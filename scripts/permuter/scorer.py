@@ -173,8 +173,14 @@ class Scorer:
                 return False, combined
         return True, None
 
-    def _build_to_path(self, source_bytes: bytes, obj_output: Path) -> tuple[bool, str | None]:
-        """Compile variant source to a specific .obj path (for parallel builds)."""
+    def _build_to_path(
+        self, source_bytes: bytes, obj_output: Path, source_tmp: Path | None = None,
+    ) -> tuple[bool, str | None]:
+        """Compile variant source to a specific .obj path (for parallel builds).
+
+        When source_tmp is provided, writes variant source there and compiles
+        from that path (enables true parallelism — no shared source file).
+        """
         if self._compile_shell_cmd is None:
             self._extract_compile_cmd()
 
@@ -184,13 +190,21 @@ class Scorer:
                 f"/Fo{self._compile_fo_path}", f"/Fo{obj_output}"
             )
         else:
-            # Fallback: try relative path replacement
             cmd = self._compile_shell_cmd.replace(
                 str(self._obj_path), str(obj_output)
             )
 
-        # Write source to the real source path (workers serialize on this)
-        self.source_path.write_bytes(source_bytes)
+        if source_tmp is not None:
+            # Write to private temp file — no lock needed
+            source_tmp.write_bytes(source_bytes)
+            # Replace the trailing source filename with /Tp<absolute_temp_path>
+            # to tell MSVC to compile from the temp file instead
+            src_basename = self.source_path.name
+            cmd = cmd.rsplit(src_basename, 1)
+            cmd = f"/Tp{source_tmp}".join(cmd)
+        else:
+            # Legacy path: write to real source (caller must serialize)
+            self.source_path.write_bytes(source_bytes)
 
         result = subprocess.run(
             cmd,
@@ -374,7 +388,8 @@ class Scorer:
 
         Workflow:
         1. Run dedup layers on all variants (instant, serial)
-        2. Compile remaining variants in parallel (ThreadPoolExecutor)
+        2. Compile remaining variants in parallel — each thread writes to its
+           own temp .cpp file (no shared source file, true parallelism)
         3. Score compiled .obj files sequentially via objdiff
         4. Return results in the same order as input variants
 
@@ -402,42 +417,53 @@ class Scorer:
             return results  # type: ignore[return-value]
 
         # Phase 2: Parallel compilation
-        # Create temp dir for variant .obj files
+        # Each thread gets its own temp .cpp and .obj — no shared source file
+        n_dedup = sum(1 for r in results if r is not None)
+        n_build = len(to_build)
+        if n_dedup > 0:
+            print(
+                f"  Dedup: {n_dedup} cached, {n_build} to compile "
+                f"({workers} workers)",
+                file=sys.stderr,
+            )
+
         tmp_dir = Path(tempfile.mkdtemp(prefix="permuter_"))
         try:
-            # Build function for thread pool
             def _compile_worker(
-                idx: int, variant: Variant, source_md5: str, obj_out: Path,
+                idx: int, variant: Variant, source_md5: str,
+                obj_out: Path, src_tmp: Path,
             ) -> tuple[int, bool, str | None, str, Path]:
-                """Compile one variant. Returns (idx, build_ok, error, source_md5, obj_out)."""
-                build_ok, build_error = self._build_to_path(variant.source, obj_out)
+                """Compile one variant to its own temp files."""
+                build_ok, build_error = self._build_to_path(
+                    variant.source, obj_out, source_tmp=src_tmp,
+                )
                 return (idx, build_ok, build_error, source_md5, obj_out)
 
-            # Submit compile jobs — serialize source writes via a lock since
-            # all compiles read from the same source_path
-            import threading
-            source_lock = threading.Lock()
+            compiled: list[tuple[int, Variant, str, Path]] = []
+            build_done = 0
+            build_fail = 0
 
-            def _locked_compile(idx, variant, source_md5, obj_out):
-                with source_lock:
-                    return _compile_worker(idx, variant, source_md5, obj_out)
-
-            futures = {}
-            with ThreadPoolExecutor(max_workers=workers) as pool:
+            # Use ThreadPoolExecutor but manage shutdown ourselves to
+            # avoid the wait=True hang on KeyboardInterrupt.
+            pool = ThreadPoolExecutor(max_workers=workers)
+            try:
+                futures = {}
                 for idx, variant, source_md5 in to_build:
                     obj_out = tmp_dir / f"variant_{idx}.obj"
+                    src_tmp = tmp_dir / f"variant_{idx}.cpp"
                     future = pool.submit(
-                        _locked_compile, idx, variant, source_md5, obj_out,
+                        _compile_worker, idx, variant, source_md5,
+                        obj_out, src_tmp,
                     )
                     futures[future] = (idx, variant, source_md5)
 
-                # Collect compile results
-                compiled: list[tuple[int, Variant, str, Path]] = []
                 for future in as_completed(futures):
                     idx, build_ok, build_error, source_md5, obj_out = future.result()
                     orig_idx, variant, _ = futures[future]
+                    build_done += 1
 
                     if not build_ok:
+                        build_fail += 1
                         if self._cache:
                             self._cache.store(source_md5, None, 0.0, False)
                         results[orig_idx] = ScoreResult(
@@ -449,7 +475,29 @@ class Scorer:
                     else:
                         compiled.append((orig_idx, variant, source_md5, obj_out))
 
+                    # Progress every 10 builds or on last
+                    if build_done % 10 == 0 or build_done == n_build:
+                        fail_str = f", {build_fail} failed" if build_fail else ""
+                        print(
+                            f"  Compiled {build_done}/{n_build}{fail_str}",
+                            file=sys.stderr,
+                        )
+            except KeyboardInterrupt:
+                for f in futures:
+                    f.cancel()
+                pool.shutdown(wait=False, cancel_futures=True)
+                raise
+            else:
+                pool.shutdown(wait=True)
+
             # Phase 3: Score compiled objects sequentially (objdiff is fast)
+            n_to_score = len(compiled)
+            if n_to_score > 0:
+                print(
+                    f"  Scoring {n_to_score} compiled objects...",
+                    file=sys.stderr,
+                )
+            score_done = 0
             for orig_idx, variant, source_md5, obj_out in compiled:
                 if not obj_out.exists():
                     results[orig_idx] = ScoreResult(

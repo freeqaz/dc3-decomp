@@ -178,7 +178,7 @@ void CampaignDiffSelectPanel::CheatWinDiff(int i) {
         const auto& eras = TheCampaign->Eras();
         FOREACH (it, eras) {
             count++;
-            if (i <= count) {
+            if (count >= i) {
                 CampaignEra *pEra = *it;
                 MILO_ASSERT(pEra, 0xe6);
                 auto numEraSongs = pEra->GetNumSongs();

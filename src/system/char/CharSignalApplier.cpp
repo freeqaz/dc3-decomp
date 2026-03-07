@@ -119,7 +119,6 @@ void CharSignalApplier::Poll() {
         return;
     float clamped = Clamp(mSignalMin, mSignalMax, mSignal);
     mSignal = clamped;
-    BoneOp *cur = mBoneOps.begin();
     if (!mDoSmoothing) {
         mSmoothedSignal = clamped;
     } else {
@@ -138,6 +137,7 @@ void CharSignalApplier::Poll() {
             }
         }
     }
+    BoneOp *cur = mBoneOps.begin();
     mSmoothedSignal *= Weight();
     if (cur != mBoneOps.end()) {
         do {

@@ -7,6 +7,7 @@
 #include "os/File.h"
 #include "os/System.h"
 #include "utl/Loader.h"
+#include "utl/MakeString.h"
 #include "utl/Symbol.h"
 
 #include <cstdio>
@@ -119,6 +120,8 @@ void SystemPreInit(int argc, char **argv, const char *config) {
         if (i > 0) cmdLine += ' ';
         cmdLine += argv[i];
     }
+    // InitMakeString before NativeDetectDataDir (which uses MakeString)
+    InitMakeString();
     // Detect game data directory before engine init
     NativeDetectDataDir();
     SystemPreInit(cmdLine.c_str(), config);

@@ -818,16 +818,46 @@ float HamMove::ConfusabilityWithMoveDataArray(const DataArray *a) {
 }
 
 float HamMove::AdjustNormalizedPercentToConfusability(float f1, float f2) {
-    float awesomeThreshold = PSNRToDetectFrac(mThresholds[kMoveRatingAwesome]) * f2;
+    float awesomeFrac = PSNRToDetectFrac(mThresholds[kMoveRatingAwesome]);
+    float perfectFrac = PSNRToDetectFrac(mThresholds[kMoveRatingPerfect]);
+    float awesomeThreshold = awesomeFrac * f2;
     if (f1 < awesomeThreshold) {
         return (0.5f / awesomeThreshold) * f1;
     } else {
-        return ((f1 - awesomeThreshold) / (PSNRToDetectFrac(mThresholds[kMoveRatingPerfect]) - awesomeThreshold) + 1.0f) / 2.0f;
+        return ((f1 - awesomeThreshold) / (perfectFrac - awesomeThreshold) + 1.0f) / 2.0f;
     }
 }
 
 float HamMove::PSNRToDetectFrac(float psnr) const {
-    return psnr / 100.0f;
+    extern std::vector<float> sDefaultRatingThresholds;
+    MoveRating rating = (MoveRating)0;
+    for (; rating < kNumMoveRatings; rating = (MoveRating)(rating + 1)) {
+        if (psnr > PSNRThreshold(rating))
+            break;
+    }
+    if (rating == (MoveRating)0) {
+        return 1.0f;
+    }
+    MoveRating upper = (MoveRating)(rating - 1);
+    float upperThresh = PSNRThreshold(upper);
+    float lowerThresh = 0.0f;
+    if (rating != kNumMoveRatings) {
+        lowerThresh = PSNRThreshold(rating);
+    }
+    if (upperThresh <= lowerThresh) {
+        MILO_FAIL("upper psnr threshold (%f) not greater than lower (%f)", upperThresh, lowerThresh);
+    }
+    float t = (psnr - lowerThresh) / (upperThresh - lowerThresh);
+    float clamped = Clamp(0.0f, 1.0f, t);
+    float upperDefault = 1.0f;
+    if (upper != (MoveRating)0) {
+        upperDefault = sDefaultRatingThresholds[upper - 1];
+    }
+    float lowerDefault = 0.0f;
+    if (rating != kNumMoveRatings) {
+        lowerDefault = sDefaultRatingThresholds[rating - 1];
+    }
+    return (upperDefault - lowerDefault) * clamped + lowerDefault;
 }
 
 const std::vector<float> *HamMove::RatingOverride() const {

@@ -920,6 +920,54 @@ void WorldCrowd::Mats(std::list<RndMat *> &mats, bool additive) {
 
 DataNode WorldCrowd::OnIterateFrac(DataArray *da) {
     START_AUTO_TIMER("crowd_iter");
+
+    if (mCharacters.empty()) {
+        return DataNode(0);
+    }
+
+    // Collect non-null Character pointers into local array
+    Character *chars[64];
+    int count = 0;
+    for (std::list<CharData>::iterator it = mCharacters.begin();
+         it != mCharacters.end(); ++it) {
+        Character *c = it->mDef.mChar.Ptr();
+        if (c) {
+            chars[count++] = c;
+        }
+    }
+
+    // Fisher-Yates shuffle
+    for (int i = count - 1; i > 0; i--) {
+        int j = RandomInt() % (i + 1);
+        Character *tmp = chars[i];
+        chars[i] = chars[j];
+        chars[j] = tmp;
+    }
+
+    // Calculate total fraction weight
+    float totalWeight = 0.0f;
+    for (int i = 2; i < da->Size(); i++) {
+        DataArray *sub = da->Array(i);
+        float frac = sub->Float(0);
+        if (frac > 0.0f) {
+            totalWeight += frac;
+        }
+    }
+
+    // Iterate characters, executing scripts by fraction
+    float charsPerWeight = (float)count / totalWeight;
+    float threshold = -0.5f;
+    int charIdx = 0;
+    for (int i = 2; i < da->Size(); i++) {
+        DataArray *sub = da->Array(i);
+        float frac = sub->Float(0);
+        threshold += frac * charsPerWeight;
+        while ((float)charIdx < threshold) {
+            sub->ExecuteScript(1, chars[charIdx], 0, 1);
+            charIdx++;
+        }
+    }
+
     return DataNode(0);
 }
 

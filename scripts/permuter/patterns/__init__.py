@@ -58,6 +58,8 @@ from . import condition_arithmetic  # noqa: F401  # Swap if(x!=N) <-> if(x-N) ar
 from . import switch_if_convert  # noqa: F401  # Convert switch <-> if/else if chains
 from . import bool_materialize  # noqa: F401  # Swap && <-> & for branchless boolean (subfc/eqv/addze)
 from . import float_literal_pressure  # noqa: F401  # Swap inline float <-> static const for GPR/FPR pressure
+from . import return_call_merge  # noqa: F401  # Merge/split return calls in if/else branches
+from . import tail_call_reorder  # noqa: F401  # Swap trailing calls to enable tail-call optimization
 
 from .base import get_all_patterns, get_pattern, list_patterns
 

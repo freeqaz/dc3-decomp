@@ -405,14 +405,14 @@ protected:
         When the fit type is kFitScrollMarqueeWrapAlways, this value will be ignored." */
     float mScrollPause; // 0x3c
     bool mWrapEnabled;
-    int mScrollState;
-    int mScrollOffset;
-    int mScrollTimer;
-    int mScrollPos;
-    int mNumLines;
+    float mScrollState;
+    float mScrollOffset;
+    float mScrollTimer;
+    float mScrollPos;
+    float mNumLines;
     float mLineHeight;
-    int mTotalHeight;
-    int mTotalWidth;
+    float mTotalHeight;
+    float mTotalWidth;
     /** "Space between continuous scrolling messages.
         This value is only considered when the fit type
         is set to kFitScrollMarqueeWrapAlways." */

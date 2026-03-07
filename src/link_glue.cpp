@@ -71,7 +71,9 @@ int strnicmp(const char *, const char *, int) { return 0; }
 char *itoa(int, char *, int) { return 0; }
 long long _64time(long *) { return 0; }
 
-struct _stati64_s { char _pad[128]; };
+struct _stati64_s {
+    char _pad[128];
+};
 int _stati64(const char *, struct _stati64_s *) { return -1; }
 
 // -- Winsock --
@@ -144,7 +146,8 @@ FormatString &FormatString::operator<<(unsigned long long) { return *this; }
 #include "ui/UIList.h"
 
 // -- BufStream --
-// Still needed: virtual method not exported from decomp .obj, referenced by other split .objs
+// Still needed: virtual method not exported from decomp .obj, referenced by other split
+// .objs
 #include "utl/BufStream.h"
 
 // -- ObjPtrList template instantiations --
@@ -248,9 +251,12 @@ template <>
 ObjPtrList<Hmx::Object>::Node *ObjPtrList<Hmx::Object>::Unlink(Node *node) {
     Node *next = node->next;
     Node *prev = node->prev;
-    if (prev) prev->next = next;
-    if (next) next->prev = prev;
-    if (mNodes == node) mNodes = next;
+    if (prev)
+        prev->next = next;
+    if (next)
+        next->prev = prev;
+    if (mNodes == node)
+        mNodes = next;
     mSize--;
     return next;
 }
@@ -259,9 +265,12 @@ template <>
 ObjPtrList<UILabel>::Node *ObjPtrList<UILabel>::Unlink(Node *node) {
     Node *next = node->next;
     Node *prev = node->prev;
-    if (prev) prev->next = next;
-    if (next) next->prev = prev;
-    if (mNodes == node) mNodes = next;
+    if (prev)
+        prev->next = next;
+    if (next)
+        next->prev = prev;
+    if (mNodes == node)
+        mNodes = next;
     mSize--;
     return next;
 }
@@ -270,9 +279,12 @@ template <>
 ObjPtrList<RndMesh>::Node *ObjPtrList<RndMesh>::Unlink(Node *node) {
     Node *next = node->next;
     Node *prev = node->prev;
-    if (prev) prev->next = next;
-    if (next) next->prev = prev;
-    if (mNodes == node) mNodes = next;
+    if (prev)
+        prev->next = next;
+    if (next)
+        next->prev = prev;
+    if (mNodes == node)
+        mNodes = next;
     mSize--;
     return next;
 }
@@ -405,9 +417,11 @@ BinStream &operator<<(BinStream &bs, const ObjPtrList<CharPollable, ObjectDir> &
 }
 
 template <>
-BinStream &operator<<(BinStream &bs, const ObjPtrList<CharWeightSetter, ObjectDir> &list) {
+BinStream &
+operator<<(BinStream &bs, const ObjPtrList<CharWeightSetter, ObjectDir> &list) {
     bs << list.size();
-    for (ObjPtrList<CharWeightSetter>::iterator it = list.begin(); it != list.end(); ++it) {
+    for (ObjPtrList<CharWeightSetter>::iterator it = list.begin(); it != list.end();
+         ++it) {
         Hmx::Object *obj = *it;
         const char *name = obj ? obj->Name() : "";
         bs << name;
@@ -513,9 +527,9 @@ BinStream &operator<<(BinStream &bs, const ObjOwnerPtr<Hmx::Object> &ptr) {
 // (DancerSkeleton removed — hamobj/DancerSkeleton is Matching)
 
 // -- VenueProvider --
-// Still needed: virtual NumData referenced by CharacterProvider, HamUI, LocalePanel split .objs
+// Still needed: virtual NumData referenced by CharacterProvider, HamUI, LocalePanel split
+// .objs
 #include "meta_ham/VenueProvider.h"
-
 
 // (Accomplishment removed — meta_ham/Accomplishment is Matching)
 
@@ -532,7 +546,8 @@ BinStream &operator<<(BinStream &bs, const ObjOwnerPtr<Hmx::Object> &ptr) {
 // (UIManager removed — ui/UI is Matching)
 
 // -- SongMetadata --
-// Still needed: inline in header, not exported from decomp .obj, referenced by SongMgr/SongRecord
+// Still needed: inline in header, not exported from decomp .obj, referenced by
+// SongMgr/SongRecord
 #include "meta/SongMetadata.h"
 
 // (HamProfile removed — meta_ham/HamProfile is Matching)
@@ -541,7 +556,8 @@ BinStream &operator<<(BinStream &bs, const ObjOwnerPtr<Hmx::Object> &ptr) {
 
 // (FixedSizeSaveableStream removed — meta/FixedSizeSaveableStream is Matching)
 
-// (soundtouch::FIRFilter::getLength removed — synth_xbox/soundtouch FIRFilter.cpp is Matching)
+// (soundtouch::FIRFilter::getLength removed — synth_xbox/soundtouch FIRFilter.cpp is
+// Matching)
 
 // (Stream::kStreamEndMs removed — synth/Stream is Matching)
 
@@ -574,9 +590,12 @@ template <>
 ObjPtrList<RndTransformable>::Node *ObjPtrList<RndTransformable>::Unlink(Node *node) {
     Node *next = node->next;
     Node *prev = node->prev;
-    if (prev) prev->next = next;
-    if (next) next->prev = prev;
-    if (mNodes == node) mNodes = next;
+    if (prev)
+        prev->next = next;
+    if (next)
+        next->prev = prev;
+    if (mNodes == node)
+        mNodes = next;
     mSize--;
     return next;
 }
@@ -596,16 +615,19 @@ void ObjPtrList<RndTransformable>::Link(iterator it, Node *node) {
     if (pos) {
         node->next = pos;
         node->prev = pos->prev;
-        if (pos->prev) pos->prev->next = node;
+        if (pos->prev)
+            pos->prev->next = node;
         pos->prev = node;
-        if (mNodes == pos) mNodes = node;
+        if (mNodes == pos)
+            mNodes = node;
     } else {
         // insert at end
         if (mNodes) {
             Node *tail = mNodes->prev;
             node->prev = tail;
             node->next = nullptr;
-            if (tail) tail->next = node;
+            if (tail)
+                tail->next = node;
         } else {
             node->prev = nullptr;
             node->next = nullptr;
@@ -617,14 +639,17 @@ void ObjPtrList<RndTransformable>::Link(iterator it, Node *node) {
 
 template <>
 Hmx::Object *ObjPtrList<RndTransformable>::Node::RefOwner() const {
-    ObjPtrList<RndTransformable> *list = static_cast<ObjPtrList<RndTransformable> *>(mOwner);
+    ObjPtrList<RndTransformable> *list =
+        static_cast<ObjPtrList<RndTransformable> *>(mOwner);
     return list->Owner();
 }
 
 template <>
-BinStream &operator<<(BinStream &bs, const ObjPtrList<RndTransformable, ObjectDir> &list) {
+BinStream &
+operator<<(BinStream &bs, const ObjPtrList<RndTransformable, ObjectDir> &list) {
     bs << list.size();
-    for (ObjPtrList<RndTransformable>::iterator it = list.begin(); it != list.end(); ++it) {
+    for (ObjPtrList<RndTransformable>::iterator it = list.begin(); it != list.end();
+         ++it) {
         Hmx::Object *obj = *it;
         const char *name = obj ? obj->Name() : "";
         bs << name;
@@ -654,9 +679,12 @@ template <>
 ObjPtrList<RndDrawable>::Node *ObjPtrList<RndDrawable>::Unlink(Node *node) {
     Node *next = node->next;
     Node *prev = node->prev;
-    if (prev) prev->next = next;
-    if (next) next->prev = prev;
-    if (mNodes == node) mNodes = next;
+    if (prev)
+        prev->next = next;
+    if (next)
+        next->prev = prev;
+    if (mNodes == node)
+        mNodes = next;
     mSize--;
     return next;
 }
@@ -676,15 +704,18 @@ void ObjPtrList<RndDrawable>::Link(iterator it, Node *node) {
     if (pos) {
         node->next = pos;
         node->prev = pos->prev;
-        if (pos->prev) pos->prev->next = node;
+        if (pos->prev)
+            pos->prev->next = node;
         pos->prev = node;
-        if (mNodes == pos) mNodes = node;
+        if (mNodes == pos)
+            mNodes = node;
     } else {
         if (mNodes) {
             Node *tail = mNodes->prev;
             node->prev = tail;
             node->next = nullptr;
-            if (tail) tail->next = node;
+            if (tail)
+                tail->next = node;
         } else {
             node->prev = nullptr;
             node->next = nullptr;
@@ -733,9 +764,12 @@ template <>
 ObjPtrList<RndAnimatable>::Node *ObjPtrList<RndAnimatable>::Unlink(Node *node) {
     Node *next = node->next;
     Node *prev = node->prev;
-    if (prev) prev->next = next;
-    if (next) next->prev = prev;
-    if (mNodes == node) mNodes = next;
+    if (prev)
+        prev->next = next;
+    if (next)
+        next->prev = prev;
+    if (mNodes == node)
+        mNodes = next;
     mSize--;
     return next;
 }
@@ -755,15 +789,18 @@ void ObjPtrList<RndAnimatable>::Link(iterator it, Node *node) {
     if (pos) {
         node->next = pos;
         node->prev = pos->prev;
-        if (pos->prev) pos->prev->next = node;
+        if (pos->prev)
+            pos->prev->next = node;
         pos->prev = node;
-        if (mNodes == pos) mNodes = node;
+        if (mNodes == pos)
+            mNodes = node;
     } else {
         if (mNodes) {
             Node *tail = mNodes->prev;
             node->prev = tail;
             node->next = nullptr;
-            if (tail) tail->next = node;
+            if (tail)
+                tail->next = node;
         } else {
             node->prev = nullptr;
             node->next = nullptr;
@@ -796,9 +833,12 @@ template <>
 ObjPtrList<FlowNode>::Node *ObjPtrList<FlowNode>::Unlink(Node *node) {
     Node *next = node->next;
     Node *prev = node->prev;
-    if (prev) prev->next = next;
-    if (next) next->prev = prev;
-    if (mNodes == node) mNodes = next;
+    if (prev)
+        prev->next = next;
+    if (next)
+        next->prev = prev;
+    if (mNodes == node)
+        mNodes = next;
     mSize--;
     return next;
 }
@@ -818,15 +858,18 @@ void ObjPtrList<FlowNode>::Link(iterator it, Node *node) {
     if (pos) {
         node->next = pos;
         node->prev = pos->prev;
-        if (pos->prev) pos->prev->next = node;
+        if (pos->prev)
+            pos->prev->next = node;
         pos->prev = node;
-        if (mNodes == pos) mNodes = node;
+        if (mNodes == pos)
+            mNodes = node;
     } else {
         if (mNodes) {
             Node *tail = mNodes->prev;
             node->prev = tail;
             node->next = nullptr;
-            if (tail) tail->next = node;
+            if (tail)
+                tail->next = node;
         } else {
             node->prev = nullptr;
             node->next = nullptr;
@@ -851,15 +894,18 @@ void ObjPtrList<Hmx::Object>::Link(iterator it, Node *node) {
     if (pos) {
         node->next = pos;
         node->prev = pos->prev;
-        if (pos->prev) pos->prev->next = node;
+        if (pos->prev)
+            pos->prev->next = node;
         pos->prev = node;
-        if (mNodes == pos) mNodes = node;
+        if (mNodes == pos)
+            mNodes = node;
     } else {
         if (mNodes) {
             Node *tail = mNodes->prev;
             node->prev = tail;
             node->next = nullptr;
-            if (tail) tail->next = node;
+            if (tail)
+                tail->next = node;
         } else {
             node->prev = nullptr;
             node->next = nullptr;
@@ -905,15 +951,18 @@ void ObjPtrList<CharBone>::Link(iterator it, Node *node) {
     if (pos) {
         node->next = pos;
         node->prev = pos->prev;
-        if (pos->prev) pos->prev->next = node;
+        if (pos->prev)
+            pos->prev->next = node;
         pos->prev = node;
-        if (mNodes == pos) mNodes = node;
+        if (mNodes == pos)
+            mNodes = node;
     } else {
         if (mNodes) {
             Node *tail = mNodes->prev;
             node->prev = tail;
             node->next = nullptr;
-            if (tail) tail->next = node;
+            if (tail)
+                tail->next = node;
         } else {
             node->prev = nullptr;
             node->next = nullptr;
@@ -949,9 +998,12 @@ template <>
 ObjPtrList<CharBone>::Node *ObjPtrList<CharBone>::Unlink(Node *node) {
     Node *next = node->next;
     Node *prev = node->prev;
-    if (prev) prev->next = next;
-    if (next) next->prev = prev;
-    if (mNodes == node) mNodes = next;
+    if (prev)
+        prev->next = next;
+    if (next)
+        next->prev = prev;
+    if (mNodes == node)
+        mNodes = next;
     mSize--;
     return next;
 }
@@ -976,15 +1028,18 @@ void ObjPtrList<CharCollide>::Link(iterator it, Node *node) {
     if (pos) {
         node->next = pos;
         node->prev = pos->prev;
-        if (pos->prev) pos->prev->next = node;
+        if (pos->prev)
+            pos->prev->next = node;
         pos->prev = node;
-        if (mNodes == pos) mNodes = node;
+        if (mNodes == pos)
+            mNodes = node;
     } else {
         if (mNodes) {
             Node *tail = mNodes->prev;
             node->prev = tail;
             node->next = nullptr;
-            if (tail) tail->next = node;
+            if (tail)
+                tail->next = node;
         } else {
             node->prev = nullptr;
             node->next = nullptr;
@@ -1020,9 +1075,12 @@ template <>
 ObjPtrList<CharCollide>::Node *ObjPtrList<CharCollide>::Unlink(Node *node) {
     Node *next = node->next;
     Node *prev = node->prev;
-    if (prev) prev->next = next;
-    if (next) next->prev = prev;
-    if (mNodes == node) mNodes = next;
+    if (prev)
+        prev->next = next;
+    if (next)
+        next->prev = prev;
+    if (mNodes == node)
+        mNodes = next;
     mSize--;
     return next;
 }
@@ -1044,15 +1102,18 @@ void ObjPtrList<CharInterest>::Link(iterator it, Node *node) {
     if (pos) {
         node->next = pos;
         node->prev = pos->prev;
-        if (pos->prev) pos->prev->next = node;
+        if (pos->prev)
+            pos->prev->next = node;
         pos->prev = node;
-        if (mNodes == pos) mNodes = node;
+        if (mNodes == pos)
+            mNodes = node;
     } else {
         if (mNodes) {
             Node *tail = mNodes->prev;
             node->prev = tail;
             node->next = nullptr;
-            if (tail) tail->next = node;
+            if (tail)
+                tail->next = node;
         } else {
             node->prev = nullptr;
             node->next = nullptr;
@@ -1082,9 +1143,12 @@ template <>
 ObjPtrList<CharInterest>::Node *ObjPtrList<CharInterest>::Unlink(Node *node) {
     Node *next = node->next;
     Node *prev = node->prev;
-    if (prev) prev->next = next;
-    if (next) next->prev = prev;
-    if (mNodes == node) mNodes = next;
+    if (prev)
+        prev->next = next;
+    if (next)
+        next->prev = prev;
+    if (mNodes == node)
+        mNodes = next;
     mSize--;
     return next;
 }
@@ -1106,15 +1170,18 @@ void ObjPtrList<CharPollable>::Link(iterator it, Node *node) {
     if (pos) {
         node->next = pos;
         node->prev = pos->prev;
-        if (pos->prev) pos->prev->next = node;
+        if (pos->prev)
+            pos->prev->next = node;
         pos->prev = node;
-        if (mNodes == pos) mNodes = node;
+        if (mNodes == pos)
+            mNodes = node;
     } else {
         if (mNodes) {
             Node *tail = mNodes->prev;
             node->prev = tail;
             node->next = nullptr;
-            if (tail) tail->next = node;
+            if (tail)
+                tail->next = node;
         } else {
             node->prev = nullptr;
             node->next = nullptr;
@@ -1144,9 +1211,12 @@ template <>
 ObjPtrList<CharPollable>::Node *ObjPtrList<CharPollable>::Unlink(Node *node) {
     Node *next = node->next;
     Node *prev = node->prev;
-    if (prev) prev->next = next;
-    if (next) next->prev = prev;
-    if (mNodes == node) mNodes = next;
+    if (prev)
+        prev->next = next;
+    if (next)
+        next->prev = prev;
+    if (mNodes == node)
+        mNodes = next;
     mSize--;
     return next;
 }
@@ -1169,15 +1239,18 @@ void ObjPtrList<CharWeightable>::Link(iterator it, Node *node) {
     if (pos) {
         node->next = pos;
         node->prev = pos->prev;
-        if (pos->prev) pos->prev->next = node;
+        if (pos->prev)
+            pos->prev->next = node;
         pos->prev = node;
-        if (mNodes == pos) mNodes = node;
+        if (mNodes == pos)
+            mNodes = node;
     } else {
         if (mNodes) {
             Node *tail = mNodes->prev;
             node->prev = tail;
             node->next = nullptr;
-            if (tail) tail->next = node;
+            if (tail)
+                tail->next = node;
         } else {
             node->prev = nullptr;
             node->next = nullptr;
@@ -1207,9 +1280,12 @@ template <>
 ObjPtrList<CharWeightable>::Node *ObjPtrList<CharWeightable>::Unlink(Node *node) {
     Node *next = node->next;
     Node *prev = node->prev;
-    if (prev) prev->next = next;
-    if (next) next->prev = prev;
-    if (mNodes == node) mNodes = next;
+    if (prev)
+        prev->next = next;
+    if (next)
+        next->prev = prev;
+    if (mNodes == node)
+        mNodes = next;
     mSize--;
     return next;
 }
@@ -1231,15 +1307,18 @@ void ObjPtrList<CharWeightSetter>::Link(iterator it, Node *node) {
     if (pos) {
         node->next = pos;
         node->prev = pos->prev;
-        if (pos->prev) pos->prev->next = node;
+        if (pos->prev)
+            pos->prev->next = node;
         pos->prev = node;
-        if (mNodes == pos) mNodes = node;
+        if (mNodes == pos)
+            mNodes = node;
     } else {
         if (mNodes) {
             Node *tail = mNodes->prev;
             node->prev = tail;
             node->next = nullptr;
-            if (tail) tail->next = node;
+            if (tail)
+                tail->next = node;
         } else {
             node->prev = nullptr;
             node->next = nullptr;
@@ -1269,9 +1348,12 @@ template <>
 ObjPtrList<CharWeightSetter>::Node *ObjPtrList<CharWeightSetter>::Unlink(Node *node) {
     Node *next = node->next;
     Node *prev = node->prev;
-    if (prev) prev->next = next;
-    if (next) next->prev = prev;
-    if (mNodes == node) mNodes = next;
+    if (prev)
+        prev->next = next;
+    if (next)
+        next->prev = prev;
+    if (mNodes == node)
+        mNodes = next;
     mSize--;
     return next;
 }
@@ -1294,15 +1376,18 @@ void ObjPtrList<Fader>::Link(iterator it, Node *node) {
     if (pos) {
         node->next = pos;
         node->prev = pos->prev;
-        if (pos->prev) pos->prev->next = node;
+        if (pos->prev)
+            pos->prev->next = node;
         pos->prev = node;
-        if (mNodes == pos) mNodes = node;
+        if (mNodes == pos)
+            mNodes = node;
     } else {
         if (mNodes) {
             Node *tail = mNodes->prev;
             node->prev = tail;
             node->next = nullptr;
-            if (tail) tail->next = node;
+            if (tail)
+                tail->next = node;
         } else {
             node->prev = nullptr;
             node->next = nullptr;
@@ -1332,9 +1417,12 @@ template <>
 ObjPtrList<Fader>::Node *ObjPtrList<Fader>::Unlink(Node *node) {
     Node *next = node->next;
     Node *prev = node->prev;
-    if (prev) prev->next = next;
-    if (next) next->prev = prev;
-    if (mNodes == node) mNodes = next;
+    if (prev)
+        prev->next = next;
+    if (next)
+        next->prev = prev;
+    if (mNodes == node)
+        mNodes = next;
     mSize--;
     return next;
 }
@@ -1362,15 +1450,18 @@ void ObjPtrList<HamCamShot>::Link(iterator it, Node *node) {
     if (pos) {
         node->next = pos;
         node->prev = pos->prev;
-        if (pos->prev) pos->prev->next = node;
+        if (pos->prev)
+            pos->prev->next = node;
         pos->prev = node;
-        if (mNodes == pos) mNodes = node;
+        if (mNodes == pos)
+            mNodes = node;
     } else {
         if (mNodes) {
             Node *tail = mNodes->prev;
             node->prev = tail;
             node->next = nullptr;
-            if (tail) tail->next = node;
+            if (tail)
+                tail->next = node;
         } else {
             node->prev = nullptr;
             node->next = nullptr;
@@ -1406,9 +1497,12 @@ template <>
 ObjPtrList<HamCamShot>::Node *ObjPtrList<HamCamShot>::Unlink(Node *node) {
     Node *next = node->next;
     Node *prev = node->prev;
-    if (prev) prev->next = next;
-    if (next) next->prev = prev;
-    if (mNodes == node) mNodes = next;
+    if (prev)
+        prev->next = next;
+    if (next)
+        next->prev = prev;
+    if (mNodes == node)
+        mNodes = next;
     mSize--;
     return next;
 }
@@ -1431,15 +1525,18 @@ void ObjPtrList<CamShot>::Link(iterator it, Node *node) {
     if (pos) {
         node->next = pos;
         node->prev = pos->prev;
-        if (pos->prev) pos->prev->next = node;
+        if (pos->prev)
+            pos->prev->next = node;
         pos->prev = node;
-        if (mNodes == pos) mNodes = node;
+        if (mNodes == pos)
+            mNodes = node;
     } else {
         if (mNodes) {
             Node *tail = mNodes->prev;
             node->prev = tail;
             node->next = nullptr;
-            if (tail) tail->next = node;
+            if (tail)
+                tail->next = node;
         } else {
             node->prev = nullptr;
             node->next = nullptr;
@@ -1464,9 +1561,12 @@ template <>
 ObjPtrList<CamShot>::Node *ObjPtrList<CamShot>::Unlink(Node *node) {
     Node *next = node->next;
     Node *prev = node->prev;
-    if (prev) prev->next = next;
-    if (next) next->prev = prev;
-    if (mNodes == node) mNodes = next;
+    if (prev)
+        prev->next = next;
+    if (next)
+        next->prev = prev;
+    if (mNodes == node)
+        mNodes = next;
     mSize--;
     return next;
 }
@@ -1488,15 +1588,18 @@ void ObjPtrList<NoteVoiceInst>::Link(iterator it, Node *node) {
     if (pos) {
         node->next = pos;
         node->prev = pos->prev;
-        if (pos->prev) pos->prev->next = node;
+        if (pos->prev)
+            pos->prev->next = node;
         pos->prev = node;
-        if (mNodes == pos) mNodes = node;
+        if (mNodes == pos)
+            mNodes = node;
     } else {
         if (mNodes) {
             Node *tail = mNodes->prev;
             node->prev = tail;
             node->next = nullptr;
-            if (tail) tail->next = node;
+            if (tail)
+                tail->next = node;
         } else {
             node->prev = nullptr;
             node->next = nullptr;
@@ -1526,9 +1629,12 @@ template <>
 ObjPtrList<NoteVoiceInst>::Node *ObjPtrList<NoteVoiceInst>::Unlink(Node *node) {
     Node *next = node->next;
     Node *prev = node->prev;
-    if (prev) prev->next = next;
-    if (next) next->prev = prev;
-    if (mNodes == node) mNodes = next;
+    if (prev)
+        prev->next = next;
+    if (next)
+        next->prev = prev;
+    if (mNodes == node)
+        mNodes = next;
     mSize--;
     return next;
 }
@@ -1555,15 +1661,18 @@ void ObjPtrList<ObjectDir>::Link(iterator it, Node *node) {
     if (pos) {
         node->next = pos;
         node->prev = pos->prev;
-        if (pos->prev) pos->prev->next = node;
+        if (pos->prev)
+            pos->prev->next = node;
         pos->prev = node;
-        if (mNodes == pos) mNodes = node;
+        if (mNodes == pos)
+            mNodes = node;
     } else {
         if (mNodes) {
             Node *tail = mNodes->prev;
             node->prev = tail;
             node->next = nullptr;
-            if (tail) tail->next = node;
+            if (tail)
+                tail->next = node;
         } else {
             node->prev = nullptr;
             node->next = nullptr;
@@ -1593,9 +1702,12 @@ template <>
 ObjPtrList<ObjectDir>::Node *ObjPtrList<ObjectDir>::Unlink(Node *node) {
     Node *next = node->next;
     Node *prev = node->prev;
-    if (prev) prev->next = next;
-    if (next) next->prev = prev;
-    if (mNodes == node) mNodes = next;
+    if (prev)
+        prev->next = next;
+    if (next)
+        next->prev = prev;
+    if (mNodes == node)
+        mNodes = next;
     mSize--;
     return next;
 }
@@ -1622,15 +1734,18 @@ void ObjPtrList<RndFontBase>::Link(iterator it, Node *node) {
     if (pos) {
         node->next = pos;
         node->prev = pos->prev;
-        if (pos->prev) pos->prev->next = node;
+        if (pos->prev)
+            pos->prev->next = node;
         pos->prev = node;
-        if (mNodes == pos) mNodes = node;
+        if (mNodes == pos)
+            mNodes = node;
     } else {
         if (mNodes) {
             Node *tail = mNodes->prev;
             node->prev = tail;
             node->next = nullptr;
-            if (tail) tail->next = node;
+            if (tail)
+                tail->next = node;
         } else {
             node->prev = nullptr;
             node->next = nullptr;
@@ -1666,9 +1781,12 @@ template <>
 ObjPtrList<RndFontBase>::Node *ObjPtrList<RndFontBase>::Unlink(Node *node) {
     Node *next = node->next;
     Node *prev = node->prev;
-    if (prev) prev->next = next;
-    if (next) next->prev = prev;
-    if (mNodes == node) mNodes = next;
+    if (prev)
+        prev->next = next;
+    if (next)
+        next->prev = prev;
+    if (mNodes == node)
+        mNodes = next;
     mSize--;
     return next;
 }
@@ -1695,15 +1813,18 @@ void ObjPtrList<RndLight>::Link(iterator it, Node *node) {
     if (pos) {
         node->next = pos;
         node->prev = pos->prev;
-        if (pos->prev) pos->prev->next = node;
+        if (pos->prev)
+            pos->prev->next = node;
         pos->prev = node;
-        if (mNodes == pos) mNodes = node;
+        if (mNodes == pos)
+            mNodes = node;
     } else {
         if (mNodes) {
             Node *tail = mNodes->prev;
             node->prev = tail;
             node->next = nullptr;
-            if (tail) tail->next = node;
+            if (tail)
+                tail->next = node;
         } else {
             node->prev = nullptr;
             node->next = nullptr;
@@ -1733,9 +1854,12 @@ template <>
 ObjPtrList<RndLight>::Node *ObjPtrList<RndLight>::Unlink(Node *node) {
     Node *next = node->next;
     Node *prev = node->prev;
-    if (prev) prev->next = next;
-    if (next) next->prev = prev;
-    if (mNodes == node) mNodes = next;
+    if (prev)
+        prev->next = next;
+    if (next)
+        next->prev = prev;
+    if (mNodes == node)
+        mNodes = next;
     mSize--;
     return next;
 }
@@ -1758,15 +1882,18 @@ void ObjPtrList<RndMat>::Link(iterator it, Node *node) {
     if (pos) {
         node->next = pos;
         node->prev = pos->prev;
-        if (pos->prev) pos->prev->next = node;
+        if (pos->prev)
+            pos->prev->next = node;
         pos->prev = node;
-        if (mNodes == pos) mNodes = node;
+        if (mNodes == pos)
+            mNodes = node;
     } else {
         if (mNodes) {
             Node *tail = mNodes->prev;
             node->prev = tail;
             node->next = nullptr;
-            if (tail) tail->next = node;
+            if (tail)
+                tail->next = node;
         } else {
             node->prev = nullptr;
             node->next = nullptr;
@@ -1802,9 +1929,12 @@ template <>
 ObjPtrList<RndMat>::Node *ObjPtrList<RndMat>::Unlink(Node *node) {
     Node *next = node->next;
     Node *prev = node->prev;
-    if (prev) prev->next = next;
-    if (next) next->prev = prev;
-    if (mNodes == node) mNodes = next;
+    if (prev)
+        prev->next = next;
+    if (next)
+        next->prev = prev;
+    if (mNodes == node)
+        mNodes = next;
     mSize--;
     return next;
 }
@@ -1831,15 +1961,18 @@ void ObjPtrList<RndTexBlendController>::Link(iterator it, Node *node) {
     if (pos) {
         node->next = pos;
         node->prev = pos->prev;
-        if (pos->prev) pos->prev->next = node;
+        if (pos->prev)
+            pos->prev->next = node;
         pos->prev = node;
-        if (mNodes == pos) mNodes = node;
+        if (mNodes == pos)
+            mNodes = node;
     } else {
         if (mNodes) {
             Node *tail = mNodes->prev;
             node->prev = tail;
             node->next = nullptr;
-            if (tail) tail->next = node;
+            if (tail)
+                tail->next = node;
         } else {
             node->prev = nullptr;
             node->next = nullptr;
@@ -1856,7 +1989,8 @@ Hmx::Object *ObjPtrList<RndTexBlendController>::RefOwner() const {
 
 template <>
 Hmx::Object *ObjPtrList<RndTexBlendController>::Node::RefOwner() const {
-    ObjPtrList<RndTexBlendController> *list = static_cast<ObjPtrList<RndTexBlendController> *>(mOwner);
+    ObjPtrList<RndTexBlendController> *list =
+        static_cast<ObjPtrList<RndTexBlendController> *>(mOwner);
     return list->Owner();
 }
 
@@ -1872,18 +2006,23 @@ bool ObjPtrList<RndTexBlendController>::Replace(ObjRef *ref, Hmx::Object *obj) {
 }
 
 template <>
-ObjPtrList<RndTexBlendController>::Node *ObjPtrList<RndTexBlendController>::Unlink(Node *node) {
+ObjPtrList<RndTexBlendController>::Node *
+ObjPtrList<RndTexBlendController>::Unlink(Node *node) {
     Node *next = node->next;
     Node *prev = node->prev;
-    if (prev) prev->next = next;
-    if (next) next->prev = prev;
-    if (mNodes == node) mNodes = next;
+    if (prev)
+        prev->next = next;
+    if (next)
+        next->prev = prev;
+    if (mNodes == node)
+        mNodes = next;
     mSize--;
     return next;
 }
 
 template <>
-ObjPtrList<RndTexBlendController>::iterator ObjPtrList<RndTexBlendController>::erase(iterator it) {
+ObjPtrList<RndTexBlendController>::iterator
+ObjPtrList<RndTexBlendController>::erase(iterator it) {
     Node *node = it.mNode;
     Node *next = Unlink(node);
     delete node;
@@ -1899,15 +2038,18 @@ void ObjPtrList<SeqInst>::Link(iterator it, Node *node) {
     if (pos) {
         node->next = pos;
         node->prev = pos->prev;
-        if (pos->prev) pos->prev->next = node;
+        if (pos->prev)
+            pos->prev->next = node;
         pos->prev = node;
-        if (mNodes == pos) mNodes = node;
+        if (mNodes == pos)
+            mNodes = node;
     } else {
         if (mNodes) {
             Node *tail = mNodes->prev;
             node->prev = tail;
             node->next = nullptr;
-            if (tail) tail->next = node;
+            if (tail)
+                tail->next = node;
         } else {
             node->prev = nullptr;
             node->next = nullptr;
@@ -1937,9 +2079,12 @@ template <>
 ObjPtrList<SeqInst>::Node *ObjPtrList<SeqInst>::Unlink(Node *node) {
     Node *next = node->next;
     Node *prev = node->prev;
-    if (prev) prev->next = next;
-    if (next) next->prev = prev;
-    if (mNodes == node) mNodes = next;
+    if (prev)
+        prev->next = next;
+    if (next)
+        next->prev = prev;
+    if (mNodes == node)
+        mNodes = next;
     mSize--;
     return next;
 }
@@ -1966,15 +2111,18 @@ void ObjPtrList<SfxInst>::Link(iterator it, Node *node) {
     if (pos) {
         node->next = pos;
         node->prev = pos->prev;
-        if (pos->prev) pos->prev->next = node;
+        if (pos->prev)
+            pos->prev->next = node;
         pos->prev = node;
-        if (mNodes == pos) mNodes = node;
+        if (mNodes == pos)
+            mNodes = node;
     } else {
         if (mNodes) {
             Node *tail = mNodes->prev;
             node->prev = tail;
             node->next = nullptr;
-            if (tail) tail->next = node;
+            if (tail)
+                tail->next = node;
         } else {
             node->prev = nullptr;
             node->next = nullptr;
@@ -2004,9 +2152,12 @@ template <>
 ObjPtrList<SfxInst>::Node *ObjPtrList<SfxInst>::Unlink(Node *node) {
     Node *next = node->next;
     Node *prev = node->prev;
-    if (prev) prev->next = next;
-    if (next) next->prev = prev;
-    if (mNodes == node) mNodes = next;
+    if (prev)
+        prev->next = next;
+    if (next)
+        next->prev = prev;
+    if (mNodes == node)
+        mNodes = next;
     mSize--;
     return next;
 }
@@ -2028,15 +2179,18 @@ void ObjPtrList<ThreeDSound>::Link(iterator it, Node *node) {
     if (pos) {
         node->next = pos;
         node->prev = pos->prev;
-        if (pos->prev) pos->prev->next = node;
+        if (pos->prev)
+            pos->prev->next = node;
         pos->prev = node;
-        if (mNodes == pos) mNodes = node;
+        if (mNodes == pos)
+            mNodes = node;
     } else {
         if (mNodes) {
             Node *tail = mNodes->prev;
             node->prev = tail;
             node->next = nullptr;
-            if (tail) tail->next = node;
+            if (tail)
+                tail->next = node;
         } else {
             node->prev = nullptr;
             node->next = nullptr;
@@ -2066,9 +2220,12 @@ template <>
 ObjPtrList<ThreeDSound>::Node *ObjPtrList<ThreeDSound>::Unlink(Node *node) {
     Node *next = node->next;
     Node *prev = node->prev;
-    if (prev) prev->next = next;
-    if (next) next->prev = prev;
-    if (mNodes == node) mNodes = next;
+    if (prev)
+        prev->next = next;
+    if (next)
+        next->prev = prev;
+    if (mNodes == node)
+        mNodes = next;
     mSize--;
     return next;
 }
@@ -2090,15 +2247,18 @@ void ObjPtrList<Waypoint>::Link(iterator it, Node *node) {
     if (pos) {
         node->next = pos;
         node->prev = pos->prev;
-        if (pos->prev) pos->prev->next = node;
+        if (pos->prev)
+            pos->prev->next = node;
         pos->prev = node;
-        if (mNodes == pos) mNodes = node;
+        if (mNodes == pos)
+            mNodes = node;
     } else {
         if (mNodes) {
             Node *tail = mNodes->prev;
             node->prev = tail;
             node->next = nullptr;
-            if (tail) tail->next = node;
+            if (tail)
+                tail->next = node;
         } else {
             node->prev = nullptr;
             node->next = nullptr;
@@ -2128,9 +2288,12 @@ template <>
 ObjPtrList<Waypoint>::Node *ObjPtrList<Waypoint>::Unlink(Node *node) {
     Node *next = node->next;
     Node *prev = node->prev;
-    if (prev) prev->next = next;
-    if (next) next->prev = prev;
-    if (mNodes == node) mNodes = next;
+    if (prev)
+        prev->next = next;
+    if (next)
+        next->prev = prev;
+    if (mNodes == node)
+        mNodes = next;
     mSize--;
     return next;
 }
@@ -2153,15 +2316,18 @@ void ObjPtrList<WorldCrowd>::Link(iterator it, Node *node) {
     if (pos) {
         node->next = pos;
         node->prev = pos->prev;
-        if (pos->prev) pos->prev->next = node;
+        if (pos->prev)
+            pos->prev->next = node;
         pos->prev = node;
-        if (mNodes == pos) mNodes = node;
+        if (mNodes == pos)
+            mNodes = node;
     } else {
         if (mNodes) {
             Node *tail = mNodes->prev;
             node->prev = tail;
             node->next = nullptr;
-            if (tail) tail->next = node;
+            if (tail)
+                tail->next = node;
         } else {
             node->prev = nullptr;
             node->next = nullptr;
@@ -2191,9 +2357,12 @@ template <>
 ObjPtrList<WorldCrowd>::Node *ObjPtrList<WorldCrowd>::Unlink(Node *node) {
     Node *next = node->next;
     Node *prev = node->prev;
-    if (prev) prev->next = next;
-    if (next) next->prev = prev;
-    if (mNodes == node) mNodes = next;
+    if (prev)
+        prev->next = next;
+    if (next)
+        next->prev = prev;
+    if (mNodes == node)
+        mNodes = next;
     mSize--;
     return next;
 }
@@ -2215,15 +2384,18 @@ void ObjPtrList<EventTrigger>::Link(iterator it, Node *node) {
     if (pos) {
         node->next = pos;
         node->prev = pos->prev;
-        if (pos->prev) pos->prev->next = node;
+        if (pos->prev)
+            pos->prev->next = node;
         pos->prev = node;
-        if (mNodes == pos) mNodes = node;
+        if (mNodes == pos)
+            mNodes = node;
     } else {
         if (mNodes) {
             Node *tail = mNodes->prev;
             node->prev = tail;
             node->next = nullptr;
-            if (tail) tail->next = node;
+            if (tail)
+                tail->next = node;
         } else {
             node->prev = nullptr;
             node->next = nullptr;
@@ -2263,15 +2435,18 @@ void ObjPtrList<RndMesh>::Link(iterator it, Node *node) {
     if (pos) {
         node->next = pos;
         node->prev = pos->prev;
-        if (pos->prev) pos->prev->next = node;
+        if (pos->prev)
+            pos->prev->next = node;
         pos->prev = node;
-        if (mNodes == pos) mNodes = node;
+        if (mNodes == pos)
+            mNodes = node;
     } else {
         if (mNodes) {
             Node *tail = mNodes->prev;
             node->prev = tail;
             node->next = nullptr;
-            if (tail) tail->next = node;
+            if (tail)
+                tail->next = node;
         } else {
             node->prev = nullptr;
             node->next = nullptr;
@@ -2297,15 +2472,18 @@ void ObjPtrList<Sequence>::Link(iterator it, Node *node) {
     if (pos) {
         node->next = pos;
         node->prev = pos->prev;
-        if (pos->prev) pos->prev->next = node;
+        if (pos->prev)
+            pos->prev->next = node;
         pos->prev = node;
-        if (mNodes == pos) mNodes = node;
+        if (mNodes == pos)
+            mNodes = node;
     } else {
         if (mNodes) {
             Node *tail = mNodes->prev;
             node->prev = tail;
             node->next = nullptr;
-            if (tail) tail->next = node;
+            if (tail)
+                tail->next = node;
         } else {
             node->prev = nullptr;
             node->next = nullptr;
@@ -2332,15 +2510,18 @@ void ObjPtrList<UILabel>::Link(iterator it, Node *node) {
     if (pos) {
         node->next = pos;
         node->prev = pos->prev;
-        if (pos->prev) pos->prev->next = node;
+        if (pos->prev)
+            pos->prev->next = node;
         pos->prev = node;
-        if (mNodes == pos) mNodes = node;
+        if (mNodes == pos)
+            mNodes = node;
     } else {
         if (mNodes) {
             Node *tail = mNodes->prev;
             node->prev = tail;
             node->next = nullptr;
-            if (tail) tail->next = node;
+            if (tail)
+                tail->next = node;
         } else {
             node->prev = nullptr;
             node->next = nullptr;
@@ -2358,17 +2539,23 @@ void ObjPtrList<UILabel>::Link(iterator it, Node *node) {
 #include "synth/MoggClip.h"
 
 template <>
-void ObjRefConcrete<RndTex, ObjectDir>::CopyRef(const ObjRefConcrete<RndTex, ObjectDir> &o) {
+void ObjRefConcrete<RndTex, ObjectDir>::CopyRef(
+    const ObjRefConcrete<RndTex, ObjectDir> &o
+) {
     SetObjConcrete(o.mObject);
 }
 
 template <>
-void ObjRefConcrete<ObjectDir, ObjectDir>::CopyRef(const ObjRefConcrete<ObjectDir, ObjectDir> &o) {
+void ObjRefConcrete<ObjectDir, ObjectDir>::CopyRef(
+    const ObjRefConcrete<ObjectDir, ObjectDir> &o
+) {
     SetObjConcrete(o.mObject);
 }
 
 template <>
-void ObjRefConcrete<MoggClip, ObjectDir>::CopyRef(const ObjRefConcrete<MoggClip, ObjectDir> &o) {
+void ObjRefConcrete<MoggClip, ObjectDir>::CopyRef(
+    const ObjRefConcrete<MoggClip, ObjectDir> &o
+) {
     SetObjConcrete(o.mObject);
 }
 
@@ -2418,7 +2605,10 @@ Hmx::Object *ObjPtrList<Character>::RefOwner() const {
 template <>
 bool ObjPtrList<Character>::Replace(ObjRef *ref, Hmx::Object *obj) {
     for (iterator it = begin(); it != end(); ++it) {
-        if (it.mNode == ref) { ReplaceNode(it.mNode, obj); return true; }
+        if (it.mNode == ref) {
+            ReplaceNode(it.mNode, obj);
+            return true;
+        }
     }
     return false;
 }
@@ -2427,9 +2617,12 @@ template <>
 ObjPtrList<Character>::Node *ObjPtrList<Character>::Unlink(Node *node) {
     Node *next = node->next;
     Node *prev = node->prev;
-    if (prev) prev->next = next;
-    if (next) next->prev = prev;
-    if (mNodes == node) mNodes = next;
+    if (prev)
+        prev->next = next;
+    if (next)
+        next->prev = prev;
+    if (mNodes == node)
+        mNodes = next;
     mSize--;
     return next;
 }
@@ -2449,15 +2642,18 @@ void ObjPtrList<Character>::Link(iterator it, Node *node) {
     if (pos) {
         node->next = pos;
         node->prev = pos->prev;
-        if (pos->prev) pos->prev->next = node;
+        if (pos->prev)
+            pos->prev->next = node;
         pos->prev = node;
-        if (mNodes == pos) mNodes = node;
+        if (mNodes == pos)
+            mNodes = node;
     } else {
         if (mNodes) {
             Node *tail = mNodes->prev;
             node->prev = tail;
             node->next = nullptr;
-            if (tail) tail->next = node;
+            if (tail)
+                tail->next = node;
         } else {
             node->prev = nullptr;
             node->next = nullptr;
@@ -2493,7 +2689,10 @@ Hmx::Object *ObjPtrList<Sequence>::RefOwner() const {
 template <>
 bool ObjPtrList<Sequence>::Replace(ObjRef *ref, Hmx::Object *obj) {
     for (iterator it = begin(); it != end(); ++it) {
-        if (it.mNode == ref) { ReplaceNode(it.mNode, obj); return true; }
+        if (it.mNode == ref) {
+            ReplaceNode(it.mNode, obj);
+            return true;
+        }
     }
     return false;
 }
@@ -2502,9 +2701,12 @@ template <>
 ObjPtrList<Sequence>::Node *ObjPtrList<Sequence>::Unlink(Node *node) {
     Node *next = node->next;
     Node *prev = node->prev;
-    if (prev) prev->next = next;
-    if (next) next->prev = prev;
-    if (mNodes == node) mNodes = next;
+    if (prev)
+        prev->next = next;
+    if (next)
+        next->prev = prev;
+    if (mNodes == node)
+        mNodes = next;
     mSize--;
     return next;
 }
@@ -2533,7 +2735,10 @@ Hmx::Object *ObjPtrList<Task>::RefOwner() const {
 template <>
 bool ObjPtrList<Task>::Replace(ObjRef *ref, Hmx::Object *obj) {
     for (iterator it = begin(); it != end(); ++it) {
-        if (it.mNode == ref) { ReplaceNode(it.mNode, obj); return true; }
+        if (it.mNode == ref) {
+            ReplaceNode(it.mNode, obj);
+            return true;
+        }
     }
     return false;
 }
@@ -2542,9 +2747,12 @@ template <>
 ObjPtrList<Task>::Node *ObjPtrList<Task>::Unlink(Node *node) {
     Node *next = node->next;
     Node *prev = node->prev;
-    if (prev) prev->next = next;
-    if (next) next->prev = prev;
-    if (mNodes == node) mNodes = next;
+    if (prev)
+        prev->next = next;
+    if (next)
+        next->prev = prev;
+    if (mNodes == node)
+        mNodes = next;
     mSize--;
     return next;
 }
@@ -2573,7 +2781,10 @@ Hmx::Object *ObjPtrList<EventTrigger>::RefOwner() const {
 template <>
 bool ObjPtrList<EventTrigger>::Replace(ObjRef *ref, Hmx::Object *obj) {
     for (iterator it = begin(); it != end(); ++it) {
-        if (it.mNode == ref) { ReplaceNode(it.mNode, obj); return true; }
+        if (it.mNode == ref) {
+            ReplaceNode(it.mNode, obj);
+            return true;
+        }
     }
     return false;
 }
@@ -2582,9 +2793,12 @@ template <>
 ObjPtrList<EventTrigger>::Node *ObjPtrList<EventTrigger>::Unlink(Node *node) {
     Node *next = node->next;
     Node *prev = node->prev;
-    if (prev) prev->next = next;
-    if (next) next->prev = prev;
-    if (mNodes == node) mNodes = next;
+    if (prev)
+        prev->next = next;
+    if (next)
+        next->prev = prev;
+    if (mNodes == node)
+        mNodes = next;
     mSize--;
     return next;
 }
@@ -2612,15 +2826,18 @@ void ObjPtrList<RndPartLauncher>::Link(iterator it, Node *node) {
     if (pos) {
         node->next = pos;
         node->prev = pos->prev;
-        if (pos->prev) pos->prev->next = node;
+        if (pos->prev)
+            pos->prev->next = node;
         pos->prev = node;
-        if (mNodes == pos) mNodes = node;
+        if (mNodes == pos)
+            mNodes = node;
     } else {
         if (mNodes) {
             Node *tail = mNodes->prev;
             node->prev = tail;
             node->next = nullptr;
-            if (tail) tail->next = node;
+            if (tail)
+                tail->next = node;
         } else {
             node->prev = nullptr;
             node->next = nullptr;
@@ -2638,7 +2855,10 @@ Hmx::Object *ObjPtrList<RndPartLauncher>::RefOwner() const {
 template <>
 bool ObjPtrList<RndPartLauncher>::Replace(ObjRef *ref, Hmx::Object *obj) {
     for (iterator it = begin(); it != end(); ++it) {
-        if (it.mNode == ref) { ReplaceNode(it.mNode, obj); return true; }
+        if (it.mNode == ref) {
+            ReplaceNode(it.mNode, obj);
+            return true;
+        }
     }
     return false;
 }
@@ -2647,9 +2867,12 @@ template <>
 ObjPtrList<RndPartLauncher>::Node *ObjPtrList<RndPartLauncher>::Unlink(Node *node) {
     Node *next = node->next;
     Node *prev = node->prev;
-    if (prev) prev->next = next;
-    if (next) next->prev = prev;
-    if (mNodes == node) mNodes = next;
+    if (prev)
+        prev->next = next;
+    if (next)
+        next->prev = prev;
+    if (mNodes == node)
+        mNodes = next;
     mSize--;
     return next;
 }
@@ -2664,7 +2887,8 @@ ObjPtrList<RndPartLauncher>::iterator ObjPtrList<RndPartLauncher>::erase(iterato
 
 template <>
 Hmx::Object *ObjPtrList<RndPartLauncher>::Node::RefOwner() const {
-    ObjPtrList<RndPartLauncher> *list = static_cast<ObjPtrList<RndPartLauncher> *>(mOwner);
+    ObjPtrList<RndPartLauncher> *list =
+        static_cast<ObjPtrList<RndPartLauncher> *>(mOwner);
     return list->Owner();
 }
 
@@ -2673,20 +2897,25 @@ Hmx::Object *ObjPtrList<RndPartLauncher>::Node::RefOwner() const {
 // ============================================================================
 
 template <>
-void ObjRefConcrete<EventTrigger, ObjectDir>::CopyRef(const ObjRefConcrete<EventTrigger, ObjectDir> &o) {
+void ObjRefConcrete<EventTrigger, ObjectDir>::CopyRef(
+    const ObjRefConcrete<EventTrigger, ObjectDir> &o
+) {
     SetObjConcrete(o.mObject);
 }
 
 template <>
-void ObjRefConcrete<UILabel, ObjectDir>::CopyRef(const ObjRefConcrete<UILabel, ObjectDir> &o) {
+void ObjRefConcrete<UILabel, ObjectDir>::CopyRef(
+    const ObjRefConcrete<UILabel, ObjectDir> &o
+) {
     SetObjConcrete(o.mObject);
 }
 
 template <>
-void ObjRefConcrete<RndMesh, ObjectDir>::CopyRef(const ObjRefConcrete<RndMesh, ObjectDir> &o) {
+void ObjRefConcrete<RndMesh, ObjectDir>::CopyRef(
+    const ObjRefConcrete<RndMesh, ObjectDir> &o
+) {
     SetObjConcrete(o.mObject);
 }
-
 
 // ============================================================================
 // ObjRefConcrete::CopyRef template instantiations (promoted from stubs)
@@ -2732,11 +2961,11 @@ void ObjRefConcrete<RndMesh, ObjectDir>::CopyRef(const ObjRefConcrete<RndMesh, O
 #include "ui/UIColor.h"
 #include "ui/UILabelDir.h"
 
-#define OBJREFCONCRETE_COPYREF(T) \
-template <> \
-void ObjRefConcrete<T, ObjectDir>::CopyRef(const ObjRefConcrete<T, ObjectDir> &o) { \
-    SetObjConcrete(o.mObject); \
-}
+#define OBJREFCONCRETE_COPYREF(T)                                                        \
+    template <>                                                                          \
+    void ObjRefConcrete<T, ObjectDir>::CopyRef(const ObjRefConcrete<T, ObjectDir> &o) {  \
+        SetObjConcrete(o.mObject);                                                       \
+    }
 
 OBJREFCONCRETE_COPYREF(ADSR)
 OBJREFCONCRETE_COPYREF(BaseMaterial)
@@ -2798,7 +3027,9 @@ OBJREFCONCRETE_COPYREF(WorldCrowd)
 
 // Hmx::Object uses Hmx:: namespace prefix
 template <>
-void ObjRefConcrete<Hmx::Object, ObjectDir>::CopyRef(const ObjRefConcrete<Hmx::Object, ObjectDir> &o) {
+void ObjRefConcrete<Hmx::Object, ObjectDir>::CopyRef(
+    const ObjRefConcrete<Hmx::Object, ObjectDir> &o
+) {
     SetObjConcrete(o.mObject);
 }
 
@@ -2877,28 +3108,33 @@ DebugNotifyOncePrinter TheDebugNotifyOncePrinter;
 
 // -- ObjRefConcrete template stubs --
 template <>
-void ObjRefConcrete<CharWeightable, ObjectDir>::CopyRef(const ObjRefConcrete<CharWeightable, ObjectDir> &o) {
+void ObjRefConcrete<CharWeightable, ObjectDir>::CopyRef(
+    const ObjRefConcrete<CharWeightable, ObjectDir> &o
+) {
     SetObjConcrete(o.mObject);
 }
 
 #include "rndobj/Wind.h"
 template <>
-void ObjRefConcrete<RndWind, ObjectDir>::CopyRef(const ObjRefConcrete<RndWind, ObjectDir> &o) {
+void ObjRefConcrete<RndWind, ObjectDir>::CopyRef(
+    const ObjRefConcrete<RndWind, ObjectDir> &o
+) {
     SetObjConcrete(o.mObject);
 }
 
 // -- ObjPtrVec<RndTransformable> stubs --
 template <>
 Hmx::Object *ObjPtrVec<RndTransformable, ObjectDir>::Node::RefOwner() const {
-    return static_cast<Hmx::Object*>(mOwner);
+    return static_cast<Hmx::Object *>(mOwner);
 }
 
 template <>
 ObjPtrVec<RndTransformable, ObjectDir>::iterator
-ObjPtrVec<RndTransformable, ObjectDir>::erase(ObjPtrVec<RndTransformable, ObjectDir>::iterator it) {
+ObjPtrVec<RndTransformable, ObjectDir>::erase(
+    ObjPtrVec<RndTransformable, ObjectDir>::iterator it
+) {
     return mNodes.erase(&*it);
 }
-
 
 // ============================================================================
 // ObjPtrVec Node::RefOwner and erase template instantiations
@@ -2918,11 +3154,11 @@ ObjPtrVec<RndTransformable, ObjectDir>::erase(ObjPtrVec<RndTransformable, Object
 
 // -- ObjPtrVec Node::RefOwner instantiations --
 
-#define OBJPTRVEC_NODE_REFOWNER(T) \
-template <> \
-Hmx::Object *ObjPtrVec<T, ObjectDir>::Node::RefOwner() const { \
-    return static_cast<Hmx::Object*>(mOwner); \
-}
+#define OBJPTRVEC_NODE_REFOWNER(T)                                                       \
+    template <>                                                                          \
+    Hmx::Object *ObjPtrVec<T, ObjectDir>::Node::RefOwner() const {                       \
+        return static_cast<Hmx::Object *>(mOwner);                                       \
+    }
 
 OBJPTRVEC_NODE_REFOWNER(CharClip)
 OBJPTRVEC_NODE_REFOWNER(Flow)
@@ -2946,12 +3182,13 @@ OBJPTRVEC_NODE_REFOWNER(Waypoint)
 
 // -- ObjPtrVec erase instantiations --
 
-#define OBJPTRVEC_ERASE(T) \
-template <> \
-ObjPtrVec<T, ObjectDir>::iterator \
-ObjPtrVec<T, ObjectDir>::erase(ObjPtrVec<T, ObjectDir>::iterator it) { \
-    return mNodes.erase(&*it); \
-}
+#define OBJPTRVEC_ERASE(T)                                                               \
+    template <>                                                                          \
+    ObjPtrVec<T, ObjectDir>::iterator ObjPtrVec<T, ObjectDir>::erase(                    \
+        ObjPtrVec<T, ObjectDir>::iterator it                                             \
+    ) {                                                                                  \
+        return mNodes.erase(&*it);                                                       \
+    }
 
 OBJPTRVEC_ERASE(CharClip)
 OBJPTRVEC_ERASE(Flow)
@@ -3016,14 +3253,18 @@ OBJPTRVEC_ERASE(Waypoint)
 // ObjRefConcrete::CopyRef for RndParticleSys (PartLauncher.obj)
 #include "rndobj/Part.h"
 template <>
-void ObjRefConcrete<RndParticleSys, ObjectDir>::CopyRef(const ObjRefConcrete<RndParticleSys, ObjectDir> &o) {
+void ObjRefConcrete<RndParticleSys, ObjectDir>::CopyRef(
+    const ObjRefConcrete<RndParticleSys, ObjectDir> &o
+) {
     SetObjConcrete(o.mObject);
 }
 
 // ObjRefConcrete::CopyRef for CharBone (CharBone.obj)
 #include "char/CharBone.h"
 template <>
-void ObjRefConcrete<CharBone, ObjectDir>::CopyRef(const ObjRefConcrete<CharBone, ObjectDir> &o) {
+void ObjRefConcrete<CharBone, ObjectDir>::CopyRef(
+    const ObjRefConcrete<CharBone, ObjectDir> &o
+) {
     SetObjConcrete(o.mObject);
 }
 
@@ -3065,7 +3306,6 @@ void HolmesClientPrint(const char *) {}
 #include "utl/MemMgr.h"
 void MemOrPoolFree(int, void *mem, const char *, int, const char *) {}
 
-
 // ============================================================================
 // ObjPtrList::RefOwner and Node::RefOwner instantiations (promoted from stubs)
 // ============================================================================
@@ -3083,12 +3323,12 @@ Hmx::Object *ObjPtrList<FlowNode>::RefOwner() const {
 }
 
 // Node::RefOwner instantiations
-#define OBJPTRLIST_NODE_REFOWNER(T) \
-template <> \
-Hmx::Object *ObjPtrList<T>::Node::RefOwner() const { \
-    ObjPtrList<T> *list = static_cast<ObjPtrList<T> *>(mOwner); \
-    return list->Owner(); \
-}
+#define OBJPTRLIST_NODE_REFOWNER(T)                                                      \
+    template <>                                                                          \
+    Hmx::Object *ObjPtrList<T>::Node::RefOwner() const {                                 \
+        ObjPtrList<T> *list = static_cast<ObjPtrList<T> *>(mOwner);                      \
+        return list->Owner();                                                            \
+    }
 
 OBJPTRLIST_NODE_REFOWNER(CharPollable)
 OBJPTRLIST_NODE_REFOWNER(CharWeightSetter)
@@ -3135,9 +3375,8 @@ extern "C" void floor0_unpack(void) {}
 // lbl_ data stubs: now resolved by create_data_stubs.py, removed from here
 
 // Data stubs for vtable/static data ALTERNATENAME redirects
-extern "C" int __link_glue_zero[64] = {0};
+extern "C" int __link_glue_zero[64] = { 0 };
 extern "C" const char __link_glue_empty_str[] = "";
-
 
 // Remaining unresolved symbols from Matching unit decomp-only linking.
 // Removed: NewBufStream@Synth — already implemented in Synth.cpp (matching unit)
@@ -3151,11 +3390,14 @@ extern "C" const char __link_glue_empty_str[] = "";
 // ============================================================================
 
 // -- ObjPtr/ObjRef template instantiations --
-#pragma comment(linker, "/ALTERNATENAME:?merged_ObjPtrListPopBack@@YAXPAX@Z=__link_glue_noop")
+#pragma comment(                                                                         \
+    linker, "/ALTERNATENAME:?merged_ObjPtrListPopBack@@YAXPAX@Z=__link_glue_noop"        \
+)
 
 // -- BinStream operators --
-// Removed: operator>>(BinStream&, FlowTrigger::PropTriggerDefn&) — implemented in FlowTrigger.cpp (matching unit)
-// Removed: PostLoad@HamDriver — implemented in HamDriver.cpp (matching unit)
+// Removed: operator>>(BinStream&, FlowTrigger::PropTriggerDefn&) — implemented in
+// FlowTrigger.cpp (matching unit) Removed: PostLoad@HamDriver — implemented in
+// HamDriver.cpp (matching unit)
 
 // -- Data symbols --
 #pragma comment(linker, "/ALTERNATENAME:?lbl_82F1AB98@@3IA=__link_glue_zero")
@@ -3164,40 +3406,41 @@ extern "C" const char __link_glue_empty_str[] = "";
 #pragma comment(linker, "/ALTERNATENAME:?lbl_82F5E180@@3JC=__link_glue_zero")
 // Removed: sLoadingMaster@LoadingPanel — defined in LoadingPanel.cpp (matching unit)
 // Removed: sSongDB@LoadingPanel — defined in LoadingPanel.cpp (matching unit)
-#pragma comment(linker, "/ALTERNATENAME:?tf2cf@RndRenderState@@2PAW4_D3DCMPFUNC@@A=__link_glue_zero")
+#pragma comment(                                                                         \
+    linker, "/ALTERNATENAME:?tf2cf@RndRenderState@@2PAW4_D3DCMPFUNC@@A=__link_glue_zero" \
+)
 
 // -- Other functions --
-// Removed: LocationCmp::LocationCmp — implemented in SongSortByLocation.cpp (matching unit)
-// Removed: ~DifficultyCmp — implemented in SongSortByDiff.cpp (matching unit)
+// Removed: LocationCmp::LocationCmp — implemented in SongSortByLocation.cpp (matching
+// unit) Removed: ~DifficultyCmp — implemented in SongSortByDiff.cpp (matching unit)
 // Removed: ~MQSongSortNode — implemented in MQSongSortNode.cpp (matching unit)
 // Removed: ~SongCmp — implemented in SongSortBySong.cpp (matching unit)
 // Removed: SortCmp::operator() — implemented in StoreOffer.cpp (matching unit)
 // Removed: DrawFixedZ@DrawString — implemented in Graph.cpp
-// Removed: DrawShowing@SpotlightDrawer — implemented in SpotlightDrawer.cpp (matching unit)
-// Removed: GetBufferSize@HttpGet — implemented in HttpGet.cpp
-// Removed: GetColor@UIColor — implemented in UIColor.cpp (matching unit)
-// Removed: GetNumRestarts@Game — implemented in Game.cpp
-// Removed: GetSlipOffset@StreamReceiverFile — implemented in StreamReceiverFile.cpp
-// Removed: Highlight@Waypoint — implemented in Waypoint.cpp
-// Removed: OnSelect@NgPostProc — implemented in PostProc_NG.cpp (matching unit)
-// Removed: OnSync@RndMesh — implemented in Mesh.cpp (matching unit)
-// Removed: OnUnselect@NgPostProc — implemented in PostProc_NG.cpp (matching unit)
-// Removed: PresyncBitmap@RndTex — implemented in Tex.cpp (matching unit)
-// Removed: SpewInit — implemented in Spew.cpp
-// Removed: SpewTerminate — implemented in Spew.cpp
-// Removed: SyncBitmap@RndTex — implemented in Tex.cpp (matching unit)
-// Removed: TerminateMakeString — implemented in MakeString.cpp
-// Removed: ValidateCRC@CRC@Hmx — implemented in Crc.cpp
+// Removed: DrawShowing@SpotlightDrawer — implemented in SpotlightDrawer.cpp (matching
+// unit) Removed: GetBufferSize@HttpGet — implemented in HttpGet.cpp Removed:
+// GetColor@UIColor — implemented in UIColor.cpp (matching unit) Removed:
+// GetNumRestarts@Game — implemented in Game.cpp Removed: GetSlipOffset@StreamReceiverFile
+// — implemented in StreamReceiverFile.cpp Removed: Highlight@Waypoint — implemented in
+// Waypoint.cpp Removed: OnSelect@NgPostProc — implemented in PostProc_NG.cpp (matching
+// unit) Removed: OnSync@RndMesh — implemented in Mesh.cpp (matching unit) Removed:
+// OnUnselect@NgPostProc — implemented in PostProc_NG.cpp (matching unit) Removed:
+// PresyncBitmap@RndTex — implemented in Tex.cpp (matching unit) Removed: SpewInit —
+// implemented in Spew.cpp Removed: SpewTerminate — implemented in Spew.cpp Removed:
+// SyncBitmap@RndTex — implemented in Tex.cpp (matching unit) Removed: TerminateMakeString
+// — implemented in MakeString.cpp Removed: ValidateCRC@CRC@Hmx — implemented in Crc.cpp
 // Removed: Flush@HDCache — implemented in HDCache.cpp (matching unit)
 // Removed: Handle@BustAMoveData — implemented in BustAMoveData.cpp (matching unit)
 // Removed: Handle@OvershellSlot — implemented in Overshell.cpp (matching unit)
 // Removed: InsertBreak@RndConsole — implemented in Console.cpp (matching unit)
-// Removed: IsDifficultyUnlockedForProfile@HamProfile — implemented in HamProfile.cpp (matching unit)
-// Removed: JointToVertexData — implemented in DepthBuffer3D.cpp (matching unit)
-// Removed: OnMsg@HamUI — implemented in HamUI.cpp (matching unit)
-// Removed: RemoveFromLists@Spotlight — implemented in Spotlight.cpp (matching unit)
-// Removed: VertexToWorld — implemented in DepthBuffer3D.cpp (matching unit)
-#pragma comment(linker, "/ALTERNATENAME:?altCfg@@YA?AVDataArrayPtr@@VDataNode@@0@Z=__link_glue_noop")
+// Removed: IsDifficultyUnlockedForProfile@HamProfile — implemented in HamProfile.cpp
+// (matching unit) Removed: JointToVertexData — implemented in DepthBuffer3D.cpp (matching
+// unit) Removed: OnMsg@HamUI — implemented in HamUI.cpp (matching unit) Removed:
+// RemoveFromLists@Spotlight — implemented in Spotlight.cpp (matching unit) Removed:
+// VertexToWorld — implemented in DepthBuffer3D.cpp (matching unit)
+#pragma comment(                                                                         \
+    linker, "/ALTERNATENAME:?altCfg@@YA?AVDataArrayPtr@@VDataNode@@0@Z=__link_glue_noop" \
+)
 #pragma comment(linker, "/ALTERNATENAME:?merged_82610090@@YAPBDPBDPCH@Z=__link_glue_noop")
 
 // -- BinStream operator<< template instantiations --
@@ -3218,25 +3461,65 @@ extern "C" const char __link_glue_empty_str[] = "";
 // -- Dynamic initializers (??__E) needed by auto_08_82F05C00_data.obj --
 // These ??__E symbols are referenced from the CRT __xc_a section but their
 // defining TUs are NonMatching split objects that lack the definitions.
-#pragma comment(linker, "/ALTERNATENAME:??__E?mAssocMicXbox@ExternalMicClientMgr@@0V?$vector@PAVMicXbox@@V?$StlNodeAlloc@PAVMicXbox@@@stlpmtx_std@@@stlpmtx_std@@A@@YAXXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:??__E?mDevToMicMaster@ExternalMicClientMgr@@0V?$vector@KV?$StlNodeAlloc@K@stlpmtx_std@@@stlpmtx_std@@A@@YAXXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:??__E?mMicMasterToDev@ExternalMicClientMgr@@0V?$vector@KV?$StlNodeAlloc@K@stlpmtx_std@@@stlpmtx_std@@A@@YAXXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:??__E?mMicMasters@ExternalMicClientMgr@@0V?$vector@PAVExternalMicClientProxy@@V?$StlNodeAlloc@PAVExternalMicClientProxy@@@stlpmtx_std@@@stlpmtx_std@@A@@YAXXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VCompressionEffect@@UParams@1@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop")
+#pragma comment(                                                                                                                                                        \
+    linker,                                                                                                                                                             \
+    "/ALTERNATENAME:??__E?mAssocMicXbox@ExternalMicClientMgr@@0V?$vector@PAVMicXbox@@V?$StlNodeAlloc@PAVMicXbox@@@stlpmtx_std@@@stlpmtx_std@@A@@YAXXZ=__link_glue_noop" \
+)
+#pragma comment(                                                                                                                                    \
+    linker,                                                                                                                                         \
+    "/ALTERNATENAME:??__E?mDevToMicMaster@ExternalMicClientMgr@@0V?$vector@KV?$StlNodeAlloc@K@stlpmtx_std@@@stlpmtx_std@@A@@YAXXZ=__link_glue_noop" \
+)
+#pragma comment(                                                                                                                                    \
+    linker,                                                                                                                                         \
+    "/ALTERNATENAME:??__E?mMicMasterToDev@ExternalMicClientMgr@@0V?$vector@KV?$StlNodeAlloc@K@stlpmtx_std@@@stlpmtx_std@@A@@YAXXZ=__link_glue_noop" \
+)
+#pragma comment(                                                                                                                                                                                    \
+    linker,                                                                                                                                                                                         \
+    "/ALTERNATENAME:??__E?mMicMasters@ExternalMicClientMgr@@0V?$vector@PAVExternalMicClientProxy@@V?$StlNodeAlloc@PAVExternalMicClientProxy@@@stlpmtx_std@@@stlpmtx_std@@A@@YAXXZ=__link_glue_noop" \
+)
+#pragma comment(                                                                                                                                      \
+    linker,                                                                                                                                           \
+    "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VCompressionEffect@@UParams@1@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop" \
+)
 #pragma comment(linker, "/ALTERNATENAME:??__EgInput@?A0x49b544a7@@YAXXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:??__EgJoypadData@?A0xca10770b@@YAXXZ=__link_glue_noop")
+#pragma comment(                                                                         \
+    linker, "/ALTERNATENAME:??__EgJoypadData@?A0xca10770b@@YAXXZ=__link_glue_noop"       \
+)
 #pragma comment(linker, "/ALTERNATENAME:??__EgMics@?A0x0c39da7f@@YAXXZ=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:??__Es_voiceGC@@YAXXZ=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:??__Es_voiceGCInProgress@@YAXXZ=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:??__EsFlipYZ@@YAXXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:??__EsIdentityXfm@?A0x8e417309@@YAXXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VBitCrushEffect@@UParams@1@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VDistortionEffect@@UParams@1@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VDelayEffect@@UParams@1@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VFlangerEffect@@UParams@1@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VEQEffect@@UParams@1@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VWahEffect@@UParams@1@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VMeterEffect@@UMeterEffectParams@@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop")
+#pragma comment(                                                                         \
+    linker, "/ALTERNATENAME:??__EsIdentityXfm@?A0x8e417309@@YAXXZ=__link_glue_noop"      \
+)
+#pragma comment(                                                                                                                                   \
+    linker,                                                                                                                                        \
+    "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VBitCrushEffect@@UParams@1@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop" \
+)
+#pragma comment(                                                                                                                                     \
+    linker,                                                                                                                                          \
+    "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VDistortionEffect@@UParams@1@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop" \
+)
+#pragma comment(                                                                                                                                \
+    linker,                                                                                                                                     \
+    "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VDelayEffect@@UParams@1@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop" \
+)
+#pragma comment(                                                                                                                                  \
+    linker,                                                                                                                                       \
+    "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VFlangerEffect@@UParams@1@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop" \
+)
+#pragma comment(                                                                                                                             \
+    linker,                                                                                                                                  \
+    "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VEQEffect@@UParams@1@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop" \
+)
+#pragma comment(                                                                                                                              \
+    linker,                                                                                                                                   \
+    "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VWahEffect@@UParams@1@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop" \
+)
+#pragma comment(                                                                                                                                          \
+    linker,                                                                                                                                               \
+    "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VMeterEffect@@UMeterEffectParams@@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop" \
+)
 #pragma comment(linker, "/ALTERNATENAME:except_data_82918780=__link_glue_zero")
 
 // ============================================================================
@@ -3245,21 +3528,50 @@ extern "C" const char __link_glue_empty_str[] = "";
 // ============================================================================
 
 // -- Dynamic initializers (76 symbols) --
-#pragma comment(linker, "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VEnvelopeGenerator@@UEnvelopeGeneratorParams@@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VGainEffect@@UGainEffectParams@@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VHeadsetPlaybackEffect@@UHeadsetPlaybackEffectParams@@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VHeadsetXferEffect@@UHeadsetXferEffectParams@@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VPitchShiftEffect@@UPitchShiftEffectParams@@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VSynapseAPO@DSP@@USynapseAPOParams@2@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop")
+#pragma comment(                                                                                                                                                      \
+    linker,                                                                                                                                                           \
+    "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VEnvelopeGenerator@@UEnvelopeGeneratorParams@@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop" \
+)
+#pragma comment(                                                                                                                                        \
+    linker,                                                                                                                                             \
+    "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VGainEffect@@UGainEffectParams@@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop" \
+)
+#pragma comment(                                                                                                                                                              \
+    linker,                                                                                                                                                                   \
+    "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VHeadsetPlaybackEffect@@UHeadsetPlaybackEffectParams@@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop" \
+)
+#pragma comment(                                                                                                                                                      \
+    linker,                                                                                                                                                           \
+    "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VHeadsetXferEffect@@UHeadsetXferEffectParams@@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop" \
+)
+#pragma comment(                                                                                                                                                    \
+    linker,                                                                                                                                                         \
+    "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VPitchShiftEffect@@UPitchShiftEffectParams@@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop" \
+)
+#pragma comment(                                                                                                                                             \
+    linker,                                                                                                                                                  \
+    "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VSynapseAPO@DSP@@USynapseAPOParams@2@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop" \
+)
 #pragma comment(linker, "/ALTERNATENAME:??__EgCrit@@YAXXZ=__link_glue_noop")
 // Removed: ??__EgChildPolys — symbol exists in matching Utl.obj
 // Removed: ??__EgParentPolys — symbol exists in matching Utl.obj
-#pragma comment(linker, "/ALTERNATENAME:??__EgPhysicsVolumeBox@?A0x5ba00aca@@YAXXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:??__EkConvLen@?A0x5c754947@@YAXXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:??__EmFriendEnumRequests@?A0x8a9ffbf2@@YAXXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:??__EmServiceIdMap@?A0x8a9ffbf2@@YAXXZ=__link_glue_noop")
+#pragma comment(                                                                         \
+    linker, "/ALTERNATENAME:??__EgPhysicsVolumeBox@?A0x5ba00aca@@YAXXZ=__link_glue_noop" \
+)
+#pragma comment(                                                                         \
+    linker, "/ALTERNATENAME:??__EkConvLen@?A0x5c754947@@YAXXZ=__link_glue_noop"          \
+)
+#pragma comment(                                                                         \
+    linker,                                                                              \
+    "/ALTERNATENAME:??__EmFriendEnumRequests@?A0x8a9ffbf2@@YAXXZ=__link_glue_noop"       \
+)
+#pragma comment(                                                                         \
+    linker, "/ALTERNATENAME:??__EmServiceIdMap@?A0x8a9ffbf2@@YAXXZ=__link_glue_noop"     \
+)
 #pragma comment(linker, "/ALTERNATENAME:??__EmTime@?A0x8a9ffbf2@@YAXXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:??__EsOverlayWidth@?A0xe50ea9df@@YAXXZ=__link_glue_noop")
+#pragma comment(                                                                         \
+    linker, "/ALTERNATENAME:??__EsOverlayWidth@?A0xe50ea9df@@YAXXZ=__link_glue_noop"     \
+)
 #pragma comment(linker, "/ALTERNATENAME:??__EsSuperClassMap@@YAXXZ=__link_glue_noop")
 
 // -- Audio SDK (11 symbols) --
@@ -3288,27 +3600,30 @@ extern "C" const char __link_glue_empty_str[] = "";
 // Removed: DataOwner@RndFont3d — implemented in Font3d.cpp (matching unit)
 // Removed: ExitStore@StorePanel — implemented in StorePanel.cpp (matching unit)
 // Removed: GetFailType@NetCacheLoader — implemented in NetCacheLoader.cpp
-// Removed: GetJumpBackTotalTime@StandardStream — implemented in StandardStream.cpp (matching unit)
-// Removed: GetName@MicXbox — implemented in Mic.cpp
-// Removed: Handle@FitnessCalorieSortMgr — implemented in FitnessCalorieSortMgr.cpp (matching unit)
+// Removed: GetJumpBackTotalTime@StandardStream — implemented in StandardStream.cpp
+// (matching unit) Removed: GetName@MicXbox — implemented in Mic.cpp Removed:
+// Handle@FitnessCalorieSortMgr — implemented in FitnessCalorieSortMgr.cpp (matching unit)
 // Removed: Handle@RndFont3d — implemented in Font3d.cpp (matching unit)
 // Removed: Load@SynthSample — implemented in SynthSample.cpp (matching unit)
 // Removed: Mat@RndFont3d — implemented in Font3d.cpp (matching unit)
-// Removed: NewHeaderNode(2-arg)@ChallengeSortByScore — implemented in ChallengeSortByScore.cpp (matching unit)
-// Removed: NewHeaderNode(2-arg)@FitnessCalorieSortByCalorie — implemented in FitnessCalorieSortByCalorie.cpp (matching unit)
-// Removed: NewHeaderNode(2-arg)@MQSongSortByCharacter — implemented in MQSongSortByCharacter.cpp (matching unit)
-// Removed: NewHeaderNode(2-arg)@SongSortByLocation — implemented in SongSortByLocation.cpp (matching unit)
-// Removed: OldResourcePreload@LabelShrinkWrapper — implemented in LabelShrinkWrapper.cpp (matching unit)
-// Removed: OnParametersChanged@FxSendFlanger360 — implemented in FxSendFlanger.cpp
-// Removed: OnSync@DxMesh — implemented in rnddx9/Mesh.cpp (matching unit)
-// Removed: Poll@LabelShrinkWrapper — implemented in LabelShrinkWrapper.cpp (matching unit)
+// Removed: NewHeaderNode(2-arg)@ChallengeSortByScore — implemented in
+// ChallengeSortByScore.cpp (matching unit) Removed:
+// NewHeaderNode(2-arg)@FitnessCalorieSortByCalorie — implemented in
+// FitnessCalorieSortByCalorie.cpp (matching unit) Removed:
+// NewHeaderNode(2-arg)@MQSongSortByCharacter — implemented in MQSongSortByCharacter.cpp
+// (matching unit) Removed: NewHeaderNode(2-arg)@SongSortByLocation — implemented in
+// SongSortByLocation.cpp (matching unit) Removed: OldResourcePreload@LabelShrinkWrapper —
+// implemented in LabelShrinkWrapper.cpp (matching unit) Removed:
+// OnParametersChanged@FxSendFlanger360 — implemented in FxSendFlanger.cpp Removed:
+// OnSync@DxMesh — implemented in rnddx9/Mesh.cpp (matching unit) Removed:
+// Poll@LabelShrinkWrapper — implemented in LabelShrinkWrapper.cpp (matching unit)
 // Removed: Poll@RandomIntervalGroupSeqInst — implemented in Sequence.cpp (matching unit)
-// Removed: Select@ChallengeHeaderNode — implemented in ChallengeSortNode.cpp (matching unit)
-// Removed: Set@NgDOFProc — implemented in DOFProc_NG.cpp (matching unit)
-// Removed: SetPaused@BinkMovieImpl — implemented in BinkMovieImpl.cpp (matching unit)
-// Removed: SetVConstant(float*)@DxShaderMgr — implemented in ShaderMgr.cpp (matching unit)
-// Removed: StartImpl@RandomIntervalGroupSeqInst — implemented in Sequence.cpp (matching unit)
-// Removed: StoreProfile@StorePanel — implemented in StorePanel.cpp (matching unit)
+// Removed: Select@ChallengeHeaderNode — implemented in ChallengeSortNode.cpp (matching
+// unit) Removed: Set@NgDOFProc — implemented in DOFProc_NG.cpp (matching unit) Removed:
+// SetPaused@BinkMovieImpl — implemented in BinkMovieImpl.cpp (matching unit) Removed:
+// SetVConstant(float*)@DxShaderMgr — implemented in ShaderMgr.cpp (matching unit)
+// Removed: StartImpl@RandomIntervalGroupSeqInst — implemented in Sequence.cpp (matching
+// unit) Removed: StoreProfile@StorePanel — implemented in StorePanel.cpp (matching unit)
 // Removed: SyncBitmap@DxTex — implemented in rnddx9/Tex.cpp (matching unit)
 // Removed: UpdateApproxLighting@RndEnviron — implemented in Env.cpp (matching unit)
 
@@ -3323,54 +3638,84 @@ extern "C" const char __link_glue_empty_str[] = "";
 
 // -- Game/engine functions (535 symbols) --
 #pragma comment(linker, "/ALTERNATENAME:??0CXAPOBase@ATG@@QAA@XZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:??0CXAPOParametersBase@ATG@@QAA@PBXPAXIE@Z=__link_glue_noop")
+#pragma comment(                                                                         \
+    linker, "/ALTERNATENAME:??0CXAPOParametersBase@ATG@@QAA@PBXPAXIE@Z=__link_glue_noop" \
+)
 #pragma comment(linker, "/ALTERNATENAME:??0ID3DXInclude@@QAA@XZ=__link_glue_noop")
 // Removed: ~AppLabel — implemented in AppLabel.cpp (matching unit)
-// Removed: ~FitnessCalorieSortByCalorie — implemented in FitnessCalorieSortByCalorie.cpp (matching unit)
-// Removed: ~FitnessCalorieSortCmp — implemented in FitnessCalorieSortByCalorie.cpp (matching unit)
-// Removed: ~MQSongSortByCharacter — implemented in MQSongSortByCharacter.cpp (matching unit)
-#pragma comment(linker, "/ALTERNATENAME:??1PeakDetector@Synapse@DSP@@QAA@XZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:??1PitchCorrectedVoice@Synapse@DSP@@QAA@XZ=__link_glue_noop")
+// Removed: ~FitnessCalorieSortByCalorie — implemented in FitnessCalorieSortByCalorie.cpp
+// (matching unit) Removed: ~FitnessCalorieSortCmp — implemented in
+// FitnessCalorieSortByCalorie.cpp (matching unit) Removed: ~MQSongSortByCharacter —
+// implemented in MQSongSortByCharacter.cpp (matching unit)
+#pragma comment(                                                                         \
+    linker, "/ALTERNATENAME:??1PeakDetector@Synapse@DSP@@QAA@XZ=__link_glue_noop"        \
+)
+#pragma comment(                                                                         \
+    linker, "/ALTERNATENAME:??1PitchCorrectedVoice@Synapse@DSP@@QAA@XZ=__link_glue_noop" \
+)
 #pragma comment(linker, "/ALTERNATENAME:?BinkClose@@YAXPAUBINK@@@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?BinkCloseTrack@@YAXPAUBINKTRACK@@@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?BinkGetTrackData@@YAIPAUBINKTRACK@@PAX@Z=__link_glue_noop")
+#pragma comment(                                                                         \
+    linker, "/ALTERNATENAME:?BinkCloseTrack@@YAXPAUBINKTRACK@@@Z=__link_glue_noop"       \
+)
+#pragma comment(                                                                         \
+    linker, "/ALTERNATENAME:?BinkGetTrackData@@YAIPAUBINKTRACK@@PAX@Z=__link_glue_noop"  \
+)
 #pragma comment(linker, "/ALTERNATENAME:?BinkNextFrame@@YAXPAUBINK@@@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?BinkOpenTrack@@YAPAUBINKTRACK@@PAUBINK@@E@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?BinkSetMemory@@YAXP6APAXH@ZP6AXPAX@Z@Z=__link_glue_noop")
+#pragma comment(                                                                         \
+    linker,                                                                              \
+    "/ALTERNATENAME:?BinkOpenTrack@@YAPAUBINKTRACK@@PAUBINK@@E@Z=__link_glue_noop"       \
+)
+#pragma comment(                                                                         \
+    linker, "/ALTERNATENAME:?BinkSetMemory@@YAXP6APAXH@ZP6AXPAX@Z@Z=__link_glue_noop"    \
+)
 #pragma comment(linker, "/ALTERNATENAME:?BinkStartAsyncThread@@YAHHH@Z=__link_glue_noop")
 // Removed: GetLastResult@Cache — implemented in Cache.cpp
-// Removed: Intersect(Segment,Triangle,int,float&) — fixed signature and already in Geo.cpp (matching unit)
-// Removed: OnSmartGlassListen@FitnessGoalMgr — implemented in FitnessGoalMgr.cpp (matching unit)
-#pragma comment(linker, "/ALTERNATENAME:?PreSave@WorldInstance@@UAAXAAVBinStream@@@Z=__link_glue_noop")
+// Removed: Intersect(Segment,Triangle,int,float&) — fixed signature and already in
+// Geo.cpp (matching unit) Removed: OnSmartGlassListen@FitnessGoalMgr — implemented in
+// FitnessGoalMgr.cpp (matching unit) Removed: PreSave@WorldInstance — implemented in
+// Instance.cpp (matching unit)
 #pragma comment(linker, "/ALTERNATENAME:?RadAlloc@@YAPAXH@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?SetReleaseSmoothing@PitchCorrectedVoice@Synapse@DSP@@QAAXM@Z=__link_glue_noop")
+#pragma comment(                                                                                    \
+    linker,                                                                                         \
+    "/ALTERNATENAME:?SetReleaseSmoothing@PitchCorrectedVoice@Synapse@DSP@@QAAXM@Z=__link_glue_noop" \
+)
 // Removed: UpdateGestures@HamNavList — implemented in HamNavList.cpp (matching unit)
-#pragma comment(linker, "/ALTERNATENAME:?__pop_heap_aux@stlpmtx_std@@YAXPAUMemDiffEntry@@0HU?$less@UMemDiffEntry@@@1@@Z=__link_glue_noop")
+#pragma comment(                                                                                                      \
+    linker,                                                                                                           \
+    "/ALTERNATENAME:?__pop_heap_aux@stlpmtx_std@@YAXPAUMemDiffEntry@@0HU?$less@UMemDiffEntry@@@1@@Z=__link_glue_noop" \
+)
 // Removed: dispose@Voice — implemented in Voice.cpp (matching unit)
 // Removed: kStreamEndMs@StandardStream — defined in StandardStream.cpp (matching unit)
 #pragma comment(linker, "/ALTERNATENAME:?merged_82610090@@YAPAXPBXPAI@Z=__link_glue_noop")
-// Removed: CopyRef@ObjRefConcrete<Hmx::Object,ObjectDir> — explicit instantiation in link_glue.cpp
-// Removed: IsLoaded@ObjDirPtr<ObjectDir> — explicit instantiation in link_glue.cpp
-// Removed: RefOwner@ObjPtrList<FlowNode> — explicit instantiation in link_glue.cpp
-// Removed: Node::RefOwner for CharPollable, CharWeightSetter, CharWeightable, Fader,
+// Removed: CopyRef@ObjRefConcrete<Hmx::Object,ObjectDir> — explicit instantiation in
+// link_glue.cpp Removed: IsLoaded@ObjDirPtr<ObjectDir> — explicit instantiation in
+// link_glue.cpp Removed: RefOwner@ObjPtrList<FlowNode> — explicit instantiation in
+// link_glue.cpp Removed: Node::RefOwner for CharPollable, CharWeightSetter,
+// CharWeightable, Fader,
 //          NoteVoiceInst, ObjectDir, RndLight, SeqInst, SfxInst, ThreeDSound,
 //          Waypoint, WorldCrowd — explicit instantiations in link_glue.cpp
-#pragma comment(linker, "/ALTERNATENAME:?copy@?$char_traits@_W@stlpmtx_std@@SAPA_WPA_WPB_WI@Z=__link_glue_noop")
+#pragma comment(                                                                            \
+    linker,                                                                                 \
+    "/ALTERNATENAME:?copy@?$char_traits@_W@stlpmtx_std@@SAPA_WPA_WPB_WI@Z=__link_glue_noop" \
+)
 #pragma comment(linker, "/ALTERNATENAME:BinkInit=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:D3DTexture_GetLevelDesc=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:D3DTexture_LockRect=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:D3DTexture_UnlockRect=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:D3DXSetDXT3DXT5=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:FFTRealForward=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:JoypadSetActuatorsImp=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:__real_0000000000000000=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:__real_3f50624dd2f1a9fc=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:__real_3fe0000000000000=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:__real_4000000000000000=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:__real_400921fb60000000=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:__real_401921fb60000000=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:__vmx_00000000000000000000000000000000=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:__vmx_bf8000003f800000bf8000003f800000=__link_glue_noop")
+#pragma comment(                                                                         \
+    linker, "/ALTERNATENAME:__vmx_00000000000000000000000000000000=__link_glue_noop"     \
+)
+#pragma comment(                                                                         \
+    linker, "/ALTERNATENAME:__vmx_bf8000003f800000bf8000003f800000=__link_glue_noop"     \
+)
 #pragma comment(linker, "/ALTERNATENAME:_close=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:cexp=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:expand=__link_glue_noop")
@@ -3414,17 +3759,17 @@ extern "C" const char __link_glue_empty_str[] = "";
 
 // -- BinStream operator<< for ObjPtrList<T> --
 
-#define BINSTREAM_OP_OBJPTRLIST(T) \
-template <> \
-BinStream &operator<<(BinStream &bs, const ObjPtrList<T, ObjectDir> &list) { \
-    bs << list.size(); \
-    for (ObjPtrList<T>::iterator it = list.begin(); it != list.end(); ++it) { \
-        Hmx::Object *obj = *it; \
-        const char *name = obj ? obj->Name() : ""; \
-        bs << name; \
-    } \
-    return bs; \
-}
+#define BINSTREAM_OP_OBJPTRLIST(T)                                                       \
+    template <>                                                                          \
+    BinStream &operator<<(BinStream &bs, const ObjPtrList<T, ObjectDir> &list) {         \
+        bs << list.size();                                                               \
+        for (ObjPtrList<T>::iterator it = list.begin(); it != list.end(); ++it) {        \
+            Hmx::Object *obj = *it;                                                      \
+            const char *name = obj ? obj->Name() : "";                                   \
+            bs << name;                                                                  \
+        }                                                                                \
+        return bs;                                                                       \
+    }
 
 BINSTREAM_OP_OBJPTRLIST(CamShot)
 BINSTREAM_OP_OBJPTRLIST(CharBone)
@@ -3440,17 +3785,17 @@ BINSTREAM_OP_OBJPTRLIST(Sequence)
 
 // -- BinStream operator<< for ObjPtrVec<T> --
 
-#define BINSTREAM_OP_OBJPTRVEC(T) \
-template <> \
-BinStream &operator<<(BinStream &bs, const ObjPtrVec<T, ObjectDir> &vec) { \
-    bs << (int)vec.size(); \
-    for (int i = 0; i < (int)vec.size(); i++) { \
-        const Hmx::Object *obj = vec[i]; \
-        const char *name = obj ? obj->Name() : ""; \
-        bs << name; \
-    } \
-    return bs; \
-}
+#define BINSTREAM_OP_OBJPTRVEC(T)                                                        \
+    template <>                                                                          \
+    BinStream &operator<<(BinStream &bs, const ObjPtrVec<T, ObjectDir> &vec) {           \
+        bs << (int)vec.size();                                                           \
+        for (int i = 0; i < (int)vec.size(); i++) {                                      \
+            const Hmx::Object *obj = vec[i];                                             \
+            const char *name = obj ? obj->Name() : "";                                   \
+            bs << name;                                                                  \
+        }                                                                                \
+        return bs;                                                                       \
+    }
 
 BINSTREAM_OP_OBJPTRVEC(CharClip)
 BINSTREAM_OP_OBJPTRVEC(Flow)
@@ -3467,14 +3812,14 @@ BINSTREAM_OP_OBJPTRVEC(SpotlightDrawer)
 
 // -- BinStream operator<< for ObjOwnerPtr<T> --
 
-#define BINSTREAM_OP_OBJOWNERPTR(T) \
-template <> \
-BinStream &operator<<(BinStream &bs, const ObjOwnerPtr<T> &ptr) { \
-    Hmx::Object *obj = ptr; \
-    const char *name = obj ? obj->Name() : ""; \
-    bs << name; \
-    return bs; \
-}
+#define BINSTREAM_OP_OBJOWNERPTR(T)                                                      \
+    template <>                                                                          \
+    BinStream &operator<<(BinStream &bs, const ObjOwnerPtr<T> &ptr) {                    \
+        Hmx::Object *obj = ptr;                                                          \
+        const char *name = obj ? obj->Name() : "";                                       \
+        bs << name;                                                                      \
+        return bs;                                                                       \
+    }
 
 BINSTREAM_OP_OBJOWNERPTR(CharInterest)
 BINSTREAM_OP_OBJOWNERPTR(CharLookAt)
@@ -3493,14 +3838,14 @@ BINSTREAM_OP_OBJOWNERPTR(RndParticleSysAnim)
 
 // -- BinStream operator<< for ObjDirPtr<T> --
 
-#define BINSTREAM_OP_OBJDIRPTR(T) \
-template <> \
-BinStream &operator<<(BinStream &bs, const ObjDirPtr<T> &ptr) { \
-    T *dir = ptr; \
-    const char *name = dir ? dir->Name() : ""; \
-    bs << name; \
-    return bs; \
-}
+#define BINSTREAM_OP_OBJDIRPTR(T)                                                        \
+    template <>                                                                          \
+    BinStream &operator<<(BinStream &bs, const ObjDirPtr<T> &ptr) {                      \
+        T *dir = ptr;                                                                    \
+        const char *name = dir ? dir->Name() : "";                                       \
+        bs << name;                                                                      \
+        return bs;                                                                       \
+    }
 
 BINSTREAM_OP_OBJDIRPTR(HamListRibbon)
 BINSTREAM_OP_OBJDIRPTR(HamScrollSpeedIndicator)
@@ -3512,11 +3857,11 @@ BINSTREAM_OP_OBJDIRPTR(UIListDir)
 // -- PropSync<T> for ObjPtrVec<T> --
 // These are stub implementations that just return false.
 
-#define PROPSYNC_OBJPTRVEC(T) \
-template <> \
-bool PropSync(ObjPtrVec<T, ObjectDir> &, DataNode &, DataArray *, int, PropOp) { \
-    return false; \
-}
+#define PROPSYNC_OBJPTRVEC(T)                                                            \
+    template <>                                                                          \
+    bool PropSync(ObjPtrVec<T, ObjectDir> &, DataNode &, DataArray *, int, PropOp) {     \
+        return false;                                                                    \
+    }
 
 PROPSYNC_OBJPTRVEC(CharClip)
 PROPSYNC_OBJPTRVEC(Flow)
@@ -3530,7 +3875,6 @@ PROPSYNC_OBJPTRVEC(RndTransformable)
 
 // -- PropSync<T> for ObjDirPtr<T> --
 // (WorldInstance specialization moved to Instance.cpp)
-
 
 // -- GatherObjectsFromGroup<RndMesh> --
 

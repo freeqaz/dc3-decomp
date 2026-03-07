@@ -1288,7 +1288,7 @@ May be from headers, SDK, or small utility classes not split by jeff.
 - [ ] `FD_SET`
 - [ ] `FFTRealForward`
 - [ ] `HIBYTE`
-- [ ] `JoypadSetActuatorsImp`
+- [x] `JoypadSetActuatorsImp`
 - [ ] `LOBYTE`
 - [ ] `MAKEWORD`
 - [ ] `__real_0000000000000000`

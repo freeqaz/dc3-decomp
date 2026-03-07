@@ -136,6 +136,10 @@ def parse_args() -> argparse.Namespace:
         "--adaptive", action="store_true",
         help="Enable adaptive per-round pattern suppression/boosting",
     )
+    parser.add_argument(
+        "--force", action="store_true",
+        help="Ignore climb history — re-run even if previously tried",
+    )
     return parser.parse_args()
 
 
@@ -380,6 +384,31 @@ def _climb_one(
             "patterns": candidate["patterns"], "error": "interrupted",
         }
 
+    # Check climb history — skip if already tried with same source + patterns
+    if not getattr(args, "force", False):
+        try:
+            from .climb_history import should_skip
+            from .score_cache import md5_file
+            source_full = Path(REPO_ROOT / source_path)
+            if source_full.exists():
+                src_md5 = md5_file(source_full)
+                skip_reason = should_skip(symbol, src_md5, candidate["patterns"])
+                if skip_reason:
+                    print(
+                        f"\n[{index+1}/{total}] {func_name} ({pct:.1f}%) "
+                        f"— SKIP: {skip_reason}",
+                        file=sys.stderr,
+                    )
+                    return {
+                        "function": func_name, "symbol": symbol,
+                        "source": source_path,
+                        "initial": pct, "final": pct, "delta": 0,
+                        "patterns": candidate["patterns"],
+                        "error": "skipped_history",
+                    }
+        except Exception:
+            pass  # Don't block on history check failures
+
     print(
         f"\n[{index+1}/{total}] {func_name} ({pct:.1f}%) "
         f"— {len(func_patterns)} pattern(s): {', '.join(candidate['patterns'])}",
@@ -401,6 +430,7 @@ def _climb_one(
             chain=getattr(args, "chain", False),
             chain_depth=getattr(args, "chain_depth", 3),
             adaptive=getattr(args, "adaptive", False),
+            all_patterns=list(get_all_patterns()),
         )
         delta = result.final_percent - result.initial_percent
         if delta > 0:
@@ -456,6 +486,9 @@ def _climb_source_group(
 
 def _accumulate_result(stats: dict, result: dict):
     """Accumulate a single result into the stats dict."""
+    if result["error"] == "skipped_history":
+        stats["skipped"] += 1
+        return
     if result["error"]:
         stats["errors"] += 1
         return
@@ -600,6 +633,7 @@ def main():
         "improved": 0,
         "perfect": 0,
         "no_change": 0,
+        "skipped": 0,
         "errors": 0,
         "total_delta": 0.0,
         "improvements": [],
@@ -621,7 +655,8 @@ def main():
     else:
         # Parallel execution — different source files run concurrently,
         # functions within the same file run sequentially
-        with ProcessPoolExecutor(max_workers=args.jobs) as executor:
+        executor = ProcessPoolExecutor(max_workers=args.jobs)
+        try:
             futures = {}
             for source_path, funcs in by_source.items():
                 future = executor.submit(
@@ -636,14 +671,18 @@ def main():
                     for r in group_results:
                         _accumulate_result(stats, r)
                 except KeyboardInterrupt:
-                    print("\nInterrupted — cancelling remaining jobs...",
-                          file=sys.stderr)
-                    for f in futures:
-                        f.cancel()
-                    break
+                    raise
                 except Exception as e:
                     stats["errors"] += 1
                     print(f"  ERROR in {source_path}: {e}", file=sys.stderr)
+        except KeyboardInterrupt:
+            print("\nInterrupted — cancelling remaining jobs...",
+                  file=sys.stderr)
+            for f in futures:
+                f.cancel()
+            executor.shutdown(wait=False, cancel_futures=True)
+        else:
+            executor.shutdown(wait=True)
 
     total_elapsed = time.time() - scan_start
 
@@ -660,6 +699,9 @@ def main():
     print(f"  Scanned: {len(files)} files in {scan_elapsed:.1f}s", file=sys.stderr)
     print(f"  Climbed: {stats['processed']}/{stats['total']} functions "
           f"in {time.time() - climb_start:.1f}s", file=sys.stderr)
+    if stats["skipped"] > 0:
+        print(f"  Skipped: {stats['skipped']} (unchanged since last run, use --force to retry)",
+              file=sys.stderr)
     print(f"  Improved: {stats['improved']} functions (+{stats['total_delta']:.2f}% total)",
           file=sys.stderr)
     print(f"  Perfect: {stats['perfect']}", file=sys.stderr)

@@ -1,4 +1,5 @@
 #include "os/Memcard_Xbox.h"
+#include "os/VirtualKeyboard.h"
 #include "Memcard.h"
 #include "obj/Object.h"
 #include "os/DateTime.h"
@@ -507,3 +508,5 @@ MCResult MemcardXbox::FindValidUnit(ContainerId *pCid) {
         }
     }
 }
+
+void VirtualKeyboard::Terminate() {}

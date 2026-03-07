@@ -78,11 +78,11 @@ void FlowManager::Poll() {
     }
 
     mExecuting = false;
+    float eventTimeSum = 0.0f;
     timer.Stop();
     unk2c = false;
     float timerMs = timer.Ms() - mLastFrameTime;
 
-    float eventTimeSum = 0.0f;
     Symbol peakSym(NULL);
     Symbol peakElapsedSym(NULL);
     float maxEventTime = -1.0f;

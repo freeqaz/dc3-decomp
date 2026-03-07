@@ -75,15 +75,15 @@ void Multiply(const Hmx::Matrix3 &a, const Hmx::Matrix3 &b, Hmx::Matrix3 &out) {
 }
 
 void Multiply(const Transform &a, const Transform &b, Transform &out) {
+    out.v.x = b.m.x.x * a.v.x + b.m.y.x * a.v.y + b.m.z.x * a.v.z;
+    out.v.y = b.m.x.y * a.v.x + b.m.y.y * a.v.y + b.m.z.y * a.v.z;
+    out.v.z = b.m.x.z * a.v.x + b.m.y.z * a.v.y + b.m.z.z * a.v.z;
+    out.v.x += b.v.x;
+    out.v.y += b.v.y;
+    out.v.z += b.v.z;
     Multiply(a.m, b.m, out.m);
-    Multiply(a.v, b.m, out.v);
-    Add(out.v, b.v, out.v);
 }
 
-void Multiply(const Transform &t, const Hmx::Matrix3 &m, Transform &out) {
-    Multiply(t.m, m, out.m);
-    Multiply(t.v, m, out.v);
-}
 
 void FastInvert(const Hmx::Matrix3 &min, Hmx::Matrix3 &mout) {
     float xdot = Dot(min.x, min.x);

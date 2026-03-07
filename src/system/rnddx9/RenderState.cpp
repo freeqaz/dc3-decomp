@@ -3,6 +3,28 @@
 
 RndRenderState TheRenderState;
 
+// Maps TestFunc to D3DCMPFUNC. Two banks of 8: [0-7] normal Z, [8-15] reversed Z.
+D3DCMPFUNC RndRenderState::tf2cf[] = {
+    // Normal Z
+    D3DCMP_ALWAYS,      // 0
+    D3DCMP_LESS,        // 1
+    D3DCMP_EQUAL,       // 2
+    D3DCMP_LESSEQUAL,   // 3
+    D3DCMP_GREATER,     // 4
+    D3DCMP_NOTEQUAL,    // 5
+    D3DCMP_GREATEREQUAL,// 6
+    D3DCMP_NEVER,       // 7
+    // Reversed Z (flip less/greater)
+    D3DCMP_ALWAYS,      // 8
+    D3DCMP_GREATER,     // 9
+    D3DCMP_EQUAL,       // 10
+    D3DCMP_GREATEREQUAL,// 11
+    D3DCMP_LESS,        // 12
+    D3DCMP_NOTEQUAL,    // 13
+    D3DCMP_LESSEQUAL,   // 14
+    D3DCMP_NEVER,       // 15
+};
+
 void RndRenderState::SetBlendEnable(bool b) {
     D3DDevice_SetRenderState_AlphaBlendEnable(TheDxRnd.Device(), (u8)b);
 }

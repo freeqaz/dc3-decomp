@@ -76,6 +76,22 @@ That validates two more things:
 - target prefers an explicit gated call shape over a compact boolean expression
 - call placement and branch ordering matter as much as the final condition itself
 
+## Planning Decisions
+
+These decisions came out of review and should shape the next implementation:
+
+- optimize first for **cross-function generalization**, not a one-off `WrapText` win
+- keep Ghidra vs m2c trust **configurable** and validate it experimentally rather than hard-coding one oracle as globally superior
+- add field/offset anchoring early, even if that expands extraction scope
+- prefer a broader, more wasteful mutation space over an overly conservative one in the first iteration
+- keep region matching as a clean abstraction in `region_match.py`, not ad hoc logic inside `constraint_solver.py`
+- tier call-gate shaping:
+  - start with anchored helper calls
+  - expand to more generic call-site shells later
+- use register-pressure estimates for **ranking and telemetry only**, not pruning
+- treat "not knowing what to mutate" as the primary bottleneck; search-budget collapse is secondary for now
+- allow source-shape rewrites freely in the matching phase; cleanup can happen afterward
+
 ## What The Current Guided Permuter Still Misses
 
 The repo already has good first-generation Ghidra guidance:
@@ -110,11 +126,60 @@ That is useful, but it is still too shallow for functions like `WrapText`.
    - `ConstraintSet` knows about decl order, condition tags, sign choices
    - it does not know about "block X should move after block Y"
 
+## m2c As A Second Oracle
+
+m2c is valuable here precisely because it is less polished.
+
+For hard matching work, Ghidra often improves readability while m2c preserves more of the machine-shaped structure:
+
+- explicit temporaries
+- raw stack-slot groupings
+- lower-level loop shells
+- branch-and-call gating that is closer to emitted code
+
+That makes the right split:
+
+- **Ghidra** for semantic anchors
+- **m2c** for structural anchors
+
+### What m2c is good for
+
+- call placement and call gating
+- loop-entry / loop-exit form
+- temp reuse and lifetime windows
+- stack-backed scratch-region grouping
+- identifying where source shape is too "clean" compared to the target
+
+### What Ghidra is still better for
+
+- function names
+- field names and type-backed interpretation
+- assert strings and semantic labels
+- higher-level intent
+- xrefs and whole-program context
+
+### How to use both
+
+Do not treat m2c as a fallback. Treat it as a second target-side view.
+
+The permuter should compare:
+
+1. source vs Ghidra
+2. source vs m2c
+3. Ghidra vs m2c
+
+Then assign confidence:
+
+- if Ghidra and m2c agree, emit a strong structural constraint
+- if m2c alone gives the better call-shell view, prefer m2c for that site
+- if Ghidra alone gives the better semantic anchor, prefer Ghidra for that site
+- if they disagree sharply, lower confidence and avoid aggressive automation
+
 ## The Right Next Step: Region-Aware Guided Matching
 
 The next smart layer should not be "more patterns first". It should be a better **alignment model** between target structure and source structure.
 
-### Proposal: build a lightweight structural IR for both source and Ghidra
+### Proposal: build a lightweight structural IR for source, Ghidra, and m2c
 
 For each top-level statement and important nested block, extract:
 
@@ -122,7 +187,9 @@ For each top-level statement and important nested block, extract:
 - call anchors: `ParseMarkup`, `WordWrap_CanBreakLineAt`, `SegmentLength`, `MakeString`
 - literal anchors: `30.0f`, `60.0f`, `1.0f`, `0x3c`, `'\n'`
 - string anchors: assert expressions, file strings
+- field/offset anchors: named member accesses when available, raw offsets when names are lost
 - writes / reads summary
+- side-effect summary: pure read / local write / unknown call / pointer escape
 - pointer/field usage summary
 - control tags: guard, conjunction, nested-if, call-under-guard
 - allocation tags: `_alloca`, temp scratch buffer, vector reserve/erase
@@ -131,8 +198,25 @@ This should exist for:
 
 - source AST via Tree-Sitter C++
 - Ghidra decomp AST via Tree-Sitter C
+- m2c decomp AST via Tree-Sitter C
 
-Once that exists, use similarity scoring and LCS-style alignment to match **regions**, not just nodes by position.
+Once that exists, use weighted similarity scoring and LCS-style alignment to match **regions**, not just nodes by position.
+
+The important refinement is that region matching should be triaged through both decompilers:
+
+- Ghidra supplies semantic labels and type-backed anchors
+- m2c supplies code-shape hints, temp reuse, and lower-level control shells
+- the matcher fuses them into one target-side region map with per-region confidence
+
+This is also where the appended "offset-aware anchoring" idea fits. It makes sense and should be part of the base alignment layer, not a separate late-stage feature. Calls and strings will not exist in every function. Field offsets and access patterns will.
+
+The dual-oracle policy should stay configurable:
+
+- Ghidra-preferred mode
+- m2c-preferred mode for structural shells
+- fused mode with confidence weighting
+
+That lets us run experiments instead of arguing from anecdotes.
 
 ## New Rule Ideas
 
@@ -156,18 +240,29 @@ These are the concrete rule families `WrapText` suggests.
    - writes
    - calls
    - allocas
+   - alias / side-effect risk
 3. align source blocks to target blocks using anchors
-4. derive a partial-order target graph
+4. derive a conservative partial-order graph
 5. emit only legal reorder variants that move source order toward target order
 
 **Key point**: this should be smarter than existing `statement_reorder`.
 
 `statement_reorder` is generic adjacency swapping. `ghidra_block_schedule` should operate on **multi-statement regions with anchor-based alignment**.
 
+The appended DDG idea also makes sense here, with one narrowing: use a **lightweight dependence graph**, not an ambitious whole-function DDG. The goal is to produce topological sorts of obviously legal schedules inside an aligned window.
+
+For the first pass, it is acceptable to be broad:
+
+- allow more candidate schedules
+- accept more compile-waste
+- record legality and success telemetry so later heuristics can become stricter from data rather than intuition
+
 **Implementation target**:
 
 - add `extract_block_fingerprints()` to `ghidra_ast.py`
-- add matching logic in a new `ghidra_region_match.py`
+- add the same extraction for m2c output
+- add matching logic in a neutral `region_match.py`
+- add a legality helper that builds reorder windows plus a dependency DAG
 - add a pattern or constraint-solver edit category for block moves
 
 ### 2. `ghidra_call_gate_shape`
@@ -200,6 +295,16 @@ For a specific anchored call site:
 
 This is more precise than current branch-polarity or `and_split` guidance because it is **call-site anchored**.
 
+This is also the rule where m2c should often be trusted more than Ghidra, because m2c tends to preserve the compiler-shaped shell around a call.
+
+The appended CFG idea is useful if it stays small. We do not need full subgraph isomorphism. We need anchored path-shape summaries:
+
+- how many guards dominate this call
+- whether the call is on the true branch, false branch, or both
+- whether the call is followed by a boolean materialization / test sequence
+
+That is enough to guide `and_split` and `early_return_merge` without adding a heavyweight CFG solver.
+
 ### 3. `ghidra_scope_window`
 
 **Problem it solves**: variable lifetime and scope shape change register pressure and scheduling, especially in medium-large functions.
@@ -230,6 +335,12 @@ This is the missing bridge between:
 
 Today those all act locally. This rule would make them target-directed.
 
+m2c is likely the better source for this rule, because temp naming and stack-slot reuse expose pressure and lifetime more directly than Ghidra's cleaner pseudocode.
+
+The appended register-pressure idea is directionally right, but it should start as a **soft scoring signal**, not a hard ABI-threshold prune. A lightweight liveness estimate can help rank variants, but the compiler's real register allocation is too nonlinear for "peak live vars > N" to be a safe early reject rule.
+
+Important: keep the telemetry. We want to know whether pressure score actually predicts match improvements, spill behavior, or compile failures before using it for pruning.
+
 ### 4. `ghidra_anchor_alignment`
 
 **Problem it solves**: all other guided rules need stable source-target correspondence, and positional matching is too brittle.
@@ -250,6 +361,7 @@ Build a per-region fingerprint using weighted anchors:
 
 - unique call names: very high weight
 - unique strings: very high weight
+- resolved field names or stable field offsets: very high weight
 - float constants: medium weight
 - character constants: medium weight
 - operator/control shape: medium weight
@@ -258,6 +370,12 @@ Build a per-region fingerprint using weighted anchors:
 Then run a best-match / sequence alignment pass to pair source regions with Ghidra regions.
 
 This is not a user-visible permuter pattern. It is infrastructure that makes all later guided rules reliable.
+
+For this rule, m2c contributes anchor classes that Ghidra often hides:
+
+- temp families like `var_r*`, `temp_f*`
+- stack-slot runs
+- compare/call/test idioms
 
 ### 5. `ghidra_assert_anchor`
 
@@ -294,7 +412,7 @@ Important: this is **not** about chasing `MakeString` mangled names. It is about
 
 At a matched loop region:
 
-- compare loop shell form in source vs Ghidra
+- compare loop shell form in source vs Ghidra/m2c
 - emit only shell-preserving conversions relevant to the matched region
 
 Examples:
@@ -303,7 +421,64 @@ Examples:
 - pre-read `while (c != 0)` -> `for (;;) { c = *s; if (c == 0) break; ... }`
 - move `cur++`/`cCount++`/`curBrk++` between tail and header forms
 
-This should stay constrained to regions where Ghidra alignment says the loop corresponds.
+This should stay constrained to regions where alignment says the loop corresponds.
+
+m2c should be the primary loop-shell classifier here, with Ghidra acting as a semantic cross-check.
+
+### 7. `m2c_temp_pack`
+
+**Problem it solves**: some functions are blocked not by declaration order alone, but by how source temporaries are grouped, split, and reused across calls.
+
+**Why this is m2c-driven**:
+
+m2c exposes temporary clusters and stack-slot families more concretely than Ghidra. That gives us a way to infer when the target likely wants:
+
+- one reused temp instead of two
+- two shorter-lived temps instead of one long-lived temp
+- a literal hoisted into a temp
+- a temp introduced closer to first use
+
+**What it should do**:
+
+1. cluster m2c temporaries by region and use distance
+2. compare those clusters to source locals in the aligned region
+3. emit only targeted transforms:
+   - split a temp
+   - merge adjacent temps
+   - move temp introduction
+   - inline a trivial temp
+   - hoist a repeated literal or address
+
+## Review Of The Appended Ideas
+
+The appended ideas are mostly good, but they need to be sorted into:
+
+- core architecture we should adopt now
+- useful heuristics that should stay soft
+- expensive ideas that should be deferred or narrowed
+
+### Keep and integrate now
+
+- offset-aware anchoring
+- conservative dependence graphs for block scheduling
+- region-focused pruning once region IDs are stable
+- configurable Ghidra/m2c fusion with confidence scoring
+
+These directly strengthen the region-matching plan and reduce wasted variants without changing the basic architecture.
+
+### Keep, but narrow
+
+- register-pressure estimation
+- CFG-aware control-flow matching
+
+Both are useful as guidance signals, but not as rigid proof systems. They should rank or suggest edits, not become mandatory gates in the first implementation.
+
+### Defer or keep as diagnostics only
+
+- full CFG subgraph isomorphism
+- automatic inline-boundary synthesis
+
+These are too expensive or too source-invasive for the first serious version. Inline and macro boundaries can matter, but inventing dummy inline wrappers is not a good default decomp workflow. At most, boundary detection should explain why a region is stubborn or highlight a candidate for manual cleanup.
 
 ## Design Principle: Move From Local Patterns To Targeted Region Edits
 
@@ -313,23 +488,62 @@ The right architecture is:
 
 1. extract source regions
 2. extract Ghidra regions
-3. align them by anchors
-4. explain the delta in terms of:
+3. extract m2c regions
+4. align them by anchors and region order
+5. explain the delta in terms of:
    - order
    - call shell
    - loop shell
    - lifetime window
    - declaration order
-5. emit only transforms justified by that explanation
+   - temp packing
+6. emit only transforms justified by that explanation
 
 This is the difference between:
 
 - "try 40 transforms because the function has branch diffs"
 - "the `WordWrap_CanBreakLineAt` site in source is a compact boolean, but the aligned target site is an explicit gated call, so emit 2 variants only"
 
+## Additional Infrastructure Beyond Individual Rules
+
+### Conservative legality graph for reordering
+
+Block scheduling needs a reusable legality layer:
+
+- derive def-use and write-after-read hazards inside a candidate window
+- treat unknown calls and pointer alias escapes as schedule barriers
+- generate only topological sorts that respect those barriers
+
+This is the practical version of the appended DDG idea.
+
+### Active-region focus and progressive pinning
+
+Combination explosion is real, but pinning should come **after** alignment and region IDs are reliable.
+
+The useful version is:
+
+- mark regions with strong source-target agreement as inactive
+- spend variant budget on the remaining mismatched windows
+- allow pinning at region granularity first, not arbitrary AST-node granularity
+
+This is safer than immediately trying to freeze exact AST nodes based on noisy line mappings.
+
+It is also explicitly lower priority than better mutation targeting. If the permuter still cannot identify the right region and the right edit family, pinning just helps it fail faster.
+
+### Heuristic scoring signals
+
+The solver should eventually score candidates using:
+
+- alignment confidence
+- estimated lifetime pressure
+- branch-path similarity at anchored call sites
+- spill suspicion from m2c or asm hints
+
+These should bias search order and pruning, but only after the basic region edits are working.
+
 ## How To Integrate This With Existing Code
 
-### Phase 1: Add richer extraction, not new patterns first
+### Phase 1: Add richer extraction and alignment
 
 Add to `ghidra_ast.py`:
 
@@ -337,19 +551,24 @@ Add to `ghidra_ast.py`:
 - `extract_call_gate_sites(ast)`
 - `extract_loop_shells(ast)`
 - `extract_assert_anchors(ast)`
+- `extract_field_offset_anchors(ast)`
 - `extract_live_ranges(ast)` or a lighter first/last-use approximation
+
+Add parallel extraction for m2c output.
 
 Add new module:
 
-- `ghidra_region_match.py`
+- `region_match.py`
 
 Responsibilities:
 
 - build source-side fingerprints
-- align source and Ghidra regions
+- align source, Ghidra, and m2c regions
+- attach confidence scores to matches
+- support configurable oracle-combination policies for experiments
 - provide stable region IDs for patterns and the constraint solver
 
-### Phase 2: Upgrade the constraint model
+### Phase 2: Add legality and structural constraints
 
 Extend `ConstraintSet` with:
 
@@ -358,6 +577,14 @@ Extend `ConstraintSet` with:
 - `loop_shell_constraints`
 - `lifetime_constraints`
 - `assert_anchor_map`
+- `temp_pack_constraints`
+- `oracle_confidence`
+
+Add a legality helper used by scheduling-oriented edits:
+
+- reorder windows
+- dependency DAG
+- barrier classification for calls / aliasing
 
 This lets `constraint_solver.py` emit deterministic edits for structural moves rather than only decl-order and sign choices.
 
@@ -367,29 +594,48 @@ Do not immediately write six new standalone patterns.
 
 Instead:
 
-- let `statement_reorder` accept aligned region move hints
+- let `statement_reorder` accept aligned region move hints plus legality windows
 - let `and_split` / `early_return_merge` accept call-gate hints
 - let `declaration_reorder` / `temp_elimination` / `reference_elimination` accept lifetime hints
+- let `prologue_pressure` consume scope and pressure hints
 - let `fma_reorder` keep using expression guidance
 
 Then add genuinely new patterns only where existing ones cannot express the edit.
 
-### Phase 4: Validate on a small "hard but fixable" suite
+### Phase 4: Add search control, not just more rewrites
+
+Once region matching is stable:
+
+- bias search toward mismatched regions only
+- keep solved regions inactive unless a later edit overlaps them
+- use heuristic scores to rank promising variants before full compile/test
+
+This is where progressive pinning belongs.
+
+But it should remain behind the mutation-targeting work in priority.
+
+### Phase 5: Validate on a small "hard but fixable" suite
 
 Recommended validation set:
 
 1. `RndText::WrapText`
 2. `SaveLoadManager::Poll`
 3. `ContentLoadingPanel::Poll`
-4. one known FMA case (`CalcSpline` or `InterpTangent`)
-5. one regswap-heavy medium function that already benefits from declaration guidance
+4. `RhythmBattle::OnBeat`
+5. one known FMA case (`CalcSpline` or `InterpTangent`)
+6. at least one additional large, reg-cascade-heavy function discovered during triage
+7. one regswap-heavy medium function that already benefits from declaration guidance
 
 Metrics:
 
 - average variants generated per round
 - hit rate of guided variants vs blind variants
+- compile success rate of scheduled variants
 - whether large insert/delete cluster pairs shrink
 - whether branch/call ordering diffs disappear at aligned call sites
+- whether dual-oracle guidance beats Ghidra-only guidance
+- whether m2c-preferred, Ghidra-preferred, or fused mode wins on each function family
+- whether pressure score correlates with better or worse outcomes
 
 ## Why `WrapText` Points To Region Matching, Not Just More Rules
 
@@ -404,79 +650,28 @@ The most important lesson from this function is that the next ceiling is not "we
 - loop-shell shaping
 - lifetime pressure
 - semantic anchors via asserts and helper calls
+- field/offset anchors for less expressive functions
 
 If we solve those well here, the same machinery should generalize to a large class of 50-90% functions that are currently too expensive to fix manually.
 
 ## Recommended Next Implementation Order
 
-1. Build `ghidra_region_match.py` and prove it can align the `WrapText` setup region.
-2. Implement `ghidra_call_gate_shape` for anchored call sites.
-3. Add `region_order_constraints` to `ConstraintSet`.
-4. Teach `statement_reorder` to consume region moves.
-5. Add `ghidra_scope_window` only after region alignment exists.
+1. Build `region_match.py` as a clean abstraction and prove it can align the `WrapText` setup region.
+2. Add field/offset anchors so the matcher still works on low-string, low-call functions.
+3. Make oracle fusion configurable so Ghidra-preferred, m2c-preferred, and fused modes can be compared empirically.
+4. Implement tier-1 call-site anchored `ghidra_call_gate_shape` for distinctive helper calls first.
+5. Add legality windows plus dependency DAG support for region reordering.
+6. Add `region_order_constraints` to `ConstraintSet`.
+7. Teach `statement_reorder` to consume region moves.
+8. Add `ghidra_scope_window` only after region alignment exists.
+9. Add m2c-backed `temp_pack_constraints` after lifetime extraction is stable.
+10. Add ranking-only pressure telemetry.
+11. Add progressive pinning only after region IDs and mismatch localization are trustworthy.
 
-That order matters. Without region alignment, the later rules stay brittle and positional.
+That order matters. Without region alignment, the later rules stay brittle and positional. Without legality windows, block scheduling becomes a compile-waste machine. Without stable region IDs, pinning will freeze the wrong things.
 
 ## Bottom Line
 
 The permuter already knows how to rewrite syntax. The next gain is teaching it **where** and **why** to rewrite.
 
-`WrapText` shows that Ghidra + Tree-Sitter can supply that missing information if we stop treating Ghidra as a bag of tags and start treating it as a **target-side structural map**.
-
-## Advanced Architectural Enhancements
-
-Building upon the foundation of semantic, region-based alignment, here are several advanced ideas to further turbocharge the smart permuter:
-
-### 1. Advanced Alignment: Type & Offset-Aware Anchoring
-The current proposal relies on function calls, literals, and strings as anchors. In many functions (especially getters, setters, or math-heavy routines), these are scarce. 
-* **The Idea:** Extend `ghidra_anchor_alignment` to use **struct offsets and memory access patterns** as anchors.
-* **How it works:** 
-  * Ghidra decompilation frequently exposes raw memory offsets (e.g., `*(int*)(this + 0x48)` or `this->field_48`). 
-  * Using the project's DWARF data or struct headers, the permuter can resolve Tree-Sitter AST member accesses (e.g., `pRVar6->mMarkup`) to their byte offsets.
-  * This creates a massive new class of semantic anchors. If both source and Ghidra perform a read at `offset 0x48` and a write at `offset 0x14`, you can confidently align those regions even if no strings or calls exist.
-
-### 2. Hard Constraints via Data Dependency Graphs (DDG)
-The proposal mentions summarizing reads/writes for `ghidra_block_schedule`. This can be formalized into a strict mathematical model to prevent generating broken code.
-* **The Idea:** Build a lightweight **Data Dependency Graph (DDG)** for the variables within an aligned region.
-* **How it works:** 
-  * Before generating block reordering variants, map out strict Def-Use chains (e.g., Block B reads `var_x` which is written by Block A).
-  * This forms a Directed Acyclic Graph (DAG) of mandatory execution order. 
-  * Instead of generating permutations and filtering them, the permuter only generates valid **topological sorts** of this DAG, weighted by their similarity to Ghidra's sequence. This guarantees that 100% of generated variants are semantically legal C++, drastically reducing compilation waste.
-
-### 3. Execution Pruning: Progressive AST Pinning ("Lock-In")
-Large functions like `WrapText` suffer from combination explosion if you permute everything at once.
-* **The Idea:** Introduce a stateful "Pinning" mechanism that locks down portions of the AST that are already producing perfectly matching assembly.
-* **How it works:**
-  * When `run_objdiff` runs, it generates a mismatch table. 
-  * If a contiguous block of source lines (via DWARF line-number mapping) results in 0 mismatches, the permuter tags those Tree-Sitter AST nodes as `@Pinned`.
-  * In subsequent permuter rounds, the Constraint Solver treats `@Pinned` regions as immutable scaffolding. The permuter only focuses its combination budget on the "unpinned" gaps. This acts like a binary search or progressive slice, collapsing the search space as progress is made.
-
-### 4. Target-Specific Heuristics: Register Pressure Simulation
-`ghidra_scope_window` aims to fix register swaps and scheduling by modifying variable lifetimes. However, guessing lifetimes is expensive.
-* **The Idea:** Implement a fast, AST-level **Register Pressure Estimator** specifically tuned for the target architecture (PowerPC).
-* **How it works:**
-  * As the permuter proposes a lifetime split or block move, it runs a quick liveness pass over the proposed AST region.
-  * It counts the peak concurrent live variables. If the peak exceeds the known volatile register limits of the PowerPC ABI (e.g., >8 integer registers, >13 float registers), it knows the compiler will likely be forced to spill to the stack.
-  * If the target Ghidra region does *not* contain stack spills (`stw` / `lwz` to the local frame), the permuter instantly discards the variant without compiling it. This provides a quantitative score to guide `ghidra_scope_window`.
-
-### 5. Control Flow Graph (CFG) Subgraph Isomorphism
-The `ghidra_call_gate_shape` rule is excellent for localized gates, but nested `if/else` structures often get mangled in Ghidra decompilation compared to source.
-* **The Idea:** Move beyond AST matching for control flow and use simplified CFG path matching.
-* **How it works:**
-  * Extract a basic CFG from the source Tree-Sitter and the Ghidra target.
-  * Calculate the Dominator Tree or simply count the independent paths to an anchor (e.g., "There are 3 unique branches that reach `ParseMarkup`").
-  * If the source has 2 paths and Ghidra has 3 paths, the permuter knows it needs to apply an `and_split` or `early_return_merge` specifically to duplicate or merge a path. This provides a mathematical target for branch restructuring.
-
-### 6. Macro & Inline Boundary Detection
-A major source of structural mismatch is when the original code used an inline function or macro, but our decompiled source manually writes out the statements (or vice versa).
-* **The Idea:** Add an `inline_boundary_recognition` pass to the extraction phase.
-* **How it works:**
-  * If the permuter detects a recurring cluster of AST nodes (e.g., a specific math operation or validation check) that perfectly aligns with a discrete block in Ghidra, it can suggest wrapping that block in a dummy inline function to force the compiler's scheduler to isolate it.
-  * Conversely, if Ghidra shows a flat block of code but our source has it inside an inline function, the permuter can temporarily "flatten" (un-inline) the Tree-Sitter AST to see if removing the inline boundary fixes the scheduling mismatch.
-
-### Integration into Implementation Plan
-
-These ideas map cleanly into the proposed phases:
-* **Phase 1 (Extraction):** Add offset-extraction (Idea 1) and inline-boundary detection (Idea 6) to `ghidra_ast.py`.
-* **Phase 2 (Constraint Model):** Add the DDG builder (Idea 2) to `ConstraintSet` to enforce strictly legal C++ variants, and add the Register Pressure Estimator (Idea 4).
-* **Phase 3/4 (Execution):** Implement Progressive Pinning (Idea 3) in the core orchestrator loop, so as `WrapText` gets closer to 100%, the permuter natively speeds up by ignoring the solved regions.
+`WrapText` shows that Ghidra + Tree-Sitter + m2c can supply that missing information if we stop treating Ghidra as a bag of tags and start treating the decompilers together as a **target-side structural map**.

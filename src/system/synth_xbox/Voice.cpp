@@ -2,6 +2,7 @@
 #include "math/Utl.h"
 #include "os/CritSec.h"
 #include "os/Debug.h"
+#include <deque>
 #include <list>
 #include "xdk/win_types.h"
 #include "xdk/xapilibi/processthreadsapi.h"
@@ -18,6 +19,8 @@ std::list<Voice *> gPendingVoices;
 std::list<Voice *> gPendingSyncVoices;
 std::list<Voice *> gInProgressVoices;
 std::list<Voice *> gInProgressSyncVoices;
+std::deque<PoolVoice> s_voiceGC;
+std::deque<PoolVoice> s_voiceGCInProgress;
 
 extern void StartSynchronizedVoices();
 

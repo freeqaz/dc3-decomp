@@ -11,7 +11,6 @@ Example:
     unsigned long bw = u8(w);
     unsigned long ret = bw | (bw << 8);
 
-This is opt-in since it only applies to bitwise byte manipulation code.
 """
 
 from __future__ import annotations
@@ -27,7 +26,6 @@ from ..types import Diagnosis, FunctionContext, Variant
 
 class ByteMaskExtractionPattern(Pattern):
     name = "byte_mask_extraction"
-    opt_in = True
 
     # rlwimi pseudo-ops and related rotate-mask instructions
     _ROTATE_OPS = {"rlwimi", "rlwinm", "clrlwi", "clrrwi", "clrlslwi",

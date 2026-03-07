@@ -12,7 +12,6 @@ Example:
     u32 w32 = w;
     u32 tmp = (w32 >> 3) ^ 0x1F;
 
-This is opt-in since it only applies to narrow-type bitwise XOR code.
 """
 
 from __future__ import annotations
@@ -28,7 +27,6 @@ from ..types import Diagnosis, FunctionContext, Variant
 
 class NorPreventionPattern(Pattern):
     name = "nor_prevention"
-    opt_in = True
 
     _NOR_OPS = {"nor", "nor."}
     _XOR_OPS = {"xor", "xori", "xoris", "xor."}

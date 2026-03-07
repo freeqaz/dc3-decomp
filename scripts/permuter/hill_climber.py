@@ -35,15 +35,16 @@ _interrupted = False
 
 
 def _sigint_handler(signum, frame):
-    """Handle Ctrl+C by setting flag for graceful shutdown."""
+    """Handle Ctrl+C by setting flag and raising KeyboardInterrupt.
+
+    Always raises so that blocked operations (ThreadPoolExecutor, subprocess)
+    can be interrupted. The _interrupted flag is checked between rounds for
+    graceful stop messages.
+    """
     global _interrupted
-    if _interrupted:
-        # Second Ctrl+C — force exit
-        print("\nForce quit.", file=sys.stderr)
-        raise KeyboardInterrupt
     _interrupted = True
-    print("\nInterrupt received — finishing current operation and restoring source...",
-          file=sys.stderr)
+    print("\nInterrupt received — stopping...", file=sys.stderr)
+    raise KeyboardInterrupt
 
 
 def install_signal_handler():
@@ -146,6 +147,7 @@ def hill_climb(
     chain_depth: int = 3,
     adaptive: bool = False,
     constrained: bool = False,
+    all_patterns: list | None = None,
 ) -> HillClimbResult:
     """Run the hill-climbing loop for a single function.
 
@@ -165,6 +167,7 @@ def hill_climb(
         chain_depth: Maximum chain depth for N-stage composition.
         adaptive: Enable adaptive per-round pattern suppression/boosting.
         constrained: Enable constraint-directed synthesis pre-pass.
+        all_patterns: Full pattern set for chains/composition (defaults to patterns).
 
     Returns:
         HillClimbResult with full session history.
@@ -176,6 +179,10 @@ def hill_climb(
     if chain:
         compose = True
     compose_pairs = _DEFAULT_PAIRS if compose else None
+
+    # Resolve full pattern set for chains/composition
+    if all_patterns is None:
+        all_patterns = patterns
 
     # Create adaptive hints tracker when chain or adaptive is enabled
     round_hints: RoundHints | None = None
@@ -371,11 +378,13 @@ def hill_climb(
                     break
 
                 # Build adaptive chains for this round
+                # Use full pattern set so chains can reference patterns
+                # beyond the user-specified focus set
                 round_chains: list[ChainSpec] | None = None
                 if chain and ctx.diagnosis:
                     round_chains = build_adaptive_chains(
                         diagnosis=ctx.diagnosis,
-                        patterns=patterns,
+                        patterns=all_patterns,
                         hints=round_hints,
                         max_depth=chain_depth,
                     )
@@ -389,10 +398,12 @@ def hill_climb(
                         )
 
                 # Generate variants
+                # Phase 1 uses focused patterns; Phase 2/3 use all_patterns
                 variants = list(generate_variants(
                     ctx, patterns, max_variants,
                     compose_pairs=compose_pairs,
                     chains=round_chains,
+                    chain_patterns=all_patterns,
                     round_hints=round_hints if adaptive else None,
                 ))
                 print(
@@ -571,6 +582,23 @@ def hill_climb(
         )
     except Exception:
         pass  # Don't fail the run if stats storage fails
+
+    # Record climb history for skip-on-rerun
+    try:
+        from .climb_history import record_climb
+        from .score_cache import md5_bytes
+        record_climb(
+            symbol=symbol,
+            source_md5=md5_bytes(original_source),
+            pattern_names=[p.name for p in patterns],
+            initial_pct=initial_percent,
+            final_pct=final_percent,
+            stopped_reason=stopped_reason,
+            rounds_used=len(rounds),
+            elapsed_seconds=round(time.time() - start_time, 2),
+        )
+    except Exception:
+        pass
 
     # Store Ghidra stats to DB
     if ghidra_run_stats:

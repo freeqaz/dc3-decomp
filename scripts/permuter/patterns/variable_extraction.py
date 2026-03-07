@@ -46,9 +46,8 @@ class VariableExtractionPattern(Pattern):
             return True
         if diagnosis.replace_real > 0:
             return True
-        # GPR swaps can sometimes be fixed by variable extraction changing alloc order
-        if any(p[0].startswith("r") or p[1].startswith("r")
-               for p in diagnosis.reg_swap_pairs):
+        # Reg swaps can sometimes be fixed by variable extraction changing alloc order
+        if diagnosis.reg_swap_pairs:
             return True
         # Unexplained diff_arg might respond to extraction
         unexplained = diagnosis.noise_total - diagnosis.noise_explained

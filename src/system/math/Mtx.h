@@ -370,8 +370,7 @@ inline void Multiply(const Vector3 &v, const Transform &t, Vector3 &out) {
 }
 
 void Multiply(const Plane &, const Transform &, Plane &);
-void Multiply(const Transform &, const Hmx::Matrix3 &, Transform &);
-
+inline void Multiply(const Vector3 &v, const Hmx::Matrix3 &m, Vector3 &vout);
 inline void Multiply(const Hmx::Quat &q1, const Hmx::Quat &q2, Hmx::Quat &qres) {
     qres.Set(
         -(q1.z * q2.y - (q1.y * q2.z + q1.w * q2.x + q1.x * q2.w)),
@@ -387,6 +386,11 @@ inline void Multiply(const Vector3 &v, const Hmx::Matrix3 &m, Vector3 &vout) {
         m.x.y * v.x + m.y.y * v.y + m.z.y * v.z,
         m.x.z * v.x + m.y.z * v.y + m.z.z * v.z
     );
+}
+
+inline void Multiply(const Transform &t, const Hmx::Matrix3 &m, Transform &out) {
+    Multiply(t.v, m, out.v);
+    Multiply(t.m, m, out.m);
 }
 
 inline void Invert(const Transform &in, Transform &out) {

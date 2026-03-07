@@ -43,8 +43,8 @@ void CamShotVOData(
     static Symbol intro_playlist("intro_playlist");
     static Symbol battle_intro_crew("battle_intro_crew");
     static Symbol camp_intro_crew("camp_intro_crew");
-    static Symbol win_dlg_char("win_dlg_char");
     static Symbol win_mov_char("win_mov_char");
+    static Symbol win_dlg_char("win_dlg_char");
     static Symbol win_hype_solo("win_hype_solo");
     static Symbol win_hype_crew("win_hype_crew");
     static Symbol win_hype_diff_crew("win_hype_diff_crew");

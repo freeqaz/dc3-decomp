@@ -102,13 +102,13 @@ JoypadType ReadSingleXinputJoypad(
     XINPUT_CAPABILITIES caps;
     unsigned int unused;
     JoypadType joypad_type = kJoypadAnalog;
-    unsigned char setup_flag = 0;
 
     GetXinputSinceLastFrame(user_idx, &state, &unused);
 
     if (state.dwPacketNumber == -1) {
         return kJoypadNone;
     }
+    unsigned char setup_flag = 0;
 
     if (!JoypadGetCachedXInputCaps(user_idx, &caps, false)) {
         return kJoypadNone;

@@ -9,7 +9,9 @@
 #include "utl/MemMgr.h"
 
 template <>
-bool PropSync(ObjDirPtr<WorldInstance> &ptr, DataNode &node, DataArray *prop, int i, PropOp op) {
+bool PropSync(
+    ObjDirPtr<WorldInstance> &ptr, DataNode &node, DataArray *prop, int i, PropOp op
+) {
     if (op == kPropGet) {
         DataNode tmp(ptr.GetFile());
         node = tmp;
@@ -55,6 +57,8 @@ BEGIN_COPYS(WorldInstance)
 END_COPYS
 
 void WorldInstance::PostSave(BinStream &bs) { SyncDir(); }
+
+void WorldInstance::PreSave(BinStream &) {}
 
 void WorldInstance::DrawShowing() {
     RndDir::DrawShowing();

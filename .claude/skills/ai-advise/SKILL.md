@@ -1,0 +1,100 @@
+---
+name: ai-advise
+description: Get AI-guided edit suggestions for a stuck function. Gathers source, Ghidra decomp, and objdiff mismatch data, then asks an LLM for targeted structural edits. Each suggestion is compiled and scored. Use when manual analysis is slow or the permuter has plateaued.
+argument-hint: "[symbol-or-function] [--apply] [--dry-run] [--model MODEL]"
+allowed-tools: Bash(venv/bin/python *), Bash(python3 scripts/ai_advisor.py *), Bash(ninja *), Read, Grep, Glob
+---
+
+# AI Advisor Skill
+
+Uses an LLM to analyze the delta between your source and the target binary (via Ghidra
+decompilation + objdiff mismatch data) and propose specific source edits. Each suggestion
+is automatically compiled and scored — you see which ones actually improve the match.
+
+This is NOT a replacement for the permuter. Use it when:
+- The permuter has plateaued and you need fresh ideas
+- You want to understand WHY a function doesn't match
+- You're stuck on a structural mismatch (block order, control flow shape)
+- You want to try patterns the permuter doesn't cover yet
+
+## Arguments
+
+`$ARGUMENTS`
+
+## Usage
+
+### Get suggestions for a function (most common)
+
+```bash
+python3 scripts/ai_advisor.py --symbol '$0'
+```
+
+Accepts mangled symbols, qualified names, or partial names:
+- `--symbol '?WrapText@RndText@@UAAXXZ'`
+- `--symbol 'RndText::WrapText'`
+- `--symbol 'WrapText'`
+
+### Apply the best improvement automatically
+
+```bash
+python3 scripts/ai_advisor.py --symbol '$0' --apply
+```
+
+### Preview the prompt without calling the API
+
+```bash
+python3 scripts/ai_advisor.py --symbol '$0' --dry-run
+```
+
+### Use a different model
+
+```bash
+python3 scripts/ai_advisor.py --symbol '$0' --model claude-opus-4-20250514
+```
+
+## Key flags
+
+| Flag | Default | What it does |
+|------|---------|--------------|
+| `--symbol NAME` | required | Target function (mangled, qualified, or partial) |
+| `--apply` | off | Apply the best-scoring suggestion to source |
+| `--dry-run` | off | Show prompt without calling API or testing |
+| `--model MODEL` | claude-sonnet-4-6 | LLM model to use |
+| `--iterations N` | 1 | Iterative rounds (each builds on best result) |
+| `--json` | off | Machine-readable output |
+
+## How it works
+
+1. **Resolves** the function from decomp.db
+2. **Extracts** the current source via tree-sitter
+3. **Fetches** the Ghidra decompilation (cached in decomp.db) — semantic anchors
+4. **Runs** m2c decompiler on target assembly — structural/scheduling view
+5. **Runs** objdiff to get mismatch diagnosis (clusters, prologue, regswaps)
+6. **Loads** proven pattern docs for few-shot context
+7. **Calls** the LLM with a dual-oracle structured prompt
+8. **Parses** suggestions as search-and-replace edits
+9. **Tests** each suggestion: write source → build → objdiff → restore
+10. **Reports** which suggestions improved match% and by how much
+11. **Iterates** (with `--iterations N`): applies best, re-gathers context, repeats
+
+## What to report
+
+After running, tell the user:
+- How many suggestions were generated and tested
+- For each: edit type, description, match% result
+- Whether the best was applied or not
+- If `--dry-run`, show the prompt for review
+
+## Integration with permuter
+
+The advisor and permuter are complementary:
+- **Permuter**: exhaustive, pattern-based, deterministic mutations
+- **Advisor**: targeted, context-aware, handles novel situations
+
+Workflow: run the permuter first to get easy wins, then use the advisor
+for functions where the permuter plateaus.
+
+## Cost
+
+Each invocation makes one API call (typically 2-4K input tokens, 500-1K output).
+Testing suggestions requires ninja builds (~1s each). Total runtime: 15-45 seconds.

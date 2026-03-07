@@ -33,10 +33,7 @@ class CommaSplitPattern(Pattern):
     name = "comma_split"
 
     def relevant(self, diagnosis: Diagnosis) -> bool:
-        for (r0, r1) in diagnosis.reg_swap_pairs:
-            if r0.startswith("r") or r1.startswith("r"):
-                return True
-        return False
+        return bool(diagnosis.reg_swap_pairs)
 
     def generate(self, ctx: FunctionContext) -> Iterator[Variant]:
         comma_decls = _find_comma_declarations(ctx.statements)

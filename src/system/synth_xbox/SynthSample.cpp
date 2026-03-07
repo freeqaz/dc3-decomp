@@ -1,11 +1,15 @@
 #include "synth_xbox/SynthSample.h"
+#include "Memory.h"
 #include "obj/Object.h"
+#include "os/Debug.h"
 #include "synth/SampleData.h"
 #include "synth_xbox/SampleInst360.h"
 #include "utl/MemMgr.h"
 
-void *SampleAlloc(int size, const char *, int, const char *, int) {
-    return MemAlloc(size, __FILE__, __LINE__, "Sample Data", 0);
+void *SampleAlloc(int size, const char *file, int line, const char *name, int) {
+    void *ret = PhysicalAllocTracked(size, 4, file, line, "SampleData(phys)");
+    MILO_ASSERT(ret, 0x19);
+    return ret;
 }
 
 void SampleFree(void *mem, const char *, int, const char *) {

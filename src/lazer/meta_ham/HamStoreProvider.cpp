@@ -279,9 +279,58 @@ void HamStoreProvider::OnNextSort() {
 }
 
 void HamStoreProvider::Refresh() {
-    if (mFilteredOffers) {
-        ApplySort();
+    // Delete all vectors in unk38 map, then clear it
+    for (std::map<Symbol, std::vector<StoreOffer *> *>::iterator it = unk38.begin();
+         it != unk38.end(); ++it) {
+        if (it->second) {
+            delete it->second;
+        }
+        it->second = 0;
     }
+    unk38.clear();
+    mFilteredOffers = 0;
+
+    // Iterate all offers, categorize by filter symbols
+    std::vector<StoreOffer *> *allOffers = mAllOffers;
+    for (StoreOffer **it = allOffers->begin(); it != allOffers->end(); ++it) {
+        StoreOffer *offer = *it;
+        if (offer->isAvailable || TheNetCacheMgr->IsDebug()) {
+            DataArray *filters = offer->GetData(DataArrayPtr(Symbol("filters")), true).Array(0);
+            for (int i = 1; i < filters->Size(); i++) {
+                Symbol filterSym = filters->Sym(i);
+                std::map<Symbol, std::vector<StoreOffer *> *>::iterator mapIt = unk38.find(filterSym);
+                if (mapIt == unk38.end()) {
+                    std::vector<StoreOffer *> *vec = new std::vector<StoreOffer *>();
+                    vec->push_back(offer);
+                    unk38.insert(std::pair<Symbol, std::vector<StoreOffer *> *>(filterSym, vec));
+                } else {
+                    mapIt->second->push_back(offer);
+                }
+            }
+        }
+    }
+
+    PopulateOffersInCart();
+
+    // Remove empty filters (but keep shopping_cart and song_import_offers)
+    static Symbol store_filter_shopping_cart("store_filter_shopping_cart");
+    static Symbol store_filter_song_import_offers("store_filter_song_import_offers");
+
+    std::vector<HamStoreFilter *> *filters = mFilters;
+    std::vector<HamStoreFilter *>::iterator filterIt = filters->begin();
+    while (filterIt != filters->end()) {
+        HamStoreFilter *filter = *filterIt;
+        std::map<Symbol, std::vector<StoreOffer *> *>::iterator mapIt = unk38.find(filter->mFilterSym);
+        if ((mapIt == unk38.end() || mapIt->second->size() == 0)
+            && filter->mFilterSym != store_filter_shopping_cart
+            && filter->mFilterSym != store_filter_song_import_offers) {
+            filterIt = filters->erase(filterIt);
+        } else {
+            ++filterIt;
+        }
+    }
+
+    SetFilter(mCurrentFilter);
 }
 
 void HamStoreProvider::RefreshFilteredCartOffers() {
@@ -326,7 +375,31 @@ void HamStoreProvider::SetFilter(StoreOffer const *pack) {
 }
 
 bool HamStoreProvider::ShowBrowserPurchased(StoreOffer const *offer) const {
-        return offer && const_cast<StoreOffer *>(offer)->IsPurchased();
+    static Symbol song("song");
+    static Symbol pack("pack");
+
+    if (offer->isPurchased) {
+        return true;
+    }
+
+    if (offer->OfferType() == song) {
+        const StoreOffer *p = FindPack(offer);
+        if (p && p->HasSong(offer) && p->isPurchased) {
+            return true;
+        }
+    }
+
+    if (offer->OfferType() == pack) {
+        for (int i = 0; i < offer->NumSongs(); i++) {
+            const StoreOffer *s = FindSong(offer->Song(i));
+            if (!s || !s->isPurchased) {
+                return false;
+            }
+        }
+        return offer->NumSongs() > 0;
+    }
+
+    return false;
 }
 
 #pragma endregion HamStoreProvider

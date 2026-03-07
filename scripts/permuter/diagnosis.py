@@ -279,7 +279,7 @@ def _detect_gpr_fpr_type_conflict(
 def is_all_noise(diagnosis: Diagnosis) -> bool:
     """Return True if all mismatches are noise (nothing to permute).
 
-    Noise = no real diff_ops, no clusters, no unexplained diff_arg, and no GPR swaps.
+    Noise = no real diff_ops, no clusters, no unexplained diff_arg, and no reg swaps.
     """
     # diff_ops now includes replaces — check if any are non-noise
     if diagnosis.replace_real > 0:
@@ -291,10 +291,9 @@ def is_all_noise(diagnosis: Diagnosis) -> bool:
     if diagnosis.clusters:
         return False
 
-    # Check for GPR swap pairs (potentially fixable via declaration reorder)
-    for (r0, r1), info in diagnosis.reg_swap_pairs.items():
-        if r0.startswith("r") or r1.startswith("r"):
-            return False
+    # Check for any callee-saved swap pairs (GPR or FPR — both fixable)
+    if diagnosis.reg_swap_pairs:
+        return False
 
     # Check for unexplained diff_arg
     unexplained = diagnosis.noise_total - diagnosis.noise_explained

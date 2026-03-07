@@ -383,6 +383,15 @@ def diag_with_bool_materialization() -> Diagnosis:
     return d
 
 
+def diag_with_member_ref_bind_swaps() -> Diagnosis:
+    """GPR swaps suggesting member-ref-bind optimization."""
+    d = _empty_diag()
+    d.reg_swap_pairs = {
+        ("r20", "r21"): SwapInfo(count=4, first_idx=10, last_idx=50)
+    }
+    return d
+
+
 def diag_with_gpr_fpr_conflict() -> Diagnosis:
     """GPR-FPR type conflict (opposite-sign save deltas)."""
     d = _empty_diag()
@@ -392,3 +401,68 @@ def diag_with_gpr_fpr_conflict() -> Diagnosis:
     d.base_fpr_saves = 3
     d.has_gpr_fpr_type_conflict = True
     return d
+
+
+# ---------------------------------------------------------------------------
+# member_ref_bind fixtures
+# ---------------------------------------------------------------------------
+
+MEMBER_REF_BIND_FIXTURES: list[PatternFixture] = [
+    PatternFixture(
+        id="membind_member_to_ref",
+        pattern_name="member_ref_bind",
+        description="Bind repeated member access mCount to auto& reference",
+        seeded_source="""\
+class Foo {
+    int mCount;
+    void test_func() {
+        if (mCount > 0) {
+            mCount++;
+            mCount *= 2;
+            mCount--;
+        }
+    }
+};
+""",
+        expected_source="""\
+class Foo {
+    int mCount;
+    void test_func() {
+        auto& _ref0 = mCount;
+        if (_ref0 > 0) {
+            _ref0++;
+            _ref0 *= 2;
+            _ref0--;
+        }
+    }
+};
+""",
+        func_name="test_func",
+        diagnosis=diag_with_gpr_swaps(),
+        match_mode="contains",
+    ),
+
+    PatternFixture(
+        id="membind_param_to_ref",
+        pattern_name="member_ref_bind",
+        description="Bind reference parameter v to const auto& local",
+        seeded_source="""\
+struct Vec { float x, y, z; };
+float dot(const Vec& a, const Vec& b);
+float test_func(const Vec& v) {
+    return dot(v, v);
+}
+""",
+        expected_source="""\
+struct Vec { float x, y, z; };
+float dot(const Vec& a, const Vec& b);
+float test_func(const Vec& v) {
+    const auto& _ref0 = v;
+    return dot(_ref0, _ref0);
+}
+""",
+        func_name="test_func",
+        diagnosis=diag_with_gpr_swaps(),
+        match_mode="contains",
+    ),
+]

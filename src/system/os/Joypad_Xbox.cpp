@@ -311,6 +311,8 @@ void XinputJoypadThreadStart() {
     ResumeThread(tThread);
 }
 
+void JoypadSetActuatorsImp(int, int, int) {}
+
 void JoypadInit() {
     DataArray *cfg = SystemConfig("joypad");
     JoypadInitCommon(cfg);

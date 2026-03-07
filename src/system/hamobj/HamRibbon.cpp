@@ -1,5 +1,6 @@
 #include "hamobj/HamRibbon.h"
 #include "math/Mtx.h"
+#include "math/Rot.h"
 #include "obj/Object.h"
 #include "obj/Task.h"
 #include "os/File.h"
@@ -11,9 +12,9 @@
 #include "utl/Loader.h"
 
 HamRibbon::HamRibbon()
-    : mLastTime(-1), mNumSides(4), mMat(this), mWidth(1), mDirtyFlags(1), mActive(1), mSegTrans(this),
-      mNumSegments(0), mDecay(1), mFollowA(this), mFollowB(this), mFollowWeight(0),
-      mTaper(0) {
+    : mLastTime(-1), mNumSides(4), mMat(this), mWidth(1), mDirtyFlags(1), mActive(1),
+      mSegTrans(this), mNumSegments(0), mDecay(1), mFollowA(this), mFollowB(this),
+      mFollowWeight(0), mTaper(0) {
     mMesh = Hmx::Object::New<RndMesh>();
     mCreateTrans = false;
 }
@@ -136,51 +137,171 @@ void HamRibbon::SetActive(bool active) {
 
 #pragma fp_contract(off)
 void HamRibbon::UpdateChase() {
-auto& _ref0 = mSegTrans;
-#ifdef HX_NATIVE
-    // TODO: needs Interp(Transform,...) and ObjPtrList subscript - not needed for boot
-#else
-    if (!mActive || _ref0.empty()) return;
-    float now = TheTaskMgr.Seconds(TaskMgr::kDelayedTime);
-    if ((int)mLastTime < 0) {
-        mLastTime = now;
-        mChaseKeys.clear();
+    if (!mFollowA) {
+        return;
     }
-    // Get current followed transform (blend of A and B)
-    Transform followed = Transform::IDXfm();
-    if (mFollowA) {
-        followed = mFollowA->WorldXfm();
-        if (mFollowB && mFollowWeight >= 1) {
-            Transform bXfm = mFollowB->WorldXfm();
-            Interp(followed, bXfm, mFollowWeight, followed);
-        }
-    } else if (mFollowB) {
-        followed = mFollowB->WorldXfm();
-    }
-    // Add key at current time
-    mChaseKeys.Add(followed, now, true);
-    // Remove old keys beyond decay window
-    float oldestKeepTime = now - mDecay;
-    while (mChaseKeys.NumKeys() > 1 && mChaseKeys.front().frame < oldestKeepTime) {
-        mChaseKeys.Remove(0);
-    }
-    // Distribute keys to segment transforms
-    int numSegs = _ref0.size();
-    if (numSegs > 0 && mChaseKeys.NumKeys() > 0) {
-        float oldest = mChaseKeys.front().frame;
-        float newest = mChaseKeys.back().frame;
-        float timeRange = newest - oldest;
-        int i = 0;
-        for (ObjPtrList<RndTransformable>::iterator it = _ref0.begin(); it != _ref0.end(); ++it, i++) {
-            float t = (numSegs > 1) ? (float)i / (numSegs - 1) : 0.0f;
-            float sampleTime = oldest + t * timeRange;
-            Transform segXfm;
-            mChaseKeys.AtFrame(sampleTime, segXfm);
-            (*it)->SetWorldXfm(segXfm);
+
+    float now = TheTaskMgr.Seconds(TaskMgr::kRealTime);
+    if (now < mLastTime) {
+        if (mChaseKeys.begin() != mChaseKeys.end()) {
+            mChaseKeys.erase(mChaseKeys.begin(), mChaseKeys.end());
         }
     }
+
+    int added = 0;
+    if (mActive) {
+        Vector3 followed = mFollowA->WorldXfm().v;
+        if (mFollowB) {
+            Interp(followed, mFollowB->WorldXfm().v, mFollowWeight, followed);
+        }
+
+        int numKeys = mChaseKeys.size();
+        int removeCount = 0;
+        if (numKeys != 0) {
+            float cutoff = now - mDecay;
+            while (removeCount < numKeys) {
+                if (cutoff <= mChaseKeys[removeCount].frame) {
+                    break;
+                }
+                removeCount++;
+            }
+        }
+
+        if (removeCount < numKeys) {
+            for (int i = 0; i < numKeys - removeCount; ++i) {
+                mChaseKeys[i] = mChaseKeys[i + removeCount];
+            }
+        }
+
+        Key<Transform> key(Transform::IDXfm(), 0.0f);
+        mChaseKeys.resize(numKeys - removeCount, key);
+        if (mChaseKeys.size() == 0) {
+            key.value.v = followed;
+            key.frame = now;
+            mChaseKeys.push_back(key);
+        } else {
+            float step = mDecay / mNumSegments;
+            float minDistSq = mWidth * mWidth * 0.125f;
+            float nextTime = mChaseKeys.back().frame + step;
+            while (nextTime < now) {
+                key.frame = mChaseKeys.back().frame + step;
+                Interp(
+                    mChaseKeys.back().value.v,
+                    followed,
+                    step / (now - mChaseKeys.back().frame),
+                    key.value.v
+                );
+                Vector3 delta;
+                Subtract(key.value.v, mChaseKeys.back().value.v, delta);
+                if (minDistSq <= LengthSquared(delta)) {
+                    mChaseKeys.push_back(key);
+                    added++;
+                } else {
+                    mChaseKeys.back().frame = key.frame;
+                }
+                nextTime = mChaseKeys.back().frame + step;
+            }
+        }
+    }
+
+    int firstDirty = mChaseKeys.size() - added;
+    if (firstDirty < mChaseKeys.size()) {
+        float prevAngle = -1.0f;
+        for (int i = firstDirty; i < mChaseKeys.size(); ++i) {
+            if (i != 0) {
+                Vector3 dir;
+                Subtract(mChaseKeys[i].value.v, mChaseKeys[i - 1].value.v, dir);
+                Normalize(dir, dir);
+
+                Vector3 smoothDir = dir;
+                float angle = -1.0f;
+                if (2 < i) {
+                    Vector3 prevDir;
+                    Subtract(
+                        mChaseKeys[i - 1].value.v, mChaseKeys[i - 2].value.v, prevDir
+                    );
+                    float dot = Clamp(0.0f, 1.0f, Dot(prevDir, dir));
+                    angle = std::acos(dot);
+                    prevDir *= prevAngle;
+                    Interp(dir, prevDir, 0.5f, smoothDir);
+                    Normalize(smoothDir, smoothDir);
+                }
+
+                static Vector3 up(0.0f, 0.0f, 1.0f);
+                Transform invPrev;
+                Invert(mChaseKeys[i - 1].value, invPrev);
+                Vector3 localPos;
+                Multiply(mChaseKeys[i].value.v, invPrev, localPos);
+                Transform tf = Transform::IDXfm();
+                tf.LookAt(localPos, up);
+                Multiply(tf, mChaseKeys[i - 1].value.m, tf);
+                Normalize(tf.m, tf.m);
+                tf.v = mChaseKeys[i].value.v;
+
+                if (angle != -1.0f) {
+                    Hmx::Matrix3 inv;
+                    Invert(tf.m, inv);
+                    Vector3 localSmooth;
+                    Multiply(smoothDir, inv, localSmooth);
+                    float clamped = Clamp(0.0f, 1.0f, localSmooth.x);
+                    float a = std::acos(clamped);
+                    float invCos = 1.0f / std::cos(angle * 0.5f);
+                    float c = std::cos(a * 2.0f);
+                    float s = std::sin(a * 2.0f);
+                    Hmx::Matrix3 bend(
+                        ((c + 1.0f) * (invCos - 1.0f)) * 0.5f + 1.0f,
+                        (s * (1.0f - invCos)) * 0.5f,
+                        0.0f,
+                        (s * (1.0f - invCos)) * 0.5f,
+                        ((1.0f - c) * (invCos - 1.0f)) * 0.5f + 1.0f,
+                        0.0f,
+                        0.0f,
+                        0.0f,
+                        1.0f
+                    );
+                    Multiply(bend, tf.m, tf.m);
+                }
+
+                mChaseKeys[i].value = tf;
+                prevAngle = angle;
+            }
+        }
+    }
+
+    UpdateMesh();
     mLastTime = now;
-#endif
+}
+
+void HamRibbon::UpdateMesh() {
+    auto& _ref0 = mChaseKeys;
+    int histSize = _ref0.size();
+    if (histSize == 0) {
+        return;
+    }
+
+    float endTime = _ref0.back().frame;
+    Keys<Transform, Transform>::iterator keyIt = _ref0.begin();
+    int i = 0;
+    for (ObjPtrList<RndTransformable>::iterator it = mSegTrans.begin();
+         it != mSegTrans.end() && i < mNumSegments;
+         ++it, ++i) {
+        MILO_ASSERT(histSize > 0, 0x12A);
+
+        Transform tf = keyIt->value;
+        if (mTaper) {
+            Hmx::Matrix3 taper;
+            float scale = 1.0f - (endTime - keyIt->frame) / mDecay;
+            taper.Set(scale, 0.0f, 0.0f, 0.0f, scale, 0.0f, 0.0f, 0.0f, scale);
+            Multiply(taper, tf.m, tf.m);
+        }
+
+        RndTransformable *trans = *it;
+        trans->SetLocalXfm(tf);
+        ++keyIt;
+        if (i + 1 >= histSize) {
+            keyIt = _ref0.begin() + histSize - 1;
+        }
+    }
 }
 
 void HamRibbon::ConstructMesh() {
@@ -200,18 +321,17 @@ void HamRibbon::ConstructMesh() {
         // Generate faces
         for (int seg = 0; seg < mNumSegments; seg++) {
             for (int side = 0; side < mNumSides; side++) {
-                int baseIdx = (seg * mNumSides + side) * 2;
                 int nextSide = (side + 1) % mNumSides;
-                int nextIdx = (seg * mNumSides + nextSide) * 2;
+                int base = seg * mNumSides * 2;
 
                 int faceIdx = (seg * mNumSides + side) * 2;
-                mMesh->Faces()[faceIdx].v1 = baseIdx;
-                mMesh->Faces()[faceIdx].v2 = nextIdx;
-                mMesh->Faces()[faceIdx].v3 = baseIdx + 1;
+                mMesh->Faces()[faceIdx].v1 = base + side;
+                mMesh->Faces()[faceIdx].v2 = base + nextSide;
+                mMesh->Faces()[faceIdx].v3 = base + mNumSides + nextSide;
 
-                mMesh->Faces()[faceIdx + 1].v1 = baseIdx + 1;
-                mMesh->Faces()[faceIdx + 1].v2 = nextIdx;
-                mMesh->Faces()[faceIdx + 1].v3 = nextIdx + 1;
+                mMesh->Faces()[faceIdx + 1].v1 = base + mNumSides + nextSide;
+                mMesh->Faces()[faceIdx + 1].v2 = base + mNumSides + side;
+                mMesh->Faces()[faceIdx + 1].v3 = base + side;
             }
         }
 
@@ -227,9 +347,10 @@ void HamRibbon::ConstructMesh() {
                 float u = side * uStep;
                 float cosA = std::cos(angle);
                 float sinA = std::sin(angle);
+                Vector3 norm;
 
                 for (int v = 0; v < 2; v++) {
-                    int vertIdx = (seg * mNumSides + side) * 2 + v;
+                    int vertIdx = seg * mNumSides * 2 + v * mNumSides + side;
 
                     Transform xfm;
                     xfm = Transform::IDXfm();
@@ -241,14 +362,18 @@ void HamRibbon::ConstructMesh() {
                     mMesh->Verts()[vertIdx].pos = pos;
 
                     if (v == 0) {
-                        Vector3 norm;
                         Subtract(pos, zeroVec, norm);
                         Normalize(norm, norm);
-                        mMesh->Verts()[vertIdx].norm = norm;
                     }
+                    mMesh->Verts()[vertIdx].norm = norm;
 
-                    mMesh->Verts()[vertIdx].boneWeights.x = (float)side / mNumSegments;
-                    mMesh->Verts()[vertIdx].boneWeights.y = u;
+                    int boneIdx = mMesh->NumBones() - 1;
+                    if (seg + v <= boneIdx) {
+                        boneIdx = seg + v;
+                    }
+                    mMesh->Verts()[vertIdx].boneIndices[0] = (short)boneIdx;
+                    mMesh->Verts()[vertIdx].tex.x = (float)boneIdx / (float)mNumSegments;
+                    mMesh->Verts()[vertIdx].tex.y = u;
                 }
             }
         }

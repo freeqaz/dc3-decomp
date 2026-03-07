@@ -1,5 +1,8 @@
 #include "os/Endian.h"
+#include "os/CritSec.h"
 #include "os/Debug.h"
+
+CriticalSection gCrit;
 
 struct BINKIO;
 extern unsigned int BinkFileIdle(BINKIO *);

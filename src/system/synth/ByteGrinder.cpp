@@ -212,8 +212,9 @@ DataNode op6(DataArray *msg) {
 
 DataNode op7(DataArray *msg) {
     u32 operand = msg->Int(1);
+    auto _tmp0 = u8(operand);
     u32 w = msg->Int(2);
-    u8 ret = !w + u8(operand);
+    u8 ret = !w + _tmp0;
     return DataNode(kDataInt, ret);
 }
 
@@ -333,27 +334,30 @@ DataNode op20(DataArray *msg) {
 }
 
 DataNode op21(DataArray *msg) {
-    u32 l = msg->Int(1);
     u32 r = msg->Int(2);
     u32 w2 = (r & 0xFF) << 8;
     u32 w3 = (w2 & 0xFFFFFF00) | (r & 0xFF);
-    return u8(w3 >> 1 ^ l);
+    u32 l = msg->Int(1);
+    auto _tmp0 = u8(w3 >> 1 ^ l);
+    return _tmp0;
 }
 
 DataNode op22(DataArray *msg) {
-    u32 l = msg->Int(1);
     u32 r = msg->Int(2);
     u32 w2 = (r & 0xFF) << 8;
     u32 w3 = (w2 & 0xFFFFFF00) | (r & 0xFF);
-    return u8(w3 >> 2 ^ l);
+    u32 l = msg->Int(1);
+    auto _tmp0 = u8(w3 >> 2 ^ l);
+    return _tmp0;
 }
 
 DataNode op23(DataArray *msg) {
-    u32 l = msg->Int(1);
     u32 r = msg->Int(2);
     u32 w2 = (r & 0xFF) << 8;
+    u32 l = msg->Int(1);
     u32 w3 = (w2 & 0xFFFFFF00) | (r & 0xFF);
-    return u8(w3 >> 3 ^ l);
+    auto _tmp0 = u8(w3 >> 3 ^ l);
+    return _tmp0;
 }
 
 DataNode op24(DataArray *msg) {
@@ -364,19 +368,21 @@ DataNode op24(DataArray *msg) {
 }
 
 DataNode op25(DataArray *msg) {
-    u32 l = msg->Int(1);
     u32 r = msg->Int(2);
     u32 w2 = (r & 0xFF) << 8;
     u32 w3 = (w2 & 0xFFFFFF00) | (r & 0xFF);
-    return u8(w3 >> 5 ^ l);
+    u32 l = msg->Int(1);
+    auto _tmp0 = u8(w3 >> 5 ^ l);
+    return _tmp0;
 }
 
 DataNode op26(DataArray *msg) {
-    u32 l = msg->Int(1);
     u32 r = msg->Int(2);
     u32 w2 = (r & 0xFF) << 8;
+    u32 l = msg->Int(1);
     u32 w3 = (w2 & 0xFFFFFF00) | (r & 0xFF);
-    return u8(w3 >> 6 ^ l);
+    auto _tmp0 = u8(w3 >> 6 ^ l);
+    return _tmp0;
 }
 
 DataNode op27(DataArray *msg) {
@@ -388,8 +394,8 @@ DataNode op27(DataArray *msg) {
 }
 
 DataNode op28(DataArray *msg) {
-    u32 l = msg->Int(1);
     u32 r = msg->Int(2);
+    u32 l = msg->Int(1);
     u32 masked = r & 0xFF;
     u32 shifted = (masked >> 5) | (masked << 3);
     return u8(shifted + l ^ l);
@@ -618,13 +624,14 @@ DataNode op52(DataArray *msg) {
 }
 
 DataNode op53(DataArray *msg) {
-    u32 operand = msg->Int(1);
     u8 w = msg->Int(2);
-
     u32 working2 = (w ^ 0x5Cu);
+
+    u32 operand = msg->Int(1);
     u32 working3 = (w << 8) ^ 0x36u;
     u32 tmp = ((working2 | working3) >> 7);
-    return u8(tmp ^ operand);
+    auto _tmp0 = u8(tmp ^ operand);
+    return _tmp0;
 }
 
 DataNode op54(DataArray *msg) {

@@ -93,7 +93,7 @@ struct {
 #define gRndTextureEvent gRndHandles.mTextureEvent
 
 #ifdef HX_NATIVE
-static void* sTexture = nullptr; // stub — DxTex doesn't exist on native
+static void *sTexture = nullptr; // stub — DxTex doesn't exist on native
 #else
 DxTex *sTexture;
 #endif
@@ -101,6 +101,8 @@ bool sCompressDone;
 void *sCompressData;
 
 extern int lbl_82F14008;
+extern DataArray *lbl_830A4100;
+extern int lbl_830A4104;
 void MemPrintOverview(int, char *const);
 
 DataNode ModalKeyListener::OnMsg(const KeyboardKeyMsg &k) {
@@ -137,14 +139,15 @@ Rnd::Rnd()
     : mClearColor(0.3f, 0.3f, 0.3f), mWidth(640), mHeight(480), mScreenBpp(16),
       mDrawCount(0), mDrawTimer(), mTimersOverlay(0), mRateOverlay(0), mHeapOverlay(0),
       mWatchOverlay(0), mStatsOverlay(0), mDefaultMat(0), mOverlayMat(0), mOverdrawMat(0),
-      mDefaultCam(0), mWorldCamCopy(0), mDefaultEnv(0), mDefaultLit(0), mDefaultCubeTexBlack(nullptr),
-      mDefaultCubeTexWhite(nullptr), mRateTotal(0), mRateCount(5), mFrameID(0), mRateGate("    "),
-      mFont(nullptr), mSync(1), mGsTiming(0), mShowSafeArea(0), mDrawing(0),
-      mWorldEnded(1), mAspect(kWidescreen), mDrawMode(kDrawNormal), mResourceCached(0), mShowShaderCost(0),
-      mShrinkToSafe(1), mInGame(0), mVerboseTimers(0), mDisablePostProc(0), unk146(0),
-      mWorldCamCopied(0), unk148(0), mWorldEndCallback(0), unk150(0), mPostProcOverride(this),
-      mPostProcBlackLightOverride(nullptr), mPreClearDraws(this), mDraws(this), mReleaseImmediate(0),
-      mProcCmds(kProcessAll), mLastProcCmds(kProcessAll) {
+      mDefaultCam(0), mWorldCamCopy(0), mDefaultEnv(0), mDefaultLit(0),
+      mDefaultCubeTexBlack(nullptr), mDefaultCubeTexWhite(nullptr), mRateTotal(0),
+      mRateCount(5), mFrameID(0), mRateGate("    "), mFont(nullptr), mSync(1),
+      mGsTiming(0), mShowSafeArea(0), mDrawing(0), mWorldEnded(1), mAspect(kWidescreen),
+      mDrawMode(kDrawNormal), mResourceCached(0), mShowShaderCost(0), mShrinkToSafe(1),
+      mInGame(0), mVerboseTimers(0), mDisablePostProc(0), unk146(0), mWorldCamCopied(0),
+      unk148(0), mWorldEndCallback(0), unk150(0), mPostProcOverride(this),
+      mPostProcBlackLightOverride(nullptr), mPreClearDraws(this), mDraws(this),
+      mReleaseImmediate(0), mProcCmds(kProcessAll), mLastProcCmds(kProcessAll) {
     for (int i = 0; i < 8; i++)
         mDefaultTex[i] = nullptr;
 }
@@ -550,15 +553,18 @@ void Rnd::TestPoint(const Vector3 &pos, RndFlare *flare) {
         return;
     RndCam *cam = RndCam::Current();
     if (cam->TargetTex()) {
-        MILO_NOTIFY_ONCE("Flare %s can't be drawn in render to texture mode", (char *)flare->Name());
+        MILO_NOTIFY_ONCE(
+            "Flare %s can't be drawn in render to texture mode", (char *)flare->Name()
+        );
         flare->SetVisible(false);
     } else {
         Vector2 screen;
         float depth = cam->WorldToScreen(pos, screen);
-        if (depth >= cam->NearPlane() && depth <= cam->FarPlane()
-            && screen.x >= 0.0f && screen.y >= 0.0f && screen.x < 1.0f && screen.y < 1.0f) {
+        if (depth >= cam->NearPlane() && depth <= cam->FarPlane() && screen.x >= 0.0f
+            && screen.y >= 0.0f && screen.x < 1.0f && screen.y < 1.0f) {
             PointTest pt = { 0, 0, 0, 0 };
-            std::list<PointTest>::iterator it = mPointTests.insert(mPointTests.begin(), pt);
+            std::list<PointTest>::iterator it =
+                mPointTests.insert(mPointTests.begin(), pt);
             it->mFlare = flare;
             it->x = (int)((float)mWidth * screen.x);
             it->y = (int)((float)mHeight * screen.y);
@@ -983,7 +989,8 @@ Rnd::CompressTexDesc::~CompressTexDesc() {
 int Rnd::CompressTexture(
     RndTex *tex, RndTex::AlphaCompress a, CompressTextureCallback *cb
 ) {
-    for (std::list<CompressTexDesc *>::iterator it = mCompressTexQueue.begin(); it != mCompressTexQueue.end();
+    for (std::list<CompressTexDesc *>::iterator it = mCompressTexQueue.begin();
+         it != mCompressTexQueue.end();
          ++it) {
         if (tex == (*it)->tex) {
             MILO_NOTIFY("%s: texture added to compression twice", PathName(tex));
@@ -1028,8 +1035,135 @@ void Rnd::UpdateRate() {
 }
 
 // noinline: Prevents inlining of this stub implementation. Remove once fully implemented.
-__declspec(noinline) float Rnd::DrawTimers(float f) {
-    // TODO: implement full timer drawing (complex function involving AutoTimer stats)
+#include "os/Timer.h"
+
+float Rnd::DrawTimers(float f) {
+    if ((lbl_830A4104 & 1) == 0) {
+        lbl_830A4104 = lbl_830A4104 | 1;
+        Symbol timerSym("timer_script");
+        Symbol rndSym("rnd");
+        DataArray *rndCfg = SystemConfig(rndSym);
+        lbl_830A4100 = rndCfg->FindArray(timerSym, false);
+    }
+
+    if (lbl_830A4100) {
+        DataNode res = lbl_830A4100->ExecuteScript(1, nullptr, nullptr, 0);
+        if ((res.Int() & 0x10) != 0) {
+            lbl_830A4100->Release();
+        }
+    }
+
+    if (mVerboseTimers) {
+        AutoTimer::CollectTimerStats();
+    }
+
+    int numTimers = 0;
+    std::list<std::pair<Timer, TimerStats> > &timers = AutoTimer::Timers();
+    for (std::list<std::pair<Timer, TimerStats> >::iterator it = timers.begin();
+         it != timers.end();
+         ++it) {
+        if (it->first.Draw()) {
+            numTimers++;
+        }
+    }
+
+    float y = f;
+    float height = 0.025f;
+    float width = 0.045f;
+    float bgTop = 0.025f;
+    float bgLeft = 0.0f;
+    float totalHeight = numTimers * width;
+
+    Hmx::Rect bgRect(bgLeft, y, 0.95f, totalHeight + bgTop);
+    Hmx::Color bgColor(0.0f, 0.0f, 0.0f, 0.5f);
+    DrawRectScreen(bgRect, bgColor, mOverlayMat, nullptr, nullptr);
+
+    Hmx::Color barColor(0.5f, 0.5f, 0.5f, 1.0f);
+    Hmx::Color ownColor(0.0f, 0.5f, 0.0f, 1.0f);
+    Hmx::Color inclColor(0.5f, 0.5f, 0.0f, 1.0f);
+    Hmx::Color warnColor(0.0f, 0.0f, 0.5f, 1.0f);
+
+    y += bgTop;
+    float x = bgLeft;
+
+    for (std::list<std::pair<Timer, TimerStats> >::iterator it = timers.begin();
+         it != timers.end();
+         ++it) {
+        if (!it->first.Draw()) {
+            continue;
+        }
+
+        float lastMs = it->first.GetLastMs();
+        float worstMs = it->first.GetWorstMs();
+        float budget = it->first.Budget();
+
+        if (lastMs > 0.0f || worstMs <= lastMs) {
+            float barHeight = lastMs * width;
+            Hmx::Rect barRect(x, y, barHeight, width);
+            DrawRectScreen(barRect, ownColor, nullptr, nullptr, nullptr);
+            y += barHeight;
+
+            float ownTime = lastMs - worstMs;
+            if (ownTime > 0.0f) {
+                float ownHeight = ownTime * width;
+                Hmx::Rect ownRect(x, y, ownHeight, width);
+                DrawRectScreen(ownRect, inclColor, nullptr, nullptr, nullptr);
+                y += ownHeight;
+            }
+        } else {
+            float barHeight = worstMs * width;
+            Hmx::Rect barRect(x, y, barHeight, width);
+            DrawRectScreen(barRect, inclColor, nullptr, nullptr, nullptr);
+            y += barHeight;
+        }
+
+        if (budget > 0.0f && worstMs > budget) {
+            float warnHeight = (worstMs - budget) * width;
+            Hmx::Rect warnRect(x, y, warnHeight, width);
+            DrawRectScreen(warnRect, warnColor, nullptr, nullptr, nullptr);
+            y += warnHeight;
+        }
+
+        y += width * 0.5f;
+    }
+
+    y = f + bgTop;
+    for (int i = 0; i < 10; i++) {
+        Hmx::Rect tickRect(x, y, 0.001f, width);
+        Hmx::Color tickColor(1.0f, 1.0f, 1.0f, 1.0f);
+        DrawRectScreen(tickRect, tickColor, nullptr, nullptr, nullptr);
+        y += width;
+    }
+
+    y = f + bgTop + 0.00446f;
+    x = bgLeft + 0.05f;
+
+    for (std::list<std::pair<Timer, TimerStats> >::iterator it = timers.begin();
+         it != timers.end();
+         ++it) {
+        if (!it->first.Draw()) {
+            continue;
+        }
+
+        float lastMs = it->first.GetLastMs();
+        const char *name = it->first.Name().Str();
+
+        const char *text;
+        if (lastMs < 0.05f) {
+            text = name;
+        } else if (!mVerboseTimers || !AutoTimer::CollectingStats()) {
+            text = MakeString("%s %.2f", name, lastMs);
+        } else {
+            TimerStats &stats = it->second;
+            text = MakeString("%s %.1f", name, lastMs);
+        }
+
+        Vector2 pos(x, y);
+        Hmx::Color textColor(1.0f, 1.0f, 1.0f, 1.0f);
+        DrawStringScreen(text, pos, textColor, true);
+        y += width;
+    }
+
     return f;
 }
 
@@ -1063,19 +1197,18 @@ DataNode Rnd::OnToggleHeap(const DataArray *) {
 
 RndTex *Rnd::CreateDefaultTexture(DefaultTextureType textureType) {
     MILO_ASSERT(textureType < kDefaultTex_Max, 0x5F5);
-    static const int sDefSize[kDefaultTex_Max][2] = {
-        { 8, 8 }, { 8, 8 }, { 8, 8 }, { 8, 8 },
-        { 8, 8 }, { 8, 8 }, { 8, 8 }, { 8, 8 }
-    };
+    static const int sDefSize[kDefaultTex_Max][2] = { { 8, 8 }, { 8, 8 }, { 8, 8 },
+                                                      { 8, 8 }, { 8, 8 }, { 8, 8 },
+                                                      { 8, 8 }, { 8, 8 } };
     static const unsigned char sDefColor[kDefaultTex_Max][4] = {
-        { 0,    0,    0,    0xFF },  // kDefaultTex_Black
-        { 0xFF, 0xFF, 0xFF, 0xFF },  // kDefaultTex_White
-        { 0xFF, 0xFF, 0xFF, 0 },     // kDefaultTex_WhiteTransparent
-        { 0x7f, 0x7f, 0xFF, 0xFF },  // kDefaultTex_FlatNormal
-        { 0xFF, 0xFF, 0xFF, 0xFF },  // kDefaultTex_Gradient
-        { 0xFF, 0xFF, 0xFF, 0xFF },  // kDefaultTex_Hue
-        { 0xFF, 0xFF, 0xFF, 0xFF },  // kDefaultTex_Error (checkerboard)
-        { 0,    0,    0,    0xFF }   // kUnk7 (null/black)
+        { 0, 0, 0, 0xFF }, // kDefaultTex_Black
+        { 0xFF, 0xFF, 0xFF, 0xFF }, // kDefaultTex_White
+        { 0xFF, 0xFF, 0xFF, 0 }, // kDefaultTex_WhiteTransparent
+        { 0x7f, 0x7f, 0xFF, 0xFF }, // kDefaultTex_FlatNormal
+        { 0xFF, 0xFF, 0xFF, 0xFF }, // kDefaultTex_Gradient
+        { 0xFF, 0xFF, 0xFF, 0xFF }, // kDefaultTex_Hue
+        { 0xFF, 0xFF, 0xFF, 0xFF }, // kDefaultTex_Error (checkerboard)
+        { 0, 0, 0, 0xFF } // kUnk7 (null/black)
     };
     int width = sDefSize[textureType][0];
     int height = sDefSize[textureType][1];

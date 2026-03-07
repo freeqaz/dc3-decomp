@@ -401,21 +401,17 @@ def _diagnosis_driven_chains(
     """Generate chains based on diagnosis patterns."""
     chains: list[ChainSpec] = []
 
-    # GPR regswaps -> register allocation chain
+    # Regswaps -> register allocation chain
     if diagnosis.reg_swap_pairs:
-        gpr_swaps = sum(
-            1 for (a, b) in diagnosis.reg_swap_pairs
-            if a.startswith("r") and b.startswith("r")
-        )
-        if gpr_swaps > 0:
-            chains.append(ChainSpec(
-                stages=["declaration_reorder", "prologue_pressure", "parameter_live_range"],
-                reason=f"regalloc: {gpr_swaps} GPR swap pairs",
-            ))
-            chains.append(ChainSpec(
-                stages=["member_ref_bind", "declaration_reorder"],
-                reason=f"regalloc: bind members to fix register order",
-            ))
+        num_swaps = len(diagnosis.reg_swap_pairs)
+        chains.append(ChainSpec(
+            stages=["declaration_reorder", "prologue_pressure", "parameter_live_range"],
+            reason=f"regalloc: {num_swaps} swap pairs",
+        ))
+        chains.append(ChainSpec(
+            stages=["member_ref_bind", "declaration_reorder"],
+            reason=f"regalloc: bind members to fix register order",
+        ))
 
     # Prologue mismatch -> pressure chain
     if diagnosis.has_prologue_mismatch:

@@ -4,6 +4,7 @@
 #include <cstring>
 #include <cwchar>
 #include "os/OnlineID.h"
+#include "utl/DataPointMgr.h"
 #include "utl/GlitchFinder.h"
 #include "xdk/XAPILIB.h"
 #include "xdk/XBC.h"
@@ -518,4 +519,36 @@ DataNode PlatformMgr::OnSignInUsers(const DataArray *msg) {
 
 void PlatformMgr::SmartGlassSend(unsigned long clientID, const DataArray *arr) {
     XbcSendMsg(clientID, arr);
+}
+
+#include "utl/JobMgr.h"
+
+void MultipleItemsEnumJob::Cancel(Hmx::Object *) {
+    MILO_FAIL("MultipleItemsEnumJob::Cancel called");
+}
+
+void PostPurchaseEnumJob::OnCompletion(Hmx::Object *obj) {
+    if ((mStatus == 2) && (mSuccess != 0)) {
+        static int sInitFlags = 0;
+        static Symbol sSourceSymbol;
+        static Symbol sOfferSymbol;
+        static Symbol sPurchaserSymbol;
+
+        if (!(sInitFlags & 1)) {
+            sInitFlags |= 1;
+            sSourceSymbol = Symbol("source");
+        }
+        if (!(sInitFlags & 2)) {
+            sInitFlags |= 2;
+            sOfferSymbol = Symbol("offer");
+        }
+        if (!(sInitFlags & 4)) {
+            sInitFlags |= 4;
+            sPurchaserSymbol = Symbol("purchaser");
+        }
+
+        String dataStr(MakeString("%016llX", mItemID));
+        SendDataPoint("store/purchase", sSourceSymbol, mOfferSymbol, sOfferSymbol, dataStr, sPurchaserSymbol, mPurchaserID);
+    }
+    SingleItemEnumJob::OnCompletion(obj);
 }

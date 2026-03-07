@@ -49,8 +49,8 @@ void FreestyleMove::CalcCentering(int frameIdx) {
         }
     }
     unk14 = (int)(totalVal / (float)totalCount);
-    int weightedSum = 0;
     int pixelCount = 0;
+    int weightedSum = 0;
     for (int i = 0; i < 80; i++) {
         pixelCount += histogram[i];
         weightedSum += histogram[i] * i;

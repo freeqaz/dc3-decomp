@@ -7,6 +7,11 @@
 
 class FxSend360;
 
+struct PoolVoice {
+    int eg;
+    int egParams;
+};
+
 class Voice {
 public:
     POOL_OVERLOAD(Voice, 0x28);

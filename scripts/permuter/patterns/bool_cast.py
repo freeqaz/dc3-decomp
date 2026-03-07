@@ -102,6 +102,10 @@ def _generate_bool_casts(
 
         # Pattern 2: Extract condition call to bool local
         if node.type == "if_statement":
+            # Skip if this if is part of an else-if chain (parent is else clause)
+            # Inserting a declaration between "else" and "if" is invalid syntax
+            if node.parent and node.parent.type == "else_clause":
+                continue
             condition = node.child_by_field_name("condition")
             if condition is None:
                 continue

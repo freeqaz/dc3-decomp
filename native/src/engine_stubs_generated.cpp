@@ -6,6 +6,8 @@
 #include <cstdlib>
 #include <cstring>
 
+class DataArray;
+
 extern "C" {
 int BinkGetError() { return 0; }
 int BinkGoto() { return 0; }
@@ -45,7 +47,9 @@ int json_object_new_array() { return 0; }
 int json_object_put() { return 0; }
 int json_tokener_parse() { return 0; }
 extern "C" float lbl_82F0BE80 = 2.0f;
-int lbl_82F14008() { return 0; }
+int lbl_82F14008 = 0;
+DataArray *lbl_830A4100 = nullptr;
+int lbl_830A4104 = 0;
 int lbl_82F1AB98() { return 0; }
 int lbl_82F1AB9C() { return 0; }
 int lbl_82F1ABA0() { return 0; }

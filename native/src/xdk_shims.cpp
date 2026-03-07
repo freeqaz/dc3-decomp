@@ -56,6 +56,15 @@ void RtlEnterCriticalSection(RTL_CRITICAL_SECTION *cs) {
     cs->OwningThread = (void *)(uintptr_t)pthread_self();
 }
 
+void RtlDeleteCriticalSection(RTL_CRITICAL_SECTION *cs) {
+    pthread_mutex_t *mtx = GetMutex(cs);
+    if (mtx) {
+        pthread_mutex_destroy(mtx);
+        delete mtx;
+        memset(cs, 0, sizeof(*cs));
+    }
+}
+
 void RtlLeaveCriticalSection(RTL_CRITICAL_SECTION *cs) {
     uintptr_t ptr = (uintptr_t)cs->Synchronization.RawEvent[0] |
                     ((uintptr_t)cs->Synchronization.RawEvent[1] << 32);

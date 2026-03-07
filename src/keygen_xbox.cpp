@@ -46,8 +46,8 @@ void parseHex16(const char *input, unsigned char *output) {
 
     for (unsigned int i = 0; i < 0x10; ++i) {
         val = (asciiDigitToHex(src[0]) << 4) + asciiDigitToHex(src[1]);
-        *output++ = val;
         src += 2;
+        *output++ = val;
     }
 }
 
@@ -79,9 +79,9 @@ long random(long l) {
     } while (0);
 
 void KeyChain::getMasher(unsigned char *uc) {
-    unsigned int *masher_p = reinterpret_cast<unsigned int *>(uc);
     unsigned int m = 1;
     int needs_byteswap = NEEDS_BYTESWAP(&m, 1);
+    unsigned int *masher_p = reinterpret_cast<unsigned int *>(uc);
 
     for (int i = 0; i < 8; i++) {
         *masher_p = random((0 == i) ? 0xEB : 0);

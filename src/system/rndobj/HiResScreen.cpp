@@ -26,22 +26,23 @@ HiResScreen::BmpCache::BmpCache(unsigned int ui1, unsigned int ui2) {
     mDirtyStart = 0;
     mDirtyEnd = 0;
 
-    unsigned int rows_per = ui2 + 1;
     unsigned int byte_size;
+    unsigned int rows_per = ui2 + 1;
+    auto& _ref0 = mByteSize;
     do {
         rows_per--;
         byte_size = rows_per * ui1 * 4;
     } while (byte_size > 0x6DDD00);
 
     mRowsPerCacheLine = rows_per;
-    mByteSize = byte_size;
+    _ref0 = byte_size;
     MILO_ASSERT(ui2 % rows_per == 0, 0x3B);
     mTotalNumCacheLines = ui2 / rows_per;
     mFileNames = new String[mTotalNumCacheLines];
     for (uint i = 0; i < mTotalNumCacheLines; i++) {
         mFileNames[i] = MakeString("_hires_cache_%.2d.dat", i);
     }
-    mBuffer = (unsigned char *)MemAlloc(mByteSize, __FILE__, 0x44, "HiResScreenCache");
+    mBuffer = (unsigned char *)MemAlloc(_ref0, __FILE__, 0x44, "HiResScreenCache");
     mCurrLoadedIndex = ui2;
     DeleteCache();
 }
@@ -272,10 +273,10 @@ void HiResScreen::Finish() {
 void HiResScreen::Merge(
     const RndBitmap &bm, int srcX, int srcY, int srcW, int srcH, int dstX, int dstY, int padX, int padY
 ) {
+    int xStart = dstX;
     if (srcH >= srcW) {
         return;
     }
-    int xStart = dstX;
     int xEnd = srcH;
     int xRange = xEnd - srcX;
     for (; xStart < mAccumHeight && xStart >= 0; xStart++, xRange++) {
