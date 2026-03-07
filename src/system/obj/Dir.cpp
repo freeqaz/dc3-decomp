@@ -1,10 +1,6 @@
 #include "obj/Dir.h"
 #include "Dir.h"
 
-#ifdef HX_NATIVE
-const char* g_lastDyncastEntry = nullptr;
-void* g_lastDyncastObj = nullptr;
-#endif
 #include "Msg.h"
 #include "Object.h"
 #include "Utl.h"
