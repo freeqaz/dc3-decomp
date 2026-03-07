@@ -61,7 +61,8 @@ bool FlowTimer::Activate() {
 
 void FlowTimer::Deactivate(bool b) {
     FLOW_LOG("Deactivated\n");
-    delete mTask;
+    if ((int)(Task *)mTask)
+        delete (Task *)mTask;
     TheFlowMgr->CancelCommand(this);
     FlowNode::Deactivate(b);
 }

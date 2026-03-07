@@ -15,7 +15,7 @@ public:
     virtual ~UIListSlotElement() {}
     virtual void Fill(const UIListProvider &, int, int) = 0;
     virtual void Draw(const Transform &, float, UIColor *, Box *) = 0;
-    virtual void Poll();
+    virtual void Poll() {}
 
     MEM_OVERLOAD(UIListSlotElement, 0x1e)
 };

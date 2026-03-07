@@ -166,7 +166,10 @@ void UIScreen::Draw() {
                 const DataNode *prop = Property(suppress_blacklight_text, false);
                 if (prop) {
                     int val = prop->Int();
-                    TheUI->SetScreenBlacklghtDisabled(val ? true : false);
+                    if (val)
+                        TheUI->SetScreenBlacklghtDisabled(true);
+                    else
+                        TheUI->SetScreenBlacklghtDisabled(false);
                 }
                 it->mPanel->Draw();
             }
@@ -522,10 +525,12 @@ DataNode UIScreen::ForeachPanel(const DataArray *da) {
 void UIScreen::ReloadStrings() {
     Message msg(Symbol("reload_string"));
     FOREACH (it, mPanelList) {
+#ifdef HX_NATIVE
         if (!it->mPanel) {
             continue;
         }
-        PanelDir *panelDir = it->mPanel->LoadedDir();
+#endif
+        ObjectDir *panelDir = it->mPanel->DataDir();
         if (!panelDir) {
             continue;
         }

@@ -433,14 +433,22 @@ bool Flow::Activate() {
 void Flow::Deactivate(bool b1) { FlowQueueable::Deactivate(b1); }
 
 void Flow::Enter() {
-    FlowNode *node = static_cast<FlowNode *>(this);
-    int mode = mStartMode;
-    if (PollEnabled()) return;
-    if (mode != 0) {
-        if (mode == 1) {
-            node->Execute(QueueState(1));
+    FlowQueueable *q = this;
+    if (ProxyFile().empty() && mStartMode != 0) {
+        if (mStartMode == 1) {
+            q->Execute(kQueue);
         } else {
-            TheFlowMgr->QueueCommand(node, QueueState(1));
+            TheFlowMgr->QueueCommand(q, kQueue);
+        }
+    }
+}
+
+void Flow::Exit() {
+    if (IsRunning() && ProxyFile().empty()) {
+        if (mHardStop) {
+            Deactivate(false);
+        } else {
+            RequestStop();
         }
     }
 }

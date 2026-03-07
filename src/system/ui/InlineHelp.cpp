@@ -1,6 +1,7 @@
 #include "ui/InlineHelp.h"
 #include "math/Mtx.h"
 #include "math/Rot.h"
+#include "math/Trig.h"
 #include "obj/Data.h"
 #include "obj/Object.h"
 #include "obj/Task.h"
@@ -191,55 +192,42 @@ void InlineHelp::Poll() {
 }
 
 void InlineHelp::DrawShowing() {
-    // Get world transform from this InlineHelp (UIComponent inherits from RndTransformable)
-    const Transform &worldXfm = WorldXfm();
+    int numLabels = mTextLabels.size();
+    const Transform &parentXfm = mTemplateLabel->WorldXfm();
+    Transform worldXfm;
+    memcpy(&worldXfm, &parentXfm, sizeof(Transform));
+    MILO_ASSERT(mTemplateLabel, 0x117);
 
-    // We need a TypeDef for GetIconStringFromAction to work
-    const DataArray *t = TypeDef();
-    MILO_ASSERT(t, 0x1cb);
+    Transform offsetXfm;
+    offsetXfm.m.Identity();
+    offsetXfm.v.Zero();
 
-    // Create offset transform - starts with identity matrix and zero translation
-    Transform offset;
-    offset.m.Identity();
-    offset.v.Zero();
-
-    // Create rotation transform if needed
-    Transform rotation;
+    Transform rotXfm;
     if (sLabelRot != 0.0f) {
-        // Create rotation matrix around Z axis
-        Hmx::Matrix3 rotMat;
-        Vector3 rotVec(sLabelRot * DEG2RAD, 0.0f, 0.0f);
-        MakeRotMatrix(rotVec, rotMat, true);
-        Multiply(offset, rotMat, rotation);
+        Vector3 angles(DegreesToRadians(sLabelRot), 0.0f, 0.0f);
+        Hmx::Matrix3 rotMtx;
+        MakeRotMatrix(angles, rotMtx, true);
+        Multiply(offsetXfm, rotMtx, rotXfm);
     } else {
-        rotation.m.Identity();
-        rotation.v.Zero();
+        rotXfm.m.Identity();
+        rotXfm.v.Zero();
     }
 
-    // Draw each label with appropriate offset
-    for (int i = 0; i < (int)mTextLabels.size(); i++) {
-        // Add spacing if not the first label
+    for (int i = 0; i < numLabels; i++) {
         if (i > 0) {
-            if (!mHorizontal) {
-                offset.v.y += mSpacing;
+            if (mHorizontal) {
+                offsetXfm.v.x += mSpacing;
             } else {
-                offset.v.x += mSpacing;
+                offsetXfm.v.z += mSpacing;
             }
         }
-
-        // Compute label world transform: offset * worldXfm
         Transform labelXfm;
-        Multiply(offset, worldXfm, labelXfm);
-
-        // Apply rotation if label is showing
-        UILabel *label = mTextLabels[i];
-        if (label->Showing()) {
-            Multiply(rotation, labelXfm, labelXfm);
+        Multiply(offsetXfm, worldXfm, labelXfm);
+        if (*mConfig[i].mSecondaryStr.c_str() != '\0') {
+            Multiply(rotXfm, labelXfm, labelXfm);
         }
-        label->SetWorldXfm(labelXfm);
-
-        // Draw the label
-        label->Draw();
+        mTextLabels[i]->SetWorldXfm(labelXfm);
+        mTextLabels[i]->DrawShowing();
     }
 }
 

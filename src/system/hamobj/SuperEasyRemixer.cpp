@@ -208,11 +208,11 @@ void SuperEasyRemixer::LoadAllVariants() {
     std::set<const MoveVariant *> vars;
     const char *song = TheGameData->GetSong().Str();
     if (TheMoveMgr->MoveParents().size() == 0) {
-        MILO_FAIL("Failed to load move graph for: %s\n", song);
+        MILO_FAIL("Failed to load move graph for: %s\n", (char *)song);
     }
     DataArray *layout = TheMoveMgr->Graph().Layout();
     if (!layout) {
-        MILO_FAIL("couldn't load layout for: %s", song);
+        MILO_FAIL("couldn't load layout for: %s", (char *)song);
     }
     for (int i = 0; i < 3; i++) {
         Symbol diffSym = DifficultyToSym((Difficulty)i);
@@ -242,10 +242,9 @@ void SuperEasyRemixer::LoadAllVariants() {
     HamSupereasyData *data = ObjDirItr<HamSupereasyData>(hamMoves, false);
     if (data) {
         for (int i = 0; i < data->mRoutine.size(); i++) {
-            HamSupereasyMeasure &curMeasure = data->mRoutine[i];
-            Symbol name = curMeasure.second;
+            Symbol name = data->mRoutine[i].second;
             if (name.Null())
-                name = curMeasure.first;
+                name = data->mRoutine[i].first;
             if (!InsertVariants(vars, name)) {
                 MILO_NOTIFY(
                     "%s's supereasy layout, at index %d, (%s) not found in move graph",

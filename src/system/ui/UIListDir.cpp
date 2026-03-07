@@ -294,17 +294,17 @@ void UIListDir::BuildDrawState(
     }
 
     // Early out if nothing to display
-    if (0 == mFadeOffset) {
+    if (mFadeOffset == 0) {
         fadeLimit = 0;
     }
 
-    UIListProvider *provider = state.Provider();
-    int currentScroll = state.CurrentScroll();
     bool scrolling = state.IsScrolling();
     int selectedDisplay = state.SelectedDisplay();
-
     int selectedData = state.SelectedData();
+    int currentScroll = state.CurrentScroll();
+
     float gapAccum = 0.0f;
+    UIListProvider *provider = state.Provider();
 
     drawState.mElements.reserve(numDisplayWithData + 1);
 
@@ -318,16 +318,14 @@ void UIListDir::BuildDrawState(
         if (i > 0) {
             int prevShowing = state.Display2Showing(i - 1);
             int prevData = state.Display2Data(i - 1);
-            auto _tmp0 = provider->GapSize(prevShowing, prevData, showing, data);
-            gapAccum += _tmp0;
+            gapAccum += provider->GapSize(prevShowing, prevData, showing, data);
         }
 
         // Calculate position
         float pos = (float)i;
         if (scrolling) {
             // Adjust for scroll snap
-            auto _tmp3 = state.ShouldHoldDisplayInPlace(i);
-            if (_tmp3) {
+            if (state.ShouldHoldDisplayInPlace(i)) {
                 // Hold in place during scroll snap
             }
         }
@@ -351,7 +349,7 @@ void UIListDir::BuildDrawState(
 
         // Determine active state
         bool active = (data != -1);
-        if (active & !provider->IsActive(data)) {
+        if (active && !provider->IsActive(data)) {
             active = false;
         }
 
@@ -373,8 +371,7 @@ void UIListDir::BuildDrawState(
             elemCompState = UIComponent::kNormal;
         }
         if (data != -1) {
-            auto _tmp0 = provider->ComponentStateOverride(showing, data, elemCompState);
-            elemCompState = _tmp0;
+            elemCompState = provider->ComponentStateOverride(showing, data, elemCompState);
         }
 
         elem.mActive = (data != -1);
@@ -401,8 +398,7 @@ void UIListDir::BuildDrawState(
         if (extraData != -1 && numDisplayWithData > 0) {
             int lastShowing = state.Display2Showing(numDisplayWithData - 1);
             int lastData = state.Display2Data(numDisplayWithData - 1);
-            auto _tmp1 = provider->GapSize(lastShowing, lastData, extraShowing, extraData);
-            scrollGap += _tmp1;
+            scrollGap += provider->GapSize(lastShowing, lastData, extraShowing, extraData);
         }
 
         SetElementPos(scrollElem.mPos, (float)extraDisplay, gridSpan, scrollGap + subListOffset, 0.0f);
@@ -410,8 +406,7 @@ void UIListDir::BuildDrawState(
         scrollElem.mElementState = kUIListWidgetActive;
         scrollElem.mComponentState = UIComponent::kNormal;
         if (extraData != -1) {
-            auto _tmp2 = provider->ComponentStateOverride(extraShowing, extraData, UIComponent::kNormal);
-            scrollElem.mComponentState = _tmp2;
+            scrollElem.mComponentState = provider->ComponentStateOverride(extraShowing, extraData, UIComponent::kNormal);
         }
         scrollElem.mDisplay = extraDisplay;
         scrollElem.mShowing = extraShowing;
