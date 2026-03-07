@@ -1406,6 +1406,9 @@ extern "C" long _stub_fn_518() { return 0; }
 // XboxMapFile::ParseStack(char const*, StackData*, int, FixedString&)
 extern "C" __attribute__((weak, used)) long _stub_fn_519() __asm__("_ZN11XboxMapFile10ParseStackEPKcP9StackDataiR11FixedString");
 extern "C" long _stub_fn_519() { return 0; }
+// Achievements::PlatformInit()
+extern "C" __attribute__((weak, used)) long _stub_fn_519b() __asm__("_ZN12Achievements12PlatformInitEv");
+extern "C" long _stub_fn_519b() { return 0; }
 // Achievements::GetAchievementData(int, int)
 extern "C" __attribute__((weak, used)) long _stub_fn_520() __asm__("_ZN12Achievements18GetAchievementDataEii");
 extern "C" long _stub_fn_520() { return 0; }

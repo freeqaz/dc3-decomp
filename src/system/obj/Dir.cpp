@@ -668,7 +668,11 @@ void ObjectDir::DeleteObjects() {
 void ObjectDir::RemoveSubDir(const ObjDirPtr<ObjectDir> &dPtr) {
     std::vector<ObjDirPtr<ObjectDir> >::iterator it = mSubDirs.begin();
     while (it != mSubDirs.end()) {
+#ifdef HX_NATIVE
+        if ((ObjectDir *)(*it) == (ObjectDir *)dPtr) {
+#else
         if (*(u32 *)((u8 *)&(*it) + 0xc) == *(u32 *)((u8 *)&dPtr + 0xc)) {
+#endif
             RemovingSubDir(*it);
             it = mSubDirs.erase(it);
             if (it == mSubDirs.end())
