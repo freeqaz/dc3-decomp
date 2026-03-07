@@ -32,19 +32,6 @@ __forceinline ObjRefConcrete<T1, T2>::ObjRefConcrete(const ObjRefConcrete &o)
 template <class T1, class T2>
 ObjRefConcrete<T1, T2>::~ObjRefConcrete() {
     if (mObject) {
-#ifdef HX_NATIVE
-        // Guard against use-after-free: during ObjectDir::DeleteObjects(),
-        // objects are destroyed in arbitrary order. A ref's target may already
-        // be freed, making mObject a dangling pointer. Check the live-object set.
-        if (!HmxObjectIsLive(mObject)) {
-            // Can't call mObject->Release(this) since mObject is freed, but
-            // we MUST still unlink ourselves from the target's ref ring.
-            // Otherwise the ring retains a dangling pointer to this node,
-            // and the target's eventual ReplaceRefs walk will crash.
-            Release(nullptr);
-            return;
-        }
-#endif
         mObject->Release(this);
     }
 }
@@ -52,34 +39,16 @@ ObjRefConcrete<T1, T2>::~ObjRefConcrete() {
 template <class T1, class T2>
 void ObjRefConcrete<T1, T2>::SetObjConcrete(T1 *obj) {
     if (mObject) {
-#ifdef HX_NATIVE
-        if (HmxObjectIsLive(mObject))
-#endif
-            mObject->Release(this);
+        mObject->Release(this);
     }
     mObject = obj;
     if (mObject) {
-#ifdef HX_NATIVE
-        if (HmxObjectIsLive(mObject))
-#endif
-            mObject->AddRef(this);
+        mObject->AddRef(this);
     }
 }
 
 template <class T1, class T2>
 Hmx::Object *ObjRefConcrete<T1, T2>::SetObj(Hmx::Object *root_obj) {
-#ifdef HX_NATIVE
-    // GCC/Clang dynamic_cast dereferences the vptr — crashes on objects with
-    // zero-filled vtables (stub objects from engine_stubs_generated.cpp).
-    // MSVC tolerates this. Guard only needed on native.
-    if (root_obj) {
-        void **vptr = *(void ***)root_obj;
-        if (!vptr) {
-            SetObjConcrete(nullptr);
-            return nullptr;
-        }
-    }
-#endif
     T1 *obj = root_obj ? dynamic_cast<T1 *>(root_obj) : nullptr;
     SetObjConcrete(obj);
     return mObject ? mObject : nullptr;
@@ -217,8 +186,6 @@ void ObjPtrVec<T1, T2>::ReplaceNode(Node *n, Hmx::Object *obj) {
         Hmx::Object *oldObj = n->SetObj(obj);
         if (!oldObj && mListMode == kObjListNoNull) {
 #ifdef HX_NATIVE
-            // During ReplaceList walks, suppress erase to avoid vector element
-            // shifting which corrupts the ObjRef ring's prev/next pointers.
             if (!gSuppressRefErase) {
                 erase(iterator(mNodes.begin() + (n - mNodes.data())));
             }

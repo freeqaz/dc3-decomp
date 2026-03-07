@@ -27,7 +27,9 @@
 // ============================================================================
 
 static pthread_mutex_t *GetMutex(RTL_CRITICAL_SECTION *cs) {
-    return (pthread_mutex_t *)cs->Synchronization.RawEvent;
+    uintptr_t ptr = (uintptr_t)cs->Synchronization.RawEvent[0] |
+                    ((uintptr_t)cs->Synchronization.RawEvent[1] << 32);
+    return (pthread_mutex_t *)ptr;
 }
 
 void RtlInitializeCriticalSection(RTL_CRITICAL_SECTION *cs) {
@@ -48,9 +50,7 @@ void RtlInitializeCriticalSection(RTL_CRITICAL_SECTION *cs) {
 }
 
 void RtlEnterCriticalSection(RTL_CRITICAL_SECTION *cs) {
-    uintptr_t ptr = (uintptr_t)cs->Synchronization.RawEvent[0] |
-                    ((uintptr_t)cs->Synchronization.RawEvent[1] << 32);
-    pthread_mutex_t *mtx = (pthread_mutex_t *)ptr;
+    pthread_mutex_t *mtx = GetMutex(cs);
     pthread_mutex_lock(mtx);
     cs->RecursionCount++;
     cs->OwningThread = (void *)(uintptr_t)pthread_self();
@@ -66,9 +66,7 @@ void RtlDeleteCriticalSection(RTL_CRITICAL_SECTION *cs) {
 }
 
 void RtlLeaveCriticalSection(RTL_CRITICAL_SECTION *cs) {
-    uintptr_t ptr = (uintptr_t)cs->Synchronization.RawEvent[0] |
-                    ((uintptr_t)cs->Synchronization.RawEvent[1] << 32);
-    pthread_mutex_t *mtx = (pthread_mutex_t *)ptr;
+    pthread_mutex_t *mtx = GetMutex(cs);
     cs->RecursionCount--;
     if (cs->RecursionCount == 0) {
         cs->OwningThread = nullptr;

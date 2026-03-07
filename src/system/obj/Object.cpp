@@ -14,20 +14,9 @@
 #include "utl/Symbol.h"
 
 #ifdef HX_NATIVE
-#include <unordered_set>
-static std::unordered_set<Hmx::Object *> &GetLiveObjects() {
-    static std::unordered_set<Hmx::Object *> sLiveObjects;
-    return sLiveObjects;
-}
-
-bool HmxObjectIsLive(Hmx::Object *obj) {
-    return GetLiveObjects().count(obj) > 0;
-}
-
-// Suppress ObjPtrVec/ObjPtrList node erasure during ReplaceList walks to prevent
-// vector reallocation invalidating ObjRef ring pointers.
+// Suppress ObjPtrVec node erasure during ReplaceList walks to prevent
+// vector element shifting from invalidating ObjRef ring prev/next pointers.
 bool gSuppressRefErase = false;
-bool gSuppressDirPtrDelete = false;
 
 void ObjRef::ReplaceList(Hmx::Object *obj) {
     bool oldSuppress = gSuppressRefErase;
@@ -60,9 +49,6 @@ Hmx::Object::Object()
     : mTypeProps(nullptr), mTypeDef(nullptr), mName(gNullStr), mDir(nullptr),
       mSinks(nullptr) {
     mRefs.Clear();
-#ifdef HX_NATIVE
-    GetLiveObjects().insert(this);
-#endif
 }
 
 Hmx::Object::~Object() {
@@ -81,11 +67,6 @@ Hmx::Object::~Object() {
     if (gDataThis == this) {
         gDataThis = nullptr;
     }
-#ifdef HX_NATIVE
-    // Remove from live-object set AFTER ReplaceRefs, so that refs can still
-    // call Release() on this object during the cleanup walk.
-    GetLiveObjects().erase(this);
-#endif
 }
 
 bool Hmx::Object::Replace(ObjRef *from, Hmx::Object *to) {
@@ -306,43 +287,6 @@ const char *Hmx::Object::FindPathName() {
 #pragma region Ref Methods
 
 void Hmx::Object::ReplaceRefs(Hmx::Object *obj) {
-#ifdef HX_NATIVE
-    // Snapshot all ref nodes before processing.  The ring can become corrupted
-    // during processing because:
-    //   1. ObjPtrVec::erase shifts contiguous nodes, invalidating ring pointers
-    //   2. ObjDirPtr::operator= can trigger cascading deletion
-    //   3. Dead nodes (from freed owners) may have garbage prev/next
-    // By snapshotting and self-unlinking each node upfront, we avoid walking a
-    // mutated linked list entirely.
-    if (mRefs.begin() == mRefs.end())
-        return;
-
-    // Collect all refs into a vector
-    std::vector<ObjRef *> refs;
-    refs.reserve(16);
-    for (ObjRef *r = mRefs.next; r != &mRefs; r = r->next) {
-        refs.push_back(r);
-    }
-    // Detach all nodes from the ring
-    mRefs.Clear();
-    for (size_t i = 0; i < refs.size(); i++) {
-        refs[i]->prev = refs[i];
-        refs[i]->next = refs[i];
-    }
-    // Now process each ref.  Since refs are self-referencing, Release() inside
-    // SetObjConcrete becomes a no-op.  Some refs may have been invalidated by
-    // prior Replace calls (e.g., ObjPtrVec erase shifting nodes), so check the
-    // vtable before virtual dispatch.
-    bool oldSuppress = gSuppressRefErase;
-    gSuppressRefErase = true;
-    for (size_t i = 0; i < refs.size(); i++) {
-        void *vptr = *(void **)refs[i];
-        if (!vptr)
-            continue; // Node was freed/zeroed — skip
-        refs[i]->Replace(obj);
-    }
-    gSuppressRefErase = oldSuppress;
-#else
     if (mRefs.begin() != mRefs.end()) {
         ObjRef other(mRefs);
         other.prev->next = &other;
@@ -350,7 +294,6 @@ void Hmx::Object::ReplaceRefs(Hmx::Object *obj) {
         mRefs.Clear();
         other.ReplaceList(obj);
     }
-#endif
 }
 
 void Hmx::Object::ReplaceRefsFrom(Hmx::Object *from, Hmx::Object *to) {

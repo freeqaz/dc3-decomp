@@ -431,13 +431,13 @@ void ViewerScene::AutoFrameCamera(OrbitCamera& cam, RndCam* rndCam, const Viewer
     ObjDirItr<RndMesh> bboxIt(baseScene, !charFraming);
     while (bboxIt) {
         RndMesh* m = bboxIt;
-        if (!m || !HmxObjectIsLive(m)) { ++bboxIt; continue; }
+        if (!m) { ++bboxIt; continue; }
         if (!m->Showing()) { ++bboxIt; continue; }
         const Transform& xfm = m->WorldXfm();
         float px = xfm.v.x, py = xfm.v.y, pz = xfm.v.z;
 
         RndMesh* owner = m->GetGeomOwner();
-        if (!owner || !HmxObjectIsLive(owner)) owner = m;
+        if (!owner) owner = m;
 
         int nv = owner->NumVerts();
         int ncv = owner->NumCompressedVerts();

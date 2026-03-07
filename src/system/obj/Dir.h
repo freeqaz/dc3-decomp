@@ -50,29 +50,13 @@ public:
         if ((dir != mObject) || !dir) {
             RELEASE(mLoader);
             if (mObject) {
-#ifdef HX_NATIVE
-                if (HmxObjectIsLive(mObject)) {
-#endif
                     mObject->Release(this);
-#ifdef HX_NATIVE
-                    // Short-circuit: if suppressing deletion, skip HasDirPtrs()
-                    // which walks the ref ring — it may contain freed ObjRef
-                    // nodes after MergeObjectsRecurse's ref manipulation.
-                    if (!gSuppressDirPtrDelete && !mObject->HasDirPtrs()) {
-#else
                     if (!mObject->HasDirPtrs()) {
-#endif
                             delete mObject;
                     }
-#ifdef HX_NATIVE
-                }
-#endif
             }
             mObject = dir;
             if (mObject) {
-#ifdef HX_NATIVE
-                if (HmxObjectIsLive(dir))
-#endif
                     dir->AddRef(this);
             }
         }
@@ -306,10 +290,6 @@ public:
     template <class T>
     T *Find(const char *name, bool fail = true) {
         Hmx::Object *found = FindObject(name, false, true);
-#ifdef HX_NATIVE
-        if (found && !HmxObjectIsLive(found))
-            found = nullptr;
-#endif
         T *castedObj = dynamic_cast<T *>(found);
         if (!castedObj && fail) {
             MILO_FAIL(
@@ -449,12 +429,9 @@ private:
     void Advance() {
         for (; mEntry != nullptr; mEntry = mSubDirs.front()->HashTable().Next(mEntry)) {
 #ifdef HX_NATIVE
+            // During DeleteObjects, ~Object() nulls entry->obj via RemoveFromDir().
+            // Skip null entries so we never touch freed memory.
             if (!mEntry->obj)
-                continue;
-            if (!HmxObjectIsLive(mEntry->obj))
-                continue;
-            void **vptr = *(void ***)mEntry->obj;
-            if (!vptr)
                 continue;
 #endif
             mObj = dynamic_cast<T *>(mEntry->obj);

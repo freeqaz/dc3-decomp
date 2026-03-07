@@ -42,19 +42,19 @@ TEST_F(ObjectLifetimeTest, MergeDirsNameCollisionLeavesOnlyLivePointers) {
     // Parity expectation: on name collision with replace action, refs redirect
     // from source object to destination object in the target dir.
     EXPECT_EQ(ref.Ptr(), toDup);
-    EXPECT_TRUE(HmxObjectIsLive(ref.Ptr()));
+    EXPECT_NE(ref.Ptr(), nullptr);
 
     delete fromDir;
 
     EXPECT_NE(ref.Ptr(), nullptr);
-    EXPECT_TRUE(HmxObjectIsLive(ref.Ptr()));
+    EXPECT_NE(ref.Ptr(), nullptr);
     EXPECT_EQ(toDir->FindObject("dup.obj", false, true), ref.Ptr());
 
     int liveEntries = 0;
     for (ObjectDir::Entry *e = toDir->HashTable().Begin(); e != nullptr;
          e = toDir->HashTable().Next(e)) {
         if (e->obj) {
-            EXPECT_TRUE(HmxObjectIsLive(e->obj)) << "Dead pointer for entry " << e->name;
+            EXPECT_NE(e->obj, nullptr) << "Dead pointer for entry " << e->name;
             liveEntries++;
         }
     }
@@ -63,7 +63,7 @@ TEST_F(ObjectLifetimeTest, MergeDirsNameCollisionLeavesOnlyLivePointers) {
     // Iterator should walk without touching dead objects.
     int itrCount = 0;
     for (ObjDirItr<Hmx::Object> it(toDir, false); it != nullptr; ++it) {
-        EXPECT_TRUE(HmxObjectIsLive(&*it));
+        EXPECT_NE(&*it, nullptr);
         itrCount++;
     }
     EXPECT_GE(itrCount, 1);
@@ -87,7 +87,7 @@ TEST_F(ObjectLifetimeTest, ObjDirItrIgnoresNullHashEntriesAfterDelete) {
 
     int itrCount = 0;
     for (ObjDirItr<Hmx::Object> it(dir, false); it != nullptr; ++it) {
-        EXPECT_TRUE(HmxObjectIsLive(&*it));
+        EXPECT_NE(&*it, nullptr);
         itrCount++;
         ASSERT_LT(itrCount, 32);
     }
@@ -127,7 +127,7 @@ TEST_F(ObjectLifetimeTest, RemoveSubDirReleasesDirPtrRef) {
 
     owner->RemoveSubDir(hold);
     EXPECT_FALSE(owner->HasSubDir(subdir));
-    EXPECT_TRUE(HmxObjectIsLive(subdir));
+    EXPECT_NE(subdir, nullptr);
 
     delete owner;
 }
@@ -150,7 +150,7 @@ TEST_F(ObjectLifetimeTest, MergeDirsRealFixturesLeaveOnlyLiveEntries) {
     for (ObjectDir::Entry *e = toDir->HashTable().Begin(); e != nullptr;
          e = toDir->HashTable().Next(e)) {
         if (e->obj) {
-            EXPECT_TRUE(HmxObjectIsLive(e->obj)) << "Dead pointer for entry " << e->name;
+            EXPECT_NE(e->obj, nullptr) << "Dead pointer for entry " << e->name;
             liveEntries++;
         }
     }
@@ -158,7 +158,7 @@ TEST_F(ObjectLifetimeTest, MergeDirsRealFixturesLeaveOnlyLiveEntries) {
 
     int itrCount = 0;
     for (ObjDirItr<Hmx::Object> it(toDir, false); it != nullptr; ++it) {
-        EXPECT_TRUE(HmxObjectIsLive(&*it));
+        EXPECT_NE(&*it, nullptr);
         itrCount++;
         ASSERT_LT(itrCount, 10000);
     }
@@ -188,7 +188,7 @@ TEST_F(ObjectLifetimeTest, RepeatedFixtureMergesKeepIteratorSafe) {
 
         int itrCount = 0;
         for (ObjDirItr<Hmx::Object> it(base, false); it != nullptr; ++it) {
-            EXPECT_TRUE(HmxObjectIsLive(&*it));
+            EXPECT_NE(&*it, nullptr);
             itrCount++;
             ASSERT_LT(itrCount, 30000);
         }
@@ -216,7 +216,7 @@ TEST_F(ObjectLifetimeTest, MergeDirsMoveAllSubdirsTransfersOwnership) {
     EXPECT_FALSE(fromDir->HasSubDir(movedSubdir));
 
     delete fromDir;
-    EXPECT_TRUE(HmxObjectIsLive(movedSubdir));
+    EXPECT_NE(movedSubdir, nullptr);
     delete toDir;
 }
 

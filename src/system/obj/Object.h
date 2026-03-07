@@ -21,19 +21,9 @@ class MergeFilter;
 void MergeObjectsRecurse(ObjectDir *, ObjectDir *, MergeFilter &, bool);
 
 #ifdef HX_NATIVE
-// Returns true if the given Hmx::Object pointer is still alive (not yet destroyed).
-// Used to guard against use-after-free when ObjRef nodes reference freed objects.
-bool HmxObjectIsLive(Hmx::Object *obj);
-
-// When true, ObjPtrVec/ObjPtrList should NOT erase nodes during Replace(nullptr).
-// Set during ObjRef::ReplaceList walks to prevent vector element shifting from
-// corrupting the ObjRef ring's prev/next pointers.
+// Suppress ObjPtrVec node erasure during ReplaceList walks to prevent
+// vector element shifting from invalidating ObjRef ring prev/next pointers.
 extern bool gSuppressRefErase;
-
-// When true, ObjDirPtr::operator=(nullptr) should NOT delete its target.
-// Set during ObjectDir::DeleteObjects() bulk ref-replacement pass to prevent
-// cascading destruction that corrupts ref rings.
-extern bool gSuppressDirPtrDelete;
 #endif
 
 #pragma region ObjRef

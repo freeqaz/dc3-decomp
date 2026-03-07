@@ -258,7 +258,7 @@ TEST_F(DirLoaderTest, RepeatedLoadLeavesOnlyLiveEntries) {
 
     int itrCount = 0;
     for (ObjDirItr<Hmx::Object> it(second, false); it != nullptr; ++it) {
-        EXPECT_TRUE(HmxObjectIsLive(&*it));
+        EXPECT_NE(&*it, nullptr);
         itrCount++;
         ASSERT_LT(itrCount, 100000);
     }

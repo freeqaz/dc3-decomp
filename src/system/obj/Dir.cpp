@@ -46,14 +46,7 @@ ObjectDir::ObjectDir()
 }
 
 ObjectDir::~ObjectDir() {
-#ifdef HX_NATIVE
-    bool oldSuppress = gSuppressDirPtrDelete;
-    gSuppressDirPtrDelete = true;
     mSubDirs.clear();
-    gSuppressDirPtrDelete = oldSuppress;
-#else
-    mSubDirs.clear();
-#endif
     delete mLoader;
     if (TheLoadMgr.AsyncUnload()) {
         new DirUnloader(this);
@@ -629,10 +622,7 @@ void PreloadSharedSubdirs(Symbol s) {
 }
 
 void ObjectDir::Terminate() {
-#ifndef HX_NATIVE
-    // Skip DeleteShared on native — objects with broken vtables crash during ObjDirPtr cleanup
     DeleteShared();
-#endif
     sSuperClassMap.clear();
 }
 
@@ -941,7 +931,7 @@ void ObjectDir::PreLoad(BinStream &bs) {
 
     if (d.rev > 0x15) {
         LoadType(bs);
-    } else if (d.rev >= 2 && d.rev <= 0x10) {
+    } else if (d.rev > 1 && d.rev < 17) {
         Hmx::Object::Load(bs);
     }
 
@@ -953,7 +943,7 @@ void ObjectDir::PreLoad(BinStream &bs) {
 
     if (d.rev > 0x19) {
         if (d.rev < 0x1B) {
-            bool b;
+            unsigned char b;
             bs >> b;
             mAlwaysInlined = b;
         } else {
@@ -987,7 +977,7 @@ void ObjectDir::PreLoad(BinStream &bs) {
         }
         if (gLoadingProxyFromDisk || mProxyOverride) {
             bool fail = false;
-            if (mProxyOverride && (mInlineProxyType == kInlineCached || mInlineProxyType == kInlineAlways)) {
+            if (mProxyOverride && ((int)(int)mInlineProxyType == kInlineCached || mInlineProxyType == kInlineAlways)) {
                 fail = true;
             }
             if (fail) {
