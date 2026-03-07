@@ -96,7 +96,7 @@ float BoneAngleRangePoseElement::Score(const Skeleton &skeleton) const {
     Vector3 boneDir;
     skeleton.BoneVec(mBone, kCoordCamera, boneDir);
     Normalize(boneDir, boneDir);
-    auto& angle = mAngle;
+    const Vector3& angle = mAngle;
     MILO_ASSERT(1.0f - 0.001f <= Length(angle) && Length(angle) <= 1.0f + 0.001f, 0x21);
     float dot = boneDir.x * angle.x + boneDir.y * angle.y + boneDir.z * angle.z;
     float acosAngle = acosf(dot);

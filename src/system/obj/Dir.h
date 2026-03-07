@@ -28,6 +28,8 @@ public:
     virtual bool IsDirPtr() { return true; }
     virtual void Replace(Hmx::Object *o) {
 #ifdef HX_NATIVE
+        // During merges, Replace can be called on ObjDirPtrs whose target
+        // was already freed. Xbox crashes here (UB); native guards it.
         if (!ObjRefConcrete<C>::mObject) return;
 #else
         MILO_ASSERT(ObjRefConcrete<C>::mObject, 0x70);
@@ -446,6 +448,15 @@ class ObjDirItr {
 private:
     void Advance() {
         for (; mEntry != nullptr; mEntry = mSubDirs.front()->HashTable().Next(mEntry)) {
+#ifdef HX_NATIVE
+            if (!mEntry->obj)
+                continue;
+            if (!HmxObjectIsLive(mEntry->obj))
+                continue;
+            void **vptr = *(void ***)mEntry->obj;
+            if (!vptr)
+                continue;
+#endif
             mObj = dynamic_cast<T *>(mEntry->obj);
             if (mObj)
                 return;

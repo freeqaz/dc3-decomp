@@ -124,6 +124,8 @@ void LabelShrinkWrapper::Update() {
 
 void LabelShrinkWrapper::Init() { REGISTER_OBJ_FACTORY(LabelShrinkWrapper) }
 
+void LabelShrinkWrapper::Poll() { UIComponent::Poll(); }
+
 void LabelShrinkWrapper::DrawShowing() {
     if (m_pLabel && m_pShow) {
         RndDir *pDir = mResourceDir;
@@ -133,13 +135,6 @@ void LabelShrinkWrapper::DrawShowing() {
         pDir->SetWorldXfm(_tmp0);
         pDir->Draw();
     }
-}
-
-void LabelShrinkWrapper::Poll() {}
-void LabelShrinkWrapper::OldResourcePreload(BinStream &bs) {
-    char name[256];
-    bs.ReadString(name, 256);
-    mResourceDir.SetName(name, true);
 }
 
 BEGIN_HANDLERS(LabelShrinkWrapper)

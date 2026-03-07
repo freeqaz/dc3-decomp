@@ -35,7 +35,7 @@ struct UIListElementDrawState {
 }; // size: 0x3c
 
 struct UIListWidgetDrawState {
-    ~UIListWidgetDrawState() {}
+    ~UIListWidgetDrawState();
     Vector3 mFirstPos; // 0x0
     Vector3 mLastPos; // 0xc
     Vector3 mHighlightPos; // 0x18
@@ -82,7 +82,7 @@ public:
     virtual void Fill(const UIListProvider &, int, int, int) {}
     virtual void StartScroll(int, bool) {}
     virtual void CompleteScroll(const UIListState &, int) {}
-    virtual void Poll() {}
+    virtual void Poll();
 
     float DrawOrder() const;
     float DisabledAlphaScale() const { return mDisabledAlphaScale; }

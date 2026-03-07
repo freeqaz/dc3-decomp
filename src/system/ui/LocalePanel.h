@@ -15,12 +15,11 @@ public:
         Symbol mToken; // 0x10
         String mString; // 0x14
     };
-    LocalePanel() {}
+    LocalePanel();
     // Hmx::Object
     virtual ~LocalePanel();
     OBJ_CLASSNAME(LocalePanel)
     OBJ_SET_TYPE(LocalePanel)
-    NEW_OBJ(LocalePanel)
     virtual DataNode Handle(DataArray *, bool);
     // UIPanel
     virtual void Enter();

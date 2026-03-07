@@ -52,11 +52,6 @@ class CommutativeSwapPattern(Pattern):
 
         return False
 
-    def priority(self, diagnosis: Diagnosis) -> float:
-        if not self.relevant(diagnosis):
-            return 0.0
-        return 0.3  # Wins exist but rare
-
     def generate(self, ctx: FunctionContext) -> Iterator[Variant]:
         counter = 0
         for stmt in ctx.statements:
@@ -137,7 +132,7 @@ def _find_chains(
             op_str = op_node.text.decode("utf-8")
             if op_str in _COMMUTATIVE_OPS:
                 terms = _collect_chain(node, op_str)
-                if terms is not None and len(terms) >= 3:  # Skip 2-term: swapping is useless on MSVC PPC
+                if terms is not None and len(terms) >= 3:
                     # Check this is the topmost node of the chain (parent isn't same op)
                     parent = node.parent
                     if parent is not None and parent.type == "binary_expression":

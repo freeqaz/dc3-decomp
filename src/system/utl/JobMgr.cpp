@@ -69,14 +69,35 @@ void JobMgr::CancelAllJobs() {
 
 JobMgr::~JobMgr() { CancelAllJobs(); }
 
-PostPurchaseEnumJob::PostPurchaseEnumJob(Hmx::Object *obj, int unk, u64 u, Symbol s, unsigned int ui) : SingleItemEnumJob(obj, unk, u), mOfferSymbol(s), mPurchaserID(ui) {}
+PostPurchaseEnumJob::PostPurchaseEnumJob(Hmx::Object *obj, int unk, u64 u, Symbol s, unsigned int ui) : SingleItemEnumJob(obj, unk, u) {}
 
 PostPurchaseEnumJob::~PostPurchaseEnumJob() {}
 
-#ifdef HX_NATIVE
-void PostPurchaseEnumJob::OnCompletion(Hmx::Object *) {}
-#endif
-// PostPurchaseEnumJob::OnCompletion is in PlatformMgr_Xbox.cpp on Xbox
+void PostPurchaseEnumJob::OnCompletion(Hmx::Object *obj) {
+    if ((mStatus == 2) && (mSuccess != 0)) {
+        static int sInitFlags = 0;
+        static Symbol sSourceSymbol;
+        static Symbol sOfferSymbol;
+        static Symbol sPurchaserSymbol;
+
+        if (!(sInitFlags & 1)) {
+            sInitFlags |= 1;
+            sSourceSymbol = Symbol("source");
+        }
+        if (!(sInitFlags & 2)) {
+            sInitFlags |= 2;
+            sOfferSymbol = Symbol("offer");
+        }
+        if (!(sInitFlags & 4)) {
+            sInitFlags |= 4;
+            sPurchaserSymbol = Symbol("purchaser");
+        }
+
+        String dataStr(MakeString("%016llX", mItemID));
+        SendDataPoint("store/purchase", sSourceSymbol, mOfferSymbol, sOfferSymbol, dataStr, sPurchaserSymbol, mPurchaserID);
+    }
+    SingleItemEnumJob::OnCompletion(obj);
+}
 
 MultipleItemsEnumJob::MultipleItemsEnumJob(Hmx::Object *obj, int unk) : Job() {
     mObject = obj;

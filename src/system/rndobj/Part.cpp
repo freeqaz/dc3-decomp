@@ -6,6 +6,7 @@
 #include "obj/Data.h"
 #include "obj/DataFunc.h"
 #include "obj/Object.h"
+#include "obj/Task.h"
 #include "os/System.h"
 #include "os/Timer.h"
 #include "rndobj/Anim.h"
@@ -15,7 +16,9 @@
 #include "rndobj/Trans.h"
 #include "rndobj/Utl.h"
 #include "rndobj/Mat.h"
+#include "os/File.h"
 #include "utl/BinStream.h"
+#include "utl/Loader.h"
 #include <cmath>
 
 PartOverride gNoPartOverride;
@@ -118,6 +121,11 @@ void Attractor::Save(BinStream &bs) const {
 void Attractor::Load(BinStreamRev &d) {
     d >> mAttractor;
     d >> mStrength;
+}
+
+BinStreamRev &operator>>(BinStreamRev &d, Attractor &a) {
+    a.Load(d);
+    return d;
 }
 
 RndParticleSys::RndParticleSys()
@@ -509,6 +517,39 @@ void RndParticleSys::Enter() {
     RndPollable::Enter();
 }
 
+void RndParticleSys::Poll() {
+    if (!mFrameDrive) {
+        mElapsedTime += (GetRate() == k30_fps_ui ? TheTaskMgr.DeltaUISeconds()
+                                                 : TheTaskMgr.DeltaSeconds())
+            * 30.0f;
+        if (mDrawCount == 0) {
+            if (Showing()
+                && (mActiveParticles || mExplicitParts || mEmitRate.x > 0
+                    || mEmitRate.y > 0 || mMaxBurst > 0)) {
+                UpdateRelativeXfm();
+                UpdateParticles();
+            } else {
+                mLastFrame = CalcFrame();
+            }
+        } else if (mActiveParticles && mDrawCount % 60 == 0 && !mPreserveParticles) {
+            float currentFrame = CalcFrame();
+            RndParticle *p = mActiveParticles;
+            while (p) {
+                bool dead = currentFrame >= p->deathFrame || currentFrame < p->birthFrame;
+                if (dead) {
+                    p = FreeParticle(p);
+                } else {
+                    p = p->next;
+                }
+            }
+        }
+        if (mSubSamples > 0 && Dirty()) {
+            MakeLocToRel(mSubSampleXfm);
+        }
+        mDrawCount++;
+    }
+}
+
 void RndParticleSys::UpdateSphere() {
     Sphere s;
     MakeWorldSphere(s, true);
@@ -544,10 +585,244 @@ void RndParticleSys::Mats(std::list<RndMat *> &mats, bool) {
     }
 }
 
-#ifdef HX_NATIVE
-// TODO: complex deserialization with many particle fields
-void RndParticleSys::Load(BinStream &) {}
-#endif
+INIT_REVS(0x29, 0)
+
+BEGIN_LOADS(RndParticleSys)
+    LOAD_REVS(bs)
+    volatile int rev = d.rev;
+    ASSERT_REVS(0x29, 0)
+    BinStream *stream = &d.stream;
+    if (rev > 0x16)
+        LOAD_SUPERCLASS(Hmx::Object);
+    if (rev > 0x1B)
+        LOAD_SUPERCLASS(RndPollable);
+    if (rev > 0) {
+        LOAD_SUPERCLASS(RndAnimatable)
+        LOAD_SUPERCLASS(RndTransformable)
+        LOAD_SUPERCLASS(RndDrawable)
+    }
+    (*stream) >> (Key<float> &)mLife;
+    if (rev > 0x23)
+        (*stream) >> mScreenAspect;
+    (*stream) >> mBoxExtent1;
+    (*stream) >> mBoxExtent2;
+    (*stream) >> (Key<float> &)mSpeed;
+    (*stream) >> (Key<float> &)mPitch;
+    (*stream) >> (Key<float> &)mYaw;
+    (*stream) >> (Key<float> &)mEmitRate;
+    if (rev > 0x20) {
+        (*stream) >> mMaxBurst;
+        (*stream) >> (Key<float> &)mBurstInterval;
+        (*stream) >> (Key<float> &)mBurstPeak;
+        (*stream) >> (Key<float> &)mBurstLength;
+    }
+    (*stream) >> (Key<float> &)mStartSize;
+    if (rev > 0xF)
+        (*stream) >> (Key<float> &)mDeltaSize;
+    (*stream) >> mStartColorLow;
+    (*stream) >> mStartColorHigh;
+    (*stream) >> mEndColorLow;
+    (*stream) >> mEndColorHigh;
+    if (rev > 0x19)
+        (*stream) >> mBounce;
+    else if (rev > 1) {
+        bool ba7;
+        Plane p150;
+        d >> ba7;
+        if (rev > 0xB) {
+            (*stream) >> (Hmx::Color &)p150;
+        } else {
+            Vector3 v1;
+            float f1, f2, f3;
+            (*stream) >> v1;
+            (*stream) >> f1 >> f2 >> f3;
+            p150.Set(f1, f2, f3, -(v1.x * f1 + v1.y * f2 + v1.z * f3));
+        }
+        if (ba7) {
+            bool old = TheLoadMgr.EditMode();
+            TheLoadMgr.SetEditMode(true);
+            char *base = (char *)FileGetBase(Name());
+            mBounce = Dir()->New<RndTransformable>(
+                MakeString("%s_bounce.trans", base)
+            );
+            TheLoadMgr.SetEditMode(old);
+            Transform tf140;
+            float a = p150.a;
+            float b = p150.b;
+            float c = p150.c;
+            float d = p150.d;
+            tf140.m.x.x = c;
+            tf140.m.x.y = 0.0f;
+            tf140.m.x.z = -a;
+            tf140.m.z.x = a;
+            tf140.m.z.y = b;
+            tf140.m.z.z = c;
+            tf140.m.y.x = b * tf140.m.x.z - c * tf140.m.x.y;
+            tf140.m.y.y = c * c - tf140.m.x.z * a;
+            tf140.m.y.z = a * tf140.m.x.y - b * c;
+            float inv = -(d / (a * a + (b * b + c * c)));
+            tf140.v.x = a * inv;
+            tf140.v.y = b * inv;
+            tf140.v.z = c * inv;
+            Normalize(tf140.m.x, tf140.m.x);
+            Normalize(tf140.m.y, tf140.m.y);
+            mBounce->SetWorldXfm(tf140);
+        }
+    } else {
+        std::list<Plane> planes;
+        d >> planes;
+    }
+    (*stream) >> mForceDir;
+    (*stream) >> mMat;
+    if (rev > 0x17 && rev < 0x19) {
+        char buf[0x80];
+        (*stream).ReadString(buf, 0x80);
+        if (!mMat && buf[0] != '\0') {
+            mMat = LookupOrCreateMat(buf, Dir());
+        }
+    }
+    if (rev > 0x11) {
+        (*stream) >> (int &)mType >> mGrowRatio >> mShrinkRatio >> mMidColorRatio;
+        (*stream) >> mMidColorLow >> mMidColorHigh;
+    } else if (rev < 0xD) {
+        int i94;
+        (*stream) >> i94;
+    }
+    (*stream) >> mMaxParticles;
+    if (rev > 2) {
+        if (rev < 7) {
+            int i98;
+            (*stream) >> i98;
+        } else if (rev < 0xD) {
+            int i9c;
+            (*stream) >> i9c;
+        }
+    }
+    if (rev > 3) {
+        (*stream) >> (Key<float> &)mBubblePeriod >> (Key<float> &)mBubbleSize;
+        (*stream) >> mBubble;
+    }
+    if (rev > 0x1D) {
+        d >> mRotate;
+        (*stream) >> (Key<float> &)mRPM >> mRPMDrag;
+        if (rev > 0x24) {
+            d >> mRandomDirection;
+        }
+        (*stream) >> mDrag;
+    }
+    if (rev > 0x1F) {
+        (*stream) >> (Key<float> &)mStartOffset >> (Key<float> &)mEndOffset;
+        d >> mAlignWithVelocity;
+        d >> mStretchWithVelocity;
+        d >> mConstantArea;
+        (*stream) >> mStretchScale;
+    }
+    if (rev > 0x21) {
+        d >> mPerspectiveStretch;
+    }
+    if (rev > 4 && rev < 15) {
+        bool baf;
+        d >> baf;
+        int u1 = 0;
+        if (baf)
+            u1 = 2;
+        if (mMat)
+            mMat->SetZMode((ZMode)u1);
+    }
+    if (rev > 5 && rev < 17) {
+        String str;
+        (*stream) >> str;
+    }
+    if (rev == 8) {
+        bool b1b0;
+        d >> b1b0;
+    }
+    if (rev > 0xC && rev < 0xE) {
+        int i1a0;
+        (*stream) >> i1a0;
+    }
+    if (rev > 0x13) {
+        (*stream) >> mRelativeMotion;
+    } else if (rev > 0xC) {
+        bool i1b1;
+        d >> i1b1;
+        mRelativeMotion = i1b1;
+    }
+    if (rev > 0x1A)
+        (*stream) >> mMotionParent;
+    SetRelativeMotion(mRelativeMotion, mMotionParent);
+    if (rev > 0x12)
+        (*stream) >> mMeshEmitter;
+    if (rev > 0x1E || rev == 0x15)
+        (*stream) >> mSubSamples;
+    SetSubSamples(mSubSamples);
+    if (rev > 0x1B) {
+        d >> mFrameDrive;
+    } else
+        mFrameDrive = true;
+    if (rev > 0x22) {
+        d >> mPauseOffscreen;
+    } else
+        mPauseOffscreen = false;
+    if (rev > 0x1C) {
+        d >> mFastForward;
+    } else
+        mFastForward = false;
+    mNeedForward = mFastForward;
+
+    if (rev > 0x26) {
+        d >> mAnimateUVs;
+        (*stream) >> mTileHoldTime;
+        (*stream) >> mNumTilesAcross;
+        (*stream) >> mNumTilesDown;
+        (*stream) >> mNumTilesTotal;
+        (*stream) >> mStartingTile;
+        d >> mLoopUVAnim;
+        d >> mRandomAnimStart;
+        mTotalTileTime = (float)mNumTilesTotal * mTileHoldTime;
+        if (mTotalTileTime - 0.0001f < 0.0f) {
+            mTotalTileTime = 0.0001f;
+        }
+        mInvTotalTileTime = 1.0f / mTotalTileTime;
+    }
+    if (rev > 0x27) {
+        d >> mAttractors;
+    }
+    if (rev > 0x28) {
+        d >> mBirthMomentum;
+        (*stream) >> mBirthMomentumAmount;
+    }
+
+    if (rev <= 0xA || (d >> mPreserveParticles, !mPreserveParticles)) {
+        SetPool(mMaxParticles, mType);
+    } else {
+        int count;
+        RndParticle tempParticle;
+        (*stream) >> count;
+        SetPool(mMaxParticles, mType);
+        for (int i = 0; i < count; i++) {
+            RndParticle *p = AllocParticle();
+            if (p) {
+                p->angle = 0;
+                p->swingArm = 0;
+                p->vel.x = 0;
+                p->vel.y = 0;
+                p->vel.z = 0;
+                p->vel.w = 0;
+            } else {
+                MILO_NOTIFY_ONCE(
+                    "Unable to allocate all particles for %s\n",
+                    (char *)PathName(this)
+                );
+                p = &tempParticle;
+            }
+            (*stream) >> *p;
+        }
+    }
+
+    mPausedTime = 0;
+    mLastFrame = GetFrame();
+END_LOADS
 
 void RndParticleSys::SetPool(int max, Type ty) {
     if (mPreserveParticles) {

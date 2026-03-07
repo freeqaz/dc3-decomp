@@ -196,7 +196,8 @@ void SkeletonClip::PollRecording(const SkeletonFrame &frame) {
         recorded.mTrackingID = data.mTrackingID;
         recorded.mSongSeconds = songSeconds;
 
-        if (mRecordedFrames->size() == mRecordedFrames->capacity()) {
+        auto _tmp2 = mRecordedFrames->capacity();
+        if (mRecordedFrames->size() == _tmp2) {
             MILO_LOG(
                 "Can't record any more frames, reached capacity (%i)\n",
                 reinterpret_cast<void *>(mRecordedFrames->capacity())

@@ -47,8 +47,8 @@ BEGIN_LOADS(CharMirror)
 END_LOADS
 
 void CharMirror::Poll() {
-    static Symbol x("x");
     static Symbol xy("xy");
+    static Symbol x("x");
     static Symbol mirror_x("mirror_x");
     static Symbol zw("zw");
 

@@ -506,7 +506,7 @@ namespace {
     }
 }
 
-DataNode PlatformMgr::OnSignInUsers(const DataArray *msg) {
+DataNode PlatformMgr::OnSignInUsers(DataArray *msg) {
     unsigned long flags = 0;
     if (msg->Size() > 3) {
         if (msg->Int(3) != 0) {

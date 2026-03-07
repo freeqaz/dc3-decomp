@@ -128,15 +128,9 @@ void WgpuRnd::Init() {
 
         // Initialize pipeline manager
         mPipelines.Init(&mGpu);
-        // Create scene uniform buffer (224 bytes, updated once per frame)
-        {
-            wgpu::BufferDescriptor bd{};
-            bd.size = sizeof(SceneUniforms);
-            bd.usage = wgpu::BufferUsage::Uniform | wgpu::BufferUsage::CopyDst;
-            mSceneBuffer = mGpu.Device().CreateBuffer(&bd);
-        }
-
         // Create per-draw ring buffers (64KB each — enough for ~250 draws/frame at 256-byte alignment)
+        // Scene ring handles mid-frame camera switches (each camera gets its own offset)
+        mSceneRing.Init(mGpu.Device(), 16 * 1024);
         mMaterialRing.Init(mGpu.Device(), 64 * 1024);
         mObjectRing.Init(mGpu.Device(), 64 * 1024);
         // Bone ring needs more space: 2560 bytes per skinned draw (rounded to 2816 at 256 alignment)
@@ -197,7 +191,7 @@ void WgpuRnd::Terminate() {
     mBlackCubeTex = nullptr;
     mBlackCubeTexView = nullptr;
     mDefaultSampler = nullptr;
-    mSceneBuffer = nullptr;
+    mSceneRing.Release();
     mSceneBindGroup = nullptr;
     mMsaaTex = nullptr;
     mMsaaView = nullptr;
@@ -331,6 +325,7 @@ void WgpuRnd::BeginDrawing() {
         mDefaultEnv->Select(nullptr);
 
     // Reset ring buffers for this frame
+    mSceneRing.Reset();
     mMaterialRing.Reset();
     mObjectRing.Reset();
     mBoneRing.Reset();
@@ -343,7 +338,7 @@ void WgpuRnd::BeginDrawing() {
     }
     if (!mFrameView) {
         static int sFailCount = 0;
-        if (sFailCount < 3) {
+        if (sFailCount < 10) {
             printf("DC3 Native: BeginDrawing — frame acquisition failed (headless=%d, frame=%d)\n",
                    mGpu.IsHeadless(), mFrameID);
             sFailCount++;
@@ -463,7 +458,7 @@ void WgpuRnd::BeginDrawing() {
 
     mPass = mEncoder.BeginRenderPass(&rpDesc);
     mInPass = true;
-    if (mFrameID == 500) {
+    if (mFrameID == 500 || mFrameID == 10) {
         fprintf(stderr, "DC3_PASS F500: msaa=%d postproc=%d frameView=%p clear=(%.2f,%.2f,%.2f,%.2f)\n",
                 kMSAASamples, hasPostProc ? 1 : 0, (void*)&mFrameView,
                 colorAtt.clearValue.r, colorAtt.clearValue.g, colorAtt.clearValue.b, colorAtt.clearValue.a);
@@ -476,6 +471,7 @@ void WgpuRnd::BeginDrawing() {
 extern void FlushTransparentDraws();
 
 wgpu::Buffer& GetSceneBuffer() { return gWgpuRnd->SceneBuffer(); }
+uint32_t GetSceneOffset() { return gWgpuRnd->SceneOffset(); }
 
 void WgpuRnd::EnsureSceneUniformsCurrent() {
     RndCam* cam = RndCam::Current();
@@ -497,9 +493,6 @@ void WgpuRnd::EndDrawing() {
         return;
     }
 
-    if (mFrameID >= 499 && mFrameID <= 501) {
-        fprintf(stderr, "DC3_END F%d: inPass=%d frameView=%p\n", mFrameID, mInPass ? 1 : 0, (void*)&mFrameView);
-    }
     if (mInPass) {
         // Flush deferred transparent draws (sorted back-to-front)
         FlushTransparentDraws();
@@ -862,14 +855,16 @@ void WgpuRnd::WriteSceneUniforms() {
         scene.shadowStrength = 0.3f;  // minimum brightness in shadow
     }
 
-    // Upload scene uniforms
-    mGpu.Queue().WriteBuffer(mSceneBuffer, 0, &scene, sizeof(scene));
+    // Upload scene uniforms at a new ring buffer offset (allows mid-frame camera switches —
+    // each camera gets its own data in the ring, so queue.WriteBuffer doesn't overwrite earlier values)
+    uint32_t sceneOffset = mSceneRing.Write(mGpu.Queue(), &scene, sizeof(scene));
+    mLastSceneOffset = sceneOffset;
 
     // Create scene bind group (group 0) — includes shadow map texture + sampler
     wgpu::BindGroupEntry entries[3] = {};
     entries[0].binding = 0;
-    entries[0].buffer = mSceneBuffer;
-    entries[0].offset = 0;
+    entries[0].buffer = mSceneRing.Buffer();
+    entries[0].offset = sceneOffset;
     entries[0].size = sizeof(SceneUniforms);
 
     entries[1].binding = 1;

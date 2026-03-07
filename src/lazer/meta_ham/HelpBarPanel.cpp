@@ -229,7 +229,6 @@ void HelpBarPanel::SyncToPanel(UIPanel *panel) {
         }
         mDisabled = true;
     }
-    const DataNode *prop = nullptr;
     if (mLeftHandNavList) {
         if (!updatetert || updateback) {
             mLeftHandNavList->SetHighButtonMode(false);
@@ -237,8 +236,9 @@ void HelpBarPanel::SyncToPanel(UIPanel *panel) {
             mLeftHandNavList->SetHighButtonMode(true);
         }
     }
-    static Symbol helpbar_allow_controller("helpbar_allow_controller");
     static Symbol helpbar_confirm_label("helpbar_confirm_label");
+    static Symbol helpbar_allow_controller("helpbar_allow_controller");
+    const DataNode *prop = nullptr;
     mAllowController = true;
 
     if (!panel) {

@@ -28,8 +28,12 @@ class InitializerLiteralPattern(Pattern):
     name = "initializer_literal"
 
     def relevant(self, diagnosis: Diagnosis) -> bool:
-        # Always relevant — cheap pattern
-        return True
+        # Only relevant when float load/store mismatches are present
+        _FP_OPS = {"lfs", "stfs", "lfd", "stfd"}
+        for d in diagnosis.diff_ops:
+            if d.target_opcode in _FP_OPS or d.base_opcode in _FP_OPS:
+                return True
+        return False
 
     def generate(self, ctx: FunctionContext) -> Iterator[Variant]:
         counter = 0

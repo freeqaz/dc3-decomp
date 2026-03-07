@@ -276,8 +276,8 @@ void DistanceToErrors(const Vector3 &a, const Vector3 &b, const Vector3 &c, Vect
     Subtract(a, b, d);
 
     d.x *= c.x;
-    d.y *= c.y;
     d.z *= c.z;
+    d.y *= c.y;
 
     for (int j = 0; j < 3; ++j) {
         float x = fabsf(d[j]);

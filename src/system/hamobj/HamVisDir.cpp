@@ -287,12 +287,12 @@ void HamVisDir::PostUpdate(const SkeletonUpdateData *data) {
 void HamVisDir::UpdateGestureFilter(const Skeleton &skel, int playerIdx) {
     RndAnimatable *leftAnim;
     RndAnimatable *rightAnim;
-    if (!(playerIdx == 0)) {
+    if (playerIdx == 0) {
+        leftAnim = mPlayer1Left;
+        rightAnim = mPlayer1Right;
+    } else {
         leftAnim = mPlayer2Left;
         rightAnim = mPlayer2Right;
-    } else {
-        rightAnim = mPlayer1Right;
-        leftAnim = mPlayer1Left;
     }
     if ((leftAnim || rightAnim) && (!TheLoadMgr.EditMode() || !mMiloManualFrame)) {
         std::vector<float> armLengths(2, 0.0f);

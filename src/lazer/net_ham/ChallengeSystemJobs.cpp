@@ -244,7 +244,7 @@ void GetBadgeInfo(
         int dlcSilver = c.GetValue(cur, 5)->Int();
         int dlcBronze = c.GetValue(cur, 4)->Int();
         MILO_LOG("***********************************\n");
-        MILO_LOG(MakeString(">>>>>>>>>> gamertag = %s\n", gamerTag.c_str()));
+        MILO_WARN(MakeString(">>>>>>>>>> gamertag = %s\n", gamerTag.c_str()));
         MILO_LOG(MakeString(">>>>>>>>>> hmxGold = %i\n", hmxGold));
         MILO_LOG(MakeString(">>>>>>>>>> hmxSilver = %i\n", hmxSilver));
         MILO_LOG(MakeString(">>>>>>>>>> hmxBronze = %i\n", hmxBronze));
@@ -254,9 +254,9 @@ void GetBadgeInfo(
         MILO_LOG("***********************************\n");
         auto it = badgeInfos.find(gamerTag);
         if (it != badgeInfos.end()) {
+            it->second.mMedalCounts[kBadgeBronze] = dlcBronze + hmxBronze;
             it->second.mMedalCounts[kBadgeGold] = dlcGold + hmxGold;
             it->second.mMedalCounts[kBadgeSilver] = dlcSilver + hmxSilver;
-            it->second.mMedalCounts[kBadgeBronze] = dlcBronze + hmxBronze;
         } else {
             ChallengeBadgeInfo value;
             value.mMedalCounts[kBadgeGold] = 0;

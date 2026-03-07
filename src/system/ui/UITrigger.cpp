@@ -53,7 +53,7 @@ BEGIN_LOADS(UITrigger)
         anim.mAnim = animPtr;
     } else
         LOAD_SUPERCLASS(EventTrigger);
-    bs >> mBlockTransition;
+    d >> mBlockTransition;
 END_LOADS
 
 void UITrigger::Trigger() {
@@ -70,7 +70,7 @@ void UITrigger::Trigger() {
                     f4 = curAnim.mScale;
                     if (!f4)
                         f4 = 1.0f;
-                    f4 = fabsf(curAnim.mStart - curAnim.mEnd) / f4;
+                    f4 = std::fabs(curAnim.mStart - curAnim.mEnd) / f4;
                 }
             } else {
                 f4 = std::fabs(curAnim.mAnim->StartFrame() - curAnim.mAnim->EndFrame());

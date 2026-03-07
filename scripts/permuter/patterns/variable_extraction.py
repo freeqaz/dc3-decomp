@@ -15,6 +15,7 @@ Example:
 
 from __future__ import annotations
 
+import re
 from typing import Iterator
 
 from tree_sitter import Node
@@ -46,8 +47,9 @@ class VariableExtractionPattern(Pattern):
             return True
         if diagnosis.replace_real > 0:
             return True
-        # Reg swaps can sometimes be fixed by variable extraction changing alloc order
-        if diagnosis.reg_swap_pairs:
+        # GPR swaps can sometimes be fixed by variable extraction changing alloc order
+        if any(p[0].startswith("r") or p[1].startswith("r")
+               for p in diagnosis.reg_swap_pairs):
             return True
         # Unexplained diff_arg might respond to extraction
         unexplained = diagnosis.noise_total - diagnosis.noise_explained
@@ -67,14 +69,18 @@ class VariableExtractionPattern(Pattern):
 
     def generate(self, ctx: FunctionContext) -> Iterator[Variant]:
         counter = 0
+        # Track names we've already generated in this run
+        used_names: set[str] = set()
         # Walk all compound_statements to find extractable calls in their direct children
         for compound, stmt, call_node in _find_extractable_calls(ctx.body_node):
             call_text = ctx.file_source[call_node.start_byte : call_node.end_byte]
 
             indent = get_indent(ctx.file_source, stmt)
             line_start = get_line_start(ctx.file_source, stmt)
-            var_name = f"_tmp{counter}".encode("utf-8")
-            counter += 1
+            var_name_str = _unique_tmp_name(counter, ctx.file_source, used_names)
+            counter = int(var_name_str[4:]) + 1  # advance past the chosen index
+            used_names.add(var_name_str)
+            var_name = var_name_str.encode("utf-8")
 
             # Build the declaration line
             decl_line = indent + b"auto " + var_name + b" = " + call_text + b";\n"
@@ -95,6 +101,26 @@ class VariableExtractionPattern(Pattern):
                 description=desc,
                 source=new_source,
             )
+
+
+def _unique_tmp_name(
+    start: int, source: bytes, used_names: set[str]
+) -> str:
+    """Return a ``_tmpN`` name that doesn't clash with *source* or *used_names*.
+
+    Scans the function source text for word-boundary matches of the candidate
+    name (``\\b_tmpN\\b``) and increments N until a collision-free name is found.
+    Also avoids names already generated in the current ``generate()`` run.
+    """
+    source_text = source.decode("utf-8", errors="replace")
+    n = start
+    while True:
+        candidate = f"_tmp{n}"
+        if candidate not in used_names and not re.search(
+            rf"\b{re.escape(candidate)}\b", source_text
+        ):
+            return candidate
+        n += 1
 
 
 def _call_priority(call_node: Node) -> int:

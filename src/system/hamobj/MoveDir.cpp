@@ -13,7 +13,6 @@
 #include "gesture/SkeletonUpdate.h"
 #include "gesture/SkeletonViz.h"
 #include "gesture/StubCameraInput.h"
-#include "hamobj/SongCollision.h"
 #include "hamobj/CharFeedback.h"
 #include "hamobj/DancerSequence.h"
 #include "hamobj/DetectFrame.h"
@@ -29,6 +28,7 @@
 #include "hamobj/MoveDetector.h"
 #include "hamobj/PracticeSection.h"
 #include "hamobj/ScoreUtl.h"
+#include "hamobj/SongCollision.h"
 #include "meta/SongMetadata.h"
 #include "meta/SongMgr.h"
 #include "obj/Data.h"
@@ -719,79 +719,6 @@ void MoveDir::PostUpdate(const SkeletonUpdateData *data) {
     FinalPoseStateMachine();
 }
 
-void MoveDir::DrawShowing() {
-    if (Dir() != (ObjectDir *)this) {
-        if (mDebugCollision) {
-            SongCollision *sc = Find<SongCollision>("SongCollision", false);
-            if (sc) {
-                int beat = (int)TheTaskMgr.Beat();
-                if (unkf84 != beat) {
-                    unkf84 = beat;
-                    MILO_ASSERT(TheHamDirector, 0xAB1);
-                    for (int i = 0; i < 2; i++) {
-                        HamCharacter *ch = TheHamDirector->GetCharacter(i);
-                        if (ch) {
-                            memcpy(&unkf04[i], &ch->WorldXfm(), 0x40);
-                        }
-                    }
-                }
-                Difficulty diffs[2];
-                for (int i = 0; i < 2; i++) {
-                    diffs[i] = TheGameData->Player(i)->GetDifficulty();
-                }
-                std::vector<SongCollisionOutput> outputs;
-                sc->IsCollision(beat, beat + 1, diffs, unkf04, &outputs);
-                for (unsigned int n = 0; n < outputs.size(); n++) {
-                    SongCollisionOutput &out = outputs[n];
-                    Hmx::Color bgColor(0.8f, 0.8f, 0.8f, 1.0f);
-                    Hmx::Color fgColor;
-                    if (out.collisionDetected) {
-                        fgColor.Set(1.0f, 0.0f, 0.0f);
-                    } else {
-                        fgColor.Set(0.0f, 1.0f, 0.0f);
-                    }
-                    for (int j = 0; j < 2; j++) {
-                        Vector3 *collPos = (Vector3 *)(out.xfmData + j * 0x40 + 0x30);
-                        UtilDrawSphere(*collPos, 1.0f, bgColor, nullptr);
-                        const char *label = MakeString("%i:%i", j, beat + (int)n);
-                        UtilDrawString(label, *collPos, bgColor);
-                        Vector3 *minPos = (Vector3 *)&out.boneData[j * 4];
-                        TheRnd.DrawLine(*collPos, *minPos, bgColor, false);
-                        UtilDrawSphere(*minPos, 1.0f, bgColor, nullptr);
-                        Vector3 *maxPos = (Vector3 *)&out.boneData[(j + 2) * 4];
-                        TheRnd.DrawLine(*collPos, *maxPos, bgColor, false);
-                        UtilDrawSphere(*maxPos, 1.0f, bgColor, nullptr);
-                    }
-                    for (int j = 0; j < 2; j++) {
-                        Vector3 *collPos = (Vector3 *)(out.xfmData + j * 0x40 + 0x30);
-                        Vector3 *disp = (Vector3 *)&out.boneData[(j + 4) * 4];
-                        Vector3 offsetPos;
-                        Add(*disp, *collPos, offsetPos);
-                        TheRnd.DrawLine(*collPos, offsetPos, fgColor, false);
-                        UtilDrawSphere(offsetPos, 2.0f, fgColor, nullptr);
-                        const char *label2 = MakeString("%i", j);
-                        UtilDrawString(label2, offsetPos, fgColor);
-                    }
-                }
-            }
-        }
-    } else if (TheLoadMgr.EditMode()) {
-        if (mDancerSeq) {
-            ObjDirItr<SkeletonViz> it(this, true);
-            if (it != nullptr) {
-                StubCameraInput stubInput;
-                stubInput.PollTracking();
-                const DancerSkeleton *skel = mDancerSeq->CurSkeleton();
-                if (skel) {
-                    it->Visualize(stubInput, *skel, nullptr, false);
-                }
-            }
-        } else {
-            SkeletonDir::DrawShowing();
-        }
-    }
-}
-
 void MoveDir::Draw(const BaseSkeleton &baseSkeleton, SkeletonViz &skeletonViz) {
     if (unk414) {
         int actual_ms = unk414->ElapsedMs();
@@ -1331,6 +1258,106 @@ void MoveDir::DetectRange(
         std::lower_bound(frames.begin(), frames.end(), low, DetectFrameMoveIdxCmp());
     range.second =
         std::upper_bound(frames.begin(), frames.end(), high, DetectFrameMoveIdxCmp());
+}
+
+void MoveDir::DrawShowing() {
+    if (HashTable().Begin() != nullptr) {
+        if (mDebugCollision) {
+            SongCollision *songCol = Find<SongCollision>("SongCollision", false);
+            if (songCol) {
+                float beat = TheTaskMgr.Beat();
+                int intBeat = (int)beat;
+
+                if (unkf84 != intBeat) {
+                    unkf84 = intBeat;
+                    MILO_ASSERT(TheHamDirector, 0xab1);
+                    for (int i = 0; i < 2; i++) {
+                        HamCharacter *ch = TheHamDirector->GetCharacter(i);
+                        if (ch) {
+                            const Transform &xfm = ch->WorldXfm();
+                            memcpy(&unkf04[i], &xfm, sizeof(Transform));
+                        }
+                    }
+                }
+
+                Difficulty diffs[2];
+                for (int i = 0; i < 2; i++) {
+                    diffs[i] = TheGameData->Player(i)->GetDifficulty();
+                }
+
+                std::vector<SongCollisionOutput> outputs;
+                songCol->IsCollision(intBeat, intBeat + 1, diffs, unkf04, &outputs);
+
+                float gray = 0.8f;
+                float radius2 = 2.0f;
+                float zero = 0.0f;
+                float radius1 = 1.0f;
+
+                unsigned int beatIdx = 0;
+                size_t outputSize = outputs.size();
+
+                if (outputSize > 0) {
+                    for (size_t i = 0; i < outputSize; i++) {
+                        const SongCollisionOutput &out = outputs[i];
+
+                        Hmx::Color color;
+                        if (out.Colliding()) {
+                            color.Set(gray, gray, gray, 1.0f);
+                        } else {
+                            color.Set(1.0f, zero, 1.0f, 1.0f);
+                        }
+
+                        int playerIdx = 0;
+                        int labeledBeat = beatIdx + intBeat;
+
+                        for (playerIdx = 0; playerIdx < 2; playerIdx++) {
+                            const Vector3 &pos = out.WorldPos(playerIdx);
+                            UtilDrawSphere(pos, radius1, color, nullptr);
+
+                            const char *label = MakeString("%i:%i", playerIdx, labeledBeat);
+                            UtilDrawString(label, pos, color);
+
+                            TheRnd.DrawLine(pos, out.Offset(playerIdx), color, false);
+                            UtilDrawSphere(out.Offset(playerIdx), radius1, color, nullptr);
+
+                            TheRnd.DrawLine(pos, out.Offset(playerIdx + 2), color, false);
+                            UtilDrawSphere(out.Offset(playerIdx + 2), radius1, color, nullptr);
+                        }
+
+                        for (playerIdx = 0; playerIdx < 2; playerIdx++) {
+                            const Vector3 &worldPos = out.WorldPos(playerIdx);
+                            Vector3 offsetPos = out.Offset(playerIdx + 4);
+                            offsetPos += worldPos;
+                            Hmx::Color altColor;
+                            altColor.Set(zero, 1.0f, zero, 1.0f);
+                            TheRnd.DrawLine(worldPos, offsetPos, altColor, false);
+                            UtilDrawSphere(offsetPos, radius2, altColor, nullptr);
+
+                            const char *label = MakeString("%i", playerIdx);
+                            UtilDrawString(label, offsetPos, altColor);
+                        }
+
+                        beatIdx++;
+                    }
+                }
+            }
+        }
+    } else if (TheLoadMgr.EditMode()) {
+        if (mDancerSeq) {
+            ObjDirItr<SkeletonViz> it(this, true);
+            SkeletonViz *viz = it;
+            if (viz) {
+                StubCameraInput camInput;
+                camInput.PollTracking();
+                const DancerSkeleton *skeleton = mDancerSeq->CurSkeleton();
+                if (skeleton) {
+                    viz->Visualize(camInput, *skeleton, nullptr, false);
+                }
+            }
+        } else {
+            SkeletonDir::DrawShowing();
+        }
+    }
 }
 
 #ifdef HX_NATIVE

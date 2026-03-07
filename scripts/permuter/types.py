@@ -101,10 +101,6 @@ class Diagnosis:
     base_gpr_saves: int | None = None
     target_fpr_saves: int | None = None
     base_fpr_saves: int | None = None
-    # Boolean materialization: count of subfc/eqv/srwi/addze sequences in target-only
-    bool_materialization_sequences: int = 0
-    # GPR-FPR type conflict: target and base have opposite-sign save deltas
-    has_gpr_fpr_type_conflict: bool = False
 
     @property
     def has_prologue_mismatch(self) -> bool:
@@ -133,6 +129,17 @@ class Diagnosis:
 
 
 @dataclass
+class PreprocRegion:
+    """Preprocessor region within a function byte range."""
+
+    start: int
+    end: int
+    kind: str  # ifdef/ifndef/if
+    macro: str
+    has_else: bool = False
+
+
+@dataclass
 class FunctionContext:
     """Parsed function ready for pattern application."""
 
@@ -151,6 +158,8 @@ class FunctionContext:
     target_gpr_saves: Optional[int] = None  # GPR save count from __savegprlr_N
     # ASM listing path (for Ghidra+ASM crossref)
     asm_listing_path: Optional[Path] = None
+    # In-function preprocessor regions (#if/#ifdef/#else/#endif)
+    preproc_regions: list[PreprocRegion] = field(default_factory=list)
 
     def source_text(self, node: Node) -> str:
         """Extract source text for a tree-sitter node."""

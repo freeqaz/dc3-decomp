@@ -43,6 +43,8 @@ _FOLLOW_UP_MAP: dict[str, list[str]] = {
     "null_guard_elimination": ["branch_polarity", "comparison_flip"],
     "statement_reorder": ["declaration_reorder", "assignment_reorder"],
     "assignment_reorder": ["statement_reorder", "declaration_reorder"],
+    "color_copy_shape": ["statement_reorder", "declaration_reorder"],
+    "native_guard_camera_wrap": ["statement_reorder"],
 }
 
 _CACHE_DB = Path(__file__).resolve().parent.parent.parent / "permuter_cache.db"
@@ -401,17 +403,21 @@ def _diagnosis_driven_chains(
     """Generate chains based on diagnosis patterns."""
     chains: list[ChainSpec] = []
 
-    # Regswaps -> register allocation chain
+    # GPR regswaps -> register allocation chain
     if diagnosis.reg_swap_pairs:
-        num_swaps = len(diagnosis.reg_swap_pairs)
-        chains.append(ChainSpec(
-            stages=["declaration_reorder", "prologue_pressure", "parameter_live_range"],
-            reason=f"regalloc: {num_swaps} swap pairs",
-        ))
-        chains.append(ChainSpec(
-            stages=["member_ref_bind", "declaration_reorder"],
-            reason=f"regalloc: bind members to fix register order",
-        ))
+        gpr_swaps = sum(
+            1 for (a, b) in diagnosis.reg_swap_pairs
+            if a.startswith("r") and b.startswith("r")
+        )
+        if gpr_swaps > 0:
+            chains.append(ChainSpec(
+                stages=["declaration_reorder", "prologue_pressure", "parameter_live_range"],
+                reason=f"regalloc: {gpr_swaps} GPR swap pairs",
+            ))
+            chains.append(ChainSpec(
+                stages=["member_ref_bind", "declaration_reorder"],
+                reason=f"regalloc: bind members to fix register order",
+            ))
 
     # Prologue mismatch -> pressure chain
     if diagnosis.has_prologue_mismatch:

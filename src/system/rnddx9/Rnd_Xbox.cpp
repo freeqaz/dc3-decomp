@@ -498,13 +498,11 @@ void CreateBackBuffers(
 }
 
 void DxRnd::SavePreBuffer() {
-    Hmx::Color c = mClearColor;
     XMVECTOR vector;
+    Hmx::Color c = mClearColor;
     vector.x = c.red;
     vector.y = c.green;
     vector.z = c.blue;
-    vector.w = 0.f;
-
     D3DDevice_Resolve(
         mD3DDevice, 0x14, nullptr, mFrontBufferDepth, nullptr, 0, 0, nullptr, 1, 0, nullptr
     );
@@ -512,6 +510,8 @@ void DxRnd::SavePreBuffer() {
     D3DDevice_Resolve(
         mD3DDevice, 0x300, nullptr, mPreProcessBuffer, nullptr, 0, 0, &vector, 0, 0, nullptr
     );
+
+    vector.w = 0.f;
 }
 
 void DxRnd::SavePostBuffer() {
@@ -608,8 +608,9 @@ void DxRnd::InitBuffers() {
     static Symbol rnd("rnd");
     static Symbol low_res("low_res");
     static Symbol force_hd("force_hd");
+    auto& _ref0 = mVideoMode.fIsHiDef;
     if (SystemConfig(rnd)->FindInt(force_hd) != 0) {
-        mVideoMode.fIsHiDef = true;
+        _ref0 = true;
         mVideoMode.fIsWideScreen = true;
     } else if (SystemConfig(rnd)->FindInt(low_res) != 0) {
         mFlags |= 1;
@@ -618,7 +619,7 @@ void DxRnd::InitBuffers() {
     mAspect = mLowRes ? kWidescreen : kRegular;
     mHeight = mLowRes ? 540 : 720;
     int i11, i10;
-    if (mVideoMode.fIsHiDef != 0 || mLowRes != 0) {
+    if (_ref0 != 0 || mLowRes != 0) {
         i11 = (mHeight << 4) / 9;
         i10 = (mHeight << 4) / 9;
     } else {
@@ -740,7 +741,8 @@ void DxRnd::DoPointTests() {
     }
 
     // Early out if no occlusion query manager or hi-res screen is active
-    if (!mOcclusionQueryMgr)
+    auto& _ref0 = mOcclusionQueryMgr;
+    if (!_ref0)
         return;
     if (TheHiResScreen.IsActive())
         return;
@@ -748,21 +750,21 @@ void DxRnd::DoPointTests() {
     // Process query results from previous frame
     for (std::vector<RndPointTest>::iterator it = mPointTestQueries.begin(); it !=mPointTestQueries.end(); ++it) {
         unsigned int result;
-        if (mOcclusionQueryMgr->GetQueryResults(it->mPointQueryIdx, result)) {
+        if (_ref0->GetQueryResults(it->mPointQueryIdx, result)) {
             it->mFlare->SetOcclusionReady(true);
             it->mFlare->SetVisible(result != 0);
         }
-        if (mOcclusionQueryMgr->GetQueryResults(it->mAreaQueryIdx, result)) {
+        if (_ref0->GetQueryResults(it->mAreaQueryIdx, result)) {
             it->mFlare->SetOcclusionResult((float)(int)result);
             it->mFlare->SetOcclusionReady(true);
         }
     }
 
     // Update frame index - both direct manipulation and virtual call
-    mOcclusionQueryMgr->ToggleFrameIndex();
-    mOcclusionQueryMgr->OnBeginFrame();
-    mOcclusionQueryMgr->IncrementFrameCounter();
-    mOcclusionQueryMgr->OnEndFrame();
+    _ref0->ToggleFrameIndex();
+    _ref0->OnBeginFrame();
+    _ref0->IncrementFrameCounter();
+    _ref0->OnEndFrame();
 
     // Count point tests needed
     int numTests = 0;
@@ -833,11 +835,11 @@ void DxRnd::DoPointTests() {
             vtx.color = 0;
 
             unsigned int queryIdx;
-            if (mOcclusionQueryMgr->CreateQuery(queryIdx)) {
+            if (_ref0->CreateQuery(queryIdx)) {
                 test.mPointQueryIdx = queryIdx;
-                mOcclusionQueryMgr->BeginQuery(test.mPointQueryIdx);
+                _ref0->BeginQuery(test.mPointQueryIdx);
                 D3DDevice_DrawVerticesUP(mD3DDevice, D3DPT_POINTLIST, 1, &vtx, sizeof(PointVertex));
-                mOcclusionQueryMgr->EndQuery(test.mPointQueryIdx);
+                _ref0->EndQuery(test.mPointQueryIdx);
             }
         }
 
@@ -868,11 +870,11 @@ void DxRnd::DoPointTests() {
             verts[3].x += flare->GetArea().w;
 
             unsigned int queryIdx;
-            if (mOcclusionQueryMgr->CreateQuery(queryIdx)) {
+            if (_ref0->CreateQuery(queryIdx)) {
                 test.mAreaQueryIdx = queryIdx;
-                mOcclusionQueryMgr->BeginQuery(test.mAreaQueryIdx);
+                _ref0->BeginQuery(test.mAreaQueryIdx);
                 D3DDevice_DrawVerticesUP(mD3DDevice, D3DPT_TRIANGLESTRIP, 4, verts, sizeof(QuadVertex));
-                mOcclusionQueryMgr->EndQuery(test.mAreaQueryIdx);
+                _ref0->EndQuery(test.mAreaQueryIdx);
             }
         } else {
             flare->SetOcclusionReady(true);

@@ -162,10 +162,10 @@ void RndSpline::SyncDeformedCtrlPoints(int startCtrlPt, int endCtrlPt) {
 }
 
 void RndSpline::PrepareShader(float farg0, float farg1) const {
-    int endIdx = mEndCtrlPoint;
-    unsigned int deformedSize = (unsigned int)((int)(mDeformedCtrlPoints.capacity() - mDeformedCtrlPoints.size()) / 88);
     int startIdx = mStartCtrlPoint;
+    int endIdx = mEndCtrlPoint;
     int tempIdx = mCtrlPoints.size();
+    unsigned int deformedSize = (unsigned int)((int)(mDeformedCtrlPoints.capacity() - mDeformedCtrlPoints.size()) / 88);
     if (deformedSize >= 2U) {
         int temp = 0 - (startIdx + 1);
         int actualStart = ((temp - temp) - !1) & startIdx;
@@ -185,8 +185,7 @@ void RndSpline::PrepareShader(float farg0, float farg1) const {
                 if ((unsigned char)pt.mDirtyConstants != 0) {
                     MILO_ASSERT(false, 0x1CF);
                 }
-                auto _tmp0 = (VShaderConstant)(constIdx - 2);
-                TheShaderMgr.SetVConstant(_tmp0, *(Vector4 *)((unsigned char *)&pt + 0x18));
+                TheShaderMgr.SetVConstant((VShaderConstant)(constIdx - 2), *(Vector4 *)((unsigned char *)&pt + 0x18));
                 TheShaderMgr.SetVConstant((VShaderConstant)(constIdx - 1), *(Vector4 *)((unsigned char *)&pt + 0x28));
                 TheShaderMgr.SetVConstant((VShaderConstant)constIdx, *(Vector4 *)((unsigned char *)&pt + 0x38));
                 TheShaderMgr.SetVConstant((VShaderConstant)(constIdx + 1), *(Vector4 *)((unsigned char *)&pt + 0x48));

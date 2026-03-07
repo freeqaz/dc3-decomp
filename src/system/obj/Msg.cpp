@@ -213,8 +213,7 @@ void MsgSinks::Export(DataArray *arr) {
     }
 
     Symbol oldExportEvent = sCurrentExportEvent;
-    Symbol msgType = arr->Sym(1);
-    sCurrentExportEvent = msgType;
+    sCurrentExportEvent = arr->Sym(1);
     for (ObjList<EventSink>::iterator evIt = mEventSinks.begin();
          evIt != mEventSinks.end(); ++evIt) {
         if (evIt->event == arr->Sym(1)) {

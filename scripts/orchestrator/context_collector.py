@@ -2998,17 +2998,15 @@ def collect_pre_run_context(
         result["m2c_line_count"] = m2c_result["line_count"]
         result["m2c_method"] = m2c_result.get("method", "none")
 
-        # For low-match functions (<80%), m2c is mostly noise — the agent needs
-        # Ghidra's semantic view to understand what the code does first.
-        # For >=80%, m2c's structural fidelity (call gating, temp reuse, loop forms)
-        # is high-value for fine-tuning the remaining mismatches.
+        # For high-match functions (>=90%), don't inline m2c - just point to the file.
+        # The agent can read it if needed, but it's noise in the initial prompt at this stage.
         match_pct = result.get("match_percent", 0.0)
-        if match_pct < 80.0 and m2c_result["success"]:
+        if match_pct >= 90.0 and m2c_result["success"]:
             result["m2c_decompilation"] = (
-                f"(file-only - function is at {match_pct:.1f}% match, m2c is more useful above 80%)\n"
+                f"(file-only - function is at {match_pct:.1f}% match, m2c output saved to file)\n"
                 f"View with: cat {m2c_result['file_path_relative']}"
             )
-            log.info(f"m2c written to file only (match={match_pct:.1f}% < 80%): {m2c_result['file_path_relative']}")
+            log.info(f"m2c written to file only (match={match_pct:.1f}% >= 90%): {m2c_result['file_path_relative']}")
         else:
             result["m2c_decompilation"] = m2c_result["inline"]
             if m2c_result["success"]:

@@ -34,7 +34,7 @@ from typing import Iterator
 from tree_sitter import Node
 
 from .base import Pattern
-from ..ast_queries import get_indent, walk
+from ..ast_queries import get_indent
 from ..types import Diagnosis, FunctionContext, Variant
 
 
@@ -155,15 +155,6 @@ def _if_to_ternary(node: Node, ctx: FunctionContext, counter: int) -> Iterator[V
     # Get condition expression text (inside the parentheses)
     cond_expr = _get_condition_text(condition, ctx)
     if cond_expr is None:
-        return
-
-    # Cascade safety: skip if value expressions contain function calls
-    # (side effects cause cascade regressions when register pressure differs)
-    cons_stmts = [c for c in consequence.named_children]
-    alt_stmts = [c for c in alt_body.named_children] if alt_body else []
-    if cons_stmts and not _is_safe_for_ternary(cons_stmts[-1]):
-        return
-    if alt_stmts and not _is_safe_for_ternary(alt_stmts[-1]):
         return
 
     # Build ternary: var = cond ? cons_val : alt_val;
@@ -351,26 +342,13 @@ def _if_return_to_ternary(node: Node, ctx: FunctionContext, counter: int) -> Ite
     )
 
 
-def _is_safe_for_ternary(node: Node) -> bool:
-    """Check if an expression is safe for ternary conversion (no side effects)."""
-    for n in walk(node):
-        if n.type == "call_expression":
-            return False
-    return True
-
-
 def _extract_single_assignment(compound: Node) -> tuple[str, str] | None:
-    """Extract (var_name, value_text) from a compound_statement with a single assignment.
-
-    Also handles multi-statement bodies where all but the last statement are
-    identical between branches (caller must check both branches match).
-    """
+    """Extract (var_name, value_text) from a compound_statement with a single assignment."""
     stmts = [c for c in compound.named_children]
-    if len(stmts) < 1:
+    if len(stmts) != 1:
         return None
 
-    # Use the last statement as the assignment candidate
-    stmt = stmts[-1] if len(stmts) >= 1 else stmts[0]
+    stmt = stmts[0]
     if stmt.type != "expression_statement":
         return None
 
@@ -381,10 +359,9 @@ def _extract_single_assignment(compound: Node) -> tuple[str, str] | None:
             right = child.child_by_field_name("right")
             if left is None or right is None:
                 return None
-            # Accept identifier, field_expression (obj.member),
-            # pointer_expression (obj->member), or subscript_expression (arr[i])
-            if left.type not in ("identifier", "field_expression",
-                                 "pointer_expression", "subscript_expression"):
+            # Accept identifier, field_expression (obj.member), or
+            # pointer_expression (obj->member) on the LHS
+            if left.type not in ("identifier", "field_expression", "pointer_expression"):
                 return None
             var_name = left.text.decode("utf-8") if left.text else None
             val_text = right.text.decode("utf-8") if right.text else None
@@ -443,8 +420,7 @@ def _find_ternary_assignment(
                 right = child.child_by_field_name("right")
                 if left is None or right is None:
                     continue
-                if left.type not in ("identifier", "field_expression",
-                                     "pointer_expression", "subscript_expression"):
+                if left.type not in ("identifier", "field_expression", "pointer_expression"):
                     continue
                 if right.type == "conditional_expression":
                     return _parse_ternary(left, right, ctx)

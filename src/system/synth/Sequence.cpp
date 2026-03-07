@@ -652,38 +652,6 @@ void RandomGroupSeqInst::Poll() {
 #pragma endregion
 #pragma region RandomIntervalGroupSeqInst
 
-void RandomIntervalGroupSeqInst::Poll() {
-    ObjVector<ObjPtr<SeqInst> >::iterator it = mSeqs.begin();
-    while (it != mSeqs.end()) {
-        if (*it == NULL || !(*it)->IsRunning()) {
-            it = mSeqs.erase(it);
-        } else {
-            it++;
-        }
-    }
-    double currentTime = (double)TheTaskMgr.Seconds(TaskMgr::kRealTime);
-    for (unsigned int i = 0; i < mNextPlayTimes.size(); i++) {
-        if ((double)mNextPlayTimes[i] <= currentTime) {
-            if (mSeqs.size() < (unsigned int)mMaxSimultaneous) {
-                ObjPtrList<Sequence> &children = ((GroupSeq *)mOwner)->Children();
-                int idx = 0;
-                for (ObjPtrList<Sequence>::iterator childIt = children.begin();
-                     childIt != children.end(); ++childIt) {
-                    if (idx == (int)i) {
-                        SeqInst *inst = (*childIt)->MakeInst();
-                        mSeqs.push_back();
-                        mSeqs.back() = inst;
-                        inst->Start();
-                        break;
-                    }
-                    idx++;
-                }
-            }
-            ComputeNextTime(i);
-        }
-    }
-}
-
 RandomIntervalGroupSeqInst::RandomIntervalGroupSeqInst(RandomIntervalGroupSeq *seq)
     : GroupSeqInst(seq, false), mNextPlayTimes(seq->MaxSimultaneous()) {
     unk54 = false;
@@ -697,6 +665,16 @@ RandomIntervalGroupSeqInst::RandomIntervalGroupSeqInst(RandomIntervalGroupSeq *s
     }
 }
 
+void RandomIntervalGroupSeqInst::ComputeNextTime(unsigned int idx) {
+    if (idx < mNextPlayTimes.size()) {
+        float interval = mAvgIntervalSecs;
+        if (mIntervalSpread != 0.0f) {
+            interval = RandomFloat(mAvgIntervalSecs - mIntervalSpread, mAvgIntervalSecs + mIntervalSpread);
+        }
+        mNextPlayTimes[idx] = TheTaskMgr.Seconds(TaskMgr::kRealTime) + interval;
+    }
+}
+
 void RandomIntervalGroupSeqInst::StartImpl() {
     for (unsigned int i = 0; i < mNextPlayTimes.size(); i++) {
         ComputeNextTime(i);
@@ -705,19 +683,36 @@ void RandomIntervalGroupSeqInst::StartImpl() {
 }
 
 void RandomIntervalGroupSeqInst::Stop() {
-    for (ObjVector<ObjPtr<SeqInst> >::iterator it = mSeqs.begin(); it != mSeqs.end(); it++) {
-        if (*it)
+    FOREACH (it, mSeqs) {
+        if (*it) {
             (*it)->Stop();
+        }
     }
     unk54 = false;
 }
 
 bool RandomIntervalGroupSeqInst::IsRunning() { return unk54; }
 
-void RandomIntervalGroupSeqInst::ComputeNextTime(int idx) {
-    if ((unsigned int)idx < mNextPlayTimes.size()) {
-        float interval = RandomVal(mAvgIntervalSecs, mIntervalSpread);
-        mNextPlayTimes[idx] = TheTaskMgr.Seconds(TaskMgr::kRealTime) + interval;
+void RandomIntervalGroupSeqInst::Poll() {
+    float now = TheTaskMgr.Seconds(TaskMgr::kRealTime);
+    for (unsigned int i = 0; i < mNextPlayTimes.size(); i++) {
+        if (mNextPlayTimes[i] <= now) {
+            if (mSeqs.size() < (unsigned int)mMaxSimultaneous) {
+                ObjPtrList<Sequence> &children = ((GroupSeq *)mOwner)->Children();
+                unsigned int n = 0;
+                for (ObjPtrList<Sequence>::iterator it = children.begin(); it != children.end(); ++it) {
+                    if (n == i) {
+                        SeqInst *inst = (*it)->MakeInst();
+                        mSeqs.resize(mSeqs.size() + 1);
+                        mSeqs.back() = inst;
+                        inst->Start();
+                        break;
+                    }
+                    n++;
+                }
+            }
+            ComputeNextTime(i);
+        }
     }
 }
 

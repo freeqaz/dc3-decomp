@@ -344,4 +344,33 @@ u64 RndShaderFur::CalcShaderOpts(NgMat*, ShaderType, bool) { return 0; }
 void RndShaderSyncTrack::Select(RndMat*, ShaderType, bool) {}
 u64 RndShaderSyncTrack::CalcShaderOpts(NgMat*, ShaderType, bool) { return 0; }
 
+// Stubs for unimplemented functions needed by native build
+#include "rndobj/Text.h"
+#include "rndobj/Mesh.h"
+void RndText::FitTextJust() {
+    // FitTextJust scales text to fit mWidth/mHeight.
+    // Full implementation does binary search for scale factor.
+    // For now, build font maps and construct at scale 1.0 so text is visible.
+    HX_VECTOR(Line) lines;
+    BuildFontMaps(true);
+    HX_VECTOR(unsigned short) wideChars;
+    int numChars = ConvertTextToWide(mText.c_str(), wideChars);
+    if (numChars == 0) return;
+    float *charWidths = (float *)_alloca((numChars + 2) * sizeof(float));
+    OnComputeCharWidths(&wideChars[0], charWidths, false);
+
+    // Compute scale to fit width
+    float scale = 1.0f;
+    if (mWidth > 0.0f && charWidths[numChars] > 0.0f) {
+        float textWidth = charWidths[numChars];
+        if (textWidth > mWidth) {
+            scale = mWidth / textWidth;
+        }
+    }
+
+    Hmx::Rect bounds;
+    WrapText(&wideChars[0], numChars, charWidths, lines, bounds, scale);
+    ConstructMeshes(lines, bounds, scale);
+}
+
 // FlowSetProperty — PropertyTask::Poll now defined in FlowSetProperty.cpp

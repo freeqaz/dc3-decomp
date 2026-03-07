@@ -1248,20 +1248,20 @@ PartyModeMgr::SubMode *PartyModeMgr::CreateEventA() {
     Symbol mode;
     Symbol submode;
     DetermineSubMode(&mode, &submode);
-    std::vector<int> vec;
     int flags = 0;
+    std::vector<int> vec;
     int numPlayers = 0;
     DetermineSubModePlayers(mode, &flags, &numPlayers, &vec);
     int songID = 0;
     Symbol shortname;
     DetermineSubModeSong(&shortname, &songID);
     SubMode *event = new SubMode();
-    event->mModeName = mode;
-    event->mSubModeName = submode;
-    event->mSongName = shortname;
-    event->mSongID = songID;
-    event->mPlayerFlags = flags;
     event->mNumPlayers = numPlayers;
+    event->mPlayerFlags = flags;
+    event->mSongID = songID;
+    event->mSongName = shortname;
+    event->mSubModeName = submode;
+    event->mModeName = mode;
     event->mPlayerIndices.insert(event->mPlayerIndices.begin(), vec.begin(), vec.end());
     DataArray *a = new DataArray(numPlayers);
     for (int i = 0; i < numPlayers; i++) {
@@ -1347,10 +1347,10 @@ DataNode PartyModeMgr::OnMsg(const SmartGlassMsg &msg) {
 void PartyModeMgr::FinalizePlaytestParty() {
     int numEvents = mPartyModePlaytestEvents->Size() - 1;
     std::vector<Symbol> modeVec(numEvents, gNullStr);
-    std::vector<Symbol> subModeVec(numEvents, gNullStr);
     std::vector<Symbol> songVec(numEvents, gNullStr);
-    std::vector<int> team2Players;
+    std::vector<Symbol> subModeVec(numEvents, gNullStr);
     std::vector<int> team1Players;
+    std::vector<int> team2Players;
 
     for (int i = 1; i <= numEvents; i++) {
         DataArray *eventArr = mPartyModePlaytestEvents->Array(i);
@@ -1384,8 +1384,8 @@ void PartyModeMgr::FinalizePlaytestParty() {
     mRoundsTotal = numEvents - 1;
     mRoundsUntilShowdown = numEvents - 1;
     mMaxPointsPerEvent = (float)(numEvents - 1) + 1.0f;
-    static Symbol six_star_bonus("six_star_bonus");
-    mSixStarBonus = mEventScoring->FindArray(six_star_bonus)->Float(1);
+    auto _tmp0 = mEventScoring->FindArray(("six_star_bonus"))->Float(1);
+    mSixStarBonus = _tmp0;
     SetCurrEvent();
 }
 

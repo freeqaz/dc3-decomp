@@ -245,7 +245,8 @@ void RndAmbientOcclusion::BuildTrees(Quality quality) {
         Timer timer;
         timer.Restart();
         MILO_LOG("RndAmbientOcclusion: Building kd-Tree...\n");
-        Box box(Vector3(FLT_MAX, FLT_MAX, FLT_MAX), Vector3(-FLT_MAX, -FLT_MAX, -FLT_MAX));
+        auto _tmp0 = Vector3(FLT_MAX, FLT_MAX, FLT_MAX);
+        Box box(_tmp0, Vector3(-FLT_MAX, -FLT_MAX, -FLT_MAX));
         FOREACH (it, mObjectsCast) {
         }
         MILO_ASSERT(mTree == NULL, 0x234);
@@ -849,7 +850,7 @@ void RndAmbientOcclusion::CalculateAO(float *outTime) {
     unsigned int totalVerts = 0;
     auto receiveEnd = mObjectsReceive.end();
     for (std::vector<RndMesh *>::iterator it = mObjectsReceive.begin();
-         it != receiveEnd; ++it) {
+         receiveEnd != it; ++it) {
         RndMesh *mesh = *it;
         if (mesh->GetGeomOwner() != mesh) {
             mesh->CopyGeometry(mesh->GetGeomOwner(), true);

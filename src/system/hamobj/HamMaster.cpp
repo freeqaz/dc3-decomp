@@ -275,8 +275,9 @@ void HamMaster::CheckLevels() {
         leftRMS = levelData[count - 2].mRMS;
     }
 
-    float rightLevel = (RatioToDb(rightRMS) + 96.0f) / 96.0f;
+    auto _tmp3 = RatioToDb(rightRMS);
     float leftLevel = (RatioToDb(leftRMS) + 96.0f) / 96.0f;
+    float rightLevel = (_tmp3 + 96.0f) / 96.0f;
 
     // Clamp right to [0, 1]
     float r = 0.0f;
@@ -298,8 +299,8 @@ void HamMaster::CheckLevels() {
     mLevelHistory.push_back(v);
 
     // Average all entries
-    float sumX = 0.0f;
     float sumY = 0.0f;
+    float sumX = 0.0f;
     for (std::list<Vector2>::iterator it = mLevelHistory.begin();
          it != mLevelHistory.end(); ++it) {
         sumX += it->x;
@@ -319,7 +320,8 @@ void HamMaster::CheckLevels() {
     while (true) {
         if (mLevelHistory.size() < 4)
             break;
-        mLevelHistory.erase(mLevelHistory.begin());
+        auto _tmp0 = mLevelHistory.begin();
+        mLevelHistory.erase(_tmp0);
     }
 
     // Build 8-channel weighted levels

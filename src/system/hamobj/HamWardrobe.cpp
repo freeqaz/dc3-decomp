@@ -522,9 +522,8 @@ DataNode HamWardrobe::OnAddCrowd(DataArray *a) {
 DataNode HamWardrobe::OnLoadCharacters(DataArray *a) {
     short size = a->Size();
     Symbol crew1 = size > 4 ? a->Sym(4) : Symbol(gNullStr);
-    int backupType;
-    bool asyncLoad = false;
     Symbol crew2 = size > 5 ? a->Sym(5) : Symbol(gNullStr);
+    int backupType;
     Symbol speed;
     if (size > 6) {
         backupType = bool(a->Int(6));
@@ -533,6 +532,7 @@ DataNode HamWardrobe::OnLoadCharacters(DataArray *a) {
         backupType = 0;
         speed = gNullStr;
     }
+    bool asyncLoad = false;
     if (size > 7) {
         asyncLoad = a->Int(8);
     }

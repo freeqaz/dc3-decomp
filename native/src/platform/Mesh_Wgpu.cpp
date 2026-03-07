@@ -332,11 +332,14 @@ static bool EnsureMeshUploaded(RndMesh* mesh) {
 
     // Check if we have vertices (either uncompressed or compressed)
     if (numVerts <= 0 && numCompressedVerts <= 0) {
-        fprintf(stderr, "Mesh_Wgpu: skipping '%s' — no vertices\n", mesh->Name());
+        static int sNoVertLog = 0;
+        if (sNoVertLog++ < 5) fprintf(stderr, "Mesh_Wgpu: skipping '%s' — no vertices (owner='%s' ownerVerts=%d)\n",
+            mesh->Name(), geomOwner->Name(), geomOwner->NumVerts());
         return false;
     }
     if (numFaces <= 0) {
-        fprintf(stderr, "Mesh_Wgpu: skipping '%s' — no faces\n", mesh->Name());
+        static int sNoFaceLog = 0;
+        if (sNoFaceLog++ < 5) fprintf(stderr, "Mesh_Wgpu: skipping '%s' — no faces\n", mesh->Name());
         return false;
     }
 
@@ -451,6 +454,9 @@ static int sDrawCallsThisFrame = 0;
 static int sFrameCounter = 0;
 
 void RndMesh_ResetFrameStats() {
+    if (sFrameCounter > 0 && sFrameCounter % 300 == 0) {
+        printf("DC3 Render: Frame %d — %d mesh draw calls\n", sFrameCounter, sDrawCallsThisFrame);
+    }
     sDrawCallsThisFrame = 0;
     sFrameCounter++;
 }
@@ -540,12 +546,6 @@ static void DrawMeshImmediate(RndMesh* mesh) {
     matUni.color[1] = matColor.green;
     matUni.color[2] = matColor.blue;
     matUni.color[3] = matColor.alpha;
-    // Force alpha to 1 when material uses SrcAlpha blend and alpha is near 0.
-    // Many DC3 UI materials have alpha=0 at load time — normally driven to 1 by
-    // PropAnim, but the animation system isn't fully wired up yet.
-    if (matUni.color[3] < 0.01f && mat->GetBlend() == BaseMaterial::kBlendSrcAlpha) {
-        matUni.color[3] = 1.0f;
-    }
     if (mat->GetAlphaCut()) {
         matUni.alphaThreshold = mat->GetAlphaThreshold() / 255.0f;
     } else {
@@ -798,6 +798,7 @@ static void DrawMeshImmediate(RndMesh* mesh) {
     pass.SetVertexBuffer(0, meshData.vertexBuffer, 0, meshData.numVertices * vertexSize);
     pass.SetIndexBuffer(meshData.indexBuffer, wgpu::IndexFormat::Uint16, 0,
                         meshData.numIndices * sizeof(uint16_t));
+
     pass.DrawIndexed(meshData.numIndices);
 
     // --- Multi-pass materials ---

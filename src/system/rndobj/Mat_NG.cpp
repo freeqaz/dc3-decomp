@@ -218,9 +218,7 @@ void NgMat::SetRegularShaderConst(bool perPixel) {
     float spec2Pow = spec2Color.alpha;
     spec2Pow = (spec2Pow - 0.5f >= 0.0f) ? spec2Pow : 0.5f;
 
-    float specRed;
-    float specGreen;
-    float specBlue;
+    float specRed, specGreen, specBlue;
     float spec2Red, spec2Green, spec2Blue;
 
     if (!perPixel && mPerPixelLit && mSpecularMap) {

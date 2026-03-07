@@ -304,8 +304,9 @@ void DrawParticlesBillboard(RndParticleSys* sys) {
     // But the bind group layout expects minBindingSize=64 and our scene buffer is 496 bytes.
     // Create a temporary bind group pointing to the scene buffer.
     extern wgpu::Buffer& GetSceneBuffer();
+    extern uint32_t GetSceneOffset();
     sceneEntry.buffer = GetSceneBuffer();
-    sceneEntry.offset = 0;
+    sceneEntry.offset = GetSceneOffset();
     sceneEntry.size = 64;
 
     wgpu::BindGroupDescriptor bg0Desc{};

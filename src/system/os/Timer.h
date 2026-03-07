@@ -9,9 +9,7 @@
 inline unsigned int __mftb() {
     using namespace std::chrono;
     return (unsigned int)(duration_cast<microseconds>(
-                              steady_clock::now().time_since_epoch()
-    )
-                              .count());
+        steady_clock::now().time_since_epoch()).count());
 }
 // PPC byte swap intrinsics - no-ops on little-endian (data already in native order)
 inline unsigned int __loadwordbytereverse(int offset, const void *base) {
@@ -155,7 +153,7 @@ public:
 #define MAX_TOP_VALS 128
 
 class TimerStats {
-public:
+private:
     int mCount; // 0x0
     float mAvgMs; // 0x4
     float mStdDevMs; // 0x8
@@ -166,7 +164,7 @@ public:
     int mNumCritOverBudget; // 0x1c
     float mAvgMsInCrit; // 0x20
     float mTopValues[MAX_TOP_VALS]; // 0x24
-
+public:
     TimerStats(DataArray *);
 
     bool Critical() const { return mCritical; }
@@ -187,9 +185,9 @@ public:
     ~AutoSlowFrame();
 
 private:
-    float mStartMs; // 0x0
-    const char *mReason; // 0x4
-    float mWaiver; // 0x8
+    float mStartMs;       // 0x0
+    const char *mReason;  // 0x4
+    float mWaiver;        // 0x8
 };
 
 class AutoGlitchReport {
@@ -254,7 +252,11 @@ public:
             unsigned long long cycles = mTimer->Stop();
             float elapsed = Timer::CyclesToMs(cycles);
             AutoGlitchReport::EndExternal(
-                elapsed, mTimeLimit, mTimer->Name().Str(), mCallback, mContext
+                elapsed,
+                mTimeLimit,
+                mTimer->Name().Str(),
+                mCallback,
+                mContext
             );
         }
     }
@@ -268,10 +270,6 @@ public:
     static void PrintTimers(bool);
     static void Init();
     static void ResetTimers();
-
-    static std::list<std::pair<Timer, TimerStats> > &Timers() { return sTimers; }
-
-    friend class Rnd;
 
 private:
     Timer *mTimer; // 0x0

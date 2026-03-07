@@ -159,7 +159,7 @@ void CharHair::Hookup() {
 void CharHair::FreezePoseRaw() {
     for (int i = 0; i < mStrands.size(); i++) {
         Strand &strand = mStrands[i];
-        if (strand.Root()) {
+        if (strand.Root() && strand.Root()->TransParent()) {
             ObjVector<Point> &pts = strand.Points();
             Transform parentXfm(strand.Root()->TransParent()->WorldXfm());
             Invert(parentXfm, parentXfm);
@@ -203,17 +203,6 @@ void CharHair::DoReset(int reset) {
     mFriction = savedFriction;
     mInertia = savedInertia;
     mReset = 0;
-}
-
-void CharCollide::SyncWorldState() {
-    unk20c = WorldXfm().v;
-    if (mShape >= 3 || mShape == 0) {
-        unk1fc = WorldXfm().m.x;
-        unk1f8 = 1.0f / LengthSquared(unk1fc);
-    }
-    if (mShape >= 3) {
-        unk1f4 = 1.0f / (mCurLength[1] - mCurLength[0]);
-    }
 }
 
 void CharHair::SimulateLoops(int count, float fps) {

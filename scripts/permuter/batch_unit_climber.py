@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Optional, Any
 
 from scripts.permuter.types import Variant, ScoreResult, extract_qualified_name
+from scripts.permuter.file_util import atomic_write_bytes
 from scripts.permuter.generator import generate_variants
 from scripts.permuter.patterns import get_all_patterns
 from scripts.permuter.scorer import md5_file
@@ -125,7 +126,7 @@ class UnitClimber:
             self._extract_compile_cmd()
         
         # We must overwrite the real file for cl.exe to read it, but we can output to obj_out
-        self.source_path.write_bytes(source)
+        atomic_write_bytes(self.source_path, source)
         if self._compile_fo_path:
             cmd = self._compile_cmd.replace(f"/Fo{self._compile_fo_path}", f"/Fo{obj_out}")
         else:
@@ -297,9 +298,9 @@ class UnitClimber:
             if final_edits:
                 print(f"Applying {len(final_edits)} winning variants.")
                 final_source = apply_edits(self.original_source, final_edits)
-                self.source_path.write_bytes(final_source)
+                atomic_write_bytes(self.source_path, final_source)
             else:
-                self.source_path.write_bytes(self.original_source) # restore just in case
+                atomic_write_bytes(self.source_path, self.original_source) # restore just in case
                 print("No improvements found.")
                 
         finally:
@@ -307,7 +308,7 @@ class UnitClimber:
             shutil.rmtree(tmp_dir, ignore_errors=True)
             # Restore original source just in case we crashed
             if self.source_path.read_bytes() != self.original_source and not final_edits:
-                 self.source_path.write_bytes(self.original_source)
+                 atomic_write_bytes(self.source_path, self.original_source)
 
 
 def main():

@@ -15,11 +15,6 @@ FlowTrigger::FlowTrigger()
       mAutoRegister(0) {}
 FlowTrigger::~FlowTrigger() {}
 
-BinStream &operator>>(BinStream &bs, FlowTrigger::PropTriggerDefn &defn) {
-    bs >> defn.mProvider >> defn.mProperty;
-    return bs;
-}
-
 BEGIN_HANDLERS(FlowTrigger)
     HANDLE_ACTION(activate, ActivateWithParams(nullptr, _msg))
     HANDLE_ACTION(deactivate, Deactivate(false))
@@ -107,8 +102,7 @@ BEGIN_LOADS(FlowTrigger)
     if (d.rev > 0) {
         d >> mTriggerProperties;
         d >> mStopProperties;
-    }
-    if (d.rev == 0) {
+    } else {
         FOREACH (it, mTriggerEvents) {
             String cur = it->Str();
             if (cur.contains("on_") && cur.contains("_change")) {
@@ -166,7 +160,7 @@ FlowTrigger::PropTriggerDefn::PropTriggerDefn(Hmx::Object *owner) : mProvider(ow
 }
 
 DataNode FlowTrigger::PropTriggerDefn::GetPathDisplay(DataArray *a) {
-    if (!mProvider || mProperty.Type() != kDataArray || mProperty.Array()->Size() == 0)
+        if (!mProvider || mProperty.Type() != kDataArray || mProperty.Array()->Size() == 0)
         return "<none>";
     String str;
     mProperty.Print(str, true, 0);

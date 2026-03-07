@@ -4,12 +4,16 @@ Each round: extract function, get baseline with diagnosis, generate variants
 (with composition), score all, apply best improvement, repeat. Stops on
 100% match, plateau (N rounds without improvement), max rounds, or all noise.
 
+By default enables Ghidra, chains, adaptive, constrained, and compose.
+Use --no-* flags to disable individual features.
+
 Usage:
     python -m scripts.permuter.hill_climber \
+        --symbol "?Poll@LabelNumberTicker@@UAAXXZ"
+
+    python -m scripts.permuter.hill_climber \
         --symbol "?Poll@LabelNumberTicker@@UAAXXZ" \
-        --source src/system/ui/LabelNumberTicker.cpp \
-        --function "LabelNumberTicker::Poll" \
-        --max-rounds 10 --compose --json
+        --no-ghidra --no-chain --json
 """
 
 from __future__ import annotations
@@ -18,33 +22,38 @@ import argparse
 import json
 import os
 import signal
+import subprocess
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 
 from .composer import _DEFAULT_PAIRS, build_adaptive_chains
 from .diagnosis import format_diagnosis_summary, is_all_noise
 from .extractor import extract_function
+from .file_util import atomic_write_bytes, SourceFileLock
 from .generator import generate_variants
 from .patterns import get_all_patterns, get_pattern
 from .scorer import Scorer
 from .types import ChainSpec, HillClimbResult, RoundHints, RoundResult, ScoreResult
+
+# Re-export so the except clause can reference it without a deferred import
+from .ghidra_cache import GhidraCircuitOpen as _GhidraCircuitOpen
 
 # Graceful interrupt flag — set by SIGINT handler, checked between rounds
 _interrupted = False
 
 
 def _sigint_handler(signum, frame):
-    """Handle Ctrl+C by setting flag and raising KeyboardInterrupt.
-
-    Always raises so that blocked operations (ThreadPoolExecutor, subprocess)
-    can be interrupted. The _interrupted flag is checked between rounds for
-    graceful stop messages.
-    """
+    """Handle Ctrl+C by setting flag for graceful shutdown."""
     global _interrupted
+    if _interrupted:
+        # Second Ctrl+C — force exit
+        print("\nForce quit.", file=sys.stderr)
+        raise KeyboardInterrupt
     _interrupted = True
-    print("\nInterrupt received — stopping...", file=sys.stderr)
-    raise KeyboardInterrupt
+    print("\nInterrupt received — finishing current operation and restoring source...",
+          file=sys.stderr)
 
 
 def install_signal_handler():
@@ -52,6 +61,84 @@ def install_signal_handler():
     global _interrupted
     _interrupted = False
     return signal.signal(signal.SIGINT, _sigint_handler)
+
+
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+
+_BANNER_START = b"/* ===== PERMUTER LOCK"
+_BANNER_END = b"===== */\n"
+
+
+def _verify_build(source_path: Path) -> tuple[bool, str | None]:
+    """Verify source compiles via ninja. Returns (success, error_output)."""
+    try:
+        rel = source_path.relative_to(REPO_ROOT)
+    except ValueError:
+        rel = source_path
+    obj_target = f"build/373307D9/{rel.with_suffix('.obj')}"
+    result = subprocess.run(
+        ["ninja", obj_target],
+        capture_output=True, text=True,
+        cwd=str(REPO_ROOT),
+    )
+    if result.returncode != 0:
+        return False, (result.stderr or result.stdout).strip()
+    return True, None
+
+
+def _verify_match(symbol: str) -> float:
+    """Run objdiff and return match%. Used for regression checking."""
+    cmd = [
+        "bin/objdiff-cli", "diff", "-p", ".", symbol,
+        "-c", "functionRelocDiffs=none", "-f", "json",
+    ]
+    result = subprocess.run(
+        cmd, capture_output=True, text=True, cwd=str(REPO_ROOT),
+    )
+    try:
+        data = json.loads(result.stdout)
+        return data.get("fuzzy_match_percent", 0.0)
+    except (json.JSONDecodeError, KeyError):
+        return 0.0
+
+
+def _make_banner(function_name: str) -> bytes:
+    """Build the lock banner comment block."""
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    return (
+        f"/* ===== PERMUTER LOCK — DO NOT EDIT =====\n"
+        f" * The source permuter is actively working on: {function_name}\n"
+        f" * Started: {now} (stale after 5 minutes)\n"
+        f" * This banner is temporary and will be removed automatically.\n"
+        f" ===== */\n"
+    ).encode()
+
+
+def _add_banner(path: Path, function_name: str) -> None:
+    """Add a permuter lock banner to the top of a source file."""
+    content = path.read_bytes()
+    if _BANNER_START in content:
+        return  # Already has a banner
+    atomic_write_bytes(path, _make_banner(function_name) + content)
+
+
+def _strip_banner(path: Path) -> None:
+    """Remove the permuter lock banner from a file if present."""
+    content = path.read_bytes()
+    if _BANNER_START not in content:
+        return
+    start = content.index(_BANNER_START)
+    end = content.index(_BANNER_END, start) + len(_BANNER_END)
+    atomic_write_bytes(path, content[:start] + content[end:])
+
+
+def _strip_banner_bytes(data: bytes) -> bytes:
+    """Remove the permuter lock banner from source bytes."""
+    if _BANNER_START not in data:
+        return data
+    start = data.index(_BANNER_START)
+    end = data.index(_BANNER_END, start) + len(_BANNER_END)
+    return data[:start] + data[end:]
 
 
 def parse_args() -> argparse.Namespace:
@@ -84,8 +171,12 @@ def parse_args() -> argparse.Namespace:
         help="Stop after N rounds without improvement (default: 3)",
     )
     parser.add_argument(
-        "--compose", action="store_true",
-        help="Enable two-step pattern composition",
+        "--compose", action="store_true", default=True,
+        help="Enable two-step pattern composition (default: True)",
+    )
+    parser.add_argument(
+        "--no-compose", action="store_false", dest="compose",
+        help="Disable two-step pattern composition",
     )
     parser.add_argument(
         "--patterns", default="all",
@@ -108,24 +199,40 @@ def parse_args() -> argparse.Namespace:
         help="Output results as JSON",
     )
     parser.add_argument(
-        "--ghidra", action="store_true",
-        help="Enable Ghidra-guided patterns (lookup decomp.db cache)",
+        "--ghidra", action="store_true", default=True,
+        help="Enable Ghidra-guided patterns (default: True)",
     )
     parser.add_argument(
-        "--chain", action="store_true",
-        help="Enable N-stage pattern chains via beam search (implies --compose)",
+        "--no-ghidra", action="store_false", dest="ghidra",
+        help="Disable Ghidra-guided patterns",
     )
     parser.add_argument(
-        "--chain-depth", type=int, default=3,
-        help="Maximum chain depth for N-stage composition (default: 3)",
+        "--chain", action="store_true", default=True,
+        help="Enable N-stage pattern chains via beam search (default: True)",
     )
     parser.add_argument(
-        "--adaptive", action="store_true",
-        help="Enable adaptive per-round pattern suppression/boosting",
+        "--no-chain", action="store_false", dest="chain",
+        help="Disable N-stage pattern chains",
     )
     parser.add_argument(
-        "--constrained", action="store_true",
-        help="Enable constraint-directed synthesis pre-pass (implies --ghidra)",
+        "--chain-depth", type=int, default=5,
+        help="Maximum chain depth for N-stage composition (default: 5)",
+    )
+    parser.add_argument(
+        "--adaptive", action="store_true", default=True,
+        help="Enable adaptive per-round pattern suppression/boosting (default: True)",
+    )
+    parser.add_argument(
+        "--no-adaptive", action="store_false", dest="adaptive",
+        help="Disable adaptive pattern suppression/boosting",
+    )
+    parser.add_argument(
+        "--constrained", action="store_true", default=True,
+        help="Enable constraint-directed synthesis pre-pass (default: True)",
+    )
+    parser.add_argument(
+        "--no-constrained", action="store_false", dest="constrained",
+        help="Disable constraint-directed synthesis",
     )
     return parser.parse_args()
 
@@ -147,7 +254,6 @@ def hill_climb(
     chain_depth: int = 3,
     adaptive: bool = False,
     constrained: bool = False,
-    all_patterns: list | None = None,
 ) -> HillClimbResult:
     """Run the hill-climbing loop for a single function.
 
@@ -167,7 +273,6 @@ def hill_climb(
         chain_depth: Maximum chain depth for N-stage composition.
         adaptive: Enable adaptive per-round pattern suppression/boosting.
         constrained: Enable constraint-directed synthesis pre-pass.
-        all_patterns: Full pattern set for chains/composition (defaults to patterns).
 
     Returns:
         HillClimbResult with full session history.
@@ -179,10 +284,6 @@ def hill_climb(
     if chain:
         compose = True
     compose_pairs = _DEFAULT_PAIRS if compose else None
-
-    # Resolve full pattern set for chains/composition
-    if all_patterns is None:
-        all_patterns = patterns
 
     # Create adaptive hints tracker when chain or adaptive is enabled
     round_hints: RoundHints | None = None
@@ -207,6 +308,9 @@ def hill_climb(
 
     # Save original source for rollback if not applying
     original_source = source_path.read_bytes()
+
+    # Add lock banner so other agents know this file is being permuted
+    _add_banner(source_path, function_name)
 
     try:
         for round_num in range(1, max_rounds + 1):
@@ -288,6 +392,14 @@ def hill_climb(
                         diagnosis=scorer.diagnosis,
                         symbol=symbol,
                     )
+                    has_preflight_signals = (
+                        bool(preflight.struct_offset_mismatches)
+                        or bool(preflight.extra_calls)
+                        or bool(preflight.missing_calls)
+                        or bool(preflight.dead_variables)
+                        or preflight.prologue_mismatch
+                        or preflight.volatile_regswap_only
+                    )
                     if preflight.skip_reason:
                         print(
                             f"  [GHIDRA PREFLIGHT] {preflight.skip_reason} "
@@ -295,11 +407,38 @@ def hill_climb(
                             file=sys.stderr,
                         )
                     if ghidra_run_stats:
-                        ghidra_run_stats.preflight_flagged = preflight.skip_reason is not None
+                        ghidra_run_stats.preflight_flagged = has_preflight_signals
                         ghidra_run_stats.preflight_reason = preflight.skip_reason
                         ghidra_run_stats.preflight_confidence = preflight.confidence
+                        ghidra_run_stats.preflight_struct_offsets = len(
+                            preflight.struct_offset_mismatches
+                        )
+                        ghidra_run_stats.preflight_extra_calls = len(preflight.extra_calls)
+                        ghidra_run_stats.preflight_missing_calls = len(
+                            preflight.missing_calls
+                        )
+                        ghidra_run_stats.preflight_dead_vars = len(preflight.dead_variables)
+                        ghidra_run_stats.preflight_prologue_mismatch = (
+                            preflight.prologue_mismatch
+                        )
+                        ghidra_run_stats.preflight_volatile_only = (
+                            preflight.volatile_regswap_only
+                        )
+                        ghidra_run_stats.preflight_hard_skip = preflight.hard_skip
+                    if has_preflight_signals:
+                        print(
+                            "  [GHIDRA PREFLIGHT DETAIL] "
+                            f"offsets={len(preflight.struct_offset_mismatches)} "
+                            f"extra_calls={len(preflight.extra_calls)} "
+                            f"missing_calls={len(preflight.missing_calls)} "
+                            f"dead_vars={len(preflight.dead_variables)} "
+                            f"prologue={int(preflight.prologue_mismatch)} "
+                            f"volatile_only={int(preflight.volatile_regswap_only)} "
+                            f"hard_skip={int(preflight.hard_skip)}",
+                            file=sys.stderr,
+                        )
                     # Hard skip: very high confidence unfixable
-                    if preflight.confidence >= 0.9:
+                    if preflight.hard_skip:
                         print(
                             f"  [GHIDRA PREFLIGHT] Unfixable — skipping",
                             file=sys.stderr,
@@ -342,7 +481,7 @@ def hill_climb(
                         )
                         if synth_best.match_percent > baseline:
                             if apply:
-                                source_path.write_bytes(synth_best.variant.source)
+                                atomic_write_bytes(source_path, synth_best.variant.source)
                             print(
                                 f"  [SYNTH] {baseline:.2f}% -> "
                                 f"{synth_best.match_percent:.2f}%",
@@ -378,13 +517,11 @@ def hill_climb(
                     break
 
                 # Build adaptive chains for this round
-                # Use full pattern set so chains can reference patterns
-                # beyond the user-specified focus set
                 round_chains: list[ChainSpec] | None = None
                 if chain and ctx.diagnosis:
                     round_chains = build_adaptive_chains(
                         diagnosis=ctx.diagnosis,
-                        patterns=all_patterns,
+                        patterns=patterns,
                         hints=round_hints,
                         max_depth=chain_depth,
                     )
@@ -398,12 +535,10 @@ def hill_climb(
                         )
 
                 # Generate variants
-                # Phase 1 uses focused patterns; Phase 2/3 use all_patterns
                 variants = list(generate_variants(
                     ctx, patterns, max_variants,
                     compose_pairs=compose_pairs,
                     chains=round_chains,
-                    chain_patterns=all_patterns,
                     round_hints=round_hints if adaptive else None,
                 ))
                 print(
@@ -523,7 +658,7 @@ def hill_climb(
 
                 if apply:
                     # Write the improved source (Scorer already restored original)
-                    source_path.write_bytes(best_result.variant.source)
+                    atomic_write_bytes(source_path, best_result.variant.source)
                     print(
                         f"Applied: {best_result.variant.name} "
                         f"({baseline:.2f}% -> {best_score:.2f}%, +{delta:.2f}%)",
@@ -554,6 +689,8 @@ def hill_climb(
     except KeyboardInterrupt:
         stopped_reason = "interrupted"
         print("\nInterrupted — restoring source and stopping.", file=sys.stderr)
+    except _GhidraCircuitOpen:
+        stopped_reason = "ghidra_down"
     except Exception as e:
         import traceback
         stopped_reason = "error"
@@ -562,7 +699,38 @@ def hill_climb(
     finally:
         # If not applying or interrupted, restore original source
         if not apply or stopped_reason == "interrupted":
-            source_path.write_bytes(original_source)
+            atomic_write_bytes(source_path, original_source)
+        else:
+            # Strip the lock banner from the kept (improved) source
+            _strip_banner(source_path)
+
+            # Post-apply verification: ensure applied changes compile and
+            # don't regress below the initial match percentage.
+            if current_percent > initial_percent:
+                build_ok, build_err = _verify_build(source_path)
+                if not build_ok:
+                    print(
+                        f"\nVERIFICATION FAILED: applied source doesn't compile "
+                        f"— restoring original.\n  {(build_err or '')[:300]}",
+                        file=sys.stderr,
+                    )
+                    atomic_write_bytes(source_path, original_source)
+                    current_percent = initial_percent
+                    stopped_reason = "verification_failed"
+                else:
+                    actual_pct = _verify_match(symbol)
+                    if actual_pct < initial_percent - 0.01:
+                        print(
+                            f"\nVERIFICATION FAILED: regression detected "
+                            f"({actual_pct:.2f}% < initial {initial_percent:.2f}%) "
+                            f"— restoring original.",
+                            file=sys.stderr,
+                        )
+                        atomic_write_bytes(source_path, original_source)
+                        current_percent = initial_percent
+                        stopped_reason = "verification_failed"
+                    else:
+                        current_percent = actual_pct
 
     elapsed = time.time() - start_time
     final_percent = current_percent if apply else initial_percent
@@ -582,23 +750,6 @@ def hill_climb(
         )
     except Exception:
         pass  # Don't fail the run if stats storage fails
-
-    # Record climb history for skip-on-rerun
-    try:
-        from .climb_history import record_climb
-        from .score_cache import md5_bytes
-        record_climb(
-            symbol=symbol,
-            source_md5=md5_bytes(original_source),
-            pattern_names=[p.name for p in patterns],
-            initial_pct=initial_percent,
-            final_pct=final_percent,
-            stopped_reason=stopped_reason,
-            rounds_used=len(rounds),
-            elapsed_seconds=round(time.time() - start_time, 2),
-        )
-    except Exception:
-        pass
 
     # Store Ghidra stats to DB
     if ghidra_run_stats:

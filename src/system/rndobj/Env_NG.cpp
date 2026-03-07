@@ -174,8 +174,7 @@ void NgEnviron::UpdateApproxLighting(const Vector3 *pos) {
         for (int i = 0; i < 6; i++) {
             sBoxResults[i].Set(0, 0, 0);
         }
-        bool _cond = UsesApproxLocal();
-        if (_cond) {
+        if (UsesApproxLocal()) {
             sBoxLight.Clear();
             for (ObjPtrList<RndLight>::iterator it = mLightsApprox.begin();
                  it != mLightsApprox.end(); ++it) {
@@ -232,6 +231,6 @@ void NgEnviron::Select(const Vector3 *pos) {
     ReclassifyLights();
     RndEnviron::Select(pos);
     NgMat::SetCurrent(0);
-    TheNgStats->mLightsReal += mNumLightsReal;
     TheNgStats->mLightsApprox += mNumLightsApprox;
+    TheNgStats->mLightsReal += mNumLightsReal;
 }

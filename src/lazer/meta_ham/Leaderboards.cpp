@@ -350,6 +350,7 @@ DataNode Leaderboards::OnMsg(const RCJobCompleteMsg &msg) {
 }
 
 void Leaderboards::GetScores(int i) {
+    auto& _ref4 = mMode;
     if (!mLoading && !mLeaderboardJob) {
         mRows.clear();
         HamProfile *activeProfile = TheProfileMgr.GetActiveProfile(true);
@@ -362,10 +363,10 @@ void Leaderboards::GetScores(int i) {
             if (mType == 1 || mType == 5) {
                 i = 1000; // idk
             }
-            auto it = mScoreCache.find(mMode + i); // idk about the param here
+            auto it = mScoreCache.find(_ref4 + i); // idk about the param here
             if (it->second.empty()) {
                 mLeaderboardJob = new GetLeaderboardByPlayerJob(
-                    this, activeProfile, i, mType, mMode, 10, 0
+                    this, activeProfile, i, mType, _ref4, 10, 0
                 );
                 TheRockCentral.ManageJob(mLeaderboardJob);
             } else {

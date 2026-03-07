@@ -52,6 +52,8 @@ void WorldCrowd3DCharHandle::Set3DChar(
 }
 
 #ifdef HX_NATIVE
-BEGIN_PROPSYNCS(WorldCrowd3DCharHandle)
-END_PROPSYNCS
+// TODO: property synchronization
+bool WorldCrowd3DCharHandle::SyncProperty(DataNode &, DataArray *, int, PropOp) {
+    return false;
+}
 #endif

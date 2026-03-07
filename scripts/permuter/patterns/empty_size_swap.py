@@ -34,24 +34,7 @@ class EmptySizeSwapPattern(Pattern):
     name = "empty_size_swap"
 
     def relevant(self, diagnosis: Diagnosis) -> bool:
-        if self._detect_direction(diagnosis) is not None:
-            return True
-        # Also fire on clusters or cmpw/cmplw mismatches (signs of empty/size divergence)
-        if diagnosis.clusters:
-            return True
-        for d in diagnosis.diff_ops:
-            if d.target_opcode in ("cmpw", "cmplw", "cmpwi", "cmplwi") or \
-               d.base_opcode in ("cmpw", "cmplw", "cmpwi", "cmplwi"):
-                return True
-        return False
-
-    def priority(self, diagnosis: Diagnosis) -> float:
-        if not self.relevant(diagnosis):
-            return 0.0
-        direction = self._detect_direction(diagnosis)
-        if direction is not None:
-            return 0.5  # Strong signal from divw mismatch
-        return 0.2  # Exploratory
+        return self._detect_direction(diagnosis) is not None
 
     def _detect_direction(self, diagnosis: Diagnosis) -> str | None:
         """Detect which direction to swap based on opcode mismatches.
@@ -75,23 +58,16 @@ class EmptySizeSwapPattern(Pattern):
         direction = None
         if ctx.diagnosis is not None:
             direction = self._detect_direction(ctx.diagnosis)
+        # If no direction detected (shouldn't happen since relevant() checks),
+        # stay silent rather than generating both directions
+        if direction is None:
+            return
 
         counter = 0
-        if direction is not None:
-            # Known direction — generate only that direction
-            for stmt in ctx.statements:
-                for variant in _find_swaps(stmt, ctx, counter, direction):
-                    yield variant
-                    counter += 1
-        else:
-            # No direction detected — generate both directions (cheap pattern)
-            for stmt in ctx.statements:
-                for variant in _find_swaps(stmt, ctx, counter, "to_size"):
-                    yield variant
-                    counter += 1
-                for variant in _find_swaps(stmt, ctx, counter, "to_empty"):
-                    yield variant
-                    counter += 1
+        for stmt in ctx.statements:
+            for variant in _find_swaps(stmt, ctx, counter, direction):
+                yield variant
+                counter += 1
 
 
 def _find_swaps(

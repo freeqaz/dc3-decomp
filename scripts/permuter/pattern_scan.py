@@ -45,7 +45,12 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .extractor import _PARSER, _get_function_name, _find_all_function_defs
+from .extractor import (
+    _PARSER,
+    _find_all_function_defs,
+    _find_function_preproc_regions,
+    _get_function_name,
+)
 from .patterns import get_pattern, list_patterns
 from .patterns.base import Pattern
 from .types import FunctionContext, Variant
@@ -201,13 +206,15 @@ def _scan_file(
             continue
 
         statements = list(body.named_children)
+        func_range = (func_node.start_byte, func_node.end_byte)
         ctx = FunctionContext(
             file_path=source_path,
             file_source=source,
             func_node=func_node,
             body_node=body,
             statements=statements,
-            func_byte_range=(func_node.start_byte, func_node.end_byte),
+            func_byte_range=func_range,
+            preproc_regions=_find_function_preproc_regions(source, func_range),
         )
 
         for pattern in patterns:
@@ -254,15 +261,17 @@ def main():
         sys.exit(0)
 
     # Parse pattern names
-    available = list_patterns()
+    default_available = list_patterns()
+    all_available = list_patterns(include_opt_in=True)
     if args.patterns.strip() == "all":
-        pattern_names = available
+        # Keep historical behavior: `all` excludes opt-in patterns.
+        pattern_names = default_available
     else:
         pattern_names = [p.strip() for p in args.patterns.split(",")]
 
     patterns = []
     for name in pattern_names:
-        if name not in available:
+        if name not in all_available:
             print(f"Error: unknown pattern '{name}'", file=sys.stderr)
             from .scan_and_permute import _print_pattern_table
             _print_pattern_table()

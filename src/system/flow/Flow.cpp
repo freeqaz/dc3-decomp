@@ -385,8 +385,7 @@ void Flow::SyncObjects() {
     if (flow) {
         // something here
     }
-    if (flow) {
-        if (flow != this) {
+    if (flow && flow != this) {
         FOREACH (it, mDynamicProperties) {
             if (it->mExposed) {
                 Symbol name(it->mName.c_str());
@@ -412,28 +411,6 @@ void Flow::SyncObjects() {
             }
         }
     }
-    }
-}
-
-void Flow::Enter() {
-    FlowQueueable *q = this;
-    if (ProxyFile().empty() && mStartMode != 0) {
-        if (mStartMode == 1) {
-            q->Execute(kQueue);
-        } else {
-            TheFlowMgr->QueueCommand(q, kQueue);
-        }
-    }
-}
-
-void Flow::Exit() {
-    if (IsRunning() && ProxyFile().empty()) {
-        if (mHardStop) {
-            Deactivate(false);
-        } else {
-            RequestStop();
-        }
-    }
 }
 
 bool Flow::Activate() {
@@ -454,6 +431,19 @@ bool Flow::Activate() {
 }
 
 void Flow::Deactivate(bool b1) { FlowQueueable::Deactivate(b1); }
+
+void Flow::Enter() {
+    FlowNode *node = static_cast<FlowNode *>(this);
+    int mode = mStartMode;
+    if (PollEnabled()) return;
+    if (mode != 0) {
+        if (mode == 1) {
+            node->Execute(QueueState(1));
+        } else {
+            TheFlowMgr->QueueCommand(node, QueueState(1));
+        }
+    }
+}
 
 void Flow::RequestStop() {
     FLOW_LOG("RequestStop\n");

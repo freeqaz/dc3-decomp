@@ -860,8 +860,7 @@ void Challenges::DownloadPlayerChallenges() {
         mGetPlayerChallengesJob = nullptr;
         static Message allUpdatedMsg("all_challenges_updated", 0);
         if (!mGetOfficialChallengesJob) {
-            auto _tmp5 = ChallengesDirty();
-            allUpdatedMsg[0] = _tmp5;
+            allUpdatedMsg[0] = ChallengesDirty();
             TheUI->Handle(allUpdatedMsg, true);
             mPlayerChallengesDirty = false;
             mOfficialChallengesDirty = false;

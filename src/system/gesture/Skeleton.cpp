@@ -70,10 +70,9 @@ void SkeletonFrame::Create(const NUI_SKELETON_FRAME &nui_frame, int elapsed) {
     // First pass: transform joint positions by gravity matrix
     XMVECTOR transformed[6 * kNumJoints];
     for (int s = 0; s < 6; s++) {
-        const NUI_SKELETON_DATA &nuiSkel = nui_frame.SkeletonData[s];
-        if (nuiSkel.eTrackingState == NUI_SKELETON_TRACKED) {
+        if (nui_frame.SkeletonData[s].eTrackingState == NUI_SKELETON_TRACKED) {
             for (int j = 0; j < kNumJoints; j++) {
-                XMVECTOR pos = nuiSkel.SkeletonPositions[j];
+                XMVECTOR pos = nui_frame.SkeletonData[s].SkeletonPositions[j];
                 XMVECTOR sZ = __vspltw(pos, 2);
                 XMVECTOR sY = __vspltw(pos, 1);
                 XMVECTOR sX = __vspltw(pos, 0);
@@ -299,8 +298,20 @@ bool Skeleton::Velocity(
     }
 }
 
-// Skeleton::operator= is compiler-generated (implicit memberwise copy).
-// The original binary placed it in GestureMgr.obj (first use site).
+Skeleton &Skeleton::operator=(const Skeleton &other) {
+    memcpy(mTrackedJoints, other.mTrackedJoints, sizeof(mTrackedJoints));
+    memcpy(mCamBoneLengths, other.mCamBoneLengths, sizeof(mCamBoneLengths));
+    memcpy(mPlayerXfms, other.mPlayerXfms, sizeof(mPlayerXfms));
+    mTracking = other.mTracking;
+    mQualityFlags = other.mQualityFlags;
+    mElapsedMs = other.mElapsedMs;
+    mTrackingID = other.mTrackingID;
+    unkab0 = other.unkab0;
+    mSkeletonIdx = other.mSkeletonIdx;
+    unkac4 = other.unkac4;
+    mCamDisplacements = other.mCamDisplacements;
+    return *this;
+}
 
 void Skeleton::Init() {
     mTracking = kSkeletonNotTracked;
@@ -373,19 +384,20 @@ void Skeleton::Poll(int skel_idx, const SkeletonFrame &frame) {
         }
 
         for (int i = 0; i < kNumJoints; i++) {
+            auto& _sub0 = mTrackedJoints[i];
             for (int j = 0; j < kNumCoordSys; j++) {
                 if (j == 0) {
-                    mTrackedJoints[i].mJointPos[0] = data.mJointPositions[i];
+                    _sub0.mJointPos[0] = data.mJointPositions[i];
                 } else {
                     MultiplyTranspose(
                         data.mJointPositions[i],
                         mPlayerXfms[j - 1],
-                        mTrackedJoints[i].mJointPos[j]
+                        _sub0.mJointPos[j]
                     );
                 }
             }
-            mTrackedJoints[i].mJointConf = (JointConfidence)data.mJointTrackingState[i];
-            mTrackedJoints[i].mSmoothedPos = data.mRawPositions[i];
+            _sub0.mJointConf = (JointConfidence)data.mJointTrackingState[i];
+            _sub0.mSmoothedPos = data.mRawPositions[i];
         }
 
         for (int i = 0; i < kNumBones; i++) {

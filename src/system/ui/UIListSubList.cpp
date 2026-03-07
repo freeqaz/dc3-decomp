@@ -89,7 +89,8 @@ void UIListSubList::Draw(
 
 UIListSlotElement *UIListSubList::CreateElement(UIList *parent) {
     MILO_ASSERT(mList, 0x8d);
-    UIList *l = dynamic_cast<UIList *>(Hmx::Object::NewObject(mList->ClassName()));
+    Hmx::Object *obj = Hmx::Object::NewObject(mList->ClassName());
+    UIList *l = dynamic_cast<UIList *>(obj);
     MILO_ASSERT(l, 0x90);
     l->SetParent(parent);
     l->SetType(mList->Type());
@@ -135,5 +136,7 @@ void UIListSubListElement::Draw(const Transform &tf, float f, UIColor *col, Box 
     } else
         mList->DrawShowing();
 }
+
+void UIListSubListElement::Poll() { mList->Poll(); }
 
 #pragma endregion UIListSubListElement

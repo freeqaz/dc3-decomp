@@ -90,10 +90,11 @@ Symbol PoseFatalities::GetFatalityFace() {
 
 bool PoseFatalities::InFatality(int player) const {
     int max = mCurrentBeat;
+    auto& _ref0 = mFatalStartBeats;
     if (player == -1) {
         bool b1 = false;
         for (int i = 0; i < 2; i++) {
-            if (max >= mFatalStartBeats[i]) {
+            if (max >= _ref0[i]) {
                 b1 = true;
             }
         }
@@ -102,7 +103,7 @@ bool PoseFatalities::InFatality(int player) const {
         }
     } else {
         MILO_ASSERT_RANGE(player, 0, 2, 0x391);
-        if (max >= mFatalStartBeats[player]) {
+        if (max >= _ref0[player]) {
             return mInFatality[player];
         }
     }

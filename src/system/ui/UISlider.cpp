@@ -183,15 +183,17 @@ void UISlider::Update() {
     static Symbol mats("mats");
 
     // Clear material pointers for all states
-    mStateMats[0] = 0;
+    auto& _ref0 = mStateMats;
+    _ref0[0] = 0;
     mSliderMesh = 0;
-    mStateMats[1] = 0;
-    mStateMats[2] = 0;
-    mStateMats[3] = 0;
-    mStateMats[4] = 0;
+    _ref0[1] = 0;
+    _ref0[2] = 0;
+    _ref0[3] = 0;
+    _ref0[4] = 0;
 
     const DataArray *typeDef = TypeDef();
-    if (!typeDef || !mSliderResource) {
+    auto& _ref1 = mSliderResource;
+    if (!typeDef || !_ref1) {
         return;
     }
 
@@ -201,7 +203,7 @@ void UISlider::Update() {
         DataNode &meshNode = meshArray->Node(1);
         const char *meshStr = meshNode.Str(meshArray);
         if (meshStr) {
-            mSliderMesh = mSliderResource->Find<RndMesh>(meshStr, true);
+            mSliderMesh = _ref1->Find<RndMesh>(meshStr, true);
         }
     }
 
@@ -212,7 +214,7 @@ void UISlider::Update() {
     }
 
     int matsArraySize = matsArray->Size();
-    if (matsArraySize <= 1) {
+    if ((unsigned int)matsArraySize <= 1) {
         return;
     }
 
@@ -228,7 +230,7 @@ void UISlider::Update() {
         DataNode &matNode = matItemArray->Node(1);
         const char *matName = matNode.Str(matItemArray);
         if (matName) {
-            mStateMats[itemState] = mSliderResource->Find<RndMat>(matName, true);
+            _ref0[itemState] = _ref1->Find<RndMat>(matName, true);
         }
     }
 }

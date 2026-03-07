@@ -328,7 +328,7 @@ bool AccomplishmentProgress::AddAccomplishment(Symbol s) {
     if (mCompletedAchievements.find(key) == mCompletedAchievements.end()) {
         Accomplishment *pAcc = TheAccomplishmentMgr->GetAccomplishment(s);
         if (!pAcc) {
-            MILO_LOG("No Accomplishment for %s", s.Str());
+            MILO_NOTIFY("No Accomplishment for %s", s.Str());
             return false;
         } else {
             NotifyPlayerOfAccomplishment(s, pAcc->GetIconArt());
@@ -372,17 +372,5 @@ bool AccomplishmentProgress::AddAccomplishment(Symbol s) {
     }
     return false;
 }
-
-int AccomplishmentProgress::GetTotalSongsPlayed() const { return mTotalSongsPlayed; }
-
-int AccomplishmentProgress::GetTotalCampaignSongsPlayed() const {
-    return mTotalCampaignSongsPlayed;
-}
-
-int AccomplishmentProgress::GetNumCompleted() const {
-    return mCompletedAchievements.size();
-}
-
-int AccomplishmentProgress::GetFlawlessMoveCount() const { return mFlawlessMoveCount; }
 
 #pragma endregion

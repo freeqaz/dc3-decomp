@@ -51,7 +51,9 @@ Loader::Loader(const FilePath &fp, LoaderPos pos)
     TheLoadMgr.Loaders().push_front(this);
     if (mPos == kLoadFront) {
         TheLoadMgr.Loading().push_front(this);
-    } else if (!(mPos == kLoadStayBack)) {
+    } else if (!(!(mPos == kLoadStayBack))) {
+        TheLoadMgr.Loading().push_back(this);
+    } else {
         auto it = TheLoadMgr.Loading().begin();
         for (; it != TheLoadMgr.Loading().end();) {
             if ((*it)->GetPos() <= kLoadBack) {
@@ -60,8 +62,6 @@ Loader::Loader(const FilePath &fp, LoaderPos pos)
             }
         }
         TheLoadMgr.Loading().insert(it, this);
-    } else {
-        TheLoadMgr.Loading().push_back(this);
     }
 }
 

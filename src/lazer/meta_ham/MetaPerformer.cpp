@@ -1133,9 +1133,9 @@ void MetaPerformer::OnReviewMovePassed(
         mMoveScores[playerIndex].reserve(keys.size());
     }
     HamMoveScore score;
-    score.unk8 = f4;
-    score.mMove = move;
     score.mRatingStateIndex = ratingIndex;
+    score.mMove = move;
+    score.unk8 = f4;
     score.unkc = false;
     mMoveScores[playerIndex].push_back(score);
     static Symbol move_awesome("move_awesome");
@@ -1422,8 +1422,8 @@ void MetaPerformer::SaveAndUploadScores(Symbol s, int i1, int i2) {
     }
 
     if (0 < count) {
-        static Symbol p1("p1");
         static Symbol p2("p2");
+        static Symbol p1("p1");
         static Symbol alert_highscore_solo("alert_highscore_solo");
         static Symbol alert_highscore_coop("alert_highscore_coop");
 

@@ -310,7 +310,7 @@ int ClipDistMap::CalcHeight() {
         fVar = next;
     }
 
-    int res = (int)floor(((fVar - mBStart) * (float)mSamplesPerBeat) + 0.5f);
+    int res = (int)(float)floor(((fVar - mBStart) * (float)mSamplesPerBeat) + 0.5f);
     return Max(0, res) + 1;
 }
 

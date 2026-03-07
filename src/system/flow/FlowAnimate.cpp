@@ -337,7 +337,9 @@ bool FlowAnimate::Replace(ObjRef *ref, Hmx::Object *obj) {
                 OnAnimEvent(sStop);
             }
         }
-        mAnimTask->mListener = NULL;
+        if (mAnimTask) {
+            mAnimTask->mListener = NULL;
+        }
         mAnimTask = nullptr;
         return true;
     }
@@ -391,8 +393,8 @@ void FlowAnimate::RequestStop() {
             break;
         case kStopBetweenMarkers:
             if (!mBetweenStopMarkers) {
-                mStopDeferred = true;
                 mDeferredStopMode = kStopBetweenMarkers;
+                mStopDeferred = true;
                 break;
             }
             TheFlowMgr->QueueCommand(this, kIgnore);

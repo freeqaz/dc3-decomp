@@ -181,7 +181,8 @@ public:
 
     // Scene bind group (group 0) — updated when camera changes
     wgpu::BindGroup& SceneBindGroup() { return mSceneBindGroup; }
-    wgpu::Buffer& SceneBuffer() { return mSceneBuffer; }
+    wgpu::Buffer& SceneBuffer() { return mSceneRing.Buffer(); }
+    uint32_t SceneOffset() const { return mLastSceneOffset; }
     void EnsureSceneUniformsCurrent();  // call before drawing — re-uploads if camera changed
 
     // Default textures
@@ -246,7 +247,7 @@ private:
     bool mInPass = false;
 
     // Uniform buffers
-    wgpu::Buffer mSceneBuffer;
+    UniformRingBuffer mSceneRing;
     UniformRingBuffer mMaterialRing;
     UniformRingBuffer mObjectRing;
     UniformRingBuffer mBoneRing;
@@ -366,6 +367,7 @@ private:
     // Scene uniform tracking — re-upload when camera or environment changes
     RndCam* mLastSceneCam = nullptr;
     RndEnviron* mLastSceneEnv = nullptr;
+    uint32_t mLastSceneOffset = 0;
 
     // Clear color
     Hmx::Color mWgpuClearColor;

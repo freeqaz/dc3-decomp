@@ -1,5 +1,4 @@
 #include "os/Memcard_Xbox.h"
-#include "os/VirtualKeyboard.h"
 #include "Memcard.h"
 #include "obj/Object.h"
 #include "os/DateTime.h"
@@ -211,11 +210,11 @@ MCResult MCContainerXbox::Mount(CreateType ct) {
     if (res == ERROR_PATH_NOT_FOUND) {
         return kMCFileNotFound;
     }
-    auto mcResult = TranslateCommonWinErrorToMCResult(res);
+    auto _result = TranslateCommonWinErrorToMCResult(res);
     if (res == ERROR_ALREADY_EXISTS) {
-                mcResult = kMCCorrupt;
+                _result = kMCCorrupt;
     }
-    return mcResult;
+    return _result;
 }
 
 MCResult MCContainerXbox::Unmount() {
@@ -508,5 +507,3 @@ MCResult MemcardXbox::FindValidUnit(ContainerId *pCid) {
         }
     }
 }
-
-void VirtualKeyboard::Terminate() {}

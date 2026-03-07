@@ -1,10 +1,7 @@
 #include "meta_ham/HamStoreOffer.h"
-#include "meta/Sorting.h"
 #include "meta/SongMgr.h"
 #include "meta/StoreOffer.h"
 #include "obj/Data.h"
-#include "os/DateTime.h"
-#include "os/Debug.h"
 #include "utl/Symbol.h"
 
 HamStoreOffer::HamStoreOffer(DataArray *d, SongMgr *s) : StoreOffer(d, s) {
@@ -28,38 +25,23 @@ HamStoreOffer::HamStoreOffer(DataArray *d, SongMgr *s) : StoreOffer(d, s) {
 HamStoreOffer::~HamStoreOffer() {}
 
 bool HamStoreOffer::Cmp(StoreOffer const &other, Symbol sortBy) const {
-    static Symbol by_title("by_title");
-    static Symbol by_artist("by_artist");
-    static Symbol by_difficulty("by_difficulty");
-    static Symbol by_release("by_release");
-    static Symbol song("song");
-    static Symbol pack("pack");
-    static Symbol avatar("avatar");
-    const HamStoreOffer *hamOther = dynamic_cast<const HamStoreOffer *>(&other);
-    if (sortBy == by_title) {
-        return AlphaKeyStrCmp(OfferName(), hamOther->OfferName(), true) < 0;
-    } else if (sortBy == by_artist) {
-        MILO_ASSERT(OfferType() == song, 0x49);
-        MILO_ASSERT(other.OfferType() == song, 0x4a);
-        int cmp = AlphaKeyStrCmp(ArtistName(), hamOther->ArtistName(), true);
-        if (cmp == 0)
-            return Cmp(other, by_title);
-        return cmp < 0;
-    } else if (sortBy == by_difficulty) {
-        MILO_ASSERT(OfferType() == song, 0x53);
-        MILO_ASSERT(other.OfferType() == song, 0x54);
-        int myDiff = Difficulty();
-        int otherDiff = hamOther->Difficulty();
-        if (myDiff == otherDiff)
-            return Cmp(other, by_title);
-        return myDiff < otherDiff;
-    } else if (sortBy == by_release) {
-        int cmp = DateTimeCmp(ReleaseDate(), other.ReleaseDate());
-        if (cmp == 0)
-            return Cmp(other, by_title);
-        return cmp < 0;
-    } else {
-        MILO_FAIL("Unknown sort type: %s", sortBy);
+    static Symbol title("title");
+    static Symbol artist("artist");
+    static Symbol difficulty("difficulty");
+    static Symbol release_date("release_date");
+    if (sortBy == title) {
+        auto _tmp0 = strcmp(OfferName(), other.OfferName());
+        return _tmp0 < 0;
+    } else if (sortBy == artist) {
+        return strcmp(ArtistName(), other.ArtistName()) < 0;
+    } else if (sortBy == difficulty) {
+        const HamStoreOffer *hamOther = dynamic_cast<const HamStoreOffer *>(&other);
+        if (hamOther) {
+            return Difficulty() < hamOther->Difficulty();
+        }
+        return false;
+    } else if (sortBy == release_date) {
+        return false; // DateTime has no comparison operator
     }
     return false;
 }

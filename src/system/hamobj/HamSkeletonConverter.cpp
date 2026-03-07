@@ -422,11 +422,12 @@ void HamSkeletonConverter::SetLeg(
 }
 
 void HamSkeletonConverter::Set(const BaseSkeleton *skel) {
+    auto& _ref0 = mCharacter;
     if (skel && skel->IsTracked()) {
         if (!unk751) {
             unk751 = true;
         }
-        if (mCharacter) {
+        if (_ref0) {
             // Initialize unk40 to identity
             unk40.m = Hmx::Matrix3::GetIdentity();
             unk40.v.Zero();
@@ -460,7 +461,7 @@ void HamSkeletonConverter::Set(const BaseSkeleton *skel) {
             unk40.v.x = pelvisOffset.x;
             unk40.v.y = pelvisOffset.y;
 
-            Multiply(unk40, mCharacter->WorldXfm(), unk40);
+            Multiply(unk40, _ref0->WorldXfm(), unk40);
 
             // Get camera-space joint positions and transform to world
             PaddedJointPos worldJoints[kNumJoints];
@@ -472,12 +473,12 @@ void HamSkeletonConverter::Set(const BaseSkeleton *skel) {
             }
 
             // Compute pelvis center (midpoint of left and right hips)
-            mPelvisTransform.v.x = (worldJoints[kJointHipLeft].x + worldJoints[kJointHipRight].x) * 0.5f;
+            mPelvisTransform.v.x = worldJoints[kJointHipLeft].x + worldJoints[kJointHipRight].x + 0.5f;
             mPelvisTransform.v.y = (worldJoints[kJointHipLeft].y + worldJoints[kJointHipRight].y) * 0.5f;
             mPelvisTransform.v.z = (worldJoints[kJointHipLeft].z + worldJoints[kJointHipRight].z) * 0.5f;
 
             Transform invCharXfm;
-            Invert(mCharacter->WorldXfm(), invCharXfm);
+            Invert(_ref0->WorldXfm(), invCharXfm);
 
             // Set pelvis position bone value in local space
             Vector3 pelvisLocal;

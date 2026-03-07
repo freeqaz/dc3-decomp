@@ -195,8 +195,8 @@ def _try_merge_pair(
     goto_b = _find_goto_in_block(if_b, source)
 
     # Build the merged code
-    # Determine variable type from context — default to const char* for string args
-    var_type = b"const char *"
+    # Use auto to let the compiler deduce the type (args may be float, int, etc.)
+    var_type = b"auto"
     var_name = b"_mergedArg"
 
     # Build the shared MILO call with the variable substituted

@@ -9,7 +9,6 @@ Achievements *TheAchievements;
 std::vector<XUSER_ACHIEVEMENT> Achievements::gThreadAchievements;
 
 void Achievements::Terminate() { RELEASE(TheAchievements); }
-void Achievements::PlatformInit() {}
 
 BEGIN_HANDLERS(Achievements)
     HANDLE_ACTION(set_allow_achievements, SetAllowAchievements(_msg->Int(2)))

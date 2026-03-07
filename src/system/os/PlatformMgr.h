@@ -66,7 +66,7 @@ private:
     bool unk68; // 0x68
     bool unk69; // 0x69
 
-    DataNode OnSignInUsers(const DataArray *);
+    DataNode OnSignInUsers(DataArray *);
 
 public:
     // Hmx::Object

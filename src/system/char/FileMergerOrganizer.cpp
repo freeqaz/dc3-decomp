@@ -18,7 +18,8 @@ bool FileMergerSort::operator()(const FileMerger::Merger *m1, const FileMerger::
     CatData &m2data = gCatPriority[m2->mName];
     if (m2data.priority == 0) {
         if (gOrganizing) {
-            TheDebug.Notify(MakeString("unknown file merger organizer category %s", m2->mName));
+            auto _tmp0 = MakeString("unknown file merger organizer category %s", m2->mName);
+            TheDebug.Notify(_tmp0);
         }
         m2data.priority = gNextCatPriority++;
         m2data.mInGenderOrder = false;

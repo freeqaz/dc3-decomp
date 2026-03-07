@@ -43,19 +43,19 @@ Symbol GetSystemLanguage(Symbol s) {
     static Symbol fre("fre");
     static Symbol ita("ita");
     static Symbol deu("deu");
-    static Symbol rus("rus");
+    static Symbol esl("esl");
     static Symbol mex("mex");
     static Symbol swe("swe");
     static Symbol pol("pol");
-    static Symbol jpn("jpn");
+    static Symbol nor("nor");
     static Symbol fin("fin");
     static Symbol dut("dut");
     static Symbol dan("dan");
     static Symbol ptb("ptb");
-    static Symbol esl("esl");
+    static Symbol rus("rus");
     static Symbol cht("cht");
     static Symbol kor("kor");
-    static Symbol nor("nor");
+    static Symbol jpn("jpn");
 
     unsigned long lang = ULSystemLanguage();
     unsigned long locale = ULSystemLocale();

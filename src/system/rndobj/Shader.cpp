@@ -47,10 +47,10 @@ void CheckShadow();
 void CheckExtrude();
 
 void RndShader::Init() {
+    sShaders[kBlurShader] = &gShaderSimple;
     sShaders[kBloomShader] = &gShaderSimple;
     sShaders[kDepthVolumeShader] = &gShaderDepthVolume;
     sShaders[kBloomGlareShader] = &gShaderSimple;
-    sShaders[kBlurShader] = &gShaderSimple;
     sShaders[kDownsampleDepthShader] = &gShaderSimple;
     sShaders[kDownsample4xShader] = &gShaderSimple;
     sShaders[kDrawRectShader] = &gShaderDrawRect;
@@ -254,7 +254,5 @@ bool RndShaderMultimesh::CheckError(MatFlagErrorType type) {
 }
 
 bool RndShaderParticles::CheckError(MatFlagErrorType type) {
-    if (type != (MatFlagErrorType)0 && type != (MatFlagErrorType)2)
-        return false;
-    return TheRnd.GetDrawMode() != 4;
+        return !(type != (MatFlagErrorType)0 && type != (MatFlagErrorType)2) && TheRnd.GetDrawMode() != 4;
 }

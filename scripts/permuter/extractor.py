@@ -8,7 +8,7 @@ from pathlib import Path
 import tree_sitter_cpp as tscpp
 from tree_sitter import Language, Parser, Node
 
-from .types import FunctionContext
+from .types import FunctionContext, PreprocRegion
 
 CPP_LANGUAGE = Language(tscpp.language())
 _PARSER = Parser(CPP_LANGUAGE)
@@ -262,6 +262,7 @@ def _try_macro_extraction(
             body_node=wrapped_body,
             statements=statements,
             func_byte_range=(macro_start, macro_end),
+            preproc_regions=_find_function_preproc_regions(source, (macro_start, macro_end)),
         )
 
     return None
@@ -280,6 +281,68 @@ def _find_macro_function_names(source: bytes) -> list[str]:
                 cls = m.group(1).decode("utf-8")
                 names.append(f"{cls}::{method_name}")
     return names
+
+
+def _find_function_preproc_regions(
+    source: bytes, func_byte_range: tuple[int, int]
+) -> list[PreprocRegion]:
+    """Find preprocessor regions inside a function's byte range.
+
+    Scans line-by-line for #if/#ifdef/#ifndef/#else/#endif and returns balanced
+    regions that begin and end inside func_byte_range.
+    """
+    start, end = func_byte_range
+    if start < 0 or end <= start or end > len(source):
+        return []
+
+    func_src = source[start:end]
+    stack: list[tuple[int, str, str, bool]] = []  # off, kind, macro, has_else
+    regions: list[PreprocRegion] = []
+
+    # Keep trailing newlines so line offsets remain exact.
+    lines = func_src.splitlines(keepends=True)
+    line_off = 0
+    for line in lines:
+        stripped = line.lstrip()
+        if not stripped.startswith(b"#"):
+            line_off += len(line)
+            continue
+
+        directive = stripped[1:].strip()
+        absolute_off = start + line_off
+
+        if directive.startswith(b"ifdef "):
+            macro = directive[6:].split(None, 1)[0].decode("utf-8", errors="replace")
+            stack.append((absolute_off, "ifdef", macro, False))
+        elif directive.startswith(b"ifndef "):
+            macro = directive[7:].split(None, 1)[0].decode("utf-8", errors="replace")
+            stack.append((absolute_off, "ifndef", macro, False))
+        elif directive.startswith(b"if "):
+            expr = directive[3:].decode("utf-8", errors="replace").strip()
+            stack.append((absolute_off, "if", expr, False))
+        elif directive.startswith(b"else"):
+            if stack:
+                s, k, m, _ = stack[-1]
+                stack[-1] = (s, k, m, True)
+        elif directive.startswith(b"endif"):
+            if stack:
+                s, k, m, has_else = stack.pop()
+                # Include this line in the region end
+                region_end = absolute_off + len(line)
+                regions.append(
+                    PreprocRegion(
+                        start=s,
+                        end=region_end,
+                        kind=k,
+                        macro=m,
+                        has_else=has_else,
+                    )
+                )
+
+        line_off += len(line)
+
+    regions.sort(key=lambda r: r.start)
+    return regions
 
 
 def reparse_variant(
@@ -314,14 +377,16 @@ def reparse_variant(
             if body is None:
                 raise ValueError(f"Function {func_name} has no body after reparse")
             statements = [c for c in body.named_children]
+            func_range = (func_node.start_byte, func_node.end_byte)
             return FunctionContext(
                 file_path=original_ctx.file_path,
                 file_source=new_source,
                 func_node=func_node,
                 body_node=body,
                 statements=statements,
-                func_byte_range=(func_node.start_byte, func_node.end_byte),
+                func_byte_range=func_range,
                 diagnosis=original_ctx.diagnosis,
+                preproc_regions=_find_function_preproc_regions(new_source, func_range),
             )
 
     raise ValueError(
@@ -378,13 +443,15 @@ def extract_function(file_path: Path, func_name: str) -> FunctionContext:
                 raise ValueError(f"Function {func_name} has no body")
 
             statements = [c for c in body.named_children]
+            func_range = (func_node.start_byte, func_node.end_byte)
             return FunctionContext(
                 file_path=file_path,
                 file_source=source,
                 func_node=func_node,
                 body_node=body,
                 statements=statements,
-                func_byte_range=(func_node.start_byte, func_node.end_byte),
+                func_byte_range=func_range,
+                preproc_regions=_find_function_preproc_regions(source, func_range),
             )
 
     # Fallback: try macro extraction (BEGIN_LOADS, BEGIN_HANDLERS, etc.)

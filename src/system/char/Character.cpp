@@ -761,7 +761,8 @@ void Character::DrawShowing() {
     START_AUTO_TIMER("char_draw");
     float screenSize = ComputeScreenSize(RndCam::Current());
     int lod;
-    if (mForceLod < 0) {
+    auto& _ref0 = mForceLod;
+    if (_ref0 < 0) {
         for (lod = 0; lod < (int)mLods.size() - 1; lod++) {
             float hysteresis;
             if (lod < mLastLod)
@@ -772,17 +773,17 @@ void Character::DrawShowing() {
                 break;
         }
     } else {
-        lod = Clamp<int>(0, mLods.size() - 1, mForceLod);
+        lod = Clamp<int>(0, mLods.size() - 1, _ref0);
     }
     bool doSelfShadow = false;
     if (mSelfShadow && TheRnd.GetDrawMode() == 0 && lod <= 1 && (mDrawMode & 1)) {
         doSelfShadow = true;
     }
     if (doSelfShadow) {
-        int savedForceLod = mForceLod;
-        mForceLod = (LODType)lod;
+        int savedForceLod = _ref0;
+        _ref0 = (LODType)lod;
         RndShadowMap::PrepShadow(this, mEnv);
-        mForceLod = (LODType)savedForceLod;
+        _ref0 = (LODType)savedForceLod;
     }
     DrawLod(lod);
     if (doSelfShadow)

@@ -93,7 +93,6 @@ def generate_variants(
     max_variants: int = 100,
     compose_pairs: list[tuple[str, str]] | None = None,
     chains: list[ChainSpec] | None = None,
-    chain_patterns: list[Pattern] | None = None,
     round_hints: RoundHints | None = None,
 ) -> Iterator[Variant]:
     """Apply patterns to a function context and yield variants.
@@ -114,18 +113,14 @@ def generate_variants(
 
     Args:
         ctx: Parsed function context.
-        patterns: List of pattern instances for Phase 1 (direct generation).
+        patterns: List of pattern instances to apply.
         max_variants: Maximum total variants to generate.
         compose_pairs: Optional list of (pattern_a_name, pattern_b_name) pairs
             for two-step composition. None = no 2-stage composition.
         chains: Optional list of ChainSpec for N-stage beam search.
             None = no chain composition.
-        chain_patterns: Full pattern set for Phase 2/3 lookups (defaults to patterns).
         round_hints: Optional adaptive hints for suppression/boosting.
     """
-    # Full pattern set for composition/chain lookups
-    if chain_patterns is None:
-        chain_patterns = patterns
     # Budget split
     if compose_pairs and chains:
         independent_budget = int(max_variants * 0.6)
@@ -179,7 +174,7 @@ def generate_variants(
     # Phase 2: Composed 2-stage variants
     if compose_pairs and compose_budget > 0:
         remaining = compose_budget
-        pattern_map = {p.name: p for p in chain_patterns}
+        pattern_map = {p.name: p for p in patterns}
 
         for name_a, name_b in compose_pairs:
             if remaining <= 0:
@@ -203,7 +198,7 @@ def generate_variants(
 
     # Phase 3: N-stage chain variants (beam search)
     if chains and chain_budget > 0:
-        pattern_map = {p.name: p for p in chain_patterns}
+        pattern_map = {p.name: p for p in patterns}
         remaining = chain_budget
 
         for chain in chains:

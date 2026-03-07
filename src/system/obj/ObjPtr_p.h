@@ -69,6 +69,9 @@ void ObjRefConcrete<T1, T2>::SetObjConcrete(T1 *obj) {
 template <class T1, class T2>
 Hmx::Object *ObjRefConcrete<T1, T2>::SetObj(Hmx::Object *root_obj) {
 #ifdef HX_NATIVE
+    // GCC/Clang dynamic_cast dereferences the vptr — crashes on objects with
+    // zero-filled vtables (stub objects from engine_stubs_generated.cpp).
+    // MSVC tolerates this. Guard only needed on native.
     if (root_obj) {
         void **vptr = *(void ***)root_obj;
         if (!vptr) {
@@ -258,6 +261,7 @@ ObjPtrVec<T1, T2>::insert(typename ObjPtrVec<T1, T2>::const_iterator it, T1 *obj
 #ifdef HX_NATIVE
         int idx = it.it - mNodes.begin();
 #else
+        // MSVC iterators can be null (zero-initialized); GCC iterators cannot.
         int idx = it.it ? (it.it - mNodes.begin()) : 0;
 #endif
         Node newNode(this);

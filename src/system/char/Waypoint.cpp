@@ -153,7 +153,7 @@ Waypoint *Waypoint::FindNearest(const Vector3 &pos, int flags) {
             float dx = pos.x - wpPos.x;
             float dy = pos.y - wpPos.y;
             float dz = pos.z - wpPos.z;
-            float dist = dy * dy + dx * dx + dz * dz;
+            float dist = (dy * dy + (dx * dx + dz * dz));
             if (bestDist > dist) {
                 bestDist = dist;
                 best = wp;
@@ -174,8 +174,6 @@ DataNode Waypoint::OnWaypointLast(DataArray *da) {
     }
     return DataNode(0);
 }
-
-void Waypoint::Highlight() {}
 
 void Waypoint::Constrain(Transform &xfm) {
     float strictRadius = mStrictRadiusDelta;

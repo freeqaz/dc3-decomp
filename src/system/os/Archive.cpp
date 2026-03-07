@@ -304,17 +304,17 @@ void Archive::Read(int heap_headroom) {
 void Archive::Merge(Archive &shadow) {
     std::vector<FileEntry> extraFileEntries;
     MILO_ASSERT(shadow.mNumArkfiles == 1, 0x3C0);
-    const ArkHash &shadowHash = shadow.mHashTable;
     unsigned long long totalSize = 0;
     for (size_t i = 0; i < mArkfileSizes.size(); i++) {
         totalSize += mArkfileSizes[i];
     }
+    auto& _ref1 = mHashTable;
     FOREACH (it, shadow.mFileEntries) {
-        const char *name = shadowHash[it->mHashedName];
-        const char *path = shadowHash[it->mHashedPath];
+        const char *name = shadow.mHashTable[it->mHashedName];
+        const char *path = shadow.mHashTable[it->mHashedPath];
         FileEntry entry;
-        entry.mHashedName = mHashTable.AddString(name);
-        entry.mHashedPath = mHashTable.AddString(path);
+        entry.mHashedName = _ref1.AddString(name);
+        entry.mHashedPath = _ref1.AddString(path);
         auto fileIt = std::lower_bound(mFileEntries.begin(), mFileEntries.end(), entry);
         if (fileIt != mFileEntries.end() && fileIt->mHashedName == entry.HashedName()
             && fileIt->mHashedPath == entry.HashedPath()) {

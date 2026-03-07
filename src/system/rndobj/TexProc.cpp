@@ -4,12 +4,16 @@
 #include "obj/Data.h"
 #include "obj/Dir.h"
 #include "obj/Object.h"
+#include "obj/Task.h"
 #include "os/Debug.h"
 #include "rndobj/BaseMaterial.h"
 #include "rndobj/Cam.h"
 #include "rndobj/Draw.h"
 #include "rndobj/Mat.h"
+#include "rndobj/Rnd_NG.h"
+#include "rndobj/Tex.h"
 #include "utl/BinStream.h"
+#include <cmath>
 
 float gAmpTemp = 0.3f;
 float gFreqTemp = 1.0f;
@@ -177,6 +181,62 @@ bool TexProc::CheckParams(DataArray *a, bool b) {
         }
     }
     return b7;
+}
+
+void TexProc::Poll() {
+    float beat = TheTaskMgr.Beat();
+    mPhase = mPhaseVel * beat * 6.2831855f;
+    float frac = beat - (float)(int)beat;
+    float t = (1.0f - frac) - 0.5f;
+    if (t < 0.0f)
+        t = 0.0f;
+    float s = sinf(t * 6.2831855f);
+    unk78 = mAmplitude + mAmplitudeBump * s * t;
+}
+
+void TexProc::DrawToTexture() {
+    if (TheRnd.GetDrawMode() != 0)
+        return;
+    if (!Showing() || !mInputTex || !mOutputTex)
+        return;
+
+    RndMat *mat = SetUpWorkingMat();
+
+    ShaderType shaderType = kKillAlphaShader;
+    if ((unsigned int)mShaderType < 1u || mShaderType != kShaderKillAlpha) {
+        shaderType = kTwirlShader;
+    }
+
+    RndCam *prevCam = RndCam::Current();
+    RndTex *targetTex = prevCam->TargetTex();
+    if (targetTex != 0) {
+        MILO_NOTIFY_ONCE(
+            "%s: Cannot render to texture (%s) while already rendering to texture (%s).",
+            PathName(targetTex),
+            PathName(this),
+            PathName(targetTex)
+        );
+    }
+
+    mCam->SetTargetTex(mOutputTex);
+    mCam->Select();
+
+    mat->SetDiffuseTex(mInputTex);
+    mat->SetNormalMap(mInputTex);
+
+    Poll();
+    SetRegisters();
+
+    int h = mOutputTex->Height();
+    Hmx::Rect rect;
+    rect.x = 0;
+    rect.y = 0;
+    rect.w = (float)mOutputTex->Width();
+    rect.h = (float)h;
+    TheNgRnd.DrawRect(rect, mat, shaderType, Hmx::Color(1, 1, 1), nullptr, nullptr);
+
+    mCam->SetTargetTex(nullptr);
+    prevCam->Select();
 }
 
 void TexProc::SetParams(DataArray *a1, DataArray *a2) {

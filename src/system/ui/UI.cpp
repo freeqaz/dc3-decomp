@@ -280,7 +280,8 @@ void UIManager::Terminate() {
 bool UIManager::IsGameScreenActive() {
     // Resolve the bottom-most screen (first pushed screen, or current if none pushed)
     UIScreen *screen;
-    if (!mPushedScreens.empty()) {
+    bool _cond = !mPushedScreens.empty();
+    if (_cond) {
         screen = mPushedScreens[0];
     } else {
         screen = mCurrentScreen;
@@ -442,10 +443,9 @@ DataNode UIManager::OnIsResource(DataArray *arr) {
     Symbol sym = arr->Sym(3);
     static Symbol objects("objects");
     static Symbol resources_path("resources_path");
-    DataArray *cfg = SystemConfig(objects, sym);
-    DataArray *rsrcArr = cfg->FindArray(resources_path, false);
+    DataArray *rsrcArr = SystemConfig(objects, sym)->FindArray(resources_path, false);
     if (rsrcArr) {
-        FilePath rsrcPath(FileMakePath(rsrcArr->Str(1), FileGetPath(rsrcArr->File())));
+        FilePath rsrcPath(FileMakePath(FileGetPath(rsrcArr->File()), rsrcArr->Str(1)));
         FilePath inputPath(FileRoot(), arr->Str(2));
         if (rsrcPath == FileGetPath(inputPath.c_str()))
             return 1;
@@ -521,12 +521,12 @@ void UIManager::ReloadStrings() {
 }
 
 void UIManager::FakeKeyboardAction(JoypadButton btn, JoypadAction action) {
-    static ButtonDownMsg downMsg(nullptr, (JoypadButton)0x18, (JoypadAction)0, 0);
-    downMsg[0] = TheUserMgr->GetLocalUserFromPadNum(0);
-    downMsg[1] = btn;
-    downMsg[2] = action;
-    downMsg[3] = 0;
-    Handle(downMsg, false);
+    static ButtonDownMsg msg(nullptr, btn, action, 0x18);
+    msg[0] = TheUserMgr->GetLocalUserFromPadNum(0);
+    msg[1] = btn;
+    msg[2] = action;
+    msg[3] = 0;
+    mCurrentScreen->Handle(msg, false);
 }
 
 void UIManager::Poll() {
@@ -697,10 +697,8 @@ void UIManager::Poll() {
 
 void UIManager::PushScreen(UIScreen *screen) {
     // Function prologue
-    UIScreen *current = mCurrentScreen;
-
     CancelTransition();
-    MILO_ASSERT(current, 0x358);
+    MILO_ASSERT(mCurrentScreen, 0x358);
     MILO_ASSERT(screen, 0x359);
 
     // Check if screen is already in stack
@@ -716,10 +714,10 @@ void UIManager::PushScreen(UIScreen *screen) {
     }
 
     // Push current screen to stack
-    mPushedScreens.push_back(current);
+    mPushedScreens.push_back(mCurrentScreen);
 
     // Check max depth (use > instead of >= for branch matching)
-    if (mPushedScreens.size() > (mMaxPushDepth - 1)) {
+    if ((mMaxPushDepth - 1) < mPushedScreens.size()) {
         MILO_WARN(
             "Exceeded max push depth of %i, pushing %s", mMaxPushDepth, screen->Name()
         );
@@ -1124,13 +1122,15 @@ void Automator::Poll() {
         DataArray *cheatArr = curEntry->Node(1).Array();
         AdvanceScript(quick_cheat);
         CallQuickCheat(cheatArr, nullptr);
-    } else if (mCurMsgIndex > 1 && mFramesSinceAdvance > 0x1e) {
+    } else if (mCurMsgIndex > 1) {
+        if (mFramesSinceAdvance > 0x1e) {
         int prevIdx = mCurMsgIndex - 1;
         DataArray *prevEntry = mCurScript->Array(prevIdx);
         if (prevEntry->Sym(0) == button_down) {
             FillButtonMsg(b_msg, prevIdx);
             mUIManager.Handle(b_msg, false);
         }
+    }
     }
 }
 
@@ -1163,13 +1163,13 @@ DataNode Automator::OnCheatInvoked(DataArray const *arr) {
         if (screenName.Null())
             return DATA_UNHANDLED;
     } else if (screenName.Null()) {
-        screenName = CurRecordScreen();
+        auto _tmp3 = CurRecordScreen();
+        screenName = _tmp3;
         if (screenName.Null())
             return DATA_UNHANDLED;
     }
     static Symbol quick_cheat("quick_cheat");
-    DataArrayPtr ptr(quick_cheat, arr->Array(3));
-    AddRecord(screenName, ptr);
+    AddRecord(screenName, (quick_cheat, arr->Array(3)));
     return DATA_UNHANDLED;
 }
 

@@ -17,18 +17,33 @@ struct BeatCollisionData {
 };
 
 struct SongCollisionOutput {
-    // 6 padded-to-16 Vector3 entries (stride 0x10)
-    // [0] minBone player 0, [1] minBone player 1
-    // [2] maxBone player 0, [3] maxBone player 1
-    // [4] displacement player 0, [5] displacement player 1
-    float boneData[24]; // 0x00-0x5F (6 groups of 4 floats)
+    // Raw storage - 228 bytes (0xE4)
+    // Layout:
+    //   0x00-0x5F: offset arrays (6 entries at 16-byte stride)
+    //   0x60-0x8F: player collision data (48 bytes)
+    //   0x90-0x9B: world pos player 0
+    //   0x9C-0xCF: padding (52 bytes)
+    //   0xD0-0xDB: world pos player 1
+    //   0xDC-0xDF: padding (4 bytes)
+    //   0xE0: mColliding flag
+    //   0xE1-0xE3: padding
+    char _data[0xE4];
 
-    // 2 world transforms padded to 0x40 each
-    char xfmData[0x80]; // 0x60-0xDF
+    // Get world position for player (0 or 1) at 64-byte stride from 0x90
+    const Vector3 &WorldPos(int playerIdx) const {
+        return *reinterpret_cast<const Vector3 *>(
+            _data + 0x90 + playerIdx * 0x40);
+    }
 
-    bool collisionDetected; // 0xE0
-    char _padE1[3]; // 0xE1-0xE3
+    // Get offset at index (0-5) at 16-byte stride
+    const Vector3 &Offset(int idx) const {
+        return *reinterpret_cast<const Vector3 *>(_data + idx * 0x10);
+    }
+
+    // Get collision flag
+    bool Colliding() const { return *reinterpret_cast<const bool *>(_data + 0xE0); }
 };
+static_assert(sizeof(SongCollisionOutput) == 0xE4, "SongCollisionOutput size mismatch");
 
 /** "Contains data for handling potential character collisions" */
 class SongCollision : public Hmx::Object {

@@ -56,17 +56,23 @@ class DeclarationReorderPattern(Pattern):
     _bsf_printed: bool = False
 
     def relevant(self, diagnosis: Diagnosis) -> bool:
-        # Relevant when there are callee-saved swap pairs (GPR or FPR)
-        return bool(diagnosis.reg_swap_pairs)
+        # Only relevant when there are GPR swap pairs
+        for (r0, r1) in diagnosis.reg_swap_pairs:
+            if r0.startswith("r") or r1.startswith("r"):
+                return True
+        return False
 
     def priority(self, diagnosis: Diagnosis) -> float:
         if not self.relevant(diagnosis):
             return 0.0
-        # More swap pairs = stronger signal for declaration reorder
-        num_pairs = len(diagnosis.reg_swap_pairs)
-        if num_pairs >= 3:
+        # More GPR swap pairs = stronger signal for declaration reorder
+        gpr_pairs = sum(
+            1 for (r0, r1) in diagnosis.reg_swap_pairs
+            if r0.startswith("r") or r1.startswith("r")
+        )
+        if gpr_pairs >= 3:
             base = 0.9
-        elif num_pairs >= 2:
+        elif gpr_pairs >= 2:
             base = 0.7
         else:
             base = 0.5

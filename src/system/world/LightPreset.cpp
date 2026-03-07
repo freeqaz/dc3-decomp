@@ -1181,7 +1181,8 @@ void LightPreset::Animate(float f) {
             }
         }
     }
-    MILO_ASSERT(mEnvironments.size() == mEnvironmentState.size(), 0x364);
+    auto _tmp4 = mEnvironmentState.size();
+    MILO_ASSERT(mEnvironments.size() == _tmp4, 0x364);
     for (uint i = 0; i != mEnvironments.size(); i++) {
         if (mEnvironments[i]->GetAnimateFromPreset()) {
             AnimateEnvFromPreset(this, mEnvironments[i], mEnvironmentState[i], f);

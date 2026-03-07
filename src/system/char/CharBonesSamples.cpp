@@ -115,12 +115,14 @@ void CharBonesSamples::LoadData(BinStreamRev &d) {
     }
     bool cached = d.stream.Cached();
     auto& _sub1 = mOffsets[TYPE_QUAT];
+    auto& _sub0 = mOffsets[TYPE_END];
     if (!cached || d.rev <= 0xE) {
         for (int i = 0; i < mNumSamples; i++) {
-            mStart = mRawData + mTotalSize * Min(i, mNumSamples - 1);
+            auto _tmp0 = Min(i, mNumSamples - 1);
+            mStart = mRawData + mTotalSize * _tmp0;
 
             if (cached) {
-                d.stream.Read(mStart, mOffsets[TYPE_END] - mOffsets[TYPE_POS]);
+                d.stream.Read(mStart, _sub0 - mOffsets[TYPE_POS]);
 #ifdef HX_NATIVE
                 // Cached .milo_xbox files store raw big-endian data.
                 // Byte-swap floats (4 bytes) in POS/SCALE sections and
@@ -145,12 +147,12 @@ void CharBonesSamples::LoadData(BinStreamRev &d) {
                     }
                     // ROT sections: shorts (2 bytes each) when compressed, floats when not
                     if (mCompression != kCompressNone) {
-                        for (char *p = mStart + mOffsets[TYPE_ROTX]; p < mStart + mOffsets[TYPE_END]; p += 2) {
+                        for (char *p = mStart + mOffsets[TYPE_ROTX]; p < mStart + _sub0; p += 2) {
                             unsigned short *u = (unsigned short *)p;
                             *u = __builtin_bswap16(*u);
                         }
                     } else {
-                        for (char *p = mStart + mOffsets[TYPE_ROTX]; p < mStart + mOffsets[TYPE_END]; p += 4) {
+                        for (char *p = mStart + mOffsets[TYPE_ROTX]; p < mStart + _sub0; p += 4) {
                             unsigned int *u = (unsigned int *)p;
                             *u = __builtin_bswap32(*u);
                         }
@@ -194,13 +196,13 @@ void CharBonesSamples::LoadData(BinStreamRev &d) {
                 }
 
                 if (mCompression != kCompressNone) {
-                    short *endOffset = (short *)(mStart + mOffsets[TYPE_END]);
+                    short *endOffset = (short *)(mStart + _sub0);
                     for (short *p = (short *)(mStart + mOffsets[TYPE_ROTX]); p < endOffset;
                          p++) {
                         d >> *p;
                     }
                 } else {
-                    float *endOffset = (float *)(mStart + mOffsets[TYPE_END]);
+                    float *endOffset = (float *)(mStart + _sub0);
                     for (float *p = (float *)(mStart + mOffsets[TYPE_ROTX]); p < endOffset;
                          p++) {
                         d >> *p;
@@ -241,12 +243,12 @@ void CharBonesSamples::LoadData(BinStreamRev &d) {
                     }
                 }
                 if (mCompression != kCompressNone) {
-                    for (char *p = s + mOffsets[TYPE_ROTX]; p < s + mOffsets[TYPE_END]; p += 2) {
+                    for (char *p = s + mOffsets[TYPE_ROTX]; p < s + _sub0; p += 2) {
                         unsigned short *u = (unsigned short *)p;
                         *u = __builtin_bswap16(*u);
                     }
                 } else {
-                    for (char *p = s + mOffsets[TYPE_ROTX]; p < s + mOffsets[TYPE_END]; p += 4) {
+                    for (char *p = s + mOffsets[TYPE_ROTX]; p < s + _sub0; p += 4) {
                         unsigned int *u = (unsigned int *)p;
                         *u = __builtin_bswap32(*u);
                     }

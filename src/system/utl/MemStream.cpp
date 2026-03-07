@@ -1,6 +1,7 @@
 #include "utl/MemStream.h"
 
 void MemStream::Flush() {}
+
 bool MemStream::Fail() { return mFail; }
 
 void MemStream::ReadImpl(void *data, int bytes) {

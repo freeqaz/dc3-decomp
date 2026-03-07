@@ -95,7 +95,7 @@ bool HDCache::WriteDone() {
     return mWriteBlock == -1;
 }
 
-void HDCache::Flush() {}
+// void HDCache::Flush() {}
 
 void HDCache::Poll() {
     if (mWritingHeader) {
@@ -338,8 +338,7 @@ void HDCache::Init() {
             sha.Final().ReportHash(hash1, 0);
             header->Read(hash2, 0x100);
             if (!header->Fail()) {
-                auto _tmp0 = memcmp(hash1, hash2, 256);
-                hashValid = _tmp0 == 0;
+                hashValid = memcmp(hash1, hash2, 256) == 0;
             }
         }
         bool skipHdcache = OptionBool("skip_hdcache", false);

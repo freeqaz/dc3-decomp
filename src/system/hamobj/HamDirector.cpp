@@ -1714,8 +1714,8 @@ bool HamDirector::GetPracticeFrames(Key<Symbol> *&k1, Key<Symbol> *&k2) {
             endIdx = -1;
         end:
             if (startIdx < endIdx && startIdx != -1 && endIdx != -1) {
-                k1 = &(*keys)[startIdx];
                 k2 = &(*keys)[endIdx];
+                k1 = &(*keys)[startIdx];
                 return true;
             }
         }
@@ -2743,7 +2743,7 @@ void HamDirector::Poll() {
             }
             if (mForcePostProc && !mCamPostProc) {
                 float forceBlend = mForcePostProcBlend;
-                if (forceBlend > 0.0f && (bool)(forceBlend < blend)) {
+                if (forceBlend > 0.0f && forceBlend < blend) {
                     mWorldPostProc->Interp(mWorldPostProc, mForcePostProc, forceBlend);
                     overlayB = mForcePostProc;
                     overlayName = "force";

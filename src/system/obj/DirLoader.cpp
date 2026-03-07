@@ -193,8 +193,8 @@ bool DirLoader::ShouldBlockSubdirLoad(const FilePath &fp) {
 Symbol DirLoader::FixClassName(Symbol orig) {
     if (mRev >= 0x1C)
         goto ret;
-    static Symbol CharClipSamples("CharClipSamples");
     static Symbol CharClip("CharClip");
+    static Symbol CharClipSamples("CharClipSamples");
     if (orig == CharClipSamples)
         orig = CharClip;
 
@@ -214,8 +214,8 @@ Symbol DirLoader::FixClassName(Symbol orig) {
 
     if (mRev >= 0x19)
         goto ret;
-    static Symbol RenderedTex("RenderedTex");
     static Symbol TexRenderer("TexRenderer");
+    static Symbol RenderedTex("RenderedTex");
     static Symbol CompositeTexture("CompositeTexture");
     static Symbol LayerDir("LayerDir");
     if (orig == RenderedTex)
@@ -425,7 +425,7 @@ void DirLoader::WriteTypeMemDump(TextFileStream *file) {
     for (std::map<String, MemPointDelta>::iterator it = sMemPointMap.begin();
          it != sMemPointMap.end();
          ++it) {
-        MemPointDelta pt = (*it).second;
+        MemPointDelta pt = it->second;
         file->Print(it->first.c_str());
         *file << "," << pt.ToString(1) << "\n";
     }
@@ -843,16 +843,6 @@ void DirLoader::CreateObjects() {
         }
         if (!Hmx::Object::RegisteredFactory(classSym)) {
             MILO_NOTIFY("%s: Can't make %s", mFile.c_str(), classSym);
-#ifdef HX_NATIVE
-            {
-                static int sSkipLog = 0;
-                if (sSkipLog < 50) {
-                    printf("[CreateObjects] SKIP '%s' class='%s' (no factory) in %s\n",
-                           buf, classSym.Str(), mFile.c_str());
-                    sSkipLog++;
-                }
-            }
-#endif
             goto release_obj;
         } else {
             MemPoint begin(MemPoint::kInitType0);

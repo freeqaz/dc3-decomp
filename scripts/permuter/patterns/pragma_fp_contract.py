@@ -31,7 +31,7 @@ _PRAGMA_RE = re.compile(
 
 class PragmaFpContractPattern(Pattern):
     name = "pragma_fp_contract"
-    opt_in = True
+    opt_in = True  # Produces fake matches
 
     def relevant(self, diagnosis: Diagnosis) -> bool:
         for d in diagnosis.diff_ops:

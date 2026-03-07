@@ -55,6 +55,7 @@ public:
         kDrawExtrude = 2,
         kDrawShadowColor = 3,
         kDrawOcclusion = 4,
+        kDrawOcclusionDepth = 5,
         kDrawVelocity = 6
     };
 

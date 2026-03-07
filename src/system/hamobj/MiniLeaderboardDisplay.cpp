@@ -66,6 +66,12 @@ void MiniLeaderboardDisplay::OldResourcePreload(BinStream &bs) {
     mResourceDir.SetName(name, true);
 }
 
+void LabelShrinkWrapper::OldResourcePreload(BinStream &bs) {
+    char name[256];
+    bs.ReadString(name, 256);
+    mResourceDir.SetName(name, true);
+}
+
 void MiniLeaderboardDisplay::Init() { REGISTER_OBJ_FACTORY(MiniLeaderboardDisplay); }
 
 void MiniLeaderboardDisplay::Update() {}

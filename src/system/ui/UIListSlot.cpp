@@ -169,3 +169,5 @@ void UIListSlot::ClearElements() {
     DeleteAll(mElements);
     RELEASE(mNextElement);
 }
+
+void UIListSlotElement::Poll() {}

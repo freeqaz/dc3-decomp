@@ -158,7 +158,7 @@ void Splash::EndSplasher() {
         *(bool *)((char *)&TheRnd + 0x1b4) = false;
         // Clean up archived screen directories
         auto _tmp3 = mOldDirs.end();
-        for (std::list<RndDir *>::iterator it = mOldDirs.begin(); _tmp3 != it; ++it) {
+        for (std::list<RndDir *>::iterator it = mOldDirs.begin(); it != _tmp3; ++it) {
             delete *it;
         }
         Movie::Validate();
@@ -393,18 +393,19 @@ bool Splash::Show() {
     mCurrentDir->Enter();
     mCurrentCam = mCurrentDir->Find<RndCam>(kSplashCam, true);
     mCurrentMovie = mCurrentDir->Find<TexMovie>(kSplashMovie, false);
+    auto& _ref3 = mSplashDurationMs;
     if (mCurrentMovie) {
         if (mThreaded) {
             Movie &movie = mCurrentMovie->GetMovie();
             mCurrentMovie->SetShowing(true);
             movie.SetPaused(false);
             float duration = movie.MsPerFrame() * (float)movie.NumFrames();
-            mSplashDurationMs = (int)ceilf(duration);
+            _ref3 = (int)ceilf(duration);
         } else {
             return ShowNext();
         }
     } else {
-        mSplashDurationMs = params.durationMs;
+        _ref3 = params.durationMs;
     }
     mCurrentTrigger = mCurrentDir->Find<EventTrigger>("splash.trig", false);
     if (mCurrentTrigger) {

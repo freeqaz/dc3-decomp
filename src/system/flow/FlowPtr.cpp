@@ -66,24 +66,25 @@ Hmx::Object *FlowPtrBase::LoadObject(BinStream &bs) {
     Hmx::Object *obj = loadingDir->FindObject(mObjName.Str(), false, true);
     if (!obj) {
         loadingDir = FlowPtrGetLoadingDir(loadingDir);
-        if (!loadingDir)
-            goto try_main;
-        obj = loadingDir->FindObject(mObjName.Str(), false, true);
-        if (!obj) {
-            loadingDir = FlowPtrGetLoadingDir(loadingDir);
-            if (!loadingDir)
-                goto try_main;
+        if (loadingDir) {
             obj = loadingDir->FindObject(mObjName.Str(), false, true);
             if (!obj) {
-            try_main:
-                obj = ObjectDir::Main()->FindObject(mObjName.Str(), false, true);
+                loadingDir = FlowPtrGetLoadingDir(loadingDir);
+                if (loadingDir) {
+                    obj = loadingDir->FindObject(mObjName.Str(), false, true);
+                    if (!obj) {
+                        obj = ObjectDir::Main()->FindObject(mObjName.Str(), false, true);
+                    }
+                }
             }
         }
     }
     if (obj) {
         mState = -2;
-    } else if (!mObjName.Null()) {
+        return obj;
+    }
+    if (!mObjName.Null()) {
         mState = -1;
     }
-    return obj;
+    return nullptr;
 }

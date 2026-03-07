@@ -10,6 +10,7 @@ class FxSend360;
 struct PoolVoice {
     int eg;
     int egParams;
+    char padding[0x1c];
 };
 
 class Voice {

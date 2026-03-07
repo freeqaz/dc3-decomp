@@ -71,8 +71,8 @@ void CharEyes::Enter() {
     mInterestFilterFlags = mDefaultFilterFlags;
     mDartTimer = 0.0f;
     auto& needRecalc = mNeedRecalc;
-    needRecalc = false;
     mEnabled = false;
+    needRecalc = false;
     RndTransformable *head = GetHead();
     needRecalc = false;
     if (head) {
@@ -723,7 +723,8 @@ bool CharEyes::Replace(ObjRef *ref, Hmx::Object *obj) {
 }
 
 void CharEyes::NextLook() {
-    Vector3 oldTarget = mTarget;
+    auto& _ref0 = mTarget;
+    Vector3 oldTarget = _ref0;
 
     RndTransformable *head = GetHead();
     const Transform &headXfm = head->WorldXfm();
@@ -732,7 +733,7 @@ void CharEyes::NextLook() {
     Normalize(facingDir, facingDir);
 
     if (mFocusInterest) {
-        mTarget = mFocusInterest->WorldXfm().v;
+        _ref0 = mFocusInterest->WorldXfm().v;
         mCurrentInterest = mFocusInterest;
         const CharEyeDartRuleset *dartOverride = mCurrentInterest->GetDartRulesetOverride();
         if (dartOverride) {
@@ -766,21 +767,21 @@ void CharEyes::NextLook() {
         float projY = newFacingY * dist;
         float projZ = newFacingZ * dist;
 
-        mTarget.x = headXfm.v.x + projX;
-        mTarget.y = projY + headXfm.v.y;
-        mTarget.z = headXfm.v.z + projZ;
+        _ref0.x = headXfm.v.x + projX;
+        _ref0.y = projY + headXfm.v.y;
+        _ref0.z = headXfm.v.z + projZ;
 
         RndTransformable *dirTrans = dynamic_cast<RndTransformable *>(Dir());
         if (dirTrans) {
             const Vector3 &dirPos = dirTrans->WorldXfm().v;
-            if (dirPos.z > mTarget.z) {
-                float scale = (dirPos.z - headXfm.v.z) / (mTarget.z - headXfm.v.z);
+            if (dirPos.z > _ref0.z) {
+                float scale = (dirPos.z - headXfm.v.z) / (_ref0.z - headXfm.v.z);
                 float sx = projX * scale;
                 float sy = projY * scale;
                 float sz = projZ * scale;
-                mTarget.x = headXfm.v.x + sx;
-                mTarget.y = sy + headXfm.v.y;
-                mTarget.z = headXfm.v.z + sz;
+                _ref0.x = headXfm.v.x + sx;
+                _ref0.y = sy + headXfm.v.y;
+                _ref0.z = headXfm.v.z + sz;
             }
         }
 
@@ -805,7 +806,7 @@ void CharEyes::NextLook() {
                 if (maxDistSq > 0.0f) {
                     CharInterestState *bestState = 0;
                     Vector3 targetDir;
-                    Subtract(mTarget, headXfm.v, targetDir);
+                    Subtract(_ref0, headXfm.v, targetDir);
                     Normalize(targetDir, targetDir);
 
                     float inverseDist = 1.0f / maxDistSq;
@@ -832,7 +833,7 @@ void CharEyes::NextLook() {
                     }
 
                     if (bestState) {
-                        mTarget = bestState->mInterest->WorldXfm().v;
+                        _ref0 = bestState->mInterest->WorldXfm().v;
                         mCurrentInterest = bestState->mInterest;
                         const CharEyeDartRuleset *dartOverride =
                             mCurrentInterest->GetDartRulesetOverride();
@@ -882,16 +883,16 @@ stateReset:
         Normalize(oldDir, oldDir);
 
         Vector3 newDir(
-            mTarget.x - headXfm.v.x,
-            mTarget.y - headXfm.v.y,
-            mTarget.z - headXfm.v.z
+            _ref0.x - headXfm.v.x,
+            _ref0.y - headXfm.v.y,
+            _ref0.z - headXfm.v.z
         );
         Normalize(newDir, newDir);
 
         if (Dot(newDir, oldDir) < 0.984808f) {
             ForceBlink();
-            mHeadForward = mTarget;
-            mTarget = oldTarget;
+            mHeadForward = _ref0;
+            _ref0 = oldTarget;
         }
     }
 }

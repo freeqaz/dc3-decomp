@@ -2,16 +2,17 @@
 
 Win rate: untested (new pattern).
 
-ClassName(), Name(), StaticClassName(), TypeDef() return Symbol. When passed
-directly to MILO_NOTIFY / MILO_WARN / MILO_FAIL / MILO_ASSERT, the compiler
-instantiates MakeString<...,Symbol,...> instead of MakeString<...,const char*,...>.
+ClassName() and StaticClassName() return Symbol. When passed directly to
+MILO_NOTIFY / MILO_WARN / MILO_FAIL / MILO_ASSERT, the compiler instantiates
+MakeString<...,Symbol,...> instead of MakeString<...,const char*,...>.
 The mangled template name differs, causing a bl target mismatch.
+
+Note: Name() returns const char*, NOT Symbol — do not add .Str() to it.
 
 Appending .Str() converts Symbol -> const char*, fixing the template.
 
 Transformations:
     ClassName()           -> ClassName().Str()
-    obj->Name()           -> obj->Name().Str()
     StaticClassName()     -> StaticClassName().Str()
 
 Detection signals:
@@ -38,7 +39,7 @@ _MILO_MACROS = {
 
 # Method names known to return Symbol
 _SYMBOL_METHODS = {
-    b"ClassName", b"Name", b"StaticClassName", b"TypeDef",
+    b"ClassName", b"StaticClassName",
 }
 
 

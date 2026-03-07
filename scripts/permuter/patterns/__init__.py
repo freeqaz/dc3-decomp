@@ -25,9 +25,9 @@ from . import sizeof_signed_cast  # noqa: F401
 from . import initializer_literal  # noqa: F401
 from . import single_return  # noqa: F401
 from . import bit_test_bool  # noqa: F401
-from . import commutative_swap  # noqa: F401  # Regroup 3+ term commutative chains
-from . import empty_size_swap  # noqa: F401   # Swap empty() <-> size() == 0
-from . import ternary_swap  # noqa: F401      # Convert if/else <-> ternary
+from . import commutative_swap  # noqa: F401  # 0/143 wins — needs improvement
+from . import empty_size_swap  # noqa: F401   # 0/38 wins — needs improvement
+from . import ternary_swap  # noqa: F401      # 0/10 wins — needs improvement
 from . import pragma_fp_contract  # noqa: F401
 from . import hoist_sret  # noqa: F401
 from . import noreturn_attr  # noqa: F401
@@ -52,14 +52,11 @@ from . import varargs_cast  # noqa: F401  # Add (char *) casts to MILO macro var
 from . import bool_to_uchar  # noqa: F401  # Change bool locals to unsigned char
 from . import guard_to_nested  # noqa: F401  # Convert guard returns <-> nested if blocks
 from . import noinline_stub  # noqa: F401  # Mark trivial same-TU callees as __declspec(noinline)
-from . import byte_mask_extraction  # noqa: F401  # Extract byte masks to break rlwimi recognition
-from . import nor_prevention  # noqa: F401  # Widen narrow types to u32 before XOR to prevent NOR peephole
-from . import condition_arithmetic  # noqa: F401  # Swap if(x!=N) <-> if(x-N) arithmetic-boolean forms
-from . import switch_if_convert  # noqa: F401  # Convert switch <-> if/else if chains
-from . import bool_materialize  # noqa: F401  # Swap && <-> & for branchless boolean (subfc/eqv/addze)
-from . import float_literal_pressure  # noqa: F401  # Swap inline float <-> static const for GPR/FPR pressure
-from . import return_call_merge  # noqa: F401  # Merge/split return calls in if/else branches
-from . import tail_call_reorder  # noqa: F401  # Swap trailing calls to enable tail-call optimization
+from . import math_return_cast  # noqa: F401  # Add/remove (float) cast on math function returns (frsp fix)
+from . import deep_member_ref_bind  # noqa: F401  # Bind ptr->member chains to local refs (double-indirection)
+from . import loop_condition_cache  # noqa: F401  # Cache/uncache member access in loop conditions
+from . import color_copy_shape  # noqa: F401  # Switch channel-wise vs aggregate color copy forms
+from . import native_guard_camera_wrap  # noqa: F401  # Normalize inline UI camera select/restore to helpers
 
 from .base import get_all_patterns, get_pattern, list_patterns
 

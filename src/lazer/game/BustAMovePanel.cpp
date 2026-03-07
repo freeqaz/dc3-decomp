@@ -1575,7 +1575,8 @@ void BustAMovePanel::Poll() {
     if (mState == kBAMState_Playing) {
         auto currentMoveScore = mRecorder->GetScore(skelIdx, 0, -1.0f, false);
         mMoveScore = currentMoveScore;
-        mPhraseMeters[mCreatorSide]->SetShowing(true);
+        auto &phraseMeter = mPhraseMeters[mCreatorSide];
+        phraseMeter->SetShowing(true);
         float base = mMoveScore;
         unsigned int e = 2;
         float scoreSq = 1.0f;
@@ -1585,7 +1586,7 @@ void BustAMovePanel::Poll() {
             if (e == 0) break;
             base *= base;
         } while (true);
-        mPhraseMeters[mCreatorSide]->SetRatingFrac(
+        phraseMeter->SetRatingFrac(
             scoreSq * 1.4f, 4.0f - MsToBeat(mRecordScore * 1000.0f)
         );
         forceSkelIdx = mRecordSkelIdx;
@@ -1736,7 +1737,10 @@ void BustAMovePanel::Poll() {
             for (int i = 0; i < songSize; i++) {
                 Hmx::Color color;
                 if ((int)currentPhrase == i) {
-                    color = Hmx::Color(0.0f, 1.0f, 0.0f, 1.0f);
+                    // Keep channel-wise assignment for closer PPC codegen.
+                    color.red = Hmx::Color(0.0f, 1.0f, 0.0f, 1.0f).red;
+                    color.green = Hmx::Color(0.0f, 1.0f, 0.0f, 1.0f).green;
+                    color.blue = Hmx::Color(0.0f, 1.0f, 0.0f, 1.0f).blue;
                 } else {
                     color = Hmx::Color(1.0f, 1.0f, 1.0f, 1.0f);
                 }

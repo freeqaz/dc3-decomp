@@ -38,7 +38,7 @@ from ..types import Diagnosis, FunctionContext, Variant
 _FIELD_ACCESS_TYPES = {"field_expression", "pointer_expression"}
 
 # Callee-saved GPR range
-_CALLEE_SAVED_RE = re.compile(r"[rf](1[3-9]|2\d|3[01])")
+_CALLEE_SAVED_RE = re.compile(r"r(1[3-9]|2\d|3[01])")
 
 
 class MemberRefBindPattern(Pattern):

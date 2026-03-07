@@ -88,8 +88,8 @@ CharClipDisplay::SetStartEnd(float start, float end, bool resetZoom) {
 }
 
 void CharClipDisplay::DrawBeatString(char const *c, float f1, Hmx::Color const &color) {
-    float posX = GetX(f1) - 18.0f;
     float posY = mDrawPosY - 4.0f;
+    float posX = GetX(f1) - 18.0f;
     TheRnd.DrawString(c, Vector2(posY, posX), color, true);
 }
 

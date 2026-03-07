@@ -136,6 +136,10 @@ public:
         mDiffuseTex = tex;
         mDirty |= 2;
     }
+    void SetNormalMap(RndTex *tex) {
+        mNormalMap = tex;
+        mDirty |= 2;
+    }
     void SetCull(Cull cull) {
         mCull = cull;
         mDirty |= 2;

@@ -75,10 +75,10 @@ void MetagameStats::Text(int, int data, UIListLabel *slot, UILabel *label) const
                 break;
             }
             case kStatType_FavoriteMode: {
-                static Symbol stats_favorite_na("stats_favorite_na");
-                static Symbol perform("perform");
-                static Symbol practice("practice");
                 static Symbol dancebattle("dancebattle");
+                static Symbol perform("perform");
+                static Symbol stats_favorite_na("stats_favorite_na");
+                static Symbol practice("practice");
                 int fave = GetFavorite((FavoriteStatID)id);
                 if (slot->Matches("title")) {
                     Symbol title = SetTitleForFavorite(fave, 0, nullptr);
@@ -92,7 +92,8 @@ void MetagameStats::Text(int, int data, UIListLabel *slot, UILabel *label) const
                     } else if (fave == 2) {
                         tag = dancebattle;
                     }
-                    label->SetTokenFmt(statSym, Localize(tag, nullptr, TheLocale));
+                    auto _tmp0 = Localize(tag, nullptr, TheLocale);
+                    label->SetTokenFmt(statSym, _tmp0);
                 }
                 break;
             }

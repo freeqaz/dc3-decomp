@@ -337,10 +337,16 @@ int RndBitmap::PixelOffset(int x, int y, bool &nibble) const {
         }
         int yQuadMod = (y >> 2) % 4;
         int tiledOffsetX, tiledOffsetY, tiledStride;
-        if ((mWidth > 0x80U) && (mHeight > 0x80U)) {
+        if ((mWidth > 0x80U)) {
+            if ((mHeight > 0x80U)) {
             tiledOffsetX = (((int)(y - ((y / 128) << 7)) >> 1) & 0xFFFFFFF8) + ((x >> 1) & 0xFFFFFFC0);
             tiledOffsetY = (((int)(x - ((x / 128) << 7)) >> 2) & 0xFFFFFFF8) + ((y >> 2) & 0xFFFFFFE0) + (yQuadMod * 2);
             tiledStride = (((mHeight - (((int)mHeight / 128) << 7)) & 0xFFFFFFF0) + (mWidth & 0xFFFFFF80)) * 2;
+        } else {
+            tiledOffsetX = (y >> 1) & 0xFFFFFFF8;
+            tiledOffsetY = ((x >> 2) & 0xFFFFFFF8) + (yQuadMod * 2);
+            tiledStride = (int)mHeight * 2;
+        }
         } else {
             tiledOffsetX = (y >> 1) & 0xFFFFFFF8;
             tiledOffsetY = ((x >> 2) & 0xFFFFFFF8) + (yQuadMod * 2);
@@ -579,8 +585,8 @@ void RndBitmap::GenerateMips() {
                 cur->PixelColor(j * 2, i * 2, r, g, b, a);
                 int rsum = r;
                 int gsum = g;
-                int bsum = b;
                 int asum = a;
+                int bsum = b;
                 cur->PixelColor(j * 2 + 1, i * 2, r, g, b, a);
                 rsum += r;
                 gsum += g;
@@ -929,10 +935,10 @@ void DecodeDxt5Alpha(unsigned char *uc, int i, int j, unsigned char &alpha) {
 
     // Calculate adjusted offset
     unsigned int adjustedOff;
-    if ((byteOff & 1) == 0) {
-        adjustedOff = byteOff + 1;
-    } else {
+    if (!(!(!((byteOff & 1) == 0)))) {
         adjustedOff = byteOff + 0xFF;
+    } else {
+        adjustedOff = byteOff + 1;
     }
 
     unsigned int index;
@@ -958,7 +964,7 @@ void DecodeDxt5Alpha(unsigned char *uc, int i, int j, unsigned char &alpha) {
     } else if (index == 1) {
         alpha = alpha0;
     } else {
-        if (alpha0 < alpha1) {
+        if (alpha1 > alpha0) {
             if (index == 6) {
                 alpha = 0;
             } else if (index == 7) {

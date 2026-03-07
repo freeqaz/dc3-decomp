@@ -390,11 +390,9 @@ void HamNavList::Poll() {
     } else {
         // No valid skeleton - check if we should disengage
         bool shouldDisengage = true;
-        if (TheGestureMgr) {
-            if (TheGestureMgr->InVoiceMode()) {
+        if (TheGestureMgr->InVoiceMode()) {
                 shouldDisengage = false;
-            }
-        }
+            };
         if (shouldDisengage) {
             Disengage();
 
@@ -839,6 +837,7 @@ HamListRibbonDrawState::HamListRibbonDrawState()
 
 LeftHandListEngagementMsg::LeftHandListEngagementMsg(bool b) : Message(Type(), b) {}
 
+UIListWidgetDrawState::~UIListWidgetDrawState() {}
 
 void HamNavListGlitchCB(float elapsed, void *context) {
     unsigned int frameId = TheRnd.GetFrameID();
@@ -1232,14 +1231,15 @@ void HamNavList::SetSelecting(bool selecting) {
     UIListProvider *provider = mListState.Provider();
     MILO_ASSERT(provider, 0x491);
     int selected = mListState.Selected();
-    UIList *sublist = mListDirResource->SubList(selected, mListWidgets);
     Symbol sym;
-    if (sublist == nullptr) {
-        sym = provider->DataSymbol(selected);
-    } else {
+    UIList *sublist = mListDirResource->SubList(selected, mListWidgets);
+    if (!(sublist == nullptr)) {
         int subSelected = sublist->Selected();
         int wrapped = sublist->GetListState().WrapShowing(subSelected + 1);
         sym = mNavProvider->DataSymbol(selected, wrapped);
+    } else {
+        auto _tmp4 = provider->DataSymbol(selected);
+        sym = _tmp4;
     }
     SetRibbonMode(HamListRibbon::kRibbonSelect);
     if (TheGestureMgr && TheGestureMgr->GesturingWithVoice()) {
@@ -1650,7 +1650,8 @@ void HamNavList::LinkRibbonDrawState(
 }
 
 void HamNavList::DrawShowing() {
-    if (!mListRibbonResource || !mListDirResource)
+    auto& _ref0 = mListRibbonResource;
+    if (!_ref0 || !mListDirResource)
         return;
 #ifdef HX_NATIVE
     if (!mListState.Provider())
@@ -1674,7 +1675,7 @@ void HamNavList::DrawShowing() {
     }
 
     const Transform &xfm = WorldXfm();
-    mListRibbonResource->Draw(xfm, mRibbonDrawStates, false, false);
+    _ref0->Draw(xfm, mRibbonDrawStates, false, false);
 
     if (mHeaderRibbonResource) {
         mHeaderRibbonResource->Draw(xfm, mRibbonDrawStates, false, false);

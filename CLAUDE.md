@@ -36,8 +36,9 @@ Use the `mcp__orchestrator__` tools for all decomp analysis. Do not call `objdif
 - **Stale object diagnosis**: `scripts/clean_stale_objects.sh --dry-run` finds .obj files older than the PCH. Use `--all` to force-touch every .cpp for a full rebuild.
 For a complete collection of patterns, find then under ./docs/decomp/patterns/ -- these are incredibly helpful for identifying 'hard' fixes when decompiling.
 
-## Git Commits
+## Git Actions **important**
 
+- Do not run `git stash` commands in the main repo. If you want to compare a change against HEAD or another commit, use a git worktree. Odds are high that concurrent agents are working in the main repo, so a `git stash` will _deeply break things_!
 - Do not include `Co-Authored-By` lines in commit messages
 
 ## Git Worktrees

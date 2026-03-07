@@ -125,7 +125,6 @@ void KinectSharePanel::ConvertImages() {
         mImagePostParams.FullImageByteCount = iref;
         mImagePostParams.pFullImage = (const BYTE *)mBuf;
     }
-    auto bitmapHeight = bitmapa0.Height();
     {
         static int _x = MemFindHeap("physical");
         MemHeapTracker mem(_x);
@@ -154,7 +153,7 @@ void KinectSharePanel::ConvertImages() {
             "KinectSharePanel: preview bitmap = 0x%08x %d %d %d 0x%08x\n",
             mPreviewBuf,
             bitmapa0.Width(),
-            bitmapHeight,
+            bitmapa0.Height(),
             bitmapa0.RowBytes(),
             TheDxRnd.D3DFormatForBitmap(bitmapa0)
         );
