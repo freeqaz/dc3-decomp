@@ -151,8 +151,8 @@ void SkeletonIdentifier::NotifyOfRecognition(int i) const {
     bool check = true;
     Skeleton *skel = TheGestureMgr->GetSkeletonByEnrollmentIndex(i);
     if (skel) {
-        if (!IsAssociatedWithProfile(i)) {
-            check = !skel->ProfileMatched() == 0;
+        if (!IsAssociatedWithProfile(i) && !(skel->ProfileMatched() == false)) {
+            check = false;
         }
         if (check) {
             int playerID = TheGameData->GetPlayerFromSkeleton(*skel);

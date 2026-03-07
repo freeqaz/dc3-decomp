@@ -20,6 +20,8 @@ public:
     virtual bool IsPurchasing() const = 0;
     virtual bool IsSuccess() const = 0;
     virtual bool PurchaseMade() const = 0;
+    virtual bool NeedsEnum() const { return true; }
+    virtual void Poll() = 0;
 
     StorePurchaser(Symbol s, unsigned int i) : mSource(s), mUserIndex(i) {}
 
@@ -38,8 +40,8 @@ public:
     virtual bool IsPurchasing() const;
     virtual bool IsSuccess() const;
     virtual bool PurchaseMade() const;
-    virtual bool IsReady() const { return true; }
-    virtual void PollUpdate() {}
+    virtual bool NeedsEnum() const { return false; }
+    virtual void Poll() {}
 
     XboxPurchaser(
         int,
@@ -70,6 +72,8 @@ public:
     virtual bool IsPurchasing() const;
     virtual bool IsSuccess() const;
     virtual bool PurchaseMade() const;
+    virtual bool NeedsEnum() const { return false; }
+    virtual void Poll() {}
 
     XboxMultipleItemsPurchaser(
         int, std::vector<unsigned long long> &, Symbol, unsigned int

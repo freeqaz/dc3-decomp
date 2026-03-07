@@ -13,7 +13,8 @@
 class MoggClip : public Hmx::Object, public PlayableSample {
 public:
     struct PanInfo {
-        PanInfo(int, float);
+        PanInfo() : channel(0), panning(0) {}
+        PanInfo(int c, float p) : channel(c), panning(p) {}
         int channel;
         float panning;
     };
@@ -59,6 +60,7 @@ public:
     void SetLoop(bool, int, int);
     void SetFile(const char *);
     void SetPan(int, float);
+    void SetupPanInfo(float, float, bool);
     void AddFader(Fader *);
     const FilePath Path() const { return mMoggFile; }
     StandardStream *GetStream() const { return mStream; }

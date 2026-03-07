@@ -329,7 +329,9 @@ public:
     int FontMapIndex(RndFontBase *, bool);
     float ComputeHeight(int, float, float &);
     int NumStyles() const { return mStyles.size(); }
+    ObjVector<Style> &Styles() { return mStyles; }
     float Width() const { return mWidth; }
+    float BoundsRight() const { return mBoundsRight; }
 
     friend class UIFontImporter;
     friend class UIListLabelElement;

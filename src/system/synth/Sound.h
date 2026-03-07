@@ -22,6 +22,9 @@ public:
         float mTranspose;
         Hmx::Object *mEventReceiver;
         float mDelayMs;
+        DelayArgs(float vol, float pan, float trans, Hmx::Object *rcvr, float delay)
+            : mVolume(vol), mPan(pan), mTranspose(trans), mEventReceiver(rcvr),
+              mDelayMs(delay) {}
     };
     // Hmx::Object
     virtual ~Sound();

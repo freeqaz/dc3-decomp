@@ -1,10 +1,22 @@
 #include "synth/MicClientMapper.h"
 #include "os/Debug.h"
+#include "synth/Synth.h"
+
+MicClientMapper::MicClientMapper() : mMicManager(0), mNumPlayers(2) {
+    for (int i = 0; i < 4; i++) {
+        MicMappingData data;
+        data.unk0 = i;
+        mMappingData.push_back(data);
+    }
+    for (int i = 0; i < mNumPlayers; i++) {
+        mPlayers.push_back(PlayerMappingData());
+    }
+}
+
+MicClientMapper::~MicClientMapper() {}
 
 void MicClientMapper::LockMicID(int micID) {
-    for (std::vector<MicMappingData>::iterator it = mMappingData.begin();
-         it != mMappingData.end();
-         ++it) {
+    FOREACH (it, mMappingData) {
         if (it->mMicID == micID) {
             if (it->bLocked) {
                 MILO_NOTIFY(
@@ -17,9 +29,7 @@ void MicClientMapper::LockMicID(int micID) {
 }
 
 void MicClientMapper::UnlockMicID(int micID) {
-    for (std::vector<MicMappingData>::iterator it = mMappingData.begin();
-         it != mMappingData.end();
-         ++it) {
+    FOREACH (it, mMappingData) {
         if (it->mMicID == micID) {
             if (!it->bLocked) {
                 MILO_NOTIFY(
@@ -32,9 +42,7 @@ void MicClientMapper::UnlockMicID(int micID) {
 }
 
 bool MicClientMapper::HasMicID(int micID) const {
-    for (std::vector<MicMappingData>::const_iterator it = mMappingData.begin();
-         it != mMappingData.end();
-         ++it) {
+    FOREACH (it, mMappingData) {
         if (it->mMicID == micID)
             return true;
     }
@@ -42,9 +50,7 @@ bool MicClientMapper::HasMicID(int micID) const {
 }
 
 bool MicClientMapper::IsMicIDLocked(int micID) const {
-    for (std::vector<MicMappingData>::const_iterator it = mMappingData.begin();
-         it != mMappingData.end();
-         ++it) {
+    FOREACH (it, mMappingData) {
         if (it->mMicID == micID) {
             return it->bLocked;
         }
@@ -53,9 +59,7 @@ bool MicClientMapper::IsMicIDLocked(int micID) const {
 }
 
 bool MicClientMapper::GetFirstUnlockedMicID(int &micID) const {
-    for (std::vector<MicMappingData>::const_iterator it = mMappingData.begin();
-         it != mMappingData.end();
-         ++it) {
+    FOREACH (it, mMappingData) {
         if (it->mMicID != -1 && !it->bLocked) {
             micID = it->mMicID;
             return true;
@@ -65,9 +69,7 @@ bool MicClientMapper::GetFirstUnlockedMicID(int &micID) const {
 }
 
 void MicClientMapper::RefreshPlayerMapping() {
-    for (std::vector<PlayerMappingData>::iterator iter = mPlayers.begin();
-         iter != mPlayers.end();
-         ++iter) {
+    FOREACH (iter, mPlayers) {
         if (iter->iPreferredMicID != -1 && HasMicID(iter->iPreferredMicID)) {
             if (iter->iPreferredMicID == iter->iActualMicID) {
                 MILO_ASSERT(IsMicIDLocked( iter->iPreferredMicID ), 0x1A2);
@@ -81,9 +83,7 @@ void MicClientMapper::RefreshPlayerMapping() {
             }
         }
     }
-    for (std::vector<PlayerMappingData>::iterator iter = mPlayers.begin();
-         iter != mPlayers.end();
-         ++iter) {
+    FOREACH (iter, mPlayers) {
         if (iter->iActualMicID != -1 && HasMicID(iter->iActualMicID)) {
             MILO_ASSERT(IsMicIDLocked( iter->iActualMicID ), 0x1C0);
         } else {
@@ -97,34 +97,25 @@ void MicClientMapper::RefreshPlayerMapping() {
     }
 }
 
-// void MicClientMapper::RefreshMics() {
-//     for (std::vector<MicMappingData>::iterator it = mMappingData.begin();
-//          it != mMappingData.end();
-//          ++it) {
-//         if (it->mClientID != -1 && it->mMicID != -1 &&
-//         !TheSynth->IsMicConnected(it->mMicID)) {
-//             TheSynth->ReleaseMic(it->mMicID);
-//             int playerID = GetPlayerIDForMicID(it->mMicID);
-//             if (playerID != -1) {
-//                 mPlayers[playerID].iActualMicID = -1;
-//             }
-//             it->mMicID = -1;
-//             it->bLocked = false;
-//         }
-//     }
-//     for (std::vector<MicMappingData>::iterator iter = mMappingData.begin();
-//          iter != mMappingData.end();
-//          ++iter) {
-//         if (iter->mClientID != -1 && iter->mMicID == -1) {
-//             iter->mMicID = TheSynth->GetNextAvailableMicID();
-//             MILO_ASSERT(iter->bLocked == false, 0x186);
-//             if (iter->mMicID != -1) {
-//                 TheSynth->CaptureMic(iter->mMicID);
-//             }
-//         }
-//     }
-//     RefreshPlayerMapping();
-// }
+void MicClientMapper::RefreshMics() {
+    FOREACH (it, mMappingData) {
+        if (it->unk0 != -1 && it->mMicID != -1 && !TheSynth->IsMicConnected(it->mMicID)) {
+            TheSynth->ReleaseMic(it->mMicID);
+            it->mMicID = -1;
+            it->bLocked = false;
+        }
+    }
+    FOREACH (iter, mMappingData) {
+        if (iter->unk0 != -1 && iter->mMicID == -1) {
+            iter->mMicID = TheSynth->GetNextAvailableMicID();
+            MILO_ASSERT(iter->bLocked == false, 0x161);
+            if (iter->mMicID != -1) {
+                TheSynth->CaptureMic(iter->mMicID);
+            }
+        }
+    }
+    RefreshPlayerMapping();
+}
 
 void MicClientMapper::HandleMicsChanged() {
     RefreshMics();
@@ -141,24 +132,11 @@ int MicClientMapper::GetMicIDForPlayerID(int playerID) const {
 
 int MicClientMapper::GetMicIDForClientID(const MicClientID &clientID) const {
     if (clientID.mPlayerID == -1) {
-        for (std::vector<MicMappingData>::const_iterator it = mMappingData.begin();
-             it != mMappingData.end();
-             ++it) {
-            if (it->mClientID == clientID.mClientID)
+        FOREACH (it, mMappingData) {
+            if (it->unk0 == clientID.mClientID)
                 return it->mMicID;
         }
         return -1;
     } else
         return GetMicIDForPlayerID(clientID.mPlayerID);
-}
-
-MicClientMapper::~MicClientMapper() {}
-
-MicClientMapper::MicClientMapper() : mMicManager(0), mNumPlayers(2) {
-    for (int i = 0; i < 4; i++) {
-        mMappingData.push_back(MicMappingData());
-    }
-    for (int i = 0; i < mNumPlayers; i++) {
-        mPlayers.push_back(PlayerMappingData());
-    }
 }

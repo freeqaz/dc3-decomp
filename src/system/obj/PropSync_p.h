@@ -306,7 +306,7 @@ bool PropSync(
             return true;
         }
         case kPropInsert: {
-            T *objToInsert = 0;
+            T *objToInsert = nullptr;
             if (PropSync(objToInsert, node, prop, i, op)) {
                 ptr.insert(it, objToInsert);
                 return true;

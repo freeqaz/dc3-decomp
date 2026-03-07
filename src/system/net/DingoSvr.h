@@ -65,6 +65,8 @@ public:
     virtual void DeleteSessionComplete(bool success) {}
     virtual void StartUploadCareerScore(u64 career_score) {}
 
+    int GetAuthedPadNum() const { return mAuthedPadNum; }
+
     void DelayJob(DingoJob *job);
     void CancelDelayedCalls();
     void AddDelayedCalls();

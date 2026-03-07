@@ -56,6 +56,7 @@ public:
     void SetSend(FxSend *);
     void SetReverbMixDb(float);
     void SetReverbEnable(bool);
+    void SetSpeed(float);
 
     POOL_OVERLOAD(SfxInst, 0x4E);
 

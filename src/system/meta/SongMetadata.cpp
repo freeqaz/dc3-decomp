@@ -25,10 +25,6 @@ void SongMetadata::PreviewTimes(float &start, float &end) const {
 
 SongMetadata::SongMetadata() { InitSongMetadata(); }
 
-int SongMetadata::ID() const { return mID; }
-bool SongMetadata::IsOnDisc() const { return mIsOnDisc; }
-Symbol SongMetadata::GameOrigin() const { return mGameOrigin; }
-
 SongMetadata::SongMetadata(DataArray *main_arr, DataArray *backup_arr, bool onDisc)
     : mShortName(), mGameOrigin() {
     InitSongMetadata();

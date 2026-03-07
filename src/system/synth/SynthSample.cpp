@@ -1,4 +1,5 @@
 #include "synth/SynthSample.h"
+#include "Memory.h"
 #include "SampleData.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
@@ -9,20 +10,107 @@
 #include "utl/Loader.h"
 #include "utl/MemMgr.h"
 
-static void *SampleAlloc(int size, const char *file, int line, const char *name, int) {
-    (void)file;
-    (void)line;
-    (void)name;
-    return MemAlloc(size, "SynthSample.cpp", 0x1c, "Sample Data", 0);
+FileLoader *SynthSample::sLoader = nullptr;
+SynthSample *SynthSample::sLoading = nullptr;
+bool sDisabled = false;
+
+void *SampleAlloc(int size, const char *, int, const char *, int) {
+    return MemAlloc(size, __FILE__, 0x1C, "Sample Data");
 }
 
-bool sDisabled;
-SynthSample *SynthSample::sLoading;
-FileLoader *SynthSample::sLoader;
+#pragma region SynthSample
 
-void SynthSample::Init() {
-    Register();
-    SampleData::SetAllocator(SampleAlloc, MemFree);
+SynthSample::SynthSample() {}
+
+SynthSample::~SynthSample() {
+    FOREACH (it, mSampleInsts) {
+        (*it)->Stop(true);
+    }
+    if (sLoading == this) {
+        RELEASE(sLoader);
+        sLoading = nullptr;
+    }
+}
+
+BEGIN_HANDLERS(SynthSample)
+    HANDLE_EXPR(platform_size_kb, GetPlatformSize(kPlatformNone) / 1024)
+    HANDLE_EXPR(num_markers, NumMarkers())
+    HANDLE_EXPR(marker_name, mSampleData.GetMarker(_msg->Int(2)).Name())
+    HANDLE_EXPR(marker_sample, mSampleData.GetMarker(_msg->Int(2)).Sample())
+    HANDLE_EXPR(sample_length, LengthMs() / 1000.0f)
+    HANDLE_SUPERCLASS(Hmx::Object)
+END_HANDLERS
+
+BEGIN_CUSTOM_PROPSYNC(SampleMarker)
+    SYNC_PROP(sample, o.sample)
+    SYNC_PROP(name, o.name)
+END_CUSTOM_PROPSYNC
+
+BEGIN_PROPSYNCS(SynthSample)
+    SYNC_PROP_MODIFY(file, mFile, Sync(sync0))
+    SYNC_PROP_SET(
+        sample_rate,
+        mSampleData.GetSampleRate(),
+        MILO_NOTIFY("can't set property %s", "sample_rate")
+    )
+    SYNC_PROP(markers, mSampleData.AccessMarkers())
+    SYNC_SUPERCLASS(Hmx::Object)
+END_PROPSYNCS
+
+BEGIN_SAVES(SynthSample)
+    SAVE_REVS(6, 0)
+    SAVE_SUPERCLASS(Hmx::Object)
+    bs << mFile;
+    if (bs.Cached()) {
+        mSampleData.Save(bs);
+    }
+END_SAVES
+
+BEGIN_COPYS(SynthSample)
+    COPY_SUPERCLASS(Hmx::Object)
+    CREATE_COPY(SynthSample)
+    BEGIN_COPYING_MEMBERS
+        if (ty != kCopyFromMax) {
+            COPY_MEMBER(mFile)
+        }
+    END_COPYING_MEMBERS
+    Sync(sync0);
+END_COPYS
+
+BEGIN_LOADS(SynthSample)
+    PreLoad(bs);
+    PostLoad(bs);
+END_LOADS
+
+INIT_REVS(6, 0)
+
+void SynthSample::PreLoad(BinStream &bs) {
+    LOAD_REVS(bs)
+    ASSERT_REVS(6, 0)
+    if (d.rev > 1) {
+        LOAD_SUPERCLASS(Hmx::Object)
+    }
+    d >> mFile;
+    if (d.rev <= 5) {
+        bool b;
+        int x, y;
+        d >> b >> x;
+        if (d.rev >= 3) {
+            d >> y;
+        }
+    }
+    if (bs.Cached() && d.rev >= 5) {
+        mSampleData.Load(bs, mFile);
+    } else if (d.rev > 3 && !sDisabled) {
+        sLoader = dynamic_cast<FileLoader *>(TheLoadMgr.AddLoader(mFile, kLoadFront));
+        sLoading = this;
+    }
+}
+
+void SynthSample::PostLoad(BinStream &bs) {
+    sLoader = nullptr;
+    sLoading = nullptr;
+    Sync(bs.Cached() ? sync1 : sync0);
 }
 
 void SynthSample::Disable() { sDisabled = true; }
@@ -61,137 +149,21 @@ void SynthSample::Sync(SyncType ty) {
     }
 }
 
-void SynthSample::Load(BinStream &bs) {
-    PreLoad(bs);
-    PostLoad(bs);
-}
-
-void SynthSample::PreLoad(BinStream &bs) {
-    int revData;
-    bs.ReadEndian(&revData, 4);
-    int rev = revData & 0xffff;
-    int altRev = (unsigned int)revData >> 0x10;
-    if (rev > 6) {
-        MILO_FAIL(
-            "%s can't load new %s version %d > %d",
-            PathName(this),
-            ClassName(),
-            rev,
-            (unsigned short)6
-        );
-    }
-    if (altRev > 0) {
-        MILO_FAIL(
-            "%s can't load new %s alt version %d > %d",
-            PathName(this),
-            ClassName(),
-            altRev,
-            (unsigned short)0
-        );
-    }
-    if (rev > 1) {
-        Hmx::Object::Load(bs);
-    }
-    bs >> mFile;
-    // Rev <= 5 had loop fields (isLooped bool, loopStartSamp int if rev >= 3)
-    if (rev <= 5) {
-        unsigned char isLooped;
-        bs >> isLooped;
-        if (rev >= 3) {
-            int loopStartSamp;
-            bs >> loopStartSamp;
-        }
-    }
-    if (!bs.Cached() || rev < 5) {
-        if (rev > 3 && !sDisabled) {
-            Loader *loader = TheLoadMgr.AddLoader(mFile, kLoadFront);
-            sLoader = dynamic_cast<FileLoader *>(loader);
-            sLoading = this;
-        }
-    } else {
-        mSampleData.Load(bs, mFile);
-    }
-}
-
-void SynthSample::PostLoad(BinStream &bs) {
-    sLoader = nullptr;
-    sLoading = nullptr;
-    Sync(bs.Cached() ? sync1 : sync0);
-}
-
-BEGIN_COPYS(SynthSample)
-    COPY_SUPERCLASS(Hmx::Object)
-    CREATE_COPY(SynthSample)
-    BEGIN_COPYING_MEMBERS
-        if (ty != kCopyFromMax) {
-            COPY_MEMBER(mFile)
-        }
-    END_COPYING_MEMBERS
-    Sync(sync0);
-END_COPYS
-
-BEGIN_SAVES(SynthSample)
-    SAVE_REVS(6, 0)
-    SAVE_SUPERCLASS(Hmx::Object)
-    bs << mFile;
-    if (bs.Cached()) {
-        mSampleData.Save(bs);
-    }
-END_SAVES
-
-void SynthSample::RegisterChild(SampleInst *inst) {
-    mSampleInsts.push_back(inst);
-}
+void SynthSample::RegisterChild(SampleInst *inst) { mSampleInsts.push_back(inst); }
 
 void SynthSample::UnregisterChild(SampleInst *inst) {
-    for (std::list<SampleInst *>::iterator it = mSampleInsts.begin();
-         it != mSampleInsts.end(); ++it) {
+    FOREACH (it, mSampleInsts) {
         if (*it == inst) {
             mSampleInsts.erase(it);
             return;
         }
     }
-    MILO_NOTIFY("Could not find child instance for unregister\n");
+    MILO_NOTIFY("Could not find child instance for unregistration!");
 }
 
-BEGIN_CUSTOM_PROPSYNC(SampleMarker)
-    SYNC_PROP(sample, o.sample)
-    SYNC_PROP(name, o.name)
-END_CUSTOM_PROPSYNC
-
-SynthSample::SynthSample() {}
-
-SynthSample::~SynthSample() {
-    auto& sampleInsts = mSampleInsts;
-    while (!sampleInsts.empty()) {
-        SampleInst *inst = sampleInsts.front();
-        delete inst;
-        sampleInsts.pop_front();
-    }
-
-    if (sLoading == this) {
-        RELEASE(sLoader);
-        sLoading = nullptr;
-    }
+void SynthSample::Init() {
+    REGISTER_OBJ_FACTORY(SynthSample);
+    SampleData::SetAllocator(SampleAlloc, MemFree);
 }
 
-BEGIN_HANDLERS(SynthSample)
-    auto& _ref0 = mSampleData;
-    HANDLE_EXPR(platform_size_kb, (_ref0.SizeAs(SampleData::kPCM) >> 10) + 0)
-    HANDLE_EXPR(num_markers, _ref0.NumMarkers())
-    HANDLE_EXPR(marker_name, _ref0.GetMarker(_msg->Int(2)).Name())
-    HANDLE_EXPR(marker_sample, _ref0.GetMarker(_msg->Int(2)).Sample())
-    HANDLE_EXPR(sample_length, (int)(LengthMs() * 0.001f))
-    HANDLE_SUPERCLASS(Hmx::Object)
-END_HANDLERS
-
-BEGIN_PROPSYNCS(SynthSample)
-    SYNC_PROP_MODIFY(file, mFile, Sync(sync0))
-    SYNC_PROP_SET(
-        sample_rate,
-        mSampleData.GetSampleRate(),
-        MILO_NOTIFY("can't set property %s", "sample_rate")
-    )
-    SYNC_PROP(markers, mSampleData.AccessMarkers())
-    SYNC_SUPERCLASS(Hmx::Object)
-END_PROPSYNCS
+#pragma endregion

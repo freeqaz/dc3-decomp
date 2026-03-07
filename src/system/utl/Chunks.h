@@ -16,6 +16,7 @@ public:
     bool IsList() { return mIsList; }
 
     // prolly not the function name, it's inlined in debug
+    // RBVR has a symbol int TotalLength() const, this could be it
     unsigned int GetNewLength() {
         unsigned int sublen = mIsList ? 12 : 8;
         return mLength + sublen;

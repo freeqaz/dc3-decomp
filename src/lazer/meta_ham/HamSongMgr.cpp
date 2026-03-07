@@ -25,8 +25,6 @@
 #include "os/File.h"
 #include "os/PlatformMgr.h"
 #include "os/System.h"
-#include "stl/_tree.h"
-#include "stl/_vector.h"
 #include "utl/BinStream.h"
 #include "utl/FakeSongMgr.h"
 #include "utl/Locale.h"
@@ -35,6 +33,8 @@
 #include "utl/Std.h"
 #include "utl/Symbol.h"
 #include <cstring>
+#include <cstdio>
+#include <map>
 #include <vector>
 
 HamSongMgr TheHamSongMgr;
@@ -75,10 +75,11 @@ struct SongRankCmp {
     bool operator()(int x, int y) const {
         float rankX = mMgr->Data(x)->Rank();
         float rankY = mMgr->Data(y)->Rank();
-        if (rankX == rankY)
+        if (rankX == rankY) {
             return x < y;
-        else
+        } else {
             return rankX < rankY;
+        }
     }
 
     HamSongMgr *mMgr;
@@ -129,9 +130,12 @@ void HamSongMgr::Init() {
     DataArray *tierArr = cfg->FindArray(tier_ranges);
     int numTiers = tierArr->Size() - 1;
     mRankTiers.reserve(numTiers);
-    for (int i = 1; i < numTiers; i++) {
+    for (int i = 0; i < numTiers; i++) {
+        int arrIdx = i + 1;
         mRankTiers.push_back(
-            std::make_pair(tierArr->Array(i)->Int(0), tierArr->Array(i)->Int(1))
+            stlpmtx_std::make_pair(
+                tierArr->Array(arrIdx)->Int(0), tierArr->Array(arrIdx)->Int(1)
+            )
         );
     }
 }
@@ -413,106 +417,81 @@ void HamSongMgr::InitializePlaylists() {
     static Symbol songs("songs");
     DataArray *playlistArray = SystemConfig(playlists);
     MILO_ASSERT(playlistArray, 0xd9);
+    for (int i = 1; i < playlistArray->Size(); i++) {
+        DataArray *playlistEntry = playlistArray->Array(i);
+        MILO_ASSERT(playlistEntry, 0xdf);
 
-    if (1 < playlistArray->Size()) {
-        for (int i = 1; i < playlistArray->Size(); i++) {
-            DataArray *playlistEntry = playlistArray->Node(i).Array();
-            MILO_ASSERT(playlistEntry, 0xdf);
+        Symbol playlistName = playlistEntry->Sym(0);
+        Playlist *p = new Playlist();
 
-            Symbol s = playlistEntry->Sym(0);
-            Playlist *p = new Playlist();
-
-            static Symbol is_fitness("is_fitness");
-            bool isFitness = false;
-            playlistEntry->FindData(is_fitness, isFitness, false);
-            p->SetName(s);
-            p->SetIsBattlePlaylist(isFitness);
-            DataArray *songArray = playlistEntry->FindArray(songs, true);
-            MILO_ASSERT(songArray, 0xed);
-
-            auto _tmp2 = songArray->Size();
-            if (1 < _tmp2) {
-                for (int i = 1; i < songArray->Size(); i++) {
-                    Symbol sym = songArray->Sym(i);
-                    int songID = GetSongIDFromShortName(sym, 0);
-                    if (songID != 0) {
-                        p->AddSong(songID);
-                    } else {
-                        MILO_NOTIFY(
-                            "HMX Playlist: %s is referring to unknown song: %s",
-                            sym,
-                            songID
-                        );
-                    }
-                }
-            }
-            if (!p->IsEmpty()) {
-                mPlaylists.push_back(p);
+        static Symbol is_fitness("is_fitness");
+        bool isFitness = false;
+        playlistEntry->FindData(is_fitness, isFitness, false);
+        p->SetName(playlistName);
+        p->SetIsBattlePlaylist(isFitness);
+        DataArray *songArray = playlistEntry->FindArray(songs);
+        MILO_ASSERT(songArray, 0xed);
+        for (int j = 1; j < songArray->Size(); j++) {
+            Symbol curSong = songArray->Sym(j);
+            int songID = GetSongIDFromShortName(curSong, false);
+            if (songID != 0) {
+                p->AddSong(songID);
+            } else {
+                MILO_NOTIFY(
+                    "HMX Playlist: %s is referring to unknown song: %s",
+                    playlistName.Str(),
+                    curSong.Str()
+                );
             }
         }
-    }
-
-    char decadeBuffer[16];
-    char nameBuffer[32];
-    std::map<Symbol, Playlist *> dynamicPlaylists;
-
-    for (auto it = mRankedSongs.begin(); it != mRankedSongs.end(); ++it) {
-        const HamSongMetadata *metadata = Data(*it);
-        if (metadata->IsComplete() && !metadata->IsFake() &&
-            TheProfileMgr.IsContentUnlocked(metadata->ShortName())) {
-            Symbol outfit = metadata->Outfit();
-            Symbol character = GetOutfitCharacter(outfit, true);
-            Symbol crew = GetCrewForCharacter(character, true);
-
-            sprintf(decadeBuffer, "%d0s", metadata->YearReleased() / 10);
-            Symbol decade(decadeBuffer);
-
-            if (dynamicPlaylists.find(crew) == dynamicPlaylists.end()) {
-                Playlist *crewPlaylist = new Playlist();
-                dynamicPlaylists[crew] = crewPlaylist;
-                auto _tmp1 = crew.Str();
-                sprintf(nameBuffer, "%s_dynamic_playlist", _tmp1);
-                crewPlaylist->SetName(Symbol(nameBuffer));
-            }
-
-            if (dynamicPlaylists.find(decade) == dynamicPlaylists.end()) {
-                Playlist *decadePlaylist = new Playlist();
-                dynamicPlaylists[decade] = decadePlaylist;
-                sprintf(nameBuffer, "%s_dynamic_playlist", decade.Str());
-                decadePlaylist->SetName(Symbol(nameBuffer));
-                decadePlaylist->SetIsFriendPlaylist(true);
-            }
-
-            dynamicPlaylists[crew]->AddSong(*it);
-            dynamicPlaylists[decade]->AddSong(*it);
+        if (!p->IsEmpty()) {
+            mPlaylists.push_back(p);
         }
     }
-
-    for (std::map<Symbol, Playlist *>::iterator it = dynamicPlaylists.begin();
-         it != dynamicPlaylists.end();
-         ++it) {
+    char buffer[0x70];
+    std::map<Symbol, Playlist *> playlistMap;
+    FOREACH (it, TheHamSongMgr.mRankedSongs) {
+        const HamSongMetadata *data = TheHamSongMgr.Data(*it);
+        if (data->IsComplete() && !data->IsFake()
+            && TheProfileMgr.IsContentUnlocked(data->ShortName())) {
+            Symbol crewSym = GetCrewForCharacter(GetOutfitCharacter(data->Outfit()));
+            sprintf(buffer, "%d0s", data->YearReleased() / 10);
+            Symbol decadeSym = buffer;
+            if (playlistMap.find(crewSym) == playlistMap.end()) {
+                Playlist *p = new Playlist();
+                playlistMap[crewSym] = p;
+                sprintf(buffer, "%s_dynamic_playlist", crewSym.Str());
+                playlistMap[crewSym]->SetName(buffer);
+            }
+            if (playlistMap.find(decadeSym) == playlistMap.end()) {
+                Playlist *p = new Playlist();
+                playlistMap[decadeSym] = p;
+                sprintf(buffer, "%s_dynamic_playlist", decadeSym.Str());
+                playlistMap[decadeSym]->SetName(buffer);
+                playlistMap[decadeSym]->SetIsFriendPlaylist(true);
+            }
+            playlistMap[crewSym]->AddSong(*it);
+            playlistMap[decadeSym]->AddSong(*it);
+        }
+    }
+    FOREACH (it, playlistMap) {
         mPlaylists.push_back(it->second);
     }
-
-    int playlistFlags = 0;
-    for (std::map<Symbol, Playlist *>::iterator it = dynamicPlaylists.begin();
-         it != dynamicPlaylists.end();
-         ++it) {
-        playlistFlags |= GetDynamicPlaylistID(it->second->GetName());
+    int mask = 0;
+    FOREACH (it, playlistMap) {
+        mask |= GetDynamicPlaylistID(it->second->GetName());
     }
-
     for (int i = 0; i < 2; i++) {
         HamPlayerData *playerData = TheGameData->Player(i);
         MILO_ASSERT(playerData, 0x139);
-        int padNum = playerData->PadNum();
-        HamProfile *profile = TheProfileMgr.GetProfileFromPad(padNum);
+        int padnum = playerData->PadNum();
+        HamProfile *profile = TheProfileMgr.GetProfileFromPad(padnum);
         if (profile) {
             profile->UpdateOnlineID();
-            if (profile->IsSignedIn() && ThePlatformMgr.IsSignedIntoLive(padNum)) {
-                RCJob *job = new SyncAvailableDynamicPlaylistsJob(
-                    0, profile->GetOnlineID()->ToString(), playlistFlags
-                );
-                TheRockCentral.ManageJob(job);
+            if (profile->IsSignedIn() && ThePlatformMgr.IsSignedIntoLive(padnum)) {
+                TheRockCentral.ManageJob(new SyncAvailableDynamicPlaylistsJob(
+                    nullptr, profile->GetOnlineID()->ToString(), mask
+                ));
             }
         }
     }
@@ -658,13 +637,7 @@ void HamSongMgr::GetCoreStarsForDifficulty(
             static Symbol ham3("ham3");
             if (!data->IsFake() && data->GameOrigin() == ham3
                 && TheProfileMgr.IsContentUnlocked(data->ShortName())) {
-                int starsForDiff = mgr->GetStarsForDifficulty(songID, diff, b);
-                if (starsForDiff > 5) {
-                    starsForDiff = 5;
-                } else {
-                    starsForDiff = Clamp(0, 5, starsForDiff);
-                }
-                i1 += starsForDiff;
+                i1 += Clamp(0, 5, mgr->GetStarsForDifficulty(songID, diff, b));
                 i2 += 5;
             }
         }
@@ -687,13 +660,7 @@ void HamSongMgr::GetCharacterStars(
             if (!data->IsFake() && data->GameOrigin() == ham3
                 && data->Character() == character
                 && TheProfileMgr.IsContentUnlocked(data->ShortName())) {
-                int starsForDiff = mgr->GetStars(songID, b);
-                if (starsForDiff > 5) {
-                    starsForDiff = 5;
-                } else {
-                    starsForDiff = Clamp(0, 5, starsForDiff);
-                }
-                i1 += starsForDiff;
+                i1 += Clamp(0, 5, mgr->GetStars(songID, b));
                 i2 += 5;
             }
         }
@@ -716,13 +683,7 @@ void HamSongMgr::GetCrewStars(
             static Symbol ham3("ham3");
             if (!data->IsFake() && data->GameOrigin() == ham3 && crewForChar == crew
                 && TheProfileMgr.IsContentUnlocked(data->ShortName())) {
-                int bestStars = mgr->GetBestStars(songID, b, kDifficultyBeginner);
-                if (bestStars > 5) {
-                    bestStars = 5;
-                } else {
-                    bestStars = Clamp(0, 5, bestStars);
-                }
-                i1 += bestStars;
+                i1 += Clamp(0, 5, mgr->GetBestStars(songID, b, kDifficultyBeginner));
                 i2 += 5;
             }
         }
@@ -745,13 +706,7 @@ void HamSongMgr::GetCrewStarsForDifficulty(
             static Symbol ham3("ham3");
             if (!data->IsFake() && data->GameOrigin() == ham3 && crewForChar == crew
                 && TheProfileMgr.IsContentUnlocked(data->ShortName())) {
-                int starsForDiff = mgr->GetStarsForDifficulty(songID, diff, b);
-                if (starsForDiff > 5) {
-                    starsForDiff = 5;
-                } else {
-                    starsForDiff = Clamp(0, 5, starsForDiff);
-                }
-                i1 += starsForDiff;
+                i1 += Clamp(0, 5, mgr->GetStarsForDifficulty(songID, diff, b));
                 i2 += 5;
             }
         }

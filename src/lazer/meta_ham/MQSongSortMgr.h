@@ -15,6 +15,7 @@ public:
     bool IsSong(Symbol) const;
 
     std::map<Symbol, std::vector<Symbol> > GetCharacterSongs() { return mCharacterSongs; }
+    std::vector<Symbol> &GetVecAt(Symbol s) { return mCharacterSongs[s]; }
     std::vector<Symbol> &GetFlatList() { return mFlatList; }
 
 private:

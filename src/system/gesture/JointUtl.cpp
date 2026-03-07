@@ -80,8 +80,8 @@ int JointParent(SkeletonJoint joint) {
 }
 
 void JointScreenPos(const TrackedJoint &joint, Vector2 &v2) {
-    XMVECTOR vmx;
     FLOAT fDepthX, fDepthY;
+    XMVECTOR vmx;
     vmx.x = joint.mSmoothedPos.x;
     vmx.y = joint.mSmoothedPos.y;
     vmx.z = joint.mSmoothedPos.z;
@@ -97,7 +97,7 @@ void JointScreenPos(const TrackedJoint &joint, Vector3 &v3) {
     vmx.y = joint.mSmoothedPos.y;
     vmx.z = joint.mSmoothedPos.z;
     NuiTransformSkeletonToDepthImage(vmx, &lDepthX, &lDepthY, &uDepth);
+    v3.x = (float)lDepthX / 240;
+    v3.y = (float)lDepthY / 320;
     v3.z = uDepth >> 3;
-    v3.x = lDepthX * 0.003125f;
-    v3.y = lDepthY * 0.004166667f;
 }

@@ -42,3 +42,8 @@ void StreamReceiver::Stop() {
         mState = kStopped;
     }
 }
+
+StreamReceiver *StreamReceiver::New(int i1, int i2, bool b3, int i4) {
+    MILO_ASSERT(sFactory, 0x1C);
+    return sFactory(i1, i2, b3, i4);
+}

@@ -1,18 +1,3 @@
-/* ===== PERMUTER LOCK — DO NOT EDIT =====
- * The source permuter is actively working on: CharClip::EvaluateChannel
- * Started: 2026-03-07 12:33 (stale after 5 minutes)
- * This banner is temporary and will be removed automatically.
- ===== */
-/* ===== PERMUTER LOCK — DO NOT EDIT =====
- * The source permuter is actively working on: CharClip::EvaluateChannel
- * Started: 2026-03-07 12:33 (stale after 5 minutes)
- * This banner is temporary and will be removed automatically.
- ===== */
-/* ===== PERMUTER LOCK — DO NOT EDIT =====
- * The source permuter is actively working on: CharClip::EvaluateChannel
- * Started: 2026-03-07 12:33 (stale after 5 minutes)
- * This banner is temporary and will be removed automatically.
- ===== */
 #include "char/CharClip.h"
 #include "CharClipGroup.h"
 #include "char/CharBoneDir.h"

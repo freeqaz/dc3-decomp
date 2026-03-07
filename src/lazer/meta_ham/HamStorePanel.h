@@ -15,6 +15,7 @@
 #include "os/User.h"
 #include "stl/_vector.h"
 #include "types.h"
+#include "utl/NetLoader.h"
 #include "utl/Str.h"
 #include "utl/Symbol.h"
 #include <list>
@@ -46,7 +47,7 @@ public:
     virtual StoreOffer *MakeNewOffer(DataArray *);
     virtual StoreOffer *FindOffer(Symbol) const;
     virtual bool EnumerateSubsetOfOfferIDs() const { return 0; }
-    virtual void GetOfferIDsToEnumerate(std::vector<u64> &, bool) const;
+    virtual void GetOfferIDsToEnumerate(std::vector<unsigned long long> &, bool) const;
 
     // ContentMgr::Callback
     virtual bool ContentDiscovered(Symbol);
@@ -84,10 +85,11 @@ protected:
     void AddDLCToCart(int);
     void CreateCartUIs();
     void ReadCartData();
+    void ResetCancelTimer();
     DataNode OnMsg(RCJobCompleteMsg const &);
 
-    int unka0;
-    int unka4;
+    DataNetLoader *unka0;
+    DataArray *mMetadata; // 0xa4
     HamStoreProvider *mOfferProvider; // 0xa8
     std::vector<HamStoreFilter *> mFilters;
     String mMotd;

@@ -1,109 +1,132 @@
 #include "Cheats.h"
-
-#include "obj/DataFunc.h"
-#include "obj/Dir.h"
-#include "obj/Msg.h"
-#include "os/Joypad.h"
-#include "os/JoypadMsgs.h"
-#include "os/System.h"
+#include "obj/Data.h"
+#include "os/Debug.h"
+#include "os/Keyboard.h"
 #include "os/UserMgr.h"
+#include "os/JoypadMsgs.h"
+#include "os/Joypad.h"
+#include "os/System.h"
+#include "obj/DataFunc.h"
 
+static bool sKeyCheatsEnabled = true;
 CheatsManager *gCheatsManager = nullptr;
+bool gDisable = false;
 
-void InitQuickJoyCheats(const DataArray *a, CheatsManager::ShiftMode);
-void InitKeyCheats(const DataArray *);
-void InitLongJoyCheats(const DataArray *);
-
-bool CheatsInitialized() { return gCheatsManager != 0; }
-
-BEGIN_HANDLERS(CheatsManager)
-    HANDLE_ACTION(set_unsafe_cheat_used, gCheatsManager->mUnsafeCheatsUsed)
-    HANDLE_MESSAGE(ButtonDownMsg)
-    HANDLE_MESSAGE(KeyboardKeyMsg)
-    HANDLE_MESSAGE(KeyboardKeyReleaseMsg)
-END_HANDLERS
-
-void CheatsInit() {
-    SystemConfig()->FindData("disable_cheats", gDisable, true);
-    if (!gDisable) {
-        if (gCheatsManager != 0) {
-            MILO_ASSERT(gCheatsManager == null, 0x2d8);
+void InitQuickJoyCheats(const DataArray *cheats, CheatsManager::ShiftMode mode) {
+    for (int i = 1; i < cheats->Size(); i++) {
+        DataArray *curCheat = cheats->Array(i);
+        if (curCheat->Int(0) >= 0 && curCheat->Int(0) < kPad_NumButtons) {
+            QuickJoyCheat cheat;
+            cheat.mButton = curCheat->Int(0);
+            cheat.mScript = curCheat;
+            gCheatsManager->AddQuickJoyCheat(cheat, mode);
+        } else {
+            MILO_LOG(
+                "Error in quick_cheats: %s is not a valid button\n", curCheat->Str(0)
+            );
         }
-        gCheatsManager = new CheatsManager();
-        JoypadSubscribe(gCheatsManager);
-        KeyboardSubscribe(gCheatsManager);
+    }
+}
 
-        DataArray *quickCheats = SystemConfig("quick_cheats");
-        auto leftCheats = quickCheats->FindArray("left", true);
-        InitQuickJoyCheats(
-            leftCheats, CheatsManager::kLeftShift
-        );
-        InitQuickJoyCheats(
-            quickCheats->FindArray("right", true), CheatsManager::kRightShift
-        );
+void InitKeyCheats(const DataArray *cheats) {
+    static Symbol ctrl("ctrl");
+    static Symbol alt("alt");
+    for (int i = 1; i < cheats->Size(); i++) {
+        KeyCheat keyCheat;
+        DataArray *cheat = cheats->Array(i);
+        if (cheat->Type(0) == kDataInt) {
+            if (cheat->Int(0) < 0) {
+                MILO_LOG(
+                    "Error in quick_cheats: %i is not a valid key code\n", cheat->Int(0)
+                );
+                continue;
+            } else {
+                keyCheat.mKey = cheat->Int(0);
+            }
+        } else {
+            const char *key = cheat->Str(0);
+            if (strlen(key) > 1) {
+                MILO_LOG("Error in quick_cheats: %s is not a valid key\n", key);
+                continue;
+            } else {
+                keyCheat.mKey = key[0];
+            }
+        }
+        keyCheat.mAlt = false;
+        keyCheat.mCtrl = false;
+        int subIndex;
+        for (subIndex = 1; subIndex < cheat->Size(); subIndex++) {
+            if (cheat->Type(subIndex) != kDataSymbol) {
+                break;
+            }
+            Symbol key = cheat->Sym(subIndex);
+            if (key == ctrl) {
+                keyCheat.mCtrl = true;
+            } else if (key == alt) {
+                keyCheat.mAlt = true;
+            } else {
+                MILO_NOTIFY("Unknown modifier symbol in cheat: %s", cheat->Sym(subIndex));
+            }
+        }
+        MILO_ASSERT(cheat->Type( subIndex ) == kDataString, 0x2A6);
+        keyCheat.mScript = cheat;
+        gCheatsManager->AddKeyCheat(keyCheat);
+    }
+    gCheatsManager->RebuildKeyCheatsForMode();
+}
 
-        InitKeyCheats(quickCheats->FindArray("keyboard", true));
-
-        InitLongJoyCheats(SystemConfig("long_cheats"));
-
-        DataRegisterFunc("set_key_cheats_enabled", SetKeyCheatsEnabled);
-        DataRegisterFunc("set_cheat_mode", OnSetCheatMode);
-        DataRegisterFunc("get_cheat_mode", OnGetCheatMode);
+void InitLongJoyCheats(const DataArray *cheats) {
+    for (int i = 1; i < cheats->Size(); i++) {
+        DataArray *cheat = cheats->Array(i);
+        DataArray *buttons = cheat->Array(0);
+        if (buttons->Size() > 16) {
+            MILO_LOG("Too many buttons in long cheat, max %d\n", 16);
+        } else {
+            LongJoyCheat longJoyCheat;
+            bool good = true;
+            for (int j = 0; j < buttons->Size(); j++) {
+                int button = buttons->Int(j);
+                if (button >= 0 && button < kPad_NumButtons) {
+                    longJoyCheat.mSequence.push_back(button);
+                } else {
+                    MILO_LOG("Error in long_cheats: %s is not a valid button\n", button);
+                    good = false;
+                    break;
+                }
+            }
+            if (good) {
+                longJoyCheat.mScript = cheat->Command(1);
+                gCheatsManager->AddLongJoyCheat(longJoyCheat);
+            }
+        }
     }
 }
 
 DataNode OnGetCheatMode(DataArray *da) { return gCheatsManager->CheatMode(); }
 
-void EnableKeyCheats(bool b) {
-    gKeyCheatsEnabled = b;
-    if (gCheatsManager) {
-        gCheatsManager->setKeyCheatsEnabled(b);
-    }
-}
-
 DataNode OnSetCheatMode(DataArray *da) {
-    Symbol sym;
-    sym = da->Sym(1);
-    if (gCheatsManager->GetSymMode() != sym) {
-        gCheatsManager->SetSymMode(sym);
-    }
+    gCheatsManager->SetSymMode(da->Sym(1));
     return 0;
 }
 
 DataNode SetKeyCheatsEnabled(DataArray *da) {
     bool result = da->Int(1) != 0;
-    gKeyCheatsEnabled = result;
+    sKeyCheatsEnabled = result;
     if (gCheatsManager) {
-        gCheatsManager->setKeyCheatsEnabled(result);
+        gCheatsManager->SetKeyCheatsEnabled(result);
     }
     return 0;
 }
 
-CheatsManager::~CheatsManager() {}
-
-CheatsManager::CheatsManager()
-    : mLongJoyCheats(), mQuickJoyCheats(), mKeyCheats(), mJoyCheatPtrsMode(),
-      mKeyCheatPtrsMode(), mLastButtonTime(), mKeyCheatsEnabled(false) {
-    mLastButtonTime.Start();
-    SystemConfig()->FindData("cheats_buffer", (int &)mMaxBuffer, true);
-    SetName("cheats_mgr", ObjectDir::Main());
-}
-
-void CheatsManager::AppendLog(FixedString &fs) {
-    if (mBuffer.size() != 0) {
-        fs += "\n\nCheats Used";
-        char buf[16];
-        strncpy(buf, "\n   %.30s", 10);
-        for (std::list<CheatLog>::iterator it = mBuffer.begin(); it != mBuffer.end(); ++it) {
-            String str;
-            it->mScript.Print(str, 1, 0);
-            fs += MakeString(buf, str);
-        }
-        if (mBuffer.size() == mMaxBuffer) {
-            fs += "\n   ...";
-        }
+void EnableKeyCheats(bool b) {
+    sKeyCheatsEnabled = b;
+    if (gCheatsManager) {
+        gCheatsManager->SetKeyCheatsEnabled(b);
     }
 }
+
+bool GetEnabledKeyCheats() { return sKeyCheatsEnabled; }
+bool CheatsInitialized() { return gCheatsManager; }
 
 void LogCheat(int i1, bool b, DataArray *da) {
     if (!gCheatsManager) {
@@ -118,70 +141,6 @@ void AppendCheatsLog(FixedString &fs) {
     }
 }
 
-bool GetEnabledKeyCheats() { return gKeyCheatsEnabled; }
-
-void CheatsManager::Log(int padNum, bool quickCheat, DataArray *script) {
-    CheatLog log;
-    log.mPad = padNum;
-    log.mQuick = quickCheat;
-    log.mScript = script;
-    mBuffer.push_front(log);
-
-    if (mBuffer.size() > mMaxBuffer) {
-        mBuffer.pop_back();
-    }
-}
-
-void CheatsManager::CallCheatScript(bool b1, DataArray *da, LocalUser *lu, bool b2) {
-    if (!lu && TheUserMgr) {
-        std::vector<LocalUser *> users;
-        TheUserMgr->GetLocalUsers(users);
-        for (std::vector<LocalUser *>::iterator it = users.begin();
-             it != users.end();
-             ++it) {
-            if ((*it)->GetPadNum() == -1)
-                break;
-            JoypadData *padData = JoypadGetPadData((*it)->GetPadNum());
-            if (b1 && b2 && padData->mType - 1U > 2 && padData->mType - 0x13U > 2) {
-                lu = *it;
-                break;
-            }
-        }
-    }
-    if (lu) {
-        switch (JoypadGetPadData(lu->GetPadNum())->mType) {
-        case kJoypadDigital:
-        case kJoypadAnalog:
-        case kJoypadDualShock:
-        case kJoypadWiiCore:
-        case kJoypadWiiFS:
-        case kJoypadWiiClassic:
-            DataVariable("cheat_pad") = lu ? lu->GetPadNum() : 0;
-            LogCheat(lu ? lu->GetPadNum() : -1, b1, da);
-            if (b1) {
-                int i = 2;
-                for (; da->Node(i).Type() != kDataCommand && i < da->Size(); i++)
-                    ;
-                if (i < da->Size()) {
-                    da->ExecuteScript(i, nullptr, nullptr, 1);
-                }
-            } else {
-                da->Execute();
-            }
-            {
-                Hmx::Object *uiObj = ObjectDir::Main()->Find<Hmx::Object>("ui", true);
-                static Message msg("cheat_invoked", 0, 0);
-                msg[0] = b1;
-                msg[1] = DataNode(da, kDataArray);
-                uiObj->Handle(msg, false);
-            }
-            break;
-        default:
-            break;
-        }
-    }
-}
-
 void CallQuickCheat(DataArray *da, LocalUser *lu) {
     if (!gCheatsManager) {
         MILO_ASSERT(gCheatsManager, 0x309);
@@ -189,11 +148,151 @@ void CallQuickCheat(DataArray *da, LocalUser *lu) {
     gCheatsManager->CallCheatScript(true, da, lu, false);
 }
 
+#pragma region CheatsManager
+
+CheatsManager::CheatsManager()
+    : mKeyCheatsEnabled(sKeyCheatsEnabled), mCtrlOverriddeMode(false),
+      mIsOverridingKeyboard(false), mPreviousOverride(nullptr), mUnsafeCheatsUsed(false) {
+    mLastButtonTime.Start();
+    SystemConfig()->FindData("cheats_buffer", mMaxBuffer);
+    DataArray *arr = SystemConfig()->FindArray("cheats_ctrl_mode", false);
+    if (arr) {
+        mCtrlOverriddeMode = arr->Int(1);
+    }
+    SetName("cheats_mgr", ObjectDir::Main());
+}
+
+BEGIN_HANDLERS(CheatsManager)
+    HANDLE_ACTION(set_unsafe_cheat_used, mUnsafeCheatsUsed = true)
+    HANDLE_MESSAGE(ButtonDownMsg)
+    HANDLE_MESSAGE(KeyboardKeyMsg)
+    HANDLE_MESSAGE(KeyboardKeyReleaseMsg)
+END_HANDLERS
+
+void CheatsManager::AppendLog(FixedString &str) {
+    char buffer[10];
+    if (mBuffer.size() != 0) {
+        str += "\n\nCheats Used";
+        memcpy(buffer, "\n   %.30s", 10);
+        FOREACH (it, mBuffer) {
+            CheatLog &cur = *it;
+            String curStr;
+            cur.mScript.Print(curStr, true, 0);
+            str += MakeString(buffer, curStr);
+        }
+        if (mBuffer.size() == mMaxBuffer) {
+            str += "\n   ...";
+        }
+    }
+}
+
+void CheatsManager::Log(int padNum, bool quickCheat, DataArray *script) {
+    CheatLog log;
+    log.mPad = padNum;
+    log.mQuick = quickCheat;
+    log.mScript = script;
+    mBuffer.push_front(log);
+    if (mBuffer.size() > mMaxBuffer) {
+        mBuffer.pop_back();
+    }
+}
+
+// void CheatsManager::CallCheatScript(bool b1, DataArray *da, LocalUser *lu, bool b2) {
+//     if (!lu) {
+//         if (TheUserMgr) {
+//             std::vector<LocalUser *> users;
+//             TheUserMgr->GetLocalUsers(users);
+//             for (int i = 0; i < (int)users.size(); i++) {
+//                 CallCheatScript(b1, da, users[i], b2);
+//             }
+//         }
+//     } else {
+//         Log(lu->GetPadNum(), b1, da);
+//     }
+// }
+
+void CheatsManager::RebuildKeyCheatsForMode() {
+    static Symbol modes("modes");
+    mKeyCheatPtrsMode.clear();
+    FOREACH (it, mKeyCheats) {
+        KeyCheat *cur = it;
+        DataArray *modeArr = cur->mScript->FindArray(modes, false);
+        if (!modeArr || modeArr->Contains(mSymMode)) {
+            mKeyCheatPtrsMode.push_back(cur);
+        }
+    }
+    for (int i = 0; i < 2; i++) {
+        mJoyCheatPtrsMode[i].clear();
+        FOREACH (it, mQuickJoyCheats[i]) {
+            QuickJoyCheat *cur = it;
+            DataArray *modeArr = cur->mScript->FindArray(modes, false);
+            if (!modeArr || modeArr->Contains(mSymMode)) {
+                mJoyCheatPtrsMode[i].push_back(cur);
+            }
+        }
+    }
+}
+
+DataNode CheatsManager::OnMsg(const KeyboardKeyReleaseMsg &msg) {
+    if (msg->Int(2) == 0x11 && mIsOverridingKeyboard) {
+        KeyboardOverride(mPreviousOverride);
+        mIsOverridingKeyboard = false;
+    }
+    return 1;
+}
+
+DataNode CheatsManager::OnMsg(const KeyboardKeyMsg &msg) {
+    if (!mKeyCheatsEnabled) {
+        return DATA_UNHANDLED;
+    } else {
+        int key = msg.GetKey();
+        if (key == 0x11 && mCtrlOverriddeMode) {
+            if (!mIsOverridingKeyboard) {
+                mPreviousOverride = KeyboardOverride(this);
+                mIsOverridingKeyboard = true;
+            }
+            return 1;
+        } else {
+            std::vector<KeyCheat *> cheatPtrs(mKeyCheatPtrsMode);
+            FOREACH (it, cheatPtrs) {
+                KeyCheat *cur = *it;
+                if (key == cur->mKey && msg.GetCtrl() == cur->mCtrl
+                    && msg.GetAlt() == cur->mAlt) {
+                    CallCheatScript(true, cur->mScript, nullptr, false);
+                }
+            }
+            return 1;
+        }
+    }
+}
+
+#pragma endregion
+
+void CheatsInit() {
+    SystemConfig()->FindData("disable_cheats", gDisable);
+    if (!gDisable) {
+        MILO_ASSERT(gCheatsManager == null, 0x2d8);
+        gCheatsManager = new CheatsManager();
+        JoypadSubscribe(gCheatsManager);
+        KeyboardSubscribe(gCheatsManager);
+
+        DataArray *quickCheats = SystemConfig("quick_cheats");
+        InitQuickJoyCheats(quickCheats->FindArray("left"), CheatsManager::kLeftShift);
+        InitQuickJoyCheats(quickCheats->FindArray("right"), CheatsManager::kRightShift);
+
+        InitKeyCheats(quickCheats->FindArray("keyboard"));
+
+        InitLongJoyCheats(SystemConfig("long_cheats"));
+
+        DataRegisterFunc("set_key_cheats_enabled", SetKeyCheatsEnabled);
+        DataRegisterFunc("set_cheat_mode", OnSetCheatMode);
+        DataRegisterFunc("get_cheat_mode", OnGetCheatMode);
+    }
+}
+
 void CheatsTerminate() {
     if (!gDisable) {
-        if (!gCheatsManager) {
-            MILO_ASSERT(gCheatsManager, 0x2fa);
-        }
+        MILO_ASSERT(gCheatsManager, 0x2fa);
         JoypadUnsubscribe(gCheatsManager);
         KeyboardUnsubscribe(gCheatsManager);
         if (gCheatsManager) {
@@ -201,77 +300,4 @@ void CheatsTerminate() {
         }
         gCheatsManager = 0;
     }
-}
-
-void CheatsManager::RebuildKeyCheatsForMode() {
-    auto cheatsEnd = mKeyCheats.end();
-    static Symbol modes("modes");
-    mKeyCheatPtrsMode.clear();
-    for (std::vector<KeyCheat>::iterator it = mKeyCheats.begin();
-         it != cheatsEnd; ++it) {
-        DataArray *modesArr = it->mScript->FindArray(modes, false);
-        if (!modesArr || modesArr->Contains(mSymMode)) {
-            mKeyCheatPtrsMode.push_back(&*it);
-        }
-    }
-    for (int i = 0; i < 2; i++) {
-        mJoyCheatPtrsMode[i].clear();
-        for (std::vector<QuickJoyCheat>::iterator it = mQuickJoyCheats[i].begin();
-             it != mQuickJoyCheats[i].end(); ++it) {
-            DataArray *modesArr = it->mScript->FindArray(modes, false);
-            if (!modesArr || modesArr->Contains(mSymMode)) {
-                mJoyCheatPtrsMode[i].push_back(&*it);
-            }
-        }
-    }
-}
-
-__declspec(noinline) void CheatsManager::SetSymMode(Symbol sym) {
-    mSymMode = sym;
-    RebuildKeyCheatsForMode();
-}
-
-CheatLog::~CheatLog() {}
-
-void InitLongJoyCheats(const DataArray *da) {
-    int i = 1;
-    while (i < da->Size()) {
-        const DataArray *entry = da->Array(i);
-        const DataArray *array = entry->Array(0);
-
-        if (array->Size() > 0x10) {
-            TheDebug << MakeString("Too many buttons in long cheat, ");
-        } else {
-            std::vector<int> buttons;
-            bool isValid = 1;
-            int j = 0;
-
-            while (j < array->Size()) {
-                int button = array->Int(j);
-                if (button >= 0 && button < 0x18) {
-                    buttons.push_back(button);
-                } else {
-                    TheDebug << MakeString("Error in long_cheats: %s is not a valid button", button);
-                    isValid = 0;
-                    break;
-                }
-                j++;
-            }
-
-            if (isValid) {
-                DataArray *cmd = entry->Command(1);
-                CheatsManager::LongJoyCheat *cheat = new CheatsManager::LongJoyCheat();
-                cheat->mSequence = buttons;
-                cheat->mScript = cmd;
-                gCheatsManager->mLongJoyCheats.push_back(cheat);
-            }
-        }
-        i++;
-    }
-}
-
-DataNode CheatsManager::OnMsg(KeyboardKeyReleaseMsg const &msg) {
-    if (msg->Int(2) == 0x11 && mIsOverridingKeyboard)
-        return 0;
-    return DATA_UNHANDLED;
 }

@@ -21,6 +21,7 @@
 #include "utl/MemMgr.h"
 #include "utl/Symbol.h"
 #include "utl/TempoMap.h"
+#include "utl/TimeConversion.h"
 
 HamMaster *LoadingPanel::sLoadingMaster = nullptr;
 SongDB *LoadingPanel::sSongDB = nullptr;

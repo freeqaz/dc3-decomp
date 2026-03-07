@@ -109,7 +109,7 @@ protected:
     Timer mLoadTimer; // 0x98
     RndOverlay *mOverlay; // 0xc8
     Automator *mAutomator; // 0xcc
-    bool unkd0;
+    bool mShowDevMenu; // 0xd0
 };
 
 extern UIManager *TheUI;
@@ -141,8 +141,12 @@ private:
     Symbol CurScreenName();
 
     DataNode OnCustomMsg(const Message &);
-    DataNode OnMsg(UITransitionCompleteMsg const &);
-    DataNode OnMsg(ButtonDownMsg const &);
+    DataNode OnMsg(const UITransitionCompleteMsg &);
+    DataNode OnMsg(const ButtonDownMsg &);
+    DataNode OnMsg(const class UIComponentFocusChangeMsg &);
+    DataNode OnMsg(const UIComponentSelectMsg &);
+    DataNode OnMsg(const UIComponentScrollMsg &);
+    DataNode OnMsg(const UIScreenChangeMsg &);
     void FillButtonMsg(ButtonDownMsg &, int);
     DataNode OnCheatInvoked(DataArray const *);
 
@@ -163,4 +167,15 @@ private:
 DECLARE_MESSAGE(UIChangedMsg, "ui_changed")
 UIChangedMsg(bool showing) : Message(Type(), showing) {}
 bool Showing() const { return mData->Int(2); }
+END_MESSAGE
+
+#include "ui/PanelDir.h"
+// #define FOCUS_MSG (component_focus ($new_focus $old_focus $panel_dir $nav_type))
+DECLARE_MESSAGE(UIComponentFocusChangeMsg, "component_focus");
+UIComponentFocusChangeMsg(UIComponent *comp1, UIComponent *comp2, PanelDir *dir, Symbol s)
+    : Message(Type(), comp1, comp2, dir, s) {}
+UIComponent *GetNewFocus() const { return mData->Obj<UIComponent>(2); }
+UIComponent *GetOldFocus() const { return mData->Obj<UIComponent>(3); }
+PanelDir *GetDir() const { return mData->Obj<PanelDir>(4); }
+Symbol GetNavType() const { return mData->Sym(5); }
 END_MESSAGE

@@ -83,6 +83,7 @@ public:
         XShowNuiGuideUI(id);
     }
 
+    void SetUnk30AtPos(int pos, int val) { unk30[pos] = val; }
     int PauseOnSkeletonLossMode() const { return mPauseOnSkeletonLossMode; }
 
     int TogglePauseOnSkeletonLoss() {

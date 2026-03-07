@@ -16,16 +16,17 @@ void ADSRImpl::Save(BinStream &bs) const {
     bs << mAttackMode << mSustainMode << mReleaseMode;
 }
 
+INIT_REVS(1, 0)
+
 void ADSRImpl::Load(BinStream &bs, ADSR *adsr) {
     LOAD_REVS(bs)
-    static const unsigned short gRevs[4] = { 1, 0, 0, 0 };
     if (d.rev > 1) {
         MILO_FAIL(
             "%s can't load new %s version %d > %d",
             adsr ? PathName(adsr) : "",
             "ADSRImpl",
             d.rev,
-            gRevs[0]
+            gRev
         );
     }
     if (d.altRev > 0) {
@@ -34,7 +35,7 @@ void ADSRImpl::Load(BinStream &bs, ADSR *adsr) {
             adsr ? PathName(adsr) : "",
             "ADSRImpl",
             d.altRev,
-            gRevs[2]
+            gAltRev
         );
     }
     bs >> mAttackRate;

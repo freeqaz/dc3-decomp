@@ -51,22 +51,36 @@ BEGIN_LOADS(FxSendFlanger)
         mWetGain = -3.0f;
         UpdateMix();
     }
-    bs >> mDelayMs >> mRate;
+    d >> mDelayMs >> mRate;
     int dummy;
 
-    if (d.rev >= 4)
-        bs >> mDepthPct;
-    else
-        bs >> dummy;
-    if (d.rev >= 2)
-        bs >> mFeedbackPct;
-    if (d.rev >= 3)
-        bs >> mOffsetPct;
-
+    if (d.rev >= 4 && d.rev <= 6) {
+        int pct;
+        d >> pct;
+        mDepthPct = pct;
+    } else if (d.rev >= 7) {
+        d >> mDepthPct;
+    } else {
+        d >> dummy;
+    }
+    if (d.rev >= 2 && d.rev <= 6) {
+        int pct;
+        d >> pct;
+        mFeedbackPct = pct;
+    } else if (d.rev >= 7) {
+        d >> mFeedbackPct;
+    }
+    if (d.rev >= 3 && d.rev <= 6) {
+        int pct;
+        d >> pct;
+        mOffsetPct = pct;
+    } else if (d.rev >= 7) {
+        d >> mOffsetPct;
+    }
     if (d.rev >= 6) {
         d >> mTempoSync;
-        bs >> mSyncType;
-        bs >> mTempo;
+        d >> mSyncType;
+        d >> mTempo;
     }
     OnParametersChanged();
 END_LOADS

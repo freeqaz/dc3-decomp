@@ -9,16 +9,20 @@
 #include "SongSortByLocation.h"
 #include "SongSortNode.h"
 #include "meta/SongPreview.h"
+#include "meta_ham/HamSongMgr.h"
+#include "meta_ham/MetaPerformer.h"
 #include "obj/Data.h"
 #include "obj/Dir.h"
 #include "obj/Msg.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
+#include "stl/_vector.h"
 #include "ui/UI.h"
 #include "meta_ham/MetaPerformer.h"
 #include "ProfileMgr.h"
 #include "ui/UIListProvider.h"
 #include "ui/UIPanel.h"
+#include "utl/Std.h"
 #include "utl/Symbol.h"
 BEGIN_HANDLERS(SongSortMgr)
     HANDLE_ACTION(get_setlist_mode, 0)
@@ -288,4 +292,20 @@ void SongSortMgr::OnEnter() {
         mHighlightSaved = false;
     }
     current->UpdateHighlight();
+}
+
+void SongSortMgr::SetSetlistMode(bool b) {
+    static Symbol song_select_story("song_select_story");
+    MILO_ASSERT(TheGameMode->Property("song_select_mode")->Sym() != song_select_story, 0xa7);
+    if (b) {
+        std::vector<Symbol> songs;
+        TheHamSongMgr.GetValidSongs(*MetaPerformer::Current(), songs);
+        static Symbol any("any");
+        for (int i = 0; i < Min<int>(songs.size(), 100); i++) {
+            MetaPerformer::Current()->SetSong(any);
+        }
+    } else {
+        MetaPerformer::Current()->ResetSongs();
+    }
+    OnSetlistModeChanged();
 }

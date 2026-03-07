@@ -41,7 +41,7 @@ public:
     }
     virtual int Tell() { return mPos - mBuf; }
     virtual void Flush() {}
-    virtual bool Eof();
+    virtual bool Eof() { return (mPos - mBuf) >= mSize; }
     virtual bool Fail() { return false; }
     virtual int Size() { return mSize; }
     virtual int UncompressedSize() { return 0; }

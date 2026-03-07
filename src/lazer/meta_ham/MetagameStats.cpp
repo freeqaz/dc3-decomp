@@ -40,8 +40,7 @@ void MetagameStats::Text(int, int data, UIListLabel *slot, UILabel *label) const
     DataArray *statArr = mStatsCfg->Array(data + 1);
     if (statArr->Int(0) == kStatsLayoutHeader) {
         if (slot->Matches("header")) {
-            auto headerToken = statArr->Sym(1);
-            label->SetTextToken(headerToken);
+            label->SetTextToken(statArr->Sym(1));
         }
     } else if (statArr->Int(0) != kStatsLayoutSpacer) {
         if (slot->Matches("stat") || slot->Matches("title")) {
@@ -75,10 +74,10 @@ void MetagameStats::Text(int, int data, UIListLabel *slot, UILabel *label) const
                 break;
             }
             case kStatType_FavoriteMode: {
-                static Symbol dancebattle("dancebattle");
-                static Symbol perform("perform");
                 static Symbol stats_favorite_na("stats_favorite_na");
+                static Symbol perform("perform");
                 static Symbol practice("practice");
+                static Symbol dancebattle("dancebattle");
                 int fave = GetFavorite((FavoriteStatID)id);
                 if (slot->Matches("title")) {
                     Symbol title = SetTitleForFavorite(fave, 0, nullptr);
@@ -92,8 +91,7 @@ void MetagameStats::Text(int, int data, UIListLabel *slot, UILabel *label) const
                     } else if (fave == 2) {
                         tag = dancebattle;
                     }
-                    auto _tmp0 = Localize(tag, nullptr, TheLocale);
-                    label->SetTokenFmt(statSym, _tmp0);
+                    label->SetTokenFmt(statSym, Localize(tag, nullptr, TheLocale));
                 }
                 break;
             }
@@ -128,7 +126,7 @@ void MetagameStats::Text(int, int data, UIListLabel *slot, UILabel *label) const
                         SystemConfig()->FindArray("characters", false);
                     MILO_ASSERT(characterArray, 0xDF);
                     for (int i = 1; i < characterArray->Size(); i++) {
-                        if ((unsigned int)(int)(unsigned int)fave == i) {
+                        if (fave == i) {
                             DataArray *characterEntry = characterArray->Array(i);
                             MILO_ASSERT(characterEntry, 0xE5);
                             s15 = characterEntry->Sym(0);

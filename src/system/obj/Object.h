@@ -701,6 +701,8 @@ extern DataArray *SystemConfig(Symbol, Symbol, Symbol);
     if (sym == msg::Type())                                                              \
     _HANDLE_CHECKED(OnMsg(msg(_msg)))
 
+#define HANDLE_METHOD(func) _HANDLE_CHECKED(func(_msg))
+
 #define HANDLE_FORWARD(func) _HANDLE_CHECKED(func(_msg, false))
 
 #define HANDLE_MEMBER(member) HANDLE_FORWARD(member.Handle)
@@ -1324,6 +1326,12 @@ inline TextStream &operator<<(TextStream &ts, const Hmx::Object *obj) {
         ts << "<null>";
     return ts;
 }
+
+struct ObjMatchPr {
+    ObjMatchPr(Hmx::Object *o) : obj(o) {}
+    bool operator()(const Hmx::Object *value) const { return obj == value; }
+    Hmx::Object *obj;
+};
 
 #pragma endregion
 #pragma region ObjVector

@@ -43,8 +43,11 @@ public:
     virtual void Load(BinStream &);
     virtual void PreLoad(BinStream &);
     virtual void PostLoad(BinStream &);
+    // UIComponent
+    virtual void Enter();
+    virtual void Poll();
     // UIListProvider
-    virtual int NumData() const;
+    virtual int NumData() const { return mNumData; }
     virtual void AdjustTrans(Transform &, const UIListElementDrawState &) {}
     // RndDrawable
     virtual float GetDistanceToPlane(const Plane &, Vector3 &);
@@ -55,16 +58,12 @@ public:
     virtual void StartScroll(const UIListState &, int, bool);
     virtual void CompleteScroll(const UIListState &);
 
-    // unsure where these go
-    virtual void Enter();
-    virtual void Poll();
-
     static void Init();
 
     void SetNumDisplay(int);
     void SetGridSpan(int);
     void SetCircular(bool);
-    void SetSpeed(float speed); // { mListState.SetSpeed(speed); }
+    void SetSpeed(float speed);
     void SetParent(UIList *);
     void LimitCircularDisplay(bool);
     void SetProvider(UIListProvider *);
@@ -78,15 +77,17 @@ public:
     void StopAutoScroll();
     void SetSelected(int, int);
     bool SetSelected(Symbol, bool, int);
+    int Selected() const;
     int SelectedPos() const;
-    int Selected() const { return mListState.Selected(); }
-    const std::vector<UIListWidget *> &GetWidgets() const { return mWidgets; }
     void Scroll(int);
     void CalcBoundingBox(Box &);
     Symbol SelectedSym(bool) const;
     void SetSelectedSimulateScroll(int);
     bool SetSelectedSimulateScroll(Symbol, bool);
     UIListDir *GetUIListDir() const;
+    UIListState &GetListState();
+    const std::vector<UIListWidget *> &GetWidgets() const;
+    UIList *ChildList();
 
     int NumDisplay() const { return mListState.NumDisplay(); }
     int GridSpan() const { return mListState.GridSpan(); }
@@ -95,17 +96,16 @@ public:
     int SelectedData() const { return mListState.SelectedData(); }
     int FirstShowing() const { return mListState.FirstShowing(); }
     bool IsScrolling() const;
-    UIList *ChildList() { return mListDir->SubList(mListState.SelectedDisplay(), mWidgets); }
     UIList *ParentList() { return mParent; }
-    UIListState &GetListState() { return mListState; }
 
     NEW_OBJ(UIList)
     OBJ_MEM_OVERLOAD(0x21)
     static void Register() { REGISTER_OBJ_FACTORY(UIList) }
 
 private:
+    virtual void OldResourcePreload(BinStream &);
+
     void Update();
-    void OldResourcePreload(BinStream &);
 
 protected:
     // ScrollSelect

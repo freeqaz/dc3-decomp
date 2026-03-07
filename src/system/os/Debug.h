@@ -57,6 +57,7 @@ public:
     void AddExitCallback(ExitCallbackFunc *func) { mExitCallbacks.push_front(func); }
     void AddFailAppendCallback(FixedStringFunc *func) { mFailAppendCallbacks.push_front(func); }
     void RemoveExitCallback(ExitCallbackFunc *);
+    void AddFixedStrCallback(FixedStringFunc *func) { mFailAppendCallbacks.push_front(func); }
     bool CheckModalCallback(ModalCallbackFunc *func) { return mModalCallback == func; }
     ModalCallbackFunc *ModalCallback() const { return mModalCallback; }
     bool NoModal() const { return mNoModal; }
@@ -178,22 +179,7 @@ extern DebugNotifyOncePrinter TheDebugNotifyOncePrinter;
 #define MILO_PRINT_ONCE(...) TheDebugNotifyOncePrinter << MakeString(__VA_ARGS__)
 
 namespace {
-    inline bool AddToStrings(const char *name, std::list<String> &strings) {
-        unsigned int count = 0;
-        std::list<String>::iterator it = strings.begin();
-        for (; it != strings.end(); ++it)
-            count++;
-        if (count > 0x10)
-            return false;
-        it = strings.begin();
-        for (; it != strings.end(); ++it) {
-            if (strcmp(it->c_str(), name) == 0)
-                return false;
-        }
-        String s(name);
-        strings.push_back(s);
-        return true;
-    }
+    bool AddToStrings(const char *name, std::list<String> &strings);
 }
 
 class DebugNotifyOncer {

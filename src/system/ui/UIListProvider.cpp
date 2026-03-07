@@ -6,6 +6,7 @@
 #include "os/Debug.h"
 #include "rndobj/Mat.h"
 #include "rndobj/Mesh.h"
+#include "ui/UILabel.h"
 #include "ui/UIList.h"
 #include "ui/UIListMesh.h"
 #include "utl/Loader.h"
@@ -64,33 +65,27 @@ void UIListProvider::UpdateExtendedCustom(int, int, Hmx::Object *obj) const {
 #pragma region DataProvider
 
 void DataProvider::Text(int i, int j, UIListLabel *listlabel, UILabel *label) const {
-    DataNode node = mData->Node(i + mOffset);
-
-    if (node.Type() == kDataArray) {
+    DataNode &n = mData->Node(mOffset + j);
+    if (n.Type() == kDataArray) {
         if (!TheLoadMgr.EditMode() && unkd) {
-            Message msg(Symbol("set_token_fmt"), node);
-            mList->HandleType(msg);
+            Message msg("set_token_fmt", n);
+            label->Handle(msg, false);
+        } else if (TheLoadMgr.EditMode()) {
+            label->SetEditText(Localize(n.Array()->Sym(0), nullptr, TheLocale));
         } else {
-            Symbol sym = node.Array()->Sym(0);
-            label->SetEditText(Localize(sym, false, TheLocale));
+            label->SetTextToken(n.Array()->Sym(0));
         }
     } else {
-        if (!mList || mList->IsActive(i)) {
-            if (!TheLoadMgr.EditMode()) {
-                Symbol sym = node.ForceSym();
-                label->SetEditText(Localize(sym, false, TheLocale));
-            } else {
-                Symbol sym = node.ForceSym();
-                Message msg(Symbol("set_token_fmt"), node);
-                mList->HandleType(msg);
-            }
-        } else {
+        if (!IsActive(j)) {
             label->SetTextToken(gNullStr);
+        } else if (TheLoadMgr.EditMode()) {
+            label->SetEditText(Localize(n.ForceSym(), nullptr, TheLocale));
+        } else {
+            label->SetTextToken(n.ForceSym());
         }
     }
-
-    if (unkd) {
-        // mWidths[i] = label->GetX();
+    if (mFluidWidth) {
+        const_cast<DataProvider *>(this)->mWidths[j] = label->BoundsRight();
     }
 }
 
@@ -102,13 +97,15 @@ float DataProvider::GapSize(int, int i, int, int) const {
 }
 
 void DataProvider::Enable(Symbol sym) {
-    auto it = std::find(mDisabled.begin(), mDisabled.end(), sym);
+    stlpmtx_std::list<Symbol>::iterator it =
+        std::find(mDisabled.begin(), mDisabled.end(), sym);
     if (it != mDisabled.end())
         mDisabled.erase(it);
 }
 
 void DataProvider::UnDim(Symbol sym) {
-    auto it = std::find(mDimmed.begin(), mDimmed.end(), sym);
+    stlpmtx_std::list<Symbol>::iterator it =
+        std::find(mDimmed.begin(), mDimmed.end(), sym);
     if (it != mDimmed.end())
         mDimmed.erase(it);
 }
@@ -132,13 +129,15 @@ RndMat *DataProvider::Mat(int i, int j, UIListMesh *mesh) const {
 }
 
 void DataProvider::Disable(Symbol sym) {
-    auto it = std::find(mDisabled.begin(), mDisabled.end(), sym);
+    stlpmtx_std::list<Symbol>::iterator it =
+        std::find(mDisabled.begin(), mDisabled.end(), sym);
     if (it == mDisabled.end())
         mDisabled.push_back(sym);
 }
 
 void DataProvider::Dim(Symbol sym) {
-    auto it = std::find(mDimmed.begin(), mDimmed.end(), sym);
+    stlpmtx_std::list<Symbol>::iterator it =
+        std::find(mDimmed.begin(), mDimmed.end(), sym);
     if (it == mDimmed.end())
         mDimmed.push_back(sym);
 }

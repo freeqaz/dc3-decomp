@@ -15,6 +15,10 @@ public:
     void myLoad(BinStreamRev &);
     MoggClipMap &operator=(const MoggClipMap &);
     MoggClip *GetMoggClip() const { return mMoggClip; }
+    float Pan() const { return mPan; }
+    float PanWidth() const { return mPanWidth; }
+    float Volume() const { return mVolume; }
+    bool Stereo() const { return mIsStereo; }
 
 protected:
     /** "Which moggclip to play" */

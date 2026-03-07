@@ -4,8 +4,6 @@
 #include "utl/Locale.h"
 #include "utl/Std.h"
 
-LocalePanel::LocalePanel() {}
-
 int LocalePanel::NumData() const { return mEntries.size(); }
 
 bool LocalePanel::IsActive(int i) const { return !mEntries[i].mLabel.empty(); }

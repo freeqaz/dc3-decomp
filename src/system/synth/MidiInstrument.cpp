@@ -78,6 +78,26 @@ float NoteVoiceInst::getCalculatedSpeed(float f1) {
     return CalcSpeedFromTranspose(mFineTune / 100.0f + (f1 - mCenterNote));
 }
 
+void NoteVoiceInst::Poll() {
+    if (mDurationFramesLeft == 0) {
+        Stop();
+    } else {
+        if (mDurationFramesLeft > 0) {
+            mDurationFramesLeft--;
+        }
+        if (mGlideFramesLeft >= 0) {
+            float interped = Interp(
+                mGlideFromNote,
+                mGlideToNote,
+                (float)(mGlideFrames - mGlideFramesLeft--) / (float)mGlideFrames
+            );
+            mSample->SetBankSpeed(
+                CalcSpeedFromTranspose(mFineTune / 100.0f + (interped - mCenterNote))
+            );
+        }
+    }
+}
+
 #pragma endregion
 #pragma region MidiInstrument
 
@@ -159,6 +179,24 @@ BEGIN_LOADS(MidiInstrument)
     }
     StartPolling();
 END_LOADS
+
+void MidiInstrument::SynthPoll() {
+    if (!mActiveVoices.empty()) {
+        for (auto it = mActiveVoices.begin(); it != mActiveVoices.end();) {
+            NoteVoiceInst *cur = *it++;
+            cur->Poll();
+            if (cur->Started() && !cur->IsRunning()) {
+                delete cur;
+            }
+        }
+        if (mFaders.Dirty()) {
+            FOREACH (it, mActiveVoices) {
+                (*it)->UpdateVolume();
+                (*it)->UpdatePan();
+            }
+        }
+    }
+}
 
 NoteVoiceInst *MidiInstrument::MakeNoteInst(
     SampleZone *zone,

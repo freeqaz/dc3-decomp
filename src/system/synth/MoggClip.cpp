@@ -94,7 +94,7 @@ INIT_REVS(3, 2)
 void MoggClip::PreLoad(BinStream &bs) {
     LOAD_REVS(bs)
     ASSERT_REVS(3, 2)
-    Hmx::Object::Load(bs);
+    LOAD_SUPERCLASS(Hmx::Object)
     bs >> mMoggFile;
     bs >> mVolume;
     if (d.rev <= 2) {
@@ -345,9 +345,10 @@ void MoggClip::LoadFile(BinStream *bs) {
     if (!mMoggFile.empty()) {
         bool loadingMusic = IsLoadingMusicMogg(mMoggFile.c_str());
         bool useless = IsUselessMogg(mMoggFile.c_str());
-        if (useless) {
-            if (!bs || !bs->Cached() || loadingMusic)
+        if (!useless) {
+            if (!(bs && bs->Cached()) || loadingMusic) {
                 bs = nullptr;
+            }
             mLoader = new FileLoader(
                 mMoggFile,
                 FileLocalize(mMoggFile.c_str(), nullptr),
@@ -389,5 +390,34 @@ void MoggClip::AddFader(Fader *fader) {
         if (mStream) {
             mStream->Faders()->Add(fader);
         }
+    }
+}
+
+void MoggClip::SetPan(int i1, float f2) {
+    bool found = false;
+    PanInfo info;
+    info.channel = i1;
+    info.panning = f2;
+    FOREACH (it, mPanInfos) {
+        if (it->channel == i1) {
+            found = true;
+            *it = info;
+            break;
+        }
+    }
+    if (!found) {
+        mPanInfos.push_back(info);
+    }
+    if (mStream) {
+        mStream->SetPan(i1, f2);
+    }
+}
+
+void MoggClip::SetupPanInfo(float f1, float f2, bool stereo) {
+    if (stereo) {
+        SetPan(0, -f2 / 2.0f + f1);
+        SetPan(1, f2 / 2.0f + f1);
+    } else {
+        SetPan(0, f1);
     }
 }

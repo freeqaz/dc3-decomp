@@ -41,9 +41,9 @@ public:
     Vector2 Value() const;
     void ForceValue(Vector2);
 
-protected:
-    DoubleExponentialSmoother mSmootherX; // 0x0
-    DoubleExponentialSmoother mSmootherY; // 0x14
+private:
+    DoubleExponentialSmoother mX; // 0x0
+    DoubleExponentialSmoother mY; // 0x14
 };
 
 class Vector3DESmoother {
@@ -55,8 +55,8 @@ public:
     Vector3 Value() const;
     void ForceValue(Vector3);
 
-protected:
-    DoubleExponentialSmoother mSmootherX;
-    DoubleExponentialSmoother mSmootherY;
-    DoubleExponentialSmoother mSmootherZ;
+private:
+    DoubleExponentialSmoother mX; // 0x0
+    DoubleExponentialSmoother mY; // 0x14
+    DoubleExponentialSmoother mZ; // 0x28
 };

@@ -4,10 +4,10 @@
 #include "os/DateTime.h"
 #include "os/Debug.h"
 #include "rndobj/Text.h"
+#include "ui/ResourceDirPtr.h"
 #include "ui/UIColor.h"
 #include "ui/UIComponent.h"
 #include "ui/UILabelDir.h"
-#include "ui/ResourceDirPtr.h"
 #include "utl/BinStream.h"
 #include "utl/MemMgr.h"
 #include "utl/Symbol.h"
@@ -15,21 +15,18 @@
 class UILabel : public RndText, public UIComponent, public TextHolder {
 public:
     struct LabelStyle {
-#ifdef HX_NATIVE
-        LabelStyle(Hmx::Object *o) : mColorOverride(o, 0), mLabelDir(o), unk28(0) {}
-#else
-        LabelStyle(Hmx::Object *o) : mColorOverride(o, 0), mLabelDir(o, 0), unk28(0) {}
-#endif
-        ~LabelStyle();
+        LabelStyle(Hmx::Object *owner) : mColorOverride(owner), mFontResource(owner) {}
+        __forceinline LabelStyle &operator=(const LabelStyle &style) {
+            mFontResource = style.mFontResource;
+            mColorOverride = style.mColorOverride;
+            return *this;
+        }
 
         ObjPtr<UIColor> mColorOverride; // 0x0
-#ifdef HX_NATIVE
-        ResourceDirPtr<UILabelDir> mLabelDir; // 0x14
-#else
-        ObjPtr<UILabelDir> mLabelDir; // 0x14
-#endif
-        int unk28;
+        ResourceDirPtr<UILabelDir> mFontResource; // 0x14
     };
+    friend bool __cdecl PropSync(LabelStyle &, DataNode &, DataArray *, int, PropOp);
+
     // Hmx::Object
     virtual ~UILabel() {}
     OBJ_CLASSNAME(UILabel)
@@ -47,7 +44,7 @@ public:
         MILO_ASSERT(false, 0x50);
     }
     // UIComponent
-    virtual void Poll();
+    virtual void Poll() { UIComponent::Poll(); }
     virtual void Highlight();
     // TextHolder
     virtual void SetTextToken(Symbol);
@@ -79,8 +76,8 @@ public:
 
     char const *GetDefaultText() const;
     void CenterWithLabel(UILabel *, bool, float);
-    const LabelStyle &LStyle(int) const;
     LabelStyle &LStyle(int);
+    const LabelStyle &LStyle(int) const;
 
     template <class T1>
     void SetTokenFmt(Symbol s, T1 t1) {
@@ -119,17 +116,15 @@ protected:
     char const *GetFontMat(int);
     void RefreshFontMat(int);
 
-    friend bool PropSync(LabelStyle &, DataNode &, DataArray *, int, PropOp);
-
     static bool sDeferUpdate;
     static bool sDebugHighlight;
     static bool sInDebugHighlight;
 
     Symbol mTextToken; // 0x114
     String mLabelText; // 0x118
-    char mIconChar;
-    bool mTextEmpty;
-    bool mDirty;
+    char mIconChar; // 0x120
+    bool mTextEmpty; // 0x121
+    bool mDirty; // 0x122
     ObjVector<LabelStyle> mLabelStyles; // 0x124
 };
 

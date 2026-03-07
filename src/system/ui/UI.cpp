@@ -97,7 +97,7 @@ void FailAppendCallback(FixedString &str) {
 UIManager::UIManager()
     : mWentBack(0), mMaxPushDepth(100), mJoyClient(0), mCurrentScreen(0), mSink(0),
       mOverloadHorizontalNav(0), mCancelTransitionNotify(0), mDefaultAllowEditText(1),
-      mDisableScreenBlacklight(0), mOverlay(0), mAutomator(0), unkd0(0) {}
+      mDisableScreenBlacklight(0), mOverlay(0), mAutomator(0), mShowDevMenu(0) {}
 
 UIManager::~UIManager() {}
 

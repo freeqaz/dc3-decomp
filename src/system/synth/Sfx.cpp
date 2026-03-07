@@ -2,7 +2,9 @@
 #include "SampleInst.h"
 #include "math/Utl.h"
 #include "obj/Object.h"
+#include "synth/FxSend.h"
 #include "synth/MoggClip.h"
+#include "synth/MoggClipMap.h"
 #include "synth/Sequence.h"
 #include "synth/Synth.h"
 #include "synth/SynthSample.h"
@@ -42,9 +44,9 @@ void SfxInst::Stop() {
         (*it)->Stop(false);
     }
     FOREACH (it, mSfx->MoggClipMaps()) {
-        MoggClip *clp = it->GetMoggClip();
-        if (clp) {
-            clp->Stop(false);
+        MoggClip *clip = it->GetMoggClip();
+        if (clip) {
+            clip->Stop(false);
         }
     }
 }
@@ -55,13 +57,83 @@ bool SfxInst::IsRunning() {
             return true;
     }
     FOREACH (it, mSfx->MoggClipMaps()) {
-        MoggClip *clp = it->GetMoggClip();
-        if (clp != nullptr) {
-            if (clp->GetStream() != nullptr)
-                return true;
+        MoggClip *clip = it->GetMoggClip();
+        if (clip && clip->GetStream()) {
+            return true;
         }
     }
     return false;
+}
+
+void SfxInst::UpdateVolume() {
+    FOREACH (it, mSamples) {
+        (*it)->SetVolume(mOwner->Faders().GetVolume() + mVolume);
+    }
+    FOREACH (it, mSfx->MoggClipMaps()) {
+        MoggClip *clip = it->GetMoggClip();
+        if (clip) {
+            clip->SetVolume(mOwner->Faders().GetVolume() + mVolume + mRandVol);
+        }
+    }
+}
+
+void SfxInst::SetPan(float f1) {
+    FOREACH (it, mSamples) {
+        (*it)->SetPan(f1);
+    }
+}
+
+void SfxInst::SetTranspose(float f1) { SetSpeed(CalcSpeedFromTranspose(f1)); }
+
+void SfxInst::StartImpl() {
+    FOREACH (it, mSamples) {
+        (*it)->SetStartProgress(mStartProgress);
+        (*it)->Play(0);
+    }
+    FOREACH (it, mSfx->MoggClipMaps()) {
+        MoggClip *clip = it->GetMoggClip();
+        if (clip) {
+            clip->SetVolume(it->Volume());
+            clip->SetupPanInfo(it->Pan(), it->PanWidth(), it->Stereo());
+            clip->Play(0);
+        }
+    }
+}
+
+void SfxInst::Pause(bool b1) {
+    FOREACH (it, mSamples) {
+        (*it)->Pause(b1);
+    }
+    FOREACH (it, mSfx->MoggClipMaps()) {
+        MoggClip *clip = it->GetMoggClip();
+        if (clip) {
+            clip->Pause(b1);
+        }
+    }
+}
+
+void SfxInst::SetSend(FxSend *send) {
+    FOREACH (it, mSamples) {
+        (*it)->SetSend(send);
+    }
+}
+
+void SfxInst::SetReverbMixDb(float db) {
+    FOREACH (it, mSamples) {
+        (*it)->SetReverbMixDb(db);
+    }
+}
+
+void SfxInst::SetReverbEnable(bool enable) {
+    FOREACH (it, mSamples) {
+        (*it)->SetReverbEnable(enable);
+    }
+}
+
+void SfxInst::SetSpeed(float speed) {
+    FOREACH (it, mSamples) {
+        (*it)->SetSpeed(speed);
+    }
 }
 
 #pragma endregion

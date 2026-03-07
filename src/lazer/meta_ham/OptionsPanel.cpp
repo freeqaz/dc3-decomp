@@ -24,20 +24,20 @@ OptionsPanel::~OptionsPanel() {}
 void OptionsPanel::Poll() {
     UIPanel::Poll();
     if (mXboxPurchaser) {
-        mXboxPurchaser->PollUpdate();
+        mXboxPurchaser->Poll();
         if (!mXboxPurchaser->IsPurchasing()) {
             if (mXboxPurchaser->IsSuccess()) {
                 if (!mXboxPurchaser->PurchaseMade()) {
-                        if (mXboxPurchaser->IsReady()) {
-                            if (mPurchaseProfile) {
-                                PostPurchaseEnumJob *job = new PostPurchaseEnumJob(
-                                    this, mPurchaseProfile->GetPadNum(), mOfferID,
-                                    mXboxPurchaser->mSource,
-                                    static_cast<StorePurchaser *>(mXboxPurchaser)->mUserIndex
-                                );
-                                ThePlatformMgr.QueueEnumJob(job);
-                            }
+                    if (mXboxPurchaser->NeedsEnum()) {
+                        if (mPurchaseProfile) {
+                            PostPurchaseEnumJob *job = new PostPurchaseEnumJob(
+                                this, mPurchaseProfile->GetPadNum(), mOfferID,
+                                mXboxPurchaser->mSource,
+                                static_cast<StorePurchaser *>(mXboxPurchaser)->mUserIndex
+                            );
+                            ThePlatformMgr.QueueEnumJob(job);
                         }
+                    }
                 }
             }
             delete mXboxPurchaser;

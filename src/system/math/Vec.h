@@ -1,5 +1,4 @@
 #pragma once
-// #include "os/Debug.h"
 #include "os/Debug.h"
 #include "utl/BinStream.h"
 #include "utl/TextStream.h"
@@ -10,19 +9,12 @@ class Vector2 {
 public:
     Vector2() {}
     Vector2(float xx, float yy) : x(xx), y(yy) {}
-    // Vector2(const Vector2 &vec) : x(vec.x), y(vec.y) {}
 
     void Set(float xx, float yy) {
         x = xx;
         y = yy;
     }
 
-    // Vector2& operator*=(float f) {
-    //     x *= f; y *= f;
-    //     return *this;
-    // }
-    // there's no way this returns a float what
-    // according to RndCam::WorldToScreen it does
     float operator*=(float f) {
         x *= f;
         y *= f;
@@ -75,7 +67,6 @@ public:
 
     Vector3() {}
     Vector3(float f1, float f2, float f3) : x(f1), y(f2), z(f3) {}
-    // Vector3(const Vector3& v) : x(v.x), y(v.y), z(v.z) {}
 
     // used during decompression of CharBones vectors
     Vector3(short *s) {
@@ -90,10 +81,6 @@ public:
         z = f3;
     }
     void Zero() { x = y = z = 0.0f; }
-
-    float X() const { return x; }
-    float Y() const { return y; }
-    float Z() const { return z; }
 
     Vector3 &operator+=(const Vector3 &v) {
         x += v.x;
@@ -131,15 +118,19 @@ public:
     }
 
     const float &operator[](int i) const {
-        MILO_ASSERT((0) <= (i) && (i) < (3), 0x122);
+        MILO_ASSERT_RANGE(i, 0, 3, 0x122);
         return *(&x + i);
     }
 
     float &operator[](int i) {
-        MILO_ASSERT((0) <= (i) && (i) < (3), 0x127);
+        MILO_ASSERT_RANGE(i, 0, 3, 0x127);
         return *(&x + i);
     }
 
+    //   public: static const Vector3& GetXAxis();
+    //   public: static const Vector3& GetYAxis();
+    //   public: static const Vector3& GetZAxis();
+    static const Vector3 &GetZero() { return sZero; }
     static const Vector3 &ZeroVec() { return sZero; }
 
     bool operator==(const Vector3 &v) const { return x == v.x && y == v.y && z == v.z; }
@@ -221,11 +212,11 @@ public:
         w = f4;
     }
 
-    // Vector4(const Vector4 &);
+    static const Vector4 &GetZero() { return sZero; }
     static const Vector4 &ZeroVec() { return sZero; }
 
     const float &operator[](int i) const {
-        MILO_ASSERT((0) <= (i) && (i) < (4), 0x1AC);
+        MILO_ASSERT_RANGE(i, 0, 4, 0x1AC);
         return *(&x + i);
     }
 };

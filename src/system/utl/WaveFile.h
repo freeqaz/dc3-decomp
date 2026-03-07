@@ -1,6 +1,4 @@
-#ifndef UTL_WAVEFILE_H
-#define UTL_WAVEFILE_H
-
+#pragma once
 #include "utl/BinStream.h"
 #include "utl/Chunks.h"
 #include "synth/SampleData.h"
@@ -10,9 +8,13 @@ class WaveFileMarker {
 public:
     WaveFileMarker(int frame, int id, const String &name)
         : mFrame(frame), mID(id), mName(name) {} // total size: 0x14
+
+    const String &GetName() const { return mName; }
+    int GetFrame() const { return mFrame; }
+
     int mFrame; // offset 0x0, size 0x4
     int mID; // offset 0x4, size 0x4
-    class String mName; // offset 0x8, size 0xC
+    String mName; // offset 0x8, size 0xC
 };
 
 class WaveFile {
@@ -51,10 +53,8 @@ public:
 class WaveFileData : public IDataChunk {
 public:
     WaveFileData(WaveFile &);
-
     virtual ~WaveFileData();
 
-    WaveFile *mWaveFile;
+private:
+    WaveFile &mWaveFile; // 0x28
 };
-
-#endif
