@@ -174,6 +174,11 @@ def chain_variants(
     3. Reparse survivors for the next stage.
 
     Final stage yields all generated variants for scoring.
+    If the beam dies at an intermediate stage, yields partial chain output
+    from the last successful stage as shorter chains.
+
+    At intermediate stages (stage > 0, not final), diagnosis is temporarily
+    suppressed to prevent pattern relevance checks from killing the beam.
 
     Args:
         ctx: Original function context.
@@ -198,6 +203,8 @@ def chain_variants(
     ]
 
     total_yielded = 0
+    # Track last stage's candidates for fallback yield on beam death
+    last_intermediate: list[tuple[Variant, str, str]] = []
 
     for stage_idx, pattern_name in enumerate(stages):
         pattern = pattern_map[pattern_name]
@@ -205,6 +212,14 @@ def chain_variants(
         candidates: list[tuple[Variant, FunctionContext | None, str, str]] = []
 
         for beam_ctx, acc_name, acc_desc in beam:
+            # At intermediate stages (not first, not final), suppress
+            # diagnosis to prevent pattern relevance filtering from
+            # killing the beam. Patterns may not be relevant to the
+            # current diagnosis but are useful as stepping stones.
+            saved_diagnosis = beam_ctx.diagnosis
+            if not is_final and stage_idx > 0:
+                beam_ctx.diagnosis = None
+
             count = 0
             for variant in pattern.generate(beam_ctx):
                 count += 1
@@ -235,8 +250,30 @@ def chain_variants(
                     # Intermediate stage — collect for beam pruning
                     candidates.append((variant, None, new_name, new_desc))
 
+            # Restore diagnosis
+            if not is_final and stage_idx > 0:
+                beam_ctx.diagnosis = saved_diagnosis
+
         if is_final:
+            # If final stage produced nothing, fall back to intermediates
+            if total_yielded == 0 and last_intermediate:
+                partial_name = "+".join(stages[:stage_idx])
+                for variant, acc_name, acc_desc in last_intermediate:
+                    yield Variant(
+                        name=acc_name,
+                        pattern_name=f"chain:{partial_name}",
+                        description=acc_desc,
+                        source=variant.source,
+                    )
+                    total_yielded += 1
+                    if total_yielded >= max_total:
+                        return
             return
+
+        # Save intermediate candidates for potential fallback
+        last_intermediate = [
+            (v, n, d) for v, _, n, d in candidates
+        ]
 
         # Prune beam for next stage
         pruned = _prune_beam(candidates, ctx.file_source, beam_width)
@@ -251,7 +288,20 @@ def chain_variants(
                 continue  # Skip variants with syntax errors
 
         if not beam:
-            return  # No valid candidates survived
+            # Beam died — yield intermediates as shorter chains
+            if last_intermediate and stage_idx >= 1:
+                partial_name = "+".join(stages[:stage_idx + 1])
+                for variant, acc_name, acc_desc in last_intermediate:
+                    yield Variant(
+                        name=acc_name,
+                        pattern_name=f"chain:{partial_name}",
+                        description=acc_desc,
+                        source=variant.source,
+                    )
+                    total_yielded += 1
+                    if total_yielded >= max_total:
+                        return
+            return
 
 
 def _prune_beam(
@@ -284,9 +334,11 @@ def _prune_beam(
     for diff_count, _, entry in scored:
         if len(selected) >= beam_width:
             break
-        # Accept if sufficiently different from already-selected
+        # Accept if sufficiently different from already-selected.
+        # Use relative threshold to prevent over-filtering small edits.
+        min_gap = max(3, diff_count // 10)
         if not selected_diffs or all(
-            abs(diff_count - d) > 5 for d in selected_diffs
+            abs(diff_count - d) > min_gap for d in selected_diffs
         ):
             selected.append(entry)
             selected_diffs.append(diff_count)

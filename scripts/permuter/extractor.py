@@ -386,6 +386,12 @@ def reparse_variant(
                 statements=statements,
                 func_byte_range=func_range,
                 diagnosis=original_ctx.diagnosis,
+                symbol=original_ctx.symbol,
+                ghidra_code=original_ctx.ghidra_code,
+                ghidra_ast=original_ctx.ghidra_ast,
+                target_var_order=original_ctx.target_var_order,
+                target_gpr_saves=original_ctx.target_gpr_saves,
+                asm_listing_path=original_ctx.asm_listing_path,
                 preproc_regions=_find_function_preproc_regions(new_source, func_range),
             )
 

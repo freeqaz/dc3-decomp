@@ -255,6 +255,8 @@ class RoundHints:
     pattern_failures: dict[str, int] = field(default_factory=dict)
     last_winner: str | None = None
     last_diagnosis: Optional[Diagnosis] = None
+    # Patterns where ALL variants failed to build (100% build failure rate)
+    build_failed_patterns: set[str] = field(default_factory=set)
 
     def record_round(
         self,
@@ -288,6 +290,9 @@ class RoundHints:
             for p in by_pattern:
                 self.pattern_failures[p] = self.pattern_failures.get(p, 0) + 1
 
+        # Track build failures: patterns where ALL variants failed to compile
+        self.build_failed_patterns = _collect_build_failed_patterns(variant_results)
+
     def suppression_factor(self, pattern_name: str) -> float:
         """Get suppression multiplier for a pattern.
 
@@ -315,12 +320,39 @@ class RoundHints:
 def _split_pattern_name(name: str) -> list[str]:
     """Split a pattern name into component patterns.
 
-    Handles 'compose:a+b' and 'chain:a+b+c' prefixed names.
+    Handles 'compose:a+b', 'chain:a+b+c', and 'crosscompose:a+b' prefixed names.
     """
-    if name.startswith("compose:") or name.startswith("chain:"):
-        _, parts = name.split(":", 1)
-        return parts.split("+")
+    for prefix in ("compose:", "chain:", "crosscompose:"):
+        if name.startswith(prefix):
+            _, parts = name.split(":", 1)
+            return parts.split("+")
     return [name]
+
+
+def _collect_build_failed_patterns(
+    results: list[ScoreResult],
+) -> set[str]:
+    """Identify base patterns where ALL variants failed to compile.
+
+    A pattern is flagged only if it had at least 1 variant and every
+    variant failed to build. Only tracks base patterns (not compose:/chain:).
+    """
+    by_pattern: dict[str, tuple[int, int]] = {}  # name -> (total, failures)
+    for result in results:
+        name = result.variant.pattern_name
+        # Only track base patterns (Phase 1)
+        if ":" in name:
+            continue
+        total, fails = by_pattern.get(name, (0, 0))
+        total += 1
+        if not result.build_success:
+            fails += 1
+        by_pattern[name] = (total, fails)
+
+    return {
+        name for name, (total, fails) in by_pattern.items()
+        if total > 0 and fails == total
+    }
 
 
 @dataclass

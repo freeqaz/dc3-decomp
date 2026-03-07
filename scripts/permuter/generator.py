@@ -94,6 +94,7 @@ def generate_variants(
     compose_pairs: list[tuple[str, str]] | None = None,
     chains: list[ChainSpec] | None = None,
     round_hints: RoundHints | None = None,
+    failed_patterns: set[str] | None = None,
 ) -> Iterator[Variant]:
     """Apply patterns to a function context and yield variants.
 
@@ -120,6 +121,8 @@ def generate_variants(
         chains: Optional list of ChainSpec for N-stage beam search.
             None = no chain composition.
         round_hints: Optional adaptive hints for suppression/boosting.
+        failed_patterns: Optional set of pattern names that failed to build
+            in Phase 1. Suppresses these from Phase 2/3 first-stage.
     """
     # Budget split
     if compose_pairs and chains:
@@ -147,6 +150,10 @@ def generate_variants(
     total = 0
     skipped: list[str] = []
 
+    # Cross-phase source dedup: skip variants with identical source bytes
+    seen_sources: set[int] = {hash(ctx.file_source)}  # include baseline
+    dedup_count = 0
+
     # Phase 1: Independent variants with per-pattern budgets
     for pattern in patterns:
         budget = budgets.get(pattern.name, 0)
@@ -155,6 +162,11 @@ def generate_variants(
             continue
         count = 0
         for variant in pattern.generate(ctx):
+            source_hash = hash(variant.source)
+            if source_hash in seen_sources:
+                dedup_count += 1
+                continue
+            seen_sources.add(source_hash)
             yield variant
             count += 1
             total += 1
@@ -179,6 +191,9 @@ def generate_variants(
         for name_a, name_b in compose_pairs:
             if remaining <= 0:
                 break
+            # Skip if first-stage pattern failed to build in Phase 1
+            if failed_patterns and name_a in failed_patterns:
+                continue
 
             stage_a = pattern_map.get(name_a)
             stage_b = pattern_map.get(name_b)
@@ -190,6 +205,11 @@ def generate_variants(
                 max_per_stage=10,
                 max_total=remaining,
             ):
+                source_hash = hash(variant.source)
+                if source_hash in seen_sources:
+                    dedup_count += 1
+                    continue
+                seen_sources.add(source_hash)
                 yield variant
                 total += 1
                 remaining -= 1
@@ -204,16 +224,24 @@ def generate_variants(
         for chain in chains:
             if remaining <= 0:
                 break
+            # Skip chains whose first stage failed to build in Phase 1
+            if failed_patterns and chain.stages[0] in failed_patterns:
+                continue
 
             per_chain = min(remaining, chain.budget)
             count = 0
 
             for variant in chain_variants(
                 ctx, chain, pattern_map,
-                beam_width=5,
+                beam_width=max(5, len(chain.stages) * 3),
                 max_per_stage=8,
                 max_total=per_chain,
             ):
+                source_hash = hash(variant.source)
+                if source_hash in seen_sources:
+                    dedup_count += 1
+                    continue
+                seen_sources.add(source_hash)
                 yield variant
                 total += 1
                 remaining -= 1
@@ -227,3 +255,9 @@ def generate_variants(
                     f"({chain.reason})",
                     file=sys.stderr,
                 )
+
+    if dedup_count > 0:
+        print(
+            f"Source dedup: {dedup_count} duplicate variants skipped",
+            file=sys.stderr,
+        )

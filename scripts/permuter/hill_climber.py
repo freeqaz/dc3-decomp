@@ -542,12 +542,23 @@ def hill_climb(
                             file=sys.stderr,
                         )
 
+                # Collect build-failed patterns from previous round
+                build_failed: set[str] | None = None
+                if round_hints and round_hints.build_failed_patterns:
+                    build_failed = round_hints.build_failed_patterns
+                    print(
+                        f"Suppressing {len(build_failed)} build-failed patterns "
+                        f"from compose/chain: {', '.join(sorted(build_failed))}",
+                        file=sys.stderr,
+                    )
+
                 # Generate variants
                 variants = list(generate_variants(
                     ctx, patterns, max_variants,
                     compose_pairs=compose_pairs,
                     chains=round_chains,
                     round_hints=round_hints if adaptive else None,
+                    failed_patterns=build_failed,
                 ))
                 print(
                     f"Generated {len(variants)} variants",
