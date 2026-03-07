@@ -10,7 +10,9 @@
 #include "obj/Task.h"
 #include "os/Debug.h"
 #include "os/System.h"
+#include "math/Key.h"
 #include "rndobj/DOFProc.h"
+#include "rndobj/Draw.h"
 #include "rndobj/HiResScreen.h"
 #include "utl/BinStream.h"
 #include "synth_xbox/PitchCorrectedVoice.h"
@@ -367,6 +369,176 @@ BEGIN_LOADS(RndPostProc)
     }
     LoadRev(d);
 END_LOADS
+
+void RndPostProc::LoadRev(BinStreamRev &d) {
+    if (d.rev > 4) {
+        if (d.rev > 0xA) {
+            d >> mBloomColor;
+            if (d.rev < 0x18) {
+                int dummy;
+                d >> dummy;
+            }
+            d >> mBloomIntensity;
+            d >> mBloomThreshold;
+        } else {
+            Hmx::Color c;
+            d >> c;
+            float minVal = c.red;
+            if (minVal > c.green)
+                minVal = c.green;
+            if (minVal > c.blue)
+                minVal = c.blue;
+            if (minVal < 4.0f) {
+                float range = 4.0f - minVal;
+                mBloomThreshold = c.alpha;
+                c.red = (4.0f - c.red) / range;
+                c.green = (4.0f - c.green) / range;
+                c.blue = (4.0f - c.blue) / range;
+                c.alpha = 0.0f;
+                mBloomColor = c;
+            } else {
+                mBloomColor.red = 1.0f;
+                mBloomColor.green = 1.0f;
+                mBloomColor.blue = 1.0f;
+                mBloomColor.alpha = 0.0f;
+                mBloomThreshold = c.alpha;
+            }
+            int dummy;
+            d >> dummy;
+            d >> mBloomIntensity;
+            mBloomIntensity = sqrtf(mBloomIntensity);
+            d >> dummy;
+        }
+    }
+    if (d.rev > 5 && d.altRev < 1) {
+        ObjPtr<RndTex> luminanceMap(this, 0);
+        d >> luminanceMap;
+    }
+    if (d.rev > 6) {
+        if (d.rev < 0x12) {
+            d >> mColorXfm.mColorXfm.m.x >> mColorXfm.mColorXfm.m.y
+                >> mColorXfm.mColorXfm.m.z;
+            d >> mColorXfm.mColorXfm.v;
+        } else {
+            if (!mColorXfm.Load(d.stream)) {
+                MILO_FAIL(
+                    "%s can't load new %s version", PathName(this), ClassName()
+                );
+            }
+        }
+        d >> (Key<float>&)mFlickerModBounds >> (Key<float>&)mFlickerTimeBounds;
+        if (d.rev < 9) {
+            mFlickerModBounds.x = 1.0f - mFlickerModBounds.x;
+            mFlickerModBounds.y = 1.0f - mFlickerModBounds.y;
+        }
+        if (d.rev < 0x1D) {
+            mFlickerModBounds.x = 0.0f;
+        }
+        d >> (Key<float>&)mNoiseBaseScale >> mNoiseTopScale >> mNoiseIntensity;
+        if (d.rev > 0xC) {
+            d >> mNoiseStationary;
+        }
+        if (d.rev > 8) {
+            d >> mNoiseMap;
+        }
+        if (d.rev > 0x24) {
+            d >> mNoiseMidtone;
+        } else {
+            mNoiseMidtone = false;
+        }
+        if (d.rev < 0x12) {
+            d >> mColorXfm.mHue >> mColorXfm.mSaturation >> mColorXfm.mLightness
+                >> mColorXfm.mContrast >> mColorXfm.mBrightness;
+        }
+    }
+    if (d.rev > 7) {
+        d >> mTrailThreshold >> mTrailDuration >> mEmulateFPS;
+    }
+    if (d.rev > 9) {
+        if (d.rev < 0x12) {
+            d >> mColorXfm.mLevelInLo >> mColorXfm.mLevelInHi;
+            d >> mColorXfm.mLevelOutLo >> mColorXfm.mLevelOutHi;
+        }
+        d >> mPosterLevels;
+    }
+    if (d.rev > 0xD) {
+        d >> mPosterMin;
+    }
+    if (d.rev > 0xB) {
+        if (d.rev < 0x16) {
+            float complexity;
+            d >> complexity;
+            if (complexity != 0.0f) {
+                mKaleidoscopeComplexity = 2.0f;
+            }
+        } else {
+            d >> mKaleidoscopeComplexity >> mKaleidoscopeSize >> mKaleidoscopeAngle
+                >> mKaleidoscopeRadius >> mKaleidoscopeFlipUVs;
+        }
+    }
+    if (d.rev > 0xE && d.rev < 0x1F) {
+        int dummy;
+        d >> dummy;
+        if (d.rev < 0x11) {
+            int dummy2;
+            d >> dummy2;
+            ObjPtr<RndDrawable> dummyDraw(this, 0);
+            d >> dummyDraw;
+        }
+    }
+    if (d.rev > 0x12) {
+        d >> mHallOfTimeRate;
+        d >> mHallOfTimeColor >> mHallOfTimeMix;
+        if (d.rev >= 0x14 && d.rev <= 0x1F) {
+            bool hotType;
+            d >> hotType;
+            mHallOfTimeType = hotType ? 1 : 0;
+        } else if (d.rev > 0x1F) {
+            d >> mHallOfTimeType;
+        }
+    }
+    if (d.rev > 0x14) {
+        d >> mMotionBlurBlend;
+        if (d.rev > 0x1A) {
+            d >> mMotionBlurWeight;
+            if (d.rev > 0x21) {
+                d >> mMotionBlurVelocity;
+            }
+        }
+    }
+    if (d.rev > 0x16) {
+        d >> mGradientMap >> mGradientMapOpacity >> mGradientMapIndex
+            >> mGradientMapStart >> mGradientMapEnd;
+    }
+    if (d.rev < 0x18) {
+        mBloomThreshold *= 4.0f;
+    }
+    if (d.rev > 0x18) {
+        d >> mRefractMap >> mRefractDist >> (Key<float>&)mRefractScale
+            >> (Key<float>&)mRefractPanning >> mRefractAngle;
+        if (d.rev > 0x1B) {
+            d >> (Key<float>&)mRefractVelocity;
+        }
+    }
+    if (d.rev > 0x19) {
+        d >> mChromaticAberrationOffset;
+        if (d.rev > 0x22) {
+            d >> mChromaticSharpen;
+        }
+    }
+    if (d.rev > 0x1D) {
+        d >> mVignetteColor >> mVignetteIntensity;
+    }
+    if (d.rev > 0x20) {
+        d >> mBloomGlare;
+    }
+    if (d.rev > 0x23) {
+        d >> mBloomStreak >> mBloomStreakAttenuation >> mBloomStreakAngle;
+    }
+    if (d.altRev > 1) {
+        d >> mHueTarget >> mHueFocus >> mBlendAmount >> mBrightnessPower;
+    }
+}
 
 void RndPostProc::Select() {
     if (sCurrent != this) {

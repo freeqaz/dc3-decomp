@@ -639,7 +639,8 @@ void WorldCrowd::AssignRandomColors(bool incrementStamp) {
         mModifyStamp++;
     }
     FOREACH (it, mCharacters) {
-        if (it->mDef.mChar && it->mMMesh && !it->m3DChars.empty()) {
+        if (it->mDef.mChar && it->mMMesh) {
+            if (!it->m3DChars.empty()) {
             std::vector<ColorPalette *> colorPaletteList;
             it->mDef.mUseRandomColor = false;
             for (int i = 0; i < 3; i++) {
@@ -651,19 +652,21 @@ void WorldCrowd::AssignRandomColors(bool incrementStamp) {
                 }
             }
             if (!colorPaletteList.empty()) {
-                for (int i = 0; i < (int)it->m3DChars.size(); i++) {
+                for (int i = 0; (unsigned long)i < (int)it->m3DChars.size(); i++) {
                     CharData::Char3D &char3D = it->m3DChars[i];
-                    char3D.mColors.clear();
                     it->mDef.mUseRandomColor = true;
+                    char3D.mColors.clear();
                     while ((int)char3D.mColors.size() < 3) {
                         ColorPalette *randPal =
                             colorPaletteList[RandomInt(0, colorPaletteList.size())];
+                        auto _tmp1 = RandomInt(0, randPal->NumColors());
                         Hmx::Color randColor =
-                            randPal->GetColor(RandomInt(0, randPal->NumColors()));
+                            randPal->GetColor(_tmp1);
                         char3D.mColors.push_back(randColor);
                     }
                 }
             }
+        }
         }
     }
 }
@@ -695,15 +698,14 @@ void WorldCrowd::Reset3DCrowd() {
 
 void WorldCrowd::SetFullness(float flatFullness, float charFullness) {
     START_AUTO_TIMER("crowd_set");
-    mFlatFullness = flatFullness;
     mCharFullness = charFullness;
+    mFlatFullness = flatFullness;
     Delete3DCrowdHandles();
     FOREACH (it, mCharacters) {
-        RndMultiMesh *multiMesh = it->mMMesh;
-        if (multiMesh) {
-            InstanceList &instances = multiMesh->Instances();
-            InstanceList &backup = it->mBackup;
+        if (it->mMMesh) {
+            InstanceList &instances = it->mMMesh->Instances();
             int instanceCount = (int)instances.size();
+            InstanceList &backup = it->mBackup;
             int backupCount = (int)backup.size();
             int totalCount = instanceCount + backupCount;
             int targetInstances = (int)((float)totalCount * charFullness);
@@ -724,7 +726,7 @@ void WorldCrowd::SetFullness(float flatFullness, float charFullness) {
                     ++instIt;
                 }
                 backup.splice(backup.end(), instances, instances.begin(), instIt);
-                multiMesh->InvalidateProxies();
+                it->mMMesh->InvalidateProxies();
             }
             // handle m3DChars (visible 3D chars)
             int totalChars3D = (int)it->m3DChars.size() + (int)it->m3DCharsCreated.size();

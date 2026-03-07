@@ -388,8 +388,9 @@ void *LiveCameraInput::StreamBufferData(BufferType type) const {
     } else {
         i3 = type == kBufferPlayerColor ? 1 : 0;
     }
-    if (mStreams[type].mFrames[i3]) {
-        return mStreams[type].mFrames[i3]->pFrameTexture;
+    auto& _sub1 = mStreams[type];
+    if (_sub1.mFrames[i3]) {
+        return _sub1.mFrames[i3]->pFrameTexture;
     } else {
         return nullptr;
     }

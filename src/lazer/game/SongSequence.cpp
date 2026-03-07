@@ -286,8 +286,8 @@ end_sequence:
 void SongSequence::OnSongLoaded() {
     if (!Done()) {
         static Symbol reset("reset");
-        static Symbol init("init");
         static Symbol set_type("set_type");
+        static Symbol init("init");
         static Symbol start_song_now("start_song_now");
         static Symbol show_hud("show_hud");
         static Symbol hide_hud("hide_hud");

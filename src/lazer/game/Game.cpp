@@ -740,20 +740,23 @@ bool Game::IsLoaded() {
 }
 
 DataNode Game::OnSetShuttle(DataArray *arr) {
+    auto& _ref0 = mShuttle;
     if (arr->Size() > 3) {
-        mShuttle->SetController(arr->Int(3));
+        _ref0->SetController(arr->Int(3));
     }
     bool active = arr->Int(2);
     if (active) {
-        mShuttle->SetMs(mMaster->GetAudio()->GetTime());
-        mShuttle->SetEndMs(mSongDB->GetSongDurationMs());
-        mShuttle->SetActive(active);
+        auto _tmp0 = mMaster->GetAudio()->GetTime();
+        _ref0->SetMs(_tmp0);
+        _ref0->SetEndMs(mSongDB->GetSongDurationMs());
+        if (_ref0)
+            _ref0->SetActive(active);
     } else {
-        Jump(mShuttle->Ms(), true);
+        Jump(_ref0->Ms(), true);
         do {
             TheSynth->Poll();
         } while (!IsLoaded());
-        mShuttle->SetActive(active);
+        _ref0->SetActive(active);
     }
     return 0;
 }

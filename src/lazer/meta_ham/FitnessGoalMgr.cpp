@@ -60,12 +60,13 @@ bool FitnessGoalMgr::HasValidProfile() {
 void FitnessGoalMgr::UploadNextProfile() {
     std::list<HamProfile *>::iterator it;
 
+    auto& _ref1 = mCurrentProfile;
     if (!mPendingProfiles.empty()) {
-        mCurrentProfile = *mPendingProfiles.begin();
+        _ref1 = *mPendingProfiles.begin();
         it = mPendingProfiles.erase(mPendingProfiles.begin());
     }
-    if (mCurrentProfile)
-        QueueCmdUpdateFitnessGoalToRC(mCurrentProfile);
+    if (_ref1)
+        QueueCmdUpdateFitnessGoalToRC(_ref1);
 }
 
 void FitnessGoalMgr::UpdateFitnessGoal(HamProfile *profile) {

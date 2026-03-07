@@ -143,8 +143,19 @@ static std::string CrashSummary(const RunResult &result) {
     return summary;
 }
 
-// Print the tail of output for test logs
+// Print the tail of output for test logs, optionally flush full output to file
 static void PrintOutputTail(const std::string &output, size_t maxBytes = 2000) {
+    // Write full output to file if MILO_TEST_LOGFILE is set
+    const char *logfile = getenv("MILO_TEST_LOGFILE");
+    if (logfile && logfile[0]) {
+        FILE *f = fopen(logfile, "w");
+        if (f) {
+            fwrite(output.data(), 1, output.size(), f);
+            fclose(f);
+            printf("--- full output written to %s (%zu bytes) ---\n", logfile, output.size());
+        }
+    }
+
     printf("--- dc3-native output (%zu bytes) ---\n", output.size());
     if (output.size() > maxBytes)
         printf("...[truncated]...\n%s", output.substr(output.size() - maxBytes).c_str());

@@ -251,7 +251,7 @@ const char *XboxMapFile::GetFunction(unsigned int ui, bool b2) {
     int oldTell = mFile->Tell();
     char *b4 = "";
     while (!mFile->Eof()) {
-        cur = cur != local1440 ? local1440 : localC40;
+                                cur = cur == local1440 ? localC40 : local1440;
         int curTell = mFile->Tell();
         ReadLine(cur, 0x800);
         char c2 = cur[0x15];

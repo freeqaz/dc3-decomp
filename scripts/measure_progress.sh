@@ -146,6 +146,14 @@ else
         --exclude=build.ninja \
         --quiet 2>/dev/null || true
 
+    # Delete compiled source .obj files so ninja rebuilds them from the
+    # baseline source.  The worktree preserves build/ across runs, so stale
+    # .obj files from a previous session (with different uncommitted changes)
+    # can survive a git-reset if the source timestamp doesn't change.
+    # Target .obj files (build/373307D9/obj/) are commit-independent and safe
+    # to keep.
+    rm -rf "${WORKTREE}/build/373307D9/src"
+
     # --- Ensure orig/ symlink (replace if not already a symlink to main repo) ---
     if [[ ! -L "${WORKTREE}/orig" || "$(readlink "${WORKTREE}/orig")" != "${MAIN_REPO}/orig" ]]; then
         rm -rf "${WORKTREE}/orig"

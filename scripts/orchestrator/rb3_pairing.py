@@ -14,6 +14,28 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+
+def extract_rb3_method(source: str, class_name: str, method_name: str) -> str | None:
+    """Extract a method body from C++ source via brace counting."""
+    pattern = re.compile(
+        rf'^[^\n]*\b{re.escape(class_name)}::{re.escape(method_name)}\s*\(',
+        re.MULTILINE,
+    )
+    match = pattern.search(source)
+    if not match:
+        return None
+    brace_pos = source.find('{', match.end())
+    if brace_pos == -1:
+        return None
+    depth, pos = 1, brace_pos + 1
+    while pos < len(source) and depth > 0:
+        if source[pos] == '{':
+            depth += 1
+        elif source[pos] == '}':
+            depth -= 1
+        pos += 1
+    return source[match.start():pos].strip() if depth == 0 else None
+
 from .database import (
     get_connection,
     upsert_file_pair,

@@ -11,7 +11,7 @@ void Profiler::Start() { mTimer.Start(); }
 void Profiler::Stop() {
     mTimer.Stop();
     float ms = mTimer.Ms();
-    if (ms < mMin) {
+    if (mMin > (int)ms) {
         mMin = ms;
     }
     if (ms > mMax) {

@@ -338,7 +338,8 @@ void HamWardrobe::SetDir(ObjectDir *dir) {
 }
 
 void HamWardrobe::PlayCrowdAnimation(Symbol animName, int flags, bool override) {
-    if (mCrowdMembers.size() == 0) return;
+    auto& _ref0 = mCrowdMembers;
+    if (_ref0.size() == 0) return;
 
     mPreviousCrowdAnimation = animName;
     mCrowdAnimationFlags = flags;
@@ -351,10 +352,10 @@ void HamWardrobe::PlayCrowdAnimation(Symbol animName, int flags, bool override) 
             maxRandomBeat = 4.0f;
         }
 
-        for (ObjPtrList<Character>::iterator it = mCrowdMembers.begin();
-             it != mCrowdMembers.end(); ++it) {
+        for (ObjPtrList<Character>::iterator it = _ref0.begin();
+             it != _ref0.end(); ++it) {
             Character *c = *it;
-            if (animName == gNullStr) {
+            if (animName == (int)gNullStr) {
                 c->Exit();
             } else {
                 static Symbol stanceSym("stance");
@@ -368,7 +369,7 @@ void HamWardrobe::PlayCrowdAnimation(Symbol animName, int flags, bool override) 
                 CharClipDriver *cd = c->Driver()->PlayGroup(
                     buf, flags | 0x30, -1.0f, 1e30f, 0.0f
                 );
-                if (cd == NULL) {
+                if (NULL == cd) {
                     auto errMsg = MakeString("clip not found - groupName = %s\n", buf);
                     TheDebug << errMsg;
                     MILO_NOTIFY(
@@ -377,7 +378,7 @@ void HamWardrobe::PlayCrowdAnimation(Symbol animName, int flags, bool override) 
                     _snprintf(buf, 0x78, "%s", stance.Str());
                     c->Driver()->SetBlendWidth(3.0f);
                     cd = c->Driver()->PlayGroup(
-                        buf, flags | 0x30, -1.0f, 1e30f, 0.0f
+                        buf, flags | 0x30, -1.0f, 1e30f, 0.0
                     );
                     if (cd == NULL) {
                         auto errMsg2 = MakeString(
@@ -521,9 +522,10 @@ DataNode HamWardrobe::OnAddCrowd(DataArray *a) {
 
 DataNode HamWardrobe::OnLoadCharacters(DataArray *a) {
     short size = a->Size();
-    Symbol crew1 = size > 4 ? a->Sym(4) : Symbol(gNullStr);
+    Symbol crew1 = 4 < size ? a->Sym(4) : Symbol(gNullStr);
     Symbol crew2 = size > 5 ? a->Sym(5) : Symbol(gNullStr);
     int backupType;
+    bool asyncLoad = false;
     Symbol speed;
     if (size > 6) {
         backupType = bool(a->Int(6));
@@ -532,9 +534,8 @@ DataNode HamWardrobe::OnLoadCharacters(DataArray *a) {
         backupType = 0;
         speed = gNullStr;
     }
-    bool asyncLoad = false;
     if (size > 7) {
-        asyncLoad = a->Int(8);
+        asyncLoad = bool(a->Int(8));
     }
     Symbol venue = TheGameData->Venue();
     LoadCharacters(a->Sym(2), a->Sym(3), crew1, crew2, (HamBackupDancers)backupType, speed, venue, asyncLoad);

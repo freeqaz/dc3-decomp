@@ -1268,7 +1268,7 @@ void MoveDir::DrawShowing() {
                 float beat = TheTaskMgr.Beat();
                 int intBeat = (int)beat;
 
-                if (unkf84 != intBeat) {
+                if ((unsigned int)unkf84 != intBeat) {
                     unkf84 = intBeat;
                     MILO_ASSERT(TheHamDirector, 0xab1);
                     for (int i = 0; i < 2; i++) {
@@ -1345,13 +1345,12 @@ void MoveDir::DrawShowing() {
     } else if (TheLoadMgr.EditMode()) {
         if (mDancerSeq) {
             ObjDirItr<SkeletonViz> it(this, true);
-            SkeletonViz *viz = it;
-            if (viz) {
+            if (it) {
                 StubCameraInput camInput;
                 camInput.PollTracking();
                 const DancerSkeleton *skeleton = mDancerSeq->CurSkeleton();
                 if (skeleton) {
-                    viz->Visualize(camInput, *skeleton, nullptr, false);
+                    it->Visualize(camInput, *skeleton, nullptr, false);
                 }
             }
         } else {

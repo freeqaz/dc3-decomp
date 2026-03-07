@@ -23,7 +23,7 @@ are **on by default**. You only need `--no-*` flags to disable them.
 ### Single function (most common)
 
 ```bash
-venv/bin/python -m scripts.permuter.scan_and_permute --symbol '$0'
+venv/bin/python -m scripts.permuter.scan_and_permute --symbol '$0' --max-rounds 10 --max-variants 100 --plateau-limit 3 --chain-depth 5
 ```
 
 Accepts mangled symbols, qualified names, or partial names:
@@ -49,6 +49,10 @@ venv/bin/python -m scripts.permuter.scan_and_permute --jobs 16 --limit 200
 |------|---------|--------------|
 | `--symbol NAME` | — | Target one function (repeatable) |
 | `--unit GLOB` | all | Scope to units matching glob |
+| `--max-rounds N` | 5 | Hill-climbing rounds per function (use 10 for single fn) |
+| `--max-variants N` | 50 | Variants per round (use 100 for single fn) |
+| `--plateau-limit N` | 2 | Stop after N rounds w/o improvement (use 3 for single fn) |
+| `--chain-depth N` | 5 | Max chain depth for N-stage composition |
 | `--max-pct N` | 99.99 | Skip functions already above N% |
 | `--min-pct N` | 0 | Skip functions below N% |
 | `--limit N` | unlimited | Cap number of functions processed |
@@ -56,9 +60,10 @@ venv/bin/python -m scripts.permuter.scan_and_permute --jobs 16 --limit 200
 | `--dry-run` | off | Scan only — show hits, don't climb |
 | `--no-apply` | off | Score variants but don't write changes |
 | `--patterns X,Y` | all | Only run specific patterns |
-| `--max-rounds N` | 5 | Hill-climbing rounds per function |
 | `--no-ghidra` | — | Disable Ghidra-guided patterns |
 | `--no-chain` | — | Disable multi-stage pattern chains |
+| `--no-adaptive` | — | Disable adaptive pattern suppression |
+| `--no-constrained` | — | Disable constraint-directed synthesis |
 | `--json` | off | Machine-readable output |
 
 ## What to report

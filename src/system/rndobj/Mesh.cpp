@@ -1297,18 +1297,19 @@ void RndMesh::InstanceGeomOwnerBones() {
 
     ObjectDir *dir = dynamic_cast<ObjectDir *>(Dir());
     if (!dir) {
-        MILO_NOTIFY_ONCE("Cannot duplicate bones if parent Dir is not a RndDir.");
+        MILO_NOTIFY("Cannot duplicate bones if parent Dir is not a RndDir.");
         return;
     }
 
     if (mBones.empty())
         return;
 
-    bool needsCopy = mGeomOwner && mGeomOwner->mBones[0].mBone != mBones[0].mBone;
+    auto& _bones = mGeomOwner->mBones;
+    bool needsCopy = mGeomOwner && _bones[0].mBone != mBones[0].mBone;
     if (needsCopy) {
         DeleteBones(true);
         if (!(!mGeomOwner)) {
-            mBones = mGeomOwner->mBones;
+            mBones = _bones;
         } else {
             mBones.erase(mBones.begin(), mBones.end());
         }
@@ -1316,7 +1317,7 @@ void RndMesh::InstanceGeomOwnerBones() {
 
     // Find the root bone in the geom owner's hierarchy
     RndTransformable *oldRoot = NULL;
-    for (RndTransformable *parent = mGeomOwner->mBones[0].mBone; parent != NULL;
+    for (RndTransformable *parent = _bones[0].mBone; parent != NULL;
          parent = parent->TransParent()) {
         RndTransformable *transParent =
             dynamic_cast<RndTransformable *>(parent->TransParent());
@@ -1338,12 +1339,12 @@ void RndMesh::InstanceGeomOwnerBones() {
     // Create new bone transforms for each bone
     for (unsigned int i = 0; i < mBones.size(); i++) {
         RndTransformable *newBone = Hmx::Object::New<RndTransformable>();
-        newBone->SetName(NextName(mGeomOwner->mBones[i].mBone->Name(), Dir()), Dir());
-        newBone->Copy(mGeomOwner->mBones[i].mBone, Hmx::Object::kCopyDeep);
+        newBone->SetName(NextName(_bones[i].mBone->Name(), Dir()), Dir());
+        newBone->Copy(_bones[i].mBone, Hmx::Object::kCopyDeep);
         mBones[i].mBone = newBone;
 
         // Find parent in owner hierarchy and reparent
-        int parentIdx = mGeomOwner->GetBoneIndex(mGeomOwner->mBones[i].mBone->TransParent());
+        int parentIdx = mGeomOwner->GetBoneIndex(_bones[i].mBone->TransParent());
         RndTransformable *parent = (parentIdx != -1) ? (RndTransformable *)mBones[parentIdx].mBone : newRoot;
         newBone->SetTransParent(parent, false);
     }

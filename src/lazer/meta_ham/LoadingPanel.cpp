@@ -66,7 +66,8 @@ void LoadingPanel::Load() {
     UIPanel::Load();
     sLoadingMaster = new HamMaster(sSongDB->SongData(), nullptr);
     PlayLoadingMusic();
-    sLoadingMaster->SetMaps();
+    if (sLoadingMaster)
+        sLoadingMaster->SetMaps();
 }
 
 bool LoadingPanel::IsLoaded() const {
@@ -89,9 +90,11 @@ bool LoadingPanel::Exiting() {
 void LoadingPanel::Enter() {
     UIPanel::Enter();
     TheTaskMgr.SetSecondsAndBeat(0, 0, true);
-    Stream *stream = sLoadingMaster->GetHxAudio()->GetSongStream();
-    MILO_ASSERT(sLoadingMaster->GetHxAudio()->IsReady(), 0x6a);
+    auto _tmp0 = sLoadingMaster->GetHxAudio()->IsReady();
+    if (sLoadingMaster)
+        MILO_ASSERT(_tmp0, 0x6a);
     // Trigger stream initialization
+    Stream *stream = sLoadingMaster->GetHxAudio()->GetSongStream();
 }
 
 Symbol LoadingPanel::ChooseLoadingScreen() {

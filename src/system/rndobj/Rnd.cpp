@@ -101,6 +101,8 @@ bool sCompressDone;
 void *sCompressData;
 
 extern int lbl_82F14008;
+extern DataArray *lbl_830A4100;
+extern int lbl_830A4104;
 void MemPrintOverview(int, char *const);
 
 DataNode ModalKeyListener::OnMsg(const KeyboardKeyMsg &k) {
@@ -1028,8 +1030,135 @@ void Rnd::UpdateRate() {
 }
 
 // noinline: Prevents inlining of this stub implementation. Remove once fully implemented.
-__declspec(noinline) float Rnd::DrawTimers(float f) {
-    // TODO: implement full timer drawing (complex function involving AutoTimer stats)
+#include "os/Timer.h"
+
+float Rnd::DrawTimers(float f) {
+    if ((lbl_830A4104 & 1) == 0) {
+        lbl_830A4104 = lbl_830A4104 | 1;
+        Symbol timerSym("timer_script");
+        Symbol rndSym("rnd");
+        DataArray *rndCfg = SystemConfig(rndSym);
+        lbl_830A4100 = rndCfg->FindArray(timerSym, false);
+    }
+
+    if (lbl_830A4100) {
+        DataNode res = lbl_830A4100->ExecuteScript(1, nullptr, nullptr, 0);
+        if ((res.Int() & 0x10) != 0) {
+            lbl_830A4100->Release();
+        }
+    }
+
+    if (mVerboseTimers) {
+        AutoTimer::CollectTimerStats();
+    }
+
+    int numTimers = 0;
+    std::list<std::pair<Timer, TimerStats> > &timers = AutoTimer::Timers();
+    for (std::list<std::pair<Timer, TimerStats> >::iterator it = timers.begin();
+         it != timers.end();
+         ++it) {
+        if (it->first.Draw()) {
+            numTimers++;
+        }
+    }
+
+    float y = f;
+    float height = 0.025f;
+    float width = 0.045f;
+    float bgTop = 0.025f;
+    float bgLeft = 0.0f;
+    float totalHeight = numTimers * width;
+
+    Hmx::Rect bgRect(bgLeft, y, 0.95f, totalHeight + bgTop);
+    Hmx::Color bgColor(0.0f, 0.0f, 0.0f, 0.5f);
+    DrawRectScreen(bgRect, bgColor, mOverlayMat, nullptr, nullptr);
+
+    Hmx::Color barColor(0.5f, 0.5f, 0.5f, 1.0f);
+    Hmx::Color ownColor(0.0f, 0.5f, 0.0f, 1.0f);
+    Hmx::Color inclColor(0.5f, 0.5f, 0.0f, 1.0f);
+    Hmx::Color warnColor(0.0f, 0.0f, 0.5f, 1.0f);
+
+    y += bgTop;
+    float x = bgLeft;
+
+    for (std::list<std::pair<Timer, TimerStats> >::iterator it = timers.begin();
+         it != timers.end();
+         ++it) {
+        if (!it->first.Draw()) {
+            continue;
+        }
+
+        float lastMs = it->first.GetLastMs();
+        float worstMs = it->first.GetWorstMs();
+        float budget = it->first.Budget();
+
+        if (lastMs > 0.0f || worstMs <= lastMs) {
+            float barHeight = lastMs * width;
+            Hmx::Rect barRect(x, y, barHeight, width);
+            DrawRectScreen(barRect, ownColor, nullptr, nullptr, nullptr);
+            y += barHeight;
+
+            float ownTime = lastMs - worstMs;
+            if (ownTime > 0.0f) {
+                float ownHeight = ownTime * width;
+                Hmx::Rect ownRect(x, y, ownHeight, width);
+                DrawRectScreen(ownRect, inclColor, nullptr, nullptr, nullptr);
+                y += ownHeight;
+            }
+        } else {
+            float barHeight = worstMs * width;
+            Hmx::Rect barRect(x, y, barHeight, width);
+            DrawRectScreen(barRect, inclColor, nullptr, nullptr, nullptr);
+            y += barHeight;
+        }
+
+        if (budget > 0.0f && worstMs > budget) {
+            float warnHeight = (worstMs - budget) * width;
+            Hmx::Rect warnRect(x, y, warnHeight, width);
+            DrawRectScreen(warnRect, warnColor, nullptr, nullptr, nullptr);
+            y += warnHeight;
+        }
+
+        y += width * 0.5f;
+    }
+
+    y = f + bgTop;
+    for (int i = 0; i < 10; i++) {
+        Hmx::Rect tickRect(x, y, 0.001f, width);
+        Hmx::Color tickColor(1.0f, 1.0f, 1.0f, 1.0f);
+        DrawRectScreen(tickRect, tickColor, nullptr, nullptr, nullptr);
+        y += width;
+    }
+
+    y = f + bgTop + 0.00446f;
+    x = bgLeft + 0.05f;
+
+    for (std::list<std::pair<Timer, TimerStats> >::iterator it = timers.begin();
+         it != timers.end();
+         ++it) {
+        if (!it->first.Draw()) {
+            continue;
+        }
+
+        float lastMs = it->first.GetLastMs();
+        const char *name = it->first.Name().Str();
+
+        const char *text;
+        if (lastMs < 0.05f) {
+            text = name;
+        } else if (!mVerboseTimers || !AutoTimer::CollectingStats()) {
+            text = MakeString("%s %.2f", name, lastMs);
+        } else {
+            TimerStats &stats = it->second;
+            text = MakeString("%s %.1f", name, lastMs);
+        }
+
+        Vector2 pos(x, y);
+        Hmx::Color textColor(1.0f, 1.0f, 1.0f, 1.0f);
+        DrawStringScreen(text, pos, textColor, true);
+        y += width;
+    }
+
     return f;
 }
 
@@ -1051,8 +1180,8 @@ DataNode Rnd::OnToggleHeap(const DataArray *) {
     if (overlay->Showing()) {
         lbl_82F14008++;
         if (lbl_82F14008 >= numHeaps + 1) {
-            overlay->SetShowing(false);
             lbl_82F14008 = -1;
+            overlay->SetShowing(false);
         }
     } else {
         overlay->SetShowing(true);

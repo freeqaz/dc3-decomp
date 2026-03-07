@@ -913,6 +913,13 @@ set(DC3_GFX_SOURCES
     src/gfx/TextureConvert.cpp
     src/gfx/VertexFormats.cpp
     src/gfx/PipelineManager.cpp
+    src/gfx/FrameCapture.cpp
+    src/gfx/ShadowPass.cpp
+    src/gfx/BloomPass.cpp
+    src/gfx/DofPass.cpp
+    src/gfx/PostProcPass.cpp
+    src/gfx/DrawRect2D.cpp
+    src/gfx/GpuResourceRegistry.cpp
     src/gfx/mikktspace.c
 )
 set_source_files_properties(src/gfx/mikktspace.c PROPERTIES LANGUAGE C)

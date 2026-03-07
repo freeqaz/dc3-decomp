@@ -701,3 +701,159 @@ def _diagnosis_driven_chains(
             ))
 
     return filtered
+
+
+def select_improvers(
+    batch_results: list,
+    baseline: float,
+    max_k: int = 5,
+) -> list:
+    """Select top-K improving variants for cross-composition.
+
+    Filters to build_success + match_percent > baseline, skips compose:/chain:
+    prefixed patterns, deduplicates by source hash, returns top-K by match%.
+
+    Args:
+        batch_results: List of ScoreResult from the main scoring phase.
+        baseline: Current match percentage.
+        max_k: Maximum improvers to return.
+
+    Returns:
+        List of ScoreResult objects sorted by match_percent descending.
+    """
+    from hashlib import md5
+
+    candidates = []
+    seen_hashes: set[str] = set()
+
+    for r in batch_results:
+        if not r.build_success or r.match_percent <= baseline:
+            continue
+        # Skip composed/chained variants — we want independent pattern outputs
+        pname = r.variant.pattern_name
+        if pname.startswith(("compose:", "chain:", "crosscompose:", "merge:")):
+            continue
+        # Source dedup
+        h = md5(r.variant.source).hexdigest()
+        if h in seen_hashes:
+            continue
+        seen_hashes.add(h)
+        candidates.append(r)
+
+    candidates.sort(key=lambda r: -r.match_percent)
+    return candidates[:max_k]
+
+
+def _select_companion_patterns(
+    improver_pattern: str,
+    phase1_results: list,
+    patterns: list,
+    baseline: float,
+) -> list:
+    """Select companion patterns to apply on top of an improver.
+
+    Sources:
+    1. Other patterns that independently improved (from phase1_results)
+    2. _FOLLOW_UP_MAP entries for the improver's pattern
+
+    Args:
+        improver_pattern: Pattern name of the improving variant.
+        phase1_results: All ScoreResult from the main scoring phase.
+        patterns: Available pattern instances.
+        baseline: Current match percentage.
+
+    Returns:
+        List of Pattern objects to try as companions.
+    """
+    pattern_map = {p.name: p for p in patterns}
+    companion_names: set[str] = set()
+
+    # Source 1: Other patterns that independently improved
+    for r in phase1_results:
+        if not r.build_success or r.match_percent <= baseline:
+            continue
+        pname = r.variant.pattern_name
+        if pname.startswith(("compose:", "chain:", "crosscompose:", "merge:")):
+            continue
+        if pname != improver_pattern and pname in pattern_map:
+            companion_names.add(pname)
+
+    # Source 2: Follow-up map entries
+    for follow_up in _FOLLOW_UP_MAP.get(improver_pattern, []):
+        if follow_up in pattern_map:
+            companion_names.add(follow_up)
+
+    return [pattern_map[n] for n in companion_names if n in pattern_map]
+
+
+def cross_compose_variants(
+    original_ctx: FunctionContext,
+    improvers: list,
+    patterns: list,
+    phase1_results: list,
+    baseline: float,
+    max_per_improver: int = 6,
+    max_total: int = 30,
+) -> Iterator[Variant]:
+    """Cross-compose: apply companion patterns on top of improving variants.
+
+    For each improver:
+    1. Reparse the improver's source to get a fresh AST context
+    2. Select companion patterns (other improvers + follow-up map)
+    3. Generate one variant per companion pattern
+    4. Yield with crosscompose: prefix
+
+    Args:
+        original_ctx: Original function context.
+        improvers: List of ScoreResult from select_improvers().
+        patterns: All available pattern instances.
+        phase1_results: All ScoreResult from main scoring.
+        baseline: Current match percentage.
+        max_per_improver: Max variants per improver.
+        max_total: Max total variants.
+
+    Yields:
+        Variant objects with crosscompose: prefix.
+    """
+    from hashlib import md5
+
+    total = 0
+    seen_sources: set[str] = set()
+
+    for improver_result in improvers:
+        if total >= max_total:
+            return
+
+        # Reparse the improver's source
+        try:
+            reparsed = reparse_variant(original_ctx, improver_result.variant.source)
+        except ValueError:
+            continue
+
+        companions = _select_companion_patterns(
+            improver_result.variant.pattern_name,
+            phase1_results, patterns, baseline,
+        )
+
+        count = 0
+        for companion in companions:
+            if count >= max_per_improver or total >= max_total:
+                break
+
+            # Generate first variant from this companion on the reparsed context
+            for variant in companion.generate(reparsed):
+                # Dedup
+                h = md5(variant.source).hexdigest()
+                if h in seen_sources:
+                    continue
+                seen_sources.add(h)
+
+                yield Variant(
+                    name=f"crosscompose:{improver_result.variant.name}+{variant.name}",
+                    pattern_name=f"crosscompose:{improver_result.variant.pattern_name}+{companion.name}",
+                    description=f"{improver_result.variant.description} then {variant.description}",
+                    source=variant.source,
+                )
+                count += 1
+                total += 1
+                break  # Only first variant per companion

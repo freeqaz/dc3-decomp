@@ -167,19 +167,20 @@ char *Trie::get(int index, char *buffer, int bufSize) {
 }
 
 int Trie::store(const char *str) {
-    if (str == 0) return 0;
-    if (*str == 0) return 0;
+                if (str == 0)
+            return 0;
+        if (*str == 0)
+            return 0;
 
     unsigned int curIdx = 1;
     unsigned int prevSib = 0;
 
     // Compute string length by walking the string
-    const char *p = str;
     unsigned char c;
     do {
-        c = *p++;
+        c = *str++;
     } while (c != 0);
-    int strLen = (int)(p - str) - 1;
+    int strLen = (int)(str - str) - 1;
     if (strLen < 0) goto do_terminator;
 
     // Process each character
@@ -283,11 +284,7 @@ do_terminator:
         Character(termNode) = 0;
         Parent(termNode) = curIdx;
 
-        if (childIdx == 0) {
-            check_index(curIdx);
-            FirstChild(NodePtr(this, curIdx)) = termIdx;
-            inc_count(termIdx);
-        } else {
+        if (!(childIdx == 0)) {
             unsigned int sibIdx = childIdx;
             check_index(childIdx);
             unsigned char sibCount = SiblingCount(NodePtr(this, childIdx));
@@ -298,6 +295,10 @@ do_terminator:
             check_index(sibIdx);
             NextSibling(NodePtr(this, sibIdx)) = termIdx;
             inc_count(childIdx);
+        } else {
+            check_index(curIdx);
+            FirstChild(NodePtr(this, curIdx)) = termIdx;
+            inc_count(termIdx);
         }
 
         inc_dup_count(termIdx);

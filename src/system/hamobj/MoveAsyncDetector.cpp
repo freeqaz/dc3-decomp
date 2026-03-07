@@ -78,7 +78,7 @@ MoveAsyncDetector::MoveAsyncDetector(MoveDir *md) : mDir(md) {
             MILO_ASSERT(TheHamDirector, 0xF5);
             std::vector<HamMoveKey> keys;
             TheHamDirector->MoveKeys(kDifficultyExpert, md, keys);
-            for (ObjDirItr<HamMove> it(md, true); it != nullptr; ++it) {
+            for (ObjDirItr<HamMove> it(md, true); nullptr != it; ++it) {
                 if (it->Scored()) {
                     for (int i = 0; i < keys.size(); i++) {
                         if (keys[i].move == it) {
@@ -87,12 +87,12 @@ MoveAsyncDetector::MoveAsyncDetector(MoveDir *md) : mDir(md) {
                     }
                 }
                 DancerSequence *seq = it->GetDancerSequence();
-                if (seq) {
+                if (!(seq)) {
+                    MILO_NOTIFY("Could not find %s in expert keys", PathName(it));
+                } else {
                     const FilterVersion *curFv = it->FilterVer();
                     const DancerFrame *curFrame = seq->GetDancerFrames().begin();
                     mDetectors.push_back(new MoveDetector(curFv, it, curFrame));
-                } else {
-                    MILO_NOTIFY("Could not find %s in expert keys", PathName(it));
                 }
             }
             std::sort(mDetectors.begin(), mDetectors.end(), MoveDetectorCmp());

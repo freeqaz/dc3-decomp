@@ -51,10 +51,10 @@ void RndShader::Init() {
     sShaders[kBloomShader] = &gShaderSimple;
     sShaders[kDepthVolumeShader] = &gShaderDepthVolume;
     sShaders[kBloomGlareShader] = &gShaderSimple;
-    sShaders[kDownsampleDepthShader] = &gShaderSimple;
-    sShaders[kDownsample4xShader] = &gShaderSimple;
     sShaders[kDrawRectShader] = &gShaderDrawRect;
     sShaders[kDownsampleShader] = &gShaderSimple;
+    sShaders[kDownsampleDepthShader] = &gShaderSimple;
+    sShaders[kDownsample4xShader] = &gShaderSimple;
     sShaders[kMultimeshShader] = &gShaderMultimesh;
     sShaders[kFurShader] = &gShaderFur;
     sShaders[kErrorShader] = &gShaderSimple;

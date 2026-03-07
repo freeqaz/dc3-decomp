@@ -63,7 +63,8 @@ END_LOADS
 
 void HamCamTransform::Setup(bool update) {
     ClearOldCrowds();
-    for (ObjVector<TransformArea>::iterator it = mAreas.begin(); it != mAreas.end(); ++it) {
+    auto& _ref0 = mAreas;
+    for (ObjVector<TransformArea>::iterator it = _ref0.begin(); it != _ref0.end(); ++it) {
         TransformArea &area = *it;
         if (area.mArea) {
             for (ObjPtrList<HamCamShot>::iterator sit = area.mCamshots.begin();
@@ -106,7 +107,8 @@ void HamCamTransform::Setup(bool update) {
             RndAnimatable *anim = result.Obj<RndAnimatable>();
             if (anim) {
                 anim->StartAnim();
-                anim->SetFrame(anim->EndFrame(), 1.0f);
+                auto _tmp0 = anim->EndFrame();
+                anim->SetFrame(_tmp0, 1.0f);
             }
         }
     }

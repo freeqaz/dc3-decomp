@@ -16,10 +16,10 @@ Symbol MsgSinks::GetPropSyncHandler(DataArray *arr) {
             if (array->Size() == arr->Size()) {
                 bool ret = true;
                 for (int j = 0; j < array->Size(); j++) {
-                    if (array->UncheckedInt(j) != arr->UncheckedInt(j)) {
-                        ret = false;
-                        break;
-                    }
+                    if (array->UncheckedInt(j) == arr->UncheckedInt(j))
+                        continue;
+                    ret = false;
+                    break;
                 }
                 if (ret)
                     return mPropSyncHandlers->Sym(i + 1);
@@ -272,6 +272,43 @@ void MsgSinks::RemoveSink(Hmx::Object *obj, Symbol ev) {
                 it->Remove(obj, mExporting != 0);
                 return;
             }
+        }
+    }
+}
+
+void MsgSinks::RemovePropertySink(Hmx::Object *o, DataArray *a) {
+    Symbol path = PathToEventName(a);
+    RemoveSink(o, path);
+    if (mPropSyncHandlers) {
+        int i = 1;
+        if (i < mPropSyncHandlers->Size()) {
+            do {
+                if (path == mPropSyncHandlers->Sym(i)) {
+                    mPropSyncHandlers->Remove(i);
+                    mPropSyncHandlers->Remove(i - 1);
+                    return;
+                }
+                i += 2;
+            } while (i < mPropSyncHandlers->Size());
+        }
+    }
+    MILO_NOTIFY_ONCE(
+        "Property Sink not in the list! %s -> %s", PathName(mOwner), PathName(o)
+    );
+}
+
+void MsgSinks::MergeSinks(Hmx::Object *from) {
+    MsgSinks *fromSinks = from->Sinks();
+    if (!(int)fromSinks) return;
+    for (ObjList<Sink>::iterator it = fromSinks->mSinks.begin();
+         it != fromSinks->mSinks.end(); ++it) {
+        AddSink(it->obj, Symbol(), Symbol(), it->mode, true);
+    }
+    for (ObjList<EventSink>::iterator evIt = fromSinks->mEventSinks.begin();
+         evIt != fromSinks->mEventSinks.end(); ++evIt) {
+        for (ObjList<EventSinkElem>::iterator elemIt = evIt->sinks.begin();
+             elemIt != evIt->sinks.end(); ++elemIt) {
+            AddSink(elemIt->obj, evIt->event, elemIt->handler, elemIt->mode, true);
         }
     }
 }

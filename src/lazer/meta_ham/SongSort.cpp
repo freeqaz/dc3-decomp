@@ -88,8 +88,10 @@ void SongSort::DeleteItemList() {
 
 void SongSort::BuildItemList() {
     Symbol sym(gNullStr);
-    if (mHighlightNode && mHighlightNode->GetType() == kNodeFunction) {
+    if (mHighlightNode) {
+        if (mHighlightNode->GetType() == kNodeFunction) {
         sym = mHighlightNode->GetToken();
+    }
     }
     DeleteItemList();
 
@@ -100,8 +102,8 @@ void SongSort::BuildItemList() {
     bool inDanceBattle = TheGameMode->InMode(dance_battle, true);
     static Symbol song_select_story("song_select_story");
 
-    bool inPerform = TheGameMode->InMode(perform, true);
     static Symbol song_select_mode("song_select_mode");
+    bool inPerform = TheGameMode->InMode(perform, true);
     Symbol prop = TheGameMode->Property(song_select_mode, true)->Sym();
 
     if (TheSongSortMgr->HeadersSelectable() && (inPerform || inDanceBattle) && song_select_playlist != prop) {

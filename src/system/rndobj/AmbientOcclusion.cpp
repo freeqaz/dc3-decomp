@@ -914,8 +914,8 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
         return;
 
     // Clamp triLarge >= triSmall (fsel pattern)
-    float triLarge = mTessellateTriLarge;
     float triSmall = mTessellateTriSmall;
+    float triLarge = mTessellateTriLarge;
     mTessellateTriLarge = (triLarge - triSmall >= 0.0f) ? triLarge : triSmall;
 
     Timer timer;
@@ -1180,7 +1180,7 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
             RndMesh::Face *savedFaces = &newFaces[0];
             RndMesh::Face *savedFacesEnd = &newFaces[0] + newFaces.size();
             geomOwner = mesh->GetGeomOwner();
-            geomOwner->Faces().assign(newFaces.begin(), newFaces.end());
+            geomOwner->Faces().assign(newFaces.end(), newFaces.begin());
 
             RndMesh::Vert *savedVerts = &newVerts[0];
             RndMesh::Vert *savedVertsEnd = &newVerts[0] + newVerts.size();

@@ -266,7 +266,7 @@ void HamMaster::CheckLevels() {
 
     std::vector<LevelData> &levelData = TheSynth->GetLevelData();
     int count = (int)levelData.size();
-    if (count == 0)
+    if (0 == count)
         return;
 
     float rightRMS = levelData[count - 1].mRMS;
@@ -292,10 +292,10 @@ void HamMaster::CheckLevels() {
     if (-leftLevel < 0.0f)
         l = leftLevel;
     float lClamped = 1.0f;
+    Vector2 v(lClamped, rClamped);
+
     if (l - 1.0f < 0.0f)
         lClamped = l;
-
-    Vector2 v(lClamped, rClamped);
     mLevelHistory.push_back(v);
 
     // Average all entries
@@ -337,8 +337,8 @@ void HamMaster::CheckLevels() {
     } while (i != 0);
 
     // Left channels (4 to 7, decaying)
-    weight = 1.0f;
     i = 4;
+    weight = 1.0f;
     do {
         channels[i] = weight * avgY;
         weight *= 0.7f;

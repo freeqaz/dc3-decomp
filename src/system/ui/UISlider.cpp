@@ -218,6 +218,7 @@ void UISlider::Update() {
         return;
     }
 
+    Symbol itemSym;
     for (int i = 1; i < matsArraySize; i++) {
         DataNode &arrayNode = matsArray->Node(i);
         DataArray *matItemArray = arrayNode.Array(matsArray);
@@ -225,7 +226,7 @@ void UISlider::Update() {
             continue;
         }
 
-        Symbol itemSym = matItemArray->Sym(0);
+                itemSym = matItemArray->Sym(0);
         State itemState = SymToUIComponentState(itemSym);
         DataNode &matNode = matItemArray->Node(1);
         const char *matName = matNode.Str(matItemArray);

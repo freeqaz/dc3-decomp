@@ -150,8 +150,8 @@ void MoveFrame::Load(BinStreamRev &d) {
     } else {
         mTypeMask = -1;
     }
-    int num_ham2_nodes = FilterVersion::NumHam2Nodes();
     int num_ham1_nodes = kNumHam1Nodes;
+    int num_ham2_nodes = FilterVersion::NumHam2Nodes();
     if (d.rev > 0x27) {
         d >> num_ham1_nodes;
         MILO_ASSERT(num_ham1_nodes == kNumHam1Nodes, 0x122);
@@ -256,9 +256,10 @@ void MoveFrame::Load(BinStreamRev &d) {
         for (int mirror = 0; mirror < kNumMoveMirrored; mirror++) {
             int size = oldNodeWeights[mirror].size();
             for (int i = 0; i < size; i++) {
-                mNodeWeights[mirror][node_idx][0] = oldNodeWeights[mirror][i].unk0;
-                mNodeWeights[mirror][node_idx][1] = oldNodeWeights[mirror][i].unk0;
-                mNodeWeights[mirror][node_idx][2] = oldNodeWeights[mirror][i].unk0;
+                auto& _sub4 = oldNodeWeights[mirror][i];
+                mNodeWeights[mirror][node_idx][0] = _sub4.unk0;
+                mNodeWeights[mirror][node_idx][1] = _sub4.unk0;
+                mNodeWeights[mirror][node_idx][2] = _sub4.unk0;
                 node_idx++;
             }
         }
@@ -271,7 +272,8 @@ void MoveFrame::Load(BinStreamRev &d) {
         // Fill remaining nodes with default scale
         for (int node = node_idx; node < num_ham2_nodes; node++) {
             for (int mirror = 0; mirror < kNumMoveMirrored; mirror++) {
-                SetNodeScale(node, (MoveMirrored)mirror, Vector3(1, 1, 1));
+                auto _tmp1 = Vector3(1, 1, 1);
+                SetNodeScale(node, (MoveMirrored)mirror, _tmp1);
             }
         }
     }

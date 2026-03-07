@@ -935,7 +935,7 @@ void DecodeDxt5Alpha(unsigned char *uc, int i, int j, unsigned char &alpha) {
 
     // Calculate adjusted offset
     unsigned int adjustedOff;
-    if (!(!(!((byteOff & 1) == 0)))) {
+    if (!(!(!((int)(byteOff & 1) == 0)))) {
         adjustedOff = byteOff + 0xFF;
     } else {
         adjustedOff = byteOff + 1;
@@ -965,7 +965,7 @@ void DecodeDxt5Alpha(unsigned char *uc, int i, int j, unsigned char &alpha) {
         alpha = alpha0;
     } else {
         if (alpha1 > alpha0) {
-            if (index == 6) {
+            if ((int)index == 6) {
                 alpha = 0;
             } else if (index == 7) {
                 alpha = 0xFF;

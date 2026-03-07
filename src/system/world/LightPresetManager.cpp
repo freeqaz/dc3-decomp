@@ -121,11 +121,11 @@ DataNode LightPresetManager::OnToggleLightingEvents(DataArray *da) {
 }
 
 void LightPresetManager::Poll() {
+    LightPreset *pPrev = mPresetPrev;
     LightPreset *pNew = mPresetNew;
     float timeNew = mTimeNew;
-    LightPreset *pPrev = mPresetPrev;
-    float timePrev = mTimePrev;
     float blend = mBlend;
+    float timePrev = mTimePrev;
 
     if (mPresetOverride) {
         TaskUnits units = mPresetOverride->Units();
@@ -164,7 +164,8 @@ void LightPresetManager::Poll() {
     if (pNew) {
         TaskUnits units = pNew->Units();
         float time = TheTaskMgr.Time(units);
-        float frame = pNew->FramesPerUnit() * (time - timeNew);
+        auto _tmp0 = pNew->FramesPerUnit();
+        float frame = _tmp0 * (time - timeNew);
         float f = 0.0f;
         if (-frame < 0.0f) {
             f = frame;

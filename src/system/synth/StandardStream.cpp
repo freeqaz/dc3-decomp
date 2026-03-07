@@ -471,12 +471,13 @@ void StandardStream::Init(float f1, float f2, Symbol s, bool b4) {
 void StandardStream::InitInfo(int i1, int sampleRate, bool floatSamples, int i4) {
     unk154 = i4;
     int numChannels = mVirtualChans + i1;
-    mInfoChannels = numChannels;
     unkec = (mInfoChannels / sampleRate);
+    mInfoChannels = numChannels;
+    auto& _ref2 = mSampleRate;
     if (!mGetInfoOnly) {
-        if (mSampleRate == 0) {
+        if (_ref2 == 0) {
             mFloatSamples = floatSamples;
-            mSampleRate = sampleRate;
+            _ref2 = sampleRate;
             int bufBytes = mBufSecs * sampleRate * 2.0f;
             MILO_ASSERT(bufBytes % (2*kStreamBufSize) == 0, 0x13F);
             bufBytes >>= 0xE;
@@ -502,14 +503,14 @@ void StandardStream::InitInfo(int i1, int sampleRate, bool floatSamples, int i4)
             }
         } else {
             MILO_ASSERT(numChannels == mChannels.size(), 0x161);
-            MILO_ASSERT(mSampleRate == sampleRate, 0x162);
+            MILO_ASSERT(_ref2 == sampleRate, 0x162);
             MILO_ASSERT(mFloatSamples == floatSamples, 0x163);
         }
         if (mJumpSamplesInvalid) {
             setJumpSamplesFromMs(mJumpFromMs, mJumpToMs);
         }
-        MILO_ASSERT(mChanParams.size() >= numChannels, 0x16C);
         int i;
+        MILO_ASSERT(mChanParams.size() >= numChannels, 0x16C);
         for (i = 0; i < numChannels; i++) {
             mChannels[i]->SetPan(mChanParams[i]->mPan);
             UpdateSpeed(i);

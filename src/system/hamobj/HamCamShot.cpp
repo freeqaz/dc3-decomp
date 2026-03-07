@@ -90,10 +90,10 @@ void HamCamShot::SetPreFrame(float frame, float blend) {
             ++nextShotIt;
         }
         frame = nextOffset - mNextShotDuration;
-        if (mNextShotOffset <= frame) {
+        if (frame >= mNextShotOffset) {
             float maxDuration = kHugeFloat;
             do {
-                bool iterated = IterateNextShot();
+                unsigned char iterated = (unsigned char)(IterateNextShot());
                 if (!(!iterated)) {
                     frame -= mNextShotDuration;
                     mNextShotOffset += mNextShotDuration;

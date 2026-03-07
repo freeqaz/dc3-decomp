@@ -829,15 +829,15 @@ void LightPreset::CacheFrames() {
         kf.mLightChanges.resize(kf.mLightEntries.size());
         kf.mSpotlightDrawerChanges.clear();
         kf.mSpotlightDrawerChanges.resize(kf.mSpotlightDrawerEntries.size());
-        if (mLooping || i != 0) {
+        if (mLooping || (unsigned long)(unsigned int)i != 0) {
             Keyframe &prev = mKeyframes[i == 0 ? mKeyframes.size() - 1 : i - 1];
             for (uint j = 0; j != kf.mSpotlightEntries.size(); j++) {
-                if (kf.mSpotlightEntries[j] != prev.mSpotlightEntries[j]) {
+                if (prev.mSpotlightEntries[j] != kf.mSpotlightEntries[j]) {
                     kf.mSpotlightChanges[j] = true;
                 }
             }
             for (uint j = 0; j != kf.mEnvironmentEntries.size(); j++) {
-                if (kf.mEnvironmentEntries[j] != prev.mEnvironmentEntries[j]) {
+                if (prev.mEnvironmentEntries[j] != kf.mEnvironmentEntries[j]) {
                     kf.mEnvironmentChanges[j] = true;
                 }
             }

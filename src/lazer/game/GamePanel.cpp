@@ -112,7 +112,7 @@ float LoopVizCallback::UpdateOverlay(RndOverlay *o, float y) {
     mLoopEndChangeTimer -= TheTaskMgr.DeltaSeconds();
 
     // Draw semi-transparent background
-    auto bgColor = Hmx::Color(0, 0, 0, 0.6f);
+    auto bgColor = Hmx::Color(0.0f, 0, 0, 0.6f);
     auto bgRect = Hmx::Rect(0.05f, 0.1f, 0.9f, 0.2f);
     TheRnd.DrawRectScreen(
         bgRect, bgColor, nullptr, nullptr, nullptr
@@ -181,7 +181,7 @@ float LoopVizCallback::UpdateOverlay(RndOverlay *o, float y) {
     mDebugMeter1.DrawLine(playheadPos, Hmx::Color(1.0f, 1.0f, 1.0f), 1.0f, 0.0f);
 
     // Draw loop boundary labels (highlight if recently changed)
-    Hmx::Color startColor = mLoopStartChangeTimer > 0 ? Hmx::Color(0, 0, 0) : Hmx::Color(1.0f, 1.0f, 1.0f);
+    Hmx::Color startColor = (int)mLoopStartChangeTimer > 0 ? Hmx::Color(0, 0, 0) : Hmx::Color(1.0f, 1.0f, 1.0f);
     mDebugMeter1.DrawText(MakeString("%d", loopStart), loopStartNorm, 0.0f, startColor);
 
     Hmx::Color endColor = 0 < mLoopStartChangeTimer ? Hmx::Color(0, 0, 0) : Hmx::Color(1.0f, 1.0f, 1.0f); // NOTE: likely original game bug - should be mLoopEndChangeTimer (was unk54, same as start)

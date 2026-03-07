@@ -26,8 +26,8 @@ void CharIKHead::Poll() {
     }
     float weight = Weight();
     if (weight != 0) {
-        Hmx::Matrix3 origHeadMat(mHead->WorldXfm().m);
         Vector3 headOffset;
+        Hmx::Matrix3 origHeadMat(mHead->WorldXfm().m);
         Subtract(mHead->WorldXfm().v, mHeadFilter, headOffset);
         Vector3 targetPos = mTarget->WorldXfm().v;
         float headOffsetLen = Length(headOffset);
@@ -35,7 +35,8 @@ void CharIKHead::Poll() {
             float blendDist = Min(headOffsetLen, mTargetRadius * weight);
             ScaleAdd(targetPos, headOffset, blendDist / headOffsetLen, targetPos);
         }
-        Interp(mPoints[0].mBone->WorldXfm().v, targetPos, weight, targetPos);
+        auto& _sub0 = mPoints[0];
+        Interp(_sub0.mBone->WorldXfm().v, targetPos, weight, targetPos);
         Vector3 spineToTarget;
         Subtract(targetPos, mSpine->TransParent()->WorldXfm().v, spineToTarget);
         float distSq = LengthSquared(spineToTarget);
@@ -43,11 +44,11 @@ void CharIKHead::Poll() {
             ScaleAdd(
                 mSpine->TransParent()->WorldXfm().v,
                 spineToTarget,
-                mSpineLength / std::sqrt(distSq),
+                mSpineLength / sqrtf(distSq),
                 targetPos
             );
         }
-        Subtract(targetPos, mPoints[0].mBone->WorldXfm().v, spineToTarget);
+        Subtract(targetPos, _sub0.mBone->WorldXfm().v, spineToTarget);
         for (int i = 0; i < mPoints.size(); i++) {
             Point &pt = mPoints[i];
             ScaleAdd(pt.mBone->WorldXfm().v, spineToTarget, pt.mLenRatio, pt.mPos);

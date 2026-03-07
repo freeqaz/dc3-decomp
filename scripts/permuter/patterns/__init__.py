@@ -57,6 +57,11 @@ from . import deep_member_ref_bind  # noqa: F401  # Bind ptr->member chains to l
 from . import loop_condition_cache  # noqa: F401  # Cache/uncache member access in loop conditions
 from . import color_copy_shape  # noqa: F401  # Switch channel-wise vs aggregate color copy forms
 from . import native_guard_camera_wrap  # noqa: F401  # Normalize inline UI camera select/restore to helpers
+from . import rb3_source_hint  # noqa: F401  # Targeted ternary/if-else swaps guided by RB3 reference source
+from . import assert_line_fix  # noqa: F401  # Fix drifted MILO_ASSERT line numbers
+from . import math_func_promotion  # noqa: F401  # Swap sqrt/sin/cos/etc <-> sqrtf/sinf/cosf/etc
+from . import null_guard_insert  # noqa: F401  # Insert missing null guards (complement to elimination)
+from . import missing_call  # noqa: F401  # Detect and uncomment missing function calls (opt-in diagnostic)
 
 from .base import get_all_patterns, get_pattern, list_patterns
 

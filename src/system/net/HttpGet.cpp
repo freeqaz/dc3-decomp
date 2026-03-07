@@ -547,17 +547,17 @@ bool HttpPost::CanRetry() {
 }
 
 void HttpPost::StartSending() {
-    auto& _ref0 = mSocket;
-    MILO_ASSERT(_ref0, 0x3CD);
-    if (_ref0->CanSend()) {
+    MILO_ASSERT(mSocket, 0x3CD);
+    bool _cond = mSocket->CanSend();
+    if (_cond) {
         mHeaderLength = mRequestHeaders.length();
-        if (_ref0->Send(mRequestHeaders.c_str(), mHeaderLength) == mHeaderLength) {
+        if (mSocket->Send(mRequestHeaders.c_str(), mHeaderLength) == mHeaderLength) {
             SetState(kHttpGet_SendingBody);
             return;
         }
     }
-    mFailType = kHttpFail_Send;
     SetState(kHttpGet_FailedSend);
+    mFailType = kHttpFail_Send;
 }
 
 void HttpPost::Sending() {

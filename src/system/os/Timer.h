@@ -271,6 +271,10 @@ public:
     static void Init();
     static void ResetTimers();
 
+    static std::list<std::pair<Timer, TimerStats> > &Timers() { return sTimers; }
+
+    friend class Rnd;
+
 private:
     Timer *mTimer; // 0x0
     float mTimeLimit; // 0x4

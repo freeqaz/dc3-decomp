@@ -148,11 +148,7 @@ void HamScrollBehavior::Update(float input) {
     }
 
     // Direction handling
-    if (scrollDir == 0) {
-        mScrollTimeAccum = 0.0f;
-        mAutoScrollActive = false;
-        mFirstTick = false;
-    } else {
+    if (!(scrollDir == 0)) {
         mLastScrollDir = scrollDir;
         float delay = mNeutralToSlowDownDelay;
         if (scrollDir == 1) {
@@ -174,6 +170,10 @@ void HamScrollBehavior::Update(float input) {
                 ScrollDown(false);
             }
         }
+    } else {
+        mScrollTimeAccum = 0.0f;
+        mAutoScrollActive = false;
+        mFirstTick = false;
     }
 
     // Input normalization
@@ -242,8 +242,7 @@ void HamScrollBehavior::Update(float input) {
     }
 
     // Sound smoother
-    float dt3 = TheTaskMgr.DeltaUISeconds();
-    mSmoother.Smooth(soundLevel, dt3);
+    mSmoother.Smooth(soundLevel, TheTaskMgr.DeltaUISeconds());
     mNavList->SetScrollSoundFrame(mSmoother.Level());
 
     // Scroll speed anim
@@ -260,7 +259,8 @@ void HamScrollBehavior::Update(float input) {
         case 2:
             if (input <= 0.5f) {
                 shift = 0.0f;
-                if (mListState->FirstShowing() != 0) {
+                auto _tmp4 = mListState->FirstShowing();
+                if (_tmp4 != 0) {
                     shift = -mNavList->CalculateSwell(0);
                 }
             } else {

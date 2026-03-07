@@ -294,7 +294,9 @@ const char *GetExpCode(int code) {
                 }
             } else {
                 int temp = code - 0xC0000008;
-                if (temp != 0) {
+                if (temp == 0) {
+                    return "EXCEPTION_INVALID_HANDLE";
+                } else {
                     switch ((unsigned int)temp) {
                     case 0x84:
                         return "EXCEPTION_ARRAY_BOUNDS_EXCEEDED";
@@ -307,8 +309,6 @@ const char *GetExpCode(int code) {
                     default:
                         break;
                     }
-                } else {
-                    return "EXCEPTION_INVALID_HANDLE";
                 }
             }
         } else {
@@ -325,7 +325,8 @@ const char *GetExpCode(int code) {
                 return "EXCEPTION_PRIV_INSTRUCTION";
             }
             extern const char *merged_82610090(const char *, volatile int *);
-            return merged_82610090("Unhandled Exception", &code);
+            auto _tmp0 = merged_82610090("Unhandled Exception", &code);
+            return _tmp0;
         }
         case (int)0xC00000FD:
             return "EXCEPTION_STACK_OVERFLOW";

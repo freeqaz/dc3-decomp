@@ -1,78 +1,92 @@
-# DC3 Native — Rendering Gap Analysis (Session 28)
+# DC3 Native — Rendering Gap Analysis (Session 30 Update)
 
 ## Current State
 
-choose_mode_screen renders with geometry and text visible, but is mostly dark/desaturated compared to the reference (bright cyan neon UI).
+choose_mode_screen renders with geometry, text, animated materials, and working PropAnim pipeline. UI elements visible but dim compared to reference (bright cyan neon UI).
 
-- 50 mesh draw calls with real vertex data (compressed vertex decompression fixed)
-- Text rendering working ("Jump right in and Perform!")
-- Ribbon/bar geometry visible but dark purple instead of bright cyan
-- Background vertical stripes visible but near-black
+- 51 mesh draw calls with real vertex data
+- Text rendering working ("Jump right in and Perform!", "PLAYERS: 1 - 2")
+- **PropAnim → Material pipeline fully operational** (fixed session 30)
+- Material alpha values animate correctly (e.g., autosave_icon fades 1.0→0.08)
+- Letterbox rules, vertical beam stripes, and UI geometry all visible
+- Remaining dimness is shader/blend related (intensify, additive glow)
 
 Reference: `archive/screenshots-old/references/dc3_main_menu.jpg`
-Current: `archive/screenshots/session28/choose_mode_verts.png`
+Current: `archive/screenshots/session30/frame_00600.png`
 
-## Root Causes (Priority Order)
+## Session 30 Fixes
 
-### 1. PropAnim not ticking — alpha stuck at 0 (CRITICAL)
+### ObjOwnerPtr::RefOwner() decomp bug (ROOT CAUSE)
 
-Most UI elements use `kBlendSrcAlpha` (blend=3) where output = color * alpha. Material diagnostics show alpha=0.00 on nearly all glow/background layers:
+**Bug**: `ObjOwnerPtr<T>::RefOwner()` returned `mObject ? mObject->RefOwner() : nullptr`. During `ObjRefConcrete::Load()`, `mObject` is null (not yet loaded), so `RefOwner()` returned null, preventing the dir lookup from finding the target object. Every PropKeys target resolved to null.
 
-| Material | Color (RGB) | Alpha | Expected |
-|----------|-------------|-------|----------|
-| rt_frames_glow04.mat | (0.42, 0.63, 0.64) | 0.00 | ~1.0 (animated) |
-| frames_bg04.mat | (0.56, 0.58, 0.60) | 0.00 | ~1.0 (animated) |
-| mainMenuMiddleShading | (0.30, 0.27, 0.30) | 0.00 | ~1.0 (animated) |
-| icon.mat (perform) | (1.00, 1.00, 1.00) | 0.00 | ~1.0 (animated) |
-| icon_sml.mat | (1.00, 1.00, 1.00) | 0.00 | ~1.0 (animated) |
+**Fix**: Changed to `return mOwner->RefOwner()` (matching RB3 reference) in native build (`#ifdef HX_NATIVE`). PPC decomp path unchanged.
 
-These alphas are driven by **PropAnim** (property animation) during screen enter transitions. The animation system isn't advancing these values.
+**File**: `src/system/obj/ObjPtr_p.h:141-143`
 
-**Investigation needed:**
-- Is `RndPropAnim::Poll()` / `SetFrame()` being called?
-- Are the screen's animatable objects registered in the poll loop?
-- Does `PanelDir::Enter()` trigger the transition animations?
+**Impact**: All PropKeys targets (FloatKeys, ColorKeys) now resolve correctly. Material alpha/color values change at runtime via PropAnim keyframe interpolation.
+
+### TypeProps::GetArray null typeDef guard
+
+**Bug**: `TypeProps::GetArray()` asserts `typeDef != null` (line 190), but native build doesn't load DTA type definitions. Properties like `styles` that need array defaults from the typedef crash.
+
+**Fix**: Added `#ifdef HX_NATIVE` null guard to return early when typeDef is missing.
+
+**File**: `src/system/obj/TypeProps.cpp:190,204`
+
+## What's Working (Confirmed)
+
+1. **Full animation pipeline** — PropAnim → PropKeys → SetProperty → Material update → GPU uniform
+2. **Milo file loading** — PropAnim objects loaded from milo files (7,811 across all UI milos)
+3. **SyncObjects** — animatables collected into `mAnims`, target objects resolved in dir
+4. **Animation startup** — `PanelDir::Enter()` auto-starts via `Animate()` on `kTaskUISeconds`
+5. **Timer conversion** — correct µs→ms factor for native `__mftb()`
+6. **Material property animation** — alpha, color, ambient_alpha all driven by PropAnim keyframes
+
+## Remaining Root Causes (Priority Order)
+
+### 1. Missing intensify/glow blend modes (HIGH)
+
+The reference shows bright cyan neon effects from additive glow layers. Current shader doesn't implement the `intensify` material flag (which doubles color output) or additive blend mode. This is why the UI appears dim despite correct alpha values.
 
 ### 2. Colors desaturated — not bright cyan (MEDIUM)
 
-Even materials with alpha > 0 show muted gray-blue `(0.56, 0.58, 0.60)` instead of vibrant cyan `(0.0, 0.8, 1.0)`. The neon look comes from:
-- **PropAnim-driven color values** — colors animate to cyan at runtime
-- **Intensify flag** on materials (doubles color, `matUni.intensify = 2.0`)
-- **Additive glow layers** stacking up brightness
-
-This will likely fix itself once PropAnim ticking works.
+Material colors like `color_edge_gradient.mat` have correct values (0.00, 0.47, 0.85, 0.60) but appear dark because:
+- Intensify flag not doubling color
+- Additive glow layers not stacking brightness
+- Possible missing emissive/ambient term in shader
 
 ### 3. Missing DANCE CENTRAL 3 logo (HIGH)
 
-The big logo is absent from the 50 draw calls. Likely causes:
-- In a subdir that didn't load (check `turbo_shell` or logo-specific panel)
-- Rendered by a TexRenderer (render-to-texture) that isn't hooked up
-- Part of the screen enter script that populates it
+The big logo is absent. Likely rendered by a TexRenderer (render-to-texture) or loaded from a subdir not yet processed.
 
 ### 4. Missing text labels (MEDIUM)
 
-Reference shows: "MAIN MENU", "EXIT CONTROLLER MODE", "SELECT", copyright block. We only see "Jump right in and Perform!". Other labels depend on:
-- Screen enter DTA scripts setting text content
-- UILabel visibility driven by PropAnim
-- Controller mode / Kinect overlay panels
+Reference shows more labels than current output. Depend on screen enter DTA scripts and PropAnim visibility.
 
-### 5. Missing player silhouette boxes (LOW)
+## Stubs Status
 
-Corner player identity boxes are Kinect UI — may not load without Kinect subsystem. Low priority.
+### Critical stubs (no real implementation):
+| Stub | Impact | Priority |
+|------|--------|----------|
+| `EventTrigger::TriggerSelf()` | Would fire anim triggers — but 0 EventTriggers exist in UI milos | Low |
+| `MsgSinks::MergeSinks()` | Object merge sink propagation | Low |
+| `UIPanel::SetPaused()` | Panel pause state | Low |
+
+### Stubs with real implementations (503 total):
+These are weak and correctly overridden by the real linker symbols. Not blocking anything.
+
+### Total stubs: ~1,267 function stubs, 46 vtable stubs
+Most are for systems not yet needed (Kinect, networking, advanced char animation).
 
 ## Assets
 
-Two asset sources are available:
 - **Extracted .milo files**: `~/code/milohax/milo-engine-libs/harmonix-repos/milo-rnd-library/dc3/`
-  - `ui/choose_mode/gen/choose_mode.milo_xbox` — the screen panel
-  - `ui/background/gen/bg_eq.milo_xbox` — background EQ bars
-- **Ark archives**: `./orig-assets/gen/main_xbox.hdr` — full game data, 10 ark files
-  - dc3-native engine extracts from ark at runtime via `NativeArkRead`
+- **Ark archives**: `./orig-assets/gen/main_xbox.hdr` — full game data
+- dc3-native extracts from ark at runtime via `NativeArkRead`
 
 ## Next Steps
 
-1. **Investigate PropAnim ticking** — trace `RndPropAnim::Poll` / `SetFrame` to see if UI anims run
-2. **Check PanelDir::Enter animation triggers** — does entering choose_mode_screen fire transition anims?
-3. **Dump PropAnim targets** — list which properties are animated on the screen's objects
-4. **Force alpha=1 test** — temporarily hardcode alpha=1 on SrcAlpha materials to see if colors/textures are otherwise correct
-5. **Find the logo** — search for DC3 logo texture/mesh in the milo hierarchy
+1. **Implement intensify blend mode** — materials with `intensify=true` should use additive blending or doubled color output in the shader
+2. **Add additive blend pipeline** — create a separate render pipeline key for additive materials
+3. **Find the logo** — search for DC3 logo texture/mesh in the milo hierarchy

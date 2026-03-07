@@ -1,3 +1,18 @@
+/* ===== PERMUTER LOCK — DO NOT EDIT =====
+ * The source permuter is actively working on: CharClip::EvaluateChannel
+ * Started: 2026-03-07 12:33 (stale after 5 minutes)
+ * This banner is temporary and will be removed automatically.
+ ===== */
+/* ===== PERMUTER LOCK — DO NOT EDIT =====
+ * The source permuter is actively working on: CharClip::EvaluateChannel
+ * Started: 2026-03-07 12:33 (stale after 5 minutes)
+ * This banner is temporary and will be removed automatically.
+ ===== */
+/* ===== PERMUTER LOCK — DO NOT EDIT =====
+ * The source permuter is actively working on: CharClip::EvaluateChannel
+ * Started: 2026-03-07 12:33 (stale after 5 minutes)
+ * This banner is temporary and will be removed automatically.
+ ===== */
 #include "char/CharClip.h"
 #include "CharClipGroup.h"
 #include "char/CharBoneDir.h"
@@ -791,7 +806,7 @@ void CharClip::EvaluateChannel(void *v1, const void *v2, int iii, float f) {
         MILO_FAIL("%s passed in NULL for evaluate channel", PathName(this));
     }
     int offset = (intptr_t)v2 - 1;
-    if (offset < mFull.TotalSize()) {
+    if (!(!(mFull.TotalSize() > offset))) {
         mFull.EvaluateChannel(v1, offset, iii, f);
     } else {
         int oneOffset = offset - mFull.TotalSize();
@@ -1075,7 +1090,8 @@ float CharClip::SampleToBeat(int sample) const {
     const float *end = *(const float **)((char *)this + 0xfc);
     const float *begin = *(const float **)((char *)this + 0xf8);
 
-    if (!((end - begin) & ~3)) {
+    bool _bit0 = ((end - begin) && ~3) != 0;
+    if (!(_bit0)) {
         return FrameToBeat((float)sample);
     } else {
         const float *lower = std::lower_bound(begin, end, (float)sample);

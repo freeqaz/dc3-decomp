@@ -346,7 +346,7 @@ bool RndConsole::OnMsg(const KeyboardKeyMsg &msg) {
                 if (mBufPtr == mBuffer.end()) {
                     mBufPtr = mBuffer.begin();
                 }
-                if (strncmp(mInput->CurrentLine().c_str(), (*mBufPtr).c_str(), mTabLen)
+                if (strncmp(mInput->CurrentLine().c_str(), mBufPtr->c_str(), mTabLen)
                     == 0) {
                     mInput->CurrentLine() = *mBufPtr;
                     break;
@@ -367,10 +367,11 @@ bool RndConsole::OnMsg(const KeyboardKeyMsg &msg) {
         mCursor = mInput->CurrentLine().length();
     } else if (msg.GetKey() == 0x143) {
         if (!mBuffer.empty()) {
+            auto _tmp33 = mBuffer.begin();
             if (mBufPtr != mBuffer.end()) {
                 --mBufPtr;
             } else
-                mBufPtr = mBuffer.begin();
+                mBufPtr = _tmp33;
             if (mBufPtr == mBuffer.begin()) {
                 mBufPtr = PrevItr(mBuffer.begin(), 1);
             }

@@ -190,7 +190,8 @@ MoveRating BustAMovePanel::GetMoveRating(float f1) {
 void BustAMovePanel::SetFlashcardText(int side, int index, Symbol s3) {
     HamLabel *label =
         mBAMColumns[side]->Find<HamLabel>(MakeString("flashcard_%d.lbl", index));
-    label->SetTextToken(s3);
+    if (label)
+        label->SetTextToken(s3);
     label = mBAMColumns[side == 0]->Find<HamLabel>(MakeString("flashcard_%d.lbl", index));
     if (mState == kBAMState_ShowMoveSequence
         || mState == kBAMState_ShowMoveSequenceSetup) {
@@ -239,7 +240,8 @@ void BustAMovePanel::SetFlashcardName(int side, int index, int i3) {
     }
     HamLabel *label =
         mBAMColumns[side]->Find<HamLabel>(MakeString("flashcard_name_%d.lbl", index));
-    label->SetTextToken(s);
+    if (label)
+        label->SetTextToken(s);
     label = mBAMColumns[side == 0]->Find<HamLabel>(
         MakeString("flashcard_name_%d.lbl", index)
     );

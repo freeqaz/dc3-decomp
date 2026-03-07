@@ -91,7 +91,7 @@ bool XboxEnumeration::IsEnumerating() const {
 }
 
 void XboxEnumeration::Poll() {
-    if (mHandle == 0 || mOverlapped.InternalLow == 0x3E5U) {
+    if (0 == mHandle || mOverlapped.InternalLow == 0x3E5U) {
         return;
     }
 
@@ -103,8 +103,8 @@ void XboxEnumeration::Poll() {
         std::list<EnumProduct>::iterator it = mContentList.end();
         u32 offset = 0;
         while (productCount < bytesReceived) {
-            String str;
             char buf[256];
+            String str;
             u8 *entryPtr = (u8 *)mEnumBuffer + offset;
             WideCharToMultiByte(0, 0, (LPCWSTR)(entryPtr + 0x14), *(int *)(entryPtr + 0x10), buf, 0xFF, 0, 0);
             str = buf;
@@ -112,8 +112,8 @@ void XboxEnumeration::Poll() {
             EnumProduct prod;
             *(u64 *)&prod.mOfferIDLo = *(u64 *)entryPtr;
             prod.mPurchased = *(int *)(entryPtr + 0x48);
-            prod.mPrice = *(int *)(entryPtr + 0x64);
             mContentList.insert(it, prod);
+            prod.mPrice = *(int *)(entryPtr + 0x64);
 
             offset += 0x68;
             productCount++;

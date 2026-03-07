@@ -278,11 +278,6 @@ void PanelDir::Enter() {
     {
         float ef = EndFrame();
         float sf = StartFrame();
-        int numAnims = (int)mAnims.size();
-        if (numAnims > 0 || ef > sf) {
-            printf("[PanelDir::Enter] '%s' anims=%d range=[%.1f, %.1f] animating=%d\n",
-                   Name(), numAnims, sf, ef, (int)IsAnimating());
-        }
         if (ef > sf && !IsAnimating()) {
             Animate(0, true, 0, RndAnimatable::k30_fps_ui, sf, ef, 0, 1.0f, Symbol("range"), nullptr, kEaseLinear, 0, false);
         }

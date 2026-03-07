@@ -118,8 +118,8 @@ void WebSvcMgrCurl::InitCurl() {
 }
 
 void WebSvcMgrCurl::FindAndFinish(void *handle, bool success, unsigned int http_status) {
-    WebSvcRequest *req;
     auto it = mRequests.begin();
+    WebSvcRequest *req;
 
     while (it != mRequests.end()) {
         req = *it;
@@ -129,7 +129,8 @@ void WebSvcMgrCurl::FindAndFinish(void *handle, bool success, unsigned int http_
         ++it;
     }
 
-    TheDebug.Notify(MakeString("WSMC::FindAndFinish: Handle not found"));
+    auto _tmp1 = MakeString("WSMC::FindAndFinish: Handle not found");
+    TheDebug.Notify(_tmp1);
     return;
 
 found:
@@ -140,11 +141,11 @@ found:
         curl_easy_getinfo((CURL *)handle, CURLINFO_COOKIELIST, &response_headers);
 
         if (response_headers) {
-            String header_str(response_headers);
             std::vector<String> header_vector;
+            String header_str(response_headers);
             header_str.split("/", header_vector);
 
-            if ((header_vector.size()) * 8 == 0x38) {
+            if ((int)(header_vector.size()) * 8 == 0x38) {
                 String k(header_str + 0x28);
                 String v(header_str + 0x30);
                 cookies.insert(std::make_pair(k, v));

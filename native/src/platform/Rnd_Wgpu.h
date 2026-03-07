@@ -5,6 +5,9 @@
 
 #include "gfx/GpuDevice.h"
 #include "gfx/PipelineManager.h"
+#include "gfx/ShadowPass.h"
+#include "gfx/PostProcPass.h"
+#include "gfx/DrawRect2D.h"
 #include "rndobj/Rnd_NG.h"
 #include "rndobj/ShaderMgr.h"
 
@@ -220,16 +223,16 @@ public:
     UniformRingBuffer& ObjectRing() { return mObjectRing; }
     UniformRingBuffer& BoneRing() { return mBoneRing; }
 
-    // Shadow mapping — accessed by Mesh_Wgpu.cpp
-    bool InShadowPass() const { return mInShadowPass; }
-    wgpu::RenderPassEncoder& ShadowPass() { return mShadowPass; }
-    wgpu::RenderPipeline& ShadowStaticPipeline() { return mShadowStaticPipeline; }
-    wgpu::RenderPipeline& ShadowSkinnedPipeline() { return mShadowSkinnedPipeline; }
-    wgpu::BindGroupLayout& ShadowObjectBGL() { return mShadowObjectBGL; }
-    wgpu::BindGroupLayout& ShadowBoneBGL() { return mShadowBoneBGL; }
-    wgpu::TextureView& ShadowDepthView() { return mShadowDepthView; }
-    wgpu::Sampler& ShadowSampler() { return mShadowSampler; }
-    bool ShadowAvailable() const { return mShadowAvailable; }
+    // Shadow mapping — accessed by Mesh_Wgpu.cpp (delegates to ShadowPass)
+    bool InShadowPass() const { return mShadowPass.InShadowPass(); }
+    wgpu::RenderPassEncoder& ShadowRenderPass() { return mShadowPass.Pass(); }
+    wgpu::RenderPipeline& ShadowStaticPipeline() { return mShadowPass.StaticPipeline(); }
+    wgpu::RenderPipeline& ShadowSkinnedPipeline() { return mShadowPass.SkinnedPipeline(); }
+    wgpu::BindGroupLayout& ShadowObjectBGL() { return mShadowPass.ObjectBGL(); }
+    wgpu::BindGroupLayout& ShadowBoneBGL() { return mShadowPass.BoneBGL(); }
+    wgpu::TextureView& ShadowDepthView() { return mShadowPass.DepthView(); }
+    wgpu::Sampler& ShadowSampler() { return mShadowPass.Sampler(); }
+    bool ShadowAvailable() const { return mShadowPass.Available(); }
 
 private:
     void CreateDepthTexture(int w, int h);
@@ -239,6 +242,11 @@ private:
 
     GpuDevice mGpu;
     PipelineManager mPipelines;
+
+    // Render passes (extracted subsystems)
+    ShadowPass mShadowPass;
+    PostProcPass mPostProcPass;
+    DrawRect2D mDrawRect2D;
 
     // Per-frame state
     wgpu::CommandEncoder mEncoder;
@@ -268,6 +276,12 @@ private:
     int mMsaaWidth = 0;
     int mMsaaHeight = 0;
 
+    // Intermediate texture for post-processing
+    wgpu::Texture mIntermediateTex;
+    wgpu::TextureView mIntermediateView;
+    int mIntermediateWidth = 0;
+    int mIntermediateHeight = 0;
+
     // Default textures
     wgpu::Texture mWhiteTex;
     wgpu::TextureView mWhiteTexView;
@@ -279,98 +293,10 @@ private:
     wgpu::TextureView mBlackCubeTexView;
     wgpu::Sampler mDefaultSampler;
 
-    // 2D drawing (DrawRect)
-    wgpu::ShaderModule m2dShader;
-    wgpu::BindGroupLayout m2dBindGroupLayout;
-    wgpu::PipelineLayout m2dPipelineLayout;
-    wgpu::Buffer m2dVertexBuffer;
-    void EnsureDrawRect2DPipeline();
-    bool m2dPipelineReady = false;
-
-    // Post-processing
-    wgpu::Texture mIntermediateTex;
-    wgpu::TextureView mIntermediateView;
-    int mIntermediateWidth = 0;
-    int mIntermediateHeight = 0;
-    wgpu::ShaderModule mPostProcShader;
-    wgpu::BindGroupLayout mPostProcBGL;
-    wgpu::PipelineLayout mPostProcPipelineLayout;
-    wgpu::RenderPipeline mPostProcPipeline;
-    wgpu::Buffer mPostProcUniformBuffer;
-    bool mPostProcReady = false;
-    void EnsurePostProcPipeline();
-    void RunPostProcessing();
-
-    // Bloom
-    static constexpr int kBloomMips = 4;
-    wgpu::Texture mBloomTex[kBloomMips];
-    wgpu::TextureView mBloomView[kBloomMips];
-    wgpu::Texture mBloomTempTex[kBloomMips];
-    wgpu::TextureView mBloomTempView[kBloomMips];
-    int mBloomWidth[kBloomMips] = {};
-    int mBloomHeight[kBloomMips] = {};
-    wgpu::ShaderModule mBloomShader;
-    wgpu::BindGroupLayout mBloomBGL;
-    wgpu::PipelineLayout mBloomPipelineLayout;
-    wgpu::RenderPipeline mBloomThresholdPipeline;
-    wgpu::RenderPipeline mBloomBlurHPipeline;
-    wgpu::RenderPipeline mBloomBlurVPipeline;
-    wgpu::RenderPipeline mBloomUpsamplePipeline;
-    wgpu::Buffer mBloomUniformBuffer;
-    bool mBloomReady = false;
-    void EnsureBloomPipelines();
-    void EnsureBloomTextures(int sceneW, int sceneH);
-    void RunBloom(float intensity, float threshold, const Hmx::Color& tint);
-
-    // Shadow mapping
-    static constexpr int kShadowMapSize = 1024;
-    wgpu::Texture mShadowDepthTex;
-    wgpu::TextureView mShadowDepthView;
-    wgpu::Sampler mShadowSampler;
-    wgpu::ShaderModule mShadowShader;
-    wgpu::BindGroupLayout mShadowSceneBGL;   // group 0: lightVP
-    wgpu::BindGroupLayout mShadowObjectBGL;  // group 1: object world
-    wgpu::BindGroupLayout mShadowBoneBGL;    // group 2: bones
-    wgpu::PipelineLayout mShadowPipelineLayout;
-    wgpu::PipelineLayout mShadowSkinnedPipelineLayout;
-    wgpu::RenderPipeline mShadowStaticPipeline;
-    wgpu::RenderPipeline mShadowSkinnedPipeline;
-    wgpu::Buffer mShadowLightVPBuffer;
-    wgpu::BindGroup mShadowSceneBindGroup;
-    bool mShadowReady = false;
-    float mLightViewProj[16] = {};
-    bool mShadowAvailable = false;
-    bool mInShadowPass = false;
-    wgpu::RenderPassEncoder mShadowPass;
-    void EnsureShadowPipelines();
-    void RenderShadowPass();
-
-    // Depth of Field
-    wgpu::Texture mDofIntermediateTex;
-    wgpu::TextureView mDofIntermediateView;
-    wgpu::Texture mDepthResolveTex;
-    wgpu::TextureView mDepthResolveView;
-    int mDofWidth = 0;
-    int mDofHeight = 0;
-    wgpu::ShaderModule mDofShader;
-    wgpu::BindGroupLayout mDofBGL;
-    wgpu::PipelineLayout mDofPipelineLayout;
-    wgpu::RenderPipeline mDofPipeline;
-    wgpu::RenderPipeline mDepthResolvePipeline;
-    wgpu::BindGroupLayout mDepthResolveBGL;
-    wgpu::PipelineLayout mDepthResolvePipelineLayout;
-    wgpu::Buffer mDofUniformBuffer;
-    bool mDofReady = false;
-    void EnsureDofPipeline();
-    void RunDepthOfField();
-
     // Scene uniform tracking — re-upload when camera or environment changes
     RndCam* mLastSceneCam = nullptr;
     RndEnviron* mLastSceneEnv = nullptr;
     uint32_t mLastSceneOffset = 0;
-
-    // Clear color
-    Hmx::Color mWgpuClearColor;
 
     // Auto-screenshot capture (env-var controlled)
     std::string mScreenshotDir;

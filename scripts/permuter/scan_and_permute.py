@@ -161,6 +161,18 @@ def parse_args() -> argparse.Namespace:
         "--no-adaptive", action="store_false", dest="adaptive",
         help="Disable adaptive pattern suppression/boosting",
     )
+    parser.add_argument(
+        "--evolutionary", action="store_true", default=False,
+        help="Use evolutionary optimizer instead of greedy hill climbing",
+    )
+    parser.add_argument(
+        "--population-size", type=int, default=50,
+        help="Population size for evolutionary optimizer (default: 50)",
+    )
+    parser.add_argument(
+        "--generations", type=int, default=20,
+        help="Max generations for evolutionary optimizer (default: 20)",
+    )
     return parser.parse_args()
 
 
@@ -492,22 +504,40 @@ def _climb_one(
     )
 
     try:
-        result = hill_climb(
-            symbol=symbol,
-            source_path=Path(REPO_ROOT / source_path),
-            function_name=func_name,
-            patterns=func_patterns,
-            max_rounds=args.max_rounds,
-            max_variants=args.max_variants,
-            plateau_limit=args.plateau_limit,
-            compose=args.compose,
-            apply=not args.no_apply,
-            ghidra=args.ghidra,
-            chain=args.chain,
-            chain_depth=args.chain_depth,
-            adaptive=args.adaptive,
-            constrained=args.constrained,
-        )
+        if getattr(args, "evolutionary", False):
+            from .evolutionary import evolve
+            result = evolve(
+                symbol=symbol,
+                source_path=Path(REPO_ROOT / source_path),
+                function_name=func_name,
+                patterns=func_patterns,
+                population_size=getattr(args, "population_size", 50),
+                generations=getattr(args, "generations", 20),
+                apply=not args.no_apply,
+                unit=candidate.get("unit"),
+                ghidra=args.ghidra,
+                chain=args.chain,
+                chain_depth=args.chain_depth,
+                adaptive=args.adaptive,
+                constrained=args.constrained,
+            )
+        else:
+            result = hill_climb(
+                symbol=symbol,
+                source_path=Path(REPO_ROOT / source_path),
+                function_name=func_name,
+                patterns=func_patterns,
+                max_rounds=args.max_rounds,
+                max_variants=args.max_variants,
+                plateau_limit=args.plateau_limit,
+                compose=args.compose,
+                apply=not args.no_apply,
+                ghidra=args.ghidra,
+                chain=args.chain,
+                chain_depth=args.chain_depth,
+                adaptive=args.adaptive,
+                constrained=args.constrained,
+            )
         delta = result.final_percent - result.initial_percent
         if delta > 0:
             print(

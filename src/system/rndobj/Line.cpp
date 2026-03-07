@@ -296,8 +296,8 @@ void RndLine::SetNumPoints(int num) {
         int numPoints = mPoints.size();
         for (int i = 0; (unsigned int)i < numPoints; i++) {
             VertsMap vmap;
-            MapVerts(i, vmap);
             Hmx::Color &ptColor = mPoints[i].color;
+            MapVerts(i, vmap);
             if (vmap.t == 1) {
                 vmap.v->tex.Set(0, 1);
                 vmap.v++->color = ptColor;
@@ -306,7 +306,7 @@ void RndLine::SetNumPoints(int num) {
             }
             vmap.v->tex.Set(1, 1);
             vmap.v++->color = ptColor;
-            vmap.v->tex.Set(1, 0);
+            vmap.v->tex.Set(0, 1);
             vmap.v++->color = ptColor;
             if (vmap.t == 2) {
                 vmap.v->tex.Set(1, 1);
@@ -351,12 +351,12 @@ void RndLine::MapVerts(int idx, VertsMap &vmap) {
             vmap.t = (idx & 1) + 1;
             vmap.v = &mMesh->Verts()[idx * 4];
         } else {
-            if (idx == 0) {
+            if (0 == idx) {
                 vmap.t = 1;
                 vmap.v = &mMesh->Verts()[0];
             } else {
                 int lastIdx = (int)mPoints.size() - 1;
-                if (idx == lastIdx) {
+                if ((unsigned int)idx == lastIdx) {
                     vmap.t = 2;
                     vmap.v = &mMesh->Verts()[(int)mMesh->Verts().size() - 4];
                 } else {

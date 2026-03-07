@@ -139,7 +139,15 @@ ObjOwnerPtr<T>::~ObjOwnerPtr() {}
 
 template <class T>
 Hmx::Object *ObjOwnerPtr<T>::RefOwner() const {
+#ifdef HX_NATIVE
+    // RB3 reference: return mOwner directly. The original DC3 code
+    // (mObject->RefOwner()) fails during Load() because mObject is null
+    // before the target name is resolved, so the dir lookup can't find
+    // the target object. Using mOwner->RefOwner() gives the owner's dir.
+    return mOwner->RefOwner();
+#else
     return mObject ? mObject->RefOwner() : nullptr;
+#endif
 }
 
 // template <class T1>

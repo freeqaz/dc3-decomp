@@ -426,7 +426,8 @@ void DirLoader::WriteTypeMemDump(TextFileStream *file) {
          it != sMemPointMap.end();
          ++it) {
         MemPointDelta pt = it->second;
-        file->Print(it->first.c_str());
+        if (file)
+            file->Print((*it).first.c_str());
         *file << "," << pt.ToString(1) << "\n";
     }
     file->File().Flush();

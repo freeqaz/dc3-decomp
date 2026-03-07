@@ -85,7 +85,7 @@ void ArcDetector::CullPath() {
 
 void ArcDetector::Draw(const Skeleton &skeleton, SkeletonViz &viz) {
     unsigned int count = mJointPath.size();
-    if (count != 0U) {
+    if (0U != (int)count) {
         std::list<Vector3> arcPath;
         float f31 = 0.0f;
         float f29 = 2.0f;
@@ -111,7 +111,7 @@ void ArcDetector::Draw(const Skeleton &skeleton, SkeletonViz &viz) {
             arcPath.insert(arcPath.end(), vec);
 
             i++;
-        } while (i < 100);
+        } while (i < (unsigned int)100);
 
         const TrackedJoint *joints = skeleton.TrackedJoints();
         const Vector3 &jpos = joints[mPrimaryJoint].mJointPos[0];

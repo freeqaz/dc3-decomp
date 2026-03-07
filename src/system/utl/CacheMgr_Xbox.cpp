@@ -416,11 +416,11 @@ void CacheMgrXbox::PollSearch() {
 }
 
 void CacheMgrXbox::PollMount() {
-    if (mOverlapped.InternalLow != 0x3E5) {
+    if (0x3E5 != mOverlapped.InternalLow) {
         DWORD res;
         DWORD err;
         res = XGetOverlappedResult(&mOverlapped, &err, false);
-        if (res == 0) {
+        if ((int)res == 0) {
             MILO_ASSERT(mppCache != NULL, 0x293);
             MILO_ASSERT(*mppCache == NULL, 0x294);
             MILO_ASSERT(mCacheIDXbox, 0x295);
@@ -468,8 +468,8 @@ void CacheMgrXbox::PollMount() {
             SetLastResult(kCache_ErrorUnknown);
         }
     }
-    mCacheIDXbox = nullptr;
     mppCache = nullptr;
+    mCacheIDXbox = nullptr;
     SetOp(kOpNone);
     if (mCallback) {
         static Message msg("cache_mgr_mount_result", GetLastResult());

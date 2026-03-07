@@ -4,6 +4,7 @@
 // Supports both static and bone-skinned meshes.
 
 #include "platform/Rnd_Wgpu.h"
+#include "gfx/FrameCapture.h"
 #include "gfx/VertexFormats.h"
 #include "rndobj/Mesh.h"
 #include "rndobj/Mat.h"
@@ -29,6 +30,19 @@ extern "C" {
 // External: get GPU texture view for a RndTex (defined in Tex_Wgpu.cpp)
 extern wgpu::TextureView GetGpuTexView(RndTex* tex);
 extern wgpu::TextureView GetGpuCubeTexView(RndCubeTex* cubeTex);
+
+// Simple render mode (MILO_SIMPLE_RENDER=1): skip multiply override, force prelit,
+// minimal material processing. For isolating shader/blend regressions.
+static bool sSimpleRender = false;
+static bool sSimpleRenderChecked = false;
+static bool IsSimpleRender() {
+    if (!sSimpleRenderChecked) {
+        sSimpleRender = (getenv("MILO_SIMPLE_RENDER") != nullptr);
+        sSimpleRenderChecked = true;
+        if (sSimpleRender) printf("DC3 Native: SIMPLE RENDER MODE enabled\n");
+    }
+    return sSimpleRender;
+}
 
 // ============================================================================
 // GPU mesh data side table
@@ -381,11 +395,10 @@ static bool EnsureMeshUploaded(RndMesh* mesh) {
             return false;
         }
 
-        // Fix zero vertex colors for opaque meshes — many meshes don't use vertex color
-        // and have all-zero RGBA, which would multiply baseColor to black in the shader.
-        // Only skip for intentionally transparent blends (SrcAlpha, Add, etc.)
-        if (!mesh->Mat() || mesh->Mat()->GetBlend() <= BaseMaterial::kBlendSrc)
-            FixZeroAlpha(verts, unpacked);
+        // Fix zero vertex colors — many meshes don't use vertex color and have all-zero
+        // RGBA, which would multiply baseColor to black in the shader. FixZeroAlpha is
+        // conservative: only modifies if ALL sampled vertices have zero alpha.
+        FixZeroAlpha(verts, unpacked);
 
         wgpu::BufferDescriptor vbDesc{};
         vbDesc.size = unpacked * sizeof(GpuVertexSkinned);
@@ -413,11 +426,10 @@ static bool EnsureMeshUploaded(RndMesh* mesh) {
             delete[] indices;
             return false;
         }
-        // Fix zero vertex colors for opaque meshes — many meshes don't use vertex color
-        // and have all-zero RGBA, which would multiply baseColor to black in the shader.
-        // Only skip for intentionally transparent blends (SrcAlpha, Add, etc.)
-        if (!mesh->Mat() || mesh->Mat()->GetBlend() <= BaseMaterial::kBlendSrc)
-            FixZeroAlpha(verts, unpacked);
+        // Fix zero vertex colors — many meshes don't use vertex color and have all-zero
+        // RGBA, which would multiply baseColor to black in the shader. FixZeroAlpha is
+        // conservative: only modifies if ALL sampled vertices have zero alpha.
+        FixZeroAlpha(verts, unpacked);
 
         wgpu::BufferDescriptor vbDesc{};
         vbDesc.size = unpacked * sizeof(GpuVertex);
@@ -463,17 +475,28 @@ void RndMesh_ResetFrameStats() {
 
 void RndMesh::DrawShowing() {
     if (!gWgpuRnd || !gWgpuRnd->IsInPass()) return;
-    if (!Showing()) return;
+    bool capturing = FrameCapture::Get().IsCapturing();
+
+    if (!Showing()) {
+        if (capturing) FrameCapture::Get().AddSkip(Name(), "not showing");
+        return;
+    }
 
     // Skip LOD meshes (drawn by Character::DrawLod in the full engine,
     // but we iterate all meshes directly in the viewer)
-    if (strstr(Name(), "_lod")) return;
+    if (strstr(Name(), "_lod")) {
+        if (capturing) FrameCapture::Get().AddSkip(Name(), "LOD mesh");
+        return;
+    }
 
     sDrawCallsThisFrame++;
 
     // Get material
     RndMat* mat = Mat();
-    if (!mat) return;
+    if (!mat) {
+        if (capturing) FrameCapture::Get().AddSkip(Name(), "no material");
+        return;
+    }
 
     // Defer transparent meshes for back-to-front sorting
     if (IsTransparentBlend(mat->GetBlend())) {
@@ -488,6 +511,14 @@ void RndMesh::DrawShowing() {
             distSq = dx*dx + dy*dy + dz*dz;
         }
         sTransparentQueue.push_back({this, distSq, RndCam::Current()});
+        if (capturing) {
+            auto& rec = FrameCapture::Get().AddDraw();
+            rec.meshName = Name();
+            rec.materialName = mat->Name();
+            rec.deferred = true;
+            rec.distSq = distSq;
+            rec.blend = mat->GetBlend();
+        }
         return;
     }
 
@@ -496,25 +527,23 @@ void RndMesh::DrawShowing() {
 
 static void DrawMeshImmediate(RndMesh* mesh) {
     if (!gWgpuRnd || !gWgpuRnd->IsInPass()) return;
+    bool capturing = FrameCapture::Get().IsCapturing();
+    uint32_t heuristics = 0;
 
     // Re-upload scene uniforms if camera changed (e.g., UI camera vs world camera)
     gWgpuRnd->EnsureSceneUniformsCurrent();
 
     RndMat* mat = mesh->Mat();
-    if (!mat) return;
-
-    // Skip multiply-blend meshes with near-black color — these produce Dst*0=0
-    // wiping the framebuffer to black. They're meant to be animated to white/transparent
-    // but if the animation hasn't set them up yet, skip rather than destroy the scene.
-    if (mat->GetBlend() == BaseMaterial::kBlendMultiply) {
-        const Hmx::Color& c = mat->GetColor();
-        if (c.red < 0.01f && c.green < 0.01f && c.blue < 0.01f) {
-            return;
-        }
+    if (!mat) {
+        if (capturing) FrameCapture::Get().AddSkip(mesh->Name(), "no material");
+        return;
     }
 
     // Ensure mesh data is on GPU
-    if (!EnsureMeshUploaded(mesh)) return;
+    if (!EnsureMeshUploaded(mesh)) {
+        if (capturing) FrameCapture::Get().AddSkip(mesh->Name(), "upload failed");
+        return;
+    }
 
     auto& meshData = sMeshGpuData[mesh];
     auto& pass = gWgpuRnd->CurrentPass();
@@ -523,7 +552,20 @@ static void DrawMeshImmediate(RndMesh* mesh) {
     // --- Pipeline selection ---
     PipelineKey key{};
     key.shaderType = 18; // kStandardShader
-    key.blend = (WgpuBlend)mat->GetBlend();
+
+    BaseMaterial::Blend matBlend = mat->GetBlend();
+    // Multiply blend requires a bright destination to multiply against.
+    // Without a 3D venue behind the UI, the destination is black/clear → Dst*Src = 0.
+    // Skip these meshes; the SrcAlpha/Add overlays provide the visible UI elements.
+    if (matBlend == BaseMaterial::kBlendMultiply) {
+        if (capturing) {
+            auto& rec = FrameCapture::Get().AddSkip(mesh->Name(), "multiply blend");
+            rec.materialName = mat->Name();
+            rec.heuristicsApplied = kHeuristicMultiplySkip;
+        }
+        return;
+    }
+    key.blend = (WgpuBlend)matBlend;
     key.zMode = !mesh->Name()[0] ? (WgpuZMode)0 : (WgpuZMode)mat->GetZMode(); // No depth for text
     key.cull = !mesh->Name()[0] ? (WgpuCull)0 : (WgpuCull)mat->GetCull(); // No cull for text
     key.stencil = (WgpuStencil)mat->GetStencil();
@@ -546,6 +588,13 @@ static void DrawMeshImmediate(RndMesh* mesh) {
     matUni.color[1] = matColor.green;
     matUni.color[2] = matColor.blue;
     matUni.color[3] = matColor.alpha;
+    // Many DC3 UI materials have alpha=0 at load time, normally driven to visible
+    // values by PropAnim. Force alpha to 1 for SrcAlpha materials so they don't
+    // stay invisible if animation hasn't run yet.
+    if (matUni.color[3] < 0.01f && matBlend == BaseMaterial::kBlendSrcAlpha) {
+        matUni.color[3] = 1.0f;
+        heuristics |= kHeuristicAlphaForce;
+    }
     if (mat->GetAlphaCut()) {
         matUni.alphaThreshold = mat->GetAlphaThreshold() / 255.0f;
     } else {
@@ -562,6 +611,7 @@ static void DrawMeshImmediate(RndMesh* mesh) {
     if (specPower > 0.0f && specPower < 32.0f) {
         specPower = 32.0f;  // tighten the specular lobe
         specScale = 0.4f;   // reduce intensity
+        heuristics |= kHeuristicSpecularClamp;
     }
     matUni.specularColor[0] = spec.red * specScale;
     matUni.specularColor[1] = spec.green * specScale;
@@ -573,6 +623,7 @@ static void DrawMeshImmediate(RndMesh* mesh) {
     // Without a map, emissiveMultiplier defaults to 1.0 which would add
     // the full diffuse color as self-illumination (completely wrong)
     matUni.emissiveMultiplier = mat->GetEmissiveMap() ? mat->GetEmissiveMultiplier() : 0.0f;
+    if (!mat->GetEmissiveMap()) heuristics |= kHeuristicEmissiveGuard;
 
     // Rim lighting
     const Hmx::Color& rim = mat->GetRimRGB();
@@ -593,6 +644,7 @@ static void DrawMeshImmediate(RndMesh* mesh) {
         const char* matName = mat->Name();
         if (strstr(matName, "_skin") || strstr(matName, "_head")) {
             variation = kShaderVariationSkin;
+            heuristics |= kHeuristicSkinNameDetect;
         }
     }
     matUni.shaderVariation = (float)variation;
@@ -630,13 +682,40 @@ static void DrawMeshImmediate(RndMesh* mesh) {
         blend != BaseMaterial::kBlendDest && blend != BaseMaterial::kBlendAdd &&
         blend != BaseMaterial::kBlendSubtract && blend != BaseMaterial::kBlendSrcAlphaAdd;
     matUni.materialFogEnabled = allowFog ? 1.0f : 0.0f;
+    if (!allowFog && mat->GetFog()) heuristics |= kHeuristicFogBlendCheck;
 
     // Prelit: vertex color is pre-lit, skip lighting
     // Text meshes (created by RndText::FontMap) have no name and need prelit
-    // since the UI environment may have no lights/ambient
+    // since the UI environment may have no lights/ambient.
+    // Also auto-detect fullbright UI: environments with near-zero ambient and
+    // few/no lights are typically UI panels where lighting isn't meaningful.
+    // On Xbox, these meshes use simpler shaders that bypass lighting entirely.
     bool isTextMesh = !mesh->Name()[0];
-    matUni.prelit = (mat->Prelit() || isTextMesh) ? 1.0f : 0.0f;
+    bool forcePrelit = IsSimpleRender(); // Simple mode forces all prelit
+    if (!forcePrelit && !mat->Prelit() && !isTextMesh) {
+        RndEnviron* env = RndEnviron::Current();
+        if (env) {
+            const Hmx::Color& amb = env->AmbientColor();
+            if (amb.red < 0.01f && amb.green < 0.01f && amb.blue < 0.01f) {
+                // Zero-ambient environment — count real directional lights
+                int numDirLights = 0;
+                ObjPtrList<RndLight>& approx = env->LightsApprox();
+                for (auto it = approx.begin(); it != approx.end(); ++it) {
+                    if (*it && (*it)->Showing() && (*it)->GetType() == RndLight::kDirectional)
+                        numDirLights++;
+                }
+                // 0-1 lights with zero ambient = UI panel, force fullbright
+                if (numDirLights <= 1) {
+                    forcePrelit = true;
+                    heuristics |= kHeuristicAutoPrelit;
+                }
+            }
+        }
+    }
+    if (isTextMesh) heuristics |= kHeuristicTextMeshDetect;
+    matUni.prelit = (mat->Prelit() || isTextMesh || forcePrelit) ? 1.0f : 0.0f;
     matUni.useAlphaAsRGB = isTextMesh ? 1.0f : 0.0f;
+    if (isTextMesh) heuristics |= kHeuristicTextAlphaAsRGB;
 
     // Detail normal map
     matUni.normDetailTiling = mat->GetNormDetailTiling();
@@ -671,6 +750,7 @@ static void DrawMeshImmediate(RndMesh* mesh) {
     bool isEyeMat = strstr(mat->Name(), "eyes") || strstr(mat->Name(), "eye_");
     if (isEyeMat) {
         matUni.emissiveMultiplier = std::max(matUni.emissiveMultiplier, 1.0f);
+        heuristics |= kHeuristicEyeEmissiveBoost;
     }
     texViews.emissive = resolveMap(mat->GetEmissiveMap(),
         isEyeMat ? gWgpuRnd->WhiteTexView() : gWgpuRnd->BlackTexView());
@@ -694,6 +774,7 @@ static void DrawMeshImmediate(RndMesh* mesh) {
         // so the diffuse texture stays bright (e.g. eye sclera, glossy surfaces)
         if (environMap) {
             matUni.emissiveMultiplier = std::max(matUni.emissiveMultiplier, 0.6f);
+            heuristics |= kHeuristicMissingEnvironBoost;
         }
     }
 
@@ -793,6 +874,45 @@ static void DrawMeshImmediate(RndMesh* mesh) {
         pass.SetBindGroup(3, sDummyBoneBindGroup);
     }
 
+    // --- Capture record ---
+    if (capturing) {
+        auto& rec = FrameCapture::Get().AddDraw();
+        rec.meshName = mesh->Name();
+        rec.materialName = mat->Name();
+        RndCam* cam = RndCam::Current();
+        rec.cameraName = cam ? cam->Name() : nullptr;
+        rec.blend = (int)matBlend;
+        rec.zMode = mat->GetZMode();
+        rec.cull = mat->GetCull();
+        rec.stencil = mat->GetStencil();
+        rec.skinned = skinned;
+        rec.alphaCut = mat->GetAlphaCut();
+        rec.alphaWrite = mat->GetAlphaWrite();
+        memcpy(rec.color, matUni.color, sizeof(rec.color));
+        rec.specularPower = matUni.specularPower;
+        rec.emissiveMultiplier = matUni.emissiveMultiplier;
+        rec.prelit = matUni.prelit;
+        rec.useTexture = matUni.useTexture;
+        rec.alpha = matUni.color[3];
+        rec.heuristicsApplied = heuristics;
+        // Texture binding info
+        const char* slotNames[] = {"diffuse","normal","specular","emissive","rim","environCube","normDetail"};
+        RndTex* slotSources[] = {
+            mat->GetDiffuseTex(), mat->NormalMap(), mat->GetSpecularMap(),
+            mat->GetEmissiveMap(), mat->GetRimMap(), nullptr, mat->GetNormDetailMap()
+        };
+        wgpu::TextureView* slotViews[] = {
+            &texViews.diffuse, &texViews.normal, &texViews.specular,
+            &texViews.emissive, &texViews.rim, &texViews.environCube, &texViews.normDetail
+        };
+        for (int t = 0; t < 7; t++) {
+            rec.texBindings[t].slotName = slotNames[t];
+            rec.texBindings[t].source = slotSources[t];
+            rec.texBindings[t].uploaded = (*slotViews[t]) != nullptr;
+            rec.texBindings[t].usingFallback = slotSources[t] && !GetGpuTexView(slotSources[t]);
+        }
+    }
+
     // --- Draw ---
     size_t vertexSize = skinned ? sizeof(GpuVertexSkinned) : sizeof(GpuVertex);
     pass.SetVertexBuffer(0, meshData.vertexBuffer, 0, meshData.numVertices * vertexSize);
@@ -887,7 +1007,7 @@ void DrawMeshShadow(RndMesh* mesh) {
     if (!EnsureMeshUploaded(mesh)) return;
 
     auto& meshData = sMeshGpuData[mesh];
-    auto& pass = gWgpuRnd->ShadowPass();
+    auto& pass = gWgpuRnd->ShadowRenderPass();
     bool skinned = meshData.skinned;
 
     // Select shadow pipeline

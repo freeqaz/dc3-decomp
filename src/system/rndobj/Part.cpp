@@ -1095,11 +1095,11 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
     if (mActiveParticles == NULL || frameSpan == 0.0f)
         return;
 
-    float dragFactor;
-
     float oneOverThirty = 1.0f / 30.0f;
+
+    float dragFactor;
     if (mDrag > 0.0f) {
-        float powResult = std::pow(1.0f - mDrag, frameSpan * oneOverThirty);
+        float powResult = powf(1.0f - mDrag, frameSpan * oneOverThirty);
         dragFactor = powResult;
     } else {
         dragFactor = 1.0f;
@@ -1107,7 +1107,7 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
 
     float rpmDragFactor;
     if (mRotate && mRPMDrag > 0.0f) {
-        rpmDragFactor = std::pow(1.0f - mRPMDrag, frameSpan * oneOverThirty);
+        rpmDragFactor = powf(1.0f - mRPMDrag, frameSpan * oneOverThirty);
     } else {
         rpmDragFactor = 1.0f;
     }
@@ -1120,7 +1120,6 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
     // Individual matrix components needed for fmadds sequence in pre-computation.
     // Removing these and using mRelativeXfm.m.x.x etc. directly drops match by ~0.4%.
     float m_yx = mRelativeXfm.m.y.x;
-    bool isRotate = mRotate;
     float m_yy = mRelativeXfm.m.y.y;
     bool isFancy = (mType == kFancy);
     float m_yz = mRelativeXfm.m.y.z;
@@ -1148,7 +1147,8 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
         planeNz = bxf.m.z.z;
         planeNx = bxf.m.z.x;
         const Transform &bxf2 = mBounce->WorldXfm();
-        planeD = -(bxf2.v.x * planeNx + bxf2.v.z * planeNz + bxf2.v.y * planeNy);
+        planeD = (bxf2.v.x * planeNx + bxf2.v.z * planeNz + bxf2.v.y * planeNy);
+        planeD = -planeD;
     }
 
     RndParticle *p = mActiveParticles;
@@ -1285,7 +1285,7 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
                     }
 
                     // RPM rotation and swing arm
-                    if (isRotate) {
+                    if (mRotate) {
                         float rpmVel = fp->mRPMVelocity;
                         p->angle += rpmVel * frameSpan;
                         fp->mRPMVelocity = rpmVel * rpmDragFactor;

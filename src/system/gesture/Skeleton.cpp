@@ -60,7 +60,7 @@ void SkeletonFrame::Create(const NUI_SKELETON_FRAME &nui_frame, int elapsed) {
     static const SkeletonTrackingState sTrackingMap[] = {
         kSkeletonNotTracked, kSkeletonPositionOnly, kSkeletonTracked
     };
-    static const int sJointTrackingMap[] = { 0, 1, 2 };
+    static const int sJointTrackingMap[] = { 0.0f, 1, 2 };
     static const int sJointRemap[kNumJoints][2] = {
         {0, 0}, {1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}, {6, 6}, {7, 7},
         {8, 8}, {9, 9}, {10, 10}, {11, 11}, {12, 12}, {13, 13}, {14, 14},
@@ -69,7 +69,7 @@ void SkeletonFrame::Create(const NUI_SKELETON_FRAME &nui_frame, int elapsed) {
 
     // First pass: transform joint positions by gravity matrix
     XMVECTOR transformed[6 * kNumJoints];
-    for (int s = 0; s < 6; s++) {
+    for (int s = 0; (unsigned int)s < 6; s++) {
         if (nui_frame.SkeletonData[s].eTrackingState == NUI_SKELETON_TRACKED) {
             for (int j = 0; j < kNumJoints; j++) {
                 XMVECTOR pos = nui_frame.SkeletonData[s].SkeletonPositions[j];
@@ -85,7 +85,7 @@ void SkeletonFrame::Create(const NUI_SKELETON_FRAME &nui_frame, int elapsed) {
     }
 
     // Second pass: copy NUI data to SkeletonData
-    for (int s = 0; s < 6; s++) {
+    for (int s = 0; s < (unsigned long)6; s++) {
         const NUI_SKELETON_DATA &nuiSkel = nui_frame.SkeletonData[s];
         SkeletonData &data = mSkeletonDatas[s];
         data.mTracking = sTrackingMap[nuiSkel.eTrackingState];

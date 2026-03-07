@@ -171,10 +171,10 @@ void Plane::Set(const Vector3 &v1, const Vector3 &v2, const Vector3 &v3) {
 
 void SetBSPParams(float f1, float f2, int r3, int r4, float f3) {
     gBSPPosTol = f1;
+    gBSPCheckScale = f3;
+    gBSPMaxCandidates = r4;
     gBSPDirTol = f2;
     gBSPMaxDepth = r3;
-    gBSPMaxCandidates = r4;
-    gBSPCheckScale = f3;
 }
 
 DataNode SetBSPParams(DataArray *da) {
@@ -462,14 +462,14 @@ void Sphere::GrowToContain(const Sphere &s) {
         float dx = s.center.x - center.x;
         float dz = s.center.z - center.z;
         float dy = s.center.y - center.y;
-        float dist = std::sqrt(dy * dy + dz * dz + dx * dx);
+        float dist = std::sqrt((dy * dy + (dz * dz + dx * dx)));
         if (s.radius + dist > radius) {
             if (!(radius + dist < s.radius)) {
                 if (dist == 0.0f)
                     return;
                 float invDist = 1.0f / dist;
                 Vector3 a, b;
-                a.x = center.x - dx * invDist * radius;
+                a.x = center.x - (radius * (invDist * dx));
                 a.z = center.z - dz * invDist * radius;
                 b.x = s.center.x + s.radius * (dx * invDist);
                 b.y = s.center.y + s.radius * (invDist * dy);

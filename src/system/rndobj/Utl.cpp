@@ -798,12 +798,11 @@ void SortXfms(RndMultiMesh *mesh, const Vector3 &vec) {
 }
 
 bool XfmSort(RndMultiMesh::Instance &mesh1, RndMultiMesh::Instance &mesh2) {
+    const auto& _ref1 = mesh2;
     return (mesh1.mXfm.v.z - gUtlXfms.z) * (mesh1.mXfm.v.z - gUtlXfms.z)
         + (mesh1.mXfm.v.y - gUtlXfms.y) * (mesh1.mXfm.v.y - gUtlXfms.y)
         + (mesh1.mXfm.v.x - gUtlXfms.x) * (mesh1.mXfm.v.x - gUtlXfms.x)
-        < (mesh2.mXfm.v.z - gUtlXfms.z) * (mesh2.mXfm.v.z - gUtlXfms.z)
-        + (mesh2.mXfm.v.y - gUtlXfms.y) * (mesh2.mXfm.v.y - gUtlXfms.y)
-        + (mesh2.mXfm.v.x - gUtlXfms.x) * (mesh2.mXfm.v.x - gUtlXfms.x);
+        < ((_ref1.mXfm.v.y - gUtlXfms.y) * (_ref1.mXfm.v.y - gUtlXfms.y) + ((_ref1.mXfm.v.x - gUtlXfms.x) * (_ref1.mXfm.v.x - gUtlXfms.x) + (_ref1.mXfm.v.z - gUtlXfms.z) * (_ref1.mXfm.v.z - gUtlXfms.z)));
 }
 
 void DistributeXfms(RndMultiMesh *mm, int i, float f) {
@@ -1308,8 +1307,8 @@ void MakeTangentsLate(RndMesh *m) {
             basis.y.z * (basis.x.y * basis.z.x - basis.z.y * basis.x.x) < 0.0) {
             w = negW;
         }
-        Normalize(basis.x, *(Vector3*)&faceTangents[i]);
         faceTangents[i].w = (float)w;
+        Normalize(basis.x, *(Vector3*)&faceTangents[i]);
     }
 
     // Accumulate tangents per vertex
@@ -1323,19 +1322,18 @@ void MakeTangentsLate(RndMesh *m) {
             for (k = 0; k < 3; k++) {
                 if (face[k] == i) break;
             }
-            if (k != 3) {
-                Vector4& ft = faceTangents[f];
+            if (3 != k) {
                 if (first) {
                     first = false;
-                    v.tangent = ft;
+                    v.tangent = faceTangents[f];
                 } else {
-                    if ((double)(ft.w * v.tangent.w) < zeroThresh) {
+                    if ((double)(faceTangents[f].w * v.tangent.w) < zeroThresh) {
                         auto notifyMsg = MakeString("NOTIFY: %s has previously welded vertex tangents with opposite handedness; re-export from Max for more accurate normal mapping.\n", (char*)PathName(m));
                         TheDebug << notifyMsg;
                     } else {
-                        v.tangent.x += ft.x;
-                        v.tangent.y += ft.y;
-                        v.tangent.z += ft.z;
+                        v.tangent.x += faceTangents[f].x;
+                        v.tangent.y += faceTangents[f].y;
+                        v.tangent.z += faceTangents[f].z;
                     }
                 }
             }
@@ -1365,15 +1363,16 @@ void ComputeFaceTangentBasis(RndMesh *m, int faceIdx, Hmx::Matrix3 &outBasis) {
     outBasis.z.x = 0.0f; outBasis.z.y = 0.0f; outBasis.z.z = 1.0f;
 
     RndMesh::Face &face = m->Faces()[faceIdx];
-    if (face.v1 != face.v2 && face.v2 != face.v3 && face.v3 != face.v1) {
+    if (face.v1 != face.v2 && face.v2 != face.v3) {
+        if (face.v3 != face.v1) {
         RndMesh::Vert &vert1 = m->Verts()[face.v1];
         RndMesh::Vert &vert2 = m->Verts()[face.v2];
         RndMesh::Vert &vert3 = m->Verts()[face.v3];
 
         if (!BadUV(vert1.tex) && !BadUV(vert2.tex) && !BadUV(vert3.tex)) {
             float dx21 = vert2.pos.x - vert1.pos.x;
-            float dy21 = vert2.pos.y - vert1.pos.y;
             float dz21 = vert2.pos.z - vert1.pos.z;
+            float dy21 = vert2.pos.y - vert1.pos.y;
             float dx31 = vert3.pos.x - vert1.pos.x;
             float dy31 = vert3.pos.y - vert1.pos.y;
             float dz31 = vert3.pos.z - vert1.pos.z;
@@ -1384,7 +1383,7 @@ void ComputeFaceTangentBasis(RndMesh *m, int faceIdx, Hmx::Matrix3 &outBasis) {
             float dv31 = vert3.tex.y - vert1.tex.y;
 
             if (dx21 == 0.0f && dy21 == 0.0f && dz21 == 0.0f) return;
-            if (dx31 == 0.0f && dy31 == 0.0f && dz31 == 0.0f) return;
+            if (dx31 == 0.0f && dy31 == 0.0f & dz31 == 0.0f) return;
             if (du21 == 0.0f && dv21 == 0.0f) return;
             if (du31 == 0.0f && dv31 == 0.0f) return;
 
@@ -1412,6 +1411,7 @@ void ComputeFaceTangentBasis(RndMesh *m, int faceIdx, Hmx::Matrix3 &outBasis) {
         }
         TheDebug << MakeString("NOTIFY: %s has bad UVs, should reexport from Max\n", (char*)PathName(m));
     }
+    }
 }
 
 void MakeNormals(RndMesh *m) {
@@ -1426,7 +1426,7 @@ void MakeNormals(RndMesh *m) {
         int rep = i;
         for (int j = 0; (unsigned int)j < i; j++) {
             const Vector3& otherPos = m->Verts()[j].pos;
-            if (fabs(pos.x - otherPos.x) <= 0.001f &&
+            if (fabsf(pos.x - otherPos.x) <= 0.001f &&
                 fabs(pos.y - otherPos.y) <= 0.001f &&
                 fabs(pos.z - otherPos.z) <= 0.001f) {
                 rep = j;
@@ -1484,9 +1484,9 @@ void MakeNormals(RndMesh *m) {
 }
 
 void ResetNormals(RndMesh *m) {
+    auto zeroVec = Vector4(0, 0, 0, 0);
     if (!m || m->GetGeomOwner() != m || m->Verts().size() == 0) return;
 
-    auto zeroVec = Vector4(0, 0, 0, 0);
 
     bool leftHanded = LeftHanded(m->WorldXfm().m);
     std::vector<Vector4> faceTangents(m->Faces().size(), zeroVec);
@@ -1499,7 +1499,7 @@ void ResetNormals(RndMesh *m) {
         float crossY = basis.z.z * basis.x.x - basis.x.z * basis.z.x;
         float crossZ = basis.x.z * basis.z.y - basis.z.z * basis.x.y;
         Normalize(basis.x, *(Vector3*)&faceTangents[i]);
-        float w = (crossZ * basis.y.x + basis.y.y * crossY + basis.y.z * crossX < 0.0f) ? -1.0f : 1.0f;
+        float w = ((crossZ * basis.y.x + (basis.y.y * crossY + basis.y.z * crossX)) < 0.0f) ? -1.0f : 1.0f;
         faceTangents[i].w = w;
     }
 
@@ -1528,7 +1528,7 @@ void ResetNormals(RndMesh *m) {
         int rep = repVerts[i];
         for (int f = 0; f < m->Faces().size(); f++) {
             RndMesh::Face& face = m->Faces()[f];
-            for (int k = 0; k < 3; k++) {
+            for (int k = 0; k <= 2; k++) {
                 if ((unsigned int)repVerts[face[k]] == rep) {
                     const RndMesh::Vert& v0 = m->Verts()[face[k]];
                     const RndMesh::Vert& v1 = m->Verts()[face[(k+1)%3]];
@@ -1791,7 +1791,8 @@ void TessellateMesh(RndMesh *mesh) {
 
     std::vector<RndMesh::Face> newFaces;
 
-    newFaces.reserve(geomOwner->Faces().size() * 4);
+    auto _tmp0 = geomOwner->Faces().size();
+    newFaces.reserve(_tmp0 * 4);
     auto vertCount = geomOwner->Verts().size();
     newVerts.reserve(vertCount * 3);
 
@@ -1799,8 +1800,8 @@ void TessellateMesh(RndMesh *mesh) {
 
     for (unsigned int i = 0; i < (unsigned int)geomOwner->Faces().size(); i++) {
         RndMesh::Face &face = geomOwner->Faces()[i];
-        unsigned short v1 = face.v1;
         unsigned short v2 = face.v2;
+        unsigned short v1 = face.v1;
         unsigned short v3 = face.v3;
 
         int vertsBase = (int)(unsigned int)geomOwner->Verts().mVerts;
@@ -1915,12 +1916,12 @@ void BuildVisit(BSPNode *node) {
     float lenSq = plane.a * plane.a + plane.b * plane.b + plane.c * plane.c;
     float invDist = -(plane.d / lenSq);
 
-    poly.mTransform.v.x = plane.a * invDist;
     poly.mTransform.v.y = plane.b * invDist;
+    poly.mTransform.v.x = plane.a * invDist;
     poly.mTransform.v.z = plane.c * invDist;
 
-    poly.mTransform.m.z.x = plane.a;
     poly.mTransform.m.z.y = plane.b;
+    poly.mTransform.m.z.x = plane.a;
     poly.mTransform.m.z.z = plane.c;
 
     poly.mTransform.m.y.Set(0, 1, 0);

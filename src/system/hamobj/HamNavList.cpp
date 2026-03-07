@@ -644,9 +644,14 @@ void HamNavList::HideItem(int index, bool b) {
     if (mRefreshPending)
         RealRefresh();
 #ifdef HX_NATIVE
+    // Resize ribbon draw states if provider grew since last Update()
+    // (e.g. DTA append_nav_item doesn't trigger Update)
+    int numShowing = mListState.Provider() ? mListState.NumShowing() : 0;
+    if ((int)mRibbonDrawStates.size() < numShowing) {
+        HamListRibbonDrawState defaultState;
+        mRibbonDrawStates.resize(numShowing, defaultState);
+    }
     if (index < 0 || index >= (int)mRibbonDrawStates.size()) {
-        printf("DC3 WARN: HamNavList::HideItem index %d out of range (size=%d), skipping\n",
-               index, (int)mRibbonDrawStates.size());
         return;
     }
 #endif
@@ -1019,7 +1024,7 @@ float HamNavList::GetTargetSwellAmount(int display) {
 }
 
 void HamNavList::RealRefresh() {
-    AutoGlitchReport glitchReport(15.0f, HamNavListGlitchCB, this);
+    AutoGlitchReport glitchReport(15.0, HamNavListGlitchCB, this);
     mRefreshPending = false;
     if (mListRibbonResource) {
         UIListProvider *provider = mListState.Provider();
@@ -1029,13 +1034,13 @@ void HamNavList::RealRefresh() {
             if (scrollable) {
                 int maxDisplay = sListStateMaxDisplay - 4;
                 int minDisplayVal = 3;
-                if (numShowing <= maxDisplay) {
+                if ((int)numShowing <= maxDisplay) {
                     minDisplayVal = (numShowing - maxDisplay) + 2;
                 }
                 mListState.SetMinDisplay(minDisplayVal);
                 mListState.SetScrollPastMinDisplay(true);
                 mListState.SetMaxDisplay(maxDisplay);
-                mListState.SetCircular(numShowing <= maxDisplay);
+                mListState.SetCircular((unsigned long)maxDisplay >= numShowing);
             } else {
                 mListState.SetScrollPastMinDisplay(false);
                 int sel = mListState.Selected();
@@ -1234,7 +1239,7 @@ void HamNavList::SetSelecting(bool selecting) {
     if (!(sublist == nullptr)) {
         int subSelected = sublist->Selected();
         int wrapped = sublist->GetListState().WrapShowing(subSelected + 1);
-        sym = mNavProvider->DataSymbol(selected, wrapped);
+        sym = mNavProvider->DataSymbol(wrapped, selected);
     } else {
         auto _tmp4 = provider->DataSymbol(selected);
         sym = _tmp4;
@@ -1283,22 +1288,23 @@ bool HamNavList::InControllerMode() const {
 }
 
 void HamNavList::DetermineHighlightedItem() {
+    bool gathering = mListState.ScrollPastMinDisplay();
     MILO_ASSERT(!InControllerMode(), 0x2b7);
     MILO_ASSERT(!TheLoadMgr.EditMode(), 0x2b8);
 
-    bool atTop = mScrollBehavior.AtTop();
     int numItems = NumItems();
     int maxItem = 1 - numItems;
     double maxItemD = (double)maxItem;
 
-    float threshold = -(float)(maxItemD * (double)0.15f - 1.0) / (float)numItems;
+    float threshold = -(float)(maxItemD * (double)0.15 - 1.0) / (float)numItems;
 
-    bool gathering = mListState.ScrollPastMinDisplay();
+    auto& _ref1 = mScrollBehavior;
+    bool atTop = _ref1.AtTop();
     int highlightItem = GetHighlightItem();
     if (gathering && !atTop) {
-        if (highlightItem != 0 || mScrollBehavior.mScrollDir != 1) {
+        if (0 != highlightItem || _ref1.mScrollDir != 1) {
             if (highlightItem == HamListRibbon::sNumListSelectable - 2
-                && mScrollBehavior.mScrollDir == 2) {
+                && _ref1.mScrollDir == 2) {
                 highlightItem = HamListRibbon::sNumListSelectable;
             } else {
                 highlightItem = highlightItem + 1;
@@ -1307,7 +1313,7 @@ void HamNavList::DetermineHighlightedItem() {
     }
 
     unsigned int posU = (unsigned int)(maxItemD * (double)mHandHeight + 0.5);
-    if ((int)posU > maxItem) {
+    if (maxItem < (int)posU) {
         posU &= (posU >> 31) - 1;
     }
 
@@ -1317,35 +1323,35 @@ void HamNavList::DetermineHighlightedItem() {
             adjustedPos = posU - 1;
         }
         int iPos = (int)adjustedPos;
-        if (iPos == -1) {
-            mScrollBehavior.mScrollDir = 1;
-        } else if (iPos == HamListRibbon::sNumListSelectable - 1) {
-            mScrollBehavior.mScrollDir = 2;
-        } else {
-            mScrollBehavior.mScrollDir = 0;
-        }
         if (iPos < HamListRibbon::sNumListSelectable - 1) {
             adjustedPos &= (unsigned int)(-(long long)((long long)(adjustedPos << 32) >> 63));
         } else {
             adjustedPos = HamListRibbon::sNumListSelectable - 2;
+        }
+        if (iPos == -1) {
+            _ref1.mScrollDir = 1;
+        } else if (iPos == HamListRibbon::sNumListSelectable - 1) {
+            _ref1.mScrollDir = 2;
+        } else {
+            _ref1.mScrollDir = 0;
         }
     }
 
     float targetPos = (float)((double)highlightItem / maxItemD);
     float handDiff = fabsf(mHandHeight - targetPos);
     float halfThreshold = threshold * 0.5f + 0.15f;
-    if (handDiff >= halfThreshold) {
+    if (!(handDiff >= halfThreshold)) {
+        auto atBottom = _ref1.AtBottom();
+        if (atBottom) {
+            _ref1.mScrollDir = 0;
+        }
+    } else {
         int firstShowing = mListState.FirstShowing();
         int disabled = GetDisabledCount(adjustedPos);
         int newHighlight = firstShowing + disabled + (int)adjustedPos;
         int curSelected = mListState.Selected();
         if (newHighlight != curSelected) {
             SetHighlight(newHighlight);
-        }
-    } else {
-        auto atBottom = mScrollBehavior.AtBottom();
-        if (atBottom) {
-            mScrollBehavior.mScrollDir = 0;
         }
     }
 }
@@ -1489,16 +1495,15 @@ DataNode HamNavList::OnMsg(const ButtonDownMsg &msg) {
 }
 
 void HamNavList::DrawDebug() const {
-    static bool sDrawDebug = false;
+    static unsigned char sDrawDebug = 0;
     if (!sDrawDebug)
         return;
 
     // Draw a horizontal line at hand height position
     float h = mHandHeight;
-    Hmx::Color white(1.0f, 1.0f, 1.0f, 1.0f);
-    Vector2 p0(0.0f, h);
     Vector2 p1(1.0f, h);
-    UtilDrawLine(p0, p1, white);
+    Vector2 p0(0.0f, h);
+    UtilDrawLine(p0, p1, (1.0f, 1.0f, 1.0f, 1.0f));
 
     // Static rect background
     static Hmx::Color sRectColor(0.2f, 0.2f, 0.2f, 0.7f);
@@ -1521,7 +1526,7 @@ void HamNavList::DrawDebug() const {
     float startY = 0.05f;
     for (int i = 0; i < 5; i++) {
         buf[0] = '\0';
-        if (i == 0) {
+        if ((unsigned int)i == 0) {
             snprintf(buf, sizeof(buf), "hand_height: %f", mHandHeight);
         } else if (i == 1) {
             auto selectedDisplay = mListState.SelectedDisplay();
@@ -1673,13 +1678,16 @@ void HamNavList::DrawShowing() {
     }
 
     const Transform &xfm = WorldXfm();
-    _ref0->Draw(xfm, mRibbonDrawStates, false, false);
+    if (_ref0)
+        _ref0->Draw(xfm, mRibbonDrawStates, false, false);
 
-    if (mHeaderRibbonResource) {
-        mHeaderRibbonResource->Draw(xfm, mRibbonDrawStates, false, false);
+    auto& _ref3 = mHeaderRibbonResource;
+    if (_ref3) {
+        _ref3->Draw(xfm, mRibbonDrawStates, false, false);
     }
 
-    mListDirResource->DrawWidgets(
+    if (mListDirResource)
+        mListDirResource->DrawWidgets(
         widgetState, mListState, mListWidgets, xfm,
         GetState(), nullptr, false
     );

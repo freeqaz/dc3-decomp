@@ -319,13 +319,12 @@ void HamNavProvider::SetHidden(int index, bool b2) {
 DataNode HamNavProvider::OnSetFormatArgs(const DataArray *a) {
     int index = a->Int(2);
     MILO_ASSERT(index >= 0 && index < (int)mNavItems.size(), 0x0);
-    NavItem &item = mNavItems[index];
-    if (item.mFormatArgs) {
-        item.mFormatArgs->Release();
+    if (mNavItems[index].mFormatArgs) {
+        mNavItems[index].mFormatArgs->Release();
     }
-    item.mFormatArgs = a->Array(3);
-    if (item.mFormatArgs) {
-        item.mFormatArgs->AddRef();
+    mNavItems[index].mFormatArgs = a->Array(3);
+    if (mNavItems[index].mFormatArgs) {
+        mNavItems[index].mFormatArgs->AddRef();
     }
     if (mNavList) {
         mNavList->Refresh();

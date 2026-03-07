@@ -629,6 +629,19 @@ class DeclarationReorderPattern(Pattern):
             counter += 1
 
 
+def _is_static_declaration(node: Node) -> bool:
+    """Return True if a declaration has a `static` storage class specifier.
+
+    Static local declarations use $S guards (compiler-internal), so reordering
+    them never fixes ??_B vs $S guard naming differences. Exclude them from
+    permutation groups to avoid wasting budget on unfixable candidates.
+    """
+    for child in node.children:
+        if child.type == "storage_class_specifier" and child.text == b"static":
+            return True
+    return False
+
+
 def _find_declaration_groups(ctx: FunctionContext) -> list[list[Node]]:
     """Find groups of declaration statements in the body.
 
@@ -637,6 +650,8 @@ def _find_declaration_groups(ctx: FunctionContext) -> list[list[Node]]:
     statements. These are returned as 2-element groups for pairwise swapping.
 
     Only considers top-level statements in the function body.
+    Static declarations are excluded: their guard ordering is compiler-internal
+    (??_B vs $S naming) and cannot be fixed by reordering source declarations.
     """
     groups: list[list[Node]] = []
     current: list[Node] = []
@@ -644,7 +659,7 @@ def _find_declaration_groups(ctx: FunctionContext) -> list[list[Node]]:
     # Pass 1: consecutive groups
     consecutive_indices: set[int] = set()
     for i, stmt in enumerate(ctx.statements):
-        if stmt.type == "declaration":
+        if stmt.type == "declaration" and not _is_static_declaration(stmt):
             current.append(stmt)
         else:
             if len(current) >= 2:
@@ -663,9 +678,12 @@ def _find_declaration_groups(ctx: FunctionContext) -> list[list[Node]]:
         groups.append(current)
 
     # Pass 2: sparse pairs — find declarations separated by 1-2 statements
+    # Exclude static declarations for same reason as pass 1.
     decl_indices = [
         i for i, stmt in enumerate(ctx.statements)
-        if stmt.type == "declaration" and i not in consecutive_indices
+        if stmt.type == "declaration"
+        and not _is_static_declaration(stmt)
+        and i not in consecutive_indices
     ]
 
     for ai, a_idx in enumerate(decl_indices):

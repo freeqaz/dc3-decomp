@@ -382,7 +382,7 @@ void AnimTask::Poll(float time) {
     if (!mLoop && time <= mFrameSpan && mFrameSpan != 0.0f) {
         float normalized = time / mFrameSpan;
         float eased = mEaseFunc(normalized, mEasePower, 1.0f);
-        frame = mScale * eased * mFrameSpan + mOffset;
+        frame = (mScale * (eased * mFrameSpan)) + mOffset;
     } else {
         frame = mScale * time + mOffset;
     }
@@ -517,7 +517,7 @@ DataNode RndAnimatable::OnAnimate(DataArray *arr) {
     if (periodArr) {
         p = periodArr->Float(1);
         MILO_ASSERT(p, 0x1C5);
-        p = std::fabs(animTaskEnd - animTaskStart) / p;
+        p = fabsf(animTaskEnd - animTaskStart) / p;
     }
     AnimTask *task = new AnimTask(
         this,
@@ -536,7 +536,7 @@ DataNode RndAnimatable::OnAnimate(DataArray *arr) {
         MILO_ASSERT(DataThis(), 0x1CD);
         taskPtr->SetName(local_name, DataThis()->DataDir());
     }
-    if (local_wait) {
+    if (local_wait && taskPtr) {
         if (taskPtr->BlendTask()) {
             if (taskPtr->BlendTask()->Anim()->GetRate() != GetRate()) {
                 MILO_NOTIFY("%s: need same rate to wait", Name());

@@ -852,17 +852,17 @@ void CharBones::RotateBy(CharBones &dst) const {
     if (src == mBones.end()) return;
 
     // Position section
-    if (mCounts[TYPE_QUAT] > mCounts[TYPE_POS]) {
+    if ((int)mCounts[TYPE_QUAT] > mCounts[TYPE_POS]) {
         Vector3 *ddata = (Vector3 *)dst.mStart;
         Bone *db_end = dst.mBones.begin() + dst.mCounts[TYPE_QUAT];
         Bone *db = dst.mBones.begin() + dst.mCounts[TYPE_POS];
         const Bone *src_end = src + mCounts[TYPE_QUAT];
-        if (mCompression >= kCompressVects) {
+        if (db && mCompression >= kCompressVects) {
             short *sdata = (short *)mStart;
             while (true) {
                 long long sz = (long long)sdata[2];
                 short sy = sdata[1];
-                while (db->name != src->name) {
+                while (src->name != db->name) {
                     db++;
                     if (db >= db_end) goto complain;
                     ddata++;
@@ -973,7 +973,8 @@ rotate_quat:
                 float dy = dquat->y;
                 // dst = src * dst (quaternion multiply)
                 dquat->y = -(sx * dz - (dy * sw + dx * sz + sy * dw));
-                dquat->z = -(sy * dx - (dy * sx + sw * dz + dw * sz));
+                dquat->z = (sy * dx - (dy * sx + sw * dz + dw * sz));
+                dquat->z = -dquat->z;
                 dquat->w = -(dz * sz - -(dy * sy - (dw * sw - sx * dx)));
                 dquat->x = -(dy * sz - (sy * dz + sx * dw + dx * sw));
                 if (src == src_end) goto rotate_rot;
@@ -1031,16 +1032,16 @@ complain:
 
 // MARK: RotateTo
 void CharBones::RotateTo(CharBones &dst, float f) const {
-    const Bone *src = mBones.begin();
     auto bonesEnd = mBones.end();
+    const Bone *src = mBones.begin();
     if (src == bonesEnd) return;
 
     // Position section
     if (mCounts[TYPE_QUAT] > mCounts[TYPE_POS]) {
+        const Bone *src_end = src + mCounts[TYPE_QUAT];
         Vector3 *ddata = (Vector3 *)dst.mStart;
         Bone *db_end = dst.mBones.begin() + dst.mCounts[TYPE_QUAT];
         Bone *db = dst.mBones.begin() + dst.mCounts[TYPE_POS];
-        const Bone *src_end = src + mCounts[TYPE_QUAT];
         if (mCompression >= kCompressVects) {
             short *sdata = (short *)mStart;
             while (true) {
@@ -1114,7 +1115,7 @@ rotateto_quat:
                 float dy = dquat->y;
                 dquat->w = -(dz * sq.z - -(dy * sy - (dw * sq.w - dx * sq.x)));
                 dquat->z = -(dy * sx - (dw * sq.z + dz * sq.w + dx * sy));
-                dquat->y = -(dx * sq.z - (dw * sy + dy * sq.w + dz * sx));
+                dquat->y = -(dx * sq.z - ((dz * sx + (dy * sq.w + dw * sy))));
                 dquat->x = -(dz * sy - (dw * sx + dy * sq.z + dx * sq.w));
                 if (src == src_end) goto rotateto_rot;
                 db++;
@@ -1191,7 +1192,8 @@ rotateto_quat:
     }
 rotateto_rot:
     if (mCounts[TYPE_END] > mCounts[TYPE_ROTX]) {
-        Bone *db_end = dst.mBones.begin() + dst.mCounts[TYPE_END];
+        auto _tmp4 = dst.mBones.begin();
+        Bone *db_end = _tmp4 + dst.mCounts[TYPE_END];
         const Bone *src_end = mBones.data() + mCounts[TYPE_END];
         Bone *db = dst.mBones.begin() + dst.mCounts[TYPE_ROTX];
         float *dfdata = (float *)(dst.mStart + dst.mOffsets[TYPE_ROTX]);

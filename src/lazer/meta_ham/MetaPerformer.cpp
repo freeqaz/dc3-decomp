@@ -1130,33 +1130,37 @@ void MetaPerformer::OnReviewMovePassed(
         MoveDir *moves = TheHamDirector->GetWorld()->Find<MoveDir>("moves");
         std::vector<HamMoveKey> keys;
         TheHamDirector->MoveKeys(pPlayerData->GetDifficulty(), moves, keys);
-        mMoveScores[playerIndex].reserve(keys.size());
+        auto _tmp1 = keys.size();
+        mMoveScores[playerIndex].reserve(_tmp1);
     }
     HamMoveScore score;
     score.mRatingStateIndex = ratingIndex;
-    score.mMove = move;
     score.unk8 = f4;
+    score.mMove = move;
     score.unkc = false;
     mMoveScores[playerIndex].push_back(score);
     static Symbol move_awesome("move_awesome");
     int awesomeIdx = RatingStateToIndex(move_awesome);
     int i90, i80;
     GetCurrentRecapMove(i90, i80);
-    if (i90 >= 0 && i80 >= 0) {
+    auto& _ref1 = mReviewMoveMaskBySection;
+    if (i90 >= 0) {
+        if (i80 >= 0) {
 #ifdef HX_NATIVE
         if (!(ratingIndex <= awesomeIdx)) {
-            mReviewMoveMaskBySection[i90][i80] = true;
+            _ref1[i90][i80] = true;
         } else {
-            mReviewMoveMaskBySection[i90][i80] = false;
+            _ref1[i90][i80] = false;
         }
 #else
-        auto &set = mReviewMoveMaskBySection[i90][i80];
+        auto &set = _ref1[i90][i80];
         if (!(ratingIndex <= awesomeIdx)) {
             set = true;
         } else {
             set = false;
         }
 #endif
+    }
     }
 }
 

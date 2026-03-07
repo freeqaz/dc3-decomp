@@ -147,7 +147,7 @@ BEGIN_LOADS(RndEnviron)
     }
     if (d.rev > 8) {
         d >> mFadeRef;
-        d >> mLRFade;
+        d >> (Hmx::Color &)mLRFade;
     }
     if (d.rev > 6) {
         d >> mAmbientFogOwner;
@@ -175,7 +175,7 @@ BEGIN_LOADS(RndEnviron)
     if (d.rev == 0xB) {
         int dummy;
         d >> dummy;
-    } else if (d.rev - 0xC <= 1U) {
+    } else if (d.rev > 0xB && d.rev < 0xE) {
         int dummy;
         d >> dummy;
     }

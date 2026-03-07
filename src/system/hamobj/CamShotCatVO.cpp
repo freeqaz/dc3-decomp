@@ -64,7 +64,7 @@ void CamShotVOData(
             static Symbol INTRO_SKILLS("INTRO_SKILLS");
             static Symbol INTRO_SKILLS_LONG("INTRO_SKILLS_LONG");
             static Symbol INTRO_PLAYLIST("INTRO_PLAYLIST");
-            if (s == INTRO_QUICK) {
+            if ((unsigned long)s == INTRO_QUICK) {
                 s1 = intro_quick;
                 charSym = all;
             } else if (s == INTRO_SKILLS || s == INTRO_SKILLS_LONG) {
@@ -73,7 +73,7 @@ void CamShotVOData(
             } else if (s == INTRO_PLAYLIST) {
                 s1 = intro_playlist;
                 charSym = all;
-            } else if (subStrings.size() > 0) {
+            } else if (subStrings.size() >= 1) {
                 if (subStrings[0] == "BATTLE") {
                     s1 = battle_intro_crew;
                     charSym = all;
@@ -88,10 +88,11 @@ void CamShotVOData(
             }
         } else if (hasOutros) {
             auto numSubStrings = subStrings.size();
+            auto& _sub2 = subStrings[1];
             if (numSubStrings > 0 && subStrings[0] == "BATTLE") {
                 s1 = battle_outro_crew;
                 crewSym = StrToCrewSym(subStrings[2]);
-            } else if (subStrings.size() > 1 && subStrings[1] == "CAMP") {
+            } else if (subStrings.size() > 1 && _sub2 == "CAMP") {
                 if (subStrings[0] == "WIN") {
                     s1 = win_camp_crew;
                     charSym = all;
@@ -109,7 +110,7 @@ void CamShotVOData(
                 } else {
                     MILO_NOTIFY("Could not determine cam_type for %s", s);
                 }
-            } else if (subStrings.size() > 1 && subStrings[1] == "HYPE") {
+            } else if (subStrings.size() > 1 && _sub2 == "HYPE") {
                 static Symbol WIN_HYPE_SOLO("WIN_HYPE_SOLO");
                 static Symbol WIN_HYPE_DIFF_CREW("WIN_HYPE_DIFF_CREW");
                 if (s == WIN_HYPE_SOLO) {

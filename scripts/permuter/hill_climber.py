@@ -28,6 +28,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+from .classifier import classify_mismatches, format_classifications
 from .composer import _DEFAULT_PAIRS, build_adaptive_chains, get_compose_pairs
 from .diagnosis import format_diagnosis_summary, is_all_noise
 from .extractor import extract_function
@@ -234,6 +235,18 @@ def parse_args() -> argparse.Namespace:
         "--no-constrained", action="store_false", dest="constrained",
         help="Disable constraint-directed synthesis",
     )
+    parser.add_argument(
+        "--evolutionary", action="store_true", default=False,
+        help="Use evolutionary optimizer instead of greedy hill climbing",
+    )
+    parser.add_argument(
+        "--population-size", type=int, default=50,
+        help="Population size for evolutionary optimizer (default: 50)",
+    )
+    parser.add_argument(
+        "--generations", type=int, default=20,
+        help="Max generations for evolutionary optimizer (default: 20)",
+    )
     return parser.parse_args()
 
 
@@ -309,6 +322,29 @@ def hill_climb(
     # Save original source for rollback if not applying
     original_source = source_path.read_bytes()
 
+    # Cache RB3 source once before the round loop (avoids per-round file I/O)
+    _rb3_source_cache: str | None = None
+    _parts = symbol.split('@') if symbol else []
+    _rb3_method = _parts[0].lstrip('?') if _parts else ''
+    _rb3_class = _parts[1] if len(_parts) >= 2 else ''
+    if _rb3_class and _rb3_method:
+        try:
+            from scripts.orchestrator import rb3_pairing
+            _rb3_file = rb3_pairing.find_rb3_file(str(source_path))
+            if _rb3_file:
+                _rb3_text = _rb3_file.read_text(errors='replace')
+                _rb3_source_cache = rb3_pairing.extract_rb3_method(
+                    _rb3_text, _rb3_class, _rb3_method
+                )
+                if _rb3_source_cache:
+                    print(
+                        f"RB3 hint: {_rb3_class}::{_rb3_method}"
+                        f" ({len(_rb3_source_cache)} chars)",
+                        file=sys.stderr,
+                    )
+        except Exception:
+            pass
+
     # Add lock banner so other agents know this file is being permuted
     _add_banner(source_path, function_name)
 
@@ -344,6 +380,7 @@ def hill_climb(
 
                 # Wire symbol, diagnosis, and Ghidra data into context
                 ctx.symbol = symbol
+                ctx.rb3_source = _rb3_source_cache
                 if scorer.ghidra_code:
                     ctx.ghidra_code = scorer.ghidra_code
                     ctx.ghidra_ast = scorer.ghidra_ast
@@ -374,6 +411,13 @@ def hill_climb(
                         format_diagnosis_summary(scorer.diagnosis),
                         file=sys.stderr,
                     )
+                    if round_num == 1:
+                        classifications = classify_mismatches(scorer.diagnosis)
+                        if classifications:
+                            print(
+                                format_classifications(classifications),
+                                file=sys.stderr,
+                            )
 
                     # Early exit: all noise
                     if is_all_noise(scorer.diagnosis):
@@ -452,6 +496,29 @@ def hill_climb(
                             f"  [GHIDRA PREFLIGHT] Reducing to {max_rounds} rounds",
                             file=sys.stderr,
                         )
+
+                # Ghidra structural diff (round 1 diagnostic)
+                if ghidra and ctx.ghidra_code and ctx.body_node and round_num == 1:
+                    try:
+                        from .ghidra_source_diff import (
+                            diff_ghidra_vs_source,
+                            format_source_diff,
+                        )
+                        sdiff = diff_ghidra_vs_source(
+                            ctx.ghidra_code, ctx.file_source, ctx.body_node,
+                        )
+                        if (sdiff.missing_calls or sdiff.extra_calls
+                                or sdiff.guard_diffs or sdiff.control_flow_diff):
+                            print(
+                                f"  [GHIDRA DIFF]\n"
+                                + "\n".join(
+                                    f"    {line}"
+                                    for line in format_source_diff(sdiff).splitlines()
+                                ),
+                                file=sys.stderr,
+                            )
+                    except Exception:
+                        pass  # Non-critical diagnostic
 
                 # Constraint-directed synthesis pre-pass (round 1 only)
                 if constrained and round_num == 1 and ctx.ghidra_ast is not None:
@@ -629,6 +696,87 @@ def hill_climb(
                         f"{result.match_percent:.2f}%{marker}",
                         file=sys.stderr,
                     )
+
+                # --- Phase 4: Cross-variant composition ---
+                from .composer import select_improvers, cross_compose_variants
+                improvers = select_improvers(batch_results, baseline, max_k=5)
+                if len(improvers) >= 2:
+                    crosscompose_budget = min(30, max_variants // 3)
+                    phase4_variants = list(cross_compose_variants(
+                        original_ctx=ctx,
+                        improvers=improvers,
+                        patterns=patterns,
+                        phase1_results=batch_results,
+                        baseline=baseline,
+                        max_per_improver=max(1, crosscompose_budget // len(improvers)),
+                        max_total=crosscompose_budget,
+                    ))
+                    if phase4_variants:
+                        print(
+                            f"Phase 4: cross-composing {len(phase4_variants)} "
+                            f"variants from {len(improvers)} improvers...",
+                            file=sys.stderr,
+                        )
+                        phase4_results = scorer.score_batch(
+                            phase4_variants, workers=workers,
+                        )
+                        batch_results.extend(phase4_results)
+                        for result in phase4_results:
+                            if result.match_percent > best_score:
+                                best_result = result
+                                best_score = result.match_percent
+                                print(
+                                    f"  Phase 4 NEW BEST: {result.variant.name}: "
+                                    f"{result.match_percent:.2f}%",
+                                    file=sys.stderr,
+                                )
+                            pattern_accumulator.record_variant(
+                                pattern_name=result.variant.pattern_name,
+                                variant_name=result.variant.name,
+                                match_pct=result.match_percent,
+                                baseline=baseline,
+                                build_success=result.build_success,
+                            )
+
+                # --- Phase 5: Multi-variant merge ---
+                improving_count = sum(
+                    1 for r in batch_results
+                    if r.build_success and r.match_percent > baseline
+                )
+                if improving_count >= 2:
+                    from .merge import find_merge_candidates
+                    merge_candidates = find_merge_candidates(
+                        original=ctx.file_source,
+                        results=batch_results,
+                        baseline=baseline,
+                        max_merge_attempts=15,
+                    )
+                    if merge_candidates:
+                        print(
+                            f"Phase 5: merging {len(merge_candidates)} "
+                            f"candidates from {improving_count} improving variants...",
+                            file=sys.stderr,
+                        )
+                        merge_results = scorer.score_batch(
+                            merge_candidates, workers=workers,
+                        )
+                        batch_results.extend(merge_results)
+                        for result in merge_results:
+                            if result.match_percent > best_score:
+                                best_result = result
+                                best_score = result.match_percent
+                                print(
+                                    f"  Phase 5 NEW BEST: {result.variant.name}: "
+                                    f"{result.match_percent:.2f}%",
+                                    file=sys.stderr,
+                                )
+                            pattern_accumulator.record_variant(
+                                pattern_name=result.variant.pattern_name,
+                                variant_name=result.variant.name,
+                                match_pct=result.match_percent,
+                                baseline=baseline,
+                                build_success=result.build_success,
+                            )
 
             # After Scorer exits (source restored), record round and apply
             delta = best_score - baseline
@@ -839,24 +987,43 @@ def main():
 
     workers = args.workers or os.cpu_count() or 4
 
-    result = hill_climb(
-        symbol=args.symbol,
-        source_path=args.source,
-        function_name=args.function,
-        patterns=patterns,
-        max_rounds=args.max_rounds,
-        max_variants=args.max_variants,
-        plateau_limit=args.plateau_limit,
-        compose=args.compose,
-        apply=not args.no_apply,
-        unit=args.unit,
-        workers=workers,
-        ghidra=args.ghidra,
-        chain=args.chain,
-        chain_depth=args.chain_depth,
-        adaptive=args.adaptive,
-        constrained=args.constrained,
-    )
+    if args.evolutionary:
+        from .evolutionary import evolve
+        result = evolve(
+            symbol=args.symbol,
+            source_path=args.source,
+            function_name=args.function,
+            patterns=patterns,
+            population_size=args.population_size,
+            generations=args.generations,
+            apply=not args.no_apply,
+            unit=args.unit,
+            workers=workers,
+            ghidra=args.ghidra,
+            chain=args.chain,
+            chain_depth=args.chain_depth,
+            adaptive=args.adaptive,
+            constrained=args.constrained,
+        )
+    else:
+        result = hill_climb(
+            symbol=args.symbol,
+            source_path=args.source,
+            function_name=args.function,
+            patterns=patterns,
+            max_rounds=args.max_rounds,
+            max_variants=args.max_variants,
+            plateau_limit=args.plateau_limit,
+            compose=args.compose,
+            apply=not args.no_apply,
+            unit=args.unit,
+            workers=workers,
+            ghidra=args.ghidra,
+            chain=args.chain,
+            chain_depth=args.chain_depth,
+            adaptive=args.adaptive,
+            constrained=args.constrained,
+        )
 
     if args.json_output:
         from dataclasses import asdict

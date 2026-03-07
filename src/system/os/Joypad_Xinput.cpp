@@ -105,7 +105,7 @@ JoypadType ReadSingleXinputJoypad(
 
     GetXinputSinceLastFrame(user_idx, &state, &unused);
 
-    if (state.dwPacketNumber == -1) {
+    if (-1 == state.dwPacketNumber) {
         return kJoypadNone;
     }
     unsigned char setup_flag = 0;
@@ -166,22 +166,23 @@ JoypadType ReadSingleXinputJoypad(
     }
 
     short rx = state.Gamepad.sThumbRX;
-    if (joypad_type == kJoypadXboxDrums) {
-        if ((rx > 0) && (rx < 0x100)) {
+    if (joypad_type == kJoypadXboxDrums && (rx > 0) && (rx < 0x100)) {
             float f = (float)rx;
             float f2 = (248.0f - f >= 0.0f) ? 248.0f : f;
-            float f3 = (244.0f - f2 >= 0.0f) ? 244.0f : f2;
+            float f3 = ((int)244.0f - f2 >= 0.0f) ? 244.0f : f2;
             int scaled = (int)((f3 - 248.0f) * 0.03054f * -55001.0f);
             short result = (short)(-0x8000 - scaled);
             TranslateStick(stick_rx, result, 1, 0);
         } else {
-            TranslateStick(stick_rx, rx, 1, 0);
-        }
-    } else {
         TranslateStick(stick_rx, rx, 1, 0);
     }
 
-    unsigned char deadzone_apply2 = (setup_flag != 0 || joypad_type == kJoypadXboxDrums) ? 0 : 1;
+        unsigned char deadzone_apply2;
+    if ((setup_flag != 0 || joypad_type == kJoypadXboxDrums)) {
+        deadzone_apply2 = 0;
+    } else {
+        deadzone_apply2 = 1;
+    }
     short ly = state.Gamepad.sThumbLY;
     TranslateStick(stick_ly, ly, 1, deadzone_apply2);
 

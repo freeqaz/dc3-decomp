@@ -384,10 +384,10 @@ RndDrawable *Character::CollideShowing(const Segment &s, float &fl, Plane &pl) {
                 fl = v70.x;
                 return this;
             }
+            ret = lodShowing;
             float oldX = v70.x;
             Interp(mySegment.start, mySegment.end, v70.x, v70);
             fl *= oldX;
-            ret = lodShowing;
         }
     }
     RndDrawable *rndDirShowing = RndDir::CollideShowing(mySegment, v70.x, pl);

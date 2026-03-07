@@ -149,9 +149,10 @@ void SuperEasyRemixer::DumpSongLayout() {
 
 void SuperEasyRemixer::SaveSuperEasyMoveParents() {
     mSuperEasyVariants.clear();
-    mSuperEasyParents.clear();
+    auto& _ref1 = mSuperEasyParents;
+    _ref1.clear();
     mSuperEasyVariants.reserve(mTotalMeasures);
-    mSuperEasyParents.reserve(mTotalMeasures);
+    _ref1.reserve(mTotalMeasures);
     int i7 = 1;
     HamSupereasyData *data =
         ObjDirItr<HamSupereasyData>(TheHamDirector->GetMoveDir(), false);
@@ -182,13 +183,13 @@ void SuperEasyRemixer::SaveSuperEasyMoveParents() {
                 mSuperEasyVariants.push_back(mv);
             }
         }
-        if (i7 != 0) {
-            for (int i = 0; i < mSuperEasyVariants.size(); i++) {
+        if ((int)i7 != 0) {
+            for (int i = 0.0f; i < mSuperEasyVariants.size(); i++) {
                 MoveParent *parent = nullptr;
                 if (mSuperEasyVariants[i]) {
                     parent = mSuperEasyVariants[i]->Parent();
                 }
-                mSuperEasyParents.push_back(parent);
+                _ref1.push_back(parent);
             }
             BridgeGapsInMoveParents(3);
         }
@@ -198,7 +199,7 @@ void SuperEasyRemixer::SaveSuperEasyMoveParents() {
     }
     if (i7 == 0) {
         MILO_NOTIFY("Supereasy will use the easy track for '%s'", TheGameData->GetSong());
-        mSuperEasyParents = GetMoveParentsByDifficulty(kDifficultyEasy);
+        _ref1 = GetMoveParentsByDifficulty(kDifficultyEasy);
         mSuperEasyVariants = GetMoveVariantsByDifficulty(kDifficultyEasy);
     }
     mDataError = i7 == 0;

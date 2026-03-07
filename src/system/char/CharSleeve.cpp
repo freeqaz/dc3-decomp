@@ -76,8 +76,8 @@ void CharSleeve::Poll() {
     if (mSleeve && mSleeve->TransParent()) {
         float deltasecs = TheTaskMgr.DeltaSeconds();
         float dvar12 = deltasecs * 60.0f;
-        float powed = std::pow(1.0f - mStiffness, dvar12 * dvar12);
         float gravity_z = (mGravity * (deltasecs * (dvar12 * -3.858268f)));
+        float powed = std::pow(1.0f - mStiffness, dvar12 * dvar12);
         RndTransformable *sleeveparent = mSleeve->TransParent();
         float absed = std::fabs(mSleeve->LocalXfm().v.z);
         bool b2 = false;

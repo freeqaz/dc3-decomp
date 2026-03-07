@@ -160,6 +160,8 @@ class FunctionContext:
     asm_listing_path: Optional[Path] = None
     # In-function preprocessor regions (#if/#ifdef/#else/#endif)
     preproc_regions: list[PreprocRegion] = field(default_factory=list)
+    # Extracted RB3 method body (same function), if available
+    rb3_source: Optional[str] = None
 
     def source_text(self, node: Node) -> str:
         """Extract source text for a tree-sitter node."""
@@ -322,7 +324,7 @@ def _split_pattern_name(name: str) -> list[str]:
 
     Handles 'compose:a+b', 'chain:a+b+c', and 'crosscompose:a+b' prefixed names.
     """
-    for prefix in ("compose:", "chain:", "crosscompose:"):
+    for prefix in ("compose:", "chain:", "crosscompose:", "merge:", "evo_cross:", "evo_mut:"):
         if name.startswith(prefix):
             _, parts = name.split(":", 1)
             return parts.split("+")

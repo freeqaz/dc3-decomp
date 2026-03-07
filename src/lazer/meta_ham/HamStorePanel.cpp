@@ -33,8 +33,7 @@ HamStorePanel::HamStorePanel()
     for (int i = 0; i < 7; i++) {
         mJobs[i] = 0;
     }
-    Symbol specialOffersSym("special_offers");
-    DataArray *specialOfferArray = SystemConfig("store")->FindArray(specialOffersSym, false);
+    DataArray *specialOfferArray = SystemConfig("store")->FindArray(("special_offers"), false);
     if (specialOfferArray) {
         int numOffers = specialOfferArray->Size() - 1;
         HamSpecialOffer defaultOffer;

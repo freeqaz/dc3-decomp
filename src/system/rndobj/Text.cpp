@@ -1,6 +1,8 @@
 #include "rndobj/Text.h"
 #include "Text.h"
 #include "obj/Object.h"
+#include "obj/Msg.h"
+#include "obj/Task.h"
 #include "os/Debug.h"
 #include "os/System.h"
 #include "rndobj/Draw.h"
@@ -606,18 +608,20 @@ void RndText::FontMap::AllocateMeshes(RndText *text, int fixedLength) {
                 mesh->SetMat(fontMat);
             }
             mesh->SetShowing(page.displayableChars > 0);
-            if ((unsigned int)fixedLength == 0) {
+            if (fixedLength == 0) {
+                int faceCount = page.displayableChars * 2;
                 mesh->SetMutable(0);
-                ResetFontMapPageMeshFaces(mesh, page.displayableChars * 2);
+                ResetFontMapPageMeshFaces(mesh, faceCount);
                 page.mSyncFlags |= 0xA0;
-                mesh->Verts().resize(page.displayableChars * 4);
-            } else if (mesh->Mutable() == 0 || mesh->Verts().size() != fixedLength * 4) {
+                mesh->Verts().resize(faceCount * 2);
+            } else if (!(mesh->Mutable() & 0x1F) || mesh->Verts().size() != fixedLength * 4) {
                 mesh->SetMutable(0x1F);
-                ResetFontMapPageMeshFaces(mesh, page.displayableChars * 2);
+                ResetFontMapPageMeshFaces(mesh, fixedLength * 2);
                 page.mSyncFlags |= 0xA0;
-                mesh->Verts().resize(page.displayableChars * 4);
+                mesh->Verts().resize(fixedLength * 4);
             }
 #ifndef HX_NATIVE
+            page.mVertStart = mesh->Verts().begin();
             MILO_ASSERT(mesh->Verts().size() >= page.displayableChars * 4, 0xD2);
 #else
             // Clamp to available verts in native builds
@@ -1312,23 +1316,186 @@ void RndText::DrawBlacklight() {
 }
 
 void RndText::SizeCheck() {
-    // The original checks mDirtyFlags against screen size, font, and text changes.
-    // On native we always rebuild — correct but slower than dirty-flag tracking.
 #ifdef HX_NATIVE
     UpdateText();
+#else
+    static float sLastScreenHeight;
+    static RndText *sLastText;
+
+    StyleState state(this, mScrollSpeed);
+
+    for (std::vector<FontMapBase *>::iterator it = mFontMaps.begin(); it != mFontMaps.end();
+         ++it) {
+        RndFontBase *font = (*it)->Font();
+        if (font != 0 && font->BitmapFont()) {
+            for (int j = 0; j < (*it)->NumMeshes(); j++) {
+                RndMesh *mesh = (*it)->Mesh(j);
+                if (mesh != 0) {
+                    float screenHeight;
+                    if (!CalcScreenHeight(
+                            font->AspectRatio() * state.mSize, mesh, screenHeight
+                        ))
+                        return;
+
+                    float fontPixels = font->FontUnit() * font->AspectRatio();
+                    float maxHeight = 127.5f;
+                    if (127.5f > screenHeight) {
+                        maxHeight = screenHeight;
+                    }
+                    if (fontPixels * 1.25f >= maxHeight)
+                        return;
+
+                    if (sLastText == this && sLastScreenHeight >= screenHeight)
+                        return;
+
+                    int screenPx = (int)screenHeight;
+                    int fontPx = (int)fontPixels;
+                    MILO_NOTIFY(
+                        "oversized: %s font: %s token:'%s' text:'%s' %d < %d",
+                        PathName(this),
+                        font->Name(),
+                        TextToken(),
+                        mText,
+                        fontPx,
+                        screenPx
+                    );
+                    sLastScreenHeight = screenHeight;
+                    sLastText = this;
+                    return;
+                }
+            }
+        }
+    }
 #endif
 }
 
 void RndText::UpdateScrollOffsets() {
-    // Update scroll mesh positions for scrolling fit types
-    if (mFitType < kFitScrollMarqueeWrap || mFitType > kFitScrollMarqueeWrapAlways)
+#ifdef HX_NATIVE
+    if ((int)mFitType < kFitScrollMarqueeWrap || mFitType > kFitScrollMarqueeWrapAlways)
         return;
-
     FOREACH (it, mFontMaps) {
         if ((*it)->SupportsScrolling()) {
-            (*it)->UpdateScrolling(mScrollSpeed);
+            (*it)->UpdateScrolling(mScrollPos);
         }
     }
+#else
+    float dt = TheTaskMgr.DeltaUISeconds();
+    mScrollState += dt;
+    if (mScrollState < mScrollOffset)
+        goto update_meshes;
+
+    {
+        float rate = mScrollTimer;
+        float totalWidth = mNumLines;
+        unsigned char scrolledPast = 0;
+        float widthDiff = totalWidth - mWidth;
+        float scrollDelta = (1000.0f * (dt * rate));
+        float pos = mScrollPos + scrollDelta;
+        mScrollPos = pos;
+
+        switch (mFitType) {
+        case kFitScrollMarqueeReset:
+            scrolledPast = pos < -totalWidth;
+            if (scrolledPast) {
+                mScrollPos = 0.0f;
+            }
+            mLineHeight = totalWidth;
+            break;
+        case kFitScrollPingPong:
+            if (pos < -(totalWidth + 20.0f)) {
+                mScrollPos = 0.0f;
+                scrolledPast = 1;
+            }
+            break;
+        case kFitStretch:
+            if (!(rate >= 0.0f)) {
+                float limit = -widthDiff;
+                if (pos < limit) {
+                    mScrollPos = limit;
+                    mScrollTimer = -rate;
+                    scrolledPast = 1;
+                }
+            } else {
+                if (rate > 0.0f && pos >= 0.0f) {
+                    mScrollTimer = -rate;
+                    mScrollPos = 0.0f;
+                    scrolledPast = 1;
+                }
+            }
+            break;
+        case kFitScrollMarqueeWrapAlways: {
+            static Message textScrolledIn("text_scrolled_in", DataNode(0));
+            static Message textScrolledOut("text_scrolled_out", DataNode(0));
+
+            float zat = mZeroAlphaTime + scrollDelta;
+            mZeroAlphaTime = zat;
+
+            float firstLineWidth = *(float *)((*(int *)&mLineWidths) + 8);
+            if (mWidth - zat >= firstLineWidth) {
+                int idx = mDirtyFlags + 1;
+                mDirtyFlags = idx;
+                if (*(int *)&mTotalWidth <= idx) {
+                    mDirtyFlags = 0;
+                }
+                textScrolledIn[0] = DataNode(mDirtyFlags);
+
+                if (firstLineWidth == mNumLines) {
+                    mZeroAlphaTime = mWidth;
+                }
+
+                // Count items in mLineWidths
+                int count = 0;
+                for (int *node = *(int **)&mLineWidths;
+                     node != (int *)&mLineWidths;
+                     node = *(int **)node) {
+                    count++;
+                }
+                if (*(int *)&mTotalWidth == count) {
+                    mLineWidths.insert(mLineWidths.end(), *mLineWidths.begin());
+                }
+                mLineWidths.erase(mLineWidths.begin());
+
+                Hmx::Object *altObj = (Hmx::Object *)mAltStyle;
+                if (altObj != 0) {
+                    altObj->Handle(textScrolledIn, false);
+                }
+            }
+
+            float firstLineOffset = *(float *)((*(int *)&mLineOffsets) + 8);
+            if (mScrollPos <= -firstLineOffset) {
+                mLastSyncFlags = mLastSyncFlags + 1;
+                textScrolledOut[0] = DataNode(mLastSyncFlags);
+
+                if (firstLineOffset == mNumLines) {
+                    mScrollPos = 0.0f;
+                    mLastSyncFlags = -1;
+                }
+                mLineOffsets.insert(mLineOffsets.end(), *mLineOffsets.begin());
+                mLineOffsets.erase(mLineOffsets.begin());
+
+                Hmx::Object *altObj = (Hmx::Object *)mAltStyle;
+                if (altObj != 0) {
+                    altObj->Handle(textScrolledOut, false);
+                }
+            }
+            break;
+        }
+        default:
+            mScrollPos = 0.0f;
+            break;
+        }
+
+        if (scrolledPast) {
+            mScrollState = 0.0f;
+        }
+    }
+
+update_meshes:
+    for (std::vector<FontMapBase *>::iterator it = mFontMaps.begin(); it != mFontMaps.end();
+         ++it) {
+        (*it)->UpdateScrolling(mScrollPos);
+    }
+#endif
 }
 
 static const wchar_t kEllipsisStr[] = L"...";
@@ -1384,16 +1551,16 @@ void RndText::FitTextEllipsis() {
     float *charWidths = (float *)_alloca((numChars + 2) * sizeof(float));
     OnComputeCharWidths(&wideChars[0], charWidths, false);
 
-    float scale = 1.0f;
     Hmx::Rect bounds;
+    float scale = 1.0f;
 
     if (!(charWidths[numChars] <= mWidth)) {
         // Text doesn't fit — need to truncate and add ellipsis
         int ellipsisLen = wcslen(kEllipsisStr);
 
         // Binary search for how many chars fit
-        int lo = 1;
         int hi = numChars;
+        int lo = 1;
         if (numChars > 2) {
             int tmpLo = lo;
             do {
@@ -1467,16 +1634,95 @@ void RndText::FitTextEllipsis() {
 }
 
 void RndText::FitTextScroll() {
-    // Scrolling text layout — sets up mesh scrolling constraints
-    if (mFitType < kFitScrollMarqueeWrap)
+#ifdef HX_NATIVE
+    if ((int)(int)mFitType < kFitScrollMarqueeWrap)
         return;
-
     mWrapEnabled = true;
     FOREACH (it, mFontMaps) {
         if ((*it)->SupportsScrolling()) {
             (*it)->SetupScrolling();
         }
     }
+#else
+    BuildFontMaps(true);
+
+    HX_VECTOR(unsigned short) wideChars;
+    HX_VECTOR(Line) lines;
+    int numChars = ConvertTextToWide(mText.c_str(), wideChars);
+    float *charWidths = (float *)_alloca((numChars + 2) * sizeof(float));
+
+    *(int *)&mTotalWidth = 0;
+    mLineWidths.clear();
+    mLineOffsets.clear();
+    OnComputeCharWidths(&wideChars[0], charWidths, false);
+
+    mWrapEnabled = false;
+    float spaceWidth = 0.0;
+    float savedWidth = (double)mWidth;
+    if ((double)charWidths[numChars] > savedWidth || mFitType == kFitScrollMarqueeWrapAlways) {
+        mWidth = 0.0f;
+        mWrapEnabled = true;
+
+        RndFontBase *font = mStyles[0].mFont;
+        MILO_ASSERT(font, 0x312);
+
+        unsigned short spaceChar;
+        DecodeUTF8(spaceChar, " ");
+        float advance;
+        font->CharAdvance(spaceChar, spaceChar, advance);
+        spaceWidth = mStyles[0].mSize + advance + mStyles[0].mKerning;
+    }
+
+    Hmx::Rect bounds;
+    float scale = 1.0f;
+    WrapText(&wideChars[0], numChars, charWidths, lines, bounds, scale);
+    ConstructMeshes(lines, bounds, scale);
+
+    if (mWrapEnabled) {
+        mWidth = savedWidth;
+        *(int *)&mTotalHeight = 1;
+        mScrollState = spaceWidth;
+        mScrollTimer = mScrollRate * spaceWidth * -0.001f;
+
+        if (mFitType == kFitScrollMarqueeWrapAlways) {
+            mScrollPos = savedWidth;
+            int numWraps = *(int *)&mTotalWidth + 1;
+            mZeroAlphaTime = savedWidth;
+            *(int *)&mTotalWidth = numWraps;
+            mNumLines = mIndentation * (float)numWraps + charWidths[numChars];
+
+            mLineWidths.insert(mLineWidths.end(), mNumLines);
+            float firstLineWidth = *mLineWidths.begin();
+            mLineWidths.insert(mLineWidths.end(), spaceWidth);
+
+            mLineOffsets.insert(mLineOffsets.end(), mNumLines);
+
+            mLineHeight = mNumLines;
+            if ((double)mNumLines > spaceWidth) {
+                double runWidth = (double)mNumLines;
+                do {
+                    if (runWidth > (double)mWidth)
+                        break;
+                    runWidth = (double)(float)((double)mNumLines + runWidth);
+                    *(int *)&mTotalHeight = *(int *)&mTotalHeight + 1;
+                } while (spaceWidth < (double)mNumLines);
+            }
+
+            mDirtyFlags = -1;
+            mLastSyncFlags = -1;
+        } else {
+            mScrollPos = 0.0f;
+            mNumLines = charWidths[numChars];
+            mLineHeight = 0.0f;
+        }
+
+        mScrollOffset = mScrollDelay;
+
+        for (unsigned int i = 0; i < mFontMaps.size(); i++) {
+            mFontMaps[i]->SetupScrolling();
+        }
+    }
+#endif
 }
 
 void RndText::DrawMesh(RndMesh *mesh, float size, int syncFlags) {
@@ -1522,7 +1768,7 @@ void RndText::ConstructMeshes(
 ) {
     // Store scale and number of lines
     mScrollSpeed = scale;
-    mCurScrollChars = lines.size();
+    mCurScrollChars = bool(lines.size());
 
     // Copy bounds using integer word copies (matching target codegen)
 #ifdef HX_NATIVE
@@ -1602,18 +1848,139 @@ void RndText::ConstructMeshes(
 }
 
 const unsigned short *
-RndText::ParseMarkup(const unsigned short *str, StyleState &state, unsigned short &ch) {
-    // TODO: full markup parsing
-    // For now, skip past the markup tag and return the character after it
-    const unsigned short *cur = str + 1;
-    while (*cur != 0 && *cur != '>') {
-        cur++;
+RndText::ParseMarkup(const unsigned short *cc, StyleState &state, unsigned short &replaceChar) {
+    bool isClosing = cc[1] == '/';
+    const unsigned short *ptr = cc + 1;
+    if (isClosing)
+        ptr++;
+    replaceChar = 0;
+
+    static const unsigned short kSup[] = {'s', 'u', 'p', 0};
+    static const unsigned short kGtr[] = {'g', 't', 'r', 0};
+    static const unsigned short kIt[] = {'i', 't', 0};
+    static const unsigned short kColor[] = {'c', 'o', 'l', 'o', 'r', 0};
+    static const unsigned short kAmpHash[] = {'&', '#', 0};
+    static const unsigned short kNobreak[] = {'n', 'o', 'b', 'r', 'e', 'a', 'k', 0};
+    static const unsigned short kAlt[] = {'a', 'l', 't', 0};
+
+    float sizeValue;
+    if (WStrniCmp(ptr, kSup, 3) == 0) {
+        if (isClosing) {
+            sizeValue = state.mStyle->mSize;
+        } else {
+            sizeValue = state.mStyle->mSize * gSuperscriptScale;
+        }
+        ptr += 3;
+    } else if (WStrniCmp(ptr, kGtr, 3) == 0) {
+        float rawSize;
+        if (isClosing) {
+            rawSize = state.mStyle->mSize;
+        } else {
+            rawSize = state.mStyle->mSize * gGuitarScale;
+        }
+        state.mSize = state.mBaseSize * rawSize;
+        if (isClosing) {
+            state.mZOffset = state.mStyle->mZOffset;
+        } else {
+            state.mZOffset = gGuitarZOffset;
+        }
+        ptr += 3;
+        goto scan_end;
+    } else if (WStrniCmp(ptr, kIt, 2) == 0) {
+        if (isClosing) {
+            state.mItalics = state.mStyle->mItalics;
+        } else {
+            state.mItalics = state.mStyle->mItalics + 0.1f;
+        }
+        ptr += 2;
+        goto scan_end;
+    } else if (WStrniCmp(ptr, kColor, 5) == 0) {
+        if (isClosing) {
+                        state.mTextColor = state.mStyle->mTextColor;
+            ptr += 5;
+        } else {
+            int r = 0, g = 0, b = 0;
+            int a = (int)(state.mTextColor.alpha * 255.999f);
+            ptr += 6;
+            swscanf((const wchar_t *)ptr, L"%d %d %d %d", &r, &g, &b, &a);
+            state.mTextColor.blue = (float)b / 255.0f;
+            state.mTextColor.green = (float)g / 255.0f;
+            state.mTextColor.red = (float)r / 255.0f;
+            state.mTextColor.alpha = (float)a / 255.0f;
+        }
+        goto scan_end;
+    } else if (WStrniCmp(ptr, kAmpHash, 2) == 0) {
+        ptr += 2;
+        int ch = '?';
+        swscanf((const wchar_t *)ptr, L"%d", &ch);
+        replaceChar = (unsigned short)ch;
+        goto scan_end;
+    } else if (WStrniCmp(ptr, kNobreak, 7) == 0) {
+        ptr += 7;
+        if (isClosing) {
+            state.brk = true;
+        } else {
+            state.brk = false;
+        }
+        goto scan_end;
+    } else if (WStrniCmp(ptr, kAlt, 3) == 0) {
+        ptr += 3;
+        if (isClosing) {
+            while (*ptr != '>' && *ptr != 0)
+                ptr++;
+        }
+        unsigned short c = *ptr;
+        bool blacklight = false;
+        int styleIdx = 1;
+        if (c >= '2' && c <= '9') {
+            styleIdx = c - '0';
+        } else if (c == 'b' || c == 'B') {
+            blacklight = true;
+            styleIdx = (mStyles.size() > 1) ? 1 : 0;
+            Style *fontStyle = &mStyles[styleIdx];
+            if (!mStyles[styleIdx].mFont) {
+                fontStyle = &mStyles[0];
+            }
+            RndFontBase *font = fontStyle->mFont;
+            if (font && FontMapIndex(font, true) == -1) {
+                FontMapBase *fm = AcquireFontMap(font);
+                fm->mBlacklight = true;
+                mFontMaps.push_back(fm);
+            }
+            ptr++;
+            goto after_char;
+        }
+        if (c >= '2' && c <= '9') {
+            ptr++;
+        }
+    after_char:
+        styleIdx = isClosing ? 0 : styleIdx;
+        if ((unsigned int)styleIdx >= mStyles.size()) {
+            styleIdx = mStyles.size() - 1;
+        }
+        state.mStyle = &mStyles[styleIdx];
+        memcpy(&state, state.mStyle, 0x34);
+
+        bool useBlacklight = state.mStyle->mBlacklight || blacklight;
+        RndFontBase *font = state.mStyle->mFont;
+        if (!font) {
+            font = mStyles[0].mFont;
+        }
+        state.mFontMapIdx = bool(FontMapIndex(font, useBlacklight));
+        sizeValue = state.mSize;
+    } else {
+        goto scan_end;
     }
-    ch = 0;
-    if (*cur == '>') {
-        cur++;
+    state.mSize = state.mBaseSize * sizeValue;
+
+scan_end:
+    while (*ptr != 0) {
+        if (*ptr == '>') {
+            return ptr + 1;
+        }
+        ptr++;
     }
-    return cur;
+    return ptr;
 }
 
 void RndText::UpdateText() {
@@ -1703,7 +2070,7 @@ void RndText::DrawShowing() {
     bool hasOverride = false;
     auto stylesEnd = mStyles.end();
     for (auto it = mStyles.begin(); it != stylesEnd; ++it) {
-        Style &style = *it;
+        const Style &style = *it;
         if (style.mFont && style.mFontColorOverride) {
             int fmIdx = FontMapIndex(style.mFont, style.mBlacklight);
             if (fmIdx != -1) {
@@ -1751,11 +2118,12 @@ void RndText::DrawShowing() {
             RndMesh *mesh = fontMap->Mesh(i);
             if (mesh) {
                 auto blacklightDisabled = TheUI->DisableScreenBlacklight();
-                if (!sBlacklightModeEnabled || !fontMap->mBlacklight ||
-                    blacklightDisabled) {
-                    DrawMesh(mesh, mStyles[0].mSize, 0);
+                auto& _sub0 = mStyles[0];
+                if (!(!sBlacklightModeEnabled || !fontMap->mBlacklight ||
+                    blacklightDisabled)) {
+                    QueueBlacklightPacket(mesh, _sub0.mSize, 0);
                 } else {
-                    QueueBlacklightPacket(mesh, mStyles[0].mSize, 0);
+                    DrawMesh(mesh, _sub0.mSize, 0);
                 }
             }
         }
@@ -1769,8 +2137,8 @@ void RndText::DrawShowing() {
 
     // Restore material colors (r, g, b only — not alpha)
     if (hasOverride) {
-        vlaIdx = 0;
         auto fontMapsEnd = mFontMaps.end();
+        vlaIdx = 0;
         for (auto it = mFontMaps.begin(); it != fontMapsEnd; ++it) {
             FontMapBase *fontMap = *it;
             auto numMaterials = fontMap->NumMaterials();
@@ -1821,26 +2189,26 @@ void RndText::GetWidthHeightBox(Box &box) const {
 
 void RndText::ReFitTextScroll(String str) {
     auto& maxWidth = mWidth;
-    if (mFitType != kFitScrollMarqueeWrapAlways) {
+    if ((int)mFitType != kFitScrollMarqueeWrapAlways) {
     } else {
         SetText(str.c_str());
         FitTextScroll();
-        *(float *)&mScrollPos = 0.0f;
+        *(float *)&mScrollPos = 0.0;
         mZeroAlphaTime = 0.0f;
         float width = maxWidth;
         while (width >= *mLineWidths.begin()) {
             mDirtyFlags++;
-            if (mDirtyFlags >= mTotalWidth) {
+            if (mDirtyFlags >= (int)mTotalWidth) {
                 mDirtyFlags = 0;
             }
-            if (*mLineWidths.begin() == *(float *)&mNumLines) {
+            if (*(float *)&mNumLines == *mLineWidths.begin()) {
                 mZeroAlphaTime += maxWidth;
             }
             unsigned int count = 0;
             for (auto it = mLineWidths.begin(); it != mLineWidths.end(); ++it) {
                 count++;
             }
-            if ((unsigned int)mTotalWidth == count) {
+            if (count == (unsigned int)mTotalWidth) {
                 mLineWidths.insert(mLineWidths.end(), *mLineWidths.begin());
             }
             mLineWidths.erase(mLineWidths.begin());
@@ -1864,7 +2232,9 @@ float RndText::ComputeCharWidthsForText(String str) {
 }
 
 void RndText::FontMap3d::IncrementDisplayableChars(unsigned short us) {
-    if (mFont && mFont->CharDefined(us)) {
+    auto *_ptr0 = mFont;
+    auto _tmp0 = _ptr0->CharDefined(us);
+    if (_ptr0 && _tmp0) {
         mDisplayableChars++;
     }
 }

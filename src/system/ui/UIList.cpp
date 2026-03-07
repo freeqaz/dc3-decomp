@@ -1,3 +1,18 @@
+/* ===== PERMUTER LOCK — DO NOT EDIT =====
+ * The source permuter is actively working on: UIList::CalcBoundingBox
+ * Started: 2026-03-07 11:58 (stale after 5 minutes)
+ * This banner is temporary and will be removed automatically.
+ ===== */
+/* ===== PERMUTER LOCK — DO NOT EDIT =====
+ * The source permuter is actively working on: UIList::CalcBoundingBox
+ * Started: 2026-03-07 11:58 (stale after 5 minutes)
+ * This banner is temporary and will be removed automatically.
+ ===== */
+/* ===== PERMUTER LOCK — DO NOT EDIT =====
+ * The source permuter is actively working on: UIList::CalcBoundingBox
+ * Started: 2026-03-07 11:58 (stale after 5 minutes)
+ * This banner is temporary and will be removed automatically.
+ ===== */
 #include "ui/UIList.h"
 #include "ui/Utl.h"
 #include "math/Geo.h"
@@ -194,9 +209,9 @@ void UIList::SetParent(UIList *uilist) { mParent = uilist; }
 //          mListDir->DrawWidgets(mListState, mWidgets, WorldXfm(), DrawState(this), &box, ...);
 __declspec(noinline) void UIList::CalcBoundingBox(Box &box) {
     Transform xfm = WorldXfm();
-    box.Set(xfm.v, xfm.v);
+    float elementSpacing = 0;
 
-    float elementSpacing = 0.0f;
+    box.Set(xfm.v, xfm.v);
     int selectedDisplay = mListState.SelectedDisplay();
 
     UIList *subList = mListDir->SubList(selectedDisplay, mWidgets);
@@ -210,9 +225,7 @@ __declspec(noinline) void UIList::CalcBoundingBox(Box &box) {
     UIComponent::State state = DrawState(this);
     mListDir->BuildDrawState(drawState, mListState, state, elementSpacing, true);
 
-    Transform xfm2 = WorldXfm();
-    UIComponent::State state2 = DrawState(this);
-    mListDir->DrawWidgets(drawState, mListState, mWidgets, xfm2, state2, &box, (bool)mDrawManuallyControlledWidgets);
+    mListDir->DrawWidgets(drawState, mListState, mWidgets, WorldXfm(), DrawState(this), &box, (bool)mDrawManuallyControlledWidgets);
 }
 
 Symbol UIList::SelectedSym(bool fail) const {
@@ -377,11 +390,6 @@ void UIList::PreLoadWithRev(BinStreamRev &bs) {
     UIComponent::PreLoad(bs.stream);
     if (bs.rev >= 0x14) {
         bs.stream >> mListDir;
-#ifdef HX_NATIVE
-        printf("UIList::PreLoad '%s' rev=%d mListDir=%p (%s)\n",
-               Name(), bs.rev, (void*)(Hmx::Object*)mListDir,
-               mListDir ? mListDir->Name() : "<null>");
-#endif
     }
     bs.PushRev(this);
 }
@@ -504,15 +512,15 @@ void UIList::PreLoad(BinStream &bs) {
 
 void UIList::PostLoad(BinStream &bs) {
     UIComponent::PostLoad(bs);
-    int local_maxdisplay = -1;
-    int local_mindisplay = 0;
-    bool local_scrollpastmax = true;
     bool local_scrollpastmin = false;
-    float local_speed;
-    bool local_circular;
-    int local_gridspan = 1;
-    int local_numdisplay;
     int rev = bs.PopRev(this);
+    float local_speed;
+    bool local_scrollpastmax = true;
+    int local_mindisplay = 0;
+    int local_gridspan = 1;
+    int local_maxdisplay = -1;
+    int local_numdisplay;
+    bool local_circular;
     if (rev < 0xF) {
         int i;
         int x;
@@ -790,9 +798,8 @@ void UIList::LimitCircularDisplay(bool b) {
             if (numprov < val) {
                 val = numprov;
             }
-            if (val < 1) {
-                val = 1;
-            }
+            auto _tmp0 = Max(val, 1);
+            val = _tmp0;
             SetNumDisplay(val);
         } else {
             SetNumDisplay(mUncappedNumDisplay);

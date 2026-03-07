@@ -181,10 +181,10 @@ DataNode ThreadTask::OnExit(DataArray *arr) {
 }
 
 void TaskTimeline::ClearTasks() {
-    for (std::list<TaskInfo>::iterator it = mTasks.begin(); it != mTasks.end(); ++it) {
-        Task *task = it->mTask;
-        if (task != mPollingTask) {
-            delete task;
+    auto _tmp0 = mTasks.end();
+    for (std::list<TaskInfo>::iterator it = mTasks.begin(); it != _tmp0; ++it) {
+        if (it->mTask != mPollingTask) {
+            delete it->mTask;
         }
     }
 }

@@ -338,7 +338,8 @@ void HDCache::Init() {
             sha.Final().ReportHash(hash1, 0);
             header->Read(hash2, 0x100);
             if (!header->Fail()) {
-                hashValid = memcmp(hash1, hash2, 256) == 0;
+                auto _tmp0 = memcmp(hash1, hash2, 256);
+                hashValid = _tmp0 == 0;
             }
         }
         bool skipHdcache = OptionBool("skip_hdcache", false);

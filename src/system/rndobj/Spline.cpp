@@ -162,11 +162,10 @@ void RndSpline::SyncDeformedCtrlPoints(int startCtrlPt, int endCtrlPt) {
 }
 
 void RndSpline::PrepareShader(float farg0, float farg1) const {
-    int startIdx = mStartCtrlPoint;
-    int endIdx = mEndCtrlPoint;
     int tempIdx = mCtrlPoints.size();
-    unsigned int deformedSize = (unsigned int)((int)(mDeformedCtrlPoints.capacity() - mDeformedCtrlPoints.size()) / 88);
-    if (deformedSize >= 2U) {
+    int endIdx = mEndCtrlPoint;
+    int startIdx = mStartCtrlPoint;
+    if ((unsigned int)((int)(mDeformedCtrlPoints.capacity() - mDeformedCtrlPoints.size()) / 88) >= 2U) {
         int temp = 0 - (startIdx + 1);
         int actualStart = ((temp - temp) - !1) & startIdx;
         if (endIdx == -1) {
@@ -174,10 +173,10 @@ void RndSpline::PrepareShader(float farg0, float farg1) const {
         }
         const_cast<RndSpline *>(this)->SyncDeformedCtrlPoints(actualStart, endIdx);
         int count = endIdx - actualStart;
+        int idx = actualStart;
         if ((count + 1) >= 0xC) {
             MILO_ASSERT(false, 0x1C1);
         }
-        int idx = actualStart;
         if (actualStart <= endIdx) {
             int constIdx = 0xAF;
             do {

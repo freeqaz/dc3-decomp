@@ -1445,12 +1445,6 @@ extern "C" long _stub_fn_530() { return 0; }
 // DrawString3D::DrawFixedZ(float)
 extern "C" __attribute__((weak, used)) long _stub_fn_531() __asm__("_ZN12DrawString3D10DrawFixedZEf");
 extern "C" long _stub_fn_531() { return 0; }
-// EventTrigger::TriggerSelf()
-extern "C" __attribute__((weak, used)) long _stub_fn_532() __asm__("_ZN12EventTrigger11TriggerSelfEv");
-extern "C" long _stub_fn_532() { return 0; }
-// EventTrigger::Cleanup(DataArray*)
-extern "C" __attribute__((weak, used)) long _stub_fn_533() __asm__("_ZN12EventTrigger7CleanupEP9DataArray");
-extern "C" long _stub_fn_533() { return 0; }
 // FlowDistance::Execute(FlowNode::QueueState)
 extern "C" __attribute__((weak, used)) long _stub_fn_534() __asm__("_ZN12FlowDistance7ExecuteEN8FlowNode10QueueStateE");
 extern "C" long _stub_fn_534() { return 0; }

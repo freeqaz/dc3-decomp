@@ -263,7 +263,7 @@ void HamVisDir::PostUpdate(const SkeletonUpdateData *data) {
                 mFilter->UpdateFilters(*data);
             }
             if (mRunning) {
-                for (int i = 0; i < 2; i++) {
+                for (int i = 0; 2 > (unsigned int)i; i++) {
                     HamPlayerData *player_data = TheGameData->Player(i);
                     MILO_ASSERT(player_data, 0x101);
                     if (player_data->IsPlaying()) {

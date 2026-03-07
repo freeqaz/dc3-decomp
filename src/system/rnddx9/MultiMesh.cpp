@@ -76,30 +76,30 @@ void DxMultiMesh::Shutdown() {
 
 void DxMultiMesh::UpdateGeometryBuffers() {
     // Register variables ordered to match calling conventions
-    s32 temp_r3;
-    s32 temp_r3_2;
-    s32 temp_r8;
-    s32 temp_r10;
-    s32 temp_r23;
-    s32 temp_r24;
-    s32 temp_r28;
-    s32 temp_r28_2;
+    u32 var_r9;
     s32 var_r10;
+    void *temp_r3_3;
     void *temp_r11;
     void *temp_r11_2;
     void *temp_r11_3;
-    void *temp_r11_4;
-    void *temp_r27;
-    void *temp_r30;
-    void *temp_r3_3;
-    void *var_r3;
-    u16 temp_r8_2;
-    u32 var_r9;
+    s32 temp_r24;
+    s32 temp_r28_2;
+    s32 temp_r3;
     DxMesh *temp_r30_ptr;
-    void *temp_r27_ptr;
-
+    s32 temp_r28;
+    s32 temp_r10;
+    void *temp_r11_4;
+    s32 temp_r3_2;
+    void *temp_r27;
     Symbol sym("D3D(phys)3Mesh");
     PhysMemTypeTracker tracker(sym);
+    s32 temp_r8;
+    void *var_r3;
+    s32 temp_r23;
+    void *temp_r30;
+
+    u16 temp_r8_2;
+    void *temp_r27_ptr;
 
     temp_r30_ptr = *(DxMesh **)((char *)this + 0x4C);
     temp_r30 = (void *)temp_r30_ptr;
@@ -149,15 +149,14 @@ void DxMultiMesh::UpdateGeometryBuffers() {
         *(void **)((char *)this + temp_r28_2) = vb2Ptr;
     }
 
-    var_r3 = D3DVertexBuffer_Lock((D3DVertexBuffer *)*(void **)((char *)this + temp_r28_2), 0, 0, 0);
+    auto _tmp0 = D3DVertexBuffer_Lock((D3DVertexBuffer *)*(void **)((char *)this + temp_r28_2), 0, 0, 0);
+    var_r3 = _tmp0;
 
     temp_r11_3 = *(void **)((char *)temp_r30 + 0x148);
     var_r9 = 0;
 
-    s32 loopCount = (*(s32 *)((char *)temp_r11_3 + 0x114) -
-                     *(s32 *)((char *)temp_r11_3 + 0x110)) / 6;
-
-    if (loopCount != 0) {
+    if ((*(s32 *)((char *)temp_r11_3 + 0x114) -
+                     *(s32 *)((char *)temp_r11_3 + 0x110)) / 6 != 0) {
         var_r10 = 0;
         u32 indexCount = (u32)((*(s32 *)((char *)temp_r11_3 + 0x114) -
                                   *(s32 *)((char *)temp_r11_3 + 0x110)) / 6);

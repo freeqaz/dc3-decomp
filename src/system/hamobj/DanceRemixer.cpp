@@ -282,7 +282,7 @@ int DanceRemixer::JumpedMeasureStepsBetween(int from, int to, int step) const {
     int count = 0;
     while (from != to) {
         count += step;
-        if (mTotalMeasures * 2 < ((count ^ ((unsigned int)count >> 31)) - ((unsigned int)count >> 31))) {
+        if (((count ^ ((unsigned int)count >> 31)) - ((unsigned int)count >> 31)) > mTotalMeasures * 2) {
             TheDebug.Fail(MakeString("JumpedMeasureStepsBetween from %d to %d", from, to), nullptr);
         }
         from = JumpedMeasureAdd(from, step);
@@ -371,8 +371,8 @@ void DanceRemixer::AddRoutineMove(
             return;
         }
         // Apply the same move at the jump target measure
-        TheMoveMgr->mMoveParents[player][jumpTarget] = moveParent;
         TheMoveMgr->mPreferredVariants[player][jumpTarget] = moveVariant;
+        TheMoveMgr->mMoveParents[player][jumpTarget] = moveParent;
         TheMoveMgr->FillInRoutineAt(player, jumpTarget);
         TheMoveMgr->InsertMoveInSong(TheMoveMgr->mRoutineMeasures[player][jumpTarget].first, jumpTarget, player);
     }

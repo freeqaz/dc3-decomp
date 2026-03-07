@@ -331,9 +331,9 @@ void CharLookAt::Poll() {
 
 static void DrawBounds(Vector3 lookDir, const Hmx::Matrix3 &rotMat, const Vector3 &pos, RndGraph *graph) {
     Normalize(lookDir, lookDir);
-    Hmx::Color green(0, 1, 0, 1);
     Vector3 result;
     Multiply(lookDir, rotMat, result);
+    Hmx::Color green(0, 1, 0, 1);
     result *= 10.0f;
     result += pos;
     graph->AddLine(pos, result, green, false);

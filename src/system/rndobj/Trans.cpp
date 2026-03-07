@@ -655,9 +655,9 @@ const Transform &RndTransformable::WorldXfm_Force() {
 
 void RndTransformable::ApplyDynamicConstraint() {
     auto& constraint = mConstraint;
-    if (constraint == kConstraintTargetWorld) {
+    if (kConstraintTargetWorld == constraint) {
         mWorldXfm = mTarget->WorldXfm();
-    } else if (constraint == kConstraintShadowTarget) {
+    } else if (mTarget && constraint == kConstraintShadowTarget) {
         Transform tf;
         Transpose(mTarget->WorldXfm(), tf);
         Multiply(mWorldXfm, tf, mWorldXfm);

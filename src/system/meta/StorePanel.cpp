@@ -480,13 +480,13 @@ void StorePanel::FinishEnum(std::list<EnumProduct> const &enumList, bool arg) {
     if (arg) {
         StoreError err = UpdateOffers(enumList, arg);
 
-        if (err == 0 || err == 1) {
+        if (0 == err || err == 1) {
             if (!mPendingOffers.empty()) {
                 err = UpdateOffers(enumList, true);
             }
         }
 
-        if (err > 0) {
+        if (err != 0) {
             if (err == 1) {
                 if (TheNetCacheMgr->IsDebug() == 0) {
                     FormatString fmt("No offers in this metadata were");
@@ -500,10 +500,10 @@ void StorePanel::FinishEnum(std::list<EnumProduct> const &enumList, bool arg) {
             return;
         }
 
-        static bool msg_created = false;
+        static unsigned char msg_created = (unsigned char)(0);
         if (!msg_created) {
-            msg_created = true;
             static Symbol sym("enum_finished");
+            msg_created = 1;
             static Message msg(sym);
         }
     } else {
@@ -545,12 +545,13 @@ StoreError StorePanel::UpdateOffers(std::list<EnumProduct> const &enumList, bool
     auto offersEnd = offers->end();
     for (it = offers->begin(); it != offersEnd; ++it) {
         StoreOffer *offer = *it;
-        if (offer->Exists()) {
+        bool _cond = offer->Exists();
+        if (_cond) {
             std::list<EnumProduct>::const_iterator enumIt;
             enumIt = enumList.begin();
             bool match = false;
             while (enumIt != enumList.end()) {
-                if (*(u64 *)&enumIt->mOfferIDLo == offer->songID) {
+                if (offer->songID == *(u64 *)&enumIt->mOfferIDLo) {
                     match = true;
                     break;
                 }

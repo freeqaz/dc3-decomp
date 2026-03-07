@@ -434,12 +434,29 @@ def build_prompt(
 # ── API call ────────────────────────────────────────────────────────────
 
 
+def _load_dotenv() -> None:
+    """Load .env from repo root into os.environ (simple parser, no deps)."""
+    env_path = REPO_ROOT / ".env"
+    if not env_path.exists():
+        return
+    for line in env_path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
 def call_advisor(prompt: str, model: str = "claude-sonnet-4-6") -> list[EditSuggestion]:
     """Call the Claude API with the structured prompt.
 
     Supports both direct Anthropic API (ANTHROPIC_API_KEY) and
-    OpenRouter (OPENROUTER_API_KEY) as a fallback.
+    OpenRouter (OPENROUTER_API_KEY) as a fallback. Loads .env from repo root.
     """
+    _load_dotenv()
     anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
     openrouter_key = os.environ.get("OPENROUTER_API_KEY")
 

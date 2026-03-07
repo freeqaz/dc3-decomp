@@ -157,16 +157,17 @@ void FlowTimer::OnTimerEnd() {
         Timer t;
         t.Reset();
         depth++;
-        if (depth == 1) {
-            start = __mftb();
+        if ((unsigned int)depth == 1) {
+            start = bool(__mftb());
         }
         mFlowParent->ChildFinished(this);
         depth--;
-        if (depth == 0) {
+        if (0 == depth) {
             unsigned int end = __mftb();
             cycles += end - start;
             float ms = Timer::CyclesToMs(cycles);
-            TheFlowMgr->AddMs(ms);
+            if (TheFlowMgr)
+                TheFlowMgr->AddMs(ms);
         }
     }
 }

@@ -632,9 +632,9 @@ void SkeletonChooser::SetPlayerSkeletonWarningData(int p1ID, int p2ID) {
     static Symbol player_stepback("player_stepback");
     HamPlayerData *player1 = TheGameData->Player(0);
     HamPlayerData *player2 = TheGameData->Player(1);
-    int trackingID = player2->GetSkeletonTrackingID();
     int p1flags = 0;
     int p2flags = 0;
+    int trackingID = player2->GetSkeletonTrackingID();
     if (0 < p1ID) {
         Skeleton *pPlayer1Skeleton = TheGestureMgr->GetSkeletonByTrackingID(p1ID);
         MILO_ASSERT(pPlayer1Skeleton, 0x183);
@@ -648,16 +648,18 @@ void SkeletonChooser::SetPlayerSkeletonWarningData(int p1ID, int p2ID) {
 
     int p2warnings = 0;
     int p1warnings = 0;
-    if (0 < p1ID && p1ID == trackingID) {
+    if (0 < p1ID) {
+        if (p1ID == trackingID) {
         p1warnings = p1flags;
         p1warnings = 0;
         p2warnings = p1flags;
     }
+    }
 
     if (0 < p2ID && p2ID == trackingID) {
         p1flags = p2flags;
-        p1flags = p1warnings;
         p2warnings = p2flags;
+        p1flags = p1warnings;
     }
     SetPlayerCloseWarnings(0, p1flags);
     SetPlayerCloseWarnings(1, p2warnings);

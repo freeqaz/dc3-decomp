@@ -13,7 +13,8 @@
 
 void GetLightPosition(Spotlight *s, Vector3 &v) {
     v = s->WorldXfm().v;
-    Multiply(v, s->WorldXfm().m, v);
+    if (s)
+        Multiply(v, s->WorldXfm().m, v);
     // clang-format off
     //   if (param_1[0xfd] == 0x0) {
     //     pTVar11 = param_1 + 0x88;

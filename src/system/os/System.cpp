@@ -30,6 +30,7 @@
 #include "os/VirtualKeyboard.h"
 #include "utl/CacheMgr.h"
 #include "utl/Cheats.h"
+#include "utl/GlitchFinder.h"
 #include "utl/DataPointMgr.h"
 #include "utl/Licenses.h"
 #include "utl/Loader.h"
@@ -497,7 +498,7 @@ void SystemInit(const char *config) {
     ThePlatformMgr.Init();
     TheVirtualKeyboard.Init();
     TheContentMgr.Init();
-    //   GlitchFinder::Init();
+    GlitchFinder::Init();
     TheDebug.AddExitCallback(SystemTerminate);
     if (OptionBool("licenses", false)) {
         Licenses::PrintAll();
