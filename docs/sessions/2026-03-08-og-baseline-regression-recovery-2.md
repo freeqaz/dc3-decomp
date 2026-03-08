@@ -157,19 +157,62 @@ The remaining regressions are **overwhelmingly header-driven**. The merge brough
 
 8. **Extra function bodies in a TU change inlining for all functions**: Removing 360 lines of unneeded function bodies from HamSkeletonConverter reduced the TU size but didn't fix Enter's regression — because the regression is from header-level changes, not from the extra bodies in the same file.
 
-## Next Steps
+## Session 3: Full Merge Recovery (2026-03-08 evening)
 
-### Accept the remaining 62 as the cost of readable headers
-The header improvements (readable member names, type-safe getters, PaddedJointPos) are net positive for the project even though they cause 62 function regressions (34.5 KB affected). The regressions are in match% against og, not in functional correctness.
+### Context
+After upstream merge drift, `dev` branch had 407 function regressions vs pre-merge baseline (`b14f7df76`). The merge deleted many function bodies and introduced header incompatibilities.
 
-### Potential targeted header investigations
-If specific regressions need to be recovered:
-- **Rnd.h getters**: Could make them non-inline (out-of-line in Rnd.cpp) to avoid inlining into callers
-- **Vec.h ZeroVec()**: Could make it non-inline or move to Vec.cpp
-- **ModalKeyListener virtual dtor**: Could remove if not needed for PPC builds
-- These would need careful testing — each change cascades to dozens of TUs
+### Strategy: Bulk Restore + Targeted Fixes
+1. Bulk-restored ~50 .cpp files from `b14f7df76` baseline
+2. Fixed build errors from header incompatibilities (6 rounds)
+3. Targeted fixes for remaining regressions via parallel subagents
 
-### CharLipSync String→FilePath (from Session 2a, still open)
-- 14 template instantiations lost (2.9 KB)
-- Could revert `mVisemes` to `vector<String>` if FilePath was wrong
-- Need to verify which type the target binary actually uses (check DWARF/struct offsets)
+### Results
+
+**407 → 8 regressions** (from 21.1 KB to 884 B affected)
+
+Overall progress: 47.72% → 48.06% (+0.33% above pre-merge baseline)
+
+### Remaining 8 Regressions (all unfixable)
+
+| Function | Unit | Change | Root Cause |
+|----------|------|--------|------------|
+| `__destroy_range_aux<FilePath*>` | CharLipSync | 100→0% | Pre-existing unimplemented STL template stub |
+| `vector<FilePath>::_M_erase` | CharLipSync | 100→0% | Pre-existing unimplemented STL template stub |
+| `op53` | ByteGrinder | 86→76.4% | Header-driven, confirmed unfixable |
+| `op21-op26` (5 functions) | ByteGrinder | 79.2→77.7% | Header-driven, confirmed unfixable |
+
+### Key Fixes Applied
+
+**Build compatibility fixes** (header changes from merge):
+- UIList.h: `NumData()` inlined → removed .cpp duplicate
+- Text.h: Restored `Style` copy ctor declaration and `kFitStretch` enum value
+- UI.h: `unkd0` → `mShowDevMenu` member rename
+- HamDirector.h: Restored `AnimPtr::~AnimPtr()` virtual declaration
+- Cheats.h: Major API changes (globals, method renames, LongJoyCheat struct)
+- MatAnim.h: `TexPtr` ctor/dtor inlined → removed .cpp duplicates
+- TexRenderer.h: Restored `DrawBefore()`/`DrawAfter()` virtual declarations
+- Vec.h: `X()`/`Y()`→`x`/`y` member access in Graph.cpp
+- UIListWidget.h: `mPos`→`mPosX/mPosY/mPosZ` adaptation in UIListDir.cpp
+- Object.h: Restored `ObjPtrVec::iterator::operator+` const semantics and `end()` decl order
+
+**Function body restorations**:
+- UILabel: GetPctHeightFromTextSize, GetTextSizeFromPctHeight, SetTokenFmtImp, CenterWithLabel, Highlight
+- UIList: HandleSelectionUpdated (via ChildList() inline restore), SetSelected
+- Synth: DrawMeterScale, SynthTerminate, CullZombies, SendToPlayHandlers
+- SongSortMgr: MarkElementsProvided, GetListIndexFromHeaderIndex, FirstArtistSongIndex, SetQuasiRandomSong, MoveOn lambda
+- MQSongSortMgr: MQSongSortByCharacter ctor (inline in header)
+- PanelDir: PanelNav (do-while+goto), GetFocusableComponentList (explicit iterator)
+- CharFaceServo: AddToStrings (restored Debug.h anonymous namespace inline body)
+- Character: Interp (restored u32 integer-copy pattern in Vec.h)
+- PartyModeMgr: ~PartyModePlayer (explicit null-check + delete vs RELEASE macro)
+- AppLabel: SetCreditsText (empty dtor body, operand order, null guard)
+- Cheats: CheatsManager ctor, InitLongJoyCheats, SetSymMode (full rewrite for new header API)
+- MakeString: NextBuf (restored DWORD/pointer-based iteration)
+
+### Key Learnings
+
+1. **Bulk restore is highly effective**: Restoring .cpp files from baseline then fixing header incompatibilities is much faster than individual function analysis
+2. **Header compatibility is the main challenge**: Most build errors came from inlined functions, renamed members, and removed declarations
+3. **Some header changes need reverting**: `ChildList()` inline body, `AnimPtr::~AnimPtr()` declaration, `ObjPtrVec::iterator::operator+` const semantics — these were incorrectly removed and restoring them fixed significant regressions
+4. **ByteGrinder ops are header-locked**: The b14f7df76 code is actually *worse* with current headers — confirms header-driven nature

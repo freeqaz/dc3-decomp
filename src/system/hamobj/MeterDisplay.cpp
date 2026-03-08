@@ -1,6 +1,7 @@
 #include "hamobj/MeterDisplay.h"
 #include "MeterDisplay.h"
 #include "hamobj/HamLabel.h"
+#include "math/Utl.h"
 #include "obj/Object.h"
 #include "obj/Task.h"
 #include "os/Debug.h"
@@ -168,4 +169,38 @@ void MeterDisplay::UpdateDisplay() {
         }
         unk54->SetShowing(true);
     }
+}
+
+void MeterDisplay::DrawShowing() {
+    if (!mResourceDir)
+        return;
+    float f = 0.0f;
+    if (mMaxValue > 0) {
+        f = (float)mCurrentValue / (float)mMaxValue;
+        float f1 = TheTaskMgr.UISeconds() - unk4c;
+        if (mAnimPeriod > 0) {
+            int itouse = unk50;
+            if (itouse >= 0 && f1 > 0) {
+                if (f1 < mAnimPeriod) {
+                    f = (f1 / mAnimPeriod) * (float)(itouse - mCurrentValue)
+                        + (float)mCurrentValue / (float)mMaxValue;
+                } else {
+                    mCurrentValue = itouse;
+                    unk50 = -1;
+                    f = (float)mCurrentValue / (float)mMaxValue;
+                }
+            }
+        }
+    }
+    ClampEq(f, 0.0f, 1.0f);
+    mMeterAnim->SetFrame(
+        (mMeterAnim->EndFrame() - mMeterAnim->StartFrame())
+            * (f + mMeterAnim->StartFrame()),
+        1.0f
+    );
+    mResourceDir->SetWorldXfm(WorldXfm());
+    mResourceDir->Draw();
+    if (mShowText && unk54)
+        unk54->Draw();
+    SetWorldXfm(WorldXfm());
 }

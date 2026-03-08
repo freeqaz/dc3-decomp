@@ -59,25 +59,27 @@ BEGIN_LOADS(FlowSound)
         mSound.LoadFromMainOrDir(bs);
     }
     bs >> mVolume >> mPan >> mTranspose;
+    bs >> (int &)mStopMode;
     if (d.rev > 0)
         d >> mForceStop;
     if (2 < d.rev)
         d >> mUseIntensity;
 END_LOADS
 
-BEGIN_COPYS(FlowSound)
-    COPY_SUPERCLASS(FlowNode)
-    CREATE_COPY_AS(FlowSound, c)
-    BEGIN_COPYING_MEMBERS_FROM(c)
-        COPY_MEMBER(mImmediateRelease)
-        COPY_MEMBER(mVolume)
-        COPY_MEMBER(mPan)
-        COPY_MEMBER(mTranspose)
-        COPY_MEMBER(mStopMode)
-        COPY_MEMBER(mForceStop)
-        COPY_MEMBER(mUseIntensity)
-    END_COPYING_MEMBERS
-END_COPYS
+void FlowSound::Copy(const Hmx::Object *o, CopyType ty) {
+    FlowNode::Copy(o, ty);
+    const FlowSound *c;
+    if ((c = dynamic_cast<const FlowSound *>(o))) {
+        mImmediateRelease = c->mImmediateRelease;
+        mSound = c->mSound;
+        mVolume = c->mVolume;
+        mPan = c->mPan;
+        mTranspose = c->mTranspose;
+        mStopMode = c->mStopMode;
+        mForceStop = c->mForceStop;
+        mUseIntensity = c->mUseIntensity;
+    }
+}
 
 bool FlowSound::Activate() {
     FLOW_LOG("Activate\n");
@@ -180,7 +182,8 @@ void FlowSound::Execute(QueueState qs) {
                 timer.Start();
                 mFlowParent->ChildFinished(this);
                 timer.Stop();
-                TheFlowMgr->AddMs(timer.Ms());
+                auto elapsedMs = timer.Ms();
+                TheFlowMgr->AddMs(elapsedMs);
             }
             FlowNode::Deactivate(false);
         }

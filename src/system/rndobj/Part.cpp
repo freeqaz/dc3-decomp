@@ -1,15 +1,25 @@
 #include "rndobj/Part.h"
 #include "math/Geo.h"
+#include "math/Rand.h"
+#include "math/Rot.h"
+#include "math/Trig.h"
 #include "obj/Data.h"
 #include "obj/DataFunc.h"
 #include "obj/Object.h"
+#include "obj/Task.h"
 #include "os/System.h"
+#include "os/Timer.h"
 #include "rndobj/Anim.h"
 #include "rndobj/Draw.h"
 #include "rndobj/Mesh.h"
 #include "rndobj/Poll.h"
 #include "rndobj/Trans.h"
+#include "rndobj/Utl.h"
+#include "rndobj/Mat.h"
+#include "os/File.h"
 #include "utl/BinStream.h"
+#include "utl/Loader.h"
+#include <cmath>
 
 PartOverride gNoPartOverride;
 ParticleCommonPool *gParticlePool;
@@ -82,7 +92,7 @@ RndParticle *ParticleCommonPool::AllocateParticle() {
     RndParticle *cur = mPoolFreeParticles;
     RndParticle *ret = nullptr;
     if (cur) {
-        mPoolFreeParticles = mPoolFreeParticles->next;
+        mPoolFreeParticles = cur->next;
         cur->prev = cur;
         mNumActiveParticles++;
         ret = cur;
@@ -111,6 +121,11 @@ void Attractor::Save(BinStream &bs) const {
 void Attractor::Load(BinStreamRev &d) {
     d >> mAttractor;
     d >> mStrength;
+}
+
+BinStreamRev &operator>>(BinStreamRev &d, Attractor &a) {
+    a.Load(d);
+    return d;
 }
 
 RndParticleSys::RndParticleSys()
@@ -502,6 +517,39 @@ void RndParticleSys::Enter() {
     RndPollable::Enter();
 }
 
+void RndParticleSys::Poll() {
+    if (!mFrameDrive) {
+        mElapsedTime += (GetRate() == k30_fps_ui ? TheTaskMgr.DeltaUISeconds()
+                                                 : TheTaskMgr.DeltaSeconds())
+            * 30.0f;
+        if (mDrawCount == 0) {
+            if (Showing()
+                && (mActiveParticles || mExplicitParts || mEmitRate.x > 0
+                    || mEmitRate.y > 0 || mMaxBurst > 0)) {
+                UpdateRelativeXfm();
+                UpdateParticles();
+            } else {
+                mLastFrame = CalcFrame();
+            }
+        } else if (mActiveParticles && mDrawCount % 60 == 0 && !mPreserveParticles) {
+            float currentFrame = CalcFrame();
+            RndParticle *p = mActiveParticles;
+            while (p) {
+                bool dead = currentFrame >= p->deathFrame || currentFrame < p->birthFrame;
+                if (dead) {
+                    p = FreeParticle(p);
+                } else {
+                    p = p->next;
+                }
+            }
+        }
+        if (mSubSamples > 0 && Dirty()) {
+            MakeLocToRel(mSubSampleXfm);
+        }
+        mDrawCount++;
+    }
+}
+
 void RndParticleSys::UpdateSphere() {
     Sphere s;
     MakeWorldSphere(s, true);
@@ -523,7 +571,258 @@ void RndParticleSys::DrawShowing() {
         }
         mDrawCount = 0;
     }
+#ifdef HX_NATIVE
+    extern void DrawParticlesBillboard(RndParticleSys*);
+    DrawParticlesBillboard(this);
+#endif
 }
+
+void RndParticleSys::Mats(std::list<RndMat *> &mats, bool) {
+    if (mMat) {
+        MatShaderOptions shaderOpts = GetDefaultMatShaderOpts(this, mMat);
+        mMat->SetShaderOpts(shaderOpts);
+        mats.push_back(mMat);
+    }
+}
+
+INIT_REVS(0x29, 0)
+
+BEGIN_LOADS(RndParticleSys)
+    LOAD_REVS(bs)
+    volatile int rev = d.rev;
+    ASSERT_REVS(0x29, 0)
+    BinStream *stream = &d.stream;
+    if (rev > 0x16)
+        LOAD_SUPERCLASS(Hmx::Object);
+    if (rev > 0x1B)
+        LOAD_SUPERCLASS(RndPollable);
+    if (rev > 0) {
+        LOAD_SUPERCLASS(RndAnimatable)
+        LOAD_SUPERCLASS(RndTransformable)
+        LOAD_SUPERCLASS(RndDrawable)
+    }
+    (*stream) >> (Key<float> &)mLife;
+    if (rev > 0x23)
+        (*stream) >> mScreenAspect;
+    (*stream) >> mBoxExtent1;
+    (*stream) >> mBoxExtent2;
+    (*stream) >> (Key<float> &)mSpeed;
+    (*stream) >> (Key<float> &)mPitch;
+    (*stream) >> (Key<float> &)mYaw;
+    (*stream) >> (Key<float> &)mEmitRate;
+    if (rev > 0x20) {
+        (*stream) >> mMaxBurst;
+        (*stream) >> (Key<float> &)mBurstInterval;
+        (*stream) >> (Key<float> &)mBurstPeak;
+        (*stream) >> (Key<float> &)mBurstLength;
+    }
+    (*stream) >> (Key<float> &)mStartSize;
+    if (rev > 0xF)
+        (*stream) >> (Key<float> &)mDeltaSize;
+    (*stream) >> mStartColorLow;
+    (*stream) >> mStartColorHigh;
+    (*stream) >> mEndColorLow;
+    (*stream) >> mEndColorHigh;
+    if (rev > 0x19)
+        (*stream) >> mBounce;
+    else if (rev > 1) {
+        bool ba7;
+        Plane p150;
+        d >> ba7;
+        if (rev > 0xB) {
+            (*stream) >> (Hmx::Color &)p150;
+        } else {
+            Vector3 v1;
+            float f1, f2, f3;
+            (*stream) >> v1;
+            (*stream) >> f1 >> f2 >> f3;
+            p150.Set(f1, f2, f3, -(v1.x * f1 + v1.y * f2 + v1.z * f3));
+        }
+        if (ba7) {
+            bool old = TheLoadMgr.EditMode();
+            TheLoadMgr.SetEditMode(true);
+            char *base = (char *)FileGetBase(Name());
+            mBounce = Dir()->New<RndTransformable>(
+                MakeString("%s_bounce.trans", base)
+            );
+            TheLoadMgr.SetEditMode(old);
+            Transform tf140;
+            float a = p150.a;
+            float b = p150.b;
+            float c = p150.c;
+            float d = p150.d;
+            tf140.m.x.x = c;
+            tf140.m.x.y = 0.0f;
+            tf140.m.x.z = -a;
+            tf140.m.z.x = a;
+            tf140.m.z.y = b;
+            tf140.m.z.z = c;
+            tf140.m.y.x = b * tf140.m.x.z - c * tf140.m.x.y;
+            tf140.m.y.y = c * c - tf140.m.x.z * a;
+            tf140.m.y.z = a * tf140.m.x.y - b * c;
+            float inv = -(d / (a * a + (b * b + c * c)));
+            tf140.v.x = a * inv;
+            tf140.v.y = b * inv;
+            tf140.v.z = c * inv;
+            Normalize(tf140.m.x, tf140.m.x);
+            Normalize(tf140.m.y, tf140.m.y);
+            mBounce->SetWorldXfm(tf140);
+        }
+    } else {
+        std::list<Plane> planes;
+        d >> planes;
+    }
+    (*stream) >> mForceDir;
+    (*stream) >> mMat;
+    if (rev > 0x17 && rev < 0x19) {
+        char buf[0x80];
+        (*stream).ReadString(buf, 0x80);
+        if (!mMat && buf[0] != '\0') {
+            mMat = LookupOrCreateMat(buf, Dir());
+        }
+    }
+    if (rev > 0x11) {
+        (*stream) >> (int &)mType >> mGrowRatio >> mShrinkRatio >> mMidColorRatio;
+        (*stream) >> mMidColorLow >> mMidColorHigh;
+    } else if (rev < 0xD) {
+        int i94;
+        (*stream) >> i94;
+    }
+    (*stream) >> mMaxParticles;
+    if (rev > 2) {
+        if (rev < 7) {
+            int i98;
+            (*stream) >> i98;
+        } else if (rev < 0xD) {
+            int i9c;
+            (*stream) >> i9c;
+        }
+    }
+    if (rev > 3) {
+        (*stream) >> (Key<float> &)mBubblePeriod >> (Key<float> &)mBubbleSize;
+        (*stream) >> mBubble;
+    }
+    if (rev > 0x1D) {
+        d >> mRotate;
+        (*stream) >> (Key<float> &)mRPM >> mRPMDrag;
+        if (rev > 0x24) {
+            d >> mRandomDirection;
+        }
+        (*stream) >> mDrag;
+    }
+    if (rev > 0x1F) {
+        (*stream) >> (Key<float> &)mStartOffset >> (Key<float> &)mEndOffset;
+        d >> mAlignWithVelocity;
+        d >> mStretchWithVelocity;
+        d >> mConstantArea;
+        (*stream) >> mStretchScale;
+    }
+    if (rev > 0x21) {
+        d >> mPerspectiveStretch;
+    }
+    if (rev > 4 && rev < 15) {
+        bool baf;
+        d >> baf;
+        int u1 = 0;
+        if (baf)
+            u1 = 2;
+        if (mMat)
+            mMat->SetZMode((ZMode)u1);
+    }
+    if (rev > 5 && rev < 17) {
+        String str;
+        (*stream) >> str;
+    }
+    if (rev == 8) {
+        bool b1b0;
+        d >> b1b0;
+    }
+    if (rev > 0xC && rev < 0xE) {
+        int i1a0;
+        (*stream) >> i1a0;
+    }
+    if (rev > 0x13) {
+        (*stream) >> mRelativeMotion;
+    } else if (rev > 0xC) {
+        bool i1b1;
+        d >> i1b1;
+        mRelativeMotion = i1b1;
+    }
+    if (rev > 0x1A)
+        (*stream) >> mMotionParent;
+    SetRelativeMotion(mRelativeMotion, mMotionParent);
+    if (rev > 0x12)
+        (*stream) >> mMeshEmitter;
+    if (rev > 0x1E || rev == 0x15)
+        (*stream) >> mSubSamples;
+    SetSubSamples(mSubSamples);
+    if (rev > 0x1B) {
+        d >> mFrameDrive;
+    } else
+        mFrameDrive = true;
+    if (rev > 0x22) {
+        d >> mPauseOffscreen;
+    } else
+        mPauseOffscreen = false;
+    if (rev > 0x1C) {
+        d >> mFastForward;
+    } else
+        mFastForward = false;
+    mNeedForward = mFastForward;
+
+    if (rev > 0x26) {
+        d >> mAnimateUVs;
+        (*stream) >> mTileHoldTime;
+        (*stream) >> mNumTilesAcross;
+        (*stream) >> mNumTilesDown;
+        (*stream) >> mNumTilesTotal;
+        (*stream) >> mStartingTile;
+        d >> mLoopUVAnim;
+        d >> mRandomAnimStart;
+        mTotalTileTime = (float)mNumTilesTotal * mTileHoldTime;
+        if (mTotalTileTime - 0.0001f < 0.0f) {
+            mTotalTileTime = 0.0001f;
+        }
+        mInvTotalTileTime = 1.0f / mTotalTileTime;
+    }
+    if (rev > 0x27) {
+        d >> mAttractors;
+    }
+    if (rev > 0x28) {
+        d >> mBirthMomentum;
+        (*stream) >> mBirthMomentumAmount;
+    }
+
+    if (rev <= 0xA || (d >> mPreserveParticles, !mPreserveParticles)) {
+        SetPool(mMaxParticles, mType);
+    } else {
+        int count;
+        RndParticle tempParticle;
+        (*stream) >> count;
+        SetPool(mMaxParticles, mType);
+        for (int i = 0; i < count; i++) {
+            RndParticle *p = AllocParticle();
+            if (p) {
+                p->angle = 0;
+                p->swingArm = 0;
+                p->vel.x = 0;
+                p->vel.y = 0;
+                p->vel.z = 0;
+                p->vel.w = 0;
+            } else {
+                MILO_NOTIFY_ONCE(
+                    "Unable to allocate all particles for %s\n",
+                    (char *)PathName(this)
+                );
+                p = &tempParticle;
+            }
+            (*stream) >> *p;
+        }
+    }
+
+    mPausedTime = 0;
+    mLastFrame = GetFrame();
+END_LOADS
 
 void RndParticleSys::SetPool(int max, Type ty) {
     if (mPreserveParticles) {
@@ -556,25 +855,31 @@ void RndParticleSys::SetPersistentPool(int max, Type ty) {
     delete[] mPersistentParticles;
     mMaxParticles = max;
     mType = ty;
-    if (mMaxParticles != 0) {
-        RndParticle *p = nullptr;
+
+    // Allocate particle pool based on type
+    if (max != 0) {
         if (ty == kFancy) {
             mPersistentParticles = new RndFancyParticle[max];
-            RndFancyParticle *fp = (RndFancyParticle *)p;
+            RndFancyParticle *fp = (RndFancyParticle *)mPersistentParticles;
+            // Build linked list: each particle points to the next
             for (int i = 0; i != max; i++) {
                 (fp++)->next = fp;
             }
-            p = fp;
+            fp->next = nullptr;
         } else {
             mPersistentParticles = new RndParticle[max];
+            RndParticle *p = (RndParticle *)mPersistentParticles;
+            // Build linked list: each particle points to the next
             for (int i = 0; i != max; i++) {
                 (p++)->next = p;
             }
+            p->next = nullptr;
         }
-        p->next = nullptr;
     } else {
         mPersistentParticles = nullptr;
     }
+
+    // Initialize free list and state
     mActiveParticles = nullptr;
     mNumActive = 0;
     mFreeParticles = mPersistentParticles;
@@ -730,6 +1035,456 @@ void RndParticleSys::SetSubSamples(int num) {
     mSubSamples = num;
     Transpose(mRelativeXfm, mSubSampleXfm);
     Multiply(WorldXfm(), mSubSampleXfm, mSubSampleXfm);
+}
+
+void RndParticleSys::UpdateRelativeXfm() {
+    if (mRelativeMotion == 1) {
+        mRelativeXfm = mMotionParent->WorldXfm();
+    } else if (mRelativeMotion) {
+        const Transform &worldXfm = mMotionParent->WorldXfm();
+        Invert(mLastWorldXfm.m, mLastWorldXfm.m);
+        Multiply(mLastWorldXfm.m, worldXfm.m, mLastWorldXfm.m);
+        Hmx::Quat q28(0, 0, 0, 1);
+        FastInterp(q28, Hmx::Quat(mLastWorldXfm.m), mRelativeMotion, q28);
+        MakeRotMatrix(q28, mLastWorldXfm.m);
+        Subtract(mRelativeXfm.v, mLastWorldXfm.v, mRelativeXfm.v);
+        Multiply(mRelativeXfm, mLastWorldXfm.m, mRelativeXfm);
+        Normalize(mRelativeXfm.m, mRelativeXfm.m);
+        Interp(mLastWorldXfm.v, worldXfm.v, mRelativeMotion, mLastWorldXfm.v);
+        Add(mRelativeXfm.v, mLastWorldXfm.v, mRelativeXfm.v);
+    }
+    Subtract(mMotionParent->WorldXfm().v, mLastWorldXfm.v, mMotionParentDelta);
+    mLastWorldXfm = mMotionParent->WorldXfm();
+}
+
+// TODO: 69.3% match (AT_LIMIT). 2340-byte function, implemented from 0.1% stub.
+//
+// Remaining diff breakdown (614 instructions total):
+//   - r29<->r30 register swap: 117 instructions. Target uses r30 for 'this',
+//     our compiler picks r29. Unfixable compiler register allocation choice.
+//   - 111 deletes: target has dead stores to stack slots 0x60/0x64 where it
+//     caches intermediate pointers (addi rX, rBase, offset; stw rX, 0x60, r31).
+//     Our compiler optimizes these away. Also target caches &p->pos in r25 and
+//     &p->vel in r26 as dedicated pointer registers throughout the inner loop.
+//   - 2 diff_ops remaining:
+//     (1) idx 126: bounce WorldXfm call uses bl (call) in target vs b (branch)
+//         in ours. Target reuses a shared branch point for the two WorldXfm calls.
+//     (2) idx 340: attractor strength==0.015625 check uses beq (branch-if-equal
+//         to special case) in target vs bne (skip special case) in ours. Target
+//         also has dead code after (li 0; clrlwi. 0; beq - always-taken branch),
+//         suggesting original code had a boolean variable for the condition.
+//   - fmadds vs fmuls+fadds: our compiler fuses multiply-add in position update,
+//     bounce reflection (fnmsubs vs fmuls+fsubs), and basic particle color/size.
+//     Target uses separate instructions. Hard to prevent without volatile temps.
+//   - Stack frame: target 0x1c0, ours larger. Target saves from r14 (savegprlr_14),
+//     ours from r17 (3 fewer callee-saved GPRs).
+//
+// Potential improvements to investigate:
+//   - Restructure bounce WorldXfm calls to match target's shared-branch pattern
+//   - Try a bool variable for the attractor strength check to match dead code
+//   - Volatile or separate-statement tricks to prevent fmadds fusion
+//   - Declaration order changes to shift r14-r16 register assignment
+//
+// RndFancyParticle offset note: header comments are wrong by -8 bytes.
+// RndParticle is 0x68 bytes (not 0x60), so RndFancyParticle fields start at 0x68.
+// E.g. growFrame comment says 0x60 but actual compiled offset is 0x68,
+// midcolFrame comment says 0x80 but actual is 0x88, etc.
+void RndParticleSys::MoveParticles(float dt, float frameSpan) {
+    START_AUTO_TIMER("psysmove");
+
+    if (mActiveParticles == NULL || frameSpan == 0.0f)
+        return;
+
+    float dragFactor;
+
+    float oneOverThirty = 1.0f / 30.0f;
+    if (mDrag > 0.0f) {
+        float powResult = std::pow(1.0f - mDrag, frameSpan * oneOverThirty);
+        dragFactor = powResult;
+    } else {
+        dragFactor = 1.0f;
+    }
+
+    float rpmDragFactor;
+    if (mRotate && mRPMDrag > 0.0f) {
+        rpmDragFactor = std::pow(1.0f - mRPMDrag, frameSpan * oneOverThirty);
+    } else {
+        rpmDragFactor = 1.0f;
+    }
+
+    // Force direction scaled by frameSpan
+    float forceX_dt = mForceDir.x * frameSpan;
+    float forceZ_dt = mForceDir.z * frameSpan;
+    float forceY_dt = mForceDir.y * frameSpan;
+
+    // Individual matrix components needed for fmadds sequence in pre-computation.
+    // Removing these and using mRelativeXfm.m.x.x etc. directly drops match by ~0.4%.
+    float m_yx = mRelativeXfm.m.y.x;
+    bool isRotate = mRotate;
+    float m_yy = mRelativeXfm.m.y.y;
+    bool isFancy = (mType == kFancy);
+    float m_yz = mRelativeXfm.m.y.z;
+    float m_xx = mRelativeXfm.m.x.x;
+    float m_xz = mRelativeXfm.m.x.z;
+    float m_xy = mRelativeXfm.m.x.y;
+    bool isBubble = mBubble;
+
+    // Pre-compute all 3 transformed force rows (target does this before bounce check).
+    // Row 2 uses mRelativeXfm.m.z directly (not cached into locals) to match target.
+    float relForceRow0 =
+        (m_xx * forceX_dt + (m_xy * forceY_dt + m_xz * forceZ_dt));
+    float relForceRow1 =
+        m_yx * forceX_dt + m_yy * forceY_dt + m_yz * forceZ_dt;
+    float relForceRow2 =
+        mRelativeXfm.m.z.x * forceX_dt + mRelativeXfm.m.z.y * forceY_dt
+        + mRelativeXfm.m.z.z * forceZ_dt;
+
+    // TODO: target calls WorldXfm twice via a shared branch point (bl+b pattern).
+    // Our compiler generates a different call sequence (diff_op at idx 126).
+    float planeNx, planeNy, planeNz, planeD;
+    if (mBounce != NULL) {
+        const Transform &bxf = mBounce->WorldXfm();
+        planeNy = bxf.m.z.y;
+        planeNz = bxf.m.z.z;
+        planeNx = bxf.m.z.x;
+        const Transform &bxf2 = mBounce->WorldXfm();
+        planeD = -(bxf2.v.x * planeNx + bxf2.v.z * planeNz + bxf2.v.y * planeNy);
+    }
+
+    RndParticle *p = mActiveParticles;
+    int endTile = mNumTilesTotal + mStartingTile;
+
+    if (p != NULL) {
+        float sixf = 6.0f;
+        float halfPi = 1.5707963705062866f;
+        float epsilon = 1.1920928955078125e-07f;
+        float magicStrength = 0.015625f;
+        float two = 2.0f;
+
+        do {
+            bool dead;
+            if (dt >= p->deathFrame || dt < p->birthFrame) {
+                dead = true;
+            } else {
+                dead = false;
+            }
+
+            if (dead) {
+                p = FreeParticle(p);
+            } else {
+                // UV tile animation
+                if (mAnimateUVs) {
+                    float tileTime = p->mTileTime + frameSpan;
+                    p->mTileTime = tileTime;
+                    if (p->mCurrentTileIndex < endTile && tileTime > mTileHoldTime) {
+                        int newTile = p->mCurrentTileIndex + 1;
+                        p->mCurrentTileIndex = newTile;
+                        if (newTile >= endTile) {
+                            if (mLoopUVAnim) {
+                                p->mCurrentTileIndex = mStartingTile;
+                            } else {
+                                p->mCurrentTileIndex = endTile - 1;
+                            }
+                        }
+                        p->mTileTime = std::fmod(tileTime, mTileHoldTime);
+                    }
+                }
+
+                // Birth momentum (fancy only)
+                if (isFancy && mBirthMomentum) {
+                    RndFancyParticle *fp = (RndFancyParticle *)p;
+                    float momentumScale = mBirthMomentumAmount * frameSpan * oneOverThirty;
+                    p->pos.x += momentumScale * fp->mBirthVelocityX;
+                    p->pos.z += fp->mBirthVelocityZ * momentumScale;
+                    p->pos.y += fp->mBirthVelocityY * momentumScale;
+                }
+
+                // Position integration
+                // TODO: target uses fmuls+fadds (separate multiply then add) here,
+                // our compiler generates fmadds (fused multiply-add). This accounts
+                // for ~6 instruction differences in the inner loop.
+                p->pos.x += frameSpan * p->vel.x;
+                p->pos.y += p->vel.y * frameSpan;
+                p->pos.z += frameSpan * p->vel.z;
+
+                // Bounce plane reflection
+                if (mBounce != NULL) {
+                    float dist = planeNx * p->pos.x + planeNy * p->pos.y + planeNz * p->pos.z
+                        + planeD;
+                    if (dist < 0.0f) {
+                        float velDotN =
+                            planeNy * p->vel.y + p->vel.x * planeNx + planeNz * p->vel.z;
+                        if (velDotN < 0.0f) {
+                            // TODO: target uses fmuls+fsubs (separate), our compiler
+                            // generates fnmsubs (fused negate-multiply-subtract).
+                            float reflect = velDotN * two;
+                            p->vel.z -= planeNz * reflect;
+                            p->vel.x -= reflect * planeNx;
+                            p->vel.y -= planeNy * reflect;
+                        }
+                    }
+                }
+
+                // Attractors
+                unsigned int numAttractors = mAttractors.size();
+                for (unsigned int i = 0; i < numAttractors; i++) {
+                    Attractor &a = mAttractors[i];
+                    if (a.mAttractor != NULL) {
+                        const Transform &axf = a.mAttractor->WorldXfm();
+                        float dz = axf.v.z - p->pos.z;
+                        float dy = axf.v.y - p->pos.y;
+                        float strength = a.mStrength;
+                        float dx = axf.v.x - p->pos.x;
+
+                        // TODO: target uses beq (to special case) + dead code after,
+                        // ours uses bne (skip special case). diff_op at idx 340.
+                        // Target dead code: li r11,0; clrlwi. r11,r11,24; beq (always taken).
+                        // Suggests original may have used a bool for this condition.
+                        if (strength == magicStrength) {
+                            dz = 0.0f;
+                            auto _tmp0 = a.mAttractor.Owner();
+                            RndParticleSys *ps =
+                                dynamic_cast<RndParticleSys *>(_tmp0);
+                            if (ps != NULL) {
+                                const Transform &t1xf = a.mAttractor->WorldXfm();
+                                const Transform &t2xf = ps->WorldXfm();
+                                float relY = t2xf.v.y - t1xf.v.y;
+                                float relX = t2xf.v.x - t1xf.v.x;
+                                strength *= (relX * relX + relY * relY) + epsilon;
+                            }
+                        }
+
+                        float distSq =
+                            dy * dy + (dx * dx + dz * dz) + epsilon;
+                        float scale = (strength * frameSpan) / distSq;
+                        p->vel.z += scale * dz;
+                        p->vel.x += scale * dx;
+                        p->vel.y += scale * dy;
+                    }
+                }
+
+                p->vel.y += relForceRow1;
+                p->vel.x += relForceRow0;
+                p->vel.z += relForceRow2;
+
+                if (isFancy) {
+                    p->vel.y *= dragFactor;
+                    p->vel.z *= dragFactor;
+                    p->vel.x *= dragFactor;
+
+                    RndFancyParticle *fp = (RndFancyParticle *)p;
+
+                    // Bubble oscillation effect
+                    if (isBubble) {
+                        float sinVal =
+                            FastSin(fp->RPF * dt + fp->swingArmVel + halfPi);
+                        float bubbleScale = fp->RPF * sinVal * frameSpan;
+                        p->pos.x += fp->bubbleDir.z * bubbleScale;
+                        p->pos.y += fp->bubbleDir.w * bubbleScale;
+                        p->pos.z += fp->bubbleFreq * bubbleScale;
+                    }
+
+                    // RPM rotation and swing arm
+                    if (isRotate) {
+                        float rpmVel = fp->mRPMVelocity;
+                        p->angle += rpmVel * frameSpan;
+                        fp->mRPMVelocity = rpmVel * rpmDragFactor;
+                        p->swingArm += fp->mPitchAngularVel * frameSpan;
+                    }
+
+                    // Fancy color: 2-phase Hermite-like blend (before/after midcolFrame).
+                    // Blend formula: colorScale = (1-t)*t*frameSpan*6 where t is normalized
+                    // time within the current phase. Phase 1 uses midcolVel, phase 2 uses colVel.
+                    float colorScale;
+                    float cr, cg, cb, ca;
+                    if (dt < fp->midcolFrame) {
+                        float t = (dt - p->birthFrame) * p->vel.w;
+                        colorScale = (1.0f - t) * t * frameSpan * sixf;
+                        ca = fp->midcolVel.alpha * colorScale;
+                        cb = fp->midcolVel.blue * colorScale;
+                        cg = fp->midcolVel.green * colorScale;
+                        cr = colorScale * fp->midcolVel.red;
+                    } else {
+                        float t = (dt - fp->midcolFrame) * fp->bubblePhase;
+                        colorScale = (1.0f - t) * t * frameSpan * sixf;
+                        ca = p->colVel.alpha * colorScale;
+                        cb = p->colVel.blue * colorScale;
+                        cg = p->colVel.green * colorScale;
+                        cr = p->colVel.red * colorScale;
+                    }
+
+                    // Clamp color channels to [0, 1] using fneg+fsel pattern
+                    float newR = cr + p->col.red;
+                    float newA = ca + p->col.alpha;
+                    float newB = cb + p->col.blue;
+                    float newG = cg + p->col.green;
+
+                    newR = (-newR >= 0.0f) ? 0.0f : newR;
+                    newA = (-newA >= 0.0f) ? 0.0f : newA;
+                    newB = (-newB >= 0.0f) ? 0.0f : newB;
+                    newG = (-newG >= 0.0f) ? 0.0f : newG;
+
+                    p->col.red = (newR - 1.0f >= 0.0f) ? 1.0f : newR;
+                    p->col.alpha = (newA - 1.0f >= 0.0f) ? 1.0f : newA;
+                    p->col.blue = (newB - 1.0f >= 0.0f) ? 1.0f : newB;
+                    p->col.green = (newG - 1.0f >= 0.0f) ? 1.0f : newG;
+
+                    // Fancy size: 3-phase (grow / sustain / shrink)
+                    float sizeVelRate, timeSince, invDuration;
+                    if (dt < fp->growFrame) {
+                        invDuration = fp->beginGrow;
+                        timeSince = dt - p->birthFrame;
+                        sizeVelRate = fp->growVel;
+                    } else if (dt < fp->shrinkFrame) {
+                        invDuration = fp->midGrow;
+                        timeSince = dt - fp->growFrame;
+                        sizeVelRate = p->sizeVel;
+                    } else {
+                        timeSince = dt - fp->shrinkFrame;
+                        invDuration = fp->endGrow;
+                        sizeVelRate = fp->shrinkVel;
+                    }
+                    float st = timeSince * invDuration;
+                    p->size +=
+                        sizeVelRate * ((1.0f - st) * st * frameSpan * sixf);
+                } else {
+                    // Basic particle: single-phase color/size update
+                    // TODO: same fmadds vs fmuls+fadds issue as position update
+                    float t = (dt - p->birthFrame) * p->pos.w;
+                    float scale = (1.0f - t) * t * frameSpan * sixf;
+                    p->size += p->sizeVel * scale;
+                    p->col.red += p->colVel.red * scale;
+                    p->col.alpha += p->colVel.alpha * scale;
+                    p->col.blue += p->colVel.blue * scale;
+                    p->col.green += p->colVel.green * scale;
+                }
+                p = p->next;
+            }
+        } while (p != NULL);
+    }
+}
+
+void RndParticleSys::CreateParticles(float f1, float f2, const Transform &tf) {
+    if (f2 <= 0 || mNumActive >= mMaxParticles)
+        return;
+    else {
+        mEmitCount += f2 * RandomFloat(mEmitRate.x, mEmitRate.y);
+        mEmitCount += CheckBursts(f2) + (float)mExplicitParts;
+        mExplicitParts = 0;
+        while (mEmitCount >= 1.0f && mNumActive < mMaxParticles) {
+            RndParticle *p = AllocParticle();
+            if (!p) {
+                mEmitCount = 0;
+                return;
+            }
+            InitParticle(f1, p, &tf, gNoPartOverride);
+            mEmitCount -= 1.0f;
+        }
+    }
+}
+
+void RndParticleSys::RunFastForward() {
+    mNeedForward = false;
+
+    float avgEmitRate = (mEmitRate.x + mEmitRate.y) * 0.5f;
+    if (avgEmitRate < 0.0001f)
+        return;
+
+    float stepSize = 1.0f / avgEmitRate;
+    float duration = Min(stepSize * (float)mMaxParticles, (mLife.x + mLife.y) * 0.5f);
+    stepSize = Max(1.0f, stepSize);
+    float currentFrame = CalcFrame();
+    Transform xfm;
+    MakeLocToRel(xfm);
+
+    float frame;
+    for (frame = currentFrame - duration; frame <= currentFrame; frame += stepSize) {
+        MoveParticles(frame, stepSize);
+        CreateParticles(frame, stepSize, xfm);
+    }
+}
+
+void RndParticleSys::UpdateParticles() {
+    if (mPreserveParticles == 0) {
+        return;
+    }
+
+    f32 currentFrame = CalcFrame();
+
+    if (mLastFrame == 0.0f) {
+        mLastFrame = currentFrame;
+    }
+
+    if (mNeedForward != 0) {
+        RunFastForward();
+        if (mFrameDrive == 0) {
+            mLastFrame = currentFrame;
+        }
+    } else {
+        f32 frameUpdate = currentFrame - mLastFrame;
+        if (mFrameDrive == 0) {
+            mLastFrame = currentFrame;
+        }
+
+        if (frameUpdate != 0.0f) {
+            if (mPauseOffscreen != 0) {
+                if (frameUpdate > 4.0f) {
+                    float excess = frameUpdate - 4.0f;
+                    mPausedTime += excess;
+                    frameUpdate = 4.0f;
+                }
+                currentFrame -= mPausedTime;
+            }
+
+            MoveParticles(currentFrame, frameUpdate);
+
+            if ((mExplicitParts != 0) || (mEmitRate.x > 0.0f) || (mEmitRate.y > 0.0f) || (mMaxBurst != 0)) {
+                Transform locToRel;
+                MakeLocToRel(locToRel);
+
+                if (mSubSamples > 1) {
+                    Vector3 baseVel;
+                    if (!mMeshEmitter) {
+                        f32 halfSample = 0.5f;
+                        f32 pitchMid = LimitAng(mPitch.y - mPitch.x) * halfSample + mPitch.x;
+                        f32 yawMid = LimitAng(mYaw.y - mYaw.x) * halfSample + mYaw.x;
+                        f32 speedMid = (mSpeed.y - mSpeed.x) * halfSample + mSpeed.x;
+
+                        f32 halfPi = 1.57079637f;
+                        f32 cosPitch = FastSin(pitchMid + halfPi);
+                        f32 negXVel = -(FastSin(yawMid) * cosPitch * speedMid);
+                        f32 yVel = FastSin(yawMid + halfPi) * cosPitch * speedMid;
+                        f32 sinPitch = FastSin(pitchMid);
+
+                        baseVel.Set(
+                            negXVel * frameUpdate,
+                            yVel * frameUpdate,
+                            sinPitch * speedMid * frameUpdate
+                        );
+
+                        Multiply(baseVel, mSubSampleXfm, baseVel);
+                    } else {
+                        baseVel = mSubSampleXfm.v;
+                    }
+
+                    memcpy(&mSubSampleXfm, &locToRel, sizeof(Transform));
+
+                    int count = mSubSamples;
+                    f32 stepSize = frameUpdate / (f32)mSubSamples;
+                    Vector3 interpOffset;
+                    if (count != 0) {
+                        do {
+                            CreateParticles(currentFrame, stepSize, locToRel);
+                            Interp(interpOffset, baseVel, 1.0f / (f32)count, interpOffset);
+                            count--;
+                        } while (count != 0);
+                    }
+                } else {
+                    CreateParticles(currentFrame, frameUpdate, locToRel);
+                }
+            }
+        }
+    }
 }
 
 void RndParticleSys::FreeAllParticles() {
@@ -903,4 +1658,76 @@ DataNode RndParticleSys::OnExplicitParts(const DataArray *da) {
     bool b = da->Size() >= 4 && da->Int(3);
     ExplicitParticles(da->Int(2), b, gNoPartOverride);
     return 0;
+}
+
+bool RndParticleSys::Burst::Set(float f1, float f2) {
+    if (f2 > 0) {
+        mPeakRate = f1;
+        mHalfDuration = f2 * 0.5f;
+        mRemainingDuration = f2;
+        mInvHalfDuration = 1.0f / mHalfDuration;
+        return true;
+    } else
+        return false;
+}
+
+float RndParticleSys::Burst::Emit(float f1) {
+    mRemainingDuration -= f1;
+    if (mRemainingDuration < 0)
+        return -1;
+    float ret = mRemainingDuration;
+    if (ret > mHalfDuration) {
+        ret = mHalfDuration * 2.0f - ret;
+    }
+    ret *= mInvHalfDuration;
+    float ret2 = ret * ret;
+    float ret3 = ret2 * ret;
+    return (ret2 * 3.0f - ret3 * 2.0f) * mPeakRate * f1;
+}
+
+float RndParticleSys::CheckBursts(float f1) {
+    if (f1 > 1)
+        f1 = 1;
+    float sum = 0;
+    for (std::vector<Burst>::iterator it = mBursts.begin(); it != mBursts.end();) {
+        float emit = it->Emit(f1);
+        if (emit < 0)
+            it = mBursts.erase(it);
+        else {
+            sum += emit;
+            ++it;
+        }
+    }
+    if (mBursts.size() < mMaxBurst) {
+        mTimeTillBurst -= f1;
+        if (mTimeTillBurst <= 0) {
+            Burst burst;
+            if (burst.Set(
+                    RandomFloat(mBurstPeak.x, mBurstPeak.y),
+                    RandomFloat(mBurstLength.x, mBurstLength.y)
+                )) {
+                mBursts.push_back(burst);
+            }
+            mTimeTillBurst = RandomFloat(mBurstInterval.x, mBurstInterval.y);
+        }
+    }
+    return sum;
+}
+
+bool RndParticleSys::MakeWorldSphere(Sphere &s, bool b2) {
+    if (b2) {
+        s.Zero();
+        for (RndParticle *p = mActiveParticles; p != nullptr; p = p->next) {
+            Sphere s38;
+            Multiply((const Vector3 &)p->pos, mRelativeXfm, s38.center);
+            s38.radius = p->size * 0.5f;
+            s.GrowToContain(s38);
+        }
+        return true;
+    }
+    if (mSphere.GetRadius()) {
+        Multiply(mSphere, WorldXfm(), s);
+        return true;
+    }
+    return false;
 }

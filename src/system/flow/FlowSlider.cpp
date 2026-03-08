@@ -159,9 +159,9 @@ __declspec(noinline) void FlowSlider::UpdateEase() {
 void FlowSlider::UpdateActivations() {
     float savedIntensity = FlowNode::sIntensity;
 
+    auto cur = mChildNodes.begin();
     auto next = mChildNodes.begin();
     auto end = mChildNodes.end();
-    auto cur = mChildNodes.begin();
     if (end != next) ++next;
     auto prev = mChildNodes.begin();
 
@@ -169,20 +169,18 @@ void FlowSlider::UpdateActivations() {
         auto _tmp0 = cur->Obj();
         FlowValueCase *curCase = static_cast<FlowValueCase *>(_tmp0);
         float curPos = curCase->Value();
-        float t = false;
+        float t = 0.0f;
         float intensity;
 
         if (next != end) {
             FlowValueCase *nextCase = static_cast<FlowValueCase *>(next->Obj());
             float nextPos = nextCase->Value();
-            if (mValue >= curPos) {
-                if (mValue <= nextPos) {
+            if (mValue >= curPos && mValue <= nextPos) {
                 if (curPos != nextPos) {
                     t = (mValue - curPos) / (nextPos - curPos);
                 }
                 t = 1.0f - t;
                 goto ease;
-            }
             }
         }
 
@@ -190,21 +188,15 @@ void FlowSlider::UpdateActivations() {
             FlowValueCase *prevCase = static_cast<FlowValueCase *>(prev->Obj());
             float prevPos = prevCase->Value();
             if (mValue <= curPos && mValue >= prevPos) {
-                if (curPos != prevPos) {
+                if (prevPos != curPos) {
                     t = (mValue - prevPos) / (curPos - prevPos);
                 }
                 goto ease;
             }
         }
 
-        if (next == end) {
-            if (mValue > curPos) {
+        if (next == end && mValue > curPos) {
             intensity = 1.0f;
-        } else if (cur == mChildNodes.begin() && mValue < curPos) {
-            intensity = 1.0f;
-        } else {
-            intensity = 0.0f;
-        }
         } else if (cur == mChildNodes.begin() && mValue < curPos) {
             intensity = 1.0f;
         } else {

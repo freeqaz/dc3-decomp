@@ -13,9 +13,11 @@
 #include "meta_ham/AccomplishmentManager.h"
 #include "meta_ham/AppLabel.h"
 #include "meta_ham/Campaign.h"
+#include "meta_ham/HamStarsDisplay.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
 #include "os/Timer.h"
+#include "rndobj/Draw.h"
 #include "synth/Sound.h"
 #include "ui/PanelDir.h"
 #include "ui/UIPanel.h"
@@ -99,11 +101,11 @@ void LockedContentPanel::SetUpCampaignMasterQuestHeader(Symbol song) {
     String str;
     Symbol s = TheAccomplishmentMgr->GetAssetSource(song);
     Accomplishment *pAccomplishment = TheAccomplishmentMgr->GetAccomplishment(s);
-    AppLabel *pContentName = DataDir()->Find<AppLabel>("content_name.lbl");
-    HamLabel *pTeaser = DataDir()->Find<HamLabel>("teaser.lbl");
-    HamLabel *pInstructions = DataDir()->Find<HamLabel>("instructions.lbl");
-    HamLabel *pProgress = DataDir()->Find<HamLabel>("progress.lbl");
     HamLabel *pPracticeScore = DataDir()->Find<HamLabel>("practice_score.lbl");
+    HamLabel *pInstructions = DataDir()->Find<HamLabel>("instructions.lbl");
+    AppLabel *pContentName = DataDir()->Find<AppLabel>("content_name.lbl");
+    HamLabel *pProgress = DataDir()->Find<HamLabel>("progress.lbl");
+    HamLabel *pTeaser = DataDir()->Find<HamLabel>("teaser.lbl");
     pContentName->SetTextToken(gNullStr);
     pTeaser->SetTextToken(MakeString("campaign_mq_locked_%s", song.Str()));
     pInstructions->SetTextToken(gNullStr);
@@ -114,13 +116,15 @@ void LockedContentPanel::SetUpCampaignMasterQuestHeader(Symbol song) {
     if (!pAccomplishment) {
         MILO_NOTIFY("Could not find accomplishment for %s", song);
     } else {
+        auto accomplishmentType = pAccomplishment->GetType();
         if (pAccomplishment->GetType() == kAccomplishmentTypeLessonSongListConditional
-            || pAccomplishment->GetType() == kAccomplishmentTypeTourConditional) {
+            || accomplishmentType == kAccomplishmentTypeTourConditional) {
             AccomplishmentCountConditional *pAccomplishmentCountConditional =
                 dynamic_cast<AccomplishmentCountConditional *>(pAccomplishment);
             Flow *pFlow = DataDir()->Find<Flow>("one_shot.flow");
             pFlow->Activate();
-            pTeaser->SetTextToken(MakeString("%s%s%s", "award_", song, "_instruction"));
+            auto awardInstructionToken = MakeString("%s%s%s", "award_", song, "_instruction");
+            pTeaser->SetTextToken(awardInstructionToken);
         } else {
             MILO_ASSERT(false, 0xbe);
         }
@@ -135,13 +139,14 @@ void LockedContentPanel::SetUp(Symbol song) {
     HamLabel *pTeaser = DataDir()->Find<HamLabel>("teaser.lbl");
     HamLabel *pInstructions = DataDir()->Find<HamLabel>("instructions.lbl");
     HamLabel *pProgress = DataDir()->Find<HamLabel>("progress.lbl");
-    int songID = TheHamSongMgr.GetSongIDFromShortName(song, false) != 0;
+    bool songID = TheHamSongMgr.GetSongIDFromShortName(song, false) != 0;
     if (songID != 0) {
         pContentName->SetSongName(song, -1, false);
     } else {
         pContentName->SetTextToken(song);
     }
-    pTeaser->SetTextToken(MakeString("%s%s", "teaser_award_", song.Str()));
+    auto teaserAwardToken = MakeString("%s%s", "teaser_award_", song);
+    pTeaser->SetTextToken(teaserAwardToken);
     TriggerTeaserText();
     mSound = nullptr;
     if (!pAccomplishment) {
@@ -176,11 +181,22 @@ void LockedContentPanel::SetUpNoFlashcards(Symbol song, Difficulty diff) {
     Flow *pFlowSingle = DataDir()->Find<Flow>("song_list_single.flow");
     pFlowSingle->Activate();
     int songID = TheHamSongMgr.GetSongIDFromShortName(song);
-    // stuff
+    mLabels[0]->SetShowing(true);
+    mLabels[8]->SetShowing(true);
+    pContentName->SetSongName(song, -1, false);
+    ((HamStarsDisplay *)mLabels[8])->SetSongWithDifficulty(songID, diff, true);
+    HamLabel **pPtr = &mLabels[8];
+    int loopCount = 7;
+    do {
+        pPtr[-7]->SetShowing(false);
+        pPtr++;
+        (*pPtr)->SetShowing(false);
+        loopCount -= 1;
+    } while (loopCount != 0);
 }
 
-void LockedContentPanel::SetUpDifficultyLocked(Symbol s1, Symbol s2) {
-    Difficulty diff = SymToDifficulty(s2);
+void LockedContentPanel::SetUpDifficultyLocked(Symbol song, Symbol difficultySymbol) {
+    Difficulty diff = SymToDifficulty(difficultySymbol);
     MILO_ASSERT(diff > kDifficultyEasy, 0x111);
     AppLabel *pContentName = DataDir()->Find<AppLabel>("content_name.lbl");
     HamLabel *pTeaser = DataDir()->Find<HamLabel>("teaser.lbl");
@@ -199,13 +215,44 @@ void LockedContentPanel::SetUpDifficultyLocked(Symbol s1, Symbol s2) {
     static Symbol award_hard_playlist_instruction("award_hard_playlist_instruction");
     static Symbol award_mediummedley_instruction("award_mediummedley_instruction");
     static Symbol award_hardmedley_instruction("award_hardmedley_instruction");
+    Symbol diffInstruction;
     if (TheGameMode->InMode("playlist_perform", true)) {
-        Symbol diffInstruction = award_hard_playlist_instruction;
         if (diff == kDifficultyMedium) {
             diffInstruction = award_medium_playlist_instruction;
+        } else {
+            diffInstruction = award_hard_playlist_instruction;
         }
         pInstructions->SetTokenFmt(diffInstruction, 3);
+        HamLabel **pPtr = &mLabels[7];
+        int loopCount = 8;
+        do {
+            pPtr[-7]->SetShowing(false);
+            pPtr++;
+            (*pPtr)->SetShowing(false);
+            loopCount -= 1;
+        } while (loopCount != 0);
     } else {
+        if (diff == kDifficultyMedium) {
+            diffInstruction = award_medium_instruction;
+        } else {
+            diffInstruction = award_expert_instruction;
+        }
+        pInstructions->SetTokenFmt(diffInstruction, 3);
+        Flow *pFlowPractice = DataDir()->Find<Flow>("song_list_perform_practice.flow");
+        pFlowPractice->Activate();
+        int songID = TheHamSongMgr.GetSongIDFromShortName(song, true);
+        mLabels[0]->SetShowing(true);
+        mLabels[8]->SetShowing(true);
+        ((AppLabel *)mLabels[0])->SetSongName(song, -1, false);
+        ((HamStarsDisplay *)mLabels[8])->SetSongWithDifficulty(songID, (Difficulty)(diff - 1), true);
+        HamLabel **pPtr = &mLabels[8];
+        int loopCount = 7;
+        do {
+            pPtr[-7]->SetShowing(false);
+            pPtr++;
+            (*pPtr)->SetShowing(false);
+            loopCount -= 1;
+        } while (loopCount != 0);
     }
 }
 

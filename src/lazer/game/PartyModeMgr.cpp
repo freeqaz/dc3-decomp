@@ -102,7 +102,11 @@ PartyModePlayer::PartyModePlayer(PartyModeARObject *obj) : mARObject(obj), mScor
 }
 
 PartyModePlayer::~PartyModePlayer() {
-    RELEASE(mARObject);
+    PartyModeARObject *obj = mARObject;
+    if (obj) {
+        delete obj;
+    }
+    mARObject = 0;
     mTitleArray->Release();
 }
 

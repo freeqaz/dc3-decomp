@@ -87,7 +87,7 @@ public:
     UIListDir *GetUIListDir() const;
     UIListState &GetListState();
     const std::vector<UIListWidget *> &GetWidgets() const;
-    UIList *ChildList();
+    UIList *ChildList() { return mListDir->SubList(mListState.SelectedDisplay(), mWidgets); }
 
     int NumDisplay() const { return mListState.NumDisplay(); }
     int GridSpan() const { return mListState.GridSpan(); }

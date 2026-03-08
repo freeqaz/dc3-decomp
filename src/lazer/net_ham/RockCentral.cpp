@@ -1,7 +1,10 @@
 #include "net_ham/RockCentral.h"
 #include "meta/ConnectionStatusPanel.h"
+#include "meta_ham/Challenges.h"
 #include "meta_ham/ProfileMgr.h"
 #include "net/DingoSvr.h"
+#include "net_ham/DataMinerJobs.h"
+#include "net_ham/KinectShareJobs.h"
 #include "net_ham/RCJobDingo.h"
 #include "obj/Dir.h"
 #include "obj/Msg.h"
@@ -9,6 +12,7 @@
 #include "os/Debug.h"
 #include "os/PlatformMgr.h"
 #include "os/System.h"
+#include "rnddx9/Rnd.h"
 #include "rndobj/Bitmap.h"
 #include "rndobj/Tex.h"
 #include "ui/UIPanel.h"
@@ -54,9 +58,10 @@ namespace {
 }
 
 RockCentral::RockCentral()
-    : mState(), mNextControllerUploadMs(0), mMOTDJob(0), mChallengeInterval(60000), mRockCentralTime(-1), mMotdXPFlag(0),
-      mMotdFreq(0), mMiscArt(0), mLoginBlocked(0), mJustConnected(0), mKinectShareConnection(0),
-      mKinectShareCallback(0), mControllerModeEnterCount(0), mControllerModeExitCount(0) {}
+    : mState(), mNextControllerUploadMs(0), mMOTDJob(0), mChallengeInterval(60000), mRockCentralTime(-1),
+      mMotdXPFlag(0), mMotdFreq(0), mMiscArt(0), mLoginBlocked(0), mJustConnected(0),
+      mKinectShareConnection(0), mKinectShareCallback(0), mControllerModeEnterCount(0),
+      mControllerModeExitCount(0) {}
 
 RockCentral::~RockCentral() { RELEASE(mKinectShareConnection); }
 
@@ -75,8 +80,8 @@ BEGIN_HANDLERS(RockCentral)
 END_HANDLERS
 
 void RockCentral::ForceLogout() {
-    if (mState == 2 || mState == 1) {
-        mState = (State)3;
+    if (mState == kConnected || mState == kAuthenticating) {
+        mState = kLoggingOut;
         TheServer.Logout();
     }
 }
@@ -85,7 +90,7 @@ bool RockCentral::IsOnline() {
     if (mLoginBlocked) {
         return false;
     } else {
-        return mState == 2;
+        return mState == kConnected;
     }
 }
 
@@ -95,10 +100,10 @@ void RockCentral::SetLoginPassword(const char *password) {
 }
 
 void RockCentral::Login() {
-    mState = (State)1;
+    mState = kAuthenticating;
     mJustConnected = false;
-    if (!TheServer.Authenticate(TheServer.GetAuthedPadNum())) { // should be TheServer->unk74
-        Export(ServerStatusChangedMsg((ServerStatusResult)4), false);
+    if (!TheServer.Authenticate(0)) { // should be TheServer->unk74
+        Export(ServerStatusChangedMsg(kServerStatusDisconnected), false);
     }
 }
 
@@ -110,6 +115,92 @@ void RockCentral::CreateAccount() {
 void RockCentral::OnJobFinished(RCJob *job) {
     MILO_ASSERT(job->IsFinished(), 0x24A);
     delete job;
+}
+
+static bool sSentScreenRes;
+
+void RockCentral::Poll() {
+    mTimer.Split();
+
+    switch (mState) {
+    case kDisconnected:
+    case kFailed:
+        if (ThePlatformMgr.IsConnected()) {
+            if (mTimer.Ms() >= mNextLoginMs && !mLoginBlocked) {
+                Login();
+            }
+        }
+        break;
+    case kAuthenticating:
+    case kConnected:
+    case kLoggingOut:
+        break;
+    default:
+        MILO_FAIL("Bad Rock Central state");
+        break;
+    }
+
+    if (IsOnline()) {
+        TheProfileMgr.UploadDeferredFlaunt();
+        TheProfileMgr.UploadDeferredFitnessGoal();
+    }
+
+    if (mJustConnected) {
+        mMOTDJob = new GetMotdJob(this);
+        if (!mLoginBlocked) {
+            TheServer.ManageJob(mMOTDJob);
+        }
+        if (!sSentScreenRes) {
+            sSentScreenRes = true;
+#ifndef HX_NATIVE
+            ScreenResJob *job = new ScreenResJob(nullptr, TheDxRnd.VideoMode());
+            if (!TheRockCentral.IsLoginBlocked()) {
+                TheServer.ManageJob(job);
+            }
+#endif
+        }
+        TheChallenges->DownloadOfficialChallenges();
+        mJustConnected = false;
+    }
+
+    if (mKinectShareConnection) {
+        mKinectShareConnection->Poll();
+        int kinectState = mKinectShareConnection->GetState();
+        if (kinectState == 3) {
+            if (mKinectShareCallback) {
+                RockCentralOpCompleteMsg msg(false, -1, DataNode());
+                mKinectShareCallback->Handle(msg, true);
+                mKinectShareCallback = nullptr;
+            }
+            RELEASE(mKinectShareConnection);
+        } else if (kinectState == 2) {
+            if (mKinectShareCallback) {
+                RockCentralOpCompleteMsg msg(true, 0, DataNode());
+                mKinectShareCallback->Handle(msg, true);
+                mKinectShareCallback = nullptr;
+            }
+            RELEASE(mKinectShareConnection);
+            KinectShareJob *job = new KinectShareJob(nullptr);
+            if (!TheRockCentral.IsLoginBlocked()) {
+                TheServer.ManageJob(job);
+            }
+        }
+    }
+
+    if (mTimer.Ms() >= mNextControllerUploadMs) {
+        if (mControllerModeEnterCount != 0 || mControllerModeExitCount != 0) {
+            ControllerModeJob *job =
+                new ControllerModeJob(nullptr, mControllerModeEnterCount, mControllerModeExitCount);
+            if (!mLoginBlocked) {
+                TheServer.ManageJob(job);
+            }
+        }
+        mControllerModeEnterCount = 0;
+        mControllerModeExitCount = 0;
+        mNextControllerUploadMs = mTimer.Ms() + 600000.0f;
+    }
+
+    TheServer.Poll();
 }
 
 void RockCentral::Init() {
@@ -180,19 +271,19 @@ void RockCentral::CancelOutstandingCalls(Hmx::Object *obj) {
 }
 
 DataNode RockCentral::OnMsg(const ConnectionStatusChangedMsg &msg) {
-    if (msg.Connected() && (mState == 4 || mState == 0)) {
-        mState = (State)0;
+    if (msg.Connected() && (mState == kFailed || mState == kDisconnected)) {
+        mState = kDisconnected;
         mNextLoginMs = mTimer.Ms();
-    } else if (!msg.Connected() && (mState == 2 || mState == 1)) {
-        mState = (State)3;
+    } else if (!msg.Connected() && (mState == kConnected || mState == kAuthenticating)) {
+        mState = kLoggingOut;
         TheServer.Logout();
     }
     return 1;
 }
 
 DataNode RockCentral::OnMsg(const TmsDownloadedMsg &msg) {
-    if (ThePlatformMgr.IsConnected() && (mState == 4 || mState == 0)) {
-        mState = (State)0;
+    if (ThePlatformMgr.IsConnected() && (mState == kFailed || mState == kDisconnected)) {
+        mState = kDisconnected;
         mNextLoginMs = mTimer.Ms();
     }
     return 1;
@@ -242,22 +333,22 @@ DataNode RockCentral::OnMsg(const RCJobCompleteMsg &msg) {
 }
 
 DataNode RockCentral::OnMsg(const ServerStatusChangedMsg &msg) {
-    if (msg.Result() == kServerStatusConnected && mState != 2) {
+    if (msg.Result() == kServerStatusConnected && mState != kConnected) {
         mJustConnected = true;
-        mState = (State)2;
+        mState = kConnected;
         XNetGetTitleXnAddr(&mXNetAddr);
         XNetXnAddrToMachineId(&mXNetAddr, &mMachineID);
         Hx_snprintf(g_szMachineIdString, 20, "%llu", mMachineID);
     } else if (msg.Result() != kServerStatusConnected) {
-        if (mState == 3) {
-            mState = (State)0;
+        if (mState == kLoggingOut) {
+            mState = kDisconnected;
             mNextLoginMs = mTimer.Ms() + 8000.0f;
-        } else if (msg.Result() == 1) {
-            mState = (State)4;
+        } else if (msg.Result() == kServerStatusInvalidUserName) {
+            mState = kFailed;
             CreateAccount();
-            mNextLoginMs = mTimer.Ms();
+            mNextLoginMs = mTimer.Ms() + 8000.0f;
         } else {
-            mState = (State)4;
+            mState = kFailed;
             mNextLoginMs = mTimer.Ms() + 40000.0f;
         }
     }

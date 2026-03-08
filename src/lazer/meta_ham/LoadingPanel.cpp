@@ -13,6 +13,7 @@
 #include "os/File.h"
 #include "os/FileCache.h"
 #include "os/System.h"
+#include "synth/Stream.h"
 #include "ui/UI.h"
 #include "ui/UIPanel.h"
 #include "utl/BeatMap.h"
@@ -20,7 +21,9 @@
 #include "utl/MemMgr.h"
 #include "utl/Symbol.h"
 #include "utl/TempoMap.h"
-#include "utl/TimeConversion.h"
+
+HamMaster *LoadingPanel::sLoadingMaster = nullptr;
+SongDB *LoadingPanel::sSongDB = nullptr;
 
 LoadingPanel::LoadingPanel() : mSongInfo(0), mTempoMap(), mBeatMap(0) { sSongDB = new SongDB(); }
 
@@ -36,9 +39,10 @@ END_PROPSYNCS
 char const *LoadingPanel::GetLoadingScreen(Symbol s) {
     DataArray *screenArray = SystemConfig("loading_screens");
     for (int i = 1; i < screenArray->Size(); i++) {
-        DataArray *loadingScreenArray = screenArray->Array(i);
-        if (loadingScreenArray->Sym(0) == s) {
-            return loadingScreenArray->Str(1);
+        DataArray *entry = screenArray->Array(i);
+        Symbol entrySym = entry->Sym(0);
+        if (entrySym == s) {
+            return entry->Str(1);
         }
     }
     MILO_FAIL("can\'t find loadingScreen %s", s);
@@ -46,11 +50,13 @@ char const *LoadingPanel::GetLoadingScreen(Symbol s) {
 }
 
 void LoadingPanel::Unload() {
-    if (mTempoMap)
+    if (mTempoMap) {
         SetTheTempoMap(mTempoMap);
+    }
 
-    if (mBeatMap)
+    if (mBeatMap) {
         SetTheBeatMap(mBeatMap);
+    }
 
     delete sLoadingMaster;
     UIPanel::Unload();
@@ -65,13 +71,12 @@ void LoadingPanel::Load() {
 
 bool LoadingPanel::IsLoaded() const {
     HamAudio *pAudio = sLoadingMaster->GetAudio();
-    if (!pAudio)
+    if (!pAudio) {
         MILO_NOTIFY("missing audio object!\n");
+    }
 
-    return (
-        TheContentMgr.RefreshDone() && UIPanel::IsLoaded() && pAudio && !pAudio->Fail()
-        && !pAudio->IsReady()
-    );
+    return TheContentMgr.RefreshDone() && UIPanel::IsLoaded() && pAudio
+        && !pAudio->Fail() && !pAudio->IsReady();
 }
 
 bool LoadingPanel::Exiting() {
@@ -84,7 +89,9 @@ bool LoadingPanel::Exiting() {
 void LoadingPanel::Enter() {
     UIPanel::Enter();
     TheTaskMgr.SetSecondsAndBeat(0, 0, true);
+    Stream *stream = sLoadingMaster->GetHxAudio()->GetSongStream();
     MILO_ASSERT(sLoadingMaster->GetHxAudio()->IsReady(), 0x6a);
+    // Trigger stream initialization
 }
 
 Symbol LoadingPanel::ChooseLoadingScreen() {
@@ -98,15 +105,21 @@ void LoadingPanel::PlayLoadingMusic() {
     if (n.Equal(gNullStr, nullptr, true)) {
         ResetLoadingMusic();
     }
+
     const char *fileBase = FileGetBase(n.Str());
+
+    // Verify MIDI file exists (scoped to ensure String destructor runs before next operations)
     {
         String filePath = MakeString("sfx/samples/shell/%s.mid", fileBase);
         File *f = FileCache::GetFileAll(filePath.c_str());
         MILO_ASSERT(f != NULL, 0xb7);
         delete f;
     }
-    if (mSongInfo)
+
+    if (mSongInfo) {
         RELEASE(mSongInfo);
+    }
+
     DataArray *sysConfig = SystemConfig("synth", fileBase);
     static Symbol song("song");
     DataArray *songArray = sysConfig->FindArray(song, false);

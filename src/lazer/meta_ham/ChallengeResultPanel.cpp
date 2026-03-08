@@ -12,6 +12,7 @@
 #include "ui/UIList.h"
 #include "ui/UIListLabel.h"
 #include "ui/UIPanel.h"
+#include "utl/Locale.h"
 #include "utl/Symbol.h"
 
 ChallengeResultPanel::ChallengeResultPanel()
@@ -29,11 +30,80 @@ BEGIN_PROPSYNCS(ChallengeResultPanel)
     SYNC_SUPERCLASS(Hmx::Object)
 END_PROPSYNCS
 
-void ChallengeResultPanel::Text(int, int data, UIListLabel *, UILabel *label) const {
+void ChallengeResultPanel::Text(int, int data, UIListLabel *slot, UILabel *label) const {
     MILO_ASSERT_RANGE(data, 0, mItems.size(), 0x11a);
     static Symbol best_score("best_score");
     AppLabel *app_label = dynamic_cast<AppLabel *>(label);
     MILO_ASSERT(app_label, 0x11E);
+
+    if (mItems[data].mGamertag == gNullStr) {
+        Symbol nullSym(gNullStr);
+        label->SetTextToken(nullSym);
+        return;
+    }
+
+    String gamertag(mItems[data].mGamertag);
+
+    if (slot->Matches("white_small_gamertag")) {
+        if (mPlayerScore <= mItems[data].mScore && data != mRivalIndex && data != mPlayerIndex) {
+            label->SetPrelocalizedString(gamertag);
+            goto done;
+        }
+    } else if (slot->Matches("grey_small_gamertag")) {
+        if (mPlayerScore > mItems[data].mScore && data != mRivalIndex) {
+            label->SetPrelocalizedString(gamertag);
+            goto done;
+        }
+    } else if (slot->Matches("white_large_gamertag")) {
+        if (mPlayerScore <= mItems[data].mScore && data == mRivalIndex) {
+            label->SetPrelocalizedString(gamertag);
+            goto done;
+        }
+    } else if (slot->Matches("grey_large_gamertag")) {
+        if (mPlayerScore > mItems[data].mScore && data == mRivalIndex) {
+            label->SetPrelocalizedString(gamertag);
+            goto done;
+        }
+    } else if (slot->Matches("gold_large_gamertag")) {
+        if (mPlayerScore == mItems[data].mScore && data == mPlayerIndex) {
+            label->SetPrelocalizedString(gamertag);
+            goto done;
+        }
+    } else {
+        bool showScore = false;
+        if (slot->Matches("white_small_score")) {
+            if (mPlayerScore <= mItems[data].mScore && data != mRivalIndex && data != mPlayerIndex) {
+                showScore = true;
+            }
+        } else if (slot->Matches("grey_small_score")) {
+            if (mPlayerScore > mItems[data].mScore && data != mRivalIndex) {
+                showScore = true;
+            }
+        } else if (slot->Matches("white_large_score")) {
+            if (mPlayerScore <= mItems[data].mScore && data == mRivalIndex) {
+                showScore = true;
+            }
+        } else if (slot->Matches("grey_large_score")) {
+            if (mPlayerScore > mItems[data].mScore && data == mRivalIndex) {
+                showScore = true;
+            }
+        } else if (slot->Matches("gold_large_score")) {
+            if (mPlayerScore == mItems[data].mScore && data == mPlayerIndex) {
+                showScore = true;
+            }
+        }
+
+        if (showScore) {
+            app_label->SetTokenFmt(best_score, (char *)LocalizeSeparatedInt(mItems[data].mScore, TheLocale));
+            goto done;
+        }
+    }
+
+    {
+        Symbol nullSym(gNullStr);
+        label->SetTextToken(nullSym);
+    }
+done:;
 }
 
 int ChallengeResultPanel::NumData() const { return mItems.size(); }
@@ -81,31 +151,36 @@ void ChallengeResultPanel::Poll() {
 }
 
 void ChallengeResultPanel::UpdateList(int player) {
+    static Symbol max_display("max_display");
+    auto& _ref0 = mChallengeList;
+    int numDisplay = _ref0->NumDisplay();
     static Symbol score("score");
     static Symbol challenge_mission_index("challenge_mission_index");
     static Symbol side("side");
     static Symbol scroll_past_max_display("scroll_past_max_display");
-    static Symbol max_display("max_display");
-    static Symbol rival_beaten("rival_beaten");
-    static Symbol grade("grade");
-    static Symbol player_name("player_name");
-    static Symbol challenge_mission_score("challenge_mission_score");
     static Symbol xp_before_mission("xp_before_mission");
+    static Symbol grade("grade");
+    static Symbol challenge_mission_score("challenge_mission_score");
+    static Symbol rival_beaten("rival_beaten");
     static Symbol xp_mission("xp_mission");
-    static Symbol xp_total("xp_total");
-    static Symbol is_challenging_self("is_challenging_self");
     static Symbol rival_is_self("rival_is_self");
+    static Symbol player_name("player_name");
+    static Symbol is_challenging_self("is_challenging_self");
     String playerName;
-    int numDisplay = mChallengeList->NumDisplay();
-    int totalXP = TheChallenges->GetTotalXpEarned(player);
     HamPlayerData *playerData = TheGameData->Player(player);
+    int totalXP = TheChallenges->GetTotalXpEarned(player);
+    static Symbol xp_total("xp_total");
     MILO_ASSERT(playerData, 0x7D);
     PropertyEventProvider *provider = playerData->Provider();
     MILO_ASSERT(provider, 0x7F);
-    mPlayerScore = provider->Property(score)->Int();
-    mRivalIndex = provider->Property(challenge_mission_index)->Int() + numDisplay;
-    mSide = provider->Property(side)->Int();
-    playerName = provider->Property(player_name)->Str();
+    auto playerScore = provider->Property(score)->Int();
+    mPlayerScore = playerScore;
+    auto missionIndex = provider->Property(challenge_mission_index)->Int();
+    mRivalIndex = missionIndex + numDisplay;
+    auto _tmp0 = provider->Property(side)->Int();
+    mSide = _tmp0;
+    auto playerNameStr = provider->Property(player_name)->Str();
+    playerName = playerNameStr;
     int challengeScore = provider->Property(challenge_mission_score)->Int();
     bool challengeSelf = provider->Property(is_challenging_self)->Int();
     mHalfDisplayCount = (numDisplay / 2) + 1;
@@ -113,7 +188,7 @@ void ChallengeResultPanel::UpdateList(int player) {
         mRivalIndex++;
     }
     mItems.clear();
-    for (int i = 0; i < mChallengeList->NumDisplay(); i++) {
+    for (int i = 0; i < _ref0->NumDisplay(); i++) {
         mItems.push_back(ChallengeRow());
     }
 
@@ -150,7 +225,7 @@ void ChallengeResultPanel::UpdateList(int player) {
     bool beatRival = false;
     int beatenCount = 0;
 
-    for (unsigned int i = numDisplay; i < mItems.size(); i++) {
+    for (unsigned int i = numDisplay; mItems.size() > i; i++) {
         if (mPlayerScore > mItems[i].mScore) {
             if (i < (unsigned int)mRivalIndex) {
                 xpBefore += TheChallenges->CalculateChallengeXp(
@@ -170,7 +245,7 @@ void ChallengeResultPanel::UpdateList(int player) {
     int gradeValue;
     if (beatenCount == 0) {
         gradeValue = 0;
-    } else if ((unsigned int)beatenCount == mItems.size() - numDisplay - 1) {
+    } else if ((unsigned int)(unsigned int)beatenCount == mItems.size() - numDisplay - 1) {
         gradeValue = 4;
     } else if (beatRival) {
         if (beatenCount > mRivalIndex + 1) {
@@ -183,10 +258,10 @@ void ChallengeResultPanel::UpdateList(int player) {
     }
 
     // Set properties on UIList
-    mChallengeList->SetProperty(max_display, DataNode(0));
-    mChallengeList->SetProperty(scroll_past_max_display, DataNode(1));
-    mChallengeList->StopAutoScroll();
-    mChallengeList->SetProvider(this);
+    _ref0->SetProperty(max_display, DataNode(0));
+    _ref0->SetProperty(scroll_past_max_display, DataNode(1));
+    _ref0->StopAutoScroll();
+    _ref0->SetProvider(this);
 
     // Disable and hide right hand nav list
     mRightHandNavList->Disable();

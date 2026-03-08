@@ -336,4 +336,5 @@ class AnimPtr : public ObjPtr<RndPropAnim> {
 public:
     AnimPtr() : ObjPtr<RndPropAnim>(TheHamDirector) {}
     AnimPtr(RndPropAnim *anim) : ObjPtr<RndPropAnim>(TheHamDirector, anim) {}
+    virtual ~AnimPtr();
 };

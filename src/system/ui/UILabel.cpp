@@ -2,12 +2,14 @@
 
 #include "macros.h"
 #include "math/Color.h"
+#include "math/Geo.h"
 #include "obj/Data.h"
 #include "obj/Object.h"
 #include "obj/PropSync.h"
 #include "obj/PropSync_p.h"
 #include "obj/Task.h"
 #include "os/Debug.h"
+#include "rndobj/Cam.h"
 #include "rndobj/FontBase.h"
 #include "rndobj/Text.h"
 #include "rndobj/Trans.h"
@@ -22,15 +24,41 @@
 #include "utl/Loader.h"
 #include "utl/Locale.h"
 #include "utl/Str.h"
+#include "utl/SuperFormatString.h"
 #include "utl/Symbol.h"
 #include "utl/UTF8.h"
+#include <cmath>
 #include <cstring>
 
 bool UILabel::sDeferUpdate = false;
 UILabel *gMe = nullptr;
 
-float GetTextSizeFromPctHeight(float);
-float GetPctHeightFromTextSize(float);
+float GetTextSizeFromPctHeight(float f) {
+    if (TheLoadMgr.EditMode()) {
+        float depth = -TheUI->GetCam()->LocalXfm().v.y;
+        Vector2 v2a(0.0f, 0.0f);
+        Vector3 v3a;
+        TheUI->GetCam()->ScreenToWorld(v2a, depth, v3a);
+        Vector2 v2b(0.0f, f);
+        Vector3 v3b;
+        TheUI->GetCam()->ScreenToWorld(v2b, depth, v3b);
+        return std::fabs(v3a.z - v3b.z);
+    } else
+        return f;
+}
+
+float GetPctHeightFromTextSize(float f) {
+    if (TheLoadMgr.EditMode()) {
+        Vector3 v3a(0.0f, 0.0f, 0.0f);
+        Vector2 v2a;
+        TheUI->GetCam()->WorldToScreen(v3a, v2a);
+        Vector3 v3b(0.0f, 0.0f, -f);
+        Vector2 v2b;
+        TheUI->GetCam()->WorldToScreen(v3b, v2b);
+        return std::fabs(v2a.y - v2b.y);
+    } else
+        return f;
+}
 
 UILabel::UILabel() : mDirty(1), mLabelStyles(this) {
     mLabelStyles.resize(1);
@@ -456,15 +484,19 @@ void UILabel::Highlight() {
     RndTransformable::Highlight();
     Box box;
     GetWidthHeightBox(box);
-    Hmx::Color c(1.0f, 1.0f, 0.5f);
+    Hmx::Color color(1.0f, 1.0f, 0.5f, 1.0f);
     if (!CheckValid(false)) {
-        int secs = TheTaskMgr.UISeconds() * 2.0f;
-        if (secs < 0) {
-            c.Set(1.0f, 0.2f, 0.2f, 1.0f);
+        int secs = (int)(TheTaskMgr.UISeconds() * 2.0f);
+        if (secs % 2 == 0) {
+            color.red = 1.0f;
+            color.alpha = 1.0f;
+            color.green = 0.2f;
+            color.blue = 0.2f;
         }
     }
     RndText::Highlight();
-    UtilDrawBox(WorldXfm(), box, c, false);
+    const Transform &xfm = WorldXfm();
+    UtilDrawBox(xfm, box, color, false);
 }
 
 void UILabel::SetTextToken(Symbol s) {
@@ -667,20 +699,56 @@ char const *UILabel::GetDefaultText() const {
         return Localize(mTextToken, nullptr, TheLocale);
 }
 
-void UILabel::CenterWithLabel(UILabel *label, bool b2, float f3) {
-    MILO_ASSERT((mAlignment & RndText::kCenter) || (label->mAlignment & RndText::kCenter), 0x400);
-    Transform myXfm = LocalXfm();
-    Transform labelXfm = label->LocalXfm();
-    int add = b2 ? 1 : -1;
-    myXfm.v.x = label->mBoundsRight * 0.5f + f3 * 0.5f * (float)add + labelXfm.v.x;
-    labelXfm.v.x = -(label->mBoundsRight * 0.5f + f3 * 0.5f * (float)add - labelXfm.v.x);
-    SetLocalXfm(myXfm);
-    label->SetLocalXfm(labelXfm);
+void UILabel::CenterWithLabel(UILabel *label, bool b, float f) {
+    MILO_ASSERT(
+        (mAlignment & RndText::kCenter) || (label->mAlignment & RndText::kCenter),
+        0x400
+    );
+    int num = b ? -1 : 1;
+    Transform thisXfm = LocalXfm();
+    Transform otherXfm = label->LocalXfm();
+    float halfF = f * 0.5f;
+    thisXfm.v.x = -((mBoundsRight * 0.5f + halfF) * (float)num - thisXfm.v.x);
+    otherXfm.v.x = (label->mBoundsRight * 0.5f + halfF) * (float)num + otherXfm.v.x;
+    SetLocalXfm(thisXfm);
+    label->SetLocalXfm(otherXfm);
 }
 
 void UILabel::Init() {
     REGISTER_OBJ_FACTORY(UILabel);
     UILabelDir::Init();
+}
+
+void UILabel::SetTokenFmtImp(
+    Symbol s, const DataArray *da1, const DataArray *da2, int i, bool b
+) {
+    mTextToken = s;
+    if (mTextToken.Null()) {
+        SetDisplayText(gNullStr, true);
+    } else {
+        bool found;
+        const char *localized = Localize(mTextToken, &found, TheLocale);
+        if (found) {
+            SuperFormatString str(localized, da1, b, TheLocale, gNullStr);
+            if (da2) {
+                int size = da2->Size();
+                if (size > i) {
+                    do {
+                        const DataNode &n = da2->Evaluate(i);
+                        if (n.Type() == kDataSymbol) {
+                            str << Localize(n.Sym(da2), 0, TheLocale);
+                        } else {
+                            str << n;
+                        }
+                        i++;
+                    } while (i < size);
+                }
+            }
+            SetDisplayText(str.FinalStr(), false);
+        } else {
+            SetDisplayText(localized, false);
+        }
+    }
 }
 
 bool UILabel::AllowEditText() const {

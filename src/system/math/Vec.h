@@ -289,13 +289,32 @@ inline void Interp(const Vector2 &v1, const Vector2 &v2, float f, Vector2 &res) 
 }
 
 inline void Interp(const Vector3 &v1, const Vector3 &v2, float f, Vector3 &dst) {
-    if (f == 0) {
-        dst = v1;
-    } else if (f == 1) {
-        dst = v2;
-    } else {
-        dst.Set(Interp(v1.x, v2.x, f), Interp(v1.y, v2.y, f), Interp(v1.z, v2.z, f));
+    if (f == 0.0f) {
+        // Copy all fields including PAD via integer copy to avoid FP operations
+        ((u32 *)&dst)[0] = ((u32 *)&v1)[0];
+        ((u32 *)&dst)[1] = ((u32 *)&v1)[1];
+        ((u32 *)&dst)[2] = ((u32 *)&v1)[2];
+        ((u32 *)&dst)[3] = ((u32 *)&v1)[3];
+        return;
     }
+    if (f == 1.0f) {
+        // Copy all fields including PAD via integer copy to avoid FP operations
+        ((u32 *)&dst)[0] = ((u32 *)&v2)[0];
+        ((u32 *)&dst)[1] = ((u32 *)&v2)[1];
+        ((u32 *)&dst)[2] = ((u32 *)&v2)[2];
+        ((u32 *)&dst)[3] = ((u32 *)&v2)[3];
+        return;
+    }
+    // Cache z and x components to force specific load order for register allocation.
+    // Y is accessed inline in the expression to match target instruction scheduling.
+    float v1_z = v1.z;
+    float v2_z = v2.z;
+    float v1_x = v1.x;
+    float v2_x = v2.x;
+    // Compute dst.y, dst.z, dst.x in this specific order to match target stores
+    dst.y = f * (v2.y - v1.y) + v1.y;
+    dst.z = f * (v2_z - v1_z) + v1_z;
+    dst.x = f * (v2_x - v1_x) + v1_x;
 }
 
 inline float Distance(const Vector3 &v1, const Vector3 &v2) {

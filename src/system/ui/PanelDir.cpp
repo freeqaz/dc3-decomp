@@ -372,23 +372,28 @@ void PanelDir::SendTransition(Message const &msg, Symbol forward, Symbol back) {
 
 bool PanelDir::PanelNav(JoypadAction act, JoypadButton btn, Symbol controller_type) {
     UIComponent *comp = mFocusComponent;
-    if (comp) {
-        while (comp = ComponentNav(comp, act, btn, controller_type)) {
-            if (comp == mFocusComponent)
-                break;
-            if (comp->GetState() == UIComponent::kDisabled) {
-                continue;
-            }
-            static Symbol none("none");
-            if (controller_type != none) {
-                static Symbol panel_navigated("panel_navigated");
-                static Message panelNavigatedMsg(panel_navigated);
-                TheUI->Handle(panelNavigatedMsg, false);
-            }
-            SetFocusComponent(comp, controller_type);
-            return true;
-        }
+    if (!comp) {
+        goto fail;
     }
+    do {
+        comp = ComponentNav(comp, act, btn, controller_type);
+        if (!comp)
+            return false;
+        if (comp == mFocusComponent)
+            goto fail;
+        if (comp->GetState() == UIComponent::kDisabled) {
+            continue;
+        }
+        static Symbol none("none");
+        if (controller_type != none) {
+            static Symbol panelNavigated("panel_navigated");
+            static Message panelNavigatedMsg(panelNavigated);
+            TheUI->Handle(panelNavigatedMsg, false);
+        }
+        SetFocusComponent(comp, controller_type);
+        return true;
+    } while (true);
+fail:
     return false;
 }
 
@@ -448,7 +453,8 @@ DataNode PanelDir::GetFocusableComponentList() {
     }
     DataArrayPtr ptr(new DataArray(components.size()));
     int i = 0;
-    FOREACH (it, components) {
+    std::vector<UIComponent *>::iterator it = components.begin();
+    for (; it != components.end(); ++it, ++i) {
         ptr->Node(i) = *it;
     }
     return ptr;

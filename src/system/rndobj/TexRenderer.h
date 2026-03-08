@@ -38,6 +38,8 @@ public:
     static void Init() { REGISTER_OBJ_FACTORY(RndTexRenderer) }
 
     void DrawToTexture();
+    virtual void DrawBefore() {}
+    virtual void DrawAfter() {}
     void SetOutputTexture(RndTex *tex) { mOutputTexture = tex; }
 
 protected:

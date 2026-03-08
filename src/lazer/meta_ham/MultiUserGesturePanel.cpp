@@ -22,6 +22,7 @@
 #include "os/Debug.h"
 #include "os/Joypad.h"
 #include "os/JoypadMsgs.h"
+#include "rndobj/Draw.h"
 #include "rndobj/Mesh.h"
 #include "ui/UI.h"
 #include "ui/UIPicture.h"
@@ -30,9 +31,15 @@
 #include "utl/Symbol.h"
 
 MultiUserGesturePanel::MultiUserGesturePanel() {
+    // Initialize UI components and providers for both players (left/right sides)
+    // Note: (&mLeftNavList1)[i] pattern required for codegen - initializes nav list pairs
     for (int i = 0; i < 2; i++) {
+        (&mLeftNavList1)[i] = NULL;
+        (&mLeftNavList2)[i] = NULL;
         mCharacterProviders[i].SetPlayer(i);
+        mVenueProviders[i].SetPlayer(i);
         mCrewProviders[i].SetPlayer(i);
+        mOutfitProviders[i].SetPlayer(i);
         mDifficultyProviders[i].SetPlayer(i);
     }
 }
@@ -238,7 +245,7 @@ int MultiUserGesturePanel::GetPlayerIndex(int idx) const {
     int check = prop->Int();
     if (check == 0) {
         check = playerSide - 1;
-        if (idx == 0) {
+        if ((unsigned int)idx == 0) {
             idx = check - ((playerSide - 2) + (playerSide - 1 == 0));
         } else {
             idx = playerSide == 0;
@@ -329,6 +336,56 @@ void MultiUserGesturePanel::UpdateNavLists(int player) {
     MILO_ASSERT_RANGE(player, 0, 2, 0x9d);
     SkeletonChooser *skeletonChooser = TheHamUI.GetShellInput()->GetSkeletonChooser();
     MILO_ASSERT(skeletonChooser, 0xa0);
+
+    HamPlayerData *pPlayerData = TheGameData->Player(player);
+    int trackingID = pPlayerData->GetSkeletonTrackingID();
+    SkeletonSide playerSide = skeletonChooser->GetPlayerSide(player);
+
+    int sideIdx = playerSide - 1;
+
+    // Get nav lists for this player's side using array indexing
+    // Array is [mLeftNavList1, mRightNavList1, mLeftNavList2, mRightNavList2]
+    // For left side (sideIdx=-1): indices 20, 22 map to mLeftNavList1, mLeftNavList2
+    // For right side (sideIdx=0): indices 21, 23 map to mRightNavList1, mRightNavList2
+    int offset1 = (sideIdx + 0x15) * 4;
+    auto basePtr = reinterpret_cast<u8 *>(this);
+    HamNavList *navList1 = *reinterpret_cast<HamNavList **>(basePtr + offset1);
+
+    if (navList1) {
+        navList1->SetSkeletonTrackingID(trackingID);
+        auto hamUIBytes = reinterpret_cast<u8 *>(&TheHamUI);
+        if (((trackingID <= 0) && (*(char *)(reinterpret_cast<u8 *>(TheGestureMgr) + 0x426d) == '\0')) ||
+            (*reinterpret_cast<u32 *>(hamUIBytes + 0xf0) != 0)) {
+            navList1->SetSkeletonTrackingID(0);
+            navList1->Disengage();
+        }
+    }
+
+    auto thisBytes = reinterpret_cast<u8 *>(this);
+    int offset2 = (sideIdx + 0x17) * 4;
+    HamNavList *navList2 = *reinterpret_cast<HamNavList **>(thisBytes + offset2);
+
+    if (navList2) {
+        void **ptr = reinterpret_cast<void **>(reinterpret_cast<u8 *>(navList2) + 4);
+        void *obj = *ptr;
+        void *drawablePtr = *reinterpret_cast<void **>(reinterpret_cast<u8 *>(obj) + 0xc);
+        drawablePtr = reinterpret_cast<u8 *>(drawablePtr) + 4;
+        reinterpret_cast<RndDrawable *>(drawablePtr)->SetShowing(true);
+
+        navList2->SetSkeletonTrackingID(trackingID);
+        if (((trackingID <= 0) && (*(char *)(reinterpret_cast<u8 *>(TheGestureMgr) + 0x426d) == '\0')) ||
+            (*reinterpret_cast<u32 *>(reinterpret_cast<u8 *>(&TheHamUI) + 0xf0) != 0)) {
+            navList2->SetSkeletonTrackingID(0);
+            navList2->Disengage();
+            if (*reinterpret_cast<u32 *>(reinterpret_cast<u8 *>(&TheHamUI) + 0xf0) != 0) {
+                void **ptr2 = reinterpret_cast<void **>(reinterpret_cast<u8 *>(navList2) + 4);
+                void *obj2 = *ptr2;
+                void *drawablePtr2 = *reinterpret_cast<void **>(reinterpret_cast<u8 *>(obj2) + 0xc);
+                drawablePtr2 = reinterpret_cast<u8 *>(drawablePtr2) + 4;
+                reinterpret_cast<RndDrawable *>(drawablePtr2)->SetShowing(false);
+            }
+        }
+    }
 }
 
 DataNode MultiUserGesturePanel::OnMsg(const ButtonDownMsg &msg) {

@@ -58,25 +58,40 @@ char *NextBuf() {
         gThreadIds[0] = GetCurrentThreadId();
         gNumThreads = 1;
     } else {
-        int tID;
-        int curThread = GetCurrentThreadId();
-        int *tptr = &gThreadIds[0];
-        if (gThreadIds[gCurThread] != curThread) {
-            for (tID = 0; tID < gNumThreads; tID++) {
-                if (gThreadIds[tID] == GetCurrentThreadId()) {
-                    break;
-                }
-            }
-            if (tID == gNumThreads) {
-                for (tID = 0; tID < gNumThreads; tID++) {
-                    if (!ValidateThreadId(tID)) {
-                        gThreadIds[tID] = GetCurrentThreadId();
+        int threadIdx;
+        DWORD currentThreadId = GetCurrentThreadId();
+        if ((DWORD)gThreadIds[gCurThread] != currentThreadId) {
+            threadIdx = 0;
+            if (gNumThreads > 0) {
+                unsigned long *threadIdSlot = (unsigned long *)&gThreadIds[0];
+                do {
+                    DWORD loopThreadId = GetCurrentThreadId();
+                    if (*threadIdSlot == loopThreadId) {
                         break;
                     }
+                    threadIdx++;
+                    threadIdSlot++;
+                } while (threadIdx < gNumThreads);
+            }
+            if (threadIdx == gNumThreads) {
+                int activeThreadCount = gNumThreads;
+                threadIdx = 0;
+                if (gNumThreads > 0) {
+                    unsigned long *threadIdSlot = (unsigned long *)&gThreadIds[0];
+                    do {
+                        if (!ValidateThreadId(*threadIdSlot)) {
+                            gThreadIds[threadIdx] = GetCurrentThreadId();
+                            activeThreadCount = gNumThreads;
+                            break;
+                        }
+                        threadIdx++;
+                        threadIdSlot++;
+                        activeThreadCount = gNumThreads;
+                    } while (threadIdx < gNumThreads);
                 }
-                if (tID == gNumThreads) {
+                if (threadIdx == activeThreadCount) {
                     char msg[256];
-                    if (gNumThreads >= 6) {
+                    if (activeThreadCount >= 6) {
                         Hx_snprintf(
                             msg,
                             256,
@@ -86,11 +101,11 @@ char *NextBuf() {
                         TheDebug.Fail(msg, nullptr);
                         return nullptr;
                     }
-                    gThreadIds[tID] = GetCurrentThreadId();
+                    gThreadIds[threadIdx] = GetCurrentThreadId();
                     gNumThreads++;
                 }
             }
-            gCurThread = tID;
+            gCurThread = threadIdx;
         }
     }
 

@@ -258,6 +258,14 @@ public:
     // this derives off of std::vector<Node>::iterator in some way
     class iterator {
         friend class const_iterator;
+        friend class ObjPtrVec;
+
+    public:
+        typedef std::forward_iterator_tag iterator_category;
+        typedef Node value_type;
+        typedef ptrdiff_t difference_type;
+        typedef Node *pointer;
+        typedef Node &reference;
 
     private:
         typedef typename std::vector<Node>::iterator Base;
@@ -270,9 +278,10 @@ public:
         Node &operator*() const { return *it; }
         Node *operator->() const { return &(*it); }
 
-        iterator operator+(int idx) {
-            it += idx;
-            return *this;
+        iterator operator+(int idx) const {
+            iterator result = *this;
+            result.it += idx;
+            return result;
         }
 
         iterator operator++() {
@@ -287,6 +296,13 @@ public:
     class const_iterator {
         friend class ObjPtrVec;
 
+    public:
+        typedef std::forward_iterator_tag iterator_category;
+        typedef Node value_type;
+        typedef ptrdiff_t difference_type;
+        typedef const Node *pointer;
+        typedef const Node &reference;
+
     private:
         typedef typename std::vector<Node>::const_iterator Base;
         Base it;
@@ -298,9 +314,10 @@ public:
         const Node &operator*() const { return *it; }
         const Node *operator->() const { return &(*it); }
 
-        const_iterator operator+(int idx) {
-            it += idx;
-            return *this;
+        const_iterator operator+(int idx) const {
+            const_iterator result = *this;
+            result.it += idx;
+            return result;
         }
 
         const_iterator operator++() {
@@ -323,8 +340,14 @@ public:
     const_iterator end() const { return mNodes.end(); }
 #else
     iterator begin() { return empty() ? nullptr : mNodes.begin(); }
-    // regswapped and i have no idea why
-    iterator end() { return begin() + size(); }
+    // Register swap pattern: declaring size() before begin() affects PPC register allocation
+    // Variable declaration order is critical for matching FlowNode::MiloPreRun codegen
+    // See STYLEGUIDE.md §Variable Declaration Order
+    iterator end() {
+        int s = size();
+        iterator b = begin();
+        return b + s;
+    }
     const_iterator begin() const { return empty() ? nullptr : mNodes.begin(); }
     const_iterator end() const { return begin() + size(); }
 #endif

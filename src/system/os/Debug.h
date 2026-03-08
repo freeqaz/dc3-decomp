@@ -179,7 +179,22 @@ extern DebugNotifyOncePrinter TheDebugNotifyOncePrinter;
 #define MILO_PRINT_ONCE(...) TheDebugNotifyOncePrinter << MakeString(__VA_ARGS__)
 
 namespace {
-    bool AddToStrings(const char *name, std::list<String> &strings);
+    inline bool AddToStrings(const char *name, std::list<String> &strings) {
+        unsigned int count = 0;
+        std::list<String>::iterator it = strings.begin();
+        for (; it != strings.end(); ++it)
+            count++;
+        if (count > 0x10)
+            return false;
+        it = strings.begin();
+        for (; it != strings.end(); ++it) {
+            if (strcmp(it->c_str(), name) == 0)
+                return false;
+        }
+        String s(name);
+        strings.push_back(s);
+        return true;
+    }
 }
 
 class DebugNotifyOncer {

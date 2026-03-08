@@ -18,7 +18,6 @@
 #include "ThreeDSound.h"
 #include "Utl.h"
 #include "flow/Flow.h"
-#include "math/Decibels.h"
 #include "obj/Data.h"
 #include "obj/DataFile.h"
 #include "obj/DataFunc.h"
@@ -44,7 +43,6 @@
 #include "synth/WavMgr.h"
 #include "utl/Cache.h"
 #include "utl/Loader.h"
-#include <cstdio>
 
 namespace {
     struct DebugGraph {
@@ -177,7 +175,9 @@ void Synth::Init() {
     }
     mHud = RndOverlay::Find("synth_hud", true);
     mHud->SetCallback(this);
+#ifndef HX_NATIVE
     InitSecurity();
+#endif
 }
 
 void Synth::InitSecurity() {
@@ -194,6 +194,8 @@ void Synth::InitSecurity() {
     mByteGrinder.Init();
 }
 
+extern "C" void OnlyReturns();
+
 void Synth::Terminate() {
     MILO_ASSERT(mZombieInsts.empty(), 0x116);
     DeleteAll(mMics);
@@ -202,7 +204,7 @@ void Synth::Terminate() {
     RELEASE(mSfxFader);
     RELEASE(mMidiInstrumentFader);
     RELEASE(mMicClientMapper);
-    SynthUtlTerm();
+    OnlyReturns();
 }
 
 void Synth::Poll() {
@@ -249,47 +251,6 @@ FxSendPitchShift *Synth::CreatePitchShift(int stage, SendChannels channels) {
 
 void Synth::DestroyPitchShift(FxSendPitchShift *shift) { delete shift; }
 
-float Synth::UpdateOverlay(RndOverlay *o, float y) {
-    Hmx::Color white(1, 1, 1, 1);
-    float f24 = (float)TheRnd.Width() * (y + 0.265f);
-    if (mDebugStream) {
-        DrawMeterScale(f24);
-        float volume = mDebugStream->Faders()->GetVolume();
-        DrawMeter(f24, volume, 0, "stream");
-        for (int i = 0; i < mDebugStream->GetNumChannels(); i++) {
-            DrawMeter(
-                f24,
-                mDebugStream->ChannelFaders(i).GetVolume(),
-                0,
-                MakeString("chan %i", i)
-            );
-        }
-    }
-    if (!mLevelData.empty()) {
-        DrawMeterScale(f24);
-    }
-    for (int i = 0; i < mLevelData.size(); i++) {
-        float rms = RatioToDb(mLevelData[i].mRMS);
-        float peakhold = RatioToDb(mLevelData[i].mPeakHold);
-        if (rms > 2) {
-            rms = -30;
-        }
-        DrawMeter(f24, rms, peakhold, mLevelData[i].mName.c_str());
-    }
-    char buf[64];
-    sprintf(buf, "Total active Sequences: %d", SynthPollable::Pollables().size());
-    TheRnd.DrawString(buf, Vector2(100, f24), white, true);
-    float f12 = f24 + 12.0f;
-    FOREACH (it, SynthPollable::Pollables()) {
-        const char *name = (*it)->GetSoundDisplayName();
-        if (*name != '\0') {
-            TheRnd.DrawString(name, Vector2(100, f12), white, true);
-            f12 += 12.0f;
-        }
-    }
-    return f12 / (float)TheRnd.Width();
-}
-
 void Synth::SetMasterVolume(float volume) { mMasterFader->SetVolume(volume); }
 
 float Synth::GetMasterVolume() { return mMasterFader->DuckedValue(); }
@@ -304,6 +265,22 @@ void Synth::ToggleHud() {
 const ADSRImpl *Synth::DefaultADSR() {
     MILO_ASSERT(mADSR, 0x498);
     return mADSR;
+}
+
+void Synth::DrawMeterScale(float &y) {
+    int db = -40;
+    float height = (float)TheRnd.Width();
+    Hmx::Color color(1.0f, 1.0f, 1.0f, 1.0f);
+    float left = height * 0.2f;
+    float width = height * 0.7f;
+    Vector2 pos(left, y);
+    TheRnd.DrawString(MakeString("%i", db), pos, color, true);
+    db = -20;
+    Vector2 pos2(left + width * 0.5f, y);
+    TheRnd.DrawString(MakeString("%i", db), pos2, color, true);
+    Vector2 pos3(left + width, y);
+    TheRnd.DrawString("0", pos3, color, true);
+    y += 16.0f;
 }
 
 void Synth::SetFX(const DataArray *data) {
@@ -367,7 +344,8 @@ void Synth::RemovePlayHandler(Hmx::Object *obj) { mPlayHandlers.remove(obj); }
 
 void Synth::SendToPlayHandlers(Sound *sound) {
     SoundPlayMsg msg(sound);
-    FOREACH (it, mPlayHandlers) {
+    auto end_it = mPlayHandlers.end();
+    for (auto it = mPlayHandlers.begin(); it != end_it; ++it) {
         (*it)->Handle(msg, false);
     }
 }
@@ -431,6 +409,8 @@ void Synth::StopAllSounds() {
     }
 }
 
+int Synth::GetNumMics() const { return mNumMics; }
+
 int Synth::GetSampleMem(ObjectDir *dir, Platform p) {
     int num = 0;
     for (ObjDirItr<SynthSample> it(dir, true); it != nullptr; ++it) {
@@ -440,17 +420,19 @@ int Synth::GetSampleMem(ObjectDir *dir, Platform p) {
 }
 
 void Synth::AddZombie(SampleInst *inst) {
-    inst->Stop(false);
-    mZombieInsts.push_back(inst);
+    inst->SynthPoll();
+    mZombieInsts.insert(mZombieInsts.end(), inst);
 }
 
 void Synth::CullZombies() {
-    for (auto it = mZombieInsts.begin(); it != mZombieInsts.end();) {
-        auto next = it++;
+    std::list<SampleInst *>::iterator next = mZombieInsts.begin();
+    std::list<SampleInst *>::iterator it;
+    while (next != mZombieInsts.end()) {
+        it = next;
+        ++next;
         if ((*it)->DonePlaying()) {
             mZombieInsts.erase(it);
         }
-        it = next;
     }
 }
 
@@ -497,6 +479,11 @@ DataNode Synth::OnSetFXVol(const DataArray *a) {
     return 0;
 }
 
+
+#ifdef HX_NATIVE
+extern Synth *CreateNativeSynth();
+#endif
+
 void SynthPreInit() {
     MILO_ASSERT(!TheSynth, 0x283);
     DataArray *cfg = SystemConfig("synth");
@@ -504,7 +491,13 @@ void SynthPreInit() {
     if (useNullSynth) {
         TheSynth = new Synth();
     } else {
-        // TheSynth = Synth::New();
+#ifdef HX_NATIVE
+        TheSynth = CreateNativeSynth();
+#else
+        // TODO: Synth::New() creates Synth360 on Xbox; stubbed for now
+        // because XAudio2 isn't available in headless mode.
+        TheSynth = new Synth();
+#endif
     }
     if (TheSynth->Fail()) {
         // RELEASE(TheSynth);
@@ -527,8 +520,10 @@ void SynthInit() {
 }
 
 void SynthTerminate() {
+    TheSynth->StopAllSounds();
     TheSynth->Poll();
     TheDebug.RemoveExitCallback(SynthTerminate);
     TheSynth->Terminate();
-    // RELEASE(TheSynth);
+    delete TheSynth;
+    TheSynth = nullptr;
 }

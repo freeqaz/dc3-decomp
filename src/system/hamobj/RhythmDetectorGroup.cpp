@@ -1,5 +1,8 @@
 #include "RhythmDetectorGroup.h"
+#include "hamobj/HollaBackMinigame.h"
 #include "hamobj/RhythmDetector.h"
+
+void HollaBackMinigame::Enter() {}
 
 RhythmDetectorGroup::RhythmDetectorGroup()
     : mDetectors(this, (EraseMode)0), mRating(0.0), mFreshness(0.0), mSkeletonIndex(-1),
@@ -59,15 +62,19 @@ BEGIN_LOADS(RhythmDetectorGroup)
 END_LOADS
 
 void RhythmDetectorGroup::Poll() {
-    if (!TheLoadMgr.EditMode()) {
-        mRating = 0;
-        mFreshness = 0;
-        FOREACH (it, mDetectors) {
-            RhythmDetector *cur = *it;
-            mRating = Max(mRating, cur->Groove());
-            mFreshness = Max(mFreshness, cur->Freshness());
+    RhythmDetector* detector;
+    float groove, freshness;
+    if (TheLoadMgr.EditMode() == false) {
+        mRating = 0.0f;
+        mFreshness = 0.0f;
+        FOREACH(it, mDetectors) {
+            detector = *it;
+            groove = detector->Groove();
+            mRating = (mRating - groove < 0.0f) ? groove : mRating;
+            freshness = detector->Freshness();
+            mFreshness = (mFreshness - freshness < 0.0f) ? freshness : mFreshness;
         }
-        if (mDebugGraph) {
+        if (mDebugGraph != 0) {
             mDebugGraph->AddData(mRating, false);
             mDebugGraph->Draw();
         }
@@ -90,6 +97,8 @@ void RhythmDetectorGroup::RemoveDebugGraphs() {
 void RhythmDetectorGroup::AddDebugGraphs() {
     float f6 = 1.0f / (float)(mDetectors.size() + 1);
     float f7 = f6 * 0.9f;
+    float f10 = f6;
+    Hmx::Color bgColor = Hmx::Color(0.4, 0.4, 0.4, 0.8);
     delete mDebugGraph;
     mDebugGraph = new DebugGraph(
         0.1f,
@@ -97,14 +106,13 @@ void RhythmDetectorGroup::AddDebugGraphs() {
         0.8f,
         0.9f,
         Hmx::Color(0.4, 0.4, 0.4, 0.8),
-        Hmx::Color(0.4, 0.4, 0.4, 0.8),
+        bgColor,
         null,
         0.0,
         2.0,
         ""
     );
     mDebugGraph->SetThresholdValue(1);
-    float f10 = f6;
     FOREACH (it, mDetectors) {
         RhythmDetector *cur = *it;
         cur->RemoveDebugGraphs();
