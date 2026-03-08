@@ -19,7 +19,7 @@ public:
     void Clear();
     void SetRequiredMs(int ms) { mRequiredMs = ms; }
     void SetRaisedMs(int ms) { mRaisedMs = ms; }
-    void SetUnk4c(bool b) { unk4c = b; }
+    void SetUnk48(bool b) { unk48 = b; }
 
     void SetStandingStill(bool b) { mStandingStill = b; }
     bool StandingStill() const { return mStandingStill; }
@@ -30,7 +30,6 @@ private:
     int mRaisedMs; // 0x30
     int mRequiredMs; // 0x34
     Vector3 unk38; // 0x38
-    int unk44; // 0x44 - padding field for 16-byte copy alignment
-    float mForwardFacingCutoff; // 0x48
-    bool unk4c;
+    float mForwardFacingCutoff; // 0x44
+    bool unk48;
 };

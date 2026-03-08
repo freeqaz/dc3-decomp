@@ -316,7 +316,7 @@ bool VectorSort<RndMesh *>::operator()(RndMesh *item1, RndMesh *item2) {
         std::find(vector.begin(), vector.end(), item1);
     std::vector<RndMesh *>::const_iterator it2 =
         std::find(vector.begin(), vector.end(), item2);
-    return it1 < it2;
+    return (it1 - vector.begin()) < (it2 - vector.begin());
 }
 
 void RndAmbientOcclusion::BuildObjectLists() {

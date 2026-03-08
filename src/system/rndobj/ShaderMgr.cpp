@@ -92,18 +92,18 @@ void RndShaderMgr::UpdateCache(const Transform &xfm, int idx) {
     float *p = &mConstantCache[idx * 12];
 
     // Load transform components - declaration order affects register allocation
-    float xx = xfm.m.x.x;
-    float xy = xfm.m.x.y;
     float xz = xfm.m.x.z;
     float yx = xfm.m.y.x;
-    float yy = xfm.m.y.y;
-    float yz = xfm.m.y.z;
     float zx = xfm.m.z.x;
-    float zy = xfm.m.z.y;
-    float zz = xfm.m.z.z;
-    float tx = xfm.v.x;
-    float ty = xfm.v.y;
+    float yz = xfm.m.y.z;
+    float xy = xfm.m.x.y;
     float tz = xfm.v.z;
+    float xx = xfm.m.x.x;
+    float zy = xfm.m.z.y;
+    float ty = xfm.v.y;
+    float yy = xfm.m.y.y;
+    float tx = xfm.v.x;
+    float zz = xfm.m.z.z;
 
     // Store in column-major order for GPU shader constants (transpose)
     p[0] = xx;

@@ -60,7 +60,7 @@ END_PROPSYNCS
 // - Target pre-loads NumDisplay() into r29 across Write call
 // - Speed() call is ICF-merged to merged_82752368 (verified: UIListState::Speed)
 BEGIN_SAVES(UIListDir)
-    SAVE_REVS(0, 1)
+    SAVE_REVS(1, 0)
     SAVE_SUPERCLASS(RndDir)
     bs << mOrientation;
     bs << mFadeOffset;

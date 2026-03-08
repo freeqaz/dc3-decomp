@@ -244,7 +244,7 @@ DirectionGestureFilterDoubleUser::DirectionGestureFilterDoubleUser(
     for (int i = 0; i < 2; i++) {
         mStillFilters[i] = new StandingStillGestureFilter();
         mStillFilters[i]->SetRequiredMs(750);
-        mStillFilters[i]->SetUnk4c(true);
+        mStillFilters[i]->SetUnk48(true);
     }
 }
 

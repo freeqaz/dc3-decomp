@@ -195,8 +195,10 @@ MatShaderOptions GetDefaultMatShaderOpts(const Hmx::Object *obj, RndMat *mat) {
     if (mesh) {
         if (mesh->Mat() == mat) {
             opts.SetLast5(0x12);
-            opts.SetHasBones(mesh->NumBones() != 0);
-            opts.SetHasAOCalc(mesh->HasAOCalc());
+            auto _tmp4 = mesh->NumBones();
+            opts.SetHasBones(_tmp4 != (int)0);
+            auto _tmp1 = mesh->HasAOCalc();
+            opts.SetHasAOCalc(_tmp1);
         }
     } else {
         const RndMultiMesh *multimesh = dynamic_cast<const RndMultiMesh *>(obj);

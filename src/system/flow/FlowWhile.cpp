@@ -182,7 +182,7 @@ void FlowWhile::ReActivate() {
     timer.Restart();
     PushDrivenProperties();
     mEntryCount++;
-    if (mEntryCount > 8) {
+    if ((int)mEntryCount > 8) {
         char *path = (char *)PathName(Dir());
         MILO_NOTIFY(
             "While reentrance count > 8 in flow %s, did you mean to use a switch? Aborting while node behavior",
@@ -212,7 +212,7 @@ void FlowWhile::ReActivate() {
                     break;
                 }
             }
-            if (validCase != running) {
+            if (running != validCase) {
                 running->RequestStop();
             }
         }

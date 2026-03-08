@@ -383,7 +383,8 @@ void Synth::RemovePlayHandler(Hmx::Object *obj) { mPlayHandlers.remove(obj); }
 
 void Synth::SendToPlayHandlers(Sound *sound) {
     SoundPlayMsg msg(sound);
-    FOREACH (it, mPlayHandlers) {
+    auto end_it = mPlayHandlers.end();
+    for (auto it = mPlayHandlers.begin(); it != end_it; ++it) {
         (*it)->Handle(msg, false);
     }
 }

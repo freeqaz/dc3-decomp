@@ -330,32 +330,26 @@ public:
     DataArray *UncheckedArray(int i) const { return Node(i).UncheckedArray(); }
     DataFunc *UncheckedFunc(int i) const { return Node(i).UncheckedFunc(); }
     const char *UncheckedStr(int i) const { return Node(i).UncheckedStr(); }
-#ifdef HX_NATIVE
     int UncheckedInt(int i) { return Node(i).UncheckedInt(); }
     Hmx::Object *UncheckedObj(int i) { return Node(i).UncheckedObj(); }
     DataNode *UncheckedVar(int i) { return Node(i).UncheckedVar(); }
     DataArray *UncheckedArray(int i) { return Node(i).UncheckedArray(); }
     DataFunc *UncheckedFunc(int i) { return Node(i).UncheckedFunc(); }
     const char *UncheckedStr(int i) { return Node(i).UncheckedStr(); }
-#endif
 
     /** Get the DataType at the given node index.
      * @param [in] i The node index.
      * @returns The resulting DataType.
      */
     DataType Type(int i) const { return Node(i).Type(); }
-#ifdef HX_NATIVE
     DataType Type(int i) { return Node(i).Type(); }
-#endif
 
     /** Get the int at the given node index.
      * @param [in] i The node index.
      * @returns The resulting int.
      */
     int Int(int i) const { return Node(i).Int(this); }
-#ifdef HX_NATIVE
     int Int(int i) { return Node(i).Int(this); }
-#endif
 
     /** Get the Symbol at the given node index.
      * @param [in] i The node index.
@@ -375,63 +369,49 @@ public:
      * @returns The resulting string.
      */
     const char *Str(int i) const { return Node(i).Str(this); }
-#ifdef HX_NATIVE
     const char *Str(int i) { return Node(i).Str(this); }
-#endif
 
     /** Get the literal string at the given node index.
      * @param [in] i The node index.
      * @returns The resulting string.
      */
     const char *LiteralStr(int i) const { return Node(i).LiteralStr(this); }
-#ifdef HX_NATIVE
     const char *LiteralStr(int i) { return Node(i).LiteralStr(this); }
-#endif
 
     /** Get the float at the given node index.
      * @param [in] i The node index.
      * @returns The resulting float.
      */
     float Float(int i) const { return Node(i).Float(this); }
-#ifdef HX_NATIVE
     float Float(int i) { return Node(i).Float(this); }
-#endif
 
     /** Get the Hmx::Object at the given node index.
      * @param [in] i The node index.
      * @returns The resulting Hmx::Object.
      */
     Hmx::Object *GetObj(int i) const { return Node(i).GetObj(this); }
-#ifdef HX_NATIVE
     Hmx::Object *GetObj(int i) { return Node(i).GetObj(this); }
-#endif
 
     /** Get the DataArray at the given node index.
      * @param [in] i The node index.
      * @returns The resulting DataArray.
      */
     DataArray *Array(int i) const { return Node(i).Array(this); }
-#ifdef HX_NATIVE
     DataArray *Array(int i) { return Node(i).Array(this); }
-#endif
 
     /** Get the command DataArray at the given node index.
      * @param [in] i The node index.
      * @returns The resulting command DataArray.
      */
     DataArray *Command(int i) const { return Node(i).Command(this); }
-#ifdef HX_NATIVE
     DataArray *Command(int i) { return Node(i).Command(this); }
-#endif
 
     /** Get the var DataNode at the given node index.
      * @param [in] i The node index.
      * @returns The resulting var DataNode.
      */
     DataNode *Var(int i) const { return Node(i).Var(this); }
-#ifdef HX_NATIVE
     DataNode *Var(int i) { return Node(i).Var(this); }
-#endif
 
     /** Get the Hmx::Object derivative at the given node index.
      * @param [in] i The node index.
@@ -588,9 +568,7 @@ public:
     DataNode
     ExecuteScript(int firstCmd, Hmx::Object *_this, const DataArray *_args, int firstArg);
     const DataNode &Evaluate(int i) const { return Node(i).Evaluate(); }
-#ifdef HX_NATIVE
     const DataNode &Evaluate(int i) { return Node(i).Evaluate(); }
-#endif
 
     POOL_OVERLOAD(DataArray, 0xd2);
 };

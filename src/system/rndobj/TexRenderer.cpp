@@ -205,7 +205,7 @@ BEGIN_LOADS(RndTexRenderer)
     if (d.rev > 5) {
         d >> mDrawPreClear;
     } else {
-        mDrawPreClear = true;
+        mDrawPreClear = false;
     }
     if (d.rev > 6) {
         d >> mDrawWorldOnly;
@@ -214,7 +214,7 @@ BEGIN_LOADS(RndTexRenderer)
         d >> mPrimeDraw;
     }
     if (d.rev > 8) {
-        d >> mForce;
+        d >> mForceMips;
     }
     if (d.rev > 9) {
         bs >> mMirrorCam;

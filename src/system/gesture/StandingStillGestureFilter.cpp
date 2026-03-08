@@ -6,7 +6,7 @@
 #include "obj/Object.h"
 
 StandingStillGestureFilter::StandingStillGestureFilter()
-    : mRequiredMs(500), mForwardFacingCutoff(0.4f), unk4c(false) {
+    : mRequiredMs(500), mForwardFacingCutoff(0.4f), unk48(false) {
     Clear();
 }
 
@@ -48,7 +48,7 @@ void StandingStillGestureFilter::Update(const Skeleton &skeleton, int ms) {
         return;
     }
 
-    if (unk4c)
+    if (unk48)
         goto StandingStillLogic;
 
     {
