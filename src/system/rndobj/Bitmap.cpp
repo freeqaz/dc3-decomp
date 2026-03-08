@@ -244,7 +244,7 @@ void RndBitmap::Create(void *buffer) {
         unsigned char buf;
         LoadHeader(bs, buf);
         if (mBuffer) {
-            MemFree(mBuffer, __FILE__, 0x203);
+            MemFree(mBuffer, __FILE__, 0x1FC);
             mBuffer = 0;
         }
         mBuffer = (u8 *)buffer;
@@ -252,10 +252,10 @@ void RndBitmap::Create(void *buffer) {
 
         int pbytes = PaletteBytes();
         mPalette = pbytes ? i5 : 0;
+        mPixels = i5 + pbytes;
 
         int pixbytes = PixelBytes();
-        mPixels = i5 + pbytes;
-        u8 *pixels = i5 + pbytes + pixbytes;
+        u8 *pixels = mPixels + pixbytes;
         RELEASE(mMip);
         int width = mWidth;
         int height = mHeight;

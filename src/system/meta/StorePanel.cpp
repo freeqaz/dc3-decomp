@@ -171,7 +171,7 @@ void StorePanel::Poll() {
                     if (mPurchaser->IsSuccess()) {
                         std::vector<unsigned long long> songIds;
                         for (size_t i = 0; i < mCartOffers.size(); i++) {
-                            songIds.push_back(mCartOffers[i]->songID);
+                            songIds.push_back(mCartOffers[i].first->songID);
                         }
                         void *mem = operator new(0x64);
                         MultipleItemsPostPurchaseEnumJob *job = 0;

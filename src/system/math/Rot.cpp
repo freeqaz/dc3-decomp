@@ -77,7 +77,8 @@ void Hmx::Quat::Set(const Hmx::Matrix3 &m) {
             i = 2;
         int j = nxt[i];
         int k = nxt[j];
-        float root = std::sqrt(m[i][i] - m[j][j] - m[k][k] + 1.0f);
+        float mii = m[i][i];
+        float root = std::sqrt(mii - m[j][j] - m[k][k] + 1.0f);
         (*this)[i] = root * 0.5f;
         if (root != 0.0f) {
             root = 0.5f / root;

@@ -62,8 +62,8 @@ class MiloLogSwapPattern(Pattern):
             if d.target_opcode in ("stw", "lwz") or d.base_opcode in ("stw", "lwz"):
                 return True
 
-        # Insert/delete differences
-        if diagnosis.insert_count > 0 or diagnosis.delete_count > 0:
+        # Insert/delete differences (check via clusters)
+        if any(c.inserts > 0 or c.deletes > 0 for c in diagnosis.clusters):
             return True
 
         return False

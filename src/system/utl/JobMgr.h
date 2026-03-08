@@ -75,7 +75,7 @@ private:
 
 class MultipleItemsEnumJob : public Job {
 public:
-    MultipleItemsEnumJob(Hmx::Object *, int);
+    MultipleItemsEnumJob(Hmx::Object *, int, std::vector<u64> &);
     virtual ~MultipleItemsEnumJob();
     virtual void Start();
     virtual bool IsFinished();
@@ -83,40 +83,35 @@ public:
     virtual void OnCompletion(Hmx::Object *);
 
 protected:
-    Hmx::Object *mObject;           // 0x8
-    int mUnkc;                      // 0xc
-    u64 *mItemIDsBegin;
-    u64 *mItemIDsEnd;
-    int mStatus;                    // 0x18
-    bool mSuccess;                  // 0x1c
-    int unk20;
-    int unk24;
-    XOVERLAPPED mOverlapped;        // 0x28
-    int mEnumStatus;
-    bool mEnumSuccess;
-    int unk38;
-    int unk3c;
-    int unk40;
-    int unk44;
-    int unk48;
-    int unk4c;
-    int unk50;
-    int unk54;
-    int unk58;
-    Symbol *mOfferSymbol;
-    int mPurchaserID;
+    void Poll();
+
+    Hmx::Object *mObject;                  // 0x08
+    int mUserIndex;                         // 0x0c
+    std::vector<u64> mItemIDs;              // 0x10 (begin, end, capacity = 12 bytes)
+    std::vector<bool> mPurchased;           // 0x1c (20 bytes)
+    int mStatus;                            // 0x30
+    bool mSuccess;                          // 0x34
+    void *mEnumBuffer;                      // 0x38
+    HANDLE mEnumHandle;                     // 0x3c
+    XOVERLAPPED mOverlapped;               // 0x40
+    Symbol mOfferSymbol;                    // 0x5c
+    int mPurchaserID;                       // 0x60
 };
 
 class MultipleItemsPostPurchaseEnumJob : public MultipleItemsEnumJob {
 public:
-    MultipleItemsPostPurchaseEnumJob(Hmx::Object *, int, std::vector<unsigned long long> &, Symbol, unsigned int);
+    MultipleItemsPostPurchaseEnumJob(Hmx::Object *, int, std::vector<u64> &, Symbol, unsigned int);
     virtual ~MultipleItemsPostPurchaseEnumJob();
     virtual void OnCompletion(Hmx::Object *);
 };
 
 DECLARE_MESSAGE(SingleItemEnumCompleteMsg, "single_item_enum_complete")
+SingleItemEnumCompleteMsg(bool success, bool purchaseMade, const String &offerID)
+    : Message(Type(), success, purchaseMade, offerID) {}
 bool Success() const { return mData->Int(2); }
 bool HasOfferID() const { return mData->Int(3); }
 unsigned long long OfferID() const;
+void SetPurchaseMade(bool b) { mData->Node(3) = b; }
+void SetOfferID(const String &s) { mData->Node(4) = DataNode(s); }
 END_MESSAGE
 

@@ -376,35 +376,27 @@ void StandardStream::UpdateTime() {
 
     float rawTime = GetRawTime();
 
-    // Quantize raw time to sample boundaries
-    // 0.1875 = 1000.0 / (sampleRate=44100) * (something) ... actually these are
-    // magic constants from the original binary for 44100Hz sample-aligned timing
     float quantized = floorf(rawTime * 0.1875f + 0.5f) * 5.3333335f;
 
     float timerMs = mTimer.Ms();
-    // Adjust timerMs by the residual (rawTime - quantized)
     float adjusted = timerMs - (rawTime - quantized);
     float adjustedQuantized = floorf(adjusted * 0.1875f);
 
-    if (quantized == adjustedQuantized * 5.3333335f) {
-        // Already aligned, just update mLastStreamTime
-        mLastStreamTime = mTimer.Ms();
-        return;
-    }
+    if (quantized != adjustedQuantized * 5.3333335f) {
+        float drift = quantized - adjusted;
+        if (drift < 0.0f) {
+            drift += 5.3333335f;
+        }
 
-    float drift = quantized - adjusted;
-    if (drift < 0.0f) {
-        drift += 5.3333335f;
-    }
+        if (fabsf(drift) < 5.3333335f) {
+            drift *= 0.1f;
+        }
 
-    if (fabsf(drift) < 5.3333335f) {
-        drift *= 0.1f;
-    }
+        mTimer.Reset(mTimer.Ms() + drift);
 
-    mTimer.Reset(mTimer.Ms() + drift);
-
-    if (fabsf(drift) > 50.0f && sReportLargeTimerErrors) {
-        MILO_NOTIFY(MakeString("Large timer error: %f", drift));
+        if (fabsf(drift) > 50.0f && sReportLargeTimerErrors) {
+            MILO_LOG("timer error is large: %f\n", drift);
+        }
     }
 
     mLastStreamTime = mTimer.Ms();
@@ -418,10 +410,12 @@ void StandardStream::UpdateTimeByFiltering() {
 
     float drift = GetRawTime() - mTimer.Ms();
 
-    if (fabsf(drift) <= 50.0f) {
+    if (fabsf(drift) > 50.0f) {
+        if (sReportLargeTimerErrors) {
+            MILO_LOG("timer error is large: %f\n", drift);
+        }
+    } else {
         drift *= 0.1f;
-    } else if (sReportLargeTimerErrors) {
-        MILO_NOTIFY(MakeString("Large timer error: %f", drift));
     }
 
     mTimer.Reset(mTimer.Ms() + drift);

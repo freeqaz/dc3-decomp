@@ -12,15 +12,6 @@
 
 extern "C" LONG CompareFileTime(const FILETIME *, const FILETIME *);
 
-typedef struct _WIN32_FILE_ATTRIBUTE_DATA {
-    DWORD dwFileAttributes;
-    FILETIME ftCreationTime;
-    FILETIME ftLastAccessTime;
-    FILETIME ftLastWriteTime;
-    DWORD nFileSizeHigh;
-    DWORD nFileSizeLow;
-} WIN32_FILE_ATTRIBUTE_DATA;
-
 void MakeDir(const char *path) {
     String dir(path);
     String parent(FileGetPath(dir.c_str()));
@@ -42,10 +33,10 @@ bool BinkMovieImpl::PlatformCacheFile(const char *filename) {
         return false;
     }
 
-    long long fileTime = ((long long)stat.st_mtime + 0x2B6109100LL) * 10000000LL;
+    long long fileTime = ((long long)(long)stat.st_mtime + 0x2B6109100LL) * 10000000LL;
     FILETIME srcTime;
+    srcTime.dwHighDateTime = (DWORD)(fileTime >> 32);
     srcTime.dwLowDateTime = (DWORD)fileTime;
-    srcTime.dwHighDateTime = bool((DWORD)(fileTime >> 32));
 
     String cachePath(FileMakePath("DEVKIT:", filename));
     FileQualifiedFilename(cachePath, cachePath.c_str());

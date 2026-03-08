@@ -440,31 +440,21 @@ Symbol RemoveDigitSuffix(const Symbol &symbol) {
     trimmedText[0] = '\0';
     memset(trimmedText + 1, 0, 63);
 
-    const char *symbolText = *(const char **)&symbol;
-    const char *scanPtr = symbolText;
-    unsigned char scanCh;
-    do {
-        scanCh = (unsigned char)*scanPtr;
-        ++scanPtr;
-    } while (scanCh != '\0');
-
-    int symbolLen = scanPtr - symbolText;
-    symbolLen -= 1;
-    if (symbolLen < 1) {
-        TheDebug.Fail(MakeString(kAssertStr, "App.cpp", 0x2AB, "len > 0"), nullptr);
-    }
+    const char *symbolText = symbol.Str();
+    int len = strlen(symbolText);
+    MILO_ASSERT(len > 0, 0x2AB);
 
 #ifdef HX_NATIVE
     int copyLen = std::find_if(
                       symbolText,
-                      symbolText + symbolLen,
+                      symbolText + len,
                       static_cast<int (*)(int)>(isdigit)
     ) - symbolText;
 #else
     stlpmtx_std::random_access_iterator_tag findTag;
     int copyLen = stlpmtx_std::__find_if(
                       symbolText,
-                      symbolText + symbolLen,
+                      symbolText + len,
                       static_cast<int (*)(int)>(isdigit),
                       findTag
     ) - symbolText;

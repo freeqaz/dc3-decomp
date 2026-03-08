@@ -70,7 +70,7 @@ bool HDCache::ReadFail() {
 
 bool HDCache::ReadDone() {
     File *file = mReadArkFiles[mReadFileIdx];
-    if (!file) {
+    if ((int)file == 0) {
         return true;
     }
     return file->ReadDone();

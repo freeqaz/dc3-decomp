@@ -263,13 +263,12 @@ SuperFormatString::SuperFormatString(
 const char *SuperFormatString::FinalStr() {
     if (!(!mTokensOnly)) {
         return mFmt;
-    } else {
-        const char *result = Str();
-        if (mHasPercentFormat) {
-            String str(result);
-            str += "%s";
-            result = MakeString(str.c_str(), "");
-        }
+    }
+    const char *result = Str();
+    if (!mHasPercentFormat) {
         return result;
     }
+    String str(result);
+    str += "%s";
+    return MakeString(str.c_str(), "");
 }

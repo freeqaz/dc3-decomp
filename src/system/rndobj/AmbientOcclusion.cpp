@@ -462,25 +462,20 @@ bool RndAmbientOcclusion::IsValid_AOReceive(const RndMesh *mesh) const {
         return false;
     }
     RndMat *mat = mesh->Mat();
-    bool _result = false;
     if (mat != NULL) {
         ZMode zmode = mat->GetZMode();
-        bool transparent = false;
         float alpha = mat->Alpha();
-        if (zmode == kZModeDisable || zmode == kZModeTransparent || alpha == 0.0f) {
-            transparent = true;
-        }
+        isTransparent = (zmode == kZModeDisable || zmode == kZModeTransparent || alpha == 0.0f);
         isPrelit = mat->Prelit();
-        isTransparent = transparent;
     }
     if (!mIgnoreHidden || mesh->Showing()) {
         if (!mIgnoreTransparent || !isTransparent) {
             if (!mIgnorePrelit || !isPrelit) {
-                                _result = true;
+                return true;
             }
         }
     }
-    return _result;
+    return false;
 }
 
 bool RndAmbientOcclusion::IsValid_Tessellate(

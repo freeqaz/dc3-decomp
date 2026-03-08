@@ -41,7 +41,7 @@ CharEyes::CharEyes()
       mMaxExtrapolation(19.5), mMinTargetDist(35), mUpperLidTrackUp(1),
       mUpperLidTrackDown(1), mLowerLidTrackUp(0.75), mLowerLidTrackDown(0.75),
       mLowerLidTrackRotate(false), mInterestFilterFlags(0), mLastFacing(0, 0, 0),
-      mLastCang(0), mLastBlinkWeight(0),
+      mLastLook(0), mLastBlinkWeight(0),
       mBlinkDetect(0), mBlinkActive(0), mCurrentInterest(this), mFocusInterest(this),
       mFocusTimer(-1), mNeedRecalc(0), mDartOffset(0, 1, 0), mDartTimer(0),
       mDartEnabled(0), mDartInterval(-1), mEyeClampCount(-1),

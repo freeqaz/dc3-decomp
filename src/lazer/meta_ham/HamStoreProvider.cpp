@@ -47,8 +47,6 @@ Symbol PackSongListProvider::DataSymbol(int idx) {
     return mSongs->Node(idx).Array(mSongs)->Sym(0);
 }
 
-PackSongListProvider::~PackSongListProvider() {}
-
 #pragma endregion PackSongListProvider
 #pragma region HamStoreProvider
 

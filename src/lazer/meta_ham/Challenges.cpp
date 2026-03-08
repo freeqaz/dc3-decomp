@@ -306,10 +306,10 @@ int Challenges::GetTotalXpEarned(int player) {
             );
         }
     }
-    if (xp != 0) {
-        return xp;
-    } else
-        return mConsolationXP;
+    if (xp == 0) {
+        xp = mConsolationXP;
+    }
+    return xp;
 }
 
 void Challenges::UploadNextFlaunt() {

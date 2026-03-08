@@ -169,10 +169,12 @@ BEGIN_SAVES(Flow)
             bs << Symbol(it->mName.c_str());
             const DataNode *prop = Property(it->mName.c_str(), false);
             if (prop) {
-                if (prop->Type() != kDataObject) {
+                if (prop->Type() == kDataObject) {
+                    bs << *prop;
+                } else {
                     bs << prop->Type();
+                    bs << *prop;
                 }
-                bs << *prop;
             } else {
                 bs << it->mDefaultVal.Type();
                 bs << it->mDefaultVal;

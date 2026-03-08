@@ -34,22 +34,19 @@ public:
 struct CmdSendFitnessGoalToRC : public QueueableCommand {
 public:
     virtual int GetType() { return 1; } // fix
-    CmdSendFitnessGoalToRC(HamProfile *p) : profile(p) {}
-    HamProfile *profile;
+    CmdSendFitnessGoalToRC(HamProfile *p) { mData.profile = p; }
 };
 
 struct CmdUpdateFitnessGoalToRC : public QueueableCommand {
 public:
     virtual int GetType() { return 1; } // fix
-    CmdUpdateFitnessGoalToRC(HamProfile *p) : profile(p) {}
-    HamProfile *profile;
+    CmdUpdateFitnessGoalToRC(HamProfile *p) { mData.profile = p; }
 };
 
 struct CmdDeleteFitnessGoalFromRC : public QueueableCommand {
 public:
     virtual int GetType() { return 1; } // fix
-    CmdDeleteFitnessGoalFromRC(HamProfile *p) : profile(p) {}
-    HamProfile *profile;
+    CmdDeleteFitnessGoalFromRC(HamProfile *p) { mData.profile = p; }
 };
 
 struct CmdChangeProfileOnlineID : public QueueableCommand {

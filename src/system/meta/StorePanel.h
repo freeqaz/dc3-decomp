@@ -17,10 +17,17 @@
 #include <list>
 
 DECLARE_MESSAGE(MultipleItemsEnumCompleteMsg, "multiple_items_enum_complete")
+MultipleItemsEnumCompleteMsg(bool success, bool purchaseMade, int numOfferIDs, const String &offerID)
+    : Message(Type(), success, purchaseMade, numOfferIDs, DataArrayPtr(), DataArrayPtr()) {}
 bool Purchased(int index) const {
     DataArray *arr = mData->Node(6).Array(mData);
     return arr->Node(index).Int(arr);
 }
+void SetSuccess(bool b) { mData->Node(2) = b; }
+void SetPurchaseMade(bool b) { mData->Node(3) = b; }
+void SetNumOfferIDs(int count);
+void SetOfferID(int index, const String &s);
+void SetPurchased(int index, bool b);
 END_MESSAGE
 
 class StorePanel : public UIPanel {
@@ -64,7 +71,7 @@ public:
     StorePurchaser *mPurchaser; // 0x74
     StorePurchaseable *mCheckoutItem;
     int mCheckoutProfile;
-    std::vector<StoreOffer *> mCartOffers;
+    std::vector<std::pair<StorePurchaseable *, const Profile *>> mCartOffers;
     Symbol mPurchaseSource;
     Symbol mBackupPurchaseSource;
     int unk94;

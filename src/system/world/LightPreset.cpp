@@ -1078,7 +1078,7 @@ void LightPreset::TranslateColor(const Hmx::Color &col, Hmx::Color &res) {
 void LightPreset::AnimateLightFromPreset(
     RndLight *light, const EnvLightEntry &entry, float f
 ) {
-    if (light->Showing()) {
+    if (light->AnimateColorFromPreset()) {
         Hmx::Color c;
         TranslateColor(entry.mColor, c);
         Interp(light->GetColor(), c, f, c);

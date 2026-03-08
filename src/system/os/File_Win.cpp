@@ -18,14 +18,14 @@ int FileGetStat(const char *iFilename, FileStat *iBuffer) {
     if (!UsingCD() && !FileIsLocal(fullName.c_str())) {
         return HolmesClientGetStat(fullName.c_str(), *iBuffer);
     } else {
-        FileStat curStat;
+        WIN32_FILE_ATTRIBUTE_DATA attrData;
         BOOL res =
-            GetFileAttributesExA(fullName.c_str(), GetFileExInfoStandard, &curStat);
-        iBuffer->st_ctime = curStat.st_ctime;
-        iBuffer->st_atime = curStat.st_atime;
-        iBuffer->st_mode = curStat.st_mode;
-        iBuffer->st_mtime = curStat.st_mtime;
-        iBuffer->st_size = curStat.st_size;
+            GetFileAttributesExA(fullName.c_str(), GetFileExInfoStandard, &attrData);
+        iBuffer->st_ctime = *(unsigned long long *)&attrData.ftCreationTime;
+        iBuffer->st_atime = *(unsigned long long *)&attrData.ftLastAccessTime;
+        iBuffer->st_mode = attrData.dwFileAttributes;
+        iBuffer->st_mtime = *(unsigned long long *)&attrData.ftLastWriteTime;
+        iBuffer->st_size = attrData.nFileSizeLow;
         return res ? 0 : -1;
     }
 }

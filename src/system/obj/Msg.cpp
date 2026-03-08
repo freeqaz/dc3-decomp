@@ -276,6 +276,20 @@ void MsgSinks::RemoveSink(Hmx::Object *obj, Symbol ev) {
     }
 }
 
+void MsgSinks::MergeSinks(Hmx::Object *o) {
+    MsgSinks *from = o->Sinks();
+    if ((int)from) {
+        FOREACH (it, from->mSinks) {
+            AddSink(it->obj, Symbol(), Symbol(), it->mode);
+        }
+        FOREACH (it, from->mEventSinks) {
+            FOREACH (elemIt, it->sinks) {
+                AddSink(elemIt->obj, it->event, elemIt->handler, elemIt->mode);
+            }
+        }
+    }
+}
+
 bool MsgSinks::Replace(ObjRef *ref, Hmx::Object *obj) {
     for (ObjList<Sink>::iterator it = mSinks.begin(); it != mSinks.end(); ++it) {
         if (&it->obj == ref) {

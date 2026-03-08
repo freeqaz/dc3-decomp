@@ -3345,6 +3345,10 @@ OBJPTRLIST_NODE_REFOWNER(WorldCrowd)
 
 #undef OBJPTRLIST_NODE_REFOWNER
 
+// EaseLinear standalone instantiation (inline in Easing.h, needs out-of-line symbol)
+// Including Easing.h emits gEaseFuncs[] which takes &EaseLinear, forcing out-of-line copy
+#include "math/Easing.h"
+
 // ObjDirPtr<ObjectDir>::IsLoaded
 template <>
 bool ObjDirPtr<ObjectDir>::IsLoaded() const {

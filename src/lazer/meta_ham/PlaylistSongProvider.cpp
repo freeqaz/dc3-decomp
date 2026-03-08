@@ -3,6 +3,7 @@
 #include "HamSongMgr.h"
 #include "macros.h"
 #include "meta_ham/AppLabel.h"
+#include "meta_ham/HamStoreProvider.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
 #include "ui/UILabel.h"
@@ -13,6 +14,8 @@
 PlaylistSongProvider::PlaylistSongProvider() : mPlaylist(0), unk34(false) {}
 
 PlaylistSongProvider::~PlaylistSongProvider() {}
+
+PackSongListProvider::~PackSongListProvider() {}
 
 int PlaylistSongProvider::NumData() const {
     if (mPlaylist == nullptr) {

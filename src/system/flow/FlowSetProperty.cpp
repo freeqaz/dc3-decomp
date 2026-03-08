@@ -135,7 +135,7 @@ bool PropertyTask::Replace(ObjRef *from, Hmx::Object *to) {
 
 void PropertyTask::SetProperty(DataNode &val) {
     if (val.Type() == kDataString) {
-        DataNode strNode(MakeString("%s", val));
+        DataNode strNode(MakeString("%i", val));
         mTarget->SetProperty(mProperty.Array(), strNode);
     } else {
         mTarget->SetProperty(mProperty.Array(), val);

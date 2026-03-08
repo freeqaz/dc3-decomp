@@ -43,7 +43,7 @@ int RingBuffer::Peek(void *data, int len) {
     MILO_ASSERT(len <= mSize, 0x62);
     int i2 = ((mWriteIx - len) + mSize) % mSize;
     int i30 = mSize - i2;
-    i30 = Max(len, i30);
+    i30 = Min(len, i30);
     memcpy(data, (char *)mBuffer + i2, i30);
     if (i30 != len) {
         memcpy((char *)data + i30, mBuffer, len - i30);

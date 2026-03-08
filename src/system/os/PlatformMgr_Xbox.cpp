@@ -522,10 +522,18 @@ void PlatformMgr::SmartGlassSend(unsigned long clientID, const DataArray *arr) {
 }
 
 #include "utl/JobMgr.h"
+#include "meta/StorePanel.h"
+#include "lazer/meta_ham/OptionsPanel.h"
 
 void MultipleItemsEnumJob::Cancel(Hmx::Object *) {
     MILO_FAIL("MultipleItemsEnumJob::Cancel called");
 }
+
+PostPurchaseEnumJob::PostPurchaseEnumJob(Hmx::Object *obj, int userIndex, u64 itemID, Symbol offerSym, unsigned int purchaserID)
+    : SingleItemEnumJob(obj, userIndex, itemID), mOfferSymbol(offerSym), mPurchaserID(purchaserID) {
+}
+
+PostPurchaseEnumJob::~PostPurchaseEnumJob() {}
 
 void PostPurchaseEnumJob::OnCompletion(Hmx::Object *obj) {
     if ((mStatus == 2) && (mSuccess != 0)) {
@@ -551,4 +559,174 @@ void PostPurchaseEnumJob::OnCompletion(Hmx::Object *obj) {
         SendDataPoint("store/purchase", sSourceSymbol, mOfferSymbol, sOfferSymbol, dataStr, sPurchaserSymbol, mPurchaserID);
     }
     SingleItemEnumJob::OnCompletion(obj);
+}
+
+unsigned long long SingleItemEnumCompleteMsg::OfferID() const {
+    return _strtoui64(mData->Str(4), 0, 16);
+}
+
+MultipleItemsEnumJob::MultipleItemsEnumJob(Hmx::Object *obj, int userIndex, std::vector<u64> &itemIDs)
+    : Job(), mItemIDs(itemIDs), mPurchased() {
+    mObject = obj;
+    mUserIndex = userIndex;
+    mStatus = 0;
+    mSuccess = false;
+    mEnumBuffer = 0;
+    mEnumHandle = 0;
+    memset(&mOverlapped, 0, sizeof(mOverlapped));
+    mPurchaserID = 0;
+}
+
+MultipleItemsEnumJob::~MultipleItemsEnumJob() {
+    if (mStatus == 1 && mOverlapped.InternalLow == 0x3e5) {
+        DWORD result = XCancelOverlapped(&mOverlapped);
+        if (result != 0) {
+            TheDebug.Fail(MakeString("Error cancelling enum %d", result), 0);
+        }
+    }
+    if (mEnumHandle != 0) {
+        CloseHandle(mEnumHandle);
+        mEnumHandle = 0;
+    }
+    ::operator delete(mEnumBuffer);
+    mEnumBuffer = 0;
+}
+
+void MultipleItemsEnumJob::Poll() {
+    if (mStatus == 1 && mOverlapped.InternalLow != 0x3e5) {
+        DWORD result = XGetOverlappedResult(&mOverlapped, 0, 0);
+        if (result == 0) {
+            mStatus = 2;
+            int count = (int)mItemIDs.size();
+            u64 *enumEntry = (u64 *)mEnumBuffer;
+            u64 *itemPtr = &mItemIDs[0];
+            if (count != 0) {
+                unsigned int bitOffset = mPurchased.begin()._M_offset;
+                unsigned int *bitChunk = mPurchased.begin()._M_p;
+                for (unsigned int i = 0; i < (unsigned int)count; i++) {
+                    if (*enumEntry == *itemPtr) {
+                        unsigned int mask = 1 << (bitOffset & 0x3f);
+                        if (*(int *)(enumEntry + 9) == 0) {
+                            *bitChunk = *bitChunk & ~mask;
+                        } else {
+                            *bitChunk = *bitChunk | mask;
+                        }
+                        if (mSuccess || (*bitChunk & mask) != 0) {
+                            mSuccess = true;
+                        }
+                        enumEntry += 0xd;
+                    } else {
+                        MILO_NOTIFY(MakeString("Could not enumerate offerId %016llX", itemPtr));
+                        *bitChunk = *bitChunk & ~(1 << (bitOffset & 0x3f));
+                    }
+                    bitOffset++;
+                    if (bitOffset == 0x20) {
+                        bitOffset = 0;
+                        bitChunk++;
+                    }
+                    itemPtr++;
+                }
+            }
+        } else {
+            mStatus = 3;
+            MILO_NOTIFY(MakeString("Error enumerating after purchase: %d", result));
+        }
+    }
+}
+
+bool MultipleItemsEnumJob::IsFinished() {
+    if (mStatus == 1) {
+        Poll();
+    }
+    return mStatus != 1;
+}
+
+void MultipleItemsEnumJob::Start() {
+    mStatus = 1;
+    int count = (int)mItemIDs.size();
+    mPurchased.resize(count, false);
+    fill(mPurchased.begin(), mPurchased.end(), false);
+
+    DWORD bufSize = 0;
+    DWORD result = XMarketplaceCreateOfferEnumeratorByOffering(
+        mUserIndex, (int)mItemIDs.size(), &mItemIDs[0], (WORD)mItemIDs.size(), &bufSize, &mEnumHandle
+    );
+    if (result != 0) {
+        if (mEnumHandle != 0) {
+            CloseHandle(mEnumHandle);
+            mEnumHandle = 0;
+        }
+        TheDebug.Notify(MakeString("Error creating enumerator after purchase: %d", result));
+        mStatus = 3;
+        return;
+    }
+    mEnumBuffer = new char[bufSize];
+    memset(mEnumBuffer, 0, bufSize);
+    memset(&mOverlapped, 0, sizeof(mOverlapped));
+    result = XEnumerate(mEnumHandle, mEnumBuffer, bufSize, 0, &mOverlapped);
+    if (result == 0x3e5) {
+        return;
+    }
+    if (mEnumHandle != 0) {
+        CloseHandle(mEnumHandle);
+        mEnumHandle = 0;
+    }
+    ::operator delete(mEnumBuffer);
+    mEnumBuffer = 0;
+    TheDebug.Notify(MakeString("Error enumerating after purchase: %d", result));
+    mStatus = 3;
+}
+
+void MultipleItemsEnumJob::OnCompletion(Hmx::Object *obj) {
+    if (mObject != 0) {
+        static MultipleItemsEnumCompleteMsg msg(false, false, (int)mItemIDs.size(), String(gNullStr));
+
+        msg.SetSuccess(mStatus == 2);
+        msg.SetPurchaseMade(mSuccess);
+        int count = (int)mItemIDs.size();
+        msg.SetNumOfferIDs(count);
+        for (int i = 0; i < count; i++) {
+            String offerStr(MakeString("%016llX", mItemIDs[i]));
+            msg.SetOfferID(i, offerStr);
+            msg.SetPurchased(i, mPurchased[i]);
+        }
+        mObject->Handle(msg.Data(), true);
+    }
+}
+
+MultipleItemsPostPurchaseEnumJob::MultipleItemsPostPurchaseEnumJob(
+    Hmx::Object *obj, int userIndex, std::vector<u64> &itemIDs, Symbol offerSym, unsigned int purchaserID)
+    : MultipleItemsEnumJob(obj, userIndex, itemIDs) {
+    mOfferSymbol = offerSym;
+    mPurchaserID = purchaserID;
+}
+
+MultipleItemsPostPurchaseEnumJob::~MultipleItemsPostPurchaseEnumJob() {}
+
+void MultipleItemsPostPurchaseEnumJob::OnCompletion(Hmx::Object *obj) {
+    if (mStatus == 2 && mSuccess != 0) {
+        static Symbol sSourceSymbol("source");
+        static Symbol sOfferSymbol("offer");
+        static Symbol sPurchaserSymbol("purchaser");
+
+        for (unsigned int i = 0; i < mItemIDs.size(); i++) {
+            String itemStr(MakeString("%016llX", mItemIDs[i]));
+            SendDataPoint("store/purchase", sSourceSymbol, mOfferSymbol, sOfferSymbol, itemStr.c_str(), sPurchaserSymbol, mPurchaserID);
+        }
+    }
+    MultipleItemsEnumJob::OnCompletion(obj);
+}
+
+void MultipleItemsEnumCompleteMsg::SetNumOfferIDs(int count) {
+    mData->Node(4) = count;
+    mData->Node(5).Array(mData)->Resize(count);
+    mData->Node(6).Array(mData)->Resize(count);
+}
+
+void MultipleItemsEnumCompleteMsg::SetOfferID(int index, const String &s) {
+    mData->Node(5).Array(mData)->Node(index) = DataNode(s);
+}
+
+void MultipleItemsEnumCompleteMsg::SetPurchased(int index, bool b) {
+    mData->Node(6).Array(mData)->Node(index) = b;
 }

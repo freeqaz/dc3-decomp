@@ -30,7 +30,11 @@ public:
     virtual ~StoreOffer();
     virtual DataNode Handle(DataArray *, bool);
 
-    Symbol OfferType() const;
+    Symbol OfferType() const {
+        static Symbol type("type");
+        Symbol s = type;
+        return mStoreOfferData->FindArray(s)->Sym(1);
+    }
     bool HasData(Symbol) const;
     DateTime const &ReleaseDate() const;
     Symbol FirstChar(Symbol, bool) const;

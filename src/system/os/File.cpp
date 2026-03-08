@@ -63,22 +63,22 @@ void FileNormalizePath(const char *cc) {
     }
 }
 
-const char *FileGetDriveBuf(const char *file, char *drive) {
-    MILO_ASSERT(file, 0x437);
-    MILO_ASSERT(drive, 0x438);
-    const char *p = strchr(file, ':');
-    if (p == 0) {
-        drive[0] = '\0';
+const char *FileGetDriveBuf(const char *iFilepath, char *oBuf) {
+    MILO_ASSERT(iFilepath, 0x437);
+    MILO_ASSERT(oBuf, 0x438);
+    const char *p = strchr(iFilepath, ':');
+    if (p != 0) {
+        strncpy(oBuf, iFilepath, p - iFilepath);
+        oBuf[p - iFilepath] = '\0';
     } else {
-        strncpy(drive, file, p - file);
-        drive[p - file] = '\0';
+        oBuf[0] = '\0';
     }
-    return drive;
+    return oBuf;
 }
 
 const char *FileGetDrive(const char *file) {
     static char drive[256];
-    MILO_ASSERT(MainThread(), 0x443);
+    MainThread();
     return FileGetDriveBuf(file, drive);
 }
 
@@ -105,7 +105,7 @@ const char *FileGetPathBuf(const char *file, char *path) {
 
 const char *FileGetPath(const char *file) {
     static char static_path[256];
-    MILO_ASSERT(MainThread(), 0x413);
+    MainThread();
     return FileGetPathBuf(file, static_path);
 }
 
@@ -125,7 +125,7 @@ const char *FileGetBaseBuf(const char *file, char *base) {
 
 const char *FileGetBase(const char *file) {
     static char my_path[256];
-    MILO_ASSERT(MainThread(), 0x465);
+    MainThread();
     return FileGetBaseBuf(file, my_path);
 }
 
@@ -262,9 +262,24 @@ String UniqueFilename(const char *c1, const char *c2) {
     return ret;
 }
 
-DataNode OnFileGetDrive(DataArray *da) { return FileGetDrive(da->Str(1)); }
-DataNode OnFileGetPath(DataArray *da) { return FileGetPath(da->Str(1)); }
-DataNode OnFileGetBase(DataArray *da) { return FileGetBase(da->Str(1)); }
+DataNode OnFileGetDrive(DataArray *da) {
+    static char drive[256];
+    const char *str = da->Str(1);
+    MainThread();
+    return FileGetDriveBuf(str, drive);
+}
+DataNode OnFileGetPath(DataArray *da) {
+    static char static_path[256];
+    const char *str = da->Str(1);
+    MainThread();
+    return FileGetPathBuf(str, static_path);
+}
+DataNode OnFileGetBase(DataArray *da) {
+    static char my_path[256];
+    const char *str = da->Str(1);
+    MainThread();
+    return FileGetBaseBuf(str, my_path);
+}
 DataNode OnFileAbsolutePath(DataArray *da) {
     return FileMakePath(da->Str(1), da->Str(2));
 }

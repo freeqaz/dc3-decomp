@@ -87,10 +87,6 @@ void Trie::dec_dup_count(unsigned int index) {
     *cf = ((dupCount - 1) << 8) | SiblingCount(node);
 }
 
-void Trie::check_index(unsigned int index) {
-    MILO_ASSERT(NodeCount(this) < 0x20000, 0x82);
-}
-
 unsigned int Trie::get_free_node() {
     unsigned int freeHead = FreeListHead(this);
 
@@ -133,37 +129,6 @@ void Trie::delete_node(unsigned int index) {
     }
 
     FreeListHead(this) = index;
-}
-
-char *Trie::get(int index, char *buffer, int bufSize) {
-    if (index <= 0 || index >= 0x20000) {
-        *buffer = 0;
-        return buffer;
-    }
-
-    check_index(index);
-    if (Character(NodePtr(this, index)) != 0) {
-        *buffer = 0;
-        return buffer;
-    }
-
-    // Walk up the tree, building string in reverse
-    char *end = buffer + bufSize;
-    char *ptr = end - 1;
-    int count = 0;
-
-    while (count < bufSize && index != 0) {
-        check_index(index);
-        char *node = NodePtr(this, index);
-        *ptr = Character(node);
-        check_index(index);
-        count++;
-        ptr--;
-        index = Parent(node);
-    }
-
-    *(end - 1) = 0; // null terminate
-    return (ptr == end - 1) ? ptr : ptr + 1;
 }
 
 int Trie::store(const char *str) {

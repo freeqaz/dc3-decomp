@@ -80,11 +80,12 @@ void HamSkeletonConverter::Enter() {
             mCharacter->Find<RndTransformable>(MirrorBoneName((SkeletonJoint)i), true);
         mBoneMeshes[i] = t;
     }
-    Vector3 z = mBoneMeshes[kJointHipLeft]->WorldXfm().m.z;
+    PaddedJointPos z;
+    memcpy(&z, &mBoneMeshes[kJointHipLeft]->WorldXfm().m.z, sizeof(PaddedJointPos));
     mLeftHipZAxis = z;
-    z = mBoneMeshes[kJointHipRight]->WorldXfm().m.z;
-    mLeftHipZAxisInit = mLeftHipZAxis;
+    memcpy(&z, &mBoneMeshes[kJointHipRight]->WorldXfm().m.z, sizeof(PaddedJointPos));
     mRightHipZAxis = z;
+    mLeftHipZAxisInit = mLeftHipZAxis;
     mRightHipZAxisInit = mRightHipZAxis;
 }
 

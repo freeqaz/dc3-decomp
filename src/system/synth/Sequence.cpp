@@ -653,13 +653,13 @@ void RandomGroupSeqInst::Poll() {
 #pragma region RandomIntervalGroupSeqInst
 
 RandomIntervalGroupSeqInst::RandomIntervalGroupSeqInst(RandomIntervalGroupSeq *seq)
-    : GroupSeqInst(seq, false), mNextPlayTimes(seq->MaxSimultaneous()) {
+    : GroupSeqInst(seq, false), mNextPlayTimes(seq->Children().size()) {
     unk54 = false;
     mMaxSimultaneous = seq->MaxSimultaneous();
     mAvgIntervalSecs = seq->AvgIntervalSecs();
     mIntervalSpread = seq->IntervalSpread();
     int i = 0;
-    while (i < seq->MaxSimultaneous()) {
+    while (i < (int)seq->Children().size()) {
         mNextPlayTimes[i] = -1.0f;
         i++;
     }

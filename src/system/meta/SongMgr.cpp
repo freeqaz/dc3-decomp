@@ -329,7 +329,7 @@ const char *SongMgr::CachedPath(Symbol shortname, const char *cc, int version) c
     int songID = GetSongIDFromShortName(shortname, true);
     const SongMetadata *data = Data(songID);
     if (!(UsingCD()
-          || (data && data->IsOnDisc() || (version != 0 && data->Version() < version))
+          || (data && (data->IsOnDisc() || (version != 0 && data->Version() < version)))
           || !strstr(cc, ".milo"))) {
         DirLoader::SetCacheMode(true);
         cc = DirLoader::CachedPath(cc, false);

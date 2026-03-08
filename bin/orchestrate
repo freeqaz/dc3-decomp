@@ -81,6 +81,8 @@ from orchestrator.database import (
     query_file_pairs,
     get_file_pairs_stats,
     get_rb3_ref_stats,
+    record_attempt,
+    update_function_status,
 )
 from orchestrator.rb3_pairing import (
     sync_file_pairs,
@@ -1144,6 +1146,109 @@ def cmd_rb3_merge(args):
         print(json.dumps(summary, indent=2, default=str))
 
 
+def cmd_permute(args):
+    """Run the source permuter on a function (automated pattern search)."""
+    from permuter.__main__ import resolve_from_db
+    from permuter.hill_climber import hill_climb, install_signal_handler
+    from permuter.patterns import get_all_patterns, get_pattern
+
+    # Resolve symbol from DB
+    resolved = resolve_from_db(args.symbol)
+    if not resolved:
+        print(f"Error: Could not resolve '{args.symbol}' from decomp.db")
+        sys.exit(1)
+
+    mangled, source_path, qualified_name = resolved
+    if not args.quiet:
+        print(f"Permuting: {qualified_name}")
+        print(f"  Symbol: {mangled}")
+        print(f"  Source: {source_path}")
+
+    # Resolve patterns
+    if args.patterns == "all":
+        patterns = get_all_patterns()
+    else:
+        pattern_names = [p.strip() for p in args.patterns.split(",")]
+        patterns = [get_pattern(name) for name in pattern_names]
+
+    # Enable BSF-guided mode on declaration_reorder
+    for p in patterns:
+        if p.name == "declaration_reorder":
+            p.bsf_guided = True
+
+    install_signal_handler()
+
+    result = hill_climb(
+        symbol=mangled,
+        source_path=source_path,
+        function_name=qualified_name,
+        patterns=patterns,
+        max_rounds=args.max_rounds,
+        max_variants=args.max_variants,
+        plateau_limit=args.plateau_limit,
+        compose=True,
+        apply=not args.no_apply,
+        workers=args.workers,
+        ghidra=not args.no_ghidra,
+        chain=True,
+        adaptive=True,
+        constrained=not args.no_ghidra,
+    )
+
+    # Extract best pattern from improving rounds
+    best_pattern = None
+    for r in reversed(result.rounds):
+        if r.improved and r.best_pattern:
+            best_pattern = r.best_pattern
+            break
+
+    if args.json:
+        print(json.dumps({
+            "symbol": mangled,
+            "function": qualified_name,
+            "source": str(source_path),
+            "initial_percent": result.initial_percent,
+            "final_percent": result.final_percent,
+            "delta": result.final_percent - result.initial_percent,
+            "rounds": len(result.rounds),
+            "stopped_reason": result.stopped_reason,
+            "best_pattern": best_pattern,
+        }, indent=2))
+    elif not args.quiet:
+        delta = result.final_percent - result.initial_percent
+        print(f"\nResult: {result.initial_percent:.2f}% → {result.final_percent:.2f}% ({'+' if delta >= 0 else ''}{delta:.2f}%)")
+        print(f"Rounds: {len(result.rounds)}, Stopped: {result.stopped_reason}")
+        if best_pattern:
+            print(f"Best pattern: {best_pattern}")
+        if result.final_percent >= 100.0:
+            print("COMPLETE!")
+
+    # Report to orchestrator DB if improvement was made
+    if result.final_percent > result.initial_percent:
+        try:
+            func = get_function_by_symbol(mangled, db_path=args.db)
+            if func:
+                status = "complete" if result.final_percent >= 100.0 else "at_limit"
+                record_attempt(
+                    function_id=func["id"],
+                    session_id=f"permuter-{int(time.time())}",
+                    model="permuter",
+                    start_percent=result.initial_percent,
+                    end_percent=result.final_percent,
+                    exit_status=status,
+                    notes=f"hill_climb: {result.stopped_reason}, best_pattern={best_pattern}",
+                    db_path=args.db,
+                )
+                update_function_status(
+                    func["id"],
+                    current_percent=result.final_percent,
+                    db_path=args.db,
+                )
+        except Exception as e:
+            if not args.quiet:
+                print(f"Warning: Could not update DB: {e}")
+
+
 def cmd_patch_refresh(args):
     """Refresh stale patches using agents in worktrees."""
     validate_model_backend(args.model)
@@ -1808,6 +1913,27 @@ def main():
     p_rb3_merge.add_argument("--no-auto-apply", action="store_true", help="Disable auto-apply patches")
     p_rb3_merge.add_argument("--json", action="store_true", help="Output as JSON")
 
+    # permute
+    p_permute = subparsers.add_parser(
+        "permute",
+        help="Run source permuter (automated pattern search)",
+        description="Run the hill-climbing source permuter on a function. Tries AST-level transformations (declaration reorder, comparison flip, ternary swap, etc.) to find matching code.",
+        epilog="""Examples:
+  ./bin/orchestrate permute '?TriggerSelf@EventTrigger@@IAAXXZ'
+  ./bin/orchestrate permute '?TriggerSelf@EventTrigger@@IAAXXZ' --patterns declaration_reorder,comparison_flip
+  ./bin/orchestrate permute '?Poll@CharMirror@@UAEXXZ' --no-apply --json"""
+    )
+    p_permute.add_argument("symbol", help="Mangled function symbol")
+    p_permute.add_argument("--patterns", default="all", help="Comma-separated patterns or 'all' (default: all)")
+    p_permute.add_argument("--max-rounds", type=int, default=10, help="Max hill-climbing rounds (default: 10)")
+    p_permute.add_argument("--max-variants", type=int, default=100, help="Max variants per round (default: 100)")
+    p_permute.add_argument("--plateau-limit", type=int, default=3, help="Stop after N rounds without improvement (default: 3)")
+    p_permute.add_argument("--workers", type=int, default=6, help="Parallel scoring workers (default: 6)")
+    p_permute.add_argument("--no-apply", action="store_true", help="Don't apply best result to source")
+    p_permute.add_argument("--no-ghidra", action="store_true", help="Disable Ghidra-guided patterns")
+    p_permute.add_argument("--quiet", "-q", action="store_true", help="Suppress output")
+    p_permute.add_argument("--json", action="store_true", help="Output as JSON")
+
     # patch-refresh
     p_patch_refresh = subparsers.add_parser(
         "patch-refresh",
@@ -1904,6 +2030,7 @@ def main():
         "rb3-query": cmd_rb3_query,
         "rb3-refs": cmd_rb3_refs,
         "rb3-merge": cmd_rb3_merge,
+        "permute": cmd_permute,
         "patch-refresh": cmd_patch_refresh,
     }
 

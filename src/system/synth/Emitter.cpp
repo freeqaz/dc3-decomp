@@ -123,21 +123,22 @@ void SynthEmitter::Poll() {
         if (len > mRadOuter) {
             delete mInst;
         } else {
-            if (mInst) {
+            bool needStart = !mInst;
+            if (needStart) {
                 mInst = dynamic_cast<SfxInst *>(mSfx->MakeInst());
                 if (!mInst) {
                     return;
                 }
             }
             if (len > mRadInner) {
-                float vol = (mVolOuter - mVolInner) / (mRadOuter - mRadInner);
-                vol = vol * len + -(vol * mRadInner - mVolInner);
+                float slope = (mVolOuter - mVolInner) / (mRadOuter - mRadInner);
+                float vol = slope * len + (mVolInner - slope * mRadInner);
                 mInst->SetVolume(vol);
             } else {
                 mInst->SetVolume(mVolInner);
             }
             mInst->SetTranspose(atan2f(v80.x, v80.y) * 1.2732395f);
-            if (mInst) {
+            if (needStart) {
                 mInst->Start();
             }
         }
