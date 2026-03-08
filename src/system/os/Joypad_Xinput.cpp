@@ -19,30 +19,26 @@ void JoypadInitXboxPCDeadzone(DataArray *arr) {
     gXboxDeadzone *= (1.0f / 256.0f);
 }
 
-void TranslateStick(char *keys, short s, unsigned char invert, unsigned char apply_deadzone) {
-    // Convert stick value from signed short range to normalized float [-1.0, 1.0]
-    float normalized = ((float)(long long)s + 0.5f) * (1.0f / 32768.0f);
+void TranslateStick(char *keys, short s, bool param_a, bool param_b) {
+    float var1 = (s + 0.5f) / 32768.0f;
 
-    // Apply deadzone if requested
-    if (apply_deadzone) {
-        float adjusted;
-        if (normalized > gXboxDeadzone) {
-            adjusted = normalized - gXboxDeadzone;
-            normalized = adjusted / (1.0f - gXboxDeadzone);
-        } else if (normalized < -gXboxDeadzone) {
-            adjusted = gXboxDeadzone + normalized;
-            normalized = adjusted / (1.0f - gXboxDeadzone);
+    if (param_b) {
+        if (var1 <= gXboxDeadzone) {
+            if (-gXboxDeadzone <= var1) {
+                var1 = 0.0;
+            }
+            var1 += gXboxDeadzone;
         } else {
-            normalized = 0.0f;
+            var1 -= gXboxDeadzone;
         }
+        var1 /= (1.0 - gXboxDeadzone);
     }
 
-    // Convert to char range and write output
-    *keys = (char)(int)(normalized * 127.0f);
+    int c = (var1 * 127.0);
+    *keys = c;
 
-    // Invert if requested
-    if (invert) {
-        *keys = -*keys;
+    if (param_a) {
+        *keys = -c;
     }
 }
 

@@ -3,7 +3,7 @@
 #include "xdk/XAPILIB.h"
 
 void JoypadInitXboxPCDeadzone(class DataArray *);
-void TranslateStick(char *, short, unsigned char, unsigned char);
+void TranslateStick(char *, short, bool, bool);
 void TranslateButtons(unsigned int *, unsigned short);
 bool JoypadGetCachedXInputCaps(int, XINPUT_CAPABILITIES *, bool);
 

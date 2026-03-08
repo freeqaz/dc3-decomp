@@ -165,7 +165,19 @@ class WorktreePool:
                     # Copy from main repo
                     if not dst.exists():
                         if src.is_dir():
-                            shutil.copytree(src, dst)
+                            shutil.copytree(
+                                src, dst,
+                                ignore=shutil.ignore_patterns(
+                                    "gen",                # game assets (6.2G symlink)
+                                    "report_raw.cache",   # dtk report cache (564M)
+                                    "report.cache",       # dtk report cache (70M)
+                                    "baselines",          # regression baselines (40M)
+                                    "asm",                # disassembly text (241M)
+                                    "data",               # dtk data section (36M)
+                                    "default.xex",        # linked XEX (28M)
+                                    "bsf_*",              # BSF test dirs
+                                ),
+                            )
                             print(f"  Copied directory: {copy_name}")
                         else:
                             shutil.copy2(src, dst)

@@ -16,8 +16,8 @@
 #include "utl/TextFileStream.h"
 #include "utl/TextStream.h"
 
-extern bool gMemTrackerTracking;
-extern String gMemLogType;
+bool gMemTrackerTracking;
+String gMemLogType;
 
 struct MemDiffEntry {
     char data[72];

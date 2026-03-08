@@ -83,8 +83,8 @@ void HamSkeletonConverter::Enter() {
     Vector3 z = mBoneMeshes[kJointHipLeft]->WorldXfm().m.z;
     mLeftHipZAxis = z;
     z = mBoneMeshes[kJointHipRight]->WorldXfm().m.z;
-    mLeftHipZAxisInit = mLeftHipZAxis;
     mRightHipZAxis = z;
+    mLeftHipZAxisInit = mLeftHipZAxis;
     mRightHipZAxisInit = mRightHipZAxis;
 }
 

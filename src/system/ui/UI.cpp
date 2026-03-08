@@ -1150,26 +1150,23 @@ DataNode Automator::OnMsg(ButtonDownMsg const &msg) {
 }
 
 DataNode Automator::OnCheatInvoked(DataArray const *arr) {
-    if (!mRecord)
-        return DATA_UNHANDLED;
-    if (mSkipNextQuickCheat) {
-        mSkipNextQuickCheat = false;
-        return DATA_UNHANDLED;
+    if (mRecord) {
+        if (mSkipNextQuickCheat) {
+            mSkipNextQuickCheat = false;
+        } else if (arr->Int(2) != 0) {
+            Symbol screen = CurScreenName();
+            if (mUIManager.CurrentScreen()) {
+                if (screen.Null()) {
+                    screen = CurRecordScreen();
+                }
+            }
+            if (!screen.Null()) {
+                static Symbol quick_cheat("quick_cheat");
+                DataArrayPtr ptr(quick_cheat, arr->Array(3));
+                AddRecord(screen, ptr);
+            }
+        }
     }
-    if (arr->Int(2) == 0)
-        return DATA_UNHANDLED;
-    Symbol screenName = CurScreenName();
-    if (!mUIManager.CurrentScreen()) {
-        if (screenName.Null())
-            return DATA_UNHANDLED;
-    } else if (screenName.Null()) {
-        auto _tmp3 = CurRecordScreen();
-        screenName = _tmp3;
-        if (screenName.Null())
-            return DATA_UNHANDLED;
-    }
-    static Symbol quick_cheat("quick_cheat");
-    AddRecord(screenName, (quick_cheat, arr->Array(3)));
     return DATA_UNHANDLED;
 }
 

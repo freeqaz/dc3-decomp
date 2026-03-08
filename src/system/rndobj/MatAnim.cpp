@@ -16,7 +16,6 @@ RndMatAnim::TexPtr::TexPtr(RndTex *tex) : ObjPtr<RndTex>(DeferOwner(), tex) {
 #pragma region Hmx::Object
 
 RndMatAnim::RndMatAnim() : mMat(this), mKeysOwner(this, this), mTexKeys(this) {}
-RndMatAnim::~RndMatAnim() {}
 
 bool RndMatAnim::Replace(ObjRef *ref, Hmx::Object *obj) {
     if (&mKeysOwner == ref) {
