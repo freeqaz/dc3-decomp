@@ -457,15 +457,15 @@ void UILabel::Highlight() {
     RndTransformable::Highlight();
     Box box;
     GetWidthHeightBox(box);
-    Hmx::Color c(1.0f, 1.0f, 0.5f);
+    Hmx::Color color(1.0f, 1.0f, 0.5f, 1.0f);
     if (!CheckValid(false)) {
         int secs = TheTaskMgr.UISeconds() * 2.0f;
-        if (secs < 0) {
-            c.Set(1.0f, 0.2f, 0.2f, 1.0f);
+        if (!(secs % 2)) {
+            color.Set(1.0f, 0.2f, 0.2f, 1.0f);
         }
     }
     RndText::Highlight();
-    UtilDrawBox(WorldXfm(), box, c, false);
+    UtilDrawBox(WorldXfm(), box, color, false);
 }
 
 void UILabel::SetTextToken(Symbol s) {

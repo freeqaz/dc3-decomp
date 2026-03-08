@@ -174,7 +174,7 @@ BEGIN_LOADS(RndTexRenderer)
     LOAD_REVS(bs)
     ASSERT_REVS(13, 0)
     LOAD_SUPERCLASS(Hmx::Object)
-    if (2 < d.rev) {
+    if (d.rev > 2) {
         LOAD_SUPERCLASS(RndAnimatable)
         LOAD_SUPERCLASS(RndDrawable)
         if (d.rev > 10)

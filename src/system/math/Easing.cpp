@@ -1,48 +1,8 @@
 #include "math/Easing.h"
 #include "os/Debug.h"
 #include "utl/Licenses.h"
-#include <cmath>
 
-static Licenses sLicense("system/src/math/Easing.h", Licenses::kRequirementNotification);
-
-EaseFunc *gEaseFuncs[35] = {
-    EaseLinear,
-    EasePolyIn,
-    EasePolyOut,
-    EasePolyInOut,
-    EasePolyOutIn,
-    EaseBounceIn,
-    EaseBounceOut,
-    EaseBounceInOut,
-    EaseBounceOutIn,
-    EaseElasticIn,
-    EaseElasticOut,
-    EaseElasticInOut,
-    EaseElasticOutIn,
-    EaseBackIn,
-    EaseBackOut,
-    EaseBackInOut,
-    EaseBackOutIn,
-    EaseSineIn,
-    EaseSineOut,
-    EaseSineInOut,
-    EaseSineOutIn,
-    EaseExpoIn,
-    EaseExpoOut,
-    EaseExpoInOut,
-    EaseExpoOutIn,
-    EaseCircIn,
-    EaseCircOut,
-    EaseCircInOut,
-    EaseCircOutIn,
-    EaseStairstep,
-    EaseThirdStairstep,
-    EaseQuarterStairstep,
-    EaseHalfQuarterStairstep,
-    EaseQuarterHalfStairstep,
-};
-
-float EaseLinear(float t, float, float) { return t; }
+Licenses sLicense("system/src/math/Easing.h", Licenses::kRequirementNotification);
 
 float EaseBounceOut(float t, float, float) {
     MILO_ASSERT(t >= 0 && t <= 1, 0x13);

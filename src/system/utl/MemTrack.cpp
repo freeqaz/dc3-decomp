@@ -16,7 +16,7 @@
 AllocInfo *gAllocInfoHeap;
 MemTracker *gMemTracker;
 bool gMemTrackerTracking;
-extern bool gMemoryUsageTest;
+bool gMemoryUsageTest;
 // HeapTracker* gHeapTracker;
 int gNumDiffs;
 TextFileStream *gLog;

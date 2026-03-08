@@ -966,62 +966,56 @@ void UIList::BoundingBoxTriangles(std::vector<std::vector<Vector3> > &vec) {
     vec.clear();
     Box box;
     CalcBoundingBox(box);
-    float boxMinX = box.mMin.x;
-    float boxMaxX = box.mMax.x;
-    float boxMinY = box.mMin.y;
-    float boxMaxY = box.mMax.y;
-    float boxMinZ = box.mMin.z;
-    float boxMaxZ = box.mMax.z;
     std::vector<Vector3> locVec;
     for (int i = 0; i < 2; i++) {
         float f;
         if (i != 0)
-            f = boxMinX;
+            f = box.mMin.x;
         else
-            f = boxMaxX;
+            f = box.mMax.x;
         locVec.clear();
-        locVec.push_back(Vector3(f, boxMinY, boxMinZ));
-        locVec.push_back(Vector3(f, boxMinY, boxMaxZ));
-        locVec.push_back(Vector3(f, boxMaxY, boxMaxZ));
+        locVec.push_back(Vector3(f, box.mMin.y, box.mMin.z));
+        locVec.push_back(Vector3(f, box.mMin.y, box.mMax.z));
+        locVec.push_back(Vector3(f, box.mMax.y, box.mMax.z));
         vec.push_back(locVec);
         locVec.clear();
-        locVec.push_back(Vector3(f, boxMinY, boxMinZ));
-        locVec.push_back(Vector3(f, boxMaxY, boxMinZ));
-        locVec.push_back(Vector3(f, boxMaxY, boxMaxZ));
+        locVec.push_back(Vector3(f, box.mMin.y, box.mMin.z));
+        locVec.push_back(Vector3(f, box.mMax.y, box.mMin.z));
+        locVec.push_back(Vector3(f, box.mMax.y, box.mMax.z));
         vec.push_back(locVec);
     }
     for (int i = 0; i < 2; i++) {
         float f;
         if (i != 0)
-            f = boxMinY;
+            f = box.mMin.y;
         else
-            f = boxMaxY;
+            f = box.mMax.y;
         locVec.clear();
-        locVec.push_back(Vector3(boxMinX, f, boxMinZ));
-        locVec.push_back(Vector3(boxMinX, f, boxMaxZ));
-        locVec.push_back(Vector3(boxMaxX, f, boxMaxZ));
+        locVec.push_back(Vector3(box.mMin.x, f, box.mMin.z));
+        locVec.push_back(Vector3(box.mMin.x, f, box.mMax.z));
+        locVec.push_back(Vector3(box.mMax.x, f, box.mMax.z));
         vec.push_back(locVec);
         locVec.clear();
-        locVec.push_back(Vector3(boxMinX, f, boxMinZ));
-        locVec.push_back(Vector3(boxMaxX, f, boxMinZ));
-        locVec.push_back(Vector3(boxMaxX, f, boxMaxZ));
+        locVec.push_back(Vector3(box.mMin.x, f, box.mMin.z));
+        locVec.push_back(Vector3(box.mMax.x, f, box.mMin.z));
+        locVec.push_back(Vector3(box.mMax.x, f, box.mMax.z));
         vec.push_back(locVec);
     }
     for (int i = 0; i < 2; i++) {
         float f;
         if (i != 0)
-            f = boxMinZ;
+            f = box.mMin.z;
         else
-            f = boxMaxZ;
+            f = box.mMax.z;
         locVec.clear();
-        locVec.push_back(Vector3(boxMinX, boxMinY, f));
-        locVec.push_back(Vector3(boxMinX, boxMaxY, f));
-        locVec.push_back(Vector3(boxMaxX, boxMaxY, f));
+        locVec.push_back(Vector3(box.mMin.x, box.mMin.y, f));
+        locVec.push_back(Vector3(box.mMin.x, box.mMax.y, f));
+        locVec.push_back(Vector3(box.mMax.x, box.mMax.y, f));
         vec.push_back(locVec);
         locVec.clear();
-        locVec.push_back(Vector3(boxMinX, boxMinY, f));
-        locVec.push_back(Vector3(boxMaxX, boxMinY, f));
-        locVec.push_back(Vector3(boxMaxX, boxMaxY, f));
+        locVec.push_back(Vector3(box.mMin.x, box.mMin.y, f));
+        locVec.push_back(Vector3(box.mMax.x, box.mMin.y, f));
+        locVec.push_back(Vector3(box.mMax.x, box.mMax.y, f));
         vec.push_back(locVec);
     }
 }

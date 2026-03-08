@@ -3,6 +3,11 @@
 #include "utl/Cache.h"
 #include "utl/Symbol.h"
 
+class WavFileCacheHelper : public FileCacheHelper {
+public:
+    virtual const char *CacheFile(const char *);
+};
+
 void SynthUtlInit();
 void SynthUtlTerm();
 float CalcRateForTempoSync(Symbol, float);

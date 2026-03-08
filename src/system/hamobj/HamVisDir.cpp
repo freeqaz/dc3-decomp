@@ -29,13 +29,16 @@ HamVisDir::HamVisDir()
     : mFilter(0), mRunning(0), unk2d8(0), unk2dc(0), mPlayer1Right(this),
       mPlayer1Left(this), mPlayer2Right(this), mPlayer2Left(this), mMiloManualFrame(1),
       mGrooviness(0) {
-    bool hasInstance = SkeletonUpdate::HasInstance();
-    if (hasInstance) {
+#ifdef HX_NATIVE
+    if (SkeletonUpdate::HasInstance()) {
+#endif
         SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
         if (!handle.HasCallback(this)) {
             handle.AddCallback(this);
         }
+#ifdef HX_NATIVE
     }
+#endif
     for (int i = 0; i < 2; i++) {
         mSquatPoses[i].name = MakeString("pose_squat_%i", i);
         mSquatPoses[i].pose = new Pose(10, (Pose::ScoreMode)1);
@@ -113,12 +116,16 @@ HamVisDir::HamVisDir()
 
 HamVisDir::~HamVisDir() {
     RELEASE(mFilter);
+#ifdef HX_NATIVE
     if (SkeletonUpdate::HasInstance()) {
+#endif
         SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
         if (handle.HasCallback(this)) {
             handle.RemoveCallback(this);
         }
+#ifdef HX_NATIVE
     }
+#endif
 }
 
 BEGIN_HANDLERS(HamVisDir)

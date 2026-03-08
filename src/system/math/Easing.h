@@ -77,7 +77,7 @@ enum EaseType {
     kEaseQuarterHalfStairstep = 34
 };
 
-float EaseLinear(float, float, float);
+inline float EaseLinear(float t, float, float) { return t; }
 
 inline float EasePolyIn(float t, float power, float) {
     MILO_ASSERT(t >= 0 && t <= 1 && power != 0, 88);
@@ -332,7 +332,42 @@ inline float EaseQuarterHalfStairstep(float t, float power, float) {
 
 typedef float EaseFunc(float, float, float);
 
-extern EaseFunc *gEaseFuncs[35];
+EaseFunc *gEaseFuncs[35] = {
+    EaseLinear,
+    EasePolyIn,
+    EasePolyOut,
+    EasePolyInOut,
+    EasePolyOutIn,
+    EaseBounceIn,
+    EaseBounceOut,
+    EaseBounceInOut,
+    EaseBounceOutIn,
+    EaseElasticIn,
+    EaseElasticOut,
+    EaseElasticInOut,
+    EaseElasticOutIn,
+    EaseBackIn,
+    EaseBackOut,
+    EaseBackInOut,
+    EaseBackOutIn,
+    EaseSineIn,
+    EaseSineOut,
+    EaseSineInOut,
+    EaseSineOutIn,
+    EaseExpoIn,
+    EaseExpoOut,
+    EaseExpoInOut,
+    EaseExpoOutIn,
+    EaseCircIn,
+    EaseCircOut,
+    EaseCircInOut,
+    EaseCircOutIn,
+    EaseStairstep,
+    EaseThirdStairstep,
+    EaseQuarterStairstep,
+    EaseHalfQuarterStairstep,
+    EaseQuarterHalfStairstep,
+};
 
 inline EaseFunc *GetEaseFunction(EaseType e) {
     MILO_ASSERT(e >= kEaseLinear && e <= kEaseQuarterHalfStairstep, 0x16B);

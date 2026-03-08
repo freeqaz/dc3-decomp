@@ -25,7 +25,8 @@ bool gStlAllocNameLookup = false;
 
 bool gbUseLowestMip = false;
 bool gInsideMemFunc = false;
-extern bool gMemoryUsageTest;
+bool gMemoryUsageTest;
+int gNumHeaps;
 int gCheckConsistency;
 int gNewOperatorAlign;
 int gSingleHeap;
@@ -38,7 +39,6 @@ unsigned long gThreadIds[MAX_BUF_THREADS];
 bool gInitted;
 
 MemHeap gHeaps[MAX_HEAPS];
-int gNumHeaps;
 
 #ifdef HX_NATIVE
 // On native, do NOT override global operator new/delete.
@@ -142,14 +142,9 @@ void MemFree(void *mem, const char *file, int line, const char *name) {
         }
         if (gMemTracker) {
             MemTrackFree(mem);
-#ifdef HX_NATIVE
-            // On LP64, mHeapOnly is at a different offset and mHeapStats shifts
-            // Skip heap stats tracking on native — not critical for functionality
-#else
             if (((char *)gMemTracker)[0x18195]) {
                 ((HeapStats *)((char *)gMemTracker + 0xC))[(signed char)i].Free(freed, freed);
             }
-#endif
         }
 #endif
     }
@@ -432,13 +427,12 @@ void *MemResizeElem(
     const char *name
 ) {
     void *old = mem;
-    int suffixSize = 0;
     int prefixSize = (char *)cutPoint - (char *)mem;
+    int suffixSize = 0;
     int newTotalSize = prefixSize;
     if (insertLength > -1) {
         suffixSize = (totalSize - newTotalSize) - cutLength;
-        int delta = insertLength + suffixSize;
-        newTotalSize = delta + prefixSize;
+        newTotalSize += suffixSize + insertLength;
     }
     if (newTotalSize != totalSize) {
         mem = MemAlloc(newTotalSize, file, line, name);
