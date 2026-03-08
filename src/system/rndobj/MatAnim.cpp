@@ -9,10 +9,6 @@
 
 Hmx::Object *RndMatAnim::sOwner;
 
-RndMatAnim::TexPtr::TexPtr(RndTex *tex) : ObjPtr<RndTex>(DeferOwner(), tex) {
-    mOwner = sOwner;
-}
-
 #pragma region Hmx::Object
 
 RndMatAnim::RndMatAnim() : mMat(this), mKeysOwner(this, this), mTexKeys(this) {}

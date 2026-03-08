@@ -13,7 +13,7 @@ namespace NUISPEECH {
 
         void *Alloc(unsigned int, bool);
         bool Free(void *);
-        void Realloc(void *, unsigned int, bool);
+        void *Realloc(void *, unsigned int, bool);
 
     private:
         _BLOCK_ENTRY *AllocatePageBlock(unsigned int);

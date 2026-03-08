@@ -6,6 +6,7 @@
 class DancerSkeleton : public BaseSkeleton {
 public:
     DancerSkeleton();
+    DancerSkeleton(const DancerSkeleton &);
     virtual ~DancerSkeleton() {} // 0x0
     virtual void JointPos(SkeletonCoordSys, SkeletonJoint, Vector3 &) const; // 0x4
     virtual bool Displacement(

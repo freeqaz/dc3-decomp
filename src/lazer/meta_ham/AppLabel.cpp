@@ -27,8 +27,6 @@
 #include "utl/Locale.h"
 #include "utl/Symbol.h"
 
-AppLabel::~AppLabel() {}
-
 BEGIN_HANDLERS(AppLabel)
     HANDLE(set_user_name, OnSetUserName)
     HANDLE_ACTION(set_instarank, SetInstarank(_msg->Obj<Instarank>(2)))
@@ -106,7 +104,7 @@ void AppLabel::SetCreditsText(DataArray *arr, UIListSlot *slot) {
     static Symbol title_name("title_name");
     static Symbol centered("centered");
     Symbol sym = blank;
-    if (0 != arr->Size()) {
+    if (arr->Size() != 0) {
         sym = arr->Sym(0);
     }
     if (sym == blank) {
@@ -337,7 +335,6 @@ void AppLabel::SetArtistName(Symbol shortname, bool b2) {
     const HamSongMetadata *pMetaData =
         TheHamSongMgr.Data(TheHamSongMgr.GetSongIDFromShortName(shortname));
     MILO_ASSERT(pMetaData, 0xF1);
-    if (!pMetaData) return;
     if (pMetaData->IsCover() && !b2) {
         static Symbol as_made_famous_by("as_made_famous_by");
         SetDisplayText(

@@ -66,11 +66,6 @@ bool LocalUser::IsLocal() const { return true; }
 LocalUser *LocalUser::GetLocalUser() { return this; }
 const LocalUser *LocalUser::GetLocalUser() const { return this; }
 
-RemoteUser *LocalUser::GetRemoteUser() {
-    MILO_FAIL("Bad Conversion");
-    return nullptr;
-}
-
 const RemoteUser *LocalUser::GetRemoteUser() const {
     MILO_FAIL("Bad Conversion");
     return nullptr;

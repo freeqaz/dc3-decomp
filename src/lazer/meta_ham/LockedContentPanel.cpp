@@ -16,8 +16,8 @@
 #include "meta_ham/HamStarsDisplay.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
-#include "os/Timer.h"
 #include "rndobj/Draw.h"
+#include "os/Timer.h"
 #include "synth/Sound.h"
 #include "ui/PanelDir.h"
 #include "ui/UIPanel.h"
@@ -101,11 +101,11 @@ void LockedContentPanel::SetUpCampaignMasterQuestHeader(Symbol song) {
     String str;
     Symbol s = TheAccomplishmentMgr->GetAssetSource(song);
     Accomplishment *pAccomplishment = TheAccomplishmentMgr->GetAccomplishment(s);
-    HamLabel *pPracticeScore = DataDir()->Find<HamLabel>("practice_score.lbl");
-    HamLabel *pInstructions = DataDir()->Find<HamLabel>("instructions.lbl");
     AppLabel *pContentName = DataDir()->Find<AppLabel>("content_name.lbl");
-    HamLabel *pProgress = DataDir()->Find<HamLabel>("progress.lbl");
     HamLabel *pTeaser = DataDir()->Find<HamLabel>("teaser.lbl");
+    HamLabel *pInstructions = DataDir()->Find<HamLabel>("instructions.lbl");
+    HamLabel *pProgress = DataDir()->Find<HamLabel>("progress.lbl");
+    HamLabel *pPracticeScore = DataDir()->Find<HamLabel>("practice_score.lbl");
     pContentName->SetTextToken(gNullStr);
     pTeaser->SetTextToken(MakeString("campaign_mq_locked_%s", song.Str()));
     pInstructions->SetTextToken(gNullStr);
@@ -116,15 +116,13 @@ void LockedContentPanel::SetUpCampaignMasterQuestHeader(Symbol song) {
     if (!pAccomplishment) {
         MILO_NOTIFY("Could not find accomplishment for %s", song);
     } else {
-        auto accomplishmentType = pAccomplishment->GetType();
         if (pAccomplishment->GetType() == kAccomplishmentTypeLessonSongListConditional
-            || accomplishmentType == kAccomplishmentTypeTourConditional) {
+            || pAccomplishment->GetType() == kAccomplishmentTypeTourConditional) {
             AccomplishmentCountConditional *pAccomplishmentCountConditional =
                 dynamic_cast<AccomplishmentCountConditional *>(pAccomplishment);
             Flow *pFlow = DataDir()->Find<Flow>("one_shot.flow");
             pFlow->Activate();
-            auto awardInstructionToken = MakeString("%s%s%s", "award_", song, "_instruction");
-            pTeaser->SetTextToken(awardInstructionToken);
+            pTeaser->SetTextToken(MakeString("%s%s%s", "award_", song, "_instruction"));
         } else {
             MILO_ASSERT(false, 0xbe);
         }
@@ -139,14 +137,13 @@ void LockedContentPanel::SetUp(Symbol song) {
     HamLabel *pTeaser = DataDir()->Find<HamLabel>("teaser.lbl");
     HamLabel *pInstructions = DataDir()->Find<HamLabel>("instructions.lbl");
     HamLabel *pProgress = DataDir()->Find<HamLabel>("progress.lbl");
-    bool songID = TheHamSongMgr.GetSongIDFromShortName(song, false) != 0;
+    int songID = TheHamSongMgr.GetSongIDFromShortName(song, false) != 0;
     if (songID != 0) {
         pContentName->SetSongName(song, -1, false);
     } else {
         pContentName->SetTextToken(song);
     }
-    auto teaserAwardToken = MakeString("%s%s", "teaser_award_", song);
-    pTeaser->SetTextToken(teaserAwardToken);
+    pTeaser->SetTextToken(MakeString("%s%s", "teaser_award_", song.Str()));
     TriggerTeaserText();
     mSound = nullptr;
     if (!pAccomplishment) {

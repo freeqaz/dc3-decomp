@@ -36,6 +36,7 @@ private:
 
 class BlockRequest {
 public:
+    BlockRequest(const BlockRequest &);
     BlockRequest(const AsyncTask &);
 
 private:

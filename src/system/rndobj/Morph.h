@@ -19,6 +19,7 @@ class RndMorph : public RndAnimatable {
 public:
     struct Pose {
         Pose(Hmx::Object *owner) : mesh(owner) {}
+        Pose(const Pose &);
 
         ObjPtr<RndMesh> mesh; // 0x0
         Keys<float, float> weights; // 0x14

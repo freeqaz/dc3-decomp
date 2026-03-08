@@ -356,8 +356,8 @@ void FlowNode::PushDrivenProperties() {
             SetProperty(entry.Node().Array(NULL), targetValue);
         } else {
             if (targetValue.CompatibleType(kDataFloat)) {
-                float val = targetValue.LiteralFloat(NULL);
                 FlowMathOp *op = &mathOps[0];
+                float val = targetValue.LiteralFloat(NULL);
                 auto opEnd = mathOps.end();
                 while (op++, op != opEnd) {
                     val = op->Apply(val);
@@ -376,7 +376,7 @@ void FlowNode::PushDrivenProperties() {
                 } else {
                     float fVal = targetValue.LiteralFloat(NULL);
                     int iVal;
-                    if (fVal > 0.0f) {
+                    if (fVal > 0.0) {
                         iVal = (int)(fVal + 0.5f);
                     } else {
                         iVal = (int)(fVal - 0.5f);

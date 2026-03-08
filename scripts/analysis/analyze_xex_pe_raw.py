@@ -672,7 +672,8 @@ def parse_pdata(pe: dict) -> dict:
     exception_samples = []
     for i in range(directory["size"] // 8):
         ent_off = off + i * 8
-        begin_rva = be32(pe["data"], ent_off)
+        begin_va = be32(pe["data"], ent_off)
+        begin_rva = begin_va - pe["image_base"] if begin_va >= pe["image_base"] else begin_va
         word1 = be32(pe["data"], ent_off + 4)
         prolog = word1 & 0xFF
         function_length_insns = (word1 >> 8) & 0x3FFFFF
@@ -681,7 +682,7 @@ def parse_pdata(pe: dict) -> dict:
         type_hist[function_type] += 1
         entry = {
             "begin_rva": begin_rva,
-            "begin_va": pe["image_base"] + begin_rva,
+            "begin_va": begin_va if begin_va >= pe["image_base"] else pe["image_base"] + begin_rva,
             "prolog_length_insns": prolog,
             "function_length_insns": function_length_insns,
             "function_length_bytes": function_length_insns * 4,

@@ -15,6 +15,7 @@ class StepMoves : public PracticeStep {
 
 public:
     StepMoves() : mSelected(false), mDisplayNum(0), mStepNum(0) {}
+    StepMoves(const StepMoves &);
     ~StepMoves() {}
     bool operator<(const StepMoves &) const;
 

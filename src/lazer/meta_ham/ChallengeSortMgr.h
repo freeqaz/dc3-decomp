@@ -33,7 +33,7 @@ public:
 
 private:
     ChallengeSortMgr(SongPreview &);
-    ~ChallengeSortMgr();
+    virtual ~ChallengeSortMgr();
 
 protected:
     std::vector<ChallengeRecord> mChallengeRecords; // 0x78

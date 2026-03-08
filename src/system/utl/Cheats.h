@@ -55,8 +55,13 @@ public:
     void AddKeyCheat(const KeyCheat &cheat) { mKeyCheats.push_back(cheat); }
     void AddLongJoyCheat(const LongJoyCheat &cheat) { mLongJoyCheats.push_back(cheat); }
 
-    Symbol GetSymMode() { return mSymMode; }
-    void SetSymMode(Symbol sym);
+    Symbol SymMode() { return mSymMode; }
+    void SetSymMode(Symbol sym) {
+        if (sym != mSymMode) {
+            mSymMode = sym;
+            RebuildKeyCheatsForMode();
+        }
+    }
 
 private:
     int OnMsg(ButtonDownMsg const &);

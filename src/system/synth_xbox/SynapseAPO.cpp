@@ -35,6 +35,6 @@ void SynapseAPO::SetSamplingRate(float rate) {
 
 void SynapseAPO::OnSetParameters(const SynapseAPOParams& params) {}
 
-void SynapseAPO::DoProcess(const SynapseAPOParams& params, int* arg1, float arg2, int arg3, int arg4) {}
+void SynapseAPO::DoProcess(const SynapseAPOParams& params, unsigned int* arg1, float& arg2, unsigned int arg3, unsigned int arg4) {}
 
 }  // namespace DSP

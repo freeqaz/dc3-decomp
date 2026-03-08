@@ -30,6 +30,7 @@ public:
 
     void PrintCsv(TextStream &) const;
     void PrintForReport(TextStream &) const;
+    void PrintForReport(struct _iobuf *) const;
     void Print(TextStream &) const;
     int StackCompare(const AllocInfo &) const;
 

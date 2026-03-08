@@ -119,7 +119,7 @@ float StandardStream::GetTime() {
         return mStartMs;
 }
 
-float StandardStream::GetJumpBackTotalTime(float) { return 0.0f; }
+float StandardStream::GetJumpBackTotalTime(float) const { return 0.0f; }
 
 float StandardStream::GetInSongTime() {
     float time = GetTime();

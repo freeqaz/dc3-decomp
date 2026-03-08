@@ -76,6 +76,8 @@ protected:
 
     void UpdateInternal();
     void UpdateLine(const Transform &, float);
+    void UpdateLine(Point *, Point *);
+    void UpdateLinePair(Point *, Point *);
     void MapVerts(int, VertsMap &);
 
     DataNode OnSetMat(const DataArray *);

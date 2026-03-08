@@ -9,7 +9,7 @@
 class WavReader : public StreamReader {
 public:
     WavReader(File *, StandardStream *);
-    ~WavReader();
+    virtual ~WavReader();
     virtual void Poll(float);
     virtual void Seek(int);
    // virtual void EnableReads(bool enable) { mEnableReads = enable; }

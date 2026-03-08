@@ -157,7 +157,7 @@ const RndSpline::CtrlPoint &RndSpline::GetDeformedCtrlPointOrDummy(int iIndex) c
     }
 }
 
-void RndSpline::SyncDeformedCtrlPoints(int startCtrlPt, int endCtrlPt) {
+void RndSpline::SyncDeformedCtrlPoints(int startCtrlPt, int endCtrlPt) const {
     // Stub implementation
 }
 
@@ -171,7 +171,7 @@ void RndSpline::PrepareShader(float farg0, float farg1) const {
         if (endIdx == -1) {
             endIdx = (((int)(mCtrlPoints.capacity() - mCtrlPoints.size()) / 88) - 1);
         }
-        const_cast<RndSpline *>(this)->SyncDeformedCtrlPoints(actualStart, endIdx);
+        SyncDeformedCtrlPoints(actualStart, endIdx);
         int count = endIdx - actualStart;
         int idx = actualStart;
         if ((count + 1) >= 0xC) {

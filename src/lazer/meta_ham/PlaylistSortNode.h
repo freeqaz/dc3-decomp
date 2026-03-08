@@ -34,7 +34,7 @@ public:
     virtual Symbol OnSelect();
     virtual Symbol OnSelectDone();
     virtual void OnHighlight();
-    NavListSortNode *GetFirstActive();
+    virtual NavListSortNode *GetFirstActive();
     virtual void Text(UIListLabel *, UILabel *) const;
     virtual bool IsActive() const;
     char const *GetAlbumArtPath();

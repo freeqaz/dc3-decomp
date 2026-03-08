@@ -1,6 +1,7 @@
 #include "ui/UIScreen.h"
 #include "gesture/GestureMgr.h"
 #include "obj/Data.h"
+#include "obj/Dir.h"
 #include "obj/Msg.h"
 #include "obj/Object.h"
 #include "os/Archive.h"
@@ -11,17 +12,25 @@
 #include "ui/UI.h"
 #include "ui/UILabel.h"
 #include "ui/UIPanel.h"
-#include "ui/PanelDir.h"
-#include "utl/MakeString.h"
 #include "utl/Std.h"
 #include "utl/Symbol.h"
 #include "utl/TextStream.h"
-#include <vector>
 
-void EnterGlitchCB(float, void *);
-void UnloadGlitchCB(float, void *);
+UIScreen *UIScreen::sUnloadingScreen = nullptr;
 
-UIScreen *UIScreen::sUnloadingScreen;
+#ifndef HX_NATIVE
+void EnterGlitchCB(float ms, void *panel) {
+    UIPanel *uiPanel = static_cast<UIPanel *>(panel);
+    MILO_LOG("%s %s Enter took %.2f ms\n", uiPanel->ClassName(), uiPanel->Name(), ms);
+}
+
+void UnloadGlitchCB(float ms, void *panel) {
+    UIPanel *uiPanel = static_cast<UIPanel *>(panel);
+    MILO_LOG(
+        "%s %s CheckUnload took %.2f ms\n", uiPanel->ClassName(), uiPanel->Name(), ms
+    );
+}
+#endif
 
 UIScreen::UIScreen()
     : mFocusPanel(nullptr), mBack(nullptr), mClearVram(false), mShowing(true),
@@ -29,28 +38,43 @@ UIScreen::UIScreen()
     MILO_ASSERT(sMaxScreenId < 0x8000, 0x20);
 }
 
+BEGIN_HANDLERS(UIScreen)
+    HANDLE_EXPR(focus_panel, mFocusPanel)
+    HANDLE_ACTION(set_focus_panel, SetFocusPanel(_msg->Obj<class UIPanel>(2)))
+    HANDLE_ACTION(print, Print(TheDebug))
+    HANDLE_ACTION(reenter_screen, ReenterScreen())
+    HANDLE_ACTION(
+        set_panel_active, SetPanelActive(_msg->Obj<class UIPanel>(2), _msg->Int(3))
+    )
+    HANDLE_ACTION(set_showing, SetShowing(_msg->Int(2)))
+    HANDLE_EXPR(has_panel, HasPanel(_msg->Obj<class UIPanel>(2)))
+    HANDLE_ACTION(foreach_panel, ForeachPanel(_msg))
+    HANDLE_EXPR(exiting, Exiting())
+    HANDLE_ACTION(reload_strings, ReloadStrings())
+    HANDLE_SUPERCLASS(Hmx::Object)
+    HANDLE_MEMBER_PTR(FocusPanel())
+    HANDLE_MESSAGE(ButtonDownMsg)
+END_HANDLERS
+
 void UIScreen::SetTypeDef(DataArray *data) {
     Hmx::Object::SetTypeDef(data);
-    mFocusPanel = NULL;
+    mFocusPanel = nullptr;
     mPanelList.clear();
     static Symbol panels("panels");
     DataArray *panelsArr = data->FindArray(panels, false);
-    if (panelsArr != NULL) {
+    if (panelsArr) {
         for (int i = 1; i < panelsArr->Size(); i++) {
             PanelRef pr;
-            pr.mActive = true;
-            pr.mAlwaysLoad = true;
-
-            if (panelsArr->Node(i).Type() == kDataArray) {
+            if (panelsArr->Type(i) == kDataArray) {
                 static Symbol active("active");
                 static Symbol always_load("always_load");
                 DataArray *panelArray = panelsArr->Array(i);
-                pr.mPanel = panelArray->Obj<class UIPanel>(0);
+                pr.mPanel = panelArray->Obj<UIPanel>(0);
                 MILO_ASSERT(pr.mPanel, 0x3a);
                 panelArray->FindData(active, pr.mActive, false);
                 panelArray->FindData(always_load, pr.mAlwaysLoad, false);
             } else {
-                pr.mPanel = panelsArr->Obj<class UIPanel>(i);
+                pr.mPanel = panelsArr->Obj<UIPanel>(i);
                 MILO_ASSERT(pr.mPanel, 0x41);
             }
 #ifdef HX_NATIVE
@@ -64,11 +88,10 @@ void UIScreen::SetTypeDef(DataArray *data) {
     }
     static Symbol focus("focus");
     DataArray *focusArr = data->FindArray(focus, false);
-    if (focusArr != NULL) {
-        SetFocusPanel(focusArr->Obj<class UIPanel>(1));
+    if (focusArr) {
+        SetFocusPanel(focusArr->Obj<UIPanel>(1));
     }
-
-    if (mFocusPanel == NULL && !mPanelList.empty()) {
+    if (!mFocusPanel && !mPanelList.empty()) {
         SetFocusPanel(mPanelList.front().mPanel);
     }
 
@@ -105,7 +128,7 @@ void UIScreen::LoadPanels() {
 void UIScreen::UnloadPanels() {
     FOREACH_REVERSE(it, mPanelList) {
         if (it->mLoaded) {
-            AutoGlitchReport hang(17.0f, UnloadGlitchCB, it->mPanel);
+            AutoGlitchReport report(17.0f, UnloadGlitchCB, it->mPanel);
             it->mPanel->CheckUnload();
         }
     }
@@ -157,23 +180,13 @@ void UIScreen::Poll() {
 }
 
 void UIScreen::Draw() {
-    if (!mShowing) {
-        return;
-    }
-
-    for (std::list<PanelRef>::iterator it = mPanelList.begin(); it != mPanelList.end();
-         it++) {
-        if (it->Active() && it->mPanel->Showing()) {
-            if (TheRnd.ShouldDrawPanel(it->mPanel)) {
+    if (mShowing) {
+        FOREACH (it, mPanelList) {
+            if (it->Active() && it->mPanel->Showing()
+                && TheRnd.ShouldDrawPanel(it->mPanel)) {
                 static Symbol suppress_blacklight_text("suppress_blacklight_text");
                 const DataNode *prop = Property(suppress_blacklight_text, false);
-                if (prop) {
-                    int val = prop->Int();
-                    if (val)
-                        TheUI->SetScreenBlacklghtDisabled(true);
-                    else
-                        TheUI->SetScreenBlacklghtDisabled(false);
-                }
+                TheUI->SetScreenBlacklghtDisabled(prop && prop->Int() != 0);
                 it->mPanel->Draw();
             }
         }
@@ -182,68 +195,61 @@ void UIScreen::Draw() {
 
 bool UIScreen::InComponentSelect() const {
     UIComponent *component = TheUI->FocusComponent();
-    if (component != nullptr) {
+    if (component) {
         return component->GetState() == UIComponent::kSelecting;
     }
 
     return false;
 }
 
-void UIScreen::Enter(UIScreen *from) {
+void UIScreen::Enter(UIScreen *scr) {
 #ifdef HX_NATIVE
-    printf("DC3 UI: Screen '%s' Enter (from '%s')\n", Name(), from ? from->Name() : "<null>");
+    printf("DC3 UI: Screen '%s' Enter (from '%s')\n", Name(), scr ? scr->Name() : "<null>");
 #endif
-    if (from != NULL) {
-        sUnloadingScreen = from;
+    if (scr) {
+        sUnloadingScreen = scr;
 #ifdef HX_NATIVE
         // Skip panel unload on native — ObjRef lifecycle issues cause SIGSEGV
         // during bulk object deletion (ObjPtrList::Unlink on freed nodes).
         // Instead, hide the old screen so it stops drawing.
-        from->mShowing = false;
+        scr->mShowing = false;
 #else
-        from->UnloadPanels();
+        scr->UnloadPanels();
 #endif
     }
-
     Rnd::sPostProcPanelCount = 0;
-    std::vector<char *> panelNames;
-    int lastCount = 0;
-
+    std::vector<const char *> vec;
+    int i5 = 0;
     FOREACH (it, mPanelList) {
         if (it->Active() && it->mPanel->GetState() == UIPanel::kDown) {
-            AutoGlitchReport hang(17.0f, EnterGlitchCB, it->mPanel);
+            AutoGlitchReport report(17, EnterGlitchCB, it->mPanel);
             it->mPanel->Enter();
-            if (Rnd::sPostProcPanelCount != lastCount) {
-                panelNames.push_back((char *)it->mPanel->Name());
-                lastCount = Rnd::sPostProcPanelCount;
+            if (Rnd::sPostProcPanelCount != i5) {
+                vec.push_back(it->mPanel->Name());
+                i5 = Rnd::sPostProcPanelCount;
             }
         }
     }
-
     if (Rnd::sPostProcPanelCount != 1) {
         if (Rnd::sPostProcPanelCount == 0) {
-            TheDebug << MakeString(
+            MILO_LOG(
                 "[POSTPROC WARNING] UIScreen '%s' doesn't have any panels that set the PostProc\n",
-                (char *)Name()
+                Name()
             );
         } else {
-            TheDebug << MakeString(
+            MILO_LOG(
                 "[POSTPROC WARNING] UIScreen '%s' has %d panels that attempt to set the PostProc\n",
                 Name(),
                 Rnd::sPostProcPanelCount
             );
             for (int i = 0; i < Rnd::sPostProcPanelCount; i++) {
-                TheDebug << MakeString(
-                    "[POSTPROC WARNING]    panel = '%s'\n",
-                    panelNames[i]
-                );
+                MILO_LOG("[POSTPROC WARNING]    panel = '%s'\n", vec[i]);
             }
         }
         Rnd::sPostProcPanelCount = 0;
     }
-
     static Message msg("enter", 0);
-    msg[0] = from;
+    msg[0] = scr;
     HandleType(msg);
     Poll();
 
@@ -365,24 +371,23 @@ bool UIScreen::Exiting() const {
 
 void UIScreen::Print(TextStream &s) {
     static Symbol file("file");
-
     s << "{UIScreen " << Name() << "\n";
-
     if (mPanelList.size() != 0) {
         s << "   Panels:\n";
         FOREACH (it, mPanelList) {
             s << "      " << it->mPanel->Name() << " ";
-            if (!it->mActive) {
-                s << "(active " << it->mActive << ") ";
+            bool a = it->mActive;
+            if (!a) {
+                s << "(active " << a << ") ";
             }
-            if (!it->mAlwaysLoad) {
-                s << "(always_load " << it->mAlwaysLoad << ") ";
+            a = it->mAlwaysLoad;
+            if (!a) {
+                s << "(always_load " << a << ") ";
             }
-
             const DataArray *typeDef = it->mPanel->TypeDef();
-            if (typeDef != nullptr) {
+            if (typeDef) {
                 DataArray *fileArray = typeDef->FindArray(file, false);
-                if (fileArray != nullptr) {
+                if (fileArray) {
                     DataNode type = fileArray->Node(1);
                     if (type.Type() == kDataString || type.Type() == kDataSymbol) {
                         s << "(" << type.LiteralStr() << ") ";
@@ -541,24 +546,6 @@ void UIScreen::ReloadStrings() {
     }
 }
 
-BEGIN_HANDLERS(UIScreen)
-    HANDLE_EXPR(focus_panel, mFocusPanel)
-    HANDLE_ACTION(set_focus_panel, SetFocusPanel(_msg->Obj<class UIPanel>(2)))
-    HANDLE_ACTION(print, Print(TheDebug))
-    HANDLE_ACTION(reenter_screen, ReenterScreen())
-    HANDLE_ACTION(
-        set_panel_active, SetPanelActive(_msg->Obj<class UIPanel>(2), _msg->Int(3))
-    )
-    HANDLE_ACTION(set_showing, SetShowing(_msg->Int(2)))
-    HANDLE_EXPR(has_panel, HasPanel(_msg->Obj<class UIPanel>(2)))
-    HANDLE_ACTION(foreach_panel, ForeachPanel(_msg))
-    HANDLE_EXPR(exiting, Exiting())
-    HANDLE_ACTION(reload_strings, ReloadStrings())
-    HANDLE_SUPERCLASS(Hmx::Object)
-    HANDLE_MEMBER_PTR(FocusPanel())
-    HANDLE_MESSAGE(ButtonDownMsg)
-END_HANDLERS
-
 #ifdef HX_NATIVE
 void EnterGlitchCB(float fElapsed, void *data) {
     // Glitch detection callbacks use hardcoded ILP32 struct offsets — stub on native
@@ -567,23 +554,5 @@ void EnterGlitchCB(float fElapsed, void *data) {
 
 void UnloadGlitchCB(float f, void *data) {
     TheDebug << MakeString("CheckUnload took %.2f ms\n", f);
-}
-#else
-void EnterGlitchCB(float fElapsed, void *data) {
-    int sp54;
-    const char *sp50;
-
-    char *obj = (char *)(((int **)data)[1][1] + (int)data);
-    sp50 = *(const char **)((char *)obj + 0x24);
-    void *(*func)(void *, char *) = *(void *(**)(void *, char *))(*((int *)(obj + 4)) + 0xC);
-    TheDebug << MakeString("%s %s Enter took %.2f ms\n", *(Symbol *)func(&sp54, obj + 4), sp50, fElapsed);
-}
-
-void UnloadGlitchCB(float f, void *data) {
-    int checkTime;
-    char *obj = (char *)((char **)((char **)data)[1])[1] + (int)data;
-    checkTime = *(int *)((char *)obj + 0x24);
-    int result = (*(int (**)(char *, char *, int))((char *)obj + 0xC))((char *)obj + 4, obj, 0);
-    TheDebug << MakeString("CheckUnload took %2.f ms\n", result, &checkTime, &f);
 }
 #endif

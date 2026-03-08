@@ -58,7 +58,7 @@ protected:
 
 private:
     void SyncPristineCtrlPoints();
-    void SyncDeformedCtrlPoints(int, int);
+    void SyncDeformedCtrlPoints(int, int) const;
     const CtrlPoint &GetDeformedCtrlPointOrDummy(int) const;
 
     DataNode OnTestPulse(DataArray *);

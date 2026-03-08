@@ -1,6 +1,5 @@
 #include "utl/MemMgr.h"
 #include "MemHeap.h"
-#include "MemStats.h"
 #include "MemTracker.h"
 #include "Memory.h"
 #include "obj/Data.h"
@@ -9,13 +8,10 @@
 #include "os/System.h"
 #include "utl/Option.h"
 #include "utl/PoolAlloc.h"
-#include "utl/Std.h"
 #include "utl/TextStream.h"
 #include "xdk/XAPILIB.h"
+#include "utl/Std.h"
 #include <cstdlib>
-
-extern MemTracker *gMemTracker;
-CriticalSection *gMemLock;
 
 #define MAX_HEAPS 16
 #define MAX_BUF_THREADS 32
@@ -25,27 +21,32 @@ bool gStlAllocNameLookup = false;
 
 bool gbUseLowestMip = false;
 bool gInsideMemFunc = false;
-extern bool gMemoryUsageTest;
+bool gMemoryUsageTest;
+int gNumHeaps;
 int gCheckConsistency;
 int gNewOperatorAlign;
 int gSingleHeap;
 String gMemLogType;
 std::vector<String> gUseLowestMipExceptions;
 MemHeapStack gNullMemStack;
+
+bool MemUseLowestMipException(const char *exc) {
+    String str(exc);
+    str.ToLower();
+    FOREACH (it, gUseLowestMipExceptions) {
+        if (strstr(str.c_str(), it->c_str()) != nullptr) {
+            return true;
+        }
+    }
+    return false;
+}
 int gNumThreads;
 unsigned long gThreadIds[MAX_BUF_THREADS];
 
 bool gInitted;
 
 MemHeap gHeaps[MAX_HEAPS];
-int gNumHeaps;
 
-#ifdef HX_NATIVE
-// On native, do NOT override global operator new/delete.
-// The CRT's default new/delete use malloc/free which is what we want.
-// Overriding them here caused heap corruption during static initialization
-// because some code paths still went through custom MemHeap logic.
-#else
 void *operator new(unsigned int size) {
     return MemAlloc(size, __FILE__, 0x5CF, "new", gNewOperatorAlign);
 }
@@ -56,7 +57,6 @@ void *operator new[](unsigned int size) {
 
 void operator delete(void *v) { MemFree(v, "unknown", 0, "unknown"); }
 void operator delete[](void *v) { MemFree(v, "unknown", 0, "unknown"); }
-#endif
 
 void PhysDelta(const char *name) {
     static int gPhysicalUsage = -1;
@@ -71,17 +71,6 @@ void PhysDelta(const char *name) {
 }
 
 bool MemUseLowestMip() { return gbUseLowestMip; }
-
-bool MemUseLowestMipException(const char *exc) {
-    String str(exc);
-    str.ToLower();
-    FOREACH (it, gUseLowestMipExceptions) {
-        if (strstr(str.c_str(), it->c_str()) != nullptr) {
-            return true;
-        }
-    }
-    return false;
-}
 
 int _GetFreePhysicalMemory() {
     int low = 0;
@@ -121,16 +110,10 @@ int MemNumHeaps() { return gNumHeaps; }
 
 void MemFree(void *mem, const char *file, int line, const char *name) {
     if (mem) {
-#ifdef HX_NATIVE
-        free(mem);
-#else
         CritSecTracker tracker(gMemLock);
         int i;
-        int freed = 0;
-        MemHeap *heap = gHeaps;
-        for (i = 0; i < gNumHeaps; i++, heap++) {
-            freed = heap->Free((int *)mem);
-            if (freed)
+        for (i = 0; i < gNumHeaps; i++) {
+            if (gHeaps[i].Free((int *)mem))
                 break;
         }
         if (i == gNumHeaps) {
@@ -140,18 +123,11 @@ void MemFree(void *mem, const char *file, int line, const char *name) {
                 free(mem);
             }
         }
-        if (gMemTracker) {
-            MemTrackFree(mem);
-#ifdef HX_NATIVE
-            // On LP64, mHeapOnly is at a different offset and mHeapStats shifts
-            // Skip heap stats tracking on native — not critical for functionality
-#else
-            if (((char *)gMemTracker)[0x18195]) {
-                ((HeapStats *)((char *)gMemTracker + 0xC))[(signed char)i].Free(freed, freed);
-            }
-#endif
-        }
-#endif
+        //     if ((gMemTracker != 0x0) && (MemTrackFree(mem), gMemTracker->field_0x18195
+        //     !=
+        //     '\0')) {
+        //       HeapStats::Free(gMemTracker->mHeapStats + iVar2,iVar1,iVar1);
+        //     }
     }
 }
 
@@ -165,10 +141,10 @@ void *MemTruncate(void *mem, int size, const char *file, int line, const char *n
         MemFree(mem);
         return nullptr;
     } else {
-        int i60;
-        int allocSize = (size + 3) >> 2;
-        void *truncated = nullptr;
         int i;
+        int allocSize = (size + 3) / 4;
+        int i60;
+        void *truncated = nullptr;
         for (i = 0; i < gNumHeaps; i++) {
             if (gHeaps[i].Truncate((int *)mem, allocSize, i60))
                 break;
@@ -177,7 +153,7 @@ void *MemTruncate(void *mem, int size, const char *file, int line, const char *n
             truncated = realloc(mem, size);
             i60 = allocSize;
         }
-        MemTrackRealloc(mem, size, i60 << 2, truncated);
+        MemTrackRealloc(mem, size, i60 * 4, truncated);
         return truncated;
     }
 }
@@ -241,7 +217,7 @@ void MemOrPoolFreeSTL(
 
 void AddHeap(
     int heapNum,
-    int size,
+    int i2,
     const char *c3,
     bool b4,
     int i5,
@@ -249,22 +225,22 @@ void AddHeap(
     int i7,
     bool b8
 ) {
-    void *raw_mem = malloc(size);
-    if (raw_mem == 0) {
+    void *tmp2 = malloc(i2);
+    if (!tmp2) {
         int max = 0x40000000;
-        raw_mem = malloc(max);
+        void *raw_mem = malloc(max);
         MILO_ASSERT(raw_mem, 0x32C);
-        if (size > max) {
+        if (i2 > max) {
             MILO_LOG(
                 "not enough memory for heap \"%s\". Requested: %d. Available: %d\n",
                 c3,
-                size,
+                i2,
                 max
             );
         }
-        size = max;
+        i2 = max;
     }
-    gHeaps[heapNum].Init(c3, gNumHeaps, (int *)raw_mem, size >> 2, b4, strat, i7, b8);
+    gHeaps[heapNum].Init(c3, gNumHeaps, (int *)tmp2, i2 / 4, b4, strat, i7, b8);
 }
 
 void AddHeap(int i1, int i2, DataArray *arr) {
@@ -289,14 +265,6 @@ void AddHeap(int i1, int i2, DataArray *arr) {
     );
 }
 
-// Stub: MemHeap::Alloc and ThreadMemStack are not yet decompiled, so route
-// through malloc() which uses the CRT heap (NtAllocateVirtualMemory in Xenia).
-void *MemAlloc(int size, const char *file, int line, const char *name, int align) {
-    if (size <= 0)
-        return nullptr;
-    return malloc(size);
-}
-
 void *_MemAllocTemp(int size, const char *file, int line, const char *name, int align) {
     MemTemp tmp;
     return MemAlloc(size, file, line, name, align);
@@ -305,16 +273,12 @@ void *_MemAllocTemp(int size, const char *file, int line, const char *name, int 
 void *MemOrPoolAllocSTL(int size, const char *file, int line, const char *name) {
     if (size == 0)
         return nullptr;
-#ifdef HX_NATIVE
-    return malloc(size);
-#else
     else if (size > 0x80) {
         MemTemp tmp;
         return MemAlloc(size, file, line, name, 0);
     } else {
         return PoolAlloc(size, size, file, line, name);
     }
-#endif
 }
 
 void MemInit() {
@@ -371,19 +335,17 @@ void MemInit() {
                 heapArr = cfg->FindArray("discReleaseHeaps");
             }
         }
-        if (!(gSingleHeap == 0)) {
-            gNumHeaps = 1;
-        } else {
+        if (gSingleHeap == 0) {
             gNumHeaps = heapArr->Size();
             MILO_ASSERT(gNumHeaps < MAX_HEAPS, 0x295);
+        } else {
+            gNumHeaps = 1;
         }
         Symbol size("size");
-        for (int i = 1; i < heapArr->Size(); i++) {
-            DataArray *heapDef = heapArr->Array(i);
-            int bytes = 0;
-            heapDef->FindData(size, bytes, false);
-            AddHeap(i - 1, bytes, heapDef);
-        }
+        AddHeap(
+            heapArr->Size() - 1, 0x2500000, "tiny", false, 0, MemHeap::kFirstFit, 0, 0
+        );
+        // more...
     }
     disableMgr = false;
     if (enableTracking) {
@@ -432,13 +394,12 @@ void *MemResizeElem(
     const char *name
 ) {
     void *old = mem;
-    int suffixSize = 0;
     int prefixSize = (char *)cutPoint - (char *)mem;
+    int suffixSize = 0;
     int newTotalSize = prefixSize;
     if (insertLength > -1) {
         suffixSize = (totalSize - newTotalSize) - cutLength;
-        int delta = insertLength + suffixSize;
-        newTotalSize = delta + prefixSize;
+        newTotalSize += suffixSize + insertLength;
     }
     if (newTotalSize != totalSize) {
         mem = MemAlloc(newTotalSize, file, line, name);
@@ -469,8 +430,7 @@ MemRealloc(void *mem, int size, const char *file, int line, const char *name, in
         return dst;
     } else {
         void *dst = realloc(mem, size);
-        int sizeInWords = (size + 3) >> 2;
-        MemTrackRealloc(mem, size, sizeInWords << 2, dst);
+        MemTrackRealloc(mem, size, (size + 3) / 4, dst);
         return dst;
     }
 }
@@ -478,10 +438,10 @@ MemRealloc(void *mem, int size, const char *file, int line, const char *name, in
 MemHeapStack &ThreadMemStack(bool);
 
 void MemPushHeap(int iHeap) {
-    if (gInitted && (unsigned int)gNumHeaps > 0) {
+    if (gInitted && gNumHeaps > 0) {
         MemHeapStack &s = ThreadMemStack(true);
         MILO_ASSERT_FMT(
-            (unsigned int)iHeap > kNoHeap && iHeap < gNumHeaps,
+            iHeap > kNoHeap && iHeap < gNumHeaps,
             "iHeap = %d, gNumHeaps=%d",
             iHeap,
             gNumHeaps
@@ -493,17 +453,12 @@ void MemPushHeap(int iHeap) {
 }
 
 void MemPopHeap() {
-    bool proceed = false;
-    if (gInitted) {
-        if (gNumHeaps > 0) {
-            proceed = true;
-        }
+    if (gInitted == false || gNumHeaps < 1) {
+        return;
     }
-    if (proceed) {
-        MemHeapStack &s = ThreadMemStack(true);
-        MILO_ASSERT(s.mSize > 0, 0x1f6);
-        s.mSize--;
-    }
+    MemHeapStack s = ThreadMemStack(true);
+    MILO_ASSERT(s.mSize > 0, 0x1f6);
+    s.mSize--;
 }
 
 void MemPushTemp() {

@@ -136,13 +136,7 @@ bool FlowAnimate::Activate() {
     PushDrivenProperties();
     RndAnimatable *anim = (RndAnimatable *)mAnim;
     if (!anim) return false;
-    if (!mImmediateRelease) {
-        // Wait mode: queue the command to execute later
-        if (mRunningNodes.empty()) {
-            TheFlowMgr->QueueCommand(this, kQueue);
-            return true;
-        }
-    } else {
+    if (!(!mImmediateRelease)) {
         // ImmediateRelease: start and forget
         if (mAnimTask) {
             mAnimTask->mListener = NULL;
@@ -164,23 +158,30 @@ bool FlowAnimate::Activate() {
             );
             mAnimTask = static_cast<AnimTask *>(task);
         }
+    } else {
+        // Wait mode: queue the command to execute later
+        if (mRunningNodes.empty()) {
+            TheFlowMgr->QueueCommand(this, kQueue);
+            return true;
+        }
     }
     return false;
 }
 
 void FlowAnimate::Execute(QueueState state) {
     FLOW_LOG("Execute: state = %i\n", state);
+    auto& _ref0 = mAnimTask;
     if (IsRunning()) {
         // Already running (an animtask is active)
-        if (mAnimTask && state == kIgnore) {
-            mAnimTask->mListener = NULL;
+        if (_ref0 && kIgnore == (int)state) {
+            _ref0->mListener = NULL;
             if (mStopMode != kReleaseAndContinue) {
-                AnimTask *task = mAnimTask;
+                AnimTask *task = _ref0;
                 if (task) {
                     delete task;
                 }
             }
-            mAnimTask = nullptr;
+            _ref0 = nullptr;
             FLOW_LOG("Timed Release From Parent \n");
             Timer timer;
             timer.Reset();
@@ -203,7 +204,16 @@ void FlowAnimate::Execute(QueueState state) {
                 float easePower = mEasePower;
                 RndAnimatable *anim = (RndAnimatable *)mAnim;
                 Task *task;
-                if (period == 0.0f) {
+                if (!(period == 0.0f)) {
+                    float end = mEnd;
+                    float start = mStart;
+                    float blend = mBlend;
+                    float delay = mDelay;
+                    task = anim->Animate(
+                        blend, false, delay, (RndAnimatable::Rate)rate, start, end,
+                        period, 1.0f, type, this, (EaseType)ease, easePower, wrap
+                    );
+                } else {
                     float scale = mScale;
                     float end = mEnd;
                     float start = mStart;
@@ -213,23 +223,14 @@ void FlowAnimate::Execute(QueueState state) {
                         blend, false, delay, (RndAnimatable::Rate)rate, start, end,
                         0.0f, scale, type, this, (EaseType)ease, easePower, wrap
                     );
-                } else {
-                    float end = mEnd;
-                    float start = mStart;
-                    float blend = mBlend;
-                    float delay = mDelay;
-                    task = anim->Animate(
-                        blend, false, delay, (RndAnimatable::Rate)rate, start, end,
-                        period, 1.0f, type, this, (EaseType)ease, easePower, wrap
-                    );
                 }
-                mAnimTask = static_cast<AnimTask *>(task);
+                _ref0 = static_cast<AnimTask *>(task);
             } else {
                 float delay = mDelay;
                 float blend = mBlend;
                 RndAnimatable *anim = (RndAnimatable *)mAnim;
                 Task *task = anim->Animate(blend, false, delay, this, kEaseLinear, 2.0f, false);
-                mAnimTask = static_cast<AnimTask *>(task);
+                _ref0 = static_cast<AnimTask *>(task);
             }
         } else if (state == kIgnore) {
             mFlowParent->ChildFinished(this);
@@ -240,9 +241,10 @@ void FlowAnimate::Execute(QueueState state) {
 void FlowAnimate::ChildFinished(FlowNode *node) {
     FLOW_LOG("Child Finished\n");
     mRunningNodes.remove(node);
+    auto& _ref1 = mFlowParent;
     if (mRunningNodes.empty() && !mAnimTask && !mImmediateRelease) {
-        if (mFlowParent)
-            mFlowParent->ChildFinished(this);
+        if (_ref1)
+            _ref1->ChildFinished(this);
     }
 }
 

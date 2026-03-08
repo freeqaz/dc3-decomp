@@ -30,7 +30,7 @@ public:
 
 protected:
     virtual void OnSetParameters(const Params& params) = 0;
-    virtual void DoProcess(const Params& params, int* arg1, float arg2, int arg3, int arg4) = 0;
+    virtual void DoProcess(const Params& params, unsigned int* arg1, float& arg2, unsigned int arg3, unsigned int arg4) = 0;
 
 private:
     // Internal state - CXAPOBase = 0x24 bytes (0x20 CXAPOParametersBase + 0x4 IXAPOParameters)
@@ -52,7 +52,7 @@ public:
     virtual ~SynapseAPO();
     void SetSamplingRate(float rate);
     void OnSetParameters(const SynapseAPOParams& params);
-    void DoProcess(const SynapseAPOParams& params, int* arg1, float arg2, int arg3, int arg4);
+    void DoProcess(const SynapseAPOParams& params, unsigned int* arg1, float& arg2, unsigned int arg3, unsigned int arg4);
 
 private:
     Synapse::Synapse* mSynapse;   // at offset 0x168

@@ -9,16 +9,20 @@
 #include "SongSortByLocation.h"
 #include "SongSortNode.h"
 #include "meta/SongPreview.h"
+#include "meta_ham/HamSongMgr.h"
+#include "meta_ham/MetaPerformer.h"
 #include "obj/Data.h"
 #include "obj/Dir.h"
 #include "obj/Msg.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
+#include "stl/_vector.h"
 #include "ui/UI.h"
 #include "meta_ham/MetaPerformer.h"
 #include "ProfileMgr.h"
 #include "ui/UIListProvider.h"
 #include "ui/UIPanel.h"
+#include "utl/Std.h"
 #include "utl/Symbol.h"
 BEGIN_HANDLERS(SongSortMgr)
     HANDLE_ACTION(get_setlist_mode, 0)
@@ -37,6 +41,8 @@ BEGIN_HANDLERS(SongSortMgr)
     )
     HANDLE_SUPERCLASS(NavListSortMgr)
 END_HANDLERS
+
+SongSort::SongSort() {}
 
 SongSortMgr::SongSortMgr(SongPreview &sp) : NavListSortMgr(sp) {
     SetName("song_offer_provider", ObjectDir::Main());
@@ -237,7 +243,7 @@ void SongSortMgr::RebuildSongRecordMap() {
         if (metadata && !metadata->IsFake()
             && TheProfileMgr.IsContentUnlocked(metadata->ShortName())) {
             SongRecord second(metadata);
-            mSongRecordMap.insert(std::pair<Symbol, SongRecord>(metadata->ShortName(), second));
+            mSongRecordMap.insert(std::pair<Symbol, SongRecord>(second.ShortName(), second));
         }
     }
 }

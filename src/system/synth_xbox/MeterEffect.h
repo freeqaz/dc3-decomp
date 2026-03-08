@@ -19,7 +19,7 @@ public:
     MeterEffect();
     virtual ~MeterEffect();
     virtual void OnSetParameters(const MeterEffectParams &params);
-    virtual void DoProcess(const MeterEffectParams &params, float **ppInputSamples, unsigned int uNumInputFrames, unsigned int uNumInputChannels);
+    virtual void DoProcess(const MeterEffectParams &params, unsigned int *pInputSamples, float &fOutputLevel, unsigned int uNumInputFrames, unsigned int uNumInputChannels);
 
 protected:
     char padding[0x50];  // Padding to match object layout

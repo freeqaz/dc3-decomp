@@ -32,7 +32,7 @@ public:
 class XboxPurchaser : public StorePurchaser, public Hmx::Object {
 public:
     // Hmx::Object
-    ~XboxPurchaser();
+    virtual ~XboxPurchaser();
     virtual DataNode Handle(DataArray *, bool);
 
     // StorePurchaser
