@@ -39,11 +39,11 @@ struct UIListElementDrawState {
 struct UIListWidgetDrawState {
     ~UIListWidgetDrawState() {}
     Vector3 mFirstPos; // 0x0
-    Vector3 mLastPos; // 0x10
-    Vector3 mHighlightPos; // 0x20
-    int mHighlightDisplay; // 0x30
-    UIListWidgetState mHighlightElementState; // 0x34
-    std::vector<UIListElementDrawState> mElements; // 0x38
+    Vector3 mLastPos; // 0xc
+    Vector3 mHighlightPos; // 0x18
+    int mHighlightDisplay; // 0x24
+    UIListWidgetState mHighlightElementState; // 0x28
+    std::vector<UIListElementDrawState> mElements; // 0x2c
 };
 
 enum UIListWidgetDrawType {

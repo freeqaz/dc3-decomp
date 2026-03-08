@@ -129,8 +129,6 @@ public:
     bool AnimateColorFromPreset() const { return mAnimateColorFromPreset; }
     bool AnimateOrientationFromPreset() const { return mAnimateOrientationFromPreset; }
 
-    static void RemoveFromLists(Spotlight *);
-
 protected:
 
     Spotlight();

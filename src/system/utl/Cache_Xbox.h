@@ -14,7 +14,6 @@ public:
     virtual const char *GetCachePath(const char *);
     virtual const char *GetCacheSearchPath(const char *);
 
-    CacheIDXbox(CacheIDXbox const &);
     const char *Name() const { return mStrCacheName.c_str(); }
     DWORD DeviceID() const { return mContentData.DeviceID; }
     XCONTENT_DATA *ContentData() { return &mContentData; }

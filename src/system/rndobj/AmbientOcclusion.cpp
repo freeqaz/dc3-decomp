@@ -31,6 +31,45 @@ bool RndAmbientOcclusion::Edge::operator<(const Edge &other) const {
 }
 #endif
 
+void RndAmbientOcclusion::BlendVert(
+    const RndMesh::Vert &v1, const RndMesh::Vert &v2, RndMesh::Vert &out
+) {
+    memcpy(&out, &v1, sizeof(RndMesh::Vert));
+    out.pos.z += v2.pos.z;
+    out.pos.y += v2.pos.y;
+    out.pos.x += v2.pos.x;
+    out.tex.x += v2.tex.x;
+    out.tex.y += v2.tex.y;
+    out.color.green += v2.color.green;
+    out.color.red += v2.color.red;
+    out.color.alpha += v2.color.alpha;
+    out.color.blue += v2.color.blue;
+    out.norm.x += v2.norm.x;
+    out.norm.z += v2.norm.z;
+    out.norm.y += v2.norm.y;
+    Vector3 tang(v2.tangent.x + out.tangent.x, v2.tangent.y, v2.tangent.z);
+    out.pos.x *= 0.5f;
+    out.pos.y *= 0.5f;
+    out.pos.z *= 0.5f;
+    out.tex.x *= 0.5f;
+    out.tex.y *= 0.5f;
+    out.color.blue *= 0.5f;
+    out.color.red *= 0.5f;
+    out.color.green *= 0.5f;
+    out.color.alpha *= 0.5f;
+    tang.z += out.tangent.z;
+    tang.y += out.tangent.y;
+    Normalize(out.norm, out.norm);
+    Normalize(tang, tang);
+    out.tangent.x = tang.x;
+    out.tangent.y = tang.y;
+    out.tangent.z = tang.z;
+    out.color.alpha = 0.0f;
+    out.color.blue = 0.0f;
+    out.color.green = 0.0f;
+    out.color.red = 0.0f;
+}
+
 bool IsValidObject(Hmx::Object *obj) {
     RndMesh *mesh = dynamic_cast<RndMesh *>(obj);
     RndGroup *group = dynamic_cast<RndGroup *>(obj);
@@ -201,11 +240,13 @@ void RndAmbientOcclusion::BuildTrees(Quality quality) {
     MILO_ASSERT(quality < kQuality_Max, 0x1E3);
     mQuality = quality;
     if (!mObjectsCast.empty() && !mObjectsReceive.empty()) {
-        MILO_ASSERT(mTriList.empty(), 0x1E9);
+        auto triListEmpty = mTriList.empty();
+        MILO_ASSERT(triListEmpty, 0x1E9);
         Timer timer;
         timer.Restart();
         MILO_LOG("RndAmbientOcclusion: Building kd-Tree...\n");
-        Box box(Vector3(FLT_MAX, FLT_MAX, FLT_MAX), Vector3(-FLT_MAX, -FLT_MAX, -FLT_MAX));
+        auto _tmp0 = Vector3(FLT_MAX, FLT_MAX, FLT_MAX);
+        Box box(_tmp0, Vector3(-FLT_MAX, -FLT_MAX, -FLT_MAX));
         FOREACH (it, mObjectsCast) {
         }
         MILO_ASSERT(mTree == NULL, 0x234);
@@ -245,14 +286,38 @@ void RndAmbientOcclusion::BuildSHCoeff(const Vector3 &inVector, float *fArr) con
     fArr[3] = inVector.x * 0.48860252f;
 }
 
+float RndAmbientOcclusion::DistanceSH(
+    const Vector4 &sh1, const Vector3 &n1, const Vector4 &sh2, const Vector3 &n2
+) const {
+    float dw = (sh1.w * 2.0f - 1.0f) - (sh2.w * 2.0f - 1.0f);
+    float dz = (sh1.z * 2.0f - 1.0f) - (sh2.z * 2.0f - 1.0f);
+    float dy = (sh1.y * 2.0f - 1.0f) - (sh2.y * 2.0f - 1.0f);
+    float dot = n1.x * n2.x + n1.z * n2.z + n1.y * n2.y;
+    if (dot <= 0.0f) {
+        dot = -dot;
+    }
+    float dx = sh1.x - sh2.x;
+    auto dist = sqrtf(dx * dx + dy * dy + dw * dw + dz * dz);
+    return dist / (dot + 1.0f);
+}
+
 template <class T>
 struct VectorSort {
     VectorSort(const std::vector<T> &v) : vector(v) {}
 
     bool operator()(T item1, T item2);
 
-    const std::vector<T> &vector; // idk
+    const std::vector<T> &vector;
 };
+
+template <>
+bool VectorSort<RndMesh *>::operator()(RndMesh *item1, RndMesh *item2) {
+    std::vector<RndMesh *>::const_iterator it1 =
+        std::find(vector.begin(), vector.end(), item1);
+    std::vector<RndMesh *>::const_iterator it2 =
+        std::find(vector.begin(), vector.end(), item2);
+    return it1 < it2;
+}
 
 void RndAmbientOcclusion::BuildObjectLists() {
     ObjectDir *myDir = Dir();
@@ -263,8 +328,8 @@ void RndAmbientOcclusion::BuildObjectLists() {
     std::vector<RndMesh *> meshes;
     GatherObjectsFromDir(myDir, meshes);
     std::unique_copy(meshes.begin(), meshes.end(), meshes.begin());
-    std::vector<RndMesh *> dontCastMeshes;
     std::vector<RndMesh *> dontReceiveMeshes;
+    std::vector<RndMesh *> dontCastMeshes;
     std::vector<RndMesh *> tessellateMeshes;
     FOREACH (it, mDontCastAO) {
         GatherObject(*it, dontCastMeshes);
@@ -303,6 +368,8 @@ void RndAmbientOcclusion::BuildObjectLists() {
     );
 }
 
+// Transform a normal vector by applying the inverse transpose of a matrix.
+// This is used to correctly transform normals under non-uniform scaling.
 void RndAmbientOcclusion::TransformNormal(
     const Vector3 &vin, const Hmx::Matrix3 &min, Vector3 &vout
 ) const {
@@ -310,10 +377,13 @@ void RndAmbientOcclusion::TransformNormal(
     Normalize(vin, vtmp);
     Hmx::Matrix3 mtmp;
     Invert(min, mtmp);
-    // vout.x = vtmp.x * mtmp.x.x + vtmp.y * mtmp.x.y + vtmp.z * mtmp.x.z;
-    // vout.y = vtmp.x * mtmp.y.x + vtmp.y * mtmp.y.y + vtmp.z * mtmp.y.z;
-    // vout.z = vtmp.x * mtmp.z.x + vtmp.y * mtmp.z.y + vtmp.z * mtmp.z.z;
-    vout.Set(Dot(vtmp, mtmp.x), Dot(vtmp, mtmp.y), Dot(vtmp, mtmp.z));
+    // Compute dot products with inverted matrix rows
+    float z = Dot(vtmp, mtmp.z);
+    float x = Dot(vtmp, mtmp.x);
+    float y = Dot(vtmp, mtmp.y);
+    vout.y = y;
+    vout.x = x;
+    vout.z = z;
     Normalize(vout, vout);
 }
 
@@ -340,12 +410,13 @@ bool RndAmbientOcclusion::IsSerializable(const RndMesh *mesh) const {
         return false;
     }
     ObjectDir *meshDir = mesh->Dir();
-    return (meshDir == Dir())
-        || (meshDir->IsSubDir() && meshDir->InlineSubDirType() == kInlineAlways);
+        if ((meshDir == Dir()))
+        return true;
+    return (meshDir->IsSubDir() && meshDir->InlineSubDirType() == kInlineAlways);
 }
 
 bool RndAmbientOcclusion::IsValid_Mesh(const RndMesh *mesh) const {
-    RndMesh *nonConstMesh = (RndMesh *)mesh; // lmao
+    RndMesh *nonConstMesh = const_cast<RndMesh *>(mesh);
     if (nonConstMesh->Verts().size() && nonConstMesh->Faces().size()) {
         static Symbol classNames[] = { "Spotlight", "WorldCrowd" };
         FOREACH (it, mesh->Refs()) {
@@ -361,6 +432,61 @@ bool RndAmbientOcclusion::IsValid_Mesh(const RndMesh *mesh) const {
         return true;
     }
     return false;
+}
+
+bool RndAmbientOcclusion::IsValid_AOCast(const RndMesh *mesh) const {
+    bool isTransparent = false;
+    if (!IsValid_Mesh(mesh)) {
+        return false;
+    }
+    RndMat *mat = mesh->Mat();
+    if (mat != NULL) {
+        ZMode zmode = mat->GetZMode();
+        isTransparent = zmode == kZModeDisable || zmode == kZModeTransparent;
+    }
+    if (!mIgnoreHidden || mesh->Showing()) {
+        if (!mIgnoreTransparent || !isTransparent) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool RndAmbientOcclusion::IsValid_AOReceive(const RndMesh *mesh) const {
+    bool isTransparent = false;
+    bool isPrelit = false;
+    if (!IsSerializable(mesh)) {
+        return false;
+    }
+    if (!IsValid_Mesh(mesh)) {
+        return false;
+    }
+    RndMat *mat = mesh->Mat();
+    bool _result = false;
+    if (mat != NULL) {
+        ZMode zmode = mat->GetZMode();
+        bool transparent = false;
+        float alpha = mat->Alpha();
+        if (zmode == kZModeDisable || zmode == kZModeTransparent || alpha == 0.0f) {
+            transparent = true;
+        }
+        isPrelit = mat->Prelit();
+        isTransparent = transparent;
+    }
+    if (!mIgnoreHidden || mesh->Showing()) {
+        if (!mIgnoreTransparent || !isTransparent) {
+            if (!mIgnorePrelit || !isPrelit) {
+                                _result = true;
+            }
+        }
+    }
+    return _result;
+}
+
+bool RndAmbientOcclusion::IsValid_Tessellate(
+    const RndMesh *mesh, const ObjectDir *dir
+) const {
+                return !(!IsValid_AOCast(mesh) || !IsValid_AOReceive(mesh) || mesh->IsSkinned() || mesh->GetGeomOwner() != mesh || mesh->Dir() == dir);
 }
 
 bool RndAmbientOcclusion::IsMeshAnimated(const RndMesh *mesh) const {
@@ -426,152 +552,6 @@ void RndAmbientOcclusion::OnCalculate(bool b1) {
     CalculateAO(&f1);
     Tessellate(&f2, &f3);
     Clean();
-}
-
-DataNode RndAmbientOcclusion::OnGetRecvMeshes(DataArray *) {
-    BuildObjectLists();
-    unsigned int numReceives = mObjectsReceive.size();
-    DataArrayPtr ptr(new DataArray(numReceives));
-    for (int i = 0; i < numReceives; i++) {
-        ptr->Node(i) = mObjectsReceive[i];
-    }
-    Clean();
-    return ptr;
-}
-
-DataNode RndAmbientOcclusion::OnGetValidObjects(DataArray *) const {
-    int numObjects = 0;
-    for (ObjDirItr<Hmx::Object> it(Dir(), true); it != NULL; ++it) {
-        if (IsValidObject(it) && it != Dir()) {
-            numObjects++;
-        }
-    }
-    DataArrayPtr ptr(new DataArray(numObjects));
-    int idx = 0;
-    for (ObjDirItr<Hmx::Object> it(Dir(), true); it != NULL; ++it) {
-        if (IsValidObject(it) && it != Dir()) {
-            ptr->Node(idx++) = &*it;
-        }
-    }
-    return ptr;
-}
-
-void RndAmbientOcclusion::BlendVert(
-    const RndMesh::Vert &v1, const RndMesh::Vert &v2, RndMesh::Vert &out
-) {
-    memcpy(&out, &v1, sizeof(RndMesh::Vert));
-    out.pos.z += v2.pos.z;
-    out.pos.y += v2.pos.y;
-    out.pos.x += v2.pos.x;
-    out.tex.x += v2.tex.x;
-    out.tex.y += v2.tex.y;
-    out.color.green += v2.color.green;
-    out.color.red += v2.color.red;
-    out.color.alpha += v2.color.alpha;
-    out.color.blue += v2.color.blue;
-    out.norm.x += v2.norm.x;
-    out.norm.z += v2.norm.z;
-    out.norm.y += v2.norm.y;
-    Vector3 tang(v2.tangent.x + out.tangent.x, v2.tangent.y, v2.tangent.z);
-    out.pos.x *= 0.5f;
-    out.pos.y *= 0.5f;
-    out.pos.z *= 0.5f;
-    out.tex.x *= 0.5f;
-    out.tex.y *= 0.5f;
-    out.color.blue *= 0.5f;
-    out.color.red *= 0.5f;
-    out.color.green *= 0.5f;
-    out.color.alpha *= 0.5f;
-    tang.z += out.tangent.z;
-    tang.y += out.tangent.y;
-    Normalize(out.norm, out.norm);
-    Normalize(tang, tang);
-    out.tangent.x = tang.x;
-    out.tangent.y = tang.y;
-    out.tangent.z = tang.z;
-    out.color.alpha = 0.0f;
-    out.color.blue = 0.0f;
-    out.color.green = 0.0f;
-    out.color.red = 0.0f;
-}
-
-float RndAmbientOcclusion::DistanceSH(
-    const Vector4 &sh1, const Vector3 &n1, const Vector4 &sh2, const Vector3 &n2
-) const {
-    float dw = (sh1.w * 2.0f - 1.0f) - (sh2.w * 2.0f - 1.0f);
-    float dz = (sh1.z * 2.0f - 1.0f) - (sh2.z * 2.0f - 1.0f);
-    float dy = (sh1.y * 2.0f - 1.0f) - (sh2.y * 2.0f - 1.0f);
-    float dot = n1.x * n2.x + n1.z * n2.z + n1.y * n2.y;
-    if (dot <= 0.0f) {
-        dot = -dot;
-    }
-    float dx = sh1.x - sh2.x;
-    auto dist = sqrtf(dx * dx + dy * dy + dw * dw + dz * dz);
-    return dist / (dot + 1.0f);
-}
-
-template <>
-bool VectorSort<RndMesh *>::operator()(RndMesh *item1, RndMesh *item2) {
-    std::vector<RndMesh *>::const_iterator it1 =
-        std::find(vector.begin(), vector.end(), item1);
-    std::vector<RndMesh *>::const_iterator it2 =
-        std::find(vector.begin(), vector.end(), item2);
-    return it1 < it2;
-}
-
-bool RndAmbientOcclusion::IsValid_AOCast(const RndMesh *mesh) const {
-    bool isTransparent = false;
-    if (!IsValid_Mesh(mesh)) {
-        return false;
-    }
-    RndMat *mat = mesh->Mat();
-    if (mat != NULL) {
-        ZMode zmode = mat->GetZMode();
-        isTransparent = zmode == kZModeDisable || zmode == kZModeTransparent;
-    }
-    if (!mIgnoreHidden || mesh->Showing()) {
-        if (!mIgnoreTransparent || !isTransparent) {
-            return true;
-        }
-    }
-    return false;
-}
-
-bool RndAmbientOcclusion::IsValid_AOReceive(const RndMesh *mesh) const {
-    bool isTransparent = false;
-    bool isPrelit = false;
-    if (!IsSerializable(mesh)) {
-        return false;
-    }
-    if (!IsValid_Mesh(mesh)) {
-        return false;
-    }
-    RndMat *mat = mesh->Mat();
-    bool _result = false;
-    if (mat != NULL) {
-        ZMode zmode = mat->GetZMode();
-        bool transparent = false;
-        float alpha = mat->Alpha();
-        if (zmode == kZModeDisable || zmode == kZModeTransparent || alpha == 0.0f) {
-            transparent = true;
-        }
-        isPrelit = mat->Prelit();
-        isTransparent = transparent;
-    }
-    if (!mIgnoreHidden || mesh->Showing()) {
-        if (!mIgnoreTransparent || !isTransparent) {
-            if (!mIgnorePrelit || !isPrelit) {
-                                _result = true;
-            }
-        }
-    }
-    return _result;
-}
-
-bool RndAmbientOcclusion::IsValid_Tessellate(
-    const RndMesh *mesh, const ObjectDir *dir
-) const {
-                return !(!IsValid_AOCast(mesh) || !IsValid_AOReceive(mesh) || mesh->IsSkinned() || mesh->GetGeomOwner() != mesh || mesh->Dir() == dir);
 }
 
 template <>
@@ -1510,3 +1490,32 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
     // Clear tessellate list
     mObjectsTessellate.erase(mObjectsTessellate.begin(), mObjectsTessellate.end());
 }
+
+DataNode RndAmbientOcclusion::OnGetRecvMeshes(DataArray *) {
+    BuildObjectLists();
+    unsigned int numReceives = mObjectsReceive.size();
+    DataArrayPtr ptr(new DataArray(numReceives));
+    for (int i = 0; i < numReceives; i++) {
+        ptr->Node(i) = mObjectsReceive[i];
+    }
+    Clean();
+    return ptr;
+}
+
+DataNode RndAmbientOcclusion::OnGetValidObjects(DataArray *) const {
+    int numObjects = 0;
+    for (ObjDirItr<Hmx::Object> it(Dir(), true); it != NULL; ++it) {
+        if (IsValidObject(it) && it != Dir()) {
+            numObjects++;
+        }
+    }
+    DataArrayPtr ptr(new DataArray(numObjects));
+    int idx = 0;
+    for (ObjDirItr<Hmx::Object> it(Dir(), true); it != NULL; ++it) {
+        if (IsValidObject(it) && it != Dir()) {
+            ptr->Node(idx++) = &*it;
+        }
+    }
+    return ptr;
+}
+

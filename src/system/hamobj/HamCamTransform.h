@@ -25,7 +25,6 @@ public:
 class TransformArea {
 public:
     TransformArea(Hmx::Object *);
-    TransformArea(const TransformArea &);
     TransformArea(Hmx::Object *, const TransformArea &);
 
     void Save(BinStream &) const;

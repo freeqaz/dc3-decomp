@@ -1,9 +1,7 @@
 #include "ui/UIListDir.h"
 #include "obj/Object.h"
 #include "rndobj/Dir.h"
-#include "ui/UIComponent.h"
 #include "ui/UIListState.h"
-#include "ui/UIListWidget.h"
 #include "utl/BinStream.h"
 #include "utl/Loader.h"
 #include "utl/Std.h"
@@ -28,11 +26,6 @@ UIListDir::UIListDir()
 }
 
 UIListDir::~UIListDir() { DeleteAll(mTestWidgets); }
-
-BEGIN_HANDLERS(UIListDir)
-    HANDLE_ACTION(test_scroll, mTestState.Scroll(_msg->Int(2), false))
-    HANDLE_SUPERCLASS(RndDir)
-END_HANDLERS
 
 BEGIN_PROPSYNCS(UIListDir)
     SYNC_PROP_SET(orientation, mOrientation, mOrientation = (UIListOrientation)_val.Int())
@@ -60,14 +53,27 @@ BEGIN_PROPSYNCS(UIListDir)
     SYNC_SUPERCLASS(RndDir)
 END_PROPSYNCS
 
+// DECOMP: 87.9% match - AT_LIMIT
+// Unfixable diffs:
+// - Target uses __savegprlr_29/__restgprlr_29 helpers, base inlines register saves
+// - Stack frame 0x90 vs 0x70: target allocates separate temps (0x58-0x6c), base reuses 0x54
+// - Target pre-loads NumDisplay() into r29 across Write call
+// - Speed() call is ICF-merged to merged_82752368 (verified: UIListState::Speed)
 BEGIN_SAVES(UIListDir)
-    SAVE_REVS(1, 0)
+    SAVE_REVS(0, 1)
     SAVE_SUPERCLASS(RndDir)
-    bs << mOrientation << mFadeOffset;
-    int numDisp = mTestState.NumDisplay();
-    bs << mTestMode << numDisp << mElementSpacing << mTestState.Speed() << mTestNumData
-       << mTestComponentState << mTestGapSize << mTestDisableElements
-       << mScrollHighlightChange;
+    bs << mOrientation;
+    bs << mFadeOffset;
+    bs << mTestMode;
+    auto& testState = mTestState;
+    bs << testState.NumDisplay();
+    bs << mElementSpacing;
+    bs << testState.Speed();
+    bs << mTestNumData;
+    bs << mTestComponentState;
+    bs << mTestGapSize;
+    bs << mTestDisableElements;
+    bs << mScrollHighlightChange;
 END_SAVES
 
 BEGIN_COPYS(UIListDir)
@@ -95,27 +101,22 @@ void UIListDir::PreLoad(BinStream &bs) {
     LOAD_REVS(bs);
     ASSERT_REVS(1, 0);
     RndDir::PreLoad(bs);
-    d.PushRev(this);
+    bs.PushRev(packRevs(d.altRev, d.rev), this);
 }
 
 void UIListDir::PostLoad(BinStream &bs) {
     BinStreamRev d(bs, bs.PopRev(this));
     RndDir::PostLoad(bs);
-    int orientation;
-    d >> orientation;
-    d >> mFadeOffset;
-    mOrientation = (UIListOrientation)orientation;
-    int numDisp;
+    int orientation, numdisplay, compstate;
     float speed;
-    int state;
-    d >> mTestMode >> numDisp >> mElementSpacing >> speed >> mTestNumData >> state
+    d >> orientation >> mFadeOffset;
+    mOrientation = (UIListOrientation)orientation;
+    d >> mTestMode >> numdisplay >> mElementSpacing >> speed >> mTestNumData >> compstate
         >> mTestGapSize >> mTestDisableElements;
-    if (d.rev > 0) {
-        d >> mScrollHighlightChange;
-    }
-    mTestState.SetNumDisplay(numDisp, true);
+    if (d.rev > 0) d >> mScrollHighlightChange;
+    mTestState.SetNumDisplay(numdisplay, true);
     mTestState.SetSpeed(speed);
-    mTestComponentState = (UIComponent::State)state;
+    mTestComponentState = (UIComponent::State)compstate;
 }
 
 void UIListDir::SyncObjects() {
@@ -129,38 +130,10 @@ void UIListDir::SyncObjects() {
 void UIListDir::DrawShowing() {
     if (mTestMode && TheLoadMgr.EditMode()) {
         UIListWidgetDrawState drawState;
-        BuildDrawState(drawState, mTestState, mTestComponentState, 0, true);
-        DrawWidgets(
-            drawState, mTestState, mTestWidgets, WorldXfm(), mTestComponentState, nullptr, false
-        );
-    } else {
+        BuildDrawState(drawState, mTestState, mTestComponentState, 0.0f, true);
+        DrawWidgets(drawState, mTestState, mTestWidgets, WorldXfm(), mTestComponentState, nullptr, false);
+    } else
         RndDir::DrawShowing();
-    }
-    // clang-format off
-//       if ((this[0x178] == (UIListDir)0x0) || (LoadMgrEditMode == '\0')) {
-//     RndDir::DrawShowing((RndDir *)this);
-//   }
-//   else {
-//     local_38 = (UIListElementDrawState *)0x0;
-//     local_34 = 0;
-//     local_30[0] = 0;
-//     BuildDrawState(this + -0x9c,aUStack_70,(UIListState *)(this + 0x17c),*(State *)(this + 0x1cc),
-//                    0.0,in_r7);
-//     if (this[0x10d] == (UIListDir)0x0) {
-//       pTVar1 = (Transform *)(this + 0x98);
-//     }
-//     else {
-//       pTVar1 = RndTransformable::WorldXfm_Force((RndTransformable *)(this + 0x50));
-//     }
-//     DrawWidgets(this + -0x9c,aUStack_70,(UIListState *)(this + 0x17c),(vector<> *)(this + 0x1d4),
-//                 pTVar1,*(State *)(this + 0x1cc),(Box *)0x0,false);
-//     if (local_38 != (UIListElementDrawState *)0x0) {
-//       stlpmtx_std::StlNodeAlloc<>::deallocate
-//                 ((StlNodeAlloc<> *)local_30,local_38,(local_30[0] - (int)local_38) / 0x3c);
-//     }
-//   }
-//   return;
-    // clang-format on
 }
 
 void UIListDir::Poll() {
@@ -205,15 +178,42 @@ UIList *UIListDir::SubList(int i, std::vector<UIListWidget *> &vec) {
     return nullptr;
 }
 
-// void UIListDir::DrawWidgets(
-//     UIListWidgetDrawState &,
-//     UIListState const &,
-//     std::vector<UIListWidget *> &,
-//     class Transform const &,
-//     UIComponent::State,
-//     Box *,
-//     bool
-// ) {}
+void UIListDir::DrawWidgets(
+    UIListWidgetDrawState &drawState,
+    UIListState const &state,
+    std::vector<UIListWidget *> &widgets,
+    class Transform const &tf,
+    UIComponent::State compState,
+    Box *box,
+    bool bDrawFocusedOrManual
+) {
+    bool scrolling = state.IsScrolling();
+    FOREACH (it, widgets) {
+        UIListWidget *widget = *it;
+        UIListWidgetDrawType drawType = widget->WidgetDrawType();
+        if (drawType == kUIListWidgetDrawAlways
+            || (drawType == kUIListWidgetDrawFocusedOrManual
+                && (bDrawFocusedOrManual || compState == UIComponent::kFocused))
+            || (drawType == kUIListWidgetDrawOnlyFocused
+                && compState == UIComponent::kFocused)) {
+            DrawCommand cmd = kDrawAll;
+            if (scrolling)
+                cmd = kExcludeFirst;
+            widget->Draw(drawState, state, tf, compState, box, cmd);
+        }
+    }
+    if (scrolling) {
+        FOREACH (it, widgets) {
+            UIListWidget *widget = *it;
+            UIListWidgetDrawType drawType = widget->WidgetDrawType();
+            if (drawType == kUIListWidgetDrawAlways
+                || (drawType == kUIListWidgetDrawOnlyFocused
+                    && compState == UIComponent::kFocused)) {
+                widget->Draw(drawState, state, tf, compState, box, kDrawFirst);
+            }
+        }
+    }
+}
 
 void UIListDir::PollWidgets(std::vector<UIListWidget *> &widgets) {
     FOREACH (it, widgets) {
@@ -279,15 +279,177 @@ void UIListDir::ListEntered() {
     Handle(start, false);
 }
 
-// void UIListDir::BuildDrawState(
-//     UIListWidgetDrawState &, UIListState const &, UIComponent::State, float, bool
-// ) const {}
+void UIListDir::BuildDrawState(
+    UIListWidgetDrawState &drawState, UIListState const &state, UIComponent::State compState, float subListOffset, bool allowHighlight
+) const {
+    int numDisplay = state.NumDisplay();
+    int numDisplayWithData = state.NumDisplayWithData();
+    int gridSpan = state.GridSpan();
+
+    // Calculate fade limit: min of half the display count and mFadeOffset
+    int halfDisplay = numDisplay / 2;
+    int fadeLimit = halfDisplay;
+    if (halfDisplay > mFadeOffset) {
+        fadeLimit = mFadeOffset;
+    }
+
+    // Early out if nothing to display
+    if (mFadeOffset == 0) {
+        fadeLimit = 0;
+    }
+
+    bool scrolling = state.IsScrolling();
+    int selectedDisplay = state.SelectedDisplay();
+    int selectedData = state.SelectedData();
+    int currentScroll = state.CurrentScroll();
+
+    float gapAccum = 0.0f;
+    UIListProvider *provider = state.Provider();
+
+    drawState.mElements.reserve(numDisplayWithData + 1);
+
+    // Build element states
+    for (int i = 0; i < numDisplayWithData; i++) {
+        UIListElementDrawState elem;
+        int showing = state.Display2Showing(i);
+        int data = state.Display2Data(i);
+
+        // Calculate gap
+        if (i > 0) {
+            int prevShowing = state.Display2Showing(i - 1);
+            int prevData = state.Display2Data(i - 1);
+            gapAccum += provider->GapSize(prevShowing, prevData, showing, data);
+        }
+
+        // Calculate position
+        float pos = (float)i;
+        if (scrolling) {
+            // Adjust for scroll snap
+            if (state.ShouldHoldDisplayInPlace(i)) {
+                // Hold in place during scroll snap
+            }
+        }
+
+        {
+            Vector3 pos;
+            SetElementPos(pos, (float)i, gridSpan, gapAccum + subListOffset, 0.0f);
+            elem.mPosX = pos.x;
+            elem.mPosY = pos.y;
+            elem.mPosZ = pos.z;
+        }
+
+        // Calculate alpha based on fade
+        float alpha = 1.0f;
+        if (fadeLimit > 0) {
+            if (i < fadeLimit) {
+                alpha = (float)(i + 1) / (float)(fadeLimit + 1);
+            }
+            int fromEnd = (numDisplayWithData - 1) - i;
+            if (fromEnd < fadeLimit) {
+                float endAlpha = (float)(fromEnd + 1) / (float)(fadeLimit + 1);
+                if (endAlpha < alpha) {
+                    alpha = endAlpha;
+                }
+            }
+        }
+
+        // Determine active state
+        bool active = (data != -1);
+        if (active && !provider->IsActive(data)) {
+            active = false;
+        }
+
+        // Determine element state
+        UIListWidgetState widgetState;
+        if (allowHighlight && i == selectedDisplay) {
+            widgetState = kUIListWidgetHighlight;
+        } else if (active) {
+            widgetState = kUIListWidgetActive;
+        } else {
+            widgetState = kUIListWidgetInactive;
+        }
+
+        // Determine component state
+        UIComponent::State elemCompState;
+        if (allowHighlight && i == selectedDisplay) {
+            elemCompState = compState;
+        } else {
+            elemCompState = UIComponent::kNormal;
+        }
+        if (data != -1) {
+            elemCompState = provider->ComponentStateOverride(showing, data, elemCompState);
+        }
+
+        elem.mActive = (data != -1);
+        elem.mAlpha = alpha;
+        elem.mElementState = widgetState;
+        elem.mComponentState = elemCompState;
+        elem.mDisplay = i;
+        elem.mShowing = showing;
+        elem.mData = data;
+
+        drawState.mElements.push_back(elem);
+    }
+
+    // Handle extra scroll element
+    if (scrolling) {
+        int extraDisplay = currentScroll > 0 ? numDisplay : -1;
+        int extraShowing = state.Display2Showing(extraDisplay);
+        int extraData = state.Display2Data(extraDisplay);
+
+        UIListElementDrawState scrollElem;
+        scrollElem.mActive = (extraData != -1);
+
+        float scrollGap = gapAccum;
+        if (extraData != -1 && numDisplayWithData > 0) {
+            int lastShowing = state.Display2Showing(numDisplayWithData - 1);
+            int lastData = state.Display2Data(numDisplayWithData - 1);
+            scrollGap += provider->GapSize(lastShowing, lastData, extraShowing, extraData);
+        }
+
+        {
+            Vector3 pos;
+            SetElementPos(pos, (float)extraDisplay, gridSpan, scrollGap + subListOffset, 0.0f);
+            scrollElem.mPosX = pos.x;
+            scrollElem.mPosY = pos.y;
+            scrollElem.mPosZ = pos.z;
+        }
+        scrollElem.mAlpha = 0.0f;
+        scrollElem.mElementState = kUIListWidgetActive;
+        scrollElem.mComponentState = UIComponent::kNormal;
+        if (extraData != -1) {
+            scrollElem.mComponentState = provider->ComponentStateOverride(extraShowing, extraData, UIComponent::kNormal);
+        }
+        scrollElem.mDisplay = extraDisplay;
+        scrollElem.mShowing = extraShowing;
+        scrollElem.mData = extraData;
+        drawState.mElements.push_back(scrollElem);
+    }
+
+    // Set highlight info
+    drawState.mHighlightDisplay = selectedDisplay;
+    if (allowHighlight) {
+        drawState.mHighlightElementState = kUIListWidgetHighlight;
+    } else {
+        drawState.mHighlightElementState = kUIListWidgetActive;
+    }
+
+    // Set highlight position
+    SetElementPos(drawState.mHighlightPos, (float)selectedDisplay, gridSpan, subListOffset, 0.0f);
+
+    // Set first and last positions
+    if (numDisplayWithData > 0) {
+        drawState.mFirstPos.Set(drawState.mElements[0].mPosX, drawState.mElements[0].mPosY, drawState.mElements[0].mPosZ);
+        drawState.mLastPos.Set(drawState.mElements[numDisplayWithData - 1].mPosX, drawState.mElements[numDisplayWithData - 1].mPosY, drawState.mElements[numDisplayWithData - 1].mPosZ);
+    }
+}
 
 void UIListDir::CreateElements(UIList *uilist, std::vector<UIListWidget *> &vec, int i) {
     DeleteAll(vec);
     for (ObjDirItr<UIListWidget> it(this, true); it != 0; ++it) {
+        auto newObj = Hmx::Object::NewObject(it->ClassName());
         UIListWidget *widget =
-            dynamic_cast<UIListWidget *>(Hmx::Object::NewObject(it->ClassName()));
+            dynamic_cast<UIListWidget *>(newObj);
         widget->ResourceCopy(it);
         widget->SetParentList(uilist);
         vec.push_back(widget);
@@ -298,23 +460,48 @@ void UIListDir::CreateElements(UIList *uilist, std::vector<UIListWidget *> &vec,
     }
 }
 
-float UIListDir::SetElementPos(Vector3 &v, float f1, int i2, float f3, float f4) const {
+// Calculates element position in 3D space based on grid layout and scroll position.
+// position: fractional position in the list (e.g., 2.5 = between elements 2 and 3)
+// gridSpan: number of columns in the grid
+// primaryBase/secondaryBase: base offsets for primary (scroll) and secondary (grid) axes
+// Returns: the primary axis offset
+float UIListDir::SetElementPos(Vector3 &v, float position, int gridSpan, float primaryBase, float secondaryBase) const {
     v.Zero();
-    int floored = std::floor(f1);
-    float f3toset =
-        mElementSpacing * ((f1 - (float)floored) + (float)(floored / i2)) + f3;
-    float f2toset = mElementSpacing * (float)(floored % i2) + f4;
+
+    // Split position into integer and fractional parts
+    float floored = std::floor(position);
+    int intPos = (int)floored;
+
+    // Calculate grid coordinates (row = scroll position, col = grid column)
+    int rowIndex = intPos / gridSpan;
+    int colIndex = intPos % gridSpan;
+
+    // Calculate offsets along each axis
+    float colOffset = (float)colIndex;
+    float secondaryOffset = colOffset * mElementSpacing + secondaryBase;
+
+    float fractional = position - (float)intPos;
+    float rowOffset = (float)rowIndex;
+    float primaryOffset = (fractional + rowOffset) * mElementSpacing + primaryBase;
+
+    // Apply offsets based on orientation
     if (mOrientation == kUIListVertical) {
-        v.z -= f3toset;
-        v.x += f2toset;
+        v.z -= primaryOffset;   // Primary axis: vertical scroll (Z)
+        v.x += secondaryOffset; // Secondary axis: horizontal grid (X)
     } else {
-        v.x += f3toset;
-        v.z -= f2toset;
+        v.x += primaryOffset;   // Primary axis: horizontal scroll (X)
+        v.z -= secondaryOffset; // Secondary axis: vertical grid (Z)
     }
-    return f3toset;
+
+    return primaryOffset;
 }
 
 void UIListDir::Reset() {
     mTestState.SetSelected(0, -1, true);
     FillElements(mTestState, mTestWidgets);
 }
+
+BEGIN_HANDLERS(UIListDir)
+    HANDLE_ACTION(test_scroll, mTestState.Scroll(_msg->Int(2), false))
+    HANDLE_SUPERCLASS(RndDir)
+END_HANDLERS

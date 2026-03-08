@@ -23,7 +23,6 @@ public:
     )
         : mRect(f1, f2, f3, f4), mColorA(c1), mColorB(c2), mMaxSamples(i1), mMinValue(f5),
           mMaxValue(f6), mThresholdValue(FLT_MAX), mGraphName(s), mIsVisible(1) {}
-    DebugGraph(const DebugGraph &);
     ~DebugGraph() {}
     void AddData(float, bool);
     void Draw();

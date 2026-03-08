@@ -72,6 +72,7 @@ public:
 
     static void Init();
     static void DrawLight(Spotlight *);
+    static void RemoveFromLists(Spotlight *);
 
     void Select();
     void DeSelect();

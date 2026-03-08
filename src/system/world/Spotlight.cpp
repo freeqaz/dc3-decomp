@@ -150,11 +150,9 @@ Spotlight::Spotlight()
     mOrder = -1000;
 }
 
-void Spotlight::RemoveFromLists(Spotlight *) {}
-
 Spotlight::~Spotlight() {
     CloseSlaves();
-    RemoveFromLists(this);
+    SpotlightDrawer::RemoveFromLists(this);
     RELEASE(mFlare);
 }
 

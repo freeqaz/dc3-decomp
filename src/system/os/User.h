@@ -26,6 +26,7 @@ public:
     virtual bool IsLocal() const = 0;
     virtual LocalUser *GetLocalUser() = 0;
     virtual const LocalUser *GetLocalUser() const = 0;
+    virtual RemoteUser *GetRemoteUser() = 0;
     virtual const RemoteUser *GetRemoteUser() const = 0;
     virtual const char *UserName() const = 0;
 
@@ -55,6 +56,7 @@ public:
     virtual bool IsLocal() const;
     virtual LocalUser *GetLocalUser();
     virtual const LocalUser *GetLocalUser() const;
+    virtual RemoteUser *GetRemoteUser();
     virtual const RemoteUser *GetRemoteUser() const;
 };
 
@@ -75,6 +77,7 @@ public:
         MILO_FAIL("Bad Conversion");
         return nullptr;
     }
+    virtual RemoteUser *GetRemoteUser() { return this; }
     virtual const RemoteUser *GetRemoteUser() const { return this; }
     virtual const char *UserName() const { return mUserName.c_str(); }
     virtual void SyncLoad(BinStream &, unsigned int) {}

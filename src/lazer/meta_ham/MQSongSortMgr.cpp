@@ -8,19 +8,11 @@
 #include "MQSongSortNode.h"
 #include "ProfileMgr.h"
 #include "obj/Dir.h"
-#include "utl/Std.h"
-
-MQSongSortByCharacter::MQSongSortByCharacter() {
-    static Symbol by_character("by_character");
-    mSortName = by_character;
-}
 
 MQSongSortMgr::MQSongSortMgr(SongPreview &sp) : NavListSortMgr(sp) {
     SetName("mq_song_provider", ObjectDir::Main());
     mSorts.push_back(new MQSongSortByCharacter());
 }
-
-MQSongSort::MQSongSort() {};
 
 MQSongSortMgr::~MQSongSortMgr() {};
 
@@ -72,25 +64,28 @@ bool MQSongSortMgr::IsCharacter(Symbol sym) const {
 
 void MQSongSortMgr::UpdateList() {
     MILO_ASSERT(TheCampaign, 0x6e);
-    mFlatList.clear();
+    auto& _ref0 = mFlatList;
+    if (_ref0.begin() != _ref0.end()) {
+        _ref0.clear();
+    }
     Symbol mqCrew = TheCampaign->GetMQCrew();
     mCharacterSongs.clear();
     const std::vector<int> &rankedSongs = TheHamSongMgr.RankedSongs((SongType)1);
-    FOREACH_CONST (it, rankedSongs) {
+    FOREACH (it, rankedSongs) {
         const HamSongMetadata *metadata = TheHamSongMgr.Data(*it);
         Symbol character = GetOutfitCharacter(metadata->Outfit(), true);
         Symbol crew = GetCrewForCharacter(character, true);
-        Symbol temp = character;
-        Symbol mqHeader = MakeString("mqheader_%s", temp);
-        if (!metadata->IsFake() && crew == mqCrew
+        Symbol charCopy = character;
+        Symbol mqHeader = MakeString<char>("mqheader_%s", charCopy);
+        if (metadata->IsFake() == false && crew == mqCrew
             && TheProfileMgr.IsContentUnlocked(metadata->ShortName())) {
             mCharacterSongs[mqHeader].push_back(TheHamSongMgr.GetShortNameFromSongID(*it));
         }
     }
     FOREACH (it, mCharacterSongs) {
-        mFlatList.push_back(it->first);
+        _ref0.push_back(it->first);
         FOREACH (it2, it->second) {
-            mFlatList.push_back(*it2);
+            _ref0.push_back(*it2);
         }
     }
 }

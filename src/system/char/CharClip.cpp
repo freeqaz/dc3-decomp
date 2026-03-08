@@ -65,8 +65,9 @@ CharClip::NodeVector *CharClip::Transitions::Resize(int size, const NodeVector *
             );
         }
     }
-    mNodeEnd = mNodeStart + size;
-    return mNodeStart + n;
+    // size is in bytes, not element count — use byte arithmetic
+    mNodeEnd = (NodeVector *)((char *)mNodeStart + size);
+    return (NodeVector *)((char *)mNodeStart + n);
 }
 
 CharClip::NodeVector *CharClip::Transitions::GetNodes(int idx) const {
@@ -95,7 +96,7 @@ void CharClip::Transitions::AddNode(CharClip *clip, const CharGraphNode &node) {
         memmove(
             (char *)resized->Next() + 8,
             resized->Next(),
-            (int)end - (int)next
+            (intptr_t)end - (intptr_t)next
         );
     } else {
         resized = Resize(BytesInMemory() + 0x20, mNodeEnd);
@@ -136,10 +137,16 @@ void CharClip::Transitions::RemoveClip(CharClip *clip) {
 void CharClip::Transitions::RemoveNodes(NodeVector *n) {
     MILO_ASSERT(n, 0xEC);
     NodeVector *next = n->Next();
-    memmove(n, next, (int)mNodeEnd - (int)next);
-    Resize(BytesInMemory() - ((int)next - (int)n), nullptr);
+    memmove(n, next, (intptr_t)mNodeEnd - (intptr_t)next);
+    Resize(BytesInMemory() - ((intptr_t)next - (intptr_t)n), nullptr);
     for (NodeVector *it = mNodeStart; it < mNodeEnd; it = it->Next()) {
-        it->clip->Release(nullptr);
+        // Fix up linked list pointers after memmove
+        // ObjRef layout: vtable(sizeof(void*)) + next(sizeof(void*)) + prev(sizeof(void*))
+        ObjRef *clipRef = (ObjRef*)&it->clip;
+        ObjRef *clipNext = *(ObjRef**)((char*)clipRef + sizeof(void*));
+        ObjRef *clipPrev = *(ObjRef**)((char*)clipRef + sizeof(void*) * 2);
+        *(ObjRef**)((char*)clipPrev + sizeof(void*)) = clipRef;
+        *(ObjRef**)((char*)clipNext + sizeof(void*) * 2) = clipRef;
     }
 }
 
@@ -198,6 +205,7 @@ void CharClip::Transitions::Load(BinStreamRev &d, int oldRev) {
         }
 #ifdef HX_NATIVE
         // On LP64, NodeVector is ~2x larger (8-byte pointers), need more space
+        // temp from file is Xbox byte count; scale up generously
         int allocSize = temp < 256 ? 4096 : temp * 4;
         NodeVector *start = (NodeVector *)_MemAllocTemp(allocSize, __FILE__, 0x4CB, "CharGraphNode", 0);
         memset(start, 0, allocSize);
@@ -241,16 +249,20 @@ void CharClip::Transitions::Load(BinStreamRev &d, int oldRev) {
             NodeVector *permIt = mNodeStart;
             for (NodeVector *tempIt = start; tempIt < tempEnd;
                  tempIt = tempIt->Next(), permIt = permIt->Next()) {
-                permIt->clip.SwapObjRef(tempIt->clip);
+                CharClip *clip = (CharClip *)tempIt->clip;
+                if (clip) {
+                    clip->Release(&tempIt->clip); // deregister temp from chain
+                    clip->AddRef(&permIt->clip);  // register permanent in chain
+                }
             }
         }
 #else
-        Resize((int)it - (int)start, nullptr);
+        Resize((intptr_t)it - (intptr_t)start, nullptr);
         memcpy(mNodeStart, start, BytesInMemory());
-#endif
         for (NodeVector *it = mNodeStart; it < mNodeEnd; it = it->Next()) {
             it->clip->Release(nullptr);
         }
+#endif
         MemFree(start);
     }
 }
@@ -778,15 +790,15 @@ void CharClip::EvaluateChannel(void *v1, const void *v2, int iii, float f) {
     if (!v2) {
         MILO_FAIL("%s passed in NULL for evaluate channel", PathName(this));
     }
-    int offset = (int)v2 - 1;
-    if (!(!(mFull.TotalSize() > offset))) {
+    int offset = (intptr_t)v2 - 1;
+    if (offset < mFull.TotalSize()) {
         mFull.EvaluateChannel(v1, offset, iii, f);
     } else {
         int oneOffset = offset - mFull.TotalSize();
         if (oneOffset < mOne.TotalSize()) {
             mOne.EvaluateChannel(v1, oneOffset, 0, 0);
         } else {
-            MILO_FAIL("%s could not find offset %d %d", offset, oneOffset, PathName(this));
+            MILO_FAIL("%s could not find offset %d %d", PathName(this), offset, oneOffset);
         }
     }
 }
@@ -1063,8 +1075,7 @@ float CharClip::SampleToBeat(int sample) const {
     const float *end = *(const float **)((char *)this + 0xfc);
     const float *begin = *(const float **)((char *)this + 0xf8);
 
-    bool _bit0 = ((end - begin) && ~3) != 0;
-    if (!(_bit0)) {
+    if (!((end - begin) & ~3)) {
         return FrameToBeat((float)sample);
     } else {
         const float *lower = std::lower_bound(begin, end, (float)sample);

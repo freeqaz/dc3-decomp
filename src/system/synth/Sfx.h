@@ -15,7 +15,6 @@ class SfxMap {
 
 public:
     SfxMap(Hmx::Object *);
-    SfxMap(const SfxMap &);
     void Save(BinStream &) const;
     void Load(BinStreamRev &);
     SynthSample *Sample() const { return mSample; }
