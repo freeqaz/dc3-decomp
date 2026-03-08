@@ -60,7 +60,7 @@ void SkeletonFrame::Create(const NUI_SKELETON_FRAME &nui_frame, int elapsed) {
     static const SkeletonTrackingState sTrackingMap[] = {
         kSkeletonNotTracked, kSkeletonPositionOnly, kSkeletonTracked
     };
-    static const int sJointTrackingMap[] = { 0.0f, 1, 2 };
+    static const int sJointTrackingMap[] = { 0, 1, 2 };
     static const int sJointRemap[kNumJoints][2] = {
         {0, 0}, {1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}, {6, 6}, {7, 7},
         {8, 8}, {9, 9}, {10, 10}, {11, 11}, {12, 12}, {13, 13}, {14, 14},

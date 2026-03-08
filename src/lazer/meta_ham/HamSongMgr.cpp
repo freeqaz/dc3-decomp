@@ -133,7 +133,7 @@ void HamSongMgr::Init() {
     for (int i = 0; i < numTiers; i++) {
         int arrIdx = i + 1;
         mRankTiers.push_back(
-            stlpmtx_std::make_pair(
+            std::make_pair(
                 tierArr->Array(arrIdx)->Int(0), tierArr->Array(arrIdx)->Int(1)
             )
         );

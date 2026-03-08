@@ -101,4 +101,4 @@ void AppendCheatsLog(FixedString &);
 void CallQuickCheat(DataArray *da, LocalUser *lu);
 void InitQuickJoyCheats(const DataArray *a, CheatsManager::ShiftMode);
 void CheatsTerminate();
-Symbol GetCheatMode() { return gCheatsManager->CheatMode(); };
+Symbol GetCheatMode();

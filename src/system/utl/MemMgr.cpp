@@ -29,7 +29,7 @@ extern bool gMemoryUsageTest;
 int gCheckConsistency;
 int gNewOperatorAlign;
 int gSingleHeap;
-String gMemLogType;
+extern String gMemLogType;
 std::vector<String> gUseLowestMipExceptions;
 MemHeapStack gNullMemStack;
 int gNumThreads;

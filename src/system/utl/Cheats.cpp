@@ -104,6 +104,8 @@ void InitLongJoyCheats(const DataArray *cheats) {
     }
 }
 
+Symbol GetCheatMode() { return gCheatsManager->CheatMode(); }
+
 DataNode OnGetCheatMode(DataArray *da) { return gCheatsManager->CheatMode(); }
 
 DataNode OnSetCheatMode(DataArray *da) {

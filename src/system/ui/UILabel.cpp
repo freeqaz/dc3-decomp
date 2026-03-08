@@ -31,6 +31,7 @@
 #include <cstring>
 
 bool UILabel::sDeferUpdate = false;
+bool UILabel::sInDebugHighlight = false;
 UILabel *gMe = nullptr;
 
 float GetTextSizeFromPctHeight(float f) {

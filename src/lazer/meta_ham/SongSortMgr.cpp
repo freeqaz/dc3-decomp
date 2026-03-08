@@ -42,7 +42,9 @@ BEGIN_HANDLERS(SongSortMgr)
     HANDLE_SUPERCLASS(NavListSortMgr)
 END_HANDLERS
 
+#ifndef HX_NATIVE
 SongSort::SongSort() {}
+#endif
 
 SongSortMgr::SongSortMgr(SongPreview &sp) : NavListSortMgr(sp) {
     SetName("song_offer_provider", ObjectDir::Main());

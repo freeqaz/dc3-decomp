@@ -29,7 +29,7 @@ long HmxGlobalHandler(_EXCEPTION_POINTERS *ep) {
 }
 
 const char *kAssertStr = "File: %s Line: %d Error: %s\n";
-bool gMemoryUsageTest;
+extern bool gMemoryUsageTest;
 DebugWarner TheDebugWarner;
 DebugNotifier TheDebugNotifier;
 DebugFailer TheDebugFailer;

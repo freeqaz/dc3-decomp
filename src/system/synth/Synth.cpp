@@ -181,6 +181,10 @@ void Synth::Init() {
 }
 
 void Synth::InitSecurity() {
+#ifdef HX_NATIVE
+    // DRM security init not needed on native
+    return;
+#endif
     char buf[256];
     buf[1] = '\0';
     for (int i = 0; i < 3; i++) {

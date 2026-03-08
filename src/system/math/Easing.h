@@ -339,6 +339,9 @@ inline float EaseQuarterHalfStairstep(float t, float power, float) {
 
 typedef float EaseFunc(float, float, float);
 
+#ifdef HX_NATIVE
+inline
+#endif
 EaseFunc *gEaseFuncs[35] = {
     EaseLinear,
     EasePolyIn,
