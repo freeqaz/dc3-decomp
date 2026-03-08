@@ -1,5 +1,4 @@
 #include "ui/UIList.h"
-#include "ui/Utl.h"
 #include "math/Geo.h"
 #include "math/Utl.h"
 #include "math/Vec.h"
@@ -446,19 +445,21 @@ void UIList::StartScroll(const UIListState &state, int i2, bool b3) {
     }
 }
 
-void UIList::CompleteScroll(UIListState const &state) {
+void UIList::CompleteScroll(const UIListState &state) {
     mListDir->CompleteScroll(state, mWidgets);
     if (mAutoScrolling) {
-        int firstshowing = FirstShowing();
+        int firstshowing = mNumData;
         state.Provider();
         int i3 = mAutoScrollDir > 0 ? mListState.MaxFirstShowing() : 0;
         if (firstshowing == i3) {
             mAutoScrollDir = -mAutoScrollDir;
-            mAutoScrollTimer = mAutoScrollPause + TheTaskMgr.UISeconds();
-        } else
-            Scroll(mAutoScrollDir);
+            mAutoScrollTimer = TheTaskMgr.UISeconds() + mAutoScrollPause;
+        } else {
+            mScrolling = true;
+            mListState.Scroll(mAutoScrollDir, false);
+        }
     }
-    if (state.Provider()->IsActive(state.SelectedData())) {
+    if (mListState.Provider()->IsActive(mListState.SelectedData())) {
         if (!mAutoScrolling || mAutoScrollSendMsgs) {
             TheUI->Handle(UIComponentScrollMsg(this, mUser), false);
         }
@@ -467,8 +468,8 @@ void UIList::CompleteScroll(UIListState const &state) {
 }
 
 void UIList::OldResourcePreload(BinStream &bs) {
-    char buf[0x100];
-    bs.ReadString(buf, 0x100);
+    char buf[256];
+    bs.ReadString(buf, 256);
     mListDir.SetName(buf, true);
 }
 
@@ -493,106 +494,6 @@ void UIList::SetSpeed(float speed) { mListState.SetSpeed(speed); }
 float UIList::Speed() const { return mListState.Speed(); }
 
 void UIList::SetParent(UIList *uilist) { mParent = uilist; }
-
-int UIList::CollidePlane(std::vector<Vector3> const &vec, Plane const &p) {
-    bool le0 = vec[0] <= p;
-    bool le1 = vec[1] <= p;
-    bool le2 = vec[2] <= p;
-    if (le0 == le1 && le1 == le2) {
-        return le0 ? 1 : -1;
-    } else
-        return 0;
-}
-
-UIList *UIList::ChildList() {
-    return mListDir->SubList(mListState.SelectedDisplay(), mWidgets);
-}
-
-// Called when the list selection changes. Triggers transition animations and propagates to child lists.
-void UIList::HandleSelectionUpdated() {
-    UITransitionHandler::StartValueChange();
-    if (ChildList()) {
-        ChildList()->HandleSelectionUpdated();
-    }
-}
-
-void UIList::UpdateExtendedEntries(UIListState const &state) {
-    UIListProvider *prov = state.Provider();
-    if (prov && prov->NumData() > 0) {
-        UIList *pMainList = mParent ? mParent : this;
-        MILO_ASSERT(pMainList, 0x3FD);
-        for (ObjPtrList<UILabel, ObjectDir>::iterator it =
-                 pMainList->mExtendedLabelEntries.begin();
-             it != pMainList->mExtendedLabelEntries.end();
-             ++it) {
-            UILabel *label = *it;
-            MILO_ASSERT(label, 0x404);
-            prov->UpdateExtendedText(state.SelectedDisplay(), state.SelectedData(), label);
-        }
-        for (ObjPtrList<RndMesh, ObjectDir>::iterator it =
-                 pMainList->mExtendedMeshEntries.begin();
-             it != pMainList->mExtendedMeshEntries.end();
-             ++it) {
-            RndMesh *mesh = *it;
-            MILO_ASSERT(mesh, 0x40F);
-            prov->UpdateExtendedMesh(state.SelectedDisplay(), state.SelectedData(), mesh);
-        }
-        for (ObjPtrList<Hmx::Object, ObjectDir>::iterator it =
-                 pMainList->mExtendedCustomEntries.begin();
-             it != pMainList->mExtendedCustomEntries.end();
-             ++it) {
-            Hmx::Object *custom = *it;
-            MILO_ASSERT(custom, 0x41A);
-            prov->UpdateExtendedCustom(
-                state.SelectedDisplay(), state.SelectedData(), custom
-            );
-        }
-    }
-}
-
-DataNode UIList::OnScroll(DataArray *da) {
-    int scroll = da->Int(2);
-    mUser = da->Size() > 3 ? da->Obj<LocalUser>(3) : 0;
-    Scroll(scroll);
-    return 1;
-}
-
-DataNode UIList::OnSelectedSym(DataArray *da) {
-    if (da->Size() > 2) {
-        return SelectedSym(da->Int(2));
-    } else {
-        return SelectedSym(true);
-    }
-}
-
-// noinline: Prevents inlining of this stub implementation. Remove once fully implemented.
-// TODO: implement properly - 524 bytes in target
-// See RB3: box.Set(WorldXfm().v, WorldXfm().v);
-//          mListDir->DrawWidgets(mListState, mWidgets, WorldXfm(), DrawState(this), &box, ...);
-// TODO: implement properly - 524 bytes in target
-// See RB3: box.Set(WorldXfm().v, WorldXfm().v);
-//          mListDir->DrawWidgets(mListState, mWidgets, WorldXfm(), DrawState(this), &box, ...);
-__declspec(noinline) void UIList::CalcBoundingBox(Box &box) {
-    Transform xfm = WorldXfm();
-    float elementSpacing = 0;
-
-    box.Set(xfm.v, xfm.v);
-    int selectedDisplay = mListState.SelectedDisplay();
-
-    UIList *subList = mListDir->SubList(selectedDisplay, mWidgets);
-    if (subList) {
-        int subSelectedDisplay = mListState.SelectedDisplay();
-        float spacing = mListDir->ElementSpacing();
-        elementSpacing = spacing * (float)(double)subSelectedDisplay;
-    }
-
-    UIListWidgetDrawState drawState;
-    UIComponent::State state = DrawState(this);
-    mListDir->BuildDrawState(drawState, mListState, state, elementSpacing, true);
-
-    mListDir->DrawWidgets(drawState, mListState, mWidgets, WorldXfm(), DrawState(this), &box, (bool)mDrawManuallyControlledWidgets);
-}
-
 
 Symbol UIList::SelectedSym(bool fail) const {
     Symbol sym = mListState.Provider()->DataSymbol(mListState.SelectedData());
@@ -631,13 +532,51 @@ void UIList::AutoScroll() {
     }
 }
 
+UIList *UIList::ChildList() {
+    return mListDir->SubList(mListState.SelectedDisplay(), mWidgets);
+}
+
+void UIList::HandleSelectionUpdated() {
+    UITransitionHandler::StartValueChange();
+    if (ChildList()) {
+        ChildList()->HandleSelectionUpdated();
+    }
+}
+
+void UIList::UpdateExtendedEntries(const UIListState &state) {
+    UIListProvider *prov = state.Provider();
+    if (prov && prov->NumData() > 0) {
+        UIList *pMainList = mParent ? mParent : this;
+        MILO_ASSERT(pMainList, 0x3EF);
+        FOREACH (it, pMainList->mExtendedLabelEntries) {
+            UILabel *label = *it;
+            MILO_ASSERT(label, 0x3F6);
+            prov->UpdateExtendedText(state.SelectedDisplay(), state.SelectedData(), label);
+        }
+        FOREACH (it, pMainList->mExtendedMeshEntries) {
+            RndMesh *mesh = *it;
+            MILO_ASSERT(mesh, 0x401);
+            prov->UpdateExtendedMesh(state.SelectedDisplay(), state.SelectedData(), mesh);
+        }
+        FOREACH (it, pMainList->mExtendedCustomEntries) {
+            Hmx::Object *custom = *it;
+            MILO_ASSERT(custom, 0x40C);
+            prov->UpdateExtendedCustom(
+                state.SelectedDisplay(), state.SelectedData(), custom
+            );
+        }
+    }
+}
+
 void UIList::SetSelected(int i, int j) {
     mListDir->CompleteScroll(mListState, mWidgets);
     mListState.SetSelected(i, j, true);
     Refresh(false);
     mListDir->Poll();
-    if (ChildList())
-        Poll();
+    UIList *sublist = ChildList();
+    if (sublist) {
+        sublist->Poll();
+    }
     HandleSelectionUpdated();
 }
 
@@ -706,38 +645,15 @@ void UIList::SetSelectedSimulateScroll(int i1) {
     }
 }
 
-DataNode UIList::OnSetSelected(DataArray *da) {
-    DataNode node = da->Evaluate(2);
-    int i6 = -1;
-    if (node.Type() == kDataInt) {
-        if (da->Size() == 4)
-            i6 = da->Int(3);
-        SetSelected(node.Int(), i6);
-        return 1;
-    } else if (node.Type() == kDataSymbol || node.Type() == kDataString) {
-        int i3;
-        if (da->Size() == 4)
-            i3 = bool(da->Int(3));
-        else
-            i3 = 1;
-        if (da->Size() == 5)
-            i6 = da->Int(4);
-        return SetSelected(node.ForceSym(), i3 != 0, i6);
-    } else {
-        MILO_FAIL("bad arg to set_selected");
-        return 0;
-    }
-}
-
-bool UIList::SetSelectedSimulateScroll(Symbol sym, bool b) {
-    int index = mListState.Provider()->DataIndex(sym);
-    if (index == -1) {
-        if (b) {
-            MILO_NOTIFY("Couldn't find %s in UIList provider", sym);
+bool UIList::SetSelectedSimulateScroll(Symbol s, bool warn) {
+    int scroll = mListState.Provider()->DataIndex(s);
+    if (scroll == -1) {
+        if (warn) {
+            MILO_NOTIFY("Couldn't find %s in UIList provider", s);
         }
         return false;
     } else {
-        SetSelectedSimulateScroll(index);
+        SetSelectedSimulateScroll(scroll);
         return true;
     }
 }
@@ -754,135 +670,6 @@ void UIList::Update() {
             Refresh(false);
     }
 }
-
-DataNode UIList::OnMsg(const ButtonDownMsg &msg) {
-    mUser = msg.GetUser();
-    Symbol cntType = JoypadControllerTypePadNum(msg.GetPadNum());
-    bool bLeftyFlip = JoypadTypeHasLeftyFlip(cntType);
-    int gridspan = 0;
-    UIList *childList = 0;
-    UIListOrientation o = kUIListVertical;
-    bool b1 = false;
-    int scrollDir = 0;
-    int oldSelData = 0;
-    int oldNextFill = 0;
-
-    if (CanScroll()) {
-        gridspan = mListState.GridSpan();
-        childList = mListDir->SubList(mListState.SelectedDisplay(), mWidgets);
-        o = mListDir->Orientation();
-        b1 = false;
-
-        if (childList) {
-            if (childList->Handle(msg, false) != DataNode(kDataUnhandled, 0)) {
-                return 1;
-            }
-
-            scrollDir = ScrollDirection(
-                msg,
-                bLeftyFlip,
-                childList->GetUIListDir()->Orientation() == 0,
-                childList->GridSpan()
-            );
-            if ((scrollDir == 1
-                 && childList->SelectedData() == childList->NumProviderData() - 1)
-                || (scrollDir == -1 && childList->SelectedData() == 0)) {
-                o = childList->GetUIListDir()->Orientation();
-                b1 = true;
-            }
-        }
-
-        scrollDir = ScrollDirection(msg, bLeftyFlip, o == 0, gridspan);
-        if (scrollDir != 0) {
-            if (gridspan == 1 || (scrollDir != 1 && scrollDir != -1)
-                || ((scrollDir == 1 && (mListState.SelectedDisplay() + 1) % gridspan)
-                    || (scrollDir == -1 && mListState.SelectedDisplay() % gridspan))) {
-                oldSelData = SelectedData();
-                Scroll(scrollDir);
-                if (oldSelData == SelectedData() && !IsScrolling() && !mSelectToScroll) {
-                    return DataNode(kDataUnhandled, 0);
-                }
-
-                oldNextFill = UIListSubList::sNextFillSelection;
-                if (childList) {
-                    UIList *curChild = mListDir->SubList(mListState.SelectedDisplay(), mWidgets);
-                    bool b2 = false;
-                    if (curChild == childList) {
-                        int dispFill = scrollDir + mListState.SelectedDisplay();
-                        if (dispFill < 0 || dispFill >= NumDisplay())
-                            b2 = true;
-                        else {
-                            curChild = mListDir->SubList(dispFill, mWidgets);
-                        }
-                    }
-                    if (curChild) {
-                        if (b1) {
-                            if (scrollDir > 0)
-                                oldNextFill = 0;
-                            else if (b2)
-                                oldNextFill = 1000000;
-                            else
-                                oldNextFill = curChild->NumProviderData() - 1;
-                        } else {
-                            oldNextFill =
-                                Min(curChild->NumProviderData() - 1,
-                                    childList->SelectedData());
-                        }
-                        if (b2)
-                            UIListSubList::sNextFillSelection = oldNextFill;
-                        else
-                            curChild->SetSelectedSimulateScroll(oldNextFill);
-                    }
-                }
-
-                return 1;
-            }
-
-            return 1;
-        }
-
-        int pageDir = PageDirection(msg.GetAction());
-        if (pageDir != 0) {
-            if (mPaginate) {
-                mListState.PageScroll(pageDir);
-                return 1;
-            }
-        } else if (pageDir == 0) {
-            if (CatchNavAction(msg.GetAction()))
-                return 1;
-        }
-    }
-
-    if (!IsScrolling()) {
-        if (msg.GetAction() == kAction_Confirm) {
-            if (SelectScrollSelect(this, mUser))
-                return 1;
-            SendSelect(mUser);
-            return 1;
-        }
-        if (msg.GetAction() == kAction_Cancel) {
-            if (RevertScrollSelect(this, mUser, nullptr))
-                return 1;
-        }
-    }
-
-    return DataNode(kDataUnhandled, 0);
-}
-
-DataNode UIList::OnSetSelectedSimulateScroll(DataArray *da) {
-    DataNode node = da->Evaluate(2);
-    if (node.Type() == kDataInt) {
-        SetSelectedSimulateScroll(node.Int());
-        return DataNode(1);
-    } else if (node.Type() == kDataSymbol || node.Type() == kDataString) {
-        bool b3 = da->Size() == 4 ? da->Int(3) : true;
-        return SetSelectedSimulateScroll(node.ForceSym(), b3);
-    } else {
-        MILO_FAIL("bad arg to set_selected_simulate_scroll");
-        return 0;
-    }
-}
-
 
 void UIList::SetNumDisplay(int i) {
     mListState.SetNumDisplay(i, gLoading == 0);
@@ -901,19 +688,11 @@ void UIList::SetCircular(bool b) {
         Refresh(false);
 }
 
-// Limits the number of displayed items to the number of data items (prevents duplicates in circular lists)
 void UIList::LimitCircularDisplay(bool b) {
     if (Circular()) {
         mLimitCircularDisplayNumToDataNum = b;
         if (b) {
-            int numprov = NumProviderData();
-            int val = mUncappedNumDisplay;
-            if (numprov < val) {
-                val = numprov;
-            }
-            auto _tmp0 = Max(val, 1);
-            val = _tmp0;
-            SetNumDisplay(val);
+            SetNumDisplay(Max(Min(mUncappedNumDisplay, NumProviderData()), 1));
         } else {
             SetNumDisplay(mUncappedNumDisplay);
         }
@@ -926,25 +705,13 @@ void UIList::SetProvider(UIListProvider *prov) {
         LimitCircularDisplay(mLimitCircularDisplayNumToDataNum);
         Refresh(true);
     } else {
-        mListState.SetProvider(prov, (RndDir *)mListDir);
+        mListState.SetProvider(prov, mListDir);
         LimitCircularDisplay(mLimitCircularDisplayNumToDataNum);
         SetSelected(0, -1);
     }
-    if (UIList *child = mListDir->SubList(mListState.SelectedDisplay(), mWidgets))
-        child->Poll();
-}
-
-DataNode UIList::OnSetData(DataArray *da) {
-    DataArray *arr = da->Array(2);
-    int i3 = da->Size() > 3 ? da->Int(3) : 0;
-    bool i4 = da->Size() > 4 ? da->Int(4) : 0;
-    bool i5 = da->Size() > 5 ? da->Int(5) : 0;
-    if (mDataProvider)
-        mDataProvider->SetData(arr);
-    else
-        mDataProvider = new DataProvider(arr, i3, i4, i5, this);
-    SetProvider(mDataProvider);
-    return 1;
+    if (ChildList()) {
+        Poll();
+    }
 }
 
 void UIList::Init() {
@@ -958,6 +725,14 @@ void UIList::Init() {
     REGISTER_OBJ_FACTORY(UIListSlot)
     REGISTER_OBJ_FACTORY(UIListSubList)
     REGISTER_OBJ_FACTORY(UIListWidget)
+}
+
+void UIList::CalcBoundingBox(Box &box) {
+    box.Set(WorldXfm().v, WorldXfm().v);
+    UIListWidgetDrawState drawState;
+    mListDir->DrawWidgets(
+        drawState, mListState, mWidgets, WorldXfm(), DrawState(this), &box, mDrawManuallyControlledWidgets
+    );
 }
 
 const std::vector<UIListWidget *> &UIList::GetWidgets() const { return mWidgets; }
@@ -1018,4 +793,171 @@ void UIList::BoundingBoxTriangles(std::vector<std::vector<Vector3> > &vec) {
         locVec.push_back(Vector3(box.mMax.x, box.mMax.y, f));
         vec.push_back(locVec);
     }
+}
+
+DataNode UIList::OnScroll(DataArray *da) {
+    int scroll = da->Int(2);
+    mUser = da->Size() > 3 ? da->Obj<LocalUser>(3) : 0;
+    Scroll(scroll);
+    return 1;
+}
+
+DataNode UIList::OnSelectedSym(DataArray *da) {
+    if (da->Size() > 2) {
+        return SelectedSym(da->Int(2));
+    } else
+        return SelectedSym(true);
+}
+
+DataNode UIList::OnSetSelected(DataArray *da) {
+    DataNode node = da->Evaluate(2);
+    int i6 = -1;
+    if (node.Type() == kDataInt) {
+        if (da->Size() == 4)
+            i6 = da->Int(3);
+        SetSelected(node.Int(), i6);
+        return 1;
+    } else if (node.Type() == kDataSymbol || node.Type() == kDataString) {
+        bool i3 = da->Size() == 4 ? da->Int(3) : true;
+        if (da->Size() == 5)
+            i6 = da->Int(4);
+        return SetSelected(node.ForceSym(), i3, i6);
+    } else {
+        MILO_FAIL("bad arg to set_selected");
+        return 0;
+    }
+}
+
+DataNode UIList::OnMsg(const ButtonDownMsg &msg) {
+    mUser = msg.GetUser();
+    Symbol cntType = JoypadControllerTypePadNum(msg.GetPadNum());
+
+    if (CanScroll()) {
+        int gridspan = mListState.GridSpan();
+        UIList *childList = ChildList();
+        UIListOrientation o = mListDir->Orientation();
+        bool b1 = false;
+
+        if (childList) {
+            if (childList->Handle(msg, false) != DATA_UNHANDLED) {
+                return 1;
+            }
+
+            int scrollDir = ScrollDirection(
+                msg,
+                cntType,
+                childList->GetUIListDir()->Orientation() == 0,
+                childList->GridSpan()
+            );
+            if ((scrollDir == 1
+                 && childList->SelectedData() == childList->NumProviderData() - 1)
+                || (scrollDir == -1 && childList->SelectedData() == 0)) {
+                o = childList->GetUIListDir()->Orientation();
+                b1 = true;
+            }
+        }
+
+        int scrollDir = ScrollDirection(msg, cntType, o == 0, gridspan);
+        if (scrollDir != 0) {
+            if (gridspan == 1 || (scrollDir != 1 && scrollDir != -1)
+                || ((scrollDir == 1 && (mListState.SelectedDisplay() + 1) % gridspan)
+                    || (scrollDir == -1 && mListState.SelectedDisplay() % gridspan))) {
+                int oldSelData = SelectedData();
+                Scroll(scrollDir);
+                if (oldSelData == SelectedData() && !IsScrolling() && !mSelectToScroll) {
+                    return DATA_UNHANDLED;
+                }
+
+                int oldNextFill = UIListSubList::sNextFillSelection;
+                if (childList) {
+                    UIList *curChild = ChildList();
+                    bool b2 = false;
+                    if (curChild == childList) {
+                        int dispFill = scrollDir + mListState.SelectedDisplay();
+                        if (dispFill < 0 || dispFill >= NumDisplay())
+                            b2 = true;
+                        else {
+                            curChild = mListDir->SubList(dispFill, mWidgets);
+                        }
+                    }
+                    // oldNextFill = UIListSubList::sNextFillSelection;
+                    if (curChild) {
+                        if (b1) {
+                            if (scrollDir > 0)
+                                oldNextFill = 0;
+                            else if (b2)
+                                oldNextFill = 1000000;
+                            else
+                                oldNextFill = curChild->NumProviderData() - 1;
+                        } else {
+                            oldNextFill =
+                                Min(curChild->NumProviderData() - 1,
+                                    childList->SelectedData());
+                        }
+                        if (b2)
+                            UIListSubList::sNextFillSelection = oldNextFill;
+                        else
+                            curChild->SetSelectedSimulateScroll(oldNextFill);
+                    }
+                }
+
+                return 1;
+            }
+
+            return 1;
+        }
+
+        int pageDir = PageDirection(msg.GetAction());
+        if (pageDir != 0) {
+            if (mPaginate) {
+                mListState.PageScroll(pageDir);
+                return 1;
+            }
+        } else if (pageDir == 0) {
+            if (CatchNavAction(msg.GetAction()))
+                return 1;
+        }
+    }
+
+    if (!IsScrolling()) {
+        if (msg.GetAction() == kAction_Confirm) {
+            if (SelectScrollSelect(this, mUser))
+                return 1;
+            SendSelect(mUser);
+            return 1;
+        }
+
+        if (msg.GetAction() == kAction_Cancel && RevertScrollSelect(this, mUser, 0)) {
+            return 1;
+        }
+    }
+
+    return DATA_UNHANDLED;
+}
+
+DataNode UIList::OnSetSelectedSimulateScroll(DataArray *da) {
+    DataNode node = da->Evaluate(2);
+    if (node.Type() == kDataInt) {
+        SetSelectedSimulateScroll(node.Int());
+        return DataNode(1);
+    } else if (node.Type() == kDataSymbol || node.Type() == kDataString) {
+        bool b3 = da->Size() == 4 ? da->Int(3) : true;
+        return SetSelectedSimulateScroll(node.ForceSym(), b3);
+    } else {
+        MILO_FAIL("bad arg to set_selected_simulate_scroll");
+        return 0;
+    }
+}
+
+DataNode UIList::OnSetData(DataArray *da) {
+    DataArray *arr = da->Array(2);
+    int i3 = da->Size() > 3 ? da->Int(3) : 0;
+    bool i4 = da->Size() > 4 ? da->Int(4) : 0;
+    bool i5 = da->Size() > 5 ? da->Int(5) : 0;
+    if (mDataProvider)
+        mDataProvider->SetData(arr);
+    else
+        mDataProvider = new DataProvider(arr, i3, i4, i5, this);
+    SetProvider(mDataProvider);
+    return 1;
 }

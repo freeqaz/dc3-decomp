@@ -74,9 +74,9 @@ enum JointConfidence {
 class SkeletonHistory;
 
 struct BoneJoints {
+    SkeletonBone bone;
     SkeletonJoint joint1;
     SkeletonJoint joint2;
-    SkeletonBone bone;
 };
 
 class BaseSkeleton {

@@ -10,11 +10,7 @@ std::list<RndGraph *> *sGraphs;
 std::list<FakeGraph> sFakes;
 ObjPtr<RndCam> sCam(nullptr);
 
-#ifdef HX_NATIVE
-void *Drawable::operator new(size_t s) {
-#else
 void *Drawable::operator new(unsigned int s) {
-#endif
     return MemAlloc(s, __FILE__, 0xA9, "Drawable");
 }
 void Drawable::operator delete(void *v) { MemFree(v, __FILE__, 0xA9, "Drawable"); }
@@ -23,12 +19,9 @@ void ScreenLine::DrawFixedZ(float) { Draw(); }
 void RectFilled2D::Draw() {
     TheRnd.DrawRectScreen(mRect, mCol, nullptr, nullptr, nullptr);
 }
-void RectFilled2D::DrawFixedZ(float) {
-    TheRnd.DrawRectScreen(mRect, mCol, nullptr, nullptr, nullptr);
-}
+void RectFilled2D::DrawFixedZ(float) { Draw(); }
 void DrawSphere::Draw() { UtilDrawSphere(mCenter, mRadius, mCol, nullptr); }
 void DrawString::Draw() { TheRnd.DrawString(mText.c_str(), mPos, mCol, true); }
-void DrawString::DrawFixedZ(float) { Draw(); }
 void DrawString3D::Draw() { UtilDrawString(mText.c_str(), mPos, mCol); }
 void Line::Draw() { TheRnd.DrawLine(mA, mB, mCol, mZBuf); }
 void Line::DrawFixedZ(float f) {
@@ -122,8 +115,7 @@ void RndGraph::Reset() {
 void RndGraph::DrawAll() {
     if (sCam)
         sCam->Select();
-    auto _tmp0 = sGraphs->end();
-    for (std::list<RndGraph *>::iterator it = sGraphs->begin(); _tmp0 != it;
+    for (std::list<RndGraph *>::iterator it = sGraphs->begin(); it != sGraphs->end();
          ++it) {
         (*it)->Draw();
     }
@@ -131,7 +123,7 @@ void RndGraph::DrawAll() {
         sOneFrame->Draw();
         sOneFrame->Reset();
     }
-    for (std::list<FakeGraph>::iterator it = sFakes.begin(); sFakes.end() != it; ++it) {
+    for (std::list<FakeGraph>::iterator it = sFakes.begin(); it != sFakes.end(); ++it) {
         it->mDrawCallback();
     }
     sCam = nullptr;

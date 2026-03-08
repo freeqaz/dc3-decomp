@@ -16,8 +16,6 @@
 
 CrewProvider::CrewProvider() : mPlayer(0), mPanelDir(0) {}
 
-CrewProvider::~CrewProvider() {}
-
 void CrewProvider::Text(int, int data, UIListLabel *slot, UILabel *label) const {
     MILO_ASSERT_RANGE(data, 0, mCrews.size(), 0x69);
     AppLabel *app_label = dynamic_cast<AppLabel *>(label);

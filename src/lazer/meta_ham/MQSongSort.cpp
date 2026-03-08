@@ -6,8 +6,6 @@
 
 MQSongSort::MQSongSort() {};
 
-MQSongSort::~MQSongSort() {};
-
 void MQSongSort::DeleteItemList() {
     NavListSort::DeleteItemList();
     TheMQSongSortMgr->ClearHeaders();

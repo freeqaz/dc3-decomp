@@ -159,8 +159,8 @@ public:
 
     /** The animatable this task should be animating. */
     ObjOwnerPtr<RndAnimatable> mAnim; // 0x2c
-    ObjPtr<Hmx::Object> mAnimTarget; // 0x40
-    ObjPtr<Hmx::Object> mListener; // 0x54
+    ObjPtr<Hmx::Object> mListener; // 0x40
+    ObjPtr<Hmx::Object> mAnimTarget; // 0x54
     /** The anim task to blend into. */
     ObjPtr<AnimTask> mBlendTask; // 0x68
     /** Whether or not this animation should blend into another. */

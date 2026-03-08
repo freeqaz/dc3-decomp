@@ -24,9 +24,9 @@ static int gNumThreads = 0;
 void InitMakeString() {
     if (!gLock) {
         gLock = new CriticalSection();
-        gBuf = (char ***)MemAlloc(6 * sizeof(char **), __FILE__, 0x93, "MakeString Buffer", 0);
+        gBuf = (char ***)MemAlloc(0x18, __FILE__, 0x93, "MakeString Buffer", 0);
         for (int i = 0; i < 6; i++) {
-            gBuf[i] = (char **)MemAlloc(16 * sizeof(char *), __FILE__, 0x97, "MakeString Buffer", 0);
+            gBuf[i] = (char **)MemAlloc(0x40, __FILE__, 0x97, "MakeString Buffer", 0);
             for (int j = 0; j < 16; j++) {
                 gBuf[i][j] =
                     (char *)MemAlloc(0x1000, __FILE__, 0x9B, "MakeString Buffer", 0);
@@ -58,40 +58,25 @@ char *NextBuf() {
         gThreadIds[0] = GetCurrentThreadId();
         gNumThreads = 1;
     } else {
-        int threadIdx;
-        DWORD currentThreadId = GetCurrentThreadId();
-        if ((DWORD)gThreadIds[gCurThread] != currentThreadId) {
-            threadIdx = 0;
-            if (gNumThreads > 0) {
-                unsigned long *threadIdSlot = (unsigned long *)&gThreadIds[0];
-                do {
-                    DWORD loopThreadId = GetCurrentThreadId();
-                    if (*threadIdSlot == loopThreadId) {
+        int tID;
+        int curThread = GetCurrentThreadId();
+        int *tptr = &gThreadIds[0];
+        if (gThreadIds[gCurThread] != curThread) {
+            for (tID = 0; tID < gNumThreads; tID++) {
+                if (gThreadIds[tID] == GetCurrentThreadId()) {
+                    break;
+                }
+            }
+            if (tID == gNumThreads) {
+                for (tID = 0; tID < gNumThreads; tID++) {
+                    if (!ValidateThreadId(tID)) {
+                        gThreadIds[tID] = GetCurrentThreadId();
                         break;
                     }
-                    threadIdx++;
-                    threadIdSlot++;
-                } while (threadIdx < gNumThreads);
-            }
-            if (threadIdx == gNumThreads) {
-                int activeThreadCount = gNumThreads;
-                threadIdx = 0;
-                if (gNumThreads > 0) {
-                    unsigned long *threadIdSlot = (unsigned long *)&gThreadIds[0];
-                    do {
-                        if (!ValidateThreadId(*threadIdSlot)) {
-                            gThreadIds[threadIdx] = GetCurrentThreadId();
-                            activeThreadCount = gNumThreads;
-                            break;
-                        }
-                        threadIdx++;
-                        threadIdSlot++;
-                        activeThreadCount = gNumThreads;
-                    } while (threadIdx < gNumThreads);
                 }
-                if (threadIdx == activeThreadCount) {
+                if (tID == gNumThreads) {
                     char msg[256];
-                    if (activeThreadCount >= 6) {
+                    if (gNumThreads >= 6) {
                         Hx_snprintf(
                             msg,
                             256,
@@ -101,11 +86,11 @@ char *NextBuf() {
                         TheDebug.Fail(msg, nullptr);
                         return nullptr;
                     }
-                    gThreadIds[threadIdx] = GetCurrentThreadId();
+                    gThreadIds[tID] = GetCurrentThreadId();
                     gNumThreads++;
                 }
             }
-            gCurThread = threadIdx;
+            gCurThread = tID;
         }
     }
 
@@ -116,8 +101,6 @@ char *NextBuf() {
 
     return buf;
 }
-
-void TerminateMakeString() {}
 
 FormatString::FormatString()
     : mBuf(NextBuf()), mBufSize(MAX_BUF_SIZE), mFmtEnd(nullptr), mType(kNone) {}
@@ -141,7 +124,6 @@ FormatString &FormatString::operator<<(int i) {
 }
 
 const char *FormatString::Str() {
-
     if (mType != kNone)
         MILO_NOTIFY(
             "FormatString: '%s' doesn't start with kNone.  Format: '%s'", mFmt, mFmtBuf
@@ -150,8 +132,7 @@ const char *FormatString::Str() {
         MILO_ASSERT(mFmtEnd - mFmt < mBufSize, 0x16F);
         strcpy(mBuf + MAX_BUF_SIZE - mBufSize, mFmt);
     }
-    const char *result = mBuf;
-    return result;
+    return mBuf;
 }
 
 FormatString &FormatString::operator<<(const char *cc) {
@@ -424,10 +405,6 @@ FormatString::FormatString(const char *str)
     : mBuf(NextBuf()), mBufSize(MAX_BUF_SIZE), mFmtEnd(nullptr), mType(kNone) {
     InitializeWithFmt(str, true);
 }
-
-// Explicit template instantiations for MakeString variants used by ASSERT_REVS
-template const char *
-MakeString<const char *, Symbol, int, unsigned short>(const char *, const char *const &, const Symbol &, const int &, const unsigned short &);
 
 FormatString &FormatString::operator<<(const DataNode &node) {
     char tmp = *mFmtEnd;

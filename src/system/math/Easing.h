@@ -129,7 +129,14 @@ inline float EaseBounceOutIn(float t, float power, float) {
         return (EaseBounceIn(t * 2 - 1.0f, 0.0f, 0.0f) + 1.0f) / 2;
 }
 
-float EaseElasticIn(float t, float power, float period);
+inline float EaseElasticIn(float t, float power, float f3) {
+    MILO_ASSERT(t >= 0 && t <= 1, 145);
+    if (t > 0 && t < 1.0f) {
+        if (f3 <= 0)
+            f3 = 0.45;
+    }
+    return t;
+}
 
 inline float EaseElasticOut(float t, float power, float period) {
     MILO_ASSERT(t >= 0 && t <= 1, 164);

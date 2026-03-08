@@ -3,7 +3,6 @@
 #include "os/System.h"
 #include "rndobj/FontBase.h"
 #include "obj/Object.h"
-#include "obj/PropSync.h"
 #include "utl/BinStream.h"
 #include "math/Rot.h"
 #include "utl/FilePath.h"
@@ -15,15 +14,15 @@ KerningTable::KerningTable() : mNumEntries(0), mEntries(0) { memset(mTable, 0, 0
 KerningTable::~KerningTable() { delete mEntries; }
 
 KerningTable::Entry *KerningTable::Find(unsigned short us1, unsigned short us2) {
-    if (mNumEntries == 0) {
+    if (mNumEntries == 0)
         return nullptr;
+    else {
+        Entry *entry = mTable[TableIndex(us1, us2)];
+        int key = Key(us1, us2);
+        for (; entry != nullptr && key != entry->key; entry = entry->next)
+            ;
+        return entry;
     }
-    Entry *entry = mTable[TableIndex(us1, us2)];
-    int key = Key(us1, us2);
-    while (entry != nullptr && key != entry->key) {
-        entry = entry->next;
-    }
-    return entry;
 }
 
 float KerningTable::Kerning(unsigned short us1, unsigned short us2) {
@@ -50,7 +49,8 @@ void KerningTable::SetKerning(
     const std::vector<RndFont::KernInfo> &info, RndFontBase *font
 ) {
     int validcount = 0;
-    for (int i = 0; i < info.size(); i++) {
+    int i = 0;
+    for (i = 0; i < info.size(); i++) {
         if (Valid(info[i], font)) {
             validcount++;
         }
@@ -62,13 +62,13 @@ void KerningTable::SetKerning(
     }
     memset(mTable, 0, 0x80);
     int entryIdx = 0;
-    for (int i = 0; i < info.size(); i++) {
+    for (i = 0; i < info.size(); i++) {
         const RndFont::KernInfo &curInfo = info[i];
         if (Valid(curInfo, font)) {
             Entry &curEntry = mEntries[entryIdx++];
             curEntry.key = Key(curInfo.mFirstChar, curInfo.mSecondChar);
             curEntry.kerning = curInfo.kerning;
-            int index = TableIndex(curInfo.mSecondChar, curInfo.mFirstChar);
+            int index = TableIndex(curInfo.mFirstChar, curInfo.mSecondChar);
             curEntry.next = mTable[index];
             mTable[index] = &curEntry;
         }
@@ -160,15 +160,11 @@ RndFont::~RndFont() { RELEASE(mKerningTable); }
 
 bool RndFont::Replace(ObjRef *from, Hmx::Object *to) {
     if (&mTextureOwner == from) {
-        RndFont *replace;
-        if (mTextureOwner == this) {
-            replace = this;
-        } else {
+        RndFont *replace = this;
+        if (mTextureOwner != this) {
             RndFont *f = dynamic_cast<RndFont *>(to);
             if (f) {
                 replace = f->mTextureOwner;
-            } else {
-                replace = this;
             }
         }
         mTextureOwner = replace;
@@ -214,7 +210,7 @@ BEGIN_SAVES(RndFont)
          it != mCharInfoMap.end();
          ++it) {
         bs << it->first;
-        const CharInfo &info = it->second;
+        CharInfo &info = it->second;
         bs << info.mPage;
         bs << info.mU;
         bs << info.mV;

@@ -30,9 +30,9 @@ bool CharClip::Transitions::Replace(ObjRef *from, Hmx::Object *to) {
 
 void CharClip::Transitions::Clear() {
     for (NodeVector *it = mNodeStart; it < mNodeEnd; it = it->Next()) {
-        it->~NodeVector();
+        it->clip->~CharClip();
     }
-    Resize(0, 0);
+    Resize(0, nullptr);
 }
 
 int CharClip::Transitions::Size() const {
@@ -46,11 +46,7 @@ int CharClip::Transitions::Size() const {
 CharClip::NodeVector *CharClip::Transitions::Resize(int size, const NodeVector *old) {
     static int _x = MemFindHeap("char");
     MemHeapTracker temp(_x);
-#ifdef HX_NATIVE
-    intptr_t n = (intptr_t)old - (intptr_t)mNodeStart;
-#else
     int n = (int)old - (int)mNodeStart;
-#endif
     MILO_ASSERT((old == NULL) || (n >= 0), 0x9B);
     if (size != BytesInMemory()) {
         if (size == 0) {
@@ -65,9 +61,8 @@ CharClip::NodeVector *CharClip::Transitions::Resize(int size, const NodeVector *
             );
         }
     }
-    // size is in bytes, not element count — use byte arithmetic
-    mNodeEnd = (NodeVector *)((char *)mNodeStart + size);
-    return (NodeVector *)((char *)mNodeStart + n);
+    mNodeEnd = mNodeStart + size;
+    return mNodeStart + n;
 }
 
 CharClip::NodeVector *CharClip::Transitions::GetNodes(int idx) const {
@@ -85,68 +80,26 @@ CharClip::NodeVector *CharClip::Transitions::FindNodes(CharClip *clip) const {
     return nullptr;
 }
 
-void CharClip::Transitions::AddNode(CharClip *clip, const CharGraphNode &node) {
-    NodeVector *nodes = FindNodes(clip);
-    NodeVector *resized;
-    if (nodes) {
-        int bytes = BytesInMemory();
-        NodeVector *next = nodes->Next();
-        NodeVector *end = mNodeEnd;
-        resized = Resize(bytes + 8, nodes);
-        memmove(
-            (char *)resized->Next() + 8,
-            resized->Next(),
-            (intptr_t)end - (intptr_t)next
-        );
-    } else {
-        resized = Resize(BytesInMemory() + 0x20, mNodeEnd);
-        new (&resized->clip) ObjOwnerPtr<CharClip>(mOwner, (CharClip *)NULL);
-        resized->clip = clip;
-        resized->size = 0;
-    }
-    int size = resized->size;
-    int i = 0;
-    if (size > 0) {
-        for (; i < size; i++) {
-            if (resized->nodes[i].curBeat > node.curBeat)
-                break;
-        }
-    }
-    if (i < size) {
-        for (int j = size; j > i; j--) {
-            resized->nodes[j] = resized->nodes[j - 1];
-        }
-    }
-    resized->nodes[i] = node;
-    resized->size++;
-    // Fix up ObjRef linked list pointers after potential reallocation
-    for (NodeVector *it = mNodeStart; it < mNodeEnd; it = it->Next()) {
-        ObjRef **prev = (ObjRef **)((char *)it + 4);
-        ObjRef **next = (ObjRef **)((char *)it + 8);
-        *(ObjRef **)((char *)*next + 4) = (ObjRef *)it;
-        *(ObjRef **)((char *)*prev + 8) = (ObjRef *)it;
-    }
-}
-
 void CharClip::Transitions::RemoveClip(CharClip *clip) {
-    NodeVector *node = FindNodes(clip);
-    if (node)
-        RemoveNodes(node);
+    NodeVector *it;
+    for (it = mNodeStart; it < mNodeEnd; it = it->Next()) {
+        if (it->clip == clip) {
+            goto found;
+        }
+    }
+    it = nullptr;
+found:
+    if (it)
+        RemoveNodes(it);
 }
 
 void CharClip::Transitions::RemoveNodes(NodeVector *n) {
     MILO_ASSERT(n, 0xEC);
     NodeVector *next = n->Next();
-    memmove(n, next, (intptr_t)mNodeEnd - (intptr_t)next);
-    Resize(BytesInMemory() - ((intptr_t)next - (intptr_t)n), nullptr);
+    memmove(n, next, (int)mNodeEnd - (int)next);
+    Resize(BytesInMemory() - ((int)next - (int)n), nullptr);
     for (NodeVector *it = mNodeStart; it < mNodeEnd; it = it->Next()) {
-        // Fix up linked list pointers after memmove
-        // ObjRef layout: vtable(sizeof(void*)) + next(sizeof(void*)) + prev(sizeof(void*))
-        ObjRef *clipRef = (ObjRef*)&it->clip;
-        ObjRef *clipNext = *(ObjRef**)((char*)clipRef + sizeof(void*));
-        ObjRef *clipPrev = *(ObjRef**)((char*)clipRef + sizeof(void*) * 2);
-        *(ObjRef**)((char*)clipPrev + sizeof(void*)) = clipRef;
-        *(ObjRef**)((char*)clipNext + sizeof(void*) * 2) = clipRef;
+        it->clip->Release(nullptr);
     }
 }
 
@@ -203,16 +156,8 @@ void CharClip::Transitions::Load(BinStreamRev &d, int oldRev) {
         if (d.rev < 0x14) {
             temp /= 8;
         }
-#ifdef HX_NATIVE
-        // On LP64, NodeVector is ~2x larger (8-byte pointers), need more space
-        // temp from file is Xbox byte count; scale up generously
-        int allocSize = temp < 256 ? 4096 : temp * 4;
-        NodeVector *start = (NodeVector *)_MemAllocTemp(allocSize, __FILE__, 0x4CB, "CharGraphNode", 0);
-        memset(start, 0, allocSize);
-#else
         NodeVector *start =
             (NodeVector *)_MemAllocTemp(temp, __FILE__, 0x4CB, "CharGraphNode", 0);
-#endif
         NodeVector *it = start;
 
         for (int i = 0; i < numNodes; i++) {
@@ -237,32 +182,11 @@ void CharClip::Transitions::Load(BinStreamRev &d, int oldRev) {
                 }
             }
         }
-#ifdef HX_NATIVE
-        // On native, ObjOwnerPtr registers as ObjRef in the clip's ref chain.
-        // memcpy creates bitwise copies with stale prev/next pointers.
-        // Fix: after memcpy, swap temp ObjRefs out and permanent ObjRefs in.
-        {
-            int dataSize = (intptr_t)it - (intptr_t)start;
-            Resize(dataSize, nullptr);
-            memcpy(mNodeStart, start, BytesInMemory());
-            NodeVector *tempEnd = (NodeVector *)((char *)start + dataSize);
-            NodeVector *permIt = mNodeStart;
-            for (NodeVector *tempIt = start; tempIt < tempEnd;
-                 tempIt = tempIt->Next(), permIt = permIt->Next()) {
-                CharClip *clip = (CharClip *)tempIt->clip;
-                if (clip) {
-                    clip->Release(&tempIt->clip); // deregister temp from chain
-                    clip->AddRef(&permIt->clip);  // register permanent in chain
-                }
-            }
-        }
-#else
-        Resize((intptr_t)it - (intptr_t)start, nullptr);
+        Resize((int)it - (int)start, nullptr);
         memcpy(mNodeStart, start, BytesInMemory());
         for (NodeVector *it = mNodeStart; it < mNodeEnd; it = it->Next()) {
             it->clip->Release(nullptr);
         }
-#endif
         MemFree(start);
     }
 }
@@ -790,7 +714,7 @@ void CharClip::EvaluateChannel(void *v1, const void *v2, int iii, float f) {
     if (!v2) {
         MILO_FAIL("%s passed in NULL for evaluate channel", PathName(this));
     }
-    int offset = (intptr_t)v2 - 1;
+    int offset = (int)v2 - 1;
     if (!(!(mFull.TotalSize() > offset))) {
         mFull.EvaluateChannel(v1, offset, iii, f);
     } else {
@@ -798,7 +722,7 @@ void CharClip::EvaluateChannel(void *v1, const void *v2, int iii, float f) {
         if (oneOffset < mOne.TotalSize()) {
             mOne.EvaluateChannel(v1, oneOffset, 0, 0);
         } else {
-            MILO_FAIL("%s could not find offset %d %d", PathName(this), offset, oneOffset);
+            MILO_FAIL("%s could not find offset %d %d", offset, oneOffset, PathName(this));
         }
     }
 }

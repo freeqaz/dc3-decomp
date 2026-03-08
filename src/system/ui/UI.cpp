@@ -8,15 +8,15 @@
 #include "obj/Msg.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
+#include "os/File.h"
+#include "os/Joypad.h"
 #include "os/JoypadClient.h"
+#include "os/JoypadMsgs.h"
 #include "os/Keyboard.h"
 #include "os/System.h"
 #include "os/UserMgr.h"
 #include "rndobj/Cam.h"
-#include "rndobj/Env.h"
 #include "ui/CheatProvider.h"
-#include "utl/Cheats.h"
-#include "utl/FilePath.h"
 #include "ui/InlineHelp.h"
 #include "ui/LabelNumberTicker.h"
 #include "ui/LabelShrinkWrapper.h"
@@ -34,6 +34,8 @@
 #include "ui/UIPanel.h"
 #include "ui/UISlider.h"
 #include "ui/UITrigger.h"
+#include "utl/Cheats.h"
+#include "utl/FilePath.h"
 #include "utl/KnownIssues.h"
 #include "utl/Locale.h"
 #include "utl/OSCMessenger.h"
@@ -71,7 +73,7 @@ const char *TransitionStateString(UIManager::TransitionState s) {
     }
 }
 
-static void TerminateCallback() {
+void TerminateCallback() {
     MILO_ASSERT(TheUI, 0x1CE);
     TheUI->Terminate();
 }
@@ -91,6 +93,8 @@ void FailAppendCallback(FixedString &str) {
         }
     }
 }
+
+void UITerminateCallback() { TheUI->Terminate(); }
 
 #pragma region UIManager
 
@@ -278,58 +282,9 @@ void UIManager::Terminate() {
 }
 
 bool UIManager::IsGameScreenActive() {
-    // Resolve the bottom-most screen (first pushed screen, or current if none pushed)
-    UIScreen *screen;
-    bool _cond = !mPushedScreens.empty();
-    if (_cond) {
-        screen = mPushedScreens[0];
-    } else {
-        screen = mCurrentScreen;
-    }
-
-    bool result;
-    if (screen) {
-        // Re-resolve bottom screen (required for register allocation to match target)
-        UIScreen *bottomScreen;
-        if (!mPushedScreens.empty()) {
-            bottomScreen = mPushedScreens[0];
-        } else {
-            bottomScreen = mCurrentScreen;
-        }
-
-        // Manual string comparison to check if screen name is "game_screen"
-        // (Cannot use strcmp - must match target's inline comparison)
-        const char *screenName = bottomScreen->Name();
-        const char *gameScreen = "game_screen";
-        signed char c1, c2;
-        do {
-            c1 = *screenName;
-            c2 = *gameScreen;
-            if (!c1) break;
-            screenName++;
-            gameScreen++;
-        } while (c1 == c2);
-
-        result = true;
-        // If strings match, proceed to check if bottom equals current
-        if (c1 == c2) goto check_current;
-    }
-    result = false;
-
-check_current:
-    // Verify that bottom screen is the current screen
-    screen = mCurrentScreen;
-    if (screen) {
-        UIScreen *bottomScreen = screen;
-        if (!mPushedScreens.empty()) {
-            bottomScreen = mPushedScreens[0];
-        }
-        // Bit manipulation: result &= (bottomScreen == screen)
-        // Uses -(bool) to convert true->-1 (all bits set), false->0
-        result = -(bottomScreen == screen) & result;
-    }
-
-    return result;
+    bool ret = BottomScreen() && streq(BottomScreen()->Name(), "game_screen");
+    ret &= mCurrentScreen != BottomScreen();
+    return ret;
 }
 
 bool UIManager::BlockHandlerDuringTransition(Symbol s, DataArray *da) {
@@ -696,67 +651,53 @@ void UIManager::Poll() {
 }
 
 void UIManager::PushScreen(UIScreen *screen) {
-    // Function prologue
-    CancelTransition();
-    MILO_ASSERT(mCurrentScreen, 0x358);
-    MILO_ASSERT(screen, 0x359);
-
-    // Check if screen is already in stack
-    UIScreen *existing = nullptr;
-    for (std::vector<UIScreen *>::iterator it = mPushedScreens.begin();
-         it != mPushedScreens.end();
-         ++it) {
-        existing = *it;
-        if (screen == existing) {
-            MILO_WARN("Don't push %s, it is already there!\n", screen->Name());
-            break;
-        }
-    }
-
-    // Push current screen to stack
-    mPushedScreens.push_back(mCurrentScreen);
-
-    // Check max depth (use > instead of >= for branch matching)
-    if ((mMaxPushDepth - 1) < mPushedScreens.size()) {
-        MILO_WARN(
-            "Exceeded max push depth of %i, pushing %s", mMaxPushDepth, screen->Name()
+    MILO_ASSERT(screen, 0x38C);
+    if (!mCurrentScreen) {
+        MILO_NOTIFY(
+            "Called PushScreen() with %s when mCurrentScreen is NULL, are you calling PushScreen() twice in the same frame?",
+            screen->Name()
         );
-        MILO_LOG("mPushedScreens:\n");
-
-        UIScreen *stacked = nullptr;
-        for (std::vector<UIScreen *>::iterator it = mPushedScreens.begin();
-             it != mPushedScreens.end();
-             ++it) {
-            stacked = *it;
-            if (stacked) {
-                MILO_LOG("%s\n", stacked->Name());
+    } else {
+        CancelTransition();
+        if (mCurrentScreen) {
+            mPushedScreens.push_back(mCurrentScreen);
+        } else {
+            MILO_LOG("UIManager::PushScreen NULL current screen. Not pushing it.\n");
+        }
+        if (mPushedScreens.size() >= mMaxPushDepth) {
+            MILO_NOTIFY(
+                "Exceeded max push depth of %i, pushing %s", mMaxPushDepth, screen->Name()
+            );
+            MILO_LOG("mPushedScreens:\n");
+            FOREACH (it, mPushedScreens) {
+                if (*it) {
+                    MILO_LOG("%s\n", (*it)->Name());
+                } else {
+                    MILO_LOG("NULL pushed screen? That's pretty bad.\n");
+                }
             }
         }
+        mCurrentScreen = nullptr;
+        GotoScreenImpl(screen, false, false);
     }
-
-    // Clear current screen before transition
-    mCurrentScreen = nullptr;
-    GotoScreenImpl(screen, false, false);
 }
 
-DataNode UIManager::OnForeachCurrentScreen(DataArray const *arr) {
-    DataNode *var = arr->Node(2).Var(arr);
-    DataNode saved(*var);
+DataNode UIManager::OnForeachCurrentScreen(const DataArray *arr) {
+    DataNode *var = arr->Var(2);
+    DataNode n(*var);
     std::vector<UIScreen *> screens(mPushedScreens);
     if (mCurrentScreen) {
         screens.push_back(mCurrentScreen);
     }
-    for (auto it = screens.begin(); it != screens.end(); it++) {
-        *var = DataNode(*it);
+    FOREACH (it, screens) {
+        *var = *it;
         for (int i = 3; i < arr->Size(); i++) {
-            arr->Node(i).Command(arr)->Execute();
+            arr->Command(i)->Execute();
         }
     }
-    *var = saved;
+    *var = n;
     return 0;
 }
-
-void UITerminateCallback() { TheUI->Terminate(); }
 
 void UIManager::Init() {
     MILO_ASSERT(TheUI, 0x1f3);
@@ -836,112 +777,40 @@ void UIManager::Init() {
     TheKnownIssues.Init();
 }
 
-// TODO: these small handlers are inlined into UIManager::Handle (0xCE4 bytes, 55.8% match).
-// RB3 equivalents: set_sink=HANDLE_MEMBER_PTR(mSink), push_screen=PushScreen(Obj<UIScreen>(2)),
-// pop_screen=PopScreen(Obj<UIScreen>(2)), reset_screen=ResetScreen(Obj<UIScreen>(2)),
-// focus_panel=HANDLE_EXPR(FocusPanel()). Implementing them individually doesn't improve Handle's
-// match due to cascading register allocation changes. Need to fix all stubs at once to see improvement.
-DataNode UIManager::OnSetSink(DataArray *arr) {
-    mSink = arr->GetObj(2);
-    return 0;
-}
-DataNode UIManager::OnUseJoypad(DataArray *arr) {
-    int val = arr->Int(2);
-    UseJoypad(val != 0, true);
-    return 0;
-}
-DataNode UIManager::OnSetVirtualDpad(DataArray *arr) {
-    int val = arr->Int(2);
-    mJoyClient->SetVirtualDpad(val != 0);
-    return 0;
-}
-DataNode UIManager::OnPushScreen(DataArray *arr) {
-    PushScreen(arr->Obj<UIScreen>(2));
-    return 0;
-}
-DataNode UIManager::OnPopScreen(DataArray *arr) {
-    if (arr->Size() > 2)
-        PopScreen(arr->Obj<UIScreen>(2));
-    else
-        PopScreen(nullptr);
-    return 0;
-}
-DataNode UIManager::OnCurrentScreen(DataArray *arr) {
-    return DataNode(mCurrentScreen);
-}
-DataNode UIManager::OnTransitionScreen(DataArray *arr) {
-    return DataNode(mTransitionScreen);
-}
-DataNode UIManager::OnBottomScreen(DataArray *arr) {
-    UIScreen *screen;
-    if (mPushedScreens.size() != (size_t)mPushedScreens.capacity()) {
-        screen = *mPushedScreens.begin();
-    } else {
-        screen = mCurrentScreen;
-    }
-    return DataNode(screen);
-}
-DataNode UIManager::OnInTransition(DataArray *arr) {
-    return DataNode((bool)(mTransitionState != kTransitionNone));
-}
-DataNode UIManager::OnFocusPanel(DataArray *arr) {
-    return DataNode(FocusPanel());
-}
-DataNode UIManager::OnWentBack(DataArray *arr) {
-    return DataNode((bool)mWentBack);
-}
-DataNode UIManager::OnIsGameScreenActive(DataArray *arr) {
-    return DataNode((bool)IsGameScreenActive());
-}
-DataNode UIManager::OnToggleLoadTimes(DataArray *arr) {
-    ToggleLoadTimes();
-    return 0;
-}
-DataNode UIManager::OnShowingLoadTimes(DataArray *arr) {
-    u8 result = 0;
-    return DataNode(result);
-}
-DataNode UIManager::OnToggleDevMenu(DataArray *arr) {
-    return 0;
-}
-DataNode UIManager::OnShowDevMenu(DataArray *arr) {
-    u8 result = 0;
-    return DataNode(result);
-}
-DataNode UIManager::OnResetScreen(DataArray *arr) {
-    ResetScreen(arr->Obj<UIScreen>(2));
-    return 0;
-}
-DataNode UIManager::OnFakeKeyboardAction(DataArray *arr) {
-    int button = arr->Int(3);
-    int action = arr->Int(2);
-    FakeKeyboardAction((JoypadButton)action, (JoypadAction)button);
-    return 0;
-}
-
 BEGIN_HANDLERS(UIManager)
-    HANDLE(set_sink, OnSetSink)
-    HANDLE(use_joypad, OnUseJoypad)
-    HANDLE(set_virtual_dpad, OnSetVirtualDpad)
-    HANDLE(push_screen, OnPushScreen)
-    HANDLE(pop_screen, OnPopScreen)
+    if ((InTransition() || InComponentSelect())
+        && BlockHandlerDuringTransition(sym, _msg)) {
+        return 0;
+    }
+    HANDLE_MEMBER_PTR(mSink)
+    HANDLE_ACTION(set_sink, mSink = _msg->Obj<Hmx::Object>(2))
+    HANDLE_ACTION(use_joypad, UseJoypad(_msg->Int(2), true))
+    HANDLE_ACTION(set_virtual_dpad, mJoyClient->SetVirtualDpad(_msg->Int(2)))
+    HANDLE_ACTION(push_screen, PushScreen(_msg->Obj<UIScreen>(2)))
+    HANDLE_ACTION_IF_ELSE(
+        pop_screen, _msg->Size() > 2, PopScreen(_msg->Obj<UIScreen>(2)), PopScreen(0)
+    )
     HANDLE(goto_screen, OnGotoScreen)
     HANDLE(go_back_screen, OnGoBackScreen)
-    HANDLE(reset_screen, OnResetScreen)
-    HANDLE(focus_panel, OnFocusPanel)
-    HANDLE(current_screen, OnCurrentScreen)
-    HANDLE(transition_screen, OnTransitionScreen)
-    HANDLE(bottom_screen, OnBottomScreen)
-    HANDLE(in_transition, OnInTransition)
+    HANDLE_ACTION(reset_screen, ResetScreen(_msg->Obj<UIScreen>(2)))
+    HANDLE_EXPR(focus_panel, FocusPanel())
+    HANDLE_EXPR(current_screen, CurrentScreen())
+    HANDLE_EXPR(transition_screen, TransitionScreen())
+    HANDLE_EXPR(bottom_screen, BottomScreen())
+    HANDLE_EXPR(in_transition, InTransition())
     HANDLE(is_resource, OnIsResource)
     HANDLE(foreach_current_screen, OnForeachCurrentScreen)
-    HANDLE(went_back, OnWentBack)
-    HANDLE(is_game_screen_active, OnIsGameScreenActive)
-    HANDLE(toggle_load_times, OnToggleLoadTimes)
-    HANDLE(showing_load_times, OnShowingLoadTimes)
-    HANDLE(toggle_dev_menu, OnToggleDevMenu)
-    HANDLE(show_dev_menu, OnShowDevMenu)
-    HANDLE(fake_keyboard_action, OnFakeKeyboardAction)
+    HANDLE_EXPR(went_back, WentBack())
+    HANDLE_EXPR(is_game_screen_active, IsGameScreenActive())
+    HANDLE_ACTION(toggle_load_times, ToggleLoadTimes())
+    HANDLE_EXPR(showing_load_times, mOverlay->Showing())
+    HANDLE_ACTION(toggle_dev_menu, mShowDevMenu = !mShowDevMenu)
+    HANDLE_EXPR(show_dev_menu, mShowDevMenu)
+    HANDLE_MEMBER_PTR(mAutomator)
+    HANDLE_ACTION(
+        fake_keyboard_action,
+        FakeKeyboardAction((JoypadButton)_msg->Int(2), (JoypadAction)_msg->Int(3))
+    )
     HANDLE_SUPERCLASS(Hmx::Object)
     HANDLE_MEMBER_PTR(mCurrentScreen)
 END_HANDLERS

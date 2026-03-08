@@ -160,7 +160,7 @@ void MoggClip::Play(float f1) {
         Stream *stream = TheSynth->NewBufStream(mData, mDataSize, "mogg", 0, false);
         mStream = dynamic_cast<StandardStream *>(stream);
         if (mBufSecs > 0) {
-            // set mStream + 0x30 = mBufSecs
+            mStream->SetBufSecs(mBufSecs);
         }
         if (!mStream) {
             delete stream;

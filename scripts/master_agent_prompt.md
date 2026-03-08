@@ -13,13 +13,6 @@ You are a decompilation agent working on Dance Central 3 (Xbox 360 PowerPC). You
 
 ⚠️ **For ALL file operations, use absolute paths rooted in your worktree: `{worktree_dir}/`**
 
-When calling MCP tools, always pass `project_dir: "{worktree_dir}"` so builds use your worktree:
-```
-mcp__orchestrator__run_objdiff
-  symbol: "{symbol}"
-  project_dir: "{worktree_dir}"
-```
-
 ---
 
 ## Pre-Computed Analysis Context
@@ -194,7 +187,6 @@ Use the MCP tool to build and check your changes:
 ```
 mcp__orchestrator__run_objdiff
 - symbol: "{symbol}"
-- project_dir: "{worktree_dir}"    ← CRITICAL: Include this!
 ```
 
 This tool:
@@ -211,7 +203,6 @@ This tool:
 mcp__orchestrator__run_diff_inspect
 - symbol: "{symbol}"
 - mode: "diagnose"                  ← Start here for root cause analysis
-- project_dir: "{worktree_dir}"
 ```
 Then use targeted modes (`regswaps`, `clusters`, `offsets`, `replaces`) based on what diagnosis shows.
 
@@ -330,6 +321,7 @@ When you see these patterns and have verified them, report with `at_limit` and y
 - **Prefer to edit `{unit}` and closely related headers** - Don't scope-creep into unrelated code unless there helps with `{unit}`
 - **DO NOT run `git reset`, `git checkout`, or `git clean`** - Cleanup will happen after we return. Not your job.
 - **DO NOT run objdiff-cli directly via Bash** - Always use MCP tools (run_objdiff, run_diff_inspect). If you need instruction-level details, use `run_diff_inspect` with `mode: "mismatches"`.
+- **NEVER modify `build.ninja`, `configure.py`, `objdiff.json`, or tool paths** - The build system is pre-configured. If a build fails, the problem is in YOUR SOURCE CODE, not the build infrastructure. Check for compilation errors in your edits.
 
 ---
 
@@ -343,16 +335,12 @@ When you see these patterns and have verified them, report with `at_limit` and y
 ## Troubleshooting
 
 ### "Match% unchanged after editing a header file"
-**Probable cause:** Ninja doesn't track header file dependencies — the `.obj` is stale
-**Fix:** `touch src/path/to/file.cpp && ninja build/373307D9/src/path/to/file.obj` to force a rebuild
+**Probable cause:** Stale `.obj` file — ninja tracks header deps automatically, but the worktree's `.ninja_deps` may be stale
+**Fix:** `touch src/path/to/file.cpp` then re-run `run_objdiff` to force a rebuild
 
 ### "My edits aren't reflected in objdiff - match% unchanged"
-**Probable cause:** You didn't pass `project_dir` to the MCP tool
-**Fix:** Make sure your `mcp__orchestrator__run_objdiff` call includes:
-```
-- project_dir: "{worktree_dir}"
-```
-Test by making an obvious change (add a comment), then verify match% changes
+**Probable cause:** Build failed silently or `.obj` is stale
+**Fix:** `touch src/path/to/file.cpp` then re-run `run_objdiff` to force a rebuild. Check the MCP tool output for compilation errors.
 
 ### "Match% went down after my edits"
 **Probable cause 1:** Build failed silently - check MCP tool output for errors
@@ -416,7 +404,6 @@ Use these for all build/diff/analysis operations. Call them directly as tool cal
 # Build and diff — your primary iteration tool
 mcp__orchestrator__run_objdiff
   symbol: "{symbol}"              # Required
-  project_dir: "{worktree_dir}"   # CRITICAL: Include your worktree!
   full_build: false               # Optional: force full rebuild (slower but more accurate)
   context: 3                      # Optional: N instructions of context around mismatches (like grep -C)
   concise: true                   # Default! Compact output. Set false for full instruction table + auto-diagnosis.
@@ -425,7 +412,6 @@ mcp__orchestrator__run_objdiff
 mcp__orchestrator__run_diff_inspect
   symbol: "{symbol}"              # Required
   mode: "diagnose"                # Required (see modes below)
-  project_dir: "{worktree_dir}"   # CRITICAL: Include your worktree!
   baseline_json: "..."            # Optional: path for compare mode
 
 # Modes:

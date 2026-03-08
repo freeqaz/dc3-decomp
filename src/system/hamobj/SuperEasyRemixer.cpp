@@ -95,7 +95,7 @@ bool InsertVariants(std::set<const MoveVariant *> &vars, Symbol name) {
     if (!mp) {
         return false;
     } else {
-        for (int i = 0; i < (int)mp->Variants().size(); i++) {
+        for (int i = 0; i < mp->Variants().size(); i++) {
             const MoveVariant *v = mp->Variants()[i];
             vars.insert(v);
         }
@@ -126,8 +126,8 @@ void SuperEasyRemixer::DumpSongLayout() {
                         str += "_";
                     }
                     if (TheMoveMgr->HasVariantPair(
-                            GetMoveParentsByDifficulty(next)[i],
-                            GetMoveParentsByDifficulty(d)[i - 1]
+                            GetMoveParentsByDifficulty(d)[i - 1],
+                            GetMoveParentsByDifficulty(next)[i]
                         )) {
                         str += ">";
                     } else {
@@ -149,10 +149,9 @@ void SuperEasyRemixer::DumpSongLayout() {
 
 void SuperEasyRemixer::SaveSuperEasyMoveParents() {
     mSuperEasyVariants.clear();
-    auto& _ref1 = mSuperEasyParents;
-    _ref1.clear();
+    mSuperEasyParents.clear();
     mSuperEasyVariants.reserve(mTotalMeasures);
-    _ref1.reserve(mTotalMeasures);
+    mSuperEasyParents.reserve(mTotalMeasures);
     int i7 = 1;
     HamSupereasyData *data =
         ObjDirItr<HamSupereasyData>(TheHamDirector->GetMoveDir(), false);
@@ -183,13 +182,13 @@ void SuperEasyRemixer::SaveSuperEasyMoveParents() {
                 mSuperEasyVariants.push_back(mv);
             }
         }
-        if ((int)i7 != 0) {
-            for (int i = 0.0f; i < mSuperEasyVariants.size(); i++) {
+        if (i7 != 0) {
+            for (int i = 0; i < mSuperEasyVariants.size(); i++) {
                 MoveParent *parent = nullptr;
                 if (mSuperEasyVariants[i]) {
                     parent = mSuperEasyVariants[i]->Parent();
                 }
-                _ref1.push_back(parent);
+                mSuperEasyParents.push_back(parent);
             }
             BridgeGapsInMoveParents(3);
         }
@@ -199,7 +198,7 @@ void SuperEasyRemixer::SaveSuperEasyMoveParents() {
     }
     if (i7 == 0) {
         MILO_NOTIFY("Supereasy will use the easy track for '%s'", TheGameData->GetSong());
-        _ref1 = GetMoveParentsByDifficulty(kDifficultyEasy);
+        mSuperEasyParents = GetMoveParentsByDifficulty(kDifficultyEasy);
         mSuperEasyVariants = GetMoveVariantsByDifficulty(kDifficultyEasy);
     }
     mDataError = i7 == 0;
@@ -209,11 +208,11 @@ void SuperEasyRemixer::LoadAllVariants() {
     std::set<const MoveVariant *> vars;
     const char *song = TheGameData->GetSong().Str();
     if (TheMoveMgr->MoveParents().size() == 0) {
-        MILO_FAIL("Failed to load move graph for: %s\n", (char *)song);
+        MILO_FAIL("Failed to load move graph for: %s\n", song);
     }
     DataArray *layout = TheMoveMgr->Graph().Layout();
     if (!layout) {
-        MILO_FAIL("couldn't load layout for: %s", (char *)song);
+        MILO_FAIL("couldn't load layout for: %s", song);
     }
     for (int i = 0; i < 3; i++) {
         Symbol diffSym = DifficultyToSym((Difficulty)i);
@@ -243,9 +242,10 @@ void SuperEasyRemixer::LoadAllVariants() {
     HamSupereasyData *data = ObjDirItr<HamSupereasyData>(hamMoves, false);
     if (data) {
         for (int i = 0; i < data->mRoutine.size(); i++) {
-            Symbol name = data->mRoutine[i].second;
+            HamSupereasyMeasure &curMeasure = data->mRoutine[i];
+            Symbol name = curMeasure.second;
             if (name.Null())
-                name = data->mRoutine[i].first;
+                name = curMeasure.first;
             if (!InsertVariants(vars, name)) {
                 MILO_NOTIFY(
                     "%s's supereasy layout, at index %d, (%s) not found in move graph",

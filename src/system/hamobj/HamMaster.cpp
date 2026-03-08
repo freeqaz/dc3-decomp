@@ -2,8 +2,6 @@
 #include "HamAudio.h"
 #include "flow/PropertyEventProvider.h"
 #include "hamobj/HamSongData.h"
-#include "math/Decibels.h"
-#include "math/Vec.h"
 #include "midi/DataEventList.h"
 #include "midi/MidiParserMgr.h"
 #include "obj/Data.h"
@@ -15,7 +13,6 @@
 #include "synth/Faders.h"
 #include "synth/Synth.h"
 #include "utl/Loader.h"
-#include "utl/MakeString.h"
 #include "utl/SongPos.h"
 #include "utl/TimeConversion.h"
 
@@ -79,9 +76,9 @@ void HamMaster::Poll(float f1) {
 
 void HamMaster::Jump(float f1) {
     SongPos calcedPos = mSongData->CalcSongPos(this, f1);
-    SongPos tmp = mSongPos;
-    mPrevSongPos = tmp;
+    const SongPos &tmp = mSongPos;
     mSongPos = calcedPos;
+    mPrevSongPos = tmp;
     mLastBeatIndex = -1;
     mBeatCount = 0;
     if (mMidiParserMgr) {
@@ -253,102 +250,6 @@ void HamMaster::CheckBeat() {
         TheHamProvider->Export(msg, true);
     }
     mPrevSongPos = mSongPos;
-}
-
-void HamMaster::CheckLevels() {
-    if (!TheSynth)
-        return;
-
-    PropertyEventProvider *prov =
-        ObjectDir::Main()->Find<PropertyEventProvider>("audio_channels", false);
-    if (!prov)
-        return;
-
-    std::vector<LevelData> &levelData = TheSynth->GetLevelData();
-    int count = (int)levelData.size();
-    if (0 == count)
-        return;
-
-    float rightRMS = levelData[count - 1].mRMS;
-    float leftRMS = rightRMS;
-    if (count > 2) {
-        leftRMS = levelData[count - 2].mRMS;
-    }
-
-    auto _tmp3 = RatioToDb(rightRMS);
-    float leftLevel = (RatioToDb(leftRMS) + 96.0f) / 96.0f;
-    float rightLevel = (_tmp3 + 96.0f) / 96.0f;
-
-    // Clamp right to [0, 1]
-    float r = 0.0f;
-    if (-rightLevel < 0.0f)
-        r = rightLevel;
-    float rClamped = 1.0f;
-    if (r - 1.0f < 0.0f)
-        rClamped = r;
-
-    // Clamp left to [0, 1]
-    float l = 0.0f;
-    if (-leftLevel < 0.0f)
-        l = leftLevel;
-    float lClamped = 1.0f;
-    Vector2 v(lClamped, rClamped);
-
-    if (l - 1.0f < 0.0f)
-        lClamped = l;
-    mLevelHistory.push_back(v);
-
-    // Average all entries
-    float sumY = 0.0f;
-    float sumX = 0.0f;
-    for (std::list<Vector2>::iterator it = mLevelHistory.begin();
-         it != mLevelHistory.end(); ++it) {
-        sumX += it->x;
-        sumY += it->y;
-    }
-
-    int histCount = 0;
-    for (std::list<Vector2>::iterator it = mLevelHistory.begin();
-         it != mLevelHistory.end(); ++it) {
-        histCount++;
-    }
-
-    float avgX = (1.0f / (float)histCount) * sumX;
-    float avgY = (1.0f / (float)histCount) * sumY;
-
-    // Trim to < 4 entries
-    while (true) {
-        if (mLevelHistory.size() < 4)
-            break;
-        auto _tmp0 = mLevelHistory.begin();
-        mLevelHistory.erase(_tmp0);
-    }
-
-    // Build 8-channel weighted levels
-    float channels[8];
-
-    // Right channels (3 to 0, decaying)
-    float weight = 1.0f;
-    int i = 4;
-    do {
-        i--;
-        channels[i] = weight * avgX;
-        weight *= 0.7f;
-    } while (i != 0);
-
-    // Left channels (4 to 7, decaying)
-    i = 4;
-    weight = 1.0f;
-    do {
-        channels[i] = weight * avgY;
-        weight *= 0.7f;
-        i++;
-    } while (i < 8);
-
-    // Set properties on audio_channels provider
-    for (i = 0; i < 8; i++) {
-        prov->SetProperty(Symbol(MakeString("channel%d", i)), DataNode(channels[i]));
-    }
 }
 
 HamMasterLoader::HamMasterLoader(HamMaster *master)

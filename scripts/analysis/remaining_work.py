@@ -10,6 +10,7 @@ Usage:
     python3 scripts/analysis/remaining_work.py --symbols        # list all missing symbols with file paths
     python3 scripts/analysis/remaining_work.py --format json -s # JSON with full symbol details
     python3 scripts/analysis/remaining_work.py --min-bytes 1000 # only units with >1KB remaining
+    python3 scripts/analysis/remaining_work.py --symbols --max-percent 95  # stubs + partials ≤95%
 """
 import argparse
 import json
@@ -27,7 +28,7 @@ SKIP_UNITS = {
 SKIP_KEYWORDS = ("DepthBuffer",)
 
 
-def analyze_report(report_path: str, min_bytes: int = 500) -> dict:
+def analyze_report(report_path: str, min_bytes: int = 500, max_percent: float = 0.0) -> dict:
     with open(report_path) as f:
         report = json.load(f)
 
@@ -55,12 +56,13 @@ def analyze_report(report_path: str, min_bytes: int = 500) -> dict:
             size = int(func.get("size", 0))
             mangled = func.get("name", "")
             demangled = func.get("metadata", {}).get("demangled_name", "") or mangled
-            if pct is not None and pct == 100.0:
+            if pct is not None and pct > max_percent:
                 done += 1
             elif pct is not None and pct > 0.0:
                 partial += 1
+                stubs.append({"name": demangled, "mangled": mangled, "size": size, "pct": pct})
             else:
-                stubs.append({"name": demangled, "mangled": mangled, "size": size})
+                stubs.append({"name": demangled, "mangled": mangled, "size": size, "pct": 0.0})
 
         if not stubs:
             continue
@@ -185,7 +187,9 @@ def format_symbols(data: dict) -> str:
             lines.append("")
             for stub in info["all_stubs"]:
                 size_str = f"({stub['size']}B)"
-                lines.append(f"- {stub['name']} {size_str}")
+                pct = stub.get("pct", 0.0)
+                pct_str = f" [{pct:.1f}%]" if pct > 0.0 else ""
+                lines.append(f"- {stub['name']} {size_str}{pct_str}")
                 if stub["mangled"] != stub["name"]:
                     lines.append(f"  `{stub['mangled']}`")
             lines.append("")
@@ -252,6 +256,12 @@ def main():
         help="Max units shown per category in markdown (default: 5)",
     )
     parser.add_argument(
+        "--max-percent",
+        type=float,
+        default=0.0,
+        help="Include functions at or below this match%% (default: 0 = stubs only)",
+    )
+    parser.add_argument(
         "--symbols", "-s",
         action="store_true",
         help="List all unimplemented symbols per unit with file paths",
@@ -262,7 +272,7 @@ def main():
     )
     args = parser.parse_args()
 
-    data = analyze_report(args.report, min_bytes=args.min_bytes)
+    data = analyze_report(args.report, min_bytes=args.min_bytes, max_percent=args.max_percent)
 
     if args.format == "json":
         result = format_json(data, include_symbols=args.symbols)

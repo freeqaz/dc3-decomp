@@ -1,6 +1,5 @@
 #include "gesture/ArcDetector.h"
 #include "gesture/BaseSkeleton.h"
-#include "gesture/SkeletonViz.h"
 #include "os/Debug.h"
 #include "utl/Std.h"
 
@@ -30,7 +29,7 @@ void ArcDetector::Initialize(
 
 Vector3 ArcDetector::GetCurveStart() const {
     MILO_ASSERT(!mJointPath.empty(), 0xE9);
-    return Vector3((mSide == kSkeletonLeft ? 1 : -1) * mSwipeExtentX, mSwipeExtentY, 0.0f);
+    return Vector3((mSide) * mSwipeExtentX, mSwipeExtentY, 0);
 }
 
 void ArcDetector::Clear() {
@@ -80,61 +79,5 @@ void ArcDetector::CullPath() {
             }
         }
         mJointPath = other;
-    }
-}
-
-void ArcDetector::Draw(const Skeleton &skeleton, SkeletonViz &viz) {
-    unsigned int count = mJointPath.size();
-    if (0U != (int)count) {
-        std::list<Vector3> arcPath;
-        float f31 = 0.0f;
-        float f29 = 2.0f;
-        float f30 = 0.031415927f;
-        int i = 0;
-
-        do {
-            float f13 = mSwipeExtentX;
-            double temp_d = (double)i;
-            float f0 = (float)temp_d * f13 * f30;
-            float f12 = f13 * f0;
-            float comp = f12 * f29 - (f0 * f0);
-
-            if (!(comp > f31)) {
-                f13 = f31;
-            } else {
-                f13 = sqrtf(comp);
-            }
-
-            f13 = -f13;
-            int sign = ((-(0 - mSide)) & 2) - 1;
-            Vector3 vec(f0 * (float)sign, f31, f13);
-            arcPath.insert(arcPath.end(), vec);
-
-            i++;
-        } while (i < (unsigned int)100);
-
-        const TrackedJoint *joints = skeleton.TrackedJoints();
-        const Vector3 &jpos = joints[mPrimaryJoint].mJointPos[0];
-        Vector3 pos(
-            jpos.x + mArcOffset.x,
-            jpos.z + mArcOffset.z,
-            jpos.y + mArcOffset.y
-        );
-
-        std::list<Vector3> path1(arcPath);
-        DrawPath(path1, viz, Hmx::Color(0.0f, 1.0f, 1.0f, 1.0f), pos);
-        arcPath.clear();
-
-        const Vector3 &jpos2 = joints[mSecondaryJoint].mJointPos[0];
-        std::list<Vector3> path2(mJointPath);
-        DrawPath(path2, viz, Hmx::Color(1.0f, 0.0f, 1.0f, 1.0f), jpos2);
-    }
-}
-
-void ArcDetector::DrawPath(
-    const std::list<Vector3> &path, SkeletonViz &viz, Hmx::Color color, const Vector3 &offset
-) const {
-    for (std::list<Vector3>::const_iterator it = path.begin(); it != path.end(); ++it) {
-        viz.DrawPoint3D(Vector3(it->x + offset.x, it->y + offset.y, it->z + offset.z), 1.0f, color, 1.0f);
     }
 }

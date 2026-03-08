@@ -2,25 +2,25 @@
 #include "os/Debug.h"
 
 const BoneJoints BaseSkeleton::sBones[] = {
-    { kJointHead, kJointShoulderCenter, kBoneHead },
-    { kJointShoulderCenter, kJointShoulderRight, kBoneCollarRight },
-    { kJointShoulderRight, kJointElbowRight, kBoneArmUpperRight },
-    { kJointElbowRight, kJointWristRight, kBoneArmLowerRight },
-    { kJointWristRight, kJointHandRight, kBoneHandRight },
-    { kJointShoulderCenter, kJointShoulderLeft, kBoneCollarLeft },
-    { kJointShoulderLeft, kJointElbowLeft, kBoneArmUpperLeft },
-    { kJointElbowLeft, kJointWristLeft, kBoneArmLowerLeft },
-    { kJointWristLeft, kJointHandLeft, kBoneHandLeft },
-    { kJointHipRight, kJointKneeRight, kBoneLegUpperRight },
-    { kJointKneeRight, kJointAnkleRight, kBoneLegLowerRight },
-    { kJointHipLeft, kJointKneeLeft, kBoneLegUpperLeft },
-    { kJointKneeLeft, kJointAnkleLeft, kBoneLegLowerLeft },
-    { kJointShoulderCenter, kJointSpine, kBoneBackUpper },
-    { kJointSpine, kJointHipCenter, kBoneBackLower },
-    { kJointHipRight, kJointHipCenter, kBoneHipRight },
-    { kJointHipCenter, kJointHipLeft, kBoneHipLeft },
-    { kJointAnkleLeft, kJointFootLeft, kBoneFootLeft },
-    { kJointAnkleRight, kJointFootRight, kBoneFootRight }
+    { kBoneHead, kJointHead, kJointShoulderCenter },
+    { kBoneCollarRight, kJointShoulderCenter, kJointShoulderRight },
+    { kBoneArmUpperRight, kJointShoulderRight, kJointElbowRight },
+    { kBoneArmLowerRight, kJointElbowRight, kJointWristRight },
+    { kBoneHandRight, kJointWristRight, kJointHandRight },
+    { kBoneCollarLeft, kJointShoulderCenter, kJointShoulderLeft },
+    { kBoneArmUpperLeft, kJointShoulderLeft, kJointElbowLeft },
+    { kBoneArmLowerLeft, kJointElbowLeft, kJointWristLeft },
+    { kBoneHandLeft, kJointWristLeft, kJointHandLeft },
+    { kBoneLegUpperRight, kJointHipRight, kJointKneeRight },
+    { kBoneLegLowerRight, kJointKneeRight, kJointAnkleRight },
+    { kBoneLegUpperLeft, kJointHipLeft, kJointKneeLeft },
+    { kBoneLegLowerLeft, kJointKneeLeft, kJointAnkleLeft },
+    { kBoneBackUpper, kJointShoulderCenter, kJointSpine },
+    { kBoneBackLower, kJointSpine, kJointHipCenter },
+    { kBoneHipRight, kJointHipRight, kJointHipCenter },
+    { kBoneHipLeft, kJointHipCenter, kJointHipLeft },
+    { kBoneFootLeft, kJointAnkleLeft, kJointFootLeft },
+    { kBoneFootRight, kJointAnkleRight, kJointFootRight }
 };
 
 const SkeletonJoint BaseSkeleton::sJointParents[] = {

@@ -1293,8 +1293,9 @@ class DecompMCPServer:
             symbol = demangled
 
         # Determine which project directory to use
-        # - If agent passes project_dir (e.g., its worktree), use that
-        # - Otherwise use main repo (for orchestrator calls or main repo usage)
+        # Priority: explicit project_dir arg > REPO_ROOT env var > main repo fallback
+        # REPO_ROOT is set by agent_runner.py to the agent's worktree, ensuring
+        # builds test the agent's edits even if project_dir is omitted.
         if project_dir_arg:
             project_dir = Path(project_dir_arg)
             if not project_dir.exists():
@@ -1302,6 +1303,8 @@ class DecompMCPServer:
                     type="text",
                     text=f"Error: project_dir does not exist: {project_dir}"
                 )]
+        elif os.environ.get("REPO_ROOT"):
+            project_dir = Path(os.environ["REPO_ROOT"])
         else:
             project_dir = self.project_root
 
@@ -1531,8 +1534,9 @@ class DecompMCPServer:
             symbol = demangled
 
         # Determine which project directory to use
-        # - If agent passes project_dir (e.g., its worktree), use that
-        # - Otherwise use main repo (for orchestrator calls or main repo usage)
+        # Priority: explicit project_dir arg > REPO_ROOT env var > main repo fallback
+        # REPO_ROOT is set by agent_runner.py to the agent's worktree, ensuring
+        # builds test the agent's edits even if project_dir is omitted.
         if project_dir_arg:
             project_dir = Path(project_dir_arg)
             if not project_dir.exists():
@@ -1540,6 +1544,8 @@ class DecompMCPServer:
                     type="text",
                     text=f"Error: project_dir does not exist: {project_dir}"
                 )]
+        elif os.environ.get("REPO_ROOT"):
+            project_dir = Path(os.environ["REPO_ROOT"])
         else:
             project_dir = self.project_root
 

@@ -27,10 +27,12 @@
 #include "obj/Dir.h"
 #include "obj/Msg.h"
 #include "obj/Object.h"
+#include "obj/DirLoader.h"
 #include "obj/PropSync.h"
 #include "obj/Task.h"
 #include "obj/Utl.h"
 #include "os/Debug.h"
+#include "os/Joypad.h"
 #include "os/File.h"
 #include "os/System.h"
 #include "os/Timer.h"
@@ -112,8 +114,8 @@ float LoopVizCallback::UpdateOverlay(RndOverlay *o, float y) {
     mLoopEndChangeTimer -= TheTaskMgr.DeltaSeconds();
 
     // Draw semi-transparent background
-    auto bgColor = Hmx::Color(0.0f, 0, 0, 0.6f);
-    auto bgRect = Hmx::Rect(0.05f, 0.1f, 0.9f, 0.2f);
+    Hmx::Color bgColor(0.0f, 0, 0, 0.6f);
+    Hmx::Rect bgRect(0.05f, 0.1f, 0.9f, 0.2f);
     TheRnd.DrawRectScreen(
         bgRect, bgColor, nullptr, nullptr, nullptr
     );
@@ -504,6 +506,66 @@ void GamePanel::UpdateFitnessOverlay() {
             FormatTimeMSH(f1 * 1000.0f)
         );
     }
+}
+
+void GamePanel::UpdateLatency() {
+    static DataNode &latency_test = DataVariable("latency_test");
+    static DataNode &pad_button = DataVariable("pad_button");
+    if (latency_test.Int(nullptr) == 0) {
+        mLatencyOverlay->SetShowingOnly(false);
+        mLatencyOverlay->TimerRef().Restart();
+        return;
+    }
+    bool bFlash = false;
+    bool bJustPressed = false;
+    int joyNum = latency_test.Int(nullptr) - 2;
+    if (joyNum == -1) {
+        static int sFlashCnt = 0;
+        float f30 = (float)floor(TheTaskMgr.Beat() * 2.0f);
+        float beat2 = TheTaskMgr.Beat();
+        float delta = TheTaskMgr.DeltaBeat();
+        if (f30 != (float)floor((beat2 - delta) * 2.0f)) {
+            sFlashCnt = 3;
+        }
+        if (sFlashCnt > 0) {
+            bFlash = true;
+            sFlashCnt--;
+        }
+    } else {
+        static bool sLastBtn = false;
+        JoypadData *pad = JoypadGetPadData(joyNum);
+        if (pad != nullptr) {
+            bool pressed = ((1 << pad_button.Int(nullptr)) & pad->mButtons) != 0;
+            bFlash = pressed;
+            bJustPressed = pressed && !sLastBtn;
+            sLastBtn = pressed;
+        }
+    }
+    gGamePanelCallback.unk4 = bFlash;
+    if (bJustPressed) {
+        static Hmx::Object *sBeep = nullptr;
+        if (sBeep == nullptr) {
+            ObjectDir *dir;
+            {
+                FilePath path("test/latency.milo");
+                dir = DirLoader::LoadObjects(path, nullptr, nullptr);
+            }
+            sBeep = dir->Find<Hmx::Object>("beep.cue", true);
+        }
+        static Message sPlayMsg("play");
+        DataNode result = sBeep->Handle(sPlayMsg, true);
+    }
+    static int sToggle = 0;
+    static float sMs[2] = {0, 0};
+    int idx = sToggle;
+    sToggle = 1 - sToggle;
+    sMs[idx] = TheRnd.DrawMs();
+    mLatencyOverlay->SetShowingOnly(true);
+    mLatencyOverlay->TimerRef().Restart();
+    mLatencyOverlay->Clear();
+    float beat = TheTaskMgr.Beat();
+    *mLatencyOverlay << MakeString("Joy %d Beat %.3f\nms %.2f last %.2f", joyNum, beat, sMs[0], sMs[1]);
+    mLatencyOverlay->SetCallback(&gGamePanelCallback);
 }
 
 void GamePanel::StartIntro() {

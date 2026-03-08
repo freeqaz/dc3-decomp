@@ -11,19 +11,6 @@ RndTransAnim::RndTransAnim()
       mRotSpline(false), mRotKeys(), mTransKeys(), mScaleKeys(), mKeysOwner(this, this),
       mRepeatTrans(false), mFollowPath(false) {}
 
-bool RndTransAnim::Replace(ObjRef *ref, Hmx::Object *obj) {
-    if (&mKeysOwner == ref) {
-        RndTransAnim *ta;
-        if (mKeysOwner == this || !(ta = dynamic_cast<RndTransAnim *>(obj))) {
-            mKeysOwner.SetObjConcrete(this);
-        } else {
-            mKeysOwner.SetObjConcrete(ta->mKeysOwner.Ptr());
-        }
-        return true;
-    }
-    return Hmx::Object::Replace(ref, obj);
-}
-
 BEGIN_HANDLERS(RndTransAnim)
     HANDLE(trans, OnTrans)
     HANDLE(splice, OnSplice)
@@ -66,7 +53,7 @@ BEGIN_COPYS(RndTransAnim)
     COPY_SUPERCLASS(RndAnimatable)
     mTrans = t->mTrans;
     if (ty == kCopyShallow || ty == kCopyFromMax && t->mKeysOwner != t) {
-        mKeysOwner.SetObjConcrete(t->mKeysOwner);
+        mKeysOwner = t->mKeysOwner;
     } else {
         mKeysOwner = this;
         mTransKeys = t->mKeysOwner->mTransKeys;
@@ -102,14 +89,14 @@ BEGIN_LOADS(RndTransAnim)
         mKeysOwner = this;
     }
     if (d.rev < 3) {
-        unsigned int numKeys;
+        int numKeys;
         d >> numKeys;
         if (d.rev == 2 || numKeys != 0) {
             mTransKeys.resize(numKeys);
             FOREACH (it, mTransKeys) {
                 int i1, i2, i3;
                 Vector3 v1, v2;
-                d.stream >> it->value >> i1 >> i2 >> i3 >> v1 >> v2 >> it->frame;
+                d >> it->value >> i1 >> i2 >> i3 >> v1 >> v2 >> it->frame;
             }
         }
         d >> numKeys;
@@ -118,7 +105,7 @@ BEGIN_LOADS(RndTransAnim)
             FOREACH (it, mRotKeys) {
                 int i1, i2, i3;
                 Hmx::Quat v1, v2;
-                d.stream >> it->value >> i1 >> i2 >> i3 >> v1 >> v2 >> it->frame;
+                d >> it->value >> i1 >> i2 >> i3 >> v1 >> v2 >> it->frame;
             }
         }
         int c0;
@@ -139,14 +126,14 @@ BEGIN_LOADS(RndTransAnim)
             d >> mScaleKeys;
         }
         if (d.rev < 3) {
-            unsigned int numKeys;
+            int numKeys;
             d >> numKeys;
             if (d.rev == 2 || numKeys != 0) {
                 mScaleKeys.resize(numKeys);
                 FOREACH (it, mScaleKeys) {
                     int i1, i2, i3;
                     Vector3 v1, v2;
-                    d.stream >> it->value >> i1 >> i2 >> i3 >> v1 >> v2 >> it->frame;
+                    d >> it->value >> i1 >> i2 >> i3 >> v1 >> v2 >> it->frame;
                 }
             }
         }
@@ -292,7 +279,7 @@ void RndTransAnim::MakeTransform(float frame, Transform &tf, bool whole, float b
             MakeRotMatrix(q80, tf.m);
         } else if (whole)
             tf.m.Identity();
-        if (!mTransKeys.empty()) {
+        if (mFollowPath && !mTransKeys.empty()) {
             if (!mRotKeys.empty()) {
                 MakeRotMatrix(v4c, tf.m.z, tf.m);
             } else {

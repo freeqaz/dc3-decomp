@@ -29,6 +29,7 @@
 #include "utl/DataPointMgr.h"
 #include "utl/JobMgr.h"
 #include "utl/Locale.h"
+#include "utl/Std.h"
 #include "utl/Symbol.h"
 #include <cstdlib>
 
@@ -101,11 +102,7 @@ PartyModePlayer::PartyModePlayer(PartyModeARObject *obj) : mARObject(obj), mScor
 }
 
 PartyModePlayer::~PartyModePlayer() {
-    PartyModeARObject *obj = mARObject;
-    if (obj) {
-        delete obj;
-    }
-    mARObject = 0;
+    RELEASE(mARObject);
     mTitleArray->Release();
 }
 

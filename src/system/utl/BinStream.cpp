@@ -6,7 +6,6 @@
 #include "os/Endian.h"
 #include "os/Timer.h"
 #include <vector>
-#include <list>
 
 #define BUF_SIZE 512
 
@@ -159,20 +158,18 @@ int BinStream::PopRev(Hmx::Object *o) {
 }
 
 void BinStream::Read(void *data, int bytes) {
-    bool failed = Fail();
-    if (failed) {
+    if (Fail()) {
         MILO_NOTIFY_ONCE("Stream error: Can't read from %s", Name());
         memset(data, 0, bytes);
     } else {
-        AutoGlitchReport report(50.0f, "BinStream::Read");
-        unsigned char *ptr = (unsigned char *)data;
-        unsigned char *end;
+        AutoGlitchReport report(50.0f, __FUNCTION__);
         ReadImpl(data, bytes);
         if (mCrypto) {
-            end = ptr + bytes;
-            while (ptr < end) {
-                u8 bastard = mCrypto->Int();
-                *ptr++ ^= bastard;
+            for (unsigned char *ptr = (unsigned char *)data;
+                 ptr < (unsigned char *)data + bytes;
+                 ptr++) {
+                unsigned char cryptoInt = mCrypto->Int();
+                *ptr ^= cryptoInt;
             }
         }
     }
@@ -201,13 +198,8 @@ void BinStream::ReadEndian(void *out, int size) {
 void BinStream::ReadString(char *c, int i) {
     unsigned int a;
     *this >> a;
-    if (a >= i) {
+    if (a >= i)
         MILO_FAIL("String chars %d > %d", a + 1, i);
-#ifdef HX_NATIVE
-        fprintf(stderr, "BinStream::ReadString ABORT: len=%u > buf=%d at stream pos=%d\n", a, i, Tell());
-        abort();
-#endif
-    }
     Read(c, a);
     c[a] = 0;
 }

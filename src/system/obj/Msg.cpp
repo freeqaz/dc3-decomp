@@ -4,25 +4,23 @@
 #include "os/Debug.h"
 #include "utl/Str.h"
 #include "utl/Symbol.h"
-#include "world/CameraShot.h"
 
 Symbol MsgSinks::sCurrentExportEvent(gNullStr);
 
 Symbol MsgSinks::GetPropSyncHandler(DataArray *arr) {
     if (mPropSyncHandlers) {
-        int size = mPropSyncHandlers->Size();
-        for (int i = 0; i < size; i += 2) {
+        for (int i = 0; i < mPropSyncHandlers->Size(); i += 2) {
             DataArray *array = mPropSyncHandlers->Array(i);
             if (array->Size() == arr->Size()) {
                 bool ret = true;
                 for (int j = 0; j < array->Size(); j++) {
-                    if (array->UncheckedInt(j) == arr->UncheckedInt(j))
-                        continue;
-                    ret = false;
-                    break;
+                    if (array->UncheckedInt(j) != arr->UncheckedInt(j)) {
+                        ret = false;
+                        break;
+                    }
                 }
                 if (ret)
-                    return mPropSyncHandlers->Sym(i + 1);
+                    return mPropSyncHandlers->Sym(0);
             }
         }
     }
@@ -36,7 +34,7 @@ Symbol PathToEventName(DataArray *arr) {
         if (arr->Type(i) == kDataSymbol) {
             str += arr->LiteralSym(i).Str();
         } else {
-            str += MakeString("%i", (CamShotFrame::BlendEaseMode)arr->Int(i));
+            str += MakeString("%i", arr->Int(i));
         }
     }
     str += "_change";
@@ -47,7 +45,7 @@ bool MsgSinks::HasPropertySink(Hmx::Object *o, DataArray *a) {
     Symbol path = PathToEventName(a);
     if (mPropSyncHandlers) {
         for (int i = 1; i < mPropSyncHandlers->Size(); i += 2) {
-            if (path == mPropSyncHandlers->Sym(i)) {
+            if (path == a->Sym(i)) {
                 return true;
             }
         }
@@ -64,13 +62,6 @@ bool MsgSinks::HasSink(Hmx::Object *o) const {
     return false;
 }
 
-MsgSinks::EventSinkElem &
-MsgSinks::EventSinkElem::operator=(const EventSinkElem &other) {
-    Sink::operator=(other);
-    handler = other.handler;
-    return *this;
-}
-
 void MsgSinks::ChainEventSinks(Hmx::Object *from, Hmx::Object *to) {
     for (ObjList<EventSink>::const_iterator it = mEventSinks.begin();
          it != mEventSinks.end();
@@ -81,15 +72,13 @@ void MsgSinks::ChainEventSinks(Hmx::Object *from, Hmx::Object *to) {
     }
 }
 
-void MsgSinks::EventSink::Remove(Hmx::Object *o, bool exporting) {
+void MsgSinks::EventSink::Remove(Hmx::Object *o, bool b) {
     for (ObjList<EventSinkElem>::iterator it = sinks.begin(); it != sinks.end(); ++it) {
         if (it->obj == o) {
-            it->obj = nullptr;
-            // When exporting, null the pointer but keep the element in the list
-            if (exporting) {
-                return;
+            it->obj->Release(nullptr);
+            if (!b) {
+                sinks.erase(it);
             }
-            sinks.erase(it);
             return;
         }
     }
@@ -103,7 +92,8 @@ void MsgSinks::EventSink::Add(
     elem.mode = mode;
     elem.handler = s;
     if (b4) {
-        sinks.push_front(elem);
+        sinks.push_front();
+        sinks.front() = elem;
     } else {
         sinks.push_back(elem);
     }
@@ -149,14 +139,15 @@ void MsgSinks::AddSink(
         if (handler.Null())
             handler = ev;
         MILO_ASSERT((s != mOwner) || (handler != ev), 0xB9);
-        ObjList<EventSink>::iterator found;
-        for (found = mEventSinks.begin(); found != mEventSinks.end(); ++found) {
-            if (found->event == ev) {
-                if (chainProxy != found->chainProxy) {
+        for (ObjList<EventSink>::iterator it = mEventSinks.begin();
+             it != mEventSinks.end();
+             ++it) {
+            if (it->event == ev) {
+                if (chainProxy != it->chainProxy) {
                     MILO_NOTIFY("%s mismatched proxy chain for %s", PathName(mOwner), ev);
+                    mEventSinks.back().Add(s, mode, handler, mExporting);
+                    return;
                 }
-                found->Add(s, mode, handler, mExporting);
-                return;
             }
         }
         mEventSinks.push_back();
@@ -167,7 +158,7 @@ void MsgSinks::AddSink(
 }
 
 void MsgSinks::AddPropertySink(Hmx::Object *o, DataArray *a, Symbol s) {
-    GetPropSyncHandler(a);
+    Symbol handler = GetPropSyncHandler(a);
     Symbol path = PathToEventName(a);
     if (!mPropSyncHandlers) {
         mPropSyncHandlers = new DataArray(2);
@@ -178,157 +169,4 @@ void MsgSinks::AddPropertySink(Hmx::Object *o, DataArray *a, Symbol s) {
     mPropSyncHandlers->Node(mPropSyncHandlers->Size() - 2).LiteralArray()->Release();
     mPropSyncHandlers->Node(mPropSyncHandlers->Size() - 1) = path;
     AddSink(o, path, s, Hmx::Object::kHandle, false);
-}
-
-void MsgSinks::Sink::Export(DataArray *arr) {
-    switch (mode) {
-    case Hmx::Object::kHandle:
-        obj->Handle(arr, false);
-        break;
-    case Hmx::Object::kExport:
-        obj->Export(arr, false);
-        break;
-    case Hmx::Object::kType:
-        obj->HandleType(arr);
-        break;
-    case Hmx::Object::kExportType:
-        obj->Export(arr, true);
-        break;
-    }
-}
-
-void MsgSinks::Export(DataArray *arr) {
-    mExporting++;
-    for (ObjList<Sink>::iterator it = mSinks.begin(); it != mSinks.end();) {
-        if (it->obj != nullptr) {
-            it->Export(arr);
-            ++it;
-        } else {
-            if (mExporting == 1) {
-                it = mSinks.erase(it);
-            } else {
-                ++it;
-            }
-        }
-    }
-
-    Symbol oldExportEvent = sCurrentExportEvent;
-    sCurrentExportEvent = arr->Sym(1);
-    for (ObjList<EventSink>::iterator evIt = mEventSinks.begin();
-         evIt != mEventSinks.end(); ++evIt) {
-        if (evIt->event == arr->Sym(1)) {
-            DataNode origNode = arr->Node(1);
-            for (ObjList<EventSinkElem>::iterator sinkIt = evIt->sinks.begin();
-                 sinkIt != evIt->sinks.end();) {
-                if (sinkIt->obj != nullptr) {
-                    arr->Node(1) = DataNode(sinkIt->handler);
-                    sinkIt->Export(arr);
-                    ++sinkIt;
-                } else {
-                    if (mExporting == 1) {
-                        sinkIt = evIt->sinks.erase(sinkIt);
-                    } else {
-                        ++sinkIt;
-                    }
-                }
-            }
-            arr->Node(1) = origNode;
-            if (evIt->sinks.empty()) {
-                mEventSinks.erase(evIt);
-            }
-            break;
-        }
-    }
-
-    mExporting--;
-    sCurrentExportEvent = oldExportEvent;
-}
-
-void MsgSinks::RemoveSink(Hmx::Object *obj, Symbol ev) {
-    MILO_ASSERT(obj, 0x10A);
-    for (ObjList<Sink>::iterator it = mSinks.begin(); it != mSinks.end(); ++it) {
-        if (it->obj == obj) {
-            if (!ev.Null()) {
-                MILO_WARN(
-                    "%s: removing global to %s for event %s, all other events will be wiped out",
-                    PathName(mOwner), obj->Name(), ev
-                );
-            }
-            it->obj = nullptr;
-            if (!mExporting)
-                mSinks.erase(it);
-            return;
-        }
-    }
-    if (ev.Null()) {
-        for (ObjList<EventSink>::iterator it = mEventSinks.begin();
-             it != mEventSinks.end(); ++it) {
-            it->Remove(obj, mExporting != 0);
-        }
-    } else {
-        for (ObjList<EventSink>::iterator it = mEventSinks.begin();
-             it != mEventSinks.end(); ++it) {
-            if (it->event == ev) {
-                it->Remove(obj, mExporting != 0);
-                return;
-            }
-        }
-    }
-}
-
-void MsgSinks::RemovePropertySink(Hmx::Object *o, DataArray *a) {
-    Symbol path = PathToEventName(a);
-    RemoveSink(o, path);
-    if (mPropSyncHandlers) {
-        int i = 1;
-        if (i < mPropSyncHandlers->Size()) {
-            do {
-                if (path == mPropSyncHandlers->Sym(i)) {
-                    mPropSyncHandlers->Remove(i);
-                    mPropSyncHandlers->Remove(i - 1);
-                    return;
-                }
-                i += 2;
-            } while (i < mPropSyncHandlers->Size());
-        }
-    }
-    MILO_NOTIFY_ONCE(
-        "Property Sink not in the list! %s -> %s", PathName(mOwner), PathName(o)
-    );
-}
-
-void MsgSinks::MergeSinks(Hmx::Object *from) {
-    MsgSinks *fromSinks = from->Sinks();
-    if (!(int)fromSinks) return;
-    for (ObjList<Sink>::iterator it = fromSinks->mSinks.begin();
-         it != fromSinks->mSinks.end(); ++it) {
-        AddSink(it->obj, Symbol(), Symbol(), it->mode, true);
-    }
-    for (ObjList<EventSink>::iterator evIt = fromSinks->mEventSinks.begin();
-         evIt != fromSinks->mEventSinks.end(); ++evIt) {
-        for (ObjList<EventSinkElem>::iterator elemIt = evIt->sinks.begin();
-             elemIt != evIt->sinks.end(); ++elemIt) {
-            AddSink(elemIt->obj, evIt->event, elemIt->handler, elemIt->mode, true);
-        }
-    }
-}
-
-bool MsgSinks::Replace(ObjRef *ref, Hmx::Object *obj) {
-    for (ObjList<Sink>::iterator it = mSinks.begin(); it != mSinks.end(); ++it) {
-        if (&it->obj == ref) {
-            mSinks.erase(it);
-            return true;
-        }
-    }
-    for (ObjList<EventSink>::iterator evIt = mEventSinks.begin();
-         evIt != mEventSinks.end(); ++evIt) {
-        for (ObjList<EventSinkElem>::iterator sinkIt = evIt->sinks.begin();
-             sinkIt != evIt->sinks.end(); ++sinkIt) {
-            if (&sinkIt->obj == ref) {
-                evIt->sinks.erase(sinkIt);
-                return true;
-            }
-        }
-    }
-    return false;
 }

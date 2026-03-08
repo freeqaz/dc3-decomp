@@ -22,7 +22,6 @@
 #include "utl/Loader.h"
 #include "utl/Locale.h"
 #include "utl/Str.h"
-#include "utl/SuperFormatString.h"
 #include "utl/Symbol.h"
 #include "utl/UTF8.h"
 #include <cstring>
@@ -457,15 +456,15 @@ void UILabel::Highlight() {
     RndTransformable::Highlight();
     Box box;
     GetWidthHeightBox(box);
-    Hmx::Color color(1.0f, 1.0f, 0.5f, 1.0f);
+    Hmx::Color c(1.0f, 1.0f, 0.5f);
     if (!CheckValid(false)) {
         int secs = TheTaskMgr.UISeconds() * 2.0f;
-        if (!(secs % 2)) {
-            color.Set(1.0f, 0.2f, 0.2f, 1.0f);
+        if (secs < 0) {
+            c.Set(1.0f, 0.2f, 0.2f, 1.0f);
         }
     }
     RndText::Highlight();
-    UtilDrawBox(WorldXfm(), box, color, false);
+    UtilDrawBox(WorldXfm(), box, c, false);
 }
 
 void UILabel::SetTextToken(Symbol s) {
@@ -684,8 +683,6 @@ void UILabel::Init() {
     UILabelDir::Init();
 }
 
-void UILabel::Terminate() {}
-
 bool UILabel::AllowEditText() const {
 #ifdef HX_NATIVE
     if (TheUI && TheUI->DefaultAllowEditText()) {
@@ -773,38 +770,6 @@ void UILabel::RefreshFontMat(int i) {
     }
 }
 
-void UILabel::SetTokenFmtImp(
-    Symbol s, const DataArray *da1, const DataArray *da2, int i, bool b
-) {
-    mTextToken = s;
-    if (mTextToken.Null()) {
-        SetDisplayText(gNullStr, true);
-    } else {
-        bool found;
-        const char *localized = Localize(mTextToken, &found, TheLocale);
-        if (found) {
-            SuperFormatString str(localized, da1, b, TheLocale, gNullStr);
-            if (da2) {
-                int size = da2->Size();
-                if (size > i) {
-                    do {
-                        const DataNode &n = da2->Evaluate(i);
-                        if (n.Type() == kDataSymbol) {
-                            str << Localize(n.Sym(da2), 0, TheLocale);
-                        } else {
-                            str << n;
-                        }
-                        i++;
-                    } while (i < size);
-                }
-            }
-            SetDisplayText(str.FinalStr(), false);
-        } else {
-            SetDisplayText(localized, false);
-        }
-    }
-}
-
 DataNode UILabel::OnSetPrelocalizedString(const DataArray *a) {
     const DataNode &stringNode = a->Evaluate(2);
     MILO_ASSERT(stringNode.Type() == kDataString, 0x386);
@@ -869,31 +834,4 @@ DataNode UILabel::OnSetHeightFromText(DataArray *a) {
         );
     }
     return 0;
-}
-
-float GetTextSizeFromPctHeight(float f) {
-    if (TheLoadMgr.EditMode()) {
-        float depth = -TheUI->GetCam()->LocalXfm().v.y;
-        Vector2 v2a(0.0f, 0.0f);
-        Vector3 v3a;
-        TheUI->GetCam()->ScreenToWorld(v2a, depth, v3a);
-        Vector2 v2b(0.0f, f);
-        Vector3 v3b;
-        TheUI->GetCam()->ScreenToWorld(v2b, depth, v3b);
-        return std::fabs(v3a.z - v3b.z);
-    } else
-        return f;
-}
-
-float GetPctHeightFromTextSize(float f) {
-    if (TheLoadMgr.EditMode()) {
-        Vector3 v3a(0.0f, 0.0f, 0.0f);
-        Vector2 v2a;
-        TheUI->GetCam()->WorldToScreen(v3a, v2a);
-        Vector3 v3b(0.0f, 0.0f, -f);
-        Vector2 v2b;
-        TheUI->GetCam()->WorldToScreen(v3b, v2b);
-        return std::fabs(v2a.y - v2b.y);
-    } else
-        return f;
 }

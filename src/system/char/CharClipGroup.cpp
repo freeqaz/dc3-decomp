@@ -16,7 +16,7 @@ namespace stlpmtx_std {
 #endif
 
 CharClipGroup::CharClipGroup()
-    : mClips(this, (EraseMode)1), mWhich(0), mLRUBoundary(0), mFlags(0) {}
+    : mClips(this, (EraseMode)1), mWhich(0), unk24(0), mFlags(0) {}
 
 BEGIN_HANDLERS(CharClipGroup)
     HANDLE_EXPR(get_clip, GetClip(0))
@@ -87,16 +87,11 @@ bool CharClipGroup::HasClip(CharClip *clip) const {
     return mClips.find(clip) != mClips.end();
 }
 
-// Generates a random index for shuffling clips in the range [pos, end).
-// When end < pos (wrapping case), the range extends from pos to array end, then wraps to 0..end.
-// Returns the selected index, wrapped back into [0, size) bounds if needed.
 int CharClipGroup::QueueRandom(int pos, int end) const {
     int diff = end - pos;
-    // Handle wrap-around: if end < pos, range includes tail + head of array
     int range = (diff < 0 ? mClips.size() : 0) + diff;
     int result = Rand::sRand.FastInt(0, range) + pos;
     int size = mClips.size();
-    // Modulo operation: wrap result back into valid array bounds
     return result - ((result >= size) ? size : 0);
 }
 
@@ -109,12 +104,12 @@ CharClip *CharClipGroup::GetClip(int flags) {
         mWhich = mClips.size() - 1;
     }
 
-    if (mLRUBoundary >= mClips.size()) {
-        mLRUBoundary = mClips.size() - 1;
+    if (unk24 >= mClips.size()) {
+        unk24 = mClips.size() - 1;
     }
 
     int origWhich = mWhich;
-    int origUnk24 = mLRUBoundary;
+    int origUnk24 = unk24;
 
     int pos = mWhich + 1;
     pos -= (pos >= mClips.size()) ? mClips.size() : 0;
@@ -129,7 +124,7 @@ CharClip *CharClipGroup::GetClip(int flags) {
                 mClips.swap(pos, mWhich);
                 int newUnk24 = origUnk24 + 1;
                 newUnk24 -= (newUnk24 >= mClips.size()) ? mClips.size() : 0;
-                mLRUBoundary = newUnk24;
+                unk24 = newUnk24;
                 return clip;
             }
             pos++;
@@ -145,7 +140,7 @@ CharClip *CharClipGroup::GetClip(int flags) {
             clip = mClips[pos];
             if ((clip->Flags() & flags) == flags) {
                 mClips.swap(pos, mWhich);
-                mClips.swap(pos, mLRUBoundary);
+                mClips.swap(pos, unk24);
                 goto updateBoundary;
             }
             pos++;
@@ -156,11 +151,11 @@ CharClip *CharClipGroup::GetClip(int flags) {
     clip = mClips[pos];
     if ((clip->Flags() & flags) == flags) {
         mClips.swap(pos, mWhich);
-        mClips.swap(pos, mLRUBoundary);
+        mClips.swap(pos, unk24);
     updateBoundary:;
-        int newUnk24 = mLRUBoundary + 1;
+        int newUnk24 = unk24 + 1;
         newUnk24 -= (newUnk24 >= mClips.size()) ? mClips.size() : 0;
-        mLRUBoundary = newUnk24;
+        unk24 = newUnk24;
         return clip;
     }
 

@@ -208,7 +208,10 @@ class AgentRunner:
         mcp_config: McpStdioServerConfig = {
             "command": "python3",
             "args": ["-m", "scripts.orchestrator.mcp_server", "--db", str(self.db_path), "--no-record-attempts"],
-            "env": {"PYTHONPATH": str(self.main_repo)},
+            "env": {
+                "PYTHONPATH": str(self.main_repo),
+                "REPO_ROOT": str(config.worktree),  # So MCP tools default to worktree builds
+            },
         }
 
         tools = config.effective_tools

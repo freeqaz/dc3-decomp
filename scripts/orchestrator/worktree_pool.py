@@ -183,6 +183,9 @@ class WorktreePool:
                             shutil.copy2(src, dst)
                             print(f"  Copied file: {copy_name}")
 
+            # Regenerate build.ninja with absolute tool paths
+            self._regenerate_build_ninja(worktree_path)
+
             # Write empty .mcp.json to prevent name collisions with SDK mcp_servers
             self._write_agent_mcp_json(worktree_path)
 
@@ -259,6 +262,47 @@ class WorktreePool:
         mcp_json_path = worktree_path / ".mcp.json"
         with open(mcp_json_path, "w") as f:
             json.dump({"mcpServers": {}}, f)
+
+    def _regenerate_build_ninja(self, worktree_path: Path) -> None:
+        """Regenerate build.ninja with absolute tool paths.
+
+        The main repo's build.ninja may use relative paths (../jeff/...) that
+        break when copied to worktrees in /tmp/. Mirrors setup_worktree.sh by
+        running configure.py with absolute paths to dtk, objdiff-cli, and wibo.
+        """
+        tool_dir = self.main_repo.parent  # e.g., /home/user/code/milohax
+        dtk = tool_dir / "jeff" / "target" / "release" / "dtk"
+        objdiff = tool_dir / "objdiff" / "target" / "release" / "objdiff-cli"
+        wibo = tool_dir / "wibo" / "build" / "release" / "wibo"
+
+        # Only regenerate if configure.py exists and tools are available
+        configure_py = worktree_path / "configure.py"
+        if not configure_py.exists():
+            logger.warning(f"configure.py not found in {worktree_path}")
+            return
+
+        missing = [str(t) for t in [dtk, objdiff, wibo] if not t.exists()]
+        if missing:
+            logger.warning(f"Skipping build.ninja regen — missing tools: {missing}")
+            return
+
+        try:
+            result = subprocess.run(
+                [
+                    "python3", str(configure_py),
+                    "--dtk", str(dtk),
+                    "--objdiff", str(objdiff),
+                    "--wibo", str(wibo),
+                ],
+                cwd=worktree_path,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if result.returncode != 0:
+                logger.warning(f"configure.py failed: {result.stderr[:200]}")
+        except Exception as e:
+            logger.warning(f"Failed to regenerate build.ninja: {e}")
 
     def _refresh_tools(self, worktree_path: Path) -> None:
         """Re-copy tool directories from main repo to keep worktree in sync."""
@@ -427,6 +471,12 @@ class WorktreePool:
 
         # Refresh tool directories from main repo so worktrees stay in sync
         self._refresh_tools(worktree_path)
+
+        # Regenerate build.ninja with absolute tool paths.
+        # The main repo's build.ninja uses relative paths (../jeff/...) that
+        # don't resolve from worktrees in /tmp/. Re-running configure.py with
+        # absolute paths makes ninja work from any location.
+        self._regenerate_build_ninja(worktree_path)
 
         # Write empty .mcp.json to prevent name collisions with SDK mcp_servers
         self._write_agent_mcp_json(worktree_path)

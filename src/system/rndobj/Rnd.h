@@ -160,6 +160,7 @@ public:
     RndMat *OverlayMat() const { return mOverlayMat; }
     bool ResourceCached() const { return mResourceCached; }
     bool VerboseTimers() const { return mVerboseTimers; }
+    float DrawMs() { return mDrawTimer.GetLastMs(); }
     void ShowConsole(bool);
     bool ConsoleShowing();
     void EndWorld();

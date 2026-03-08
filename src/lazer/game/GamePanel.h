@@ -103,6 +103,8 @@ public:
     virtual ~LatencyCallback() {}
     virtual float UpdateOverlay(RndOverlay *o, float y);
 
+    friend class GamePanel;
+
 private:
     bool unk4;
 };

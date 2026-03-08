@@ -113,7 +113,7 @@ void UIListSlot::Draw(
                 tfa8 = tf78;
                 if (ParentList())
                     ParentList()->AdjustTrans(tfa8, curdrawstate);
-                CalcXfm(ctf, curdrawstate.mPos, tfa8);
+                CalcXfm(ctf, *(Vector3 *)&curdrawstate.mPosX, tfa8);
                 if (cmd != kExcludeFirst || i > 0) {
                     mElements[i]->Draw(tfa8, d10, uicolor, box);
                 }

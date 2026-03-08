@@ -153,8 +153,3 @@ void SynthEmitter::CheckLoadResources() {
         MILO_ASSERT(gIconDir, 0x8C);
     }
 }
-
-#ifdef HX_NATIVE
-// TODO: 3D sound positioning and math
-void SynthEmitter::Poll() {}
-#endif

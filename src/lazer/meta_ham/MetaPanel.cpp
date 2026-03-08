@@ -7,7 +7,6 @@
 #include "hamobj/HamMaster.h"
 #include "hamobj/HamSongData.h"
 #include "macros.h"
-#include "math/Rand.h"
 #include "meta/CreditsPanel.h"
 #include "meta/HAQManager.h"
 #include "meta/MemcardMgr.h"
@@ -88,42 +87,23 @@
 #include "utl/TimeConversion.h"
 #include <cstring>
 
-SongDB *MetaPanel::sSongDB = nullptr;
-HamMaster *MetaPanel::sHamMaster = nullptr;
-
 MetaPanel::MetaPanel() : mLoopHistoryCursor(0), mSongPreview(TheHamSongMgr), mXMPPlaying(false) {
-#ifdef HX_NATIVE
-    mMetaMusicManager = nullptr;
-    mCampaign = nullptr;
-    mHAQManager = nullptr;
-#else
     mMetaMusicManager = new MetaMusicManager(SystemConfig("synth", "metamusic"));
     mCampaign = new Campaign(SystemConfig("campaign"));
     mHAQManager = new HAQManager();
-#endif
-    auto& songPreview = mSongPreview;
-    songPreview.SetName("song_preview", ObjectDir::Main());
-#ifndef HX_NATIVE
-    SongSortMgr::Init(songPreview);
-    ChallengeSortMgr::Init(songPreview);
-    PlaylistSortMgr::Init(songPreview);
-    MQSongSortMgr::Init(songPreview);
-    FitnessCalorieSortMgr::Init(songPreview);
-#endif
+    mSongPreview.SetName("song_preview", ObjectDir::Main());
+    SongSortMgr::Init(mSongPreview);
+    ChallengeSortMgr::Init(mSongPreview);
+    PlaylistSortMgr::Init(mSongPreview);
+    MQSongSortMgr::Init(mSongPreview);
+    FitnessCalorieSortMgr::Init(mSongPreview);
     mLoopHistory.reserve(3);
     for (int i = 3; i != 0; i--) {
         mLoopHistory.push_back(-1);
     }
     ThePlatformMgr.AddSink(this, "xmp_state_changed");
-#ifdef HX_NATIVE
-    // SongDB/HamMaster init requires song MIDI data from ark
-    // Skip for now — MetaMusic will be null-guarded
-    sSongDB = nullptr;
-    sHamMaster = nullptr;
-#else
     sSongDB = new SongDB();
     sHamMaster = new HamMaster(sSongDB->SongData(), nullptr);
-#endif
 }
 
 MetaPanel::~MetaPanel() {
@@ -175,19 +155,15 @@ void MetaPanel::Init() {
     REGISTER_OBJ_FACTORY(SongSelectPanel)
     REGISTER_OBJ_FACTORY(SongSelectPlaylistCustomizePanel)
     REGISTER_OBJ_FACTORY(SongSelectPlaylistPanel)
-#ifndef HX_NATIVE
     SongStatusMgr::Init();
-#endif
     REGISTER_OBJ_FACTORY(TexLoadPanel)
     REGISTER_OBJ_FACTORY(Hmx::Object)
-#ifndef HX_NATIVE
     TheMemcardMgr.Init();
     MetagameRank::Preinit();
     TheProfileMgr.Init();
     Leaderboards::Init();
     Challenges::Init();
     FitnessGoalMgr::Init();
-#endif
     REGISTER_OBJ_FACTORY(HamStarsDisplay)
     REGISTER_OBJ_FACTORY(WeightInputPanel)
     REGISTER_OBJ_FACTORY(AppNavProvider)
@@ -202,28 +178,6 @@ void MetaPanel::Init() {
     DataRegisterFunc("toggle_motd_cheat", ToggleMotdCheat);
 }
 
-int MetaPanel::PickLoopIndex(int numEntries) {
-    int vecSize = mLoopHistory.size();
-    int idx = RandomInt(1, numEntries);
-    if (numEntries >= vecSize + 2) {
-        for (;;) {
-            int i = 0;
-            for (; i < vecSize; i++) {
-                if (idx == mLoopHistory[i])
-                    break;
-            }
-            if (i == vecSize)
-                break;
-            idx = RandomInt(1, numEntries);
-        }
-        mLoopHistory[mLoopHistoryCursor++] = idx;
-        if (mLoopHistoryCursor == vecSize) {
-            mLoopHistoryCursor = 0;
-        }
-    }
-    return idx;
-}
-
 void MetaPanel::Load() {
     if (TheUI && TheUI->BottomScreen()) {
         if (strcmp(TheUI->BottomScreen()->Name(), "game_screen") == 0) {
@@ -236,9 +190,6 @@ void MetaPanel::Load() {
     int loopIndex = PickLoopIndex(sysConfig->Size());
     DataArray *loopArray = sysConfig->Array(loopIndex);
     if (!TheMetaMusic) {
-#ifdef HX_NATIVE
-        if (!sHamMaster) return;
-#endif
         TheMetaMusic = new MetaMusic(sHamMaster, "sfx/shell_fx.milo");
         TheMetaMusic->Load(0.0f, true, true);
         sHamMaster->Load(
@@ -273,11 +224,7 @@ void MetaPanel::FinishLoad() {
         }
     }
     UIPanel::FinishLoad();
-#ifdef HX_NATIVE
-    if (!TheMetaMusic) return;
-#endif
-    auto bgMusicFader = TheSynth->Find<Fader>("background_music_level.fade", true);
-    TheMetaMusic->AddFader(bgMusicFader);
+    TheMetaMusic->AddFader(TheSynth->Find<Fader>("background_music_level.fade", true));
 }
 
 bool MetaPanel::IsLoaded() const {
@@ -286,9 +233,6 @@ bool MetaPanel::IsLoaded() const {
             return true;
         }
     }
-#ifdef HX_NATIVE
-    if (!TheMetaMusic) return UIPanel::IsLoaded();
-#endif
     return UIPanel::IsLoaded() && TheMetaMusic->Loaded();
 }
 
@@ -300,14 +244,11 @@ void MetaPanel::Poll() {
     }
     UIPanel::Poll();
     mSongPreview.Poll();
-#ifdef HX_NATIVE
-    if (!TheMetaMusic || !sHamMaster) return;
-#endif
     MILO_ASSERT(TheMetaMusic, 0x176);
     TheMetaMusic->Poll();
-    float beat = MsToBeat(sHamMaster->StreamMs());
-    if (beat > 0.0f) {
-        TheTaskMgr.SetSecondsAndBeat(sHamMaster->StreamMs() * 0.001f, beat, false);
+    if (MsToBeat(sHamMaster->StreamMs()) > 0.0f) {
+        float f = sHamMaster->StreamMs();
+        TheTaskMgr.SetSecondsAndBeat(f * 0.001f, 0, false);
     }
 }
 
@@ -318,9 +259,6 @@ void MetaPanel::Enter() {
         }
     }
     UIPanel::Enter();
-#ifdef HX_NATIVE
-    if (!sHamMaster) return;
-#endif
     sHamMaster->SetMaps();
     TheTaskMgr.SetAutoSecondsBeats(true);
 }
@@ -333,9 +271,6 @@ void MetaPanel::Exit() {
     }
     UIPanel::Exit();
     mSongPreview.Start(gNullStr, nullptr);
-#ifdef HX_NATIVE
-    if (TheMetaMusic)
-#endif
     TheMetaMusic->Stop();
     ThePlatformMgr.DisableXMP();
 }
@@ -349,17 +284,14 @@ bool MetaPanel::Exiting() const {
     if (mState != 2) {
         return UIPanel::Exiting();
     }
-    bool ret = mSongPreview.IsWaitingToDelete() || mSongPreview.IsFadingOut() ||
-#ifdef HX_NATIVE
-        (TheMetaMusic && TheMetaMusic->IsActive()) ||
-#else
-        TheMetaMusic->IsActive() ||
-#endif
-        UIPanel::Exiting();
-    if (!ret) {
-        TheTaskMgr.SetAutoSecondsBeats(true);
+    if (mSongPreview.IsWaitingToDelete() || mSongPreview.IsFadingOut() || TheMetaMusic->IsActive()) {
+        if (!UIPanel::Exiting()) {
+            TheTaskMgr.SetAutoSecondsBeats(true);
+            return UIPanel::Exiting();
+        }
+        return true;
     }
-    return ret;
+    return false;
 }
 
 void MetaPanel::UnlockClassicOutfit(Symbol s) {
@@ -414,18 +346,17 @@ void MetaPanel::CycleVenuePreference() {
         MILO_ASSERT(pVenueEntryArray, 0x76);
         venuePref = pVenueEntryArray->Sym(0);
     } else {
-        auto venueCount = pVenueArray->Size();
-        for (int i = 1; i < venueCount; i++) {
+        for (int i = 1; i < pVenueArray->Size(); i++) {
             DataArray *pVenueEntryArray = pVenueArray->Array(i);
             MILO_ASSERT(pVenueEntryArray, 0x80);
-            Symbol entrySym = pVenueEntryArray->Sym(0);
-            if (entrySym == venuePref) {
-                if (i + 1 >= pVenueArray->Size()) {
-                    venuePref = random_venue;
-                } else {
-                    DataArray *pVenueEntryArray = pVenueArray->Array(i + 1);
-                    MILO_ASSERT(pVenueEntryArray, 0x8f);
-                    venuePref = pVenueEntryArray->Sym(0);
+            if (pVenueEntryArray->Sym(0) == venuePref) {
+                venuePref = random_venue;
+                if (i + 1 < pVenueArray->Size()) {
+                    pVenueEntryArray = pVenueArray->Array(i + 1);
+                    if (!pVenueEntryArray) {
+                        MILO_ASSERT(pVenueEntryArray, 0x8f);
+                        venuePref = pVenueEntryArray->Sym(0);
+                    }
                 }
                 break;
             }
@@ -436,22 +367,12 @@ void MetaPanel::CycleVenuePreference() {
 
 BEGIN_HANDLERS(MetaPanel)
     HANDLE_EXPR(meta_music, TheMetaMusic)
-#ifdef HX_NATIVE
-    HANDLE_ACTION_IF(
-        load_meta_music,
-        sHamMaster && TheMetaMusic,
-        sHamMaster->Load(
-            TheMetaMusic->SongInfo(), true, 0, false, (HamSongDataValidate)0, 0
-        )
-    )
-#else
     HANDLE_ACTION(
         load_meta_music,
         sHamMaster->Load(
             TheMetaMusic->SongInfo(), true, 0, false, (HamSongDataValidate)0, 0
         )
     )
-#endif
     HANDLE_ACTION(init_songpreview, mSongPreview.Init())
     HANDLE_ACTION(unlock_all, UnlockAll())
     HANDLE_ACTION(unlock_classic, UnlockClassicOutfit(_msg->Sym(2)))

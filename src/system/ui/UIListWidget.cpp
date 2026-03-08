@@ -9,8 +9,6 @@
 
 float UIListWidget::DrawOrder() const { return mDrawOrder; }
 
-void UIListWidget::ResourceCopy(const UIListWidget *w) { Copy(w, kCopyShallow); }
-
 void UIListWidget::CalcXfm(const Transform &tfin, const Vector3 &vin, Transform &out) {
     out.v.x += vin.x;
     out.v.y += vin.y;
@@ -64,10 +62,6 @@ void UIListWidget::SetColor(UIListWidgetState ws, UIComponent::State cs, UIColor
     ObjPtr<UIColor> &theColor = mColors[ws][cs];
     theColor = color;
 }
-
-BEGIN_HANDLERS(UIListWidget)
-    HANDLE_SUPERCLASS(Hmx::Object)
-END_HANDLERS
 
 BEGIN_PROPSYNCS(UIListWidget)
     SYNC_PROP(draw_order, mDrawOrder)
@@ -174,9 +168,6 @@ BEGIN_LOADS(UIListWidget)
         bs >> mDisabledAlphaScale;
     for (int i = 0; i < kNumUIListWidgetStates; i++) {
         for (int j = 0; j < UIComponent::kNumStates; j++) {
-            ObjPtr<UIColor> tmp(this);
-            bs >> tmp;
-            mColors[i][j] = tmp;
         }
     }
 END_LOADS
@@ -202,27 +193,7 @@ void UIListWidget::DrawMesh(
     MILO_ASSERT(mesh, 0x40);
     mesh->SetWorldXfm(tf);
     if (box) {
-        int minData[4];
-        int maxData[4];
-        const int *src = (const int *)box;
-        minData[0] = src[0];
-        minData[2] = src[2];
-        minData[3] = src[3];
-        maxData[0] = src[4];
-        minData[1] = src[1];
-        maxData[2] = src[6];
-        maxData[3] = src[7];
-        maxData[1] = src[5];
-        Box localbox;
-        int *dst = (int *)&localbox;
-        dst[0] = minData[0];
-        dst[1] = minData[1];
-        dst[2] = minData[2];
-        dst[3] = minData[3];
-        dst[4] = maxData[0];
-        dst[5] = maxData[1];
-        dst[6] = maxData[2];
-        dst[7] = maxData[3];
+        Box localbox = *box;
         CalcBox(mesh, localbox);
         box->GrowToContain(localbox.mMin, false);
         box->GrowToContain(localbox.mMax, false);
@@ -230,11 +201,11 @@ void UIListWidget::DrawMesh(
         UIColor *col = DisplayColor(wstate, cstate);
         if (col) {
             RndMat *mat = mesh->Mat();
-            if (mat) {
-                const Hmx::Color &c = col->GetColor();
-                mat->SetColor(c.red, c.green, c.blue);
-            }
+            if (mat)
+                mat->SetColor(0, 0, 0);
         }
         mesh->DrawShowing();
     }
 }
+
+void UIListWidget::ResourceCopy(const UIListWidget *w) { Copy(w, kCopyShallow); }

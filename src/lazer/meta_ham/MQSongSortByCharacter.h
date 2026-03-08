@@ -12,10 +12,7 @@ public:
 
 class MQSongSortByCharacter : public MQSongSort {
 public:
-    MQSongSortByCharacter() {
-        static Symbol by_character("by_character");
-        mSortName = by_character;
-    }
+    MQSongSortByCharacter();
     virtual ~MQSongSortByCharacter();
 
     virtual NavListItemNode *NewItemNode(void *) const;

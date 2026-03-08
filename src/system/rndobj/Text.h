@@ -70,18 +70,14 @@ public:
         kFitScrollMarqueeReset = 4,
         /** "Reverse scroll direction whenever string end or beginning is reached" */
         kFitScrollPingPong = 5,
-        /** "Stretch text to fit width" */
-        kFitStretch = 6,
         /** "Continuous right-to-left scroll with wrapping and not care about string size.
             '\n' will be replaced with indentation." */
-        kFitScrollMarqueeWrapAlways = 7
+        kFitScrollMarqueeWrapAlways = 6
     };
 
     class Style {
     public:
         Style(Hmx::Object *owner);
-        Style(const Style &s);
-
         Style &operator=(const Style &s) {
             mFont = s.mFont;
             mBlacklight = s.mBlacklight;

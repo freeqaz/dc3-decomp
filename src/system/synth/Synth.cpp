@@ -177,9 +177,7 @@ void Synth::Init() {
     }
     mHud = RndOverlay::Find("synth_hud", true);
     mHud->SetCallback(this);
-#ifndef HX_NATIVE
     InitSecurity();
-#endif
 }
 
 void Synth::InitSecurity() {
@@ -308,22 +306,6 @@ const ADSRImpl *Synth::DefaultADSR() {
     return mADSR;
 }
 
-void Synth::DrawMeterScale(float &y) {
-    int db = -40;
-    float height = (float)TheRnd.Width();
-    Hmx::Color color(1.0f, 1.0f, 1.0f, 1.0f);
-    float left = height * 0.2f;
-    float width = height * 0.7f;
-    Vector2 pos(left, y);
-    TheRnd.DrawString(MakeString("%i", db), pos, color, true);
-    db = -20;
-    Vector2 pos2(left + width * 0.5f, y);
-    TheRnd.DrawString(MakeString("%i", db), pos2, color, true);
-    Vector2 pos3(left + width, y);
-    TheRnd.DrawString("0", pos3, color, true);
-    y += 16.0f;
-}
-
 void Synth::SetFX(const DataArray *data) {
     MILO_ASSERT(data, 0x165);
     SetFXChain(data->FindInt("chain"));
@@ -385,8 +367,7 @@ void Synth::RemovePlayHandler(Hmx::Object *obj) { mPlayHandlers.remove(obj); }
 
 void Synth::SendToPlayHandlers(Sound *sound) {
     SoundPlayMsg msg(sound);
-    auto end_it = mPlayHandlers.end();
-    for (auto it = mPlayHandlers.begin(); it != end_it; ++it) {
+    FOREACH (it, mPlayHandlers) {
         (*it)->Handle(msg, false);
     }
 }
@@ -450,8 +431,6 @@ void Synth::StopAllSounds() {
     }
 }
 
-int Synth::GetNumMics() const { return mNumMics; }
-
 int Synth::GetSampleMem(ObjectDir *dir, Platform p) {
     int num = 0;
     for (ObjDirItr<SynthSample> it(dir, true); it != nullptr; ++it) {
@@ -466,14 +445,12 @@ void Synth::AddZombie(SampleInst *inst) {
 }
 
 void Synth::CullZombies() {
-    std::list<SampleInst *>::iterator next = mZombieInsts.begin();
-    std::list<SampleInst *>::iterator it;
-    while (next != mZombieInsts.end()) {
-        it = next;
-        ++next;
+    for (auto it = mZombieInsts.begin(); it != mZombieInsts.end();) {
+        auto next = it++;
         if ((*it)->DonePlaying()) {
             mZombieInsts.erase(it);
         }
+        it = next;
     }
 }
 
@@ -520,11 +497,6 @@ DataNode Synth::OnSetFXVol(const DataArray *a) {
     return 0;
 }
 
-
-#ifdef HX_NATIVE
-extern Synth *CreateNativeSynth();
-#endif
-
 void SynthPreInit() {
     MILO_ASSERT(!TheSynth, 0x283);
     DataArray *cfg = SystemConfig("synth");
@@ -532,13 +504,7 @@ void SynthPreInit() {
     if (useNullSynth) {
         TheSynth = new Synth();
     } else {
-#ifdef HX_NATIVE
-        TheSynth = CreateNativeSynth();
-#else
-        // TODO: Synth::New() creates Synth360 on Xbox; stubbed for now
-        // because XAudio2 isn't available in headless mode.
-        TheSynth = new Synth();
-#endif
+        // TheSynth = Synth::New();
     }
     if (TheSynth->Fail()) {
         // RELEASE(TheSynth);
@@ -561,10 +527,8 @@ void SynthInit() {
 }
 
 void SynthTerminate() {
-    TheSynth->StopAllSounds();
     TheSynth->Poll();
     TheDebug.RemoveExitCallback(SynthTerminate);
     TheSynth->Terminate();
-    delete TheSynth;
-    TheSynth = nullptr;
+    // RELEASE(TheSynth);
 }

@@ -63,7 +63,7 @@ ModalCallbackFunc *Debug::SetModalCallback(ModalCallbackFunc *func) {
     return oldFunc;
 }
 
-void DebugModal(enum Debug::ModalType &ty, class FixedString &str, bool b3) {
+void DebugModal(Debug::ModalType &ty, FixedString &str, bool b3) {
     if (ty == Debug::kModalFail) {
         str += "\n\n-- Program ended --\n";
     } else {
