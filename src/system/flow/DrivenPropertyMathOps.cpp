@@ -116,16 +116,7 @@ float FlowMathOp::Apply(float val) {
         }
     }
 
-    if ((int)mOp > 100) {
-        MILO_NOTIFY_ONCE("Bad mathop operation value");
-        return val;
-    }
-
-    if ((int)mOp == 100) {
-        goto lookup;
-    }
-
-    switch (mOp) {
+    switch ((int)mOp) {
     case kMathOp_Add:
         rhs = rhs + val;
         break;
@@ -142,15 +133,19 @@ float FlowMathOp::Apply(float val) {
         rhs = val / rhs;
         break;
     case kMathOp_Random: {
-        float r = RandomFloat(0.0f, rhs * 2.0f);
+        float r = RandomFloat(0, rhs * 2.0f);
         rhs = (r - rhs) + val;
         break;
     }
     case kMathOp_Min:
-        rhs = (val < rhs) ? val : rhs;
+        if (val >= rhs) {
+            return val;
+        }
         break;
     case kMathOp_Max:
-        rhs = (val > rhs) ? val : rhs;
+        if (val <= rhs) {
+            return val;
+        }
         break;
     case kMathOp_Mod:
         if (rhs <= 0.0f) {
@@ -226,42 +221,44 @@ float FlowMathOp::Apply(float val) {
         if (mLhs.Type() == kDataString) {
             String str(mLhs.Str(0));
             if (*str.c_str() != '\0') {
-                DataVariable("val") = DataNode(val);
-                DataVariable("prop_val") = DataNode(rhs);
+                DataNode varSave = DataVariable("flow_math_op_result");
+                DataNode valSave = DataVariable("flow_math_op_val");
                 TheDebug.SetTry(true);
                 DataArray *script = DataReadString(str.c_str());
                 DataNode scriptNode(script, kDataArray);
                 DataArray *arr = scriptNode.Array(0);
-                if (arr->Node(0).Type() == kDataCommand && arr->Size() == 1) {
-                    DataNode result = arr->Node(0).Command(arr)->Execute(true);
+                if (!(arr->Node(0).Type() == kDataCommand && arr->Size() == 1)) {
+                    DataNode result = arr->Execute(true);
                     val = result.Float(0);
                 } else {
-                    DataNode result = arr->Execute(true);
+                    DataNode result = arr->Node(0).Command(arr)->Execute(true);
                     val = result.Float(0);
                 }
                 TheDebug.SetTry(false);
+                DataVariable("flow_math_op_result") = varSave;
+                DataVariable("flow_math_op_val") = valSave;
             }
             return val;
         }
         // fall through to lookup
-    default:
-        MILO_NOTIFY_ONCE("Bad mathop operation value");
-        return val;
-    }
-    return rhs;
-
-lookup:
-    if (mLhs.Type() != kDataSymbol) {
-        return val;
-    }
-    {
-        DataArray *config = SystemConfig("objects", "FlowNode", "mathops");
+    case 100: {
+        if (mLhs.Type() != kDataSymbol) {
+            return val;
+        }
+        DataArray *config = SystemConfig("flow", "math_ops", "driven_property");
         DataArray *found = config->FindArray(mLhs.Sym(0), false);
         if (!found) {
             return val;
         }
-        DataVariable("val") = DataNode(val);
-        DataVariable("prop_val") = DataNode(rhs);
+        DataVariable("flow_math_op_result") = DataNode(0);
+        DataVariable("flow_math_op_val") = DataNode(0);
         return found->Node(1).Float(found);
     }
+    case kMathOp_ClampMin:
+        break;
+    default:
+        MILO_NOTIFY_ONCE("Unknown math op type %d", mOp);
+        return val;
+    }
+    return rhs;
 }
