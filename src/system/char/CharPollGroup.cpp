@@ -2,6 +2,7 @@
 #include "char/CharPollable.h"
 #include "char/CharWeightable.h"
 #include "obj/Object.h"
+#include "rndobj/Trans.h"
 #include <algorithm>
 
 CharPollGroup::CharPollGroup() : mPolls(this), mChangedBy(this), mChanges(this) {}
@@ -166,51 +167,62 @@ bool CharPollableSorter::ChangedBy(Dep *a, Dep *b) {
 }
 
 void CharPollableSorter::Sort(std::vector<RndPollable *> &polls) {
-    // Build dependency map for all CharPollables
-    for (int i = 0; i < (int)polls.size(); i++) {
-        CharPollable *cp = dynamic_cast<CharPollable *>(polls[i]);
-        if (cp) {
-            Dep &dep = mDeps[cp];
-            dep.obj = cp;
-            dep.poll = polls[i];
-            dep.searchID = 0;
+    std::vector<Dep *> deps;
+    deps.reserve(polls.size());
+    for (int i = polls.size() - 1, last = i; i >= 0; i--) {
+        CharPollable *c = dynamic_cast<CharPollable *>(polls[i]);
+        if (c) {
+            Dep &dep = mDeps[c];
+            dep.obj = c;
+            dep.poll = c;
+            deps.push_back(&dep);
+        } else {
+            polls[last--] = polls[i];
         }
     }
-
-    // Build changedBy lists
-    for (std::map<Hmx::Object *, Dep>::iterator it = mDeps.begin(); it != mDeps.end();
-         ++it) {
-        CharPollable *cp = dynamic_cast<CharPollable *>(it->first);
-        if (!cp)
-            continue;
-        std::list<Hmx::Object *> changedBy, change;
-        cp->PollDeps(changedBy, change);
-        AddDeps(&it->second, changedBy, it->second.changedBy, true);
-    }
-
-    // Topological sort: sort so that if A changes B, B comes after A
-    std::vector<Dep *> sorted;
-    sorted.reserve(mDeps.size());
-    for (std::map<Hmx::Object *, Dep>::iterator it = mDeps.begin(); it != mDeps.end();
-         ++it) {
-        sorted.push_back(&it->second);
-    }
-
-    // Bubble sort based on dependency
-    for (int i = 0; i < (int)sorted.size(); i++) {
-        for (int j = i + 1; j < (int)sorted.size(); j++) {
-            if (ChangedBy(sorted[i], sorted[j])) {
-                // sorted[i] is changed by sorted[j], so sorted[j] must come first
-                std::swap(sorted[i], sorted[j]);
+    if (deps.empty())
+        return;
+    else {
+        std::sort(deps.begin(), deps.end(), CharPollableSorter::AlphaSort());
+        std::list<Dep *> depList;
+        for (int i = 0; i < deps.size(); i++)
+            depList.push_back(deps[i]);
+        while (!depList.empty()) {
+            Dep *curDep = depList.back();
+            depList.pop_back();
+            CharPollable *c = dynamic_cast<CharPollable *>(curDep->obj);
+            if (c) {
+                std::list<Hmx::Object *> depList1;
+                std::list<Hmx::Object *> depList2;
+                c->PollDeps(depList1, depList2);
+                AddDeps(curDep, depList1, depList, true);
+                AddDeps(curDep, depList2, depList, false);
+            }
+            RndTransformable *t = dynamic_cast<RndTransformable *>(curDep->obj);
+            if (t) {
+                std::list<Hmx::Object *> tDepList;
+                tDepList.push_back(t->TransParent());
+                AddDeps(curDep, tDepList, depList, true);
             }
         }
-    }
 
-    // Rebuild polls vector
-    polls.clear();
-    for (int i = 0; i < (int)sorted.size(); i++) {
-        if (sorted[i]->poll)
-            polls.push_back(sorted[i]->poll);
+        std::list<Dep *> otherDepList;
+        for (int i = 0; i < deps.size(); i++) {
+            Dep *curDep = deps[i];
+            std::list<Dep *>::iterator it = otherDepList.begin();
+            for (; it != otherDepList.end(); ++it) {
+                if (ChangedBy(curDep, *it))
+                    break;
+            }
+            otherDepList.insert(it, curDep);
+        }
+
+        int idx = 0;
+        for (std::list<Dep *>::iterator it = otherDepList.begin();
+             it != otherDepList.end();
+             ++it) {
+            polls[idx++] = (*it)->poll;
+        }
     }
 }
 

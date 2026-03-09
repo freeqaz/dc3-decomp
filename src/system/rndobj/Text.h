@@ -330,6 +330,11 @@ public:
     int NumStyles() const { return mStyles.size(); }
     ObjVector<Style> &Styles() { return mStyles; }
     float Width() const { return mWidth; }
+#ifdef HX_NATIVE
+    void SetWidth(float w) { mWidth = w; }
+    Alignment GetAlignment() const { return mAlignment; }
+    void SetAlignment(Alignment a) { mAlignment = a; }
+#endif
     float BoundsRight() const { return mBoundsRight; }
 
     friend class UIFontImporter;

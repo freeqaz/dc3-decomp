@@ -1,4 +1,6 @@
 #include "hamobj/HamWardrobe.h"
+#include "char/CharClipDriver.h"
+#include "char/CharClipGroup.h"
 #include "char/CharDriver.h"
 #include "char/CharInterest.h"
 #include "char/Character.h"
@@ -295,24 +297,35 @@ void HamWardrobe::SyncInterestObjects(ObjectDir *dir) {
 }
 
 void HamWardrobe::UpdateOverlay() {
-    if (!mOverlay || !mOverlay->Showing()) {
-        return;
-    }
-    ObjPtrList<Character>::iterator it = mCrowdMembers.begin();
-    while (it != mCrowdMembers.end()) {
+    if (!mOverlay || !mOverlay->Showing()) return;
+
+    for (ObjPtrList<Character>::iterator it = mCrowdMembers.begin();
+         it != mCrowdMembers.end(); ++it) {
         Character *cur = *it;
-        if (cur) {
-            *mOverlay << cur->Name();
-            *mOverlay << ": ";
-            CharDriver *driver = cur->Driver();
-            if (driver) {
-                *mOverlay << "     ";
-                *mOverlay << "\n";
-            } else {
-                *mOverlay << "\n";
+        if (!cur) continue;
+
+        *mOverlay << cur->Name();
+        *mOverlay << ": ";
+        CharDriver *driver = cur->Driver();
+        CharClipGroup *clipGroup = driver ? driver->GetClipGroup() : nullptr;
+        if (!driver || !clipGroup) {
+            *mOverlay << "\n";
+        } else {
+            *mOverlay << clipGroup->Name();
+            *mOverlay << "    [ ";
+            std::set<String> seen;
+            for (CharClipDriver *cd = driver->First(); cd != nullptr; cd = cd->mNext) {
+                CharClip *clip = cd->mClip;
+                const char *name = clip ? clip->Name() : "<NULL>";
+                String s(name);
+                if (seen.find(s) == seen.end()) {
+                    seen.insert(s);
+                    *mOverlay << name;
+                    *mOverlay << " ";
+                }
             }
+            *mOverlay << "]\n";
         }
-        ++it;
     }
 }
 

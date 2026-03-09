@@ -8,13 +8,17 @@
 #include "hamobj/HamGameData.h"
 #include "hamobj/HamPlayerData.h"
 #include "obj/Data.h"
+#include "obj/Object.h"
 #include "os/Debug.h"
 #include "os/System.h"
 #include "ui/PanelDir.h"
+#include "ui/UIListProvider.h"
 #include "utl/Symbol.h"
 #include <cstdio>
 
 CrewProvider::CrewProvider() : mPlayer(0), mPanelDir(0) {}
+
+CrewProvider::~CrewProvider() {}
 
 void CrewProvider::Text(int, int data, UIListLabel *slot, UILabel *label) const {
     MILO_ASSERT_RANGE(data, 0, mCrews.size(), 0x69);
