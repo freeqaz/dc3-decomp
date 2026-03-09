@@ -280,9 +280,10 @@ void CharLookAt::Poll() {
                 }
                 static DataNode &disable = DataVariable("cheat.disable_eye_jitter");
                 if (mEnableJitter && !sDisableJitter && !disable && deltasecs > 0.0f) {
+                    auto _tmp4 = RandomFloat(-mPitchJitterLimit, mPitchJitterLimit);
                     lookDir.Set(
                         lookDir[0]
-                            + RandomFloat(-mPitchJitterLimit, mPitchJitterLimit)
+                            + _tmp4
                                 * DEG2RAD,
                         lookDir[1],
                         lookDir[2] + RandomFloat(-mYawJitterLimit, mYawJitterLimit) * DEG2RAD

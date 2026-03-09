@@ -231,7 +231,8 @@ void CharDebug::DisplayObject(Hmx::Object *obj) {
                 mesh->Sync(0x13F);
                 mesh->SetMat(mat);
             }
-            mat->SetDiffuseTex(tex);
+            if (mat)
+                mat->SetDiffuseTex(tex);
             CreateAndSetMetaMat(mat);
             mesh->Highlight();
         }

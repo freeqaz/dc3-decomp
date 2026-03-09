@@ -693,9 +693,9 @@ bool CharEyes::Replace(ObjRef *ref, Hmx::Object *obj) {
 #else
     int eyeOffset = (char *)ref - (char *)mEyes.begin();
 #endif
-    if ((unsigned)eyeOffset < (unsigned)(eyeSize * eyeCount)) {
+    if ((int)(unsigned)eyeOffset < (unsigned)(eyeSize * eyeCount)) {
         int eyeIdx = eyeOffset / eyeSize;
-        if (eyeOffset == eyeIdx * eyeSize) {
+        if (eyeOffset == (unsigned int)eyeIdx * eyeSize) {
             EyeDesc &desc = mEyes[eyeIdx];
             if (!desc.mEye.SetObj(obj))
                 mEyes.erase(mEyes.begin() + eyeIdx);

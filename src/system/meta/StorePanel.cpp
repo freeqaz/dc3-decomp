@@ -712,6 +712,12 @@ void StorePanel::ValidateOffers(std::vector<StoreOffer *> &offers) {
 
 DataNode StorePanel::OnMsg(MultipleItemsEnumCompleteMsg const &) { return 0; }
 
+void StorePanel::SetSource(Symbol src, bool backup) {
+    mPurchaseSource = src;
+    if (backup)
+        mBackupPurchaseSource = src;
+}
+
 BEGIN_HANDLERS(StorePanel)
     HANDLE_EXPR(toggle_test_offers, mShowTestOffers = !mShowTestOffers)
     HANDLE_EXPR(test_offers, mShowTestOffers)
@@ -720,16 +726,7 @@ BEGIN_HANDLERS(StorePanel)
     HANDLE_ACTION(cancel_art, (mArtLoader = 0, mPendingArtCallback = 0))
     HANDLE_ACTION(check_out, CheckOut(_msg->Obj<StorePurchaseable>(2)))
     HANDLE_ACTION(re_download, CheckOut(_msg->Obj<StorePurchaseable>(2)))
-    {
-        static Symbol _s("set_source");
-        if (sym == _s) {
-            Symbol src = _msg->Sym(2);
-            mPurchaseSource = src;
-            if (_msg->Int(3))
-                mBackupPurchaseSource = src;
-            return 0;
-        }
-    }
+    HANDLE_ACTION(set_source, SetSource(_msg->Sym(2), _msg->Int(3)))
     HANDLE_ACTION(set_source_to_backup, mPurchaseSource = mBackupPurchaseSource)
     HANDLE_ACTION(start_reenum_if_needed, StartReEnum())
     HANDLE_MESSAGE(SigninChangedMsg)

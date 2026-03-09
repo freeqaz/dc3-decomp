@@ -21,7 +21,7 @@ void CharIKHead::Poll() {
     if (!mHead || !mTarget || !mSpine)
         return;
     UpdatePoints(false);
-    if (TheTaskMgr.DeltaSeconds() > 0) {
+    if (mHead && TheTaskMgr.DeltaSeconds() > 0) {
         Interp(mHeadFilter, mHead->WorldXfm().v, 0.5f, mHeadFilter);
     }
     float weight = Weight();

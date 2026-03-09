@@ -76,6 +76,12 @@ void CheatProvider::Terminate() {
     RELEASE(sInstance);
 }
 
+void CheatProvider::Invoke(int idx, LocalUser *user) {
+    DataArray *script = mFilterCheats[idx].mScript;
+    if (script)
+        CallQuickCheat(script, user);
+}
+
 void CheatProvider::InitData(RndDir *) { ApplyFilter(); }
 
 int CheatProvider::NumData() const { return mFilterCheats.size(); }
@@ -118,9 +124,9 @@ void CheatProvider::Text(int i, int j, UIListLabel *listlabel, UILabel *label) c
 }
 
 void CheatProvider::ApplyFilter() {
-    static Symbol modes("modes");
     static Symbol all("all");
     static Symbol filters("filters");
+    static Symbol modes("modes");
     Symbol curFilt = mFilters[mFilterIdx];
     mFilterCheats.clear();
     Cheat *curCheat = nullptr;
@@ -155,7 +161,7 @@ void CheatProvider::ApplyFilter() {
 }
 
 BEGIN_HANDLERS(CheatProvider)
-    HANDLE_ACTION(invoke, CallQuickCheat(mFilterCheats[_msg->Int(2)].mScript, _msg->Obj<LocalUser>(3)))
+    HANDLE_ACTION(invoke, Invoke(_msg->Int(2), _msg->Obj<LocalUser>(3)))
     HANDLE_ACTION(next_filter, (mFilterIdx = (mFilterIdx + 1) % mFilters.size(), ApplyFilter()))
     HANDLE_EXPR(filter, mFilters[mFilterIdx])
     HANDLE_SUPERCLASS(Hmx::Object)

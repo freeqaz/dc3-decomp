@@ -21,13 +21,22 @@ bool gSuppressRefErase = false;
 void ObjRef::ReplaceList(Hmx::Object *obj) {
     bool oldSuppress = gSuppressRefErase;
     gSuppressRefErase = true;
-    while (this != next) {
-        ObjRef *n = next;
-        n->Replace(obj);
-        if (n == next) {
-            next = n->next;
-        }
+
+    // Snapshot all refs into a vector before replacing.
+    // Replace handlers (e.g. RndGroup::Replace, RndMesh::Replace) can move
+    // refs between rings as a side effect, corrupting the ring walk.
+    // By snapshotting first, we avoid following next-pointers that have been
+    // re-linked into a different object's ref ring.
+    std::vector<ObjRef *> refs;
+    for (ObjRef *cur = next; cur != this; cur = cur->next) {
+        refs.push_back(cur);
     }
+    Clear();
+
+    for (ObjRef *ref : refs) {
+        ref->Replace(obj);
+    }
+
     gSuppressRefErase = oldSuppress;
 }
 #endif

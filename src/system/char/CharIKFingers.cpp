@@ -436,13 +436,13 @@ void CharIKFingers::FixSingleFinger(
 
 void CharIKFingers::MeasureLengths() {
     for (int i = 0; i < 5; i++) {
-        RndTransformable *f2 = mFingers[i].mFinger02;
-        RndTransformable *f3 = mFingers[i].mFinger03;
-        RndTransformable *tip = mFingers[i].mFingertip;
+        auto& _sub0 = mFingers[i];
+        RndTransformable *f2 = _sub0.mFinger02;
+        RndTransformable *f3 = _sub0.mFinger03;
+        RndTransformable *tip = _sub0.mFingertip;
         if (f2 && f3 && tip) {
-            float &totalLen = mFingers[i].mBoneTotalLength;
-            totalLen = Length(f2->LocalXfm().v) + Length(f3->LocalXfm().v)
-                + Length(tip->LocalXfm().v);
+            float &totalLen = _sub0.mBoneTotalLength;
+            totalLen = (Length(f2->LocalXfm().v) + (Length(f3->LocalXfm().v) + Length(tip->LocalXfm().v)));
         }
     }
 

@@ -1098,6 +1098,13 @@ void RndText::ReplaceMissingCharacters(HX_VECTOR(unsigned short) &wideChars) {
 }
 
 int RndText::OnComputeCharWidths(const unsigned short *wideChars, float *widths, bool marqueeWrap) {
+#ifdef HX_NATIVE
+    // Reset displayable char counts before recomputing — prevents unbounded growth
+    // when UpdateText() is called every frame (ResetDisplayableChars was never called)
+    for (auto *fm : mFontMaps) {
+        fm->ResetDisplayableChars();
+    }
+#endif
     StyleState styleState(this, 1.0f);
     std::vector<RndFontBase *> missingFonts;
     unsigned short prevChar = 0;
@@ -1558,6 +1565,7 @@ void RndText::ConstructMeshes(
 
             const unsigned short *cur = line.mStart;
             unsigned short prevChar = 0;
+            int charIdx = 0;
 
             while (cur != line.mEnd && cur < line.mEnd) {
                 unsigned short ch = *cur;
@@ -1587,6 +1595,7 @@ void RndText::ConstructMeshes(
                         mIndentation
                     );
                     prevChar = ch;
+                    charIdx++;
                 }
 
                 cur++;
@@ -1599,6 +1608,41 @@ void RndText::ConstructMeshes(
          ++it) {
         (*it)->CleanupSyncMeshes();
     }
+
+#ifdef HX_NATIVE
+    // Diagnostic: dump vertex+face data for kFitEllipsis text meshes after sync
+    static int sTextDiag = 0;
+    if (sTextDiag < 15 && mText.length() >= 4 && mText.length() <= 30
+        && mFitType == kFitEllipsis && mText.c_str()[0] != ' ') {
+        for (auto *fm : mFontMaps) {
+            for (int _p = 0; _p < fm->NumMeshes(); _p++) {
+                RndMesh *_m = fm->Mesh(_p);
+                if (_m && _m->NumVerts() >= 8) {
+                    int nv = _m->NumVerts();
+                    int nf = _m->NumFaces();
+                    fprintf(stderr, "TEXT_DIAG [%s] text='%s' fit=%d verts=%d faces=%d meshPtr=%p\n",
+                        PathName(this), mText.c_str(), mFitType, nv, nf, (void*)_m);
+                    // Dump first 12 verts (3 chars worth)
+                    int dumpV = nv < 12 ? nv : 12;
+                    for (int _i = 0; _i < dumpV; _i++) {
+                        auto &_v = _m->Verts(_i);
+                        fprintf(stderr, "  v[%d] pos=(%.3f,%.3f,%.3f) uv=(%.4f,%.4f) col=(%.1f,%.1f,%.1f,%.1f)\n",
+                            _i, _v.pos.x, _v.pos.y, _v.pos.z, _v.tex.x, _v.tex.y,
+                            _v.color.red, _v.color.green, _v.color.blue, _v.color.alpha);
+                    }
+                    // Dump first 6 face indices (3 face pairs = 3 char quads)
+                    int dumpF = nf < 6 ? nf : 6;
+                    for (int _i = 0; _i < dumpF; _i++) {
+                        auto &_f = _m->Faces(_i);
+                        fprintf(stderr, "  f[%d] = (%d, %d, %d)\n", _i, _f.v1, _f.v2, _f.v3);
+                    }
+                    sTextDiag++;
+                    break;
+                }
+            }
+        }
+    }
+#endif
 }
 
 const unsigned short *
@@ -1906,9 +1950,7 @@ void RndText::FontMap::SetupCharacter(
     // Setup a character quad in the mesh
     if (!mFont) return;
     int page = mFont->CharPage(charCode);
-    if (page < 0 || page >= (int)mPages.size()) {
-        return;
-    }
+    if (page < 0 || page >= (int)mPages.size()) return;
     Page &pg = *(mPages[page]);
     if (!pg.mesh || !pg.mVertStart || pg.mVertStart == pg.mesh->Verts().end()) {
         return;
@@ -1920,6 +1962,11 @@ void RndText::FontMap::SetupCharacter(
         auto advance = mFont->CharAdvance(charCode);
         xPos += advance * size;
         return;
+    }
+
+    // Apply kerning from previous character BEFORE positioning this one
+    if (prevChar) {
+        xPos += mFont->Kerning(prevChar, charCode) * size;
     }
 
     float z0 = yPos;
@@ -1937,13 +1984,16 @@ void RndText::FontMap::SetupCharacter(
     v[2].tex.Set(uvMax.x, uvMax.y);
     v[3].pos.Set(x0, 0.0f, z1);
     v[3].tex.Set(uvMin.x, uvMax.y);
+#ifdef HX_NATIVE
+    // Set vertex color to white for all chars (default 0,0,0,0 makes them invisible)
+    for (int _i = 0; _i < 4; _i++) {
+        v[_i].color.Set(1.0f, 1.0f, 1.0f, 1.0f);
+    }
+#endif
     pg.mVertStart += 4;
 
-    // Advance x position
-    xPos += advW * size;
-    if (prevChar) {
-        xPos += mFont->Kerning(prevChar, charCode) * size;
-    }
+    // Advance x position past this character (advance + style kerning to match OnComputeCharWidths)
+    xPos += (advW + state.mKerning) * size;
 }
 
 void RndText::FontMap3d::SetupCharacter(

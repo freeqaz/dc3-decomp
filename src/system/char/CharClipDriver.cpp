@@ -287,17 +287,24 @@ CharClipDriver *CharClipDriver::PreEvaluate(float beat, float deltaBeat, float d
             } else {
                 mBlendFrac = 1.0f;
             }
-            float clamped = (mBlendFrac - 1.0f >= 0.0f) ? 1.0f : mBlendFrac;
+                        float clamped;
+            if ((mBlendFrac - 1.0f >= 0.0f)) {
+                clamped = 1.0f;
+            } else {
+                clamped = mBlendFrac;
+            }
             mBlendFrac = clamped;
         }
     }
 
     if (!mPlayMultipleClips) {
-        if (mNext && mBlendFrac == 1.0f) {
+        if (mNext) {
+            if (mBlendFrac == 1.0f) {
             mNext = mNext->Exit(true);
         }
+        }
     } else {
-        if (mClip->EndBeat() < mBeat) {
+        if (mBeat > mClip->EndBeat()) {
             return Exit(false);
         }
     }

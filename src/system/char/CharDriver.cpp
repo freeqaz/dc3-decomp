@@ -63,6 +63,12 @@ CharClipDriver *CharDriver::Before(CharClipDriver *driver) {
     return d;
 }
 
+void CharDriver::AddBeat(float lo, float hi) {
+    if (mFirst) {
+        mFirst->mBeat += RandomFloat(lo, hi);
+    }
+}
+
 void CharDriver::Clear() {
     if (mFirst)
         mFirst->DeleteStack();
@@ -580,7 +586,7 @@ void CharDriver::SetBeatScale(float beatscale, bool) {
 void CharDriver::Poll() {
     float beat = mBeatScale * TheTaskMgr.Beat();
     float deltaBeat = mBeatScale * TheTaskMgr.DeltaBeat();
-    if (mRealign && beat > 0) {
+    if (mRealign && 0 < beat) {
         beat = mBeatScale * ((float)(TheTaskMgr.CurrentBeat()) + (float)(TheTaskMgr.CurrentTick()) / 480.0f);
         if (mOldBeat == kHugeFloat)
             mOldBeat = beat;
@@ -597,7 +603,7 @@ void CharDriver::Poll() {
                 flags--;
                 if (flags > 0) {
                     float fb = (float)std::floor(beat);
-                    float fo = (float)std::floor(mOldBeat);
+                    float fo = (float)floorf(mOldBeat);
                     int i12 = (int)fb ^ ((int)fo + 1);
                     CharClipDriver *d = playing;
                     if (i12 & flags) {
@@ -670,15 +676,7 @@ BEGIN_HANDLERS(CharDriver)
     HANDLE(play, OnPlay)
     HANDLE(play_group, OnPlayGroup)
     HANDLE(play_group_flags, OnPlayGroupFlags)
-    {
-        static Symbol _s("add_beat");
-        if (sym == _s) {
-            if (mFirst) {
-                mFirst->mBeat += RandomFloat(_msg->Float(2), _msg->Float(_msg->Size() - 1));
-            }
-            return 0;
-        }
-    }
+    HANDLE_ACTION(add_beat, AddBeat(_msg->Float(2), _msg->Float(_msg->Size() - 1)))
     HANDLE(evaluate_flags, OnEvaluateFlags)
     HANDLE(get_first_flags, OnGetFirstFlags)
     HANDLE_EXPR(first_clip, mFirst ? (Hmx::Object *)mFirst->GetClip() : (Hmx::Object *)0)
@@ -688,16 +686,7 @@ BEGIN_HANDLERS(CharDriver)
     HANDLE(print, OnPrint)
     HANDLE(set_default_clip, OnSetDefaultClip)
     HANDLE(set_first_beat_offset, OnSetFirstBeatOffset)
-    {
-        static Symbol _s("clear");
-        if (sym == _s) {
-            if (mFirst) {
-                mFirst->DeleteStack();
-            }
-            mFirst = nullptr;
-            return 0;
-        }
-    }
+    HANDLE_ACTION(clear, Clear())
     HANDLE(get_clip_or_group_list, OnGetClipOrGroupList)
     HANDLE_EXPR(default_clip, mDefaultClip.Ptr())
     HANDLE_SUPERCLASS(RndPollable)

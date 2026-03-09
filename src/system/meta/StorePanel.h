@@ -51,6 +51,7 @@ public:
 
     StorePanel();
     void CheckOut(StorePurchaseable *);
+    void SetSource(Symbol src, bool backup);
     void ExitError(StoreError);
     void HandleNetCacheMgrFailure();
     void HandleNetCacheLoaderFailure(int);

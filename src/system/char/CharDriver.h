@@ -49,6 +49,7 @@ public:
     CharClipDriver *FirstPlaying();
     CharClipDriver *Last();
     CharClipDriver *Before(CharClipDriver *);
+    void AddBeat(float lo, float hi);
     void Clear();
     void SetBeatScale(float, bool);
     float EvaluateFlags(int);

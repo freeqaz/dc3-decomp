@@ -229,8 +229,8 @@ void CharIKHand::PollDeps(
 }
 
 void CharIKHand::Poll() {
-    float charWeight = Weight();
     RndTransformable *hand = mHand;
+    float charWeight = Weight();
     if (!hand || mTargets.empty())
         return;
     Vector3 destPos(0.0f, 0.0f, 0.0f);
@@ -305,8 +305,8 @@ void CharIKHand::Poll() {
         destQuat.Set(tf.m);
     }
     Vector3 worldDst;
-    Interp(mHand->WorldXfm().v, destPos, charWeight, worldDst);
     mWorldDstX = worldDst.x;
+    Interp(mHand->WorldXfm().v, destPos, charWeight, worldDst);
     mWorldDstY = worldDst.y;
     mWorldDstZ = worldDst.z;
     RndTransformable *elbowParent = 0;
@@ -338,7 +338,8 @@ void CharIKHand::Poll() {
         mHand->SetWorldXfm(handXfm);
     }
 
-    if (mConstraintWrist && charWeight > 0.0f && shoulderParent) {
+    if (mConstraintWrist && charWeight > 0.0f) {
+        if (shoulderParent) {
         Vector3 fingerSavedPos(mFinger->WorldXfm().v);
         Hmx::Matrix3 elbowMat(shoulderParent->WorldXfm().m);
         Hmx::Matrix3 handMat(mHand->WorldXfm().m);
@@ -346,7 +347,7 @@ void CharIKHand::Poll() {
         Vector3 handY(handMat.y);
         Vector3 handZ(handMat.z);
         Vector3 wristDst(mWorldDstX, mWorldDstY, mWorldDstZ);
-        float acosDot = std::acos(Dot(elbowMat.x, handZ)) - 1.570796370506287f;
+        float acosDot = acosf(Dot(elbowMat.x, handZ)) - 1.570796370506287f;
         float maxRads = mWristRadians;
         if (Abs(acosDot) > maxRads) {
             if (acosDot > 0.0f)
@@ -374,6 +375,7 @@ void CharIKHand::Poll() {
             mHand->SetWorldXfm(wristXfm);
         }
     }
+    }
 }
 
 void CharIKHand::IKElbow(RndTransformable *elbow, RndTransformable *shoulder) {
@@ -394,7 +396,7 @@ void CharIKHand::IKElbow(RndTransformable *elbow, RndTransformable *shoulder) {
     Vector3 handPos, targetPos;
     Multiply(mHand->WorldXfm().v, shoulder->WorldXfm(), handPos);
     Multiply(wristDst, shoulder->WorldXfm(), targetPos);
-    if (mElbowSwing > 0) {
+    if (mElbowSwing >= (unsigned int)1) {
         Vector2 handYZ(handPos.y, handPos.z);
         Vector2 targetYZ(targetPos.y, targetPos.z);
         float handYZSq = handYZ.x * handYZ.x + handYZ.y * handYZ.y;
@@ -450,9 +452,9 @@ void CharIKHand::IKElbow(RndTransformable *elbow, RndTransformable *shoulder) {
                 float sPerpDist = std::sqrt(sphereRadius * sphereRadius - sDistToAxis * sDistToAxis);
                 sphereCenter.Set(sphereToMid.x, sphereToMid.y, sphereToMid.z);
                 float sphereToAxisDist = Distance(sphereCenter, axisProj);
-                float d = (sphereToAxisDist * sphereToAxisDist + -(sDistToAxis * sDistToAxis - sPerpDist * sPerpDist))
-                    / (sphereToAxisDist * 2.0f);
-                float sqrtTerm = std::sqrt(-(d * d - sPerpDist * sPerpDist));
+                float d = sphereToAxisDist * sphereToAxisDist + -(sDistToAxis * sDistToAxis - sPerpDist * sPerpDist) + sphereToAxisDist * 2.0f;
+                float sqrtTerm = std::sqrt((d * d - sPerpDist * sPerpDist));
+                sqrtTerm = -sqrtTerm;
                 float tiltAngle = std::asin(sqrtTerm / elbowLen);
                 if (IsNaN(tiltAngle))
                     return;

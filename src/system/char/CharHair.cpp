@@ -219,8 +219,8 @@ void CharHair::SimulateLoops(int count, float fps) {
 
 void CharHair::SimulateInternal(float fps) {
     float sixtyOver = 60.0f / fps;
-    float timeStep = (1.0f / fps) * sixtyOver;
     float stiffPow = std::pow(1.0f - mStiffness, sixtyOver * sixtyOver);
+    float timeStep = (1.0f / fps) * sixtyOver;
     Vector3 windForce(0, 0, 0);
     if (mWindObj && mStrands.size() > 0) {
         if (mStrands[0].Root()) {
@@ -243,9 +243,10 @@ void CharHair::SimulateInternal(float fps) {
                 strandXfm.m
             );
             ObjVector<Point> &points = curStrand.Points();
+            Vector3 oldPos;
             for (int j = 0; j < points.size(); j++) {
                 Point &pt = points[j];
-                Vector3 oldPos(pt.pos);
+                                oldPos = (pt.pos);
                 pt.pos += pt.force;
                 pt.pos += windForce;
                 if (pt.sideLength >= 0.0f) {
@@ -256,7 +257,7 @@ void CharHair::SimulateInternal(float fps) {
                     float minLen = pt.sideLength - mMinSlack;
                     float minLenSq = minLen * minLen;
                     if (distSq < minLenSq) {
-                        toMod *= (minLenSq / (minLenSq + distSq) - 0.5f);
+                        toMod *= (minLenSq / (minLenSq + distSq) - 0.5);
                         pt.pos += toMod;
                         modPt.pos -= toMod;
                     } else {
@@ -307,7 +308,7 @@ void CharHair::SimulateInternal(float fps) {
                         } else if (colShape == CharCollide::kCollideInsideSphere || colShape == CharCollide::kCollideInsideCigar) {
                             float minRad = colRad - maxRad;
                             if (dist > minRad && dist > 0) {
-                                float pull = minRad / dist - 1.0f;
+                                float pull = -1.0f + minRad / dist;
                                 ScaleAdd(pt.pos, toPt, pull, pt.pos);
                                 Scale(toPt, -1.0f / dist, boneFrame.z);
                             }

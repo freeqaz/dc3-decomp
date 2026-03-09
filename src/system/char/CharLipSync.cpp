@@ -267,13 +267,14 @@ void CharLipSync::PlayBack::Set(CharLipSync *lipsync, ObjPtr<ObjectDir> clips) {
     mLipSync = lipsync;
 
     int numVisemes = mLipSync->mVisemes.size();
-    mWeights.resize(numVisemes);
+    auto& _ref2 = mWeights;
+    _ref2.resize(numVisemes);
 
-    for (int i = 0; i < mWeights.size(); i++) {
-        ObjPtr<CharClip> &clip = mWeights[i].mClip;
+    for (int i = 0; i < _ref2.size(); i++) {
+        ObjPtr<CharClip> &clip = _ref2[i].mClip;
         clip = mClips->Find<CharClip>(mLipSync->mVisemes[i].c_str(), false);
         if (!clip) {
-            MILO_NOTIFY("could not find %s", mLipSync->mVisemes[i].c_str());
+            MILO_LOG("could not find %s", (char *)mLipSync->mVisemes[i].c_str());
         }
     }
 
@@ -284,11 +285,11 @@ void CharLipSync::PlayBack::Set(CharLipSync *lipsync, ObjPtr<ObjectDir> clips) {
         DataArray *arr = result.Array(0);
         int arrSize = arr->Size();
         int newSize = numVisemes + arrSize;
-        if (mWeights.size() != newSize) {
-            mWeights.resize(newSize);
+        if (_ref2.size() != newSize) {
+            _ref2.resize(newSize);
             for (int i = numVisemes; (unsigned int)i < newSize; i++) {
                 Symbol visemeSym = arr->Sym(i - numVisemes);
-                ObjPtr<CharClip> &clip = mWeights[i].mClip;
+                ObjPtr<CharClip> &clip = _ref2[i].mClip;
                 clip = mClips->Find<CharClip>(visemeSym.Str(), false);
             }
         }

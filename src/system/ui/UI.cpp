@@ -1078,11 +1078,7 @@ BEGIN_HANDLERS(Automator)
         _HANDLE_CHECKED(OnCustomMsg(UIComponentFocusChangeMsg(_msg)))
     if (sym == UIScreenChangeMsg::Type())
         _HANDLE_CHECKED(OnCustomMsg(UIScreenChangeMsg(_msg)))
-    {
-        static Symbol _s("cheat_invoked");
-        if (sym == _s)
-            _HANDLE_CHECKED(OnCheatInvoked(_msg))
-    }
+    HANDLE(cheat_invoked, OnCheatInvoked)
     {
         Message msg(_msg);
         _HANDLE_CHECKED(OnCustomMsg(msg))

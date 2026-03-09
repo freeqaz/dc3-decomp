@@ -137,14 +137,15 @@ bool ClipDistMap::FindBestNode(float maxError, float startBeat, float endBeat, C
     node.err = maxError;
 
     float clipAStart = mAStart;
-    int endCol = (int)((endBeat - mAStart) * mSamplesPerBeat);
     int startCol = (int)((startBeat - mAStart) * mSamplesPerBeat);
 
     // Clamp startCol to non-negative (unsigned masking pattern for codegen)
     startCol = 0xffffffffU - ((int)startCol >> 0x1f) & startCol;
-    int maxCol = mDists.mWidth;
+    auto& _width = mDists.mWidth;
+    int maxCol = _width;
+    int endCol = (int)((endBeat - mAStart) * mSamplesPerBeat);
 
-    if (mDists.mWidth >= endCol) {
+    if (_width >= endCol) {
         maxCol = endCol;
     }
 
@@ -160,7 +161,7 @@ bool ClipDistMap::FindBestNode(float maxError, float startBeat, float endBeat, C
                 float currentError = node.err;
                 u8 foundBetter = 1;
                 // Access distance map: mData[(row * width) + col]
-                float cellError = *(float *)((mDists.mWidth * rowIdx + startCol) * 4 + mDists.mData);
+                float cellError = *(float *)((_width * rowIdx + startCol) * 4 + mDists.mData);
                 float newError = (currentError - cellError >= 0.0f) ? cellError : currentError;
 
                 node.err = newError;
@@ -388,9 +389,10 @@ void ClipDistMap::FindDists(float maxFacing, DataArray *arr) {
     std::vector<float> floatVec;
     float interpA = Interp(mClipA->StartBeat(), mClipA->EndBeat(), 0.5f);
     float interpB = Interp(mClipB->StartBeat(), mClipB->EndBeat(), 0.5f);
-    mWorstErr = 0;
+    auto& _ref3 = mWorstErr;
+    _ref3 = 0;
 
-    for (int i = 0; i < mDists.mWidth; i++) {
+    for (int i = 0.0f; i < mDists.mWidth; i++) {
         DistEntry newDistEntry;
         for (int j = 0; j < mDists.mHeight; j++) {
             mDists(i, j) = kHugeFloat;
@@ -442,13 +444,14 @@ void ClipDistMap::FindDists(float maxFacing, DataArray *arr) {
                 }
                 float dist = 0;
                 for (unsigned int k = 0; k < newDistEntry.bones.size(); k++) {
-                    float dx = newDistEntry.bones[k].x - curDistEntry.bones[k].x;
-                    float dy = newDistEntry.bones[k].y - curDistEntry.bones[k].y;
-                    float dz = newDistEntry.bones[k].z - curDistEntry.bones[k].z;
+                    auto& _sub1 = curDistEntry.bones[k];
+                    float dx = newDistEntry.bones[k].x - _sub1.x;
+                    float dy = newDistEntry.bones[k].y - _sub1.y;
+                    float dz = newDistEntry.bones[k].z - _sub1.z;
                     dist += ((dz * dz + (dy * dy + dx * dx))) * floatVec[k];
                 }
                 float err = std::sqrt(dist / (float)newDistEntry.bones.size());
-                MaxEq(mWorstErr, err);
+                MaxEq(_ref3, err);
                 mDists(i, j) = err;
             }
         }

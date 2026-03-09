@@ -766,7 +766,7 @@ void Character::DrawShowing() {
     int lod;
     auto& _ref0 = mForceLod;
     if (_ref0 < 0) {
-        for (lod = 0; lod < (int)mLods.size() - 1; lod++) {
+        for (lod = 0; (int)lod < (int)mLods.size() - 1; lod++) {
             float hysteresis;
             if (lod < mLastLod)
                 hysteresis = 0.09f;
@@ -779,7 +779,7 @@ void Character::DrawShowing() {
         lod = Clamp<int>(0, mLods.size() - 1, _ref0);
     }
     bool doSelfShadow = false;
-    if (mSelfShadow && TheRnd.GetDrawMode() == 0 && lod <= 1 && (mDrawMode & 1)) {
+    if (mSelfShadow && TheRnd.GetDrawMode() == 0 && lod < 2 & (mDrawMode & 1)) {
         doSelfShadow = true;
     }
     if (doSelfShadow) {
@@ -911,17 +911,17 @@ void DrawPtrVec::Draw() const {
 }
 
 RndDrawable *DrawPtrVec::CollideShowing(const Segment &s, float &dist, Plane &pl) const {
-    RndDrawable *result = nullptr;
     Segment seg;
+    RndDrawable *result = nullptr;
     memcpy(&seg, &s, sizeof(Segment));
     dist = 1.0f;
     for (const_iterator it = begin(); it != end(); ++it) {
         float d;
         RndDrawable *hit = (*it)->Collide(seg, d, pl);
         if (hit) {
+            result = hit;
             Interp(seg.start, seg.end, d, seg.start);
             dist *= d;
-            result = hit;
         }
     }
     return result;

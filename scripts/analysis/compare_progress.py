@@ -99,51 +99,81 @@ def load_report(path: Path) -> dict:
         return json.load(f)
 
 
+def get_unit_match_percent(measures: dict) -> float | None:
+    """Get the best available match percentage for a unit.
+
+    Prefers fuzzy_match_percent, falls back to matched_code_percent.
+    Returns None if no match data is available.
+    """
+    fp = measures.get("fuzzy_match_percent", None)
+    if fp is not None:
+        return fp
+    mcp = measures.get("matched_code_percent", None)
+    if mcp is not None:
+        return mcp
+    # If we have matched_code/total_code, compute it
+    tc = int(measures.get("total_code", 0) or 0)
+    mc = int(measures.get("matched_code", 0) or 0)
+    if tc > 0 and mc > 0:
+        return 100.0 * mc / tc
+    return None
+
+
 def aggregate_by_subsystem(units: list) -> dict:
-    """Aggregate unit stats by subsystem."""
+    """Aggregate unit stats by subsystem using best available match percentages.
+
+    Prefers fuzzy_match_percent, falls back to matched_code_percent.
+    Units without any match data are counted for total_functions but not
+    for percentage calculations.
+    """
     agg = {}
     for u in units:
         sub = get_subsystem(u["name"])
         if sub not in agg:
             agg[sub] = {
-                "matched_code": 0,
+                "fuzzy_code": 0,
+                "weighted_fuzzy": 0.0,
                 "total_code": 0,
-                "matched_functions": 0,
                 "total_functions": 0,
+                "matched_functions": 0,
             }
         measures = u.get("measures", {})
-        agg[sub]["matched_code"] += int(measures.get("matched_code", 0) or 0)
-        agg[sub]["total_code"] += int(measures.get("total_code", 0) or 0)
-        agg[sub]["matched_functions"] += int(measures.get("matched_functions", 0) or 0)
+        tc = int(measures.get("total_code", 0) or 0)
+        pct = get_unit_match_percent(measures)
+        agg[sub]["total_code"] += tc
+        if pct is not None and tc > 0:
+            agg[sub]["fuzzy_code"] += tc
+            agg[sub]["weighted_fuzzy"] += pct * tc
         agg[sub]["total_functions"] += int(measures.get("total_functions", 0) or 0)
+        agg[sub]["matched_functions"] += int(measures.get("matched_functions", 0) or 0)
     return agg
 
 
 def compare_subsystems(baseline: dict, current: dict) -> list:
-    """Compare aggregated subsystem stats."""
+    """Compare aggregated subsystem stats using fuzzy match percentages."""
     baseline_agg = aggregate_by_subsystem(baseline["units"])
     current_agg = aggregate_by_subsystem(current["units"])
 
     results = []
     for sub, curr in current_agg.items():
-        if sub in baseline_agg and curr["total_code"] > 0:
+        if sub in baseline_agg and curr["fuzzy_code"] > 0 and baseline_agg[sub]["fuzzy_code"] > 0:
             base = baseline_agg[sub]
-            base_pct = 100 * base["matched_code"] / base["total_code"] if base["total_code"] > 0 else 0
-            curr_pct = 100 * curr["matched_code"] / curr["total_code"]
-            diff_bytes = curr["matched_code"] - base["matched_code"]
+            base_pct = base["weighted_fuzzy"] / base["fuzzy_code"] if base["fuzzy_code"] > 0 else 0
+            curr_pct = curr["weighted_fuzzy"] / curr["fuzzy_code"] if curr["fuzzy_code"] > 0 else 0
+            diff_pct = curr_pct - base_pct
             diff_funcs = curr["matched_functions"] - base["matched_functions"]
 
-            if diff_bytes != 0:
+            if abs(diff_pct) > 0.005:
                 results.append({
                     "subsystem": sub,
                     "base_pct": base_pct,
                     "curr_pct": curr_pct,
-                    "diff_pct": curr_pct - base_pct,
-                    "diff_bytes": diff_bytes,
+                    "diff_pct": diff_pct,
                     "diff_funcs": diff_funcs,
+                    "total_code": curr["total_code"],
                 })
 
-    results.sort(key=lambda x: x["diff_bytes"], reverse=True)
+    results.sort(key=lambda x: x["diff_pct"], reverse=True)
     return results
 
 
@@ -158,8 +188,8 @@ def compare_units(baseline: dict, current: dict, min_diff: float = 0.01) -> list
             base = baseline_units[name]
             base_measures = base.get("measures", {})
             curr_measures = curr.get("measures", {})
-            base_pct = base_measures.get("fuzzy_match_percent", 0) or 0
-            curr_pct = curr_measures.get("fuzzy_match_percent", 0) or 0
+            base_pct = get_unit_match_percent(base_measures) or 0
+            curr_pct = get_unit_match_percent(curr_measures) or 0
             diff = curr_pct - base_pct
 
             if abs(diff) > min_diff:
@@ -236,18 +266,17 @@ def compare_functions(baseline: dict, current: dict, min_diff: float = 0.5) -> l
 
 def print_subsystem_table(results: list, baseline: dict, current: dict):
     """Print subsystem comparison table."""
-    total_bytes = sum(r["diff_bytes"] for r in results)
     total_funcs = sum(r["diff_funcs"] for r in results)
     base_total = baseline.get("measures", {}).get("fuzzy_match_percent", 0)
     curr_total = current.get("measures", {}).get("fuzzy_match_percent", 0)
 
     print()
-    print(f"Overall: {base_total:.2f}% -> {curr_total:.2f}% ({curr_total-base_total:+.2f}%)")
-    print(f"Total: {fmt_bytes(total_bytes)} matched code, {total_funcs:+d} functions")
+    print(f"Overall fuzzy: {base_total:.2f}% -> {curr_total:.2f}% ({curr_total-base_total:+.2f}%)")
+    print(f"Subsystems changed: {len(results)}, {total_funcs:+d} matched functions")
     print()
 
     # Calculate column widths
-    headers = ["Subsystem", "Baseline", "Current", "Change", "Bytes Gained"]
+    headers = ["Subsystem", "Baseline", "Current", "Change", "Size"]
     rows = []
     for r in results:
         rows.append([
@@ -255,7 +284,7 @@ def print_subsystem_table(results: list, baseline: dict, current: dict):
             f"{r['base_pct']:.2f}%",
             f"{r['curr_pct']:.2f}%",
             f"{r['diff_pct']:+.2f}%",
-            fmt_bytes(r["diff_bytes"]),
+            fmt_bytes_plain(r["total_code"]),
         ])
 
     widths = [len(h) for h in headers]
@@ -281,12 +310,39 @@ def print_subsystem_table(results: list, baseline: dict, current: dict):
         print(fmt_row(row, align))
 
 
-def print_unit_table(results: list, limit: int = 50):
+def count_100pct_units(baseline: dict, current: dict) -> tuple:
+    """Count units at 100% in current and how many are new since baseline."""
+    baseline_units = {u["name"]: u for u in baseline.get("units", [])}
+    current_units = {u["name"]: u for u in current.get("units", [])}
+
+    at_100 = 0
+    newly_100 = 0
+    for name, cu in current_units.items():
+        curr_pct = get_unit_match_percent(cu.get("measures", {}))
+        if curr_pct is not None and curr_pct >= 99.99:
+            at_100 += 1
+            if name in baseline_units:
+                base_pct = get_unit_match_percent(baseline_units[name].get("measures", {})) or 0
+                if base_pct < 99.99:
+                    newly_100 += 1
+            else:
+                newly_100 += 1  # new unit not in baseline
+    return at_100, newly_100
+
+
+def print_unit_table(results: list, limit: int = 50, baseline: dict = None, current: dict = None):
     """Print detailed unit comparison table."""
     count = min(limit, len(results))
     print()
     print(f"Top {count} Unit Changes")
     print()
+
+    # Show 100% summary from raw reports
+    if baseline is not None and current is not None:
+        at_100, newly_100 = count_100pct_units(baseline, current)
+        if at_100:
+            print(f"  Units at 100%: {at_100} ({newly_100} new since baseline)")
+            print()
 
     headers = ["Unit Path", "Baseline", "Current", "Change", "Funcs (base)", "Funcs (curr)"]
     rows = []
@@ -426,11 +482,10 @@ def print_overview(report: dict):
     results = []
     for sub, stats in agg.items():
         if stats["total_code"] > 0:
-            pct = 100 * stats["matched_code"] / stats["total_code"]
+            pct = stats["weighted_fuzzy"] / stats["fuzzy_code"] if stats["fuzzy_code"] > 0 else 0
             results.append({
                 "subsystem": sub,
                 "category": get_category(sub),
-                "matched_code": stats["matched_code"],
                 "total_code": stats["total_code"],
                 "percent": pct,
                 "matched_funcs": stats["matched_functions"],
@@ -439,16 +494,15 @@ def print_overview(report: dict):
 
     # Overall stats
     measures = report.get("measures", {})
-    total_matched = int(measures.get("matched_code", 0) or 0)
+    total_pct = measures.get("fuzzy_match_percent", 0) or 0
     total_code = int(measures.get("total_code", 0) or 0)
-    total_pct = 100 * total_matched / total_code if total_code > 0 else 0
     total_funcs_matched = int(measures.get("matched_functions", 0) or 0)
     total_funcs = int(measures.get("total_functions", 0) or 0)
 
     print()
     print(f"{'='*70}")
-    print(f"  DECOMP OVERVIEW: {total_pct:.2f}% complete")
-    print(f"  Code: {fmt_bytes_plain(total_matched)} / {fmt_bytes_plain(total_code)}")
+    print(f"  DECOMP OVERVIEW: {total_pct:.2f}% fuzzy match")
+    print(f"  Code: {fmt_bytes_plain(total_code)}")
     print(f"  Functions: {total_funcs_matched:,} / {total_funcs:,}")
     print(f"{'='*70}")
 
@@ -463,17 +517,17 @@ def print_overview(report: dict):
         cat_results.sort(key=lambda x: x["total_code"], reverse=True)
 
         # Category totals
-        cat_matched = sum(r["matched_code"] for r in cat_results)
         cat_total = sum(r["total_code"] for r in cat_results)
-        cat_pct = 100 * cat_matched / cat_total if cat_total > 0 else 0
+        cat_weighted = sum(r["percent"] * r["total_code"] for r in cat_results)
+        cat_pct = cat_weighted / cat_total if cat_total > 0 else 0
         cat_funcs_matched = sum(r["matched_funcs"] for r in cat_results)
         cat_funcs_total = sum(r["total_funcs"] for r in cat_results)
 
         print()
-        print(f"## {cat}: {cat_pct:.1f}% ({fmt_bytes_plain(cat_matched)}/{fmt_bytes_plain(cat_total)}, {cat_funcs_matched}/{cat_funcs_total} funcs)")
+        print(f"## {cat}: {cat_pct:.1f}% ({fmt_bytes_plain(cat_total)}, {cat_funcs_matched}/{cat_funcs_total} funcs)")
         print()
 
-        headers = ["Subsystem", "Matched", "Total", "%", "Funcs"]
+        headers = ["Subsystem", "Fuzzy %", "Total", "Funcs"]
         rows = []
         for r in cat_results:
             # Trim category prefix for cleaner display
@@ -491,9 +545,8 @@ def print_overview(report: dict):
 
             rows.append([
                 name,
-                fmt_bytes_plain(r["matched_code"]),
-                fmt_bytes_plain(r["total_code"]),
                 f"{r['percent']:.1f}%",
+                fmt_bytes_plain(r["total_code"]),
                 f"{r['matched_funcs']}/{r['total_funcs']}",
             ])
 
@@ -513,7 +566,7 @@ def print_overview(report: dict):
                     parts.append(cell.ljust(widths[i]))
             return "  " + " | ".join(parts)
 
-        align = [False, True, True, True, True]
+        align = [False, True, True, True]
         print(fmt_row(headers))
         print("  " + "-+-".join("-" * w for w in widths))
         for row in rows:
@@ -537,10 +590,9 @@ def print_snapshot(report: dict, sort_by: str = "percent", show_all: bool = Fals
                 if stats["total_code"] < DEFAULT_MIN_SIZE:
                     continue
 
-            pct = 100 * stats["matched_code"] / stats["total_code"]
+            pct = stats["weighted_fuzzy"] / stats["fuzzy_code"] if stats["fuzzy_code"] > 0 else 0
             results.append({
                 "subsystem": sub,
-                "matched_code": stats["matched_code"],
                 "total_code": stats["total_code"],
                 "percent": pct,
                 "matched_funcs": stats["matched_functions"],
@@ -553,31 +605,29 @@ def print_snapshot(report: dict, sort_by: str = "percent", show_all: bool = Fals
     elif sort_by == "size":
         results.sort(key=lambda x: x["total_code"], reverse=True)
     elif sort_by == "matched":
-        results.sort(key=lambda x: x["matched_code"], reverse=True)
+        results.sort(key=lambda x: x["percent"] * x["total_code"], reverse=True)
     else:  # name
         results.sort(key=lambda x: x["subsystem"])
 
     # Overall stats
     measures = report.get("measures", {})
-    total_matched = int(measures.get("matched_code", 0) or 0)
+    total_pct = measures.get("fuzzy_match_percent", 0) or 0
     total_code = int(measures.get("total_code", 0) or 0)
-    total_pct = 100 * total_matched / total_code if total_code > 0 else 0
     total_funcs_matched = int(measures.get("matched_functions", 0) or 0)
     total_funcs = int(measures.get("total_functions", 0) or 0)
 
     print()
-    print(f"Overall: {total_pct:.2f}% ({fmt_bytes_plain(total_matched)} / {fmt_bytes_plain(total_code)})")
+    print(f"Overall fuzzy: {total_pct:.2f}% ({fmt_bytes_plain(total_code)})")
     print(f"Functions: {total_funcs_matched}/{total_funcs}")
     print()
 
-    headers = ["Subsystem", "Matched", "Total", "%", "Functions"]
+    headers = ["Subsystem", "Fuzzy %", "Total", "Functions"]
     rows = []
     for r in results:
         rows.append([
             r["subsystem"],
-            fmt_bytes_plain(r["matched_code"]),
-            fmt_bytes_plain(r["total_code"]),
             f"{r['percent']:.2f}%",
+            fmt_bytes_plain(r["total_code"]),
             f"{r['matched_funcs']}/{r['total_funcs']}",
         ])
 
@@ -597,7 +647,7 @@ def print_snapshot(report: dict, sort_by: str = "percent", show_all: bool = Fals
                 parts.append(cell.ljust(widths[i]))
         return "| " + " | ".join(parts) + " |"
 
-    align = [False, True, True, True, True]
+    align = [False, True, True, True]
     print(fmt_row(headers))
     print("|" + "|".join("-" * (w + 2) for w in widths) + "|")
     for row in rows:
@@ -738,7 +788,7 @@ def main():
     # Always show subsystem summary
     subsystem_results = compare_subsystems(baseline, current)
     if args.regressions:
-        subsystem_results = [r for r in subsystem_results if r["diff_bytes"] < 0]
+        subsystem_results = [r for r in subsystem_results if r["diff_pct"] < 0]
     print_subsystem_table(subsystem_results, baseline, current)
 
     # Optionally show detailed unit breakdown
@@ -746,7 +796,7 @@ def main():
         unit_results = compare_units(baseline, current)
         if args.regressions:
             unit_results = [r for r in unit_results if r["diff_pct"] < 0]
-        print_unit_table(unit_results, args.limit)
+        print_unit_table(unit_results, args.limit, baseline=baseline, current=current)
 
     # Optionally show function-level breakdown
     if args.functions:

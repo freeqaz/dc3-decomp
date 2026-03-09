@@ -1,3 +1,8 @@
+/* ===== PERMUTER LOCK — DO NOT EDIT =====
+ * The source permuter is actively working on: CharClip::SampleToBeat
+ * Started: 2026-03-09 00:23 (stale after 5 minutes)
+ * This banner is temporary and will be removed automatically.
+ ===== */
 #include "char/CharClip.h"
 #include "CharClipGroup.h"
 #include "char/CharBoneDir.h"
@@ -138,14 +143,15 @@ void CharClip::Transitions::RemoveNodes(NodeVector *n) {
     MILO_ASSERT(n, 0xEC);
     NodeVector *next = n->Next();
     memmove(n, next, (intptr_t)mNodeEnd - (intptr_t)next);
-    Resize(BytesInMemory() - ((intptr_t)next - (intptr_t)n), nullptr);
+    auto _tmp0 = BytesInMemory();
+    Resize(_tmp0 - ((intptr_t)next - (intptr_t)n), nullptr);
     for (NodeVector *it = mNodeStart; it < mNodeEnd; it = it->Next()) {
         // Fix up linked list pointers after memmove
         // ObjRef layout: vtable(sizeof(void*)) + next(sizeof(void*)) + prev(sizeof(void*))
         ObjRef *clipRef = (ObjRef*)&it->clip;
-        ObjRef *clipNext = *(ObjRef**)((char*)clipRef + sizeof(void*));
         ObjRef *clipPrev = *(ObjRef**)((char*)clipRef + sizeof(void*) * 2);
         *(ObjRef**)((char*)clipPrev + sizeof(void*)) = clipRef;
+        ObjRef *clipNext = *(ObjRef**)((char*)clipRef + sizeof(void*));
         *(ObjRef**)((char*)clipNext + sizeof(void*) * 2) = clipRef;
     }
 }
@@ -1075,11 +1081,13 @@ float CharClip::SampleToBeat(int sample) const {
     const float *end = *(const float **)((char *)this + 0xfc);
     const float *begin = *(const float **)((char *)this + 0xf8);
 
-    if (!((end - begin) & ~3)) {
+    bool _bit0 = ((end - begin) && ~3) != 0;
+    if (!(_bit0)) {
         return FrameToBeat((float)sample);
     } else {
         const float *lower = std::lower_bound(begin, end, (float)sample);
-        return FrameToBeat(lower - begin);
+        auto _tmp2 = FrameToBeat(lower - begin);
+        return _tmp2;
     }
 }
 

@@ -210,7 +210,8 @@ void ClipCollide::TestClips() {
 ObjectDir *ClipCollide::Clips() { return !mChar ? nullptr : mChar->Driver()->ClipDir(); }
 
 void ClipCollide::Collide() {
-    if (!mChar || !mClip || !mWaypoint) {
+    auto& _ref0 = mChar;
+    if (!_ref0 || !mClip || !mWaypoint) {
         return;
     }
 
@@ -219,13 +220,13 @@ void ClipCollide::Collide() {
     const char *boneNames[3] = { "bone_L-ankle", "bone_R-ankle", "bone_pos_guitar" };
 
     for (int i = 0; i < 3; i++) {
-        bones[i] = CharUtlFindBoneTrans(boneNames[i], mChar->Dir());
+        bones[i] = CharUtlFindBoneTrans(boneNames[i], _ref0->Dir());
     }
 
     SyncWaypoint();
 
     // Get bone servo
-    CharServoBone *servo = mChar->BoneServo();
+    CharServoBone *servo = _ref0->BoneServo();
     if (!servo) {
         return;
     }

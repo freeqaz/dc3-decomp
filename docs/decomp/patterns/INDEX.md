@@ -29,6 +29,7 @@ These patterns can often be fixed with source changes. Sorted by ROI (impact x s
 | Explicit Float Cast | +35% | HIGH | [fixable-casting.md](fixable-casting.md#explicit-float-cast) |
 | MakeString Template Type Mismatch | +5-21% | HIGH | [fixable-casting.md](fixable-casting.md#makestring-template-type-mismatch-milo-macro-arguments) |
 | ObjPtr DeferOwner Constructor | +16% | HIGH | [fixable-declarations.md](fixable-declarations.md#objptr-constructor-deferred-owner-initialization) |
+| Manual Handler Extraction | +3-5% | HIGH | [fixable-macros.md](fixable-macros.md#manual-handler-extraction) |
 | Unsigned Zero Comparison | +0.4-1.3% | 95% | [fixable-comparison.md](fixable-comparison.md#unsigned-zero-comparison) |
 | Operator Overload Selection | +1-2% | 100% | [fixable-operators.md](fixable-operators.md#operator-overload-selection) |
 | Inline Assignment | +1-2% | 95% | [fixable-operators.md](fixable-operators.md#inline-assignment) |
@@ -84,6 +85,8 @@ These patterns can often be fixed with source changes. Sorted by ROI (impact x s
 | extrwi vs rlwinm Encoding | [fixable-bool-mask.md](fixable-bool-mask.md#extrwi-vs-rlwinm-bit-test-encoding) |
 | MILO_NOTIFY vs MILO_NOTIFY_ONCE | [fixable-declarations.md](fixable-declarations.md#milo_notify-vs-milo_notify_once) |
 | MakeString Template Type Mismatch | [fixable-casting.md](fixable-casting.md#makestring-template-type-mismatch-milo-macro-arguments) |
+| Manual Handler Extraction | [fixable-macros.md](fixable-macros.md#manual-handler-extraction) |
+| Static Symbol Order in Handlers | [fixable-macros.md](fixable-macros.md#static-symbol-declaration-order-in-handlers) |
 | ObjPtr DeferOwner Constructor | [fixable-declarations.md](fixable-declarations.md#objptr-constructor-deferred-owner-initialization) |
 | IsNaN vs Threshold Check | [fixable-comparison.md](fixable-comparison.md#isnan-vs-threshold-check) |
 

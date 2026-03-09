@@ -84,7 +84,7 @@ void CharClipGroup::AddClip(CharClip *clip) {
 }
 
 bool CharClipGroup::HasClip(CharClip *clip) const {
-    return mClips.find(clip) != mClips.end();
+    return mClips.end() != mClips.find(clip);
 }
 
 int CharClipGroup::QueueRandom(int pos, int end) const {
@@ -100,7 +100,7 @@ CharClip *CharClipGroup::GetClip(int flags) {
         return nullptr;
     }
 
-    if (mWhich >= mClips.size()) {
+    if (mClips.size() <= mWhich) {
         mWhich = mClips.size() - 1;
     }
 
