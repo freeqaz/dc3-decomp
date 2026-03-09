@@ -222,6 +222,11 @@ class AgentRunner:
         else:
             disallowed = []
 
+        # Capture stderr lines for debugging agent crashes
+        stderr_lines: list[str] = []
+        def _capture_stderr(line: str) -> None:
+            stderr_lines.append(line)
+
         options = ClaudeAgentOptions(
             model=cli_model,
             max_turns=config.max_turns,
@@ -234,8 +239,11 @@ class AgentRunner:
             allowed_tools=tools,
             disallowed_tools=disallowed,
             add_dirs=[str(self.main_repo)],
+            stderr=_capture_stderr,
         )
 
+        # Attach stderr collector to options so _run_sdk can access it
+        options._stderr_lines = stderr_lines  # type: ignore[attr-defined]
         return options
 
     def parse_process_output(self, output: str) -> AgentRunResult:
@@ -569,22 +577,35 @@ class AgentRunner:
 
         except ProcessError as e:
             error_msg = str(e)
+            # Get captured stderr from our callback (more useful than SDK's placeholder)
+            captured_stderr = getattr(options, '_stderr_lines', [])
+            stderr = "\n".join(captured_stderr) if captured_stderr else (getattr(e, 'stderr', '') or '')
             if config.verbose >= 1:
                 pfx = _clr.colored_prefix(config.session_id)
                 print(f"\n{pfx}{_clr.BOLD_RED}Process error:{_clr.RESET} {error_msg}")
+                if captured_stderr:
+                    print(f"{pfx}{_clr.DIM}  Captured stderr ({len(captured_stderr)} lines):{_clr.RESET}")
+                    for line in captured_stderr[-20:]:
+                        print(f"{pfx}{_clr.DIM}  {line.rstrip()}{_clr.RESET}")
             return {
                 "exit_code": e.exit_code if hasattr(e, 'exit_code') else 1,
                 "error": error_msg,
-                "messages": [],
-                "output": getattr(e, 'stderr', ''),
+                "messages": messages,  # preserve messages collected before error
+                "output": stderr,
             }
 
         except Exception as e:
             error_msg = str(e)
+            captured_stderr = getattr(options, '_stderr_lines', [])
+            stderr = "\n".join(captured_stderr) if captured_stderr else ''
             if config.verbose >= 1:
                 pfx = _clr.colored_prefix(config.session_id)
                 print(f"\n{pfx}{_clr.BOLD_RED}Unexpected error:{_clr.RESET} {error_msg}")
-            return {"exit_code": 1, "error": error_msg, "messages": [], "output": ""}
+                if captured_stderr:
+                    print(f"{pfx}{_clr.DIM}  Captured stderr ({len(captured_stderr)} lines):{_clr.RESET}")
+                    for line in captured_stderr[-20:]:
+                        print(f"{pfx}{_clr.DIM}  {line.rstrip()}{_clr.RESET}")
+            return {"exit_code": 1, "error": error_msg, "messages": messages, "output": stderr}
 
     async def _run_process(self, config: AgentRunConfig) -> dict[str, Any]:
         """Run Claude CLI agent as subprocess."""
