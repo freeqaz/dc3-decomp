@@ -44,36 +44,16 @@ void Hmx::Quat::Set(const Vector3 &v, float f) {
 }
 
 void Hmx::Quat::Set(const Vector3 &v) {
-    double halfX = v.x * 0.5f;
-    double halfY = v.y * 0.5f;
-    double halfZ = v.z * 0.5f;
-    float sx = Sine((float)halfX);
-    double dsx = sx;
-    float cx = Cosine((float)halfX + 1.5707963705062866f);
-    double dcx = cx;
-    float sy = Sine((float)halfY);
-    double dsy = sy;
-    float cy = Cosine((float)halfY + 1.5707963705062866f);
-    double dcy = cy;
-    double px1 = dsy * dcx;
-    double p0x = dcy * dsx;
-    double p0y = dsy * dcx;
-    double p0z = dsy * dsx;
-    double p0w = dcy * dcx;
-    x = (float)p0x;
-    y = (float)p0y;
-    z = (float)p0z;
-    w = (float)p0w;
-    float sz = Sine((float)halfZ);
-    double dsz = sz;
-    float cz = Cosine((float)halfZ + 1.5707963705062866f);
-    double dcz = cz;
-    float tw = w;
-    float tx = x;
-    w = (float)(tw * dcz - dsx * dsz);
-    x = (float)(tx * dcz - px1 * dsz);
-    y = (float)(tx * dsz + px1 * dcz);
-    z = (float)(tw * dsz + dsx * dcz);
+    Vector3 stack;
+    Scale(v, 0.5f, stack);
+    float f1 = Sine(stack.x);
+    float f2 = Cosine(stack.x);
+    float f3 = Sine(stack.y);
+    float f4 = Cosine(stack.y);
+    Set(f1 * f4, f2 * f3, f1 * f3, f2 * f4);
+    f1 = Sine(stack.z);
+    f2 = Cosine(stack.z);
+    Set(f2 * x - f1 * y, f2 * y + f1 * x, f2 * z + f1 * w, f2 * w - f1 * z);
 }
 
 void Hmx::Quat::Set(const Hmx::Matrix3 &m) {

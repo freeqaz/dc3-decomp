@@ -74,21 +74,20 @@ bool FlowRun::Activate() {
     ResolveTarget();
     Flow *target = mTarget;
     if (target) {
-        if (mStop == false) {
-            if (mImmediateRelease == false) {
-                Flow *t = mTarget;
-                mRunningNodes.push_back(t);
-                bool running = mTarget->Activate(this);
-                if (running == false) {
-                    Flow *t2 = mTarget;
-                    mRunningNodes.remove(t2);
-                }
-                return running;
-            }
+        if (mStop) {
+            mTarget->RequestStop();
+        } else if (mImmediateRelease) {
             mTarget->Activate(nullptr);
-            return false;
+        } else {
+            Flow *t = mTarget;
+            mRunningNodes.push_back(t);
+            bool running = mTarget->Activate(this);
+            if (running) {
+                return true;
+            }
+            Flow *t2 = mTarget;
+            mRunningNodes.remove(t2);
         }
-        mTarget->RequestStop();
     }
     return false;
 }
@@ -97,24 +96,17 @@ bool FlowRun::Activate() {
 void FlowRun::ResolveTarget() {
     if (mTarget)
         return;
-    const String& targetName = mTargetName;
-    const char *nameStr = targetName.c_str();
-    if (!nameStr[0])
+    if (!mTargetName.c_str()[0])
         return;
-    ObjectDir *dir = mTargetDir;
-    if (!dir) {
-        // Find the containing flow's dir
+    ObjectDir *targetDir = mTargetDir;
+    if (!targetDir) {
         Flow *ownerFlow = GetOwnerFlow();
         if (ownerFlow) {
-            dir = ownerFlow->Dir();
-            if (!dir) {
-                MILO_ASSERT(false, 0x72);
-            }
+            targetDir = ownerFlow->Dir();
         }
+        MILO_ASSERT(targetDir, 0x72);
     }
-    if (dir) {
-        mTarget = dir->Find<Flow>(nameStr, false);
-    }
+    mTarget = targetDir->Find<Flow>(mTargetName.c_str(), false);
 }
 
 void FlowRun::ChildFinished(FlowNode *node) {

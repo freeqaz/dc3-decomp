@@ -856,7 +856,7 @@ void Rnd::CopyWorldCam(RndCam *cam) {
     }
 }
 
-RndTex *Rnd::GetNullTexture() { return mDefaultTex[kUnk7]; }
+RndTex *Rnd::GetNullTexture() { return mDefaultTex[kDefaultTex_Error]; }
 
 void Rnd::SetupFont() {
     mFont = SystemConfig("rnd", "font");
@@ -1285,10 +1285,10 @@ RndTex *Rnd::CreateDefaultTexture(DefaultTextureType textureType) {
         { 0xFF, 0xFF, 0xFF, 0xFF },  // kDefaultTex_White
         { 0xFF, 0xFF, 0xFF, 0 },     // kDefaultTex_WhiteTransparent
         { 0x7f, 0x7f, 0xFF, 0xFF },  // kDefaultTex_FlatNormal
+        { 0,    0,    0,    0xFF },  // kDefaultTex_Unk4 (black)
         { 0xFF, 0xFF, 0xFF, 0xFF },  // kDefaultTex_Gradient
         { 0xFF, 0xFF, 0xFF, 0xFF },  // kDefaultTex_Hue
         { 0xFF, 0xFF, 0xFF, 0xFF },  // kDefaultTex_Error (checkerboard)
-        { 0,    0,    0,    0xFF }   // kUnk7 (null/black)
     };
     int width = sDefSize[textureType][0];
     int height = sDefSize[textureType][1];
@@ -1296,8 +1296,9 @@ RndTex *Rnd::CreateDefaultTexture(DefaultTextureType textureType) {
     unsigned char green = sDefColor[textureType][1];
     unsigned char blue = sDefColor[textureType][2];
     unsigned char alpha = sDefColor[textureType][3];
+    unsigned int order = GetDefaultTexBitmapOrder();
     RndBitmap bmap;
-    bmap.Create(width, height, 0, 0x20, 0x40, 0, 0, 0);
+    bmap.Create(width, height, 0, 0x20, order, 0, 0, 0);
     for (int i = 0; i < height; i++) {
         for (int j = 0; j < width; j++) {
             bmap.SetPixelColor(j, i, red, green, blue, alpha);
@@ -1327,7 +1328,8 @@ RndTex *Rnd::CreateDefaultTexture(DefaultTextureType textureType) {
     case kDefaultTex_Error:
         for (int i = 0; i < height; i++) {
             for (int j = 0; j < width; j++) {
-                if (((i ^ j) >> 2) & 1) {
+                int iShift = i >> 2;
+                if ((iShift ^ (j >> 2)) & 1) {
                     bmap.SetPixelColor(j, i, 0xff, 0x80, 0x40, alpha);
                 } else {
                     bmap.SetPixelColor(j, i, 0, 0, 0, alpha);
@@ -1338,8 +1340,9 @@ RndTex *Rnd::CreateDefaultTexture(DefaultTextureType textureType) {
     default:
         break;
     }
+    EndianSwapBitmap(bmap);
     RndTex *tex = Hmx::Object::New<RndTex>();
-    tex->SetBitmap(bmap, nullptr, true);
+    tex->SetBitmap(bmap, nullptr, true, RndTex::kRegular);
     return tex;
 }
 

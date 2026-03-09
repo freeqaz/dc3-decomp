@@ -161,8 +161,8 @@ END_HANDLERS
 int ChallengeSortNode::GetChallengeExp() {
     ChallengeRecord *rec = mChallengeRecord;
     return TheChallenges->CalculateChallengeXp(
-        rec->GetChallengeRow().mDiff,
-        rec->GetChallengeRow().mType
+        rec->GetChallengeRow().mScore,
+        rec->GetChallengeRow().mDiff
     );
 }
 

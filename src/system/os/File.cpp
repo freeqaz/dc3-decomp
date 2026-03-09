@@ -34,7 +34,7 @@ DataArray *gFrameRateArray;
 std::vector<File *> gFiles(0x80); // 0x10...?
 int gCaptureFileMode;
 std::vector<String> gDirList;
-// const int File::MaxFileNameLen = 0x100;
+const int File::MaxFileNameLen = 0x100;
 
 const char *FileRoot() { return gRoot; }
 const char *FileExecRoot() { return gExecRoot; }
@@ -341,16 +341,16 @@ void FileInit() {
 }
 
 const char *FileRelativePathBuf(
-    const char *root, const char *filepath, char *relative
+    const char *iRoot, const char *iFilepath, char *oBuf
 ) {
-    MILO_ASSERT(root, 0x38d);
-    MILO_ASSERT(filepath, 0x38e);
-    MILO_ASSERT(relative, 0x38f);
-    if (*filepath != '\0') {
+    MILO_ASSERT(iRoot, 0x38d);
+    MILO_ASSERT(iFilepath, 0x38e);
+    MILO_ASSERT(oBuf, 0x38f);
+    if (*iFilepath != '\0') {
         char rootBuf[256];
         char fpBuf[256];
-        strcpy(rootBuf, root);
-        strcpy(fpBuf, filepath);
+        strcpy(rootBuf, iRoot);
+        strcpy(fpBuf, iFilepath);
 
         std::list<char *> rootToks;
         std::list<char *> fpToks;
@@ -372,40 +372,43 @@ const char *FileRelativePathBuf(
         }
 
         if (!fpToks.empty() && !rootToks.empty()) {
-            int cmp = strcmp(fpToks.back(), rootToks.back());
+            int cmp = strcmp(fpToks.front(), rootToks.front());
             if (cmp == 0) {
-                while (!rootToks.empty() && !fpToks.empty() && strcmp(fpToks.back(), rootToks.back()) == 0) {
-                    rootToks.pop_back();
-                    fpToks.pop_back();
+                while (rootToks.size() > 0 && fpToks.size() > 0 && strcmp(fpToks.front(), rootToks.front()) == 0) {
+                    rootToks.pop_front();
+                    fpToks.pop_front();
                 }
 
-                char *p = relative;
-                for (std::list<char *>::iterator it = rootToks.begin(); it != rootToks.end(); ++it) {
-                    if (p != relative)
+                char *p = oBuf;
+                while (rootToks.size() > 0) {
+                    if (p != oBuf)
                         *p++ = '/';
                     *p++ = '.';
                     *p++ = '.';
+                    rootToks.pop_front();
                 }
-                for (std::list<char *>::reverse_iterator it = fpToks.rbegin(); it != fpToks.rend(); ++it) {
-                    if (p != relative)
+                while (fpToks.size() > 0) {
+                    if (p != oBuf)
                         *p++ = '/';
-                    for (const char *pp = *it; *pp != '\0'; pp++)
+                    for (const char *pp = fpToks.front(); *pp != '\0'; pp++)
                         *p++ = *pp;
+                    fpToks.pop_front();
+                    MILO_ASSERT(p - oBuf < File::MaxFileNameLen, 0x3d9);
                 }
-                if (p == relative)
+                if (p == oBuf)
                     *p++ = '.';
                 *p = '\0';
             } else {
-                strcpy(relative, filepath);
+                strcpy(oBuf, iFilepath);
             }
         } else {
-            strcpy(relative, filepath);
+            strcpy(oBuf, iFilepath);
         }
 
-        rootToks.clear();
         fpToks.clear();
+        rootToks.clear();
     }
-    return relative;
+    return oBuf;
 }
 
 const char *FileRelativePath(const char *root, const char *filepath) {

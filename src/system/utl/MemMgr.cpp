@@ -508,22 +508,19 @@ void MemPopHeap() {
 }
 
 void MemPushTemp() {
-    if ((int)gNumHeaps == 0) {
-        return;
+    bool proceed = gNumHeaps != 0 && gNumHeaps > 0;
+    if (proceed) {
+        MemHeapStack &s = ThreadMemStack(true);
+        s.mTempRefs++;
     }
-    if (gNumHeaps < 1) {
-        return;
-    }
-    MemHeapStack &s = ThreadMemStack(true);
-    s.mSize++;
 }
 
 void MemPopTemp() {
     bool proceed = gNumHeaps != 0 && gNumHeaps > 0;
     if (proceed) {
         MemHeapStack &s = ThreadMemStack(true);
-        MILO_ASSERT(s.mSize > 0, 0x209);
-        s.mSize--;
+        MILO_ASSERT(s.mTempRefs > 0, 0x209);
+        s.mTempRefs--;
     }
 }
 

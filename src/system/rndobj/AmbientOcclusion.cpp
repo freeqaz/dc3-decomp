@@ -17,6 +17,12 @@
 #include <set>
 #include "utl/Std.h"
 
+void BuildSphereStratified(unsigned int, std::vector<Vector3> &);
+
+// Quality parameters: [samples_q0, samples_q1, splitPlane_q0, splitPlane_q1]
+// Values are guesses; exact values in .rdata at 0x820A658C (16 bytes)
+static const int kQualityLUT[] = { 256, 1024, 0, 2 };
+
 // PPC: Edge::operator< lives in Utl.cpp (matching original link unit).
 // Native: define it here since AmbientOcclusion.cpp is the natural home.
 #ifdef HX_NATIVE
@@ -246,24 +252,25 @@ void RndAmbientOcclusion::BuildTrees(Quality quality) {
         timer.Restart();
         MILO_LOG("RndAmbientOcclusion: Building kd-Tree...\n");
 
+        int packDepth = kQualityLUT[quality + 2];
+        BuildSphereStratified(kQualityLUT[quality], mSampleDirs);
+
         Box box(Vector3(FLT_MAX, FLT_MAX, FLT_MAX), Vector3(-FLT_MAX, -FLT_MAX, -FLT_MAX));
 
         FOREACH (it, mObjectsCast) {
             RndMesh *mesh = *it;
             const Transform &xfm = mesh->WorldXfm();
-            RndMesh::VertVector &verts = mesh->Verts();
-            unsigned int numVerts = verts.size();
-            unsigned int i = 0;
 
-            while (numVerts > i + 2) {
+            for (unsigned int i = 0; i < mesh->Faces().size(); i++) {
+                RndMesh::Face &face = mesh->Faces(i);
                 Vector3 v0, v1, v2;
-                Multiply(verts[i].pos, xfm, v0);
-                Multiply(verts[i + 1].pos, xfm, v1);
-                Multiply(verts[i + 2].pos, xfm, v2);
+                Multiply(mesh->Verts()[face.v1].pos, xfm, v0);
+                Multiply(mesh->Verts()[face.v2].pos, xfm, v1);
+                Multiply(mesh->Verts()[face.v3].pos, xfm, v2);
 
-                float d01 = Distance(v0, v1);
+                float d01 = Distance(v1, v0);
                 float d12 = Distance(v1, v2);
-                float d20 = Distance(v2, v0);
+                float d20 = Distance(v0, v2);
 
                 if ((d01 + d12 + d20) > 9.999999747378752e-05f && (d01 * d12 * d20) > 1.1920928955078125e-07f) {
                     box.GrowToContain(v0, false);
@@ -280,7 +287,6 @@ void RndAmbientOcclusion::BuildTrees(Quality quality) {
                         mTriList.push_back(triBack);
                     }
                 }
-                i += 3;
             }
         }
 
@@ -292,10 +298,11 @@ void RndAmbientOcclusion::BuildTrees(Quality quality) {
             mTree->Add(&*it);
         }
 
-        mTree->PackNodes((kdTree<Triangle>::SplitPlaneType)0, 0);
+        mTree->PackNodes((kdTree<Triangle>::SplitPlaneType)packDepth, 0);
+        static const float kMsToSec = 0.001f;
         MILO_LOG(
             "RndAmbientOcclusion: Built kd-Tree in %0.2f seconds\n",
-            timer.SplitMs() / 1000.0f
+            timer.SplitMs() * kMsToSec
         );
         timer.Restart();
     }
@@ -311,7 +318,7 @@ void RndAmbientOcclusion::Clean() {
     mObjectsReceive.clear();
     mObjectsTessellate.clear();
     mTriList.clear();
-    unkb8.clear();
+    mSampleDirs.clear();
 }
 
 void RndAmbientOcclusion::BuildSHCoeff(const Vector3 &inVector, float *fArr) const {
@@ -671,12 +678,12 @@ void RndAmbientOcclusion::CalculateAOAtPoint(
     rayOrigin.z = norm.z * 0.001f + pos.z;
     double shAccum[4] = { 0, 0, 0, 0 };
     float invMaxDist = 1.0f / maxDist;
-    int numSamples = unkb8.size();
+    int numSamples = mSampleDirs.size();
     float shCoeffs[4];
     float occlusion = 1.0f;
 
     for (int i = 0; (unsigned int)i < numSamples; i++) {
-        const Vector3 &sampleDir = unkb8[i];
+        const Vector3 &sampleDir = mSampleDirs[i];
         float dot = norm.x * sampleDir.x + sampleDir.z * norm.z + sampleDir.y * norm.y;
         occlusion = 1.0f;
         if (dot > 0.0f) {

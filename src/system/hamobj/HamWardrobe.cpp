@@ -307,10 +307,10 @@ void HamWardrobe::UpdateOverlay() {
         *mOverlay << cur->Name();
         *mOverlay << ": ";
         CharDriver *driver = cur->Driver();
-        CharClipGroup *clipGroup = driver ? driver->GetClipGroup() : nullptr;
-        if (!driver || !clipGroup) {
-            *mOverlay << "\n";
-        } else {
+        if (!driver) goto output_newline;
+        {
+            CharClipGroup *clipGroup = driver->GetClipGroup();
+            if (!clipGroup) goto output_newline;
             *mOverlay << clipGroup->Name();
             *mOverlay << "    [ ";
             std::set<String> seen;
@@ -320,12 +320,15 @@ void HamWardrobe::UpdateOverlay() {
                 String s(name);
                 if (seen.find(s) == seen.end()) {
                     seen.insert(s);
-                    *mOverlay << name;
+                    *mOverlay << s.c_str();
                     *mOverlay << " ";
                 }
             }
             *mOverlay << "]\n";
+            continue;
         }
+    output_newline:
+        *mOverlay << "\n";
     }
 }
 

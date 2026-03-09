@@ -43,10 +43,10 @@ public:
         kDefaultTex_White = 1,
         kDefaultTex_WhiteTransparent = 2,
         kDefaultTex_FlatNormal = 3,
-        kDefaultTex_Gradient = 4,
-        kDefaultTex_Hue = 5,
-        kDefaultTex_Error = 6,
-        kUnk7 = 7,
+        kDefaultTex_Unk4 = 4,
+        kDefaultTex_Gradient = 5,
+        kDefaultTex_Hue = 6,
+        kDefaultTex_Error = 7,
         kDefaultTex_Max = 8
     };
     enum DrawMode {

@@ -1,23 +1,9 @@
 #include "SynapseAPO.h"
 #include "Synapse_dsp.h"
-#include <new>
-
-namespace ATG {
-
-template <typename Derived, typename Params>
-CSampleXAPOBase<Derived, Params>::CSampleXAPOBase() : CXAPOBase()
-{
-}
-
-template class CSampleXAPOBase<DSP::SynapseAPO, DSP::SynapseAPOParams>;
-
-} // namespace ATG
 
 namespace DSP {
 
-SynapseAPO::SynapseAPO() : ATG::CSampleXAPOBase<SynapseAPO, SynapseAPOParams>() {
-    mSynapse = nullptr;
-    new (&mParams) SynapseAPOParams();
+SynapseAPO::SynapseAPO() : ATG::CSampleXAPOBase<SynapseAPO, SynapseAPOParams>(), mSynapse(nullptr) {
     SetSamplingRate(48000.0f);
 }
 
@@ -40,3 +26,14 @@ void SynapseAPO::OnSetParameters(const SynapseAPOParams& params) {}
 void SynapseAPO::DoProcess(const SynapseAPOParams& params, unsigned int* arg1, float& arg2, unsigned int arg3, unsigned int arg4) {}
 
 }  // namespace DSP
+
+namespace ATG {
+
+template <typename Derived, typename Params>
+CSampleXAPOBase<Derived, Params>::CSampleXAPOBase() : CXAPOBase()
+{
+}
+
+template class CSampleXAPOBase<DSP::SynapseAPO, DSP::SynapseAPOParams>;
+
+} // namespace ATG
