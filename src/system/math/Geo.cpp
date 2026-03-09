@@ -432,11 +432,15 @@ namespace stlpmtx_std {
 void Multiply(const Box &box, float f, Box &out) {
     Vector3 center;
     Interp(box.mMin, box.mMax, 0.5f, center);
-    Vector3 halfSize;
-    Subtract(box.mMax, center, halfSize);
-    Scale(halfSize, f, halfSize);
-    Subtract(center, halfSize, out.mMin);
-    Add(center, halfSize, out.mMax);
+    float hsy = box.mMax.y - center.y;
+    float hsx = box.mMax.x - center.x;
+    out.mMin.y = center.y - hsy * f;
+    float hsz = box.mMax.z - center.z;
+    out.mMin.z = center.z - hsz * f;
+    out.mMin.x = center.x - hsx * f;
+    out.mMax.z = hsz * f + center.z;
+    out.mMax.x = hsx * f + center.x;
+    out.mMax.y = hsy * f + center.y;
 }
 
 void Multiply(const Plane &p, const Transform &t, Plane &out) {
@@ -458,33 +462,35 @@ void Multiply(const Plane &p, const Transform &t, Plane &out) {
 void Sphere::GrowToContain(const Sphere &s) {
     if (s.radius == 0.0f)
         return;
-    if (radius != 0.0f) {
-        float dx = s.center.x - center.x;
-        float dz = s.center.z - center.z;
-        float dy = s.center.y - center.y;
-        float dist = std::sqrt((dy * dy + (dz * dz + dx * dx)));
-        if (s.radius + dist > radius) {
-            if (!(radius + dist < s.radius)) {
-                if (dist == 0.0f)
-                    return;
-                float invDist = 1.0f / dist;
-                Vector3 a, b;
-                a.x = center.x - (radius * (invDist * dx));
-                a.z = center.z - dz * invDist * radius;
-                b.x = s.center.x + s.radius * (dx * invDist);
-                b.y = s.center.y + s.radius * (invDist * dy);
-                a.y = center.y - radius * (invDist * dy);
-                b.z = s.center.z + dz * invDist * s.radius;
-                Interp(a, b, 0.5f, center);
-                radius = (dist + s.radius + radius) * 0.5f;
-                return;
-            }
-        } else {
+    if (radius == 0.0f) {
+        center = s.center;
+        radius = s.radius;
+        return;
+    }
+    float dx = s.center.x - center.x;
+    float dy = s.center.y - center.y;
+    float dz = s.center.z - center.z;
+    float dist = std::sqrt((dy * dy + (dz * dz + dx * dx)));
+    if (s.radius + dist > radius) {
+        if (radius + dist < s.radius) {
+            center = s.center;
+            radius = s.radius;
             return;
         }
+        if (dist == 0.0f)
+            return;
+        float invDist = 1.0f / dist;
+        Vector3 a, b;
+        a.x = center.x - (radius * (invDist * dx));
+        a.z = center.z - dz * invDist * radius;
+        b.x = s.center.x + s.radius * (dx * invDist);
+        b.y = s.center.y + s.radius * (invDist * dy);
+        a.y = center.y - radius * (invDist * dy);
+        b.z = s.center.z + dz * invDist * s.radius;
+        Interp(a, b, 0.5f, center);
+        radius = (dist + s.radius + radius) * 0.5f;
+        return;
     }
-    center = s.center;
-    radius = s.radius;
 }
 
 void Frustum::Set(float near, float far, float fovY, float ratio) {
@@ -625,72 +631,38 @@ bool Intersect(const Segment &seg, const BSPNode *n, float &t, Plane &p) {
 bool Intersect(
     const Vector3 &v1, const Vector3 &v2, const Triangle &tri, float &out
 ) {
-    // h = cross(v2, tri.frame.y)
-    // Compute components using fmsubs pattern: a*b - c
-    float fy_x = tri.frame.y.x;
-    float fy_y = tri.frame.y.y;
     float fy_z = tri.frame.y.z;
-    float v2_y = v2.y;
-    float v2_z = v2.z;
     float v2_x = v2.x;
-    float eps = 1e-4f;
-
-    // h.z = v2.x * fy.y - fy.x * v2.y
-    float hz_partial = fy_x * v2_y;   // fy.x * v2.y
-    // h.x = v2.y * fy.z - v2.z * fy.y
-    float hx_partial = v2_z * fy_y;   // v2.z * fy.y
-    // h.y = fy.x * v2.z - v2.x * fy.z
-    float hy_partial = v2_x * fy_z;   // v2.x * fy.z
-
-    float h_z = v2_x * fy_y - hz_partial;   // h.z = v2.x*fy.y - fy.x*v2.y
-    float h_x = v2_y * fy_z - hx_partial;   // h.x = v2.y*fy.z - v2.z*fy.y
-    float h_y = fy_x * v2_z - hy_partial;   // h.y = fy.x*v2.z - v2.x*fy.z
-
-    // s = v1 - tri.origin
+    float h_x = v2.y * tri.frame.y.z - v2.z * tri.frame.y.y;
     float s_z = v1.z - tri.origin.z;
     float s_x = v1.x - tri.origin.x;
+    float h_z = v2_x * tri.frame.y.y - tri.frame.y.x * v2.y;
     float s_y = v1.y - tri.origin.y;
+    float h_y = tri.frame.y.x * v2.z - v2_x * fy_z;
 
-    float fx_z = tri.frame.x.z;
     float fx_x = tri.frame.x.x;
     float fx_y = tri.frame.x.y;
+    float fx_z = tri.frame.x.z;
 
-    // Compute a = dot(frame.x, h) and u_num = dot(s, h) simultaneously
-    float u_z_part = s_z * h_z;
-    float a_z_part = fx_z * h_z;
-    float u_num = s_x * h_x + u_z_part;
-    float a = fx_x * h_x + a_z_part;
+    float u_num = s_x * h_x + s_z * h_z;
+    float a = fx_x * h_x + fx_z * h_z;
     u_num = s_y * h_y + u_num;
     a = fx_y * h_y + a;
 
-    if (u_num < eps)
-        return false;
-    if (u_num > a)
-        return false;
+    if (0.0f <= u_num && u_num <= a) {
+        float q_z = fx_y * s_x - fx_x * s_y;
+        float q_y = fx_x * s_z - fx_z * s_x;
+        float q_x = fx_z * s_y - fx_y * s_z;
 
-    // q = cross(s, frame.x)
-    // q.z = s.x * fx.y - fx.x * s.y
-    // q.y = fx.x * s.z - fx.z * s.x
-    // q.x = fx.z * s.y - fx.y * s.z
-    float q_z = fx_y * s_x - fx_x * s_y;
-    float q_y = fx_x * s_z - fx_z * s_x;
-    float q_x = fx_z * s_y - fx_y * s_z;
+        float v_num = v2.y * q_y + v2.z * q_z + v2_x * q_x;
 
-    // v_num = dot(v2, q)
-    float v_num = v2_y * q_y + v2_z * q_z + v2_x * q_x;
-
-    if (v_num < eps)
-        return false;
-    if (v_num + u_num > a)
-        return false;
-
-    // t = dot(frame.y, q) / a
-    float t_num = fy_y * q_y + fy_z * q_z + fy_x * q_x;
-    float t = t_num / a;
-    out = t;
-
-    float min_t = 1.192093e-7f;   // FLT_EPSILON (0x34000000)
-    if (t < min_t)
-        return false;
-    return true;
+        if (0.0f <= v_num &&
+            v_num + u_num <= a) {
+            float t = (tri.frame.y.y * q_y + tri.frame.y.z * q_z + tri.frame.y.x * q_x) / a;
+            out = t;
+            if (1.1920929e-07f <= t)
+                return true;
+        }
+    }
+    return false;
 }

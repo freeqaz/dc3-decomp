@@ -93,24 +93,25 @@ bool FlowRun::Activate() {
 }
 
 void FlowRun::ResolveTarget() {
-    Flow *target = mTarget;
-    auto& targetName = mTargetName;
-    if (!target && targetName.length() > 0) {
-        ObjectDir *dir = mTargetDir;
-        if (!dir) {
-            // Find the containing flow's dir
-            Flow *ownerFlow = GetOwnerFlow();
-            if (ownerFlow) {
-                dir = ownerFlow->Dir();
-                if (!dir) {
-                    MILO_ASSERT(false, 0x72);
-                }
+    if (mTarget)
+        return;
+    const String& targetName = mTargetName;
+    const char *nameStr = targetName.c_str();
+    if (!nameStr[0])
+        return;
+    ObjectDir *dir = mTargetDir;
+    if (!dir) {
+        // Find the containing flow's dir
+        Flow *ownerFlow = GetOwnerFlow();
+        if (ownerFlow) {
+            dir = ownerFlow->Dir();
+            if (!dir) {
+                MILO_ASSERT(false, 0x72);
             }
         }
-        if (dir) {
-            Hmx::Object *found = dir->Find<Hmx::Object>(targetName.c_str(), false);
-            mTarget = dynamic_cast<Flow *>(found);
-        }
+    }
+    if (dir) {
+        mTarget = dir->Find<Flow>(nameStr, false);
     }
 }
 

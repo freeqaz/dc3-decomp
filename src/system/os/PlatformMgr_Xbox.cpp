@@ -594,43 +594,53 @@ MultipleItemsEnumJob::~MultipleItemsEnumJob() {
 
 void MultipleItemsEnumJob::Poll() {
     if (mStatus == 1 && mOverlapped.InternalLow != 0x3e5) {
-        DWORD result = XGetOverlappedResult(&mOverlapped, 0, 0);
+        DWORD resultBuf[26];
+        DWORD result = XGetOverlappedResult(&mOverlapped, resultBuf, 0);
         if (result == 0) {
-            mStatus = 2;
-            int count = (int)mItemIDs.size();
             u64 *enumEntry = (u64 *)mEnumBuffer;
+            mStatus = 2;
+            unsigned int bitOffset = mPurchased.begin()._M_offset;
+            unsigned int *bitChunk = mPurchased.begin()._M_p;
             u64 *itemPtr = &mItemIDs[0];
+            int count = (int)(mItemIDs.end() - mItemIDs.begin());
             if (count != 0) {
-                unsigned int bitOffset = mPurchased.begin()._M_offset;
-                unsigned int *bitChunk = mPurchased.begin()._M_p;
-                for (unsigned int i = 0; i < (unsigned int)count; i++) {
+                unsigned int i = 0;
+                do {
                     if (*enumEntry == *itemPtr) {
                         unsigned int mask = 1 << (bitOffset & 0x3f);
-                        if (*(int *)(enumEntry + 9) == 0) {
-                            *bitChunk = *bitChunk & ~mask;
-                        } else {
+                        int purchased = *(int *)(enumEntry + 9);
+                        if (purchased != 0) {
                             *bitChunk = *bitChunk | mask;
+                        } else {
+                            *bitChunk = *bitChunk & ~mask;
                         }
-                        if (mSuccess || (*bitChunk & mask) != 0) {
-                            mSuccess = true;
-                        }
+                        bool success = mSuccess || ((*bitChunk & mask) != 0);
                         enumEntry += 0xd;
+                        mSuccess = success;
                     } else {
-                        MILO_NOTIFY(MakeString("Could not enumerate offerId %016llX", itemPtr));
+                        TheDebug.Notify(MakeString("Could not enumerate offerId %016llX", *itemPtr));
                         *bitChunk = *bitChunk & ~(1 << (bitOffset & 0x3f));
                     }
+                    bool wrap = bitOffset == 0x1f;
                     bitOffset++;
-                    if (bitOffset == 0x20) {
+                    if (wrap) {
                         bitOffset = 0;
                         bitChunk++;
                     }
+                    i++;
                     itemPtr++;
-                }
+                } while (i < (unsigned int)count);
             }
         } else {
             mStatus = 3;
-            MILO_NOTIFY(MakeString("Error enumerating after purchase: %d", result));
+            TheDebug.Notify(MakeString("Error enumerating after purchase: %d", result));
         }
+        if (mEnumHandle != 0) {
+            CloseHandle(mEnumHandle);
+            mEnumHandle = 0;
+        }
+        ::operator delete(mEnumBuffer);
+        mEnumBuffer = 0;
     }
 }
 

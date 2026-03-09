@@ -191,24 +191,37 @@ void UIListDir::DrawWidgets(
     FOREACH (it, widgets) {
         UIListWidget *widget = *it;
         UIListWidgetDrawType drawType = widget->WidgetDrawType();
-        if (drawType == kUIListWidgetDrawAlways
-            || (drawType == kUIListWidgetDrawFocusedOrManual
-                && (bDrawFocusedOrManual || compState == UIComponent::kFocused))
-            || (drawType == kUIListWidgetDrawOnlyFocused
-                && compState == UIComponent::kFocused)) {
-            DrawCommand cmd = kDrawAll;
-            if (scrolling)
-                cmd = kExcludeFirst;
+        bool shouldDraw = false;
+        if (drawType == kUIListWidgetDrawAlways) {
+            shouldDraw = true;
+        } else if (drawType == kUIListWidgetDrawFocusedOrManual) {
+            if (bDrawFocusedOrManual || compState == UIComponent::kFocused) {
+                shouldDraw = true;
+            }
+        } else if (drawType == kUIListWidgetDrawOnlyFocused) {
+            if (compState == UIComponent::kFocused) {
+                shouldDraw = true;
+            }
+        }
+
+        if (shouldDraw) {
+            DrawCommand cmd = scrolling ? kExcludeFirst : kDrawAll;
             widget->Draw(drawState, state, tf, compState, box, cmd);
         }
     }
+
     if (scrolling) {
         FOREACH (it, widgets) {
             UIListWidget *widget = *it;
             UIListWidgetDrawType drawType = widget->WidgetDrawType();
-            if (drawType == kUIListWidgetDrawAlways
-                || (drawType == kUIListWidgetDrawOnlyFocused
-                    && compState == UIComponent::kFocused)) {
+            bool shouldDrawFirst = false;
+            if (drawType == kUIListWidgetDrawAlways) {
+                shouldDrawFirst = true;
+            } else if (drawType == kUIListWidgetDrawOnlyFocused && compState == UIComponent::kFocused) {
+                shouldDrawFirst = true;
+            }
+
+            if (shouldDrawFirst) {
                 widget->Draw(drawState, state, tf, compState, box, kDrawFirst);
             }
         }

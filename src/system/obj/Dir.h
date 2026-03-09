@@ -144,11 +144,7 @@ ObjDirPtr<C>::ObjDirPtr(C *dir) : ObjRefConcrete<C>(dir), mLoader(nullptr) {
 
 template <class C>
 bool ObjDirPtr<C>::IsLoaded() const {
-    if (mObject)
-        return true;
-    if (mLoader && mLoader->IsLoaded())
-        return true;
-    return false;
+    return mObject != nullptr || (mLoader != nullptr && mLoader->IsLoaded());
 }
 
 template <class C>

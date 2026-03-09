@@ -70,11 +70,10 @@ void CharEyes::Enter() {
     mLowerBlinkAngle = -1.0f;
     mInterestFilterFlags = mDefaultFilterFlags;
     mDartTimer = 0.0f;
-    auto& needRecalc = mNeedRecalc;
     mEnabled = false;
-    needRecalc = false;
+    mNeedRecalc = false;
     RndTransformable *head = GetHead();
-    needRecalc = false;
+    mNeedRecalc = false;
     if (head) {
         mLastFacing = head->WorldXfm().m.y;
         Normalize(mLastFacing, mLastFacing);
@@ -186,6 +185,46 @@ void CharEyes::Highlight() {
                     headPos,
                     Hmx::Color(0.0f, 1.0f, 0.0f)
                 );
+            }
+        }
+        if (mInterests.size() != 0) {
+            RndTransformable *head = GetHead();
+            const Transform &headxfm = head->WorldXfm();
+            Vector3 headFwd(headxfm.m.y);
+            Normalize(headFwd, headFwd);
+            float sphereSize = 2.0f;
+            for (ObjVector<CharInterestState>::iterator it = mInterests.begin();
+                 it != mInterests.end();
+                 ++it) {
+                CharInterest *interest = it->mInterest;
+                bool matchesFilter = interest->IsMatchingFilterFlags(mInterestFilterFlags);
+                if (!matchesFilter && (mInterestFilterFlags != mDefaultFilterFlags ||
+                    interest->mMaxViewAngleCos != 0)) {
+                    continue;
+                }
+
+                if (interest == mCurrentInterest) {
+                    oneframe->AddSphere(headxfm.v, sphereSize, Hmx::Color(1.0f, 0.0f, 0.0f));
+                    if (interest->mMaxViewAngleCos != 0) {
+                    }
+                } else {
+                    if (interest->IsWithinViewCone(headxfm.v, headFwd) &&
+                        interest->IsWithinViewCone(headxfm.v, headFwd)) {
+                        if (!matchesFilter) {
+                        } else {
+                            oneframe->AddSphere(interest->WorldXfm().v, sphereSize, Hmx::Color(0.3f, 0.3f, 1.0f));
+                        }
+                    } else if (!matchesFilter) {
+                    } else {
+                        oneframe->AddSphere(interest->WorldXfm().v, sphereSize, Hmx::Color(0.313f, 0.313f, 1.0f));
+                    }
+                }
+
+                if (it->IsInRefractoryPeriod()) {
+                    float refTime = it->RefractoryTimeRemaining();
+                    if (interest->mMaxViewAngleCos != 0) {
+                    }
+                }
             }
         }
     }
@@ -723,8 +762,7 @@ bool CharEyes::Replace(ObjRef *ref, Hmx::Object *obj) {
 }
 
 void CharEyes::NextLook() {
-    auto& _ref0 = mTarget;
-    Vector3 oldTarget = _ref0;
+    Vector3 oldTarget = mTarget;
 
     RndTransformable *head = GetHead();
     const Transform &headXfm = head->WorldXfm();
@@ -733,7 +771,7 @@ void CharEyes::NextLook() {
     Normalize(facingDir, facingDir);
 
     if (mFocusInterest) {
-        _ref0 = mFocusInterest->WorldXfm().v;
+        mTarget = mFocusInterest->WorldXfm().v;
         mCurrentInterest = mFocusInterest;
         const CharEyeDartRuleset *dartOverride = mCurrentInterest->GetDartRulesetOverride();
         if (dartOverride) {
@@ -767,21 +805,21 @@ void CharEyes::NextLook() {
         float projY = newFacingY * dist;
         float projZ = newFacingZ * dist;
 
-        _ref0.x = headXfm.v.x + projX;
-        _ref0.y = projY + headXfm.v.y;
-        _ref0.z = headXfm.v.z + projZ;
+        mTarget.x = headXfm.v.x + projX;
+        mTarget.y = projY + headXfm.v.y;
+        mTarget.z = headXfm.v.z + projZ;
 
         RndTransformable *dirTrans = dynamic_cast<RndTransformable *>(Dir());
         if (dirTrans) {
             const Vector3 &dirPos = dirTrans->WorldXfm().v;
-            if (dirPos.z > _ref0.z) {
-                float scale = (dirPos.z - headXfm.v.z) / (_ref0.z - headXfm.v.z);
+            if (dirPos.z > mTarget.z) {
+                float scale = (dirPos.z - headXfm.v.z) / (mTarget.z - headXfm.v.z);
                 float sx = projX * scale;
                 float sy = projY * scale;
                 float sz = projZ * scale;
-                _ref0.x = headXfm.v.x + sx;
-                _ref0.y = sy + headXfm.v.y;
-                _ref0.z = headXfm.v.z + sz;
+                mTarget.x = headXfm.v.x + sx;
+                mTarget.y = sy + headXfm.v.y;
+                mTarget.z = headXfm.v.z + sz;
             }
         }
 
@@ -806,7 +844,7 @@ void CharEyes::NextLook() {
                 if (maxDistSq > 0.0f) {
                     CharInterestState *bestState = 0;
                     Vector3 targetDir;
-                    Subtract(_ref0, headXfm.v, targetDir);
+                    Subtract(mTarget, headXfm.v, targetDir);
                     Normalize(targetDir, targetDir);
 
                     float inverseDist = 1.0f / maxDistSq;
@@ -833,7 +871,7 @@ void CharEyes::NextLook() {
                     }
 
                     if (bestState) {
-                        _ref0 = bestState->mInterest->WorldXfm().v;
+                        mTarget = bestState->mInterest->WorldXfm().v;
                         mCurrentInterest = bestState->mInterest;
                         const CharEyeDartRuleset *dartOverride =
                             mCurrentInterest->GetDartRulesetOverride();
@@ -883,16 +921,16 @@ stateReset:
         Normalize(oldDir, oldDir);
 
         Vector3 newDir(
-            _ref0.x - headXfm.v.x,
-            _ref0.y - headXfm.v.y,
-            _ref0.z - headXfm.v.z
+            mTarget.x - headXfm.v.x,
+            mTarget.y - headXfm.v.y,
+            mTarget.z - headXfm.v.z
         );
         Normalize(newDir, newDir);
 
         if (Dot(newDir, oldDir) < 0.984808f) {
             ForceBlink();
-            mHeadForward = _ref0;
-            _ref0 = oldTarget;
+            mHeadForward = mTarget;
+            mTarget = oldTarget;
         }
     }
 }

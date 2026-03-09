@@ -1,5 +1,6 @@
 #include "world/LightPresetManager.h"
 #include "world/Dir.h"
+#include "math/Utl.h"
 #include "obj/Object.h"
 
 void PrintPreset(const char *str, LightPreset *preset) {
@@ -121,69 +122,50 @@ DataNode LightPresetManager::OnToggleLightingEvents(DataArray *da) {
 }
 
 void LightPresetManager::Poll() {
-    LightPreset *pPrev = mPresetPrev;
-    LightPreset *pNew = mPresetNew;
-    float timeNew = mTimeNew;
+    LightPreset *pnew = mPresetNew;
+    LightPreset *pprev = mPresetPrev;
+    float u30 = mTimeNew;
+    float u34 = mTimePrev;
     float blend = mBlend;
-    float timePrev = mTimePrev;
 
     if (mPresetOverride) {
-        TaskUnits units = mPresetOverride->Units();
-        float time = TheTaskMgr.Time(units);
-        float t = 1.0f;
-        if (0.0f < mOverrideDuration) {
-            t = (time - mTimeOverride) / mOverrideDuration;
+        float time = TheTaskMgr.Time(mPresetOverride->Units());
+        float f7 = 1.0f;
+        if (mOverrideDuration > 0.0f) {
+            f7 = (time - mTimeOverride) / mOverrideDuration;
         }
-        float clamped = 0.0f;
-        if (-t < 0.0f) {
-            clamped = t;
-        }
-        t = 1.0f;
-        if ((clamped - 1.0f) < 0.0f) {
-            t = clamped;
-        }
+        float t = Clamp<float>(0.0f, 1.0f, f7);
         if (mOverrideMode == 1) {
             t = 1.0f - t;
         }
         if (t > 0.0f) {
-            timePrev = timeNew;
+            pprev = pnew;
+            pnew = mPresetOverride;
+            u34 = u30;
+            u30 = mTimeOverride;
             blend = t;
-            timeNew = mTimeOverride;
-            pPrev = pNew;
-            pNew = mPresetOverride;
-        } else {
-            if (mOverrideMode == 1) {
-                mTimeOverride = 0.0f;
-                mPresetOverride = 0;
-                mOverrideDuration = 0.0f;
-                mOverrideMode = 0;
-            }
+        } else if (mOverrideMode == 1) {
+            mPresetOverride = 0;
+            mTimeOverride = 0.0f;
+            mOverrideDuration = 0.0f;
+            mOverrideMode = 0;
         }
     }
 
-    if (pNew) {
-        TaskUnits units = pNew->Units();
-        float time = TheTaskMgr.Time(units);
-        auto _tmp0 = pNew->FramesPerUnit();
-        float frame = _tmp0 * (time - timeNew);
-        float f = 0.0f;
-        if (-frame < 0.0f) {
-            f = frame;
-        }
-        if (pPrev == 0 || pPrev == pNew) {
-            pNew->SetFrameEx(f, 1.0f, (bool)units);
-            mSingleBlend = true;
-        } else {
-            TaskUnits prevUnits = pPrev->Units();
-            float prevTime = TheTaskMgr.Time(prevUnits);
-            float prevFrame = pPrev->FramesPerUnit() * (prevTime - timePrev);
-            float pf = 0.0f;
-            if (-prevFrame < 0.0f) {
-                pf = prevFrame;
-            }
-            pPrev->SetFrameEx(pf, 1.0f - blend, (bool)prevUnits);
-            pNew->SetFrameEx(f, blend, (bool)prevUnits);
+    if (pnew) {
+        float time = TheTaskMgr.Time(pnew->Units());
+        float fpu = pnew->FramesPerUnit();
+        float max = (0.0f > -((time - u30) * fpu)) ? (time - u30) * fpu : 0.0f;
+        if (pprev != 0 && pprev != pnew) {
+            float time2 = TheTaskMgr.Time(pprev->Units());
+            float fpu2 = pprev->FramesPerUnit();
+            float max2 = (0.0f > -((time2 - u34) * fpu2)) ? (time2 - u34) * fpu2 : 0.0f;
+            pprev->SetFrameEx(max2, 1.0f - blend, false);
+            pnew->SetFrameEx(max, blend, false);
             mSingleBlend = false;
+        } else {
+            pnew->SetFrameEx(max, 1.0f, mSingleBlend);
+            mSingleBlend = true;
         }
     }
     UpdateOverlay();

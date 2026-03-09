@@ -44,19 +44,36 @@ void Hmx::Quat::Set(const Vector3 &v, float f) {
 }
 
 void Hmx::Quat::Set(const Vector3 &v) {
-    float halfX = v.x * 0.5f;
-    float halfY = v.y * 0.5f;
-    float halfZ = v.z * 0.5f;
-    float sx = Sine(halfX);
-    float cx = Cosine(halfX);
-    float sy = Sine(halfY);
-    float cy = Cosine(halfY);
-    float sz = Sine(halfZ);
-    float cz = Cosine(halfZ);
-    x = cy * sx * cz + sy * cx * sz;
-    y = sy * cx * cz - cy * sx * sz;
-    z = cy * cx * sz - sy * sx * cz;
-    w = cy * cx * cz + sy * sx * sz;
+    double halfX = v.x * 0.5f;
+    double halfY = v.y * 0.5f;
+    double halfZ = v.z * 0.5f;
+    float sx = Sine((float)halfX);
+    double dsx = sx;
+    float cx = Cosine((float)halfX + 1.5707963705062866f);
+    double dcx = cx;
+    float sy = Sine((float)halfY);
+    double dsy = sy;
+    float cy = Cosine((float)halfY + 1.5707963705062866f);
+    double dcy = cy;
+    double px1 = dsy * dcx;
+    double p0x = dcy * dsx;
+    double p0y = dsy * dcx;
+    double p0z = dsy * dsx;
+    double p0w = dcy * dcx;
+    x = (float)p0x;
+    y = (float)p0y;
+    z = (float)p0z;
+    w = (float)p0w;
+    float sz = Sine((float)halfZ);
+    double dsz = sz;
+    float cz = Cosine((float)halfZ + 1.5707963705062866f);
+    double dcz = cz;
+    float tw = w;
+    float tx = x;
+    w = (float)(tw * dcz - dsx * dsz);
+    x = (float)(tx * dcz - px1 * dsz);
+    y = (float)(tx * dsz + px1 * dcz);
+    z = (float)(tw * dsz + dsx * dcz);
 }
 
 void Hmx::Quat::Set(const Hmx::Matrix3 &m) {

@@ -159,20 +159,18 @@ __declspec(noinline) void FlowSlider::UpdateEase() {
 void FlowSlider::UpdateActivations() {
     float savedIntensity = FlowNode::sIntensity;
 
-    auto next = mChildNodes.begin();
-    auto end = mChildNodes.end();
     auto cur = mChildNodes.begin();
-    if (end != next) ++next;
     auto prev = mChildNodes.begin();
+    auto next = cur;
+    if (cur != mChildNodes.end()) ++next;
 
-    while (cur != end) {
-        auto _tmp0 = cur->Obj();
-        FlowValueCase *curCase = static_cast<FlowValueCase *>(_tmp0);
+    while (cur != mChildNodes.end()) {
+        FlowValueCase *curCase = static_cast<FlowValueCase *>(cur->Obj());
         float curPos = curCase->Value();
         float t = false;
         float intensity;
 
-        if (next != end) {
+        if (next != mChildNodes.end()) {
             FlowValueCase *nextCase = static_cast<FlowValueCase *>(next->Obj());
             float nextPos = nextCase->Value();
             if (mValue >= curPos) {
@@ -197,7 +195,7 @@ void FlowSlider::UpdateActivations() {
             }
         }
 
-        if (next == end) {
+        if (next == mChildNodes.end()) {
             if (mValue > curPos) {
             intensity = 1.0f;
         } else if (cur == mChildNodes.begin() && mValue < curPos) {
@@ -233,7 +231,7 @@ void FlowSlider::UpdateActivations() {
 
         prev = cur;
         cur = next;
-        if (next != end) ++next;
+        if (next != mChildNodes.end()) ++next;
     }
 
     FlowNode::sIntensity = savedIntensity;
@@ -251,3 +249,4 @@ void FlowSlider::ReActivate() {
     Symbol sym = MakeString("%s: %s->%s", ClassName(), flow->Dir()->Name(), flow->Name());
     TheFlowMgr->AddEventTime(sym, timer.Ms());
 }
+

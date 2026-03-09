@@ -297,12 +297,10 @@ void MainMenuPanel::MotdHandleTextScrolledOut(int i) {
     static Symbol utility("utility");
     static Symbol none("none");
 
-    // Early exit if MOTD system not initialized
     if (!mMotdProcessingActive) {
         return;
     }
 
-    // Clear icon state for DLC/utility messages
     Symbol type = mMotdData.front().mType;
     if (type == dlc || type == utility) {
         UpdateIconState(none);
@@ -310,7 +308,6 @@ void MainMenuPanel::MotdHandleTextScrolledOut(int i) {
 
     mMotdData.pop_front();
 
-    // Calculate current width of remaining MOTD texts
     std::list<MotdData>::iterator it = mMotdData.begin();
     float currentWidth = 0.0f;
     float targetWidth = mMsgLabel->Width() * 2.0f;
@@ -323,14 +320,12 @@ void MainMenuPanel::MotdHandleTextScrolledOut(int i) {
         }
     }
 
-    // Add more text until we have enough to fill scroll area (2x label width)
     while (currentWidth < targetWidth) {
         currentWidth += MotdPickNextText();
     }
 
     MILO_ASSERT(mMotdData.size(), 0x301);
 
-    // Build the full text string from all queued messages
     String text = mMotdData.front().mText;
     it = mMotdData.begin();
     ++it;
@@ -380,19 +375,10 @@ float MainMenuPanel::MotdPickNextText() {
     static Symbol community("community");
     static Symbol stats("stats");
 
+    int rand;
     MotdData data;
-    data.mType = community;
-    int iVar8;
 
-    if (mMotdPromoFreq == 0) {
-        goto normal_pick;
-    }
-    if (mMotdPickCount % mMotdPromoFreq != 0) {
-        goto normal_pick;
-    }
-
-    {
-        // Promo path
+    if (mMotdPromoFreq != 0 && mMotdPickCount % mMotdPromoFreq == 0) {
         Symbol *pPromoType = &dlc;
         if (mMotdLastPromoType != utility) {
             pPromoType = &utility;
@@ -405,59 +391,61 @@ float MainMenuPanel::MotdPickNextText() {
         data.mWidth = mMsgLabel->ComputeCharWidthsForText(textCopy)
             + mMsgLabel->Indentation();
 
-        iVar8 = 1;
+        rand = 1;
         mMotdLastPromoType = data.mType;
-    }
-    goto set_counter;
-
-normal_pick:
-    if (mMotdMaxCommunityRun == 0 || mMotdMaxCommunityRun <= mMotdCommunityRunCount) {
-        iVar8 = 1;
-    pick_stats:
-        data.mType = stats;
-        mMotdCommunityRunCount = 0;
-        mMotdStatsRunCount = iVar8;
-    } else if (!(mMotdStatsRunCount < mMotdMaxStatsRun)) {
-        mMotdCommunityRunCount = 1;
-        mMotdStatsRunCount = 0;
+        mMotdPickCount = rand;
     } else {
-        iVar8 = RandomInt(0, 2);
         data.mType = community;
-        if (iVar8 == 0) {
-            iVar8 = mMotdStatsRunCount + 1;
-            goto pick_stats;
+
+        if (mMotdMaxCommunityRun != 0 && mMotdMaxCommunityRun > mMotdCommunityRunCount) {
+            if (mMotdStatsRunCount >= mMotdMaxStatsRun) {
+                mMotdCommunityRunCount = 1;
+                mMotdStatsRunCount = 0;
+            } else {
+                rand = RandomInt(0, 2);
+                data.mType = community;
+                if (rand != 0) {
+                    mMotdStatsRunCount = 0;
+                    mMotdCommunityRunCount = mMotdCommunityRunCount + 1;
+                } else {
+                    rand = mMotdStatsRunCount + 1;
+                    data.mType = stats;
+                    mMotdCommunityRunCount = 0;
+                    mMotdStatsRunCount = rand;
+                }
+            }
+        } else {
+            rand = 1;
+            data.mType = stats;
+            mMotdCommunityRunCount = 0;
+            mMotdStatsRunCount = rand;
         }
-        mMotdStatsRunCount = 0;
-        mMotdCommunityRunCount = mMotdCommunityRunCount + 1;
+
+        {
+            Symbol cat = data.mType;
+            int offset = 0;
+            if (mMotdMessagesByCategory[cat].size() > 1) {
+                offset = RandomInt(0, (unsigned int)mMotdMessagesByCategory[cat].size() >> 1);
+            }
+
+            std::list<String>::iterator it = mMotdMessagesByCategory[cat].begin();
+            std::advance(it, offset);
+
+            data.mText = *it;
+            String textCopy(data.mText);
+            data.mWidth = mMsgLabel->ComputeCharWidthsForText(textCopy)
+                + mMsgLabel->Indentation();
+
+            mMotdMessagesByCategory[cat].push_back(*it);
+            mMotdMessagesByCategory[cat].erase(it);
+
+            if (mMotdPromoFreq != 0) {
+                rand = mMotdPickCount + 1;
+                mMotdPickCount = rand;
+            }
+        }
     }
 
-    {
-        Symbol cat = data.mType;
-        int offset = 0;
-        if (mMotdMessagesByCategory[cat].size() > 1) {
-            offset = RandomInt(0, (unsigned int)mMotdMessagesByCategory[cat].size() >> 1);
-        }
-
-        std::list<String>::iterator it = mMotdMessagesByCategory[cat].begin();
-        std::advance(it, offset);
-
-        data.mText = *it;
-        String textCopy(data.mText);
-        data.mWidth = mMsgLabel->ComputeCharWidthsForText(textCopy)
-            + mMsgLabel->Indentation();
-
-        mMotdMessagesByCategory[cat].push_back(*it);
-        mMotdMessagesByCategory[cat].erase(it);
-
-        if (mMotdPromoFreq == 0)
-            goto end;
-        iVar8 = mMotdPickCount + 1;
-    }
-
-set_counter:
-    mMotdPickCount = iVar8;
-
-end:
     mMotdData.push_back(data);
     return mMotdData.back().mWidth;
 }
@@ -471,7 +459,6 @@ void MainMenuPanel::MotdInitializeTexts() {
 
     Symbol *pCategory = &no_profile;
 
-    // Ensure label uses scroll marquee wrap always
     if (mMsgLabel->GetFitType() != RndText::kFitScrollMarqueeWrapAlways) {
         MILO_LOG(
             ">>>>>>>>>> Forcing the souce lable to use "
@@ -480,18 +467,15 @@ void MainMenuPanel::MotdInitializeTexts() {
         mMsgLabel->SetFitType(RndText::kFitScrollMarqueeWrapAlways);
     }
 
-    // Clear existing alt style reference and scroll state
     mMsgLabel->SetAltStyle(nullptr);
 
     mMotdProcessingActive = false;
     mMotdData.clear();
 
-    // Check for no_profile messages - simple case
     if (!mMotdMessagesByCategory[no_profile].empty()) {
         goto show_single;
     }
 
-    // If both DLC and utility are empty...
     if (mMotdMessagesByCategory[dlc].empty() && mMotdMessagesByCategory[utility].empty()) {
         unsigned int commCount = mMotdMessagesByCategory[community].size();
         unsigned int statsCount = mMotdMessagesByCategory[stats].size();
@@ -501,18 +485,15 @@ void MainMenuPanel::MotdInitializeTexts() {
         }
     }
 
-    // Enable scrolling mode
     mMotdProcessingActive = true;
     mMsgLabel->SetAltStyle(this);
     {
         float targetWidth = mMsgLabel->Width() * 2.0f;
         mMotdPromoFreq = TheRockCentral.GetMotdFreq();
 
-        // Count community and stats
         int communityCount = mMotdMessagesByCategory[community].size();
         int statsCount = mMotdMessagesByCategory[stats].size();
 
-        // Adjust promo frequency
         if (mMotdMessagesByCategory[dlc].empty()
             && mMotdMessagesByCategory[utility].empty()) {
             mMotdPromoFreq = 0;
@@ -522,7 +503,6 @@ void MainMenuPanel::MotdInitializeTexts() {
             mMotdPromoFreq = communityCount + statsCount + 1;
         }
 
-        // Set community max rotation count
         {
             unsigned int commSize = mMotdMessagesByCategory[community].size();
             if (commSize == 0) {
@@ -535,7 +515,6 @@ void MainMenuPanel::MotdInitializeTexts() {
             }
         }
 
-        // Set stats max rotation count
         {
             unsigned int statsSize = mMotdMessagesByCategory[stats].size();
             if (statsSize > 1) {
@@ -545,25 +524,20 @@ void MainMenuPanel::MotdInitializeTexts() {
             }
         }
 
-        // Initialize counters
         mMotdStatsRunCount = 0;
         mMotdCommunityRunCount = 0;
         mMotdPickCount = 0;
         mMotdLastPromoType = utility;
 
-        // Pick first text
         MotdPickNextText();
 
-        // Fill scroll area with enough text (2x label width)
         float currentWidth = 0.0f;
         while (currentWidth < targetWidth) {
             currentWidth += MotdPickNextText();
         }
 
-        // Assert we have at least one text
         MILO_ASSERT(mMotdData.size(), 0x258);
 
-        // Build combined text string
         String text = mMotdData.front().mText;
         std::list<MotdData>::iterator it = mMotdData.begin();
         ++it;

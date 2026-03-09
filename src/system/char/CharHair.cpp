@@ -243,10 +243,9 @@ void CharHair::SimulateInternal(float fps) {
                 strandXfm.m
             );
             ObjVector<Point> &points = curStrand.Points();
-            Vector3 oldPos;
             for (int j = 0; j < points.size(); j++) {
                 Point &pt = points[j];
-                                oldPos = (pt.pos);
+                Vector3 oldPos = pt.pos;
                 pt.pos += pt.force;
                 pt.pos += windForce;
                 if (pt.sideLength >= 0.0f) {
@@ -263,7 +262,7 @@ void CharHair::SimulateInternal(float fps) {
                     } else {
                         float maxLen = pt.sideLength + mMaxSlack;
                         float maxLenSq = maxLen * maxLen;
-                        if (maxLen > maxLenSq) {
+                        if (distSq > maxLenSq) {
                             toMod *= (maxLenSq / (maxLenSq + distSq) - 0.5f);
                             pt.pos += toMod;
                             modPt.pos -= toMod;
@@ -283,9 +282,7 @@ void CharHair::SimulateInternal(float fps) {
                 ScaleAdd(strandXfm.v, strandXfm.m.y, pt.length, idealPos);
                 Interp(pt.lastZ, strandXfm.m.z, mTorsion, boneFrame.z);
 
-                // Collision
                 if (pt.collides.size() != 0) {
-                    float diffRad = pt.outerRadius - pt.radius;
                     float maxRad;
                     if (pt.radius < pt.outerRadius) maxRad = pt.outerRadius;
                     else maxRad = pt.radius;
@@ -591,16 +588,15 @@ CharHair::Strand::Strand(const Strand &rhs)
 }
 
 void CharHair::Strand::SetRoot(RndTransformable *trans) {
-    auto& root = mRoot;
-    root = trans;
-    if (!root) {
+    mRoot = trans;
+    if (!mRoot) {
         mPoints.resize(0);
     } else {
-        float savedLength = 0 != mPoints.size() ? mPoints.back().length : 0.0f;
+        RndTransformable *root = mRoot;
+        float savedLength = mPoints.size() != 0 ? mPoints.back().length : 0.0f;
         mBaseMat = root->LocalXfm().m;
         SetAngle(mAngle);
 
-        // Count chain depth by walking Children until leaf
         int depth = 0;
         for (RndTransformable *it = root; ; it = it->Children().front()) {
             depth++;
@@ -609,7 +605,6 @@ void CharHair::Strand::SetRoot(RndTransformable *trans) {
         }
 
         mPoints.resize(depth);
-        // Assign bones: root gets points[0], then walk children
         mPoints[0].bone = root;
         if (!root->Children().empty()) {
             int idx = 0;
@@ -620,7 +615,6 @@ void CharHair::Strand::SetRoot(RndTransformable *trans) {
             }
         }
 
-        // Set length and pos for all but last point
         Point *prevPt = nullptr;
         for (int i = 1; (unsigned int)i < (int)mPoints.size(); i++) {
             Point &prevPoint = mPoints[i - 1];
@@ -630,7 +624,6 @@ void CharHair::Strand::SetRoot(RndTransformable *trans) {
             prevPoint.pos = nextBone->WorldXfm().v;
         }
 
-        // Set last point's length and pos
         Point &lastPt = mPoints.back();
         if (savedLength != 0.0f) {
             lastPt.length = savedLength;

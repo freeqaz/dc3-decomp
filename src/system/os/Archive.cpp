@@ -137,68 +137,61 @@ void Archive::Enumerate(
     char folderPath[256];
     bool isDtb = false;
 
-    if (pattern) {
-        if (strstr(pattern, ".dta")) {
-            isDtb = true;
-            sprintf(dtbPath, "%s/gen/%s.dtb", FileGetPath(pattern), FileGetBase(pattern));
-            pattern = dtbPath;
-            if (!recurse) {
-                sprintf(folderPath, "%s/gen/", dir);
-                dir = folderPath;
-            }
+    if (pattern && strstr(pattern, ".dta")) {
+        isDtb = true;
+        sprintf(dtbPath, "%s/gen/%s.dtb", FileGetPath(pattern), FileGetBase(pattern));
+        pattern = dtbPath;
+        if (!recurse) {
+            sprintf(folderPath, "%s/gen/", dir);
+            dir = folderPath;
         }
     }
 
-    // Calculate directory length
-    const char *dirEnd = dir;
-    while (*dirEnd) {
-        dirEnd++;
-    }
-    int dirLen = dirEnd - dir;
+    const char *dirp = dir;
+    do {
+        dirp++;
+    } while (*(dirp - 1) != '\0');
+    int dirLen = dirp - dir - 1;
 
-    const char *lastPath = nullptr;
     bool matches = false;
+    const char *lastPath = nullptr;
 
-    // Iterate through file entries
     FOREACH (it, mFileEntries) {
         const char *curPath = mHashTable[it->HashedPath()];
 
-        // If path is different, recheck the directory match
         if (lastPath != curPath) {
-            lastPath = curPath;
-            matches = strncmp(dir, curPath, dirLen) == 0;
-            if (matches && !recurse) {
-                // For non-recursive, verify we're in the same directory (same slash count)
-                int dirSlashes = 0;
-                for (const char *p = dir; *p; p++) {
-                    if (*p == '/') dirSlashes++;
-                }
-                int curSlashes = 0;
-                for (const char *p = curPath; *p; p++) {
-                    if (*p == '/') curSlashes++;
-                }
-                if (dirSlashes != curSlashes) {
-                    matches = false;
-                }
+            if (recurse) {
+                matches = strncmp(dir, curPath, dirLen) == 0;
+            } else {
+                const char *dp = dir;
+                const char *cp = curPath;
+                int result;
+                do {
+                    result = (unsigned char)*cp - (unsigned char)*dp;
+                    if (*cp == '\0') break;
+                    dp++;
+                    cp++;
+                } while (result == 0);
+                matches = result == 0;
             }
+            lastPath = curPath;
         }
 
         if (!matches) continue;
 
         const char *curName = mHashTable[it->HashedName()];
-        bool patternMatches = true;
-        if (pattern != nullptr) {
-            char buf[512];
-            sprintf(buf, "%s/%s", curPath, curName);
-            patternMatches = FileMatch(buf, pattern) != 0;
+        if (pattern) {
+            const char *buf = MakeString("%s/%s", curPath, curName);
+            if (!FileMatch(buf, pattern)) continue;
         }
 
-        if (patternMatches) {
-            if (isDtb) {
-                cb(FileGetPath(curPath), FileGetBase(curPath));
-            } else {
-                cb(curName, curPath);
-            }
+        if (isDtb) {
+            const char *path = FileGetPath(curPath);
+            char *base = (char *)FileGetBase(curName);
+            const char *dtaName = MakeString("%s.dta", base);
+            cb(path, dtaName);
+        } else {
+            cb(curName, curPath);
         }
     }
 }

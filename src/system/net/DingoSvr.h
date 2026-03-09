@@ -74,6 +74,8 @@ public:
 private:
     bool SendAuthenticateMsg(const char *url, DataPoint &pt, Hmx::Object *callback);
 
+    friend class DingoJob;
+
 protected:
     virtual void FillAuthParams(DataPoint &pt);
     virtual bool FillAuthParamsFromPadNum(DataPoint &pt, int padnum) { return false; }
@@ -91,7 +93,8 @@ protected:
     String mHostName; // 0x30
     unsigned int mIPAddr; // 0x38
     unsigned int mPort; // 0x3c
-    String unk40;
+    const char *unk40; // 0x40
+    const char *unk44; // 0x44
     String mAuthUrl; // 0x48
     String unk50;
     String mLocale; // 0x58

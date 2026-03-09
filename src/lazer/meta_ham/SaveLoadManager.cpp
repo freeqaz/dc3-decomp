@@ -606,6 +606,157 @@ DataNode SaveLoadManager::GetDialogMsg() {
     }
 }
 
+void SaveLoadManager::Poll() {
+    if (!mActivated) {
+        return;
+    }
+
+    if (mState == kS_Idle) {
+        if (mNeedsSave && IsSafePlaceToSave()) {
+            mMode = kAutoSave;
+            Start();
+            mNeedsSave = false;
+            return;
+        }
+
+        if (mNeedsLoad && IsSafePlaceToLoad()) {
+            mMode = kAutoLoad;
+            Start();
+            mNeedsLoad = false;
+            return;
+        }
+
+        if (TheUIEventMgr->HasActiveDialogEvent()) {
+            return;
+        }
+
+        TheProfileMgr.PurgeOldData();
+
+        if (IsReasonToAutoload()) {
+            mNeedsLoad = true;
+        }
+        return;
+    }
+
+    // Check if state is in valid range for switch
+    if ((u32)(mState - 1) > 0x66u) {
+        return;
+    }
+
+    // Poll for state transitions
+    switch (mState) {
+    case kS_Start: {
+        State nextState;
+        switch (mMode) {
+        case kAutoLoad:
+            nextState = kS_AutoloadInit;
+            break;
+        case kAutoSave:
+            nextState = kS_SaveLoadError;
+            break;
+        case kDisableAutoSave:
+            nextState = kS_SaveLoadError;
+            break;
+        default: {
+            FormatString fmt("SaveLoadManager startup bad mode: %d");
+            MILO_NOTIFY(fmt.Str());
+            nextState = kS_Done;
+            break;
+        }
+        }
+        SetState(nextState);
+        break;
+    }
+    case kS_AutoloadInit:
+        if (!mInitialLoadPending) {
+            SetState(kS_AutoloadSelectProfile);
+        } else {
+            SetState(kS_SongCacheInit);
+        }
+        break;
+    case kS_AutoloadSelectProfile:
+        mActiveProfile = GetNewSigninProfile();
+        if (!mActiveProfile) {
+            SetState(kS_AutoloadDone);
+        } else {
+            SetState(kS_AutoloadSearchDevice);
+        }
+        break;
+    case kS_AutoloadDone:
+        mInitialLoadPending = false;
+        if (TheProfileMgr.GlobalOptionsNeedsSave()) {
+            SetState(kS_SongCacheInit);
+        } else {
+            TheProfileMgr.HandleProfileLoadComplete();
+            SetState(kS_Done);
+        }
+        break;
+    case kS_SongCacheInit: {
+        mCacheName = TheSongMgr.GetCachedSongInfoName();
+        if (mCacheID) {
+            TheCacheMgr->RemoveCacheID(mCacheID);
+            RELEASE(mCacheID);
+        }
+        if (!TheCacheMgr->SearchAsync(mCacheName.c_str(), &mCacheID)) {
+            MILO_FAIL(
+                "TheCacheMgr->SearchAsync() failed. CacheResult = %d",
+                TheCacheMgr->GetLastResult()
+            );
+        }
+        break;
+    }
+    case kS_SongCacheSearchResult:
+        SetState(kS_SongCacheCreate);
+        break;
+    case kS_SongCacheLookup:
+        mCacheID = nullptr;
+        SetState(kS_GlobalOptionsCreate);
+        break;
+    case kS_GlobalNewSignIns: {
+        std::vector<HamProfile *> newSignIns = TheProfileMgr.GetNewlySignedIn();
+        bool hasMultiple = newSignIns.size() > 1;
+        if (hasMultiple) {
+            mDeviceIDState = 1;
+        }
+        SetState(kS_AutoloadSelectProfile);
+        break;
+    }
+    case kS_SaveDone:
+        if (SongCacheNeedsWrite()) {
+            SetState(kS_SaveSongCache);
+        } else if (TheProfileMgr.GlobalOptionsNeedsSave()) {
+            SetState(kS_SaveGlobalOptions);
+        } else {
+            SetState(kS_SaveCheckProfile);
+        }
+        break;
+    case kS_SaveSongCache:
+        TheSongMgr.StartSongCacheWrite();
+        break;
+    case kS_SaveCheckProfile:
+        mActiveProfile = GetAutosavableProfile();
+        if (mActiveProfile) {
+            auto isStorageValid = TheMemcardMgr.IsStorageDeviceValid(mActiveProfile);
+            if (isStorageValid) {
+                SetState(kS_SaveOverwrite);
+            } else {
+                SetState(kS_SaveDeviceInvalid);
+            }
+        } else {
+            SetState(kS_SaveCheckAutosave);
+        }
+        break;
+    case kS_SaveCheckAutosave:
+        TheProfileMgr.HandleProfileSaveComplete();
+        SetState(kS_Done);
+        break;
+    case kS_Done:
+        TheMemcardMgr.SaveLoadAllComplete();
+        Finish();
+        break;
+    }
+}
+
 void SaveLoadManager::SetState(State newState) {
     auto& state = mState;
     if (state == newState)

@@ -2047,25 +2047,28 @@ void BuildFromBSP(RndMesh *mesh) {
     RndMesh *geomOwner = mesh->GetGeomOwner();
     BuildVisit(geomOwner->GetBSPTree());
 
-    int totalVerts = 0;
     unsigned int totalFaces = 0;
+    int totalVerts = 0;
 
+    // First pass: count vertices and faces, erase polys with < 3 points
     std::list<BuildPoly>::iterator it = gChildPolys.begin();
     while (it != gChildPolys.end()) {
-        int numPoints = (int)it->mPoly.points.size();
-        if ((unsigned int)numPoints < 3) {
+        unsigned int numPoints = (unsigned int)it->mPoly.points.size();
+        if (numPoints < 3U) {
             it = gChildPolys.erase(it);
         } else {
-            totalVerts += numPoints;
+            totalVerts += (int)numPoints;
             totalFaces += numPoints - 2;
             ++it;
         }
     }
 
+    // Resize vertex array
     geomOwner->Verts().resize(totalVerts);
 
-    int currentFaces = (int)geomOwner->Faces().size();
-    if (totalFaces < (unsigned int)currentFaces) {
+    // Handle face array
+    unsigned int currentFaces = (unsigned int)geomOwner->Faces().size();
+    if (totalFaces < currentFaces) {
         geomOwner->Faces().erase(
             geomOwner->Faces().begin() + totalFaces,
             geomOwner->Faces().end()
@@ -2081,48 +2084,56 @@ void BuildFromBSP(RndMesh *mesh) {
 
     int vertIdx = 0;
     int faceIdx = 0;
+    float z = 0.0f;
 
-    for (std::list<BuildPoly>::iterator pit = gChildPolys.begin();
-         pit != gChildPolys.end(); ++pit) {
-        Vector2 *points = &pit->mPoly.points[0];
-        Vector2 *pointsEnd = &pit->mPoly.points[0] + pit->mPoly.points.size();
+    // Second pass: transform vertices and create faces
+    std::list<BuildPoly>::iterator pit = gChildPolys.begin();
+    while (pit != gChildPolys.end()) {
+        std::vector<Vector2> &points = pit->mPoly.points;
 
-        if (points != pointsEnd) {
+        if (!points.empty()) {
             int vertOffset = vertIdx * 0x60;
+            Vector2 *p = &points[0];
+            Vector2 *pEnd = &points[0] + points.size();
+
             do {
-                Vector3 pt(points->x, points->y, 0.0f);
+                Vector3 pt(p->x, p->y, z);
                 Multiply(
                     pt,
                     pit->mTransform,
                     *(Vector3 *)((char *)geomOwner->Verts().mVerts + vertOffset)
                 );
-                points++;
+                p++;
                 vertIdx++;
                 vertOffset += 0x60;
-            } while (points != pointsEnd);
+            } while (p != pEnd);
         }
 
-        int firstVert = vertIdx - (int)pit->mPoly.points.size();
-        int j = firstVert + 2;
-        if (j < vertIdx) {
-            int numTris = vertIdx - j;
+        unsigned int numPoints = (unsigned int)points.size();
+        int firstVert = vertIdx - (int)numPoints;
+        int v2 = firstVert + 2;
+        if (v2 < vertIdx) {
+            int triCount = vertIdx - v2;
             int faceOffset = faceIdx * 6;
-            int v2 = firstVert + 1;
-            faceIdx += numTris;
+            int v1 = firstVert + 1;
+            faceIdx += triCount;
+
             do {
                 unsigned short *facePtr =
                     (unsigned short *)((char *)&geomOwner->Faces()[0] + faceOffset);
                 facePtr[0] = (unsigned short)firstVert;
-                facePtr[1] = (unsigned short)v2;
-                facePtr[2] = (unsigned short)j;
-                j++;
+                facePtr[1] = (unsigned short)v1;
+                facePtr[2] = (unsigned short)v2;
                 v2++;
+                v1++;
                 faceOffset += 6;
-                numTris--;
-            } while (numTris != 0);
+                triCount--;
+            } while (triCount != 0);
         }
+        ++pit;
     }
 
+    // Clear global lists
     gParentPolys.clear();
     gChildPolys.clear();
 

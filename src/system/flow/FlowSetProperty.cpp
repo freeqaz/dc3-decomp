@@ -7,6 +7,7 @@
 #include "math/Easing.h"
 #include "obj/Data.h"
 #include "obj/Dir.h"
+#include "obj/DirLoader.h"
 #include "obj/Object.h"
 #include "obj/Task.h"
 #include "utl/MakeString.h"
@@ -217,37 +218,52 @@ BEGIN_COPYS(FlowSetProperty)
     END_COPYING_MEMBERS
 END_COPYS
 
-INIT_REVS(4, 0)
+INIT_REVS(3, 0)
 
 BEGIN_LOADS(FlowSetProperty)
     LOAD_REVS(bs)
-    ASSERT_REVS(4, 0)
+    ASSERT_REVS(3, 0)
     LOAD_SUPERCLASS(FlowNode)
-    bs >> mTarget;
-    bs >> unk_0x98;
-
-    if (d.rev < 3) {
+    if (d.rev < 2) {
+        mTarget = mTarget.LoadFromMainOrDir(bs);
+    } else {
+        bs >> mTarget;
+    }
+    unk_0x98.Load(bs);
+    if (d.rev < 1) {
         DataNode node;
         node.Load(bs);
         mValue = node;
-    } else {
-        // Rev 3+ format: Save conditionally writes a type prefix.
-        // kDataObject: DataNode::Save writes [type=kDataObject, name_string]
-        // non-kDataObject: explicit [type_prefix], then DataNode::Save [type, data]
+    } else if (d.rev == 2) {
         int type;
         bs >> type;
         if (type == kDataObject) {
-            char buf[128];
-            bs.ReadString(buf, 128);
-            Hmx::Object *obj = Dir() ? Dir()->FindObject(buf, false, true) : nullptr;
-            mValue = DataNode(obj);
+            Flow *owner = GetOwnerFlow();
+            DirLoader *loader = owner->Loader();
+            ObjectDir *dir = loader ? loader->ProxyDir() : owner->Dir();
+            mValue = LoadObjectFromMainOrDir(bs, dir);
+        } else {
+            DataNode node;
+            node.Load(bs);
+            mValue = node;
+        }
+    } else {
+        int type;
+        bs >> type;
+        if (type == kDataObject) {
+            Flow *owner = GetOwnerFlow();
+            if (!owner) {
+                owner = dynamic_cast<Flow *>(this);
+            }
+            DirLoader *loader = owner->Loader();
+            ObjectDir *dir = loader ? loader->ProxyDir() : owner->Dir();
+            mValue = LoadObjectFromMainOrDir(bs, dir);
         } else {
             DataNode node;
             node.Load(bs);
             mValue = node;
         }
     }
-
     bs >> mRate;
     bs >> mBlendTime;
     bs >> mChangePerUnit;

@@ -15,6 +15,8 @@
 #include "utl/JobMgr.h"
 #include "utl/Symbol.h"
 
+class AccomplishmentCharacterListConditional;
+
 struct CharacterPref {
     bool operator==(Symbol s) const { return mChar == s; }
 
@@ -168,6 +170,7 @@ private:
     int mProfileSaveCounter; // 0x320
     int mChallengeTimeStamp; // 0x324 - challenge timestamp?
     int mSkippedSongCount; // 0x328
+    friend class AccomplishmentCharacterListConditional;
     int mProfileFlags; // 0x32c
     int mPrePracticeBestScore;
     bool mHasPracticedSong;

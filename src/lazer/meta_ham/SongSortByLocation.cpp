@@ -20,9 +20,6 @@ int ConvertGameOriginSymbolToEnum(Symbol sym) {
         return 3;
 }
 
-LocationCmp::LocationCmp() : mName(nullptr) {}
-LocationCmp::~LocationCmp() {}
-
 int LocationCmp::Compare(const NavListItemSortCmp *cmp, NavListNodeType type) const {
     switch (type) {
     case kNodeHeader: {
@@ -60,14 +57,19 @@ SongSortByLocation::NewHeaderNode(NavListItemNode *n1, NavListItemNode *n2) cons
 NavListShortcutNode *
 SongSortByLocation::NewShortcutNode(NavListItemNode *itemNode) const {
     SongSortNode *ssNode = dynamic_cast<SongSortNode *>(itemNode);
+    LocationCmp *newCmp;
+    LocationCmp *cmp;
     Symbol location = ssNode->Record()->Metadata()->GameOrigin();
     const char *name = ssNode->Record()->Metadata()->Title();
-    LocationCmp *newCmp = new LocationCmp();
+    newCmp = new LocationCmp();
+    cmp = newCmp;
     if (newCmp != 0) {
         newCmp->mName = name;
         newCmp->mLocation = location;
+    } else {
+        cmp = 0;
     }
-    return new NavListShortcutNode(newCmp, location, true);
+    return new NavListShortcutNode(cmp, location, true);
 }
 
 NavListItemNode *SongSortByLocation::NewItemNode(void *v) const {

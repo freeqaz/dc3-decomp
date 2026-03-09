@@ -56,17 +56,21 @@ DistEntry::DistEntry(const DistEntry &entry) : beat(entry.beat), bones(entry.bon
 ClipDistMap::ClipDistMap(
     CharClip *clip1, CharClip *clip2, float f1, float f2, int i, const DataArray *a
 )
-    : mBeatAlign(f1), mBlendWidth(f2), mClipA(clip1), mClipB(clip2), mWeightData(a),
-      mSamplesPerBeat(8), mLastMinErr(kHugeFloat), mBeatAlignOffset(0), mNumSamples(i) {
-    mDists.Resize(CalcWidth(), CalcHeight());
+    : mClipA(clip1), mClipB(clip2), mWeightData(a), mSamplesPerBeat(8),
+      mLastMinErr(kHugeFloat), mBeatAlign(f1), mBeatAlignOffset(0), mBlendWidth(f2),
+      mNumSamples(i) {
+    int height = CalcHeight();
+    int width = CalcWidth();
+    mDists.Resize(width, height);
 
     mBeatAlignPeriod = (int)((double)(mBeatAlign * mSamplesPerBeat) + 0.5);
 
     if (mBeatAlignPeriod != 0) {
-        int diff = (int)(mBStart * mSamplesPerBeat) - (int)(mAStart * mSamplesPerBeat);
-        mBeatAlignOffset = diff - (diff / mBeatAlignPeriod) * mBeatAlignPeriod;
-        if (mBeatAlignOffset < 0)
-            mBeatAlignOffset += mBeatAlignPeriod;
+        int diff = (int)(-mBStart * mSamplesPerBeat) - (int)(-mAStart * mSamplesPerBeat);
+        diff = diff - (diff / mBeatAlignPeriod) * mBeatAlignPeriod;
+        if (diff < 0)
+            diff += mBeatAlignPeriod;
+        mBeatAlignOffset = diff;
     }
 }
 
@@ -77,7 +81,6 @@ DistEntry::~DistEntry() {
 
 bool ClipDistMap::LocalMin(int col, int row) {
     int width = mDists.mWidth;
-    float *data = mDists.mData;
     float val = mDists(col, row);
 
     if (val == kHugeFloat) {
@@ -141,11 +144,10 @@ bool ClipDistMap::FindBestNode(float maxError, float startBeat, float endBeat, C
 
     // Clamp startCol to non-negative (unsigned masking pattern for codegen)
     startCol = 0xffffffffU - ((int)startCol >> 0x1f) & startCol;
-    auto& _width = mDists.mWidth;
-    int maxCol = _width;
+    int maxCol = mDists.mWidth;
     int endCol = (int)((endBeat - mAStart) * mSamplesPerBeat);
 
-    if (_width >= endCol) {
+    if (mDists.mWidth >= endCol) {
         maxCol = endCol;
     }
 
@@ -161,7 +163,7 @@ bool ClipDistMap::FindBestNode(float maxError, float startBeat, float endBeat, C
                 float currentError = node.err;
                 u8 foundBetter = 1;
                 // Access distance map: mData[(row * width) + col]
-                float cellError = *(float *)((_width * rowIdx + startCol) * 4 + mDists.mData);
+                float cellError = *(float *)((mDists.mWidth * rowIdx + startCol) * 4 + mDists.mData);
                 float newError = (currentError - cellError >= 0.0f) ? cellError : currentError;
 
                 node.err = newError;
@@ -389,10 +391,9 @@ void ClipDistMap::FindDists(float maxFacing, DataArray *arr) {
     std::vector<float> floatVec;
     float interpA = Interp(mClipA->StartBeat(), mClipA->EndBeat(), 0.5f);
     float interpB = Interp(mClipB->StartBeat(), mClipB->EndBeat(), 0.5f);
-    auto& _ref3 = mWorstErr;
-    _ref3 = 0;
+    mWorstErr = 0;
 
-    for (int i = 0.0f; i < mDists.mWidth; i++) {
+    for (int i = 0; i < mDists.mWidth; i++) {
         DistEntry newDistEntry;
         for (int j = 0; j < mDists.mHeight; j++) {
             mDists(i, j) = kHugeFloat;
@@ -444,14 +445,14 @@ void ClipDistMap::FindDists(float maxFacing, DataArray *arr) {
                 }
                 float dist = 0;
                 for (unsigned int k = 0; k < newDistEntry.bones.size(); k++) {
-                    auto& _sub1 = curDistEntry.bones[k];
-                    float dx = newDistEntry.bones[k].x - _sub1.x;
-                    float dy = newDistEntry.bones[k].y - _sub1.y;
-                    float dz = newDistEntry.bones[k].z - _sub1.z;
+                    const Vector3 &curBone = curDistEntry.bones[k];
+                    float dx = newDistEntry.bones[k].x - curBone.x;
+                    float dy = newDistEntry.bones[k].y - curBone.y;
+                    float dz = newDistEntry.bones[k].z - curBone.z;
                     dist += ((dz * dz + (dy * dy + dx * dx))) * floatVec[k];
                 }
                 float err = std::sqrt(dist / (float)newDistEntry.bones.size());
-                MaxEq(_ref3, err);
+                MaxEq(mWorstErr, err);
                 mDists(i, j) = err;
             }
         }

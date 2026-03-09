@@ -11,6 +11,8 @@
 #include "utl/MemMgr.h"
 #include "utl/UrlEncode.h"
 
+extern const char *lbl_82066608;
+
 #pragma region DingoJob
 
 DingoJob::DingoJob(char const *url, Hmx::Object *callback)
@@ -24,6 +26,11 @@ DingoJob::~DingoJob() { RELEASE(mDataPoint); }
 void DingoJob::Start() {
     MILO_ASSERT(GetURL(), 0x49);
     MILO_ASSERT(strlen(GetURL()) != 0, 0x4A);
+
+    const char *url = GetURL();
+    TheServer.Poll();
+    SetURL(MakeString("/?fs/?fs/?fs/?fs", lbl_82066608, TheServer.unk44, url));
+    StartImpl();
 }
 
 void DingoJob::SendCallback(bool success, bool cancelled) {

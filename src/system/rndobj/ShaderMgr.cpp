@@ -242,20 +242,52 @@ void *RndShaderMgr::AllocShader() {
 }
 
 RndShaderProgram &RndShaderMgr::FindShader(ShaderType t, const ShaderOptions &opts) {
-    for (std::list<ShaderTree>::iterator it = mShaderTrees.begin();
-         it != mShaderTrees.end() && it->shaderType != t;
-         ++it) {
-        // more stuff here
+    u64 flags = opts.flags;
+    std::list<ShaderTree>::iterator it;
+
+    for (it = mShaderTrees.begin(); it != mShaderTrees.end(); ++it) {
+        if (it->shaderType == t) {
+            break;
+        }
     }
-    ShaderTree tree;
-    tree.shaderType = t;
-    RndShaderProgram *p = NewShaderProgram();
-    p->mFlags = opts.flags;
-    tree.obj = p;
-    if (t == kStandardShader) {
-        mShaderTrees.push_front(tree);
-    } else {
-        mShaderTrees.push_back(tree);
+
+    if (it == mShaderTrees.end()) {
+        ShaderTree tree;
+        tree.shaderType = t;
+        RndShaderProgram *p = NewShaderProgram();
+        p->mFlags = flags;
+        tree.obj = p;
+        if (t == kStandardShader) {
+            mShaderTrees.push_front(tree);
+        } else {
+            mShaderTrees.push_back(tree);
+        }
+        return *p;
     }
-    return *p;
+
+    // Found the tree, now binary search in it
+    RndShaderProgram *node = it->obj;
+    while (true) {
+        if (flags < node->mFlags) {
+            RndShaderProgram *left = (RndShaderProgram *)node->unk10;
+            if (left == NULL) {
+                RndShaderProgram *newNode = NewShaderProgram();
+                node->unk10 = (Hmx::Object *)newNode;
+                newNode->mFlags = flags;
+                return *newNode;
+            }
+            node = left;
+        } else if (flags > node->mFlags) {
+            RndShaderProgram *right = (RndShaderProgram *)node->unk14;
+            if (right == NULL) {
+                RndShaderProgram *newNode = NewShaderProgram();
+                node->unk14 = (Hmx::Object *)newNode;
+                newNode->mFlags = flags;
+                return *newNode;
+            }
+            node = right;
+        } else {
+            return *node;
+        }
+    }
 }

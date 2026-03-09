@@ -142,10 +142,10 @@ void HamRibbon::UpdateChase() {
     }
 
     float now = TheTaskMgr.Seconds(TaskMgr::kRealTime);
-    if (now < mLastTime) {
-        if (mChaseKeys.begin() != mChaseKeys.end()) {
-            mChaseKeys.erase(mChaseKeys.begin(), mChaseKeys.end());
-        }
+    auto& _ref1 = mLastTime;
+    if (now < _ref1) {
+        auto _tmp1 = mChaseKeys.begin();
+        mChaseKeys.erase(_tmp1, mChaseKeys.end());
     }
 
     int added = 0;
@@ -167,14 +167,16 @@ void HamRibbon::UpdateChase() {
             }
         }
 
+        Key<Transform> key;
+        key.value = Transform::IDXfm();
+        key.frame = 0.0f;
+        mChaseKeys.resize(numKeys - removeCount, key);
+
         if (removeCount < numKeys) {
             for (int i = 0; i < numKeys - removeCount; ++i) {
                 mChaseKeys[i] = mChaseKeys[i + removeCount];
             }
         }
-
-        Key<Transform> key(Transform::IDXfm(), 0.0f);
-        mChaseKeys.resize(numKeys - removeCount, key);
         if (mChaseKeys.size() == 0) {
             key.value.v = followed;
             key.frame = now;
@@ -269,7 +271,7 @@ void HamRibbon::UpdateChase() {
     }
 
     UpdateMesh();
-    mLastTime = now;
+    _ref1 = now;
 }
 
 void HamRibbon::UpdateMesh() {
@@ -329,9 +331,10 @@ void HamRibbon::ConstructMesh() {
                 mMesh->Faces()[faceIdx].v2 = base + nextSide;
                 mMesh->Faces()[faceIdx].v3 = base + mNumSides + nextSide;
 
-                mMesh->Faces()[faceIdx + 1].v1 = base + mNumSides + nextSide;
-                mMesh->Faces()[faceIdx + 1].v2 = base + mNumSides + side;
-                mMesh->Faces()[faceIdx + 1].v3 = base + side;
+                int faceIdx1 = faceIdx + 1;
+                mMesh->Faces()[faceIdx1].v1 = base + mNumSides + nextSide;
+                mMesh->Faces()[faceIdx1].v2 = base + mNumSides + side;
+                mMesh->Faces()[faceIdx1].v3 = base + side;
             }
         }
 
@@ -352,8 +355,7 @@ void HamRibbon::ConstructMesh() {
                 for (int v = 0; v < 2; v++) {
                     int vertIdx = seg * mNumSides * 2 + v * mNumSides + side;
 
-                    Transform xfm;
-                    xfm = Transform::IDXfm();
+                    Transform xfm = Transform::IDXfm();
 
                     float scale = (v == 0) ? 1.0f : (0.5f - u);
                     Vector3 pos(sinA * radius * scale, 0, cosA * radius * scale);

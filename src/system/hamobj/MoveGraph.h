@@ -83,6 +83,9 @@ public:
     const std::vector<const MoveParent *> &NextAdjacents() const {
         return mNextAdjacents;
     }
+    const std::vector<const MoveParent *> &PrevAdjacents() const {
+        return mPrevAdjacents;
+    }
 
     void AddGenre(Symbol genre) {
         if (!HasGenre(genre)) {

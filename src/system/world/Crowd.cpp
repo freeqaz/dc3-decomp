@@ -839,7 +839,7 @@ void WorldCrowd::Set3DCharList(
         Reset3DCrowd();
         std::vector<std::pair<RndMultiMesh *, InstanceList::iterator> > grosserPairs;
         grosserPairs.reserve(pairVec.size());
-        for (int i = 0; (unsigned int)i < (int)pairVec.size(); i++) {
+        for (int i = 0; (unsigned int)i != pairVec.size(); i++) {
             int meshIdx = pairVec[i].first;
             if ((unsigned int)meshIdx >= (int)mCharacters.size()) {
                 MILO_NOTIFY(
@@ -854,7 +854,7 @@ void WorldCrowd::Set3DCharList(
                     ;
                 if (charIt->mMMesh) {
                     int charInstIdx = pairVec[i].second;
-                    if (charInstIdx >= (int)charIt->mMMesh->Instances().size()) {
+                    if ((unsigned int)charInstIdx >= charIt->mMMesh->Instances().size()) {
                         MILO_WARN(
                             "%s setting bad 3d char %d on mmesh %s, only has %d chars",
                             PathName(this),
@@ -874,34 +874,13 @@ void WorldCrowd::Set3DCharList(
                 }
             }
         }
-        for (int i = 0; i < (int)grosserPairs.size(); i++) {
+        for (int i = 0; (unsigned int)i != grosserPairs.size(); i++) {
             grosserPairs[i].first->Instances().erase(grosserPairs[i].second);
             grosserPairs[i].first->InvalidateProxies();
         }
         Sort3DCharList();
         SetFullness(oldFullness, mCharFullness);
         AssignRandomColors(false);
-        // Create handles for edit mode
-        if (TheLoadMgr.EditMode()) {
-            ObjList<CharData>::iterator charIt = mCharacters.begin();
-            for (; charIt != mCharacters.end(); ++charIt) {
-                for (int i = 0; i < (int)charIt->m3DChars.size(); i++) {
-                    if (!charIt->m3DChars[i].mHandle) {
-                        WorldCrowd3DCharHandle *handle =
-                            Hmx::Object::New<WorldCrowd3DCharHandle>();
-                        handle->Set3DChar(this, charIt, i, charIt->m3DChars[i].mXfm);
-                        charIt->m3DChars[i].mHandle = handle;
-                        // also update m3DCharsCreated
-                        for (int j = 0; j < (int)charIt->m3DCharsCreated.size(); j++) {
-                            if (charIt->m3DCharsCreated[j].mIdx == charIt->m3DChars[i].mIdx) {
-                                charIt->m3DCharsCreated[j].mHandle = handle;
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-        }
     }
 }
 

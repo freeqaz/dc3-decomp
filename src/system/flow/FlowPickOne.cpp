@@ -5,6 +5,8 @@
 #include "obj/Data.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
+#include <algorithm>
+#include <vector>
 
 FlowPickOne::FlowPickOne()
     : mChoiceHistory(this), mChoiceType(kChoiceRandom), mIndex(0), mChance(1) {}
@@ -37,45 +39,38 @@ BEGIN_COPYS(FlowPickOne)
     END_COPYING_MEMBERS
 END_COPYS
 
-// Helper: get Nth element from ObjPtrVec by index
-static FlowNode *GetNthChild(ObjPtrVec<FlowNode> &vec, int n) {
-    auto it = vec.begin();
-    for (int i = 0; i < n && it != vec.end(); i++)
-        ++it;
-    return (it != vec.end()) ? it->Obj() : nullptr;
-}
-
 bool FlowPickOne::Activate() {
     FLOW_LOG("Activate\n");
     mStopRequested = false;
     PushDrivenProperties();
 
-    // Chance check
     if (mChance != 1.0f) {
-        if (mChance * 100.0f < (float)(rand() % 100)) {
+        unsigned int r = rand() % 100;
+        if (mChance * 100.0f < (float)(int)r) {
             return false;
         }
     }
 
-    int numChildren = mChildNodes.size();
-    if (numChildren == 0)
+    int numChildren = (int)mChildNodes.size();
+    if (mChildNodes.empty())
         return false;
 
     FlowNode *chosen = nullptr;
 
     switch (mChoiceType) {
     case kChoiceOrdered:
-        if (mIndex < 0 || mIndex >= numChildren)
+        if (mIndex < 0 || numChildren <= mIndex)
             mIndex = 0;
-        chosen = GetNthChild(mChildNodes, mIndex);
+        chosen = (mChildNodes.begin() + mIndex)->Obj();
+        ActivateChild(chosen);
         mIndex++;
-        break;
+        return !mRunningNodes.empty();
     case kChoiceRandom:
         mIndex = RandomInt(0, numChildren);
-        chosen = GetNthChild(mChildNodes, mIndex);
+        chosen = (mChildNodes.begin() + mIndex)->Obj();
         break;
     case kChoiceRandomNoRepeat:
-        if (numChildren <= 1) {
+        if (numChildren < 2) {
             mIndex = 0;
         } else {
             int newIndex;
@@ -84,56 +79,50 @@ bool FlowPickOne::Activate() {
             } while (newIndex == mIndex);
             mIndex = newIndex;
         }
-        chosen = GetNthChild(mChildNodes, mIndex);
+        chosen = (mChildNodes.begin() + mIndex)->Obj();
         break;
-    case kChoiceRandomJukeBox:
+    case kChoiceRandomJukeBox: {
         if (numChildren <= 1) {
-            auto firstChild = mChildNodes.begin()->Obj();
             if (numChildren == 1)
-                chosen = firstChild;
+                chosen = mChildNodes.begin()->Obj();
             break;
         }
-        {
-            int historySize = mChoiceHistory.size();
-            if (mIndex < 0 || mIndex >= historySize) {
-                // Save last chosen before clearing
-                FlowNode *lastChosen =
-                    (historySize > 0) ? GetNthChild(mChoiceHistory, historySize - 1)
-                                      : nullptr;
-                mChoiceHistory.clear();
-                // Add all children to history
-                FOREACH (it, mChildNodes) {
-                    mChoiceHistory.push_back(it->Obj());
-                }
-                // Shuffle via swap
-                int newSize = mChoiceHistory.size();
-                for (int i = newSize - 1; i > 0; i--) {
-                    int j = RandomInt(0, i + 1);
-                    mChoiceHistory.swap(i, j);
-                }
-                mIndex = 0;
-                // If first element is same as lastChosen, start at 1
-                auto firstHistory = mChoiceHistory.begin()->Obj();
-                if (lastChosen && newSize > 0 &&
-                    firstHistory == lastChosen) {
-                    mIndex = 1;
-                }
-                historySize = newSize;
+        int historySize = (int)mChoiceHistory.size();
+        if (mIndex < 0 || historySize <= mIndex) {
+            FlowNode *lastChosen = nullptr;
+            if (!mChoiceHistory.empty()) {
+                lastChosen = (mChoiceHistory.begin() + (historySize - 1))->Obj();
             }
-            if (mIndex < historySize) {
-                chosen = GetNthChild(mChoiceHistory, mIndex);
-                mIndex++;
+            mChoiceHistory.clear();
+            std::vector<FlowNode *> items;
+            FOREACH (it, mChildNodes) {
+                items.push_back(it->Obj());
             }
+            std::random_shuffle(items.begin(), items.end());
+            for (auto rit = items.end(); rit != items.begin();) {
+                --rit;
+                mChoiceHistory.push_back(*rit);
+            }
+            mIndex = 0;
+            if (lastChosen && mChoiceHistory.begin()->Obj() == lastChosen) {
+                mIndex = 1;
+            }
+            historySize = (int)mChoiceHistory.size();
+        }
+        if (mIndex < historySize) {
+            chosen = (mChoiceHistory.begin() + mIndex)->Obj();
+            mIndex++;
         }
         break;
-    case kChoiceUseIndex:
-        {
-            int adjustedIndex = mIndex % numChildren;
-            mIndex = adjustedIndex;
-            chosen = GetNthChild(mChildNodes, adjustedIndex);
-        }
+    }
+    case kChoiceUseIndex: {
+        int adjustedIndex = mIndex % numChildren;
+        mIndex = adjustedIndex;
+        chosen = (mChildNodes.begin() + adjustedIndex)->Obj();
+        ActivateChild(chosen);
         mIndex++;
-        break;
+        return !mRunningNodes.empty();
+    }
     default:
         MILO_NOTIFY_ONCE("Bad ChoiceType in FlowPickOne!");
         break;

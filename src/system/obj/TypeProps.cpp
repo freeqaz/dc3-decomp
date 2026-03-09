@@ -318,19 +318,19 @@ void TypeProps::Save(BinStream &bs) {
         if (TheLoadMgr.EditMode()) {
             DataArray *def = ref->TypeDef();
             for (int i = 0; mMap && i < mMap->Size(); i += 2) {
-                    DataArray *arr = def->FindArray(mMap->Sym(i), false);
-                    if (arr && arr->Type(1) != kDataCommand) {
-                        if (arr->Node(1).CompatibleType(mMap->Type(i + 1)))
-                            continue;
-                        ClearKeyValue(mMap->Sym(i));
-                        if (mMap)
-                            i -= 2;
-                        else
-                            break;
-                    }
-                };
+                DataArray *arr = def->FindArray(mMap->Sym(i), false);
+                if (arr && arr->Type(1) != kDataCommand) {
+                    if (arr->Node(1).CompatibleType(mMap->Type(i + 1)))
+                        continue;
+                    ClearKeyValue(mMap->Sym(i));
+                    if (mMap)
+                        i -= 2;
+                    else
+                        break;
+                }
+            }
         }
-        if (mMap && ref->DataDir() == ref && ref->Dir() != ref || gLoadingProxyFromDisk) {
+        if ((mMap && ref->DataDir() == ref && ref->Dir() != ref) || gLoadingProxyFromDisk) {
             DataArray *def = ref->TypeDef();
             std::list<Symbol> classnames;
             ObjectDir *refDir = dynamic_cast<ObjectDir *>(ref);
@@ -363,7 +363,6 @@ void TypeProps::Save(BinStream &bs) {
                 }
             }
             if (arrToWrite) {
-                // resize arrToWrite to however many properties were actually inserted
                 arrToWrite->Resize(keyIdx);
                 bs << arrToWrite;
                 arrToWrite->Release();
@@ -372,8 +371,8 @@ void TypeProps::Save(BinStream &bs) {
             return;
         }
     }
-    std::list<Symbol> listb0;
-    std::list<Hmx::Object *> lista8;
+    std::list<Symbol> removedKeys;
+    std::list<Hmx::Object *> removedObjs;
     for (int i = 0; i < mMap->Size(); i += 2) {
         Symbol key = mMap->Sym(i);
         DataNode &n = mMap->Node(i + 1);
@@ -383,8 +382,8 @@ void TypeProps::Save(BinStream &bs) {
                 ObjectDir *objDir = obj->Dir();
                 if (objDir) {
                     if (objDir->ClassName() == "EditorDir") {
-                        listb0.push_back(key);
-                        lista8.push_back(obj);
+                        removedKeys.push_back(key);
+                        removedObjs.push_back(obj);
                         mMap->Remove(i);
                         mMap->Remove(i);
                     }
@@ -393,8 +392,8 @@ void TypeProps::Save(BinStream &bs) {
         }
     }
     bs << mMap;
-    std::list<Hmx::Object *>::const_iterator oit = lista8.begin();
-    for (std::list<Symbol>::const_iterator sit = listb0.begin(); sit != listb0.end();
+    std::list<Hmx::Object *>::const_iterator oit = removedObjs.begin();
+    for (std::list<Symbol>::const_iterator sit = removedKeys.begin(); sit != removedKeys.end();
          ++sit, ++oit) {
         mMap->Insert(0, *oit);
         mMap->Insert(0, *sit);

@@ -46,9 +46,8 @@ public:
         int mPage; // 0x0
         float mU;
         float mV;
-        float charWidth; // 0xc
+        float mCharWidth; // 0xc
         float mAdvance;
-        float unk14;
     };
     virtual ~RndFont();
     virtual bool Replace(ObjRef *, Hmx::Object *);

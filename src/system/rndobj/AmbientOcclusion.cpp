@@ -47,7 +47,10 @@ void RndAmbientOcclusion::BlendVert(
     out.norm.x += v2.norm.x;
     out.norm.z += v2.norm.z;
     out.norm.y += v2.norm.y;
-    Vector3 tang(v2.tangent.x + out.tangent.x, v2.tangent.y, v2.tangent.z);
+    Vector3 tang;
+    tang.x = v2.tangent.x + out.tangent.x;
+    tang.y = v2.tangent.y;
+    tang.z = v2.tangent.z;
     out.pos.x *= 0.5f;
     out.pos.y *= 0.5f;
     out.pos.z *= 0.5f;
@@ -240,22 +243,57 @@ void RndAmbientOcclusion::BuildTrees(Quality quality) {
     MILO_ASSERT(quality < kQuality_Max, 0x1E3);
     mQuality = quality;
     if (!mObjectsCast.empty() && !mObjectsReceive.empty()) {
-        auto triListEmpty = mTriList.empty();
-        MILO_ASSERT(triListEmpty, 0x1E9);
+        MILO_ASSERT(mTriList.empty(), 0x1E9);
         Timer timer;
         timer.Restart();
         MILO_LOG("RndAmbientOcclusion: Building kd-Tree...\n");
-        auto _tmp0 = Vector3(FLT_MAX, FLT_MAX, FLT_MAX);
-        Box box(_tmp0, Vector3(-FLT_MAX, -FLT_MAX, -FLT_MAX));
+
+        Box box(Vector3(FLT_MAX, FLT_MAX, FLT_MAX), Vector3(-FLT_MAX, -FLT_MAX, -FLT_MAX));
+
         FOREACH (it, mObjectsCast) {
+            RndMesh *mesh = *it;
+            const Transform &xfm = mesh->WorldXfm();
+            RndMesh::VertVector &verts = mesh->Verts();
+            unsigned int numVerts = verts.size();
+            unsigned int i = 0;
+
+            while (numVerts > i + 2) {
+                Vector3 v0, v1, v2;
+                Multiply(verts[i].pos, xfm, v0);
+                Multiply(verts[i + 1].pos, xfm, v1);
+                Multiply(verts[i + 2].pos, xfm, v2);
+
+                float d01 = Distance(v0, v1);
+                float d12 = Distance(v1, v2);
+                float d20 = Distance(v2, v0);
+
+                if ((d01 + d12 + d20) > 9.999999747378752e-05f && (d01 * d12 * d20) > 1.1920928955078125e-07f) {
+                    box.GrowToContain(v0, false);
+                    box.GrowToContain(v1, false);
+                    box.GrowToContain(v2, false);
+
+                    Triangle tri;
+                    tri.Set(v0, v1, v2);
+                    mTriList.push_back(tri);
+
+                    if (mIntersectBackFaces) {
+                        Triangle triBack;
+                        triBack.Set(v0, v2, v1);
+                        mTriList.push_back(triBack);
+                    }
+                }
+                i += 3;
+            }
         }
+
         MILO_ASSERT(mTree == NULL, 0x234);
         box.Extend(0.001f);
         mTree = new kdTree<Triangle>(box);
+
         FOREACH (it, mTriList) {
             mTree->Add(&*it);
         }
-        // kdtree pack
+
         mTree->PackNodes((kdTree<Triangle>::SplitPlaneType)0, 0);
         MILO_LOG(
             "RndAmbientOcclusion: Built kd-Tree in %0.2f seconds\n",
@@ -688,8 +726,6 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
     std::vector<Hmx::Color> faceAO(numFaces, aoResult);
     unsigned int f = 0;
     if (numFaces != 0) {
-        int colorOffset = 0;
-        int faceOffset = 0;
         float oneThird = 1.0f / 3.0f;
         do {
             RndMesh::Vert *verts = &mesh->Verts(0);
@@ -718,10 +754,8 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
             TransformNormal(faceNorm, (const Hmx::Matrix3 &)xfm, worldNorm);
             CalculateAOAtPoint(worldCenter, worldNorm, (float *)&aoResult);
 
+            faceAO[f] = aoResult;
             f++;
-            faceOffset += 6;
-            *(Hmx::Color *)((char *)&faceAO[0] + colorOffset) = aoResult;
-            colorOffset += 0x10;
         } while (f < (unsigned int)numFaces);
     }
 
@@ -729,25 +763,21 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
     std::vector<int> vertMap(numVerts);
     int v = 0;
     if (0 < numVerts) {
-        int vertOffset = 0;
         do {
             int equiv = 0;
             if (0 < v) {
-                int searchOffset = 0;
                 RndMesh::Vert *verts = &mesh->Verts(0);
                 do {
-                    float dy = verts[v].pos.y - verts[equiv].pos.y;
                     float dx = verts[v].pos.x - verts[equiv].pos.x;
+                    float dy = verts[v].pos.y - verts[equiv].pos.y;
                     float dz = verts[v].pos.z - verts[equiv].pos.z;
-                    if (dz * dz + dx * dx + dy * dy <= 0.001f)
+                    if (dx * dx + dy * dy + dz * dz <= 0.001f)
                         break;
                     equiv++;
-                    searchOffset += 0x60;
                 } while (equiv < v);
             }
             vertMap[v] = equiv;
             v++;
-            vertOffset += 0x60;
         } while (v < numVerts);
     }
 
@@ -799,14 +829,14 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
                             Normalize(edge2, edge2);
 
                             // Weight by the angle subtended at this vertex
-                            float dot = edge2.y * edge1.y
-                                + edge2.x * edge1.x + edge2.z * edge1.z;
+                            float dot = (float)(edge2.y * edge1.y
+                                + edge2.x * edge1.x + edge2.z * edge1.z);
                             float angle = (float)acos((double)dot);
-                            totalAngle += angle;
-                            accG += faceColor->green * angle;
-                            accR += angle * faceColor->red;
-                            accA += faceColor->alpha * angle;
-                            accB += faceColor->blue * angle;
+                            totalAngle = totalAngle + angle;
+                            accG = accG + faceColor->green * angle;
+                            accR = accR + angle * faceColor->red;
+                            accA = accA + faceColor->alpha * angle;
+                            accB = accB + faceColor->blue * angle;
                         }
                         j++;
                         fvPtr++;

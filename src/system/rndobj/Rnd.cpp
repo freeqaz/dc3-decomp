@@ -1195,7 +1195,7 @@ DataNode Rnd::OnToggleHeap(const DataArray *) {
 }
 
 RndTex *Rnd::CreateDefaultTexture(DefaultTextureType textureType) {
-    MILO_ASSERT(textureType < kDefaultTex_Max, 0x5F5);
+    MILO_ASSERT(textureType < kDefaultTex_Max, 0x5E4);
     static const int sDefSize[kDefaultTex_Max][2] = {
         { 8, 8 }, { 8, 8 }, { 8, 8 }, { 8, 8 },
         { 8, 8 }, { 8, 8 }, { 8, 8 }, { 8, 8 }
@@ -1217,7 +1217,7 @@ RndTex *Rnd::CreateDefaultTexture(DefaultTextureType textureType) {
     unsigned char blue = sDefColor[textureType][2];
     unsigned char alpha = sDefColor[textureType][3];
     RndBitmap bmap;
-    bmap.Create(width, height, 0, 32, 0, nullptr, nullptr, nullptr);
+    bmap.Create(width, height, 0, 0x20, 0x40, 0, 0, 0);
     for (int i = 0; i < height; i++) {
         for (int j = 0; j < width; j++) {
             bmap.SetPixelColor(j, i, red, green, blue, alpha);
@@ -1232,12 +1232,23 @@ RndTex *Rnd::CreateDefaultTexture(DefaultTextureType textureType) {
             }
         }
         break;
+    case kDefaultTex_Hue:
+        for (int i = 0; i < width; i++) {
+            Hmx::Color color;
+            MakeColor((float)i / 255.0f, 1.0f, 0.5f, color);
+            unsigned char thisRed = color.red * 255.0f;
+            unsigned char thisGreen = color.green * 255.0f;
+            unsigned char thisBlue = color.blue * 255.0f;
+            for (int j = 0; j < height; j++) {
+                bmap.SetPixelColor(i, j, thisRed, thisGreen, thisBlue, alpha);
+            }
+        }
+        break;
     case kDefaultTex_Error:
         for (int i = 0; i < height; i++) {
             for (int j = 0; j < width; j++) {
-                bool _bit0 = (((i ^ j) >> 2) & 1) != 0;
-                if (_bit0) {
-                    bmap.SetPixelColor(j, i, 0xFF, 0x80, 0x40, alpha);
+                if (((i ^ j) >> 2) & 1) {
+                    bmap.SetPixelColor(j, i, 0xff, 0x80, 0x40, alpha);
                 } else {
                     bmap.SetPixelColor(j, i, 0, 0, 0, alpha);
                 }

@@ -218,7 +218,7 @@ BEGIN_SAVES(RndFont)
         bs << info.mPage;
         bs << info.mU;
         bs << info.mV;
-        bs << info.charWidth;
+        bs << info.mCharWidth;
         bs << info.mAdvance;
     }
 END_SAVES
@@ -255,6 +255,23 @@ BinStream &operator>>(BinStream &bs, MatChar &mc) {
     bs.ReadString(x, 0x80);
     bs >> mc.width;
     bs >> mc.height;
+    return bs;
+}
+
+template<>
+BinStream &operator>>(BinStream &bs, std::map<char, MatChar> &m) {
+    unsigned int count;
+    bs >> count;
+    while (count > 0) {
+        char key;
+        bs >> key;
+        MatChar &mc = m[key];
+        char x[0x80];
+        bs.ReadString(x, 0x80);
+        bs >> mc.width;
+        bs >> mc.height;
+        count--;
+    }
     return bs;
 }
 
@@ -385,14 +402,14 @@ BEGIN_LOADS(RndFont)
                 info.mPage = 0;
                 bs >> info.mU;
                 bs >> info.mV;
-                bs >> info.charWidth;
-                if (info.charWidth < 0) {
-                    info.charWidth = 0;
+                bs >> info.mCharWidth;
+                if (info.mCharWidth < 0) {
+                    info.mCharWidth = 0;
                 }
                 if (d.rev > 0xe) {
                     bs >> info.mAdvance;
                 } else {
-                    info.mAdvance = info.charWidth;
+                    info.mAdvance = info.mCharWidth;
                 }
                 if (info.mAdvance < 0) {
                     info.mAdvance = 0;
@@ -412,7 +429,7 @@ BEGIN_LOADS(RndFont)
                 }
                 bs >> info.mU;
                 bs >> info.mV;
-                bs >> info.charWidth;
+                bs >> info.mCharWidth;
                 bs >> info.mAdvance;
             }
         }
@@ -438,7 +455,7 @@ END_LOADS
 float RndFont::CharWidth(unsigned short c) const {
     MILO_ASSERT(HasChar(c), 0x143);
     CharInfo &info = mTextureOwner->mCharInfoMap[c];
-    float w = info.charWidth;
+    float w = info.mCharWidth;
     MILO_ASSERT(w >= 0, 0x146);
     return w;
 }
@@ -556,10 +573,10 @@ bool RndFont::CharWidthAdvanceCoords(
     if (it != owner->mCharInfoMap.end()) {
         const CharInfo &info = it->second;
         if (info.mU != 0 || info.mV != 0 || info.mAdvance != 0) {
-            charW = info.charWidth;
+            charW = info.mCharWidth;
             advW = owner->mMonospace ? 1.0f : info.mAdvance;
             uvMin.x = info.mU;
-            uvMax.x = owner->mMaterialOffsets[info.mPage].x * info.charWidth + info.mU;
+            uvMax.x = owner->mMaterialOffsets[info.mPage].x * info.mCharWidth + info.mU;
             uvMin.y = info.mV;
             uvMax.y = owner->mMaterialOffsets[info.mPage].y + info.mV;
             return true;
@@ -567,4 +584,5 @@ bool RndFont::CharWidthAdvanceCoords(
     }
     return false;
 }
+
 

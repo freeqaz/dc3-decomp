@@ -1281,11 +1281,10 @@ RndCam *CamShot::GetCam() {
 }
 
 void CamShot::ClearCrowds() {
-    auto& crowds = mCrowds;
-    ObjVector<CamShotCrowd>::iterator it = crowds.begin();
-    while (it != crowds.end()) {
+    ObjVector<CamShotCrowd>::iterator it = mCrowds.begin();
+    while (it != mCrowds.end()) {
         if (!it->mCrowd) {
-            it = crowds.erase(it);
+            mCrowds.erase(it);
         } else {
             ++it;
         }

@@ -64,23 +64,30 @@
 void vorbis_lsp_to_curve(float *curve,int *map,int n,int ln,float *lsp,int m,
 			    float amp,float ampoffset){
   int i;
+  int c;
+  int k;
+  int qexp;
   float wdel=M_PI/ln;
+  float p;
+  float q;
+  float w;
+  float *ftmp;
 
   for(i=0;i<m;i++)lsp[i]=vorbis_coslook(lsp[i]);
 
   for(i=0;i<n;){
-    int k=map[i];
-    float p=.7071067812f;
-    float q=.7071067812f;
-    float w=vorbis_coslook(wdel*k);
-    float *ftmp=lsp;
-    int c=m>>1;
+    k=map[i];
+    p=.7071067812f;
+    q=.7071067812f;
+    w=vorbis_coslook(wdel*k);
+    ftmp=lsp;
+    c=m>>1;
 
-    while(c--){
+    do{
       q*=ftmp[0]-w;
       p*=ftmp[1]-w;
       ftmp+=2;
-    }
+    }while(--c);
 
     if(m&1){
       /* odd order filter; slightly assymetric */
@@ -94,14 +101,11 @@ void vorbis_lsp_to_curve(float *curve,int *map,int n,int ln,float *lsp,int m,
       p*=p*(1.f-w);
     }
 
-    {
-      int qexp;
-      q=frexp(p+q,&qexp);
-      q=vorbis_fromdBlook(amp*
-			  vorbis_invsqlook(q)*
-			  vorbis_invsq2explook(qexp+m)-
-			  ampoffset);
-    }
+    q=frexp(p+q,&qexp);
+    q=vorbis_fromdBlook(amp*
+                        vorbis_invsqlook(q)*
+                        vorbis_invsq2explook(qexp+m)-
+                        ampoffset);
 
     do{
       curve[i++]*=q;

@@ -69,8 +69,10 @@ void HamLabel::PostLoad(BinStream &bs) {
 
 void HamLabel::Count(int i1, int i2, float f3, Symbol s) {
     mCountKeys.clear();
-    mCountKeys.push_back(Key<float>(TheTaskMgr.UISeconds() * 1000, i1));
-    mCountKeys.push_back(Key<float>((float)(i2) + f3, i2));
+    float f1 = TheTaskMgr.UISeconds() * 1000;
+    mCountKeys.push_back(Key<float>(f1, i1));
+    float f2 = f1 + f3;
+    mCountKeys.push_back(Key<float>(f2, i2));
     mCountToken = s;
 }
 

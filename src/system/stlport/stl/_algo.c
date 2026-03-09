@@ -75,7 +75,7 @@ const _Tp& __median(const _Tp& __a, const _Tp& __b, const _Tp& __c) {
 
 template <class _Tp, class _Compare>
 #if !(defined (__SUNPRO_CC) && (__SUNPRO_CC < 0x420 ))
-inline 
+inline
 #endif
 const _Tp&
 __median(const _Tp& __a, const _Tp& __b, const _Tp& __c, _Compare __comp) {

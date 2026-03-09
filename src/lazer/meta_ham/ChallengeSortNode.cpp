@@ -143,11 +143,10 @@ int ChallengeHeaderNode::GetSongID() {
 }
 
 Symbol ChallengeHeaderNode::GetSongShortName() {
-    if (mChildren.size() != 0) {
-        auto firstChildToken = mChildren.front()->GetToken();
-        return firstChildToken;
+    if (!mChildren.size()) {
+        return gNullStr;
     }
-    return gNullStr;
+    return mChildren.front()->GetToken();
 }
 
 BEGIN_HANDLERS(ChallengeHeaderNode)

@@ -201,11 +201,15 @@ void MoveAsyncDetector::ClearLoopedRatingFrac(const HamMove *move) {
 }
 
 void MoveAsyncDetector::DisableDetector(HamMove *move) {
-    MoveDetector *detector = FindDetector(move);
-    if (detector != 0) {
-        detector->Reset();
-        mActiveDetectors.erase(detector);
-    } else if (move != 0) {
-        MILO_NOTIFY("Could not disable detector for %s", PathName(move));
+    if (move != 0) {
+        MoveDetector *detector = FindDetector(move);
+        if (detector != 0) {
+            detector->Reset();
+            mActiveDetectors.erase(detector);
+        } else {
+            const char *path = PathName(move);
+            auto _tmp0 = MakeString("Could not disable detector for %s", path);
+            TheDebug.Notify(_tmp0);
+        }
     }
 }

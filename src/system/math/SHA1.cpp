@@ -34,7 +34,7 @@ static Licenses sLicense("system/src/math/SHA1.h", Licenses::kRequirementNotific
     w = rol(w, 30);
 
 void CSHA1::Transform(unsigned int *pState, const unsigned char *pBuffer) {
-    unsigned int a, b, c, d, e;
+    unsigned long a, b, c, d, e;
 
     a = pState[0];
     b = pState[1];

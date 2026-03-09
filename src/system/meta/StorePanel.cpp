@@ -366,49 +366,37 @@ void StorePanel::HandleNetCacheLoaderFailure(int failType) {
 void StorePanel::MultipleItemsCheckout(std::list<StoreOffer *> *offers) {
     MILO_ASSERT(!mPurchaser, 0x2e7);
 
-    std::vector<u64> songIds;
-    std::vector<std::pair<StorePurchaseable*, const Profile*>> pairs;
+    Profile *profile = StoreProfile();
+    MILO_ASSERT(profile, 0x2ea);
 
-    // Populate vectors from offers list
+    std::vector<u64> songIds;
+
     FOREACH(it, *offers) {
         StoreOffer *offer = *it;
-        MILO_ASSERT(offer->IsAvailable(), 0x2ef);
+        MILO_ASSERT((*it)->IsAvailable(), 0x2ef);
 
-        // Store song ID
         u64 songId = offer->songID;
         songIds.push_back(songId);
 
-        // Store pair
         std::pair<StorePurchaseable*, const Profile*> pair;
         pair.first = offer;
-        pairs.push_back(pair);
+        mCartOffers.push_back(pair);
     }
 
-    // Allocate and construct purchaser
     void* mem = operator new(0x50);
     if (mem) {
-        u64 firstSongId = (*offers->begin())->songID;
         mPurchaser = new (mem) XboxMultipleItemsPurchaser(
-            (int)firstSongId,
+            profile->GetPadNum(),
             songIds,
             mPurchaseSource,
             0
         );
-    } else {
-        mPurchaser = 0;
     }
 
-    // Call Initiate virtual function
-    if (mPurchaser) {
-        typedef void (*VirtFunc)(void*);
-        void** vptr = (void**)mPurchaser;
-        void** vfunc_addr = (void**)*vptr;
-        VirtFunc vf = (VirtFunc)vfunc_addr[1];
-        vf(mPurchaser);
-    }
-
-    // Clean up
-    songIds.clear();
+    typedef void (*VirtFunc)(void*);
+    void** vptr = (void**)mPurchaser;
+    VirtFunc vf = (VirtFunc)vptr[1];
+    vf(mPurchaser);
 }
 
 void StorePanel::PopulateOffers(DataArray *arr, bool b) {
