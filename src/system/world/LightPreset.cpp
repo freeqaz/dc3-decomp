@@ -861,7 +861,6 @@ void LightPreset::CacheFrames() {
 }
 
 void LightPreset::GetKey(float frame, int &prevIdx, int &curIdx, float &blend) const {
-    auto& _ref1 = mKeyframes;
     float theframe = frame;
     if (theframe <= 0.0f || mEndFrame <= 0.0f) {
         prevIdx = -1;
@@ -871,57 +870,57 @@ void LightPreset::GetKey(float frame, int &prevIdx, int &curIdx, float &blend) c
     } else {
         if (mLooping) {
             theframe = std::fmod(frame, mEndFrame);
-            if (frame >= _ref1.back().unka8) {
-                if (_ref1.back().mFadeOutTime <= 0.0f) {
+            if (frame >= mKeyframes.back().unka8) {
+                if (mKeyframes.back().mFadeOutTime <= 0.0f) {
                     prevIdx = -1;
-                    curIdx = _ref1.size() - 1;
+                    curIdx = mKeyframes.size() - 1;
                     blend = 1.0f;
                     return;
                 }
-                float framedur = _ref1.back().unka8 + _ref1.back().mDuration;
+                float framedur = mKeyframes.back().unka8 + mKeyframes.back().mDuration;
                 if (theframe > framedur) {
-                    MILO_ASSERT(_ref1.back().mFadeOutTime > 0, 0x358);
-                    prevIdx = _ref1.size() - 1;
+                    MILO_ASSERT(mKeyframes.back().mFadeOutTime > 0, 0x358);
+                    prevIdx = mKeyframes.size() - 1;
                     curIdx = 0;
-                    blend = (theframe - framedur) / _ref1.back().mFadeOutTime;
+                    blend = (theframe - framedur) / mKeyframes.back().mFadeOutTime;
                     return;
                 }
                 prevIdx = -1;
-                curIdx = _ref1.size() - 1;
+                curIdx = mKeyframes.size() - 1;
                 blend = 1.0f;
                 return;
             }
-        } else if (frame >= _ref1.back().unka8) {
+        } else if (frame >= mKeyframes.back().unka8) {
             prevIdx = -1;
-            curIdx = _ref1.size() - 1;
+            curIdx = mKeyframes.size() - 1;
             blend = 1.0f;
             return;
         }
 
-        int cap = _ref1.size() - 1;
+        int cap = mKeyframes.size() - 1;
         int i;
         for (i = 0; i + 1 < cap;) {
             int mid = (i + cap) >> 1;
-            if (theframe == _ref1[mid].unka8) {
+            if (theframe == mKeyframes[mid].unka8) {
                 prevIdx = -1;
                 curIdx = mid;
                 blend = 1.0f;
                 return;
             }
-            if (!(theframe <= _ref1[mid].unka8)) {
+            if (!(theframe <= mKeyframes[mid].unka8)) {
                 i = mid;
             } else {
                 cap = mid;
             }
         }
 
-        MILO_ASSERT(theframe >= _ref1[i].unka8 && theframe < _ref1[cap].unka8, 0x317);
-        float dur = _ref1[i].unka8 + _ref1[i].mDuration;
+        MILO_ASSERT(theframe >= mKeyframes[i].unka8 && theframe < mKeyframes[cap].unka8, 0x317);
+        float dur = mKeyframes[i].unka8 + mKeyframes[i].mDuration;
         if (theframe > dur) {
-            MILO_ASSERT(_ref1[i].mFadeOutTime > 0, 0x31c);
+            MILO_ASSERT(mKeyframes[i].mFadeOutTime > 0, 0x31c);
             prevIdx = i;
             curIdx = cap;
-            blend = (theframe - dur) / _ref1[i].mFadeOutTime;
+            blend = (theframe - dur) / mKeyframes[i].mFadeOutTime;
         } else {
             prevIdx = -1;
             curIdx = i;
