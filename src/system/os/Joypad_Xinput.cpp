@@ -69,7 +69,11 @@ bool JoypadGetCachedXInputCaps(int pad, XINPUT_CAPABILITIES *caps, bool b3) {
 
 void JoypadResetXboxPC(int pad) {
     ResetAllUsersPads();
+#ifdef HX_NATIVE
+    if (TheUserMgr && TheUserMgr->GetBool()) {
+#else
     if (TheUserMgr && *(unsigned char *)((char *)TheUserMgr + 0x2c)) {
+#endif
         std::vector<LocalUser *> users;
         TheUserMgr->GetLocalUsers(users);
         for (int i = 0; i < pad; i++) {

@@ -116,6 +116,12 @@ void FlowSwitch::VerifyTypes() {
     const ObjVector<FlowMathOp> &mathOps = entry->MathOps();
     if (!mathOps.empty()) {
         const FlowMathOp *firstOp = mathOps.begin();
+#ifdef HX_NATIVE
+        // Use proper member accessors instead of hardcoded struct offsets
+        Hmx::Object *drivenObj = const_cast<FlowMathOp *>(firstOp)->DrivenObj();
+        if (drivenObj) {
+            const DataNode *rhsNode = &firstOp->Rhs();
+#else
         // FlowPtr<Object> is at offset 0x18 (24) in FlowMathOp
         // FlowPtr layout: mObjName(0), mOwnerNode(4), mState(8), mObjPtr.ObjRef(12+)
         // ObjRefConcrete<T> has vtable(0) and ptr(4), so object is at FlowPtr+0xc+4 = 0x20
@@ -123,6 +129,7 @@ void FlowSwitch::VerifyTypes() {
         if (drivenObj) {
             // rhs DataNode is at offset 0x10, it contains the property path on the driven obj
             const DataNode *rhsNode = (const DataNode *)((const char *)firstOp + 0x10);
+#endif
             if (rhsNode->Type() == kDataArray) {
                 const DataNode *drivenVal = drivenObj->Property(rhsNode->Array(), false);
                 if (drivenVal)

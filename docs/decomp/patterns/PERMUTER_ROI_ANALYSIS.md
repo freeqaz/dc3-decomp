@@ -149,9 +149,26 @@ These 3 patterns should be reviewed:
 ### Phase 2: Done
 `bitwise_accumulator`, `max_to_conditional`, `early_return_merge`, `bool_return_expr`, `fsel_template` — implemented with tests. All 112 tests pass.
 
-### Phase 3: Future priorities
-1. `pragma_fp_contract` — add/remove `#pragma fp_contract(on/off)` around expressions
-2. `hoist_sret` — hoist loop variable for sret register matching
-3. `alloca_intrinsic` — swap `alloca` ↔ `_alloca`
-4. Improve `ternary_swap` to increase win rate (currently 0/10 wins)
-15. Add `noreturn_attr` — `__declspec(noreturn)` insertion
+### Phase 3: Data-driven priorities (from commit history mining, 2026-03-09)
+
+Commit history analysis of 956 function improvements across 11 baselines revealed:
+
+**Fix existing patterns (highest ROI — proven wins in history but 0% permuter rate):**
+1. **Fix `ternary_swap` relevance** — 32.4% of human improvements involve ternary changes, but permuter has 0/10 wins. Root cause: `relevant()` fires on any branch opcode mismatch (too broad), wasting budget. Fix: tighten to ternary-specific signals, boost when Ghidra shows ternary patterns.
+2. **Fix `empty_size_swap` relevance** — 6.9% of improvements, 0 permuter wins. Root cause: only fires on `divw`/`divwu` signal, but real codegen difference includes `cmplw` vs `subf`+`clrrwi`.
+
+**New patterns (from unclassified improvements):**
+3. `reference_elimination` — inverse of `member_ref_bind`: remove `auto& ref = m[i]; ref.foo` → use `m[i].foo` directly. Easy AST transform.
+4. `const_ref_swap` — `Type copy = expr` ↔ `const Type& ref = expr`. Affects copy ctor codegen.
+5. `static_init_explicit` — add explicit `= nullptr/false/0` to file-scope statics. Trivial.
+6. `find_operand_order` — swap `end() != find()` to `find() != end()`. Comparison order matters.
+
+**Existing priorities (still valid):**
+7. `pragma_fp_contract` — add/remove `#pragma fp_contract(on/off)` around expressions
+8. `hoist_sret` — hoist loop variable for sret register matching
+9. `alloca_intrinsic` — swap `alloca` ↔ `_alloca`
+10. `noreturn_attr` — `__declspec(noreturn)` insertion
+
+### Commit History Mining Tool
+
+`scripts/analysis/mine_patterns.py` — mines cached baselines for pattern validation and discovery. See `docs/sessions/2026-03-09-commit-history-pattern-mining.md` for full analysis.

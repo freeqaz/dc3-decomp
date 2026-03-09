@@ -61,7 +61,11 @@ bool FlowTimer::Activate() {
 
 void FlowTimer::Deactivate(bool b) {
     FLOW_LOG("Deactivated\n");
+#ifdef HX_NATIVE
+    if ((Task *)mTask)
+#else
     if ((int)(Task *)mTask)
+#endif
         delete (Task *)mTask;
     TheFlowMgr->CancelCommand(this);
     FlowNode::Deactivate(b);

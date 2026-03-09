@@ -184,10 +184,17 @@ void RndSpline::PrepareShader(float farg0, float farg1) const {
                 if ((unsigned char)pt.mDirtyConstants != 0) {
                     MILO_ASSERT(false, 0x1CF);
                 }
+#ifdef HX_NATIVE
+                TheShaderMgr.SetVConstant((VShaderConstant)(constIdx - 2), pt.mCoeff0);
+                TheShaderMgr.SetVConstant((VShaderConstant)(constIdx - 1), pt.mCoeff1);
+                TheShaderMgr.SetVConstant((VShaderConstant)constIdx, pt.mCoeff2);
+                TheShaderMgr.SetVConstant((VShaderConstant)(constIdx + 1), pt.mCoeff3);
+#else
                 TheShaderMgr.SetVConstant((VShaderConstant)(constIdx - 2), *(Vector4 *)((unsigned char *)&pt + 0x18));
                 TheShaderMgr.SetVConstant((VShaderConstant)(constIdx - 1), *(Vector4 *)((unsigned char *)&pt + 0x28));
                 TheShaderMgr.SetVConstant((VShaderConstant)constIdx, *(Vector4 *)((unsigned char *)&pt + 0x38));
                 TheShaderMgr.SetVConstant((VShaderConstant)(constIdx + 1), *(Vector4 *)((unsigned char *)&pt + 0x48));
+#endif
                 idx++;
                 constIdx += 4;
             } while (idx <= endIdx);

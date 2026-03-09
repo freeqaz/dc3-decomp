@@ -82,7 +82,11 @@ public:
 
     struct CompressTextureCallback {
         virtual ~CompressTextureCallback() {}
+#ifdef HX_NATIVE
+        virtual void TextureCompressed(intptr_t) = 0;
+#else
         virtual void TextureCompressed(int) = 0;
+#endif
     };
 
     Rnd();

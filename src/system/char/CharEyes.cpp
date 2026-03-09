@@ -923,7 +923,7 @@ void CharEyes::LidTrackAndClampingUpdate(EyeDesc &desc, float blinkWeight) {
         float dx = lidPos.x - srcPos.x;
         float dy = lidPos.y - srcPos.y;
         float dz = lidPos.z - srcPos.z;
-        dist = std::sqrt(dx * dx + dy * dy + dz * dz);
+        dist = std::sqrt((dy * dy + (dx * dx + dz * dz)));
     }
 
     float eyeRot = (1.0f - blinkWeight) * source->LocalXfm().m.y.x;

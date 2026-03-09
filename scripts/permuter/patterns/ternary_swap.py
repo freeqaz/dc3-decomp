@@ -38,6 +38,11 @@ from ..ast_queries import get_indent
 from ..types import Diagnosis, FunctionContext, Variant
 
 
+_BRANCH_OPS = {"beq", "bne", "bge", "ble", "bgt", "blt",
+               "beq+", "bne+", "ble+", "bgt+", "bge+", "blt+",
+               "beq-", "bne-", "ble-", "bgt-", "bge-", "blt-"}
+
+
 class TernarySwapPattern(Pattern):
     name = "ternary_swap"
 
@@ -47,11 +52,34 @@ class TernarySwapPattern(Pattern):
         if diagnosis.reg_swap_pairs:
             return True
         # Check for branch opcode mismatches
-        branch_ops = {"beq", "bne", "bge", "ble", "bgt", "blt"}
         for d in diagnosis.diff_ops:
-            if d.target_opcode in branch_ops or d.base_opcode in branch_ops:
+            if d.target_opcode in _BRANCH_OPS or d.base_opcode in _BRANCH_OPS:
                 return True
         return False
+
+    def priority(self, diagnosis: Diagnosis) -> float:
+        if not self.relevant(diagnosis):
+            return 0.0
+
+        has_branch_mismatch = any(
+            d.target_opcode in _BRANCH_OPS or d.base_opcode in _BRANCH_OPS
+            for d in diagnosis.diff_ops
+        )
+
+        # Small clusters (size 2-6) are the signature of ternary-vs-if/else:
+        # one branch + one assignment on each side = 2-6 instruction difference
+        small_clusters = [c for c in diagnosis.clusters if 2 <= c.size <= 6]
+
+        # Strong signal: small clusters exist AND branch opcode mismatches present
+        if small_clusters and has_branch_mismatch:
+            return 1.0
+
+        # Moderate signal: branch mismatches without the characteristic small clusters
+        if has_branch_mismatch:
+            return 0.5
+
+        # Weak signal: only clusters or reg swaps, no branch evidence
+        return 0.3
 
     def generate(self, ctx: FunctionContext) -> Iterator[Variant]:
         counter = 0

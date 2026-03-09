@@ -802,13 +802,22 @@ void RndText::WrapText(
             }
             *d = 0;
         }
+        // Convert brkChars from unsigned short to wchar_t for WordWrap_CanBreakLineAt.
+        // On Linux, wchar_t is 4 bytes but our text buffers are unsigned short (2 bytes).
+        // Passing unsigned short* cast to wchar_t* causes the function to read garbled
+        // 4-byte values, producing spurious line breaks.
+        int brkLen = 0;
+        { const unsigned short *t = brkChars; while (*t++) brkLen++; }
+        wchar_t *brkWide = (wchar_t *)_alloca((brkLen + 1) * sizeof(wchar_t));
+        for (int bi = 0; bi <= brkLen; bi++) brkWide[bi] = (wchar_t)brkChars[bi];
+
         int nWp = 1, wpI = 0;
         const unsigned short *cur = baseChars;
         const unsigned short *curBrk = brkChars;
         int cCount = 0;
         for (;;) {
             unsigned short ch = *cur;
-            const wchar_t *brkW = (const wchar_t *)curBrk;
+            const wchar_t *brkW = &brkWide[cCount];
             int prevI = wpI;
             WrapPoint *nxt = &wps[nWp];
             if (ch == 0 || ch == '\n') {
@@ -853,7 +862,7 @@ void RndText::WrapText(
                 if (ch == 0x3c && mMarkup) {
                     cur = ParseMarkup(cur, styleState, mc);
                     cCount--;
-                    brkW = (const wchar_t *)curBrk - 1;
+                    brkW = &brkWide[cCount];
                     cur--;
                     if (styleState.mActive != activeMarkup && styleState.mActive)
                         activeMarkup = true;
@@ -861,7 +870,7 @@ void RndText::WrapText(
                 if (mc != 0) {
                     int ci = (int)(cur - baseChars);
                     if (activeMarkup) {
-                        bool canBrk = cCount >= 1 && WordWrap_CanBreakLineAt(brkW, (const wchar_t *)brkChars);
+                        bool canBrk = cCount >= 1 && WordWrap_CanBreakLineAt(brkW, brkWide);
                         if (canBrk) {
                             int best = -1, bestC = 100000;
                             bool ovf = false;
@@ -1338,6 +1347,32 @@ void RndText::UpdateScrollOffsets() {
     }
 }
 
+#ifdef HX_NATIVE
+// On Linux, wchar_t is 4 bytes but our text buffers use unsigned short (2 bytes).
+// Use manual u16 operations instead of wchar_t string functions to avoid buffer overflow.
+static const unsigned short kEllipsisU16[] = {'.', '.', '.', 0};
+static const unsigned short kBreakCharsU16[] = {' ', '\t', '\n', 0};
+
+static int u16len(const unsigned short *s) {
+    int n = 0;
+    while (s[n])
+        n++;
+    return n;
+}
+static void u16cpy(unsigned short *dst, const unsigned short *src) {
+    while ((*dst++ = *src++))
+        ;
+}
+static const unsigned short *u16chr(const unsigned short *s, unsigned short ch) {
+    while (*s) {
+        if (*s == ch)
+            return s;
+        s++;
+    }
+    return nullptr;
+}
+#endif
+
 static const wchar_t kEllipsisStr[] = L"...";
 static const wchar_t kBreakChars[] = L" \t\n";
 
@@ -1396,7 +1431,11 @@ void RndText::FitTextEllipsis() {
 
     if (!(charWidths[numChars] <= mWidth)) {
         // Text doesn't fit — need to truncate and add ellipsis
+#ifdef HX_NATIVE
+        int ellipsisLen = u16len(kEllipsisU16);
+#else
         int ellipsisLen = wcslen(kEllipsisStr);
+#endif
 
         // Binary search for how many chars fit
         int lo = 1;
@@ -1429,14 +1468,22 @@ void RndText::FitTextEllipsis() {
 
         // Place ellipsis at the truncation point
         int truncPos = totalLen - ellipsisLen;
+#ifdef HX_NATIVE
+        u16cpy(&buf[truncPos], kEllipsisU16);
+#else
         wcscpy((wchar_t *)&buf[truncPos], kEllipsisStr);
+#endif
 
         BuildFontMaps(true);
         OnComputeCharWidths(buf, charWidths, false);
         WrapText(buf, totalLen, charWidths, lines, bounds, 1.0f);
 
         // Iteratively shrink if text still doesn't fit
+#ifdef HX_NATIVE
+        auto breakChar = u16chr(kBreakCharsU16, buf[truncPos - 1]);
+#else
         auto breakChar = wcschr(kBreakChars, (wchar_t)buf[truncPos - 1]);
+#endif
         while (truncPos > 1
             && (lines.size() > 1 || mWidth <= bounds.w
                 || breakChar != 0)) {
@@ -1460,7 +1507,11 @@ void RndText::FitTextEllipsis() {
             }
 
             truncPos = totalLen - ellipsisLen;
+#ifdef HX_NATIVE
+            u16cpy(&buf[truncPos], kEllipsisU16);
+#else
             wcscpy((wchar_t *)&buf[truncPos], kEllipsisStr);
+#endif
             BuildFontMaps(true);
             OnComputeCharWidths(buf, charWidths, false);
             WrapText(buf, totalLen, charWidths, lines, bounds, 1.0f);
@@ -1610,37 +1661,35 @@ void RndText::ConstructMeshes(
     }
 
 #ifdef HX_NATIVE
-    // Diagnostic: dump vertex+face data for kFitEllipsis text meshes after sync
-    static int sTextDiag = 0;
-    if (sTextDiag < 15 && mText.length() >= 4 && mText.length() <= 30
-        && mFitType == kFitEllipsis && mText.c_str()[0] != ' ') {
+    // Diagnostic: dump per-char vertex positions for menu text
+    static int sCmDiag = 0;
+    if (sCmDiag < 5 && mText.length() >= 4
+        && (strstr(mText.c_str(), "MAIN") || strstr(mText.c_str(), "START"))) {
+        fprintf(stderr, "CM_DIAG [%s] text='%s' lines=%d fontMaps=%d\n",
+                PathName(this), mText.c_str(), (int)lines.size(), (int)mFontMaps.size());
+        for (int _li = 0; _li < (int)lines.size(); _li++) {
+            const Line &_l = lines[_li];
+            fprintf(stderr, "  line[%d] start=%d end=%d xStart=%.1f yPos=%.1f width=%.1f\n",
+                    _li, (int)(_l.mStart - lines[0].mStart), (int)(_l.mEnd - lines[0].mStart),
+                    _l.mXStart, _l.mYPos, _l.mWidth);
+        }
         for (auto *fm : mFontMaps) {
             for (int _p = 0; _p < fm->NumMeshes(); _p++) {
                 RndMesh *_m = fm->Mesh(_p);
-                if (_m && _m->NumVerts() >= 8) {
+                if (_m) {
                     int nv = _m->NumVerts();
                     int nf = _m->NumFaces();
-                    fprintf(stderr, "TEXT_DIAG [%s] text='%s' fit=%d verts=%d faces=%d meshPtr=%p\n",
-                        PathName(this), mText.c_str(), mFitType, nv, nf, (void*)_m);
-                    // Dump first 12 verts (3 chars worth)
-                    int dumpV = nv < 12 ? nv : 12;
-                    for (int _i = 0; _i < dumpV; _i++) {
-                        auto &_v = _m->Verts(_i);
-                        fprintf(stderr, "  v[%d] pos=(%.3f,%.3f,%.3f) uv=(%.4f,%.4f) col=(%.1f,%.1f,%.1f,%.1f)\n",
-                            _i, _v.pos.x, _v.pos.y, _v.pos.z, _v.tex.x, _v.tex.y,
-                            _v.color.red, _v.color.green, _v.color.blue, _v.color.alpha);
+                    fprintf(stderr, "  mesh[%d] verts=%d faces=%d\n", _p, nv, nf);
+                    int dv = nv < 40 ? nv : 40;
+                    for (int _i = 0; _i < dv; _i += 4) {
+                        auto &v0 = _m->Verts(_i);
+                        fprintf(stderr, "    char[%d] v0=(%.1f,%.1f,%.1f) uv=(%.3f,%.3f)\n",
+                                _i/4, v0.pos.x, v0.pos.y, v0.pos.z, v0.tex.x, v0.tex.y);
                     }
-                    // Dump first 6 face indices (3 face pairs = 3 char quads)
-                    int dumpF = nf < 6 ? nf : 6;
-                    for (int _i = 0; _i < dumpF; _i++) {
-                        auto &_f = _m->Faces(_i);
-                        fprintf(stderr, "  f[%d] = (%d, %d, %d)\n", _i, _f.v1, _f.v2, _f.v3);
-                    }
-                    sTextDiag++;
-                    break;
                 }
             }
         }
+        sCmDiag++;
     }
 #endif
 }

@@ -155,7 +155,12 @@ void Splash::EndSplasher() {
         }
         TheSplasher = NULL;
         SetRndSplasherCallback(0, 0, 0);
+#ifdef HX_NATIVE
+        // Use proper member access instead of hardcoded struct offset (0x1b4 = mReleaseImmediate)
+        TheRnd.mReleaseImmediate = false;
+#else
         *(bool *)((char *)&TheRnd + 0x1b4) = false;
+#endif
         // Clean up archived screen directories
         auto _tmp3 = mOldDirs.end();
         for (std::list<RndDir *>::iterator it = mOldDirs.begin(); it != _tmp3; ++it) {

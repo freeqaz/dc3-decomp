@@ -270,6 +270,13 @@ def diag_with_lfd_lfs() -> Diagnosis:
     return d
 
 
+def diag_with_shift_ops() -> Diagnosis:
+    """srwi vs srawi mismatch (signed vs unsigned shift from sizeof)."""
+    d = _empty_diag()
+    d.diff_ops = [DiffOp(index=6, target_opcode="srawi", base_opcode="srwi")]
+    return d
+
+
 def diag_with_offset_deltas() -> Diagnosis:
     """Offset swap mismatches (assignment reorder)."""
     d = _empty_diag()
@@ -1281,7 +1288,7 @@ void test_func(int size) {
         pattern_name="sizeof_signed_cast",
         description="sizeof(X) -> (int)sizeof(X)",
         func_name="test_func",
-        diagnosis=diag_always(),
+        diagnosis=diag_with_shift_ops(),
         seeded_source="""\
 void test_func(int total) {
     int n = total / sizeof(int);
@@ -1299,7 +1306,7 @@ void test_func(int total) {
         pattern_name="sizeof_signed_cast",
         description="(int)sizeof(X) -> sizeof(X)",
         func_name="test_func",
-        diagnosis=diag_always(),
+        diagnosis=diag_with_shift_ops(),
         seeded_source="""\
 void test_func(int total) {
     int n = total / (int)sizeof(int);
@@ -1319,7 +1326,7 @@ void test_func(int total) {
         pattern_name="initializer_literal",
         description="0.0f -> 0 in initializer",
         func_name="test_func",
-        diagnosis=diag_always(),
+        diagnosis=diag_with_lfd_lfs(),
         seeded_source="""\
 void test_func() {
     float val = 0.0f;
@@ -1337,7 +1344,7 @@ void test_func() {
         pattern_name="initializer_literal",
         description="0 -> 0.0f in initializer",
         func_name="test_func",
-        diagnosis=diag_always(),
+        diagnosis=diag_with_lfd_lfs(),
         seeded_source="""\
 void test_func() {
     float val = 0;
@@ -1857,17 +1864,17 @@ void test_func() {
     PatternFixture(
         id="strconv_member_name",
         pattern_name="milo_str_conv",
-        description="Add .Str() to obj->Name() in MILO_WARN",
+        description="Add .Str() to obj->ClassName() in MILO_WARN",
         func_name="test_func",
         diagnosis=diag_with_bl_mismatch(),
         seeded_source="""\
 void test_func(Hmx::Object *obj) {
-    MILO_WARN("bad obj %s", obj->Name());
+    MILO_WARN("bad obj %s", obj->ClassName());
 }
 """,
         expected_source="""\
 void test_func(Hmx::Object *obj) {
-    MILO_WARN("bad obj %s", obj->Name().Str());
+    MILO_WARN("bad obj %s", obj->ClassName().Str());
 }
 """,
     ),
@@ -1880,12 +1887,12 @@ void test_func(Hmx::Object *obj) {
         diagnosis=diag_with_bl_mismatch(),
         seeded_source="""\
 void test_func() {
-    MILO_NOTIFY("%s %s %s", PathName(this), ClassName(), Name());
+    MILO_NOTIFY("%s %s %s", PathName(this), ClassName(), StaticClassName());
 }
 """,
         expected_source="""\
 void test_func() {
-    MILO_NOTIFY("%s %s %s", PathName(this), ClassName().Str(), Name().Str());
+    MILO_NOTIFY("%s %s %s", PathName(this), ClassName().Str(), StaticClassName().Str());
 }
 """,
     ),
@@ -1898,12 +1905,12 @@ void test_func() {
         diagnosis=diag_with_bl_mismatch(),
         seeded_source="""\
 void test_func() {
-    MILO_NOTIFY("%s %s", ClassName().Str(), Name());
+    MILO_NOTIFY("%s %s", ClassName().Str(), StaticClassName());
 }
 """,
         expected_source="""\
 void test_func() {
-    MILO_NOTIFY("%s %s", ClassName().Str(), Name().Str());
+    MILO_NOTIFY("%s %s", ClassName().Str(), StaticClassName().Str());
 }
 """,
     ),

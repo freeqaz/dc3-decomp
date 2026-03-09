@@ -51,8 +51,14 @@ bool WordWrap_CanBreakLineAt(const wchar_t *cur, const wchar_t *start) {
             return false;
     }
 
-    // Quote handling
+    // Quote handling — guard against cur[-2] when too close to start.
+    // Original check uses byte distance <= 2, assuming 2-byte wchar_t (PPC/Xbox).
+    // On Linux wchar_t is 4 bytes, so use element distance instead.
+#ifdef HX_NATIVE
+    if ((cur - start) <= 1
+#else
     if ((int)(((unsigned int)((char *)cur - (char *)start)) & 0xFFFFFFFEu) <= 2
+#endif
         || (cur[-2] != 0x9 && cur[-2] != 0xD && cur[-2] != 0x20 && cur[-2] != 0x3000)
         || cur[-1] != 0x22
         || ch == 0x9 || ch == 0xD || ch == 0x20 || ch == 0x3000) {

@@ -1078,8 +1078,13 @@ CharBoneDir *CharClip::GetResource() const {
 }
 
 float CharClip::SampleToBeat(int sample) const {
+#ifdef HX_NATIVE
+    const float *end = mFull.Frames().data() + mFull.Frames().size();
+    const float *begin = mFull.Frames().data();
+#else
     const float *end = *(const float **)((char *)this + 0xfc);
     const float *begin = *(const float **)((char *)this + 0xf8);
+#endif
 
     bool _bit0 = ((end - begin) && ~3) != 0;
     if (!(_bit0)) {

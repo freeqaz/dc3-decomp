@@ -868,7 +868,7 @@ def parse_xdbf_string_table(payload: bytes) -> dict | None:
 
 def scan_source_paths(pe_data: bytes) -> dict:
     matches = sorted({m.group().decode("utf-8", errors="replace") for m in SOURCE_PATH_RE.finditer(pe_data)})
-    return {"count": len(matches), "samples": matches[:20]}
+    return {"count": len(matches), "samples": matches[:20], "all": matches}
 
 
 def analyze(xex_path: Path, pe_path: Path) -> dict:

@@ -70,11 +70,16 @@ Vector3 PhotoSpotlightPositioner::GetImagePos(Vector2 v2) const {
     RndMesh *mesh = mRefImage;
     const Transform *xfm;
 
+#ifdef HX_NATIVE
+    if (!mesh->Dirty()) {
+        xfm = &mesh->LocalXfm();
+#else
     // Check mDirty flag at offset 0xfd in RndMesh
     // Due to virtual inheritance, accessing directly via offset
     if (*((unsigned char *)mesh + 0xfd) == 0) {
         // Use mLocalXfm (part of RndTransformable subobject)
         xfm = (const Transform *)((char *)mesh + 0x88);
+#endif
     } else {
         // mDirty is set, must compute world transform
         xfm = &mesh->WorldXfm();

@@ -30,7 +30,11 @@ public:
     virtual void Poll();
     virtual void Exit();
     // Rnd::CompressTextureCallback
+#ifdef HX_NATIVE
+    virtual void TextureCompressed(intptr_t) { mFramesRecorded++; }
+#else
     virtual void TextureCompressed(int) { mFramesRecorded++; }
+#endif
 
     NEW_OBJ(StreamRecorder)
     OBJ_MEM_OVERLOAD(0x24)

@@ -180,7 +180,11 @@ void PhysicsVolume::CreatePhysicsVolume(PhysicsManager *mgr) {
 }
 
 void PhysicsVolume::DestroyPhysicsVolume() {
+#ifdef HX_NATIVE
+    if (mDetectionVolume.Ptr() != nullptr) {
+#else
     if ((unsigned)(void*)mDetectionVolume.Ptr()) {
+#endif
         delete mDetectionVolume.Ptr();
     }
     mDetectionVolume = nullptr;

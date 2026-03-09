@@ -674,9 +674,13 @@ def normalize_unit_pattern(pattern: str) -> str:
 
 
 # Default exclusion patterns for batch operations
-# XDK functions are third-party/SDK code, not decomp targets
+# XDK: third-party/SDK code, not decomp targets
+# link_glue: linker shims (ICF/ALTERNATENAME), not real decomp work
+# binkxenon: third-party Bink video library
 DEFAULT_EXCLUDE_PATTERNS = [
     "default/xdk/*",
+    "default/link_glue",
+    "default/lib/binkxenon/*",
 ]
 
 

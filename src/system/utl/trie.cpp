@@ -362,7 +362,11 @@ loop_start:
     if (curIdx == 1) {
         // Root level special handling
         unsigned int scanCount = 0;
+#ifdef HX_NATIVE
+        unsigned char rootCount = SiblingCount(NodePtr(this, 1));
+#else
         unsigned char rootCount = *(unsigned char *)((char *)this + 0x20);
+#endif
 
         while (scanCount < rootCount - 1) {
             check_index(curIdx);
@@ -380,7 +384,11 @@ loop_start:
         check_index(curIdx);
         FirstChild(NodePtr(this, 1)) = FirstChild(curNode);
         check_index(curIdx);
+#ifdef HX_NATIVE
+        Character(NodePtr(this, 1)) = Character(curNode);
+#else
         *(unsigned char *)((char *)this + 0x21) = Character(curNode);
+#endif
         delete_node(curIdx);
         dec_count(firstChildIdx);
 

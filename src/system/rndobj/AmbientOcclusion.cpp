@@ -1196,7 +1196,11 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
                     );
                     count--;
                     offset += 0x60;
+#ifdef HX_NATIVE
+                    src++;
+#else
                     src = (RndMesh::Vert *)((char *)src + 0x60);
+#endif
                 } while (count != 0);
             }
 
@@ -1434,7 +1438,11 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
                     );
                     count--;
                     offset += 0x60;
+#ifdef HX_NATIVE
+                    src++;
+#else
                     src = (RndMesh::Vert *)((char *)src + 0x60);
+#endif
                 } while (count != 0);
             }
 

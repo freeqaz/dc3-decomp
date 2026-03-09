@@ -1081,6 +1081,59 @@ target_link_libraries(milo-viewer PRIVATE
 )
 
 # ============================================================================
+# Render Test — programmatic test scenes for renderer validation
+# ============================================================================
+
+add_executable(render-test
+    src/render_test/render_test_main.cpp
+    src/render_test/test_scene.cpp
+    ${DC3_ENGINE_SOURCES}
+    ${DC3_NATIVE_CORE_SOURCES}
+    ${DC3_GFX_SOURCES}
+)
+
+target_compile_options(render-test PRIVATE
+    ${DC3_MSVC_COMPAT_FLAGS}
+    ${DC3_DECOMP_FLAGS}
+    ${DC3_ATOMIC_COMPAT_FLAGS}
+)
+
+target_compile_definitions(render-test PRIVATE
+    HX_NATIVE=1
+    MILO_DEBUG=1
+    _DEBUG=1
+)
+
+target_include_directories(render-test PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/../src
+    ${CMAKE_SOURCE_DIR}/../src/system
+    ${CMAKE_SOURCE_DIR}/../src/lazer
+    ${CMAKE_SOURCE_DIR}/../include
+    ${CMAKE_SOURCE_DIR}/include
+)
+
+target_link_options(render-test PRIVATE
+    -rdynamic
+    -Wl,--unresolved-symbols=ignore-all
+    -Wl,--warn-unresolved-symbols
+    -Wl,--allow-multiple-definition
+)
+
+target_link_libraries(render-test PRIVATE
+    Threads::Threads
+    dawn::webgpu_dawn
+    glfw
+    dl
+    curl
+    jpeg
+    vorbis
+    vorbisfile
+    ogg
+    z
+)
+
+# ============================================================================
 # Export CLI tools — headless .milo asset converters
 # ============================================================================
 

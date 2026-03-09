@@ -915,8 +915,8 @@ def hill_climb(
             unit=unit,
             caller="hill_climber",
         )
-    except Exception:
-        pass  # Don't fail the run if stats storage fails
+    except Exception as e:
+        print(f"WARNING: pattern stats storage failed: {e}", file=sys.stderr)
 
     # Store Ghidra stats to DB
     if ghidra_run_stats:

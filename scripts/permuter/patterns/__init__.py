@@ -32,6 +32,7 @@ from . import pragma_fp_contract  # noqa: F401
 from . import hoist_sret  # noqa: F401
 from . import noreturn_attr  # noqa: F401
 from . import const_overload  # noqa: F401
+from . import const_ref_swap  # noqa: F401  # Swap copy init <-> const ref binding for struct types
 from . import member_ref_bind  # noqa: F401  # Binds member/param to local ref to fix callee-saved regswaps
 from . import temp_elimination  # noqa: F401  # Inline single-use temps to fix commutative/regswap
 from . import fabs_variant  # noqa: F401  # Swap fabs/fabsf/std::fabs for float width fixes

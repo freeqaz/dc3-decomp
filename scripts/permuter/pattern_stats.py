@@ -39,44 +39,33 @@ from typing import Optional
 
 _CACHE_DB = Path(__file__).resolve().parent.parent.parent / "permuter_cache.db"
 
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS pattern_runs (
-    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-    timestamp           REAL NOT NULL,
-    symbol              TEXT NOT NULL,
-    function_name       TEXT,
-    source_path         TEXT,
+_SCHEMA_STATEMENTS = [
+    """CREATE TABLE IF NOT EXISTS pattern_runs (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp           REAL NOT NULL,
+        symbol              TEXT NOT NULL,
+        function_name       TEXT,
+        source_path         TEXT,
+        pattern             TEXT NOT NULL,
+        variants_generated  INTEGER NOT NULL DEFAULT 0,
+        variants_built      INTEGER NOT NULL DEFAULT 0,
+        build_failures      INTEGER NOT NULL DEFAULT 0,
+        won                 INTEGER NOT NULL DEFAULT 0,
+        best_delta          REAL NOT NULL DEFAULT 0,
+        best_variant        TEXT,
+        initial_pct         REAL,
+        final_pct           REAL,
+        diagnosis_category  TEXT,
+        unit                TEXT,
+        caller              TEXT NOT NULL DEFAULT 'hill_climber'
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_pattern_runs_pattern ON pattern_runs (pattern)",
+    "CREATE INDEX IF NOT EXISTS idx_pattern_runs_symbol ON pattern_runs (symbol)",
+    "CREATE INDEX IF NOT EXISTS idx_pattern_runs_won ON pattern_runs (won) WHERE won = 1",
+]
 
-    -- What was tried
-    pattern             TEXT NOT NULL,
-    variants_generated  INTEGER NOT NULL DEFAULT 0,
-    variants_built      INTEGER NOT NULL DEFAULT 0,
-    build_failures      INTEGER NOT NULL DEFAULT 0,
-
-    -- Outcome
-    won                 INTEGER NOT NULL DEFAULT 0,
-    best_delta          REAL NOT NULL DEFAULT 0,
-    best_variant        TEXT,
-
-    -- Context (for correlating patterns with mismatch types)
-    initial_pct         REAL,
-    final_pct           REAL,
-    diagnosis_category  TEXT,
-
-    -- Caller context
-    unit                TEXT,
-    caller              TEXT NOT NULL DEFAULT 'hill_climber'
-);
-
-CREATE INDEX IF NOT EXISTS idx_pattern_runs_pattern
-ON pattern_runs (pattern);
-
-CREATE INDEX IF NOT EXISTS idx_pattern_runs_symbol
-ON pattern_runs (symbol);
-
-CREATE INDEX IF NOT EXISTS idx_pattern_runs_won
-ON pattern_runs (won) WHERE won = 1;
-"""
+# Track whether schema has been initialized in this process
+_schema_initialized = False
 
 
 @dataclass
@@ -154,9 +143,15 @@ def store_run(
     if not accumulator.by_pattern:
         return
 
-    conn = sqlite3.connect(str(_CACHE_DB))
+    global _schema_initialized
+    conn = sqlite3.connect(str(_CACHE_DB), timeout=30)
     conn.execute("PRAGMA journal_mode=WAL")
-    conn.executescript(_SCHEMA)
+    conn.execute("PRAGMA busy_timeout=30000")
+    if not _schema_initialized:
+        for stmt in _SCHEMA_STATEMENTS:
+            conn.execute(stmt)
+        conn.commit()
+        _schema_initialized = True
 
     now = time.time()
     rows = []

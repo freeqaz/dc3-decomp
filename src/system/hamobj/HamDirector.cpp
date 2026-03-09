@@ -2279,9 +2279,14 @@ void HamDirector::UnloadMergers() {
     if (mMerger) {
         mMerger->Clear();
         mMoveMerger->Clear();
+#ifdef HX_NATIVE
+        ObjVector<FileMerger::Merger>& mergers = mMoveMerger->Mergers();
+        mergers.erase(mergers.begin(), mergers.end());
+#else
         ObjVector<FileMerger::Merger> *mergers =
             (ObjVector<FileMerger::Merger> *)((char *)mMoveMerger.Ptr() + 0x40);
         mergers->erase(mergers->begin(), mergers->end());
+#endif
         HamWardrobe *wardrobe = TheHamWardrobe;
         if (wardrobe) {
             for (int i = 0; i < 2; i++) {
