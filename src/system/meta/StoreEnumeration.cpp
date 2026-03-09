@@ -4,6 +4,7 @@
 #include "xdk/XAPILIB.h"
 #include <cstring>
 
+#ifndef HX_NATIVE
 namespace stlpmtx_std {
 template <>
 _List_node_base* list<EnumProduct, StlNodeAlloc<EnumProduct>>::_M_create_node(const EnumProduct& __x) {
@@ -12,6 +13,7 @@ _List_node_base* list<EnumProduct, StlNodeAlloc<EnumProduct>>::_M_create_node(co
     return p;
 }
 }
+#endif
 
 XboxEnumeration::XboxEnumeration(int i, std::vector<unsigned long long> *offerIDs)
     : mUserIndex(i), mOfferIDCount(0), mOfferIDsBegin(0), mCurOffers(0), mEnumerating(false), mHandle(0), mBufferSize(0), mEnumBuffer(0) {
@@ -28,6 +30,7 @@ XboxEnumeration::XboxEnumeration(int i, std::vector<unsigned long long> *offerID
     }
 }
 
+#ifndef HX_NATIVE
 // Template specialization for _List_base<EnumProduct>::clear()
 // EnumProduct is a POD struct with no destructor, so skip _Destroy
 namespace stlpmtx_std {
@@ -44,6 +47,7 @@ namespace stlpmtx_std {
         _M_node._M_data._M_prev = &_M_node._M_data;
     }
 }
+#endif
 
 XboxEnumeration::~XboxEnumeration() {
     delete[] mOfferIDsBegin;

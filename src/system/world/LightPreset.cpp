@@ -863,7 +863,12 @@ void LightPreset::CacheFrames() {
 void LightPreset::GetKey(float frame, int &prevIdx, int &curIdx, float &blend) const {
     auto& _ref1 = mKeyframes;
     float theframe = frame;
-    if (!(theframe <= (int)0.0f || mEndFrame <= 0.0f)) {
+    if (theframe <= 0.0f || mEndFrame <= 0.0f) {
+        prevIdx = -1;
+        curIdx = 0;
+        blend = 1.0f;
+        return;
+    } else {
         if (mLooping) {
             theframe = std::fmod(frame, mEndFrame);
             if (frame >= _ref1.back().unka8) {
@@ -874,7 +879,7 @@ void LightPreset::GetKey(float frame, int &prevIdx, int &curIdx, float &blend) c
                     return;
                 }
                 float framedur = _ref1.back().unka8 + _ref1.back().mDuration;
-                if (framedur < theframe) {
+                if (theframe > framedur) {
                     MILO_ASSERT(_ref1.back().mFadeOutTime > 0, 0x358);
                     prevIdx = _ref1.size() - 1;
                     curIdx = 0;
@@ -895,7 +900,7 @@ void LightPreset::GetKey(float frame, int &prevIdx, int &curIdx, float &blend) c
 
         int cap = _ref1.size() - 1;
         int i;
-        for (i = 0; cap > i + 1;) {
+        for (i = 0; i + 1 < cap;) {
             int mid = (i + cap) >> 1;
             if (theframe == _ref1[mid].unka8) {
                 prevIdx = -1;
@@ -922,11 +927,6 @@ void LightPreset::GetKey(float frame, int &prevIdx, int &curIdx, float &blend) c
             curIdx = i;
             blend = 1.0f;
         }
-    } else {
-        prevIdx = -1;
-        curIdx = 0;
-        blend = 1.0f;
-        return;
     }
 }
 

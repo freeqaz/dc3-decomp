@@ -393,17 +393,14 @@ void HamListRibbon::Draw(
     bool entering,
     bool disengaged
 ) {
-    // TODO: Full implementation needed from m2c decompilation
-    // This is a complex function with vector manipulation and ribbon drawing
     SetWorldXfm(xfm);
-
-    // For now, simple placeholder that calls DrawShowing
-    // The real function involves:
-    // 1. Creating padded draw states
-    // 2. Complex spacing calculations
-    // 3. Multiple loops through draw states
-    // 4. Individual ribbon drawing with transforms
-
+    for (int i = 0; i < (int)drawStates.size(); i++) {
+        const HamListRibbonDrawState &state = drawStates[i];
+        if (state.mHidden) continue;
+        bool selected = state.mSelected;
+        float swellFrame = state.mSwellSmoother.Level();
+        SetAnims(swellFrame, selected);
+    }
     RndDir::DrawShowing();
 }
 

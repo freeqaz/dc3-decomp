@@ -1171,6 +1171,7 @@ void Rnd::DrawPreClear() {
     if (unk150) {
         unk150();
     }
+#ifndef HX_NATIVE
     unsigned int event = 0;
     if ((unsigned char)gRndTextureEvent) {
         sTexture->FinishCompress(gRndTextureEvent);
@@ -1237,6 +1238,7 @@ void Rnd::DrawPreClear() {
             }
         }
     }
+#endif // !HX_NATIVE
     ObjPtrList<RndDrawable> *drawList;
     if (!mReleaseImmediate) {
         drawList = &mPreClearDraws;

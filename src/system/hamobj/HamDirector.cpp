@@ -2660,7 +2660,9 @@ found:
         Keys<Symbol, Symbol> *clipSymbols = clipKeys->AsSymbolKeys();
         int clipKeyIdx = clipSymbols->KeyLessEq((*practiceSymbols)[foundIdx].frame);
         if ((unsigned int)clipKeyIdx >= clipSymbols->size()) {
+#ifndef HX_NATIVE
             stlpmtx_std::__stl_throw_out_of_range("vector");
+#endif
         }
         CharClip *clip = mClipDir->Find<CharClip>((*clipSymbols)[clipKeyIdx].value.Str(), true);
         if (clip) {
