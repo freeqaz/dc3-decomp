@@ -84,29 +84,32 @@ UIListLabelElement::~UIListLabelElement() { delete mLabel; }
 void UIListLabelElement::Draw(const Transform &tf, float f, UIColor *col, Box *box) {
     mLabel->SetWorldXfm(tf);
     if (box) {
-        int numFontMaps = mLabel->mFontMaps.size();
         Box localbox = *box;
-        for (int i = 0; i < numFontMaps; i++) {
-            RndText::FontMapBase *fm = mLabel->mFontMaps[i];
-            int numMeshes = fm->NumMeshes();
-            for (int j = 0; j < numMeshes; j++) {
-                Box meshbox;
-                CalcBox(fm->Mesh(j), meshbox);
-                localbox.GrowToContain(meshbox.mMin, false);
-                localbox.GrowToContain(meshbox.mMax, false);
-            }
-        }
+        Vector3 minPt(mLabel->mBoundsLeft, mLabel->mBoundsTop, 0.0f);
+        Vector3 maxPt(mLabel->mBoundsLeft + mLabel->mBoundsRight, mLabel->mBoundsTop + mLabel->mBoundsBottom, 0.0f);
+        localbox.GrowToContain(minPt, false);
+        localbox.GrowToContain(maxPt, false);
         box->GrowToContain(localbox.mMin, false);
         box->GrowToContain(localbox.mMax, false);
     } else {
-        float oldAlpha = mLabel->Style(0).GetAlpha();
-        UILabel::LabelStyle &ls0 = mLabel->LStyle(0);
-        ls0.mColorOverride = col;
-        UIColor *oldColorOverride = ls0.mColorOverride;
-        mLabel->Style(0).SetAlpha(f * oldAlpha);
+        int numStyles = mLabel->NumStyles();
+        float *savedAlphas = (float *)_alloca(numStyles * sizeof(float));
+        for (int i = 0; i < numStyles; i++) {
+            savedAlphas[i] = mLabel->Style(i).GetAlpha();
+        }
+        mLabel->LStyle(0).mColorOverride = col;
+        if (mListLabel->mHighlightAltStyles) {
+            for (int i = 1; i < numStyles; i++) {
+                mLabel->LStyle(i).mColorOverride = col;
+            }
+        }
+        for (int i = 0; i < numStyles; i++) {
+            mLabel->Style(i).SetAlpha(f * savedAlphas[i]);
+        }
         mLabel->DrawShowing();
-        mLabel->Style(0).SetAlpha(oldAlpha);
-        ls0.mColorOverride = oldColorOverride;
+        for (int i = 0; i < numStyles; i++) {
+            mLabel->Style(i).SetAlpha(savedAlphas[i]);
+        }
     }
 }
 

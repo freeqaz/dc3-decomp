@@ -127,15 +127,21 @@ void DefaultPhysicsManager::CastRays(RayCast *, int) {
 void DefaultPhysicsManager::CastRays(
     const Segment *s, RayCastListener *rcl, int i3, unsigned int ui4
 ) {
-    float collideFloat = 1;
-    for (int i = 0; i < i3; i++) {
+    int i = 0;
+    while (i < i3) {
         Segment localSegment = s[i];
+        float collideFloat = 1.0f;
         FOREACH (it, mActiveCollidables) {
             Plane curPlane;
             RndDrawable *d = (*it)->Collide(localSegment, collideFloat, curPlane);
             if (d) {
+                Vector3 hitPoint;
+                Interp(localSegment.start, localSegment.end, collideFloat, hitPoint);
+                ObjectDir *dir = mCollidableDirs[*it];
+                collideFloat = collideFloat * collideFloat;
             }
         }
+        i = i + 1;
     }
 }
 

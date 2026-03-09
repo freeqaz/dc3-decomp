@@ -65,21 +65,33 @@ void SkeletonExtentTracker::ApplyToMeshVerts(RndMesh *mesh, bool mirrored) const
     Hmx::Rect box = GetViewBox();
     MILO_ASSERT(mesh->Verts().size() == 16, 0x43);
 
-    float xFractions[4] = { 0.0f, 0.2f, 0.8f, 1.0f };
-    float yFractions[4] = { 0.0f, 0.2f, 0.8f, 1.0f };
+    int direction = (-(unsigned int)mirrored & 0xFFFFFFFEu) + 1;
 
-    int direction = mirrored ? -1 : 1;
+    int vertIdx = 0;
+    unsigned int i = 0;
+    float prevYFrac = 0.0f;
+    do {
+        float yFrac = 0.0f;
+        if ((i != 0 && (yFrac = 0.2f, i != 1)) && (yFrac = 0.8f, i > 2) && (yFrac = prevYFrac, i == 3))
+            yFrac = 1.0f;
 
-    for (int row = 0; row < 4; row++) {
-        for (int col = 0; col < 4; col++) {
-            int idx = row * 4 + col;
-            RndMesh::Vert &vert = mesh->Verts()[idx];
+        unsigned int j = 0;
+        int baseStride = vertIdx * 0x60;
+        float prevXFrac = prevYFrac;
+        do {
+            float xFrac = 0.0f;
+            if ((j != 0 && (xFrac = 0.2f, j != 1)) && (xFrac = 0.8f, j > 2) && (xFrac = prevXFrac, j == 3))
+                xFrac = 1.0f;
 
-            float xFrac = xFractions[col];
-            float yFrac = yFractions[row];
+            j++;
+            vertIdx++;
+            mesh->Verts()[vertIdx - 1].tex.x = box.w * xFrac + box.x;
+            mesh->Verts()[vertIdx - 1].tex.y = (box.h * yFrac + box.y) * (float)(long long)direction;
+            baseStride += 0x60;
+            prevXFrac = xFrac;
+        } while ((int)j < 4);
 
-            vert.pos.x = (box.x + xFrac * box.w) * (float)direction;
-            vert.pos.z = -(box.y - yFrac * box.h);
-        }
-    }
+        i++;
+        prevYFrac = yFrac;
+    } while ((int)i < 4);
 }

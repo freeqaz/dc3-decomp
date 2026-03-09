@@ -464,6 +464,16 @@ Curl_addrinfo *Curl_str2addr(char *address, int port) {
     return NULL; /* bad input format */
 }
 
+Curl_addrinfo *Curl_ipv4_resolve_r(const char *hostname, int port) {
+    struct in_addr in;
+
+    if (Curl_inet_pton(AF_INET, hostname, &in) > 0)
+        /* This is a dotted IP address 123.123.123.123-style */
+        return Curl_ip2addr(AF_INET, &in, hostname, port);
+
+    return NULL;
+}
+
 #if defined(CURLDEBUG) && defined(HAVE_FREEADDRINFO)
 /*
  * curl_dofreeaddrinfo()

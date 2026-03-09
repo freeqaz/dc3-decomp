@@ -1608,37 +1608,58 @@ void PackVector(
     output = (pw << offsetW) | (pz << offsetZ) | (py << offsetY) | px;
 }
 
+static inline unsigned short FloatToHalf(float value) {
+    unsigned int raw = *(unsigned int *)&value;
+    unsigned int iValue = raw & 0x7FFFFFFF;
+    unsigned int sign = (raw >> 16) & 0x8000;
+    if (iValue > 0x47FFEFFF) {
+        return (unsigned short)(sign | 0x7FFF);
+    }
+    if (iValue < 0x38800000) {
+        unsigned int shift = 113 - (iValue >> 23);
+        iValue = (0x800000 | (iValue & 0x7FFFFF)) >> shift;
+    } else {
+        iValue -= 0x38000000;
+    }
+    return (unsigned short)(sign | ((((iValue >> 13) & 1) + iValue + 0xFFF) >> 13));
+}
+
 void FillCompressedVertex(CompressedVertex_Xbox &compressed, const RndMesh::Vert &vert, bool normalize) {
-    // Copy position
+    // Pack color (ARGB D3DCOLOR format)
+    u32 blue = (u32)(vert.color.blue * 255.0f);
+    u32 red = (u32)(vert.color.red * 255.0f);
+    compressed.mColor =
+        (((((u32)(vert.color.alpha * 255.0f) << 8) | (red & 0xFF)) << 8)
+        | ((u32)(vert.color.green * 255.0f) & 0xFF)) << 8
+        | (blue & 0xFF);
+
+    // Pack bone weights as UDEC4N (field name is misleading — mBoneIndices stores weights)
+    PackVector(
+        (unsigned int &)compressed.mBoneIndices, vert.boneWeights, 10, 10, 10, 2, false
+    );
+
+    // Copy position as float bit patterns
     *(f32 *)(&compressed.mPosX) = vert.pos.x;
     *(f32 *)(&compressed.mPosY) = vert.pos.y;
     *(f32 *)(&compressed.mPosZ) = vert.pos.z;
 
-    // Pack color - RGBA format
-    u32 col = (u32)(vert.color.alpha * 255.0f);
-    col = (col << 8) | (u32)(vert.color.blue * 255.0f);
-    col = (col << 8) | (u32)(vert.color.green * 255.0f);
-    col = (col << 8) | (u32)(vert.color.red * 255.0f);
-    compressed.mColor = col;
+    // Pack UV as FLOAT16_2 (field name is misleading — mNormal stores UVs)
+    unsigned short halfU = FloatToHalf(vert.tex.x);
+    unsigned short halfV = FloatToHalf(vert.tex.y);
+    compressed.mNormal = (halfU << 16) | halfV;
 
-    // Pack normal
-    Vector4 n4(vert.norm.x, vert.norm.y, vert.norm.z, 0.0f);
-    PackVector((unsigned int &)compressed.mNormal, n4, 10, 10, 10, 2, normalize);
+    // Pack normal as DEC4N (field name is misleading — mTangent stores normals)
+    Vector4 normVec(vert.norm.x, vert.norm.y, vert.norm.z, 0.0f);
+    PackVector((unsigned int &)compressed.mTangent, normVec, 10, 10, 10, 2, true);
 
-    // Pack tangent space data
-    Vector4 t4(vert.tex.x, vert.tex.y, 0.0f, 0.0f);
-    PackVector((unsigned int &)compressed.mTangent, t4, 10, 10, 10, 2, 1);
+    // Pack tangent as DEC4N (field name is misleading — mBinormal stores tangents)
+    PackVector((unsigned int &)compressed.mBinormal, vert.tangent, 10, 10, 10, 2, true);
 
-    // Pack binormal
-    Vector4 b4(vert.tex.x, vert.tex.y, 0.0f, 0.0f);
-    PackVector((unsigned int &)compressed.mBinormal, b4, 10, 10, 10, 2, 1);
-
-    // Pack bone indices
-    compressed.mBoneIndices = (vert.boneIndices[3] << 24) | (vert.boneIndices[2] << 16) |
-                       (vert.boneIndices[1] << 8) | vert.boneIndices[0];
-
-    // Pack bone weights
-    compressed.mBoneWeights = *(s32 *)&vert.boneWeights;
+    // Pack bone indices as UBYTE4 (field name is misleading — mBoneWeights stores indices)
+    compressed.mBoneWeights = (((int)vert.boneIndices[3] * 0x100
+        + (int)vert.boneIndices[2]) * 0x100
+        + (int)vert.boneIndices[1]) * 0x100
+        + (int)vert.boneIndices[0];
 }
 
 void RndMesh::LoadVertices(BinStreamRev &d) {
@@ -1652,6 +1673,14 @@ void RndMesh::LoadVertices(BinStreamRev &d) {
     }
 #ifdef HX_NATIVE
     // Native: decompress Xbox compressed vertices into regular mVerts
+    //
+    // IMPORTANT: CompressedVertex_Xbox field names are MISLEADING!
+    // The actual D3D vertex declaration layout (from rnddx9/Mesh.cpp) is:
+    //   mNormal    = FLOAT16_2  TEXCOORD  (UV as two half-floats!)
+    //   mTangent   = DEC4N      NORMAL    (normal as 10-10-10-2 signed)
+    //   mBinormal  = DEC4N      TANGENT   (tangent as 10-10-10-2 signed)
+    //   mBoneIndices = UDEC4N   BLENDWEIGHT  (bone weights)
+    //   mBoneWeights = UBYTE4   BLENDINDICES (bone indices)
     if (b58) {
         unsigned int loadedCompressedSize = 0;
         unsigned int loadedVersion = 0;
@@ -1687,21 +1716,46 @@ void RndMesh::LoadVertices(BinStreamRev &d) {
                 v.color.blue  = (float)((col >> 16) & 0xFF) / 255.0f;
                 v.color.alpha = (float)((col >> 24) & 0xFF) / 255.0f;
 
-                // Normal: unpack 10-10-10-2 signed
-                unsigned int norm = (unsigned int)cv->mNormal;
-                int nx = norm & 0x3FF; if (nx & 0x200) nx |= ~0x3FF; // sign extend 10-bit
-                int ny = (norm >> 10) & 0x3FF; if (ny & 0x200) ny |= ~0x3FF;
-                int nz = (norm >> 20) & 0x3FF; if (nz & 0x200) nz |= ~0x3FF;
-                v.norm.x = (float)nx / 511.0f;
-                v.norm.y = (float)ny / 511.0f;
-                v.norm.z = (float)nz / 511.0f;
+                // UV: FLOAT16_2 stored in mNormal field (D3D TEXCOORD)
+                {
+                    unsigned int uvPacked = (unsigned int)cv->mNormal;
+                    // After bulk bswap32, value matches Xbox's native int interpretation
+                    // FLOAT16_2: upper 16 bits = halfU (tex.x), lower 16 bits = halfV (tex.y)
+                    unsigned short halfU = (uvPacked >> 16) & 0xFFFF;
+                    unsigned short halfV = uvPacked & 0xFFFF;
+                    // IEEE 754 half-float → float conversion
+                    auto halfToFloat = [](unsigned short h) -> float {
+                        unsigned int sign = (h >> 15) & 1;
+                        unsigned int exp  = (h >> 10) & 0x1F;
+                        unsigned int mant = h & 0x3FF;
+                        if (exp == 0) {
+                            if (mant == 0) {
+                                unsigned int f = sign << 31;
+                                float r; memcpy(&r, &f, 4); return r;
+                            }
+                            float val = (float)mant / 1024.0f * (1.0f / 16384.0f);
+                            return sign ? -val : val;
+                        } else if (exp == 0x1F) {
+                            unsigned int f = (sign << 31) | 0x7F800000 | (mant << 13);
+                            float r; memcpy(&r, &f, 4); return r;
+                        }
+                        unsigned int f = (sign << 31) | ((exp - 15 + 127) << 23) | (mant << 13);
+                        float r; memcpy(&r, &f, 4); return r;
+                    };
+                    v.tex.x = halfToFloat(halfU);
+                    v.tex.y = halfToFloat(halfV);
+                }
 
-                // Tangent: unpack 10-10-10-2
-                unsigned int tang = (unsigned int)cv->mTangent;
-                int tx = tang & 0x3FF; if (tx & 0x200) tx |= ~0x3FF;
-                int ty = (tang >> 10) & 0x3FF; if (ty & 0x200) ty |= ~0x3FF;
-                v.tex.x = (float)tx / 511.0f;
-                v.tex.y = (float)ty / 511.0f;
+                // Normal: DEC4N stored in mTangent field (D3D NORMAL)
+                {
+                    unsigned int norm = (unsigned int)cv->mTangent;
+                    int nx = norm & 0x3FF; if (nx & 0x200) nx |= ~0x3FF;
+                    int ny = (norm >> 10) & 0x3FF; if (ny & 0x200) ny |= ~0x3FF;
+                    int nz = (norm >> 20) & 0x3FF; if (nz & 0x200) nz |= ~0x3FF;
+                    v.norm.x = (float)nx / 511.0f;
+                    v.norm.y = (float)ny / 511.0f;
+                    v.norm.z = (float)nz / 511.0f;
+                }
 
                 // Tangent vector (use normal-derived default)
                 v.tangent.Set(1, 0, 0, 1);

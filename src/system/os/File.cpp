@@ -19,6 +19,7 @@
 #include <cctype>
 #include <cstdio>
 #include <cstring>
+#include <list>
 
 static char gSystemRoot[256]; // 0x0
 static char gExecRoot[256]; // 0x100
@@ -342,51 +343,67 @@ void FileInit() {
 const char *FileRelativePathBuf(
     const char *root, const char *filepath, char *relative
 ) {
-    if (*filepath == '\0')
-        return filepath;
-    char rootBuf[256];
-    char fpBuf[256];
-    strcpy(rootBuf, root);
-    strcpy(fpBuf, filepath);
+    MILO_ASSERT(root, 0x38d);
+    MILO_ASSERT(filepath, 0x38e);
+    MILO_ASSERT(relative, 0x38f);
+    if (*filepath != '\0') {
+        char rootBuf[256];
+        char fpBuf[256];
+        strcpy(rootBuf, root);
+        strcpy(fpBuf, filepath);
 
-    const char *rootToks[64];
-    const char *fpToks[64];
-    int rootCount = 0;
-    int fpCount = 0;
+        std::list<char *> rootToks;
+        std::list<char *> fpToks;
 
-    for (char *tok = strtok(rootBuf, "/"); tok != nullptr;
-         tok = strtok(nullptr, "/"))
-        rootToks[rootCount++] = tok;
-    for (char *tok = strtok(fpBuf, "/"); tok != nullptr;
-         tok = strtok(nullptr, "/"))
-        fpToks[fpCount++] = tok;
+        char *rootTok = strtok(rootBuf, "/");
+        if (rootTok != nullptr) {
+            do {
+                rootToks.push_back(rootTok);
+                rootTok = strtok(nullptr, "/");
+            } while (rootTok != nullptr);
+        }
 
-    if (fpCount > 0 && rootCount > 0) {
-        if (strcmp(fpToks[fpCount - 1], rootToks[rootCount - 1]) != 0)
-            return filepath;
-        while (rootCount > 0 && fpCount > 0
-               && strcmp(fpToks[fpCount - 1], rootToks[rootCount - 1]) == 0) {
-            rootCount--;
-            fpCount--;
+        char *fpTok = strtok(fpBuf, "/");
+        if (fpTok != nullptr) {
+            do {
+                fpToks.push_back(fpTok);
+                fpTok = strtok(nullptr, "/");
+            } while (fpTok != nullptr);
         }
-        char *p = relative;
-        for (int i = 0; i < rootCount; i++) {
-            if (p != relative)
-                *p++ = '/';
-            *p++ = '.';
-            *p++ = '.';
+
+        if (!fpToks.empty() && !rootToks.empty()) {
+            int cmp = strcmp(fpToks.back(), rootToks.back());
+            if (cmp == 0) {
+                while (!rootToks.empty() && !fpToks.empty() && strcmp(fpToks.back(), rootToks.back()) == 0) {
+                    rootToks.pop_back();
+                    fpToks.pop_back();
+                }
+
+                char *p = relative;
+                for (std::list<char *>::iterator it = rootToks.begin(); it != rootToks.end(); ++it) {
+                    if (p != relative)
+                        *p++ = '/';
+                    *p++ = '.';
+                    *p++ = '.';
+                }
+                for (std::list<char *>::reverse_iterator it = fpToks.rbegin(); it != fpToks.rend(); ++it) {
+                    if (p != relative)
+                        *p++ = '/';
+                    for (const char *pp = *it; *pp != '\0'; pp++)
+                        *p++ = *pp;
+                }
+                if (p == relative)
+                    *p++ = '.';
+                *p = '\0';
+            } else {
+                strcpy(relative, filepath);
+            }
+        } else {
+            strcpy(relative, filepath);
         }
-        for (int i = fpCount - 1; i >= 0; i--) {
-            if (p != relative)
-                *p++ = '/';
-            for (const char *pp = fpToks[i]; *pp != '\0'; pp++)
-                *p++ = *pp;
-        }
-        if (p == relative)
-            *p++ = '.';
-        *p = '\0';
-    } else {
-        strcpy(relative, filepath);
+
+        rootToks.clear();
+        fpToks.clear();
     }
     return relative;
 }
@@ -472,8 +489,9 @@ const char *FileMakePathBuf(const char *root, const char *file, char *buffer) {
 }
 
 const char *FileMakePath(const char *root, const char *file) {
-    MILO_ASSERT(MainThread(), 0x341);
-    return FileMakePathBuf(root, file, NULL);
+    MainThread();
+    static char static_buffer[256];
+    return FileMakePathBuf(root, file, static_buffer);
 }
 
 const char *FileLocalize(const char *iFilename, char *buffer) {

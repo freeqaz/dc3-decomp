@@ -255,3 +255,4 @@ void SpotlightDrawer::EndWorld() {
     }
     MILO_ASSERT(!sNeedDraw, 0x165);
 }
+

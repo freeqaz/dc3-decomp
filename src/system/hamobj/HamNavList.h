@@ -123,7 +123,7 @@ public:
     friend class HamScrollBehavior;
 
 private:
-    void LinkRibbonDrawState(UIListWidgetDrawState &, std::vector<HamListRibbonDrawState> &);
+    void LinkRibbonDrawState(std::vector<HamListRibbonDrawState> &, UIListWidgetDrawState &);
     void SetRibbonMode(HamListRibbon::RibbonMode);
     void SetHighlight(int);
     void SetSliding(float);

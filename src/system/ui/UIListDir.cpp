@@ -243,11 +243,11 @@ void UIListDir::FillElement(
         if (snapped >= 0)
             disp = snapped;
         int disp2show = state.Display2Showing(i);
-        bool isnegone = i == -1;
+        bool wasNegOne = i == -1;
         ClampEq(i, 0, state.NumDisplay());
         FOREACH (it, vec) {
             (*it)->Fill(*state.Provider(), i, disp2show, disp);
-            if (isnegone && snapped >= 0) {
+            if (wasNegOne && snapped >= 0) {
                 (*it)->Fill(
                     *state.Provider(), 1, state.Display2Showing(0), state.Display2Data(0)
                 );
@@ -299,14 +299,12 @@ void UIListDir::BuildDrawState(
     int numDisplayWithData = state.NumDisplayWithData();
     int gridSpan = state.GridSpan();
 
-    // Calculate fade limit: min of half the display count and mFadeOffset
     int halfDisplay = numDisplay / 2;
     int fadeLimit = halfDisplay;
     if (halfDisplay > mFadeOffset) {
         fadeLimit = mFadeOffset;
     }
 
-    // Early out if nothing to display
     if (mFadeOffset == 0) {
         fadeLimit = 0;
     }
@@ -321,26 +319,15 @@ void UIListDir::BuildDrawState(
 
     drawState.mElements.reserve(numDisplayWithData + 1);
 
-    // Build element states
     for (int i = 0; i < numDisplayWithData; i++) {
         UIListElementDrawState elem;
         int showing = state.Display2Showing(i);
         int data = state.Display2Data(i);
 
-        // Calculate gap
         if (i > 0) {
             int prevShowing = state.Display2Showing(i - 1);
             int prevData = state.Display2Data(i - 1);
             gapAccum += provider->GapSize(prevShowing, prevData, showing, data);
-        }
-
-        // Calculate position
-        float pos = (float)i;
-        if (scrolling) {
-            // Adjust for scroll snap
-            if (state.ShouldHoldDisplayInPlace(i)) {
-                // Hold in place during scroll snap
-            }
         }
 
         {
@@ -351,7 +338,6 @@ void UIListDir::BuildDrawState(
             elem.mPosZ = pos.z;
         }
 
-        // Calculate alpha based on fade
         float alpha = 1.0f;
         if (fadeLimit > 0) {
             if (i < fadeLimit) {
@@ -366,13 +352,8 @@ void UIListDir::BuildDrawState(
             }
         }
 
-        // Determine active state
-        bool active = (data != -1);
-        if (active && !provider->IsActive(data)) {
-            active = false;
-        }
+        bool active = (data != -1) && provider->IsActive(data);
 
-        // Determine element state
         UIListWidgetState widgetState;
         if (allowHighlight && i == selectedDisplay) {
             widgetState = kUIListWidgetHighlight;
@@ -382,7 +363,6 @@ void UIListDir::BuildDrawState(
             widgetState = kUIListWidgetInactive;
         }
 
-        // Determine component state
         UIComponent::State elemCompState;
         if (allowHighlight && i == selectedDisplay) {
             elemCompState = compState;
@@ -404,7 +384,6 @@ void UIListDir::BuildDrawState(
         drawState.mElements.push_back(elem);
     }
 
-    // Handle extra scroll element
     if (scrolling) {
         int extraDisplay = currentScroll > 0 ? numDisplay : -1;
         int extraShowing = state.Display2Showing(extraDisplay);
@@ -439,7 +418,6 @@ void UIListDir::BuildDrawState(
         drawState.mElements.push_back(scrollElem);
     }
 
-    // Set highlight info
     drawState.mHighlightDisplay = selectedDisplay;
     if (allowHighlight) {
         drawState.mHighlightElementState = kUIListWidgetHighlight;
@@ -447,10 +425,12 @@ void UIListDir::BuildDrawState(
         drawState.mHighlightElementState = kUIListWidgetActive;
     }
 
-    // Set highlight position
-    SetElementPos(drawState.mHighlightPos, (float)selectedDisplay, gridSpan, subListOffset, 0.0f);
+    {
+        Vector3 pos;
+        SetElementPos(pos, (float)selectedDisplay, gridSpan, subListOffset, 0.0f);
+        drawState.mHighlightPos = pos;
+    }
 
-    // Set first and last positions
     if (numDisplayWithData > 0) {
         drawState.mFirstPos.Set(drawState.mElements[0].mPosX, drawState.mElements[0].mPosY, drawState.mElements[0].mPosZ);
         drawState.mLastPos.Set(drawState.mElements[numDisplayWithData - 1].mPosX, drawState.mElements[numDisplayWithData - 1].mPosY, drawState.mElements[numDisplayWithData - 1].mPosZ);
@@ -473,23 +453,15 @@ void UIListDir::CreateElements(UIList *uilist, std::vector<UIListWidget *> &vec,
     }
 }
 
-// Calculates element position in 3D space based on grid layout and scroll position.
-// position: fractional position in the list (e.g., 2.5 = between elements 2 and 3)
-// gridSpan: number of columns in the grid
-// primaryBase/secondaryBase: base offsets for primary (scroll) and secondary (grid) axes
-// Returns: the primary axis offset
 float UIListDir::SetElementPos(Vector3 &v, float position, int gridSpan, float primaryBase, float secondaryBase) const {
     v.Zero();
 
-    // Split position into integer and fractional parts
     float floored = std::floor(position);
     int intPos = (int)floored;
 
-    // Calculate grid coordinates (row = scroll position, col = grid column)
     int rowIndex = intPos / gridSpan;
     int colIndex = intPos % gridSpan;
 
-    // Calculate offsets along each axis
     float colOffset = (float)colIndex;
     float secondaryOffset = colOffset * mElementSpacing + secondaryBase;
 
@@ -497,13 +469,12 @@ float UIListDir::SetElementPos(Vector3 &v, float position, int gridSpan, float p
     float rowOffset = (float)rowIndex;
     float primaryOffset = (fractional + rowOffset) * mElementSpacing + primaryBase;
 
-    // Apply offsets based on orientation
     if (mOrientation == kUIListVertical) {
-        v.z -= primaryOffset;   // Primary axis: vertical scroll (Z)
-        v.x += secondaryOffset; // Secondary axis: horizontal grid (X)
+        v.z -= primaryOffset;
+        v.x += secondaryOffset;
     } else {
-        v.x += primaryOffset;   // Primary axis: horizontal scroll (X)
-        v.z -= secondaryOffset; // Secondary axis: vertical grid (Z)
+        v.x += primaryOffset;
+        v.z -= secondaryOffset;
     }
 
     return primaryOffset;

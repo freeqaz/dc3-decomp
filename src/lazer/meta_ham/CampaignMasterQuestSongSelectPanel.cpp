@@ -192,20 +192,28 @@ void CampaignMasterQuestSongSelectPanel::Refresh() {
 
 void CampaignMasterQuestSongSelectPanel::OnHighlightHeader() {
     Symbol selectedSong = GetSelectedSong();
+    bool b;
+    int maxStars = 0;
+    int totalStars = 0;
     mImpl->mContextualTitleLabel->SetTextToken(selectedSong);
+    mImpl->mContextualInstructionsLabel->SetPrelocalizedString(String(gNullStr));
     static DataNode &mq_difficulty = DataVariable("mq_difficulty");
+    Difficulty mqDiff = (Difficulty)mq_difficulty.Int();
     FOREACH (it, m_pCampaignSongProvider->GetVecAt(selectedSong)) {
         HamProfile *activeProfile = TheProfileMgr.GetActiveProfile(true);
         SongStatusMgr *mgr = activeProfile->GetSongStatusMgr();
-        bool b;
         int stars = mgr->GetStarsForDifficulty(
             TheHamSongMgr.GetSongIDFromShortName(selectedSong),
-            (Difficulty)mq_difficulty.Int(),
+            mqDiff,
             b
         );
         if (stars >= 5) {
             stars = 5;
         }
+        totalStars += stars;
+        maxStars += 5;
     }
-    // not done but getting there
+    mImpl->mContextualStarsLabel->SetPrelocalizedString(
+        String(MakeString("%d / %d", totalStars, maxStars))
+    );
 }

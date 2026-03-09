@@ -638,15 +638,13 @@ void SaveLoadManager::Poll() {
         return;
     }
 
-    // Check if state is in valid range for switch
     if ((u32)(mState - 1) > 0x66u) {
         return;
     }
 
-    // Poll for state transitions
+    State nextState = mState;
     switch (mState) {
-    case kS_Start: {
-        State nextState;
+    case kS_Start:
         switch (mMode) {
         case kAutoLoad:
             nextState = kS_AutoloadInit;
@@ -657,38 +655,35 @@ void SaveLoadManager::Poll() {
         case kDisableAutoSave:
             nextState = kS_SaveLoadError;
             break;
-        default: {
+        default:
+            nextState = kS_Done;
             FormatString fmt("SaveLoadManager startup bad mode: %d");
             MILO_NOTIFY(fmt.Str());
-            nextState = kS_Done;
             break;
         }
-        }
-        SetState(nextState);
         break;
-    }
     case kS_AutoloadInit:
         if (!mInitialLoadPending) {
-            SetState(kS_AutoloadSelectProfile);
+            nextState = kS_AutoloadSelectProfile;
         } else {
-            SetState(kS_SongCacheInit);
+            nextState = kS_SongCacheInit;
         }
         break;
     case kS_AutoloadSelectProfile:
         mActiveProfile = GetNewSigninProfile();
         if (!mActiveProfile) {
-            SetState(kS_AutoloadDone);
+            nextState = kS_AutoloadDone;
         } else {
-            SetState(kS_AutoloadSearchDevice);
+            nextState = kS_AutoloadSearchDevice;
         }
         break;
     case kS_AutoloadDone:
         mInitialLoadPending = false;
         if (TheProfileMgr.GlobalOptionsNeedsSave()) {
-            SetState(kS_SongCacheInit);
+            nextState = kS_SongCacheInit;
         } else {
             TheProfileMgr.HandleProfileLoadComplete();
-            SetState(kS_Done);
+            nextState = kS_Done;
         }
         break;
     case kS_SongCacheInit: {
@@ -706,11 +701,11 @@ void SaveLoadManager::Poll() {
         break;
     }
     case kS_SongCacheSearchResult:
-        SetState(kS_SongCacheCreate);
+        nextState = kS_SongCacheCreate;
         break;
     case kS_SongCacheLookup:
         mCacheID = nullptr;
-        SetState(kS_GlobalOptionsCreate);
+        nextState = kS_GlobalOptionsCreate;
         break;
     case kS_GlobalNewSignIns: {
         std::vector<HamProfile *> newSignIns = TheProfileMgr.GetNewlySignedIn();
@@ -718,16 +713,16 @@ void SaveLoadManager::Poll() {
         if (hasMultiple) {
             mDeviceIDState = 1;
         }
-        SetState(kS_AutoloadSelectProfile);
+        nextState = kS_AutoloadSelectProfile;
         break;
     }
     case kS_SaveDone:
         if (SongCacheNeedsWrite()) {
-            SetState(kS_SaveSongCache);
+            nextState = kS_SaveSongCache;
         } else if (TheProfileMgr.GlobalOptionsNeedsSave()) {
-            SetState(kS_SaveGlobalOptions);
+            nextState = kS_SaveGlobalOptions;
         } else {
-            SetState(kS_SaveCheckProfile);
+            nextState = kS_SaveCheckProfile;
         }
         break;
     case kS_SaveSongCache:
@@ -738,90 +733,80 @@ void SaveLoadManager::Poll() {
         if (mActiveProfile) {
             auto isStorageValid = TheMemcardMgr.IsStorageDeviceValid(mActiveProfile);
             if (isStorageValid) {
-                SetState(kS_SaveOverwrite);
+                nextState = kS_SaveOverwrite;
             } else {
-                SetState(kS_SaveDeviceInvalid);
+                nextState = kS_SaveDeviceInvalid;
             }
         } else {
-            SetState(kS_SaveCheckAutosave);
+            nextState = kS_SaveCheckAutosave;
         }
         break;
     case kS_SaveCheckAutosave:
         TheProfileMgr.HandleProfileSaveComplete();
-        SetState(kS_Done);
+        nextState = kS_Done;
         break;
     case kS_Done:
         TheMemcardMgr.SaveLoadAllComplete();
         Finish();
-        break;
+        return;
     }
+    SetState(nextState);
 }
 
 void SaveLoadManager::SetState(State newState) {
-    auto& state = mState;
-    if (state == newState)
+    if (mState == newState)
         return;
 
     static Symbol saveload_dialog_event("saveload_dialog_event");
 
     bool wasIdle = false;
 
-    // Cleanup resources based on current state before transition
-    // WARNING: Control flow structure is critical for codegen - do not refactor
-    if (state <= kS_GlobalOptionsWrite) {
-        if (kS_GlobalOptionsWrite == state) {
-            // 0x3E: free mData unless going to Finish
+    if (mState <= kS_GlobalOptionsWrite) {
+        if (kS_GlobalOptionsWrite == mState) {
             if ((newState != kS_Finish) && mData) {
                 MemFree(mData, "SaveLoadManager.cpp", 0x424);
                 mData = nullptr;
             }
-        } else if (!(state == kS_Idle)) {
-            if (state == kS_AutoloadStartLoad) {
-                // 0xB: release mAction unless going to Abort
+        } else if (!(mState == kS_Idle)) {
+            if (mState == kS_AutoloadStartLoad) {
                 if (newState != kS_Abort) {
                     RELEASE(mAction);
                 }
-            } else if (((state == kS_SongCacheWrite) || (state == kS_SongCacheDone))
-                       || ((state > kS_GlobalDoneRead) && (state < kS_GlobalUnmount))) {
-                // 0x1F, 0x21, or 0x32-0x33: free mData unless going to Finish
+            } else if (((mState == kS_SongCacheWrite) || (mState == kS_SongCacheDone))
+                       || ((mState > kS_GlobalDoneRead) && (mState < kS_GlobalUnmount))) {
                 if ((newState != kS_Finish) && mData) {
                     MemFree(mData, "SaveLoadManager.cpp", 0x424);
                     mData = nullptr;
                 }
             }
         } else {
-            // 0: set wasIdle flag
             wasIdle = true;
         }
-    } else if (state > kS_SaveDeviceInvalid) {  // > 0x45
-        if ((state < kS_SaveConfirmOverwrite) || (state == kS_ManualLoadStartLoad)) {
-            // (mState < 0x48) || (mState == 0x60): release mAction unless going to Abort
+    } else if (mState > kS_SaveDeviceInvalid) {
+        if ((mState < kS_SaveConfirmOverwrite) || (mState == kS_ManualLoadStartLoad)) {
             if (newState != kS_Abort) {
                 RELEASE(mAction);
             }
         } else {
-            if (state == kS_Abort) {
-                // 0x65: release mAction unconditionally
+            if (mState == kS_Abort) {
                 RELEASE(mAction);
-            } else if ((state == kS_Finish) && mData) {
-                // 0x67: free mData
+            } else if ((mState == kS_Finish) && mData) {
                 MemFree(mData, "SaveLoadManager.cpp", 0x433);
                 mData = nullptr;
             }
         }
     }
 
-    state = newState;
+    mState = newState;
 
     if (wasIdle) {
         UpdateStatus((SaveLoadMgrStatus)0);
     }
 
-    // Handle state based on new state value
-    if (state > kS_Done)
+    if (mState > kS_Done)
         return;
 
-    switch (state) {
+    switch (mState) {
     case kS_Idle:
         UpdateStatus((SaveLoadMgrStatus)5);
         break;
@@ -1308,7 +1293,7 @@ void SaveLoadManager::SetState(State newState) {
     case kS_SaveLoadError2: {
         int errorType = 1;
         mDeviceIDState = 0;
-        if (state == kS_SaveLoadError2) {
+        if (mState == kS_SaveLoadError2) {
             errorType = -1;
         }
         HamProfile *pProfile = mActiveProfile;

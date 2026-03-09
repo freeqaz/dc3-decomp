@@ -598,7 +598,7 @@ RndTex::CheckSize(int width, int height, int bpp, int numMips, Type ty, bool fil
 
 DataNode RndTex::OnSetBitmap(const DataArray *arr) {
     if (arr->Size() == 3) {
-        FilePath path(FilePath::Root().c_str(), arr->Str(2));
+        FilePath path(arr->Str(2));
         SetBitmap(path);
     } else {
         SetBitmap(

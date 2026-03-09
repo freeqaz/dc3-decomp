@@ -70,27 +70,29 @@ END_LOADS
 bool FlowRun::Activate() {
     FLOW_LOG("Activate\n");
     mStopRequested = false;
+    PushDrivenProperties();
     ResolveTarget();
     Flow *target = mTarget;
-    if (!target)
-        return false;
-    if (mStop) {
-        target->RequestStop();
-        return false;
-    }
-    if (mImmediateRelease) {
-        target->Activate(nullptr);
-        return false;
-    } else {
-        mRunningNodes.push_back(target);
-        bool running = target->Activate(this);
-        if (!running) {
-            FLOW_LOG("Target ran in full immediately.\n");
-            mRunningNodes.remove(target);
+    if (target) {
+        if (mStop == false) {
+            if (mImmediateRelease == false) {
+                Flow *t = mTarget;
+                mRunningNodes.push_back(t);
+                bool running = mTarget->Activate(this);
+                if (running == false) {
+                    Flow *t2 = mTarget;
+                    mRunningNodes.remove(t2);
+                }
+                return running;
+            }
+            mTarget->Activate(nullptr);
+            return false;
         }
-        return running;
+        mTarget->RequestStop();
     }
+    return false;
 }
+
 
 void FlowRun::ResolveTarget() {
     if (mTarget)

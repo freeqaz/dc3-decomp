@@ -107,11 +107,19 @@ void WgpuRnd::Init() {
     // Register subsystem types (creates default cam/env/mat/etc.)
     PreInit();
 
-    // Override clear color — DTA config isn't loaded in the native port,
-    // so the default (0.3 gray) is wrong. Use dark teal to approximate the
-    // turbo_shell venue background that fills the screen on Xbox. SrcAlpha
-    // blends against this instead of black, producing more visible results.
-    mClearColor = Hmx::Color(0.03f, 0.06f, 0.08f);
+    // Override clear color — DTA config isn't loaded in the native port.
+    // Default to medium-dark teal to approximate the turbo_shell venue.
+    // Without venue geometry, this is the only background; brighter values
+    // make the multiply-blend overlays visible and SrcAlpha overlays less jarish.
+    // MILO_CLEAR_COLOR=r,g,b overrides (e.g. "1,1,1" for white, "0.5,0.5,0.5" for gray)
+    const char* clearEnv = getenv("MILO_CLEAR_COLOR");
+    if (clearEnv) {
+        float r = 0, g = 0, b = 0;
+        sscanf(clearEnv, "%f,%f,%f", &r, &g, &b);
+        mClearColor = Hmx::Color(r, g, b);
+    } else {
+        mClearColor = Hmx::Color(0.06f, 0.09f, 0.12f);
+    }
 
     // Create GPU device and window
     GpuDeviceDesc desc{};

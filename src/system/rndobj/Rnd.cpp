@@ -18,6 +18,7 @@
 #include "math/Color.h"
 #include "obj/DataFunc.h"
 #include "obj/Dir.h"
+#include "obj/Utl.h"
 #include "os/Debug.h"
 #include "os/OSFuncs.h"
 #include "os/System.h"
@@ -416,7 +417,7 @@ void WordWrap(const char *src, int lineWidth, char *dst, int dstSize) {
 DWORD CompressThread(void *) {
     while (true) {
         WaitForSingleObject(gRndTextureEvent, -1);
-        if (!sTexture)
+        if (sTexture == nullptr)
             break;
         sCompressDone = true;
         sTexture->DoCompress(sCompressData);
@@ -1170,11 +1171,90 @@ void Rnd::DrawPreClear() {
     if (unk150) {
         unk150();
     }
-    // TODO: handle texture compression queue
-    for (ObjPtrList<RndDrawable>::iterator it = mPreClearDraws.begin();
-         it != mPreClearDraws.end();
-         ++it) {
-        (*it)->DrawPreClear();
+    unsigned int event = 0;
+    if ((unsigned char)gRndTextureEvent) {
+        sTexture->FinishCompress(gRndTextureEvent);
+        unsigned int eventVal = (unsigned int)gRndTextureEvent;
+        gRndTextureEvent = 0;
+        if (eventVal == 0) {
+            MILO_ASSERT(sTexture, 0x481);
+            eventVal = (unsigned int)gRndTextureEvent;
+        }
+        CompressTexDesc *desc = (CompressTexDesc *)mCompressTexQueue.front();
+        RndTex *tex = desc->tex;
+        if (tex) {
+            ReplaceObject(tex, (Hmx::Object *)eventVal, false, false, false);
+            gRndTextureEvent = tex;
+        }
+        auto it = mCompressTexQueue.begin();
+        mCompressTexQueue.erase(it);
+        delete desc;
+        if (gRndTextureEvent) {
+            CompressTextureCallback *cb = (CompressTextureCallback *)gRndTextureEvent;
+            cb->TextureCompressed((intptr_t)gRndTextureEvent);
+        }
+        event = 0;
+        gRndTextureEvent = 0;
+        gRndTextureEvent = 0;
+    } else {
+        event = (unsigned int)gRndTextureEvent;
+    }
+    if (event == 0) {
+        auto it_end = mCompressTexQueue.end();
+        auto it_begin = mCompressTexQueue.begin();
+        if (it_begin != it_end) {
+            auto it = it_begin;
+            do {
+                CompressTexDesc *desc = *it;
+                if ((desc->tex) && ((unsigned int)desc->alpha > 0U)) {
+                    ++it;
+                } else {
+                    it = mCompressTexQueue.erase(it);
+                    delete desc;
+                }
+            } while (it != it_end);
+            it_begin = mCompressTexQueue.begin();
+            unsigned int count = 0;
+            if (it_begin != it_end) {
+                auto it2 = it_begin;
+                do {
+                    count++;
+                    ++it2;
+                } while (it2 != it_end);
+                if (count > 0) {
+                    CompressTexDesc *first = *mCompressTexQueue.begin();
+                    gRndTextureEvent = (void *)first->tex;
+                    MemPushTemp();
+                    RndTex *newTex = Hmx::Object::New<RndTex>();
+                    MemPopTemp();
+                    ReplaceObject((Hmx::Object *)gRndTextureEvent, newTex, false, false, false);
+                    gRndTextureEvent = sTexture->StartCompress(first->alpha);
+                    if ((unsigned char)gRndTextureEvent != 0) {
+                        MILO_ASSERT(!sCompressDone, 0x4C3);
+                    }
+                    SetEvent((HANDLE)(unsigned int)gRndTextureEvent);
+                }
+            }
+        }
+    }
+    ObjPtrList<RndDrawable> *drawList;
+    if (!mReleaseImmediate) {
+        drawList = &mPreClearDraws;
+    } else {
+        drawList = &mDraws;
+    }
+    if (drawList->size() > 0) {
+        mWorldCamCopied = true;
+        RndCam *prevCam = RndCam::Current();
+        for (ObjPtrList<RndDrawable>::iterator it = drawList->begin();
+             it != drawList->end();
+             ++it) {
+            (*it)->DrawPreClear();
+        }
+        if ((prevCam != NULL) && (prevCam != RndCam::Current())) {
+            prevCam->Select();
+        }
+        mWorldCamCopied = false;
     }
 }
 

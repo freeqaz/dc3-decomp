@@ -43,23 +43,22 @@ float vorbis_invsq2explook(int a){
   return INVSQ2EXP_LOOKUP[a-INVSQ2EXP_LOOKUP_MIN];
 }
 
-#include <stdio.h>
 /* interpolated lookup based fromdB function, domain -140dB to 0dB only */
 float vorbis_fromdBlook(float a){
   int i;
-  float f0, f1, f13;
+  float v0, v1, fi;
 
-  f13 = (float)(a * 8.0f + 0.5f);
-  i = (int)(0.5 - (double)f13);
+  fi = (float)(a * 8.0f + 0.5f);
+  i = (int)(0.5 - (double)fi);
   if (0 > i) {
     return 1.0f;
   }
-  if (0x460 <= i) {
+  if (FROMdB_LOOKUP_SZ * FROMdB2_LOOKUP_SZ <= i) {
     return 0.0f;
   }
-  f0 = FROMdB_LOOKUP[i >> 5];
-  f1 = FROMdB2_LOOKUP[i & 0x1f];
-  return f0 * f1;
+  v0 = FROMdB_LOOKUP[i >> FROMdB_SHIFT];
+  v1 = FROMdB2_LOOKUP[i & FROMdB2_MASK];
+  return v0 * v1;
 }
 
 #endif

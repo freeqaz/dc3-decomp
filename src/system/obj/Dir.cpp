@@ -686,7 +686,7 @@ void CheckForDuplicates() {
     bool fail = false;
     for (std::list<Symbol>::iterator it = syms.begin(); it != syms.end();
          previous = *it, ++it) {
-        Symbol cur = *it;
+        const Symbol& cur = *it;
         if (cur == previous) {
             MILO_NOTIFY("Duplicate object %s in config", cur);
             fail = true;

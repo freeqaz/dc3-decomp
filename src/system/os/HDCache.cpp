@@ -321,7 +321,8 @@ void HDCache::Init() {
                 writeFiles[i] = NULL;
             }
             if (readFiles[i] != NULL) {
-                int numDwords = (TheArchive->GetArkfileNumBlocks(i) + 0x1F) / 32;
+                auto _tmp6 = TheArchive->GetArkfileNumBlocks(i);
+                int numDwords = (_tmp6 + 0x1F) / 32;
                 int *blockMem = new int[numDwords];
                 memcpy(blockMem, blockBuf, blockSize);
                 memset((char *)blockMem + blockSize, 0, numDwords * 4 - blockSize);

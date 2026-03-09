@@ -201,14 +201,63 @@ void CameraManager::PrePoll() {
 }
 
 void CameraManager::Poll() {
-    auto& _ref0 = mCurrentShot;
+    static int _init_guard = 0;
+    static Symbol _shot_sym;
+    static Symbol _category_sym;
+
+    if ((_init_guard & 1) == 0) {
+        _init_guard |= 1;
+        _shot_sym = Symbol("shot");
+    }
+    if ((_init_guard & 2) == 0) {
+        _init_guard |= 2;
+        _category_sym = Symbol("category");
+    }
+
     if (!MiloCamera()) {
-        if (_ref0) {
-            auto _tmp0 = CalcFrame();
-            _ref0->SetFrame(_tmp0, 1.0f);
+        if (mCurrentShot) {
+            bool shot_over = mCurrentShot->ShotOver();
+            RndCam *cam = mCurrentShot->GetCam();
+
+            if (cam) {
+                float frame = CalcFrame();
+                float blend_time = mBlendTime;
+                float blend_ratio = 1.0f;
+
+                if (blend_time > 0.0f) {
+                    blend_ratio = frame / blend_time;
+                    if (blend_ratio <= 0.0f) {
+                        blend_ratio = 0.0f;
+                    } else if (blend_ratio >= 1.0f) {
+                        blend_ratio = 1.0f;
+                    }
+                }
+
+                if (mShotChanged) {
+                    blend_ratio = 0.0f;
+                }
+
+                // Apply camera frame and interpolation
+                mCurrentShot->SetFrame(frame, blend_ratio);
+
+                if (blend_ratio >= 1.0f && mBlendRatio < 1.0f) {
+                    // Blending just finished
+                    static Message _blend_msg("blend_finished", "");
+                    HandleType(_blend_msg);
+                }
+
+                mBlendRatio = blend_ratio;
+            }
+
+            if (!shot_over && mCurrentShot->ShotOver()) {
+                static Message _shot_msg("shot_over", "");
+                HandleType(_shot_msg);
+            }
         }
-        if (mFreeCam)
+
+        if (mFreeCam) {
             mFreeCam->Poll();
+        }
     }
 }
 

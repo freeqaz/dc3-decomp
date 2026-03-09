@@ -8,7 +8,7 @@
 class CrewProvider : public UIListProvider, public Hmx::Object {
 public:
     CrewProvider();
-    virtual ~CrewProvider() {}
+    virtual ~CrewProvider();
     virtual void Text(int, int, UIListLabel *, UILabel *) const;
     virtual Symbol DataSymbol(int) const;
     virtual bool CanSelect(int) const;

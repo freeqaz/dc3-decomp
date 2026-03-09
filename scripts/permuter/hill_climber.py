@@ -932,6 +932,13 @@ def hill_climb(
         except Exception:
             pass  # Don't fail the run if stats storage fails
 
+    # Find the pattern that produced the last improvement
+    winning_pattern = None
+    for r in reversed(rounds):
+        if r.improved and r.best_pattern:
+            winning_pattern = r.best_pattern
+            break
+
     return HillClimbResult(
         symbol=symbol,
         function_name=function_name,
@@ -942,6 +949,7 @@ def hill_climb(
         rounds=rounds,
         stopped_reason=stopped_reason,
         elapsed_seconds=round(elapsed, 2),
+        winning_pattern=winning_pattern,
         ghidra_stats=ghidra_run_stats,
     )
 

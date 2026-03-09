@@ -33,6 +33,13 @@ StorePanel::~StorePanel() {
     delete mAlbumTex;
 }
 
+unsigned long long MultipleItemsEnumCompleteMsg::OfferID(int index) const {
+    DataArray *arr = mData->Node(5).Array(mData);
+    int lo = arr->Node(index * 2).Int(arr);
+    int hi = arr->Node(index * 2 + 1).Int(arr);
+    return ((unsigned long long)hi << 32) | (unsigned int)lo;
+}
+
 BEGIN_PROPSYNCS(StorePanel)
     SYNC_PROP(load_ok, mLoadOk)
     SYNC_SUPERCLASS(Hmx::Object)
@@ -698,7 +705,36 @@ void StorePanel::ValidateOffers(std::vector<StoreOffer *> &offers) {
     }
 }
 
-DataNode StorePanel::OnMsg(MultipleItemsEnumCompleteMsg const &) { return 0; }
+DataNode StorePanel::OnMsg(MultipleItemsEnumCompleteMsg const &msg) {
+    bool success = msg.Success();
+    if (success) {
+        int numOffers = msg.NumOfferIDs();
+        for (int i = 0; i < numOffers; i++) {
+            u64 offerId = msg.OfferID(i);
+            for (std::vector<StoreOffer *>::iterator it = mOffers.begin(); it != mOffers.end();
+                 ++it) {
+                StoreOffer *offer = *it;
+                if (offer->songID == offerId) {
+                    if (!offer->isPurchased) {
+                        bool purchased = msg.Purchased(i);
+                        if (purchased) {
+                            offer->isPurchased = true;
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+        static Message enumMsg("enum_finished");
+        HandleType(enumMsg);
+        TheUI->Handle(enumMsg, false);
+    }
+
+    static Message doneMsg("reenum_finished", DataNode(0));
+    doneMsg->Node(2) = DataNode((int)success);
+    TheUI->Handle(doneMsg, false);
+    return DataNode(0);
+}
 
 void StorePanel::SetSource(Symbol src, bool backup) {
     mPurchaseSource = src;

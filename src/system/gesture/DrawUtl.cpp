@@ -119,19 +119,42 @@ void DrawGestureMgr(GestureMgr &gm, LiveCameraInput::BufferType bufferType, floa
 
 bool UpdateBufferTex(LiveCameraInput *cam, RndTex *tex, LiveCameraInput::BufferType bufType, GestureMgr *gm) {
     START_AUTO_TIMER("draw_natal_buffer");
-    MILO_ASSERT((unsigned int)bufType < LiveCameraInput::kBufferNum, 0x12b);
+    MILO_ASSERT(bufType < LiveCameraInput::kBufferNum, 0x12b);
     if (cam == nullptr) {
         return false;
     }
     MILO_ASSERT(tex, 0x130);
     MILO_ASSERT(tex->Bpp() == 16, 0x131);
     MILO_ASSERT(tex->GetType() == RndTex::kScratch, 0x132);
-    //tex->TexelsLock(); seemingly pulls param out of nowehere
-    if (bufType == LiveCameraInput::kBufferColor) {
-        auto bufStream = cam->StreamBufferData(LiveCameraInput::kBufferColor);
-        if (bufStream != nullptr) {
 
+    void *texelsPtr = nullptr;
+    tex->TexelsLock(texelsPtr);
+
+    if (bufType == LiveCameraInput::kBufferColor) {
+        void *bufStream = cam->StreamBufferData(LiveCameraInput::kBufferColor);
+        if (bufStream != nullptr) {
+            LiveCameraInput::LockedRect lockedRect;
+            cam->LockStream(bufStream, lockedRect);
+            cam->UnlockStream(bufStream);
         }
+    } else if (bufType == LiveCameraInput::kBufferPlayerColor) {
+        void *colorStream = cam->StreamBufferData(LiveCameraInput::kBufferColor);
+        void *playerStream = cam->StreamBufferData(LiveCameraInput::kBufferPlayer);
+        LiveCameraInput::LockedRect colorRect;
+        cam->LockStream(colorStream, colorRect);
+        LiveCameraInput::LockedRect playerRect;
+        cam->LockStream(playerStream, playerRect);
+        cam->UnlockStream(colorStream);
+        cam->UnlockStream(playerStream);
+    } else {
+        MILO_ASSERT(gm != nullptr, 0x191);
+        void *bufStream = cam->StreamBufferData(bufType);
+        LiveCameraInput::LockedRect lockedRect;
+        cam->LockStream(bufStream, lockedRect);
+        MILO_ASSERT(tex->Width() == 0x140 && tex->Height() == 0xf0, 0x19a);
+        cam->UnlockStream(bufStream);
     }
-    return false;
+
+    tex->TexelsUnlock();
+    return true;
 }

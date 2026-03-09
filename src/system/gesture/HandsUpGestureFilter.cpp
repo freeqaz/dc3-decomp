@@ -16,6 +16,7 @@ BEGIN_PROPSYNCS(HandsUpGestureFilter)
 END_PROPSYNCS
 
 void HandsUpGestureFilter::Update(Skeleton const &skeleton, int elapsed) {
+    static float sHandsUpXThresh = -0.1f;
     static bool sForceHandsUp = false;
     if (sForceHandsUp) {
         mHandsUp = true;
@@ -24,69 +25,71 @@ void HandsUpGestureFilter::Update(Skeleton const &skeleton, int elapsed) {
     }
 
     int idx = skeleton.SkeletonIndex();
-    if (idx < 0 || idx >= 6)
+    if (idx < 0)
+        return;
+    if (idx >= 6)
         return;
 
     SkeletonQualityFilter &qualityFilter = TheGestureMgr->GetSkeletonQualityFilter(idx);
-    if (!skeleton.IsTracked() || qualityFilter.Sitting()) {
-        mHandsUp = false;
-        mRaisedMs = 0;
-        return;
-    }
-    if (!qualityFilter.IsConfident()) {
-        mHandsUp = false;
-        mRaisedMs = 0;
-        return;
+    if (!skeleton.IsTracked() || qualityFilter.Sitting() || !qualityFilter.IsConfident()) {
+        goto reset;
     }
 
-    const TrackedJoint &lShoulder = skeleton.ShoulderJoint(kSkeletonLeft);
-    const TrackedJoint &rShoulder = skeleton.ShoulderJoint(kSkeletonRight);
+    {
+        const TrackedJoint &lShoulder = skeleton.ShoulderJoint(kSkeletonLeft);
+        const TrackedJoint &rShoulder = skeleton.ShoulderJoint(kSkeletonRight);
 
-    // Average shoulder y for threshold
-    float shoulderAvgY = (lShoulder.mJointPos[kCoordCamera].y + rShoulder.mJointPos[kCoordCamera].y) * 0.5f;
+        Vector3 shoulderDiff;
+        shoulderDiff.x = lShoulder.mJointPos[kCoordCamera].x - rShoulder.mJointPos[kCoordCamera].x;
+        shoulderDiff.y = lShoulder.mJointPos[kCoordCamera].y - rShoulder.mJointPos[kCoordCamera].y;
+        shoulderDiff.z = lShoulder.mJointPos[kCoordCamera].z - rShoulder.mJointPos[kCoordCamera].z;
+        Normalize(shoulderDiff, shoulderDiff);
 
-    const TrackedJoint &lHand = skeleton.HandJoint(kSkeletonLeft);
-    const TrackedJoint &rHand = skeleton.HandJoint(kSkeletonRight);
-    const TrackedJoint &lElbow = skeleton.ElbowJoint(kSkeletonLeft);
-    const TrackedJoint &rElbow = skeleton.ElbowJoint(kSkeletonRight);
+        if (fabsf((shoulderDiff.y + shoulderDiff.x) * 0.0f + shoulderDiff.z) > 0.8f)
+            goto reset;
 
-    // Direction from shoulder to hand for left arm, normalized
-    Vector3 lArmDir;
-    lArmDir.x = lHand.mJointPos[kCoordCamera].x - lShoulder.mJointPos[kCoordCamera].x;
-    lArmDir.y = lHand.mJointPos[kCoordCamera].y - lShoulder.mJointPos[kCoordCamera].y;
-    lArmDir.z = lHand.mJointPos[kCoordCamera].z - lShoulder.mJointPos[kCoordCamera].z;
-    Vector3 lArmNorm;
-    Normalize(lArmDir, lArmNorm);
+        const TrackedJoint &rHand = skeleton.HandJoint(kSkeletonRight);
+        const TrackedJoint &rElbow = skeleton.ElbowJoint(kSkeletonRight);
+        const TrackedJoint &rShoulderR = skeleton.ShoulderJoint(kSkeletonRight);
+        const TrackedJoint &lHand = skeleton.HandJoint(kSkeletonLeft);
+        const TrackedJoint &lElbow = skeleton.ElbowJoint(kSkeletonLeft);
+        const TrackedJoint &lShoulderL = skeleton.ShoulderJoint(kSkeletonLeft);
 
-    // Check left hand above left shoulder
-    const TrackedJoint &lShoulderAgain = skeleton.ShoulderJoint(kSkeletonLeft);
-    const TrackedJoint &rShoulderAgain = skeleton.ShoulderJoint(kSkeletonRight);
+        Vector2 rightScreenPos, leftScreenPos;
+        skeleton.ScreenPos(kJointHandRight, rightScreenPos);
+        skeleton.ScreenPos(kJointHandLeft, leftScreenPos);
 
-    bool leftHandUp = lHand.mJointPos[kCoordCamera].y > lShoulderAgain.mJointPos[kCoordCamera].y;
-    bool rightHandUp = rHand.mJointPos[kCoordCamera].y > rShoulderAgain.mJointPos[kCoordCamera].y;
+        static float sScreenBoundary = 0.05f;
+        bool rightValid = rightScreenPos.x > sScreenBoundary && rightScreenPos.x < 1.0f - sScreenBoundary;
+        bool leftValid = leftScreenPos.x > sScreenBoundary && leftScreenPos.x < 1.0f - sScreenBoundary;
 
-    // Check elbows above shoulder average
-    bool leftElbowUp = lElbow.mJointPos[kCoordCamera].y > shoulderAvgY;
-    bool rightElbowUp = rElbow.mJointPos[kCoordCamera].y > shoulderAvgY;
+        if (!rightValid || !leftValid)
+            goto reset;
 
-    // Get screen positions
-    Vector2 lScreenPos, rScreenPos;
-    skeleton.ScreenPos(kJointHandLeft, lScreenPos);
-    skeleton.ScreenPos(kJointHandRight, rScreenPos);
+        static float sHandsUpYThresh = 0.1f;
+        if (rHand.mJointPos[kCoordCamera].y <= rShoulderR.mJointPos[kCoordCamera].y + sHandsUpYThresh)
+            goto reset;
+        if (rHand.mJointPos[kCoordCamera].y <= rElbow.mJointPos[kCoordCamera].y)
+            goto reset;
+        if (rHand.mJointPos[kCoordCamera].x > rShoulderR.mJointPos[kCoordCamera].x + sHandsUpXThresh) {
+            if (lHand.mJointPos[kCoordCamera].x <= lShoulderL.mJointPos[kCoordCamera].x + sHandsUpXThresh)
+                goto reset;
+        }
+        if (lHand.mJointPos[kCoordCamera].y <= lShoulderL.mJointPos[kCoordCamera].y + sHandsUpYThresh)
+            goto reset;
+        if (lHand.mJointPos[kCoordCamera].y <= lElbow.mJointPos[kCoordCamera].y)
+            goto reset;
 
-    // Check screen position distance
-    bool screenCheck = (rScreenPos.x - lScreenPos.x) > 0.0f;
-
-    if (leftHandUp && rightHandUp && leftElbowUp && rightElbowUp
-        && lArmNorm.y > 0.0f && screenCheck) {
         mRaisedMs += elapsed;
         if (mRaisedMs >= mRequiredMs) {
             mHandsUp = true;
         }
-    } else {
-        mHandsUp = false;
-        mRaisedMs = 0;
+        return;
     }
+
+reset:
+    mHandsUp = false;
+    mRaisedMs = 0;
 }
 
 void HandsUpGestureFilter::Update(int i, int j) {

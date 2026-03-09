@@ -262,8 +262,8 @@ void GetBadgeInfo(
             value.mMedalCounts[kBadgeGold] = 0;
             value.mMedalCounts[kBadgeSilver] = 0;
             value.mMedalCounts[kBadgeBronze] = 0;
-            value.mMedalCounts[kBadgeGold] = dlcGold + hmxGold;
             value.mMedalCounts[kBadgeSilver] = dlcSilver + hmxSilver;
+            value.mMedalCounts[kBadgeGold] = dlcGold + hmxGold;
             value.mMedalCounts[kBadgeBronze] = dlcBronze + hmxBronze;
             badgeInfos[gamerTag] = value;
         }
@@ -316,19 +316,19 @@ void GetRows(
         std::sort(it->second.begin(), it->second.end(), TimeStampCmp);
         if (!bref) {
             auto rowIt = rows.find(it->first);
-            if (rowIt != rows.end()) {
+            if (!(rowIt != rows.end())) {
+                bref = true;
+            } else {
                 std::vector<ChallengeRow> &rowItRows = rowIt->second;
                 std::vector<ChallengeRow> &itRows = it->second;
                 if (rowItRows.size() == itRows.size()) {
                     for (int i = 0; i < it->second.size(); i++) {
-                        if (rowItRows[i] != itRows[i]) {
+                        if (itRows[i] != rowItRows[i]) {
                             bref = true;
                             break;
                         }
                     }
                 }
-            } else {
-                bref = true;
             }
         }
     }

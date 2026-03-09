@@ -51,8 +51,9 @@ bool ClipPlayer::Init(RndPropAnim *anim) {
                 mPracticeEnd = Round(FrameToBeat(k2->frame)) - 1.0f;
                 String str(k1->value);
                 str.ReplaceAll('*', '\0');
+                auto _tmp4 = mClipDir->Find<CharClip>(MakeString("%s_in", str.c_str()), false);
                 mInClip =
-                    mClipDir->Find<CharClip>(MakeString("%s_in", str.c_str()), false);
+                    _tmp4;
                 str = k2->value;
                 str.ReplaceAll('*', '\0');
                 mOutClip =

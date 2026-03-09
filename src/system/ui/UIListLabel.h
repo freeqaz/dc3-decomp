@@ -22,6 +22,8 @@ public:
     NEW_OBJ(UIListLabel)
     OBJ_MEM_OVERLOAD(0x11)
 
+    friend class UIListLabelElement;
+
 protected:
     virtual RndTransformable *RootTrans();
     virtual UIListSlotElement *CreateElement(UIList *);

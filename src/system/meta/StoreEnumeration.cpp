@@ -4,6 +4,15 @@
 #include "xdk/XAPILIB.h"
 #include <cstring>
 
+namespace stlpmtx_std {
+template <>
+_List_node_base* list<EnumProduct, StlNodeAlloc<EnumProduct>>::_M_create_node(const EnumProduct& __x) {
+    _List_node<EnumProduct>* p = (_List_node<EnumProduct>*)this->_M_node.allocate(1);
+    _Copy_Construct(&p->_M_data, __x);
+    return p;
+}
+}
+
 XboxEnumeration::XboxEnumeration(int i, std::vector<unsigned long long> *offerIDs)
     : mUserIndex(i), mOfferIDCount(0), mOfferIDsBegin(0), mCurOffers(0), mEnumerating(false), mHandle(0), mBufferSize(0), mEnumBuffer(0) {
     if (offerIDs != 0) {
@@ -16,6 +25,23 @@ XboxEnumeration::XboxEnumeration(int i, std::vector<unsigned long long> *offerID
         mOfferIDsBegin = (unsigned long long *)new char[allocSize];
         memcpy(mOfferIDsBegin, &(*offerIDs)[0], mOfferIDCount << 3);
         mCurOffers = mOfferIDsBegin;
+    }
+}
+
+// Template specialization for _List_base<EnumProduct>::clear()
+// EnumProduct is a POD struct with no destructor, so skip _Destroy
+namespace stlpmtx_std {
+    template <>
+    void _List_base<EnumProduct, StlNodeAlloc<EnumProduct>>::clear() {
+        typedef _List_node<EnumProduct> _Node;
+        _Node* __cur = (_Node*)_M_node._M_data._M_next;
+        while (&(_M_node._M_data) != __cur) {
+            _Node* __tmp = __cur;
+            __cur = (_Node*)__cur->_M_next;
+            _M_node.deallocate(__tmp, 1);
+        }
+        _M_node._M_data._M_next = &_M_node._M_data;
+        _M_node._M_data._M_prev = &_M_node._M_data;
     }
 }
 
@@ -206,3 +232,4 @@ continue_enum:
 done:
     mEnumerating = false;
 }
+

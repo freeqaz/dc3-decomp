@@ -184,9 +184,15 @@ void CharSignalApplier::Poll() {
 }
 
 void CharSignalApplier::PollDeps(std::list<Hmx::Object *> &a, std::list<Hmx::Object *> &b) {
-    for (size_t i = 0; i < mBoneOps.size(); i++) {
-        for (std::list<Hmx::Object *>::iterator it = a.begin(); it != a.end(); ++it) {
-            b.push_back(*it);
-        }
+    BoneOp *cur = mBoneOps.begin();
+    if (cur != mBoneOps.end()) {
+        do {
+            BoneOp op = *cur;
+            Hmx::Object *bone = op.mBone;
+            if (bone) {
+                b.insert(b.end(), bone);
+            }
+            cur++;
+        } while (cur != mBoneOps.end());
     }
 }

@@ -30,6 +30,8 @@
 #include "utl/MakeString.h"
 #include "utl/Symbol.h"
 
+CrewProvider::~CrewProvider() {}
+
 MultiUserGesturePanel::MultiUserGesturePanel() {
     // Initialize UI components and providers for both players (left/right sides)
     // Note: (&mLeftNavList1)[i] pattern required for codegen - initializes nav list pairs

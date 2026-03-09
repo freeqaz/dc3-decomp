@@ -32,6 +32,8 @@
 #include "utl/Std.h"
 #include "utl/Symbol.h"
 #include <string.h>
+#include <algorithm>
+#include <list>
 
 Character *Character::sCurrent;
 Character *gCharMe;
@@ -762,6 +764,8 @@ DataNode Character::OnGetCurrentInterests(DataArray *da) {
 
 void Character::DrawShowing() {
     START_AUTO_TIMER("char_draw");
+    if (mTest)
+        mTest->Draw();
     float screenSize = ComputeScreenSize(RndCam::Current());
     int lod;
     auto& _ref0 = mForceLod;
@@ -779,7 +783,7 @@ void Character::DrawShowing() {
         lod = Clamp<int>(0, mLods.size() - 1, _ref0);
     }
     bool doSelfShadow = false;
-    if (mSelfShadow && TheRnd.GetDrawMode() == 0 && lod < 2 & (mDrawMode & 1)) {
+    if (mSelfShadow && TheRnd.GetDrawMode() == 0 && lod <= 1 && (mDrawMode & 1)) {
         doSelfShadow = true;
     }
     if (doSelfShadow) {
@@ -791,6 +795,26 @@ void Character::DrawShowing() {
     DrawLod(lod);
     if (doSelfShadow)
         RndShadowMap::EndShadow();
+
+    if (TheLoadMgr.EditMode() && TheRnd.GetDrawMode() == 0) {
+        if (mTest)
+            mTest->Draw();
+
+        static DataNode* sShowName = nullptr;
+        if (!sShowName) {
+            sShowName = &DataVariable(Symbol("character.show_name"));
+        }
+
+        if (sShowName && sShowName->Int()) {
+            static Symbol sCrowd("crowd");
+            if (Type() != sCrowd) {
+                RndTransformable* bone = CharUtlFindBoneTrans("bone_head", this);
+                if (bone) {
+                    // Debug drawing of character name above head
+                }
+            }
+        }
+    }
 }
 
 void Character::FindInterestObjects(ObjectDir *dir) {
@@ -925,4 +949,107 @@ RndDrawable *DrawPtrVec::CollideShowing(const Segment &s, float &dist, Plane &pl
         }
     }
     return result;
+}
+
+int CharPollableSorter::sSearchID = 0;
+
+void CharPollableSorter::AddDeps(
+    Dep *dep,
+    const std::list<Hmx::Object *> &objs,
+    std::list<Dep *> &deps,
+    bool isChangedBy
+) {
+    for (std::list<Hmx::Object *>::const_iterator it = objs.begin(); it != objs.end();
+         ++it) {
+        Hmx::Object *obj = *it;
+        if (!obj)
+            continue;
+        std::map<Hmx::Object *, Dep>::iterator found = mDeps.find(obj);
+        if (found != mDeps.end()) {
+            Dep *other = &found->second;
+            if (isChangedBy) {
+                dep->changedBy.push_back(other);
+            }
+        }
+    }
+}
+
+bool CharPollableSorter::ChangedByRecurse(Dep *dep) {
+    if (dep->searchID == sSearchID)
+        return false;
+    dep->searchID = sSearchID;
+    for (std::list<Dep *>::iterator it = dep->changedBy.begin();
+         it != dep->changedBy.end();
+         ++it) {
+        if (*it == mTarget)
+            return true;
+        if (ChangedByRecurse(*it))
+            return true;
+    }
+    return false;
+}
+
+bool CharPollableSorter::ChangedBy(Dep *a, Dep *b) {
+    mTarget = b;
+    sSearchID++;
+    return ChangedByRecurse(a);
+}
+
+void CharPollableSorter::Sort(std::vector<RndPollable *> &polls) {
+    std::vector<Dep *> deps;
+    deps.reserve(polls.size());
+    for (int i = polls.size() - 1, last = i; i >= 0; i--) {
+        CharPollable *c = dynamic_cast<CharPollable *>(polls[i]);
+        if (c) {
+            Dep &dep = mDeps[c];
+            dep.obj = c;
+            dep.poll = c;
+            deps.push_back(&dep);
+        } else {
+            polls[last--] = polls[i];
+        }
+    }
+    if (deps.empty())
+        return;
+
+    std::sort(deps.begin(), deps.end(), CharPollableSorter::AlphaSort());
+    std::list<Dep *> depList;
+    for (int i = 0; i < deps.size(); i++)
+        depList.push_back(deps[i]);
+    while (!depList.empty()) {
+        Dep *curDep = depList.back();
+        depList.pop_back();
+        CharPollable *c = dynamic_cast<CharPollable *>(curDep->obj);
+        if (c) {
+            std::list<Hmx::Object *> depList1;
+            std::list<Hmx::Object *> depList2;
+            c->PollDeps(depList1, depList2);
+            AddDeps(curDep, depList1, depList, true);
+            AddDeps(curDep, depList2, depList, false);
+        }
+        RndTransformable *t = dynamic_cast<RndTransformable *>(curDep->obj);
+        if (t) {
+            std::list<Hmx::Object *> tDepList;
+            tDepList.push_back(t->TransParent());
+            AddDeps(curDep, tDepList, depList, true);
+        }
+    }
+
+    std::list<Dep *> otherDepList;
+    for (int i = 0; i < deps.size(); i++) {
+        Dep *curDep = deps[i];
+        std::list<Dep *>::iterator it = otherDepList.begin();
+        for (; it != otherDepList.end(); ++it) {
+            if (ChangedBy(curDep, *it))
+                break;
+        }
+        otherDepList.insert(it, curDep);
+    }
+
+    int idx = 0;
+    for (std::list<Dep *>::iterator it = otherDepList.begin();
+         it != otherDepList.end();
+         ++it) {
+        polls[idx++] = (*it)->poll;
+    }
 }

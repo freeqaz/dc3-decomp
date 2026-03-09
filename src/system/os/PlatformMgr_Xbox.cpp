@@ -537,26 +537,12 @@ PostPurchaseEnumJob::~PostPurchaseEnumJob() {}
 
 void PostPurchaseEnumJob::OnCompletion(Hmx::Object *obj) {
     if ((mStatus == 2) && (mSuccess != 0)) {
-        static int sInitFlags = 0;
-        static Symbol sSourceSymbol;
-        static Symbol sOfferSymbol;
-        static Symbol sPurchaserSymbol;
-
-        if (!(sInitFlags & 1)) {
-            sInitFlags |= 1;
-            sSourceSymbol = Symbol("source");
-        }
-        if (!(sInitFlags & 2)) {
-            sInitFlags |= 2;
-            sOfferSymbol = Symbol("offer");
-        }
-        if (!(sInitFlags & 4)) {
-            sInitFlags |= 4;
-            sPurchaserSymbol = Symbol("purchaser");
-        }
+        static Symbol sSourceSymbol("source");
+        static Symbol sPurchaserSymbol("purchaser");
+        static Symbol sOfferSymbol("offer");
 
         String dataStr(MakeString("%016llX", mItemID));
-        SendDataPoint("store/purchase", sSourceSymbol, mOfferSymbol, sOfferSymbol, dataStr, sPurchaserSymbol, mPurchaserID);
+        SendDataPoint<Symbol, Symbol, Symbol, String, Symbol, int>("store/purchase", sSourceSymbol, mOfferSymbol, sOfferSymbol, dataStr, sPurchaserSymbol, mPurchaserID);
     }
     SingleItemEnumJob::OnCompletion(obj);
 }

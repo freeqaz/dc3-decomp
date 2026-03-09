@@ -226,8 +226,8 @@ void TransConstraint::Poll() {
         mChild->SetWorldPos(childPos);
 
         if (mAffectScale) {
-            Vector3 childWorldScale;
             Vector3 parentScale;
+            Vector3 childWorldScale;
             MakeScale(mParent->WorldXfm().m, parentScale);
             MakeScale(mChild->WorldXfm().m, childWorldScale);
             Vector3 childLocalScale;

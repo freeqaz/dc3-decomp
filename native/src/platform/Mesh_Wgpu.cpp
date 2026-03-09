@@ -477,7 +477,9 @@ void RndMesh::DrawShowing() {
     if (!gWgpuRnd || !gWgpuRnd->IsInPass()) return;
     bool capturing = FrameCapture::Get().IsCapturing();
 
-    if (!Showing()) {
+    // Text meshes (created by RndText::FontMap) have empty names and may not have
+    // their Showing flag set since they're internal meshes drawn by RndText::DrawMesh.
+    if (!Showing() && Name()[0]) {
         if (capturing) FrameCapture::Get().AddSkip(Name(), "not showing");
         return;
     }
@@ -498,8 +500,12 @@ void RndMesh::DrawShowing() {
         return;
     }
 
-    // Defer transparent meshes for back-to-front sorting
-    if (IsTransparentBlend(mat->GetBlend())) {
+    // Defer transparent meshes for back-to-front sorting.
+    // Exception: text meshes (no name) must draw immediately because RndText::DrawShowing
+    // sets font color override on the material, then restores it after drawing. If deferred,
+    // the material state is wrong by the time FlushTransparentDraws runs.
+    bool isTextMeshEarly = !Name()[0];
+    if (IsTransparentBlend(mat->GetBlend()) && !isTextMeshEarly) {
         float distSq = 0.0f;
         RndCam* cam = RndCam::Current();
         if (cam) {
@@ -549,14 +555,18 @@ static void DrawMeshImmediate(RndMesh* mesh) {
     auto& pass = gWgpuRnd->CurrentPass();
     bool skinned = meshData.skinned;
 
+    // Text meshes (created by RndText::FontMap) have no name — detect early for pipeline config.
+    // The DC3 fonts are named "Eagle-Light" so we can't exclude by material name.
+    bool isTextMesh = !mesh->Name()[0];
+
     // --- Pipeline selection ---
     PipelineKey key{};
     key.shaderType = 18; // kStandardShader
 
     BaseMaterial::Blend matBlend = mat->GetBlend();
     // Multiply blend requires a bright destination to multiply against.
-    // Without a 3D venue behind the UI, the destination is black/clear → Dst*Src = 0.
-    // Skip these meshes; the SrcAlpha/Add overlays provide the visible UI elements.
+    // Without a 3D venue behind the UI, the destination is dark → Dst*Src produces
+    // bright white rectangles that obscure text. Skip these meshes.
     if (matBlend == BaseMaterial::kBlendMultiply) {
         if (capturing) {
             auto& rec = FrameCapture::Get().AddSkip(mesh->Name(), "multiply blend");
@@ -566,8 +576,8 @@ static void DrawMeshImmediate(RndMesh* mesh) {
         return;
     }
     key.blend = (WgpuBlend)matBlend;
-    key.zMode = !mesh->Name()[0] ? (WgpuZMode)0 : (WgpuZMode)mat->GetZMode(); // No depth for text
-    key.cull = !mesh->Name()[0] ? (WgpuCull)0 : (WgpuCull)mat->GetCull(); // No cull for text
+    key.zMode = isTextMesh ? (WgpuZMode)0 : (WgpuZMode)mat->GetZMode(); // No depth for text
+    key.cull = isTextMesh ? (WgpuCull)0 : (WgpuCull)mat->GetCull(); // No cull for text
     key.stencil = (WgpuStencil)mat->GetStencil();
     key.layout = skinned ? VertexLayoutType::Skinned : VertexLayoutType::Static;
     key.targetFormat = gWgpuRnd->Gpu().SurfaceFormat();
@@ -588,9 +598,11 @@ static void DrawMeshImmediate(RndMesh* mesh) {
     matUni.color[1] = matColor.green;
     matUni.color[2] = matColor.blue;
     matUni.color[3] = matColor.alpha;
+
     // Many DC3 UI materials have alpha=0 at load time, normally driven to visible
     // values by PropAnim. Force alpha to 1 for SrcAlpha materials so they don't
-    // stay invisible if animation hasn't run yet.
+    // stay invisible if animation hasn't run yet. Also needed for font/text materials
+    // whose alpha is set by RndText::DrawShowing but restored before deferred flush.
     if (matUni.color[3] < 0.01f && matBlend == BaseMaterial::kBlendSrcAlpha) {
         matUni.color[3] = 1.0f;
         heuristics |= kHeuristicAlphaForce;
@@ -684,13 +696,9 @@ static void DrawMeshImmediate(RndMesh* mesh) {
     matUni.materialFogEnabled = allowFog ? 1.0f : 0.0f;
     if (!allowFog && mat->GetFog()) heuristics |= kHeuristicFogBlendCheck;
 
-    // Prelit: vertex color is pre-lit, skip lighting
-    // Text meshes (created by RndText::FontMap) have no name and need prelit
-    // since the UI environment may have no lights/ambient.
-    // Also auto-detect fullbright UI: environments with near-zero ambient and
+    // Auto-detect fullbright UI: environments with near-zero ambient and
     // few/no lights are typically UI panels where lighting isn't meaningful.
     // On Xbox, these meshes use simpler shaders that bypass lighting entirely.
-    bool isTextMesh = !mesh->Name()[0];
     bool forcePrelit = IsSimpleRender(); // Simple mode forces all prelit
     if (!forcePrelit && !mat->Prelit() && !isTextMesh) {
         RndEnviron* env = RndEnviron::Current();
@@ -715,7 +723,9 @@ static void DrawMeshImmediate(RndMesh* mesh) {
     if (isTextMesh) heuristics |= kHeuristicTextMeshDetect;
     matUni.prelit = (mat->Prelit() || isTextMesh || forcePrelit) ? 1.0f : 0.0f;
     matUni.useAlphaAsRGB = isTextMesh ? 1.0f : 0.0f;
-    if (isTextMesh) heuristics |= kHeuristicTextAlphaAsRGB;
+    if (isTextMesh) {
+        heuristics |= kHeuristicTextAlphaAsRGB;
+    }
 
     // Detail normal map
     matUni.normDetailTiling = mat->GetNormDetailTiling();

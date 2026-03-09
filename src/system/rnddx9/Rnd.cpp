@@ -148,12 +148,19 @@ void DxRnd::DrawLargeQuad(
 }
 
 void DxRnd::SetVertShaderTex(RndTex *tex, int sampler) {
-    DxTex *dxTex = static_cast<DxTex *>(tex);
+    D3DBaseTexture *texPtr;
+    if (tex) {
+        texPtr = static_cast<DxTex *>(tex)->Tex();
+    } else {
+        texPtr = nullptr;
+    }
+    int slot = sampler + 0x10;
+    u32 shift = slot + 0x20;
     D3DDevice_SetTexture(
         mD3DDevice,
-        sampler + 0x10,
-        dxTex ? dxTex->Tex() : nullptr,
-        0x8000000000000000 >> ((sampler + 0x30) & 0x7FU)
+        slot,
+        texPtr,
+        0x8000000000000000 >> shift
     );
 }
 

@@ -519,14 +519,12 @@ void MemPushTemp() {
 }
 
 void MemPopTemp() {
-    if (gNumHeaps == 0) {
-        return;
+    bool proceed = gNumHeaps != 0 && gNumHeaps > 0;
+    if (proceed) {
+        MemHeapStack &s = ThreadMemStack(true);
+        MILO_ASSERT(s.mSize > 0, 0x209);
+        s.mSize--;
     }
-    MemHeapStack &s = ThreadMemStack(true);
-    if (gNumHeaps <= 0) {
-        return;
-    }
-    s.mSize--;
 }
 
 MemDoTempAllocations::MemDoTempAllocations(bool b1, bool b2) {

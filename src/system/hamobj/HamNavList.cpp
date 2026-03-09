@@ -1544,8 +1544,8 @@ void HamNavList::DrawDebug() const {
 }
 
 void HamNavList::LinkRibbonDrawState(
-    UIListWidgetDrawState &widgetState,
-    std::vector<HamListRibbonDrawState> &ribbonStates
+    std::vector<HamListRibbonDrawState> &ribbonStates,
+    UIListWidgetDrawState &widgetState
 ) {
 #ifdef HX_NATIVE
     // LP64-safe version: use proper struct access instead of raw pointer arithmetic
@@ -1653,8 +1653,7 @@ void HamNavList::LinkRibbonDrawState(
 }
 
 void HamNavList::DrawShowing() {
-    auto& _ref0 = mListRibbonResource;
-    if (!_ref0 || !mListDirResource)
+    if (!mListRibbonResource || unkc8)
         return;
 #ifdef HX_NATIVE
     if (!mListState.Provider())
@@ -1665,10 +1664,10 @@ void HamNavList::DrawShowing() {
 
     UIListWidgetDrawState widgetState;
     mListDirResource->BuildDrawState(
-        widgetState, mListState, GetState(), GetFrame(), true
+        widgetState, mListState, GetState(), 0.0f, true
     );
 
-    LinkRibbonDrawState(widgetState, mRibbonDrawStates);
+    LinkRibbonDrawState(mRibbonDrawStates, widgetState);
 
     if (mScrollBehavior.IsScrolling()) {
         for (unsigned int i = 0; i < mRibbonDrawStates.size(); i++) {
@@ -1677,26 +1676,45 @@ void HamNavList::DrawShowing() {
         }
     }
 
-    const Transform &xfm = WorldXfm();
-    if (_ref0)
-        _ref0->Draw(xfm, mRibbonDrawStates, false, false);
+    float scrollFrame = mScrollSettleTime;
+    if (mListRibbonResource) {
+        mListRibbonResource->SetFrame(scrollFrame, 1.0f);
+        mListRibbonResource->mScrollAnims.SetScrollFrame(scrollFrame);
+        mListRibbonResource->SetDisengageFrame(scrollFrame);
+        mListRibbonResource->mMode = mRibbonMode;
+    }
 
-    auto& _ref3 = mHeaderRibbonResource;
-    if (_ref3) {
-        _ref3->Draw(xfm, mRibbonDrawStates, false, false);
+    if (mHeaderRibbonResource) {
+        mHeaderRibbonResource->SetFrame(scrollFrame, 1.0f);
+        mHeaderRibbonResource->mScrollAnims.SetScrollFrame(scrollFrame);
+        mHeaderRibbonResource->SetDisengageFrame(scrollFrame);
+        mHeaderRibbonResource->mMode = mRibbonMode;
+    }
+
+    if (mListRibbonResource)
+        mListRibbonResource->Draw(WorldXfm(), mRibbonDrawStates, false, false);
+
+    if (mHeaderRibbonResource) {
+        mHeaderRibbonResource->Draw(WorldXfm(), mRibbonDrawStates, true, false);
+    }
+
+    for (unsigned int i = 0; i < mRibbonDrawStates.size(); i++) {
+        HamListRibbonDrawState &state = mRibbonDrawStates[i];
+        if (state.mHidden && state.unk18) {
+            UIListElementDrawState *elem = (UIListElementDrawState *)state.unk18;
+            elem->mData = 0;
+        }
     }
 
     if (mListDirResource)
         mListDirResource->DrawWidgets(
-        widgetState, mListState, mListWidgets, xfm,
-        GetState(), nullptr, false
-    );
+            widgetState, mListState, mListWidgets, WorldXfm(),
+            GetState(), nullptr, false
+        );
 
     if (mScrollSpeedIndicatorResource) {
-        mScrollSpeedIndicatorResource->DrawShowing();
+        mScrollSpeedIndicatorResource->Draw(WorldXfm());
     }
-
-    DrawDebug();
 }
 
 void WorldInstance::Load(BinStream &bs) {

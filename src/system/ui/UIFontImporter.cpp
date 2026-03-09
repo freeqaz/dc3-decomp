@@ -616,20 +616,15 @@ DataNode UIFontImporter::OnGenerate3D(DataArray *msg) {
 }
 
 DataNode UIFontImporter::OnGetGennedBitmapPath(DataArray *da) {
-    RndFont *font;
-    const char *path = "";
-    if (!mGennedFonts.empty()) {
-        font = dynamic_cast<RndFont *>(mGennedFonts.front());
-        if (font) {
-            RndMat *mat = font->Mat(0);
-            if (mat) {
-                if (mat->GetDiffuseTex()) {
-                    path = mat->GetDiffuseTex()->File().c_str();
-                }
-            }
-        }
+    RndFont *font = nullptr;
+    if ((unsigned int)mGennedFonts.size() > 0)
+        font = (RndFont *)*mGennedFonts.begin();
+    if (font && font->Mat(0)) {
+        RndTex *tex = font->Mat(0)->GetDiffuseTex();
+        if (tex)
+            return DataNode(font->Mat(0)->GetDiffuseTex()->File().c_str());
     }
-    return DataNode(path);
+    return DataNode("");
 }
 
 DataNode UIFontImporter::OnImportSettings(DataArray *da) {

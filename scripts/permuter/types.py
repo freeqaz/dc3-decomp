@@ -235,6 +235,7 @@ class HillClimbResult:
     rounds: list  # list[RoundResult]
     stopped_reason: str  # "perfect", "plateau", "max_rounds", "no_variants", "noise_only", "error"
     elapsed_seconds: float
+    winning_pattern: Optional[str] = None
     ghidra_stats: Optional[object] = None  # GhidraRunStats or None
 
 

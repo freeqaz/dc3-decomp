@@ -567,65 +567,91 @@ bool Intersect(const Vector3 &v, const BSPNode *n) {
 }
 
 bool Intersect(const Segment &seg, const BSPNode *n, float &t, Plane &p) {
-    if (!n)
-        return false;
     MILO_ASSERT(n, 0x4e6);
-    float zero = 0.0f;
+
     float startDot = n->plane.Dot(seg.start);
     float endDot = n->plane.Dot(seg.end);
-    if (startDot >= 0 && endDot >= 0) {
+
+    if (startDot >= 0.0f && endDot >= 0.0f) {
         if (!n->left)
             return false;
         return Intersect(seg, n->left, t, p);
     }
-    if (!(startDot > 0) && !(endDot > 0)) {
+
+    if (!(startDot > 0.0f) && !(endDot > 0.0f)) {
         if (!n->right) {
-            t = zero;
+            t = 0.0f;
             return true;
         }
         return Intersect(seg, n->right, t, p);
     }
+
+    float t2 = 0.0f;
     float denom = startDot - endDot;
     if (denom == 0.0f)
         return false;
+
     float frac = startDot / denom;
     Vector3 mid;
     Interp(seg.start, seg.end, frac, mid);
-    if (startDot >= 0) {
-        Segment seg1;
-        seg1.start = seg.start;
-        seg1.end = mid;
-        if (Intersect(seg1, n->left, t, p))
-            return true;
-        t = frac;
-        p = n->plane;
-        Segment seg2;
-        seg2.start = mid;
-        seg2.end = seg.end;
-        float t2;
-        if (Intersect(seg2, n->right, t2, p)) {
-            t = frac + t2 * (1.0f - frac);
-            return true;
+
+    Segment seg1;
+    seg1.start = seg.start;
+    seg1.end = seg.end;
+    Segment seg2;
+    seg2.start = mid;
+    seg2.end = seg.end;
+
+    if (startDot <= endDot) {
+        if (!n->right) {
+            t = frac;
+            goto done_neg;
         }
-        return true;
+        if (Intersect(seg1, n->right, t2, p)) {
+            t = frac * t2;
+        } else {
+            if (!n->left || !Intersect(seg2, n->left, t2, p))
+                return false;
+            t = (1.0f - frac) * t2 + frac;
+        }
+        t = frac;
+    done_neg:
+        if (t2 == 0.0f && t != 0.0f) {
+            p.a = -n->plane.a;
+            p.b = -n->plane.b;
+            p.c = -n->plane.c;
+            p.d = -n->plane.d;
+        }
     } else {
-        Segment seg1;
-        seg1.start = seg.start;
-        seg1.end = mid;
-        if (Intersect(seg1, n->right, t, p))
-            return true;
-        t = frac;
-        p = n->plane;
-        Segment seg2;
-        seg2.start = mid;
-        seg2.end = seg.end;
-        float t2;
-        if (Intersect(seg2, n->left, t2, p)) {
-            t = frac + t2 * (1.0f - frac);
-            return true;
+        if (!n->left) {
+            if (!n->right || !Intersect(seg2, n->right, t2, p))
+                return false;
+            t = (1.0f - frac) * t2 + frac;
+            t = frac;
+            if (t2 == 0.0f && t != 0.0f) {
+                p.a = n->plane.a;
+                p.b = n->plane.b;
+                p.c = n->plane.c;
+                p.d = n->plane.d;
+            }
+        } else {
+            if (Intersect(seg1, n->left, t2, p)) {
+                t = frac * t2;
+            } else {
+                if (!n->right || !Intersect(seg2, n->right, t2, p))
+                    return false;
+                t = (1.0f - frac) * t2 + frac;
+            }
+            t = frac;
+            if (t2 == 0.0f && t != 0.0f) {
+                p.a = n->plane.a;
+                p.b = n->plane.b;
+                p.c = n->plane.c;
+                p.d = n->plane.d;
+            }
         }
-        return true;
     }
+    return true;
 }
 
 bool Intersect(

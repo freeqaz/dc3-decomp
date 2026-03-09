@@ -52,6 +52,7 @@ public:
         ObjVector<Point> &Points() { return mPoints; }
         int NumPoints() const { return mPoints.size(); }
         Point &PointAt(int i) { return mPoints[i]; }
+        int HookupFlags() const { return mHookupFlags; }
 
     private:
         /** "show the points as spheres" */

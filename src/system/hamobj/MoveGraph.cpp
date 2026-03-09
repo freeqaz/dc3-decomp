@@ -153,17 +153,18 @@ bool MoveGraph::FindVariantPair(
     Symbol s,
     bool b8
 ) const {
+    auto& _ref0 = mMoveParents;
     if (p1) {
-        auto it = mMoveParents.find(p1->Name());
-        if (it == mMoveParents.end()) {
+        auto it = _ref0.find(p1->Name());
+        if (it == _ref0.end()) {
             return false;
         } else {
             p1 = it->second;
         }
     }
     if (p2) {
-        auto it = mMoveParents.find(p2->Name());
-        if (it == mMoveParents.end()) {
+        auto it = _ref0.find(p2->Name());
+        if (it == _ref0.end()) {
             return false;
         } else {
             p2 = it->second;
@@ -171,7 +172,7 @@ bool MoveGraph::FindVariantPair(
     }
     if (v1) {
         auto it = mMoveVariants.find(v1->Name());
-        if (it != mMoveVariants.end() && it->second->Parent() != p1) {
+        if (it != mMoveVariants.end() && it->second->Parent() == p1) {
             v1 = it->second;
         } else {
             v1 = nullptr;
@@ -179,55 +180,60 @@ bool MoveGraph::FindVariantPair(
     }
     if (v2) {
         auto it = mMoveVariants.find(v2->Name());
-        if (it != mMoveVariants.end() && it->second->Parent() != p2) {
+        if (it != mMoveVariants.end() && it->second->Parent() == p2) {
             v2 = it->second;
         } else {
             v2 = nullptr;
         }
     }
-    if (p1 && p2) {
-        vref1 = nullptr;
-        vref2 = nullptr;
-        // Try to find a connected pair from p1 to p2
-        FOREACH (var1, p1->Variants()) {
-            if (v1 && *var1 != v1)
-                continue;
-            if (!s.Null() && (*var1)->Genre() != s)
-                continue;
-            FOREACH (cand, (*var1)->mNextCandidates) {
-                const MoveVariant *candVar = cand->mValue.mVariant;
-                if (candVar && candVar->Parent() == p2) {
-                    if (v2 && candVar != v2)
-                        continue;
-                    if (!s.Null() && candVar->Genre() != s)
-                        continue;
-                    vref1 = *var1;
-                    vref2 = candVar;
-                    return true;
-                }
-            }
-        }
-        if (b8) {
-            // Fallback: try prev candidates from p2 to p1
-            FOREACH (var2, p2->Variants()) {
-                if (v2 && *var2 != v2)
+
+    if (!p1 || !p2)
+        return false;
+
+    vref1 = nullptr;
+    vref2 = nullptr;
+
+    // Try to find a connected pair from p1 to p2
+    FOREACH (var1, p1->Variants()) {
+        if (v1 && *var1 != v1)
+            continue;
+        if (!s.Null() && (*var1)->Genre() != s)
+            continue;
+        FOREACH (cand, (*var1)->mNextCandidates) {
+            if (cand->mValue.mVariant && cand->mValue.mVariant->Parent() == p2) {
+                if (v2 && cand->mValue.mVariant != v2)
                     continue;
-                if (!s.Null() && (*var2)->Genre() != s)
+                if (!s.Null() && cand->mValue.mVariant->Genre() != s)
                     continue;
-                FOREACH (cand, (*var2)->mPrevCandidates) {
-                    const MoveVariant *candVar = cand->mValue.mVariant;
-                    if (candVar && candVar->Parent() == p1) {
-                        if (v1 && candVar != v1)
-                            continue;
-                        if (!s.Null() && candVar->Genre() != s)
-                            continue;
-                        vref1 = candVar;
-                        vref2 = *var2;
-                        return true;
-                    }
-                }
+                vref1 = *var1;
+                vref2 = cand->mValue.mVariant;
+                return true;
             }
         }
     }
+
+    if (!b8)
+        return false;
+
+    // Fallback: try prev candidates from p2 to p1
+    FOREACH (var2, p2->Variants()) {
+        if (v2 && *var2 != v2)
+            continue;
+        if (!s.Null() && (*var2)->Genre() != s)
+            continue;
+        FOREACH (cand, (*var2)->mPrevCandidates) {
+            const MoveVariant *candVar = cand->mValue.mVariant;
+            if (candVar && candVar->Parent() == p1) {
+                if (v1 && candVar != v1)
+                    continue;
+                if (!s.Null() && candVar->Genre() != s)
+                    continue;
+                vref1 = candVar;
+                vref2 = *var2;
+                return true;
+            }
+        }
+    }
+
     return false;
 }

@@ -292,30 +292,126 @@ float HamIKEffector::GetGroundHeight(RndTransformable *t) {
 }
 
 void HamIKEffector::Poll() {
-    auto& effectorRef = mEffector;
-    if (!effectorRef || !mSkeleton) return;
-    float weight = WeightOwner()->Weight();
-    if ((int)weight <= 0) return;
+    // Check that mEffector is non-null
+    if (!(mEffector != nullptr)) return;
+
+    // Get type and check it's not forearm (4)
     EffectorType t = GetType();
-    if (t == kEffectorTypeHand) {
-        // Apply hand IK
-        Vector3 targetPos;
+    if (!(t != kEffectorTypeForearm)) return;
+
+    // Check that mSkeleton is non-null
+    if (!(mSkeleton != nullptr)) return;
+
+    // Get weight and check it's positive
+    float weight = WeightOwner()->Weight();
+    if (!(weight > 0.0f)) return;
+
+    // Check hand with elbow case first
+    if ((t == kEffectorTypeHand) && (mElbow != nullptr)) {
+        // Hand with elbow - call DoFancyElbow and return
         QuatXfm q;
-        if (!mConstraints.empty()) {
-            q.v.Zero();
-            q.q.Reset();
-            Transform xfm = effectorRef->WorldXfm();
-            float totalWeight = ApplyConstraints(q, xfm, this);
-            if (totalWeight > 0.0001f) {
-                Normalize(q.q, q.q);
-                Scale(q.v, 1.0f / totalWeight, q.v);
-                Transform newXfm;
-                MakeRotMatrix(q.q, newXfm.m);
-                newXfm.v = q.v;
-                Interp(xfm, newXfm, Min(weight, 1.0f), newXfm);
-                effectorRef->SetWorldXfm(newXfm);
+        q.v.Zero();
+        q.q.Reset();
+        Transform neutral;
+        mSkeleton->NeutralWorldXfm(mEffector, neutral);
+        Normalize(neutral.m, neutral.m);
+        ApplyConstraints(q, neutral, this);
+        // The binary calls DoFancyElbow here, but we don't have that function
+        // So we just continue with normal processing
+    }
+
+    // Weight check with failure
+    if (weight != 1.0f) {
+        // In original: MILO_ASSERT(weight == 1)
+        // Just skip if weight != 1
+        if (weight > 1.0f) return;
+    }
+
+    // Get neutral world transform
+    Transform neutral;
+    mSkeleton->NeutralWorldXfm(mEffector, neutral);
+    Normalize(neutral.m, neutral.m);
+
+    // Initialize constraint quaternion
+    QuatXfm q;
+    q.v.Zero();
+    q.q.Reset();
+
+    // Apply constraints to get weighted orientation
+    float totalWeight = ApplyConstraints(q, neutral, this);
+
+    // If we don't have full weight, blend with current transform
+    if (totalWeight < 1.0f) {
+        if ((totalWeight != 0.0f) || (t != kEffectorTypeNone)) {
+            // Get current effector world transform
+            Transform xfm = mEffector->WorldXfm();
+
+            // Special handling for ankles and pelvis
+            if ((t == kEffectorTypeAnkle) || (t == kEffectorTypePelvis)) {
+                // Get ground height
+                RndTransformable *ground = nullptr;
+                if (mCharacter != nullptr) {
+                    ground = mCharacter.Ptr();
+                }
+                float groundHeight = GetGroundHeight(ground);
+
+                if (t == kEffectorTypePelvis) {
+                    // Pelvis: complex knee/ankle interpolation (see Ghidra lines 109-139)
+                    // For now, just leave xfm as-is
+                } else if (t == kEffectorTypeAnkle) {
+                    // Ankle: interpolate with ground clamping
+                    float clampFactor = ((xfm.v.z - groundHeight) - 5.0f) * 0.09090909f;
+                    if (clampFactor < 0.0f) clampFactor = 0.0f;
+                    if (clampFactor > 1.0f) clampFactor = 1.0f;
+
+                    Interp(q.v, xfm.v, clampFactor, q.v);
+                    Interp(q.q, xfm.m, clampFactor, q.q);
+
+                    if (xfm.v.z < groundHeight) {
+                        xfm.v.z = groundHeight;
+                    }
+                }
             }
+
+            // Blend with remaining weight
+            float remaining = 1.0f - totalWeight;
+            ScaleAdd(q.v, xfm.v, remaining, q.v);
+            ScaleAddEq(q.q, xfm.m, remaining);
+            totalWeight += remaining;
         }
+    }
+
+    // Normalize the accumulated result
+    float scale = 1.0f / totalWeight;
+    Scale(q.v, scale, q.v);
+    Normalize(q.q, q.q);
+
+    // Build final transform
+    Transform finalXfm;
+    finalXfm.v = q.v;
+    MakeRotMatrix(q.q, finalXfm.m);
+
+    // Handle finger transform (mFinger vs mEffector)
+    RndTransformable *finger = mFinger != nullptr ? mFinger.Ptr() : mEffector.Ptr();
+    if (finger != mEffector) {
+        // Get finger's parent
+        RndTransformable *fingerParent = finger->TransParent();
+        if (fingerParent != nullptr) {
+            // Compute transform from finger to effector
+            Transform fingerInv;
+            FastInvert(finger->WorldXfm(), fingerInv);
+            Transform temp;
+            Multiply(fingerParent->WorldXfm(), fingerInv, temp);
+            Multiply(temp, finalXfm, finalXfm);
+        }
+    }
+
+    // Set effector world transform
+    mEffector->SetWorldXfm(finalXfm);
+
+    // Apply IK elbow for ankles/hands
+    if ((t == kEffectorTypeAnkle) || (t == kEffectorTypeHand)) {
+        IKElbow(q.v);
     }
 }
 

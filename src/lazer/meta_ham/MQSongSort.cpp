@@ -4,7 +4,8 @@
 #include "ChallengeSort.h"
 #include "MQSongSortMgr.h"
 
-MQSongSort::MQSongSort() {};
+MQSongSort::MQSongSort() {}
+
 
 void MQSongSort::DeleteItemList() {
     NavListSort::DeleteItemList();
@@ -23,7 +24,7 @@ void MQSongSort::SetHighlightedIx(int i1) {
             return;
         }
     }
-    mHighlightNode = 0;
+    mHighlightNode = nullptr;
 }
 
 void MQSongSort::UpdateHighlight() {

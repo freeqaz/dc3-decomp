@@ -404,6 +404,8 @@ END_SAVES
 
 BEGIN_LOADS(CharEyes)
     LOAD_REVS(bs)
+    int gRev = d.rev;
+    int gAltRev = d.altRev;
     ASSERT_REVS(0x12, 0)
     LOAD_SUPERCLASS(Hmx::Object)
     if (gRev > 5)
@@ -420,17 +422,17 @@ BEGIN_LOADS(CharEyes)
             mEyes[idx].mEye = *it;
             mEyes[idx].mUpperLid = 0;
             mEyes[idx].mLowerLid = 0;
-            mEyes[idx].mLowerLidBlink = 0;
             mEyes[idx].mUpperLidBlink = 0;
+            mEyes[idx].mLowerLidBlink = 0;
             idx++;
         }
     }
-    if (gRev == 3 || gRev == 4) {
+    if (gRev > 2 && gRev < 5) {
         ObjPtr<RndTransformable> tPtr(this);
         d.stream >> tPtr;
     }
     mInterests.clear();
-    if (gRev >= 4 && gRev <= 8) {
+    if (gRev > 3 && gRev <= 8) {
         ObjPtr<RndTransformable> tPtr(this);
         int cnt;
         d.stream >> cnt;

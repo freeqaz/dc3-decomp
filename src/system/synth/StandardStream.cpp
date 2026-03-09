@@ -119,7 +119,39 @@ float StandardStream::GetTime() {
         return mStartMs;
 }
 
-float StandardStream::GetJumpBackTotalTime(float) const { return 0.0f; }
+float StandardStream::GetJumpBackTotalTime(float time) const {
+    bool foundJump = true;
+    float lastTime = 0.0f;
+    float loopback = 0.0f;
+
+    int count = (int)mJumpInstances.size() - 1;
+    int i = count;
+    while (i >= 0) {
+        const JumpInstance& jump = mJumpInstances[i];
+        float jumpTime = jump.unk8;
+        if (time >= jumpTime) {
+            loopback = jump.unkc;
+            lastTime = jumpTime;
+            break;
+        }
+        foundJump = false;
+        i--;
+    }
+
+    if (foundJump && mJumpFromSamples != mJumpToSamples) {
+        float totalLoopback = loopback + lastTime;
+        float jumpFromMs = SampToMs(mJumpFromSamples);
+        float jumpToMs = SampToMs(mJumpToSamples);
+        if (totalLoopback < jumpFromMs) {
+            float adjustedTime = (time - lastTime) + totalLoopback;
+            if (adjustedTime >= jumpFromMs) {
+                loopback = loopback + (jumpToMs - jumpFromMs);
+            }
+        }
+    }
+
+    return loopback;
+}
 
 float StandardStream::GetInSongTime() {
     float time = GetTime();

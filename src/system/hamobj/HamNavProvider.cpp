@@ -317,15 +317,32 @@ void HamNavProvider::SetHidden(int index, bool b2) {
 }
 
 DataNode HamNavProvider::OnSetFormatArgs(const DataArray *a) {
-    int index = a->Int(2);
-    MILO_ASSERT(index >= 0 && index < (int)mNavItems.size(), 0x0);
+    int index;
+    const DataNode &evalNode = a->Evaluate(2);
+    if (evalNode.Type() == kDataInt) {
+        index = evalNode.Int();
+    } else {
+        index = FindLabel(evalNode.ForceSym());
+    }
+    MILO_ASSERT(index >= 0 && (unsigned int)index < (unsigned int)mNavItems.size(), 0x16d);
+
     if (mNavItems[index].mFormatArgs) {
         mNavItems[index].mFormatArgs->Release();
+        mNavItems[index].mFormatArgs = 0;
     }
-    mNavItems[index].mFormatArgs = a->Array(3);
-    if (mNavItems[index].mFormatArgs) {
-        mNavItems[index].mFormatArgs->AddRef();
+
+    if (a->Size() > 3) {
+        mNavItems[index].mFormatArgs = new DataArray(a->Size() - 2);
+        mNavItems[index].mFormatArgs->Node(0) = mNavItems[index].mLabel;
+        int i = 3;
+        if (i < a->Size()) {
+            do {
+                mNavItems[index].mFormatArgs->Node(i - 2) = a->Node(i).Evaluate();
+                i++;
+            } while (i < a->Size());
+        }
     }
+
     if (mNavList) {
         mNavList->Refresh();
     }

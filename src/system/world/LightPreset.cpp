@@ -1,5 +1,4 @@
 #include "world/LightPreset.h"
-#include "LightPreset.h"
 #include "SpotlightDrawer.h"
 #include "math/Mtx.h"
 #include "math/Rot.h"
@@ -795,8 +794,13 @@ void LightPreset::SpotlightEntry::Animate(
     c2.Unpack(other.mColor);
     Interp(c1, c2, t, result);
     mColor = result.Pack();
-    if (mRotation != Hmx::Quat(0, 0, 0, 0) & Hmx::Quat(0, 0, 0, 0) != other.mRotation) {
-        Interp(mRotation, other.mRotation, t, mRotation);
+    Hmx::Quat q1, q2;
+    CalculateDirection(spot, q1);
+    other.CalculateDirection(spot, q2);
+    Interp(q1, q2, t, mRotation);
+    if (t == 1.0f) {
+        mFlags = other.mFlags;
+        mTarget = other.mTarget;
     }
 }
 
@@ -829,7 +833,7 @@ void LightPreset::CacheFrames() {
         kf.mLightChanges.resize(kf.mLightEntries.size());
         kf.mSpotlightDrawerChanges.clear();
         kf.mSpotlightDrawerChanges.resize(kf.mSpotlightDrawerEntries.size());
-        if (mLooping || (unsigned long)(unsigned int)i != 0) {
+        if (mLooping || (unsigned int)(unsigned long)(unsigned int)i != 0) {
             Keyframe &prev = mKeyframes[i == 0 ? mKeyframes.size() - 1 : i - 1];
             for (uint j = 0; j != kf.mSpotlightEntries.size(); j++) {
                 if (prev.mSpotlightEntries[j] != kf.mSpotlightEntries[j]) {
@@ -842,7 +846,7 @@ void LightPreset::CacheFrames() {
                 }
             }
             for (uint j = 0; j != kf.mLightEntries.size(); j++) {
-                if (kf.mLightEntries[j] != prev.mLightEntries[j]) {
+                if (prev.mLightEntries[j] != kf.mLightEntries[j]) {
                     kf.mLightChanges[j] = true;
                 }
             }
@@ -857,71 +861,72 @@ void LightPreset::CacheFrames() {
 }
 
 void LightPreset::GetKey(float frame, int &prevIdx, int &curIdx, float &blend) const {
+    auto& _ref1 = mKeyframes;
     float theframe = frame;
-    if (theframe <= 0.0f || mEndFrame <= 0.0f) {
-        prevIdx = -1;
-        curIdx = 0;
-        blend = 1.0f;
-        return;
-    } else {
+    if (!(theframe <= (int)0.0f || mEndFrame <= 0.0f)) {
         if (mLooping) {
             theframe = std::fmod(frame, mEndFrame);
-            if (frame >= mKeyframes.back().unka8) {
-                if (mKeyframes.back().mFadeOutTime <= 0.0f) {
+            if (frame >= _ref1.back().unka8) {
+                if (_ref1.back().mFadeOutTime <= 0.0f) {
                     prevIdx = -1;
-                    curIdx = mKeyframes.size() - 1;
+                    curIdx = _ref1.size() - 1;
                     blend = 1.0f;
                     return;
                 }
-                float framedur = mKeyframes.back().unka8 + mKeyframes.back().mDuration;
-                if (theframe > framedur) {
-                    MILO_ASSERT(mKeyframes.back().mFadeOutTime > 0, 0x358);
-                    prevIdx = mKeyframes.size() - 1;
+                float framedur = _ref1.back().unka8 + _ref1.back().mDuration;
+                if (framedur < theframe) {
+                    MILO_ASSERT(_ref1.back().mFadeOutTime > 0, 0x358);
+                    prevIdx = _ref1.size() - 1;
                     curIdx = 0;
-                    blend = (theframe - framedur) / mKeyframes.back().mFadeOutTime;
+                    blend = (theframe - framedur) / _ref1.back().mFadeOutTime;
                     return;
                 }
                 prevIdx = -1;
-                curIdx = mKeyframes.size() - 1;
+                curIdx = _ref1.size() - 1;
                 blend = 1.0f;
                 return;
             }
-        } else if (frame >= mKeyframes.back().unka8) {
+        } else if (frame >= _ref1.back().unka8) {
             prevIdx = -1;
-            curIdx = mKeyframes.size() - 1;
+            curIdx = _ref1.size() - 1;
             blend = 1.0f;
             return;
         }
 
-        int cap = mKeyframes.size() - 1;
+        int cap = _ref1.size() - 1;
         int i;
-        for (i = 0; i + 1 < cap;) {
+        for (i = 0; cap > i + 1;) {
             int mid = (i + cap) >> 1;
-            if (theframe == mKeyframes[mid].unka8) {
+            if (theframe == _ref1[mid].unka8) {
                 prevIdx = -1;
                 curIdx = mid;
                 blend = 1.0f;
                 return;
             }
-            if (!(theframe <= mKeyframes[mid].unka8)) {
+            if (!(theframe <= _ref1[mid].unka8)) {
                 i = mid;
             } else {
                 cap = mid;
             }
         }
 
-        MILO_ASSERT(theframe >= mKeyframes[i].unka8 && theframe < mKeyframes[cap].unka8, 0x317);
-        float dur = mKeyframes[i].unka8 + mKeyframes[i].mDuration;
+        MILO_ASSERT(theframe >= _ref1[i].unka8 && theframe < _ref1[cap].unka8, 0x317);
+        float dur = _ref1[i].unka8 + _ref1[i].mDuration;
         if (theframe > dur) {
-            MILO_ASSERT(mKeyframes[i].mFadeOutTime > 0, 0x31c);
+            MILO_ASSERT(_ref1[i].mFadeOutTime > 0, 0x31c);
             prevIdx = i;
             curIdx = cap;
-            blend = (theframe - dur) / mKeyframes[i].mFadeOutTime;
+            blend = (theframe - dur) / _ref1[i].mFadeOutTime;
         } else {
             prevIdx = -1;
             curIdx = i;
             blend = 1.0f;
         }
+    } else {
+        prevIdx = -1;
+        curIdx = 0;
+        blend = 1.0f;
+        return;
     }
 }
 
@@ -1330,37 +1335,53 @@ BEGIN_LOADS(LightPreset)
 END_LOADS
 
 bool LightPreset::Replace(ObjRef *from, Hmx::Object *to) {
-    ObjPtrVec<Spotlight>& spotlights = mSpotlights;
-    if (!to) {
-        Hmx::Object *old = from->GetObj();
-        for (int i = 0; i < (int)spotlights.size(); i++) {
-            if (spotlights[i] == old) {
-                RemoveSpotlight(i);
-                CacheFrames();
-                return true;
-            }
+    ObjPtrVec<Spotlight, ObjectDir>::iterator it = mSpotlights.FindRef(from);
+    if (it != mSpotlights.end()) {
+        mSpotlights.Set(it, dynamic_cast<Spotlight *>(to));
+        if (!*it) {
+            int idx = 0;
+            for (ObjPtrVec<Spotlight, ObjectDir>::iterator i = mSpotlights.begin(); i != it; ++i)
+                idx++;
+            RemoveSpotlight(idx);
         }
-        for (int i = 0; i < (int)mEnvironments.size(); i++) {
-            if (mEnvironments[i] == old) {
-                RemoveEnvironment(i);
-                CacheFrames();
-                return true;
-            }
+        CacheFrames();
+        return true;
+    }
+    ObjPtrVec<RndEnviron, ObjectDir>::iterator it2 = mEnvironments.FindRef(from);
+    if (it2 != mEnvironments.end()) {
+        mEnvironments.Set(it2, dynamic_cast<RndEnviron *>(to));
+        if (!*it2) {
+            int idx = 0;
+            for (ObjPtrVec<RndEnviron, ObjectDir>::iterator i = mEnvironments.begin(); i != it2; ++i)
+                idx++;
+            RemoveEnvironment(idx);
         }
-        for (int i = 0; i < (int)mLights.size(); i++) {
-            if (mLights[i] == old) {
-                RemoveLight(i);
-                CacheFrames();
-                return true;
-            }
+        CacheFrames();
+        return true;
+    }
+    ObjPtrVec<RndLight, ObjectDir>::iterator it3 = mLights.FindRef(from);
+    if (it3 != mLights.end()) {
+        mLights.Set(it3, dynamic_cast<RndLight *>(to));
+        if (!*it3) {
+            int idx = 0;
+            for (ObjPtrVec<RndLight, ObjectDir>::iterator i = mLights.begin(); i != it3; ++i)
+                idx++;
+            RemoveLight(idx);
         }
-        for (int i = 0; i < (int)mSpotlightDrawers.size(); i++) {
-            if (mSpotlightDrawers[i] == old) {
-                RemoveSpotlightDrawer(i);
-                CacheFrames();
-                return true;
-            }
+        CacheFrames();
+        return true;
+    }
+    ObjPtrVec<SpotlightDrawer, ObjectDir>::iterator it4 = mSpotlightDrawers.FindRef(from);
+    if (it4 != mSpotlightDrawers.end()) {
+        mSpotlightDrawers.Set(it4, dynamic_cast<SpotlightDrawer *>(to));
+        if (!*it4) {
+            int idx = 0;
+            for (ObjPtrVec<SpotlightDrawer, ObjectDir>::iterator i = mSpotlightDrawers.begin(); i != it4; ++i)
+                idx++;
+            RemoveSpotlightDrawer(idx);
         }
+        CacheFrames();
+        return true;
     }
     return RndAnimatable::Replace(from, to);
 }

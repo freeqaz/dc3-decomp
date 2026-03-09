@@ -308,7 +308,7 @@ void HamRibbon::UpdateMesh() {
 
 void HamRibbon::ConstructMesh() {
     mSegTrans.DeleteAll();
-    if (mNumSegments > 0) {
+    if (0 < mNumSegments) {
         mMesh->SetLocalXfm(Transform::IDXfm());
         mMesh->SetNumBones(mNumSegments);
         for (int i = 0; i < mNumSegments; i++) {
@@ -320,7 +320,6 @@ void HamRibbon::ConstructMesh() {
         mMesh->Verts().resize(mNumSides * mNumSegments * 2);
         mMesh->Faces().resize(mNumSides * mNumSegments * 2);
 
-        // Generate faces
         for (int seg = 0; seg < mNumSegments; seg++) {
             for (int side = 0; side < mNumSides; side++) {
                 int nextSide = (side + 1) % mNumSides;
@@ -338,11 +337,10 @@ void HamRibbon::ConstructMesh() {
             }
         }
 
-        // Generate vertices
         float angleStep = 6.2831855f / mNumSides;
         float radius = mWidth * 0.5f;
         float uStep = 1.0f / mNumSides;
-        Vector3 zeroVec(0, 0, 0);
+        Vector3 zeroVec(0.0f, 0.0f, 0.0f);
 
         for (int seg = 0; seg < mNumSegments; seg++) {
             for (int side = 0; side < mNumSides; side++) {
@@ -358,7 +356,7 @@ void HamRibbon::ConstructMesh() {
                     Transform xfm = Transform::IDXfm();
 
                     float scale = (v == 0) ? 1.0f : (0.5f - u);
-                    Vector3 pos(sinA * radius * scale, 0, cosA * radius * scale);
+                    Vector3 pos(sinA * radius * scale, 0.0f, cosA * radius * scale);
                     Multiply(pos, xfm, pos);
 
                     mMesh->Verts()[vertIdx].pos = pos;

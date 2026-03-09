@@ -2,7 +2,9 @@
 #include "hamobj/HollaBackMinigame.h"
 #include "hamobj/RhythmDetector.h"
 
-void HollaBackMinigame::Enter() {}
+void HollaBackMinigame::Enter() {
+    RndPollable::Enter();
+}
 
 RhythmDetectorGroup::RhythmDetectorGroup()
     : mDetectors(this, (EraseMode)0), mRating(0.0), mFreshness(0.0), mSkeletonIndex(-1),

@@ -2,11 +2,14 @@
 #include "synth_xbox/Voice.h"
 
 SampleInst360::SampleInst360(SynthSample360 *sample, bool b, int i1, int i2)
-    : SampleInst(sample), mVoice(0), unk_ac(0) {
-    // TODO: implement Xbox 360 specific initialization
-}
+    : SampleInst(sample), mVoice(0), unk_ac(0) {}
 
-SampleInst360::~SampleInst360() {}
+SampleInst360::~SampleInst360() {
+    Voice *voice = mVoice;
+    if (voice) {
+        delete voice;
+    }
+}
 
 bool SampleInst360::IsPlaying() const { return false; }
 
@@ -24,4 +27,7 @@ void SampleInst360::SetSpeedImpl(float speed) { mVoice->SetSpeed(speed); }
 
 void SampleInst360::Pause(bool b) { mVoice->Pause(b); }
 
-void SampleInst360::SetADSR(const ADSRImpl &adsr) {}
+void SampleInst360::SetADSR(const ADSRImpl &adsr) {
+    mVoice->mAttackRate = adsr.GetAttackRate();
+    mVoice->mReleaseRate = adsr.GetReleaseRate();
+}

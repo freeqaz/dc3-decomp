@@ -302,17 +302,8 @@ void ShellInput::SyncVoiceControl() { // almost done
     } else {
         prop = nullptr;
     }
-    if (!mInputPanel || !prop || prop->Int() != 1 || TheProfileMgr.DisableVoice()
-        || TheUIEventMgr->HasActiveDialogEvent() || !TheSpeechMgr->SpeechSupported()) {
-        TheSpeechMgr->SetRecognizing(false);
-        mVoiceControlEnabled = false;
-        static Symbol hide_microphone_icon("hide_microphone_icon");
-        static Message hide_microphone_msg(hide_microphone_icon);
-        TheHamProvider->Handle(hide_microphone_msg, false);
-        static Symbol voice_commander_help_hide("voice_commander_help_hide");
-        static Message voice_commander_help_hide_msg(voice_commander_help_hide);
-        TheHamProvider->Handle(voice_commander_help_hide_msg, false);
-    } else {
+    if (!(!mInputPanel || !prop || 1 != prop->Int() || TheProfileMgr.DisableVoice()
+        || TheUIEventMgr->HasActiveDialogEvent() || !TheSpeechMgr->SpeechSupported())) {
         TheSpeechMgr->SetRecognizing(true);
         mVoiceControlEnabled = true;
         static Symbol show_microphone_icon("show_microphone_icon");
@@ -331,6 +322,15 @@ void ShellInput::SyncVoiceControl() { // almost done
         } else {
             TheHamProvider->SetProperty(voice_commander_tip_temporary, false);
         }
+    } else {
+        TheSpeechMgr->SetRecognizing(false);
+        mVoiceControlEnabled = false;
+        static Symbol hide_microphone_icon("hide_microphone_icon");
+        static Message hide_microphone_msg(hide_microphone_icon);
+        TheHamProvider->Handle(hide_microphone_msg, false);
+        static Symbol voice_commander_help_hide("voice_commander_help_hide");
+        static Message voice_commander_help_hide_msg(voice_commander_help_hide);
+        TheHamProvider->Handle(voice_commander_help_hide_msg, false);
     }
 }
 

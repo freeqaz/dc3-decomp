@@ -788,7 +788,7 @@ void EventTrigger::LoadOldEvent(
         SetName(NextName(MakeString("%s_%s.trig", trigName, s), dir), dir);
     }
     RndAnimatable *anim = dynamic_cast<RndAnimatable *>(obj);
-    if (bs.rev <= 4) {
+    if (bs.rev < 5) {
         bool b58;
         bs >> b58;
         LoadOldAnim(bs.stream, b58 ? anim : nullptr);

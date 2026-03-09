@@ -227,7 +227,24 @@ void CharDebug::DisplayObject(Hmx::Object *obj) {
                 mat->SetUseEnv(false);
                 mesh->Verts().resize(4);
                 mesh->Faces().resize(2);
-                // a loop from i = 0 to 4
+                for (int i = 0; i < 4; i++) {
+                    float u, v;
+                    if ((i != 1) && (i != 2)) {
+                        u = 0.0f;
+                    } else {
+                        u = 1.0f;
+                    }
+                    if (i < 2) {
+                        v = 1.0f;
+                    } else {
+                        v = 0.0f;
+                    }
+                    mesh->Verts()[i].pos.Set((v + 1.0f) * 20.0f, 0.0f, -(u * 20.0f - 60.0f));
+                    mesh->Verts()[i].norm.Set(0.0f, -1.0f, 0.0f);
+                    mesh->Verts()[i].color = Hmx::Color(1.0f, 1.0f, 1.0f, 1.0f);
+                }
+                mesh->Faces()[0].Set(0, 1, 2);
+                mesh->Faces()[1].Set(0, 2, 3);
                 mesh->Sync(0x13F);
                 mesh->SetMat(mat);
             }

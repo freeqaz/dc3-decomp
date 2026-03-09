@@ -75,8 +75,8 @@ void Multiply(const Hmx::Matrix3 &a, const Hmx::Matrix3 &b, Hmx::Matrix3 &out) {
 }
 
 void Multiply(const Transform &a, const Transform &b, Transform &out) {
+    out.v.y = b.m.y.y * a.v.y + b.m.x.y * a.v.x + b.m.z.y * a.v.z;
     out.v.x = b.m.x.x * a.v.x + b.m.y.x * a.v.y + b.m.z.x * a.v.z;
-    out.v.y = b.m.x.y * a.v.x + b.m.y.y * a.v.y + b.m.z.y * a.v.z;
     out.v.z = b.m.x.z * a.v.x + b.m.y.z * a.v.y + b.m.z.z * a.v.z;
     out.v.x += b.v.x;
     out.v.y += b.v.y;

@@ -5,7 +5,9 @@
 namespace ATG {
 
 template <typename Derived, typename Params>
-CSampleXAPOBase<Derived, Params>::CSampleXAPOBase() : CXAPOBase() {}
+CSampleXAPOBase<Derived, Params>::CSampleXAPOBase() : CXAPOBase()
+{
+}
 
 template class CSampleXAPOBase<DSP::SynapseAPO, DSP::SynapseAPOParams>;
 
@@ -14,23 +16,23 @@ template class CSampleXAPOBase<DSP::SynapseAPO, DSP::SynapseAPOParams>;
 namespace DSP {
 
 SynapseAPO::SynapseAPO() : ATG::CSampleXAPOBase<SynapseAPO, SynapseAPOParams>() {
-  mSynapse = 0;
-  new (&mParams) SynapseAPOParams();
-  SetSamplingRate(48000.0f);
+    mSynapse = nullptr;
+    new (&mParams) SynapseAPOParams();
+    SetSamplingRate(48000.0f);
 }
 
 SynapseAPO::~SynapseAPO() {
-    if (mSynapse != 0) {
+    if (mSynapse) {
         delete mSynapse;
     }
 }
 
 void SynapseAPO::SetSamplingRate(float rate) {
-  Synapse::Synapse* prevSynapse = mSynapse;
-  if (prevSynapse != 0) {
-    delete prevSynapse;
-  }
-  mSynapse = new Synapse::Synapse(rate);
+    Synapse::Synapse* prevSynapse = mSynapse;
+    if (prevSynapse) {
+        delete prevSynapse;
+    }
+    mSynapse = new Synapse::Synapse(rate);
 }
 
 void SynapseAPO::OnSetParameters(const SynapseAPOParams& params) {}

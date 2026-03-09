@@ -497,7 +497,8 @@ void PoseFatalities::AddFatal(int player) {
     } else {
         const char *str =
             MakeString("pose_fatalities_%s", GetOutfitCharacter(hChar->Outfit()));
-        randClip = driver->FindClip(str, true);
+        auto _tmp10 = driver->FindClip(str, true);
+        randClip = _tmp10;
     }
 lab5548:
     if (randClip) {

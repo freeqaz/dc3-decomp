@@ -19,6 +19,9 @@
 DECLARE_MESSAGE(MultipleItemsEnumCompleteMsg, "multiple_items_enum_complete")
 MultipleItemsEnumCompleteMsg(bool success, bool purchaseMade, int numOfferIDs, const String &offerID)
     : Message(Type(), success, purchaseMade, numOfferIDs, DataArrayPtr(), DataArrayPtr()) {}
+bool Success() const { return mData->Int(2); }
+int NumOfferIDs() const { return mData->Int(4); }
+unsigned long long OfferID(int index) const;
 bool Purchased(int index) const {
     DataArray *arr = mData->Node(6).Array(mData);
     return arr->Node(index).Int(arr);

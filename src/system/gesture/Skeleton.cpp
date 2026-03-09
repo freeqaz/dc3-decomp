@@ -164,7 +164,7 @@ bool Skeleton::Displacements(
         if (it->unk0 == i4) {
             memcpy(disps, it->unk8, sizeof(it->unk8));
             iref = it->unk4;
-            return (iref + 1) != 0;
+            return 0 < (unsigned int)(iref + 1);
         }
     }
 
@@ -173,7 +173,7 @@ bool Skeleton::Displacements(
     ArchiveSkeleton archiveSkeleton;
     bool ok = PrevTrackedSkeleton(history, i4, iref, archiveSkeleton);
     if (ok) {
-        for (int i = 0; i < kNumJoints; i++) {
+        for (int i = 0; kNumJoints > i; i++) {
             Vector3 prevPos;
             archiveSkeleton.JointPos(cs, (SkeletonJoint)i, prevPos);
             Subtract(mTrackedJoints[i].mJointPos[cs], prevPos, disps[i]);

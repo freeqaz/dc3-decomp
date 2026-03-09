@@ -361,8 +361,8 @@ void CharBonesSamples::Relativize(CharClip *clip) {
                 Vector3 evalPos;
                 clip->EvaluateChannel(&evalPos, channel, startBeat);
                 float sx = (float)pos->x * (1300.0 / 32767.0f);
-                float sy = (float)pos->y * (1300.0f / 32767.0f);
                 float sz = (float)pos->z * (1300.0f / 32767.0f);
+                float sy = (float)pos->y * (1300.0f / 32767.0f);
                 Vector3 v;
                 v.x = sx - evalPos.x;
                 v.y = sy - evalPos.y;

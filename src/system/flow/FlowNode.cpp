@@ -242,7 +242,7 @@ void FlowNode::MoveIntoDir(ObjectDir *from, ObjectDir *to) {
         const char *name = NextName(MakeString("%s", (char *)suffix.c_str()), from);
 
         if (to) {
-            while (!strcmp(name, to->Name()) || !strcmp(name, from->Name())) {
+            while (!strcmp(to->Name(), name) || !strcmp(from->Name(), name)) {
                 suffix[0] = rand() % 25 + 'a';
                 name = MakeString("%s%s", name, suffix.c_str());
             }

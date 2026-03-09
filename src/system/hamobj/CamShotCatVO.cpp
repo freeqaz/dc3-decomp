@@ -64,7 +64,7 @@ void CamShotVOData(
             static Symbol INTRO_SKILLS("INTRO_SKILLS");
             static Symbol INTRO_SKILLS_LONG("INTRO_SKILLS_LONG");
             static Symbol INTRO_PLAYLIST("INTRO_PLAYLIST");
-            if ((unsigned long)s == INTRO_QUICK) {
+            if ((unsigned long)(int)(unsigned long)s == INTRO_QUICK) {
                 s1 = intro_quick;
                 charSym = all;
             } else if (s == INTRO_SKILLS || s == INTRO_SKILLS_LONG) {
@@ -73,7 +73,7 @@ void CamShotVOData(
             } else if (s == INTRO_PLAYLIST) {
                 s1 = intro_playlist;
                 charSym = all;
-            } else if (subStrings.size() >= 1) {
+            } else if (0 < subStrings.size()) {
                 if (subStrings[0] == "BATTLE") {
                     s1 = battle_intro_crew;
                     charSym = all;
@@ -84,7 +84,7 @@ void CamShotVOData(
                 }
             }
             if (s1.Null()) {
-                MILO_WARN("Unknown intro category %s", s);
+                MILO_NOTIFY("Unknown intro category %s", s);
             }
         } else if (hasOutros) {
             auto numSubStrings = subStrings.size();

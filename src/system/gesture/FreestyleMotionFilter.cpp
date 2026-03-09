@@ -49,8 +49,8 @@ void FreestyleMotionFilter::UpdateFilters(SkeletonUpdateData const &skeletonData
                 float vy = velocity.y;
                 float vz = velocity.z;
                 float x2 = vx * vx;
-                float z2 = vz * vz;
                 float y2 = vy * vy;
+                float z2 = vz * vz;
                 float sum = x2 + z2;
                 if (sum + y2 > mVelocityThreshold) {
                     mMovementAmount = sqrtf(x2 + z2 + y2);

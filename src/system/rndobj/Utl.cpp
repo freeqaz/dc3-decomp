@@ -8,20 +8,26 @@
 #include "os/Debug.h"
 #include "os/Endian.h"
 #include "os/FileCache.h"
+#include "os/HolmesClient.h"
 #include "os/Platform.h"
 #include "os/System.h"
 #include "rndobj/AmbientOcclusion.h"
 #include "rndobj/Bitmap.h"
 #include "rndobj/Cam.h"
+#include "rndobj/CamAnim.h"
 #include "rndobj/Dir.h"
 #include "rndobj/Draw.h"
 #include "rndobj/Env.h"
 #include "rndobj/Flare.h"
 #include "rndobj/Group.h"
+#include "rndobj/Line.h"
 #include "rndobj/Mat.h"
 #include "rndobj/Mesh.h"
+#include "rndobj/MeshAnim.h"
 #include "rndobj/MetaMaterial.h"
+#include "rndobj/Morph.h"
 #include "rndobj/Part.h"
+#include "rndobj/PartAnim.h"
 #include "rndobj/Tex.h"
 #include "utl/Cache.h"
 #include "utl/Std.h"
@@ -170,12 +176,10 @@ void RndUtlInit() {
         sSphereMesh = sSphereDir->Find<RndMesh>("sphere.mesh", true);
     }
     if (sCylinderDir) {
-        // Note: Searches in sSphereDir, not sCylinderDir - matches original binary
         sCylinderMesh = sSphereDir->Find<RndMesh>("Cylinder.mesh", true);
     }
 }
 
-// Clean up sphere and cylinder resource directories
 void RndUtlTerminate() {
     if (sSphereDir) {
         delete sSphereDir;
@@ -351,21 +355,16 @@ float AngleBetween(const Hmx::Quat &q1, const Hmx::Quat &q2) {
     }
 }
 
-// Check if UV coordinates are invalid (NaN or out of range), clamping near-zero values.
-// Returns true if the UV is bad (NaN or extreme), false if valid (after clamping).
 bool BadUV(Vector2 &v) {
-    // NaN check: IEEE 754 property that NaN != NaN
     bool xIsNaN = v.x != v.x;
     if (xIsNaN) return true;
     bool yIsNaN = v.y != v.y;
     if (yIsNaN) return true;
 
-    // Range check: reject extreme values beyond reasonable UV range
     if (fabsf(v.x) > 1000.0f || fabsf(v.y) > 1000.0f) {
         return true;
     }
 
-    // Clamp near-zero values to exactly zero to avoid floating-point precision issues
     bool xIsSmall = fabsf(v.x) < 0.0001f;
     if (xIsSmall) {
         v.x = 0;
@@ -732,8 +731,6 @@ void TransformKeys(RndTransAnim *tanim, const Transform &tf) {
     }
 }
 
-// Swap RGBA byte order in-place for endianness conversion
-// Uses pointer arithmetic pattern: base-4 with pixel[1] access for optimal codegen
 void EndianSwapBitmap(RndBitmap &bmap) {
     int row = 0;
     int col = 0;
@@ -741,14 +738,10 @@ void EndianSwapBitmap(RndBitmap &bmap) {
         do {
             col = 0;
             if (bmap.Width() > 0) {
-                // Pointer positioned 4 bytes before row start for pre-increment access
-                // This pattern (pixel[1] then pixel++) matches original binary codegen
                 u32 *pixel = (u32 *)(bmap.Pixels() + bmap.RowBytes() * row - 4);
                 do {
                     u32 val = pixel[1];
                     col++;
-                    // Endian swap: exchange bytes 0↔2, preserve bytes 1 and 3
-                    // RGBA (0x RRGB BBAA) becomes BGRA (0x BBGG RRAA)
                     pixel[1] = (val >> 16 | val & 0xFFFF0000) >> 8 & 0xFFFF
                         | ((val << 16 | val & 0xFFFF) & 0xFFFF00) << 8;
                     pixel++;
@@ -828,7 +821,31 @@ void ScaleXfms(RndMultiMesh *mm, const Vector3 &v) {
     }
 }
 
-void RandomXfms(RndMultiMesh *) { MILO_ASSERT(0, 3173); }
+void RandomXfms(RndMultiMesh *mesh) {
+    RndMultiMesh::InstanceList temp;
+
+    while (!mesh->Instances().empty()) {
+        int count = 0;
+        for (auto it = mesh->Instances().begin(); it != mesh->Instances().end(); ++it) {
+            count++;
+        }
+
+        int randomPos = RandomInt(0, count);
+
+        auto it = mesh->Instances().begin();
+        while (randomPos != 0) {
+            ++it;
+            randomPos--;
+        }
+
+        temp.splice(temp.begin(), mesh->Instances(), it);
+    }
+
+    mesh->Instances().splice(mesh->Instances().begin(), temp);
+
+    mesh->InvalidateProxies();
+}
+
 
 void RandomPointOnMesh(RndMesh *m, Vector3 &v1, Vector3 &v2) {
     RndMesh::Face &face = m->Faces()[RandomInt(0, m->Faces().size())];
@@ -913,61 +930,113 @@ void UtilDrawCigar(
     const Transform &tf, const float *const radii, const float *const lengths,
     const Hmx::Color &col, int segments
 ) {
-    if (!(!sCylinderMesh)) {
-        Vector3 scaledLengths;
-        float len = Length(*(const Vector3 *)lengths);
-        for (int i = 0; i < 3; i++) {
-            (&scaledLengths.x)[i] = radii[i] * len;
-        }
-        Hmx::Matrix3 basis;
-        memcpy(&basis, lengths, sizeof(Hmx::Matrix3));
-        Normalize(*(Vector3 *)&basis, *(Vector3 *)&basis);
-
-        Vector3 bottom, top;
-        bottom.Set(0, scaledLengths.x - radii[0], 0);
-        top.Set(0, scaledLengths.y + radii[1], 0);
-        Multiply(bottom, (const Transform &)basis, bottom);
-        Multiply(top, (const Transform &)basis, top);
-
-        int i = 0;
-        if (segments > 0) {
-            float angleStep = 6.2831854820251465 / (float)segments;
-            float angle = 1.5707963705062866f;
-            do {
-                float sinVal = FastSin(angle + angleStep);
-                float cosVal = FastSin(angle);
-                Vector3 p1, p2, p3, p4;
-
-                p1.Set(cosVal * radii[0], sinVal * radii[0], 0);
-                Multiply(p1, (const Transform &)basis, p1);
-                Add(p1, bottom, p1);
-
-                p2.Set(cosVal * radii[1], sinVal * radii[1], 0);
-                Multiply(p2, (const Transform &)basis, p2);
-                Add(p2, top, p2);
-
-                float nextSin = FastSin(angle + angleStep + angleStep);
-                float nextCos = FastSin(angle + angleStep);
-
-                p3.Set(nextCos * radii[0], nextSin * radii[0], 0);
-                Multiply(p3, (const Transform &)basis, p3);
-                Add(p3, bottom, p3);
-
-                p4.Set(nextCos * radii[1], nextSin * radii[1], 0);
-                Multiply(p4, (const Transform &)basis, p4);
-                Add(p4, top, p4);
-
-                TheRnd.DrawLine(p1, p2, col, false);
-                TheRnd.DrawLine(p1, p3, col, false);
-                TheRnd.DrawLine(p2, p4, col, false);
-
-                angle += angleStep;
-                i++;
-            } while (i < segments);
-        }
-    } else {
-        MILO_NOTIFY("Cylinder mesh is not loaded");
+    float len0 = lengths[0];
+    float len1 = lengths[1];
+    float len2 = lengths[2];
+    float scale = sqrtf(len2 * len2 + len0 * len0 + len1 * len1);
+    float scaledLens[3];
+    {
+        int cnt = 3;
+        float *dst = scaledLens;
+        do {
+            *dst = *(float *)((int)(lengths) + ((int)dst - (int)scaledLens)) * scale;
+            dst++;
+            cnt--;
+        } while (cnt != 0);
     }
+
+    Hmx::Matrix3 basis;
+    memcpy(&basis, lengths, 0x30);
+    Normalize(basis, basis);
+
+    float sLen0 = scaledLens[0];
+    float sLen1 = scaledLens[1];
+
+    Vector3 top;
+    top.Set(0, sLen0 - radii[0], 0);
+    Multiply(top, (const Transform &)basis, top);
+
+    Vector3 bottom;
+    bottom.Set(0, sLen1 + radii[1], 0);
+    Multiply(bottom, (const Transform &)basis, bottom);
+
+    double angle2Pi = 1.0471975803375244;
+    double anglePiHalf = 1.5707963705062866;
+    double anglePi6 = 0.5235987901687622;
+
+    // Arrays use 16-byte stride per element (4 floats per Vector3)
+    float verts2e0[96 * 4];
+    float verts1c0[96 * 4];
+    float verts280[192 * 4];
+    float verts160[352 * 4];
+
+    int iIdx = 0;
+    int iLatSum = 0;
+    do {
+        double latVal = (double)(float)((double)iIdx * anglePi6);
+        float sinLatPi2 = FastSin((float)(latVal + anglePiHalf));
+        double r0 = (double)(radii[0] * sinLatPi2);
+        float sinLat = FastSin((float)latVal);
+        double h0 = (double)(sinLat * radii[0]);
+        float sinLatPi2b = FastSin((float)((double)(float)(latVal + anglePiHalf)));
+        double r1 = (double)(sinLatPi2b * radii[1]);
+        float sinLatb = FastSin((float)latVal);
+        double h0b = (double)(float)((double)sLen0 - h0);
+        int iLon = 0;
+        double h1 = (double)(float)((double)(sinLatb * radii[1]) + (double)sLen1);
+        do {
+            double lonVal = (double)(float)((double)iLon * angle2Pi);
+            float sinLon = FastSin((float)((double)iLon * angle2Pi));
+            double sinLonD = (double)sinLon;
+            float sinLonPi2 = FastSin((float)(lonVal + anglePiHalf));
+            double sinLonPi2D = (double)sinLonPi2;
+            int idx = (iLatSum + iLon) * 4;
+            Vector3 v1((float)h0b, (float)(sinLonPi2D * r0), (float)(sinLonD * r0));
+            Multiply(v1, (const Transform &)basis, *(Vector3 *)&verts1c0[idx]);
+            Vector3 v2((float)h1, (float)(sinLonD * r1), (float)(sinLonPi2D * r1));
+            Multiply(v2, (const Transform &)basis, *(Vector3 *)&verts2e0[idx]);
+            iLon = iLon + 1;
+        } while (iLon < 6);
+        iLatSum = iLatSum + 6;
+        iIdx = iIdx + 1;
+    } while (iLatSum < 0x12);
+
+    int i = 0;
+    do {
+        TheRnd.DrawLine(*(Vector3 *)&verts2e0[i * 4], *(Vector3 *)&verts1c0[i * 4], col, false);
+        i = i + 1;
+    } while (i < 6);
+
+    int iRing = 0;
+    do {
+        int iJ = 0;
+        int iK = 5;
+        int iJcur;
+        do {
+            iJcur = iJ;
+            int p1 = (iRing * 6 + iJcur) * 4;
+            int p2 = (iRing * 6 + iK) * 4;
+            TheRnd.DrawLine(*(Vector3 *)&verts2e0[p1], *(Vector3 *)&verts2e0[p2], col, false);
+            Vector3 *pTop;
+            if (iRing == 2) {
+                pTop = &top;
+            } else {
+                pTop = (Vector3 *)&verts280[p1];
+            }
+            TheRnd.DrawLine(*(Vector3 *)&verts2e0[p1], *pTop, col, false);
+            TheRnd.DrawLine(*(Vector3 *)&verts1c0[p1], *(Vector3 *)&verts1c0[p2], col, false);
+            Vector3 *pBottom;
+            if (iRing == 2) {
+                pBottom = &bottom;
+            } else {
+                pBottom = (Vector3 *)&verts160[p1];
+            }
+            TheRnd.DrawLine(*(Vector3 *)&verts1c0[p1], *pBottom, col, false);
+            iJ = iJcur + 1;
+            iK = iJcur;
+        } while (iJcur + 1 < 6);
+        iRing = iRing + 1;
+    } while (iRing < 3);
 }
 
 void UtilDrawPlane(
@@ -1078,9 +1147,11 @@ const char *CacheResource(const char *cc, const Hmx::Object *o) {
 const char *CacheResource(const char *cc, CacheResourceResult &res) {
     Platform thisPlatform = TheLoadMgr.GetPlatform();
     res = kCacheUnnecessary;
-    char buf[256];
+    char buf[320];
     const char *localized = FileLocalize(cc, buf);
     const char *ext = FileGetExt(localized);
+    bool isLocal = FileIsLocal(localized);
+
     if (stricmp(ext, "bmp") != 0 && stricmp(ext, "png") != 0) {
         const char *movieExt = MovieExtension(ext, thisPlatform);
         if (movieExt) {
@@ -1100,19 +1171,35 @@ const char *CacheResource(const char *cc, CacheResourceResult &res) {
                 int ps3Idx = xboxStr - localized;
                 strcpy(ps3File + ps3Idx, "_ps3");
                 strcpy(ps3File + ps3Idx + 4, xboxStr + 5);
+                localized = ps3File;
             }
         }
+        const char *filePath = FileGetPath(localized);
+        const char *fileBase = FileGetBase(localized);
+        const char *fileExt = FileGetExt(localized);
         static char *cacheFile;
         strcpy(
             cacheFile,
             MakeString(
                 "%s/gen/%s.%s_%s",
-                FileGetPath(localized),
-                FileGetBase(localized),
-                FileGetExt(localized),
+                filePath,
+                fileBase,
+                fileExt,
                 PlatformSymbol(thisPlatform)
             )
         );
+        if (!UsingCD() && !isLocal) {
+            String qualifiedPath;
+            FileQualifiedFilename(qualifiedPath, localized);
+            CacheResourceResult cacheRes = HolmesClientCacheResource(
+                qualifiedPath.c_str(),
+                cacheFile
+            );
+            res = cacheRes;
+            if (cacheRes > 0) {
+                return nullptr;
+            }
+        }
         return cacheFile;
     }
 }
@@ -1295,7 +1382,6 @@ void MakeTangentsLate(RndMesh *m) {
     if (geom != m || geom->Verts().size() == 0) return;
     if (GetGfxMode() == kOldGfx) return;
 
-    // Build per-face tangent array
     Vector4 zeroTangent(0, 0, 0, 0);
     std::vector<Vector4> faceTangents(m->Faces().size(), zeroTangent);
     double posW = 1.0;
@@ -1313,7 +1399,6 @@ void MakeTangentsLate(RndMesh *m) {
         Normalize(basis.x, *(Vector3*)&faceTangents[i]);
     }
 
-    // Accumulate tangents per vertex
     double zeroThresh = 0.0;
     for (int i = 0; i < (int)m->Verts().size(); i++) {
         RndMesh::Vert& v = m->Verts()[i];
@@ -1342,7 +1427,6 @@ void MakeTangentsLate(RndMesh *m) {
         }
         Normalize(*(Vector3*)&v.tangent, *(Vector3*)&v.tangent);
 
-        // Gram-Schmidt orthogonalize tangent against normal
         float tx = v.tangent.x, ty = v.tangent.y, tz = v.tangent.z;
         float tDotN = v.norm.x * tx + v.norm.z * tz + v.norm.y * ty;
         float scaleX = v.norm.x * tDotN;
@@ -1398,7 +1482,6 @@ void ComputeFaceTangentBasis(RndMesh *m, int faceIdx, Hmx::Matrix3 &outBasis) {
 
             Invert(edgeMat, edgeMat);
 
-            // Transpose the inverted edge matrix
             float swapXY = edgeMat.x.y; edgeMat.x.y = edgeMat.y.x; edgeMat.y.x = swapXY;
             float swapXZ = edgeMat.x.z; edgeMat.x.z = edgeMat.z.x; edgeMat.z.x = swapXZ;
             float swapYZ = edgeMat.y.z; edgeMat.y.z = edgeMat.z.y; edgeMat.z.y = swapYZ;
@@ -1679,6 +1762,120 @@ void RndScaleObject(Hmx::Object *obj, float scale, float fovScale) {
         }
         return;
     }
+    RndLight *lit = dynamic_cast<RndLight *>(obj);
+    if (lit) {
+        lit->SetRange(lit->Range() * scale);
+        return;
+    }
+    RndLine *line = dynamic_cast<RndLine *>(obj);
+    if (line) {
+        line->SetWidth(line->GetWidth() * scale);
+        for (int i = 0; i < line->NumPoints(); i++) {
+            Vector3 vec;
+            Scale(line->PointAt(i).point, fovScale, vec);
+            line->SetPointPos(i, vec);
+        }
+        return;
+    }
+    RndMesh *mesh = dynamic_cast<RndMesh *>(obj);
+    if (mesh) {
+        if (mesh->GetGeomOwner() == mesh) {
+            for (RndMesh::Vert *it = mesh->Verts().begin(); it != mesh->Verts().end();
+                 ++it) {
+                it->pos *= scale;
+            }
+            mesh->Sync(0x1F);
+            Transform tf;
+            tf.m.Set(scale, 0, 0, 0, scale, 0, 0, 0, scale);
+            tf.v.Zero();
+            MultiplyEq(mesh->GetBSPTree(), tf);
+        }
+        mesh->ScaleBones(scale);
+        return;
+    }
+    RndMeshAnim *meshanim = dynamic_cast<RndMeshAnim *>(obj);
+    if (meshanim) {
+        if (meshanim->KeysOwner() == meshanim) {
+            for (Keys<std::vector<Vector3>, std::vector<RndMesh::Vert> >::iterator it =
+                     meshanim->VertPointsKeys().begin();
+                 it != meshanim->VertPointsKeys().end();
+                 ++it) {
+                for (std::vector<Vector3>::iterator vit = it->value.begin();
+                     vit != it->value.end();
+                     ++vit) {
+                    *vit *= scale;
+                }
+            }
+            ScaleFrame(meshanim->VertNormalsKeys(), fovScale);
+            ScaleFrame(meshanim->VertPointsKeys(), fovScale);
+            ScaleFrame(meshanim->VertTexsKeys(), fovScale);
+            ScaleFrame(meshanim->VertColorsKeys(), fovScale);
+        }
+        return;
+    }
+    RndMorph *morph = dynamic_cast<RndMorph *>(obj);
+    if (morph) {
+        for (int i = 0; i < morph->NumPoses(); i++) {
+            morph->PoseAt(i);
+        }
+        return;
+    }
+    RndMultiMesh *multimesh = dynamic_cast<RndMultiMesh *>(obj);
+    if (multimesh) {
+        for (std::list<RndMultiMesh::Instance>::iterator it =
+                 multimesh->Instances().begin();
+             it != multimesh->Instances().end();
+             ++it) {
+            (*it).mXfm.v *= scale;
+        }
+        return;
+    }
+    RndParticleSys *partsys = dynamic_cast<RndParticleSys *>(obj);
+    if (partsys) {
+        partsys->SetBubbleSize(partsys->BubbleSize().x * scale, partsys->BubbleSize().y * scale);
+        partsys->SetBubblePeriod(
+            partsys->BubblePeriod().x * scale, partsys->BubblePeriod().y * scale
+        );
+        partsys->SetLife(partsys->Life().x * scale, partsys->Life().y * scale);
+        partsys->SetEmitRate(partsys->EmitRate().x / scale, partsys->EmitRate().y / scale);
+        Vector3 vb = partsys->ForceDir();
+        vb *= (scale / fovScale) / fovScale;
+        partsys->SetForceDir(vb);
+        Vector3 box1, box2;
+        Scale(partsys->BoxExtent1(), scale, box1);
+        Scale(partsys->BoxExtent2(), scale, box2);
+        partsys->SetBoxExtent(box1, box2);
+        partsys->SetSpeed((partsys->Speed().x * scale) / fovScale, (partsys->Speed().y * scale) / fovScale);
+        partsys->SetStartSize(partsys->StartSize().x * scale, partsys->StartSize().y * scale);
+        partsys->SetDeltaSize(partsys->DeltaSize().x * scale, partsys->DeltaSize().y * scale);
+        return;
+    }
+    RndParticleSysAnim *partsysanim = dynamic_cast<RndParticleSysAnim *>(obj);
+    if (partsysanim) {
+        if (partsysanim->KeysOwner() == partsysanim) {
+            ScaleFrame(partsysanim->StartColorKeys(), fovScale);
+            ScaleFrame(partsysanim->EndColorKeys(), fovScale);
+            ScaleFrame(partsysanim->EmitRateKeys(), fovScale);
+            ScaleFrame(partsysanim->SpeedKeys(), fovScale);
+            ScaleFrame(partsysanim->LifeKeys(), fovScale);
+            ScaleFrame(partsysanim->StartSizeKeys(), fovScale);
+        }
+        return;
+    }
+    RndTransAnim *transanim = dynamic_cast<RndTransAnim *>(obj);
+    if (transanim) {
+        if (transanim->KeysOwner() == transanim) {
+            for (Keys<Vector3, Vector3>::iterator it = transanim->TransKeys().begin();
+                 it != transanim->TransKeys().end();
+                 ++it) {
+                it->value *= scale;
+            }
+            ScaleFrame(transanim->TransKeys(), fovScale);
+            ScaleFrame(transanim->RotKeys(), fovScale);
+            ScaleFrame(transanim->ScaleKeys(), fovScale);
+        }
+        return;
+    }
 }
 
 void FixVertOrder(const RndMesh *src, RndMesh *dst) {
@@ -1819,7 +2016,6 @@ void TessellateMesh(RndMesh *mesh) {
 
         unsigned short mid12, mid23, mid31;
 
-        // Edge v1-v2
         Edge e12;
         e12.v0 = v1;
         e12.v1 = v2;
@@ -1834,7 +2030,6 @@ void TessellateMesh(RndMesh *mesh) {
             mid12 = it12->midpoint;
         }
 
-        // Edge v2-v3
         Edge e23;
         e23.v0 = v2;
         e23.v1 = v3;
@@ -1849,7 +2044,6 @@ void TessellateMesh(RndMesh *mesh) {
             mid23 = it23->midpoint;
         }
 
-        // Edge v3-v1
         Edge e31;
         e31.v0 = v3;
         e31.v1 = v1;
@@ -1864,7 +2058,6 @@ void TessellateMesh(RndMesh *mesh) {
             mid31 = it31->midpoint;
         }
 
-        // 4 sub-faces
         RndMesh::Face f1, f2, f3, f4;
         f1.Set(v1, mid12, mid31);
         f2.Set(mid31, mid12, mid23);
@@ -1876,10 +2069,8 @@ void TessellateMesh(RndMesh *mesh) {
         newFaces.push_back(f4);
     }
 
-    // Replace faces
     geomOwner->Faces().assign(newFaces.begin(), newFaces.end());
 
-    // Expand verts and copy new midpoint verts
     int origNumVerts = geomOwner->Verts().size();
     geomOwner->Verts().resize(origNumVerts + (int)newVerts.size());
 

@@ -40,6 +40,10 @@ public:
     void SyncShape();
     void CopyOriginalToCur();
     float GetCurRadius() const { return mCurRadius[0]; }
+    float GetCurRadius1() const { return mCurRadius[1]; }
+    float GetCurLength0() const { return mCurLength[0]; }
+    float GetCurLength1() const { return mCurLength[1]; }
+    int GetFlags() const { return mFlags; }
     Shape GetShape() const { return mShape; }
     /** "Cache world state for collision queries during simulation" */
     void SyncWorldState();

@@ -133,38 +133,9 @@ public:
             SplitPlaneType s,
             const Box &inDimensions,
             std::list<Triangle *> &items,
-            kdTreeNode *,
+            kdTreeNode *pBase,
             unsigned char uc
-        ) {
-            if (uc < 0xF) {
-                // a whole lotta stuff
-                if (!items.empty()) {
-                    if (items.size() >= 10) {
-                        bool find = false;
-                        switch (s) {
-                        case 0:
-                        case 1:
-                            find = FindSplit_Mean(inDimensions, items);
-                            break;
-                        case 2:
-                            find = FindSplit_SAH(inDimensions, items);
-                            break;
-                        default:
-                            MILO_FAIL("Invalid split plane type");
-                            break;
-                        }
-                    }
-                }
-            }
-            MILO_ASSERT(GetIsLeaf(), 0x19F);
-            if (items.empty()) {
-                mData.triList = nullptr;
-            } else {
-                mData.triList = kdTriList::Allocate(items.size());
-                FOREACH (it, items) {
-                }
-            }
-        }
+        );
 
         MEM_ARRAY_OVERLOAD(kdTreeNode, 0xEC);
     };
@@ -190,3 +161,98 @@ private:
     kdTreeNode *mNodes; // 0x8
     Box mBounds; // 0xc - bounding box of the tree?
 };
+
+template <class T>
+void kdTree<T>::kdTreeNode::Pack(
+    SplitPlaneType s,
+    const Box &inDimensions,
+    std::list<Triangle *> &items,
+    kdTreeNode *pBase,
+    unsigned char uc
+) {
+    if (uc < 0xF) {
+        if (!items.empty()) {
+            if (items.size() >= 10) {
+                bool bFound = false;
+                if (s == 0) {
+                    bFound = FindSplit_Mean(inDimensions, items);
+                } else if (s == 1) {
+                    bFound = FindSplit_SAH(inDimensions, items);
+                } else if (s == 2) {
+                    bFound = FindSplit_Mean(inDimensions, items);
+                } else {
+                    MILO_FAIL("Invalid split plane type");
+                }
+
+                if (bFound) {
+                    float fSplit = mData.real;
+                    unsigned int iAxis = mData.index & 3;
+                    float fMin = inDimensions.mMin[iAxis];
+                    float fMax = inDimensions.mMax[iAxis];
+
+                    if (fMin <= fSplit && fSplit <= fMax) {
+                        Box minBox = inDimensions;
+                        Box maxBox = inDimensions;
+                        minBox.mMax[iAxis] = fSplit;
+                        maxBox.mMin[iAxis] = fSplit;
+
+                        std::list<Triangle *> leftList, rightList;
+                        bool bContinue = true;
+                        for (auto it = items.begin(); it != items.end(); ++it) {
+                            Triangle *pTri = *it;
+                            MILO_ASSERT(::Intersect(*pTri, inDimensions), 0x166);
+                            bool bLeftIntersect = ::Intersect(*pTri, minBox);
+                            bool bRightIntersect = ::Intersect(*pTri, maxBox);
+
+                            if ((!bLeftIntersect) && (!bRightIntersect)) {
+                                bContinue = false;
+                                break;
+                            }
+
+                            if (bLeftIntersect) {
+                                leftList.push_back(pTri);
+                            }
+                            if (bRightIntersect) {
+                                rightList.push_back(pTri);
+                            }
+                        }
+
+                        if (bContinue && !leftList.empty() && !rightList.empty() && (unsigned short)(mFlags & 0x7fff) <= 0x3ffe) {
+                            items.clear();
+                            unsigned char ucNext = uc + 1;
+                            unsigned short uNodeIdx = mFlags & 0x7fff;
+                            mFlags = (mFlags & 0x8000) | uNodeIdx;
+
+                            kdTreeNode *pNode0 = pBase + uNodeIdx * 0x10 + 8;
+                            kdTreeNode *pNode1 = pBase + (uNodeIdx + 1) * 0x10;
+
+                            pNode0->Pack(s, minBox, leftList, pBase, ucNext);
+                            pNode1->Pack(s, maxBox, rightList, pBase, ucNext);
+
+                            leftList.clear();
+                            rightList.clear();
+                            return;
+                        }
+                        leftList.clear();
+                        rightList.clear();
+                    }
+                }
+            }
+        }
+    }
+
+    MILO_ASSERT(GetIsLeaf(), 0x19F);
+    if (items.empty()) {
+        mData.triList = nullptr;
+    } else {
+        unsigned int uCount = items.size();
+        mData.triList = kdTriList::Allocate(uCount);
+        kdTriList *pCurr = mData.triList;
+        while (!items.empty()) {
+            MILO_ASSERT(pCurr->mIndex != -1, 0x1AE);
+            pCurr->mIndex = reinterpret_cast<int>(items.front());
+            items.pop_front();
+            ++pCurr;
+        }
+    }
+}

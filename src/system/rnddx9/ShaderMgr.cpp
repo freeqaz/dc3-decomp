@@ -42,6 +42,11 @@ DxShader::~DxShader() {
     }
 }
 
+void DxShader::operator delete(void *ptr) {
+    // Empty - shaders are allocated from a pool in TheShaderMgr
+}
+
+
 void DxShader::Select(bool b1) {
     D3DDevice_SetVertexShader(TheDxRnd.Device(), mVShader);
     D3DDevice_SetPixelShader(TheDxRnd.Device(), b1 ? nullptr : mPShader);

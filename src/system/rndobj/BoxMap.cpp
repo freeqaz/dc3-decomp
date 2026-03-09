@@ -2,10 +2,9 @@
 #include "os/Timer.h"
 #include "rndobj/Lit.h"
 
-// Accumulation buffers for light calculations
 static int gLightIndex = 0;
-static Vector3 gLightBuffer1[50];
-static Vector3 gLightBuffer2[50];
+static Vector3 gLightBuffer1[150];
+static Vector3 gLightBuffer2[150];
 
 BoxMapLighting::BoxMapLighting() { Clear(); }
 
@@ -50,18 +49,102 @@ bool BoxMapLighting::QueueLight(RndLight *light, float colorScale) {
 
 void BoxMapLighting::ApplyQueuedLights(Hmx::Color * __restrict color, const Vector3 *v3) const {
     START_AUTO_TIMER("draw_light_approx");
-    ApplyLight(mQueued_Directional);
+    gLightIndex = 0;
     if (v3) {
         ApplyLight(mQueued_Spot, *v3);
         ApplyLight(mQueued_Point, *v3);
     }
-    gLightIndex = 0;
-    // Accumulate light contributions into output colors
-    for (int i = 0; i < 6; i++) {
-        color[i].red = gLightBuffer1[i].x;
-        color[i].green = gLightBuffer1[i].y;
-        color[i].blue = gLightBuffer1[i].z;
-        color[i].alpha = 1.0f;
+    ApplyLight(mQueued_Directional);
+    unsigned int idx = gLightIndex;
+
+    if (idx != 0) {
+        float c0r = color[0].red;
+        float c0g = color[0].green;
+        float c0b = color[0].blue;
+        float c20r = color[0x50].red;
+        float c20g = color[0x54].red;
+        float c20b = color[0x58].green;
+        float c4r = color[0x10].red;
+        float c4g = color[0x10].green;
+        float c4b = color[0x10].blue;
+        float c8r = color[0x20].red;
+        float c8g = color[0x20].green;
+        float c8b = color[0x20].blue;
+        float c12r = color[0x30].red;
+        float c12g = color[0x30].green;
+        float c12b = color[0x30].blue;
+        float c16r = color[0x40].red;
+        float c16g = color[0x40].green;
+        float c16b = color[0x40].blue;
+
+        float *lightBuf1 = (float *)&gLightIndex;
+        float *lightBuf2 = (float *)gLightBuffer2 - 2;
+        unsigned int counter = idx;
+        do {
+            float x1 = lightBuf1[2];
+            float y1 = lightBuf1[3];
+            lightBuf1 += 4;
+            float z1 = *lightBuf1;
+
+            float x2 = lightBuf2[2];
+            float y2 = lightBuf2[3];
+            lightBuf2 += 4;
+            float z2 = *lightBuf2;
+
+            float abs_nx1 = (-z1 >= 0.0f) ? -z1 : 0.0f;
+            float abs_ny1 = (-x1 >= 0.0f) ? -x1 : 0.0f;
+            float abs_nz1 = (-y1 >= 0.0f) ? -y1 : 0.0f;
+            float abs_nw1 = (z1 >= 0.0f) ? z1 : 0.0f;
+            float abs_nx2 = (x1 >= 0.0f) ? x1 : 0.0f;
+            float abs_ny2 = (y1 >= 0.0f) ? y1 : 0.0f;
+
+            float sq1 = abs_nx1 * abs_nx1;
+            float sq2 = abs_ny1 * abs_ny1;
+            float sq3 = abs_nz1 * abs_nz1;
+            float sq4 = abs_nw1 * abs_nw1;
+            float sq5 = abs_nx2 * abs_nx2;
+            float sq6 = abs_ny2 * abs_ny2;
+
+            c16b += sq1 * z2;
+            c0b += sq2 * z2;
+            c8b += sq3 * z2;
+            c0r += sq2 * x2;
+            c0g += sq2 * y2;
+            c8r += sq3 * x2;
+            c8g += sq3 * y2;
+            c4b += sq4 * z2;
+            c12b += sq5 * z2;
+            c20g = sq6 * y2 + c20g;
+            c20b = sq6 * z2 + c20b;
+            c16r += sq1 * x2;
+            c4r += sq4 * x2;
+            c4g += sq4 * y2;
+            c12r += sq5 * x2;
+            c12g += sq5 * y2;
+            c20r = sq6 * x2 + c20r;
+            c16g = sq1 * y2 + c16g;
+
+            counter--;
+        } while (counter != 0);
+
+        color[0].red = c0r;
+        color[0].green = c0g;
+        color[0].blue = c0b;
+        color[0x10].red = c4r;
+        color[0x10].green = c4g;
+        color[0x10].blue = c4b;
+        color[0x20].red = c8r;
+        color[0x20].green = c8g;
+        color[0x20].blue = c8b;
+        color[0x30].red = c12r;
+        color[0x30].green = c12g;
+        color[0x30].blue = c12b;
+        color[0x40].red = c16r;
+        color[0x40].green = c16g;
+        color[0x40].blue = c16b;
+        color[0x50].red = c20r;
+        color[0x54].red = c20g;
+        color[0x58].green = c20b;
     }
 }
 

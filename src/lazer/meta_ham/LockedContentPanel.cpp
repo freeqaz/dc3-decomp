@@ -101,11 +101,11 @@ void LockedContentPanel::SetUpCampaignMasterQuestHeader(Symbol song) {
     String str;
     Symbol s = TheAccomplishmentMgr->GetAssetSource(song);
     Accomplishment *pAccomplishment = TheAccomplishmentMgr->GetAccomplishment(s);
-    HamLabel *pPracticeScore = DataDir()->Find<HamLabel>("practice_score.lbl");
-    HamLabel *pInstructions = DataDir()->Find<HamLabel>("instructions.lbl");
     AppLabel *pContentName = DataDir()->Find<AppLabel>("content_name.lbl");
-    HamLabel *pProgress = DataDir()->Find<HamLabel>("progress.lbl");
+    HamLabel *pInstructions = DataDir()->Find<HamLabel>("instructions.lbl");
     HamLabel *pTeaser = DataDir()->Find<HamLabel>("teaser.lbl");
+    HamLabel *pProgress = DataDir()->Find<HamLabel>("progress.lbl");
+    HamLabel *pPracticeScore = DataDir()->Find<HamLabel>("practice_score.lbl");
     pContentName->SetTextToken(gNullStr);
     pTeaser->SetTextToken(MakeString("campaign_mq_locked_%s", song.Str()));
     pInstructions->SetTextToken(gNullStr);
@@ -117,7 +117,8 @@ void LockedContentPanel::SetUpCampaignMasterQuestHeader(Symbol song) {
         MILO_NOTIFY("Could not find accomplishment for %s", song);
     } else {
         auto accomplishmentType = pAccomplishment->GetType();
-        if (pAccomplishment->GetType() == kAccomplishmentTypeLessonSongListConditional
+        auto _tmp1 = pAccomplishment->GetType();
+        if (_tmp1 == kAccomplishmentTypeLessonSongListConditional
             || accomplishmentType == kAccomplishmentTypeTourConditional) {
             AccomplishmentCountConditional *pAccomplishmentCountConditional =
                 dynamic_cast<AccomplishmentCountConditional *>(pAccomplishment);

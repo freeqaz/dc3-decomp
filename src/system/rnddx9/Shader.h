@@ -14,6 +14,7 @@ public:
     virtual void SetShaders(D3DVertexShader *, D3DPixelShader *);
 
     static void *operator new(unsigned int) { return TheShaderMgr.AllocShader(); }
+    static void operator delete(void *ptr);
 
 protected:
     virtual RndShaderBuffer *NewBuffer(unsigned int);
@@ -26,5 +27,5 @@ protected:
     D3DPixelShader *mPShader; // 0x24
     float mMinOverall; // 0x28
     float mMaxOverall; // 0x2c
-    bool mPreCreated; // unk30
+    bool mPreCreated; // 0x30
 };

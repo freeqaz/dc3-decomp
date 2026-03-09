@@ -2633,16 +2633,58 @@ void HamDirector::DrawIconMan(Difficulty diff, float f1, float f2, float f3, flo
 CharClip *HamDirector::GetClipStartAndEndBeats(
     Symbol clipName, float &startBeat, float &endBeat, std::pair<float, float> *range
 ) {
-    CharClip *clip = mClipDir ? mClipDir->Find<CharClip>(clipName.Str(), false) : nullptr;
-    if (!clip) return nullptr;
-    startBeat = clip->StartBeat();
-    endBeat = startBeat + clip->NumFrames() / 30.0f * SecondsToBeat(1.0f);
-    if (range) {
-        range->first = startBeat;
-        range->second = endBeat;
+    static Symbol practice_sym("practice");
+    static Symbol clip_sym("clip");
+
+    if (!mMasterClipAnim) return nullptr;
+
+    PropKeys *practiceKeys = mMasterClipAnim->GetKeys(this, DataArrayPtr(practice_sym));
+    PropKeys *clipKeys = mMasterClipAnim->GetKeys(this, DataArrayPtr(clip_sym));
+
+    if (!practiceKeys || !clipKeys) return nullptr;
+
+    Keys<Symbol, Symbol> *practiceSymbols = practiceKeys->AsSymbolKeys();
+    unsigned int size = practiceSymbols->size();
+    unsigned int foundIdx = 0xffffffff;
+    if (size != 0) {
+        int byteOff = 0;
+        do {
+            if ((*practiceSymbols)[foundIdx + 1].value == clipName) goto found;
+            foundIdx++;
+            byteOff += 8;
+        } while (foundIdx < size);
     }
-    return clip;
+    foundIdx = 0xffffffff;
+found:
+    if (foundIdx != 0xffffffff && (int)(foundIdx + 1) < (int)size) {
+        Keys<Symbol, Symbol> *clipSymbols = clipKeys->AsSymbolKeys();
+        int clipKeyIdx = clipSymbols->KeyLessEq((*practiceSymbols)[foundIdx].frame);
+        if ((unsigned int)clipKeyIdx >= clipSymbols->size()) {
+            stlpmtx_std::__stl_throw_out_of_range("vector");
+        }
+        CharClip *clip = mClipDir->Find<CharClip>((*clipSymbols)[clipKeyIdx].value.Str(), true);
+        if (clip) {
+            float beat1 = SecondsToBeat((*practiceSymbols)[foundIdx].frame * (1.0f / 30.0f));
+            float clipStartBeat = clip->StartBeat();
+            int loopCount = (clip->PlayFlags() >> 12) & 0xF;
+            float loopAdjust = 0.0f;
+            if (loopCount > 0) {
+                loopAdjust = Mod(beat1 - clipStartBeat, (float)loopCount);
+            }
+            float adjust = beat1 - loopAdjust;
+            startBeat = SecondsToBeat((*practiceSymbols)[foundIdx].frame * (1.0f / 30.0f)) - adjust + clipStartBeat;
+            endBeat = SecondsToBeat((*practiceSymbols)[foundIdx + 1].frame * (1.0f / 30.0f)) - adjust + clipStartBeat;
+            if (range) {
+                range->first = SecondsToBeat((*practiceSymbols)[foundIdx].frame * (1.0f / 30.0f));
+                range->second = SecondsToBeat((*practiceSymbols)[foundIdx + 1].frame * (1.0f / 30.0f));
+                return clip;
+            }
+            return clip;
+        }
+    }
+    return nullptr;
 }
+
 
 void HamDirector::Poll() {
     if (TheHamWardrobe) {

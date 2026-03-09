@@ -23,6 +23,7 @@ struct HamListRibbonDrawState {
 
 /** "Top-level resource object for UILists" */
 class HamListRibbon : public RndDir {
+    friend class HamNavList;
 public:
     enum RibbonMode {
         kRibbonSwell = 0,

@@ -22,47 +22,53 @@ extern "C" {
 
 void compute_z_mzt(void) {
     complex sp50;
-    int loop_count = 0;
-    int array_offset = 0;
+    char* src_base;
+    char* dst_base;
+    int src_count1;
+    int src_count2;
+    complex* src_ptr;
+    complex* dst_ptr;
+    int loop_count;
 
-    // Load and copy header values
-    int src_count1 = *(int*)((char*)lbl_8316EBA8 + 0x4000);
-    int src_count2 = *(int*)((char*)lbl_8316EBA8 + 0x4004);
-    *(int*)((char*)lbl_83172BB0 + 0x4000) = src_count1;
-    *(int*)((char*)lbl_83172BB0 + 0x4004) = src_count2;
+    src_base = (char*)lbl_8316EBA8;
+    dst_base = (char*)lbl_83172BB0;
 
-    // Process first array
+    src_count1 = *(int*)(src_base + 0x4000);
+    src_count2 = *(int*)(src_base + 0x4004);
+    *(int*)(dst_base + 0x4000) = src_count1;
+    *(int*)(dst_base + 0x4004) = src_count2;
+
     if (src_count1 > 0) {
+        loop_count = 0;
+        src_ptr = (complex*)src_base;
+        dst_ptr = (complex*)dst_base;
         do {
-            complex* src = (complex*)((char*)lbl_8316EBA8 + array_offset);
-            complex* dst = (complex*)((char*)lbl_83172BB0 + array_offset);
-
-            sp50 = cexp(*src);
+            sp50 = cexp(*src_ptr);
             loop_count++;
-            array_offset += 0x10;
-            dst->x = sp50.x;
-            dst->y = sp50.y;
+            src_ptr++;
+            dst_ptr->x = sp50.x;
+            dst_ptr->y = sp50.y;
+            dst_ptr++;
 
-            src_count1 = *(int*)((char*)lbl_83172BB0 + 0x4000);
+            src_count1 = *(int*)(dst_base + 0x4000);
         } while (loop_count < src_count1);
     }
 
-    src_count2 = *(int*)((char*)lbl_83172BB0 + 0x4004);
+    src_count2 = *(int*)(dst_base + 0x4004);
     loop_count = 0;
 
-    // Process second array (offset by 0x2000)
     if (src_count2 > 0) {
+        src_ptr = (complex*)(src_base + 0x2000);
+        dst_ptr = (complex*)(dst_base + 0x2000);
         do {
-            complex* src = (complex*)((char*)lbl_8316EBA8 + 0x2000 + array_offset);
-            complex* dst = (complex*)((char*)lbl_83172BB0 + 0x2000 + array_offset);
-
-            sp50 = cexp(*src);
+            sp50 = cexp(*src_ptr);
             loop_count++;
-            array_offset += 0x10;
-            dst->x = sp50.x;
-            dst->y = sp50.y;
+            src_ptr++;
+            dst_ptr->x = sp50.x;
+            dst_ptr->y = sp50.y;
+            dst_ptr++;
 
-            src_count2 = *(int*)((char*)lbl_83172BB0 + 0x4004);
+            src_count2 = *(int*)(dst_base + 0x4004);
         } while (loop_count < src_count2);
     }
 }
