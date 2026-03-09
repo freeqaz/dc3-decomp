@@ -200,8 +200,61 @@ def _verbosity(args) -> int:
     return 1
 
 
+def resolve_symbol(name: str, db_path: str | Path = "decomp.db", quiet: bool = False) -> str:
+    """Resolve a friendly name (e.g. 'FlowMathOp::Apply') to a mangled symbol.
+
+    Tries in order:
+    1. Exact mangled symbol match
+    2. Demangled name substring match (LIKE %name%), filtering boilerplate
+
+    If multiple matches found, prints them and exits with error.
+    Returns the mangled symbol string.
+    """
+    from orchestrator.database import BOILERPLATE_SYMBOL_PREFIXES
+
+    conn = get_connection(db_path)
+
+    # 1. Exact mangled match — return immediately
+    row = conn.execute(
+        "SELECT symbol FROM functions WHERE symbol = ? LIMIT 1", (name,)
+    ).fetchone()
+    if row:
+        return name
+
+    # 2. Fuzzy match on demangled name, excluding boilerplate symbols
+    escaped = name.replace("%", r"\%").replace("_", r"\_")
+    query = "SELECT symbol, demangled FROM functions WHERE demangled LIKE ? ESCAPE '\\'"
+    for prefix in BOILERPLATE_SYMBOL_PREFIXES:
+        p_escaped = prefix.replace("_", r"\_")
+        query += f" AND symbol NOT LIKE '{p_escaped}%' ESCAPE '\\'"
+    rows = conn.execute(query, (f"%{escaped}%",)).fetchall()
+
+    if len(rows) == 0:
+        print(f"Error: No function matching '{name}' found in decomp.db")
+        sys.exit(1)
+
+    if len(rows) == 1:
+        mangled = rows[0]["symbol"]
+        demangled = rows[0]["demangled"]
+        if not quiet:
+            print(f"Resolved: {name} → {mangled}", flush=True)
+            print(f"  {demangled}", flush=True)
+        return mangled
+
+    # Multiple matches — show them and fail
+    print(f"Error: '{name}' is ambiguous, matches {len(rows)} functions:\n")
+    for r in rows[:20]:
+        print(f"  {r['demangled']}")
+        print(f"    {r['symbol']}")
+    if len(rows) > 20:
+        print(f"  ... and {len(rows) - 20} more")
+    print(f"\nUse a more specific name or pass the exact mangled symbol.")
+    sys.exit(1)
+
+
 def cmd_single(args):
     """Run single agent on one function."""
+    args.symbol = resolve_symbol(args.symbol, db_path=args.db, quiet=getattr(args, 'quiet', False))
     validate_model_backend(args.model)
     orchestrator = DecompOrchestrator(
         db_path=args.db,
@@ -641,6 +694,7 @@ def cmd_info(args):
 
 def cmd_retry(args):
     """Retry a specific function with escalated model."""
+    args.symbol = resolve_symbol(args.symbol, db_path=args.db, quiet=getattr(args, 'quiet', False))
     validate_model_backend(args.model)
     func = get_function_by_symbol(args.symbol, db_path=args.db)
     if not func:
@@ -1455,9 +1509,13 @@ def main():
         "single",
         help="Run agent on a single function",
         description="Run Claude agent on one function with full analysis context and pre-computed decompilations.",
-        epilog="Example: ./bin/orchestrate single '?Load@CharClip@@UAAXAAVBinStream@@@Z' --model sonnet"
+        epilog="Examples:\n"
+               "  ./bin/orchestrate single '?Load@CharClip@@UAAXAAVBinStream@@@Z' --model sonnet\n"
+               "  ./bin/orchestrate single 'CharClip::Load' --model sonnet\n"
+               "  ./bin/orchestrate single 'FlowMathOp::Apply'",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p_single.add_argument("symbol", help="Mangled function symbol (copy from progress report)")
+    p_single.add_argument("symbol", help="Function name or mangled symbol (e.g. 'FlowMathOp::Apply')")
     # Model choices generated dynamically from registry (all backends)
     available_models = get_available_models("all")
     p_single.add_argument("--model", choices=available_models, help="Force specific model (default: auto-select)")
@@ -1674,9 +1732,9 @@ def main():
         "retry",
         help="Retry a function with escalated model",
         description="Retry a previously attempted function with a higher-tier model (e.g., retry failed haiku with sonnet).",
-        epilog="Example: ./bin/orchestrate retry '?Load@CharClip@@UAAXAAVBinStream@@@Z' --model opus"
+        epilog="Example: ./bin/orchestrate retry 'CharClip::Load' --model opus"
     )
-    p_retry.add_argument("symbol", help="Mangled function symbol")
+    p_retry.add_argument("symbol", help="Function name or mangled symbol (e.g. 'CharClip::Load')")
     # Model choices generated dynamically from registry (supports all backends)
     p_retry.add_argument("--model", choices=available_models, help="Escalated model to use")
     p_retry.add_argument("--quiet", "-q", action="store_true", help="Suppress all output")
