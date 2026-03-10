@@ -98,6 +98,7 @@ public:
     NEW_OBJ(EventTrigger);
 
     void SetNextLink(EventTrigger *);
+    bool HasTriggerEvents() const { return !mTriggerEvents.empty(); }
 
     static void Init();
 

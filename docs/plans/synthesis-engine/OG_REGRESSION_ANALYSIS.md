@@ -194,7 +194,20 @@ The header changes should be kept. The fixes are semantically correct (fixing UB
 3. Break the native port (which depends on the template bodies being in the header)
 4. Lose 2,551 net functions at 100% match
 
-The 144 remaining real codegen drops from 100% are the cost of correctness. No source-level fix exists for them — they're driven by the compiler's inlining budget seeing different template code volumes.
+### Definitive PCH/ObjPtr_p.h Test (2026-03-10)
+
+**Tested and confirmed**: The 144 remaining drops from 100% are **NOT caused by ObjPtr_p.h changes at all**.
+
+**Methodology**: Created a worktree with OG's exact `ObjPtr_p.h` (reverting all our bug fixes, template body additions, and iterator changes), rebuilt the entire project, and compared the dropped-from-100% list against our current build.
+
+**Result**: The **same 144 functions** are dropped in both builds. Zero difference. 0 functions recovered by reverting to OG's header, 0 additional regressions from keeping ours.
+
+This disproves the earlier hypothesis that ObjPtr_p.h template bodies caused the remaining regressions. The actual causes are:
+- **95 link_glue artifacts** (0%): Template specializations (`SetObj`, `SetObjConcrete`, `ReplaceNode`, `EasePoly*`, `floor0_*`) attributed to different TUs in our report vs OG's. Not real codegen regressions.
+- **49 real codegen differences** across ~25 TUs: Caused by other header differences (UIList.h layout, Object.h changes, RndText.h, etc.) and .cpp source differences. Not ObjPtr_p.h.
+- Of the 49 real differences, 13 are at ~100% (99.9-99.99%, trivial rounding), leaving **36 meaningful drops**.
+
+**Implication**: The ObjPtr_p.h bug fixes (operator=, insert, Node::operator= with CopyRef) are **completely free** — they improved 2,700+ functions to 100% with zero regression cost.
 
 ### Implemented: ObjPtrVec Impl Header Split
 
@@ -213,7 +226,7 @@ The 144 remaining real codegen drops from 100% are the cost of correctness. No s
 | OG improvements (comparison tool) | 3,251 | 3,256 | +5 |
 | HEAD regressions | 0 | 1 (MeterDisplay -1.0%) | +1 |
 
-The split recovered 71 functions that had fallen from 100% (due to inlining budget pollution from the PCH seeing extra template code), at the cost of 1 small MeterDisplay regression. The 67 "big" regressions reported by the comparison tool are unchanged — these are caused by the remaining template bodies in ObjPtr_p.h (`operator=`, `insert`, `Node` constructors, `CopyRef` operator=) which must stay in the header.
+The split recovered 71 functions that had fallen from 100% (due to inlining budget pollution from the PCH seeing extra template code), at the cost of 1 small MeterDisplay regression. The remaining 144 drops from 100% are **not caused by ObjPtr_p.h at all** — confirmed by testing with OG's exact header (see "Definitive PCH/ObjPtr_p.h Test" above). They're caused by other header differences (UIList.h, RndText.h, Object.h, etc.) and .cpp source changes across ~25 TUs.
 
 **Files changed:**
 - `src/system/obj/ObjPtr_p.h` — removed find/swap/sort/merge/unique/remove bodies, added `#ifdef HX_NATIVE` include of impl header

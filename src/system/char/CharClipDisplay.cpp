@@ -69,15 +69,15 @@ CharClipDisplay::SetStartEnd(float start, float end, bool resetZoom) {
         if (end - start > zoomRange) {
             float cursor = unk1c;
             float halfZoom = zoomRange * 0.5f;
-            if (cursor > halfZoom + start) {
+            if (cursor < halfZoom + start) {
+                mEndBeat = zoomRange + start;
+            } else {
                 if (cursor > end - halfZoom) {
                     mStartBeat = end - zoomRange;
                     return;
                 }
                 mStartBeat = cursor - halfZoom;
                 mEndBeat = halfZoom + cursor;
-            } else {
-                mEndBeat = zoomRange + start;
             }
         } else {
             if (end != start) {
@@ -161,7 +161,7 @@ void CharClipDisplay::DrawTrack() {
     // Draw beat events
     {
         bool firstEvent = true;
-        unsigned int idx = 0;
+        int idx = 0;
         float eventLabelOffset = 10.0f;
         if (mClip->NumBeatEvents() != 0) {
             float eventAlpha = 0.2f;
@@ -188,7 +188,7 @@ void CharClipDisplay::DrawTrack() {
                     );
                 }
                 idx += 1;
-            } while (idx < (unsigned int)mClip->NumBeatEvents());
+            } while ((unsigned int)idx < (unsigned int)mClip->NumBeatEvents());
         }
     }
 

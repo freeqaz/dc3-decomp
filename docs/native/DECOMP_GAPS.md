@@ -17,7 +17,7 @@ These directly affect what's visible on screen.
 
 | Class | Method | Status | Impact |
 |-------|--------|--------|--------|
-| `DxCam` | `Select()` | **67.6%** (control flow + offset swap) | Xbox D3D9 camera matrix setup. Implemented in source, still a useful decomp target. |
+| `DxCam` | `Select()` | **81.3%** AT_LIMIT (prologue, ShaderMgr caching, SetViewProj forwarding) | Xbox D3D9 camera matrix setup. Fully implemented. |
 | `DxCam` | `SetViewport()` | **94.0%** (mostly volatile FPR/regalloc) | Sets D3D9 viewport from RndCam frustum |
 | `DxCam` | `ProjectZ(float)` | **88.8%** (offset/control flow cleanup) | Projects Z coordinate for depth sorting |
 | `MeterDisplay` | `DrawShowing()` | **88.7%** (WorldInstance type, volatile FPR swaps) | Score/progress meters render |
@@ -175,7 +175,7 @@ Sorted by impact x feasibility:
 2. ~~**Flow::Enter()**~~ — **Done**. Implemented with `Flow::Exit()`. 81.8% / 99.1% match respectively.
 3. ~~**Locale data loading**~~ — **Done**. 2091 symbols loaded from 2 files. Fix was proper `mInitialized` constructor init + LocalePanel vtable key function fix.
 4. ~~**Text positioning**~~ — **Verified working** (2026-03-06). No alignment issues — sFlipYZ + ortho projection correct. `FitTextJust()` was missing (undefined symbol crash), now implemented.
-5. **Keep decomping `DxCam::Select()`** — source implementation exists, but it is still only **67.6%**. It remains the closest shared-code analogue to the Xbox camera setup path for UI/world rendering.
+5. ~~**DxCam::Select()**~~ — **Done** (81.3% AT_LIMIT). Fully implemented with boolean materialization, ScreenRect field-by-field copy, member_ref_bind. Remaining gaps are compiler-level (prologue, ShaderMgr caching, SetViewProj forwarding).
 6. **Camera animation on native** — CamShots/PropAnims in .milo files should reposition camera for menu screens. Investigate why the Milo animation system isn't driving camera position on native. May need `RndDir::Enter()` to trigger animations, or `CameraManager` to play CamShots.
 7. **Re-test choose_mode_screen without `MILO_DEBUG_UI_CAM_HACK`** — the old debug camera proof is now isolated behind an env var. Validate a fresh frame capture on the default `[ui.cam]` path before chasing more projection math.
 

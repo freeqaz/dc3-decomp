@@ -1,11 +1,16 @@
 #include "world/Instance.h"
+#include "math/Rot.h"
 #include "obj/Dir.h"
 #include "obj/Msg.h"
 #include "obj/Object.h"
 #include "obj/DirLoader.h"
 #include "obj/PropSync_p.h"
+#include "obj/Utl.h"
 #include "rndobj/Dir.h"
+#include "rndobj/EventTrigger.h"
 #include "rndobj/Group.h"
+#include "rndobj/Mesh.h"
+#include "rndobj/Utl.h"
 #include "utl/MemMgr.h"
 
 template <>
@@ -237,6 +242,107 @@ void WorldInstance::SetProxyFile(const FilePath &fp, bool override) {
     }
 }
 
+void WorldInstance::PostLoad(BinStream &bs) {
+    int revs = bs.PopRev(this);
+    BinStreamRev d(bs, revs);
+    RndDir::PostLoad(bs);
+    if (d.rev > 0) {
+        mDir = dynamic_cast<WorldInstance *>((ObjectDir *)PostLoadInlined());
+    } else {
+        mDir.PostLoad(0);
+    }
+    if (d.rev > 1) {
+        LoadPersistentObjects(d);
+    }
+    SyncDir();
+}
+
+void WorldInstance::SyncDir() {
+    if (IsProxy()) {
+        DeleteTransientObjects();
+        mSharedGroup = nullptr;
+        if (mDir) {
+            RndGroup *grp = mDir->Find<RndGroup>("shared.grp", false);
+            if (!mDir->mSharedGroup2 && grp) {
+                mDir->mSharedGroup2 = new SharedGroup(grp);
+            }
+            mSharedGroup = mDir->mSharedGroup2;
+            Sphere sphere = mDir->mSphere;
+            Vector3 v98;
+            MakeScale(WorldXfm().m, v98);
+            float f21 = Max(v98.y, v98.z);
+            f21 = Max(v98.x, f21);
+            if (f21 > 1.0f)
+                sphere.radius *= f21;
+            SetSphere(sphere);
+            std::list<ObjPair> objPairs;
+            objPairs.push_back(ObjPair(mDir, this));
+            for (ObjDirItr<Hmx::Object> it(mDir, false); it != nullptr; ++it) {
+                RndMesh *curMesh = dynamic_cast<RndMesh *>(&*it);
+                if (!grp)
+                    goto iterate;
+                if (it != grp && !GroupedUnder(grp, it))
+                    goto iterate;
+                if (curMesh) {
+                    grp->RemoveObject(it);
+                    goto iterate;
+                }
+                continue;
+            iterate:
+                if (it->ClassName() == Symbol("Tex") || it->ClassName() == Symbol("CubeTex")
+                    || it->ClassName() == Symbol("SynthSample") || it->ClassName() == Symbol("Movie")
+                    || it == mDir)
+                    continue;
+                else {
+                    EventTrigger *trig = dynamic_cast<EventTrigger *>(&*it);
+                    if (trig && trig->HasTriggerEvents()) {
+                        MILO_NOTIFY("%s must be in shared.grp", PathName(it));
+                    } else {
+                        Hmx::Object *foundObj = FindObject(it->Name(), false, false);
+                        if (!foundObj) {
+                            foundObj = Hmx::Object::NewObject(it->ClassName());
+                            bool deep = true;
+                            if (it->ClassName() == Symbol("Group"))
+                                deep = false;
+                            CopyObject(it, foundObj, (Hmx::Object::CopyType)deep, true);
+                        }
+                        objPairs.push_back(ObjPair(foundObj, it));
+                    }
+                }
+            }
+
+            std::list<ObjPair>::const_iterator p = objPairs.begin();
+            for (; p != objPairs.end(); ++p) {
+                MILO_ASSERT(p->from->Dir(), 0x2CA);
+                const_cast<ObjRef &>(p->from->Refs()).ReplaceList(p->to);
+            }
+
+            Reserve(mDir->HashTableSize(), mDir->StrTableSize());
+
+            p = objPairs.begin();
+            for (; p != objPairs.end(); ++p) {
+                if (p->to != this) {
+                    p->to->SetName(p->from->Name(), this);
+                }
+            }
+
+            if (f21 > 1.0f) {
+                for (ObjDirItr<RndTransformable> it(this, true); it != nullptr; ++it) {
+                    if (GenerationCount(this, it) > 0) {
+                        RndDrawable *draw = dynamic_cast<RndDrawable *>(&*it);
+                        if (draw) {
+                            Sphere s = draw->GetSphere();
+                            s.radius *= f21;
+                            draw->SetSphere(s);
+                        }
+                    }
+                }
+            }
+        }
+        SyncObjects();
+    }
+}
+
 #pragma endregion WorldInstance
 #pragma region SharedGroup
 
@@ -245,6 +351,20 @@ SharedGroup::SharedGroup(RndGroup *group) : mGroup(group), mPollMaster(this) {
 }
 
 void SharedGroup::ClearPollMaster() { mPollMaster = nullptr; }
+
+void SharedGroup::AddPolls(RndGroup *grp) {
+    const ObjPtrList<Hmx::Object> &objs = grp->Objects();
+    for (ObjPtrList<Hmx::Object>::iterator it = objs.begin(); it != objs.end(); ++it) {
+        RndPollable *poll = dynamic_cast<RndPollable *>(*it);
+        if (poll)
+            mPolls.push_back(poll);
+        else {
+            RndGroup *group = dynamic_cast<RndGroup *>(*it);
+            if (group)
+                AddPolls(group);
+        }
+    }
+}
 
 void SharedGroup::TryPoll(WorldInstance *inst) {
     if (!mPollMaster)

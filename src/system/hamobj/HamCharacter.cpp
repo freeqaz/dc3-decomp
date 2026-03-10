@@ -15,6 +15,7 @@
 #include "hamobj/HamDriver.h"
 #include "hamobj/HamGameData.h"
 #include "math/Mtx.h"
+#include "math/Rot.h"
 #include "obj/Data.h"
 #include "obj/DataUtl.h"
 #include "obj/Dir.h"
@@ -36,6 +37,8 @@
 #include "utl/FilePath.h"
 #include "utl/Loader.h"
 #include "utl/Symbol.h"
+
+extern "C" char *_strlwr(char *);
 
 namespace {
     const char *kCrewCardMeshName = "crew_card.mesh";
@@ -716,7 +719,88 @@ DataNode HamCharacter::OnSoundPlay(const DataArray *a) {
 QuatXfm::QuatXfm(const Transform &t) : v(t.v) { q.Set(t.m); }
 #endif
 
-#ifdef HX_NATIVE
+#ifndef HX_NATIVE
+void HamCharacter::Poll() {
+    int songAnim = SongAnimation();
+    if (songAnim == -1 || InClipTest()) {
+        if (mDriver) mDriver->SetWeight(1.0f);
+    } else {
+        if (mDriver) mDriver->SetWeight(0.0f);
+    }
+
+    bool wasShowing = mShowing;
+    if (!wasShowing && mPollWhenHidden) {
+        SetShowing(true);
+    }
+    Character::Poll();
+    SetShowing(wasShowing);
+
+    RndTransformable *boneProp = Find<RndTransformable>("bone_prop0.mesh", false);
+    if (!boneProp) return;
+    RndTransformable *spotProp = Find<RndTransformable>("spot_prop0.mesh", false);
+    if (!spotProp) return;
+
+    float blendWeight;
+    int songAnim2 = SongAnimation();
+    if (songAnim2 == -1) {
+        if (mDriver && mDriver->First()) {
+            blendWeight = mDriver->EvaluateFlags(2);
+        } else {
+            blendWeight = 1.0f;
+        }
+    } else {
+        blendWeight = 0.0f;
+    }
+
+    QuatXfm boneXfm(boneProp->WorldXfm());
+    QuatXfm spotXfm(spotProp->WorldXfm());
+
+    Vector3 interpPos;
+    Interp(spotXfm.v, boneXfm.v, blendWeight, interpPos);
+    Hmx::Quat interpRot;
+    Interp(spotXfm.q, boneXfm.q, blendWeight, interpRot);
+
+    Transform result;
+    result.v = interpPos;
+    MakeRotMatrix(interpRot, result.m);
+    boneProp->SetWorldXfm(result);
+
+    RndMat *mat = Find<RndMat>("robot_face.mat", false);
+    if (!mat) return;
+
+    CharLipSyncDriver *lipDrv = Find<CharLipSyncDriver>("face.lipdrv", false);
+    const char *clipName = "base";
+    CharLipSync::PlayBack *pb = lipDrv->GetPlayBack();
+    if (pb) {
+        float maxWeight = 0.0f;
+        for (int i = 0; i < (int)pb->mWeights.size(); i++) {
+            CharLipSync::PlayBack::Weight &w = pb->mWeights[i];
+            if (!w.mClip) continue;
+            float curWeight = w.mCurWeight;
+            float newMax = (maxWeight >= curWeight) ? maxWeight : curWeight;
+            if (newMax != maxWeight) {
+                clipName = w.mClip->Name();
+            }
+            maxWeight = newMax;
+        }
+    }
+
+    char texName[256];
+    strcpy(texName, clipName);
+    _strlwr(texName);
+    strcat(texName, ".tex");
+
+    RndTex *tex = Find<RndTex>(texName, false);
+    if (!tex) {
+        tex = Find<RndTex>("base.tex", false);
+    }
+    if (tex) {
+        mat->SetDiffuseTex(tex);
+    } else {
+        MILO_NOTIFY_ONCE("%s could not find viseme texture %s", PathName(this), texName);
+    }
+}
+#else
 // TODO: real implementation clears a list
 void HamCharacter::Poll() {}
 #endif
