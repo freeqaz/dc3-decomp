@@ -138,26 +138,26 @@ inline float EaseElasticIn(float t, float power, float f3) {
     return t;
 }
 
-inline float EaseElasticOut(float t, float power, float period) {
+inline float EaseElasticOut(float t, float power, float f3) {
     MILO_ASSERT(t >= 0 && t <= 1, 164);
-    float difference = EaseElasticIn(1.0f - t, power, period);
+    float difference = EaseElasticIn(1.0f - t, power, f3);
     return 1.0f - difference;
 }
 
-inline float EaseElasticInOut(float t, float power, float period) {
+inline float EaseElasticInOut(float t, float power, float f3) {
     MILO_ASSERT(t >= 0 && t <= 1, 170);
     if (t < 0.5)
-        return EaseElasticIn(t * 2, power, period) / 2;
+        return EaseElasticIn(t * 2, power, f3) / 2;
     else
-        return (EaseElasticOut(t * 2 - 1.0f, power, period) + 1.0f) / 2;
+        return (EaseElasticOut(t * 2 - 1.0f, power, f3) + 1.0f) / 2;
 }
 
-inline float EaseElasticOutIn(float t, float power, float period) {
+inline float EaseElasticOutIn(float t, float power, float f3) {
     MILO_ASSERT(t >= 0 && t <= 1, 177);
     if (t < 0.5)
-        return EaseElasticOut(t * 2, power, period) / 2;
+        return EaseElasticOut(t * 2, power, f3) / 2;
     else
-        return (EaseElasticIn(t * 2 - 1.0f, power, period) + 1.0f) / 2;
+        return (EaseElasticIn(t * 2 - 1.0f, power, f3) + 1.0f) / 2;
 }
 
 inline float EaseBackIn(float t, float power, float) {
@@ -302,15 +302,15 @@ inline float EaseCircOutIn(float t, float power, float) {
         return (EaseCircIn(t * 2 - 1.0f, 0.0f, 0.0f) + 1.0f) / 2;
 }
 
-inline float EaseStairstep(float t, float power, float steps) {
+inline float EaseStairstep(float t, float power, float f3) {
     MILO_ASSERT(t >= 0 && t <= 1, 294);
-    if (steps == 0) {
-        steps = 2;
+    if (f3 == 0) {
+        f3 = 2;
     }
-    float tmp_f30 = t * steps;
+    float tmp_f30 = t * f3;
     float tmp_f26 = floor(tmp_f30);
-    steps = 1.0f / steps; // this is SUPPOSED to be here, but it's getting scheduled for later
-    return (EasePolyInOut(tmp_f30 - tmp_f26, power, 0.0f) + tmp_f26) * steps;
+    f3 = 1.0f / f3; // this is SUPPOSED to be here, but it's getting scheduled for later
+    return (EasePolyInOut(tmp_f30 - tmp_f26, power, 0.0f) + tmp_f26) * f3;
 }
 
 inline float EaseThirdStairstep(float t, float power, float) {

@@ -337,7 +337,6 @@ void AppLabel::SetArtistName(Symbol shortname, bool b2) {
     const HamSongMetadata *pMetaData =
         TheHamSongMgr.Data(TheHamSongMgr.GetSongIDFromShortName(shortname));
     MILO_ASSERT(pMetaData, 0xF1);
-    if (!pMetaData) return;
     if (pMetaData->IsCover() && !b2) {
         static Symbol as_made_famous_by("as_made_famous_by");
         SetDisplayText(

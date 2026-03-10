@@ -69,7 +69,7 @@ void UIListSlot::Draw(
     RndTransformable *root = RootTrans();
     if (root) {
         int thesize = drawstate.mElements.size();
-        if (thesize > (int)mElements.size()) {
+        if (thesize > mElements.size()) {
 #ifdef HX_NATIVE
             return;
 #else

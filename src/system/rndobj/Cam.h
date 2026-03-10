@@ -23,7 +23,7 @@ public:
     virtual void Load(BinStream &);
     virtual void UpdatedWorldXfm();
     virtual void Select();
-    virtual unsigned int ProjectZ(float) { return 0; }
+    virtual unsigned int ProjectZ(float);
 
     float NearPlane() const { return mNearPlane; }
     float FarPlane() const { return mFarPlane; }

@@ -35,6 +35,8 @@ RndCam::~RndCam() {
         sCurrent = nullptr;
 }
 
+unsigned int RndCam::ProjectZ(float) { return 0; }
+
 BEGIN_HANDLERS(RndCam)
     HANDLE(set_frustum, OnSetFrustum)
     HANDLE(set_z_range, OnSetZRange)

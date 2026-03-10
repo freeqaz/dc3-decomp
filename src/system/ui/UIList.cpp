@@ -197,6 +197,10 @@ int UIList::Selected() const { return mListState.Selected(); }
 UIListState &UIList::GetListState() { return mListState; }
 #endif
 
+UIList *UIList::ChildList() {
+    return mListDir->SubList(mListState.SelectedDisplay(), mWidgets);
+}
+
 bool UIList::IsScrolling() const { return mListState.IsScrolling(); }
 
 void UIList::SetSpeed(float speed) { mListState.SetSpeed(speed); }
