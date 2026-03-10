@@ -240,7 +240,8 @@ ObjPtrVec<T1, T2>::insert(typename ObjPtrVec<T1, T2>::const_iterator it, T1 *obj
         int idx = it.it ? (it.it - mNodes.begin()) : 0;
 #endif
         Node newNode(this);
-        mNodes.insert(mNodes.begin() + idx, 1, newNode);
+        typename std::vector<Node>::iterator pos = mNodes.begin() + idx;
+        mNodes.insert(pos, 1, newNode);
         Set(begin() + idx, obj);
     }
 #ifdef HX_NATIVE
@@ -322,14 +323,16 @@ template <class T1, class T2>
 template <class S>
 void ObjPtrVec<T1, T2>::sort(const S &cmp) {
     MemPushTemp();
-    std::vector<T1 *> ptrs;
-    ptrs.insert(ptrs.begin(), size(), (T1 *)0);
-    for (unsigned int i = 0; i < size(); i++) {
-        ptrs[i] = mNodes[i].Obj();
-    }
-    std::sort(ptrs.begin(), ptrs.end(), cmp);
-    for (unsigned int i = 0; i < size(); i++) {
-        mNodes[i].SetObjConcrete(ptrs[i]);
+    {
+        std::vector<T1 *> ptrs;
+        ptrs.insert(ptrs.begin(), size(), (T1 *)0);
+        for (unsigned int i = 0; i < size(); i++) {
+            ptrs[i] = mNodes[i].Obj();
+        }
+        std::sort(ptrs.begin(), ptrs.end(), cmp);
+        for (unsigned int i = 0; i < size(); i++) {
+            mNodes[i].SetObjConcrete(ptrs[i]);
+        }
     }
     MemPopTemp();
 }

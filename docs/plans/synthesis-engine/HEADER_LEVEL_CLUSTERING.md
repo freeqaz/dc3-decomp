@@ -190,6 +190,32 @@ All header-level fixes applied to this project, ordered by impact.
 - **Scope isolation**: Changing the base `ObjRefConcrete::operator=` caused
   19 severe regressions. The fix must be Node-specific.
 
+#### 5b. ObjPtrVec::insert argument scheduling (`ObjPtr_p.h`)
+
+- **Date**: 2026-03-10
+- **Header**: `src/system/obj/ObjPtr_p.h`
+- **Impact**: **18 `insert` instantiations: 96.6% → 100%** across 14 TUs.
+  Zero regressions.
+- **Root cause**: `mNodes.insert(mNodes.begin() + idx, 1, newNode)` computes
+  the position argument (`begin() + idx`) as part of the function call
+  expression. The compiler schedules its evaluation LAST among the 4
+  arguments (r3, r4, r5, r6), hiding the load latency of `_M_start`. The
+  target evaluates `pos` FIRST, using `r11` immediately after loading it.
+- **Fix**: Separate the position computation into a local variable:
+  ```cpp
+  typename std::vector<Node>::iterator pos = mNodes.begin() + idx;
+  mNodes.insert(pos, 1, newNode);
+  ```
+  This forces the compiler to evaluate `pos` before materializing the other
+  arguments, matching the target's argument scheduling order.
+- **Detection**: 18 functions at exact same match% (96.6%) across 14 TUs.
+  All 4 mismatched instructions are the same set, just reordered — pure
+  argument scheduling permutation before `_M_fill_insert`.
+- **Lesson**: Separating subexpressions into local variables can influence
+  the compiler's instruction scheduler, even for volatile register
+  arguments. This is a new fix category — not register allocation, not
+  inlining, but **argument materialization scheduling**.
+
 #### 6. AmbientOcclusion VectorSort sort comparator
 
 - **Impact**: **14 VectorSort sort templates → 100%**
@@ -366,7 +392,7 @@ As of 2026-03-10, from report.json and decomp.db analysis:
 | Cluster | Match% | Count | TUs | Status | Root Cause |
 |---------|--------|-------|-----|--------|------------|
 | ObjectDir::Find\<T\> | 99.7% | 81 | 40 | AT_LIMIT | Volatile reg scheduling in `__RTDynamicCast` |
-| ObjPtrVec\<T\>::insert | 96.6% | 19 | 15 | Open | Header template in ObjPtr_p.h |
+| ObjPtrVec\<T\>::insert | 96.6% | 18 | 14 | **FIXED** | Argument scheduling — separated pos local (Tier 2 #5b) |
 | ObjPtrVec\<T\>::_M_fill_insert_aux | 83.8% | 18 | 14 | AT_LIMIT | Register swap after CopyRef fix |
 | ObjPtrVec\<T\>::operator= | 82.9% | 13 | 10 | AT_LIMIT | Address relocation noise |
 | ResourceDirPtr\<T\>::SetName | 88.3% | 7 | 5 | AT_LIMIT | Register swap |
@@ -483,6 +509,20 @@ names, causing wrong overload dispatch or COMDAT linkage.
 **Expected gain**: +1-100% depending on how many call sites dispatch
 through the wrong overload.
 
+### Category G: Argument Scheduling Fixes
+
+Subexpressions computed inline in function call arguments get scheduled
+by the compiler in a different order than the target. Separating the
+computation into a local variable forces earlier evaluation.
+
+**Detection**: 3-4 `replace` instructions that are the same set of
+operations, just permuted. All arguments go to volatile registers
+(r3-r10). No register allocation or inlining difference.
+
+**Examples**: ObjPtrVec::insert position computation (#5b).
+
+**Expected gain**: +3-5% per function, across all template instantiations.
+
 ---
 
 ## Lessons Learned
@@ -528,6 +568,12 @@ through the wrong overload.
     iterator operator+ copy semantic improves 21 functions but regresses
     68 og-baseline functions. Net positive, but not free.
 
+11. **Separating subexpressions into locals influences instruction
+    scheduling**. Computing `mNodes.begin() + idx` inline in a call
+    expression lets the scheduler defer it. Assigning to a local first
+    forces earlier evaluation — matching the target's argument order.
+    This is a new fix category: **argument materialization scheduling**.
+
 ---
 
 ## Integration with Permuter/Synthesis Engine
@@ -549,11 +595,11 @@ first — no amount of function-body permutation will fix a header bug.
 Based on the current cluster landscape, these are the highest-ROI
 header-level targets:
 
-1. **ObjPtrVec\<T\>::insert** (19 functions at 96.6%): Template cluster
-   in ObjPtr_p.h. Investigate what the 3.4% gap consists of.
+1. ~~**ObjPtrVec\<T\>::insert** (18 functions at 96.6%)~~ **FIXED** —
+   separated position computation into local variable. All 18 → 100%.
 
 2. **ObjPtrVec\<T\>::sort** (3 functions at 96.3%): Same header, may
-   share root cause with insert.
+   have a similar argument scheduling or template body issue.
 
 3. **Unclassified 99.7% functions** (38 non-Find functions): May include
    additional template clusters not yet identified.

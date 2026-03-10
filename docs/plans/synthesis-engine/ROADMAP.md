@@ -88,14 +88,19 @@ engine should emerge inside the existing permuter stack.
 
 What already exists:
 
-- **beam search** — default strategy in scan_and_permute.py (`--strategy beam`).
-  Multi-state, diagnosis-guided, diversity-preserving. BeamState carries source,
-  score, diagnosis, tags, provenance chain, failure history, guidance agreement.
-  Config: width=8, depth=4, expand=24, escape=4, diversity=3.
-- **greedy and evolutionary** baselines for comparison
+- **beam search** — default strategy everywhere (`--strategy beam` in batch,
+  `--beam` in hill_climber). Multi-state, diagnosis-guided, diversity-preserving.
+  BeamState carries source, score, diagnosis, tags, provenance chain, failure
+  history, guidance agreement. Config: width=8, depth=4, expand=24, escape=4,
+  diversity=3.
+- **greedy and evolutionary** available via `--no-beam` / `--evolutionary`
 - **diagnosis** from objdiff instruction data (clusters, regswaps, offsets,
   prologue deltas, noise ratio)
-- **Ghidra, m2c, RB3, and ASM-guided** proposal inputs
+- **Ghidra, m2c, RB3, and ASM-guided** proposal inputs (all default-on)
+- **standalone ASM-guided declaration reorder** — compiles with `/FAs`, parses
+  var→register mapping, generates targeted swaps without BSF tracing. Runs
+  automatically for any function with GPR swap pairs. Falls through to BSF-guided
+  (also default-on) for deeper analysis.
 - **79 patterns** with composition (2-stage + N-stage chains), adaptive
   follow-ups, tag-based selection. Includes `foreach_to_dowhile` (FOREACH
   macro → do-while with pre-guard, with optional scope narrowing variants).
@@ -119,8 +124,8 @@ What already exists:
   function improvements. 6-category fix taxonomy (struct layout, vtable order,
   inlining control, template semantics, __forceinline, type qualifiers). Active
   cluster tracking from report.json + decomp.db. See [HEADER_LEVEL_CLUSTERING.md](HEADER_LEVEL_CLUSTERING.md).
-- **compiler atlas** — 30 `AtlasEntry` records: 18 proven (diff-test), 3 inferred,
-  9 negative (AT_LIMIT). Opcode-indexed for O(1) lookup. `boost_patterns()` API
+- **compiler atlas** — 80 `AtlasEntry` records: proven (diff-test), inferred, and
+  negative (AT_LIMIT). Opcode-indexed for O(1) lookup. `boost_patterns()` API
   for beam/generator integration. 20 unit tests.
 - **target facts** — normalized evidence layer aggregating diagnosis, attribution,
   atlas, and guidance into queryable `TargetFact` records. 3 extractors, wired
@@ -145,6 +150,15 @@ What is still missing:
 - ~~selective compiler RE for COLOR register allocator internals~~ DONE (linear scan, not graph coloring — see `msvc-src/docs/COLOR_RE.md`)
 - automated header cluster detection (methodology proven, script not yet built)
 - TU-boundary inlining control catalog (which functions must NOT have header bodies)
+- **`static const float` prologue fix pattern**: When target caches a float literal
+  pool ADDRESS in a callee-saved GPR (e.g. `lis r29, lbl_...` + `lfs fN, offset, r29`)
+  but our compiler caches the VALUE in a callee-saved FPR (e.g. `fmr f1, f30`),
+  replacing inline float literals with `static const float kVal = X.Xf;` forces
+  address-based access matching the target. Proven on ContentLoadingPanel::Poll
+  (84.8% → 100%). Detection: prologue has GPR↔FPR type mismatch (`__savegprlr_N`
+  vs manual FPR saves), replace instructions show `lfs fN, label, rGPR` vs
+  `fmr fN, fFPR`. Should be added as a new permuter pattern (`float_const_static`)
+  or integrated into the existing `float_literal_pressure` pattern.
 
 ## Design Principle
 
@@ -1174,7 +1188,12 @@ Implemented:
 - **Tail-call applicability expansion**: `tail_call_reorder` now recognizes
   terminal single-call `if` wrappers and mixed wrapper/plain-call runs, which
   unlocks real cleanup/destructor shapes such as `VorbisReader::~VorbisReader`
-  (5 generated variants in direct pattern measurement).
+  (4 generated variants after noise trimming in direct pattern measurement).
+- **Noise trimming pass**: shared call classification now treats STL/container
+  mutators, lifecycle helpers, `RELEASE`, `Mem*` helpers, and logging-style
+  macros more aggressively, and `tail_call_reorder` rejects same-name pairs and
+  macro-ish timer helpers. Direct measurement on 20 tail-call candidates now
+  narrows to a small plausible set instead of broad infrastructure noise.
 - **34 unit tests** in `scripts/permuter/tests/test_target_facts.py` covering
   all shape-fact handlers, target-aware routing, and integration
 
@@ -1288,7 +1307,7 @@ it should be narrowed, rewritten, or dropped.
    scorer integration, 15 region-aware patterns. DONE.
 2. **Differential testing** — core harness + 13 suites with proven decision maps.
    DONE.
-3. **Compiler atlas** — 72 entries (51 proven, 3 inferred, 18 negative), opcode-indexed
+3. **Compiler atlas** — 80 entries (57 proven, 5 inferred, 18 negative), opcode-indexed
    lookup, beam boost/suppress wiring. Expanded from pattern docs. DONE.
 4. **Target facts** — normalized evidence layer, 4 extractors (diagnosis, atlas,
    guidance, shape facts), wired into BeamState ranking and proposal filtering. DONE.
@@ -1314,15 +1333,23 @@ it should be narrowed, rewritten, or dropped.
 
 The remaining work is:
 - **validation at scale** — run the full pipeline on 30+ hard targets to measure
-  improvement
-- **boosted-pattern applicability** — convert measured `call_shape` and
-  `switch_dispatch` boosts into real variants and real wins
-- **IL type control integration** — the proven `u8()` CAST vs `& 0xFF` AND finding
-  ([IL_TYPE_CONTROL.md](IL_TYPE_CONTROL.md)) should be wired into the permuter as:
-  (a) atlas entries for `extrwi`/`clrlslwi` detection/suppression,
-  (b) a new `u8_to_unsigned_long` pattern that converts `u8` intermediate types to
-  `unsigned long` + `& 0xFF`, and
-  (c) IL capture fixtures to confirm the CAST vs AND mechanism.
-  This single finding fixed 20+ functions and likely affects hundreds more.
-- **next IL lift families** — virtual dispatch detail, argument materialization,
-  inline wrappers, and sparse/default-heavy switch lowering
+  improvement. Initial 30-target benchmark (2026-03-10) showed beam finding 3
+  improvements in LOW bracket where greedy found none. Full-power run pending.
+- **boosted-pattern applicability** — DONE. Fixed switch_dispatch routing (removed
+  incorrect default-to-boost, fixed byte_fusion duplicate suppress). Fixed
+  tail_call_reorder routing. Added 4 atlas entries (switch_table_dispatch,
+  switch_compare_chain, tail_call_b_vs_bl, tail_call_prologue_delta). 7 new/fixed
+  target_facts tests.
+- **IL type control integration** — DONE. Pattern implementation (`u8_to_unsigned_long`)
+  was already complete with 3 strategies (widen locals, return masking, combined).
+  Atlas entries exist (rlwinm_fusion_extrwi, rlwinm_fusion_clrlslwi,
+  u8_backward_propagation). Target_facts byte_fusion routing wired. 3 pattern fixture
+  tests + 2 relevance tests added.
+- **next IL lift families** — DONE (virtual dispatch + inline wrappers). Enhanced
+  `detect_vtable_dispatch` to capture slot_offset, vbtable_offset, receiver_reg,
+  and vbtable indirection flag. Added `detect_inline_wrapper` for trivial forwarding,
+  accessor load, accessor store, and return forwarding shapes. Wired into target_facts
+  routing (virtual_dispatch carries slot detail, inline_wrapper boosts noinline_stub).
+  3 atlas entries added (vtable_slot_dispatch, accessor_inline_vs_outline,
+  trivial_forwarding_wrapper). 9 new tests. Remaining: argument materialization,
+  sparse switch lowering.
