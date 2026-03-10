@@ -197,6 +197,7 @@ void CharSignalApplier::PollDeps(std::list<Hmx::Object *> &a, std::list<Hmx::Obj
     }
 }
 
+#ifndef HX_NATIVE
 // Minimal __uninitialized_fill_n implementation for BoneOp
 namespace stlpmtx_std {
 
@@ -229,4 +230,5 @@ CharSignalApplier::BoneOp* __uninitialized_fill_n<CharSignalApplier::BoneOp*, un
 }
 
 }
+#endif
 

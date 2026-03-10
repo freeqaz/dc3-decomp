@@ -993,14 +993,14 @@ void PartyModeMgr::AddPlayerToTeam(int team) {
 void PartyModeMgr::ClearTeam(int team) {
     switch (team) {
     case 1:
-        for (int i = 0; i < mTeam1Players.size(); i++) {
-            RELEASE(mTeam1Players[i]);
+        for (int i = 0; i != mTeam1Players.size(); i++) {
+            delete mTeam1Players[i];
         }
         mTeam1Players.clear();
         break;
     case 2:
-        for (int i = 0; i < mTeam2Players.size(); i++) {
-            RELEASE(mTeam2Players[i]);
+        for (int i = 0; i != mTeam2Players.size(); i++) {
+            delete mTeam2Players[i];
         }
         mTeam2Players.clear();
         break;

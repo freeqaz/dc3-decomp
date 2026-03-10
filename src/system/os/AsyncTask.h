@@ -10,6 +10,7 @@ public:
     int GetArkfileNum() const { return mArkfileNum; }
     int GetBlockNum() const { return mBlockNum; }
     const char *GetStr() const { return mStr; }
+    ArkFile *GetOwner() const { return mOwner; }
 
 private:
     int mArkfileNum; // 0x0

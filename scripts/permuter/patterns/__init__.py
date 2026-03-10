@@ -63,6 +63,8 @@ from . import assert_line_fix  # noqa: F401  # Fix drifted MILO_ASSERT line numb
 from . import math_func_promotion  # noqa: F401  # Swap sqrt/sin/cos/etc <-> sqrtf/sinf/cosf/etc
 from . import null_guard_insert  # noqa: F401  # Insert missing null guards (complement to elimination)
 from . import missing_call  # noqa: F401  # Detect and uncomment missing function calls (opt-in diagnostic)
+from . import cast_insertion  # noqa: F401  # Add/remove/swap casts guided by Ghidra decompilation
+from . import iterator_index_compare  # noqa: F401  # Convert it1<it2 to (it1-begin)<(it2-begin)
 
 from .base import get_all_patterns, get_pattern, list_patterns
 

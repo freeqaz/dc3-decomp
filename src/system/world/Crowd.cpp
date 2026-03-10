@@ -476,7 +476,7 @@ void WorldCrowd::Delete3DCrowdHandles() {
 
 bool WorldCrowd::Crowd3DExists() {
     FOREACH (it, mCharacters) {
-        if (it->mDef.mChar && it->mMMesh && it->m3DChars.size() > 0) {
+        if (it->mDef.mChar && it->mMMesh && !it->m3DChars.empty()) {
             return true;
         }
     }

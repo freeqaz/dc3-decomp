@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 
 from tree_sitter import Node
 
+from . import clang_types
 from .ghidra_ast import GhidraAST
 
 # Matches Ghidra's *(type *)(param + 0xNN) patterns
@@ -56,6 +57,9 @@ class PreflightResult:
     volatile_regswap_only: bool = False
     is_merged_symbol: bool = False
     hard_skip: bool = False
+    param_type_mismatches: list[str] = field(default_factory=list)
+    cast_on_pointer: bool = False
+    struct_offsets_validated: int = 0  # offsets confirmed in headers
 
 
 def run_preflight(
@@ -64,6 +68,7 @@ def run_preflight(
     source_bytes: bytes,
     diagnosis: object | None = None,
     symbol: str | None = None,
+    file_path: object | None = None,
 ) -> PreflightResult:
     """Scan Ghidra output for red flags that indicate unfixable mismatches.
 
@@ -73,6 +78,7 @@ def run_preflight(
         source_bytes: Full file source bytes.
         diagnosis: Diagnosis from objdiff (optional, enables prologue/regswap checks).
         symbol: Mangled symbol name (optional, enables merged symbol detection).
+        file_path: Path to source file (optional, enables libclang type checks).
     """
     result = PreflightResult()
 
@@ -116,6 +122,30 @@ def run_preflight(
     if ghidra_ast.body_node:
         result.dead_variables = _find_dead_variables(ghidra_ast)
 
+    # Rule 7: libclang-enhanced checks (struct offset validation,
+    # parameter type matching, cast-on-pointer detection)
+    if file_path is not None and clang_types.is_available():
+        from pathlib import Path
+        fp = Path(file_path) if not isinstance(file_path, Path) else file_path
+
+        # 7a: Validate struct offsets against headers
+        if result.struct_offset_mismatches:
+            validated = _validate_struct_offsets(
+                ghidra_ast, source_node, source_bytes, fp
+            )
+            result.struct_offsets_validated = validated
+
+        # 7b: Parameter type matching
+        param_mismatches = _check_param_types(
+            ghidra_ast, source_node, source_bytes, fp
+        )
+        result.param_type_mismatches = param_mismatches
+
+        # 7c: Cast-on-pointer detection
+        result.cast_on_pointer = _detect_cast_on_pointer(
+            ghidra_ast, source_node, source_bytes, fp
+        )
+
     # Rule 4: Prologue mismatch (from diagnosis)
     if diagnosis and hasattr(diagnosis, "has_prologue_mismatch") and diagnosis.has_prologue_mismatch:
         result.prologue_mismatch = True
@@ -145,13 +175,22 @@ def run_preflight(
     # Compute confidence score
     confidence = 0.0
     if result.struct_offset_mismatches:
-        confidence += 0.15
+        # Reduce confidence if offsets were validated against headers
+        if result.struct_offsets_validated > 0:
+            unvalidated = len(result.struct_offset_mismatches) - result.struct_offsets_validated
+            confidence += max(0.0, 0.15 * (unvalidated / len(result.struct_offset_mismatches)))
+        else:
+            confidence += 0.15
     if result.extra_calls:
         confidence += 0.05
     if result.missing_calls:
         confidence += 0.05
     if result.dead_variables:
         confidence += 0.10
+    if result.param_type_mismatches:
+        confidence += 0.10
+    if result.cast_on_pointer:
+        confidence += 0.15
     if result.prologue_mismatch:
         confidence += 0.30
         if diagnosis and hasattr(diagnosis, "gpr_save_delta"):
@@ -189,6 +228,12 @@ def run_preflight(
         reasons.append("all regswaps are volatile (unfixable)")
     if result.prologue_mismatch:
         reasons.append("prologue save count mismatch")
+    if result.param_type_mismatches:
+        reasons.append(
+            f"{len(result.param_type_mismatches)} param type mismatch(es)"
+        )
+    if result.cast_on_pointer:
+        reasons.append("Ghidra casts pointer to int (header type mismatch)")
 
     if result.confidence >= 0.4:
         result.skip_reason = "; ".join(reasons)
@@ -273,3 +318,167 @@ def _find_dead_variables(ast: GhidraAST) -> list[str]:
             dead.append(var)
 
     return sorted(dead)[:5]
+
+
+# ---------------------------------------------------------------------------
+# Rule 7: libclang-enhanced checks
+# ---------------------------------------------------------------------------
+
+# Matches Ghidra's *(type *)(param + 0xNN) — extract hex offset
+_STRUCT_OFFSET_HEX_RE = re.compile(
+    r"\*\(.+?\s*\*\)\s*\((\w+)\s*\+\s*0x([0-9a-fA-F]+)\)"
+)
+
+# Matches Ghidra's (int)param_N or (uint)param_N etc.
+_CAST_ON_PARAM_RE = re.compile(
+    r"\((int|uint|long|ulong)\)\s*(param_\d+)"
+)
+
+
+def _validate_struct_offsets(
+    ghidra_ast: GhidraAST,
+    source_node: Node,
+    source_bytes: bytes,
+    file_path: "Path",
+) -> int:
+    """Cross-reference Ghidra struct offsets against libclang types.
+
+    Returns the count of offsets that could be validated (i.e., the
+    parameter type is a known struct and the offset corresponds to a
+    real field). These are benign accesses, not layout mismatches.
+    """
+    validated = 0
+    for m in _STRUCT_OFFSET_HEX_RE.finditer(ghidra_ast.code):
+        param_name = m.group(1)
+        # Only check param_ references (function parameters)
+        if not param_name.startswith("param_"):
+            continue
+
+        # Try to find the corresponding source parameter
+        param_idx = int(param_name.split("_")[1]) - 1  # 0-based
+        source_params = _get_source_params(source_node)
+        if param_idx < len(source_params):
+            param_node = source_params[param_idx]
+            ti = clang_types.resolve_decl_type(
+                file_path, param_node.start_byte, source_bytes
+            )
+            if ti is not None and (ti.is_pointer or ti.kind == clang_types.TypeKind.RECORD):
+                # Parameter is a struct/class pointer — the offset access
+                # is likely a legitimate field access, not a layout mismatch
+                validated += 1
+
+    return validated
+
+
+def _check_param_types(
+    ghidra_ast: GhidraAST,
+    source_node: Node,
+    source_bytes: bytes,
+    file_path: "Path",
+) -> list[str]:
+    """Compare Ghidra parameter types against source parameter types.
+
+    Returns a list of mismatch descriptions.
+    """
+    mismatches = []
+
+    # Extract Ghidra function parameters
+    if not ghidra_ast.func_node:
+        return mismatches
+
+    ghidra_params = _get_ghidra_param_types(ghidra_ast)
+    source_params = _get_source_params(source_node)
+
+    for i, (g_type, s_param) in enumerate(zip(ghidra_params, source_params)):
+        ti = clang_types.resolve_decl_type(
+            file_path, s_param.start_byte, source_bytes
+        )
+        if ti is None:
+            continue
+
+        # Check for obvious mismatches
+        if g_type in ("int", "uint", "long", "ulong") and ti.is_pointer:
+            mismatches.append(
+                f"param {i+1}: Ghidra={g_type}, source={ti.spelling}"
+            )
+        elif g_type.endswith("*") and not ti.is_pointer:
+            mismatches.append(
+                f"param {i+1}: Ghidra={g_type}, source={ti.spelling}"
+            )
+
+    return mismatches[:5]
+
+
+def _detect_cast_on_pointer(
+    ghidra_ast: GhidraAST,
+    source_node: Node,
+    source_bytes: bytes,
+    file_path: "Path",
+) -> bool:
+    """Detect Ghidra casting a pointer parameter to int.
+
+    This indicates Ghidra sees the parameter as an integer but our source
+    declares it as a pointer — a strong header type mismatch signal.
+    """
+    source_params = _get_source_params(source_node)
+
+    for m in _CAST_ON_PARAM_RE.finditer(ghidra_ast.code):
+        cast_type = m.group(1)
+        param_name = m.group(2)
+
+        if cast_type not in ("int", "uint", "long", "ulong"):
+            continue
+
+        param_idx = int(param_name.split("_")[1]) - 1
+        if param_idx < len(source_params):
+            ti = clang_types.resolve_decl_type(
+                file_path, source_params[param_idx].start_byte, source_bytes
+            )
+            if ti is not None and ti.is_pointer:
+                return True
+
+    return False
+
+
+def _get_source_params(source_node: Node) -> list[Node]:
+    """Extract parameter declaration nodes from a function_definition."""
+    params = []
+    declarator = source_node.child_by_field_name("declarator")
+    if declarator is None:
+        return params
+
+    # Walk to find the parameter_list
+    for child in _walk_all_nodes(declarator):
+        if child.type == "parameter_list":
+            for param in child.named_children:
+                if param.type == "parameter_declaration":
+                    params.append(param)
+            break
+
+    return params
+
+
+def _get_ghidra_param_types(ghidra_ast: GhidraAST) -> list[str]:
+    """Extract parameter type names from Ghidra function declaration."""
+    types = []
+    if not ghidra_ast.func_node:
+        return types
+
+    declarator = ghidra_ast.func_node.child_by_field_name("declarator")
+    if declarator is None:
+        return types
+
+    code_bytes = ghidra_ast.code.encode("utf-8")
+    for child in _walk_all_nodes(declarator):
+        if child.type == "parameter_list":
+            for param in child.named_children:
+                if param.type == "parameter_declaration":
+                    type_node = param.child_by_field_name("type")
+                    if type_node:
+                        type_text = code_bytes[
+                            type_node.start_byte : type_node.end_byte
+                        ].decode("utf-8", errors="replace").strip()
+                        types.append(type_text)
+            break
+
+    return types

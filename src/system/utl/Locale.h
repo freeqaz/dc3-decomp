@@ -63,6 +63,6 @@ extern Locale TheLocale;
 extern bool gShowTokensCheat;
 
 const char *Localize(Symbol token, bool *success, Locale &locale);
-char *LocalizeSeparatedInt(int num, Locale &locale);
+const char *LocalizeSeparatedInt(int num, Locale &locale);
 const char *LocalizeFloat(const char *fmt, float num);
 void SyncReloadLocale();

@@ -6,6 +6,7 @@
 #include "ui/UIPanel.h"
 #include "ui/PanelDir.h"
 #include "rndobj/Dir.h"
+#include "meta_ham/HamUI.h"
 extern GLFWwindow *gNativeWindow;
 #endif
 #include "ChecksumData_xbox.h"
@@ -161,13 +162,14 @@ App::App(int argc, char **argv) {
     TheHamSongMgr.Init();
 
     // Game subsystem inits (from original init sequence)
-    UIEventMgr::Init();
     MetaPanel::Init();
     GameInit();
 
-    // UI system
-    TheUI = new UIManager();
-    TheUI->Init();
+    // UI system — use the global TheHamUI (game-specific UIManager subclass)
+    // for proper two-pass draw pipeline (letterbox, blacklight, helpbar, shell input)
+    // HamUI::Init() calls UIEventMgr::Init() + UIManager::Init() internally
+    TheUI = &TheHamUI;
+    TheHamUI.Init();
 
     // Go to first screen (title screen)
     TheUI->GotoFirstScreen();

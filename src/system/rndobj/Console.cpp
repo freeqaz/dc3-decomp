@@ -523,7 +523,7 @@ void RndConsole::ExecuteLine() {
         mBuffer.pop_back();
     }
     mBufPtr = mBuffer.begin();
-    MILO_LOG("> %s\n", line_txt.c_str());
+    MILO_LOG("> %s\n", line_txt);
     n40 = DataNode(DataReadString(line_txt.c_str()), kDataArray);
     n40.Array()->Release();
     mInput->CurrentLine().erase();

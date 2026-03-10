@@ -30,12 +30,55 @@ from typing import Iterator
 from tree_sitter import Node
 
 from .base import Pattern
+from .. import clang_types
 from ..ast_queries import identifiers_in
 from ..editor import SourceEditor
 from ..types import Diagnosis, FunctionContext, Variant
 
 # Maximum permutations to generate per group before switching to sampling
 _MAX_PERMS = 20
+
+
+def _resolve_decl_types(
+    decls: list[Node], decl_names: list[str], ctx: FunctionContext
+) -> dict[str, clang_types.TypeInfo]:
+    """Resolve types for all declarations via libclang.
+
+    Returns a dict mapping variable name to TypeInfo.
+    Only populated if libclang is available.
+    """
+    if not clang_types.is_available():
+        return {}
+    result: dict[str, clang_types.TypeInfo] = {}
+    for decl, name in zip(decls, decl_names):
+        if name == "?":
+            continue
+        ti = clang_types.resolve_decl_type(
+            ctx.file_path, decl.start_byte, ctx.file_source
+        )
+        if ti is not None:
+            result[name] = ti
+    return result
+
+
+def _is_cross_regfile_swap(
+    name_a: str, name_b: str,
+    type_map: dict[str, clang_types.TypeInfo],
+) -> bool:
+    """Return True if swapping these two vars crosses GPR/FPR register files.
+
+    Swapping a float-typed var with an int/pointer-typed var can never
+    fix a GPR regswap because they live in different register files.
+    """
+    if not type_map:
+        return False
+    ti_a = type_map.get(name_a)
+    ti_b = type_map.get(name_b)
+    if ti_a is None or ti_b is None:
+        return False
+    a_is_fpr = ti_a.is_float
+    b_is_fpr = ti_b.is_float
+    return a_is_fpr != b_is_fpr
 
 
 class DeclarationReorderPattern(Pattern):
@@ -180,6 +223,9 @@ class DeclarationReorderPattern(Pattern):
             name = _get_declared_name(decl)
             decl_names.append(name or "?")
 
+        # Resolve types for register-class filtering
+        type_map = _resolve_decl_types(all_decls, decl_names, ctx)
+
         # Get target register allocation from Ghidra
         target_mappings = infer_target_register_order(
             ctx.target_var_order, ctx.target_gpr_saves
@@ -211,6 +257,7 @@ class DeclarationReorderPattern(Pattern):
         # Find exact swaps needed
         targeted_swaps: list[tuple[int, int]] = []
         n_vars = len(decl_names)
+        n_filtered = 0
 
         for rA, rB in swap_pairs:
             if not (rA.startswith("r") and rB.startswith("r")):
@@ -221,6 +268,12 @@ class DeclarationReorderPattern(Pattern):
             idxB = 31 - int(rB[1:])
 
             if 0 <= idxA < n_vars and 0 <= idxB < n_vars:
+                # Filter: skip cross-register-file swaps (float vs int)
+                if _is_cross_regfile_swap(
+                    decl_names[idxA], decl_names[idxB], type_map
+                ):
+                    n_filtered += 1
+                    continue
                 pair = (min(idxA, idxB), max(idxA, idxB))
                 if pair not in targeted_swaps:
                     targeted_swaps.append(pair)
@@ -228,9 +281,11 @@ class DeclarationReorderPattern(Pattern):
         if not targeted_swaps:
             return
 
+        filter_msg = f", filtered {n_filtered} cross-regfile" if n_filtered else ""
         print(
             f"  Ghidra+ASM crossref: {len(targeted_swaps)} swap(s) from "
-            f"{len(target_mappings)} Ghidra vars + {len(asm_regmap.var_to_reg)} ASM mappings",
+            f"{len(target_mappings)} Ghidra vars + {len(asm_regmap.var_to_reg)} ASM mappings"
+            f"{filter_msg}",
             file=sys.stderr,
         )
 
@@ -305,6 +360,9 @@ class DeclarationReorderPattern(Pattern):
             name = _get_declared_name(decl)
             decl_names.append(name or "?")
 
+        # Resolve types for register-class filtering
+        type_map = _resolve_decl_types(all_decls, decl_names, ctx)
+
         # Get swap pairs from diagnosis
         if not ctx.diagnosis:
             return
@@ -324,6 +382,29 @@ class DeclarationReorderPattern(Pattern):
 
         if not candidates:
             return
+
+        # Filter candidates with cross-register-file swaps
+        if type_map:
+            filtered = []
+            for cand in candidates:
+                has_cross = False
+                for i, name in enumerate(cand):
+                    if i < len(decl_names) and name != decl_names[i]:
+                        # This name moved — check if it crosses regfile with its new neighbor
+                        if _is_cross_regfile_swap(name, decl_names[i], type_map):
+                            has_cross = True
+                            break
+                if not has_cross:
+                    filtered.append(cand)
+            if len(filtered) < len(candidates):
+                print(
+                    f"  Type filter: {len(candidates) - len(filtered)} "
+                    f"cross-regfile candidate(s) removed",
+                    file=sys.stderr,
+                )
+            candidates = filtered
+            if not candidates:
+                return
 
         print(
             f"  Ghidra-guided reorder: {len(candidates)} candidate(s) "

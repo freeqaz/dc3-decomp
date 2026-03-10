@@ -555,6 +555,10 @@ bool HamUI::IsGameActive() const {
 }
 
 void HamUI::DrawDebug() {
+#ifdef HX_NATIVE
+    // Kinect/gesture debug drawing not available on native
+    return;
+#endif
     if (mBufferType < 4 || NumSnapshots() <= 0) {
         LiveCameraInput::BufferType bt = mBufferType;
         if (bt < 0) {

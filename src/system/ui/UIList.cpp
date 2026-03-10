@@ -191,6 +191,10 @@ UIListDir *UIList::GetUIListDir() const { return mListDir; }
 
 int UIList::SelectedPos() const { return mListState.Selected(); }
 
+int UIList::Selected() const { return mListState.Selected(); }
+
+UIListState &UIList::GetListState() { return mListState; }
+
 bool UIList::IsScrolling() const { return mListState.IsScrolling(); }
 
 void UIList::SetSpeed(float speed) { mListState.SetSpeed(speed); }

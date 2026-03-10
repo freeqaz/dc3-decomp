@@ -3,6 +3,7 @@
 #include "gesture/Skeleton.h"
 
 class HandHeightGestureFilter {
+    friend class HamNavList;
 public:
     HandHeightGestureFilter(SkeletonSide);
     virtual ~HandHeightGestureFilter() {}

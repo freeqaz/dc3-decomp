@@ -1,6 +1,6 @@
 # Native Port Progress (x86_64 Linux)
 
-## Current Status: Session 31 - Data Integrity Fixes
+## Current Status: Session 38 - HamUI Integration + LP64 Fixes
 **Goal**: Bright, animated UI matching the original game's cyan neon aesthetic
 
 ### Sessions Complete
@@ -16,6 +16,11 @@
 - **Session 29**: Animation pipeline fully verified — Timer fix, SyncObjects, AnimTask ticking
 - **Session 30**: ObjOwnerPtr::RefOwner() decomp fix, multiply→opaque blend, auto-prelit, FixZeroAlpha
 - **Session 31**: Object lifetime guard elimination (HmxObjectIsLive, gSuppressDirPtrDelete), ASan verification, ChunkStream endianness fix, ASSERT_REVS decomp bugs fixed, defensive guard instrumentation
+- **Session 32-33**: Text rendering regression fixes (Eagle-Light font collision, deferred draw state, Showing() filter), FontMap heap buffer overflow fix (PPC hardcoded sizes in AcquireFontMap), text clipping fixes (wchar_t 2→4 byte, markup cursor off-by-one), 47 draw calls with GPU
+- **Session 34-35**: Text brightness (shader useAlphaAsRGB bypass), mTextColor vertex colors, text_menu test case, duplicate symbol fixes
+- **Session 36**: FontMap heap buffer overflow root cause fix (sizeof(FontMap)/sizeof(FontMap3d) under #ifdef HX_NATIVE), ASan verified clean
+- **Session 37**: HamNavList element creation, UIList::Selected/GetListState implementations, STLport compat guards
+- **Session 38**: HamUI integration (TheUI = &TheHamUI for two-pass draw), ShellInput/CursorPanel Kinect guards, HamListRibbonDrawState LP64 pointer fix (mElemDrawState), HamListRibbonDrawState field rename (unk18→mElemDrawState, unk20→mBigScale, unk24→mActive)
 
 ### Completed Phases
 - **Phase 0**: Foundation — COMPLETE
@@ -31,8 +36,9 @@ Engine boots, enters main loop, auto-navigates through all screens to main menu:
 2. **Full boot screen flow**: attract_screen → autosave_warning_screen → title_screen → wait_main_after_saveload_screen → tutorial_voice_control_screen_0..4 → main_screen → choose_mode_screen
 3. **Auto-skip mechanism**: UIScreen::Enter() fires DTA handlers (`skip_selected`, `next_screen`) on enter. Timer-based fallback in UIManager::Poll auto-advances stuck screens after 120 frames
 4. **Button dispatch working**: JoypadPoll → Export → MsgSinks → JoypadClient → UIManager → UIScreen
-5. **Mesh rendering**: 51 draw calls/frame on choose_mode_screen (headless Dawn GPU)
-6. **5000+ frames stable**, clean exit
+5. **Mesh rendering**: 47+ draw calls/frame on choose_mode_screen (headless Dawn GPU)
+6. **HamUI two-pass draw**: Uses TheHamUI (game-specific UIManager) for proper letterbox/blacklight/helpbar rendering
+7. **5000+ frames stable**, clean exit
 7. **Env vars**: `MILO_FIRST_SCREEN=main_screen` skips attract, `MILO_MAX_FRAMES=N`, `MILO_INPUT_SCRIPT=path`, `MILO_RENDER=1`, `MILO_SCREENSHOT_DIR=path`, `MILO_SCREENSHOT_FRAMES=100,300,500`
 
 ### Session 22 Fixes (MsgSinks + Button Dispatch)
@@ -333,10 +339,65 @@ Key findings:
 - `AnimTask::Poll` receives increasing time (0.0→0.3→0.5→0.7s confirmed)
 - **Remaining gap**: PropAnim drives material properties but the renderer doesn't reflect them visually
 
+### Session 38: HamUI Integration + Kinect Guards
+| Issue | Root Cause | Fix |
+|-------|-----------|-----|
+| **0 draw calls on choose_mode_screen** | `TheUI = new UIManager()` instead of `&TheHamUI` — HamUI::Draw() never called | Changed to `TheUI = &TheHamUI; TheHamUI.Init()` in App.cpp |
+| **SIGSEGV in SpeechMgr::SpeechSupported** | TheSpeechMgr null (Kinect not initialized) | Null guard in ShellInput::SyncVoiceControl |
+| **SIGABRT in CursorPanel::Poll** | TheHamProvider->Property returns null DataNode (Kinect cursor tracking) | `#ifdef HX_NATIVE return` early in CursorPanel::Poll |
+| **SIGABRT in SkeletonIdentifier::Init** | Kinect user index OOB (no Kinect on native) | `#ifdef HX_NATIVE` simplified ShellInput::Init |
+| **SIGSEGV in HandsUpGestureFilter::GetHandsUp** | Null pointer from skipped Kinect init | `#ifdef HX_NATIVE` simplified ShellInput::Poll |
+| **SIGSEGV in DrawGestureMgr** | RndDrawable::Showing on null (Kinect debug draw) | `#ifdef HX_NATIVE return` in HamUI::DrawDebug |
+| **SIGSEGV in HamListRibbon::DrawRibbon** | LP64 pointer truncation: `int mElemDrawState` stored 8-byte pointer as 4 bytes | `UIListElementDrawState*` type on native, `int` on PPC |
+| **Undefined UIList::Selected/GetListState** | Missing function bodies | Added implementations in UIList.cpp |
+| **STLport compile errors** | Concurrent agents added STLport-specific templates | `#ifndef HX_NATIVE` guards in CharSignalApplier.cpp, PropKeys.cpp |
+
+#### HamUI vs UIManager
+HamUI is DC3's game-specific UIManager subclass providing:
+- **Two-pass draw pipeline**: First pass (`mFinalDrawPassFlag=0`), letterbox draw, second pass (`mFinalDrawPassFlag=1`)
+- **Blacklight mode**: Visual effect overlay
+- **HelpBar**: On-screen button prompts
+- **ShellInput**: Kinect gesture + controller input routing
+- **Init chain**: `HamUI::Init()` → `UIEventMgr::Init()` + `UIManager::Init()` + `ShellInput::Init()`
+
+App.cpp must use `TheUI = &TheHamUI` (global instance) not `new UIManager()`.
+
+#### HamListRibbonDrawState LP64 Fix
+The `mElemDrawState` field stores a `UIListElementDrawState*` pointer. On ILP32 (Xbox), `int == pointer` (4 bytes). On LP64, pointers are 8 bytes — storing in `int` truncates the upper 4 bytes, causing SIGSEGV when dereferenced.
+
+```cpp
+// HamListRibbon.h
+#ifdef HX_NATIVE
+    UIListElementDrawState *mElemDrawState; // LP64: pointer, not int
+#else
+    int mElemDrawState; // ILP32: int == pointer size
+#endif
+```
+
+### Native Implementation TODOs
+Functions currently guarded with `#ifdef HX_NATIVE` early returns that should be properly implemented:
+
+| Function | File | Current Guard | What It Does | Priority |
+|----------|------|---------------|-------------|----------|
+| **ShellInput::Init** | ShellInput.cpp | Simplified init (cursor panel only) | Full init: SkeletonIdentifier, SpeechMgr, HandsUpGestureFilter, DepthBuffer, DrawGestureMgr, multiple gesture panels | Low (Kinect-specific) |
+| **ShellInput::Poll** | ShellInput.cpp | Early return after cursor panel poll | Polls all gesture recognizers, skeleton updates, voice control | Low (Kinect-specific) |
+| **ShellInput::SyncVoiceControl** | ShellInput.cpp | Null guard on TheSpeechMgr | Syncs speech recognition commands from DTA config | Low (Kinect-specific) |
+| **CursorPanel::Poll** | CursorPanel.cpp | Early return after PassiveMessagesPanel::Poll | Tracks hand cursor position from Kinect skeleton data | Low (Kinect-specific) |
+| **HamUI::DrawDebug** | HamUI.cpp | Early return on native | Draws Kinect camera buffers and skeleton debug visualization | Low (debug-only) |
+
+Non-Kinect TODOs:
+| Feature | Description | Priority |
+|---------|-------------|----------|
+| **Content system** | Store/DLC content loading — currently 0 list items because no content provider | High |
+| **Locale data** | Full localization strings — currently shows token names | Medium |
+| **Audio playback** | Miniaudio integration for SFX/music | Medium |
+| **Skinned mesh rendering** | Bone transforms, vertex skinning shader | Medium |
+| **Post-processing** | Bloom, color correction, etc. | Low |
+
 ### Next Steps
-1. Trace PropAnim → material property → GPU uniform path to find where values drop
-2. Verify renderer reads material color/alpha per-frame (not cached at load time)
-3. Find and render the DC3 logo
+1. Verify HamUI + DrawRibbon LP64 fix at runtime (build passes, needs runtime test)
+2. Trace PropAnim → material property → GPU uniform path
+3. Content system integration for list population
 4. Skinned mesh rendering (bone transforms, vertex skinning shader)
 5. Post-processing, UI rendering
 

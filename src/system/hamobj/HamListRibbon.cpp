@@ -427,10 +427,19 @@ void HamListRibbon::DrawRibbon(
         mLabelPlaceholder->mCanHaveFocus = true;
         mLabelPlaceholder->SetState((UIComponent::State)(int)state.mSelected);
 
-        UIListElementDrawState *elem = (UIListElementDrawState *)state.unk18;
+#ifdef HX_NATIVE
+        UIListElementDrawState *elem = state.mElemDrawState;
+#else
+        UIListElementDrawState *elem = (UIListElementDrawState *)state.mElemDrawState;
+#endif
         if (elem) {
-            static Hmx::Color sBigColor(1.3f, 1.0f, 1.3f);
-            static Hmx::Color sNormalColor(1.0f, 1.0f, 1.0f);
+            // Target uses 4-arg ctor with alpha=0.0f. BSS zero-elision: target
+            // compiler skips storing 0.0f to BSS statics (already zero-initialized),
+            // our compiler doesn't — causes 2 extra stfs instructions (unfixable).
+            // Confirmed: Color 3-arg ctor DOES set alpha=1.0f (verified via RB3 ref,
+            // RndMat ctor, RndLight ctor), so these intentionally use 4-arg with 0.0f.
+            static Hmx::Color sBigColor(1.3f, 1.0f, 1.3f, 0.0f);
+            static Hmx::Color sNormalColor(1.0f, 1.0f, 1.0f, 0.0f);
 
             const Transform &labelXfm = mLabelPlaceholder->WorldXfm();
             Vector3 pos = labelXfm.v;
@@ -441,7 +450,7 @@ void HamListRibbon::DrawRibbon(
             *(float *)&elem->mData = alpha;
 
             Hmx::Color *color = &sBigColor;
-            if (state.unk20 == 0.0f) {
+            if (state.mBigScale == 0.0f) {
                 color = &sNormalColor;
             }
             *(Hmx::Color *)&elem->mElementState = *color;
@@ -555,7 +564,7 @@ void HamListRibbon::Draw(
         bool inRange = ((int)i >= startOffset + paddingPerSide)
             && ((int)i < startOffset + paddingPerSide + visibleCount - 1);
 
-        if (entering == paddedStates[i].unk24) {
+        if (entering == paddedStates[i].mActive) {
             if (!paddedStates[i].mSelected) {
                 DrawRibbon(i, ribbonXfm, xfm, paddedStates[i], paddingPerSide, numItems, startOffset, disengaged);
             } else {

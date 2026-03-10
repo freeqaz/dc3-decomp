@@ -38,10 +38,13 @@ public:
     virtual bool Replace(ObjRef *from, Hmx::Object *to) = 0;
 };
 
+void ObjRefRelinkRing(ObjRef *ref);
+
 // ObjRef size: 0xc
 class ObjRef {
     friend class Hmx::Object;
     friend void ::MergeObjectsRecurse(ObjectDir *, ObjectDir *, MergeFilter &, bool);
+    friend void ::ObjRefRelinkRing(ObjRef *);
 
 protected:
     // seems to be a linked list of an Object's refs
@@ -62,14 +65,6 @@ protected:
     }
 
 public:
-    // Relink ring pointers back to this node after a move/swap
-    void RelinkRing() {
-        if (next != this) {
-            next->prev = this;
-            prev->next = this;
-        }
-    }
-
     ObjRef() {}
     virtual ~ObjRef() {}
     virtual Hmx::Object *RefOwner() const { return nullptr; }

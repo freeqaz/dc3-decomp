@@ -435,6 +435,7 @@ def hill_climb(
                         ctx.ghidra_ast, ctx.func_node, ctx.file_source,
                         diagnosis=scorer.diagnosis,
                         symbol=symbol,
+                        file_path=ctx.file_path,
                     )
                     has_preflight_signals = (
                         bool(preflight.struct_offset_mismatches)

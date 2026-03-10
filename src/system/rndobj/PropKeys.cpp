@@ -841,6 +841,7 @@ int Vector3Keys::Vector3At(float frame, Vector3 &vec) {
     return idx;
 }
 
+#ifndef HX_NATIVE
 // Explicit push_heap implementation for Key<ObjectStage> to avoid template issues
 namespace stlpmtx_std {
 
@@ -869,6 +870,7 @@ void __push_heap<Key<ObjectStage>*, int, Key<ObjectStage>, less<Key<ObjectStage>
 }
 
 }
+#endif // HX_NATIVE
 
 #pragma endregion
 #pragma region SymbolKeys
@@ -979,6 +981,14 @@ int SymbolKeys::SymbolAt(float frame, Symbol &sym) {
     return AtFrame(frame, sym);
 }
 
+void ObjRefRelinkRing(ObjRef *ref) {
+    if (ref->next != ref) {
+        ref->next->prev = ref;
+        ref->prev->next = ref;
+    }
+}
+
+#ifndef HX_NATIVE
 // swap specialization for Key<ObjectStage>
 template<>
 void stlpmtx_std::swap<class Key<class ObjectStage> >(class Key<class ObjectStage> &a, class Key<class ObjectStage> &b) {
@@ -987,7 +997,8 @@ void stlpmtx_std::swap<class Key<class ObjectStage> >(class Key<class ObjectStag
     a.frame = b.frame;
     b.value.CopyRef(temp.value);
     b.frame = temp.frame;
-    temp.value.RelinkRing();
+    ObjRefRelinkRing(&temp.value);
 }
+#endif
 
 #pragma endregion

@@ -91,6 +91,16 @@ void ShellInput::PostUpdate(const SkeletonUpdateData *updata) {
 
 void ShellInput::Init() {
     SetName("shell_input", ObjectDir::Main());
+#ifdef HX_NATIVE
+    // On native, skip Kinect/gesture infrastructure init (SkeletonIdentifier,
+    // DepthBuffer, skeleton callbacks, speech). Just set up cursor panel.
+    mCursorPanel = ObjectDir::Main()->Find<UIPanel>("cursor_panel");
+    if (mCursorPanel && mCursorPanel->CheckIsLoaded() && mCursorPanel->LoadedDir()) {
+        mCursorPanel->Enter();
+    }
+    static Symbol reset_controller_mode_timeout("reset_controller_mode_timeout");
+    TheHamUI.AddSink(this, reset_controller_mode_timeout);
+#else
     SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
     handle.AddCallback(this);
     mCursorPanel = ObjectDir::Main()->Find<UIPanel>("cursor_panel");
@@ -113,11 +123,19 @@ void ShellInput::Init() {
 
     static Symbol reset_controller_mode_timeout("reset_controller_mode_timeout");
     TheHamUI.AddSink(this, reset_controller_mode_timeout);
+#endif
 }
 
 void ShellInput::Draw() { mCursorPanel->Draw(); }
 
 void ShellInput::Poll() {
+#ifdef HX_NATIVE
+    // Most of ShellInput::Poll relies on Kinect gesture infrastructure
+    // (HandsUpGestureFilter, SkeletonIdentifier, etc) which aren't init'd on native.
+    // Only poll the cursor panel if it exists.
+    if (mCursorPanel) mCursorPanel->Poll();
+    return;
+#endif
     static Symbol is_in_shell_pause("is_in_shell_pause");
     static Symbol is_in_party_mode("is_in_party_mode");
     static Symbol is_in_infinite_party_mode("is_in_infinite_party_mode");
@@ -295,6 +313,10 @@ int ShellInput::CycleDrawCursor() {
 }
 
 void ShellInput::SyncVoiceControl() { // almost done
+#ifdef HX_NATIVE
+    // Speech/Kinect voice control not available on native
+    if (!TheSpeechMgr) return;
+#endif
     static Symbol allow_voice_control("allow_voice_control");
     const DataNode *prop;
     if (mInputPanel) {

@@ -40,6 +40,7 @@ These patterns can often be fixed with source changes. Sorted by ROI (impact x s
 | Early Return Destructor Path Separation | +10-16% | HIGH | [fixable-control-flow.md](fixable-control-flow.md#early-return-for-destructor-path-separation) |
 | Ternary vs If-Else | +5-10% | 75% | [fixable-control-flow.md](fixable-control-flow.md#ternary-vs-if-else) |
 | IsNaN vs Threshold Check | +3-5% | HIGH | [fixable-comparison.md](fixable-comparison.md#isnan-vs-threshold-check) |
+| Iterator Index Comparison | +40-100% | HIGH | [fixable-comparison.md](fixable-comparison.md#iterator-index-comparison) |
 | Split && into Nested If | +5-18% | HIGH | [fixable-control-flow.md](fixable-control-flow.md#split--into-nested-if) |
 | Avoid Unnecessary dynamic_cast | +6% | HIGH | [fixable-casting.md](fixable-casting.md#avoid-unnecessary-dynamic_cast-getobj-vs-objt) |
 | Function Definition Order ($S#) | +3-5% | 100% | [fixable-declarations.md](fixable-declarations.md#function-definition-order-tu-wide-static-guard-counters) |
@@ -89,6 +90,7 @@ These patterns can often be fixed with source changes. Sorted by ROI (impact x s
 | Static Symbol Order in Handlers | [fixable-macros.md](fixable-macros.md#static-symbol-declaration-order-in-handlers) |
 | ObjPtr DeferOwner Constructor | [fixable-declarations.md](fixable-declarations.md#objptr-constructor-deferred-owner-initialization) |
 | IsNaN vs Threshold Check | [fixable-comparison.md](fixable-comparison.md#isnan-vs-threshold-check) |
+| Iterator Index Comparison | [fixable-comparison.md](fixable-comparison.md#iterator-index-comparison) |
 
 ---
 

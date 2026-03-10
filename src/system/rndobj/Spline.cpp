@@ -7,6 +7,8 @@
 #include "rndobj/ShaderMgr.h"
 #include "utl/BinStream.h"
 
+RndSpline *RndSpline::sGlobalDefaultSpline;
+
 RndSpline::CtrlPoint::CtrlPoint()
     : mPos(Vector3::ZeroVec()), mRoll(0), mDirtyPosition(1), mDirtyConstants(1),
       mCoeff0(Vector4::ZeroVec()), mCoeff1(Vector4::ZeroVec()), mCoeff2(Vector4::ZeroVec()),
@@ -157,8 +159,139 @@ const RndSpline::CtrlPoint &RndSpline::GetDeformedCtrlPointOrDummy(int iIndex) c
     }
 }
 
-void RndSpline::SyncDeformedCtrlPoints(int startCtrlPt, int endCtrlPt) const {
-    // Stub implementation
+void RndSpline::SyncPristineCtrlPoints() {
+    bool foundNew = false;
+    int size = mCtrlPoints.size();
+    for (int i = size - 1; i >= 0; i--) {
+        CtrlPoint &pt = mCtrlPoints[i];
+        if (pt.mDirtyPosition) {
+            MILO_ASSERT(!foundNew, 0x227);
+            foundNew = true;
+            pt.mDirtyPosition = false;
+            if (size == 2) {
+                if (i == 0) {
+                    mCtrlPoints[0] = mCtrlPoints[1];
+                    mCtrlPoints[0].mPos.y -= 10.0f;
+                } else {
+                    mCtrlPoints[i] = mCtrlPoints[i - 1];
+                    mCtrlPoints[i].mPos.y += 10.0f;
+                }
+            } else if (size > 2) {
+                if (i == 0) {
+                    CtrlPoint &p1 = mCtrlPoints[1];
+                    CtrlPoint &p2 = mCtrlPoints[2];
+                    pt.mPos.x = p1.mPos.x + (p1.mPos.x - p2.mPos.x);
+                    pt.mPos.y = p1.mPos.y + (p1.mPos.y - p2.mPos.y);
+                    pt.mPos.z = p1.mPos.z + (p1.mPos.z - p2.mPos.z);
+                    pt.mRoll = p1.mRoll;
+                } else if (i == size - 1) {
+                    CtrlPoint &pPrev = mCtrlPoints[i - 1];
+                    CtrlPoint &pPrev2 = mCtrlPoints[i - 2];
+                    pt.mPos.x = pPrev.mPos.x + (pPrev.mPos.x - pPrev2.mPos.x);
+                    pt.mPos.y = pPrev.mPos.y + (pPrev.mPos.y - pPrev2.mPos.y);
+                    pt.mPos.z = pPrev.mPos.z + (pPrev.mPos.z - pPrev2.mPos.z);
+                    pt.mRoll = pPrev.mRoll;
+                } else {
+                    pt.Interp(mCtrlPoints[i - 1], mCtrlPoints[i + 1], 0.5f);
+                }
+            }
+        }
+    }
+    int count = mCtrlPoints.size();
+    if (count < 2) {
+        mStartCtrlPoint = -1;
+        mEndCtrlPoint = -1;
+    } else {
+        if (mEndCtrlPoint != -1) {
+            int maxIdx = count - 1;
+            if (mEndCtrlPoint > maxIdx) {
+                mEndCtrlPoint = maxIdx;
+            } else if (mEndCtrlPoint < 1) {
+                mEndCtrlPoint = 1;
+            }
+        }
+        if (mStartCtrlPoint != -1) {
+            int maxStart = mEndCtrlPoint - 1;
+            if (mStartCtrlPoint > maxStart) {
+                mStartCtrlPoint = maxStart;
+            } else if (mStartCtrlPoint < 0) {
+                mStartCtrlPoint = 0;
+            }
+        }
+    }
+    mDeformedCtrlPoints = mCtrlPoints;
+    unk144 = true;
+    unk145 = true;
+}
+
+void RndSpline::SyncDeformedDummyCtrlPoints(int startIdx, int endIdx) const {
+    int size = mDeformedCtrlPoints.size();
+    MILO_ASSERT_RANGE(startIdx, 0, size, 0x2C5);
+    MILO_ASSERT_RANGE(endIdx, 0, size, 0x2C6);
+    MILO_ASSERT(startIdx <= endIdx, 0x2C7);
+    if (size > 1) {
+        if (unk144 && startIdx == 0) {
+            unk144 = false;
+            const CtrlPoint &p0 = mDeformedCtrlPoints[0];
+            const CtrlPoint &p1 = mDeformedCtrlPoints[1];
+            mDummyBefore.mPos.x = p0.mPos.x + (p0.mPos.x - p1.mPos.x);
+            mDummyBefore.mPos.y = p0.mPos.y + (p0.mPos.y - p1.mPos.y);
+            mDummyBefore.mPos.z = p0.mPos.z + (p0.mPos.z - p1.mPos.z);
+            mDummyBefore.mRoll = p0.mRoll;
+            mDeformedCtrlPoints[0].mDirtyConstants = true;
+        }
+        int numPts = mDeformedCtrlPoints.size();
+        if (unk145 && endIdx >= numPts - 2) {
+            unk145 = false;
+            const CtrlPoint &pLast = mDeformedCtrlPoints[numPts - 1];
+            const CtrlPoint &pPrev = mDeformedCtrlPoints[numPts - 2];
+            mDummyAfter.mPos.x = pLast.mPos.x + (pLast.mPos.x - pPrev.mPos.x);
+            mDummyAfter.mPos.y = pLast.mPos.y + (pLast.mPos.y - pPrev.mPos.y);
+            mDummyAfter.mPos.z = pLast.mPos.z + (pLast.mPos.z - pPrev.mPos.z);
+            mDummyAfter.mRoll = pLast.mRoll;
+            mDummyAfterEnd.mPos.x = mDummyAfter.mPos.x + (mDummyAfter.mPos.x - pLast.mPos.x);
+            mDummyAfterEnd.mPos.y = mDummyAfter.mPos.y + (mDummyAfter.mPos.y - pLast.mPos.y);
+            mDummyAfterEnd.mPos.z = mDummyAfter.mPos.z + (mDummyAfter.mPos.z - pLast.mPos.z);
+            mDummyAfterEnd.mRoll = mDummyAfter.mRoll;
+            mDeformedCtrlPoints[numPts - 2].mDirtyConstants = true;
+            mDeformedCtrlPoints[numPts - 1].mDirtyConstants = true;
+        }
+    }
+}
+
+void RndSpline::SyncDeformedCtrlPoints(int startIdx, int endIdx) const {
+    int size = mDeformedCtrlPoints.size();
+    MILO_ASSERT_RANGE(startIdx, 0, size, 0x278);
+    MILO_ASSERT_RANGE(endIdx, 0, size, 0x279);
+    MILO_ASSERT(startIdx <= endIdx, 0x27A);
+    if (size > 1) {
+        SyncDeformedDummyCtrlPoints(startIdx, endIdx);
+        for (int i = startIdx; i <= endIdx; i++) {
+            CtrlPoint &pt = mDeformedCtrlPoints[i];
+            if (pt.mDirtyConstants) {
+                pt.mDirtyConstants = false;
+                const CtrlPoint &prev = GetDeformedCtrlPointOrDummy(i - 1);
+                const CtrlPoint &next = GetDeformedCtrlPointOrDummy(i + 1);
+                const CtrlPoint &nextNext = GetDeformedCtrlPointOrDummy(i + 2);
+                float px = prev.mPos.x, py = prev.mPos.y, pz = prev.mPos.z, pr = prev.mRoll;
+                float cx = pt.mPos.x, cy = pt.mPos.y, cz = pt.mPos.z, cr = pt.mRoll;
+                float nx = next.mPos.x, ny = next.mPos.y, nz = next.mPos.z, nr = next.mRoll;
+                float nnx = nextNext.mPos.x, nny = nextNext.mPos.y, nnz = nextNext.mPos.z,
+                      nnr = nextNext.mRoll;
+                pt.mCoeff0.Set(-0.5f * px + 1.5f * cx - 1.5f * nx + 0.5f * nnx,
+                    -0.5f * py + 1.5f * cy - 1.5f * ny + 0.5f * nny,
+                    -0.5f * pz + 1.5f * cz - 1.5f * nz + 0.5f * nnz,
+                    -0.5f * pr + 1.5f * cr - 1.5f * nr + 0.5f * nnr);
+                pt.mCoeff1.Set(px - 2.5f * cx + 2.0f * nx - 0.5f * nnx,
+                    py - 2.5f * cy + 2.0f * ny - 0.5f * nny,
+                    pz - 2.5f * cz + 2.0f * nz - 0.5f * nnz,
+                    pr - 2.5f * cr + 2.0f * nr - 0.5f * nnr);
+                pt.mCoeff2.Set(-0.5f * px + 0.5f * nx, -0.5f * py + 0.5f * ny,
+                    -0.5f * pz + 0.5f * nz, -0.5f * pr + 0.5f * nr);
+                pt.mCoeff3.Set(cx, cy, cz, cr);
+            }
+        }
+    }
 }
 
 void RndSpline::PrepareShader(float farg0, float farg1) const {

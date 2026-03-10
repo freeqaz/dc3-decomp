@@ -39,6 +39,8 @@ public:
     BlockRequest(const BlockRequest &);
     BlockRequest(const AsyncTask &);
 
+    friend class BlockMgr;
+
 private:
     int mArkfileNum; // 0x0
     int mBlockNum; // 0x4

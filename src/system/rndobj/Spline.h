@@ -59,6 +59,7 @@ protected:
 private:
     void SyncPristineCtrlPoints();
     void SyncDeformedCtrlPoints(int, int) const;
+    void SyncDeformedDummyCtrlPoints(int, int) const;
     const CtrlPoint &GetDeformedCtrlPointOrDummy(int) const;
 
     DataNode OnTestPulse(DataArray *);
@@ -77,12 +78,12 @@ private:
     int mEndCtrlPoint; // 0x24
     float mYOffset; // 0x28
     float mYPerCtrlPoint; // 0x2c
-    std::vector<CtrlPoint> mDeformedCtrlPoints; // 0x30
-    CtrlPoint mDummyBefore; // 0x3c
-    CtrlPoint mDummyAfter; // 0x94
-    CtrlPoint mDummyAfterEnd; // 0xec
-    bool unk144;
-    bool unk145;
+    mutable std::vector<CtrlPoint> mDeformedCtrlPoints; // 0x30
+    mutable CtrlPoint mDummyBefore; // 0x3c
+    mutable CtrlPoint mDummyAfter; // 0x94
+    mutable CtrlPoint mDummyAfterEnd; // 0xec
+    mutable bool unk144;
+    mutable bool unk145;
     bool mPulseDrawing; // 0x146
     float mPulseOffset; // 0x148
     bool mTestPulseActive; // 0x14c

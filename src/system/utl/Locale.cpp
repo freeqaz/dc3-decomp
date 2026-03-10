@@ -275,6 +275,71 @@ const char *LocalizeFloat(const char *fmt, float num) {
     return str;
 }
 
+static char gLocalizeSepBuf[4][0x32];
+static int gLocalizeSepIdx = 0;
+
+const char *LocalizeSeparatedInt(int num, Locale &locale) {
+    static Symbol sSep("locale_separator");
+    bool success;
+    const char *sep = Localize(sSep, &success, locale);
+    if (strcmp(sep, gNullStr) == 0) {
+        return (char *)MakeString("%i", num);
+    }
+    int sepLen = strlen(sep);
+    int pos = 0x31;
+    int bufOff = gLocalizeSepIdx * 0x32;
+    char *buf = (char *)gLocalizeSepBuf;
+    buf[0x31 + bufOff] = '\0';
+    bool negative = num < 0;
+    unsigned int absNum = (unsigned int)num;
+    if (negative) {
+        absNum = (unsigned int)(num ^ (num >> 31)) - (num >> 31);
+    }
+    int digitCount = 0;
+    while (true) {
+        if (digitCount != 0 && (int)absNum < 1)
+            break;
+        if (digitCount % 3 == 0 && digitCount > 0 && sepLen > 0) {
+            for (int j = sepLen - 1; j >= 0; j--) {
+                pos--;
+                buf[pos + bufOff] = sep[j];
+            }
+        }
+        char digitBuf[110];
+        Hx_snprintf(digitBuf, 2, "%d", absNum % 10);
+        pos--;
+        buf[pos + bufOff] = digitBuf[0];
+        digitCount++;
+        absNum = absNum / 10;
+    }
+    if (negative) {
+        pos--;
+        buf[pos + bufOff] = '-';
+    }
+    char *result = &buf[pos + bufOff];
+    gLocalizeSepIdx = (gLocalizeSepIdx + 1) % 4;
+    return result;
+}
+
+void SyncReloadLocale() {
+    static Symbol sLocale("locale");
+    DataArray *cfg = SystemConfig(sLocale);
+    for (int i = 1; i < cfg->Size(); i++) {
+        const char *path =
+            FileMakePath(FileGetPath(cfg->File()), cfg->Node(i).Str(cfg));
+        int ret = SystemExec(MakeString("p4 sync %s", path));
+        const char *fmt;
+        if (ret == 0) {
+            fmt = "updated %s\n";
+        } else {
+            fmt = "failed to update %s\n";
+        }
+        TheDebug << MakeString(fmt, path);
+    }
+    TheLocale.Terminate();
+    TheLocale.Init();
+}
+
 const char *Localize(Symbol token, bool *success, Locale &locale) {
     if (gShowTokensCheat && !token.Null()) {
         if (success)

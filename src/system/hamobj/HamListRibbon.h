@@ -10,15 +10,21 @@
 #include "utl/BinStream.h"
 #include "utl/MemMgr.h"
 
+struct UIListElementDrawState;
+
 struct HamListRibbonDrawState {
     HamListRibbonDrawState();
 
     DoubleExponentialSmoother mSwellSmoother;
     bool mSelected;
-    int unk18;
+#ifdef HX_NATIVE
+    UIListElementDrawState *mElemDrawState; // LP64: pointer, not int
+#else
+    int mElemDrawState; // ILP32: int == pointer size
+#endif
     bool mHidden;
-    float unk20;
-    bool unk24;
+    float mBigScale;
+    bool mActive;
 };
 
 /** "Top-level resource object for UILists" */

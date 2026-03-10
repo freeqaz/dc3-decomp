@@ -70,8 +70,6 @@ public:
     int unk60; // 0x60 - PoolVoice
 
 private:
-    // long createOrReuse(PoolVoice *, unsigned int &, tWAVEFORMATEX &,
-    // XAUDIO2_VOICE_SENDS *);
     void UpdateMix();
     void UpdateSends();
     void SafeRestart();
@@ -80,3 +78,5 @@ private:
 };
 
 unsigned long StartVoiceThreadEntry(void *);
+void StopSynchronizedVoices();
+void TerminateVoiceThread();

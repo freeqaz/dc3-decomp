@@ -21,6 +21,7 @@ from typing import Iterator
 from tree_sitter import Node
 
 from .base import Pattern
+from .. import clang_types
 from ..ast_queries import get_indent, get_line_start
 from ..editor import SourceEditor
 from ..types import Diagnosis, FunctionContext, Variant
@@ -82,7 +83,7 @@ class VariableExtractionPattern(Pattern):
             used_names.add(var_name_str)
             var_name = var_name_str.encode("utf-8")
 
-            # Build the declaration line
+            # Build the declaration line (auto variant — always first)
             decl_line = indent + b"auto " + var_name + b" = " + call_text + b";\n"
 
             # Use SourceEditor: insert decl at line start, replace call with var_name
@@ -101,6 +102,29 @@ class VariableExtractionPattern(Pattern):
                 description=desc,
                 source=new_source,
             )
+
+            # Type-guided variants: use libclang to resolve the call's
+            # return type and generate explicit-type alternatives
+            for type_spec in _explicit_type_specs(call_node, ctx):
+                typed_decl = (
+                    indent + type_spec + b" " + var_name + b" = "
+                    + call_text + b";\n"
+                )
+                ed2 = SourceEditor(ctx.file_source)
+                ed2.insert_at(line_start, typed_decl)
+                ed2.replace_node(call_node, var_name)
+                typed_source = ed2.apply()
+
+                type_str = type_spec.decode()
+                yield Variant(
+                    name=f"varext_{counter - 1}_typed",
+                    pattern_name=self.name,
+                    description=(
+                        f"Extract '{call_text.decode('utf-8', errors='replace')}' "
+                        f"into {type_str} {var_name.decode()}"
+                    ),
+                    source=typed_source,
+                )
 
 
 def _unique_tmp_name(
@@ -121,6 +145,46 @@ def _unique_tmp_name(
         ):
             return candidate
         n += 1
+
+
+def _explicit_type_specs(call_node: Node, ctx: FunctionContext) -> list[bytes]:
+    """Return explicit type specifier bytes for a call's return type.
+
+    Uses libclang to resolve the return type and generates appropriate
+    C++ type specifiers. Returns empty list if libclang is unavailable.
+    """
+    if not clang_types.is_available():
+        return []
+    ti = clang_types.resolve_call_return_type(
+        ctx.file_path, call_node.start_byte, ctx.file_source
+    )
+    if ti is None:
+        return []
+
+    specs: list[bytes] = []
+    if ti.is_float:
+        if ti.spelling == "float":
+            specs.append(b"float")
+        elif ti.spelling == "double":
+            specs.append(b"double")
+        else:
+            specs.append(b"float")
+            specs.append(b"double")
+    elif ti.is_signed_int:
+        specs.append(b"int")
+        specs.append(b"unsigned int")
+    elif ti.is_unsigned_int:
+        specs.append(b"unsigned int")
+        specs.append(b"int")
+    elif ti.kind == clang_types.TypeKind.BOOL:
+        specs.append(b"bool")
+        specs.append(b"int")
+    elif ti.is_pointer:
+        # Use the actual pointer type spelling
+        spelling = ti.spelling.encode("utf-8")
+        specs.append(spelling)
+    # Don't generate typed variants for record/enum/other — auto is better
+    return specs
 
 
 def _call_priority(call_node: Node) -> int:

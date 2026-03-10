@@ -22,6 +22,7 @@ from tree_sitter import Node
 
 from .base import Pattern
 from ..ast_queries import find_comparisons
+from .. import clang_types
 from ..editor import SourceEditor
 from ..types import Diagnosis, FunctionContext, Variant
 
@@ -71,8 +72,34 @@ class SignedUnsignedPattern(Pattern):
 
                 op_text = ctx.source_text(op_node) if op_node else None
 
-                # Skip cast variants for likely-pointer comparisons
-                if not _is_likely_pointer(left, right, ctx):
+                # Type-guided filtering: use libclang if available
+                left_type = _resolve_operand_type(left, ctx)
+                right_type = _resolve_operand_type(right, ctx)
+
+                if left_type is not None or right_type is not None:
+                    # libclang available — use precise type info
+                    either_pointer = (
+                        (left_type is not None and left_type.is_pointer)
+                        or (right_type is not None and right_type.is_pointer)
+                    )
+                    if not either_pointer:
+                        casts = _type_guided_casts(left_type, right_type)
+                        for cast, side, operand in _cast_candidates(
+                            casts, left, right
+                        ):
+                            ed = SourceEditor(ctx.file_source)
+                            ed.insert_before(operand, cast)
+                            new_source = ed.apply()
+                            cast_str = cast.decode()
+                            yield Variant(
+                                name=f"signunsign_{counter}",
+                                pattern_name=self.name,
+                                description=f"Cast {side} of '{op_text}' to {cast_str}",
+                                source=new_source,
+                            )
+                            counter += 1
+                elif not _is_likely_pointer(left, right, ctx):
+                    # Fallback: heuristic-based (no libclang)
                     # Cast left operand
                     for cast in _CAST_TYPES:
                         ed = SourceEditor(ctx.file_source)
@@ -142,6 +169,67 @@ class SignedUnsignedPattern(Pattern):
                             source=new_source,
                         )
                         counter += 1
+
+
+def _resolve_operand_type(node: Node, ctx: FunctionContext):
+    """Try to resolve the type of a comparison operand via libclang.
+
+    Returns a clang_types.TypeInfo or None if unavailable.
+    """
+    if not clang_types.is_available():
+        return None
+    return clang_types.resolve_type_at(
+        ctx.file_path, node.start_byte, ctx.file_source
+    )
+
+
+def _type_guided_casts(left_type, right_type):
+    """Return targeted cast bytes based on resolved types.
+
+    Returns dict mapping side ("left"/"right") to list of cast bytes to try.
+    """
+    casts: dict[str, list[bytes]] = {"left": [], "right": []}
+
+    if left_type is not None:
+        if left_type.is_signed_int:
+            casts["left"] = [b"(unsigned int)", b"(unsigned long)"]
+        elif left_type.is_unsigned_int:
+            casts["left"] = [b"(int)"]
+        elif left_type.kind == clang_types.TypeKind.BOOL:
+            casts["left"] = [b"(int)", b"(unsigned int)"]
+        elif left_type.kind == clang_types.TypeKind.ENUM:
+            casts["left"] = [b"(int)", b"(unsigned int)"]
+        else:
+            # Float, record, other — try all
+            casts["left"] = list(_CAST_TYPES)
+
+    if right_type is not None:
+        if right_type.is_signed_int:
+            casts["right"] = [b"(unsigned int)", b"(unsigned long)"]
+        elif right_type.is_unsigned_int:
+            casts["right"] = [b"(int)"]
+        elif right_type.kind == clang_types.TypeKind.BOOL:
+            casts["right"] = [b"(int)", b"(unsigned int)"]
+        elif right_type.kind == clang_types.TypeKind.ENUM:
+            casts["right"] = [b"(int)", b"(unsigned int)"]
+        else:
+            casts["right"] = list(_CAST_TYPES)
+
+    # If one side couldn't be resolved, still try all casts for it
+    if left_type is None:
+        casts["left"] = list(_CAST_TYPES)
+    if right_type is None:
+        casts["right"] = list(_CAST_TYPES)
+
+    return casts
+
+
+def _cast_candidates(casts, left, right):
+    """Yield (cast_bytes, side_str, operand_node) tuples."""
+    for cast in casts.get("left", []):
+        yield cast, "left", left
+    for cast in casts.get("right", []):
+        yield cast, "right", right
 
 
 def _is_likely_pointer(left: Node, right: Node, ctx: FunctionContext) -> bool:

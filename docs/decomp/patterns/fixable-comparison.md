@@ -399,6 +399,91 @@ Look for `rlwimi` in a `replace` or structural mismatch where the target has two
 
 ---
 
+## Iterator Index Comparison
+
+**Impact:** +40-100% (0→100 on entire TU)
+**Success Rate:** HIGH (when pattern applies)
+**Time:** 5 minutes
+
+Compare iterators via index subtraction instead of direct pointer comparison.
+
+### Symptom
+
+objdiff shows `subf` + `clrrwi` (index computation + alignment mask) in target vs simpler `subfc` + `subfe` (direct pointer subtraction) in our build. Often accompanied by delete clusters containing `eqv`, `srwi`, `addze` — the target's signed index comparison sequence.
+
+### Why It Works
+
+MSVC PPC generates different code for these two semantically-equivalent iterator comparisons:
+
+```
+// Direct pointer compare → subfc + subfe (2 instructions)
+return it1 < it2;
+
+// Index compare → subf + clrrwi + subfc + eqv + srwi + addze (6 instructions)
+return (it1 - vec.begin()) < (it2 - vec.begin());
+```
+
+The index form computes `(ptr - base)` for each iterator, masks to element alignment (`clrrwi` clears low 2 bits for 4-byte elements), then does a signed comparison on the indices. The target binary used the index form.
+
+### Fix
+
+```cpp
+// Before (60.5% match) — direct iterator comparison
+template <>
+bool VectorSort<RndMesh *>::operator()(RndMesh *item1, RndMesh *item2) {
+    std::vector<RndMesh *>::const_iterator it1 =
+        std::find(vector.begin(), vector.end(), item1);
+    std::vector<RndMesh *>::const_iterator it2 =
+        std::find(vector.begin(), vector.end(), item2);
+    return it1 < it2;
+}
+
+// After (100% match) — index-based comparison
+template <>
+bool VectorSort<RndMesh *>::operator()(RndMesh *item1, RndMesh *item2) {
+    std::vector<RndMesh *>::const_iterator it1 =
+        std::find(vector.begin(), vector.end(), item1);
+    std::vector<RndMesh *>::const_iterator it2 =
+        std::find(vector.begin(), vector.end(), item2);
+    return (it1 - vector.begin()) < (it2 - vector.begin());
+}
+```
+
+### Cascade Effect
+
+When a comparator body is visible to the compiler, MSVC PPC may **inline** it into all STL sort template instantiations (`__unguarded_partition`, `__linear_insert`, `__push_heap`, etc.). If the inlined body doesn't match, ALL sort templates in the TU are affected.
+
+In the VectorSort case, fixing the comparison from direct pointer to index-based recovered **14 sort template functions to 100%** — the correct body inlines correctly.
+
+### Real Examples
+
+| Function | Before | After | Delta | Notes |
+|----------|--------|-------|-------|-------|
+| VectorSort::operator() | 60.5% | 100% | +39.5% | Direct fix |
+| __unguarded_partition | 3.9% | 100% | +96.1% | Cascade from inlined body |
+| __linear_insert | 46.3% | 100% | +53.7% | Cascade |
+| __adjust_heap | 66.1% | 100% | +33.9% | Cascade |
+| __push_heap | 43.2% | 100% | +56.8% | Cascade |
+| __partial_sort | 64.0% | 100% | +36.0% | Cascade |
+| __median | 0% | 100% | +100% | Cascade |
+| __unguarded_linear_insert | 0% | 100% | +100% | Cascade |
+| + 6 more sort templates | — | 100% | — | Cascade |
+
+### Detection
+
+1. Look for `clrrwi` in target's delete clusters — indicates alignment masking on pointer differences
+2. Look for `eqv` + `srwi` + `addze` sequence — signed index comparison
+3. The compared variables are iterators from `std::find`, `begin()`, or similar
+4. Permuter pattern: `iterator_index_compare`
+
+### When to Use
+
+- Comparator functors that compare iterator positions (e.g., `VectorSort`, custom sort predicates)
+- Functions where two iterators from the same container are compared with `<`, `>`, `<=`, `>=`
+- The container's `begin()` is accessible in the comparison scope
+
+---
+
 ## See Also
 
 - [fixable-casting.md](fixable-casting.md) - Type casting patterns

@@ -89,7 +89,7 @@ END_CUSTOM_PROPSYNC
 
 BEGIN_PROPSYNCS(Flow)
     SYNC_PROP(dynamic_properties, mDynamicProperties)
-    SYNC_PROP_SET(start_on_enter, mStartMode > 0, StartOnEnter(_val.Int()))
+    SYNC_PROP_SET(start_on_enter, mStartMode != 0, StartOnEnter(_val.Int()))
     SYNC_PROP_SET(start_after_game_code, mStartMode == 2, StartAfterGameCode(_val.Int()))
     SYNC_PROP(hard_stop, mHardStop)
     SYNC_PROP(intensity, FlowNode::sIntensity)
@@ -365,7 +365,7 @@ void Flow::PostLoad(BinStream &bs) {
             mPrivate = false;
         }
     }
-    if (mStartMode > 0) {
+    if (mStartMode != 0) {
         mPrivate = true;
     }
     RefreshPortLabelLists();

@@ -23,7 +23,7 @@ bool SortCmp::operator()(const StoreOffer *a, const StoreOffer *b) const { retur
 StorePurchaseable::StorePurchaseable()
     : isAvailable(0), isPurchased(0), cost(0), songID(0) {}
 
-bool StorePurchaseable::Exists() const { return songID != 0; }
+bool StorePurchaseable::Exists() const { return (songID != 0) ? true : false; }
 
 unsigned long long StorePurchaseable::OfferStringToID(char const *s) {
 #ifdef HX_NATIVE
@@ -49,7 +49,8 @@ StoreOffer::StoreOffer(DataArray *a, SongMgr *mgr) : mStoreOfferData(a), mSongMg
 
     DataArray *dateArray = mStoreOfferData->FindArray(release_date, false);
     if (dateArray) {
-        date = DateTime(dateArray->Int(1), dateArray->Int(2), dateArray->Int(3), 0, 0, 0);
+        auto _tmp4 = DateTime(dateArray->Int(1), dateArray->Int(2), dateArray->Int(3), 0, 0, 0);
+        date = _tmp4;
     }
 
     static Symbol song_ids("song_ids");

@@ -73,50 +73,36 @@ void HamCamShot::SetPreFrame(float frame, float blend) {
     mTargetsFlipped = true;
 
     bool inFirstShot = true;
-    if (frame >= mDuration && mNextShotIt != mNextShots.end()) {
+    if (frame >= mDuration && mNextShots.size() != 0) {
         inFirstShot = false;
     }
 
     if (inFirstShot) {
-        if (mNextShotIt != mNextShots.end()) {
+        if (mCurrentShot != this) {
             ResetNextShot();
         }
     } else {
-        float nextOffset = frame - mZeroTime;
-        while (nextOffset < mNextShotDuration && mNextShotIt != mNextShots.end()) {
-            if (mCurrentShot && mCurrentShot != this) {
-                mCurrentShot->EndAnim();
-            }
-            HamCamShot *nextCurrent = *mNextShotIt;
-            mCurrentShot = nextCurrent;
-            if (mCurrentShot) {
+        float nextOffset = frame - mDuration;
+        while (nextOffset < mNextShotOffset && mNextShotIt != mNextShots.begin()) {
+            ++mNextShotIt;
+            mNextShotDuration = (*mNextShotIt)->GetTotalDuration();
+            mNextShotOffset -= mNextShotDuration;
+            mCurrentShot = *mNextShotIt;
+        }
+        frame = nextOffset - mNextShotOffset;
+        while (frame >= mNextShotDuration) {
+            if (IterateNextShot()) {
+                frame -= mNextShotDuration;
+                mNextShotOffset += mNextShotDuration;
+                if (mCurrentShot) {
+                    mCurrentShot->EndAnim();
+                }
+                mCurrentShot = *mNextShotIt;
                 mCurrentShot->StartAnim();
                 mNextShotDuration = mCurrentShot->GetTotalDuration();
-                mNextShotOffset = mNextShotOffset + mNextShotDuration;
+            } else {
+                mNextShotDuration = kHugeFloat;
             }
-            ++mNextShotIt;
-        }
-        frame = nextOffset - mNextShotDuration;
-        if (frame >= mNextShotOffset) {
-            float maxDuration = kHugeFloat;
-            do {
-                unsigned char iterated = (unsigned char)(IterateNextShot());
-                if (iterated != 0) {
-                    frame -= mNextShotDuration;
-                    mNextShotOffset = mNextShotOffset + mNextShotDuration;
-                    if (mCurrentShot && mCurrentShot != this) {
-                        mCurrentShot->EndAnim();
-                    }
-                    HamCamShot *nextShot = *mNextShotIt;
-                    mCurrentShot = nextShot;
-                    if (mCurrentShot) {
-                        mCurrentShot->StartAnim();
-                        mNextShotDuration = mCurrentShot->GetTotalDuration();
-                    }
-                } else {
-                    mNextShotDuration = maxDuration;
-                }
-            } while (frame >= mNextShotDuration);
         }
     }
     if (mCurrentShot != this) {
@@ -699,7 +685,10 @@ void HamCamShot::ResetNextShot() {
 }
 
 bool HamCamShot::ListNextShots(std::list<HamCamShot *> &shots) {
-    if (!mListingShots) {
+    if (mListingShots) {
+        MILO_NOTIFY("%s infinite camera shot loop detected!", PathName(this));
+        return false;
+    } else {
         mListingShots = true;
         for (ObjPtrList<HamCamShot>::iterator it = mNextShots.begin();
              it != mNextShots.end();
@@ -713,9 +702,6 @@ bool HamCamShot::ListNextShots(std::list<HamCamShot *> &shots) {
         }
         mListingShots = false;
         return true;
-    } else {
-        MILO_NOTIFY("%s infinite camera shot loop detected!", PathName(this));
-        return false;
     }
 }
 
@@ -767,14 +753,14 @@ void HamCamShot::SetFrame(float frame, float blend) {
     if (CheckShotOver(origFrame)) {
         CamShot::SetShotOver();
     }
-    if (this != mCurrentShot) {
+    if (this == mCurrentShot) {
+        CamShot::SetFrame(frame, blend);
+    } else {
         for (ObjPtrList<RndAnimatable>::iterator it = mAnims.begin(); it != mAnims.end(); ++it) {
             (*it)->SetFrame(frame, 1.0f);
         }
         mCurrentShot->SetFrameEx(frame, blend);
         RndAnimatable::SetFrame(origFrame, blend);
-    } else {
-        CamShot::SetFrame(frame, blend);
     }
     CamShot::SetFrames(mMasterAnims, origFrame);
     mTargetsFlipped = false;

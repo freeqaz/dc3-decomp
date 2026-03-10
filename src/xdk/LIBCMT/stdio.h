@@ -71,4 +71,14 @@ char *tmpnam(char *filename);
 
 #ifdef __cplusplus
 }
+
+// MSVC secure CRT template overload: auto-deduces buffer size from array ref
+template <size_t _Size>
+inline int sprintf_s(char (&_Dest)[_Size], const char *_Format, ...) {
+    va_list args;
+    va_start(args, _Format);
+    int ret = vsprintf(_Dest, _Format, args);
+    va_end(args);
+    return ret;
+}
 #endif

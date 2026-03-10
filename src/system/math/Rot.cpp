@@ -50,16 +50,10 @@ void Hmx::Quat::Set(const Vector3 &v) {
     float f2 = Cosine(stack.x);
     float f3 = Sine(stack.y);
     float f4 = Cosine(stack.y);
-    float x1 = f1 * f4;
-    float y1 = f2 * f3;
-    float z1 = f1 * f3;
-    float w1 = f2 * f4;
-    float f5 = Sine(stack.z);
-    float f6 = Cosine(stack.z);
-    w = w1 * f6 - z1 * f5;
-    x = x1 * f6 - y1 * f5;
-    y = y1 * f6 + x1 * f5;
-    z = z1 * f6 + w1 * f5;
+    Set(f1 * f4, f2 * f3, f1 * f3, f2 * f4);
+    f1 = Sine(stack.z);
+    f2 = Cosine(stack.z);
+    Set(f2 * x - f1 * y, f2 * y + f1 * x, f2 * z + f1 * w, f2 * w - f1 * z);
 }
 
 void Hmx::Quat::Set(const Hmx::Matrix3 &m) {

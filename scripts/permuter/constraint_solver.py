@@ -95,6 +95,7 @@ def extract_constraints(ctx: FunctionContext) -> ConstraintSet:
             ctx.ghidra_ast, ctx.func_node, ctx.file_source,
             diagnosis=ctx.diagnosis,
             symbol=ctx.symbol,
+            file_path=ctx.file_path,
         )
 
     return cs
