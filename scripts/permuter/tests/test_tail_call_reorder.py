@@ -220,6 +220,29 @@ void test_func() {
         )
         self.assertEqual(variants, [])
 
+    def test_does_not_swap_same_name_tail_calls(self):
+        variants = _variants(
+            """\
+struct Foo { void Poll(); };
+void test_func(Foo* a, Foo* b) {
+    a->Poll();
+    b->Poll();
+}
+"""
+        )
+        self.assertEqual(variants, [])
+
+    def test_does_not_swap_macro_timer_helpers(self):
+        variants = _variants(
+            """\
+void test_func() {
+    START_AUTO_TIMER("tail");
+    DrawShowing();
+}
+"""
+        )
+        self.assertEqual(variants, [])
+
     def test_ghidra_guidance_skips_already_correct_last_call(self):
         variants = _variants(
             """\

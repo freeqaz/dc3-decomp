@@ -4,8 +4,8 @@ Each round: extract function, get baseline with diagnosis, generate variants
 (with composition), score all, apply best improvement, repeat. Stops on
 100% match, plateau (N rounds without improvement), max rounds, or all noise.
 
-By default enables Ghidra, chains, adaptive, constrained, and compose.
-Use --no-* flags to disable individual features.
+By default enables beam search, Ghidra, m2c, chains, adaptive, constrained,
+compose, and BSF-guided declaration reorder. Use --no-* flags to disable.
 
 Usage:
     python -m scripts.permuter.hill_climber \
@@ -13,7 +13,7 @@ Usage:
 
     python -m scripts.permuter.hill_climber \
         --symbol "?Poll@LabelNumberTicker@@UAAXXZ" \
-        --no-ghidra --no-chain --json
+        --no-ghidra --no-beam --json
 """
 
 from __future__ import annotations
@@ -48,6 +48,14 @@ from .types import (
     RoundResult,
     ScoreResult,
     variant_file_updates,
+)
+from .validator import (
+    ValidationResult,
+    ValidationTier,
+    format_result as format_validation_result,
+    format_tier_distribution,
+    validate_batch,
+    validate_variant as run_validation,
 )
 
 # Re-export so the except clause can reference it without a deferred import
@@ -220,8 +228,8 @@ def parse_args() -> argparse.Namespace:
         help="Disable Ghidra-guided patterns",
     )
     parser.add_argument(
-        "--m2c", action="store_true", default=False,
-        help="Enable m2c-guided context loading (default: False)",
+        "--m2c", action="store_true", default=True,
+        help="Enable m2c-guided context loading (default: True)",
     )
     parser.add_argument(
         "--no-m2c", action="store_false", dest="m2c",
@@ -268,8 +276,12 @@ def parse_args() -> argparse.Namespace:
         help="Max generations for evolutionary optimizer (default: 20)",
     )
     parser.add_argument(
-        "--beam", action="store_true", default=False,
-        help="Use beam search instead of greedy hill climbing",
+        "--beam", action="store_true", default=True,
+        help="Use beam search (default: True). Use --no-beam for greedy hill climbing.",
+    )
+    parser.add_argument(
+        "--no-beam", action="store_false", dest="beam",
+        help="Disable beam search, use greedy hill climbing",
     )
     parser.add_argument(
         "--beam-width", type=int, default=8,
@@ -290,6 +302,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--beam-diversity", type=int, default=3,
         help="Min distinct pattern families in beam (default: 3)",
+    )
+    parser.add_argument(
+        "--validate", action="store_true", default=True,
+        help="Show per-variant validation tiers and tier distribution summary (default: True)",
+    )
+    parser.add_argument(
+        "--no-validate", action="store_false", dest="validate",
+        help="Disable validation tier display",
     )
     return parser.parse_args()
 
@@ -312,6 +332,7 @@ def hill_climb(
     chain_depth: int = 3,
     adaptive: bool = False,
     constrained: bool = False,
+    validate: bool = True,
 ) -> HillClimbResult:
     """Run the hill-climbing loop for a single function.
 
@@ -331,6 +352,7 @@ def hill_climb(
         chain_depth: Maximum chain depth for N-stage composition.
         adaptive: Enable adaptive per-round pattern suppression/boosting.
         constrained: Enable constraint-directed synthesis pre-pass.
+        validate: Show per-variant validation tiers in output.
 
     Returns:
         HillClimbResult with full session history.
@@ -357,6 +379,7 @@ def hill_climb(
     result_codegen_shapes: list[str] = []
     result_fact_boosts: list[str] = []
     result_fact_suppresses: list[str] = []
+    all_validation_results: list[ValidationResult] = []
 
     # Pattern stats tracking
     from .pattern_stats import RunStatsAccumulator
@@ -773,6 +796,16 @@ def hill_climb(
                 )
                 batch_results = scorer.score_batch(variants, workers=workers)
 
+                # Validate all variants when --validate is enabled
+                round_validation_results: list[ValidationResult] = []
+                if validate:
+                    round_validation_results = validate_batch(
+                        variants, batch_results,
+                        baseline_score=baseline,
+                        original_source=original_source,
+                        target_facts=ctx.target_facts,
+                    )
+
                 for i, result in enumerate(batch_results):
                     marker = ""
                     if result.error in ("source_dedup", "cache_hit", "obj_dedup"):
@@ -798,10 +831,16 @@ def hill_climb(
                         build_success=result.build_success,
                     )
 
+                    # Append validation tier to the line when enabled
+                    vtier_str = ""
+                    if validate and i < len(round_validation_results):
+                        vr = round_validation_results[i]
+                        vtier_str = f" [{vr.tier.name}]"
+
                     print(
                         f"  [{i + 1}/{len(batch_results)}] "
                         f"{result.variant.name}: "
-                        f"{result.match_percent:.2f}%{marker}",
+                        f"{result.match_percent:.2f}%{marker}{vtier_str}",
                         file=sys.stderr,
                     )
 
@@ -886,6 +925,10 @@ def hill_climb(
                                 build_success=result.build_success,
                             )
 
+                # Accumulate validation results for summary
+                if validate and round_validation_results:
+                    all_validation_results.extend(round_validation_results)
+
             # After Scorer exits (source restored), record round and apply
             delta = best_score - baseline
             improved = best_result is not None and best_score > baseline
@@ -928,18 +971,18 @@ def hill_climb(
                 # Validate the winner (advisory — logs warnings but doesn't block)
                 if best_result:
                     try:
-                        from .validator import validate_variant as _validate, format_result as _format_vr
-                        vr = _validate(
+                        vr = run_validation(
                             best_result.variant,
                             score_result=best_result,
                             baseline_score=baseline,
                             original_source=original_source,
                         )
                         last_validation_tier = int(vr.tier)
-                        print(
-                            f"  [VALIDATE] {_format_vr(vr)}",
-                            file=sys.stderr,
-                        )
+                        if validate:
+                            print(
+                                f"  [VALIDATE] {format_validation_result(vr)}",
+                                file=sys.stderr,
+                            )
                     except Exception:
                         pass  # Validation is advisory
 
@@ -1074,6 +1117,13 @@ def hill_climb(
             winning_pattern = r.best_pattern
             break
 
+    # Build validation tier distribution
+    validation_dist: dict[int, int] = {}
+    if validate and all_validation_results:
+        for vr in all_validation_results:
+            t = int(vr.tier)
+            validation_dist[t] = validation_dist.get(t, 0) + 1
+
     return HillClimbResult(
         symbol=symbol,
         function_name=function_name,
@@ -1087,6 +1137,7 @@ def hill_climb(
         winning_pattern=winning_pattern,
         ghidra_stats=ghidra_run_stats,
         validation_tier=last_validation_tier,
+        validation_distribution=validation_dist,
         codegen_shapes=result_codegen_shapes,
         fact_boost_patterns=result_fact_boosts,
         fact_suppress_patterns=result_fact_suppresses,
@@ -1155,6 +1206,7 @@ def main():
             ghidra=args.ghidra,
             m2c=args.m2c,
             constrained=args.constrained,
+            validate=args.validate,
         )
     elif args.evolutionary:
         from .evolutionary import evolve
@@ -1194,6 +1246,7 @@ def main():
             chain_depth=args.chain_depth,
             adaptive=args.adaptive,
             constrained=args.constrained,
+            validate=args.validate,
         )
 
     if args.json_output:
@@ -1223,14 +1276,24 @@ def _print_result(result: HillClimbResult):
     if result.fact_suppress_patterns:
         print(f"  Suppress:   {', '.join(result.fact_suppress_patterns)}", file=sys.stderr)
 
-    # Validation tier
+    # Validation tier (winner)
+    _tier_names = {
+        0: "INVALID", 1: "PARSE_OK", 2: "BUILD_OK", 3: "SCORE_IMPROVED",
+        4: "REGION_IMPROVED", 5: "FACT_AGREED", 6: "SEMANTIC_OK",
+    }
     if result.validation_tier > 0:
-        _tier_names = {
-            1: "PARSE_OK", 2: "BUILD_OK", 3: "SCORE_IMPROVED",
-            4: "REGION_IMPROVED", 5: "FACT_AGREED", 6: "SEMANTIC_OK",
-        }
         tier_name = _tier_names.get(result.validation_tier, f"TIER_{result.validation_tier}")
         print(f"  Validation: {tier_name} ({result.validation_tier}/6)", file=sys.stderr)
+
+    # Validation tier distribution across all variants
+    if result.validation_distribution:
+        parts = []
+        for tier in range(6, -1, -1):
+            count = result.validation_distribution.get(tier, 0)
+            if count > 0:
+                parts.append(f"{_tier_names.get(tier, f'T{tier}')}:{count}")
+        if parts:
+            print(f"  Tier dist:  {' '.join(parts)}", file=sys.stderr)
 
     # Ghidra stats
     gs = result.ghidra_stats

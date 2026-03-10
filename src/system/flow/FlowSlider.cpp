@@ -1,5 +1,6 @@
 #include "flow/FlowSlider.h"
 #include "flow/FlowDistance.h"
+#include "obj/ObjPtrVec_impl.h"
 #include "flow/FlowManager.h"
 #include "flow/FlowNode.h"
 #include "flow/FlowValueCase.h"

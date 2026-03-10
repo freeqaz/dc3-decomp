@@ -127,6 +127,20 @@ class Diagnosis:
             return self.target_fpr_saves - self.base_fpr_saves
         return 0
 
+    @property
+    def has_gpr_fpr_type_conflict(self) -> bool:
+        """True if GPR and FPR deltas have opposite signs.
+
+        Indicates the target caches a value differently from our compiler:
+        e.g., target uses GPR for a float literal address (GPR up, FPR down)
+        while our compiler caches the float value in FPR (FPR up, GPR down).
+        """
+        gd = self.gpr_save_delta
+        fd = self.fpr_save_delta
+        if gd == 0 or fd == 0:
+            return False
+        return (gd > 0) != (fd > 0)
+
 
 @dataclass
 class PreprocRegion:
@@ -374,6 +388,7 @@ class HillClimbResult:
     winning_pattern: Optional[str] = None
     ghidra_stats: Optional[object] = None  # GhidraRunStats or None
     validation_tier: int = 0  # Highest validation tier reached (0-6)
+    validation_distribution: dict[int, int] = field(default_factory=dict)  # tier -> count across all variants
     shape_facts_enabled: bool = True
     codegen_shapes: list[str] = field(default_factory=list)
     fact_boost_patterns: list[str] = field(default_factory=list)

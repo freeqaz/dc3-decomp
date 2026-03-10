@@ -1,5 +1,6 @@
 #include "char/Character.h"
 #include "CharInterest.h"
+#include "obj/ObjPtrVec_impl.h"
 #include "Waypoint.h"
 #include "char/CharEyes.h"
 #include "char/CharPollable.h"

@@ -1,5 +1,6 @@
 #include "char/ClipCollide.h"
 #include "CharClipSet.h"
+#include "obj/ObjPtrVec_impl.h"
 #include "char/CharClip.h"
 #include "char/CharUtl.h"
 #include "obj/Data.h"

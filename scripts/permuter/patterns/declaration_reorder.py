@@ -87,8 +87,9 @@ class DeclarationReorderPattern(Pattern):
     structural_domain = "data_flow"
     follow_ups = ("variable_extraction", "prologue_pressure", "declaration_movement")
 
-    # Set by the permuter when --bsf-guided is enabled
-    bsf_guided: bool = False
+    # BSF-guided mode: traces compiler's register allocator for targeted reorders.
+    # Default True — disable with --no-bsf-guided.
+    bsf_guided: bool = True
     # When True, fail instead of falling back to unguided generation
     bsf_required: bool = False
     # Cache BSF trace to avoid re-tracing on composition passes
@@ -102,23 +103,26 @@ class DeclarationReorderPattern(Pattern):
     _bsf_printed: bool = False
 
     def relevant(self, diagnosis: Diagnosis) -> bool:
-        # Only relevant when there are GPR swap pairs
+        # Relevant when there are GPR or FPR callee-saved swap pairs
         for (r0, r1) in diagnosis.reg_swap_pairs:
             if r0.startswith("r") or r1.startswith("r"):
+                return True
+            if r0.startswith("f") or r1.startswith("f"):
                 return True
         return False
 
     def priority(self, diagnosis: Diagnosis) -> float:
         if not self.relevant(diagnosis):
             return 0.0
-        # More GPR swap pairs = stronger signal for declaration reorder
-        gpr_pairs = sum(
+        # More swap pairs = stronger signal for declaration reorder
+        callee_pairs = sum(
             1 for (r0, r1) in diagnosis.reg_swap_pairs
             if r0.startswith("r") or r1.startswith("r")
+            or r0.startswith("f") or r1.startswith("f")
         )
-        if gpr_pairs >= 3:
+        if callee_pairs >= 3:
             base = 0.9
-        elif gpr_pairs >= 2:
+        elif callee_pairs >= 2:
             base = 0.7
         else:
             base = 0.5
@@ -130,7 +134,7 @@ class DeclarationReorderPattern(Pattern):
     def generate(self, ctx: FunctionContext) -> Iterator[Variant]:
         counter = 0
 
-        # Priority chain: Ghidra+ASM crossref -> Ghidra -> BSF/ASM -> blind
+        # Priority chain: Ghidra+ASM crossref -> Ghidra -> ASM-guided -> BSF -> blind
         # Try compound Ghidra+ASM crossref first (highest confidence)
         crossref_produced = False
         if (ctx.ghidra_ast is not None and ctx.target_var_order is not None
@@ -148,9 +152,17 @@ class DeclarationReorderPattern(Pattern):
                 counter += 1
                 ghidra_produced = True
 
+        # Try standalone ASM-guided generation (lightweight: /FAs compile + parse)
+        asm_produced = False
+        if not crossref_produced and not ghidra_produced:
+            for variant in self._try_asm_guided(ctx, counter):
+                yield variant
+                counter += 1
+                asm_produced = True
+
         # Try BSF-guided generation
         bsf_produced = False
-        if self.bsf_guided and not ghidra_produced and not crossref_produced:
+        if self.bsf_guided and not ghidra_produced and not crossref_produced and not asm_produced:
             for variant in self._try_bsf_guided(ctx, counter):
                 yield variant
                 counter += 1
@@ -166,7 +178,7 @@ class DeclarationReorderPattern(Pattern):
                 return
 
         # Skip blind permutations if any guided method produced candidates
-        if crossref_produced or ghidra_produced or bsf_produced:
+        if crossref_produced or ghidra_produced or asm_produced or bsf_produced:
             return
 
         # Then fill remaining budget with random permutations
@@ -467,6 +479,163 @@ class DeclarationReorderPattern(Pattern):
             )
             counter += 1
 
+    def _try_asm_guided(self, ctx: FunctionContext, start_counter: int) -> Iterator[Variant]:
+        """Generate ASM-guided reorder variants using /FAs assembly listing.
+
+        Lightweight strategy: compiles with /FAs to get source-interleaved
+        assembly, extracts var→register mapping, then uses asm_guided_search()
+        to generate targeted swaps. No BSF tracing required.
+
+        Priority: runs after Ghidra-guided, before BSF-guided.
+        """
+        try:
+            from tools.compiler_trace.asm_regmap import parse_asm_listing
+            from tools.compiler_trace.regmap_solver import asm_guided_search
+            from tools.compiler_trace.invoker import CompilerInvoker
+        except ImportError:
+            return
+
+        # Need diagnosis with swap pairs (GPR or FPR)
+        if not ctx.diagnosis:
+            return
+        swap_pairs = [
+            pair for pair in ctx.diagnosis.reg_swap_pairs
+            if (pair[0].startswith("r") and pair[1].startswith("r"))
+            or (pair[0].startswith("f") and pair[1].startswith("f"))
+        ]
+        if not swap_pairs:
+            return
+
+        # Need declarations to reorder
+        all_decls = [s for s in ctx.statements if s.type == "declaration"]
+        if len(all_decls) < 2:
+            return
+
+        decl_names = []
+        for decl in all_decls:
+            name = _get_declared_name(decl)
+            decl_names.append(name or "?")
+
+        # Resolve types for register-class filtering
+        type_map = _resolve_decl_types(all_decls, decl_names, ctx)
+
+        # Check cached asm lines first (from a previous BSF run in this session)
+        asm_lines_key = str(ctx.file_path)
+        cached_asm = (
+            self._asm_lines_cache.get(asm_lines_key)
+            if self._asm_lines_cache else None
+        )
+
+        if cached_asm is None:
+            # Compile with /FAs to get source-interleaved assembly listing
+            try:
+                import tempfile
+                import shutil
+
+                invoker = CompilerInvoker()
+                asm_dir = Path(tempfile.mkdtemp(prefix="asm_guided_", dir="/tmp/claude"))
+                result = invoker.compile_with_asm(ctx.file_path, asm_dir, listing_type="/FAs")
+                if result.returncode != 0:
+                    shutil.rmtree(asm_dir, ignore_errors=True)
+                    return
+
+                # Find the listing file
+                asm_file = None
+                for ext in (".cod", ".asm"):
+                    files = list(asm_dir.glob(f"*{ext}"))
+                    if files:
+                        asm_file = files[0]
+                        break
+
+                if asm_file:
+                    cached_asm = asm_file.read_text().splitlines()
+                    # Cache for reuse
+                    if self._asm_lines_cache is None:
+                        self._asm_lines_cache = {}
+                    self._asm_lines_cache[asm_lines_key] = cached_asm
+
+                shutil.rmtree(asm_dir, ignore_errors=True)
+            except Exception:
+                return
+
+        if not cached_asm:
+            return
+
+        # Parse listing for target function
+        func_name = ctx.symbol or ""
+        asm_regmap = parse_asm_listing(cached_asm, func_name)
+        if not asm_regmap or not asm_regmap.var_to_reg:
+            return
+
+        # Generate candidates via asm_guided_search
+        candidates = asm_guided_search(asm_regmap, swap_pairs, decl_names)
+        if not candidates:
+            return
+
+        print(
+            f"  ASM-guided: {len(asm_regmap.var_to_reg)} var\u2192reg mappings "
+            f"\u2192 {len(candidates)} candidate(s) "
+            f"for {len(swap_pairs)} swap pair(s)",
+            file=sys.stderr,
+        )
+
+        # Build dependency edges and emit variants
+        deps = _build_dependency_edges(all_decls)
+        counter = start_counter
+
+        for candidate_names in candidates:
+            # Map candidate name order back to node order
+            name_to_node = {}
+            for decl in all_decls:
+                name = _get_declared_name(decl)
+                if name:
+                    name_to_node[name] = decl
+
+            reordered = []
+            valid = True
+            for name in candidate_names:
+                if name in name_to_node:
+                    reordered.append(name_to_node[name])
+                else:
+                    valid = False
+                    break
+
+            if not valid or len(reordered) != len(all_decls):
+                continue
+
+            # Check dependency safety
+            perm_indices = [all_decls.index(n) for n in reordered]
+            if not _respects_deps(perm_indices, deps):
+                continue
+
+            # Filter cross-register-file swaps
+            if type_map:
+                has_cross = False
+                for i, name in enumerate(candidate_names):
+                    if i < len(decl_names) and name != decl_names[i]:
+                        if _is_cross_regfile_swap(name, decl_names[i], type_map):
+                            has_cross = True
+                            break
+                if has_cross:
+                    continue
+
+            new_source = _apply_reorder(ctx.file_source, all_decls, reordered)
+            if new_source == ctx.file_source:
+                continue
+
+            moved = [n for i, n in enumerate(candidate_names)
+                     if candidate_names[i] != decl_names[i]]
+            desc = f"ASM-guided reorder: {', '.join(moved[:4])}"
+
+            yield Variant(
+                name=f"asm_declreorder_{counter}",
+                pattern_name=self.name,
+                description=desc,
+                source=new_source,
+                tags=frozenset({"reordered_declarations"}),
+            )
+            counter += 1
+
     def _try_bsf_guided(self, ctx: FunctionContext, start_counter: int) -> Iterator[Variant]:
         """Generate BSF-guided reorder variants.
 
@@ -493,6 +662,10 @@ class DeclarationReorderPattern(Pattern):
             )
             return
 
+        # Need diagnosis with swap pairs — check BEFORE expensive BSF trace
+        if not ctx.diagnosis:
+            return
+
         # Get all declarations as a flat group
         all_decls = [s for s in ctx.statements if s.type == "declaration"]
         if len(all_decls) < 2:
@@ -516,11 +689,6 @@ class DeclarationReorderPattern(Pattern):
             except Exception as e:
                 print(f"  BSF mode: fallback (trace failed: {e})", file=sys.stderr)
                 return
-
-        # Get swap pairs from diagnosis
-        if not ctx.diagnosis:
-            print("  BSF mode: fallback (no diagnosis available)", file=sys.stderr)
-            return
         swap_pairs = [
             pair for pair in ctx.diagnosis.reg_swap_pairs
             if pair[0].startswith("r") or pair[1].startswith("r")

@@ -496,6 +496,7 @@ def beam_search(
     constrained: bool = True,
     cross_unit: bool = False,
     shape_facts: bool = True,
+    validate: bool = True,
 ) -> HillClimbResult:
     """Run beam search for a single function.
 
@@ -533,6 +534,7 @@ def beam_search(
     result_codegen_shapes: list[str] = []
     result_fact_boosts: list[str] = []
     result_fact_suppresses: list[str] = []
+    all_validation_results: list = []  # list[ValidationResult] across all depths
 
     original_source = source_path.read_bytes()
     applied_file_originals: dict[Path, bytes | None] = {
@@ -749,7 +751,7 @@ def beam_search(
             # Run validation ladder
             vtier = 2  # BUILD_OK (already passed build)
             try:
-                from .validator import validate_variant, ValidationTier
+                from .validator import validate_variant, ValidationTier, ValidationResult as VR
                 vresult = validate_variant(
                     result.variant,
                     score_result=result,
@@ -759,6 +761,8 @@ def beam_search(
                     original_source=original_source,
                 )
                 vtier = int(vresult.tier)
+                if validate:
+                    all_validation_results.append(vresult)
             except Exception:
                 pass  # Validation is advisory
 
@@ -872,8 +876,17 @@ def beam_search(
 
         # Print beam summary
         print(f"  Survivors:", file=sys.stderr)
+        _vtier_short = {
+            0: "INV", 1: "PAR", 2: "BLD", 3: "SCR",
+            4: "REG", 5: "FCT", 6: "SEM",
+        }
         for si, s in enumerate(beam):
-            vtier_str = f" v={s.validation_tier}" if s.validation_tier > 0 else ""
+            if validate and s.validation_tier > 0:
+                vtier_str = f" v={_vtier_short.get(s.validation_tier, str(s.validation_tier))}"
+            elif s.validation_tier > 0:
+                vtier_str = f" v={s.validation_tier}"
+            else:
+                vtier_str = ""
             print(
                 f"    [{si + 1}] {s.score:.2f}% gen={s.generation} "
                 f"stag={s.stagnation_count}{vtier_str} "
@@ -903,12 +916,21 @@ def beam_search(
         final_percent = initial_percent
 
     best_vtier = best_ever_state.validation_tier if best_ever_state else 0
+
+    # Build validation tier distribution
+    validation_dist: dict[int, int] = {}
+    if validate and all_validation_results:
+        for vr in all_validation_results:
+            t = int(vr.tier)
+            validation_dist[t] = validation_dist.get(t, 0) + 1
+
     return _build_result(
         symbol, function_name, source_path,
         initial_percent, final_percent, rounds, stopped_reason,
         time.time() - start_time,
         ghidra_stats=ghidra_run_stats,
         validation_tier=best_vtier,
+        validation_distribution=validation_dist,
         shape_facts_enabled=shape_facts,
         codegen_shapes=result_codegen_shapes,
         fact_boost_patterns=result_fact_boosts,
@@ -970,6 +992,7 @@ def _build_result(
     elapsed: float,
     ghidra_stats: object | None = None,
     validation_tier: int = 0,
+    validation_distribution: dict[int, int] | None = None,
     shape_facts_enabled: bool = True,
     codegen_shapes: list[str] | None = None,
     fact_boost_patterns: list[str] | None = None,
@@ -995,6 +1018,7 @@ def _build_result(
         winning_pattern=winning_pattern,
         ghidra_stats=ghidra_stats,
         validation_tier=validation_tier,
+        validation_distribution=dict(validation_distribution or {}),
         shape_facts_enabled=shape_facts_enabled,
         codegen_shapes=list(codegen_shapes or []),
         fact_boost_patterns=list(fact_boost_patterns or []),
@@ -1032,6 +1056,10 @@ def parse_args() -> argparse.Namespace:
                         help="Enable header-backed cross-unit proposals (expensive)")
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument("--patterns", default="all", help="Pattern list")
+    parser.add_argument("--validate", action="store_true", default=True,
+                        help="Show per-variant validation tiers and tier distribution summary (default: True)")
+    parser.add_argument("--no-validate", action="store_false", dest="validate",
+                        help="Disable validation tier display")
     return parser.parse_args()
 
 
@@ -1088,6 +1116,7 @@ def main() -> None:
         m2c=args.m2c,
         constrained=args.constrained,
         cross_unit=args.cross_unit,
+        validate=args.validate,
     )
 
     # Output
@@ -1106,6 +1135,8 @@ def main() -> None:
             "codegen_shapes": result.codegen_shapes,
             "fact_boost_patterns": result.fact_boost_patterns,
             "fact_suppress_patterns": result.fact_suppress_patterns,
+            "validation_tier": result.validation_tier,
+            "validation_distribution": {str(k): v for k, v in result.validation_distribution.items()},
             "rounds": [
                 {
                     "depth": r.round_num,
@@ -1135,6 +1166,20 @@ def main() -> None:
             print(f"  Suppress: {', '.join(result.fact_suppress_patterns)}")
         if result.winning_pattern:
             print(f"  Winning pattern: {result.winning_pattern}")
+        # Validation tier distribution
+        if args.validate and result.validation_distribution:
+            _vtn = {
+                0: "INVALID", 1: "PARSE_OK", 2: "BUILD_OK", 3: "SCORE_IMPROVED",
+                4: "REGION_IMPROVED", 5: "FACT_AGREED", 6: "SEMANTIC_OK",
+            }
+            parts = []
+            for tier in range(6, -1, -1):
+                count = result.validation_distribution.get(tier, 0)
+                if count > 0:
+                    parts.append(f"{_vtn.get(tier, f'T{tier}')}:{count}")
+            if parts:
+                total = sum(result.validation_distribution.values())
+                print(f"  Tier dist: {' '.join(parts)} ({total} variants)")
         for r in result.rounds:
             marker = " IMPROVED" if r.improved else ""
             print(f"  Depth {r.round_num}: {r.best_score:.2f}% "

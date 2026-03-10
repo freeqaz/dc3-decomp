@@ -47,6 +47,7 @@ from scripts.permuter.tests.conftest import (
     diag_with_cntlzw,
     diag_with_cntlzw_dot,
     diag_with_nor,
+    diag_with_rlwinm_fusion,
     diag_with_subf_cmpw,
 )
 
@@ -3080,6 +3081,61 @@ int FindDataIndex(int* arr, int size, int key) {
         expected_source="""\
 high >= low
 """,
+    ),
+    # ===================== u8_to_unsigned_long =====================
+
+    PatternFixture(
+        id="u8widen_local_to_unsigned_long",
+        pattern_name="u8_to_unsigned_long",
+        description="Widen unsigned char local variable to unsigned long",
+        func_name="test_func",
+        diagnosis=diag_with_rlwinm_fusion(),
+        seeded_source="""\
+int test_func(int a, int b) {
+    unsigned char result = (unsigned char)(a ^ b);
+    return result;
+}
+""",
+        expected_source="""\
+unsigned long result
+""",
+        match_mode="contains",
+    ),
+
+    PatternFixture(
+        id="u8widen_return_mask",
+        pattern_name="u8_to_unsigned_long",
+        description="Convert u8() return to & 0xFF mask",
+        func_name="test_func",
+        diagnosis=diag_with_rlwinm_fusion(),
+        seeded_source="""\
+int test_func(int a, int b) {
+    return DataNode(kDataInt, u8(a ^ b));
+}
+""",
+        expected_source="""\
+(int)((a ^ b) & 0xFF)
+""",
+        match_mode="contains",
+    ),
+
+    PatternFixture(
+        id="u8widen_combined",
+        pattern_name="u8_to_unsigned_long",
+        description="Combined: widen unsigned char locals + convert u8() return",
+        func_name="test_func",
+        diagnosis=diag_with_rlwinm_fusion(),
+        seeded_source="""\
+int test_func(int a, int b) {
+    unsigned char x = (unsigned char)(a ^ b);
+    unsigned char y = (unsigned char)(x | 0x10);
+    return DataNode(kDataInt, u8(y));
+}
+""",
+        expected_source="""\
+unsigned long
+""",
+        match_mode="contains",
     ),
 ]
 

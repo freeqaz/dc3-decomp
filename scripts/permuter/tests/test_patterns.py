@@ -343,6 +343,16 @@ def diag_with_subf_cmpw() -> Diagnosis:
     return d
 
 
+def diag_with_rlwinm_fusion() -> Diagnosis:
+    """rlwinm fusion ops (extrwi/clrlslwi) in diff — u8 type control."""
+    d = _empty_diag()
+    d.diff_ops = [
+        DiffOp(index=5, target_opcode="srwi", base_opcode="extrwi"),
+        DiffOp(index=8, target_opcode="clrlwi", base_opcode="clrlslwi"),
+    ]
+    return d
+
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -2860,6 +2870,61 @@ high >= low
 """,
     ),
 
+    # ===================== u8_to_unsigned_long =====================
+
+    PatternFixture(
+        id="u8widen_local_to_unsigned_long",
+        pattern_name="u8_to_unsigned_long",
+        description="Widen unsigned char local variable to unsigned long",
+        func_name="test_func",
+        diagnosis=diag_with_rlwinm_fusion(),
+        seeded_source="""\
+int test_func(int a, int b) {
+    unsigned char result = (unsigned char)(a ^ b);
+    return result;
+}
+""",
+        expected_source="""\
+unsigned long result
+""",
+        match_mode="contains",
+    ),
+
+    PatternFixture(
+        id="u8widen_return_mask",
+        pattern_name="u8_to_unsigned_long",
+        description="Convert u8() return to & 0xFF mask",
+        func_name="test_func",
+        diagnosis=diag_with_rlwinm_fusion(),
+        seeded_source="""\
+int test_func(int a, int b) {
+    return DataNode(kDataInt, u8(a ^ b));
+}
+""",
+        expected_source="""\
+(int)((a ^ b) & 0xFF)
+""",
+        match_mode="contains",
+    ),
+
+    PatternFixture(
+        id="u8widen_combined",
+        pattern_name="u8_to_unsigned_long",
+        description="Combined: widen unsigned char locals + convert u8() return",
+        func_name="test_func",
+        diagnosis=diag_with_rlwinm_fusion(),
+        seeded_source="""\
+int test_func(int a, int b) {
+    unsigned char x = (unsigned char)(a ^ b);
+    unsigned char y = (unsigned char)(x | 0x10);
+    return DataNode(kDataInt, u8(y));
+}
+""",
+        expected_source="""\
+unsigned long
+""",
+        match_mode="contains",
+    ),
 ]
 
 # Build lookup by ID
@@ -3043,6 +3108,14 @@ class TestPatternRelevance(unittest.TestCase):
 
     def test_null_guard_irrelevant_empty(self):
         p = get_pattern("null_guard_elimination")
+        self.assertFalse(p.relevant(_empty_diag()))
+
+    def test_u8_to_unsigned_long_relevant_fusion(self):
+        p = get_pattern("u8_to_unsigned_long")
+        self.assertTrue(p.relevant(diag_with_rlwinm_fusion()))
+
+    def test_u8_to_unsigned_long_irrelevant_empty(self):
+        p = get_pattern("u8_to_unsigned_long")
         self.assertFalse(p.relevant(_empty_diag()))
 
 
@@ -4209,17 +4282,17 @@ class TestFPRSwapHandling(unittest.TestCase):
     will be updated when FPR support is added.
     """
 
-    def test_fpr_only_diagnosis_makes_declreorder_irrelevant(self):
-        """declaration_reorder should NOT be relevant for FPR-only swaps.
+    def test_fpr_only_diagnosis_makes_declreorder_relevant(self):
+        """declaration_reorder IS relevant for FPR-only swaps.
 
-        The pattern checks for GPR swaps (r-prefix). FPR swaps (f-prefix)
-        should not trigger it since BSF-guided reorder can't fix them.
+        FPR swaps (f-prefix) now trigger the pattern since ASM-guided
+        mode supports FPR swap pairs.
         """
         from scripts.permuter.patterns import get_pattern
         p = get_pattern("declaration_reorder")
         diag = diag_with_fpr_swaps()
-        self.assertFalse(p.relevant(diag),
-                         "declaration_reorder should NOT be relevant for FPR-only swaps")
+        self.assertTrue(p.relevant(diag),
+                        "declaration_reorder should be relevant for FPR swaps")
 
     def test_mixed_gpr_fpr_makes_declreorder_relevant(self):
         """Mixed GPR+FPR swaps should still make declreorder relevant (for GPR part)."""

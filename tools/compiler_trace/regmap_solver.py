@@ -531,16 +531,18 @@ def asm_guided_search(
     """Generate targeted declaration reorders using assembly register mapping.
 
     Uses the var→reg mapping from /FAs listing analysis instead of BSF traces.
-    For each swap pair (rA, rB):
-    1. Look up which vars currently have rA and rB via asm_regmap
+    For each swap pair (rA, rB) or (fA, fB):
+    1. Look up which vars currently have rA/rB (or fA/fB) via asm_regmap
     2. Swap those vars' positions in the declaration order
 
-    Callee-saved assignment rule: 1st declared → r31, 2nd → r30, etc.
+    Callee-saved assignment rule: 1st declared → r31/f31, 2nd → r30/f30, etc.
     So swapping declaration positions swaps register assignments.
+
+    Handles both GPR (r13-r31) and FPR (f14-f31) swap pairs.
 
     Args:
         asm_regmap: Register mapping from parse_asm_listing().
-        swap_pairs: Register swap pairs from objdiff (e.g. [("r30", "r31")]).
+        swap_pairs: Register swap pairs from objdiff (e.g. [("r30", "r31"), ("f30", "f31")]).
         decl_names: Variable declaration names in current source order.
 
     Returns:
@@ -559,13 +561,17 @@ def asm_guided_search(
     targeted_swaps: list[tuple[int, int]] = []
 
     for rA, rB in swap_pairs:
-        # Only handle GPR swaps
-        if not (rA.startswith("r") and rB.startswith("r")):
+        # Handle GPR swaps via GPR var→reg mapping
+        if rA.startswith("r") and rB.startswith("r"):
+            varA = asm_regmap.reg_to_var.get(rA)
+            varB = asm_regmap.reg_to_var.get(rB)
+        # Handle FPR swaps via FPR var→reg mapping
+        elif rA.startswith("f") and rB.startswith("f"):
+            fpr_reg_to_var = getattr(asm_regmap, "fpr_reg_to_var", {})
+            varA = fpr_reg_to_var.get(rA)
+            varB = fpr_reg_to_var.get(rB)
+        else:
             continue
-
-        # Look up which variable has each register
-        varA = asm_regmap.reg_to_var.get(rA)
-        varB = asm_regmap.reg_to_var.get(rB)
 
         if varA and varB and varA in name_to_idx and varB in name_to_idx:
             idxA = name_to_idx[varA]

@@ -16,10 +16,10 @@ public:
     // size 0x18
     struct Viewport {
         Viewport() : X(0), Y(0), Width(0), Height(0), MinZ(0), MaxZ(0) {}
-        int X; // 0x0
-        int Y; // 0x4
-        int Width; // 0x8
-        int Height; // 0xc
+        unsigned int X; // 0x0
+        unsigned int Y; // 0x4
+        unsigned int Width; // 0x8
+        unsigned int Height; // 0xc
         float MinZ; // 0x10
         float MaxZ; // 0x14
     };

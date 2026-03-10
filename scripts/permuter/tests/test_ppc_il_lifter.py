@@ -238,6 +238,84 @@ class TestLiftFunction(unittest.TestCase):
         self.assertIn("vtable_tail_call", vcall_categories)
         self.assertNotIn("switch_table", switch_categories)
 
+    def test_vtable_dispatch_slot_offset(self):
+        """Vtable dispatch captures slot offset from the slot load."""
+        func = FunctionAsm(
+            name="test",
+            mangled="?vcall@@YAXXZ",
+            instructions=[
+                (0x10, "81630000", "lwz r11,0(r3)"),       # vtable ptr at offset 0
+                (0x14, "816b0010", "lwz r11,0x10(r11)"),   # slot at offset 0x10
+                (0x18, "7d6903a6", "mtctr r11"),
+                (0x1c, "4e800421", "bctrl"),
+            ],
+        )
+        lifted = lift_function_asm(func)
+        facts = derive_shape_facts(lifted)
+        vfacts = [f for f in facts if f["kind"] == "virtual_dispatch"]
+        self.assertEqual(len(vfacts), 1)
+        self.assertEqual(vfacts[0]["category"], "vtable_call")
+        self.assertEqual(vfacts[0]["slot_offset"], 0x10)
+        self.assertEqual(vfacts[0]["vbtable_offset"], 0)
+        self.assertEqual(vfacts[0]["receiver_reg"], "r3")
+
+    def test_vtable_dispatch_vbtable_indirection(self):
+        """Multi-inheritance vtable with 3 loads detects vbtable indirection."""
+        func = FunctionAsm(
+            name="test",
+            mangled="?vcall@@YAXXZ",
+            instructions=[
+                (0x10, "81630004", "lwz r11,0x4(r3)"),     # vbtable ptr at offset 4
+                (0x14, "816b0004", "lwz r11,0x4(r11)"),    # vbtable load
+                (0x18, "816b0020", "lwz r11,0x20(r11)"),   # slot at offset 0x20
+                (0x1c, "7d6903a6", "mtctr r11"),
+                (0x20, "4e800421", "bctrl"),
+            ],
+        )
+        lifted = lift_function_asm(func)
+        facts = derive_shape_facts(lifted)
+        vfacts = [f for f in facts if f["kind"] == "virtual_dispatch"]
+        self.assertEqual(len(vfacts), 1)
+        self.assertTrue(vfacts[0].get("has_vbtable_indirection"))
+
+    def test_inline_wrapper_trivial_forwarding(self):
+        """Detect trivial forwarding: single call + blr."""
+        func = FunctionAsm(
+            name="test",
+            mangled="?wrapper@@YAXXZ",
+            instructions=[
+                (0x10, "48000001", "bl 0x20"),   # call
+                (0x14, "4e800020", "blr"),        # return
+            ],
+        )
+        lifted = lift_function_asm(func)
+        facts = derive_shape_facts(lifted)
+        wrapper_facts = [f for f in facts if f["kind"] == "inline_wrapper"]
+        self.assertGreaterEqual(len(wrapper_facts), 1)
+        categories = {f["category"] for f in wrapper_facts}
+        self.assertTrue(
+            categories & {"trivial_forwarding", "trivial_tail_forward", "return_forwarding"},
+            f"Expected a forwarding category, got {categories}",
+        )
+
+    def test_inline_wrapper_accessor_load(self):
+        """Detect accessor pattern: single load + return."""
+        func = FunctionAsm(
+            name="test",
+            mangled="?GetX@@YAXXZ",
+            instructions=[
+                (0x10, "80630010", "lwz r3,0x10(r3)"),  # load member
+                (0x14, "4e800020", "blr"),                # return
+            ],
+        )
+        lifted = lift_function_asm(func)
+        facts = derive_shape_facts(lifted)
+        wrapper_facts = [f for f in facts if f["kind"] == "inline_wrapper"]
+        self.assertGreaterEqual(len(wrapper_facts), 1)
+        accessor_facts = [f for f in wrapper_facts if f["category"] == "accessor_load"]
+        self.assertEqual(len(accessor_facts), 1)
+        self.assertEqual(accessor_facts[0]["member_offset"], 0x10)
+
 
 if __name__ == "__main__":
     unittest.main()

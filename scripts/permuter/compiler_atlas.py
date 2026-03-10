@@ -465,6 +465,44 @@ _add(
     tags=("byte", "type", "rlwinm", "xor"),
 )
 
+# ── Virtual Dispatch / Inline Wrapper (PROVEN via accessor outline fix) ───
+
+_add(
+    "vtable_slot_dispatch",
+    ("lwz", "mtctr", "bctrl"),
+    "Virtual method call via vtable slot — slot offset identifies which method",
+    "",
+    Confidence.INFERRED, "varies",
+    (),
+    "MEMORY.md §vbase Recomputation, IL_FORMAT.md §VCALL_SETUP",
+    fixable=False,
+    tags=("vtable", "virtual"),
+)
+
+_add(
+    "accessor_inline_vs_outline",
+    ("bl", "lwz"),
+    "Target calls accessor via bl but our compiler inlines it (direct lwz load)",
+    "Move accessor body from header to .cpp to force outlined call",
+    Confidence.PROVEN, "1-5%",
+    ("noinline_stub",),
+    "MEMORY.md §Accessor outline fix — UIListSlot::Draw 96.6→100%",
+    fixable=True,
+    tags=("inline", "accessor", "header"),
+)
+
+_add(
+    "trivial_forwarding_wrapper",
+    ("bl", "blr"),
+    "Trivial forwarding function: single call + return, may inline differently",
+    "Use noinline_stub to control inlining boundary",
+    Confidence.INFERRED, "1-5%",
+    ("noinline_stub",),
+    "INLINER_RE.md §threshold 150 IL nodes",
+    fixable=True,
+    tags=("inline", "wrapper"),
+)
+
 # ── Entries harvested from docs/decomp/patterns/*.md ─────────────────────
 
 # ── Casting Patterns (PROVEN) ─────────────────────────────────────────────

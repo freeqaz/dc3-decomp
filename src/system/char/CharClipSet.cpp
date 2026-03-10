@@ -1,5 +1,6 @@
 #include "char/CharClipSet.h"
 #include "char/CharClipGroup.h"
+#include "obj/ObjPtrVec_impl.h"
 #include "char/Character.h"
 #include "char/CharBonesMeshes.h"
 #include "char/CharUtl.h"

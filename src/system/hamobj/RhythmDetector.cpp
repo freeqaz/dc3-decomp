@@ -5,6 +5,7 @@
 #include "math/Vec.h"
 #include "ui/UIPanel.h"
 #include "obj/DataFunc.h"
+#include "obj/Dir.h"
 #include "gesture/SkeletonUpdate.h"
 
 namespace {
@@ -136,7 +137,7 @@ RhythmDetector::RhythmDetector()
     : mTracked(false), mRecording(0), mSkeletonID(-1), mBeats(8), mGroove(0),
       mRhythmDecay(0), mFold(2), mToleranceFactor(1.5f), mDirection(0, 0, 0), mFrameCount(0),
       mDebugGraphA(0), mDebugGraphB(0), mDebugGraphC(0), mDebugGraphD(0), mDebugGraphE(0),
-      mDivergenceCounter(0), unkaa4(0) {
+      mDivergenceCounter(0), mBufferIndex(0) {
     mCurrentFrame.mJointVelocities.clear();
     for (int i = 0; i < 8; i++) {
         mTimestamps[i] = -1;
@@ -388,37 +389,74 @@ void RhythmDetector::ClearData() {
     AddFullDebugGraphs();
 }
 
-// void RhythmDetector::AddFrame(BaseSkeleton const &skel) {
-//     auto panel = ObjectDir::Main()->Find<UIPanel>("rhythm_detector_panel", false);
-//     if (panel) {
-//         Vector3 jointPosVec;
-//         for (int skelJoint = 0; skelJoint < kNumJoints; skelJoint++) {
-//             skel.JointPos(
-//                 kCoordCamera, static_cast<SkeletonJoint>(skelJoint), jointPosVec
-//             );
-//         }
-//         float beat = TheTaskMgr.Beat();
-//         float seconds = TheTaskMgr.Seconds(TaskMgr::kRealTime);
-//         float beatDiff = beat - mLastBeatTime;
-//         if (beatDiff < 0.0) {
-//             ClearData();
-//             beatDiff = 0.0;
-//         }
-//         int temp = -1;
-//         int anotherInt = 0;
-//         float something = 0.0;
-//         for (int i = 0; i < 8; i++) {
-//             if (0.0 < unka80.back()
-//                 && ((fabs(seconds - unka80.back()) - 0.1) < something || temp == -1)) {
-//                 something = fabs(seconds - unka80.back()) - 0.1;
-//                 temp = anotherInt;
-//                 anotherInt++;
-//             }
-//         }
-//         if (temp != -1) {
-//         }
-//     }
-// }
+void RhythmDetector::AddFrame(BaseSkeleton const &skel) {
+    static UIPanel *panel = ObjectDir::Main()->Find<UIPanel>("rhythm_detector_panel", false);
+    if (!panel)
+        return;
+
+    PaddedJointPos localJoints[kNumJoints];
+    for (int j = 0; j < kNumJoints; j++) {
+        skel.JointPos(kCoordCamera, (SkeletonJoint)j, localJoints[j]);
+    }
+
+    float beat = TheTaskMgr.Beat();
+    float seconds = TheTaskMgr.Seconds(TaskMgr::kRealTime);
+    float beatDiff = beat - mLastBeatTime;
+    if (beatDiff < 0.0f) {
+        beatDiff = 0.0f;
+        ClearData();
+    }
+
+    int bestIdx = -1;
+    int idx = 0;
+    float bestDist = 0.0f;
+    for (int i = 0; i < 8; i++) {
+        if (mTimestamps[i] >= 0.0f) {
+            float dist = fabs((seconds - mTimestamps[i]) - 0.1f);
+            if (dist < bestDist || bestIdx == -1) {
+                bestIdx = idx;
+                bestDist = dist;
+            }
+        }
+        idx++;
+    }
+
+    if (bestIdx != -1) {
+        Frame newFrame;
+        mFrameHistory.insert(mFrameHistory.end(), newFrame);
+
+        // Trim history to 3 entries
+        std::list<Frame>::iterator it = mFrameHistory.begin();
+        unsigned int count = 0;
+        while (it != mFrameHistory.end()) {
+            it++;
+            count++;
+        }
+        if (count > 3) {
+            mFrameHistory.erase(mFrameHistory.begin());
+        }
+
+        SetupFrame(
+            mFrameHistory.back(),
+            mFrameCount,
+            beatDiff,
+            (Vector3 *)mJointBuffer[bestIdx],
+            (Vector3 *)localJoints,
+            seconds - mTimestamps[bestIdx]
+        );
+
+        mLastBeatTime = beat;
+
+        // Copy local joints into circular buffer
+        for (int k = 0; k < kNumJoints; k++) {
+            mJointBuffer[mBufferIndex][k] = localJoints[k];
+        }
+
+        mTimestamps[mBufferIndex] = seconds;
+        mFrameCount += beatDiff;
+        mBufferIndex = (mBufferIndex + 1) % 8;
+    }
+}
 
 // const RhythmDetector::RecordData &
 // RhythmDetector::GetRecord(float f1, float f2, bool b, Symbol sym, TextStream *stream) {

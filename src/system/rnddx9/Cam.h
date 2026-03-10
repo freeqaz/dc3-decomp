@@ -11,6 +11,8 @@ public:
     virtual unsigned int ProjectZ(float);
     virtual void PostDeviceReset() { UpdateLocal(); }
 
+    void SetViewport();
+
     NEW_OBJ(DxCam)
 
 protected:

@@ -420,11 +420,14 @@ def _should_try_swap(
     ghidra_last_call: str | None,
 ) -> bool:
     """Use Ghidra's last-call hint to suppress already-correct orderings."""
-    if ghidra_last_call is None:
-        return True
-
     a_name = _get_call_name(a.call_stmt, source)
     b_name = _get_call_name(b.call_stmt, source)
+    if _is_noisy_tail_call_name(a_name) or _is_noisy_tail_call_name(b_name):
+        return False
+    if a_name and b_name and a_name == b_name:
+        return False
+    if ghidra_last_call is None:
+        return True
     if b_name == ghidra_last_call:
         return False
     if a_name == ghidra_last_call:
@@ -582,6 +585,22 @@ _NOT_CALLS = frozenset({
     "uint", "ulong", "ushort", "uchar", "undefined", "undefined4",
     "undefined8", "undefined2", "undefined1", "bool", "byte",
 })
+_NOISY_TAIL_CALL_NAMES = frozenset({
+    "START_AUTO_TIMER",
+    "PlatformDebugBreak",
+    "Sleep",
+})
+
+
+def _is_noisy_tail_call_name(name: str | None) -> bool:
+    """Return True for obvious infrastructure helpers, not tail-call targets."""
+    if not name:
+        return False
+    if name in _NOISY_TAIL_CALL_NAMES:
+        return True
+    if name.isupper() and "_" in name:
+        return True
+    return False
 
 
 def _extract_ghidra_last_call(ghidra_code: str) -> str | None:

@@ -388,14 +388,14 @@ class TestFPRSwapHandling(unittest.TestCase):
     def test_fpr_only_diagnosis_makes_declreorder_irrelevant(self):
         """declaration_reorder should NOT be relevant for FPR-only swaps.
 
-        The pattern checks for GPR swaps (r-prefix). FPR swaps (f-prefix)
-        should not trigger it since BSF-guided reorder can't fix them.
+        FPR swaps (f-prefix) now trigger declaration_reorder since
+        ASM-guided mode supports FPR swap pairs.
         """
         from scripts.permuter.patterns import get_pattern
         p = get_pattern("declaration_reorder")
         diag = diag_with_fpr_swaps()
-        self.assertFalse(p.relevant(diag),
-                         "declaration_reorder should NOT be relevant for FPR-only swaps")
+        self.assertTrue(p.relevant(diag),
+                        "declaration_reorder should be relevant for FPR swaps")
 
     def test_mixed_gpr_fpr_makes_declreorder_relevant(self):
         """Mixed GPR+FPR swaps should still make declreorder relevant (for GPR part)."""

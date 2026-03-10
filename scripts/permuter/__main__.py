@@ -189,13 +189,15 @@ def main():
         pattern_names = [p.strip() for p in args.patterns.split(",")]
         patterns = [get_pattern(name) for name in pattern_names]
 
-    # Enable BSF-guided mode on declaration_reorder pattern if requested
-    if not args.no_bsf_guided:
+    # BSF-guided is now default-on. --no-bsf-guided disables it.
+    if args.no_bsf_guided:
         for p in patterns:
             if p.name == "declaration_reorder":
-                p.bsf_guided = True
+                p.bsf_guided = False
+    else:
+        for p in patterns:
+            if p.name == "declaration_reorder":
                 p.bsf_required = getattr(args, "bsf_required", False)
-                print("BSF-guided declaration reordering enabled", file=sys.stderr)
 
     # Extract function
     print(f"Extracting {args.function} from {args.source}...", file=sys.stderr)

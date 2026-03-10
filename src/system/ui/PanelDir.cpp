@@ -260,19 +260,25 @@ void PanelDir::DrawShowing() {
         auto dumpCam = [](const char *label, RndCam *c) {
             if (!c) return;
             const Transform &w = c->WorldXfm();
-            printf("  CAM '%s' (%s): pos=(%.1f,%.1f,%.1f) near=%.1f far=%.1f yfov=%.4f(%.1fdeg) zRange=(%.2f,%.2f)\n",
+            const Transform &l = c->LocalXfm();
+            printf("  CAM '%s' (%s): worldPos=(%.1f,%.1f,%.1f) localPos=(%.1f,%.1f,%.1f)\n",
                    label, c->Name(),
                    w.v.x, w.v.y, w.v.z,
-                   c->NearPlane(), c->FarPlane(),
-                   c->YFov(), c->YFov() * (180.0f / 3.14159f),
-                   0.0f, 0.0f);
-            printf("       localPos=(%.1f,%.1f,%.1f) fwd=(%.3f,%.3f,%.3f)\n",
-                   c->LocalXfm().v.x, c->LocalXfm().v.y, c->LocalXfm().v.z,
+                   l.v.x, l.v.y, l.v.z);
+            printf("       worldBasis: X=(%.3f,%.3f,%.3f) Y=(%.3f,%.3f,%.3f) Z=(%.3f,%.3f,%.3f)\n",
+                   w.m.x.x, w.m.x.y, w.m.x.z,
+                   w.m.y.x, w.m.y.y, w.m.y.z,
                    w.m.z.x, w.m.z.y, w.m.z.z);
+            RndTransformable *parent = c->TransParent();
+            if (parent) {
+                const Transform &pw = parent->WorldXfm();
+                printf("       parent='%s' parentPos=(%.1f,%.1f,%.1f)\n",
+                       parent->Name(), pw.v.x, pw.v.y, pw.v.z);
+            } else {
+                printf("       parent=NONE\n");
+            }
         };
-        dumpCam("curCam", curCam);
         dumpCam("camOverride", camOverride);
-        dumpCam("[ui.cam]", TheUI->GetCam());
     }
 #endif
     if (camOverride && camOverride != RndCam::Current()) {

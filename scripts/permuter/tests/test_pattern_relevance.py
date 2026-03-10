@@ -11,7 +11,7 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-from scripts.permuter.types import SwapInfo
+from scripts.permuter.types import Cluster, SwapInfo
 from scripts.permuter.tests.conftest import (
     _empty_diag,
     diag_with_arith_ops,
@@ -49,6 +49,23 @@ class TestPatternRelevance(unittest.TestCase):
     def test_ternary_swap_irrelevant_empty(self):
         p = get_pattern("ternary_swap")
         self.assertFalse(p.relevant(_empty_diag()))
+
+    def test_ternary_swap_irrelevant_reg_swaps_only(self):
+        """Pure register swaps without branch/cluster signal should not trigger."""
+        p = get_pattern("ternary_swap")
+        self.assertFalse(p.relevant(diag_with_gpr_swaps()))
+
+    def test_ternary_swap_irrelevant_large_cluster(self):
+        """Large clusters (>6 insns) without branch mismatches should not trigger."""
+        p = get_pattern("ternary_swap")
+        d = _empty_diag()
+        d.clusters = [Cluster(start_idx=0, end_idx=20, size=20, inserts=10, deletes=10)]
+        self.assertFalse(p.relevant(d))
+
+    def test_empty_size_irrelevant_subf_only(self):
+        """subf without divw/mulli should not trigger empty_size_swap."""
+        p = get_pattern("empty_size_swap")
+        self.assertFalse(p.relevant(diag_with_subf_cmpw()))
 
     def test_empty_size_relevant_divw_target(self):
         p = get_pattern("empty_size_swap")

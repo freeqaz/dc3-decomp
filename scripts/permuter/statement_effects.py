@@ -21,11 +21,31 @@ _ACCESSOR_CALL_RE = re.compile(
     r"^(Get[A-Z_]\w*|Is[A-Z_]\w*|Has[A-Z_]\w*|size|empty|length|begin|end|front|back|c_str)$"
 )
 _MUTATOR_CALL_RE = re.compile(
-    r"^(Set|Add|Remove|Push|Pop|Append|Insert|Erase|Update|Init|Reset|Release|Destroy|Load|Save|Write)[A-Z_]\w*$"
+    r"^(Set|Add|Remove|Push|Pop|Append|Insert|Erase|Update|Init|Reset|Release|Destroy|Delete|Load|Save|Write|Clear|Select|Resize|Reserve|Make|Finish|Begin|End|Swap|Unload)([A-Z_]\w*)?$"
 )
 _LOGGING_CALL_RE = re.compile(
-    r"^(printf|fprintf|sprintf|snprintf|puts|Log[A-Z_]\w*|Warn[A-Z_]\w*|Notify[A-Z_]\w*|MILO_LOG|MILO_WARN|MILO_NOTIFY)$"
+    r"^(printf|fprintf|sprintf|snprintf|puts|Log([A-Z_]\w*)?|Warn([A-Z_]\w*)?|Notify([A-Z_]\w*)?|Print([A-Z_]\w*)?|MILO_LOG|MILO_WARN|MILO_NOTIFY(?:_ONCE)?)$"
 )
+_MUTATOR_CALL_NAMES = frozenset({
+    "RELEASE",
+    "MemAlloc",
+    "MemFree",
+    "MemPushTemp",
+    "MemPopTemp",
+    "BeginMemTrackObjectName",
+    "EndMemTrackObjectName",
+    "BeginMemTrackFileName",
+    "EndMemTrackFileName",
+    "push_back",
+    "push_front",
+    "pop_back",
+    "pop_front",
+    "emplace_back",
+    "emplace_front",
+    "clear",
+    "resize",
+    "reserve",
+})
 
 
 @dataclass(frozen=True)
@@ -355,6 +375,8 @@ def _classify_call_name(name: str) -> str:
         return "guard"
     if _LOGGING_CALL_RE.match(name):
         return "logging"
+    if name in _MUTATOR_CALL_NAMES:
+        return "mutator"
     if _MUTATOR_CALL_RE.match(name):
         return "mutator"
     if _ACCESSOR_CALL_RE.match(name):

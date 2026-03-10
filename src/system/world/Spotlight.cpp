@@ -466,7 +466,6 @@ void Spotlight::DrawShowing() {
             }
         }
     }
-    auto& _ref3 = mBeam;
     if (TheRnd.GetDrawMode() == Rnd::kDrawNormal) {
         SpotlightDrawer::DrawLight(this);
     } else if (mTargetLoaded) {
@@ -486,6 +485,7 @@ void Spotlight::DrawShowing() {
             sDiskMesh->SetMat(mLensMaterial);
             sDiskMesh->DrawShowing();
         }
+        auto& _ref3 = mBeam;
         if (_ref3.mBeam && TheRnd.GetDrawMode() != 5) {
             _ref3.mBeam->DrawShowing();
         }

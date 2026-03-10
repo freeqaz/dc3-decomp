@@ -1,3 +1,4 @@
+#include "char/CharCollide.h"
 #include "char/Character.h"
 #include "math/Mtx.h"
 #include "math/Rand.h"
@@ -989,7 +990,9 @@ void WorldCrowd::DrawShowing() {
         Draw3DChars();
         if (Rnd::kDrawNormal == TheRnd.GetDrawMode()) {
             FOREACH (it, mCharacters) {
-                if ((it->mDef.mChar && it->mMMesh) & !mShow3DOnly) {
+                Character *curChar = it->mDef.mChar;
+                if ((curChar && it->mMMesh) & !mShow3DOnly) {
+                    CharCollide *collide = curChar->Find<CharCollide>("body.col", false);
                     it->mMMesh->DrawShowing();
                 }
             }

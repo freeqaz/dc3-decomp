@@ -148,17 +148,19 @@ What is still missing:
 - ~~PPC ASM -> IL-style lifting for a constrained opcode subset~~ DONE (80+ PPC mnemonics, 12 shape categories, CFG, 173 tests)
 - ~~IL-guided constraints or facts consumable by the permuter~~ DONE (4th extractor `extract_from_shape_facts()`, 10 shape-fact category handlers, target-aware routing)
 - ~~selective compiler RE for COLOR register allocator internals~~ DONE (linear scan, not graph coloring — see `msvc-src/docs/COLOR_RE.md`)
-- automated header cluster detection (methodology proven, script not yet built)
+- ~~automated header cluster detection~~ DONE — `scripts/analysis/header_cluster.py`:
+  match% clustering, template pattern clustering, opportunity ranking with fixability
+  scores. JSON output for downstream tooling. First run found ObjectDir::Find at
+  99.7% across 38 TUs (78 functions) — fixed via Dir.h intermediate variable removal,
+  +78 functions to 100%.
 - TU-boundary inlining control catalog (which functions must NOT have header bodies)
-- **`static const float` prologue fix pattern**: When target caches a float literal
-  pool ADDRESS in a callee-saved GPR (e.g. `lis r29, lbl_...` + `lfs fN, offset, r29`)
-  but our compiler caches the VALUE in a callee-saved FPR (e.g. `fmr f1, f30`),
-  replacing inline float literals with `static const float kVal = X.Xf;` forces
-  address-based access matching the target. Proven on ContentLoadingPanel::Poll
-  (84.8% → 100%). Detection: prologue has GPR↔FPR type mismatch (`__savegprlr_N`
-  vs manual FPR saves), replace instructions show `lfs fN, label, rGPR` vs
-  `fmr fN, fFPR`. Should be added as a new permuter pattern (`float_const_static`)
-  or integrated into the existing `float_literal_pressure` pattern.
+- ~~`static const float` prologue fix pattern~~ DONE — `float_const_static` pattern
+  (`scripts/permuter/patterns/float_const_static.py`): detects GPR↔FPR type conflict
+  via `has_gpr_fpr_type_conflict` property, generates variants replacing inline float
+  literals with `static const float` declarations. 23 unit tests.
+- ~~`--validate` flag~~ DONE — default-on in hill_climber. Shows per-variant
+  validation tier next to score, tier distribution summary at end of search.
+  18 unit tests.
 
 ## Design Principle
 
@@ -536,7 +538,9 @@ TODO:
 - ~~Implement validator chain~~ DONE (6 levels)
 - ~~Wire into beam selection~~ DONE (`validation_tier` in `ranking_key`)
 - ~~Wire into hill_climber~~ DONE (advisory validation on winners)
-- Add `--validate` flag to show per-variant validation tiers in output
+- ~~Add `--validate` flag~~ DONE — default-on in hill_climber CLI. Shows
+  per-variant validation tier inline with score output, tier distribution
+  summary at end of search. 18 unit tests.
 - Add region-regression rejection mode (optional: reject variants that pass
   overall but regress specific regions)
 

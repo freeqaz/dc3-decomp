@@ -41,6 +41,10 @@ class EmptySizeSwapPattern(Pattern):
 
         Returns "to_size" if target uses division/multiply (size()), "to_empty" if
         target uses pointer comparison (empty()), or None if no signal.
+
+        Only fires on divw/divwu/mulli opcodes — the actual codegen signature of
+        size() on STL containers. The previous subf secondary heuristic was removed
+        because subf appears in unrelated contexts (loop conditions, binary search).
         """
         _SIZE_OPS = {"divw", "divwu", "mulli"}
 
@@ -54,18 +58,6 @@ class EmptySizeSwapPattern(Pattern):
             return "to_size"  # target uses division/multiply, swap empty→size
         if base_has_size and not target_has_size:
             return "to_empty"  # we use division/multiply, target uses pointer cmp
-
-        # Secondary heuristic: subf + comparison pattern
-        target_has_subf = any(
-            d.target_opcode == "subf" for d in diagnosis.diff_ops
-        )
-        base_has_subf = any(
-            d.base_opcode == "subf" for d in diagnosis.diff_ops
-        )
-        if target_has_subf and not base_has_subf:
-            return "to_size"
-        if base_has_subf and not target_has_subf:
-            return "to_empty"
 
         return None
 

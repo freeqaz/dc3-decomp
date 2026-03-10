@@ -7,7 +7,7 @@ Inventory of decomp gaps affecting the native build. Prioritized by impact on re
 ## Current State
 
 - **Track A (Engine Boot)**: Boots to `choose_mode_screen`, 51 draw calls/frame, 5000+ frames stable. `Flow::Enter()` and `Flow::Exit()` now implemented — screen navigation should work.
-- **Current UI regression**: `choose_mode_screen` still collapses to a mostly black frame with a thin horizontal strip, even though the choose-mode provider populates 5 items and the list widgets now draw under `[ui.cam]`.
+- **Current UI regression**: `choose_mode_screen` menu content invisible. Root cause confirmed: **camera positioning**. `turbo_shell.cam` sits at Z=-63, ribbons render at Z=285–517, frustum half-width ≈206 at that depth — ribbons are outside the view. Moving `[ui.cam]` to Z=370 produces 447 mesh draw calls (from 0), proving the rendering pipeline is correct. On Xbox, CamShots/PropAnims baked into .milo files reposition the camera; on native, the animation system isn't driving camera position.
 - **Track B (Milo Viewer)**: Full rendering pipeline. 14/44 demo shots render (8 broken YAML paths).
 - **Weak stubs**: `engine_stubs_generated.cpp` has ~2530 weak function stubs. Any real .cpp implementation automatically overrides them.
 
@@ -17,8 +17,11 @@ These directly affect what's visible on screen.
 
 | Class | Method | Status | Impact |
 |-------|--------|--------|--------|
-| `MeterDisplay` | `DrawShowing()` | **98.3%** (dead register) | Score/progress meters render |
-| `Spotlight` | `DrawShowing()` | **95.6%** (stack frame, control flow) | Stage lighting |
+| `DxCam` | `Select()` | **67.6%** (control flow + offset swap) | Xbox D3D9 camera matrix setup. Implemented in source, still a useful decomp target. |
+| `DxCam` | `SetViewport()` | **94.0%** (mostly volatile FPR/regalloc) | Sets D3D9 viewport from RndCam frustum |
+| `DxCam` | `ProjectZ(float)` | **88.8%** (offset/control flow cleanup) | Projects Z coordinate for depth sorting |
+| `MeterDisplay` | `DrawShowing()` | **88.7%** (WorldInstance type, volatile FPR swaps) | Score/progress meters render |
+| `Spotlight` | `DrawShowing()` | **96.8%** (stack frame, bne/beq polarity, store reorder) | Stage lighting |
 | `SpotlightDrawer` | `DrawShowing()` | **100%** | Spotlight drawer selection |
 | `RndTexBlender` | `DrawShowing()` | **88.6%** (regswaps, static guards) | Texture blend effects |
 | `MoveDir` | `DrawShowing()` | **90.4%** (MI this-adjust, r27/r28 regswap) | Dance move overlay (debug) |
@@ -71,7 +74,7 @@ These affect menu navigation, list population, and screen transitions.
 |-------|--------|--------|--------|
 | `OptionsPanel` | `OnMsg(RCJobComplete)` | **89.5%** (regswaps, addr reloc) | Token redemption / linking code |
 | `OptionsPanel` | `Poll()` | **98.9%** | Options purchasing/update flow |
-| `ContentLoadingPanel` | `Poll()` | **84.8%** (prologue, volatile FPR swaps) | Loading progress animation |
+| ~~`ContentLoadingPanel`~~ | ~~`Poll()`~~ | **100%** (fixed: static const float for GPR caching) | Loading progress animation |
 | `ContentLoadingPanel` | `ShowIfPossible()` | **100%** | Loading panel entry |
 | `ProfileMgr` | `Poll()` | **99.6%** | Profile debug overlay |
 | `SaveLoadManager` | `Poll()` | **100%** | Save/load state machine |
@@ -84,11 +87,34 @@ These affect menu navigation, list population, and screen transitions.
 - The real list polling path is already implemented and complete through `UIList::Poll()`, `UIListDir::PollWidgets()`, and `UIListSlot::Poll()`.
 
 ### Choose-Mode Follow-Up — 2026-03-10
-- `HamNavList::DrawShowing()` — **90.7%**. A real native-facing issue was confirmed here: ribbon draw was leaving the wrong camera selected for list widget draw. Re-selecting `TheUI->GetCam()` moves choose-mode widget and label draws from `turbo_shell.cam` to `[ui.cam]`, but the frame is still visually collapsed. Keep this function on the shortlist, but it is no longer the only suspect.
-- `HamListRibbon::DrawRibbon()` — **89.6%**. Still a high-value decomp target. It mutates shared `UIListElementDrawState` storage, offsets label/widget positions, and drives the final per-ribbon transform path. Runtime now shows sane widget positions and alphas, so remaining mistakes here are more likely to be transform/composition related than provider-state related.
-- `RndCam::GetViewProjectXfms()` — **66.8%**. This is now the highest-priority shared decomp gap for the broken choose-mode frame. `Transpose()` is 100% and `RndCam::WorldToScreen()` / `ScreenToWorld()` are now 100%, but the real frame still collapses after widgets switch to `[ui.cam]`. That makes the camera projection path itself the strongest remaining shared-code suspect.
-- `UIListDir::BuildDrawState()` — shared native correctness fix already landed. Zero-initialize `UIListElementDrawState` before filling it; Xbox got away with partially initialized stack POD here, native did not. This fixed ribbon overlay garbage, but not the collapsed frame.
-- `PanelDir::DrawShowing()` is no longer the primary decomp suspect for choose-mode. Runtime now proves the actual list payload reaches `UIListMeshElement::Draw()` and `UILabel::DrawShowing()` under `[ui.cam]`.
+
+**Root cause identified**: Camera positioning, not draw pipeline logic. Debug confirmed:
+- `turbo_shell.cam`: worldPos=(-125.0, -663.5, -63.0) — loaded from .milo file
+- Ribbons render at final Z=285.5–517.5 (after HamNavList WorldXfm applied)
+- At FOV 34.5° and Y-distance 663.5, visible Z half-width ≈206, so ribbons at Z=348+ from camera are outside frustum
+- **Proof**: Overriding `[ui.cam]` to Z=370 → 447 mesh draw calls (from 0). Rendering pipeline is correct.
+- On Xbox, `DxCam::Select()` builds D3D view/projection matrices and CamShots/PropAnims in .milo files reposition the camera. Neither mechanism works on native yet.
+- **Important follow-up**: after `HamNavList::DrawShowing()` was fixed to re-select `[ui.cam]` for list widgets, the unconditional `UI.cpp` debug override (`mCam->SetLocalPos(Vector3(0, -768, 370));`) became counterproductive. Runtime logs showed choose-mode labels/icons projecting to negative screen Y under that forced camera. The override is now opt-in via `MILO_DEBUG_UI_CAM_HACK=1` and should not be treated as the normal native path.
+
+**Draw chain status** (all functions in the UI draw path):
+- `PanelDir::DrawShowing()` — **100%** COMPLETE
+- `RndDir::DrawShowing()` — **100%** COMPLETE
+- `UIListDir::DrawWidgets()` — **100%** COMPLETE
+- `UIListDir::SetElementPos()` — **100%** COMPLETE
+- `UIListSlot::Draw()` — **100%** COMPLETE
+- `UIListWidget::CalcXfm()` — **100%** COMPLETE
+- `RndCam::Select()` — **100%** COMPLETE
+- `UIListDir::FillElements()` — **100%** COMPLETE
+- `HamListRibbon::DrawShowing()` — **100%** COMPLETE
+- `UIListWidget::DrawMesh()` — **93.0%** AT_LIMIT (behaviorally equivalent)
+- `HamListRibbon::Draw()` — **91.6%** AT_LIMIT. Logic bug fixed (visibleCount=4→5), now producing correct ribbon layout.
+- `HamNavList::DrawShowing()` — **90.7%** AT_LIMIT. Camera re-select fixed. 11 register swap pairs (r28/r29).
+- `HamListRibbon::DrawRibbon()` — **89.6%** AT_LIMIT. Transform/composition path, branch polarity inversions.
+- `UIListDir::BuildDrawState()` — **87.6%** AT_LIMIT. Zero-init fix landed. 130 diff_arg instructions.
+- `RndCam::GetViewProjectXfms()` — **57.3%** AT_LIMIT. Uses sFlipYZ (zero on Xbox/BSS). Not used for Xbox rendering (DxCam::Select builds its own matrices). Still needed for native `WorldToScreen()`.
+- `native/tests/test_rndcam_projection.cpp` now covers `GetViewProjectXfms()` / `WorldToScreen()` for identity perspective, translated camera, screen-subrect projection, orthographic projection, and frustum edges. All pass on native as of 2026-03-10, so any remaining issue here is likely specific-path behavior, not a basic projection math bug.
+- `native/tests/test_rndcam_projection.cpp` now also covers the approximate choose-mode list coordinates captured from runtime. Those tests show the default `[ui.cam]` geometry keeps the list in-bounds, while the old forced `Z=370` debug camera pushes it off-screen vertically.
+- `RndCam::UpdateLocal()` — **99.9%** AT_LIMIT. 6 stfs offset mismatches.
 
 ### Screen Transition Workarounds (src/system/ui/UIScreen.cpp)
 - ~~`UnloadPanels()` — Skipped on native (ObjRef crash)~~ **FIXED**: Real crash was null `sHamMaster` in `MetaPanel::Load`, not ObjRef corruption. UnloadPanels fully re-enabled.
@@ -149,6 +175,9 @@ Sorted by impact x feasibility:
 2. ~~**Flow::Enter()**~~ — **Done**. Implemented with `Flow::Exit()`. 81.8% / 99.1% match respectively.
 3. ~~**Locale data loading**~~ — **Done**. 2091 symbols loaded from 2 files. Fix was proper `mInitialized` constructor init + LocalePanel vtable key function fix.
 4. ~~**Text positioning**~~ — **Verified working** (2026-03-06). No alignment issues — sFlipYZ + ortho projection correct. `FitTextJust()` was missing (undefined symbol crash), now implemented.
+5. **Keep decomping `DxCam::Select()`** — source implementation exists, but it is still only **67.6%**. It remains the closest shared-code analogue to the Xbox camera setup path for UI/world rendering.
+6. **Camera animation on native** — CamShots/PropAnims in .milo files should reposition camera for menu screens. Investigate why the Milo animation system isn't driving camera position on native. May need `RndDir::Enter()` to trigger animations, or `CameraManager` to play CamShots.
+7. **Re-test choose_mode_screen without `MILO_DEBUG_UI_CAM_HACK`** — the old debug camera proof is now isolated behind an env var. Validate a fresh frame capture on the default `[ui.cam]` path before chasing more projection math.
 
 ### Remaining Stubs — All Resolved
 4. ~~**SaveLoadManager::Poll()**~~ — **Done** (100% match)

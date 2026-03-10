@@ -33,6 +33,8 @@ This document predates the current implementation state. The practical status is
 - `tail_call_reorder` applicability has been widened for terminal cleanup
   wrappers (`if (ptr) Call(ptr);` / `if (ptr) { Call(ptr); }`), which now
   generates real variants on destructor-style candidates
+- a follow-up noise-trimming pass removed most infrastructure-only tail-call
+  variants; the current plausible producers are a much smaller subset
 
 That changes the next RE priorities:
 

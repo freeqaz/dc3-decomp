@@ -42,6 +42,7 @@ from . import fabs_variant  # noqa: F401  # Swap fabs/fabsf/std::fabs for float 
 from . import milo_log_swap  # noqa: F401  # Swap MILO_WARN/NOTIFY/LOG/FAIL macros
 from . import float_double_literal  # noqa: F401  # Swap 0.001 <-> 0.001f literal suffixes
 from . import float_literal_pressure  # noqa: F401  # Swap inline float literals <-> static consts
+from . import float_const_static  # noqa: F401  # Convert float literals <-> static const for GPR/FPR prologue fix
 from . import objptr_bool_extract  # noqa: F401  # Extract ObjPtr to raw ptr before && chains (cmpwi->cmplwi)
 from . import iterator_deref_style  # noqa: F401  # (*it).member <-> it->member
 from . import assignment_reorder  # noqa: F401  # Reorder consecutive assignment statements

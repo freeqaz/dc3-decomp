@@ -130,14 +130,16 @@ class TernarySwapPattern(Pattern):
     name = "ternary_swap"
 
     def relevant(self, diagnosis: Diagnosis) -> bool:
-        if diagnosis.clusters:
+        has_branch_mismatch = any(
+            d.target_opcode in _BRANCH_OPS or d.base_opcode in _BRANCH_OPS
+            for d in diagnosis.diff_ops
+        )
+        # Branch opcode mismatch is the primary signal for ternary-vs-if/else
+        if has_branch_mismatch:
             return True
-        if diagnosis.reg_swap_pairs:
+        # Small clusters (2-6 insns) are the characteristic ternary signature
+        if any(2 <= c.size <= 6 for c in diagnosis.clusters):
             return True
-        # Check for branch opcode mismatches
-        for d in diagnosis.diff_ops:
-            if d.target_opcode in _BRANCH_OPS or d.base_opcode in _BRANCH_OPS:
-                return True
         return False
 
     def priority(self, diagnosis: Diagnosis) -> float:

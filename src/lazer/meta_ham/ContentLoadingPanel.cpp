@@ -58,14 +58,15 @@ void ContentLoadingPanel::Poll() {
         UIPanel::Poll();
         RndGroup *progressGroup = LoadedDir()->Find<RndGroup>("progress.grp", true);
         f32 currentFrame = progressGroup->GetFrame();
+        static const f32 kHundred = 100.0f;
         f32 target;
         if (mContentCount > 0) {
             target = ((f32)mMountedCount * 110.0f) / (f32)mContentCount;
         } else {
-            target = 100.0f;
+            target = kHundred;
         }
-        if (target > 100.0f) {
-            target = 100.0f;
+        if (target > kHundred) {
+            target = kHundred;
         }
         f32 delta = TheTaskMgr.DeltaSeconds();
         if (delta < 0.0f) {
@@ -75,7 +76,7 @@ void ContentLoadingPanel::Poll() {
         }
         f32 newFrame = (target - currentFrame) * delta + currentFrame;
         if (mMountedCount == mContentCount) {
-            newFrame = 100.0f;
+            newFrame = kHundred;
         }
         progressGroup->SetFrame(newFrame, 1.0f);
     }

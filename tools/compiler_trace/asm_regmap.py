@@ -47,6 +47,10 @@ class AsmRegMap:
     var_to_reg: dict[str, str] = field(default_factory=dict)  # {"a": "r31"}
     reg_to_var: dict[str, str] = field(default_factory=dict)  # {"r31": "a"}
     callee_saved_count: int = 0  # Number of callee-saved GPRs used
+    # FPR mappings (f14-f31 callee-saved)
+    fpr_var_to_reg: dict[str, str] = field(default_factory=dict)  # {"x": "f31"}
+    fpr_reg_to_var: dict[str, str] = field(default_factory=dict)  # {"f31": "x"}
+    fpr_callee_saved_count: int = 0  # Number of callee-saved FPRs used
 
 
 # Source comment line: "; 42   :     int a = GetValue();"
@@ -61,10 +65,18 @@ _ADDI_RE = re.compile(r"\baddi\s+(r\d+)\s*,")
 # li rN, imm (loading immediate into callee-saved)
 _LI_RE = re.compile(r"\bli\s+(r\d+)\s*,")
 
-# Any instruction writing to a callee-saved register (first operand is dest)
-# Matches: mr rN, lwz rN, lfs rN, addi rN, li rN, etc.
+# Any instruction writing to a callee-saved GPR (first operand is dest)
+# Matches: mr rN, lwz rN, addi rN, li rN, etc.
 _DEST_REG_RE = re.compile(
     r"\b(?:mr|addi|li|lwz|lbz|lhz|lha|lfs|lfd|add|subf|mullw|ori|lis|rlwinm|srawi)\s+(r\d+)"
+)
+
+# Any instruction writing to a callee-saved FPR (first operand is dest)
+# Matches: fmr fN, lfs fN, lfd fN, fadds fN, fsubs fN, fmuls fN, fdivs fN, etc.
+_DEST_FPR_RE = re.compile(
+    r"\b(?:fmr|lfs|lfd|fadds|fadd|fsubs|fsub|fmuls|fmul|fdivs|fdiv|"
+    r"fmadds|fmadd|fmsubs|fmsub|fnmsubs|fnmsub|fneg|fabs|frsp|fctiw|fctiwz|"
+    r"fsel|fres|frsqrte|ps_merge00|ps_merge01|ps_merge10|ps_merge11)\s+(f\d+)"
 )
 
 # Declaration patterns in source comments
@@ -97,6 +109,63 @@ def _is_callee_saved_gpr(reg: str) -> bool:
         return 13 <= num <= 31
     except ValueError:
         return False
+
+
+def _is_callee_saved_fpr(reg: str) -> bool:
+    """Check if a register is a callee-saved FPR (f14-f31)."""
+    if not reg.startswith("f"):
+        return False
+    try:
+        num = int(reg[1:])
+        return 14 <= num <= 31
+    except ValueError:
+        return False
+
+
+# __savefpr_N saves fN through f31
+_SAVEFPR_RE = re.compile(r"__savefpr_(\d+)")
+
+# Individual FPR save: stfd fN, -offset(r1)
+_INDIVIDUAL_FPR_SAVE_RE = re.compile(r"\bstfd\s+f(\d+)\s*,\s*-?\d+\(r1\)")
+
+# FPR move: fmr fN, fM (volatile→callee-saved, like parameter save for floats)
+_FMR_RE = re.compile(r"\bfmr\s+(f\d+)\s*,\s*f(\d+)")
+
+
+def _count_fpr_saves(func_lines: list[str]) -> int:
+    """Count callee-saved FPR registers from function prologue."""
+    count = 0
+    fpr_regs: set[int] = set()
+    in_prologue = True
+
+    for line in func_lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        # End of prologue
+        if ".endprolog" in stripped or (
+            stripped.startswith("bl ") and "__savefpr" not in stripped
+            and "__savegprlr" not in stripped
+        ):
+            in_prologue = False
+        if not in_prologue:
+            break
+
+        # __savefpr_N
+        m = _SAVEFPR_RE.search(stripped)
+        if m:
+            first_saved = int(m.group(1))
+            if 14 <= first_saved <= 31:
+                count = max(count, 32 - first_saved)
+            continue
+        # Individual stfd fN, -offset(r1)
+        m = _INDIVIDUAL_FPR_SAVE_RE.search(stripped)
+        if m:
+            reg_num = int(m.group(1))
+            if 14 <= reg_num <= 31:
+                fpr_regs.add(reg_num)
+
+    return max(count, len(fpr_regs))
 
 
 def _extract_var_from_source(source_text: str) -> str | None:
@@ -153,8 +222,11 @@ def parse_asm_listing(
     if func_info:
         callee_saved_count = func_info[0][1]
 
-    if callee_saved_count == 0:
-        return AsmRegMap(callee_saved_count=0)
+    # Count FPR callee-saved registers
+    fpr_callee_saved_count = _count_fpr_saves(func_lines)
+
+    if callee_saved_count == 0 and fpr_callee_saved_count == 0:
+        return AsmRegMap(callee_saved_count=0, fpr_callee_saved_count=0)
 
     # Determine which callee-saved regs are actually used
     callee_saved_regs = _find_callee_saved_regs(func_lines)
@@ -168,6 +240,10 @@ def parse_asm_listing(
     var_to_reg: dict[str, str] = {}
     reg_to_var: dict[str, str] = {}
     assigned_regs: set[str] = set()
+    # FPR mappings
+    fpr_var_to_reg: dict[str, str] = {}
+    fpr_reg_to_var: dict[str, str] = {}
+    assigned_fprs: set[str] = set()
 
     # Track current source context
     current_var: str | None = None
@@ -240,7 +316,7 @@ def parse_asm_listing(
                 assigned_regs.add(dest_reg)
                 reg_to_var[dest_reg] = f"__param_{m.group(2)}"
 
-        # Assembly instruction — look for first write to callee-saved reg
+        # Assembly instruction — look for first write to callee-saved GPR
         if current_var and current_var not in var_to_reg:
             m = _DEST_REG_RE.search(stripped)
             if m:
@@ -250,10 +326,37 @@ def parse_asm_listing(
                     reg_to_var[dest_reg] = current_var
                     assigned_regs.add(dest_reg)
 
+        # Also look for first write to callee-saved FPR
+        if current_var and current_var not in fpr_var_to_reg:
+            m = _DEST_FPR_RE.search(stripped)
+            if m:
+                dest_fpr = m.group(1)
+                if _is_callee_saved_fpr(dest_fpr) and dest_fpr not in assigned_fprs:
+                    fpr_var_to_reg[current_var] = dest_fpr
+                    fpr_reg_to_var[dest_fpr] = current_var
+                    assigned_fprs.add(dest_fpr)
+
+        # FPR parameter saves: fmr fN, f1/f2/... (volatile→callee-saved)
+        m = _FMR_RE.search(stripped)
+        if m and not seen_bl_since_source:
+            dest_fpr = m.group(1)
+            src_fpr = m.group(2)
+            # Volatile FPR params: f1-f13
+            try:
+                src_num = int(src_fpr[1:])
+            except ValueError:
+                src_num = 0
+            if 1 <= src_num <= 13 and _is_callee_saved_fpr(dest_fpr) and dest_fpr not in assigned_fprs:
+                assigned_fprs.add(dest_fpr)
+                fpr_reg_to_var[dest_fpr] = f"__fparam_{src_fpr}"
+
     return AsmRegMap(
         var_to_reg=var_to_reg,
         reg_to_var=reg_to_var,
         callee_saved_count=callee_saved_count,
+        fpr_var_to_reg=fpr_var_to_reg,
+        fpr_reg_to_var=fpr_reg_to_var,
+        fpr_callee_saved_count=fpr_callee_saved_count,
     )
 
 

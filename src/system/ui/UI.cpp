@@ -169,12 +169,15 @@ void UIManager::Draw() {
     RndCam* savedCam = RndCam::Current();
     RndEnviron* savedEnv = RndEnviron::Current();
     if (mCam) {
-        mCam->Select();
-        extern int gDebugFrameID;
-        if (gDebugFrameID == 500) {
-            printf("DC3 UI::Draw@500: selected [ui.cam], RndCam::Current()='%s'\n",
-                   RndCam::Current() ? RndCam::Current()->Name() : "NULL");
+        // Keep the old choose-mode camera override available for diagnostics, but do
+        // not force it during normal native runs. Once HamNavList started drawing its
+        // widgets under [ui.cam], the unconditional Z=370 override pushed those items
+        // off-screen vertically.
+        const char *debugCamHack = getenv("MILO_DEBUG_UI_CAM_HACK");
+        if (debugCamHack && debugCamHack[0]) {
+            mCam->SetLocalPos(Vector3(0, -768, 370));
         }
+        mCam->Select();
     }
     if (mEnv) mEnv->Select(nullptr);
 #endif

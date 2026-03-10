@@ -1,5 +1,6 @@
 #include "flow/FlowMultiSetProperty.h"
 #include "flow/DrivenPropertyEntry.h"
+#include "obj/ObjPtrVec_impl.h"
 #include "flow/FlowNode.h"
 #include "obj/Data.h"
 #include "obj/Object.h"

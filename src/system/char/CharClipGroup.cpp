@@ -1,6 +1,7 @@
 #include "char/CharClipGroup.h"
 #include "CharClipGroup.h"
 #include "char/CharClip.h"
+#include "obj/ObjPtrVec_impl.h"
 #include "math/Rand.h"
 #include "math/Utl.h"
 #include "obj/Object.h"

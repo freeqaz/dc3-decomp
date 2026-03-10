@@ -1,5 +1,6 @@
 #include "world/LightPreset.h"
 #include "SpotlightDrawer.h"
+#include "obj/ObjPtrVec_impl.h"
 #include "math/Mtx.h"
 #include "math/Rot.h"
 #include "math/Color.h"

@@ -402,6 +402,16 @@ def diag_with_member_ref_bind_swaps() -> Diagnosis:
     return d
 
 
+def diag_with_rlwinm_fusion() -> Diagnosis:
+    """rlwinm fusion ops (extrwi/clrlslwi) in diff — u8 type control."""
+    d = _empty_diag()
+    d.diff_ops = [
+        DiffOp(index=5, target_opcode="srwi", base_opcode="extrwi"),
+        DiffOp(index=8, target_opcode="clrlwi", base_opcode="clrlslwi"),
+    ]
+    return d
+
+
 def diag_with_gpr_fpr_conflict() -> Diagnosis:
     """GPR-FPR type conflict (opposite-sign save deltas)."""
     d = _empty_diag()
@@ -409,7 +419,7 @@ def diag_with_gpr_fpr_conflict() -> Diagnosis:
     d.base_gpr_saves = 2
     d.target_fpr_saves = 2
     d.base_fpr_saves = 3
-    d.has_gpr_fpr_type_conflict = True
+    # has_gpr_fpr_type_conflict is now a property computed from deltas
     return d
 
 

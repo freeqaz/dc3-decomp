@@ -141,8 +141,8 @@ def parse_args() -> argparse.Namespace:
         help="Disable Ghidra-guided patterns",
     )
     parser.add_argument(
-        "--m2c", action="store_true", default=False,
-        help="Enable m2c-guided context loading (default: False)",
+        "--m2c", action="store_true", default=True,
+        help="Enable m2c-guided context loading (default: True)",
     )
     parser.add_argument(
         "--no-m2c", action="store_false", dest="m2c",
@@ -205,8 +205,12 @@ def parse_args() -> argparse.Namespace:
         help="Proposals per state per depth (default: 24)",
     )
     parser.add_argument(
-        "--validate", action="store_true",
-        help="Show validation tier info for each result (tier distribution in summary)",
+        "--validate", action="store_true", default=True,
+        help="Show validation tier info for each result (tier distribution in summary, default: True)",
+    )
+    parser.add_argument(
+        "--no-validate", action="store_false", dest="validate",
+        help="Disable validation tier display",
     )
     return parser.parse_args()
 
@@ -559,6 +563,7 @@ def _climb_one(
                 ghidra=args.ghidra,
                 m2c=args.m2c,
                 constrained=args.constrained,
+                validate=getattr(args, "validate", True),
             )
         elif strategy == "evolutionary":
             from .evolutionary import evolve
@@ -595,6 +600,7 @@ def _climb_one(
                 chain_depth=args.chain_depth,
                 adaptive=args.adaptive,
                 constrained=args.constrained,
+                validate=getattr(args, "validate", True),
             )
         delta = result.final_percent - result.initial_percent
         if delta > 0:
@@ -644,6 +650,7 @@ def _climb_one(
             "ghidra_stats": result.ghidra_stats,
             "preflight": preflight,
             "validation_tier": result.validation_tier,
+            "validation_distribution": dict(result.validation_distribution),
             "shape_facts_enabled": result.shape_facts_enabled,
             "codegen_shapes": list(result.codegen_shapes),
             "fact_boost_patterns": list(result.fact_boost_patterns),
@@ -1102,21 +1109,39 @@ def main():
     print(f"  Total time: {total_elapsed:.1f}s", file=sys.stderr)
 
     # Validation tier summary (when --validate)
-    if getattr(args, "validate", False) and stats["improvements"]:
-        tier_counts: dict[int, int] = {}
-        for imp in stats["improvements"]:
-            t = imp.get("validation_tier", 0)
-            tier_counts[t] = tier_counts.get(t, 0) + 1
+    if getattr(args, "validate", False):
         _tier_names = {
             0: "INVALID", 1: "PARSE_OK", 2: "BUILD_OK", 3: "SCORE_IMPROVED",
             4: "REGION_IMPROVED", 5: "FACT_AGREED", 6: "SEMANTIC_OK",
         }
-        parts = []
-        for tier in range(6, -1, -1):
-            count = tier_counts.get(tier, 0)
-            if count > 0:
-                parts.append(f"{_tier_names.get(tier, f'T{tier}')}:{count}")
-        print(f"  Validation: {' '.join(parts)}", file=sys.stderr)
+        # Winner tier distribution
+        if stats["improvements"]:
+            tier_counts: dict[int, int] = {}
+            for imp in stats["improvements"]:
+                t = imp.get("validation_tier", 0)
+                tier_counts[t] = tier_counts.get(t, 0) + 1
+            parts = []
+            for tier in range(6, -1, -1):
+                count = tier_counts.get(tier, 0)
+                if count > 0:
+                    parts.append(f"{_tier_names.get(tier, f'T{tier}')}:{count}")
+            if parts:
+                print(f"  Validation: {' '.join(parts)}", file=sys.stderr)
+
+        # Aggregate per-variant tier distribution across all functions
+        agg_dist: dict[int, int] = {}
+        for imp in stats["improvements"]:
+            for tier_str, count in imp.get("validation_distribution", {}).items():
+                tier = int(tier_str) if isinstance(tier_str, str) else tier_str
+                agg_dist[tier] = agg_dist.get(tier, 0) + count
+        if agg_dist:
+            total_variants = sum(agg_dist.values())
+            dist_parts = []
+            for tier in range(6, -1, -1):
+                count = agg_dist.get(tier, 0)
+                if count > 0:
+                    dist_parts.append(f"{_tier_names.get(tier, f'T{tier}')}:{count}")
+            print(f"  Tier dist:  {' '.join(dist_parts)} ({total_variants} variants)", file=sys.stderr)
 
     # Ghidra stats summary
     if ghidra_batch:
@@ -1207,11 +1232,19 @@ def main():
             reverse=True,
         )
         print(f"\nImprovements:", file=sys.stderr)
+        _v_tier_names = {
+            0: "INVALID", 1: "PARSE_OK", 2: "BUILD_OK", 3: "SCORE_IMPROVED",
+            4: "REGION_IMPROVED", 5: "FACT_AGREED", 6: "SEMANTIC_OK",
+        }
         for imp in sorted_imps:
             perfect_tag = " ★" if imp["final"] >= 100.0 else ""
+            vtier_tag = ""
+            if getattr(args, "validate", False) and imp.get("validation_tier", 0) > 0:
+                vt = imp["validation_tier"]
+                vtier_tag = f" [{_v_tier_names.get(vt, f'T{vt}')}]"
             print(
-                f"\n  {imp['function']}: {imp['initial']:.1f}% → "
-                f"{imp['final']:.1f}% (+{imp['delta']:.1f}%){perfect_tag}",
+                f"\n  {imp['function']}: {imp['initial']:.1f}% -> "
+                f"{imp['final']:.1f}% (+{imp['delta']:.1f}%){perfect_tag}{vtier_tag}",
                 file=sys.stderr,
             )
             if imp.get("codegen_shapes"):

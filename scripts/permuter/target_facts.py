@@ -450,8 +450,27 @@ def extract_from_shape_facts(
                     payload["boost_patterns"] = ["temp_elimination", "tail_call_reorder"]
 
         elif kind == "virtual_dispatch":
-            # Virtual call detected — suppress patterns that change call type
+            # Virtual call detected — capture slot detail for struct analysis
             payload["virtual_call"] = True
+            if shape.get("slot_offset") is not None:
+                payload["slot_offset"] = shape["slot_offset"]
+            if shape.get("vbtable_offset") is not None:
+                payload["vbtable_offset"] = shape["vbtable_offset"]
+            if shape.get("has_vbtable_indirection"):
+                payload["has_vbtable_indirection"] = True
+
+        elif kind == "inline_wrapper":
+            payload["wrapper_category"] = category
+            if category in ("trivial_forwarding", "trivial_tail_forward"):
+                # Wrapper detected — if target outlines but we inline,
+                # boost noinline_stub to force outlined call
+                payload["boost_patterns"] = ["noinline_stub"]
+            elif category == "accessor_load":
+                # Accessor pattern — relevant for outline-vs-inline decision
+                if shape.get("member_offset") is not None:
+                    payload["member_offset"] = shape["member_offset"]
+            elif category == "return_forwarding":
+                payload["boost_patterns"] = ["noinline_stub"]
 
         elif kind == "prologue_shape":
             # Register save metadata — inform register-pressure-aware patterns

@@ -67,8 +67,8 @@ class TestAsmRegMap(unittest.TestCase):
         candidates = asm_guided_search(regmap, [("r30", "r31")], ["a", "b", "c"])
         self.assertEqual(candidates, [])
 
-    def test_fpr_swap_pairs_are_skipped(self):
-        """asm_guided_search only handles GPR swaps, FPR pairs are ignored."""
+    def test_fpr_swap_pairs_without_fpr_mapping_skipped(self):
+        """FPR swaps without FPR mappings in regmap produce no candidates."""
         from tools.compiler_trace.asm_regmap import AsmRegMap
         from tools.compiler_trace.regmap_solver import asm_guided_search
 
@@ -79,6 +79,25 @@ class TestAsmRegMap(unittest.TestCase):
         )
         candidates = asm_guided_search(regmap, [("f30", "f31")], ["a", "b"])
         self.assertEqual(candidates, [])
+
+    def test_fpr_swap_pairs_with_fpr_mapping(self):
+        """FPR swaps with FPR mappings generate targeted candidates."""
+        from tools.compiler_trace.asm_regmap import AsmRegMap
+        from tools.compiler_trace.regmap_solver import asm_guided_search
+
+        regmap = AsmRegMap(
+            var_to_reg={"a": "r31"},
+            reg_to_var={"r31": "a"},
+            callee_saved_count=1,
+            fpr_var_to_reg={"x": "f31", "y": "f30"},
+            fpr_reg_to_var={"f31": "x", "f30": "y"},
+            fpr_callee_saved_count=2,
+        )
+        candidates = asm_guided_search(regmap, [("f30", "f31")], ["a", "x", "y"])
+        self.assertGreater(len(candidates), 0)
+        # Should have a candidate that swaps x and y positions
+        swapped = any(c[1] == "y" and c[2] == "x" for c in candidates)
+        self.assertTrue(swapped, f"Expected x↔y swap in candidates: {candidates}")
 
     def test_multi_swap_produces_simultaneous_candidate(self):
         """Two swap pairs should produce a combined simultaneous swap."""

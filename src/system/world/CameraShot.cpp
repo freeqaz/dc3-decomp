@@ -28,7 +28,10 @@
 #include "world/Crowd.h"
 #include "world/FreeCamera.h"
 #include "world/Dir.h"
+#include "rndobj/TransProxy.h"
+#include "utl/MakeString.h"
 #include <cstdlib>
+#include <cstring>
 
 inline float ComputeFOVScale(float fov) {
     return 24.0f / (float(std::tan(fov / 2.0f)) * 2.0f);
@@ -120,7 +123,46 @@ void CamShotFrame::Save(BinStream &bs) const {
     bs << mParentFirstFrame;
 }
 
-RndTransformable *LoadSubPart(BinStreamRev &, CamShot *);
+RndTransformable *LoadSubPart(BinStreamRev &d, CamShot *shot) {
+    if (d.rev < 0x2B) {
+        int dummy;
+        d >> dummy;
+    }
+    String str;
+    d >> str;
+    Symbol sym;
+    d >> sym;
+    if (str.empty())
+        return 0;
+    RndTransformable *foundTrans =
+        shot->Dir()->Find<RndTransformable>(str.c_str(), false);
+    if (sym.Null()) {
+        if (foundTrans)
+            return foundTrans;
+        MILO_LOG(
+            "%s could not find %s, assuming character, attaching to base\n",
+            PathName(shot),
+            str
+        );
+    }
+    char buf[256];
+    strcpy(buf, sym.Str());
+    char *buf_ptr = strchr(buf, '.');
+    if (buf_ptr)
+        *buf_ptr = '\0';
+    else if (buf[0] == '\0') {
+        strcpy(buf, "base");
+    }
+    const char *search = MakeString("%s_%s.tp", str, buf);
+    RndTransProxy *proxy = shot->Dir()->Find<RndTransProxy>(search, false);
+    if (!proxy) {
+        proxy = Hmx::Object::New<RndTransProxy>();
+        proxy->SetName(search, shot->Dir());
+        proxy->SetProxy(dynamic_cast<ObjectDir *>(foundTrans));
+        proxy->SetPart(sym);
+    }
+    return proxy;
+}
 
 void CamShotFrame::Load(BinStreamRev &d) {
     d >> mDuration;

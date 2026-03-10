@@ -356,8 +356,7 @@ public:
      */
     template <class T>
     T *Find(const char *name, bool fail = true) {
-        Hmx::Object *found = FindObject(name, false, true);
-        T *castedObj = dynamic_cast<T *>(found);
+        T *castedObj = dynamic_cast<T *>(FindObject(name, false, true));
         if (!castedObj && fail) {
             MILO_FAIL(
                 kNotObjectMsg, name, PathName(this) ? PathName(this) : "**no file**"

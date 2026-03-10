@@ -457,5 +457,92 @@ class TestExtractFacts(unittest.TestCase):
         self.assertEqual(len(facts.facts), 0)
 
 
+class TestVirtualDispatchFacts(unittest.TestCase):
+    """Tests for virtual dispatch shape facts routing."""
+
+    def test_vtable_call_carries_slot_offset(self):
+        """Virtual dispatch facts carry slot_offset from shape."""
+        facts = extract_from_shape_facts([
+            {
+                "kind": "virtual_dispatch",
+                "category": "vtable_call",
+                "confidence": 0.9,
+                "slot_offset": 0x10,
+                "vbtable_offset": 0,
+                "receiver_reg": "r3",
+            },
+        ], diagnosis=_make_diagnosis())
+        self.assertEqual(len(facts), 1)
+        self.assertEqual(facts[0].payload["slot_offset"], 0x10)
+        self.assertEqual(facts[0].payload["vbtable_offset"], 0)
+
+    def test_vtable_tail_call_category(self):
+        """Virtual tail call dispatch is correctly categorized."""
+        facts = extract_from_shape_facts([
+            {
+                "kind": "virtual_dispatch",
+                "category": "vtable_tail_call",
+                "confidence": 0.92,
+                "slot_offset": 0x20,
+            },
+        ], diagnosis=_make_diagnosis())
+        self.assertEqual(len(facts), 1)
+        self.assertTrue(facts[0].payload["virtual_call"])
+
+    def test_vbtable_indirection_flag(self):
+        """Multi-inheritance vtable carries indirection flag."""
+        facts = extract_from_shape_facts([
+            {
+                "kind": "virtual_dispatch",
+                "category": "vtable_call",
+                "confidence": 0.9,
+                "has_vbtable_indirection": True,
+            },
+        ], diagnosis=_make_diagnosis())
+        self.assertEqual(len(facts), 1)
+        self.assertTrue(facts[0].payload.get("has_vbtable_indirection"))
+
+
+class TestInlineWrapperFacts(unittest.TestCase):
+    """Tests for inline wrapper shape facts routing."""
+
+    def test_trivial_forwarding_boosts_noinline(self):
+        """Trivial forwarding wrapper boosts noinline_stub pattern."""
+        facts = extract_from_shape_facts([
+            {
+                "kind": "inline_wrapper",
+                "category": "trivial_forwarding",
+                "confidence": 0.92,
+            },
+        ], diagnosis=_make_diagnosis())
+        self.assertEqual(len(facts), 1)
+        self.assertIn("noinline_stub", facts[0].payload["boost_patterns"])
+
+    def test_accessor_load_carries_offset(self):
+        """Accessor load wrapper carries member_offset."""
+        facts = extract_from_shape_facts([
+            {
+                "kind": "inline_wrapper",
+                "category": "accessor_load",
+                "confidence": 0.9,
+                "member_offset": 0x10,
+            },
+        ], diagnosis=_make_diagnosis())
+        self.assertEqual(len(facts), 1)
+        self.assertEqual(facts[0].payload["member_offset"], 0x10)
+
+    def test_return_forwarding_boosts_noinline(self):
+        """Return forwarding wrapper boosts noinline_stub."""
+        facts = extract_from_shape_facts([
+            {
+                "kind": "inline_wrapper",
+                "category": "return_forwarding",
+                "confidence": 0.85,
+            },
+        ], diagnosis=_make_diagnosis())
+        self.assertEqual(len(facts), 1)
+        self.assertIn("noinline_stub", facts[0].payload["boost_patterns"])
+
+
 if __name__ == "__main__":
     unittest.main()

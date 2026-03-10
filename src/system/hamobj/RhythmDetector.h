@@ -93,9 +93,9 @@ protected:
     DebugGraph *mDebugGraphD; // 0x78
     DebugGraph *mDebugGraphE; // 0x7c
     int mDivergenceCounter; // 0x80
-    char buffer[0xA00]; // 0x84 some big ass buffer maybe who knows
+    PaddedJointPos mJointBuffer[8][kNumJoints]; // 0x84 - circular buffer of joint snapshots
     float mTimestamps[8]; // 0xa84 - cached beat timestamps
-    int unkaa4;
+    int mBufferIndex; // 0xaa4 - circular buffer write index
     float mLastBeatTime; // 0xaa8 - last beat time at recording start
     PaddedJointPos unkaac[kNumJoints]; // 0xaac
     RecordData mRecordData; // 0xbec

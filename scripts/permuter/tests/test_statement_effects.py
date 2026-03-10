@@ -76,6 +76,28 @@ void test_func() {
         self.assertIn("mutator", mutator_effects.call_kinds)
         self.assertIn("logging", logging_effects.call_kinds)
 
+    def test_classifies_macro_stl_and_lifecycle_helpers_as_mutators(self):
+        ctx = make_context(
+            """\
+struct Vec { void push_back(int); };
+struct Cam { void Select(); };
+void test_func(Vec& vec, Cam* cam, int value) {
+    RELEASE(cam);
+    vec.push_back(value);
+    cam->Select();
+    MILO_NOTIFY_ONCE("x");
+}
+""",
+            "test_func",
+            diag_with_clusters(),
+        )
+        analyzer = StatementEffectAnalyzer(ctx.file_source)
+
+        self.assertIn("mutator", analyzer.analyze(ctx.statements[0]).call_kinds)
+        self.assertIn("mutator", analyzer.analyze(ctx.statements[1]).call_kinds)
+        self.assertIn("mutator", analyzer.analyze(ctx.statements[2]).call_kinds)
+        self.assertIn("logging", analyzer.analyze(ctx.statements[3]).call_kinds)
+
     def test_call_pair_policy_is_configurable(self):
         ctx = make_context(
             """\

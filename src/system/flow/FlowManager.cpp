@@ -1,5 +1,6 @@
 #include "flow/FlowManager.h"
 #include "flow/FlowNode.h"
+#include "obj/ObjPtrVec_impl.h"
 #include "obj/Data.h"
 #include "os/Timer.h"
 #include "rndobj/Overlay.h"

@@ -516,7 +516,7 @@ void HamListRibbon::Draw(
     // Calculate sizes
     int numItems = (int)drawStates.size();
     bool scrollable = numItems > 6;
-    int visibleCount = scrollable ? numItems : 4;
+    int visibleCount = scrollable ? numItems : sNumListSelectable;
 
     // Calculate padding per side
     int paddingPerSide = Max((mPaddedSize - numItems + 1) / 2, 0);
