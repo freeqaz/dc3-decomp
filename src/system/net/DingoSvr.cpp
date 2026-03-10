@@ -35,8 +35,7 @@ void DingoServer::Init() {
 }
 
 void DingoServer::Logout() {
-    unk40 = nullptr;
-    unk44 = nullptr;
+    unk40 = "";
     mAuthState = kServerUnauthed;
     mAuthedPadNum = -1;
     for (int i = 0; i < DIM(mPadAuthed); i++) {

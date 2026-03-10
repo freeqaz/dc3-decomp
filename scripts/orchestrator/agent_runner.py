@@ -108,9 +108,11 @@ class AgentRunner:
     def build_env(self, model: str = None) -> dict[str, str]:
         """Build environment dict for agent process. Public for testing.
 
-        Translates parent session's proxy ports into standard HTTP_PROXY/HTTPS_PROXY
-        vars so child processes can route through the parent's proxy. This is required
-        when direct internet access is unavailable (e.g. DNS doesn't resolve without proxy).
+        Optionally translates parent session's proxy ports into standard
+        HTTP_PROXY/HTTPS_PROXY vars. Only enabled when ORCHESTRATOR_USE_PROXY=true
+        (e.g. when direct internet access is unavailable). By default, child
+        processes connect directly — the parent's sandbox proxy doesn't work
+        for child claude processes making their own API calls.
         """
         agent_home = Path(os.environ.get(
             "AGENT_HOME",
@@ -118,22 +120,25 @@ class AgentRunner:
         ))
         agent_home.mkdir(parents=True, exist_ok=True)
 
-        http_proxy_port = os.environ.get("CLAUDE_CODE_HOST_HTTP_PROXY_PORT")
-        socks_proxy_port = os.environ.get("CLAUDE_CODE_HOST_SOCKS_PROXY_PORT")
-
         env: dict[str, str] = {
             "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
             "HOME": str(agent_home),
         }
 
-        if http_proxy_port:
-            env["HTTP_PROXY"] = f"http://localhost:{http_proxy_port}"
-            env["HTTPS_PROXY"] = f"http://localhost:{http_proxy_port}"
-            env["http_proxy"] = f"http://localhost:{http_proxy_port}"
-            env["https_proxy"] = f"http://localhost:{http_proxy_port}"
-        if socks_proxy_port:
-            env["ALL_PROXY"] = f"socks5h://localhost:{socks_proxy_port}"
-            env["all_proxy"] = f"socks5h://localhost:{socks_proxy_port}"
+        # Only forward parent proxy when explicitly requested.
+        # The parent Claude Code session's proxy is a sandbox-internal proxy
+        # that doesn't work for child claude processes making API calls.
+        if os.environ.get("ORCHESTRATOR_USE_PROXY", "").lower() == "true":
+            http_proxy_port = os.environ.get("CLAUDE_CODE_HOST_HTTP_PROXY_PORT")
+            socks_proxy_port = os.environ.get("CLAUDE_CODE_HOST_SOCKS_PROXY_PORT")
+            if http_proxy_port:
+                env["HTTP_PROXY"] = f"http://localhost:{http_proxy_port}"
+                env["HTTPS_PROXY"] = f"http://localhost:{http_proxy_port}"
+                env["http_proxy"] = f"http://localhost:{http_proxy_port}"
+                env["https_proxy"] = f"http://localhost:{http_proxy_port}"
+            if socks_proxy_port:
+                env["ALL_PROXY"] = f"socks5h://localhost:{socks_proxy_port}"
+                env["all_proxy"] = f"socks5h://localhost:{socks_proxy_port}"
 
         return env
 

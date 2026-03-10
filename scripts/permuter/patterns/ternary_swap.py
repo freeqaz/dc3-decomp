@@ -43,6 +43,89 @@ _BRANCH_OPS = {"beq", "bne", "bge", "ble", "bgt", "blt",
                "beq-", "bne-", "ble-", "bgt-", "bge-", "blt-"}
 
 
+def _has_swappable_constructs(body: Node) -> bool:
+    """Quick AST check for ternary/if-else patterns worth transforming.
+
+    Returns True if the body contains:
+    - if_statement with alternative (else) where both branches have single assignments/returns
+    - conditional_expression (ternary) in assignment or return
+    - Consecutive if (no else) + return (bare if/return pattern)
+    """
+    from ..ast_queries import walk
+
+    stmts = list(body.named_children)
+
+    for node in walk(body):
+        # Ternary in assignment or return context
+        if node.type == "conditional_expression":
+            parent = node.parent
+            if parent is not None and parent.type in (
+                "assignment_expression", "return_statement", "init_declarator",
+            ):
+                return True
+
+        # if/else with single assignment or return in each branch
+        if node.type == "if_statement":
+            alternative = node.child_by_field_name("alternative")
+            consequence = node.child_by_field_name("consequence")
+            if alternative is not None and consequence is not None:
+                # Check if both branches are single-statement (assignment or return)
+                cons_ok = _is_single_assign_or_return(consequence)
+                if cons_ok:
+                    # alt body is inside the else clause
+                    for child in alternative.children:
+                        if child.type == "compound_statement":
+                            if _is_single_assign_or_return(child):
+                                return True
+                            break
+
+    # Check for bare if/return pattern (consecutive stmts)
+    for i in range(len(stmts) - 1):
+        if_stmt = stmts[i]
+        next_stmt = stmts[i + 1]
+        if (
+            if_stmt.type == "if_statement"
+            and next_stmt.type == "return_statement"
+            and if_stmt.child_by_field_name("alternative") is None
+        ):
+            consequence = if_stmt.child_by_field_name("consequence")
+            if consequence is not None:
+                # Check if consequence has a return
+                if _has_return(consequence):
+                    return True
+
+    return False
+
+
+def _is_single_assign_or_return(compound: Node) -> bool:
+    """Check if compound_statement has exactly one assignment or return."""
+    if compound.type != "compound_statement":
+        # Could be a bare return_statement
+        return compound.type == "return_statement"
+    named = [c for c in compound.named_children]
+    if len(named) != 1:
+        return False
+    stmt = named[0]
+    if stmt.type == "return_statement":
+        return True
+    if stmt.type == "expression_statement":
+        for child in stmt.named_children:
+            if child.type == "assignment_expression":
+                return True
+    return False
+
+
+def _has_return(node: Node) -> bool:
+    """Check if node contains a return_statement."""
+    if node.type == "return_statement":
+        return True
+    if node.type == "compound_statement":
+        for child in node.named_children:
+            if child.type == "return_statement":
+                return True
+    return False
+
+
 class TernarySwapPattern(Pattern):
     name = "ternary_swap"
 
@@ -82,6 +165,10 @@ class TernarySwapPattern(Pattern):
         return 0.3
 
     def generate(self, ctx: FunctionContext) -> Iterator[Variant]:
+        # AST preflight: skip if body has no swappable constructs
+        if not _has_swappable_constructs(ctx.body_node):
+            return
+
         counter = 0
         for stmt in ctx.statements:
             # if/else -> ternary (preferred direction per TECHNICAL_NOTES)

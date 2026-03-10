@@ -18,8 +18,9 @@ void Profiler::Stop() {
     if (ms > mMax) {
         mMax = ms;
     }
+    mSum += ms;
     mCount++;
-        if (mCount == mCountMax) {
+    if (mCount == mCountMax) {
         if (mCountMax == 1U) {
             TheDebug << MakeString("%s: %s\n", mName, FormatTime(mMin));
         } else {

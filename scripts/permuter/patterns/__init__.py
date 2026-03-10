@@ -16,6 +16,7 @@ from . import negation_split  # noqa: F401
 from . import and_split  # noqa: F401
 from . import bool_cast  # noqa: F401
 from . import bitwise_accumulator  # noqa: F401
+from . import bool_materialize  # noqa: F401
 from . import max_to_conditional  # noqa: F401
 from . import early_return_merge  # noqa: F401
 from . import bool_return_expr  # noqa: F401
@@ -25,9 +26,11 @@ from . import sizeof_signed_cast  # noqa: F401
 from . import initializer_literal  # noqa: F401
 from . import single_return  # noqa: F401
 from . import bit_test_bool  # noqa: F401
+from . import byte_mask_extraction  # noqa: F401
 from . import commutative_swap  # noqa: F401  # 0/143 wins — needs improvement
 from . import empty_size_swap  # noqa: F401   # 0/38 wins — needs improvement
 from . import ternary_swap  # noqa: F401      # 0/10 wins — needs improvement
+from . import condition_arithmetic  # noqa: F401
 from . import pragma_fp_contract  # noqa: F401
 from . import hoist_sret  # noqa: F401
 from . import noreturn_attr  # noqa: F401
@@ -38,19 +41,25 @@ from . import temp_elimination  # noqa: F401  # Inline single-use temps to fix c
 from . import fabs_variant  # noqa: F401  # Swap fabs/fabsf/std::fabs for float width fixes
 from . import milo_log_swap  # noqa: F401  # Swap MILO_WARN/NOTIFY/LOG/FAIL macros
 from . import float_double_literal  # noqa: F401  # Swap 0.001 <-> 0.001f literal suffixes
+from . import float_literal_pressure  # noqa: F401  # Swap inline float literals <-> static consts
 from . import objptr_bool_extract  # noqa: F401  # Extract ObjPtr to raw ptr before && chains (cmpwi->cmplwi)
 from . import iterator_deref_style  # noqa: F401  # (*it).member <-> it->member
 from . import assignment_reorder  # noqa: F401  # Reorder consecutive assignment statements
 from . import statement_reorder  # noqa: F401  # Reorder independent statements within blocks
 from . import milo_str_conv  # noqa: F401  # Add .Str() to Symbol args in MILO macros
 from . import milo_call_merge  # noqa: F401  # Merge duplicate MILO calls via shared variable
+from . import nor_prevention  # noqa: F401  # Widen narrow XOR inputs to avoid NOR peepholes
 from . import prologue_pressure  # noqa: F401  # Manipulate callee-saved register count via pressure changes
 from . import parameter_live_range  # noqa: F401  # Kill bs param live range after LOAD_REVS via d.stream
 from . import reference_elimination  # noqa: F401  # Eliminate multi-use ref/ptr vars (inverse of member_ref_bind)
+from . import return_call_merge  # noqa: F401  # Merge/split duplicate return-call branches
 from . import subscript_ref_bind  # noqa: F401  # Bind repeated arr[i] to local ref (inverse of reference_elimination)
+from . import switch_if_convert  # noqa: F401  # Convert switch <-> if/else-if chains
+from . import tail_call_reorder  # noqa: F401  # Reorder trailing calls to expose tail-call codegen
 from . import null_guard_elimination  # noqa: F401  # Remove redundant null checks (if (ptr) ptr->M() -> ptr->M())
 from . import varargs_cast  # noqa: F401  # Add (char *) casts to MILO macro varargs
 from . import bool_to_uchar  # noqa: F401  # Change bool locals to unsigned char
+from . import type_width_change  # noqa: F401  # Generalized int type width/sign changes
 from . import guard_to_nested  # noqa: F401  # Convert guard returns <-> nested if blocks
 from . import noinline_stub  # noqa: F401  # Mark trivial same-TU callees as __declspec(noinline)
 from . import math_return_cast  # noqa: F401  # Add/remove (float) cast on math function returns (frsp fix)

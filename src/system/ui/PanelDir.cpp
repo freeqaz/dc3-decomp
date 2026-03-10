@@ -398,6 +398,11 @@ fail:
 }
 
 DataNode PanelDir::OnMsg(ButtonDownMsg const &msg) {
+#ifdef HX_NATIVE
+    printf("DC3 PanelDir: '%s'.OnMsg(ButtonDown) focusComponent=%s action=%d\n",
+           Name(), mFocusComponent ? mFocusComponent->Name() : "<null>",
+           (int)msg.GetAction());
+#endif
     DataNode node(kDataUnhandled, 0);
     if (mFocusComponent) {
         node = mFocusComponent->Handle(msg, false);

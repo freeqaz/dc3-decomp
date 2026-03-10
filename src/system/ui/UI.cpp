@@ -236,9 +236,6 @@ void UIManager::UseJoypad(bool useJoypad, bool enableAutoRepeat) {
         if (enableAutoRepeat) {
             mJoyClient->SetRepeatMask(0xf000);
         }
-#ifdef HX_NATIVE
-        printf("DC3 UI: JoypadClient created for UIManager\n");
-#endif
     } else if (!useJoypad) {
         if (mJoyClient) {
             RELEASE(mJoyClient);
@@ -525,7 +522,8 @@ void UIManager::Poll() {
                     {"tutorial_voice_control_screen_0", "tutorial_voice_control_screen_1"},
                     {"tutorial_voice_control_screen_1", "tutorial_party_mode_screen_0"},
                     {"tutorial_party_mode_screen_0", "tutorial_party_mode_screen_1"},
-                    {"main_screen", "choose_mode_screen"},
+                    // main_screen → choose_mode_screen removed:
+                    // user navigates interactively from main_screen onward
                     {nullptr, nullptr}
                 };
 
@@ -587,6 +585,11 @@ void UIManager::Poll() {
             UIScreen *oldCur = mCurrentScreen;
             mTransitionState = kTransitionFrom;
             mCurrentScreen = trans;
+#ifdef HX_NATIVE
+            // Native: set_sink DTA action doesn't fire (screen-level DTA not loaded).
+            // Set mSink to current screen so HANDLE_MEMBER_PTR(mSink) routes messages.
+            mSink = trans;
+#endif
             mTransitionScreen = oldCur;
             if (trans) {
                 if (trans->AllPanelsDown() && mPushedScreens.empty()
@@ -779,6 +782,13 @@ void UIManager::Init() {
 }
 
 BEGIN_HANDLERS(UIManager)
+#ifdef HX_NATIVE
+    if (sym == Symbol("button_down") || sym == Symbol("button_up")) {
+        printf("DC3 UI: Handle '%s' — inTransition=%d mSink=%p mCurrentScreen=%p\n",
+               sym.Str(), (int)(InTransition() || InComponentSelect()),
+               (void*)mSink, (void*)mCurrentScreen);
+    }
+#endif
     if ((InTransition() || InComponentSelect())
         && BlockHandlerDuringTransition(sym, _msg)) {
         return 0;

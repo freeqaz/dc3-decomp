@@ -40,7 +40,12 @@ static bool sAutoPauseOnCameraDisconnect;
 
 GestureMgr::GestureMgr()
     : mLiveCamInput(LiveCameraInput::sInstance), mPauseOnSkeletonLossMode(2), mIDEnabled(1),
-      mInControllerMode(0), mInVoiceMode(0), mGesturingWithVoice(0), mInDoubleUserMode(0),
+#ifdef HX_NATIVE
+      mInControllerMode(1), // Native: always in controller mode (no Kinect)
+#else
+      mInControllerMode(0),
+#endif
+      mInVoiceMode(0), mGesturingWithVoice(0), mInDoubleUserMode(0),
       mInShellMode(0), mDebugDir(0) {
 #ifndef HX_NATIVE
     MILO_ASSERT(mLiveCamInput, 0x40);

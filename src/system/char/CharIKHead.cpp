@@ -173,7 +173,7 @@ void CharIKHead::PollDeps(
     changedBy.push_back(mMouth);
     changedBy.push_back(mHead);
     changedBy.push_back(mTarget);
-    if (GenerationCount(mSpine, mHead) > 0) {
+    if (GenerationCount(mSpine, mHead) != 0) {
 #ifdef HX_NATIVE
         for (RndTransformable *t = mHead; t != nullptr && t != mSpine->TransParent();
 #else

@@ -1,0 +1,168 @@
+"""Executable tests for the tail-call reorder permuter."""
+
+from __future__ import annotations
+
+import unittest
+
+from scripts.permuter.patterns.base import get_pattern
+from scripts.permuter.tests.conftest import (
+    diag_with_prologue_fewer_saves,
+    make_context,
+    make_ghidra_context,
+    match_variant,
+)
+
+
+def _variants(source: str, ghidra_code: str | None = None):
+    diagnosis = diag_with_prologue_fewer_saves()
+    if ghidra_code is None:
+        ctx = make_context(source, "test_func", diagnosis)
+    else:
+        ctx = make_ghidra_context(source, "test_func", diagnosis, ghidra_code)
+    return list(get_pattern("tail_call_reorder").generate(ctx))
+
+
+class TestTailCallReorder(unittest.TestCase):
+    def test_swaps_trailing_calls_at_function_end(self):
+        variants = _variants(
+            """\
+void test_func() {
+    First();
+    Second();
+}
+"""
+        )
+        self.assertTrue(
+            any(
+                match_variant(
+                    v.source,
+                    """\
+void test_func() {
+    Second();
+    First();
+}
+""",
+                    "normalized",
+                )
+                for v in variants
+            )
+        )
+
+    def test_swaps_calls_before_return_in_nested_block(self):
+        variants = _variants(
+            """\
+void test_func(int ok) {
+    if (ok) {
+        First();
+        Second();
+        return;
+    }
+}
+"""
+        )
+        self.assertTrue(
+            any(
+                match_variant(
+                    v.source,
+                    """\
+void test_func(int ok) {
+    if (ok) {
+        Second();
+        First();
+        return;
+    }
+}
+""",
+                    "normalized",
+                )
+                for v in variants
+            )
+        )
+
+    def test_nested_trailing_call_run_tries_more_than_tail_pair(self):
+        variants = _variants(
+            """\
+void test_func(int ok) {
+    if (ok) {
+        Alpha();
+        Beta();
+        Gamma();
+    }
+}
+"""
+        )
+        self.assertTrue(
+            any(
+                match_variant(
+                    v.source,
+                    """\
+void test_func(int ok) {
+    if (ok) {
+        Beta();
+        Alpha();
+        Gamma();
+    }
+}
+""",
+                    "normalized",
+                )
+                for v in variants
+            )
+        )
+
+    def test_ghidra_guidance_skips_already_correct_last_call(self):
+        variants = _variants(
+            """\
+void test_func() {
+    First();
+    Second();
+    return;
+}
+""",
+            ghidra_code="""\
+void test_func(void) {
+    First();
+    Second();
+    return;
+}
+""",
+        )
+        self.assertEqual(variants, [])
+
+    def test_ghidra_guidance_applies_to_before_return_path(self):
+        variants = _variants(
+            """\
+void test_func() {
+    Second();
+    First();
+    return;
+}
+""",
+            ghidra_code="""\
+void test_func(void) {
+    First();
+    Second();
+    return;
+}
+""",
+        )
+        self.assertTrue(
+            any(
+                match_variant(
+                    v.source,
+                    """\
+void test_func() {
+    First();
+    Second();
+    return;
+}
+""",
+                    "normalized",
+                )
+                for v in variants
+            )
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

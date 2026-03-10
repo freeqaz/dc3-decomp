@@ -730,11 +730,11 @@ void MoveDir::Draw(const BaseSkeleton &baseSkeleton, SkeletonViz &skeletonViz) {
                     nullptr, kCoordCamera, (SkeletonJoint)i, actual_ms, vdisp, disp_ms
                 );
                 MILO_ASSERT(actual_ms == disp_ms, 0x50F);
-                const Vector3 &camJointPos = unk414->CamJointPos((SkeletonJoint)i);
+                Vector3 camJointPos = unk414->CamJointPos((SkeletonJoint)i);
                 Vector3 vdiff;
                 Subtract(camJointPos, vdisp, vdiff);
                 Hmx::Color color(0.3f, 0.6f, 0.3f);
-                mSkeletonViz->DrawLine3D(vdiff, camJointPos, 0.01f, color, &color);
+                mSkeletonViz->DrawLine3D(vdiff, camJointPos, 0.01f, color, nullptr);
             }
         }
     } else if (mFiltersEnabled && mShowErrorFrames) {
@@ -744,15 +744,19 @@ void MoveDir::Draw(const BaseSkeleton &baseSkeleton, SkeletonViz &skeletonViz) {
         const Skeleton *player_skel = dynamic_cast<const Skeleton *>(&baseSkeleton);
         MILO_ASSERT(player_skel, 0x51F);
         SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
-        ErrorNodeInput nodeInput;
-        ErrorFrameInput input(handle.History(), *unk414, baseSkeleton, SongSpeed());
+        ErrorFrameInput input(
+            handle.History(), mShowErrorFrames->GetDancerFrame()->mSkeleton, baseSkeleton,
+            SongSpeed()
+        );
+        ErrorNode **nodePtr = mFilterVer->mErrorNodes;
         for (int i = 0; i < mFilterVer->NumNodes(); i++) {
-            ErrorNode *node = mFilterVer->mErrorNodes[i];
-            if (node) {
-                Vector3 error;
-                node->CalcError(input, nodeInput, error);
+            ErrorNode *node = *nodePtr;
+            if (node->IsTypeJointMatch(mErrorNodeInfo)) {
+                ErrorNodeInput nodeInput;
+                mFilterVer->NodeInput(i, mShowErrorFrames, moveMode, nodeInput);
                 node->VizError(skeletonViz, input, nodeInput);
             }
+            nodePtr++;
         }
     }
 }

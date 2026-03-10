@@ -43,17 +43,15 @@ void LocaleChunkSort::Sort(OrderedLocaleChunk *chunks, int count) {
 }
 
 const char *Locale::Localize(Symbol token, bool success) const {
-    if (token == gNullStr) {
+    if (token.Null()) {
         return "";
     }
     if (!mSymTable) {
         MILO_ASSERT(mSymTable, 0x1D8);
     }
 
-    // Static eng symbol
     static Symbol sEng("eng");
 
-    // Check mMagnuStrings for language-specific strings
     if (mMagnuStrings != nullptr) {
         if (SystemLanguage() == sEng) {
             DataArray *langArray = mMagnuStrings->FindArray(token, false);
@@ -63,11 +61,9 @@ const char *Locale::Localize(Symbol token, bool success) const {
         }
     }
 
-    // Search main symbol table
-    for (int i = 0; i < mSize; i++) {
-        if (mSymTable[i] == token) {
-            return mStrTable[i];
-        }
+    int idx;
+    if (FindDataIndex(token, idx, success)) {
+        return mStrTable[idx];
     }
 
     if (UsingCD()) {
@@ -75,6 +71,26 @@ const char *Locale::Localize(Symbol token, bool success) const {
     }
 
     return nullptr;
+}
+
+bool Locale::FindDataIndex(Symbol s, int &idx, bool fail) const {
+    int low = 0;
+    int high = mSize - 1;
+    while (high >= low) {
+        int mid = (low + high) >> 1;
+        if ((int)s > (int)mSymTable[mid]) {
+            low = mid + 1;
+        } else if ((int)s < (int)mSymTable[mid]) {
+            high = mid - 1;
+        } else {
+            idx = mid;
+            return true;
+        }
+    }
+    if (fail) {
+        MILO_FAIL("Couldn't find '%s' in array (file %s)", s.Str(), mFile.Str());
+    }
+    return false;
 }
 
 void Locale::Terminate() {
@@ -280,43 +296,45 @@ static int gLocalizeSepIdx = 0;
 
 const char *LocalizeSeparatedInt(int num, Locale &locale) {
     static Symbol sSep("locale_separator");
-    bool success;
+    bool success = false;
+    char digitBuf[2];
     const char *sep = Localize(sSep, &success, locale);
+    if (!success) {
+        sep = ",";
+    }
     if (strcmp(sep, gNullStr) == 0) {
         return (char *)MakeString("%i", num);
     }
     int sepLen = strlen(sep);
     int pos = 0x31;
-    int bufOff = gLocalizeSepIdx * 0x32;
-    char *buf = (char *)gLocalizeSepBuf;
-    buf[0x31 + bufOff] = '\0';
+    char *buf = gLocalizeSepBuf[gLocalizeSepIdx];
+    buf[0x31] = '\0';
     bool negative = num < 0;
-    unsigned int absNum = (unsigned int)num;
+    int absNum = num;
     if (negative) {
-        absNum = (unsigned int)(num ^ (num >> 31)) - (num >> 31);
+        absNum = (num ^ (num >> 31)) - (num >> 31);
     }
     int digitCount = 0;
     while (true) {
-        if (digitCount != 0 && (int)absNum < 1)
+        if (digitCount != 0 && absNum <= 0)
             break;
-        if (digitCount % 3 == 0 && digitCount > 0 && sepLen > 0) {
+        if (digitCount % 3 == 0 && digitCount > 0) {
             for (int j = sepLen - 1; j >= 0; j--) {
                 pos--;
-                buf[pos + bufOff] = sep[j];
+                buf[pos] = sep[j];
             }
         }
-        char digitBuf[110];
         Hx_snprintf(digitBuf, 2, "%d", absNum % 10);
         pos--;
-        buf[pos + bufOff] = digitBuf[0];
+        buf[pos] = digitBuf[0];
         digitCount++;
         absNum = absNum / 10;
     }
     if (negative) {
         pos--;
-        buf[pos + bufOff] = '-';
+        buf[pos] = '-';
     }
-    char *result = &buf[pos + bufOff];
+    char *result = &buf[pos];
     gLocalizeSepIdx = (gLocalizeSepIdx + 1) % 4;
     return result;
 }
@@ -325,16 +343,14 @@ void SyncReloadLocale() {
     static Symbol sLocale("locale");
     DataArray *cfg = SystemConfig(sLocale);
     for (int i = 1; i < cfg->Size(); i++) {
-        const char *path =
-            FileMakePath(FileGetPath(cfg->File()), cfg->Node(i).Str(cfg));
-        int ret = SystemExec(MakeString("p4 sync %s", path));
-        const char *fmt;
-        if (ret == 0) {
-            fmt = "updated %s\n";
+        const char *str = cfg->Str(i);
+        char *path =
+            (char *)FileMakePath(FileGetPath(cfg->File()), str);
+        if (SystemExec(MakeString("p4 sync %s", path)) == 0) {
+            TheDebug << MakeString("updated %s\n", path);
         } else {
-            fmt = "failed to update %s\n";
+            TheDebug << MakeString("failed to update %s\n", path);
         }
-        TheDebug << MakeString(fmt, path);
     }
     TheLocale.Terminate();
     TheLocale.Init();

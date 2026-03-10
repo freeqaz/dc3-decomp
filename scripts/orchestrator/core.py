@@ -271,8 +271,9 @@ class DecompOrchestrator:
         agent_home = Path(os.environ.get("AGENT_HOME", "/home/free/code/milohax/dc3-decomp/agent-home"))
         agent_home.mkdir(parents=True, exist_ok=True)
 
-        # Strip stale system proxy vars and translate parent's proxy port
-        # into standard HTTP_PROXY so the child claude process can reach the API.
+        # Strip stale system proxy vars so child doesn't inherit broken proxy config.
+        # The parent Claude Code session's proxy is sandbox-internal and doesn't work
+        # for child claude processes making their own API calls.
         _strip_proxy = {"HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy",
                         "ALL_PROXY", "all_proxy", "CLAUDECODE"}
         env = {k: v for k, v in os.environ.items() if k not in _strip_proxy}
@@ -281,17 +282,18 @@ class DecompOrchestrator:
             "HOME": str(agent_home),
         })
 
-        # Translate parent session's proxy ports into standard proxy vars
-        http_proxy_port = os.environ.get("CLAUDE_CODE_HOST_HTTP_PROXY_PORT")
-        socks_proxy_port = os.environ.get("CLAUDE_CODE_HOST_SOCKS_PROXY_PORT")
-        if http_proxy_port:
-            env["HTTP_PROXY"] = f"http://localhost:{http_proxy_port}"
-            env["HTTPS_PROXY"] = f"http://localhost:{http_proxy_port}"
-            env["http_proxy"] = f"http://localhost:{http_proxy_port}"
-            env["https_proxy"] = f"http://localhost:{http_proxy_port}"
-        if socks_proxy_port:
-            env["ALL_PROXY"] = f"socks5h://localhost:{socks_proxy_port}"
-            env["all_proxy"] = f"socks5h://localhost:{socks_proxy_port}"
+        # Only forward parent proxy when explicitly requested via ORCHESTRATOR_USE_PROXY=true
+        if os.environ.get("ORCHESTRATOR_USE_PROXY", "").lower() == "true":
+            http_proxy_port = os.environ.get("CLAUDE_CODE_HOST_HTTP_PROXY_PORT")
+            socks_proxy_port = os.environ.get("CLAUDE_CODE_HOST_SOCKS_PROXY_PORT")
+            if http_proxy_port:
+                env["HTTP_PROXY"] = f"http://localhost:{http_proxy_port}"
+                env["HTTPS_PROXY"] = f"http://localhost:{http_proxy_port}"
+                env["http_proxy"] = f"http://localhost:{http_proxy_port}"
+                env["https_proxy"] = f"http://localhost:{http_proxy_port}"
+            if socks_proxy_port:
+                env["ALL_PROXY"] = f"socks5h://localhost:{socks_proxy_port}"
+                env["all_proxy"] = f"socks5h://localhost:{socks_proxy_port}"
 
         # Auth for CLI subprocess (not SDK - CLI needs ANTHROPIC_API_KEY, not AUTH_TOKEN)
         use_zai = _get_zai_enabled() or requires_zai(model)

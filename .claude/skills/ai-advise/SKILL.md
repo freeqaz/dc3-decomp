@@ -60,6 +60,7 @@ python3 scripts/ai_advisor.py --symbol '$0' --model claude-opus-4-20250514
 | `--apply` | off | Apply the best-scoring suggestion to source |
 | `--dry-run` | off | Show prompt without calling API or testing |
 | `--model MODEL` | claude-sonnet-4-6 | LLM model to use |
+| `--provider P` | auto | `claude` (CLI via agent-home), `openrouter`, or `auto` (claude then openrouter fallback) |
 | `--iterations N` | 1 | Iterative rounds (each builds on best result) |
 | `--json` | off | Machine-readable output |
 

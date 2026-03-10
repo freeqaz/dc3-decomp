@@ -39,19 +39,34 @@ class EmptySizeSwapPattern(Pattern):
     def _detect_direction(self, diagnosis: Diagnosis) -> str | None:
         """Detect which direction to swap based on opcode mismatches.
 
-        Returns "to_size" if target uses division (size()), "to_empty" if
+        Returns "to_size" if target uses division/multiply (size()), "to_empty" if
         target uses pointer comparison (empty()), or None if no signal.
         """
-        target_has_div = any(
-            d.target_opcode in ("divw", "divwu") for d in diagnosis.diff_ops
+        _SIZE_OPS = {"divw", "divwu", "mulli"}
+
+        target_has_size = any(
+            d.target_opcode in _SIZE_OPS for d in diagnosis.diff_ops
         )
-        base_has_div = any(
-            d.base_opcode in ("divw", "divwu") for d in diagnosis.diff_ops
+        base_has_size = any(
+            d.base_opcode in _SIZE_OPS for d in diagnosis.diff_ops
         )
-        if target_has_div and not base_has_div:
-            return "to_size"  # target uses division, swap empty→size
-        if base_has_div and not target_has_div:
-            return "to_empty"  # we use division, target uses pointer cmp
+        if target_has_size and not base_has_size:
+            return "to_size"  # target uses division/multiply, swap empty→size
+        if base_has_size and not target_has_size:
+            return "to_empty"  # we use division/multiply, target uses pointer cmp
+
+        # Secondary heuristic: subf + comparison pattern
+        target_has_subf = any(
+            d.target_opcode == "subf" for d in diagnosis.diff_ops
+        )
+        base_has_subf = any(
+            d.base_opcode == "subf" for d in diagnosis.diff_ops
+        )
+        if target_has_subf and not base_has_subf:
+            return "to_size"
+        if base_has_subf and not target_has_subf:
+            return "to_empty"
+
         return None
 
     def generate(self, ctx: FunctionContext) -> Iterator[Variant]:

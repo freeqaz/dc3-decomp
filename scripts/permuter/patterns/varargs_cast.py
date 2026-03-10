@@ -104,7 +104,8 @@ class VarargsCastPattern(Pattern):
 
             # Generate variants: one per arg per cast type
             for arg_node in target_args:
-                for cast in _CAST_OPTIONS:
+                casts = _select_casts_for_arg(arg_node, source, ctx)
+                for cast in casts:
                     if counter >= 12:
                         return
 
@@ -245,3 +246,36 @@ def _already_has_cast(arg_node: Node, source: bytes) -> bool:
         return True
     # Also check parenthesized cast: (Type)expr shows as cast_expression
     return False
+
+
+def _select_casts_for_arg(
+    arg_node: Node, source: bytes, ctx: FunctionContext
+) -> list[bytes]:
+    """Select appropriate casts for an argument using libclang when available.
+
+    Falls back to the default _CAST_OPTIONS when libclang is unavailable or
+    cannot resolve the type.
+    """
+    try:
+        from ..clang_types import is_available, resolve_decl_type
+        if is_available() and ctx.file_path.name != "null":
+            type_info = resolve_decl_type(str(ctx.file_path), arg_node.start_byte)
+            if type_info is not None:
+                spelling = type_info.spelling.lower()
+                # Already const char* — no cast needed
+                if "char" in spelling and type_info.is_pointer:
+                    return []
+                # Symbol type → prefer (char*)
+                if "symbol" in spelling:
+                    return [b"(char *)"]
+                # String type → prefer (String &)
+                if "string" in spelling and not type_info.is_pointer:
+                    return [b"(String &)"]
+                # Pointer type → only (char*)
+                if type_info.is_pointer:
+                    return [b"(char *)"]
+    except (ImportError, Exception):
+        pass
+
+    # Fallback: try both cast options
+    return list(_CAST_OPTIONS)

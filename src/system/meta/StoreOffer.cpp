@@ -18,7 +18,9 @@
 #include <cstring>
 #include <stdlib.h>
 
-bool SortCmp::operator()(const StoreOffer *a, const StoreOffer *b) const { return false; }
+bool SortCmp::operator()(const StoreOffer *a, const StoreOffer *b) const {
+    return a->Cmp(*b, mSortBy);
+}
 
 StorePurchaseable::StorePurchaseable()
     : isAvailable(0), isPurchased(0), cost(0), songID(0) {}
@@ -49,7 +51,8 @@ StoreOffer::StoreOffer(DataArray *a, SongMgr *mgr) : mStoreOfferData(a), mSongMg
 
     DataArray *dateArray = mStoreOfferData->FindArray(release_date, false);
     if (dateArray) {
-        auto _tmp4 = DateTime(dateArray->Int(1), dateArray->Int(2), dateArray->Int(3), 0, 0, 0);
+        auto _tmp4 =
+            DateTime(dateArray->Int(1), dateArray->Int(2), dateArray->Int(3), 0, 0, 0);
         date = _tmp4;
     }
 
@@ -69,6 +72,8 @@ StoreOffer::StoreOffer(DataArray *a, SongMgr *mgr) : mStoreOfferData(a), mSongMg
 }
 
 StoreOffer::~StoreOffer() { mStoreOfferData->Release(); }
+
+bool StoreOffer::Cmp(StoreOffer const &, Symbol) const { return false; }
 
 bool StoreOffer::HasData(Symbol s) const {
     return mStoreOfferData->FindArray(s, false) != nullptr;

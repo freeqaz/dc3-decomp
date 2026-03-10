@@ -21,6 +21,7 @@
 - **Session 36**: FontMap heap buffer overflow root cause fix (sizeof(FontMap)/sizeof(FontMap3d) under #ifdef HX_NATIVE), ASan verified clean
 - **Session 37**: HamNavList element creation, UIList::Selected/GetListState implementations, STLport compat guards
 - **Session 38**: HamUI integration (TheUI = &TheHamUI for two-pass draw), ShellInput/CursorPanel Kinect guards, HamListRibbonDrawState LP64 pointer fix (mElemDrawState), HamListRibbonDrawState field rename (unk18→mElemDrawState, unk20→mBigScale, unk24→mActive)
+- **Session 39**: Input pipeline unblocked — IsAnimating() bypass (AnimTask never self-deletes without DTA lifecycle), mSink fallback dispatch (set_sink DTA action doesn't fire), controller mode force-on. Debug traces cleaned up. **Identified DTA loading as critical blocker** — mSink, animation cleanup, content population, and screen flow all depend on DTA scripts that native can't execute yet.
 
 ### Completed Phases
 - **Phase 0**: Foundation — COMPLETE

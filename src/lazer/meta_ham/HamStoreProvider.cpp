@@ -55,7 +55,8 @@ HamStoreProvider::HamStoreProvider(
     std::vector<HamStoreFilter *> *filters,
     std::vector<CartRow> *rows
 )
-    : mAllOffers(offers), mFilters(filters), mCurrentFilter(0), mFilteredOffers(0), mCartRows(rows), unkb8(0) {
+    : mAllOffers(offers), mFilters(filters), mCurrentFilter(0), mFilteredOffers(0),
+      mCartRows(rows), unkb8(0) {
     mFilterProvider = new HamStoreFilterProvider(mFilters);
 }
 
@@ -241,7 +242,7 @@ void HamStoreProvider::ApplySort() {
     if (!mSorts.empty()) {
         MILO_ASSERT_RANGE(mSortIndex, 0, mSorts.size(), 0xf1);
         if (mSorts[mSortIndex].Str() != gNullStr) {
-            SortCmp cmp;
+            SortCmp cmp(mSorts[mSortIndex]);
             std::sort(mFilteredOffers->begin(), mFilteredOffers->end(), cmp);
         }
     }
@@ -296,7 +297,8 @@ void HamStoreProvider::PopulateOffersInCart() {
             StoreOffer *offer = *it_storeOffer;
             if (offer->IsAvailable() || TheNetCacheMgr->IsDebug()) {
                 static Symbol song("song");
-                if (offer->OfferType() == song && offer->GetSingleSongID() == row.mSongID) {
+                if (offer->OfferType() == song
+                    && offer->GetSingleSongID() == row.mSongID) {
                     if (offer->IsPurchased()) {
                         storePanel->RemoveDLCFromCart(offer->GetSingleSongID());
                     } else {
@@ -320,7 +322,8 @@ void HamStoreProvider::SetFilter(HamStoreFilter const *filter) {
     mCurrentFilter = (HamStoreFilter *)filter;
     unk54.clear();
     std::map<Symbol, std::vector<StoreOffer *> *>::iterator it;
-    if (mCurrentFilter && (it = unk38.find(mCurrentFilter->mFilterSym), it != unk38.end())) {
+    if (mCurrentFilter
+        && (it = unk38.find(mCurrentFilter->mFilterSym), it != unk38.end())) {
         mFilteredOffers = it->second;
         mSorts = mCurrentFilter->mSortTypes;
     } else {
@@ -335,7 +338,8 @@ void HamStoreProvider::SetFilter(HamStoreFilter const *filter) {
 void HamStoreProvider::Refresh() {
     // Delete all vectors in unk38 map, then clear it
     for (std::map<Symbol, std::vector<StoreOffer *> *>::iterator it = unk38.begin();
-         it != unk38.end(); ++it) {
+         it != unk38.end();
+         ++it) {
         if (it->second) {
             delete it->second;
         }
@@ -349,14 +353,18 @@ void HamStoreProvider::Refresh() {
     for (StoreOffer **it = allOffers->begin(); it != allOffers->end(); ++it) {
         StoreOffer *offer = *it;
         if (offer->isAvailable || TheNetCacheMgr->IsDebug()) {
-            DataArray *filters = offer->GetData(DataArrayPtr(Symbol("filters")), true).Array(0);
+            DataArray *filters =
+                offer->GetData(DataArrayPtr(Symbol("filters")), true).Array(0);
             for (int i = 1; i < filters->Size(); i++) {
                 Symbol filterSym = filters->Sym(i);
-                std::map<Symbol, std::vector<StoreOffer *> *>::iterator mapIt = unk38.find(filterSym);
+                std::map<Symbol, std::vector<StoreOffer *> *>::iterator mapIt =
+                    unk38.find(filterSym);
                 if (mapIt == unk38.end()) {
                     std::vector<StoreOffer *> *vec = new std::vector<StoreOffer *>();
                     vec->push_back(offer);
-                    unk38.insert(std::pair<Symbol, std::vector<StoreOffer *> *>(filterSym, vec));
+                    unk38.insert(
+                        std::pair<Symbol, std::vector<StoreOffer *> *>(filterSym, vec)
+                    );
                 } else {
                     mapIt->second->push_back(offer);
                 }
@@ -374,7 +382,8 @@ void HamStoreProvider::Refresh() {
     std::vector<HamStoreFilter *>::iterator filterIt = filters->begin();
     while (filterIt != filters->end()) {
         HamStoreFilter *filter = *filterIt;
-        std::map<Symbol, std::vector<StoreOffer *> *>::iterator mapIt = unk38.find(filter->mFilterSym);
+        std::map<Symbol, std::vector<StoreOffer *> *>::iterator mapIt =
+            unk38.find(filter->mFilterSym);
         if ((mapIt == unk38.end() || mapIt->second->size() == 0)
             && filter->mFilterSym != store_filter_shopping_cart
             && filter->mFilterSym != store_filter_song_import_offers) {
@@ -407,4 +416,3 @@ BEGIN_HANDLERS(HamStoreProvider)
 END_HANDLERS
 
 #pragma endregion HamStoreProvider
-

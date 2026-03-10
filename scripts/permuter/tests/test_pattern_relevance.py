@@ -204,6 +204,52 @@ class TestPatternRelevance(unittest.TestCase):
         p = get_pattern("null_guard_elimination")
         self.assertFalse(p.relevant(_empty_diag()))
 
+    # type_width_change
+    def test_type_width_change_relevant_cmp(self):
+        p = get_pattern("type_width_change")
+        self.assertTrue(p.relevant(diag_with_cmp_ops()))
+
+    def test_type_width_change_irrelevant_empty(self):
+        p = get_pattern("type_width_change")
+        self.assertFalse(p.relevant(_empty_diag()))
+
+    # empty_size_swap with mulli
+    def test_empty_size_relevant_mulli(self):
+        """empty_size_swap should fire on mulli (size computation without divw)."""
+        from scripts.permuter.types import DiffOp
+        p = get_pattern("empty_size_swap")
+        d = _empty_diag()
+        d.diff_ops = [DiffOp(index=5, target_opcode="mulli", base_opcode="cmplw")]
+        self.assertTrue(p.relevant(d))
+
+
+class TestTernarySwapGenerationGuard(unittest.TestCase):
+    """Test that ternary_swap generates nothing on bodies without swappable constructs."""
+
+    def test_ternary_swap_no_variants_without_swappable(self):
+        """ternary_swap generates nothing when body has no if/else or ternary."""
+        source = "void test_func(int x) {\n    x++;\n    x *= 2;\n}\n"
+        ctx = make_context(source, "test_func", diag_with_branch_and_clusters())
+        p = get_pattern("ternary_swap")
+        variants = list(p.generate(ctx))
+        self.assertEqual(len(variants), 0)
+
+    def test_ternary_swap_generates_with_if_else(self):
+        """ternary_swap generates variants when body has if/else."""
+        source = """\
+void test_func(int cond) {
+    int x;
+    if (cond) {
+        x = 1;
+    } else {
+        x = 2;
+    }
+}
+"""
+        ctx = make_context(source, "test_func", diag_with_branch_and_clusters())
+        p = get_pattern("ternary_swap")
+        variants = list(p.generate(ctx))
+        self.assertGreater(len(variants), 0)
 
 
 class TestNullGuardGhidraGuided(unittest.TestCase):
@@ -258,18 +304,24 @@ void test_func(void) {
         self.assertEqual(len(ghidra_variants), 0)
 
     def test_null_guard_ghidra_and_operand_removes_absent(self):
-        """Ghidra has no null check in && -> drop the leading operand."""
+        """Ghidra has no null check in && -> drop the leading operand.
+
+        The safety check in _drop_leading_and_operand requires the kept side
+        to reference the dropped guard (e.g. TheMetaMusic && TheMetaMusic->X()).
+        When the sides are unrelated (TheMetaMusic && sHamMaster), the drop is
+        unsafe and correctly refused — the kept side must reference the guard.
+        """
         source = '''
 void test_func(int sHamMaster) {
-    if (TheMetaMusic && sHamMaster) {
+    if (TheMetaMusic && TheMetaMusic->IsActive()) {
         DoSomething();
     }
 }
 '''
-        # Ghidra just checks sHamMaster, no null check on TheMetaMusic
+        # Ghidra just calls directly, no null check on TheMetaMusic
         ghidra_code = '''
 void test_func(int param_1) {
-    if (param_1 != 0) {
+    if (FUN_AABBCCDD() != 0) {
         FUN_12345678();
     }
 }

@@ -2692,6 +2692,68 @@ void ChainLoad(BinStream &bs) {
 """,
     ),
 
+    # ===================== type_width_change =====================
+
+    PatternFixture(
+        id="typewidth_int_to_uint",
+        pattern_name="type_width_change",
+        description="Widen int to unsigned int (first transition)",
+        func_name="test_func",
+        diagnosis=diag_with_cmp_ops(),
+        seeded_source="""\
+void test_func() {
+    int count = 0;
+    if (count < 10) count++;
+}
+""",
+        expected_source="""\
+void test_func() {
+    unsigned int count = 0;
+    if (count < 10) count++;
+}
+""",
+    ),
+
+    PatternFixture(
+        id="typewidth_uint_to_int",
+        pattern_name="type_width_change",
+        description="Swap unsigned int to int (sign change)",
+        func_name="test_func",
+        diagnosis=diag_with_cmp_ops(),
+        seeded_source="""\
+void test_func() {
+    unsigned int x = 0;
+    if (x < 10) x++;
+}
+""",
+        expected_source="""\
+void test_func() {
+    int x = 0;
+    if (x < 10) x++;
+}
+""",
+    ),
+
+    PatternFixture(
+        id="typewidth_bool_to_uchar",
+        pattern_name="type_width_change",
+        description="Change bool to unsigned char with true/false fixup",
+        func_name="test_func",
+        diagnosis=diag_with_cmp_ops(),
+        seeded_source="""\
+void test_func() {
+    bool flag = false;
+    if (flag) flag = true;
+}
+""",
+        expected_source="""\
+void test_func() {
+    unsigned char flag = 0;
+    if (flag) flag = 1;
+}
+""",
+    ),
+
 ]
 
 # Build lookup by ID

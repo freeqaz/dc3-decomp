@@ -78,10 +78,10 @@ def unit_to_source_path(unit: str) -> str:
 
 
 def unit_to_obj_target(unit: str) -> str:
-    """Convert unit name to ninja build target. e.g. 'default/system/rndobj/Text' -> 'build/373307D9/obj/system/rndobj/Text.obj'."""
+    """Convert unit name to ninja build target. e.g. 'default/system/rndobj/Text' -> 'build/373307D9/src/system/rndobj/Text.obj'."""
     if unit.startswith("default/"):
         unit = unit[len("default/"):]
-    return f"build/373307D9/obj/{unit}.obj"
+    return f"build/373307D9/src/{unit}.obj"
 
 
 def resolve_symbol(name: str) -> dict | None:
@@ -450,60 +450,131 @@ def _load_dotenv() -> None:
             os.environ[key] = value
 
 
-def call_advisor(prompt: str, model: str = "claude-sonnet-4-6") -> list[EditSuggestion]:
-    """Call the Claude API with the structured prompt.
+def call_advisor(prompt: str, model: str = "claude-sonnet-4-6", provider: str = "auto") -> list[EditSuggestion]:
+    """Call LLM with the structured prompt.
 
-    Supports both direct Anthropic API (ANTHROPIC_API_KEY) and
-    OpenRouter (OPENROUTER_API_KEY) as a fallback. Loads .env from repo root.
+    Provider priority:
+    1. "claude" — Claude CLI subprocess using agent-home/ OAuth credentials (default)
+    2. "openrouter" — OpenRouter API via OPENROUTER_API_KEY
+    3. "auto" — try claude first, fall back to openrouter
     """
+    if provider in ("claude", "auto"):
+        suggestions = _call_claude_cli(prompt, model)
+        if suggestions is not None:
+            return suggestions
+        if provider == "claude":
+            print("Error: Claude CLI failed.", file=sys.stderr)
+            return []
+
+    # OpenRouter fallback
     _load_dotenv()
-    anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
     openrouter_key = os.environ.get("OPENROUTER_API_KEY")
-
-    if anthropic_key:
-        return _call_anthropic(prompt, model, anthropic_key)
-    elif openrouter_key:
+    if openrouter_key:
         return _call_openrouter(prompt, model, openrouter_key)
-    else:
-        print(
-            "Error: No API key found. Set ANTHROPIC_API_KEY or OPENROUTER_API_KEY.",
-            file=sys.stderr,
-        )
-        return []
 
-
-def _call_anthropic(prompt: str, model: str, api_key: str) -> list[EditSuggestion]:
-    """Call via Anthropic API."""
-    import anthropic
-
-    client = anthropic.Anthropic(api_key=api_key)
-    print(f"  Calling {model} (Anthropic)...", file=sys.stderr)
-    response = client.messages.create(
-        model=model,
-        max_tokens=4096,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    text = response.content[0].text
-    suggestions = parse_suggestions(text)
     print(
-        f"  Got {len(suggestions)} suggestions "
-        f"(input={response.usage.input_tokens}, output={response.usage.output_tokens})",
+        "Error: Claude CLI failed and no OPENROUTER_API_KEY found.",
         file=sys.stderr,
     )
-    return suggestions
+    return []
+
+
+# Map API model IDs to Claude CLI model names
+_CLI_MODEL_MAP = {
+    "claude-sonnet-4-6": "sonnet",
+    "claude-opus-4-6": "opus",
+    "claude-haiku-4-5": "haiku",
+    "sonnet": "sonnet",
+    "opus": "opus",
+    "haiku": "haiku",
+}
+
+# Map API model IDs to OpenRouter model IDs
+_OPENROUTER_MODEL_MAP = {
+    "claude-sonnet-4-6": "anthropic/claude-sonnet-4.6",
+    "claude-opus-4-6": "anthropic/claude-opus-4.6",
+    "claude-haiku-4-5": "anthropic/claude-haiku-4.5",
+}
+
+
+def _call_claude_cli(prompt: str, model: str) -> list[EditSuggestion] | None:
+    """Call via Claude CLI subprocess using agent-home credentials.
+
+    Returns None if CLI is unavailable or fails (allows fallback to next provider).
+    """
+    cli_model = _CLI_MODEL_MAP.get(model, "sonnet")
+
+    agent_home = REPO_ROOT / "agent-home"
+    creds_path = agent_home / ".claude" / ".credentials.json"
+    if not creds_path.exists():
+        print("  Claude CLI: no agent-home credentials, skipping", file=sys.stderr)
+        return None
+
+    # Build clean environment — strip proxy vars and CLAUDECODE to avoid
+    # sandbox proxy interference and nested-session errors.
+    strip_vars = {
+        "CLAUDECODE", "HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy",
+        "ALL_PROXY", "all_proxy",
+    }
+    env = {k: v for k, v in os.environ.items() if k not in strip_vars}
+    env["HOME"] = str(agent_home)
+    env["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"] = "1"
+
+    cmd = [
+        "claude", "--print",
+        "--model", cli_model,
+        "--max-turns", "1",
+        "--dangerously-skip-permissions",
+        "--no-session-persistence",
+        "--", prompt,
+    ]
+
+    print(f"  Calling {cli_model} (Claude CLI, agent-home)...", file=sys.stderr)
+    try:
+        result = subprocess.run(
+            cmd,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=300,
+            cwd=str(REPO_ROOT),
+            env=env,
+        )
+        if result.returncode != 0:
+            stderr_msg = result.stderr[:500] if result.stderr else ""
+            stdout_msg = result.stdout[:500] if result.stdout else ""
+            print(
+                f"  Claude CLI error (exit {result.returncode}): "
+                f"{stderr_msg or stdout_msg}",
+                file=sys.stderr,
+            )
+            return None
+
+        text = result.stdout.strip()
+        if not text:
+            print("  Claude CLI: empty response", file=sys.stderr)
+            return None
+
+        suggestions = parse_suggestions(text)
+        print(f"  Got {len(suggestions)} suggestions (Claude CLI)", file=sys.stderr)
+        return suggestions
+
+    except subprocess.TimeoutExpired:
+        print("  Claude CLI: timed out after 180s", file=sys.stderr)
+        return None
+    except FileNotFoundError:
+        print("  Claude CLI: 'claude' not found in PATH", file=sys.stderr)
+        return None
+    except Exception as e:
+        print(f"  Claude CLI error: {e}", file=sys.stderr)
+        return None
 
 
 def _call_openrouter(prompt: str, model: str, api_key: str) -> list[EditSuggestion]:
     """Call via OpenRouter API."""
     import httpx
 
-    # Map model IDs to OpenRouter format
-    MODEL_MAP = {
-        "claude-sonnet-4-6": "anthropic/claude-sonnet-4.6",
-        "claude-opus-4-6": "anthropic/claude-opus-4.6",
-        "claude-haiku-4-5": "anthropic/claude-haiku-4.5",
-    }
-    or_model = MODEL_MAP.get(model, model)
+    or_model = _OPENROUTER_MODEL_MAP.get(model, model)
     if "/" not in or_model:
         or_model = f"anthropic/{or_model}"
 
@@ -696,6 +767,7 @@ def run_advisor(
     model: str = "claude-sonnet-4-6",
     max_suggestions: int = 5,
     iterations: int = 1,
+    provider: str = "auto",
 ) -> AdvisorResult:
     """Run the AI advisor on a function."""
     start_time = time.time()
@@ -751,20 +823,19 @@ def run_advisor(
     else:
         print("  Ghidra: no cached decompilation", file=sys.stderr)
 
-    # Objdiff (markdown for LLM, percent for scoring)
+    # Objdiff — always build and get live percent (DB may be stale)
     objdiff_markdown = None
-    if not dry_run:
-        # Build first so objdiff has fresh .obj
-        build_result = subprocess.run(
-            ["ninja", obj_target],
-            capture_output=True, text=True, timeout=60, cwd=str(REPO_ROOT),
-        )
-        if build_result.returncode == 0:
+    build_result = subprocess.run(
+        ["ninja", obj_target],
+        capture_output=True, text=True, timeout=60, cwd=str(REPO_ROOT),
+    )
+    if build_result.returncode == 0:
+        current_percent = get_objdiff_percent(symbol)
+        print(f"  Objdiff: {current_percent:.1f}%", file=sys.stderr)
+        if not dry_run:
             objdiff_markdown = get_objdiff_markdown(symbol)
-            current_percent = get_objdiff_percent(symbol)
-            print(f"  Objdiff: {current_percent:.1f}%", file=sys.stderr)
-        else:
-            print("  Objdiff: build failed", file=sys.stderr)
+    else:
+        print("  Objdiff: build failed", file=sys.stderr)
 
     # m2c decompilation (structural view of target)
     m2c_code = None
@@ -840,7 +911,7 @@ def run_advisor(
                 current_percent=round_percent,
             )
 
-        suggestions = call_advisor(prompt, model=model)
+        suggestions = call_advisor(prompt, model=model, provider=provider)
         if not suggestions:
             if iteration == 0:
                 return AdvisorResult(
@@ -993,6 +1064,12 @@ def main():
         help="Model to use (default: claude-sonnet-4-6). Options: claude-sonnet-4-6, claude-opus-4-6, claude-haiku-4-5",
     )
     parser.add_argument(
+        "--provider",
+        default="auto",
+        choices=["auto", "claude", "openrouter"],
+        help="LLM provider: 'claude' (CLI subprocess, default), 'openrouter', or 'auto' (claude then openrouter fallback)",
+    )
+    parser.add_argument(
         "--iterations",
         type=int,
         default=1,
@@ -1012,6 +1089,7 @@ def main():
         dry_run=args.dry_run,
         model=args.model,
         iterations=args.iterations,
+        provider=args.provider,
     )
 
     if args.json_output:

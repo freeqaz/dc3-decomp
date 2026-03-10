@@ -161,7 +161,10 @@ else
     fi
 
     # --- Ensure build tools and compilers are available (avoid downloads) ---
-    mkdir -p "${WORKTREE}/build/tools"
+    mkdir -p "${WORKTREE}/build/tools" "${WORKTREE}/build/373307D9/pch"
+    # Pre-create empty PCH file — WIBO_FS_CACHE=1 breaks creating new files in
+    # case-insensitive path components (373307D9). cl.exe can overwrite existing files fine.
+    touch "${WORKTREE}/build/373307D9/pch/system.pch"
     for tool in "${MAIN_REPO}/build/tools"/*; do
         dest="${WORKTREE}/build/tools/$(basename "$tool")"
         [[ -e "$dest" ]] || ln -sf "$tool" "$dest"

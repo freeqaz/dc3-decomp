@@ -500,8 +500,12 @@ void HamNavList::Poll() {
 
     // Handle select mode completion
     if (mRibbonMode == HamListRibbon::kRibbonSelect) {
+#ifdef HX_NATIVE
+        if (!TheUI->InTransition() && !TheLoadMgr.EditMode()) {
+#else
         if (!RndAnimatable::IsAnimating() && !TheUI->InTransition()
             && !TheLoadMgr.EditMode()) {
+#endif
             SetRibbonMode(HamListRibbon::kRibbonSwell);
 
             // Reset all draw state smoothers
@@ -545,10 +549,17 @@ void HamNavList::Poll() {
             RndAnimatable::SetFrame(0.0f, 1.0f);
         } else {
             if (mListRibbonResource->TestEntering()) {
+#ifdef HX_NATIVE
+                // Native: force-clear TestEntering since AnimTask never self-deletes
+                mListRibbonResource->SetTestEntering(false);
+                RndAnimatable::StopAnimation();
+                RndAnimatable::SetFrame(0.0f, 1.0f);
+#else
                 if (!RndAnimatable::IsAnimating()) {
                     mListRibbonResource->SetTestEntering(false);
                     RndAnimatable::SetFrame(0.0f, 1.0f);
                 }
+#endif
             }
         }
     }
@@ -560,10 +571,16 @@ void HamNavList::Poll() {
             RndAnimatable::SetFrame(0.0f, 1.0f);
         } else {
             if (mHeaderRibbonResource->TestEntering()) {
+#ifdef HX_NATIVE
+                mHeaderRibbonResource->SetTestEntering(false);
+                RndAnimatable::StopAnimation();
+                RndAnimatable::SetFrame(0.0f, 1.0f);
+#else
                 if (!RndAnimatable::IsAnimating()) {
                     mHeaderRibbonResource->SetTestEntering(false);
                     RndAnimatable::SetFrame(0.0f, 1.0f);
                 }
+#endif
             }
         }
     }
@@ -1377,9 +1394,11 @@ void HamNavList::UpdateGestures(const Skeleton *skeleton) {
         bool inVoiceMode = TheGestureMgr && TheGestureMgr->GesturingWithVoice();
         if (!inVoiceMode && mEnabled) {
             if (mRibbonMode == HamListRibbon::kRibbonSelect) {
+#ifndef HX_NATIVE
                 if (RndAnimatable::IsAnimating()) {
                     return;
                 }
+#endif
                 float curFrame = RndAnimatable::GetFrame();
                 float endFrame = EndFrame();
                 if (curFrame == endFrame) {
@@ -1464,8 +1483,25 @@ DataNode HamNavList::OnMsg(const ButtonDownMsg &msg) {
         RealRefresh();
 
     bool inControllerMode = InControllerMode();
+#ifdef HX_NATIVE
+    {
+        bool gesturing2 = TheGestureMgr && TheGestureMgr->GesturingWithVoice();
+        UIComponent *fc = TheUI->FocusComponent();
+        printf("DC3 HamNavList: '%s'.OnMsg(ButtonDown) ctrl=%d enabled=%d gesturing=%d focusComp=%s(=this:%d) numShowing=%d selected=%d action=%d\n",
+               Name(), (int)inControllerMode, (int)mEnabled, (int)gesturing2,
+               fc ? fc->Name() : "<null>", (int)(fc == this),
+               mListState.NumShowing(), mListState.Selected(),
+               (int)msg.GetAction());
+    }
+#endif
     if ((inControllerMode || TheLoadMgr.EditMode())
+#ifdef HX_NATIVE
+        // Native: AnimTask with non-null mAnimTarget never self-deletes.
+        // On Xbox, DTA lifecycle scripts call StopAnimation(); on native they don't fire.
+        && mEnabled) {
+#else
         && !RndAnimatable::IsAnimating() && mEnabled) {
+#endif
         bool gesturing = TheGestureMgr && TheGestureMgr->GesturingWithVoice();
         if (!gesturing && TheUI->FocusComponent() == this) {
             int dir = ScrollDirection(msg, false, true, 1);
@@ -1533,22 +1569,30 @@ void HamNavList::DrawDebug() const {
     float lineStep = 0.05f;
     float startX = 0.0f;
     float startY = 0.05f;
-    for (unsigned int i = 0; i < 5; i++) {
+    unsigned int i = 0;
+    do {
         sprintf_s(buf, "");
-        if (i == 0) {
+        switch (i) {
+        case 0:
             sprintf_s(buf, "Hand height %f", mHandHeight);
-        } else if (i == 1) {
+            break;
+        case 1:
             sprintf_s(buf, "ListState SelectedDisplay: %d", mListState.SelectedDisplay());
-        } else if (i < 3) {
+            break;
+        case 2:
             sprintf_s(buf, "ListState FirstShowing: %d", mListState.FirstShowing());
-        } else if (i == 3) {
+            break;
+        case 3:
             sprintf_s(buf, "ListState Selected: %d", mListState.Selected());
-        } else {
+            break;
+        case 4:
             sprintf_s(buf, "Num selectable items: %d", NumItems());
+            break;
         }
         Vector2 pos(startX, startY + i * lineStep);
         TheRnd.DrawStringScreen(buf, pos, sTextColor, true);
-    }
+        i++;
+    } while ((int)i < 5);
 #endif
 }
 

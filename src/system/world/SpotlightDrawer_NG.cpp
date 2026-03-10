@@ -104,8 +104,6 @@ void NgSpotlightDrawer::SpotlightResources::Clear() {
     }
     RELEASE(unk8);
     RELEASE(mDensityMap);
-    RELEASE(unk10);
-    RELEASE(unk14);
     unk18 = nullptr;
 }
 

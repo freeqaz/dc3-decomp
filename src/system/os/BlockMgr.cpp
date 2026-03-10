@@ -152,19 +152,16 @@ void BlockMgr::GetAssociatedBlocks(
 ) {
     blockSize = 0x10000;
     startBlock = (int)(offset >> 16);
-    long long remaining = ((offset & 0xffff) + (long long)bytes) - 0x10000;
-    if (remaining < 1) {
-        numBlocks = 1;
-    } else {
-        int iRemaining = (int)remaining;
-        int extraBlocks =
-            (iRemaining >> 16) + (unsigned int)(iRemaining < 0 && (remaining & 0xffff) != 0);
+    int remaining = (int)(offset & 0xFFFF) + bytes - 0x10000;
+    if (remaining > 0) {
+        int extraBlocks = remaining / 0x10000;
         numBlocks = extraBlocks + 1;
-        if (remaining == (long long)extraBlocks * 0x10000) {
-            return;
+        if (remaining % 0x10000 != 0) {
+            numBlocks++;
         }
-        numBlocks = extraBlocks + 2;
+        return;
     }
+    numBlocks = 1;
 }
 
 void BlockMgr::AddTask(const AsyncTask &task) {
@@ -187,8 +184,9 @@ void BlockMgr::AddTask(const AsyncTask &task) {
 }
 
 void BlockMgr::KillBlockRequests(ArkFile *arkFile) {
+    std::list<BlockRequest>::iterator end = mRequests.end();
     std::list<BlockRequest>::iterator it = mRequests.begin();
-    while (it != mRequests.end()) {
+    while (it != end) {
         std::list<AsyncTask>::iterator taskIt = it->mTasks.begin();
         while (taskIt != it->mTasks.end()) {
             if (taskIt->GetOwner() == arkFile) {
@@ -197,7 +195,7 @@ void BlockMgr::KillBlockRequests(ArkFile *arkFile) {
                 ++taskIt;
             }
         }
-        if (it->mTasks.empty()) {
+        if (it->mTasks.size() == 0) {
             if (mReadingBlock
                 && mReadingBlock->CheckMetadata(it->mArkfileNum, it->mBlockNum)) {
                 ++it;

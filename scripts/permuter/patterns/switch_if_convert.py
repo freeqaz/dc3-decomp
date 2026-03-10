@@ -142,14 +142,11 @@ def _if_to_switch(node: Node, ctx: FunctionContext, counter: int) -> Iterator[Va
     source = ctx.file_source
 
     # Collect the if/else if chain
-    chain = _collect_if_chain(node, source)
-    if chain is None or len(chain) < 3:
+    collected = _collect_if_chain(node, source)
+    if collected is None:
         return
 
-    # All conditions must compare the same variable to constants
-    switch_var = chain[0][0]
-    if switch_var is None:
-        return
+    switch_var, chain = collected
 
     indent = get_indent(source, node)
     inner_indent = indent + b"    "
@@ -157,8 +154,8 @@ def _if_to_switch(node: Node, ctx: FunctionContext, counter: int) -> Iterator[Va
 
     parts = [indent + b"switch (" + switch_var + b") {" + nl]
 
-    for var, val, body_lines in chain:
-        if var is None and val is None:
+    for val, body_lines in chain:
+        if val is None:
             # else clause -> default
             body_text = nl.join(inner_indent + line for line in body_lines)
             parts.append(inner_indent + b"default:" + nl + body_text + nl + inner_indent + b"break;" + nl)
@@ -237,14 +234,17 @@ def _strip_break(lines: list[bytes]) -> list[bytes]:
 
 def _collect_if_chain(
     node: Node, source: bytes
-) -> list[tuple[bytes | None, bytes | None, list[bytes]]] | None:
-    """Collect if/else if chain into (var, const_value, body_lines) tuples.
+) -> tuple[bytes, list[tuple[bytes | None, list[bytes]]]] | None:
+    """Collect if/else if chain into switch expression + (case_value, body_lines).
 
-    Returns None if conditions don't all compare the same variable to constants.
-    The final `else` has (None, None, body_lines).
+    Returns None if conditions don't all compare the same expression to constants.
+    The final `else` has (None, body_lines).
     """
-    chain: list[tuple[bytes | None, bytes | None, list[bytes]]] = []
-    switch_var: bytes | None = None
+    chain: list[tuple[bytes | None, list[bytes]]] = []
+    switch_expr: bytes | None = None
+    switch_key: bytes | None = None
+    handled_int_values: set[int] = set()
+    handled_case_values: set[bytes] = set()
     current = node
 
     while current is not None and current.type == "if_statement":
@@ -255,31 +255,28 @@ def _collect_if_chain(
         if condition is None or consequence is None:
             return None
 
-        # Extract var == const from condition
-        inner = _get_inner_expr(condition)
-        if inner is None or inner.type != "binary_expression":
+        parsed = _parse_chain_condition(
+            condition, source, switch_key, handled_int_values
+        )
+        if parsed is None:
             return None
 
-        op = inner.child_by_field_name("operator")
-        if op is None or op.text != b"==":
+        branch_expr, branch_key, case_value, case_int = parsed
+        if case_value in handled_case_values:
             return None
 
-        left = inner.child_by_field_name("left")
-        right = inner.child_by_field_name("right")
-        if left is None or right is None:
-            return None
-
-        var_text = source[left.start_byte:left.end_byte]
-        val_text = source[right.start_byte:right.end_byte]
-
-        if switch_var is None:
-            switch_var = var_text
-        elif var_text != switch_var:
+        if switch_expr is None:
+            switch_expr = branch_expr
+            switch_key = branch_key
+        elif branch_key != switch_key:
             return None
 
         # Get body lines
         body_lines = _extract_body_lines(consequence, source)
-        chain.append((var_text, val_text, body_lines))
+        chain.append((case_value, body_lines))
+        handled_case_values.add(case_value)
+        if case_int is not None:
+            handled_int_values.add(case_int)
 
         # Follow the else chain
         if alternative is None:
@@ -294,10 +291,192 @@ def _collect_if_chain(
             elif child.type == "compound_statement":
                 # Final else
                 body_lines = _extract_body_lines(child, source)
-                chain.append((None, None, body_lines))
+                chain.append((None, body_lines))
                 break
 
-    return chain if len(chain) >= 3 else None
+    if switch_expr is None or len(chain) < 3:
+        return None
+    return switch_expr, chain
+
+
+def _parse_chain_condition(
+    condition: Node,
+    source: bytes,
+    expected_key: bytes | None,
+    handled_int_values: set[int],
+) -> tuple[bytes, bytes, bytes, int | None] | None:
+    """Parse a chain condition into switch expr, canonical key, and case value."""
+    inner = _get_inner_expr(condition)
+    if inner is None or inner.type != "binary_expression":
+        return None
+
+    op = inner.child_by_field_name("operator")
+    left = inner.child_by_field_name("left")
+    right = inner.child_by_field_name("right")
+    if op is None or left is None or right is None:
+        return None
+
+    var_node, const_node = _select_var_and_const(left, right, source, expected_key)
+    if var_node is None or const_node is None or _has_side_effects(var_node):
+        return None
+
+    switch_expr = source[var_node.start_byte:var_node.end_byte]
+    switch_key = _expr_key(var_node, source)
+    if switch_key is None:
+        return None
+
+    if op.text == b"==":
+        case_value = source[const_node.start_byte:const_node.end_byte]
+        return switch_expr, switch_key, case_value, _parse_int_constant(const_node)
+
+    case_int = _infer_case_value(
+        op.text, var_node.id == left.id, const_node, handled_int_values
+    )
+    if case_int is None:
+        return None
+
+    return switch_expr, switch_key, str(case_int).encode(), case_int
+
+
+def _select_var_and_const(
+    left: Node,
+    right: Node,
+    source: bytes,
+    expected_key: bytes | None,
+) -> tuple[Node | None, Node | None]:
+    """Choose the variable side and case-value side of a comparison."""
+    left_key = _expr_key(left, source)
+    right_key = _expr_key(right, source)
+
+    if expected_key is not None:
+        if left_key == expected_key:
+            return left, right
+        if right_key == expected_key:
+            return right, left
+        return None, None
+
+    left_const = _looks_like_constant(left)
+    right_const = _looks_like_constant(right)
+    if left_const and not right_const:
+        return right, left
+    if right_const and not left_const:
+        return left, right
+    return left, right
+
+
+def _looks_like_constant(node: Node) -> bool:
+    """Heuristic for choosing const-vs-var on the first branch."""
+    inner = _unwrap_expr(node)
+    if inner.type in {
+        "number_literal",
+        "char_literal",
+        "true",
+        "false",
+        "null",
+        "nullptr",
+        "qualified_identifier",
+        "scoped_identifier",
+    }:
+        return True
+    if inner.type == "identifier":
+        return False
+    return _parse_int_constant(inner) is not None
+
+
+def _expr_key(node: Node, source: bytes) -> bytes | None:
+    """Canonicalize casts/parens so mixed `(unsigned)i` / `i` chains still match."""
+    inner = _unwrap_expr(node)
+    return source[inner.start_byte:inner.end_byte] if inner is not None else None
+
+
+def _unwrap_expr(node: Node) -> Node:
+    """Strip wrappers that do not change which value is being tested."""
+    current = node
+    while True:
+        if current.type == "parenthesized_expression":
+            children = [c for c in current.named_children if c.type != "comment"]
+            if len(children) == 1:
+                current = children[0]
+                continue
+        if current.type in ("cast_expression", "c_style_cast_expression"):
+            value = current.child_by_field_name("value")
+            if value is not None:
+                current = value
+                continue
+        return current
+
+
+def _has_side_effects(node: Node) -> bool:
+    """Reject expressions that would change semantics if moved to switch()."""
+    inner = _unwrap_expr(node)
+    if inner.type in {
+        "assignment_expression",
+        "update_expression",
+        "call_expression",
+        "new_expression",
+        "delete_expression",
+        "comma_expression",
+    }:
+        return True
+    return any(_has_side_effects(child) for child in inner.named_children)
+
+
+def _parse_int_constant(node: Node) -> int | None:
+    """Parse integer literals used for conservative inequality inference."""
+    inner = _unwrap_expr(node)
+    if inner.type == "number_literal":
+        try:
+            return int(inner.text.decode("ascii"), 0)
+        except ValueError:
+            return None
+
+    if inner.type == "char_literal":
+        text = inner.text.decode("ascii", errors="ignore")
+        if len(text) == 3 and text.startswith("'") and text.endswith("'"):
+            return ord(text[1])
+        return None
+
+    if inner.type == "unary_expression":
+        op = inner.child_by_field_name("operator")
+        arg = inner.child_by_field_name("argument")
+        if op is not None and op.text == b"-" and arg is not None:
+            value = _parse_int_constant(arg)
+            return -value if value is not None else None
+
+    return None
+
+
+def _infer_case_value(
+    op_text: bytes,
+    var_is_left: bool,
+    const_node: Node,
+    handled_int_values: set[int],
+) -> int | None:
+    """Infer the one remaining dense case from a bounded inequality branch."""
+    bound = _parse_int_constant(const_node)
+    if bound is None:
+        return None
+
+    if op_text == b"<" and var_is_left:
+        return _infer_missing_case_below(bound, handled_int_values)
+    if op_text == b"<=" and var_is_left:
+        return _infer_missing_case_below(bound + 1, handled_int_values)
+    if op_text == b">" and not var_is_left:
+        return _infer_missing_case_below(bound, handled_int_values)
+    if op_text == b">=" and not var_is_left:
+        return _infer_missing_case_below(bound + 1, handled_int_values)
+    return None
+
+
+def _infer_missing_case_below(limit: int, handled_int_values: set[int]) -> int | None:
+    """Infer one missing case from a dense prefix [0, limit)."""
+    if limit <= 0 or 0 not in handled_int_values:
+        return None
+
+    candidates = [value for value in range(limit) if value not in handled_int_values]
+    if len(candidates) == 1:
+        return candidates[0]
+    return None
 
 
 def _extract_body_lines(node: Node, source: bytes) -> list[bytes]:

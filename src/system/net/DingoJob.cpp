@@ -29,7 +29,7 @@ void DingoJob::Start() {
 
     const char *url = GetURL();
     TheServer.Poll();
-    SetURL(MakeString("/?fs/?fs/?fs/?fs", lbl_82066608, TheServer.unk44, url));
+    SetURL(MakeString("/?fs/?fs/?fs/?fs", lbl_82066608, TheServer.unk40, url));
     StartImpl();
 }
 

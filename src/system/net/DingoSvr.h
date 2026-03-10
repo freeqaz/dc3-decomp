@@ -93,8 +93,7 @@ protected:
     String mHostName; // 0x30
     unsigned int mIPAddr; // 0x38
     unsigned int mPort; // 0x3c
-    const char *unk40; // 0x40
-    const char *unk44; // 0x44
+    String unk40; // 0x40
     String mAuthUrl; // 0x48
     String unk50;
     String mLocale; // 0x58

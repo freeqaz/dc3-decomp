@@ -171,6 +171,27 @@ App::App(int argc, char **argv) {
     TheUI = &TheHamUI;
     TheHamUI.Init();
 
+    // Register stub objects for DTA scripts that reference Xbox managers.
+    // These managers aren't fully initialized on native (they need Xbox Live,
+    // profiles, content DLC, etc.), but DTA scripts reference them by name.
+    // Without stubs, DTA commands like (platform_mgr add_sink ...) fail silently.
+    static const char *stubNames[] = {
+        "platform_mgr",
+        "profile_mgr",
+        "content_mgr",
+        "song_offer_provider",
+        "challenge_provider",
+        "challenges",
+        "saveload_mgr",
+        "speech_mgr",
+    };
+    for (const char *name : stubNames) {
+        if (!ObjectDir::Main()->FindObject(name, false, false)) {
+            Hmx::Object *stub = new Hmx::Object();
+            stub->SetName(name, ObjectDir::Main());
+        }
+    }
+
     // Go to first screen (title screen)
     TheUI->GotoFirstScreen();
 #else

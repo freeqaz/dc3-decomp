@@ -52,6 +52,12 @@ BEGIN_HANDLERS(UIScreen)
     HANDLE_EXPR(exiting, Exiting())
     HANDLE_ACTION(reload_strings, ReloadStrings())
     HANDLE_SUPERCLASS(Hmx::Object)
+#ifdef HX_NATIVE
+    if ((sym == Symbol("button_down") || sym == Symbol("button_up")) && FocusPanel()) {
+        printf("DC3 UIScreen: '%s' forwarding '%s' to focus panel '%s'\n",
+               Name(), sym.Str(), FocusPanel()->Name());
+    }
+#endif
     HANDLE_MEMBER_PTR(FocusPanel())
     HANDLE_MESSAGE(ButtonDownMsg)
 END_HANDLERS

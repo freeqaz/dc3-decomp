@@ -52,7 +52,7 @@ _FOLLOW_UP_MAP: dict[str, list[str]] = {
     # Comparison/boolean
     "comparison_equivalence": ["signed_unsigned", "comparison_flip"],
     "signed_unsigned": ["comparison_equivalence", "comparison_flip"],
-    "branch_polarity": ["comparison_flip", "early_return_merge"],
+    "branch_polarity": ["comparison_flip", "early_return_merge", "switch_if_convert"],
     "null_guard_elimination": ["branch_polarity", "comparison_flip"],
     "bool_cast": ["comparison_flip", "signed_unsigned"],
     "bool_return_expr": ["comparison_flip", "branch_polarity"],
@@ -84,6 +84,7 @@ _FOLLOW_UP_MAP: dict[str, list[str]] = {
     "early_return_merge": ["branch_polarity", "guard_to_nested"],
     "guard_to_nested": ["early_return_merge", "branch_polarity"],
     "single_return": ["branch_polarity", "early_return_merge"],
+    "switch_if_convert": ["branch_polarity", "declaration_reorder"],
     "ternary_swap": ["comparison_flip", "branch_polarity"],
     "fsel_template": ["comparison_flip", "branch_polarity"],
     "noreturn_attr": ["branch_polarity"],

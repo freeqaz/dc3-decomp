@@ -79,7 +79,7 @@ BEGIN_COPYS(MoggClip)
     CREATE_COPY(MoggClip)
     BEGIN_COPYING_MEMBERS
         COPY_MEMBER(mMoggFile)
-        COPY_MEMBER(mVolume)
+        COPY_MEMBER(mControllerVolume)
         COPY_MEMBER(mBufSecs)
     END_COPYING_MEMBERS
 END_COPYS

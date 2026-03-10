@@ -229,32 +229,41 @@ void RndSpline::SyncDeformedDummyCtrlPoints(int startIdx, int endIdx) const {
     MILO_ASSERT_RANGE(startIdx, 0, size, 0x2C5);
     MILO_ASSERT_RANGE(endIdx, 0, size, 0x2C6);
     MILO_ASSERT(startIdx <= endIdx, 0x2C7);
-    if (size > 1) {
+    if ((unsigned int)size > 1) {
         if (unk144 && startIdx == 0) {
+            float *p0 = (float *)&mDeformedCtrlPoints[0];
             unk144 = false;
-            const CtrlPoint &p0 = mDeformedCtrlPoints[0];
-            const CtrlPoint &p1 = mDeformedCtrlPoints[1];
-            mDummyBefore.mPos.x = p0.mPos.x + (p0.mPos.x - p1.mPos.x);
-            mDummyBefore.mPos.y = p0.mPos.y + (p0.mPos.y - p1.mPos.y);
-            mDummyBefore.mPos.z = p0.mPos.z + (p0.mPos.z - p1.mPos.z);
-            mDummyBefore.mRoll = p0.mRoll;
+            float p0y = p0[1];
+            float p0z = p0[2];
+            float p1y = p0[0x17];
+            float p1z = p0[0x18];
+            mDummyBefore.mPos.x = p0[0] + (p0[0] - p0[0x16]);
+            mDummyBefore.mPos.z = p0z + (p0z - p1z);
+            mDummyBefore.mPos.y = p0y + (p0y - p1y);
+            mDummyBefore.mRoll = p0[4];
             mDeformedCtrlPoints[0].mDirtyConstants = true;
         }
-        int numPts = mDeformedCtrlPoints.size();
+        int numPts = (mDeformedCtrlPoints.end() - mDeformedCtrlPoints.begin());
         if (unk145 && endIdx >= numPts - 2) {
+            int lastOff = (numPts - 1) * 0x58;
             unk145 = false;
-            const CtrlPoint &pLast = mDeformedCtrlPoints[numPts - 1];
-            const CtrlPoint &pPrev = mDeformedCtrlPoints[numPts - 2];
-            mDummyAfter.mPos.x = pLast.mPos.x + (pLast.mPos.x - pPrev.mPos.x);
-            mDummyAfter.mPos.y = pLast.mPos.y + (pLast.mPos.y - pPrev.mPos.y);
-            mDummyAfter.mPos.z = pLast.mPos.z + (pLast.mPos.z - pPrev.mPos.z);
-            mDummyAfter.mRoll = pLast.mRoll;
-            mDummyAfterEnd.mPos.x = mDummyAfter.mPos.x + (mDummyAfter.mPos.x - pLast.mPos.x);
-            mDummyAfterEnd.mPos.y = mDummyAfter.mPos.y + (mDummyAfter.mPos.y - pLast.mPos.y);
-            mDummyAfterEnd.mPos.z = mDummyAfter.mPos.z + (mDummyAfter.mPos.z - pLast.mPos.z);
+            float *pLast = (float *)(lastOff + (int)&mDeformedCtrlPoints[0]);
+            float lastX = pLast[0];
+            float prevX = pLast[-0x16];
+            float lastZ = pLast[2];
+            float prevZ = pLast[-0x14];
+            mDummyAfter.mPos.y = pLast[1] + (pLast[1] - pLast[-0x15]);
+            mDummyAfter.mPos.x = lastX + (lastX - prevX);
+            mDummyAfter.mPos.z = lastZ + (lastZ - prevZ);
+            mDummyAfter.mRoll = pLast[4];
+            float lastZ2 = pLast[2];
+            float lastX2 = pLast[0];
+            mDummyAfterEnd.mPos.y = mDummyAfter.mPos.y + (mDummyAfter.mPos.y - pLast[1]);
+            mDummyAfterEnd.mPos.x = mDummyAfter.mPos.x + (mDummyAfter.mPos.x - lastX2);
+            mDummyAfterEnd.mPos.z = mDummyAfter.mPos.z + (mDummyAfter.mPos.z - lastZ2);
             mDummyAfterEnd.mRoll = mDummyAfter.mRoll;
-            mDeformedCtrlPoints[numPts - 2].mDirtyConstants = true;
-            mDeformedCtrlPoints[numPts - 1].mDirtyConstants = true;
+            *(bool *)(lastOff + (int)&mDeformedCtrlPoints[0] - 0x43) = true;
+            *(bool *)(lastOff + (int)&mDeformedCtrlPoints[0] + 0x15) = true;
         }
     }
 }
@@ -264,7 +273,7 @@ void RndSpline::SyncDeformedCtrlPoints(int startIdx, int endIdx) const {
     MILO_ASSERT_RANGE(startIdx, 0, size, 0x278);
     MILO_ASSERT_RANGE(endIdx, 0, size, 0x279);
     MILO_ASSERT(startIdx <= endIdx, 0x27A);
-    if (size > 1) {
+    if ((unsigned int)size > 1) {
         SyncDeformedDummyCtrlPoints(startIdx, endIdx);
         for (int i = startIdx; i <= endIdx; i++) {
             CtrlPoint &pt = mDeformedCtrlPoints[i];
@@ -273,22 +282,66 @@ void RndSpline::SyncDeformedCtrlPoints(int startIdx, int endIdx) const {
                 const CtrlPoint &prev = GetDeformedCtrlPointOrDummy(i - 1);
                 const CtrlPoint &next = GetDeformedCtrlPointOrDummy(i + 1);
                 const CtrlPoint &nextNext = GetDeformedCtrlPointOrDummy(i + 2);
+
                 float px = prev.mPos.x, py = prev.mPos.y, pz = prev.mPos.z, pr = prev.mRoll;
-                float cx = pt.mPos.x, cy = pt.mPos.y, cz = pt.mPos.z, cr = pt.mRoll;
                 float nx = next.mPos.x, ny = next.mPos.y, nz = next.mPos.z, nr = next.mRoll;
-                float nnx = nextNext.mPos.x, nny = nextNext.mPos.y, nnz = nextNext.mPos.z,
-                      nnr = nextNext.mRoll;
-                pt.mCoeff0.Set(-0.5f * px + 1.5f * cx - 1.5f * nx + 0.5f * nnx,
-                    -0.5f * py + 1.5f * cy - 1.5f * ny + 0.5f * nny,
-                    -0.5f * pz + 1.5f * cz - 1.5f * nz + 0.5f * nnz,
-                    -0.5f * pr + 1.5f * cr - 1.5f * nr + 0.5f * nnr);
-                pt.mCoeff1.Set(px - 2.5f * cx + 2.0f * nx - 0.5f * nnx,
-                    py - 2.5f * cy + 2.0f * ny - 0.5f * nny,
-                    pz - 2.5f * cz + 2.0f * nz - 0.5f * nnz,
-                    pr - 2.5f * cr + 2.0f * nr - 0.5f * nnr);
-                pt.mCoeff2.Set(-0.5f * px + 0.5f * nx, -0.5f * py + 0.5f * ny,
-                    -0.5f * pz + 0.5f * nz, -0.5f * pr + 0.5f * nr);
-                pt.mCoeff3.Set(cx, cy, cz, cr);
+                float nnx = nextNext.mPos.x, nny = nextNext.mPos.y,
+                      nnz = nextNext.mPos.z, nnr = nextNext.mRoll;
+
+                // mCoeff0 = -0.5*prev + 1.5*cur - 1.5*next + 0.5*nextNext
+                pt.mCoeff0 = Vector4::ZeroVec();
+                float cx = pt.mPos.x, cy = pt.mPos.y, cz = pt.mPos.z, cr = pt.mRoll;
+                pt.mCoeff0.x -= px * 0.5f;
+                pt.mCoeff0.y -= py * 0.5f;
+                pt.mCoeff0.z -= pz * 0.5f;
+                pt.mCoeff0.w -= pr * 0.5f;
+                pt.mCoeff0.x += cx * 1.5f;
+                pt.mCoeff0.y += cy * 1.5f;
+                pt.mCoeff0.z += cz * 1.5f;
+                pt.mCoeff0.w += cr * 1.5f;
+                pt.mCoeff0.x -= nx * 1.5f;
+                pt.mCoeff0.y -= ny * 1.5f;
+                pt.mCoeff0.z -= nz * 1.5f;
+                pt.mCoeff0.w -= nr * 1.5f;
+                pt.mCoeff0.x += nnx * 0.5f;
+                pt.mCoeff0.y += nny * 0.5f;
+                pt.mCoeff0.z += nnz * 0.5f;
+                pt.mCoeff0.w += nnr * 0.5f;
+
+                // mCoeff1 = prev - 2.5*cur + 2.0*next - 0.5*nextNext
+                pt.mCoeff1.x = px;
+                pt.mCoeff1.y = py;
+                pt.mCoeff1.z = pz;
+                pt.mCoeff1.w = pr;
+                pt.mCoeff1.x -= cx * 2.5f;
+                pt.mCoeff1.y -= cy * 2.5f;
+                pt.mCoeff1.z -= cz * 2.5f;
+                pt.mCoeff1.w -= cr * 2.5f;
+                pt.mCoeff1.x += nx * 2.0f;
+                pt.mCoeff1.y += ny * 2.0f;
+                pt.mCoeff1.z += nz * 2.0f;
+                pt.mCoeff1.w += nr * 2.0f;
+                pt.mCoeff1.x -= nnx * 0.5f;
+                pt.mCoeff1.y -= nny * 0.5f;
+                pt.mCoeff1.z -= nnz * 0.5f;
+                pt.mCoeff1.w -= nnr * 0.5f;
+
+                // mCoeff2 = -0.5*prev + 0.5*next
+                pt.mCoeff2 = Vector4::ZeroVec();
+                pt.mCoeff2.x -= px * 0.5f;
+                pt.mCoeff2.y -= py * 0.5f;
+                pt.mCoeff2.z -= pz * 0.5f;
+                pt.mCoeff2.w -= pr * 0.5f;
+                pt.mCoeff2.x += nx * 0.5f;
+                pt.mCoeff2.y += ny * 0.5f;
+                pt.mCoeff2.z += nz * 0.5f;
+                pt.mCoeff2.w += nr * 0.5f;
+
+                // mCoeff3 = cur
+                pt.mCoeff3.x = cx;
+                pt.mCoeff3.y = cy;
+                pt.mCoeff3.z = cz;
+                pt.mCoeff3.w = cr;
             }
         }
     }

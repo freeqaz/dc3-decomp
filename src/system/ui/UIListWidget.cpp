@@ -23,8 +23,19 @@ void UIListWidget::SetParentList(UIList *list) { mParentList = list; }
 UIColor *UIListWidget::DisplayColor(
     UIListWidgetState element_state, UIComponent::State list_state
 ) const {
+#ifdef HX_NATIVE
+    // HamListRibbon::DrawRibbon repurposes UIListElementDrawState fields
+    // (mElementState, mComponentState, etc.) as a Hmx::Color overlay.
+    // DrawWidgets then reads the corrupted mElementState. On Xbox,
+    // MILO_ASSERT doesn't abort; on native it does. Return default color.
+    if (element_state < 0 || element_state >= kNumUIListWidgetStates)
+        return mDefaultColor;
+    if (list_state < 0 || list_state >= UIComponent::kNumStates)
+        return mDefaultColor;
+#else
     MILO_ASSERT((0) <= (element_state) && (element_state) < (kNumUIListWidgetStates), 0x64);
     MILO_ASSERT((0) <= (list_state) && (list_state) < (UIComponent::kNumStates), 0x65);
+#endif
     UIColor *color = mColors[element_state][list_state];
     if (color)
         return color;

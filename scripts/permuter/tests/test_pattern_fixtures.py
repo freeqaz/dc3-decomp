@@ -2300,6 +2300,164 @@ void test_func(DataArray* da) {
 """,
     ),
 
+    # ===================== switch_if_convert =====================
+
+    PatternFixture(
+        id="switch_if_convert_if_chain_to_switch",
+        pattern_name="switch_if_convert",
+        description="Convert equality if/else-if chain into switch",
+        func_name="test_func",
+        diagnosis=diag_with_branch_ops(),
+        seeded_source="""\
+void test_func(int state) {
+    if (state == 0) {
+        do_a();
+    } else if (state == 1) {
+        do_b();
+    } else if (state == 2) {
+        do_c();
+    } else {
+        do_d();
+    }
+}
+""",
+        expected_source="""\
+void test_func(int state) {
+    switch (state) {
+    case 0:
+        do_a();
+        break;
+    case 1:
+        do_b();
+        break;
+    case 2:
+        do_c();
+        break;
+    default:
+        do_d();
+        break;
+    }
+}
+""",
+    ),
+
+    PatternFixture(
+        id="switch_if_convert_infers_less_than_case",
+        pattern_name="switch_if_convert",
+        description="Infer a dense missing case from an i < N branch",
+        func_name="test_func",
+        diagnosis=diag_with_branch_and_clusters(),
+        seeded_source="""\
+void test_func(unsigned int i) {
+    if (i == 0) {
+        do_a();
+    } else if (i == 1) {
+        do_b();
+    } else if (i < 3) {
+        do_c();
+    } else if (i == 3) {
+        do_d();
+    } else {
+        do_e();
+    }
+}
+""",
+        expected_source="""\
+void test_func(unsigned int i) {
+    switch (i) {
+    case 0:
+        do_a();
+        break;
+    case 1:
+        do_b();
+        break;
+    case 2:
+        do_c();
+        break;
+    case 3:
+        do_d();
+        break;
+    default:
+        do_e();
+        break;
+    }
+}
+""",
+    ),
+
+    PatternFixture(
+        id="switch_if_convert_handles_casts_and_reversed_equality",
+        pattern_name="switch_if_convert",
+        description="Treat casted and reversed comparisons as the same switch variable",
+        func_name="test_func",
+        diagnosis=diag_with_branch_ops(),
+        seeded_source="""\
+void test_func(unsigned int i) {
+    if ((unsigned int)i == 0) {
+        do_a();
+    } else if (1 == i) {
+        do_b();
+    } else if (i == 2) {
+        do_c();
+    } else {
+        do_d();
+    }
+}
+""",
+        expected_source="""\
+void test_func(unsigned int i) {
+    switch ((unsigned int)i) {
+    case 0:
+        do_a();
+        break;
+    case 1:
+        do_b();
+        break;
+    case 2:
+        do_c();
+        break;
+    default:
+        do_d();
+        break;
+    }
+}
+""",
+    ),
+
+    PatternFixture(
+        id="switch_if_convert_switch_to_if_chain",
+        pattern_name="switch_if_convert",
+        description="Convert switch dispatch back into if/else-if chain",
+        func_name="test_func",
+        diagnosis=diag_with_branch_ops(),
+        seeded_source="""\
+void test_func(int state) {
+    switch (state) {
+    case 0:
+        do_a();
+        break;
+    case 1:
+        do_b();
+        break;
+    default:
+        do_c();
+        break;
+    }
+}
+""",
+        expected_source="""\
+void test_func(int state) {
+    if (state == 0) {
+        do_a();
+    } else if (state == 1) {
+        do_b();
+    } else {
+        do_c();
+    }
+}
+""",
+    ),
+
     # ===================== byte_mask_extraction =====================
 
     PatternFixture(
@@ -2743,6 +2901,68 @@ a && x > 1
 """,
     ),
 
+    # ===================== type_width_change =====================
+
+    PatternFixture(
+        id="typewidth_int_to_uchar",
+        pattern_name="type_width_change",
+        description="Narrow int to unsigned int (first transition)",
+        func_name="test_func",
+        diagnosis=diag_with_cmp_ops(),
+        seeded_source="""\
+void test_func() {
+    int count = 0;
+    if (count < 10) count++;
+}
+""",
+        expected_source="""\
+void test_func() {
+    unsigned int count = 0;
+    if (count < 10) count++;
+}
+""",
+    ),
+
+    PatternFixture(
+        id="typewidth_uint_to_int",
+        pattern_name="type_width_change",
+        description="Swap unsigned int to int (sign change)",
+        func_name="test_func",
+        diagnosis=diag_with_cmp_ops(),
+        seeded_source="""\
+void test_func() {
+    unsigned int x = 0;
+    if (x < 10) x++;
+}
+""",
+        expected_source="""\
+void test_func() {
+    int x = 0;
+    if (x < 10) x++;
+}
+""",
+    ),
+
+    PatternFixture(
+        id="typewidth_bool_to_uchar",
+        pattern_name="type_width_change",
+        description="Change bool to unsigned char with true/false fixup",
+        func_name="test_func",
+        diagnosis=diag_with_cmp_ops(),
+        seeded_source="""\
+void test_func() {
+    bool flag = false;
+    if (flag) flag = true;
+}
+""",
+        expected_source="""\
+void test_func() {
+    unsigned char flag = 0;
+    if (flag) flag = 1;
+}
+""",
+    ),
+
     # ===================== float_literal_pressure =====================
 
     PatternFixture(
@@ -2768,4 +2988,3 @@ static const float
 
 # Build lookup by ID
 _FIXTURE_MAP: dict[str, PatternFixture] = {f.id: f for f in FIXTURES}
-

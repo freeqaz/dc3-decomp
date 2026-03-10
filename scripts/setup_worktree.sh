@@ -70,6 +70,9 @@ echo "==> Symlinking shared build artifacts"
 WT_BUILD="$WORKTREE_PATH/build/373307D9"
 MAIN_BUILD="$MAIN_REPO/build/373307D9"
 mkdir -p "$WT_BUILD" "$WT_BUILD/pch"
+# Pre-create empty PCH file — WIBO_FS_CACHE=1 breaks creating new files in
+# case-insensitive path components (373307D9). cl.exe can overwrite existing files fine.
+touch "$WT_BUILD/pch/system.pch"
 
 # Target objects (original binary, never changes)
 ln -sf "$MAIN_BUILD/obj" "$WT_BUILD/obj"

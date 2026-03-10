@@ -155,12 +155,12 @@ void HamRibbon::UpdateChase() {
             Interp(followed, mFollowB->WorldXfm().v, mFollowWeight, followed);
         }
 
-        int numKeys = mChaseKeys.size();
-        int removeCount = 0;
+        unsigned int numKeys = mChaseKeys.size();
+        unsigned int removeCount = 0;
         if (numKeys != 0) {
             float cutoff = now - mDecay;
             while (removeCount < numKeys) {
-                if (cutoff <= mChaseKeys[removeCount].frame) {
+                if (mChaseKeys[removeCount].frame >= cutoff) {
                     break;
                 }
                 removeCount++;
@@ -168,12 +168,12 @@ void HamRibbon::UpdateChase() {
         }
 
         Key<Transform> key;
-        key.value = Transform::IDXfm();
         key.frame = 0.0f;
 #ifdef HX_NATIVE
         // Native: copy elements down first, then resize.
         // STLport doesn't bounds-check operator[], libstdc++ does —
         // the original code accesses past-end-of-vector after resize.
+        key.value = Transform::IDXfm();
         if (removeCount > 0 && removeCount < numKeys) {
             for (int i = 0; i < numKeys - removeCount; ++i) {
                 mChaseKeys[i] = mChaseKeys[i + removeCount];
@@ -181,12 +181,14 @@ void HamRibbon::UpdateChase() {
         }
         mChaseKeys.resize(numKeys - removeCount, key);
 #else
-        mChaseKeys.resize(numKeys - removeCount, key);
         if (removeCount < numKeys) {
-            for (int i = 0; i < numKeys - removeCount; ++i) {
-                mChaseKeys[i] = mChaseKeys[i + removeCount];
+            for (unsigned int i = removeCount; i < mChaseKeys.size(); i++) {
+                mChaseKeys[i - removeCount] = mChaseKeys[i];
             }
         }
+        mChaseKeys.resize(numKeys - removeCount, key);
+        key.value = Transform::IDXfm();
+        key.frame = 0.0f;
 #endif
         if (mChaseKeys.size() == 0) {
             key.value.v = followed;
@@ -196,7 +198,7 @@ void HamRibbon::UpdateChase() {
             float step = mDecay / mNumSegments;
             float minDistSq = mWidth * mWidth * 0.125f;
             float nextTime = mChaseKeys.back().frame + step;
-            while (nextTime < now) {
+            while (now > nextTime) {
                 key.frame = mChaseKeys.back().frame + step;
                 Interp(
                     mChaseKeys.back().value.v,
@@ -206,7 +208,7 @@ void HamRibbon::UpdateChase() {
                 );
                 Vector3 delta;
                 Subtract(key.value.v, mChaseKeys.back().value.v, delta);
-                if (minDistSq <= LengthSquared(delta)) {
+                if (minDistSq < LengthSquared(delta)) {
                     mChaseKeys.push_back(key);
                     added++;
                 } else {
@@ -258,7 +260,8 @@ void HamRibbon::UpdateChase() {
                     Multiply(smoothDir, inv, localSmooth);
                     float clamped = Clamp(0.0f, 1.0f, localSmooth.x);
                     float a = std::acos(clamped);
-                    float invCos = 1.0f / std::cos(angle * 0.5f);
+                    float cosHalf = std::cos(angle * 0.5f);
+                    float invCos = 1.0f / cosHalf;
                     float c = std::cos(a * 2.0f);
                     float s = std::sin(a * 2.0f);
                     Hmx::Matrix3 bend(
@@ -357,9 +360,10 @@ void HamRibbon::ConstructMesh() {
             for (int side = 0; side < mNumSides; side++) {
                 float angle = side * angleStep;
                 float u = side * uStep;
+                Vector3 norm;
+
                 float cosA = std::cos(angle);
                 float sinA = std::sin(angle);
-                Vector3 norm;
 
                 for (int v = 0; v < 2; v++) {
                     int vertIdx = seg * mNumSides * 2 + v * mNumSides + side;

@@ -30,7 +30,7 @@ from typing import Iterator
 from tree_sitter import Node
 
 from .base import Pattern
-from ..ast_queries import walk, find_calls, identifiers_in, node_text
+from ..ast_queries import walk, identifiers_in
 from ..editor import SourceEditor
 from ..types import Diagnosis, FunctionContext, Variant
 
@@ -122,50 +122,15 @@ def _swap_trailing_calls(
     if len(call_run) < 2:
         return
 
-    # Try swapping adjacent pairs (prioritize last pair)
-    for i in range(len(call_run) - 1, 0, -1):
-        if counter - start >= 4:
-            return
-        a = call_run[i - 1]
-        b = call_run[i]
-
-        if not _are_independent_calls(a, b, source):
-            continue
-
-        # If Ghidra tells us which call should be last, only try that
-        if ghidra_last_call:
-            a_name = _get_call_name(a, source)
-            if a_name and a_name == ghidra_last_call:
-                # a should be last, but it's currently first -> swap
-                pass
-            elif not a_name:
-                pass  # can't determine, try anyway
-            else:
-                b_name = _get_call_name(b, source)
-                if b_name and b_name == ghidra_last_call:
-                    # b is already last, skip
-                    continue
-
-        ed = SourceEditor(source)
-        _swap_statement_ranges(ed, source, a, b)
-
-        try:
-            new_source = ed.apply()
-        except ValueError:
-            continue
-
-        a_name = _get_call_name(a, source) or "?"
-        b_name = _get_call_name(b, source) or "?"
-        guided = " (Ghidra-guided)" if ghidra_last_call else ""
-        yield Variant(
-            name=f"tailcall_{counter}",
-            pattern_name="tail_call_reorder",
-            description=(
-                f"Swap {a_name}() and {b_name}() for tail-call"
-                f"{guided}"
-            ),
-            source=new_source,
-        )
+    for variant in _variants_for_call_run(
+        call_run,
+        source,
+        ghidra_last_call,
+        counter,
+        max_variants=4,
+        description_template="Swap {a}() and {b}() for tail-call{guided}",
+    ):
+        yield variant
         counter += 1
 
 
@@ -175,51 +140,44 @@ def _swap_calls_before_return(
     ghidra_last_call: str | None,
     start: int,
 ) -> Iterator[Variant]:
-    """Swap consecutive calls that appear before a bare `return;`."""
-    stmts = ctx.statements
-    if len(stmts) < 3:
-        return
-
+    """Swap trailing call runs that appear before a bare `return;`."""
     counter = start
 
-    # Look for pattern: call; call; return;
-    for i in range(len(stmts) - 2):
+    for node in walk(ctx.body_node):
         if counter - start >= 4:
             return
 
-        ret = stmts[i + 2] if i + 2 < len(stmts) else None
-        if ret is None or ret.type != "return_statement":
+        if node.type != "compound_statement":
             continue
 
-        # Check if return is bare (no value)
-        ret_text = source[ret.start_byte:ret.end_byte].strip()
-        if ret_text not in (b"return;", b"return ;"):
+        children = [c for c in node.named_children if c.type != "comment"]
+        if len(children) < 3:
+            continue
+        if not _is_bare_return(children[-1], source):
             continue
 
-        a = stmts[i]
-        b = stmts[i + 1]
-        if not _is_call_statement(a) or not _is_call_statement(b):
-            continue
-        if not _are_independent_calls(a, b, source):
+        call_run = _trailing_call_run(children[:-1])
+        if len(call_run) < 2:
             continue
 
-        ed = SourceEditor(source)
-        _swap_statement_ranges(ed, source, a, b)
+        if node.id == ctx.body_node.id:
+            template = "Swap {a}() and {b}() before return for tail-call{guided}"
+        else:
+            template = (
+                "Swap {a}() and {b}() in nested block before return "
+                "for tail-call{guided}"
+            )
 
-        try:
-            new_source = ed.apply()
-        except ValueError:
-            continue
-
-        a_name = _get_call_name(a, source) or "?"
-        b_name = _get_call_name(b, source) or "?"
-        yield Variant(
-            name=f"tailcall_{counter}",
-            pattern_name="tail_call_reorder",
-            description=f"Swap {a_name}() and {b_name}() before return for tail-call",
-            source=new_source,
-        )
-        counter += 1
+        for variant in _variants_for_call_run(
+            call_run,
+            source,
+            ghidra_last_call,
+            counter,
+            max_variants=4 - (counter - start),
+            description_template=template,
+        ):
+            yield variant
+            counter += 1
 
 
 def _swap_calls_in_terminal_blocks(
@@ -245,10 +203,8 @@ def _swap_calls_in_terminal_blocks(
         if len(children) < 2:
             continue
 
-        # Check if last two are call statements
-        a = children[-2]
-        b = children[-1]
-        if not _is_call_statement(a) or not _is_call_statement(b):
+        call_run = _trailing_call_run(children)
+        if len(call_run) < 2:
             continue
 
         # Must be at a terminal position (end of if/else, end of function path)
@@ -262,28 +218,18 @@ def _swap_calls_in_terminal_blocks(
         ):
             continue
 
-        if not _are_independent_calls(a, b, source):
-            continue
-
-        ed = SourceEditor(source)
-        _swap_statement_ranges(ed, source, a, b)
-
-        try:
-            new_source = ed.apply()
-        except ValueError:
-            continue
-
-        a_name = _get_call_name(a, source) or "?"
-        b_name = _get_call_name(b, source) or "?"
-        yield Variant(
-            name=f"tailcall_{counter}",
-            pattern_name="tail_call_reorder",
-            description=(
-                f"Swap {a_name}() and {b_name}() in nested block for tail-call"
+        for variant in _variants_for_call_run(
+            call_run,
+            source,
+            ghidra_last_call,
+            counter,
+            max_variants=4 - (counter - start),
+            description_template=(
+                "Swap {a}() and {b}() in nested block for tail-call{guided}"
             ),
-            source=new_source,
-        )
-        counter += 1
+        ):
+            yield variant
+            counter += 1
 
 
 # ---------------------------------------------------------------------------
@@ -298,6 +244,25 @@ def _is_call_statement(node: Node) -> bool:
         if child.type == "call_expression":
             return True
     return False
+
+
+def _is_bare_return(node: Node, source: bytes) -> bool:
+    """Check if a statement is `return;` with no value."""
+    if node.type != "return_statement":
+        return False
+    return source[node.start_byte:node.end_byte].strip() in (b"return;", b"return ;")
+
+
+def _trailing_call_run(stmts: list[Node]) -> list[Node]:
+    """Return the maximal trailing run of call statements."""
+    end = len(stmts)
+    start = end
+    for i in range(end - 1, -1, -1):
+        if _is_call_statement(stmts[i]):
+            start = i
+        else:
+            break
+    return stmts[start:end]
 
 
 def _get_call_name(stmt: Node, source: bytes) -> str | None:
@@ -326,6 +291,71 @@ def _get_writes(stmt: Node, source: bytes) -> set[str]:
             if left and left.type == "identifier" and left.text:
                 writes.add(left.text.decode())
     return writes
+
+
+def _should_try_swap(
+    a: Node,
+    b: Node,
+    source: bytes,
+    ghidra_last_call: str | None,
+) -> bool:
+    """Use Ghidra's last-call hint to suppress already-correct orderings."""
+    if ghidra_last_call is None:
+        return True
+
+    a_name = _get_call_name(a, source)
+    b_name = _get_call_name(b, source)
+    if b_name == ghidra_last_call:
+        return False
+    if a_name == ghidra_last_call:
+        return True
+    return a_name is None or b_name is None
+
+
+def _variants_for_call_run(
+    call_run: list[Node],
+    source: bytes,
+    ghidra_last_call: str | None,
+    start: int,
+    max_variants: int,
+    description_template: str,
+) -> Iterator[Variant]:
+    """Yield adjacent swaps from a trailing call run, prioritizing the tail pair."""
+    counter = start
+
+    for i in range(len(call_run) - 1, 0, -1):
+        if counter - start >= max_variants:
+            return
+
+        a = call_run[i - 1]
+        b = call_run[i]
+        if not _are_independent_calls(a, b, source):
+            continue
+        if not _should_try_swap(a, b, source, ghidra_last_call):
+            continue
+
+        ed = SourceEditor(source)
+        _swap_statement_ranges(ed, source, a, b)
+
+        try:
+            new_source = ed.apply()
+        except ValueError:
+            continue
+
+        a_name = _get_call_name(a, source) or "?"
+        b_name = _get_call_name(b, source) or "?"
+        guided = " (Ghidra-guided)" if ghidra_last_call else ""
+        yield Variant(
+            name=f"tailcall_{counter}",
+            pattern_name="tail_call_reorder",
+            description=description_template.format(
+                a=a_name,
+                b=b_name,
+                guided=guided,
+            ),
+            source=new_source,
+        )
+        counter += 1
 
 
 def _are_independent_calls(a: Node, b: Node, source: bytes) -> bool:

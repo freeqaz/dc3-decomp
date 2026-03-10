@@ -29,6 +29,7 @@ public:
     // Hmx::Object
     virtual ~StoreOffer();
     virtual DataNode Handle(DataArray *, bool);
+    virtual bool Cmp(StoreOffer const &, Symbol) const;
 
     Symbol OfferType() const {
         static Symbol type("type");
@@ -67,5 +68,8 @@ protected:
 
 class SortCmp {
 public:
+    SortCmp(Symbol sortBy) : mSortBy(sortBy) {}
     bool operator()(const StoreOffer *, const StoreOffer *) const;
+
+    Symbol mSortBy;
 };
