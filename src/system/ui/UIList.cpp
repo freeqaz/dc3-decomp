@@ -414,10 +414,8 @@ void UIList::SetSelected(int i, int j) {
     mListState.SetSelected(i, j, true);
     Refresh(false);
     mListDir->Poll();
-    UIList *sublist = ChildList();
-    if (sublist) {
-        sublist->Poll();
-    }
+    if (ChildList())
+        Poll();
     HandleSelectionUpdated();
 }
 
