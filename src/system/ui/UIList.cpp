@@ -191,11 +191,9 @@ UIListDir *UIList::GetUIListDir() const { return mListDir; }
 
 int UIList::SelectedPos() const { return mListState.Selected(); }
 
-#ifdef HX_NATIVE
 int UIList::Selected() const { return mListState.Selected(); }
 
 UIListState &UIList::GetListState() { return mListState; }
-#endif
 
 UIList *UIList::ChildList() {
     return mListDir->SubList(mListState.SelectedDisplay(), mWidgets);
