@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-import pytest
-
 from scripts.permuter.evolutionary import (
     Individual,
     _crossover,
     _dedup_population,
+    _mutate,
     _tournament_select,
 )
-from scripts.permuter.merge import EditSpan
+from scripts.permuter.tests.conftest import diag_with_branch_ops, make_context
 from scripts.permuter.types import Variant
 
 
@@ -25,6 +24,19 @@ def _make_individual(
         fitness=fitness,
         build_success=True,
     )
+
+
+class _MutateTagPattern:
+    name = "test_mutate_tag_pattern"
+
+    def generate(self, ctx):
+        yield Variant(
+            name="mutated",
+            pattern_name=self.name,
+            description="mutated",
+            source=ctx.file_source.replace(b"First", b"Second"),
+            tags=frozenset({"tag_b"}),
+        )
 
 
 class TestTournamentSelect:
@@ -103,3 +115,33 @@ class TestDedup:
         ]
         result = _dedup_population(pop)
         assert len(result) == 2
+
+
+class TestMutate:
+    def test_preserves_and_unions_tags(self, monkeypatch):
+        ctx = make_context(
+            """\
+void test_func() {
+    First();
+}
+""",
+            "test_func",
+            diag_with_branch_ops(),
+        )
+        individual = Individual(
+            variant=Variant(
+                name="seed",
+                pattern_name="seed",
+                description="seed",
+                source=ctx.file_source,
+                tags=frozenset({"tag_a"}),
+            ),
+            fitness=50.0,
+            build_success=True,
+        )
+
+        monkeypatch.setattr("scripts.permuter.evolutionary.random.choice", lambda seq: seq[0])
+        mutated = _mutate(ctx, individual, [_MutateTagPattern()])
+
+        assert mutated is not None
+        assert mutated.tags == frozenset({"tag_a", "tag_b"})

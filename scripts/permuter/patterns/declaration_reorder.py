@@ -83,6 +83,9 @@ def _is_cross_regfile_swap(
 
 class DeclarationReorderPattern(Pattern):
     name = "declaration_reorder"
+    safety_tier = "conservative"
+    structural_domain = "data_flow"
+    follow_ups = ("variable_extraction", "prologue_pressure", "declaration_movement")
 
     # Set by the permuter when --bsf-guided is enabled
     bsf_guided: bool = False
@@ -193,6 +196,7 @@ class DeclarationReorderPattern(Pattern):
                     pattern_name=self.name,
                     description=desc,
                     source=new_source,
+                    tags=frozenset({"reordered_declarations"}),
                 )
                 counter += 1
 
@@ -319,6 +323,7 @@ class DeclarationReorderPattern(Pattern):
                 pattern_name=self.name,
                 description=f"Ghidra+ASM crossref reorder: {', '.join(moved[:4])}",
                 source=new_source,
+                tags=frozenset({"reordered_declarations"}),
             )
             counter += 1
 
@@ -340,6 +345,7 @@ class DeclarationReorderPattern(Pattern):
                         pattern_name=self.name,
                         description=f"Ghidra+ASM multi-swap: {', '.join(moved[:4])}",
                         source=new_source,
+                        tags=frozenset({"reordered_declarations"}),
                     )
                     counter += 1
 
@@ -454,6 +460,7 @@ class DeclarationReorderPattern(Pattern):
                 pattern_name=self.name,
                 description=desc,
                 source=new_source,
+                tags=frozenset({"reordered_declarations"}),
             )
             counter += 1
 
@@ -706,6 +713,7 @@ class DeclarationReorderPattern(Pattern):
                 pattern_name=self.name,
                 description=desc,
                 source=new_source,
+                tags=frozenset({"reordered_declarations"}),
             )
             counter += 1
 

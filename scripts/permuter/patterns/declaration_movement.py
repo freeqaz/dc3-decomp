@@ -23,6 +23,7 @@ from tree_sitter import Node
 from .base import Pattern
 from ..ast_queries import identifiers_in
 from ..editor import SourceEditor
+from ..statement_effects import StatementEffectAnalyzer
 from ..types import Diagnosis, FunctionContext, Variant
 
 # Max declarations to try moving
@@ -33,6 +34,9 @@ _MAX_MOVES = 5
 
 class DeclarationMovementPattern(Pattern):
     name = "declaration_movement"
+    safety_tier = "moderate"
+    structural_domain = "data_flow"
+    follow_ups = ("declaration_reorder", "statement_reorder")
 
     def relevant(self, diagnosis: Diagnosis) -> bool:
         for (r0, r1) in diagnosis.reg_swap_pairs:
@@ -45,6 +49,7 @@ class DeclarationMovementPattern(Pattern):
         if len(stmts) < 2:
             return
 
+        analyzer = StatementEffectAnalyzer(ctx.file_source)
         movable = _find_movable_decls(stmts)
         if not movable:
             return
@@ -61,7 +66,7 @@ class DeclarationMovementPattern(Pattern):
 
             moves = _compute_moves(decl_idx, first_use, len(stmts))
             for new_idx in moves:
-                if not _is_safe_move(stmts, decl_idx, new_idx):
+                if not _is_safe_move(stmts, decl_idx, new_idx, analyzer):
                     continue
 
                 new_source = _apply_move(ctx.file_source, stmts, decl_idx, new_idx)
@@ -75,6 +80,7 @@ class DeclarationMovementPattern(Pattern):
                     pattern_name=self.name,
                     description=f"Move '{decl_name}' {direction} by {dist}",
                     source=new_source,
+                    tags=frozenset({"moved_declaration"}),
                 )
                 counter += 1
 
@@ -193,7 +199,12 @@ def _compute_moves(decl_idx: int, first_use: int, num_stmts: int) -> list[int]:
     return moves[:_MAX_MOVES]
 
 
-def _is_safe_move(stmts: list[Node], from_idx: int, to_idx: int) -> bool:
+def _is_safe_move(
+    stmts: list[Node],
+    from_idx: int,
+    to_idx: int,
+    analyzer: StatementEffectAnalyzer,
+) -> bool:
     """Check if moving a declaration is dependency-safe.
 
     The declaration's initializer must not reference variables that are
@@ -204,25 +215,34 @@ def _is_safe_move(stmts: list[Node], from_idx: int, to_idx: int) -> bool:
     """
     decl = stmts[from_idx]
     init_ids = _get_init_identifiers(decl)
+    decl_effects = analyzer.analyze(decl)
+
+    # Obvious side-effecting declaration initializers are not safe to move.
+    if decl_effects.call_kinds & {"guard", "logging", "mutator"}:
+        return False
 
     if to_idx < from_idx:
-        # Moving up: check that the initializer doesn't reference
-        # any variables declared in stmts[to_idx..from_idx)
-        for i in range(to_idx, from_idx):
-            stmt = stmts[i]
-            if stmt.type == "declaration":
-                name = _get_declared_name(stmt)
-                if name and name in init_ids:
-                    return False
+        crossed = range(to_idx, from_idx)
     else:
-        # Moving down: check that no statement in (from_idx..to_idx]
-        # declares a variable used in our initializer
-        for i in range(from_idx + 1, to_idx + 1):
-            stmt = stmts[i]
-            if stmt.type == "declaration":
-                name = _get_declared_name(stmt)
-                if name and name in init_ids:
-                    return False
+        crossed = range(from_idx + 1, to_idx + 1)
+
+    for i in crossed:
+        stmt = stmts[i]
+        stmt_effects = analyzer.analyze(stmt)
+
+        if stmt.type == "declaration":
+            name = _get_declared_name(stmt)
+            if name and name in init_ids:
+                return False
+
+        if stmt_effects.has_assert_like_guard:
+            return False
+
+        if decl_effects.has_call and stmt_effects.has_call:
+            if not analyzer.can_reorder_call_pair(decl, stmt):
+                return False
+        elif not analyzer.are_independent(decl, stmt):
+            return False
 
     return True
 

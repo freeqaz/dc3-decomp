@@ -90,9 +90,10 @@ void FrameCapture::DumpToStderr() const {
                     r.index, r.meshName ? r.meshName : "?", r.skipReason ? r.skipReason : "?");
             continue;
         }
-        fprintf(stderr, "[%3d] DRAW  mesh='%s' mat='%s' blend=%d zMode=%d cull=%d",
+        fprintf(stderr, "[%3d] DRAW  mesh='%s' mat='%s' cam='%s' blend=%d zMode=%d cull=%d",
                 r.index, r.meshName ? r.meshName : "?",
                 r.materialName ? r.materialName : "?",
+                r.cameraName ? r.cameraName : "?",
                 r.blend, r.zMode, r.cull);
         if (r.skinned) fprintf(stderr, " SKINNED");
         if (r.deferred) fprintf(stderr, " DEFERRED(dist=%.1f)", r.distSq);
@@ -101,6 +102,13 @@ void FrameCapture::DumpToStderr() const {
         fprintf(stderr, "       color=(%.2f,%.2f,%.2f,%.2f) alpha=%.2f prelit=%.0f tex=%.0f spec=%.0f emissive=%.2f\n",
                 r.color[0], r.color[1], r.color[2], r.color[3],
                 r.alpha, r.prelit, r.useTexture, r.specularPower, r.emissiveMultiplier);
+        fprintf(stderr, "       world=(%.2f,%.2f,%.2f)",
+                r.worldPos[0], r.worldPos[1], r.worldPos[2]);
+        if (r.hasNdcPos) {
+            fprintf(stderr, " ndc=(%.3f,%.3f,%.3f)",
+                    r.ndcPos[0], r.ndcPos[1], r.ndcPos[2]);
+        }
+        fprintf(stderr, "\n");
 
         if (r.heuristicsApplied) {
             fprintf(stderr, "       heuristics: ");
@@ -132,10 +140,17 @@ void FrameCapture::DumpFiltered(const char* meshFilter, const char* matFilter, i
         if (matFilter && r.materialName && !strstr(r.materialName, matFilter)) continue;
         if (blendFilter >= 0 && r.blend != blendFilter) continue;
 
-        fprintf(stderr, "[%3d] mesh='%s' mat='%s' blend=%d color=(%.2f,%.2f,%.2f,%.2f)",
+        fprintf(stderr, "[%3d] mesh='%s' mat='%s' cam='%s' blend=%d color=(%.2f,%.2f,%.2f,%.2f)",
                 r.index, r.meshName ? r.meshName : "?",
                 r.materialName ? r.materialName : "?",
+                r.cameraName ? r.cameraName : "?",
                 r.blend, r.color[0], r.color[1], r.color[2], r.color[3]);
+        fprintf(stderr, " world=(%.2f,%.2f,%.2f)",
+                r.worldPos[0], r.worldPos[1], r.worldPos[2]);
+        if (r.hasNdcPos) {
+            fprintf(stderr, " ndc=(%.3f,%.3f,%.3f)",
+                    r.ndcPos[0], r.ndcPos[1], r.ndcPos[2]);
+        }
         if (r.heuristicsApplied) {
             fprintf(stderr, " heuristics=0x%x", r.heuristicsApplied);
         }

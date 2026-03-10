@@ -15,6 +15,7 @@ from tree_sitter import Node
 
 from .base import Pattern
 from ..ast_queries import walk, get_indent
+from ..control_flow import else_compound_body, noncomment_named_children
 from ..types import Diagnosis, FunctionContext, Variant
 
 _BRANCH_OPCODES = {"beq", "bne", "ble", "bgt", "bge", "blt",
@@ -24,6 +25,9 @@ _BRANCH_OPCODES = {"beq", "bne", "ble", "bgt", "bge", "blt",
 
 class SwitchIfConvertPattern(Pattern):
     name = "switch_if_convert"
+    safety_tier = "moderate"
+    structural_domain = "control_flow"
+    follow_ups = ("branch_polarity", "declaration_reorder", "ternary_swap")
 
     def relevant(self, diagnosis: Diagnosis) -> bool:
         # Branch opcode mismatches suggest control flow structure differences
@@ -129,6 +133,7 @@ def _switch_to_if(node: Node, ctx: FunctionContext, counter: int) -> Iterator[Va
         pattern_name="switch_if_convert",
         description=f"switch -> if/else if ({len(cases)} cases)",
         source=new_source,
+        tags=frozenset({"converted_switch_to_if"}),
     )
 
 
@@ -173,6 +178,7 @@ def _if_to_switch(node: Node, ctx: FunctionContext, counter: int) -> Iterator[Va
         pattern_name="switch_if_convert",
         description=f"if/else if -> switch ({len(chain)} branches)",
         source=new_source,
+        tags=frozenset({"converted_if_to_switch"}),
     )
 
 
@@ -186,7 +192,7 @@ def _extract_switch_cases(body: Node, source: bytes) -> list[tuple[bytes | None,
     current_lines: list[bytes] = []
     in_case = False
 
-    for child in body.named_children:
+    for child in noncomment_named_children(body):
         if child.type == "case_statement":
             # Save previous case
             if in_case:
@@ -199,8 +205,8 @@ def _extract_switch_cases(body: Node, source: bytes) -> list[tuple[bytes | None,
                 current_value = None
             # Collect body statements
             current_lines = []
-            for stmt_child in child.named_children:
-                if stmt_child.type != "comment" and stmt_child != value_node:
+            for stmt_child in noncomment_named_children(child):
+                if stmt_child != value_node:
                     line = source[stmt_child.start_byte:stmt_child.end_byte].strip()
                     if line:
                         current_lines.append(line)
@@ -211,11 +217,10 @@ def _extract_switch_cases(body: Node, source: bytes) -> list[tuple[bytes | None,
                 cases.append((current_value, _strip_break(current_lines)))
             current_value = None
             current_lines = []
-            for stmt_child in child.named_children:
-                if stmt_child.type != "comment":
-                    line = source[stmt_child.start_byte:stmt_child.end_byte].strip()
-                    if line:
-                        current_lines.append(line)
+            for stmt_child in noncomment_named_children(child):
+                line = source[stmt_child.start_byte:stmt_child.end_byte].strip()
+                if line:
+                    current_lines.append(line)
             in_case = True
 
     # Save last case
@@ -288,11 +293,11 @@ def _collect_if_chain(
             if child.type == "if_statement":
                 current = child
                 break
-            elif child.type == "compound_statement":
-                # Final else
-                body_lines = _extract_body_lines(child, source)
+        if current is None:
+            alt_body = else_compound_body(alternative)
+            if alt_body is not None:
+                body_lines = _extract_body_lines(alt_body, source)
                 chain.append((None, body_lines))
-                break
 
     if switch_expr is None or len(chain) < 3:
         return None
@@ -483,11 +488,10 @@ def _extract_body_lines(node: Node, source: bytes) -> list[bytes]:
     """Extract statement lines from a compound_statement or single statement."""
     if node.type == "compound_statement":
         lines = []
-        for child in node.named_children:
-            if child.type != "comment":
-                line = source[child.start_byte:child.end_byte].strip()
-                if line:
-                    lines.append(line)
+        for child in noncomment_named_children(node):
+            line = source[child.start_byte:child.end_byte].strip()
+            if line:
+                lines.append(line)
         return lines
     else:
         line = source[node.start_byte:node.end_byte].strip()
@@ -498,14 +502,14 @@ def _get_inner_expr(condition: Node) -> Node | None:
     """Extract the inner expression from a condition_clause."""
     current = condition
     while current.type in ("condition_clause", "parenthesized_expression"):
-        children = [c for c in current.named_children if c.type != "comment"]
+        children = noncomment_named_children(current)
         if len(children) == 1:
             current = children[0]
         else:
             break
     if current.id == condition.id:
-        for child in condition.named_children:
-            if child.type != "comment":
-                return child
+        children = noncomment_named_children(condition)
+        for child in children:
+            return child
         return None
     return current

@@ -44,6 +44,19 @@ static bool IsSimpleRender() {
     return sSimpleRender;
 }
 
+static bool sNoTransparentDefer = false;
+static bool sNoTransparentDeferChecked = false;
+static bool NoTransparentDefer() {
+    if (!sNoTransparentDeferChecked) {
+        sNoTransparentDefer = (getenv("MILO_NO_TRANSPARENT_DEFER") != nullptr);
+        sNoTransparentDeferChecked = true;
+        if (sNoTransparentDefer) {
+            printf("DC3 Native: transparent defer disabled\n");
+        }
+    }
+    return sNoTransparentDefer;
+}
+
 // ============================================================================
 // GPU mesh data side table
 // ============================================================================
@@ -505,7 +518,7 @@ void RndMesh::DrawShowing() {
     // sets font color override on the material, then restores it after drawing. If deferred,
     // the material state is wrong by the time FlushTransparentDraws runs.
     bool isTextMeshEarly = !Name()[0];
-    if (IsTransparentBlend(mat->GetBlend()) && !isTextMeshEarly) {
+    if (IsTransparentBlend(mat->GetBlend()) && !isTextMeshEarly && !NoTransparentDefer()) {
         float distSq = 0.0f;
         RndCam* cam = RndCam::Current();
         if (cam) {
@@ -904,6 +917,56 @@ static void DrawMeshImmediate(RndMesh* mesh) {
         rec.prelit = matUni.prelit;
         rec.useTexture = matUni.useTexture;
         rec.alpha = matUni.color[3];
+        const Vector3& worldPos = mesh->WorldXfm().v;
+        rec.worldPos[0] = worldPos.x;
+        rec.worldPos[1] = worldPos.y;
+        rec.worldPos[2] = worldPos.z;
+        rec.hasNdcPos = false;
+        if (cam) {
+            cam->UpdatedWorldXfm();
+            Transform viewXfm;
+            Hmx::Matrix4 projMtx;
+            cam->GetViewProjectXfms(viewXfm, projMtx);
+
+            float view[16] = {
+                viewXfm.m.x.x, viewXfm.m.x.y, viewXfm.m.x.z, 0.0f,
+                viewXfm.m.y.x, viewXfm.m.y.y, viewXfm.m.y.z, 0.0f,
+                viewXfm.m.z.x, viewXfm.m.z.y, viewXfm.m.z.z, 0.0f,
+                viewXfm.v.x,   viewXfm.v.y,   viewXfm.v.z,   1.0f
+            };
+            float proj[16] = {
+                projMtx.x.x, projMtx.x.y, projMtx.x.z, projMtx.x.w,
+                projMtx.y.x, projMtx.y.y, projMtx.y.z, projMtx.y.w,
+                projMtx.z.x, projMtx.z.y, projMtx.z.z, projMtx.z.w,
+                projMtx.w.x, projMtx.w.y, projMtx.w.z, projMtx.w.w,
+            };
+            float viewProj[16];
+            for (int i = 0; i < 4; i++) {
+                for (int j = 0; j < 4; j++) {
+                    float sum = 0.0f;
+                    for (int k = 0; k < 4; k++) {
+                        sum += view[i * 4 + k] * proj[k * 4 + j];
+                    }
+                    viewProj[i * 4 + j] = sum;
+                }
+            }
+
+            float clip[4];
+            float pos[4] = {worldPos.x, worldPos.y, worldPos.z, 1.0f};
+            for (int j = 0; j < 4; j++) {
+                float sum = 0.0f;
+                for (int k = 0; k < 4; k++) {
+                    sum += pos[k] * viewProj[k * 4 + j];
+                }
+                clip[j] = sum;
+            }
+            if (clip[3] != 0.0f) {
+                rec.ndcPos[0] = clip[0] / clip[3];
+                rec.ndcPos[1] = clip[1] / clip[3];
+                rec.ndcPos[2] = clip[2] / clip[3];
+                rec.hasNdcPos = true;
+            }
+        }
         rec.heuristicsApplied = heuristics;
         // Texture binding info
         const char* slotNames[] = {"diffuse","normal","specular","emissive","rim","environCube","normDetail"};

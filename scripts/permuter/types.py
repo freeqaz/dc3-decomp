@@ -177,6 +177,7 @@ class Variant:
     description: str
     source: bytes  # Full modified file content
     edits: list | None = None  # Edits applied to produce this variant
+    tags: frozenset[str] = field(default_factory=frozenset)
 
 
 @dataclass
@@ -254,9 +255,13 @@ class RoundHints:
     """Per-round carry-forward state for adaptive hill climbing."""
 
     pattern_deltas: dict[str, list[tuple[float, int]]] = field(default_factory=dict)
+    tag_deltas: dict[str, list[tuple[float, int]]] = field(default_factory=dict)
     pattern_wins: dict[str, int] = field(default_factory=dict)
+    tag_wins: dict[str, int] = field(default_factory=dict)
     pattern_failures: dict[str, int] = field(default_factory=dict)
+    pattern_positive_tags: dict[str, set[str]] = field(default_factory=dict)
     last_winner: str | None = None
+    last_winner_tags: frozenset[str] = field(default_factory=frozenset)
     last_diagnosis: Optional[Diagnosis] = None
     # Patterns where ALL variants failed to build (100% build failure rate)
     build_failed_patterns: set[str] = field(default_factory=set)
@@ -267,20 +272,31 @@ class RoundHints:
         variant_results: list[ScoreResult],
         baseline: float,
         winner_pattern: str | None,
+        winner_variant: Variant | None = None,
     ) -> None:
         """Update hints from a completed round's results."""
         # Track per-pattern best delta
         by_pattern: dict[str, float] = {}
+        by_tag: dict[str, float] = {}
         for result in variant_results:
             pname = result.variant.pattern_name
+            delta = result.match_percent - baseline
             # Strip compose: prefix to credit both patterns
             for p in _split_pattern_name(pname):
-                delta = result.match_percent - baseline
                 if p not in by_pattern or delta > by_pattern[p]:
                     by_pattern[p] = delta
+                if delta > 0.0 and result.variant.tags:
+                    self.pattern_positive_tags.setdefault(p, set()).update(
+                        result.variant.tags
+                    )
+            for tag in result.variant.tags:
+                if tag not in by_tag or delta > by_tag[tag]:
+                    by_tag[tag] = delta
 
         for p, delta in by_pattern.items():
             self.pattern_deltas.setdefault(p, []).append((delta, round_num))
+        for tag, delta in by_tag.items():
+            self.tag_deltas.setdefault(tag, []).append((delta, round_num))
 
         # Update wins and failures
         if winner_pattern:
@@ -292,6 +308,10 @@ class RoundHints:
             # No winner — increment failure count for all patterns that were tried
             for p in by_pattern:
                 self.pattern_failures[p] = self.pattern_failures.get(p, 0) + 1
+        if winner_variant:
+            self.last_winner_tags = winner_variant.tags
+            for tag in winner_variant.tags:
+                self.tag_wins[tag] = self.tag_wins.get(tag, 0) + 1
 
         # Track build failures: patterns where ALL variants failed to compile
         self.build_failed_patterns = _collect_build_failed_patterns(variant_results)
@@ -311,6 +331,29 @@ class RoundHints:
         else:
             return 0.1
 
+    def adaptive_priority_boost(self, pattern_name: str) -> float:
+        """Get a positive multiplier from past wins and structural tag history."""
+        boost = 1.0
+
+        wins = self.pattern_wins.get(pattern_name, 0)
+        if wins > 0:
+            boost += min(0.4, wins * 0.1)
+
+        tags = self.promising_tags_for_pattern(pattern_name)
+        if not tags:
+            return boost
+
+        if tags & self.last_winner_tags:
+            boost += 0.2
+
+        tag_win_bonus = sum(self.tag_wins.get(tag, 0) for tag in tags)
+        if tag_win_bonus > 0:
+            boost += min(0.4, tag_win_bonus * 0.08)
+        elif any(tag in self.promising_tags() for tag in tags):
+            boost += 0.1
+
+        return boost
+
     def promising_patterns(self) -> list[str]:
         """Return patterns that had positive delta in any round."""
         result = []
@@ -318,6 +361,18 @@ class RoundHints:
             if any(d > 0.0 for d, _ in deltas):
                 result.append(p)
         return result
+
+    def promising_tags(self) -> list[str]:
+        """Return structural tags that had positive delta in any round."""
+        result = []
+        for tag, deltas in self.tag_deltas.items():
+            if any(d > 0.0 for d, _ in deltas):
+                result.append(tag)
+        return result
+
+    def promising_tags_for_pattern(self, pattern_name: str) -> frozenset[str]:
+        """Return historically positive tags associated with a pattern."""
+        return frozenset(self.pattern_positive_tags.get(pattern_name, set()))
 
 
 def _split_pattern_name(name: str) -> list[str]:

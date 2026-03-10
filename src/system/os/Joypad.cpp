@@ -187,9 +187,6 @@ namespace {
 
     void Export(const Message &msg) {
         if (gExportMsgs) {
-#ifdef HX_NATIVE
-            printf("DC3 Joypad: Export '%s'\n", msg.Type().Str());
-#endif
             gJoypadMsgSource->Handle(msg, false);
         }
     }

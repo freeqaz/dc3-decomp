@@ -542,7 +542,7 @@ void PostPurchaseEnumJob::OnCompletion(Hmx::Object *obj) {
         static Symbol sOfferSymbol("offer");
 
         String dataStr(MakeString("%016llX", mItemID));
-        SendDataPoint<Symbol, Symbol, Symbol, String, Symbol, int>("store/purchase", sSourceSymbol, mOfferSymbol, sOfferSymbol, dataStr, sPurchaserSymbol, mPurchaserID);
+        SendDataPoint("store/purchase", sSourceSymbol, mOfferSymbol, sOfferSymbol, dataStr.c_str(), sPurchaserSymbol, mPurchaserID);
     }
     SingleItemEnumJob::OnCompletion(obj);
 }
@@ -564,7 +564,7 @@ MultipleItemsEnumJob::MultipleItemsEnumJob(Hmx::Object *obj, int userIndex, std:
 }
 
 MultipleItemsEnumJob::~MultipleItemsEnumJob() {
-    if (mStatus == 1 && mOverlapped.InternalLow == 0x3e5) {
+    if (mStatus == 1 && mOverlapped.InternalLow != 0x3e5) {
         DWORD result = XCancelOverlapped(&mOverlapped);
         if (result != 0) {
             TheDebug.Fail(MakeString("Error cancelling enum %d", result), 0);
@@ -583,39 +583,40 @@ void MultipleItemsEnumJob::Poll() {
         DWORD resultBuf[26];
         DWORD result = XGetOverlappedResult(&mOverlapped, resultBuf, 0);
         if (result == 0) {
-            u64 *enumEntry = (u64 *)mEnumBuffer;
             mStatus = 2;
-            unsigned int bitOffset = mPurchased.begin()._M_offset;
-            unsigned int *bitChunk = mPurchased.begin()._M_p;
-            u64 *itemPtr = &mItemIDs[0];
-            int count = (int)(mItemIDs.end() - mItemIDs.begin());
-            if (count != 0) {
+            u64 *enumEntry = (u64 *)mEnumBuffer;
+            auto itemIt = mItemIDs.begin();
+            int count = (int)mItemIDs.size();
+            auto purchasedIt = mPurchased.begin();
+            unsigned int bitOffset = purchasedIt._M_offset;
+            unsigned int *bitChunk = purchasedIt._M_p;
+            if (count > 0) {
                 unsigned int i = 0;
                 do {
-                    if (*enumEntry == *itemPtr) {
-                        unsigned int mask = 1 << (bitOffset & 0x3f);
+                    if (*enumEntry == *itemIt) {
+                        unsigned int mask = 1 << (bitOffset & 63);
                         int purchased = *(int *)(enumEntry + 9);
-                        if (purchased != 0) {
-                            *bitChunk = *bitChunk | mask;
+                        if (purchased > 0) {
+                            *bitChunk |= mask;
                         } else {
-                            *bitChunk = *bitChunk & ~mask;
+                            *bitChunk &= ~mask;
                         }
-                        bool success = mSuccess || ((*bitChunk & mask) != 0);
+                        bool success = mSuccess || ((*bitChunk & mask) > 0);
                         enumEntry += 0xd;
                         mSuccess = success;
                     } else {
-                        TheDebug.Notify(MakeString("Could not enumerate offerId %016llX", *itemPtr));
-                        *bitChunk = *bitChunk & ~(1 << (bitOffset & 0x3f));
+                        TheDebug.Notify(MakeString("Could not enumerate offerId %016llX", *itemIt));
+                        *bitChunk &= ~(1 << (bitOffset & 63));
                     }
-                    bool wrap = bitOffset == 0x1f;
+                    bool wrap = bitOffset > 0x1e;
                     bitOffset++;
                     if (wrap) {
                         bitOffset = 0;
                         bitChunk++;
                     }
                     i++;
-                    itemPtr++;
-                } while (i < (unsigned int)count);
+                    itemIt++;
+                } while (i < count);
             }
         } else {
             mStatus = 3;
@@ -721,6 +722,12 @@ void MultipleItemsEnumCompleteMsg::SetNumOfferIDs(int count) {
 
 void MultipleItemsEnumCompleteMsg::SetOfferID(int index, const String &s) {
     mData->Node(5).Array(mData)->Node(index) = DataNode(s);
+}
+
+unsigned long long MultipleItemsEnumCompleteMsg::OfferID(int index) const {
+    DataArray *arr = mData->Node(5).Array(mData);
+    const char *str = arr->Node(index).Str(arr);
+    return _strtoui64(str, nullptr, 0x10);
 }
 
 void MultipleItemsEnumCompleteMsg::SetPurchased(int index, bool b) {

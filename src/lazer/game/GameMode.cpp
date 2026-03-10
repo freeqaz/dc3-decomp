@@ -111,6 +111,13 @@ int GameMode::MaxPlayers(Symbol sym) {
 
 void GameMode::SetMode(Symbol mode, Symbol s2) {
     if (mMode != mode) {
+#ifdef HX_NATIVE
+        // On native, DTA property expressions in mode configs reference
+        // runtime objects (TheGameData, campaign state, etc.) that aren't
+        // initialized. Just track the requested mode name.
+        mMode = mode;
+        return;
+#endif
         DataArray *cfg = SystemConfig("modes");
         static Message exitMsg("exit");
         HandleType(exitMsg);

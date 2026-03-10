@@ -39,12 +39,16 @@ from tree_sitter import Node
 
 from .base import Pattern
 from ..ast_queries import get_indent, walk, node_text
+from ..control_flow import else_compound_body, noncomment_named_children
 from ..editor import SourceEditor
 from ..types import Diagnosis, FunctionContext, Variant
 
 
 class ReturnCallMergePattern(Pattern):
     name = "return_call_merge"
+    safety_tier = "moderate"
+    structural_domain = "control_flow"
+    follow_ups = ("branch_polarity", "declaration_reorder", "early_return_merge")
 
     def relevant(self, diagnosis: Diagnosis) -> bool:
         # Branch opcode mismatches suggest branch restructuring
@@ -119,7 +123,7 @@ def _try_merge_if_else(
         return
 
     # Get alternative body
-    alt_body = _get_alt_body(alternative)
+    alt_body = else_compound_body(alternative)
     if alt_body is None:
         return
 
@@ -203,6 +207,7 @@ def _try_merge_if_else(
             f"(arg {diff_idx} differs: {cons_diff_arg.decode()} vs {alt_diff_arg.decode()})"
         ),
         source=new_source,
+        tags=frozenset({"merged_return_calls"}),
     )
 
 
@@ -265,7 +270,7 @@ def _try_split_pair(
     if cons_assign is None:
         return
 
-    alt_body = _get_alt_body(alternative)
+    alt_body = else_compound_body(alternative)
     if alt_body is None:
         return
 
@@ -319,6 +324,7 @@ def _try_split_pair(
         pattern_name="return_call_merge",
         description=f"Split return {func_name.decode()}() into if/else branches",
         source=new_source,
+        tags=frozenset({"split_return_calls"}),
     )
 
 
@@ -345,7 +351,7 @@ def _try_split_with_decl(
     if cons_assign is None:
         return
 
-    alt_body = _get_alt_body(alternative)
+    alt_body = else_compound_body(alternative)
     if alt_body is None:
         return
 
@@ -397,6 +403,7 @@ def _try_split_with_decl(
         pattern_name="return_call_merge",
         description=f"Split return {func_name.decode()}() into if/else (removing decl)",
         source=new_source,
+        tags=frozenset({"split_return_calls"}),
     )
 
 
@@ -409,7 +416,7 @@ def _extract_return_call(compound: Node, source: bytes) -> tuple[bytes, list[byt
 
     Returns None if the compound doesn't end with `return func(...)`.
     """
-    stmts = [c for c in compound.named_children]
+    stmts = noncomment_named_children(compound)
     if not stmts:
         return None
 
@@ -470,7 +477,7 @@ def _extract_single_assignment(
     compound: Node, source: bytes
 ) -> tuple[bytes, bytes] | None:
     """Extract (var_name, value) from compound with single assignment statement."""
-    stmts = [c for c in compound.named_children]
+    stmts = noncomment_named_children(compound)
     if len(stmts) != 1:
         return None
 
@@ -513,18 +520,6 @@ def _extract_decl_var_name(decl: Node, source: bytes) -> bytes | None:
     if name_node.type == "identifier":
         return node_text(source, name_node)
     return None
-
-
-def _get_alt_body(alternative: Node) -> Node | None:
-    """Get the compound_statement body from an else clause."""
-    for child in alternative.children:
-        if child.type == "compound_statement":
-            return child
-        elif child.type == "if_statement":
-            return None  # else-if, skip
-    return None
-
-
 def _get_condition_text(condition: Node, source: bytes) -> bytes | None:
     """Get condition text including parens from condition_clause."""
     # The condition_clause includes parens: (expr)
@@ -534,7 +529,7 @@ def _get_condition_text(condition: Node, source: bytes) -> bytes | None:
 
 def _get_extra_statements(compound: Node, source: bytes) -> list[bytes]:
     """Get statements before the return (if any)."""
-    stmts = [c for c in compound.named_children]
+    stmts = noncomment_named_children(compound)
     if len(stmts) <= 1:
         return []
     # All but last (which is the return)

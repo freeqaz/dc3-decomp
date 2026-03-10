@@ -382,7 +382,16 @@ void GestureMgr::SetIdentificationEnabled(bool enabled) {
     }
 }
 
-void GestureMgr::SetInControllerMode(bool mode) { mInControllerMode = mode; }
+void GestureMgr::SetInControllerMode(bool mode) {
+#ifdef HX_NATIVE
+    // Native: always stay in controller mode (no Kinect gesture input).
+    // DTA scripts call exit_controller_mode during screen transitions,
+    // but enter_controller_mode is never called back on native.
+    mInControllerMode = true;
+#else
+    mInControllerMode = mode;
+#endif
+}
 void GestureMgr::SetInVoiceMode(bool mode) { mInVoiceMode = mode; }
 void GestureMgr::SetGesturingWithVoice(bool gesturing) {
     mGesturingWithVoice = gesturing;

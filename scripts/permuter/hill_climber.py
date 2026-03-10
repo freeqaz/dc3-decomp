@@ -29,7 +29,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .classifier import classify_mismatches, format_classifications
-from .composer import _DEFAULT_PAIRS, build_adaptive_chains, get_compose_pairs
+from .composer import _DEFAULT_PAIRS, available_context_keys, build_adaptive_chains, get_compose_pairs
 from .diagnosis import format_diagnosis_summary, is_all_noise
 from .extractor import extract_function
 from .file_util import atomic_write_bytes, SourceFileLock
@@ -590,6 +590,8 @@ def hill_climb(
                     compose_pairs = get_compose_pairs(
                         diagnosis=ctx.diagnosis,
                         patterns=patterns,
+                        hints=round_hints if adaptive else None,
+                        available_context=available_context_keys(ctx),
                     )
 
                 # Build adaptive chains for this round
@@ -599,6 +601,7 @@ def hill_climb(
                         diagnosis=ctx.diagnosis,
                         patterns=patterns,
                         hints=round_hints,
+                        available_context=available_context_keys(ctx),
                         max_depth=chain_depth,
                     )
                     if round_chains:
@@ -802,6 +805,11 @@ def hill_climb(
                     baseline=baseline,
                     winner_pattern=(
                         best_result.variant.pattern_name
+                        if best_result and best_score > baseline
+                        else None
+                    ),
+                    winner_variant=(
+                        best_result.variant
                         if best_result and best_score > baseline
                         else None
                     ),

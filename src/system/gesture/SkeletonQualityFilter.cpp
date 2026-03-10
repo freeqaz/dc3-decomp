@@ -6,6 +6,11 @@
 #include "hamobj/HamGameData.h"
 #include "hamobj/HamPlayerData.h"
 #include "math/Vec.h"
+#include <stdio.h>
+
+#ifndef HX_NATIVE
+template int sprintf_s<50>(char (&)[50], const char *, ...);
+#endif
 
 SkeletonQualityFilter::SkeletonQualityFilter()
     : mConfidenceLossThreshold(0), mConfidenceRegainThreshold(20), mValid(0),

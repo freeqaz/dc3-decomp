@@ -1240,6 +1240,7 @@ if(BUILD_TESTS)
         tests/test_extract_bik.cpp
         tests/test_input.cpp
         tests/test_audio.cpp
+        tests/test_ham_provider.cpp
         tests/test_subsystems.cpp
         tests/test_bone_ground_truth.cpp
         tests/test_headless_boot.cpp

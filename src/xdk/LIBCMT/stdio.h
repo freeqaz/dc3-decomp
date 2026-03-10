@@ -33,6 +33,7 @@ int _snprintf(char *buffer, size_t bufsz, const char *format, ...);
 int vprintf(const char *format, va_list vlist);
 int vfprintf(FILE *stream, const char *format, va_list vlist);
 int vsprintf(char *buffer, const char *format, va_list vlist);
+int vsprintf_s(char *buffer, size_t bufsz, const char *format, va_list vlist);
 int vsnprintf(char *buffer, size_t bufsz, const char *format, va_list vlist);
 
 int scanf(const char *format, ...);
@@ -77,7 +78,7 @@ template <size_t _Size>
 inline int sprintf_s(char (&_Dest)[_Size], const char *_Format, ...) {
     va_list args;
     va_start(args, _Format);
-    int ret = vsprintf(_Dest, _Format, args);
+    int ret = vsprintf_s(_Dest, _Size, _Format, args);
     va_end(args);
     return ret;
 }

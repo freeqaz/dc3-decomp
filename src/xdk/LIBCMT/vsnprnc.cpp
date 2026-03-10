@@ -44,4 +44,8 @@ int _vsprintf_s_l(char *buffer, size_t sizeInBytes, const char *format, void *lo
     return -1;
 }
 
+int vsprintf_s(char *buffer, size_t sizeInBytes, const char *format, va_list argptr) {
+    return _vsprintf_s_l(buffer, sizeInBytes, format, 0, argptr);
+}
+
 }

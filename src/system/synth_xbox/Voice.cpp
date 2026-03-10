@@ -190,12 +190,12 @@ void Voice::InitSourceBuffer(XAUDIO2_BUFFER &audio_buffer) {
 }
 
 void StartSynchronizedVoices() {
-    if (gShutdownVoiceThread)
+    if (gShutdownVoiceThread != false)
         return;
     gLockPendingLists.Enter();
     gCommitSyncVoices = true;
     gCommitTag = 1;
-    if (gEvent != INVALID_HANDLE_VALUE) {
+    if (gEvent != (HANDLE)-1) {
         SetEvent(gEvent);
     }
     gLockPendingLists.Exit();
@@ -229,22 +229,23 @@ bool Voice::HasPendingVoices() {
     if (gShutdownVoiceThread)
         return false;
     gLockPendingLists.Enter();
-    int count = 0;
+    int count1 = 0;
     for (std::list<Voice *>::iterator it = gPendingVoices.begin();
          it != gPendingVoices.end(); ++it) {
-        count++;
+        count1++;
     }
+    int count2 = 0;
     for (std::list<Voice *>::iterator it = gPendingSyncVoices.begin();
          it != gPendingSyncVoices.end(); ++it) {
-        count++;
+        count2++;
     }
-    bool result = count > 0;
+    bool result = (count1 + count2) > 0;
     gLockPendingLists.Exit();
     return result;
 }
 
 void Voice::blockingStart(bool b) {
-    if (gShutdownVoiceThread || !TheXboxSynth || TheXboxSynth->unkf0 == 0)
+    if (gShutdownVoiceThread || TheXboxSynth->unkf0 == 0)
         return;
     gLockPendingLists.Enter();
     Init(b);
@@ -275,8 +276,8 @@ void Voice::Stop(bool immediate) {
 }
 
 void Voice::Pause(bool b) {
-    bool isPaused = (mState == 4);
-    if (b != isPaused && IsPlaying()) {
+    int isPaused = (mState == 4);
+    if (!(b == isPaused) && IsPlaying()) {
         if (mSynchronized && mState == 2 && b) {
             StartSynchronizedVoices();
         }
@@ -284,9 +285,7 @@ void Voice::Pause(bool b) {
             Sleep(0);
         }
         MILO_ASSERT(mSourceVoice, 0x2b4);
-        if (!b) {
-            SafeRestart();
-        } else {
+        if (b) {
             gHasPendingStopCommits = true;
             int *pVoice = (int *)mSourceVoice;
             int flags = mSynchronized ? 2 : 0;
@@ -294,22 +293,27 @@ void Voice::Pause(bool b) {
                 ((HRESULT(*)(int *, int, int))(*(int *)(*(int *)pVoice + 0x50)))(pVoice, 0, flags);
             MILO_ASSERT(SUCCEEDED(hr), 700);
             mState = 4;
+        } else {
+            SafeRestart();
         }
     }
 }
 
 void Voice::SetSpeed(float speed) {
+    float min_speed = 0.0099999998f;
+    float max_speed = 2.0f;
     float clamped = speed;
-    if (clamped <= 0.01f)
-        clamped = 0.01f;
-    if (clamped > 2.0f && mXMA) {
+
+    if (clamped <= min_speed)
+        clamped = min_speed;
+    if (clamped > max_speed && mXMA) {
         MILO_NOTIFY("can't pitch an XMA sound up more than one octave");
-        clamped = 2.0f;
+        clamped = max_speed;
     }
     mSpeed = clamped;
-    if (mSourceVoice) {
-        int *pVoice = (int *)mSourceVoice;
-        ((void (*)(int *, float))(*(int *)(*(int *)pVoice + 0x68)))(pVoice, mSpeed);
+    if (mSourceVoice != 0) {
+        void *pVoice = (void*)mSourceVoice;
+        ((void (*)(void *, float))(*(int *)(*(int *)pVoice + 0x68)))(pVoice, mSpeed);
     }
 }
 
@@ -334,20 +338,21 @@ void Voice::SetSendImpl(FxSend360 *send) {
 void Voice::SafeRestart() {
     MILO_ASSERT(mSourceVoice, 0x471);
     int *pVoice = (int *)mSourceVoice;
-    ((void (*)(int *, int, bool))(*(int *)(*(int *)pVoice + 0x4c)))(pVoice, 0, mSynchronized);
+    bool sync = mSynchronized != 0;
+    ((void (*)(int *, int, bool))(*(int *)(*(int *)pVoice + 0x4c)))(pVoice, 0, sync);
     mState = 3;
 }
 
 int Voice::GetAddr() {
     int *pVoice = (int *)mSourceVoice;
-    if (!pVoice || mXMA)
+    if (pVoice == 0 || mXMA)
         return 0;
 
     int state[3] = {0, 0, 0};
     ((void (*)(int *, int *, int))(*(int *)(*(int *)pVoice + 100)))(pVoice, state, 0);
 
     int addr = mStartSamp + state[2];
-    if (mAudioData == 0) {
+    if ((int)mAudioData == 0) {
         addr = mChannels * addr;
     } else {
         int bytesPerSample = mChannels * 2;
@@ -399,13 +404,48 @@ void Voice::InitVoiceParameters(XMA2WAVEFORMATEX &fmt, XAUDIO2_BUFFER buf) {
         fmt.wfx.wFormatTag = 0x166;
         fmt.wfx.nChannels = mChannels;
         fmt.wfx.nSamplesPerSec = mSampleRate;
+        fmt.wfx.wBitsPerSample = 0;
+        fmt.wfx.nBlockAlign = 0;
+        fmt.wfx.nAvgBytesPerSec = 0;
+        fmt.wfx.cbSize = 0x10;
+
+        unsigned int channels = mChannels;
+        unsigned int sampleRate = mSampleRate;
+        unsigned short blockAlign = (unsigned short)((unsigned int)(unsigned short)channels << 4) >> 3;
+        fmt.wfx.nBlockAlign = blockAlign;
+
+        if (channels == 1) {
+            fmt.NumStreams = 4;
+        } else if (channels == 2) {
+            fmt.NumStreams = 3;
+        } else if (channels == 5) {
+            fmt.NumStreams = 0x60f;
+        } else {
+            return;
+        }
+
+        fmt.NumStreams = 1;
+        fmt.ChannelMask = 0;
+        fmt.SamplesEncoded = mNumSamples;
+        fmt.BytesPerBlock = 0;
+        fmt.PlayBegin = 0;
+        fmt.PlayLength = 0;
+        fmt.LoopBegin = (unsigned int)((unsigned long long)buf.LoopBegin >> 0x20);
+        fmt.LoopLength = (unsigned int)((unsigned long long)buf.LoopLength >> 0x20);
+        fmt.LoopCount = buf.LoopCount;
+        fmt.EncoderVersion = 4;
+        fmt.BlockCount = 0;
+
+        float duration = (float)(long long)*(int *)&mNumSamples * 1.5258789e-05f;
+        fmt.NumStreams = (unsigned short)(unsigned long long)(long long)ceil(duration);
     } else {
         fmt.wfx.wFormatTag = 1;
         fmt.wfx.nChannels = mChannels;
         fmt.wfx.nSamplesPerSec = mSampleRate;
         fmt.wfx.wBitsPerSample = 16;
-        fmt.wfx.nBlockAlign = mChannels * 2;
-        fmt.wfx.nAvgBytesPerSec = mSampleRate * fmt.wfx.nBlockAlign;
+        fmt.wfx.nBlockAlign = (unsigned short)((unsigned int)(unsigned short)mChannels << 4) >> 3;
+        fmt.wfx.nAvgBytesPerSec = (unsigned int)fmt.wfx.nBlockAlign * mSampleRate;
+        fmt.wfx.cbSize = 0;
     }
 }
 
@@ -463,7 +503,7 @@ unsigned long StartVoiceThreadEntry(void *) {
         if (TheXboxSynth) {
             CriticalSection *cs = &TheXboxSynth->unkb0;
             cs->Enter();
-            while (!s_voiceGCInProgress.empty()) {
+            while (s_voiceGCInProgress.empty()) {
                 PoolVoice &pv = s_voiceGCInProgress.front();
                 if (pv.eg) {
                     int *pEg = (int *)pv.eg;

@@ -191,6 +191,7 @@ class NullGuardEliminationPattern(Pattern):
                                 pattern_name=variant.pattern_name,
                                 description=f"[ghidra] {variant.description}",
                                 source=variant.source,
+                                tags=variant.tags,
                             )
                             counter += 1
                         for variant in _drop_leading_and_operand(stmt, source, counter):
@@ -199,6 +200,7 @@ class NullGuardEliminationPattern(Pattern):
                                 pattern_name=variant.pattern_name,
                                 description=f"[ghidra] {variant.description}",
                                 source=variant.source,
+                                tags=variant.tags,
                             )
                             counter += 1
 

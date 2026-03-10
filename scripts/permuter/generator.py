@@ -10,6 +10,65 @@ from .patterns.base import Pattern, get_pattern
 from .composer import compose_variants, chain_variants
 
 _MIN_BUDGET = 3  # minimum variants per relevant pattern
+_SAFETY_TIER_WEIGHTS = {
+    "conservative": 1.05,
+    "normal": 1.0,
+    "moderate": 0.95,
+    "aggressive": 0.85,
+}
+
+
+def _winner_domains(round_hints: RoundHints | None) -> set[str]:
+    """Collect structural domains from the most recent winning pattern(s)."""
+    if not round_hints or not round_hints.last_winner:
+        return set()
+
+    from .patterns.base import get_pattern
+
+    domains: set[str] = set()
+    for name in _split_pattern_names(round_hints.last_winner):
+        try:
+            domains.add(get_pattern(name).structural_domain)
+        except KeyError:
+            continue
+    return domains
+
+
+def _split_pattern_names(name: str) -> list[str]:
+    """Split composed pattern names into base pattern names."""
+    for prefix in ("compose:", "chain:", "crosscompose:", "merge:", "evo_cross:", "evo_mut:"):
+        if name.startswith(prefix):
+            _, parts = name.split(":", 1)
+            return parts.split("+")
+    return [name]
+
+
+def _pattern_priorities(
+    patterns: list[Pattern],
+    diagnosis: Diagnosis | None,
+    round_hints: RoundHints | None = None,
+) -> dict[str, float]:
+    """Compute effective per-pattern priorities for the current round."""
+    priorities: dict[str, float] = {}
+    winner_domains = _winner_domains(round_hints)
+
+    for pattern in patterns:
+        if diagnosis:
+            priority = pattern.priority(diagnosis)
+        else:
+            priority = 1.0
+
+        priority *= _SAFETY_TIER_WEIGHTS.get(pattern.safety_tier, 1.0)
+        if winner_domains and pattern.structural_domain in winner_domains:
+            priority *= 1.08
+
+        if round_hints and priority > 0.0:
+            priority *= round_hints.suppression_factor(pattern.name)
+            priority *= round_hints.adaptive_priority_boost(pattern.name)
+
+        priorities[pattern.name] = priority
+
+    return priorities
 
 
 def allocate_budgets(
@@ -38,19 +97,15 @@ def allocate_budgets(
         Dict mapping pattern name to allocated budget.
     """
     budgets: dict[str, int] = {}
-    priorities: dict[str, float] = {}
+    priorities = _pattern_priorities(
+        patterns,
+        diagnosis,
+        round_hints=round_hints,
+    )
     relevant: list[Pattern] = []
 
     for pattern in patterns:
-        if diagnosis:
-            p = pattern.priority(diagnosis)
-        else:
-            p = 1.0
-
-        # Apply suppression from round hints
-        if round_hints and p > 0.0:
-            p *= round_hints.suppression_factor(pattern.name)
-
+        p = priorities[pattern.name]
         priorities[pattern.name] = p
         if p <= 0.0:
             budgets[pattern.name] = 0
@@ -146,6 +201,11 @@ def generate_variants(
         patterns, independent_budget, ctx.diagnosis,
         round_hints=round_hints,
     )
+    priorities = _pattern_priorities(
+        patterns,
+        ctx.diagnosis,
+        round_hints=round_hints,
+    )
 
     total = 0
     skipped: list[str] = []
@@ -155,7 +215,11 @@ def generate_variants(
     dedup_count = 0
 
     # Phase 1: Independent variants with per-pattern budgets
-    for pattern in patterns:
+    ordered_patterns = sorted(
+        patterns,
+        key=lambda pattern: (-priorities.get(pattern.name, 0.0), pattern.name),
+    )
+    for pattern in ordered_patterns:
         budget = budgets.get(pattern.name, 0)
         if budget == 0:
             skipped.append(pattern.name)

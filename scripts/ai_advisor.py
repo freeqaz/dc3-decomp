@@ -65,6 +65,7 @@ class AdvisorResult:
     applied: bool = False
     error: str | None = None
     elapsed_seconds: float = 0.0
+    analysis: str = ""  # LLM's analysis text (before the JSON suggestions)
 
 
 # ── Database helpers ────────────────────────────────────────────────────
@@ -450,8 +451,11 @@ def _load_dotenv() -> None:
             os.environ[key] = value
 
 
-def call_advisor(prompt: str, model: str = "claude-sonnet-4-6", provider: str = "auto") -> list[EditSuggestion]:
+def call_advisor(prompt: str, model: str = "claude-sonnet-4-6", provider: str = "auto") -> tuple[str, list[EditSuggestion]]:
     """Call LLM with the structured prompt.
+
+    Returns (analysis_text, suggestions). The analysis is the LLM's reasoning
+    about the mismatch before the JSON suggestions.
 
     Provider priority:
     1. "claude" — Claude CLI subprocess using agent-home/ OAuth credentials (default)
@@ -459,12 +463,12 @@ def call_advisor(prompt: str, model: str = "claude-sonnet-4-6", provider: str = 
     3. "auto" — try claude first, fall back to openrouter
     """
     if provider in ("claude", "auto"):
-        suggestions = _call_claude_cli(prompt, model)
-        if suggestions is not None:
-            return suggestions
+        result = _call_claude_cli(prompt, model)
+        if result is not None:
+            return result
         if provider == "claude":
             print("Error: Claude CLI failed.", file=sys.stderr)
-            return []
+            return "", []
 
     # OpenRouter fallback
     _load_dotenv()
@@ -476,7 +480,7 @@ def call_advisor(prompt: str, model: str = "claude-sonnet-4-6", provider: str = 
         "Error: Claude CLI failed and no OPENROUTER_API_KEY found.",
         file=sys.stderr,
     )
-    return []
+    return "", []
 
 
 # Map API model IDs to Claude CLI model names
@@ -497,10 +501,10 @@ _OPENROUTER_MODEL_MAP = {
 }
 
 
-def _call_claude_cli(prompt: str, model: str) -> list[EditSuggestion] | None:
+def _call_claude_cli(prompt: str, model: str) -> tuple[str, list[EditSuggestion]] | None:
     """Call via Claude CLI subprocess using agent-home credentials.
 
-    Returns None if CLI is unavailable or fails (allows fallback to next provider).
+    Returns (analysis, suggestions) or None if CLI is unavailable/fails.
     """
     cli_model = _CLI_MODEL_MAP.get(model, "sonnet")
 
@@ -523,7 +527,7 @@ def _call_claude_cli(prompt: str, model: str) -> list[EditSuggestion] | None:
     cmd = [
         "claude", "--print",
         "--model", cli_model,
-        "--max-turns", "1",
+        "--max-turns", "3",
         "--dangerously-skip-permissions",
         "--no-session-persistence",
         "--", prompt,
@@ -555,12 +559,16 @@ def _call_claude_cli(prompt: str, model: str) -> list[EditSuggestion] | None:
             print("  Claude CLI: empty response", file=sys.stderr)
             return None
 
-        suggestions = parse_suggestions(text)
+        analysis, suggestions = parse_suggestions(text)
+        if not suggestions:
+            # Show first 500 chars of response for debugging
+            preview = text[:500].replace('\n', '\n    ')
+            print(f"  Claude CLI raw response (first 500 chars):\n    {preview}", file=sys.stderr)
         print(f"  Got {len(suggestions)} suggestions (Claude CLI)", file=sys.stderr)
-        return suggestions
+        return analysis, suggestions
 
     except subprocess.TimeoutExpired:
-        print("  Claude CLI: timed out after 180s", file=sys.stderr)
+        print("  Claude CLI: timed out after 300s", file=sys.stderr)
         return None
     except FileNotFoundError:
         print("  Claude CLI: 'claude' not found in PATH", file=sys.stderr)
@@ -570,7 +578,7 @@ def _call_claude_cli(prompt: str, model: str) -> list[EditSuggestion] | None:
         return None
 
 
-def _call_openrouter(prompt: str, model: str, api_key: str) -> list[EditSuggestion]:
+def _call_openrouter(prompt: str, model: str, api_key: str) -> tuple[str, list[EditSuggestion]]:
     """Call via OpenRouter API."""
     import httpx
 
@@ -597,7 +605,7 @@ def _call_openrouter(prompt: str, model: str, api_key: str) -> list[EditSuggesti
         response.raise_for_status()
     data = response.json()
     text = data["choices"][0]["message"]["content"]
-    suggestions = parse_suggestions(text)
+    analysis, suggestions = parse_suggestions(text)
 
     usage = data.get("usage", {})
     print(
@@ -606,20 +614,26 @@ def _call_openrouter(prompt: str, model: str, api_key: str) -> list[EditSuggesti
         f"output={usage.get('completion_tokens', '?')})",
         file=sys.stderr,
     )
-    return suggestions
+    return analysis, suggestions
 
 
-def parse_suggestions(text: str) -> list[EditSuggestion]:
-    """Parse edit suggestions from LLM response text."""
+def parse_suggestions(text: str) -> tuple[str, list[EditSuggestion]]:
+    """Parse edit suggestions and analysis from LLM response text.
+
+    Returns (analysis_text, suggestions). The analysis is everything before
+    the JSON array — the LLM's reasoning about mismatches and patterns.
+    """
     suggestions = []
 
     # Strategy: try fenced code block first (most reliable), then bare array
     json_str = None
+    json_start_pos = len(text)  # position where JSON starts in the original text
 
     # 1. Try fenced JSON block
     fence_match = re.search(r"```(?:json)?\s*(\[[\s\S]*?\])\s*```", text)
     if fence_match:
         json_str = fence_match.group(1)
+        json_start_pos = fence_match.start()
 
     # 2. Try bare JSON array — find balanced brackets
     if json_str is None:
@@ -647,11 +661,15 @@ def parse_suggestions(text: str) -> list[EditSuggestion]:
                     depth -= 1
                     if depth == 0:
                         json_str = text[start : i + 1]
+                        json_start_pos = start
                         break
+
+    # Extract analysis text (everything before the JSON)
+    analysis = text[:json_start_pos].strip()
 
     if json_str is None:
         print("  Warning: could not find JSON array in response", file=sys.stderr)
-        return []
+        return analysis, []
 
     try:
         items = json.loads(json_str)
@@ -665,7 +683,7 @@ def parse_suggestions(text: str) -> list[EditSuggestion]:
         except json.JSONDecodeError as e:
             print(f"  Warning: JSON parse error: {e}", file=sys.stderr)
             print(f"  First 200 chars: {json_str[:200]}", file=sys.stderr)
-            return []
+            return analysis, []
 
     if not isinstance(items, list):
         items = [items]
@@ -686,7 +704,7 @@ def parse_suggestions(text: str) -> list[EditSuggestion]:
             )
         )
 
-    return suggestions
+    return analysis, suggestions
 
 
 # ── Testing suggestions ─────────────────────────────────────────────────
@@ -876,6 +894,7 @@ def run_advisor(
 
     all_suggestions = []
     all_tested = []
+    analysis_parts = []
     overall_best_percent = current_percent
     overall_best_idx = -1
     applied = False
@@ -911,7 +930,12 @@ def run_advisor(
                 current_percent=round_percent,
             )
 
-        suggestions = call_advisor(prompt, model=model, provider=provider)
+        round_analysis, suggestions = call_advisor(prompt, model=model, provider=provider)
+        if round_analysis:
+            # Accumulate analysis across iterations
+            if analysis_parts:
+                analysis_parts.append(f"\n--- Iteration {iteration + 1} ---\n")
+            analysis_parts.append(round_analysis)
         if not suggestions:
             if iteration == 0:
                 return AdvisorResult(
@@ -922,6 +946,7 @@ def run_advisor(
                     suggestions=[],
                     error="No suggestions returned",
                     elapsed_seconds=time.time() - start_time,
+                    analysis="\n".join(analysis_parts),
                 )
             break
 
@@ -1036,6 +1061,7 @@ def run_advisor(
         best_suggestion_idx=overall_best_idx,
         applied=applied,
         elapsed_seconds=round(elapsed, 2),
+        analysis="\n".join(analysis_parts),
     )
 
 
@@ -1106,6 +1132,11 @@ def main():
             print(f"  Winner:    {best.edit_type} — {best.description}")
         print(f"  Applied:   {result.applied}")
         print(f"  Elapsed:   {result.elapsed_seconds:.1f}s")
+
+        if result.analysis:
+            print(f"\n  Analysis:")
+            for line in result.analysis.splitlines():
+                print(f"    {line}")
 
         if result.suggestions:
             print(f"\n  Suggestions:")

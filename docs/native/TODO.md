@@ -1,158 +1,170 @@
 # Native Port TODO — UI Fully Working
 
-## Current State (Session 38)
-- **450+ draw calls/frame** on choose_mode_screen (up from 47 before HamUI integration)
+## Current State (Session 40)
+- **Interactive menu navigation working** — Up/Down/Confirm on choose_mode_screen
 - Full boot flow renders: autosave_warning → title_screen → tutorial_voice_control → main_screen → choose_mode_screen
 - Text rendering, mesh rendering, material pipeline all working
 - HamUI two-pass draw pipeline active (letterbox + main draw pass)
-- 10000 frames stable, zero crashes
+- ScrollDirection decomp fixed to 100% match (was 66.1%)
+- 3800+ frames stable with navigation input, zero crashes
+- Screenshots: `archive/screenshots/session40/`
+- Reference: `archive/screenshots/references/dc3_main_menu.jpg`
+
+## Headless GPU Rendering
+
+dc3-native supports fully headless GPU rendering via Dawn/WebGPU (no display server needed):
+
+```bash
+# Headless render with auto-screenshots
+MILO_RENDER=1 MILO_HEADLESS=1 \
+  MILO_SCREENSHOT_DIR=archive/screenshots/session40 \
+  MILO_SCREENSHOT_FRAMES=500,3500,3700 \
+  MILO_INPUT_SCRIPT=path/to/input.txt \
+  MILO_MAX_FRAMES=4000 \
+  native/build/dc3-native
+
+# Input script format (one "frame button" per line):
+#   3500 down
+#   3550 confirm
+# Button names: start, confirm/a, cancel/b, up, down, left, right, option/back, x, y
+```
+
+Env vars:
+- `MILO_RENDER=1` — enable GPU rendering (otherwise headless no-GPU mode)
+- `MILO_HEADLESS=1` — skip window creation, render to offscreen buffer
+- `MILO_SCREENSHOT_DIR=<dir>` — auto-capture frames as PNG
+- `MILO_SCREENSHOT_FRAMES=<csv>` — which frames to capture (default: 100,600,900,1500)
+- `MILO_INPUT_SCRIPT=<path>` — text file with timed button presses
+- `MILO_MAX_FRAMES=<N>` — exit after N frames
+- `MILO_FIRST_SCREEN=<name>` — skip attract/boot screens
+
+## NEXT UP: UI Layout Fix (Session 41)
+
+### Problem
+UI elements render but are not positioned correctly. Comparing our output (`archive/screenshots/session40/frame_03500.png`) to the Xbox reference (`archive/screenshots/references/dc3_main_menu.jpg`):
+
+| Element | Xbox Reference | Our Native | Issue |
+|---------|---------------|------------|-------|
+| **Player icons** | Top-left and top-right corners, ~100x100px, white outlined | Top-left and top-right, smaller, pink/magenta filled | Size, color, position offset |
+| **Nav ribbon** | Right half of screen, "MAIN MENU" text with arrow | Center of screen, horizontal band with selection box | Position shifted, text missing |
+| **Selection box** | N/A (main_screen has no selection box) | Center square with icon | Different screen content |
+| **Logo** | "DANCE CENTRAL 3" left-center, large cyan text | Not visible | Missing or not rendered |
+| **Copyright text** | Bottom center, white text | Not visible | Missing or not rendered |
+| **Help bar** | Top bar: "EXIT CONTROLLER MODE" + "SELECT" | Not visible | Missing or not rendered |
+| **Background** | Flowing blue/cyan neon lines | Plain dark gray | No venue/background rendering |
+| **Kinect icon** | Bottom-right, "Say Xbox" | Bottom-right, small icon | Present but different style |
+
+Note: The reference shows `main_screen` while our native shows `choose_mode_screen` — need to compare equivalent screens.
+
+### Investigation Plan
+1. **Camera/projection setup** — Is [ui.cam] positioned correctly? Check RndCam transform, FOV, aspect ratio
+2. **RndTransformable world transforms** — Are mesh/group transforms being applied? Check if xfm matrices are loaded from .milo
+3. **Coordinate system** — Milo uses a different coordinate convention (Y-forward?). Check if our projection matches
+4. **Screen resolution** — Xbox renders at 1280x720. Are our viewport/projection matrices set up for this?
+5. **Missing text** — Are RndText objects loading? Are font meshes being created? Check visibility/Showing state
+6. **HelpBar rendering** — HamUI has a help bar system — is it entering/drawing?
+
+### Key Files to Investigate
+- `native/src/platform/Rnd_Wgpu.cpp` — Camera selection, projection setup, draw loop
+- `native/src/platform/Mesh_Wgpu.cpp` — Transform application in DrawShowing
+- `src/system/rndobj/Cam.cpp` — RndCam::UpdateLocal, projection matrix
+- `src/system/rndobj/Trans.cpp` — RndTransformable::WorldXfm
+- `src/system/ui/PanelDir.cpp` — Panel draw, camera setup
+- `src/system/hamobj/HamUI.cpp` — HamUI::Draw, two-pass pipeline
 
 ## CRITICAL BLOCKER: DTA Loading Subsystem
 
 **The native port cannot fully function without a DTA content/scripting system.** DTA (Data Array) files are the game's primary configuration and scripting format. They drive:
 
 ### What DTAs control
-1. **UIManager::mSink** — The only way `mSink` gets set is via a `set_sink` DTA message handler (`HANDLE_ACTION(set_sink, mSink = _msg->Obj<Hmx::Object>(2))`). Without this, button messages don't route to screens. We have a native-only fallback that forwards ButtonDown/ButtonUp directly to `mCurrentScreen`, but this is incomplete.
-2. **Screen transitions** — DTA scripts define `next_screen`, screen flow logic, and transition triggers
-3. **Content population** — List providers, mode definitions, song lists all come from DTA configs
-4. **Animation lifecycle** — `StopAnimation()` calls that clean up `AnimTask` objects after enter animations complete are triggered by DTA event handlers. Without these, `IsAnimating()` returns true forever (fixed with native bypass, but the root issue persists)
-5. **UI initialization** — Panel enter/exit handlers, focus management, component wiring
-6. **Object properties** — Material colors, animation ranges, timing parameters
-
-### Where DTAs live
-- Compiled into binary `.dta`/`.dtb` files inside the game's `.ark` archives
-- Loaded at runtime by `ObjectDir::Load` and `DataArray::Load`
-- Our archive loader (`BlockMgr`) CAN read `.ark` files and extract content
-- The `DataArray` parser exists and works for loading binary DTAs
-
-### What's needed
-- [ ] **DTA autoload on Dir/Object load** — When an ObjectDir loads a `.milo`, also load its associated `.dta` if present in the ark
-- [ ] **DTA init message broadcast** — After loading, broadcast `"init"` to trigger `set_sink` and other init handlers
-- [ ] **SystemConfig DTA loading** — Ensure `system.dta` / `ui.dta` configs are loaded from ark
-- [ ] **Screen-level DTA hooks** — Screen enter/exit/transition DTAs that wire up mSink, animation callbacks, content providers
-- [ ] **Test: verify mSink gets set naturally** — Remove the native fallback once DTA loading works
+1. **Screen transitions** — DTA scripts define `next_screen`, screen flow logic, and transition triggers
+2. **Content population** — List providers, mode definitions, song lists all come from DTA configs
+3. **Animation lifecycle** — `StopAnimation()` calls that clean up `AnimTask` objects after enter animations complete
+4. **UI initialization** — Panel enter/exit handlers, focus management, component wiring
+5. **Object properties** — Material colors, animation ranges, timing parameters
 
 ### Current workarounds (native-only guards)
-- `UI.cpp`: Fallback button dispatch when `mSink` is null
-- `HamNavList.cpp`: Bypass `IsAnimating()` check (AnimTask lifecycle not managed by DTA scripts)
-- `GestureMgr.cpp`: Force `mInControllerMode = true` (no Kinect init DTA)
+- `App.cpp`: 8 stub objects for Xbox-only managers (`platform_mgr`, `profile_mgr`, etc.)
+- `App.cpp`: TheHamProvider fallback via PropertyEventProvider::NewObject()
+- `UI.cpp`: Fallback button dispatch + mSink = screen on transition
+- `HamNavList.cpp`: Bypass `IsAnimating()` check + TheHamProvider null guards
+- `GestureMgr.cpp`: Force `mInControllerMode = true`
+- `GameMode.cpp`: Skip full SetMode property evaluation on native
 - `UI.cpp`: Screen auto-advance timer (replaces DTA-driven transitions)
 
-## Phase 1: Interactive Menu Navigation (HIGH PRIORITY)
-Goal: Navigate menus with keyboard/controller, see selections change
+## Phase 1: Interactive Menu Navigation — COMPLETE
+- [x] Joypad input reaches UIManager (ButtonDownMsg dispatch)
+- [x] mSink fallback dispatch to mCurrentScreen
+- [x] Controller mode gate always-on
+- [x] IsAnimating() bypass
+- [x] ScrollDirection vertical mode fix (Up/Down navigation)
+- [x] SetSelecting crash fix (TheHamProvider null)
+- [x] GameMode::SetMode crash fix
+- [x] Keyboard arrows → menu highlight movement (verified headless)
+- [x] Confirm button → screen transition (verified headless)
 
-### 1.1 Controller Input on Menus
-- [x] Verify joypad input reaches UIManager (ButtonDownMsg dispatch)
-- [x] Fix mSink null — added fallback dispatch to mCurrentScreen
-- [x] Fix controller mode gate — forced mInControllerMode on native
-- [x] Fix IsAnimating() blocker — bypassed on native (AnimTask never self-deletes)
-- [ ] Test keyboard arrow keys → menu highlight movement (needs GPU window)
-- [ ] Verify HamNavList responds to nav input (highlight changes, scroll)
-- [ ] Test select/back buttons trigger screen transitions
+## Phase 2: UI Layout & Visual Fidelity (NEXT)
+Goal: UI elements positioned and sized correctly, matching Xbox reference
 
-### 1.2 Menu Selection Visual Feedback
-- [ ] Verify HamListRibbon swell/slide/select animations play on highlight change
-- [ ] Test that PropAnim-driven material changes (color, alpha) reach GPU uniforms
-- [ ] Verify HamLabel text updates when list selection changes
+### 2.1 Camera & Projection
+- [ ] Verify [ui.cam] transform matches Xbox (position, FOV, near/far)
+- [ ] Check aspect ratio (1280x720 → 16:9)
+- [ ] Verify projection matrix (orthographic vs perspective for UI?)
 
-## Phase 2: DTA/Content System (HIGH PRIORITY — BLOCKER)
+### 2.2 Transform Hierarchy
+- [ ] Check RndTransformable::WorldXfm is populated from .milo data
+- [ ] Verify parent-child transform chain (group → mesh)
+- [ ] Check if RndDir/PanelDir camera is being selected
+
+### 2.3 Text Rendering
+- [ ] Verify RndText objects load and create font meshes
+- [ ] Check if font .milo files load (default.milo_xbox)
+- [ ] Verify text positioning in world space
+- [ ] Fix missing "MAIN MENU", copyright, help bar text
+
+### 2.4 Help Bar & Overlays
+- [ ] Verify HamUI help bar rendering (ShellInput overlay)
+- [ ] Check InlineHelp component visibility
+
+## Phase 3: DTA/Content System (HIGH PRIORITY)
 Goal: Load and execute DTA scripts so the game's event system works natively
 
-### 2.1 DTA Loading Infrastructure
-- [ ] Identify which `.dtb` files are in the ark archives
-- [ ] Trace Xbox DTA load path: where/when does `system.dta` get loaded?
-- [ ] Implement DTA autoload in ObjectDir (load .dta alongside .milo)
-- [ ] Verify DataArray binary parser handles DC3's DTB format
+- [ ] DTA autoload on Dir/Object load
+- [ ] Content population for HamNavList providers
+- [ ] Screen-level DTA hooks (enter/exit/transition)
 
-### 2.2 Content Population
-- [ ] Trace what provides data to choose_mode_screen's HamNavList
-- [ ] Identify which HamNavProvider subclass populates mode list items
-- [ ] Check if DTA scripts define fallback/hardcoded list content
-- [ ] Understand `main_menu_wait_for_content_panel` — why it force-finishes with no loader
-
-### 2.3 Content System Stubs (fallback if DTA loading is too complex)
-- [ ] Implement minimal content provider that returns hardcoded mode list
-- [ ] Or: find DTA-level content definitions that work without Xbox DLC system
-- [ ] Verify list items appear in HamNavList after content is provided
-- [ ] Test scrolling through populated list
-
-## Phase 3: Visual Polish (MEDIUM PRIORITY)
-Goal: Match Xbox visual quality as closely as possible
-
-### 3.1 Kinect UI Cleanup
-- [ ] Hide Kinect player indicator panels (purple corner boxes) on native
-- [ ] Hide "Tip: Say Xbox, Dance!" overlay on native
-- [ ] Hide voice control tutorial screens (auto-skip is fine, but they flash visually)
-
-### 3.2 PropAnim → Material → GPU Path
-- [ ] Trace PropAnim::Poll() → which material properties change
-- [ ] Verify changed material properties are re-read in Mesh_Wgpu.cpp each frame
-- [ ] Check if material color/alpha is read from RndMat at draw time (not cached at load)
-- [ ] Test: add printf for material alpha changes on main_screen background animations
-
-### 3.3 Text Quality
-- [ ] Check localization: are token names showing instead of real strings?
-- [ ] Verify text wrapping/alignment matches Xbox layout
-- [ ] Check "jump n'" truncation on choose_mode_screen — might be list item text
-
-### 3.4 Letterbox / Blacklight
-- [ ] Verify HamUI's two-pass draw (mFinalDrawPassFlag) produces correct layering
-- [ ] Test blacklight mode activation (enter_blacklight_mode / exit_blacklight_mode handlers)
-- [ ] Verify letterbox draws between the two passes
-
-## Phase 4: Screen-by-Screen Verification (MEDIUM PRIORITY)
-Goal: Each major screen renders and functions correctly
-
-### 4.1 Main Screen
-- [ ] "START THE PARTY" / "PLAYERS" / etc. text visible and positioned
-- [ ] Main menu list items navigable
-- [ ] Background animation playing
-
-### 4.2 Choose Mode Screen
-- [ ] Mode thumbnails (Perform, Dance Battle, etc.) visible with correct textures
-- [ ] List scrolling works
-- [ ] Select transitions to next screen
-
-### 4.3 Song Select (stretch)
-- [ ] Song list populates (requires content system)
-- [ ] Album art thumbnails render
-- [ ] Difficulty selection works
+## Phase 4: Visual Polish
+- [ ] PropAnim → material → GPU uniform path verification
+- [ ] Letterbox / blacklight two-pass draw verification
+- [ ] Background venue rendering (or fallback)
 
 ## Phase 5: Audio (LOW PRIORITY)
-Goal: Menu sound effects play
-
 - [ ] UI click/select/scroll sounds via miniaudio backend
-- [ ] Background music (if accessible from .milo assets)
-- [ ] Sound volumes respond to game settings
+- [ ] Background music playback
 
 ## Phase 6: Advanced Rendering (LOW PRIORITY)
-Goal: Full visual parity
-
 - [ ] Skinned mesh rendering (bone transforms in vertex shader)
 - [ ] Post-processing: bloom, color correction
-- [ ] Multiply blend mode (needs bright destination — venue background)
-- [ ] Motion blur (NgPostProc::DoVelocity)
+- [ ] Multiply blend mode (needs bright destination)
 
 ---
 
 ## Known Issues to Fix
 | Issue | File | Status |
 |-------|------|--------|
-| HamRibbon::UpdateChase resize-before-copy UB | HamRibbon.cpp | **FIXED** (copy first on native) |
-| UIListWidget::DisplayColor assert on corrupted mElementState | UIListWidget.cpp | **FIXED** (bounds check on native) |
-| IsAnimating() blocks input forever | HamNavList.cpp | **FIXED** (bypassed on native) |
-| mSink null — button dispatch broken | UI.cpp | **FIXED** (set mSink = screen on transition) |
-| Controller mode gate blocks input | GestureMgr.cpp | **FIXED** (force on native) |
-| Kinect player indicators visible on native | ShellInput panels | TODO — hide panels |
-| "jump n'" text truncation | choose_mode_screen | TODO — investigate |
-| Empty lists (no content) | Content system | TODO — Phase 2 |
+| HamRibbon::UpdateChase resize-before-copy UB | HamRibbon.cpp | **FIXED** |
+| UIListWidget::DisplayColor assert on corrupted mElementState | UIListWidget.cpp | **FIXED** |
+| IsAnimating() blocks input forever | HamNavList.cpp | **FIXED** (bypassed) |
+| mSink null — button dispatch broken | UI.cpp | **FIXED** (set on transition) |
+| Controller mode gate blocks input | GestureMgr.cpp | **FIXED** (force on) |
+| TheHamProvider null crash | HamNavList.cpp + App.cpp | **FIXED** (factory stub) |
+| GameMode::SetMode crash | GameMode.cpp | **FIXED** (skip eval on native) |
+| ScrollDirection vertical mode missing | Utl.cpp | **FIXED** (100% match) |
+| UI elements mispositioned | Rendering pipeline | TODO — Phase 2 |
+| Text labels missing | Text/Font pipeline | TODO — Phase 2 |
+| Empty lists (no content) | Content system | TODO — Phase 3 |
 
-## Crashes Fixed
-1. HamRibbon::UpdateChase — vector OOB from resize-before-copy (STLport UB)
-2. UIListWidget::DisplayColor — HamListRibbon data overlay corrupts mElementState
-3. SpeechMgr::SpeechSupported — TheSpeechMgr null
-4. CursorPanel::Poll — Kinect cursor tracking null
-5. SkeletonIdentifier::Init — Kinect user index OOB
-6. HandsUpGestureFilter::GetHandsUp — null from skipped init
-7. DrawGestureMgr — null drawable
-8. HamListRibbon::DrawRibbon — LP64 pointer truncation (mElemDrawState)
+## Crashes Fixed (Session 40)
+1. HamNavList::SetSelecting → TheHamProvider null (virtual inheritance vbtable at offset 0x8)
+2. GameMode::SetMode → Property("battle_mode")->Sym() null DataArray evaluation
+3. All previous session crashes (see NATIVE_PORT_STATUS.md for full history)

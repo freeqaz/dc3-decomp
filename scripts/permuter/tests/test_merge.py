@@ -95,8 +95,14 @@ class TestMergeVariants:
         mod_a = b"XXXX_middle_BBBB"
         mod_b = b"AAAA_middle_YYYY"
 
-        var_a = Variant(name="a", pattern_name="pat_a", description="A", source=mod_a)
-        var_b = Variant(name="b", pattern_name="pat_b", description="B", source=mod_b)
+        var_a = Variant(
+            name="a", pattern_name="pat_a", description="A", source=mod_a,
+            tags=frozenset({"tag_a"}),
+        )
+        var_b = Variant(
+            name="b", pattern_name="pat_b", description="B", source=mod_b,
+            tags=frozenset({"tag_b"}),
+        )
 
         spans_a = extract_edit_spans(original, mod_a)
         spans_b = extract_edit_spans(original, mod_b)
@@ -107,6 +113,7 @@ class TestMergeVariants:
         assert merged.source == b"XXXX_middle_YYYY"
         assert merged.pattern_name == "merge:pat_a+pat_b"
         assert "merge:" in merged.name
+        assert merged.tags == frozenset({"tag_a", "tag_b"})
 
     def test_roundtrip_correctness(self):
         """Verify merge produces the union of both edits."""

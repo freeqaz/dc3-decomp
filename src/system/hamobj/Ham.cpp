@@ -66,6 +66,40 @@
 
 PropertyEventProvider *TheHamProvider;
 
+namespace {
+    PropertyEventProvider *FindHamProvider() {
+        return ObjectDir::Main()->Find<PropertyEventProvider>("hamprovider", false);
+    }
+
+    DataArray *HamProviderTypes() {
+        return SystemConfig("objects", "PropertyEventProvider", "types");
+    }
+
+    bool HasHamProviderType() {
+        DataArray *types = HamProviderTypes();
+        return types && types->FindArray("HamProvider", false);
+    }
+
+    PropertyEventProvider *EnsureHamProvider() {
+        PropertyEventProvider *provider = FindHamProvider();
+        if (provider && provider->Type().Null() && HasHamProviderType()) {
+            provider->SetType("HamProvider");
+        }
+#ifdef HX_NATIVE
+        if (!provider) {
+            provider = Hmx::Object::New<PropertyEventProvider>();
+            provider->SetName("hamprovider", ObjectDir::Main());
+            if (HasHamProviderType()) {
+                provider->SetType("HamProvider");
+            } else {
+                MILO_WARN("HamInit: HamProvider type config missing on native fallback");
+            }
+        }
+#endif
+        return provider;
+    }
+}
+
 void HamTerminate() {
     DataArray *dataMacro = DataGetMacro("INIT_HAM");
     if (dataMacro) {
@@ -133,11 +167,9 @@ void HamInit() {
         MoveDir::Init();
         DifficultyInit();
         TheDebug.AddExitCallback(HamTerminate);
-        if (SystemConfig("objects", "PropertyEventProvider", "types")
-                ->FindArray("HamProvider", false)) {
+        if (HasHamProviderType()) {
             SystemConfig("ham_init")->ExecuteBlock(1);
-            TheHamProvider =
-                ObjectDir::Main()->Find<PropertyEventProvider>("hamprovider", false);
+            TheHamProvider = EnsureHamProvider();
             static Symbol language("language");
             TheHamProvider->SetProperty(language, SystemLanguage());
             if (TheSpeechMgr) {
@@ -148,6 +180,11 @@ void HamInit() {
             }
             HamProviderPrinter *printer = new HamProviderPrinter(); // uhhh...
         }
+#ifdef HX_NATIVE
+        else {
+            TheHamProvider = EnsureHamProvider();
+        }
+#endif
         PreloadSharedSubdirs("ham");
     }
 }

@@ -1,6 +1,6 @@
 # Native Port Progress (x86_64 Linux)
 
-## Current Status: Session 38 - HamUI Integration + LP64 Fixes
+## Current Status: Session 40 - Interactive Menu Navigation
 **Goal**: Bright, animated UI matching the original game's cyan neon aesthetic
 
 ### Sessions Complete
@@ -22,6 +22,7 @@
 - **Session 37**: HamNavList element creation, UIList::Selected/GetListState implementations, STLport compat guards
 - **Session 38**: HamUI integration (TheUI = &TheHamUI for two-pass draw), ShellInput/CursorPanel Kinect guards, HamListRibbonDrawState LP64 pointer fix (mElemDrawState), HamListRibbonDrawState field rename (unk18→mElemDrawState, unk20→mBigScale, unk24→mActive)
 - **Session 39**: Input pipeline unblocked — IsAnimating() bypass (AnimTask never self-deletes without DTA lifecycle), mSink fallback dispatch (set_sink DTA action doesn't fire), controller mode force-on. Debug traces cleaned up. **Identified DTA loading as critical blocker** — mSink, animation cleanup, content population, and screen flow all depend on DTA scripts that native can't execute yet.
+- **Session 40**: **Interactive menu navigation working end-to-end.** ScrollDirection decomp fix (66.1%→100% match — was missing vertical mode logic entirely). DTA stub objects for 8 Xbox-only managers. TheHamProvider null crash fix (PropertyEventProvider factory stub). GestureMgr controller mode always-on. GameMode::SetMode crash guard. Full Up/Down/Confirm navigation verified with headless GPU screenshots.
 
 ### Completed Phases
 - **Phase 0**: Foundation — COMPLETE
@@ -32,15 +33,16 @@
 - **Phase 4**: Input — COMPLETE (Joypad_Native + Keyboard_Native + 19 tests)
 
 ### Current Boot Progress
-Engine boots, enters main loop, auto-navigates through all screens to main menu:
+Engine boots, enters main loop, auto-navigates through all screens to main menu. Full interactive navigation works:
 1. Archive loading → config → all subsystem inits → main loop
 2. **Full boot screen flow**: attract_screen → autosave_warning_screen → title_screen → wait_main_after_saveload_screen → tutorial_voice_control_screen_0..4 → main_screen → choose_mode_screen
 3. **Auto-skip mechanism**: UIScreen::Enter() fires DTA handlers (`skip_selected`, `next_screen`) on enter. Timer-based fallback in UIManager::Poll auto-advances stuck screens after 120 frames
-4. **Button dispatch working**: JoypadPoll → Export → MsgSinks → JoypadClient → UIManager → UIScreen
-5. **Mesh rendering**: 47+ draw calls/frame on choose_mode_screen (headless Dawn GPU)
-6. **HamUI two-pass draw**: Uses TheHamUI (game-specific UIManager) for proper letterbox/blacklight/helpbar rendering
-7. **5000+ frames stable**, clean exit
-7. **Env vars**: `MILO_FIRST_SCREEN=main_screen` skips attract, `MILO_MAX_FRAMES=N`, `MILO_INPUT_SCRIPT=path`, `MILO_RENDER=1`, `MILO_SCREENSHOT_DIR=path`, `MILO_SCREENSHOT_FRAMES=100,300,500`
+4. **Button dispatch working**: JoypadPoll → Export → MsgSinks → JoypadClient → UIManager → UIScreen → PanelDir → HamNavList
+5. **Interactive navigation**: Up/Down move highlight on choose_mode_screen, Confirm triggers screen transition. Full dispatch chain verified.
+6. **Mesh rendering**: 47+ draw calls/frame on choose_mode_screen (headless Dawn GPU)
+7. **HamUI two-pass draw**: Uses TheHamUI (game-specific UIManager) for proper letterbox/blacklight/helpbar rendering
+8. **3800+ frames stable** with navigation input, clean exit
+9. **Env vars**: `MILO_RENDER=1` + `MILO_HEADLESS=1` for headless GPU, `MILO_SCREENSHOT_DIR=path` + `MILO_SCREENSHOT_FRAMES=100,300,500` for auto-capture, `MILO_FIRST_SCREEN=main_screen` skips attract, `MILO_MAX_FRAMES=N`, `MILO_INPUT_SCRIPT=path`
 
 ### Session 22 Fixes (MsgSinks + Button Dispatch)
 | Issue | Root Cause | Fix |
@@ -396,11 +398,12 @@ Non-Kinect TODOs:
 | **Post-processing** | Bloom, color correction, etc. | Low |
 
 ### Next Steps
-1. Verify HamUI + DrawRibbon LP64 fix at runtime (build passes, needs runtime test)
-2. Trace PropAnim → material property → GPU uniform path
-3. Content system integration for list population
-4. Skinned mesh rendering (bone transforms, vertex skinning shader)
-5. Post-processing, UI rendering
+1. **UI layout fix** — elements are rendered but not in correct positions. Compare with `archive/screenshots/references/dc3_main_menu.jpg` reference. Need to investigate camera/projection setup, RndTransformable world transforms, and coordinate system mapping.
+2. **Text labels missing** — "MAIN MENU", "DANCE CENTRAL 3", copyright text not visible on rendered screens. Font loading or text mesh visibility issue.
+3. Content system integration for list population (currently 0 items from providers)
+4. DTA script execution improvements (many DTA commands fail silently due to missing Xbox globals)
+5. Skinned mesh rendering (bone transforms, vertex skinning shader)
+6. Post-processing, background venue rendering
 
 ### Build Commands
 ```bash

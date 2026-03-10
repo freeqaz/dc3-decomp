@@ -359,9 +359,7 @@ public:
     iterator erase(iterator);
     iterator insert(const_iterator, T1 *);
     const_iterator find(const Hmx::Object *) const;
-#ifdef HX_NATIVE
     iterator find(const Hmx::Object *);
-#endif
     int size() const { return mNodes.size(); }
     bool empty() const { return mNodes.empty(); }
     T1 *front() const { return *begin(); }

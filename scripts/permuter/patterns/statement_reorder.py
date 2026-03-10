@@ -26,13 +26,17 @@ from typing import Iterator
 from tree_sitter import Node
 
 from .base import Pattern
-from ..ast_queries import walk, identifiers_in
+from ..control_flow import iter_compound_statements
 from ..editor import SourceEditor
+from ..statement_effects import StatementEffectAnalyzer
 from ..types import Diagnosis, FunctionContext, Variant
 
 
 class StatementReorderPattern(Pattern):
     name = "statement_reorder"
+    safety_tier = "conservative"
+    structural_domain = "control_flow"
+    follow_ups = ("declaration_reorder", "assignment_reorder", "declaration_movement")
 
     def relevant(self, diagnosis: Diagnosis) -> bool:
         # Clusters suggest structural differences
@@ -61,9 +65,10 @@ class StatementReorderPattern(Pattern):
     def generate(self, ctx: FunctionContext) -> Iterator[Variant]:
         source = ctx.file_source
         counter = 0
+        analyzer = StatementEffectAnalyzer(source)
 
         # Collect all compound_statement nodes (function body + nested blocks)
-        compound_stmts = list(_find_compound_statements(ctx.body_node))
+        compound_stmts = list(iter_compound_statements(ctx.body_node))
 
         for compound in compound_stmts:
             if counter >= 8:
@@ -77,7 +82,7 @@ class StatementReorderPattern(Pattern):
                 continue
 
             # Find runs of 2-4 consecutive independent statements
-            runs = _find_independent_runs(children, source)
+            runs = _find_independent_runs(children, analyzer)
 
             for run in runs:
                 if counter >= 8:
@@ -91,7 +96,7 @@ class StatementReorderPattern(Pattern):
                     stmt_a = run[i]
                     stmt_b = run[i + 1]
 
-                    if not _are_independent(stmt_a, stmt_b, source):
+                    if not analyzer.can_reorder_statement_pair(stmt_a, stmt_b):
                         continue
 
                     ed = SourceEditor(source)
@@ -107,6 +112,7 @@ class StatementReorderPattern(Pattern):
                         pattern_name=self.name,
                         description=f"Swap statements in block",
                         source=new_source,
+                        tags=frozenset({"reordered_statements"}),
                     )
                     counter += 1
 
@@ -116,7 +122,7 @@ class StatementReorderPattern(Pattern):
                     last = run[-1]
                     first = run[0]
 
-                    if all(_are_independent(last, run[j], source)
+                    if all(analyzer.can_reorder_statement_pair(last, run[j])
                            for j in range(len(run) - 1)):
                         ed = SourceEditor(source)
                         _move_statement(ed, source, last, first)
@@ -131,20 +137,11 @@ class StatementReorderPattern(Pattern):
                                 pattern_name=self.name,
                                 description=f"Move last statement to first in run of {len(run)}",
                                 source=new_source,
+                                tags=frozenset({"reordered_statements"}),
                             )
                             counter += 1
-
-
-def _find_compound_statements(node: Node) -> Iterator[Node]:
-    """Find all compound_statement nodes (blocks) in the AST."""
-    if node.type == "compound_statement":
-        yield node
-    for child in node.children:
-        yield from _find_compound_statements(child)
-
-
 def _find_independent_runs(
-    stmts: list[Node], source: bytes
+    stmts: list[Node], analyzer: StatementEffectAnalyzer
 ) -> list[list[Node]]:
     """Find runs of 2-4 consecutive statements that are pairwise independent."""
     runs: list[list[Node]] = []
@@ -161,10 +158,10 @@ def _find_independent_runs(
             candidate = stmts[j]
 
             # Skip control flow that can't be reordered
-            if _has_control_flow(candidate):
+            if analyzer.analyze(candidate).has_control_flow:
                 break
 
-            if _has_control_flow(run[-1]):
+            if analyzer.analyze(run[-1]).has_control_flow:
                 break
 
             run.append(candidate)
@@ -176,96 +173,6 @@ def _find_independent_runs(
         i = max(j, i + 1)
 
     return runs
-
-
-def _get_writes(stmt: Node, source: bytes) -> set[str]:
-    """Get variable names written by a statement."""
-    writes: set[str] = set()
-    for node in walk(stmt):
-        if node.type == "assignment_expression":
-            left = node.child_by_field_name("left")
-            if left and left.type == "identifier" and left.text:
-                writes.add(left.text.decode())
-        elif node.type == "update_expression":
-            arg = node.child_by_field_name("argument")
-            if arg and arg.type == "identifier" and arg.text:
-                writes.add(arg.text.decode())
-        elif node.type == "declaration":
-            declarator = node.child_by_field_name("declarator")
-            if declarator:
-                name = _extract_decl_name(declarator)
-                if name:
-                    writes.add(name)
-    return writes
-
-
-def _extract_decl_name(declarator: Node) -> str | None:
-    """Extract the variable name from a declarator node."""
-    if declarator.type == "identifier" and declarator.text:
-        return declarator.text.decode()
-    # init_declarator: int x = 5;
-    if declarator.type == "init_declarator":
-        name_node = declarator.child_by_field_name("declarator")
-        if name_node and name_node.type == "identifier" and name_node.text:
-            return name_node.text.decode()
-    # Recurse into pointer/reference declarators
-    for child in declarator.named_children:
-        result = _extract_decl_name(child)
-        if result:
-            return result
-    return None
-
-
-def _get_reads(stmt: Node, source: bytes) -> set[str]:
-    """Get variable names read by a statement."""
-    all_ids = identifiers_in(stmt)
-    writes = _get_writes(stmt, source)
-    return all_ids - writes
-
-
-def _has_control_flow(stmt: Node) -> bool:
-    """Check if a statement contains return, break, or continue."""
-    for node in walk(stmt):
-        if node.type in ("return_statement", "break_statement",
-                         "continue_statement", "goto_statement"):
-            return True
-    return False
-
-
-def _has_call(stmt: Node) -> bool:
-    """Check if a statement contains a function call."""
-    for node in walk(stmt):
-        if node.type == "call_expression":
-            return True
-    return False
-
-
-def _are_independent(stmt_a: Node, stmt_b: Node, source: bytes) -> bool:
-    """Check if two statements can be safely reordered."""
-    # Control flow statements can't be reordered past each other safely
-    if _has_control_flow(stmt_a) or _has_control_flow(stmt_b):
-        return False
-
-    writes_a = _get_writes(stmt_a, source)
-    reads_a = _get_reads(stmt_a, source)
-    writes_b = _get_writes(stmt_b, source)
-    reads_b = _get_reads(stmt_b, source)
-
-    # Check WAR, RAW, WAW dependencies
-    if writes_a & reads_b:  # A writes something B reads
-        return False
-    if reads_a & writes_b:  # B writes something A reads
-        return False
-    if writes_a & writes_b:  # Both write same variable
-        return False
-
-    # Call expressions with side effects are conservatively dependent
-    # BUT: we allow reordering calls past simple assignments
-    # (being conservative only when both statements have calls)
-    if _has_call(stmt_a) and _has_call(stmt_b):
-        return False
-
-    return True
 
 
 def _swap_statements(

@@ -80,3 +80,5 @@ private:
 unsigned long StartVoiceThreadEntry(void *);
 void StopSynchronizedVoices();
 void TerminateVoiceThread();
+
+extern bool gHasPendingStopCommits;

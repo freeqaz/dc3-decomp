@@ -33,6 +33,9 @@ from ..types import Diagnosis, FunctionContext, Variant
 
 class AssignmentReorderPattern(Pattern):
     name = "assignment_reorder"
+    safety_tier = "conservative"
+    structural_domain = "data_flow"
+    follow_ups = ("statement_reorder", "declaration_reorder")
 
     def relevant(self, diagnosis: Diagnosis) -> bool:
         # Offset swaps suggest store reordering
@@ -93,6 +96,7 @@ class AssignmentReorderPattern(Pattern):
                             pattern_name=self.name,
                             description=f"Swap assignment {i} <-> {j} in run of {run_len}",
                             source=new_source,
+                            tags=frozenset({"reordered_assignments"}),
                         )
                         counter += 1
 
@@ -109,6 +113,7 @@ class AssignmentReorderPattern(Pattern):
                             pattern_name=self.name,
                             description=f"Reverse {run_len} consecutive assignments",
                             source=new_source,
+                            tags=frozenset({"reordered_assignments"}),
                         )
                         counter += 1
                     except ValueError:

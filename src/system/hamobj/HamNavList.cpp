@@ -527,6 +527,9 @@ void HamNavList::Poll() {
                 navSelectDoneMsg->Node(5) = DataNode(mSelectDoneSelecting);
 
                 TheUI->Handle(navSelectDoneMsg.Data(), false);
+#ifdef HX_NATIVE
+                if (TheHamProvider)
+#endif
                 TheHamProvider->Handle(navSelectDoneMsg.Data(), false);
 
                 mSelectDoneIndex = -1;
@@ -747,6 +750,9 @@ void HamNavList::SendHighlightSettledMsg(int i) {
         NavHighlightSettledMsg msg(dataSym, i, this, canSel);
         TheUI->Handle(msg, false);
         Handle(msg, true);
+#ifdef HX_NATIVE
+        if (TheHamProvider)
+#endif
         TheHamProvider->Handle(msg, false);
     }
 }
@@ -800,6 +806,9 @@ void HamNavList::SendHighlightMsg(int i) {
     NavHighlightMsg msg(dataSym, i, this, canSel);
     TheUI->Handle(msg, false);
     Handle(msg, true);
+#ifdef HX_NATIVE
+    if (TheHamProvider)
+#endif
     TheHamProvider->Handle(msg, false);
 }
 
@@ -1089,8 +1098,14 @@ void HamNavList::RealRefresh() {
             static Message eqShiftOddMsg(Symbol("eq_shift_odd"));
             int numShowing = mListState.NumShowing();
             if ((numShowing % 2 == 0) || mListState.ScrollPastMinDisplay()) {
+#ifdef HX_NATIVE
+                if (TheHamProvider)
+#endif
                 TheHamProvider->Handle(eqShiftEvenMsg, false);
             } else {
+#ifdef HX_NATIVE
+                if (TheHamProvider)
+#endif
                 TheHamProvider->Handle(eqShiftOddMsg, false);
             }
         }
@@ -1266,9 +1281,11 @@ void HamNavList::SetSelecting(bool selecting) {
     Symbol sym;
     UIList *sublist = mListDirResource->SubList(selected, mListWidgets);
     if (!(sublist == nullptr)) {
+        HamNavProvider *navProvider = mNavProvider;
         int subSelected = sublist->Selected();
-        int wrapped = sublist->GetListState().WrapShowing(subSelected + 1);
-        sym = mNavProvider->DataSymbol(wrapped, selected);
+        int subSelPlusOne = subSelected + 1;
+        int wrapped = sublist->GetListState().WrapShowing(subSelPlusOne);
+        sym = navProvider->DataSymbol(wrapped, selected);
     } else {
         auto _tmp4 = provider->DataSymbol(selected);
         sym = _tmp4;
@@ -1286,6 +1303,9 @@ void HamNavList::SetSelecting(bool selecting) {
     mSelectDoneSymbol = sym;
     mSelectDoneIndex = selected;
     NavSelectMsg navSelectMsg(sym, selected, this, canSelect);
+#ifdef HX_NATIVE
+    if (TheHamProvider)
+#endif
     TheHamProvider->Handle(navSelectMsg, false);
     DataNode result = TheUI->Handle(navSelectMsg, false);
     Handle(navSelectMsg, true);
@@ -1483,17 +1503,6 @@ DataNode HamNavList::OnMsg(const ButtonDownMsg &msg) {
         RealRefresh();
 
     bool inControllerMode = InControllerMode();
-#ifdef HX_NATIVE
-    {
-        bool gesturing2 = TheGestureMgr && TheGestureMgr->GesturingWithVoice();
-        UIComponent *fc = TheUI->FocusComponent();
-        printf("DC3 HamNavList: '%s'.OnMsg(ButtonDown) ctrl=%d enabled=%d gesturing=%d focusComp=%s(=this:%d) numShowing=%d selected=%d action=%d\n",
-               Name(), (int)inControllerMode, (int)mEnabled, (int)gesturing2,
-               fc ? fc->Name() : "<null>", (int)(fc == this),
-               mListState.NumShowing(), mListState.Selected(),
-               (int)msg.GetAction());
-    }
-#endif
     if ((inControllerMode || TheLoadMgr.EditMode())
 #ifdef HX_NATIVE
         // Native: AnimTask with non-null mAnimTarget never self-deletes.

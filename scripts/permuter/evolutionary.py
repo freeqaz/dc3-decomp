@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from hashlib import md5
 from pathlib import Path
 
-from .composer import build_adaptive_chains, get_compose_pairs
+from .composer import available_context_keys, build_adaptive_chains, get_compose_pairs
 from .extractor import extract_function, reparse_variant
 from .file_util import atomic_write_bytes
 from .generator import generate_variants
@@ -108,6 +108,7 @@ def _mutate(
         pattern_name=f"evo_mut:{individual.variant.pattern_name}+{pattern.name}",
         description=f"Mutated: {chosen.description}",
         source=chosen.source,
+        tags=individual.variant.tags | chosen.tags,
     )
 
 
@@ -192,13 +193,18 @@ def evolve(
             compose_pairs = None
             if compose:
                 compose_pairs = get_compose_pairs(
-                    diagnosis=ctx.diagnosis, patterns=patterns,
+                    diagnosis=ctx.diagnosis,
+                    patterns=patterns,
+                    available_context=available_context_keys(ctx),
                 )
             round_chains = None
             if chain and ctx.diagnosis:
                 round_chains = build_adaptive_chains(
-                    diagnosis=ctx.diagnosis, patterns=patterns,
-                    hints=None, max_depth=chain_depth,
+                    diagnosis=ctx.diagnosis,
+                    patterns=patterns,
+                    hints=None,
+                    available_context=available_context_keys(ctx),
+                    max_depth=chain_depth,
                 )
 
             # Seed initial population

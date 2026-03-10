@@ -46,6 +46,11 @@ struct DrawCallRecord {
     float useTexture;
     float alpha;
 
+    // Spatial snapshot
+    float worldPos[3];
+    float ndcPos[3];
+    bool hasNdcPos;
+
     // Heuristics
     uint32_t heuristicsApplied;
     static const char* HeuristicName(int bit);

@@ -782,13 +782,6 @@ void UIManager::Init() {
 }
 
 BEGIN_HANDLERS(UIManager)
-#ifdef HX_NATIVE
-    if (sym == Symbol("button_down") || sym == Symbol("button_up")) {
-        printf("DC3 UI: Handle '%s' — inTransition=%d mSink=%p mCurrentScreen=%p\n",
-               sym.Str(), (int)(InTransition() || InComponentSelect()),
-               (void*)mSink, (void*)mCurrentScreen);
-    }
-#endif
     if ((InTransition() || InComponentSelect())
         && BlockHandlerDuringTransition(sym, _msg)) {
         return 0;

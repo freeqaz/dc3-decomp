@@ -163,6 +163,39 @@ void test_func() {
             )
         )
 
+    def test_does_not_reorder_obvious_mutator_calls(self):
+        variants = _variants(
+            """\
+void test_func() {
+    SetState();
+    Finish();
+}
+"""
+        )
+        self.assertEqual(variants, [])
+
+    def test_does_not_reorder_logging_calls(self):
+        variants = _variants(
+            """\
+void test_func() {
+    printf("before");
+    Finish();
+}
+"""
+        )
+        self.assertEqual(variants, [])
+
+    def test_does_not_reorder_unknown_calls_with_shared_input(self):
+        variants = _variants(
+            """\
+void test_func(int* ptr) {
+    First(ptr);
+    Second(ptr);
+}
+"""
+        )
+        self.assertEqual(variants, [])
+
 
 if __name__ == "__main__":
     unittest.main()

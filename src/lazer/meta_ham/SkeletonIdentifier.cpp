@@ -1,6 +1,11 @@
 #include "meta_ham/SkeletonIdentifier.h"
 #include "SkeletonIdentifier.h"
+#include <stdio.h>
 #include "flow/PropertyEventProvider.h"
+
+#ifndef HX_NATIVE
+template int sprintf_s<200>(char (&)[200], const char *, ...);
+#endif
 #include "gesture/GestureMgr.h"
 #include "gesture/Skeleton.h"
 #include "hamobj/HamGameData.h"

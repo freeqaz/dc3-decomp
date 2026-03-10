@@ -106,6 +106,7 @@ def merge_variants(
         pattern_name=f"merge:{name_a}+{name_b}",
         description=f"Merged: {variant_a.description} AND {variant_b.description}",
         source=result,
+        tags=variant_a.tags | variant_b.tags,
     )
 
 

@@ -127,6 +127,7 @@ class AndSplitPattern(Pattern):
                         pattern_name=variant.pattern_name,
                         description=f"[ghidra] {variant.description}",
                         source=variant.source,
+                        tags=variant.tags,
                     )
                     yield variant
                     counter += 1
@@ -137,6 +138,7 @@ class AndSplitPattern(Pattern):
                         pattern_name=variant.pattern_name,
                         description=f"[ghidra] {variant.description}",
                         source=variant.source,
+                        tags=variant.tags,
                     )
                     yield variant
                     counter += 1

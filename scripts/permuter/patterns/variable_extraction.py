@@ -39,6 +39,9 @@ _NESTING_TYPES = {
 
 class VariableExtractionPattern(Pattern):
     name = "variable_extraction"
+    safety_tier = "conservative"
+    structural_domain = "data_flow"
+    follow_ups = ("declaration_reorder", "inline_assignment", "statement_reorder")
 
     def relevant(self, diagnosis: Diagnosis) -> bool:
         # Skip when there are no actionable mismatches (pure noise/unfixable)
@@ -101,6 +104,7 @@ class VariableExtractionPattern(Pattern):
                 pattern_name=self.name,
                 description=desc,
                 source=new_source,
+                tags=frozenset({"introduced_temp"}),
             )
 
             # Type-guided variants: use libclang to resolve the call's
@@ -124,6 +128,7 @@ class VariableExtractionPattern(Pattern):
                         f"into {type_str} {var_name.decode()}"
                     ),
                     source=typed_source,
+                    tags=frozenset({"introduced_temp"}),
                 )
 
 

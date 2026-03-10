@@ -30,13 +30,23 @@ from typing import Iterator
 from tree_sitter import Node
 
 from .base import Pattern
-from ..ast_queries import walk, identifiers_in
+from ..ast_queries import walk
+from ..control_flow import (
+    is_bare_return_statement,
+    noncomment_named_children,
+    trailing_run,
+)
 from ..editor import SourceEditor
+from ..statement_effects import StatementEffectAnalyzer
 from ..types import Diagnosis, FunctionContext, Variant
 
 
 class TailCallReorderPattern(Pattern):
     name = "tail_call_reorder"
+    safety_tier = "moderate"
+    structural_domain = "control_flow"
+    follow_ups = ("branch_polarity", "declaration_reorder")
+    requires_context = ("ghidra",)
 
     def relevant(self, diagnosis: Diagnosis) -> bool:
         # Primary signal: prologue mismatch where target saves fewer regs
@@ -108,6 +118,7 @@ def _swap_trailing_calls(
         return
 
     counter = start
+    analyzer = StatementEffectAnalyzer(source)
 
     # Find runs of consecutive call statements at the end
     end = len(stmts)
@@ -125,6 +136,7 @@ def _swap_trailing_calls(
     for variant in _variants_for_call_run(
         call_run,
         source,
+        analyzer,
         ghidra_last_call,
         counter,
         max_variants=4,
@@ -142,6 +154,7 @@ def _swap_calls_before_return(
 ) -> Iterator[Variant]:
     """Swap trailing call runs that appear before a bare `return;`."""
     counter = start
+    analyzer = StatementEffectAnalyzer(source)
 
     for node in walk(ctx.body_node):
         if counter - start >= 4:
@@ -150,13 +163,13 @@ def _swap_calls_before_return(
         if node.type != "compound_statement":
             continue
 
-        children = [c for c in node.named_children if c.type != "comment"]
+        children = noncomment_named_children(node)
         if len(children) < 3:
             continue
-        if not _is_bare_return(children[-1], source):
+        if not is_bare_return_statement(children[-1], source):
             continue
 
-        call_run = _trailing_call_run(children[:-1])
+        call_run = trailing_run(children[:-1], _is_call_statement)
         if len(call_run) < 2:
             continue
 
@@ -171,6 +184,7 @@ def _swap_calls_before_return(
         for variant in _variants_for_call_run(
             call_run,
             source,
+            analyzer,
             ghidra_last_call,
             counter,
             max_variants=4 - (counter - start),
@@ -188,6 +202,7 @@ def _swap_calls_in_terminal_blocks(
 ) -> Iterator[Variant]:
     """Swap consecutive calls at the end of terminal blocks (if/else/loop bodies)."""
     counter = start
+    analyzer = StatementEffectAnalyzer(source)
 
     for node in walk(ctx.body_node):
         if counter - start >= 4:
@@ -199,11 +214,11 @@ def _swap_calls_in_terminal_blocks(
         if node.id == ctx.body_node.id:
             continue
 
-        children = [c for c in node.named_children if c.type != "comment"]
+        children = noncomment_named_children(node)
         if len(children) < 2:
             continue
 
-        call_run = _trailing_call_run(children)
+        call_run = trailing_run(children, _is_call_statement)
         if len(call_run) < 2:
             continue
 
@@ -221,6 +236,7 @@ def _swap_calls_in_terminal_blocks(
         for variant in _variants_for_call_run(
             call_run,
             source,
+            analyzer,
             ghidra_last_call,
             counter,
             max_variants=4 - (counter - start),
@@ -244,27 +260,6 @@ def _is_call_statement(node: Node) -> bool:
         if child.type == "call_expression":
             return True
     return False
-
-
-def _is_bare_return(node: Node, source: bytes) -> bool:
-    """Check if a statement is `return;` with no value."""
-    if node.type != "return_statement":
-        return False
-    return source[node.start_byte:node.end_byte].strip() in (b"return;", b"return ;")
-
-
-def _trailing_call_run(stmts: list[Node]) -> list[Node]:
-    """Return the maximal trailing run of call statements."""
-    end = len(stmts)
-    start = end
-    for i in range(end - 1, -1, -1):
-        if _is_call_statement(stmts[i]):
-            start = i
-        else:
-            break
-    return stmts[start:end]
-
-
 def _get_call_name(stmt: Node, source: bytes) -> str | None:
     """Extract the function name from a call statement."""
     for child in walk(stmt):
@@ -280,17 +275,6 @@ def _get_call_name(stmt: Node, source: bytes) -> str | None:
                         text = text.rsplit(sep, 1)[-1]
                 return text.strip()
     return None
-
-
-def _get_writes(stmt: Node, source: bytes) -> set[str]:
-    """Get variable names written by a statement."""
-    writes: set[str] = set()
-    for node in walk(stmt):
-        if node.type == "assignment_expression":
-            left = node.child_by_field_name("left")
-            if left and left.type == "identifier" and left.text:
-                writes.add(left.text.decode())
-    return writes
 
 
 def _should_try_swap(
@@ -315,6 +299,7 @@ def _should_try_swap(
 def _variants_for_call_run(
     call_run: list[Node],
     source: bytes,
+    analyzer: StatementEffectAnalyzer,
     ghidra_last_call: str | None,
     start: int,
     max_variants: int,
@@ -329,7 +314,7 @@ def _variants_for_call_run(
 
         a = call_run[i - 1]
         b = call_run[i]
-        if not _are_independent_calls(a, b, source):
+        if not _are_independent_calls(a, b, source, analyzer):
             continue
         if not _should_try_swap(a, b, source, ghidra_last_call):
             continue
@@ -354,11 +339,17 @@ def _variants_for_call_run(
                 guided=guided,
             ),
             source=new_source,
+            tags=frozenset({"reordered_tail_calls"}),
         )
         counter += 1
 
 
-def _are_independent_calls(a: Node, b: Node, source: bytes) -> bool:
+def _are_independent_calls(
+    a: Node,
+    b: Node,
+    source: bytes,
+    analyzer: StatementEffectAnalyzer,
+) -> bool:
     """Check if two call statements can be safely reordered.
 
     Two calls are independent if:
@@ -366,37 +357,18 @@ def _are_independent_calls(a: Node, b: Node, source: bytes) -> bool:
     - Neither reads a variable written by the other
     - The second doesn't dereference a pointer checked by the first
     """
-    # Never reorder assertions — they guard subsequent code
-    text_a = source[a.start_byte:a.end_byte]
-    text_b = source[b.start_byte:b.end_byte]
-    for guard in (b"MILO_ASSERT", b"MILO_FAIL", b"assert(", b"ASSERT("):
-        if guard in text_a or guard in text_b:
-            return False
-
-    ids_a = identifiers_in(a)
-    ids_b = identifiers_in(b)
-    writes_a = _get_writes(a, source)
-    writes_b = _get_writes(b, source)
-
-    # WAR/RAW/WAW check
-    if writes_a & ids_b:
+    effects_a = analyzer.analyze(a)
+    effects_b = analyzer.analyze(b)
+    if effects_a.has_assert_like_guard or effects_b.has_assert_like_guard:
         return False
-    if ids_a & writes_b:
-        return False
-    if writes_a & writes_b:
+
+    if not analyzer.can_reorder_call_pair(a, b):
         return False
 
     # Check for pointer dereference dependency:
     # If a checks/uses a pointer that b dereferences (->), don't reorder
-    for node in walk(b):
-        if node.type == "field_expression":
-            op = node.child_by_field_name("operator")
-            if op and op.text == b"->":
-                arg = node.child_by_field_name("argument")
-                if arg and arg.type == "identifier" and arg.text:
-                    ptr_name = arg.text.decode("utf-8", errors="replace")
-                    if ptr_name in ids_a:
-                        return False
+    if effects_a.reads & effects_b.dereferenced_identifiers:
+        return False
 
     return True
 

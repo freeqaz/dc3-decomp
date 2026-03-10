@@ -20,6 +20,10 @@ class Pattern(ABC):
 
     name: str = ""
     opt_in: bool = False
+    safety_tier: str = "normal"
+    structural_domain: str = "general"
+    follow_ups: tuple[str, ...] = ()
+    requires_context: tuple[str, ...] = ()
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -49,6 +53,17 @@ class Pattern(ABC):
         patterns most likely to help for the specific mismatch profile.
         """
         return 1.0 if self.relevant(diagnosis) else 0.0
+
+    def metadata(self) -> dict[str, object]:
+        """Return lightweight declarative metadata for orchestration/tests."""
+        return {
+            "name": self.name,
+            "opt_in": self.opt_in,
+            "safety_tier": self.safety_tier,
+            "structural_domain": self.structural_domain,
+            "follow_ups": list(self.follow_ups),
+            "requires_context": list(self.requires_context),
+        }
 
 
 def get_pattern(name: str) -> Pattern:
@@ -80,3 +95,9 @@ def list_patterns(include_opt_in: bool = False) -> list[str]:
     if include_opt_in:
         return sorted(_REGISTRY.keys())
     return sorted(k for k, v in _REGISTRY.items() if not v.opt_in)
+
+
+def get_pattern_metadata(include_opt_in: bool = False) -> dict[str, dict[str, object]]:
+    """Return metadata for registered patterns."""
+    patterns = get_all_patterns(include_opt_in=include_opt_in)
+    return {pattern.name: pattern.metadata() for pattern in patterns}

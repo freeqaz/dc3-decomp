@@ -96,7 +96,61 @@ _FOLLOW_UP_MAP: dict[str, list[str]] = {
     "const_overload": ["comparison_equivalence"],
 }
 
+_TAG_FOLLOW_UP_MAP: dict[str, list[str]] = {
+    "introduced_temp": ["declaration_reorder", "inline_assignment", "statement_reorder"],
+    "moved_declaration": ["declaration_reorder", "statement_reorder"],
+    "reordered_declarations": ["variable_extraction", "prologue_pressure", "declaration_movement"],
+    "reordered_assignments": ["statement_reorder", "declaration_reorder"],
+    "reordered_statements": ["declaration_reorder", "assignment_reorder"],
+    "merged_return_calls": ["branch_polarity", "declaration_reorder", "early_return_merge"],
+    "split_return_calls": ["branch_polarity", "early_return_merge"],
+    "reordered_tail_calls": ["branch_polarity", "declaration_reorder"],
+    "converted_if_to_switch": ["branch_polarity", "declaration_reorder"],
+    "converted_switch_to_if": ["branch_polarity", "ternary_swap"],
+}
+
 _CACHE_DB = Path(__file__).resolve().parent.parent.parent / "permuter_cache.db"
+
+
+def _merged_follow_up_map(patterns: list[Pattern]) -> dict[str, list[str]]:
+    """Merge static follow-up wiring with pattern-declared follow-ups."""
+    merged: dict[str, list[str]] = {
+        name: list(follow_ups) for name, follow_ups in _FOLLOW_UP_MAP.items()
+    }
+
+    for pattern in patterns:
+        bucket = merged.setdefault(pattern.name, [])
+        for follow_up in pattern.follow_ups:
+            if follow_up not in bucket:
+                bucket.append(follow_up)
+
+    return merged
+
+
+def available_context_keys(ctx: FunctionContext) -> set[str]:
+    """Return auxiliary context keys available for the current function."""
+    keys: set[str] = set()
+    if ctx.ghidra_code or ctx.ghidra_ast is not None:
+        keys.add("ghidra")
+    if ctx.asm_listing_path is not None:
+        keys.add("asm")
+    if ctx.rb3_source:
+        keys.add("rb3")
+    if ctx.diagnosis is not None:
+        keys.add("diagnosis")
+    return keys
+
+
+def _context_score(pattern: Pattern, available_context: set[str] | None) -> float:
+    """Return a soft score adjustment from auxiliary context availability."""
+    if not pattern.requires_context:
+        return 0.0
+    if not available_context:
+        return -0.2
+    required = set(pattern.requires_context)
+    if required.issubset(available_context):
+        return 0.2
+    return -0.2
 
 
 def compose_variants(
@@ -151,6 +205,7 @@ def compose_variants(
                 pattern_name=f"compose:{stage_a.name}+{stage_b.name}",
                 description=f"{a_variant.description} then {b_variant.description}",
                 source=b_variant.source,
+                tags=a_variant.tags | b_variant.tags,
             )
             total += 1
             if total >= max_total:
@@ -199,20 +254,20 @@ def chain_variants(
             return
 
     # Initial beam: the original context
-    beam: list[tuple[FunctionContext, str, str]] = [
-        (ctx, "", "")  # (context, accumulated_name, accumulated_desc)
+    beam: list[tuple[FunctionContext, str, str, frozenset[str]]] = [
+        (ctx, "", "", frozenset())  # (context, accumulated_name, accumulated_desc, accumulated_tags)
     ]
 
     total_yielded = 0
     # Track last stage's candidates for fallback yield on beam death
-    last_intermediate: list[tuple[Variant, str, str]] = []
+    last_intermediate: list[tuple[Variant, str, str, frozenset[str]]] = []
 
     for stage_idx, pattern_name in enumerate(stages):
         pattern = pattern_map[pattern_name]
         is_final = stage_idx == len(stages) - 1
-        candidates: list[tuple[Variant, FunctionContext | None, str, str]] = []
+        candidates: list[tuple[Variant, FunctionContext | None, str, str, frozenset[str]]] = []
 
-        for beam_ctx, acc_name, acc_desc in beam:
+        for beam_ctx, acc_name, acc_desc, acc_tags in beam:
             # At intermediate stages (not first, not final), suppress
             # diagnosis to prevent pattern relevance filtering from
             # killing the beam. Patterns may not be relevant to the
@@ -234,6 +289,7 @@ def chain_variants(
                 else:
                     new_name = variant.name
                     new_desc = variant.description
+                new_tags = acc_tags | variant.tags
 
                 if is_final:
                     # Final stage — yield directly
@@ -243,13 +299,14 @@ def chain_variants(
                         pattern_name=f"chain:{chain_name}",
                         description=new_desc,
                         source=variant.source,
+                        tags=new_tags,
                     )
                     total_yielded += 1
                     if total_yielded >= max_total:
                         return
                 else:
                     # Intermediate stage — collect for beam pruning
-                    candidates.append((variant, None, new_name, new_desc))
+                    candidates.append((variant, None, new_name, new_desc, new_tags))
 
             # Restore diagnosis
             if not is_final and stage_idx > 0:
@@ -259,12 +316,13 @@ def chain_variants(
             # If final stage produced nothing, fall back to intermediates
             if total_yielded == 0 and last_intermediate:
                 partial_name = "+".join(stages[:stage_idx])
-                for variant, acc_name, acc_desc in last_intermediate:
+                for variant, acc_name, acc_desc, acc_tags in last_intermediate:
                     yield Variant(
                         name=acc_name,
                         pattern_name=f"chain:{partial_name}",
                         description=acc_desc,
                         source=variant.source,
+                        tags=acc_tags,
                     )
                     total_yielded += 1
                     if total_yielded >= max_total:
@@ -273,7 +331,7 @@ def chain_variants(
 
         # Save intermediate candidates for potential fallback
         last_intermediate = [
-            (v, n, d) for v, _, n, d in candidates
+            (v, n, d, t) for v, _, n, d, t in candidates
         ]
 
         # Prune beam for next stage
@@ -281,10 +339,10 @@ def chain_variants(
 
         # Reparse pruned candidates for the next stage
         beam = []
-        for variant, _, acc_name, acc_desc in pruned:
+        for variant, _, acc_name, acc_desc, acc_tags in pruned:
             try:
                 reparsed = reparse_variant(ctx, variant.source)
-                beam.append((reparsed, acc_name, acc_desc))
+                beam.append((reparsed, acc_name, acc_desc, acc_tags))
             except ValueError:
                 continue  # Skip variants with syntax errors
 
@@ -292,12 +350,13 @@ def chain_variants(
             # Beam died — yield intermediates as shorter chains
             if last_intermediate and stage_idx >= 1:
                 partial_name = "+".join(stages[:stage_idx + 1])
-                for variant, acc_name, acc_desc in last_intermediate:
+                for variant, acc_name, acc_desc, acc_tags in last_intermediate:
                     yield Variant(
                         name=acc_name,
                         pattern_name=f"chain:{partial_name}",
                         description=acc_desc,
                         source=variant.source,
+                        tags=acc_tags,
                     )
                     total_yielded += 1
                     if total_yielded >= max_total:
@@ -306,10 +365,10 @@ def chain_variants(
 
 
 def _prune_beam(
-    candidates: list[tuple[Variant, object, str, str]],
+    candidates: list[tuple[Variant, object, str, str, frozenset[str]]],
     original_source: bytes,
     beam_width: int,
-) -> list[tuple[Variant, object, str, str]]:
+) -> list[tuple[Variant, object, str, str, frozenset[str]]]:
     """Prune candidates to beam_width by source diversity.
 
     Uses byte-level diff size from original as a diversity proxy.
@@ -329,7 +388,7 @@ def _prune_beam(
     scored.sort(key=lambda x: -x[0])
 
     # Greedy diverse selection: take the most different, then spread out
-    selected: list[tuple[Variant, object, str, str]] = []
+    selected: list[tuple[Variant, object, str, str, frozenset[str]]] = []
     selected_diffs: list[int] = []
 
     for diff_count, _, entry in scored:
@@ -371,6 +430,7 @@ def build_adaptive_chains(
     diagnosis: Diagnosis | None,
     patterns: list[Pattern],
     hints: RoundHints | None,
+    available_context: set[str] | None = None,
     max_depth: int = 3,
     max_chains: int = 10,
 ) -> list[ChainSpec]:
@@ -391,6 +451,7 @@ def build_adaptive_chains(
         max_chains: Maximum chains to return.
     """
     available = {p.name for p in patterns}
+    follow_map = _merged_follow_up_map(patterns)
     pattern_map = {p.name: p for p in patterns}
     chains: list[ChainSpec] = []
     seen_stages: set[tuple[str, ...]] = set()
@@ -406,6 +467,11 @@ def build_adaptive_chains(
         if key in seen_stages:
             return
         seen_stages.add(key)
+        priority += sum(
+            _context_score(pattern_map[name], available_context)
+            for name in key
+            if name in pattern_map
+        )
         chains.append(ChainSpec(
             stages=list(key),
             reason=reason,
@@ -416,8 +482,12 @@ def build_adaptive_chains(
     # Layer 1: Follow-up chains from last winner (recursive walk)
     if hints and hints.last_winner:
         for base_name in _split_for_lookup(hints.last_winner):
-            for chain_stages in _walk_followups(
-                base_name, _FOLLOW_UP_MAP, max_depth, available,
+            for chain_stages in _walk_followups_seeded(
+                base_name,
+                _follow_up_names_for(base_name, hints.last_winner_tags),
+                follow_map,
+                max_depth,
+                available,
             ):
                 _add_chain(
                     chain_stages,
@@ -429,8 +499,12 @@ def build_adaptive_chains(
     if hints:
         promising = hints.promising_patterns()
         for p in promising[:5]:
-            for chain_stages in _walk_followups(
-                p, _FOLLOW_UP_MAP, min(3, max_depth), available,
+            for chain_stages in _walk_followups_seeded(
+                p,
+                _follow_up_names_for(p, hints.promising_tags_for_pattern(p)),
+                follow_map,
+                min(3, max_depth),
+                available,
             ):
                 _add_chain(
                     chain_stages,
@@ -444,7 +518,7 @@ def build_adaptive_chains(
             p.name for p in patterns if p.relevant(diagnosis)
         ]
         for name in relevant_names:
-            follow_ups = _FOLLOW_UP_MAP.get(name, [])
+            follow_ups = follow_map.get(name, [])
             for fu in follow_ups:
                 if fu in available and fu in {n for n in relevant_names}:
                     _add_chain(
@@ -508,9 +582,63 @@ def _walk_followups(
     return results
 
 
+def _walk_followups_seeded(
+    start: str,
+    initial_follow_ups: set[str],
+    follow_map: dict[str, list[str]],
+    max_depth: int,
+    available: set[str],
+    _max_chains: int = 6,
+) -> list[list[str]]:
+    """Walk follow-ups, allowing tag-derived first-hop expansions."""
+    seeded = [
+        follow_up for follow_up in initial_follow_ups
+        if follow_up in available and follow_up != start
+    ]
+    if not seeded:
+        return []
+
+    results: list[list[str]] = []
+    seen: set[tuple[str, ...]] = set()
+    queue: list[tuple[list[str], set[str]]] = []
+
+    for follow_up in seeded:
+        chain = [start, follow_up]
+        key = tuple(chain)
+        if key in seen:
+            continue
+        seen.add(key)
+        results.append(chain)
+        if len(results) >= _max_chains:
+            return results
+        if len(chain) < max_depth:
+            queue.append((chain, {start, follow_up}))
+
+    while queue and len(results) < _max_chains:
+        chain, visited = queue.pop(0)
+        tail = chain[-1]
+        for follow_up in follow_map.get(tail, []):
+            if follow_up in visited or follow_up not in available:
+                continue
+            new_chain = chain + [follow_up]
+            key = tuple(new_chain)
+            if key in seen:
+                continue
+            seen.add(key)
+            results.append(new_chain)
+            if len(results) >= _max_chains:
+                break
+            if len(new_chain) < max_depth:
+                queue.append((new_chain, visited | {follow_up}))
+
+    return results
+
+
 def get_compose_pairs(
     diagnosis: Diagnosis | None,
     patterns: list[Pattern],
+    hints: RoundHints | None = None,
+    available_context: set[str] | None = None,
     max_pairs: int = 12,
 ) -> list[tuple[str, str]]:
     """Build dynamic compose pairs from _FOLLOW_UP_MAP + DB history.
@@ -522,10 +650,11 @@ def get_compose_pairs(
     """
     available = {p.name for p in patterns}
     pattern_map = {p.name: p for p in patterns}
+    follow_map = _merged_follow_up_map(patterns)
 
     # Collect all valid edges
     candidates: list[tuple[str, str, float]] = []  # (a, b, score)
-    for src, dsts in _FOLLOW_UP_MAP.items():
+    for src, dsts in follow_map.items():
         if src not in available:
             continue
         for dst in dsts:
@@ -533,13 +662,36 @@ def get_compose_pairs(
                 continue
             # Score: 1.0 base, +0.5 if at least one is diagnosis-relevant
             score = 1.0
+            src_pat = pattern_map.get(src)
+            dst_pat = pattern_map.get(dst)
             if diagnosis:
-                src_pat = pattern_map.get(src)
-                dst_pat = pattern_map.get(dst)
                 if (src_pat and src_pat.relevant(diagnosis)) or \
                    (dst_pat and dst_pat.relevant(diagnosis)):
                     score += 0.5
+            if src_pat is not None:
+                score += _context_score(src_pat, available_context)
+            if dst_pat is not None:
+                score += _context_score(dst_pat, available_context)
             candidates.append((src, dst, score))
+
+    if hints and hints.last_winner:
+        for base_name in _split_for_lookup(hints.last_winner):
+            if base_name not in available:
+                continue
+            for dst in _follow_up_names_for(base_name, hints.last_winner_tags):
+                if dst in available:
+                    candidates.append((base_name, dst, 2.0))
+
+    if hints:
+        for pattern_name in hints.promising_patterns()[:5]:
+            if pattern_name not in available:
+                continue
+            tag_follow_ups = _follow_up_names_for(
+                pattern_name, hints.promising_tags_for_pattern(pattern_name),
+            )
+            for dst in tag_follow_ups:
+                if dst in available:
+                    candidates.append((pattern_name, dst, 1.5))
 
     # Boost pairs seen in DB win history
     historical = set(_query_effective_pairs())
@@ -572,6 +724,22 @@ def _split_for_lookup(pattern_name: str) -> list[str]:
         _, parts = pattern_name.split(":", 1)
         return parts.split("+")
     return [pattern_name]
+
+
+def _follow_up_names_for(pattern_name: str, tags: frozenset[str]) -> set[str]:
+    """Collect static and structural-tag-driven follow-up names."""
+    companion_names = set(_FOLLOW_UP_MAP.get(pattern_name, []))
+    pattern = None
+    try:
+        from .patterns.base import get_pattern
+        pattern = get_pattern(pattern_name)
+    except KeyError:
+        pattern = None
+    if pattern is not None:
+        companion_names.update(pattern.follow_ups)
+    for tag in tags:
+        companion_names.update(_TAG_FOLLOW_UP_MAP.get(tag, []))
+    return companion_names
 
 
 def _query_effective_pairs() -> list[tuple[str, str]]:
@@ -747,6 +915,7 @@ def select_improvers(
 
 def _select_companion_patterns(
     improver_pattern: str,
+    improver_tags: frozenset[str],
     phase1_results: list,
     patterns: list,
     baseline: float,
@@ -780,7 +949,7 @@ def _select_companion_patterns(
             companion_names.add(pname)
 
     # Source 2: Follow-up map entries
-    for follow_up in _FOLLOW_UP_MAP.get(improver_pattern, []):
+    for follow_up in _follow_up_names_for(improver_pattern, improver_tags):
         if follow_up in pattern_map:
             companion_names.add(follow_up)
 
@@ -833,6 +1002,7 @@ def cross_compose_variants(
 
         companions = _select_companion_patterns(
             improver_result.variant.pattern_name,
+            improver_result.variant.tags,
             phase1_results, patterns, baseline,
         )
 
@@ -854,6 +1024,7 @@ def cross_compose_variants(
                     pattern_name=f"crosscompose:{improver_result.variant.pattern_name}+{companion.name}",
                     description=f"{improver_result.variant.description} then {variant.description}",
                     source=variant.source,
+                    tags=improver_result.variant.tags | variant.tags,
                 )
                 count += 1
                 total += 1

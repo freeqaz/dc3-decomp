@@ -16,33 +16,36 @@ bool IsNavAction(JoypadAction act) {
 }
 
 int ScrollDirection(const ButtonDownMsg &msg, bool b1, bool b2, int i) {
-    int button;
     int action;
     bool overload;
 
     action = msg.mData->Int(4);
 
     if (!b2) {
-        button = msg.mData->Int(3);
+        int button = msg.mData->Int(3);
         overload = TheUI->OverloadHorizontalNav((JoypadAction)action, (JoypadButton)button, b1);
         if (overload) {
-            if (action == 6) {
-                action = 9;
-            } else if (action == 8) {
-                action = 7;
+            if (action == kAction_Up) {
+                action = kAction_Left;
+            } else if (action == kAction_Down) {
+                action = kAction_Right;
             }
         }
     }
 
-    int result;
-    if (action == 9) {
-        result = -i;
-    } else if (action == 7) {
-        result = i;
-    } else if (action == 6 && i > 1) {
-        result = -1;
-    } else {
-        result = 0;
+    int negAction = b2 ? kAction_Up : kAction_Left;
+    int posAction = b2 ? kAction_Down : kAction_Right;
+    int secNeg = b2 ? kAction_Left : kAction_Up;
+    int secPos = b2 ? kAction_Right : kAction_Down;
+
+    if (action == negAction) {
+        return -i;
+    } else if (action == posAction) {
+        return i;
+    } else if (action == secNeg && i > 1) {
+        return -1;
+    } else if (action == secPos && i > 1) {
+        return 1;
     }
-    return result;
+    return 0;
 }

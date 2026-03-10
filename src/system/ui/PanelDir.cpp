@@ -13,6 +13,17 @@
 #include "utl/Loader.h"
 #include "utl/Std.h"
 #include "utl/Symbol.h"
+#ifdef HX_NATIVE
+#include <cstdlib>
+extern void FlushTransparentDraws();
+static bool FlushTransparentOnPanelCamSwitch() {
+    static int sCached = -1;
+    if (sCached < 0) {
+        sCached = getenv("MILO_FLUSH_TRANSPARENT_ON_CAM_SWITCH") ? 1 : 0;
+    }
+    return sCached != 0;
+}
+#endif
 
 bool gSendFocusMsg = true;
 
@@ -246,6 +257,11 @@ void PanelDir::DrawShowing() {
     RndCam *curCam = RndCam::Current();
     RndCam *camOverride = CamOverride();
     if (camOverride && camOverride != RndCam::Current()) {
+#ifdef HX_NATIVE
+        if (FlushTransparentOnPanelCamSwitch()) {
+            FlushTransparentDraws();
+        }
+#endif
         camOverride->Select();
     }
     if (!mEnv) {
@@ -264,6 +280,11 @@ void PanelDir::DrawShowing() {
             (*it)->DrawShowing();
     }
     if (curCam && curCam != RndCam::Current()) {
+#ifdef HX_NATIVE
+        if (FlushTransparentOnPanelCamSwitch()) {
+            FlushTransparentDraws();
+        }
+#endif
         curCam->Select();
     }
 }
@@ -398,11 +419,6 @@ fail:
 }
 
 DataNode PanelDir::OnMsg(ButtonDownMsg const &msg) {
-#ifdef HX_NATIVE
-    printf("DC3 PanelDir: '%s'.OnMsg(ButtonDown) focusComponent=%s action=%d\n",
-           Name(), mFocusComponent ? mFocusComponent->Name() : "<null>",
-           (int)msg.GetAction());
-#endif
     DataNode node(kDataUnhandled, 0);
     if (mFocusComponent) {
         node = mFocusComponent->Handle(msg, false);
