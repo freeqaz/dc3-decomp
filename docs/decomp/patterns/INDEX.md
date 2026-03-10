@@ -30,6 +30,7 @@ These patterns can often be fixed with source changes. Sorted by ROI (impact x s
 | MakeString Template Type Mismatch | +5-21% | HIGH | [fixable-casting.md](fixable-casting.md#makestring-template-type-mismatch-milo-macro-arguments) |
 | ObjPtr DeferOwner Constructor | +16% | HIGH | [fixable-declarations.md](fixable-declarations.md#objptr-constructor-deferred-owner-initialization) |
 | Manual Handler Extraction | +3-5% | HIGH | [fixable-macros.md](fixable-macros.md#manual-handler-extraction) |
+| Loop Condition Subtraction (subf.) | +2-3% | HIGH | [fixable-loop-condition.md](fixable-loop-condition.md#subtract-and-record-subf-loop-condition) |
 | Unsigned Zero Comparison | +0.4-1.3% | 95% | [fixable-comparison.md](fixable-comparison.md#unsigned-zero-comparison) |
 | Operator Overload Selection | +1-2% | 100% | [fixable-operators.md](fixable-operators.md#operator-overload-selection) |
 | Inline Assignment | +1-2% | 95% | [fixable-operators.md](fixable-operators.md#inline-assignment) |

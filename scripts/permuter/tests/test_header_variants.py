@@ -68,6 +68,38 @@ def test_discover_header_variants_supports_header_tail_call(tmp_path: Path):
     assert discovered[0].variant.pattern_name == "header_tail_call"
 
 
+def test_discover_header_variants_supports_generic_header_bridge(tmp_path: Path):
+    header_path = tmp_path / "shared.h"
+    source_path = tmp_path / "caller.cpp"
+
+    header_path.write_text(
+        "inline int Helper(int cond) {\n"
+        "    if (cond) {\n"
+        "        return Foo(1);\n"
+        "    } else {\n"
+        "        return Foo(2);\n"
+        "    }\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    source_path.write_text(
+        '#include "shared.h"\n'
+        "int Caller(int cond) {\n"
+        "    return Helper(cond);\n"
+        "}\n",
+        encoding="utf-8",
+    )
+
+    discovered = discover_header_variants(
+        source_path,
+        "Caller",
+        pattern_name="header_return_call_merge",
+    )
+
+    assert discovered
+    assert discovered[0].variant.pattern_name == "header_return_call_merge"
+
+
 def test_score_discovered_variants_orders_accepted_before_rejected(tmp_path: Path):
     primary = tmp_path / "caller.cpp"
     header = tmp_path / "shared.h"

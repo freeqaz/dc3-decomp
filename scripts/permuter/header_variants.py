@@ -11,6 +11,10 @@ from pathlib import Path
 from .cross_unit import AffectedFunction
 from .file_util import apply_file_updates
 from .header_impact import HeaderImpact, estimate_header_impact
+from .header_pattern_bridge import (
+    discover_header_pattern_variants,
+    supported_header_patterns,
+)
 from .header_variant_scorer import HeaderVariantScore, HeaderVariantScorer
 from .header_tail_call import discover_header_tail_call_variants
 from .patterns import get_pattern
@@ -120,6 +124,17 @@ def discover_header_variants(
             DiscoveredHeaderVariant(variant=item.variant, impact=item.impact)
             for item in discover_header_tail_call_variants(source_path, function_name)
         ]
+    if pattern_name.startswith("header_"):
+        base_pattern = pattern_name[len("header_"):]
+        if base_pattern in supported_header_patterns():
+            return [
+                DiscoveredHeaderVariant(variant=item.variant, impact=item.impact)
+                for item in discover_header_pattern_variants(
+                    source_path,
+                    function_name,
+                    base_pattern,
+                )
+            ]
 
     ctx = extract_function(source_path, function_name)
     pattern = get_pattern(pattern_name)

@@ -74,6 +74,7 @@ from . import null_guard_insert  # noqa: F401  # Insert missing null guards (com
 from . import missing_call  # noqa: F401  # Detect and uncomment missing function calls (opt-in diagnostic)
 from . import cast_insertion  # noqa: F401  # Add/remove/swap casts guided by Ghidra decompilation
 from . import iterator_index_compare  # noqa: F401  # Convert it1<it2 to (it1-begin)<(it2-begin)
+from . import loop_condition_subtract  # noqa: F401  # Rewrite a>=b to a-b>=0 in loops (subf. vs cmpw)
 
 from .base import get_all_patterns, get_pattern, list_patterns
 

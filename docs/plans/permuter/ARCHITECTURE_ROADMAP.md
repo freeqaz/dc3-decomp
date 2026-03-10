@@ -183,10 +183,16 @@ Implemented so far:
   - resolves directly included inline header callees
   - finds safe trailing-call swaps using the shared tail-call safety logic
   - emits auxiliary header edits that flow through the same multi-symbol scorer
+- Additional cross-unit header bridges now exist for selected local patterns:
+  - `header_return_call_merge`
+  - `header_switch_if_convert`
+  - `header_early_return_merge`
+  - `header_branch_polarity`
+  These reuse existing proven single-function transforms on directly included
+  inline headers and feed the same cross-unit scoring workflow
 
 Follow-on work:
-- Broader cross-unit patterns beyond the current `noinline_stub` and
-  header-inline tail-call paths
+- Still-broader cross-unit patterns beyond the current header-backed set
 - Search policies that gate or prioritize cross-unit edits using the new risk
   tier and include graph data
 - Worktree-backed execution for isolated cross-unit rebuild/scoring loops
