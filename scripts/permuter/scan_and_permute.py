@@ -803,7 +803,7 @@ def main():
         scoped = [
             (unit_name, source_path)
             for unit_name, source_path in files
-            if unit_name in target_unit_set
+            if _normalize_unit(unit_name) in target_unit_set
         ]
         if scoped:
             files_to_scan = scoped

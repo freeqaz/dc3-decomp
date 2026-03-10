@@ -75,12 +75,35 @@ void Multiply(const Hmx::Matrix3 &a, const Hmx::Matrix3 &b, Hmx::Matrix3 &out) {
 }
 
 void Multiply(const Transform &a, const Transform &b, Transform &out) {
-    out.v.y = b.m.y.y * a.v.y + b.m.x.y * a.v.x + b.m.z.y * a.v.z;
-    out.v.x = b.m.x.x * a.v.x + b.m.y.x * a.v.y + b.m.z.x * a.v.z;
-    out.v.z = b.m.x.z * a.v.x + b.m.y.z * a.v.y + b.m.z.z * a.v.z;
-    out.v.x += b.v.x;
-    out.v.y += b.v.y;
-    out.v.z += b.v.z;
+    float fVar1 = a.v.y;
+    float fVar2 = a.v.x;
+    float fVar3 = a.v.z;
+
+    float fVar10 = b.m.x.y * fVar2 + b.m.z.y * fVar1 + b.m.y.y * fVar3;
+
+    if (&b != &out) {
+        float fVar4 = b.m.z.x;
+        float fVar5 = b.m.y.x;
+        float fVar6 = b.m.x.x;
+        float fVar7 = b.m.z.y;
+        float fVar8 = b.m.y.y;
+
+        out.v.x = b.v.x + fVar6 * fVar2 + fVar5 * fVar1 + fVar4 * fVar3;
+        out.v.y = b.v.y + fVar10;
+        out.v.z = b.v.z + b.m.x.z * fVar2 + fVar7 * fVar1 + b.m.z.z * fVar3;
+    } else {
+        float fVar4 = b.v.x;
+        float fVar5 = b.v.z;
+        float fVar6 = b.m.z.z;
+        float fVar7 = b.m.y.z;
+        float fVar8 = b.m.x.z;
+        float fVar9 = b.m.y.x;
+
+        out.v.x = b.m.x.x * fVar2 + fVar9 * fVar1 + b.m.z.x * fVar3;
+        out.v.y = fVar10 + fVar5;
+        out.v.z = b.m.x.z * fVar2 + fVar7 * fVar1 + fVar6 * fVar3 + b.v.z;
+        out.v.x += fVar4;
+    }
     Multiply(a.m, b.m, out.m);
 }
 

@@ -76,7 +76,7 @@ const char *Locale::Localize(Symbol token, bool success) const {
 bool Locale::FindDataIndex(Symbol s, int &idx, bool fail) const {
     int low = 0;
     int high = mSize - 1;
-    while (high >= low) {
+    while (high - low >= 0) {
         int mid = (low + high) >> 1;
         if ((int)s > (int)mSymTable[mid]) {
             low = mid + 1;
@@ -306,8 +306,8 @@ const char *LocalizeSeparatedInt(int num, Locale &locale) {
         return (char *)MakeString("%i", num);
     }
     int sepLen = strlen(sep);
-    int pos = 0x31;
     char *buf = gLocalizeSepBuf[gLocalizeSepIdx];
+    int pos = 0x31;
     buf[0x31] = '\0';
     bool negative = num < 0;
     int absNum = num;

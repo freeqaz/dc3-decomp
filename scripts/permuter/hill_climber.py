@@ -32,11 +32,23 @@ from .classifier import classify_mismatches, format_classifications
 from .composer import _DEFAULT_PAIRS, available_context_keys, build_adaptive_chains, get_compose_pairs
 from .diagnosis import format_diagnosis_summary, is_all_noise
 from .extractor import extract_function
-from .file_util import atomic_write_bytes, SourceFileLock
+from .file_util import (
+    apply_file_updates,
+    atomic_write_bytes,
+    restore_tracked_files,
+    SourceFileLock,
+)
 from .generator import generate_variants
 from .patterns import get_all_patterns, get_pattern
 from .scorer import Scorer
-from .types import ChainSpec, HillClimbResult, RoundHints, RoundResult, ScoreResult
+from .types import (
+    ChainSpec,
+    HillClimbResult,
+    RoundHints,
+    RoundResult,
+    ScoreResult,
+    variant_file_updates,
+)
 
 # Re-export so the except clause can reference it without a deferred import
 from .ghidra_cache import GhidraCircuitOpen as _GhidraCircuitOpen
@@ -321,6 +333,10 @@ def hill_climb(
 
     # Save original source for rollback if not applying
     original_source = source_path.read_bytes()
+    applied_file_originals: dict[Path, bytes | None] = {
+        source_path.resolve(): original_source,
+    }
+    applied_file_paths: set[Path] = {source_path.resolve()}
 
     # Cache RB3 source once before the round loop (avoids per-round file I/O)
     _rb3_source_cache: str | None = None
@@ -834,7 +850,11 @@ def hill_climb(
 
                 if apply:
                     # Write the improved source (Scorer already restored original)
-                    atomic_write_bytes(source_path, best_result.variant.source)
+                    applied_file_paths = apply_file_updates(
+                        variant_file_updates(source_path, best_result.variant),
+                        applied_file_originals,
+                        current_paths=applied_file_paths,
+                    )
                     print(
                         f"Applied: {best_result.variant.name} "
                         f"({baseline:.2f}% -> {best_score:.2f}%, +{delta:.2f}%)",
@@ -875,7 +895,7 @@ def hill_climb(
     finally:
         # If not applying or interrupted, restore original source
         if not apply or stopped_reason == "interrupted":
-            atomic_write_bytes(source_path, original_source)
+            restore_tracked_files(applied_file_originals)
         else:
             # Strip the lock banner from the kept (improved) source
             _strip_banner(source_path)
@@ -890,7 +910,7 @@ def hill_climb(
                         f"— restoring original.\n  {(build_err or '')[:300]}",
                         file=sys.stderr,
                     )
-                    atomic_write_bytes(source_path, original_source)
+                    restore_tracked_files(applied_file_originals)
                     current_percent = initial_percent
                     stopped_reason = "verification_failed"
                 else:
@@ -902,7 +922,7 @@ def hill_climb(
                             f"— restoring original.",
                             file=sys.stderr,
                         )
-                        atomic_write_bytes(source_path, original_source)
+                        restore_tracked_files(applied_file_originals)
                         current_percent = initial_percent
                         stopped_reason = "verification_failed"
                     else:

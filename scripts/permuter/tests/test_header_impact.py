@@ -25,6 +25,13 @@ def test_estimate_header_impact_finds_sources_and_headers(tmp_path: Path):
     assert impact.including_sources == (src_dir / "main.cpp",)
     assert impact.including_headers == (include_dir / "wrapper.h",)
     assert impact.total_includers == 2
+    assert impact.affected_sources == (
+        src_dir / "main.cpp",
+        src_dir / "other.cpp",
+    )
+    assert impact.affected_headers == (include_dir / "wrapper.h",)
+    assert impact.max_include_depth == 2
+    assert impact.risk_tier == "medium"
 
 
 def test_estimate_header_impact_ignores_unrelated_includes(tmp_path: Path):
@@ -42,3 +49,7 @@ def test_estimate_header_impact_ignores_unrelated_includes(tmp_path: Path):
 
     assert impact.including_sources == ()
     assert impact.including_headers == ()
+    assert impact.affected_sources == ()
+    assert impact.affected_headers == ()
+    assert impact.total_affected_files == 0
+    assert impact.risk_tier == "low"

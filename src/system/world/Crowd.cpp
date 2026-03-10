@@ -994,6 +994,33 @@ void WorldCrowd::DrawShowing() {
                 }
             }
         }
+    } else {
+        MILO_NOTIFY_ONCE(
+            "%s: Rendering 2D crowd character texture without an environment, set the environ property on the WorldCrowd object."
+        );
+
+        // Draw 2D characters with environment tracking
+        RndEnviron *env = mEnviron;
+        if (env) {
+            bool savedApprox = env->UsesApproxGlobal();
+            env->SetUseApproxGlobal(false);
+            RndEnvironTracker tracker(env, nullptr);
+
+            FOREACH (it, mCharacters) {
+                if (it->mDef.mChar && it->mMMesh && !mShow3DOnly) {
+                    it->mMMesh->DrawShowing();
+                }
+            }
+
+            env->SetUseApproxGlobal(savedApprox);
+        } else {
+            // Fallback without environment
+            FOREACH (it, mCharacters) {
+                if (it->mDef.mChar && it->mMMesh && !mShow3DOnly) {
+                    it->mMMesh->DrawShowing();
+                }
+            }
+        }
     }
 }
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from collections import deque
 from pathlib import Path
 import re
 
@@ -18,10 +19,26 @@ class HeaderImpact:
     header: Path
     including_sources: tuple[Path, ...]
     including_headers: tuple[Path, ...]
+    affected_sources: tuple[Path, ...] = ()
+    affected_headers: tuple[Path, ...] = ()
+    max_include_depth: int = 1
 
     @property
     def total_includers(self) -> int:
         return len(self.including_sources) + len(self.including_headers)
+
+    @property
+    def total_affected_files(self) -> int:
+        return len(self.affected_sources) + len(self.affected_headers)
+
+    @property
+    def risk_tier(self) -> str:
+        affected_sources = len(self.affected_sources)
+        if affected_sources >= 8 or self.max_include_depth >= 4:
+            return "high"
+        if affected_sources >= 3 or self.max_include_depth >= 2:
+            return "medium"
+        return "low"
 
 
 def estimate_header_impact(
@@ -35,24 +52,23 @@ def estimate_header_impact(
     if search_roots is None:
         search_roots = (normalized_root,)
 
-    sources: list[Path] = []
-    headers: list[Path] = []
-
-    for candidate in _iter_candidate_files(search_roots):
-        if candidate.resolve() == normalized_header:
-            continue
-        if not _includes_header(candidate, normalized_header, normalized_root):
-            continue
-        if candidate.suffix.lower() in _SOURCE_SUFFIXES:
-            sources.append(candidate)
-        else:
-            headers.append(candidate)
+    reverse_graph = _build_reverse_include_graph(search_roots, normalized_root)
+    direct_includers = reverse_graph.get(normalized_header, set())
+    affected, max_depth = _walk_reverse_include_graph(reverse_graph, normalized_header)
 
     return HeaderImpact(
         header=normalized_header,
-        including_sources=tuple(sorted(sources)),
-        including_headers=tuple(sorted(headers)),
+        including_sources=_bucket_files(direct_includers, _SOURCE_SUFFIXES),
+        including_headers=_bucket_files(direct_includers, _HEADER_SUFFIXES),
+        affected_sources=_bucket_files(affected, _SOURCE_SUFFIXES),
+        affected_headers=_bucket_files(affected, _HEADER_SUFFIXES),
+        max_include_depth=max_depth,
     )
+
+
+def resolve_included_files(candidate: Path, project_root: Path) -> tuple[Path, ...]:
+    """Resolve include targets from a source/header against the project root."""
+    return _iter_resolved_includes(candidate, project_root.resolve())
 
 
 def _iter_candidate_files(search_roots: tuple[Path, ...]) -> list[Path]:
@@ -73,23 +89,65 @@ def _iter_candidate_files(search_roots: tuple[Path, ...]) -> list[Path]:
     return results
 
 
-def _includes_header(candidate: Path, header: Path, project_root: Path) -> bool:
-    """Return True if *candidate* includes *header* via a resolvable include."""
+def _build_reverse_include_graph(
+    search_roots: tuple[Path, ...],
+    project_root: Path,
+) -> dict[Path, set[Path]]:
+    """Map included file -> files that include it."""
+    reverse_graph: dict[Path, set[Path]] = {}
+    for candidate in _iter_candidate_files(search_roots):
+        for include in _iter_resolved_includes(candidate, project_root):
+            reverse_graph.setdefault(include, set()).add(candidate.resolve())
+    return reverse_graph
+
+
+def _walk_reverse_include_graph(
+    reverse_graph: dict[Path, set[Path]],
+    header: Path,
+) -> tuple[set[Path], int]:
+    """Collect all direct/transitive includers of a header."""
+    affected: set[Path] = set()
+    max_depth = 0
+    queue: deque[tuple[Path, int]] = deque((path, 1) for path in reverse_graph.get(header, ()))
+
+    while queue:
+        current, depth = queue.popleft()
+        if current in affected:
+            continue
+        affected.add(current)
+        max_depth = max(max_depth, depth)
+        for parent in reverse_graph.get(current, ()):
+            queue.append((parent, depth + 1))
+
+    return affected, max_depth
+
+
+def _bucket_files(paths: set[Path], suffixes: set[str]) -> tuple[Path, ...]:
+    """Sort and keep only files matching the requested suffix bucket."""
+    return tuple(
+        sorted(path for path in paths if path.suffix.lower() in suffixes)
+    )
+
+
+def _iter_resolved_includes(candidate: Path, project_root: Path) -> tuple[Path, ...]:
+    """Resolve all includes in *candidate* against known project paths."""
     try:
         text = candidate.read_text(encoding="utf-8", errors="ignore")
     except OSError:
-        return False
+        return ()
+
+    resolved: list[Path] = []
 
     for line in text.splitlines():
         match = _INCLUDE_RE.match(line)
         if not match:
             continue
         include_target = match.group(1)
-        resolved = _resolve_include(candidate.parent, include_target, project_root)
-        if resolved is not None and resolved == header:
-            return True
+        include_path = _resolve_include(candidate.parent, include_target, project_root)
+        if include_path is not None:
+            resolved.append(include_path)
 
-    return False
+    return tuple(resolved)
 
 
 def _resolve_include(base_dir: Path, include_target: str, project_root: Path) -> Path | None:

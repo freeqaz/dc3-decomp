@@ -45,6 +45,41 @@ def atomic_write_bytes(path: Path, data: bytes) -> None:
         raise
 
 
+def restore_file_bytes(path: Path, original: bytes | None) -> None:
+    """Restore a file to its original bytes, or remove it if it was created."""
+    if original is None:
+        path.unlink(missing_ok=True)
+        return
+    atomic_write_bytes(path, original)
+
+
+def apply_file_updates(
+    updates: dict[Path, bytes],
+    originals: dict[Path, bytes | None],
+    current_paths: set[Path] | None = None,
+) -> set[Path]:
+    """Apply an exact file set, restoring previously touched files not in updates."""
+    current = set(current_paths or ())
+    desired = {path.resolve() for path in updates}
+    normalized_updates = {path.resolve(): data for path, data in updates.items()}
+
+    for path in current - desired:
+        restore_file_bytes(path, originals[path])
+
+    for path, data in normalized_updates.items():
+        if path not in originals:
+            originals[path] = path.read_bytes() if path.exists() else None
+        atomic_write_bytes(path, data)
+
+    return desired
+
+
+def restore_tracked_files(originals: dict[Path, bytes | None]) -> None:
+    """Restore all tracked files to their original bytes."""
+    for path, original in sorted(originals.items(), key=lambda item: str(item[0])):
+        restore_file_bytes(path, original)
+
+
 class SourceFileLock:
     """Per-file exclusive lock to prevent concurrent permuter access.
 

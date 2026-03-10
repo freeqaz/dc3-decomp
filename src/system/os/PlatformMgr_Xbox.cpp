@@ -580,43 +580,40 @@ MultipleItemsEnumJob::~MultipleItemsEnumJob() {
 
 void MultipleItemsEnumJob::Poll() {
     if (mStatus == 1 && mOverlapped.InternalLow != 0x3e5) {
-        DWORD resultBuf[26];
-        DWORD result = XGetOverlappedResult(&mOverlapped, resultBuf, 0);
+        DWORD resultVal;
+        void *result = (void *)XGetOverlappedResult(&mOverlapped, &resultVal, 0);
         if (result == 0) {
             mStatus = 2;
             u64 *enumEntry = (u64 *)mEnumBuffer;
-            auto itemIt = mItemIDs.begin();
-            int count = (int)mItemIDs.size();
+            u64 *itemIt = &mItemIDs[0];
+            unsigned int i = 0;
             auto purchasedIt = mPurchased.begin();
             unsigned int bitOffset = purchasedIt._M_offset;
             unsigned int *bitChunk = purchasedIt._M_p;
-            if (count > 0) {
-                unsigned int i = 0;
+            if (mItemIDs.size() > 0) {
                 do {
                     if (*enumEntry == *itemIt) {
-                        unsigned int mask = 1 << (bitOffset & 63);
+                        unsigned int mask = 1 << bitOffset;
                         int purchased = *(int *)(enumEntry + 9);
-                        if (purchased > 0) {
+                        if (purchased != 0) {
                             *bitChunk |= mask;
                         } else {
                             *bitChunk &= ~mask;
                         }
-                        bool success = mSuccess || ((*bitChunk & mask) > 0);
+                        bool success = mSuccess || ((*bitChunk & mask) != 0);
                         enumEntry += 0xd;
                         mSuccess = success;
                     } else {
                         TheDebug.Notify(MakeString("Could not enumerate offerId %016llX", *itemIt));
-                        *bitChunk &= ~(1 << (bitOffset & 63));
+                        *bitChunk &= ~(1 << bitOffset);
                     }
-                    bool wrap = bitOffset > 0x1e;
-                    bitOffset++;
-                    if (wrap) {
+                    if (bitOffset++ == 31) {
                         bitOffset = 0;
                         bitChunk++;
                     }
                     i++;
                     itemIt++;
-                } while (i < count);
+                } while (i < (unsigned int)mItemIDs.size());
             }
         } else {
             mStatus = 3;

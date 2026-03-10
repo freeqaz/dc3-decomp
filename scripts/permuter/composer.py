@@ -16,7 +16,15 @@ from typing import Iterator
 
 from .extractor import reparse_variant
 from .patterns.base import Pattern
-from .types import ChainSpec, Diagnosis, FunctionContext, RoundHints, Variant
+from .types import (
+    ChainSpec,
+    Diagnosis,
+    FunctionContext,
+    RoundHints,
+    Variant,
+    merge_auxiliary_file_sets,
+    variant_identity_bytes,
+)
 
 _DEFAULT_PAIRS: list[tuple[str, str]] = [
     ("variable_extraction", "declaration_reorder"),
@@ -199,6 +207,12 @@ def compose_variants(
             if b_count >= max_per_stage:
                 break
             b_count += 1
+            auxiliary_files = merge_auxiliary_file_sets(
+                a_variant.auxiliary_files,
+                b_variant.auxiliary_files,
+            )
+            if auxiliary_files is None:
+                continue
 
             yield Variant(
                 name=f"{a_variant.name}+{b_variant.name}",
@@ -206,6 +220,7 @@ def compose_variants(
                 description=f"{a_variant.description} then {b_variant.description}",
                 source=b_variant.source,
                 tags=a_variant.tags | b_variant.tags,
+                auxiliary_files=auxiliary_files,
             )
             total += 1
             if total >= max_total:
@@ -379,10 +394,11 @@ def _prune_beam(
 
     # Score each candidate by edit distance from original (cheap proxy)
     scored: list[tuple[int, int, tuple]] = []
-    for i, (variant, ctx_unused, acc_name, acc_desc) in enumerate(candidates):
+    for i, entry in enumerate(candidates):
+        variant = entry[0]
         # Simple diversity metric: count differing bytes
         diff_count = _byte_diff_count(original_source, variant.source)
-        scored.append((diff_count, i, (variant, ctx_unused, acc_name, acc_desc)))
+        scored.append((diff_count, i, entry))
 
     # Sort by diff size (most different first) and take diverse subset
     scored.sort(key=lambda x: -x[0])
@@ -1013,19 +1029,27 @@ def cross_compose_variants(
 
             # Generate first variant from this companion on the reparsed context
             for variant in companion.generate(reparsed):
-                # Dedup
-                h = md5(variant.source).hexdigest()
-                if h in seen_sources:
+                auxiliary_files = merge_auxiliary_file_sets(
+                    improver_result.variant.auxiliary_files,
+                    variant.auxiliary_files,
+                )
+                if auxiliary_files is None:
                     continue
-                seen_sources.add(h)
-
-                yield Variant(
+                # Dedup
+                candidate = Variant(
                     name=f"crosscompose:{improver_result.variant.name}+{variant.name}",
                     pattern_name=f"crosscompose:{improver_result.variant.pattern_name}+{companion.name}",
                     description=f"{improver_result.variant.description} then {variant.description}",
                     source=variant.source,
                     tags=improver_result.variant.tags | variant.tags,
+                    auxiliary_files=auxiliary_files,
                 )
+                h = md5(variant_identity_bytes(original_ctx.file_path, candidate)).hexdigest()
+                if h in seen_sources:
+                    continue
+                seen_sources.add(h)
+
+                yield candidate
                 count += 1
                 total += 1
                 break  # Only first variant per companion

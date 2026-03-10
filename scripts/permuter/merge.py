@@ -9,8 +9,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from hashlib import md5
+from pathlib import Path
 
-from .types import Variant, ScoreResult
+from .types import (
+    ScoreResult,
+    Variant,
+    merge_auxiliary_file_sets,
+    variant_identity_bytes,
+)
 
 
 @dataclass
@@ -101,12 +107,19 @@ def merge_variants(
     # Build descriptive name from both variants' pattern names
     name_a = variant_a.pattern_name
     name_b = variant_b.pattern_name
+    auxiliary_files = merge_auxiliary_file_sets(
+        variant_a.auxiliary_files,
+        variant_b.auxiliary_files,
+    )
+    if auxiliary_files is None:
+        raise ValueError("Cannot merge variants with conflicting auxiliary file edits")
     return Variant(
         name=f"merge:{variant_a.name}+{variant_b.name}",
         pattern_name=f"merge:{name_a}+{name_b}",
         description=f"Merged: {variant_a.description} AND {variant_b.description}",
         source=result,
         tags=variant_a.tags | variant_b.tags,
+        auxiliary_files=auxiliary_files,
     )
 
 
@@ -183,12 +196,15 @@ def find_merge_candidates(
         if edits_overlap(spans_a, spans_b):
             continue
 
-        candidate = merge_variants(
-            original, r_a.variant, r_b.variant, spans_a, spans_b,
-        )
+        try:
+            candidate = merge_variants(
+                original, r_a.variant, r_b.variant, spans_a, spans_b,
+            )
+        except ValueError:
+            continue
 
         # Dedup merged source
-        h = md5(candidate.source).hexdigest()
+        h = md5(variant_identity_bytes(Path("/tmp/merge.cpp"), candidate)).hexdigest()
         if h in merged_hashes:
             continue
         merged_hashes.add(h)

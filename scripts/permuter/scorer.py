@@ -22,9 +22,20 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Optional
 
-from .file_util import atomic_write_bytes, SourceFileLock
+from .file_util import (
+    apply_file_updates,
+    atomic_write_bytes,
+    restore_tracked_files,
+    SourceFileLock,
+)
 from .score_cache import ScoreCache, md5_bytes, md5_file
-from .types import Variant, ScoreResult, Diagnosis
+from .types import (
+    Diagnosis,
+    ScoreResult,
+    Variant,
+    variant_file_updates,
+    variant_identity_bytes,
+)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -95,7 +106,18 @@ class Scorer:
             self._backup_path.unlink()
 
         self._original_source = self.source_path.read_bytes()
-        self._original_source_md5 = md5_bytes(self._original_source)
+        self._tracked_file_originals: dict[Path, bytes | None] = {
+            self.source_path.resolve(): self._original_source,
+        }
+        self._applied_paths: set[Path] = {self.source_path.resolve()}
+        self._original_source_md5 = self._variant_source_md5(
+            Variant(
+                name="baseline",
+                pattern_name="baseline",
+                description="baseline",
+                source=self._original_source,
+            )
+        )
         shutil.copy2(self.source_path, self._backup_path)
         # Acquire per-file lock (prevents concurrent permuter access)
         self._file_lock = SourceFileLock(self.source_path)
@@ -113,8 +135,8 @@ class Scorer:
             self._cache.close()
             self._cache = None
         # Always restore original source
-        if self._original_source is not None:
-            atomic_write_bytes(self.source_path, self._original_source)
+        if hasattr(self, "_tracked_file_originals"):
+            restore_tracked_files(self._tracked_file_originals)
         if self._backup_path and self._backup_path.exists():
             self._backup_path.unlink()
         # Release per-file lock
@@ -122,6 +144,25 @@ class Scorer:
             self._file_lock.__exit__(exc_type, exc_val, exc_tb)
             self._file_lock = None
         return False
+
+    def _variant_file_updates(self, variant: Variant) -> dict[Path, bytes]:
+        """Return the exact file writes needed for a variant."""
+        return variant_file_updates(self.source_path, variant)
+
+    def _variant_source_md5(self, variant: Variant) -> str:
+        """Hash all file updates so cache keys distinguish header edits."""
+        updates = self._variant_file_updates(variant)
+        del updates  # normalized by variant_identity_bytes
+        return md5_bytes(variant_identity_bytes(self.source_path, variant))
+
+    def _apply_variant_files(self, variant: Variant) -> None:
+        """Apply a variant's main and auxiliary file edits."""
+        updates = self._variant_file_updates(variant)
+        self._applied_paths = apply_file_updates(
+            updates,
+            self._tracked_file_originals,
+            current_paths=self._applied_paths,
+        )
 
     def _extract_compile_cmd(self) -> None:
         """Extract the cl.exe command from ninja for direct invocation."""
@@ -275,7 +316,7 @@ class Scorer:
         Returns a ScoreResult if the variant can be skipped, None otherwise.
         Thread-safe: only reads from cache, no builds.
         """
-        source_md5 = md5_bytes(variant.source)
+        source_md5 = self._variant_source_md5(variant)
 
         # Layer 1: Source dedup — identical to baseline
         if source_md5 == self._original_source_md5:
@@ -315,10 +356,10 @@ class Scorer:
         if dedup_result is not None:
             return dedup_result
 
-        source_md5 = md5_bytes(variant.source)
+        source_md5 = self._variant_source_md5(variant)
 
         # No cache hit — must build
-        atomic_write_bytes(self.source_path, variant.source)
+        self._apply_variant_files(variant)
 
         build_ok, build_error = self._build()
         if not build_ok:
@@ -403,7 +444,7 @@ class Scorer:
             if dedup_result is not None:
                 results[i] = dedup_result
             else:
-                source_md5 = md5_bytes(variant.source)
+                source_md5 = self._variant_source_md5(variant)
                 to_build.append((i, variant, source_md5))
 
         if not to_build:
@@ -418,6 +459,7 @@ class Scorer:
                 idx: int, variant: Variant, source_md5: str, obj_out: Path,
             ) -> tuple[int, bool, str | None, str, Path]:
                 """Compile one variant. Returns (idx, build_ok, error, source_md5, obj_out)."""
+                self._apply_variant_files(variant)
                 build_ok, build_error = self._build_to_path(variant.source, obj_out)
                 return (idx, build_ok, build_error, source_md5, obj_out)
 

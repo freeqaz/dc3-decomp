@@ -170,7 +170,6 @@ App::App(int argc, char **argv) {
     // HamUI::Init() calls UIEventMgr::Init() + UIManager::Init() internally
     TheUI = &TheHamUI;
     TheHamUI.Init();
-
     // Register stub objects for DTA scripts that reference Xbox managers.
     // These managers aren't fully initialized on native (they need Xbox Live,
     // profiles, content DLC, etc.), but DTA scripts reference them by name.

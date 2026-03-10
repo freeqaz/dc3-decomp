@@ -11,6 +11,7 @@
 #include "rndobj/Tex.h"
 #include "rndobj/Trans.h"
 #include "rndobj/Cam.h"
+#include "rndobj/Env.h"
 #include "rndobj/BaseMaterial.h"
 #include "rndobj/CubeTex.h"
 #include "math/Mtx.h"
@@ -128,8 +129,10 @@ struct DeferredDraw {
     RndMesh* mesh;
     float distSq; // squared distance from camera to centroid
     RndCam* cam;  // camera active when queued (restored during flush)
+    RndEnviron* env; // environment active when queued
 };
 static std::vector<DeferredDraw> sTransparentQueue;
+static bool sFlushingTransparentQueue = false;
 
 static bool IsTransparentBlend(int blend) {
     return blend == BaseMaterial::kBlendSrcAlpha ||
@@ -142,23 +145,37 @@ static bool IsTransparentBlend(int blend) {
 // Forward declaration — draws a mesh immediately (called for both opaque and deferred)
 static void DrawMeshImmediate(RndMesh* mesh);
 
+bool HasTransparentDraws() {
+    return !sTransparentQueue.empty();
+}
+
+bool IsFlushingTransparentDraws() {
+    return sFlushingTransparentQueue;
+}
+
 // Called from EndDrawing to flush transparent draws
 void FlushTransparentDraws() {
-    if (sTransparentQueue.empty()) return;
+    if (sTransparentQueue.empty() || sFlushingTransparentQueue) return;
+
+    sFlushingTransparentQueue = true;
+    std::vector<DeferredDraw> draws;
+    draws.swap(sTransparentQueue);
 
     // Sort back-to-front (farthest first)
-    std::sort(sTransparentQueue.begin(), sTransparentQueue.end(),
+    std::sort(draws.begin(), draws.end(),
         [](const DeferredDraw& a, const DeferredDraw& b) {
             return a.distSq > b.distSq;
         });
 
-    for (auto& dd : sTransparentQueue) {
+    for (auto& dd : draws) {
+        if (dd.env && dd.env != RndEnviron::Current())
+            dd.env->Select(nullptr);
         // Restore the camera that was active when this mesh was queued
         if (dd.cam && dd.cam != RndCam::Current())
             dd.cam->Select();
         DrawMeshImmediate(dd.mesh);
     }
-    sTransparentQueue.clear();
+    sFlushingTransparentQueue = false;
 }
 
 // Set depth bias for a mesh (used by viewer to push combined meshes behind splits)
@@ -529,7 +546,7 @@ void RndMesh::DrawShowing() {
             float dz = meshPos.z - camPos.z;
             distSq = dx*dx + dy*dy + dz*dz;
         }
-        sTransparentQueue.push_back({this, distSq, RndCam::Current()});
+        sTransparentQueue.push_back({this, distSq, RndCam::Current(), RndEnviron::Current()});
         if (capturing) {
             auto& rec = FrameCapture::Get().AddDraw();
             rec.meshName = Name();

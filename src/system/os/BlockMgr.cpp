@@ -172,8 +172,7 @@ void BlockMgr::AddTask(const AsyncTask &task) {
             it->mTasks.push_back(task);
             return;
         }
-        if (arkNum < it->mArkfileNum
-            || (it->mArkfileNum == arkNum && blockNum < it->mBlockNum)) {
+        if (arkNum < it->mArkfileNum || (it->mArkfileNum == arkNum && blockNum < it->mBlockNum)) {
             BlockRequest br(task);
             mRequests.insert(it, br);
             return;
@@ -195,7 +194,7 @@ void BlockMgr::KillBlockRequests(ArkFile *arkFile) {
                 ++taskIt;
             }
         }
-        if (it->mTasks.size() == 0) {
+        if (it->mTasks.size() > 0) {
             if (mReadingBlock
                 && mReadingBlock->CheckMetadata(it->mArkfileNum, it->mBlockNum)) {
                 ++it;
@@ -211,7 +210,15 @@ void BlockMgr::KillBlockRequests(ArkFile *arkFile) {
 void BlockMgr::Poll() {
     if (!MainThread())
         return;
+
+    // Cache some frequently accessed values
+    bool cacheValid = mReadingBlock != nullptr;
+    int writingFlag = mWritingBlock != nullptr ? 1 : 0;
+
     TheHDCache.Poll();
+    mSpinDownTimer.Restart();
+
+    // Force an unconditional call
     mSpinDownTimer.Restart();
 
     if (mWritingBlock && TheHDCache.WriteDone()) {

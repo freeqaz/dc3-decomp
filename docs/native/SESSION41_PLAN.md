@@ -45,11 +45,16 @@ Fresh screenshot validation tightened the scope further:
 - `render-test text_menu` still renders centered, readable menu text on native. This keeps the core text path in the "working enough to debug layout" bucket.
 - `render-test venue_with_ui` still looks awkward, but fresh frame capture shows its text overlays are mostly landing near the center of clip space. Treat this test as a useful smoke test for "text over a venue still renders", not as conclusive proof of the same full-app layout bug.
 - A fresh standalone app capture using scripted headless input still reaches `choose_mode_screen`, and `frame_00500.png` remains visually very close to the old bad Session 40 capture. Provider/build fixes did not materially improve layout by themselves.
+- Fresh archived captures under `archive/screenshots/session41/` are now the best review set:
+  - `frame_00410.png` through `frame_00425.png` show the early post-tutorial state
+  - `frame_00430_postfix.png` through `frame_00500_postfix.png` show the transparent-fix baseline
+  - the retail north-star remains `archive/screenshots/references/dc3_main_menu.jpg`
 - Intermediate standalone app frames (`frame_00220.png`, `frame_00360.png`) also show the over-wide ribbon dominating the frame during earlier UI screens, which points toward a shared placement/projection problem rather than a single broken panel.
 - Standalone app logs at frame 500 explicitly reported:
   - selected camera: `[ui.cam]`
   - `RndCam::Current() == [ui.cam]`
   So "the app never switches to the UI camera" is no longer a strong primary hypothesis. The more likely issue is that the selected camera, projection, viewport mapping, or object placement is numerically wrong for UI composition.
+- Extra frame probing around `main_screen` (`frame_00410.png`, `frame_00415.png`, `frame_00420.png`, `frame_00425.png`) shows the current scripted native path does not dwell on the retail-like main menu long enough to use it as a stable comparison point. By those frames the app is already in `choose_mode_screen`.
 
 ### Frame-Capture Evidence Worth Carrying Into Session 41
 
@@ -59,6 +64,10 @@ Fresh capture of app frame 500 (`MILO_CAPTURE_FRAME=500`) adds stronger evidence
 - Several unnamed `Eagle-Light` text meshes render with clearly wrong clip-space placement:
   - some text lands at roughly `ndc y = 1.56`, which is above the visible frame
   - some text lands around `ndc x = -0.68`, which is far left of the intended retail placement
+- The top-edge "white block" artifacts are probably clipped helpbar label/button meshes, not the player cards themselves:
+  - helpbar text/button meshes (`icons_buttons.mat`, `Eagle-Light(47).mat`) land at `ndc y = 1.56`
+  - the actual player/card meshes (`buffer_container_{left,right}.mesh`, `silhouette_guy*.mesh`) sit much lower around `ndc y ~= 0.70`
+  This explains why the top corners look like giant cropped glyphs even though the card meshes themselves are closer to sensible positions.
 - The prominent menu ribbon also projects to suspicious positions. Repeated `mainMenuRibbon.mesh` draws cluster around:
   - `world ~= (-155, -9, -33)`
   - `ndc ~= (-0.087, 0.147, 0.993)`
@@ -85,9 +94,31 @@ Implication:
 - the global transparent queue is almost certainly crossing camera/pass boundaries in a way the original game does not
 - a real fix likely needs transparent ordering scoped by camera or panel/pass, not just a better sort key
 
+Current status:
+- native now flushes deferred transparent draws before scene camera/environment changes, and deferred draws retain both queued camera and queued environment
+- after this fix, frame 500 no longer shows the old oversized mixed ribbon composite
+- the remaining frame is much more coherent under `[ui.cam]`, which confirms the transparent cross-camera mix was a real root cause
+- residual issues remain in specific UI elements, especially top-corner help/icon blocks that are still too large / too high
+
 Important nuance:
 - frame 500 in current native runs is `choose_mode_screen`, while the retail north-star image is a main-menu retail shot
 - keep screen matching honest when judging visual parity
+
+### Controller-Mode / Helpbar Probes
+
+Two native probes were worth trying and are now ruled out as direct fixes:
+
+- Early `App.cpp` call to `ShellInput::EnterControllerMode(true)`
+  - rejected: it aborts immediately because `ShellInput::EnterControllerMode()` asserts on `TheHamUI.GetHelpBarPanel()` before the helpbar exists
+- Late replay of controller-mode visuals/state after the helpbar exists
+  - probe 1: calling `HelpBarPanel::EnterControllerMode()` from `HelpBarPanel::Enter()`
+  - probe 2: calling full `ShellInput::EnterControllerMode(true)` from `ShellInput::SyncToCurrentScreen()` once `in_controller_mode` was still false
+  - both probes keep boot stable but move the whole helpbar/player-indicator family from roughly `ndc y ~= 0.7/1.56` to `ndc y ~= 3.2`, effectively blowing the frame off the top and turning the captured screen mostly black
+
+Implication:
+- the remaining layout bug is strongly entangled with controller-mode/helpbar state
+- but the missing native parity is not solved by naively replaying `controller_mode.flow` or `EnterControllerMode()` at the first "safe-looking" point
+- the next session should treat controller-mode sequencing as a state-ordering problem, not as a single missing function call
 
 This makes the next-session question more precise:
 - Why are some UI text anchors ending up above the top of the frame or too far left if `[ui.cam]` is active?
@@ -129,6 +160,7 @@ The strongest new evidence is that many text draws exist, but their clip-space p
 - some of them land off-screen (`ndc y > 1`)
 - others land far left when retail expects right-side placement
 - the ribbon is still visible and near the center-left of clip space, but not composed like retail
+- the clipped top-edge artifacts line up with helpbar text/button meshes rather than the card meshes behind them
 
 ### H2: Camera / projection / screen-rect mismatch
 The UI camera `[ui.cam]` has specific properties (position, FOV, near/far, screen rect) loaded from .milo data. If any of these are wrong or are combined incorrectly with the viewport/projection math, all UI elements shift.
@@ -159,11 +191,30 @@ Specific fix direction:
 - do not use a single global transparent queue across the whole frame
 - flush transparents at camera/pass boundaries, or partition the queue by camera and preserve higher-level panel order
 
+Status:
+- this hypothesis has now been validated enough to act on; native has an initial implementation that flushes transparent draws before scene state changes
+- this should be treated as established baseline for the next session, not as an open question to re-prove
+
 ### H5: Text layout/visibility mismatch, not total text failure
 Earlier native text investigation concluded text rendering exists, but it is subtle/small and easy to miss against the current layout/background. Treat text as a camera/layout/scale problem first, and only fall back to font loading if diagnostics prove `RndText::DrawShowing()` is not being reached or font meshes are absent.
 
 ### H6: Transform hierarchy not propagating
 If `RndTransformable::WorldXfm()` returns identity for UI elements (because parent transforms aren't dirty-flagged or loaded from .milo), everything renders at the origin.
+
+### H7: Specific panel/helpbar transforms are still wrong after the transparent fix
+After fixing the mixed-camera transparent composition, the remaining visible problems are no longer "whole-screen chaos". They are more local:
+
+- top-corner help/icon blocks are still oversized / badly placed
+- some top-help text/icons were previously observed above the visible frame (`ndc y ~= 1.56`)
+- the central instructional panel now reads coherently, which suggests the remaining work is in panel-specific placement, not a global renderer collapse
+
+### H8: Controller-mode helpbar state is partially missing or is being applied at the wrong time
+The top-edge issues are now localized enough that helpbar/controller-mode sequencing deserves its own hypothesis.
+
+**Evidence**:
+- native forces controller mode at the gesture layer before UI panels exist
+- the obvious "replay controller mode later" probes do change the same mesh family, but they overshoot badly (`ndc y ~= 3.2`) instead of fixing the layout
+- this suggests the correct native fix is likely to preserve the original event ordering or prerequisite state for controller-mode activation, not merely call the same functions later
 
 ## Session Guardrails
 
@@ -178,6 +229,9 @@ If `RndTransformable::WorldXfm()` returns identity for UI elements (because pare
 - Treat the current menu as a mixed-camera composition. Validate both the `[ui.cam]` text/help pass and the `turbo_shell.cam` ribbon/overshell pass, plus their relative balance.
 - Do not trust a whole-frame transparent sort across mixed cameras as "probably fine". It now has direct evidence against it.
 - Compare like-for-like screens. Frame 500 `choose_mode_screen` is useful for debugging, but it is not the same thing as the retail main-menu north-star shot.
+- Do not regress the transparent queue fix while chasing remaining panel placement bugs.
+- Do not assume the current scripted path gives a useful `main_screen` capture. It transitions through `main_screen` too quickly to serve as a clean retail comparison without extra work.
+- Do not keep naïve controller-mode probes (`HelpBarPanel::EnterControllerMode()` replay or `ShellInput::EnterControllerMode()` after sync) as real fixes. They are now known-bad experiments.
 
 ## Investigation Plan
 
@@ -256,6 +310,10 @@ Acceptance for this step:
 - the current frame should stop looking like a mixed overlay from mismatched passes
 - changes should improve compositional coherence without needing to disable all transparency
 
+Status:
+- done enough for now; native now flushes deferred transparents before scene state changes
+- the next session should build on that result and move to the remaining panel-specific placement bugs
+
 ### Step 3: Dump Transform Hierarchy / Clip-Space Placement (15 min)
 Add a diagnostic in `Mesh_Wgpu.cpp`'s `DrawMeshImmediate()` to print the mesh name and its WorldXfm translation for the first frame:
 
@@ -272,6 +330,7 @@ Fresh evidence already suggests a better version of this step:
   - top-help icon/text meshes
 - note which camera each family is using (`[ui.cam]` vs `turbo_shell.cam`)
 - if those are already off-screen in NDC, focus on the transforms / anchors that produced them before blaming visibility or material state
+- with the transparent fix in place, prioritize the top-help/icon family because they remain visibly wrong while the central instructional panel is now coherent
 
 ### Step 4: Check Text Object Visibility (15 min)
 Search for RndText objects in the loaded panels:

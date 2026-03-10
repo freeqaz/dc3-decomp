@@ -289,6 +289,9 @@ BinStream &operator>>(BinStream &bs, ObjPtrVec<T1, ObjectDir> &vec) {
     return bs;
 }
 
+// ObjPtrVec find/swap/sort: bodies guarded to prevent PPC inlining budget bloat.
+// Include "obj/ObjPtrVec_p.h" in .cpp files that need these methods.
+#ifdef HX_NATIVE
 template <class T1, class T2>
 typename ObjPtrVec<T1, T2>::const_iterator
 ObjPtrVec<T1, T2>::find(const Hmx::Object *target) const {
@@ -333,6 +336,9 @@ void ObjPtrVec<T1, T2>::sort(const S &cmp) {
     }
     MemPopTemp();
 }
+#else
+#include "obj/ObjPtrVec_p.h"
+#endif
 
 #pragma endregion
 #pragma region ObjPtrList

@@ -360,10 +360,20 @@ def _make_type_info(canonical_type) -> TypeInfo:
     else:
         tk = TypeKind.OTHER
 
-    try:
-        size = canonical_type.get_size()
-    except Exception:
-        size = 0
+    # Guard against SIGILL: clang_Type_getSizeOf crashes on UNEXPOSED/INVALID
+    # types with a signal (not catchable by Python). Only call get_size() on
+    # types we know are safe.
+    size = 0
+    safe_for_size = kind not in (
+        CTypeKind.UNEXPOSED, CTypeKind.INVALID, CTypeKind.DEPENDENT,
+        CTypeKind.FUNCTIONPROTO, CTypeKind.FUNCTIONNOPROTO,
+        CTypeKind.INCOMPLETEARRAY, CTypeKind.MEMBERPOINTER,
+    )
+    if safe_for_size:
+        try:
+            size = canonical_type.get_size()
+        except Exception:
+            size = 0
 
     return TypeInfo(
         kind=tk,

@@ -132,6 +132,8 @@ Expected value:
 
 ## Phase 5: Cross-Unit/Header-Aware Tier
 
+Status: Completed
+
 Problem:
 - Some high-value fixes, especially tail-call reorder in header inlines, are
   fundamentally multi-symbol
@@ -146,6 +148,48 @@ Deliverables:
 Expected value:
 - Unlock fixes the single-function permuter will never see
 - Keep risky cross-unit edits out of the normal hot path
+
+Implemented so far:
+- Shared header-impact analysis now computes:
+  - direct includers
+  - transitive affected translation units
+  - include-depth-derived risk tiers
+- Variants can now carry auxiliary file edits in addition to the primary
+  function source edit
+- Scoring and apply/restore flows now understand multi-file variants, including:
+  - cache keys that distinguish header edits from same-source variants
+  - safe restoration of touched auxiliary files after scoring
+  - final apply/verification paths that preserve or roll back auxiliary edits
+- `noinline_stub` can now emit conservative direct-header variants by:
+  - resolving directly included headers
+  - finding trivial inline callees in those headers
+  - skipping high-risk headers by blast-radius tier
+  - emitting auxiliary header edits instead of pretending the change is local
+- Cross-unit source-to-symbol lookup now exists, so header impact can be turned
+  into concrete functions to score rather than just a list of affected files
+- A reusable header-variant scorer now exists for:
+  - looking up affected functions
+  - rebuilding only the affected object targets
+  - skipping unchanged objects via obj hash comparison
+  - rescoring changed symbols with objdiff batch
+  - computing net improvement/regression/perfect-loss summaries
+- A standalone header-variant workflow now exists for the first consumer path:
+  - discover header-backed variants from a function/pattern
+  - score them with the multi-symbol scorer
+  - report ranked results
+  - optionally apply the best accepted variant
+- Header-inline tail-call discovery now exists as a second cross-unit path:
+  - starts from the current caller
+  - resolves directly included inline header callees
+  - finds safe trailing-call swaps using the shared tail-call safety logic
+  - emits auxiliary header edits that flow through the same multi-symbol scorer
+
+Follow-on work:
+- Broader cross-unit patterns beyond the current `noinline_stub` and
+  header-inline tail-call paths
+- Search policies that gate or prioritize cross-unit edits using the new risk
+  tier and include graph data
+- Worktree-backed execution for isolated cross-unit rebuild/scoring loops
 
 ## Phase 6: Better Semantic Context
 
@@ -170,6 +214,30 @@ Implemented so far:
 - `tail_call_reorder` now uses that call classification to reject obvious
   mutator/logging/guard call pairs instead of relying on a blanket
   `allow_call_pair=True` exception
+
+## Phase 7: Worktree-Aware Cross-Unit Execution
+
+Status: Planned
+
+Problem:
+- Cross-unit/header scoring mutates shared files and can trigger multi-object
+  rebuilds, which is a poor fit for the normal single-tree hot path
+- We already have orchestrator worktree-pool machinery for isolation, commit
+  sync, and DB-backed leasing, but the permuter does not use it yet
+
+Deliverables:
+- Add an optional worktree-backed execution mode for cross-unit scoring flows
+- Reuse the existing worktree pool's:
+  - DB locking / session leasing
+  - sync-to-main-commit behavior before a worktree is handed out
+  - patch extraction / cleanup lifecycle
+- Let header-wide scorers and future cross-unit CLIs run in isolated worktrees
+  instead of mutating the main checkout
+
+Expected value:
+- Safer cross-unit experimentation
+- Natural parallelism for expensive rebuild/score loops
+- Reuse proven infrastructure instead of inventing a second isolation path
 
 ## Immediate Implementation Track
 

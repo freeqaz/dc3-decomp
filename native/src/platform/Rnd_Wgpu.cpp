@@ -447,6 +447,8 @@ void WgpuRnd::BeginDrawing() {
 }
 
 extern void FlushTransparentDraws();
+extern bool HasTransparentDraws();
+extern bool IsFlushingTransparentDraws();
 
 wgpu::Buffer& GetSceneBuffer() { return gWgpuRnd->SceneBuffer(); }
 uint32_t GetSceneOffset() { return gWgpuRnd->SceneOffset(); }
@@ -455,6 +457,9 @@ void WgpuRnd::EnsureSceneUniformsCurrent() {
     RndCam* cam = RndCam::Current();
     RndEnviron* env = RndEnviron::Current();
     if (cam != mLastSceneCam || env != mLastSceneEnv) {
+        if (HasTransparentDraws() && !IsFlushingTransparentDraws()) {
+            FlushTransparentDraws();
+        }
         WriteSceneUniforms();
         // Re-bind the new scene bind group on the active render pass
         if (mInPass) {

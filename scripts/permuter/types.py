@@ -168,6 +168,14 @@ class FunctionContext:
         return self.file_source[node.start_byte : node.end_byte].decode("utf-8")
 
 
+@dataclass(frozen=True)
+class AuxiliaryFile:
+    """An additional file update carried by a variant."""
+
+    path: Path
+    content: bytes
+
+
 @dataclass
 class Variant:
     """A source variation to test."""
@@ -178,6 +186,50 @@ class Variant:
     source: bytes  # Full modified file content
     edits: list | None = None  # Edits applied to produce this variant
     tags: frozenset[str] = field(default_factory=frozenset)
+    auxiliary_files: tuple[AuxiliaryFile, ...] = field(default_factory=tuple)
+
+
+def merge_auxiliary_file_sets(
+    *groups: tuple[AuxiliaryFile, ...],
+) -> tuple[AuxiliaryFile, ...] | None:
+    """Merge auxiliary file sets, returning None on conflicting writes."""
+    merged: dict[Path, bytes] = {}
+    for group in groups:
+        for entry in group:
+            path = entry.path.resolve()
+            existing = merged.get(path)
+            if existing is not None and existing != entry.content:
+                return None
+            merged[path] = entry.content
+
+    return tuple(
+        AuxiliaryFile(path=path, content=content)
+        for path, content in sorted(merged.items(), key=lambda item: str(item[0]))
+    )
+
+
+def variant_file_updates(primary_path: Path, variant: Variant) -> dict[Path, bytes]:
+    """Return the exact file writes implied by a variant."""
+    updates = {primary_path.resolve(): variant.source}
+    for entry in variant.auxiliary_files:
+        resolved = entry.path.resolve()
+        if resolved in updates and updates[resolved] != entry.content:
+            raise ValueError(f"Conflicting writes for {resolved}")
+        updates[resolved] = entry.content
+    return updates
+
+
+def variant_identity_bytes(primary_path: Path, variant: Variant) -> bytes:
+    """Stable byte representation of a variant's full file update set."""
+    updates = variant_file_updates(primary_path, variant)
+    chunks: list[bytes] = []
+    for path, content in sorted(updates.items(), key=lambda item: str(item[0])):
+        path_bytes = str(path).encode("utf-8", errors="surrogateescape")
+        chunks.append(len(path_bytes).to_bytes(4, "big"))
+        chunks.append(path_bytes)
+        chunks.append(len(content).to_bytes(8, "big"))
+        chunks.append(content)
+    return b"".join(chunks)
 
 
 @dataclass

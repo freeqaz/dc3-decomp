@@ -66,6 +66,7 @@
 
 PropertyEventProvider *TheHamProvider;
 
+#ifdef HX_NATIVE
 namespace {
     PropertyEventProvider *FindHamProvider() {
         return ObjectDir::Main()->Find<PropertyEventProvider>("hamprovider", false);
@@ -85,7 +86,6 @@ namespace {
         if (provider && provider->Type().Null() && HasHamProviderType()) {
             provider->SetType("HamProvider");
         }
-#ifdef HX_NATIVE
         if (!provider) {
             provider = Hmx::Object::New<PropertyEventProvider>();
             provider->SetName("hamprovider", ObjectDir::Main());
@@ -95,10 +95,10 @@ namespace {
                 MILO_WARN("HamInit: HamProvider type config missing on native fallback");
             }
         }
-#endif
         return provider;
     }
 }
+#endif
 
 void HamTerminate() {
     DataArray *dataMacro = DataGetMacro("INIT_HAM");
@@ -167,9 +167,11 @@ void HamInit() {
         MoveDir::Init();
         DifficultyInit();
         TheDebug.AddExitCallback(HamTerminate);
-        if (HasHamProviderType()) {
+        if (SystemConfig("objects", "PropertyEventProvider", "types")
+                ->FindArray("HamProvider", false)) {
             SystemConfig("ham_init")->ExecuteBlock(1);
-            TheHamProvider = EnsureHamProvider();
+            TheHamProvider =
+                ObjectDir::Main()->Find<PropertyEventProvider>("hamprovider", false);
             static Symbol language("language");
             TheHamProvider->SetProperty(language, SystemLanguage());
             if (TheSpeechMgr) {

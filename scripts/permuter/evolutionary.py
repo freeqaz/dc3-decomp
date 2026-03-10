@@ -15,12 +15,11 @@ import random
 import sys
 import time
 from dataclasses import dataclass, field
-from hashlib import md5
 from pathlib import Path
 
 from .composer import available_context_keys, build_adaptive_chains, get_compose_pairs
 from .extractor import extract_function, reparse_variant
-from .file_util import atomic_write_bytes
+from .file_util import apply_file_updates, atomic_write_bytes, restore_tracked_files
 from .generator import generate_variants
 from .merge import EditSpan, edits_overlap, extract_edit_spans, merge_variants
 from .scorer import Scorer
@@ -32,6 +31,9 @@ from .types import (
     RoundResult,
     ScoreResult,
     Variant,
+    merge_auxiliary_file_sets,
+    variant_file_updates,
+    variant_identity_bytes,
 )
 
 
@@ -47,7 +49,7 @@ class Individual:
 
     @property
     def source_hash(self) -> str:
-        return md5(self.variant.source).hexdigest()
+        return variant_identity_bytes(Path("/tmp/evolutionary.cpp"), self.variant).hex()
 
 
 def _tournament_select(population: list[Individual], k: int = 3) -> Individual:
@@ -103,12 +105,19 @@ def _mutate(
         return None
 
     chosen = random.choice(variants)
+    auxiliary_files = merge_auxiliary_file_sets(
+        individual.variant.auxiliary_files,
+        chosen.auxiliary_files,
+    )
+    if auxiliary_files is None:
+        return None
     return Variant(
         name=f"evo_mut:{individual.variant.name}+{pattern.name}",
         pattern_name=f"evo_mut:{individual.variant.pattern_name}+{pattern.name}",
         description=f"Mutated: {chosen.description}",
         source=chosen.source,
         tags=individual.variant.tags | chosen.tags,
+        auxiliary_files=auxiliary_files,
     )
 
 
@@ -320,7 +329,7 @@ def evolve(
                                 child = mutated
                                 mutation_count += 1
 
-                        h = md5(child.source).hexdigest()
+                        h = variant_identity_bytes(source_path, child).hex()
                         if h not in seen_hashes:
                             seen_hashes.add(h)
                             new_variants.append(child)
@@ -334,7 +343,7 @@ def evolve(
                             chains=round_chains,
                         ))
                         for v in fill_variants:
-                            h = md5(v.source).hexdigest()
+                            h = variant_identity_bytes(source_path, v).hex()
                             if h not in seen_hashes:
                                 seen_hashes.add(h)
                                 new_variants.append(v)
@@ -400,7 +409,13 @@ def evolve(
         # Apply best or restore
         final_percent = initial_percent
         if best_ever_individual and best_ever_fitness > initial_percent and apply:
-            atomic_write_bytes(source_path, best_ever_individual.variant.source)
+            originals: dict[Path, bytes | None] = {
+                source_path.resolve(): original_source,
+            }
+            apply_file_updates(
+                variant_file_updates(source_path, best_ever_individual.variant),
+                originals,
+            )
             _strip_banner(source_path)
 
             # Verify
@@ -410,7 +425,7 @@ def evolve(
                     f"\nVERIFICATION FAILED: doesn't compile — restoring.",
                     file=sys.stderr,
                 )
-                atomic_write_bytes(source_path, original_source)
+                restore_tracked_files(originals)
             else:
                 actual_pct = _verify_match(symbol)
                 if actual_pct < initial_percent - 0.01:
@@ -418,7 +433,7 @@ def evolve(
                         f"\nVERIFICATION FAILED: regression — restoring.",
                         file=sys.stderr,
                     )
-                    atomic_write_bytes(source_path, original_source)
+                    restore_tracked_files(originals)
                 else:
                     final_percent = actual_pct
                     print(

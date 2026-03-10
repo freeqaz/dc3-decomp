@@ -5,7 +5,14 @@ from __future__ import annotations
 import sys
 from typing import Iterator
 
-from .types import ChainSpec, Diagnosis, FunctionContext, RoundHints, Variant
+from .types import (
+    ChainSpec,
+    Diagnosis,
+    FunctionContext,
+    RoundHints,
+    Variant,
+    variant_identity_bytes,
+)
 from .patterns.base import Pattern, get_pattern
 from .composer import compose_variants, chain_variants
 
@@ -211,7 +218,15 @@ def generate_variants(
     skipped: list[str] = []
 
     # Cross-phase source dedup: skip variants with identical source bytes
-    seen_sources: set[int] = {hash(ctx.file_source)}  # include baseline
+    baseline_variant = Variant(
+        name="baseline",
+        pattern_name="baseline",
+        description="baseline",
+        source=ctx.file_source,
+    )
+    seen_sources: set[bytes] = {
+        variant_identity_bytes(ctx.file_path, baseline_variant)
+    }
     dedup_count = 0
 
     # Phase 1: Independent variants with per-pattern budgets
@@ -226,7 +241,7 @@ def generate_variants(
             continue
         count = 0
         for variant in pattern.generate(ctx):
-            source_hash = hash(variant.source)
+            source_hash = variant_identity_bytes(ctx.file_path, variant)
             if source_hash in seen_sources:
                 dedup_count += 1
                 continue
@@ -269,7 +284,7 @@ def generate_variants(
                 max_per_stage=10,
                 max_total=remaining,
             ):
-                source_hash = hash(variant.source)
+                source_hash = variant_identity_bytes(ctx.file_path, variant)
                 if source_hash in seen_sources:
                     dedup_count += 1
                     continue
@@ -301,7 +316,7 @@ def generate_variants(
                 max_per_stage=8,
                 max_total=per_chain,
             ):
-                source_hash = hash(variant.source)
+                source_hash = variant_identity_bytes(ctx.file_path, variant)
                 if source_hash in seen_sources:
                     dedup_count += 1
                     continue
