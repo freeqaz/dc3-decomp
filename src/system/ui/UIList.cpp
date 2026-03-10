@@ -36,8 +36,8 @@ UIList::UIList()
       mNumData(100), mPaginate(0), mUser(0), mParent(0), mExtendedLabelEntries(this),
       mExtendedMeshEntries(this), mExtendedCustomEntries(this), mAutoScrollPause(2),
       mAutoScrollSendMsgs(0), mAutoScrollDir(1), mAutoScrolling(0), mAutoScrollTimer(-1),
-      mScrolling(0), mDrawManuallyControlledWidgets(0), mUncappedNumDisplay(1),
-      mAllowHighlight(1) {}
+      mDrawManuallyControlledWidgets(0), mAllowHighlight(1),
+      mUncappedNumDisplay(1), mScrolling(0) {}
 
 UIList::~UIList() {
     DeleteAll(mWidgets);
@@ -855,20 +855,22 @@ void UIList::DrawShowing() {
         mDrawManuallyControlledWidgets = false;
     }
     bool b = mAllowHighlight;
-    float offset = 0.0f;
     if (mParent) {
         if (mParent->GetUIListDir()->SubList(mListState.SelectedDisplay(), mParent->mWidgets) == this) {
             b = mParent->mAllowHighlight;
         }
     }
+    float offset;
     UIList *subList = mListDir->SubList(mListState.SelectedDisplay(), mWidgets);
     if (subList != NULL) {
         int subSelectedDisplay = subList->mListState.SelectedDisplay();
         float spacing = mListDir->ElementSpacing();
         offset = spacing * (float)subSelectedDisplay;
+    } else {
+        offset = 0.0f;
     }
     UIListWidgetDrawState drawState;
-    mListDir->BuildDrawState(drawState, mListState, DrawState(this), offset, false);
+    mListDir->BuildDrawState(drawState, mListState, DrawState(this), offset, mScrolling);
     mListDir->DrawWidgets(drawState, mListState, mWidgets, WorldXfm(), DrawState(this), 0, b);
 }
 

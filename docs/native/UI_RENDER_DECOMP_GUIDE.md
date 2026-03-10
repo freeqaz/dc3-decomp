@@ -202,20 +202,58 @@ Native-specific code is mostly responsible for:
 
 That means decomp priority should stay centered on shared-engine functions first, not on replacing more behavior in native code.
 
-## Suggested Decomp Order
+## Current Status (2026-03-10)
 
-1. `UIListDir::BuildDrawState`
-2. `UIListDir::SetElementPos`
-3. `UIList::DrawShowing`
-4. `HamNavList::DrawShowing`
-5. `PanelDir::DrawShowing`
-6. `HamUI::Draw`
-7. `UIManager::Draw`
-8. `UILabel::DrawShowing`
-9. `RndText::UpdateText`
-10. `RndText::DrawShowing`
-11. `ShellInput::SyncToCurrentScreen`
-12. `HelpBarPanel::*` / `LetterboxPanel::*`
+### Tier 1
+
+| Function | Match% | Status |
+|----------|--------|--------|
+| `UIListDir::BuildDrawState` | WIP | Being worked on separately |
+| `UIListDir::SetElementPos` | **100%** | Complete |
+| `UIList::DrawShowing` | **90.1%** | Improved from 84.3% (struct fix + mScrolling param + float init) |
+| `HamNavList::DrawShowing` | 64.5% | AT_LIMIT (register swaps, bool mask) |
+| `PanelDir::DrawShowing` | **100%** | Complete |
+| `HamUI::Draw` | **100%** | Complete |
+| `UIManager::Draw` | **100%** | Complete |
+| `UILabel::DrawShowing` | 95.6% | AT_LIMIT (Style() scheduling, cmpwi vs cmplwi) |
+| `RndText::UpdateText` | 85.2% | LikelyFixable (control flow, font access path) |
+| `RndText::DrawShowing` | 70.1% | LikelyFixable (register shuffling, control flow) |
+
+### Tier 2
+
+| Function | Match% | Status |
+|----------|--------|--------|
+| `UIScreen::Draw` | **100%** | Complete |
+| `UIPanel::Draw` | **100%** | Complete |
+| `UIListDir::DrawWidgets` | 71.8% | LikelyFixable (register cascade, control flow) |
+| `ShellInput::SyncToCurrentScreen` | **100%** | Complete |
+| `HelpBarPanel::Draw` | **100%** | Complete |
+| `HelpBarPanel::EnterControllerMode` | **100%** | Complete |
+| `HelpBarPanel::SyncToPanel` | **100%** | Complete |
+| `LetterboxPanel::Draw` | **100%** | Complete |
+| `LetterboxPanel::EnterBlacklightMode` | **100%** | Complete |
+| `LetterboxPanel::ExitBlacklightMode` | **100%** | Complete |
+
+### Key Fixes (Session 41)
+
+**UIList struct layout fix** — Discovered UIList.h had incorrect member ordering:
+- Reordered to: `mDrawManuallyControlledWidgets` (0x15c), `mAllowHighlight` (0x15d), `mLimitCircularDisplayNumToDataNum` (0x15e), `mUncappedNumDisplay` (0x160), `mScrolling` (0x164)
+- **UIList::PostLoad**: 76.7% → **100%**
+
+**UIList::DrawShowing source fixes**:
+- Changed `false` → `mScrolling` as last param to `BuildDrawState()` (target passes scroll state)
+- Changed `float offset = 0.0f` to deferred if/else init (target initializes 0.0f in else branch only)
+- Combined with struct fix: 84.3% → **90.1%**
+
+## Remaining Work
+
+Functions still needing improvement:
+1. `UIListDir::BuildDrawState` (WIP, separate effort)
+2. `UIList::DrawShowing` (90.1% — register cascade, ICF symbol noise)
+3. `UIListDir::DrawWidgets` (71.8% — register cascade, control flow)
+4. `RndText::UpdateText` (85.2% — goto/control flow, ObjPtr access path)
+5. `RndText::DrawShowing` (70.1% — massive register shuffling)
+6. `HamNavList::DrawShowing` (64.5% — register swaps, bool mask)
 
 ## Practical Rule
 

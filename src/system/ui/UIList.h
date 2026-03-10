@@ -153,12 +153,12 @@ protected:
     int mAutoScrollDir; // 0x150
     bool mAutoScrolling; // 0x154
     float mAutoScrollTimer; // 0x158
-    bool mScrolling; // 0x15c
-    bool mDrawManuallyControlledWidgets; // 0x15d
+    bool mDrawManuallyControlledWidgets; // 0x15c
+    bool mAllowHighlight; // 0x15d
     /** "Allow multiple instances of same option to be displayed?" */
     bool mLimitCircularDisplayNumToDataNum; // 0x15e
     int mUncappedNumDisplay; // 0x160
-    bool mAllowHighlight; // 0x164
+    bool mScrolling; // 0x164
 };
 
 class UIListCustomTemplate {
