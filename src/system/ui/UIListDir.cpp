@@ -296,10 +296,10 @@ void UIListDir::BuildDrawState(
     UIListWidgetDrawState &drawState, UIListState const &state, UIComponent::State compState, float subListOffset, bool allowHighlight
 ) const {
     int numDisplay = state.NumDisplay();
-    unsigned int numDisplayWithData = state.NumDisplayWithData();
+    int numDisplayWithData = state.NumDisplayWithData();
 
     int fadeCountStart = numDisplay / 2;
-    if (mFadeOffset < (unsigned long)(unsigned int)fadeCountStart) {
+    if ((int)(unsigned long)(unsigned int)fadeCountStart >= mFadeOffset) {
         fadeCountStart = mFadeOffset;
     }
     int fadeCountEnd = fadeCountStart;
@@ -310,7 +310,7 @@ void UIListDir::BuildDrawState(
             if (selectedDisp < fadeCountStart) {
                 fadeCountStart = selectedDisp;
             }
-            fadeEndCalc = numDisplay - selectedDisp - 1;
+            fadeEndCalc = numDisplay - state.SelectedDisplay() - 1;
         } else {
             int firstShowing = state.FirstShowing();
             int adjustedFirstShowing = firstShowing;
@@ -331,8 +331,10 @@ void UIListDir::BuildDrawState(
     float fadeStartDist = (float)fadeCountStart * mElementSpacing;
     float fadeEndDist = (float)((numDisplay - fadeCountEnd - 1) * mElementSpacing);
 
-    int direction = 1;
-    if (state.CurrentScroll() <= 0) {
+    int direction;
+    if (state.CurrentScroll() > 0) {
+        direction = 1;
+    } else {
         direction = -1;
     }
     int selected = state.Selected();
@@ -355,11 +357,10 @@ void UIListDir::BuildDrawState(
 
     int prevData = 0;
     float lastPosBase = 0.0f;
-    Vector3 elemPos;
-    float totalGap = 0.0f;
-    UIListProvider *provider = state.Provider();
     float highlightBase = 0.0f;
     float firstGap = 0.0f;
+    float totalGap = 0.0f;
+    Vector3 elemPos;
 
     float scrollOffset = (float)direction * state.Speed();
 
@@ -377,7 +378,7 @@ void UIListDir::BuildDrawState(
             continue;
         }
 
-        if (!state.Circular() && data < prevData) {
+        if (!state.Circular() && prevData > data) {
             break;
         }
 
@@ -388,7 +389,7 @@ void UIListDir::BuildDrawState(
         }
         prevData = data;
 
-        float gap = provider->GapSize(showing, data, selectedData, direction);
+        float gap = state.Provider()->GapSize(showing, data, selectedData, direction);
         if (i == 0) {
             firstGap = gap;
         }
@@ -410,7 +411,7 @@ void UIListDir::BuildDrawState(
 
         float alpha = 1.0f;
         if (!state.ShouldHoldDisplayInPlace(dispIndex)) {
-            float dist = pos - primaryBase;
+            float dist = pos - (-((scrollOffset * firstGap) - totalGap));
             if (dist < fadeStartDist) {
                 float fadeDist = fadeStartDist - dist;
                 float fadeCount = (float)(fadeCountStart + 1);
@@ -423,7 +424,7 @@ void UIListDir::BuildDrawState(
         }
 
         UIListWidgetState elemState;
-        if (!provider->IsActive(data)) {
+        if (!state.Provider()->IsActive(data)) {
             elemState = kUIListWidgetInactive;
         } else if (showing == selected && allowHighlight) {
             elemState = kUIListWidgetHighlight;
@@ -431,7 +432,7 @@ void UIListDir::BuildDrawState(
             elemState = kUIListWidgetActive;
         }
 
-        UIListWidgetState widgetState = provider->ElementStateOverride(showing, data, elemState);
+        UIListWidgetState widgetState = state.Provider()->ElementStateOverride(showing, data, elemState);
         if (showing == selected) {
             drawState.mHighlightElementState = widgetState;
         }
@@ -443,7 +444,7 @@ void UIListDir::BuildDrawState(
         elem.mPosZ = elemPos.z;
         elem.mAlpha = alpha;
         elem.mElementState = widgetState;
-        elem.mComponentState = provider->ComponentStateOverride(showing, data, compState);
+        elem.mComponentState = state.Provider()->ComponentStateOverride(showing, data, compState);
         elem.mDisplay = dispIndex;
         elem.mShowing = showing;
         elem.mData = data;

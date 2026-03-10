@@ -49,7 +49,7 @@ python3 scripts/ai_advisor.py --symbol '$0' --dry-run
 ### Use a different model
 
 ```bash
-python3 scripts/ai_advisor.py --symbol '$0' --model claude-opus-4-20250514
+python3 scripts/ai_advisor.py --symbol '$0' --model claude-sonnet-4-6
 ```
 
 ## Key flags

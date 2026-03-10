@@ -13,21 +13,21 @@ probe its behavior with controlled inputs.
 
 ```
 Test Case (C++ source variants)
-    │
-    ▼
+    |
+    v
 Compiler (/FAcs)
-    │
-    ▼
+    |
+    v
 Assembly Extractor (parse .asm listing)
-    │
-    ▼
+    |
+    v
 Function Isolator (extract per-function asm)
-    │
-    ▼
+    |
+    v
 Differ (structural diff, not textual)
-    │
-    ▼
-Decision Map (source pattern → asm pattern)
+    |
+    v
+Decision Map (source pattern -> asm pattern)
 ```
 
 ## Test Suites
@@ -39,15 +39,15 @@ Decision Map (source pattern → asm pattern)
 ```cpp
 // Variant A
 void func() {
-    int x = get_x();  // → r31?
-    int y = get_y();  // → r30?
+    int x = get_x();  // -> r31?
+    int y = get_y();  // -> r30?
     use(x, y);
 }
 
 // Variant B
 void func() {
-    int y = get_y();  // → r31?
-    int x = get_x();  // → r30?
+    int y = get_y();  // -> r31?
+    int x = get_x();  // -> r30?
     use(x, y);
 }
 ```
@@ -98,15 +98,15 @@ Vary N, observe when callee stops being inlined (visible in caller's assembly).
 ```cpp
 // NOR trigger
 unsigned char x = get();
-unsigned char result = x ^ 0xFF;     // → NOR?
-unsigned int result2 = (unsigned int)x ^ 0xFF;  // → xori?
+unsigned char result = x ^ 0xFF;     // -> NOR?
+unsigned int result2 = (unsigned int)x ^ 0xFF;  // -> xori?
 
 // Boolean materialization
 bool a = get_a();
 bool b = get_b() > 1;
-bool r1 = a && b;           // → branch
-bool r2 = a && (bool)b;     // → branchless (subfc/eqv/srwi)
-bool r3 = a & b;            // → branchless (and.)
+bool r1 = a && b;           // -> branch
+bool r2 = a && (bool)b;     // -> branchless (subfc/eqv/srwi)
+bool r3 = a & b;            // -> branchless (and.)
 ```
 
 ### 5. Branch Polarity

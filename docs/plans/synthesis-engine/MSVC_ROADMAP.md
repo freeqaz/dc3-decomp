@@ -30,7 +30,7 @@ Critical passes for DC3:
 - **COLOR** (index 14) — register allocation via graph coloring
 - **G5_SPECIAL** (index 19) — PPC/Xenon-specific peephole optimizations
 - **DOUBLETOSINGLE** (index 26) — float precision demotion
-- **FPMOV_TO_INTMOV** (index 29) — FP↔GPR register transfer decisions
+- **FPMOV_TO_INTMOV** (index 29) — FP<->GPR register transfer decisions
 - **NORMALIZE_CASTS** (index 10) — cast handling (boolean materialization trigger)
 
 ### Empirical Knowledge (from 87% decomp completion)
@@ -38,13 +38,13 @@ We already understand many codegen patterns from the source side. The RE effort
 maps these to specific code paths inside c2.dll:
 
 | Pattern | Empirical Knowledge | c2.dll Target |
-|---------|--------------------|----|
-| Callee-saved GPR order | first decl → r31, second → r30 | COLOR pass |
+|---------|--------------------|---|
+| Callee-saved GPR order | first decl -> r31, second -> r30 | COLOR pass |
 | BSF graph coloring threshold | ~7+ callee-saved vars | COLOR pass |
-| NOR peephole | `x ^ 0xFF` on u8 → NOR | G5_SPECIAL pass |
-| Boolean materialization | `(bool)(x > 1)` → subfc/eqv/srwi | G5_SPECIAL or NORMALIZE_CASTS |
-| subf. loop condition | `high - low >= 0` → subf. | G5_SPECIAL pass |
-| Float literal GPR caching | static const float → GPR for addr | FPMOV_TO_INTMOV |
+| NOR peephole | `x ^ 0xFF` on u8 -> NOR | G5_SPECIAL pass |
+| Boolean materialization | `(bool)(x > 1)` -> subfc/eqv/srwi | G5_SPECIAL or NORMALIZE_CASTS |
+| subf. loop condition | `high - low >= 0` -> subf. | G5_SPECIAL pass |
+| Float literal GPR caching | static const float -> GPR for addr | FPMOV_TO_INTMOV |
 | Inlining budget | body size affects neighbors | Inliner (pre-pass) |
 | Branch polarity | beq vs bne for if/else | Codegen (post-COLOR) |
 
@@ -59,17 +59,23 @@ but reachable via binary patching or DLL hooking.
 
 ## Phases
 
-### Phase 0: Ghidra Analysis (Current)
+### Phase 0: Ghidra Analysis (DONE — initial pass)
 **Goal**: Map c2.dll's high-level structure using Ghidra auto-analysis + string xrefs.
 
-- [ ] Load c2.dll into Ghidra, run auto-analysis
-- [ ] Find and name the pass dispatch function (references pass table at 0x0012E9E4)
-- [ ] Trace each pass table entry to its implementation function
-- [ ] Name the 4 exported functions and their call trees
+- [x] Load c2.dll into rizin, auto-analyze (~4,746 functions identified)
+- [x] Find and name the pass dispatch function -> `fcn.10b7e6af` dispatches to 5 pass groups
+- [x] Trace each pass table entry to its implementation function -> 37 unique pass functions
+- [x] Name the 4 exported functions and their call trees -> full pipeline traced
+- [x] Identify COLOR (register allocator) -> `fcn.10bc6487`, ~207 helper functions
 - [ ] Find the IL ingestion code (what data structure does InvokeCompilerPass receive?)
-- [ ] Export annotated function list as `msvc-src/ghidra/exports/c2_functions.json`
+- [x] Export function list -> `msvc-src/analysis/all_functions.txt` (4,746 functions)
 
-**Deliverable**: Named function map with pass entry points identified.
+**Key findings** (see `msvc-src/docs/PIPELINE.md` for details):
+- **35 named optimization passes** in two tables at VA 0x10C2E9D0/0x10C2E9E4
+- **5 pass groups** called in sequence per function, containing 37 pass functions
+- **COLOR entry** at `fcn.10bc6487` -> 207 functions in the register allocator subsystem
+- **Source path found**: `e:\bt\278379\vctools\compiler\be\p2\misc.c`
+- **Pipeline**: init -> IL load -> per-function {prep -> optimize -> codegen -> cleanup} -> emit
 
 ### Phase 1: Differential Testing Framework
 **Goal**: Build empirical codegen decision maps WITHOUT decompiling c2.dll.
@@ -77,14 +83,14 @@ but reachable via binary patching or DLL hooking.
 Approach: Compile carefully crafted test cases with `/FAcs`, diff the assembly output
 to understand what source patterns trigger what codegen changes.
 
-- [ ] Build test harness: compile test case → extract function assembly → diff
+- [ ] Build test harness: compile test case -> extract function assembly -> diff
 - [ ] Test suite for register allocation order (declaration permutations)
 - [ ] Test suite for inlining thresholds (vary function size)
 - [ ] Test suite for peephole patterns (NOR, bool materialize, subf.)
 - [ ] Test suite for branch polarity (if/else ordering)
 - [ ] Test suite for float precision (literal types, static const)
 
-**Deliverable**: Empirical decision maps as JSON: `{source_pattern} → {asm_pattern}`.
+**Deliverable**: Empirical decision maps as JSON: `{source_pattern} -> {asm_pattern}`.
 
 ### Phase 2: Targeted Decompilation
 **Goal**: Decompile the specific c2.dll functions that implement our critical passes.
@@ -106,10 +112,10 @@ Priority order (by impact on AT_LIMIT count):
    - Branch polarity selection
    - If/else vs conditional move decisions
 
-- [ ] Decompile COLOR entry point → readable C pseudocode
+- [ ] Decompile COLOR entry point -> readable C pseudocode
 - [ ] Identify the graph coloring data structures
 - [ ] Find the callee-saved assignment loop
-- [ ] Decompile G5_SPECIAL → identify peephole table
+- [ ] Decompile G5_SPECIAL -> identify peephole table
 - [ ] Document each peephole pattern and its trigger condition
 
 **Deliverable**: Annotated pseudocode for critical passes.
@@ -122,9 +128,9 @@ The model doesn't need to be a full compiler reimplementation. It needs to answe
 - "Will function Y be inlined into function Z?"
 - "Will pattern P trigger peephole Q?"
 
-- [ ] Register allocation predictor (input: variable list + types → output: register map)
-- [ ] Inlining predictor (input: callee size + call context → output: inline yes/no)
-- [ ] Peephole predictor (input: IR pattern → output: instruction sequence)
+- [ ] Register allocation predictor (input: variable list + types -> output: register map)
+- [ ] Inlining predictor (input: callee size + call context -> output: inline yes/no)
+- [ ] Peephole predictor (input: IR pattern -> output: instruction sequence)
 - [ ] Integrate into permuter as constraint oracle
 
 **Deliverable**: Python module `msvc-src/model/` importable by the permuter.
@@ -158,26 +164,50 @@ by revealing the exact source patterns needed for specific codegen paths.
 
 ```
 msvc-src/
-├── docs/                    ← Analysis documentation
+├── docs/                    <- Analysis documentation
 │   ├── PLAN.md
 │   ├── ARCHITECTURE.md
-│   ├── PASSES.md            ★ Complete pass catalog
-│   ├── FINDINGS.md          ★ Initial analysis results
+│   ├── PASSES.md            * Complete pass catalog
+│   ├── FINDINGS.md          * Initial analysis results
 │   └── PRIOR_ART.md
-├── tools/                   ← Analysis tools
-│   ├── extract_strings.py   ★ String xref tool (working)
+├── tools/                   <- Analysis tools
+│   ├── extract_strings.py   * String xref tool (working)
 │   └── capture_il.py
-├── analysis/                ← Raw analysis data
-├── ghidra/                  ← Ghidra project exports
+├── analysis/                <- Raw analysis data
+├── ghidra/                  <- Ghidra project exports
 │   ├── scripts/
 │   └── exports/
-├── model/                   ← Predictive compiler model (Phase 3)
-└── src/                     ← Reconstructed source (Phase 2+)
+├── model/                   <- Predictive compiler model (Phase 3)
+└── src/                     <- Reconstructed source (Phase 2+)
     └── c2/
         ├── regalloc/
         ├── peephole/
         └── codegen/
 ```
+
+## Current Status
+
+### Completed
+- Full pipeline traced from `InvokeCompilerPass` export through to `.obj` emission
+- 35 named optimization passes identified and cataloged
+- COLOR (register allocator) entry point found at `fcn.10bc6487` with 207 helper functions
+- Pass group structure mapped: 5 groups containing 37 unique pass functions
+- `/FAcs` assembly listing confirmed working for differential testing
+- Source file reference found: `e:\bt\278379\vctools\compiler\be\p2\misc.c`
+- Tools built: `extract_strings.py` (string xref), `capture_il.py` (IL capture prototype)
+
+### Blockers
+- No PDB symbols (must rely on auto-analysis + manual annotation)
+- `/d2` diagnostic flags not supported in our version (v16.00.11886.00)
+- Ghidra instance loaded with DC3 binary (need separate project for c2.dll x86 analysis)
+
+### Immediate Next Steps
+1. **Disassemble COLOR helpers**: Focus on the 207 functions in the 0x10BC6xxx range.
+   Find the callee-saved register assignment loop and BSF threshold.
+2. **Build differential testing harness**: Compile test cases with `/FAcs`, extract
+   per-function assembly, diff across source variations.
+3. **Map pass group <-> pass name**: Determine which of the 37 pass functions corresponds
+   to each of the 35 named passes by correlating data references.
 
 ## References
 

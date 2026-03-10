@@ -13,31 +13,31 @@ codegen decisions, then use that knowledge to either:
 ## Architecture
 
 ```
-                    ┌─────────────────────────┐
-                    │   Synthesis Engine       │
-                    │                         │
-                    │  ┌───────────────────┐  │
-                    │  │ Compiler Model    │  │ ← RE'd from c2.dll
-                    │  │  • Regalloc rules │  │
-                    │  │  • Inline thresh  │  │
-                    │  │  • Peephole table │  │
-                    │  │  • Pass ordering  │  │
-                    │  └────────┬──────────┘  │
-                    │           │              │
-                    │  ┌────────▼──────────┐  │
-                    │  │ Decision Oracle   │  │ ← predicts codegen choices
-                    │  │  • Will this inline?│ │
-                    │  │  • Which register? │  │
-                    │  │  • Which peephole? │  │
-                    │  └────────┬──────────┘  │
-                    │           │              │
-                    │  ┌────────▼──────────┐  │
-                    │  │ Source Synthesizer │  │ ← generates candidate source
-                    │  │  • Guided permuter│  │
-                    │  │  • Pattern library │  │
-                    │  │  • Constraint SAT │  │
-                    │  └───────────────────┘  │
-                    └─────────────────────────┘
+                    +---------------------------+
+                    |   Synthesis Engine         |
+                    |                           |
+                    |  +---------------------+  |
+                    |  | Compiler Model      |  | <- RE'd from c2.dll
+                    |  |  * Regalloc rules   |  |
+                    |  |  * Inline thresh    |  |
+                    |  |  * Peephole table   |  |
+                    |  |  * Pass ordering    |  |
+                    |  +---------+-----------+  |
+                    |            |               |
+                    |  +---------v-----------+  |
+                    |  | Decision Oracle     |  | <- predicts codegen choices
+                    |  |  * Will this inline?|  |
+                    |  |  * Which register?  |  |
+                    |  |  * Which peephole?  |  |
+                    |  +---------+-----------+  |
+                    |            |               |
+                    |  +---------v-----------+  |
+                    |  | Source Synthesizer   |  | <- generates candidate source
+                    |  |  * Guided permuter  |  |
+                    |  |  * Pattern library  |  |
+                    |  |  * Constraint SAT   |  |
+                    |  +---------------------+  |
+                    +---------------------------+
 ```
 
 ## Components
@@ -56,11 +56,11 @@ The synthesis engine sits between the existing permuter and the existing objdiff
 
 ```
 Current workflow:
-  Source → permuter (brute force) → compile → objdiff → score
+  Source -> permuter (brute force) -> compile -> objdiff -> score
 
 Synthesis engine workflow:
-  Target asm → compiler model (predict decisions) → oracle (constrain search) →
-  guided permuter (targeted mutations) → compile → objdiff → score
+  Target asm -> compiler model (predict decisions) -> oracle (constrain search) ->
+  guided permuter (targeted mutations) -> compile -> objdiff -> score
 ```
 
 The compiler model dramatically prunes the search space. Instead of trying all possible

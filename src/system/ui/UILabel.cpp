@@ -531,9 +531,9 @@ void UILabel::DrawShowing() {
             UIColor *color = rsrc->GetStateColor(mState);
             for (int i = 0; i < mLabelStyles.size(); i++) {
                 LabelStyle &curLabelStyle = mLabelStyles[i];
+                UIColor *curColor = curLabelStyle.mColorOverride;
                 RndText::Style &curStyle = Style(i);
                 curStyle.mFontColorOverride = true;
-                UIColor *curColor = curLabelStyle.mColorOverride;
                 if (!curColor) {
                     curColor = color;
                 }

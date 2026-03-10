@@ -31,6 +31,15 @@ MILO_HEADLESS=1 MILO_MAX_FRAMES=100 ./native/build/dc3-native
 
 This means Session 41 should treat provider wiring and app buildability as prerequisites that are already satisfied, and focus on UI layout/render correctness.
 
+Related decomp guide for the shared-engine UI render path:
+
+- [`UI_RENDER_DECOMP_GUIDE.md`](/home/free/code/milohax/dc3-decomp/docs/native/UI_RENDER_DECOMP_GUIDE.md)
+
+Use that guide when deciding whether a suspected regression should be attacked as:
+
+- a shared-engine decomp correctness problem
+- a native backend/render-policy problem
+
 ## Fresh Validation From 2026-03-10
 
 Fresh screenshot validation tightened the scope further:

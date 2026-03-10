@@ -485,12 +485,12 @@ def call_advisor(prompt: str, model: str = "claude-sonnet-4-6", provider: str = 
 
 # Map API model IDs to Claude CLI model names
 _CLI_MODEL_MAP = {
-    "claude-sonnet-4-6": "sonnet",
-    "claude-opus-4-6": "opus",
-    "claude-haiku-4-5": "haiku",
-    "sonnet": "sonnet",
-    "opus": "opus",
-    "haiku": "haiku",
+    "claude-sonnet-4-6": "claude-sonnet-4-6",
+    "claude-opus-4-6": "claude-opus-4-6",
+    "claude-haiku-4-5": "claude-haiku-4-5",
+    "sonnet": "claude-sonnet-4-6",
+    "opus": "claude-opus-4-6",
+    "haiku": "claude-haiku-4-5",
 }
 
 # Map API model IDs to OpenRouter model IDs

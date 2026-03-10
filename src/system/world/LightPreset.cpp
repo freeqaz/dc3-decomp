@@ -862,7 +862,7 @@ void LightPreset::CacheFrames() {
 
 void LightPreset::GetKey(float frame, int &prevIdx, int &curIdx, float &blend) const {
     float theframe = frame;
-    if (theframe <= 0.0f || mEndFrame <= 0.0f) {
+    if (!(!(theframe <= 0.0f || mEndFrame <= 0.0f))) {
         prevIdx = -1;
         curIdx = 0;
         blend = 1.0f;
@@ -878,7 +878,7 @@ void LightPreset::GetKey(float frame, int &prevIdx, int &curIdx, float &blend) c
                     return;
                 }
                 float framedur = mKeyframes.back().unka8 + mKeyframes.back().mDuration;
-                if (theframe > framedur) {
+                if (framedur < theframe) {
                     MILO_ASSERT(mKeyframes.back().mFadeOutTime > 0, 0x358);
                     prevIdx = mKeyframes.size() - 1;
                     curIdx = 0;
@@ -899,7 +899,7 @@ void LightPreset::GetKey(float frame, int &prevIdx, int &curIdx, float &blend) c
 
         int cap = mKeyframes.size() - 1;
         int i;
-        for (i = 0; i + 1 < cap;) {
+        for (i = 0; cap > i + 1;) {
             int mid = (i + cap) >> 1;
             if (theframe == mKeyframes[mid].unka8) {
                 prevIdx = -1;

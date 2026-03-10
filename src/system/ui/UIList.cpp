@@ -855,13 +855,13 @@ void UIList::DrawShowing() {
         mDrawManuallyControlledWidgets = false;
     }
     bool b = mAllowHighlight;
+    float offset = 0.0f;
     if (mParent) {
         if (mParent->GetUIListDir()->SubList(mListState.SelectedDisplay(), mParent->mWidgets) == this) {
             b = mParent->mAllowHighlight;
         }
     }
     UIList *subList = mListDir->SubList(mListState.SelectedDisplay(), mWidgets);
-    float offset = 0.0f;
     if (subList != NULL) {
         int subSelectedDisplay = subList->mListState.SelectedDisplay();
         float spacing = mListDir->ElementSpacing();
