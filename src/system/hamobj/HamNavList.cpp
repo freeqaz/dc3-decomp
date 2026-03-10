@@ -1776,19 +1776,16 @@ void HamNavList::DrawShowing() {
         mListRibbonResource->SetDisengageFrame(mDisengageSmoother.Level());
         mListRibbonResource->mMode = mRibbonMode;
 #ifdef HX_NATIVE
-        if (gDebugFrameID == 500) {
+        if (gDebugFrameID % 1000 == 500) {
             const Transform &wxfm = WorldXfm();
-            printf("DC3 HamNavList WorldXfm pos=(%.1f,%.1f,%.1f) basisX=(%.3f,%.3f,%.3f) basisY=(%.3f,%.3f,%.3f) basisZ=(%.3f,%.3f,%.3f)\n",
-                   wxfm.v.x, wxfm.v.y, wxfm.v.z,
-                   wxfm.m.x.x, wxfm.m.x.y, wxfm.m.x.z,
-                   wxfm.m.y.x, wxfm.m.y.y, wxfm.m.y.z,
-                   wxfm.m.z.x, wxfm.m.z.y, wxfm.m.z.z);
             RndCam *cam = RndCam::Current();
             if (cam) {
                 const Transform &cxfm = cam->WorldXfm();
-                printf("DC3 Current cam='%s' pos=(%.1f,%.1f,%.1f) near=%.1f far=%.1f fov=%.3f\n",
+                printf("DC3 [frame %d] cam='%s' pos=(%.1f,%.1f,%.1f) fov=%.1f | navlist pos=(%.1f,%.1f,%.1f)\n",
+                       gDebugFrameID,
                        cam->Name(), cxfm.v.x, cxfm.v.y, cxfm.v.z,
-                       cam->NearPlane(), cam->FarPlane(), cam->YFov());
+                       cam->YFov() * 57.2958f,
+                       wxfm.v.x, wxfm.v.y, wxfm.v.z);
             }
         }
 #endif

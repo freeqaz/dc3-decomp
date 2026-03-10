@@ -250,7 +250,7 @@ void PanelDir::DrawShowing() {
     RndCam *camOverride = CamOverride();
 #ifdef HX_NATIVE
     extern int gDebugFrameID;
-    if (gDebugFrameID == 500) {
+    if (gDebugFrameID % 1000 == 500) {
         printf("DC3 PanelDir::DrawShowing '%s' camOverride=%s curCam=%s showing=%d draws=%d\n",
                Name(),
                camOverride ? camOverride->Name() : "null",

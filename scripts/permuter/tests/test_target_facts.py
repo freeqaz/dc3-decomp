@@ -220,7 +220,8 @@ class TestExtractFromAtlas(unittest.TestCase):
 
 
 class TestExtractFromShapeFacts(unittest.TestCase):
-    def test_separate_byte_fusion_boosts_widening_pattern(self):
+    def test_separate_byte_fusion_no_action_when_target_also_separate(self):
+        """When both base and target use separate shift+mask, no boost/suppress needed."""
         diag = _make_diagnosis()
         diag.diff_ops = [MagicMock(target_opcode="srwi"), MagicMock(target_opcode="clrlwi")]
         facts = extract_from_shape_facts([
@@ -228,7 +229,9 @@ class TestExtractFromShapeFacts(unittest.TestCase):
         ], diagnosis=diag)
         self.assertEqual(len(facts), 1)
         self.assertEqual(facts[0].kind, "codegen_shape")
-        self.assertIn("u8_to_unsigned_long", facts[0].payload["suppress_patterns"])
+        # Neither boost nor suppress — base and target agree
+        self.assertNotIn("boost_patterns", facts[0].payload)
+        self.assertNotIn("suppress_patterns", facts[0].payload)
 
     def test_fused_byte_fusion_suppresses_widening_pattern(self):
         diag = _make_diagnosis()
@@ -277,12 +280,34 @@ class TestExtractFromShapeFacts(unittest.TestCase):
         self.assertEqual(len(facts), 1)
         self.assertIn("switch_if_convert", facts[0].payload["boost_patterns"])
 
-    def test_switch_if_chain_boosts_switch_conversion_by_default(self):
+    def test_switch_if_chain_suppresses_without_switch_markers(self):
+        """When target has no switch table markers, suppress conversion."""
         facts = extract_from_shape_facts([
             {"kind": "switch_dispatch", "category": "switch_if_chain", "confidence": 0.72},
         ], diagnosis=_make_diagnosis())
         self.assertEqual(len(facts), 1)
+        self.assertIn("switch_if_convert", facts[0].payload["suppress_patterns"])
+
+    def test_switch_table_boosts_conversion_when_target_uses_compare_chain(self):
+        """When base uses switch table but target uses compare chain, boost conversion."""
+        diag = _make_diagnosis()
+        diag.diff_ops = [
+            MagicMock(target_opcode="cmpwi"),
+            MagicMock(target_opcode="beq"),
+        ]
+        facts = extract_from_shape_facts([
+            {"kind": "switch_dispatch", "category": "switch_table", "confidence": 0.88},
+        ], diagnosis=diag)
+        self.assertEqual(len(facts), 1)
         self.assertIn("switch_if_convert", facts[0].payload["boost_patterns"])
+
+    def test_switch_table_suppresses_when_no_compare_markers(self):
+        """When base has switch table and target has no compare markers, suppress."""
+        facts = extract_from_shape_facts([
+            {"kind": "switch_dispatch", "category": "switch_table", "confidence": 0.88},
+        ], diagnosis=_make_diagnosis())
+        self.assertEqual(len(facts), 1)
+        self.assertIn("switch_if_convert", facts[0].payload["suppress_patterns"])
 
     def test_switch_ctr_chain_suppresses_switch_conversion_when_target_matches(self):
         diag = _make_diagnosis()

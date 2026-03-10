@@ -393,8 +393,7 @@ def extract_from_shape_facts(
                     payload["suppress_patterns"] = ["u8_to_unsigned_long"]
             elif category == "separate_shift_and_mask":
                 if target_ops & target_fusion_ops:
-                    payload["suppress_patterns"] = ["u8_to_unsigned_long"]
-                elif target_ops & target_separate_ops:
+                    # Target wants fused ops but base has separate — keep separate
                     payload["suppress_patterns"] = ["u8_to_unsigned_long"]
         elif kind == "bool_materialization":
             if target_ops & bool_target_markers:
@@ -408,19 +407,19 @@ def extract_from_shape_facts(
             if category in ("switch_table", "switch_ctr_chain"):
                 payload["switch_table"] = True
                 if _has_target_prefix(*target_compare_chain_markers):
+                    # Base has switch table but target uses compare chain
                     payload["boost_patterns"] = ["switch_if_convert"]
-                elif _has_target_prefix(*target_switch_markers):
-                    payload["suppress_patterns"] = ["switch_if_convert"]
                 else:
+                    # Base and target both use switch table — no conversion needed
                     payload["suppress_patterns"] = ["switch_if_convert"]
             elif category == "switch_if_chain":
                 payload["switch_if_chain"] = True
                 if _has_target_prefix(*target_switch_markers):
+                    # Base uses if-chain but target has switch table markers
                     payload["boost_patterns"] = ["switch_if_convert"]
-                elif _has_target_prefix(*target_compare_chain_markers):
-                    payload["suppress_patterns"] = ["switch_if_convert"]
                 else:
-                    payload["boost_patterns"] = ["switch_if_convert"]
+                    # No switch markers in target — suppress conversion
+                    payload["suppress_patterns"] = ["switch_if_convert"]
 
         elif kind == "call_shape":
             if category == "tail_direct_call":

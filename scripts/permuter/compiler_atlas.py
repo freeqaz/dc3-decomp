@@ -924,6 +924,54 @@ _add(
 )
 
 
+# ── Switch Dispatch (PROVEN via binary patching + diff-test) ──────────────
+
+_add(
+    "switch_table_dispatch",
+    ("bctr", "mtctr", "lwzx"),
+    "Switch statement lowered to jump table: bctr dispatch via computed address",
+    "Convert switch to if/else if chain when target uses compare chain",
+    Confidence.PROVEN, "5-30%",
+    ("switch_if_convert",),
+    "PASS_GROUPS.md §G5P10, diff-test suite_scope_nesting",
+    tags=("switch", "control_flow"),
+)
+
+_add(
+    "switch_compare_chain",
+    ("cmpwi", "beq", "bne"),
+    "Switch lowered to compare chain: sequential cmpwi+beq/bne for each case",
+    "Convert if/else if chain to switch when target uses jump table",
+    Confidence.PROVEN, "5-30%",
+    ("switch_if_convert",),
+    "PASS_GROUPS.md §G5P10, diff-test suite_scope_nesting",
+    tags=("switch", "control_flow"),
+)
+
+# ── Tail Call Optimization (PROVEN via decomp experience) ─────────────────
+
+_add(
+    "tail_call_b_vs_bl",
+    ("b", "bl"),
+    "Last call uses b (tail call) vs bl (normal call) — depends on call order at function end",
+    "Reorder trailing calls so the tail-callable one is last",
+    Confidence.PROVEN, "1-5%",
+    ("tail_call_reorder",),
+    "TECHNICAL_NOTES.md, COLOR_RE.md §prologue implications",
+    tags=("tail_call", "control_flow"),
+)
+
+_add(
+    "tail_call_prologue_delta",
+    ("__savegprlr",),
+    "Tail call saves fewer registers — __savegprlr_N vs __savegprlr_N+1",
+    "Reorder calls at function end to enable tail-call optimization",
+    Confidence.INFERRED, "1-3%",
+    ("tail_call_reorder",),
+    "COLOR_RE.md §prologue implications, INLINER_RE.md",
+    tags=("tail_call", "prologue"),
+)
+
 # ---------------------------------------------------------------------------
 # Opcode Index (built at import time)
 # ---------------------------------------------------------------------------

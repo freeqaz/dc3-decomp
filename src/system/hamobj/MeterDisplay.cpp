@@ -179,12 +179,12 @@ void MeterDisplay::DrawShowing() {
 
     float f = 0.0f;
 
-    if (mMaxValue > 0) {
+    if ((int)(int)mMaxValue >= 1) {
         f = (float)mCurrentValue / (float)mMaxValue;
         float f1 = TheTaskMgr.UISeconds() - unk4c;
         if (mAnimPeriod > 0) {
-            int itouse = unk50;
-            if (itouse >= 0 && f1 > 0) {
+            unsigned int itouse = unk50;
+            if (itouse >= 0 && 0 < f1) {
                 if (f1 < mAnimPeriod) {
                     f = ((f1 / mAnimPeriod) * (float)(itouse - mCurrentValue)
                          + (float)mCurrentValue)
@@ -200,8 +200,8 @@ void MeterDisplay::DrawShowing() {
     }
     ClampEq(f, 0.0f, 1.0f);
     mMeterAnim->SetFrame(
-        (mMeterAnim->EndFrame() - mMeterAnim->StartFrame())
-            * (f + mMeterAnim->StartFrame()),
+        f * (mMeterAnim->EndFrame() - mMeterAnim->StartFrame())
+            + mMeterAnim->StartFrame(),
         1.0f
     );
     mResourceDir->SetWorldXfm(WorldXfm());
