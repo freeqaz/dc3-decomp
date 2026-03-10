@@ -91,6 +91,14 @@ bool UIPanel::Entering() const {
 }
 
 void UIPanel::Draw() {
+#ifdef HX_NATIVE
+    extern int gDebugFrameID;
+    if (gDebugFrameID == 500) {
+        printf("DC3 UIPanel::Draw '%s' finalDrawPass=%d==%d mDir=%p(%s) mLoaded=%d\n",
+               Name(), mFinalDrawPassFlag, sIsFinalDrawPass, mDir,
+               mDir ? mDir->Name() : "null", mLoaded);
+    }
+#endif
     if (mFinalDrawPassFlag == sIsFinalDrawPass && mDir && !mLoaded) {
         mDir->DrawShowing();
     }
@@ -256,6 +264,15 @@ bool UIPanel::Exiting() const {
 
 void UIPanel::Enter() {
     MILO_ASSERT(mState == kDown, 0x158);
+#ifdef HX_NATIVE
+    // Block Kinect tutorial panels from entering on native.
+    // DTA handlers call {$tutorial_nav_panel enter} which bypasses our
+    // UIScreen::Enter() skip. Suppress here at the panel level.
+    if (strstr(Name(), "tutorial")) {
+        printf("DC3 UI: Blocking tutorial panel '%s' Enter()\n", Name());
+        return;
+    }
+#endif
     if (!mFocusName.empty() && mDir) {
         SetFocusComponent(mDir->FindComponent(mFocusName.c_str()));
     }

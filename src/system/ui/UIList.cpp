@@ -246,7 +246,7 @@ Symbol UIList::SelectedSym(bool fail) const {
 }
 
 void UIList::Scroll(int i) {
-    mScrolling = true;
+    mDrawManuallyControlledWidgets = true;
     mListState.Scroll(i, false);
 }
 
@@ -299,7 +299,7 @@ void UIList::Poll() {
     }
     mListState.Poll(TheTaskMgr.UISeconds());
     mListDir->PollWidgets(mWidgets);
-    mScrolling = false;
+    mDrawManuallyControlledWidgets = false;
     UpdateHandler();
 }
 
@@ -856,7 +856,7 @@ void UIList::DrawShowing() {
     }
     bool b = mAllowHighlight;
     if (mParent) {
-        if (mParent->GetUIListDir()->SubList(mListState.SelectedDisplay(), mParent->mWidgets) == this) {
+        if (mParent->ChildList() == this) {
             b = mParent->mAllowHighlight;
         }
     }
@@ -864,7 +864,7 @@ void UIList::DrawShowing() {
     UIList *subList = mListDir->SubList(mListState.SelectedDisplay(), mWidgets);
     if (subList != NULL) {
         int subSelectedDisplay = subList->mListState.SelectedDisplay();
-        float spacing = mListDir->ElementSpacing();
+        float spacing = subList->GetUIListDir()->ElementSpacing();
         offset = spacing * (float)subSelectedDisplay;
     } else {
         offset = 0.0f;

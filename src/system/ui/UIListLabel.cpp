@@ -44,8 +44,12 @@ BEGIN_LOADS(UIListLabel)
     ASSERT_REVS(1, 1)
     LOAD_SUPERCLASS(UIListSlot)
     bs >> mLabel;
-    if (d.altRev > 0) {
-        bs >> mHighlightAltStyles;
+    if (d.altRev < 1) {
+        String tmp;
+        bs >> tmp;
+    }
+    if (d.rev >= 1) {
+        d >> mHighlightAltStyles;
     }
 END_LOADS
 
@@ -68,7 +72,7 @@ UILabel *UIListLabel::ElementLabel(int display) const {
 
 UIListSlotElement *UIListLabel::CreateElement(UIList *uilist) {
     MILO_ASSERT(mLabel, 0x86);
-    auto newObj = Hmx::Object::NewObject(mLabel->ClassName());
+    Hmx::Object *newObj = Hmx::Object::NewObject(mLabel->ClassName());
     UILabel *l = dynamic_cast<UILabel *>(newObj);
     MILO_ASSERT(l, 0x89);
     l->Copy(mLabel, kCopyDeep);
@@ -84,30 +88,29 @@ UIListLabelElement::~UIListLabelElement() { delete mLabel; }
 void UIListLabelElement::Draw(const Transform &tf, float f, UIColor *col, Box *box) {
     mLabel->SetWorldXfm(tf);
     if (box) {
+        Vector3 minPt(mLabel->mBoundsLeft, 0.0f, mLabel->mBoundsTop);
         Box localbox = *box;
-        Vector3 minPt(mLabel->mBoundsLeft, mLabel->mBoundsTop, 0.0f);
-        Vector3 maxPt(mLabel->mBoundsLeft + mLabel->mBoundsRight, mLabel->mBoundsTop + mLabel->mBoundsBottom, 0.0f);
+        Vector3 maxPt(mLabel->mBoundsLeft + mLabel->mBoundsRight, 0.0f, mLabel->mBoundsTop + mLabel->mBoundsBottom);
         localbox.GrowToContain(minPt, false);
         localbox.GrowToContain(maxPt, false);
         box->GrowToContain(localbox.mMin, false);
         box->GrowToContain(localbox.mMax, false);
     } else {
-        int numStyles = mLabel->NumStyles();
-        float *savedAlphas = (float *)_alloca(numStyles * sizeof(float));
-        for (int i = 0; i < numStyles; i++) {
+        float *savedAlphas = (float *)_alloca(mLabel->NumStyles() * sizeof(float));
+        for (unsigned int i = 0; i < mLabel->NumStyles(); i++) {
             savedAlphas[i] = mLabel->Style(i).GetAlpha();
         }
         mLabel->LStyle(0).mColorOverride = col;
         if (mListLabel->mHighlightAltStyles) {
-            for (int i = 1; i < numStyles; i++) {
+            for (unsigned int i = 1; i < mLabel->NumStyles(); i++) {
                 mLabel->LStyle(i).mColorOverride = col;
             }
         }
-        for (int i = 0; i < numStyles; i++) {
+        for (unsigned int i = 0; i < mLabel->NumStyles(); i++) {
             mLabel->Style(i).SetAlpha(f * savedAlphas[i]);
         }
         mLabel->DrawShowing();
-        for (int i = 0; i < numStyles; i++) {
+        for (unsigned int i = 0; i < mLabel->NumStyles(); i++) {
             mLabel->Style(i).SetAlpha(savedAlphas[i]);
         }
     }

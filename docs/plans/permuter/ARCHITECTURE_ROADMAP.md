@@ -206,6 +206,8 @@ Follow-on work:
 
 ## Phase 6: Better Semantic Context
 
+Status: Complete
+
 Problem:
 - Many patterns still use syntax-only checks where semantic summaries would
   permit more targeted and safer rewrites
@@ -220,13 +222,44 @@ Expected value:
 - Broader safe rewrite space
 - Fewer false-positive variants
 
-Implemented so far:
+Implemented:
 - Shared statement effects now record call names and coarse call kinds
 - The analyzer still behaves conservatively, but future reorder rules now have
   a tested place to hang call-side-effect heuristics
 - `tail_call_reorder` now uses that call classification to reject obvious
   mutator/logging/guard call pairs instead of relying on a blanket
   `allow_call_pair=True` exception
+- m2c structural extractors now available for pattern guidance:
+  - `extract_nesting_depth()` — maximum nesting depth from m2c output
+  - `extract_guard_count()` — count of guard-return patterns
+  - `extract_return_pattern()` — classifies return structure (merged_var, split_calls, guard_chain, single)
+  - `extract_call_order()` — function call names in order of appearance
+- m2c guidance now wired into 4 patterns:
+  - `guard_to_nested` — uses nesting depth + guard count to prefer direction
+  - `return_call_merge` — uses return pattern to prefer merge vs split
+  - `early_return_merge` — uses return pattern + guard count to filter directions
+  - `statement_reorder` — uses call order to prioritize swaps toward target order
+- Alias-aware statement effects (`AliasInfo`) now detect reference and pointer
+  bindings (`auto& ref = obj.member`, `Type* p = &obj`) and track them per
+  statement, enabling alias-aware safety checks in reorder rules
+- Def-use chain construction (`DefUseChains`) across statement sequences:
+  - Per-variable definition-to-use tracking with live-in support for parameters
+  - Live-range computation (first_def, last_use) per variable
+  - `can_move_past(stmt_idx, target_idx)` for safe multi-step movement
+  - `is_live_between(var, start, end)` for liveness queries
+  - `statement_reorder` now uses def-use chains for multi-step statement moves
+    instead of only pairwise independence checks
+- Lightweight CFG module (`cfg.py`) for function bodies:
+  - `BasicBlock` / `CFG` dataclasses with successor/predecessor edges
+  - `build_cfg()` — splits at if/switch/loop/return boundaries
+  - `is_terminal_block()` — recursive all-successors-terminal check
+  - `reaches_exit()` / `dominates()` — reachability and dominance queries
+  - `stmt_is_in_terminal_position()` — primary API for tail-call analysis
+  - `live_variables_at_block_entry()` — backward liveness using statement effects
+  - `tail_call_reorder` now uses CFG terminal-block discovery as a fourth
+    strategy for finding swap sites, complementing the AST-walk approaches
+- 27 new tests covering CFG construction, terminal detection, dominance,
+  liveness, alias detection, and def-use chain safety
 
 ## Phase 7: Worktree-Aware Cross-Unit Execution
 
@@ -251,6 +284,41 @@ Expected value:
 - Safer cross-unit experimentation
 - Natural parallelism for expensive rebuild/score loops
 - Reuse proven infrastructure instead of inventing a second isolation path
+
+## Phase 8: Beam Search
+
+Status: Complete (Phases A-E all implemented)
+
+Problem:
+- Greedy hill climbing keeps only one working state and gets trapped on plateaus
+- Evolutionary mode's crossover is weak for structured source-to-source rewrites
+
+Deliverables:
+- Multi-state search that keeps the top K candidates alive at each depth
+- Multi-criteria ranking: score, build reliability, guidance agreement, diversity
+- State re-diagnosis between expansion rounds
+- Integration with all existing proposal sources
+
+Implemented so far:
+- `BeamState` dataclass with lexicographic `ranking_key` property
+- `BeamConfig` dataclass for width, depth, expand, escape, diversity
+- `beam_search.py` — full search loop (seed → expand → score → select)
+- `_expand_state()` — per-state proposal generation via standard patterns
+- `_select_survivors()` — diversity-aware selection
+- `_rediagnose_state()` — reparse + re-diagnose for next depth
+- Stagnation detection across all beam survivors
+- Best-ever tracking with guaranteed beam inclusion
+- `--beam` flag in hill_climber CLI + standalone `beam_search.py` CLI
+- Constrained synthesis integrated as per-state proposal source (not just
+  round-1 prepass) — runs at every beam depth when Ghidra AST available
+- Real guidance agreement scoring using structural extractors:
+  - Compares source guard count, nesting depth, and return pattern against
+    both m2c and Ghidra targets
+  - Returns +2 (both agree), +1 (one agrees), 0 (neutral), -1 (diverges)
+- 25 unit tests for ranking, selection, dedup, guidance, config, escape
+- Cross-unit beam proposals via `--cross-unit` flag (Phase E)
+
+See `docs/plans/permuter/BEAM_SOLVER.md` for the full design.
 
 ## Immediate Implementation Track
 

@@ -8,6 +8,9 @@
 #include "utl/BinStream.h"
 
 float UIListWidget::DrawOrder() const { return mDrawOrder; }
+float UIListWidget::DisabledAlphaScale() const { return mDisabledAlphaScale; }
+UIListWidgetDrawType UIListWidget::WidgetDrawType() const { return mWidgetDrawType; }
+UIList *UIListWidget::ParentList() { return mParentList; }
 
 void UIListWidget::ResourceCopy(const UIListWidget *w) { Copy(w, kCopyShallow); }
 

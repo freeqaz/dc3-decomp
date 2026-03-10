@@ -494,13 +494,17 @@ void UIManager::Poll() {
     if (mCurrentScreen)
         mCurrentScreen->Poll();
 #ifdef HX_NATIVE
-    // Auto-advance stuck screens: if we've been on the same screen for too long
-    // with no transition in progress, force-advance through the boot flow.
-    // Complements UIScreen::Enter auto-skip (handles screens that stall in poll).
+    // Native boot flow: advance screens that get stuck because their DTA
+    // handlers fail (missing Xbox globals) or wait for async events that
+    // never complete (save system, Kinect init).
+    //
+    // Three categories:
+    //  1. Boot splash screens (autosave, title) — auto-advance after delay
+    //  2. Tutorial/Kinect screens — skip immediately
+    //  3. Interactive screens (main_screen+) — user navigates via controller
     {
         static const char *sStuckScreen = nullptr;
         static int sStuckFrames = 0;
-        const int kAutoAdvanceFrames = 120; // ~4 seconds at 30fps
 
         const char *curName = mCurrentScreen ? mCurrentScreen->Name() : nullptr;
         if (curName && mTransitionState == kTransitionNone) {
@@ -511,38 +515,40 @@ void UIManager::Poll() {
                 sStuckFrames = 0;
             }
 
-            if (sStuckFrames == kAutoAdvanceFrames) {
-                // Map of known boot flow screens → next screen
-                struct ScreenAdvance { const char *from; const char *to; };
-                static const ScreenAdvance sFlow[] = {
-                    {"autosave_warning_screen", "title_screen"},
-                    {"title_screen", "wait_main_after_saveload_screen"},
-                    {"wait_main_after_saveload_screen", "title_screen_to_voice_control_tutorial_screen"},
-                    {"title_screen_to_voice_control_tutorial_screen", "tutorial_voice_control_screen_0"},
-                    {"tutorial_voice_control_screen_0", "tutorial_voice_control_screen_1"},
-                    {"tutorial_voice_control_screen_1", "tutorial_party_mode_screen_0"},
-                    {"tutorial_party_mode_screen_0", "tutorial_party_mode_screen_1"},
-                    // main_screen → choose_mode_screen removed:
-                    // user navigates interactively from main_screen onward
-                    {nullptr, nullptr}
-                };
+            // Screen advance table: from -> to, with frame delay before advancing.
+            // delay=0 means skip immediately on Enter (handled by UIScreen::Enter).
+            // delay>0 means wait that many frames in Poll before auto-advancing.
+            struct ScreenAdvance {
+                const char *from;
+                const char *to;
+                int delay; // frames to wait (0 = skip in Enter, not here)
+            };
+            static const ScreenAdvance sFlow[] = {
+                // Boot splash: DTA enter handlers fail, auto-advance after delay
+                {"autosave_warning_screen", "title_screen", 90},        // ~3s
+                {"title_screen", "wait_main_after_saveload_screen", 60}, // ~2s
+                {"wait_main_after_saveload_screen", "main_screen", 30},  // ~1s (save never completes)
+                // Kinect tutorials: skip immediately if we somehow land on them
+                {"title_screen_to_voice_control_tutorial_screen", "main_screen", 1},
+                {"tutorial_voice_control_screen_0", "main_screen", 1},
+                {"tutorial_voice_control_screen_1", "main_screen", 1},
+                {"tutorial_party_mode_screen_0", "main_screen", 1},
+                {"tutorial_party_mode_screen_1", "main_screen", 1},
+                // Interactive screens: no auto-advance (user navigates)
+                {nullptr, nullptr, 0}
+            };
 
-                for (int i = 0; sFlow[i].from; i++) {
-                    if (!strcmp(curName, sFlow[i].from)) {
-                        UIScreen *next = ObjectDir::Main()->Find<UIScreen>(sFlow[i].to, false);
-                        if (next) {
-                            printf("DC3 UI: Auto-advancing stuck screen '%s' -> '%s'\n",
-                                   curName, sFlow[i].to);
-                            sStuckScreen = nullptr;
-                            sStuckFrames = 0;
-                            GotoScreen(next, false, false);
-                        } else {
-                            printf("DC3 UI: Auto-advance target '%s' not found\n", sFlow[i].to);
-                            sStuckScreen = nullptr;
-                            sStuckFrames = 0;
-                        }
-                        break;
+            for (int i = 0; sFlow[i].from; i++) {
+                if (!strcmp(curName, sFlow[i].from) && sStuckFrames == sFlow[i].delay) {
+                    UIScreen *next = ObjectDir::Main()->Find<UIScreen>(sFlow[i].to, false);
+                    if (next) {
+                        printf("DC3 UI: Boot flow '%s' -> '%s' (after %d frames)\n",
+                               curName, sFlow[i].to, sFlow[i].delay);
+                        sStuckScreen = nullptr;
+                        sStuckFrames = 0;
+                        GotoScreen(next, false, false);
                     }
+                    break;
                 }
             }
         } else {

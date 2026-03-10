@@ -275,7 +275,7 @@ float HamListRibbon::StartFrame() {
         case kRibbonSelect:
             if (mSelectToggle && mSelectToggleAnim) {
                 return mSelectToggleAnim->StartFrame();
-            } else if (mSelectAnim || mSelectAllAnim) {
+            } else {
                 if (mSelectAnim && !mSelectAllAnim) {
                     return mSelectAnim->StartFrame();
                 } else if (!mSelectAnim && mSelectAllAnim) {
@@ -453,7 +453,7 @@ void HamListRibbon::DrawRibbon(
             if (state.mBigScale == 0.0f) {
                 color = &sNormalColor;
             }
-            *(Hmx::Color *)&elem->mElementState = *color;
+            *(Hmx::Color *)&elem->mScaleX = *color;
         }
     }
 
@@ -617,7 +617,7 @@ float HamListRibbon::EndFrame() {
         case kRibbonSelect:
             if (mSelectToggle && mSelectToggleAnim) {
                 return mSelectToggleAnim->EndFrame();
-            } else if (mSelectAnim || mSelectAllAnim) {
+            } else {
                 if (mSelectAnim && !mSelectAllAnim) {
                     return mSelectAnim->EndFrame();
                 } else if (!mSelectAnim && mSelectAllAnim) {

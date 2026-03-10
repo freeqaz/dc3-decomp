@@ -987,9 +987,9 @@ void WorldCrowd::DrawShowing() {
     MILO_ASSERT(!gImpostorMat->NextPass(), 0x34A);
     if (mEnviron3D) {
         Draw3DChars();
-        if (TheRnd.GetDrawMode() == Rnd::kDrawNormal) {
+        if (Rnd::kDrawNormal == TheRnd.GetDrawMode()) {
             FOREACH (it, mCharacters) {
-                if (it->mDef.mChar && it->mMMesh && !mShow3DOnly) {
+                if ((it->mDef.mChar && it->mMMesh) & !mShow3DOnly) {
                     it->mMMesh->DrawShowing();
                 }
             }
@@ -1001,8 +1001,15 @@ void WorldCrowd::DrawShowing() {
 
         // Draw 2D characters with environment tracking
         RndEnviron *env = mEnviron;
-        if (env) {
-            bool savedApprox = env->UsesApproxGlobal();
+        if (!(env)) {
+            // Fallback without environment
+            FOREACH (it, mCharacters) {
+                if (it->mDef.mChar && it->mMMesh && !mShow3DOnly) {
+                    it->mMMesh->DrawShowing();
+                }
+            }
+        } else {
+            unsigned char savedApprox = (unsigned char)(env->UsesApproxGlobal());
             env->SetUseApproxGlobal(false);
             RndEnvironTracker tracker(env, nullptr);
 
@@ -1013,13 +1020,6 @@ void WorldCrowd::DrawShowing() {
             }
 
             env->SetUseApproxGlobal(savedApprox);
-        } else {
-            // Fallback without environment
-            FOREACH (it, mCharacters) {
-                if (it->mDef.mChar && it->mMMesh && !mShow3DOnly) {
-                    it->mMMesh->DrawShowing();
-                }
-            }
         }
     }
 }

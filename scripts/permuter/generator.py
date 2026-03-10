@@ -229,6 +229,14 @@ def generate_variants(
     }
     dedup_count = 0
 
+    def _annotate_scope(variant: Variant) -> Variant:
+        """Add scope-isolation metadata from the function context."""
+        if variant.func_byte_range is None:
+            variant.func_byte_range = ctx.func_byte_range
+        if variant.original_source is None:
+            variant.original_source = ctx.file_source
+        return variant
+
     # Phase 1: Independent variants with per-pattern budgets
     ordered_patterns = sorted(
         patterns,
@@ -241,6 +249,7 @@ def generate_variants(
             continue
         count = 0
         for variant in pattern.generate(ctx):
+            _annotate_scope(variant)
             source_hash = variant_identity_bytes(ctx.file_path, variant)
             if source_hash in seen_sources:
                 dedup_count += 1
@@ -284,6 +293,7 @@ def generate_variants(
                 max_per_stage=10,
                 max_total=remaining,
             ):
+                _annotate_scope(variant)
                 source_hash = variant_identity_bytes(ctx.file_path, variant)
                 if source_hash in seen_sources:
                     dedup_count += 1
@@ -316,6 +326,7 @@ def generate_variants(
                 max_per_stage=8,
                 max_total=per_chain,
             ):
+                _annotate_scope(variant)
                 source_hash = variant_identity_bytes(ctx.file_path, variant)
                 if source_hash in seen_sources:
                     dedup_count += 1

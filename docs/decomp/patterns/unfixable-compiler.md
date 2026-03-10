@@ -231,6 +231,33 @@ Try [Variable Declaration Order](fixable-declarations.md#variable-declaration-or
 
 **Future**: Binary patching of c2.dll's coloring loop (RVA `0x026780`) could reverse the BSF scan direction or reorder the color assignment, fixing all register swap functions at once. See [compiler-instrumentation.md](../../plans/compiler-instrumentation.md) for the full mechanism and address map.
 
+### Statistical Analysis (1,288 functions scanned)
+
+Analysis of cached objdiff results reveals the scope of callee-saved register swaps:
+
+**Most common adjacent swap pairs** (by function count):
+| Pair | Functions |
+|------|----------|
+| r27↔r28 | 44 |
+| r29↔r30 | 43 |
+| r28↔r29 | 40 |
+| r26↔r27 | 26 |
+| r30↔r31 | 24 |
+| f30↔f31 | 16 |
+
+Adjacent register pairs dominate (85%+ of all callee-saved swaps), confirming the compiler versions differ only in tie-breaking within the coloring loop, not in fundamental allocation strategy.
+
+**Variable classification of swapped entities** (173 single-pair swap functions):
+| Category | Count | % | Description |
+|----------|-------|---|-------------|
+| Both compiler-internal | 49 | 28% | addr_compute×addr_compute, member_load×member_load — no user-declared variable to reorder |
+| One user + one temp | 104 | 60% | param_save×addr_compute — can't reorder a parameter against a compiler temp |
+| Both user-controllable | 20 | 12% | param_save×param_save — only these are candidates for declaration reorder |
+
+**Key finding**: Only ~12% of callee-saved swaps involve two user-declared variables. The other 88% swap a parameter or local against a compiler-generated temporary (member loads, address computations, vtable pointers). This is why declaration reorder has a ~30% success rate overall — it can only help the 12% where both entities are reorderable, and even then interference constraints may prevent it.
+
+**No consistent allocation order**: Definition order analysis shows 50/50 split between target-allocates-ascending vs target-allocates-descending. The allocation depends on interference graph structure, not a simple ordering heuristic.
+
 ### Real Example
 
 | Function | Match | Attempts | Result |

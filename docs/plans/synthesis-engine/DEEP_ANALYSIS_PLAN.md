@@ -4,31 +4,46 @@
 
 Move from "we know the structure" to "we can predict codegen decisions" by:
 1. Mapping the COLOR register allocator's decision logic
-2. Identifying the G5_SPECIAL peephole pattern table
-3. Building a working differential testing harness **[DONE — see results below]**
+2. ~~Identifying the G5_SPECIAL peephole pattern table~~ **[DONE — no table, it's the code generator]**
+3. Building a working differential testing harness **[DONE]**
 4. Extracting inliner cost formulas **[PARTIALLY DONE — threshold found]**
-5. Understanding the IL (intermediate language) format
+5. Understanding the IL (intermediate language) format **[STARTED — bundle parser + constrained PPC->IL lifter landed]**
 
 ## Completed Results (2026-03-10)
 
-See `msvc-src/results/FINDINGS_SUMMARY.md` for full details. Key findings:
+See `msvc-src/results/FINDINGS_SUMMARY.md` for full details.
 
-- **Register allocation**: Strictly first-allocated=highest for all tested patterns
-  (including virtual calls, loops, conditionals). Linear scan, NOT graph coloring.
-  Compiler-generated temporaries (loop counters, this pointers) consume registers
-  before user variables, shifting them down.
-- **Inlining threshold**: ~30 IR tuples. `inline` keyword = no effect with /Ox.
-  `__forceinline` = always inlines (no limit). Header function body size directly
-  affects neighboring function codegen.
-- **NOR peephole**: u8 XOR 0xFF → `not` (=`nor rA,rS,rS`). Widening to u32 first
-  prevents NOR, generates `xori` instead.
-- **Boolean materialization**: `(bool)` cast triggers `subfc/eqv/srwi`. Without cast,
-  compiler uses branches. Source-controllable.
-- **subf. fusion**: `hi - lo >= 0` → `subf.`. `hi >= lo` → `cmpw`. Source-controllable.
-- **Branch polarity**: Compiler ALWAYS inverts condition for branches. `== 0` → `bne`,
-  `!= 0` → `beq`. Deterministic.
-- **Float precision**: DOUBLETOSINGLE aggressively demotes all double literals assigned
-  to float. No `lfd` cases found in simple tests.
+### Differential testing results:
+- **Register allocation**: Strictly first-allocated=highest (linear scan, NOT graph coloring)
+- **Inlining threshold**: ~30 IR tuples. `__forceinline` = unlimited.
+- **NOR peephole**: u8 XOR 0xFF → `not`. Widening to u32 → `xori`.
+- **Boolean materialization** (comprehensive): 6 categories of instruction selection based on
+  signedness + comparison operator + comparison constant. See FINDINGS_SUMMARY.md §4.
+- **subf. fusion**: `hi - lo >= 0` → `subf.`. Source-controllable.
+- **Branch polarity**: Compiler ALWAYS inverts condition.
+- **Float precision**: DOUBLETOSINGLE demotes all double→float assignments.
+
+### Pass identification via binary patching (2026-03-10):
+
+**Critical discovery**: G5P10 (`fcn.10b3421b`) is NOT a peephole optimizer — it's
+the **entire PPC code generator**. Disabling it produces zero code. All PPC-specific
+instruction patterns (subfc, eqv, srwi, not, rlwinm, etc.) are instruction selection
+choices made during code generation.
+
+- **G3P2 (`fcn.10c0f14e`)**: Record-form fusion. Marks IL for `subf.` at the IL level.
+- **G5P10 (`fcn.10b3421b`)**: PPC code generator + Xenon scheduler.
+  - Sub-function `fcn.10b71d8f`: Xenon pipeline scheduler with `/QXSTALLS` diagnostics
+  - Pipeline hazard table: LHS (0 cyc), BF (23 cyc), LHSUSE, P, MC, S, DA, D, VQF, VQS, VQD
+  - The scheduler handles instruction reordering for pipeline efficiency
+- **G4P4 (`fcn.10c04d6d`)**: NOT G5_SPECIAL — zero peephole effect (disproved).
+- **Full binary patching matrix**: See `msvc-src/docs/PASS_GROUPS.md` for complete results
+
+### Two-pattern-type insight:
+1. **Source-controllable** (via IL-level changes): subf. fusion, bool materialization,
+   NOR peephole, branch polarity — these depend on source-level constructs
+2. **Not source-controllable** (code generator internals): instruction scheduling,
+   register naming within carry chains, neg/andc vs subfc selection — determined by
+   surrounding context and pipeline timing
 
 ## Track 1: COLOR Register Allocator Deep Dive
 
@@ -100,47 +115,89 @@ For each function, identify:
 4. **FPR allocation**: Is FPR assignment independent of GPR, or do they share the same graph?
    - Our empirical observation: FPR NOT addressable by BSF (base=0 is GPR only)
 
-## Track 2: G5_SPECIAL Peephole Patterns
+## Track 2: PPC Instruction Selection **[RESOLVED]**
 
-The G5_SPECIAL pass (index 19) contains PPC/Xenon-specific peephole optimizations.
-~200+ AT_LIMIT functions are blocked by peephole mismatches.
+### Original hypothesis (disproved):
+We expected G5_SPECIAL (pass index 19) to be a peephole optimizer with a
+pattern-match-replace table. Binary patching showed this is **wrong**:
+- G4P4 (`fcn.10c04d6d`) at the G5_SPECIAL position has ZERO peephole effect
+- There is no separate peephole pass — all PPC patterns are generated during
+  instruction selection in the code generator (G5P10)
 
-### 2.1 Find the Peephole Table
+### Actual architecture:
+The compiler uses a **two-stage** model:
+1. **IL-level optimization** (groups 1-4): Operates on intermediate language.
+   G3P2 marks record-form candidates (`subf.`).
+2. **PPC code generation** (G5P10): Converts IL to PPC instructions, making
+   all instruction selection choices (subfc vs neg/andc, eqv vs branch, etc.)
+   The Xenon scheduler within G5P10 reorders for pipeline efficiency.
 
-Peephole optimizers typically use a pattern-match-replace table:
-```
-struct PeepholeRule {
-    Pattern match;      // IR pattern to match
-    Pattern replace;    // IR pattern to replace with
-    Condition guard;    // additional conditions
-};
-```
+### Implication for DC3:
+"Peephole mismatches" in AT_LIMIT functions are actually **instruction selection
+differences** in the code generator. They're triggered by IL-level differences
+(how the source is expressed), not by a configurable peephole table. The fix is
+always at the source level (matching the original source's expression structure).
 
-**Search strategy:**
-1. Find the function that implements G5_SPECIAL (in pass group 2 or 3)
-2. Look for a table of structs in .rdata or .data near G5_SPECIAL references
-3. Each entry should reference PPC instruction mnemonics or opcode constants
-4. Cross-reference with known patterns:
-   - NOR: match `xori rD, rA, 0xFF` on u8 → replace with `nor rD, rA, rA`
-   - Boolean: match compare+branch → replace with `subfc/eqv/srwi`
-   - subf.: match `cmpw + subf` → replace with `subf.`
+### 2.4 rlwinm Fusion **[PROVEN — 2026-03-10]**
 
-### 2.2 Map Each Known Empirical Pattern
+**Discovery source**: ByteGrinder byte-rotation functions (20 functions, op15-op39).
 
-For each AT_LIMIT pattern we've observed, find the specific code path in G5_SPECIAL:
+G5P10 has a `rlwinm` fusion optimization that combines separate shift+mask into
+fused PPC rotate-and-mask instructions. Same compiler version for both target
+and base — the fusion difference is caused by **different source expressions**
+producing different IL, which the same G5P10 then handles differently.
 
-| Pattern | What to Find |
-|---------|-------------|
-| NOR peephole | The rule that matches `xor 0xFF` on byte-width operands |
-| Boolean materialization | The rule that converts compare+branch to branchless |
-| subf. fusion | The rule that fuses subtract with record bit |
-| Branch hint insertion | Where `+`/`-` branch hints get added |
-| Paired-single fusion | Where adjacent float ops get combined |
+| Our output | Target output | PPC encoding |
+|------------|---------------|--------------|
+| `extrwi rA, rS, N, B` | `srwi rA, rS, N` | Both are `rlwinm` aliases |
+| `clrlslwi rA, rS, N, M` | `slwi rA, rS, M` | Both are `rlwinm` aliases |
 
-### 2.3 Priority
+**Pattern**: When computing `(byte >> N)` where `byte` is known to be 8-bit
+(via `u8` type or prior mask), c1xx.dll emits IL with a CAST to unsigned char
+before the SHR. G5P10 sees the narrowed type and fuses the shift + implicit
+8-bit mask into a single `rlwinm` (`extrwi` form). If the source uses a
+wider type (`unsigned long`, `u32`) and masks later, G5P10 generates separate
+`srwi` + `clrlwi` at the mask point, matching the target.
+
+**u8 mask placement**: `u8 x = value;` causes c1xx.dll to emit CAST(82 12 20)
+at assignment. G5P10 then emits `clrlwi` immediately. The target source likely
+used `unsigned long x = value;` (or `int`), deferring the mask to the final
+u8() truncation.
+
+**Proven by ByteGrinder**: All 20 rotation functions (op15-op39) improved when
+rewritten from `u8` intermediate types (which trigger fusion) to `unsigned long`
+with explicit rotation decomposition. The `unsigned long` versions matched target
+instruction selection exactly for `srwi`/`slwi`. The remaining mismatches are
+from `u8` operands in XOR variants, where the type forces early masking.
+
+**Key insight**: The source type system directly controls IL CAST placement,
+which controls G5P10's instruction selection. `u8` → fused `rlwinm`. `u32` →
+separate shift+mask. This is a general principle for ALL byte-level operations.
+
+**Test opportunity**: Use `msvc-src/tools/il_parser.py` to capture IL for:
+1. `u8 byte = w; u8 hi = byte >> 2;` — expect CAST before SHR
+2. `u32 val = w & 0xFF; u32 hi = val >> 2;` — expect SHR without CAST
+Compare IL to confirm the CAST is the trigger for `extrwi` fusion.
+
+**Impact**: 20+ ByteGrinder functions confirmed (17 to 100%). Pattern likely affects
+hundreds more across the project — any function doing byte-level shift operations with
+`u8` typed variables will generate fused `rlwinm` instead of separate shifts.
+
+**Full writeup**: See [IL_TYPE_CONTROL.md](IL_TYPE_CONTROL.md) for complete mechanism,
+fix pattern, results table, and implications.
+
+**Current implementation support**:
+- persistent `_CL_*` fixture capture under `msvc-src/analysis/il-fixtures/`
+- normalized `bundle.json` export from `msvc-src/tools/il_parser.py`
+- constrained PPC->IL lifting in `msvc-src/tools/ppc_il_lifter.py`
+  for fused-vs-separate byte shift/mask analysis
+- bool-materialization carry-chain lifting and derived shape facts
+  (`zero_test`, `signed_positive`, etc.) in the same lifter
+
+### 2.5 Priority
 
 **High**: NOR, boolean materialization, subf. — these have known source-side triggers
-**Medium**: Branch hints, paired-single — less controllable from source
+**Medium**: rlwinm fusion — need IL comparison to determine if source-controllable
 **Low**: Instruction scheduling — purely internal, no source influence
 
 ## Track 3: Differential Testing Harness

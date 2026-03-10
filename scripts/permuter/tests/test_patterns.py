@@ -5028,6 +5028,80 @@ class TestEarlyReturnMergeSkeletonGuided(unittest.TestCase):
                            "Should produce skeleton-guided merge variants")
 
 
+class TestEarlyReturnMergeM2cGuided(unittest.TestCase):
+    """Test m2c guidance for early_return_merge direction filtering."""
+
+    def test_m2c_guard_chain_prefers_split(self):
+        """When m2c shows guard_chain, should not generate merge variants."""
+        source = textwrap.dedent("""\
+        int test_func(int a, int b) {
+            if (a < 0 || b < 0)
+                return 0;
+            return a + b;
+        }
+        """)
+        # m2c output: guard_chain → prefer split direction
+        m2c_code = """\
+void test_func(int a, int b) {
+    if (a < 0) { return 0; }
+    if (b < 0) { return 0; }
+    return a + b;
+}
+"""
+        ctx = make_context(source, "test_func", diag_with_branch_ops())
+        ctx.m2c_code = m2c_code
+        pattern = get_pattern("early_return_merge")
+        variants = list(pattern.generate(ctx))
+        # Should produce split variants, not merge
+        descriptions = [v.description.lower() for v in variants]
+        has_split = any("split" in d or "expand" in d or "guard return" in d for d in descriptions)
+        self.assertTrue(has_split, f"Expected split variant, got: {descriptions}")
+
+    def test_m2c_single_return_prefers_merge(self):
+        """When m2c shows single return, should prefer merge/conjunction."""
+        source = textwrap.dedent("""\
+        int test_func(int a, int b) {
+            if (a < 0)
+                return 0;
+            return a + b;
+        }
+        """)
+        # m2c output: single return → prefer merge/conjunction
+        m2c_code = "int test_func(int a, int b) { return a + b; }"
+        ctx = make_context(source, "test_func", diag_with_branch_ops())
+        ctx.m2c_code = m2c_code
+        pattern = get_pattern("early_return_merge")
+        variants = list(pattern.generate(ctx))
+        # Should produce conjunction variant (collapse guard into &&)
+        descriptions = [v.description.lower() for v in variants]
+        has_conjunction = any("conjunction" in d or "merge" in d for d in descriptions)
+        self.assertTrue(has_conjunction, f"Expected conjunction variant, got: {descriptions}")
+
+
+class TestStatementReorderM2cGuided(unittest.TestCase):
+    """Test m2c call-order guidance for statement_reorder."""
+
+    def test_m2c_call_order_prioritizes_matching_swap(self):
+        """When m2c shows B before A, swap toward that order."""
+        source = textwrap.dedent("""\
+        void test_func() {
+            Alpha();
+            Beta();
+        }
+        """)
+        # m2c output: Beta before Alpha
+        m2c_code = "void test_func(void) { Beta(); Alpha(); }"
+        diag = diag_with_clusters()
+        ctx = make_context(source, "test_func", diag)
+        ctx.m2c_code = m2c_code
+        pattern = get_pattern("statement_reorder")
+        variants = list(pattern.generate(ctx))
+        # Should produce a variant described as m2c-guided
+        m2c_variants = [v for v in variants if "m2c" in v.description.lower()]
+        self.assertGreater(len(m2c_variants), 0,
+                           f"Expected m2c-guided variants, got: {[v.description for v in variants]}")
+
+
 class TestAndSplitHelpers(unittest.TestCase):
     """Test the _count_consecutive_ifs and _count_guard_return_pairs helpers."""
 

@@ -182,6 +182,14 @@ void UIScreen::Poll() {
 void UIScreen::Draw() {
     if (mShowing) {
         FOREACH (it, mPanelList) {
+#ifdef HX_NATIVE
+            extern int gDebugFrameID;
+            if (gDebugFrameID == 500) {
+                printf("DC3 UIScreen::Draw '%s' panel='%s' active=%d showing=%d shouldDraw=%d\n",
+                       Name(), it->mPanel->Name(), it->Active(), it->mPanel->Showing(),
+                       TheRnd.ShouldDrawPanel(it->mPanel));
+            }
+#endif
             if (it->Active() && it->mPanel->Showing()
                 && TheRnd.ShouldDrawPanel(it->mPanel)) {
                 static Symbol suppress_blacklight_text("suppress_blacklight_text");
@@ -222,6 +230,17 @@ void UIScreen::Enter(UIScreen *scr) {
     int i5 = 0;
     FOREACH (it, mPanelList) {
         if (it->Active() && it->mPanel->GetState() == UIPanel::kDown) {
+#ifdef HX_NATIVE
+            // Skip Kinect tutorial panels — no gesture input on native.
+            // On Xbox, DTA scripts suppress these in controller mode.
+            if (strstr(it->mPanel->Name(), "tutorial")) {
+                printf("DC3 UI: Skipping tutorial panel '%s' on screen '%s'\n",
+                       it->mPanel->Name(), Name());
+                continue;
+            }
+            printf("DC3 UI: Entering panel '%s' on screen '%s'\n",
+                   it->mPanel->Name(), Name());
+#endif
             AutoGlitchReport report(17, EnterGlitchCB, it->mPanel);
             it->mPanel->Enter();
             if (Rnd::sPostProcPanelCount != i5) {

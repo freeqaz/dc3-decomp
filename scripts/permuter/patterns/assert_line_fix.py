@@ -63,6 +63,14 @@ class AssertLineFixPattern(Pattern):
         if not macro_calls:
             return
 
+        # Region filter: only consider macro calls in mismatch regions
+        macro_calls = [
+            (call, arg, val) for call, arg, val in macro_calls
+            if ctx.node_in_mismatch_region(call)
+        ]
+        if not macro_calls:
+            return
+
         counter = 0
 
         # Strategy 1: Uniform delta applied to ALL asserts at once

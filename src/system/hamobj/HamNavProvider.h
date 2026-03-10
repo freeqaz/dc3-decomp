@@ -78,6 +78,7 @@ public:
     void SetEnabled(int, bool);
     bool IsEnabled(int) const;
     void SetHidden(int, bool);
+    void AppendNavItem();
 
     void SetNavList(HamNavList *l) { mNavList = l; }
     std::vector<NavItem> &Items() { return mNavItems; }

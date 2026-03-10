@@ -394,8 +394,8 @@ void CharIKHand::IKElbow(RndTransformable *elbow, RndTransformable *shoulder) {
     float sinAngle = -std::sqrt(-(cosAngle * cosAngle - 1.0f));
     elbow->DirtyLocalXfm().m.Set(cosAngle, sinAngle, 0, -sinAngle, cosAngle, 0, 0, 0, 1);
     Vector3 handPos, targetPos;
-    Multiply(mHand->WorldXfm().v, shoulder->WorldXfm(), handPos);
-    Multiply(wristDst, shoulder->WorldXfm(), targetPos);
+    MultiplyTranspose(mHand->WorldXfm().v, shoulder->WorldXfm(), handPos);
+    MultiplyTranspose(wristDst, shoulder->WorldXfm(), targetPos);
     if (mElbowSwing >= (unsigned int)1) {
         Vector2 handYZ(handPos.y, handPos.z);
         Vector2 targetYZ(targetPos.y, targetPos.z);
@@ -408,7 +408,7 @@ void CharIKHand::IKElbow(RndTransformable *elbow, RndTransformable *shoulder) {
         float swingAngle = Clamp(-mElbowSwing, mElbowSwing, crossVal / crossDenom);
         Transform &dirtyElbow = elbow->DirtyLocalXfm();
         RotateAboutX(dirtyElbow.m, -swingAngle, dirtyElbow.m);
-        Multiply(mHand->WorldXfm().v, shoulder->WorldXfm(), handPos);
+        MultiplyTranspose(mHand->WorldXfm().v, shoulder->WorldXfm(), handPos);
     }
     Hmx::Quat rotQuat;
     MakeRotQuat(handPos, targetPos, rotQuat);
@@ -477,18 +477,18 @@ void CharIKHand::IKElbow(RndTransformable *elbow, RndTransformable *shoulder) {
                 Vector3 v2(quatResult.x, quatResult.y, quatResult.z);
                 Add(v2, axisProj, v2);
                 Vector3 elbowLocal, targetLocal;
-                Multiply(elbow->WorldXfm().v, shoulder->WorldXfm(), elbowLocal);
+                MultiplyTranspose(elbow->WorldXfm().v, shoulder->WorldXfm(), elbowLocal);
                 if (mClockwise)
-                    Multiply(v2, shoulder->WorldXfm(), targetLocal);
+                    MultiplyTranspose(v2, shoulder->WorldXfm(), targetLocal);
                 else
-                    Multiply(v1, shoulder->WorldXfm(), targetLocal);
+                    MultiplyTranspose(v1, shoulder->WorldXfm(), targetLocal);
                 Hmx::Quat finalQuat;
                 MakeRotQuat(elbowLocal, targetLocal, finalQuat);
                 Hmx::Matrix3 finalMat;
                 MakeRotMatrix(finalQuat, finalMat);
                 Multiply(finalMat, shoulder->LocalXfm().m, shoulder->DirtyLocalXfm().m);
-                Multiply(mHand->WorldXfm().v, elbow->WorldXfm(), elbowLocal);
-                Multiply(wristDst, elbow->WorldXfm(), targetLocal);
+                MultiplyTranspose(mHand->WorldXfm().v, elbow->WorldXfm(), elbowLocal);
+                MultiplyTranspose(wristDst, elbow->WorldXfm(), targetLocal);
                 MakeRotQuat(elbowLocal, targetLocal, finalQuat);
                 MakeRotMatrix(finalQuat, finalMat);
                 Multiply(finalMat, elbow->LocalXfm().m, elbow->DirtyLocalXfm().m);

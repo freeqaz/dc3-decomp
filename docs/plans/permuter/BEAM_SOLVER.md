@@ -453,36 +453,56 @@ These are still real, but they should not block phase 1:
 
 ## Recommended Implementation Order
 
-### Phase A: Infrastructure
+### Phase A: Infrastructure — DONE
 
-- add a beam-state dataclass
-- factor state re-diagnosis into a reusable helper
-- factor proposal-source execution behind a shared interface
-- finalize cached auxiliary context loading (`ghidra`, `m2c`, `rb3`) per state
+- `BeamState` dataclass with multi-criteria `ranking_key` property
+- `BeamConfig` dataclass for search parameters
+- `_rediagnose_state()` — reparse and re-diagnose a beam state
+- Stable target-side guidance loading (`ghidra`, `m2c`, `rb3`) cached once and
+  reused across all states
 
-### Phase B: Search Skeleton
+### Phase B: Search Skeleton — DONE
 
-- add `beam_search.py`
-- seed beam from existing generators
-- score and select top `K`
-- add stagnation and diversity controls
-- add logging/reporting that makes survivor decisions inspectable
+- `beam_search.py` — full search module with seed → expand → score → select loop
+- `_expand_state()` — generates proposals from any beam state via standard patterns
+- `_select_survivors()` — multi-criteria ranking with diversity enforcement
+- `_deduplicate_states()` — source-hash deduplication
+- Stagnation detection (all survivors stalled → early stop)
+- Best-ever tracking with guaranteed beam inclusion
+- `--beam` flag wired into hill_climber.py (also standalone CLI)
+- 18 unit tests covering ranking, selection, dedup, guidance, config
 
-### Phase C: Proposal Integration
+### Phase C: Proposal Integration — DONE
 
-- integrate constrained synthesis as a proposal source
-- integrate adaptive chain generation per state
-- integrate tag-history ranking per state
-- make existing single-function proposal sources usable without rewriting them
-  per search mode
+- Constrained synthesis (`constraint_solver.synthesize()`) integrated as a
+  per-state proposal source in `_expand_state()` — runs at every beam depth,
+  not just round 1
+- Build-failure-aware: suppresses synthesis for a lineage after repeated
+  failures (same policy as pattern suppression)
+- Adaptive chain generation already wired per state via `build_adaptive_chains()`
+- Tag-history ranking already wired via `RoundHints.last_winner_tags`
+- All existing single-function proposal sources (patterns, compose pairs,
+  chains, synthesis) work without per-search-mode rewrites
 
-### Phase D: Guidance Scoring
+### Phase D: Guidance Scoring — DONE
 
-- add Ghidra/m2c agreement signals
-- add m2c-guided tail-call/control-flow helpers
-- use guidance agreement in beam ranking
+- `_compute_guidance_agreement()` now uses structural extractors to compare
+  source state against m2c and Ghidra targets:
+  - Guard count agreement (both high or both low)
+  - Nesting depth agreement (both deep or both shallow)
+  - Return pattern agreement (matching classification)
+- Returns +2 (both Ghidra and m2c agree with source), +1 (one agrees),
+  0 (no signal), -1 (diverges from both)
+- m2c-guided tail-call/control-flow helpers wired into 4 patterns:
+  `guard_to_nested`, `return_call_merge`, `early_return_merge`,
+  `statement_reorder`
+- Guidance agreement feeds into `BeamState.ranking_key` for beam selection
 
-### Phase E: Cross-Unit Extension
+### Phase E: Cross-Unit Extension — DONE (basic)
 
-- allow optional header-backed beam proposals
-- keep these behind explicit flags or separate budgets
+- `--cross-unit` flag enables header-backed proposals in beam expansion
+- Only runs in early depths (generation ≤ 1) to limit expensive rebuilds
+- Uses existing `header_pattern_bridge` infrastructure — all supported
+  header patterns (tail_call, branch_polarity, statement_reorder, etc.)
+  generate proposals via the same beam scoring pipeline
+- Behind explicit `--cross-unit` flag, off by default

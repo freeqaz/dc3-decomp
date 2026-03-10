@@ -2007,7 +2007,6 @@ void RndText::UpdateText() {
     }
     if (mStyles[0].mSize > 0.0f && mWidth > 0.0f) {
         if (mFitType == kFitScrollMarqueeWrap) {
-        do_ellipsis:
             FitTextEllipsis();
             return;
         }
@@ -2018,19 +2017,22 @@ void RndText::UpdateText() {
             for (unsigned int i = 0; i < (unsigned int)mStyles.size(); i++) {
                 RndFontBase *font = mStyles[i].mFont;
                 const char *fontName;
-                if (font == 0) {
-                    fontName = "NULL";
-                } else if (font->ClassName() != RndFont::StaticClassName()) {
-                    fontName = font->Name();
+                if (font != 0) {
+                    if (font->ClassName() != RndFont::StaticClassName()) {
+                        fontName = font->Name();
+                    } else {
+                        continue;
+                    }
                 } else {
-                    continue;
+                    fontName = "NULL";
                 }
                 MILO_NOTIFY(
                     "%s %s requests scrolling, but uses a font that does not support it (%s)",
-                    PathName(this), ClassName().Str(), fontName
+                    PathName(this), Name(), fontName
                 );
                 mFitType = kFitScrollMarqueeWrap;
-                goto do_ellipsis;
+                FitTextEllipsis();
+                return;
             }
             FitTextScroll();
             return;

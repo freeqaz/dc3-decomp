@@ -72,25 +72,48 @@ class EarlyReturnMergePattern(Pattern):
             if counter > 0:
                 return  # Ghidra guided produced candidates, skip blind
 
+        # Region filter: only consider statements in mismatch regions
+        region_stmts = [s for s in stmts if ctx.node_in_mismatch_region(s)]
+
+        # m2c guidance: determine which directions to prefer
+        prefer_merge = None  # None=all, True=merge/conjunction, False=split/expand
+        prefer_conjunction = None  # None=both, True=conjunction, False=expand
+        if ctx.m2c_code:
+            from ..m2c import extract_return_pattern, extract_guard_count
+            ret_pattern = extract_return_pattern(ctx.m2c_code)
+            guard_count = extract_guard_count(ctx.m2c_code)
+            if ret_pattern == "guard_chain" or guard_count >= 2:
+                prefer_merge = False  # Target uses guards → split/expand
+            elif ret_pattern == "merged_var":
+                prefer_merge = True  # Target merges → merge/conjunction
+                prefer_conjunction = True
+            elif ret_pattern == "single":
+                prefer_merge = True  # Single return → merge/conjunction
+                prefer_conjunction = True
+
         # Direction 1: Merge consecutive guard returns into || chain
-        for variant in _merge_guard_returns(stmts, source, counter):
-            yield variant
-            counter += 1
+        if prefer_merge is not False:
+            for variant in _merge_guard_returns(region_stmts, source, counter):
+                yield variant
+                counter += 1
 
         # Direction 2: Split || chain in guard return into separate returns
-        for variant in _split_guard_returns(stmts, ctx, counter):
-            yield variant
-            counter += 1
+        if prefer_merge is not True:
+            for variant in _split_guard_returns(region_stmts, ctx, counter):
+                yield variant
+                counter += 1
 
         # Direction 3: Collapse guard return + final return into && conjunction
-        for variant in _guard_to_conjunction(stmts, source, counter):
-            yield variant
-            counter += 1
+        if prefer_conjunction is not False:
+            for variant in _guard_to_conjunction(region_stmts, source, counter):
+                yield variant
+                counter += 1
 
         # Direction 4: Expand && conjunction into guard return + final return
-        for variant in _conjunction_to_guard(stmts, source, counter):
-            yield variant
-            counter += 1
+        if prefer_conjunction is not True:
+            for variant in _conjunction_to_guard(region_stmts, source, counter):
+                yield variant
+                counter += 1
 
     def _try_ghidra_guided(self, ctx: FunctionContext, start_counter: int) -> Iterator[Variant]:
         """Generate only the direction(s) indicated by Ghidra's condition structure."""

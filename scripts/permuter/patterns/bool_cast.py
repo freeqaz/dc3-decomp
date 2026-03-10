@@ -55,6 +55,9 @@ class BoolCastPattern(Pattern):
     def generate(self, ctx: FunctionContext) -> Iterator[Variant]:
         counter = 0
         for stmt in ctx.statements:
+            # Region filter: skip statements outside mismatch regions
+            if not ctx.node_in_mismatch_region(stmt):
+                continue
             for variant in _generate_bool_casts(stmt, ctx, counter):
                 yield variant
                 counter += 1

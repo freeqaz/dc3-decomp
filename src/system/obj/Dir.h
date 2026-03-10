@@ -10,6 +10,11 @@
 #include "utl/MemMgr.h"
 #include "utl/Std.h"
 #include "utl/StringTable.h"
+#ifdef HX_NATIVE
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#endif
 #include <vector>
 
 enum InlineDirType {
@@ -18,6 +23,24 @@ enum InlineDirType {
     kInlineAlways = 2,
     kInlineCachedShared = 3
 };
+
+#ifdef HX_NATIVE
+static inline bool MiloDebugChooseModeEnabled() {
+    static int enabled = -1;
+    if (enabled == -1) {
+        const char *env = getenv("MILO_DEBUG_CHOOSE_MODE");
+        enabled = (env && env[0] && strcmp(env, "0") != 0) ? 1 : 0;
+    }
+    return enabled != 0;
+}
+
+static inline bool MiloDebugChooseModePath(const char *path) {
+    return path
+        && (strstr(path, "choose_mode") || strstr(path, "HamList")
+            || strstr(path, "ham_list") || strstr(path, "hamnav")
+            || strstr(path, "ui/choose_mode") || strstr(path, "ui/common"));
+}
+#endif
 
 template <class C>
 class ObjDirPtr : public ObjRefConcrete<C> {
@@ -71,8 +94,32 @@ public:
     }
     void PostLoad(Loader *loader) {
         if (mLoader) {
+#ifdef HX_NATIVE
+            const char *file = mLoader->LoaderFile().c_str();
+            bool debug = MiloDebugChooseModeEnabled() && MiloDebugChooseModePath(file);
+            if (debug) {
+                printf(
+                    "DC3 CHOOSE ObjDirPtr::PostLoad begin file='%s' loader=%p current=%p\n",
+                    file ? file : "<null>",
+                    (void *)mLoader,
+                    (void *)mObject
+                );
+            }
+#endif
             TheLoadMgr.PollUntilLoaded(mLoader, loader);
             C *gotten = dynamic_cast<C *>(mLoader->GetDir());
+#ifdef HX_NATIVE
+            if (debug) {
+                Hmx::Object *obj = dynamic_cast<Hmx::Object *>(gotten);
+                printf(
+                    "DC3 CHOOSE ObjDirPtr::PostLoad end file='%s' resolved=%p class=%s name=%s\n",
+                    file ? file : "<null>",
+                    (void *)gotten,
+                    obj ? obj->ClassName().Str() : "<null>",
+                    obj ? obj->Name() : "<null>"
+                );
+            }
+#endif
             mLoader = nullptr;
             *this = gotten;
         }
@@ -81,6 +128,19 @@ public:
     void LoadFile(const FilePath &p, bool async, bool share, LoaderPos pos, bool b3) {
         *this = nullptr;
         DirLoader *d = nullptr;
+#ifdef HX_NATIVE
+        bool debug = MiloDebugChooseModeEnabled() && MiloDebugChooseModePath(p.c_str());
+        if (debug) {
+            printf(
+                "DC3 CHOOSE ObjDirPtr::LoadFile request file='%s' async=%d share=%d pos=%d b3=%d\n",
+                p.c_str(),
+                async,
+                share,
+                (int)pos,
+                b3
+            );
+        }
+#endif
         if (share) {
             d = DirLoader::Find(p);
             if (d && !d->IsLoaded()) {
@@ -97,6 +157,16 @@ public:
                 d = new DirLoader(p, pos, nullptr, nullptr, nullptr, b3, nullptr);
         }
         mLoader = d;
+#ifdef HX_NATIVE
+        if (debug) {
+            printf(
+                "DC3 CHOOSE ObjDirPtr::LoadFile loader=%p loaded=%d file='%s'\n",
+                (void *)d,
+                d ? d->IsLoaded() : 0,
+                p.c_str()
+            );
+        }
+#endif
         if (d) {
             if (!async || mLoader->IsLoaded())
                 PostLoad(nullptr);

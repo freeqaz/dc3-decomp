@@ -386,6 +386,12 @@ void ShellInput::EnterControllerMode(bool b) {
 }
 
 void ShellInput::ExitControllerMode(bool b) {
+#ifdef HX_NATIVE
+    // Native: no Kinect — never exit controller mode.
+    // DTA scripts fire exit_controller_mode during screen transitions,
+    // but without gesture input there's no way to re-enter.
+    return;
+#endif
     if (TheHamUI.GetHelpBarPanel())
         TheHamUI.GetHelpBarPanel()->ExitControllerMode(b);
     TheGestureMgr->SetInControllerMode(false);

@@ -38,8 +38,6 @@ public:
     const char *GetName() const { return FileGetBase(GetFile().c_str()); }
     void SetName(const char *name, bool b2) {
         FilePath path;
-        // maybe classname is accessed via a ResourceDirBase helper?
-        // something going on where the ResourceDirBase is addi'ed
         if (MakeResourcePath(path, mOwner->ClassName(), T::StaticClassName(), name)) {
             LoadFile(path, b2, true, kLoadFront, false);
         } else {

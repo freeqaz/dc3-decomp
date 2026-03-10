@@ -6,7 +6,10 @@
 enum UIListSlotDrawType {
     kUIListSlotDrawAlways,
     kUIListSlotDrawHighlight,
-    kUIListSlotDrawNoHighlight
+    kUIListSlotDrawNoHighlight,
+    kUIListSlotDrawAlwaysNoAlpha,
+    kUIListSlotDrawHighlightNoAlpha,
+    kUIListSlotDrawNoHighlightNoAlpha
 };
 
 class UIListSlotElement {

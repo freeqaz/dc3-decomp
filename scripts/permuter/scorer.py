@@ -613,6 +613,8 @@ class Scorer:
 
         self._baseline_equivalent = self._check_equivalence()
         self._baseline_pct = baseline
+        # Stash objdiff data for optional attribution
+        self._baseline_objdiff_data = objdiff_data if guided else None
 
         # Seed the obj hash cache with baseline obj
         if self._cache and self._obj_path.exists():
@@ -623,3 +625,119 @@ class Scorer:
                 self._cache.store(self._original_source_md5, obj_md5, baseline, True)
 
         return baseline
+
+    def get_attribution(self) -> list:
+        """Compute source-attributed mismatch regions for the baseline.
+
+        Compiles with /FAs, parses the listing, and joins with the objdiff
+        instruction data from get_baseline(guided=True).
+
+        Returns a list of MismatchRegion objects, or empty list on failure.
+        Must be called after get_baseline(guided=True).
+        """
+        objdiff_data = getattr(self, "_baseline_objdiff_data", None)
+        if not objdiff_data or not objdiff_data.get("instructions"):
+            return []
+
+        try:
+            from tools.compiler_trace.invoker import CompilerInvoker
+            from .attribution import attribute_function
+        except ImportError:
+            return []
+
+        # Compile with /FAs to get listing
+        invoker = CompilerInvoker()
+        output_dir = Path("/tmp/claude") / "attribution" / self.source_path.stem
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        result = invoker.compile_with_asm(
+            self.source_path, output_dir, listing_type="/FAs",
+        )
+        if result.returncode != 0:
+            return []
+
+        # Find listing file
+        listing_text = None
+        for ext in (".asm", ".cod"):
+            p = output_dir / (self.source_path.stem + ext)
+            if p.exists():
+                listing_text = p.read_text(errors="replace")
+                break
+        if not listing_text:
+            for p in output_dir.iterdir():
+                if p.suffix in (".asm", ".cod"):
+                    listing_text = p.read_text(errors="replace")
+                    break
+        if not listing_text:
+            return []
+
+        # Convert objdiff instructions to attribution format
+        diff_instrs = []
+        for ins in objdiff_data["instructions"]:
+            mt = ins.get("match_type", "equal")
+            if mt == "equal":
+                kind = "match"
+            elif mt in ("diff_op", "replace"):
+                kind = "replace"
+            elif mt == "insert":
+                kind = "insert"
+            elif mt == "delete":
+                kind = "delete"
+            elif mt == "diff_arg":
+                kind = "replace"
+            else:
+                kind = "match"
+            target = ins.get("target") or {}
+            base = ins.get("base") or {}
+            diff_instrs.append({
+                "index": ins.get("index", -1),
+                "diff_kind": kind,
+                "target_opcode": target.get("opcode", ""),
+                "base_opcode": base.get("opcode", ""),
+            })
+
+        # Run attribution
+        _, _, regions = attribute_function(listing_text, self.symbol, diff_instrs)
+        return regions
+
+    def get_shape_facts(self) -> list[dict]:
+        """Compute derived PPC shape facts for the baseline via /FAcs listing."""
+        cached = getattr(self, "_baseline_shape_facts", None)
+        if cached is not None:
+            return cached
+
+        try:
+            from tools.compiler_trace.invoker import CompilerInvoker
+            from .ppc_shape_facts import extract_shape_facts_from_listing
+        except ImportError:
+            return []
+
+        invoker = CompilerInvoker()
+        output_dir = Path("/tmp/claude") / "shape_facts" / self.source_path.stem
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        result = invoker.compile_with_asm(
+            self.source_path, output_dir, listing_type="/FAcs",
+        )
+        if result.returncode != 0:
+            self._baseline_shape_facts = []
+            return []
+
+        listing_text = None
+        for ext in (".cod", ".asm"):
+            p = output_dir / (self.source_path.stem + ext)
+            if p.exists():
+                listing_text = p.read_text(errors="replace")
+                break
+        if not listing_text:
+            for p in output_dir.iterdir():
+                if p.suffix in (".cod", ".asm"):
+                    listing_text = p.read_text(errors="replace")
+                    break
+        if not listing_text:
+            self._baseline_shape_facts = []
+            return []
+
+        facts = extract_shape_facts_from_listing(listing_text, self.symbol)
+        self._baseline_shape_facts = facts
+        return facts

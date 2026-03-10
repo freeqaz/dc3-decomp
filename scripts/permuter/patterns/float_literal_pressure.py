@@ -104,6 +104,9 @@ class FloatLiteralPressurePattern(Pattern):
             if node.type == "number_literal" and node.text is not None:
                 text = node.text
                 if text.endswith(b"f") and b"." in text:
+                    # Region filter: only consider literals in mismatch regions
+                    if not ctx.node_in_mismatch_region(node):
+                        continue
                     literal_uses.setdefault(text, []).append(node)
 
         for literal, nodes in literal_uses.items():
@@ -183,6 +186,9 @@ class FloatLiteralPressurePattern(Pattern):
             uses = []
             for node in walk(ctx.func_node):
                 if node.type == "identifier" and node.text == var_name:
+                    # Region filter: only consider uses in mismatch regions
+                    if not ctx.node_in_mismatch_region(node):
+                        continue
                     uses.append(node)
 
             if len(uses) < 2:

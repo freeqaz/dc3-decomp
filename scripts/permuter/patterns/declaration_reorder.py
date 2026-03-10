@@ -173,6 +173,9 @@ class DeclarationReorderPattern(Pattern):
         for group in _find_declaration_groups(ctx):
             if len(group) < 2:
                 continue
+            # Region filter: skip groups entirely outside mismatch regions
+            if not any(ctx.node_in_mismatch_region(decl) for decl in group):
+                continue
 
             # Build dependency graph to avoid use-before-declaration errors
             deps = _build_dependency_edges(group)

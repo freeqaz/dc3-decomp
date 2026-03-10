@@ -563,6 +563,7 @@ void RndMesh::DrawShowing() {
 
 static void DrawMeshImmediate(RndMesh* mesh) {
     if (!gWgpuRnd || !gWgpuRnd->IsInPass()) return;
+
     bool capturing = FrameCapture::Get().IsCapturing();
     uint32_t heuristics = 0;
 
@@ -573,6 +574,38 @@ static void DrawMeshImmediate(RndMesh* mesh) {
     if (!mat) {
         if (capturing) FrameCapture::Get().AddSkip(mesh->Name(), "no material");
         return;
+    }
+
+    // Skip Kinect-specific UI elements that render incorrectly without
+    // DTA PropAnim driving their material properties. On Xbox, controller_mode.flow
+    // and DTA scripts animate these to correct alpha/visibility.
+    {
+        const char* name = mesh->Name();
+        // Player indicator elements (Kinect skeleton tracking display)
+        if (!strcmp(name, "ui_blank.mesh") ||
+            !strncmp(name, "silhouette_guy", 14) ||
+            !strncmp(name, "buffer_container", 16) ||
+            !strncmp(name, "buffer_left", 11) ||
+            !strncmp(name, "buffer_right", 12) ||
+            strstr(name, "buffer_glass") ||
+            strstr(name, "_crown.mesh")) {
+            return;
+        }
+        // Microphone/voice control UI
+        if (!strncmp(name, "mic_", 4) ||
+            !strncmp(name, "geo_mic", 7) ||
+            !strncmp(name, "geo_mictab", 10)) {
+            return;
+        }
+        // Hand gesture icons
+        if (!strncmp(name, "shield_hand", 11)) {
+            return;
+        }
+        // Tutorial/gesture overlay content
+        if (strstr(name, "tutorial") || strstr(name, "gesture") ||
+            strstr(name, "spotlight") || strstr(name, "nav_tut")) {
+            return;
+        }
     }
 
     // Ensure mesh data is on GPU

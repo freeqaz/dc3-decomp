@@ -24,11 +24,12 @@ PropertyTask::PropertyTask(Hmx::Object *obj, DataNode &prop, DataNode &val, Task
     : mTarget(this, nullptr), mProperty(prop), mValue(val), mStartValue(0),
       mDuration(dur), mEasePower(power), mIsColorInterp(flag),
       mListener(this, nullptr), mElapsed(0.0f), mEaseFunc(gEaseFuncs[t]) {
+    auto _tmp0 = obj->Refs().end();
     MILO_ASSERT(obj, 0x4D);
     MILO_ASSERT(t >= kEaseLinear && t <= kEaseQuarterHalfStairstep, 0x16B);
 
     // Loop through target's refs to find existing PropertyTasks with same property
-    for (ObjRef::iterator it = obj->Refs().begin(); it != obj->Refs().end(); ++it) {
+    for (ObjRef::iterator it = obj->Refs().begin(); it != _tmp0; ++it) {
         Hmx::Object *refOwner = it->RefOwner();
         if (refOwner != nullptr && refOwner->ClassName() == PropertyTask::StaticClassName()) {
             PropertyTask *task = static_cast<PropertyTask *>(refOwner);

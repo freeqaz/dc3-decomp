@@ -220,7 +220,7 @@ void ObjPtrVec<T1, T2>::operator=(const ObjPtrVec &other) {
     mNodes.reserve(other.mNodes.size());
     for (const_iterator it = other.begin(); it != other.end(); ++it) {
         mNodes.push_back(Node(this));
-        Set(end(), *it);
+        Set(begin() + (mNodes.size() - 1), *it);
     }
 }
 

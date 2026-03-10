@@ -8,6 +8,28 @@ to transform AT_LIMIT decomp work from brute-force search to targeted, model-gui
 
 Source and tools live in `msvc-src/`. Analysis docs are here in the synthesis-engine plan.
 
+## Status Note (2026-03-10)
+
+This document predates the current implementation state. The practical status is:
+
+- differential testing is no longer speculative; `msvc-src/tools/diff_test.py`
+  exists and produced the findings in `msvc-src/results/FINDINGS_SUMMARY.md`
+- persistent `_CL_*` fixture capture now exists under
+  `msvc-src/analysis/il-fixtures/`
+- `msvc-src/tools/il_parser.py` exports normalized bundle JSON
+- `msvc-src/tools/ppc_il_lifter.py` has started the constrained PPC->IL work
+- the IL fixture corpus now includes:
+  - `il_type_control_cast_vs_and`
+  - `il_bool_materialization`
+- the permuter-side target-facts layer can now ingest derived PPC shape facts
+  from `/FAcs` listings, with routing gated by target-side mismatch opcodes
+
+That changes the next RE priorities:
+
+1. extend the IL corpus and PPC->IL lift for switch/control-flow shapes
+2. measure whether the first IL-derived facts improve proposal routing
+3. keep COLOR RE selective and demand-driven for unanswered allocator questions
+
 ## Target Binary
 
 | Property | Value |
@@ -78,19 +100,23 @@ but reachable via binary patching or DLL hooking.
 - **Pipeline**: init -> IL load -> per-function {prep -> optimize -> codegen -> cleanup} -> emit
 
 ### Phase 1: Differential Testing Framework
+Status: Implemented core harness and first suites
 **Goal**: Build empirical codegen decision maps WITHOUT decompiling c2.dll.
 
 Approach: Compile carefully crafted test cases with `/FAcs`, diff the assembly output
 to understand what source patterns trigger what codegen changes.
 
-- [ ] Build test harness: compile test case -> extract function assembly -> diff
-- [ ] Test suite for register allocation order (declaration permutations)
-- [ ] Test suite for inlining thresholds (vary function size)
-- [ ] Test suite for peephole patterns (NOR, bool materialize, subf.)
-- [ ] Test suite for branch polarity (if/else ordering)
-- [ ] Test suite for float precision (literal types, static const)
+- [x] Build test harness: compile test case -> extract function assembly -> diff
+- [x] Test suite for register allocation order (declaration permutations)
+- [x] Test suite for inlining thresholds (vary function size)
+- [x] Test suite for peephole patterns (NOR, bool materialize, subf.)
+- [x] Test suite for branch polarity (if/else ordering)
+- [x] Test suite for float precision (literal types, static const)
+- [x] rlwinm fusion / IL-type-control suite
+- [ ] extend suites for switch lowering and call/return shape
 
 **Deliverable**: Empirical decision maps as JSON: `{source_pattern} -> {asm_pattern}`.
+Current outputs exist under `msvc-src/results/*.json`.
 
 ### Phase 2: Targeted Decompilation
 **Goal**: Decompile the specific c2.dll functions that implement our critical passes.
@@ -121,6 +147,7 @@ Priority order (by impact on AT_LIMIT count):
 **Deliverable**: Annotated pseudocode for critical passes.
 
 ### Phase 3: Compiler Model
+Status: Started via atlas, normalized IL bundles, and constrained PPC->IL lifting
 **Goal**: Build a predictive model of c2.dll's decisions, usable by the synthesis engine.
 
 The model doesn't need to be a full compiler reimplementation. It needs to answer:
@@ -131,6 +158,7 @@ The model doesn't need to be a full compiler reimplementation. It needs to answe
 - [ ] Register allocation predictor (input: variable list + types -> output: register map)
 - [ ] Inlining predictor (input: callee size + call context -> output: inline yes/no)
 - [ ] Peephole predictor (input: IR pattern -> output: instruction sequence)
+- [ ] IL/PPC shape predictor for fused vs separate byte operations
 - [ ] Integrate into permuter as constraint oracle
 
 **Deliverable**: Python module `msvc-src/model/` importable by the permuter.
@@ -202,12 +230,15 @@ msvc-src/
 - Ghidra instance loaded with DC3 binary (need separate project for c2.dll x86 analysis)
 
 ### Immediate Next Steps
-1. **Disassemble COLOR helpers**: Focus on the 207 functions in the 0x10BC6xxx range.
-   Find the callee-saved register assignment loop and BSF threshold.
-2. **Build differential testing harness**: Compile test cases with `/FAcs`, extract
-   per-function assembly, diff across source variations.
-3. **Map pass group <-> pass name**: Determine which of the 37 pass functions corresponds
-   to each of the 35 named passes by correlating data references.
+1. **Extend the IL fixture corpus**: capture switch and call/return fixtures
+   under `msvc-src/analysis/il-fixtures/`.
+2. **Extend the constrained PPC->IL lifter**: add switch dispatch shape and
+   control-flow lowering beyond the current rlwinm + bool-materialization coverage.
+3. **Measure the first permuter-facing facts**: `byte_fusion` and
+   `bool_materialization` now reach `TargetFacts`; next verify that they change
+   proposal ordering on real targets.
+4. **Disassemble COLOR helpers selectively**: only for allocator questions still
+   unanswered by the differential harness.
 
 ## References
 

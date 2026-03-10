@@ -70,13 +70,15 @@ void UIListSlot::Draw(
     if (root) {
         int thesize = drawstate.mElements.size();
         if (thesize > mElements.size()) {
+            int numSlotElements = mElements.size();
 #ifdef HX_NATIVE
             return;
 #else
-            MILO_FAIL("%i isn't enough elements (need %i)", mElements.size(), thesize);
+            MILO_FAIL("%i isn't enough elements (need %i)", numSlotElements, thesize);
 #endif
         }
-        Transform tf78(root->WorldXfm());
+        const Transform &rootWorldXfm = root->WorldXfm();
+        Transform tf78(rootWorldXfm);
         Transform tfa8;
         UIListProvider *prov = liststate.Provider();
         float d10;
@@ -84,12 +86,14 @@ void UIListSlot::Draw(
         for (int i = 0; i < thesize; i++) {
             const UIListElementDrawState &curdrawstate = drawstate.mElements[i];
             if (curdrawstate.mActive) {
-                d10 = 1.0f;
                 uicolor = 0;
+                d10 = 1.0f;
                 if (!box) {
-                    if (mSlotDrawType == kUIListSlotDrawHighlight
+                    if ((mSlotDrawType == kUIListSlotDrawHighlight
+                            || mSlotDrawType == kUIListSlotDrawHighlightNoAlpha)
                             && curdrawstate.mDisplay != drawstate.mHighlightDisplay
-                        || mSlotDrawType == kUIListSlotDrawNoHighlight
+                        || (mSlotDrawType == kUIListSlotDrawNoHighlight
+                            || mSlotDrawType == kUIListSlotDrawNoHighlightNoAlpha)
                             && curdrawstate.mDisplay == drawstate.mHighlightDisplay) {
                         continue;
                     }
@@ -105,7 +109,13 @@ void UIListSlot::Draw(
                     uicolor = prov->SlotColorOverride(
                         curdrawstate.mShowing, curdrawstate.mData, this, uicolor
                     );
-                    d10 = curdrawstate.mAlpha;
+                    if (mSlotDrawType == kUIListSlotDrawAlwaysNoAlpha
+                        || mSlotDrawType == kUIListSlotDrawHighlightNoAlpha
+                        || mSlotDrawType == kUIListSlotDrawNoHighlightNoAlpha) {
+                        d10 = 1.0f;
+                    } else {
+                        d10 = curdrawstate.mAlpha;
+                    }
                     if (curcompstate == UIComponent::kDisabled)
                         d10 *= DisabledAlphaScale();
                     prov->PreDraw(curdrawstate.mShowing, curdrawstate.mData, this);
@@ -114,6 +124,9 @@ void UIListSlot::Draw(
                 if (ParentList())
                     ParentList()->AdjustTrans(tfa8, curdrawstate);
                 CalcXfm(ctf, *(Vector3 *)&curdrawstate.mPosX, tfa8);
+                tfa8.m.x.x *= curdrawstate.mScaleX;
+                tfa8.m.y.y *= curdrawstate.mScaleY;
+                tfa8.m.z.z *= curdrawstate.mScaleZ;
                 if (cmd != kExcludeFirst || i > 0) {
                     mElements[i]->Draw(tfa8, d10, uicolor, box);
                 }

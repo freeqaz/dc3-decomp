@@ -171,6 +171,9 @@ class TernarySwapPattern(Pattern):
 
         counter = 0
         for stmt in ctx.statements:
+            # Region filter: skip statements outside mismatch regions
+            if not ctx.node_in_mismatch_region(stmt):
+                continue
             # if/else -> ternary (preferred direction per TECHNICAL_NOTES)
             for variant in _if_to_ternary(stmt, ctx, counter):
                 yield variant
@@ -201,7 +204,9 @@ class TernarySwapPattern(Pattern):
                 counter += 1
 
         # bare if/return (no else) -> return ternary
-        for variant in _bare_if_return_to_ternary(ctx.statements, ctx, counter):
+        # Filter statements for region awareness before passing to bare if/return
+        region_stmts = [s for s in ctx.statements if ctx.node_in_mismatch_region(s)]
+        for variant in _bare_if_return_to_ternary(region_stmts, ctx, counter):
             yield variant
             counter += 1
 

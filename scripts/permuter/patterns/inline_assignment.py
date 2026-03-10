@@ -38,6 +38,9 @@ class InlineAssignmentPattern(Pattern):
         # Look for assignment stmt_a with uses in stmt_b up to _MAX_GAP statements later
         for i in range(len(ctx.statements)):
             stmt_a = ctx.statements[i]
+            # Region filter: skip statements outside mismatch regions
+            if not ctx.node_in_mismatch_region(stmt_a):
+                continue
 
             assign_info = _extract_assignment(stmt_a, ctx.file_source)
             if assign_info is None:

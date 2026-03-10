@@ -267,6 +267,30 @@ def parse_args() -> argparse.Namespace:
         "--generations", type=int, default=20,
         help="Max generations for evolutionary optimizer (default: 20)",
     )
+    parser.add_argument(
+        "--beam", action="store_true", default=False,
+        help="Use beam search instead of greedy hill climbing",
+    )
+    parser.add_argument(
+        "--beam-width", type=int, default=8,
+        help="Beam width — survivors per depth (default: 8)",
+    )
+    parser.add_argument(
+        "--beam-depth", type=int, default=4,
+        help="Beam depth — expansion rounds (default: 4)",
+    )
+    parser.add_argument(
+        "--beam-expand", type=int, default=24,
+        help="Proposals per state per depth (default: 24)",
+    )
+    parser.add_argument(
+        "--beam-escape", type=int, default=4,
+        help="Escape budget for stagnating beam slots (default: 4)",
+    )
+    parser.add_argument(
+        "--beam-diversity", type=int, default=3,
+        help="Min distinct pattern families in beam (default: 3)",
+    )
     return parser.parse_args()
 
 
@@ -329,6 +353,7 @@ def hill_climb(
     current_percent = 0.0
     plateau_count = 0
     stopped_reason = "max_rounds"
+    last_validation_tier = 0
 
     # Pattern stats tracking
     from .pattern_stats import RunStatsAccumulator
@@ -453,6 +478,47 @@ def hill_climb(
                         )
                         stopped_reason = "noise_only"
                         break
+
+                # Target facts from attribution, atlas, and derived PPC shape facts
+                try:
+                    from .target_facts import extract_facts
+                    from .compiler_atlas import lookup_for_diagnosis
+
+                    atlas_entries = []
+                    if scorer.diagnosis:
+                        atlas_entries = lookup_for_diagnosis(
+                            diff_ops=getattr(scorer.diagnosis, 'diff_ops', None),
+                            reg_swap_pairs=getattr(scorer.diagnosis, 'reg_swap_pairs', None),
+                            has_prologue_mismatch=getattr(scorer.diagnosis, 'has_prologue_mismatch', False),
+                        )
+
+                    attrib_regions = None
+                    try:
+                        attrib_regions = scorer.get_attribution()
+                    except Exception:
+                        pass
+                    if attrib_regions is not None:
+                        ctx.mismatch_regions = attrib_regions
+
+                    shape_facts = None
+                    try:
+                        shape_facts = scorer.get_shape_facts()
+                    except Exception:
+                        pass
+
+                    ctx.target_facts = extract_facts(
+                        diagnosis=scorer.diagnosis,
+                        regions=attrib_regions,
+                        atlas_entries=atlas_entries or None,
+                        shape_facts=shape_facts,
+                        ghidra_ast=ctx.ghidra_ast,
+                        rb3_source=ctx.rb3_source,
+                    )
+                    if round_num == 1 and ctx.target_facts is not None:
+                        for line in ctx.target_facts.summary_lines():
+                            print(line, file=sys.stderr)
+                except Exception:
+                    ctx.target_facts = None
 
                 # Ghidra preflight check
                 if ghidra and ctx.ghidra_ast and round_num == 1:
@@ -847,6 +913,24 @@ def hill_climb(
                 plateau_count = 0
                 current_percent = best_score
 
+                # Validate the winner (advisory — logs warnings but doesn't block)
+                if best_result:
+                    try:
+                        from .validator import validate_variant as _validate, format_result as _format_vr
+                        vr = _validate(
+                            best_result.variant,
+                            score_result=best_result,
+                            baseline_score=baseline,
+                            original_source=original_source,
+                        )
+                        last_validation_tier = int(vr.tier)
+                        print(
+                            f"  [VALIDATE] {_format_vr(vr)}",
+                            file=sys.stderr,
+                        )
+                    except Exception:
+                        pass  # Validation is advisory
+
                 # Track winning pattern
                 if best_result:
                     pattern_accumulator.mark_winner(best_result.variant.pattern_name)
@@ -990,6 +1074,7 @@ def hill_climb(
         elapsed_seconds=round(elapsed, 2),
         winning_pattern=winning_pattern,
         ghidra_stats=ghidra_run_stats,
+        validation_tier=last_validation_tier,
     )
 
 
@@ -1034,7 +1119,29 @@ def main():
 
     workers = args.workers or os.cpu_count() or 4
 
-    if args.evolutionary:
+    if args.beam:
+        from .beam_search import beam_search, BeamConfig
+        config = BeamConfig(
+            width=args.beam_width,
+            depth=args.beam_depth,
+            expand=args.beam_expand,
+            escape=args.beam_escape,
+            diversity=args.beam_diversity,
+            workers=workers,
+        )
+        result = beam_search(
+            symbol=args.symbol,
+            source_path=args.source,
+            function_name=args.function,
+            patterns=patterns,
+            config=config,
+            apply=not args.no_apply,
+            unit=args.unit,
+            ghidra=args.ghidra,
+            m2c=args.m2c,
+            constrained=args.constrained,
+        )
+    elif args.evolutionary:
         from .evolutionary import evolve
         result = evolve(
             symbol=args.symbol,
@@ -1094,6 +1201,15 @@ def _print_result(result: HillClimbResult):
     print(f"  Rounds:     {len(result.rounds)}", file=sys.stderr)
     print(f"  Stopped:    {result.stopped_reason}", file=sys.stderr)
     print(f"  Elapsed:    {result.elapsed_seconds:.1f}s", file=sys.stderr)
+
+    # Validation tier
+    if result.validation_tier > 0:
+        _tier_names = {
+            1: "PARSE_OK", 2: "BUILD_OK", 3: "SCORE_IMPROVED",
+            4: "REGION_IMPROVED", 5: "FACT_AGREED", 6: "SEMANTIC_OK",
+        }
+        tier_name = _tier_names.get(result.validation_tier, f"TIER_{result.validation_tier}")
+        print(f"  Validation: {tier_name} ({result.validation_tier}/6)", file=sys.stderr)
 
     # Ghidra stats
     gs = result.ghidra_stats

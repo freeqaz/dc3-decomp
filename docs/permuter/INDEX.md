@@ -166,6 +166,7 @@ Key design decisions:
 - **File restoration**: Scorer uses a context manager to guarantee source file restoration even on errors
 - **Independent variants by default**: Each variant is generated from the original source; composition (chaining pattern pairs) is available via `--compose`
 - **Diagnosis-driven**: Patterns only generate variants when diagnosis signals match (reduces ~100 blind variants to ~5-20 targeted ones)
+- **Region-aware**: When `/FAs` attribution data is available, patterns skip generating variants for statements outside mismatch regions (variable_extraction, signed_unsigned, comparison_equivalence, comparison_flip, commutative_swap, inline_assignment)
 - **BSF-guided**: Declaration reordering uses compiler register allocator traces when available
 
 ## Example Output
@@ -218,14 +219,22 @@ Use `--json` for structured output suitable for integration with other tools:
 scripts/permuter/
 ├── __init__.py          # Public API exports
 ├── __main__.py          # CLI entry point + diagnosis-guided orchestration
-├── types.py             # FunctionContext, Variant, ScoreResult dataclasses
+├── types.py             # FunctionContext, Variant, ScoreResult, BeamState dataclasses
 ├── extractor.py         # tree-sitter function extraction + reparse
 ├── scorer.py            # ninja build + objdiff scoring
 ├── generator.py         # Pattern application + composition orchestration
 ├── composer.py          # Multi-step pattern composition (--compose)
+├── beam_search.py       # Beam search — multi-state structured search
 ├── editor.py            # SourceEditor — byte-level AST splicing primitive
 ├── ast_queries.py       # Reusable AST query helpers
 ├── diagnosis.py         # Diagnosis dataclass + objdiff mismatch parsing
+├── statement_effects.py # Per-statement reads/writes/calls, alias tracking, def-use chains
+├── cfg.py               # Lightweight CFG: basic blocks, terminal detection, dominance, liveness
+├── control_flow.py      # Shared control-flow helpers: trailing runs, bare-return detection
+├── attribution.py       # Instruction attribution: /FAs listing parser, mismatch join, regions
+├── compiler_atlas.py    # Compiler Atlas: 30+ opcode→source-feature mappings with lookup/boost
+├── target_facts.py      # Target Facts: normalized evidence layer with 3 extractors
+├── validator.py         # Validator Ladder: 6-level validation chain (parse→build→score→region→fact→semantic)
 └── patterns/
     ├── __init__.py              # Auto-imports all patterns
     ├── base.py                  # Pattern ABC with auto-registration
@@ -289,11 +298,67 @@ class MyPattern(Pattern):
 
 Import it in `patterns/__init__.py` to register it.
 
-## Hill Climbing
+## Search Strategies
 
-The `hill_climber` runs iterative improve-apply-repeat rounds on a single function:
+The `scan_and_permute` pipeline supports three search strategies via `--strategy`:
+
+### Beam Search (default)
+
+Beam search keeps multiple source states alive at each depth, expanding the most
+promising candidates. Better than greedy for functions where a slightly regressive
+intermediate rewrite opens a better later path.
 
 ```bash
+# Default (beam search)
+python -m scripts.permuter.scan_and_permute \
+    --symbol "?Poll@LabelNumberTicker@@UAAXXZ"
+
+# Customize beam parameters
+python -m scripts.permuter.scan_and_permute \
+    --symbol "?Poll@LabelNumberTicker@@UAAXXZ" \
+    --beam-width 12 --beam-depth 6
+
+# Standalone beam search CLI (single function, no scanning)
+python -m scripts.permuter.beam_search \
+    --symbol "?Poll@LabelNumberTicker@@UAAXXZ" \
+    --beam-width 8 --beam-depth 4 --json
+```
+
+Beam parameters:
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--beam-width` | 8 | Max survivors per depth |
+| `--beam-depth` | 4 | Max expansion rounds |
+| `--beam-expand` | 24 | Proposals per state per depth |
+| `--beam-escape` | 4 | Escape budget for stagnating slots |
+| `--beam-diversity` | 3 | Min distinct pattern families in beam |
+| `--constrained/--no-constrained` | on | Constrained synthesis at every depth |
+| `--m2c` | off | Enable m2c structural guidance |
+
+Stops on: 100% match, all survivors stalled, beam empty, or depth exhausted.
+
+Features:
+- **Multi-criteria ranking**: score, build reliability, guidance agreement, stagnation, chain length
+- **Structural guidance scoring**: Compares source structure against Ghidra and m2c targets (guard count, nesting depth, return pattern)
+- **Constrained synthesis**: Runs at every beam depth (not just round 1)
+- **Escape mechanism**: Replaces stagnating beam slots with fresh states from best-ever
+- **Diversity enforcement**: Ensures beam doesn't collapse into near-duplicates
+
+See [BEAM_SOLVER.md](../plans/permuter/BEAM_SOLVER.md) for the full design.
+
+### Hill Climbing
+
+Greedy single-state iterative search. Simpler and faster per function, but can
+get stuck in local optima.
+
+```bash
+python -m scripts.permuter.scan_and_permute \
+    --strategy hill_climb \
+    --symbol "?Poll@LabelNumberTicker@@UAAXXZ" \
+    --max-rounds 10 --compose
+
+# Standalone hill climber CLI
 python -m scripts.permuter.hill_climber \
     --symbol "?Poll@LabelNumberTicker@@UAAXXZ" \
     --source src/system/ui/LabelNumberTicker.cpp \
@@ -303,31 +368,60 @@ python -m scripts.permuter.hill_climber \
 
 Stops on: 100% match, plateau (N rounds without improvement), max rounds, or all noise.
 
-## Batch Automation
+### Evolutionary
 
-Sweep all workable functions automatically:
+Population-based optimizer using crossover and mutation.
 
 ```bash
-# Sweep all workable functions
-python -m scripts.permuter.batch_auto --target workable --max-rounds 5
-
-# Target specific unit
-python -m scripts.permuter.batch_auto --target unit --unit "system/rndobj/Shader"
-
-# Dry run — show triage without running
-python -m scripts.permuter.batch_auto --target workable --dry-run --limit 20
-
-# Resume from previous run
-python -m scripts.permuter.batch_auto --resume logs/permuter/auto_20260303_120000
+python -m scripts.permuter.scan_and_permute \
+    --strategy evolutionary \
+    --symbol "?Poll@LabelNumberTicker@@UAAXXZ" \
+    --population-size 50 --generations 20
 ```
 
-Features: resume support (progress.json), per-function JSON logs, triage filtering, grouped by source file.
+## Batch Automation
+
+Sweep functions automatically with `scan_and_permute`:
+
+```bash
+# Sweep all functions 40-98% match (beam search, default)
+python -m scripts.permuter.scan_and_permute \
+    --min-pct 40 --max-pct 98 --jobs 8 --limit 100
+
+# Sweep specific unit
+python -m scripts.permuter.scan_and_permute \
+    --unit "system/rndobj/*" --jobs 4
+
+# Use hill climbing for faster sweeps
+python -m scripts.permuter.scan_and_permute \
+    --strategy hill_climb --min-pct 40 --max-pct 98 --jobs 8 --limit 100
+
+# Dry run — scan only, show what would be permuted
+python -m scripts.permuter.scan_and_permute --dry-run
+
+# Legacy batch_auto (deprecated, use scan_and_permute)
+python -m scripts.permuter.batch_auto --target workable --max-rounds 5
+```
+
+Features: parallel jobs by source file, Ghidra-guided patterns, pattern composition, score caching.
 
 ## Test Suite
 
 ```bash
-# Permuter pattern tests (65 tests)
+# All permuter tests (715 tests)
+python -m pytest scripts/permuter/tests/ -v
+
+# Permuter pattern tests
 python -m pytest scripts/permuter/tests/test_patterns.py -v
+
+# Beam search tests
+python -m pytest scripts/permuter/tests/test_beam_search.py -v
+
+# CFG and statement effects tests
+python -m pytest scripts/permuter/tests/test_cfg.py scripts/permuter/tests/test_statement_effects.py -v
+
+# m2c extractor tests
+python -m pytest scripts/permuter/tests/test_m2c.py -v
 
 # BSF engine integration tests (30 tests, requires wibo + MSVC + GDB)
 python -m pytest tools/compiler_trace/tests/test_bsf_engine.py -v

@@ -172,7 +172,7 @@ def _init() -> bool:
     """Initialize libclang singletons. Returns True if successful."""
     global _IDX, _COMPDB, _RESOURCE_DIR, _INITIALIZED
     if _INITIALIZED:
-        return _IDX is not None
+        return _COMPDB is not None
     _INITIALIZED = True
 
     if not is_available():

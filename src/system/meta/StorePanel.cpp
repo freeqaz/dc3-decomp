@@ -664,20 +664,19 @@ DataNode StorePanel::OnMsg(SingleItemEnumCompleteMsg const &msg) {
 }
 
 void StorePanel::ValidateOffers(std::vector<StoreOffer *> &offers) {
-    static Symbol song_sym("song");
-    static Symbol dummy_upsell_sym("dummy_upsell_offer");
-    static Symbol album_sym("album");
-    static Symbol pack_sym("pack");
-
-    std::vector<Symbol> song_names;
     std::vector<StoreOffer *> song_offers;
+    std::vector<Symbol> song_names;
+
+    static Symbol pack_sym("pack");
+    static Symbol album_sym("album");
 
     std::vector<StoreOffer *>::iterator it;
-    for (it = offers.begin(); it != offers.end(); ++it) {
+    auto _tmp4 = offers.end();
+    for (it = offers.begin(); it != _tmp4; ++it) {
         StoreOffer *offer = *it;
         Symbol offer_type = offer->OfferType();
 
-        if (offer_type != dummy_upsell_sym) {
+        if (offer_type != ("dummy_upsell_offer")) {
             Symbol short_name = offer->StoreOfferData()->Sym(0);
 
             std::vector<Symbol>::iterator sit =
@@ -689,7 +688,7 @@ void StorePanel::ValidateOffers(std::vector<StoreOffer *> &offers) {
                 song_names.push_back(short_name);
             }
 
-            if (offer_type == song_sym) {
+            if (offer_type == ("song")) {
                 song_offers.push_back(offer);
             }
         }
@@ -714,7 +713,8 @@ void StorePanel::ValidateOffers(std::vector<StoreOffer *> &offers) {
             }
             if (count > 1) {
                 Symbol song_name = song_offer->StoreOfferData()->Sym(0);
-                TheDebug.Notify(MakeString("Song %s is in more than one %s", song_name, cur_type));
+                auto _tmp0 = MakeString("Song %s is in more than one %s", song_name, cur_type);
+                TheDebug.Notify(_tmp0);
             }
         }
     }

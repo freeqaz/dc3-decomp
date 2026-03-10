@@ -188,40 +188,31 @@ void UIListDir::DrawWidgets(
     bool bDrawFocusedOrManual
 ) {
     bool scrolling = state.IsScrolling();
-    FOREACH (it, widgets) {
-        UIListWidget *widget = *it;
-        UIListWidgetDrawType drawType = widget->WidgetDrawType();
-        bool shouldDraw = false;
-        if (drawType == kUIListWidgetDrawAlways) {
-            shouldDraw = true;
-        } else if (drawType == kUIListWidgetDrawFocusedOrManual) {
-            if (bDrawFocusedOrManual || compState == UIComponent::kFocused) {
-                shouldDraw = true;
+    std::vector<UIListWidget *>::iterator it = widgets.begin();
+    if (it != widgets.end()) {
+        bool isFocused = (compState == UIComponent::kFocused);
+        do {
+            UIListWidget *widget = *it;
+            UIListWidgetDrawType drawType = widget->WidgetDrawType();
+            if (drawType == kUIListWidgetDrawAlways
+                || (drawType == kUIListWidgetDrawFocusedOrManual
+                    && (bDrawFocusedOrManual || isFocused))
+                || (drawType == kUIListWidgetDrawOnlyFocused && isFocused)) {
+                DrawCommand cmd = scrolling ? kExcludeFirst : kDrawAll;
+                widget->Draw(drawState, state, tf, compState, box, cmd);
             }
-        } else if (drawType == kUIListWidgetDrawOnlyFocused) {
-            if (compState == UIComponent::kFocused) {
-                shouldDraw = true;
-            }
-        }
-
-        if (shouldDraw) {
-            DrawCommand cmd = scrolling ? kExcludeFirst : kDrawAll;
-            widget->Draw(drawState, state, tf, compState, box, cmd);
-        }
+            ++it;
+        } while (it != widgets.end());
     }
 
     if (scrolling) {
-        FOREACH (it, widgets) {
+        for (std::vector<UIListWidget *>::iterator it = widgets.begin();
+             it != widgets.end(); ++it) {
             UIListWidget *widget = *it;
             UIListWidgetDrawType drawType = widget->WidgetDrawType();
-            bool shouldDrawFirst = false;
-            if (drawType == kUIListWidgetDrawAlways) {
-                shouldDrawFirst = true;
-            } else if (drawType == kUIListWidgetDrawOnlyFocused && compState == UIComponent::kFocused) {
-                shouldDrawFirst = true;
-            }
-
-            if (shouldDrawFirst) {
+            if (drawType == kUIListWidgetDrawAlways
+                || (drawType == kUIListWidgetDrawOnlyFocused
+                    && compState == UIComponent::kFocused)) {
                 widget->Draw(drawState, state, tf, compState, box, kDrawFirst);
             }
         }
@@ -439,9 +430,10 @@ void UIListDir::BuildDrawState(
 
         UIListElementDrawState elem;
         elem.mActive = true;
-        elem.mPosX = elemPos.x;
-        elem.mPosY = elemPos.y;
-        elem.mPosZ = elemPos.z;
+        *(Vector3 *)&elem.mPosX = elemPos;
+        elem.mScaleX = 1.0f;
+        elem.mScaleY = 1.0f;
+        elem.mScaleZ = 1.0f;
         elem.mAlpha = alpha;
         elem.mElementState = widgetState;
         elem.mComponentState = state.Provider()->ComponentStateOverride(showing, data, compState);

@@ -1033,9 +1033,15 @@ float HamNavList::GetTargetSwellAmount(int display) {
                 if (mRibbonMode == HamListRibbon::kRibbonSwell
                     && display < mListState.NumShowing()) {
                     UIListProvider *provider = mListState.Provider();
+#ifdef HX_NATIVE
+                    bool displayActive = provider && provider->IsActive(display);
+                    if (displayActive
+                        && mSkeletonTrackingID != -1) {
+#else
                     auto displayActive = provider->IsActive(display);
                     if (provider && displayActive
                         && mSkeletonTrackingID != -1) {
+#endif
                         int disabledCount = GetDisabledCount(display);
                         int effectivePos = display - disabledCount;
                         if (mListState.IsScrolling()) {
@@ -1275,9 +1281,10 @@ void HamNavList::SetSelecting(bool selecting) {
     if (!mSelectionEnabled)
         return;
     sLastSelectInControllerMode = selecting;
-    UIListProvider *provider = mListState.Provider();
+    auto& listState = mListState;
+    UIListProvider *provider = listState.Provider();
     MILO_ASSERT(provider, 0x491);
-    int selected = mListState.Selected();
+    int selected = listState.Selected();
     Symbol sym;
     UIList *sublist = mListDirResource->SubList(selected, mListWidgets);
     if (!(sublist == nullptr)) {
@@ -1287,13 +1294,13 @@ void HamNavList::SetSelecting(bool selecting) {
         int wrapped = sublist->GetListState().WrapShowing(subSelPlusOne);
         sym = navProvider->DataSymbol(wrapped, selected);
     } else {
-        auto _tmp4 = provider->DataSymbol(selected);
-        sym = _tmp4;
+        Symbol dataSym = provider->DataSymbol(selected);
+        sym = dataSym;
     }
     SetRibbonMode(HamListRibbon::kRibbonSelect);
     if (TheGestureMgr && TheGestureMgr->GesturingWithVoice()) {
         TheGestureMgr->SetGesturingWithVoice(false);
-        if (mListState.IsScrolling()) {
+        if (listState.IsScrolling()) {
             mScrollBehavior.Enter();
         }
     }
@@ -1320,7 +1327,8 @@ void HamNavList::SetSelecting(bool selecting) {
         if (sla) {
             sla->SetFrame(1.0f, 1.0f);
         }
-        mListRibbonResource->SetSelectToggle(ShouldSkipSelectAnim(result));
+        bool skipSelectAnim = ShouldSkipSelectAnim(result);
+        mListRibbonResource->SetSelectToggle(skipSelectAnim);
     }
     if (mHeaderRibbonResource) {
         RndAnimatable *sla = mHeaderRibbonResource->SlideSoundAnim();
@@ -1653,7 +1661,7 @@ void HamNavList::LinkRibbonDrawState(
                 }
             }
             if (shouldClear) {
-                elem.mRibbonInteraction = 0;
+                elem.mElementState = kUIListWidgetActive;
             }
         }
     }
@@ -1687,12 +1695,12 @@ void HamNavList::LinkRibbonDrawState(
         state.mActive = isActive;
 
         state.mBigScale = (float)IsElementBig(i);
-        state.mElemDrawState = (int)&elem;
+        state.mElemDrawState = (unsigned int)&elem;
 
-        // Set secondary vtable pointer for AdjustTrans
-        elem.mNavVtablePtr = *(int *)((char *)this + 4);
+        // Store vtable pointer into mComponentState for AdjustTrans
+        *(int *)&elem.mComponentState = *(int *)((char *)this + 4);
 
-        // Conditionally clear ribbon interaction state
+        // Conditionally clear element state
         if (elem.mShowing == 1) {
             bool shouldClear = false;
             if (mListRibbonResource && !mListRibbonResource->TestEntering()
@@ -1707,7 +1715,7 @@ void HamNavList::LinkRibbonDrawState(
                 }
             }
             if (shouldClear) {
-                elem.mRibbonInteraction = 0;
+                elem.mElementState = kUIListWidgetActive;
             }
         }
     }
@@ -1726,37 +1734,33 @@ void HamNavList::DrawShowing() {
 
     UIListWidgetDrawState widgetState;
     mListDirResource->BuildDrawState(
-        widgetState, mListState, GetState(), 0.0f, true
+        widgetState, mListState, kFocused, 0.0f, !mScrollBehavior.IsScrolling()
     );
 
     LinkRibbonDrawState(mRibbonDrawStates, widgetState);
 
     if (mScrollBehavior.IsScrolling()) {
+        int first = mListState.FirstShowing();
         for (unsigned int i = 0; i < mRibbonDrawStates.size(); i++) {
-            float targetSwell = GetTargetSwellAmount(i);
-            mRibbonDrawStates[i].mSwellSmoother.SetParams(targetSwell, targetSwell, 0.0f);
+            if ((int)i < first || (int)i >= first + HamListRibbon::sNumListSelectable) {
+                mRibbonDrawStates[i].mSwellSmoother.SetParams(0.0f, 0.0f, 0.0f);
+            }
         }
     }
 
-    float scrollFrame = mScrollSettleTime;
     if (mListRibbonResource) {
-        mListRibbonResource->SetFrame(scrollFrame, 1.0f);
-        mListRibbonResource->mScrollAnims.SetScrollFrame(scrollFrame);
-        mListRibbonResource->SetDisengageFrame(scrollFrame);
+        mListRibbonResource->SetFrame(GetFrame(), 1.0f);
+        mListRibbonResource->mScrollAnims.SetScrollFrame(mScrollBehavior.mScrollProgress);
+        mListRibbonResource->SetDisengageFrame(mDisengageSmoother.Level());
         mListRibbonResource->mMode = mRibbonMode;
-    }
-
-    if (mHeaderRibbonResource) {
-        mHeaderRibbonResource->SetFrame(scrollFrame, 1.0f);
-        mHeaderRibbonResource->mScrollAnims.SetScrollFrame(scrollFrame);
-        mHeaderRibbonResource->SetDisengageFrame(scrollFrame);
-        mHeaderRibbonResource->mMode = mRibbonMode;
-    }
-
-    if (mListRibbonResource)
         mListRibbonResource->Draw(WorldXfm(), mRibbonDrawStates, false, false);
+    }
 
     if (mHeaderRibbonResource) {
+        mHeaderRibbonResource->SetFrame(GetFrame(), 1.0f);
+        mHeaderRibbonResource->mScrollAnims.SetScrollFrame(mScrollBehavior.mScrollProgress);
+        mHeaderRibbonResource->SetDisengageFrame(mDisengageSmoother.Level());
+        mHeaderRibbonResource->mMode = mRibbonMode;
         mHeaderRibbonResource->Draw(WorldXfm(), mRibbonDrawStates, true, false);
     }
 
@@ -1764,15 +1768,14 @@ void HamNavList::DrawShowing() {
         HamListRibbonDrawState &state = mRibbonDrawStates[i];
         if (state.mHidden && state.mElemDrawState) {
             UIListElementDrawState *elem = (UIListElementDrawState *)state.mElemDrawState;
-            elem->mData = 0;
+            elem->mAlpha = 0.0f;
         }
     }
 
-    if (mListDirResource)
-        mListDirResource->DrawWidgets(
-            widgetState, mListState, mListWidgets, WorldXfm(),
-            GetState(), nullptr, false
-        );
+    mListDirResource->DrawWidgets(
+        widgetState, mListState, mListWidgets, WorldXfm(),
+        GetState(), nullptr, false
+    );
 
     if (mScrollSpeedIndicatorResource) {
         mScrollSpeedIndicatorResource->Draw(WorldXfm());

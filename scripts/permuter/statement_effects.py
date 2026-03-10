@@ -1,8 +1,15 @@
-"""Shared statement-effect analysis for reorder-style permuter patterns."""
+"""Shared statement-effect analysis for reorder-style permuter patterns.
+
+Provides:
+- Per-statement reads/writes/call classification (StatementEffects)
+- Alias tracking for reference bindings (auto& ref = obj.member)
+- Def-use chain construction across statement sequences
+- Pairwise reordering safety checks
+"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import re
 
 from tree_sitter import Node
@@ -22,6 +29,53 @@ _LOGGING_CALL_RE = re.compile(
 
 
 @dataclass(frozen=True)
+class AliasInfo:
+    """Tracks a reference or pointer alias binding."""
+    alias_name: str        # The local name (e.g., "ref")
+    target: str            # The aliased target (e.g., "obj.member" or "obj")
+    target_root: str       # Root identifier (e.g., "obj")
+    is_reference: bool     # True for &, False for * (pointer)
+
+
+@dataclass(frozen=True)
+class DefUseEntry:
+    """A single definition-use relationship."""
+    variable: str
+    def_stmt_idx: int      # Statement index where defined
+    use_stmt_idx: int      # Statement index where used
+
+
+@dataclass(frozen=True)
+class DefUseChains:
+    """Def-use chains for a statement sequence."""
+    entries: tuple[DefUseEntry, ...]
+    live_ranges: dict[str, tuple[int, int]]  # var -> (first_def, last_use)
+
+    def is_live_between(self, var: str, start: int, end: int) -> bool:
+        """Check if variable is live between statement indices [start, end)."""
+        rng = self.live_ranges.get(var)
+        if rng is None:
+            return False
+        return rng[0] <= start and rng[1] >= end
+
+    def can_move_past(self, stmt_idx: int, target_idx: int) -> bool:
+        """Check if moving statement at stmt_idx past target_idx is safe.
+
+        Safe if no variable defined at stmt_idx is used between stmt_idx
+        and target_idx, and no variable used at stmt_idx is defined between.
+        """
+        lo, hi = min(stmt_idx, target_idx), max(stmt_idx, target_idx)
+        for entry in self.entries:
+            # Def at stmt_idx, use in between
+            if entry.def_stmt_idx == stmt_idx and lo < entry.use_stmt_idx <= hi:
+                return False
+            # Use at stmt_idx, def in between
+            if entry.use_stmt_idx == stmt_idx and lo <= entry.def_stmt_idx < hi:
+                return False
+        return True
+
+
+@dataclass(frozen=True)
 class StatementEffects:
     """Summary of a statement's observable local effects."""
 
@@ -34,6 +88,7 @@ class StatementEffects:
     call_kinds: frozenset[str]
     dereferenced_identifiers: frozenset[str]
     has_assert_like_guard: bool
+    aliases: tuple[AliasInfo, ...] = ()  # Reference/pointer aliases created
 
 
 class StatementEffectAnalyzer:
@@ -101,6 +156,9 @@ class StatementEffectAnalyzer:
                 ):
                     dereferenced_identifiers.add(arg.text.decode())
 
+        # Detect alias bindings (auto& ref = obj.member, Type* p = &obj)
+        aliases = _detect_aliases(stmt, self.source)
+
         reads = identifiers_in(stmt) - writes
         text = self.source[stmt.start_byte:stmt.end_byte]
         effects = StatementEffects(
@@ -113,6 +171,7 @@ class StatementEffectAnalyzer:
             call_kinds=frozenset(call_kinds),
             dereferenced_identifiers=frozenset(dereferenced_identifiers),
             has_assert_like_guard=any(marker in text for marker in _ASSERT_GUARDS),
+            aliases=aliases,
         )
         self._cache[stmt.id] = effects
         return effects
@@ -301,3 +360,219 @@ def _classify_call_name(name: str) -> str:
     if _ACCESSOR_CALL_RE.match(name):
         return "accessor"
     return "unknown"
+
+
+# ---------------------------------------------------------------------------
+# Alias detection
+# ---------------------------------------------------------------------------
+
+_REF_TYPE_QUALIFIERS = frozenset({
+    "auto", "const", "volatile", "static",
+})
+
+
+def _detect_aliases(stmt: Node, source: bytes) -> tuple[AliasInfo, ...]:
+    """Detect reference/pointer alias bindings in a declaration statement.
+
+    Recognizes patterns like:
+        auto& ref = obj.member;
+        const auto& r = vec;
+        Type* p = &obj;
+        auto* p = ptr->field;
+    """
+    if stmt.type != "declaration":
+        return ()
+
+    # Check if the type specifier or declarator contains & or *
+    declarator = stmt.child_by_field_name("declarator")
+    if declarator is None or declarator.type != "init_declarator":
+        return ()
+
+    inner_decl = declarator.child_by_field_name("declarator")
+    value = declarator.child_by_field_name("value")
+    if inner_decl is None or value is None:
+        return ()
+
+    # Extract the alias name
+    alias_name = _extract_decl_name(inner_decl)
+    if not alias_name:
+        return ()
+
+    # Determine if this is a reference or pointer binding
+    is_reference = _decl_is_reference(stmt, inner_decl, source)
+    is_pointer = _decl_is_pointer(inner_decl, source) if not is_reference else False
+
+    if not is_reference and not is_pointer:
+        return ()
+
+    # Extract the target expression
+    target_text = source[value.start_byte:value.end_byte].decode("utf-8", errors="replace").strip()
+
+    # For pointer bindings via &obj, unwrap the address-of
+    if is_pointer and target_text.startswith("&"):
+        target_text = target_text[1:].strip()
+
+    # Extract root identifier from target
+    target_root = _extract_target_root(value, is_pointer)
+    if not target_root:
+        return ()
+
+    return (AliasInfo(
+        alias_name=alias_name,
+        target=target_text,
+        target_root=target_root,
+        is_reference=is_reference,
+    ),)
+
+
+def _decl_is_reference(stmt: Node, inner_decl: Node, source: bytes) -> bool:
+    """Check if declaration uses reference binding (& in type or declarator)."""
+    # Check for reference_declarator wrapping
+    if inner_decl.type == "reference_declarator":
+        return True
+
+    # Check the type specifier text for &
+    type_node = stmt.child_by_field_name("type")
+    if type_node is not None:
+        type_text = source[type_node.start_byte:type_node.end_byte].decode("utf-8", errors="replace")
+        if "&" in type_text:
+            return True
+
+    # Check for & between type and declarator in the raw text
+    stmt_text = source[stmt.start_byte:stmt.end_byte].decode("utf-8", errors="replace")
+    if "&" in stmt_text and "*" not in stmt_text:
+        return True
+
+    return False
+
+
+def _decl_is_pointer(inner_decl: Node, source: bytes) -> bool:
+    """Check if declaration uses pointer binding (* in declarator)."""
+    if inner_decl.type == "pointer_declarator":
+        return True
+    return False
+
+
+def _extract_target_root(value_node: Node, is_pointer: bool) -> str | None:
+    """Extract the root identifier from an alias target expression."""
+    node = value_node
+
+    # Unwrap address-of for pointer bindings
+    if node.type == "pointer_expression":
+        arg = node.child_by_field_name("argument")
+        if arg is not None:
+            node = arg
+
+    # Unwrap parentheses
+    while node.type == "parenthesized_expression" and node.named_children:
+        node = node.named_children[0]
+
+    # Direct identifier
+    if node.type == "identifier" and node.text:
+        return node.text.decode()
+
+    # Field expression (obj.member or obj->member)
+    if node.type == "field_expression":
+        arg = node.child_by_field_name("argument")
+        if arg is not None:
+            return _extract_target_root(arg, False)
+
+    # Subscript expression (arr[i])
+    if node.type == "subscript_expression":
+        arg = node.child_by_field_name("argument")
+        if arg is not None:
+            return _extract_target_root(arg, False)
+
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Def-use chain construction
+# ---------------------------------------------------------------------------
+
+
+def build_def_use_chains(
+    stmts: list[Node],
+    analyzer: StatementEffectAnalyzer,
+) -> DefUseChains:
+    """Build def-use chains across a flat statement sequence.
+
+    For each variable, tracks which statement defines it and which later
+    statements use it.  This enables safe reordering checks beyond simple
+    pairwise independence.
+    """
+    # Pass 1: collect per-statement reads/writes
+    stmt_effects = [(i, analyzer.analyze(s)) for i, s in enumerate(stmts)]
+
+    # Pass 2: for each variable, find definitions and uses
+    # A "definition" is any statement that writes the variable.
+    # A "use" is any statement that reads the variable.
+    defs: dict[str, list[int]] = {}  # var -> [stmt indices that define it]
+    uses: dict[str, list[int]] = {}  # var -> [stmt indices that use it]
+
+    for idx, effects in stmt_effects:
+        for w in effects.writes:
+            defs.setdefault(w, []).append(idx)
+        for r in effects.reads:
+            uses.setdefault(r, []).append(idx)
+        # Aliases create implicit reads of the target root
+        for alias in effects.aliases:
+            uses.setdefault(alias.target_root, []).append(idx)
+
+    # Pass 3: build def-use entries
+    # For each definition, find all subsequent uses (before the next definition)
+    entries: list[DefUseEntry] = []
+    all_vars = set(defs.keys()) | set(uses.keys())
+
+    for var in all_vars:
+        var_defs = sorted(defs.get(var, []))
+        var_uses = sorted(uses.get(var, []))
+
+        for d_idx in var_defs:
+            # Find next definition (if any) to bound the reach
+            next_def = None
+            for nd in var_defs:
+                if nd > d_idx:
+                    next_def = nd
+                    break
+
+            # Link to all uses between this def and the next def
+            for u_idx in var_uses:
+                if u_idx <= d_idx:
+                    continue
+                if next_def is not None and u_idx >= next_def:
+                    continue
+                entries.append(DefUseEntry(
+                    variable=var,
+                    def_stmt_idx=d_idx,
+                    use_stmt_idx=u_idx,
+                ))
+
+        # Variables used without a prior definition (parameters, globals)
+        # are "live-in" — create entries from a virtual def at -1
+        if var_uses and (not var_defs or var_uses[0] < var_defs[0]):
+            first_def = var_defs[0] if var_defs else len(stmts)
+            for u_idx in var_uses:
+                if u_idx >= first_def:
+                    break
+                entries.append(DefUseEntry(
+                    variable=var,
+                    def_stmt_idx=-1,
+                    use_stmt_idx=u_idx,
+                ))
+
+    # Pass 4: compute live ranges (first_def, last_use)
+    live_ranges: dict[str, tuple[int, int]] = {}
+    for var in all_vars:
+        var_defs = defs.get(var, [])
+        var_uses = uses.get(var, [])
+        all_touches = var_defs + var_uses
+        if all_touches:
+            first = min(all_touches)
+            last = max(all_touches)
+            live_ranges[var] = (first, last)
+
+    return DefUseChains(
+        entries=tuple(entries),
+        live_ranges=live_ranges,
+    )

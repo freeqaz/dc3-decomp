@@ -687,6 +687,7 @@ void WgpuRnd::WriteSceneUniforms() {
 
 
 
+
     } else {
         // Identity viewProj if no camera
         scene.viewProj[0] = scene.viewProj[5] = scene.viewProj[10] = scene.viewProj[15] = 1;

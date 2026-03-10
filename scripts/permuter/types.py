@@ -163,10 +163,43 @@ class FunctionContext:
     preproc_regions: list[PreprocRegion] = field(default_factory=list)
     # Extracted RB3 method body (same function), if available
     rb3_source: Optional[str] = None
+    # Instruction attribution: mismatch regions from /FAs listing join
+    mismatch_regions: list = field(default_factory=list)  # list[MismatchRegion]
+    # Target facts: normalized evidence from diagnosis, atlas, guidance
+    target_facts: object | None = None  # TargetFacts or None
 
     def source_text(self, node: Node) -> str:
         """Extract source text for a tree-sitter node."""
         return self.file_source[node.start_byte : node.end_byte].decode("utf-8")
+
+    def line_in_mismatch_region(self, line: int) -> bool:
+        """Check if a source line falls within any mismatch region.
+
+        Returns True if no regions are available (don't filter when no data).
+        """
+        if not self.mismatch_regions:
+            return True  # No attribution data — allow everything
+        for region in self.mismatch_regions:
+            if region.start_line <= line <= region.end_line:
+                return True
+        return False
+
+    def node_in_mismatch_region(self, node: Node, margin: int = 2) -> bool:
+        """Check if a tree-sitter node overlaps any mismatch region.
+
+        Uses the node's start/end line (1-based) with an optional margin.
+        Returns True if no regions are available (don't filter when no data).
+        """
+        if not self.mismatch_regions:
+            return True  # No attribution data — allow everything
+        # tree-sitter uses 0-based lines; /FAs uses 1-based
+        node_start = node.start_point[0] + 1
+        node_end = node.end_point[0] + 1
+        for region in self.mismatch_regions:
+            if (node_start - margin <= region.end_line and
+                    node_end + margin >= region.start_line):
+                return True
+        return False
 
 
 @dataclass(frozen=True)
@@ -188,6 +221,10 @@ class Variant:
     edits: list | None = None  # Edits applied to produce this variant
     tags: frozenset[str] = field(default_factory=frozenset)
     auxiliary_files: tuple[AuxiliaryFile, ...] = field(default_factory=tuple)
+    # Scope isolation: track the function byte range so we can verify
+    # that only the target function was modified
+    func_byte_range: tuple[int, int] | None = None
+    original_source: bytes | None = None
 
 
 def merge_auxiliary_file_sets(
@@ -210,7 +247,52 @@ def merge_auxiliary_file_sets(
 
 
 def variant_file_updates(primary_path: Path, variant: Variant) -> dict[Path, bytes]:
-    """Return the exact file writes implied by a variant."""
+    """Return the exact file writes implied by a variant.
+
+    If the variant carries scope-isolation metadata (func_byte_range +
+    original_source), validates that only bytes within the target function
+    were modified.  Raises ValueError on out-of-scope modifications.
+    """
+    # Scope isolation check: verify only target function bytes changed
+    if variant.func_byte_range and variant.original_source:
+        func_start, func_end = variant.func_byte_range
+        orig = variant.original_source
+        mod = variant.source
+        # Check bytes BEFORE the function
+        orig_before = orig[:func_start]
+        mod_before = mod[:func_start] if len(mod) >= func_start else mod
+        if orig_before != mod_before:
+            # Find first differing byte for diagnostic
+            for i in range(min(len(orig_before), len(mod_before))):
+                if orig_before[i] != mod_before[i]:
+                    raise ValueError(
+                        f"Variant '{variant.name}' ({variant.pattern_name}) modified "
+                        f"byte {i} BEFORE target function (func starts at {func_start})"
+                    )
+            raise ValueError(
+                f"Variant '{variant.name}' ({variant.pattern_name}) modified "
+                f"content before target function (length mismatch)"
+            )
+        # Check bytes AFTER the function — must account for size changes
+        # within the function that shift everything after it
+        func_size_orig = func_end - func_start
+        func_size_mod = len(mod) - len(orig) + func_size_orig
+        mod_after_start = func_start + func_size_mod
+        orig_after = orig[func_end:]
+        mod_after = mod[mod_after_start:] if mod_after_start <= len(mod) else b""
+        if orig_after != mod_after:
+            for i in range(min(len(orig_after), len(mod_after))):
+                if orig_after[i] != mod_after[i]:
+                    raise ValueError(
+                        f"Variant '{variant.name}' ({variant.pattern_name}) modified "
+                        f"byte {func_end + i} AFTER target function "
+                        f"(func ends at {func_end})"
+                    )
+            raise ValueError(
+                f"Variant '{variant.name}' ({variant.pattern_name}) modified "
+                f"content after target function (length mismatch)"
+            )
+
     updates = {primary_path.resolve(): variant.source}
     for entry in variant.auxiliary_files:
         resolved = entry.path.resolve()
@@ -291,6 +373,7 @@ class HillClimbResult:
     elapsed_seconds: float
     winning_pattern: Optional[str] = None
     ghidra_stats: Optional[object] = None  # GhidraRunStats or None
+    validation_tier: int = 0  # Highest validation tier reached (0-6)
 
 
 @dataclass
@@ -318,6 +401,9 @@ class RoundHints:
     last_diagnosis: Optional[Diagnosis] = None
     # Patterns where ALL variants failed to build (100% build failure rate)
     build_failed_patterns: set[str] = field(default_factory=set)
+    # Atlas-derived pattern boost/suppress (from compiler_atlas lookups)
+    atlas_boost_patterns: set[str] = field(default_factory=set)
+    atlas_suppress_patterns: set[str] = field(default_factory=set)
 
     def record_round(
         self,
@@ -385,12 +471,18 @@ class RoundHints:
             return 0.1
 
     def adaptive_priority_boost(self, pattern_name: str) -> float:
-        """Get a positive multiplier from past wins and structural tag history."""
+        """Get a positive multiplier from past wins, tags, and atlas."""
         boost = 1.0
 
         wins = self.pattern_wins.get(pattern_name, 0)
         if wins > 0:
             boost += min(0.4, wins * 0.1)
+
+        # Atlas-derived boost (from compiler_atlas lookups)
+        if pattern_name in self.atlas_boost_patterns:
+            boost += 0.3
+        if pattern_name in self.atlas_suppress_patterns:
+            boost *= 0.3  # Strong suppression for atlas-negative patterns
 
         tags = self.promising_tags_for_pattern(pattern_name)
         if not tags:
@@ -464,6 +556,79 @@ def _collect_build_failed_patterns(
         name for name, (total, fails) in by_pattern.items()
         if total > 0 and fails == total
     }
+
+
+@dataclass
+class BeamState:
+    """A single state in the beam search.
+
+    Represents a reparsed source state with metadata about its quality,
+    provenance, and guidance agreement.
+    """
+
+    source: bytes  # Full modified file content
+    score: float  # Match percent from scoring
+    diagnosis: Diagnosis | None = None
+    tags: frozenset[str] = field(default_factory=frozenset)
+    applied_patterns: list[str] = field(default_factory=list)
+    generation: int = 0  # Depth in the search tree
+    stagnation_count: int = 0  # Rounds without score improvement
+    build_fail_count: int = 0  # Cumulative build failures
+    guidance_agreement: int = 0  # -1 to +2 (conflict to full agreement)
+    provenance: list[str] = field(default_factory=list)  # Variant names
+    # Auxiliary file edits carried from the variant
+    auxiliary_files: tuple[AuxiliaryFile, ...] = field(default_factory=tuple)
+    # Pattern-level build failure tracking within this lineage
+    lineage_build_failures: dict[str, int] = field(default_factory=dict)
+    # Per-region match ratios from /FAs attribution (line_range → ratio)
+    # e.g. {(500, 502): 0.68, (540, 544): 0.69}
+    region_scores: dict[tuple[int, int], float] = field(default_factory=dict)
+    # Target facts: normalized evidence carried per-state
+    target_facts: object | None = None  # TargetFacts or None
+    # Fact agreement score: how many high-confidence facts this state satisfies
+    fact_agreement: int = 0
+    # Validation tier reached (0-6, from validator ladder)
+    validation_tier: int = 0
+
+    @property
+    def ranking_key(self) -> tuple:
+        """Lexicographic ranking tuple (higher = better).
+
+        Order: match%, validation_tier, -build_fails, guidance,
+               fact_agreement, -stagnation, -chain_length.
+        """
+        return (
+            self.score,
+            self.validation_tier,
+            -self.build_fail_count,
+            self.guidance_agreement,
+            self.fact_agreement,
+            -self.stagnation_count,
+            -len(self.provenance),
+        )
+
+    def region_improvement_count(self, parent_regions: dict[tuple[int, int], float]) -> int:
+        """Count how many regions improved compared to a parent state."""
+        if not self.region_scores or not parent_regions:
+            return 0
+        count = 0
+        for key, ratio in self.region_scores.items():
+            parent_ratio = parent_regions.get(key, 0.0)
+            if ratio > parent_ratio + 0.01:  # 1% threshold
+                count += 1
+        return count
+
+
+@dataclass
+class BeamConfig:
+    """Configuration for beam search."""
+
+    width: int = 8  # Max survivors per depth
+    depth: int = 4  # Max expansion depths
+    expand: int = 24  # Variants per state per depth
+    escape: int = 4  # Perturbation budget when stalled
+    diversity: int = 3  # Min distinct pattern families in beam
+    workers: int = 0  # Parallel compile workers (0 = cpu_count)
 
 
 @dataclass

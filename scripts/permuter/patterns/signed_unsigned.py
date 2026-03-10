@@ -63,6 +63,9 @@ class SignedUnsignedPattern(Pattern):
     def generate(self, ctx: FunctionContext) -> Iterator[Variant]:
         counter = 0
         for stmt in ctx.statements:
+            # Region filter: skip statements outside mismatch regions
+            if not ctx.node_in_mismatch_region(stmt):
+                continue
             for cmp_node in find_comparisons(stmt):
                 left = cmp_node.child_by_field_name("left")
                 right = cmp_node.child_by_field_name("right")

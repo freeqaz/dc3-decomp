@@ -3,6 +3,7 @@
 #include "meta_ham/BlacklightPanel.h"
 #include "meta_ham/HelpBarPanel.h"
 #include "meta_ham/LetterboxPanel.h"
+#include "meta_ham/ShellInput.h"
 #include "meta_ham/UIEventMgr.h"
 #include "obj/Data.h"
 #include "obj/Msg.h"
@@ -30,6 +31,24 @@ void HamScreen::Enter(UIScreen *screen) {
     if (blp && blp->GetState() != UIPanel::kUp) {
         blp->Enter();
     }
+#ifdef HX_NATIVE
+    // Force controller mode on first screen enter. This fires:
+    //   - HelpBarPanel::EnterControllerMode() → activates controller_mode.flow
+    //   - controller_mode_entered message → DTA hides gesture tutorial UI
+    //   - in_controller_mode property → DTA reads this for flow decisions
+    // Must happen after HelpBarPanel is up, before UIScreen::Enter DTA handlers.
+    {
+        static bool sControllerModeForced = false;
+        if (!sControllerModeForced) {
+            sControllerModeForced = true;
+            ShellInput *si = TheHamUI.GetShellInput();
+            if (si) {
+                printf("DC3 Native: Forcing controller mode on first HamScreen enter\n");
+                si->EnterControllerMode(true); // true = force past AllowController check
+            }
+        }
+    }
+#endif
     TheHamUI.GetShellInput()->UpdateInputPanel(mFocusPanel);
     UIScreen::Enter(screen);
 }

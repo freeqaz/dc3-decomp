@@ -75,6 +75,8 @@ from . import missing_call  # noqa: F401  # Detect and uncomment missing functio
 from . import cast_insertion  # noqa: F401  # Add/remove/swap casts guided by Ghidra decompilation
 from . import iterator_index_compare  # noqa: F401  # Convert it1<it2 to (it1-begin)<(it2-begin)
 from . import loop_condition_subtract  # noqa: F401  # Rewrite a>=b to a-b>=0 in loops (subf. vs cmpw)
+from . import foreach_to_dowhile  # noqa: F401  # Convert FOREACH to do-while with pre-guard
+from . import u8_to_unsigned_long  # noqa: F401  # Widen u8 intermediates to prevent rlwinm fusion
 
 from .base import get_all_patterns, get_pattern, list_patterns
 

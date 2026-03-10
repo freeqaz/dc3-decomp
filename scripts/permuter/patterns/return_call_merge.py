@@ -75,19 +75,31 @@ class ReturnCallMergePattern(Pattern):
     def generate(self, ctx: FunctionContext) -> Iterator[Variant]:
         counter = 0
 
+        # m2c guidance: determine which direction to prefer
+        prefer_merge = None  # None = both, True = merge, False = split
+        if ctx.m2c_code:
+            from ..m2c import extract_return_pattern
+            pattern = extract_return_pattern(ctx.m2c_code)
+            if pattern == "merged_var":
+                prefer_merge = True  # Target uses merged var → try merge
+            elif pattern == "split_calls":
+                prefer_merge = False  # Target uses split returns → try split
+
         # Direction 1: Merge — find if/else with matching return calls
-        for variant in _try_merge_all(ctx, counter):
-            yield variant
-            counter += 1
-            if counter >= 6:
-                return
+        if prefer_merge is not False:
+            for variant in _try_merge_all(ctx, counter):
+                yield variant
+                counter += 1
+                if counter >= 6:
+                    return
 
         # Direction 2: Split — find conditional var + single return call
-        for variant in _try_split_all(ctx, counter):
-            yield variant
-            counter += 1
-            if counter >= 6:
-                return
+        if prefer_merge is not True:
+            for variant in _try_split_all(ctx, counter):
+                yield variant
+                counter += 1
+                if counter >= 6:
+                    return
 
 
 # ---------------------------------------------------------------------------
@@ -98,6 +110,9 @@ def _try_merge_all(ctx: FunctionContext, counter: int) -> Iterator[Variant]:
     """Find if/else where both branches end with return same_func(...)."""
     for node in walk(ctx.body_node):
         if node.type != "if_statement" or counter >= 6:
+            continue
+        # Region filter: skip if_statements outside mismatch regions
+        if not ctx.node_in_mismatch_region(node):
             continue
 
         for variant in _try_merge_if_else(node, ctx, counter):
@@ -229,6 +244,9 @@ def _try_split_all(ctx: FunctionContext, counter: int) -> Iterator[Variant]:
 
         if if_stmt.type != "if_statement" or ret_stmt.type != "return_statement":
             continue
+        # Region filter: skip pairs outside mismatch regions
+        if not ctx.node_in_mismatch_region(if_stmt):
+            continue
 
         for variant in _try_split_pair(if_stmt, ret_stmt, ctx, counter):
             yield variant
@@ -246,6 +264,9 @@ def _try_split_all(ctx: FunctionContext, counter: int) -> Iterator[Variant]:
         if decl_stmt.type != "declaration":
             continue
         if if_stmt.type != "if_statement" or ret_stmt.type != "return_statement":
+            continue
+        # Region filter: skip triplets outside mismatch regions
+        if not ctx.node_in_mismatch_region(if_stmt):
             continue
 
         for variant in _try_split_with_decl(decl_stmt, if_stmt, ret_stmt, ctx, counter):

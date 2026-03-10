@@ -673,7 +673,7 @@ void Game::LoadNewSong(Symbol s1, Symbol s2) {
 
 void Game::PauseForSkeletonLoss() {
     if (!mPaused) {
-        int gestureVal = TheGestureMgr->GetPauseOnSkeletonLossMode();
+        short gestureVal = TheGestureMgr->GetPauseOnSkeletonLossMode();
         if (gestureVal != 0 && gestureVal != 1 && !TheSynth->HasPendingVoices()
             && !TheUI->InTransition()) {
             static Message pauseOnSkeletonLossMsg("pause_on_skeleton_loss");

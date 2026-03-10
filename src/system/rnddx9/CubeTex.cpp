@@ -23,17 +23,16 @@ void DxCubeTex::Reset() {
 void DxCubeTex::Sync() {
     PhysMemTypeTracker tracker("D3D(phys):CubeTex");
 
-    mTex = D3DDevice_CreateTexture(
+        DX_ASSERT(mTex = D3DDevice_CreateTexture(
         props.mWidth, props.mWidth, 6, props.mNumMips + 1, 0,
         TheDxRnd.D3DFormatForBitmap(mBitmap[kCubeFaceRight]), 0,
         D3DRTYPE_CUBETEXTURE
-    );
-
-    DX_ASSERT(mTex, 0x38);
+    ), 0x38);
 
     XGTEXTURE_DESC desc;
     XGGetTextureDesc(mTex, 0, &desc);
 
+    NgMat::SetCurrent(nullptr);
     int numMips = props.mNumMips + 1;
 
     for (int face = 0; face < 6; face++) {
@@ -67,5 +66,4 @@ void DxCubeTex::Sync() {
         bitmap.Reset();
     }
 
-    NgMat::SetCurrent(nullptr);
 }

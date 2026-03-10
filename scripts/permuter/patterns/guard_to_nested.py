@@ -84,19 +84,35 @@ class GuardToNestedPattern(Pattern):
         source = ctx.file_source
         stmts = ctx.statements
 
+        # m2c guidance: determine which direction to prefer
+        prefer_nested = None  # None = both, True = guards→nested, False = nested→guards
+        if ctx.m2c_code:
+            from ..m2c import extract_nesting_depth, extract_guard_count
+            target_depth = extract_nesting_depth(ctx.m2c_code)
+            target_guards = extract_guard_count(ctx.m2c_code)
+            if target_depth >= 2 and target_guards == 0:
+                prefer_nested = True  # Target uses nesting → convert guards to nested
+            elif target_guards >= 2 and target_depth <= 1:
+                prefer_nested = False  # Target uses guards → convert nested to guards
+
+        # Region filter: only consider statements in mismatch regions
+        region_stmts = [s for s in stmts if ctx.node_in_mismatch_region(s)]
+
         # Direction 1: Guards to nested
-        for variant in _guards_to_nested(stmts, source, counter):
-            yield variant
-            counter += 1
-            if counter >= 5:
-                return
+        if prefer_nested is not False:
+            for variant in _guards_to_nested(region_stmts, source, counter):
+                yield variant
+                counter += 1
+                if counter >= 5:
+                    return
 
         # Direction 2: Nested to guards (reverse)
-        for variant in _nested_to_guards(stmts, source, counter):
-            yield variant
-            counter += 1
-            if counter >= 5:
-                return
+        if prefer_nested is not True:
+            for variant in _nested_to_guards(region_stmts, source, counter):
+                yield variant
+                counter += 1
+                if counter >= 5:
+                    return
 
 
 def _negate_condition(cond_text: bytes) -> bytes:

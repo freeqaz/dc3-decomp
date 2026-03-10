@@ -7,6 +7,24 @@
 #include "ui/UIListLabel.h"
 #include "ui/UIListMesh.h"
 #include "utl/Symbol.h"
+#ifdef HX_NATIVE
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#endif
+
+#ifdef HX_NATIVE
+namespace {
+bool DebugChooseMode() {
+    static int enabled = -1;
+    if (enabled == -1) {
+        const char *env = getenv("MILO_DEBUG_CHOOSE_MODE");
+        enabled = (env && env[0] && strcmp(env, "0") != 0) ? 1 : 0;
+    }
+    return enabled != 0;
+}
+}
+#endif
 
 BEGIN_HANDLERS(ChooseModeProvider)
     HANDLE_ACTION(update_list, UpdateList(_msg->Int(2)))
@@ -33,6 +51,16 @@ Symbol ChooseModeProvider::DataSymbol(int i_iData) const {
 }
 
 void ChooseModeProvider::UpdateList(bool b) {
+#ifdef HX_NATIVE
+    if (DebugChooseMode()) {
+        printf(
+            "DC3 CHOOSE ChooseModeProvider::UpdateList provider=%s extra=%d before=%zu\n",
+            PathName(this),
+            b,
+            mModes.size()
+        );
+    }
+#endif
     mModes.clear();
     static Symbol perform("perform");
     static Symbol practice("practice");
@@ -69,6 +97,16 @@ void ChooseModeProvider::UpdateList(bool b) {
             mModes.push_back(mind_control);
         }
     }
+#ifdef HX_NATIVE
+    if (DebugChooseMode()) {
+        printf(
+            "DC3 CHOOSE ChooseModeProvider::UpdateList done provider=%s count=%zu first=%s\n",
+            PathName(this),
+            mModes.size(),
+            mModes.empty() ? "<none>" : mModes[0].Str()
+        );
+    }
+#endif
 }
 
 RndMat *ChooseModeProvider::Mat(int, int i_iData, UIListMesh *mesh) const {
@@ -92,7 +130,7 @@ RndMat *ChooseModeProvider::Mat(int, int i_iData, UIListMesh *mesh) const {
     if (mesh->Matches("icon_1p")) {
         return nullptr;
     }
-    auto isOnePlusIcon = mesh->Matches("icon_1p_plus");
+    bool isOnePlusIcon = mesh->Matches("icon_1p_plus");
     if (isOnePlusIcon) {
         if ((int)dataSym == custom_party) {
             return nullptr;

@@ -334,13 +334,13 @@ void HamIKEffector::Poll() {
 
     // Initialize constraint quaternion
     QuatXfm q;
-    q.v.Zero();
     q.q.Reset();
 
     // Apply constraints to get weighted orientation
     float totalWeight = ApplyConstraints(q, neutral, this);
 
     // If we don't have full weight, blend with current transform
+    q.v.Zero();
     if (totalWeight < 1.0f) {
         if ((totalWeight != 0.0f) || (t != kEffectorTypeNone)) {
             // Get current effector world transform
@@ -361,7 +361,7 @@ void HamIKEffector::Poll() {
                 } else if (t == kEffectorTypeAnkle) {
                     // Ankle: interpolate with ground clamping
                     float clampFactor = ((xfm.v.z - groundHeight) - 5.0f) * 0.09090909f;
-                    if (clampFactor < 0.0f) clampFactor = 0.0f;
+                    clampFactor = Max(clampFactor, 0.0f);
                     if (clampFactor > 1.0f) clampFactor = 1.0f;
 
                     Interp(q.v, xfm.v, clampFactor, q.v);
@@ -382,8 +382,7 @@ void HamIKEffector::Poll() {
     }
 
     // Normalize the accumulated result
-    float scale = 1.0f / totalWeight;
-    Scale(q.v, scale, q.v);
+    Scale(q.v, 1.0f / totalWeight, q.v);
     Normalize(q.q, q.q);
 
     // Build final transform

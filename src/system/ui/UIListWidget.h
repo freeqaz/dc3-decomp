@@ -23,16 +23,14 @@ struct UIListElementDrawState {
     float mPosX; // 0x4
     float mPosY; // 0x8
     float mPosZ; // 0xc
-    float mAlpha; // 0x10
-    UIListWidgetState mElementState; // 0x14
-    UIComponent::State mComponentState; // 0x18
-    // DC3 additions: unk1c-unk20 absorb HamListRibbon overlay Color write
-    // (*(Color*)&mElementState = color), preventing it from clobbering mDisplay/mShowing
-    int unk1c; // 0x1c
-    int unk20; // 0x20
-    int unk24; // 0x24
-    int mRibbonInteraction; // 0x28 - gesture state flag, cleared by HamNavList
-    int mNavVtablePtr; // 0x2c - secondary vtable ptr, set by HamNavList
+    int unk10; // 0x10 - Vector3 word-copy overflow padding
+    float mScaleX; // 0x14 - scale factor for transform X axis (written by HamListRibbon as Color.r)
+    float mScaleY; // 0x18 - scale factor for transform Y axis (written by HamListRibbon as Color.g)
+    float mScaleZ; // 0x1c - scale factor for transform Z axis (written by HamListRibbon as Color.b)
+    int unk20; // 0x20 - Color overlay A
+    float mAlpha; // 0x24
+    UIListWidgetState mElementState; // 0x28
+    UIComponent::State mComponentState; // 0x2c
     int mDisplay; // 0x30
     int mShowing; // 0x34
     int mData; // 0x38
@@ -50,6 +48,7 @@ struct UIListWidgetDrawState {
 enum UIListWidgetDrawType {
     kUIListWidgetDrawAlways,
     kUIListWidgetDrawOnlyFocused,
+    kUIListWidgetDrawNever,
     kUIListWidgetDrawFocusedOrManual,
     kNumUIListWidgetDrawTypes
 };
@@ -88,9 +87,9 @@ public:
     virtual void Poll() {}
 
     float DrawOrder() const;
-    float DisabledAlphaScale() const { return mDisabledAlphaScale; }
-    UIListWidgetDrawType WidgetDrawType() const { return mWidgetDrawType; }
-    UIList *ParentList() { return mParentList; }
+    float DisabledAlphaScale() const;
+    UIListWidgetDrawType WidgetDrawType() const;
+    UIList *ParentList();
     void SetParentList(UIList *);
     void SetColor(UIListWidgetState, UIComponent::State, UIColor *);
 

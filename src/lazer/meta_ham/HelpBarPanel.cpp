@@ -113,6 +113,10 @@ void HelpBarPanel::FinishLoad() {
 
 void HelpBarPanel::EnterControllerMode() {
     Flow *f = DataDir()->Find<Flow>("controller_mode.flow", false);
+#ifdef HX_NATIVE
+    printf("DC3 HelpBarPanel::EnterControllerMode() flow=%p dir='%s'\n",
+           (void*)f, DataDir() ? DataDir()->Name() : "null");
+#endif
     if (f)
         f->Activate();
 }

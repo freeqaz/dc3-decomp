@@ -16,6 +16,7 @@ Usage:
     python3 scripts/analysis/diff_inspect.py /tmp/claude/diff.json --summary        # count by match type
 
     # Analysis modes:
+    python3 scripts/analysis/diff_inspect.py --symbol "?Foo@@QAAXXZ" --attributed   # source-attributed regions
     python3 scripts/analysis/diff_inspect.py /tmp/claude/diff.json --diagnose       # root cause analysis
     python3 scripts/analysis/diff_inspect.py /tmp/claude/diff.json --clusters       # insert/delete clusters
     python3 scripts/analysis/diff_inspect.py /tmp/claude/diff.json --regswaps       # register swap pairs
@@ -35,6 +36,7 @@ import re
 import subprocess
 import sys
 from collections import Counter, defaultdict
+from pathlib import Path
 
 
 # ── Formatting helpers ──────────────────────────────────────────────────────
@@ -769,6 +771,249 @@ def cmd_replaces(instrs):
             print(f"           SRC {fmt_instr(b)}")
 
 
+# ── Attribution ────────────────────────────────────────────────────────────
+
+def _find_source_for_symbol(symbol, project_dir=None):
+    """Look up source file path for a mangled symbol via report.json.
+
+    Returns (source_path, unit_name) or (None, None).
+    """
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    repo_root = os.path.dirname(os.path.dirname(script_dir))
+    effective_dir = project_dir or repo_root
+
+    report_path = os.path.join(effective_dir, "build", "373307D9", "report.json")
+    if not os.path.exists(report_path):
+        return None, None
+
+    with open(report_path) as f:
+        report = json.load(f)
+
+    for unit in report.get("units", []):
+        for fn in unit.get("functions", []):
+            if fn.get("name") == symbol:
+                unit_name = unit.get("name", "")
+                # Strip default/ prefix
+                name = unit_name
+                if name.startswith("default/"):
+                    name = name[len("default/"):]
+                # Try to find .cpp
+                for ext in (".cpp", ".c"):
+                    src = os.path.join(effective_dir, "src", name + ext)
+                    if os.path.exists(src):
+                        return src, unit_name
+                return None, unit_name
+
+    return None, None
+
+
+def _compile_with_listing(source_path, project_dir=None):
+    """Compile a source file with /FAs and return the listing text.
+
+    Returns the listing text or None on failure.
+    """
+    try:
+        from tools.compiler_trace.invoker import CompilerInvoker
+    except ImportError:
+        print("Error: cannot import CompilerInvoker", file=sys.stderr)
+        return None
+
+    invoker = CompilerInvoker()
+    src = Path(source_path)
+    output_dir = Path("/tmp/claude") / "attribution" / src.stem
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    result = invoker.compile_with_asm(src, output_dir, listing_type="/FAs")
+    if result.returncode != 0:
+        print(f"Compilation failed (exit {result.returncode}):", file=sys.stderr)
+        if result.stderr:
+            print(result.stderr[:500], file=sys.stderr)
+        return None
+
+    # Find the .cod or .asm listing file
+    for ext in (".cod", ".asm"):
+        listing_path = output_dir / (src.stem + ext)
+        if listing_path.exists():
+            return listing_path.read_text(errors="replace")
+
+    # Try any file in output_dir
+    for p in output_dir.iterdir():
+        if p.suffix in (".cod", ".asm"):
+            return p.read_text(errors="replace")
+
+    print(f"No listing file found in {output_dir}", file=sys.stderr)
+    return None
+
+
+def _objdiff_to_diff_instructions(instrs):
+    """Convert objdiff JSON instructions to the format expected by attribution.
+
+    Maps objdiff's match_type/target/base format to the attribution module's
+    index/diff_kind/target_opcode/base_opcode format.
+    """
+    result = []
+    for ins in instrs:
+        idx = ins.get("index", -1)
+        mt = ins.get("match_type", "equal")
+
+        # Map objdiff match_type to diff_kind
+        if mt == "equal":
+            kind = "match"
+        elif mt in ("diff_op", "replace"):
+            kind = "replace"
+        elif mt == "insert":
+            kind = "insert"
+        elif mt == "delete":
+            kind = "delete"
+        elif mt == "diff_arg":
+            kind = "replace"  # args differ but opcode may match
+        else:
+            kind = "match"
+
+        target = ins.get("target") or {}
+        base = ins.get("base") or {}
+
+        result.append({
+            "index": idx,
+            "diff_kind": kind,
+            "target_opcode": target.get("opcode", ""),
+            "base_opcode": base.get("opcode", ""),
+        })
+    return result
+
+
+def cmd_attributed(instrs, symbol, project_dir=None):
+    """Source-attributed mismatch analysis.
+
+    Compiles the source with /FAs, parses the listing, and joins with
+    objdiff instruction data to show which source lines cause mismatches.
+    """
+    # Lazy import
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    repo_root = os.path.dirname(os.path.dirname(script_dir))
+    if repo_root not in sys.path:
+        sys.path.insert(0, repo_root)
+
+    from scripts.permuter.attribution import (
+        attribute_function,
+    )
+
+    # 1. Find source file
+    source_path, unit_name = _find_source_for_symbol(symbol, project_dir)
+    if not source_path:
+        print(f"Error: cannot resolve source file for symbol: {symbol}", file=sys.stderr)
+        if unit_name:
+            print(f"  Unit: {unit_name}", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"Source: {source_path}", file=sys.stderr)
+    print(f"Unit:   {unit_name}", file=sys.stderr)
+
+    # 2. Compile with /FAs
+    print("Compiling with /FAs...", file=sys.stderr)
+    listing_text = _compile_with_listing(source_path, project_dir)
+    if not listing_text:
+        print("Error: failed to generate assembly listing", file=sys.stderr)
+        sys.exit(1)
+
+    # 3. Extract function name from mangled symbol for listing lookup
+    # The listing uses full mangled names in PROC/ENDP markers
+    func_name = symbol
+
+    # 4. Convert objdiff instructions to attribution format
+    diff_instrs = _objdiff_to_diff_instructions(instrs)
+
+    # 5. Run attribution pipeline
+    listing, attributed, regions = attribute_function(listing_text, func_name, diff_instrs)
+
+    if listing is None:
+        print(f"Warning: function not found in /FAs listing: {func_name}", file=sys.stderr)
+        print("  The listing may use a different mangling. Trying partial match...", file=sys.stderr)
+        # Try with just the class::method part
+        # e.g., ?BurnXfm@RndMesh@@QAAXXZ -> RndMesh or BurnXfm
+        parts = symbol.split("@")
+        if len(parts) >= 2:
+            short_name = parts[0].lstrip("?")
+            from scripts.permuter.attribution import parse_asm_listing
+            listing = parse_asm_listing(listing_text, short_name)
+            if listing:
+                from scripts.permuter.attribution import attribute_mismatches, aggregate_regions
+                attributed = attribute_mismatches(listing, diff_instrs)
+                regions = aggregate_regions(attributed, listing)
+
+    if listing is None:
+        print("Error: could not find function in assembly listing", file=sys.stderr)
+        sys.exit(1)
+
+    # 6. Display results
+    total = len(instrs)
+    equal_count = sum(1 for i in instrs if i.get("match_type") == "equal")
+    match_pct = 100.0 * equal_count / total if total else 0
+
+    print()
+    print("=" * 70)
+    print("SOURCE ATTRIBUTION REPORT")
+    print("=" * 70)
+    print()
+    print(f"Function:      {func_name}")
+    print(f"Source:        {os.path.basename(source_path)}")
+    print(f"Match:         ~{match_pct:.1f}% ({equal_count}/{total} instructions)")
+    print(f"Listing:       {listing.instruction_count()} instructions parsed")
+    if listing.prologue_helper:
+        print(f"Prologue:      {listing.prologue_helper} ({listing.callee_saved_count} callee-saved)")
+    print(f"Attributed:    {len(attributed)} mismatches → {len(regions)} region(s)")
+
+    if not regions:
+        print()
+        print("  No mismatch regions found (function may match perfectly)")
+        return
+
+    print()
+    print("-" * 70)
+    print("MISMATCH REGIONS (sorted by impact)")
+    print("-" * 70)
+
+    for i, region in enumerate(regions):
+        print()
+        if region.source_file == "<unknown>":
+            print(f"  Region {i+1}: <unattributed> ({region.unattributed_count} mismatches)")
+            for m in region.mismatches[:5]:
+                print(f"    idx {m.instruction_index:4d}: {m.mismatch_type:8s}  "
+                      f"TGT: {m.target_opcode:8s}  SRC: {m.base_opcode}")
+            if len(region.mismatches) > 5:
+                print(f"    ... and {len(region.mismatches) - 5} more")
+            continue
+
+        line_range = (f"L{region.start_line}" if region.start_line == region.end_line
+                      else f"L{region.start_line}-{region.end_line}")
+        ratio_str = f"{region.match_ratio*100:.0f}%" if region.total_instructions > 0 else "?"
+
+        print(f"  Region {i+1}: {os.path.basename(region.source_file)}:{line_range} "
+              f"({region.mismatch_count} mismatches, {region.total_instructions} instrs, "
+              f"{ratio_str} local match)")
+        print(f"  Dominant type: {region.dominant_type}")
+        print(f"  Source:")
+        for src_line in region.source_lines[:5]:
+            print(f"    | {src_line}")
+        if len(region.source_lines) > 5:
+            print(f"    | ... ({len(region.source_lines) - 5} more lines)")
+
+        # Show individual mismatches grouped by type
+        by_type = defaultdict(list)
+        for m in region.mismatches:
+            by_type[m.mismatch_type].append(m)
+
+        print(f"  Mismatches:")
+        for mtype, mlist in sorted(by_type.items(), key=lambda x: -len(x[1])):
+            print(f"    {mtype} ({len(mlist)}):")
+            for m in mlist[:4]:
+                confidence = f" [{m.confidence:.0%}]" if m.confidence < 0.9 else ""
+                print(f"      idx {m.instruction_index:4d}: "
+                      f"TGT {m.target_opcode:8s} vs SRC {m.base_opcode:8s}{confidence}")
+            if len(mlist) > 4:
+                print(f"      ... and {len(mlist) - 4} more")
+
+
 # ── Symbol invocation ───────────────────────────────────────────────────────
 
 def run_objdiff_for_symbol(symbol, project_dir=None):
@@ -830,6 +1075,7 @@ def main():
         epilog="""
 Analysis modes (pick one):
   --diagnose    Root cause analysis: why doesn't this match?
+  --attributed  Source-attributed mismatch regions (requires --symbol)
   --clusters    Group insert/delete into contiguous clusters
   --regswaps    Register swap pair analysis
   --offsets     Offset/immediate shift analysis
@@ -875,6 +1121,9 @@ Filter modes:
         "--replaces", action="store_true",
         help="Categorize replace instructions (noise vs real)")
     parser.add_argument(
+        "--attributed", action="store_true",
+        help="Source-attributed mismatch regions (compile with /FAs, join with objdiff)")
+    parser.add_argument(
         "--symbol", type=str, default=None,
         help="Run objdiff-cli diff internally for this symbol")
     parser.add_argument(
@@ -915,6 +1164,11 @@ Filter modes:
         sys.exit(1)
 
     # ── Analysis modes ──
+    if args.attributed:
+        if not args.symbol:
+            parser.error("--attributed requires --symbol")
+        cmd_attributed(instrs, args.symbol, project_dir=args.project_dir)
+        return
     if args.diagnose:
         cmd_diagnose(instrs)
         return

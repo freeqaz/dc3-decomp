@@ -1,15 +1,22 @@
-"""Scan + permute pipeline — AST scan to find pattern hits, then hill-climb only matching patterns.
+"""Scan + permute pipeline — AST scan to find pattern hits, then search for improvements.
 
-Combines pattern_scan (fast, no build) with hill_climber (build + score) for
-targeted permutation. Instead of running all 46 patterns on every function,
+Combines pattern_scan (fast, no build) with a search strategy (build + score)
+for targeted permutation. Instead of running all 46 patterns on every function,
 this only runs the patterns that the scan identified as relevant.
 
-By default runs all patterns with Ghidra, chains, adaptive, and constrained
-synthesis enabled. Use --no-* flags to disable individual features.
+By default uses beam search with Ghidra, chains, adaptive, and constrained
+synthesis enabled. Use --strategy to switch to hill_climb or evolutionary.
+Use --no-* flags to disable individual features.
 
 Usage:
-    # Run with all defaults (all patterns, ghidra, chain, adaptive, constrained)
+    # Run with all defaults (beam search, all patterns, ghidra, constrained)
     python -m scripts.permuter.scan_and_permute
+
+    # Use hill climber instead of beam search
+    python -m scripts.permuter.scan_and_permute --strategy hill_climb
+
+    # Use evolutionary optimizer
+    python -m scripts.permuter.scan_and_permute --strategy evolutionary
 
     # Specific patterns only
     python -m scripts.permuter.scan_and_permute \
@@ -54,7 +61,7 @@ DECOMP_DB = REPO_ROOT / "decomp.db"
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="python -m scripts.permuter.scan_and_permute",
-        description="Scan for pattern hits then hill-climb only matching patterns.",
+        description="Scan for pattern hits then search for matching improvements.",
     )
     parser.add_argument(
         "--patterns", default="all",
@@ -170,16 +177,36 @@ def parse_args() -> argparse.Namespace:
         help="Disable adaptive pattern suppression/boosting",
     )
     parser.add_argument(
-        "--evolutionary", action="store_true", default=False,
-        help="Use evolutionary optimizer instead of greedy hill climbing",
+        "--strategy", default="beam",
+        choices=["beam", "hill_climb", "evolutionary"],
+        help="Search strategy (default: beam). "
+             "beam = multi-state beam search, "
+             "hill_climb = greedy single-state, "
+             "evolutionary = population-based optimizer",
     )
     parser.add_argument(
         "--population-size", type=int, default=50,
-        help="Population size for evolutionary optimizer (default: 50)",
+        help="Population size for evolutionary strategy (default: 50)",
     )
     parser.add_argument(
         "--generations", type=int, default=20,
-        help="Max generations for evolutionary optimizer (default: 20)",
+        help="Max generations for evolutionary strategy (default: 20)",
+    )
+    parser.add_argument(
+        "--beam-width", type=int, default=8,
+        help="Beam width — survivors per depth (default: 8)",
+    )
+    parser.add_argument(
+        "--beam-depth", type=int, default=4,
+        help="Beam depth — expansion rounds (default: 4)",
+    )
+    parser.add_argument(
+        "--beam-expand", type=int, default=24,
+        help="Proposals per state per depth (default: 24)",
+    )
+    parser.add_argument(
+        "--validate", action="store_true",
+        help="Show validation tier info for each result (tier distribution in summary)",
     )
     return parser.parse_args()
 
@@ -512,15 +539,36 @@ def _climb_one(
     )
 
     try:
-        if getattr(args, "evolutionary", False):
+        strategy = getattr(args, "strategy", "beam")
+        if strategy == "beam":
+            from .beam_search import beam_search, BeamConfig
+            config = BeamConfig(
+                width=args.beam_width,
+                depth=args.beam_depth,
+                expand=args.beam_expand,
+                workers=args.jobs if args.jobs > 1 else 6,
+            )
+            result = beam_search(
+                symbol=symbol,
+                source_path=Path(REPO_ROOT / source_path),
+                function_name=func_name,
+                patterns=func_patterns,
+                config=config,
+                apply=not args.no_apply,
+                unit=candidate.get("unit"),
+                ghidra=args.ghidra,
+                m2c=args.m2c,
+                constrained=args.constrained,
+            )
+        elif strategy == "evolutionary":
             from .evolutionary import evolve
             result = evolve(
                 symbol=symbol,
                 source_path=Path(REPO_ROOT / source_path),
                 function_name=func_name,
                 patterns=func_patterns,
-                population_size=getattr(args, "population_size", 50),
-                generations=getattr(args, "generations", 20),
+                population_size=args.population_size,
+                generations=args.generations,
                 apply=not args.no_apply,
                 unit=candidate.get("unit"),
                 ghidra=args.ghidra,
@@ -530,7 +578,7 @@ def _climb_one(
                 adaptive=args.adaptive,
                 constrained=args.constrained,
             )
-        else:
+        else:  # hill_climb
             result = hill_climb(
                 symbol=symbol,
                 source_path=Path(REPO_ROOT / source_path),
@@ -595,6 +643,7 @@ def _climb_one(
             "error": None,
             "ghidra_stats": result.ghidra_stats,
             "preflight": preflight,
+            "validation_tier": result.validation_tier,
         }
     except Exception as e:
         print(f"  ERROR: {e}", file=sys.stderr)
@@ -937,7 +986,7 @@ def main():
         by_source[c["source_path"]].append(c)
 
     print(
-        f"\nPhase 3: Hill-climbing {len(candidates)} functions "
+        f"\nPhase 3: Searching {len(candidates)} functions ({args.strategy}) "
         f"across {len(by_source)} source files "
         f"({args.jobs} job{'s' if args.jobs != 1 else ''})...",
         file=sys.stderr,
@@ -1026,13 +1075,30 @@ def main():
     print(label, file=sys.stderr)
     print(f"{'=' * 70}", file=sys.stderr)
     print(f"  Scanned: {len(files)} files in {scan_elapsed:.1f}s", file=sys.stderr)
-    print(f"  Climbed: {stats['processed']}/{stats['total']} functions "
+    print(f"  Searched: {stats['processed']}/{stats['total']} functions "
           f"in {time.time() - climb_start:.1f}s", file=sys.stderr)
     print(f"  Improved: {stats['improved']} functions (+{stats['total_delta']:.2f}% total)",
           file=sys.stderr)
     print(f"  Perfect: {stats['perfect']}", file=sys.stderr)
     print(f"  Errors: {stats['errors']}", file=sys.stderr)
     print(f"  Total time: {total_elapsed:.1f}s", file=sys.stderr)
+
+    # Validation tier summary (when --validate)
+    if getattr(args, "validate", False) and stats["improvements"]:
+        tier_counts: dict[int, int] = {}
+        for imp in stats["improvements"]:
+            t = imp.get("validation_tier", 0)
+            tier_counts[t] = tier_counts.get(t, 0) + 1
+        _tier_names = {
+            0: "INVALID", 1: "PARSE_OK", 2: "BUILD_OK", 3: "SCORE_IMPROVED",
+            4: "REGION_IMPROVED", 5: "FACT_AGREED", 6: "SEMANTIC_OK",
+        }
+        parts = []
+        for tier in range(6, -1, -1):
+            count = tier_counts.get(tier, 0)
+            if count > 0:
+                parts.append(f"{_tier_names.get(tier, f'T{tier}')}:{count}")
+        print(f"  Validation: {' '.join(parts)}", file=sys.stderr)
 
     # Ghidra stats summary
     if ghidra_batch:

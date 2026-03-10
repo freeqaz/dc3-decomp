@@ -20,7 +20,7 @@ struct HamListRibbonDrawState {
 #ifdef HX_NATIVE
     UIListElementDrawState *mElemDrawState; // LP64: pointer, not int
 #else
-    int mElemDrawState; // ILP32: int == pointer size
+    unsigned int mElemDrawState; // ILP32: unsigned int == pointer size
 #endif
     bool mHidden;
     float mBigScale;

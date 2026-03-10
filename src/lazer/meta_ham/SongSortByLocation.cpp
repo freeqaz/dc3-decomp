@@ -74,8 +74,8 @@ SongSortByLocation::NewShortcutNode(NavListItemNode *itemNode) const {
 
 NavListItemNode *SongSortByLocation::NewItemNode(void *v) const {
     SongRecord *record = static_cast<SongRecord *>(v);
-    const char *title = record->Metadata()->Title();
     Symbol location = record->Metadata()->GameOrigin();
+    const char *title = record->Metadata()->Title();
     LocationCmp *cmp = new LocationCmp();
     cmp->mName = title;
     cmp->mLocation = location;

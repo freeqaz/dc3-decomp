@@ -211,6 +211,21 @@ bool RndGroup::MakeWorldSphere(Sphere &s, bool b) {
 }
 
 void RndGroup::DrawShowing() {
+#ifdef HX_NATIVE
+    extern int gDebugFrameID;
+    if (gDebugFrameID == 500 && !strcmp(Name(), "all.grp")) {
+        printf("DC3 RndGroup::DrawShowing '%s' dir=%s draws=%d objects=%d\n",
+               Name(), Dir() ? Dir()->Name() : "null",
+               (int)mDraws.size(), 0);
+        for (int i = 0; i < (int)mDraws.size(); i++) {
+            Hmx::Object *obj = dynamic_cast<Hmx::Object*>(mDraws[i]);
+            printf("  grp_draw[%d] = %s (%s) showing=%d\n",
+                   i, obj ? obj->Name() : "?",
+                   obj ? obj->ClassName() : "?",
+                   mDraws[i]->Showing());
+        }
+    }
+#endif
     RndEnvironTracker tracker(nullptr, nullptr);
     if (!mSortInWorld) {
         for (std::vector<RndDrawable *>::iterator it = mDraws.begin(); it != mDraws.end();

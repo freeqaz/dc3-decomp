@@ -75,6 +75,16 @@ void Multiply(const Hmx::Matrix3 &a, const Hmx::Matrix3 &b, Hmx::Matrix3 &out) {
 }
 
 void Multiply(const Transform &a, const Transform &b, Transform &out) {
+#ifdef HX_NATIVE
+    // Native fix: the PPC decomp below has decompiler mis-mappings in the translation
+    // computation (b.m.y.y/b.m.z.y swapped, b.m.y.z/b.m.z.y swapped, b.v.y/b.v.z swapped).
+    // These produce identical PPC assembly but wrong x86 results for non-trivial rotations.
+    // Use the mathematically correct formula: out.v = a.v * b.m + b.v
+    Multiply(a.m, b.m, out.m);
+    out.v.x = a.v.x * b.m.x.x + a.v.y * b.m.y.x + a.v.z * b.m.z.x + b.v.x;
+    out.v.y = a.v.x * b.m.x.y + a.v.y * b.m.y.y + a.v.z * b.m.z.y + b.v.y;
+    out.v.z = a.v.x * b.m.x.z + a.v.y * b.m.y.z + a.v.z * b.m.z.z + b.v.z;
+#else
     float fVar1 = a.v.y;
     float fVar2 = a.v.x;
     float fVar3 = a.v.z;
@@ -105,6 +115,7 @@ void Multiply(const Transform &a, const Transform &b, Transform &out) {
         out.v.x += fVar4;
     }
     Multiply(a.m, b.m, out.m);
+#endif
 }
 
 

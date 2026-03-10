@@ -620,9 +620,11 @@ DataNode UIFontImporter::OnGetGennedBitmapPath(DataArray *da) {
     if ((unsigned int)mGennedFonts.size() > 0)
         font = (RndFont *)*mGennedFonts.begin();
     if (font && font->Mat(0)) {
-        RndTex *tex = font->Mat(0)->GetDiffuseTex();
-        if (tex)
-            return DataNode(font->Mat(0)->GetDiffuseTex()->File().c_str());
+        if (font->Mat(0)->GetDiffuseTex()) {
+            RndTex *tex = font->Mat(0)->GetDiffuseTex();
+            if (tex)
+                return DataNode(tex->File().c_str());
+        }
     }
     return DataNode("");
 }

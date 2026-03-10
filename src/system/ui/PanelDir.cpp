@@ -14,15 +14,7 @@
 #include "utl/Std.h"
 #include "utl/Symbol.h"
 #ifdef HX_NATIVE
-#include <cstdlib>
 extern void FlushTransparentDraws();
-static bool FlushTransparentOnPanelCamSwitch() {
-    static int sCached = -1;
-    if (sCached < 0) {
-        sCached = getenv("MILO_FLUSH_TRANSPARENT_ON_CAM_SWITCH") ? 1 : 0;
-    }
-    return sCached != 0;
-}
 #endif
 
 bool gSendFocusMsg = true;
@@ -256,11 +248,47 @@ void PanelDir::DrawShowing() {
     }
     RndCam *curCam = RndCam::Current();
     RndCam *camOverride = CamOverride();
+#ifdef HX_NATIVE
+    extern int gDebugFrameID;
+    if (gDebugFrameID == 500) {
+        printf("DC3 PanelDir::DrawShowing '%s' camOverride=%s curCam=%s showing=%d draws=%d\n",
+               Name(),
+               camOverride ? camOverride->Name() : "null",
+               curCam ? curCam->Name() : "null",
+               Showing(), (int)mDraws.size());
+        // Dump every drawable in mDraws
+        for (int i = 0; i < (int)mDraws.size(); i++) {
+            RndDrawable *d = mDraws[i];
+            Hmx::Object *obj = dynamic_cast<Hmx::Object*>(d);
+            printf("  mDraws[%d] = %p class=%s name=%s showing=%d\n",
+                   i, (void*)d,
+                   obj ? obj->ClassName() : "?",
+                   obj ? obj->Name() : "?",
+                   d->Showing());
+        }
+        // Dump subdirs to see if choose_mode.milo is present
+        printf("  Subdirs of '%s':\n", Name());
+        for (ObjDirItr<ObjectDir> dit(this, false); dit != nullptr; ++dit) {
+            if (dit != (ObjectDir*)this) {
+                printf("    subdir: class=%s name=%s path=%s\n",
+                       dit->ClassName(), dit->Name(),
+                       dit->GetPathName() ? dit->GetPathName() : "null");
+            }
+        }
+        // Check for HamNavList objects anywhere in the hierarchy
+        for (ObjDirItr<Hmx::Object> oit(this, true); oit != nullptr; ++oit) {
+            const char *cn = oit->ClassName().Str();
+            if (strstr(cn, "HamNav") || strstr(cn, "UIList")) {
+                printf("  FOUND %s: name=%s dir=%s\n",
+                       cn, oit->Name(),
+                       oit->Dir() ? oit->Dir()->Name() : "null");
+            }
+        }
+    }
+#endif
     if (camOverride && camOverride != RndCam::Current()) {
 #ifdef HX_NATIVE
-        if (FlushTransparentOnPanelCamSwitch()) {
-            FlushTransparentDraws();
-        }
+        FlushTransparentDraws();
 #endif
         camOverride->Select();
     }
@@ -281,9 +309,7 @@ void PanelDir::DrawShowing() {
     }
     if (curCam && curCam != RndCam::Current()) {
 #ifdef HX_NATIVE
-        if (FlushTransparentOnPanelCamSwitch()) {
-            FlushTransparentDraws();
-        }
+        FlushTransparentDraws();
 #endif
         curCam->Select();
     }
@@ -307,6 +333,37 @@ void PanelDir::Enter() {
         float sf = StartFrame();
         if (ef > sf && !IsAnimating()) {
             Animate(0, true, 0, RndAnimatable::k30_fps_ui, sf, ef, 0, 1.0f, Symbol("range"), nullptr, kEaseLinear, 0, false);
+        }
+    }
+    // Hide Kinect skeleton tracking UI elements and gesture tutorial overlays.
+    // On Xbox, controller_mode.flow and DTA PropAnims drive visibility.
+    // On native, these render as unwanted overlays without DTA animation.
+    {
+        static const char *sHideDirs[] = {
+            "NewSkeletonDir",        // Kinect player tracking display
+            "silhouette_guy_left",   // Left player silhouette
+            "silhouette_guy_right",  // Right player silhouette
+            nullptr
+        };
+        for (const char **d = sHideDirs; *d; d++) {
+            RndDir *sub = Find<RndDir>(*d, false);
+            if (sub && sub->Showing()) {
+                sub->SetShowing(false);
+                printf("DC3 Native: Hiding Kinect UI dir '%s' in PanelDir '%s'\n",
+                       *d, Name());
+            }
+        }
+        // Also hide sub-dirs with tutorial/gesture names
+        for (ObjDirItr<RndDir> dit(this, false); dit != nullptr; ++dit) {
+            const char *dname = dit->Name();
+            if (strstr(dname, "tutorial") || strstr(dname, "gesture") ||
+                strstr(dname, "nav_tut") || strstr(dname, "spotlight")) {
+                if (dit->Showing()) {
+                    dit->SetShowing(false);
+                    printf("DC3 Native: Hiding tutorial dir '%s' in PanelDir '%s'\n",
+                           dname, Name());
+                }
+            }
         }
     }
 #endif

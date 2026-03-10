@@ -211,13 +211,13 @@ That means decomp priority should stay centered on shared-engine functions first
 | `UIListDir::BuildDrawState` | WIP | Being worked on separately |
 | `UIListDir::SetElementPos` | **100%** | Complete |
 | `UIList::DrawShowing` | **90.1%** | Improved from 84.3% (struct fix + mScrolling param + float init) |
-| `HamNavList::DrawShowing` | 64.5% | AT_LIMIT (register swaps, bool mask) |
+| `HamNavList::DrawShowing` | **90.7%** | AT_LIMIT (register swaps, scheduling). Improved from 64.5% (IsScrolling reorder, kFocused literal, unsigned mElemDrawState, float unk24 store) |
 | `PanelDir::DrawShowing` | **100%** | Complete |
 | `HamUI::Draw` | **100%** | Complete |
 | `UIManager::Draw` | **100%** | Complete |
 | `UILabel::DrawShowing` | 95.6% | AT_LIMIT (Style() scheduling, cmpwi vs cmplwi) |
-| `RndText::UpdateText` | 85.2% | LikelyFixable (control flow, font access path) |
-| `RndText::DrawShowing` | 70.1% | LikelyFixable (register shuffling, control flow) |
+| `RndText::UpdateText` | **95.0%** | AT_LIMIT (ObjPtr offset folding, store scheduling) |
+| `RndText::DrawShowing` | 70.1% | AT_LIMIT (address relocation noise, behaviorally equivalent) |
 
 ### Tier 2
 
@@ -225,7 +225,7 @@ That means decomp priority should stay centered on shared-engine functions first
 |----------|--------|--------|
 | `UIScreen::Draw` | **100%** | Complete |
 | `UIPanel::Draw` | **100%** | Complete |
-| `UIListDir::DrawWidgets` | 71.8% | LikelyFixable (register cascade, control flow) |
+| `UIListDir::DrawWidgets` | **100%** | Complete |
 | `ShellInput::SyncToCurrentScreen` | **100%** | Complete |
 | `HelpBarPanel::Draw` | **100%** | Complete |
 | `HelpBarPanel::EnterControllerMode` | **100%** | Complete |
@@ -250,9 +250,9 @@ That means decomp priority should stay centered on shared-engine functions first
 Functions still needing improvement:
 1. `UIListDir::BuildDrawState` (WIP, separate effort)
 2. `UIList::DrawShowing` (90.1% — register cascade, ICF symbol noise)
-3. `UIListDir::DrawWidgets` (71.8% — register cascade, control flow)
-4. `RndText::UpdateText` (85.2% — goto/control flow, ObjPtr access path)
-5. `RndText::DrawShowing` (70.1% — massive register shuffling)
+3. ~~`UIListDir::DrawWidgets`~~ (100% — Complete)
+4. ~~`RndText::UpdateText`~~ (95.0% — AT_LIMIT, ObjPtr offset folding, store scheduling)
+5. ~~`RndText::DrawShowing`~~ (70.1% — AT_LIMIT, addr reloc noise, behaviorally equivalent)
 6. `HamNavList::DrawShowing` (64.5% — register swaps, bool mask)
 
 ## Practical Rule

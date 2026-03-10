@@ -123,3 +123,116 @@ def extract_last_call_name(code: str) -> str | None:
     if calls:
         return calls[-1]
     return None
+
+
+# ------------------------------------------------------------------
+# Structural extractors for pattern guidance
+# ------------------------------------------------------------------
+
+_IF_RE = re.compile(r"\bif\s*\(")
+_RETURN_RE = re.compile(r"\breturn\b")
+_GUARD_RETURN_RE = re.compile(
+    r"\bif\s*\([^)]*\)\s*\{?\s*return\b"
+)
+
+
+def extract_nesting_depth(code: str) -> int:
+    """Extract maximum nesting depth from m2c output.
+
+    Counts the deepest chain of nested ``if`` statements by tracking
+    brace/keyword depth.  Useful for guard_to_nested to know whether
+    the target uses flat guards or deep nesting.
+
+    Returns 0 if no ``if`` statements found, 1 for flat if-chains,
+    2+ for nested structures.
+    """
+    body = code.split("{", 1)[1] if "{" in code else code
+    max_depth = 0
+    current_depth = 0
+
+    i = 0
+    while i < len(body):
+        # Check for "if ("
+        if body[i:i+2] == "if" and (i + 2 >= len(body) or not body[i+2].isalnum()):
+            rest = body[i+2:].lstrip()
+            if rest.startswith("("):
+                current_depth += 1
+                max_depth = max(max_depth, current_depth)
+        elif body[i] == "}":
+            current_depth = max(0, current_depth - 1)
+        i += 1
+
+    return max_depth
+
+
+def extract_guard_count(code: str) -> int:
+    """Count guard-return patterns in m2c output.
+
+    A guard-return is ``if (cond) { return ...; }`` or
+    ``if (cond) return ...;`` — an early return guarded by a condition.
+
+    Useful for early_return_merge and guard_to_nested to determine
+    whether the target uses guard-style or merged-condition style.
+    """
+    return len(_GUARD_RETURN_RE.findall(code))
+
+
+def extract_return_pattern(code: str) -> str:
+    """Classify the return structure of m2c output.
+
+    Returns one of:
+        "merged_var"   - single return with conditional assignment to temp
+        "split_calls"  - multiple returns with different call expressions
+        "guard_chain"  - early returns followed by a final return
+        "single"       - only one return statement
+        "unknown"      - unclassifiable
+
+    Useful for return_call_merge to decide which direction to transform.
+    """
+    body = code.split("{", 1)[1] if "{" in code else code
+
+    returns = list(_RETURN_RE.finditer(body))
+    if len(returns) <= 1:
+        return "single"
+
+    guards = extract_guard_count(code)
+    if guards >= 2:
+        return "guard_chain"
+
+    # Check for temp-variable pattern: "type temp; if (...) temp = ...; else temp = ...; return temp;"
+    # Simplified: look for assignment to same var in if/else + final return of that var
+    if re.search(r"\btemp\b.*=.*;\s*\}?\s*else\s*\{?\s*\btemp\b.*=", body, re.DOTALL):
+        return "merged_var"
+
+    # Multiple returns with calls → split_calls
+    call_returns = 0
+    for m in returns:
+        after = body[m.end():m.end() + 80]
+        if _CALL_RE.search(after):
+            call_returns += 1
+    if call_returns >= 2:
+        return "split_calls"
+
+    if guards >= 1:
+        return "guard_chain"
+
+    return "unknown"
+
+
+def extract_call_order(code: str) -> list[str]:
+    """Extract function call names in order of appearance.
+
+    Returns deduplicated list preserving first-occurrence order.
+    Useful for statement_reorder to detect target's call ordering.
+    """
+    body = code.split("{", 1)[1] if "{" in code else code
+    seen: set[str] = set()
+    order: list[str] = []
+    for match in _CALL_RE.finditer(body):
+        name = match.group(1)
+        if name in _NOT_CALLS:
+            continue
+        if name not in seen:
+            seen.add(name)
+            order.append(name)
+    return order

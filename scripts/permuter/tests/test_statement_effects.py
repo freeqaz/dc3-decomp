@@ -5,7 +5,10 @@ from __future__ import annotations
 import unittest
 
 from scripts.permuter.patterns.base import get_pattern
-from scripts.permuter.statement_effects import StatementEffectAnalyzer
+from scripts.permuter.statement_effects import (
+    StatementEffectAnalyzer,
+    build_def_use_chains,
+)
 from scripts.permuter.tests.conftest import (
     diag_with_clusters,
     make_context,
@@ -153,6 +156,192 @@ void test_func(int value) {
         first, second = ctx.statements
 
         self.assertFalse(analyzer.can_reorder_statement_pair(first, second))
+
+
+class TestAliasDetection(unittest.TestCase):
+    def test_detects_reference_alias(self):
+        ctx = make_context(
+            """\
+void test_func(int x) {
+    auto& ref = x;
+    ref = 5;
+}
+""",
+            "test_func",
+            diag_with_clusters(),
+        )
+        analyzer = StatementEffectAnalyzer(ctx.file_source)
+        effects = analyzer.analyze(ctx.statements[0])
+        self.assertEqual(len(effects.aliases), 1)
+        alias = effects.aliases[0]
+        self.assertEqual(alias.alias_name, "ref")
+        self.assertEqual(alias.target_root, "x")
+        self.assertTrue(alias.is_reference)
+
+    def test_detects_member_reference_alias(self):
+        ctx = make_context(
+            """\
+struct Foo { int val; };
+void test_func(Foo* foo) {
+    auto& ref = foo->val;
+    ref = 10;
+}
+""",
+            "test_func",
+            diag_with_clusters(),
+        )
+        analyzer = StatementEffectAnalyzer(ctx.file_source)
+        effects = analyzer.analyze(ctx.statements[0])
+        self.assertEqual(len(effects.aliases), 1)
+        alias = effects.aliases[0]
+        self.assertEqual(alias.alias_name, "ref")
+        self.assertEqual(alias.target_root, "foo")
+        self.assertTrue(alias.is_reference)
+
+    def test_no_alias_for_value_init(self):
+        ctx = make_context(
+            """\
+void test_func() {
+    int x = 5;
+}
+""",
+            "test_func",
+            diag_with_clusters(),
+        )
+        analyzer = StatementEffectAnalyzer(ctx.file_source)
+        effects = analyzer.analyze(ctx.statements[0])
+        self.assertEqual(len(effects.aliases), 0)
+
+    def test_no_alias_for_non_declaration(self):
+        ctx = make_context(
+            """\
+void test_func(int x) {
+    x = 5;
+}
+""",
+            "test_func",
+            diag_with_clusters(),
+        )
+        analyzer = StatementEffectAnalyzer(ctx.file_source)
+        effects = analyzer.analyze(ctx.statements[0])
+        self.assertEqual(len(effects.aliases), 0)
+
+
+class TestDefUseChains(unittest.TestCase):
+    def test_simple_def_use(self):
+        ctx = make_context(
+            """\
+void test_func(int a) {
+    int x = 1;
+    a = x + 2;
+}
+""",
+            "test_func",
+            diag_with_clusters(),
+        )
+        analyzer = StatementEffectAnalyzer(ctx.file_source)
+        chains = build_def_use_chains(ctx.statements, analyzer)
+        # x is defined at stmt 0, used at stmt 1
+        x_entries = [e for e in chains.entries if e.variable == "x" and e.def_stmt_idx == 0]
+        self.assertTrue(len(x_entries) >= 1)
+        self.assertEqual(x_entries[0].use_stmt_idx, 1)
+
+    def test_live_range(self):
+        ctx = make_context(
+            """\
+void test_func() {
+    int x = 1;
+    int y = 2;
+    int z = x + y;
+}
+""",
+            "test_func",
+            diag_with_clusters(),
+        )
+        analyzer = StatementEffectAnalyzer(ctx.file_source)
+        chains = build_def_use_chains(ctx.statements, analyzer)
+        # x defined at 0, used at 2 → live range (0, 2)
+        self.assertIn("x", chains.live_ranges)
+        self.assertEqual(chains.live_ranges["x"], (0, 2))
+        # y defined at 1, used at 2 → live range (1, 2)
+        self.assertIn("y", chains.live_ranges)
+        self.assertEqual(chains.live_ranges["y"], (1, 2))
+
+    def test_can_move_past_independent(self):
+        ctx = make_context(
+            """\
+void test_func() {
+    int x = 1;
+    int y = 2;
+    int z = 3;
+}
+""",
+            "test_func",
+            diag_with_clusters(),
+        )
+        analyzer = StatementEffectAnalyzer(ctx.file_source)
+        chains = build_def_use_chains(ctx.statements, analyzer)
+        # Independent declarations can be moved past each other
+        self.assertTrue(chains.can_move_past(0, 1))
+        self.assertTrue(chains.can_move_past(1, 2))
+
+    def test_cannot_move_past_dependent(self):
+        ctx = make_context(
+            """\
+void test_func() {
+    int x = 1;
+    int y = x + 1;
+    int z = y + 1;
+}
+""",
+            "test_func",
+            diag_with_clusters(),
+        )
+        analyzer = StatementEffectAnalyzer(ctx.file_source)
+        chains = build_def_use_chains(ctx.statements, analyzer)
+        # x defined at 0, used at 1 → can't move stmt 0 past stmt 1
+        self.assertFalse(chains.can_move_past(0, 1))
+        # y defined at 1, used at 2 → can't move stmt 1 past stmt 2
+        self.assertFalse(chains.can_move_past(1, 2))
+
+    def test_is_live_between(self):
+        ctx = make_context(
+            """\
+void test_func() {
+    int x = 1;
+    int y = 2;
+    int z = x + y;
+}
+""",
+            "test_func",
+            diag_with_clusters(),
+        )
+        analyzer = StatementEffectAnalyzer(ctx.file_source)
+        chains = build_def_use_chains(ctx.statements, analyzer)
+        # x is live between its def (0) and use (2)
+        self.assertTrue(chains.is_live_between("x", 0, 2))
+        # y is live between 1 and 2
+        self.assertTrue(chains.is_live_between("y", 1, 2))
+
+    def test_parameter_use_without_def(self):
+        ctx = make_context(
+            """\
+void test_func(int p) {
+    int x = p;
+    int y = p + 1;
+}
+""",
+            "test_func",
+            diag_with_clusters(),
+        )
+        analyzer = StatementEffectAnalyzer(ctx.file_source)
+        chains = build_def_use_chains(ctx.statements, analyzer)
+        # p is used at stmt 0 and 1 without prior definition → live-in entries
+        p_entries = [e for e in chains.entries if e.variable == "p"]
+        self.assertTrue(len(p_entries) >= 2)
+        # All should have def_stmt_idx == -1 (live-in)
+        live_in = [e for e in p_entries if e.def_stmt_idx == -1]
+        self.assertTrue(len(live_in) >= 2)
 
 
 class TestStatementReorderWithEffects(unittest.TestCase):

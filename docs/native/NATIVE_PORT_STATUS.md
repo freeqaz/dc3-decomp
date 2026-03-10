@@ -1,6 +1,6 @@
 # Native Port Progress (x86_64 Linux)
 
-## Current Status: Session 40 - Interactive Menu Navigation
+## Current Status: Session 41 - UI Layout Fix
 **Goal**: Bright, animated UI matching the original game's cyan neon aesthetic
 
 ### Sessions Complete
@@ -23,6 +23,7 @@
 - **Session 38**: HamUI integration (TheUI = &TheHamUI for two-pass draw), ShellInput/CursorPanel Kinect guards, HamListRibbonDrawState LP64 pointer fix (mElemDrawState), HamListRibbonDrawState field rename (unk18→mElemDrawState, unk20→mBigScale, unk24→mActive)
 - **Session 39**: Input pipeline unblocked — IsAnimating() bypass (AnimTask never self-deletes without DTA lifecycle), mSink fallback dispatch (set_sink DTA action doesn't fire), controller mode force-on. Debug traces cleaned up. **Identified DTA loading as critical blocker** — mSink, animation cleanup, content population, and screen flow all depend on DTA scripts that native can't execute yet.
 - **Session 40**: **Interactive menu navigation working end-to-end.** ScrollDirection decomp fix (66.1%→100% match — was missing vertical mode logic entirely). DTA stub objects for 8 Xbox-only managers. TheHamProvider null crash fix (PropertyEventProvider factory stub). GestureMgr controller mode always-on. GameMode::SetMode crash guard. Full Up/Down/Confirm navigation verified with headless GPU screenshots.
+- **Session 41**: **UI layout fix — Transform::Multiply decomp bug.** Fixed fundamental decomp bug in `Multiply(Transform, Transform, Transform)` (mtx.cpp, was 48% match) — the translation y/z coefficients were swapped due to decompiler mis-mapping of struct field offsets. This caused ALL transform compositions to produce wrong results for non-trivial rotations, including the `sFlipYZ` axis swap in `GetViewProjectXfms()`. The `[ui.cam]` view translation went from `(0, 768, 768)` (wrong — y duplicated into z) to `(0, 0, 768)` (correct). Made transparent queue flush unconditional on panel camera switch (was env-var gated). Result: autosave_warning_screen now shows correctly positioned player indicators (~100px, matching Xbox reference), centered autosave icon with metallic orb, full readable text, and Kinect prompt. Screenshots: `archive/screenshots/session41/`.
 
 ### Completed Phases
 - **Phase 0**: Foundation — COMPLETE

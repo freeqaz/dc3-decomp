@@ -78,6 +78,9 @@ class VariableExtractionPattern(Pattern):
         used_names: set[str] = set()
         # Walk all compound_statements to find extractable calls in their direct children
         for compound, stmt, call_node in _find_extractable_calls(ctx.body_node):
+            # Region filter: skip calls outside mismatch regions when data is available
+            if not ctx.node_in_mismatch_region(stmt):
+                continue
             call_text = ctx.file_source[call_node.start_byte : call_node.end_byte]
 
             indent = get_indent(ctx.file_source, stmt)

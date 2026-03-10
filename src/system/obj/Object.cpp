@@ -663,6 +663,13 @@ DataNode Hmx::Object::HandleType(DataArray *msg) {
         handler = mTypeDef->FindArray(t, false);
     }
     if (handler) {
+#ifdef HX_NATIVE
+        // Log DTA handler execution for debugging screen flow
+        if (t == Symbol("enter") || t == Symbol("exit")) {
+            printf("DC3 DTA: %s->HandleType('%s') handler size=%d\n",
+                   Name(), t.Str(), handler->Size());
+        }
+#endif
         MessageTimer timer(this, t);
         return handler->ExecuteScript(1, this, (const DataArray *)msg, 2);
     }

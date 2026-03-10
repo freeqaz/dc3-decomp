@@ -31,6 +31,7 @@ from tree_sitter import Node
 
 from .base import Pattern
 from ..ast_queries import walk
+from ..cfg import build_cfg, get_terminal_blocks
 from ..control_flow import (
     is_bare_return_statement,
     noncomment_named_children,
@@ -97,6 +98,13 @@ class TailCallReorderPattern(Pattern):
 
         # Strategy 3: Swap calls at end of terminal blocks (last if/else branches)
         for v in _swap_calls_in_terminal_blocks(ctx, source, guided_last_call, counter):
+            yield v
+            counter += 1
+            if counter >= 8:
+                return
+
+        # Strategy 4: CFG-guided terminal block discovery
+        for v in _swap_calls_in_cfg_terminals(ctx, source, guided_last_call, counter):
             yield v
             counter += 1
             if counter >= 8:
@@ -239,6 +247,71 @@ def _swap_calls_in_terminal_blocks(
             max_variants=4 - (counter - start),
             description_template=(
                 "Swap {a}() and {b}() in nested block for tail-call{guided}"
+            ),
+        ):
+            yield variant
+            counter += 1
+
+
+def _swap_calls_in_cfg_terminals(
+    ctx: FunctionContext,
+    source: bytes,
+    ghidra_last_call: str | None,
+    start: int,
+) -> Iterator[Variant]:
+    """Use CFG terminal-block analysis to find tail-call swap sites.
+
+    This complements the AST-walk strategies by using control-flow graph
+    analysis to find blocks that are provably terminal (all paths from them
+    reach function exit).  This catches cases where compound nesting makes
+    the AST walk miss valid swap sites.
+    """
+    counter = start
+    analyzer = StatementEffectAnalyzer(source)
+
+    try:
+        cfg = build_cfg(ctx.body_node, source)
+    except Exception:
+        return
+
+    seen_stmt_ids: set[int] = set()
+    for block in get_terminal_blocks(cfg):
+        if counter - start >= 4:
+            return
+
+        stmts = block.statements
+        if len(stmts) < 2:
+            continue
+
+        # Find trailing call run in this terminal block
+        call_run: list[Node] = []
+        for s in reversed(stmts):
+            if _is_call_statement(s):
+                call_run.insert(0, s)
+            elif is_bare_return_statement(s, source):
+                continue  # skip bare returns at the end
+            else:
+                break
+
+        if len(call_run) < 2:
+            continue
+
+        # Deduplicate against strategies 1-3 (same statement pair)
+        pair_id = (call_run[-2].id, call_run[-1].id)
+        if pair_id in seen_stmt_ids:
+            continue
+        seen_stmt_ids.add(pair_id[0])
+        seen_stmt_ids.add(pair_id[1])
+
+        for variant in _variants_for_call_run(
+            call_run,
+            source,
+            analyzer,
+            ghidra_last_call,
+            counter,
+            max_variants=4 - (counter - start),
+            description_template=(
+                "Swap {a}() and {b}() in CFG terminal block for tail-call{guided}"
             ),
         ):
             yield variant

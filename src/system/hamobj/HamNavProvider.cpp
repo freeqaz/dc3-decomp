@@ -10,6 +10,23 @@
 #include "ui/UIListSubList.h"
 #include "utl/BinStream.h"
 #include "utl/Symbol.h"
+#ifdef HX_NATIVE
+#include <cstdlib>
+#include <cstring>
+#endif
+
+#ifdef HX_NATIVE
+namespace {
+bool DebugChooseMode() {
+    static int enabled = -1;
+    if (enabled == -1) {
+        const char *env = getenv("MILO_DEBUG_CHOOSE_MODE");
+        enabled = (env && env[0] && strcmp(env, "0") != 0) ? 1 : 0;
+    }
+    return enabled != 0;
+}
+}
+#endif
 
 HamNavProvider::HamNavProvider() : mNavList(0) {}
 
@@ -32,7 +49,7 @@ BEGIN_HANDLERS(HamNavProvider)
     HANDLE(set_enabled, OnSetEnabled)
     HANDLE(set_hidden, OnSetHidden)
     HANDLE(set_format_args, OnSetFormatArgs)
-    HANDLE_ACTION(append_nav_item, mNavItems.push_back(NavItem()))
+    HANDLE_ACTION(append_nav_item, AppendNavItem())
     HANDLE_SUPERCLASS(Hmx::Object)
 END_HANDLERS
 
@@ -135,6 +152,19 @@ void HamNavProvider::Text(int i1, int i2, UIListLabel *list, UILabel *label) con
     }
 }
 
+void HamNavProvider::AppendNavItem() {
+    mNavItems.push_back(NavItem());
+#ifdef HX_NATIVE
+    if (DebugChooseMode()) {
+        printf(
+            "DC3 CHOOSE HamNavProvider::AppendNavItem provider=%s size=%zu\n",
+            PathName(this),
+            mNavItems.size()
+        );
+    }
+#endif
+}
+
 UIListProvider *HamNavProvider::Provider(int, int data, UIListSubList *) const {
     MILO_ASSERT(data < mNavItems.size(), 0x81);
     return mNavItems[data].mSubListProvider;
@@ -217,6 +247,18 @@ void HamNavProvider::SetLabel(int elementIndex, int i2, Symbol s) {
     } else {
         CreateSubListProvider(elementIndex);
     }
+#ifdef HX_NATIVE
+    if (DebugChooseMode()) {
+        printf(
+            "DC3 CHOOSE HamNavProvider::SetLabel provider=%s index=%d sub=%d label=%s size=%zu\n",
+            PathName(this),
+            elementIndex,
+            i2,
+            s.Str(),
+            mNavItems.size()
+        );
+    }
+#endif
 }
 
 void HamNavProvider::SetLabels(int index, DataArray *a) {
@@ -231,6 +273,17 @@ void HamNavProvider::SetLabels(int index, DataArray *a) {
     } else {
         CreateSubListProvider(index);
     }
+#ifdef HX_NATIVE
+    if (DebugChooseMode()) {
+        printf(
+            "DC3 CHOOSE HamNavProvider::SetLabels provider=%s index=%d labels=%d size=%zu\n",
+            PathName(this),
+            index,
+            a ? a->Size() : -1,
+            mNavItems.size()
+        );
+    }
+#endif
 }
 
 void HamNavProvider::SetChecked(Symbol s, bool b2, bool b3) {

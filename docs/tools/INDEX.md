@@ -72,6 +72,9 @@ python3 -m scripts.unicorn_runner.probe --unit DirLoader --batch --runs 8
 | Tool | Description | Doc |
 |------|-------------|-----|
 | [Compiler Trace](compiler-trace.md) | c2.dll instrumentation: asm diff, IL capture, perf profiling, GDB scripting | [compiler-trace.md](compiler-trace.md) |
+| IL Parser | Parse MSVC PPC intermediate language bytecode (opcodes, types, control flow) | [../../msvc-src/docs/IL_FORMAT.md](../../msvc-src/docs/IL_FORMAT.md) |
+| IL Annotate | Side-by-side IL operations + PPC assembly for any source file | — |
+| IL Diff | Compare IL between two source variants to find codegen differences | — |
 
 ```bash
 # Compare assembly for two source variants (detects register swaps)
@@ -82,6 +85,15 @@ python -m tools.compiler_trace capture-il test.cpp --output-dir /tmp/il_out
 
 # Profile and diff c2.dll execution paths
 python -m tools.compiler_trace callgrind-diff test_a.cpp test_b.cpp
+
+# Parse IL from any source file (standalone or project)
+python3 msvc-src/tools/il_parser.py analyze src/system/utl/Locale.cpp
+
+# IL + PPC side-by-side for specific function
+python3 msvc-src/tools/il_annotate.py src/system/utl/Locale.cpp -f FindDataIndex
+
+# Compare IL between two source variants
+python3 msvc-src/tools/il_diff.py variant_a.cpp variant_b.cpp -f FunctionName
 ```
 
 ## Post-Build Tools
@@ -90,10 +102,13 @@ python -m tools.compiler_trace callgrind-diff test_a.cpp test_b.cpp
 |------|-------------|-----|
 | Register Swap Patcher | Patches .obj register fields using objdiff diff as oracle (manual, not run by default) | [REFERENCE.md](REFERENCE.md#register-swap-patcher) |
 
-## Database Management Tools
+## Analysis & Diagnostic Tools
 
 | Tool | Description | Usage |
 |------|-------------|-------|
+| Function Health | Unified diagnostic: match%, mismatch breakdown, ceiling, pattern suggestions, fixability verdict | `python scripts/analysis/function_health.py --symbol "..." --json` |
+| Batch Health | Scan functions by unit/match% range, rank by workability | `python scripts/analysis/function_health.py --unit "system/*" --top 20` |
+| Regswap Classify | Classify callee-saved register swaps by variable type | `python scripts/analysis/regswap_classify.py --verbose` |
 | Reclassify AT_LIMIT | Scan AT_LIMIT functions, diagnose fixable vs unfixable, reopen fixable ones | `python -m scripts.analysis.reclassify_at_limit --apply --unit 'system/char/*'` |
 
 ## Code Transformation Tools

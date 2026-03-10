@@ -1,948 +1,1246 @@
 # Synthesis Engine Roadmap
 
-This document describes a longer-term direction for turning the permuter into a
-search-and-validation engine for source transformations.
+This document defines the execution roadmap for the synthesis engine work.
 
-It builds on the existing permuter roadmap in
-`docs/plans/permuter/ARCHITECTURE_ROADMAP.md` and the beam-search design in
-`docs/plans/permuter/BEAM_SOLVER.md`.
+The key update from earlier planning is simple:
 
-The core idea is to stop treating the permuter as primarily a bag of variant
-generators and instead treat it as a constrained search system with:
+- beam search is no longer hypothetical
+- the synthesis engine should build on the beam search already in tree
+- the next work is about better evidence, better proposal routing, and better validation
 
-- a model of what the target likely wants
-- a first-class notion of searchable program state
-- multiple proposal sources
-- strong validation and suppression
-- explicit budget management
+Relevant existing pieces:
+
+Search & permuter:
+- [`scripts/permuter/beam_search.py`](../../scripts/permuter/beam_search.py) — multi-state search loop (default strategy)
+- [`scripts/permuter/hill_climber.py`](../../scripts/permuter/hill_climber.py) — greedy baseline + CLI wiring for `--beam`
+- [`scripts/permuter/scan_and_permute.py`](../../scripts/permuter/scan_and_permute.py) — entry point, beam as default strategy
+- [`scripts/permuter/types.py`](../../scripts/permuter/types.py) — `BeamState`, `BeamConfig`, `FunctionContext`, `Diagnosis`
+- [`scripts/permuter/composer.py`](../../scripts/permuter/composer.py) — 2-stage + N-stage chains, adaptive follow-ups
+- [`scripts/permuter/scorer.py`](../../scripts/permuter/scorer.py) — build pipeline, 3-layer dedup, parallel scoring
+
+Attribution (Phase 1 implementation):
+- [`scripts/permuter/attribution.py`](../../scripts/permuter/attribution.py) — `/FAs` listing parser, mismatch join, region aggregation
+
+Compiler Atlas (Phase 3 implementation):
+- [`scripts/permuter/compiler_atlas.py`](../../scripts/permuter/compiler_atlas.py) — 30 opcode→source-feature entries, lookup/boost API
+
+Target Facts (Phase 4 implementation):
+- [`scripts/permuter/target_facts.py`](../../scripts/permuter/target_facts.py) — normalized evidence layer with 3 extractors
+
+Validator Ladder (Phase 5 implementation):
+- [`scripts/permuter/validator.py`](../../scripts/permuter/validator.py) — 6-level validation chain (parse → build → score → region → fact → semantic)
+
+Compiler trace & differential testing:
+- [`tools/compiler_trace/invoker.py`](../../tools/compiler_trace/invoker.py) — wraps cl.exe with project flags, `/FAs` listing generation
+- [`tools/compiler_trace/asm_diff.py`](../../tools/compiler_trace/asm_diff.py) — compile two variants, normalize, diff
+- [`tools/compiler_trace/asm_regmap.py`](../../tools/compiler_trace/asm_regmap.py) — variable→register assignments from `/FAs`
+- [`msvc-src/tools/diff_test.py`](../../msvc-src/tools/diff_test.py) — differential testing harness (regalloc, inline, peephole suites)
+- [`msvc-src/results/FINDINGS_SUMMARY.md`](../../msvc-src/results/FINDINGS_SUMMARY.md) — proven codegen decision maps
+
+Analysis & mining:
+- [`scripts/analysis/mine_patterns.py`](../../scripts/analysis/mine_patterns.py) — commit-history pattern extraction
+- [`scripts/analysis/diff_inspect.py`](../../scripts/analysis/diff_inspect.py) — deep mismatch analysis (diagnose, clusters, regswaps, attributed regions)
+- [`scripts/analysis/reclassify_at_limit.py`](../../scripts/analysis/reclassify_at_limit.py) — bulk AT_LIMIT reclassification
+- [`scripts/permuter/batch_triage.py`](../../scripts/permuter/batch_triage.py) — 6-category mismatch classification
+- [`scripts/permuter/ghidra_preflight.py`](../../scripts/permuter/ghidra_preflight.py) — unfixable detection
+
+MSVC RE:
+- [`msvc-src/docs/PASSES.md`](../../msvc-src/docs/PASSES.md) — 35 named optimization passes
+- [`msvc-src/docs/PIPELINE.md`](../../msvc-src/docs/PIPELINE.md) — compiler pipeline architecture
+- [`msvc-src/docs/PASS_GROUPS.md`](../../msvc-src/docs/PASS_GROUPS.md) — binary patching results
+- [`msvc-src/docs/IL_FORMAT.md`](../../msvc-src/docs/IL_FORMAT.md) — intermediate language format
+- [`msvc-src/docs/PPC_IL_LIFTER.md`](../../msvc-src/docs/PPC_IL_LIFTER.md) — constrained PPC→IL lift for comparison and future hints
+
+Data:
+- `decomp.db` — function registry (symbol, unit, match%, verdict)
+- `permuter_cache.db` — per-function scoring history
+- `build/373307D9/report.json` — current objdiff report
+- `build/373307D9/baselines/` — 25 commit-stamped baseline snapshots
+
+Companion design docs:
+- [INSTRUCTION_ATTRIBUTION.md](INSTRUCTION_ATTRIBUTION.md) — `/FAs` join design
+- [COMPILER_ATLAS.md](COMPILER_ATLAS.md) — instruction-pattern → source-feature mappings
+- [PATTERN_MINING.md](PATTERN_MINING.md) — cross-function transfer learning
+- [TARGET_FACTS.md](TARGET_FACTS.md) — normalized evidence layer
+- [DIFFERENTIAL_TESTING.md](DIFFERENTIAL_TESTING.md) — black-box codegen probing
+- [IL_TYPE_CONTROL.md](IL_TYPE_CONTROL.md) — **NEW**: source types control IL opcodes, which control instruction selection (proven via ByteGrinder, 20+ functions)
+- [MSVC_ROADMAP.md](MSVC_ROADMAP.md) — c2.dll RE plan
+- [DEEP_ANALYSIS_PLAN.md](DEEP_ANALYSIS_PLAN.md) — detailed c2.dll analysis tracks
+
+This roadmap is intentionally narrower than the earlier vision docs. It focuses
+on the work that still needs to happen now that search infrastructure exists.
 
 ## Goal
 
-The goal is to build an engine that can explore a large space of possible
-source transformations while staying:
+Turn the current permuter + beam search stack into a target-guided
+search-and-validation system that:
 
-- strongly guided by target-side evidence
-- aggressively filtered by correctness and safety checks
-- stateful across multiple rewrite steps
-- inspectable enough that failures are debuggable
+- spends build budget on the right regions of a function
+- uses compiler behavior knowledge as structured evidence
+- preserves and ranks promising partial progress
+- remains inspectable enough to debug failed searches
 
-This is not “try more random edits.” It is an attempt to combine:
+This is not a plan to build a separate standalone engine first. The synthesis
+engine should emerge inside the existing permuter stack.
 
-- diagnosis-guided search
-- synthesis-style proposal generation
-- translation-validation-style acceptance
-- search policies that can survive local maxima
+## Current State
 
-## Why This Direction
+What already exists:
 
-The current permuter is already stronger than a naive local rewriter, but it
-still has a mostly proposal-centric architecture.
+- **beam search** — default strategy in scan_and_permute.py (`--strategy beam`).
+  Multi-state, diagnosis-guided, diversity-preserving. BeamState carries source,
+  score, diagnosis, tags, provenance chain, failure history, guidance agreement.
+  Config: width=8, depth=4, expand=24, escape=4, diversity=3.
+- **greedy and evolutionary** baselines for comparison
+- **diagnosis** from objdiff instruction data (clusters, regswaps, offsets,
+  prologue deltas, noise ratio)
+- **Ghidra, m2c, RB3, and ASM-guided** proposal inputs
+- **79 patterns** with composition (2-stage + N-stage chains), adaptive
+  follow-ups, tag-based selection. Includes `foreach_to_dowhile` (FOREACH
+  macro → do-while with pre-guard, with optional scope narrowing variants).
+- **`/FAs` listing parser** — `attribution.py` parses MSVC assembly listings,
+  joins with objdiff instruction diffs, produces `AttributedMismatch` and
+  `MismatchRegion` records. 19 unit tests. `FunctionContext.mismatch_regions`
+  field added.
+- **differential testing harness** — `msvc-src/tools/diff_test.py` with proven
+  results for: register allocation order (linear, first-decl=highest),
+  inlining threshold (~40 weighted cost units, branch=8x arithmetic),
+  boolean materialization (comprehensive 6-category decision tree),
+  NOR peephole, subf. fusion, branch polarity, float precision.
+  See `msvc-src/results/FINDINGS_SUMMARY.md`.
+- **MSVC pipeline mapped** — 35 named passes, 5 groups, G5P10 identified as the
+  PPC code generator (not a separate peephole optimizer), G3P2 does record-form
+  fusion, inliner cost model found. Binary patching confirmed.
+- **cross-unit header variants** — header pattern bridge, multi-symbol scoring,
+  blast-radius analysis, 8 header-backed patterns
+- **compiler atlas** — 30 `AtlasEntry` records: 18 proven (diff-test), 3 inferred,
+  9 negative (AT_LIMIT). Opcode-indexed for O(1) lookup. `boost_patterns()` API
+  for beam/generator integration. 20 unit tests.
+- **target facts** — normalized evidence layer aggregating diagnosis, attribution,
+  atlas, and guidance into queryable `TargetFact` records. 3 extractors, wired
+  into BeamState (fact_agreement in ranking_key) and FunctionContext. 19 unit tests.
+- **validator ladder** — 6-level validation chain from parse validity through
+  semantic checks. `ValidationTier` enum used in `BeamState.ranking_key` for
+  survivor selection. Advisory validation in hill_climber. 38 unit tests.
 
-Today, the system is good at:
+What is still missing:
 
-- generating local variants
-- using some guidance (`ghidra`, `m2c`, `rb3`)
-- scoring aggressively with objdiff
-- learning limited pattern/tag history
+- ~~attribution wired into scorer baseline~~ DONE (`Scorer.get_attribution()`)
+- ~~attribution wired into pattern filtering~~ DONE (6 patterns use region filter)
+- ~~a normalized target-facts layer~~ DONE (`TargetFacts` with 3 extractors)
+- ~~a machine-readable compiler atlas~~ DONE (30 entries, opcode-indexed lookup)
+- cross-function strategy database (mining infra exists, strategy records don't)
+- ~~region-level improvement tracking in beam state~~ DONE (`BeamState.region_scores`)
+- ~~validator ladder above "it built and scored better"~~ DONE (6-level chain)
+- stable IL capture corpus with reusable fixtures
+- parsed IL bundle schema across `.ex/.gl/.sy/.in/.db`
+- PPC ASM -> IL-style lifting for a constrained opcode subset
+- IL-guided constraints or facts consumable by the permuter
+- selective compiler RE for COLOR register allocator internals
 
-It is still weak at:
+## Design Principle
 
-- carrying multiple coherent source states at once
-- understanding target intent as structured facts rather than raw text blobs
-- making deterministic guidance-backed proposals a first-class search input
-- verifying semantic plausibility beyond “it builds and scores better”
-- remembering failure/success at the right granularity
+Search is no longer the bottleneck. Evidence quality is.
 
-If the long-term aim is a real transformation engine, those are the gaps to
-close.
+Beam search gives us the search controller we needed. The remaining job is to
+improve what the search sees, what it proposes, and how it decides that a
+variant is truly useful.
 
-## Engine Model
+That means the roadmap should prioritize:
 
-The engine should be organized around five layers.
+1. attribution
+2. target facts
+3. atlas and diff-testing data
+4. validator ladder
+5. selective compiler RE
 
-### 1. Target Facts
+Notably, this means "implement beam search" is no longer a roadmap item.
 
-The engine needs a normalized, machine-usable target model derived from:
+## Phase 1: Attribution First
 
-- objdiff diagnosis
-- Ghidra decompilation
-- m2c output
-- RB3/source analogs
-- future semantic summaries
+Status: In progress
 
-These should become structured facts such as:
+Primary doc: `INSTRUCTION_ATTRIBUTION.md`
 
-- likely terminal call ordering
-- likely control-flow shape
-- likely temp/live-range pressure points
-- likely return/guard/switch form
-- likely no-touch zones
-- confidence and conflict markers across guidance sources
+Objective:
+Connect objdiff mismatches back to concrete source lines and source regions.
 
-Without this layer, the engine keeps reinterpreting raw guidance text in
-pattern-local code.
+Why this comes first:
 
-### 2. Searchable Program State
+- it plugs directly into the existing permuter
+- it makes current patterns more precise immediately
+- it benefits both manual decomp work and automated search
+- it is lower risk than new compiler RE
 
-The engine should search over real reparsed states, not just source blobs.
+Deliverables:
 
-Each state should carry:
+- a robust `/FAs` listing parser that maps instructions to source lines
+- join logic from objdiff instructions to source attribution
+- `MismatchRegion` records stored on `FunctionContext`
+- attributed output mode in `scripts/analysis/diff_inspect.py`
+- region-scoped pattern filtering for a small high-ROI pattern set
 
-- source bytes
-- reparsed AST / `FunctionContext`
-- auxiliary file edits when relevant
-- score and diagnosis
-- structural tags
-- provenance chain
-- lineage-local failure history
-- state-derived guidance summaries
+Implemented so far:
 
-This is the minimum substrate for a true non-greedy search policy.
+- `/FAs` listing parser (`scripts/permuter/attribution.py`):
+  - `parse_asm_listing()` — extracts function from PROC..ENDP, parses source
+    comments, instruction lines, prologue helpers, file transitions
+  - `AsmListing` / `AsmEntry` / `AsmInstruction` structured dataclasses
+  - `source_line_for_index()` / `source_line_for_offset()` lookups
+- Mismatch attribution join:
+  - `attribute_mismatches()` — joins objdiff instruction diffs with /FAs source
+    annotations, produces `AttributedMismatch` records with confidence scores
+  - Supports opcode, register, insert/delete mismatch types
+  - Interpolates from neighbors when direct attribution fails
+- Region aggregation:
+  - `aggregate_regions()` — merges attributed mismatches into contiguous source
+    regions with configurable gap tolerance
+  - `MismatchRegion` with match_ratio, impact, dominant_type properties
+  - Sorted by impact for budget allocation
+- Integration:
+  - `FunctionContext.mismatch_regions` field added
+  - `attribute_function()` convenience pipeline
+- 19 unit tests covering parser, attribution, aggregation, and full pipeline
 
-### 3. Proposal Market
+TODO:
 
-All candidate-generation mechanisms should enter through one abstraction.
+- ~~Wire listing generation into scorer's baseline computation~~ DONE —
+  `Scorer.get_attribution()` method compiles with /FAs, parses listing,
+  joins with baseline objdiff data, returns `MismatchRegion` list.
+- ~~Add `--attributed` mode to `scripts/analysis/diff_inspect.py`~~ DONE —
+  `--symbol "..." --attributed` compiles with /FAs, runs objdiff, displays
+  source-attributed mismatch regions with impact, local match ratio, and
+  dominant type. Tested on real functions (DirLoader::SaveObjects: 5 regions).
+- ~~Add region-aware filtering to high-ROI pattern generators~~ DONE —
+  Added `node_in_mismatch_region()` and `line_in_mismatch_region()` helpers
+  to `FunctionContext`. Wired into 15 patterns: variable_extraction,
+  signed_unsigned, comparison_equivalence, comparison_flip, commutative_swap,
+  inline_assignment, ternary_swap, bool_cast, guard_to_nested,
+  early_return_merge, statement_reorder, return_call_merge,
+  float_literal_pressure, assert_line_fix, declaration_reorder (fallback).
+  Gracefully passes through when no regions available.
+- ~~Add region-level improvement tracking to beam state~~ DONE —
+  `BeamState.region_scores` dict maps `(start_line, end_line)` to local
+  match ratio. `region_improvement_count()` compares against parent state.
+- Test on 20-30 representative hard-target functions across different units
 
-Proposal sources should include:
+Success criteria:
 
-- ordinary patterns
-- composed pairs and adaptive chains
-- constrained synthesis
-- deterministic guidance-backed edits
-- later cross-unit/header-backed edits
+- useful attribution on a representative hard-target slice
+- fewer irrelevant pattern applications per round
+- visible improvement in beam diversity by region, not only raw score
 
-This is the correct long-term interpretation of `--constrained`: not a mode,
-but one producer in a broader proposal market.
+## Phase 2: Differential Testing Harness
 
-### 4. Validator Stack
+Status: Core harness and first suites DONE. Extension suites not started.
 
-Acceptance should not rely on objdiff alone.
+Primary doc: [DIFFERENTIAL_TESTING.md](DIFFERENTIAL_TESTING.md)
 
-The engine should have a staged validator stack:
+Results: [`msvc-src/results/FINDINGS_SUMMARY.md`](../../msvc-src/results/FINDINGS_SUMMARY.md)
 
-1. cheap structural/syntactic validity
-2. compile/build success
+Objective:
+Systematically map source features to codegen outcomes without decompiling
+`c2.dll`.
+
+Implemented:
+
+- [`msvc-src/tools/diff_test.py`](../../msvc-src/tools/diff_test.py) — test
+  harness using invoker + `/FAs` listing parser
+- **regalloc_order suite** — declaration count (2-15 vars), order swap, mixed
+  GPR/FPR, virtual calls, loops, conditionals. Finding: strictly
+  first-declared=highest (linear scan) for ALL tested patterns up to N=15.
+  Graph coloring (BSF) NOT triggered in any test. Compiler temporaries
+  (loop counters, vtable lookups) consume callee-saved regs before user vars.
+- **inline_threshold suite** — callee with N=1..50 statements. Finding: weighted
+  cost model (~40 cost units). Arithmetic=weight 1, branch=weight 8.
+  `inline` keyword = no effect with /Ox. `__forceinline` = unlimited.
+- **peephole_trigger suite** — NOR (u8 XOR 0xFF → `not`), bool materialization
+  (comprehensive 6-category decision tree by signedness+operator+constant),
+  subf. fusion (`hi - lo >= 0` → `subf.`). Key finding: signedness is the
+  primary differentiator for carry-chain instruction selection.
+- **branch_polarity suite** — compiler ALWAYS inverts condition. `== 0` → `bne`,
+  `!= 0` → `beq`. Applies to early return and nested if/else.
+- **float_precision suite** — DOUBLETOSINGLE aggressively demotes all
+  double→float assignments to `lfs`. `lfd` only for true double contexts.
+- **pass identification via binary patching** — G5P10 is the PPC code generator
+  (not a separate peephole optimizer). G3P2 does record-form fusion. G4P4
+  disproved as G5_SPECIAL.
+
+TODO (extension suites):
+
+- **rlwinm fusion** — **PROVEN** (2026-03-10, 20+ ByteGrinder functions):
+  Source type controls G5P10 rlwinm fusion via IL opcode choice.
+  `u8()` cast → IL CAST(82 12 20) → fused `extrwi`/`clrlslwi`.
+  `& 0xFF` → IL AND → separate `srwi`+`clrlwi` (matches target).
+  Key finding: `u8()` CAST propagates backward through XOR/OR/ADD, masking
+  all operands. `& 0xFF` AND stays local. See [IL_TYPE_CONTROL.md](IL_TYPE_CONTROL.md).
+  **Remaining**: IL capture confirmation with `il_parser.py` (not yet done but
+  codegen results are conclusive). Add atlas entries for extrwi/clrlslwi detection.
+- **u8 mask placement** — **PROVEN** (2026-03-10, same ByteGrinder session):
+  `u8 x = val;` → immediate `clrlwi` at assignment (early mask).
+  `unsigned long x = val;` → no mask until `& 0xFF` at return (late mask).
+  Target consistently defers mask to final computation. `unsigned long` intermediate
+  types + `(int)((expr) & 0xFF)` return pattern matches target in all tested cases.
+  See [IL_TYPE_CONTROL.md](IL_TYPE_CONTROL.md) for the full fix pattern.
+- **FPR allocation interaction**: test GPR+FPR mixed declaration ordering,
+  confirm FPR independence from GPR graph
+- **Template instantiation**: test how template type parameters affect codegen
+  decisions (signed vs unsigned template args)
+- **Cross-call live range**: test how function calls between declarations affect
+  register assignment vs temporaries
+- **Scope nesting**: test how variable declarations inside loops/branches vs
+  outer scope affect allocation order. Results feed the deferred
+  `scope_narrowing` pattern (see Deferred Work).
+- **Static local guard patterns**: test when `??_B` vs `$S` guard naming occurs
+- Record negative results (source variations that did NOT change codegen) in
+  structured JSON alongside positive results
+
+Success criteria (for extension suites):
+
+- decision maps that directly inform proposal ranking or suppression
+- at least one new proven mapping that gets reused by the permuter
+- explanation for the "~7 variable" BSF threshold seen in real DC3 functions
+
+## Phase 3: Compiler Atlas Seed
+
+Status: Core atlas DONE. Beam integration DONE. Atlas expansion DONE (72 entries).
+
+Primary doc: [COMPILER_ATLAS.md](COMPILER_ATLAS.md)
+
+Objective:
+Create a machine-readable atlas of known instruction-pattern to source-feature
+relationships.
+
+This phase should start by harvesting what the repo already knows, not by
+waiting for a perfect generator.
+
+Existing raw material for harvest:
+
+- [`msvc-src/results/FINDINGS_SUMMARY.md`](../../msvc-src/results/FINDINGS_SUMMARY.md) —
+  30+ **proven** instruction→source mappings from differential testing:
+  - 8 boolean materialization categories (addic/subfe, neg/andc/srwi, etc.)
+  - NOR peephole trigger conditions
+  - subf. fusion conditions
+  - branch polarity rules
+  - float precision behavior
+  - register allocation ordering rules
+  - inlining cost model
+- [`docs/decomp/TECHNICAL_NOTES.md`](../decomp/TECHNICAL_NOTES.md) — 38
+  hand-documented patterns (mix of proven and inferred)
+- [`docs/decomp/patterns/*.md`](../decomp/patterns/) — 17 pattern docs with
+  real examples and before/after percentages
+- [`docs/decomp/patterns/unfixable-compiler.md`](../decomp/patterns/unfixable-compiler.md) —
+  16 hard patterns with detection heuristics (negative atlas entries)
+- MEMORY.md known patterns section — proven fixes with specific instructions
+
+Deliverables:
+
+- structured atlas entries in a queryable format (JSON or SQLite)
+- confidence tagging: `proven` (diff-test confirmed) vs `inferred` (docs only)
+  vs `negative` (confirmed no source-level fix)
+- a lookup surface: given target opcode sequence, return matching entries
+- pattern boost/suppress hooks for beam search
+
+Implemented:
+
+- [`scripts/permuter/compiler_atlas.py`](../../scripts/permuter/compiler_atlas.py):
+  - `AtlasEntry` frozen dataclass with `Confidence` enum (PROVEN/INFERRED/NEGATIVE)
+  - 30 entries harvested from FINDINGS_SUMMARY, TECHNICAL_NOTES, unfixable-compiler, MEMORY
+  - Opcode index for O(1) lookup by target instruction
+  - `lookup(target_opcodes)` — returns matching entries ranked by confidence then overlap
+  - `boost_patterns(entries)` — extracts pattern boost/suppress sets from entries
+  - `lookup_for_diagnosis()` — convenience wrapper mapping Diagnosis fields to lookups
+  - Boolean materialization: 7 entries covering all 6 diff-test categories
+  - Comparison patterns: unsigned zero, subf. fusion, branch polarity, division
+  - Register allocation: declaration order, prologue mismatch
+  - Float: literal precision, FMA fusion
+  - Peephole: NOR, bit test materialization
+  - Inlining threshold
+  - Data layout: member bitwidth, empty/size, string signedness
+  - Unfixable: 9 negative entries (volatile regswap, BSF locked, address reloc,
+    static guard, scheduler fence, BSS zero-elision, vbtable recompute, mixed FMA,
+    subic/subfe bool)
+- 20 unit tests covering entries, lookup, boost, and diagnosis integration
+
+TODO:
+
+- ~~Define AtlasEntry schema~~ DONE
+- ~~Harvest proven entries from FINDINGS_SUMMARY~~ DONE (~18 entries)
+- ~~Harvest entries from TECHNICAL_NOTES~~ DONE (~5 entries)
+- ~~Harvest negative entries from unfixable-compiler + MEMORY~~ DONE (~9 entries)
+- ~~Build compiler_atlas.py with lookup/boost~~ DONE
+- ~~Harvest patterns/*.md → additional entries with real examples~~ DONE (39 new
+  entries from 8 pattern docs, bringing total from 33 to 72)
+- ~~Wire lookup into beam expansion~~ DONE — `_expand_state()` in
+  `beam_search.py` now calls `lookup_for_diagnosis()` and populates
+  `round_hints.atlas_boost_patterns` / `atlas_suppress_patterns`.
+  Priority multiplier: +0.3 for boosted, ×0.3 for suppressed.
+- ~~Use atlas boost/suppress to influence pattern priority~~ DONE —
+  `adaptive_priority_boost()` in `RoundHints` applies atlas multipliers.
+
+Success criteria:
+
+- ~~atlas entries are queryable~~ DONE
+- ~~the 30 proven diff-test mappings are immediately queryable~~ DONE
+- ~~negative entries identify known-unfixable instruction patterns~~ DONE
+- ~~atlas lookups influence proposal ordering in beam search~~ DONE
+- known patterns can be explained in atlas terms instead of only prose docs
+
+## Phase 4: Target Facts MVP
+
+Status: **DONE** — core module + beam integration + ranking hooks.
+
+Primary doc: [TARGET_FACTS.md](TARGET_FACTS.md)
+
+Objective:
+Introduce a minimal normalized evidence layer above diagnosis, attribution,
+atlas lookups, and guidance sources.
+
+Important constraint:
+
+The first version should be intentionally small. We do not need the full
+long-term schema before the first consumers exist.
+
+Phase-1 target facts should cover only:
+
+- region identity
+- fact kind
+- payload
+- confidence
+- provenance
+
+Initial fact kinds should stay narrow:
+
+- `control_shape`
+- `call_order`
+- `type_shape`
+- `register_pressure`
+- `mismatch_class`
+- `no_touch_zone`
+
+Deliverables:
+
+- `TargetFacts` object attached to a function state
+- one extractor from diagnosis + attribution
+- one extractor from atlas lookups
+- one extractor from Ghidra/m2c agreement
+- beam ranking hooks that consume facts
+- proposal filters that consume facts
+
+Implemented:
+
+- [`scripts/permuter/target_facts.py`](../../scripts/permuter/target_facts.py):
+  - `TargetFact` frozen dataclass (kind, region, payload, confidence, provenance)
+  - `TargetFacts` container with `by_kind()`, `for_region()`, `high_confidence()`,
+    `has_no_touch()`, and `pattern_recommendations()` queries
+  - 3 extractors:
+    1. `extract_from_diagnosis()` → register_pressure, mismatch_class, noise facts
+    2. `extract_from_atlas()` → mismatch_class/no_touch_zone from atlas entries with
+       boost/suppress pattern recommendations
+    3. `extract_from_guidance()` → call_order, control_shape from Ghidra/RB3
+  - `extract_facts()` convenience pipeline combining all sources
+- 19 unit tests covering all dataclasses, queries, and extractors
+
+TODO:
+
+- ~~Define TargetFact dataclass~~ DONE
+- ~~Define TargetFacts container~~ DONE
+- ~~Build 3 extractors~~ DONE (diagnosis, atlas, guidance)
+- ~~Wire into BeamState and FunctionContext~~ DONE —
+  `FunctionContext.target_facts` and `BeamState.target_facts` fields added.
+  `BeamState.fact_agreement` computed per child state via `_compute_fact_agreement()`.
+- ~~Add beam ranking hook~~ DONE —
+  `BeamState.ranking_key` includes `validation_tier` and `fact_agreement`
+  in the lexicographic sort. States that satisfy more facts and pass higher
+  validation tiers are preferred over raw-score-only equivalents.
+- ~~Add proposal filter~~ DONE —
+  `_expand_state()` feeds `target_facts.pattern_recommendations()` into
+  `round_hints.atlas_boost_patterns` / `atlas_suppress_patterns`.
+  Suppressed patterns get ×0.3 priority multiplier.
+
+Success criteria:
+
+- proposal code consumes normalized facts instead of raw text blobs
+- conflicts are visible, not silently flattened
+- the same facts can be reused by both ranking and filtering
+
+## Phase 5: Validator Ladder
+
+Status: **DONE** — 6-level chain implemented, wired into beam + hill climber.
+
+Primary module: [`scripts/permuter/validator.py`](../../scripts/permuter/validator.py)
+
+Objective:
+Move acceptance beyond "objdiff score improved."
+
+This does not mean full theorem proving. It means layering cheap checks before
+spending expensive build budget or trusting a misleading score delta.
+
+Validator ladder:
+
+1. syntax and parse validity
+2. build success
 3. objdiff improvement
-4. mismatch-class improvement
-5. stronger semantic checks where feasible
-
-Over time, the engine should gain translation-validation-like checks for narrow
-classes of rewrites, even if that starts with partial or bounded validation.
-
-### 5. Search Controller
-
-The controller should allocate budget across states and proposal sources.
-
-The most likely near-term fit is:
-
-- beam-style best-first search
-- state re-diagnosis after surviving rewrites
-- diversity preservation by structure, not only edit size
-- lineage-local suppression instead of blunt global suppression
-
-Greedy remains useful as a cheap baseline. Cross-unit exploration remains a
-separate, opt-in tier.
-
-## Biggest Expected Wins
-
-If built well, the biggest gains are likely to come from:
-
-### Search Before More Rules
-
-The largest broad gain is probably not one more pattern, but a search kernel
-that can:
-
-- keep multiple plausible branches alive
-- survive neutral intermediate rewrites
-- re-rank after state changes
-- spend build budget on good successors instead of random recombination
-
-### Deterministic Guidance-Backed Proposals
-
-The next biggest gain is to extract more deterministic proposals from target
-facts instead of relying only on local pattern heuristics.
-
-This includes:
-
-- control-flow reshaping
-- call-order proposals
-- temp/live-range proposals
-- typed/cast/sign proposals
-- narrow register-pressure rewrites
-
-### Better Semantic Filtering
-
-Many bad variants should die before full scoring.
-
-The engine needs stronger local summaries for:
-
-- read/write effects
-- aliasing risk
-- call-side-effect classes
-- path termination
-- expression purity
-
-This is one of the highest-leverage areas because it increases both quality and
-effective search budget.
-
-### Advanced m2c Integration
-
-Advanced m2c support is likely a multiplier, not the core engine.
-
-Its highest-value roles are:
-
-- second-opinion structural guidance next to Ghidra
-- conflict detection that lowers confidence in weak guidance
-- better call ordering / gating hints
-- better temp/live-range shape hints
-- better condition-structure hints
-
-This is broadly useful across many single-function targets.
-
-### Advanced Cross-Unit Integration
-
-Advanced cross-unit search is high ceiling but narrower in applicability.
-
-It matters most for:
-
-- inline/header tail-call and return-shape cases
-- shared inline helper rewrites
-- one-to-many source changes that benefit several caller functions
-
-This should stay isolated, risk-aware, and probably worktree-backed.
-
-## Additional Design Principles
-
-The research points to a few design principles that should shape the engine
-even before specific implementations exist.
-
-### Preserve Novel Partial Progress
-
-The engine should not keep only the globally best states.
-
-It should also preserve states that improve distinct mismatch regions or
-distinct structural hypotheses, even when they are not currently the top scalar
-score. This is especially important for byte-equivalent search, where a branch
-may be globally mediocre but uniquely good at one region of the function.
-
-### Convert Guidance Into Facts, Not Special Cases
-
-The strongest use of decompiler/compiler guidance is not “run more heuristics.”
-
-It is to convert that guidance into:
-
-- concrete structural hypotheses
-- deterministic proposal families
-- confidence/conflict markers
-- verifier expectations
-
-This is the architectural step that turns guidance from pattern-local tribal
-knowledge into search infrastructure.
-
-### Keep Equality-Space Exploration Local
-
-Equality-saturation-style exploration is attractive, but it should be scoped to
-small regions first.
-
-Good early targets:
-
-- condition expressions
-- arithmetic/bitwise simplifications
-- return-value reshaping
-- short statement clusters
-
-Whole-function equality-space exploration is likely too expensive and too hard
-to control in phase 1.
-
-### Use A Verifier Ladder, Not A Single Oracle
-
-No one verifier is likely to be strong and cheap enough for the whole engine.
-
-The design should assume layered acceptance:
-
-- syntactic validity
-- structural fact agreement
-- build success
-- objdiff delta
-- bounded semantic checks
-- selective expensive validation for top candidates
-
-That is much closer to translation-validation practice than to trusting a
-single heuristic score.
-
-## Prior Art
-
-The best model is a hybrid, not a copy of one system.
-
-### STOKE
-
-Search over program rewrites with a cost function and strong validation.
-
-Why it matters here:
-
-- shows that nontrivial program-search can find wins humans miss
-- reinforces that search quality depends on the objective and validation
-- reminds us that large search spaces need aggressive guidance
-
-Reference:
-
-- Schkufza, Sharma, Aiken. "Stochastic Superoptimization." ASPLOS 2013.
-  https://cs.stanford.edu/people/eschkufz/docs/asplos_13.pdf
-
-### Souper
-
-Local superoptimization through synthesis and solver-backed validation.
-
-Why it matters here:
-
-- shows the value of deterministic synthesis over blind mutation
-- suggests that local rewrite discovery and proof can scale when scoped well
-- supports reframing constrained search as a proposal generator
-
-Reference:
-
-- Sasnauskas et al. "Souper: A Synthesizing Superoptimizer." 2017.
-  https://arxiv.org/abs/1711.04422
-
-### Sketch / CEGIS
-
-Search over partial programs with validation-driven refinement.
-
-Why it matters here:
-
-- the engine can search much better when given structured holes, not just free
-  mutation
-- counterexamples and failed checks should prune families of bad candidates,
-  not just one concrete variant
-- the right analogy for `--constrained` is “structured synthesis under
-  guidance,” not “special round-1 mode”
-
-References:
-
-- Solar-Lezama. "Program Synthesis by Sketching." PhD thesis, 2008.
-  https://people.csail.mit.edu/asolar/papers/thesis.pdf
-- Solar-Lezama. "The Sketching Approach to Program Synthesis." 2009.
-  https://people.csail.mit.edu/asolar/papers/Solar-Lezama09.pdf
-
-### Equality Saturation / egg
-
-Keep many equivalent forms alive, then extract using a cost model.
-
-Why it matters here:
-
-- committing too early is often the real problem in rewrite systems
-- representation matters: a good shared state space can be more powerful than a
-  long list of handcrafted sequences
-- extraction cost models are at least as important as rewrite generation
-
-References:
-
-- Tate et al. "Equality Saturation: A New Approach to Optimization." 2009.
-  https://www.cs.cornell.edu/~ross/publications/eqsat/
-- Willsey et al. "egg: Fast and Extensible Equality Saturation." 2020.
-  https://arxiv.org/abs/2004.03082
-
-### Guided Equality Saturation
-
-Use guidance or sketches to make equality-saturation search tractable.
-
-Why it matters here:
-
-- guidance can narrow an otherwise explosive rewrite space
-- it supports the idea of using Ghidra/m2c/diagnosis as guides, not just as
-  passive hints
-- it gives a concrete model for “proposal freedom constrained by target facts”
-
-Reference:
-
-- Steuwer et al. "Guided Equality Saturation." POPL 2024.
-  https://steuwer.info/files/publications/2024/POPL-Guided-Equality-Saturation.pdf
-
-### Translation Validation / Alive2
-
-Verify transformations after the fact instead of blindly trusting them.
-
-Why it matters here:
-
-- correctness checks should be a first-class subsystem
-- many transformations can be validated more cheaply than fully synthesized
-- bounded or partial validation is still very valuable in practice
-
-References:
-
-- Stepp, Tate, Lerner. "Equality-Based Translation Validator for LLVM." CAV
-  2011. https://www.cs.cornell.edu/~ross/publications/eqsat/eqsat_stepp_cav11.pdf
-- Lopes et al. "Alive2: Bounded Translation Validation for LLVM." PLDI 2021.
-  https://web.ist.utl.pt/nuno.lopes/pubs/alive2-pldi21.pdf
-- Alive2 project:
-  https://github.com/AliveToolkit/alive2
-
-### Compiler-Aware Decompilation
-
-Recovered structure is often wrong because compiler transformations distorted
-the source shape before the decompiler saw it.
-
-Why it matters here:
-
-- supports the need for a canonical target-facts layer
-- argues that “what the compiler likely did” should be first-class evidence
-- reinforces that decompiler ASTs are not ground truth
-
-Reference:
-
-- Basque et al. "Ahoy SAILR! There is No Need to DREAM of C: A Compiler-Aware
-  Structuring Algorithm for Binary Decompilation." USENIX Security 2024.
-  https://adamdoupe.com/publications/sailr-usenix2024.pdf
-
-### Decompiler Validation And Testing
-
-Independent semantic checking matters because decompilers are often wrong in
-ways that are not obvious from structure alone.
-
-Why it matters here:
-
-- agreement with one decompiler is not enough
-- the verifier stack needs independent checks
-- semantic-differencing-style validation is likely to catch issues that pure
-  structural guidance will miss
-
-Reference:
-
-- Zou et al. "D-Helix: A Generic Decompiler Testing Framework Using Symbolic
-  Differentiation." USENIX Security 2024.
-  https://www.usenix.org/system/files/usenixsecurity24-zou.pdf
-
-### Byte-Equivalent Decompilation Search
-
-Search systems that target byte equivalence have a directly relevant lesson:
-preserve states that match different unique parts of the target.
-
-Why it matters here:
-
-- diversity should be based on mismatch-class or region coverage, not just a
-  scalar score
-- global best-first alone can discard the branch that uniquely explains one
-  important region
-
-Reference:
-
-- Schulte et al. "Evolving Byte-Equivalent Decompilation from Big Code."
-  https://www.cs.unm.edu/~eschulte/data/bed-full.pdf
-
-### Search-Guided Synthesis And Repair
-
-Search quality improves when the system learns which partial programs and which
-proposal families are likely to pay off.
-
-Why it matters here:
-
-- supports lineage-local memory and proposal ranking
-- suggests that search history should become a first-class signal
-- reinforces that proposal ordering matters as much as proposal availability
-
-References:
-
-- Alur et al. "Accelerating Search-Based Program Synthesis using Learned
-  Probabilistic Models." PLDI 2018.
-  https://www.cis.upenn.edu/~alur/PLDI18.pdf
-- Shi et al. "CrossBeam: Learning to Search in Bottom-Up Program Synthesis."
-  https://arxiv.org/abs/2203.10452
-- Katis et al. "Counterexample Guided Inductive Synthesis Modulo Theories."
-  CAV 2018.
-  https://link.springer.com/chapter/10.1007/978-3-319-96145-3_15
-
-## Tools And Systems To Study
-
-These are not all immediate dependencies, but they are worth mapping to engine
-subsystems.
-
-### Likely High-Value
-
-- `egg` / `egglog` for local equivalence-space exploration
-- Z3/SMT-backed validation ideas by analogy with Alive2 and CEGIS(T)
-- `angr` for IR-lifting and semantic-analysis experiments:
-  https://docs.angr.io/advanced-topics/ir
-- Coccinelle for C-level semantic patch ideas:
-  https://coccinelle.gitlabpages.inria.fr/website/
-- Clang Transformer / LibTooling for deterministic AST-backed rewrites:
-  https://clang.llvm.org/docs/ClangTransformerTutorial.html
-
-### Useful Secondary Opinions
-
-- RetDec:
-  https://github.com/avast/retdec
-- McSema:
-  https://github.com/lifting-bits/mcsema
-- VerifOx / CPROVER-family ideas for path-wise symbolic checks:
-  https://www.cprover.org/verifox
-
-## Existing Tooling Inventory
-
-These are the project tools and data sources that the synthesis engine builds
-on. All paths are relative to the repo root.
-
-### Compiler Trace & Assembly Analysis
-
-| Tool | Path | Role |
-|------|------|------|
-| invoker.py | [`tools/compiler_trace/invoker.py`](../../tools/compiler_trace/invoker.py) | Wraps cl.exe with project flags, `/FAs` listing generation |
-| asm_diff.py | [`tools/compiler_trace/asm_diff.py`](../../tools/compiler_trace/asm_diff.py) | Compiles two variants, normalizes listings, diffs output |
-| asm_regmap.py | [`tools/compiler_trace/asm_regmap.py`](../../tools/compiler_trace/asm_regmap.py) | Extracts variable→register assignments from `/FAs` output |
-| bsf_trace.py | [`tools/compiler_trace/bsf_trace.py`](../../tools/compiler_trace/bsf_trace.py) | GDB+Valgrind instrumentation of c2.dll register allocator |
-| regmap_solver.py | [`tools/compiler_trace/regmap_solver.py`](../../tools/compiler_trace/regmap_solver.py) | Graph coloring simulation from BSF traces or listings |
-
-### Analysis & Mining
-
-| Tool | Path | Role |
-|------|------|------|
-| mine_patterns.py | [`scripts/analysis/mine_patterns.py`](../../scripts/analysis/mine_patterns.py) | Walks commit history, classifies source patterns per fix |
-| diff_inspect.py | [`scripts/analysis/diff_inspect.py`](../../scripts/analysis/diff_inspect.py) | Deep mismatch analysis: diagnose, clusters, regswaps, asm_listing |
-| reclassify_at_limit.py | [`scripts/analysis/reclassify_at_limit.py`](../../scripts/analysis/reclassify_at_limit.py) | Bulk re-diagnosis and classification of AT_LIMIT functions |
-| compare_progress.py | [`scripts/analysis/compare_progress.py`](../../scripts/analysis/compare_progress.py) | Regression detection between baseline reports |
-| ceiling_calculator.py | [`scripts/analysis/ceiling_calculator.py`](../../scripts/analysis/ceiling_calculator.py) | Theoretical match ceiling per unit |
-| remaining_work.py | [`scripts/analysis/remaining_work.py`](../../scripts/analysis/remaining_work.py) | Stub analysis in near-complete units |
-
-### Permuter Core
-
-| Tool | Path | Role |
-|------|------|------|
-| scorer.py | [`scripts/permuter/scorer.py`](../../scripts/permuter/scorer.py) | Build pipeline, 3-layer dedup, parallel scoring |
-| types.py | [`scripts/permuter/types.py`](../../scripts/permuter/types.py) | Diagnosis, FunctionContext, Variant, RoundHints dataclasses |
-| batch_triage.py | [`scripts/permuter/batch_triage.py`](../../scripts/permuter/batch_triage.py) | 6-category mismatch classification |
-| ghidra_preflight.py | [`scripts/permuter/ghidra_preflight.py`](../../scripts/permuter/ghidra_preflight.py) | Unfixable detection before permuting |
-| constraint_solver.py | [`scripts/permuter/constraint_solver.py`](../../scripts/permuter/constraint_solver.py) | Deterministic edits from Ghidra + objdiff constraints |
-| statement_effects.py | [`scripts/permuter/statement_effects.py`](../../scripts/permuter/statement_effects.py) | Per-statement read/write/call/control-flow analysis |
-| hill_climber.py | [`scripts/permuter/hill_climber.py`](../../scripts/permuter/hill_climber.py) | Greedy iterative search (current default) |
-| evolutionary.py | [`scripts/permuter/evolutionary.py`](../../scripts/permuter/evolutionary.py) | Population-based genetic search |
-| composer.py | [`scripts/permuter/composer.py`](../../scripts/permuter/composer.py) | 2-stage composition + N-stage beam chains |
-
-### Behavioral Verification
-
-| Tool | Path | Role |
-|------|------|------|
-| unicorn bench.py | [`scripts/unicorn_runner/bench.py`](../../scripts/unicorn_runner/bench.py) | PPC32 emulation benchmark harness |
-| unicorn comparator.py | [`scripts/unicorn_runner/comparator.py`](../../scripts/unicorn_runner/comparator.py) | Differential execution: decomp vs original |
-
-### Documentation
-
-| Document | Path | Content |
-|----------|------|---------|
-| TECHNICAL_NOTES.md | [`docs/decomp/TECHNICAL_NOTES.md`](../decomp/TECHNICAL_NOTES.md) | 38+ compiler behavior patterns |
-| MSVC_X360_REGALLOC.md | [`docs/decomp/MSVC_X360_REGALLOC.md`](../decomp/MSVC_X360_REGALLOC.md) | c2.dll register allocator reverse engineering |
-| Pattern INDEX.md | [`docs/decomp/patterns/INDEX.md`](../decomp/patterns/INDEX.md) | Master pattern index with ROI rankings |
-| unfixable-compiler.md | [`docs/decomp/patterns/unfixable-compiler.md`](../decomp/patterns/unfixable-compiler.md) | 16 hard compiler-level patterns |
-| at-limit-systemic.md | [`docs/decomp/patterns/at-limit-systemic.md`](../decomp/patterns/at-limit-systemic.md) | Project-wide systemic unfixable patterns |
-| PERMUTER_ROI_ANALYSIS.md | [`docs/decomp/patterns/PERMUTER_ROI_ANALYSIS.md`](../decomp/patterns/PERMUTER_ROI_ANALYSIS.md) | Pattern coverage vs automation analysis |
-
-### Data Sources
-
-| Resource | Path | Content |
-|----------|------|---------|
-| decomp.db | `decomp.db` | Function registry (symbol, unit, match%, verdict) |
-| permuter_cache.db | `permuter_cache.db` | Per-function (symbol, source_md5, score) history |
-| report.json | `build/373307D9/report.json` | Current objdiff report (14MB) |
-| baselines/ | `build/373307D9/baselines/` | 25 commit-stamped baseline snapshots |
-| regswap_manifest.json | [`scripts/regswap_manifest.json`](../../scripts/regswap_manifest.json) | 709 known register swap patterns |
-
-## Companion Documents
-
-Detailed designs for the three new subsystems live in separate docs:
-
-- **[COMPILER_ATLAS.md](COMPILER_ATLAS.md)** — Systematic micro-program
-  compilation to map instruction patterns to source constructs. Builds the
-  empirical foundation for target-driven proposals.
-
-- **[PATTERN_MINING.md](PATTERN_MINING.md)** — Cross-function transfer
-  learning from the 29,842 solved functions. Diagnosis fingerprinting,
-  strategy records, similarity search.
-
-- **[INSTRUCTION_ATTRIBUTION.md](INSTRUCTION_ATTRIBUTION.md)** — Connecting
-  mismatched instructions to specific source lines via `/FAs` listings.
-  Enables surgically targeted edits instead of broad pattern sweeps.
-
-## Proposed Roadmap
-
-The roadmap is organized into three tracks that can advance in parallel: the
-**search track** (how the engine explores), the **knowledge track** (what the
-engine knows about the compiler), and the **infrastructure track** (how the
-engine observes and learns).
-
-### Search Track
-
-#### S1: Search Kernel
-
-Build a beam-style search controller over reparsed single-function states.
+4. region-level improvement
+5. fact agreement improvement
+6. bounded semantic checks where practical
+
+Implemented:
+
+- [`scripts/permuter/validator.py`](../../scripts/permuter/validator.py):
+  - `ValidationTier` enum (INVALID=0 through SEMANTIC_OK=6)
+  - `ValidationResult` dataclass with per-level detail + `is_acceptable` /
+    `is_high_quality` properties
+  - 6 validation levels:
+    1. `check_parse_validity()` — tree-sitter reparse, error collection
+    2. `check_build_success()` — from ScoreResult
+    3. `check_score_improved()` — score >= baseline with tolerance
+    4. `check_region_improvement()` — per-region regression detection with
+       configurable threshold
+    5. `check_fact_agreement()` — pattern suppression, noise regression,
+       no-touch zone checks
+    6. `check_semantics()` — return-count, MILO_ASSERT-count, call-set
+       preservation heuristics
+  - `validate_variant()` — full ladder runner, stops at first failure
+  - `validate_batch()` — batch validation for scoring pipelines
+- `BeamState.validation_tier` field — set during child state creation
+- `BeamState.ranking_key` — includes `validation_tier` in lexicographic sort
+- Beam search: every child state gets validated, tier stored on state
+- Hill climber: winner validated before apply, semantic warnings logged
+- 38 unit tests covering all 6 levels + full ladder + tier ordering
+
+TODO:
+
+- ~~Implement validator chain~~ DONE (6 levels)
+- ~~Wire into beam selection~~ DONE (`validation_tier` in `ranking_key`)
+- ~~Wire into hill_climber~~ DONE (advisory validation on winners)
+- Add `--validate` flag to show per-variant validation tiers in output
+- Add region-regression rejection mode (optional: reject variants that pass
+  overall but regress specific regions)
+
+Success criteria:
+
+- fewer high-scoring but structurally wrong survivors
+- better plateau behavior because neutral partial progress is separated from
+  noisy regressions
+
+## Phase 6: Selective Compiler RE And IL Modeling
+
+Status: Initial exploration done (pipeline mapped, pass groups identified).
+IL tooling exists in prototype form. Targeted decompilation and IL-guided
+permuter integration not started.
+
+Primary docs: [MSVC_ROADMAP.md](MSVC_ROADMAP.md), [DEEP_ANALYSIS_PLAN.md](DEEP_ANALYSIS_PLAN.md)
+
+Existing RE results (see [`msvc-src/docs/`](../../msvc-src/docs/)):
+- Pipeline fully traced from `InvokeCompilerPass` through `.obj` emission
+- 35 named optimization passes cataloged ([`PASSES.md`](../../msvc-src/docs/PASSES.md))
+- 5 pass groups with 37 unique pass functions ([`PASS_GROUPS.md`](../../msvc-src/docs/PASS_GROUPS.md))
+- COLOR entry at `fcn.10bc6487` with 207 helper functions
+- G5P10 identified as the PPC code generator — NOT a peephole optimizer
+- G3P2 does record-form fusion (subf.)
+- G4P4 disproved as G5_SPECIAL (zero peephole effect)
+- Inliner cost model: weighted (~40 units), branch=8x arithmetic, `__forceinline`=unlimited
+- IL format partially documented ([`IL_FORMAT.md`](../../msvc-src/docs/IL_FORMAT.md))
+- IL type-control mechanism documented for byte operations
+  ([`IL_TYPE_CONTROL.md`](IL_TYPE_CONTROL.md))
+- Tools: [`extract_strings.py`](../../msvc-src/tools/extract_strings.py), [`capture_il.py`](../../msvc-src/tools/capture_il.py),
+  [`il_parser.py`](../../msvc-src/tools/il_parser.py), [`il_diff.py`](../../msvc-src/tools/il_diff.py),
+  [`il_annotate.py`](../../msvc-src/tools/il_annotate.py)
+
+Objective:
+Reverse-engineer `c2.dll` only where the black-box harness and atlas still
+leave important unanswered questions.
+
+This phase should be selective, not the default entry point.
+
+Secondary objective:
+Use the captured MSVC IL as a bridge layer between source-side structure and
+target-side PPC assembly, so the permuter can reason about compiler-relevant
+shapes instead of only raw source text and final asm.
+
+Priority order:
+
+1. IL capture, parsing, and lifting for the subset of operations that matter to
+   current AT_LIMIT patterns:
+   - casts and promotions
+   - compare / branch structure
+   - shift / mask / rlwinm-sensitive byte operations
+   - bool materialization
+   - switch dispatch
+   - call/return shape
+2. COLOR details that materially affect register-pressure proposals —
+   specifically: what triggers BSF graph coloring in real DC3 functions (~7+
+   vars)? The diff testing found linear allocation up to N=15 in simple
+   patterns, so the trigger must involve overlapping live ranges, not just
+   variable count.
+3. ~~G5_SPECIAL details~~ **RESOLVED** — G5_SPECIAL is not a separate pass.
+   All PPC patterns are instruction selection inside G5P10 (code generator).
+4. Inliner cross-call budget effects — the diff testing found the threshold
+   (~40 cost units) but not how caller context affects the budget.
 
 Deliverables:
 
-- first-class beam state model
-- state-local proposal expansion
-- state-local failure memory
-- explainable survivor ranking
-- replayable logs
+- normalized IL capture bundle format for `_CL_*` files
+- fixture corpus of captured IL bundles tied to known source patterns
+- parsed IL JSON or Python representation for `.ex/.gl/.sy/.in/.db`
+- PPC ASM -> IL-style lifter for a constrained subset of opcodes
+- comparison tool: source IL vs lifted PPC for one function
+- annotated pseudocode for COLOR's callee-saved assignment loop
+- BSF trigger condition (what makes allocation non-linear)
+- spill cost formula
+- validated inliner cross-function effects
 
-#### S2: Constrained Proposal Engine
+TODO:
 
-Replace the current narrow constrained prepass with a reusable proposal source.
+- Stabilize IL capture:
+  - ~~add manifest-writing and bundle inspection support~~ DONE —
+    `il_parser.py capture --bundle-name` now writes `manifest.json` and
+    `list-bundle` inspects bundle contents/functions
+  - make `capture_il.py` and/or `il_parser.py capture` preserve full `_CL_*`
+    bundles reproducibly
+  - store fixtures under `msvc-src/analysis/il-fixtures/` with metadata:
+    source file, compiler flags, symbol list, capture date
+  - verify capture works on small representative sources for compare/cast,
+    bool materialization, rlwinm-sensitive byte ops, switch, and calls
+- Parse the full IL bundle, not only `.ex`:
+  - document and parse `.gl`, `.sy`, `.in`, and `.db`
+  - map symbol/type tokens across files into one structured `ILBundle`
+  - emit normalized JSON for diffing and downstream tooling
+- Build an IL fixture corpus:
+  - prioritize `IL_TYPE_CONTROL.md` cases first:
+    `u8(expr)` / CAST vs `expr & 0xFF` / AND, plus backward propagation through
+    XOR / OR / ADD
+  - one fixture per proven compiler behavior from FINDINGS_SUMMARY
+  - one pairwise fixture for "same asm class, different IL" cases
+  - one pairwise fixture for "same source semantics, different IL and asm" cases
+- Build a constrained PPC->IL lifter:
+  - start with arithmetic, compare, branch, casts, shifts, masks, loads/stores,
+    call/return, switch
+  - do not attempt full PPC coverage initially
+  - preserve typed operations where inferable (`u8`, `u16`, `u32`, signedness)
+  - emit a lossy but comparable lifted form, not a full verifier IR
+- Add IL comparison tooling:
+  - compare source IL bundles against lifted PPC for one function
+  - identify missing casts, widened temporaries, compare polarity, switch shape,
+    and call ordering differences
+- Turn IL findings into permuter inputs:
+  - define `il_shape` / `cast_placement` / `branch_shape` / `switch_shape`
+    facts or hints
+  - boost patterns that move the candidate toward the desired lifted IL shape
+  - add a lightweight CLI/debug surface to inspect IL deltas on one function
+- Create Ghidra project for c2.dll (x86 PE, no PDB) — name key functions
+  from call graph around COLOR entry (fcn.10bc6487). See DEEP_ANALYSIS_PLAN.md
+  Track 1 for the priority function list.
+- Decompile top COLOR helpers by size: fcn.10bc9550 (1752b), fcn.10bc9fda
+  (725b), fcn.10bc69f1 (691b) — extract BSF trigger, spill cost formula
+- Build runtime instrumentation prototype: hook COLOR entry via wibo
+  LD_PRELOAD, dump the 1428-byte register state buffer before/after
+- Cross-validate against diff-test regalloc findings
+- Output actionable Python modules usable by permuter (register predictor)
+
+Success criteria:
+
+- reproducible IL capture on a representative source corpus
+- parsed IL bundles are diffable and testable
+- the PPC->IL lifter explains at least one existing pattern family better than
+  raw asm alone
+- at least one IL-derived fact or hint is consumable by the permuter
+- BSF trigger condition explained (why ~7 vars in DC3 but not in diff tests)
+- a register assignment predictor usable in beam proposal ranking
+- RE outputs a practical rule, not only documentation
+
+## Deferred Work
+
+These are real ideas, but they should not block the near-term roadmap:
+
+- full historical mining across all solved functions (see [PATTERN_MINING.md](PATTERN_MINING.md))
+- large target-facts ontology expansion
+- broad runtime instrumentation and DLL hooking (Track 6 in DEEP_ANALYSIS_PLAN.md)
+- whole-function equality-saturation exploration
+- heavyweight cross-unit search by default
+- IL format deep exploration (partially started, see [`IL_FORMAT.md`](../../msvc-src/docs/IL_FORMAT.md))
+- **scope_narrowing pattern** — a dedicated pattern that moves variable
+  declarations into narrower scopes (e.g., from function scope into an
+  `if`-guard or loop body). Changes when the compiler "sees" a variable,
+  affecting register allocation timing and callee-saved assignment order.
+  Proven effective in UIListDir::DrawWidgets (71.8→100%) where moving
+  `bool isFocused` from before the loop into the pre-guard block fixed
+  all 15 register swap instructions and the loop entry structure. The
+  `foreach_to_dowhile` pattern already includes basic scope narrowing
+  variants (moving 1-2 preceding statements into the guard). A standalone
+  `scope_narrowing` pattern would generalize this to any scope boundary:
+  if/else branches, loop bodies, switch cases, compound blocks. Requires
+  dataflow analysis to verify no uses exist outside the target scope.
+  Blocked on Phase 2's "scope nesting" differential test suite, which
+  would provide the codegen decision map for how scope depth affects
+  register assignment.
+
+- **redundant_guard_elimination pattern** — when an `else if (A || B)`
+  guard wraps inner conditions that are collectively exhaustive
+  (e.g., `(A && !B)`, `(!A && B)`, `(A && B)`), the outer OR check
+  generates redundant comparison + branch instructions. Replacing
+  `else if (A || B) { ... }` with bare `else { ... }` eliminates
+  the guard while preserving semantics (the inner conditions already
+  handle all cases). Proven on HamListRibbon::StartFrame and
+  HamListRibbon::EndFrame (both 93%→100%). The pattern should detect
+  `else if (X || Y)` blocks where the inner branches exhaustively
+  test X and Y, and propose replacing with `else`. Detection heuristic:
+  look for insert clusters of 4-6 instructions (2× cmpwi+branch pairs)
+  that re-test variables already checked in the inner conditions.
+  Could also apply to `if (A || B)` at function scope when inner
+  conditions are exhaustive.
+
+- **accessor_outline pattern** — when an objdiff mismatch shows the
+  target calling a small accessor via `bl` while our compiler inlines
+  it (e.g., `lfs f0, 0x30, r30` vs `bl DisabledAlphaScale`), the
+  accessor's inline body in the header is causing unwanted inlining.
+  Moving the body from the header to the .cpp file makes our compiler
+  emit a function call, matching the target. Proven on
+  UIListSlot::Draw (96.6%→100%) by moving `DisabledAlphaScale()` and
+  `ParentList()` from UIListWidget.h to UIListWidget.cpp. Detection:
+  look for `replace` clusters where one side has `mr rN, rM` + `bl`
+  (function call) and the other has a direct `lwz`/`lfs` load at the
+  same member offset. The pattern should cross-reference the called
+  symbol (may be ICF-merged) with known inline header accessors.
+  Impact: potentially affects many AT_LIMIT functions where target
+  doesn't inline accessors that our headers expose.
+
+These can be revisited after attribution wiring + atlas seed + target-facts MVP
+are proving value on real beam runs.
+
+## Agent Execution Rules
+
+Agents should treat this roadmap as an implementation queue, not as a research
+wishlist.
+
+For each work package below:
+
+- make the code change
+- add or update tests
+- run the narrowest relevant verification
+- update this roadmap status if the package meaningfully advances
+- do not start selective compiler RE until the measurement package is done
+
+When a package says "done", it means all of the following are true:
+
+- the target files exist or are updated
+- tests covering the new behavior exist
+- the feature is wired into the real permuter path, not left as a standalone helper
+- the outcome is measurable from logs, JSON output, or CLI behavior
+
+## Agent Work Packages
+
+These are the current actionable tasks. They are ordered by priority.
+
+### WP1: Measure Beam Search On A Fixed Hard Slice
+
+Priority: P0
+
+Objective:
+Prove that the implemented synthesis stack improves real search outcomes on a
+stable target set.
+
+Required file targets:
+
+- `scripts/permuter/beam_search.py`
+- `scripts/permuter/scan_and_permute.py`
+- `scripts/permuter/hill_climber.py`
+- `scripts/analysis/compare_progress.py` or a new analysis helper if needed
+- `docs/plans/synthesis-engine/ROADMAP.md`
+
+Implementation tasks:
+
+- define a fixed slice of 30 hard functions with symbol, unit, baseline %, and
+  reason for inclusion
+- add a reproducible runner or documented command for beam vs greedy comparison
+- capture per-function metrics: final %, delta, proposals attempted, build
+  failures, region improvements, atlas usage, validation tier distribution
+- emit machine-readable output (JSON or CSV) suitable for before/after analysis
+- summarize the result in a committed artifact under `docs/` or `msvc-src/results/`
 
 Deliverables:
 
-- proposal-source interface
-- deterministic edit families from target facts
-- lineage-local suppression for constrained proposals
-- repeated constrained expansion during search
+- fixed target list checked into the repo
+- one reproducible benchmark command
+- one machine-readable results artifact
+- one short findings summary with wins, losses, and neutral outcomes
 
-#### S3: Region-Aware Search
+Exit criteria:
 
-Use instruction attribution to scope and prioritize search.
+- beam and greedy can be compared on the same fixed slice
+- attribution coverage and proposal counts are visible in the output
+- the repo contains committed benchmark results, not only code
 
-Deliverables:
+### WP2: Extend Diff Testing With The Missing Suites
 
-- region-aware pattern filtering (only apply patterns to mismatch regions)
-- budget allocation proportional to region impact
-- region-level improvement tracking across rounds
-- region-diverse beam selection
+Priority: P0
 
-#### S4: Cross-Unit Search Tier
+Status: **DONE** — 5 new suites added (13 total), all producing structured JSON output.
 
-Extend the engine to carefully handle shared-header and multi-symbol states.
+Objective:
+Close the biggest remaining knowledge gaps in the black-box compiler model.
 
-Deliverables:
+Required file targets:
 
-- separate cross-unit sub-search or sub-beam
-- risk-aware prioritization
-- worktree-backed execution
-- multi-symbol validation and attribution
+- `msvc-src/tools/diff_test.py`
+- `msvc-src/results/FINDINGS_SUMMARY.md`
+- `scripts/permuter/tests/` or `tools/compiler_trace/tests/` for any helpers
 
-### Knowledge Track
+Implementation tasks:
 
-#### K1: Compiler Atlas — Harvest
-
-Convert the 50+ proven patterns from existing documentation into structured
-atlas entries. No new compilation needed.
-
-Deliverables:
-
-- atlas schema and storage format
-- 50-80 entries from existing TECHNICAL_NOTES.md and pattern docs
-- reverse lookup by target instruction pattern
-
-See [COMPILER_ATLAS.md](COMPILER_ATLAS.md) Phase 1.
-
-#### K2: Compiler Atlas — Systematic Exploration
-
-Build micro-program families for each codegen dimension. Compile all variants,
-diff, record results.
+- ~~add the FPR allocation interaction suite~~ — DONE: `suite_fpr_allocation()`
+- ~~add the template-instantiation signedness suite~~ — DONE: `suite_template_signedness()`
+- ~~add the cross-call live-range suite~~ — DONE: `suite_cross_call_live_range()`
+- ~~add the scope-nesting suite~~ — DONE: `suite_scope_nesting()`
+- ~~add the static-local-guard suite~~ — DONE: `suite_static_local_guard()`
+- ~~record negative results in structured output, not only human prose~~ — DONE: each suite outputs structured JSON with boolean flags and markers
 
 Deliverables:
 
-- micro-program generator script
-- automated compilation and diffing pipeline (extending invoker.py + asm_diff.py)
-- 200-400 new atlas entries from ~30 micro-program families
-- negative results catalog (source changes that produce identical codegen)
+- ~~runnable new suites in `diff_test.py`~~ — 5 new suites, all invocable from CLI
+- ~~updated findings summary with proven and negative results~~ — Sections 9-13 in FINDINGS_SUMMARY.md
+- ~~tests for any parser/output/schema additions~~ — suites self-test via compile+parse
 
-See [COMPILER_ATLAS.md](COMPILER_ATLAS.md) Phase 2.
+Key findings:
+- FPR allocation: f31-first descending, independent of GPR, threshold at N=5 floats
+- Template signedness: result type matters more than parameter type; sub-word promotion masks apply
+- Cross-call live range: dead-after-call = no callee-saved; declaration order confirmed across calls
+- Scope nesting: ZERO codegen effect (all depths produce identical hash) — **negative result**
+- Static local guard: separate guard per static, `static const` with literal elides guard
 
-#### K3: Compiler Atlas — Interaction Discovery
+Exit criteria:
 
-Identify and test compound codegen effects (where two source features interact
-to produce a specific instruction pattern).
+- ~~each new suite can be invoked directly from the CLI~~ — PASS
+- ~~at least one suite produces a new reusable decision map~~ — PASS (cross-call live range, FPR scaling)
+- ~~negative results are represented in structured output, not lost in text~~ — PASS (scope_nesting, template_signedness have explicit negative-result markers)
 
-Deliverables:
+### WP3: Expand Atlas Entries From Pattern Docs
 
-- interaction candidate identification from single-dimension atlas
-- compound micro-programs for high-value interactions
-- compound atlas entries with multi-feature requirements
-- documented interaction chains (type + control flow, type + variable lifetime)
+Priority: P1
 
-See [COMPILER_ATLAS.md](COMPILER_ATLAS.md) Phase 3.
+Status: **DONE** — 72 total entries (was 33), all tests passing.
 
-#### K4: Target Facts Layer
+Objective:
+Turn the existing pattern documentation corpus into machine-usable atlas data.
 
-Normalize guidance from all sources into reusable structured facts.
+Required file targets:
 
-Deliverables:
+- `scripts/permuter/compiler_atlas.py`
+- `docs/decomp/patterns/*.md`
+- `scripts/permuter/tests/test_compiler_atlas.py`
 
-- target-facts datamodel
-- Ghidra fact extractor
-- m2c fact extractor
-- diagnosis fact extractor
-- atlas-backed fact enrichment (instruction patterns → source hypotheses)
-- confidence/conflict scoring across guidance sources
+Implementation tasks:
 
-#### K5: Target-Driven Proposals
-
-Use the atlas and target facts to generate proposals directly from mismatches,
-rather than trying all patterns and hoping one hits.
-
-Deliverables:
-
-- mismatch-to-atlas lookup in the proposal pipeline
-- atlas-guided proposal generation (targeted source edits)
-- integration with beam search as a first-class proposal source
-- feedback loop: successful proposals strengthen atlas entries
-
-### Infrastructure Track
-
-#### I1: Instruction Attribution Pipeline
-
-Connect mismatched instructions to specific source lines via `/FAs` listings.
+- ~~harvest entries from `docs/decomp/patterns/*.md`~~ DONE — 39 new entries from
+  8 pattern docs: fixable-casting (7), fixable-declarations (6+1 from copy-ctor),
+  fixable-control-flow (6), fixable-operators (4), fixable-comparison (2),
+  fixable-fsel-fma (2), fixable-bool-mask (1), fixable-macros (1),
+  unfixable-compiler (6), at-limit-systemic (1)
+- ~~preserve provenance for each new atlas entry~~ DONE — each entry references
+  its source doc section (e.g., "fixable-casting.md §noreturn Attribute")
+- ~~mark entries as `PROVEN`, `INFERRED`, or `NEGATIVE`~~ DONE — 51 proven,
+  3 inferred, 18 negative
+- ~~attach boost/suppress pattern names where appropriate~~ DONE — 15 new entries
+  have pattern_names for beam boost integration
+- ~~avoid duplicating semantically identical entries under multiple names~~ DONE
 
 Deliverables:
 
-- robust `/FAs` listing parser (handle inlines, macros, reordering)
-- mismatch-to-source-line join with objdiff instruction output
-- attributed mismatch reports (line-level, region-level)
-- integration with diff_inspect.py (`--attributed` mode)
+- ~~increased atlas coverage beyond the current 30 entries~~ DONE — 72 entries total
+- ~~tests for lookup and boost/suppress behavior for new entries~~ DONE — 14 new
+  tests in TestHarvestedLookups class (34 total, all passing)
+- ~~short note in this roadmap stating the new entry count~~ DONE — 72 entries
+  (51 proven, 3 inferred, 18 negative)
 
-See [INSTRUCTION_ATTRIBUTION.md](INSTRUCTION_ATTRIBUTION.md) Phases 1-2.
+Exit criteria:
 
-#### I2: Cross-Function Strategy Database
+- new entries are queryable through the existing lookup API
+- at least one new entry affects proposal ordering in a real beam run
+- provenance for harvested entries is inspectable in code
 
-Mine solved functions to build a transfer learning database.
+### WP4: Broaden Region-Aware Pattern Coverage — DONE
+
+Priority: P1
+
+Status: **DONE** — 15 patterns now use region filtering (was 6).
+
+Objective:
+Move region attribution from a small pilot set to the main high-ROI pattern
+surface.
+
+Completed:
+
+- Wired 9 additional patterns to `node_in_mismatch_region()`:
+  ternary_swap, bool_cast, guard_to_nested, early_return_merge,
+  statement_reorder, return_call_merge, float_literal_pressure,
+  assert_line_fix, declaration_reorder (fallback mode).
+- All 15 patterns gracefully fall back when no attribution data is available
+  (the API returns True when `mismatch_regions` is empty).
+- 738 existing tests pass without regressions.
+
+Exit criteria met:
+
+- region filtering used by 15 patterns (materially more than 6)
+- no-attribution fallback verified by existing test suite (tests don't provide
+  mismatch regions, so all patterns run unfiltered = backward compatible)
+
+### WP5: Improve Validator Visibility — DONE
+
+Priority: P1
+
+Status: **DONE** — validation tiers visible in hill_climber, beam search survivors, and batch summaries.
+
+Completed:
+
+- `validator.py`: Added `format_result()` (concise/verbose modes) and
+  `format_tier_distribution()` for human-readable validation output.
+- `hill_climber.py`: Winner validation now prints full tier info via
+  `format_result()` instead of only semantic issues. `HillClimbResult`
+  carries `validation_tier` field. `_print_result()` shows tier in output.
+- `beam_search.py`: Survivor summary shows `v=N` per-state validation tier.
+  `_build_result()` propagates best-ever state's validation tier.
+- `scan_and_permute.py`: Added `--validate` flag. When set, batch summary
+  shows tier distribution (e.g., "SEMANTIC_OK:3 SCORE_IMPROVED:2").
+  Result dict includes `validation_tier` for JSON output.
+- `types.py`: `HillClimbResult.validation_tier` field added.
+- 9 new tests for `format_result` and `format_tier_distribution`.
+
+Exit criteria met:
+
+- Runs show why a survivor ranked highly (tier visible in survivor list + result)
+- Validation output visible via CLI without reading Python state
+- `--validate` flag provides tier distribution in batch summaries
+
+### WP6: Build A Stable IL Capture Corpus
+
+Priority: P1
+
+Status: Started — named bundle capture, manifest writing, and bundle inspection
+CLI landed in `msvc-src/tools/il_parser.py`. First real fixture captured:
+`il_type_control_cast_vs_and` with all five `_CL_*` files, manifest, and
+normalized `bundle.json`.
+
+Objective:
+Make IL capture reproducible and reusable across many small source fixtures.
+
+Required file targets:
+
+- `msvc-src/tools/capture_il.py`
+- `msvc-src/tools/il_parser.py`
+- `msvc-src/analysis/il-fixtures/`
+- `msvc-src/docs/IL_FORMAT.md`
+
+Implementation tasks:
+
+- preserve the full `_CL_*` file bundle instead of only opportunistic captures
+- define a fixture manifest format with source path, flags, symbols, and notes
+- capture representative fixtures for compare/cast, bool materialization,
+  rlwinm-sensitive byte shifts, switch, and call/return
+- capture the first `IL_TYPE_CONTROL.md` pair:
+  - `u8()` / CAST-driven byte narrowing
+  - `& 0xFF` / AND-driven local masking
+- add a CLI mode that lists captured functions and bundle contents
 
 Deliverables:
 
-- diagnosis fingerprint schema
-- strategy record and failure record schemas
-- retroactive harvest from 25 cached baseline snapshots
-- SQLite strategy database (target: 500-2000 records from history)
+- committed fixture corpus under `msvc-src/analysis/il-fixtures/`
+- documented bundle manifest format
+- capture tool that can preserve and inspect a bundle deterministically
 
-See [PATTERN_MINING.md](PATTERN_MINING.md) Phase 1.
+Progress so far:
 
-#### I3: Live Strategy Recording
+- fixture source added:
+  `msvc-src/analysis/il-fixtures/sources/il_type_control_cast_vs_and.cpp`
+- first captured bundle committed:
+  `msvc-src/analysis/il-fixtures/il_type_control_cast_vs_and/`
+- second fixture source added:
+  `msvc-src/analysis/il-fixtures/sources/il_bool_materialization.cpp`
+- second captured bundle committed:
+  `msvc-src/analysis/il-fixtures/il_bool_materialization/`
+- verified the CAST-vs-AND distinction at the IL level:
+  - `cast_shift` emits IL `CAST` around byte narrowing before `SHR`
+  - `and_shift` emits IL `AND` before/after `SHR` with no equivalent early byte cast
+  - `cast_xor` emits trailing `CAST`
+  - `and_xor` emits `AND(255)` then `CAST`
+- captured a bool-materialization fixture family covering zero-test, equality,
+  inequality, signed-positive, and ordered comparisons
+- `il_parser.py export-json` now emits normalized `bundle.json` for a bundle
 
-Extend the permuter to emit strategy records on every run.
+Exit criteria:
+
+- a new fixture can be captured and checked into the repo with one command
+- fixture metadata is sufficient for another agent to reproduce the capture
+- the corpus covers at least 5 distinct compiler behavior families
+
+### WP7: Parse The Full IL Bundle Into A Normalized Schema
+
+Priority: P1
+
+Status: Started — normalized bundle JSON export exists, but cross-file schema
+linking is still minimal.
+
+Objective:
+Turn the raw `_CL_*` files into one structured representation suitable for
+diffing, testing, and later lifting work.
+
+Required file targets:
+
+- `msvc-src/tools/il_parser.py`
+- `msvc-src/docs/IL_FORMAT.md`
+- tests under `msvc-src/tools/` or repo test locations
+
+Implementation tasks:
+
+- define an `ILBundle` container spanning `.ex/.gl/.sy/.in/.db`
+- parse symbol and type references across files
+- emit normalized JSON for a fixture
+- add fixture-based tests that lock down the schema
+- document known unknowns instead of silently dropping bytes
 
 Deliverables:
 
-- automatic strategy/failure recording in hill climber and beam solver
-- fingerprint computation at baseline time
-- database growth with each permuter session
+- normalized parsed representation for all five IL files
+- fixture-backed tests for parser stability
+- updated `IL_FORMAT.md` with per-file schema notes
 
-See [PATTERN_MINING.md](PATTERN_MINING.md) Phase 2.
+Progress so far:
 
-#### I4: Strategy-Boosted Search
+- `ILFile.to_dict()` provides normalized JSON export for bundle-level metadata,
+  globals, symbols, imports, debug summaries, and parsed functions
+- `export-json` CLI added to `msvc-src/tools/il_parser.py`
+- fixture-based tests added for bundle manifests and JSON export
+- real fixture export now resolves symbol names into function operations and
+  exposes partial `.in` / `.db` summaries for downstream tooling
 
-Use the strategy database to guide first-round pattern selection.
+Exit criteria:
+
+- parsing a fixture produces stable JSON across runs
+- symbol/type tokens can be followed across file boundaries
+- unknown bytes/records are surfaced explicitly in output
+
+### WP8: Build A Constrained PPC->IL Lifter
+
+Priority: P1
+
+Status: Started — initial constrained lifter landed in
+`msvc-src/tools/ppc_il_lifter.py` with tests for rlwinm-sensitive shapes and
+compare-source CLI support.
+
+Objective:
+Lift a limited PPC subset into an IL-like representation that can be compared
+to source-side IL.
+
+Required file targets:
+
+- new lifter module under `msvc-src/tools/` or `scripts/permuter/`
+- `tools/compiler_trace/asm_diff.py` or attribution helpers if reused
+- tests for lifting and comparison
+
+Implementation tasks:
+
+- define the lifted form and its intentional limits
+- support only the opcode families needed by known synthesis patterns
+- map PPC compare/branch, casts, shifts/masks, loads/stores, switch, and
+  call/return into the lifted representation
+- build one comparison tool that shows source IL vs lifted PPC for a function
+
+Progress so far:
+
+- `msvc-src/tools/ppc_il_lifter.py` now lifts a constrained PPC subset into
+  normalized ops:
+  - `extrwi` -> `FUSED_SHR_MASK`
+  - `clrlslwi` -> `FUSED_SHL_MASK`
+  - `clrlwi` -> `BYTE_MASK`
+  - `srwi` / `slwi` -> `SHR` / `SHL`
+  - compare/branch, load/store, basic ALU, call/return
+  - bool carry chains: `addic`, `subfe`, `subfc`, `subfic`, `addze`, `adde`,
+    `subfze`, `cntlzw`, `eqv`, `andc`, `neg`, `srawi`
+- unsupported PPC instructions are surfaced explicitly, not silently dropped
+- `compare-source` CLI now shows source IL from `_CL_*` capture beside lifted PPC
+- the tool now derives higher-level shape facts:
+  - `byte_fusion=fused_shr_mask|fused_shl_mask|separate_shift_and_mask`
+  - `bool_materialization=zero_test|equality_nonzero|inequality_nonzero|signed_positive|unsigned_ordered|signed_ordered`
+- verified real cases:
+  - `cast_shift` -> `byte_fusion=fused_shr_mask`
+  - `zero_test` -> `bool_materialization=zero_test`
+  - `signed_positive` -> `bool_materialization=signed_positive`
+- tests added for fused byte shift/mask lifting, bool carry chains, and unsupported-op reporting
+
+Remaining work:
+
+- add switch and dispatch-table lifting
+- emit machine-readable shape deltas instead of only side-by-side output
+- prove at least one derived fact can feed the permuter
 
 Deliverables:
 
-- fingerprint similarity search (weighted Hamming)
-- historical strategy lookup at round 1
-- pattern boosting from k-nearest solved functions
-- logging of which historical strategies influenced search
+- constrained lifter module
+- fixture-based lift tests
+- side-by-side comparison output for at least a few real examples
 
-See [PATTERN_MINING.md](PATTERN_MINING.md) Phase 3.
+Exit criteria:
 
-#### I5: Validator Ladder
+- the lifter can explain at least one of: bool materialization, rlwinm fusion,
+  branch polarity, or switch shape
+- comparison output is usable by humans and scripts
+- unsupported opcodes fail clearly instead of silently mis-lifting
 
-Add stronger validation and richer acceptance decisions.
+### WP9: Feed IL-Derived Hints Into The Permuter
+
+Priority: P2
+
+Status: Started — the target-facts layer can now ingest derived PPC shape
+facts, and the beam seed path requests them from baseline `/FAcs` listings.
+
+Objective:
+Use IL-level structure as another evidence source for search and ranking.
+
+Required file targets:
+
+- `scripts/permuter/target_facts.py`
+- `scripts/permuter/beam_search.py`
+- `scripts/permuter/types.py`
+- any new `il_features.py` or similar helper
+
+Implementation tasks:
+
+- define a small set of IL-derived facts or hints
+- expose them through `TargetFacts` or `RoundHints`
+- boost or suppress patterns based on lifted/source IL comparisons
+- add a debug mode to print the IL-derived reasoning for one function
+
+Progress so far:
+
+- `scripts/permuter/ppc_shape_facts.py` extracts derived shape facts from a
+  PPC listing using the constrained lifter
+- `Scorer.get_shape_facts()` now compiles a baseline `/FAcs` listing and derives
+  shape facts for the target function
+- `TargetFacts` now ingests `shape_facts` and converts them to `codegen_shape`
+  facts with pattern routing:
+  - `byte_fusion=separate_shift_and_mask` -> boost `u8_to_unsigned_long`
+  - `byte_fusion=fused_*` -> suppress `u8_to_unsigned_long`
+  - `bool_materialization=*` -> boost `bool_materialize`
+  - signed/unsigned bool families also boost `signed_unsigned`
+- routing is target-aware: shape-derived boosts/suppression only fire when the
+  target-side diff opcodes agree with that direction
+- `beam_search.py` and `hill_climber.py` now pass baseline shape facts into
+  `extract_facts()`
+- `TargetFacts.summary_lines()` now surfaces `codegen_shape` categories and
+  boost/suppress routing at search startup for normal runs
+- tests added for shape-fact extraction and target-fact routing
+
+Remaining work:
+
+- prove the new facts measurably change proposal ordering on real targets
+- decide whether shape facts should remain target-facts-only or also become
+  direct `RoundHints`
+- expose the same fact summary in more result/reporting surfaces if needed
 
 Deliverables:
 
-- mismatch-class delta tracking (not just overall score)
-- region-level improvement tracking (from attribution)
-- state-local semantic plausibility checks
-- partial translation-validation-style checks for narrow transforms
-- stronger logging on why candidates were rejected
+- IL-derived hints visible in beam expansion or ranking
+- tests for at least one hint affecting proposal priority
+- roadmap status update describing what hints are in use
 
-#### I6: Evaluation And Benchmarking
+Exit criteria:
 
-Make search-policy work measurable and improvable.
+- the permuter can consume at least one IL-derived signal
+- that signal changes proposal ordering in a measurable way
+
+### WP10: Selective COLOR RE
+
+Priority: P2
+
+Objective:
+Answer the remaining register-allocation questions that black-box testing has
+not resolved.
+
+Required file targets:
+
+- `msvc-src/docs/`
+- `msvc-src/tools/`
+- any new `msvc-src/model/` helper created from the findings
+
+Implementation tasks:
+
+- create the dedicated c2.dll Ghidra project and name priority COLOR helpers
+- decompile the top COLOR helpers by size and trace their roles
+- identify the BSF trigger condition and spill cost formula
+- cross-check the RE result against diff-test observations
+- extract any actionable heuristic into code the permuter can consume
 
 Deliverables:
 
-- benchmark corpus of plateaued-but-fixable functions
-- replayable search traces
-- comparative evaluation: greedy vs beam vs atlas-guided
-- aggregate pattern effectiveness reports from strategy database
-- benchmark categories keyed by mismatch class and structural failure mode
+- annotated RE notes committed under `msvc-src/docs/`
+- at least one actionable heuristic or predictor stub in code
+- explicit statement of what question was answered
 
-### Recommended Sequencing
+Exit criteria:
 
-The three tracks have some dependencies but are mostly independent:
+- the RE result explains a real observed gap in DC3 behavior
+- at least one finding is usable by the permuter, not just documented
 
-```
-Knowledge:  K1 ──── K2 ──── K3 ──── K4 ──── K5
-                                     │        │
-Search:     S1 ──────────── S2 ──── S3 ──── S4
-                             │       │
-Infra:      I1 ──── I2 ──── I3 ──── I4 ──── I5 ──── I6
-```
+## Next Sprint
 
-**Immediate priorities** (can start in parallel):
+The next sprint should execute these work packages in order:
 
-- **K1** (atlas harvest) — pure documentation work, no new code
-- **I1** (attribution pipeline) — extends existing tools, high diagnostic value
-  even without search integration
-- **I2** (strategy database schema + retroactive harvest) — uses existing
-  mine_patterns.py output
-- **S1** (beam search kernel) — already designed in BEAM_SOLVER.md
+1. WP1: measure beam vs greedy on a fixed hard slice
+2. WP2: extend diff testing with the missing suites
+3. WP6: build a stable IL capture corpus
+4. WP7: parse the full IL bundle into a normalized schema
 
-**First integration point**: When K1 + I1 + S1 are done, K4 can fuse them
-into a target-facts layer that the beam search consumes.
+After that:
 
-**Second integration point**: When I2 + I3 are done, I4 connects strategy
-lookup to the search loop.
+- WP3 expands atlas coverage from pattern docs
+- WP4 broadens region-aware pattern coverage
+- WP5 improves validator visibility
+- WP8 and WP9 begin once there is a stable IL fixture corpus
+- WP10 stays blocked until WP1 and WP2 are done
 
-## Open Questions
+## Measurement
 
-These are the biggest unresolved design questions, organized by subsystem.
+The roadmap should be judged on real outcomes, not architectural elegance.
 
-### Compiler Atlas
+Track at least:
 
-- What storage format? SQLite enables rich queries; JSON/YAML enables easy
-  editing and version control. The editorial workflow (human curation of
-  entries) suggests a file format; the search-time lookup suggests a database.
-  A hybrid may work: YAML source of truth, compiled to SQLite at build time.
-- How should confidence work? An entry proven on 10 micro-programs is stronger
-  than one proven on 1, but “proven” vs “inferred” may be the more useful
-  distinction. Start with tiers (proven/inferred/negative), add counts later.
-- How deep should interaction exploration go? Two-way interactions (type +
-  operator) are tractable. Three-way interactions (type + operator + lifetime)
-  may be combinatorially explosive. Use the single-dimension atlas to identify
-  which dimensions actually share instruction patterns before expanding.
-- Can we auto-generate micro-programs from the existing pattern docs? Many
-  pattern docs already contain before/after code snippets that are essentially
-  micro-programs. A parser could extract these and compile them automatically.
+- functions improved vs greedy and existing beam baseline
+- proposals attempted per improvement
+- build failures per depth
+- attribution coverage on mismatched instructions
+- region-level improvement retention in beam survivors
+- number of atlas entries actually used during search
 
-### Strategy Database
+If a phase does not change search outcomes on representative plateaued targets,
+it should be narrowed, rewritten, or dropped.
 
-- How many distinct fingerprint clusters exist in the solved functions? If
-  there are ~50 clusters, similarity search is straightforward. If there are
-  thousands, we need embedding-based search or hierarchical clustering.
-- How should header-driven regressions be handled? A strategy record from
-  before a header change may not be valid after it. Options: record expiry,
-  header-state hashing, or confidence decay based on age.
-- Should the strategy database subsume permuter_cache.db? They store related
-  data (per-function scoring history vs cross-function strategy records) and
-  could share a schema.
+## Summary
 
-### Instruction Attribution
+Phases 1-5 are implemented:
 
-- How reliable is `/FAs` attribution after `/O1` optimization? MSVC may
-  scramble source annotations for heavily optimized code. Test on 20-30
-  representative functions to assess noise level.
-- Should attribution be stored persistently? It enables cross-session analysis
-  but costs space. A cache keyed by (source_hash, compiler_flags) would allow
-  reuse without unbounded growth.
-- Can we get useful target-side attribution without debug info? Ghidra provides
-  decompiled-line-level mapping, and surrounding matched instructions provide
-  interpolation anchors. How accurate is this in practice?
+1. **Attribution** — `/FAs` listing parser, mismatch join, region aggregation,
+   scorer integration, 6 region-aware patterns. DONE.
+2. **Differential testing** — core harness + 5 suites with proven decision maps.
+   DONE. Extension suites deferred.
+3. **Compiler atlas** — 72 entries (51 proven, 3 inferred, 18 negative), opcode-indexed
+   lookup, beam boost/suppress wiring. Expanded from pattern docs. DONE.
+4. **Target facts** — normalized evidence layer, 3 extractors, wired into
+   BeamState ranking and proposal filtering. DONE.
+5. **Validator ladder** — 6-level chain (parse→build→score→region→fact→semantic),
+   wired into beam search and hill climber. DONE.
+6. **Selective compiler RE** — pipeline mapped, pass groups identified. Targeted
+   decompilation (COLOR internals) not started.
 
-### Search & Integration
-
-- Is a beam over reparsed source states enough, or do we eventually want a more
-  explicit equivalence representation for some rewrite classes?
-- Should region-level improvement be a first-class beam ranking signal, or just
-  a diversity tiebreaker?
-- How should atlas-driven proposals interact with pattern-driven proposals?
-  Should they compete for the same budget, or have separate allocations?
-- When multiple systems agree (atlas suggests X, strategy DB suggests X,
-  diagnosis suggests X), how aggressively should the engine concentrate budget?
-
-### Validation
-
-- What is the strongest practical validation we can do below full-machine
-  semantics? Can we build a useful translation-validation-like layer over
-  reduced IR or compiler-emitted listings?
-- Can failed validation produce reusable counterexamples that prune families
-  of bad candidates, not just one concrete variant?
-- Which rewrite classes are worth special-case validation first? (Comparison
-  changes and type casts are likely candidates — narrow, well-defined, and
-  the atlas provides ground truth.)
-
-### Cross-Unit Search
-
-- Should cross-unit states compete directly with local states, or live in a
-  separately budgeted search tier?
-- How should we attribute gains and regressions across many affected symbols?
-- What risk model should gate shared-header edits?
-
-### Runtime And Tooling
-
-- What caches are essential for acceptable runtime? The atlas lookup should be
-  sub-millisecond; strategy DB similarity search should be <100ms; attribution
-  compilation adds ~10-15% overhead per listing.
-- How should worktree-backed execution integrate with the existing orchestrator
-  pool?
-- Which external tools are worth adopting directly versus studying only for
-  design ideas?
-
-## What Makes This World-Class
-
-No existing decomp project has this combination:
-
-1. **A compiler behavior atlas built from systematic experimentation.** Other
-   projects document patterns as they encounter them. This project would have a
-   proactively explored, queryable mapping of the compiler's decision space.
-
-2. **Cross-function transfer learning.** Decomp permuters (N64, GC, Wii
-   projects) treat each function independently. This project would learn from
-   its own history — 29,842 solved functions as training data.
-
-3. **Instruction-level source attribution integrated into search.** Other tools
-   do binary diffing (objdiff, decomp.me) but don't close the loop to source
-   lines. This project would trace mismatches to specific source expressions
-   and apply targeted fixes.
-
-4. **Beam search over program states with diagnosis-guided proposals.** Other
-   permuters use random mutation or greedy hill climbing. This project would
-   use structured, multi-state search with evidence-based proposal generation.
-
-5. **Deep compiler reverse engineering (BSF tracing, c2.dll analysis)
-   integrated into the search loop.** The register allocator behavior is
-   already documented at the instruction level. Connecting that knowledge to
-   the search engine turns it from documentation into automation.
-
-The individual pieces exist in academia (STOKE for search, Alive2 for
-validation, egg for equivalence saturation, SAILR for compiler-aware
-decompilation). The novel contribution is combining them into a practical
-tool that operates on a real codebase with a real proprietary compiler, using
-empirical evidence from 30,000+ solved functions.
-
-## Practical Next Steps
-
-The immediate priorities that can start in parallel:
-
-### Track 1: Atlas Harvest (K1) — 1-2 days
-
-Convert existing pattern documentation into structured atlas entries. No new
-compilation needed. This is documentation refactoring with high downstream
-value.
-
-Start with the 20 highest-impact patterns from `TECHNICAL_NOTES.md`:
-comparison operators, boolean materialization, float literals, FMA ordering,
-loop condition subtraction, NOR peephole, fsel templates.
-
-### Track 2: Attribution Pipeline (I1) — 2-3 days
-
-Build the `/FAs` listing parser and mismatch join. The infrastructure
-(`invoker.py`, `asm_diff.py`, `diff_inspect.py`) already exists. The new work
-is the structured parser, the objdiff join, and the `--attributed` mode.
-
-Test on 20-30 functions spanning different mismatch classes. Assess attribution
-reliability under `/O1` optimization.
-
-### Track 3: Strategy Schema + Harvest (I2) — 1-2 days
-
-Define the fingerprint, strategy record, and failure record schemas. Run
-mine_patterns.py over the 25 cached baselines and produce the initial strategy
-database.
-
-Assess: how many distinct fingerprint clusters exist? What's the distribution
-of winning patterns by cluster?
-
-### Track 4: Beam Search (S1) — 3-5 days
-
-Implement the beam search controller from the BEAM_SOLVER.md design. Run it
-on a benchmark slice of 50 plateaued-but-fixable functions. Compare against
-greedy.
-
-### First Convergence
-
-When K1 + I1 + S1 are done, build K4 (target facts layer) to fuse atlas
-lookups and attributed mismatches into the beam search's proposal generation.
-This is the moment the engine starts doing target-driven search instead of
-blind pattern sweeps.
+The remaining work is:
+- **validation at scale** — run the full pipeline on 30+ hard targets to measure
+  improvement
+- **IL type control integration** — the proven `u8()` CAST vs `& 0xFF` AND finding
+  ([IL_TYPE_CONTROL.md](IL_TYPE_CONTROL.md)) should be wired into the permuter as:
+  (a) atlas entries for `extrwi`/`clrlslwi` detection/suppression,
+  (b) a new `u8_to_unsigned_long` pattern that converts `u8` intermediate types to
+  `unsigned long` + `& 0xFF`, and
+  (c) IL capture fixtures to confirm the CAST vs AND mechanism.
+  This single finding fixed 20+ functions and likely affects hundreds more.
+- **extension suites** — FPR, template, scope nesting differential tests
+- ~~**atlas expansion**~~ DONE — 72 entries harvested from pattern docs
+- **selective RE** — only for COLOR questions diff testing can't answer
