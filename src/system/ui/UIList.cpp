@@ -524,92 +524,93 @@ void UIList::PreLoad(BinStream &bs) {
 }
 
 void UIList::PostLoad(BinStream &bs) {
-    UIComponent::PostLoad(bs);
-    int local_maxdisplay = -1;
-    int local_mindisplay = 0;
-    bool local_scrollpastmax = true;
+    BinStreamRev d(bs, bs.PopRev(this));
+    UIComponent::PostLoad(d.stream);
+    mListDir.PostLoad(nullptr);
     bool local_scrollpastmin = false;
-    float local_speed;
+    bool local_scrollpastmax = true;
     bool local_circular;
     int local_gridspan = 1;
     int local_numdisplay;
-    int rev = bs.PopRev(this);
-    if (rev < 0xF) {
-        int i;
-        int x;
-        int j;
-        int k;
-        bool ba;
-        bool b9;
-        bool b8;
-        bs >> i;
-        bs >> j;
-        if (rev > 4) {
-            if (rev > 6)
-                bs >> k;
+    int local_mindisplay = 0;
+    int local_maxdisplay = -1;
+    float local_speed;
+    if (d.rev < 0xF) {
+        int i, j, k;
+        bool ba, b9, b8;
+        d >> i >> j;
+        if (d.rev > 4) {
+            if (d.rev > 6)
+                d >> k;
             else
-                bs >> b8;
+                d >> b8;
         }
-        if (rev > 6) {
-            bs >> b9;
+        if (d.rev > 6) {
+            d >> b9;
         }
-        if (rev > 8) {
-            bs >> ba;
+        if (d.rev > 8) {
+            d >> ba;
         }
-        if (rev > 10) {
-            int b;
-            bs >> b;
+        int b;
+        if (d.rev > 10) {
+            d >> b;
         }
-        bs >> x;
+        int x;
+        d >> x;
     }
-    bs >> local_numdisplay;
-    if (rev > 0x11)
-        bs >> local_gridspan;
-    bs >> local_circular;
-    bs >> local_speed;
-    if (rev > 0xC) {
-        bs >> local_scrollpastmin;
+    d >> local_numdisplay;
+    if (d.rev > 0x11)
+        d >> local_gridspan;
+    d >> local_circular;
+    d >> local_speed;
+    if (d.rev > 0xC) {
+        d >> local_scrollpastmin;
     }
-    if (rev > 7) {
-        bs >> local_scrollpastmax;
+    if (d.rev > 7) {
+        d >> local_scrollpastmax;
     }
-    if (rev > 2)
-        bs >> mPaginate;
-    if (rev > 3)
-        bs >> mSelectToScroll;
-    if (rev >= 10)
-        bs >> local_mindisplay;
-    if (rev >= 6)
-        bs >> local_maxdisplay;
+    if (d.rev > 2)
+        d >> mPaginate;
+    if (d.rev > 3)
+        d >> mSelectToScroll;
+    if (d.rev >= 10)
+        d >> local_mindisplay;
+    if (d.rev >= 6)
+        d >> local_maxdisplay;
     gLoading = true;
-    SetNumDisplay(local_numdisplay);
-    SetGridSpan(local_gridspan);
-    SetCircular(local_circular);
-    SetSpeed(local_speed);
+    mListState.SetNumDisplay(local_numdisplay, false);
+    mUncappedNumDisplay = local_numdisplay;
+    mListState.SetGridSpan(local_gridspan, false);
+    mListState.SetCircular(local_circular, false);
+    mListState.SetSpeed(local_speed);
     mListState.SetScrollPastMinDisplay(local_scrollpastmin);
     mListState.SetScrollPastMaxDisplay(local_scrollpastmax);
     mListState.SetMinDisplay(local_mindisplay);
     mListState.SetMaxDisplay(local_maxdisplay);
-    if (rev == 1) {
+    if (d.rev == 1) {
         int x, y;
-        bs >> x >> y;
+        d >> x >> y;
     }
-    if (rev >= 12)
-        bs >> mNumData;
-    if (rev >= 14)
-        bs >> mAutoScrollPause;
-    if (rev < 19)
+    if (d.rev >= 0xC)
+        d >> mNumData;
+    if (d.rev >= 0xE)
+        d >> mAutoScrollPause;
+    if (d.rev < 0x13)
         mAutoScrollSendMsgs = true;
     else
-        bs >> mAutoScrollSendMsgs;
-    if (rev >= 0x10) {
-        bs >> mExtendedLabelEntries;
-        bs >> mExtendedMeshEntries;
-        bs >> mExtendedCustomEntries;
+        d >> mAutoScrollSendMsgs;
+    if (d.rev >= 0x10) {
+        d >> mExtendedLabelEntries;
+        d >> mExtendedMeshEntries;
+        d >> mExtendedCustomEntries;
     }
-    if (rev >= 17)
-        UITransitionHandler::LoadHandlerData(bs);
-    mListDir.PostLoad(0);
+    if (d.rev >= 0x11)
+        LoadHandlerData(d.stream);
+    if (d.rev >= 0x15) {
+        d >> mLimitCircularDisplayNumToDataNum;
+    } else {
+        mLimitCircularDisplayNumToDataNum = false;
+    }
     gLoading = false;
     Update();
 }
