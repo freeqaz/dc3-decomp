@@ -1638,7 +1638,7 @@ void HamNavList::LinkRibbonDrawState(
         state.mBigScale = (float)IsElementBig(i);
         state.mElemDrawState = &elem;
 
-        // Conditionally clear elem.unk28
+        // Conditionally clear ribbon interaction state
         if (elem.mShowing == 1) {
             bool shouldClear = false;
             if (mListRibbonResource && !mListRibbonResource->TestEntering()
@@ -1653,7 +1653,7 @@ void HamNavList::LinkRibbonDrawState(
                 }
             }
             if (shouldClear) {
-                elem.unk28 = 0;
+                elem.mRibbonInteraction = 0;
             }
         }
     }
@@ -1689,10 +1689,10 @@ void HamNavList::LinkRibbonDrawState(
         state.mBigScale = (float)IsElementBig(i);
         state.mElemDrawState = (int)&elem;
 
-        // Set the AdjustTrans vtable pointer in elem.unk2c
-        elem.unk2c = *(int *)((char *)this + 4);
+        // Set secondary vtable pointer for AdjustTrans
+        elem.mNavVtablePtr = *(int *)((char *)this + 4);
 
-        // Conditionally clear elem.unk28
+        // Conditionally clear ribbon interaction state
         if (elem.mShowing == 1) {
             bool shouldClear = false;
             if (mListRibbonResource && !mListRibbonResource->TestEntering()
@@ -1707,7 +1707,7 @@ void HamNavList::LinkRibbonDrawState(
                 }
             }
             if (shouldClear) {
-                elem.unk28 = 0;
+                elem.mRibbonInteraction = 0;
             }
         }
     }
