@@ -191,6 +191,8 @@ UIListDir *UIList::GetUIListDir() const { return mListDir; }
 
 int UIList::SelectedPos() const { return mListState.Selected(); }
 
+const std::vector<UIListWidget *> &UIList::GetWidgets() const { return mWidgets; }
+
 int UIList::Selected() const { return mListState.Selected(); }
 
 UIListState &UIList::GetListState() { return mListState; }
