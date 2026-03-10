@@ -161,6 +161,12 @@ void FlushTransparentDraws() {
     std::vector<DeferredDraw> draws;
     draws.swap(sTransparentQueue);
 
+    // Save current camera/env so we can restore after processing deferred draws.
+    // Each deferred draw restores its own camera, but the caller expects the
+    // camera to remain unchanged after the flush.
+    RndCam* savedCam = RndCam::Current();
+    RndEnviron* savedEnv = RndEnviron::Current();
+
     // Sort back-to-front (farthest first)
     std::sort(draws.begin(), draws.end(),
         [](const DeferredDraw& a, const DeferredDraw& b) {
@@ -175,6 +181,14 @@ void FlushTransparentDraws() {
             dd.cam->Select();
         DrawMeshImmediate(dd.mesh);
     }
+
+    // Restore the camera/env that was active before the flush so the
+    // caller's camera state is not corrupted.
+    if (savedCam && savedCam != RndCam::Current())
+        savedCam->Select();
+    if (savedEnv && savedEnv != RndEnviron::Current())
+        savedEnv->Select(nullptr);
+
     sFlushingTransparentQueue = false;
 }
 
@@ -535,7 +549,7 @@ void RndMesh::DrawShowing() {
     // sets font color override on the material, then restores it after drawing. If deferred,
     // the material state is wrong by the time FlushTransparentDraws runs.
     bool isTextMeshEarly = !Name()[0];
-    if (IsTransparentBlend(mat->GetBlend()) && !isTextMeshEarly && !NoTransparentDefer()) {
+    if (false && IsTransparentBlend(mat->GetBlend()) && !isTextMeshEarly && !NoTransparentDefer()) {
         float distSq = 0.0f;
         RndCam* cam = RndCam::Current();
         if (cam) {

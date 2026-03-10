@@ -2119,16 +2119,8 @@ void RndText::DrawShowing() {
         UpdateScrollOffsets();
     }
 
-    // Draw each mesh
-#ifdef HX_NATIVE
-    // Switch to UI camera for text rendering — text positions are in UI/screen
-    // space, not world space. On Xbox 360, text was drawn in a separate 2D pass.
-    RndCam *savedCam = RndCam::Current();
-    RndCam *uiCam = TheUI ? TheUI->GetCam() : nullptr;
-    if (uiCam && uiCam != savedCam) {
-        uiCam->Select();
-    }
-#endif
+    // Draw each mesh — text inherits the current camera (PanelDir's CamOverride).
+    // On Xbox, text was drawn in 3D world space under the active camera.
     for (auto it = mFontMaps.begin(); it != mFontMaps.end(); ++it) {
         FontMapBase *fontMap = *it;
         int numMeshes = fontMap->NumMeshes();
@@ -2145,12 +2137,6 @@ void RndText::DrawShowing() {
             }
         }
     }
-#ifdef HX_NATIVE
-    // Restore previous camera
-    if (savedCam && savedCam != RndCam::Current()) {
-        savedCam->Select();
-    }
-#endif
 
     // Restore material colors (r, g, b only — not alpha)
     if (hasOverride) {

@@ -677,6 +677,18 @@ void WgpuRnd::WriteSceneUniforms() {
                 }
             }
             memcpy(scene.view, view, sizeof(view));
+
+            if (mFrameID == 500) {
+                printf("DC3 ViewProj for cam='%s':\n", cam->Name());
+                printf("  proj: [%.3f %.3f %.3f %.3f] [%.3f %.3f %.3f %.3f] [%.3f %.3f %.3f %.3f] [%.3f %.3f %.3f %.3f]\n",
+                       proj[0],proj[1],proj[2],proj[3], proj[4],proj[5],proj[6],proj[7],
+                       proj[8],proj[9],proj[10],proj[11], proj[12],proj[13],proj[14],proj[15]);
+                printf("  view row3: [%.3f %.3f %.3f %.3f]\n", view[12], view[13], view[14], view[15]);
+                printf("  VP[0-3]: %.4f %.4f %.4f %.4f\n", scene.viewProj[0], scene.viewProj[1], scene.viewProj[2], scene.viewProj[3]);
+                printf("  VP[4-7]: %.4f %.4f %.4f %.4f\n", scene.viewProj[4], scene.viewProj[5], scene.viewProj[6], scene.viewProj[7]);
+                printf("  VP[8-11]: %.4f %.4f %.4f %.4f\n", scene.viewProj[8], scene.viewProj[9], scene.viewProj[10], scene.viewProj[11]);
+                printf("  VP[12-15]: %.4f %.4f %.4f %.4f\n", scene.viewProj[12], scene.viewProj[13], scene.viewProj[14], scene.viewProj[15]);
+            }
         }
 
         // Camera position (in world space, before axis flip)

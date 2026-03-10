@@ -182,17 +182,21 @@ void MeterDisplay::DrawShowing() {
     if (mMaxValue > 0) {
         f = (float)mCurrentValue / (float)mMaxValue;
         float f1 = TheTaskMgr.UISeconds() - unk4c;
-        int itouse = unk50;
-        if (mAnimPeriod > 0 && itouse >= 0 && f1 > 0) {
-            if (f1 < mAnimPeriod) {
-                f = (f1 / mAnimPeriod) * (float)(itouse - mCurrentValue)
-                    + (float)mCurrentValue / (float)mMaxValue;
-            } else {
-                mCurrentValue = itouse;
-                unk50 = -1;
-                f = (float)mCurrentValue / (float)mMaxValue;
+        if (mAnimPeriod > 0) {
+            int itouse = unk50;
+            if (itouse >= 0 && f1 > 0) {
+                if (f1 < mAnimPeriod) {
+                    f = ((f1 / mAnimPeriod) * (float)(itouse - mCurrentValue)
+                         + (float)mCurrentValue)
+                        / (float)mMaxValue;
+                } else {
+                    mCurrentValue = itouse;
+                    unk50 = -1;
+                    f = (float)mCurrentValue / (float)mMaxValue;
+                }
             }
         }
+        UpdateDisplay();
     }
     ClampEq(f, 0.0f, 1.0f);
     mMeterAnim->SetFrame(
@@ -204,5 +208,4 @@ void MeterDisplay::DrawShowing() {
     mResourceDir->Draw();
     if (mShowText && unk54)
         unk54->Draw();
-    SetWorldXfm(WorldXfm());
 }

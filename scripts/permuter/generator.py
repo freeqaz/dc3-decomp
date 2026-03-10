@@ -69,6 +69,8 @@ def _pattern_priorities(
         if winner_domains and pattern.structural_domain in winner_domains:
             priority *= 1.08
 
+        if round_hints:
+            priority = max(priority, round_hints.priority_floor(pattern.name))
         if round_hints and priority > 0.0:
             priority *= round_hints.suppression_factor(pattern.name)
             priority *= round_hints.adaptive_priority_boost(pattern.name)
@@ -292,6 +294,7 @@ def generate_variants(
                 ctx, stage_a, stage_b,
                 max_per_stage=10,
                 max_total=remaining,
+                round_hints=round_hints,
             ):
                 _annotate_scope(variant)
                 source_hash = variant_identity_bytes(ctx.file_path, variant)

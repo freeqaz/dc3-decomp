@@ -7,7 +7,6 @@
 #include "utl/MakeString.h"
 
 const char *ResourceDirBase::GetResourcesPath(Symbol s1, Symbol s2) {
-    DataArray *pathArr = nullptr;
     std::vector<Symbol> superClasses;
     superClasses.push_back(s1);
     ListSuperClasses(s1, superClasses);
@@ -15,11 +14,11 @@ const char *ResourceDirBase::GetResourcesPath(Symbol s1, Symbol s2) {
     int offset = 0;
     static Symbol resources_path("resources_path");
     static DataArray *cfg = SystemConfig(objects);
-    unsigned int i = 0;
+    DataArray *pathArr = nullptr;
     const char *path = nullptr;
+    unsigned int i = 0;
     do {
-        unsigned int numClasses = superClasses.size();
-        if (i >= numClasses)
+        if (i >= superClasses.size())
             break;
         DataArray *curClassCfg = cfg->FindArray(superClasses[i], true);
         if (curClassCfg) {

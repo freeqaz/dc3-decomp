@@ -158,6 +158,89 @@ def _generate_inversions(
                     description=f"Invert {op_str} -> {_INVERSIONS[op_str]}, swap if/else bodies",
                     source=new_source,
                 )
+                counter += 1
+
+    # Method 3: For "x > 0" conditions, also try "x == 0" with swapped bodies.
+    # For unsigned types, (x > 0) is equivalent to (x != 0), and the standard
+    # inversion (x <= 0) generates different code than (x == 0) even though
+    # they're semantically identical for unsigned. This catches the case where
+    # the target uses beq (== 0) but we generate ble (<= 0).
+    if inner_expr is not None and inner_expr.type == "binary_expression":
+        op_node = inner_expr.child_by_field_name("operator")
+        right = inner_expr.child_by_field_name("right")
+        if (
+            op_node and op_node.text and right and right.text
+            and right.text.strip() == b"0"
+        ):
+            op_str = op_node.text.decode("utf-8")
+            # > 0 with swap -> == 0 with swap (unsigned equivalent)
+            if op_str == ">":
+                new_cond = (
+                    source[condition.start_byte:op_node.start_byte]
+                    + b"=="
+                    + source[op_node.end_byte:condition.end_byte]
+                )
+                new_source = (
+                    source[:condition.start_byte]
+                    + new_cond
+                    + source[condition.end_byte:consequence.start_byte]
+                    + alt_body_text
+                    + source[consequence.end_byte:alt_body.start_byte]
+                    + cons_text
+                    + source[alt_body.end_byte:]
+                )
+                yield Variant(
+                    name=f"brpol_{counter}",
+                    pattern_name="branch_polarity",
+                    description="Invert > 0 -> == 0 (unsigned equiv), swap if/else bodies",
+                    source=new_source,
+                )
+                counter += 1
+            # != 0 with swap -> == 0 with swap
+            elif op_str == "!=":
+                new_cond = (
+                    source[condition.start_byte:op_node.start_byte]
+                    + b"=="
+                    + source[op_node.end_byte:condition.end_byte]
+                )
+                new_source = (
+                    source[:condition.start_byte]
+                    + new_cond
+                    + source[condition.end_byte:consequence.start_byte]
+                    + alt_body_text
+                    + source[consequence.end_byte:alt_body.start_byte]
+                    + cons_text
+                    + source[alt_body.end_byte:]
+                )
+                yield Variant(
+                    name=f"brpol_{counter}",
+                    pattern_name="branch_polarity",
+                    description="Invert != 0 -> == 0, swap if/else bodies",
+                    source=new_source,
+                )
+                counter += 1
+            # == 0 with swap -> > 0 with swap (try the reverse too)
+            elif op_str == "==":
+                new_cond = (
+                    source[condition.start_byte:op_node.start_byte]
+                    + b">"
+                    + source[op_node.end_byte:condition.end_byte]
+                )
+                new_source = (
+                    source[:condition.start_byte]
+                    + new_cond
+                    + source[condition.end_byte:consequence.start_byte]
+                    + alt_body_text
+                    + source[consequence.end_byte:alt_body.start_byte]
+                    + cons_text
+                    + source[alt_body.end_byte:]
+                )
+                yield Variant(
+                    name=f"brpol_{counter}",
+                    pattern_name="branch_polarity",
+                    description="Invert == 0 -> > 0 (unsigned equiv), swap if/else bodies",
+                    source=new_source,
+                )
 
 
 def _get_condition_expr(condition: Node) -> Node | None:

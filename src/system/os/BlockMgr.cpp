@@ -199,7 +199,7 @@ void BlockMgr::KillBlockRequests(ArkFile *arkFile) {
                 ++taskIt;
             }
         }
-        if (it->mTasks.size() > 0) {
+        if (it->mTasks.size() == 0) {
             if (mReadingBlock
                 && mReadingBlock->CheckMetadata(it->mArkfileNum, it->mBlockNum)) {
                 ++it;

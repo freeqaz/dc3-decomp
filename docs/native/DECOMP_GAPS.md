@@ -2,11 +2,12 @@
 
 Inventory of decomp gaps affecting the native build. Prioritized by impact on rendering and UI.
 
-**Last updated**: 2026-03-07
+**Last updated**: 2026-03-10
 
 ## Current State
 
 - **Track A (Engine Boot)**: Boots to `choose_mode_screen`, 51 draw calls/frame, 5000+ frames stable. `Flow::Enter()` and `Flow::Exit()` now implemented — screen navigation should work.
+- **Current UI regression**: `choose_mode_screen` still collapses to a mostly black frame with a thin horizontal strip, even though the choose-mode provider populates 5 items and the list widgets now draw under `[ui.cam]`.
 - **Track B (Milo Viewer)**: Full rendering pipeline. 14/44 demo shots render (8 broken YAML paths).
 - **Weak stubs**: `engine_stubs_generated.cpp` has ~2530 weak function stubs. Any real .cpp implementation automatically overrides them.
 
@@ -81,6 +82,13 @@ These affect menu navigation, list population, and screen transitions.
 - `UIListWidget::Poll()`, `UIListSlotElement::Poll()`, and `UIListSubListElement::Poll()` are **not** real native-port gaps.
 - They are trivial inline virtual defaults in source, and the symbol dump shows them folded into ICF-merged tiny functions.
 - The real list polling path is already implemented and complete through `UIList::Poll()`, `UIListDir::PollWidgets()`, and `UIListSlot::Poll()`.
+
+### Choose-Mode Follow-Up — 2026-03-10
+- `HamNavList::DrawShowing()` — **90.7%**. A real native-facing issue was confirmed here: ribbon draw was leaving the wrong camera selected for list widget draw. Re-selecting `TheUI->GetCam()` moves choose-mode widget and label draws from `turbo_shell.cam` to `[ui.cam]`, but the frame is still visually collapsed. Keep this function on the shortlist, but it is no longer the only suspect.
+- `HamListRibbon::DrawRibbon()` — **89.6%**. Still a high-value decomp target. It mutates shared `UIListElementDrawState` storage, offsets label/widget positions, and drives the final per-ribbon transform path. Runtime now shows sane widget positions and alphas, so remaining mistakes here are more likely to be transform/composition related than provider-state related.
+- `RndCam::GetViewProjectXfms()` — **66.8%**. This is now the highest-priority shared decomp gap for the broken choose-mode frame. `Transpose()` is 100% and `RndCam::WorldToScreen()` / `ScreenToWorld()` are now 100%, but the real frame still collapses after widgets switch to `[ui.cam]`. That makes the camera projection path itself the strongest remaining shared-code suspect.
+- `UIListDir::BuildDrawState()` — shared native correctness fix already landed. Zero-initialize `UIListElementDrawState` before filling it; Xbox got away with partially initialized stack POD here, native did not. This fixed ribbon overlay garbage, but not the collapsed frame.
+- `PanelDir::DrawShowing()` is no longer the primary decomp suspect for choose-mode. Runtime now proves the actual list payload reaches `UIListMeshElement::Draw()` and `UILabel::DrawShowing()` under `[ui.cam]`.
 
 ### Screen Transition Workarounds (src/system/ui/UIScreen.cpp)
 - ~~`UnloadPanels()` — Skipped on native (ObjRef crash)~~ **FIXED**: Real crash was null `sHamMaster` in `MetaPanel::Load`, not ObjRef corruption. UnloadPanels fully re-enabled.

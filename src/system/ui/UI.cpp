@@ -109,6 +109,8 @@ void UIManager::SetScreenBlacklghtDisabled(bool disable) {
     mDisableScreenBlacklight = disable;
 }
 
+bool UIManager::DefaultAllowEditText() const { return mDefaultAllowEditText; }
+
 bool UIManager::InComponentSelect() {
     if (mCurrentScreen)
         return mCurrentScreen->InComponentSelect();
@@ -280,7 +282,8 @@ void UIManager::Terminate() {
 
 bool UIManager::IsGameScreenActive() {
     bool ret = BottomScreen() && streq(BottomScreen()->Name(), "game_screen");
-    ret &= mCurrentScreen != BottomScreen();
+    if (mCurrentScreen)
+        ret &= mCurrentScreen != BottomScreen();
     return ret;
 }
 

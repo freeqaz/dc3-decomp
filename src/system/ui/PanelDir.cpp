@@ -256,34 +256,23 @@ void PanelDir::DrawShowing() {
                camOverride ? camOverride->Name() : "null",
                curCam ? curCam->Name() : "null",
                Showing(), (int)mDraws.size());
-        // Dump every drawable in mDraws
-        for (int i = 0; i < (int)mDraws.size(); i++) {
-            RndDrawable *d = mDraws[i];
-            Hmx::Object *obj = dynamic_cast<Hmx::Object*>(d);
-            printf("  mDraws[%d] = %p class=%s name=%s showing=%d\n",
-                   i, (void*)d,
-                   obj ? obj->ClassName() : "?",
-                   obj ? obj->Name() : "?",
-                   d->Showing());
-        }
-        // Dump subdirs to see if choose_mode.milo is present
-        printf("  Subdirs of '%s':\n", Name());
-        for (ObjDirItr<ObjectDir> dit(this, false); dit != nullptr; ++dit) {
-            if (dit != (ObjectDir*)this) {
-                printf("    subdir: class=%s name=%s path=%s\n",
-                       dit->ClassName(), dit->Name(),
-                       dit->GetPathName() ? dit->GetPathName() : "null");
-            }
-        }
-        // Check for HamNavList objects anywhere in the hierarchy
-        for (ObjDirItr<Hmx::Object> oit(this, true); oit != nullptr; ++oit) {
-            const char *cn = oit->ClassName().Str();
-            if (strstr(cn, "HamNav") || strstr(cn, "UIList")) {
-                printf("  FOUND %s: name=%s dir=%s\n",
-                       cn, oit->Name(),
-                       oit->Dir() ? oit->Dir()->Name() : "null");
-            }
-        }
+        // Dump camera properties for both cameras
+        auto dumpCam = [](const char *label, RndCam *c) {
+            if (!c) return;
+            const Transform &w = c->WorldXfm();
+            printf("  CAM '%s' (%s): pos=(%.1f,%.1f,%.1f) near=%.1f far=%.1f yfov=%.4f(%.1fdeg) zRange=(%.2f,%.2f)\n",
+                   label, c->Name(),
+                   w.v.x, w.v.y, w.v.z,
+                   c->NearPlane(), c->FarPlane(),
+                   c->YFov(), c->YFov() * (180.0f / 3.14159f),
+                   0.0f, 0.0f);
+            printf("       localPos=(%.1f,%.1f,%.1f) fwd=(%.3f,%.3f,%.3f)\n",
+                   c->LocalXfm().v.x, c->LocalXfm().v.y, c->LocalXfm().v.z,
+                   w.m.z.x, w.m.z.y, w.m.z.z);
+        };
+        dumpCam("curCam", curCam);
+        dumpCam("camOverride", camOverride);
+        dumpCam("[ui.cam]", TheUI->GetCam());
     }
 #endif
     if (camOverride && camOverride != RndCam::Current()) {

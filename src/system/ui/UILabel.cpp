@@ -29,6 +29,29 @@
 #include "utl/UTF8.h"
 #include <cmath>
 #include <cstring>
+#ifdef HX_NATIVE
+#include <cstdio>
+#include <cstdlib>
+#endif
+
+#ifdef HX_NATIVE
+namespace {
+bool DebugChooseModeUILabel() {
+    static int enabled = -1;
+    if (enabled == -1) {
+        const char *env = getenv("MILO_DEBUG_CHOOSE_MODE");
+        enabled = (env && env[0] && strcmp(env, "0") != 0) ? 1 : 0;
+    }
+    return enabled != 0;
+}
+
+bool IsChooseModeToken(Symbol token) {
+    return token == Symbol("perform") || token == Symbol("practice")
+        || token == Symbol("dance_battle") || token == Symbol("custom_party")
+        || token == Symbol("crew_showdown");
+}
+}
+#endif
 
 bool UILabel::sDeferUpdate = false;
 bool UILabel::sInDebugHighlight = false;
@@ -529,6 +552,33 @@ void UILabel::DrawShowing() {
         UILabelDir *rsrc = mLabelStyles[0].mFontResource;
         if (rsrc) {
             UIColor *color = rsrc->GetStateColor(mState);
+#ifdef HX_NATIVE
+            static int sChooseModeUILabelDiag = 0;
+            if (DebugChooseModeUILabel() && IsChooseModeToken(mTextToken)
+                && sChooseModeUILabelDiag < 80) {
+                RndCam *cam = RndCam::Current();
+                Vector2 screenPos(0.0f, 0.0f);
+                float depth = cam ? cam->WorldToScreen(WorldXfm().v, screenPos) : 0.0f;
+                printf(
+                    "DC3 UILabel::DrawShowing label=%s token=%s text='%s' state=%d styles=%d fontRes=%s stateColor=%s alpha0=%.3f dirty=%d fontMaps=%zu cam=%s screen=(%.3f,%.3f) depth=%.3f\n",
+                    PathName(this),
+                    mTextToken.Str(),
+                    mText.c_str(),
+                    mState,
+                    (int)mLabelStyles.size(),
+                    PathName(rsrc),
+                    color ? PathName(color) : "<null>",
+                    Style(0).mFontColor.alpha,
+                    mDirty,
+                    mFontMaps.size(),
+                    cam ? PathName(cam) : "<null>",
+                    screenPos.x,
+                    screenPos.y,
+                    depth
+                );
+                sChooseModeUILabelDiag++;
+            }
+#endif
             for (int i = 0; i < mLabelStyles.size(); i++) {
                 LabelStyle &curLabelStyle = mLabelStyles[i];
                 UIColor *curColor = curLabelStyle.mColorOverride;

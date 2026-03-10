@@ -1,6 +1,7 @@
 #include "ui/UIListArrow.h"
 #include "math/Easing.h"
 #include "obj/Object.h"
+#include "ui/UIList.h"
 #include "ui/UIListWidget.h"
 
 UIListArrow::UIListArrow()
@@ -60,29 +61,21 @@ void UIListArrow::Draw(
     Box *box,
     DrawCommand cmd
 ) {
-    if (!mMesh)
+    if (!mMesh || cmd == kDrawFirst)
         return;
-    if (cmd == kDrawFirst)
-        return;
-
-    const Vector3 *vec;
+    const Vector3 *vec = mOnHighlight
+        ? &drawstate.mHighlightPos
+        : (mPosition == kUIListArrowBack ? &drawstate.mFirstPos : &drawstate.mLastPos);
     bool onhighlight = mOnHighlight;
-
-    if (onhighlight) {
-        vec = &drawstate.mHighlightPos;
-    } else if (mPosition == kUIListArrowBack) {
-        vec = &drawstate.mFirstPos;
-    } else {
-        vec = &drawstate.mLastPos;
-    }
 
     if (box || !mShowOnlyScroll
         || ((mPosition != kUIListArrowBack || liststate.CanScrollBack(onhighlight))
             && (mPosition != kUIListArrowNext || liststate.CanScrollNext(mOnHighlight)))) {
-        const Transform &worldxfm = mMesh->WorldXfm();
-        Transform xfm1 = worldxfm;
+        Transform xfm1 = mMesh->WorldXfm();
         Transform xfm2 = xfm1;
-
+        if (ParentList()) {
+            ParentList()->AdjustTransSelected(xfm2);
+        }
         CalcXfm(tf, *vec, xfm2);
         DrawMesh(mMesh, drawstate.mHighlightElementState, compstate, xfm2, box);
         mMesh->SetWorldXfm(xfm1);

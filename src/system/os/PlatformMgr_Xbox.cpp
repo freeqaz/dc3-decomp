@@ -718,7 +718,8 @@ void MultipleItemsEnumCompleteMsg::SetNumOfferIDs(int count) {
 }
 
 void MultipleItemsEnumCompleteMsg::SetOfferID(int index, const String &s) {
-    mData->Node(5).Array(mData)->Node(index) = DataNode(s);
+    DataNode dn(s);
+    mData->Node(5).Array(mData)->Node(index) = dn;
 }
 
 unsigned long long MultipleItemsEnumCompleteMsg::OfferID(int index) const {

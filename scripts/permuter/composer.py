@@ -163,12 +163,26 @@ def _context_score(pattern: Pattern, available_context: set[str] | None) -> floa
     return -0.2
 
 
+def _pattern_relevant(
+    pattern: Pattern,
+    diagnosis: Diagnosis | None,
+    round_hints: RoundHints | None = None,
+) -> bool:
+    """Return True if a pattern should participate for this diagnosis."""
+    if diagnosis is None:
+        return True
+    if round_hints and round_hints.force_pattern(pattern.name):
+        return True
+    return pattern.relevant(diagnosis)
+
+
 def compose_variants(
     ctx: FunctionContext,
     stage_a: Pattern,
     stage_b: Pattern,
     max_per_stage: int = 10,
     max_total: int = 50,
+    round_hints: RoundHints | None = None,
 ) -> Iterator[Variant]:
     """Apply pattern B to each output of pattern A.
 
@@ -201,7 +215,7 @@ def compose_variants(
             continue
 
         # Check if stage B is relevant for the re-parsed context
-        if reparsed_ctx.diagnosis and not stage_b.relevant(reparsed_ctx.diagnosis):
+        if not _pattern_relevant(stage_b, reparsed_ctx.diagnosis, round_hints):
             continue
 
         b_count = 0
@@ -533,7 +547,7 @@ def build_adaptive_chains(
     # Layer 2.5: Round-1 diagnosis-relevant combos (no hints yet)
     if not hints and diagnosis:
         relevant_names = [
-            p.name for p in patterns if p.relevant(diagnosis)
+            p.name for p in patterns if _pattern_relevant(p, diagnosis, hints)
         ]
         for name in relevant_names:
             follow_ups = follow_map.get(name, [])
@@ -683,8 +697,8 @@ def get_compose_pairs(
             src_pat = pattern_map.get(src)
             dst_pat = pattern_map.get(dst)
             if diagnosis:
-                if (src_pat and src_pat.relevant(diagnosis)) or \
-                   (dst_pat and dst_pat.relevant(diagnosis)):
+                if (src_pat and _pattern_relevant(src_pat, diagnosis, hints)) or \
+                   (dst_pat and _pattern_relevant(dst_pat, diagnosis, hints)):
                     score += 0.5
             if src_pat is not None:
                 score += _context_score(src_pat, available_context)

@@ -5,6 +5,11 @@
 #include "utl/BinStream.h"
 #include "utl/Loader.h"
 #include "utl/Std.h"
+#ifdef HX_NATIVE
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#endif
 
 namespace {
     class WidgetDrawSort {
@@ -13,6 +18,25 @@ namespace {
             return w1->DrawOrder() < w2->DrawOrder();
         }
     };
+
+#ifdef HX_NATIVE
+    bool DebugChooseModeList(const UIListProvider *provider) {
+        static int enabled = -1;
+        if (enabled == -1) {
+            const char *env = getenv("MILO_DEBUG_CHOOSE_MODE");
+            enabled = (env && env[0] && strcmp(env, "0") != 0) ? 1 : 0;
+        }
+        if (!enabled || !provider) {
+            return false;
+        }
+        const Hmx::Object *obj = dynamic_cast<const Hmx::Object *>(provider);
+        if (!obj) {
+            return false;
+        }
+        const char *path = PathName(obj);
+        return (path && strstr(path, "choose_mode")) || strcmp(obj->ClassName().Str(), "ChooseModeProvider") == 0;
+    }
+#endif
 }
 
 UIListDir::UIListDir()
@@ -187,6 +211,38 @@ void UIListDir::DrawWidgets(
     Box *box,
     bool bDrawFocusedOrManual
 ) {
+#ifdef HX_NATIVE
+    static int sChooseListDiag = 0;
+    if (DebugChooseModeList(state.Provider()) && sChooseListDiag < 24) {
+        const Hmx::Object *providerObj = dynamic_cast<const Hmx::Object *>(state.Provider());
+        printf(
+            "DC3 UIListDir::DrawWidgets provider=%s class=%s widgets=%d elems=%d selected=%d first=%d numData=%d comp=%d scrolling=%d manual=%d\n",
+            providerObj ? PathName(providerObj) : "<null>",
+            providerObj ? providerObj->ClassName().Str() : "<null>",
+            (int)widgets.size(),
+            (int)drawState.mElements.size(),
+            state.Selected(),
+            state.FirstShowing(),
+            state.Provider() ? state.Provider()->NumData() : -1,
+            (int)compState,
+            (int)state.IsScrolling(),
+            (int)bDrawFocusedOrManual
+        );
+        for (int i = 0; i < (int)widgets.size() && i < 8; i++) {
+            UIListWidget *widget = widgets[i];
+            Hmx::Object *obj = dynamic_cast<Hmx::Object *>(widget);
+            printf(
+                "  widget[%d] class=%s name=%s drawType=%d order=%.2f\n",
+                i,
+                obj ? obj->ClassName().Str() : "<null>",
+                obj ? obj->Name() : "<null>",
+                widget ? (int)widget->WidgetDrawType() : -1,
+                widget ? widget->DrawOrder() : 0.0f
+            );
+        }
+        sChooseListDiag++;
+    }
+#endif
     bool scrolling = state.IsScrolling();
     std::vector<UIListWidget *>::iterator it = widgets.begin();
     if (it != widgets.end()) {
@@ -364,6 +420,9 @@ void UIListDir::BuildDrawState(
         int data = state.Display2Data(dispIndex);
         if (data == -1) {
             UIListElementDrawState elem;
+#ifdef HX_NATIVE
+            memset(&elem, 0, sizeof(elem));
+#endif
             elem.mActive = false;
             drawState.mElements.push_back(elem);
             continue;
@@ -429,6 +488,9 @@ void UIListDir::BuildDrawState(
         }
 
         UIListElementDrawState elem;
+#ifdef HX_NATIVE
+        memset(&elem, 0, sizeof(elem));
+#endif
         elem.mActive = true;
         *(Vector3 *)&elem.mPosX = elemPos;
         elem.mScaleX = 1.0f;

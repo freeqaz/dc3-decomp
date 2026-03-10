@@ -21,14 +21,25 @@ This document predates the current implementation state. The practical status is
 - the IL fixture corpus now includes:
   - `il_type_control_cast_vs_and`
   - `il_bool_materialization`
+  - `il_switch_dispatch`
+  - `il_call_return`
 - the permuter-side target-facts layer can now ingest derived PPC shape facts
-  from `/FAcs` listings, with routing gated by target-side mismatch opcodes
+  from `/FAcs` listings, with default-on routing through beam + hill + batch
+  reporting
+- measured batch output now records real fact-driven boosts:
+  `switch_if_convert`, `tail_call_reorder`, and `temp_elimination`
+- the current blocker is no longer shape extraction; it is generator
+  applicability on boosted call-shape targets
+- `tail_call_reorder` applicability has been widened for terminal cleanup
+  wrappers (`if (ptr) Call(ptr);` / `if (ptr) { Call(ptr); }`), which now
+  generates real variants on destructor-style candidates
 
 That changes the next RE priorities:
 
-1. extend the IL corpus and PPC->IL lift for switch/control-flow shapes
-2. measure whether the first IL-derived facts improve proposal routing
-3. keep COLOR RE selective and demand-driven for unanswered allocator questions
+1. improve `tail_call_reorder` / call-shape applicability on real targets
+2. extend the IL corpus and PPC->IL lift for the next missing call families
+3. measure the current default-on path on a larger hard slice
+4. keep COLOR RE selective and demand-driven for unanswered allocator questions
 
 ## Target Binary
 
@@ -230,15 +241,24 @@ msvc-src/
 - Ghidra instance loaded with DC3 binary (need separate project for c2.dll x86 analysis)
 
 ### Immediate Next Steps
-1. **Extend the IL fixture corpus**: capture switch and call/return fixtures
-   under `msvc-src/analysis/il-fixtures/`.
-2. **Extend the constrained PPC->IL lifter**: add switch dispatch shape and
-   control-flow lowering beyond the current rlwinm + bool-materialization coverage.
-3. **Measure the first permuter-facing facts**: `byte_fusion` and
-   `bool_materialization` now reach `TargetFacts`; next verify that they change
-   proposal ordering on real targets.
-4. **Disassemble COLOR helpers selectively**: only for allocator questions still
-   unanswered by the differential harness.
+1. **Fix tail-call applicability on boosted targets**:
+   - collect 10-20 `tail_call_reorder` candidates that emit `call_shape`
+   - classify which generated variants are actually sensible vs noisy
+   - keep expanding the pattern only for real missed tail-position families
+2. **Measure the current default-on path on a larger slice**:
+   - run `scan_and_permute.py --json` on 20-30 call/switch/temp targets
+   - record `codegen_shape`, `fact_boost_counts`, `fact_suppress_counts`
+   - compare proposal ordering and wins before vs after shape-fact routing
+3. **Lift the next IL families**:
+   - virtual dispatch detail: slot load, `bctrl` vs `bctr`, tail vs non-tail
+   - argument materialization: temp extraction vs inline arg formation
+   - inline wrappers: trivial forwarding calls, cached-return wrappers
+   - switch edge cases: sparse tables, default hoists, mixed fallthrough
+4. **Add fixtures before adding new routing**:
+   every new IL-derived fact should land with a captured `_CL_*` bundle and a
+   PPC comparison fixture.
+5. **Disassemble COLOR helpers selectively**:
+   only for allocator questions still unanswered by the differential harness.
 
 ## References
 

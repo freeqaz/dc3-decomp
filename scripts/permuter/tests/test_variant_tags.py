@@ -53,6 +53,13 @@ class _TagStageBPattern:
         )
 
 
+class _BlockedStageBPattern(_TagStageBPattern):
+    name = "test_tag_stage_b_blocked"
+
+    def relevant(self, diagnosis):
+        return False
+
+
 class _BudgetPattern:
     def __init__(
         self,
@@ -77,6 +84,11 @@ class _BudgetPattern:
             source=ctx.file_source + f"// {self.name}\n".encode(),
             tags=frozenset({self._tag}),
         )
+
+
+class _ZeroPriorityPattern(_BudgetPattern):
+    def priority(self, diagnosis):
+        return 0.0
 
 
 class _ContextPattern(_BudgetPattern):
@@ -308,6 +320,30 @@ void test_func() {
 
     assert len(variants) == 1
     assert variants[0].tags == frozenset({"tag_a", "tag_b"})
+
+
+def test_compose_variants_allows_boosted_second_stage():
+    ctx = make_context(
+        """\
+void test_func() {
+    int value = 0;
+}
+""",
+        "test_func",
+        diag_with_branch_ops(),
+    )
+
+    variants = list(compose_variants(
+        ctx,
+        _TagStageAPattern(),
+        _BlockedStageBPattern(),
+        max_per_stage=1,
+        max_total=1,
+        round_hints=RoundHints(atlas_boost_patterns={"test_tag_stage_b_blocked"}),
+    ))
+
+    assert len(variants) == 1
+    assert variants[0].pattern_name == "compose:test_tag_stage_a+test_tag_stage_b_blocked"
 
 
 def test_round_hints_record_tag_history_from_winner():
@@ -557,6 +593,23 @@ void test_func() {
 
     assert variants
     assert variants[0].pattern_name == "pat_hot"
+
+
+def test_allocate_budgets_boosted_pattern_overrides_zero_priority():
+    hints = RoundHints(atlas_boost_patterns={"pat_forced"})
+    patterns = [
+        _ZeroPriorityPattern("pat_forced", "tag_forced"),
+        _BudgetPattern("pat_normal", "tag_normal"),
+    ]
+
+    budgets = allocate_budgets(
+        patterns,
+        total_budget=12,
+        diagnosis=diag_with_branch_ops(),
+        round_hints=hints,
+    )
+
+    assert budgets["pat_forced"] > 0
 
 
 def test_allocate_budgets_prefers_conservative_pattern_when_equal():

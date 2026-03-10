@@ -49,6 +49,7 @@ public:
     // UIListProvider
     virtual int NumData() const { return mNumData; }
     virtual void AdjustTrans(Transform &, const UIListElementDrawState &) {}
+    virtual void AdjustTransSelected(Transform &) {}
     // RndDrawable
     virtual float GetDistanceToPlane(const Plane &, Vector3 &);
     virtual void DrawShowing();

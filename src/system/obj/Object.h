@@ -231,6 +231,7 @@ private:
     struct Node : public ObjRefConcrete<T1, T2> {
         Node(ObjRefOwner *owner) : ObjRefConcrete<T1>(nullptr), mOwner(owner) {}
         Node(const Node &n);
+        void operator=(const Node &o) { CopyRef(o); mOwner = o.mOwner; }
         virtual ~Node() {}
         virtual Hmx::Object *RefOwner() const;
         virtual void Replace(Hmx::Object *obj) {
@@ -282,6 +283,7 @@ public:
         Node *operator->() const { return &(*it); }
 
         iterator operator+(int idx) const { return iterator(it + idx); }
+        int operator-(const iterator &other) const { return it - other.it; }
 
         iterator operator++() {
             ++it;

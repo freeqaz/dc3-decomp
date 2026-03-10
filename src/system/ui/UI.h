@@ -56,7 +56,7 @@ public:
     void UseJoypad(bool, bool);
     bool OverloadHorizontalNav(JoypadAction, JoypadButton, bool) const;
     bool IsGameScreenActive();
-    bool DefaultAllowEditText() const { return mDefaultAllowEditText; }
+    bool DefaultAllowEditText() const;
     bool DisableScreenBlacklight() const { return mDisableScreenBlacklight; }
 
 private:

@@ -644,6 +644,10 @@ def _climb_one(
             "ghidra_stats": result.ghidra_stats,
             "preflight": preflight,
             "validation_tier": result.validation_tier,
+            "shape_facts_enabled": result.shape_facts_enabled,
+            "codegen_shapes": list(result.codegen_shapes),
+            "fact_boost_patterns": list(result.fact_boost_patterns),
+            "fact_suppress_patterns": list(result.fact_suppress_patterns),
         }
     except Exception as e:
         print(f"  ERROR: {e}", file=sys.stderr)
@@ -718,6 +722,17 @@ def _accumulate_result(stats: dict, result: dict):
     ghidra_run = result.get("ghidra_stats")
     if ghidra_batch and ghidra_run:
         ghidra_batch.accumulate(ghidra_run, result["delta"])
+
+    for shape in result.get("codegen_shapes", []):
+        stats["shape_counts"][shape] = stats["shape_counts"].get(shape, 0) + 1
+    for pattern in result.get("fact_boost_patterns", []):
+        stats["fact_boost_counts"][pattern] = (
+            stats["fact_boost_counts"].get(pattern, 0) + 1
+        )
+    for pattern in result.get("fact_suppress_patterns", []):
+        stats["fact_suppress_counts"][pattern] = (
+            stats["fact_suppress_counts"].get(pattern, 0) + 1
+        )
 
 
 _IMPROVEMENT_SCHEMA = """
@@ -1010,6 +1025,9 @@ def main():
         "improvements": [],
         "pattern_wins": {},  # pattern_name -> {wins, delta, perfects}
         "ghidra_batch": ghidra_batch,
+        "shape_counts": {},
+        "fact_boost_counts": {},
+        "fact_suppress_counts": {},
     }
 
     if args.jobs <= 1:
@@ -1105,6 +1123,39 @@ def main():
         for line in ghidra_batch.summary_lines():
             print(line, file=sys.stderr)
 
+    shape_counts = stats["shape_counts"]
+    if shape_counts:
+        shape_summary = ", ".join(
+            f"{name}:{count}"
+            for name, count in sorted(
+                shape_counts.items(),
+                key=lambda item: (-item[1], item[0]),
+            )[:6]
+        )
+        print(f"  Codegen shapes: {shape_summary}", file=sys.stderr)
+
+    fact_boost_counts = stats["fact_boost_counts"]
+    if fact_boost_counts:
+        boost_summary = ", ".join(
+            f"{name}:{count}"
+            for name, count in sorted(
+                fact_boost_counts.items(),
+                key=lambda item: (-item[1], item[0]),
+            )[:6]
+        )
+        print(f"  Fact boosts: {boost_summary}", file=sys.stderr)
+
+    fact_suppress_counts = stats["fact_suppress_counts"]
+    if fact_suppress_counts:
+        suppress_summary = ", ".join(
+            f"{name}:{count}"
+            for name, count in sorted(
+                fact_suppress_counts.items(),
+                key=lambda item: (-item[1], item[0]),
+            )[:6]
+        )
+        print(f"  Fact suppress: {suppress_summary}", file=sys.stderr)
+
     if args.json_output:
         # Strip non-serializable fields before JSON output
         non_serializable = {"ghidra_batch", "pattern_wins"}
@@ -1163,6 +1214,21 @@ def main():
                 f"{imp['final']:.1f}% (+{imp['delta']:.1f}%){perfect_tag}",
                 file=sys.stderr,
             )
+            if imp.get("codegen_shapes"):
+                print(
+                    f"    Shapes: {', '.join(imp['codegen_shapes'])}",
+                    file=sys.stderr,
+                )
+            if imp.get("fact_boost_patterns"):
+                print(
+                    f"    Boosts: {', '.join(imp['fact_boost_patterns'])}",
+                    file=sys.stderr,
+                )
+            if imp.get("fact_suppress_patterns"):
+                print(
+                    f"    Suppress: {', '.join(imp['fact_suppress_patterns'])}",
+                    file=sys.stderr,
+                )
             winning_rounds = imp.get("winning_rounds", [])
             if winning_rounds:
                 for wr in winning_rounds:

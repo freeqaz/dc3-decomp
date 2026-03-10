@@ -5,6 +5,28 @@
 #include "ui/UILabel.h"
 #include "ui/UIListSlot.h"
 #include "utl/Symbol.h"
+#ifdef HX_NATIVE
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#endif
+
+#ifdef HX_NATIVE
+namespace {
+bool DebugChooseModeLabel(const UILabel *label) {
+    static int enabled = -1;
+    if (enabled == -1) {
+        const char *env = getenv("MILO_DEBUG_CHOOSE_MODE");
+        enabled = (env && env[0] && strcmp(env, "0") != 0) ? 1 : 0;
+    }
+    if (!enabled || !label) {
+        return false;
+    }
+    const char *path = PathName(label);
+    return path && strstr(path, "choose_mode");
+}
+}
+#endif
 
 #pragma region UIListLabel
 
@@ -96,6 +118,24 @@ void UIListLabelElement::Draw(const Transform &tf, float f, UIColor *col, Box *b
         box->GrowToContain(localbox.mMin, false);
         box->GrowToContain(localbox.mMax, false);
     } else {
+#ifdef HX_NATIVE
+        static int sChooseModeLabelDiag = 0;
+        if (DebugChooseModeLabel(mLabel) && sChooseModeLabelDiag < 80) {
+            printf(
+                "DC3 UIListLabelElement::Draw label=%s token=%s alpha=%.3f color=%s styles=%u bounds=(%.2f,%.2f,%.2f,%.2f)\n",
+                PathName(mLabel),
+                mLabel->TextToken().Str(),
+                f,
+                col ? PathName(col) : "<null>",
+                mLabel->NumStyles(),
+                mLabel->mBoundsLeft,
+                mLabel->mBoundsTop,
+                mLabel->mBoundsRight,
+                mLabel->mBoundsBottom
+            );
+            sChooseModeLabelDiag++;
+        }
+#endif
         float *savedAlphas = (float *)_alloca(mLabel->NumStyles() * sizeof(float));
         for (unsigned int i = 0; i < mLabel->NumStyles(); i++) {
             savedAlphas[i] = mLabel->Style(i).GetAlpha();

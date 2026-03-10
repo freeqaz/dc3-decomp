@@ -196,7 +196,8 @@ void InlineHelp::DrawShowing() {
     const Transform &parentXfm = mTemplateLabel->WorldXfm();
     Transform worldXfm;
     memcpy(&worldXfm, &parentXfm, sizeof(Transform));
-    MILO_ASSERT(mTemplateLabel, 0x117);
+    UILabel *t = mTemplateLabel;
+    MILO_ASSERT(t, 0x117);
 
     Transform offsetXfm;
     offsetXfm.m.Identity();

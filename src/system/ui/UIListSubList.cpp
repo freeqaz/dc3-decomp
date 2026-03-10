@@ -66,7 +66,7 @@ void UIListSubList::Draw(
 #ifdef HX_NATIVE
             if (!uilist) continue;
 #endif
-            UIComponent::State state = drawstate.mElements[i].mComponentState;
+            UIComponent::State state = (UIComponent::State)drawstate.mElements[i].mElementState;
             switch (state) {
             case UIComponent::kNormal:
                 uilist->SetState(UIComponent::kNormal);

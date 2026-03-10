@@ -354,6 +354,9 @@ def hill_climb(
     plateau_count = 0
     stopped_reason = "max_rounds"
     last_validation_tier = 0
+    result_codegen_shapes: list[str] = []
+    result_fact_boosts: list[str] = []
+    result_fact_suppresses: list[str] = []
 
     # Pattern stats tracking
     from .pattern_stats import RunStatsAccumulator
@@ -514,6 +517,15 @@ def hill_climb(
                         ghidra_ast=ctx.ghidra_ast,
                         rb3_source=ctx.rb3_source,
                     )
+                    if ctx.target_facts is not None:
+                        result_codegen_shapes = [
+                            fact.payload.get("shape_category")
+                            for fact in ctx.target_facts.by_kind("codegen_shape")
+                            if fact.payload.get("shape_category")
+                        ]
+                        boost, suppress = ctx.target_facts.pattern_recommendations()
+                        result_fact_boosts = sorted(boost)
+                        result_fact_suppresses = sorted(suppress)
                     if round_num == 1 and ctx.target_facts is not None:
                         for line in ctx.target_facts.summary_lines():
                             print(line, file=sys.stderr)
@@ -1075,6 +1087,9 @@ def hill_climb(
         winning_pattern=winning_pattern,
         ghidra_stats=ghidra_run_stats,
         validation_tier=last_validation_tier,
+        codegen_shapes=result_codegen_shapes,
+        fact_boost_patterns=result_fact_boosts,
+        fact_suppress_patterns=result_fact_suppresses,
     )
 
 
@@ -1201,6 +1216,12 @@ def _print_result(result: HillClimbResult):
     print(f"  Rounds:     {len(result.rounds)}", file=sys.stderr)
     print(f"  Stopped:    {result.stopped_reason}", file=sys.stderr)
     print(f"  Elapsed:    {result.elapsed_seconds:.1f}s", file=sys.stderr)
+    if result.codegen_shapes:
+        print(f"  Shapes:     {', '.join(result.codegen_shapes)}", file=sys.stderr)
+    if result.fact_boost_patterns:
+        print(f"  Boosts:     {', '.join(result.fact_boost_patterns)}", file=sys.stderr)
+    if result.fact_suppress_patterns:
+        print(f"  Suppress:   {', '.join(result.fact_suppress_patterns)}", file=sys.stderr)
 
     # Validation tier
     if result.validation_tier > 0:

@@ -3,6 +3,24 @@
 #include "rndobj/Trans.h"
 #include "ui/UIList.h"
 #include "ui/UIListSlot.h"
+#ifdef HX_NATIVE
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#endif
+
+#ifdef HX_NATIVE
+namespace {
+bool DebugChooseModeCustom() {
+    static int enabled = -1;
+    if (enabled == -1) {
+        const char *env = getenv("MILO_DEBUG_CHOOSE_MODE");
+        enabled = (env && env[0] && strcmp(env, "0") != 0) ? 1 : 0;
+    }
+    return enabled != 0;
+}
+}
+#endif
 
 #pragma region UIListCustom
 
@@ -82,6 +100,23 @@ void UIListCustomElement::Draw(const Transform &tf, float f, UIColor *col, Box *
             temp->SetAlphaColor(f, col);
         RndDrawable *d = dynamic_cast<RndDrawable *>(mPtr);
         MILO_ASSERT(d, 49);
+#ifdef HX_NATIVE
+        static int sChooseModeCustomDiag = 0;
+        if (DebugChooseModeCustom() && sChooseModeCustomDiag < 40) {
+            printf(
+                "DC3 UIListCustomElement::Draw obj=%s class=%s alphaIn=%.3f color=%s pos=(%.2f,%.2f,%.2f) temp=%d\n",
+                PathName(mPtr),
+                mPtr ? mPtr->ClassName().Str() : "<null>",
+                f,
+                col ? PathName(col) : "<null>",
+                tf.v.x,
+                tf.v.y,
+                tf.v.z,
+                temp != nullptr
+            );
+            sChooseModeCustomDiag++;
+        }
+#endif
         d->Draw();
     }
 }

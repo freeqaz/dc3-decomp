@@ -30,6 +30,7 @@
 #include "utl/Std.h"
 #include "utl/Symbol.h"
 #include "meta/MetaMusicManager.h"
+#include "rndobj/Cam.h"
 #include "rndobj/Rnd.h"
 #include "rndobj/Utl.h"
 #include "ui/Utl.h"
@@ -1723,6 +1724,19 @@ void HamNavList::LinkRibbonDrawState(
 }
 
 void HamNavList::DrawShowing() {
+#ifdef HX_NATIVE
+    extern int gDebugFrameID;
+    if (gDebugFrameID == 500) {
+        printf("DC3 HamNavList::DrawShowing '%s' ribbonRes=%p unkc8=%d listDirRes=%p provider=%p numShowing=%d widgets=%d\n",
+               Name(),
+               (void*)(HamListRibbon*)mListRibbonResource,
+               (int)unkc8,
+               (void*)(UIListDir*)mListDirResource,
+               (void*)mListState.Provider(),
+               mListState.NumShowing(),
+               (int)mListWidgets.size());
+    }
+#endif
     if (!mListRibbonResource || unkc8)
         return;
 #ifdef HX_NATIVE
@@ -1731,6 +1745,14 @@ void HamNavList::DrawShowing() {
 #endif
 
     mScrollSettleTime = TheTaskMgr.UISeconds();
+
+#ifdef HX_NATIVE
+    RndCam *savedCam = RndCam::Current();
+    RndCam *drawUiCam = TheUI ? TheUI->GetCam() : nullptr;
+    if (drawUiCam && drawUiCam != savedCam) {
+        drawUiCam->Select();
+    }
+#endif
 
     UIListWidgetDrawState widgetState;
     mListDirResource->BuildDrawState(
@@ -1753,6 +1775,23 @@ void HamNavList::DrawShowing() {
         mListRibbonResource->mScrollAnims.SetScrollFrame(mScrollBehavior.mScrollProgress);
         mListRibbonResource->SetDisengageFrame(mDisengageSmoother.Level());
         mListRibbonResource->mMode = mRibbonMode;
+#ifdef HX_NATIVE
+        if (gDebugFrameID == 500) {
+            const Transform &wxfm = WorldXfm();
+            printf("DC3 HamNavList WorldXfm pos=(%.1f,%.1f,%.1f) basisX=(%.3f,%.3f,%.3f) basisY=(%.3f,%.3f,%.3f) basisZ=(%.3f,%.3f,%.3f)\n",
+                   wxfm.v.x, wxfm.v.y, wxfm.v.z,
+                   wxfm.m.x.x, wxfm.m.x.y, wxfm.m.x.z,
+                   wxfm.m.y.x, wxfm.m.y.y, wxfm.m.y.z,
+                   wxfm.m.z.x, wxfm.m.z.y, wxfm.m.z.z);
+            RndCam *cam = RndCam::Current();
+            if (cam) {
+                const Transform &cxfm = cam->WorldXfm();
+                printf("DC3 Current cam='%s' pos=(%.1f,%.1f,%.1f) near=%.1f far=%.1f fov=%.3f\n",
+                       cam->Name(), cxfm.v.x, cxfm.v.y, cxfm.v.z,
+                       cam->NearPlane(), cam->FarPlane(), cam->YFov());
+            }
+        }
+#endif
         mListRibbonResource->Draw(WorldXfm(), mRibbonDrawStates, false, false);
     }
 
@@ -1763,6 +1802,12 @@ void HamNavList::DrawShowing() {
         mHeaderRibbonResource->mMode = mRibbonMode;
         mHeaderRibbonResource->Draw(WorldXfm(), mRibbonDrawStates, true, false);
     }
+
+#ifdef HX_NATIVE
+    if (drawUiCam && drawUiCam != RndCam::Current()) {
+        drawUiCam->Select();
+    }
+#endif
 
     for (unsigned int i = 0; i < mRibbonDrawStates.size(); i++) {
         HamListRibbonDrawState &state = mRibbonDrawStates[i];
@@ -1780,6 +1825,12 @@ void HamNavList::DrawShowing() {
     if (mScrollSpeedIndicatorResource) {
         mScrollSpeedIndicatorResource->Draw(WorldXfm());
     }
+
+#ifdef HX_NATIVE
+    if (savedCam && savedCam != RndCam::Current()) {
+        savedCam->Select();
+    }
+#endif
 }
 
 void WorldInstance::Load(BinStream &bs) {

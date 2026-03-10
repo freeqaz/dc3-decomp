@@ -46,10 +46,8 @@ void UIListHighlight::Draw(
 
     Transform xfm1 = mMesh->WorldXfm();
     Transform xfm2 = xfm1;
-    if (mParentList) {
-        // Call virtual method - based on assembly, takes Transform& parameter
-        // Method name unknown, trying methods that could modify a Transform
-        mParentList->Poll();
+    if (ParentList()) {
+        ParentList()->AdjustTransSelected(xfm2);
     }
     CalcXfm(tf, drawstate.mHighlightPos, xfm2);
     DrawMesh(mMesh, (UIListWidgetState)drawstate.mHighlightElementState, compstate, xfm2, box);

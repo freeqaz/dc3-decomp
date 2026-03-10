@@ -37,6 +37,8 @@ public:
     static bool HasPendingVoices();
     void SetSpeed(float);
 
+    int GetVoice();
+
     static int sHeadsetTarget;
     void Init(bool);
     void blockingStart(bool);
@@ -57,7 +59,7 @@ public:
     float mAttackRate; // 0x30 - ADSR attack rate
     float mReleaseRate; // 0x34 - ADSR release rate
     bool mXMA; // 0x38
-    int *unk3c; // 0x3c
+    FxSend360 *mFxSend; // 0x3c
     bool mReverbEnabled; // 0x40
     float mReverbMixDb; // 0x44 - reverb mix in dB
     bool unk48; // 0x48
@@ -66,8 +68,8 @@ public:
     int mTagState; // 0x50 - stream tag state
     bool unk54; // 0x54
     int mSourceVoice; // 0x58 - IXAudio2SourceVoice* (as int for vtable dispatch)
-    int unk5c; // 0x5c
-    int unk60; // 0x60 - PoolVoice
+    int mEnvelopeEffect; // 0x5c - XAPO envelope generator (PoolVoice.eg)
+    void *mEnvelopeParams; // 0x60 - envelope effect parameters (PoolVoice.egParams)
 
 private:
     void UpdateMix();

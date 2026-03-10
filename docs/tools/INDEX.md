@@ -72,11 +72,15 @@ python3 -m scripts.unicorn_runner.probe --unit DirLoader --batch --runs 8
 | Tool | Description | Doc |
 |------|-------------|-----|
 | [Compiler Trace](compiler-trace.md) | c2.dll instrumentation: asm diff, IL capture, perf profiling, GDB scripting | [compiler-trace.md](compiler-trace.md) |
+| c2 Decompile | Decompile c2.dll functions via pyghidra (register allocator, inliner, G3P2) | [../../msvc-src/docs/GHIDRA_SETUP.md](../../msvc-src/docs/GHIDRA_SETUP.md) |
 | IL Parser | Parse MSVC PPC intermediate language bytecode (opcodes, types, control flow) | [../../msvc-src/docs/IL_FORMAT.md](../../msvc-src/docs/IL_FORMAT.md) |
 | IL Annotate | Side-by-side IL operations + PPC assembly for any source file | — |
 | IL Diff | Compare IL between two source variants to find codegen differences | — |
 
 ```bash
+# Decompile c2.dll functions (register allocator, inliner, etc.)
+GHIDRA_INSTALL_DIR=/opt/ghidra python3 msvc-src/tools/c2_decompile.py decompile 0x10bc6487
+
 # Compare assembly for two source variants (detects register swaps)
 python -m tools.compiler_trace diff-asm test_a.cpp test_b.cpp
 

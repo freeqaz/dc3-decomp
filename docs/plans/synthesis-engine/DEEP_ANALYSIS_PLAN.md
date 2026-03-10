@@ -45,38 +45,51 @@ choices made during code generation.
    register naming within carry chains, neg/andc vs subfc selection — determined by
    surrounding context and pipeline timing
 
-## Track 1: COLOR Register Allocator Deep Dive
+## Track 1: COLOR Register Allocator Deep Dive — **DONE** (2026-03-10)
 
-The COLOR pass at `fcn.10bc6487` with 207 helper functions is responsible for
-1,218 AT_LIMIT functions (the single largest blocker). Understanding its internals
-lets us predict register assignments from source.
+Full results: [`msvc-src/docs/COLOR_RE.md`](../../msvc-src/docs/COLOR_RE.md)
 
-### 1.1 Priority Functions to Disassemble
+**Critical finding**: COLOR is a **linear scan** allocator, NOT graph coloring.
+No BSF threshold exists. The "~7 variable" observation was an artifact of
+volatile registers running out (9 volatile GPRs: r4-r12).
 
-From the COLOR helper list (`msvc-src/analysis/color_functions.txt`), ordered by
-size (larger = more logic to extract):
+### 1.1 Decompiled Functions
 
-| Function | Size | Likely Role |
-|----------|------|-------------|
-| `fcn.10bc9550` | 1752 bytes | Core graph coloring loop? (largest non-init) |
-| `fcn.10bc9fda` | 725 bytes | Spill cost calculator? |
-| `fcn.10bc69f1` | 691 bytes | Register assignment loop? |
-| `fcn.10bc7a42` | ~600 bytes | Interference graph builder? |
-| `fcn.10bc6487` | 131 bytes | Entry point (already analyzed: memset 1428 bytes, 261/357 regs) |
+| Address | Size | Actual Role |
+|---------|------|-------------|
+| `0x10bc6487` | 23 bytes | Entry: lock → dispatch → unlock |
+| `0x10bc62b6` | 465 bytes | Dispatcher: zeroes reg_state[357], selects alloc table, iterates IL nodes |
+| `0x10bc514a` | 842 bytes | Simple allocation: builds interference bitsets, tracks live ranges |
+| `0x10bc5494` | 1089 bytes | Complex allocation: same + cross-basic-block live ranges |
+| `0x10bc61bb` | 251 bytes | Register assignment: walks IL ops, assigns phys regs via lookup |
+| `0x10bc58d5` | 1891 bytes | Register selection: advancing-pointer scan of priority table |
+| `0x10bc4be9` | 220 bytes | Spill cost: distance-to-next-use (Belady variant) |
+| `0x10bc4eae` | 668 bytes | Spill handler: generates load/store, re-runs selection |
+| `0x10bc6038` | 387 bytes | Conflict resolver: coalesce or spill-and-reselect |
+| `0x10bc4b38` | 105 bytes | Register lookup: returns physical descriptor for virtual reg |
 
-### 1.2 What to Extract
+Source: `e:\bt\278379\vctools\compiler\be\p2\regasg.c`
 
-For each function, identify:
-- **Input data structures**: What does the register state buffer (1428 bytes) contain?
-  - Register file descriptor (261 GPR+FPR+CR or 357 with VMX)
-  - Interference graph adjacency matrix or edge list
-  - Live range intervals per virtual register
-  - Spill cost per virtual register
-- **Decision points**: Where does it choose between:
-  - Linear scan vs graph coloring (BSF threshold)
-  - Callee-saved vs caller-saved assignment
-  - Spill vs split vs rematerialize
-- **Output**: The physical register map (virtual -> physical)
+### 1.2 Key Findings
+
+**Register state buffer**: `DAT_10c3d730`, 1428 bytes (357 × 4). Index = physical register
+number. Value = 0 (free) or pointer to occupying virtual register.
+
+**Allocation order tables**: 6 GPR variants, 1 FPR, 1 VMX. All follow:
+1. Volatile first (r12→r4), then
+2. Callee-saved (r31→r13 or higher), then
+3. Volatile again (wrap), then
+4. Callee-saved again (wrap)
+
+**Selection algorithm**: Linear scan with advancing pointer into priority table.
+Position pointers (`DAT_10c6fe0c/08/10`) track where last allocation stopped.
+Next allocation continues from there. Creates the "first-declared = r31" pattern.
+
+**Spill cost**: Distance to next use (node count in IL linked list). Longest
+distance = cheapest to spill (Belady's algorithm variant).
+
+**No graph coloring**: No interference graph, no simplicial elimination, no
+coloring loop. Pure priority-table scan with interference bitset checks.
 
 ### 1.3 Methodology
 
@@ -286,42 +299,36 @@ msvc-src/results/
 └── summary.json              # cross-suite findings
 ```
 
-## Track 4: Inliner Analysis
+## Track 4: Inliner Analysis — **DONE** (2026-03-10)
 
-The inliner affects ALL other patterns indirectly — if a function is inlined,
-its body is subject to the caller's optimization context.
+Full results: [`msvc-src/docs/INLINER_RE.md`](../../msvc-src/docs/INLINER_RE.md)
 
-### 4.1 Find the Inliner
+### Key Functions Decompiled
 
-The inliner runs BEFORE the per-function optimization loop (it decides what gets
-inlined during IL load or function preparation). Look for:
-- References to the `INL:` diagnostic strings
-- `%s won't be inlined (too big)` string → follow xref to the decision function
-- `Inlining %s (%d instrs)` → the instruction count comparison
+| Address | Size | Role |
+|---------|------|------|
+| `0x10ba347b` | 109b | Top-level inliner entry |
+| `0x10ba32fc` | 383b | Inline dispatcher (sets flags, calls cost calculator) |
+| `0x10ba1eca` | 1368b | Cost calculator (walks IL, counts nodes) |
+| `0x10ba1c2d` | 597b | Inline executor (performs inlining) |
+| `0x10b32533` | 3b | Per-node weight (STUB = returns 0) |
+| `0x10ba1e82` | 27b | Linear flow: mark always-inline |
 
-### 4.2 Extract the Cost Model
+### Critical Finding: Threshold = 150 IL Nodes
 
-From diagnostic strings, we know the inliner uses:
-- **Instruction count** (`%d instrs`) — primary size metric
-- **Bad candidate flag** (`InlBadCandidate`) — explicit rejection
-- **Force inline** (`__forceinline`) — override
-- **Dangerous asm** — assembly block rejection
+The inliner uses a **simple node count** with threshold **0x96 (150)**:
+- Per-node weight function is a stub returning 0
+- Cost = exactly 1 per counted IL node (not all nodes count)
+- Reconciles with empirical ~30 tuples: each statement ≈ 5 IL nodes → 30 × 5 = 150
+- Budget is **per-function**, not per-TU
+- **Linear flow functions**: always inlined regardless of size (flag 0x900)
+- **`__forceinline`**: bypasses size check entirely (flag 0x2000)
+- **Inlined callee adjustment**: callee cost subtracted from caller's budget
 
-What we need to find:
-1. The threshold constant for "too big" (compare against `%d instrs`)
-2. How `__forceinline` overrides the threshold
-3. How call context affects the budget (caller size? nesting depth?)
-4. Whether the budget is per-function or per-TU
-
-### 4.3 Differential Test
-
-```cpp
-// Generate: inline int callee_N() { ... N statements ... return x; }
-// For N = 1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50
-// Compile with /FAcs, check if callee body appears in caller
-```
-
-Find the exact threshold where inlining stops.
+### Three Inline Types
+- `[normal inline]` — standard size-based inlining
+- `[vcall inline]` — devirtualization + inline
+- `[force inline]` — `__forceinline` keyword
 
 ## Track 5: IL Format Discovery
 

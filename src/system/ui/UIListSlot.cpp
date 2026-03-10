@@ -1,10 +1,38 @@
 #include "ui/UIListSlot.h"
 #include "macros.h"
+#include "math/Color.h"
 #include "obj/Object.h"
 #include "ui/UIList.h"
 #include "ui/UIListState.h"
 #include "ui/UIListWidget.h"
 #include "utl/Std.h"
+#ifdef HX_NATIVE
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#endif
+
+#ifdef HX_NATIVE
+namespace {
+bool DebugChooseModeSlot(const UIListProvider *provider) {
+    static int enabled = -1;
+    if (enabled == -1) {
+        const char *env = getenv("MILO_DEBUG_CHOOSE_MODE");
+        enabled = (env && env[0] && strcmp(env, "0") != 0) ? 1 : 0;
+    }
+    if (!enabled || !provider) {
+        return false;
+    }
+    const Hmx::Object *obj = dynamic_cast<const Hmx::Object *>(provider);
+    if (!obj) {
+        return false;
+    }
+    const char *path = PathName(obj);
+    return (path && strstr(path, "choose_mode"))
+        || strcmp(obj->ClassName().Str(), "ChooseModeProvider") == 0;
+}
+}
+#endif
 
 UIListSlot::UIListSlot() : mSlotDrawType(kUIListSlotDrawAlways), mNextElement(0) {}
 
@@ -120,6 +148,40 @@ void UIListSlot::Draw(
                         d10 *= DisabledAlphaScale();
                     prov->PreDraw(curdrawstate.mShowing, curdrawstate.mData, this);
                 }
+#ifdef HX_NATIVE
+                static int sChooseModeSlotDiag = 0;
+                if (DebugChooseModeSlot(prov) && sChooseModeSlotDiag < 80) {
+                    const Hmx::Object *providerObj = dynamic_cast<const Hmx::Object *>(prov);
+                    const Hmx::Color &overlay =
+                        *(const Hmx::Color *)&curdrawstate.mScaleX;
+                    float overlayAlpha = *(const float *)&curdrawstate.mData;
+                    printf(
+                        "DC3 UIListSlot::Draw provider=%s widget=%s/%s idx=%d showing=%d data=%d alpha=%.3f overlayAlpha=%.3f elemState=%d compState=%d pos=(%.2f,%.2f,%.2f) scale=(%.2f,%.2f,%.2f) overlay=(%.2f,%.2f,%.2f,%.2f) color=%s\n",
+                        providerObj ? PathName(providerObj) : "<null>",
+                        ClassName().Str(),
+                        Name(),
+                        i,
+                        curdrawstate.mShowing,
+                        curdrawstate.mData,
+                        d10,
+                        overlayAlpha,
+                        curdrawstate.mElementState,
+                        curdrawstate.mComponentState,
+                        curdrawstate.mPosX,
+                        curdrawstate.mPosY,
+                        curdrawstate.mPosZ,
+                        curdrawstate.mScaleX,
+                        curdrawstate.mScaleY,
+                        curdrawstate.mScaleZ,
+                        overlay.red,
+                        overlay.green,
+                        overlay.blue,
+                        overlay.alpha,
+                        uicolor ? PathName(uicolor) : "<null>"
+                    );
+                    sChooseModeSlotDiag++;
+                }
+#endif
                 tfa8 = tf78;
                 if (ParentList())
                     ParentList()->AdjustTrans(tfa8, curdrawstate);

@@ -25,6 +25,7 @@ Detection signals:
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from typing import Iterator
 
 from tree_sitter import Node
@@ -35,12 +36,20 @@ from ..cfg import build_cfg, get_terminal_blocks
 from ..control_flow import (
     is_bare_return_statement,
     noncomment_named_children,
-    trailing_run,
 )
 from ..editor import SourceEditor
 from ..m2c import extract_last_call_name as extract_m2c_last_call_name
 from ..statement_effects import StatementEffectAnalyzer
 from ..types import Diagnosis, FunctionContext, Variant
+
+
+@dataclass(frozen=True)
+class _TailCallUnit:
+    """A tail-position unit that can potentially be swapped."""
+
+    swap_node: Node
+    call_stmt: Node
+    condition_node: Node | None = None
 
 
 class TailCallReorderPattern(Pattern):
@@ -125,21 +134,12 @@ def _swap_trailing_calls(
     counter = start
     analyzer = StatementEffectAnalyzer(source)
 
-    # Find runs of consecutive call statements at the end
-    end = len(stmts)
-    call_run_start = end
-    for i in range(end - 1, -1, -1):
-        if _is_call_statement(stmts[i]):
-            call_run_start = i
-        else:
-            break
-
-    call_run = stmts[call_run_start:end]
-    if len(call_run) < 2:
+    unit_run = _trailing_call_units(stmts, source)
+    if len(unit_run) < 2:
         return
 
-    for variant in _variants_for_call_run(
-        call_run,
+    for variant in _variants_for_unit_run(
+        unit_run,
         source,
         analyzer,
         ghidra_last_call,
@@ -174,8 +174,8 @@ def _swap_calls_before_return(
         if not is_bare_return_statement(children[-1], source):
             continue
 
-        call_run = trailing_run(children[:-1], _is_call_statement)
-        if len(call_run) < 2:
+        unit_run = _trailing_call_units(children[:-1], source)
+        if len(unit_run) < 2:
             continue
 
         if node.id == ctx.body_node.id:
@@ -186,8 +186,8 @@ def _swap_calls_before_return(
                 "for tail-call{guided}"
             )
 
-        for variant in _variants_for_call_run(
-            call_run,
+        for variant in _variants_for_unit_run(
+            unit_run,
             source,
             analyzer,
             ghidra_last_call,
@@ -223,8 +223,8 @@ def _swap_calls_in_terminal_blocks(
         if len(children) < 2:
             continue
 
-        call_run = trailing_run(children, _is_call_statement)
-        if len(call_run) < 2:
+        unit_run = _trailing_call_units(children, source)
+        if len(unit_run) < 2:
             continue
 
         # Must be at a terminal position (end of if/else, end of function path)
@@ -238,8 +238,8 @@ def _swap_calls_in_terminal_blocks(
         ):
             continue
 
-        for variant in _variants_for_call_run(
-            call_run,
+        for variant in _variants_for_unit_run(
+            unit_run,
             source,
             analyzer,
             ghidra_last_call,
@@ -284,27 +284,19 @@ def _swap_calls_in_cfg_terminals(
             continue
 
         # Find trailing call run in this terminal block
-        call_run: list[Node] = []
-        for s in reversed(stmts):
-            if _is_call_statement(s):
-                call_run.insert(0, s)
-            elif is_bare_return_statement(s, source):
-                continue  # skip bare returns at the end
-            else:
-                break
-
-        if len(call_run) < 2:
+        unit_run = _trailing_call_units(stmts, source, allow_bare_return_suffix=True)
+        if len(unit_run) < 2:
             continue
 
         # Deduplicate against strategies 1-3 (same statement pair)
-        pair_id = (call_run[-2].id, call_run[-1].id)
+        pair_id = (unit_run[-2].swap_node.id, unit_run[-1].swap_node.id)
         if pair_id in seen_stmt_ids:
             continue
         seen_stmt_ids.add(pair_id[0])
         seen_stmt_ids.add(pair_id[1])
 
-        for variant in _variants_for_call_run(
-            call_run,
+        for variant in _variants_for_unit_run(
+            unit_run,
             source,
             analyzer,
             ghidra_last_call,
@@ -330,6 +322,80 @@ def _is_call_statement(node: Node) -> bool:
         if child.type == "call_expression":
             return True
     return False
+
+
+def _single_call_stmt_in_node(node: Node, source: bytes) -> Node | None:
+    """Extract a single call statement from a simple wrapper node."""
+    if _is_call_statement(node):
+        return node
+
+    if node.type != "compound_statement":
+        return None
+
+    children = noncomment_named_children(node)
+    if len(children) != 1:
+        return None
+    child = children[0]
+    if is_bare_return_statement(child, source):
+        return None
+    if _is_call_statement(child):
+        return child
+    return None
+
+
+def _extract_tail_call_unit(node: Node, source: bytes) -> _TailCallUnit | None:
+    """Extract a reorderable tail-position call unit from a statement node."""
+    direct = _single_call_stmt_in_node(node, source)
+    if direct is not None:
+        return _TailCallUnit(swap_node=node, call_stmt=direct)
+
+    if node.type != "if_statement":
+        return None
+
+    if node.child_by_field_name("alternative") is not None:
+        return None
+
+    consequence = node.child_by_field_name("consequence")
+    condition = node.child_by_field_name("condition")
+    if consequence is None or condition is None:
+        return None
+
+    # Only lift simple null/flag guards with a single call and no callful condition.
+    if any(child.type == "call_expression" for child in walk(condition)):
+        return None
+
+    guarded = _single_call_stmt_in_node(consequence, source)
+    if guarded is None:
+        return None
+
+    return _TailCallUnit(
+        swap_node=node,
+        call_stmt=guarded,
+        condition_node=condition,
+    )
+
+
+def _trailing_call_units(
+    stmts: list[Node],
+    source: bytes,
+    allow_bare_return_suffix: bool = False,
+) -> list[_TailCallUnit]:
+    """Collect trailing reorderable call units from a statement list."""
+    run: list[_TailCallUnit] = []
+    started = False
+
+    for stmt in reversed(stmts):
+        if allow_bare_return_suffix and not started and is_bare_return_statement(stmt, source):
+            continue
+
+        unit = _extract_tail_call_unit(stmt, source)
+        if unit is None:
+            break
+
+        started = True
+        run.insert(0, unit)
+
+    return run
 def _get_call_name(stmt: Node, source: bytes) -> str | None:
     """Extract the function name from a call statement."""
     for child in walk(stmt):
@@ -348,8 +414,8 @@ def _get_call_name(stmt: Node, source: bytes) -> str | None:
 
 
 def _should_try_swap(
-    a: Node,
-    b: Node,
+    a: _TailCallUnit,
+    b: _TailCallUnit,
     source: bytes,
     ghidra_last_call: str | None,
 ) -> bool:
@@ -357,8 +423,8 @@ def _should_try_swap(
     if ghidra_last_call is None:
         return True
 
-    a_name = _get_call_name(a, source)
-    b_name = _get_call_name(b, source)
+    a_name = _get_call_name(a.call_stmt, source)
+    b_name = _get_call_name(b.call_stmt, source)
     if b_name == ghidra_last_call:
         return False
     if a_name == ghidra_last_call:
@@ -366,8 +432,8 @@ def _should_try_swap(
     return a_name is None or b_name is None
 
 
-def _variants_for_call_run(
-    call_run: list[Node],
+def _variants_for_unit_run(
+    unit_run: list[_TailCallUnit],
     source: bytes,
     analyzer: StatementEffectAnalyzer,
     ghidra_last_call: str | None,
@@ -375,30 +441,30 @@ def _variants_for_call_run(
     max_variants: int,
     description_template: str,
 ) -> Iterator[Variant]:
-    """Yield adjacent swaps from a trailing call run, prioritizing the tail pair."""
+    """Yield adjacent swaps from a trailing tail-unit run, prioritizing the tail pair."""
     counter = start
 
-    for i in range(len(call_run) - 1, 0, -1):
+    for i in range(len(unit_run) - 1, 0, -1):
         if counter - start >= max_variants:
             return
 
-        a = call_run[i - 1]
-        b = call_run[i]
-        if not _are_independent_calls(a, b, source, analyzer):
+        a = unit_run[i - 1]
+        b = unit_run[i]
+        if not _are_independent_units(a, b, source, analyzer):
             continue
         if not _should_try_swap(a, b, source, ghidra_last_call):
             continue
 
         ed = SourceEditor(source)
-        _swap_statement_ranges(ed, source, a, b)
+        _swap_statement_ranges(ed, source, a.swap_node, b.swap_node)
 
         try:
             new_source = ed.apply()
         except ValueError:
             continue
 
-        a_name = _get_call_name(a, source) or "?"
-        b_name = _get_call_name(b, source) or "?"
+        a_name = _get_call_name(a.call_stmt, source) or "?"
+        b_name = _get_call_name(b.call_stmt, source) or "?"
         guided = " (Ghidra-guided)" if ghidra_last_call else ""
         yield Variant(
             name=f"tailcall_{counter}",
@@ -438,6 +504,38 @@ def _are_independent_calls(
     # Check for pointer dereference dependency:
     # If a checks/uses a pointer that b dereferences (->), don't reorder
     if effects_a.reads & effects_b.dereferenced_identifiers:
+        return False
+
+    return True
+
+
+def _are_independent_units(
+    a: _TailCallUnit,
+    b: _TailCallUnit,
+    source: bytes,
+    analyzer: StatementEffectAnalyzer,
+) -> bool:
+    """Check if two tail-call units can be safely reordered."""
+    if not _are_independent_calls(a.call_stmt, b.call_stmt, source, analyzer):
+        return False
+
+    reads_a = set()
+    reads_b = set()
+    if a.condition_node is not None:
+        reads_a |= analyzer.analyze(a.condition_node).reads
+    if b.condition_node is not None:
+        reads_b |= analyzer.analyze(b.condition_node).reads
+
+    effects_a = analyzer.analyze(a.call_stmt)
+    effects_b = analyzer.analyze(b.call_stmt)
+
+    if reads_a & effects_b.writes:
+        return False
+    if reads_b & effects_a.writes:
+        return False
+    if reads_a & effects_b.dereferenced_identifiers:
+        return False
+    if reads_b & effects_a.dereferenced_identifiers:
         return False
 
     return True

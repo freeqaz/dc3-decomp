@@ -1,9 +1,29 @@
 #include "ui/UIListMesh.h"
 #include "obj/Object.h"
+#include "rndobj/Cam.h"
 #include "rndobj/Trans.h"
 #include "rndobj/Utl.h"
 #include "ui/UIListSlot.h"
+#include "ui/UI.h"
 #include "utl/Loader.h"
+#ifdef HX_NATIVE
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#endif
+
+#ifdef HX_NATIVE
+namespace {
+bool DebugChooseModeMesh() {
+    static int enabled = -1;
+    if (enabled == -1) {
+        const char *env = getenv("MILO_DEBUG_CHOOSE_MODE");
+        enabled = (env && env[0] && strcmp(env, "0") != 0) ? 1 : 0;
+    }
+    return enabled != 0;
+}
+}
+#endif
 
 #pragma region UIListMesh
 
@@ -94,6 +114,47 @@ UIListMeshElement::Draw(const Transform &tf, float f, UIColor *col, Box *box) {
         box->GrowToContain(localbox.mMax, false);
     } else if (mMat != nullptr) {
         float alpha = mMat->Alpha();
+#ifdef HX_NATIVE
+        static int sChooseModeMeshDiag = 0;
+        if (DebugChooseModeMesh() && sChooseModeMeshDiag < 80) {
+            RndCam *cam = RndCam::Current();
+            Vector2 screenPos(0.0f, 0.0f);
+            float depth = cam ? cam->WorldToScreen(tf.v, screenPos) : 0.0f;
+            RndCam *uiCam = TheUI ? TheUI->GetCam() : nullptr;
+            Vector2 uiScreenPos(0.0f, 0.0f);
+            float uiDepth = uiCam ? uiCam->WorldToScreen(tf.v, uiScreenPos) : 0.0f;
+            printf(
+                "DC3 UIListMeshElement::Draw mesh=%s slot=%s mat=%s alphaIn=%.3f matAlpha=%.3f color=%s pos=(%.2f,%.2f,%.2f) basisX=(%.2f,%.2f,%.2f) basisY=(%.2f,%.2f,%.2f) basisZ=(%.2f,%.2f,%.2f) cam=%s screen=(%.3f,%.3f) depth=%.3f uiCam=%s uiScreen=(%.3f,%.3f) uiDepth=%.3f\n",
+                PathName(mesh),
+                mListMesh ? mListMesh->MatchName() : "<null>",
+                PathName(mMat),
+                f,
+                alpha,
+                col ? PathName(col) : "<null>",
+                tf.v.x,
+                tf.v.y,
+                tf.v.z,
+                tf.m.x.x,
+                tf.m.x.y,
+                tf.m.x.z,
+                tf.m.y.x,
+                tf.m.y.y,
+                tf.m.y.z,
+                tf.m.z.x,
+                tf.m.z.y,
+                tf.m.z.z,
+                cam ? PathName(cam) : "<null>",
+                screenPos.x,
+                screenPos.y,
+                depth,
+                uiCam ? PathName(uiCam) : "<null>",
+                uiScreenPos.x,
+                uiScreenPos.y,
+                uiDepth
+            );
+            sChooseModeMeshDiag++;
+        }
+#endif
         mesh->SetMat(mMat);
         mMat->SetAlpha(f * alpha);
         if (col != nullptr) {

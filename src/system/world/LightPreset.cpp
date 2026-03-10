@@ -1335,48 +1335,36 @@ END_LOADS
 bool LightPreset::Replace(ObjRef *from, Hmx::Object *to) {
     ObjPtrVec<Spotlight, ObjectDir>::iterator it = mSpotlights.FindRef(from);
     if (it != mSpotlights.end()) {
-        mSpotlights.Set(it, dynamic_cast<Spotlight *>(to));
+        mSpotlights.Set(it, to ? dynamic_cast<Spotlight *>(to) : 0);
         if (!*it) {
-            int idx = 0;
-            for (ObjPtrVec<Spotlight, ObjectDir>::iterator i = mSpotlights.begin(); i != it; ++i)
-                idx++;
-            RemoveSpotlight(idx);
+            RemoveSpotlight(it - mSpotlights.begin());
         }
         CacheFrames();
         return true;
     }
     ObjPtrVec<RndEnviron, ObjectDir>::iterator it2 = mEnvironments.FindRef(from);
     if (it2 != mEnvironments.end()) {
-        mEnvironments.Set(it2, dynamic_cast<RndEnviron *>(to));
+        mEnvironments.Set(it2, to ? dynamic_cast<RndEnviron *>(to) : 0);
         if (!*it2) {
-            int idx = 0;
-            for (ObjPtrVec<RndEnviron, ObjectDir>::iterator i = mEnvironments.begin(); i != it2; ++i)
-                idx++;
-            RemoveEnvironment(idx);
+            RemoveEnvironment(it2 - mEnvironments.begin());
         }
         CacheFrames();
         return true;
     }
     ObjPtrVec<RndLight, ObjectDir>::iterator it3 = mLights.FindRef(from);
     if (it3 != mLights.end()) {
-        mLights.Set(it3, dynamic_cast<RndLight *>(to));
+        mLights.Set(it3, to ? dynamic_cast<RndLight *>(to) : 0);
         if (!*it3) {
-            int idx = 0;
-            for (ObjPtrVec<RndLight, ObjectDir>::iterator i = mLights.begin(); i != it3; ++i)
-                idx++;
-            RemoveLight(idx);
+            RemoveLight(it3 - mLights.begin());
         }
         CacheFrames();
         return true;
     }
     ObjPtrVec<SpotlightDrawer, ObjectDir>::iterator it4 = mSpotlightDrawers.FindRef(from);
     if (it4 != mSpotlightDrawers.end()) {
-        mSpotlightDrawers.Set(it4, dynamic_cast<SpotlightDrawer *>(to));
+        mSpotlightDrawers.Set(it4, to ? dynamic_cast<SpotlightDrawer *>(to) : 0);
         if (!*it4) {
-            int idx = 0;
-            for (ObjPtrVec<SpotlightDrawer, ObjectDir>::iterator i = mSpotlightDrawers.begin(); i != it4; ++i)
-                idx++;
-            RemoveSpotlightDrawer(idx);
+            RemoveSpotlightDrawer(it4 - mSpotlightDrawers.begin());
         }
         CacheFrames();
         return true;

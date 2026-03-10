@@ -374,6 +374,10 @@ class HillClimbResult:
     winning_pattern: Optional[str] = None
     ghidra_stats: Optional[object] = None  # GhidraRunStats or None
     validation_tier: int = 0  # Highest validation tier reached (0-6)
+    shape_facts_enabled: bool = True
+    codegen_shapes: list[str] = field(default_factory=list)
+    fact_boost_patterns: list[str] = field(default_factory=list)
+    fact_suppress_patterns: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -404,6 +408,19 @@ class RoundHints:
     # Atlas-derived pattern boost/suppress (from compiler_atlas lookups)
     atlas_boost_patterns: set[str] = field(default_factory=set)
     atlas_suppress_patterns: set[str] = field(default_factory=set)
+
+    def force_pattern(self, pattern_name: str) -> bool:
+        """Return True when guidance should override diagnosis gating."""
+        return (
+            pattern_name in self.atlas_boost_patterns and
+            pattern_name not in self.atlas_suppress_patterns
+        )
+
+    def priority_floor(self, pattern_name: str) -> float:
+        """Return a minimum search priority for guidance-boosted patterns."""
+        if self.force_pattern(pattern_name):
+            return 0.35
+        return 0.0
 
     def record_round(
         self,

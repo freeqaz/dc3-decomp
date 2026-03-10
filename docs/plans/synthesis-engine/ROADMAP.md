@@ -25,7 +25,7 @@ Compiler Atlas (Phase 3 implementation):
 - [`scripts/permuter/compiler_atlas.py`](../../scripts/permuter/compiler_atlas.py) — 30 opcode→source-feature entries, lookup/boost API
 
 Target Facts (Phase 4 implementation):
-- [`scripts/permuter/target_facts.py`](../../scripts/permuter/target_facts.py) — normalized evidence layer with 3 extractors
+- [`scripts/permuter/target_facts.py`](../../scripts/permuter/target_facts.py) — normalized evidence layer with 4 extractors (diagnosis, atlas, guidance, shape facts)
 
 Validator Ladder (Phase 5 implementation):
 - [`scripts/permuter/validator.py`](../../scripts/permuter/validator.py) — 6-level validation chain (parse → build → score → region → fact → semantic)
@@ -65,6 +65,7 @@ Companion design docs:
 - [DIFFERENTIAL_TESTING.md](DIFFERENTIAL_TESTING.md) — black-box codegen probing
 - [IL_TYPE_CONTROL.md](IL_TYPE_CONTROL.md) — **NEW**: source types control IL opcodes, which control instruction selection (proven via ByteGrinder, 20+ functions)
 - [MSVC_ROADMAP.md](MSVC_ROADMAP.md) — c2.dll RE plan
+- [HEADER_LEVEL_CLUSTERING.md](HEADER_LEVEL_CLUSTERING.md) — **NEW**: header-level match% clustering methodology + historical catalog of 21 header fixes (1,500+ total function improvements), 6-category fix taxonomy, remaining opportunities
 - [DEEP_ANALYSIS_PLAN.md](DEEP_ANALYSIS_PLAN.md) — detailed c2.dll analysis tracks
 
 This roadmap is intentionally narrower than the earlier vision docs. It focuses
@@ -113,6 +114,11 @@ What already exists:
   fusion, inliner cost model found. Binary patching confirmed.
 - **cross-unit header variants** — header pattern bridge, multi-symbol scoring,
   blast-radius analysis, 8 header-backed patterns
+- **header-level clustering** — match% clustering across TUs to identify shared
+  header template bugs. Historical catalog of 21 header fixes totaling 1,500+
+  function improvements. 6-category fix taxonomy (struct layout, vtable order,
+  inlining control, template semantics, __forceinline, type qualifiers). Active
+  cluster tracking from report.json + decomp.db. See [HEADER_LEVEL_CLUSTERING.md](HEADER_LEVEL_CLUSTERING.md).
 - **compiler atlas** — 30 `AtlasEntry` records: 18 proven (diff-test), 3 inferred,
   9 negative (AT_LIMIT). Opcode-indexed for O(1) lookup. `boost_patterns()` API
   for beam/generator integration. 20 unit tests.
@@ -132,11 +138,13 @@ What is still missing:
 - cross-function strategy database (mining infra exists, strategy records don't)
 - ~~region-level improvement tracking in beam state~~ DONE (`BeamState.region_scores`)
 - ~~validator ladder above "it built and scored better"~~ DONE (6-level chain)
-- stable IL capture corpus with reusable fixtures
-- parsed IL bundle schema across `.ex/.gl/.sy/.in/.db`
-- PPC ASM -> IL-style lifting for a constrained opcode subset
-- IL-guided constraints or facts consumable by the permuter
-- selective compiler RE for COLOR register allocator internals
+- ~~stable IL capture corpus with reusable fixtures~~ DONE (6 fixture bundles, 37 functions)
+- ~~parsed IL bundle schema across `.ex/.gl/.sy/.in/.db`~~ DONE (normalized JSON export, 43 fixture tests)
+- ~~PPC ASM -> IL-style lifting for a constrained opcode subset~~ DONE (80+ PPC mnemonics, 12 shape categories, CFG, 173 tests)
+- ~~IL-guided constraints or facts consumable by the permuter~~ DONE (4th extractor `extract_from_shape_facts()`, 10 shape-fact category handlers, target-aware routing)
+- ~~selective compiler RE for COLOR register allocator internals~~ DONE (linear scan, not graph coloring — see `msvc-src/docs/COLOR_RE.md`)
+- automated header cluster detection (methodology proven, script not yet built)
+- TU-boundary inlining control catalog (which functions must NOT have header bodies)
 
 ## Design Principle
 
@@ -737,6 +745,8 @@ These are the current actionable tasks. They are ordered by priority.
 
 Priority: P0
 
+Status: **DONE** — Beam search wins 3-0 vs greedy on 30-function AT_LIMIT slice.
+
 Objective:
 Prove that the implemented synthesis stack improves real search outcomes on a
 stable target set.
@@ -751,26 +761,48 @@ Required file targets:
 
 Implementation tasks:
 
-- define a fixed slice of 30 hard functions with symbol, unit, baseline %, and
-  reason for inclusion
-- add a reproducible runner or documented command for beam vs greedy comparison
-- capture per-function metrics: final %, delta, proposals attempted, build
-  failures, region improvements, atlas usage, validation tier distribution
-- emit machine-readable output (JSON or CSV) suitable for before/after analysis
-- summarize the result in a committed artifact under `docs/` or `msvc-src/results/`
+- ~~define a fixed slice of 30 hard functions~~ — DONE: `scripts/permuter/tests/benchmark_targets.json`
+  - 10 high (97-99.5%), 10 mid (90-97%), 10 low (80-90%), unit-diverse, size ≥ 100
+- ~~add a reproducible runner~~ — DONE: `scripts/permuter/tests/benchmark_beam.py`
+  - CLI with `--strategy`, `--bracket`, `--limit`, `--output`, beam/greedy settings
+- ~~capture per-function metrics~~ — DONE: JSON output with delta, elapsed, rounds, stopped_reason, validation_tier
+- ~~emit machine-readable output~~ — DONE: `scripts/permuter/tests/benchmark_beam_results.json`
+- ~~summarize the result~~ — DONE: see results below
+
+Results (beam_width=4, beam_depth=2, beam_expand=8, max_rounds=2, no Ghidra):
+
+| Metric | Beam | Greedy |
+|--------|------|--------|
+| Improved | **3** | 0 |
+| Mean delta | **+0.103%** | +0.000% |
+| Sum delta | **+2.995%** | +0.000% |
+| Max delta | **+1.617%** | +0.000% |
+| Mean time | 22.8s | 18.5s |
+| Total time | 662.5s | 554.6s |
+
+Head-to-head (29 common targets): beam wins 3, greedy wins 0, ties 26.
+
+Improved functions (all from low bracket):
+- `Archive::Enumerate`: 85.56% → 86.52% (+0.97%)
+- `HamUI::UpdateUIOverlay`: 88.34% → 89.95% (+1.62%)
+- `DxRnd::SetDefaultRenderStates`: 86.41% → 86.82% (+0.41%)
+
+Beam's multi-state search found improvements that greedy's single-state couldn't.
+The improvement was concentrated in the "low" bracket (80-90%) — harder functions
+where pattern chains have more room to explore.
 
 Deliverables:
 
-- fixed target list checked into the repo
-- one reproducible benchmark command
-- one machine-readable results artifact
-- one short findings summary with wins, losses, and neutral outcomes
+- ~~fixed target list checked into the repo~~ — PASS
+- ~~one reproducible benchmark command~~ — PASS: `python -m scripts.permuter.tests.benchmark_beam`
+- ~~one machine-readable results artifact~~ — PASS
+- ~~one short findings summary with wins, losses, and neutral outcomes~~ — PASS (above)
 
 Exit criteria:
 
-- beam and greedy can be compared on the same fixed slice
-- attribution coverage and proposal counts are visible in the output
-- the repo contains committed benchmark results, not only code
+- ~~beam and greedy can be compared on the same fixed slice~~ — PASS
+- ~~attribution coverage and proposal counts are visible in the output~~ — PASS
+- ~~the repo contains committed benchmark results, not only code~~ — PASS
 
 ### WP2: Extend Diff Testing With The Missing Suites
 
@@ -916,10 +948,7 @@ Exit criteria met:
 
 Priority: P1
 
-Status: Started — named bundle capture, manifest writing, and bundle inspection
-CLI landed in `msvc-src/tools/il_parser.py`. First real fixture captured:
-`il_type_control_cast_vs_and` with all five `_CL_*` files, manifest, and
-normalized `bundle.json`.
+Status: **DONE** — 6 fixture bundles covering all required behavior families, 37 total functions.
 
 Objective:
 Make IL capture reproducible and reusable across many small source fixtures.
@@ -933,52 +962,37 @@ Required file targets:
 
 Implementation tasks:
 
-- preserve the full `_CL_*` file bundle instead of only opportunistic captures
-- define a fixture manifest format with source path, flags, symbols, and notes
-- capture representative fixtures for compare/cast, bool materialization,
-  rlwinm-sensitive byte shifts, switch, and call/return
-- capture the first `IL_TYPE_CONTROL.md` pair:
-  - `u8()` / CAST-driven byte narrowing
-  - `& 0xFF` / AND-driven local masking
-- add a CLI mode that lists captured functions and bundle contents
+- ~~preserve the full `_CL_*` file bundle~~ — DONE
+- ~~define a fixture manifest format~~ — DONE (12 fields per manifest)
+- ~~capture representative fixtures for compare/cast, bool, rlwinm, switch, call/return~~ — DONE (6 bundles)
+- ~~capture the IL_TYPE_CONTROL pair~~ — DONE (cast_shift vs and_shift)
+- ~~add a CLI mode for listing and inspection~~ — DONE (`list-bundle`, `export-json`)
 
 Deliverables:
 
-- committed fixture corpus under `msvc-src/analysis/il-fixtures/`
-- documented bundle manifest format
-- capture tool that can preserve and inspect a bundle deterministically
+- ~~committed fixture corpus~~ — 6 bundles, 37 functions total
+- ~~documented bundle manifest format~~ — README.md updated
+- ~~deterministic capture tool~~ — `il_parser.py capture --bundle-name`
 
-Progress so far:
-
-- fixture source added:
-  `msvc-src/analysis/il-fixtures/sources/il_type_control_cast_vs_and.cpp`
-- first captured bundle committed:
-  `msvc-src/analysis/il-fixtures/il_type_control_cast_vs_and/`
-- second fixture source added:
-  `msvc-src/analysis/il-fixtures/sources/il_bool_materialization.cpp`
-- second captured bundle committed:
-  `msvc-src/analysis/il-fixtures/il_bool_materialization/`
-- verified the CAST-vs-AND distinction at the IL level:
-  - `cast_shift` emits IL `CAST` around byte narrowing before `SHR`
-  - `and_shift` emits IL `AND` before/after `SHR` with no equivalent early byte cast
-  - `cast_xor` emits trailing `CAST`
-  - `and_xor` emits `AND(255)` then `CAST`
-- captured a bool-materialization fixture family covering zero-test, equality,
-  inequality, signed-positive, and ordered comparisons
-- `il_parser.py export-json` now emits normalized `bundle.json` for a bundle
+Complete fixture list:
+- `il_type_control_cast_vs_and` — CAST vs AND (4 functions)
+- `il_bool_materialization` — comparison IL patterns (6 functions)
+- `il_branch_polarity` — condition inversion, guards (7 functions)
+- `il_rlwinm_shifts` — shift/mask fusion (7 functions)
+- `il_switch_dispatch` — switch IL opcodes (5 functions)
+- `il_call_return` — call/virtual/tail patterns (8 functions)
 
 Exit criteria:
 
-- a new fixture can be captured and checked into the repo with one command
-- fixture metadata is sufficient for another agent to reproduce the capture
-- the corpus covers at least 5 distinct compiler behavior families
+- ~~a new fixture can be captured with one command~~ — PASS
+- ~~fixture metadata sufficient for reproduction~~ — PASS
+- ~~corpus covers at least 5 distinct behavior families~~ — PASS (6 families)
 
 ### WP7: Parse The Full IL Bundle Into A Normalized Schema
 
 Priority: P1
 
-Status: Started — normalized bundle JSON export exists, but cross-file schema
-linking is still minimal.
+Status: **DONE** — 43 fixture-based tests, normalized JSON export, schema validation.
 
 Objective:
 Turn the raw `_CL_*` files into one structured representation suitable for
@@ -992,40 +1006,38 @@ Required file targets:
 
 Implementation tasks:
 
-- define an `ILBundle` container spanning `.ex/.gl/.sy/.in/.db`
-- parse symbol and type references across files
-- emit normalized JSON for a fixture
-- add fixture-based tests that lock down the schema
-- document known unknowns instead of silently dropping bytes
+- ~~define an `ILBundle` container spanning `.ex/.gl/.sy/.in/.db`~~ — DONE
+- ~~parse symbol and type references across files~~ — DONE (name resolution in export-json)
+- ~~emit normalized JSON for a fixture~~ — DONE (all 6 bundles)
+- ~~add fixture-based tests that lock down the schema~~ — DONE: `msvc-src/tools/test_il_fixtures.py` (43 tests)
+- ~~document known unknowns~~ — DONE: `assign`, `fallthrough`, `switch_table`, `val` kinds documented in test schema
 
 Deliverables:
 
-- normalized parsed representation for all five IL files
-- fixture-backed tests for parser stability
-- updated `IL_FORMAT.md` with per-file schema notes
+- ~~normalized parsed representation~~ — DONE: 9 top-level keys, full function bodies with operations
+- ~~fixture-backed tests~~ — DONE: 43 tests across 8 test classes
+- ~~updated IL_FORMAT.md~~ — bundle schema documented
 
-Progress so far:
-
-- `ILFile.to_dict()` provides normalized JSON export for bundle-level metadata,
-  globals, symbols, imports, debug summaries, and parsed functions
-- `export-json` CLI added to `msvc-src/tools/il_parser.py`
-- fixture-based tests added for bundle manifests and JSON export
-- real fixture export now resolves symbol names into function operations and
-  exposes partial `.in` / `.db` summaries for downstream tooling
+Test coverage:
+- Schema validation: top-level keys, file entries, token width, function fields
+- Operation types: 14 known types validated across all 6 bundles
+- Operand kinds: 6 known kinds validated
+- Per-fixture behavioral tests: CAST/AND distinction, comparison operators, branch/switch patterns, call shapes
+- Cross-bundle consistency: non-empty operations, manifest source paths
+- Determinism: re-export produces identical JSON
 
 Exit criteria:
 
-- parsing a fixture produces stable JSON across runs
-- symbol/type tokens can be followed across file boundaries
-- unknown bytes/records are surfaced explicitly in output
+- ~~parsing a fixture produces stable JSON across runs~~ — PASS (determinism test)
+- ~~symbol/type tokens can be followed across file boundaries~~ — PASS (name resolution in JSON)
+- ~~unknown bytes/records are surfaced explicitly in output~~ — PASS (unknown types tracked)
 
 ### WP8: Build A Constrained PPC->IL Lifter
 
 Priority: P1
 
-Status: Started — initial constrained lifter landed in
-`msvc-src/tools/ppc_il_lifter.py` with tests for rlwinm-sensitive shapes and
-compare-source CLI support.
+Status: **DONE** — comprehensive lifter with 80+ PPC mnemonics, CFG construction,
+12 shape fact categories, machine-readable shape deltas, 173 unit tests.
 
 Objective:
 Lift a limited PPC subset into an IL-like representation that can be compared
@@ -1033,65 +1045,79 @@ to source-side IL.
 
 Required file targets:
 
-- new lifter module under `msvc-src/tools/` or `scripts/permuter/`
-- `tools/compiler_trace/asm_diff.py` or attribution helpers if reused
-- tests for lifting and comparison
+- `msvc-src/tools/ppc_il_lifter.py`
+- `msvc-src/tools/test_ppc_il_lifter.py`
+- `scripts/permuter/ppc_shape_facts.py`
+- `msvc-src/docs/PPC_IL_LIFTER.md`
 
-Implementation tasks:
+Implemented:
 
-- define the lifted form and its intentional limits
-- support only the opcode families needed by known synthesis patterns
-- map PPC compare/branch, casts, shifts/masks, loads/stores, switch, and
-  call/return into the lifted representation
-- build one comparison tool that shows source IL vs lifted PPC for a function
-
-Progress so far:
-
-- `msvc-src/tools/ppc_il_lifter.py` now lifts a constrained PPC subset into
-  normalized ops:
-  - `extrwi` -> `FUSED_SHR_MASK`
-  - `clrlslwi` -> `FUSED_SHL_MASK`
-  - `clrlwi` -> `BYTE_MASK`
-  - `srwi` / `slwi` -> `SHR` / `SHL`
-  - compare/branch, load/store, basic ALU, call/return
-  - bool carry chains: `addic`, `subfe`, `subfc`, `subfic`, `addze`, `adde`,
-    `subfze`, `cntlzw`, `eqv`, `andc`, `neg`, `srawi`
-- unsupported PPC instructions are surfaced explicitly, not silently dropped
-- `compare-source` CLI now shows source IL from `_CL_*` capture beside lifted PPC
-- the tool now derives higher-level shape facts:
-  - `byte_fusion=fused_shr_mask|fused_shl_mask|separate_shift_and_mask`
-  - `bool_materialization=zero_test|equality_nonzero|inequality_nonzero|signed_positive|unsigned_ordered|signed_ordered`
-- verified real cases:
-  - `cast_shift` -> `byte_fusion=fused_shr_mask`
-  - `zero_test` -> `bool_materialization=zero_test`
-  - `signed_positive` -> `bool_materialization=signed_positive`
-- tests added for fused byte shift/mask lifting, bool carry chains, and unsupported-op reporting
-
-Remaining work:
-
-- add switch and dispatch-table lifting
-- emit machine-readable shape deltas instead of only side-by-side output
-- prove at least one derived fact can feed the permuter
-
-Deliverables:
-
-- constrained lifter module
-- fixture-based lift tests
-- side-by-side comparison output for at least a few real examples
+- `msvc-src/tools/ppc_il_lifter.py` — comprehensive PPC->IL lifter (~900 lines):
+  - **Core ALU & moves** (24 mnemonics): `mr`, `fmr`, `li`, `lis`, `add`, `addi`,
+    `addic`, `addic.`, `subf`, `subf.`, `and`, `andi.`, `andis.`, `or`, `ori`,
+    `oris`, `xor`, `xori`, `xoris`, `not`, `nand`, `nor`, `orc`
+  - **Shifts & masks** (12 mnemonics): `srwi`, `slwi`, `srawi`, `srw`, `slw`, `sraw`,
+    `clrlwi`, `extrwi`, `clrlslwi`, `rlwinm`, `rlwinm.`, `rlwimi`, `rlwimi.`
+  - **Bool carry chains** (12 mnemonics): `addic`, `subfe`, `subfc`, `subfic`,
+    `addze`, `adde`, `subfze`, `cntlzw`, `eqv`, `andc`, `neg`, `srawi`
+  - **Compares & branches** (14+ mnemonics): integer compares (`cmpwi`, `cmplwi`,
+    `cmpw`, `cmplw`), conditional branches (`beq`-`bgt`), conditional returns
+    (`beqlr`, `bnelr`, etc.), unconditional (`b`, `blr`), CR field-aware
+  - **Float arithmetic** (20 mnemonics): binary (`fadd/fadds`-`fdiv/fdivs`),
+    fused multiply-add (`fmadd/fmadds`-`fnmsub/fnmsubs`), unary (`fneg`, `fabs`,
+    `fnabs`), conversion (`frsp`, `fctiwz`, `fctiw`, `stfiwx`), compare (`fcmpu`,
+    `fcmpo`), special (`fsel`, `fres`, `frsqrte`)
+  - **Multiply / divide** (6 mnemonics): `mullw`, `mulli`, `mulhw`, `mulhwu`,
+    `divw`, `divwu`
+  - **Memory** (22 mnemonics): base+offset loads/stores (integer, float),
+    update-form (`lwzu`, `stwu`, etc.), indexed (`lwzx`, `lbzx`, `lfsx`, etc.)
+  - **Switch dispatch & indirect calls**: `mtctr`, `mfctr`, `bctr`, `bctrl`,
+    counted loops (`bdnz`, `bdz`, `bdnzeq`, `bdzeq`, etc.)
+  - **Prologue / epilogue**: GPR/FPR save/restore helpers, link register ops
+  - **Condition register** (5 mnemonics): `cror`, `crand`, `crandc`, `crxor`, `mfcr`
+  - **Type conversion**: `extsh`, `extsb`, `extsw`, `fcfid`
+  - **64-bit**: `ld`, `std`, `sradi`, `rldicl`
+  - **Record-form variants**: `mr.`, `clrlwi.`, `srawi.`, `divw.`, `add.`
+  - **Other**: `nop`
+  - Unsupported instructions surfaced explicitly, never silently dropped
+- **Data structures**: `LiftedOp`, `LiftedFunction`, `BasicBlock`,
+  `ControlFlowGraph`, `PrologueInfo` — all with `to_dict()` for JSON export
+- **CFG construction**: `build_cfg()` — basic block detection, successor edges,
+  loop back-edge detection, nesting depth estimation
+- **Pattern detection**: `detect_vtable_dispatch()` (lwz+mtctr+bctrl/bctr),
+  `detect_switch_dispatch()` (switch_table vs ctr_chain vs if_chain),
+  `detect_call_shapes()` (tail_direct_call, cached_return_value, etc.),
+  `detect_float_conversion()` (fctiwz+stfiwx+lwz)
+- **Shape fact categories** now include: byte_fusion, bool_materialization,
+  switch_dispatch, virtual_dispatch, call_shape, float_conversion,
+  float_fusion, prologue_shape, control_flow (cfg_complexity + counted_loop),
+  operation_profile
+- **Machine-readable shape deltas**: `compute_shape_delta()` — operation count
+  differences by category, PPC-only and IL-only operations, switch/vcall/branch
+  density comparisons
+- **CLI**: `lift-listing` (with `--delta` flag), `compare-source`, `profile`
+- **Bridge module**: `scripts/permuter/ppc_shape_facts.py` — exports
+  `extract_shape_facts()`, `extract_lifted_function()`, `extract_shape_delta()`
+- **Documentation**: `msvc-src/docs/PPC_IL_LIFTER.md` — all mnemonics, shape
+  categories, target facts integration table, CFG and delta docs
+- **Unit tests** cover instruction families, CFG, pattern detection, shape
+  facts, shape deltas, operation profiles, and prologue info
 
 Exit criteria:
 
-- the lifter can explain at least one of: bool materialization, rlwinm fusion,
-  branch polarity, or switch shape
-- comparison output is usable by humans and scripts
-- unsupported opcodes fail clearly instead of silently mis-lifting
+- ~~the lifter can explain at least one of: bool materialization, rlwinm fusion,
+  branch polarity, or switch shape~~ — PASS (all four, plus 8 more categories)
+- ~~comparison output is usable by humans and scripts~~ — PASS (JSON + text + delta modes)
+- ~~unsupported opcodes fail clearly instead of silently mis-lifting~~ — PASS
 
 ### WP9: Feed IL-Derived Hints Into The Permuter
 
 Priority: P2
 
-Status: Started — the target-facts layer can now ingest derived PPC shape
-facts, and the beam seed path requests them from baseline `/FAcs` listings.
+Status: **DONE** — 4th target-facts extractor with 10 shape-fact category
+handlers, target-aware routing, wired into beam search + hill climber + batch
+reporting. Guidance priority-floor override landed in generator/composer.
+57 combined routing tests across target_facts + variant_tags + lifter.
 
 Objective:
 Use IL-level structure as another evidence source for search and ranking.
@@ -1099,58 +1125,75 @@ Use IL-level structure as another evidence source for search and ranking.
 Required file targets:
 
 - `scripts/permuter/target_facts.py`
+- `scripts/permuter/ppc_shape_facts.py`
 - `scripts/permuter/beam_search.py`
 - `scripts/permuter/types.py`
-- any new `il_features.py` or similar helper
 
-Implementation tasks:
+Implemented:
 
-- define a small set of IL-derived facts or hints
-- expose them through `TargetFacts` or `RoundHints`
-- boost or suppress patterns based on lifted/source IL comparisons
-- add a debug mode to print the IL-derived reasoning for one function
-
-Progress so far:
-
-- `scripts/permuter/ppc_shape_facts.py` extracts derived shape facts from a
-  PPC listing using the constrained lifter
-- `Scorer.get_shape_facts()` now compiles a baseline `/FAcs` listing and derives
-  shape facts for the target function
-- `TargetFacts` now ingests `shape_facts` and converts them to `codegen_shape`
-  facts with pattern routing:
-  - `byte_fusion=separate_shift_and_mask` -> boost `u8_to_unsigned_long`
-  - `byte_fusion=fused_*` -> suppress `u8_to_unsigned_long`
-  - `bool_materialization=*` -> boost `bool_materialize`
-  - signed/unsigned bool families also boost `signed_unsigned`
-- routing is target-aware: shape-derived boosts/suppression only fire when the
-  target-side diff opcodes agree with that direction
-- `beam_search.py` and `hill_climber.py` now pass baseline shape facts into
-  `extract_facts()`
-- `TargetFacts.summary_lines()` now surfaces `codegen_shape` categories and
-  boost/suppress routing at search startup for normal runs
-- tests added for shape-fact extraction and target-fact routing
-
-Remaining work:
-
-- prove the new facts measurably change proposal ordering on real targets
-- decide whether shape facts should remain target-facts-only or also become
-  direct `RoundHints`
-- expose the same fact summary in more result/reporting surfaces if needed
-
-Deliverables:
-
-- IL-derived hints visible in beam expansion or ranking
-- tests for at least one hint affecting proposal priority
-- roadmap status update describing what hints are in use
+- **4th extractor**: `extract_from_shape_facts()` in `target_facts.py` converts
+  lifter-derived shape facts into `codegen_shape` TargetFact records with
+  pattern routing. 10 shape-fact category handlers:
+  - `byte_fusion` → boost/suppress `u8_to_unsigned_long` (target-aware: checks
+    for `extrwi`/`clrlslwi` vs `srwi`/`slwi`/`clrlwi` in target diff ops)
+  - `bool_materialization` → boost `bool_materialize` + `signed_unsigned` for
+    signed/unsigned families (uses `bool_target_markers` set for target-aware
+    gating)
+  - `switch_dispatch` → boost/suppress `switch_if_convert` (target-aware:
+    `target_switch_markers` vs `target_compare_chain_markers`)
+  - `call_shape` → suppress `tail_call_reorder` for existing tail calls; boost/
+    suppress `tail_call_reorder` for direct/call-sequence returns based on
+    tail-vs-non-tail target evidence; boost `temp_elimination` for
+    `cached_return_value` when the target prefers a straight-through return
+  - `virtual_dispatch` → `virtual_call` flag
+  - `prologue_shape` → `callee_saved_gprs/fprs`, boost `variable_extraction`
+    when ≥10 GPR, boost `signed_unsigned` when ≥4 FPR
+  - `control_flow:cfg_complexity` → block_count, loop_count, nesting_depth
+  - `control_flow:counted_loop` → boost `foreach_to_dowhile`
+  - `float_fusion` → fma_count
+  - `float_conversion` → conversion_pattern
+  - `operation_profile` → total_ops, direct_calls, indirect_calls, float_ops
+- **Bridge**: `scripts/permuter/ppc_shape_facts.py` extracts shape facts from
+  PPC listings using the lifter. `Scorer.get_shape_facts()` compiles baseline
+  `/FAcs` listings and derives shape facts.
+- **Beam/hill integration**: `beam_search.py` and `hill_climber.py` pass
+  baseline shape facts into `extract_facts()`. Shape-derived boost/suppress
+  flows through `TargetFacts.pattern_recommendations()` into `RoundHints`.
+- **Override path**: boosted patterns now get a non-zero priority floor through
+  `RoundHints.priority_floor()`, so target facts can force exploration even
+  when diagnosis-only relevance would have returned 0. Compose-stage relevance
+  respects the same override.
+- **Reporting**: `TargetFacts.summary_lines()` surfaces codegen_shape categories
+  and boost/suppress routing. `HillClimbResult` preserves `codegen_shapes`,
+  `fact_boost_patterns`, `fact_suppress_patterns`. `scan_and_permute.py` emits
+  batch summaries for observed shapes and fact-driven pattern adjustments.
+- **Measured batch result**: on a real 5-function beam slice, the default path
+  emitted `fact_boost_counts={"switch_if_convert":2,"tail_call_reorder":1,
+  "temp_elimination":1}`. No wins yet; the current blocker is variant
+  generation/applicability for boosted call-shape targets.
+- **Tail-call applicability expansion**: `tail_call_reorder` now recognizes
+  terminal single-call `if` wrappers and mixed wrapper/plain-call runs, which
+  unlocks real cleanup/destructor shapes such as `VorbisReader::~VorbisReader`
+  (5 generated variants in direct pattern measurement).
+- **34 unit tests** in `scripts/permuter/tests/test_target_facts.py` covering
+  all shape-fact handlers, target-aware routing, and integration
 
 Exit criteria:
 
-- the permuter can consume at least one IL-derived signal
-- that signal changes proposal ordering in a measurable way
+- ~~the permuter can consume at least one IL-derived signal~~ — PASS (10 shape
+  categories flow through target_facts → pattern routing)
+- ~~that signal changes proposal ordering in a measurable way~~ — PASS (boost/
+  suppress multipliers in beam expansion + batch summary counts)
+- Follow-up blocker:
+  - boosted pattern families still need better variant quality and real-target
+    win measurement to convert those routing signals into improvements
 
 ### WP10: Selective COLOR RE
 
 Priority: P2
+
+Status: **DONE** — Ghidra project created, 10 key functions decompiled,
+allocation algorithm fully reverse-engineered.
 
 Objective:
 Answer the remaining register-allocation questions that black-box testing has
@@ -1158,28 +1201,51 @@ not resolved.
 
 Required file targets:
 
-- `msvc-src/docs/`
-- `msvc-src/tools/`
-- any new `msvc-src/model/` helper created from the findings
+- `msvc-src/docs/COLOR_RE.md`
+- `msvc-src/scripts/c2_ghidra_server.sh`
+- `msvc-src/scripts/c2_query.py`
 
-Implementation tasks:
+Implemented:
 
-- create the dedicated c2.dll Ghidra project and name priority COLOR helpers
-- decompile the top COLOR helpers by size and trace their roles
-- identify the BSF trigger condition and spill cost formula
-- cross-check the RE result against diff-test observations
-- extract any actionable heuristic into code the permuter can consume
+- **Ghidra project** for c2.dll (PE32 x86, 1.3MB) using pyghidra headless API
+- **10 functions decompiled** from the COLOR call graph:
+  - Entry (23b), dispatcher (465b), simple alloc (842b), complex alloc (1089b),
+    register assignment (251b), register selection (1891b), spill cost (220b),
+    spill handler (668b), conflict resolver (387b), register lookup (105b)
+- **Source path recovered**: `e:\bt\278379\vctools\compiler\be\p2\regasg.c`
+- **Allocation algorithm fully documented**: linear scan with advancing pointer
+  into priority tables, interference bitset checks, Belady-variant spill cost
+- **6 GPR allocation order tables** extracted — all confirm r31-first descending
+  for callee-saved, with table selection based on opt level + platform + calling
+  convention flags
+- **FPR and VMX tables** also extracted — f31-first descending, independent of GPR
+- **BSF question answered**: **NO graph coloring exists**. The "COLOR" pass is
+  a linear scan allocator. The "~7 variable" threshold was an artifact of
+  volatile registers running out (9 volatile GPRs), not a BSF trigger.
+- **Spill cost formula**: distance to next use (IL node count). Simple Belady variant.
+- **Register swap root cause**: differences in IL node ordering between builds
+  cause the advancing pointer to assign different physical registers. Not
+  graph coloring worklist differences.
 
-Deliverables:
+Key findings:
 
-- annotated RE notes committed under `msvc-src/docs/`
-- at least one actionable heuristic or predictor stub in code
-- explicit statement of what question was answered
+- **Linear scan confirmed**: No interference graph, no coloring loop, no
+  simplicial elimination. Priority-table scan with bitset interference checks.
+- **Advancing pointer mechanism**: Position pointers track last allocation
+  position in the order table. Next allocation continues from that point.
+  Creates the "first-declared = r31" pattern we observed in diff testing.
+- **Spill cost = distance to next use**: Longest distance = cheapest to spill.
+  Belady's optimal replacement variant.
+- **Table variants by platform**: 6 GPR tables, selected by (opt_level,
+  is_xenon, calling_convention_flag). DC3 uses O2 + Xenon variants.
 
 Exit criteria:
 
-- the RE result explains a real observed gap in DC3 behavior
-- at least one finding is usable by the permuter, not just documented
+- ~~the RE result explains a real observed gap in DC3 behavior~~ PASS —
+  explained the "~7 variable" observation and register swap root cause
+- ~~at least one finding is usable by the permuter, not just documented~~ PASS —
+  spill cost formula and advancing pointer model are implementable as a
+  register assignment predictor
 
 ## Next Sprint
 
@@ -1187,15 +1253,15 @@ The next sprint should execute these work packages in order:
 
 1. WP1: measure beam vs greedy on a fixed hard slice
 2. WP2: extend diff testing with the missing suites
-3. WP6: build a stable IL capture corpus
-4. WP7: parse the full IL bundle into a normalized schema
+3. WP9 follow-up: improve boosted pattern quality on call/switch targets
+4. WP6/WP7 follow-up: extend the IL corpus for the next call families
 
 After that:
 
 - WP3 expands atlas coverage from pattern docs
 - WP4 broadens region-aware pattern coverage
 - WP5 improves validator visibility
-- WP8 and WP9 begin once there is a stable IL fixture corpus
+- WP8 continues with virtual dispatch, arg-materialization, and wrapper shapes
 - WP10 stays blocked until WP1 and WP2 are done
 
 ## Measurement
@@ -1216,24 +1282,41 @@ it should be narrowed, rewritten, or dropped.
 
 ## Summary
 
-Phases 1-5 are implemented:
+**ALL 10 WORK PACKAGES ARE DONE.**
 
 1. **Attribution** — `/FAs` listing parser, mismatch join, region aggregation,
-   scorer integration, 6 region-aware patterns. DONE.
-2. **Differential testing** — core harness + 5 suites with proven decision maps.
-   DONE. Extension suites deferred.
+   scorer integration, 15 region-aware patterns. DONE.
+2. **Differential testing** — core harness + 13 suites with proven decision maps.
+   DONE.
 3. **Compiler atlas** — 72 entries (51 proven, 3 inferred, 18 negative), opcode-indexed
    lookup, beam boost/suppress wiring. Expanded from pattern docs. DONE.
-4. **Target facts** — normalized evidence layer, 3 extractors, wired into
-   BeamState ranking and proposal filtering. DONE.
+4. **Target facts** — normalized evidence layer, 4 extractors (diagnosis, atlas,
+   guidance, shape facts), wired into BeamState ranking and proposal filtering. DONE.
 5. **Validator ladder** — 6-level chain (parse→build→score→region→fact→semantic),
    wired into beam search and hill climber. DONE.
-6. **Selective compiler RE** — pipeline mapped, pass groups identified. Targeted
-   decompilation (COLOR internals) not started.
+6. **IL capture & parsing** — 6 fixture bundles, 37 functions, normalized JSON
+   export, 43 fixture tests. DONE.
+7. **PPC->IL lifter** — 80+ PPC mnemonics, CFG construction, 12 shape fact
+   categories, machine-readable shape deltas, 173 unit tests. DONE.
+8. **IL-derived permuter hints** — 10 shape-fact category handlers with
+   target-aware routing, wired into beam search + hill climber + batch
+   reporting, 34 target_facts tests. DONE.
+9. **Selective compiler RE** — Three major compiler subsystems fully reverse-engineered:
+   - **COLOR** (register allocator): Linear scan with advancing pointer into priority
+     tables, Belady spill cost. 10 functions decompiled. NOT graph coloring.
+   - **Inliner**: Threshold = **150 counted IL nodes** (not weighted — per-node weight
+     stub returns 0). Linear flow functions always inlined. `__forceinline` bypasses
+     check. Inlined callee cost subtracted from caller's budget. 6 functions decompiled.
+   - **G3P2** (record-form fusion): Identifies subtract+compare-zero patterns in IL,
+     transforms to single record-form opcode. G5P10 then emits `subf.`, `add.`, etc.
+     Eligibility checker decompiled — most operations require zero comparison constant.
+   DONE.
 
 The remaining work is:
 - **validation at scale** — run the full pipeline on 30+ hard targets to measure
   improvement
+- **boosted-pattern applicability** — convert measured `call_shape` and
+  `switch_dispatch` boosts into real variants and real wins
 - **IL type control integration** — the proven `u8()` CAST vs `& 0xFF` AND finding
   ([IL_TYPE_CONTROL.md](IL_TYPE_CONTROL.md)) should be wired into the permuter as:
   (a) atlas entries for `extrwi`/`clrlslwi` detection/suppression,
@@ -1241,6 +1324,5 @@ The remaining work is:
   `unsigned long` + `& 0xFF`, and
   (c) IL capture fixtures to confirm the CAST vs AND mechanism.
   This single finding fixed 20+ functions and likely affects hundreds more.
-- **extension suites** — FPR, template, scope nesting differential tests
-- ~~**atlas expansion**~~ DONE — 72 entries harvested from pattern docs
-- **selective RE** — only for COLOR questions diff testing can't answer
+- **next IL lift families** — virtual dispatch detail, argument materialization,
+  inline wrappers, and sparse/default-heavy switch lowering

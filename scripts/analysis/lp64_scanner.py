@@ -11,6 +11,7 @@ Categories:
   PTRDIFF  - Pointer difference stored in int (should be ptrdiff_t)
   STRUCTIO - sizeof(UserType) in binary I/O or hardcoded struct offsets
   PTRCMP   - Pointer compared with integer via relational operator
+  INTASPTR - int field used as pointer (cast from int member to pointer type)
 
 Usage:
   python3 scripts/analysis/lp64_scanner.py [--dir src/] [--severity high|medium|low|all]
@@ -938,9 +939,141 @@ def check_ptrcmp(node: Node, source: bytes) -> list[tuple]:
     return results
 
 
+# ── INTASPTR checks ─────────────────────────────────────────────────────────
+
+# Member prefixes that indicate class/struct fields (not local vars)
+_MEMBER_PREFIXES = ("m", "s_", "g", "unk", "pv.")
+
+# Known int-as-pointer field names to suppress (false positives or name collisions)
+_INTASPTR_SUPPRESSIONS = {
+    "mNonce",       # unsigned char[16] reinterpreted as int for byte swap
+    "mData",        # HxGuid: int[4] array; MeshDeform/Cache context-dependent
+    "mStart",       # Name collision: CharBones has char* mStart, Timer/MapFile have int mStart
+    "mElemDrawState",  # Already has #ifdef HX_NATIVE guard in HamListRibbon.h
+}
+
+
+def _is_member_or_field(txt: str) -> bool:
+    """Check if an identifier looks like a class member field."""
+    # Direct member access: mFoo, unkFoo, gFoo, s_foo
+    if any(txt.startswith(p) for p in ("m", "unk", "g", "s_")):
+        return True
+    # Struct field access: pv.egParams, state.mFoo
+    if "." in txt:
+        parts = txt.rsplit(".", 1)
+        if len(parts) == 2 and len(parts[1]) > 0:
+            return True
+    return False
+
+
+def _collect_int_fields_from_headers(node: Node) -> set[str]:
+    """Collect field names declared as int-sized types in struct/class bodies.
+
+    Scans header AST for field_declaration nodes with int-type specifiers
+    and extracts the field names. Returns set of field names like
+    {'mSourceVoice', 'unk3c', 'mData'}.
+    """
+    fields: set[str] = set()
+    for n in walk(node):
+        if n.type != "field_declaration":
+            continue
+        # Get the type specifier
+        type_node = n.child_by_field_name("type")
+        if type_node is None:
+            continue
+        type_txt = node_text(type_node).strip()
+        if not _is_int_type(type_txt):
+            continue
+        # Get the declarator(s) — skip pointer declarators (int *foo is a pointer)
+        for child in n.named_children:
+            if child.type == "field_identifier":
+                fields.add(node_text(child).strip())
+            elif child.type == "pointer_declarator":
+                continue  # int *field — already a pointer
+            elif child.type == "init_declarator":
+                decl = child.child_by_field_name("declarator")
+                if decl and decl.type == "field_identifier":
+                    fields.add(node_text(decl).strip())
+    return fields
+
+
+def check_intasptr(node: Node, source: bytes,
+                   global_int_fields: set[str] | None = None,
+                   ) -> list[tuple[str, str, str, str]]:
+    """Detect int fields cast to pointer types.
+
+    Uses a pre-built set of int-typed field names from headers (global_int_fields)
+    plus local header analysis and heuristic fallbacks.
+
+    Catches patterns like:
+        int *p = (int *)mSourceVoice;    // mSourceVoice is int, should be pointer
+        *(float *)((int *)unk60 + 2)     // unk60 is int, used as pointer
+
+    These work on ILP32 (sizeof(int)==sizeof(void*)==4) but break on LP64
+    (sizeof(int)==4, sizeof(void*)==8) — the int truncates the pointer.
+    """
+    results: list[tuple[str, str, str, str]] = []
+
+    # Collect int fields from this file's own headers (for .h files)
+    local_int_fields = _collect_int_fields_from_headers(node)
+    all_int_fields = local_int_fields | (global_int_fields or set())
+
+    for n in walk(node):
+        if n.type != "cast_expression":
+            continue
+
+        cast_type = _get_cast_type(n)
+        if not _is_pointer_type(cast_type):
+            continue
+
+        # Get the value being cast
+        value = n.child_by_field_name("value")
+        if value is None:
+            continue
+
+        value_txt = node_text(value).strip()
+
+        # Skip if the value is already a pointer expression (legitimate cast)
+        if _expr_is_pointer(value):
+            continue
+
+        # Skip literals, sizeof, etc.
+        if value.type in ("number_literal", "char_literal", "sizeof_expression",
+                          "null", "nullptr", "true", "false"):
+            continue
+
+        # Skip array subscripts, function calls, complex expressions
+        if value.type in ("subscript_expression", "call_expression",
+                          "conditional_expression"):
+            continue
+
+        # Extract the base field name
+        base_name = value_txt
+        if "." in value_txt:
+            base_name = value_txt.rsplit(".", 1)[-1]
+
+        # Skip known suppressions
+        if base_name in _INTASPTR_SUPPRESSIONS:
+            continue
+
+        # Check: is this a known int-typed field from headers?
+        # Only flag member-like names to avoid false positives from locals
+        is_member = _is_member_or_field(value_txt)
+        if base_name in all_int_fields and is_member:
+            results.append((
+                n, "int_field_as_pointer", "high",
+                f"Field '{value_txt}' is declared as int but cast to pointer "
+                f"type '{cast_type}' — truncates pointer on LP64 "
+                f"(int=4 bytes, pointer=8 bytes). "
+                f"Declare the field as a pointer type or use intptr_t."
+            ))
+
+    return results
+
+
 # ── Main scanner ─────────────────────────────────────────────────────────────
 
-ALL_CATEGORIES = {"WCHAR", "PTRCAST", "PTRDIFF", "STRUCTIO", "PTRCMP"}
+ALL_CATEGORIES = {"WCHAR", "PTRCAST", "PTRDIFF", "STRUCTIO", "PTRCMP", "INTASPTR"}
 
 CHECKERS = {
     "WCHAR": check_wchar,
@@ -948,11 +1081,37 @@ CHECKERS = {
     "PTRDIFF": check_ptrdiff,
     "STRUCTIO": check_structio,
     "PTRCMP": check_ptrcmp,
+    "INTASPTR": check_intasptr,
 }
 
 
+def _collect_global_int_fields(root_dir: Path) -> set[str]:
+    """Pre-scan all header files to collect int-typed field names.
+
+    Returns a set of field names declared as int-sized types in
+    struct/class bodies across all headers.
+    """
+    all_fields: set[str] = set()
+    for dirpath, dirnames, filenames in os.walk(root_dir):
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+        for filename in sorted(filenames):
+            if not filename.endswith((".h", ".hpp", ".inl")):
+                continue
+            filepath = Path(dirpath) / filename
+            if not should_scan(filepath):
+                continue
+            try:
+                source = filepath.read_bytes()
+            except OSError:
+                continue
+            tree = _PARSER.parse(source)
+            all_fields |= _collect_int_fields_from_headers(tree.root_node)
+    return all_fields
+
+
 def scan_file(filepath: Path, categories: set[str], severity_filter: set[str],
-              exclude_guarded: bool) -> list[Finding]:
+              exclude_guarded: bool,
+              global_int_fields: set[str] | None = None) -> list[Finding]:
     """Scan a single file using tree-sitter."""
     findings = []
 
@@ -973,7 +1132,13 @@ def scan_file(filepath: Path, categories: set[str], severity_filter: set[str],
         if cat not in categories:
             continue
 
-        for result_node, rule_name, severity, suggestion in checker(root, source):
+        # INTASPTR needs the global int fields set
+        if cat == "INTASPTR":
+            check_results = checker(root, source, global_int_fields=global_int_fields)
+        else:
+            check_results = checker(root, source)
+
+        for result_node, rule_name, severity, suggestion in check_results:
             if severity not in severity_filter:
                 continue
 
@@ -1007,13 +1172,19 @@ def scan_directory(root: Path, categories: set[str], severity_filter: set[str],
     all_findings = []
     file_count = 0
 
+    # Pre-collect int-typed fields from all headers for INTASPTR cross-file analysis
+    global_int_fields: set[str] | None = None
+    if "INTASPTR" in categories:
+        global_int_fields = _collect_global_int_fields(root)
+
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
 
         for filename in sorted(filenames):
             filepath = Path(dirpath) / filename
             if should_scan(filepath):
-                findings = scan_file(filepath, categories, severity_filter, exclude_guarded)
+                findings = scan_file(filepath, categories, severity_filter,
+                                     exclude_guarded, global_int_fields)
                 all_findings.extend(findings)
                 file_count += 1
 

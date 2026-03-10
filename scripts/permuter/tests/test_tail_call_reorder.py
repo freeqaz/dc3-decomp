@@ -116,6 +116,110 @@ void test_func(int ok) {
             )
         )
 
+    def test_swaps_simple_if_wrapped_cleanup_calls(self):
+        variants = _variants(
+            """\
+void test_func() {
+    if (mFirst)
+        First();
+    if (mSecond)
+        Second();
+}
+"""
+        )
+        self.assertTrue(
+            any(
+                match_variant(
+                    v.source,
+                    """\
+void test_func() {
+    if (mSecond)
+        Second();
+    if (mFirst)
+        First();
+}
+""",
+                    "normalized",
+                )
+                for v in variants
+            )
+        )
+
+    def test_swaps_compound_if_wrapped_cleanup_calls(self):
+        variants = _variants(
+            """\
+void test_func() {
+    if (mFirst) {
+        First();
+    }
+    if (mSecond) {
+        Second();
+    }
+}
+"""
+        )
+        self.assertTrue(
+            any(
+                match_variant(
+                    v.source,
+                    """\
+void test_func() {
+    if (mSecond) {
+        Second();
+    }
+    if (mFirst) {
+        First();
+    }
+}
+""",
+                    "normalized",
+                )
+                for v in variants
+            )
+        )
+
+    def test_swaps_mixed_if_wrapper_and_plain_call(self):
+        variants = _variants(
+            """\
+void test_func() {
+    if (mFirst) {
+        First();
+    }
+    Second();
+}
+"""
+        )
+        self.assertTrue(
+            any(
+                match_variant(
+                    v.source,
+                    """\
+void test_func() {
+    Second();
+    if (mFirst) {
+        First();
+    }
+}
+""",
+                    "normalized",
+                )
+                for v in variants
+            )
+        )
+
+    def test_does_not_swap_if_wrapper_with_callful_condition(self):
+        variants = _variants(
+            """\
+void test_func() {
+    if (ShouldRun())
+        First();
+    if (mSecond)
+        Second();
+}
+"""
+        )
+        self.assertEqual(variants, [])
+
     def test_ghidra_guidance_skips_already_correct_last_call(self):
         variants = _variants(
             """\

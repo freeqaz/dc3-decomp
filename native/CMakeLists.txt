@@ -1,5 +1,27 @@
 cmake_minimum_required(VERSION 3.22)
+
+# This project requires Clang due to MSVC compatibility flags (-fms-extensions, etc.)
+if(NOT DEFINED CMAKE_C_COMPILER AND NOT DEFINED ENV{CC})
+    find_program(CLANG_C_COMPILER clang)
+    if(CLANG_C_COMPILER)
+        set(CMAKE_C_COMPILER "${CLANG_C_COMPILER}" CACHE FILEPATH "C compiler" FORCE)
+    endif()
+endif()
+if(NOT DEFINED CMAKE_CXX_COMPILER AND NOT DEFINED ENV{CXX})
+    find_program(CLANG_CXX_COMPILER clang++)
+    if(CLANG_CXX_COMPILER)
+        set(CMAKE_CXX_COMPILER "${CLANG_CXX_COMPILER}" CACHE FILEPATH "C++ compiler" FORCE)
+    endif()
+endif()
+
 project(dc3-native LANGUAGES C CXX)
+
+# Verify we're using Clang (the MSVC compat flags won't work with GCC)
+if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    message(FATAL_ERROR
+        "This project requires Clang (found ${CMAKE_CXX_COMPILER_ID}).\n"
+        "Configure with: CC=clang CXX=clang++ cmake ..")
+endif()
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

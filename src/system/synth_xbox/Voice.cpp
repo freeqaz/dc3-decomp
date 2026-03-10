@@ -39,13 +39,15 @@ typedef void (*VoiceCallFunc)(int*, int*);
 typedef void (*PoolVoiceCallFunc)(int*, int, int);
 typedef HRESULT (*EndLoopFunc)(int *, int);
 
+int Voice::GetVoice() { return mSourceVoice; }
+
 Voice::Voice(bool b1, int i, bool b2)
     : mState(0), mAudioData(0), mAudioBytes(0), mNumSamples(0), mSampleRate(0), mStartSamp(0), mLoopStart(-1),
       mLoopEnd(-1), mVolume(1.0f), mPan(0), mSpeed(1.0f), mAttackRate(0.001f), mReleaseRate(0.001f),
-      mXMA(b1), unk3c(), mReverbEnabled(false), mReverbMixDb(-96.0f), unk48(false), mSynchronized(b2),
+      mXMA(b1), mFxSend(), mReverbEnabled(false), mReverbMixDb(-96.0f), unk48(false), mSynchronized(b2),
       mChannels(i), mTagState(0), unk54(false) {
-    unk5c = 0;
-    unk60 = 0;
+    mEnvelopeEffect = 0;
+    mEnvelopeParams = 0;
     mSourceVoice = 0;
     if (gEvent == INVALID_HANDLE_VALUE) {
         gEvent = CreateEventA(0, 0, 0, 0);
@@ -72,8 +74,8 @@ Voice::~Voice() {
         Sleep(0);
     }
 
-    if (unk3c) {
-        int *pVar1 = (int *)unk3c;
+    if (mFxSend) {
+        int *pVar1 = (int *)mFxSend;
         int *pVar2 = (int *)(*pVar1);
         VoiceCallFunc fn = (VoiceCallFunc)(*(int *)(*pVar2 + 0x10));
         fn(pVar1, (int*)this);
@@ -264,11 +266,11 @@ void Voice::Stop(bool immediate) {
             int *pVoice = (int *)mSourceVoice;
             ((void (*)(int *, int, int))(*(int *)(*(int *)pVoice + 0x50)))(pVoice, 0, 0);
         } else {
-            MILO_ASSERT(unk60, 0x14d);
-            *(float *)((int *)unk60 + 2) = 1.0f;
+            MILO_ASSERT(mEnvelopeParams, 0x14d);
+            *(float *)((int *)mEnvelopeParams + 2) = 1.0f;
             int *pVoice = (int *)mSourceVoice;
             HRESULT hr = ((HRESULT(*)(int *, int, int, int, int))(*(int *)(*(int *)pVoice + 0x18)))(
-                pVoice, 0, unk60, 0x10, 0
+                pVoice, 0, (int)mEnvelopeParams, 0x10, 0
             );
             MILO_ASSERT(SUCCEEDED(hr), 0x150);
         }
@@ -285,13 +287,13 @@ void Voice::Pause(bool b) {
         while (mState == 2) {
             Sleep(0);
         }
-        MILO_ASSERT(mSourceVoice, 0x2b4);
+        MILO_ASSERT(GetVoice(), 0x2b4);
         if (b) {
             gHasPendingStopCommits = true;
             int *pVoice = (int *)mSourceVoice;
-            int flags = mSynchronized ? 2 : 0;
+            bool sync = mSynchronized;
             HRESULT hr =
-                ((HRESULT(*)(int *, int, int))(*(int *)(*(int *)pVoice + 0x50)))(pVoice, 0, flags);
+                ((HRESULT(*)(int *, int, int))(*(int *)(*(int *)pVoice + 0x50)))(pVoice, 0, sync ? 2 : 0);
             MILO_ASSERT(SUCCEEDED(hr), 700);
             mState = 4;
         } else {
@@ -319,20 +321,20 @@ void Voice::SetSpeed(float speed) {
 }
 
 void Voice::SetSend(FxSend360 *send) {
-    if ((FxSend360 *)unk3c == send)
+    if (mFxSend == send)
         return;
     SetSendImpl(send);
 }
 
 void Voice::SetSendImpl(FxSend360 *send) {
-    if (unk3c) {
-        int *pSend = (int *)unk3c;
+    if (mFxSend) {
+        int *pSend = (int *)mFxSend;
         ((void (*)(int *, Voice *))(*(int *)(*(int *)pSend + 0x10)))(pSend, this);
     }
     if (send) {
         ((void (*)(FxSend360 *, Voice *))(*(int *)(*(int *)send + 0x0c)))(send, this);
     }
-    unk3c = (int *)send;
+    mFxSend = send;
     UpdateSends();
 }
 
