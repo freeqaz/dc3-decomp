@@ -191,6 +191,8 @@ UIListDir *UIList::GetUIListDir() const { return mListDir; }
 
 int UIList::SelectedPos() const { return mListState.Selected(); }
 
+const std::vector<UIListWidget *> &UIList::GetWidgets() const { return mWidgets; }
+
 #ifdef HX_NATIVE
 int UIList::Selected() const { return mListState.Selected(); }
 
@@ -412,8 +414,10 @@ void UIList::SetSelected(int i, int j) {
     mListState.SetSelected(i, j, true);
     Refresh(false);
     mListDir->Poll();
-    if (ChildList())
-        Poll();
+    UIList *sublist = ChildList();
+    if (sublist) {
+        sublist->Poll();
+    }
     HandleSelectionUpdated();
 }
 
