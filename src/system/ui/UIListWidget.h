@@ -26,23 +26,25 @@ struct UIListElementDrawState {
     float mAlpha; // 0x10
     UIListWidgetState mElementState; // 0x14
     UIComponent::State mComponentState; // 0x18
-    int mDisplay; // 0x1c
-    int mShowing; // 0x20
-    int mData; // 0x24
-    int unk28; // 0x28
-    int unk2c; // 0x2c
-    int unk30; // 0x30
-    int unk34; // 0x34
-    int unk38; // 0x38
+    // DC3 additions: unk1c-unk20 absorb HamListRibbon overlay Color write
+    // (*(Color*)&mElementState = color), preventing it from clobbering mDisplay/mShowing
+    int unk1c; // 0x1c
+    int unk20; // 0x20
+    int unk24; // 0x24
+    int mRibbonInteraction; // 0x28 - gesture state flag, cleared by HamNavList
+    int mNavVtablePtr; // 0x2c - secondary vtable ptr, set by HamNavList
+    int mDisplay; // 0x30
+    int mShowing; // 0x34
+    int mData; // 0x38
 }; // size: 0x3c
 
 struct UIListWidgetDrawState {
-    Vector3 mFirstPos; // 0x0
-    Vector3 mLastPos; // 0xc
-    Vector3 mHighlightPos; // 0x18
-    int mHighlightDisplay; // 0x24
-    UIListWidgetState mHighlightElementState; // 0x28
-    std::vector<UIListElementDrawState> mElements; // 0x2c
+    Vector3 mFirstPos; // 0x0 (padded to 0x10)
+    Vector3 mLastPos; // 0x10 (padded to 0x20)
+    Vector3 mHighlightPos; // 0x20 (padded to 0x30)
+    int mHighlightDisplay; // 0x30
+    UIListWidgetState mHighlightElementState; // 0x34
+    std::vector<UIListElementDrawState> mElements; // 0x38
 };
 
 enum UIListWidgetDrawType {
