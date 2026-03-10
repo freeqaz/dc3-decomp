@@ -333,6 +333,16 @@ def diag_with_insert_delete() -> Diagnosis:
     return d
 
 
+def diag_with_subf_cmpw() -> Diagnosis:
+    """Target uses subf. (subtract-and-record), base uses cmpw (direct compare)."""
+    d = _empty_diag()
+    d.diff_ops = [
+        DiffOp(index=18, target_opcode="subf.", base_opcode="cmpw"),
+        DiffOp(index=19, target_opcode="bge", base_opcode="bge"),
+    ]
+    return d
+
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -2751,6 +2761,102 @@ void test_func() {
     unsigned char flag = 0;
     if (flag) flag = 1;
 }
+""",
+    ),
+
+    # ===================== loop_condition_subtract =====================
+
+    PatternFixture(
+        id="loopsub_while_ge_to_subtract",
+        pattern_name="loop_condition_subtract",
+        description="while (high >= low) -> while (high - low >= 0)",
+        func_name="FindDataIndex",
+        diagnosis=diag_with_subf_cmpw(),
+        match_mode="contains",
+        seeded_source="""\
+int FindDataIndex(int* arr, int size, int key) {
+    int low = 0;
+    int high = size - 1;
+    while (high >= low) {
+        int mid = (low + high) >> 1;
+        if (arr[mid] == key) return mid;
+        if (arr[mid] < key) low = mid + 1;
+        else high = mid - 1;
+    }
+    return -1;
+}
+""",
+        expected_source="""\
+high - low >= 0
+""",
+    ),
+
+    PatternFixture(
+        id="loopsub_while_le_to_subtract",
+        pattern_name="loop_condition_subtract",
+        description="while (low <= high) -> while (high - low >= 0)",
+        func_name="FindDataIndex",
+        diagnosis=diag_with_subf_cmpw(),
+        match_mode="contains",
+        seeded_source="""\
+int FindDataIndex(int* arr, int size, int key) {
+    int low = 0;
+    int high = size - 1;
+    while (low <= high) {
+        int mid = (low + high) >> 1;
+        if (arr[mid] == key) return mid;
+        if (arr[mid] < key) low = mid + 1;
+        else high = mid - 1;
+    }
+    return -1;
+}
+""",
+        expected_source="""\
+high - low >= 0
+""",
+    ),
+
+    PatternFixture(
+        id="loopsub_for_gt_to_subtract",
+        pattern_name="loop_condition_subtract",
+        description="for (... ; i > limit; ...) -> for (... ; i - limit > 0; ...)",
+        func_name="test_func",
+        diagnosis=diag_with_subf_cmpw(),
+        match_mode="contains",
+        seeded_source="""\
+void test_func(int* arr, int n, int limit) {
+    for (int i = n; i > limit; i--) {
+        arr[i] = 0;
+    }
+}
+""",
+        expected_source="""\
+i - limit > 0
+""",
+    ),
+
+    PatternFixture(
+        id="loopsub_reverse_subtract_to_ge",
+        pattern_name="loop_condition_subtract",
+        description="while (high - low >= 0) -> while (high >= low) (reverse)",
+        func_name="FindDataIndex",
+        diagnosis=diag_with_subf_cmpw(),
+        match_mode="contains",
+        seeded_source="""\
+int FindDataIndex(int* arr, int size, int key) {
+    int low = 0;
+    int high = size - 1;
+    while (high - low >= 0) {
+        int mid = (low + high) >> 1;
+        if (arr[mid] == key) return mid;
+        if (arr[mid] < key) low = mid + 1;
+        else high = mid - 1;
+    }
+    return -1;
+}
+""",
+        expected_source="""\
+high >= low
 """,
     ),
 

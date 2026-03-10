@@ -28,6 +28,7 @@ from scripts.permuter.tests.conftest import (
     diag_with_lwz_ops,
     diag_with_prologue_fewer_saves,
     diag_with_prologue_more_saves,
+    diag_with_subf_cmpw,
     make_context,
     make_ghidra_context,
 )
@@ -633,6 +634,30 @@ class TestDiagnosisNoise(unittest.TestCase):
         diag = diagnose_baseline({"instructions": instrs})
         self.assertEqual(diag.noise_explained, 1)  # immediate with numeric values = noise
 
+
+
+class TestLoopConditionSubtractRelevance(unittest.TestCase):
+    """Verify loop_condition_subtract relevance for subf./cmpw diagnoses."""
+
+    def test_relevant_with_subf_cmpw(self):
+        p = get_pattern("loop_condition_subtract")
+        self.assertTrue(p.relevant(diag_with_subf_cmpw()))
+
+    def test_relevant_with_cmpw_only(self):
+        p = get_pattern("loop_condition_subtract")
+        self.assertTrue(p.relevant(diag_with_cmp_ops()))
+
+    def test_irrelevant_empty(self):
+        p = get_pattern("loop_condition_subtract")
+        self.assertFalse(p.relevant(_empty_diag()))
+
+    def test_priority_high_for_subf(self):
+        p = get_pattern("loop_condition_subtract")
+        self.assertAlmostEqual(p.priority(diag_with_subf_cmpw()), 0.8)
+
+    def test_priority_low_for_generic_cmpw(self):
+        p = get_pattern("loop_condition_subtract")
+        self.assertAlmostEqual(p.priority(diag_with_cmp_ops()), 0.3)
 
 
 if __name__ == "__main__":

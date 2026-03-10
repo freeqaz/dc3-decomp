@@ -201,6 +201,16 @@ def diag_with_cmp_ops() -> Diagnosis:
     return d
 
 
+def diag_with_subf_cmpw() -> Diagnosis:
+    """Target uses subf. (subtract-and-record), base uses cmpw (direct compare)."""
+    d = _empty_diag()
+    d.diff_ops = [
+        DiffOp(index=18, target_opcode="subf.", base_opcode="cmpw"),
+        DiffOp(index=19, target_opcode="bge", base_opcode="bge"),
+    ]
+    return d
+
+
 def diag_with_fma_ops() -> Diagnosis:
     d = _empty_diag()
     d.diff_ops = [DiffOp(index=7, target_opcode="fmadds", base_opcode="fmsubs")]
