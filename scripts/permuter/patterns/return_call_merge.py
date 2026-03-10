@@ -49,6 +49,7 @@ class ReturnCallMergePattern(Pattern):
     safety_tier = "moderate"
     structural_domain = "control_flow"
     follow_ups = ("branch_polarity", "declaration_reorder", "early_return_merge")
+    cross_unit_modes = ("inline_header",)
 
     def relevant(self, diagnosis: Diagnosis) -> bool:
         # Branch opcode mismatches suggest branch restructuring

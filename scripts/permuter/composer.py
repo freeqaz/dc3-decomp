@@ -140,6 +140,8 @@ def available_context_keys(ctx: FunctionContext) -> set[str]:
     keys: set[str] = set()
     if ctx.ghidra_code or ctx.ghidra_ast is not None:
         keys.add("ghidra")
+    if ctx.m2c_code:
+        keys.add("m2c")
     if ctx.asm_listing_path is not None:
         keys.add("asm")
     if ctx.rb3_source:

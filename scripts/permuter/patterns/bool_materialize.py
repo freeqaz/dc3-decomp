@@ -41,7 +41,7 @@ class BoolMaterializePattern(Pattern):
     name = "bool_materialize"
 
     def relevant(self, diagnosis: Diagnosis) -> bool:
-        if diagnosis.bool_materialization_sequences > 0:
+        if getattr(diagnosis, "bool_materialization_sequences", 0) > 0:
             return True
         for d in diagnosis.diff_ops:
             if d.target_opcode in ("subfc", "eqv", "addze"):
@@ -51,7 +51,7 @@ class BoolMaterializePattern(Pattern):
         return False
 
     def priority(self, diagnosis: Diagnosis) -> float:
-        if diagnosis.bool_materialization_sequences > 0:
+        if getattr(diagnosis, "bool_materialization_sequences", 0) > 0:
             return 0.85
         for d in diagnosis.diff_ops:
             if d.target_opcode in ("subfc", "eqv", "addze"):

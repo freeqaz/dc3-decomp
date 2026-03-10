@@ -34,6 +34,10 @@ _BRANCH_OPCODES = {"beq", "bne", "ble", "bgt", "bge", "blt",
 
 class EarlyReturnMergePattern(Pattern):
     name = "early_return_merge"
+    safety_tier = "moderate"
+    structural_domain = "control_flow"
+    follow_ups = ("branch_polarity", "single_return", "guard_to_nested")
+    cross_unit_modes = ("inline_header",)
 
     def relevant(self, diagnosis: Diagnosis) -> bool:
         for d in diagnosis.diff_ops:

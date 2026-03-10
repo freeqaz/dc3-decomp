@@ -8,14 +8,10 @@ from pathlib import Path
 from .extractor import extract_function
 from .header_impact import HeaderImpact, estimate_header_impact, resolve_included_files
 from .patterns import get_pattern
+from .patterns.base import get_all_patterns
 from .types import AuxiliaryFile, Variant
 
-_SUPPORTED_HEADER_PATTERNS = frozenset({
-    "return_call_merge",
-    "switch_if_convert",
-    "early_return_merge",
-    "branch_polarity",
-})
+_INLINE_HEADER_MODE = "inline_header"
 
 
 @dataclass(frozen=True)
@@ -31,7 +27,11 @@ class HeaderPatternVariant:
 
 def supported_header_patterns() -> frozenset[str]:
     """Return local patterns supported in header-backed mode."""
-    return _SUPPORTED_HEADER_PATTERNS
+    return frozenset(
+        pattern.name
+        for pattern in get_all_patterns(include_opt_in=True)
+        if _INLINE_HEADER_MODE in getattr(pattern, "cross_unit_modes", ())
+    )
 
 
 def discover_header_pattern_variants(
@@ -41,10 +41,11 @@ def discover_header_pattern_variants(
     max_variants: int = 8,
 ) -> list[HeaderPatternVariant]:
     """Run a selected local pattern on directly included inline header functions."""
-    if base_pattern_name not in _SUPPORTED_HEADER_PATTERNS:
+    supported = supported_header_patterns()
+    if base_pattern_name not in supported:
         raise KeyError(
             f"Unsupported header pattern bridge '{base_pattern_name}'. "
-            f"Supported: {', '.join(sorted(_SUPPORTED_HEADER_PATTERNS))}"
+            f"Supported: {', '.join(sorted(supported))}"
         )
 
     caller_ctx = extract_function(source_path, function_name)

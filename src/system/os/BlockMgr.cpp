@@ -21,7 +21,12 @@ namespace {
     bool gReadHD = false;
     char *gTempBlock;
     static DataNode OnSpinUp(DataArray *) { return TheBlockMgr.SpinUp(); }
-    static int ReadError() { return 0; }
+    static int ReadError() {
+        if (gReadHD) {
+            return TheHDCache.ReadFail();
+        }
+        return (int)(void*)0x1;
+    }
 }
 
 static int gReadCount;

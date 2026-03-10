@@ -220,6 +220,14 @@ def parse_args() -> argparse.Namespace:
         help="Disable Ghidra-guided patterns",
     )
     parser.add_argument(
+        "--m2c", action="store_true", default=False,
+        help="Enable m2c-guided context loading (default: False)",
+    )
+    parser.add_argument(
+        "--no-m2c", action="store_false", dest="m2c",
+        help="Disable m2c-guided context loading",
+    )
+    parser.add_argument(
         "--chain", action="store_true", default=True,
         help="Enable N-stage pattern chains via beam search (default: True)",
     )
@@ -275,6 +283,7 @@ def hill_climb(
     unit: str | None = None,
     workers: int = 6,
     ghidra: bool = False,
+    m2c: bool = False,
     chain: bool = False,
     chain_depth: int = 3,
     adaptive: bool = False,
@@ -386,7 +395,7 @@ def hill_climb(
 
             # Fresh scorer per round — context manager restores source on exit
             with Scorer(source_path, symbol, unit=unit) as scorer:
-                baseline = scorer.get_baseline(guided=True, ghidra=ghidra)
+                baseline = scorer.get_baseline(guided=True, ghidra=ghidra, m2c=m2c)
 
                 if round_num == 1:
                     initial_percent = baseline
@@ -397,6 +406,7 @@ def hill_climb(
                 # Wire symbol, diagnosis, and Ghidra data into context
                 ctx.symbol = symbol
                 ctx.rb3_source = _rb3_source_cache
+                ctx.m2c_code = scorer.m2c_code
                 if scorer.ghidra_code:
                     ctx.ghidra_code = scorer.ghidra_code
                     ctx.ghidra_ast = scorer.ghidra_ast
@@ -1037,6 +1047,7 @@ def main():
             unit=args.unit,
             workers=workers,
             ghidra=args.ghidra,
+            m2c=args.m2c,
             chain=args.chain,
             chain_depth=args.chain_depth,
             adaptive=args.adaptive,
@@ -1056,6 +1067,7 @@ def main():
             unit=args.unit,
             workers=workers,
             ghidra=args.ghidra,
+            m2c=args.m2c,
             chain=args.chain,
             chain_depth=args.chain_depth,
             adaptive=args.adaptive,

@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+import time
+
 from scripts.permuter.evolutionary import (
     Individual,
     _crossover,
     _dedup_population,
+    _make_result,
     _mutate,
+    _record_ghidra_variants,
     _tournament_select,
+    _variant_is_ghidra_guided,
 )
+from scripts.permuter.ghidra_stats import GhidraRunStats
 from scripts.permuter.tests.conftest import diag_with_branch_ops, make_context
 from scripts.permuter.types import Variant
 
@@ -145,3 +151,73 @@ void test_func() {
 
         assert mutated is not None
         assert mutated.tags == frozenset({"tag_a", "tag_b"})
+
+
+class TestGhidraReporting:
+    def test_detects_ghidra_variants_by_name_or_description(self):
+        guided = Variant(
+            name="evo_mut:ghidra_fma_0+type_width_change",
+            pattern_name="test",
+            description="mutated",
+            source=b"guided",
+        )
+        desc_guided = Variant(
+            name="plain",
+            pattern_name="test",
+            description="[ghidra] guided variant",
+            source=b"guided2",
+        )
+        plain = Variant(
+            name="plain",
+            pattern_name="test",
+            description="plain variant",
+            source=b"plain",
+        )
+
+        assert _variant_is_ghidra_guided(guided) is True
+        assert _variant_is_ghidra_guided(desc_guided) is True
+        assert _variant_is_ghidra_guided(plain) is False
+
+    def test_records_ghidra_variant_counts(self):
+        stats = GhidraRunStats(ghidra_available=True)
+        variants = [
+            Variant(
+                name="ghidra_declreorder_0",
+                pattern_name="test",
+                description="guided",
+                source=b"a",
+            ),
+            Variant(
+                name="plain_0",
+                pattern_name="test",
+                description="plain",
+                source=b"b",
+            ),
+        ]
+
+        _record_ghidra_variants(stats, variants)
+
+        assert stats.total_variants == 2
+        assert stats.ghidra_variants_generated == 1
+
+    def test_make_result_preserves_ghidra_stats(self):
+        stats = GhidraRunStats(
+            ghidra_available=True,
+            ghidra_variants_generated=3,
+            total_variants=10,
+        )
+
+        result = _make_result(
+            symbol="sym",
+            function_name="Func",
+            source_path="file.cpp",
+            initial_percent=90.0,
+            final_percent=91.0,
+            rounds=[],
+            stopped_reason="done",
+            start_time=time.time(),
+            ghidra_stats=stats,
+        )
+
+        assert result.ghidra_stats is stats
+        assert result.ghidra_stats.ghidra_available is True

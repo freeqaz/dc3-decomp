@@ -39,7 +39,7 @@ class FloatLiteralPressurePattern(Pattern):
 
     def relevant(self, diagnosis: Diagnosis) -> bool:
         # Primarily relevant when there's a GPR-FPR type conflict
-        if diagnosis.has_gpr_fpr_type_conflict:
+        if getattr(diagnosis, "has_gpr_fpr_type_conflict", False):
             return True
         # Also relevant for any prologue mismatch with FPR delta
         if diagnosis.has_prologue_mismatch and diagnosis.fpr_save_delta != 0:
@@ -47,7 +47,7 @@ class FloatLiteralPressurePattern(Pattern):
         return False
 
     def priority(self, diagnosis: Diagnosis) -> float:
-        if diagnosis.has_gpr_fpr_type_conflict:
+        if getattr(diagnosis, "has_gpr_fpr_type_conflict", False):
             return 0.9
         if diagnosis.has_prologue_mismatch and diagnosis.fpr_save_delta != 0:
             return 0.6

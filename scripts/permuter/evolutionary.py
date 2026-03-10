@@ -137,6 +137,7 @@ def evolve(
     unit: str | None = None,
     workers: int = 6,
     ghidra: bool = False,
+    m2c: bool = False,
     chain: bool = False,
     chain_depth: int = 3,
     adaptive: bool = False,
@@ -168,6 +169,13 @@ def evolve(
     stopped_reason = "max_generations"
     total_evaluations = 0
     stagnation_count = 0
+    ghidra_run_stats = None
+
+    if constrained:
+        ghidra = True
+    if ghidra:
+        from .ghidra_stats import GhidraRunStats
+        ghidra_run_stats = GhidraRunStats()
 
     _add_banner(source_path, function_name)
 
@@ -176,7 +184,7 @@ def evolve(
         ctx = extract_function(source_path, function_name)
 
         with Scorer(source_path, symbol, unit=unit) as scorer:
-            baseline = scorer.get_baseline(guided=True, ghidra=ghidra)
+            baseline = scorer.get_baseline(guided=True, ghidra=ghidra, m2c=m2c)
             initial_percent = baseline
             best_ever_fitness = baseline
 
@@ -187,6 +195,10 @@ def evolve(
             if scorer.ghidra_code:
                 ctx.ghidra_code = scorer.ghidra_code
                 ctx.ghidra_ast = scorer.ghidra_ast
+                if ghidra_run_stats:
+                    ghidra_run_stats.ghidra_available = True
+                    ghidra_run_stats.ghidra_code_bytes = len(scorer.ghidra_code)
+            ctx.m2c_code = scorer.m2c_code
             if scorer.diagnosis:
                 ctx.diagnosis = scorer.diagnosis
 
@@ -196,6 +208,7 @@ def evolve(
                 return _make_result(
                     symbol, function_name, source_path, initial_percent,
                     baseline, rounds, stopped_reason, start_time,
+                    ghidra_stats=ghidra_run_stats,
                 )
 
             # Build compose pairs and chains for seeding
@@ -233,7 +246,9 @@ def evolve(
                 return _make_result(
                     symbol, function_name, source_path, initial_percent,
                     baseline, rounds, stopped_reason, start_time,
+                    ghidra_stats=ghidra_run_stats,
                 )
+            _record_ghidra_variants(ghidra_run_stats, seed_variants)
 
             # Score initial population
             seed_results = scorer.score_batch(seed_variants, workers=workers)
@@ -352,6 +367,7 @@ def evolve(
 
                     # Score new variants
                     if new_variants:
+                        _record_ghidra_variants(ghidra_run_stats, new_variants)
                         new_results = scorer.score_batch(
                             new_variants, workers=workers,
                         )
@@ -452,6 +468,25 @@ def evolve(
                 )
 
     elapsed = time.time() - start_time
+    if ghidra_run_stats and best_ever_individual and best_ever_fitness > initial_percent:
+        if _variant_is_ghidra_guided(best_ever_individual.variant):
+            ghidra_run_stats.ghidra_winner = True
+            ghidra_run_stats.winning_variant = best_ever_individual.variant.name
+            ghidra_run_stats.winning_pattern = best_ever_individual.variant.pattern_name
+
+    if ghidra_run_stats:
+        try:
+            from .ghidra_stats import store_run
+            store_run(
+                symbol=symbol,
+                function_name=function_name,
+                run=ghidra_run_stats,
+                initial_pct=initial_percent,
+                final_pct=final_percent,
+            )
+        except Exception:
+            pass
+
     return HillClimbResult(
         symbol=symbol,
         function_name=function_name,
@@ -462,6 +497,7 @@ def evolve(
         rounds=rounds,
         stopped_reason=stopped_reason,
         elapsed_seconds=round(elapsed, 2),
+        ghidra_stats=ghidra_run_stats,
     )
 
 
@@ -553,7 +589,7 @@ def _log_generation(
 
 def _make_result(
     symbol, function_name, source_path, initial_percent, final_percent,
-    rounds, stopped_reason, start_time,
+    rounds, stopped_reason, start_time, ghidra_stats=None,
 ) -> HillClimbResult:
     """Build a HillClimbResult (shorthand for early returns)."""
     return HillClimbResult(
@@ -566,4 +602,24 @@ def _make_result(
         rounds=rounds,
         stopped_reason=stopped_reason,
         elapsed_seconds=round(time.time() - start_time, 2),
+        ghidra_stats=ghidra_stats,
+    )
+
+
+def _variant_is_ghidra_guided(variant: Variant) -> bool:
+    """Best-effort test for whether a variant came from Ghidra guidance."""
+    if "ghidra_" in variant.name:
+        return True
+    if variant.description.lower().startswith("[ghidra]"):
+        return True
+    return False
+
+
+def _record_ghidra_variants(ghidra_stats, variants: list[Variant]) -> None:
+    """Accumulate per-run Ghidra variant counts."""
+    if ghidra_stats is None:
+        return
+    ghidra_stats.total_variants += len(variants)
+    ghidra_stats.ghidra_variants_generated += sum(
+        1 for variant in variants if _variant_is_ghidra_guided(variant)
     )

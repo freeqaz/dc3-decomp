@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from scripts.permuter.header_pattern_bridge import discover_header_pattern_variants
+from scripts.permuter.header_pattern_bridge import (
+    discover_header_pattern_variants,
+    supported_header_patterns,
+)
 
 
 def test_header_return_call_merge_bridge(tmp_path: Path):
@@ -115,3 +118,79 @@ def test_header_pattern_bridge_skips_high_risk_headers(tmp_path: Path):
     )
 
     assert variants == []
+
+
+def test_supported_header_patterns_include_new_metadata_driven_patterns():
+    supported = supported_header_patterns()
+
+    assert "single_return" in supported
+    assert "guard_to_nested" in supported
+    assert "statement_reorder" in supported
+    assert "variable_extraction" in supported
+
+
+def test_header_single_return_bridge(tmp_path: Path):
+    header_path = tmp_path / "shared.h"
+    source_path = tmp_path / "caller.cpp"
+
+    header_path.write_text(
+        "inline int Helper(bool cond) {\n"
+        "    if (cond) {\n"
+        "        return 1;\n"
+        "    }\n"
+        "    return 0;\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    source_path.write_text(
+        '#include "shared.h"\n'
+        "int Caller(bool cond) {\n"
+        "    return Helper(cond);\n"
+        "}\n",
+        encoding="utf-8",
+    )
+
+    variants = discover_header_pattern_variants(
+        source_path,
+        "Caller",
+        "single_return",
+    )
+
+    assert variants
+    variant = variants[0].variant
+    assert variant.pattern_name == "header_single_return"
+    header_text = variant.auxiliary_files[0].content.decode("utf-8")
+    assert "_result" in header_text
+    assert "return _result;" in header_text
+
+
+def test_header_variable_extraction_bridge(tmp_path: Path):
+    header_path = tmp_path / "shared.h"
+    source_path = tmp_path / "caller.cpp"
+
+    header_path.write_text(
+        "inline bool Helper() {\n"
+        "    return Value() > 0;\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    source_path.write_text(
+        '#include "shared.h"\n'
+        "bool Caller() {\n"
+        "    return Helper();\n"
+        "}\n",
+        encoding="utf-8",
+    )
+
+    variants = discover_header_pattern_variants(
+        source_path,
+        "Caller",
+        "variable_extraction",
+    )
+
+    assert variants
+    variant = variants[0].variant
+    assert variant.pattern_name == "header_variable_extraction"
+    header_text = variant.auxiliary_files[0].content.decode("utf-8")
+    assert "auto _tmp0 = Value();" in header_text
+    assert "return _tmp0 > 0;" in header_text

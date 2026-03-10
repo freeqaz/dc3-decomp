@@ -24,6 +24,7 @@ class Pattern(ABC):
     structural_domain: str = "general"
     follow_ups: tuple[str, ...] = ()
     requires_context: tuple[str, ...] = ()
+    cross_unit_modes: tuple[str, ...] = ()
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -63,6 +64,7 @@ class Pattern(ABC):
             "structural_domain": self.structural_domain,
             "follow_ups": list(self.follow_ups),
             "requires_context": list(self.requires_context),
+            "cross_unit_modes": list(self.cross_unit_modes),
         }
 
 

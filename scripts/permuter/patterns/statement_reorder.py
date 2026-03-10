@@ -37,6 +37,7 @@ class StatementReorderPattern(Pattern):
     safety_tier = "conservative"
     structural_domain = "control_flow"
     follow_ups = ("declaration_reorder", "assignment_reorder", "declaration_movement")
+    cross_unit_modes = ("inline_header",)
 
     def relevant(self, diagnosis: Diagnosis) -> bool:
         # Clusters suggest structural differences

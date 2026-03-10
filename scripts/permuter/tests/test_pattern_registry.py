@@ -5,6 +5,7 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
+from scripts.permuter.header_pattern_bridge import supported_header_patterns
 from scripts.permuter.patterns.base import get_pattern_metadata, list_patterns
 
 
@@ -29,6 +30,15 @@ class TestPatternRegistry(unittest.TestCase):
                     registered,
                     f"{name} declares unknown follow-up {follow_up}",
                 )
+
+    def test_inline_header_bridge_matches_pattern_metadata(self):
+        metadata = get_pattern_metadata(include_opt_in=True)
+        declared = {
+            name
+            for name, pattern_meta in metadata.items()
+            if "inline_header" in pattern_meta["cross_unit_modes"]
+        }
+        self.assertEqual(declared, set(supported_header_patterns()))
 
 
 if __name__ == "__main__":

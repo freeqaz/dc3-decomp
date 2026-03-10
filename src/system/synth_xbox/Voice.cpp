@@ -7,6 +7,7 @@
 #include "os/Timer.h"
 #include <deque>
 #include <list>
+#include <vector>
 #include "xdk/win_types.h"
 #include "xdk/xapilibi/processthreadsapi.h"
 #include "xdk/xapilibi/synchapi.h"
@@ -26,13 +27,13 @@ std::deque<PoolVoice> s_voiceGC;
 std::deque<PoolVoice> s_voiceGCInProgress;
 
 static bool gShutdownVoiceThread = false;
-void StartSynchronizedVoices();
 static bool gCommitSyncVoices = false;
 static int gCommitTag = 0;
 static bool gHasPendingStopCommits = false;
 static bool gWasCommitSyncVoices = false;
 static int gWasCommitTag = 0;
 static int rolling = 0;
+void StartSynchronizedVoices();
 
 typedef void (*VoiceCallFunc)(int*, int*);
 typedef void (*PoolVoiceCallFunc)(int*, int, int);
@@ -259,7 +260,10 @@ void Voice::blockingStart(bool b) {
 
 void Voice::Stop(bool immediate) {
     if (mSourceVoice) {
-        if (!immediate) {
+        if (immediate) {
+            int *pVoice = (int *)mSourceVoice;
+            ((void (*)(int *, int, int))(*(int *)(*(int *)pVoice + 0x50)))(pVoice, 0, 0);
+        } else {
             MILO_ASSERT(unk60, 0x14d);
             *(float *)((int *)unk60 + 2) = 1.0f;
             int *pVoice = (int *)mSourceVoice;
@@ -267,9 +271,6 @@ void Voice::Stop(bool immediate) {
                 pVoice, 0, unk60, 0x10, 0
             );
             MILO_ASSERT(SUCCEEDED(hr), 0x150);
-        } else {
-            int *pVoice = (int *)mSourceVoice;
-            ((void (*)(int *, int, int))(*(int *)(*(int *)pVoice + 0x50)))(pVoice, 0, 0);
         }
     }
     mState = 1;

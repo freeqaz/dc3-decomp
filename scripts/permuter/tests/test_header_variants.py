@@ -12,6 +12,7 @@ from scripts.permuter.header_variants import (
     DiscoveredHeaderVariant,
     apply_header_variant,
     discover_header_variants,
+    resolve_from_db,
     score_discovered_variants,
     select_best_variant,
 )
@@ -98,6 +99,37 @@ def test_discover_header_variants_supports_generic_header_bridge(tmp_path: Path)
 
     assert discovered
     assert discovered[0].variant.pattern_name == "header_return_call_merge"
+
+
+def test_discover_header_variants_supports_metadata_driven_bridge(tmp_path: Path):
+    header_path = tmp_path / "shared.h"
+    source_path = tmp_path / "caller.cpp"
+
+    header_path.write_text(
+        "inline int Helper(bool cond) {\n"
+        "    if (cond) {\n"
+        "        return 1;\n"
+        "    }\n"
+        "    return 0;\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    source_path.write_text(
+        '#include "shared.h"\n'
+        "int Caller(bool cond) {\n"
+        "    return Helper(cond);\n"
+        "}\n",
+        encoding="utf-8",
+    )
+
+    discovered = discover_header_variants(
+        source_path,
+        "Caller",
+        pattern_name="header_single_return",
+    )
+
+    assert discovered
+    assert discovered[0].variant.pattern_name == "header_single_return"
 
 
 def test_score_discovered_variants_orders_accepted_before_rejected(tmp_path: Path):
@@ -196,3 +228,42 @@ def test_apply_header_variant_writes_auxiliary_files(tmp_path: Path):
     apply_header_variant(source_path, variant)
 
     assert header_path.read_text(encoding="utf-8") == "// new header\n"
+
+
+def test_resolve_from_db_uses_objdiff_source_path(tmp_path: Path):
+    db_path = tmp_path / "decomp.db"
+    objdiff_path = tmp_path / "objdiff.json"
+
+    import sqlite3
+
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "CREATE TABLE functions (symbol TEXT, demangled TEXT, unit TEXT)"
+    )
+    conn.execute(
+        "INSERT INTO functions(symbol, demangled, unit) VALUES (?, ?, ?)",
+        (
+            "?Foo@Bar@@QAEXXZ",
+            "public: void __cdecl Bar::Foo(void)",
+            "default/system/test/Bar",
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    objdiff_path.write_text(
+        '{'
+        '"units": ['
+        '{"name": "default/system/test/Bar", "metadata": {"source_path": "src/system/test/Bar.cpp"}}'
+        "]"
+        "}",
+        encoding="utf-8",
+    )
+
+    resolved = resolve_from_db(db_path, "?Foo@Bar@@QAEXXZ", project_root=tmp_path)
+
+    assert resolved == (
+        "?Foo@Bar@@QAEXXZ",
+        Path("src/system/test/Bar.cpp"),
+        "Bar::Foo",
+    )

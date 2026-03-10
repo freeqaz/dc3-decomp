@@ -28,6 +28,7 @@ class SwitchIfConvertPattern(Pattern):
     safety_tier = "moderate"
     structural_domain = "control_flow"
     follow_ups = ("branch_polarity", "declaration_reorder", "ternary_swap")
+    cross_unit_modes = ("inline_header",)
 
     def relevant(self, diagnosis: Diagnosis) -> bool:
         # Branch opcode mismatches suggest control flow structure differences

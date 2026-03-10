@@ -389,6 +389,7 @@ def reparse_variant(
                 symbol=original_ctx.symbol,
                 ghidra_code=original_ctx.ghidra_code,
                 ghidra_ast=original_ctx.ghidra_ast,
+                m2c_code=original_ctx.m2c_code,
                 target_var_order=original_ctx.target_var_order,
                 target_gpr_saves=original_ctx.target_gpr_saves,
                 asm_listing_path=original_ctx.asm_listing_path,

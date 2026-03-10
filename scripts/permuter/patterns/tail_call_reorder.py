@@ -37,6 +37,7 @@ from ..control_flow import (
     trailing_run,
 )
 from ..editor import SourceEditor
+from ..m2c import extract_last_call_name as extract_m2c_last_call_name
 from ..statement_effects import StatementEffectAnalyzer
 from ..types import Diagnosis, FunctionContext, Variant
 
@@ -46,7 +47,6 @@ class TailCallReorderPattern(Pattern):
     safety_tier = "moderate"
     structural_domain = "control_flow"
     follow_ups = ("branch_polarity", "declaration_reorder")
-    requires_context = ("ghidra",)
 
     def relevant(self, diagnosis: Diagnosis) -> bool:
         # Primary signal: prologue mismatch where target saves fewer regs
@@ -79,27 +79,24 @@ class TailCallReorderPattern(Pattern):
         source = ctx.file_source
         counter = 0
 
-        # Try to get Ghidra's last call for guided reordering
-        ghidra_last_call = None
-        if ctx.ghidra_code:
-            ghidra_last_call = _extract_ghidra_last_call(ctx.ghidra_code)
+        guided_last_call = _extract_guided_last_call(ctx)
 
         # Strategy 1: Swap consecutive calls at end of function body
-        for v in _swap_trailing_calls(ctx, source, ghidra_last_call, counter):
+        for v in _swap_trailing_calls(ctx, source, guided_last_call, counter):
             yield v
             counter += 1
             if counter >= 8:
                 return
 
         # Strategy 2: Swap consecutive calls before a bare return
-        for v in _swap_calls_before_return(ctx, source, ghidra_last_call, counter):
+        for v in _swap_calls_before_return(ctx, source, guided_last_call, counter):
             yield v
             counter += 1
             if counter >= 8:
                 return
 
         # Strategy 3: Swap calls at end of terminal blocks (last if/else branches)
-        for v in _swap_calls_in_terminal_blocks(ctx, source, ghidra_last_call, counter):
+        for v in _swap_calls_in_terminal_blocks(ctx, source, guided_last_call, counter):
             yield v
             counter += 1
             if counter >= 8:
@@ -407,8 +404,7 @@ def _line_end(source: bytes, pos: int) -> int:
 # Ghidra integration
 # ---------------------------------------------------------------------------
 
-# Match function calls in Ghidra output — captures the function name
-_GHIDRA_CALL_RE = re.compile(r"\b([a-zA-Z_]\w*)\s*\(")
+_GUIDE_CALL_RE = re.compile(r"\b([a-zA-Z_]\w*)\s*\(")
 _NOT_CALLS = frozenset({
     "if", "while", "for", "switch", "return", "sizeof", "typeof",
     "int", "long", "short", "char", "void", "float", "double",
@@ -425,7 +421,7 @@ def _extract_ghidra_last_call(ghidra_code: str) -> str | None:
     """
     # Find all calls in order
     calls = []
-    for m in _GHIDRA_CALL_RE.finditer(ghidra_code):
+    for m in _GUIDE_CALL_RE.finditer(ghidra_code):
         name = m.group(1)
         if name not in _NOT_CALLS and not name.startswith("local_"):
             calls.append(name)
@@ -434,3 +430,23 @@ def _extract_ghidra_last_call(ghidra_code: str) -> str | None:
     if calls:
         return calls[-1]
     return None
+
+
+def _extract_guided_last_call(ctx: FunctionContext) -> str | None:
+    """Choose a preferred last-call hint from Ghidra and/or m2c."""
+    ghidra_last_call = (
+        _extract_ghidra_last_call(ctx.ghidra_code)
+        if ctx.ghidra_code
+        else None
+    )
+    m2c_last_call = (
+        extract_m2c_last_call_name(ctx.m2c_code)
+        if ctx.m2c_code
+        else None
+    )
+
+    if ghidra_last_call and m2c_last_call:
+        if ghidra_last_call == m2c_last_call:
+            return ghidra_last_call
+        return None
+    return ghidra_last_call or m2c_last_call

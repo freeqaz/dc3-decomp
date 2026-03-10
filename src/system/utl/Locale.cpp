@@ -307,10 +307,10 @@ const char *LocalizeSeparatedInt(int num, Locale &locale) {
     }
     int sepLen = strlen(sep);
     char *buf = gLocalizeSepBuf[gLocalizeSepIdx];
-    int pos = 0x31;
     buf[0x31] = '\0';
-    bool negative = num < 0;
+    int pos = 0x31;
     int absNum = num;
+    bool negative = num < 0;
     if (negative) {
         absNum = (num ^ (num >> 31)) - (num >> 31);
     }

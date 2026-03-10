@@ -38,6 +38,10 @@ _INVERSIONS = {
 
 class BranchPolarityPattern(Pattern):
     name = "branch_polarity"
+    safety_tier = "conservative"
+    structural_domain = "control_flow"
+    follow_ups = ("switch_if_convert", "early_return_merge", "single_return")
+    cross_unit_modes = ("inline_header",)
 
     def relevant(self, diagnosis: Diagnosis) -> bool:
         for d in diagnosis.diff_ops:

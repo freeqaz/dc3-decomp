@@ -42,6 +42,7 @@ class VariableExtractionPattern(Pattern):
     safety_tier = "conservative"
     structural_domain = "data_flow"
     follow_ups = ("declaration_reorder", "inline_assignment", "statement_reorder")
+    cross_unit_modes = ("inline_header",)
 
     def relevant(self, diagnosis: Diagnosis) -> bool:
         # Skip when there are no actionable mismatches (pure noise/unfixable)

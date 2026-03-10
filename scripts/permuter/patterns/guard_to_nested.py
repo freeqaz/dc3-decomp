@@ -52,6 +52,10 @@ _BRANCH_OPCODES = {"beq", "bne", "ble", "bgt", "bge", "blt",
 
 class GuardToNestedPattern(Pattern):
     name = "guard_to_nested"
+    safety_tier = "aggressive"
+    structural_domain = "control_flow"
+    follow_ups = ("early_return_merge", "branch_polarity")
+    cross_unit_modes = ("inline_header",)
 
     def relevant(self, diagnosis: Diagnosis) -> bool:
         branch_count = sum(

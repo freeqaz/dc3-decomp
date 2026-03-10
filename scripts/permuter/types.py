@@ -154,6 +154,7 @@ class FunctionContext:
     # Ghidra-guided fields (populated when --ghidra is enabled)
     ghidra_code: Optional[str] = None  # Raw Ghidra decompilation text
     ghidra_ast: Optional[object] = None  # Parsed GhidraAST
+    m2c_code: Optional[str] = None  # Raw m2c decompilation text
     target_var_order: Optional[list] = None  # Variable first-use order from Ghidra
     target_gpr_saves: Optional[int] = None  # GPR save count from __savegprlr_N
     # ASM listing path (for Ghidra+ASM crossref)

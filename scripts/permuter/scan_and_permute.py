@@ -134,6 +134,14 @@ def parse_args() -> argparse.Namespace:
         help="Disable Ghidra-guided patterns",
     )
     parser.add_argument(
+        "--m2c", action="store_true", default=False,
+        help="Enable m2c-guided context loading (default: False)",
+    )
+    parser.add_argument(
+        "--no-m2c", action="store_false", dest="m2c",
+        help="Disable m2c-guided context loading",
+    )
+    parser.add_argument(
         "--constrained", action="store_true", default=True,
         help="Enable constraint-directed synthesis pre-pass (default: True)",
     )
@@ -516,6 +524,7 @@ def _climb_one(
                 apply=not args.no_apply,
                 unit=candidate.get("unit"),
                 ghidra=args.ghidra,
+                m2c=args.m2c,
                 chain=args.chain,
                 chain_depth=args.chain_depth,
                 adaptive=args.adaptive,
@@ -533,6 +542,7 @@ def _climb_one(
                 compose=args.compose,
                 apply=not args.no_apply,
                 ghidra=args.ghidra,
+                m2c=args.m2c,
                 chain=args.chain,
                 chain_depth=args.chain_depth,
                 adaptive=args.adaptive,

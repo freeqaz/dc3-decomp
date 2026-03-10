@@ -82,8 +82,9 @@ def parse_args() -> argparse.Namespace:
 def resolve_from_db(
     db_path: Path,
     symbol_query: str,
+    project_root: Path = Path("."),
 ) -> tuple[str, Path, str] | None:
-    """Resolve symbol -> (symbol, source_path, qualified_name) from decomp.db."""
+    """Resolve symbol -> (symbol, source_path, qualified_name)."""
     import sqlite3
 
     if not db_path.exists():
@@ -110,7 +111,23 @@ def resolve_from_db(
     qualified_name = extract_qualified_name(row["demangled"] or "")
     if not qualified_name:
         return None
-    return row["symbol"], Path(row["unit"]), qualified_name
+
+    objdiff_path = project_root.resolve() / "objdiff.json"
+    if objdiff_path.exists():
+        data = json.loads(objdiff_path.read_text(encoding="utf-8"))
+        unit = row["unit"] or ""
+        for item in data.get("units", ()):
+            if item.get("name") == unit:
+                source_path = item.get("metadata", {}).get("source_path")
+                if source_path:
+                    return row["symbol"], Path(source_path), qualified_name
+
+    unit = row["unit"] or ""
+    normalized = unit[len("default/"):] if unit.startswith("default/") else unit
+    fallback = Path(normalized)
+    if fallback.suffix:
+        return row["symbol"], fallback, qualified_name
+    return row["symbol"], fallback.with_suffix(".cpp"), qualified_name
 
 
 def discover_header_variants(
@@ -250,7 +267,7 @@ def main() -> int:
     db_path = args.db.resolve()
 
     if args.symbol and (not args.source or not args.function):
-        resolved = resolve_from_db(db_path, args.symbol)
+        resolved = resolve_from_db(db_path, args.symbol, project_root=project_root)
         if resolved is None:
             print(f"Could not resolve '{args.symbol}' from {db_path}", file=sys.stderr)
             return 1

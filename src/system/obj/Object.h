@@ -281,11 +281,7 @@ public:
         Node &operator*() const { return *it; }
         Node *operator->() const { return &(*it); }
 
-        iterator operator+(int idx) const {
-            iterator result = *this;
-            result.it += idx;
-            return result;
-        }
+        iterator operator+(int idx) const { return iterator(it + idx); }
 
         iterator operator++() {
             ++it;
@@ -317,11 +313,7 @@ public:
         const Node &operator*() const { return *it; }
         const Node *operator->() const { return &(*it); }
 
-        const_iterator operator+(int idx) const {
-            const_iterator result = *this;
-            result.it += idx;
-            return result;
-        }
+        const_iterator operator+(int idx) const { return const_iterator(it + idx); }
 
         const_iterator operator++() {
             ++it;

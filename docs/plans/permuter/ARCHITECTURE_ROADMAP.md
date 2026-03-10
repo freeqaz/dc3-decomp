@@ -188,8 +188,15 @@ Implemented so far:
   - `header_switch_if_convert`
   - `header_early_return_merge`
   - `header_branch_polarity`
+  - `header_single_return`
+  - `header_guard_to_nested`
+  - `header_statement_reorder`
+  - `header_variable_extraction`
   These reuse existing proven single-function transforms on directly included
   inline headers and feed the same cross-unit scoring workflow
+- Header bridge support is now metadata-driven via pattern declarations rather
+  than a separate hardcoded allowlist, which keeps future cross-unit opt-ins
+  aligned with registry/test coverage
 
 Follow-on work:
 - Still-broader cross-unit patterns beyond the current header-backed set

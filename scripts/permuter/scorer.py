@@ -67,6 +67,8 @@ class Scorer:
         # Ghidra-guided fields (populated by get_baseline when ghidra=True)
         self.ghidra_code: Optional[str] = None
         self.ghidra_ast: object = None  # GhidraAST or None
+        self.m2c_code: Optional[str] = None
+        self.unit = unit
 
         # Derive targeted object path from source path.
         # Accept either relative or absolute source paths.
@@ -541,12 +543,18 @@ class Scorer:
 
         return results  # type: ignore[return-value]
 
-    def get_baseline(self, guided: bool = True, ghidra: bool = False) -> float:
+    def get_baseline(
+        self,
+        guided: bool = True,
+        ghidra: bool = False,
+        m2c: bool = False,
+    ) -> float:
         """Score the unmodified source. Must be called within context manager.
 
         When guided=True, runs objdiff with --include-instructions and
         produces a Diagnosis for pattern filtering.
         When ghidra=True, also looks up cached Ghidra decompilation.
+        When m2c=True, also tries to load machine-shaped m2c decompilation.
         """
         if self._original_source is None:
             raise RuntimeError("get_baseline() must be called within context manager")
@@ -582,6 +590,16 @@ class Scorer:
                 raise  # Let circuit breaker propagate to hill_climb
             except Exception as e:
                 print(f"  Ghidra: unavailable ({e})", file=sys.stderr)
+
+        if m2c:
+            try:
+                from .m2c import get_or_run_m2c
+                code = get_or_run_m2c(self.symbol, self.unit)
+                if code:
+                    self.m2c_code = code
+                    print(f"  m2c: loaded ({len(code)} bytes)", file=sys.stderr)
+            except Exception as e:
+                print(f"  m2c: unavailable ({e})", file=sys.stderr)
 
         # Check for ASM listing (for Ghidra+ASM crossref)
         # The /FAs listing would be at the same path as .obj but with .asm/.cod extension

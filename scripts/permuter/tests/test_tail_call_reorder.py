@@ -13,12 +13,18 @@ from scripts.permuter.tests.conftest import (
 )
 
 
-def _variants(source: str, ghidra_code: str | None = None):
+def _variants(
+    source: str,
+    ghidra_code: str | None = None,
+    m2c_code: str | None = None,
+):
     diagnosis = diag_with_prologue_fewer_saves()
     if ghidra_code is None:
         ctx = make_context(source, "test_func", diagnosis)
     else:
         ctx = make_ghidra_context(source, "test_func", diagnosis, ghidra_code)
+    if m2c_code is not None:
+        ctx.m2c_code = m2c_code
     return list(get_pattern("tail_call_reorder").generate(ctx))
 
 
@@ -162,6 +168,66 @@ void test_func() {
                 for v in variants
             )
         )
+
+    def test_m2c_guidance_applies_without_ghidra(self):
+        variants = _variants(
+            """\
+void test_func() {
+    Second();
+    First();
+    return;
+}
+""",
+            m2c_code="""\
+void test_func(void) {
+    First();
+    Second();
+    return;
+}
+""",
+        )
+        self.assertTrue(
+            any(
+                match_variant(
+                    v.source,
+                    """\
+void test_func() {
+    First();
+    Second();
+    return;
+}
+""",
+                    "normalized",
+                )
+                for v in variants
+            )
+        )
+
+    def test_conflicting_ghidra_and_m2c_hints_fall_back_to_blind(self):
+        variants = _variants(
+            """\
+void test_func() {
+    First();
+    Second();
+    return;
+}
+""",
+            ghidra_code="""\
+void test_func(void) {
+    First();
+    Second();
+    return;
+}
+""",
+            m2c_code="""\
+void test_func(void) {
+    Second();
+    First();
+    return;
+}
+""",
+        )
+        self.assertTrue(variants)
 
     def test_does_not_reorder_obvious_mutator_calls(self):
         variants = _variants(
