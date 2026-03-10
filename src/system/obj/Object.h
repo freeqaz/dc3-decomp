@@ -346,11 +346,7 @@ public:
     // Register swap pattern: declaring size() before begin() affects PPC register allocation
     // Variable declaration order is critical for matching FlowNode::MiloPreRun codegen
     // See STYLEGUIDE.md §Variable Declaration Order
-    iterator end() {
-        int s = size();
-        iterator b = begin();
-        return b + s;
-    }
+    iterator end() { return begin() + size(); }
     const_iterator begin() const { return empty() ? nullptr : mNodes.begin(); }
     const_iterator end() const { return begin() + size(); }
 #endif
@@ -614,7 +610,7 @@ extern DataArray *SystemConfig(Symbol, Symbol, Symbol);
 // BEGIN HANDLE MACROS -------------------------------------------------------------------
 #define BEGIN_HANDLERS(objType)                                                          \
     DataNode objType::Handle(DataArray *_msg, bool _warn) {                              \
-        Symbol sym = CONST_ARRAY(_msg)->Sym(1);                                          \
+        Symbol sym = _msg->Sym(1);                                                       \
         MessageTimer timer(                                                              \
             (MessageTimer::Active()) ? static_cast<Hmx::Object *>(this) : 0, sym         \
         );
@@ -622,7 +618,7 @@ extern DataArray *SystemConfig(Symbol, Symbol, Symbol);
 // for handlers of objects that aren't directly Hmx::Objects (i.e. UIListProvider)
 #define BEGIN_CUSTOM_HANDLERS(objType)                                                   \
     DataNode objType::Handle(DataArray *_msg, bool _warn) {                              \
-        Symbol sym = CONST_ARRAY(_msg)->Sym(1);                                          \
+        Symbol sym = _msg->Sym(1);                                          \
         MessageTimer timer(                                                              \
             (MessageTimer::Active()) ? dynamic_cast<Hmx::Object *>(this) : 0, sym        \
         );
@@ -1424,7 +1420,7 @@ public:
     void push_back() { resize(size() + 1); }
 
     void push_back(const T &t) {
-        resize(size() + 1);
+        push_back();
         back() = t;
     }
 
