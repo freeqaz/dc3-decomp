@@ -257,11 +257,10 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     if (material.useTexture > 0.5) {
         let texColor = textureSample(diffuseTex, diffuseSampler, in.uv);
         // Font textures (DXT5): glyph shape is in alpha, RGB is garbage.
-        // Use alpha as grayscale RGB when useAlphaAsRGB is set.
-        // With SrcAlpha blending, keep RGB at full color and let alpha control
-        // opacity. Multiplying RGB by coverage AND blending by alpha would square it.
+        // Use vertex color directly for text (skip material color tint).
+        // The mTextColor is baked into vertex colors by the text mesh builder.
         if (material.useAlphaAsRGB > 0.5) {
-            baseColor = vec4f(baseColor.rgb, baseColor.a * texColor.a);
+            baseColor = vec4f(in.color.rgb, in.color.a * texColor.a);
         } else {
             baseColor = vec4f(baseColor.rgb * texColor.rgb, baseColor.a * texColor.a);
         }

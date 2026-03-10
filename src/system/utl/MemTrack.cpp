@@ -82,9 +82,11 @@ void MemTrackAlloc(
     if (gMemTracker && gMemTrackerTracking) {
         CritSecTracker tracker(gMemLock);
         int heap = GetCurrentHeapNum();
+#ifndef HX_NATIVE
         if (mem >= (void *)0xA0000000) {
             heap = MemNumHeaps();
         }
+#endif
         gMemTracker->Alloc(req, act, type, mem, heap, pooled, strat, file, line);
     }
 }

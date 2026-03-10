@@ -141,17 +141,15 @@ class AgentRunner:
         """Build auth environment for SDK/subprocess. Public for testing.
 
         Returns environment variables for API authentication.
-        SDK auto-detects OAuth credentials, but we still need to set
-        backend-specific environment variables when that backend is enabled
-        or when the model requires a specific backend.
+        Uses get_backend() which respects --provider override and defaults
+        Anthropic-native models to the anthropic backend (subscription).
         """
+        from .config import get_backend
+
         env: dict[str, str] = {}
+        backend = get_backend(model)
 
-        use_zai = _get_zai_enabled() or (model and requires_zai(model))
-        use_openrouter = _get_openrouter_enabled() or (model and requires_openrouter(model))
-
-        # Z.AI takes priority over OpenRouter
-        if use_zai and _get_zai_api_key():
+        if backend == "zai" and _get_zai_api_key():
             env["ANTHROPIC_BASE_URL"] = _get_zai_base_url()
             env["ANTHROPIC_AUTH_TOKEN"] = _get_zai_api_key()
             env["ANTHROPIC_API_KEY"] = ""  # Must be explicitly empty
@@ -161,7 +159,7 @@ class AgentRunner:
                 zai_model_id = get_model_id(model)
                 env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = zai_model_id
 
-        elif use_openrouter and _get_openrouter_api_key():
+        elif backend == "openrouter" and _get_openrouter_api_key():
             env["ANTHROPIC_BASE_URL"] = _get_openrouter_base_url()
             env["ANTHROPIC_AUTH_TOKEN"] = _get_openrouter_api_key()
             env["ANTHROPIC_API_KEY"] = ""  # Must be explicitly empty

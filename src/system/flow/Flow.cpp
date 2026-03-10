@@ -89,7 +89,7 @@ END_CUSTOM_PROPSYNC
 
 BEGIN_PROPSYNCS(Flow)
     SYNC_PROP(dynamic_properties, mDynamicProperties)
-    SYNC_PROP_SET(start_on_enter, mStartMode != 0, StartOnEnter(_val.Int()))
+    SYNC_PROP_SET(start_on_enter, mStartMode > 0, StartOnEnter(_val.Int()))
     SYNC_PROP_SET(start_after_game_code, mStartMode == 2, StartAfterGameCode(_val.Int()))
     SYNC_PROP(hard_stop, mHardStop)
     SYNC_PROP(intensity, FlowNode::sIntensity)
@@ -321,7 +321,7 @@ void Flow::PostLoad(BinStream &bs) {
             std::list<Symbol> stopEvents;
             d >> triggerEvents;
             d >> stopEvents;
-            if (triggerEvents.size() != 0 || stopEvents.size() != 0) {
+            if (triggerEvents.size() > 0 || stopEvents.size() > 0) {
                 MILO_NOTIFY("Flow with trigger events found, %s", PathName(this));
             }
             d >> mHardStop;
@@ -338,7 +338,7 @@ void Flow::PostLoad(BinStream &bs) {
                 ObjList<FlowTrigger::PropTriggerDefn> stopProperties(this);
                 d >> triggerProperties;
                 d >> stopProperties;
-                if (triggerProperties.size() != 0 || stopProperties.size() != 0) {
+                if (triggerProperties.size() > 0 || stopProperties.size() > 0) {
                     MILO_NOTIFY("Flow with trigger events found, %s", PathName(this));
                 }
                 stopProperties.clear();
@@ -365,7 +365,7 @@ void Flow::PostLoad(BinStream &bs) {
             mPrivate = false;
         }
     }
-    if (mStartMode != 0) {
+    if (mStartMode > 0) {
         mPrivate = true;
     }
     RefreshPortLabelLists();
@@ -436,7 +436,7 @@ void Flow::Deactivate(bool b1) { FlowQueueable::Deactivate(b1); }
 
 void Flow::Enter() {
     FlowQueueable *q = this;
-    if (ProxyFile().empty() && mStartMode != 0) {
+    if (ProxyFile().empty() && mStartMode > 0) {
         if (mStartMode == 1) {
             q->Execute(kQueue);
         } else {

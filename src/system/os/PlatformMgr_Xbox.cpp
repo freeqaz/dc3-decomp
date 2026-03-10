@@ -495,11 +495,11 @@ namespace {
     }
 
     void SmartGlassInit() {
-        gSmartGlassClientIDs[0] = 0;
-        gSmartGlassClientIDs[1] = 0;
-        gSmartGlassClientIDs[2] = 0;
-        gSmartGlassClientIDs[3] = 0;
-        long result = XbcInitialize(XbcCallback, 0);
+        *(unsigned long*)gSmartGlassClientIDs = 0;
+        *(unsigned long*)(gSmartGlassClientIDs + 4) = 0;
+        *(unsigned long*)(gSmartGlassClientIDs + 8) = 0;
+        *(unsigned long*)(gSmartGlassClientIDs + 12) = 0;
+        long result = XbcInitialize(XbcCallback, nullptr);
         if (result < 0) {
             MILO_FAIL("Failed to initialize Xbox SmartGlass library.\n");
         }

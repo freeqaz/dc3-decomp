@@ -153,11 +153,13 @@ BEGIN_LOADS(UIList)
     PostLoad(bs);
 END_LOADS
 
-BEGIN_COPYS(UIList)
-    COPY_SUPERCLASS(UIComponent)
-    CREATE_COPY(UIList)
-    BEGIN_COPYING_MEMBERS
-        COPY_MEMBER(mListDir)
+void UIList::Copy(const Hmx::Object *obj, CopyType ty) {
+    UIComponent::Copy(obj, ty);
+
+    const UIList *c = dynamic_cast<const UIList *>(obj);
+    if (c) {
+        mListDir = c->mListDir;
+
         mListState.SetCircular(c->mListState.Circular(), true);
         mListState.SetNumDisplay(c->mListState.NumDisplay(), true);
         mListState.SetGridSpan(c->mListState.GridSpan(), true);
@@ -166,13 +168,24 @@ BEGIN_COPYS(UIList)
         mListState.SetScrollPastMinDisplay(c->mListState.ScrollPastMinDisplay());
         mListState.SetMaxDisplay(c->mListState.MaxDisplay());
         mListState.SetScrollPastMaxDisplay(c->mListState.ScrollPastMaxDisplay());
-        COPY_MEMBER(mExtendedLabelEntries)
-        COPY_MEMBER(mExtendedMeshEntries)
-        COPY_MEMBER(mExtendedCustomEntries)
+
+        mNumData = c->mNumData;
+        mPaginate = c->mPaginate;
+        mAutoScrollPause = c->mAutoScrollPause;
+        mAutoScrollSendMsgs = c->mAutoScrollSendMsgs;
+        mUncappedNumDisplay = c->mUncappedNumDisplay;
+        mLimitCircularDisplayNumToDataNum = c->mLimitCircularDisplayNumToDataNum;
+        mAllowHighlight = c->mAllowHighlight;
+
+        mExtendedLabelEntries = c->mExtendedLabelEntries;
+        mExtendedMeshEntries = c->mExtendedMeshEntries;
+        mExtendedCustomEntries = c->mExtendedCustomEntries;
+
         CopyHandlerData(c);
-    END_COPYING_MEMBERS
-    Update();
-END_COPYS
+
+        Update();
+    }
+}
 
 UIListDir *UIList::GetUIListDir() const { return mListDir; }
 

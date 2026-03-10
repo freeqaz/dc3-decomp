@@ -395,7 +395,7 @@ void CharBones::ScaleDown(CharBones &dst, float f) const {
                 data->y = 0.0f;
                 data->x = 0.0f;
                 db->weight = 0.0f;
-                if (src == src_end) goto zero_quat;
+                if (src >= src_end) goto zero_quat;
                 db++;
                 if (db >= db_end) goto complain;
                 data++;
@@ -420,7 +420,7 @@ void CharBones::ScaleDown(CharBones &dst, float f) const {
                 qdata->z = 0.0f;
                 qdata->w = 0.0f;
                 db->weight = 0.0f;
-                if (src == src_end) goto zero_rot;
+                if (src >= src_end) goto zero_rot;
                 db++;
                 if (db >= db_end) goto complain;
                 qdata++;
@@ -442,7 +442,7 @@ void CharBones::ScaleDown(CharBones &dst, float f) const {
                 src++;
                 *fdata = 0.0f;
                 db->weight = 0.0f;
-                if (src == src_end) return;
+                if (src >= src_end) return;
                 db++;
                 if (db >= db_end) goto complain;
                 fdata++;
@@ -465,7 +465,7 @@ void CharBones::ScaleDown(CharBones &dst, float f) const {
                 data->x *= f;
                 data->y *= f;
                 data->z *= f;
-                if (src == src_end) goto scale_quat;
+                if (src >= src_end) goto scale_quat;
                 db++;
                 if (db >= db_end) goto complain;
                 data++;
@@ -489,7 +489,7 @@ void CharBones::ScaleDown(CharBones &dst, float f) const {
                 qdata->y *= f;
                 qdata->z *= f;
                 qdata->w *= f;
-                if (src == src_end) goto scale_rot;
+                if (src >= src_end) goto scale_rot;
                 db++;
                 if (db >= db_end) goto complain;
                 qdata++;
@@ -510,7 +510,7 @@ void CharBones::ScaleDown(CharBones &dst, float f) const {
                 }
                 src++;
                 *fdata *= f;
-                if (src == src_end) return;
+                if (src >= src_end) return;
                 db++;
                 if (db >= db_end) goto complain;
                 fdata++;
@@ -551,7 +551,7 @@ void CharBones::Blend(CharBones &dst) const {
             ddata->y += sdata->y;
             ddata->z += sdata->z;
             src++;
-            if (src == src_end) goto blend_quat;
+            if (src >= src_end) goto blend_quat;
             db++;
             if (db >= db_end) goto complain;
             ddata++;
@@ -593,7 +593,7 @@ blend_quat:
                 dquat->w += sw;
             }
             src++;
-            if (src == src_end) goto blend_rot;
+            if (src >= src_end) goto blend_rot;
             db++;
             if (db >= db_end) goto complain;
             dquat++;
@@ -617,7 +617,7 @@ blend_rot:
             float wt = src->weight;
             src++;
             *dfdata += wt * *sfdata;
-            if (src == src_end) return;
+            if (src >= src_end) return;
             db++;
             if (db >= db_end) goto complain;
             dfdata++;
@@ -635,7 +635,6 @@ void CharBones::ScaleAdd(CharBones &dst, float f) const {
     const Bone *src = mBones.begin();
     if (src == mBones.end()) return;
 
-    // Position section
     if (mCounts[TYPE_QUAT] > mCounts[TYPE_POS]) {
         Vector3 *ddata = (Vector3 *)dst.mStart;
         Bone *db_end = dst.mBones.begin() + dst.mCounts[TYPE_QUAT];
@@ -656,7 +655,7 @@ void CharBones::ScaleAdd(CharBones &dst, float f) const {
                 ddata->y += (float)(long long)sy * 0.039674062f * f;
                 db->weight += src->weight * f;
                 src++;
-                if (src == src_end) goto add_quat;
+                if (src >= src_end) goto add_quat;
                 db++;
                 if (db >= db_end) goto complain;
                 ddata++;
@@ -675,7 +674,7 @@ void CharBones::ScaleAdd(CharBones &dst, float f) const {
                 ddata->z += sdata->z * f;
                 db->weight += src->weight * f;
                 src++;
-                if (src == src_end) goto add_quat;
+                if (src >= src_end) goto add_quat;
                 db++;
                 if (db >= db_end) goto complain;
                 ddata++;
@@ -720,7 +719,7 @@ add_quat:
                 }
                 db->weight += src->weight * f;
                 src++;
-                if (src == src_end) goto add_rot;
+                if (src >= src_end) goto add_rot;
                 db++;
                 if (db >= db_end) goto complain;
                 dquat++;
@@ -756,7 +755,7 @@ add_quat:
                 }
                 db->weight += src->weight * f;
                 src++;
-                if (src == src_end) goto add_rot;
+                if (src >= src_end) goto add_rot;
                 db++;
                 if (db >= db_end) goto complain;
                 dquat++;
@@ -791,7 +790,7 @@ add_quat:
                 }
                 db->weight += src->weight * f;
                 src++;
-                if (src == src_end) goto add_rot;
+                if (src >= src_end) goto add_rot;
                 db++;
                 if (db >= db_end) goto complain;
                 dquat++;
@@ -816,7 +815,7 @@ add_rot:
                 *dfdata += (float)(long long)*(short *)sfdata * (f * 0.0006103515625f);
                 db->weight += src->weight * f;
                 src++;
-                if (src == src_end) return;
+                if (src >= src_end) return;
                 db++;
                 if (db >= db_end) goto complain;
                 dfdata++;
@@ -832,7 +831,7 @@ add_rot:
                 *dfdata += *sfdata * f;
                 db->weight += src->weight * f;
                 src++;
-                if (src == src_end) return;
+                if (src >= src_end) return;
                 db++;
                 if (db >= db_end) goto complain;
                 dfdata++;
@@ -853,17 +852,17 @@ void CharBones::RotateBy(CharBones &dst) const {
 
     // Position section
     auto& _ref1 = mCounts;
-    if ((int)(int)_ref1[TYPE_QUAT] > _ref1[TYPE_POS]) {
+    if (_ref1[TYPE_QUAT] > _ref1[TYPE_POS]) {
         Bone *db_end = dst.mBones.begin() + dst.mCounts[TYPE_QUAT];
         Vector3 *ddata = (Vector3 *)dst.mStart;
         Bone *db = dst.mBones.begin() + dst.mCounts[TYPE_POS];
         const Bone *src_end = src + _ref1[TYPE_QUAT];
-        if (db && mCompression >= kCompressVects) {
+        if (db != nullptr && mCompression >= kCompressVects) {
             short *sdata = (short *)mStart;
             while (true) {
                 long long sz = (long long)sdata[2];
                 short sy = sdata[1];
-                while (src->name != db->name) {
+                while (db->name != src->name) {
                     db++;
                     if (db >= db_end) goto complain;
                     ddata++;
@@ -890,7 +889,7 @@ void CharBones::RotateBy(CharBones &dst) const {
                 ddata->x += sdata->x;
                 ddata->y += sdata->y;
                 ddata->z += sdata->z;
-                if (src == src_end) goto rotate_quat;
+                if (src >= src_end) goto rotate_quat;
                 db++;
                 if (db >= db_end) goto complain;
                 ddata++;
@@ -924,7 +923,7 @@ rotate_quat:
                 dquat->z = -(dx * sq.y - ((dy * sq.x + (dz * sq.w + dw * sq.z))));
                 dquat->y = -(dz * sq.x - (dw * sq.y + dy * sq.w + dx * sq.z));
                 dquat->x = -(dy * sq.z - (dw * sq.x + dz * sq.y + dx * sq.w));
-                if (src == src_end) goto rotate_rot;
+                if (src >= src_end) goto rotate_rot;
                 db++;
                 if (db >= db_end) goto complain;
                 dquat++;
@@ -949,7 +948,7 @@ rotate_quat:
                 dquat->z = -(dx * sq.y - (dy * sq.x + dz * sq.w + dw * sq.z));
                 dquat->y = -(dz * sq.x - (dw * sq.y + dy * sq.w + dx * sq.z));
                 dquat->x = -(dy * sq.z - (dw * sq.x + dz * sq.y + dx * sq.w));
-                if (src == src_end) goto rotate_rot;
+                if (src >= src_end) goto rotate_rot;
                 db++;
                 if (db >= db_end) goto complain;
                 dquat++;
@@ -978,7 +977,7 @@ rotate_quat:
                 dquat->z = -dquat->z;
                 dquat->w = -(dz * sz - -(dy * sy - (dw * sw - sx * dx)));
                 dquat->x = -(dy * sz - (sy * dz + sx * dw + dx * sw));
-                if (src == src_end) goto rotate_rot;
+                if (src >= src_end) goto rotate_rot;
                 db++;
                 if (db >= db_end) goto complain;
                 dquat++;
@@ -1002,7 +1001,7 @@ rotate_rot:
                 }
                 src++;
                 *dfdata += (float)(long long)*(short *)sfdata * 0.00061035156f;
-                if (src == src_end) return;
+                if (src >= src_end) return;
                 db++;
                 if (db >= db_end) goto complain;
                 dfdata++;
@@ -1017,7 +1016,7 @@ rotate_rot:
                 }
                 src++;
                 *dfdata += *sfdata;
-                if (src == src_end) return;
+                if (src >= src_end) return;
                 db++;
                 if (db >= db_end) goto complain;
                 dfdata++;
@@ -1034,8 +1033,7 @@ complain:
 // MARK: RotateTo
 void CharBones::RotateTo(CharBones &dst, float f) const {
     const Bone *src = mBones.begin();
-    auto bonesEnd = mBones.end();
-    if (src == bonesEnd) return;
+    if (src >= mBones.end()) return;
 
     // Position section
     if (mCounts[TYPE_QUAT] > mCounts[TYPE_POS]) {
@@ -1043,7 +1041,7 @@ void CharBones::RotateTo(CharBones &dst, float f) const {
         Vector3 *ddata = (Vector3 *)dst.mStart;
         Bone *db_end = dst.mBones.begin() + dst.mCounts[TYPE_QUAT];
         Bone *db = dst.mBones.begin() + dst.mCounts[TYPE_POS];
-        if (db && mCompression >= kCompressVects) {
+        if (db != nullptr && mCompression >= kCompressVects) {
             short *sdata = (short *)mStart;
             while (true) {
                 long long sz = (long long)sdata[2];
@@ -1057,7 +1055,7 @@ void CharBones::RotateTo(CharBones &dst, float f) const {
                 ddata->x += (float)(long long)sdata[0] * 0.039674062f * f;
                 ddata->y += (float)(long long)sy * 0.039674062f * f;
                 ddata->z += (float)sz * 0.039674062f * f;
-                if (src == src_end) goto rotateto_quat;
+                if (src >= src_end) goto rotateto_quat;
                 db++;
                 if (db >= db_end) goto complain;
                 ddata++;
@@ -1075,7 +1073,7 @@ void CharBones::RotateTo(CharBones &dst, float f) const {
                 ddata->x += sdata->x * f;
                 ddata->y += sdata->y * f;
                 ddata->z += sdata->z * f;
-                if (src == src_end) goto rotateto_quat;
+                if (src >= src_end) goto rotateto_quat;
                 db++;
                 if (db >= db_end) goto complain;
                 ddata++;
@@ -1118,7 +1116,7 @@ rotateto_quat:
                 dquat->z = -(dy * sx - (dw * sq.z + dz * sq.w + dx * sy));
                 dquat->y = -(dx * sq.z - ((dz * sx + (dy * sq.w + dw * sy))));
                 dquat->x = -(dz * sy - (dw * sx + dy * sq.z + dx * sq.w));
-                if (src == src_end) goto rotateto_rot;
+                if (src >= src_end) goto rotateto_rot;
                 db++;
                 if (db >= db_end) goto complain;
                 dquat++;
@@ -1151,7 +1149,7 @@ rotateto_quat:
                 dquat->z = -(dy * sx - (sq.z * dw + dz * sq.w + dx * sy));
                 dquat->y = -(dx * sq.z - (sy * dw + dy * sq.w + dz * sx));
                 dquat->x = -(dz * sy - (dw * sx + dy * sq.z + dx * sq.w));
-                if (src == src_end) goto rotateto_rot;
+                if (src >= src_end) goto rotateto_rot;
                 db++;
                 if (db >= db_end) goto complain;
                 dquat++;
@@ -1174,16 +1172,16 @@ rotateto_quat:
                 } else {
                     sw = (1.0f - f) + sw;
                 }
-                float dw = dquat->w;
-                src++;
                 float dx = dquat->x;
+                src++;
                 float dz = dquat->z;
+                float dw = dquat->w;
                 float dy = dquat->y;
                 dquat->z = -(sx * dy - (sw * dz + sy * dx + sz * dw));
                 dquat->w = -(sz * dz - -(sy * dy - (sw * dw - sx * dx)));
                 dquat->y = -(sz * dx - (sw * dy + sx * dz + sy * dw));
                 dquat->x = -(sy * dz - (sw * dx + sz * dy + sx * dw));
-                if (src == src_end) goto rotateto_rot;
+                if (src >= src_end) goto rotateto_rot;
                 db++;
                 if (db >= db_end) goto complain;
                 dquat++;
@@ -1193,8 +1191,7 @@ rotateto_quat:
     }
 rotateto_rot:
     if (mCounts[TYPE_END] > mCounts[TYPE_ROTX]) {
-        auto _tmp4 = dst.mBones.begin();
-        Bone *db_end = _tmp4 + dst.mCounts[TYPE_END];
+        Bone *db_end = dst.mBones.begin() + dst.mCounts[TYPE_END];
         const Bone *src_end = mBones.data() + mCounts[TYPE_END];
         Bone *db = dst.mBones.begin() + dst.mCounts[TYPE_ROTX];
         float *dfdata = (float *)(dst.mStart + dst.mOffsets[TYPE_ROTX]);
@@ -1208,7 +1205,7 @@ rotateto_rot:
                 }
                 src++;
                 *dfdata += (float)(long long)*(short *)sfdata * (f * 0.00061035156f);
-                if (src == src_end) return;
+                if (src >= src_end) return;
                 db++;
                 if (db >= db_end) goto complain;
                 dfdata++;
@@ -1223,7 +1220,7 @@ rotateto_rot:
                 }
                 src++;
                 *dfdata += *sfdata * f;
-                if (src == src_end) return;
+                if (src >= src_end) return;
                 db++;
                 if (db >= db_end) goto complain;
                 dfdata++;

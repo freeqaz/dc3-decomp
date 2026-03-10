@@ -21,11 +21,11 @@ void CharIKHead::Poll() {
     if (!mHead || !mTarget || !mSpine)
         return;
     UpdatePoints(false);
-    if (mHead && TheTaskMgr.DeltaSeconds() > 0) {
+    if (TheTaskMgr.DeltaSeconds() > 0 && mHead) {
         Interp(mHeadFilter, mHead->WorldXfm().v, 0.5f, mHeadFilter);
     }
     float weight = Weight();
-    if (weight != 0) {
+    if (weight > 0) {
         Vector3 headOffset;
         Hmx::Matrix3 origHeadMat(mHead->WorldXfm().m);
         Subtract(mHead->WorldXfm().v, mHeadFilter, headOffset);
@@ -59,7 +59,6 @@ void CharIKHead::Poll() {
             Vector3 diff;
             Subtract(mPoints[i].mPos, mPoints[i - 1].mPos, diff);
             correction -= diff;
-            // ScaleToMagnitude: scale diff to have magnitude mPoints[i-1].mLen
             float diffLen = Length(diff);
             if (diffLen > 0)
                 Scale(diff, mPoints[i - 1].mLen / diffLen, diff);
@@ -74,7 +73,6 @@ void CharIKHead::Poll() {
             if (i > 0) {
                 Vector3 localVec;
                 Hmx::Quat rotQuat;
-                // Multiply(v, matrix, out)
                 Multiply(mPoints[i - 1].mBone->LocalXfm().v, boneXfm.m, localVec);
                 Vector3 targetVec;
                 Subtract(mPoints[i - 1].mPos, mPoints[i].mPos, targetVec);
@@ -175,8 +173,12 @@ void CharIKHead::PollDeps(
     changedBy.push_back(mMouth);
     changedBy.push_back(mHead);
     changedBy.push_back(mTarget);
-    if (GenerationCount(mSpine, mHead) != 0) {
-        for (RndTransformable *t = mHead; t != 0 && t != mSpine->TransParent();
+    if (GenerationCount(mSpine, mHead) > 0) {
+#ifdef HX_NATIVE
+        for (RndTransformable *t = mHead; t != nullptr && t != mSpine->TransParent();
+#else
+        for (RndTransformable *t = mHead; t > 0 && t != mSpine->TransParent();
+#endif
              t = t->TransParent()) {
             change.push_back(t);
         }
@@ -189,7 +191,7 @@ void CharIKHead::UpdatePoints(bool b) {
         mUpdatePoints = false;
         mPoints.clear();
         int gencnt = GenerationCount(mSpine, mHead);
-        if (gencnt != 0) {
+        if (gencnt > 0) {
             mPoints.resize(gencnt + 1);
             float f1 = 0.0f;
             int i;
@@ -216,17 +218,15 @@ void CharIKHead::Highlight() {
     float weight = Weight();
     if (weight == 0 || !mHead || !mTarget || !mSpine)
         return;
-    else {
-        UtilDrawSphere(mDebugTarget, mTargetRadius, Hmx::Color(0, 1, 0), 0);
-        UtilDrawString(MakeString("%.2f", weight), mDebugTarget, Hmx::Color(1, 1, 1));
-        for (int i = 1; i < mPoints.size(); i++) {
-            TheRnd.DrawLine(
-                mPoints[i].mWorldPos, mPoints[i - 1].mWorldPos, Hmx::Color(1, 0, 0), false
-            );
-            TheRnd.DrawLine(
-                mPoints[i].mPos, mPoints[i - 1].mPos, Hmx::Color(0, 1, 0), false
-            );
-        }
+    UtilDrawSphere(mDebugTarget, mTargetRadius, Hmx::Color(0, 1, 0), 0);
+    UtilDrawString(MakeString("%.2f", weight), mDebugTarget, Hmx::Color(1, 1, 1));
+    for (int i = 1; i < mPoints.size(); i++) {
+        TheRnd.DrawLine(
+            mPoints[i].mWorldPos, mPoints[i - 1].mWorldPos, Hmx::Color(1, 0, 0), false
+        );
+        TheRnd.DrawLine(
+            mPoints[i].mPos, mPoints[i - 1].mPos, Hmx::Color(0, 1, 0), false
+        );
     }
 }
 

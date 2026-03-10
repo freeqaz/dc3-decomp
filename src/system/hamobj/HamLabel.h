@@ -11,6 +11,7 @@
 
 /** "Label with Hammer-specific features" */
 class HamLabel : public UILabel, public UITransitionHandler {
+    friend class HamListRibbon;
 public:
     // Hmx::Object
     virtual ~HamLabel();

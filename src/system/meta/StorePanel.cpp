@@ -180,7 +180,11 @@ void StorePanel::Poll() {
                         for (size_t i = 0; i < mCartOffers.size(); i++) {
                             songIds.push_back(mCartOffers[i].first->songID);
                         }
+#ifdef HX_NATIVE
+                        void *mem = operator new(sizeof(MultipleItemsPostPurchaseEnumJob));
+#else
                         void *mem = operator new(0x64);
+#endif
                         MultipleItemsPostPurchaseEnumJob *job = 0;
                         job = new (mem) MultipleItemsPostPurchaseEnumJob(
                                 this,
@@ -204,7 +208,11 @@ void StorePanel::Poll() {
                         } else if (mPurchaser->IsSuccess()) {
                             // purchased
                         } else if (mCheckoutProfile != 0) {
+#ifdef HX_NATIVE
+                            void *mem = operator new(sizeof(PostPurchaseEnumJob));
+#else
                             void *mem = operator new(0x50);
+#endif
                             PostPurchaseEnumJob *job = 0;
                             job = new (mem) PostPurchaseEnumJob(
                                     this,
@@ -283,7 +291,11 @@ void StorePanel::CheckOut(StorePurchaseable *p) {
     mCheckoutProfile = (int)profile;
 
     // Allocate and construct XboxPurchaser
+#ifdef HX_NATIVE
+    void *mem = operator new(sizeof(XboxPurchaser));
+#else
     void *mem = operator new(0x50);
+#endif
     if (mem) {
         purchaser = new (mem) XboxPurchaser(
             profile->GetPadNum(),
@@ -390,7 +402,11 @@ void StorePanel::MultipleItemsCheckout(std::list<StoreOffer *> *offers) {
         mCartOffers.push_back(pair);
     }
 
+#ifdef HX_NATIVE
+    void* mem = operator new(sizeof(XboxMultipleItemsPurchaser));
+#else
     void* mem = operator new(0x50);
+#endif
     if (mem) {
         mPurchaser = new (mem) XboxMultipleItemsPurchaser(
             profile->GetPadNum(),
@@ -514,16 +530,15 @@ void StorePanel::FinishEnum(std::list<EnumProduct> const &enumList, bool arg) {
 }
 
 StoreError StorePanel::UpdateOffers(std::list<EnumProduct> const &enumList, bool arg) {
-    std::vector<StoreOffer *> *offers;
     StoreError result;
+    std::vector<StoreOffer *> *offers;
 
-    if (!(arg == 0)) {
+    if (arg) {
         offers = &mPendingOffers;
     } else {
         offers = &mOffers;
     }
 
-    // Check if mShowTestOffers is non-zero
     if (mShowTestOffers != 0) {
         result = kStoreErrorSuccess;
     } else if (offers->size() == 0) {
@@ -535,18 +550,18 @@ StoreError StorePanel::UpdateOffers(std::list<EnumProduct> const &enumList, bool
         result = kStoreErrorNoContent;
     }
 
-    // Iterate through offers
     std::vector<StoreOffer *>::iterator it;
     auto offersEnd = offers->end();
     for (it = offers->begin(); it != offersEnd; ++it) {
         StoreOffer *offer = *it;
         bool _cond = offer->Exists();
         if (_cond) {
+            // Check if offer matches enum list
             std::list<EnumProduct>::const_iterator enumIt;
             enumIt = enumList.begin();
             bool match = false;
             while (enumIt != enumList.end()) {
-                if (offer->songID == *(u64 *)&enumIt->mOfferIDLo) {
+                if (offer->songID == enumIt->mOfferIDLo) {
                     match = true;
                     break;
                 }

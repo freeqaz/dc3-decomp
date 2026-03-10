@@ -71,36 +71,43 @@ void HamCamShot::EndAnim() {
 
 void HamCamShot::SetPreFrame(float frame, float blend) {
     mTargetsFlipped = true;
-    auto& nextShotIt = mNextShotIt;
-    if (frame >= mZeroTime && nextShotIt != 0) {
+
+    bool inFirstShot = true;
+    if (frame >= mDuration && mNextShotIt != mNextShots.end()) {
+        inFirstShot = false;
+    }
+
+    if (inFirstShot) {
+        if (mNextShotIt != mNextShots.end()) {
+            ResetNextShot();
+        }
+    } else {
         float nextOffset = frame - mZeroTime;
-        while (nextOffset < mNextShotDuration) {
-            auto endIt = mNextShots.end();
-            if (nextShotIt == endIt) break;
+        while (nextOffset < mNextShotDuration && mNextShotIt != mNextShots.end()) {
             if (mCurrentShot && mCurrentShot != this) {
                 mCurrentShot->EndAnim();
             }
-            HamCamShot *nextCurrent = *nextShotIt;
+            HamCamShot *nextCurrent = *mNextShotIt;
             mCurrentShot = nextCurrent;
             if (mCurrentShot) {
                 mCurrentShot->StartAnim();
                 mNextShotDuration = mCurrentShot->GetTotalDuration();
-                mNextShotOffset += mNextShotDuration;
+                mNextShotOffset = mNextShotOffset + mNextShotDuration;
             }
-            ++nextShotIt;
+            ++mNextShotIt;
         }
         frame = nextOffset - mNextShotDuration;
         if (frame >= mNextShotOffset) {
             float maxDuration = kHugeFloat;
             do {
                 unsigned char iterated = (unsigned char)(IterateNextShot());
-                if (!(!iterated)) {
+                if (iterated != 0) {
                     frame -= mNextShotDuration;
-                    mNextShotOffset += mNextShotDuration;
+                    mNextShotOffset = mNextShotOffset + mNextShotDuration;
                     if (mCurrentShot && mCurrentShot != this) {
                         mCurrentShot->EndAnim();
                     }
-                    HamCamShot *nextShot = *nextShotIt;
+                    HamCamShot *nextShot = *mNextShotIt;
                     mCurrentShot = nextShot;
                     if (mCurrentShot) {
                         mCurrentShot->StartAnim();
@@ -109,7 +116,7 @@ void HamCamShot::SetPreFrame(float frame, float blend) {
                 } else {
                     mNextShotDuration = maxDuration;
                 }
-            } while (mNextShotDuration <= frame);
+            } while (frame >= mNextShotDuration);
         }
     }
     if (mCurrentShot != this) {
@@ -212,13 +219,13 @@ void HamCamShot::UpdateTargetsFlipped() {
                     }
 
                     const char *clipsDirName;
-                    if (!(clipsDir == NULL)) {
+                    if (clipsDir != NULL) {
                         clipsDirName = clipsDir->Name();
                     } else {
                         clipsDirName = "NULL";
                     }
                     const char *charName;
-                    if (!(character == NULL)) {
+                    if (character != NULL) {
                         charName = PathName(character);
                     } else {
                         charName = "NULL";
@@ -692,10 +699,7 @@ void HamCamShot::ResetNextShot() {
 }
 
 bool HamCamShot::ListNextShots(std::list<HamCamShot *> &shots) {
-    if (mListingShots) {
-        MILO_NOTIFY("%s infinite camera shot loop detected!", PathName(this));
-        return false;
-    } else {
+    if (!mListingShots) {
         mListingShots = true;
         for (ObjPtrList<HamCamShot>::iterator it = mNextShots.begin();
              it != mNextShots.end();
@@ -709,6 +713,9 @@ bool HamCamShot::ListNextShots(std::list<HamCamShot *> &shots) {
         }
         mListingShots = false;
         return true;
+    } else {
+        MILO_NOTIFY("%s infinite camera shot loop detected!", PathName(this));
+        return false;
     }
 }
 
@@ -760,14 +767,14 @@ void HamCamShot::SetFrame(float frame, float blend) {
     if (CheckShotOver(origFrame)) {
         CamShot::SetShotOver();
     }
-    if (this == mCurrentShot) {
-        CamShot::SetFrame(frame, blend);
-    } else {
+    if (this != mCurrentShot) {
         for (ObjPtrList<RndAnimatable>::iterator it = mAnims.begin(); it != mAnims.end(); ++it) {
             (*it)->SetFrame(frame, 1.0f);
         }
         mCurrentShot->SetFrameEx(frame, blend);
         RndAnimatable::SetFrame(origFrame, blend);
+    } else {
+        CamShot::SetFrame(frame, blend);
     }
     CamShot::SetFrames(mMasterAnims, origFrame);
     mTargetsFlipped = false;
@@ -782,13 +789,11 @@ void HamCamShot::SetFrameEx(float frame, float blend) {
 bool HamCamShot::AreTargetsFlipped() const {
     static Symbol flip_camshot_targets("flip_camshot_targets");
     const DataNode *prop = TheHamProvider->Property(flip_camshot_targets, true);
-    bool result;
     if (prop) {
-        result = prop->Int(NULL) != 0;
+        return prop->Int(NULL) != 0;
     } else {
-        result = false;
+        return false;
     }
-    return result;
 }
 
 Symbol HamCamShot::GetFlipTarget(Symbol s) const {

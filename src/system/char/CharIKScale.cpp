@@ -6,8 +6,8 @@
 #include "rndobj/Trans.h"
 
 CharIKScale::CharIKScale()
-    : mDest(this), mScale(1), mSecondaryTargets(this), mBottomHeight(0), mTopHeight(0),
-      mAutoWeight(0) {}
+    : mDest(this), mScale(1.0f), mSecondaryTargets(this), mBottomHeight(0.0f), mTopHeight(0.0f),
+      mAutoWeight(false) {}
 
 CharIKScale::~CharIKScale() {}
 
@@ -74,18 +74,17 @@ END_LOADS
 
 void CharIKScale::Poll() {
     float weight = Weight();
-    if (mDest && weight != 0) {
+    if (mDest && weight > 0) {
         if (mAutoWeight) {
-            float bottom = mBottomHeight;
             float localZ = mDest->LocalXfm().v.z;
-            if (localZ < bottom)
-                weight = 0;
+            if (localZ < mBottomHeight)
+                weight = 0.0f;
             else if (localZ > mTopHeight)
                 weight = 1.0f;
             else
-                weight = (localZ - bottom) / (mTopHeight - bottom);
+                weight = (localZ - mBottomHeight) / (mTopHeight - mBottomHeight);
         }
-        if (weight != 0) {
+        if (weight > 0) {
             Transform destXfm(mDest->WorldXfm());
             destXfm.v = mDest->LocalXfm().v;
             destXfm.v.z *= Interp(1.0f, mScale, weight);
@@ -97,8 +96,7 @@ void CharIKScale::Poll() {
             }
             mDest->SetWorldXfm(destXfm);
             if (mSecondaryTargets.size() > 0) {
-                Vector3 fullScaledPos;
-                fullScaledPos = mDest->LocalXfm().v;
+                Vector3 fullScaledPos = mDest->LocalXfm().v;
                 fullScaledPos.z *= mScale;
                 Vector3 fullScaledWorldPos;
                 Multiply(fullScaledPos, mDest->TransParent()->WorldXfm(), fullScaledWorldPos);

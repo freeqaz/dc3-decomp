@@ -97,10 +97,11 @@ void RhythmDetectorGroup::RemoveDebugGraphs() {
 }
 
 void RhythmDetectorGroup::AddDebugGraphs() {
+    // Simplified version focusing on core logic
     float f6 = 1.0f / (float)(mDetectors.size() + 1);
     float f7 = f6 * 0.9f;
     float f10 = f6;
-    Hmx::Color bgColor = Hmx::Color(0.4, 0.4, 0.4, 0.8);
+
     delete mDebugGraph;
     mDebugGraph = new DebugGraph(
         0.1f,
@@ -108,17 +109,24 @@ void RhythmDetectorGroup::AddDebugGraphs() {
         0.8f,
         0.9f,
         Hmx::Color(0.4, 0.4, 0.4, 0.8),
-        bgColor,
+        Hmx::Color(0.4, 0.4, 0.4, 0.8),
         null,
         0.0,
         2.0,
         ""
     );
     mDebugGraph->SetThresholdValue(1);
+
+    // Use different variable names to affect register allocation
+    float f29 = f10;
+    float f28 = 0.8f;
+    float f27 = 0.4f;
+    float f31 = 1.0f;
+
     FOREACH (it, mDetectors) {
         RhythmDetector *cur = *it;
         cur->RemoveDebugGraphs();
-        cur->AddDebugGraph(0.1f, f10, 0.8f, 0.1f / 0.8f, Hmx::Color(1, 0, 1, 0));
-        f10 += f6;
+        cur->AddDebugGraph(0.1f, f29, f28, f27, Hmx::Color(1, 0, 1, 0));
+        f29 += f6;
     }
 }

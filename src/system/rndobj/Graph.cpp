@@ -178,8 +178,24 @@ DataNode OnGraphReset(DataArray *) {
 }
 
 void RndGraph::Terminate() {
-    RELEASE(sGraphs);
-    RELEASE(sOneFrame);
+    std::list<RndGraph*> *temp = sGraphs;
+#ifdef HX_NATIVE
+    if (temp != nullptr) {
+#else
+    if (temp > 0) {
+#endif
+        temp->clear();
+        delete temp;
+    }
+    sGraphs = nullptr;
+#ifdef HX_NATIVE
+    if (sOneFrame != nullptr) {
+#else
+    if (sOneFrame > 0) {
+#endif
+        delete sOneFrame;
+    }
+    sOneFrame = nullptr;
 }
 
 void RndGraph::Init() {

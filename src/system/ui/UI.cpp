@@ -525,6 +525,7 @@ void UIManager::Poll() {
                     {"tutorial_voice_control_screen_0", "tutorial_voice_control_screen_1"},
                     {"tutorial_voice_control_screen_1", "tutorial_party_mode_screen_0"},
                     {"tutorial_party_mode_screen_0", "tutorial_party_mode_screen_1"},
+                    {"main_screen", "choose_mode_screen"},
                     {nullptr, nullptr}
                 };
 

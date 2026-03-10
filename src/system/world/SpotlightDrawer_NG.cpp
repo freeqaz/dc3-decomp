@@ -40,6 +40,10 @@ NgSpotlightDrawer::NgSpotlightDrawer()
 
 NgSpotlightDrawer::~NgSpotlightDrawer() { RELEASE(mSpotCam); }
 
+NgSpotlightDrawer::SpotlightResources::~SpotlightResources() {
+    Clear();
+}
+
 void NgSpotlightDrawer::EndWorld() {
     if (SpotlightDrawer::sNeedDraw) {
         CheckCam();
@@ -100,8 +104,11 @@ void NgSpotlightDrawer::SpotlightResources::Clear() {
     }
     RELEASE(unk8);
     RELEASE(mDensityMap);
+    RELEASE(unk10);
+    RELEASE(unk14);
     unk18 = nullptr;
 }
+
 
 void NgSpotlightDrawer::SetXSectionTexture(const Spotlight::BeamDef &def) {
     RndTex *tex = def.mXSection;

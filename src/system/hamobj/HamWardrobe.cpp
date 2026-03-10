@@ -517,18 +517,21 @@ DataNode HamWardrobe::OnAddCrowd(DataArray *a) {
     WorldCrowd *crowd = a->Obj<WorldCrowd>(2);
     auto crowdEnd = crowd->mCharacters.end();
     auto& crowdMembers = mCrowdMembers;
+
     for (std::list<WorldCrowd::CharData>::iterator it = crowd->mCharacters.begin();
          it != crowdEnd; ++it) {
         Character *c = it->mDef.mChar;
-        if (c) {
+        if (c != nullptr) {
             ObjPtrList<Character>::iterator mit = crowdMembers.begin();
+            bool found = false;
             for (; mit != crowdMembers.end(); ++mit) {
                 Character *existing = *mit;
                 if (existing && (ObjectDir *)existing == (ObjectDir *)c) {
+                    found = true;
                     break;
                 }
             }
-            if (mit == crowdMembers.end()) {
+            if (!found) {
                 crowdMembers.push_back(c);
             }
         }

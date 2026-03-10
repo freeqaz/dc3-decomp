@@ -405,8 +405,6 @@ const char *FileRelativePathBuf(
             strcpy(oBuf, iFilepath);
         }
 
-        fpToks.clear();
-        rootToks.clear();
     }
     return oBuf;
 }

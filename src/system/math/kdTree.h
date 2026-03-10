@@ -81,6 +81,7 @@ public:
         bool FindSplit_Mean(const Box &box, const std::list<Triangle *> &items) {
             float yDiff = box.mMax.y - box.mMin.y;
             float zDiff = box.mMax.z - box.mMin.z;
+
             if (box.mMax.x - box.mMin.x > yDiff) {
                 mData.index = 0;
             } else {
@@ -89,12 +90,15 @@ public:
             if (zDiff > yDiff) {
                 mData.index = 2;
             }
+
             unsigned int vecIdx = mData.index;
             float idxDiff = box.mMax[vecIdx] - box.mMin[vecIdx];
-            long numContains = 0;
+
+            unsigned int numContains = 0;
             mData.real = idxDiff / 2.0f + box.mMin[mData.index];
             mData.index = 3;
-            double fsum = 0;
+
+            double fsum = 0.0;
             if (!items.empty()) {
                 FOREACH (it, items) {
                     Triangle *cur = *it;

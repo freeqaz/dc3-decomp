@@ -1089,17 +1089,14 @@ def query_batch_stats(
     limit: int = 0,
     exclude_at_limit: bool = False,
     db_path: str | Path = DEFAULT_DB_PATH,
+    exclude_patterns: list[str] | None = None,
+    max_attempts: int | None = DEFAULT_MAX_ATTEMPTS,
 ) -> dict[str, Any]:
     """
     Get statistics about functions that would be targeted by a batch run.
 
-    Returns breakdown of:
-    - Total functions matching pattern in database
-    - Functions in match percentage range
-    - Functions available (not locked, not complete)
-    - First-try functions (no previous attempts)
-    - Retry functions (have previous attempts)
-    - Functions that would be selected (respecting limit)
+    Uses the same filters as get_next_function so counts accurately reflect
+    what will actually be processed.
 
     Args:
         pattern: Glob pattern(s) for unit (e.g., "src/system/char/*" or list of patterns)
@@ -1108,13 +1105,18 @@ def query_batch_stats(
         limit: Max functions to process (0 = unlimited)
         exclude_at_limit: Also exclude AT_LIMIT verdicts (default: only COMPLETE excluded)
         db_path: Database path
+        exclude_patterns: Glob patterns for units to exclude (default: XDK/link_glue/binkxenon)
+        max_attempts: Skip functions with >= this many attempts (None to disable)
 
     Returns:
         Dict with counts and breakdowns
     """
     conn = get_connection(db_path)
 
-    glob_clause, glob_params = _build_unit_glob_clause(pattern)
+    # Use default exclusions if not specified (same as get_next_function)
+    if exclude_patterns is None:
+        exclude_patterns = DEFAULT_EXCLUDE_PATTERNS
+    glob_clause, glob_params = _build_unit_glob_clause(pattern, exclude_patterns)
 
     # Count functions matching pattern (total in scope)
     total_matching = conn.execute(
@@ -1122,8 +1124,17 @@ def query_batch_stats(
         glob_params,
     ).fetchone()[0]
 
-    # All batch stats queries exclude merged_ symbols (ICF artifacts, not real functions)
-    merged_filter = " AND symbol NOT LIKE 'merged_%'"
+    # Symbol filters matching get_next_function
+    symbol_filter = (
+        " AND symbol NOT LIKE 'merged_%'"
+        " AND symbol NOT LIKE 'fn_%'"
+        " AND symbol != 'OnlyReturns'"
+    )
+
+    # Max attempts filter matching get_next_function
+    attempts_filter = ""
+    if max_attempts is not None:
+        attempts_filter = f" AND (attempt_count IS NULL OR attempt_count < {max_attempts})"
 
     # Count functions in match percentage range
     in_range = conn.execute(
@@ -1131,7 +1142,7 @@ def query_batch_stats(
         SELECT COUNT(*) FROM functions
         WHERE {glob_clause}
           AND (current_percent IS NULL OR (current_percent >= ? AND current_percent <= ?))
-        """ + merged_filter,
+        """ + symbol_filter,
         glob_params + [min_percent, max_percent],
     ).fetchone()[0]
 
@@ -1142,7 +1153,7 @@ def query_batch_stats(
         WHERE {glob_clause}
           AND (current_percent IS NULL OR (current_percent >= ? AND current_percent <= ?))
           AND locked_by IS NOT NULL
-        """ + merged_filter,
+        """ + symbol_filter,
         glob_params + [min_percent, max_percent],
     ).fetchone()[0]
 
@@ -1160,11 +1171,11 @@ def query_batch_stats(
         WHERE {glob_clause}
           AND (current_percent IS NULL OR (current_percent >= ? AND current_percent <= ?))
           AND verdict IN ({verdict_placeholders})
-        """ + merged_filter,
+        """ + symbol_filter,
         glob_params + [min_percent, max_percent],
     ).fetchone()[0]
 
-    # Count available functions (not locked, not excluded by verdict)
+    # Count available functions (not locked, not excluded by verdict, within attempt limit)
     available = conn.execute(
         f"""
         SELECT COUNT(*) FROM functions
@@ -1172,7 +1183,7 @@ def query_batch_stats(
           AND (current_percent IS NULL OR (current_percent >= ? AND current_percent <= ?))
           AND locked_by IS NULL
           {verdict_filter}
-        """ + merged_filter,
+        """ + symbol_filter + attempts_filter,
         glob_params + [min_percent, max_percent],
     ).fetchone()[0]
 
@@ -1184,10 +1195,25 @@ def query_batch_stats(
           AND (current_percent IS NULL OR (current_percent >= ? AND current_percent <= ?))
           AND locked_by IS NULL
           {verdict_filter}
-          AND attempt_count = 0
-        """ + merged_filter,
+          AND (attempt_count IS NULL OR attempt_count = 0)
+        """ + symbol_filter + attempts_filter,
         glob_params + [min_percent, max_percent],
     ).fetchone()[0]
+
+    # Count functions skipped due to max_attempts (for display)
+    exceeded_attempts = 0
+    if max_attempts is not None:
+        exceeded_attempts = conn.execute(
+            f"""
+            SELECT COUNT(*) FROM functions
+            WHERE {glob_clause}
+              AND (current_percent IS NULL OR (current_percent >= ? AND current_percent <= ?))
+              AND locked_by IS NULL
+              {verdict_filter}
+              AND attempt_count >= {max_attempts}
+            """ + symbol_filter,
+            glob_params + [min_percent, max_percent],
+        ).fetchone()[0]
 
     # Retries = available - first_tries
     retries = available - first_tries
@@ -1208,6 +1234,7 @@ def query_batch_stats(
         "in_match_range": in_range,
         "locked": locked,
         "excluded_complete": excluded_verdict,
+        "exceeded_attempts": exceeded_attempts,
         "available": available,
         "first_tries": first_tries,
         "retries": retries,

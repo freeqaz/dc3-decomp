@@ -1205,10 +1205,9 @@ void LightPreset::Animate(float f) {
 }
 
 void LightPreset::SyncNewSpotlights() {
-    for (ObjDirItr<Spotlight> it(Dir(), true); it != nullptr; ++it) {
-        Spotlight *key = it;
-        if (mSpotlights.find(key) == mSpotlights.end()) {
-            AddSpotlight(key, true);
+    for (ObjDirItr<Spotlight> it(Dir(), true); it; ++it) {
+        if (mSpotlights.find(it) == mSpotlights.end()) {
+            AddSpotlight(it, true);
         }
     }
 }

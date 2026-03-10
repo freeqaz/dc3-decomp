@@ -113,7 +113,6 @@ void MeterDisplay::OldResourcePreload(BinStream &bs) {
 
 void MeterDisplay::Update() {
     if (mResourceDir) {
-        static Symbol meter_label("meter_label");
         HamLabel *label = mResourceDir->Find<HamLabel>("meter.lbl", false);
         if (label) {
             if (!unk54) {
@@ -123,7 +122,6 @@ void MeterDisplay::Update() {
             unk54->SetTransParent(label->TransParent(), false);
             label->SetShowing(false);
         }
-        static Symbol meter_anim("meter_anim");
         mMeterAnim = mResourceDir->Find<RndAnimatable>("meter_anim", true);
     }
 }
@@ -137,35 +135,33 @@ void MeterDisplay::AnimateToValue(int x, int y) {
 
 void MeterDisplay::UpdateDisplay() {
     if (unk54) {
-        static Symbol meter_progress_generic_wrapper("meter_progress_generic_wrapper");
         String str;
         if (mPercentageText) {
-            static Symbol meter_progress_percent("meter_progress_percent");
             float f1 = 0;
             if (mMaxValue > 0) {
                 f1 = (float)mCurrentValue / (float)mMaxValue;
             }
             int perc = f1 * 100.0f;
-            str = MakeString(Localize(meter_progress_percent, nullptr, TheLocale), perc);
+            str = MakeString(
+                Localize("meter_progress_percent", nullptr, TheLocale), perc
+            );
         } else if (mHideDenominator) {
-            static Symbol meter_progress_no_denominator("meter_progress_no_denominator");
             String localized(LocalizeSeparatedInt(mCurrentValue, TheLocale));
             str = MakeString(
-                Localize(meter_progress_no_denominator, nullptr, TheLocale), localized
+                Localize("meter_progress_no_denominator", nullptr, TheLocale), localized
             );
         } else {
-            static Symbol meter_progress("meter_progress");
             String curLocalized(LocalizeSeparatedInt(mCurrentValue, TheLocale));
             String maxLocalized(LocalizeSeparatedInt(mMaxValue, TheLocale));
             str = MakeString(
-                Localize(meter_progress, nullptr, TheLocale), curLocalized, maxLocalized
+                Localize("meter_progress", nullptr, TheLocale), curLocalized, maxLocalized
             );
         }
         unk54->SetPrelocalizedString(String(""));
         if (mWrapperText != gNullStr) {
             unk54->SetTokenFmt(mWrapperText, str);
         } else {
-            unk54->SetTokenFmt(meter_progress_generic_wrapper, str);
+            unk54->SetTokenFmt("meter_progress_generic_wrapper", str);
         }
         unk54->SetShowing(true);
     }
@@ -174,21 +170,21 @@ void MeterDisplay::UpdateDisplay() {
 void MeterDisplay::DrawShowing() {
     if (!mResourceDir)
         return;
+
     float f = 0.0f;
+
     if (mMaxValue > 0) {
         f = (float)mCurrentValue / (float)mMaxValue;
         float f1 = TheTaskMgr.UISeconds() - unk4c;
-        if (mAnimPeriod > 0) {
-            int itouse = unk50;
-            if (itouse >= 0 && f1 > 0) {
-                if (f1 < mAnimPeriod) {
-                    f = (f1 / mAnimPeriod) * (float)(itouse - mCurrentValue)
-                        + (float)mCurrentValue / (float)mMaxValue;
-                } else {
-                    mCurrentValue = itouse;
-                    unk50 = -1;
-                    f = (float)mCurrentValue / (float)mMaxValue;
-                }
+        int itouse = unk50;
+        if (mAnimPeriod > 0 && itouse >= 0 && f1 > 0) {
+            if (f1 < mAnimPeriod) {
+                f = (f1 / mAnimPeriod) * (float)(itouse - mCurrentValue)
+                    + (float)mCurrentValue / (float)mMaxValue;
+            } else {
+                mCurrentValue = itouse;
+                unk50 = -1;
+                f = (float)mCurrentValue / (float)mMaxValue;
             }
         }
     }

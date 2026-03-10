@@ -1049,6 +1049,13 @@ void HamNavList::RealRefresh() {
         }
     }
     if (mListDirResource) {
+#ifdef HX_NATIVE
+        // Recreate elements if NumShowing changed since CreateElements was last called
+        // (e.g. provider set after Update() which created 0 elements)
+        int numSh = mListState.NumShowing();
+        mListDirResource->CreateElements(nullptr, mListWidgets, numSh);
+        mRibbonDrawStates.resize(numSh, HamListRibbonDrawState());
+#endif
         mListState.Provider()->UnHighlightCurrent();
         mListState.Provider()->ClearIconLabels();
         mListDirResource->FillElements(mListState, mListWidgets);
@@ -1289,22 +1296,22 @@ bool HamNavList::InControllerMode() const {
 
 void HamNavList::DetermineHighlightedItem() {
     bool gathering = mListState.ScrollPastMinDisplay();
+    bool atTop = mScrollBehavior.AtTop();
+
     MILO_ASSERT(!InControllerMode(), 0x2b7);
     MILO_ASSERT(!TheLoadMgr.EditMode(), 0x2b8);
 
     int numItems = NumItems();
     int maxItem = 1 - numItems;
-    double maxItemD = (double)maxItem;
-
-    float threshold = -(float)(maxItemD * (double)0.15 - 1.0) / (float)numItems;
-
-    auto& _ref1 = mScrollBehavior;
-    bool atTop = _ref1.AtTop();
     int highlightItem = GetHighlightItem();
-    if (gathering && !atTop) {
-        if (0 != highlightItem || _ref1.mScrollDir != 1) {
+
+    double maxItemD = (double)maxItem;
+    float const_015 = 0.15f;
+    float threshold = (1.0f - (float)(maxItemD * const_015)) / (float)numItems;
+    if (!atTop && gathering) {
+        if (highlightItem != 0 || mScrollBehavior.mScrollDir != 1) {
             if (highlightItem == HamListRibbon::sNumListSelectable - 2
-                && _ref1.mScrollDir == 2) {
+                && mScrollBehavior.mScrollDir == 2) {
                 highlightItem = HamListRibbon::sNumListSelectable;
             } else {
                 highlightItem = highlightItem + 1;
@@ -1329,21 +1336,21 @@ void HamNavList::DetermineHighlightedItem() {
             adjustedPos = HamListRibbon::sNumListSelectable - 2;
         }
         if (iPos == -1) {
-            _ref1.mScrollDir = 1;
+            mScrollBehavior.mScrollDir = 1;
         } else if (iPos == HamListRibbon::sNumListSelectable - 1) {
-            _ref1.mScrollDir = 2;
+            mScrollBehavior.mScrollDir = 2;
         } else {
-            _ref1.mScrollDir = 0;
+            mScrollBehavior.mScrollDir = 0;
         }
     }
 
     float targetPos = (float)((double)highlightItem / maxItemD);
     float handDiff = fabsf(mHandHeight - targetPos);
     float halfThreshold = threshold * 0.5f + 0.15f;
-    if (!(handDiff >= halfThreshold)) {
-        auto atBottom = _ref1.AtBottom();
+    if (handDiff < halfThreshold) {
+        bool atBottom = mScrollBehavior.AtBottom();
         if (atBottom) {
-            _ref1.mScrollDir = 0;
+            mScrollBehavior.mScrollDir = 0;
         }
     } else {
         int firstShowing = mListState.FirstShowing();

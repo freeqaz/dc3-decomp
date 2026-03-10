@@ -14,7 +14,7 @@
 
 struct BuildPoly {
     BuildPoly();
-    ~BuildPoly();
+    ~BuildPoly() {}
 
     Hmx::Polygon mPoly; // 0x0
     Transform mTransform; // 0xc

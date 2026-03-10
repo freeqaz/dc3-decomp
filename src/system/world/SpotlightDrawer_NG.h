@@ -15,7 +15,7 @@ public:
     public:
         SpotlightResources()
             : unk4(0), unk8(0), mDensityMap(0), unk10(0), unk14(0), unk18(0) {}
-        virtual ~SpotlightResources() {}
+        virtual ~SpotlightResources();
         void Clear();
 
         MEM_OVERLOAD(SpotlightResources, 0x3B);

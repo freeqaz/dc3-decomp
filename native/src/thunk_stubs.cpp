@@ -6,3 +6,6 @@
 // All stubs have been moved to their respective decomp source files under
 // #ifdef HX_NATIVE guards. This file is kept for any future thunk stubs that
 // can't be placed in decomp source.
+
+// DingoJob.cpp references this label-named string constant from .rodata
+const char *lbl_82066608 = "";

@@ -90,14 +90,15 @@ void JointScreenPos(const TrackedJoint &joint, Vector2 &v2) {
 }
 
 void JointScreenPos(const TrackedJoint &joint, Vector3 &v3) {
+    XMVECTOR vmx;
+    const Vector3 &pos = joint.mSmoothedPos;
+    vmx.x = pos.x;
+    vmx.y = pos.y;
+    vmx.z = pos.z;
     LONG lDepthX, lDepthY;
     USHORT uDepth;
-    XMVECTOR vmx;
-    vmx.x = joint.mSmoothedPos.x;
-    vmx.y = joint.mSmoothedPos.y;
-    vmx.z = joint.mSmoothedPos.z;
+
     NuiTransformSkeletonToDepthImage(vmx, &lDepthX, &lDepthY, &uDepth);
-    v3.x = (float)lDepthX / 240;
-    v3.y = (float)lDepthY / 320;
-    v3.z = uDepth >> 3;
+
+    v3.Set(lDepthX * 0.003125f, lDepthY * 0.004166667f, uDepth >> 3);
 }

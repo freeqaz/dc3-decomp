@@ -9,13 +9,13 @@
  * Copyright (c) 1997
  * Moscow Center for SPARC Technology
  *
- * Copyright (c) 1999 
+ * Copyright (c) 1999
  * Boris Fomitchev
  *
  * This material is provided "as is", with absolutely no warranty expressed
  * or implied. Any use is at your own risk.
  *
- * Permission to use or copy this software for any purpose is hereby granted 
+ * Permission to use or copy this software for any purpose is hereby granted
  * without fee, provided the above notices are retained on all copies.
  * Permission to modify the code and to distribute modified code is granted,
  * provided the above notices are retained, and a notice that the code was
@@ -834,8 +834,8 @@ stable_partition(_ForwardIter __first, _ForwardIter __last, _Predicate __pred) {
 }
 
 template <class _RandomAccessIter, class _Tp, class _Compare>
-_RandomAccessIter __unguarded_partition(_RandomAccessIter __first, 
-                                        _RandomAccessIter __last, 
+_RandomAccessIter __unguarded_partition(_RandomAccessIter __first,
+                                        _RandomAccessIter __last,
                                         _Tp __pivot, _Compare __comp) {
   for (;;) {
     while (__comp(*__first, __pivot))
@@ -849,6 +849,7 @@ _RandomAccessIter __unguarded_partition(_RandomAccessIter __first,
     ++__first;
   }
 }
+
 
 // sort() and its auxiliary functions. 
 #define __stl_threshold  16

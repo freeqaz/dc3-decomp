@@ -1857,59 +1857,82 @@ void RndMesh::LoadVertices(BinStreamRev &d) {
 }
 
 void RndMesh::SaveVertices(BinStream &bs) {
-    bool useCached;
-    if (bs.Cached() && (bs.GetPlatform() == kPlatformPS3 || bs.GetPlatform() == kPlatformXBox)) {
-        useCached = true;
-    } else {
-        useCached = false;
-    }
-    bool isXBox;
-    bool hasMeshData = (mMutable & 0x1F) > 0 || mKeepMeshData == true;
-    if (TheLoadMgr.GetPlatform() == kPlatformXBox || TheLoadMgr.GetPlatform() == kPlatformPS3) {
-        isXBox = true;
-    } else {
-        isXBox = false;
-    }
+    VertVector *verts = &mVerts;
+    unsigned int value;
     bool doCompress;
-    if (isXBox && useCached && !hasMeshData) {
-        doCompress = true;
+    bool cached;
+    if (bs.Cached() && (bs.GetPlatform() == kPlatformPS3 || bs.GetPlatform() == kPlatformXBox)) {
+        cached = true;
     } else {
+        cached = false;
+    }
+
+    bool hasMeshData;
+    if ((mMutable & 0x1F) > 0 || (hasMeshData = false, mKeepMeshData == true)) {
+        hasMeshData = true;
+    }
+
+    if (TheLoadMgr.GetPlatform() == kPlatformXBox
+        || (doCompress = false, TheLoadMgr.GetPlatform() == kPlatformPS3)) {
+        doCompress = true;
+    }
+    if ((!doCompress) || (!cached) || (doCompress = true, hasMeshData)) {
         doCompress = false;
     }
-    int count = mVerts.size();
-    bs.WriteEndian(&count, 4);
-    bs.Write(&doCompress, 1);
-    if (doCompress) {
-        unsigned int vertSize = 0;
-        unsigned int version = 0;
+
+    value = verts->mNumVerts;
+    bs.WriteEndian(&value, 4);
+    bool compress = doCompress;
+    bs.Write(&compress, 1);
+    if (compress) {
+        unsigned int compressedSize = 0;
+        bool isXBox;
         if (TheLoadMgr.GetPlatform() != kPlatformXBox) {
-            auto errMsg = FormatString("Unsupported platform for vertex compression").Str();
-            TheDebug.Fail(errMsg, 0);
-            MILO_ASSERT(vertSize > 0, 0x339);
-            MILO_ASSERT(version > 0, 0x33A);
+            FormatString str("Unsupported platform for vertex compression");
+            int line;
+            isXBox = false;
+            TheDebug.Fail(str.Str(), 0);
+            line = 0x339;
+            TheDebug.Fail(MakeString(kAssertStr, "Mesh.cpp", line, "compressedSize > 0"), 0);
+            line = 0x33A;
+            TheDebug.Fail(MakeString(kAssertStr, "Mesh.cpp", line, "compressedVersion > 0"), 0);
         } else {
-            vertSize = 0x24;
-            version = 1;
+            compressedSize = 0x24;
+            isXBox = true;
         }
-        bs.WriteEndian(&vertSize, 4);
-        bs.WriteEndian(&version, 4);
+        value = compressedSize;
+        bs.WriteEndian(&value, 4);
+        value = isXBox;
+        bs.WriteEndian(&value, 4);
     }
-    int i = 0;
-    for (Vert *it = mVerts.begin(); it != mVerts.end(); ++it) {
-        if (useCached && doCompress) {
-            if (TheLoadMgr.GetPlatform() != kPlatformXBox) {
-                TheDebug.Fail(FormatString("Unsupported platform for vertex compression").Str(), 0);
+
+    unsigned int i = 0;
+#ifdef HX_NATIVE
+    if (verts->mNumVerts != 0) {
+        Vert *it = verts->mVerts;
+        do {
+#else
+    Vert *it = verts->mVerts;
+    if (it != verts->mVerts + verts->mNumVerts) {
+        do {
+#endif
+            if (cached && compress) {
+                if (TheLoadMgr.GetPlatform() != kPlatformXBox) {
+                    FormatString str("Unsupported platform for vertex compression");
+                    TheDebug.Fail(str.Str(), 0);
+                } else {
+                    static CompressedVertex_Xbox compressed;
+                    FillCompressedVertex(compressed, *it, true);
+                    SaveCompressedVertex(compressed, bs);
+                }
             } else {
-                static CompressedVertex_Xbox compressed;
-                FillCompressedVertex(compressed, *it, doCompress);
-                SaveCompressedVertex(compressed, bs);
+                bs << *it;
             }
-        } else {
-            bs << *it;
-        }
-        i++;
-        if (bs.GetPlatform() == kPlatformWii && !(i & 0x1FF)) {
-            MarkChunk(bs);
-        }
+            i++;
+            if (bs.GetPlatform() == kPlatformWii && !(i & 0x1FF)) {
+                MarkChunk(bs);
+            }
+            ++it;
+        } while (it != verts->mVerts + verts->mNumVerts);
     }
 }

@@ -241,8 +241,8 @@ void HamStoreProvider::ApplySort() {
     if (!mSorts.empty()) {
         MILO_ASSERT_RANGE(mSortIndex, 0, mSorts.size(), 0xf1);
         if (mSorts[mSortIndex].Str() != gNullStr) {
-            auto sortCmp = SortCmp();
-            std::sort(mFilteredOffers->begin(), mFilteredOffers->end(), sortCmp);
+            SortCmp cmp;
+            std::sort(mFilteredOffers->begin(), mFilteredOffers->end(), cmp);
         }
     }
 }
@@ -407,3 +407,4 @@ BEGIN_HANDLERS(HamStoreProvider)
 END_HANDLERS
 
 #pragma endregion HamStoreProvider
+

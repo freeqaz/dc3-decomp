@@ -196,3 +196,37 @@ void CharSignalApplier::PollDeps(std::list<Hmx::Object *> &a, std::list<Hmx::Obj
         } while (cur != mBoneOps.end());
     }
 }
+
+// Minimal __uninitialized_fill_n implementation for BoneOp
+namespace stlpmtx_std {
+
+template <>
+CharSignalApplier::BoneOp* __uninitialized_fill_n<CharSignalApplier::BoneOp*, unsigned int, CharSignalApplier::BoneOp>(
+    CharSignalApplier::BoneOp* first,
+    unsigned int count,
+    const CharSignalApplier::BoneOp& value,
+    __false_type const&
+) {
+    CharSignalApplier::BoneOp* cur = first;
+    unsigned int remaining = count;
+    if (count != 0U) {
+        do {
+            if (cur != NULL) {
+                // Set vtable pointer
+                *(void**)cur = (void*)0x10000000;
+                // Set mOp to 0
+                *(int*)((char*)cur + 0x14) = 0;
+                // Copy mApplyPercent
+                *(float*)((char*)cur + 0x18) = *(float*)((char*)&value + 0x18);
+                // Initialize remaining members with assignment
+                *cur = value;
+            }
+            remaining--;
+            cur = (CharSignalApplier::BoneOp*)((char*)cur + 0x24);
+        } while (remaining != 0U);
+    }
+    return cur;
+}
+
+}
+

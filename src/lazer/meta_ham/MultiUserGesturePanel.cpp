@@ -30,7 +30,9 @@
 #include "utl/MakeString.h"
 #include "utl/Symbol.h"
 
+#ifndef HX_NATIVE // defined in CrewProvider.cpp
 CrewProvider::~CrewProvider() {}
+#endif
 
 MultiUserGesturePanel::MultiUserGesturePanel() {
     // Initialize UI components and providers for both players (left/right sides)

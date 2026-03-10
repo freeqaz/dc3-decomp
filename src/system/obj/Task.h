@@ -172,7 +172,7 @@ public:
 
 private:
     DataNode OnTimeTilNext(DataArray *);
-    // const SongPos &GetSongPos() const { return mSongPos; }
+        // const SongPos &GetSongPos() const { return mSongPos; }
 
     TaskTimeline *mTimelines; // 0x2c
     SongPos mSongPos; // 0x30

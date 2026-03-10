@@ -64,7 +64,11 @@ JsonObject *JsonConverter::LoadFromString(const String &str) {
     }
     printbuf_memappend(buf, str.c_str(), str.length());
     json_object *obj = json_tokener_parse(buf->buf);
+#ifdef HX_NATIVE
+    if (!obj) {
+#else
     if ((int)obj > 0xfffff060) { // ???
+#endif
         printbuf_free(buf);
         return nullptr;
     }

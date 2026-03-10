@@ -826,13 +826,13 @@ void RandomXfms(RndMultiMesh *mesh) {
 
     while (!mesh->Instances().empty()) {
         int count = 0;
-        for (auto it = mesh->Instances().begin(); it != mesh->Instances().end(); ++it) {
+        for (RndMultiMesh::InstanceList::iterator it = mesh->Instances().begin(); it != mesh->Instances().end(); ++it) {
             count++;
         }
 
         int randomPos = RandomInt(0, count);
 
-        auto it = mesh->Instances().begin();
+        RndMultiMesh::InstanceList::iterator it = mesh->Instances().begin();
         while (randomPos != 0) {
             ++it;
             randomPos--;
@@ -939,7 +939,11 @@ void UtilDrawCigar(
         int cnt = 3;
         float *dst = scaledLens;
         do {
+#ifdef HX_NATIVE
+            *dst = *(float *)((intptr_t)(lengths) + ((intptr_t)dst - (intptr_t)scaledLens)) * scale;
+#else
             *dst = *(float *)((int)(lengths) + ((int)dst - (int)scaledLens)) * scale;
+#endif
             dst++;
             cnt--;
         } while (cnt != 0);
@@ -1220,7 +1224,7 @@ DataNode GetNormalMapTextures(ObjectDir *dir) {
             }
         }
         if (isNormalMapOrRenderTarget) {
-            auto texNode = DataNode(it);
+            DataNode texNode(it);
             ptr->Node(idx++) = texNode;
         }
     }
@@ -1415,7 +1419,7 @@ void MakeTangentsLate(RndMesh *m) {
                     v.tangent = faceTangents[f];
                 } else {
                     if ((double)(faceTangents[f].w * v.tangent.w) < zeroThresh) {
-                        auto notifyMsg = MakeString("NOTIFY: %s has previously welded vertex tangents with opposite handedness; re-export from Max for more accurate normal mapping.\n", (char*)PathName(m));
+                        String notifyMsg = MakeString("NOTIFY: %s has previously welded vertex tangents with opposite handedness; re-export from Max for more accurate normal mapping.\n", PathName(m));
                         TheDebug << notifyMsg;
                     } else {
                         v.tangent.x += faceTangents[f].x;
@@ -1437,28 +1441,25 @@ void MakeTangentsLate(RndMesh *m) {
         float oz = tz - scaleZ;
         Normalize(*(Vector3*)&ox, *(Vector3*)&v.tangent);
     }
-    TheDebug << MakeString("NOTIFY: %s MakingTangentsLate, resave this file!", (char*)PathName(m));
+    TheDebug << MakeString("NOTIFY: %s MakingTangentsLate, resave this file!", PathName(m));
 }
 
 void ComputeFaceTangentBasis(RndMesh *m, int faceIdx, Hmx::Matrix3 &outBasis) {
-    if (!m) {
-        MILO_ASSERT(m, 0x250);
-    }
+    MILO_ASSERT(m, 0x250);
     outBasis.x.x = 1.0f; outBasis.x.y = 0.0f; outBasis.x.z = 0.0f;
     outBasis.y.x = 0.0f; outBasis.y.y = 1.0f; outBasis.y.z = 0.0f;
     outBasis.z.x = 0.0f; outBasis.z.y = 0.0f; outBasis.z.z = 1.0f;
 
     RndMesh::Face &face = m->Faces()[faceIdx];
-    if (face.v1 != face.v2 && face.v2 != face.v3) {
-        if (face.v3 != face.v1) {
+    if (face.v1 != face.v2 && face.v2 != face.v3 && face.v3 != face.v1) {
         RndMesh::Vert &vert1 = m->Verts()[face.v1];
         RndMesh::Vert &vert2 = m->Verts()[face.v2];
         RndMesh::Vert &vert3 = m->Verts()[face.v3];
 
         if (!BadUV(vert1.tex) && !BadUV(vert2.tex) && !BadUV(vert3.tex)) {
             float dx21 = vert2.pos.x - vert1.pos.x;
-            float dz21 = vert2.pos.z - vert1.pos.z;
             float dy21 = vert2.pos.y - vert1.pos.y;
+            float dz21 = vert2.pos.z - vert1.pos.z;
             float dx31 = vert3.pos.x - vert1.pos.x;
             float dy31 = vert3.pos.y - vert1.pos.y;
             float dz31 = vert3.pos.z - vert1.pos.z;
@@ -1468,34 +1469,36 @@ void ComputeFaceTangentBasis(RndMesh *m, int faceIdx, Hmx::Matrix3 &outBasis) {
             float du31 = vert3.tex.x - vert1.tex.x;
             float dv31 = vert3.tex.y - vert1.tex.y;
 
-            if (dx21 == 0.0f && dy21 == 0.0f && dz21 == 0.0f) return;
-            if (dx31 == 0.0f && dy31 == 0.0f & dz31 == 0.0f) return;
-            if (du21 == 0.0f && dv21 == 0.0f) return;
-            if (du31 == 0.0f && dv31 == 0.0f) return;
+            if (dx21 != 0.0f || dy21 != 0.0f || dz21 != 0.0f) {
+                if (dx31 != 0.0f || dy31 != 0.0f || dz31 != 0.0f) {
+                    if (du21 != 0.0f || dv21 != 0.0f) {
+                        if (du31 != 0.0f || dv31 != 0.0f) {
+                            float crossX = dz31 * dy21 - dy31 * dz21;
+                            float crossY = dz31 * dx21 - dx31 * dz21;
+                            float crossZ = dy31 * dx21 - dx31 * dy21;
+                            Hmx::Matrix3 edgeMat(Vector3(dx21, dy21, dz21),
+                                                  Vector3(dx31, dy31, dz31),
+                                                  Vector3(crossX, crossY, crossZ));
 
-            float crossX = dz31 * dy21 - dy31 * dz21;
-            float crossY = dz31 * dx21 - dx31 * dz21;
-            float crossZ = dy31 * dx21 - dx31 * dy21;
-            Hmx::Matrix3 edgeMat(Vector3(dx21, dy21, dz21),
-                                  Vector3(dx31, dy31, dz31),
-                                  Vector3(crossX, crossY, crossZ));
+                            Invert(edgeMat, edgeMat);
 
-            Invert(edgeMat, edgeMat);
+                            float swapXY = edgeMat.x.y; edgeMat.x.y = edgeMat.y.x; edgeMat.y.x = swapXY;
+                            float swapXZ = edgeMat.x.z; edgeMat.x.z = edgeMat.z.x; edgeMat.z.x = swapXZ;
+                            float swapYZ = edgeMat.y.z; edgeMat.y.z = edgeMat.z.y; edgeMat.z.y = swapYZ;
 
-            float swapXY = edgeMat.x.y; edgeMat.x.y = edgeMat.y.x; edgeMat.y.x = swapXY;
-            float swapXZ = edgeMat.x.z; edgeMat.x.z = edgeMat.z.x; edgeMat.z.x = swapXZ;
-            float swapYZ = edgeMat.y.z; edgeMat.y.z = edgeMat.z.y; edgeMat.z.y = swapYZ;
+                            Hmx::Matrix3 texMat;
+                            texMat.x.Set(du21, du31, 0.0f);
+                            texMat.y.Set(dv21, dv31, 0.0f);
+                            texMat.z.Set(0.0f, 0.0f, 1.0f);
 
-            Hmx::Matrix3 texMat;
-            texMat.x.Set(du21, du31, 0.0f);
-            texMat.y.Set(dv21, dv31, 0.0f);
-            texMat.z.Set(0.0f, 0.0f, 1.0f);
-
-            Multiply(texMat, edgeMat, outBasis);
-            return;
+                            Multiply(texMat, edgeMat, outBasis);
+                            return;
+                        }
+                    }
+                }
+            }
         }
-        TheDebug << MakeString("NOTIFY: %s has bad UVs, should reexport from Max\n", (char*)PathName(m));
-    }
+        TheDebug << MakeString("NOTIFY: %s has bad UVs, should reexport from Max\n", PathName(m));
     }
 }
 
@@ -1569,7 +1572,7 @@ void MakeNormals(RndMesh *m) {
 }
 
 void ResetNormals(RndMesh *m) {
-    auto zeroVec = Vector4(0, 0, 0, 0);
+    Vector4 zeroVec(0, 0, 0, 0);
     if (!m || m->GetGeomOwner() != m || m->Verts().size() == 0) return;
 
 
@@ -2003,11 +2006,19 @@ void TessellateMesh(RndMesh *mesh) {
         unsigned short v1 = face.v1;
         unsigned short v3 = face.v3;
 
+#ifdef HX_NATIVE
+        intptr_t vertsBase = (intptr_t)geomOwner->Verts().mVerts;
+
+        RndMesh::Vert *pv1 = (RndMesh::Vert *)((uintptr_t)v1 * 0x60 + vertsBase);
+        RndMesh::Vert *pv2 = (RndMesh::Vert *)((uintptr_t)v2 * 0x60 + vertsBase);
+        RndMesh::Vert *pv3 = (RndMesh::Vert *)((uintptr_t)v3 * 0x60 + vertsBase);
+#else
         int vertsBase = (int)(unsigned int)geomOwner->Verts().mVerts;
 
         RndMesh::Vert *pv1 = (RndMesh::Vert *)((unsigned int)v1 * 0x60 + vertsBase);
         RndMesh::Vert *pv2 = (RndMesh::Vert *)((unsigned int)v2 * 0x60 + vertsBase);
         RndMesh::Vert *pv3 = (RndMesh::Vert *)((unsigned int)v3 * 0x60 + vertsBase);
+#endif
 
         RndMesh::Vert blend12, blend23, blend31;
         RndAmbientOcclusion::BlendVert(*pv1, *pv2, blend12);

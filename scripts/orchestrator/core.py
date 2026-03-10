@@ -222,6 +222,9 @@ class DecompOrchestrator:
         # Active sessions: session_id -> asyncio.Task
         self.active_sessions: dict[str, asyncio.Task] = {}
 
+        # Graceful shutdown: set by Ctrl+C handler to stop spawning new agents
+        self._shutdown_requested = False
+
     @staticmethod
     def _resolve_cost(sdk_cost, model, usage):
         """Resolve actual cost, falling back to token-rate computation.
@@ -1229,6 +1232,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
         order_asc: bool = False,
         min_size: int = 0,
         exclude_patterns: list[str] | None = None,
+        max_attempts: int | None = 20,
     ) -> dict[str, Any]:
         """
         Run batch of functions matching pattern with N parallel agents.
@@ -1263,6 +1267,8 @@ Focus on readability and maintainability while preserving exact behavior and mat
             limit=limit,
             exclude_at_limit=exclude_at_limit,
             db_path=self.db_path,
+            exclude_patterns=exclude_patterns,
+            max_attempts=max_attempts,
         )
 
         display_pattern = pattern if isinstance(pattern, str) else ", ".join(pattern)
@@ -1287,6 +1293,9 @@ Focus on readability and maintainability while preserving exact behavior and mat
         print(f"    - First tries: {batch_stats['first_tries']} (no prior attempts)")
         print(f"    - Retries: {batch_stats['retries']} (have prior attempts)")
 
+        if batch_stats.get('exceeded_attempts', 0) > 0:
+            print(f"  Exceeded {max_attempts} attempts: {batch_stats['exceeded_attempts']} (skipped)")
+
         # Show selection info
         if limit > 0:
             if batch_stats['more_available']:
@@ -1297,6 +1306,26 @@ Focus on readability and maintainability while preserving exact behavior and mat
             print(f"\n  Selected: {batch_stats['selected']} (no limit)")
 
         print()
+
+        # Early exit if nothing to do
+        if batch_stats['available'] == 0:
+            in_range = batch_stats['in_match_range']
+            if in_range == 0:
+                print("No functions found in the specified match range.")
+            else:
+                reasons = []
+                if batch_stats['excluded_complete'] > 0:
+                    reasons.append(f"{batch_stats['excluded_complete']} excluded by verdict")
+                if batch_stats['locked'] > 0:
+                    reasons.append(f"{batch_stats['locked']} locked")
+                if max_attempts is not None:
+                    reasons.append(f"all remaining have >= {max_attempts} attempts")
+                reason_str = "; ".join(reasons) if reasons else "all filtered out"
+                print(f"No available functions to process ({reason_str}).")
+                print(f"Try: --max-attempts 0 (disable limit), or broaden --min/max-percent range.")
+            summary = self._generate_batch_summary([], pattern)
+            summary["build_strategy"] = "incremental" if use_incremental else "full"
+            return summary
 
         # Ensure pool is initialized
         if self.worktree_pool.status()["total"] == 0:
@@ -1322,95 +1351,107 @@ Focus on readability and maintainability while preserving exact behavior and mat
             "full_time": 0.0,
         }
 
-        while True:
-            # Get next unlocked function
-            func = get_next_function(
-                pattern=pattern,
-                min_percent=min_percent,
-                max_percent=max_percent,
-                exclude_at_limit=exclude_at_limit,
-                db_path=self.db_path,
-                order_by=order_by,
-                order_asc=order_asc,
-                min_size=min_size,
-                exclude_patterns=exclude_patterns,
-            )
+        self._shutdown_requested = False
+        interrupted = False
 
-            if not func:
-                # No more work - wait for active agents to finish
-                if not self.active_sessions:
-                    break
-                await self._wait_for_any_completion()
-                continue
-
-            # Pre-check: skip already-complete functions before counting against limit
-            if self._precheck_complete(func):
-                skipped_complete += 1
-                continue
-
-            # Check limit
-            if limit > 0 and processed >= limit:
-                break
-
-            # Decide if this is a periodic full build validation
-            current_use_incremental = use_incremental
-            if periodic_full_interval > 0 and use_incremental:
-                # Every Nth batch, switch to full build for validation
-                if (processed + 1) % (max_agents * periodic_full_interval) == 0:
-                    current_use_incremental = False
+        try:
+            while True:
+                # Check for graceful shutdown
+                if self._shutdown_requested:
                     if verbose:
-                        print(f"\n[Batch {batch_count}] Running full build validation...")
+                        print(f"\nShutdown requested — stopping new agent spawns.")
+                    break
 
-            # Wait if at max capacity
-            while len(self.active_sessions) >= max_agents:
-                result = await self._wait_for_any_completion()
-                if result:
-                    results.append(result)
-                    if result.get("status") == "error":
-                        errors += 1
-                        consecutive_errors += 1
-                        recent_errors.append(result.get("error", "unknown"))
-                        reason = self._should_trip_circuit_breaker(
-                            errors, len(results), consecutive_errors, recent_errors
-                        )
-                        if reason:
-                            circuit_tripped = True
-                            circuit_reason = reason
-                            print(f"\nCIRCUIT BREAKER: {reason}")
-                            self.logger.error(f"CIRCUIT BREAKER: {reason}")
-                            break
-                    else:
-                        consecutive_errors = 0
-                    batch_count += 1
-            if circuit_tripped:
-                break
-
-            # Lock function BEFORE spawning to prevent race conditions
-            session_id = f"batch-{func['id']}-{datetime.now().strftime('%H%M%S')}"
-            if not lock_function(func["id"], session_id, db_path=self.db_path):
-                # Already locked by another agent, skip and get next
-                continue
-
-            # Spawn agent asynchronously
-            task = asyncio.create_task(
-                self._run_batch_agent(
-                    session_id, func, model, verbose, use_incremental=current_use_incremental, refactor=refactor, reviewer_model=reviewer_model
+                # Get next unlocked function
+                func = get_next_function(
+                    pattern=pattern,
+                    min_percent=min_percent,
+                    max_percent=max_percent,
+                    exclude_at_limit=exclude_at_limit,
+                    db_path=self.db_path,
+                    order_by=order_by,
+                    order_asc=order_asc,
+                    min_size=min_size,
+                    exclude_patterns=exclude_patterns,
+                    max_attempts=max_attempts,
                 )
-            )
-            self.active_sessions[session_id] = task
-            processed += 1
 
+                if not func:
+                    # No more work - wait for active agents to finish
+                    if not self.active_sessions:
+                        break
+                    await self._wait_for_any_completion()
+                    continue
+
+                # Pre-check: skip already-complete functions before counting against limit
+                if self._precheck_complete(func):
+                    skipped_complete += 1
+                    continue
+
+                # Check limit
+                if limit > 0 and processed >= limit:
+                    break
+
+                # Decide if this is a periodic full build validation
+                current_use_incremental = use_incremental
+                if periodic_full_interval > 0 and use_incremental:
+                    # Every Nth batch, switch to full build for validation
+                    if (processed + 1) % (max_agents * periodic_full_interval) == 0:
+                        current_use_incremental = False
+                        if verbose:
+                            print(f"\n[Batch {batch_count}] Running full build validation...")
+
+                # Wait if at max capacity
+                while len(self.active_sessions) >= max_agents:
+                    result = await self._wait_for_any_completion()
+                    if result:
+                        results.append(result)
+                        if result.get("status") == "error":
+                            errors += 1
+                            consecutive_errors += 1
+                            recent_errors.append(result.get("error", "unknown"))
+                            reason = self._should_trip_circuit_breaker(
+                                errors, len(results), consecutive_errors, recent_errors
+                            )
+                            if reason:
+                                circuit_tripped = True
+                                circuit_reason = reason
+                                print(f"\nCIRCUIT BREAKER: {reason}")
+                                self.logger.error(f"CIRCUIT BREAKER: {reason}")
+                                break
+                        else:
+                            consecutive_errors = 0
+                        batch_count += 1
+                if circuit_tripped:
+                    break
+
+                # Lock function BEFORE spawning to prevent race conditions
+                session_id = f"batch-{func['id']}-{datetime.now().strftime('%H%M%S')}"
+                if not lock_function(func["id"], session_id, db_path=self.db_path):
+                    # Already locked by another agent, skip and get next
+                    continue
+
+                # Spawn agent asynchronously
+                task = asyncio.create_task(
+                    self._run_batch_agent(
+                        session_id, func, model, verbose, use_incremental=current_use_incremental, refactor=refactor, reviewer_model=reviewer_model
+                    )
+                )
+                self.active_sessions[session_id] = task
+                processed += 1
+
+                if verbose:
+                    build_str = "inc" if current_use_incremental else "full"
+                    print(f"[{len(self.active_sessions)}/{max_agents}] Spawned: {func.get('demangled') or func['symbol']} ({build_str})")
+
+        except (KeyboardInterrupt, asyncio.CancelledError):
+            interrupted = True
             if verbose:
-                build_str = "inc" if current_use_incremental else "full"
-                print(f"[{len(self.active_sessions)}/{max_agents}] Spawned: {func.get('demangled') or func['symbol']} ({build_str})")
+                print(f"\nInterrupted — waiting for {len(self.active_sessions)} active agent(s) to finish...")
+                print("Press Ctrl+C again to force-stop.")
 
         # Wait for remaining agents (drain — no new spawns, just collect results)
-        while self.active_sessions:
-            result = await self._wait_for_any_completion()
-            if result:
-                results.append(result)
-                if result.get("status") == "error":
-                    errors += 1
+        errors = await self._drain_active_sessions(results, errors, verbose)
 
         # Generate summary
         summary = self._generate_batch_summary(results, pattern)
@@ -1422,6 +1463,8 @@ Focus on readability and maintainability while preserving exact behavior and mat
         if circuit_tripped:
             summary["circuit_breaker_tripped"] = True
             summary["circuit_breaker_reason"] = circuit_reason
+        if interrupted:
+            summary["interrupted"] = True
 
         if verbose:
             elapsed = (datetime.now() - batch_start_time).total_seconds()
@@ -1431,6 +1474,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
                 total_targets=len(results),
                 errors=errors,
                 circuit_tripped=circuit_tripped,
+                interrupted=interrupted,
             )
 
         return summary
@@ -1492,111 +1536,121 @@ Focus on readability and maintainability while preserving exact behavior and mat
         circuit_reason = ""
         batch_start_time = datetime.now()
         target_idx = 0
+        self._shutdown_requested = False
+        interrupted = False
 
-        while target_idx < len(targets) or self.active_sessions:
-            # Get next target from pre-selected list
-            func = None
-            while target_idx < len(targets) and func is None:
-                candidate = targets[target_idx]
-                target_idx += 1
-
-                # Check if still eligible (not locked, not complete)
-                current = get_function_by_symbol(candidate["symbol"], db_path=self.db_path)
-                if current is None:
-                    continue
-                if current.get("locked_by") is not None:
+        try:
+            while target_idx < len(targets) or self.active_sessions:
+                # Check for graceful shutdown
+                if self._shutdown_requested:
                     if verbose:
-                        print(f"  Skipping (locked): {candidate.get('demangled') or candidate['symbol']}")
+                        print(f"\nShutdown requested — stopping new agent spawns.")
+                    break
+
+                # Get next target from pre-selected list
+                func = None
+                while target_idx < len(targets) and func is None:
+                    candidate = targets[target_idx]
+                    target_idx += 1
+
+                    # Check if still eligible (not locked, not complete)
+                    current = get_function_by_symbol(candidate["symbol"], db_path=self.db_path)
+                    if current is None:
+                        continue
+                    if current.get("locked_by") is not None:
+                        if verbose:
+                            print(f"  Skipping (locked): {candidate.get('demangled') or candidate['symbol']}")
+                        continue
+                    if current.get("verdict") in ("COMPLETE", "AT_LIMIT"):
+                        if verbose:
+                            print(f"  Skipping (complete): {candidate.get('demangled') or candidate['symbol']}")
+                        continue
+
+                    # Pre-check: verify not already complete via objdiff
+                    if self._precheck_complete(current):
+                        skipped_complete += 1
+                        continue
+
+                    func = current
+
+                if func is None and not self.active_sessions:
+                    # No more targets and no active agents
+                    break
+
+                if func is None:
+                    # No more targets but have active agents - wait for completion
+                    result = await self._wait_for_any_completion()
+                    if result:
+                        results.append(result)
+                        if result.get("status") == "error":
+                            errors += 1
+                            consecutive_errors += 1
+                            recent_errors.append(result.get("error", "unknown"))
+                        else:
+                            consecutive_errors = 0
+                        batch_count += 1
                     continue
-                if current.get("verdict") in ("COMPLETE", "AT_LIMIT"):
-                    if verbose:
-                        print(f"  Skipping (complete): {candidate.get('demangled') or candidate['symbol']}")
+
+                # Decide if this is a periodic full build validation
+                current_use_incremental = use_incremental
+                if periodic_full_interval > 0 and use_incremental:
+                    if (processed + 1) % (max_agents * periodic_full_interval) == 0:
+                        current_use_incremental = False
+                        if verbose:
+                            print(f"\n[Batch {batch_count}] Running full build validation...")
+
+                # Wait if at max capacity
+                while len(self.active_sessions) >= max_agents:
+                    result = await self._wait_for_any_completion()
+                    if result:
+                        results.append(result)
+                        if result.get("status") == "error":
+                            errors += 1
+                            consecutive_errors += 1
+                            recent_errors.append(result.get("error", "unknown"))
+                            reason = self._should_trip_circuit_breaker(
+                                errors, len(results), consecutive_errors, recent_errors
+                            )
+                            if reason:
+                                circuit_tripped = True
+                                circuit_reason = reason
+                                print(f"\nCIRCUIT BREAKER: {reason}")
+                                self.logger.error(f"CIRCUIT BREAKER: {reason}")
+                                break
+                        else:
+                            consecutive_errors = 0
+                        batch_count += 1
+                if circuit_tripped:
+                    break
+
+                # Lock function BEFORE spawning to prevent race conditions
+                session_id = f"batch-{func['id']}-{datetime.now().strftime('%H%M%S')}"
+                if not lock_function(func["id"], session_id, db_path=self.db_path):
+                    # Already locked by another agent, skip
                     continue
 
-                # Pre-check: verify not already complete via objdiff
-                if self._precheck_complete(current):
-                    skipped_complete += 1
-                    continue
-
-                func = current
-
-            if func is None and not self.active_sessions:
-                # No more targets and no active agents
-                break
-
-            if func is None:
-                # No more targets but have active agents - wait for completion
-                result = await self._wait_for_any_completion()
-                if result:
-                    results.append(result)
-                    if result.get("status") == "error":
-                        errors += 1
-                        consecutive_errors += 1
-                        recent_errors.append(result.get("error", "unknown"))
-                    else:
-                        consecutive_errors = 0
-                    batch_count += 1
-                continue
-
-            # Decide if this is a periodic full build validation
-            current_use_incremental = use_incremental
-            if periodic_full_interval > 0 and use_incremental:
-                if (processed + 1) % (max_agents * periodic_full_interval) == 0:
-                    current_use_incremental = False
-                    if verbose:
-                        print(f"\n[Batch {batch_count}] Running full build validation...")
-
-            # Wait if at max capacity
-            while len(self.active_sessions) >= max_agents:
-                result = await self._wait_for_any_completion()
-                if result:
-                    results.append(result)
-                    if result.get("status") == "error":
-                        errors += 1
-                        consecutive_errors += 1
-                        recent_errors.append(result.get("error", "unknown"))
-                        reason = self._should_trip_circuit_breaker(
-                            errors, len(results), consecutive_errors, recent_errors
-                        )
-                        if reason:
-                            circuit_tripped = True
-                            circuit_reason = reason
-                            print(f"\nCIRCUIT BREAKER: {reason}")
-                            self.logger.error(f"CIRCUIT BREAKER: {reason}")
-                            break
-                    else:
-                        consecutive_errors = 0
-                    batch_count += 1
-            if circuit_tripped:
-                break
-
-            # Lock function BEFORE spawning to prevent race conditions
-            session_id = f"batch-{func['id']}-{datetime.now().strftime('%H%M%S')}"
-            if not lock_function(func["id"], session_id, db_path=self.db_path):
-                # Already locked by another agent, skip
-                continue
-
-            # Spawn agent asynchronously
-            task = asyncio.create_task(
-                self._run_batch_agent(
-                    session_id, func, model, verbose, use_incremental=current_use_incremental, refactor=refactor, reviewer_model=reviewer_model
+                # Spawn agent asynchronously
+                task = asyncio.create_task(
+                    self._run_batch_agent(
+                        session_id, func, model, verbose, use_incremental=current_use_incremental, refactor=refactor, reviewer_model=reviewer_model
+                    )
                 )
-            )
-            self.active_sessions[session_id] = task
-            processed += 1
+                self.active_sessions[session_id] = task
+                processed += 1
 
+                if verbose:
+                    build_str = "inc" if current_use_incremental else "full"
+                    pct = func.get("current_percent") or 0
+                    print(f"[{len(self.active_sessions)}/{max_agents}] Spawned: {func.get('demangled') or func['symbol']} ({pct:.1f}%, {build_str})")
+
+        except (KeyboardInterrupt, asyncio.CancelledError):
+            interrupted = True
             if verbose:
-                build_str = "inc" if current_use_incremental else "full"
-                pct = func.get("current_percent") or 0
-                print(f"[{len(self.active_sessions)}/{max_agents}] Spawned: {func.get('demangled') or func['symbol']} ({pct:.1f}%, {build_str})")
+                print(f"\nInterrupted — waiting for {len(self.active_sessions)} active agent(s) to finish...")
+                print("Press Ctrl+C again to force-stop.")
 
         # Wait for remaining agents (drain — no new spawns, just collect results)
-        while self.active_sessions:
-            result = await self._wait_for_any_completion()
-            if result:
-                results.append(result)
-                if result.get("status") == "error":
-                    errors += 1
+        errors = await self._drain_active_sessions(results, errors, verbose)
 
         # Generate summary
         summary = self._generate_batch_summary(results, f"<{len(targets)} priority targets>")
@@ -1609,6 +1663,8 @@ Focus on readability and maintainability while preserving exact behavior and mat
         if circuit_tripped:
             summary["circuit_breaker_tripped"] = True
             summary["circuit_breaker_reason"] = circuit_reason
+        if interrupted:
+            summary["interrupted"] = True
 
         if verbose:
             elapsed = (datetime.now() - batch_start_time).total_seconds()
@@ -1618,6 +1674,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
                 total_targets=len(targets),
                 errors=errors,
                 circuit_tripped=circuit_tripped,
+                interrupted=interrupted,
             )
 
         return summary
@@ -1667,6 +1724,49 @@ Focus on readability and maintainability while preserving exact behavior and mat
         finally:
             # Batch mode: unlock the function when agent completes
             unlock_function(func["id"], db_path=self.db_path)
+
+    def request_shutdown(self):
+        """Request graceful shutdown. Active agents will finish, no new ones spawned."""
+        self._shutdown_requested = True
+
+    async def _drain_active_sessions(self, results: list, errors_count: int, verbose: int = 1) -> int:
+        """Wait for all active agents to finish. Returns updated error count.
+
+        On second Ctrl+C during drain, cancels all remaining agents immediately.
+        """
+        if not self.active_sessions:
+            return errors_count
+        if verbose:
+            n = len(self.active_sessions)
+            print(f"\nDraining {n} active agent(s)...")
+        while self.active_sessions:
+            try:
+                # Shield from outer cancellation so drain completes on first Ctrl+C
+                result = await asyncio.shield(self._wait_for_any_completion())
+                if result:
+                    results.append(result)
+                    if result.get("status") == "error":
+                        errors_count += 1
+                    if verbose:
+                        status = result.get("status", "?")
+                        sym = result.get("demangled") or result.get("symbol", "?")
+                        pct = result.get("end_percent")
+                        pct_str = f" ({pct:.1f}%)" if pct is not None else ""
+                        print(f"  Finished: {sym} [{status}]{pct_str}  ({len(self.active_sessions)} remaining)")
+            except (asyncio.CancelledError, KeyboardInterrupt):
+                if verbose:
+                    print(f"\nForce-stopping {len(self.active_sessions)} remaining agent(s)...")
+                for task in self.active_sessions.values():
+                    task.cancel()
+                # Briefly await cancelled tasks to allow cleanup
+                for task in self.active_sessions.values():
+                    try:
+                        await asyncio.shield(asyncio.wait_for(task, timeout=2.0))
+                    except (asyncio.CancelledError, asyncio.TimeoutError, Exception):
+                        pass
+                self.active_sessions.clear()
+                break
+        return errors_count
 
     async def _wait_for_any_completion(self) -> Optional[dict[str, Any]]:
         """Wait for any active agent to complete. Returns its result."""
@@ -1776,10 +1876,13 @@ Focus on readability and maintainability while preserving exact behavior and mat
         total_targets: int,
         errors: int,
         circuit_tripped: bool,
+        interrupted: bool = False,
     ) -> None:
         """Print rich batch completion summary."""
         print(f"\n{'='*60}")
-        if circuit_tripped:
+        if interrupted:
+            print("Batch interrupted (Ctrl+C) — partial results below")
+        elif circuit_tripped:
             print("Batch stopped early (circuit breaker)")
         else:
             print("Batch complete!")

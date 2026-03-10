@@ -291,21 +291,26 @@ def get_model_info(model: str, backend: Optional[str] = None) -> dict:
 
 
 def _derive_openrouter_only_models() -> set[str]:
-    """Derive OpenRouter-only models from registry (don't maintain separately)."""
+    """Derive models that are ONLY available via OpenRouter.
+
+    Excludes models available natively via Anthropic or Z.AI subscriptions,
+    so those always route to subscription backends by default.
+    """
     anthropic_models = set(MODEL_REGISTRY.get("anthropic", {}).keys())
+    zai_models = set(MODEL_REGISTRY.get("zai", {}).keys())
     all_openrouter_models = set(MODEL_REGISTRY.get("openrouter", {}).keys())
-    return all_openrouter_models - anthropic_models
+    return all_openrouter_models - anthropic_models - zai_models
 
 
 def _derive_zai_only_models() -> set[str]:
-    """Derive Z.AI-only models from registry (don't maintain separately)."""
-    # All models in zai backend are exclusive to Z.AI
+    """Derive Z.AI-native models (prefer Z.AI subscription over OpenRouter)."""
     return set(MODEL_REGISTRY.get("zai", {}).keys())
 
 
 # Backward compatibility: derive these from registry
 OPENROUTER_ONLY_MODELS = _derive_openrouter_only_models()
 ZAI_ONLY_MODELS = _derive_zai_only_models()
+ANTHROPIC_NATIVE_MODELS = set(MODEL_REGISTRY.get("anthropic", {}).keys())
 
 # Backward compatibility: derive from registry
 TOKEN_BUDGETS = {
@@ -341,21 +346,29 @@ def requires_zai(model: str) -> bool:
     return model in ZAI_ONLY_MODELS
 
 
+_provider_override: Optional[BackendType] = None
+
+
+def set_provider_override(provider: Optional[BackendType]) -> None:
+    """Set explicit provider override (from --provider CLI flag).
+
+    When set, this provider is used for ALL models, bypassing auto-detection.
+    """
+    global _provider_override
+    _provider_override = provider
+
+
 def get_backend(model: str = None) -> BackendType:
     """Get current backend type.
 
-    Returns "zai" if:
-    - A Z.AI-only model is specified (glm-4.7, glm-5), OR
-    - Z.AI is enabled via USE_ZAI=true and API key is configured
-
-    Returns "openrouter" if:
-    - An OpenRouter-only model is specified, OR
-    - OpenRouter is enabled via USE_OPENROUTER=true and API key is configured
-
-    Otherwise returns "anthropic" (default backend).
-
-    This function checks environment variables at call time to support runtime
-    configuration changes (e.g., USE_OPENROUTER=true on command line).
+    Priority:
+    1. Explicit --provider override (set via set_provider_override)
+    2. Model requires specific backend (Z.AI-only, OpenRouter-only)
+    3. Anthropic-native models (haiku/sonnet/opus) → always "anthropic"
+       (uses Claude Code subscription instead of per-token OpenRouter billing)
+    4. USE_ZAI=true → "zai"
+    5. USE_OPENROUTER=true → "openrouter" (only for non-Anthropic models)
+    6. Default → "anthropic"
 
     Args:
         model: Optional model name. If a backend-specific model, auto-selects that backend.
@@ -363,13 +376,19 @@ def get_backend(model: str = None) -> BackendType:
     Returns:
         BackendType: Either "zai", "openrouter", or "anthropic"
     """
-    # Auto-select Z.AI for Z.AI-only models (highest priority)
+    # 1. Explicit --provider flag overrides everything
+    if _provider_override is not None:
+        return _provider_override
+    # 2. Auto-select Z.AI for Z.AI-only models (highest priority)
     if model and requires_zai(model):
         return "zai"
-    # Auto-select OpenRouter for OpenRouter-only models
+    # 3. Auto-select OpenRouter for OpenRouter-only models
     if model and requires_openrouter(model):
         return "openrouter"
-    # Check explicit backend enablement (Z.AI takes priority over OpenRouter)
+    # 4. Anthropic-native models always use anthropic backend (subscription)
+    if model and model in ANTHROPIC_NATIVE_MODELS:
+        return "anthropic"
+    # 5. Check explicit backend enablement (Z.AI takes priority over OpenRouter)
     if _get_zai_enabled() and _get_zai_api_key():
         return "zai"
     if _get_openrouter_enabled() and _get_openrouter_api_key():

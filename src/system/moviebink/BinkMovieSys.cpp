@@ -45,7 +45,11 @@ void BinkMovieSys::Init() {
     }
 
     if (mCriticalSection == nullptr) {
+#ifdef HX_NATIVE
+        void *ptr = MemAlloc(sizeof(CriticalSection), __FILE__, __LINE__, "CriticalSection", 0);
+#else
         void *ptr = MemAlloc(0x20, __FILE__, __LINE__, "CriticalSection", 0);
+#endif
                 if (ptr) {
             mCriticalSection = new (ptr) CriticalSection();
         } else {

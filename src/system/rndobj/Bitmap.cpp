@@ -1221,7 +1221,7 @@ bool RndBitmap::LoadDIB(BinStream *bs, unsigned int offbits) {
         bs->Read(buf, readSize);
         palette = buf;
     }
-    void *pixels = (void *)((int)buf + paletteBytes);
+    void *pixels = (void *)((char *)buf + paletteBytes);
     bs->Seek(offbits, BinStream::kSeekBegin);
     if (infoheader.biHeight < 0) {
         bs->Read(pixels, pixelBytes);

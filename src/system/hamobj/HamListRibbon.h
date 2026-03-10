@@ -94,6 +94,7 @@ public:
 private:
     void ResetAnims(bool);
     void SetAnims(bool, float);
+    void DrawRibbon(int, const Transform &, const Transform &, const HamListRibbonDrawState &, int, int, int, bool);
     float GetLabelTotalAlpha() const;
 
     DataNode OnEnterBlacklightMode(const DataArray *);

@@ -1,10 +1,14 @@
 #include "hamobj/HamListRibbon.h"
 #include "hamobj/HamLabel.h"
+#include "math/Mtx.h"
 #include "obj/Data.h"
 #include "obj/Object.h"
 #include "rndobj/Dir.h"
+#include "rndobj/Env.h"
 #include "rndobj/Text.h"
+#include "ui/UIListWidget.h"
 #include "utl/BinStream.h"
+#include "utl/Loader.h"
 
 // HamListRibbonDrawState ctor is defined in HamNavList.cpp
 
@@ -387,21 +391,201 @@ float HamListRibbon::GetLabelTotalAlpha() const {
     return ret;
 }
 
+void HamListRibbon::DrawRibbon(
+    int index,
+    const Transform &ribbonXfm,
+    const Transform &worldXfm,
+    const HamListRibbonDrawState &state,
+    int paddingPerSide,
+    int numItems,
+    int startOffset,
+    bool disengaged
+) {
+    bool inRange = index >= paddingPerSide && index < paddingPerSide + numItems;
+
+    ResetAnims(false);
+    SetAnims(state.mSelected, state.mSwellSmoother.Level());
+
+    if (numItems > 6) {
+        mScrollAnims.SetAnims((index - paddingPerSide) - startOffset);
+    } else {
+        if (mScrollAnims.mScrollActive) {
+            mScrollAnims.mScrollActive->SetFrame(0.0f, 1.0f);
+        }
+    }
+
+    Transform tempXfm;
+    Multiply(ribbonXfm, worldXfm, tempXfm);
+    SetWorldXfm(Transform::IDXfm());
+
+    if (mLabelPlaceholder) {
+        bool showLabel;
+        if (!disengaged || (showLabel = true, !inRange)) {
+            showLabel = false;
+        }
+        mLabelPlaceholder->SetShowing(showLabel);
+        mLabelPlaceholder->mCanHaveFocus = true;
+        mLabelPlaceholder->SetState((UIComponent::State)(int)state.mSelected);
+
+        UIListElementDrawState *elem = (UIListElementDrawState *)state.unk18;
+        if (elem) {
+            static Hmx::Color sBigColor(1.3f, 1.0f, 1.3f);
+            static Hmx::Color sNormalColor(1.0f, 1.0f, 1.0f);
+
+            const Transform &labelXfm = mLabelPlaceholder->WorldXfm();
+            Vector3 pos = labelXfm.v;
+            pos.z += ribbonXfm.v.z;
+            *(Vector3 *)&elem->mPosX = pos;
+
+            float alpha = GetLabelTotalAlpha();
+            *(float *)&elem->mData = alpha;
+
+            Hmx::Color *color = &sBigColor;
+            if (state.unk20 == 0.0f) {
+                color = &sNormalColor;
+            }
+            *(Hmx::Color *)&elem->mElementState = *color;
+        }
+    }
+
+    float savedAlpha;
+    if (TheLoadMgr.EditMode() && mLabelPlaceholder) {
+        savedAlpha = ((const UILabel *)(HamLabel *)mLabelPlaceholder)->Style(0).GetAlpha();
+        float totalAlpha = GetLabelTotalAlpha();
+        mLabelPlaceholder->Style(0).SetAlpha(totalAlpha);
+    }
+
+    SetWorldXfm(tempXfm);
+
+    if (!state.mHidden) {
+        for (RndDrawable **it = mDraws.begin(); it != mDraws.end(); ++it) {
+            (*it)->Draw();
+        }
+    }
+
+    if (TheLoadMgr.EditMode() && mLabelPlaceholder) {
+        mLabelPlaceholder->Style(0).SetAlpha(savedAlpha);
+        mLabelPlaceholder->SetShowing(true);
+    }
+}
+
 void HamListRibbon::Draw(
     const Transform &xfm,
     const std::vector<HamListRibbonDrawState> &drawStates,
     bool entering,
     bool disengaged
 ) {
-    SetWorldXfm(xfm);
-    for (int i = 0; i < (int)drawStates.size(); i++) {
-        const HamListRibbonDrawState &state = drawStates[i];
-        if (state.mHidden) continue;
-        bool selected = state.mSelected;
-        float swellFrame = state.mSwellSmoother.Level();
-        SetAnims(swellFrame, selected);
+    RndEnvironTracker envTracker(mEnv, NULL);
+
+    // Set up selectAllAnim
+    if (mSelectAllAnim) {
+        float frame;
+        if (mMode == kRibbonSelect && !mTestEntering && !mSelectToggle) {
+            frame = GetFrame();
+        } else {
+            frame = 0.0f;
+        }
+        mSelectAllAnim->SetFrame(frame, 1.0f);
     }
-    RndDir::DrawShowing();
+
+    // Set up enterAnim
+    if (mTestEntering && mEnterAnim) {
+        mEnterAnim->SetFrame(GetFrame(), 1.0f);
+    }
+
+    // Calculate sizes
+    int numItems = (int)drawStates.size();
+    bool scrollable = numItems > 6;
+    int visibleCount = scrollable ? numItems : 4;
+
+    // Calculate padding per side
+    int paddingPerSide = Max((mPaddedSize - numItems + 1) / 2, 0);
+
+    // Build padded draw states vector
+    std::vector<HamListRibbonDrawState> paddedStates;
+    HamListRibbonDrawState defaultState;
+
+    for (int i = 0; i < paddingPerSide; i++)
+        paddedStates.push_back(defaultState);
+    for (int i = 0; i < numItems; i++)
+        paddedStates.push_back(drawStates[i]);
+    for (int i = 0; i < paddingPerSide; i++)
+        paddedStates.push_back(defaultState);
+
+    // Handle scrollable vs non-scrollable
+    int startOffset = 0;
+    if (!scrollable) {
+        int half = numItems / 2;
+        startOffset = half - 2;
+        if (mTestSelectedIndex < startOffset || mTestSelectedIndex > startOffset + 4) {
+            mTestSelectedIndex = startOffset;
+        }
+    } else {
+        if (mScrollAnims.mScrollAnim) {
+            mScrollAnims.mScrollAnim->SetFrame(0.0f, 1.0f);
+        }
+    }
+
+    // Calculate total count and padded count
+    int totalCount = numItems;
+    if ((int)mPaddedSize >= numItems) {
+        totalCount = mPaddedSize;
+    }
+    int paddedCount = totalCount - visibleCount;
+
+    // Calculate initial position offset
+    float offset = (visibleCount * mSpacing + paddedCount * mPaddedSpacing) * 0.5f;
+    if (paddedCount % 2 == 0) {
+        offset = -(mSpacing * 0.5f - offset);
+    } else if (visibleCount < (int)mPaddedSize) {
+        offset += (mPaddedSpacing - mSpacing) * 0.5f;
+    }
+
+    // Save original transform and set up ribbon transform
+    Transform savedXfm = xfm;
+    Transform ribbonXfm;
+    ribbonXfm.Reset();
+    ribbonXfm.v.z = offset;
+
+    unsigned int selectedIdx = 0xFFFFFFFF;
+    Transform selectedXfm;
+
+    unsigned int totalPadded = paddedStates.size();
+    for (unsigned int i = 0; i < totalPadded; i++) {
+        bool inRange = ((int)i >= startOffset + paddingPerSide)
+            && ((int)i < startOffset + paddingPerSide + visibleCount - 1);
+
+        if (entering == paddedStates[i].unk24) {
+            if (!paddedStates[i].mSelected) {
+                DrawRibbon(i, ribbonXfm, xfm, paddedStates[i], paddingPerSide, numItems, startOffset, disengaged);
+            } else {
+                selectedXfm = ribbonXfm;
+                selectedIdx = i;
+            }
+        }
+
+        float step = inRange ? mSpacing : mPaddedSpacing;
+        ribbonXfm.v.z -= step;
+    }
+
+    // Draw selected ribbon last (on top)
+    if (selectedIdx != 0xFFFFFFFF) {
+        DrawRibbon(selectedIdx, selectedXfm, xfm, paddedStates[selectedIdx], paddingPerSide, numItems, startOffset, disengaged);
+    }
+
+    // Handle edit mode animations
+    if (TheLoadMgr.EditMode()) {
+        SetAnims(true, 1.0f);
+        if (mScrollAnims.mScrollAnim) {
+            float scrollFrame = mScrollAnims.mScrollAnim->GetFrame();
+            if (mScrollAnims.mScrollFade) {
+                mScrollAnims.mScrollFade->SetFrame(1.0f - scrollFrame, 1.0f);
+            }
+        }
+    }
+
+    // Restore world transform
+    SetWorldXfm(savedXfm);
 }
 
 float HamListRibbon::EndFrame() {

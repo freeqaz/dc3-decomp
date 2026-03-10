@@ -215,7 +215,7 @@ void PropKeys::SetPropExceptionID() {
             mPropExceptionID = PropExceptionID(mTarget.Ptr(), mProp);
             if (mPropExceptionID == kTransQuat || mPropExceptionID == kTransScale
                 || mPropExceptionID == kTransPos) {
-                if ((Hmx::Object *)mTrans != mTarget.Ptr()) {
+                if (mTrans != mTarget.Ptr()) {
                     mTrans = dynamic_cast<RndTransformable *>(mTarget.Ptr());
                 }
             }
@@ -841,6 +841,35 @@ int Vector3Keys::Vector3At(float frame, Vector3 &vec) {
     return idx;
 }
 
+// Explicit push_heap implementation for Key<ObjectStage> to avoid template issues
+namespace stlpmtx_std {
+
+template<>
+void __push_heap<Key<ObjectStage>*, int, Key<ObjectStage>, less<Key<ObjectStage> > >(
+    Key<ObjectStage>* first,
+    int holeIndex,
+    int topIndex,
+    Key<ObjectStage> value,
+    less<Key<ObjectStage> > comp) {
+    while (holeIndex > topIndex) {
+        int parent = (holeIndex - 1) >> 1;
+        Key<ObjectStage>* parent_ptr = first + parent;
+
+        if (comp(value, *parent_ptr)) {
+            break;
+        }
+
+        Key<ObjectStage>* current_ptr = first + holeIndex;
+        *current_ptr = *parent_ptr;
+
+        holeIndex = parent;
+    }
+
+    *(first + holeIndex) = value;
+}
+
+}
+
 #pragma endregion
 #pragma region SymbolKeys
 
@@ -948,6 +977,17 @@ void SymbolKeys::Copy(const PropKeys *keys) {
 int SymbolKeys::SymbolAt(float frame, Symbol &sym) {
     MILO_ASSERT(size(), 0x350);
     return AtFrame(frame, sym);
+}
+
+// swap specialization for Key<ObjectStage>
+template<>
+void stlpmtx_std::swap<class Key<class ObjectStage> >(class Key<class ObjectStage> &a, class Key<class ObjectStage> &b) {
+    Key<ObjectStage> temp(a);
+    a.value.CopyRef(b.value);
+    a.frame = b.frame;
+    b.value.CopyRef(temp.value);
+    b.frame = temp.frame;
+    temp.value.RelinkRing();
 }
 
 #pragma endregion

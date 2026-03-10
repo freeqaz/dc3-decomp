@@ -600,10 +600,6 @@ void Character::DrawTranslucent() {
 
 CharEyes *Character::GetEyes() { return Find<CharEyes>("CharEyes.eyes", false); }
 
-bool Character::SetFocusInterest(CharInterest *interest, int i) {
-    CharEyes *eyes = GetEyes();
-    return eyes ? eyes->SetFocusInterest(interest, i) : false;
-}
 
 void Character::SetInterestFilterFlags(int i) {
     CharEyes *eyes = GetEyes();
@@ -697,22 +693,35 @@ void Character::SetInterestObjects(
     }
 }
 
-bool Character::SetFocusInterest(Symbol s, int iii) {
+bool Character::SetFocusInterest(CharInterest *interest, int i) {
+    CharEyes *eyes = GetEyes();
+    if (eyes) {
+        return eyes->SetFocusInterest(interest, i);
+    }
+    return false;
+}
+
+bool Character::SetFocusInterest(Symbol symbol, int i) {
     CharEyes *eyes = GetEyes();
     if (eyes) {
         CharInterest *interest = nullptr;
-        for (int i = 0; i < eyes->NumInterests(); i++) {
-            if (s == eyes->GetInterest(i)->Name()) {
-                interest = eyes->GetInterest(i);
+        int count = eyes->NumInterests();
+
+        for (int idx = 0; idx < count; idx++) {
+            CharInterest *current_interest = eyes->GetInterest(idx);
+            if (symbol == current_interest->Name()) {
+                interest = current_interest;
                 break;
             }
         }
-        if (!s.Null() && !interest) {
-            MILO_NOTIFY("Couldn't find interest named %s to force on %s", s.Str(), Name());
+
+        if (!symbol.Null() && !interest) {
+            MILO_WARN("Couldn't find interest named %s to force on %s", symbol.Str(), Name());
         }
-        return SetFocusInterest(interest, iii);
-    } else
-        return false;
+
+        return SetFocusInterest(interest, i);
+    }
+    return false;
 }
 
 void Character::SetSphereBase(RndTransformable *trans) {
@@ -951,6 +960,8 @@ RndDrawable *DrawPtrVec::CollideShowing(const Segment &s, float &dist, Plane &pl
     return result;
 }
 
+// On native, these are defined in CharPollGroup.cpp (same TU on PPC via ICF)
+#ifndef HX_NATIVE
 int CharPollableSorter::sSearchID = 0;
 
 void CharPollableSorter::AddDeps(
@@ -1053,3 +1064,4 @@ void CharPollableSorter::Sort(std::vector<RndPollable *> &polls) {
         polls[idx++] = (*it)->poll;
     }
 }
+#endif // HX_NATIVE

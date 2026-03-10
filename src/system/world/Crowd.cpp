@@ -476,7 +476,7 @@ void WorldCrowd::Delete3DCrowdHandles() {
 
 bool WorldCrowd::Crowd3DExists() {
     FOREACH (it, mCharacters) {
-        if (it->mDef.mChar && it->mMMesh && !it->m3DChars.empty()) {
+        if (it->mDef.mChar && it->mMMesh && it->m3DChars.size() > 0) {
             return true;
         }
     }
@@ -645,10 +645,10 @@ void WorldCrowd::AssignRandomColors(bool incrementStamp) {
         mModifyStamp++;
     }
     FOREACH (it, mCharacters) {
-        if (it->mDef.mChar && it->mMMesh && !it->m3DChars.empty()) {
-            std::vector<ColorPalette *> colorPaletteList;
+        if (it->mDef.mChar && it->mMMesh && it->m3DChars.size() > 0) {
             it->mDef.mUseRandomColor = false;
-            for (int i = 0; i < 3; i++) {
+            std::vector<ColorPalette *> colorPaletteList;
+            for (int i = 0; i < 3; ++i) {
                 ColorPalette *randPal = it->mDef.mChar->Find<ColorPalette>(
                     MakeString("random%d.pal", i + 1), false
                 );
@@ -656,12 +656,12 @@ void WorldCrowd::AssignRandomColors(bool incrementStamp) {
                     colorPaletteList.push_back(randPal);
                 }
             }
-            if (!colorPaletteList.empty()) {
-                for (int i = 0; i < (int)it->m3DChars.size(); i++) {
+            if (colorPaletteList.size() > 0) {
+                for (unsigned int i = 0; i < it->m3DChars.size(); ++i) {
                     CharData::Char3D &char3D = it->m3DChars[i];
                     char3D.mColors.clear();
                     it->mDef.mUseRandomColor = true;
-                    while ((int)char3D.mColors.size() < 3) {
+                    while (char3D.mColors.size() < 3) {
                         ColorPalette *randPal =
                             colorPaletteList[RandomInt(0, colorPaletteList.size())];
                         Hmx::Color randColor =

@@ -43,27 +43,35 @@ Transform XfmOnCircleEdge(float circumference, float pos) {
     float sign = circumference >= 0.0f ? 1.0f : -1.0f;
 
     xfm.m.z.Set(0.0f, 0.0f, 1.0f);
+    xfm.v.Set(0.0f, 0.0f, 0.0f);
 
     float offset = sign * -1.5707964f;
     float angle = (pos / circumference) * 6.2831855f + offset;
 
-    float cosA = Cosine(angle);
     float sinA = Sine(angle);
+    float cosA = Cosine(angle + 1.5707964f);
 
-    xfm.v.Set(cosA, sinA, 0.0f);
-
+    xfm.m.x.Set(cosA, sinA, 0.0f);
     float negSign = -sign;
-    xfm.m.y.y = sinA * negSign;
-    xfm.m.y.x = cosA * negSign;
-    xfm.m.y.z = 0.0f * negSign;
+    xfm.m.y.Set(sinA * negSign, cosA * negSign, 0.0f);
 
-    xfm.m.x.z = -(xfm.m.y.x * xfm.m.z.y - xfm.m.z.x * xfm.m.y.y);
-    xfm.m.x.x = -(xfm.m.y.z * xfm.m.z.y - xfm.m.z.z * xfm.m.y.y);
-    xfm.m.x.y = xfm.m.y.z * xfm.m.z.x - xfm.m.z.z * xfm.m.y.x;
+    float cross_z = xfm.m.y.x * xfm.m.z.y - xfm.m.z.x * xfm.m.y.y;
+    float cross_x = xfm.m.y.z * xfm.m.z.y - xfm.m.z.z * xfm.m.y.y;
+    float cross_y = xfm.m.y.z * xfm.m.z.x - xfm.m.z.z * xfm.m.y.x;
 
-    float radius = (sign * (circumference * 0.15915494f));
-    xfm.v.y *= radius;
+    float radius = sign * (circumference * 0.15915494f);
+
+    xfm.m.x.x *= radius;
+    xfm.m.x.y *= radius;
+    xfm.m.x.z *= radius;
+    xfm.m.y.x *= radius;
+    xfm.m.y.y *= radius;
+    xfm.m.y.z *= radius;  // 0x20
+    xfm.m.z.x *= radius;
+    xfm.m.z.y *= radius;
+    xfm.m.z.z *= radius;
     xfm.v.x *= radius;
+    xfm.v.y *= radius;
     xfm.v.z *= radius;
 
     return xfm;
@@ -1727,18 +1735,30 @@ RndText::FontMapBase *RndText::AcquireFontMap(RndFontBase *font) {
 
     auto _tmp9 = FontMap3d::StaticClassName();
     if (fontMapClassName == FontMap::StaticClassName()) {
+#ifdef HX_NATIVE
+        result = (FontMapBase *)MemAlloc(sizeof(FontMap), __FILE__, 0xd7, "FontMapBase", 0);
+#else
         result = (FontMapBase *)MemAlloc(0x18, __FILE__, 0xd7, "FontMapBase", 0);
+#endif
         if (result) {
             new (result) FontMap();
         }
     } else if (fontMapClassName == _tmp9) {
+#ifdef HX_NATIVE
+        result = (FontMapBase *)MemAlloc(sizeof(FontMap3d), __FILE__, 0xd7, "FontMapBase", 0);
+#else
         result = (FontMapBase *)MemAlloc(0x20, __FILE__, 0xd7, "FontMapBase", 0);
+#endif
         if (result) {
             new (result) FontMap3d();
         }
     } else {
         TheDebug.Fail(MakeString("Unknown FontMap type: %s", fontMapClassName), 0);
+#ifdef HX_NATIVE
+        result = (FontMapBase *)MemAlloc(sizeof(FontMap), __FILE__, 0xd7, "FontMapBase", 0);
+#else
         result = (FontMapBase *)MemAlloc(0x18, __FILE__, 0xd7, "FontMapBase", 0);
+#endif
         if (result) {
             new (result) FontMap();
         }
@@ -2369,7 +2389,8 @@ void RndText::FontMap::SetupCharacter(
 #ifdef HX_NATIVE
     // Apply mTextColor to vertex colors (Xbox does this natively via packed verts)
     for (int _i = 0; _i < 4; _i++) {
-        v[_i].color = state.mTextColor;
+        v[_i].color.Set(state.mTextColor.red, state.mTextColor.green,
+                        state.mTextColor.blue, state.mTextColor.alpha);
     }
 #endif
     pg.mVertStart += 4;

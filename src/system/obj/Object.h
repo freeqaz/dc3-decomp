@@ -62,6 +62,14 @@ protected:
     }
 
 public:
+    // Relink ring pointers back to this node after a move/swap
+    void RelinkRing() {
+        if (next != this) {
+            next->prev = this;
+            prev->next = this;
+        }
+    }
+
     ObjRef() {}
     virtual ~ObjRef() {}
     virtual Hmx::Object *RefOwner() const { return nullptr; }

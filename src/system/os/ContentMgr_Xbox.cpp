@@ -11,6 +11,12 @@
 #include "xdk/XAPILIB.h"
 #include "xdk/win_types.h"
 
+// Forward declarations for XContent functions
+extern "C" {
+    long XContentCreateCrossTitleEnumerator(int, void*, int, int, int, int, void*);
+    long XEnumerateCrossTitle(void*, void*, int, int, void*);
+}
+
 std::vector<String> gIgnoredContent;
 XboxContentMgr gContentMgr;
 const char *kContentRootFormat = "cnt%08x";
@@ -130,21 +136,16 @@ void XboxContent::Mount() {
 }
 
 void XboxContent::Unmount() {
-    // Cache state and overlapped pointer for register allocation
-    State state = mState;
-    XOVERLAPPED **overlappedPtr = &mOverlapped;
-
-    if (state == kMounted) {
-        *overlappedPtr = new XOVERLAPPED;
-        memset(*overlappedPtr, 0, sizeof(XOVERLAPPED));
-        // 0x3E5 = ERROR_IO_PENDING - async operation started
-        if (XContentClose(mRoot.c_str(), *overlappedPtr) != 0x3E5) {
-            RELEASE(*overlappedPtr);
+    if (mState == kMounted) {
+        mOverlapped = new XOVERLAPPED;
+        memset(mOverlapped, 0, sizeof(XOVERLAPPED));
+        if (XContentClose(mRoot.c_str(), mOverlapped) != 0x3E5) {
+            RELEASE(mOverlapped);
             mState = kContentDeleting;
             return;
         }
         mState = kUnmounting;
-    } else if (state == kNeedsMounting || state == kContentDeleting) {
+    } else if (mState == kNeedsMounting || mState == kContentDeleting) {
         mState = kUnmounted;
     }
 }
@@ -193,6 +194,7 @@ void XboxContentMgr::Terminate() { ThePlatformMgr.RemoveSink(this); }
 
 void XboxContentMgr::StartRefresh() {
     bool b10 = mDirty || (unk70 && unk71);
+
     if (b10) {
         mDirty = false;
         unk70 = false;
@@ -234,6 +236,20 @@ void XboxContentMgr::StartRefresh() {
             if (i >= 4
                 || ThePlatformMgr.IsSignedIn(i)
                     && (i != 5 || mEnumerateSaveGameExports)) {
+                int flags = i == 4 ? 2 : i == 5 ? 1 : i == 6 ? 0x7000 : 2;
+                int param = i == 4 || i == 5 ? 0xff : i;
+                void* dataPtr = &mXDatas[i];
+
+                if (i == 4) dataPtr = (void*)((char*)this + 0x84);
+                else if (i == 5) dataPtr = (void*)((char*)this + 0x88);
+                else if (i == 6) dataPtr = (void*)((char*)this + 0x8c);
+
+                void* enumHandle = operator new(0x1c);
+                memset(enumHandle, 0, 0x1c);
+
+                if (XContentCreateCrossTitleEnumerator(param, 0, flags, 0, 1, 0, dataPtr) == 0) {
+                    XEnumerateCrossTitle(enumHandle, &mXDatas[i], 0x138, 0, mOverlappeds[i]);
+                }
             }
         }
     }

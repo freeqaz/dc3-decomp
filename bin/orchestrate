@@ -107,6 +107,7 @@ from orchestrator.reporting import (
 )
 from orchestrator.config import (
     get_backend,
+    set_provider_override,
     get_token_budget,
     get_available_models,
     _get_openrouter_api_key,
@@ -176,6 +177,20 @@ def validate_model_backend(model: Optional[str]) -> None:
         print(f"Error: Model '{model}' requires OpenRouter.")
         print("Set OPENROUTER_API_KEY in .env or environment.")
         sys.exit(1)
+
+
+def apply_provider_override(args) -> None:
+    """Apply --provider flag as global backend override."""
+    provider = getattr(args, 'provider', None)
+    if provider:
+        # Validate API key exists for chosen provider
+        if provider == "openrouter" and not _get_openrouter_api_key():
+            print("Error: --provider openrouter requires OPENROUTER_API_KEY in .env or environment.")
+            sys.exit(1)
+        if provider == "zai" and not _get_zai_api_key():
+            print("Error: --provider zai requires ZAI_API_KEY.")
+            sys.exit(1)
+        set_provider_override(provider)
 
 
 def cmd_init(args):
@@ -254,6 +269,7 @@ def resolve_symbol(name: str, db_path: str | Path = "decomp.db", quiet: bool = F
 
 def cmd_single(args):
     """Run single agent on one function."""
+    apply_provider_override(args)
     args.symbol = resolve_symbol(args.symbol, db_path=args.db, quiet=getattr(args, 'quiet', False))
     validate_model_backend(args.model)
     orchestrator = DecompOrchestrator(
@@ -384,6 +400,7 @@ def _print_divergent_summary(targets, min_priority):
 
 def cmd_batch(args):
     """Run batch of functions with parallel agents."""
+    apply_provider_override(args)
     validate_model_backend(args.model)
 
     # Select targets based on strategy
@@ -480,48 +497,71 @@ def cmd_batch(args):
         print()
 
     # Run batch with either pre-selected targets or pattern-based selection
-    if targets is not None:
-        # Use pre-selected targets (priority or unit-completion strategy)
-        summary = asyncio.run(
-            orchestrator.run_batch_with_targets(
-                targets=targets,
-                max_agents=args.max_agents,
-                model=args.model,
-                verbose=_verbosity(args),
-                use_incremental=use_incremental,
-                periodic_full_interval=args.periodic_full if not args.incremental_only else 0,
-                validate_diffs=args.validate_diffs,
-                refactor=not args.no_refactor,
-                reviewer_model=args.reviewer_model,
+    # Install graceful shutdown handler for Ctrl+C
+    import signal
+    _sigint_count = 0
+    _orig_handler = signal.getsignal(signal.SIGINT)
+
+    def _batch_sigint_handler(signum, frame):
+        nonlocal _sigint_count
+        _sigint_count += 1
+        if _sigint_count == 1:
+            print("\n\nCtrl+C received — finishing active agents, no new spawns.")
+            print("Press Ctrl+C again to force-stop immediately.\n")
+            orchestrator.request_shutdown()
+        else:
+            # Second Ctrl+C: restore original handler and re-raise
+            signal.signal(signal.SIGINT, _orig_handler)
+            raise KeyboardInterrupt
+
+    signal.signal(signal.SIGINT, _batch_sigint_handler)
+
+    try:
+        if targets is not None:
+            # Use pre-selected targets (priority or unit-completion strategy)
+            summary = asyncio.run(
+                orchestrator.run_batch_with_targets(
+                    targets=targets,
+                    max_agents=args.max_agents,
+                    model=args.model,
+                    verbose=_verbosity(args),
+                    use_incremental=use_incremental,
+                    periodic_full_interval=args.periodic_full if not args.incremental_only else 0,
+                    validate_diffs=args.validate_diffs,
+                    refactor=not args.no_refactor,
+                    reviewer_model=args.reviewer_model,
+                )
             )
-        )
-    else:
-        # Use pattern-based selection (default)
-        # Handle exclude patterns: None means use defaults, empty list means no exclusions
-        exclude_patterns = args.exclude if args.exclude else None
-        if args.no_exclude:
-            exclude_patterns = []
-        summary = asyncio.run(
-            orchestrator.run_batch(
-                pattern=args.pattern,
-                min_percent=args.min_percent,
-                max_percent=args.max_percent,
-                max_agents=args.max_agents,
-                model=args.model,
-                limit=args.limit,
-                verbose=_verbosity(args),
-                use_incremental=use_incremental,
-                periodic_full_interval=args.periodic_full if not args.incremental_only else 0,
-                validate_diffs=args.validate_diffs,
-                refactor=not args.no_refactor,
-                exclude_at_limit=args.exclude_at_limit,
-                reviewer_model=args.reviewer_model,
-                order_by=args.order,
-                order_asc=args.asc,
-                min_size=args.min_size,
-                exclude_patterns=exclude_patterns,
+        else:
+            # Use pattern-based selection (default)
+            # Handle exclude patterns: None means use defaults, empty list means no exclusions
+            exclude_patterns = args.exclude if args.exclude else None
+            if args.no_exclude:
+                exclude_patterns = []
+            summary = asyncio.run(
+                orchestrator.run_batch(
+                    pattern=args.pattern,
+                    min_percent=args.min_percent,
+                    max_percent=args.max_percent,
+                    max_agents=args.max_agents,
+                    model=args.model,
+                    limit=args.limit,
+                    verbose=_verbosity(args),
+                    use_incremental=use_incremental,
+                    periodic_full_interval=args.periodic_full if not args.incremental_only else 0,
+                    validate_diffs=args.validate_diffs,
+                    refactor=not args.no_refactor,
+                    exclude_at_limit=args.exclude_at_limit,
+                    reviewer_model=args.reviewer_model,
+                    order_by=args.order,
+                    order_asc=args.asc,
+                    min_size=args.min_size,
+                    exclude_patterns=exclude_patterns,
+                    max_attempts=max_attempts,
+                )
             )
-        )
+    finally:
+        signal.signal(signal.SIGINT, _orig_handler)
 
     if args.json:
         print(json.dumps(summary, indent=2, default=str))
@@ -694,6 +734,7 @@ def cmd_info(args):
 
 def cmd_retry(args):
     """Retry a specific function with escalated model."""
+    apply_provider_override(args)
     args.symbol = resolve_symbol(args.symbol, db_path=args.db, quiet=getattr(args, 'quiet', False))
     validate_model_backend(args.model)
     func = get_function_by_symbol(args.symbol, db_path=args.db)
@@ -1519,6 +1560,7 @@ def main():
     # Model choices generated dynamically from registry (all backends)
     available_models = get_available_models("all")
     p_single.add_argument("--model", choices=available_models, help="Force specific model (default: auto-select)")
+    p_single.add_argument("--provider", choices=["anthropic", "openrouter", "zai"], help="Force backend provider (default: anthropic for Claude models)")
     p_single.add_argument("--quiet", "-q", action="store_true", help="Suppress all output")
     p_single.add_argument("--verbose", "-v", action="store_true", help="Full agent output (tool args, results, text)")
     p_single.add_argument("--json", action="store_true", help="Output results as JSON")
@@ -1628,6 +1670,7 @@ def main():
     )
     # Model choices generated dynamically from registry (supports all backends)
     p_batch.add_argument("--model", choices=available_models, help="Force all agents to use this model")
+    p_batch.add_argument("--provider", choices=["anthropic", "openrouter", "zai"], help="Force backend provider (default: anthropic for Claude models)")
     p_batch.add_argument("--limit", type=int, default=0, help="Max functions to process (0=unlimited)")
     p_batch.add_argument("--quiet", "-q", action="store_true", help="Suppress all output")
     p_batch.add_argument("--verbose", "-v", action="store_true", help="Full agent output (tool args, results, text)")
@@ -1737,6 +1780,7 @@ def main():
     p_retry.add_argument("symbol", help="Function name or mangled symbol (e.g. 'CharClip::Load')")
     # Model choices generated dynamically from registry (supports all backends)
     p_retry.add_argument("--model", choices=available_models, help="Escalated model to use")
+    p_retry.add_argument("--provider", choices=["anthropic", "openrouter", "zai"], help="Force backend provider (default: anthropic for Claude models)")
     p_retry.add_argument("--quiet", "-q", action="store_true", help="Suppress all output")
     p_retry.add_argument("--verbose", "-v", action="store_true", help="Full agent output (tool args, results, text)")
 
@@ -2095,8 +2139,10 @@ def main():
     try:
         commands[args.command](args)
     except KeyboardInterrupt:
+        # Batch commands handle Ctrl+C internally for graceful drain.
+        # This only fires for non-batch commands or double Ctrl+C.
         print("\nInterrupted")
-        sys.exit(1)
+        sys.exit(130)
     except Exception as e:
         print(f"Error: {e}")
         if "--debug" in sys.argv:

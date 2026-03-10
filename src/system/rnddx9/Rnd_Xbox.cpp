@@ -334,18 +334,35 @@ void DxRnd::SetDefaultRenderStates() {
     GetDeviceCaps(&caps);
     D3DDevice_SetRenderState_AlphaRef(TheDxRnd.Device(), 0);
     D3DDevice_SetRenderState_AlphaFunc(TheDxRnd.Device(), D3DCMP_GREATER);
-    D3DDevice_SetRenderState_PointSizeMax(
-        TheDxRnd.Device(), reinterpret_cast<UINT &>(caps.MaxPointSize)
-    );
+    unsigned int maxPointSize = (int)caps.MaxPointSize;
+    D3DDevice_SetRenderState_PointSizeMax(TheDxRnd.Device(), maxPointSize);
     D3DDevice_SetRenderState_SeparateAlphaBlendEnable(TheDxRnd.Device(), 1);
     D3DDevice_SetRenderState_SrcBlendAlpha(TheDxRnd.Device(), 1);
     D3DDevice_SetRenderState_DestBlendAlpha(TheDxRnd.Device(), 1);
     D3DDevice_SetRenderState_BlendOpAlpha(TheDxRnd.Device(), 3);
     unsigned int max_stages = caps.MaxTextureBlendStages;
-    for (unsigned int i = 0; i < max_stages; i++) {
-        D3DDevice_SetSamplerState_MinFilter(TheDxRnd.Device(), i, 1);
-        D3DDevice_SetSamplerState_MagFilter(TheDxRnd.Device(), i, 1);
+
+    if (max_stages != 0) {
+        unsigned int stage_offset = 0;
+        unsigned int i = 0;
+        do {
+            D3DDevice_SetSamplerState_MinFilter(TheDxRnd.Device(), i, 1);
+            D3DDevice_SetSamplerState_MagFilter(TheDxRnd.Device(), i, 1);
+
+            unsigned char* device = reinterpret_cast<unsigned char*>(TheDxRnd.Device());
+            unsigned int* stage_ptr = reinterpret_cast<unsigned int*>(device + stage_offset + 0x48C);
+            *stage_ptr = (*stage_ptr & 0xFE7FFFFF) | 0x800000;
+
+            unsigned long long* state64 = reinterpret_cast<unsigned long long*>(device + 0x18);
+            unsigned long long shift64 = (unsigned long long)(i + 0x20) & 0x7F;
+            unsigned long long mask = 0x8000000000000000ULL;
+            *state64 |= mask >> shift64;
+
+            i++;
+            stage_offset += 0x18;
+        } while (i < max_stages);
     }
+
     D3DDevice_SetRenderState_PresentImmediateThreshold(TheDxRnd.Device(), 100);
 }
 

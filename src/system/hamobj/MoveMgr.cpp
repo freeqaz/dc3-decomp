@@ -565,7 +565,11 @@ HamMove *MoveMgr::FindHamMoveFromName(Symbol name) const {
         return nullptr;
     }
     MoveDir *moveDir = TheHamDirector->GetMoveDir();
+#ifdef HX_NATIVE
+    if (!moveDir) {
+#else
     if ((unsigned int)moveDir <= 0) {
+#endif
         return nullptr;
     }
     HamMove *move = moveDir->Find<HamMove>(name.Str(), false);

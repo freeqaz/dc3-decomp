@@ -995,55 +995,48 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
 
             // Phase 1: Classify each face by error and perimeter
             unsigned int faceIdx = 0;
-            unsigned int geomOwnerVal = (unsigned int)mesh->GetGeomOwner();
-            if ((unsigned int)((*(int *)(geomOwnerVal + 0x114) - *(int *)(geomOwnerVal + 0x110)) / 6) != 0) {
+            RndMesh *geomOwnerClassify = mesh->GetGeomOwner();
+            if ((unsigned int)geomOwnerClassify->Faces().size() != 0) {
                 int faceOffset = 0;
                 do {
-                    geomOwnerVal = (unsigned int)mesh->GetGeomOwner();
-                    int vertsBase = *(int *)(geomOwnerVal + 0x100);
-                    int facesBase = *(int *)(geomOwnerVal + 0x110);
-                    RndMesh::Face *face = (RndMesh::Face *)(facesBase + faceOffset);
+                    geomOwnerClassify = mesh->GetGeomOwner();
+                    RndMesh::Vert *vertsBase = &geomOwnerClassify->Verts(0);
+                    RndMesh::Face *facesBase = &geomOwnerClassify->Faces()[0];
+                    RndMesh::Face *face = (RndMesh::Face *)((char *)facesBase + faceOffset);
                     unsigned short i0 = face->v1;
-                    unsigned short i1 = *(unsigned short *)((char *)face + 2);
-                    unsigned short i2 = *(unsigned short *)((char *)face + 4);
-
-                    int i0off = (unsigned int)i0 * 0x60;
+                    unsigned short i1 = face->v2;
+                    unsigned short i2 = face->v3;
 
                     // Compute SH error on each edge
                     float err01 = DistanceSH(
-                        *(const Vector4 *)(vertsBase + i0off + 0x30),
-                        *(const Vector3 *)(vertsBase + i0off + 0x10),
-                        *(const Vector4 *)(vertsBase + (unsigned int)i1 * 0x60 + 0x30),
-                        *(const Vector3 *)(vertsBase + (unsigned int)i1 * 0x60 + 0x10)
+                        *(const Vector4 *)&vertsBase[i0].color,
+                        vertsBase[i0].norm,
+                        *(const Vector4 *)&vertsBase[i1].color,
+                        vertsBase[i1].norm
                     );
                     float err12 = DistanceSH(
-                        *(const Vector4 *)(vertsBase + (unsigned int)i1 * 0x60 + 0x30),
-                        *(const Vector3 *)(vertsBase + (unsigned int)i1 * 0x60 + 0x10),
-                        *(const Vector4 *)(vertsBase + (unsigned int)i2 * 0x60 + 0x30),
-                        *(const Vector3 *)(vertsBase + (unsigned int)i2 * 0x60 + 0x10)
+                        *(const Vector4 *)&vertsBase[i1].color,
+                        vertsBase[i1].norm,
+                        *(const Vector4 *)&vertsBase[i2].color,
+                        vertsBase[i2].norm
                     );
                     float err20 = DistanceSH(
-                        *(const Vector4 *)(vertsBase + (unsigned int)i2 * 0x60 + 0x30),
-                        *(const Vector3 *)(vertsBase + (unsigned int)i2 * 0x60 + 0x10),
-                        *(const Vector4 *)(vertsBase + i0off + 0x30),
-                        *(const Vector3 *)(vertsBase + i0off + 0x10)
+                        *(const Vector4 *)&vertsBase[i2].color,
+                        vertsBase[i2].norm,
+                        *(const Vector4 *)&vertsBase[i0].color,
+                        vertsBase[i0].norm
                     );
                     float totalError = (float)((double)(float)((double)err20 + (double)err12)
                                                + (double)err01);
                     bool smallError = totalError <= mTessellateTriError;
 
                     // Compute world-space perimeter
-                    geomOwnerVal = (unsigned int)mesh->GetGeomOwner();
+                    geomOwnerClassify = mesh->GetGeomOwner();
+                    RndMesh::Vert *vertsPos = &geomOwnerClassify->Verts(0);
                     Vector3 wp0, wp1, wp2;
-                    Multiply(*(const Vector3 *)(*(int *)(geomOwnerVal + 0x100) + i0off), xfm, wp0);
-                    Multiply(
-                        *(const Vector3 *)(*(int *)(*(int *)((int)mesh + 0x148) + 0x100) + (unsigned int)i1 * 0x60),
-                        xfm, wp1
-                    );
-                    Multiply(
-                        *(const Vector3 *)(*(int *)(*(int *)((int)mesh + 0x148) + 0x100) + (unsigned int)i2 * 0x60),
-                        xfm, wp2
-                    );
+                    Multiply(vertsPos[i0].pos, xfm, wp0);
+                    Multiply(vertsPos[i1].pos, xfm, wp1);
+                    Multiply(vertsPos[i2].pos, xfm, wp2);
 
                     float d12 = sqrtf((wp1.x - wp2.x) * (wp1.x - wp2.x) + (wp1.y - wp2.y) * (wp1.y - wp2.y) + (wp1.z - wp2.z) * (wp1.z - wp2.z));
                     float d02 = sqrtf((wp0.x - wp2.x) * (wp0.x - wp2.x) + (wp0.y - wp2.y) * (wp0.y - wp2.y) + (wp0.z - wp2.z) * (wp0.z - wp2.z));
@@ -1073,11 +1066,11 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
                     }
                     priorities.push_back(*pFP);
                 nextFace:
-                    geomOwnerVal = (unsigned int)mesh->GetGeomOwner();
+                    geomOwnerClassify = mesh->GetGeomOwner();
                     faceIdx++;
                     faceOffset += 6;
                 } while (faceIdx
-                         < (unsigned int)((*(int *)(geomOwnerVal + 0x114) - *(int *)(geomOwnerVal + 0x110)) / 6));
+                         < (unsigned int)geomOwnerClassify->Faces().size());
             }
 
             // Sort priorities (most negative = highest priority first)
@@ -1086,23 +1079,23 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
             std::sort(priEnd, priBegin);
 
             // Phase 2: Process priority faces — split all 3 edges
-            unsigned int priCount = ((int)priEnd - (int)priBegin) >> 3;
+            unsigned int priCount = priEnd - priBegin;
             unsigned int numNewVerts = numVerts;
             unsigned int pi = 0;
             if (priCount != 0) {
                 FacePriority *pPtr = priBegin;
                 do {
                     geomOwner = mesh->GetGeomOwner();
-                    int vertBase = *(int *)((int)geomOwner + 0x100);
+                    RndMesh::Vert *vertBase = &geomOwner->Verts(0);
                     unsigned short *facePtr =
-                        (unsigned short *)(*(int *)((int)geomOwner + 0x110) + *(int *)pPtr * 6);
+                        (unsigned short *)&geomOwner->Faces()[pPtr->faceIndex];
                     unsigned short fv0 = facePtr[0];
                     unsigned short fv1 = facePtr[1];
                     unsigned short fv2 = facePtr[2];
 
-                    RndMesh::Vert *vert0 = (RndMesh::Vert *)(vertBase + (unsigned int)fv0 * 0x60);
-                    RndMesh::Vert *vert1 = (RndMesh::Vert *)(vertBase + (unsigned int)fv1 * 0x60);
-                    RndMesh::Vert *vert2 = (RndMesh::Vert *)(vertBase + (unsigned int)fv2 * 0x60);
+                    RndMesh::Vert *vert0 = &vertBase[fv0];
+                    RndMesh::Vert *vert1 = &vertBase[fv1];
+                    RndMesh::Vert *vert2 = &vertBase[fv2];
 
                     // Construct 3 midpoint edges
                     Edge edge01, edge12, edge20;
@@ -1202,7 +1195,7 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
 
                     pi++;
                     newFacesThisIter += 3;
-                    pPtr = (FacePriority *)((char *)pPtr + 8);
+                    pPtr++;
                 } while (pi < priCount);
             }
 
@@ -1216,7 +1209,7 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
             RndMesh::Vert *savedVertsEnd = &newVerts[0] + newVerts.size();
             geomOwner = mesh->GetGeomOwner();
             geomOwner->Verts().resize(
-                ((int)savedVertsEnd - (int)savedVerts) / 0x60 + geomOwner->Verts().size()
+                (savedVertsEnd - savedVerts) + geomOwner->Verts().size()
             );
 
             // Copy new verts into mesh
@@ -1231,11 +1224,7 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
                     );
                     count--;
                     offset += 0x60;
-#ifdef HX_NATIVE
                     src++;
-#else
-                    src = (RndMesh::Vert *)((char *)src + 0x60);
-#endif
                 } while (count != 0);
             }
 
@@ -1260,11 +1249,11 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
                     int splitCount = 0;
                     unsigned int lastSplitEdge = 0;
                     RndMesh::Face *curFace =
-                        (RndMesh::Face *)(*(int *)((int)geomOwner + 0x110) + fOff);
+                        (RndMesh::Face *)((char *)&geomOwner->Faces()[0] + fOff);
 
                     unsigned short cv0 = curFace->v1;
-                    unsigned short cv1 = *(unsigned short *)((char *)curFace + 2);
-                    unsigned short cv2 = *(unsigned short *)((char *)curFace + 4);
+                    unsigned short cv1 = curFace->v2;
+                    unsigned short cv2 = curFace->v3;
 
                     // Set up 3 edges and check which were split
                     Edge edges[3];
@@ -1290,7 +1279,7 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
                             lastSplitEdge = edgeIdx;
                         }
                         edgeIdx++;
-                        edgePtr = (Edge *)((char *)edgePtr + 6);
+                        edgePtr++;
                         midPtr++;
                     } while (edgeIdx < 3);
 
@@ -1348,23 +1337,16 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
                         newFaces.push_back(fb);
                     } else if (splitCount == 2) {
                         // 2 edges split: create blend vert + faces
-                        int geomVal = (int)mesh->GetGeomOwner();
-                        unsigned short uv0 = *(unsigned short *)curFace;
-                        unsigned short uv1 = *(unsigned short *)((char *)curFace + 2);
-                        unsigned short uv2 = *(unsigned short *)((char *)curFace + 4);
-                        int vBase = *(int *)(geomVal + 0x100);
+                        RndMesh *geomSplit = mesh->GetGeomOwner();
+                        unsigned short uv0 = curFace->v1;
+                        unsigned short uv1 = curFace->v2;
+                        unsigned short uv2 = curFace->v3;
+                        RndMesh::Vert *vBase = &geomSplit->Verts(0);
 
                         RndMesh::Vert blendA;
                         RndMesh::Vert blendB;
-                        BlendVert(
-                            *(RndMesh::Vert *)(vBase + (unsigned int)uv0 * 0x60),
-                            *(RndMesh::Vert *)(vBase + (unsigned int)uv1 * 0x60),
-                            blendA
-                        );
-                        BlendVert(
-                            *(RndMesh::Vert *)(vBase + (unsigned int)uv2 * 0x60),
-                            blendA, blendB
-                        );
+                        BlendVert(vBase[uv0], vBase[uv1], blendA);
+                        BlendVert(vBase[uv2], blendA, blendB);
 
                         Vector3 worldPos, worldNorm;
                         Multiply(blendB.pos, xfm, worldPos);
@@ -1380,19 +1362,19 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
                         if (mids[0] == 0xffff) {
                             RndMesh::Face tmpA;
                             tmpA.v1 = blendIdx;
-                            tmpA.v2 = *(unsigned short *)curFace;
-                            tmpA.v3 = *(unsigned short *)((char *)curFace + 2);
+                            tmpA.v2 = curFace->v1;
+                            tmpA.v3 = curFace->v2;
                             pFace = &tmpA;
                         } else {
                             RndMesh::Face tmpA;
                             tmpA.v1 = blendIdx;
-                            tmpA.v2 = *(unsigned short *)curFace;
+                            tmpA.v2 = curFace->v1;
                             tmpA.v3 = mids[0];
                             newFaces.push_back(tmpA);
                             RndMesh::Face tmpB;
                             tmpB.v1 = blendIdx;
                             tmpB.v2 = mids[0];
-                            tmpB.v3 = *(unsigned short *)((char *)curFace + 2);
+                            tmpB.v3 = curFace->v2;
                             pFace = &tmpB;
                         }
                         newFaces.push_back(*pFace);
@@ -1401,19 +1383,19 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
                         if (mids[1] == 0xffff) {
                             RndMesh::Face tmpA;
                             tmpA.v1 = blendIdx;
-                            tmpA.v2 = *(unsigned short *)((char *)curFace + 2);
-                            tmpA.v3 = *(unsigned short *)((char *)curFace + 4);
+                            tmpA.v2 = curFace->v2;
+                            tmpA.v3 = curFace->v3;
                             pFace = &tmpA;
                         } else {
                             RndMesh::Face tmpA;
                             tmpA.v1 = blendIdx;
-                            tmpA.v2 = *(unsigned short *)((char *)curFace + 2);
+                            tmpA.v2 = curFace->v2;
                             tmpA.v3 = mids[1];
                             newFaces.push_back(tmpA);
                             RndMesh::Face tmpB;
                             tmpB.v1 = blendIdx;
                             tmpB.v2 = mids[1];
-                            tmpB.v3 = *(unsigned short *)((char *)curFace + 4);
+                            tmpB.v3 = curFace->v3;
                             pFace = &tmpB;
                         }
                         newFaces.push_back(*pFace);
@@ -1422,19 +1404,19 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
                         if (mids[2] == 0xffff) {
                             RndMesh::Face tmpA;
                             tmpA.v1 = blendIdx;
-                            tmpA.v2 = *(unsigned short *)((char *)curFace + 4);
-                            tmpA.v3 = *(unsigned short *)curFace;
+                            tmpA.v2 = curFace->v3;
+                            tmpA.v3 = curFace->v1;
                             pFace = &tmpA;
                         } else {
                             RndMesh::Face tmpA;
                             tmpA.v1 = blendIdx;
-                            tmpA.v2 = *(unsigned short *)((char *)curFace + 4);
+                            tmpA.v2 = curFace->v3;
                             tmpA.v3 = mids[2];
                             newFaces.push_back(tmpA);
                             RndMesh::Face tmpB;
                             tmpB.v1 = blendIdx;
                             tmpB.v2 = mids[2];
-                            tmpB.v3 = *(unsigned short *)curFace;
+                            tmpB.v3 = curFace->v1;
                             pFace = &tmpB;
                         }
                         newFaces.push_back(*pFace);
@@ -1457,8 +1439,7 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
             savedVerts = &newVerts[0];
             geomOwner = mesh->GetGeomOwner();
             geomOwner->Verts().resize(
-                ((int)(&newVerts[0] + newVerts.size()) - (int)savedVerts) / 0x60
-                + geomOwner->Verts().size()
+                (int)newVerts.size() + geomOwner->Verts().size()
             );
 
             // Copy Phase 3 new verts into mesh
@@ -1473,11 +1454,7 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
                     );
                     count--;
                     offset += 0x60;
-#ifdef HX_NATIVE
                     src++;
-#else
-                    src = (RndMesh::Vert *)((char *)src + 0x60);
-#endif
                 } while (count != 0);
             }
 

@@ -18,12 +18,12 @@
 #include <cstring>
 #include <stdlib.h>
 
-bool SortCmp::operator()(const StoreOffer *, const StoreOffer *) const { return false; }
+bool SortCmp::operator()(const StoreOffer *a, const StoreOffer *b) const { return false; }
 
 StorePurchaseable::StorePurchaseable()
     : isAvailable(0), isPurchased(0), cost(0), songID(0) {}
 
-bool StorePurchaseable::Exists() const { return (songID != 0) ? true : false; }
+bool StorePurchaseable::Exists() const { return songID != 0; }
 
 unsigned long long StorePurchaseable::OfferStringToID(char const *s) {
 #ifdef HX_NATIVE
@@ -49,8 +49,7 @@ StoreOffer::StoreOffer(DataArray *a, SongMgr *mgr) : mStoreOfferData(a), mSongMg
 
     DataArray *dateArray = mStoreOfferData->FindArray(release_date, false);
     if (dateArray) {
-        auto _tmp4 = DateTime(dateArray->Int(1), dateArray->Int(2), dateArray->Int(3), 0, 0, 0);
-        date = _tmp4;
+        date = DateTime(dateArray->Int(1), dateArray->Int(2), dateArray->Int(3), 0, 0, 0);
     }
 
     static Symbol song_ids("song_ids");
@@ -71,7 +70,7 @@ StoreOffer::StoreOffer(DataArray *a, SongMgr *mgr) : mStoreOfferData(a), mSongMg
 StoreOffer::~StoreOffer() { mStoreOfferData->Release(); }
 
 bool StoreOffer::HasData(Symbol s) const {
-    return (mStoreOfferData->FindArray(s, false) != nullptr);
+    return mStoreOfferData->FindArray(s, false) != nullptr;
 }
 
 DateTime const &StoreOffer::ReleaseDate() const { return date; }

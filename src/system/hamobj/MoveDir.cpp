@@ -744,8 +744,15 @@ void MoveDir::Draw(const BaseSkeleton &baseSkeleton, SkeletonViz &skeletonViz) {
         const Skeleton *player_skel = dynamic_cast<const Skeleton *>(&baseSkeleton);
         MILO_ASSERT(player_skel, 0x51F);
         SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
-        // ErrorFrameInput input(handle.History(), )
+        ErrorNodeInput nodeInput;
+        ErrorFrameInput input(handle.History(), *unk414, baseSkeleton, SongSpeed());
         for (int i = 0; i < mFilterVer->NumNodes(); i++) {
+            ErrorNode *node = mFilterVer->mErrorNodes[i];
+            if (node) {
+                Vector3 error;
+                node->CalcError(input, nodeInput, error);
+                node->VizError(skeletonViz, input, nodeInput);
+            }
         }
     }
 }

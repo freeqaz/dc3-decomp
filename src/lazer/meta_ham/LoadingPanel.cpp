@@ -91,7 +91,10 @@ void LoadingPanel::Enter() {
     TheTaskMgr.SetSecondsAndBeat(0, 0, true);
     Stream *stream = sLoadingMaster->GetHxAudio()->GetSongStream();
     MILO_ASSERT(sLoadingMaster->GetHxAudio()->IsReady(), 0x6a);
-    // Trigger stream initialization
+    if (stream) {
+        stream->Play();
+        stream->Resync(0.0f);
+    }
 }
 
 Symbol LoadingPanel::ChooseLoadingScreen() {
