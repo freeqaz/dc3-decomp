@@ -11,21 +11,23 @@
 template <class T1, class T2>
 typename ObjPtrVec<T1, T2>::const_iterator
 ObjPtrVec<T1, T2>::find(const Hmx::Object *target) const {
-    for (const_iterator it = begin(); it != end(); ++it) {
+    const_iterator it = begin();
+    for (; it != end(); ++it) {
         if (*it == target)
-            return it;
+            break;
     }
-    return end();
+    return it;
 }
 
 template <class T1, class T2>
 typename ObjPtrVec<T1, T2>::iterator
 ObjPtrVec<T1, T2>::find(const Hmx::Object *target) {
-    for (iterator it = begin(); it != end(); ++it) {
+    iterator it = begin();
+    for (; it != end(); ++it) {
         if (*it == target)
-            return it;
+            break;
     }
-    return end();
+    return it;
 }
 
 template <class T1, class T2>
@@ -67,12 +69,16 @@ void ObjPtrVec<T1, T2>::merge(const ObjPtrVec<T1, T2> &other) {
 
 template <class T1, class T2>
 void ObjPtrVec<T1, T2>::unique() {
-    for (int i = 0; i < (int)mNodes.size(); i++) {
-        for (int j = i + 1; j < (int)mNodes.size(); j++) {
-            if (mNodes[i].Obj() == mNodes[j].Obj()) {
-                erase(iterator(mNodes.begin() + j));
-                j--;
-            }
+    if (mNodes.empty())
+        return;
+    T1 *obj = begin()->Obj();
+    iterator jt = begin() + 1;
+    while (jt != end()) {
+        if (jt->Obj() == obj) {
+            erase(jt);
+        } else {
+            obj = jt->Obj();
+            ++jt;
         }
     }
 }

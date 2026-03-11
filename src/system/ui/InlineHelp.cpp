@@ -32,6 +32,21 @@ BEGIN_LOADS(InlineHelp)
     PostLoad(bs);
 END_LOADS
 
+INIT_REVS(5, 0)
+
+void InlineHelp::PreLoad(BinStream &bs) {
+    LOAD_REVS(bs);
+    ASSERT_REVS(5, 0);
+    bs >> mHorizontal;
+    bs >> mSpacing;
+    bs >> mConfig;
+    bs >> mTextColor;
+    bs >> mUseConnectedControllers;
+    bs >> mResourceDir;
+    UIComponent::PreLoad(bs);
+    bs.PushRev(packRevs(d.altRev, d.rev), this);
+}
+
 BEGIN_SAVES(InlineHelp)
     SAVE_REVS(5, 0)
     bs << mHorizontal;
