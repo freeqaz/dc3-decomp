@@ -18,15 +18,15 @@
 #include "math/Vec.h"
 #include "utl/FilePath.h"
 #include "platform/Rnd_Wgpu.h"
+#include "platform/MeshGpuCache.h"
 
 #include <cstdio>
 #include <cstring>
 #include <cmath>
 #include <climits>
 
-// From Mesh_Wgpu.cpp
+// From Tex_Wgpu.cpp
 extern wgpu::TextureView GetGpuTexView(RndTex* tex);
-extern void SetMeshDepthBias(RndMesh*, int32_t);
 
 bool ViewerScene::Load(const char* miloAbsPath, const ViewerConfig& cfg) {
     printf("Milo Viewer: loading milo file...\n");

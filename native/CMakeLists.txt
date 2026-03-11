@@ -886,7 +886,12 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/SampleInst_Native.cpp
     src/platform/FxSendNative.cpp
     src/platform/Rnd_Wgpu.cpp
+    src/platform/MeshFilter.cpp
+    src/platform/BoneSetup.cpp
+    src/platform/MeshGpuCache.cpp
+    src/platform/MaterialSetup.cpp
     src/platform/Mesh_Wgpu.cpp
+    src/platform/TransparentQueue.cpp
     src/platform/Part_Wgpu.cpp
     src/platform/Tex_Wgpu.cpp
     src/platform/Cam_Native.cpp

@@ -2,6 +2,7 @@
 // Replaces Rnd_Stub.cpp with real WebGPU rendering via Dawn
 
 #include "platform/Rnd_Wgpu.h"
+#include "platform/MeshGpuCache.h"
 
 #include "gfx/FrameCapture.h"
 #include "gfx/GpuDevice.h"
@@ -254,9 +255,6 @@ void WgpuRnd::Clear(unsigned int flags, const Hmx::Color& color) {
     mClearColor = color;
 }
 
-// Defined in Mesh_Wgpu.cpp
-extern void RndMesh_ResetFrameStats();
-
 void WgpuRnd::BeginDrawing() {
     RndMesh_ResetFrameStats();
 
@@ -436,10 +434,7 @@ void WgpuRnd::BeginDrawing() {
     mPass.SetBindGroup(0, mSceneBindGroup);
 }
 
-extern void FlushTransparentDraws();
-extern void FlushTextDraws();
-extern bool HasTransparentDraws();
-extern bool IsFlushingTransparentDraws();
+#include "platform/TransparentQueue.h"
 
 wgpu::Buffer& GetSceneBuffer() { return gWgpuRnd->SceneBuffer(); }
 uint32_t GetSceneOffset() { return gWgpuRnd->SceneOffset(); }

@@ -27,6 +27,33 @@
 #include "ui/LabelShrinkWrapper.h"
 #include "ui/UILabelDir.h"
 #include "ui/UIList.h"
+#include "ui/InlineHelp.h"
+#include "movie/TexMovie.h"
+#include "synth/SynthSample.h"
+#include "synth/Sound.h"
+#include "synth/Sfx.h"
+#include "synth/FxSendReverb.h"
+#include "synth/FxSendEQ.h"
+#include "synth/FxSendCompress.h"
+#include "synth/FxSendDistortion.h"
+#include "synth/FxSendDelay.h"
+#include "synth/FxSendBitCrush.h"
+#include "synth/FxSendPitchShift.h"
+#include "synth/FxSendFlanger.h"
+#include "synth/FxSendChorus.h"
+#include "synth/FxSendSynapse.h"
+#include "synth/FxSendWah.h"
+#include "synth/FxSendMeterEffect.h"
+#include "synth/Sequence.h"
+#include "synth/Emitter.h"
+#include "synth/Faders.h"
+#include "synth/MidiInstrument.h"
+#include "synth/MoggClip.h"
+#include "synth/MeterEffectMonitor.h"
+#include "synth/ADSR.h"
+#include "synth/ThreeDSound.h"
+#include "synth/AudioDucker.h"
+#include "synth/Synth.h"
 #include "utl/Symbol.h"
 
 // Forward declarations from engine
@@ -91,10 +118,44 @@ void EnsureEngineInit() {
     // UIList family — factories only (no UIList::Register() which needs a dir context)
     UIList::Init();
 
-    // NOT registered (decomp bugs cause stream desync or crashes):
-    //   Movie::Init()  — TexMovie::Load stub desyncs stream ("String chars N > 256")
-    //   SynthInit()    — Sound/SynthSample::Load stubs same issue
-    //   InlineHelp     — InlineHelp::PreLoad is stubbed, desyncs stream
+    // InlineHelp — PreLoad now implemented
+    REGISTER_OBJ_FACTORY(InlineHelp)
+
+    // TexMovie — Load now fixed
+    REGISTER_OBJ_FACTORY(TexMovie)
+
+    // Synth subsystem — SynthPreInit creates TheSynth singleton (needed by Sound ctor)
+    SynthPreInit();
+    SynthSample::Disable();
+    SynthSample::Init();
+    REGISTER_OBJ_FACTORY(Sound)
+    REGISTER_OBJ_FACTORY(Sfx)
+    REGISTER_OBJ_FACTORY(SynthEmitter)
+    REGISTER_OBJ_FACTORY(FxSendReverb)
+    REGISTER_OBJ_FACTORY(FxSendEQ)
+    REGISTER_OBJ_FACTORY(FxSendCompress)
+    REGISTER_OBJ_FACTORY(FxSendDistortion)
+    REGISTER_OBJ_FACTORY(FxSendDelay)
+    REGISTER_OBJ_FACTORY(FxSendBitCrush)
+    REGISTER_OBJ_FACTORY(FxSendPitchShift)
+    REGISTER_OBJ_FACTORY(FxSendFlanger)
+    REGISTER_OBJ_FACTORY(FxSendChorus)
+    REGISTER_OBJ_FACTORY(FxSendSynapse)
+    REGISTER_OBJ_FACTORY(FxSendWah)
+    REGISTER_OBJ_FACTORY(FxSendMeterEffect)
+    REGISTER_OBJ_FACTORY(WaitSeq)
+    REGISTER_OBJ_FACTORY(RandomGroupSeq)
+    REGISTER_OBJ_FACTORY(RandomIntervalGroupSeq)
+    REGISTER_OBJ_FACTORY(SerialGroupSeq)
+    REGISTER_OBJ_FACTORY(ParallelGroupSeq)
+    REGISTER_OBJ_FACTORY(SfxSeq)
+    REGISTER_OBJ_FACTORY(Fader)
+    REGISTER_OBJ_FACTORY(MidiInstrument)
+    REGISTER_OBJ_FACTORY(MoggClip)
+    REGISTER_OBJ_FACTORY(MeterEffectMonitor)
+    REGISTER_OBJ_FACTORY(ADSR)
+    REGISTER_OBJ_FACTORY(ThreeDSound)
+    REGISTER_OBJ_FACTORY(AudioDuckerTrigger)
 
     printf("=== Test Engine Init Complete ===\n");
 }
