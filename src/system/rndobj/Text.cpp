@@ -18,6 +18,24 @@
 #include "wordwrap.h"
 #include "ui/UI.h"
 #include <algorithm>
+#ifdef HX_NATIVE
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#endif
+
+#ifdef HX_NATIVE
+namespace {
+bool DebugChooseModeText() {
+    static int enabled = -1;
+    if (enabled == -1) {
+        const char *env = std::getenv("MILO_DEBUG_CHOOSE_MODE");
+        enabled = (env && env[0] && std::strcmp(env, "0") != 0) ? 1 : 0;
+    }
+    return enabled != 0;
+}
+}
+#endif
 
 std::vector<RndText::BlacklightPacket> RndText::sBlacklightPacketPool;
 int RndText::sBlacklightPacketCount;
@@ -97,9 +115,10 @@ RndText::RndText()
     : mWidth(0), mHeight(0), mCircle(0), mAlignment(kMiddleCenter), mFitType(kFitWrap),
       mCapsMode(kCapsModeNone), mLeading(1), mFixedLength(0), mMarkup(true),
       mBasicMarkup(true), mScrollDelay(0), mScrollRate(1), mScrollPause(0), mWrapEnabled(0),
-      mLineHeight(0), mTotalHeight(0), mTotalWidth(0), mIndentation(0), mAltStyle(nullptr), mZeroAlphaTime(0), mDirtyFlags(-1),
-      mLastSyncFlags(-1), mStyles(this), mBoundsLeft(0), mBoundsTop(0), mBoundsRight(0), mBoundsBottom(0), mCurScrollChars(0),
-      mScrollSpeed(0) {
+      mScrollSpeed(0), mTotalWidth(0), mLineHeight(0), mTotalHeight(0), mIndentation(0),
+      mAltStyle(nullptr), mScrollOffset(0), mCurScrollChars(0), mScrollOutIndex(-1),
+      mStyles(this), mBoundsLeft(0), mBoundsTop(0), mBoundsRight(0), mBoundsBottom(0),
+      mNumLinesRendered(0), mConstructScale(0) {
     mStyles.resize(1);
     mFontMaps.reserve(1);
 }
@@ -1334,7 +1353,7 @@ void RndText::SizeCheck() {
     static float sLastHeight;
     static RndText *sLastText;
 
-    StyleState ss(this, mScrollSpeed);
+    StyleState ss(this, mConstructScale);
     for (FontMapBase **it = mFontMaps.begin(); it != mFontMaps.end(); ++it) {
         RndFontBase *font = (*it)->Font();
         if (font != nullptr && font->BitmapFont()) {
@@ -1384,11 +1403,11 @@ void RndText::UpdateScrollOffsets() {
     float fVar1 = TheTaskMgr.DeltaUISeconds();
     mScrollTimer += fVar1;
 
-    if (mScrollTimer < mScrollDelay) {
+    if (mScrollTimer < mScrollState) {
         return;
     }
 
-    float fVar2 = mScrollRate;
+    float fVar2 = mScrollSpeed;
     int iVar9 = mFitType;
     float fVar3 = mTotalWidth;
     bool bVar10 = false;
@@ -1403,11 +1422,11 @@ void RndText::UpdateScrollOffsets() {
             float fVar13_2 = -(fVar3 - mWidth);
             if (fVar13 < fVar13_2) {
                 mScrollPos = fVar13_2;
-                mScrollRate = -fVar2;
+                mScrollSpeed = -fVar2;
                 bVar10 = true;
             }
         } else if ((fVar2 > 0.0f) && (!(fVar13 < 0.0f))) {
-            mScrollRate = -fVar2;
+            mScrollSpeed = -fVar2;
             bVar10 = true;
         }
         break;
@@ -1724,7 +1743,7 @@ void RndText::FitTextScroll() {
             mTotalHeight = 0.0f;
         }
 
-        mScrollTimer = mScrollDelay;
+        mScrollState = mScrollDelay;
         for (size_t i = 0; i < mFontMaps.size(); ++i) {
             mFontMaps[i]->SetupScrolling();
         }
@@ -1813,8 +1832,8 @@ void RndText::ConstructMeshes(
     const HX_VECTOR(Line) &lines, const Hmx::Rect &bounds, float scale
 ) {
     // Store scale and number of lines
-    mScrollSpeed = scale;
-    mCurScrollChars = lines.size();
+    mConstructScale = scale;
+    mNumLinesRendered = lines.size();
 
     // Copy bounds using integer word copies (matching target codegen)
 #ifdef HX_NATIVE
@@ -2096,6 +2115,34 @@ void RndText::UpdateText() {
 void RndText::DrawShowing() {
     SizeCheck();
 
+#ifdef HX_NATIVE
+    extern int gDebugFrameID;
+    if (DebugChooseModeText() && gDebugFrameID == 500) {
+        RndCam *cam = RndCam::Current();
+        const Transform &xfm = WorldXfm();
+        Vector2 screen;
+        bool haveScreen = false;
+        if (cam) {
+            cam->WorldToScreen(xfm.v, screen);
+            haveScreen = true;
+        }
+        printf(
+            "DC3 RndText::DrawShowing name=%s cam=%s pos=(%.2f,%.2f,%.2f) screen=%s(%.3f,%.3f) width=%.2f height=%.2f text='%s'\n",
+            Name(),
+            cam ? cam->Name() : "<null>",
+            xfm.v.x,
+            xfm.v.y,
+            xfm.v.z,
+            haveScreen ? "" : "<none>",
+            haveScreen ? screen.x : 0.0f,
+            haveScreen ? screen.y : 0.0f,
+            mWidth,
+            mHeight,
+            mText.c_str()
+        );
+    }
+#endif
+
     // Count total materials across all font maps for VLA allocation
     int totalMats = 0;
     for (auto it = mFontMaps.begin(); it != mFontMaps.end(); ++it) {
@@ -2238,15 +2285,15 @@ void RndText::ReFitTextScroll(String str) {
         SetText(str.c_str());
         FitTextScroll();
         *(float *)&mScrollPos = 0.0f;
-        mZeroAlphaTime = 0.0f;
+        mScrollOffset = 0.0f;
         float width = maxWidth;
         while (width >= *mLineWidths.begin()) {
-            mDirtyFlags++;
-            if (mDirtyFlags >= mTotalWidth) {
-                mDirtyFlags = 0;
+            mCurScrollChars++;
+            if (mCurScrollChars >= (int)mTotalWidth) {
+                mCurScrollChars = 0;
             }
             if (*mLineWidths.begin() == *(float *)&mNumLines) {
-                mZeroAlphaTime += maxWidth;
+                mScrollOffset += maxWidth;
             }
             unsigned int count = 0;
             for (auto it = mLineWidths.begin(); it != mLineWidths.end(); ++it) {
@@ -2256,7 +2303,7 @@ void RndText::ReFitTextScroll(String str) {
                 mLineWidths.insert(mLineWidths.end(), *mLineWidths.begin());
             }
             mLineWidths.erase(mLineWidths.begin());
-            width = maxWidth - mZeroAlphaTime;
+            width = maxWidth - mScrollOffset;
         }
         *(float *)&mScrollState = *(float *)&mScrollOffset;
     }

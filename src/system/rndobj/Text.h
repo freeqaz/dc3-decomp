@@ -410,25 +410,25 @@ protected:
     /** "If scrolling oversized text - delay this many seconds between scrolls.
         When the fit type is kFitScrollMarqueeWrapAlways, this value will be ignored." */
     float mScrollPause; // 0x3c
-    bool mWrapEnabled;
-    float mScrollState;
-    float mScrollOffset;
-    float mScrollTimer;
-    float mScrollPos;
-    float mNumLines;
-    float mLineHeight;
-    float mTotalHeight;
-    float mTotalWidth;
+    bool mWrapEnabled; // 0x40
+    float mScrollTimer; // 0x44
+    float mScrollState; // 0x48
+    float mScrollSpeed; // 0x4c
+    float mScrollPos; // 0x50
+    float mTotalWidth; // 0x54
+    float mLineHeight; // 0x58
+    float mTotalHeight; // 0x5c
+    int mNumLines; // 0x60
     /** "Space between continuous scrolling messages.
         This value is only considered when the fit type
         is set to kFitScrollMarqueeWrapAlways." */
     float mIndentation; // 0x64
-    std::list<float> mLineWidths;
-    std::list<float> mLineOffsets;
-    ObjPtr<Hmx::Object> mAltStyle;
-    float mZeroAlphaTime;
-    int mDirtyFlags;
-    int mLastSyncFlags;
+    std::list<float> mLineWidths; // 0x68
+    std::list<float> mLineOffsets; // 0x70
+    ObjPtr<Hmx::Object> mAltStyle; // 0x78
+    float mScrollOffset; // 0x8c
+    int mCurScrollChars; // 0x90
+    int mScrollOutIndex; // 0x94
     /** "The different styles this text can have" */
     ObjVector<Style> mStyles; // 0x98
     std::vector<FontMapBase *> mFontMaps; // 0xa8
@@ -436,6 +436,6 @@ protected:
     float mBoundsTop;
     float mBoundsRight;
     float mBoundsBottom;
-    int mCurScrollChars;
-    float mScrollSpeed;
+    int mNumLinesRendered; // 0xc4
+    float mConstructScale; // 0xc8
 };

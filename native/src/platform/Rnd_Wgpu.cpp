@@ -457,6 +457,23 @@ void WgpuRnd::EnsureSceneUniformsCurrent() {
     RndCam* cam = RndCam::Current();
     RndEnviron* env = RndEnviron::Current();
     if (cam != mLastSceneCam || env != mLastSceneEnv) {
+        // Log camera switches on debug frames
+        if (mFrameID == 500) {
+            int drawsSinceLastSwitch = mDrawCount; // approximate
+            printf("DC3_LAYER [F%d] cam switch: '%s' -> '%s' (draws so far: %d)\n",
+                   mFrameID,
+                   mLastSceneCam ? mLastSceneCam->Name() : "(null)",
+                   cam ? cam->Name() : "(null)",
+                   drawsSinceLastSwitch);
+            if (cam) {
+                const Transform &w = cam->WorldXfm();
+                printf("  cam '%s' worldPos=(%.1f,%.1f,%.1f) worldBasis: X=(%.3f,%.3f,%.3f) Y=(%.3f,%.3f,%.3f) Z=(%.3f,%.3f,%.3f)\n",
+                       cam->Name(), w.v.x, w.v.y, w.v.z,
+                       w.m.x.x, w.m.x.y, w.m.x.z,
+                       w.m.y.x, w.m.y.y, w.m.y.z,
+                       w.m.z.x, w.m.z.y, w.m.z.z);
+            }
+        }
         if (HasTransparentDraws() && !IsFlushingTransparentDraws()) {
             FlushTransparentDraws();
         }

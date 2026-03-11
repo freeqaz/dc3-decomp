@@ -314,8 +314,21 @@ int ShellInput::CycleDrawCursor() {
 
 void ShellInput::SyncVoiceControl() { // almost done
 #ifdef HX_NATIVE
-    // Speech/Kinect voice control not available on native
-    if (!TheSpeechMgr) return;
+    // Speech/Kinect voice control is unavailable on native. We still need to
+    // drive the "hide" side of the shell/helpbar state so the voice-tip
+    // overlay does not stay latched on and cover the menu.
+    if (!TheSpeechMgr) {
+        mVoiceControlEnabled = false;
+        static Symbol hide_microphone_icon("hide_microphone_icon");
+        static Message hide_microphone_msg(hide_microphone_icon);
+        TheHamProvider->Handle(hide_microphone_msg, false);
+        static Symbol voice_commander_help_hide("voice_commander_help_hide");
+        static Message voice_commander_help_hide_msg(voice_commander_help_hide);
+        TheHamProvider->Handle(voice_commander_help_hide_msg, false);
+        static Symbol voice_commander_tip_temporary("voice_commander_tip_temporary");
+        TheHamProvider->SetProperty(voice_commander_tip_temporary, false);
+        return;
+    }
 #endif
     static Symbol allow_voice_control("allow_voice_control");
     const DataNode *prop;

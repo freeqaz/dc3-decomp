@@ -872,29 +872,27 @@ void WorldCrowd::Set3DCharList(
                     meshIdx,
                     mCharacters.size()
                 );
-            } else {
-                ObjList<CharData>::iterator charIt = mCharacters.begin();
-                for (int n = 0; n < meshIdx; ++n, ++charIt)
-                    ;
-                if (charIt->mMMesh) {
-                    int charInstIdx = pairVec[i].second;
-                    if ((unsigned int)charInstIdx >= charIt->mMMesh->Instances().size()) {
-                        MILO_NOTIFY(
-                            "%s setting bad 3d char %d on mmesh %s, only has %d chars",
-                            PathName(obj),
-                            charInstIdx,
-                            charIt->mMMesh->Name(),
-                            charIt->mMMesh->Instances().size()
-                        );
-                    } else {
-                        InstanceList::iterator instIt = charIt->mMMesh->Instances().begin();
-                        for (int n = 0; n < charInstIdx; ++instIt, ++n)
-                            ;
-                        CharData::Char3D char3D(instIt->mXfm, charInstIdx);
-                        charIt->m3DChars.push_back(char3D);
-                        auto meshInstPair = std::make_pair(charIt->mMMesh, instIt);
-                        grosserPairs.push_back(meshInstPair);
-                    }
+                continue;
+            }
+            ObjList<CharData>::iterator charIt = mCharacters.begin();
+            for (int n = 0; n < meshIdx; ++n, ++charIt)
+                ;
+            if (charIt->mMMesh) {
+                int charInstIdx = pairVec[i].second;
+                if ((unsigned int)charInstIdx >= charIt->mMMesh->Instances().size()) {
+                    MILO_NOTIFY(
+                        "%s setting bad 3d char %d on mmesh %s, only has %d chars",
+                        PathName(obj),
+                        charInstIdx,
+                        charIt->mMMesh->Name(),
+                        charIt->mMMesh->Instances().size()
+                    );
+                } else {
+                    InstanceList::iterator instIt = charIt->mMMesh->Instances().begin();
+                    for (int n = 0; n < charInstIdx; ++instIt, ++n)
+                        ;
+                    charIt->m3DChars.push_back(CharData::Char3D(instIt->mXfm, charInstIdx));
+                    grosserPairs.push_back(std::make_pair(charIt->mMMesh, instIt));
                 }
             }
         }

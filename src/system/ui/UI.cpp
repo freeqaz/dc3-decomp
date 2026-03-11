@@ -42,6 +42,10 @@
 #include "utl/Std.h"
 #include "utl/Str.h"
 #include "utl/Symbol.h"
+#ifdef HX_NATIVE
+#include <cstdlib>
+#include <cstring>
+#endif
 
 namespace {
     JoypadAction NavButtonToNavAction(JoypadButton btn) {
@@ -58,6 +62,32 @@ namespace {
             return kAction_None;
         }
     }
+
+#ifdef HX_NATIVE
+    enum NativeUICamMode {
+        kNativeUICamDefault,
+        kNativeUICamZHack,
+        kNativeUICamRotateHack
+    };
+
+    NativeUICamMode GetNativeUICamMode() {
+        static int cached = -1;
+        if (cached == -1) {
+            cached = kNativeUICamRotateHack;
+            const char *env = std::getenv("MILO_UI_CAM_MODE");
+            if (env && env[0]) {
+                if (std::strcmp(env, "default") == 0 || std::strcmp(env, "none") == 0) {
+                    cached = kNativeUICamDefault;
+                } else if (std::strcmp(env, "z_hack") == 0) {
+                    cached = kNativeUICamZHack;
+                } else if (std::strcmp(env, "rotate_hack") == 0) {
+                    cached = kNativeUICamRotateHack;
+                }
+            }
+        }
+        return (NativeUICamMode)cached;
+    }
+#endif
 }
 
 const char *TransitionStateString(UIManager::TransitionState s) {
@@ -169,15 +199,23 @@ void UIManager::Draw() {
     RndCam* savedCam = RndCam::Current();
     RndEnviron* savedEnv = RndEnviron::Current();
     if (mCam) {
-        // Keep the old choose-mode camera override available for diagnostics, but do
-        // not force it during normal native runs. Once HamNavList started drawing its
-        // widgets under [ui.cam], the unconditional Z=370 override pushed those items
-        // off-screen vertically.
-        // Native camera Z override: Milo Z=up maps to screen vertical via sFlipYZ.
-        // Ribbons at Z=256-517 need camera centered at Z≈387 to fit in 34.5° FOV.
-        // On Xbox, mLocalProjectXfm.m.z.x=1 maps Z→horizontal so this isn't needed.
-        // TODO: Replace with proper camera animation from milo PropAnims.
-        mCam->SetLocalPos(Vector3(0, -768, 387));
+        switch (GetNativeUICamMode()) {
+        case kNativeUICamDefault:
+            break;
+        case kNativeUICamZHack:
+            mCam->SetLocalPos(Vector3(0, -768, 387));
+            break;
+        case kNativeUICamRotateHack: {
+            // Experimental native-only camera remap for choose-mode analysis.
+            Transform camXfm;
+            camXfm.m.x = Vector3(0, 0, 1);
+            camXfm.m.y = Vector3(0, 1, 0);
+            camXfm.m.z = Vector3(-1, 0, 0);
+            camXfm.v = Vector3(0, -768, 387);
+            mCam->SetLocalXfm(camXfm);
+            break;
+        }
+        }
         mCam->Select();
     }
     if (mEnv) mEnv->Select(nullptr);

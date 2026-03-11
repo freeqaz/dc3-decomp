@@ -135,35 +135,53 @@ bool FlowAnimate::Activate() {
     mStopRequested = false;
     PushDrivenProperties();
     RndAnimatable *anim = (RndAnimatable *)mAnim;
+    bool _result = false;
     if (anim) {
         if (mImmediateRelease) {
-            if (mAnimTask) {
-                mAnimTask->mListener = NULL;
-            }
             mAnimTask = nullptr;
             if (mEnable) {
-                if (mPeriod == 0.0f) {
-                    mAnimTask = static_cast<AnimTask *>(anim->Animate(
-                        mBlend, false, mDelay, mRate, mStart, mEnd,
-                        0.0f, mScale, mType, nullptr, mEase, mEasePower, mWrap
-                    ));
+                float period = mPeriod;
+                bool wrap = mWrap;
+                int ease = mEase;
+                Symbol type = mType;
+                int rate = mRate;
+                float easePower = mEasePower;
+                Task *task;
+                if (0.0f == period) {
+                    float scale = mScale;
+                    float end = mEnd;
+                    float start = mStart;
+                    float blend = mBlend;
+                    float delay = mDelay;
+                    task = mAnim->Animate(
+                        blend, false, delay, (RndAnimatable::Rate)rate, start, end,
+                        0.0f, scale, type, nullptr, (EaseType)ease, easePower, wrap
+                    );
                 } else {
-                    mAnimTask = static_cast<AnimTask *>(anim->Animate(
-                        mBlend, false, mDelay, mRate, mStart, mEnd,
-                        mPeriod, 1.0f, mType, nullptr, mEase, mEasePower, mWrap
-                    ));
+                    float end = mEnd;
+                    float start = mStart;
+                    float blend = mBlend;
+                    float delay = mDelay;
+                    task = mAnim->Animate(
+                        blend, false, delay, (RndAnimatable::Rate)rate, start, end,
+                        period, 1.0f, type, nullptr, (EaseType)ease, easePower, wrap
+                    );
                 }
+                mAnimTask = static_cast<AnimTask *>(task);
             } else {
-                mAnimTask = static_cast<AnimTask *>(anim->Animate(mBlend, false, mDelay, nullptr, kEaseLinear, 2.0f, false));
+                float delay = mDelay;
+                float blend = mBlend;
+                Task *task = mAnim->Animate(blend, false, delay, nullptr, kEaseLinear, 2.0f, false);
+                mAnimTask = static_cast<AnimTask *>(task);
             }
         } else {
             if (mRunningNodes.empty()) {
                 TheFlowMgr->QueueCommand(this, kQueue);
-                return true;
+                                _result = true;
             }
         }
     }
-    return false;
+    return _result;
 }
 
 void FlowAnimate::Execute(QueueState state) {

@@ -120,7 +120,12 @@ class ScoreCache:
 
     def stats_summary(self) -> str:
         """Return a short summary of cache hit/miss stats."""
-        total = self.hits_source + self.hits_obj + self.hits_persistent + self.misses
+        total = (
+            self.hits_source
+            + self.hits_obj
+            + self.hits_persistent
+            + self.misses
+        )
         if total == 0:
             return "cache: no lookups"
         hit_total = self.hits_source + self.hits_obj + self.hits_persistent

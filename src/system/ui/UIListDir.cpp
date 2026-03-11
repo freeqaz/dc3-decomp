@@ -77,22 +77,16 @@ BEGIN_PROPSYNCS(UIListDir)
     SYNC_SUPERCLASS(RndDir)
 END_PROPSYNCS
 
-// DECOMP: 87.9% match - AT_LIMIT
-// Unfixable diffs:
-// - Target uses __savegprlr_29/__restgprlr_29 helpers, base inlines register saves
-// - Stack frame 0x90 vs 0x70: target allocates separate temps (0x58-0x6c), base reuses 0x54
-// - Target pre-loads NumDisplay() into r29 across Write call
-// - Speed() call is ICF-merged to merged_82752368 (verified: UIListState::Speed)
 BEGIN_SAVES(UIListDir)
     SAVE_REVS(1, 0)
     SAVE_SUPERCLASS(RndDir)
     bs << mOrientation;
     bs << mFadeOffset;
+    int numDisplay = mTestState.NumDisplay();
     bs << mTestMode;
-    auto& testState = mTestState;
-    bs << testState.NumDisplay();
+    bs << numDisplay;
     bs << mElementSpacing;
-    bs << testState.Speed();
+    bs << mTestState.Speed();
     bs << mTestNumData;
     bs << mTestComponentState;
     bs << mTestGapSize;

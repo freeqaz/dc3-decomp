@@ -13,6 +13,7 @@
 #include "obj/Object.h"
 #include "os/Debug.h"
 #include "os/JoypadMsgs.h"
+#include "rndobj/Draw.h"
 #include "rndobj/Group.h"
 #include "ui/UILabel.h"
 #include "ui/UIPanel.h"
@@ -48,6 +49,36 @@ END_PROPSYNCS
 void HelpBarPanel::Draw() {
     bool show = (!ShouldHideHelpbar() && !mDisabled) || TheGestureMgr->InControllerMode();
     mAll->SetShowing(show);
+#ifdef HX_NATIVE
+    if (show && TheGestureMgr->InControllerMode() && DataDir()) {
+        static const char *kHideVoiceTipDrawables[] = {
+            "voice_tip.lbl",
+            "grey_alpha.mesh",
+            "warning_top.mesh",
+            "warning_bottom.mesh",
+            "warning_left.mesh",
+            "warning_right.mesh",
+            "shield_grey.mesh",
+            "shield_dark.mesh",
+            "geo_ray_horz03.mesh",
+            "geo_ray_horz02.mesh",
+            "geo_ray_horz01.mesh",
+            "geo_ray_vert_right_03.mesh",
+            "geo_ray_vert_left_03.mesh",
+            "geo_ray_vert_right_02.mesh",
+            "geo_ray_vert_left_02.mesh",
+            "geo_ray_vert_right_01.mesh",
+            "geo_ray_vert_left_01.mesh",
+            nullptr
+        };
+        for (const char **name = kHideVoiceTipDrawables; *name; ++name) {
+            RndDrawable *drawable = DataDir()->Find<RndDrawable>(*name, false);
+            if (drawable && drawable->Showing()) {
+                drawable->SetShowing(false);
+            }
+        }
+    }
+#endif
     UIPanel::Draw();
 }
 

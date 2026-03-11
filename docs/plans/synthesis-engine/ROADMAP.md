@@ -1360,6 +1360,55 @@ it should be narrowed, rewritten, or dropped.
      Eligibility checker decompiled — most operations require zero comparison constant.
    DONE.
 
+10. **Register swap fixing via IL live-range manipulation** (2026-03-11) — Proven
+    technique for fixing callee-saved register swaps by changing WHICH values the
+    compiler caches in callee-saved registers. Based on COLOR RE (linear scan,
+    advancing pointer): first live range needing callee-saved → r31, second → r30,
+    etc. By changing whether we cache a VALUE (int) or an ADDRESS (reference), we
+    control which live range gets which register.
+
+    **Proven fix: UIListDir::Save** (92.2% → 99.8%, r29↔r30 fixed):
+    - Before: `auto& testState = mTestState; bs << testState.NumDisplay(); ... bs << testState.Speed();`
+      - Compiler caches testState ADDRESS in r30, bs parameter gets r29
+    - After: `int numDisplay = mTestState.NumDisplay(); bs << numDisplay; ... bs << mTestState.Speed();`
+      - Compiler caches numDisplay VALUE in r29, bs parameter gets r30 (matching target)
+    - Key insight: removing the reference alias eliminates one callee-saved live range
+      (the address), and caching the accessor return value BEFORE a Write call matches
+      the target's hoisting behavior. The Speed() call uses inline address computation
+      (`subi r3, r31, 0x6c`) instead of the cached reference.
+    - Remaining 0.2%: stack slot reuse (compiler allocates separate temps per WriteEndian
+      in target, reuses 0x54 in base). Unfixable.
+
+    **Technique summary**:
+    - `auto& ref = member;` → caches ADDRESS, uses callee-saved GPR for pointer
+    - `int val = member.Accessor();` → caches VALUE, uses callee-saved GPR for data
+    - `member.Accessor()` inline → computes address inline (`subi rX, r31, offset`), no callee-saved
+    - Swapping between these strategies shifts register assignments in the linear scan
+
+    **Not yet fixable** (investigated but blocked):
+    - RndTransAnim::Load (99.6%): target pre-computes address in chained `d >> mRotKeys >> mTransKeys`
+      expression. Adding reference/splitting chain didn't help — compiler internal scheduling.
+    - MetagameRank::SaveFixed (96.6%): r28↔r30 between static guard and static Symbol addresses.
+      Both are compiler-generated; no source-level control over their allocation order.
+
+11. **Handler body inlining** (2026-03-11) — When the target compiler inlines a wrapper
+    function at a HANDLE_ACTION call site, the handler must replicate the wrapper body
+    directly in the macro instead of calling the wrapper.
+
+    **Proven fix: HamNavProvider::Handle** (98.4% → 100%):
+    - Before: `HANDLE_ACTION(append_nav_item, AppendNavItem())`
+    - After: `HANDLE_ACTION(append_nav_item, mNavItems.push_back(NavItem()))`
+    - The AppendNavItem() wrapper was inlined by the target compiler at the call site.
+      Our compiler kept it as a `bl` call. Inlining the body directly forces matching codegen.
+
+    **Related: Automator::Handle** (98.8% → 100%):
+    - Message temporary scoping: `_HANDLE_CHECKED(OnCustomMsg(Message(_msg)))` (temporary
+      destructor runs at end of expression) vs named `Message msg(_msg)` (destructor at
+      block end). Target uses temporary semantics.
+    - OnMsg ICF wrappers: target ICF-merges 4 OnMsg overloads with identical body
+      `HandleMessage(msg.Data()->Sym(1)); return DATA_UNHANDLED;`. Must use HANDLE_MESSAGE
+      macro to route through these overloads.
+
 The remaining work is:
 - **validation at scale** — run the full pipeline on 30+ hard targets to measure
   improvement. Initial 30-target benchmark (2026-03-10) showed beam finding 3
