@@ -770,10 +770,10 @@ ObjDirPtr<ObjectDir> ObjectDir::PostLoadInlined() {
     InlinedDir iDir = mInlinedDirs.back();
     mInlinedDirs.pop_back();
     if (mInlinedDirs.size() == 0) {
-        mInlinedDirs.~vector();
-        new (&mInlinedDirs) std::vector<InlinedDir>();
+        std::vector<InlinedDir> empty;
+        mInlinedDirs.swap(empty);
     }
-    if (iDir.shared && iDir.file.length() != 0 && !iDir.dir) {
+    if (iDir.shared && iDir.file.length() > 0 && !iDir.dir) {
         MILO_NOTIFY("Couldn't load shared inlined file %s\n", iDir.file);
     }
     return iDir.dir;
