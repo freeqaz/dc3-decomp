@@ -49,7 +49,7 @@ BEGIN_HANDLERS(HamNavProvider)
     HANDLE(set_enabled, OnSetEnabled)
     HANDLE(set_hidden, OnSetHidden)
     HANDLE(set_format_args, OnSetFormatArgs)
-    HANDLE_ACTION(append_nav_item, AppendNavItem())
+    HANDLE_ACTION(append_nav_item, mNavItems.push_back(NavItem()))
     HANDLE_SUPERCLASS(Hmx::Object)
 END_HANDLERS
 

@@ -173,10 +173,11 @@ void UIManager::Draw() {
         // not force it during normal native runs. Once HamNavList started drawing its
         // widgets under [ui.cam], the unconditional Z=370 override pushed those items
         // off-screen vertically.
-        const char *debugCamHack = getenv("MILO_DEBUG_UI_CAM_HACK");
-        if (debugCamHack && debugCamHack[0]) {
-            mCam->SetLocalPos(Vector3(0, -768, 370));
-        }
+        // Native camera Z override: Milo Z=up maps to screen vertical via sFlipYZ.
+        // Ribbons at Z=256-517 need camera centered at Z≈387 to fit in 34.5° FOV.
+        // On Xbox, mLocalProjectXfm.m.z.x=1 maps Z→horizontal so this isn't needed.
+        // TODO: Replace with proper camera animation from milo PropAnims.
+        mCam->SetLocalPos(Vector3(0, -768, 387));
         mCam->Select();
     }
     if (mEnv) mEnv->Select(nullptr);
@@ -1069,6 +1070,26 @@ void Automator::HandleMessage(Symbol msgType) {
     }
 }
 
+DataNode Automator::OnMsg(const UIComponentSelectMsg &msg) {
+    HandleMessage(msg.Data()->Sym(1));
+    return DATA_UNHANDLED;
+}
+
+DataNode Automator::OnMsg(const UIComponentScrollMsg &msg) {
+    HandleMessage(msg.Data()->Sym(1));
+    return DATA_UNHANDLED;
+}
+
+DataNode Automator::OnMsg(const UIComponentFocusChangeMsg &msg) {
+    HandleMessage(msg.Data()->Sym(1));
+    return DATA_UNHANDLED;
+}
+
+DataNode Automator::OnMsg(const UIScreenChangeMsg &msg) {
+    HandleMessage(msg.Data()->Sym(1));
+    return DATA_UNHANDLED;
+}
+
 void Automator::AddMessageType(Hmx::Object *obj, Symbol sym) {
     obj->AddSink(this, sym);
     mCustomMsgs.push_back(sym);
@@ -1086,19 +1107,12 @@ BEGIN_HANDLERS(Automator)
         return DataNode(kDataUnhandled);
     HANDLE_MESSAGE(UITransitionCompleteMsg)
     HANDLE_MESSAGE(ButtonDownMsg)
-    if (sym == UIComponentSelectMsg::Type())
-        _HANDLE_CHECKED(OnCustomMsg(UIComponentSelectMsg(_msg)))
-    if (sym == UIComponentScrollMsg::Type())
-        _HANDLE_CHECKED(OnCustomMsg(UIComponentScrollMsg(_msg)))
-    if (sym == UIComponentFocusChangeMsg::Type())
-        _HANDLE_CHECKED(OnCustomMsg(UIComponentFocusChangeMsg(_msg)))
-    if (sym == UIScreenChangeMsg::Type())
-        _HANDLE_CHECKED(OnCustomMsg(UIScreenChangeMsg(_msg)))
+    HANDLE_MESSAGE(UIComponentSelectMsg)
+    HANDLE_MESSAGE(UIComponentScrollMsg)
+    HANDLE_MESSAGE(UIComponentFocusChangeMsg)
+    HANDLE_MESSAGE(UIScreenChangeMsg)
     HANDLE(cheat_invoked, OnCheatInvoked)
-    {
-        Message msg(_msg);
-        _HANDLE_CHECKED(OnCustomMsg(msg))
-    }
+    _HANDLE_CHECKED(OnCustomMsg(Message(_msg)))
     HANDLE_SUPERCLASS(Hmx::Object)
 END_HANDLERS
 

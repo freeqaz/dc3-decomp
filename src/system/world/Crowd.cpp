@@ -856,7 +856,9 @@ void WorldCrowd::Set3DCharList(
     const std::vector<std::pair<int, int> > &pairVec, Hmx::Object *obj
 ) {
     START_AUTO_TIMER("crowd_set3d");
-    if (!mForce3DCrowd) {
+    if (mForce3DCrowd) {
+        AssignRandomColors(false);
+    } else {
         float oldFullness = mFlatFullness;
         Reset3DCrowd();
         std::vector<std::pair<RndMultiMesh *, InstanceList::iterator> > grosserPairs;
@@ -877,9 +879,9 @@ void WorldCrowd::Set3DCharList(
                 if (charIt->mMMesh) {
                     int charInstIdx = pairVec[i].second;
                     if ((unsigned int)charInstIdx >= charIt->mMMesh->Instances().size()) {
-                        MILO_WARN(
+                        MILO_NOTIFY(
                             "%s setting bad 3d char %d on mmesh %s, only has %d chars",
-                            PathName(this),
+                            PathName(obj),
                             charInstIdx,
                             charIt->mMMesh->Name(),
                             charIt->mMMesh->Instances().size()

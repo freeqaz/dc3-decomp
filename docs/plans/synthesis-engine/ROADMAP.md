@@ -732,6 +732,31 @@ These are real ideas, but they should not block the near-term roadmap:
   Impact: potentially affects many AT_LIMIT functions where target
   doesn't inline accessors that our headers expose.
 
+- **handler_inline pattern** — when a `HANDLE_ACTION` handler macro calls
+  a wrapper function (e.g., `AppendNavItem()`), but the target binary
+  inlines the wrapper body directly at the call site in the handler,
+  the mismatch manifests as a delete cluster (5-10 instructions for
+  the inlined ctor + push_back + dtor) plus a frame size difference
+  (the inlined code needs stack space for temporaries). The fix is to
+  replace the wrapper call in the handler with the wrapper's body:
+  e.g., `HANDLE_ACTION(append_nav_item, mNavItems.push_back(NavItem()))`
+  instead of `HANDLE_ACTION(append_nav_item, AppendNavItem())`.
+  Proven on HamNavProvider::Handle (98.4%→100%) — the target inlined
+  NavItem construction + push_back + destruction (5 extra instructions),
+  requiring a 0x130 frame vs our 0x100, plus fixing an 11-group offset
+  swap. Detection: look for delete clusters containing a constructor
+  call (`??0`), a container method (`push_back`, `insert`), and a
+  destructor call (`??1`) that correspond to a single `bl` wrapper call
+  in the base. The wrapper function exists in the source but the target
+  compiler decided to inline it at this specific call site. Related to
+  the accessor_outline pattern but operates in the opposite direction
+  (inlining INTO the caller rather than outlining FROM the header).
+  Also applies to Message temporary construction — using
+  `Message(_msg)` as a temporary expression vs `Message msg(_msg)` as
+  a named variable changes destructor timing (end of full expression
+  vs end of block scope), shifting Release calls relative to
+  kDataUnhandled checks. Proven on Automator::Handle (98.8%→100%).
+
 These can be revisited after attribution wiring + atlas seed + target-facts MVP
 are proving value on real beam runs.
 

@@ -91,10 +91,18 @@ void MetagameRank::SaveFixed(FixedSizeSaveableStream &fs) const {
     bool b1 = mFirstTimePlayed;
     if (!b1) {
         static Symbol play_first_time_disp("play_first_time_disp");
-        FOREACH (it, mDeferredPoints) {
+        auto _tmp1 = mDeferredPoints.end();
+        {
+            auto it = mDeferredPoints.begin();
+            if (it != _tmp1) {
+                do {
             if (it->mSource == play_first_time_disp) {
                 b1 = true;
                 break;
+            }
+        
+                    ++it;
+                } while (it != mDeferredPoints.end());
             }
         }
     }

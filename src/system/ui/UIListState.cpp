@@ -100,11 +100,12 @@ void UIListState::SetMinDisplay(int min) {
 
 void UIListState::SetMaxDisplay(int max) {
     MILO_ASSERT(max >= -1, 0x150);
-    if (TheLoadMgr.EditMode() && max > mNumDisplay - 1) {
-        max = mNumDisplay - 1;
-    }
-    if (max < -1) {
-        max = -1;
+    if (TheLoadMgr.EditMode()) {
+        if (max > mNumDisplay - 1) {
+            max = mNumDisplay - 1;
+        } else if (max < -1) {
+            max = -1;
+        }
     }
     mMaxDisplay = max;
 }

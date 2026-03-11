@@ -828,8 +828,8 @@ void UIList::SetProvider(UIListProvider *prov) {
         LimitCircularDisplay(mLimitCircularDisplayNumToDataNum);
         SetSelected(0, -1);
     }
-    if (UIList *child = mListDir->SubList(mListState.SelectedDisplay(), mWidgets))
-        child->Poll();
+    if (mListDir->SubList(mListState.SelectedDisplay(), mWidgets))
+        Poll();
 }
 
 DataNode UIList::OnSetData(DataArray *da) {

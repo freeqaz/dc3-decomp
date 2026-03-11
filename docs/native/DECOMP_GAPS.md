@@ -88,13 +88,17 @@ These affect menu navigation, list population, and screen transitions.
 
 ### Choose-Mode Follow-Up — 2026-03-10
 
-**Root cause identified**: Camera positioning, not draw pipeline logic. Debug confirmed:
+**Current status**: camera state was one blocker, but not the only one. Debug and fresh frame-500 capture confirmed:
 - `turbo_shell.cam`: worldPos=(-125.0, -663.5, -63.0) — loaded from .milo file
 - Ribbons render at final Z=285.5–517.5 (after HamNavList WorldXfm applied)
 - At FOV 34.5° and Y-distance 663.5, visible Z half-width ≈206, so ribbons at Z=348+ from camera are outside frustum
 - **Proof**: Overriding `[ui.cam]` to Z=370 → 447 mesh draw calls (from 0). Rendering pipeline is correct.
 - On Xbox, `DxCam::Select()` builds D3D view/projection matrices and CamShots/PropAnims in .milo files reposition the camera. Neither mechanism works on native yet.
 - **Important follow-up**: after `HamNavList::DrawShowing()` was fixed to re-select `[ui.cam]` for list widgets, the unconditional `UI.cpp` debug override (`mCam->SetLocalPos(Vector3(0, -768, 370));`) became counterproductive. Runtime logs showed choose-mode labels/icons projecting to negative screen Y under that forced camera. The override is now opt-in via `MILO_DEBUG_UI_CAM_HACK=1` and should not be treated as the normal native path.
+- Fresh frame-500 capture (`/tmp/dc3_postbuild_fix/run.log`) showed a second real source-level bug: `UIListMeshElement::Draw()` was trying to render list template meshes that were authored with `showing=false`. On native those died at the final `RndDrawable::Draw()` gate as `reason='not showing'`, even though the provider, transforms, mats, and screen positions were all correct.
+- That bug is now fixed in shared source: native temporarily forces hidden `UIListMesh` template meshes visible for the duration of the slot draw, then restores their original hidden state. Regression coverage was added in `native/tests/test_rndcam_projection.cpp` (`UIListMeshDrawTemporarilyShowsHiddenTemplateMesh`).
+- After that fix, frame-500 capture now emits real choose-mode icon draws (`icon_2p`, `icon_1p_plus`, `icon_1por2p`) under `[ui.cam]` instead of skipping them as hidden.
+- What remains broken is the shared-panel composition path: `choose_mode_panel` still draws through `PanelDir 'main'` with `camOverride=turbo_shell.cam`, while the live list payload is reselected onto `[ui.cam]`. The remaining artifact is now a mixed-camera shell/layout problem, not a provider-population or basic list-widget problem.
 
 **Draw chain status** (all functions in the UI draw path):
 - `PanelDir::DrawShowing()` — **100%** COMPLETE
@@ -107,13 +111,15 @@ These affect menu navigation, list population, and screen transitions.
 - `UIListDir::FillElements()` — **100%** COMPLETE
 - `HamListRibbon::DrawShowing()` — **100%** COMPLETE
 - `UIListWidget::DrawMesh()` — **93.0%** AT_LIMIT (behaviorally equivalent)
-- `HamListRibbon::Draw()` — **91.6%** AT_LIMIT. Logic bug fixed (visibleCount=4→5), now producing correct ribbon layout.
+- `UIListMeshElement::Draw()` — behavioral native fix landed. Hidden template meshes now draw correctly through list slots; new regression test covers the temporary `showing=true` restore path.
+- `HamListRibbon::Draw()` — **91.6%** AT_LIMIT. Fresh objdiff still points at control flow + regalloc cleanup, but the earlier `visibleCount=4→5` logic bug is fixed and producing correct ribbon spacing.
 - `HamNavList::DrawShowing()` — **90.7%** AT_LIMIT. Camera re-select fixed. 11 register swap pairs (r28/r29).
-- `HamListRibbon::DrawRibbon()` — **89.6%** AT_LIMIT. Transform/composition path, branch polarity inversions.
+- `HamListRibbon::DrawRibbon()` — **89.6%** AT_LIMIT. Fresh objdiff still shows mostly regswap/control-flow cleanup; no new clear source bug after the mesh-visibility fix.
 - `UIListDir::BuildDrawState()` — **87.6%** AT_LIMIT. Zero-init fix landed. 130 diff_arg instructions.
-- `RndCam::GetViewProjectXfms()` — **57.3%** AT_LIMIT. Uses sFlipYZ (zero on Xbox/BSS). Not used for Xbox rendering (DxCam::Select builds its own matrices). Still needed for native `WorldToScreen()`.
+- `RndCam::GetViewProjectXfms()` — **66.8%** normalized AT_LIMIT on current objdiff. Still needed for native `WorldToScreen()`, but the current projection tests pass, so it no longer looks like the main choose-mode blocker.
 - `native/tests/test_rndcam_projection.cpp` now covers `GetViewProjectXfms()` / `WorldToScreen()` for identity perspective, translated camera, screen-subrect projection, orthographic projection, and frustum edges. All pass on native as of 2026-03-10, so any remaining issue here is likely specific-path behavior, not a basic projection math bug.
 - `native/tests/test_rndcam_projection.cpp` now also covers the approximate choose-mode list coordinates captured from runtime. Those tests show the default `[ui.cam]` geometry keeps the list in-bounds, while the old forced `Z=370` debug camera pushes it off-screen vertically.
+- `native/tests/test_rndcam_projection.cpp` now also covers the hidden-template `UIListMesh` case that was suppressing choose-mode icons on native.
 - `RndCam::UpdateLocal()` — **99.9%** AT_LIMIT. 6 stfs offset mismatches.
 
 ### Screen Transition Workarounds (src/system/ui/UIScreen.cpp)
@@ -177,7 +183,8 @@ Sorted by impact x feasibility:
 4. ~~**Text positioning**~~ — **Verified working** (2026-03-06). No alignment issues — sFlipYZ + ortho projection correct. `FitTextJust()` was missing (undefined symbol crash), now implemented.
 5. ~~**DxCam::Select()**~~ — **Done** (81.3% AT_LIMIT). Fully implemented with boolean materialization, ScreenRect field-by-field copy, member_ref_bind. Remaining gaps are compiler-level (prologue, ShaderMgr caching, SetViewProj forwarding).
 6. **Camera animation on native** — CamShots/PropAnims in .milo files should reposition camera for menu screens. Investigate why the Milo animation system isn't driving camera position on native. May need `RndDir::Enter()` to trigger animations, or `CameraManager` to play CamShots.
-7. **Re-test choose_mode_screen without `MILO_DEBUG_UI_CAM_HACK`** — the old debug camera proof is now isolated behind an env var. Validate a fresh frame capture on the default `[ui.cam]` path before chasing more projection math.
+7. **Shell/main panel composition on choose_mode** — the list payload now draws under `[ui.cam]`, but `PanelDir 'main'` still selects `turbo_shell.cam` for the shared shell overlay. Trace which shell/title/overlay elements still depend on `turbo_shell.cam` and whether that camera should be animated, replaced, or split from the list pass.
+8. **Re-test choose_mode_screen without `MILO_DEBUG_UI_CAM_HACK`** — now done for frame 500. Keep using the default `[ui.cam]` path as the baseline; only use the env hack for controlled experiments.
 
 ### Remaining Stubs — All Resolved
 4. ~~**SaveLoadManager::Poll()**~~ — **Done** (100% match)

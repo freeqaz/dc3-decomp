@@ -64,14 +64,14 @@ public:
         kFitJust = 1,
         /** "Constrains the text to one line of [width] with ellipses" */
         kFitEllipsis = 2,
-        /** "Continuous right-to-left scrolling. String start follows sring end" */
-        kFitScrollMarqueeWrap = 3,
+        /** "Stretch text to fit width" */
+        kFitStretch = 3,
         /** "Right-to-left scroll - Reset to beginning after end scrolls off" */
         kFitScrollMarqueeReset = 4,
         /** "Reverse scroll direction whenever string end or beginning is reached" */
         kFitScrollPingPong = 5,
-        /** "Stretch text to fit width" */
-        kFitStretch = 6,
+        /** "Continuous right-to-left scrolling. String start follows sring end" */
+        kFitScrollMarqueeWrap = 6,
         /** "Continuous right-to-left scroll with wrapping and not care about string size.
             '\n' will be replaced with indentation." */
         kFitScrollMarqueeWrapAlways = 7

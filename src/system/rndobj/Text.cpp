@@ -1328,10 +1328,55 @@ void RndText::DrawBlacklight() {
 }
 
 void RndText::SizeCheck() {
-    // The original checks mDirtyFlags against screen size, font, and text changes.
-    // On native we always rebuild — correct but slower than dirty-flag tracking.
 #ifdef HX_NATIVE
     UpdateText();
+#else
+    static float sLastHeight;
+    static RndText *sLastText;
+
+    StyleState ss(this, mScrollSpeed);
+    for (FontMapBase **it = mFontMaps.begin(); it != mFontMaps.end(); ++it) {
+        RndFontBase *font = (*it)->Font();
+        if (font != nullptr && font->BitmapFont()) {
+            for (int i = 0; i < (*it)->NumMeshes(); i++) {
+                RndMesh *mesh = (*it)->Mesh(i);
+                if (mesh != nullptr) {
+                    float screenHeight;
+                    if (!CalcScreenHeight(
+                            ss.mSize * font->AspectRatio(), mesh, screenHeight
+                        )) {
+                        return;
+                    }
+                    float fontUnit = font->FontUnit();
+                    float aspectRatio = font->AspectRatio();
+                    float cap = 127.5f;
+                    if (screenHeight < 127.5f) {
+                        cap = screenHeight;
+                    }
+                    if (cap <= fontUnit * aspectRatio * 1.25f) {
+                        return;
+                    }
+                    if (sLastText == this && screenHeight <= sLastHeight) {
+                        return;
+                    }
+                    int heightInt = (int)screenHeight;
+                    int productInt = (int)(fontUnit * aspectRatio);
+                    MILO_NOTIFY(
+                        "oversized: %s font: %s token:'%s' text:'%s' %d < %d",
+                        PathName(this),
+                        font->Name(),
+                        TextToken(),
+                        mText,
+                        productInt,
+                        heightInt
+                    );
+                    sLastHeight = screenHeight;
+                    sLastText = this;
+                    return;
+                }
+            }
+        }
+    }
 #endif
 }
 
@@ -1850,73 +1895,76 @@ void RndText::ConstructMeshes(
 
 const unsigned short *
 RndText::ParseMarkup(const unsigned short *str, StyleState &state, unsigned short &ch) {
-    unsigned int isClosing = (unsigned int)(str[1] - 0x2f) == 0;
-    const unsigned short *cur = str + 2;
+    const unsigned short *cur = str;
+    unsigned int isClosing = (unsigned int)(*++cur - 0x2f) == 0;
     if (isClosing) {
-        cur += 2;
+        cur++;
     }
     ch = 0;
 
     float fVar12;
+    auto& _ref0 = mStyles;
     if (WStrniCmp(cur, (const unsigned short *)L"sup", 3) == 0) {
+        cur += 3;
         if (isClosing) {
             fVar12 = state.mStyle->mSize;
         } else {
-            fVar12 = state.mStyle->mSize * 0.5f;
+            fVar12 = state.mStyle->mSize * gSuperscriptScale;
         }
-        cur += 3;
         goto set_size;
     }
     else if (WStrniCmp(cur, (const unsigned short *)L"gtr", 3) == 0) {
         cur += 3;
+        Style *style = state.mStyle;
         float scale;
         if (isClosing) {
-            scale = state.mStyle->mSize;
+            scale = style->mSize;
         } else {
-            scale = state.mStyle->mSize * 0.8f;
+            scale = style->mSize * gGuitarScale;
         }
         state.mSize = state.mBaseSize * scale;
+        float zOff = gGuitarZOffset;
         if (isClosing) {
-            state.mZOffset = state.mStyle->mZOffset;
-        } else {
-            state.mZOffset = 0.1f;
+            zOff = style->mZOffset;
         }
+        state.mZOffset = zOff;
     }
     else if (WStrniCmp(cur, (const unsigned short *)L"it", 2) == 0) {
+        cur += 2;
         if (isClosing) {
             state.mItalics = state.mStyle->mItalics;
         } else {
             state.mItalics = state.mStyle->mItalics + 0.1f;
         }
-        cur += 2;
     }
     else if (WStrniCmp(cur, (const unsigned short *)L"color", 5) == 0) {
         cur += 5;
         if (isClosing) {
-            state.mFontColor.red = state.mStyle->mFontColor.red;
-            state.mFontColor.green = state.mStyle->mFontColor.green;
-            state.mFontColor.blue = state.mStyle->mFontColor.blue;
-            state.mFontColor.alpha = state.mStyle->mFontColor.alpha;
+                        state.mTextColor = state.mStyle->mTextColor;
         } else {
-            cur++;
             int r = 0, g = 0, b = 0;
-            int a = (int)(state.mFontColor.alpha * 256.0f);
-            swscanf((const wchar_t*)cur, L"%d %d %d %d", &r, &g, &b, &a);
-            state.mFontColor.red = r / 255.0f;
-            state.mFontColor.green = g / 255.0f;
-            state.mFontColor.blue = b / 255.0f;
-            state.mFontColor.alpha = a / 255.0f;
+            int a = (int)(state.mTextColor.alpha * 255.999f);
+            cur++;
+            swscanf((const wchar_t *)cur, L"%d %d %d %d", &r, &g, &b, &a);
+            state.mTextColor.blue = (float)b * (1.0f / 255.0f);
+            state.mTextColor.green = (float)g * (1.0f / 255.0f);
+            state.mTextColor.red = (float)r * (1.0f / 255.0f);
+            state.mTextColor.alpha = (float)a * (1.0f / 255.0f);
         }
     }
     else if (WStrniCmp(cur, (const unsigned short *)L"#", 2) == 0) {
         cur += 2;
         int code = 0x3f;
-        swscanf((const wchar_t*)cur, L"%d", &code);
-        ch = code;
+        swscanf((const wchar_t *)cur, L"%d", &code);
+        ch = (unsigned short)code;
     }
     else if (WStrniCmp(cur, (const unsigned short *)L"nobreak", 7) == 0) {
         cur += 7;
-        state.brk = isClosing;
+        if (isClosing) {
+            state.brk = true;
+        } else {
+            state.brk = false;
+        }
     }
     else if (WStrniCmp(cur, (const unsigned short *)L"alt", 3) == 0) {
         cur += 3;
@@ -1937,10 +1985,14 @@ RndText::ParseMarkup(const unsigned short *str, StyleState &state, unsigned shor
             cur++;
         } else if ((markupChar == 0x62) || (markupChar == 0x42)) {
             bBlacklight = true;
-            styleIdx = (1 < (int)mStyles.size()) ? 1 : 1;
-            Style *stylePtr = &mStyles[styleIdx];
-            RndFontBase *font = stylePtr->mFont;
-            if (font != 0) {
+            styleIdx = (1 < (unsigned int)_ref0.size()) ? 1 : 0;
+            Style *fallback = &_ref0[0];
+            Style *stylePtr = &_ref0[styleIdx];
+            if (stylePtr->mFont != nullptr) {
+                fallback = stylePtr;
+            }
+            RndFontBase *font = fallback->mFont;
+            if (font != nullptr) {
                 if (FontMapIndex(font, true) == -1) {
                     FontMapBase *fm = AcquireFontMap(font);
                     fm->mBlacklight = true;
@@ -1952,18 +2004,18 @@ RndText::ParseMarkup(const unsigned short *str, StyleState &state, unsigned shor
 
         styleIdx = styleIdx & -(isClosing == 0);
 
-        unsigned int numStyles = (unsigned int)mStyles.size();
+        unsigned int numStyles = (unsigned int)_ref0.size();
         if (styleIdx < numStyles) {
-            state.mStyle = &mStyles[styleIdx];
+            state.mStyle = &_ref0[styleIdx];
         } else {
-            state.mStyle = &mStyles[0];
+            state.mStyle = &_ref0[0];
         }
 
         memcpy(&state, state.mStyle, 0x34);
 
         bool bFontColorOverride = state.mFontColorOverride || bBlacklight;
         if (!state.mStyle->mFont) {
-            state.mStyle = &mStyles[0];
+            state.mStyle = &_ref0[0];
         }
         state.mFontMapIdx = FontMapIndex(state.mStyle->mFont, bFontColorOverride);
 
@@ -1971,24 +2023,13 @@ RndText::ParseMarkup(const unsigned short *str, StyleState &state, unsigned shor
         goto set_size;
     }
 
-    // Scan to the closing '>'
-    {
-        unsigned short scanChar = *cur;
-        while (scanChar != 0x3e && scanChar != 0) {
-            cur++;
-            scanChar = *cur;
-        }
-        if (scanChar == 0x3e) {
-            cur++;
-        }
-    }
-
-    return cur;
+    goto scan_close;
 
 set_size:
     state.mSize = state.mBaseSize * fVar12;
+scan_close:
     {
-        unsigned short scanChar = *cur;
+        short scanChar = *cur;
         while (scanChar != 0x3e && scanChar != 0) {
             cur++;
             scanChar = *cur;
