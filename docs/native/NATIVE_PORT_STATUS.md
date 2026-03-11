@@ -1,6 +1,6 @@
 # Native Port Progress (x86_64 Linux)
 
-## Current Status: Session 41 - UI Layout Fix
+## Current Status: Session 48 - Nested RndDir PropAnim Fix
 **Goal**: Bright, animated UI matching the original game's cyan neon aesthetic
 
 ### Sessions Complete
@@ -24,6 +24,8 @@
 - **Session 39**: Input pipeline unblocked — IsAnimating() bypass (AnimTask never self-deletes without DTA lifecycle), mSink fallback dispatch (set_sink DTA action doesn't fire), controller mode force-on. Debug traces cleaned up. **Identified DTA loading as critical blocker** — mSink, animation cleanup, content population, and screen flow all depend on DTA scripts that native can't execute yet.
 - **Session 40**: **Interactive menu navigation working end-to-end.** ScrollDirection decomp fix (66.1%→100% match — was missing vertical mode logic entirely). DTA stub objects for 8 Xbox-only managers. TheHamProvider null crash fix (PropertyEventProvider factory stub). GestureMgr controller mode always-on. GameMode::SetMode crash guard. Full Up/Down/Confirm navigation verified with headless GPU screenshots.
 - **Session 41**: **UI layout fix — Transform::Multiply decomp bug.** Fixed fundamental decomp bug in `Multiply(Transform, Transform, Transform)` (mtx.cpp, was 48% match) — the translation y/z coefficients were swapped due to decompiler mis-mapping of struct field offsets. This caused ALL transform compositions to produce wrong results for non-trivial rotations, including the `sFlipYZ` axis swap in `GetViewProjectXfms()`. The `[ui.cam]` view translation went from `(0, 768, 768)` (wrong — y duplicated into z) to `(0, 0, 768)` (correct). Made transparent queue flush unconditional on panel camera switch (was env-var gated). Result: autosave_warning_screen now shows correctly positioned player indicators (~100px, matching Xbox reference), centered autosave icon with metallic orb, full readable text, and Kinect prompt. Screenshots: `archive/screenshots/session41/`.
+- **Session 47**: **Main menu text visible.** Three fixes: HamListRibbon draw filter bypass (`entering=true` when no header ribbon), label alpha force (1.0 on native), Flow activation + PropAnim end-frame forcing. Menu items render but still centered.
+- **Session 48**: **game_mode_icon panel visible.** Key discovery: `ObjDirItr::RecurseSubdirs()` only traverses formal `SubDirs()`, NOT nested `RndDir` objects in the hash table. `game_mode_icon` is an RndDir object (not a subdir) with 42 objects including 6 PropAnims (`icon_enter.anim`, etc.). Added nested RndDir PropAnim forcing in PanelDir::Enter(). Also identified `list_choose_mode.milo` (UIListDir) PostLoad resolving to nullptr — file loads but dir creation fails. Screenshots: `archive/screenshots/session48/`. See `docs/native/UI_ANIMATION_STATUS.md` for full analysis.
 
 ### Completed Phases
 - **Phase 0**: Foundation — COMPLETE
@@ -399,12 +401,13 @@ Non-Kinect TODOs:
 | **Post-processing** | Bloom, color correction, etc. | Low |
 
 ### Next Steps
-1. **UI layout fix** — elements are rendered but not in correct positions. Compare with `archive/screenshots/references/dc3_main_menu.jpg` reference. Need to investigate camera/projection setup, RndTransformable world transforms, and coordinate system mapping.
-2. **Text labels missing** — "MAIN MENU", "DANCE CENTRAL 3", copyright text not visible on rendered screens. Font loading or text mesh visibility issue.
-3. Content system integration for list population (currently 0 items from providers)
-4. DTA script execution improvements (many DTA commands fail silently due to missing Xbox globals)
-5. Skinned mesh rendering (bone transforms, vertex skinning shader)
-6. Post-processing, background venue rendering
+1. **Fix `list_choose_mode.milo` loading** — UIListDir PostLoad resolves to nullptr. File opens but DirLoader fails. May fix list widget layout and header ribbon resource.
+2. **Flow animation pipeline** — Flows activate but don't drive PropAnims through full timeline. "Force to end frame" hack works but skips intermediate states.
+3. **Remove native workarounds** — `entering=true` hack, label alpha force, nested RndDir PropAnim forcing should all be removable once Flow pipeline works and list resources load.
+4. Content system integration for list population (currently 0 items from providers)
+5. DTA script execution improvements (many DTA commands fail silently due to missing Xbox globals)
+6. Skinned mesh rendering (bone transforms, vertex skinning shader)
+7. Post-processing, background venue rendering
 
 ### Build Commands
 ```bash

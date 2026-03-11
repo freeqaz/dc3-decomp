@@ -669,3 +669,100 @@ TEST_F(AssetLoadingTest, BulkLoad_World) { RunCategoryBulkLoad("world"); }
 TEST_F(AssetLoadingTest, BulkLoad_UI)    { RunCategoryBulkLoad("ui"); }
 TEST_F(AssetLoadingTest, BulkLoad_SFX)   { RunCategoryBulkLoad("sfx"); }
 TEST_F(AssetLoadingTest, BulkLoad_Songs) { RunCategoryBulkLoad("songs"); }
+
+// ============================================================================
+// Subdir loading validation — verify inlined subdirs are populated
+// ============================================================================
+
+#include "rndobj/PropAnim.h"
+#include "rndobj/Dir.h"
+#include "flow/Flow.h"
+
+TEST_F(AssetLoadingTest, ChooseModeSubdirLoading) {
+    std::string root = GetMiloLibRoot();
+    if (root.empty())
+        GTEST_SKIP() << "MILO_LIB not set";
+    std::string path = root + "/ui/choose_mode/gen/choose_mode.milo_xbox";
+    if (!FileExists(path))
+        GTEST_SKIP() << "choose_mode.milo_xbox not found";
+
+    FilePath fp(path.c_str());
+    ObjectDir *dir = DirLoader::LoadObjects(fp, nullptr, nullptr);
+    ASSERT_NE(dir, nullptr);
+
+    printf("Dir: '%s' class='%s'\n", dir->Name(), dir->ClassName().Str());
+
+    printf("SubDirs (%d):\n", (int)dir->SubDirs().size());
+    for (int i = 0; i < (int)dir->SubDirs().size(); i++) {
+        ObjectDir *sub = dir->SubDirs()[i];
+        if (sub) {
+            int count = 0;
+            for (ObjDirItr<Hmx::Object> it(sub, false); it != nullptr; ++it)
+                count++;
+            printf("  [%d] '%s' class='%s' objects=%d subdirs=%d\n",
+                   i, sub->Name(), sub->ClassName().Str(), count,
+                   (int)sub->SubDirs().size());
+        } else {
+            printf("  [%d] nullptr\n", i);
+        }
+    }
+
+    int flatCount = 0;
+    for (ObjDirItr<Hmx::Object> it(dir, false); it != nullptr; ++it)
+        flatCount++;
+    int recCount = 0;
+    for (ObjDirItr<Hmx::Object> it(dir, true); it != nullptr; ++it)
+        recCount++;
+    printf("Objects: flat=%d recursive=%d\n", flatCount, recCount);
+
+    int paCount = 0;
+    for (ObjDirItr<RndPropAnim> it(dir, true); it != nullptr; ++it) {
+        printf("  PropAnim '%s' (dir='%s') end=%.1f\n",
+               it->Name(), it->Dir() ? it->Dir()->Name() : "?", it->EndFrame());
+        paCount++;
+    }
+    printf("PropAnims: %d\n", paCount);
+
+    int flowCount = 0;
+    for (ObjDirItr<Flow> it(dir, true); it != nullptr; ++it) {
+        printf("  Flow '%s' (dir='%s')\n",
+               it->Name(), it->Dir() ? it->Dir()->Name() : "?");
+        flowCount++;
+    }
+    printf("Flows: %d\n", flowCount);
+
+    // Check for RndDir objects (nested dirs that aren't formal subdirs)
+    printf("\nRndDir objects in main dir:\n");
+    int rndDirCount = 0;
+    for (ObjDirItr<RndDir> it(dir, false); it != nullptr; ++it) {
+        printf("  RndDir '%s' (dir='%s')\n", it->Name(), it->Dir() ? it->Dir()->Name() : "?");
+        // Count objects inside this nested RndDir
+        int innerCount = 0;
+        for (ObjDirItr<Hmx::Object> inner((ObjectDir*)&*it, false); inner != nullptr; ++inner)
+            innerCount++;
+        int innerPA = 0;
+        for (ObjDirItr<RndPropAnim> inner((ObjectDir*)&*it, false); inner != nullptr; ++inner) {
+            printf("    PropAnim '%s' end=%.1f\n", inner->Name(), inner->EndFrame());
+            innerPA++;
+        }
+        printf("    Objects=%d PropAnims=%d subdirs=%d\n", innerCount, innerPA, (int)it->SubDirs().size());
+        rndDirCount++;
+    }
+    printf("RndDir count: %d\n\n", rndDirCount);
+
+    // game_mode_icon RndDir should have icon_enter PropAnims
+    // Note: ObjDirItr only traverses SubDirs(), not nested RndDir objects.
+    // The flat iteration of the main dir finds game_mode_icon as an object;
+    // its PropAnims must be queried by iterating inside that RndDir specifically.
+    bool hasIconEnter = false;
+    for (ObjDirItr<RndDir> rdit(dir, false); rdit != nullptr; ++rdit) {
+        if (std::strcmp(rdit->Name(), "game_mode_icon") == 0) {
+            for (ObjDirItr<RndPropAnim> pa((ObjectDir*)&*rdit, false); pa != nullptr; ++pa) {
+                if (std::strstr(pa->Name(), "icon_enter") != nullptr)
+                    hasIconEnter = true;
+            }
+        }
+    }
+    EXPECT_TRUE(hasIconEnter) << "game_mode_icon RndDir missing icon_enter PropAnims";
+    EXPECT_GE(rndDirCount, 2) << "Expected at least game_mode_icon + self as RndDir objects";
+}

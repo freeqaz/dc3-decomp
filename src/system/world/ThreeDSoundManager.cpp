@@ -140,12 +140,12 @@ float ThreeDSoundManager::CalculateDoppler(
         invDist = 1.0f / distance;
     }
 
-    float listenerApproach = Dot(listenerVel, dir) * invDist * invDt;
+    float listenerApproach = (Dot(listenerVel, dir) * (invDist * invDt));
     float soundApproach = Dot(soundVel, dir) * invDist * invDt;
 
     const float speedOfSound = 340.29f;
     float ratio = (-listenerApproach + speedOfSound) / (soundApproach + speedOfSound);
-    float result = std::pow(ratio, mDopplerPower);
+    float result = powf(ratio, mDopplerPower);
 
     // Clamp to +-5 semitones
     const float kMaxDoppler = 1.3348398208618164f;

@@ -1762,7 +1762,14 @@ void HamNavList::DrawShowing() {
         mListRibbonResource->mScrollAnims.SetScrollFrame(mScrollBehavior.mScrollProgress);
         mListRibbonResource->SetDisengageFrame(mDisengageSmoother.Level());
         mListRibbonResource->mMode = mRibbonMode;
+#ifdef HX_NATIVE
+        // When no header ribbon resource, draw both active and inactive items
+        // through the main ribbon. On Xbox, the header ribbon handles active items.
+        bool mainEntering = mHeaderRibbonResource ? false : true;
+        mListRibbonResource->Draw(WorldXfm(), mRibbonDrawStates, mainEntering, false);
+#else
         mListRibbonResource->Draw(WorldXfm(), mRibbonDrawStates, false, false);
+#endif
     }
 
     if (mHeaderRibbonResource) {

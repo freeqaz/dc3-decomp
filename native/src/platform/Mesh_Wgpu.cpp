@@ -696,6 +696,7 @@ static void DrawMeshImmediate(RndMesh* mesh) {
         }
     }
 
+
     // Ensure mesh data is on GPU
     if (!EnsureMeshUploaded(mesh)) {
         if (capturing) FrameCapture::Get().AddSkip(MeshLabel(mesh), "upload failed");

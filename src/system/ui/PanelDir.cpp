@@ -148,7 +148,9 @@ bool ShouldActivateNativeFlow(const char *dirName, const char *flowPath) {
     if (!dirName || dir.empty()) {
         return true;
     }
-    return dir != "main" && dir != "letterbox" && dir != "background";
+    // Allow main/background flows — they contain positioning PropAnims
+    // driven by DTA enter scripts that don't run on native.
+    return dir != "letterbox";
 }
 }
 #endif
@@ -421,87 +423,50 @@ void PanelDir::Enter() {
     static Symbol ui_enter_back("ui_enter_back");
     SendTransition(ui_enter, ui_enter_forward, ui_enter_back);
 #ifdef HX_NATIVE
-    // Activate all Flow objects in this dir to drive PropAnims.
-    // On Xbox, Flows auto-start via mStartMode or DTA TypeDef enter scripts.
-    // On native, proxy Flows have mStartMode=0 and many panels lack DTA
-    // enter handlers, so we activate them directly.
-    {
-        int flowCount = 0, activatedCount = 0, skippedCount = 0, failedCount = 0;
-        for (ObjDirItr<Flow> it(this, true); it != nullptr; ++it) {
-            flowCount++;
-            const char *flowPath = PathName((Hmx::Object *)it);
-            if (!ShouldActivateNativeFlow(Name(), flowPath)) {
-                skippedCount++;
-                if (DebugPanelFlowNames(Name())) {
-                    printf(
-                        "DC3_FLOW_SKIP dir=%s flow=%s\n",
-                        Name(),
-                        flowPath ? flowPath : "<null>"
-                    );
-                }
-                continue;
-            }
-            if (!it->IsRunning()) {
-                if (it->Activate()) {
-                    activatedCount++;
-                    if (DebugPanelFlowNames(Name())) {
-                        printf(
-                            "DC3_FLOW_ACTIVATE dir=%s flow=%s\n",
-                            Name(),
-                            flowPath ? flowPath : "<null>"
-                        );
-                    }
-                } else {
-                    failedCount++;
-                    if (DebugPanelFlowNames(Name())) {
-                        printf(
-                            "DC3_FLOW_FAIL dir=%s flow=%s\n",
-                            Name(),
-                            flowPath ? flowPath : "<null>"
-                        );
-                    }
-                }
-            }
-        }
-        if (flowCount > 0) {
-            printf(
-                "DC3_FLOW [%s] Enter: %d Flows, %d activated, %d skipped, %d failed\n",
-                Name(),
-                flowCount,
-                activatedCount,
-                skippedCount,
-                failedCount
-            );
+    // Activate Flow objects to drive PropAnims. On Xbox, Flows auto-start via
+    // mStartMode or DTA enter scripts. On native, we activate them directly.
+    for (ObjDirItr<Flow> it(this, true); it != nullptr; ++it) {
+        const char *flowPath = PathName((Hmx::Object *)it);
+        if (!ShouldActivateNativeFlow(Name(), flowPath))
+            continue;
+        if (!it->IsRunning())
+            it->Activate();
+    }
+    // Force enter PropAnims to end frame for initial positioning.
+    // ObjDirItr only traverses formal SubDirs(), not nested RndDir objects
+    // in the hash table (like game_mode_icon). Force PropAnims in both.
+    for (ObjDirItr<RndPropAnim> pait(this, true); pait != nullptr; ++pait) {
+        float endFrame = pait->EndFrame();
+        if (endFrame <= 0.0f) continue;
+        if (std::strstr(pait->Name(), "enter") != nullptr)
+            pait->SetFrame(endFrame, 1.0f);
+    }
+    // Also force PropAnims inside nested RndDir objects (e.g. game_mode_icon)
+    for (ObjDirItr<RndDir> rdit(this, false); rdit != nullptr; ++rdit) {
+        if (&*rdit == (RndDir *)this) continue; // skip self
+        for (ObjDirItr<RndPropAnim> pait((ObjectDir *)&*rdit, false); pait != nullptr; ++pait) {
+            float endFrame = pait->EndFrame();
+            if (endFrame <= 0.0f) continue;
+            if (std::strstr(pait->Name(), "enter") != nullptr)
+                pait->SetFrame(endFrame, 1.0f);
         }
     }
-    // Hide Kinect skeleton tracking UI elements and gesture tutorial overlays.
-    // On Xbox, controller_mode.flow and DTA PropAnims drive visibility.
-    // On native, these render as unwanted overlays without DTA animation.
+    // Hide Kinect/tutorial UI elements that render as unwanted overlays on native.
     {
         static const char *sHideDirs[] = {
-            "NewSkeletonDir",        // Kinect player tracking display
-            "silhouette_guy_left",   // Left player silhouette
-            "silhouette_guy_right",  // Right player silhouette
-            nullptr
+            "NewSkeletonDir", "silhouette_guy_left", "silhouette_guy_right", nullptr
         };
         for (const char **d = sHideDirs; *d; d++) {
             RndDir *sub = Find<RndDir>(*d, false);
-            if (sub && sub->Showing()) {
+            if (sub && sub->Showing())
                 sub->SetShowing(false);
-                printf("DC3 Native: Hiding Kinect UI dir '%s' in PanelDir '%s'\n",
-                       *d, Name());
-            }
         }
-        // Also hide sub-dirs with tutorial/gesture names
         for (ObjDirItr<RndDir> dit(this, false); dit != nullptr; ++dit) {
             const char *dname = dit->Name();
-            if (strstr(dname, "tutorial") || strstr(dname, "gesture") ||
-                strstr(dname, "nav_tut") || strstr(dname, "spotlight")) {
-                if (dit->Showing()) {
+            if (strstr(dname, "tutorial") || strstr(dname, "gesture")
+                || strstr(dname, "nav_tut") || strstr(dname, "spotlight")) {
+                if (dit->Showing())
                     dit->SetShowing(false);
-                    printf("DC3 Native: Hiding tutorial dir '%s' in PanelDir '%s'\n",
-                           dname, Name());
-                }
             }
         }
     }

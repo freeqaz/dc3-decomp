@@ -23,10 +23,10 @@
 #include "ui/UIComponent.h"
 #include "ui/UIButton.h"
 #include "ui/UISlider.h"
-#include "ui/InlineHelp.h"
 #include "ui/LabelNumberTicker.h"
 #include "ui/LabelShrinkWrapper.h"
 #include "ui/UILabelDir.h"
+#include "ui/UIList.h"
 #include "utl/Symbol.h"
 
 // Forward declarations from engine
@@ -84,15 +84,17 @@ void EnsureEngineInit() {
     REGISTER_OBJ_FACTORY(UIComponent)
     REGISTER_OBJ_FACTORY(UIButton)
     REGISTER_OBJ_FACTORY(UISlider)
-    REGISTER_OBJ_FACTORY(InlineHelp)
     REGISTER_OBJ_FACTORY(LabelNumberTicker)
     REGISTER_OBJ_FACTORY(LabelShrinkWrapper)
     REGISTER_OBJ_FACTORY(UILabelDir)
 
-    // NOT registered (decomp Load bugs cause stream desync):
-    //   Movie::Init()  — TexMovie::Load desyncs stream ("String chars N > 256")
-    //   SynthInit()    — Sound/SynthSample::Load same issue
-    //   UIList family  — UIList/UIListLabel/etc SetName asserts (null dir context)
+    // UIList family — factories only (no UIList::Register() which needs a dir context)
+    UIList::Init();
+
+    // NOT registered (decomp bugs cause stream desync or crashes):
+    //   Movie::Init()  — TexMovie::Load stub desyncs stream ("String chars N > 256")
+    //   SynthInit()    — Sound/SynthSample::Load stubs same issue
+    //   InlineHelp     — InlineHelp::PreLoad is stubbed, desyncs stream
 
     printf("=== Test Engine Init Complete ===\n");
 }

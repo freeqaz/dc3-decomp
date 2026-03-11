@@ -283,14 +283,14 @@ void WorldInstance::SyncDir() {
             std::list<ObjPair> objPairs;
             objPairs.push_back(ObjPair(mDir, this));
             for (ObjDirItr<Hmx::Object> it(mDir, false); it != nullptr; ++it) {
-                bool curMesh = dynamic_cast<RndMesh *>(&*it) != NULL;
+                bool curMesh = NULL != dynamic_cast<RndMesh *>(&*it);
                 if (!grp || (it != grp && !GroupedUnder(grp, it))) {
                     // not in shared group - fall through to iterate
-                } else if (curMesh) {
+                } else if (!(curMesh)) {
+                    continue;
+                } else {
                     grp->RemoveObject(it);
                     // fall through to iterate
-                } else {
-                    continue;
                 }
                 if (it->ClassName() == texSym
                     || it->ClassName() == cubeSym

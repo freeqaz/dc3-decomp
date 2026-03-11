@@ -938,8 +938,7 @@ stateReset:
 }
 
 void CharEyes::LidTrackAndClampingUpdate(EyeDesc &desc, float blinkWeight) {
-    DataNode &lidTrackCheat = DataVariable("no_lids");
-    if (lidTrackCheat.Int(0))
+    if (DataVariable("no_lids").Int(0))
         return;
     if (!mFaceServo)
         return;
@@ -1138,8 +1137,7 @@ void CharEyes::LidTrackAndClampingUpdate(EyeDesc &desc, float blinkWeight) {
         }
     }
 
-    DataNode &distCheat = DataVariable("disable_llidnorm");
-    if (!distCheat.Int(0) && !mLowerLidTrackRotate && 0.0f < dist) {
+    if (!DataVariable("disable_llidnorm").Int(0) && !mLowerLidTrackRotate && 0.0f < dist) {
         Vector3 srcPos = source->WorldXfm().v;
         Vector3 lidPos = lowerLid->WorldXfm().v;
         Vector3 dir(

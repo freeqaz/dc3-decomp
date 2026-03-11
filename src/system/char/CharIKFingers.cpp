@@ -226,8 +226,10 @@ void CharIKFingers::SetName(const char *name, ObjectDir *dir) {
 }
 
 void CharIKFingers::CalculateHandDest(int engagedCount, int firstEngaged) {
-    Transform curHandXfm(mHand->WorldXfm());
-    if (mMoveHand) {
+    auto _tmp0 = mHand->WorldXfm();
+    Transform curHandXfm(_tmp0);
+    auto& _ref0 = mMoveHand;
+    if (_ref0) {
         if (engagedCount > 0) {
             Vector3 destOffset(0, 0, 0);
             FingerDesc firstDesc = mFingers[firstEngaged];
@@ -277,7 +279,7 @@ void CharIKFingers::CalculateHandDest(int engagedCount, int firstEngaged) {
             Add(avgPos, destOffset, finalPos);
             mDestHandTrans.v.Set(finalPos.x, finalPos.y, finalPos.z);
         }
-        mMoveHand = false;
+        _ref0 = false;
     }
 }
 

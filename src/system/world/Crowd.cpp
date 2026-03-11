@@ -88,7 +88,8 @@ WorldCrowd::WorldCrowd()
       mModifyStamp(0) {
     if (gNumCrowd++ == 0) {
         int w, h, bpp;
-        if (GetGfxMode() == kNewGfx) {
+        auto _tmp0 = GetGfxMode();
+        if (_tmp0 == kNewGfx) {
             w = 256;
             h = 512;
             bpp = 32;
@@ -98,7 +99,8 @@ WorldCrowd::WorldCrowd()
             bpp = 16;
         }
         for (int i = 0; i < kNumLods; i++) {
-            gImpostorTex[i] = Hmx::Object::New<RndTex>();
+            auto _tmp1 = Hmx::Object::New<RndTex>();
+            gImpostorTex[i] = _tmp1;
             gImpostorTex[i]->SetBitmap(w, h, bpp, RndTex::kRendered, true, nullptr);
         }
         RELEASE(gImpostorMat);
@@ -113,8 +115,9 @@ WorldCrowd::WorldCrowd()
         mat->SetTexWrap(kTexWrapClamp);
         mat->SetPerPixelLit(false);
         mat->SetPointLights(true);
+        auto _tmp2 = Hmx::Object::New<RndCam>();
         CreateAndSetMetaMat(mat);
-        gImpostorCamera = Hmx::Object::New<RndCam>();
+        gImpostorCamera = _tmp2;
         SetMatAndCameraLod();
     }
 }
@@ -578,11 +581,11 @@ void WorldCrowd::Force3DCrowd(bool force) {
 }
 
 RndMesh *WorldCrowd::BuildBillboard(Character *c, float height) {
-    float halfHeight = height * 0.5f;
     c->GetSphere().GetRadius();
     RndMesh *mesh = Hmx::Object::New<RndMesh>();
-    RndMesh::VertVector &verts = mesh->Verts();
     std::vector<RndMesh::Face> &faces = mesh->Faces();
+    float halfHeight = height * 0.5;
+    RndMesh::VertVector &verts = mesh->Verts();
     float halfWidth = halfHeight * 0.5f;
     verts.resize(4);
     float negHalfWidth = -halfWidth;
@@ -1032,7 +1035,10 @@ void WorldCrowd::DrawShowing() {
     MILO_ASSERT(!dynamic_cast<RndMat*>(gImpostorMat->NextPass()), 0x3A0);
     std::vector<Hmx::Rect> rects;
     rects.reserve(12);
-    FOREACH (charIt, mCharacters) {
+    {
+        auto charIt = mCharacters.begin();
+        if (charIt != mCharacters.end()) {
+            do {
         Character *curChar = charIt->mDef.mChar;
         RndMultiMesh *mmesh = charIt->mMMesh;
         if (curChar && mmesh && !mShow3DOnly
@@ -1246,6 +1252,10 @@ void WorldCrowd::DrawShowing() {
                 // --- Draw billboarded multimesh instances ---
                 DrawMultiMeshWithEnviron(mmesh);
             }
+        }
+    
+                ++charIt;
+            } while (charIt != mCharacters.end());
         }
     }
 }

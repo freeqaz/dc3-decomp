@@ -6,21 +6,11 @@ Inventory of decomp gaps affecting the native build. Prioritized by impact on re
 
 ## Current State
 
-- **Track A (Engine Boot)**: Boots to `choose_mode_screen`, ~450 draw calls/frame, 10000 frames stable. Menu text, icons, ribbons, and shell decorations all visible.
-- **Current rendering**: choose-mode text objects still draw at correct screen positions, but readable shell/list text regressed after removing the broad renderer-side `AlphaForce` fallback. A narrow native fallback is now restored for transparent text meshes only; fullscreen/voice-tip overlays remain filtered separately. Fresh runtime validation is currently blocked by unrelated `Crowd.cpp` build errors plus an in-flight `PanelDir::Enter()` Flow experiment.
-- **GPU capture update (2026-03-11)**: GFXReconstruct capture/replay of frame 500 confirms the choose-mode frame has a full Vulkan workload (22 graphics pipelines, 818 indexed draws, 32 non-indexed draws), and the shell/helpbar text meshes are in the draw stream. A plain native frame-500 screenshot from the same build shows the real regression more clearly than the old logs: the grey shell plaque is back, but readable text has collapsed into tiny glyph clusters and mini labels instead of the session-43 readable layout. The offscreen replay screenshot is visually overexposed and should not be treated as ground truth for color/composite fidelity.
-- **Reference shots now anchored**: use `archive/screenshots/references/` as the live-game baseline, especially `dc3_main_menu.jpg` and `dc3_song_select.jpg`, plus the native progress checkpoints in `archive/screenshots/session38/`, `session39/`, `session40/`, and `session43/overlay-fix/`.
-- **Flow filter experiments (2026-03-12)**: env-gated `PanelDir` flow modes now exist for A/B testing:
-  - default `all`: current concurrent-agent blanket activation path; reproduces the collapsed tiny-text choose-mode frame
-  - `MILO_NATIVE_FLOW_FILTER=curated`: removes obvious hide/exit/deactivate conflicts, but still activates `letterbox` positive flows (`activate_letterbox`, `activate_text`) and reintroduces a giant cyan/teal border wash
-  - `MILO_NATIVE_FLOW_FILTER=menu_only`: skips auto-activation for `helpbar`, `letterbox`, `blacklight`, `autosaving_icon`, and `NewSkeletonDir`; this is the best current experimental image because the plaque and card art return without the cyan wash, but the large shell/list text is still missing
-  This narrows the remaining issue: helpbar/letterbox flow spam was obscuring the frame, but it is not the root cause of the missing readable text.
-- **Flow activation failure logging (2026-03-12)**: `MILO_DEBUG_PANEL_FLOWS=1` now also reports `DC3_FLOW_FAIL`. In the best `menu_only` run, the important `ui/main/main.milo` flows are not just skipped by the filter; they actively fail to start:
-  - `update_rank_number.flow`
-  - `udpate_icon_state.flow`
-  - `update_tier.flow`
-  The same run also shows the shared input/sfx select flows failing (`left_select`, `right_select`, `right_select_P2`, `invalid_select`). This is now the strongest source-level clue for the missing readable text: the remaining choose-mode label/material state appears to depend on flows that never activate successfully.
-- **DTA/Flow/PropAnim chain traced (2026-03-11)**: Full activation path: `RndPollable::Enter()` → `HandleType("enter")` → DTA TypeDef script → `Flow::Activate()` → PropAnim → material alpha/color. DTA execution works, but most panels' enter handlers don't activate enter-transition Flows. Zero UITrigger/EventTrigger objects exist (created dynamically, not in .milo). The old broad `AlphaForce` fallback has been narrowed back to text-only while the real Flow path is stabilized. See Track A roadmap for removal plan.
+- **Track A (Engine Boot)**: Boots to `choose_mode_screen`, ~169 draw calls/frame, 10000 frames stable. Menu text, icons, description panel, and ribbons all visible.
+- **Current rendering (Session 48)**: choose_mode_screen shows menu items on right side with game_mode_icon description panel and icon image on the left. Key fix: `ObjDirItr::RecurseSubdirs()` only traverses formal `SubDirs()`, not nested RndDir objects in the hash table. `game_mode_icon` (42 objects, 6 PropAnims) was invisible to the PropAnim forcing code. Now fixed with separate nested RndDir iteration in `PanelDir::Enter()`.
+- **Reference shots**: `archive/screenshots/references/` as live-game baseline. Native progress: `archive/screenshots/session47/` (text visible, centered), `archive/screenshots/session48/` (icon panel visible, improved layout).
+- **Flow activation**: Flows activate via `ShouldActivateNativeFlow()` filter (blocks only `letterbox`). Enter PropAnims forced to end frame for positioning. Nested RndDir PropAnims (icon_enter.anim etc.) now also forced.
+- **DTA/Flow/PropAnim chain**: `RndPollable::Enter()` → `HandleType("enter")` → DTA TypeDef script → `Flow::Activate()` → PropAnim → material alpha/color. DTA execution works. Zero UITrigger/EventTrigger objects exist (created dynamically, not in .milo).
 - **Track B (Milo Viewer)**: Full rendering pipeline. 14/44 demo shots render (8 broken YAML paths).
 - **Weak stubs**: `engine_stubs_generated.cpp` has ~2530 weak function stubs. Any real .cpp implementation automatically overrides them.
 
@@ -323,7 +313,7 @@ All these assets load correctly, including previously-crashing inlined subdir fi
 2. Find where the class is registered (usually in a subsystem `Init()` function)
 3. Add `REGISTER_OBJ_FACTORY(ClassName)` to `test_helpers.cpp` `EnsureEngineInit()`
 
-Currently registered for tests: `PanelDir`, `UIPanel`, `UIScreen` (plus all classes from `FlowInit`, `CharInit`, `WorldInit`, `HamInit`).
+Currently registered for tests: `PanelDir`, `UIPanel`, `UIScreen`, `UIColor`, `UIGuide`, `UIPicture`, `UITrigger`, `UILabel`, `UIComponent`, `UIButton`, `UISlider`, `LabelNumberTicker`, `LabelShrinkWrapper`, `UILabelDir` (plus all classes from `FlowInit`, `CharInit`, `WorldInit`, `HamInit`).
 
 **PreLoad match% regression** (88.9% → 87.8%): The `bs >> d >>` changes shifted register allocation to a new dominant r19↔r20 swap. Could potentially be recovered by reverting the `d >>` changes for reads that are functionally identical to `bs >>` (non-rev-dependent scalar types), but the native behavioral fix is more important than the PPC match% here.
 
@@ -365,6 +355,75 @@ Community milo/ark tools at `~/code/milohax/milo-engine-libs/harmonix-repos/`:
 - Class name fixups for older revisions (e.g., "RenderedTex" → "TexRenderer" for rev ≤ 24)
 
 **Pre-extracted asset library**: `~/code/milohax/milo-engine-libs/harmonix-repos/milo-rnd-library/dc3/` — 5,399 `.milo_xbox` files across songs (2,678), ui (1,153), sfx (1,091), char (324), world (141), flow (3).
+
+## Priority 6: Loading Completeness & Runtime Performance
+
+**Added**: 2026-03-11
+
+### O(n²) HasDirPtrs Performance Fix
+
+World files with 500+ objects (venue worlds have 2671–3525) caused the destructor chain to hang for 30+ minutes. Root cause: `ObjDirPtr::operator=(nullptr)` calls `HasDirPtrs()` which walked the entire ObjRef ring — O(n) per call, O(n²) total during `ObjectDir::~ObjectDir() → DeleteSubDirs()`.
+
+**Fix**: Static `unordered_map<const void*, int>` counter tracks how many `ObjDirPtr`s reference each object. `HasDirPtrs()` checks the counter in O(1). All changes guarded by `#ifdef HX_NATIVE` — zero impact on PPC decomp match.
+
+| Test | Before | After |
+|------|--------|-------|
+| `LoadWorldMasterFile` | 30+ min hang | **431ms** |
+| `LoadFullVenueWorlds` (8 venues) | infinite hang | **11 seconds** |
+| PPC `HasDirPtrs` match | 100% | **100%** (unchanged) |
+
+**Why not add a member to `Hmx::Object`?** Shifts class layout by 8 bytes, breaking every non-virtual thunk offset in `engine_stubs_generated.cpp` (e.g., `_ZThn88_` → `_ZThn96_`). Use external storage for native-only data.
+
+**Why not use `IsDirPtr()` in `Object::AddRef/Release`?** During `ObjRefConcrete` base class construction, vtable hasn't been updated to `ObjDirPtr` yet — `IsDirPtr()` returns false. Counter would never increment during construction but would decrement during destruction.
+
+Files modified: `src/system/obj/Dir.h` (counter map + ObjDirPtr ctors/operator=), `src/system/obj/Dir.cpp` (O(1) HasDirPtrs on native).
+
+Session doc: `docs/sessions/NATIVE_SUBDIR_LOADING_FIX.md`
+
+### CharHair.cpp __frsqrte Fix
+
+`__frsqrte` (PPC reciprocal square root estimate) is not available on x86. Added `#ifdef HX_NATIVE` guard using `1.0f / sqrtf(x)` as the native equivalent in `RecipSqrtAccurate()`.
+
+File modified: `src/system/char/CharHair.cpp`
+
+### Loading Completeness Analysis
+
+The native port's object factory registrations were incomplete. `UIManager::Init()` registers ~25 UI types but is too heavy for tests (needs SystemConfig, Automator, cameras). The main `App.cpp` native path calls all subsystem inits including `UIManager::Init()`, so full runtime is fine — but the test engine (`test_helpers.cpp`) needed manual registrations.
+
+**12 UI types added to test engine** (safe — Load functions implemented):
+`UIColor`, `UIGuide`, `UIPicture`, `UITrigger`, `UILabel`, `UIComponent`, `UIButton`, `UISlider`, `LabelNumberTicker`, `LabelShrinkWrapper`, `UILabelDir` (plus `PanelDir`, `UIPanel`, `UIScreen` from earlier fix)
+
+**4 categories blocked by decomp bugs** (cannot register until Load functions are fixed):
+
+| Category | Types | Bug | Symptom |
+|----------|-------|-----|---------|
+| TexMovie | `TexMovie` | `TexMovie::Load` stubbed | Stream desync → "String chars 8751 > 256" |
+| Synth/Sound | `SynthSample`, `Sound`, `SynthDir`, `Sfx`, `SynthPatch`, `Stream`, `Sequence`, `FxSend`, `FxSendEQ`, `FxSendReverb`, `FxSendCompress`, `FxSendDistortion` | `SynthSample::Load` / `Sound::Load` stubbed | Same stream desync |
+| UIList family | `UIList`, `UIListLabel`, `UIListMesh`, `UIListCustom`, `UIListArrow`, `UIListHighlight`, `UIListSlot`, `UIListSubList`, `UIListWidget`, `UIListDir` | `SetName` asserts null dir | `MILO_ASSERT(dir, 0xE7)` in `Object::SetName` |
+| InlineHelp | `InlineHelp` | `InlineHelp::PreLoad` stubbed | Stream desync |
+
+### Stub Function Analysis
+
+Of 1,117 unimplemented functions (weak stubs in `engine_stubs_generated.cpp`):
+
+| Subsystem | Stub Count | Native Impact |
+|-----------|-----------|---------------|
+| Xbox platform (XDK, D3D9, Kinect, XNet) | ~400 | None — replaced by native implementations |
+| Audio backend (Bink, Synth internals) | ~150 | Blocks audio playback only |
+| Rendering (DxMesh, DxShader, DxCam internals) | ~120 | None — WebGPU renderer bypasses |
+| Network/Online (RockCentral, DingoServer) | ~80 | None — single-player only |
+| Editor/Debug tools | ~100 | None — runtime only |
+| **Load/PreLoad/PostLoad** | **16** | **Blocks object type registration** |
+| Game logic (HamCharacter, Crowd, MoveDir) | ~150 | Partial — some affect gameplay |
+| Other (crypto, JSON, profile) | ~100 | Minimal |
+
+**Only the 16 Load-family stubs** directly block loading completeness. The rest are either irrelevant to native (Xbox platform, D3D9 renderer, network) or affect features beyond basic loading (audio playback, gameplay logic).
+
+**Key Load stubs to fix** (ordered by type count unblocked):
+1. `SynthSample::Load`, `Sound::Load` → unblocks 12 audio types
+2. `UIList::SetName` path (not a stub — needs null dir context fix) → unblocks 10 UI types
+3. `TexMovie::Load` → unblocks 1 video type
+4. `InlineHelp::PreLoad` → unblocks 1 UI type
 
 ## Key Architecture Notes
 
