@@ -119,6 +119,7 @@ void ShadowPass::EnsurePipelines(GpuDevice& gpu) {
 
     // Shadow depth texture
     wgpu::TextureDescriptor texDesc{};
+    texDesc.label = "ShadowDepth";
     texDesc.size = {kShadowMapSize, kShadowMapSize, 1};
     texDesc.format = wgpu::TextureFormat::Depth32Float;
     texDesc.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding;
@@ -128,6 +129,7 @@ void ShadowPass::EnsurePipelines(GpuDevice& gpu) {
 
     // Comparison sampler for shadow mapping
     wgpu::SamplerDescriptor sampDesc{};
+    sampDesc.label = "ShadowCompSampler";
     sampDesc.compare = wgpu::CompareFunction::LessEqual;
     sampDesc.magFilter = wgpu::FilterMode::Linear;
     sampDesc.minFilter = wgpu::FilterMode::Linear;
@@ -139,11 +141,13 @@ void ShadowPass::EnsurePipelines(GpuDevice& gpu) {
     wgpu::ShaderSourceWGSL src;
     src.code = kShadowShaderSource;
     wgpu::ShaderModuleDescriptor smDesc{};
+    smDesc.label = "ShadowShader";
     smDesc.nextInChain = &src;
     mShadowShader = dev.CreateShaderModule(&smDesc);
 
     // Light VP uniform buffer
     wgpu::BufferDescriptor bufDesc{};
+    bufDesc.label = "ShadowLightVP";
     bufDesc.size = 64;
     bufDesc.usage = wgpu::BufferUsage::Uniform | wgpu::BufferUsage::CopyDst;
     mShadowLightVPBuffer = dev.CreateBuffer(&bufDesc);
@@ -212,6 +216,7 @@ void ShadowPass::EnsurePipelines(GpuDevice& gpu) {
     {
         const wgpu::VertexBufferLayout* vtxLayout = &VertexFormats::StaticLayout();
         wgpu::RenderPipelineDescriptor pipeDesc{};
+        pipeDesc.label = "ShadowStatic";
         pipeDesc.layout = mShadowPipelineLayout;
         pipeDesc.vertex.module = mShadowShader;
         pipeDesc.vertex.entryPoint = "vs_shadow";
@@ -228,6 +233,7 @@ void ShadowPass::EnsurePipelines(GpuDevice& gpu) {
     {
         const wgpu::VertexBufferLayout* vtxLayout = &VertexFormats::SkinnedLayout();
         wgpu::RenderPipelineDescriptor pipeDesc{};
+        pipeDesc.label = "ShadowSkinned";
         pipeDesc.layout = mShadowSkinnedPipelineLayout;
         pipeDesc.vertex.module = mShadowShader;
         pipeDesc.vertex.entryPoint = "vs_shadow_skinned";
@@ -300,6 +306,7 @@ void ShadowPass::Render(wgpu::CommandEncoder& encoder, UniformRingBuffer& object
     depthAtt.depthClearValue = 1.0f;
 
     wgpu::RenderPassDescriptor rpDesc{};
+    rpDesc.label = "ShadowPass";
     rpDesc.depthStencilAttachment = &depthAtt;
 
     mShadowPass = encoder.BeginRenderPass(&rpDesc);

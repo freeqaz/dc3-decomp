@@ -286,6 +286,7 @@ void GpuDevice::PresentFrame() {
 wgpu::TextureView GpuDevice::AcquireHeadlessFrame() {
     if (!mHeadlessTex) {
         wgpu::TextureDescriptor texDesc{};
+        texDesc.label = "HeadlessTarget";
         texDesc.size = {(uint32_t)mWidth, (uint32_t)mHeight, 1};
         texDesc.format = wgpu::TextureFormat::RGBA8Unorm;
         texDesc.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopySrc;
@@ -304,6 +305,7 @@ bool GpuDevice::ReadbackHeadlessFrame(uint8_t* outPixels, size_t outSize) {
     size_t bufSize = alignedBytesPerRow * (uint32_t)mHeight;
 
     wgpu::BufferDescriptor readbackDesc{};
+    readbackDesc.label = "HeadlessReadback";
     readbackDesc.usage = wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::MapRead;
     readbackDesc.size = bufSize;
     wgpu::Buffer readbackBuf = mDevice.CreateBuffer(&readbackDesc);

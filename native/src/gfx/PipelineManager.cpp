@@ -32,6 +32,7 @@ void PipelineManager::Init(GpuDevice* device) {
     sceneEntries[2].sampler.type = wgpu::SamplerBindingType::Comparison;
 
     wgpu::BindGroupLayoutDescriptor sceneLayoutDesc{};
+    sceneLayoutDesc.label = "SceneBGL";
     sceneLayoutDesc.entryCount = 3;
     sceneLayoutDesc.entries = sceneEntries;
     mLayouts[0] = dev.CreateBindGroupLayout(&sceneLayoutDesc);
@@ -99,6 +100,7 @@ void PipelineManager::Init(GpuDevice* device) {
     matEntries[10].texture.viewDimension = wgpu::TextureViewDimension::e2D;
 
     wgpu::BindGroupLayoutDescriptor matLayoutDesc{};
+    matLayoutDesc.label = "MaterialBGL";
     matLayoutDesc.entryCount = 11;
     matLayoutDesc.entries = matEntries;
     mLayouts[1] = dev.CreateBindGroupLayout(&matLayoutDesc);
@@ -111,6 +113,7 @@ void PipelineManager::Init(GpuDevice* device) {
     objEntries[0].buffer.minBindingSize = 0;
 
     wgpu::BindGroupLayoutDescriptor objLayoutDesc{};
+    objLayoutDesc.label = "ObjectBGL";
     objLayoutDesc.entryCount = 1;
     objLayoutDesc.entries = objEntries;
     mLayouts[2] = dev.CreateBindGroupLayout(&objLayoutDesc);
@@ -123,12 +126,14 @@ void PipelineManager::Init(GpuDevice* device) {
     boneEntries[0].buffer.minBindingSize = 0;
 
     wgpu::BindGroupLayoutDescriptor boneLayoutDesc{};
+    boneLayoutDesc.label = "BoneBGL";
     boneLayoutDesc.entryCount = 1;
     boneLayoutDesc.entries = boneEntries;
     mLayouts[3] = dev.CreateBindGroupLayout(&boneLayoutDesc);
 
     // === Create pipeline layout ===
     wgpu::PipelineLayoutDescriptor plDesc{};
+    plDesc.label = "MainPipelineLayout";
     plDesc.bindGroupLayoutCount = 4;
     plDesc.bindGroupLayouts = mLayouts;
     mPipelineLayout = dev.CreatePipelineLayout(&plDesc);
@@ -147,6 +152,7 @@ wgpu::ShaderModule PipelineManager::GetOrCreateShader(uint32_t shaderType) {
     wgslSource.code = src;
 
     wgpu::ShaderModuleDescriptor desc{};
+    desc.label = "StandardShader";
     desc.nextInChain = &wgslSource;
     wgpu::ShaderModule module = mDevice->Device().CreateShaderModule(&desc);
 
@@ -312,6 +318,7 @@ wgpu::RenderPipeline PipelineManager::CreatePipeline(const PipelineKey& key) {
     }
 
     wgpu::RenderPipelineDescriptor pipeDesc{};
+    pipeDesc.label = (key.layout == VertexLayoutType::Skinned) ? "MainSkinned" : "MainStatic";
     pipeDesc.layout = mPipelineLayout;
     pipeDesc.vertex.module = shader;
     pipeDesc.vertex.entryPoint = (key.layout == VertexLayoutType::Skinned) ? "vs_skinned" : "vs_main";

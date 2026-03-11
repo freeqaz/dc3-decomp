@@ -4,6 +4,7 @@
 // Supports both static and bone-skinned meshes.
 
 #include "platform/Rnd_Wgpu.h"
+#include "platform/UiRenderHeuristics.h"
 #include "gfx/FrameCapture.h"
 #include "gfx/VertexFormats.h"
 #include "rndobj/Mesh.h"
@@ -93,6 +94,7 @@ static void EnsureDummyBoneBindGroup() {
     }
 
     wgpu::BufferDescriptor bd{};
+    bd.label = "DummyBones";
     bd.size = sizeof(BoneUniforms);
     bd.usage = wgpu::BufferUsage::Uniform | wgpu::BufferUsage::CopyDst;
     sDummyBoneBuffer = gWgpuRnd->Gpu().Device().CreateBuffer(&bd);
@@ -445,6 +447,7 @@ static bool EnsureMeshUploaded(RndMesh* mesh) {
         FixZeroAlpha(verts, unpacked);
 
         wgpu::BufferDescriptor vbDesc{};
+        vbDesc.label = mesh->Name();  // Dawn copies the string
         vbDesc.size = unpacked * sizeof(GpuVertexSkinned);
         vbDesc.usage = wgpu::BufferUsage::Vertex | wgpu::BufferUsage::CopyDst;
         vertexBuf = gWgpuRnd->Gpu().Device().CreateBuffer(&vbDesc);
@@ -476,6 +479,7 @@ static bool EnsureMeshUploaded(RndMesh* mesh) {
         FixZeroAlpha(verts, unpacked);
 
         wgpu::BufferDescriptor vbDesc{};
+        vbDesc.label = mesh->Name();  // Dawn copies the string
         vbDesc.size = unpacked * sizeof(GpuVertex);
         vbDesc.usage = wgpu::BufferUsage::Vertex | wgpu::BufferUsage::CopyDst;
         vertexBuf = gWgpuRnd->Gpu().Device().CreateBuffer(&vbDesc);
@@ -486,6 +490,7 @@ static bool EnsureMeshUploaded(RndMesh* mesh) {
     size_t ibAlignedSize = (numIndices * sizeof(uint16_t) + 3) & ~3u;
 
     wgpu::BufferDescriptor ibDesc{};
+    ibDesc.label = mesh->Name();  // Dawn copies the string
     ibDesc.size = ibAlignedSize;
     ibDesc.usage = wgpu::BufferUsage::Index | wgpu::BufferUsage::CopyDst;
     wgpu::Buffer indexBuf = gWgpuRnd->Gpu().Device().CreateBuffer(&ibDesc);
@@ -680,12 +685,9 @@ static void DrawMeshImmediate(RndMesh* mesh) {
     matUni.color[2] = matColor.blue;
     matUni.color[3] = matColor.alpha;
 
-    // Many DC3 UI materials have alpha=0 in their .milo defaults. On Xbox, DTA
-    // TypeDef enter scripts activate specific Flow→PropAnims that drive alpha from
-    // 0→1. Since we don't run those scripts on native, force alpha to 1 for all
-    // SrcAlpha materials. This also fixes text materials whose alpha is temporarily
-    // set by RndText::DrawShowing but restored before the deferred WebGPU flush.
-    if (matUni.color[3] < 0.01f && matBlend == BaseMaterial::kBlendSrcAlpha) {
+    // The broad UI AlphaForce hack is gone, but text still needs a narrow
+    // fallback until Flow-driven PropAnim activation is stable on native.
+    if (NativeShouldForceTextAlpha(isTextMesh, matBlend, matUni.color[3])) {
         matUni.color[3] = 1.0f;
         heuristics |= kHeuristicAlphaForce;
     }

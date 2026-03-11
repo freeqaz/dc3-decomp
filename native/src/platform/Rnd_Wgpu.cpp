@@ -51,9 +51,11 @@ int gDebugFrameID = 0;
 // UniformRingBuffer
 // ============================================================================
 
-void UniformRingBuffer::Init(wgpu::Device& device, uint32_t capacity) {
+void UniformRingBuffer::Init(wgpu::Device& device, uint32_t capacity, const char* label) {
     mDevice = device;
+    mLabel = label ? label : "UniformRing";
     wgpu::BufferDescriptor desc{};
+    desc.label = mLabel;
     desc.size = capacity;
     desc.usage = wgpu::BufferUsage::Uniform | wgpu::BufferUsage::CopyDst;
     mBuffer = device.CreateBuffer(&desc);
@@ -63,9 +65,10 @@ void UniformRingBuffer::Init(wgpu::Device& device, uint32_t capacity) {
 
 void UniformRingBuffer::Grow(wgpu::Device& device) {
     uint32_t newCapacity = mCapacity * 2;
-    fprintf(stderr, "UniformRingBuffer: growing %u -> %u bytes\n", mCapacity, newCapacity);
+    fprintf(stderr, "UniformRingBuffer: growing %s %u -> %u bytes\n", mLabel, mCapacity, newCapacity);
 
     wgpu::BufferDescriptor desc{};
+    desc.label = mLabel;
     desc.size = newCapacity;
     desc.usage = wgpu::BufferUsage::Uniform | wgpu::BufferUsage::CopyDst;
     // Old buffer stays alive until GPU is done with current frame (ref-counted by Dawn)
@@ -147,11 +150,11 @@ void WgpuRnd::Init() {
         mPipelines.Init(&mGpu);
         // Create per-draw ring buffers (64KB each — enough for ~250 draws/frame at 256-byte alignment)
         // Scene ring handles mid-frame camera switches (each camera gets its own offset)
-        mSceneRing.Init(mGpu.Device(), 16 * 1024);
-        mMaterialRing.Init(mGpu.Device(), 64 * 1024);
-        mObjectRing.Init(mGpu.Device(), 64 * 1024);
+        mSceneRing.Init(mGpu.Device(), 16 * 1024, "SceneUniforms");
+        mMaterialRing.Init(mGpu.Device(), 64 * 1024, "MaterialUniforms");
+        mObjectRing.Init(mGpu.Device(), 64 * 1024, "ObjectUniforms");
         // Bone ring needs more space: 2560 bytes per skinned draw (rounded to 2816 at 256 alignment)
-        mBoneRing.Init(mGpu.Device(), 256 * 1024);
+        mBoneRing.Init(mGpu.Device(), 256 * 1024, "BoneUniforms");
 
         // Create depth texture
         CreateDepthTexture(mWidth, mHeight);
@@ -331,6 +334,7 @@ void WgpuRnd::BeginDrawing() {
     // Ensure MSAA color target exists (format may not be known until first frame)
     if (mMsaaWidth != curW || mMsaaHeight != curH || !mMsaaTex) {
         wgpu::TextureDescriptor desc{};
+        desc.label = "MSAA4xColor";
         desc.size.width = curW;
         desc.size.height = curH;
         desc.size.depthOrArrayLayers = 1;
@@ -368,7 +372,9 @@ void WgpuRnd::BeginDrawing() {
     }
 
     // Create command encoder
-    mEncoder = mGpu.Device().CreateCommandEncoder();
+    wgpu::CommandEncoderDescriptor encDesc{};
+    encDesc.label = "FrameEncoder";
+    mEncoder = mGpu.Device().CreateCommandEncoder(&encDesc);
 
     // Shadow pre-pass: render depth from light's perspective
     mShadowPass.Render(mEncoder, mObjectRing, mBoneRing, mGpu);
@@ -382,6 +388,7 @@ void WgpuRnd::BeginDrawing() {
             // Ensure intermediate texture exists
             if (mIntermediateWidth != curW || mIntermediateHeight != curH || !mIntermediateTex) {
                 wgpu::TextureDescriptor iDesc{};
+                iDesc.label = "PostProcIntermediate";
                 iDesc.size = {(uint32_t)curW, (uint32_t)curH, 1};
                 iDesc.format = mGpu.SurfaceFormat();
                 iDesc.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding;
@@ -401,6 +408,7 @@ void WgpuRnd::BeginDrawing() {
         if (hasPostProc) {
             if (mIntermediateWidth != curW || mIntermediateHeight != curH || !mIntermediateTex) {
                 wgpu::TextureDescriptor iDesc{};
+                iDesc.label = "PostProcIntermediate";
                 iDesc.size = {(uint32_t)curW, (uint32_t)curH, 1};
                 iDesc.format = mGpu.SurfaceFormat();
                 iDesc.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding;
@@ -435,6 +443,7 @@ void WgpuRnd::BeginDrawing() {
     depthAtt.stencilClearValue = 0;
 
     wgpu::RenderPassDescriptor rpDesc{};
+    rpDesc.label = "MainPass";
     rpDesc.colorAttachmentCount = 1;
     rpDesc.colorAttachments = &colorAtt;
     rpDesc.depthStencilAttachment = &depthAtt;
@@ -528,6 +537,7 @@ void WgpuRnd::CreateDepthTexture(int w, int h) {
     // Depth texture (MSAA)
     {
         wgpu::TextureDescriptor desc{};
+        desc.label = "DepthStencil";
         desc.size.width = w;
         desc.size.height = h;
         desc.size.depthOrArrayLayers = 1;
@@ -548,6 +558,7 @@ void WgpuRnd::CreateDefaultTextures() {
     // 1x1 white texture for untextured materials
     {
         wgpu::TextureDescriptor desc{};
+        desc.label = "DefaultWhite";
         desc.size = {1, 1, 1};
         desc.format = wgpu::TextureFormat::RGBA8UnormSrgb;
         desc.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
@@ -568,6 +579,7 @@ void WgpuRnd::CreateDefaultTextures() {
     // 1x1 flat normal texture (tangent-space up: 128,128,255)
     {
         wgpu::TextureDescriptor desc{};
+        desc.label = "DefaultFlatNormal";
         desc.size = {1, 1, 1};
         desc.format = wgpu::TextureFormat::RGBA8Unorm; // linear, not sRGB
         desc.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
@@ -588,6 +600,7 @@ void WgpuRnd::CreateDefaultTextures() {
     // 1x1 black texture (no emission)
     {
         wgpu::TextureDescriptor desc{};
+        desc.label = "DefaultBlack";
         desc.size = {1, 1, 1};
         desc.format = wgpu::TextureFormat::RGBA8Unorm;
         desc.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
@@ -608,6 +621,7 @@ void WgpuRnd::CreateDefaultTextures() {
     // 1x1x6 black cube texture (no environment reflection)
     {
         wgpu::TextureDescriptor desc{};
+        desc.label = "DefaultBlackCube";
         desc.size = {1, 1, 6};
         desc.dimension = wgpu::TextureDimension::e2D;
         desc.format = wgpu::TextureFormat::RGBA8Unorm;
@@ -890,6 +904,7 @@ void WgpuRnd::WriteSceneUniforms() {
     entries[2].sampler = mShadowPass.Sampler();  // comparison sampler
 
     wgpu::BindGroupDescriptor bgDesc{};
+    bgDesc.label = "SceneBindGroup";
     bgDesc.layout = mPipelines.SceneLayout();
     bgDesc.entryCount = 3;
     bgDesc.entries = entries;

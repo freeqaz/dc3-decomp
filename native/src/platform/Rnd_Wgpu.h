@@ -99,7 +99,7 @@ static_assert(sizeof(BoneUniforms) == 2560, "BoneUniforms must match WGSL layout
 
 class UniformRingBuffer {
 public:
-    void Init(wgpu::Device& device, uint32_t capacity);
+    void Init(wgpu::Device& device, uint32_t capacity, const char* label = nullptr);
     void Reset() { mOffset = 0; }
     void Release() { mBuffer = nullptr; mDevice = nullptr; }
 
@@ -117,6 +117,7 @@ private:
     wgpu::Buffer mBuffer;
     uint32_t mCapacity = 0;
     uint32_t mOffset = 0;
+    const char* mLabel = "UniformRing";
 };
 
 // ============================================================================
