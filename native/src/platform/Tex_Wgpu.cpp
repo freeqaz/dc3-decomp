@@ -20,6 +20,8 @@ struct GpuTexData {
     wgpu::Texture texture;
     wgpu::TextureView view;
     bool uploaded = false;
+    const uint8_t* lastPixelPtr = nullptr;  // detect bitmap data changes
+    uint32_t pixelFingerprint = 0;          // quick content check
 };
 
 static std::unordered_map<RndTex*, GpuTexData> sTexGpuData;
@@ -38,6 +40,19 @@ wgpu::TextureView GetGpuTexView(RndTex* tex) {
 // RndTex::PresyncBitmap — create GPU texture from bitmap data
 // ============================================================================
 
+// Quick fingerprint of pixel data to detect content changes
+static uint32_t PixelFingerprint(const uint8_t* pixels, int size) {
+    if (!pixels || size < 16) return 0;
+    // Sample a few positions across the data
+    uint32_t h = 0;
+    int step = size / 8;
+    if (step < 1) step = 1;
+    for (int i = 0; i < size; i += step) {
+        h = h * 31 + pixels[i];
+    }
+    return h;
+}
+
 void RndTex::PresyncBitmap() {
     if (!gWgpuRnd) return;
 
@@ -45,10 +60,20 @@ void RndTex::PresyncBitmap() {
     if (mBitmap.Width() <= 0 || mBitmap.Height() <= 0 || mBitmap.Bpp() <= 0) {
         return;
     }
+    const uint8_t* curPixels = mBitmap.Pixels();
+    if (!curPixels) return;
 
-    // Check if already uploaded
+    // Check if already uploaded AND bitmap data hasn't changed.
+    // Font textures may be uploaded before their data is loaded from
+    // the .milo file — the bitmap has valid dimensions but placeholder
+    // pixel data. When the real data loads, we need to re-upload.
     auto it = sTexGpuData.find(this);
-    if (it != sTexGpuData.end() && it->second.uploaded) return;
+    if (it != sTexGpuData.end() && it->second.uploaded) {
+        uint32_t fp = PixelFingerprint(curPixels, mBitmap.PixelBytes());
+        if (it->second.lastPixelPtr == curPixels && it->second.pixelFingerprint == fp)
+            return; // Same data, skip
+        // Data changed — re-upload
+    }
 
     // Create GPU texture from Milo bitmap
     int numMips = 0;
@@ -71,6 +96,8 @@ void RndTex::PresyncBitmap() {
     data.texture = gpuTex;
     data.view = gpuTex.CreateView();
     data.uploaded = true;
+    data.lastPixelPtr = curPixels;
+    data.pixelFingerprint = PixelFingerprint(curPixels, mBitmap.PixelBytes());
 
     sTexGpuData[this] = data;
 }

@@ -39,3 +39,18 @@ These are project-wide issues that cause regressions across many functions. Fixi
 - **Target**: ArkFile's `operator new` uses `_MemAllocTemp`
 - **Fix applied**: Changed `MemAlloc` → `_MemAllocTemp` in ArkFile_p.h
 - **Note**: No current `new ArkFile` call sites (allocation done via placement new in File.cpp), so no functional impact yet
+
+## 7. Block Sinking / Cold Code Relocation (UNFIXABLE)
+- **What**: 361 functions (1.5%) in the target have basic blocks placed AFTER the function return, with backward branches to the join point. Typically null-check patterns where the non-null block (vbase conversion, member loads) is "sunk" past the epilogue.
+- **Pattern**: `bne cr6, [past_return]` → null-path falls through → epilogue → return → [non-null block] → `b [back_to_join]`
+- **Affects**: FlowPtr<T>::operator= (all specializations with vbase: RndAnimatable, Sound, Flow, ObjectDir), STL algorithms, D3D shader code, error-return paths
+- **Root cause investigation (c2.dll RE)**:
+  - **PEEP branch pair reorder** (`FUN_10bacf2b` in c2.dll) reorders conditional/unconditional branch pairs but is gated behind `DAT_10c3de20 == 2` (PGO optimize mode)
+  - `DAT_10c3de20` is set from `DAT_10c6f1c8` which is only set to 2 when PGO options (`-PogoSafeMode` etc.) are active
+  - **Xenon scheduler** (`0x10b71d8f`) also has PGO-gated block layout code paths
+  - Binary patching: forced PGO mode 2 (patched all 10 loads of DAT_10c6f1c8) → **no effect** — PGO code paths need actual profiling data (branch weights) to make different block layout decisions
+  - Tested with /O1, /O2, /Ox, various source patterns (if/else, defaults+if, ternary, different complexity levels) — **identical output** in all cases
+  - No PGO symbols (`__PogoProbeVector`, `__PogoRuntimeVector`) in target's `ham_xbox_r.map` — target was NOT compiled with standard PGO
+  - No BBT section splitting in target binary (single `.text` section)
+- **Possible explanations**: Different c2.dll build variant, linker-level BBT with branch trace data, or unknown compiler mechanism
+- **Status**: UNFIXABLE — cannot reproduce block sinking with our compiler under any conditions

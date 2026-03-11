@@ -45,7 +45,6 @@ WgpuRnd* gWgpuRnd = &gWgpuRndInstance;
 GLFWwindow *gNativeWindow = nullptr;
 
 UIManager* TheUI = nullptr;
-int gDebugFrameID = 0;
 
 // ============================================================================
 // UniformRingBuffer
@@ -142,8 +141,12 @@ void WgpuRnd::Init() {
             }
         }
 
-        mWidth = mGpu.WindowWidth();
-        mHeight = mGpu.WindowHeight();
+        // NOTE: Do NOT override mWidth/mHeight here. The Rnd base class sets these
+        // from config (height=432, width=768 for widescreen) in PreInit(). The UI layout
+        // system uses Width()/Height() to position elements in the camera's visible area.
+        // Overriding them with the GPU framebuffer dimensions (1280x720) causes UI content
+        // to appear at ~60% scale because elements are positioned for a 1280x720 view but
+        // the projection only covers 768x432 world units.
         gNativeWindow = mGpu.Window();
 
         // Initialize pipeline manager
@@ -156,8 +159,8 @@ void WgpuRnd::Init() {
         // Bone ring needs more space: 2560 bytes per skinned draw (rounded to 2816 at 256 alignment)
         mBoneRing.Init(mGpu.Device(), 256 * 1024, "BoneUniforms");
 
-        // Create depth texture
-        CreateDepthTexture(mWidth, mHeight);
+        // Create depth texture (use GPU framebuffer dimensions, not Rnd virtual resolution)
+        CreateDepthTexture(mGpu.WindowWidth(), mGpu.WindowHeight());
 
         // Create default textures (1x1 white for untextured materials)
         CreateDefaultTextures();
@@ -166,8 +169,9 @@ void WgpuRnd::Init() {
         mShadowPass.Init(mGpu);
         mPostProcPass.Init(mGpu);
 
-        printf("DC3 Native: WgpuRnd initialized (%dx%d, %s)\n",
-               mWidth, mHeight, mGpu.HasBCCompression() ? "BC supported" : "software DXT");
+        printf("DC3 Native: WgpuRnd initialized (GPU %dx%d, Rnd %dx%d, %s)\n",
+               mGpu.WindowWidth(), mGpu.WindowHeight(), mWidth, mHeight,
+               mGpu.HasBCCompression() ? "BC supported" : "software DXT");
 
         // Frame capture setup (env-var controlled)
         const char* captureFrame = getenv("MILO_CAPTURE_FRAME");
@@ -201,8 +205,7 @@ void WgpuRnd::Init() {
         }
     } else {
         printf("DC3 Native: GPU init skipped (set MILO_RENDER=1 to enable)\n");
-        mWidth = 1280;
-        mHeight = 720;
+        // mWidth/mHeight stay at config values from PreInit (768x432 for widescreen)
     }
 }
 
@@ -283,8 +286,6 @@ void WgpuRnd::BeginDrawing() {
     mWorldEnded = false;
     mDrawCount++;
     mFrameID++;
-    extern int gDebugFrameID;
-    gDebugFrameID = mFrameID;
 
     FrameCapture::Get().BeginFrame(mFrameID);
 
@@ -328,8 +329,7 @@ void WgpuRnd::BeginDrawing() {
     int curH = mGpu.WindowHeight();
     if (curW != mDepthWidth || curH != mDepthHeight) {
         CreateDepthTexture(curW, curH);
-        mWidth = curW;
-        mHeight = curH;
+        // Do NOT update mWidth/mHeight — those are the Rnd virtual resolution for UI layout
     }
     // Ensure MSAA color target exists (format may not be known until first frame)
     if (mMsaaWidth != curW || mMsaaHeight != curH || !mMsaaTex) {
@@ -352,25 +352,6 @@ void WgpuRnd::BeginDrawing() {
     WriteSceneUniforms();
     mLastSceneCam = RndCam::Current();
     mLastSceneEnv = RndEnviron::Current();
-    // Debug: log camera state every 500 frames
-    if (mFrameID % 500 == 0) {
-        RndCam* dbgCam = RndCam::Current();
-        if (dbgCam) {
-            const Hmx::Rect& sr = dbgCam->GetScreenRect();
-            printf("DC3 Debug [frame %d]: cam='%s' near=%.2f far=%.2f yfov=%.4f pos=(%.2f,%.2f,%.2f)\n",
-                   mFrameID, dbgCam->Name(),
-                   dbgCam->NearPlane(), dbgCam->FarPlane(), dbgCam->YFov(),
-                   dbgCam->WorldXfm().v.x, dbgCam->WorldXfm().v.y, dbgCam->WorldXfm().v.z);
-            printf("  screenRect=(%.4f,%.4f,%.4f,%.4f) aspect=%d YRatio=%.4f Rnd::w=%d h=%d\n",
-                   sr.x, sr.y, sr.w, sr.h, (int)mAspect, YRatio(), mWidth, mHeight);
-            Transform viewXfm;
-            Hmx::Matrix4 projMtx;
-            dbgCam->GetViewProjectXfms(viewXfm, projMtx);
-            printf("  projMtx: x.x=%.4f y.y=%.4f z.x=%.4f z.y=%.4f z.z=%.4f z.w=%.4f w.z=%.4f w.w=%.4f\n",
-                   projMtx.x.x, projMtx.y.y, projMtx.z.x, projMtx.z.y, projMtx.z.z, projMtx.z.w, projMtx.w.z, projMtx.w.w);
-        }
-    }
-
     // Create command encoder
     wgpu::CommandEncoderDescriptor encDesc{};
     encDesc.label = "FrameEncoder";
@@ -456,6 +437,7 @@ void WgpuRnd::BeginDrawing() {
 }
 
 extern void FlushTransparentDraws();
+extern void FlushTextDraws();
 extern bool HasTransparentDraws();
 extern bool IsFlushingTransparentDraws();
 
@@ -465,24 +447,11 @@ uint32_t GetSceneOffset() { return gWgpuRnd->SceneOffset(); }
 void WgpuRnd::EnsureSceneUniformsCurrent() {
     RndCam* cam = RndCam::Current();
     RndEnviron* env = RndEnviron::Current();
-    if (cam != mLastSceneCam || env != mLastSceneEnv) {
-        // Log camera switches on debug frames
-        if (mFrameID == 500) {
-            int drawsSinceLastSwitch = mDrawCount; // approximate
-            printf("DC3_LAYER [F%d] cam switch: '%s' -> '%s' (draws so far: %d)\n",
-                   mFrameID,
-                   mLastSceneCam ? mLastSceneCam->Name() : "(null)",
-                   cam ? cam->Name() : "(null)",
-                   drawsSinceLastSwitch);
-            if (cam) {
-                const Transform &w = cam->WorldXfm();
-                printf("  cam '%s' worldPos=(%.1f,%.1f,%.1f) worldBasis: X=(%.3f,%.3f,%.3f) Y=(%.3f,%.3f,%.3f) Z=(%.3f,%.3f,%.3f)\n",
-                       cam->Name(), w.v.x, w.v.y, w.v.z,
-                       w.m.x.x, w.m.x.y, w.m.x.z,
-                       w.m.y.x, w.m.y.y, w.m.y.z,
-                       w.m.z.x, w.m.z.y, w.m.z.z);
-            }
-        }
+    // Check both pointer identity AND camera position — the UI code modifies
+    // the same camera object's position each frame before drawing panels.
+    float camPosY = cam ? cam->WorldXfm().v.y : 0.0f;
+    bool camChanged = (cam != mLastSceneCam || env != mLastSceneEnv || camPosY != mLastCamPosY);
+    if (camChanged) {
         if (HasTransparentDraws() && !IsFlushingTransparentDraws()) {
             FlushTransparentDraws();
         }
@@ -493,6 +462,7 @@ void WgpuRnd::EnsureSceneUniformsCurrent() {
         }
         mLastSceneCam = cam;
         mLastSceneEnv = env;
+        mLastCamPosY = camPosY;
     }
 }
 
@@ -503,6 +473,8 @@ void WgpuRnd::EndDrawing() {
     }
 
     if (mInPass) {
+        // Flush text draws last — text must render on top of all other UI elements
+        FlushTextDraws();
         // Flush deferred transparent draws (sorted back-to-front)
         FlushTransparentDraws();
 
@@ -708,18 +680,6 @@ void WgpuRnd::WriteSceneUniforms() {
                 }
             }
             memcpy(scene.view, view, sizeof(view));
-
-            if (mFrameID == 500) {
-                printf("DC3 ViewProj for cam='%s':\n", cam->Name());
-                printf("  proj: [%.3f %.3f %.3f %.3f] [%.3f %.3f %.3f %.3f] [%.3f %.3f %.3f %.3f] [%.3f %.3f %.3f %.3f]\n",
-                       proj[0],proj[1],proj[2],proj[3], proj[4],proj[5],proj[6],proj[7],
-                       proj[8],proj[9],proj[10],proj[11], proj[12],proj[13],proj[14],proj[15]);
-                printf("  view row3: [%.3f %.3f %.3f %.3f]\n", view[12], view[13], view[14], view[15]);
-                printf("  VP[0-3]: %.4f %.4f %.4f %.4f\n", scene.viewProj[0], scene.viewProj[1], scene.viewProj[2], scene.viewProj[3]);
-                printf("  VP[4-7]: %.4f %.4f %.4f %.4f\n", scene.viewProj[4], scene.viewProj[5], scene.viewProj[6], scene.viewProj[7]);
-                printf("  VP[8-11]: %.4f %.4f %.4f %.4f\n", scene.viewProj[8], scene.viewProj[9], scene.viewProj[10], scene.viewProj[11]);
-                printf("  VP[12-15]: %.4f %.4f %.4f %.4f\n", scene.viewProj[12], scene.viewProj[13], scene.viewProj[14], scene.viewProj[15]);
-            }
         }
 
         // Camera position (in world space, before axis flip)

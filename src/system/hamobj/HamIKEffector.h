@@ -62,6 +62,7 @@ protected:
 
     EffectorType GetType();
     void IKElbow(const Vector3 &);
+    void DoFancyElbow(QuatXfm &, float);
     void
     ComputeHandPullAndQuat(QuatXfm &, Transform &, const Transform &, const Vector3 &);
     float ApplyConstraints(QuatXfm &, const Transform &, HamIKEffector *);

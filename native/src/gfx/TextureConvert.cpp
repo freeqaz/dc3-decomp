@@ -13,8 +13,9 @@ namespace TextureConvert {
 // Xbox 360 byte swap — all DXT block data is big-endian 16-bit words
 // ============================================================================
 
-void ByteSwapDXT(uint8_t* data, size_t size) {
-    // Swap every pair of bytes (k8in16 pattern)
+void ByteSwapDXT(uint8_t* data, size_t size, int /*dxtType*/) {
+    // Swap every pair of bytes (k8in16 pattern) — converts Xbox 360
+    // big-endian 16-bit words to little-endian for PC/GPU.
     for (size_t i = 0; i + 1 < size; i += 2) {
         uint8_t tmp = data[i];
         data[i] = data[i + 1];
@@ -441,7 +442,7 @@ wgpu::Texture CreateFromBitmap(GpuDevice& gpu, const RndBitmap& bmp, int numMips
 
         // Step 2: Byte-swap DXT data from Xbox BE
         if (dxt) {
-            ByteSwapDXT(workData, pixelBytes);
+            ByteSwapDXT(workData, pixelBytes, dxt);
         }
 
         // Step 3: Determine upload data and format
@@ -574,7 +575,7 @@ wgpu::Texture CreateCubeFromBitmaps(GpuDevice& gpu, const RndBitmap* const* face
 
         // Byte-swap DXT
         if (dxt) {
-            ByteSwapDXT(workData, pixelBytes);
+            ByteSwapDXT(workData, pixelBytes, dxt);
         }
 
         // Determine upload data

@@ -15,6 +15,18 @@
 #include "ui/PanelDir.h"
 #include "ui/UIPanel.h"
 #include "ui/UIScreen.h"
+#include "ui/UIColor.h"
+#include "ui/UIGuide.h"
+#include "ui/UIPicture.h"
+#include "ui/UITrigger.h"
+#include "ui/UILabel.h"
+#include "ui/UIComponent.h"
+#include "ui/UIButton.h"
+#include "ui/UISlider.h"
+#include "ui/InlineHelp.h"
+#include "ui/LabelNumberTicker.h"
+#include "ui/LabelShrinkWrapper.h"
+#include "ui/UILabelDir.h"
 #include "utl/Symbol.h"
 
 // Forward declarations from engine
@@ -60,10 +72,27 @@ void EnsureEngineInit() {
     HamInit();
 
     // UI object factories — UIManager::Init() is too heavy for tests
-    // (needs SystemConfig, Automator, cameras, etc.), so register key types manually.
+    // (needs SystemConfig, Automator, cameras, etc.), so register types manually.
     REGISTER_OBJ_FACTORY(PanelDir)
     REGISTER_OBJ_FACTORY(UIPanel)
     REGISTER_OBJ_FACTORY(UIScreen)
+    REGISTER_OBJ_FACTORY(UIColor)
+    REGISTER_OBJ_FACTORY(UIGuide)
+    REGISTER_OBJ_FACTORY(UIPicture)
+    REGISTER_OBJ_FACTORY(UITrigger)
+    REGISTER_OBJ_FACTORY(UILabel)
+    REGISTER_OBJ_FACTORY(UIComponent)
+    REGISTER_OBJ_FACTORY(UIButton)
+    REGISTER_OBJ_FACTORY(UISlider)
+    REGISTER_OBJ_FACTORY(InlineHelp)
+    REGISTER_OBJ_FACTORY(LabelNumberTicker)
+    REGISTER_OBJ_FACTORY(LabelShrinkWrapper)
+    REGISTER_OBJ_FACTORY(UILabelDir)
+
+    // NOT registered (decomp Load bugs cause stream desync):
+    //   Movie::Init()  — TexMovie::Load desyncs stream ("String chars N > 256")
+    //   SynthInit()    — Sound/SynthSample::Load same issue
+    //   UIList family  — UIList/UIListLabel/etc SetName asserts (null dir context)
 
     printf("=== Test Engine Init Complete ===\n");
 }

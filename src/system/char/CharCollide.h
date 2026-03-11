@@ -45,6 +45,20 @@ public:
     float GetCurLength1() const { return mCurLength[1]; }
     int GetFlags() const { return mFlags; }
     Shape GetShape() const { return mShape; }
+    const Vector3 &Axis() const { return unk1fc; }
+    float GetRadius(const Vector3 &pos, Vector3 &out) const {
+        Subtract(pos, unk20c, out);
+        float ret = mCurRadius[0];
+        if (mShape >= kCollideCigar) {
+            float clamped = Clamp(mCurLength[0], mCurLength[1], unk1f8 * Dot(out, unk1fc));
+            ScaleAdd(out, unk1fc, -clamped, out);
+            Interp(ret, mCurRadius[1], unk1f4 * (clamped - mCurLength[0]), ret);
+        } else if (mShape == kCollidePlane) {
+            ret = Dot(out, unk1fc);
+            Scale(unk1fc, ret, out);
+        }
+        return ret;
+    }
     /** "Cache world state for collision queries during simulation" */
     void SyncWorldState();
 

@@ -217,77 +217,92 @@ void CharHair::SimulateLoops(int count, float fps) {
     }
 }
 
+static inline void ScaleAddEq(Vector3 &v1, const Vector3 &v2, float f) {
+    v1.x += v2.x * f;
+    v1.y += v2.y * f;
+    v1.z += v2.z * f;
+}
+
+static inline float RecipSqrtAccurate(float x) {
+#ifdef HX_NATIVE
+    float est = 1.0f / sqrtf(x);
+#else
+    float est = __frsqrte(x);
+#endif
+    return -(est * est * x - 3.0f) * est * 0.5f;
+}
+
 void CharHair::SimulateInternal(float fps) {
     float sixtyOver = 60.0f / fps;
+    float recipFps = 1.0f / fps;
+    float gravity = (1.0f / (fps * fps)) * mGravity * gUnitsPerMeter * -9.8f;
     float stiffPow = std::pow(1.0f - mStiffness, sixtyOver * sixtyOver);
-    float timeStep = (1.0f / fps) * sixtyOver;
+    float halfWeight = mWeight * -0.5f;
     Vector3 windForce;
     windForce.Zero();
-    if (mWindObj && mStrands.size() > 0) {
+    if (mWindObj) {
         if (mStrands[0].Root()) {
             float secs = TheTaskMgr.Seconds(TaskMgr::kRealTime);
             mWindObj->GetWind(mStrands[0].Root()->WorldXfm().v, secs, windForce);
-            windForce *= timeStep * 0.5f;
+            windForce.x *= recipFps;
+            windForce.y *= recipFps;
+            windForce.z *= recipFps;
         }
     }
-    windForce.z = windForce.z + mGravity * timeStep * -3.858268f;
-
-    Hmx::Matrix3 boneFrame;
-    Vector3 toMod;
-    Vector3 oldPos;
-    Vector3 idealPos;
-    Vector3 frictionDiff;
-    Vector3 movement;
+    stiffPow = 1.0f - stiffPow;
 
     for (int i = 0; i < mStrands.size(); i++) {
         Strand &modStrand = mStrands[Mod(i + 1, mStrands.size())];
         Strand &curStrand = mStrands[i];
         if (curStrand.Root() && curStrand.Root()->TransParent()) {
-            Transform strandXfm;
-            strandXfm.v = curStrand.Root()->WorldXfm().v;
+            Transform t100;
+            t100.v = curStrand.Root()->WorldXfm().v;
             Multiply(
                 curStrand.RootMat(),
                 curStrand.Root()->TransParent()->WorldXfm().m,
-                strandXfm.m
+                t100.m
             );
             ObjVector<Point> &points = curStrand.Points();
             for (int j = 0; j < points.size(); j++) {
                 Point &pt = points[j];
-                oldPos = pt.pos;
+                Vector3 oldPos(pt.pos);
                 pt.pos += pt.force;
-                pt.pos += windForce;
+                pt.pos.z = pt.pos.z + gravity;
                 if (pt.sideLength >= 0.0f) {
-                    Point &modPt = modStrand.Points()[j];
-                    Subtract(pt.pos, modPt.pos, toMod);
-                    float distSq = LengthSquared(toMod);
                     float minLen = pt.sideLength - mMinSlack;
+                    Point &modPt = modStrand.Points()[j];
+                    Vector3 vRes;
+                    Subtract(pt.pos, modPt.pos, vRes);
+                    float lensq = LengthSquared(vRes);
                     float minLenSq = minLen * minLen;
-                    if (distSq < minLenSq) {
-                        toMod *= (minLenSq / (minLenSq + distSq) - 0.5);
-                        pt.pos += toMod;
-                        modPt.pos -= toMod;
+                    if (lensq < minLenSq) {
+                        vRes *= (minLenSq / (minLenSq + lensq) - 0.5f);
+                        pt.pos += vRes;
+                        modPt.pos -= vRes;
                     } else {
                         float maxLen = pt.sideLength + mMaxSlack;
                         float maxLenSq = maxLen * maxLen;
-                        if (distSq > maxLenSq) {
-                            toMod *= (maxLenSq / (maxLenSq + distSq) - 0.5f);
-                            pt.pos += toMod;
-                            modPt.pos -= toMod;
+                        if (lensq > maxLenSq) {
+                            vRes *= (maxLenSq / (maxLenSq + lensq) - 0.5f);
+                            pt.pos += vRes;
+                            modPt.pos -= vRes;
                         }
                     }
                 }
-                Subtract(pt.pos, strandXfm.v, boneFrame.y);
-                float boneLen = Length(boneFrame.y);
-                float recipLen = boneLen > 0 ? (1.0f / boneLen) : 0.0f;
-                float lenDiff = -(1.0f - pt.length * recipLen);
+                Hmx::Matrix3 m128;
+                Subtract(pt.pos, t100.v, m128.y);
+                float rsa = RecipSqrtAccurate(LengthSquared(m128.y));
+                float rsalen = pt.length * rsa - 1.0f;
                 if (j > 0) {
-                    ScaleAdd(points[j - 1].force, boneFrame.y, -sixtyOver * 0.5f * lenDiff, points[j - 1].force);
+                    ScaleAddEq(points[j - 1].force, m128.y, -sixtyOver * 0.5f * rsalen);
                 }
-                ScaleAdd(pt.pos, boneFrame.y, lenDiff, pt.pos);
-                ScaleAdd(strandXfm.v, strandXfm.m.y, pt.length, idealPos);
-                Interp(pt.lastZ, strandXfm.m.z, mTorsion, boneFrame.z);
+                ScaleAddEq(pt.pos, m128.y, rsalen);
+                Vector3 idealPos;
+                ScaleAdd(t100.v, t100.m.y, pt.length, idealPos);
+                Interp(pt.lastZ, t100.m.z, mTorsion, m128.z);
 
-                if (!pt.collides.empty()) {
+                if (pt.collides.size() != 0) {
+                    float diffRad = pt.outerRadius - pt.radius;
                     float maxRad;
                     if (pt.radius < pt.outerRadius) maxRad = pt.outerRadius;
                     else maxRad = pt.radius;
@@ -295,49 +310,97 @@ void CharHair::SimulateInternal(float fps) {
                          it != pt.collides.end();
                          ++it) {
                         CharCollide *col = *it;
-                        float colRad = col->GetCurRadius();
-                        Subtract(pt.pos, col->WorldXfm().v, toMod);
-                        float dist = Length(toMod);
-                        CharCollide::Shape colShape = col->GetShape();
-                        if (colShape == CharCollide::kCollideSphere || colShape == CharCollide::kCollideCigar) {
+                        Vector3 v164;
+                        float colRad = col->GetRadius(pt.pos, v164);
+                        switch (col->GetShape()) {
+                        case CharCollide::kCollidePlane:
+                            if (colRad < maxRad) {
+                                ScaleAddEq(pt.pos, col->Axis(), maxRad - colRad);
+                            }
+                            break;
+                        case CharCollide::kCollideSphere:
+                        case CharCollide::kCollideCigar: {
+                            float v164sq = LengthSquared(v164);
                             float sumRad = colRad + maxRad;
-                            if (dist < sumRad && dist > 0) {
-                                float push = sumRad / dist - 1.0f;
-                                ScaleAdd(pt.pos, toMod, push, pt.pos);
-                                Scale(toMod, 1.0f / dist, boneFrame.z);
+                            if (v164sq < sumRad * sumRad) {
+                                if (diffRad > 0.0f) {
+                                    float v164recip = RecipSqrtAccurate(v164sq);
+                                    float dist = v164sq * v164recip;
+                                    float innerSumRad = colRad + pt.radius;
+                                    v164 *= -v164recip;
+                                    if (dist < innerSumRad) {
+                                        m128.z = v164;
+                                        ScaleAddEq(pt.pos, v164, dist - innerSumRad);
+                                    } else {
+                                        Interp(m128.z, v164, (sumRad - dist) / diffRad, m128.z);
+                                    }
+                                } else {
+                                    ScaleAddEq(
+                                        pt.pos, v164,
+                                        sumRad * RecipSqrtAccurate(v164sq) - 1.0f
+                                    );
+                                }
                             }
-                        } else if (colShape == CharCollide::kCollideInsideSphere || colShape == CharCollide::kCollideInsideCigar) {
+                            break;
+                        }
+                        case CharCollide::kCollideInsideSphere:
+                        case CharCollide::kCollideInsideCigar: {
+                            float v164sq = LengthSquared(v164);
                             float minRad = colRad - maxRad;
-                            if (dist > minRad && dist > 0) {
-                                float pull = -1.0f + minRad / dist;
-                                ScaleAdd(pt.pos, toMod, pull, pt.pos);
-                                Scale(toMod, -1.0f / dist, boneFrame.z);
+                            if (v164sq > minRad * minRad) {
+                                if (diffRad > 0.0f) {
+                                    float v164recip = RecipSqrtAccurate(v164sq);
+                                    float dist = v164sq * v164recip;
+                                    float innerMinRad = colRad - pt.radius;
+                                    v164 *= -v164recip;
+                                    if (dist > innerMinRad) {
+                                        m128.z = v164;
+                                        ScaleAddEq(pt.pos, v164, dist - innerMinRad);
+                                    } else {
+                                        Interp(m128.z, v164, (dist - minRad) / diffRad, m128.z);
+                                    }
+                                } else {
+                                    ScaleAddEq(
+                                        pt.pos, v164,
+                                        minRad * RecipSqrtAccurate(v164sq) - 1.0f
+                                    );
+                                }
                             }
+                            break;
+                        }
+                        default:
+                            break;
                         }
                     }
                 }
 
-                Subtract(pt.pos, strandXfm.v, boneFrame.y);
-                float newBoneLen = Length(boneFrame.y);
-                if (newBoneLen > 0)
-                    boneFrame.y *= (1.0f / newBoneLen);
-                Cross(boneFrame.y, boneFrame.z, strandXfm.m.x);
-                float xLen = Length(strandXfm.m.x);
-                if (xLen > 0)
-                    strandXfm.m.x *= (1.0f / xLen);
-                Cross(strandXfm.m.x, boneFrame.y, strandXfm.m.z);
-                strandXfm.m.y = boneFrame.y;
-                pt.lastZ = strandXfm.m.z;
+                Scale(m128.y, rsa, t100.m.y);
+                Cross(t100.m.y, m128.z, t100.m.x);
+                t100.m.x *= RecipSqrtAccurate(LengthSquared(t100.m.x));
+                Normalize(t100.m.x, t100.m.x);
+                Cross(t100.m.x, t100.m.y, t100.m.z);
+                pt.lastZ = t100.m.z;
                 if (pt.bone)
-                    pt.bone->SetWorldXfm(strandXfm);
+                    pt.bone->SetWorldXfm(t100);
                 Subtract(idealPos, pt.pos, pt.force);
+                Vector3 frictionDiff;
                 Subtract(pt.lastFriction, pt.force, frictionDiff);
                 pt.lastFriction = pt.force;
-                pt.force *= 1.0f - stiffPow;
-                ScaleAdd(pt.force, frictionDiff, -mFriction, pt.force);
+                pt.force *= stiffPow;
+                ScaleAddEq(pt.force, frictionDiff, -mFriction);
+                Vector3 movement;
                 Subtract(pt.pos, oldPos, movement);
-                ScaleAdd(pt.force, movement, mInertia, pt.force);
-                strandXfm.v = pt.pos;
+                ScaleAddEq(pt.force, movement, mInertia);
+
+                Vector3 windRelative;
+                Subtract(windForce, movement, windRelative);
+                float windRelLen = Length(windRelative);
+                float perpComponent = std::fabs(Dot(windRelative, t100.m.z));
+                float windScale =
+                    ((perpComponent - windRelLen) * mFlat + windRelLen) * mWind;
+                ScaleAddEq(pt.force, windRelative, windScale);
+
+                t100.v = pt.pos;
             }
         }
     }

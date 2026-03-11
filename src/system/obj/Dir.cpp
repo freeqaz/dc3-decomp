@@ -977,10 +977,8 @@ void ObjectDir::PreLoad(BinStream &bs) {
     if (d.rev > 0xC) {
         if (d.rev > 0x13) {
             InlineDirType proxyType;
-            if (d.rev < 0x1C) {
-                bool b;
-                d >> b;
-                proxyType = (InlineDirType)b;
+            if (d.rev > 0x1B) {
+                d >> proxyType;
             } else {
                 bool b;
                 d >> b;
@@ -1241,7 +1239,10 @@ void ObjectDir::PostLoad(BinStream &bs) {
         bs.ReadString(buf, 0x80);
         unk8c = FindObject(buf, false, true);
         bs.ReadString(buf, 0x80);
-        mCurCam = FindObject(buf, false, true);
+        mCurCam = FindObject(buf, true, true);
+        if (mCurCam == nullptr && (int)mCurViewportID == 7) {
+            mCurViewportID = (ViewportId)0;
+        }
     }
 
     if (d.rev > 0x15) {
@@ -1256,8 +1257,7 @@ void ObjectDir::PostLoad(BinStream &bs) {
     if (mProxyOverride) {
         mProxyOverride = false;
         if (!TheLoadMgr.EditMode()
-            && (!IsProxy()
-                || (mInlineProxyType == kInlineCached || mInlineProxyType == kInlineAlways))) {
+            && (!IsProxy() || mInlineProxyType != kInlineNever)) {
             MILO_FAIL("You cannot override an inlined proxy!");
         }
     } else if (ShouldSaveProxy(bs)) {

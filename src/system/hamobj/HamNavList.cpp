@@ -1724,19 +1724,6 @@ void HamNavList::LinkRibbonDrawState(
 }
 
 void HamNavList::DrawShowing() {
-#ifdef HX_NATIVE
-    extern int gDebugFrameID;
-    if (gDebugFrameID == 500) {
-        printf("DC3 HamNavList::DrawShowing '%s' ribbonRes=%p unkc8=%d listDirRes=%p provider=%p numShowing=%d widgets=%d\n",
-               Name(),
-               (void*)(HamListRibbon*)mListRibbonResource,
-               (int)unkc8,
-               (void*)(UIListDir*)mListDirResource,
-               (void*)mListState.Provider(),
-               mListState.NumShowing(),
-               (int)mListWidgets.size());
-    }
-#endif
     if (!mListRibbonResource || unkc8)
         return;
 #ifdef HX_NATIVE
@@ -1775,20 +1762,6 @@ void HamNavList::DrawShowing() {
         mListRibbonResource->mScrollAnims.SetScrollFrame(mScrollBehavior.mScrollProgress);
         mListRibbonResource->SetDisengageFrame(mDisengageSmoother.Level());
         mListRibbonResource->mMode = mRibbonMode;
-#ifdef HX_NATIVE
-        if (gDebugFrameID % 1000 == 500) {
-            const Transform &wxfm = WorldXfm();
-            RndCam *cam = RndCam::Current();
-            if (cam) {
-                const Transform &cxfm = cam->WorldXfm();
-                printf("DC3 [frame %d] cam='%s' pos=(%.1f,%.1f,%.1f) fov=%.1f | navlist pos=(%.1f,%.1f,%.1f)\n",
-                       gDebugFrameID,
-                       cam->Name(), cxfm.v.x, cxfm.v.y, cxfm.v.z,
-                       cam->YFov() * 57.2958f,
-                       wxfm.v.x, wxfm.v.y, wxfm.v.z);
-            }
-        }
-#endif
         mListRibbonResource->Draw(WorldXfm(), mRibbonDrawStates, false, false);
     }
 

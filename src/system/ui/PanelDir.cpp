@@ -398,39 +398,6 @@ void PanelDir::DrawShowing() {
     }
     RndCam *curCam = RndCam::Current();
     RndCam *camOverride = CamOverride();
-#ifdef HX_NATIVE
-    extern int gDebugFrameID;
-    if (gDebugFrameID % 1000 == 500) {
-        printf("DC3 PanelDir::DrawShowing '%s' camOverride=%s curCam=%s showing=%d draws=%d\n",
-               Name(),
-               camOverride ? camOverride->Name() : "null",
-               curCam ? curCam->Name() : "null",
-               Showing(), (int)mDraws.size());
-        // Dump camera properties for both cameras
-        auto dumpCam = [](const char *label, RndCam *c) {
-            if (!c) return;
-            const Transform &w = c->WorldXfm();
-            const Transform &l = c->LocalXfm();
-            printf("  CAM '%s' (%s): worldPos=(%.1f,%.1f,%.1f) localPos=(%.1f,%.1f,%.1f)\n",
-                   label, c->Name(),
-                   w.v.x, w.v.y, w.v.z,
-                   l.v.x, l.v.y, l.v.z);
-            printf("       worldBasis: X=(%.3f,%.3f,%.3f) Y=(%.3f,%.3f,%.3f) Z=(%.3f,%.3f,%.3f)\n",
-                   w.m.x.x, w.m.x.y, w.m.x.z,
-                   w.m.y.x, w.m.y.y, w.m.y.z,
-                   w.m.z.x, w.m.z.y, w.m.z.z);
-            RndTransformable *parent = c->TransParent();
-            if (parent) {
-                const Transform &pw = parent->WorldXfm();
-                printf("       parent='%s' parentPos=(%.1f,%.1f,%.1f)\n",
-                       parent->Name(), pw.v.x, pw.v.y, pw.v.z);
-            } else {
-                printf("       parent=NONE\n");
-            }
-        };
-        dumpCam("camOverride", camOverride);
-    }
-#endif
     if (camOverride && camOverride != RndCam::Current()) {
 #ifdef HX_NATIVE
         FlushTransparentDraws();

@@ -4,6 +4,7 @@
 #include "math/Geo.h"
 #include "math/Color.h"
 #include "rndobj/Mat.h"
+#include "rndobj/Rnd.h"
 #include "rndobj/Tex.h"
 #include "obj/Object.h"
 
@@ -101,8 +102,11 @@ void DrawRect2D::Draw(wgpu::RenderPassEncoder& pass, const Hmx::Rect& rect, RndM
 
     auto& dev = gpu.Device();
 
-    float w = (float)gpu.WindowWidth();
-    float h = (float)gpu.WindowHeight();
+    // Use the Rnd virtual resolution (e.g. 768×432 widescreen) for coordinate conversion,
+    // NOT the GPU framebuffer size (1280×720). The engine generates DrawRect coordinates in
+    // Rnd pixel space (Width()×Height()), so we must map [0,Width] → NDC [-1,1].
+    float w = (float)TheRnd.Width();
+    float h = (float)TheRnd.Height();
     if (w <= 0 || h <= 0) return;
 
     float x0 = rect.x / w * 2.0f - 1.0f;

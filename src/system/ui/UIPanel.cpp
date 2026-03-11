@@ -91,14 +91,6 @@ bool UIPanel::Entering() const {
 }
 
 void UIPanel::Draw() {
-#ifdef HX_NATIVE
-    extern int gDebugFrameID;
-    if (gDebugFrameID == 500) {
-        printf("DC3 UIPanel::Draw '%s' finalDrawPass=%d==%d mDir=%p(%s) mLoaded=%d\n",
-               Name(), mFinalDrawPassFlag, sIsFinalDrawPass, mDir,
-               mDir ? mDir->Name() : "null", mLoaded);
-    }
-#endif
     if (mFinalDrawPassFlag == sIsFinalDrawPass && mDir && !mLoaded) {
         mDir->DrawShowing();
     }

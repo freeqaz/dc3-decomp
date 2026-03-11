@@ -2495,7 +2495,168 @@ void HamDirector::ChangeNextShotIfCharacterCollisionLikely() {
     }
 }
 
-void HamDirector::OnPopulateMoves() {}
+void HamDirector::OnPopulateMoves() {
+    if (!mMasterClipAnim.Ptr()) {
+        MILO_NOTIFY("No MasterClipAnim in HamDirector.  Did you load a song?");
+        return;
+    }
+
+    static bool sPopulating = false;
+    if (sPopulating) {
+        MILO_NOTIFY(
+            "[HamDirector::OnPopulateMoves] Please wait until the function is finished."
+        );
+        return;
+    }
+
+    sPopulating = true;
+
+    DataArray *pMoveData = DataReadFile("../meta/move_data.dta", true);
+    MILO_ASSERT(pMoveData, 0xb1c);
+
+    ObjectDir *movesDir = mMerger->Dir()->Find<ObjectDir>("moves", true);
+    ObjectDir *clipsDir = mMerger->Dir()->Find<ObjectDir>("clips", true);
+
+    static Symbol clip("clip");
+    static Symbol move("move");
+    static Symbol move_instance("move_instance");
+    static Symbol charclips("charclips");
+    static Symbol hammoves("hammoves");
+    static Symbol transition_charclips("transition_charclips");
+
+    mMasterClipAnim->RemoveKeys(this, DataArrayPtr(move));
+    mMasterClipAnim->RemoveKeys(this, DataArrayPtr(clip));
+
+    PropKeys *moveKeys =
+        mMasterClipAnim->AddKeys(this, DataArrayPtr(move), PropKeys::kSymbol);
+    PropKeys *clipKeys =
+        mMasterClipAnim->AddKeys(this, DataArrayPtr(clip), PropKeys::kSymbol);
+    PropKeys *moveInstanceKeys =
+        mMasterClipAnim->GetKeys(this, DataArrayPtr(move_instance));
+
+    Keys<Symbol, Symbol> *moveInstSymKeys = moveInstanceKeys->AsSymbolKeys();
+    Keys<Symbol, Symbol> *moveSymKeys = moveKeys->AsSymbolKeys();
+    Keys<Symbol, Symbol> *clipSymKeys = clipKeys->AsSymbolKeys();
+
+    gMoveMergeMap.clear();
+
+    ObjVector<FileMerger::Merger> *mergers =
+        (ObjVector<FileMerger::Merger> *)((char *)mMoveMerger.Ptr() + 0x40);
+    if (mergers->begin() != mergers->end()) {
+        mergers->erase(mergers->begin(), mergers->end());
+    }
+
+    int numKeys = moveInstSymKeys->size();
+    for (int i = 0; i != numKeys; i++) {
+            if ((*moveInstSymKeys)[i].value == "") continue;
+
+            float keyFrame = (*moveInstSymKeys)[i].frame;
+            float beat = SecondsToBeat(keyFrame / 30.0f);
+            float roundedBeat = (float)floor(beat + 0.5f);
+            if (i != 0) {
+                roundedBeat -= 1.0f;
+            }
+            float frame = BeatToSeconds(roundedBeat) * 30.0f;
+
+            int moveIdx = moveKeys->SetKey(keyFrame);
+            int clipIdx = clipKeys->SetKey(frame);
+
+            // Find matching move variant in move_data.dta
+            DataArray *pVariant = NULL;
+            for (int j = 0; j < pMoveData->Size(); j++) {
+                DataArray *arr = pMoveData->Node(j).Array(pMoveData);
+                arr = arr->FindArray("name", true);
+                const char *entryName = arr->Str(1);
+                arr = pMoveData;
+                if (strcmp(entryName, (*moveInstSymKeys)[i].value.Str()) == 0) {
+                    arr = pMoveData->Node(j).Array(arr);
+                    DataArray *varArr = arr->FindArray("variant", true);
+                    pVariant = varArr->Node(1).Array(varArr);
+                    if (pVariant) break;
+                    break;
+                }
+            }
+            MILO_ASSERT(pVariant, 0xb5e);
+
+            pMoveData->Release();
+
+            // Get move and clip names from variant
+            Symbol hamMoveName = pVariant->FindArray("ham_move_name", true)->Sym(1);
+            Symbol clipName = pVariant->Sym(0);
+
+            (*moveSymKeys)[moveIdx].value = hamMoveName;
+            (*clipSymKeys)[clipIdx].value = clipName;
+
+            // Handle transition charclips
+            Symbol transName;
+            if (i > 0) {
+                Symbol prevClipName = (*clipSymKeys)[clipIdx - 1].value;
+                DataArray *prevCandidates =
+                    pVariant->FindArray("prev_candidates", true);
+                DataArray *prevEntry = prevCandidates->FindArray(prevClipName, false);
+                if (prevEntry) {
+                    if (prevEntry->Int(2) != 0) {
+                        transName = Symbol(
+                            MakeString("%s_%s", prevClipName.Str(), clipName.Str())
+                        );
+                    }
+                }
+
+                if (transName.Str() != gNullStr && gMoveMergeMap[transName] == 0) {
+                    FilePath fp(MakeString(
+                        "modular_song_data/transition_charclips/%s.milo",
+                        transName
+                    ));
+                    FileMerger::Merger merger(mMoveMerger.Ptr());
+                    merger.mName = transition_charclips;
+                    merger.mDir = clipsDir;
+                    merger.mSubdirs = MergeFilter::kAllSubdirs;
+                    merger.mPreClear = true;
+                    merger.mSelected = fp;
+                    merger.mForceReload = true;
+                    mergers->push_back(merger);
+                    gMoveMergeMap[transName]++;
+                }
+            }
+
+            // Add charclip merger
+            if (gMoveMergeMap[clipName] == 0) {
+                FilePath fp(
+                    MakeString("modular_song_data/charclips/%s.milo", clipName)
+                );
+                FileMerger::Merger merger(mMoveMerger.Ptr());
+                merger.mName = charclips;
+                merger.mDir = clipsDir;
+                merger.mSubdirs = MergeFilter::kAllSubdirs;
+                merger.mPreClear = true;
+                merger.mSelected = fp;
+                merger.mForceReload = true;
+                mergers->push_back(merger);
+                gMoveMergeMap[clipName]++;
+            }
+
+            // Add hammove merger
+            Symbol hamMiloName =
+                pVariant->FindArray("ham_move_milo_name", true)->Sym(1);
+            if (gMoveMergeMap[hamMiloName] == 0) {
+                FilePath fp(
+                    MakeString("modular_song_data/hammoves/%s.milo", hamMiloName)
+                );
+                FileMerger::Merger merger(mMoveMerger.Ptr());
+                merger.mName = hammoves;
+                merger.mDir = movesDir;
+                merger.mSubdirs = MergeFilter::kAllSubdirs;
+                merger.mPreClear = true;
+                merger.mSelected = fp;
+                merger.mForceReload = true;
+                mergers->push_back(merger);
+                gMoveMergeMap[hamMiloName]++;
+            }
+    }
+
+    mMoveMerger->StartLoad(mAsyncLoaded);
+    sPopulating = false;
+}
 
 void HamDirector::OnPopulateFromMoveMgr() {
     if (!mMasterClipAnim.Ptr()) {
@@ -2619,7 +2780,7 @@ void HamDirector::DrawIconMan(Difficulty diff, float f1, float f2, float f3, flo
             Keys<Symbol, Symbol> *keys = clipKeys->AsSymbolKeys();
             float frame = BeatToSeconds(f1) * 30.0f;
             int clipIdx = keys->KeyLessEq(frame);
-            Key<Symbol> &key = (*keys)[clipIdx];
+            Key<Symbol> &key = keys->at(clipIdx);
 
             CharClip *clip = mClipDir->Find<CharClip>(key.value.Str(), false);
             if (clip) {
@@ -2633,7 +2794,7 @@ void HamDirector::DrawIconMan(Difficulty diff, float f1, float f2, float f3, flo
                     alignOff = Mod(clipBeat - clip->StartBeat(), (float)beatAlign);
                 }
                 float poseBeat = f1 - (clipBeat - alignOff) + clip->StartBeat();
-                if (f3 + f4 < f1 - f2) {
+                if (f1 - f2 > f3 + f4) {
                     poseBeat -= f3;
                 }
                 PoseIconMan(clip, poseBeat, NULL, (bool)tex, NULL, 0.0f, 0.0f);
@@ -2648,10 +2809,15 @@ void HamDirector::DrawIconMan(Difficulty diff, float f1, float f2, float f3, flo
             int clipIdx = keys->KeyLessEq(frame);
             Key<Symbol> &key = keys->at(clipIdx);
             float clipBeat = SecondsToBeat(key.frame / 30.0f);
-            if (clipIdx > 0) {
-                keys->at(clipIdx - 1);
+            Symbol nextValue;
+            Symbol prevValue;
+            if ((unsigned)(clipIdx + 1) < keys->size()) {
+                nextValue = (*keys)[clipIdx + 1].value;
             }
-            DrawIconMan(key.value, Symbol(), Symbol(), f1 - clipBeat, f4, tex);
+            if (clipIdx > 0) {
+                prevValue = keys->at(clipIdx - 1).value;
+            }
+            DrawIconMan(key.value, nextValue, prevValue, f1 - clipBeat, f4, tex);
         }
     }
 }

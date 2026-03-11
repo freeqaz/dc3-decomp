@@ -182,14 +182,6 @@ void UIScreen::Poll() {
 void UIScreen::Draw() {
     if (mShowing) {
         FOREACH (it, mPanelList) {
-#ifdef HX_NATIVE
-            extern int gDebugFrameID;
-            if (gDebugFrameID == 500) {
-                printf("DC3 UIScreen::Draw '%s' panel='%s' active=%d showing=%d shouldDraw=%d\n",
-                       Name(), it->mPanel->Name(), it->Active(), it->mPanel->Showing(),
-                       TheRnd.ShouldDrawPanel(it->mPanel));
-            }
-#endif
             if (it->Active() && it->mPanel->Showing()
                 && TheRnd.ShouldDrawPanel(it->mPanel)) {
                 static Symbol suppress_blacklight_text("suppress_blacklight_text");

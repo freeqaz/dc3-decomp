@@ -416,17 +416,6 @@ void HamListRibbon::DrawRibbon(
 
     Transform tempXfm;
     Multiply(ribbonXfm, worldXfm, tempXfm);
-#ifdef HX_NATIVE
-    {
-        extern int gDebugFrameID;
-        static int sDrawRibbonDiag = 0;
-        if (gDebugFrameID == 500 && sDrawRibbonDiag < 10) {
-            printf("DC3 DrawRibbon[%d] ribbonZ=%.1f final=(%.1f,%.1f,%.1f)\n",
-                   index, ribbonXfm.v.z, tempXfm.v.x, tempXfm.v.y, tempXfm.v.z);
-            sDrawRibbonDiag++;
-        }
-    }
-#endif
     SetWorldXfm(Transform::IDXfm());
 
     if (mLabelPlaceholder) {

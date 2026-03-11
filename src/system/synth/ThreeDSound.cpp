@@ -224,52 +224,53 @@ void ThreeDSound::SetDoppler(float doppler) {
 
 void ThreeDSound::CalculateFaderVolume() {
     float vol;
-    if (unk20c < mSilenceDistance) {
-        if (unk20c <= mMinFalloffDistance) {
-            vol = 0.0f;
-        } else {
-            if (mShape != 0) {
-                if (mShape == 1) {
-                    if (mRadius < unk210) {
-                        mDistanceFader->SetVolume(-96.0f);
-                        return;
-                    }
-                } else {
-                    MILO_FAIL("Calculating volume for unknown shape %d\n", mShape);
-                }
-            }
-            float invRange = 1.0f / (mMinFalloffDistance - mSilenceDistance);
-            float t = invRange * unk20c - (mMinFalloffDistance * invRange - 1.0f);
-            float eased = GetEaseFunction(mFalloffType)(t, mFalloffParameter, 0);
-            eased = Clamp(0.0f, 1.0f, eased);
-            vol = RatioToDb(eased);
-            if (vol < -96.0f) {
-                vol = -96.0f;
-            }
-        }
-    } else {
+    if (unk20c >= mSilenceDistance) {
         vol = -96.0f;
+    } else if (unk20c <= mMinFalloffDistance) {
+        vol = 0.0f;
+    } else {
+        switch (mShape) {
+        case 1:
+            if (unk210 > mRadius) {
+                vol = -96.0f;
+                goto done;
+            }
+        case 0:
+            break;
+        default:
+            MILO_FAIL("Calculating volume for unknown shape %d\n", mShape);
+            break;
+        }
+        float invRange = 1.0f / (mMinFalloffDistance - mSilenceDistance);
+        float t = invRange * unk20c + (1.0f - mMinFalloffDistance * invRange);
+        EaseType e = mFalloffType;
+        MILO_ASSERT(e >= kEaseLinear && e <= kEaseQuarterHalfStairstep, 0x16B);
+        float eased = gEaseFuncs[e](t, mFalloffParameter, 0);
+        eased = Clamp(0.0f, 1.0f, eased);
+        vol = RatioToDb(eased);
+        vol = Max(vol, -96.0f);
     }
+done:
     mDistanceFader->SetVolume(vol);
 }
 
-void ThreeDSound::SetDistance(float distance, float radius) {
-    unk20c = distance;
+void ThreeDSound::SetDistance(float mDistance, float radius) {
+    unk20c = mDistance;
     mStartedPlaying = false;
+    MILO_ASSERT(!IsNaN(mDistance), 0x182);
     unk210 = radius;
     CalculateFaderVolume();
-    if (mIsLooping) {
-        float vol = mDistanceFader->DuckedValue();
-        if (vol > -96.0f) {
-            if (mSamples.empty() && mDelayArgs.empty()) {
-                Sound::Play(
-                    mDelayedVolume, mDelayedPan, mDelayedTranspose, mDelayedOwner, mDelayMs
-                );
-            }
-        } else {
-            if (!mSamples.empty() || !mDelayArgs.empty()) {
-                Sound::Stop(nullptr, true);
-            }
+    if (mIsLooping && mDistanceFader->DuckedValue() > kDbSilence) {
+        if (mSamples.empty() && mDelayArgs.empty()) {
+            Sound::Play(
+                mDelayedVolume, mDelayedPan, mDelayedTranspose, mDelayedOwner, mDelayMs
+            );
+        }
+        return;
+    }
+    if (mIsLooping && mDistanceFader->DuckedValue() <= kDbSilence) {
+        if (!mSamples.empty() || !mDelayArgs.empty()) {
+            Sound::Stop(nullptr, true);
         }
     }
 }

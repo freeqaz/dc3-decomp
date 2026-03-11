@@ -65,7 +65,8 @@ namespace {
 
 #ifdef HX_NATIVE
     enum NativeUICamMode {
-        kNativeUICamDefault,
+        kNativeUICamDefault,      // Corrected: scale distance for HD visible area
+        kNativeUICamOriginal,     // Original camera (too zoomed in for HD)
         kNativeUICamZHack,
         kNativeUICamRotateHack
     };
@@ -76,8 +77,10 @@ namespace {
             cached = kNativeUICamDefault;
             const char *env = std::getenv("MILO_UI_CAM_MODE");
             if (env && env[0]) {
-                if (std::strcmp(env, "default") == 0 || std::strcmp(env, "none") == 0) {
+                if (std::strcmp(env, "default") == 0) {
                     cached = kNativeUICamDefault;
+                } else if (std::strcmp(env, "original") == 0 || std::strcmp(env, "none") == 0) {
+                    cached = kNativeUICamOriginal;
                 } else if (std::strcmp(env, "z_hack") == 0) {
                     cached = kNativeUICamZHack;
                 } else if (std::strcmp(env, "rotate_hack") == 0) {
@@ -202,11 +205,12 @@ void UIManager::Draw() {
         switch (GetNativeUICamMode()) {
         case kNativeUICamDefault:
             break;
+        case kNativeUICamOriginal:
+            break;
         case kNativeUICamZHack:
             mCam->SetLocalPos(Vector3(0, -768, 387));
             break;
         case kNativeUICamRotateHack: {
-            // Experimental native-only camera remap for choose-mode analysis.
             Transform camXfm;
             camXfm.m.x = Vector3(0, 0, 1);
             camXfm.m.y = Vector3(0, 1, 0);

@@ -24,18 +24,9 @@
 #include <cstring>
 #endif
 
-#ifdef HX_NATIVE
-namespace {
-bool DebugChooseModeText() {
-    static int enabled = -1;
-    if (enabled == -1) {
-        const char *env = std::getenv("MILO_DEBUG_CHOOSE_MODE");
-        enabled = (env && env[0] && std::strcmp(env, "0") != 0) ? 1 : 0;
-    }
-    return enabled != 0;
-}
-}
-#endif
+
+// Explicit template instantiation for MakeString<char>
+template const char *MakeString<char>(const char *, const char &);
 
 std::vector<RndText::BlacklightPacket> RndText::sBlacklightPacketPool;
 int RndText::sBlacklightPacketCount;
@@ -611,6 +602,17 @@ void RndText::FontMap::AllocateMeshes(RndText *text, int fixedLength) {
 #endif
         if (!page.mesh && mFont && page.displayableChars > 0) {
             page.mesh = Hmx::Object::New<RndMesh>();
+#ifdef HX_NATIVE
+            // Label text meshes for GPU debug (buffer names + frame capture).
+            // Uses a side-table label instead of SetName to avoid registering
+            // in ObjectDir, which would cause double-draws during traversal.
+            {
+                extern void SetMeshDebugLabel(RndMesh*, const char*);
+                char label[64];
+                snprintf(label, sizeof(label), "TEXT_%.48s_p%d", text->Name(), i);
+                SetMeshDebugLabel(page.mesh, label);
+            }
+#endif
         }
         RndMesh *mesh = page.mesh;
         page.mSyncFlags = 0x1F;
@@ -825,10 +827,13 @@ void RndText::WrapText(
         // On Linux, wchar_t is 4 bytes but our text buffers are unsigned short (2 bytes).
         // Passing unsigned short* cast to wchar_t* causes the function to read garbled
         // 4-byte values, producing spurious line breaks.
+        // Allocate +2 padding: WordWrap_CanBreakLineAt reads cur[1] (lookahead)
+        // which can read one past the null terminator.
         int brkLen = 0;
         { const unsigned short *t = brkChars; while (*t++) brkLen++; }
-        wchar_t *brkWide = (wchar_t *)_alloca((brkLen + 1) * sizeof(wchar_t));
+        wchar_t *brkWide = (wchar_t *)_alloca((brkLen + 2) * sizeof(wchar_t));
         for (int bi = 0; bi <= brkLen; bi++) brkWide[bi] = (wchar_t)brkChars[bi];
+        brkWide[brkLen + 1] = 0;
 
         int nWp = 1, wpI = 0;
         const unsigned short *cur = baseChars;
@@ -2118,51 +2123,6 @@ void RndText::UpdateText() {
 void RndText::DrawShowing() {
     SizeCheck();
 
-#ifdef HX_NATIVE
-    extern int gDebugFrameID;
-    if (gDebugFrameID == 500) {
-        // Unconditional frame-500 diagnostic for all RndText objects
-        printf("DC3_TEXT_DRAW [frame %d] name='%s' text='%.40s' fontMaps=%d styles=%d width=%.1f\n",
-               gDebugFrameID, Name(), mText.c_str(),
-               (int)mFontMaps.size(), (int)mStyles.size(), mWidth);
-        for (int fm = 0; fm < (int)mFontMaps.size(); fm++) {
-            FontMapBase* fmb = mFontMaps[fm];
-            printf("  fontMap[%d]: class=%s meshes=%d mats=%d font=%s\n",
-                   fm, fmb->ClassName().Str(), fmb->NumMeshes(), fmb->NumMaterials(),
-                   fmb->Font() ? fmb->Font()->Name() : "<null>");
-            for (int mi = 0; mi < fmb->NumMeshes(); mi++) {
-                RndMesh* m = fmb->Mesh(mi);
-                printf("    mesh[%d]: %p verts=%d faces=%d showing=%d\n",
-                       mi, (void*)m, m ? (int)m->Verts().size() : 0,
-                       m ? (int)m->Faces().size() : 0, m ? m->Showing() : -1);
-            }
-        }
-    }
-    if (DebugChooseModeText() && gDebugFrameID == 500) {
-        RndCam *cam = RndCam::Current();
-        const Transform &xfm = WorldXfm();
-        Vector2 screen;
-        bool haveScreen = false;
-        if (cam) {
-            cam->WorldToScreen(xfm.v, screen);
-            haveScreen = true;
-        }
-        printf(
-            "DC3 RndText::DrawShowing name=%s cam=%s pos=(%.2f,%.2f,%.2f) screen=%s(%.3f,%.3f) width=%.2f height=%.2f text='%s'\n",
-            Name(),
-            cam ? cam->Name() : "<null>",
-            xfm.v.x,
-            xfm.v.y,
-            xfm.v.z,
-            haveScreen ? "" : "<none>",
-            haveScreen ? screen.x : 0.0f,
-            haveScreen ? screen.y : 0.0f,
-            mWidth,
-            mHeight,
-            mText.c_str()
-        );
-    }
-#endif
 
     // Count total materials across all font maps for VLA allocation
     int totalMats = 0;

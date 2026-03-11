@@ -153,25 +153,22 @@ bool MoveGraph::FindVariantPair(
     Symbol s,
     bool b8
 ) const {
-    auto& _ref0 = mMoveParents;
     if (p1) {
-        auto it = _ref0.find(p1->Name());
-        if (it == _ref0.end()) {
+        std::map<Symbol, MoveParent *>::const_iterator it = mMoveParents.find(p1->Name());
+        if (it == mMoveParents.end()) {
             return false;
-        } else {
-            p1 = it->second;
         }
+        p1 = it->second;
     }
     if (p2) {
-        auto it = _ref0.find(p2->Name());
-        if (it == _ref0.end()) {
+        std::map<Symbol, MoveParent *>::const_iterator it = mMoveParents.find(p2->Name());
+        if (it == mMoveParents.end()) {
             return false;
-        } else {
-            p2 = it->second;
         }
+        p2 = it->second;
     }
     if (v1) {
-        auto it = mMoveVariants.find(v1->Name());
+        std::map<Symbol, MoveVariant *>::const_iterator it = mMoveVariants.find(v1->Name());
         if (it != mMoveVariants.end() && it->second->Parent() == p1) {
             v1 = it->second;
         } else {
@@ -179,7 +176,7 @@ bool MoveGraph::FindVariantPair(
         }
     }
     if (v2) {
-        auto it = mMoveVariants.find(v2->Name());
+        std::map<Symbol, MoveVariant *>::const_iterator it = mMoveVariants.find(v2->Name());
         if (it != mMoveVariants.end() && it->second->Parent() == p2) {
             v2 = it->second;
         } else {
@@ -187,53 +184,115 @@ bool MoveGraph::FindVariantPair(
         }
     }
 
-    if (!p1 || !p2)
-        return false;
-
-    vref1 = nullptr;
-    vref2 = nullptr;
-
-    // Try to find a connected pair from p1 to p2
-    FOREACH (var1, p1->Variants()) {
-        if (v1 && *var1 != v1)
-            continue;
-        if (!s.Null() && (*var1)->Genre() != s)
-            continue;
-        FOREACH (cand, (*var1)->mNextCandidates) {
-            if (cand->mValue.mVariant && cand->mValue.mVariant->Parent() == p2) {
-                if (v2 && cand->mValue.mVariant != v2)
-                    continue;
-                if (!s.Null() && cand->mValue.mVariant->Genre() != s)
-                    continue;
-                vref1 = *var1;
-                vref2 = cand->mValue.mVariant;
-                return true;
+    if (p1) {
+        if (p2) {
+            // Both parents specified: find best connected pair via scoring
+            const std::vector<MoveVariant *> &variants = p1->Variants();
+            int bestScore = 0;
+            for (MoveVariant *const *var1 = &*variants.begin();
+                 var1 != &*variants.end(); ++var1) {
+                const MoveVariant *curVar = *var1;
+                for (std::vector<MoveCandidate>::const_iterator cand =
+                         curVar->mNextCandidates.begin();
+                     cand != curVar->mNextCandidates.end(); ++cand) {
+                    const MoveVariant *candVar = cand->mValue.mVariant;
+                    if (candVar->Parent() == p2) {
+                        int score = 0x200;
+                        if (candVar->Song() == s) {
+                            score = 0x220;
+                        }
+                        if (curVar->Song() == s) {
+                            score |= 0x40;
+                        }
+                        if (candVar == v2) {
+                            score |= 0x80;
+                        }
+                        if (curVar == v1) {
+                            score |= 0x100;
+                        }
+                        if (cand->mAdjacencyFlag & 2) {
+                            score |= 0x4;
+                        }
+                        int adj = cand->mAdjacencyFlag & 0x3c;
+                        if (adj == 4) {
+                            score |= 0x10;
+                        }
+                        if (adj == 8) {
+                            score |= 0x8;
+                        }
+                        if (adj == 0x10) {
+                            score |= 0x1;
+                        }
+                        if (adj == 0x20) {
+                            score |= 0x2;
+                        }
+                        int oldScore = bestScore;
+                        if (bestScore < score) {
+                            bestScore = score;
+                            if (score != oldScore) {
+                                vref1 = curVar;
+                                vref2 = candVar;
+                                if (b8) {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return bestScore != 0;
+        }
+        // Only p1 set
+        const std::vector<MoveVariant *> &variants = p1->Variants();
+        MoveVariant *const *vbegin = &*variants.begin();
+        MoveVariant *const *vend = &*variants.end();
+        if (vbegin == vend) {
+            return false;
+        }
+        if (v1) {
+            vref1 = v1;
+        } else {
+            vref1 = *vbegin;
+            if (!s.Null()) {
+                unsigned int count = variants.size();
+                if (count > 0) {
+                    for (unsigned int i = 0; i < count; i++) {
+                        if (variants[i]->Song() == s) {
+                            vref1 = variants[i];
+                            return true;
+                        }
+                    }
+                }
             }
         }
-    }
-
-    if (!b8)
-        return false;
-
-    // Fallback: try prev candidates from p2 to p1
-    FOREACH (var2, p2->Variants()) {
-        if (v2 && *var2 != v2)
-            continue;
-        if (!s.Null() && (*var2)->Genre() != s)
-            continue;
-        FOREACH (cand, (*var2)->mPrevCandidates) {
-            const MoveVariant *candVar = cand->mValue.mVariant;
-            if (candVar && candVar->Parent() == p1) {
-                if (v1 && candVar != v1)
-                    continue;
-                if (!s.Null() && candVar->Genre() != s)
-                    continue;
-                vref1 = candVar;
-                vref2 = *var2;
-                return true;
+        return true;
+    } else {
+        if (p2) {
+            // Only p2 set
+            const std::vector<MoveVariant *> &variants = p2->Variants();
+            MoveVariant *const *vbegin = &*variants.begin();
+            MoveVariant *const *vend = &*variants.end();
+            if (vbegin == vend) {
+                return false;
             }
+            if (v2) {
+                vref2 = v2;
+            } else {
+                vref2 = *vbegin;
+                if (!s.Null()) {
+                    unsigned int count = variants.size();
+                    if (count > 0) {
+                        for (unsigned int i = 0; i < count; i++) {
+                            if (variants[i]->Song() == s) {
+                                vref2 = variants[i];
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+            return true;
         }
     }
-
     return false;
 }

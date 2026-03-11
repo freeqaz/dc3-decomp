@@ -1,6 +1,7 @@
 #include "hamobj/HamIKEffector.h"
 #include "HamIKEffector.h"
 #include "char/CharPollable.h"
+#include "char/CharUtl.h"
 #include "char/CharWeightable.h"
 #include "char/Character.h"
 #include "math/Mtx.h"
@@ -292,126 +293,161 @@ float HamIKEffector::GetGroundHeight(RndTransformable *t) {
 }
 
 void HamIKEffector::Poll() {
-    // Check that mEffector is non-null
-    if (!(mEffector != nullptr)) return;
+    if (!mEffector)
+        return;
 
-    // Get type and check it's not forearm (4)
     EffectorType t = GetType();
-    if (!(t != kEffectorTypeForearm)) return;
+    if (t == kEffectorTypeForearm)
+        return;
 
-    // Check that mSkeleton is non-null
-    if (!(mSkeleton != nullptr)) return;
-
-    // Get weight and check it's positive
     float weight = WeightOwner()->Weight();
-    if (!(weight > 0.0f)) return;
+    if (!mSkeleton)
+        return;
+    if (weight == 0.0f)
+        return;
 
-    // Check hand with elbow case first
-    if ((t == kEffectorTypeHand) && (mElbow != nullptr)) {
-        // Hand with elbow - call DoFancyElbow and return
-        QuatXfm q;
-        q.v.Zero();
-        q.q.Reset();
-        Transform neutral;
-        mSkeleton->NeutralWorldXfm(mEffector, neutral);
-        Normalize(neutral.m, neutral.m);
-        ApplyConstraints(q, neutral, this);
-        // The binary calls DoFancyElbow here, but we don't have that function
-        // So we just continue with normal processing
-    }
+    // Determine which transformable to use for IK: mFinger if set, otherwise mEffector
+    RndTransformable *finger = mFinger ? mFinger.Ptr() : mEffector.Ptr();
 
-    // Weight check with failure
-    if (weight != 1.0f) {
-        // In original: MILO_ASSERT(weight == 1)
-        // Just skip if weight != 1
-        if (weight > 1.0f) return;
-    }
-
-    // Get neutral world transform
+    // Get neutral world transform for the finger/effector
     Transform neutral;
-    mSkeleton->NeutralWorldXfm(mEffector, neutral);
+    mSkeleton->NeutralWorldXfm(finger, neutral);
     Normalize(neutral.m, neutral.m);
 
-    // Initialize constraint quaternion
-    QuatXfm q;
-    q.q.Reset();
+    // Convert neutral to QuatXfm (saves position + orientation)
+    QuatXfm neutralQ(neutral);
 
-    // Apply constraints to get weighted orientation
+    // Initialize constraint accumulator to zero
+    QuatXfm q;
+    q.v.x = 0.0f;
+    q.v.y = 0.0f;
+    q.v.z = 0.0f;
+    q.q.x = 0.0f;
+    q.q.y = 0.0f;
+    q.q.z = 0.0f;
+    q.q.w = 0.0f;
+
+    // Apply constraints
     float totalWeight = ApplyConstraints(q, neutral, this);
 
-    // If we don't have full weight, blend with current transform
-    q.v.Zero();
-    if (totalWeight < 1.0f) {
-        if ((totalWeight != 0.0f) || (t != kEffectorTypeNone)) {
-            // Get current effector world transform
-            Transform xfm = mEffector->WorldXfm();
+    // Hand with elbow: call DoFancyElbow and return
+    if (t == kEffectorTypeHand && mElbow != nullptr) {
+        DoFancyElbow(q, totalWeight);
+    } else {
+        // Assert weight == 1
+        if (weight != 1.0f) {
+            MILO_ASSERT(weight == 1, 0x135);
+        }
 
-            // Special handling for ankles and pelvis
-            if ((t == kEffectorTypeAnkle) || (t == kEffectorTypePelvis)) {
-                // Get ground height
-                RndTransformable *ground = nullptr;
-                if (mCharacter != nullptr) {
-                    ground = mCharacter.Ptr();
-                }
+        if (totalWeight < 1.0f) {
+            if (totalWeight == 0.0f && t == kEffectorTypeNone)
+                goto done;
+
+            // Get current world transform of finger/effector as QuatXfm
+            QuatXfm effQ(finger->WorldXfm());
+
+            if (t == kEffectorTypeAnkle || t == kEffectorTypePelvis) {
+                RndTransformable *ground = mCharacter != nullptr
+                    ? (RndTransformable *)mCharacter.Ptr()
+                    : (RndTransformable *)nullptr;
                 float groundHeight = GetGroundHeight(ground);
 
                 if (t == kEffectorTypePelvis) {
-                    // Pelvis: complex knee/ankle interpolation (see Ghidra lines 109-139)
-                    // For now, just leave xfm as-is
-                } else if (t == kEffectorTypeAnkle) {
-                    // Ankle: interpolate with ground clamping
-                    float clampFactor = ((xfm.v.z - groundHeight) - 5.0f) * 0.09090909f;
-                    clampFactor = Max(clampFactor, 0.0f);
-                    if (clampFactor > 1.0f) clampFactor = 1.0f;
-
-                    Interp(q.v, xfm.v, clampFactor, q.v);
-                    Interp(q.q, xfm.m, clampFactor, q.q);
-
-                    if (xfm.v.z < groundHeight) {
-                        xfm.v.z = groundHeight;
+                    // Find knee and ankle bones for pelvis interpolation
+                    RndTransformable *knee =
+                        CharUtlFindBoneTrans("bone_L-knee", Dir());
+                    RndTransformable *ankle =
+                        CharUtlFindBoneTrans("bone_L-ankle", Dir());
+                    if (knee != nullptr && ankle != nullptr) {
+                        Vector3 localPos;
+                        mSkeleton->NeutralLocalPos(ankle, localPos);
+                        float ankleLen = localPos.x;
+                        mSkeleton->NeutralLocalPos(knee, localPos);
+                        float kneeLen = localPos.x;
+                        float lowerBound = kneeLen * 0.3f + ankleLen;
+                        float blend =
+                            (effQ.v.y - groundHeight - lowerBound)
+                            / (kneeLen * 0.8f + ankleLen - lowerBound);
+                        if (blend < 0.0f)
+                            blend = 0.0f;
+                        if (blend > 1.0f)
+                            blend = 1.0f;
+                        float ratio =
+                            (ankle->WorldXfm().v.z + knee->WorldXfm().v.z)
+                            / (kneeLen + ankleLen);
+                        effQ.v.y =
+                            ((ratio - 1.0f) * blend + 1.0f)
+                            * (effQ.v.y - groundHeight)
+                            + groundHeight;
                     }
+                } else if (t == kEffectorTypeAnkle) {
+                    // Save effector position for later restore
+                    Vector3 savedPos = effQ.v;
+                    float clampFactor =
+                        (neutralQ.v.y - groundHeight - 5.0f) * 0.09090909f;
+                    if (clampFactor < 0.0f)
+                        clampFactor = 0.0f;
+                    if (clampFactor > 1.0f)
+                        clampFactor = 1.0f;
+                    Interp(neutralQ.v, effQ.v, clampFactor, q.v);
+                    Interp(neutralQ.q, effQ.q, clampFactor, q.q);
+                    if (effQ.v.y < groundHeight) {
+                        effQ.v.y = groundHeight;
+                    }
+                    effQ.v.x = savedPos.x;
                 }
             }
 
             // Blend with remaining weight
             float remaining = 1.0f - totalWeight;
-            ScaleAdd(q.v, xfm.v, remaining, q.v);
-            ScaleAddEq(q.q, xfm.m, remaining);
+            q.v.x += effQ.v.x * remaining;
+            q.v.y += effQ.v.y * remaining;
+            ScaleAddEq(q.q, effQ.q, 1.0f - totalWeight);
             totalWeight += remaining;
         }
-    }
 
-    // Normalize the accumulated result
-    Scale(q.v, 1.0f / totalWeight, q.v);
-    Normalize(q.q, q.q);
+        // Normalize the accumulated result
+        q.v.x *= 1.0f / totalWeight;
+        q.v.y *= 1.0f / totalWeight;
+        Normalize(q.q, q.q);
 
-    // Build final transform
-    Transform finalXfm;
-    finalXfm.v = q.v;
-    MakeRotMatrix(q.q, finalXfm.m);
+        // Build final transform
+        Transform finalXfm;
+        finalXfm.v.x = q.v.x;
+        finalXfm.v.y = q.v.y;
+        finalXfm.v.z = q.v.z;
+        MakeRotMatrix(q.q, finalXfm.m);
 
-    // Handle finger transform (mFinger vs mEffector)
-    RndTransformable *finger = mFinger != nullptr ? mFinger.Ptr() : mEffector.Ptr();
-    if (finger != mEffector) {
-        // Get finger's parent
-        RndTransformable *fingerParent = finger->TransParent();
-        if (fingerParent != nullptr) {
-            // Compute transform from finger to effector
-            Transform fingerInv;
-            FastInvert(finger->WorldXfm(), fingerInv);
-            Transform temp;
-            Multiply(fingerParent->WorldXfm(), fingerInv, temp);
-            Multiply(temp, finalXfm, finalXfm);
+        // Handle finger != effector case
+        if (finger != mEffector) {
+            Transform inv;
+            if (finger->TransParent() == mEffector.Ptr()) {
+                // Finger's parent is the effector: use local xfm
+                FastInvert(finger->LocalXfm(), inv);
+            } else {
+                // General case: compute relative transform
+                FastInvert(finger->WorldXfm(), inv);
+                Multiply(mEffector->WorldXfm(), inv, inv);
+            }
+            Multiply(inv, finalXfm, finalXfm);
         }
-    }
 
-    // Set effector world transform
-    mEffector->SetWorldXfm(finalXfm);
+        // If mOther exists, set world xfm, poll other, then re-read
+        if (mOther) {
+            mEffector->SetWorldXfm(finalXfm);
+            mOther->Poll();
+            finalXfm = mEffector->WorldXfm();
+        }
 
-    // Apply IK elbow for ankles/hands
-    if ((t == kEffectorTypeAnkle) || (t == kEffectorTypeHand)) {
-        IKElbow(q.v);
+        // Apply IK elbow for ankles/hands
+        if (t == kEffectorTypeAnkle || t == kEffectorTypeHand) {
+            IKElbow(finalXfm.v);
+        }
+
+        // Set effector world transform
+        mEffector->SetWorldXfm(finalXfm);
     }
+done:;
 }
 
 void HamIKEffector::ComputeHandPullAndQuat(

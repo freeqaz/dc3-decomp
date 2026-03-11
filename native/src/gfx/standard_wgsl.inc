@@ -258,12 +258,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     if (material.useTexture > 0.5) {
         let texColor = textureSample(diffuseTex, diffuseSampler, in.uv);
         // Font textures (DXT5): glyph shape is in alpha, RGB is garbage.
-        // Text uses kPreMultAlpha blend (src*1 + dst*(1-srcA)), so RGB must
-        // be premultiplied by alpha. Without this, non-glyph pixels (texA=0)
-        // have RGB=1 and add white to the framebuffer instead of being transparent.
+        // Use alpha as grayscale RGB when useAlphaAsRGB is set.
         if (material.useAlphaAsRGB > 0.5) {
-            let textAlpha = max(matAlpha, in.color.a) * texColor.a;
-            baseColor = vec4f(in.color.rgb * textAlpha, textAlpha);
+            baseColor = vec4f(baseColor.rgb * texColor.a, baseColor.a * texColor.a);
         } else {
             baseColor = vec4f(baseColor.rgb * texColor.rgb, baseColor.a * texColor.a);
         }

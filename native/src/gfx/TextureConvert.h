@@ -35,8 +35,9 @@ wgpu::TextureFormat MapBitmapFormat(const RndBitmap& bmp, bool hasBCSupport);
 
 // === Xbox 360 data conversion ===
 
-// 16-bit byte-swap for Xbox BE DXT data (in-place)
-void ByteSwapDXT(uint8_t* data, size_t size);
+// 16-bit byte-swap for Xbox BE DXT data (in-place).
+// dxtType: pass kDXT5 to fix alpha endpoint byte order.
+void ByteSwapDXT(uint8_t* data, size_t size, int dxtType = 0);
 
 // Untile Milo's custom tiled layout (mOrder & 4) to linear
 // Allocates and returns new buffer; caller owns it

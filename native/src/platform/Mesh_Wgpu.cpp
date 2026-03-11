@@ -72,6 +72,7 @@ struct GpuMeshData {
     bool skinned = false;
     bool uploaded = false;
     int32_t depthBias = 0;  // set by viewer for combined meshes
+    std::string debugLabel;  // GPU debug label (for text meshes etc.)
 };
 
 static std::unordered_map<RndMesh*, GpuMeshData> sMeshGpuData;
@@ -119,6 +120,12 @@ void CleanupGpuMesh(RndMesh* mesh) {
     sMeshGpuData.erase(mesh);
 }
 
+// Set a debug label for GPU buffer names + frame capture, without registering
+// the mesh in an ObjectDir (which would cause double-draws during traversal).
+void SetMeshDebugLabel(RndMesh* mesh, const char* label) {
+    sMeshGpuData[mesh].debugLabel = label;
+}
+
 // Invalidate GPU cache when mesh data changes (called from RndMesh::Sync)
 void RndMesh::OnSync(int flags) {
     auto it = sMeshGpuData.find(this);
@@ -137,6 +144,16 @@ struct DeferredDraw {
 static std::vector<DeferredDraw> sTransparentQueue;
 static bool sFlushingTransparentQueue = false;
 
+// Text draw queue — text meshes are collected during the frame and drawn last
+// so they appear on top of other UI elements (matching Xbox draw order where
+// text was always drawn via deferred transparent queue).
+struct TextDraw {
+    RndMesh* mesh;
+    RndCam* cam;
+    RndEnviron* env;
+};
+static std::vector<TextDraw> sTextQueue;
+
 static bool IsTransparentBlend(int blend) {
     return blend == BaseMaterial::kBlendSrcAlpha ||
            blend == BaseMaterial::kBlendSrcAlphaAdd ||
@@ -150,6 +167,26 @@ static void DrawMeshImmediate(RndMesh* mesh);
 
 bool HasTransparentDraws() {
     return !sTransparentQueue.empty();
+}
+
+// Flush text draws — called from EndDrawing before transparent flush
+void FlushTextDraws() {
+    if (sTextQueue.empty()) return;
+    std::vector<TextDraw> draws;
+    draws.swap(sTextQueue);
+    RndCam* savedCam = RndCam::Current();
+    RndEnviron* savedEnv = RndEnviron::Current();
+    for (auto& td : draws) {
+        if (td.env && td.env != RndEnviron::Current())
+            td.env->Select(nullptr);
+        if (td.cam && td.cam != RndCam::Current())
+            td.cam->Select();
+        DrawMeshImmediate(td.mesh);
+    }
+    if (savedCam && savedCam != RndCam::Current())
+        savedCam->Select();
+    if (savedEnv && savedEnv != RndEnviron::Current())
+        savedEnv->Select(nullptr);
 }
 
 bool IsFlushingTransparentDraws() {
@@ -193,6 +230,14 @@ void FlushTransparentDraws() {
         savedEnv->Select(nullptr);
 
     sFlushingTransparentQueue = false;
+}
+
+// Get a mesh's effective label for GPU debugging: debugLabel if set, otherwise Name().
+static const char* MeshLabel(RndMesh* mesh) {
+    auto it = sMeshGpuData.find(mesh);
+    if (it != sMeshGpuData.end() && !it->second.debugLabel.empty())
+        return it->second.debugLabel.c_str();
+    return mesh->Name();
 }
 
 // Set depth bias for a mesh (used by viewer to push combined meshes behind splits)
@@ -378,8 +423,9 @@ static void ComputeMikkTangents(void* verts, const uint16_t* indices,
 static bool EnsureMeshUploaded(RndMesh* mesh) {
     if (!gWgpuRnd) return false;
 
+    bool isTextMesh = !mesh->Name()[0];
     auto it = sMeshGpuData.find(mesh);
-    if (it != sMeshGpuData.end() && it->second.uploaded) {
+    if (it != sMeshGpuData.end() && it->second.uploaded && !isTextMesh) {
         return true;
     }
 
@@ -448,7 +494,7 @@ static bool EnsureMeshUploaded(RndMesh* mesh) {
         FixZeroAlpha(verts, unpacked);
 
         wgpu::BufferDescriptor vbDesc{};
-        vbDesc.label = mesh->Name();  // Dawn copies the string
+        vbDesc.label = MeshLabel(mesh);
         vbDesc.size = unpacked * sizeof(GpuVertexSkinned);
         vbDesc.usage = wgpu::BufferUsage::Vertex | wgpu::BufferUsage::CopyDst;
         vertexBuf = gWgpuRnd->Gpu().Device().CreateBuffer(&vbDesc);
@@ -480,7 +526,7 @@ static bool EnsureMeshUploaded(RndMesh* mesh) {
         FixZeroAlpha(verts, unpacked);
 
         wgpu::BufferDescriptor vbDesc{};
-        vbDesc.label = mesh->Name();  // Dawn copies the string
+        vbDesc.label = MeshLabel(mesh);
         vbDesc.size = unpacked * sizeof(GpuVertex);
         vbDesc.usage = wgpu::BufferUsage::Vertex | wgpu::BufferUsage::CopyDst;
         vertexBuf = gWgpuRnd->Gpu().Device().CreateBuffer(&vbDesc);
@@ -491,7 +537,7 @@ static bool EnsureMeshUploaded(RndMesh* mesh) {
     size_t ibAlignedSize = (numIndices * sizeof(uint16_t) + 3) & ~3u;
 
     wgpu::BufferDescriptor ibDesc{};
-    ibDesc.label = mesh->Name();  // Dawn copies the string
+    ibDesc.label = MeshLabel(mesh);
     ibDesc.size = ibAlignedSize;
     ibDesc.usage = wgpu::BufferUsage::Index | wgpu::BufferUsage::CopyDst;
     wgpu::Buffer indexBuf = gWgpuRnd->Gpu().Device().CreateBuffer(&ibDesc);
@@ -550,11 +596,11 @@ void RndMesh::DrawShowing() {
         return;
     }
 
+    // Text meshes created by RndText::FontMap have empty names (not registered in ObjectDir).
+    // Draw inline — the engine's draw order already handles layering via PanelDir draw lists.
+
     // Defer transparent meshes for back-to-front sorting.
-    // Exception: text meshes (no name) must draw immediately because RndText::DrawShowing
-    // sets font color override on the material, then restores it after drawing. If deferred,
-    // the material state is wrong by the time FlushTransparentDraws runs.
-    bool isTextMeshEarly = !Name()[0];
+    bool isTextMeshEarly = false; // Text already queued above
     if (false && IsTransparentBlend(mat->GetBlend()) && !isTextMeshEarly && !NoTransparentDefer()) {
         float distSq = 0.0f;
         RndCam* cam = RndCam::Current();
@@ -592,7 +638,7 @@ static void DrawMeshImmediate(RndMesh* mesh) {
 
     RndMat* mat = mesh->Mat();
     if (!mat) {
-        if (capturing) FrameCapture::Get().AddSkip(mesh->Name(), "no material");
+        if (capturing) FrameCapture::Get().AddSkip(MeshLabel(mesh), "no material");
         return;
     }
 
@@ -638,7 +684,7 @@ static void DrawMeshImmediate(RndMesh* mesh) {
 
     // Ensure mesh data is on GPU
     if (!EnsureMeshUploaded(mesh)) {
-        if (capturing) FrameCapture::Get().AddSkip(mesh->Name(), "upload failed");
+        if (capturing) FrameCapture::Get().AddSkip(MeshLabel(mesh), "upload failed");
         return;
     }
 
@@ -646,99 +692,42 @@ static void DrawMeshImmediate(RndMesh* mesh) {
     auto& pass = gWgpuRnd->CurrentPass();
     bool skinned = meshData.skinned;
 
-    // Text meshes (created by RndText::FontMap) have no name — detect early for pipeline config.
-    // The DC3 fonts are named "Eagle-Light" so we can't exclude by material name.
+    // Text meshes (created by RndText::FontMap) have empty names (not registered in ObjectDir).
+    // Debug labels are stored in GpuMeshData::debugLabel for GPU debugging.
     bool isTextMesh = !mesh->Name()[0];
 
-    // Frame-250 diagnostic for text meshes — includes vertex bounds + transform
-    {
-        extern int gDebugFrameID;
-        static int sTextDrawCount = 0;
-        if (gDebugFrameID == 250 && isTextMesh) {
-            sTextDrawCount++;
-            auto& verts = mesh->Verts();
-            float minX = 1e9f, maxX = -1e9f, minY = 1e9f, maxY = -1e9f, minZ = 1e9f, maxZ = -1e9f;
-            for (auto& v : verts) {
-                if (v.pos.x < minX) minX = v.pos.x;
-                if (v.pos.x > maxX) maxX = v.pos.x;
-                if (v.pos.y < minY) minY = v.pos.y;
-                if (v.pos.y > maxY) maxY = v.pos.y;
-                if (v.pos.z < minZ) minZ = v.pos.z;
-                if (v.pos.z > maxZ) maxZ = v.pos.z;
-            }
+    // Text layout diagnostic — limited count
+    if (isTextMesh) {
+        static int sDiagCount = 0;
+        if (sDiagCount < 5) {
+            sDiagCount++;
             const Transform& wxfm = mesh->WorldXfm();
-            printf("DC3_TEXT_MESH [frame 250] draw#%d verts=%d faces=%d blend=%d "
-                   "mat='%s' showing=%d\n"
-                   "  localBounds: X[%.1f,%.1f] Y[%.1f,%.1f] Z[%.1f,%.1f]\n"
-                   "  worldPos=(%.1f,%.1f,%.1f)\n"
-                   "  worldMtx: [%.3f %.3f %.3f] [%.3f %.3f %.3f] [%.3f %.3f %.3f]\n",
-                   sTextDrawCount, (int)verts.size(), (int)mesh->Faces().size(),
-                   (int)mat->GetBlend(), mat->Name(), mesh->Showing(),
-                   minX, maxX, minY, maxY, minZ, maxZ,
-                   wxfm.v.x, wxfm.v.y, wxfm.v.z,
-                   wxfm.m.x.x, wxfm.m.x.y, wxfm.m.x.z,
-                   wxfm.m.y.x, wxfm.m.y.y, wxfm.m.y.z,
-                   wxfm.m.z.x, wxfm.m.z.y, wxfm.m.z.z);
-            // Also log first few vertex positions
-            for (int vi = 0; vi < std::min((int)verts.size(), 4); vi++) {
-                printf("  v[%d] pos=(%.2f,%.2f,%.2f) uv=(%.3f,%.3f) color=(%.2f,%.2f,%.2f,%.2f)\n",
-                       vi, verts[vi].pos.x, verts[vi].pos.y, verts[vi].pos.z,
-                       verts[vi].tex.x, verts[vi].tex.y,
-                       verts[vi].color.red, verts[vi].color.green,
-                       verts[vi].color.blue, verts[vi].color.alpha);
-            }
-            // Log parent RndText info (mSize, parent chain)
             RndTransformable* parent = mesh->TransParent();
-            if (parent) {
-                const Transform& pxfm = parent->WorldXfm();
-                printf("  parent='%s' class='%s' worldPos=(%.1f,%.1f,%.1f)\n"
-                       "  parentMtx: [%.3f %.3f %.3f] [%.3f %.3f %.3f] [%.3f %.3f %.3f]\n",
-                       parent->Name(), parent->ClassName().Str(),
-                       pxfm.v.x, pxfm.v.y, pxfm.v.z,
-                       pxfm.m.x.x, pxfm.m.x.y, pxfm.m.x.z,
-                       pxfm.m.y.x, pxfm.m.y.y, pxfm.m.y.z,
-                       pxfm.m.z.x, pxfm.m.z.y, pxfm.m.z.z);
-                // If parent is RndText, log the style size
-                RndText* text = dynamic_cast<RndText*>(parent);
-                if (text && text->NumStyles() > 0) {
-                    printf("  textSize=%.1f textWidth=%.1f\n",
-                           text->Styles()[0].mSize, text->Width());
-                }
-                // Also log grandparent
-                RndTransformable* gp = parent->TransParent();
-                if (gp) {
-                    const Transform& gpxfm = gp->WorldXfm();
-                    printf("  grandparent='%s' class='%s' worldPos=(%.1f,%.1f,%.1f)\n"
-                           "  gpMtx: [%.3f %.3f %.3f] [%.3f %.3f %.3f] [%.3f %.3f %.3f]\n",
-                           gp->Name(), gp->ClassName().Str(),
-                           gpxfm.v.x, gpxfm.v.y, gpxfm.v.z,
-                           gpxfm.m.x.x, gpxfm.m.x.y, gpxfm.m.x.z,
-                           gpxfm.m.y.x, gpxfm.m.y.y, gpxfm.m.y.z,
-                           gpxfm.m.z.x, gpxfm.m.z.y, gpxfm.m.z.z);
-                }
-            }
-            // Log camera info
             RndCam* cam = RndCam::Current();
+            printf("TEXT_POS[f%d]: worldPos=(%.1f,%.1f,%.1f) parent='%s' cam='%s' "
+                   "yFov=%.3f near=%.1f far=%.1f verts=%d\n",
+                   sFrameCounter, wxfm.v.x, wxfm.v.y, wxfm.v.z,
+                   parent ? parent->Name() : "<null>",
+                   cam ? cam->Name() : "<null>",
+                   cam ? cam->YFov() : -1.0f,
+                   cam ? cam->NearPlane() : -1.0f,
+                   cam ? cam->FarPlane() : -1.0f,
+                   (int)mesh->Verts().size());
             if (cam) {
-                const Transform& camXfm = cam->WorldXfm();
-                printf("  cam='%s' pos=(%.1f,%.1f,%.1f) near=%.1f far=%.1f yfov=%.4f\n",
-                       cam->Name(), camXfm.v.x, camXfm.v.y, camXfm.v.z,
-                       cam->NearPlane(), cam->FarPlane(), cam->YFov());
+                Transform viewXfm;
+                Hmx::Matrix4 projMtx;
+                cam->GetViewProjectXfms(viewXfm, projMtx);
+                printf("  proj: xx=%.4f yy=%.4f zz=%.4f ww=%.4f zw=%.4f wz=%.4f\n",
+                       projMtx.x.x, projMtx.y.y, projMtx.z.z, projMtx.w.w,
+                       projMtx.z.w, projMtx.w.z);
+                printf("  view.v=(%.1f,%.1f,%.1f) localProj.m.xx=%.4f localProj.v.x=%.4f\n",
+                       viewXfm.v.x, viewXfm.v.y, viewXfm.v.z,
+                       cam->LocalProjectXfm().m.x.x, cam->LocalProjectXfm().v.x);
+                // Show screen rect
+                const Hmx::Rect& sr = cam->GetScreenRect();
+                printf("  screenRect=(%.3f,%.3f,%.3f,%.3f)\n",
+                       sr.x, sr.y, sr.w, sr.h);
             }
-        }
-        // Log card background meshes at frame 500 to diagnose overbright
-        if (gDebugFrameID == 500 && !isTextMesh &&
-            (strstr(mesh->Name(), "frames_bg") || strstr(mesh->Name(), "frames_glow") ||
-             !strcmp(mesh->Name(), "frame.mesh") || strstr(mesh->Name(), "mod_frame"))) {
-            RndTex* diffTex = mat->GetDiffuseTex();
-            printf("DC3_CARD_BG [f500] mesh='%s' mat='%s' blend=%d "
-                   "color=(%.2f,%.2f,%.2f,%.2f) tex=%s(%dx%d) prelit=%d\n",
-                   mesh->Name(), mat->Name(), (int)mat->GetBlend(),
-                   mat->GetColor().red, mat->GetColor().green,
-                   mat->GetColor().blue, mat->GetColor().alpha,
-                   diffTex ? diffTex->Name() : "<null>",
-                   diffTex ? diffTex->Width() : 0, diffTex ? diffTex->Height() : 0,
-                   mat->Prelit());
         }
     }
 
@@ -1064,7 +1053,7 @@ static void DrawMeshImmediate(RndMesh* mesh) {
     // --- Capture record ---
     if (capturing) {
         auto& rec = FrameCapture::Get().AddDraw();
-        rec.meshName = mesh->Name();
+        rec.meshName = MeshLabel(mesh);
         rec.materialName = mat->Name();
         RndCam* cam = RndCam::Current();
         rec.cameraName = cam ? cam->Name() : nullptr;

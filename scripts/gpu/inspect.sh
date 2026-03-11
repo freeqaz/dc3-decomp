@@ -10,10 +10,17 @@
 # Commands:
 #   info <file>                Show capture metadata (GPU, pipelines, memory)
 #   summary <file>             Summarize Vulkan API calls by frequency
-#   convert <file> [-o out]    Convert to JSON Lines (default: stdout)
+#   convert <file> [-o out]    Convert to JSON (default: stdout)
 #   extract <file> [-d dir]    Extract SPIR-V shaders to directory
 #   calls <file> [pattern]     List Vulkan calls matching a pattern (e.g. "vkCmdDraw")
 #   shaders <file>             Extract + disassemble all shaders
+#   query <file.jsonl> [opts]  Query converted JSON (see query_trace.py --help)
+#   pipelines <file>           Show all pipeline creation details (blend, depth, etc.)
+#   draws <file>               Show draw calls with pipeline context
+#   labels <file> [-g pat]     Show debug labels, optionally filtered
+#
+# The query/pipelines/draws/labels commands work on converted .jsonl files.
+# Pass a .gfxr file and it will auto-convert to a cached .jsonl first.
 #
 # Examples:
 #   scripts/gpu/inspect.sh info /tmp/gpu_capture.gfxr
@@ -22,6 +29,11 @@
 #   scripts/gpu/inspect.sh extract /tmp/gpu_capture.gfxr -d /tmp/shaders
 #   scripts/gpu/inspect.sh calls /tmp/gpu_capture.gfxr vkCmdDraw
 #   scripts/gpu/inspect.sh shaders /tmp/gpu_capture.gfxr
+#   scripts/gpu/inspect.sh pipelines /tmp/gpu_capture.gfxr
+#   scripts/gpu/inspect.sh draws /tmp/gpu_capture.gfxr
+#   scripts/gpu/inspect.sh labels /tmp/gpu_capture.gfxr -g "Text"
+#   scripts/gpu/inspect.sh query /tmp/trace.jsonl --call vkCmdDrawIndexed --limit 10
+#   scripts/gpu/inspect.sh query /tmp/capture.gfxr --call CreateGraphicsPipelines --field pColorBlendState
 #
 # Source: ../gpu/gfxreconstruct/ (https://github.com/LunarG/gfxreconstruct)
 
@@ -35,6 +47,7 @@ GFXR_TOOLS="$GPU_DIR/gfxreconstruct/build/tools"
 GFXR_INFO="$GFXR_TOOLS/info/gfxrecon-info"
 GFXR_CONVERT="$GFXR_TOOLS/convert/gfxrecon-convert"
 GFXR_EXTRACT="$GFXR_TOOLS/extract/gfxrecon-extract"
+QUERY_TOOL="$SCRIPT_DIR/query_trace.py"
 
 check_tools() {
     for tool in "$GFXR_INFO" "$GFXR_CONVERT" "$GFXR_EXTRACT"; do
@@ -44,6 +57,25 @@ check_tools() {
             exit 1
         fi
     done
+}
+
+# Auto-convert .gfxr to .jsonl, caching the result next to the original.
+# Returns the path to the .jsonl file.
+ensure_jsonl() {
+    local file="$1"
+    if [[ "$file" == *.jsonl ]] || [[ "$file" == *.json ]]; then
+        echo "$file"
+        return
+    fi
+    # .gfxr file — convert to .jsonl next to it (cached)
+    local jsonl="${file%.gfxr}.jsonl"
+    if [[ ! -f "$jsonl" ]] || [[ "$file" -nt "$jsonl" ]]; then
+        echo "Converting $(basename "$file") -> $(basename "$jsonl") ..." >&2
+        check_tools
+        "$GFXR_CONVERT" --output "$jsonl" "$file" >&2 2>&1
+        echo "Done ($(du -h "$jsonl" | cut -f1))." >&2
+    fi
+    echo "$jsonl"
 }
 
 usage() {
@@ -138,6 +170,38 @@ cmd_shaders() {
     fi
 }
 
+cmd_query() {
+    local file="$1"
+    shift
+    local jsonl
+    jsonl=$(ensure_jsonl "$file")
+    python3 "$QUERY_TOOL" "$jsonl" "$@"
+}
+
+cmd_pipelines() {
+    local file="$1"
+    shift
+    local jsonl
+    jsonl=$(ensure_jsonl "$file")
+    python3 "$QUERY_TOOL" "$jsonl" --pipelines "$@"
+}
+
+cmd_draws() {
+    local file="$1"
+    shift
+    local jsonl
+    jsonl=$(ensure_jsonl "$file")
+    python3 "$QUERY_TOOL" "$jsonl" --draws "$@"
+}
+
+cmd_labels() {
+    local file="$1"
+    shift
+    local jsonl
+    jsonl=$(ensure_jsonl "$file")
+    python3 "$QUERY_TOOL" "$jsonl" --labels "$@"
+}
+
 # Main
 if [[ $# -eq 0 ]]; then
     usage
@@ -152,6 +216,13 @@ case "$CMD" in
         check_tools
         if [[ $# -eq 0 ]]; then
             echo "Error: capture file required" >&2
+            exit 1
+        fi
+        "cmd_$CMD" "$@"
+        ;;
+    query|pipelines|draws|labels)
+        if [[ $# -eq 0 ]]; then
+            echo "Error: capture/jsonl file required" >&2
             exit 1
         fi
         "cmd_$CMD" "$@"

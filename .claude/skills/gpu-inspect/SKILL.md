@@ -17,7 +17,7 @@ Analyze GFXReconstruct (.gfxr) capture files. Extract metadata, Vulkan API call 
 
 ## Commands
 
-The wrapper script is at `scripts/gpu/inspect.sh`.
+The wrapper script is at `scripts/gpu/inspect.sh`. The query engine is at `scripts/gpu/query_trace.py`.
 
 ### info — Capture Metadata
 
@@ -25,17 +25,6 @@ Shows GPU, Vulkan version, memory allocations, pipeline counts.
 
 ```bash
 scripts/gpu/inspect.sh info /tmp/capture.gfxr
-```
-
-Example output:
-```
-Vulkan application info:
-  Engine name:         Dawn
-  Target API version:  1.1.0
-Vulkan physical device info:
-  Device name:         NVIDIA GeForce RTX 3090
-Vulkan pipeline info:
-  Total graphics pipelines:   3
 ```
 
 ### summary — API Call Frequency
@@ -46,88 +35,164 @@ Lists all Vulkan API calls sorted by count.
 scripts/gpu/inspect.sh summary /tmp/capture.gfxr
 ```
 
-Example output:
-```
-     53 vkCmdPipelineBarrier
-     34 vkCmdCopyBuffer
-     28 vkUpdateDescriptorSets
-      6 vkCreateShaderModule
-      3 vkCmdDrawIndexed
-=== Total calls: 431 ===
-```
+### convert — JSON Export
 
-### convert — JSON Lines Export
-
-Convert the binary capture to machine-readable JSON Lines format.
+Convert the binary capture to JSON format (pretty-printed JSON array).
 
 ```bash
-# Stream to stdout
-scripts/gpu/inspect.sh convert /tmp/capture.gfxr
-
-# Save to file
+# Save to file (recommended for large captures)
 scripts/gpu/inspect.sh convert /tmp/capture.gfxr -o /tmp/trace.jsonl
-
-# Pipe through jq for pretty-printing
-scripts/gpu/inspect.sh convert /tmp/capture.gfxr | jq .
 ```
 
-Each line is a JSON object:
-```json
-{"index":307,"function":{"name":"vkCmdDraw","thread":2,"args":{"commandBuffer":80,...}}}
+**Important**: gfxrecon-convert outputs a pretty-printed JSON array (NOT JSON Lines), so files can be very large (100MB+). Use `query`, `pipelines`, `draws`, or `labels` commands to efficiently query the converted output instead of grepping raw JSON.
+
+### pipelines — Pipeline Creation Details
+
+**Recommended for blend/depth/rasterization debugging.** Shows all `vkCreateGraphicsPipelines` calls with human-readable output: shader stages, vertex input, topology, rasterization, depth/stencil, color blend state, and dynamic state.
+
+```bash
+scripts/gpu/inspect.sh pipelines /tmp/capture.gfxr
 ```
 
-This is ideal for scripted analysis — grep for specific calls, extract arguments, count patterns. You can pipe to `jq`, `grep`, or Python scripts.
+Example output:
+```
+=== Pipeline [2010] handle=1313 ===
+  Stages: VERTEX, FRAGMENT
+  Shader modules: [1310, 1311]
+  Vertex binding 0: stride=64
+    location=0 offset=0 R32G32B32_SFLOAT
+    location=1 offset=12 R32G32B32_SFLOAT
+  Topology: TRIANGLE_LIST
+  Raster: cull=0x00000002 front=COUNTER_CLOCKWISE
+  Depth: test=False write=False op=ALWAYS stencil=False
+  Blend: logicOp=False, 1 attachment(s)
+    [0] BLEND ON: color=SRC_ALPHA ADD ONE_MINUS_SRC_ALPHA | alpha=SRC_ALPHA ADD ONE_MINUS_SRC_ALPHA | mask=0x0000000f
+```
+
+Accepts .gfxr files (auto-converts, caches the .jsonl next to it).
+
+### draws — Draw Call Listing
+
+Shows all draw calls with their bound pipeline handle and render target dimensions. Cross-reference pipeline handles with `pipelines` output to see blend/depth state.
+
+```bash
+scripts/gpu/inspect.sh draws /tmp/capture.gfxr
+```
+
+Example output:
+```
+[19749] vkCmdDrawIndexed: 54 indices, 1 instances, first=0, pipeline=2417 render=1280x720
+[19896] vkCmdDrawIndexed: 2943 indices, 1 instances, first=0, pipeline=2490 render=1280x720
+```
+
+### labels — Debug Labels
+
+Show `vkSetDebugUtilsObjectNameEXT` calls (Dawn debug labels). Filter by substring.
+
+```bash
+# All labels
+scripts/gpu/inspect.sh labels /tmp/capture.gfxr
+
+# Filter to text-related objects
+scripts/gpu/inspect.sh labels /tmp/capture.gfxr -g "Text"
+```
+
+### query — General Purpose Query
+
+The Swiss Army knife. Query any API call by name, index, text content, or extract specific fields.
+
+```bash
+# Find specific API calls
+scripts/gpu/inspect.sh query /tmp/capture.gfxr --call CreateGraphicsPipelines
+
+# Show blend state from pipeline creation
+scripts/gpu/inspect.sh query /tmp/capture.gfxr --call CreateGraphicsPipelines --field pColorBlendState
+
+# Find draw calls in index range
+scripts/gpu/inspect.sh query /tmp/capture.gfxr --call vkCmdDrawIndexed --range 5000-6000
+
+# Show specific entry by index
+scripts/gpu/inspect.sh query /tmp/capture.gfxr --index 2007
+
+# Search for text in entries
+scripts/gpu/inspect.sh query /tmp/capture.gfxr --grep "SRC_ALPHA"
+
+# Compact one-line-per-match output
+scripts/gpu/inspect.sh query /tmp/capture.gfxr --call vkCmdDrawIndexed --compact --limit 20
+
+# Raw JSON output for piping to jq
+scripts/gpu/inspect.sh query /tmp/capture.gfxr --call vkCmdDrawIndexed --raw | jq .
+```
+
+Query options:
+- `--call <name>` — Filter by API call name (substring match)
+- `--index <N>` or `--index <N-M>` — Show specific entry/entries
+- `--range <MIN-MAX>` — Filter by index range
+- `--grep <text>` — Search raw JSON text
+- `--field <path>` — Extract a specific field (recursive search)
+- `--limit <N>` — Max results
+- `--compact` — One line per match
+- `--raw` — Raw JSON (pipe-friendly)
+- `--summary` — Count API calls by name
 
 ### extract — SPIR-V Shader Extraction
 
-Extract raw SPIR-V shader binaries from the capture.
-
 ```bash
-# Extract to auto-generated temp dir
-scripts/gpu/inspect.sh extract /tmp/capture.gfxr
-
-# Extract to specific directory
 scripts/gpu/inspect.sh extract /tmp/capture.gfxr -d /tmp/my_shaders
 ```
 
-Shaders are named `sh<handle_id>` corresponding to `vkCreateShaderModule` handles. Use `spirv-dis` (from `spirv-tools` / `vulkan-tools`) to disassemble.
-
-### calls — Filtered API Calls
-
-List Vulkan calls matching a pattern.
+### calls — Filtered API Call Counts
 
 ```bash
-# Find all draw calls
 scripts/gpu/inspect.sh calls /tmp/capture.gfxr vkCmdDraw
-
-# Find pipeline-related calls
-scripts/gpu/inspect.sh calls /tmp/capture.gfxr Pipeline
-
-# Find all commands
-scripts/gpu/inspect.sh calls /tmp/capture.gfxr vkCmd
 ```
 
 ### shaders — Extract + Disassemble
-
-Extract all shaders and show SPIR-V disassembly (first 30 lines each).
 
 ```bash
 scripts/gpu/inspect.sh shaders /tmp/capture.gfxr
 ```
 
-Example output:
-```
-=== sh38 (1972 bytes) ===
-; SPIR-V
-; Version: 1.4
-; Generator: Google Tint Compiler; 1
-OpCapability Shader
-OpEntryPoint Vertex %83 "dawn_entry_point" %1 %8 %13 %gl_Position
-...
-=== 6 shaders extracted to /tmp/gfxr_shaders_12345 ===
+Requires `spirv-dis` (install: `pacman -S spirv-tools`).
+
+## Auto-Conversion
+
+The `query`, `pipelines`, `draws`, and `labels` commands accept either:
+- A `.jsonl`/`.json` file (already converted)
+- A `.gfxr` file (auto-converts, caches the result as `.jsonl` next to the original)
+
+Subsequent runs reuse the cached `.jsonl` unless the `.gfxr` is newer.
+
+## Debugging Workflows
+
+### "Blend mode looks wrong (alpha/additive/multiply)"
+```bash
+# 1. Capture
+scripts/gpu/capture.sh -o /tmp/blend.gfxr native/build/dc3-native
+
+# 2. Show all pipeline blend states
+scripts/gpu/inspect.sh pipelines /tmp/blend.gfxr
+
+# 3. Show which draws use which pipeline
+scripts/gpu/inspect.sh draws /tmp/blend.gfxr
 ```
 
-Requires `spirv-dis` (install: `pacman -S spirv-tools`).
+### "What draws happen in a specific range?"
+```bash
+scripts/gpu/inspect.sh query /tmp/trace.gfxr --range 5000-6000 --call vkCmd --compact
+```
+
+### "What Vulkan resources does a scene allocate?"
+```bash
+scripts/gpu/inspect.sh query /tmp/trace.gfxr --call Create --compact
+```
+
+### "Compare two captures"
+```bash
+scripts/gpu/inspect.sh pipelines /tmp/before.gfxr > /tmp/p1.txt
+scripts/gpu/inspect.sh pipelines /tmp/after.gfxr > /tmp/p2.txt
+diff /tmp/p1.txt /tmp/p2.txt
+```
 
 ## Advanced Usage: Direct Tool Access
 
@@ -155,55 +220,12 @@ $GFXR/replay/gfxrecon-replay --replace-shaders /tmp/shaders capture.gfxr
 
 ### Replay Notes
 
-- In headless or no-compositor environments, replay screenshots usually need `--swapchain offscreen`. Without it, `gfxrecon-replay` may fail with `--wsi auto attempted to pick a surface, but no compositor was available`.
-- Treat replay screenshots as diagnostic, not authoritative. They are useful for confirming that draws exist and roughly where they land, but they can differ from the live app on blend/composite fidelity.
-- For DC3 UI work, compare replay screenshots against the app's own `MILO_SCREENSHOT_*` output. If the replay shows the draws but the live app still looks wrong, that usually points to higher-level state issues such as conflicting Flows/PropAnims rather than missing GPU work.
-
-## Milo Engine Debugging Workflows
-
-### "dc3-native renders but meshes are missing"
-1. Capture: `MILO_RENDER=1 scripts/gpu/capture.sh -o /tmp/dc3.gfxr native/build/dc3-native`
-2. Check draws: `scripts/gpu/inspect.sh calls /tmp/dc3.gfxr vkCmdDraw` — are draw calls present?
-3. Check pipelines: `scripts/gpu/inspect.sh calls /tmp/dc3.gfxr Pipeline` — how many created?
-4. Full trace: `scripts/gpu/inspect.sh convert /tmp/dc3.gfxr | grep vkCmdDraw` — inspect draw args
-
-### "Blend mode looks wrong (alpha/additive/multiply)"
-1. Capture both modes side by side:
-   ```bash
-   scripts/gpu/capture.sh -o /tmp/alpha.gfxr native/build/render-test --output /tmp/a.png --test alpha_blend
-   scripts/gpu/capture.sh -o /tmp/additive.gfxr native/build/render-test --output /tmp/b.png --test additive_blend
-   ```
-2. Compare pipeline creation: `scripts/gpu/inspect.sh convert /tmp/alpha.gfxr | grep CreateGraphicsPipeline`
-3. Extract shaders to check blend constants: `scripts/gpu/inspect.sh shaders /tmp/alpha.gfxr`
-
-### "Dawn/WebGPU shaders are wrong"
-Dawn compiles WGSL -> SPIR-V. Extract and inspect:
-1. `scripts/gpu/inspect.sh shaders capture.gfxr` — disassemble all SPIR-V
-2. Look for `dawn_entry_point` entry points (Dawn's naming convention)
-3. Check descriptor set layouts (Set 0 = per-frame UBO, Set 1 = per-material, etc.)
-4. Compare vertex input attributes against Milo's mesh vertex format
-
-### "What changed between two renders?"
-```bash
-scripts/gpu/capture.sh -o /tmp/before.gfxr native/build/render-test --output /tmp/a.png --test solid_quads
-# ... make code change ...
-scripts/gpu/capture.sh -o /tmp/after.gfxr native/build/render-test --output /tmp/b.png --test solid_quads
-scripts/gpu/inspect.sh convert /tmp/before.gfxr -o /tmp/before.jsonl
-scripts/gpu/inspect.sh convert /tmp/after.gfxr -o /tmp/after.jsonl
-diff <(grep '"name"' /tmp/before.jsonl) <(grep '"name"' /tmp/after.jsonl)
-```
-
-### "What Vulkan resources does a scene allocate?"
-```bash
-scripts/gpu/inspect.sh convert capture.gfxr | grep -E 'CreateImage|CreateBuffer|AllocateMemory' | jq .
-```
+- In headless or no-compositor environments, replay screenshots usually need `--swapchain offscreen`.
+- Treat replay screenshots as diagnostic, not authoritative.
+- For DC3 UI work, compare replay screenshots against the app's own `MILO_SCREENSHOT_*` output.
 
 ## Source Code
 
+- **Wrapper script**: `scripts/gpu/inspect.sh`
+- **Query engine**: `scripts/gpu/query_trace.py`
 - **GFXReconstruct tools**: `../gpu/gfxreconstruct/tools/` ([github.com/LunarG/gfxreconstruct](https://github.com/LunarG/gfxreconstruct))
-  - `tools/info/` — gfxrecon-info source
-  - `tools/convert/` — gfxrecon-convert source (JSON Lines format: `tools/convert/README.md`)
-  - `tools/extract/` — gfxrecon-extract source
-  - `tools/replay/` — gfxrecon-replay source
-- **Resource dump docs**: `../gpu/gfxreconstruct/vulkan_dump_resources.md`
-- **Full usage guide**: `../gpu/gfxreconstruct/USAGE_desktop_Vulkan.md`

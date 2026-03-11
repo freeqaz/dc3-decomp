@@ -17,12 +17,9 @@
 
 float RndCam::sDefaultNearPlane = 1;
 float RndCam::sMaxFarNearPlaneRatio = 1000;
-static Transform sFlipYZ
-#ifdef HX_NATIVE
-    // Y/Z flip: Milo (X=right, Y=forward, Z=up) → D3D (X=right, Y=up, Z=forward)
-    = {{Vector3(1,0,0), Vector3(0,0,1), Vector3(0,1,0)}, Vector3(0,0,0)}
-#endif
-    ;
+// Y/Z flip: Milo (X=right, Y=forward, Z=up) → D3D/WebGPU (X=right, Y=up, Z=forward)
+// Runtime-initialized by dynamic initializer ??__EsFlipYZ@@YAXXZ (0x82EDCAE0)
+static Transform sFlipYZ(Hmx::Matrix3(1, 0, 0, 0, 0, 1, 0, 1, 0), Vector3(0, 0, 0));
 
 RndCam::RndCam()
     : mNearPlane(sDefaultNearPlane), mFarPlane(mNearPlane * sMaxFarNearPlaneRatio),
@@ -174,13 +171,6 @@ void RndCam::UpdatedWorldXfm() {
 }
 
 void RndCam::Select() {
-#ifdef HX_NATIVE
-    extern int gDebugFrameID;
-    if (gDebugFrameID == 500 && sCurrent && sCurrent != this) {
-        printf("DC3 RndCam::Select '%s' -> '%s'\n",
-               sCurrent->Name(), Name());
-    }
-#endif
     RndCam *cur = sCurrent;
     if (cur) {
         if (cur->TargetTex() && cur != this) {
