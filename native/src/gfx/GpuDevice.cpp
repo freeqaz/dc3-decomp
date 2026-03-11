@@ -132,6 +132,14 @@ bool GpuDevice::InitDevice() {
         deviceDesc.requiredFeatures = requiredFeatures;
     }
 
+    // Enable Dawn toggle to propagate WebGPU labels to VK_EXT_debug_utils
+    // (shows object names in RenderDoc, GFXReconstruct, validation layers)
+    wgpu::DawnTogglesDescriptor toggles{};
+    static const char* kEnabledToggles[] = {"use_user_defined_labels_in_backend"};
+    toggles.enabledToggleCount = 1;
+    toggles.enabledToggles = kEnabledToggles;
+    deviceDesc.nextInChain = &toggles;
+
     deviceDesc.SetDeviceLostCallback(
         wgpu::CallbackMode::AllowSpontaneous,
         [](const wgpu::Device&, wgpu::DeviceLostReason reason, wgpu::StringView msg) {
