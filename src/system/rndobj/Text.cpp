@@ -1896,11 +1896,7 @@ void RndText::ConstructMeshes(
                         yPos,
                         state,
                         prevChar,
-#ifdef HX_NATIVE
-                        state.mSize,  // mCircle=0 for non-circular text, use style size
-#else
                         mCircle,
-#endif
                         mFitType,
                         mIndentation
                     );

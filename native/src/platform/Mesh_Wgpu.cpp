@@ -682,6 +682,20 @@ static void DrawMeshImmediate(RndMesh* mesh) {
         }
     }
 
+    // Skip PropAnim-driven shading overlays that haven't been animated.
+    // These use a small solid-white texture (e.g. white.tex 8x8) with srcAlpha blend.
+    // On Xbox, PropAnim sets their material color/alpha at runtime to create
+    // tinted ribbon/gradient overlays. Without flow animations running, they
+    // default to opaque white rectangles that obscure the UI.
+    {
+        RndTex* diffTex = mat->GetDiffuseTex();
+        if (diffTex && diffTex->Width() <= 8 && diffTex->Height() <= 8 &&
+            mat->GetBlend() == BaseMaterial::kBlendSrcAlpha &&
+            mat->Alpha() > 0.99f) {
+            return;
+        }
+    }
+
     // Ensure mesh data is on GPU
     if (!EnsureMeshUploaded(mesh)) {
         if (capturing) FrameCapture::Get().AddSkip(MeshLabel(mesh), "upload failed");
@@ -695,41 +709,6 @@ static void DrawMeshImmediate(RndMesh* mesh) {
     // Text meshes (created by RndText::FontMap) have empty names (not registered in ObjectDir).
     // Debug labels are stored in GpuMeshData::debugLabel for GPU debugging.
     bool isTextMesh = !mesh->Name()[0];
-
-    // Text layout diagnostic — limited count
-    if (isTextMesh) {
-        static int sDiagCount = 0;
-        if (sDiagCount < 5) {
-            sDiagCount++;
-            const Transform& wxfm = mesh->WorldXfm();
-            RndTransformable* parent = mesh->TransParent();
-            RndCam* cam = RndCam::Current();
-            printf("TEXT_POS[f%d]: worldPos=(%.1f,%.1f,%.1f) parent='%s' cam='%s' "
-                   "yFov=%.3f near=%.1f far=%.1f verts=%d\n",
-                   sFrameCounter, wxfm.v.x, wxfm.v.y, wxfm.v.z,
-                   parent ? parent->Name() : "<null>",
-                   cam ? cam->Name() : "<null>",
-                   cam ? cam->YFov() : -1.0f,
-                   cam ? cam->NearPlane() : -1.0f,
-                   cam ? cam->FarPlane() : -1.0f,
-                   (int)mesh->Verts().size());
-            if (cam) {
-                Transform viewXfm;
-                Hmx::Matrix4 projMtx;
-                cam->GetViewProjectXfms(viewXfm, projMtx);
-                printf("  proj: xx=%.4f yy=%.4f zz=%.4f ww=%.4f zw=%.4f wz=%.4f\n",
-                       projMtx.x.x, projMtx.y.y, projMtx.z.z, projMtx.w.w,
-                       projMtx.z.w, projMtx.w.z);
-                printf("  view.v=(%.1f,%.1f,%.1f) localProj.m.xx=%.4f localProj.v.x=%.4f\n",
-                       viewXfm.v.x, viewXfm.v.y, viewXfm.v.z,
-                       cam->LocalProjectXfm().m.x.x, cam->LocalProjectXfm().v.x);
-                // Show screen rect
-                const Hmx::Rect& sr = cam->GetScreenRect();
-                printf("  screenRect=(%.3f,%.3f,%.3f,%.3f)\n",
-                       sr.x, sr.y, sr.w, sr.h);
-            }
-        }
-    }
 
     // --- Pipeline selection ---
     PipelineKey key{};

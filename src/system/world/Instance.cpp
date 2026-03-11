@@ -275,45 +275,56 @@ void WorldInstance::SyncDir() {
             if (f21 > 1.0f)
                 sphere.radius *= f21;
             SetSphere(sphere);
+            static Symbol grpSym("Group");
+            static Symbol texSym("Tex");
+            static Symbol cubeSym("CubeTex");
+            static Symbol movieSym("Movie");
+            static Symbol synthSym("SynthSample");
             std::list<ObjPair> objPairs;
             objPairs.push_back(ObjPair(mDir, this));
             for (ObjDirItr<Hmx::Object> it(mDir, false); it != nullptr; ++it) {
-                RndMesh *curMesh = dynamic_cast<RndMesh *>(&*it);
-                if (!grp)
-                    goto iterate;
-                if (it != grp && !GroupedUnder(grp, it))
-                    goto iterate;
-                if (curMesh) {
+                bool curMesh = dynamic_cast<RndMesh *>(&*it) != NULL;
+                if (!grp || (it != grp && !GroupedUnder(grp, it))) {
+                    // not in shared group - fall through to iterate
+                } else if (curMesh) {
                     grp->RemoveObject(it);
-                    goto iterate;
-                }
-                continue;
-            iterate:
-                if (it->ClassName() == Symbol("Tex") || it->ClassName() == Symbol("CubeTex")
-                    || it->ClassName() == Symbol("SynthSample") || it->ClassName() == Symbol("Movie")
-                    || it == mDir)
+                    // fall through to iterate
+                } else {
                     continue;
-                else {
-                    EventTrigger *trig = dynamic_cast<EventTrigger *>(&*it);
-                    if (trig && trig->HasTriggerEvents()) {
-                        MILO_NOTIFY("%s must be in shared.grp", PathName(it));
-                    } else {
-                        Hmx::Object *foundObj = FindObject(it->Name(), false, false);
-                        if (!foundObj) {
-                            foundObj = Hmx::Object::NewObject(it->ClassName());
-                            bool deep = true;
-                            if (it->ClassName() == Symbol("Group"))
-                                deep = false;
-                            CopyObject(it, foundObj, (Hmx::Object::CopyType)deep, true);
-                        }
-                        objPairs.push_back(ObjPair(foundObj, it));
+                }
+                if (it->ClassName() == texSym
+                    || it->ClassName() == cubeSym
+                    || it->ClassName() == synthSym
+                    || it->ClassName() == movieSym)
+                    continue;
+                if (it == mDir)
+                    continue;
+                EventTrigger *trig = dynamic_cast<EventTrigger *>(&*it);
+                if (trig && trig->HasTriggerEvents()) {
+                    MILO_NOTIFY("%s must be in shared.grp", PathName(it));
+                } else {
+                    Hmx::Object *foundObj = FindObject(it->Name(), false, true);
+                    if (!foundObj) {
+                        foundObj = Hmx::Object::NewObject(it->ClassName());
+                        bool deep = true;
+                        if (it->ClassName() == grpSym || curMesh)
+                            deep = false;
+                        CopyObject(it, foundObj, (Hmx::Object::CopyType)deep, true);
                     }
+                    objPairs.push_back(ObjPair(foundObj, it));
                 }
             }
 
             std::list<ObjPair>::const_iterator p = objPairs.begin();
             for (; p != objPairs.end(); ++p) {
-                MILO_ASSERT(p->from->Dir(), 0x2CA);
+                if (!p->from->Dir()) {
+                    MILO_FAIL(
+                        "%s %s->Dir() is null, to is %s",
+                        PathName(this),
+                        p->from->Name(),
+                        p->to->Name()
+                    );
+                }
                 const_cast<ObjRef &>(p->from->Refs()).ReplaceList(p->to);
             }
 

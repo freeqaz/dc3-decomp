@@ -51,19 +51,18 @@ NativeFlowFilterMode GetNativeFlowFilterMode() {
     static int mode = -1;
     if (mode == -1) {
         const char *env = std::getenv("MILO_NATIVE_FLOW_FILTER");
-        if (!env || !env[0] || std::strcmp(env, "all") == 0 || std::strcmp(env, "0") == 0) {
-            mode = kNativeFlowFilterAll;
-        } else if (
-            std::strcmp(env, "curated") == 0 || std::strcmp(env, "positive") == 0
-            || std::strcmp(env, "enter_only") == 0
-        ) {
+        if (!env || !env[0] || std::strcmp(env, "curated") == 0 || std::strcmp(env, "1") == 0) {
             mode = kNativeFlowFilterCurated;
+        } else if (
+            std::strcmp(env, "all") == 0 || std::strcmp(env, "0") == 0
+        ) {
+            mode = kNativeFlowFilterAll;
         } else if (
             std::strcmp(env, "menu_only") == 0 || std::strcmp(env, "main_only") == 0
         ) {
             mode = kNativeFlowFilterMenuOnly;
         } else {
-            mode = kNativeFlowFilterAll;
+            mode = kNativeFlowFilterCurated;
         }
     }
     return (NativeFlowFilterMode)mode;
@@ -97,6 +96,25 @@ bool ShouldActivateNativeFlow(const char *dirName, const char *flowPath) {
         return true;
     }
 
+    std::string flow = LowerString(flowPath);
+    std::string dir = LowerString(dirName);
+
+    // Dirs whose flows are entirely game-code-triggered (EnterControllerMode,
+    // ShowWaveGestureIcon, etc.).  Auto-activating them causes conflicting
+    // show/hide animations that fight over transform positions.
+    static const char *kGameTriggeredDirs[] = {
+        "helpbar", "blacklight", "autosaving_icon", nullptr,
+    };
+    for (const char **d = kGameTriggeredDirs; *d; ++d) {
+        if (dir == *d) return false;
+    }
+
+    if (mode == kNativeFlowFilterMenuOnly) {
+        if (dir == "letterbox" || dir == "newskeletondir") {
+            return false;
+        }
+    }
+
     static const char *kSkipTokens[] = {
         "hide",
         "exit",
@@ -115,22 +133,9 @@ bool ShouldActivateNativeFlow(const char *dirName, const char *flowPath) {
         "start_",
         "update_",
         "udpate_",
-        "controller_mode",
         "overlay_colorswitch",
         nullptr,
     };
-
-    std::string flow = LowerString(flowPath);
-    std::string dir = LowerString(dirName);
-
-    if (mode == kNativeFlowFilterMenuOnly) {
-        if (
-            dir == "helpbar" || dir == "letterbox" || dir == "blacklight"
-            || dir == "autosaving_icon" || dir == "newskeletondir"
-        ) {
-            return false;
-        }
-    }
 
     if (ContainsAny(flow, kSkipTokens)) {
         return false;
@@ -143,7 +148,7 @@ bool ShouldActivateNativeFlow(const char *dirName, const char *flowPath) {
     if (!dirName || dir.empty()) {
         return true;
     }
-    return dir != "main" && dir != "helpbar" && dir != "letterbox" && dir != "background";
+    return dir != "main" && dir != "letterbox" && dir != "background";
 }
 }
 #endif
@@ -283,27 +288,6 @@ void PanelDir::SyncObjects() {
         mTriggers.push_back(it);
         it->CheckAnims();
     }
-#ifdef HX_NATIVE
-    {
-        int eventTrigCount = 0;
-        for (ObjDirItr<EventTrigger> it(this, true); it != nullptr; ++it) {
-            eventTrigCount++;
-        }
-        // Always log object counts to diagnose missing triggers
-        int objCount = 0;
-        int propAnimCount = 0;
-        for (ObjDirItr<Hmx::Object> oit(this, true); oit != nullptr; ++oit) {
-            objCount++;
-        }
-        for (ObjDirItr<RndPropAnim> pit(this, true); pit != nullptr; ++pit) {
-            propAnimCount++;
-        }
-        if (propAnimCount > 0 || eventTrigCount > 0 || !mTriggers.empty()) {
-            printf("DC3_SYNC [%s] SyncObjects: %d objs, %d UITriggers, %d EventTriggers, %d PropAnims\n",
-                   Name(), objCount, (int)mTriggers.size(), eventTrigCount, propAnimCount);
-        }
-    }
-#endif
     if (sAlwaysNeedFocus) {
         UIComponent *comp = GetFirstFocusableComponent();
         if (!mFocusComponent && comp) {

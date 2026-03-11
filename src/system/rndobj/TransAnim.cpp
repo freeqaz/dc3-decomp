@@ -187,6 +187,17 @@ void RndTransAnim::SetFrame(float frame, float blend) {
     if (mTrans) {
         Transform tf(mTrans->LocalXfm());
         MakeTransform(frame, tf, false, blend);
+#ifdef HX_NATIVE
+        // Debug: trace ANY TransAnim::SetFrame
+        static int sTraceCount = 0;
+        if (sTraceCount < 20 && mTrans->Name() && mTrans->Name()[0]) {
+            sTraceCount++;
+            printf("TRANSANIM: '%s' frame=%.1f Z: %.1f -> %.1f (tKeys=%d)\n",
+                   mTrans->Name(), frame,
+                   mTrans->LocalXfm().v.z, tf.v.z,
+                   (int)TransKeys().size());
+        }
+#endif
         mTrans->SetLocalXfm(tf);
     }
 }
