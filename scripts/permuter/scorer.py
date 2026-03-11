@@ -85,6 +85,10 @@ class Scorer:
         self._obj_path = Path(self._obj_target)
         self._compile_cwd: Optional[str] = None
         self._compile_shell_cmd: Optional[str] = None
+        self._il_tools_loaded = False
+        self._il_capture = None
+        self._ILFile = None
+        self._il_function_hash = None
 
         if unit:
             try:
@@ -255,6 +259,70 @@ class Scorer:
             if "error" in combined.lower():
                 return False, combined
         return True, None
+
+    def _load_il_tools(self) -> bool:
+        """Load IL capture + canonical hash helpers on demand."""
+        if self._il_tools_loaded:
+            return (
+                self._il_capture is not None
+                and self._ILFile is not None
+                and self._il_function_hash is not None
+            )
+
+        self._il_tools_loaded = True
+        tools_dir = REPO_ROOT / "msvc-src" / "tools"
+        if str(tools_dir) not in sys.path:
+            sys.path.insert(0, str(tools_dir))
+        try:
+            from il_parser import ILFile, capture_il
+            from il_permuter import function_hash
+        except Exception:
+            return False
+
+        self._il_capture = capture_il
+        self._ILFile = ILFile
+        self._il_function_hash = function_hash
+        return True
+
+    def capture_variant_il_hashes(
+        self,
+        variants: list[Variant],
+        *,
+        limit: int = 8,
+    ) -> dict[int, str]:
+        """Capture canonical IL hashes for a limited set of variants.
+
+        This is for ranking/reporting only. Every candidate still goes through
+        the normal build + objdiff path.
+        """
+        if limit <= 0 or not variants or not self._load_il_tools():
+            return {}
+
+        hashes: dict[int, str] = {}
+        tmp_dir = Path(tempfile.mkdtemp(prefix="permuter_il_analysis_"))
+        try:
+            for idx, variant in enumerate(variants[:limit]):
+                self._apply_variant_files(variant)
+                try:
+                    il_base = self._il_capture(
+                        str(self.source_path),
+                        output_dir=str(tmp_dir / f"variant_{idx}"),
+                    )
+                except Exception:
+                    continue
+                if not il_base:
+                    continue
+                try:
+                    bundle = self._ILFile(il_base).to_dict()
+                except Exception:
+                    continue
+                for function in bundle.get("functions", []):
+                    if function.get("name") == self.symbol:
+                        hashes[id(variant)] = self._il_function_hash(function)
+                        break
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+        return hashes
 
     def _run_objdiff(self, include_instructions: bool = False) -> tuple[float, dict | None]:
         """Run objdiff-cli and return (fuzzy_match_percent, full_json_dict).

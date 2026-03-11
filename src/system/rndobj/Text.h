@@ -417,7 +417,7 @@ protected:
     float mScrollPos; // 0x50
     float mTotalWidth; // 0x54
     float mLineHeight; // 0x58
-    float mTotalHeight; // 0x5c
+    int mScrollCopies; // 0x5c
     int mNumLines; // 0x60
     /** "Space between continuous scrolling messages.
         This value is only considered when the fit type

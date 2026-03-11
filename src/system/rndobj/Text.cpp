@@ -115,7 +115,7 @@ RndText::RndText()
     : mWidth(0), mHeight(0), mCircle(0), mAlignment(kMiddleCenter), mFitType(kFitWrap),
       mCapsMode(kCapsModeNone), mLeading(1), mFixedLength(0), mMarkup(true),
       mBasicMarkup(true), mScrollDelay(0), mScrollRate(1), mScrollPause(0), mWrapEnabled(0),
-      mScrollSpeed(0), mTotalWidth(0), mLineHeight(0), mTotalHeight(0), mIndentation(0),
+      mScrollSpeed(0), mTotalWidth(0), mLineHeight(0), mScrollCopies(0), mIndentation(0),
       mAltStyle(nullptr), mScrollOffset(0), mCurScrollChars(0), mScrollOutIndex(-1),
       mStyles(this), mBoundsLeft(0), mBoundsTop(0), mBoundsRight(0), mBoundsBottom(0),
       mNumLinesRendered(0), mConstructScale(0) {
@@ -1415,11 +1415,12 @@ void RndText::UpdateScrollOffsets() {
     double dVar12 = (double)(fVar2 * fVar1 * 1000.0f);
     float fVar13 = (float)((double)mScrollPos + dVar12);
     mScrollPos = fVar13;
+    float widthDiff = fVar3 - mWidth;
 
     switch (iVar9) {
     case kFitScrollMarqueeWrap: {
         if (fVar2 < 0.0f) {
-            float fVar13_2 = -(fVar3 - mWidth);
+            float fVar13_2 = -widthDiff;
             if (fVar13 < fVar13_2) {
                 mScrollPos = fVar13_2;
                 mScrollSpeed = -fVar2;
@@ -1490,8 +1491,10 @@ void RndText::UpdateScrollOffsets() {
         mScrollTimer = 0.0f;
     }
 
+    unsigned int count = 0;
     for (auto puVar7 = mFontMaps.begin(); puVar7 != mFontMaps.end(); ++puVar7) {
         (*puVar7)->UpdateScrolling(mScrollPos);
+        count++;
     }
 }
 
@@ -1719,7 +1722,7 @@ void RndText::FitTextScroll() {
         if (mFitType == kFitScrollMarqueeWrapAlways) {
             mTotalWidth = bounds.w;
             mNumLines = mCurScrollChars + 1;
-            mTotalHeight = bounds.w;
+            mScrollCopies = bounds.w;
             mLineHeight = (mIndentation * (float)mCurScrollChars) + charWidths[numChars];
             mLineWidths.push_back(bounds.w);
             mLineOffsets.push_back(0.0f);
@@ -1740,7 +1743,7 @@ void RndText::FitTextScroll() {
         } else {
             mTotalWidth = 0.0f;
             mLineHeight = charWidths[numChars];
-            mTotalHeight = 0.0f;
+            mScrollCopies = 0.0f;
         }
 
         mScrollState = mScrollDelay;
@@ -2397,74 +2400,82 @@ void RndText::FontMap::SetupCharacter(
     float yPos,
     const StyleState &state,
     unsigned short prevChar,
-    float size,
+    float circle,
     FitType fitType,
     float leading
 ) {
-    float local_c0;
-    float local_bc[3];
-    float local_b0;
-    float local_ac;
-    float local_a8;
-    float local_80;
-    float local_7c;
-    float local_78;
-    float fVar1;
-    float fVar2;
-
-    if ((fitType == 7) && ((charCode & 0xffff) == 10)) {
-        fVar1 = leading + xPos;
-        xPos = fVar1;
+    if ((fitType == kFitScrollMarqueeWrapAlways) && ((charCode & 0xffff) == 10)) {
+        xPos = leading + xPos;
         return;
     }
 
-    if (!mFont) return;
     int page = mFont->CharPage(charCode);
-    if (page < 0 || page >= (int)mPages.size()) return;
+    if (page < 0) return;
     Page &pg = *(mPages[page]);
-    if (!pg.mesh || !pg.mVertStart || pg.mVertStart == pg.mesh->Verts().end()) {
-        return;
-    }
 
     float charW, advW;
-    Vector2 uvMin, uvMax;
-    if (!mFont->CharWidthAdvanceCoords(charCode, charW, advW, uvMin, uvMax)) {
-        auto advance = mFont->CharAdvance(charCode);
-        xPos += advance * size;
+    if (!mFont->CharWidthAdvanceCoords(charCode, charW, advW, pg.mVertStart[0].tex, pg.mVertStart[2].tex)) {
         return;
     }
 
-    // Apply kerning from previous character BEFORE positioning this one
-    if (prevChar) {
-        xPos += mFont->Kerning(prevChar, charCode) * size;
+    xPos += (mFont->Kerning(prevChar, charCode) + state.mKerning) * state.mSize;
+
+    float width = charW;
+    if (charW <= 0.0f) {
+        width = advW;
     }
 
-    float z0 = yPos;
-    float x0 = xPos;
-    float x1 = x0 + charW * size;
-    float cellH = mFont->AspectRatio() * size;
-    float z1 = z0 - cellH;
-
-    RndMesh::Vert *v = pg.mVertStart;
-    v[0].pos.Set(x0, 0.0f, z0);
-    v[0].tex.Set(uvMin.x, uvMin.y);
-    v[1].pos.Set(x1, 0.0f, z0);
-    v[1].tex.Set(uvMax.x, uvMin.y);
-    v[2].pos.Set(x1, 0.0f, z1);
-    v[2].tex.Set(uvMax.x, uvMax.y);
-    v[3].pos.Set(x0, 0.0f, z1);
-    v[3].tex.Set(uvMin.x, uvMax.y);
-#ifdef HX_NATIVE
-    // Apply mTextColor to vertex colors (Xbox does this natively via packed verts)
-    for (int _i = 0; _i < 4; _i++) {
-        v[_i].color.Set(state.mTextColor.red, state.mTextColor.green,
-                        state.mTextColor.blue, state.mTextColor.alpha);
+    float centerOfs = 0.0f;
+    if (mFont->IsMonospace()) {
+        centerOfs = Max((advW - width) * 0.5f, 0.0f);
     }
-#endif
+
+    float scaledCenter = state.mSize * centerOfs;
+    float scaledW = state.mSize * width;
+    if (scaledW <= 0.0f) return;
+
+    float z0 = yPos + state.mZOffset * state.mSize;
+    auto _tmp1 = mFont->AspectRatio();
+    float italics = state.mItalics * state.mSize;
+    float x = xPos;
+    float z1 = z0 - _tmp1 * state.mSize;
+
+    pg.mVertStart[0].pos.Set(italics + scaledCenter + x, 0.0f, z0);
+    pg.mVertStart[1].pos.Set(scaledCenter + x - italics, 0.0f, z1);
+    pg.mVertStart[2].pos.Set(scaledCenter + x - italics + scaledW, 0.0f, z1);
+    pg.mVertStart[3].pos.Set(italics + scaledCenter + scaledW + x, 0.0f, z0);
+
+    if (circle != 0.0f) {
+        float midX = (pg.mVertStart[3].pos.x - pg.mVertStart[1].pos.x) * 0.5f
+            + pg.mVertStart[1].pos.x;
+        Transform xfm = XfmOnCircleEdge(circle, midX);
+        xfm.v.x -= xfm.m.x.x * midX;
+        xfm.v.y -= xfm.m.x.y * midX;
+        xfm.v.z -= xfm.m.x.z * midX;
+        Multiply(pg.mVertStart[0].pos, xfm, pg.mVertStart[0].pos);
+        Multiply(pg.mVertStart[1].pos, xfm, pg.mVertStart[1].pos);
+        Multiply(pg.mVertStart[2].pos, xfm, pg.mVertStart[2].pos);
+        Multiply(pg.mVertStart[3].pos, xfm, pg.mVertStart[3].pos);
+    }
+
+    pg.mVertStart[1].tex.y = pg.mVertStart[2].tex.y;
+    pg.mVertStart[1].tex.x = pg.mVertStart[0].tex.x;
+    pg.mVertStart[3].tex.x = pg.mVertStart[2].tex.x;
+    pg.mVertStart[3].tex.y = pg.mVertStart[0].tex.y;
+
+    pg.mVertStart[0].norm.Set(0.0f, -1.0f, 0.0f);
+    pg.mVertStart[3].norm = pg.mVertStart[0].norm;
+    pg.mVertStart[2].norm = pg.mVertStart[3].norm;
+    pg.mVertStart[1].norm = pg.mVertStart[2].norm;
+
+    pg.mVertStart[3].color = state.mTextColor;
+    pg.mVertStart[2].color = pg.mVertStart[3].color;
+    pg.mVertStart[1].color = pg.mVertStart[2].color;
+    pg.mVertStart[0].color = pg.mVertStart[1].color;
+
     pg.mVertStart += 4;
 
-    // Advance x position past this character (advance + style kerning to match OnComputeCharWidths)
-    xPos += (advW + state.mKerning) * size;
+    xPos = advW * state.mSize + xPos;
 }
 
 void RndText::FontMap3d::SetupCharacter(

@@ -379,6 +379,9 @@ def hill_climb(
     result_codegen_shapes: list[str] = []
     result_fact_boosts: list[str] = []
     result_fact_suppresses: list[str] = []
+    result_il_analyzed_variants = 0
+    result_il_unique_buckets = 0
+    result_il_duplicate_buckets = 0
     all_validation_results: list[ValidationResult] = []
 
     # Pattern stats tracking
@@ -925,6 +928,40 @@ def hill_climb(
                                 build_success=result.build_success,
                             )
 
+                # Analyze canonical IL for top scored variants in the round.
+                build_ok_results = [r for r in batch_results if r.build_success]
+                if build_ok_results:
+                    top_for_il = sorted(
+                        build_ok_results,
+                        key=lambda r: r.match_percent,
+                        reverse=True,
+                    )[: min(8, len(build_ok_results))]
+                    il_hashes = scorer.capture_variant_il_hashes(
+                        [r.variant for r in top_for_il],
+                        limit=len(top_for_il),
+                    )
+                    il_bucket_sizes: dict[str, int] = {}
+                    for result in top_for_il:
+                        il_hash = il_hashes.get(id(result.variant))
+                        if not il_hash:
+                            continue
+                        result.canonical_il_hash = il_hash
+                        il_bucket_sizes[il_hash] = il_bucket_sizes.get(il_hash, 0) + 1
+                    if il_bucket_sizes:
+                        duplicate_buckets = sum(
+                            1 for size in il_bucket_sizes.values() if size > 1
+                        )
+                        analyzed = sum(il_bucket_sizes.values())
+                        result_il_analyzed_variants += analyzed
+                        result_il_unique_buckets += len(il_bucket_sizes)
+                        result_il_duplicate_buckets += duplicate_buckets
+                        print(
+                            f"IL analysis: {len(il_bucket_sizes)} bucket(s) across "
+                            f"{analyzed} top candidate(s), "
+                            f"{duplicate_buckets} duplicate bucket(s)",
+                            file=sys.stderr,
+                        )
+
                 # Accumulate validation results for summary
                 if validate and round_validation_results:
                     all_validation_results.extend(round_validation_results)
@@ -1141,6 +1178,9 @@ def hill_climb(
         codegen_shapes=result_codegen_shapes,
         fact_boost_patterns=result_fact_boosts,
         fact_suppress_patterns=result_fact_suppresses,
+        il_analyzed_variants=result_il_analyzed_variants,
+        il_unique_buckets=result_il_unique_buckets,
+        il_duplicate_buckets=result_il_duplicate_buckets,
     )
 
 
@@ -1275,6 +1315,13 @@ def _print_result(result: HillClimbResult):
         print(f"  Boosts:     {', '.join(result.fact_boost_patterns)}", file=sys.stderr)
     if result.fact_suppress_patterns:
         print(f"  Suppress:   {', '.join(result.fact_suppress_patterns)}", file=sys.stderr)
+    if result.il_analyzed_variants > 0:
+        print(
+            f"  IL:         analyzed={result.il_analyzed_variants} "
+            f"unique={result.il_unique_buckets} "
+            f"dup={result.il_duplicate_buckets}",
+            file=sys.stderr,
+        )
 
     # Validation tier (winner)
     _tier_names = {

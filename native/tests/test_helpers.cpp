@@ -12,6 +12,9 @@
 #include "char/Char.h"
 #include "hamobj/Ham.h"
 #include "flow/Flow.h"
+#include "ui/PanelDir.h"
+#include "ui/UIPanel.h"
+#include "ui/UIScreen.h"
 #include "utl/Symbol.h"
 
 // Forward declarations from engine
@@ -55,6 +58,12 @@ void EnsureEngineInit() {
     CharInit();
     WorldInit();
     HamInit();
+
+    // UI object factories — UIManager::Init() is too heavy for tests
+    // (needs SystemConfig, Automator, cameras, etc.), so register key types manually.
+    REGISTER_OBJ_FACTORY(PanelDir)
+    REGISTER_OBJ_FACTORY(UIPanel)
+    REGISTER_OBJ_FACTORY(UIScreen)
 
     printf("=== Test Engine Init Complete ===\n");
 }

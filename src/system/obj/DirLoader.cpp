@@ -664,8 +664,8 @@ void DirLoader::LoadObjs() {
             if (obj) {
                 void **vptr = *(void ***)obj;
                 if (!vptr || !vptr[0]) {
-                    MILO_NOTIFY("DirLoader: skipping stub object '%s' (null vtable) in %s",
-                                obj->Name(), mFile.c_str());
+                    MILO_NOTIFY("DirLoader: STUB vtable '%s' class='%s' in '%s'",
+                                obj->Name(), obj->ClassName().Str(), mFile.c_str());
                     if (mRev > 1) ReadDead(*mStream);
                     mObjects.pop_front();
                     continue;
@@ -845,7 +845,7 @@ void DirLoader::CreateObjects() {
             *mStream >> b8;
         }
         if (!Hmx::Object::RegisteredFactory(classSym)) {
-            MILO_NOTIFY("%s: Can't make %s", mFile.c_str(), classSym);
+            MILO_NOTIFY("%s unknown class %s, skipping", mFile, classSym);
             goto release_obj;
         } else {
             MemPoint begin(MemPoint::kInitType0);
@@ -864,8 +864,8 @@ void DirLoader::CreateObjects() {
             {
                 void **vptr = *(void ***)obj;
                 if (!vptr || !vptr[0]) {
-                    MILO_NOTIFY("DirLoader: stub vtable for '%s' (class %s) in %s",
-                                buf, classSym.Str(), mFile.c_str());
+                    MILO_NOTIFY("DirLoader: STUB vtable for class %s in %s",
+                                classSym.Str(), mFile.c_str());
                     obj = nullptr;
                     goto release_obj;
                 }

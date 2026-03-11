@@ -1,0 +1,1036 @@
+{
+  "base": "msvc-src/analysis/il-fixtures/il_call_return/_CL_8b327891",
+  "debug": {
+    "line_candidates": [
+      1,
+      2,
+      3,
+      4,
+      6,
+      10,
+      16,
+      18,
+      19,
+      20,
+      21,
+      33,
+      34,
+      61,
+      64,
+      99,
+      100,
+      101,
+      116,
+      128,
+      132,
+      256,
+      258,
+      259,
+      262,
+      266,
+      268,
+      270,
+      274,
+      277,
+      512
+    ],
+    "strings": [
+      "Base",
+      "UBase@@",
+      "vfunc",
+      "vvoid",
+      "Base",
+      "operator=",
+      "Base",
+      "UBase@@"
+    ]
+  },
+  "files": {
+    "db": {
+      "path": "_CL_8b327891db",
+      "present": true,
+      "size": 684
+    },
+    "ex": {
+      "path": "_CL_8b327891ex",
+      "present": true,
+      "size": 3867
+    },
+    "gl": {
+      "path": "_CL_8b327891gl",
+      "present": true,
+      "size": 947
+    },
+    "in": {
+      "path": "_CL_8b327891in",
+      "present": true,
+      "size": 439
+    },
+    "sy": {
+      "path": "_CL_8b327891sy",
+      "present": true,
+      "size": 317
+    }
+  },
+  "functions": [
+    {
+      "body_offset": 2696,
+      "end_offset": 2770,
+      "header_offset": 2681,
+      "index": 0,
+      "name": "?call_and_return@@YAHH@Z",
+      "operation_count": 8,
+      "operations": [
+        {
+          "label": 15,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "CALL_START",
+          "operands": [
+            {
+              "kind": "ref",
+              "name": "tok_f209",
+              "value": 61961
+            }
+          ],
+          "return_type": "int",
+          "type": "call_start"
+        },
+        {
+          "name": "ADD",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "x",
+              "type": "int",
+              "value": 62985
+            },
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 1
+            }
+          ],
+          "type": "op"
+        },
+        {
+          "name": "CALL_EXEC",
+          "operands": [],
+          "return_type": "int",
+          "type": "call_exec"
+        },
+        {
+          "name": "CALL_EXEC",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "x",
+              "type": "int",
+              "value": 62985
+            }
+          ],
+          "return_type": "int",
+          "type": "call_exec"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 63497,
+          "target_name": "tok_f809",
+          "type": "assign"
+        },
+        {
+          "label": 16,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "RETURN",
+          "target": 63497,
+          "target_name": "tok_f809",
+          "type": "return"
+        }
+      ],
+      "param_names": [
+        "x"
+      ],
+      "params": [
+        62985
+      ],
+      "result_var": 63241,
+      "result_var_name": "tok_f709"
+    },
+    {
+      "body_offset": 2829,
+      "end_offset": 2896,
+      "header_offset": 2814,
+      "index": 1,
+      "name": "?tail_call@@YAHH@Z",
+      "operation_count": 7,
+      "operations": [
+        {
+          "label": 20,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "CALL_START",
+          "operands": [
+            {
+              "kind": "ref",
+              "name": "tok_f209",
+              "value": 61961
+            }
+          ],
+          "return_type": "int",
+          "type": "call_start"
+        },
+        {
+          "name": "CALL_EXEC",
+          "operands": [
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 0
+            }
+          ],
+          "return_type": "int",
+          "type": "call_exec"
+        },
+        {
+          "name": "CALL_EXEC",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "x",
+              "type": "int",
+              "value": 63753
+            }
+          ],
+          "return_type": "int",
+          "type": "call_exec"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 64265,
+          "target_name": "tok_fb09",
+          "type": "assign"
+        },
+        {
+          "label": 21,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "RETURN",
+          "target": 64265,
+          "target_name": "tok_fb09",
+          "type": "return"
+        }
+      ],
+      "param_names": [
+        "x"
+      ],
+      "params": [
+        63753
+      ],
+      "result_var": 64009,
+      "result_var_name": "tok_fa09"
+    },
+    {
+      "body_offset": 2955,
+      "end_offset": 3059,
+      "header_offset": 2940,
+      "index": 2,
+      "name": "?chain_calls@@YAHH@Z",
+      "operation_count": 11,
+      "operations": [
+        {
+          "label": 25,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "CALL_START",
+          "operands": [
+            {
+              "kind": "ref",
+              "name": "tok_f409",
+              "value": 62473
+            }
+          ],
+          "return_type": "type_1B(0703)",
+          "type": "call_start"
+        },
+        {
+          "name": "CALL_EXEC",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "x",
+              "type": "int",
+              "value": 64521
+            }
+          ],
+          "return_type": "int",
+          "type": "call_exec"
+        },
+        {
+          "label": 26,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "CALL_START",
+          "operands": [
+            {
+              "kind": "ref",
+              "name": "tok_f209",
+              "value": 61961
+            }
+          ],
+          "return_type": "int",
+          "type": "call_start"
+        },
+        {
+          "name": "CALL_START",
+          "operands": [
+            {
+              "kind": "ref",
+              "name": "tok_f509",
+              "value": 62729
+            }
+          ],
+          "return_type": "int",
+          "type": "call_start"
+        },
+        {
+          "name": "CALL_EXEC",
+          "operands": [],
+          "return_type": "int",
+          "type": "call_exec"
+        },
+        {
+          "name": "CALL_EXEC",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "x",
+              "type": "int",
+              "value": 64521
+            }
+          ],
+          "return_type": "int",
+          "type": "call_exec"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 65033,
+          "target_name": "tok_fe09",
+          "type": "assign"
+        },
+        {
+          "label": 27,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "RETURN",
+          "target": 65033,
+          "target_name": "tok_fe09",
+          "type": "return"
+        }
+      ],
+      "param_names": [
+        "x"
+      ],
+      "params": [
+        64521
+      ],
+      "result_var": 64777,
+      "result_var_name": "tok_fd09"
+    },
+    {
+      "body_offset": 3118,
+      "end_offset": 3202,
+      "header_offset": 3103,
+      "index": 3,
+      "name": "?virtual_call@@YAHPAUBase@@H@Z",
+      "operation_count": 10,
+      "operations": [
+        {
+          "label": 31,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "VCALL_SETUP",
+          "operands": [],
+          "target": 58633,
+          "target_name": "tok_e509",
+          "type": "op"
+        },
+        {
+          "name": "DEREF",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "obj",
+              "type": "ptr(8720)",
+              "value": 65289
+            }
+          ],
+          "result_type": "class(438a20)",
+          "type": "op"
+        },
+        {
+          "name": "DEREF",
+          "operands": [],
+          "result_type": "ptr(9a20)",
+          "type": "op"
+        },
+        {
+          "name": "VCALL_BIND",
+          "operands": [],
+          "result_type": "ptr(8b20)",
+          "type": "op"
+        },
+        {
+          "name": "CALL_START",
+          "operands": [],
+          "return_type": "int",
+          "type": "call_start"
+        },
+        {
+          "name": "CALL_EXEC",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "x",
+              "type": "int",
+              "value": 10
+            }
+          ],
+          "return_type": "int",
+          "type": "call_exec"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 522,
+          "target_name": "tok_020a",
+          "type": "assign"
+        },
+        {
+          "label": 32,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "RETURN",
+          "target": 522,
+          "target_name": "tok_020a",
+          "type": "return"
+        }
+      ],
+      "param_names": [
+        "x",
+        "obj"
+      ],
+      "params": [
+        10,
+        65289
+      ],
+      "result_var": 266,
+      "result_var_name": "tok_010a"
+    },
+    {
+      "body_offset": 3261,
+      "end_offset": 3329,
+      "header_offset": 3246,
+      "index": 4,
+      "name": "?virtual_void_call@@YAXPAUBase@@@Z",
+      "operation_count": 9,
+      "operations": [
+        {
+          "label": 36,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "VCALL_SETUP",
+          "operands": [],
+          "target": 58889,
+          "target_name": "tok_e609",
+          "type": "op"
+        },
+        {
+          "name": "DEREF",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "obj",
+              "type": "ptr(8720)",
+              "value": 778
+            }
+          ],
+          "result_type": "class(438a20)",
+          "type": "op"
+        },
+        {
+          "name": "DEREF",
+          "operands": [],
+          "result_type": "ptr(9a20)",
+          "type": "op"
+        },
+        {
+          "name": "VCALL_BIND",
+          "operands": [],
+          "result_type": "ptr(8c20)",
+          "type": "op"
+        },
+        {
+          "name": "CALL_START",
+          "operands": [],
+          "return_type": "type_1B(0703)",
+          "type": "call_start"
+        },
+        {
+          "label": 37,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 1290,
+          "target_name": "tok_050a",
+          "type": "assign"
+        },
+        {
+          "name": "RETURN",
+          "target": 1290,
+          "target_name": "tok_050a",
+          "type": "return"
+        }
+      ],
+      "param_names": [
+        "obj"
+      ],
+      "params": [
+        778
+      ],
+      "result_var": 1034,
+      "result_var_name": "tok_040a"
+    },
+    {
+      "body_offset": 3388,
+      "end_offset": 3503,
+      "header_offset": 3373,
+      "index": 5,
+      "name": "?conditional_return@@YAHH@Z",
+      "operation_count": 15,
+      "operations": [
+        {
+          "label": 41,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "GT",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "x",
+              "type": "int",
+              "value": 1546
+            },
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 0
+            }
+          ],
+          "type": "op"
+        },
+        {
+          "name": "COND_BRANCH",
+          "operands": [],
+          "target": 2314,
+          "target_name": "tok_090a",
+          "type": "branch"
+        },
+        {
+          "label": 42,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "CALL_START",
+          "operands": [
+            {
+              "kind": "ref",
+              "name": "tok_f209",
+              "value": 61961
+            }
+          ],
+          "return_type": "int",
+          "type": "call_start"
+        },
+        {
+          "name": "CALL_EXEC",
+          "operands": [
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 1
+            }
+          ],
+          "return_type": "int",
+          "type": "call_exec"
+        },
+        {
+          "name": "CALL_EXEC",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "x",
+              "type": "int",
+              "value": 1546
+            }
+          ],
+          "return_type": "int",
+          "type": "call_exec"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 2058,
+          "target_name": "tok_080a",
+          "type": "assign"
+        },
+        {
+          "label": 43,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "label": 44,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "GOTO",
+          "operands": [],
+          "type": "goto"
+        },
+        {
+          "name": "FALLTHROUGH",
+          "type": "fallthrough"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 0
+            }
+          ],
+          "target": 2058,
+          "target_name": "tok_080a",
+          "type": "assign"
+        },
+        {
+          "label": 45,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "RETURN",
+          "target": 2058,
+          "target_name": "tok_080a",
+          "type": "return"
+        }
+      ],
+      "param_names": [
+        "x"
+      ],
+      "params": [
+        1546
+      ],
+      "result_var": 1802,
+      "result_var_name": "tok_070a"
+    },
+    {
+      "body_offset": 3562,
+      "end_offset": 3681,
+      "header_offset": 3547,
+      "index": 6,
+      "name": "?early_return@@YAXH@Z",
+      "operation_count": 16,
+      "operations": [
+        {
+          "label": 49,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "EQ",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "x",
+              "type": "int",
+              "value": 2570
+            },
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 0
+            }
+          ],
+          "type": "op"
+        },
+        {
+          "name": "COND_BRANCH",
+          "operands": [],
+          "target": 3338,
+          "target_name": "tok_0d0a",
+          "type": "branch"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 3082,
+          "target_name": "tok_0c0a",
+          "type": "assign"
+        },
+        {
+          "label": 50,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "GOTO",
+          "operands": [],
+          "type": "goto"
+        },
+        {
+          "name": "FALLTHROUGH",
+          "type": "fallthrough"
+        },
+        {
+          "name": "CALL_START",
+          "operands": [
+            {
+              "kind": "ref",
+              "name": "tok_f409",
+              "value": 62473
+            }
+          ],
+          "return_type": "type_1B(0703)",
+          "type": "call_start"
+        },
+        {
+          "name": "CALL_EXEC",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "x",
+              "type": "int",
+              "value": 2570
+            }
+          ],
+          "return_type": "int",
+          "type": "call_exec"
+        },
+        {
+          "label": 51,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "CALL_START",
+          "operands": [
+            {
+              "kind": "ref",
+              "name": "tok_f409",
+              "value": 62473
+            }
+          ],
+          "return_type": "type_1B(0703)",
+          "type": "call_start"
+        },
+        {
+          "name": "ADD",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "x",
+              "type": "int",
+              "value": 2570
+            },
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 1
+            }
+          ],
+          "type": "op"
+        },
+        {
+          "name": "CALL_EXEC",
+          "operands": [],
+          "return_type": "int",
+          "type": "call_exec"
+        },
+        {
+          "label": 52,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 3082,
+          "target_name": "tok_0c0a",
+          "type": "assign"
+        },
+        {
+          "name": "RETURN",
+          "target": 3082,
+          "target_name": "tok_0c0a",
+          "type": "return"
+        }
+      ],
+      "param_names": [
+        "x"
+      ],
+      "params": [
+        2570
+      ],
+      "result_var": 2826,
+      "result_var_name": "tok_0b0a"
+    },
+    {
+      "body_offset": 3740,
+      "end_offset": 3852,
+      "header_offset": 3725,
+      "index": 7,
+      "name": "?cached_return@@YAHH@Z",
+      "operation_count": 12,
+      "operations": [
+        {
+          "label": 56,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "CALL_START",
+          "operands": [
+            {
+              "kind": "ref",
+              "name": "result",
+              "value": 4362
+            },
+            {
+              "kind": "ref",
+              "name": "tok_f209",
+              "value": 61961
+            }
+          ],
+          "return_type": "int",
+          "type": "call_start"
+        },
+        {
+          "name": "CALL_EXEC",
+          "operands": [
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 0
+            }
+          ],
+          "return_type": "int",
+          "type": "call_exec"
+        },
+        {
+          "name": "CALL_EXEC",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "x",
+              "type": "int",
+              "value": 3594
+            }
+          ],
+          "return_type": "int",
+          "type": "call_exec"
+        },
+        {
+          "name": "STORE",
+          "operands": [],
+          "result_type": "int",
+          "type": "op"
+        },
+        {
+          "label": 57,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "CALL_START",
+          "operands": [
+            {
+              "kind": "ref",
+              "name": "tok_f409",
+              "value": 62473
+            }
+          ],
+          "return_type": "type_1B(0703)",
+          "type": "call_start"
+        },
+        {
+          "name": "CALL_EXEC",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "result",
+              "type": "int",
+              "value": 4362
+            }
+          ],
+          "return_type": "int",
+          "type": "call_exec"
+        },
+        {
+          "label": 58,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "result",
+              "type": "int",
+              "value": 4362
+            }
+          ],
+          "target": 4106,
+          "target_name": "tok_100a",
+          "type": "assign"
+        },
+        {
+          "label": 59,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "RETURN",
+          "target": 4106,
+          "target_name": "tok_100a",
+          "type": "return"
+        }
+      ],
+      "param_names": [
+        "x"
+      ],
+      "params": [
+        3594
+      ],
+      "result_var": 3850,
+      "result_var_name": "tok_0f0a"
+    }
+  ],
+  "globals": {
+    "functions": [
+      "?call_and_return@@YAHH@Z",
+      "?tail_call@@YAHH@Z",
+      "?chain_calls@@YAHH@Z",
+      "?virtual_call@@YAHPAUBase@@H@Z",
+      "?virtual_void_call@@YAXPAUBase@@@Z",
+      "?conditional_return@@YAHH@Z",
+      "?early_return@@YAXH@Z",
+      "?cached_return@@YAHH@Z",
+      "?void_func@@YAXH@Z",
+      "?vfunc@Base@@UAAHH@Z",
+      "?vvoid@Base@@UAAXXZ",
+      "?get_value@@YAHXZ",
+      "?plain_func@@YAHHH@Z"
+    ],
+    "source_path": "z:\\home\\free\\code\\milohax\\dc3-decomp\\msvc-src\\analysis\\il-fixtures\\sources\\il_call_return.cpp"
+  },
+  "imports": {
+    "class_types": [],
+    "known_types": [],
+    "strings": []
+  },
+  "manifest": {
+    "bundle_base": "msvc-src/analysis/il-fixtures/il_call_return/_CL_8b327891",
+    "bundle_name": "il_call_return",
+    "captured_at": "2026-03-10T19:59:51+00:00",
+    "command": [
+      "/home/free/code/milohax/dc3-decomp/build/tools/wibo",
+      "/home/free/code/milohax/dc3-decomp/build/compilers/X360/16.00.11886.00/cl.exe",
+      "/Bd",
+      "/d2nop",
+      "/Ox",
+      "/GS-",
+      "/c",
+      "/FoZ:\\home\\free\\code\\milohax\\dc3-decomp\\msvc-src\\analysis\\il-fixtures\\il_capture.obj",
+      "Z:\\home\\free\\code\\milohax\\dc3-decomp\\msvc-src\\analysis\\il-fixtures\\sources\\il_call_return.cpp"
+    ],
+    "compiler_path": "/home/free/code/milohax/dc3-decomp/build/compilers/X360/16.00.11886.00/cl.exe",
+    "files": {
+      "db": {
+        "exists": true,
+        "path": "_CL_8b327891db",
+        "size": 684
+      },
+      "ex": {
+        "exists": true,
+        "path": "_CL_8b327891ex",
+        "size": 3867
+      },
+      "gl": {
+        "exists": true,
+        "path": "_CL_8b327891gl",
+        "size": 947
+      },
+      "in": {
+        "exists": true,
+        "path": "_CL_8b327891in",
+        "size": 439
+      },
+      "sy": {
+        "exists": true,
+        "path": "_CL_8b327891sy",
+        "size": 317
+      }
+    },
+    "il_base": "_CL_8b327891",
+    "run_cwd": "/home/free/code/milohax/dc3-decomp/msvc-src/analysis/il-fixtures",
+    "source_path": "/home/free/code/milohax/dc3-decomp/msvc-src/analysis/il-fixtures/sources/il_call_return.cpp",
+    "wibo_path": "/home/free/code/milohax/dc3-decomp/build/tools/wibo"
+  },
+  "symbols": {
+    "000a": "x",
+    "030a": "obj",
+    "060a": "x",
+    "0a0a": "x",
+    "0e0a": "x",
+    "110a": "result",
+    "f609": "x",
+    "f909": "x",
+    "fc09": "x",
+    "ff09": "obj"
+  },
+  "token_width": 2
+}

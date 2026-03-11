@@ -1,0 +1,508 @@
+{
+  "base": "msvc-src/analysis/il-fixtures/il_bool_materialization/_CL_291e984a",
+  "debug": {
+    "line_candidates": [
+      1,
+      4,
+      10,
+      16,
+      21,
+      33,
+      34,
+      116,
+      117,
+      256,
+      266,
+      268,
+      274,
+      512
+    ],
+    "strings": []
+  },
+  "files": {
+    "db": {
+      "path": "_CL_291e984adb",
+      "present": true,
+      "size": 94
+    },
+    "ex": {
+      "path": "_CL_291e984aex",
+      "present": true,
+      "size": 3312
+    },
+    "gl": {
+      "path": "_CL_291e984agl",
+      "present": true,
+      "size": 583
+    },
+    "in": {
+      "path": "_CL_291e984ain",
+      "present": true,
+      "size": 439
+    },
+    "sy": {
+      "path": "_CL_291e984asy",
+      "present": true,
+      "size": 180
+    }
+  },
+  "functions": [
+    {
+      "body_offset": 2696,
+      "end_offset": 2747,
+      "header_offset": 2681,
+      "index": 0,
+      "name": "?zero_test@@YAII@Z",
+      "operation_count": 6,
+      "operations": [
+        {
+          "label": 2,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "NE",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "x",
+              "type": "uint",
+              "value": 58121
+            },
+            {
+              "kind": "lit",
+              "type": "uint",
+              "value": 0
+            }
+          ],
+          "type": "op"
+        },
+        {
+          "name": "CAST",
+          "operands": [],
+          "result_type": "uint",
+          "type": "op"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 58633,
+          "target_name": "tok_e509",
+          "type": "assign"
+        },
+        {
+          "label": 3,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "RETURN",
+          "target": 58633,
+          "target_name": "tok_e509",
+          "type": "return"
+        }
+      ],
+      "param_names": [
+        "x"
+      ],
+      "params": [
+        58121
+      ],
+      "result_var": 58377,
+      "result_var_name": "tok_e409"
+    },
+    {
+      "body_offset": 2806,
+      "end_offset": 2857,
+      "header_offset": 2791,
+      "index": 1,
+      "name": "?equality_nonzero@@YAII@Z",
+      "operation_count": 6,
+      "operations": [
+        {
+          "label": 6,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "EQ",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "x",
+              "type": "uint",
+              "value": 58889
+            },
+            {
+              "kind": "lit",
+              "type": "uint",
+              "value": 1
+            }
+          ],
+          "type": "op"
+        },
+        {
+          "name": "CAST",
+          "operands": [],
+          "result_type": "uint",
+          "type": "op"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 59401,
+          "target_name": "tok_e809",
+          "type": "assign"
+        },
+        {
+          "label": 7,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "RETURN",
+          "target": 59401,
+          "target_name": "tok_e809",
+          "type": "return"
+        }
+      ],
+      "param_names": [
+        "x"
+      ],
+      "params": [
+        58889
+      ],
+      "result_var": 59145,
+      "result_var_name": "tok_e709"
+    },
+    {
+      "body_offset": 2916,
+      "end_offset": 2967,
+      "header_offset": 2901,
+      "index": 2,
+      "name": "?inequality_nonzero@@YAII@Z",
+      "operation_count": 6,
+      "operations": [
+        {
+          "label": 10,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "NE",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "x",
+              "type": "uint",
+              "value": 59657
+            },
+            {
+              "kind": "lit",
+              "type": "uint",
+              "value": 1
+            }
+          ],
+          "type": "op"
+        },
+        {
+          "name": "CAST",
+          "operands": [],
+          "result_type": "uint",
+          "type": "op"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 60169,
+          "target_name": "tok_eb09",
+          "type": "assign"
+        },
+        {
+          "label": 11,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "RETURN",
+          "target": 60169,
+          "target_name": "tok_eb09",
+          "type": "return"
+        }
+      ],
+      "param_names": [
+        "x"
+      ],
+      "params": [
+        59657
+      ],
+      "result_var": 59913,
+      "result_var_name": "tok_ea09"
+    },
+    {
+      "body_offset": 3026,
+      "end_offset": 3077,
+      "header_offset": 3011,
+      "index": 3,
+      "name": "?signed_positive@@YAIH@Z",
+      "operation_count": 6,
+      "operations": [
+        {
+          "label": 14,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "GT",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "x",
+              "type": "int",
+              "value": 60425
+            },
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 0
+            }
+          ],
+          "type": "op"
+        },
+        {
+          "name": "CAST",
+          "operands": [],
+          "result_type": "uint",
+          "type": "op"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 60937,
+          "target_name": "tok_ee09",
+          "type": "assign"
+        },
+        {
+          "label": 15,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "RETURN",
+          "target": 60937,
+          "target_name": "tok_ee09",
+          "type": "return"
+        }
+      ],
+      "param_names": [
+        "x"
+      ],
+      "params": [
+        60425
+      ],
+      "result_var": 60681,
+      "result_var_name": "tok_ed09"
+    },
+    {
+      "body_offset": 3136,
+      "end_offset": 3187,
+      "header_offset": 3121,
+      "index": 4,
+      "name": "?unsigned_ordered@@YAII@Z",
+      "operation_count": 6,
+      "operations": [
+        {
+          "label": 18,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "GT",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "x",
+              "type": "uint",
+              "value": 61193
+            },
+            {
+              "kind": "lit",
+              "type": "uint",
+              "value": 7
+            }
+          ],
+          "type": "op"
+        },
+        {
+          "name": "CAST",
+          "operands": [],
+          "result_type": "uint",
+          "type": "op"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 61705,
+          "target_name": "tok_f109",
+          "type": "assign"
+        },
+        {
+          "label": 19,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "RETURN",
+          "target": 61705,
+          "target_name": "tok_f109",
+          "type": "return"
+        }
+      ],
+      "param_names": [
+        "x"
+      ],
+      "params": [
+        61193
+      ],
+      "result_var": 61449,
+      "result_var_name": "tok_f009"
+    },
+    {
+      "body_offset": 3246,
+      "end_offset": 3297,
+      "header_offset": 3231,
+      "index": 5,
+      "name": "?signed_ordered@@YAIH@Z",
+      "operation_count": 6,
+      "operations": [
+        {
+          "label": 22,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "GT",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "x",
+              "type": "int",
+              "value": 61961
+            },
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 7
+            }
+          ],
+          "type": "op"
+        },
+        {
+          "name": "CAST",
+          "operands": [],
+          "result_type": "uint",
+          "type": "op"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 62473,
+          "target_name": "tok_f409",
+          "type": "assign"
+        },
+        {
+          "label": 23,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "RETURN",
+          "target": 62473,
+          "target_name": "tok_f409",
+          "type": "return"
+        }
+      ],
+      "param_names": [
+        "x"
+      ],
+      "params": [
+        61961
+      ],
+      "result_var": 62217,
+      "result_var_name": "tok_f309"
+    }
+  ],
+  "globals": {
+    "functions": [
+      "?zero_test@@YAII@Z",
+      "?equality_nonzero@@YAII@Z",
+      "?inequality_nonzero@@YAII@Z",
+      "?signed_positive@@YAIH@Z",
+      "?unsigned_ordered@@YAII@Z",
+      "?signed_ordered@@YAIH@Z"
+    ],
+    "source_path": "z:\\home\\free\\code\\milohax\\dc3-decomp\\msvc-src\\analysis\\il-fixtures\\sources\\il_bool_materialization.cpp"
+  },
+  "imports": {
+    "class_types": [],
+    "known_types": [],
+    "strings": []
+  },
+  "manifest": {
+    "bundle_base": "msvc-src/analysis/il-fixtures/il_bool_materialization/_CL_291e984a",
+    "bundle_name": "il_bool_materialization",
+    "captured_at": "2026-03-10T19:17:02+00:00",
+    "command": [
+      "/home/free/code/milohax/dc3-decomp/build/tools/wibo",
+      "/home/free/code/milohax/dc3-decomp/build/compilers/X360/16.00.11886.00/cl.exe",
+      "/Bd",
+      "/d2nop",
+      "/Ox",
+      "/GS-",
+      "/c",
+      "/FoZ:\\home\\free\\code\\milohax\\dc3-decomp\\msvc-src\\analysis\\il-fixtures\\il_capture.obj",
+      "Z:\\home\\free\\code\\milohax\\dc3-decomp\\msvc-src\\analysis\\il-fixtures\\sources\\il_bool_materialization.cpp"
+    ],
+    "compiler_path": "/home/free/code/milohax/dc3-decomp/build/compilers/X360/16.00.11886.00/cl.exe",
+    "files": {
+      "db": {
+        "exists": true,
+        "path": "_CL_291e984adb",
+        "size": 94
+      },
+      "ex": {
+        "exists": true,
+        "path": "_CL_291e984aex",
+        "size": 3312
+      },
+      "gl": {
+        "exists": true,
+        "path": "_CL_291e984agl",
+        "size": 583
+      },
+      "in": {
+        "exists": true,
+        "path": "_CL_291e984ain",
+        "size": 439
+      },
+      "sy": {
+        "exists": true,
+        "path": "_CL_291e984asy",
+        "size": 180
+      }
+    },
+    "il_base": "_CL_291e984a",
+    "run_cwd": "/home/free/code/milohax/dc3-decomp/msvc-src/analysis/il-fixtures",
+    "source_path": "/home/free/code/milohax/dc3-decomp/msvc-src/analysis/il-fixtures/sources/il_bool_materialization.cpp",
+    "wibo_path": "/home/free/code/milohax/dc3-decomp/build/tools/wibo"
+  },
+  "symbols": {
+    "e309": "x",
+    "e609": "x",
+    "e909": "x",
+    "ec09": "x",
+    "ef09": "x",
+    "f209": "x"
+  },
+  "token_width": 2
+}

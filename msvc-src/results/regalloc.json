@@ -1,0 +1,150 @@
+{
+  "regalloc": [
+    {
+      "variant": "ab",
+      "callee_saved_gprs": [
+        "r31"
+      ],
+      "callee_saved_fprs": [],
+      "prologue": null,
+      "instructions": 17,
+      "asm_hash": "60191c43fed4"
+    },
+    {
+      "variant": "ba",
+      "callee_saved_gprs": [
+        "r31"
+      ],
+      "callee_saved_fprs": [],
+      "prologue": null,
+      "instructions": 16,
+      "asm_hash": "e647f8a0a0b3"
+    },
+    {
+      "test": "var_count",
+      "n": 2,
+      "callee_saved_gprs": [
+        "r31"
+      ],
+      "prologue": null,
+      "instructions": 17,
+      "asm_hash": "60191c43fed4"
+    },
+    {
+      "test": "var_count",
+      "n": 3,
+      "callee_saved_gprs": [
+        "r31",
+        "r30"
+      ],
+      "prologue": null,
+      "instructions": 23,
+      "asm_hash": "b5eec9a015c4"
+    },
+    {
+      "test": "var_count",
+      "n": 4,
+      "callee_saved_gprs": [
+        "r31",
+        "r30",
+        "r29"
+      ],
+      "prologue": "__savegprlr_29",
+      "instructions": 21,
+      "asm_hash": "1109f70c29be"
+    },
+    {
+      "test": "var_count",
+      "n": 5,
+      "callee_saved_gprs": [
+        "r31",
+        "r30",
+        "r29",
+        "r28"
+      ],
+      "prologue": "__savegprlr_28",
+      "instructions": 25,
+      "asm_hash": "6b3c7a95e335"
+    },
+    {
+      "test": "var_count",
+      "n": 6,
+      "callee_saved_gprs": [
+        "r31",
+        "r30",
+        "r29",
+        "r28",
+        "r27"
+      ],
+      "prologue": "__savegprlr_27",
+      "instructions": 29,
+      "asm_hash": "0882605ff8f3"
+    },
+    {
+      "test": "var_count",
+      "n": 7,
+      "callee_saved_gprs": [
+        "r31",
+        "r30",
+        "r29",
+        "r28",
+        "r27",
+        "r26"
+      ],
+      "prologue": "__savegprlr_26",
+      "instructions": 33,
+      "asm_hash": "1596e5f1d874"
+    },
+    {
+      "test": "var_count",
+      "n": 8,
+      "callee_saved_gprs": [
+        "r31",
+        "r30",
+        "r29",
+        "r28",
+        "r27",
+        "r26",
+        "r25"
+      ],
+      "prologue": "__savegprlr_25",
+      "instructions": 37,
+      "asm_hash": "0677e0875287"
+    },
+    {
+      "test": "var_count",
+      "n": 9,
+      "callee_saved_gprs": [
+        "r31",
+        "r30",
+        "r29",
+        "r28",
+        "r27",
+        "r26",
+        "r25",
+        "r24"
+      ],
+      "prologue": "__savegprlr_24",
+      "instructions": 41,
+      "asm_hash": "d4a97f0801b6"
+    },
+    {
+      "test": "var_count",
+      "n": 10,
+      "callee_saved_gprs": [
+        "r31",
+        "r30",
+        "r29",
+        "r28",
+        "r27",
+        "r26",
+        "r25",
+        "r24",
+        "r23"
+      ],
+      "prologue": "__savegprlr_23",
+      "instructions": 45,
+      "asm_hash": "fa98bed7d808"
+    }
+  ]
+}

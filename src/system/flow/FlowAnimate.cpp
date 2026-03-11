@@ -135,7 +135,6 @@ bool FlowAnimate::Activate() {
     mStopRequested = false;
     PushDrivenProperties();
     RndAnimatable *anim = (RndAnimatable *)mAnim;
-    bool _result = false;
     if (anim) {
         if (mImmediateRelease) {
             mAnimTask = nullptr;
@@ -143,45 +142,42 @@ bool FlowAnimate::Activate() {
                 float period = mPeriod;
                 bool wrap = mWrap;
                 int ease = mEase;
-                Symbol type = mType;
+                const Symbol& type = mType;
                 int rate = mRate;
                 float easePower = mEasePower;
-                Task *task;
-                if (0.0f == period) {
+                if (period == 0.0f) {
                     float scale = mScale;
                     float end = mEnd;
                     float start = mStart;
-                    float blend = mBlend;
                     float delay = mDelay;
-                    task = mAnim->Animate(
-                        blend, false, delay, (RndAnimatable::Rate)rate, start, end,
+                    float blend = mBlend;
+                    mAnim->Animate(
+                        blend, mWait, delay, (RndAnimatable::Rate)rate, start, end,
                         0.0f, scale, type, nullptr, (EaseType)ease, easePower, wrap
                     );
-                } else {
-                    float end = mEnd;
-                    float start = mStart;
-                    float blend = mBlend;
-                    float delay = mDelay;
-                    task = mAnim->Animate(
-                        blend, false, delay, (RndAnimatable::Rate)rate, start, end,
-                        period, 1.0f, type, nullptr, (EaseType)ease, easePower, wrap
-                    );
+                    return false;
                 }
-                mAnimTask = static_cast<AnimTask *>(task);
+                float end = mEnd;
+                float start = mStart;
+                float delay = mDelay;
+                float blend = mBlend;
+                mAnim->Animate(
+                    blend, mWait, delay, (RndAnimatable::Rate)rate, start, end,
+                    period, 1.0f, type, nullptr, (EaseType)ease, easePower, wrap
+                );
             } else {
                 float delay = mDelay;
                 float blend = mBlend;
-                Task *task = mAnim->Animate(blend, false, delay, nullptr, kEaseLinear, 2.0f, false);
-                mAnimTask = static_cast<AnimTask *>(task);
+                mAnim->Animate(blend, mWait, delay, nullptr, kEaseLinear, 2.0f, false);
             }
         } else {
             if (mRunningNodes.empty()) {
                 TheFlowMgr->QueueCommand(this, kQueue);
-                                _result = true;
+                return true;
             }
         }
     }
-    return _result;
+    return false;
 }
 
 void FlowAnimate::Execute(QueueState state) {

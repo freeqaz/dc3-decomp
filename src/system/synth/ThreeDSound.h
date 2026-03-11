@@ -10,6 +10,8 @@
 /** "Sound effect object tied to a position.  Changes volume and pan based on the current
  * camera position." */
 class ThreeDSound : public RndTransformable, public Sound {
+    friend class ThreeDSoundManager;
+
 public:
     // Hmx::Object
     virtual ~ThreeDSound() { RELEASE(mDistanceFader); }
@@ -36,6 +38,7 @@ public:
     bool HasMoved();
     void GetVelocity(Vector3 &);
     void SetAngle(float);
+    void SetDistance(float, float);
     void SetDoppler(float);
 
     void EnableDoppler(bool enable) {

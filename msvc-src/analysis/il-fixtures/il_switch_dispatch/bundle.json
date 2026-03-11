@@ -1,0 +1,1444 @@
+{
+  "base": "msvc-src/analysis/il-fixtures/il_switch_dispatch/_CL_fd639457",
+  "debug": {
+    "line_candidates": [
+      1,
+      3,
+      4,
+      10,
+      16,
+      18,
+      21,
+      33,
+      34,
+      116,
+      117,
+      256,
+      262,
+      266,
+      268,
+      274,
+      512
+    ],
+    "strings": []
+  },
+  "files": {
+    "db": {
+      "path": "_CL_fd639457db",
+      "present": true,
+      "size": 139
+    },
+    "ex": {
+      "path": "_CL_fd639457ex",
+      "present": true,
+      "size": 3905
+    },
+    "gl": {
+      "path": "_CL_fd639457gl",
+      "present": true,
+      "size": 704
+    },
+    "in": {
+      "path": "_CL_fd639457in",
+      "present": true,
+      "size": 439
+    },
+    "sy": {
+      "path": "_CL_fd639457sy",
+      "present": true,
+      "size": 444
+    }
+  },
+  "functions": [
+    {
+      "body_offset": 2696,
+      "end_offset": 2880,
+      "header_offset": 2681,
+      "index": 0,
+      "name": "?switch_small@@YAXH@Z",
+      "operation_count": 25,
+      "operations": [
+        {
+          "label": 12,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "SWITCH",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "x",
+              "type": "int",
+              "value": 59401
+            }
+          ],
+          "target": 60169,
+          "target_name": "tok_eb09",
+          "type": "switch"
+        },
+        {
+          "label": 13,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "CALL_START",
+          "operands": [
+            {
+              "kind": "val",
+              "name": "tok_ef09",
+              "value": 61193
+            },
+            {
+              "kind": "ref",
+              "name": "tok_e309",
+              "value": 58121
+            }
+          ],
+          "return_type": "type_1B(0703)",
+          "type": "call_start"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 60425,
+          "target_name": "tok_ec09",
+          "type": "assign"
+        },
+        {
+          "label": 14,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "CALL_START",
+          "operands": [
+            {
+              "kind": "val",
+              "name": "tok_f009",
+              "value": 61449
+            },
+            {
+              "kind": "ref",
+              "name": "tok_e409",
+              "value": 58377
+            }
+          ],
+          "return_type": "type_1B(0703)",
+          "type": "call_start"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 60425,
+          "target_name": "tok_ec09",
+          "type": "assign"
+        },
+        {
+          "label": 15,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "CALL_START",
+          "operands": [
+            {
+              "kind": "val",
+              "name": "tok_f109",
+              "value": 61705
+            },
+            {
+              "kind": "ref",
+              "name": "tok_e509",
+              "value": 58633
+            }
+          ],
+          "return_type": "type_1B(0703)",
+          "type": "call_start"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 60425,
+          "target_name": "tok_ec09",
+          "type": "assign"
+        },
+        {
+          "label": 16,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "CALL_START",
+          "operands": [
+            {
+              "kind": "val",
+              "name": "tok_f209",
+              "value": 61961
+            },
+            {
+              "kind": "ref",
+              "name": "tok_e609",
+              "value": 58889
+            }
+          ],
+          "return_type": "type_1B(0703)",
+          "type": "call_start"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 60425,
+          "target_name": "tok_ec09",
+          "type": "assign"
+        },
+        {
+          "label": 17,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "GOTO",
+          "operands": [],
+          "type": "goto"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 60425,
+          "target_name": "tok_ec09",
+          "type": "assign"
+        },
+        {
+          "default_target": 61961,
+          "default_target_name": "tok_f209",
+          "name": "SWITCH_TABLE",
+          "operands": [
+            {
+              "kind": "ref",
+              "name": "tok_eb09",
+              "value": 60169
+            }
+          ],
+          "result_type": "int",
+          "type": "switch_table"
+        },
+        {
+          "name": "CASE",
+          "operands": [
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 0
+            }
+          ],
+          "target": 61193,
+          "target_name": "tok_ef09",
+          "type": "case",
+          "value": 0
+        },
+        {
+          "name": "CASE",
+          "operands": [
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 1
+            }
+          ],
+          "target": 61449,
+          "target_name": "tok_f009",
+          "type": "case",
+          "value": 1
+        },
+        {
+          "name": "CASE",
+          "operands": [
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 2
+            }
+          ],
+          "target": 61705,
+          "target_name": "tok_f109",
+          "type": "case",
+          "value": 2
+        },
+        {
+          "name": "FALLTHROUGH",
+          "type": "fallthrough"
+        },
+        {
+          "label": 18,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 59913,
+          "target_name": "tok_ea09",
+          "type": "assign"
+        },
+        {
+          "name": "RETURN",
+          "target": 59913,
+          "target_name": "tok_ea09",
+          "type": "return"
+        }
+      ],
+      "param_names": [
+        "x"
+      ],
+      "params": [
+        59401
+      ],
+      "result_var": 59657,
+      "result_var_name": "tok_e909"
+    },
+    {
+      "body_offset": 2939,
+      "end_offset": 3174,
+      "header_offset": 2924,
+      "index": 1,
+      "name": "?switch_dense@@YAHH@Z",
+      "operation_count": 29,
+      "operations": [
+        {
+          "label": 22,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "SWITCH",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "x",
+              "type": "int",
+              "value": 62217
+            }
+          ],
+          "target": 62985,
+          "target_name": "tok_f609",
+          "type": "switch"
+        },
+        {
+          "label": 23,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [
+            {
+              "kind": "val",
+              "name": "tok_fa09",
+              "value": 64009
+            },
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 10
+            }
+          ],
+          "target": 62729,
+          "target_name": "tok_f509",
+          "type": "assign"
+        },
+        {
+          "label": 24,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [
+            {
+              "kind": "val",
+              "name": "tok_fb09",
+              "value": 64265
+            },
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 20
+            }
+          ],
+          "target": 62729,
+          "target_name": "tok_f509",
+          "type": "assign"
+        },
+        {
+          "label": 25,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [
+            {
+              "kind": "val",
+              "name": "tok_fc09",
+              "value": 64521
+            },
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 30
+            }
+          ],
+          "target": 62729,
+          "target_name": "tok_f509",
+          "type": "assign"
+        },
+        {
+          "label": 26,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [
+            {
+              "kind": "val",
+              "name": "tok_fd09",
+              "value": 64777
+            },
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 40
+            }
+          ],
+          "target": 62729,
+          "target_name": "tok_f509",
+          "type": "assign"
+        },
+        {
+          "label": 27,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [
+            {
+              "kind": "val",
+              "name": "tok_fe09",
+              "value": 65033
+            },
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 50
+            }
+          ],
+          "target": 62729,
+          "target_name": "tok_f509",
+          "type": "assign"
+        },
+        {
+          "label": 28,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [
+            {
+              "kind": "val",
+              "name": "tok_ff09",
+              "value": 65289
+            },
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 60
+            }
+          ],
+          "target": 62729,
+          "target_name": "tok_f509",
+          "type": "assign"
+        },
+        {
+          "label": 29,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [
+            {
+              "kind": "val",
+              "name": "tok_000a",
+              "value": 10
+            },
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": -1
+            }
+          ],
+          "target": 62729,
+          "target_name": "tok_f509",
+          "type": "assign"
+        },
+        {
+          "label": 30,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "GOTO",
+          "operands": [],
+          "type": "goto"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 63241,
+          "target_name": "tok_f709",
+          "type": "assign"
+        },
+        {
+          "default_target": 10,
+          "default_target_name": "tok_000a",
+          "name": "SWITCH_TABLE",
+          "operands": [
+            {
+              "kind": "ref",
+              "name": "tok_f609",
+              "value": 62985
+            }
+          ],
+          "result_type": "int",
+          "type": "switch_table"
+        },
+        {
+          "name": "CASE",
+          "operands": [
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 0
+            }
+          ],
+          "target": 64009,
+          "target_name": "tok_fa09",
+          "type": "case",
+          "value": 0
+        },
+        {
+          "name": "CASE",
+          "operands": [
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 1
+            }
+          ],
+          "target": 64265,
+          "target_name": "tok_fb09",
+          "type": "case",
+          "value": 1
+        },
+        {
+          "name": "CASE",
+          "operands": [
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 2
+            }
+          ],
+          "target": 64521,
+          "target_name": "tok_fc09",
+          "type": "case",
+          "value": 2
+        },
+        {
+          "name": "CASE",
+          "operands": [
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 3
+            }
+          ],
+          "target": 64777,
+          "target_name": "tok_fd09",
+          "type": "case",
+          "value": 3
+        },
+        {
+          "name": "CASE",
+          "operands": [
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 4
+            }
+          ],
+          "target": 65033,
+          "target_name": "tok_fe09",
+          "type": "case",
+          "value": 4
+        },
+        {
+          "name": "CASE",
+          "operands": [
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 5
+            }
+          ],
+          "target": 65289,
+          "target_name": "tok_ff09",
+          "type": "case",
+          "value": 5
+        },
+        {
+          "name": "FALLTHROUGH",
+          "type": "fallthrough"
+        },
+        {
+          "label": 31,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "RETURN",
+          "target": 62729,
+          "target_name": "tok_f509",
+          "type": "return"
+        }
+      ],
+      "param_names": [
+        "x"
+      ],
+      "params": [
+        62217
+      ],
+      "result_var": 62473,
+      "result_var_name": "tok_f409"
+    },
+    {
+      "body_offset": 3233,
+      "end_offset": 3417,
+      "header_offset": 3218,
+      "index": 2,
+      "name": "?switch_sparse@@YAXH@Z",
+      "operation_count": 25,
+      "operations": [
+        {
+          "label": 35,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "SWITCH",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "x",
+              "type": "int",
+              "value": 266
+            }
+          ],
+          "target": 1034,
+          "target_name": "tok_040a",
+          "type": "switch"
+        },
+        {
+          "label": 36,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "CALL_START",
+          "operands": [
+            {
+              "kind": "val",
+              "name": "tok_080a",
+              "value": 2058
+            },
+            {
+              "kind": "ref",
+              "name": "tok_e309",
+              "value": 58121
+            }
+          ],
+          "return_type": "type_1B(0703)",
+          "type": "call_start"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 1290,
+          "target_name": "tok_050a",
+          "type": "assign"
+        },
+        {
+          "label": 37,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "CALL_START",
+          "operands": [
+            {
+              "kind": "val",
+              "name": "tok_090a",
+              "value": 2314
+            },
+            {
+              "kind": "ref",
+              "name": "tok_e409",
+              "value": 58377
+            }
+          ],
+          "return_type": "type_1B(0703)",
+          "type": "call_start"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 1290,
+          "target_name": "tok_050a",
+          "type": "assign"
+        },
+        {
+          "label": 38,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "CALL_START",
+          "operands": [
+            {
+              "kind": "val",
+              "name": "tok_0a0a",
+              "value": 2570
+            },
+            {
+              "kind": "ref",
+              "name": "tok_e509",
+              "value": 58633
+            }
+          ],
+          "return_type": "type_1B(0703)",
+          "type": "call_start"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 1290,
+          "target_name": "tok_050a",
+          "type": "assign"
+        },
+        {
+          "label": 39,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "CALL_START",
+          "operands": [
+            {
+              "kind": "val",
+              "name": "tok_0b0a",
+              "value": 2826
+            },
+            {
+              "kind": "ref",
+              "name": "tok_e609",
+              "value": 58889
+            }
+          ],
+          "return_type": "type_1B(0703)",
+          "type": "call_start"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 1290,
+          "target_name": "tok_050a",
+          "type": "assign"
+        },
+        {
+          "label": 40,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "GOTO",
+          "operands": [],
+          "type": "goto"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 1290,
+          "target_name": "tok_050a",
+          "type": "assign"
+        },
+        {
+          "default_target": 2826,
+          "default_target_name": "tok_0b0a",
+          "name": "SWITCH_TABLE",
+          "operands": [
+            {
+              "kind": "ref",
+              "name": "tok_040a",
+              "value": 1034
+            }
+          ],
+          "result_type": "int",
+          "type": "switch_table"
+        },
+        {
+          "name": "CASE",
+          "operands": [
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 1
+            }
+          ],
+          "target": 2058,
+          "target_name": "tok_080a",
+          "type": "case",
+          "value": 1
+        },
+        {
+          "name": "CASE",
+          "operands": [
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 10
+            }
+          ],
+          "target": 2314,
+          "target_name": "tok_090a",
+          "type": "case",
+          "value": 10
+        },
+        {
+          "name": "CASE",
+          "operands": [
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 100
+            }
+          ],
+          "target": 2570,
+          "target_name": "tok_0a0a",
+          "type": "case",
+          "value": 100
+        },
+        {
+          "name": "FALLTHROUGH",
+          "type": "fallthrough"
+        },
+        {
+          "label": 41,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 778,
+          "target_name": "tok_030a",
+          "type": "assign"
+        },
+        {
+          "name": "RETURN",
+          "target": 778,
+          "target_name": "tok_030a",
+          "type": "return"
+        }
+      ],
+      "param_names": [
+        "x"
+      ],
+      "params": [
+        266
+      ],
+      "result_var": 522,
+      "result_var_name": "tok_020a"
+    },
+    {
+      "body_offset": 3476,
+      "end_offset": 3671,
+      "header_offset": 3461,
+      "index": 3,
+      "name": "?switch_fallthrough@@YAHH@Z",
+      "operation_count": 29,
+      "operations": [
+        {
+          "label": 45,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "STORE",
+          "operands": [
+            {
+              "kind": "ref",
+              "name": "result",
+              "value": 3850
+            },
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 0
+            }
+          ],
+          "result_type": "int",
+          "type": "op"
+        },
+        {
+          "label": 46,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "SWITCH",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "x",
+              "type": "int",
+              "value": 3082
+            }
+          ],
+          "target": 4106,
+          "target_name": "tok_100a",
+          "type": "switch"
+        },
+        {
+          "label": 47,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "label": 48,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "ADD_ASSIGN",
+          "operands": [
+            {
+              "kind": "ref",
+              "name": "result",
+              "value": 3850
+            },
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 100
+            }
+          ],
+          "result_type": "int",
+          "type": "op"
+        },
+        {
+          "label": 50,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "label": 51,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "ADD_ASSIGN",
+          "operands": [
+            {
+              "kind": "ref",
+              "name": "result",
+              "value": 3850
+            },
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 10
+            }
+          ],
+          "result_type": "int",
+          "type": "op"
+        },
+        {
+          "label": 52,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 4362,
+          "target_name": "tok_110a",
+          "type": "assign"
+        },
+        {
+          "label": 53,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "label": 54,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "STORE",
+          "operands": [
+            {
+              "kind": "ref",
+              "name": "result",
+              "value": 3850
+            },
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 1
+            }
+          ],
+          "result_type": "int",
+          "type": "op"
+        },
+        {
+          "label": 55,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 4362,
+          "target_name": "tok_110a",
+          "type": "assign"
+        },
+        {
+          "label": 56,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "GOTO",
+          "operands": [],
+          "type": "goto"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 4362,
+          "target_name": "tok_110a",
+          "type": "assign"
+        },
+        {
+          "default_target": 4362,
+          "default_target_name": "tok_110a",
+          "name": "SWITCH_TABLE",
+          "operands": [
+            {
+              "kind": "ref",
+              "name": "tok_100a",
+              "value": 4106
+            }
+          ],
+          "result_type": "int",
+          "type": "switch_table"
+        },
+        {
+          "name": "CASE",
+          "operands": [
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 1
+            }
+          ],
+          "target": 5642,
+          "target_name": "tok_160a",
+          "type": "case",
+          "value": 1
+        },
+        {
+          "name": "CASE",
+          "operands": [
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 2
+            }
+          ],
+          "target": 5386,
+          "target_name": "tok_150a",
+          "type": "case",
+          "value": 2
+        },
+        {
+          "name": "CASE",
+          "operands": [
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 3
+            }
+          ],
+          "target": 5130,
+          "target_name": "tok_140a",
+          "type": "case",
+          "value": 3
+        },
+        {
+          "name": "FALLTHROUGH",
+          "type": "fallthrough"
+        },
+        {
+          "label": 57,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "result",
+              "type": "int",
+              "value": 3850
+            }
+          ],
+          "target": 3594,
+          "target_name": "tok_0e0a",
+          "type": "assign"
+        },
+        {
+          "label": 58,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "RETURN",
+          "target": 3594,
+          "target_name": "tok_0e0a",
+          "type": "return"
+        }
+      ],
+      "param_names": [
+        "x"
+      ],
+      "params": [
+        3082
+      ],
+      "result_var": 3338,
+      "result_var_name": "tok_0d0a"
+    },
+    {
+      "body_offset": 3730,
+      "end_offset": 3890,
+      "header_offset": 3715,
+      "index": 4,
+      "name": "?switch_enum@@YAXI@Z",
+      "operation_count": 22,
+      "operations": [
+        {
+          "label": 62,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "SWITCH",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "state",
+              "type": "uint",
+              "value": 5898
+            }
+          ],
+          "target": 6666,
+          "target_name": "tok_1a0a",
+          "type": "switch"
+        },
+        {
+          "label": 63,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "CALL_START",
+          "operands": [
+            {
+              "kind": "val",
+              "name": "tok_1e0a",
+              "value": 7690
+            },
+            {
+              "kind": "ref",
+              "name": "tok_e309",
+              "value": 58121
+            }
+          ],
+          "return_type": "type_1B(0703)",
+          "type": "call_start"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 6922,
+          "target_name": "tok_1b0a",
+          "type": "assign"
+        },
+        {
+          "label": 64,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "CALL_START",
+          "operands": [
+            {
+              "kind": "val",
+              "name": "tok_1f0a",
+              "value": 7946
+            },
+            {
+              "kind": "ref",
+              "name": "tok_e409",
+              "value": 58377
+            }
+          ],
+          "return_type": "type_1B(0703)",
+          "type": "call_start"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 6922,
+          "target_name": "tok_1b0a",
+          "type": "assign"
+        },
+        {
+          "label": 65,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "CALL_START",
+          "operands": [
+            {
+              "kind": "val",
+              "name": "tok_200a",
+              "value": 8202
+            },
+            {
+              "kind": "ref",
+              "name": "tok_e509",
+              "value": 58633
+            }
+          ],
+          "return_type": "type_1B(0703)",
+          "type": "call_start"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 6922,
+          "target_name": "tok_1b0a",
+          "type": "assign"
+        },
+        {
+          "label": 66,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "GOTO",
+          "operands": [],
+          "type": "goto"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 6922,
+          "target_name": "tok_1b0a",
+          "type": "assign"
+        },
+        {
+          "default_target": 6922,
+          "default_target_name": "tok_1b0a",
+          "name": "SWITCH_TABLE",
+          "operands": [
+            {
+              "kind": "ref",
+              "name": "tok_1a0a",
+              "value": 6666
+            }
+          ],
+          "result_type": "uint",
+          "type": "switch_table"
+        },
+        {
+          "name": "CASE",
+          "operands": [
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 0
+            }
+          ],
+          "target": 7690,
+          "target_name": "tok_1e0a",
+          "type": "case",
+          "value": 0
+        },
+        {
+          "name": "CASE",
+          "operands": [
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 1
+            }
+          ],
+          "target": 7946,
+          "target_name": "tok_1f0a",
+          "type": "case",
+          "value": 1
+        },
+        {
+          "name": "CASE",
+          "operands": [
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 2
+            }
+          ],
+          "target": 8202,
+          "target_name": "tok_200a",
+          "type": "case",
+          "value": 2
+        },
+        {
+          "name": "FALLTHROUGH",
+          "type": "fallthrough"
+        },
+        {
+          "label": 67,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 6410,
+          "target_name": "tok_190a",
+          "type": "assign"
+        },
+        {
+          "name": "RETURN",
+          "target": 6410,
+          "target_name": "tok_190a",
+          "type": "return"
+        }
+      ],
+      "param_names": [
+        "state"
+      ],
+      "params": [
+        5898
+      ],
+      "result_var": 6154,
+      "result_var_name": "tok_180a"
+    }
+  ],
+  "globals": {
+    "functions": [
+      "?switch_small@@YAXH@Z",
+      "?switch_dense@@YAHH@Z",
+      "?switch_sparse@@YAXH@Z",
+      "?switch_fallthrough@@YAHH@Z",
+      "?switch_enum@@YAXI@Z",
+      "?handle_default@@YAXXZ",
+      "?handle_a@@YAXXZ",
+      "?handle_c@@YAXXZ",
+      "?handle_b@@YAXXZ"
+    ],
+    "source_path": "z:\\home\\free\\code\\milohax\\dc3-decomp\\msvc-src\\analysis\\il-fixtures\\sources\\il_switch_dispatch.cpp"
+  },
+  "imports": {
+    "class_types": [],
+    "known_types": [],
+    "strings": []
+  },
+  "manifest": {
+    "bundle_base": "msvc-src/analysis/il-fixtures/il_switch_dispatch/_CL_fd639457",
+    "bundle_name": "il_switch_dispatch",
+    "captured_at": "2026-03-10T19:59:49+00:00",
+    "command": [
+      "/home/free/code/milohax/dc3-decomp/build/tools/wibo",
+      "/home/free/code/milohax/dc3-decomp/build/compilers/X360/16.00.11886.00/cl.exe",
+      "/Bd",
+      "/d2nop",
+      "/Ox",
+      "/GS-",
+      "/c",
+      "/FoZ:\\home\\free\\code\\milohax\\dc3-decomp\\msvc-src\\analysis\\il-fixtures\\il_capture.obj",
+      "Z:\\home\\free\\code\\milohax\\dc3-decomp\\msvc-src\\analysis\\il-fixtures\\sources\\il_switch_dispatch.cpp"
+    ],
+    "compiler_path": "/home/free/code/milohax/dc3-decomp/build/compilers/X360/16.00.11886.00/cl.exe",
+    "files": {
+      "db": {
+        "exists": true,
+        "path": "_CL_fd639457db",
+        "size": 139
+      },
+      "ex": {
+        "exists": true,
+        "path": "_CL_fd639457ex",
+        "size": 3905
+      },
+      "gl": {
+        "exists": true,
+        "path": "_CL_fd639457gl",
+        "size": 704
+      },
+      "in": {
+        "exists": true,
+        "path": "_CL_fd639457in",
+        "size": 439
+      },
+      "sy": {
+        "exists": true,
+        "path": "_CL_fd639457sy",
+        "size": 444
+      }
+    },
+    "il_base": "_CL_fd639457",
+    "run_cwd": "/home/free/code/milohax/dc3-decomp/msvc-src/analysis/il-fixtures",
+    "source_path": "/home/free/code/milohax/dc3-decomp/msvc-src/analysis/il-fixtures/sources/il_switch_dispatch.cpp",
+    "wibo_path": "/home/free/code/milohax/dc3-decomp/build/tools/wibo"
+  },
+  "symbols": {
+    "010a": "x",
+    "0c0a": "x",
+    "0f0a": "result",
+    "170a": "state",
+    "e809": "x",
+    "f309": "x"
+  },
+  "token_width": 2
+}

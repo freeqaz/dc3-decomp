@@ -17,10 +17,20 @@ static NativeCameraInput *sNativeCameraInput = nullptr;
 // Native implementation of GestureMgr::Init — replaces the early return stub.
 // Called from game startup to initialize skeleton tracking via webcam + YOLO pose.
 void GestureMgr_NativeInit() {
+    // In headless mode (tests, CLI tools), skip the pose server entirely.
+    // The 5-second socket connection timeout dominates test startup time.
+    if (getenv("MILO_HEADLESS")) {
+        printf("Native: headless mode, skipping skeleton tracking\n");
+        if (TheGestureMgr) {
+            TheGestureMgr->SetInControllerMode(true);
+            printf("Native: forced controller mode (bypasses Kinect gesture gates)\n");
+        }
+        return;
+    }
+
     if (TheSkeletonProvider) return;
     TheSkeletonProvider = new NativeSkeletonProvider();
 
-    // TODO: make these configurable via DataArray or env vars
     const char *socketPath = getenv("DC3_POSE_SOCKET");
     if (!socketPath) socketPath = "/tmp/dc3_pose.sock";
 

@@ -2,12 +2,13 @@
 
 Inventory of decomp gaps affecting the native build. Prioritized by impact on rendering and UI.
 
-**Last updated**: 2026-03-10
+**Last updated**: 2026-03-12
 
 ## Current State
 
-- **Track A (Engine Boot)**: Boots to `choose_mode_screen`, 51 draw calls/frame, 5000+ frames stable. `Flow::Enter()` and `Flow::Exit()` now implemented — screen navigation should work.
-- **Current UI regression**: `choose_mode_screen` menu content invisible. Root cause confirmed: **camera positioning**. `turbo_shell.cam` sits at Z=-63, ribbons render at Z=285–517, frustum half-width ≈206 at that depth — ribbons are outside the view. Moving `[ui.cam]` to Z=370 produces 447 mesh draw calls (from 0), proving the rendering pipeline is correct. On Xbox, CamShots/PropAnims baked into .milo files reposition the camera; on native, the animation system isn't driving camera position.
+- **Track A (Engine Boot)**: Boots to `choose_mode_screen`, ~450 draw calls/frame, 10000 frames stable. Menu text, icons, ribbons, and shell decorations all visible.
+- **Current rendering**: Text ("jump right in and...", "PLAYERS 1-2"), mode icons, cyan glow effects visible after filtering Kinect voice-tip overlays (grey_alpha.mesh, warning_*.mesh). Some text truncation on right side; bright cyan ray bars on far right.
+- **DTA/Flow/PropAnim chain traced (2026-03-11)**: Full activation path: `RndPollable::Enter()` → `HandleType("enter")` → DTA TypeDef script → `Flow::Activate()` → PropAnim → material alpha/color. DTA execution works, but most panels' enter handlers don't activate enter-transition Flows. Zero UITrigger/EventTrigger objects exist (created dynamically, not in .milo). Two hacks mask this: AlphaForce (alpha 0→1) + auto-animate (blanket PropAnim start). See Track A roadmap for removal plan.
 - **Track B (Milo Viewer)**: Full rendering pipeline. 14/44 demo shots render (8 broken YAML paths).
 - **Weak stubs**: `engine_stubs_generated.cpp` has ~2530 weak function stubs. Any real .cpp implementation automatically overrides them.
 
@@ -41,11 +42,11 @@ Remaining decomp gaps (assembly doesn't match Xbox binary) — file: `src/system
 | `RndText::Load(BinStream&)` | `?Load@RndText@@UAAXAAVBinStream@@@Z` | 94.5% | Near-match |
 | `RndText::FontMap::AllocateMeshes(RndText*, int)` | `?AllocateMeshes@FontMap@RndText@@UAAXPAV2@H@Z` | 88.1% | |
 | `RndText::FitTextEllipsis()` | `?FitTextEllipsis@RndText@@IAAXXZ` | 87.3% | |
-| `RndText::OnComputeCharWidths(unsigned short const*, float*, bool)` | `?OnComputeCharWidths@RndText@@IAAHPBGPAM_N@Z` | 60.0% | Large function |
-| `RndText::FitTextScroll()` | `?FitTextScroll@RndText@@IAAXXZ` | 12.1% | Low match |
-| `RndText::UpdateScrollOffsets()` | `?UpdateScrollOffsets@RndText@@IAAXXZ` | 10.0% | Low match |
-| `RndText::ParseMarkup(unsigned short const*, RndText::StyleState&, unsigned short&)` | `?ParseMarkup@RndText@@IAAPBGPBGAAVStyleState@1@AAG@Z` | 3.2% | |
-| `RndText::SizeCheck()` | `?SizeCheck@RndText@@IAAXXZ` | 0.3% | Effectively unimplemented |
+| `RndText::OnComputeCharWidths(unsigned short const*, float*, bool)` | `?OnComputeCharWidths@RndText@@IAAHPBGPAM_N@Z` | 94.8% | AT_LIMIT (regswap r16↔r17, offset swap, vbtable dispatch) |
+| `RndText::FitTextScroll()` | `?FitTextScroll@RndText@@IAAXXZ` | 96.7% | AT_LIMIT (regswap) |
+| `RndText::UpdateScrollOffsets()` | `?UpdateScrollOffsets@RndText@@IAAXXZ` | 97.8% | AT_LIMIT (regswap) |
+| `RndText::ParseMarkup(unsigned short const*, RndText::StyleState&, unsigned short&)` | `?ParseMarkup@RndText@@IAAPBGPBGAAVStyleState@1@AAG@Z` | 97.2% | AT_LIMIT (regswap) |
+| `RndText::SizeCheck()` | `?SizeCheck@RndText@@IAAXXZ` | 96.5% | AT_LIMIT (regswap, offset swap) |
 
 These are decomp accuracy targets, not native port blockers. Native text rendering works correctly regardless.
 
@@ -86,9 +87,23 @@ These affect menu navigation, list population, and screen transitions.
 - They are trivial inline virtual defaults in source, and the symbol dump shows them folded into ICF-merged tiny functions.
 - The real list polling path is already implemented and complete through `UIList::Poll()`, `UIListDir::PollWidgets()`, and `UIListSlot::Poll()`.
 
-### Choose-Mode Follow-Up — 2026-03-10
+### Choose-Mode Follow-Up — 2026-03-11
 
-**Current status**: camera state was one blocker, but not the only one. Debug and fresh frame-500 capture confirmed:
+**Session 43 discoveries**: Text/icons/ribbons ARE rendering correctly. Two key issues found:
+
+1. **Voice-tip overlay coverage (FIXED)**: Kinect speech UI (grey_alpha.mesh, warning_*.mesh) drew AFTER text with full alpha, covering it. Fixed by filtering in `Mesh_Wgpu.cpp` DrawMeshImmediate.
+
+2. **PropAnim not animating (ROOT CAUSE FOUND)**: 84+ PropAnims exist across all panels but 0 UITriggers/EventTriggers exist to activate them. Investigation chain:
+   - PropAnims loaded correctly from .milo (confirmed via ObjDirItr)
+   - UITrigger factory registered correctly (REGISTER_OBJ_FACTORY in UIManager::Init)
+   - No "Can't make" errors during loading — UITrigger class isn't in .milo binary data
+   - **UITriggers are created dynamically by Flow/DTA scripts at runtime**, not stored in .milo
+   - The Flow proxy system and DTA script execution path need investigation to determine why triggers aren't being created
+   - AlphaForce hack (forcing alpha 0→1 on 198 SrcAlpha meshes) is a symptom, not the fix
+
+3. **Multiply blend enabled**: Previously skipped, now allowed through. With dark background, multiply meshes produce near-zero (invisible) results — correct behavior. Debloom/overlay_colortexture already dark.
+
+**Previous status**: camera state was one blocker, but not the only one. Debug and fresh frame-500 capture confirmed:
 - `turbo_shell.cam`: worldPos=(-125.0, -663.5, -63.0) — loaded from .milo file
 - Ribbons render at final Z=285.5–517.5 (after HamNavList WorldXfm applied)
 - At FOV 34.5° and Y-distance 663.5, visible Z half-width ≈206, so ribbons at Z=348+ from camera are outside frustum
@@ -178,19 +193,113 @@ Sorted by impact x feasibility:
 1. ~~**Fix demo.yaml paths**~~ — **Done**. Removed undefined `dare_streets` scene, fixed duplicate `dare_front` key.
 
 ### Track A — Next Steps
-2. ~~**Flow::Enter()**~~ — **Done**. Implemented with `Flow::Exit()`. 81.8% / 99.1% match respectively.
-3. ~~**Locale data loading**~~ — **Done**. 2091 symbols loaded from 2 files. Fix was proper `mInitialized` constructor init + LocalePanel vtable key function fix.
-4. ~~**Text positioning**~~ — **Verified working** (2026-03-06). No alignment issues — sFlipYZ + ortho projection correct. `FitTextJust()` was missing (undefined symbol crash), now implemented.
-5. ~~**DxCam::Select()**~~ — **Done** (81.3% AT_LIMIT). Fully implemented with boolean materialization, ScreenRect field-by-field copy, member_ref_bind. Remaining gaps are compiler-level (prologue, ShaderMgr caching, SetViewProj forwarding).
-6. **Camera animation on native** — CamShots/PropAnims in .milo files should reposition camera for menu screens. Investigate why the Milo animation system isn't driving camera position on native. May need `RndDir::Enter()` to trigger animations, or `CameraManager` to play CamShots.
-7. **Shell/main panel composition on choose_mode** — the list payload now draws under `[ui.cam]`, but `PanelDir 'main'` still selects `turbo_shell.cam` for the shared shell overlay. Trace which shell/title/overlay elements still depend on `turbo_shell.cam` and whether that camera should be animated, replaced, or split from the list pass.
-8. **Re-test choose_mode_screen without `MILO_DEBUG_UI_CAM_HACK`** — now done for frame 500. Keep using the default `[ui.cam]` path as the baseline; only use the env hack for controlled experiments.
+
+**CRITICAL PATH: DTA TypeDef → Flow → PropAnim activation chain**
+
+The biggest native rendering correctness gap: material alpha/color never animates because DTA-driven Flow activation doesn't fully work. Two hacks mask this:
+- **AlphaForce** (`Mesh_Wgpu.cpp`): Forces alpha=1 on all SrcAlpha materials with alpha<0.01. Too aggressive — makes overlay/effect meshes fully opaque.
+- **Auto-animate** (`PanelDir.cpp`): Starts ALL PropAnims simultaneously on Enter. Causes show/hide conflicts (fade-out PropAnims fight fade-in ones).
+
+**What works on native (confirmed session 43):**
+- DTA TypeDef `enter` handlers fire correctly (`RndPollable::Enter()` → `HandleType("enter")`)
+- DTA script execution pipeline functional (e.g., `ui_objects.dta` letterbox `enter` handler: `{hide_mic.flow activate}`)
+- Flow proxy loading works (inline proxies loaded, objects created)
+- PropAnims loaded from .milo with valid keyframe data (84+ across all panels)
+- PropAnim::SetFrame() drives material properties correctly when called
+- SyncObjects() populates mAnims vectors after loading
+
+**What's missing — roadmap to remove hacks:**
+
+1. **Flow activation on Enter** — Most panels' TypeDef `enter` handlers don't explicitly activate enter-transition Flows. The letterbox panel does (`{hide_mic.flow activate}`), but choose_mode only does `{$this update_postproc}`. The enter-transition animations may be triggered by:
+   - Flow objects with `mStartMode > 0` (auto-start on Enter) — but proxy Flows have mStartMode=0 because PostLoad proxy path skips FlowQueueable::Load. Only `kInlineAlways` proxies get mStartMode=5.
+   - EventTriggers wired to `ui_enter` events — but these need to be created first.
+   - Other screen navigation events we haven't fully traced.
+
+2. **UITrigger/EventTrigger creation** — Zero triggers exist at runtime. They're NOT in .milo binary — they're created dynamically. Possible sources:
+   - Flow graph nodes that create triggers as part of their activation
+   - DTA `{new UITrigger ...}` commands in untraced scripts
+   - Panel-specific initialization paths not yet executed
+
+3. **Selective PropAnim activation** — Replace blanket auto-animate with targeted activation of only enter-transition PropAnims. Requires knowing WHICH PropAnims to start (information normally provided by Flow/trigger wiring).
+
+4. **Material default state** — Materials in .milo have alpha=0 as default. On Xbox, specific PropAnims animate alpha 0→1. Without selective activation, AlphaForce is needed. Removing it requires the full Flow→PropAnim chain working.
+
+**Hack removal dependency chain:**
+```
+Flow activation working → triggers created → specific PropAnims activated
+  → material alpha animated correctly → AlphaForce removable
+  → no show/hide conflicts → auto-animate removable
+```
+
+**Completed steps:**
+- ~~**Flow::Enter()**~~ — **Done**. 81.8% match.
+- ~~**Locale data loading**~~ — **Done**. 2091 symbols loaded.
+- ~~**Text positioning**~~ — **Verified working** (2026-03-06).
+- ~~**DxCam::Select()**~~ — **Done** (81.3% AT_LIMIT).
+- ~~**Camera animation on native**~~ — Superseded. CameraManager only runs in WorldDir::Poll, not PanelDir. Camera positions come from .milo file data, not CameraManager animations.
+- ~~**Voice-tip overlay coverage**~~ — **Fixed** (2026-03-11). Filtering grey_alpha.mesh and warning_*.mesh in DrawMeshImmediate.
+- ~~**Re-test choose_mode_screen without camera hacks**~~ — Done. Default [ui.cam] is the baseline.
+
+**Other rendering improvements:**
+- **Shell/main panel composition** — list payload draws under `[ui.cam]`, shell overlay under `turbo_shell.cam`. Mixed-camera composition issue remains.
+- **Clean up remaining debug logging** — DC3_PROPANIM, DC3_ENTER, DC3_TYPEDEF, DC3_TRANSITION removed (session 43). Check for any remaining DC3_SYNC or DC3_EVTTRIG diagnostics.
 
 ### Remaining Stubs — All Resolved
 4. ~~**SaveLoadManager::Poll()**~~ — **Done** (100% match)
 5. ~~**MoveDir::DrawShowing()**~~ — **Done** (88.8% match)
 6. ~~**BinkMovieImpl::Poll()**~~ — **Done** (95.6% match)
 7. ~~**RandomIntervalGroupSeqInst::Poll()**~~ — **Done** (99.4% match)
+
+## Priority 5: Inlined Subdir Loading (Asset Loading Chain) — FIXED
+
+**Last updated**: 2026-03-11
+
+~~Files with inlined subdirs crash during loading with `FAIL: String chars N > 512`.~~ **FIXED** (2026-03-11).
+
+**Root cause**: Missing `PanelDir` factory registration in test engine init. `REGISTER_OBJ_FACTORY(PanelDir)` lives inside `UIManager::Init()` (`UI.cpp:792`), but the test engine only called `FlowInit()`, `CharInit()`, `WorldInit()`, `HamInit()` — not the full UIManager init (too heavy for tests). Without PanelDir registered, `DirLoader::CreateObjects` produced NULL objects for `PanelDir 'hud'` in `director.milo_xbox`. The NULL object caused `ReadDead` to skip the wrong amount of data, desyncing the stream for subsequent objects — producing garbage revision fields and the `String chars N > 512` abort.
+
+**Fix**: Added `REGISTER_OBJ_FACTORY(PanelDir)`, `REGISTER_OBJ_FACTORY(UIPanel)`, `REGISTER_OBJ_FACTORY(UIScreen)` to `native/tests/test_helpers.cpp`.
+
+**Additional code changes** (from 6-step plan, improving PPC match%):
+1. `ObjectDir::PreLoad`: Switched ~15 `bs >>` to `d >>` (BinStreamRev), added `ShouldBlockSubdirLoad` filtering, fixed pool name
+2. `ObjectDir::PostLoad`: `gLoadingProxyFromDisk` → `TheLoadMgr.EditMode()`, inline condition → `ShouldSaveProxy(bs)`, removed `proxyPath` temp
+3. `ObjectDir::PostLoadInlined`: `ClearAndShrink` → explicit destructor+reconstruct
+
+**Regression tests**: `LoadWorldMasterFile` and `LoadDirectorSubdir` (converted from `EXPECT_DEATH` to normal load-and-verify).
+
+```bash
+cd native/build && ctest -R "LoadDirectorSubdir|LoadWorldMasterFile" --output-on-failure
+```
+
+### Match% Status (post-fix)
+
+| Function | Symbol | Match | Notes |
+|----------|--------|-------|-------|
+| `ObjectDir::PreLoad` | `?PreLoad@ObjectDir@@UAAXAAVBinStream@@@Z` | **87.8%** (was 88.9%) | bs→d, ShouldBlockSubdirLoad, pool name — slight regression from regalloc shift |
+| `ObjectDir::PostLoad` | `?PostLoad@ObjectDir@@UAAXAAVBinStream@@@Z` | **97.9%** (was 85.5%) | EditMode, ShouldSaveProxy |
+| `ObjectDir::PostLoadInlined` | `?PostLoadInlined@ObjectDir@@IAA?AV?$ObjDirPtr@VObjectDir@@@@XZ` | **85.2%** (was 82.5%) | destructor+reconstruct |
+| `DirLoader::LoadObjs` | `?LoadObjs@DirLoader@@IAAXXZ` | **95.3%** | No changes |
+| `DirLoader::CreateObjects` | `?CreateObjects@DirLoader@@IAAXXZ` | **98.8%** | No changes |
+
+### What Loads Successfully
+
+All these assets load correctly, including previously-crashing inlined subdir files:
+- **Inlined subdirs** (fixed): `director.milo_xbox` (RndDir w/ PanelDir 'hud', RndDir 'iconmandir'), `world/gen/world.milo_xbox` (WorldDir w/ deep subdir chain)
+- 8 full venue worlds (2671-3525 objects each): glitterati, dclive, houseparty, rollerrink, bid, dci, throneroom, streetside
+- Character files: main.milo_xbox (59 objects)
+- Shared world subdirs: iconman, peak_spiral, phrase_meter, move_feedback, chars_base (262 objects)
+- UI, SFX, Flow dirs (all archive-backed and standalone)
+
+### Future Work
+
+**If new `.milo_xbox` files crash on native** with "String chars N > 512" or stream desync symptoms, the likely cause is another missing `REGISTER_OBJ_FACTORY` in `test_helpers.cpp`. Diagnostic pattern:
+1. Check for `MILO_NOTIFY` "unknown class" messages in test output
+2. Find where the class is registered (usually in a subsystem `Init()` function)
+3. Add `REGISTER_OBJ_FACTORY(ClassName)` to `test_helpers.cpp` `EnsureEngineInit()`
+
+Currently registered for tests: `PanelDir`, `UIPanel`, `UIScreen` (plus all classes from `FlowInit`, `CharInit`, `WorldInit`, `HamInit`).
+
+**PreLoad match% regression** (88.9% → 87.8%): The `bs >> d >>` changes shifted register allocation to a new dominant r19↔r20 swap. Could potentially be recovered by reverting the `d >>` changes for reads that are functionally identical to `bs >>` (non-rev-dependent scalar types), but the native behavioral fix is more important than the PPC match% here.
 
 ## Key Architecture Notes
 

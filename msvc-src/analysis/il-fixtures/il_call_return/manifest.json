@@ -1,0 +1,48 @@
+{
+  "bundle_base": "msvc-src/analysis/il-fixtures/il_call_return/_CL_8b327891",
+  "bundle_name": "il_call_return",
+  "captured_at": "2026-03-10T19:59:51+00:00",
+  "command": [
+    "/home/free/code/milohax/dc3-decomp/build/tools/wibo",
+    "/home/free/code/milohax/dc3-decomp/build/compilers/X360/16.00.11886.00/cl.exe",
+    "/Bd",
+    "/d2nop",
+    "/Ox",
+    "/GS-",
+    "/c",
+    "/FoZ:\\home\\free\\code\\milohax\\dc3-decomp\\msvc-src\\analysis\\il-fixtures\\il_capture.obj",
+    "Z:\\home\\free\\code\\milohax\\dc3-decomp\\msvc-src\\analysis\\il-fixtures\\sources\\il_call_return.cpp"
+  ],
+  "compiler_path": "/home/free/code/milohax/dc3-decomp/build/compilers/X360/16.00.11886.00/cl.exe",
+  "files": {
+    "db": {
+      "exists": true,
+      "path": "_CL_8b327891db",
+      "size": 684
+    },
+    "ex": {
+      "exists": true,
+      "path": "_CL_8b327891ex",
+      "size": 3867
+    },
+    "gl": {
+      "exists": true,
+      "path": "_CL_8b327891gl",
+      "size": 947
+    },
+    "in": {
+      "exists": true,
+      "path": "_CL_8b327891in",
+      "size": 439
+    },
+    "sy": {
+      "exists": true,
+      "path": "_CL_8b327891sy",
+      "size": 317
+    }
+  },
+  "il_base": "_CL_8b327891",
+  "run_cwd": "/home/free/code/milohax/dc3-decomp/msvc-src/analysis/il-fixtures",
+  "source_path": "/home/free/code/milohax/dc3-decomp/msvc-src/analysis/il-fixtures/sources/il_call_return.cpp",
+  "wibo_path": "/home/free/code/milohax/dc3-decomp/build/tools/wibo"
+}

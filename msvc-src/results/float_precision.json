@@ -1,0 +1,82 @@
+{
+  "float_precision": [
+    {
+      "variant": "double_literal",
+      "has_lfs": true,
+      "has_lfd": false,
+      "has_frsp": false,
+      "callee_saved_gprs": [],
+      "callee_saved_fprs": [],
+      "instructions": [
+        "lis          r11,__real@3a83126f",
+        "lfs          fr1,__real@3a83126f(r11)",
+        "b            ?sink_f@@YAXM@Z"
+      ]
+    },
+    {
+      "variant": "float_literal",
+      "has_lfs": true,
+      "has_lfd": false,
+      "has_frsp": false,
+      "callee_saved_gprs": [],
+      "callee_saved_fprs": [],
+      "instructions": [
+        "lis          r11,__real@3a83126f",
+        "lfs          fr1,__real@3a83126f(r11)",
+        "b            ?sink_f@@YAXM@Z"
+      ]
+    },
+    {
+      "variant": "static_const_float",
+      "has_lfs": true,
+      "has_lfd": false,
+      "has_frsp": false,
+      "callee_saved_gprs": [],
+      "callee_saved_fprs": [],
+      "instructions": [
+        "lis          r11,?k@?1??test@@YAXXZ@4MB",
+        "lfs          fr1,?k@?1??test@@YAXXZ@4MB(r11)",
+        "b            ?sink_f@@YAXM@Z"
+      ]
+    },
+    {
+      "variant": "static_const_double_to_float",
+      "has_lfs": true,
+      "has_lfd": false,
+      "has_frsp": false,
+      "callee_saved_gprs": [],
+      "callee_saved_fprs": [],
+      "instructions": [
+        "lis          r11,?k@?1??test@@YAXXZ@4MB",
+        "lfs          fr1,?k@?1??test@@YAXXZ@4MB(r11)",
+        "b            ?sink_f@@YAXM@Z"
+      ]
+    },
+    {
+      "variant": "inline_100f",
+      "has_lfs": true,
+      "has_lfd": false,
+      "has_frsp": false,
+      "callee_saved_gprs": [],
+      "callee_saved_fprs": [],
+      "instructions": [
+        "lis          r11,__real@42c80000",
+        "lfs          fr1,__real@42c80000(r11)",
+        "b            ?sink_f@@YAXM@Z"
+      ]
+    },
+    {
+      "variant": "static_const_100f",
+      "has_lfs": true,
+      "has_lfd": false,
+      "has_frsp": false,
+      "callee_saved_gprs": [],
+      "callee_saved_fprs": [],
+      "instructions": [
+        "lis          r11,?k@?1??test@@YAXXZ@4MB",
+        "lfs          fr1,?k@?1??test@@YAXXZ@4MB(r11)",
+        "b            ?sink_f@@YAXM@Z"
+      ]
+    }
+  ]
+}

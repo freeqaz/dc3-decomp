@@ -1,0 +1,1050 @@
+{
+  "base": "msvc-src/analysis/il-fixtures/il_branch_polarity/_CL_f52292bc",
+  "debug": {
+    "line_candidates": [
+      1,
+      2,
+      3,
+      4,
+      10,
+      16,
+      18,
+      21,
+      33,
+      34,
+      116,
+      117,
+      256,
+      262,
+      266,
+      268,
+      270,
+      274,
+      512
+    ],
+    "strings": []
+  },
+  "files": {
+    "db": {
+      "path": "_CL_f52292bcdb",
+      "present": true,
+      "size": 155
+    },
+    "ex": {
+      "path": "_CL_f52292bcex",
+      "present": true,
+      "size": 3839
+    },
+    "gl": {
+      "path": "_CL_f52292bcgl",
+      "present": true,
+      "size": 783
+    },
+    "in": {
+      "path": "_CL_f52292bcin",
+      "present": true,
+      "size": 439
+    },
+    "sy": {
+      "path": "_CL_f52292bcsy",
+      "present": true,
+      "size": 409
+    }
+  },
+  "functions": [
+    {
+      "body_offset": 2696,
+      "end_offset": 2807,
+      "header_offset": 2681,
+      "index": 0,
+      "name": "?branch_eq_zero@@YAXH@Z",
+      "operation_count": 16,
+      "operations": [
+        {
+          "label": 11,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "EQ",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "x",
+              "type": "int",
+              "value": 59145
+            },
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 0
+            }
+          ],
+          "type": "op"
+        },
+        {
+          "name": "COND_BRANCH",
+          "operands": [],
+          "target": 59913,
+          "target_name": "tok_ea09",
+          "type": "branch"
+        },
+        {
+          "label": 12,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "CALL_START",
+          "operands": [
+            {
+              "kind": "ref",
+              "name": "tok_e409",
+              "value": 58377
+            }
+          ],
+          "return_type": "type_1B(0703)",
+          "type": "call_start"
+        },
+        {
+          "label": 13,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "GOTO",
+          "operands": [],
+          "type": "goto"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 60169,
+          "target_name": "tok_eb09",
+          "type": "assign"
+        },
+        {
+          "label": 14,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "CALL_START",
+          "operands": [
+            {
+              "kind": "ref",
+              "name": "tok_e509",
+              "value": 58633
+            }
+          ],
+          "return_type": "type_1B(0703)",
+          "type": "call_start"
+        },
+        {
+          "label": 15,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "GOTO",
+          "operands": [],
+          "type": "goto"
+        },
+        {
+          "name": "FALLTHROUGH",
+          "type": "fallthrough"
+        },
+        {
+          "label": 16,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 59657,
+          "target_name": "tok_e909",
+          "type": "assign"
+        },
+        {
+          "name": "RETURN",
+          "target": 59657,
+          "target_name": "tok_e909",
+          "type": "return"
+        }
+      ],
+      "param_names": [
+        "x"
+      ],
+      "params": [
+        59145
+      ],
+      "result_var": 59401,
+      "result_var_name": "tok_e809"
+    },
+    {
+      "body_offset": 2866,
+      "end_offset": 2977,
+      "header_offset": 2851,
+      "index": 1,
+      "name": "?branch_ne_zero@@YAXH@Z",
+      "operation_count": 16,
+      "operations": [
+        {
+          "label": 20,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "NE",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "x",
+              "type": "int",
+              "value": 60425
+            },
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 0
+            }
+          ],
+          "type": "op"
+        },
+        {
+          "name": "COND_BRANCH",
+          "operands": [],
+          "target": 61193,
+          "target_name": "tok_ef09",
+          "type": "branch"
+        },
+        {
+          "label": 21,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "CALL_START",
+          "operands": [
+            {
+              "kind": "ref",
+              "name": "tok_e409",
+              "value": 58377
+            }
+          ],
+          "return_type": "type_1B(0703)",
+          "type": "call_start"
+        },
+        {
+          "label": 22,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "GOTO",
+          "operands": [],
+          "type": "goto"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 61449,
+          "target_name": "tok_f009",
+          "type": "assign"
+        },
+        {
+          "label": 23,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "CALL_START",
+          "operands": [
+            {
+              "kind": "ref",
+              "name": "tok_e509",
+              "value": 58633
+            }
+          ],
+          "return_type": "type_1B(0703)",
+          "type": "call_start"
+        },
+        {
+          "label": 24,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "GOTO",
+          "operands": [],
+          "type": "goto"
+        },
+        {
+          "name": "FALLTHROUGH",
+          "type": "fallthrough"
+        },
+        {
+          "label": 25,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 60937,
+          "target_name": "tok_ee09",
+          "type": "assign"
+        },
+        {
+          "name": "RETURN",
+          "target": 60937,
+          "target_name": "tok_ee09",
+          "type": "return"
+        }
+      ],
+      "param_names": [
+        "x"
+      ],
+      "params": [
+        60425
+      ],
+      "result_var": 60681,
+      "result_var_name": "tok_ed09"
+    },
+    {
+      "body_offset": 3036,
+      "end_offset": 3129,
+      "header_offset": 3021,
+      "index": 2,
+      "name": "?branch_guard@@YAXH@Z",
+      "operation_count": 13,
+      "operations": [
+        {
+          "label": 29,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "EQ",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "x",
+              "type": "int",
+              "value": 61705
+            },
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 0
+            }
+          ],
+          "type": "op"
+        },
+        {
+          "name": "COND_BRANCH",
+          "operands": [],
+          "target": 62473,
+          "target_name": "tok_f409",
+          "type": "branch"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 62217,
+          "target_name": "tok_f309",
+          "type": "assign"
+        },
+        {
+          "label": 30,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "GOTO",
+          "operands": [],
+          "type": "goto"
+        },
+        {
+          "name": "FALLTHROUGH",
+          "type": "fallthrough"
+        },
+        {
+          "name": "CALL_START",
+          "operands": [
+            {
+              "kind": "ref",
+              "name": "tok_e409",
+              "value": 58377
+            }
+          ],
+          "return_type": "type_1B(0703)",
+          "type": "call_start"
+        },
+        {
+          "label": 31,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "CALL_START",
+          "operands": [
+            {
+              "kind": "ref",
+              "name": "tok_e509",
+              "value": 58633
+            }
+          ],
+          "return_type": "type_1B(0703)",
+          "type": "call_start"
+        },
+        {
+          "label": 32,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 62217,
+          "target_name": "tok_f309",
+          "type": "assign"
+        },
+        {
+          "name": "RETURN",
+          "target": 62217,
+          "target_name": "tok_f309",
+          "type": "return"
+        }
+      ],
+      "param_names": [
+        "x"
+      ],
+      "params": [
+        61705
+      ],
+      "result_var": 61961,
+      "result_var_name": "tok_f209"
+    },
+    {
+      "body_offset": 3188,
+      "end_offset": 3368,
+      "header_offset": 3173,
+      "index": 3,
+      "name": "?branch_nested@@YAXHH@Z",
+      "operation_count": 24,
+      "operations": [
+        {
+          "label": 36,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "GT",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "x",
+              "type": "int",
+              "value": 62729
+            },
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 0
+            }
+          ],
+          "type": "op"
+        },
+        {
+          "name": "COND_BRANCH",
+          "operands": [],
+          "target": 63753,
+          "target_name": "tok_f909",
+          "type": "branch"
+        },
+        {
+          "label": 37,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "GT",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "y",
+              "type": "int",
+              "value": 62985
+            },
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 0
+            }
+          ],
+          "type": "op"
+        },
+        {
+          "name": "COND_BRANCH",
+          "operands": [],
+          "target": 64009,
+          "target_name": "tok_fa09",
+          "type": "branch"
+        },
+        {
+          "label": 38,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "CALL_START",
+          "operands": [
+            {
+              "kind": "ref",
+              "name": "tok_e409",
+              "value": 58377
+            }
+          ],
+          "return_type": "type_1B(0703)",
+          "type": "call_start"
+        },
+        {
+          "label": 39,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 64265,
+          "target_name": "tok_fb09",
+          "type": "assign"
+        },
+        {
+          "label": 40,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "CALL_START",
+          "operands": [
+            {
+              "kind": "ref",
+              "name": "tok_e509",
+              "value": 58633
+            }
+          ],
+          "return_type": "type_1B(0703)",
+          "type": "call_start"
+        },
+        {
+          "label": 41,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "label": 42,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "GOTO",
+          "operands": [],
+          "type": "goto"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 64521,
+          "target_name": "tok_fc09",
+          "type": "assign"
+        },
+        {
+          "label": 43,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "CALL_START",
+          "operands": [
+            {
+              "kind": "ref",
+              "name": "tok_e609",
+              "value": 58889
+            }
+          ],
+          "return_type": "type_1B(0703)",
+          "type": "call_start"
+        },
+        {
+          "label": 44,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "GOTO",
+          "operands": [],
+          "type": "goto"
+        },
+        {
+          "name": "FALLTHROUGH",
+          "type": "fallthrough"
+        },
+        {
+          "label": 45,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 63497,
+          "target_name": "tok_f809",
+          "type": "assign"
+        },
+        {
+          "name": "RETURN",
+          "target": 63497,
+          "target_name": "tok_f809",
+          "type": "return"
+        }
+      ],
+      "param_names": [
+        "y",
+        "x"
+      ],
+      "params": [
+        62985,
+        62729
+      ],
+      "result_var": 63241,
+      "result_var_name": "tok_f709"
+    },
+    {
+      "body_offset": 3427,
+      "end_offset": 3520,
+      "header_offset": 3412,
+      "index": 4,
+      "name": "?branch_signed_gt@@YAXH@Z",
+      "operation_count": 12,
+      "operations": [
+        {
+          "label": 49,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "GT",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "x",
+              "type": "int",
+              "value": 64777
+            },
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 5
+            }
+          ],
+          "type": "op"
+        },
+        {
+          "name": "COND_BRANCH",
+          "operands": [],
+          "target": 10,
+          "target_name": "tok_000a",
+          "type": "branch"
+        },
+        {
+          "name": "CALL_START",
+          "operands": [
+            {
+              "kind": "ref",
+              "name": "tok_e409",
+              "value": 58377
+            }
+          ],
+          "return_type": "type_1B(0703)",
+          "type": "call_start"
+        },
+        {
+          "name": "GOTO",
+          "operands": [],
+          "type": "goto"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 266,
+          "target_name": "tok_010a",
+          "type": "assign"
+        },
+        {
+          "name": "CALL_START",
+          "operands": [
+            {
+              "kind": "val",
+              "name": "tok_000a",
+              "value": 10
+            },
+            {
+              "kind": "ref",
+              "name": "tok_e509",
+              "value": 58633
+            }
+          ],
+          "return_type": "type_1B(0703)",
+          "type": "call_start"
+        },
+        {
+          "name": "GOTO",
+          "operands": [],
+          "type": "goto"
+        },
+        {
+          "name": "FALLTHROUGH",
+          "type": "fallthrough"
+        },
+        {
+          "label": 50,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 65289,
+          "target_name": "tok_ff09",
+          "type": "assign"
+        },
+        {
+          "name": "RETURN",
+          "target": 65289,
+          "target_name": "tok_ff09",
+          "type": "return"
+        }
+      ],
+      "param_names": [
+        "x"
+      ],
+      "params": [
+        64777
+      ],
+      "result_var": 65033,
+      "result_var_name": "tok_fe09"
+    },
+    {
+      "body_offset": 3579,
+      "end_offset": 3672,
+      "header_offset": 3564,
+      "index": 5,
+      "name": "?branch_unsigned_gt@@YAXI@Z",
+      "operation_count": 12,
+      "operations": [
+        {
+          "label": 53,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "GT",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "x",
+              "type": "uint",
+              "value": 522
+            },
+            {
+              "kind": "lit",
+              "type": "uint",
+              "value": 5
+            }
+          ],
+          "type": "op"
+        },
+        {
+          "name": "COND_BRANCH",
+          "operands": [],
+          "target": 1290,
+          "target_name": "tok_050a",
+          "type": "branch"
+        },
+        {
+          "name": "CALL_START",
+          "operands": [
+            {
+              "kind": "ref",
+              "name": "tok_e409",
+              "value": 58377
+            }
+          ],
+          "return_type": "type_1B(0703)",
+          "type": "call_start"
+        },
+        {
+          "name": "GOTO",
+          "operands": [],
+          "type": "goto"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 1546,
+          "target_name": "tok_060a",
+          "type": "assign"
+        },
+        {
+          "name": "CALL_START",
+          "operands": [
+            {
+              "kind": "val",
+              "name": "tok_050a",
+              "value": 1290
+            },
+            {
+              "kind": "ref",
+              "name": "tok_e509",
+              "value": 58633
+            }
+          ],
+          "return_type": "type_1B(0703)",
+          "type": "call_start"
+        },
+        {
+          "name": "GOTO",
+          "operands": [],
+          "type": "goto"
+        },
+        {
+          "name": "FALLTHROUGH",
+          "type": "fallthrough"
+        },
+        {
+          "label": 54,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 1034,
+          "target_name": "tok_040a",
+          "type": "assign"
+        },
+        {
+          "name": "RETURN",
+          "target": 1034,
+          "target_name": "tok_040a",
+          "type": "return"
+        }
+      ],
+      "param_names": [
+        "x"
+      ],
+      "params": [
+        522
+      ],
+      "result_var": 778,
+      "result_var_name": "tok_030a"
+    },
+    {
+      "body_offset": 3731,
+      "end_offset": 3824,
+      "header_offset": 3716,
+      "index": 6,
+      "name": "?branch_signed_le@@YAXH@Z",
+      "operation_count": 12,
+      "operations": [
+        {
+          "label": 57,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "LE",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "x",
+              "type": "int",
+              "value": 1802
+            },
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 0
+            }
+          ],
+          "type": "op"
+        },
+        {
+          "name": "COND_BRANCH",
+          "operands": [],
+          "target": 2570,
+          "target_name": "tok_0a0a",
+          "type": "branch"
+        },
+        {
+          "name": "CALL_START",
+          "operands": [
+            {
+              "kind": "ref",
+              "name": "tok_e409",
+              "value": 58377
+            }
+          ],
+          "return_type": "type_1B(0703)",
+          "type": "call_start"
+        },
+        {
+          "name": "GOTO",
+          "operands": [],
+          "type": "goto"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 2826,
+          "target_name": "tok_0b0a",
+          "type": "assign"
+        },
+        {
+          "name": "CALL_START",
+          "operands": [
+            {
+              "kind": "val",
+              "name": "tok_0a0a",
+              "value": 2570
+            },
+            {
+              "kind": "ref",
+              "name": "tok_e509",
+              "value": 58633
+            }
+          ],
+          "return_type": "type_1B(0703)",
+          "type": "call_start"
+        },
+        {
+          "name": "GOTO",
+          "operands": [],
+          "type": "goto"
+        },
+        {
+          "name": "FALLTHROUGH",
+          "type": "fallthrough"
+        },
+        {
+          "label": 58,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 2314,
+          "target_name": "tok_090a",
+          "type": "assign"
+        },
+        {
+          "name": "RETURN",
+          "target": 2314,
+          "target_name": "tok_090a",
+          "type": "return"
+        }
+      ],
+      "param_names": [
+        "x"
+      ],
+      "params": [
+        1802
+      ],
+      "result_var": 2058,
+      "result_var_name": "tok_080a"
+    }
+  ],
+  "globals": {
+    "functions": [
+      "?branch_eq_zero@@YAXH@Z",
+      "?branch_ne_zero@@YAXH@Z",
+      "?branch_guard@@YAXH@Z",
+      "?branch_nested@@YAXHH@Z",
+      "?branch_signed_gt@@YAXH@Z",
+      "?branch_unsigned_gt@@YAXI@Z",
+      "?branch_signed_le@@YAXH@Z",
+      "?do_c@@YAXXZ",
+      "?do_a@@YAXXZ",
+      "?do_b@@YAXXZ"
+    ],
+    "source_path": "z:\\home\\free\\code\\milohax\\dc3-decomp\\msvc-src\\analysis\\il-fixtures\\sources\\il_branch_polarity.cpp"
+  },
+  "imports": {
+    "class_types": [],
+    "known_types": [],
+    "strings": []
+  },
+  "manifest": {
+    "bundle_base": "msvc-src/analysis/il-fixtures/il_branch_polarity/_CL_f52292bc",
+    "bundle_name": "il_branch_polarity",
+    "captured_at": "2026-03-10T19:59:47+00:00",
+    "command": [
+      "/home/free/code/milohax/dc3-decomp/build/tools/wibo",
+      "/home/free/code/milohax/dc3-decomp/build/compilers/X360/16.00.11886.00/cl.exe",
+      "/Bd",
+      "/d2nop",
+      "/Ox",
+      "/GS-",
+      "/c",
+      "/FoZ:\\home\\free\\code\\milohax\\dc3-decomp\\msvc-src\\analysis\\il-fixtures\\il_capture.obj",
+      "Z:\\home\\free\\code\\milohax\\dc3-decomp\\msvc-src\\analysis\\il-fixtures\\sources\\il_branch_polarity.cpp"
+    ],
+    "compiler_path": "/home/free/code/milohax/dc3-decomp/build/compilers/X360/16.00.11886.00/cl.exe",
+    "files": {
+      "db": {
+        "exists": true,
+        "path": "_CL_f52292bcdb",
+        "size": 155
+      },
+      "ex": {
+        "exists": true,
+        "path": "_CL_f52292bcex",
+        "size": 3839
+      },
+      "gl": {
+        "exists": true,
+        "path": "_CL_f52292bcgl",
+        "size": 783
+      },
+      "in": {
+        "exists": true,
+        "path": "_CL_f52292bcin",
+        "size": 439
+      },
+      "sy": {
+        "exists": true,
+        "path": "_CL_f52292bcsy",
+        "size": 409
+      }
+    },
+    "il_base": "_CL_f52292bc",
+    "run_cwd": "/home/free/code/milohax/dc3-decomp/msvc-src/analysis/il-fixtures",
+    "source_path": "/home/free/code/milohax/dc3-decomp/msvc-src/analysis/il-fixtures/sources/il_branch_polarity.cpp",
+    "wibo_path": "/home/free/code/milohax/dc3-decomp/build/tools/wibo"
+  },
+  "symbols": {
+    "020a": "x",
+    "070a": "x",
+    "e709": "x",
+    "ec09": "x",
+    "f109": "x",
+    "f509": "x",
+    "f609": "y",
+    "fd09": "x"
+  },
+  "token_width": 2
+}

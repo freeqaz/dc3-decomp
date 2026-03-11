@@ -620,6 +620,14 @@ static void DrawMeshImmediate(RndMesh* mesh) {
             strstr(name, "spotlight") || strstr(name, "nav_tut")) {
             return;
         }
+        // Voice-tip / speech warning overlays (Kinect speech UI).
+        // On Xbox, controller_mode.flow hides these in controller mode.
+        // On native, speech is unavailable and these full-screen overlays
+        // paint over the already-rendered menu text and ribbon content.
+        if (!strcmp(name, "grey_alpha.mesh") ||
+            !strncmp(name, "warning_", 8)) {
+            return;
+        }
     }
 
     // Ensure mesh data is on GPU
@@ -641,17 +649,13 @@ static void DrawMeshImmediate(RndMesh* mesh) {
     key.shaderType = 18; // kStandardShader
 
     BaseMaterial::Blend matBlend = mat->GetBlend();
-    // Multiply blend requires a bright destination to multiply against.
-    // Without a 3D venue behind the UI, the destination is dark → Dst*Src produces
-    // bright white rectangles that obscure text. Skip these meshes.
-    if (matBlend == BaseMaterial::kBlendMultiply) {
-        if (capturing) {
-            auto& rec = FrameCapture::Get().AddSkip(mesh->Name(), "multiply blend");
-            rec.materialName = mat->Name();
-            rec.heuristicsApplied = kHeuristicMultiplySkip;
-        }
-        return;
-    }
+    // Multiply blend: D3D9 DESTCOLOR × SRCCOLOR.
+    // On Xbox, multiply meshes (debloom, overlay_colortexture) modulate the
+    // existing framebuffer by their texture/color. With a dark background
+    // the result is near-black (dst≈0 → src*dst≈0), which is correct —
+    // debloom is meant to darken bloom regions back toward the base image.
+    // Previously skipped to avoid "white rectangles", but the real issue
+    // was shader misconfiguration (now fixed). Let multiply through.
     key.blend = (WgpuBlend)matBlend;
     key.zMode = isTextMesh ? (WgpuZMode)0 : (WgpuZMode)mat->GetZMode(); // No depth for text
     key.cull = isTextMesh ? (WgpuCull)0 : (WgpuCull)mat->GetCull(); // No cull for text
@@ -676,10 +680,11 @@ static void DrawMeshImmediate(RndMesh* mesh) {
     matUni.color[2] = matColor.blue;
     matUni.color[3] = matColor.alpha;
 
-    // Many DC3 UI materials have alpha=0 at load time, normally driven to visible
-    // values by PropAnim. Force alpha to 1 for SrcAlpha materials so they don't
-    // stay invisible if animation hasn't run yet. Also needed for font/text materials
-    // whose alpha is set by RndText::DrawShowing but restored before deferred flush.
+    // Many DC3 UI materials have alpha=0 in their .milo defaults. On Xbox, DTA
+    // TypeDef enter scripts activate specific Flow→PropAnims that drive alpha from
+    // 0→1. Since we don't run those scripts on native, force alpha to 1 for all
+    // SrcAlpha materials. This also fixes text materials whose alpha is temporarily
+    // set by RndText::DrawShowing but restored before the deferred WebGPU flush.
     if (matUni.color[3] < 0.01f && matBlend == BaseMaterial::kBlendSrcAlpha) {
         matUni.color[3] = 1.0f;
         heuristics |= kHeuristicAlphaForce;

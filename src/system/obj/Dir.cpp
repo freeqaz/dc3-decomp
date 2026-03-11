@@ -23,6 +23,7 @@
 #include "utl/Std.h"
 #include "utl/Symbol.h"
 #include "utl/BinStream.h"
+#include <algorithm>
 #include <utility>
 
 const char *kNotObjectMsg = "Could not find %s in dir \"%s\"";
@@ -760,7 +761,8 @@ ObjDirPtr<ObjectDir> ObjectDir::PostLoadInlined() {
     InlinedDir iDir = mInlinedDirs.back();
     mInlinedDirs.pop_back();
     if (mInlinedDirs.size() == 0) {
-        ClearAndShrink(mInlinedDirs);
+        mInlinedDirs.~vector();
+        new (&mInlinedDirs) std::vector<InlinedDir>();
     }
     if (iDir.shared && iDir.file.length() != 0 && !iDir.dir) {
         MILO_NOTIFY("Couldn't load shared inlined file %s\n", iDir.file);
@@ -940,15 +942,15 @@ void ObjectDir::PreLoad(BinStream &bs) {
     if (d.rev > 0x19) {
         if (d.rev < 0x1B) {
             unsigned char b;
-            bs >> b;
+            d >> b;
             mAlwaysInlined = b;
         } else {
-            bs >> mAlwaysInlined;
+            d >> mAlwaysInlined;
         }
         int hashLen;
-        bs >> hashLen;
+        d >> hashLen;
         if (hashLen) {
-            char *hash = (char *)MemOrPoolAlloc(hashLen + 1, __FILE__, 0x9B0, nullptr);
+            char *hash = (char *)MemOrPoolAlloc(hashLen + 1, __FILE__, 0x9B0, "Always Inline CDB");
             mAlwaysInlineHash = hash;
             bs.Read(hash, hashLen);
             hash[hashLen] = '\0';
@@ -956,19 +958,19 @@ void ObjectDir::PreLoad(BinStream &bs) {
     }
 
     if (d.rev > 1) {
-        bs >> mViewports;
-        bs >> (int &)mCurViewportID;
+        d >> mViewports;
+        d >> (int &)mCurViewportID;
     }
 
     if (d.rev > 0xC) {
         if (d.rev > 0x13) {
             if (!gLoadingProxyFromDisk) {
                 unsigned char proxyType;
-                bs >> proxyType;
+                d >> proxyType;
                 mInlineProxyType = (InlineDirType)proxyType;
             } else {
                 unsigned char dummy;
-                bs >> dummy;
+                d >> dummy;
             }
         }
         if (gLoadingProxyFromDisk || mProxyOverride) {
@@ -1012,17 +1014,26 @@ void ObjectDir::PreLoad(BinStream &bs) {
     static std::vector<FilePath> inlinedSubDirs;
 
     if (d.rev > 2) {
-        bs >> notInlinedSubDirs;
+        d >> notInlinedSubDirs;
         std::vector<int> intVec;
         if (d.rev == 0x17) {
-            bs >> intVec;
+            d >> intVec;
         }
         if (d.rev > 0x14) {
-            bs >> mInlineSubDirType;
-            bs >> inlinedSubDirs;
+            d >> mInlineSubDirType;
+            d >> inlinedSubDirs;
         } else {
             inlinedSubDirs.clear();
         }
+
+        notInlinedSubDirs.erase(
+            std::remove_if(notInlinedSubDirs.begin(), notInlinedSubDirs.end(),
+                           DirLoader::ShouldBlockSubdirLoad),
+            notInlinedSubDirs.end());
+        inlinedSubDirs.erase(
+            std::remove_if(inlinedSubDirs.begin(), inlinedSubDirs.end(),
+                           DirLoader::ShouldBlockSubdirLoad),
+            inlinedSubDirs.end());
 
         int i20 = 0;
         if (SaveSubdirs() || inlinedSubDirs.size() != 0 || notInlinedSubDirs.size() != 0) {
@@ -1058,7 +1069,7 @@ void ObjectDir::PreLoad(BinStream &bs) {
                 InlineDirType dType;
                 if (d.rev > 0x18) {
                     unsigned char b;
-                    bs >> b;
+                    d >> b;
                     MILO_ASSERT_RANGE_EQ(b, kInlineCached, kInlineCachedShared, 0x3C3);
                     dType = (InlineDirType)b;
                 } else {
@@ -1100,7 +1111,7 @@ void ObjectDir::PreLoad(BinStream &bs) {
             boolVec[i] = true;
         } else {
             bool b;
-            bs >> b;
+            d >> b;
             boolVec[i] = b;
         }
     }
@@ -1216,17 +1227,16 @@ void ObjectDir::PostLoad(BinStream &bs) {
 
     if (mProxyOverride) {
         mProxyOverride = false;
-        if (!gLoadingProxyFromDisk
+        if (!TheLoadMgr.EditMode()
             && (!IsProxy()
                 || (mInlineProxyType == kInlineCached || mInlineProxyType == kInlineAlways))) {
             MILO_FAIL("You cannot override an inlined proxy!");
         }
-    } else if (IsProxy() && (!mProxyFile.empty() || InlineProxy(bs))) {
+    } else if (ShouldSaveProxy(bs)) {
         DeleteObjects();
         DeleteSubDirs();
-        FilePath proxyPath = mProxyFile.empty() ? FilePath("") : mProxyFile;
         DirLoader *dl = new DirLoader(
-            proxyPath,
+            mProxyFile,
             kLoadFront,
             nullptr,
             InlineProxy(bs) ? &bs : nullptr,

@@ -28,6 +28,9 @@ class TestAccumulateResult(unittest.TestCase):
             "shape_counts": {},
             "fact_boost_counts": {},
             "fact_suppress_counts": {},
+            "il_analyzed_variants": 0,
+            "il_unique_buckets": 0,
+            "il_duplicate_buckets": 0,
         }
         result = {
             "error": None,
@@ -42,6 +45,9 @@ class TestAccumulateResult(unittest.TestCase):
             "codegen_shapes": ["signed_positive", "zero_test"],
             "fact_boost_patterns": ["bool_materialize", "signed_unsigned"],
             "fact_suppress_patterns": ["u8_to_unsigned_long"],
+            "il_analyzed_variants": 4,
+            "il_unique_buckets": 3,
+            "il_duplicate_buckets": 1,
         }
 
         _accumulate_result(stats, result)
@@ -53,6 +59,9 @@ class TestAccumulateResult(unittest.TestCase):
         self.assertEqual(stats["fact_boost_counts"]["bool_materialize"], 1)
         self.assertEqual(stats["fact_boost_counts"]["signed_unsigned"], 1)
         self.assertEqual(stats["fact_suppress_counts"]["u8_to_unsigned_long"], 1)
+        self.assertEqual(stats["il_analyzed_variants"], 4)
+        self.assertEqual(stats["il_unique_buckets"], 3)
+        self.assertEqual(stats["il_duplicate_buckets"], 1)
         self.assertEqual(stats["pattern_wins"]["bool_materialize"]["wins"], 1)
 
 

@@ -1,6 +1,8 @@
 #include "synth/ThreeDSound.h"
+#include "math/Decibels.h"
 #include "math/Easing.h"
 #include "math/Rot.h"
+#include "math/Utl.h"
 #include "math/Vec.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
@@ -218,4 +220,56 @@ void ThreeDSound::SetDoppler(float doppler) {
         powed = 1.0f;
     }
     mDistanceFader->SetTranspose(CalcTransposeFromSpeed(powed));
+}
+
+void ThreeDSound::CalculateFaderVolume() {
+    float vol;
+    if (unk20c < mSilenceDistance) {
+        if (unk20c <= mMinFalloffDistance) {
+            vol = 0.0f;
+        } else {
+            if (mShape != 0) {
+                if (mShape == 1) {
+                    if (mRadius < unk210) {
+                        mDistanceFader->SetVolume(-96.0f);
+                        return;
+                    }
+                } else {
+                    MILO_FAIL("Calculating volume for unknown shape %d\n", mShape);
+                }
+            }
+            float invRange = 1.0f / (mMinFalloffDistance - mSilenceDistance);
+            float t = invRange * unk20c - (mMinFalloffDistance * invRange - 1.0f);
+            float eased = GetEaseFunction(mFalloffType)(t, mFalloffParameter, 0);
+            eased = Clamp(0.0f, 1.0f, eased);
+            vol = RatioToDb(eased);
+            if (vol < -96.0f) {
+                vol = -96.0f;
+            }
+        }
+    } else {
+        vol = -96.0f;
+    }
+    mDistanceFader->SetVolume(vol);
+}
+
+void ThreeDSound::SetDistance(float distance, float radius) {
+    unk20c = distance;
+    mStartedPlaying = false;
+    unk210 = radius;
+    CalculateFaderVolume();
+    if (mIsLooping) {
+        float vol = mDistanceFader->DuckedValue();
+        if (vol > -96.0f) {
+            if (mSamples.empty() && mDelayArgs.empty()) {
+                Sound::Play(
+                    mDelayedVolume, mDelayedPan, mDelayedTranspose, mDelayedOwner, mDelayMs
+                );
+            }
+        } else {
+            if (!mSamples.empty() || !mDelayArgs.empty()) {
+                Sound::Stop(nullptr, true);
+            }
+        }
+    }
 }

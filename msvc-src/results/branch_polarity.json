@@ -1,0 +1,133 @@
+{
+  "branch_polarity": [
+    {
+      "variant": "if_else_eq",
+      "branches": [
+        "bne          cr6,$LN2@test"
+      ],
+      "instructions": [
+        "mflr         r12",
+        "stw          r12,-8(r1)",
+        "stwu         r1,-60h(r1)",
+        "bl           ?get@@YAHXZ",
+        "cmpwi        cr6,r3,0",
+        "bne          cr6,$LN2@test",
+        "bl           ?do_a@@YAXXZ",
+        "addi         r1,r1,96\t\t; 60h",
+        "lwz          r12,-8(r1)",
+        "mtlr         r12",
+        "blr",
+        "bl           ?do_b@@YAXXZ",
+        "addi         r1,r1,96\t\t; 60h",
+        "lwz          r12,-8(r1)",
+        "mtlr         r12",
+        "blr"
+      ]
+    },
+    {
+      "variant": "if_else_ne",
+      "branches": [
+        "beq          cr6,$LN2@test"
+      ],
+      "instructions": [
+        "mflr         r12",
+        "stw          r12,-8(r1)",
+        "stwu         r1,-60h(r1)",
+        "bl           ?get@@YAHXZ",
+        "cmpwi        cr6,r3,0",
+        "beq          cr6,$LN2@test",
+        "bl           ?do_b@@YAXXZ",
+        "addi         r1,r1,96\t\t; 60h",
+        "lwz          r12,-8(r1)",
+        "mtlr         r12",
+        "blr",
+        "bl           ?do_a@@YAXXZ",
+        "addi         r1,r1,96\t\t; 60h",
+        "lwz          r12,-8(r1)",
+        "mtlr         r12",
+        "blr"
+      ]
+    },
+    {
+      "variant": "early_return_eq",
+      "branches": [
+        "bne          cr6,$LN1@test"
+      ],
+      "instructions": [
+        "mflr         r12",
+        "stw          r12,-8(r1)",
+        "stwu         r1,-60h(r1)",
+        "bl           ?get@@YAHXZ",
+        "cmpwi        cr6,r3,0",
+        "bne          cr6,$LN1@test",
+        "bl           ?do_a@@YAXXZ",
+        "addi         r1,r1,96\t\t; 60h",
+        "lwz          r12,-8(r1)",
+        "mtlr         r12",
+        "blr",
+        "bl           ?do_b@@YAXXZ",
+        "addi         r1,r1,96\t\t; 60h",
+        "lwz          r12,-8(r1)",
+        "mtlr         r12",
+        "blr"
+      ]
+    },
+    {
+      "variant": "early_return_ne",
+      "branches": [
+        "beq          cr6,$LN1@test"
+      ],
+      "instructions": [
+        "mflr         r12",
+        "stw          r12,-8(r1)",
+        "stwu         r1,-60h(r1)",
+        "bl           ?get@@YAHXZ",
+        "cmpwi        cr6,r3,0",
+        "beq          cr6,$LN1@test",
+        "bl           ?do_b@@YAXXZ",
+        "addi         r1,r1,96\t\t; 60h",
+        "lwz          r12,-8(r1)",
+        "mtlr         r12",
+        "blr",
+        "bl           ?do_a@@YAXXZ",
+        "addi         r1,r1,96\t\t; 60h",
+        "lwz          r12,-8(r1)",
+        "mtlr         r12",
+        "blr"
+      ]
+    },
+    {
+      "variant": "nested_if",
+      "branches": [
+        "bne          cr6,$LN4@test",
+        "bne          cr6,$LN3@test"
+      ],
+      "instructions": [
+        "mflr         r12",
+        "stw          r12,-8(r1)",
+        "stwu         r1,-60h(r1)",
+        "bl           ?get_x@@YAHXZ",
+        "cmpwi        cr6,r3,0",
+        "bne          cr6,$LN4@test",
+        "bl           ?get_y@@YAHXZ",
+        "cmpwi        cr6,r3,0",
+        "bne          cr6,$LN3@test",
+        "bl           ?do_a@@YAXXZ",
+        "addi         r1,r1,96\t\t; 60h",
+        "lwz          r12,-8(r1)",
+        "mtlr         r12",
+        "blr",
+        "bl           ?do_b@@YAXXZ",
+        "addi         r1,r1,96\t\t; 60h",
+        "lwz          r12,-8(r1)",
+        "mtlr         r12",
+        "blr",
+        "bl           ?do_c@@YAXXZ",
+        "addi         r1,r1,96\t\t; 60h",
+        "lwz          r12,-8(r1)",
+        "mtlr         r12",
+        "blr"
+      ]
+    }
+  ]
+}

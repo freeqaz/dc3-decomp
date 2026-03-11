@@ -1,0 +1,843 @@
+{
+  "base": "msvc-src/analysis/il-fixtures/il_rlwinm_shifts/_CL_3ccfdb28",
+  "debug": {
+    "line_candidates": [
+      1,
+      4,
+      10,
+      16,
+      21,
+      32,
+      33,
+      34,
+      117,
+      256,
+      266,
+      268,
+      274,
+      512
+    ],
+    "strings": [
+      " tu"
+    ]
+  },
+  "files": {
+    "db": {
+      "path": "_CL_3ccfdb28db",
+      "present": true,
+      "size": 95
+    },
+    "ex": {
+      "path": "_CL_3ccfdb28ex",
+      "present": true,
+      "size": 3616
+    },
+    "gl": {
+      "path": "_CL_3ccfdb28gl",
+      "present": true,
+      "size": 651
+    },
+    "in": {
+      "path": "_CL_3ccfdb28in",
+      "present": true,
+      "size": 439
+    },
+    "sy": {
+      "path": "_CL_3ccfdb28sy",
+      "present": true,
+      "size": 312
+    }
+  },
+  "functions": [
+    {
+      "body_offset": 2696,
+      "end_offset": 2774,
+      "header_offset": 2681,
+      "index": 0,
+      "name": "?u8_shift_right@@YAII@Z",
+      "operation_count": 10,
+      "operations": [
+        {
+          "label": 14,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "CAST",
+          "operands": [
+            {
+              "kind": "ref",
+              "name": "b",
+              "value": 60937
+            },
+            {
+              "kind": "var",
+              "name": "w",
+              "type": "uint",
+              "value": 60169
+            }
+          ],
+          "result_type": "uchar",
+          "type": "op"
+        },
+        {
+          "name": "STORE",
+          "operands": [],
+          "result_type": "uchar",
+          "type": "op"
+        },
+        {
+          "label": 15,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "CAST",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "b",
+              "type": "uchar",
+              "value": 60937
+            }
+          ],
+          "result_type": "int",
+          "type": "op"
+        },
+        {
+          "name": "SHR",
+          "operands": [
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 4
+            }
+          ],
+          "type": "op"
+        },
+        {
+          "name": "CAST",
+          "operands": [],
+          "result_type": "uint",
+          "type": "op"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 60681,
+          "target_name": "tok_ed09",
+          "type": "assign"
+        },
+        {
+          "label": 16,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "RETURN",
+          "target": 60681,
+          "target_name": "tok_ed09",
+          "type": "return"
+        }
+      ],
+      "param_names": [
+        "w"
+      ],
+      "params": [
+        60169
+      ],
+      "result_var": 60425,
+      "result_var_name": "tok_ec09"
+    },
+    {
+      "body_offset": 2833,
+      "end_offset": 2906,
+      "header_offset": 2818,
+      "index": 1,
+      "name": "?u32_mask_shift_right@@YAII@Z",
+      "operation_count": 8,
+      "operations": [
+        {
+          "label": 20,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "AND",
+          "operands": [
+            {
+              "kind": "ref",
+              "name": "v",
+              "value": 62217
+            },
+            {
+              "kind": "var",
+              "name": "w",
+              "type": "uint",
+              "value": 61449
+            },
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 255
+            }
+          ],
+          "type": "op"
+        },
+        {
+          "name": "STORE",
+          "operands": [],
+          "result_type": "uint",
+          "type": "op"
+        },
+        {
+          "label": 21,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "SHR",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "v",
+              "type": "uint",
+              "value": 62217
+            },
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 4
+            }
+          ],
+          "type": "op"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 61961,
+          "target_name": "tok_f209",
+          "type": "assign"
+        },
+        {
+          "label": 22,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "RETURN",
+          "target": 61961,
+          "target_name": "tok_f209",
+          "type": "return"
+        }
+      ],
+      "param_names": [
+        "w"
+      ],
+      "params": [
+        61449
+      ],
+      "result_var": 61705,
+      "result_var_name": "tok_f109"
+    },
+    {
+      "body_offset": 2965,
+      "end_offset": 3039,
+      "header_offset": 2950,
+      "index": 2,
+      "name": "?u8_rotate@@YAEE@Z",
+      "operation_count": 10,
+      "operations": [
+        {
+          "label": 26,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "CAST",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "b",
+              "type": "uchar",
+              "value": 62473
+            }
+          ],
+          "result_type": "int",
+          "type": "op"
+        },
+        {
+          "name": "SHR",
+          "operands": [
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 2
+            }
+          ],
+          "type": "op"
+        },
+        {
+          "name": "CAST",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "b",
+              "type": "uchar",
+              "value": 62473
+            }
+          ],
+          "result_type": "int",
+          "type": "op"
+        },
+        {
+          "name": "SHL",
+          "operands": [
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 6
+            }
+          ],
+          "type": "op"
+        },
+        {
+          "name": "OR",
+          "operands": [],
+          "type": "op"
+        },
+        {
+          "name": "CAST",
+          "operands": [],
+          "result_type": "uchar",
+          "type": "op"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 62985,
+          "target_name": "tok_f609",
+          "type": "assign"
+        },
+        {
+          "label": 27,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "RETURN",
+          "target": 62985,
+          "target_name": "tok_f609",
+          "type": "return"
+        }
+      ],
+      "param_names": [
+        "b"
+      ],
+      "params": [
+        62473
+      ],
+      "result_var": 62729,
+      "result_var_name": "tok_f509"
+    },
+    {
+      "body_offset": 3098,
+      "end_offset": 3211,
+      "header_offset": 3083,
+      "index": 3,
+      "name": "?u32_mask_rotate@@YAII@Z",
+      "operation_count": 13,
+      "operations": [
+        {
+          "label": 31,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "AND",
+          "operands": [
+            {
+              "kind": "ref",
+              "name": "v",
+              "value": 64009
+            },
+            {
+              "kind": "var",
+              "name": "w",
+              "type": "uint",
+              "value": 63241
+            },
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 255
+            }
+          ],
+          "type": "op"
+        },
+        {
+          "name": "STORE",
+          "operands": [],
+          "result_type": "uint",
+          "type": "op"
+        },
+        {
+          "label": 32,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "SHR",
+          "operands": [
+            {
+              "kind": "ref",
+              "name": "r",
+              "value": 64265
+            },
+            {
+              "kind": "var",
+              "name": "v",
+              "type": "uint",
+              "value": 64009
+            },
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 2
+            }
+          ],
+          "type": "op"
+        },
+        {
+          "name": "SHL",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "v",
+              "type": "uint",
+              "value": 64009
+            },
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 6
+            }
+          ],
+          "type": "op"
+        },
+        {
+          "name": "OR",
+          "operands": [],
+          "type": "op"
+        },
+        {
+          "name": "STORE",
+          "operands": [],
+          "result_type": "uint",
+          "type": "op"
+        },
+        {
+          "label": 33,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "AND",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "r",
+              "type": "uint",
+              "value": 64265
+            },
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 255
+            }
+          ],
+          "type": "op"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 63753,
+          "target_name": "tok_f909",
+          "type": "assign"
+        },
+        {
+          "label": 34,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "RETURN",
+          "target": 63753,
+          "target_name": "tok_f909",
+          "type": "return"
+        }
+      ],
+      "param_names": [
+        "w"
+      ],
+      "params": [
+        63241
+      ],
+      "result_var": 63497,
+      "result_var_name": "tok_f809"
+    },
+    {
+      "body_offset": 3270,
+      "end_offset": 3348,
+      "header_offset": 3255,
+      "index": 4,
+      "name": "?u8_shift_left@@YAII@Z",
+      "operation_count": 10,
+      "operations": [
+        {
+          "label": 38,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "CAST",
+          "operands": [
+            {
+              "kind": "ref",
+              "name": "b",
+              "value": 65289
+            },
+            {
+              "kind": "var",
+              "name": "w",
+              "type": "uint",
+              "value": 64521
+            }
+          ],
+          "result_type": "uchar",
+          "type": "op"
+        },
+        {
+          "name": "STORE",
+          "operands": [],
+          "result_type": "uchar",
+          "type": "op"
+        },
+        {
+          "label": 39,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "CAST",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "b",
+              "type": "uchar",
+              "value": 65289
+            }
+          ],
+          "result_type": "int",
+          "type": "op"
+        },
+        {
+          "name": "SHL",
+          "operands": [
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 3
+            }
+          ],
+          "type": "op"
+        },
+        {
+          "name": "CAST",
+          "operands": [],
+          "result_type": "uint",
+          "type": "op"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 65033,
+          "target_name": "tok_fe09",
+          "type": "assign"
+        },
+        {
+          "label": 40,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "RETURN",
+          "target": 65033,
+          "target_name": "tok_fe09",
+          "type": "return"
+        }
+      ],
+      "param_names": [
+        "w"
+      ],
+      "params": [
+        64521
+      ],
+      "result_var": 64777,
+      "result_var_name": "tok_fd09"
+    },
+    {
+      "body_offset": 3407,
+      "end_offset": 3459,
+      "header_offset": 3392,
+      "index": 5,
+      "name": "?extract_nibble@@YAII@Z",
+      "operation_count": 6,
+      "operations": [
+        {
+          "label": 44,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "SHR",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "w",
+              "type": "uint",
+              "value": 266
+            },
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 4
+            }
+          ],
+          "type": "op"
+        },
+        {
+          "name": "AND",
+          "operands": [
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 15
+            }
+          ],
+          "type": "op"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 778,
+          "target_name": "tok_030a",
+          "type": "assign"
+        },
+        {
+          "label": 45,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "RETURN",
+          "target": 778,
+          "target_name": "tok_030a",
+          "type": "return"
+        }
+      ],
+      "param_names": [
+        "w"
+      ],
+      "params": [
+        266
+      ],
+      "result_var": 522,
+      "result_var_name": "tok_020a"
+    },
+    {
+      "body_offset": 3518,
+      "end_offset": 3601,
+      "header_offset": 3503,
+      "index": 6,
+      "name": "?signed_shift@@YAII@Z",
+      "operation_count": 10,
+      "operations": [
+        {
+          "label": 49,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "AND",
+          "operands": [
+            {
+              "kind": "ref",
+              "name": "v",
+              "value": 1802
+            },
+            {
+              "kind": "var",
+              "name": "w",
+              "type": "uint",
+              "value": 1034
+            },
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 255
+            }
+          ],
+          "type": "op"
+        },
+        {
+          "name": "CAST",
+          "operands": [],
+          "result_type": "int",
+          "type": "op"
+        },
+        {
+          "name": "STORE",
+          "operands": [],
+          "result_type": "int",
+          "type": "op"
+        },
+        {
+          "label": 50,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "SHR",
+          "operands": [
+            {
+              "kind": "var",
+              "name": "v",
+              "type": "int",
+              "value": 1802
+            },
+            {
+              "kind": "lit",
+              "type": "int",
+              "value": 2
+            }
+          ],
+          "type": "op"
+        },
+        {
+          "name": "CAST",
+          "operands": [],
+          "result_type": "uint",
+          "type": "op"
+        },
+        {
+          "name": "ASSIGN",
+          "operands": [],
+          "target": 1546,
+          "target_name": "tok_060a",
+          "type": "assign"
+        },
+        {
+          "label": 51,
+          "name": "LABEL",
+          "type": "label"
+        },
+        {
+          "name": "RETURN",
+          "target": 1546,
+          "target_name": "tok_060a",
+          "type": "return"
+        }
+      ],
+      "param_names": [
+        "w"
+      ],
+      "params": [
+        1034
+      ],
+      "result_var": 1290,
+      "result_var_name": "tok_050a"
+    }
+  ],
+  "globals": {
+    "functions": [
+      "?u8_shift_right@@YAII@Z",
+      "?u32_mask_shift_right@@YAII@Z",
+      "?u8_rotate@@YAEE@Z",
+      "?u32_mask_rotate@@YAII@Z",
+      "?u8_shift_left@@YAII@Z",
+      "?extract_nibble@@YAII@Z",
+      "?signed_shift@@YAII@Z"
+    ],
+    "source_path": "z:\\home\\free\\code\\milohax\\dc3-decomp\\msvc-src\\analysis\\il-fixtures\\sources\\il_rlwinm_shifts.cpp"
+  },
+  "imports": {
+    "class_types": [],
+    "known_types": [],
+    "strings": []
+  },
+  "manifest": {
+    "bundle_base": "msvc-src/analysis/il-fixtures/il_rlwinm_shifts/_CL_3ccfdb28",
+    "bundle_name": "il_rlwinm_shifts",
+    "captured_at": "2026-03-10T19:59:48+00:00",
+    "command": [
+      "/home/free/code/milohax/dc3-decomp/build/tools/wibo",
+      "/home/free/code/milohax/dc3-decomp/build/compilers/X360/16.00.11886.00/cl.exe",
+      "/Bd",
+      "/d2nop",
+      "/Ox",
+      "/GS-",
+      "/c",
+      "/FoZ:\\home\\free\\code\\milohax\\dc3-decomp\\msvc-src\\analysis\\il-fixtures\\il_capture.obj",
+      "Z:\\home\\free\\code\\milohax\\dc3-decomp\\msvc-src\\analysis\\il-fixtures\\sources\\il_rlwinm_shifts.cpp"
+    ],
+    "compiler_path": "/home/free/code/milohax/dc3-decomp/build/compilers/X360/16.00.11886.00/cl.exe",
+    "files": {
+      "db": {
+        "exists": true,
+        "path": "_CL_3ccfdb28db",
+        "size": 95
+      },
+      "ex": {
+        "exists": true,
+        "path": "_CL_3ccfdb28ex",
+        "size": 3616
+      },
+      "gl": {
+        "exists": true,
+        "path": "_CL_3ccfdb28gl",
+        "size": 651
+      },
+      "in": {
+        "exists": true,
+        "path": "_CL_3ccfdb28in",
+        "size": 439
+      },
+      "sy": {
+        "exists": true,
+        "path": "_CL_3ccfdb28sy",
+        "size": 312
+      }
+    },
+    "il_base": "_CL_3ccfdb28",
+    "run_cwd": "/home/free/code/milohax/dc3-decomp/msvc-src/analysis/il-fixtures",
+    "source_path": "/home/free/code/milohax/dc3-decomp/msvc-src/analysis/il-fixtures/sources/il_rlwinm_shifts.cpp",
+    "wibo_path": "/home/free/code/milohax/dc3-decomp/build/tools/wibo"
+  },
+  "symbols": {
+    "010a": "w",
+    "040a": "w",
+    "070a": "v",
+    "eb09": "w",
+    "ee09": "b",
+    "f009": "w",
+    "f309": "v",
+    "f409": "b",
+    "f709": "w",
+    "fa09": "v",
+    "fb09": "r",
+    "fc09": "w",
+    "ff09": "b"
+  },
+  "token_width": 2
+}

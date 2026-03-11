@@ -1268,6 +1268,7 @@ if(BUILD_TESTS)
         tests/test_headless_boot.cpp
         tests/test_milo_viewer_screenshot.cpp
         tests/test_object_lifetime.cpp
+        tests/test_asset_loading.cpp
         tests/test_rndcam_projection.cpp
         ${DC3_ENGINE_SOURCES}
         ${DC3_NATIVE_CORE_SOURCES}

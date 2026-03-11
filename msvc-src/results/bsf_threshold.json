@@ -1,0 +1,238 @@
+{
+  "bsf_threshold": [
+    {
+      "n": 3,
+      "callee_saved_gprs": [
+        "r31",
+        "r30",
+        "r29"
+      ],
+      "linear_order": true,
+      "prologue": "__savegprlr_29",
+      "instructions": 20,
+      "asm_hash": "e8e7c7d10632"
+    },
+    {
+      "n": 4,
+      "callee_saved_gprs": [
+        "r31",
+        "r30",
+        "r29",
+        "r28"
+      ],
+      "linear_order": true,
+      "prologue": "__savegprlr_28",
+      "instructions": 25,
+      "asm_hash": "8f1e61f73e60"
+    },
+    {
+      "n": 5,
+      "callee_saved_gprs": [
+        "r31",
+        "r30",
+        "r29",
+        "r28",
+        "r27"
+      ],
+      "linear_order": true,
+      "prologue": "__savegprlr_27",
+      "instructions": 30,
+      "asm_hash": "27b67ff3b658"
+    },
+    {
+      "n": 6,
+      "callee_saved_gprs": [
+        "r31",
+        "r30",
+        "r29",
+        "r28",
+        "r27",
+        "r26"
+      ],
+      "linear_order": true,
+      "prologue": "__savegprlr_26",
+      "instructions": 35,
+      "asm_hash": "900bf440d8e7"
+    },
+    {
+      "n": 7,
+      "callee_saved_gprs": [
+        "r31",
+        "r30",
+        "r29",
+        "r28",
+        "r27",
+        "r26",
+        "r25"
+      ],
+      "linear_order": true,
+      "prologue": "__savegprlr_25",
+      "instructions": 40,
+      "asm_hash": "2aaacf04b46b"
+    },
+    {
+      "n": 8,
+      "callee_saved_gprs": [
+        "r31",
+        "r30",
+        "r29",
+        "r28",
+        "r27",
+        "r26",
+        "r25",
+        "r24"
+      ],
+      "linear_order": true,
+      "prologue": "__savegprlr_24",
+      "instructions": 45,
+      "asm_hash": "e722b2acc04b"
+    },
+    {
+      "n": 9,
+      "callee_saved_gprs": [
+        "r31",
+        "r30",
+        "r29",
+        "r28",
+        "r27",
+        "r26",
+        "r25",
+        "r24",
+        "r23"
+      ],
+      "linear_order": true,
+      "prologue": "__savegprlr_23",
+      "instructions": 50,
+      "asm_hash": "f723aa0a3ffc"
+    },
+    {
+      "n": 10,
+      "callee_saved_gprs": [
+        "r31",
+        "r30",
+        "r29",
+        "r28",
+        "r27",
+        "r26",
+        "r25",
+        "r24",
+        "r23",
+        "r22"
+      ],
+      "linear_order": true,
+      "prologue": "__savegprlr_22",
+      "instructions": 55,
+      "asm_hash": "b87965b198f5"
+    },
+    {
+      "n": 11,
+      "callee_saved_gprs": [
+        "r31",
+        "r30",
+        "r29",
+        "r28",
+        "r27",
+        "r26",
+        "r25",
+        "r24",
+        "r23",
+        "r22",
+        "r21"
+      ],
+      "linear_order": true,
+      "prologue": "__savegprlr_21",
+      "instructions": 60,
+      "asm_hash": "8b95fa7094e0"
+    },
+    {
+      "n": 12,
+      "callee_saved_gprs": [
+        "r31",
+        "r30",
+        "r29",
+        "r28",
+        "r27",
+        "r26",
+        "r25",
+        "r24",
+        "r23",
+        "r22",
+        "r21",
+        "r20"
+      ],
+      "linear_order": true,
+      "prologue": "__savegprlr_20",
+      "instructions": 65,
+      "asm_hash": "b7a561b7fec9"
+    },
+    {
+      "n": 13,
+      "callee_saved_gprs": [
+        "r31",
+        "r30",
+        "r29",
+        "r28",
+        "r27",
+        "r26",
+        "r25",
+        "r24",
+        "r23",
+        "r22",
+        "r21",
+        "r20",
+        "r19"
+      ],
+      "linear_order": true,
+      "prologue": "__savegprlr_19",
+      "instructions": 70,
+      "asm_hash": "6ae20f563ee9"
+    },
+    {
+      "n": 14,
+      "callee_saved_gprs": [
+        "r31",
+        "r30",
+        "r29",
+        "r28",
+        "r27",
+        "r26",
+        "r25",
+        "r24",
+        "r23",
+        "r22",
+        "r21",
+        "r20",
+        "r19",
+        "r18"
+      ],
+      "linear_order": true,
+      "prologue": "__savegprlr_18",
+      "instructions": 75,
+      "asm_hash": "0e3d0106ce11"
+    },
+    {
+      "n": 15,
+      "callee_saved_gprs": [
+        "r31",
+        "r30",
+        "r29",
+        "r28",
+        "r27",
+        "r26",
+        "r25",
+        "r24",
+        "r23",
+        "r22",
+        "r21",
+        "r20",
+        "r19",
+        "r18",
+        "r17"
+      ],
+      "linear_order": true,
+      "prologue": "__savegprlr_17",
+      "instructions": 80,
+      "asm_hash": "65eece06c56d"
+    }
+  ]
+}

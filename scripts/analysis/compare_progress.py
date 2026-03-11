@@ -32,6 +32,7 @@ Examples:
 import argparse
 import fnmatch
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -39,6 +40,68 @@ from pathlib import Path
 # Subsystems to exclude by default (third-party, XDK, tiny standalone files)
 EXCLUDED_PREFIXES = ("xdk/", "lib/", "default/")
 DEFAULT_MIN_SIZE = 10240  # 10KB
+
+
+# Default map file for merged symbol resolution
+SCRIPT_DIR = Path(__file__).parent
+PROJECT_ROOT = SCRIPT_DIR.parent.parent
+DEFAULT_MAP_FILE = PROJECT_ROOT / "orig" / "373307D9" / "ham_xbox_r.map"
+
+
+class MergedSymbolResolver:
+    """Resolve merged_<addr> names to actual mangled symbol names via the linker map."""
+
+    def __init__(self, map_file: Path):
+        self._address_to_symbols: dict[str, list[str]] = {}
+        self._loaded = False
+        self._map_file = map_file
+
+    def _ensure_loaded(self):
+        if self._loaded:
+            return
+        if not self._map_file.exists():
+            self._loaded = True
+            return
+        pattern = re.compile(
+            r'^\s*\d{4}:[0-9a-fA-F]+\s+'
+            r'(\S+)\s+'
+            r'([0-9a-fA-F]{8})\s+'
+        )
+        with open(self._map_file, 'r') as f:
+            for line in f:
+                match = pattern.match(line)
+                if match:
+                    symbol = match.group(1)
+                    address = match.group(2).upper()
+                    if address not in self._address_to_symbols:
+                        self._address_to_symbols[address] = []
+                    self._address_to_symbols[address].append(symbol)
+        self._loaded = True
+
+    def resolve(self, merged_name: str) -> list[str]:
+        """Given 'merged_825FDA60', return list of mangled symbol names at that address."""
+        self._ensure_loaded()
+        addr = merged_name[7:].upper() if merged_name.startswith("merged_") else merged_name.upper()
+        return self._address_to_symbols.get(addr, [])
+
+
+def count_matched_functions(unit: dict) -> tuple[int, int]:
+    """Count matched/total functions using normalized match percent.
+
+    Uses match_percent_normalized (which excludes arg-only diffs like
+    register/offset swaps) if available, otherwise falls back to
+    fuzzy_match_percent.
+    """
+    functions = unit.get("functions", [])
+    total = len(functions)
+    matched = 0
+    for f in functions:
+        pct = f.get("match_percent_normalized")
+        if pct is None:
+            pct = f.get("fuzzy_match_percent") or 0
+        if pct >= 100.0:
+            matched += 1
+    return matched, total
 
 
 def get_subsystem(name: str) -> str:
@@ -144,8 +207,9 @@ def aggregate_by_subsystem(units: list) -> dict:
         if pct is not None and tc > 0:
             agg[sub]["fuzzy_code"] += tc
             agg[sub]["weighted_fuzzy"] += pct * tc
-        agg[sub]["total_functions"] += int(measures.get("total_functions", 0) or 0)
-        agg[sub]["matched_functions"] += int(measures.get("matched_functions", 0) or 0)
+        matched, total = count_matched_functions(u)
+        agg[sub]["total_functions"] += total
+        agg[sub]["matched_functions"] += matched
     return agg
 
 
@@ -193,10 +257,8 @@ def compare_units(baseline: dict, current: dict, min_diff: float = 0.01) -> list
             diff = curr_pct - base_pct
 
             if abs(diff) > min_diff:
-                base_matched = base_measures.get("matched_functions", 0)
-                base_total = base_measures.get("total_functions", 0)
-                curr_matched = curr_measures.get("matched_functions", 0)
-                curr_total = curr_measures.get("total_functions", 0)
+                base_matched, base_total = count_matched_functions(base)
+                curr_matched, curr_total = count_matched_functions(curr)
                 results.append({
                     "name": name,
                     "base_pct": base_pct,
@@ -210,7 +272,8 @@ def compare_units(baseline: dict, current: dict, min_diff: float = 0.01) -> list
     return results
 
 
-def compare_functions(baseline: dict, current: dict, min_diff: float = 0.5) -> list:
+def compare_functions(baseline: dict, current: dict, min_diff: float = 0.5,
+                      merged_resolver: MergedSymbolResolver = None) -> list:
     """Compare individual function match percentages between two reports.
 
     Returns a list of functions whose fuzzy_match_percent changed, sorted by
@@ -219,17 +282,28 @@ def compare_functions(baseline: dict, current: dict, min_diff: float = 0.5) -> l
     # Build function lookup: (unit_name, func_name) -> fuzzy_match_percent
     def build_func_map(report):
         fmap = {}
+        merged_entries = []  # (unit_name, merged_name, entry) for second pass
         for unit in report.get("units", []):
             unit_name = unit["name"]
             for func in unit.get("functions", []):
                 fname = func.get("name", "")
                 pct = func.get("fuzzy_match_percent", None)
                 demangled = func.get("metadata", {}).get("demangled_name", "")
-                fmap[(unit_name, fname)] = {
+                entry = {
                     "pct": pct,
                     "size": int(func.get("size", 0)),
                     "demangled": demangled,
                 }
+                fmap[(unit_name, fname)] = entry
+                if fname.startswith("merged_"):
+                    merged_entries.append((unit_name, fname, entry))
+        # Resolve merged_<addr> names to actual symbols
+        if merged_resolver and merged_entries:
+            for unit_name, merged_name, entry in merged_entries:
+                for symbol in merged_resolver.resolve(merged_name):
+                    alt_key = (unit_name, symbol)
+                    if alt_key not in fmap:
+                        fmap[alt_key] = entry
         return fmap
 
     base_funcs = build_func_map(baseline)
@@ -728,6 +802,17 @@ def main():
         metavar="PATTERN",
         help="Filter units by glob pattern (e.g. 'system/ui/*', '*/char/*'). Can be repeated.",
     )
+    parser.add_argument(
+        "--map-file",
+        type=Path,
+        default=DEFAULT_MAP_FILE,
+        help=f"Linker map file for resolving merged symbols (default: {DEFAULT_MAP_FILE})",
+    )
+    parser.add_argument(
+        "--no-merged-resolution",
+        action="store_true",
+        help="Disable merged symbol resolution (skip map file parsing)",
+    )
 
     args = parser.parse_args()
 
@@ -785,6 +870,11 @@ def main():
         baseline["units"] = filter_units(baseline.get("units", []), args.filter)
         current["units"] = filter_units(current.get("units", []), args.filter)
 
+    # Set up merged symbol resolver for function-level comparison
+    merged_resolver = None
+    if not args.no_merged_resolution and args.map_file.exists():
+        merged_resolver = MergedSymbolResolver(args.map_file)
+
     # Always show subsystem summary
     subsystem_results = compare_subsystems(baseline, current)
     if args.regressions:
@@ -800,7 +890,7 @@ def main():
 
     # Optionally show function-level breakdown
     if args.functions:
-        func_results = compare_functions(baseline, current)
+        func_results = compare_functions(baseline, current, merged_resolver=merged_resolver)
         if args.regressions:
             func_results = [r for r in func_results if r["diff_pct"] < 0]
         print_function_table(func_results, args.limit)

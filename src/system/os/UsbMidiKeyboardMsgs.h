@@ -16,11 +16,18 @@ int GetMidiNote() const { return mData->Int(2); }
 int GetPadNum() const { return mData->Int(3); }
 END_MESSAGE
 
-DECLARE_MESSAGE(KeyboardModMsg, "keyboard_mod")
-KeyboardModMsg(int, int);
-int GetNode2() const { return mData->Int(2); } // pitch/velocity?
-int GetPadNum() const { return mData->Int(3); }
-END_MESSAGE
+class KeyboardModMsg : public Message {
+public:
+    KeyboardModMsg(DataArray *da) : Message(da) {}
+    virtual ~KeyboardModMsg();
+    static Symbol Type() {
+        static Symbol t("keyboard_mod");
+        return t;
+    }
+    KeyboardModMsg(int, int);
+    int GetNode2() const { return mData->Int(2); }
+    int GetPadNum() const { return mData->Int(3); }
+};
 
 DECLARE_MESSAGE(KeyboardExpressionPedalMsg, "keyboard_expression_pedal")
 KeyboardExpressionPedalMsg(int, int);

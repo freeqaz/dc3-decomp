@@ -23,6 +23,7 @@ def _make_state(
     build_fails: int = 0,
     guidance: int = 0,
     generation: int = 1,
+    il_bonus: int = 0,
 ) -> BeamState:
     return BeamState(
         source=source or f"source_{score}".encode(),
@@ -33,6 +34,7 @@ def _make_state(
         build_fail_count=build_fails,
         guidance_agreement=guidance,
         generation=generation,
+        il_diversity_bonus=il_bonus,
     )
 
 
@@ -56,6 +58,11 @@ class TestBeamStateRanking(unittest.TestCase):
     def test_less_stagnation_ranks_higher(self):
         a = _make_state(score=90.0, stagnation=0)
         b = _make_state(score=90.0, stagnation=3)
+        self.assertGreater(a.ranking_key, b.ranking_key)
+
+    def test_unique_il_bucket_ranks_higher_on_tie(self):
+        a = _make_state(score=90.0, il_bonus=1)
+        b = _make_state(score=90.0, il_bonus=0)
         self.assertGreater(a.ranking_key, b.ranking_key)
 
     def test_shorter_provenance_ranks_higher(self):

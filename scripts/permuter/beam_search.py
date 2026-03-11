@@ -534,6 +534,9 @@ def beam_search(
     result_codegen_shapes: list[str] = []
     result_fact_boosts: list[str] = []
     result_fact_suppresses: list[str] = []
+    result_il_analyzed_variants = 0
+    result_il_unique_buckets = 0
+    result_il_duplicate_buckets = 0
     all_validation_results: list = []  # list[ValidationResult] across all depths
 
     original_source = source_path.read_bytes()
@@ -563,6 +566,9 @@ def beam_search(
                 codegen_shapes=result_codegen_shapes,
                 fact_boost_patterns=result_fact_boosts,
                 fact_suppress_patterns=result_fact_suppresses,
+                il_analyzed_variants=result_il_analyzed_variants,
+                il_unique_buckets=result_il_unique_buckets,
+                il_duplicate_buckets=result_il_duplicate_buckets,
             )
 
         # Check for all-noise early exit
@@ -578,6 +584,9 @@ def beam_search(
                 codegen_shapes=result_codegen_shapes,
                 fact_boost_patterns=result_fact_boosts,
                 fact_suppress_patterns=result_fact_suppresses,
+                il_analyzed_variants=result_il_analyzed_variants,
+                il_unique_buckets=result_il_unique_buckets,
+                il_duplicate_buckets=result_il_duplicate_buckets,
             )
 
         # Capture stable target-side guidance
@@ -718,6 +727,38 @@ def beam_search(
             # Re-establish baseline (source was restored by previous scorer)
             scorer.get_baseline(guided=True, ghidra=False, m2c=False)
             results = scorer.score_batch(variant_list, workers=workers)
+            il_bucket_sizes: dict[str, int] = {}
+            build_ok_results = [r for r in results if r.build_success]
+            if build_ok_results:
+                top_for_il = sorted(
+                    build_ok_results,
+                    key=lambda r: r.match_percent,
+                    reverse=True,
+                )[: min(8, len(build_ok_results))]
+                il_hashes = scorer.capture_variant_il_hashes(
+                    [r.variant for r in top_for_il],
+                    limit=len(top_for_il),
+                )
+                for result in top_for_il:
+                    il_hash = il_hashes.get(id(result.variant))
+                    if not il_hash:
+                        continue
+                    result.canonical_il_hash = il_hash
+                    il_bucket_sizes[il_hash] = il_bucket_sizes.get(il_hash, 0) + 1
+                if il_bucket_sizes:
+                    duplicate_buckets = sum(
+                        1 for size in il_bucket_sizes.values() if size > 1
+                    )
+                    analyzed = sum(il_bucket_sizes.values())
+                    result_il_analyzed_variants += analyzed
+                    result_il_unique_buckets += len(il_bucket_sizes)
+                    result_il_duplicate_buckets += duplicate_buckets
+                    print(
+                        f"  IL analysis: {len(il_bucket_sizes)} bucket(s) across "
+                        f"{analyzed} top candidate(s), "
+                        f"{duplicate_buckets} duplicate bucket(s)",
+                        file=sys.stderr,
+                    )
 
         # Build child states from scored results
         child_states: list[BeamState] = []
@@ -790,6 +831,15 @@ def beam_search(
                     seed_facts, result, parent.score,
                 ),
                 validation_tier=vtier,
+                canonical_il_hash=result.canonical_il_hash,
+                il_diversity_bonus=(
+                    1
+                    if (
+                        result.canonical_il_hash
+                        and il_bucket_sizes.get(result.canonical_il_hash, 0) == 1
+                    )
+                    else 0
+                ),
             )
             child_states.append(child)
 
@@ -890,7 +940,8 @@ def beam_search(
             print(
                 f"    [{si + 1}] {s.score:.2f}% gen={s.generation} "
                 f"stag={s.stagnation_count}{vtier_str} "
-                f"patterns={'+'.join(s.applied_patterns[-2:]) if s.applied_patterns else 'seed'}",
+                f"patterns={'+'.join(s.applied_patterns[-2:]) if s.applied_patterns else 'seed'}"
+                f"{' il=uniq' if s.il_diversity_bonus > 0 else ''}",
                 file=sys.stderr,
             )
 
@@ -935,6 +986,9 @@ def beam_search(
         codegen_shapes=result_codegen_shapes,
         fact_boost_patterns=result_fact_boosts,
         fact_suppress_patterns=result_fact_suppresses,
+        il_analyzed_variants=result_il_analyzed_variants,
+        il_unique_buckets=result_il_unique_buckets,
+        il_duplicate_buckets=result_il_duplicate_buckets,
     )
 
 
@@ -997,6 +1051,9 @@ def _build_result(
     codegen_shapes: list[str] | None = None,
     fact_boost_patterns: list[str] | None = None,
     fact_suppress_patterns: list[str] | None = None,
+    il_analyzed_variants: int = 0,
+    il_unique_buckets: int = 0,
+    il_duplicate_buckets: int = 0,
 ) -> HillClimbResult:
     """Build a HillClimbResult from beam search data."""
     winning_pattern = None
@@ -1023,6 +1080,9 @@ def _build_result(
         codegen_shapes=list(codegen_shapes or []),
         fact_boost_patterns=list(fact_boost_patterns or []),
         fact_suppress_patterns=list(fact_suppress_patterns or []),
+        il_analyzed_variants=il_analyzed_variants,
+        il_unique_buckets=il_unique_buckets,
+        il_duplicate_buckets=il_duplicate_buckets,
     )
 
 

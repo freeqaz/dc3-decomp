@@ -655,6 +655,9 @@ def _climb_one(
             "codegen_shapes": list(result.codegen_shapes),
             "fact_boost_patterns": list(result.fact_boost_patterns),
             "fact_suppress_patterns": list(result.fact_suppress_patterns),
+            "il_analyzed_variants": result.il_analyzed_variants,
+            "il_unique_buckets": result.il_unique_buckets,
+            "il_duplicate_buckets": result.il_duplicate_buckets,
         }
     except Exception as e:
         print(f"  ERROR: {e}", file=sys.stderr)
@@ -740,6 +743,9 @@ def _accumulate_result(stats: dict, result: dict):
         stats["fact_suppress_counts"][pattern] = (
             stats["fact_suppress_counts"].get(pattern, 0) + 1
         )
+    stats["il_analyzed_variants"] += int(result.get("il_analyzed_variants", 0) or 0)
+    stats["il_unique_buckets"] += int(result.get("il_unique_buckets", 0) or 0)
+    stats["il_duplicate_buckets"] += int(result.get("il_duplicate_buckets", 0) or 0)
 
 
 _IMPROVEMENT_SCHEMA = """
@@ -757,6 +763,9 @@ CREATE TABLE IF NOT EXISTS improvement_runs (
     stopped_reason  TEXT,
     elapsed_seconds REAL,
     winning_rounds  TEXT,
+    il_analyzed_variants INTEGER NOT NULL DEFAULT 0,
+    il_unique_buckets INTEGER NOT NULL DEFAULT 0,
+    il_duplicate_buckets INTEGER NOT NULL DEFAULT 0,
     caller          TEXT NOT NULL DEFAULT 'scan_and_permute'
 );
 
@@ -777,6 +786,19 @@ def _store_improvement_runs(improvements: list[dict]) -> None:
     conn = sqlite3.connect(str(_IMPROVEMENT_DB))
     conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(_IMPROVEMENT_SCHEMA)
+    existing_cols = {
+        row[1] for row in conn.execute("PRAGMA table_info(improvement_runs)").fetchall()
+    }
+    for name, coltype, default in (
+        ("il_analyzed_variants", "INTEGER", "0"),
+        ("il_unique_buckets", "INTEGER", "0"),
+        ("il_duplicate_buckets", "INTEGER", "0"),
+    ):
+        if name not in existing_cols:
+            conn.execute(
+                f"ALTER TABLE improvement_runs ADD COLUMN {name} {coltype} "
+                f"NOT NULL DEFAULT {default}"
+            )
 
     now = time.time()
     rows = []
@@ -799,6 +821,9 @@ def _store_improvement_runs(improvements: list[dict]) -> None:
             imp.get("stopped_reason", ""),
             imp.get("elapsed", 0),
             json.dumps(clean_rounds),
+            int(imp.get("il_analyzed_variants", 0) or 0),
+            int(imp.get("il_unique_buckets", 0) or 0),
+            int(imp.get("il_duplicate_buckets", 0) or 0),
             "scan_and_permute",
         ))
 
@@ -806,8 +831,9 @@ def _store_improvement_runs(improvements: list[dict]) -> None:
         "INSERT INTO improvement_runs "
         "(timestamp, symbol, function_name, source_path, unit, "
         "initial_pct, final_pct, delta, rounds_used, stopped_reason, "
-        "elapsed_seconds, winning_rounds, caller) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "elapsed_seconds, winning_rounds, il_analyzed_variants, "
+        "il_unique_buckets, il_duplicate_buckets, caller) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         rows,
     )
     conn.commit()
@@ -1035,6 +1061,9 @@ def main():
         "shape_counts": {},
         "fact_boost_counts": {},
         "fact_suppress_counts": {},
+        "il_analyzed_variants": 0,
+        "il_unique_buckets": 0,
+        "il_duplicate_buckets": 0,
     }
 
     if args.jobs <= 1:
@@ -1181,6 +1210,14 @@ def main():
         )
         print(f"  Fact suppress: {suppress_summary}", file=sys.stderr)
 
+    if stats["il_analyzed_variants"] > 0:
+        print(
+            f"  IL analysis: analyzed={stats['il_analyzed_variants']} "
+            f"unique={stats['il_unique_buckets']} "
+            f"dup={stats['il_duplicate_buckets']}",
+            file=sys.stderr,
+        )
+
     if args.json_output:
         # Strip non-serializable fields before JSON output
         non_serializable = {"ghidra_batch", "pattern_wins"}
@@ -1260,6 +1297,13 @@ def main():
             if imp.get("fact_suppress_patterns"):
                 print(
                     f"    Suppress: {', '.join(imp['fact_suppress_patterns'])}",
+                    file=sys.stderr,
+                )
+            if imp.get("il_analyzed_variants", 0) > 0:
+                print(
+                    f"    IL: analyzed={imp['il_analyzed_variants']} "
+                    f"unique={imp.get('il_unique_buckets', 0)} "
+                    f"dup={imp.get('il_duplicate_buckets', 0)}",
                     file=sys.stderr,
                 )
             winning_rounds = imp.get("winning_rounds", [])

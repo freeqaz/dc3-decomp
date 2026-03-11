@@ -1,0 +1,347 @@
+{
+  "bool_materialize": [
+    {
+      "variant": "eq_zero_signed",
+      "category": "unknown",
+      "instruction_count": 3,
+      "markers_found": {
+        "cntlzw": true,
+        "rlwinm": true
+      },
+      "instructions": [
+        "cntlzw       r11,r3",
+        "rlwinm       r3,r11,27,31,31",
+        "blr"
+      ]
+    },
+    {
+      "variant": "ne_zero_signed",
+      "category": "1-zero or 2-ne",
+      "instruction_count": 3,
+      "markers_found": {
+        "addic": true,
+        "subfe": true
+      },
+      "instructions": [
+        "addic        r11,r3,-1\t\t; 0FFFFh",
+        "subfe        r3,r11,r3",
+        "blr"
+      ]
+    },
+    {
+      "variant": "eq_zero_ptr",
+      "category": "unknown",
+      "instruction_count": 3,
+      "markers_found": {
+        "cntlzw": true,
+        "rlwinm": true
+      },
+      "instructions": [
+        "cntlzw       r11,r3",
+        "rlwinm       r3,r11,27,31,31",
+        "blr"
+      ]
+    },
+    {
+      "variant": "gt_zero_unsigned",
+      "category": "1-zero or 2-ne",
+      "instruction_count": 3,
+      "markers_found": {
+        "addic": true,
+        "subfe": true
+      },
+      "instructions": [
+        "addic        r11,r3,-1\t\t; 0FFFFh",
+        "subfe        r3,r11,r3",
+        "blr"
+      ]
+    },
+    {
+      "variant": "eq_one",
+      "category": "unknown",
+      "instruction_count": 4,
+      "markers_found": {
+        "cntlzw": true,
+        "rlwinm": true
+      },
+      "instructions": [
+        "addi         r11,r3,-1\t\t; 0FFFFh",
+        "cntlzw       r10,r11",
+        "rlwinm       r3,r10,27,31,31",
+        "blr"
+      ]
+    },
+    {
+      "variant": "ne_one",
+      "category": "1-zero or 2-ne",
+      "instruction_count": 4,
+      "markers_found": {
+        "addic": true,
+        "subfe": true
+      },
+      "instructions": [
+        "addi         r11,r3,-1\t\t; 0FFFFh",
+        "addic        r10,r11,-1\t\t; 0FFFFh",
+        "subfe        r3,r10,r11",
+        "blr"
+      ]
+    },
+    {
+      "variant": "eq_five",
+      "category": "unknown",
+      "instruction_count": 4,
+      "markers_found": {
+        "cntlzw": true,
+        "rlwinm": true
+      },
+      "instructions": [
+        "addi         r11,r3,-5\t\t; 0FFFBh",
+        "cntlzw       r10,r11",
+        "rlwinm       r3,r10,27,31,31",
+        "blr"
+      ]
+    },
+    {
+      "variant": "gt_zero_signed",
+      "category": "3-sign_bit",
+      "instruction_count": 4,
+      "markers_found": {
+        "srwi": true,
+        "neg": true,
+        "andc": true
+      },
+      "instructions": [
+        "neg          r11,r3",
+        "andc         r10,r11,r3",
+        "srwi         r3,r10,31",
+        "blr"
+      ]
+    },
+    {
+      "variant": "gt_zero_arith",
+      "category": "3-sign_bit",
+      "instruction_count": 8,
+      "markers_found": {
+        "srwi": true,
+        "neg": true,
+        "andc": true
+      },
+      "instructions": [
+        "neg          r11,r3",
+        "neg          r10,r4",
+        "andc         r9,r11,r3",
+        "andc         r8,r10,r4",
+        "srwi         r11,r9,31",
+        "srwi         r10,r8,31",
+        "add          r3,r10,r11",
+        "blr"
+      ]
+    },
+    {
+      "variant": "gt1_unsigned",
+      "category": "4-unsigned",
+      "instruction_count": 4,
+      "markers_found": {
+        "subfe": true,
+        "subfic": true
+      },
+      "instructions": [
+        "subfic       r11,r3,1",
+        "subfe        r9,r10,r10",
+        "clrlwi       r3,r9,31",
+        "blr"
+      ]
+    },
+    {
+      "variant": "ge2_unsigned",
+      "category": "4-unsigned_ge",
+      "instruction_count": 5,
+      "markers_found": {
+        "subfze": true,
+        "subfc": true
+      },
+      "instructions": [
+        "li           r11,2",
+        "li           r10,-1\t\t; 0FFFFh",
+        "subfc        r11,r11,r3",
+        "subfze       r3,r10",
+        "blr"
+      ]
+    },
+    {
+      "variant": "lt2_unsigned",
+      "category": "unknown",
+      "instruction_count": 5,
+      "markers_found": {
+        "subfe": true,
+        "subfc": true
+      },
+      "instructions": [
+        "li           r11,2",
+        "subfc        r10,r11,r3",
+        "subfe        r8,r9,r9",
+        "clrlwi       r3,r8,31",
+        "blr"
+      ]
+    },
+    {
+      "variant": "gt100_unsigned",
+      "category": "4-unsigned",
+      "instruction_count": 4,
+      "markers_found": {
+        "subfe": true,
+        "subfic": true
+      },
+      "instructions": [
+        "subfic       r11,r3,100\t\t; 64h",
+        "subfe        r9,r10,r10",
+        "clrlwi       r3,r9,31",
+        "blr"
+      ]
+    },
+    {
+      "variant": "gt1_signed",
+      "category": "5-signed",
+      "instruction_count": 7,
+      "markers_found": {
+        "subfc": true,
+        "eqv": true,
+        "srwi": true,
+        "addze": true
+      },
+      "instructions": [
+        "li           r11,1",
+        "subfc        r10,r3,r11",
+        "eqv          r9,r3,r11",
+        "srwi         r8,r9,31",
+        "addze        r7,r8",
+        "clrlwi       r3,r7,31",
+        "blr"
+      ]
+    },
+    {
+      "variant": "ge2_signed",
+      "category": "5-signed_ge",
+      "instruction_count": 6,
+      "markers_found": {
+        "subfc": true,
+        "srwi": true,
+        "srawi": true,
+        "adde": true
+      },
+      "instructions": [
+        "li           r11,2",
+        "srawi        r10,r3,31",
+        "srwi         r9,r11,31",
+        "subfc        r8,r11,r3",
+        "adde         r3,r9,r10",
+        "blr"
+      ]
+    },
+    {
+      "variant": "lt2_signed",
+      "category": "5-signed",
+      "instruction_count": 7,
+      "markers_found": {
+        "subfc": true,
+        "eqv": true,
+        "srwi": true,
+        "addze": true
+      },
+      "instructions": [
+        "li           r11,2",
+        "subfc        r10,r11,r3",
+        "eqv          r9,r11,r3",
+        "srwi         r8,r9,31",
+        "addze        r7,r8",
+        "clrlwi       r3,r7,31",
+        "blr"
+      ]
+    },
+    {
+      "variant": "gt100_signed",
+      "category": "5-signed",
+      "instruction_count": 7,
+      "markers_found": {
+        "subfc": true,
+        "eqv": true,
+        "srwi": true,
+        "addze": true
+      },
+      "instructions": [
+        "li           r11,100\t\t; 64h",
+        "subfc        r10,r3,r11",
+        "eqv          r9,r3,r11",
+        "srwi         r8,r9,31",
+        "addze        r7,r8",
+        "clrlwi       r3,r7,31",
+        "blr"
+      ]
+    },
+    {
+      "variant": "bool_cast",
+      "category": "5-signed",
+      "instruction_count": 7,
+      "markers_found": {
+        "subfc": true,
+        "eqv": true,
+        "srwi": true,
+        "addze": true
+      },
+      "instructions": [
+        "li           r11,1",
+        "subfc        r10,r3,r11",
+        "eqv          r9,r3,r11",
+        "srwi         r8,r9,31",
+        "addze        r7,r8",
+        "clrlwi       r3,r7,31",
+        "blr"
+      ]
+    },
+    {
+      "variant": "bool_var",
+      "category": "5-signed",
+      "instruction_count": 7,
+      "markers_found": {
+        "subfc": true,
+        "eqv": true,
+        "srwi": true,
+        "addze": true
+      },
+      "instructions": [
+        "li           r11,1",
+        "subfc        r10,r3,r11",
+        "eqv          r9,r3,r11",
+        "srwi         r8,r9,31",
+        "addze        r7,r8",
+        "clrlwi       r3,r7,31",
+        "blr"
+      ]
+    },
+    {
+      "variant": "branch_no_cast",
+      "category": "6-branch",
+      "instruction_count": 15,
+      "markers_found": {
+        "cmpwi": true
+      },
+      "instructions": [
+        "mflr         r12",
+        "stw          r12,-8(r1)",
+        "stwu         r1,-60h(r1)",
+        "bl           ?get_a@@YAHXZ",
+        "cmpwi        cr6,r3,0",
+        "beq          cr6,$LN3@test",
+        "bl           ?get_x@@YAHXZ",
+        "cmpwi        cr6,r3,1",
+        "li           r3,1",
+        "bgt          cr6,$LN4@test",
+        "li           r3,0",
+        "addi         r1,r1,96\t\t; 60h",
+        "lwz          r12,-8(r1)",
+        "mtlr         r12",
+        "blr"
+      ]
+    }
+  ]
+}

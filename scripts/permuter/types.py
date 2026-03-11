@@ -338,6 +338,7 @@ class ScoreResult:
     build_success: bool
     error: Optional[str] = None
     execution_equivalent: Optional[bool] = None
+    canonical_il_hash: Optional[str] = None
 
 
 @dataclass
@@ -393,6 +394,9 @@ class HillClimbResult:
     codegen_shapes: list[str] = field(default_factory=list)
     fact_boost_patterns: list[str] = field(default_factory=list)
     fact_suppress_patterns: list[str] = field(default_factory=list)
+    il_analyzed_variants: int = 0
+    il_unique_buckets: int = 0
+    il_duplicate_buckets: int = 0
 
 
 @dataclass
@@ -621,13 +625,17 @@ class BeamState:
     fact_agreement: int = 0
     # Validation tier reached (0-6, from validator ladder)
     validation_tier: int = 0
+    # Canonical IL hash for analysis/ranking only (not an equivalence oracle)
+    canonical_il_hash: str | None = None
+    # Small positive tiebreak when this state's analyzed IL bucket is unique
+    il_diversity_bonus: int = 0
 
     @property
     def ranking_key(self) -> tuple:
         """Lexicographic ranking tuple (higher = better).
 
         Order: match%, validation_tier, -build_fails, guidance,
-               fact_agreement, -stagnation, -chain_length.
+               fact_agreement, il_diversity_bonus, -stagnation, -chain_length.
         """
         return (
             self.score,
@@ -635,6 +643,7 @@ class BeamState:
             -self.build_fail_count,
             self.guidance_agreement,
             self.fact_agreement,
+            self.il_diversity_bonus,
             -self.stagnation_count,
             -len(self.provenance),
         )

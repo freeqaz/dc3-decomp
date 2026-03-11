@@ -1,0 +1,270 @@
+{
+  "inline_threshold": [
+    {
+      "method": "arith_chain",
+      "n": 1,
+      "callee_instructions": 2,
+      "caller_instructions": 2,
+      "inlined": true
+    },
+    {
+      "method": "arith_chain",
+      "n": 2,
+      "callee_instructions": 3,
+      "caller_instructions": 3,
+      "inlined": true
+    },
+    {
+      "method": "arith_chain",
+      "n": 3,
+      "callee_instructions": 4,
+      "caller_instructions": 4,
+      "inlined": true
+    },
+    {
+      "method": "arith_chain",
+      "n": 4,
+      "callee_instructions": 5,
+      "caller_instructions": 5,
+      "inlined": true
+    },
+    {
+      "method": "arith_chain",
+      "n": 5,
+      "callee_instructions": 6,
+      "caller_instructions": 6,
+      "inlined": true
+    },
+    {
+      "method": "arith_chain",
+      "n": 6,
+      "callee_instructions": 7,
+      "caller_instructions": 7,
+      "inlined": true
+    },
+    {
+      "method": "arith_chain",
+      "n": 7,
+      "callee_instructions": 8,
+      "caller_instructions": 8,
+      "inlined": true
+    },
+    {
+      "method": "arith_chain",
+      "n": 8,
+      "callee_instructions": 9,
+      "caller_instructions": 9,
+      "inlined": true
+    },
+    {
+      "method": "arith_chain",
+      "n": 9,
+      "callee_instructions": 10,
+      "caller_instructions": 10,
+      "inlined": true
+    },
+    {
+      "method": "arith_chain",
+      "n": 10,
+      "callee_instructions": 11,
+      "caller_instructions": 11,
+      "inlined": true
+    },
+    {
+      "method": "arith_chain",
+      "n": 11,
+      "callee_instructions": 12,
+      "caller_instructions": 12,
+      "inlined": true
+    },
+    {
+      "method": "arith_chain",
+      "n": 12,
+      "callee_instructions": 13,
+      "caller_instructions": 13,
+      "inlined": true
+    },
+    {
+      "method": "arith_chain",
+      "n": 13,
+      "callee_instructions": 14,
+      "caller_instructions": 14,
+      "inlined": true
+    },
+    {
+      "method": "arith_chain",
+      "n": 14,
+      "callee_instructions": 15,
+      "caller_instructions": 15,
+      "inlined": true
+    },
+    {
+      "method": "arith_chain",
+      "n": 15,
+      "callee_instructions": 16,
+      "caller_instructions": 16,
+      "inlined": true
+    },
+    {
+      "method": "arith_chain",
+      "n": 20,
+      "callee_instructions": 21,
+      "caller_instructions": 21,
+      "inlined": true
+    },
+    {
+      "method": "arith_chain",
+      "n": 25,
+      "callee_instructions": 26,
+      "caller_instructions": 26,
+      "inlined": true
+    },
+    {
+      "method": "arith_chain",
+      "n": 30,
+      "callee_instructions": 31,
+      "caller_instructions": 31,
+      "inlined": true
+    },
+    {
+      "method": "arith_chain",
+      "n": 35,
+      "callee_instructions": 36,
+      "caller_instructions": 36,
+      "inlined": true
+    },
+    {
+      "method": "arith_chain",
+      "n": 40,
+      "callee_instructions": 41,
+      "caller_instructions": 9,
+      "inlined": false
+    },
+    {
+      "method": "arith_chain",
+      "n": 45,
+      "callee_instructions": 46,
+      "caller_instructions": 9,
+      "inlined": false
+    },
+    {
+      "method": "arith_chain",
+      "n": 50,
+      "callee_instructions": 51,
+      "caller_instructions": 9,
+      "inlined": false
+    },
+    {
+      "method": "arith_chain",
+      "n": 55,
+      "callee_instructions": 56,
+      "caller_instructions": 9,
+      "inlined": false
+    },
+    {
+      "method": "arith_chain",
+      "n": 60,
+      "callee_instructions": 61,
+      "caller_instructions": 9,
+      "inlined": false
+    },
+    {
+      "method": "if_else_chain",
+      "n": 1,
+      "callee_instructions": 5,
+      "caller_instructions": 5,
+      "inlined": true
+    },
+    {
+      "method": "if_else_chain",
+      "n": 2,
+      "callee_instructions": 9,
+      "caller_instructions": 9,
+      "inlined": true
+    },
+    {
+      "method": "if_else_chain",
+      "n": 3,
+      "callee_instructions": 14,
+      "caller_instructions": 14,
+      "inlined": true
+    },
+    {
+      "method": "if_else_chain",
+      "n": 4,
+      "callee_instructions": 19,
+      "caller_instructions": 19,
+      "inlined": true
+    },
+    {
+      "method": "if_else_chain",
+      "n": 5,
+      "callee_instructions": 24,
+      "caller_instructions": 24,
+      "inlined": true
+    },
+    {
+      "method": "if_else_chain",
+      "n": 6,
+      "callee_instructions": 29,
+      "caller_instructions": 9,
+      "inlined": false
+    },
+    {
+      "method": "if_else_chain",
+      "n": 7,
+      "callee_instructions": 34,
+      "caller_instructions": 9,
+      "inlined": false
+    },
+    {
+      "method": "if_else_chain",
+      "n": 8,
+      "callee_instructions": 39,
+      "caller_instructions": 9,
+      "inlined": false
+    },
+    {
+      "method": "if_else_chain",
+      "n": 9,
+      "callee_instructions": 44,
+      "caller_instructions": 9,
+      "inlined": false
+    },
+    {
+      "method": "if_else_chain",
+      "n": 10,
+      "callee_instructions": 49,
+      "caller_instructions": 9,
+      "inlined": false
+    },
+    {
+      "method": "if_else_chain",
+      "n": 15,
+      "callee_instructions": 74,
+      "caller_instructions": 9,
+      "inlined": false
+    },
+    {
+      "method": "if_else_chain",
+      "n": 20,
+      "callee_instructions": 99,
+      "caller_instructions": 9,
+      "inlined": false
+    },
+    {
+      "method": "if_else_chain",
+      "n": 25,
+      "callee_instructions": 124,
+      "caller_instructions": 9,
+      "inlined": false
+    },
+    {
+      "method": "if_else_chain",
+      "n": 30,
+      "callee_instructions": 149,
+      "caller_instructions": 9,
+      "inlined": false
+    }
+  ]
+}

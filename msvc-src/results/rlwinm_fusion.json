@@ -1,0 +1,360 @@
+{
+  "rlwinm_fusion": [
+    {
+      "test": "right_shift_fusion",
+      "variant": "u8_shr2",
+      "has_extrwi": false,
+      "has_srwi": false,
+      "has_clrlwi": false,
+      "has_rlwinm": true,
+      "fused": true,
+      "instructions": [
+        "mflr         r12",
+        "stw          r12,-8(r1)",
+        "stwu         r1,-60h(r1)",
+        "bl           ?get_u8@@YAEXZ",
+        "rlwinm       r3,r3,30,26,31",
+        "bl           ?sink_u32@@YAXI@Z",
+        "addi         r1,r1,96\t\t; 60h",
+        "lwz          r12,-8(r1)",
+        "mtlr         r12",
+        "blr"
+      ]
+    },
+    {
+      "test": "right_shift_fusion",
+      "variant": "u32_mask_shr2",
+      "has_extrwi": false,
+      "has_srwi": false,
+      "has_clrlwi": false,
+      "has_rlwinm": true,
+      "fused": true,
+      "instructions": [
+        "mflr         r12",
+        "stw          r12,-8(r1)",
+        "stwu         r1,-60h(r1)",
+        "bl           ?get_u32@@YAIXZ",
+        "rlwinm       r3,r3,30,26,31",
+        "bl           ?sink_u32@@YAXI@Z",
+        "addi         r1,r1,96\t\t; 60h",
+        "lwz          r12,-8(r1)",
+        "mtlr         r12",
+        "blr"
+      ]
+    },
+    {
+      "test": "right_shift_fusion",
+      "variant": "u32_shr2_mask",
+      "has_extrwi": false,
+      "has_srwi": false,
+      "has_clrlwi": false,
+      "has_rlwinm": true,
+      "fused": true,
+      "instructions": [
+        "mflr         r12",
+        "stw          r12,-8(r1)",
+        "stwu         r1,-60h(r1)",
+        "bl           ?get_u32@@YAIXZ",
+        "rlwinm       r3,r3,30,26,31",
+        "bl           ?sink_u32@@YAXI@Z",
+        "addi         r1,r1,96\t\t; 60h",
+        "lwz          r12,-8(r1)",
+        "mtlr         r12",
+        "blr"
+      ]
+    },
+    {
+      "test": "right_shift_fusion",
+      "variant": "ulong_mask_shr2",
+      "has_extrwi": false,
+      "has_srwi": false,
+      "has_clrlwi": false,
+      "has_rlwinm": true,
+      "fused": true,
+      "instructions": [
+        "mflr         r12",
+        "stw          r12,-8(r1)",
+        "stwu         r1,-60h(r1)",
+        "bl           ?get_ulong@@YAKXZ",
+        "rlwinm       r3,r3,30,26,31",
+        "bl           ?sink_u32@@YAXI@Z",
+        "addi         r1,r1,96\t\t; 60h",
+        "lwz          r12,-8(r1)",
+        "mtlr         r12",
+        "blr"
+      ]
+    },
+    {
+      "test": "right_shift_fusion",
+      "variant": "u32_cast_u8_shr2",
+      "has_extrwi": false,
+      "has_srwi": false,
+      "has_clrlwi": false,
+      "has_rlwinm": true,
+      "fused": true,
+      "instructions": [
+        "mflr         r12",
+        "stw          r12,-8(r1)",
+        "stwu         r1,-60h(r1)",
+        "bl           ?get_u32@@YAIXZ",
+        "rlwinm       r3,r3,30,26,31",
+        "bl           ?sink_u32@@YAXI@Z",
+        "addi         r1,r1,96\t\t; 60h",
+        "lwz          r12,-8(r1)",
+        "mtlr         r12",
+        "blr"
+      ]
+    },
+    {
+      "test": "right_shift_fusion",
+      "variant": "int_mask_shr2",
+      "has_extrwi": false,
+      "has_srwi": false,
+      "has_clrlwi": true,
+      "has_rlwinm": false,
+      "fused": false,
+      "instructions": [
+        "mflr         r12",
+        "stw          r12,-8(r1)",
+        "stwu         r1,-60h(r1)",
+        "bl           ?get_int@@YAHXZ",
+        "clrlwi       r11,r3,24",
+        "srawi        r3,r11,2",
+        "bl           ?sink_int@@YAXH@Z",
+        "addi         r1,r1,96\t\t; 60h",
+        "lwz          r12,-8(r1)",
+        "mtlr         r12",
+        "blr"
+      ]
+    },
+    {
+      "test": "left_shift_fusion",
+      "variant": "u8_shl6",
+      "has_clrlslwi": false,
+      "has_slwi": false,
+      "has_clrlwi": false,
+      "has_rlwinm": true,
+      "fused": true,
+      "instructions": [
+        "mflr         r12",
+        "stw          r12,-8(r1)",
+        "stwu         r1,-60h(r1)",
+        "bl           ?get_u8@@YAEXZ",
+        "rlwinm       r3,r3,6,18,25",
+        "bl           ?sink_u32@@YAXI@Z",
+        "addi         r1,r1,96\t\t; 60h",
+        "lwz          r12,-8(r1)",
+        "mtlr         r12",
+        "blr"
+      ]
+    },
+    {
+      "test": "left_shift_fusion",
+      "variant": "u32_mask_shl6",
+      "has_clrlslwi": false,
+      "has_slwi": false,
+      "has_clrlwi": false,
+      "has_rlwinm": true,
+      "fused": true,
+      "instructions": [
+        "mflr         r12",
+        "stw          r12,-8(r1)",
+        "stwu         r1,-60h(r1)",
+        "bl           ?get_u32@@YAIXZ",
+        "rlwinm       r3,r3,6,18,25",
+        "bl           ?sink_u32@@YAXI@Z",
+        "addi         r1,r1,96\t\t; 60h",
+        "lwz          r12,-8(r1)",
+        "mtlr         r12",
+        "blr"
+      ]
+    },
+    {
+      "test": "left_shift_fusion",
+      "variant": "u32_shl6_mask",
+      "has_clrlslwi": false,
+      "has_slwi": false,
+      "has_clrlwi": false,
+      "has_rlwinm": true,
+      "fused": true,
+      "instructions": [
+        "mflr         r12",
+        "stw          r12,-8(r1)",
+        "stwu         r1,-60h(r1)",
+        "bl           ?get_u32@@YAIXZ",
+        "rlwinm       r3,r3,6,24,25",
+        "bl           ?sink_u32@@YAXI@Z",
+        "addi         r1,r1,96\t\t; 60h",
+        "lwz          r12,-8(r1)",
+        "mtlr         r12",
+        "blr"
+      ]
+    },
+    {
+      "test": "rotation",
+      "variant": "u8_rot2",
+      "has_extrwi": false,
+      "has_clrlslwi": false,
+      "has_srwi": false,
+      "has_slwi": false,
+      "has_rlwinm": true,
+      "fused_ops": 1,
+      "separate_ops": 0,
+      "instructions": [
+        "mflr         r12",
+        "stw          r12,-8(r1)",
+        "stwu         r1,-60h(r1)",
+        "bl           ?get_u8@@YAEXZ",
+        "rlwinm       r11,r3,6,24,25",
+        "rlwinm       r10,r3,30,26,31",
+        "or           r3,r11,r10",
+        "bl           ?sink_u8@@YAXE@Z",
+        "addi         r1,r1,96\t\t; 60h",
+        "lwz          r12,-8(r1)",
+        "mtlr         r12",
+        "blr"
+      ]
+    },
+    {
+      "test": "rotation",
+      "variant": "u32_rot2",
+      "has_extrwi": false,
+      "has_clrlslwi": false,
+      "has_srwi": true,
+      "has_slwi": true,
+      "has_rlwinm": false,
+      "fused_ops": 0,
+      "separate_ops": 2,
+      "instructions": [
+        "mflr         r12",
+        "stw          r12,-8(r1)",
+        "stwu         r1,-60h(r1)",
+        "bl           ?get_u32@@YAIXZ",
+        "clrlwi       r11,r3,24",
+        "slwi         r10,r11,6",
+        "srwi         r9,r11,2",
+        "or           r8,r10,r9",
+        "clrlwi       r3,r8,24",
+        "bl           ?sink_u32@@YAXI@Z",
+        "addi         r1,r1,96\t\t; 60h",
+        "lwz          r12,-8(r1)",
+        "mtlr         r12",
+        "blr"
+      ]
+    },
+    {
+      "test": "rotation",
+      "variant": "ulong_rot2",
+      "has_extrwi": false,
+      "has_clrlslwi": false,
+      "has_srwi": false,
+      "has_slwi": false,
+      "has_rlwinm": true,
+      "fused_ops": 1,
+      "separate_ops": 0,
+      "instructions": [
+        "mflr         r12",
+        "stw          r12,-8(r1)",
+        "stwu         r1,-60h(r1)",
+        "bl           ?get_ulong@@YAKXZ",
+        "clrlwi       r11,r3,24",
+        "rlwinm       r10,r11,6,24,25",
+        "rlwinm       r9,r11,30,24,31",
+        "or           r3,r10,r9",
+        "bl           ?sink_u32@@YAXI@Z",
+        "addi         r1,r1,96\t\t; 60h",
+        "lwz          r12,-8(r1)",
+        "mtlr         r12",
+        "blr"
+      ]
+    },
+    {
+      "test": "mask_placement",
+      "variant": "u8_decl_xor",
+      "clrlwi_positions": [
+        7,
+        8,
+        10
+      ],
+      "xor_positions": [
+        9
+      ],
+      "mask_placement": "BOTH",
+      "instructions": [
+        "mflr         r12",
+        "stw          r12,-8(r1)",
+        "std          r31,-10h(r1)",
+        "stwu         r1,-60h(r1)",
+        "bl           ?get_u8a@@YAEXZ",
+        "mr           r31,r3",
+        "bl           ?get_u8b@@YAEXZ",
+        "clrlwi       r11,r3,24",
+        "clrlwi       r10,r31,24",
+        "xor          r9,r11,r10",
+        "clrlwi       r3,r9,24",
+        "bl           ?sink_u8@@YAXE@Z",
+        "addi         r1,r1,96\t\t; 60h",
+        "lwz          r12,-8(r1)",
+        "mtlr         r12",
+        "ld           r31,-10h(r1)",
+        "blr"
+      ]
+    },
+    {
+      "test": "mask_placement",
+      "variant": "u32_decl_xor",
+      "clrlwi_positions": [
+        8
+      ],
+      "xor_positions": [
+        7
+      ],
+      "mask_placement": "LATE",
+      "instructions": [
+        "mflr         r12",
+        "stw          r12,-8(r1)",
+        "std          r31,-10h(r1)",
+        "stwu         r1,-60h(r1)",
+        "bl           ?get_u32a@@YAIXZ",
+        "mr           r31,r3",
+        "bl           ?get_u32b@@YAIXZ",
+        "xor          r11,r3,r31",
+        "clrlwi       r3,r11,24",
+        "bl           ?sink_u8@@YAXE@Z",
+        "addi         r1,r1,96\t\t; 60h",
+        "lwz          r12,-8(r1)",
+        "mtlr         r12",
+        "ld           r31,-10h(r1)",
+        "blr"
+      ]
+    },
+    {
+      "test": "mask_placement",
+      "variant": "ulong_decl_xor",
+      "clrlwi_positions": [
+        8
+      ],
+      "xor_positions": [
+        7
+      ],
+      "mask_placement": "LATE",
+      "instructions": [
+        "mflr         r12",
+        "stw          r12,-8(r1)",
+        "std          r31,-10h(r1)",
+        "stwu         r1,-60h(r1)",
+        "bl           ?get_ula@@YAKXZ",
+        "mr           r31,r3",
+        "bl           ?get_ulb@@YAKXZ",
+        "xor          r11,r3,r31",
+        "clrlwi       r3,r11,24",
+        "bl           ?sink_u8@@YAXE@Z",
+        "addi         r1,r1,96\t\t; 60h",
+        "lwz          r12,-8(r1)",
+        "mtlr         r12",
+        "ld           r31,-10h(r1)",
+        "blr"
+      ]
+    }
+  ]
+}

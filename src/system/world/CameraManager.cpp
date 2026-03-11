@@ -205,39 +205,8 @@ void CameraManager::PrePoll() {
 }
 
 void CameraManager::Poll() {
-#ifdef HX_NATIVE
-    extern int gDebugFrameID;
-    static int sCamMgrPollCount = 0;
-    sCamMgrPollCount++;
-    if (sCamMgrPollCount <= 3 || (gDebugFrameID > 0 && gDebugFrameID % 500 == 0)) {
-        printf("DC3_CAMMGR [F500] Poll: parent='%s' currentShot=%s nextShot=%s miloCamera=%d\n",
-               mParent ? ((Hmx::Object*)mParent)->Name() : "null",
-               mCurrentShot ? mCurrentShot->Name() : "null",
-               mNextShot ? mNextShot->Name() : "null",
-               MiloCamera());
-        if (mCurrentShot) {
-            RndCam *cam = mCurrentShot->GetCam();
-            printf("  shot '%s' cam='%s' shotOver=%d frame=%.1f\n",
-                   mCurrentShot->Name(),
-                   cam ? cam->Name() : "null",
-                   mCurrentShot->ShotOver(),
-                   CalcFrame());
-        }
-    }
-#endif
-    static int _init_guard = 0;
-    static Symbol _shot_sym;
-    static Symbol _category_sym;
-
-    if ((_init_guard & 1) == 0) {
-        auto _tmp8 = Symbol("shot");
-        _init_guard |= 1;
-        _shot_sym = _tmp8;
-    }
-    if ((_init_guard & 2) == 0) {
-        _init_guard |= 2;
-        _category_sym = Symbol("category");
-    }
+    static Symbol shot("shot");
+    static Symbol category("category");
 
     if (!MiloCamera()) {
         if (mCurrentShot) {
@@ -245,7 +214,6 @@ void CameraManager::Poll() {
             RndCam *cam = mCurrentShot->GetCam();
 
             if (cam) {
-                // Save old camera state before applying new frame
                 Transform savedXfm;
                 memcpy(&savedXfm, &cam->LocalXfm(), sizeof(Transform));
                 float oldYFov = cam->YFov();
@@ -265,7 +233,6 @@ void CameraManager::Poll() {
                 }
 
                 if (blend_ratio < 1.0f) {
-                    // Interpolate camera between old and new states
                     Transform &localXfm = cam->DirtyLocalXfm();
                     Interp(savedXfm.v, localXfm.v, blend_ratio, localXfm.v);
                     Interp(savedXfm.m.y, localXfm.m.y, blend_ratio, localXfm.m.y);
@@ -274,26 +241,25 @@ void CameraManager::Poll() {
                     Cross(localXfm.m.x, localXfm.m.y, localXfm.m.z);
                     Normalize(localXfm.m.z, localXfm.m.z);
                     Cross(localXfm.m.y, localXfm.m.z, localXfm.m.x);
-                    auto _tmp0 = Interp(oldNear, cam->NearPlane(), blend_ratio);
                     cam->SetFrustum(
-                        _tmp0,
+                        Interp(oldNear, cam->NearPlane(), blend_ratio),
                         Interp(oldFar, cam->FarPlane(), blend_ratio),
                         Interp(oldYFov, cam->YFov(), blend_ratio),
                         1.0f
                     );
                 } else if (mBlendRatio < 1.0f) {
-                    static Message _blend_msg("blend_finished", DataNode(0));
-                    _blend_msg[0] = DataNode(mCurrentShot.Ptr());
-                    Handle(_blend_msg, true);
+                    static Message msg("blend_finished", DataNode(0));
+                    msg[0] = DataNode(mCurrentShot.Ptr());
+                    Handle(msg, true);
                 }
 
                 mBlendRatio = blend_ratio;
             }
 
-            if (!shot_over & mCurrentShot->ShotOver()) {
-                static Message _shot_msg("shot_over", DataNode(0));
-                _shot_msg[0] = DataNode(mCurrentShot.Ptr());
-                Handle(_shot_msg, true);
+            if (!shot_over && mCurrentShot && mCurrentShot->ShotOver()) {
+                static Message msg("shot_over", DataNode(0));
+                msg[0] = DataNode(mCurrentShot.Ptr());
+                Handle(msg, true);
             }
         }
 

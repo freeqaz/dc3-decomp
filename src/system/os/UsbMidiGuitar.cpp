@@ -4,6 +4,7 @@
 #include "os/Joypad.h"
 #include "os/Debug.h"
 #include "os/UsbMidiGuitarMsgs.h"
+#include "os/UsbMidiKeyboardMsgs.h"
 
 CriticalSection gCritSection;
 Queue gQueue(0x32);
@@ -98,11 +99,13 @@ void UsbMidiGuitar::Poll() {
                         break;
                     }
                     bool velUpdated = false;
-                    if (curVel != TheGuitar->GetVelocity(i, j)) {
+                    int lastVel = TheGuitar->GetVelocity(i, j);
+                    if (curVel != lastVel) {
                         TheGuitar->SetVelocity(i, j, curVel);
                         velUpdated = true;
                     }
-                    if (curFret != TheGuitar->GetFret(i, j) || velUpdated) {
+                    int lastFret = TheGuitar->GetFret(i, j);
+                    if (curFret != lastFret || velUpdated) {
                         TheGuitar->SetFret(i, j, curFret);
                         TheGuitar->SetVelocity(i, j, curVel);
                         StringStrummedMsg ssmsg(
@@ -137,8 +140,8 @@ void UsbMidiGuitar::Poll() {
                     SendMessage(swMsg);
                 }
                 int axisVal11 = proData->mAccelX;
-                int axisVal12 = proData->mAccelY;
                 int axisVal10 = proData->mAccelZ;
+                int axisVal12 = proData->mAccelY;
                 if (axisVal11 != TheGuitar->CurrentAccelAxisVal(i, 0)
                     || axisVal12 != TheGuitar->CurrentAccelAxisVal(i, 1)
                     || axisVal10 != TheGuitar->CurrentAccelAxisVal(i, 2)) {
@@ -170,9 +173,9 @@ void UsbMidiGuitar::Poll() {
                     RGStompBoxMsg sbMsg(stompBox, i);
                     SendMessage(sbMsg);
                 }
-                int programChange = (proData->mProgramChangeBit1 << 1)
-                    + (proData->mProgramChangeBit2 << 2)
-                    + proData->mProgramChangeBit0;
+                unsigned char *pgRaw = (unsigned char *)proData;
+                int programChange = (pgRaw[0xc] >> 5 & 4)
+                    + (pgRaw[0xb] >> 6 & 2) + (pgRaw[0xa] >> 7);
                 if (programChange != TheGuitar->GetProgramChange(i)) {
                     TheGuitar->SetProgramChange(i, programChange);
                     RGProgramChangeMsg pcMsg(programChange, i);
@@ -246,5 +249,7 @@ void Queue::Initialize(int i) {
     mQueueStart = mArrayStart;
     mQueueEnd = mArrayStart;
 }
+
+KeyboardModMsg::~KeyboardModMsg() {}
 
 DECOMP_FORCEACTIVE(UsbMidiGuitar, "queue full\n", "queue empty\n")

@@ -1,10 +1,18 @@
 #include "world/ThreeDSoundManager.h"
+#include "macros.h"
 #include "math/Mtx.h"
 #include "math/Utl.h"
 #include "math/Vec.h"
+#include "obj/Task.h"
 #include "os/Debug.h"
+#include "rndobj/Cam.h"
+#include "synth/Sound.h"
 #include "synth/ThreeDSound.h"
+#include "ui/PanelDir.h"
 #include "world/Dir.h"
+#include <cmath>
+#include <float.h>
+#include <string.h>
 
 ThreeDSoundManager::ThreeDSoundManager(WorldDir *dir)
     : mParent(dir), mSounds(dir), mListener(dir), mListenerDirty(0), mDopplerPower(1) {}
@@ -30,6 +38,59 @@ void ThreeDSoundManager::HarvestSounds(ObjectDir *dir, ObjPtrList<ThreeDSound> &
         MILO_NOTIFY(
             "Warning, found ThreeDSound object %s in %s!", it->Name(), PathName(dir)
         );
+    }
+}
+
+void ThreeDSoundManager::Poll() {
+    START_AUTO_TIMER("sound_mgr_poll");
+    RndTransformable *listener = mListener;
+    if (!listener) {
+        listener = mParent->Cam();
+    }
+    if (listener) {
+        const Transform &listenerXfm = listener->WorldXfm();
+        bool listenerMoved = listenerXfm != mLastListenerXfm;
+        float dt = TheTaskMgr.DeltaSeconds();
+        float invDt = 0.0f;
+        if (dt != 0.0f) {
+            invDt = 1.0f / dt;
+        }
+        int loopCount = 0;
+        FOREACH (it, mSounds) {
+            ThreeDSound *sound = *it;
+            if ((listenerMoved || sound->HasMoved() || sound->StartedPlaying())
+                && sound->IsPlaying()) {
+                float distance, radius;
+                CalculateDistance(sound, listenerXfm, distance, radius);
+                if (!sound->mLoop || distance > sound->mSilenceDistance) {
+                    sound->SetDistance(distance, radius);
+                } else {
+                    if (loopCount == 100) {
+                        MILO_NOTIFY_ONCE(
+                            "Over %d looping 3D sounds are currently trying to play - "
+                            "ignoring some",
+                            100
+                        );
+                        sound->SetDistance(FLT_MAX, FLT_MAX);
+                    } else {
+                        sound->SetDistance(distance, radius);
+                        loopCount++;
+                    }
+                }
+                if (sound->mPanEnabled) {
+                    float angle = CalculateAngle(sound, listenerXfm);
+                    sound->SetAngle(angle);
+                }
+                if (sound->mDopplerEnabled && !mListenerDirty) {
+                    float doppler =
+                        CalculateDoppler(sound, listenerXfm, dt, invDt, distance);
+                    sound->SetDoppler(doppler);
+                }
+            }
+            sound->SaveWorldXfm();
+        }
+        mListenerDirty = false;
+        memcpy(&mLastListenerXfm, &listenerXfm, sizeof(Transform));
     }
 }
 
@@ -59,4 +120,37 @@ void ThreeDSoundManager::CalculateDistance(
         ScaleAdd(vdiff, v50, fscalar, vtotal);
         f2 = Length(vtotal);
     }
+}
+
+float ThreeDSoundManager::CalculateDoppler(
+    ThreeDSound *sound, const Transform &listenerXfm, float dt, float invDt, float distance
+) {
+    Vector3 listenerVel;
+    Subtract(listenerXfm.v, mLastListenerXfm.v, listenerVel);
+
+    Vector3 soundVel;
+    sound->GetVelocity(soundVel);
+
+    const Transform &soundXfm = sound->WorldXfm();
+    Vector3 dir;
+    Subtract(listenerXfm.v, soundXfm.v, dir);
+
+    float invDist = 0.0f;
+    if (distance != 0.0f) {
+        invDist = 1.0f / distance;
+    }
+
+    float listenerApproach = Dot(listenerVel, dir) * invDist * invDt;
+    float soundApproach = Dot(soundVel, dir) * invDist * invDt;
+
+    const float speedOfSound = 340.29f;
+    float ratio = (-listenerApproach + speedOfSound) / (soundApproach + speedOfSound);
+    float result = std::pow(ratio, mDopplerPower);
+
+    // Clamp to +-5 semitones
+    const float kMaxDoppler = 1.3348398208618164f;
+    const float kMinDoppler = 0.7491535544395447f;
+    result = Max(kMinDoppler, result);
+    result = Min(kMaxDoppler, result);
+    return result;
 }

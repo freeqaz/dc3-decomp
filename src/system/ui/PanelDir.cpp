@@ -4,6 +4,8 @@
 #include "os/Debug.h"
 #include "rndobj/Cam.h"
 #include "rndobj/Dir.h"
+#include "rndobj/EventTrigger.h"
+#include "rndobj/PropAnim.h"
 #include "ui/UI.h"
 #include "ui/UIComponent.h"
 #include "ui/UIPanel.h"
@@ -154,6 +156,27 @@ void PanelDir::SyncObjects() {
         mTriggers.push_back(it);
         it->CheckAnims();
     }
+#ifdef HX_NATIVE
+    {
+        int eventTrigCount = 0;
+        for (ObjDirItr<EventTrigger> it(this, true); it != nullptr; ++it) {
+            eventTrigCount++;
+        }
+        // Always log object counts to diagnose missing triggers
+        int objCount = 0;
+        int propAnimCount = 0;
+        for (ObjDirItr<Hmx::Object> oit(this, true); oit != nullptr; ++oit) {
+            objCount++;
+        }
+        for (ObjDirItr<RndPropAnim> pit(this, true); pit != nullptr; ++pit) {
+            propAnimCount++;
+        }
+        if (propAnimCount > 0 || eventTrigCount > 0 || !mTriggers.empty()) {
+            printf("DC3_SYNC [%s] SyncObjects: %d objs, %d UITriggers, %d EventTriggers, %d PropAnims\n",
+                   Name(), objCount, (int)mTriggers.size(), eventTrigCount, propAnimCount);
+        }
+    }
+#endif
     if (sAlwaysNeedFocus) {
         UIComponent *comp = GetFirstFocusableComponent();
         if (!mFocusComponent && comp) {
@@ -321,8 +344,10 @@ void PanelDir::Enter() {
     SendTransition(ui_enter, ui_enter_forward, ui_enter_back);
 #ifdef HX_NATIVE
     // Auto-start Dir animation if it has animatable children with keyframes.
-    // On Xbox, this is typically kicked off by DTA enter scripts or UITriggers,
-    // but many DC3 panels rely on implicit animation start.
+    // On Xbox, specific PropAnims are activated by DTA TypeDef enter scripts
+    // or Flow objects. On native, we start all of them for visual effect.
+    // This may conflict with hide/fade PropAnims but combined with AlphaForce
+    // gives reasonable results.
     {
         float ef = EndFrame();
         float sf = StartFrame();
