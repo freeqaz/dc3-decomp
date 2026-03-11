@@ -14,6 +14,14 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <unordered_map>
+
+// O(1) HasDirPtrs() — tracks how many ObjDirPtrs reference each object.
+// Avoids O(n) ref ring walk that caused O(n²) destructor cascade.
+inline std::unordered_map<const void *, int> &DirPtrRefCounts() {
+    static std::unordered_map<const void *, int> counts;
+    return counts;
+}
 #endif
 #include <vector>
 
@@ -47,7 +55,11 @@ class ObjDirPtr : public ObjRefConcrete<C> {
 public:
     ObjDirPtr() : ObjRefConcrete(nullptr), mLoader(nullptr) {}
     ObjDirPtr(C *);
-    ObjDirPtr(const ObjDirPtr &o) : ObjRefConcrete<C>(o.mObject), mLoader(nullptr) {}
+    ObjDirPtr(const ObjDirPtr &o) : ObjRefConcrete<C>(o.mObject), mLoader(nullptr) {
+#ifdef HX_NATIVE
+        if (o.mObject) DirPtrRefCounts()[(const void *)o.mObject]++;
+#endif
+    }
     virtual ~ObjDirPtr() { *this = nullptr; }
     virtual bool IsDirPtr() { return true; }
     virtual void Replace(Hmx::Object *o) {
@@ -74,6 +86,9 @@ public:
         if ((dir != mObject) || !dir) {
             RELEASE(mLoader);
             if (mObject) {
+#ifdef HX_NATIVE
+                    DirPtrRefCounts()[(const void *)mObject]--;
+#endif
                     mObject->Release(this);
                     if (!mObject->HasDirPtrs()) {
                             delete mObject;
@@ -82,6 +97,9 @@ public:
             mObject = dir;
             if (mObject) {
                     dir->AddRef(this);
+#ifdef HX_NATIVE
+                    DirPtrRefCounts()[(const void *)dir]++;
+#endif
             }
         }
         return *this;
@@ -208,8 +226,12 @@ protected:
 
 template <class C>
 ObjDirPtr<C>::ObjDirPtr(C *dir) : ObjRefConcrete<C>(dir), mLoader(nullptr) {
-    if (dir)
+    if (dir) {
         dir->AddRef(this);
+#ifdef HX_NATIVE
+        DirPtrRefCounts()[(const void *)dir]++;
+#endif
+    }
 }
 
 template <class C>

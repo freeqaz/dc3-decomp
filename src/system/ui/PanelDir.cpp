@@ -16,11 +16,137 @@
 #include "utl/Std.h"
 #include "utl/Symbol.h"
 #ifdef HX_NATIVE
+#include <cctype>
+#include <cstdlib>
+#include <cstring>
+#include <string>
 #include "flow/Flow.h"
 extern void FlushTransparentDraws();
 #endif
 
 bool gSendFocusMsg = true;
+
+#ifdef HX_NATIVE
+namespace {
+enum NativeFlowFilterMode {
+    kNativeFlowFilterAll = 0,
+    kNativeFlowFilterCurated = 1,
+    kNativeFlowFilterMenuOnly = 2,
+};
+
+bool DebugPanelFlowNames(const char *dirName) {
+    static int enabled = -1;
+    if (enabled == -1) {
+        const char *env = std::getenv("MILO_DEBUG_PANEL_FLOWS");
+        enabled = (env && env[0] && std::strcmp(env, "0") != 0) ? 1 : 0;
+    }
+    if (!enabled || !dirName) {
+        return false;
+    }
+    return std::strcmp(dirName, "main") == 0 || std::strcmp(dirName, "helpbar") == 0
+        || std::strcmp(dirName, "letterbox") == 0 || std::strcmp(dirName, "background") == 0;
+}
+
+NativeFlowFilterMode GetNativeFlowFilterMode() {
+    static int mode = -1;
+    if (mode == -1) {
+        const char *env = std::getenv("MILO_NATIVE_FLOW_FILTER");
+        if (!env || !env[0] || std::strcmp(env, "all") == 0 || std::strcmp(env, "0") == 0) {
+            mode = kNativeFlowFilterAll;
+        } else if (
+            std::strcmp(env, "curated") == 0 || std::strcmp(env, "positive") == 0
+            || std::strcmp(env, "enter_only") == 0
+        ) {
+            mode = kNativeFlowFilterCurated;
+        } else if (
+            std::strcmp(env, "menu_only") == 0 || std::strcmp(env, "main_only") == 0
+        ) {
+            mode = kNativeFlowFilterMenuOnly;
+        } else {
+            mode = kNativeFlowFilterAll;
+        }
+    }
+    return (NativeFlowFilterMode)mode;
+}
+
+std::string LowerString(const char *str) {
+    std::string lowered;
+    if (!str) {
+        return lowered;
+    }
+    lowered.reserve(std::strlen(str));
+    while (*str) {
+        lowered.push_back((char)std::tolower((unsigned char)*str));
+        ++str;
+    }
+    return lowered;
+}
+
+bool ContainsAny(const std::string &text, const char *const *tokens) {
+    for (const char *const *token = tokens; *token; ++token) {
+        if (text.find(*token) != std::string::npos) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool ShouldActivateNativeFlow(const char *dirName, const char *flowPath) {
+    NativeFlowFilterMode mode = GetNativeFlowFilterMode();
+    if (mode == kNativeFlowFilterAll) {
+        return true;
+    }
+
+    static const char *kSkipTokens[] = {
+        "hide",
+        "exit",
+        "deactivate",
+        "immediate",
+        "end_",
+        "heartbeat_stop",
+        nullptr,
+    };
+    static const char *kKeepTokens[] = {
+        "enter",
+        "show",
+        "select",
+        "highlight",
+        "activate",
+        "start_",
+        "update_",
+        "udpate_",
+        "controller_mode",
+        "overlay_colorswitch",
+        nullptr,
+    };
+
+    std::string flow = LowerString(flowPath);
+    std::string dir = LowerString(dirName);
+
+    if (mode == kNativeFlowFilterMenuOnly) {
+        if (
+            dir == "helpbar" || dir == "letterbox" || dir == "blacklight"
+            || dir == "autosaving_icon" || dir == "newskeletondir"
+        ) {
+            return false;
+        }
+    }
+
+    if (ContainsAny(flow, kSkipTokens)) {
+        return false;
+    }
+    if (ContainsAny(flow, kKeepTokens)) {
+        return true;
+    }
+
+    // Keep the current broad behavior outside the known-problem UI dirs.
+    if (!dirName || dir.empty()) {
+        return true;
+    }
+    return dir != "main" && dir != "helpbar" && dir != "letterbox" && dir != "background";
+}
+}
+#endif
 
 PanelDir::PanelDir()
     : mFocusComponent(nullptr), mOwnerPanel(nullptr), mCam(this), mCanEndWorld(true),
@@ -349,20 +475,51 @@ void PanelDir::Enter() {
     // On native, proxy Flows have mStartMode=0 and many panels lack DTA
     // enter handlers, so we activate them directly.
     {
-        int flowCount = 0, activatedCount = 0;
+        int flowCount = 0, activatedCount = 0, skippedCount = 0, failedCount = 0;
         for (ObjDirItr<Flow> it(this, true); it != nullptr; ++it) {
             flowCount++;
+            const char *flowPath = PathName((Hmx::Object *)it);
+            if (!ShouldActivateNativeFlow(Name(), flowPath)) {
+                skippedCount++;
+                if (DebugPanelFlowNames(Name())) {
+                    printf(
+                        "DC3_FLOW_SKIP dir=%s flow=%s\n",
+                        Name(),
+                        flowPath ? flowPath : "<null>"
+                    );
+                }
+                continue;
+            }
             if (!it->IsRunning()) {
-                if (it->Activate())
+                if (it->Activate()) {
                     activatedCount++;
+                    if (DebugPanelFlowNames(Name())) {
+                        printf(
+                            "DC3_FLOW_ACTIVATE dir=%s flow=%s\n",
+                            Name(),
+                            flowPath ? flowPath : "<null>"
+                        );
+                    }
+                } else {
+                    failedCount++;
+                    if (DebugPanelFlowNames(Name())) {
+                        printf(
+                            "DC3_FLOW_FAIL dir=%s flow=%s\n",
+                            Name(),
+                            flowPath ? flowPath : "<null>"
+                        );
+                    }
+                }
             }
         }
         if (flowCount > 0) {
             printf(
-                "DC3_FLOW [%s] Enter: %d Flows, %d activated\n",
+                "DC3_FLOW [%s] Enter: %d Flows, %d activated, %d skipped, %d failed\n",
                 Name(),
                 flowCount,
-                activatedCount
+                activatedCount,
+                skippedCount,
+                failedCount
             );
         }
     }

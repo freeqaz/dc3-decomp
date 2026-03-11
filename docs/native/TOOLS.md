@@ -6,6 +6,7 @@ Tools in `../gpu/` for headless debugging of the native port's Vulkan/WebGPU ren
 
 | Skill | Script | Purpose |
 |-------|--------|---------|
+| `/screenshot` | `scripts/gpu/screenshot.sh` | Take PNG screenshots (handles headless mode automatically) |
 | `/gpu-capture` | `scripts/gpu/capture.sh` | Capture Vulkan API traces (GFXReconstruct) |
 | `/gpu-inspect` | `scripts/gpu/inspect.sh` | Analyze captures: metadata, JSON, shaders |
 | `/gpu-debug` | `scripts/gpu/rdc_capture.sh` | RenderDoc frame debugging (windowed apps) |

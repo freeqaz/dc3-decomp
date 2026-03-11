@@ -23,6 +23,11 @@
 #include "world/Crowd3DCharHandle.h"
 #include <cmath>
 #include <cfloat>
+#ifdef HX_NATIVE
+inline double __fsel(double a, double b, double c) { return a >= 0.0 ? b : c; }
+#else
+#include "xdk/LIBCMT/ppcintrinsics.h"
+#endif
 
 RndTex *gImpostorTex[kNumLods];
 RndCam *gImpostorCamera;
@@ -998,6 +1003,22 @@ DataNode WorldCrowd::OnIterateFrac(DataArray *da) {
     return DataNode(0);
 }
 
+static inline void DrawMultiMeshWithEnviron(RndMultiMesh *mmesh) {
+    RndEnviron *curEnv = RndEnviron::Current();
+    bool savedApprox = true;
+    if (curEnv) {
+        savedApprox = curEnv->UsesApproxGlobal();
+        curEnv->SetUseApproxGlobal(false);
+    }
+    {
+        RndEnvironTracker tracker(curEnv, nullptr);
+        mmesh->DrawShowing();
+    }
+    if (curEnv) {
+        curEnv->SetUseApproxGlobal(savedApprox);
+    }
+}
+
 static const char *sCollideNames[] = {
     "chest.coll", "head.coll", "l_arm.coll", "l_foot.coll", "l_hand.coll", "l_knee.coll",
     "pelvis.coll", "r_arm.coll", "r_foot.coll", "r_hand.coll", "r_knee.coll", ""
@@ -1005,249 +1026,225 @@ static const char *sCollideNames[] = {
 
 void WorldCrowd::DrawShowing() {
     START_AUTO_TIMER("crowd_draw");
-    if (mPlacementMesh) {
-        Draw3DChars();
-        if (TheRnd.GetDrawMode() != Rnd::kDrawOcclusionDepth) {
-            MILO_ASSERT(!gImpostorMat->NextPass(), 0x3A0);
-            std::vector<Hmx::Rect> rects;
-            rects.reserve(12);
-            FOREACH (charIt, mCharacters) {
-                Character *curChar = charIt->mDef.mChar;
-                RndMultiMesh *mmesh = charIt->mMMesh;
-                if (curChar && mmesh && !mShow3DOnly
-                    && TheRnd.GetDrawMode() != Rnd::kDrawOcclusionDepth) {
-                    // Count instances
-                    int numInstances = 0;
-                    for (InstanceList::iterator instIt = mmesh->Instances().begin();
-                         instIt != mmesh->Instances().end(); ++instIt) {
-                        numInstances++;
+    if (!mPlacementMesh) return;
+    Draw3DChars();
+    if (Rnd::kDrawOcclusionDepth == TheRnd.GetDrawMode()) return;
+    MILO_ASSERT(!dynamic_cast<RndMat*>(gImpostorMat->NextPass()), 0x3A0);
+    std::vector<Hmx::Rect> rects;
+    rects.reserve(12);
+    FOREACH (charIt, mCharacters) {
+        Character *curChar = charIt->mDef.mChar;
+        RndMultiMesh *mmesh = charIt->mMMesh;
+        if (curChar && mmesh && !mShow3DOnly
+            && TheRnd.GetDrawMode() != Rnd::kDrawOcclusionDepth) {
+            int numInstances = 0;
+            for (InstanceList::iterator instIt = mmesh->Instances().begin();
+                 instIt != mmesh->Instances().end(); ++instIt) {
+                numInstances++;
+            }
+            if ((unsigned long)(int)numInstances != 0) {
+                SetMatAndCameraLod();
+                RndCam *curCam = RndCam::Current();
+                Transform camXfmCopy;
+                memcpy(&camXfmCopy, &curCam->WorldXfm(), sizeof(Transform) - sizeof(Vector3));
+
+                float halfHeight = charIt->mDef.mHeight * 0.5f;
+                float halfWidth = halfHeight * 0.5f;
+
+                // --- Set up impostor camera: position at -dist along camera's Y axis ---
+                const Transform &placementXfm = mPlacementMesh->WorldXfm();
+                const Transform &curCamXfm = curCam->WorldXfm();
+                float dx = curCamXfm.v.x - placementXfm.v.x;
+                float dy = curCamXfm.v.y - placementXfm.v.y;
+                float dz = curCamXfm.v.z - placementXfm.v.z - halfHeight;
+                float dist = std::sqrt(dx * dx + dy * dy + dz * dz);
+                float minDist = curCam->NearPlane() + halfHeight;
+                dist = (float)__fsel(dist - minDist, dist, minDist);
+                float negDist = -dist;
+                // NOTE: 0.0f multiplications are dead math required for codegen match (fmul)
+                camXfmCopy.v.x = camXfmCopy.m.x.x * 0.0f + (camXfmCopy.m.y.x * negDist + camXfmCopy.m.z.x * 0.0f);
+                camXfmCopy.v.y = camXfmCopy.m.z.y * 0.0f + (camXfmCopy.m.y.y * negDist + camXfmCopy.m.x.y * 0.0f);
+                camXfmCopy.v.z = (camXfmCopy.m.z.z * 0.0f + (camXfmCopy.m.y.z * negDist + camXfmCopy.m.x.z * 0.0f)) + halfHeight;
+                gImpostorCamera->SetLocalXfm(camXfmCopy);
+                float yFov = (float)std::atan((double)(halfHeight / dist)) * 2.0f;
+                gImpostorCamera->SetFrustum(
+                    curCam->NearPlane(), curCam->FarPlane(), yFov, 1.0f
+                );
+
+                // --- Compute character orientation based on crowd rotation mode ---
+                Transform charXfm;
+                if (mCrowdRotate == kCrowdRotateNone) {
+                    const Transform &meshXfm = mPlacementMesh->WorldXfm();
+                    memcpy(&charXfm, &meshXfm, 0x30);
+                } else {
+                    const Transform &meshXfm2 = mPlacementMesh->WorldXfm();
+                    float upX = meshXfm2.m.z.x;
+                    float upY = meshXfm2.m.z.y;
+                    float upZ = meshXfm2.m.z.z;
+
+                    // Cross product of camera Y-axis with mesh up vector,
+                    // component swaps determine Face vs Away rotation
+                    float fwdY, fwdZ;
+                    float tempA, tempB;
+                    if (mCrowdRotate == kCrowdRotateFace) {
+                        const Transform &camWXfm = curCam->WorldXfm();
+                        fwdZ = camWXfm.m.y.y * upX - camWXfm.m.y.x * upY;
+                        fwdY = camWXfm.m.y.x * upZ - camWXfm.m.y.z * upX;
+                        tempA = upZ;
+                        tempB = upY;
+                    } else {
+                        const Transform &camWXfm = curCam->WorldXfm();
+                        fwdY = camWXfm.m.y.z * upX - camWXfm.m.y.x * upZ;
+                        fwdZ = camWXfm.m.y.x * upY - camWXfm.m.y.y * upX;
+                        tempA = upY;
+                        tempB = upZ;
                     }
-                    if (numInstances != 0) {
-                        SetMatAndCameraLod();
-                        RndCam *curCam = RndCam::Current();
-                        Transform camXfmCopy;
-                        memcpy(&camXfmCopy, &curCam->WorldXfm(), sizeof(Transform) - sizeof(Vector3));
 
-                        float halfHeight = charIt->mDef.mHeight * 0.5f;
-                        float halfWidth = halfHeight * 0.5f;
+                    // Forward (x-row): normalize cross product result
+                    const Transform &camWXfm3 = curCam->WorldXfm();
+                    charXfm.m.x.x = camWXfm3.m.y.y * tempB - camWXfm3.m.y.z * tempA;
+                    charXfm.m.x.y = fwdY;
+                    charXfm.m.x.z = fwdZ;
+                    Normalize(charXfm.m.x, charXfm.m.x);
 
-                        const Transform &placementXfm = mPlacementMesh->WorldXfm();
-                        const Transform &curCamXfm = curCam->WorldXfm();
-                        // Compute distance from camera to placement mesh
-                        float dx = curCamXfm.v.x - placementXfm.v.x;
-                        float dy = curCamXfm.v.y - placementXfm.v.y;
-                        float dz = curCamXfm.v.z - placementXfm.v.z - halfHeight;
-                        float dist = std::sqrt(dx * dx + dy * dy + dz * dz);
-                        float minDist = curCam->NearPlane() + halfHeight;
-                        if (dist - minDist < 0.0f) {
-                            dist = minDist;
-                        }
-                        float negDist = -dist;
+                    // Right (y-row): forward × up using normalized forward values
+                    charXfm.m.y.x = charXfm.m.x.y * upX - upY * charXfm.m.x.x;
+                    charXfm.m.y.y = upZ * charXfm.m.x.x - charXfm.m.x.z * upX;
+                    charXfm.m.y.z = charXfm.m.x.z * upY - charXfm.m.x.y * upZ;
+                    charXfm.m.z.x = upX;
+                    charXfm.m.z.y = upY;
+                    charXfm.m.z.z = upZ;
+                }
+                charXfm.v.x = 0;
+                charXfm.v.y = 0;
+                charXfm.v.z = 0;
+                curChar->SetWorldXfm(charXfm);
 
-                        // Position the impostor camera
-                        camXfmCopy.v.x = camXfmCopy.m.x.x * 0.0f + (camXfmCopy.m.y.x * negDist + camXfmCopy.m.z.x * 0.0f);
-                        camXfmCopy.v.y = camXfmCopy.m.z.y * 0.0f + (camXfmCopy.m.y.y * negDist + camXfmCopy.m.x.y * 0.0f);
-                        camXfmCopy.v.z = (camXfmCopy.m.z.z * 0.0f + (camXfmCopy.m.y.z * negDist + camXfmCopy.m.x.z * 0.0f)) + halfHeight;
-                        memcpy(&gImpostorCamera->DirtyLocalXfm(), &camXfmCopy, sizeof(Transform));
-
-                        float yFov = (float)std::atan((double)(halfHeight / dist)) * 2.0f;
-                        gImpostorCamera->SetFrustum(
-                            curCam->NearPlane(), curCam->FarPlane(), yFov, 1.0f
+                // --- Project colliders to screen-space rects ---
+                rects.erase(rects.begin(), rects.end());
+                for (int ci = 0; *sCollideNames[ci] != '\0'; ci++) {
+                    CharCollide *collide =
+                        curChar->Find<CharCollide>(sCollideNames[ci], false);
+                    if (collide) {
+                        Vector2 screenPos;
+                        gImpostorCamera->WorldToScreen(
+                            collide->WorldXfm().v, screenPos
                         );
-
-                        // Handle crowd rotation
-                        Transform charXfm;
-                        if (mCrowdRotate == kCrowdRotateNone) {
-                            const Transform &meshXfm = mPlacementMesh->WorldXfm();
-                            memcpy(&charXfm, &meshXfm, 0x30);
-                        } else {
-                            const Transform &meshXfm2 = mPlacementMesh->WorldXfm();
-                            float upX = meshXfm2.m.z.x;
-                            float upY = meshXfm2.m.z.y;
-                            float upZ = meshXfm2.m.z.z;
-
-                            float fwdY, fwdZ;
-                            float tempA, tempB;
-                            if (mCrowdRotate == kCrowdRotateFace) {
-                                const Transform &camWXfm = curCam->WorldXfm();
-                                fwdZ = camWXfm.m.y.y * upX - camWXfm.m.y.x * upY;
-                                fwdY = camWXfm.m.y.x * upZ - camWXfm.m.y.z * upX;
-                                tempA = upZ;
-                                tempB = upY;
-                            } else {
-                                const Transform &camWXfm = curCam->WorldXfm();
-                                fwdY = camWXfm.m.y.z * upX - camWXfm.m.y.x * upZ;
-                                fwdZ = camWXfm.m.y.x * upY - camWXfm.m.y.y * upX;
-                                tempA = upY;
-                                tempB = upZ;
-                            }
-
-                            Vector3 fwd;
-                            const Transform &camWXfm3 = curCam->WorldXfm();
-                            fwd.x = camWXfm3.m.y.y * tempB - camWXfm3.m.y.z * tempA;
-                            fwd.y = fwdY;
-                            fwd.z = fwdZ;
-                            Normalize(fwd, fwd);
-
-                            charXfm.m.x = fwd;
-                            charXfm.m.y.x = fwdY * upX - upY * fwd.x;
-                            charXfm.m.y.y = upZ * fwd.x - fwdZ * upX;
-                            charXfm.m.y.z = fwdZ * upY - fwdY * upZ;
-                            charXfm.m.z.x = upX;
-                            charXfm.m.z.y = upY;
-                            charXfm.m.z.z = upZ;
+                        float radius = collide->GetCurRadius();
+                        const Transform &collideXfm = collide->WorldXfm();
+                        Sphere sphere(collideXfm.v, radius);
+                        float screenHeight =
+                            gImpostorCamera->CalcScreenHeight(sphere);
+                        if (screenHeight != kHugeFloat) {
+                            float screenWidth = screenHeight * 2.0f;
+                            Hmx::Rect rect(
+                                -(screenWidth * 0.5f - screenPos.x),
+                                -(screenHeight * 0.5f - screenPos.y),
+                                screenWidth, screenHeight
+                            );
+                            rects.push_back(rect);
                         }
-                        charXfm.v.x = 0;
-                        charXfm.v.y = 0;
-                        charXfm.v.z = 0;
-                        curChar->SetWorldXfm(charXfm);
-
-                        // Clear rects and iterate through collide names
-                        rects.erase(rects.begin(), rects.end());
-                        for (int ci = 0; *sCollideNames[ci] != '\0'; ci++) {
-                            CharCollide *collide =
-                                curChar->Find<CharCollide>(sCollideNames[ci], false);
-                            if (collide) {
-                                Vector2 screenPos;
-                                gImpostorCamera->WorldToScreen(
-                                    collide->WorldXfm().v, screenPos
-                                );
-                                float radius = collide->GetCurRadius();
-                                const Transform &collideXfm = collide->WorldXfm();
-                                Sphere sphere(collideXfm.v, radius);
-                                float screenHeight =
-                                    gImpostorCamera->CalcScreenHeight(sphere);
-                                if (screenHeight != kHugeFloat) {
-                                    float screenWidth = screenHeight * 2.0f;
-                                    Hmx::Rect rect(
-                                        -(screenWidth * 0.5f - screenPos.x),
-                                        -(screenHeight * 0.5f - screenPos.y),
-                                        screenHeight,
-                                        screenWidth
-                                    );
-                                    rects.push_back(rect);
-                                }
-                            } else {
-                                MILO_NOTIFY_ONCE(
-                                    "crowd char %s doesn't have %s\n",
-                                    PathName(curChar),
-                                    sCollideNames[ci]
-                                );
-                            }
-                        }
-
-                        // Compute bounding rect
-                        float minX = FLT_MAX;
-                        float maxX = -FLT_MAX;
-                        float maxY = -FLT_MAX;
-                        float minY = FLT_MAX;
-                        int numRects = (int)rects.size();
-                        if (numRects != 0) {
-                            for (int ri = 0; ri < numRects; ri++) {
-                                float ry = rects[ri].y;
-                                float rx = rects[ri].x;
-                                float diff0 = minX - ry;
-                                if (diff0 < 0.0f) ry = minX;
-                                float diff1 = minY - rx;
-                                if (diff1 < 0.0f) rx = minY;
-                                float ryh = ry + rects[ri].h;
-                                if (maxX - ryh < 0.0f) maxX = ryh;
-                                float rxw = rx + rects[ri].w;
-                                if (maxY - rxw < 0.0f) maxY = rxw;
-                                minX = ry;
-                                minY = rx;
-                            }
-                        }
-                        // Clamp to [0,1]
-                        float clampedMinY, clampedMaxY, clampedMinX, clampedMaxX;
-                        clampedMinY = 0.0f;
-                        if (-minY < 0.0f) clampedMinY = minY;
-                        if (1.0f - maxY < 0.0f) maxY = 1.0f;
-                        clampedMaxY = maxY;
-                        clampedMinX = 0.0f;
-                        if (-minX < 0.0f) clampedMinX = minX;
-                        if (1.0f - maxX < 0.0f) maxX = 1.0f;
-                        clampedMaxX = maxX;
-
-                        // Draw character with environment in normal mode
-                        if (TheRnd.GetDrawMode() == Rnd::kDrawNormal) {
-                            if (!mEnviron) {
-                                MILO_NOTIFY_ONCE(
-                                    "%s: Rendering 2D crowd character texture without an environment, set the environ property on the WorldCrowd object.",
-                                    PathName(this)
-                                );
-                            }
-                            RndEnviron *env = mEnviron;
-                            bool savedApprox = true;
-                            if (env) {
-                                savedApprox = env->UsesApproxGlobal();
-                                env->SetUseApproxGlobal(false);
-                            }
-                            {
-                                const Transform &charWorldXfm = curChar->WorldXfm();
-                                RndEnvironTracker tracker(env, &charWorldXfm.v);
-                                gImpostorCamera->Select();
-                                curChar->SetShowing(true);
-                                if (mCharForceLod != kLODPerFrame) {
-                                    curChar->SetLodType(mCharForceLod);
-                                }
-                                curChar->DrawShowing();
-                                if (mCharForceLod != kLODPerFrame) {
-                                    curChar->SetLodType(kLODPerFrame);
-                                }
-                            }
-                            if (env) {
-                                env->SetUseApproxGlobal(savedApprox);
-                            }
-                            curCam->Select();
-                        }
-
-                        // Update billboard mesh vertices
-                        float uvLeft = -(clampedMinX * charIt->mDef.mHeight - halfHeight);
-                        float posLeft = clampedMinY * halfHeight - halfWidth;
-                        float uvBottom = -(clampedMaxX * charIt->mDef.mHeight - halfHeight);
-                        float posRight = clampedMaxY * halfHeight - halfWidth;
-
-                        RndMesh *billboardMesh = mmesh->Mesh();
-                        RndMesh::Vert *verts = billboardMesh->Verts().begin();
-                        verts[0].pos.x = posLeft;
-                        verts[0].pos.y = 0;
-                        verts[0].pos.z = uvLeft;
-                        verts[1].pos.x = posLeft;
-                        verts[1].pos.y = 0;
-                        verts[1].pos.z = uvBottom;
-                        verts[2].pos.x = posRight;
-                        verts[2].pos.y = 0;
-                        verts[2].pos.z = uvLeft;
-                        verts[3].pos.x = posRight;
-                        verts[3].pos.y = 0;
-                        verts[3].pos.z = uvBottom;
-                        verts[0].tex.x = clampedMinY;
-                        verts[0].tex.y = clampedMinX;
-                        verts[1].tex.x = clampedMinY;
-                        verts[1].tex.y = clampedMaxX;
-                        verts[2].tex.x = clampedMaxY;
-                        verts[2].tex.y = clampedMinX;
-                        verts[3].tex.x = clampedMaxY;
-                        verts[3].tex.y = clampedMaxX;
-                        billboardMesh->Sync(0x1F);
-
-                        // Draw the multimesh with current environ
-                        RndEnviron *curEnv = RndEnviron::Current();
-                        bool savedApprox2 = true;
-                        if (curEnv) {
-                            savedApprox2 = curEnv->UsesApproxGlobal();
-                            curEnv->SetUseApproxGlobal(false);
-                        }
-                        {
-                            RndEnvironTracker tracker2(curEnv, nullptr);
-                            mmesh->DrawShowing();
-                        }
-                        if (curEnv) {
-                            curEnv->SetUseApproxGlobal(savedApprox2);
-                        }
+                    } else {
+                        MILO_NOTIFY_ONCE(
+                            "crowd char %s doesn't have %s\n",
+                            PathName(curChar), sCollideNames[ci]
+                        );
                     }
                 }
+
+                // --- Compute bounding rect (branchless fsel min/max) ---
+                float minX = FLT_MAX;
+                float maxX = -FLT_MAX;
+                float maxY = -FLT_MAX;
+                float minY = FLT_MAX;
+                int numRects = (int)rects.size();
+                if (numRects != 0) {
+                    unsigned int ri = 0;
+                    do {
+                        float ry = rects[ri].y;
+                        float rx = rects[ri].x;
+                        ry = (float)__fsel(minX - ry, ry, minX);
+                        rx = (float)__fsel(minY - rx, rx, minY);
+                        float ryh = ry + rects[ri].h;
+                        maxX = (float)__fsel(maxX - ryh, maxX, ryh);
+                        float rxw = rx + rects[ri].w;
+                        maxY = (float)__fsel(maxY - rxw, maxY, rxw);
+                        minX = ry;
+                        minY = rx;
+                        ri++;
+                    } while (ri != numRects);
+                }
+                // Clamp bounds to [0,1] screen space
+                float clampedMinY = (float)__fsel(-minY, 0.0f, minY);
+                float clampedMaxY = (float)__fsel(maxY - 1.0f, 1.0f, maxY);
+                float clampedMinX = (float)__fsel(-minX, 0.0f, minX);
+                float clampedMaxX = (float)__fsel(maxX - 1.0f, 1.0f, maxX);
+
+                // --- Render character to impostor texture ---
+                if (TheRnd.GetDrawMode() == Rnd::kDrawNormal) {
+                    if (!mEnviron) {
+                        MILO_NOTIFY_ONCE(
+                            "%s: Rendering 2D crowd character texture without an environment, set the environ property on the WorldCrowd object.",
+                            PathName(this)
+                        );
+                    }
+                    RndEnviron *env = mEnviron;
+                    bool savedApprox = true;
+                    if (env) {
+                        savedApprox = env->UsesApproxGlobal();
+                        env->SetUseApproxGlobal(false);
+                    }
+                    {
+                        const Transform &charWorldXfm = curChar->WorldXfm();
+                        RndEnvironTracker tracker(env, &charWorldXfm.v);
+                        gImpostorCamera->Select();
+                        curChar->SetShowing(true);
+                        if (mCharForceLod != kLODPerFrame) {
+                            curChar->SetLodType(mCharForceLod);
+                        }
+                        curChar->DrawShowing();
+                        if (mCharForceLod != kLODPerFrame) {
+                            curChar->SetLodType(kLODPerFrame);
+                        }
+                    }
+                    if (env) {
+                        env->SetUseApproxGlobal(savedApprox);
+                    }
+                    curCam->Select();
+                }
+
+                // --- Update billboard quad vertices ---
+                float uvLeft = -(clampedMinX * charIt->mDef.mHeight - halfHeight);
+                float posLeft = clampedMinY * halfHeight - halfWidth;
+                float uvBottom = -(clampedMaxX * charIt->mDef.mHeight - halfHeight);
+                float posRight = clampedMaxY * halfHeight - halfWidth;
+
+                RndMesh *billboardMesh = mmesh->Mesh();
+                RndMesh::Vert *verts = billboardMesh->Verts().begin();
+                verts[0].pos.x = posLeft;
+                verts[0].pos.y = 0;
+                verts[0].pos.z = uvLeft;
+                verts[1].pos.x = posLeft;
+                verts[1].pos.y = 0;
+                verts[1].pos.z = uvBottom;
+                verts[2].pos.x = posRight;
+                verts[2].pos.y = 0;
+                verts[2].pos.z = uvLeft;
+                verts[3].pos.x = posRight;
+                verts[3].pos.y = 0;
+                verts[3].pos.z = uvBottom;
+                verts[0].tex.x = clampedMinY;
+                verts[0].tex.y = clampedMinX;
+                verts[1].tex.x = clampedMinY;
+                verts[1].tex.y = clampedMaxX;
+                verts[2].tex.x = clampedMaxY;
+                verts[2].tex.y = clampedMinX;
+                verts[3].tex.x = clampedMaxY;
+                verts[3].tex.y = clampedMaxX;
+                billboardMesh->Sync(0x1F);
+
+                // --- Draw billboarded multimesh instances ---
+                DrawMultiMeshWithEnviron(mmesh);
             }
         }
     }

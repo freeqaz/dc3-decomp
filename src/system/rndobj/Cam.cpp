@@ -13,7 +13,7 @@
 #include "rndobj/HiResScreen.h"
 #include "rndobj/Trans.h"
 
-// Transpose is defined in math/mtx.cpp — do not duplicate here
+// Transpose is inline in math/Mtx.h
 
 float RndCam::sDefaultNearPlane = 1;
 float RndCam::sMaxFarNearPlaneRatio = 1000;

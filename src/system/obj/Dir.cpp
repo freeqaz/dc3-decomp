@@ -470,6 +470,14 @@ void ObjectDir::TransferLoaderState(ObjectDir *dir) {
 }
 
 bool ObjectDir::HasDirPtrs() const {
+#ifdef HX_NATIVE
+    // O(1) counter check instead of O(n) ring walk.
+    // sDeleting guard prevents double-delete during Object::~Object().
+    if (sDeleting == this) return true;
+    auto &counts = DirPtrRefCounts();
+    auto it = counts.find((const void *)this);
+    return it != counts.end() && it->second > 0;
+#else
     if (sDeleting == this) {
         return true;
     } else {
@@ -479,6 +487,7 @@ bool ObjectDir::HasDirPtrs() const {
         }
         return false;
     }
+#endif
 }
 
 namespace {

@@ -9,6 +9,7 @@
 #include "rndobj/Mat.h"
 #include "rndobj/Mesh.h"
 #include "rndobj/Rnd.h"
+#include "platform/UiRenderHeuristics.h"
 #include "ui/UIListMesh.h"
 
 #include <cmath>
@@ -267,4 +268,12 @@ TEST_F(RndCamProjectionTest, UIListMeshDrawTemporarilyShowsHiddenTemplateMesh) {
     EXPECT_EQ(mesh.mDrawShowingCalls, 1);
     EXPECT_TRUE(mesh.mShowingInsideDraw);
     EXPECT_FALSE(mesh.Showing());
+}
+
+TEST_F(RndCamProjectionTest, TextAlphaFallbackOnlyAppliesToTransparentTextMeshes) {
+    EXPECT_TRUE(NativeShouldForceTextAlpha(true, BaseMaterial::kBlendSrcAlpha, 0.0f));
+    EXPECT_TRUE(NativeShouldForceTextAlpha(true, BaseMaterial::kBlendSrcAlpha, 0.009f));
+    EXPECT_FALSE(NativeShouldForceTextAlpha(false, BaseMaterial::kBlendSrcAlpha, 0.0f));
+    EXPECT_FALSE(NativeShouldForceTextAlpha(true, BaseMaterial::kBlendAdd, 0.0f));
+    EXPECT_FALSE(NativeShouldForceTextAlpha(true, BaseMaterial::kBlendSrcAlpha, 0.5f));
 }

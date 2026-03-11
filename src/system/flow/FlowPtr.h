@@ -60,8 +60,17 @@ public:
     ~FlowPtr() {}
 
     void operator=(T *obj) {
-        int state = GetInitialState(obj);
-        Symbol sym(obj ? obj->Name() : 0);
+        Hmx::Object *hmxObj;
+        const char *nameStr;
+        if (obj) {
+            hmxObj = obj;
+            nameStr = hmxObj->Name();
+        } else {
+            hmxObj = 0;
+            nameStr = 0;
+        }
+        int state = GetInitialState(hmxObj);
+        Symbol sym(nameStr);
         Symbol name = sym;
         mObjPtr.SetObjConcrete(obj);
         mObjName = name;

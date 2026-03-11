@@ -7,7 +7,6 @@
 class VenueProvider : public UIListProvider, public Hmx::Object {
 public:
     VenueProvider();
-    virtual ~VenueProvider();
     virtual void Text(int, int, UIListLabel *, UILabel *) const;
     virtual Symbol DataSymbol(int) const;
     virtual int NumData() const;

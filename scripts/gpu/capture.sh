@@ -93,6 +93,18 @@ if [[ -n "$FRAMES" && -z "$USE_XVFB" && -z "$DISPLAY" ]]; then
     fi
 fi
 
+# Check GPU access — fail fast with a clear message instead of cryptic Dawn errors
+check_gpu() {
+    if [[ ! -d /dev/dri ]] || ! ls /dev/dri/renderD* &>/dev/null 2>&1; then
+        echo "ERROR: GPU device access blocked (/dev/dri not accessible)." >&2
+        echo "" >&2
+        echo "If running via Claude Code, use: dangerouslyDisableSandbox: true" >&2
+        echo "The sandbox blocks GPU device access needed for Vulkan rendering." >&2
+        exit 1
+    fi
+}
+check_gpu
+
 # Verify layer is built
 if [[ ! -f "$GFXR_LAYER_LIB" ]]; then
     echo "Error: GFXReconstruct layer not built at $GFXR_LAYER_LIB" >&2
@@ -103,6 +115,17 @@ if [[ ! -f "$GFXR_LAYER_LIB" ]]; then
     echo "  cmake --build build -j\$(nproc)" >&2
     exit 1
 fi
+
+# Auto-set MILO_RENDER=1 for Milo engine binaries (GPU rendering required for captures)
+BINARY_NAME="$(basename "$1")"
+case "$BINARY_NAME" in
+    dc3-native|render-test|milo-viewer)
+        if [[ -z "${MILO_RENDER:-}" ]]; then
+            echo "Note: auto-setting MILO_RENDER=1 for $BINARY_NAME" >&2
+            export MILO_RENDER=1
+        fi
+        ;;
+esac
 
 # Build env vars
 export VK_LAYER_PATH="$GFXR_LAYER"

@@ -154,9 +154,4 @@ void Transform::LookAt(const Vector3 &target, const Vector3 &up) {
     Normalize(m, m);
 }
 
-void Transpose(const Hmx::Matrix4 &in, Hmx::Matrix4 &out) {
-    out.x.Set(in.x.x, in.y.x, in.z.x, in.w.x);
-    out.y.Set(in.x.y, in.y.y, in.z.y, in.w.y);
-    out.z.Set(in.x.z, in.y.z, in.z.z, in.w.z);
-    out.w.Set(in.x.w, in.y.w, in.z.w, in.w.w);
-}
+// Transpose(Matrix4) moved to Mtx.h as inline

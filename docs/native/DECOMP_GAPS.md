@@ -7,8 +7,20 @@ Inventory of decomp gaps affecting the native build. Prioritized by impact on re
 ## Current State
 
 - **Track A (Engine Boot)**: Boots to `choose_mode_screen`, ~450 draw calls/frame, 10000 frames stable. Menu text, icons, ribbons, and shell decorations all visible.
-- **Current rendering**: Text ("jump right in and...", "PLAYERS 1-2"), mode icons, cyan glow effects visible after filtering Kinect voice-tip overlays (grey_alpha.mesh, warning_*.mesh). Some text truncation on right side; bright cyan ray bars on far right.
-- **DTA/Flow/PropAnim chain traced (2026-03-11)**: Full activation path: `RndPollable::Enter()` → `HandleType("enter")` → DTA TypeDef script → `Flow::Activate()` → PropAnim → material alpha/color. DTA execution works, but most panels' enter handlers don't activate enter-transition Flows. Zero UITrigger/EventTrigger objects exist (created dynamically, not in .milo). Two hacks mask this: AlphaForce (alpha 0→1) + auto-animate (blanket PropAnim start). See Track A roadmap for removal plan.
+- **Current rendering**: choose-mode text objects still draw at correct screen positions, but readable shell/list text regressed after removing the broad renderer-side `AlphaForce` fallback. A narrow native fallback is now restored for transparent text meshes only; fullscreen/voice-tip overlays remain filtered separately. Fresh runtime validation is currently blocked by unrelated `Crowd.cpp` build errors plus an in-flight `PanelDir::Enter()` Flow experiment.
+- **GPU capture update (2026-03-11)**: GFXReconstruct capture/replay of frame 500 confirms the choose-mode frame has a full Vulkan workload (22 graphics pipelines, 818 indexed draws, 32 non-indexed draws), and the shell/helpbar text meshes are in the draw stream. A plain native frame-500 screenshot from the same build shows the real regression more clearly than the old logs: the grey shell plaque is back, but readable text has collapsed into tiny glyph clusters and mini labels instead of the session-43 readable layout. The offscreen replay screenshot is visually overexposed and should not be treated as ground truth for color/composite fidelity.
+- **Reference shots now anchored**: use `archive/screenshots/references/` as the live-game baseline, especially `dc3_main_menu.jpg` and `dc3_song_select.jpg`, plus the native progress checkpoints in `archive/screenshots/session38/`, `session39/`, `session40/`, and `session43/overlay-fix/`.
+- **Flow filter experiments (2026-03-12)**: env-gated `PanelDir` flow modes now exist for A/B testing:
+  - default `all`: current concurrent-agent blanket activation path; reproduces the collapsed tiny-text choose-mode frame
+  - `MILO_NATIVE_FLOW_FILTER=curated`: removes obvious hide/exit/deactivate conflicts, but still activates `letterbox` positive flows (`activate_letterbox`, `activate_text`) and reintroduces a giant cyan/teal border wash
+  - `MILO_NATIVE_FLOW_FILTER=menu_only`: skips auto-activation for `helpbar`, `letterbox`, `blacklight`, `autosaving_icon`, and `NewSkeletonDir`; this is the best current experimental image because the plaque and card art return without the cyan wash, but the large shell/list text is still missing
+  This narrows the remaining issue: helpbar/letterbox flow spam was obscuring the frame, but it is not the root cause of the missing readable text.
+- **Flow activation failure logging (2026-03-12)**: `MILO_DEBUG_PANEL_FLOWS=1` now also reports `DC3_FLOW_FAIL`. In the best `menu_only` run, the important `ui/main/main.milo` flows are not just skipped by the filter; they actively fail to start:
+  - `update_rank_number.flow`
+  - `udpate_icon_state.flow`
+  - `update_tier.flow`
+  The same run also shows the shared input/sfx select flows failing (`left_select`, `right_select`, `right_select_P2`, `invalid_select`). This is now the strongest source-level clue for the missing readable text: the remaining choose-mode label/material state appears to depend on flows that never activate successfully.
+- **DTA/Flow/PropAnim chain traced (2026-03-11)**: Full activation path: `RndPollable::Enter()` → `HandleType("enter")` → DTA TypeDef script → `Flow::Activate()` → PropAnim → material alpha/color. DTA execution works, but most panels' enter handlers don't activate enter-transition Flows. Zero UITrigger/EventTrigger objects exist (created dynamically, not in .milo). The old broad `AlphaForce` fallback has been narrowed back to text-only while the real Flow path is stabilized. See Track A roadmap for removal plan.
 - **Track B (Milo Viewer)**: Full rendering pipeline. 14/44 demo shots render (8 broken YAML paths).
 - **Weak stubs**: `engine_stubs_generated.cpp` has ~2530 weak function stubs. Any real .cpp implementation automatically overrides them.
 
@@ -91,7 +103,7 @@ These affect menu navigation, list population, and screen transitions.
 
 **Session 43 discoveries**: Text/icons/ribbons ARE rendering correctly. Two key issues found:
 
-1. **Voice-tip overlay coverage (FIXED)**: Kinect speech UI (grey_alpha.mesh, warning_*.mesh) drew AFTER text with full alpha, covering it. Fixed by filtering in `Mesh_Wgpu.cpp` DrawMeshImmediate.
+1. **Voice-tip overlay coverage (MOSTLY FIXED)**: Kinect speech UI (grey_alpha.mesh, warning_*.mesh) drew AFTER text with full alpha, covering it. Fixed in the renderer for meshes; `HelpBarPanel::Draw()` also needed a recursive lookup fix (`Find(..., true)`) so nested `voice_tip.lbl` suppression actually reaches the live label object.
 
 2. **PropAnim not animating (ROOT CAUSE FOUND)**: 84+ PropAnims exist across all panels but 0 UITriggers/EventTriggers exist to activate them. Investigation chain:
    - PropAnims loaded correctly from .milo (confirmed via ObjDirItr)
@@ -136,6 +148,16 @@ These affect menu navigation, list population, and screen transitions.
 - `native/tests/test_rndcam_projection.cpp` now also covers the approximate choose-mode list coordinates captured from runtime. Those tests show the default `[ui.cam]` geometry keeps the list in-bounds, while the old forced `Z=370` debug camera pushes it off-screen vertically.
 - `native/tests/test_rndcam_projection.cpp` now also covers the hidden-template `UIListMesh` case that was suppressing choose-mode icons on native.
 - `RndCam::UpdateLocal()` — **99.9%** AT_LIMIT. 6 stfs offset mismatches.
+- **New smoking gun from env-gated flow logging** (`MILO_DEBUG_PANEL_FLOWS=1`): blanket native Flow activation in `PanelDir::Enter()` is starting contradictory flows on the same panel. Examples:
+  - `main_screen`: `select.flow`, `enter1.flow`, and `exit.flow` all activate together from `ui/main/main.milo`
+  - `choose_mode_screen`: `show_game_mode_icon.flow` and `hide_game_mode_icon.flow` both activate from `ui/choose_mode/choose_mode.milo`
+  - `helpbar`: `controller_mode.flow`, `exit_controller_mode.flow`, `exit_controller_mode_immediate.flow`, `start_wave_icon_display.flow`, and `end_wave_icon_display.flow` all activate together
+  This is now the leading explanation for the current composition regression. The blanket Flow-start workaround is too aggressive and is no longer just a cosmetic aid.
+- **What the new filter experiments proved**:
+  - suppressing helpbar/letterbox auto-start fixes the giant overlay wash
+  - it does **not** bring back the large readable choose-mode labels
+  - therefore the remaining missing-text issue is likely in trigger-driven label/material state inside the `main` choose-mode path, not just in late fullscreen overlays
+  - the newly logged `Flow::Activate()` failures in `ui/main/main.milo` are the best concrete lead for that missing state
 
 ### Screen Transition Workarounds (src/system/ui/UIScreen.cpp)
 - ~~`UnloadPanels()` — Skipped on native (ObjRef crash)~~ **FIXED**: Real crash was null `sHamMaster` in `MetaPanel::Load`, not ObjRef corruption. UnloadPanels fully re-enabled.
@@ -197,8 +219,9 @@ Sorted by impact x feasibility:
 **CRITICAL PATH: DTA TypeDef → Flow → PropAnim activation chain**
 
 The biggest native rendering correctness gap: material alpha/color never animates because DTA-driven Flow activation doesn't fully work. Two hacks mask this:
-- **AlphaForce** (`Mesh_Wgpu.cpp`): Forces alpha=1 on all SrcAlpha materials with alpha<0.01. Too aggressive — makes overlay/effect meshes fully opaque.
+- **AlphaForce**: the old broad `Mesh_Wgpu.cpp` alpha=1 fallback was too aggressive and has now been removed. Native still needs a narrow replacement for text meshes until Flow/PropAnim activation is reliable enough to drive font/material alpha correctly.
 - **Auto-animate** (`PanelDir.cpp`): Starts ALL PropAnims simultaneously on Enter. Causes show/hide conflicts (fade-out PropAnims fight fade-in ones).
+- **Blanket Flow activation** (`PanelDir.cpp`): Also too aggressive. Current runtime logging shows it starts mutually exclusive flows (`show_*` and `hide_*`, `controller_mode` and `exit_controller_mode`, `enter` and `exit`) on the same panel. Env-gated filtering now proves this is only part of the problem: once helpbar/letterbox flows are suppressed, the choose-mode plaque and icon art recover, but the large list/shell text still does not. The remaining gap is likely missing trigger-driven label/material setup within `main` / `choose_mode` itself.
 
 **What works on native (confirmed session 43):**
 - DTA TypeDef `enter` handlers fire correctly (`RndPollable::Enter()` → `HandleType("enter")`)
@@ -222,7 +245,10 @@ The biggest native rendering correctness gap: material alpha/color never animate
 
 3. **Selective PropAnim activation** — Replace blanket auto-animate with targeted activation of only enter-transition PropAnims. Requires knowing WHICH PropAnims to start (information normally provided by Flow/trigger wiring).
 
-4. **Material default state** — Materials in .milo have alpha=0 as default. On Xbox, specific PropAnims animate alpha 0→1. Without selective activation, AlphaForce is needed. Removing it requires the full Flow→PropAnim chain working.
+4. **Label/text state wiring in choose-mode** — the `menu_only` experiment shows the choose-mode plaque and card art can be made stable without helpbar/letterbox flow spam, but the big readable labels still do not appear. That suggests some label/material state is gated behind trigger-driven flows that still never start successfully, or behind `Flow::Activate()` calls that currently fail silently.
+   - First concrete targets from runtime logging: `update_rank_number.flow`, `udpate_icon_state.flow`, and `update_tier.flow` in `ui/main/main.milo`
+
+4. **Material default state** — Materials in .milo have alpha=0 as default. On Xbox, specific PropAnims animate alpha 0→1. Without selective activation, native still needs a small text-only alpha fallback. The remaining work is to remove even that by getting the real Flow→PropAnim chain working reliably.
 
 **Hack removal dependency chain:**
 ```
@@ -300,6 +326,45 @@ All these assets load correctly, including previously-crashing inlined subdir fi
 Currently registered for tests: `PanelDir`, `UIPanel`, `UIScreen` (plus all classes from `FlowInit`, `CharInit`, `WorldInit`, `HamInit`).
 
 **PreLoad match% regression** (88.9% → 87.8%): The `bs >> d >>` changes shifted register allocation to a new dominant r19↔r20 swap. Could potentially be recovered by reverting the `d >>` changes for reads that are functionally identical to `bs >>` (non-rev-dependent scalar types), but the native behavioral fix is more important than the PPC match% here.
+
+### Bulk Load Test
+
+A comprehensive test (`AssetLoadingTest.BulkLoadAllFiles`) walks the entire MILO_LIB directory and attempts to load every `.milo_xbox` file. 5,399 files across 6 categories (ui, world, char, sfx, flow, songs).
+
+```bash
+# Run all categories (slow — 5399 files)
+cd native/build && ctest -R BulkLoad --output-on-failure
+
+# Run a single category
+MILO_BULK_CATEGORY=world ctest -R BulkLoad --output-on-failure
+MILO_BULK_CATEGORY=ui ctest -R BulkLoad --output-on-failure
+
+# Limit files per category (for quick smoke tests)
+MILO_BULK_CATEGORY=char MILO_BULK_LIMIT=20 ctest -R BulkLoad --output-on-failure
+```
+
+Uses `MILO_FATAL_FAILS=0` so MILO_FAIL becomes non-fatal — one bad file doesn't abort the sweep.
+
+## Reference Libraries (Cross-Validation)
+
+Community milo/ark tools at `~/code/milohax/milo-engine-libs/harmonix-repos/`:
+
+| Tool | Language | Milo Parse | ARK | Notes |
+|------|----------|-----------|-----|-------|
+| **MiloEditor** | C# .NET 8.0 | Full scene | Yes | Best reference for object types. `MiloLib/` core lib, `MiloUtil/` CLI. Validates rev (6,10,24,25,26,28,32), max symbol=512, max viewport=7, max subdirs=100 |
+| **Mackiloha** | C# .NET 8.0 | Full scene | v2-10 | ARK extraction + repacking. `Ark2DirApp`, `Milo2DirApp` CLIs |
+| **pikaxe** | Rust 2024 | Full scene | Yes | Successor to Mackiloha. `scene_tool milo2dir` validates structure. Handles 20+ object types |
+| **PyMilo** | Python | Container | No | Quick container inspection. `MiloContainer.py` decompression |
+| **LibForge** | C# .NET 4.7.1 | Full | Yes | RB4/RBVR focus. 010 Editor templates document formats |
+| **Boomy** | C# + TypeScript | Bundled MiloLib | No | DC3-specific song editor |
+
+**Key validation patterns from reference libs:**
+- MiloEditor validates symbol length < 512, viewport count < 7, subdir count < 100
+- Pikaxe uses `0xADDEADDE` end-marker scanning with magic-byte validation to avoid false positives in texture data
+- Both auto-detect endianness: if revision > 50, assume little-endian (Forge engine)
+- Class name fixups for older revisions (e.g., "RenderedTex" → "TexRenderer" for rev ≤ 24)
+
+**Pre-extracted asset library**: `~/code/milohax/milo-engine-libs/harmonix-repos/milo-rnd-library/dc3/` — 5,399 `.milo_xbox` files across songs (2,678), ui (1,153), sfx (1,091), char (324), world (141), flow (3).
 
 ## Key Architecture Notes
 

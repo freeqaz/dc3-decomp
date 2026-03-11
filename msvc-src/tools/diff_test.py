@@ -83,7 +83,7 @@ def compile_source(source: str, extra_flags: list[str] = None) -> Optional[str]:
 
         cmd = [
             str(WIBO), str(CL_EXE),
-            "/c", "/FAcs", "/Ox", "/GS-", "/nologo",
+            "/c", "/FAcs", "/O1", "/Oi", "/EHsc", "/GR", "/nologo",
         ]
         if extra_flags:
             cmd.extend(extra_flags)

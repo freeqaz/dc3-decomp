@@ -26,6 +26,7 @@ public:
 
 class MoveMgr : public Hmx::Object {
     friend class DanceRemixer;
+    friend class HamDirector;
 
 protected:
     MoveMgr();

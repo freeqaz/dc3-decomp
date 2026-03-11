@@ -2497,7 +2497,33 @@ void HamDirector::ChangeNextShotIfCharacterCollisionLikely() {
 
 void HamDirector::OnPopulateMoves() {}
 
-void HamDirector::OnPopulateFromMoveMgr() {}
+void HamDirector::OnPopulateFromMoveMgr() {
+    if (!mMasterClipAnim.Ptr()) {
+        MILO_NOTIFY("No MasterClipAnim in HamDirector.  Did you load a song?");
+    } else {
+        static Symbol move_parents("move_parents");
+        static Symbol clip_crossover("clip_crossover");
+        PropKeys *moveKeys =
+            mMasterClipAnim->AddKeys(this, DataArrayPtr(move_parents), PropKeys::kSymbol);
+        PropKeys *clipKeys =
+            mMasterClipAnim->AddKeys(this, DataArrayPtr(clip_crossover), PropKeys::kSymbol);
+        Keys<Symbol, Symbol> *moveSymKeys = moveKeys->AsSymbolKeys();
+        Keys<Symbol, Symbol> *clipSymKeys = clipKeys->AsSymbolKeys();
+        int count = TheMoveMgr->CurParents(0).size();
+        for (int i = 0; i < count; i++) {
+            if (TheMoveMgr->CurParents(0)[i] != 0) {
+                float frame = BeatToSeconds((float)i * 4.0f - 1.0f) * 30.0f;
+                int moveIdx = moveKeys->SetKey(frame);
+                int clipIdx = clipKeys->SetKey(frame);
+                (*moveSymKeys)[moveIdx].value = TheMoveMgr->CurParents(0)[i]->Name();
+                const MoveVariant *second = TheMoveMgr->mRoutineMeasures[0][i].second;
+                if (second != 0) {
+                    (*clipSymKeys)[clipIdx].value = second->Name();
+                }
+            }
+        }
+    }
+}
 
 void HamDirector::DrawIconMan(Symbol sym1, Symbol sym2, Symbol sym3, float f1, float f2, RndTex *tex) {
     if (!mMasterClipAnim.Ptr()) {

@@ -2120,6 +2120,24 @@ void RndText::DrawShowing() {
 
 #ifdef HX_NATIVE
     extern int gDebugFrameID;
+    if (gDebugFrameID == 500) {
+        // Unconditional frame-500 diagnostic for all RndText objects
+        printf("DC3_TEXT_DRAW [frame %d] name='%s' text='%.40s' fontMaps=%d styles=%d width=%.1f\n",
+               gDebugFrameID, Name(), mText.c_str(),
+               (int)mFontMaps.size(), (int)mStyles.size(), mWidth);
+        for (int fm = 0; fm < (int)mFontMaps.size(); fm++) {
+            FontMapBase* fmb = mFontMaps[fm];
+            printf("  fontMap[%d]: class=%s meshes=%d mats=%d font=%s\n",
+                   fm, fmb->ClassName().Str(), fmb->NumMeshes(), fmb->NumMaterials(),
+                   fmb->Font() ? fmb->Font()->Name() : "<null>");
+            for (int mi = 0; mi < fmb->NumMeshes(); mi++) {
+                RndMesh* m = fmb->Mesh(mi);
+                printf("    mesh[%d]: %p verts=%d faces=%d showing=%d\n",
+                       mi, (void*)m, m ? (int)m->Verts().size() : 0,
+                       m ? (int)m->Faces().size() : 0, m ? m->Showing() : -1);
+            }
+        }
+    }
     if (DebugChooseModeText() && gDebugFrameID == 500) {
         RndCam *cam = RndCam::Current();
         const Transform &xfm = WorldXfm();

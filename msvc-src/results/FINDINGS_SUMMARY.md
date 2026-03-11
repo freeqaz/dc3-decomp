@@ -2,7 +2,7 @@
 
 Date: 2026-03-10
 Compiler: MSVC 16.00.11886.00 (Xbox 360 PPC cross-compiler)
-Toolchain: wibo + cl.exe + /FAcs /Ox /GS-
+Toolchain: wibo + cl.exe + /FAcs /O1 /Oi /EHsc /GR (matching DC3 build flags)
 
 ## 1. Register Allocation Order
 

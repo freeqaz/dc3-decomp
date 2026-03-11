@@ -11,9 +11,7 @@ Interactive GPU frame debugging using RenderDoc and rdc-cli. Best for windowed a
 
 For headless apps (render-test), use the `gpu-capture` skill with GFXReconstruct instead — RenderDoc requires a swapchain (vkQueuePresentKHR) to trigger capture.
 
-## IMPORTANT: Sandbox
-
-**You MUST skip the sandbox for GPU access.** Use `dangerouslyDisableSandbox: true`.
+**All Bash calls in this skill MUST use `dangerouslyDisableSandbox: true`** (GPU/Vulkan access is blocked by the sandbox).
 
 ## Arguments
 

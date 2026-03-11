@@ -15,6 +15,7 @@
 #include "rndobj/Env.h"
 #include "rndobj/BaseMaterial.h"
 #include "rndobj/CubeTex.h"
+#include "rndobj/Text.h"
 #include "math/Mtx.h"
 #include <unordered_set>
 
@@ -648,6 +649,98 @@ static void DrawMeshImmediate(RndMesh* mesh) {
     // Text meshes (created by RndText::FontMap) have no name — detect early for pipeline config.
     // The DC3 fonts are named "Eagle-Light" so we can't exclude by material name.
     bool isTextMesh = !mesh->Name()[0];
+
+    // Frame-250 diagnostic for text meshes — includes vertex bounds + transform
+    {
+        extern int gDebugFrameID;
+        static int sTextDrawCount = 0;
+        if (gDebugFrameID == 250 && isTextMesh) {
+            sTextDrawCount++;
+            auto& verts = mesh->Verts();
+            float minX = 1e9f, maxX = -1e9f, minY = 1e9f, maxY = -1e9f, minZ = 1e9f, maxZ = -1e9f;
+            for (auto& v : verts) {
+                if (v.pos.x < minX) minX = v.pos.x;
+                if (v.pos.x > maxX) maxX = v.pos.x;
+                if (v.pos.y < minY) minY = v.pos.y;
+                if (v.pos.y > maxY) maxY = v.pos.y;
+                if (v.pos.z < minZ) minZ = v.pos.z;
+                if (v.pos.z > maxZ) maxZ = v.pos.z;
+            }
+            const Transform& wxfm = mesh->WorldXfm();
+            printf("DC3_TEXT_MESH [frame 250] draw#%d verts=%d faces=%d blend=%d "
+                   "mat='%s' showing=%d\n"
+                   "  localBounds: X[%.1f,%.1f] Y[%.1f,%.1f] Z[%.1f,%.1f]\n"
+                   "  worldPos=(%.1f,%.1f,%.1f)\n"
+                   "  worldMtx: [%.3f %.3f %.3f] [%.3f %.3f %.3f] [%.3f %.3f %.3f]\n",
+                   sTextDrawCount, (int)verts.size(), (int)mesh->Faces().size(),
+                   (int)mat->GetBlend(), mat->Name(), mesh->Showing(),
+                   minX, maxX, minY, maxY, minZ, maxZ,
+                   wxfm.v.x, wxfm.v.y, wxfm.v.z,
+                   wxfm.m.x.x, wxfm.m.x.y, wxfm.m.x.z,
+                   wxfm.m.y.x, wxfm.m.y.y, wxfm.m.y.z,
+                   wxfm.m.z.x, wxfm.m.z.y, wxfm.m.z.z);
+            // Also log first few vertex positions
+            for (int vi = 0; vi < std::min((int)verts.size(), 4); vi++) {
+                printf("  v[%d] pos=(%.2f,%.2f,%.2f) uv=(%.3f,%.3f) color=(%.2f,%.2f,%.2f,%.2f)\n",
+                       vi, verts[vi].pos.x, verts[vi].pos.y, verts[vi].pos.z,
+                       verts[vi].tex.x, verts[vi].tex.y,
+                       verts[vi].color.red, verts[vi].color.green,
+                       verts[vi].color.blue, verts[vi].color.alpha);
+            }
+            // Log parent RndText info (mSize, parent chain)
+            RndTransformable* parent = mesh->TransParent();
+            if (parent) {
+                const Transform& pxfm = parent->WorldXfm();
+                printf("  parent='%s' class='%s' worldPos=(%.1f,%.1f,%.1f)\n"
+                       "  parentMtx: [%.3f %.3f %.3f] [%.3f %.3f %.3f] [%.3f %.3f %.3f]\n",
+                       parent->Name(), parent->ClassName().Str(),
+                       pxfm.v.x, pxfm.v.y, pxfm.v.z,
+                       pxfm.m.x.x, pxfm.m.x.y, pxfm.m.x.z,
+                       pxfm.m.y.x, pxfm.m.y.y, pxfm.m.y.z,
+                       pxfm.m.z.x, pxfm.m.z.y, pxfm.m.z.z);
+                // If parent is RndText, log the style size
+                RndText* text = dynamic_cast<RndText*>(parent);
+                if (text && text->NumStyles() > 0) {
+                    printf("  textSize=%.1f textWidth=%.1f\n",
+                           text->Styles()[0].mSize, text->Width());
+                }
+                // Also log grandparent
+                RndTransformable* gp = parent->TransParent();
+                if (gp) {
+                    const Transform& gpxfm = gp->WorldXfm();
+                    printf("  grandparent='%s' class='%s' worldPos=(%.1f,%.1f,%.1f)\n"
+                           "  gpMtx: [%.3f %.3f %.3f] [%.3f %.3f %.3f] [%.3f %.3f %.3f]\n",
+                           gp->Name(), gp->ClassName().Str(),
+                           gpxfm.v.x, gpxfm.v.y, gpxfm.v.z,
+                           gpxfm.m.x.x, gpxfm.m.x.y, gpxfm.m.x.z,
+                           gpxfm.m.y.x, gpxfm.m.y.y, gpxfm.m.y.z,
+                           gpxfm.m.z.x, gpxfm.m.z.y, gpxfm.m.z.z);
+                }
+            }
+            // Log camera info
+            RndCam* cam = RndCam::Current();
+            if (cam) {
+                const Transform& camXfm = cam->WorldXfm();
+                printf("  cam='%s' pos=(%.1f,%.1f,%.1f) near=%.1f far=%.1f yfov=%.4f\n",
+                       cam->Name(), camXfm.v.x, camXfm.v.y, camXfm.v.z,
+                       cam->NearPlane(), cam->FarPlane(), cam->YFov());
+            }
+        }
+        // Log card background meshes at frame 500 to diagnose overbright
+        if (gDebugFrameID == 500 && !isTextMesh &&
+            (strstr(mesh->Name(), "frames_bg") || strstr(mesh->Name(), "frames_glow") ||
+             !strcmp(mesh->Name(), "frame.mesh") || strstr(mesh->Name(), "mod_frame"))) {
+            RndTex* diffTex = mat->GetDiffuseTex();
+            printf("DC3_CARD_BG [f500] mesh='%s' mat='%s' blend=%d "
+                   "color=(%.2f,%.2f,%.2f,%.2f) tex=%s(%dx%d) prelit=%d\n",
+                   mesh->Name(), mat->Name(), (int)mat->GetBlend(),
+                   mat->GetColor().red, mat->GetColor().green,
+                   mat->GetColor().blue, mat->GetColor().alpha,
+                   diffTex ? diffTex->Name() : "<null>",
+                   diffTex ? diffTex->Width() : 0, diffTex ? diffTex->Height() : 0,
+                   mat->Prelit());
+        }
+    }
 
     // --- Pipeline selection ---
     PipelineKey key{};

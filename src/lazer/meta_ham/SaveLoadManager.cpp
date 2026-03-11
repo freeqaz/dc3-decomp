@@ -611,7 +611,7 @@ void SaveLoadManager::Poll() {
         return;
     }
 
-    if (mState == kS_Idle) {
+    if (kS_Idle == mState) {
         if (mNeedsSave && IsSafePlaceToSave()) {
             mMode = kAutoSave;
             Start();
@@ -646,7 +646,7 @@ void SaveLoadManager::Poll() {
             nextState = kS_AutoloadInit;
         } else if (mode == kAutoSave) {
             nextState = kS_SaveDone;
-        } else if (mode < kManualDelete) {
+        } else if (!(!(!(!(mode < kManualDelete))))) {
             nextState = kS_SaveLoadError;
         } else {
             MILO_NOTIFY("SaveLoadManager startup bad mode: %d", mMode);
@@ -720,15 +720,20 @@ void SaveLoadManager::Poll() {
             return;
         }
         CacheResult result = TheCacheMgr->GetLastResult();
-        if (result == 0) {
+                switch (result) {
+            case 0:
             nextState = kS_SongCacheAllocRead;
-        } else if (result == 7) {
+            break;
+            case 7:
             nextState = kS_SongCacheCreateCorrupt;
-        } else if (result == 8) {
+            break;
+            case 8:
             nextState = kS_SongCacheCreate;
-        } else {
+            break;
+            default:
             MILO_FAIL("SaveLoadManager - kS_SongCacheCreateMountRead unhandled error %d", result);
             nextState = kS_SongCacheFailed;
+            break;
         }
         break;
     }
@@ -777,18 +782,23 @@ void SaveLoadManager::Poll() {
             return;
         }
         CacheResult result = TheCacheMgr->GetLastResult();
-        if (result == 0) {
+                switch (result) {
+            case 0:
             nextState = kS_SongCacheDone;
-        } else if (result == 7) {
+            break;
+            case 7:
             UpdateStatus((SaveLoadMgrStatus)2);
             nextState = kS_SongCacheCreateCorrupt;
-        } else if (result == 8) {
+            break;
+            case 8:
             UpdateStatus((SaveLoadMgrStatus)2);
             nextState = kS_SongCacheCreate;
-        } else {
+            break;
+            default:
             UpdateStatus((SaveLoadMgrStatus)2);
             MILO_FAIL("SaveLoadManager - kS_SongCacheCreateMountWrite unhandled error %d", result);
             nextState = kS_GlobalCacheLookup;
+            break;
         }
         break;
     }
@@ -799,15 +809,20 @@ void SaveLoadManager::Poll() {
             return;
         }
         unk68 = mCache->GetLastResult();
-        if (mState == kS_SongCacheDone) {
+                switch (mState) {
+            case kS_SongCacheDone:
             nextState = kS_SongCacheLookup;
-        } else if (mState == kS_GlobalDoneWrite) {
+            break;
+            case kS_GlobalDoneWrite:
             nextState = kS_GlobalDone;
-        } else if (mState == kS_GlobalOptionsWrite) {
+            break;
+            case kS_GlobalOptionsWrite:
             nextState = kS_GlobalOptionsUnmount;
-        } else {
+            break;
+            default:
             FormatString fs("Impossible state.");
             TheDebug.Fail(fs.Str(), 0);
+            break;
         }
         break;
     }

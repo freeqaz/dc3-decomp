@@ -10,7 +10,6 @@
 #include <cstdio>
 
 VenueProvider::VenueProvider() : mPlayer(0) {}
-VenueProvider::~VenueProvider() {}
 
 void VenueProvider::Text(int, int data, UIListLabel *uiListLabel, UILabel *uiLabel) const {
     MILO_ASSERT_RANGE(data, 0, mVenues.size(), 0x4e);

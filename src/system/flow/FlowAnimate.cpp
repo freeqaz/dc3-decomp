@@ -342,11 +342,9 @@ bool FlowAnimate::Replace(ObjRef *ref, Hmx::Object *obj) {
         if (mAnimTask) {
             AnimTask *task = mAnimTask;
             if (task->mListener == (Hmx::Object *)this) {
-                static Symbol sStop("stop");
-                OnAnimEvent(sStop);
+                OnAnimEvent("interrupted");
             }
         }
-        mAnimTask->mListener = NULL;
         mAnimTask = nullptr;
         return true;
     }

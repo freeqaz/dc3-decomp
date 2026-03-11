@@ -9,9 +9,7 @@ allowed-tools: Bash, Read, Glob, Grep
 
 Analyze GFXReconstruct (.gfxr) capture files. Extract metadata, Vulkan API call traces, shaders, and resource data.
 
-## IMPORTANT: Sandbox
-
-**You MUST skip the sandbox** for shader extraction and temp file creation. Use `dangerouslyDisableSandbox: true`.
+**All Bash calls in this skill MUST use `dangerouslyDisableSandbox: true`** (GFXReconstruct tools need filesystem access the sandbox blocks).
 
 ## Arguments
 

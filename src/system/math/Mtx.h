@@ -417,7 +417,16 @@ inline void FastInvert(const Transform &in, Transform &out) {
     );
 }
 
-void Transpose(const Hmx::Matrix4 &, Hmx::Matrix4 &);
+inline void Transpose(const Hmx::Matrix4 &in, Hmx::Matrix4 &out) {
+    float p = in.w.w, l = in.z.w, h = in.y.w, d = in.x.w;
+    float o = in.w.z, k = in.z.z, g = in.y.z, c = in.x.z;
+    float n = in.w.y, j = in.z.y, f = in.y.y, b = in.x.y;
+    float m = in.w.x, i = in.z.x, e = in.y.x, a = in.x.x;
+    out.x.x = a; out.x.y = e; out.x.z = i; out.x.w = m;
+    out.y.x = b; out.y.y = f; out.y.z = j; out.y.w = n;
+    out.z.x = c; out.z.y = g; out.z.z = k; out.z.w = o;
+    out.w.x = d; out.w.y = h; out.w.z = l; out.w.w = p;
+}
 
 inline void Multiply(const Frustum &fin, const Transform &tf, Frustum &fout) {
     Multiply(fin.front, tf, fout.front);

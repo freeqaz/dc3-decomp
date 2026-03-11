@@ -4,11 +4,9 @@
 // Archive-backed assets require DC3_DATA pointing at extracted ark files.
 // Standalone .milo_xbox assets use the pre-extracted library at MILO_LIB.
 //
-// Run just the "north star" crash regression tests:
-//   cd native/build && ctest -R _Crashes --output-on-failure
-//
-// When a _Crashes test FAILS, the underlying decomp bug is fixed —
-// convert it from EXPECT_DEATH to a normal load-and-verify test.
+// Run the bulk loading sweep (tests every .milo_xbox in the library):
+//   cd native/build && ctest -R BulkLoad --output-on-failure
+//   MILO_BULK_CATEGORY=ui ctest -R BulkLoad --output-on-failure
 
 #include "test_helpers.h"
 #include "obj/Dir.h"
@@ -17,7 +15,9 @@
 #include "utl/FilePath.h"
 
 #include <sys/stat.h>
+#include <dirent.h>
 #include <cstdlib>
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -505,3 +505,167 @@ TEST_F(AssetLoadingTest, RepeatedLoadCycle) {
         delete dir;
     }
 }
+
+// ============================================================================
+// Bulk loading — try every .milo_xbox file in the library
+// ============================================================================
+// Walks the MILO_LIB directory tree and attempts to load every .milo_xbox.
+// Reports per-category pass/fail counts. Failures are non-fatal (EXPECT, not
+// ASSERT) so one bad file doesn't abort the entire sweep.
+//
+// Filter by category with env var:
+//   MILO_BULK_CATEGORY=ui    (ui, world, char, sfx, flow, songs, all)
+//   MILO_BULK_LIMIT=50       (max files per category, 0=unlimited)
+//
+// Run:
+//   cd native/build && ctest -R BulkLoad --output-on-failure
+
+static void CollectMiloFiles(const std::string &dir, std::vector<std::string> &out) {
+    DIR *dp = opendir(dir.c_str());
+    if (!dp) return;
+    struct dirent *ent;
+    while ((ent = readdir(dp)) != nullptr) {
+        if (ent->d_name[0] == '.') continue;
+        std::string full = dir + "/" + ent->d_name;
+        struct stat st;
+        if (stat(full.c_str(), &st) != 0) continue;
+        if (S_ISDIR(st.st_mode)) {
+            CollectMiloFiles(full, out);
+        } else if (S_ISREG(st.st_mode)) {
+            std::string name(ent->d_name);
+            if (name.size() > 10 && name.substr(name.size() - 10) == ".milo_xbox") {
+                out.push_back(full);
+            }
+        }
+    }
+    closedir(dp);
+}
+
+static std::string CategoryFromPath(const std::string &path, const std::string &root) {
+    std::string rel = path.substr(root.size() + 1);
+    size_t slash = rel.find('/');
+    return (slash != std::string::npos) ? rel.substr(0, slash) : "other";
+}
+
+TEST_F(AssetLoadingTest, BulkLoadAllFiles) {
+    std::string root = GetMiloLibRoot();
+    if (root.empty())
+        GTEST_SKIP() << "MILO_LIB not set";
+
+    // Make MILO_FAIL non-fatal so one bad file doesn't abort the sweep
+    setenv("MILO_FATAL_FAILS", "0", 1);
+
+    const char *catFilter = getenv("MILO_BULK_CATEGORY");
+    std::string category = catFilter ? catFilter : "all";
+
+    const char *limitStr = getenv("MILO_BULK_LIMIT");
+    int limit = limitStr ? atoi(limitStr) : 0;
+
+    // Collect all .milo_xbox files
+    std::vector<std::string> allFiles;
+    CollectMiloFiles(root, allFiles);
+    std::sort(allFiles.begin(), allFiles.end());
+
+    ASSERT_GT((int)allFiles.size(), 0) << "No .milo_xbox files found in " << root;
+    printf("Found %d .milo_xbox files in library\n", (int)allFiles.size());
+
+    // Filter by category
+    std::vector<std::string> files;
+    for (auto &f : allFiles) {
+        if (category != "all") {
+            std::string cat = CategoryFromPath(f, root);
+            if (cat != category) continue;
+        }
+        files.push_back(f);
+        if (limit > 0 && (int)files.size() >= limit) break;
+    }
+
+    printf("Testing %d files (category=%s, limit=%d)\n",
+           (int)files.size(), category.c_str(), limit);
+
+    int passed = 0, failed = 0, skipped = 0;
+    std::vector<std::string> failures;
+
+    for (auto &path : files) {
+        std::string rel = path.substr(root.size() + 1);
+        ObjectDir *dir = TryLoadStandalone(path);
+        if (dir) {
+            passed++;
+            // Don't delete dir — ObjDirPtr destructor cascade is O(n^2) for
+            // world files with many shared subdirs (HasDirPtrs walks the ref
+            // ring per subdir). One venue file takes 30+ seconds to destroy.
+            // Loading is what we're testing, not destruction.
+        } else {
+            failures.push_back(rel);
+            failed++;
+        }
+    }
+
+    printf("\n=== Bulk Load Results ===\n");
+    printf("Passed: %d  Failed: %d  Skipped: %d  Total: %d\n",
+           passed, failed, skipped, (int)files.size());
+
+    if (!failures.empty()) {
+        printf("\nFailed files (%d):\n", (int)failures.size());
+        for (auto &f : failures)
+            printf("  FAIL: %s\n", f.c_str());
+    }
+
+    // We expect at least 90% pass rate
+    if (files.size() > 10) {
+        float passRate = (float)passed / (float)files.size();
+        EXPECT_GE(passRate, 0.9f)
+            << "Pass rate " << (passRate * 100) << "% is below 90% threshold";
+    }
+}
+
+// Per-category tests — can run in parallel with ctest -j$(nproc)
+static void RunCategoryBulkLoad(const char *category) {
+    std::string root = GetMiloLibRoot();
+    if (root.empty()) {
+        GTEST_SKIP() << "MILO_LIB not set";
+        return;
+    }
+    setenv("MILO_FATAL_FAILS", "0", 1);
+
+    std::vector<std::string> allFiles;
+    CollectMiloFiles(root, allFiles);
+    std::sort(allFiles.begin(), allFiles.end());
+
+    std::vector<std::string> files;
+    for (auto &f : allFiles) {
+        if (CategoryFromPath(f, root) == category)
+            files.push_back(f);
+    }
+    if (files.empty()) {
+        GTEST_SKIP() << "No files for category " << category;
+        return;
+    }
+
+    printf("Category '%s': %d files\n", category, (int)files.size());
+    int passed = 0, failed = 0;
+    std::vector<std::string> failures;
+
+    for (auto &path : files) {
+        ObjectDir *dir = TryLoadStandalone(path);
+        if (dir) {
+            passed++;
+        } else {
+            failures.push_back(path.substr(root.size() + 1));
+            failed++;
+        }
+    }
+
+    printf("  Passed: %d  Failed: %d\n", passed, failed);
+    for (auto &f : failures)
+        printf("  FAIL: %s\n", f.c_str());
+
+    EXPECT_EQ(failed, 0) << failed << " files failed to load";
+}
+
+TEST_F(AssetLoadingTest, BulkLoad_Flow)  { RunCategoryBulkLoad("flow"); }
+TEST_F(AssetLoadingTest, BulkLoad_Char)  { RunCategoryBulkLoad("char"); }
+TEST_F(AssetLoadingTest, BulkLoad_World) { RunCategoryBulkLoad("world"); }
+TEST_F(AssetLoadingTest, BulkLoad_UI)    { RunCategoryBulkLoad("ui"); }
+TEST_F(AssetLoadingTest, BulkLoad_SFX)   { RunCategoryBulkLoad("sfx"); }
+TEST_F(AssetLoadingTest, BulkLoad_Songs) { RunCategoryBulkLoad("songs"); }

@@ -758,6 +758,83 @@ The target uses `cmplwi` (unsigned compare) for pointer null checks, while our c
 
 ---
 
+## Virtual Base Block Sinking
+
+**Prevalence:** Template functions with virtual base conversion (FlowPtr, ObjPtr with virtual inheritance)
+**Typical Gap:** ~40% (59.6% vs potential 100%)
+
+The target compiler sinks the non-null virtual base conversion block after the function return, creating a backward-jump layout that our compiler cannot reproduce.
+
+### Symptom
+
+The diff shows massive `replace` clusters (19+ instructions) where ALL instructions are present in both builds but in completely different positions. The target layout is:
+
+```
+[null-check: bne → non-null] [null-path] [common → return] [non-null: vbase conversion + backjump]
+```
+
+Our compiler produces:
+
+```
+[null-check: beq → null] [non-null: vbase conversion] [b → common] [null-path] [common → return]
+```
+
+### Root Cause
+
+When a template like `FlowPtr<T>` is instantiated with a type that virtually inherits from `Hmx::Object` (e.g., `RndAnimatable`), the `T* → Object*` conversion requires a vbtable lookup + null check. The target compiler:
+
+1. **Inverts the condition** to `bne` (branch if non-null) — null path falls through
+2. **Sinks the non-null block** (5 instructions: vbtable lookup + Name() load) past the return
+3. **Eliminates redundant `li r4, 0`** — knows r4 is already 0 from the null check
+
+This places the common code directly after the null path (zero-cost fallthrough), saving one branch instruction. The non-null path ends with a backward jump to the common code.
+
+For instantiations WITHOUT virtual base (e.g., `FlowPtr<Hmx::Object>`), the target uses the standard `beq` + source-order layout because the non-null path is small (no vbtable lookup).
+
+### What Was Tried
+
+| Approach | Result | Why |
+|----------|--------|-----|
+| `if (obj)` with hmxObj | 59.6% | Wrong polarity (beq), source-order blocks |
+| `if (!obj)` with hmxObj | 6.7% | Right polarity (bne), right instructions, wrong block order |
+| goto + backward jump | 59.6% | Compiler normalized goto back into if/else |
+| Pre-init + implicit conv (v6) | 57.8% | Changed register allocation, didn't merge checks |
+| Ternary + implicit conv | 26.7%–57.8% | Two separate null checks generated |
+| `/O1` vs `/Ox` flags | No change | Block ordering identical between optimization levels |
+
+### Key Finding: Compiler Normalizes Gotos
+
+The MSVC front-end (c1xx.dll) normalizes all goto patterns into structured if/else before generating IL. This means:
+
+```cpp
+if (obj) goto L_nonnull;
+null_body;
+L_common: common; return;
+L_nonnull: non_null_body; goto L_common;
+```
+
+Is compiled identically to `if (obj) { non_null } else { null }; common;` — the compiler detects the structured pattern and regenerates it.
+
+### Why `if (!obj)` Gives 6.7% Despite Correct Instructions
+
+The `if (!obj)` pattern produces **identical instructions** to the target — the diff shows 14 "equal" matches vs 7 for `if (obj)`. But the common block is at a different position (after non-null instead of after null), causing the diff algorithm to report 14 deletes + 13 inserts for the shifted block. The 6.7% score is a diff alignment artifact, not a real quality difference.
+
+### What Would Fix It
+
+- c2.dll block layout pass that sinks large else-blocks past the function return
+- This optimization appears to trigger only when the else-block exceeds a size threshold (vbase conversion = 5 insns triggers it; simple pointer copy = 2 insns does not)
+- No source-level, optimization flag, or goto pattern can replicate this behavior
+
+### Real Examples
+
+| Function | With `if(obj)` | With `if(!obj)` | Notes |
+|----------|---------------|----------------|-------|
+| FlowPtr\<RndAnimatable\>::operator= | 59.6% | 6.7% | Block sinking, virtual base |
+| FlowPtr\<Hmx::Object\>::operator= | 93.2% | 80.2% | No block sinking, no virtual base |
+| FlowPtr\<Sound\>::operator= | 26.7% | untested | Virtual base, likely same pattern |
+
+---
+
 ## See Also
 
 - [verifiable-icf.md](verifiable-icf.md) - ICF/linker-side verifiable patterns

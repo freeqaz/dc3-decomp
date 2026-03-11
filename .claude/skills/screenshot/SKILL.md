@@ -7,89 +7,117 @@ allowed-tools: Bash, Read, Glob
 
 # Screenshot Skill
 
-Capture PNG screenshots from the DC3 native port or milo-viewer using headless GPU rendering.
+**All Bash calls in this skill MUST use `dangerouslyDisableSandbox: true`.** The script will detect blocked GPU access and tell you if you forgot.
 
-## IMPORTANT: Sandbox
+## Usage
 
-**You MUST skip the sandbox for GPU access.** The GPU (Vulkan ICD / Dawn) requires filesystem and device access that the sandbox blocks. Always use `dangerouslyDisableSandbox: true` for any command that runs the renderer.
-
-## dc3-native (full game boot)
+The `scripts/gpu/screenshot.sh` wrapper handles everything (env vars, headless mode, timeouts).
 
 ```bash
-cd native/build
-cmake .. && make -j$(nproc) dc3-native
+# dc3-native: default frames (10, 50, 100)
+bash scripts/gpu/screenshot.sh native/build/dc3-native
 
-# Take screenshots at frames 100, 300, 500
-MILO_RENDER=1 \
-MILO_SCREENSHOT_DIR=../../archive/screenshots/sessionNN \
-MILO_SCREENSHOT_FRAMES=100,300,500 \
-./dc3-native
+# dc3-native: specific frames, custom output
+bash scripts/gpu/screenshot.sh -f 100,500 -o /tmp/my_shots native/build/dc3-native
+
+# milo-viewer: venue scene
+bash scripts/gpu/screenshot.sh native/build/milo-viewer \
+  ~/code/milohax/milo-engine-libs/harmonix-repos/milo-rnd-library/dc3/world/glitterati/gen/glitterati.milo_xbox
+
+# render-test: specific test scene
+bash scripts/gpu/screenshot.sh native/build/render-test --test solid_quads
 ```
 
-### Environment Variables
+### Options
 
-| Variable | Description | Default |
-|---|---|---|
-| `MILO_RENDER=1` | **Required.** Enable GPU rendering (without this, no draws happen) |  |
-| `MILO_SCREENSHOT_DIR=<path>` | Directory to save `frame_NNNNN.png` files | (none, no capture) |
-| `MILO_SCREENSHOT_FRAMES=<csv>` | Comma-separated frame numbers to capture | `100,600,900,1500` |
-| `MILO_CAPTURE_FRAME=<N>` | Capture a single frame + dump full draw call log to stderr | (none) |
-| `MILO_HEADLESS=1` | Force headless mode (no window, useful for CI) | auto-detected |
-| `MILO_SIMPLE_RENDER=1` | Debug: all prelit, skip multiply, black clear | (off) |
+| Option | Description | Default |
+|--------|-------------|---------|
+| `-o <dir>` | Output directory | `/tmp/dc3_screenshots` |
+| `-f <frames>` | Comma-separated frame numbers | `10,50,100` |
+| `-t <seconds>` | Timeout | `30` |
+| `-w <WxH>` | Resolution | `1280x720` |
 
-### Typical Frame Timing (boot flow)
+### dc3-native Frame Timing
 
-| Frame | Screen | Notes |
-|---|---|---|
-| ~50 | attract_screen | Movie panel (no video) |
-| ~100 | title_screen | DC3 logo, "HOW TO NAVIGATE" text |
-| ~200 | wait_main_after_saveload_screen | Transition |
-| ~250+ | choose_mode_screen | Main menu (DANCE, STORY, etc.) |
+| Frame | Screen |
+|-------|--------|
+| ~10 | Kinect loading (blue orb) |
+| ~50 | attract_screen |
+| ~100 | title_screen (DC3 logo) |
+| ~250+ | choose_mode_screen (main menu) |
 
-The boot flow uses hardcoded delays (see `UI.cpp` sFlow[]).
+### Common Assets (milo-viewer)
+
+```
+~/code/milohax/milo-engine-libs/harmonix-repos/milo-rnd-library/dc3/
+  world/glitterati/gen/glitterati.milo_xbox   # venue
+  world/dclive/gen/dclive.milo_xbox           # outdoor venue
+  char/main/gen/main.milo_xbox                # character
+```
 
 ### Draw Call Analysis
 
-To get a full draw call dump for a specific frame:
 ```bash
-MILO_RENDER=1 MILO_CAPTURE_FRAME=500 ./dc3-native 2>/tmp/frame_capture.txt
-# Then search: grep "DRAW\|SKIP" /tmp/frame_capture.txt
+MILO_RENDER=1 MILO_HEADLESS=1 MILO_CAPTURE_FRAME=500 timeout 60 native/build/dc3-native 2>/tmp/frame_capture.txt
+grep "DRAW\|SKIP" /tmp/frame_capture.txt
 ```
 
-## milo-viewer (single .milo file)
+## Digging Deeper
 
-```bash
-cd native/build
+If screenshots aren't working or you need to understand the rendering pipeline:
 
-# Screenshot mode (headless, saves PNG)
-./milo-viewer path/to/scene.milo_xbox --screenshot output.png --frames 60
+### How Screenshots Work
 
-# Video mode (multiple frames)
-./milo-viewer path/to/scene.milo_xbox --video output/ --frames 120
+dc3-native screenshots use headless GPU rendering: draw to offscreen texture → GPU readback → PNG.
+
+| Step | Code | What Happens |
+|------|------|--------------|
+| Env var parsing | `native/src/platform/Rnd_Wgpu.cpp:182-201` | Reads `MILO_SCREENSHOT_DIR`, parses frame CSV |
+| Frame counter | `native/src/platform/Rnd_Wgpu.cpp:285` | `mFrameID++` in `BeginDrawing()` |
+| Frame match check | `native/src/platform/Rnd_Wgpu.cpp:994-1033` | `MaybeCaptureFrame()` — compares mFrameID to target list |
+| GPU readback | `native/src/gfx/GpuDevice.cpp:308-361` | `ReadbackHeadlessFrame()` — copies mHeadlessTex → staging buffer → CPU |
+| PNG write | `native/src/gfx/Screenshot.cpp:10-31` | `stbi_write_png()` via `WritePNG()` |
+
+### Why Xvfb Breaks Screenshots
+
+`ReadbackHeadlessFrame()` reads from `mHeadlessTex` — an offscreen texture created only in headless mode (`GpuDevice.cpp:294-306`). With Xvfb, Dawn creates a swapchain instead, and `mHeadlessTex` is never allocated. The readback returns `false` silently.
+
+### Key Data Structures
+
+| Member | File | Purpose |
+|--------|------|---------|
+| `mScreenshotDir` | `native/src/platform/Rnd_Wgpu.h:302` | Output directory |
+| `mCaptureFrames` | `native/src/platform/Rnd_Wgpu.h:303` | Frame number targets |
+| `mCaptureIndex` | `native/src/platform/Rnd_Wgpu.h:304` | Current position in vector |
+| `mHeadlessTex` | `native/src/gfx/GpuDevice.h` | Offscreen render target (headless only) |
+| `mFrameID` | `native/src/platform/Rnd_Wgpu.h` | Global frame counter |
+
+### Debug Labels
+
+All WebGPU objects carry debug labels that propagate to Vulkan via `VK_EXT_debug_utils`:
+
+| Label | Object | Code |
+|-------|--------|------|
+| `HeadlessTarget` | Offscreen texture | `GpuDevice.cpp` |
+| `FrameEncoder` | Command encoder | `Rnd_Wgpu.cpp` |
+| `MainPass` | Render pass | `Rnd_Wgpu.cpp` |
+| `SceneUniforms` etc. | Uniform buffers | `Rnd_Wgpu.cpp` |
+| `DefaultWhite` etc. | Default textures | `Rnd_Wgpu.cpp` |
+| Mesh `Name()` | Vertex/index buffers | `Mesh_Wgpu.cpp` |
+| `ShadowPass`, `ShadowDepth` | Shadow rendering | `ShadowPass.cpp` |
+| `MainStatic`, `StandardShader` | Pipelines/shaders | `PipelineManager.cpp` |
+
+Enabled by the `use_user_defined_labels_in_backend` Dawn toggle in `GpuDevice.cpp:135-141`.
+
+### Script Source
+
+- `scripts/gpu/screenshot.sh` — the wrapper script (auto-sets all env vars, detects GPU access)
+
+### Render Pipeline Overview
+
 ```
-
-### Common test assets
+WgpuRnd::BeginDrawing()       → mFrameID++, acquire headless texture
+  ShadowPass::Render()        → shadow depth map
+  WgpuRnd::DrawMeshImmediate()→ per-mesh draws (labeled vertex/index buffers)
+WgpuRnd::EndDrawing()         → submit, MaybeCaptureFrame() → readback → PNG
 ```
-~/code/milohax/milo-engine-libs/harmonix-repos/milo-rnd-library/dc3/
-  world/glitterati/gen/glitterati.milo_xbox   # venue with meshes/lights
-  world/dclive/gen/dclive.milo_xbox           # outdoor venue
-  char/main/gen/main.milo_xbox                # main character
-```
-
-## render-test (unit test scenes)
-
-```bash
-cd native/build
-./render-test --test text_menu --output text_menu.png --frames 60
-./render-test --test venue_with_ui --output venue_ui.png --frames 120
-```
-
-## Gotchas
-
-1. **Sandbox blocks GPU** - Always `dangerouslyDisableSandbox: true`
-2. **GLFW fails headless** - Normal: "GpuDevice: failed to initialize GLFW" means it falls back to headless rendering correctly
-3. **Camera/pose server warnings** - Normal: camera/OpenCV errors are expected (no Kinect)
-4. **0 mesh draw calls** - If you see this, `MILO_RENDER=1` is not set
-5. **Build directory** - Screenshots use paths relative to `native/build/`. Use `../../archive/...` for the repo root
-6. **CMake reconfigure** - After modifying .cpp files outside `native/src/`, run `cmake ..` before `make`
-7. **Concurrent agents** - Other agents may modify shared .cpp files. Check `git diff` after build failures
