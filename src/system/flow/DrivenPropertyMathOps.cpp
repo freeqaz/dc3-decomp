@@ -111,12 +111,57 @@ float FlowMathOp::Apply(float val) {
     float rhs = mDefault;
     if ((Hmx::Object *)mDrivenObj && mRhs.Type() == kDataArray) {
         const DataNode *prop = mDrivenObj->Property(mRhs.Array(0), false);
-        if (prop && prop->CompatibleType(kDataInt)) {
+        if (prop && prop->CompatibleType(kDataFloat)) {
             rhs = prop->LiteralFloat(0);
         }
     }
 
     switch ((int)mOp) {
+    case kMathOp_Script:
+        if (mLhs.Type() == kDataString) {
+            String str(mLhs.Str(0));
+            DataNode scriptHolder;
+            if (*str.c_str() != '\0') {
+                DataVariable("val") = DataNode(val);
+                float result = val;
+                TheDebug.SetTry(true);
+                DataArray *parsed = DataReadString(str.c_str());
+                {
+                    DataNode temp(parsed, kDataArray);
+                    scriptHolder = temp;
+                }
+                DataArray *arr = scriptHolder.Array(0);
+                arr->Release();
+                arr = scriptHolder.Array(0);
+                if (arr->Node(0).Type() == kDataCommand && arr->Size() == 1) {
+                    arr = scriptHolder.Array(0);
+                    DataNode execResult = arr->Node(0).Command(arr)->Execute(true);
+                    result = execResult.Float(0);
+                } else {
+                    arr = scriptHolder.Array(0);
+                    DataNode execResult = arr->Execute(true);
+                    result = execResult.Float(0);
+                }
+                TheDebug.SetTry(false);
+                rhs = result;
+            }
+            break;
+        }
+        // fall through to lookup
+    case 100: {
+        if (mLhs.Type() != kDataSymbol) {
+            return val;
+        }
+        DataArray *config = SystemConfig("objects", "FlowNode", "mathops");
+        DataArray *found = config->FindArray(mLhs.Sym(0), false);
+        if (found) {
+            DataArray *script = found->FindArray("script", true);
+            DataVariable("val") = DataNode(val);
+            DataVariable("prop_val") = DataNode(rhs);
+            rhs = script->Node(1).Float(script);
+        }
+        break;
+    }
     case kMathOp_Add:
         rhs = rhs + val;
         break;
@@ -175,14 +220,9 @@ float FlowMathOp::Apply(float val) {
         rhs = val * rhs;
         break;
     case kMathOp_NormalizeDb: {
-        float absVal = 0.0f;
-        float clamped = rhs;
-        if (-val < 0.0f) {
-            absVal = val;
-        }
-        if (absVal - rhs < 0.0f) {
-            clamped = absVal;
-        }
+        float neg_val = -val;
+        float absVal = (neg_val >= 0.0f) ? 0.0f : val;
+        float clamped = (absVal - rhs >= 0.0f) ? rhs : absVal;
         if (rhs != 0.0f) {
             clamped = clamped / rhs;
         }
@@ -190,14 +230,9 @@ float FlowMathOp::Apply(float val) {
         break;
     }
     case kMathOp_InvNormalizeDb: {
-        float absVal = 0.0f;
-        if (-val < 0.0f) {
-            absVal = val;
-        }
-        float clamped = rhs;
-        if (absVal - rhs < 0.0f) {
-            clamped = absVal;
-        }
+        float neg_val = -val;
+        float absVal = (neg_val >= 0.0f) ? 0.0f : val;
+        float clamped = (absVal - rhs >= 0.0f) ? rhs : absVal;
         if (rhs != 0.0f) {
             clamped = clamped / rhs;
         }
@@ -217,47 +252,10 @@ float FlowMathOp::Apply(float val) {
     case kMathOp_Pow:
         rhs = (float)pow(val, rhs);
         break;
-    case kMathOp_Script:
-        if (mLhs.Type() == kDataString) {
-            String str(mLhs.Str(0));
-            if (*str.c_str() != '\0') {
-                DataNode varSave = DataVariable("flow_math_op_result");
-                DataNode valSave = DataVariable("flow_math_op_val");
-                TheDebug.SetTry(true);
-                DataArray *script = DataReadString(str.c_str());
-                DataNode scriptNode(script, kDataArray);
-                DataArray *arr = scriptNode.Array(0);
-                if (!(arr->Node(0).Type() == kDataCommand && arr->Size() == 1)) {
-                    DataNode result = arr->Execute(true);
-                    val = result.Float(0);
-                } else {
-                    DataNode result = arr->Node(0).Command(arr)->Execute(true);
-                    val = result.Float(0);
-                }
-                TheDebug.SetTry(false);
-                DataVariable("flow_math_op_result") = varSave;
-                DataVariable("flow_math_op_val") = valSave;
-            }
-            return val;
-        }
-        // fall through to lookup
-    case 100: {
-        if (mLhs.Type() != kDataSymbol) {
-            return val;
-        }
-        DataArray *config = SystemConfig("flow", "math_ops", "driven_property");
-        DataArray *found = config->FindArray(mLhs.Sym(0), false);
-        if (!found) {
-            return val;
-        }
-        DataVariable("flow_math_op_result") = DataNode(0);
-        DataVariable("flow_math_op_val") = DataNode(0);
-        return found->Node(1).Float(found);
-    }
-    case kMathOp_ClampMin:
+    case -1:
         break;
     default:
-        MILO_NOTIFY_ONCE("Unknown math op type %d", mOp);
+        MILO_NOTIFY_ONCE("Bad mathop operation value");
         return val;
     }
     return rhs;
