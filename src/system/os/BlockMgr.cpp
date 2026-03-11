@@ -21,7 +21,7 @@ namespace {
     bool gReadHD = false;
     char *gTempBlock;
     static DataNode OnSpinUp(DataArray *) { return TheBlockMgr.SpinUp(); }
-    static int ReadError() {
+    __declspec(noinline) static int ReadError() {
         if (gReadHD) {
             return TheHDCache.ReadFail();
         }
@@ -30,6 +30,8 @@ namespace {
 }
 
 static int gReadCount;
+static int gSeekCount;
+static float gAccumSeekTime;
 static int gLastBlockNum = -1;
 static int gLastArkFileNum = -1;
 
@@ -170,14 +172,16 @@ void BlockMgr::GetAssociatedBlocks(
 }
 
 void BlockMgr::AddTask(const AsyncTask &task) {
-    int arkNum = task.GetArkfileNum();
     int blockNum = task.GetBlockNum();
+    int arkNum = task.GetArkfileNum();
     for (std::list<BlockRequest>::iterator it = mRequests.begin(); it != mRequests.end(); ++it) {
-        if (arkNum == it->mArkfileNum && blockNum == it->mBlockNum) {
+        bool match = (arkNum == it->mArkfileNum && blockNum == it->mBlockNum);
+        if (match) {
             it->mTasks.push_back(task);
             return;
         }
-        if (arkNum < it->mArkfileNum || (it->mArkfileNum == arkNum && blockNum < it->mBlockNum)) {
+        bool exceeds = (it->mArkfileNum > arkNum || (it->mArkfileNum == arkNum && it->mBlockNum > blockNum));
+        if (exceeds) {
             BlockRequest br(task);
             mRequests.insert(it, br);
             return;
@@ -216,15 +220,8 @@ void BlockMgr::Poll() {
     if (!MainThread())
         return;
 
-    // Cache some frequently accessed values
-    bool cacheValid = mReadingBlock != nullptr;
-    int writingFlag = mWritingBlock != nullptr ? 1 : 0;
-
     TheHDCache.Poll();
-    mSpinDownTimer.Restart();
-
-    // Force an unconditional call
-    mSpinDownTimer.Restart();
+    mSpinDownTimer.Split();
 
     if (mWritingBlock && TheHDCache.WriteDone()) {
         mWritingBlock = nullptr;
@@ -248,12 +245,31 @@ void BlockMgr::Poll() {
         if (readDone) {
             if (Archive::DebugArkOrder()) {
                 gReadTime.Split();
-                int seekDist = mReadingBlock->BlockNum() - gLastBlockNum;
-                if (mReadingBlock->ArkFileNum() != gLastArkFileNum) {
+                int seekDist = mReadingBlock->mBlockNum - gLastBlockNum;
+                if (mReadingBlock->mArkfileNum != gLastArkFileNum) {
                     seekDist = 99999;
                 }
-                gLastBlockNum = mReadingBlock->BlockNum();
-                gLastArkFileNum = mReadingBlock->ArkFileNum();
+                if (seekDist != 1) {
+                    gSeekCount++;
+                    gAccumSeekTime += gReadTime.Ms();
+                } else {
+                    gSeekCount = 0;
+                    gAccumSeekTime = 0.0f;
+                }
+                if (gSeekCount >= 1 || gAccumSeekTime >= 240.0f) {
+                    char debugName[100];
+                    strncpy(debugName, mReadingBlock->mDebugName, 99);
+                    debugName[99] = '\0';
+                    MILO_LOG(
+                        "BlockMgr Seek: Ark: %2d  Dist: %5d  Seek Time: %3.0f ms  Suspect: %s\n",
+                        mReadingBlock->mArkfileNum,
+                        seekDist,
+                        gAccumSeekTime,
+                        debugName
+                    );
+                }
+                gLastBlockNum = mReadingBlock->mBlockNum;
+                gLastArkFileNum = mReadingBlock->mArkfileNum;
             }
             if (!gReadHD) {
                 mSpinDownTimer.Restart();
@@ -282,19 +298,22 @@ void BlockMgr::Poll() {
 
     if (mReadingBlock)
         return;
-    if (mRequests.empty())
+    if (mRequests.size() == 0)
         return;
 
     BlockRequest &nextReq = mRequests.front();
     Block *block = FindLRUBlock(false);
+    int blocknum = nextReq.mBlockNum;
+    int arkfilenum = nextReq.mArkfileNum;
+    const char *str = nextReq.mStr;
 
-    MILO_ASSERT(nextReq.mBlockNum != -1, 0x20f);
+    MILO_ASSERT(blocknum != -1, 0x20f);
 
     mReadingBlock = block;
-    block->mBlockNum = nextReq.mBlockNum;
-    block->mArkfileNum = nextReq.mArkfileNum;
-    block->mWritten = false;
-    block->mDebugName = nextReq.mStr;
+    mReadingBlock->mBlockNum = blocknum;
+    mReadingBlock->mArkfileNum = arkfilenum;
+    mReadingBlock->mWritten = false;
+    mReadingBlock->mDebugName = str;
 
     gReadTime.Restart();
     gReadCount = 0;

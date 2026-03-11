@@ -88,32 +88,36 @@ void Multiply(const Transform &a, const Transform &b, Transform &out) {
     float fVar1 = a.v.y;
     float fVar2 = a.v.x;
     float fVar3 = a.v.z;
+    float fVar4 = b.m.z.y;
 
-    float fVar10 = b.m.x.y * fVar2 + b.m.z.y * fVar1 + b.m.y.y * fVar3;
+    float fVar10 = b.m.x.y * fVar2 + b.m.y.y * fVar1;
 
+    float fVar5;
     if (&b != &out) {
-        float fVar4 = b.m.z.x;
-        float fVar5 = b.m.y.x;
-        float fVar6 = b.m.x.x;
-        float fVar7 = b.m.z.y;
-        float fVar8 = b.m.y.y;
-
-        out.v.x = b.v.x + fVar6 * fVar2 + fVar5 * fVar1 + fVar4 * fVar3;
-        out.v.y = b.v.y + fVar10;
-        out.v.z = b.v.z + b.m.x.z * fVar2 + fVar7 * fVar1 + b.m.z.z * fVar3;
+        float bzx = b.m.z.x;
+        float byx = b.m.y.x;
+        float bxx = b.m.x.x;
+        float fVar8 = b.m.z.z * fVar3 + b.m.x.z * fVar2 + b.m.y.z * fVar1;
+        out.v.z = fVar8;
+        out.v.y = fVar4 * fVar3 + fVar10;
+        out.v.x = fVar2 * bxx + byx * fVar1 + bzx * fVar3;
+        fVar5 = b.v.z;
+        float bvx = b.v.x;
+        out.v.y += b.v.y;
+        out.v.x += bvx;
+        fVar5 = fVar5 + fVar8;
     } else {
-        float fVar4 = b.v.x;
-        float fVar5 = b.v.z;
-        float fVar6 = b.m.z.z;
-        float fVar7 = b.m.y.z;
-        float fVar8 = b.m.x.z;
-        float fVar9 = b.m.y.x;
+        float fVar6 = b.m.y.z;
+        float fVar7 = b.m.x.z;
+        float fVar8 = b.m.z.z;
+        float bvz = b.v.z;
+        float fVar9 = b.v.y;
 
-        out.v.x = b.m.x.x * fVar2 + fVar9 * fVar1 + b.m.z.x * fVar3;
-        out.v.y = fVar10 + fVar5;
-        out.v.z = b.m.x.z * fVar2 + fVar7 * fVar1 + fVar6 * fVar3 + b.v.z;
-        out.v.x += fVar4;
+        out.v.x = b.v.x + fVar2 * b.m.x.x + b.m.y.x * fVar1 + b.m.z.x * fVar3;
+        out.v.y = fVar9 + fVar4 * fVar3 + fVar10;
+        fVar5 = bvz + fVar8 * fVar3 + fVar7 * fVar2 + fVar6 * fVar1;
     }
+    out.v.z = fVar5;
     Multiply(a.m, b.m, out.m);
 #endif
 }
