@@ -44,9 +44,9 @@ public:
     void blockingStart(bool);
     void Start();
 
-    u32 unk0; // 0x0
+    unsigned int unk0; // 0x0
     int mState; // 0x4 - voice play state (2 = pending)
-    const void *mAudioData; // 0x8 - audio buffer pointer (pAudioData)
+    const void *mBuffer; // 0x8 - audio buffer pointer (pAudioData)
     int mAudioBytes; // 0xc - audio buffer size in bytes
     int mNumSamples; // 0x10
     int mSampleRate; // 0x14
@@ -77,6 +77,7 @@ private:
     void SafeRestart();
     void SetSendImpl(FxSend360 *);
     void dispose(int *, unsigned int);
+    long createOrReuse(PoolVoice *, unsigned int &, tWAVEFORMATEX &, XAUDIO2_VOICE_SENDS *);
 };
 
 unsigned long StartVoiceThreadEntry(void *);

@@ -1,24 +1,39 @@
 #pragma once
 #include "synth_xbox/FxSendSynapse.h"
 
-// Global XAPO base classes (no namespace)
+struct XAPO_REGISTRATION_PROPERTIES;
+
+// CXAPOBase: base class for XAPO processing
+// Offset 0x00, size 0x20 bytes (vtable + 0x1c data)
 class CXAPOBase {
 public:
-    virtual ~CXAPOBase();
+    virtual void CXAPOBase_virt0();
 
 private:
-    char mCXAPOBasePad[0x1c]; // CXAPOBase is 0x20 bytes total (vtable + 0x1c data)
+    char mCXAPOBasePad[0x1c];
 };
 
+// IXAPOParameters: interface for XAPO parameter get/set
 class IXAPOParameters {
 public:
-    virtual ~IXAPOParameters() {}
+    virtual void IXAPOParameters_virt0();
+};
+
+// CXAPOParametersBase: inherits CXAPOBase + IXAPOParameters
+// Total size: 0x40 bytes
+class CXAPOParametersBase : public CXAPOBase, public IXAPOParameters {
+public:
+    CXAPOParametersBase(const XAPO_REGISTRATION_PROPERTIES* pRegProps, unsigned char* pParamBlocks, unsigned int uParamBlockByteSize, int fProducer);
+    virtual ~CXAPOParametersBase();
+
+private:
+    char mCXAPOParametersBasePad[0x1c]; // data from 0x24 to 0x3f
 };
 
 namespace ATG {
 
 template <typename T, typename Params>
-class CSampleXAPOBase : public CXAPOBase, public IXAPOParameters {
+class CSampleXAPOBase : public CXAPOParametersBase {
 public:
     virtual ~CSampleXAPOBase() {}
 
@@ -28,9 +43,9 @@ protected:
     virtual void DoProcess(const Params& params, unsigned int* arg1, float& arg2, unsigned int arg3, unsigned int arg4) = 0;
 
 private:
-    // Internal state - CXAPOBase = 0x20 bytes, CXAPOParametersBase (IXAPOParameters) = 0x4 bytes at 0x20
-    // CSampleXAPOBase adds 0x144 bytes of state, so total CSampleXAPOBase = 0x168 bytes
-    char pad[0x144];
+    static XAPO_REGISTRATION_PROPERTIES m_regProps;
+    Params m_paramBlocks[3]; // 3 parameter blocks for triple-buffering (offset 0x40)
+    char m_extra[0x14]; // remaining state (offset 0x154 to 0x168)
 };
 
 } // namespace ATG

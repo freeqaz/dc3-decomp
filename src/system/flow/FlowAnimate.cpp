@@ -142,10 +142,20 @@ bool FlowAnimate::Activate() {
                 float period = mPeriod;
                 bool wrap = mWrap;
                 int ease = mEase;
-                const Symbol& type = mType;
+                Symbol type = mType;
                 int rate = mRate;
-                float easePower = mEasePower;
-                if (period == 0.0f) {
+                if (!(period == 0.0f)) {
+                    float easePower = mEasePower;
+                    float end = mEnd;
+                    float start = mStart;
+                    float delay = mDelay;
+                    float blend = mBlend;
+                    mAnim->Animate(
+                        blend, mWait, delay, (RndAnimatable::Rate)rate, start, end,
+                        period, 1.0f, type, this, (EaseType)ease, easePower, wrap
+                    );
+                } else {
+                    float easePower = mEasePower;
                     float scale = mScale;
                     float end = mEnd;
                     float start = mStart;
@@ -153,22 +163,13 @@ bool FlowAnimate::Activate() {
                     float blend = mBlend;
                     mAnim->Animate(
                         blend, mWait, delay, (RndAnimatable::Rate)rate, start, end,
-                        0.0f, scale, type, nullptr, (EaseType)ease, easePower, wrap
+                        0.0f, scale, type, this, (EaseType)ease, easePower, wrap
                     );
-                    return false;
                 }
-                float end = mEnd;
-                float start = mStart;
-                float delay = mDelay;
-                float blend = mBlend;
-                mAnim->Animate(
-                    blend, mWait, delay, (RndAnimatable::Rate)rate, start, end,
-                    period, 1.0f, type, nullptr, (EaseType)ease, easePower, wrap
-                );
             } else {
                 float delay = mDelay;
                 float blend = mBlend;
-                mAnim->Animate(blend, mWait, delay, nullptr, kEaseLinear, 2.0f, false);
+                mAnim->Animate(blend, mWait, delay, this, kEaseLinear, 0.0f, false);
             }
         } else {
             if (mRunningNodes.empty()) {

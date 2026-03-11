@@ -73,7 +73,7 @@ namespace {
     NativeUICamMode GetNativeUICamMode() {
         static int cached = -1;
         if (cached == -1) {
-            cached = kNativeUICamRotateHack;
+            cached = kNativeUICamDefault;
             const char *env = std::getenv("MILO_UI_CAM_MODE");
             if (env && env[0]) {
                 if (std::strcmp(env, "default") == 0 || std::strcmp(env, "none") == 0) {

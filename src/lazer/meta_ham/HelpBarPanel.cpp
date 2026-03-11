@@ -72,7 +72,13 @@ void HelpBarPanel::Draw() {
             nullptr
         };
         for (const char **name = kHideVoiceTipDrawables; *name; ++name) {
-            RndDrawable *drawable = DataDir()->Find<RndDrawable>(*name, false);
+            RndDrawable *drawable = nullptr;
+            for (ObjDirItr<RndDrawable> it(DataDir(), true); it != nullptr; ++it) {
+                if (strcmp(it->Name(), *name) == 0) {
+                    drawable = it;
+                    break;
+                }
+            }
             if (drawable && drawable->Showing()) {
                 drawable->SetShowing(false);
             }

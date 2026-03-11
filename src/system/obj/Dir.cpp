@@ -941,7 +941,7 @@ void ObjectDir::PreLoad(BinStream &bs) {
 
     if (d.rev > 0x19) {
         if (d.rev < 0x1B) {
-            unsigned char b;
+            bool b;
             d >> b;
             mAlwaysInlined = b;
         } else {
@@ -960,25 +960,29 @@ void ObjectDir::PreLoad(BinStream &bs) {
     if (d.rev > 1) {
         d >> mViewports;
         d >> (int &)mCurViewportID;
+        if (d.rev == 3 && mCurViewportID > 6) {
+            mCurViewportID = (ViewportId)6;
+        }
     }
 
     if (d.rev > 0xC) {
         if (d.rev > 0x13) {
-            if (!gLoadingProxyFromDisk) {
-                unsigned char proxyType;
-                d >> proxyType;
-                mInlineProxyType = (InlineDirType)proxyType;
+            InlineDirType proxyType;
+            if (d.rev < 0x1C) {
+                bool b;
+                d >> b;
+                proxyType = (InlineDirType)b;
             } else {
-                unsigned char dummy;
-                d >> dummy;
+                bool b;
+                d >> b;
+                proxyType = (InlineDirType)b;
+            }
+            if (!gLoadingProxyFromDisk) {
+                mInlineProxyType = proxyType;
             }
         }
         if (gLoadingProxyFromDisk || mProxyOverride) {
-            bool fail = false;
-            if (mProxyOverride && ((int)(int)mInlineProxyType == kInlineCached || mInlineProxyType == kInlineAlways)) {
-                fail = true;
-            }
-            if (fail) {
+            if (mProxyOverride && mInlineProxyType != kInlineNever) {
                 MILO_FAIL("You cannot override an inlined proxy!");
             }
             FilePath fp;
@@ -990,31 +994,46 @@ void ObjectDir::PreLoad(BinStream &bs) {
             if (!fp.empty() && fp == mProxyFile) {
                 mProxyOverride = true;
             } else {
-                mProxyFile = fp;
+                if (!DirLoader::ShouldBlockSubdirLoad(fp)) {
+                    mProxyFile = fp;
+                }
                 mProxyOverride = false;
             }
         }
     }
 
-    if (d.rev >= 2 && d.rev <= 10) {
+    if (d.rev > 1 && d.rev < 11) {
         char buf[0x80];
         bs.ReadString(buf, 0x80);
+        unk8c = FindObject(buf, false, true);
     }
-    if (d.rev >= 4 && d.rev <= 10) {
+    if (d.rev > 3 && d.rev < 11) {
         char buf[0x80];
         bs.ReadString(buf, 0x80);
         mCurCam = FindObject(buf, false, true);
+        if (mCurCam == nullptr && (int)mCurViewportID == 7) {
+            mCurViewportID = (ViewportId)0;
+        }
     }
     if (d.rev == 5) {
         char buf[0x80];
         bs.ReadString(buf, 0x80);
     }
 
-    static std::vector<FilePath> notInlinedSubDirs;
     static std::vector<FilePath> inlinedSubDirs;
+    static std::vector<FilePath> notInlinedSubDirs;
 
     if (d.rev > 2) {
         d >> notInlinedSubDirs;
+        {
+            std::vector<FilePath>::iterator endIter = notInlinedSubDirs.end();
+            std::vector<FilePath>::iterator it = std::remove_if(
+                notInlinedSubDirs.begin(), endIter,
+                DirLoader::ShouldBlockSubdirLoad);
+            if (it != endIter) {
+                notInlinedSubDirs.erase(it, endIter);
+            }
+        }
         std::vector<int> intVec;
         if (d.rev == 0x17) {
             d >> intVec;
@@ -1022,18 +1041,18 @@ void ObjectDir::PreLoad(BinStream &bs) {
         if (d.rev > 0x14) {
             d >> mInlineSubDirType;
             d >> inlinedSubDirs;
+            {
+                std::vector<FilePath>::iterator endIter = inlinedSubDirs.end();
+                std::vector<FilePath>::iterator it = std::remove_if(
+                    inlinedSubDirs.begin(), endIter,
+                    DirLoader::ShouldBlockSubdirLoad);
+                if (it != endIter) {
+                    inlinedSubDirs.erase(it, endIter);
+                }
+            }
         } else {
             inlinedSubDirs.clear();
         }
-
-        notInlinedSubDirs.erase(
-            std::remove_if(notInlinedSubDirs.begin(), notInlinedSubDirs.end(),
-                           DirLoader::ShouldBlockSubdirLoad),
-            notInlinedSubDirs.end());
-        inlinedSubDirs.erase(
-            std::remove_if(inlinedSubDirs.begin(), inlinedSubDirs.end(),
-                           DirLoader::ShouldBlockSubdirLoad),
-            inlinedSubDirs.end());
 
         int i20 = 0;
         if (SaveSubdirs() || inlinedSubDirs.size() != 0 || notInlinedSubDirs.size() != 0) {
@@ -1088,18 +1107,18 @@ void ObjectDir::PreLoad(BinStream &bs) {
         }
     }
 
-    if (d.rev == 12 || d.rev == 13) {
+    if (d.rev > 11 && d.rev < 14) {
         OldLoadProxies(bs, d.rev);
     }
 
     if (d.rev < 0x13) {
         if (d.rev > 0xF) {
             int inlineProxy;
-            bs >> inlineProxy;
+            d >> inlineProxy;
             MILO_ASSERT(inlineProxy != 1, 0x3E1);
         } else if (d.rev > 0xE) {
             bool inlineProxy;
-            bs >> inlineProxy;
+            d >> inlineProxy;
             MILO_ASSERT(!inlineProxy, 0x3E6);
         }
     }
@@ -1130,7 +1149,7 @@ void ObjectDir::PreLoad(BinStream &bs) {
         }
     }
 
-    if (d.rev >= 21 && d.rev <= 23) {
+    if (d.rev > 20 && d.rev < 24) {
         int offset = notInlinedSubDirs.size();
         MILO_ASSERT(mSubDirs.capacity() >= offset + inlinedSubDirs.size(), 0x41A);
         for (int i = 0; i < inlinedSubDirs.size(); i++) {

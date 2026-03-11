@@ -16,6 +16,7 @@
 #include "utl/Std.h"
 #include "utl/Symbol.h"
 #ifdef HX_NATIVE
+#include "flow/Flow.h"
 extern void FlushTransparentDraws();
 #endif
 
@@ -343,16 +344,26 @@ void PanelDir::Enter() {
     static Symbol ui_enter_back("ui_enter_back");
     SendTransition(ui_enter, ui_enter_forward, ui_enter_back);
 #ifdef HX_NATIVE
-    // Auto-start Dir animation if it has animatable children with keyframes.
-    // On Xbox, specific PropAnims are activated by DTA TypeDef enter scripts
-    // or Flow objects. On native, we start all of them for visual effect.
-    // This may conflict with hide/fade PropAnims but combined with AlphaForce
-    // gives reasonable results.
+    // Activate all Flow objects in this dir to drive PropAnims.
+    // On Xbox, Flows auto-start via mStartMode or DTA TypeDef enter scripts.
+    // On native, proxy Flows have mStartMode=0 and many panels lack DTA
+    // enter handlers, so we activate them directly.
     {
-        float ef = EndFrame();
-        float sf = StartFrame();
-        if (ef > sf && !IsAnimating()) {
-            Animate(0, true, 0, RndAnimatable::k30_fps_ui, sf, ef, 0, 1.0f, Symbol("range"), nullptr, kEaseLinear, 0, false);
+        int flowCount = 0, activatedCount = 0;
+        for (ObjDirItr<Flow> it(this, true); it != nullptr; ++it) {
+            flowCount++;
+            if (!it->IsRunning()) {
+                if (it->Activate())
+                    activatedCount++;
+            }
+        }
+        if (flowCount > 0) {
+            printf(
+                "DC3_FLOW [%s] Enter: %d Flows, %d activated\n",
+                Name(),
+                flowCount,
+                activatedCount
+            );
         }
     }
     // Hide Kinect skeleton tracking UI elements and gesture tutorial overlays.

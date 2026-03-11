@@ -638,9 +638,8 @@ void SaveLoadManager::Poll() {
         return;
     }
 
-    State state = mState;
     State nextState;
-    switch (state) {
+    switch (mState) {
     case kS_Start: {
         unsigned int mode = mMode;
         if (mode == kAutoLoad) {
@@ -650,8 +649,7 @@ void SaveLoadManager::Poll() {
         } else if (mode < kManualDelete) {
             nextState = kS_SaveLoadError;
         } else {
-            const char *fmt = MakeString("SaveLoadManager startup bad mode: %d", &mMode);
-            MILO_NOTIFY(fmt);
+            MILO_NOTIFY("SaveLoadManager startup bad mode: %d", mMode);
             nextState = kS_Done;
         }
         break;
@@ -677,18 +675,15 @@ void SaveLoadManager::Poll() {
         if (!TheCacheMgr->IsDone()) {
             return;
         }
-        CacheResult result = TheCacheMgr->GetLastResult();
-        unk68 = result;
-        if (result == 0) {
+        unk68 = TheCacheMgr->GetLastResult();
+        if (unk68 == 0) {
             Symbol sym(mCacheName.c_str());
             TheCacheMgr->AddCacheID(mCacheID, sym);
             nextState = kS_SongCacheRead;
-        } else if (result == 6) {
+        } else if (unk68 == 6) {
             nextState = kS_SongCacheSearchResult;
         } else {
-            CacheResult local = result;
-            const char *msg = MakeString("SaveLoadManager - CacheMgr search returned error %d", &local);
-            MILO_NOTIFY(msg);
+            MILO_NOTIFY("SaveLoadManager - CacheMgr search returned error %d", unk68);
             nextState = kS_SongCacheFailed;
         }
         break;
@@ -698,22 +693,23 @@ void SaveLoadManager::Poll() {
             return;
         }
         CacheResult result = TheCacheMgr->GetLastResult();
-        unk68 = result;
         if (result == 0) {
-            nextState = kS_SongCacheGetSize;
-        } else if (result == 7) {
-            nextState = kS_SongCacheCreateCorrupt;
-        } else if (result == 8) {
-            nextState = kS_SongCacheCreate;
+            mDeviceIDState = 2;
+            mLastChosenDeviceID = mCacheID->GetDeviceID();
+            Symbol sym(mCacheName.c_str());
+            TheCacheMgr->AddCacheID(mCacheID, sym);
+            nextState = kS_SongCacheUnmount;
+        } else if (result == 4) {
+            nextState = kS_SongCacheCreateNotFound_Msg;
+            mDeviceIDState = 1;
         } else {
-            const char *msg = MakeString("SaveLoadManager - kS_SongCacheCreateMountRead unhandled error %d", &result);
-            MILO_FAIL(msg);
+            MILO_FAIL("SaveLoadManager - CacheMgr choose returned error %d", result);
             nextState = kS_SongCacheFailed;
         }
         break;
     }
     case kS_SongCacheMountStart: {
-        if (TheCacheMgr->IsDone()) {
+        if (ThePlatformMgr.GuideShowing()) {
             return;
         }
         nextState = kS_SongCacheMount;
@@ -724,14 +720,16 @@ void SaveLoadManager::Poll() {
             return;
         }
         CacheResult result = TheCacheMgr->GetLastResult();
-        unk68 = result;
         if (result == 0) {
-            BufStream bs(mData, mCacheFileSize, true);
-            TheSongMgr.LoadCachedSongInfo(bs);
-            SetState(kS_SongCacheUnmount);
-            return;
+            nextState = kS_SongCacheAllocRead;
+        } else if (result == 7) {
+            nextState = kS_SongCacheCreateCorrupt;
+        } else if (result == 8) {
+            nextState = kS_SongCacheCreate;
+        } else {
+            MILO_FAIL("SaveLoadManager - kS_SongCacheCreateMountRead unhandled error %d", result);
+            nextState = kS_SongCacheFailed;
         }
-        nextState = kS_SongCacheFailed;
         break;
     }
     case kS_SongCacheGetSize: {
@@ -739,34 +737,39 @@ void SaveLoadManager::Poll() {
             return;
         }
         UpdateStatus((SaveLoadMgrStatus)2);
-        nextState = kS_SongCacheWrite;
+        nextState = kS_SongCacheUnmount;
         break;
     }
     case kS_SongCacheAllocRead: {
-        if (!TheCacheMgr->IsDone()) {
+        if (!mCache->IsDone()) {
             return;
         }
-        CacheResult result = TheCacheMgr->GetLastResult();
-        unk68 = result;
+        CacheResult result = mCache->GetLastResult();
         if (result == 0) {
-            nextState = kS_SongCacheMount;
+            nextState = kS_SongCacheWrite;
         } else {
-            nextState = kS_SongCacheFailed;
+            if (result == 6) {
+                nextState = kS_SongCacheDone;
+            } else if (result == 8) {
+                nextState = kS_SongCacheCreate;
+            } else {
+                nextState = kS_SongCacheFailed;
+            }
         }
         break;
     }
     case kS_SongCacheWrite: {
-        if (!TheCacheMgr->IsDone()) {
+        if (!mCache->IsDone()) {
             return;
         }
-        CacheResult result = TheCacheMgr->GetLastResult();
-        unk68 = result;
+        CacheResult result = mCache->GetLastResult();
         if (result == 0) {
-            UpdateStatus((SaveLoadMgrStatus)2);
-            nextState = kS_SongCacheLookup;
-        } else {
-            nextState = kS_SongCacheFailed;
+            BufStream bs(mData, mCacheFileSize, true);
+            TheSongMgr.LoadCachedSongInfo(bs);
+            SetState(kS_SongCacheFailed);
+            return;
         }
+        nextState = kS_SongCacheFailed;
         break;
     }
     case kS_SongCacheUnmount: {
@@ -774,36 +777,37 @@ void SaveLoadManager::Poll() {
             return;
         }
         CacheResult result = TheCacheMgr->GetLastResult();
-        unk68 = result;
         if (result == 0) {
             nextState = kS_SongCacheDone;
         } else if (result == 7) {
+            UpdateStatus((SaveLoadMgrStatus)2);
             nextState = kS_SongCacheCreateCorrupt;
         } else if (result == 8) {
+            UpdateStatus((SaveLoadMgrStatus)2);
             nextState = kS_SongCacheCreate;
         } else {
             UpdateStatus((SaveLoadMgrStatus)2);
-            const char *msg = MakeString("SaveLoadManager - kS_SongCacheCreateMountWrite unhandled error %d", &result);
-            MILO_FAIL(msg);
-            nextState = kS_SongCacheFailed;
+            MILO_FAIL("SaveLoadManager - kS_SongCacheCreateMountWrite unhandled error %d", result);
+            nextState = kS_GlobalCacheLookup;
         }
         break;
     }
     case kS_SongCacheDone:
     case kS_GlobalDoneWrite:
     case kS_GlobalOptionsWrite: {
-        if (!TheCacheMgr->IsDone()) {
+        if (!mCache->IsDone()) {
             return;
         }
-        CacheResult result = TheCacheMgr->GetLastResult();
-        unk68 = result;
-        int curState = mState;
-        if (curState == kS_SongCacheDone) {
+        unk68 = mCache->GetLastResult();
+        if (mState == kS_SongCacheDone) {
             nextState = kS_SongCacheLookup;
-        } else if (curState == kS_GlobalDoneWrite) {
-            nextState = kS_GlobalUnmount;
-        } else {
+        } else if (mState == kS_GlobalDoneWrite) {
+            nextState = kS_GlobalDone;
+        } else if (mState == kS_GlobalOptionsWrite) {
             nextState = kS_GlobalOptionsUnmount;
+        } else {
+            FormatString fs("Impossible state.");
+            TheDebug.Fail(fs.Str(), 0);
         }
         break;
     }
@@ -812,118 +816,14 @@ void SaveLoadManager::Poll() {
             return;
         }
         CacheResult result = TheCacheMgr->GetLastResult();
-        unk68 = result;
-        if (unk68 == 0) {
-            nextState = kS_SongCacheLookup;
-        } else {
+        if (result != 0) {
             nextState = kS_SongCacheFailed;
-        }
-        break;
-    }
-    case kS_GlobalOptionsSearch: {
-        if (!TheCacheMgr->IsDone()) {
-            return;
-        }
-        CacheResult result = TheCacheMgr->GetLastResult();
-        unk68 = result;
-        if (result == 0) {
-            mDeviceIDState = 2;
-            mLastChosenDeviceID = mCacheID->GetDeviceID();
-            Symbol sym(kStrGlobalCacheName);
-            TheCacheMgr->AddCacheID(mCacheID, sym);
-            nextState = kS_GlobalOptionsWrite;
-        } else if (result == 4) {
-            nextState = kS_GlobalCreateNotFound_Msg;
-            mDeviceIDState = 1;
         } else {
-            const char *msg = MakeString("SaveLoadManager - CacheMgr choose returned error %d", &result);
-            MILO_NOTIFY(msg);
-            nextState = kS_GlobalCacheLookup;
+            nextState = kS_GlobalOptionsSearchResult;
         }
         break;
     }
-    case kS_GlobalOptionsSearchResult: {
-        if (!TheCacheMgr->IsDone()) {
-            return;
-        }
-        CacheResult result = TheCacheMgr->GetLastResult();
-        unk68 = result;
-        if (mDeviceIDState == 0) {
-            mDeviceIDState = 2;
-            mLastChosenDeviceID = mCacheID->GetDeviceID();
-            Symbol sym(kStrGlobalCacheName);
-            TheCacheMgr->AddCacheID(mCacheID, sym);
-            nextState = kS_GlobalWrite;
-        } else {
-            nextState = kS_GlobalMount;
-        }
-        break;
-    }
-    case kS_GlobalOptionsCreate: {
-        if (!TheCacheMgr->IsDone()) {
-            return;
-        }
-        CacheResult result = TheCacheMgr->GetLastResult();
-        unk68 = result;
-        if (result == 0) {
-            nextState = kS_GlobalOptionsLookup;
-        } else if (result == 7) {
-            nextState = kS_GlobalMount;
-        } else if (result == 8) {
-            UpdateStatus((SaveLoadMgrStatus)2);
-            nextState = kS_GlobalMount2;
-        } else {
-            UpdateStatus((SaveLoadMgrStatus)2);
-            CacheResult errResult = result;
-            State errState = state;
-            const char *msg = MakeString("SaveLoadManager - unknown error %d during state %d.", &errResult, &errState);
-            MILO_NOTIFY(msg);
-            nextState = kS_GlobalCacheLookup;
-        }
-        break;
-    }
-    case kS_GlobalOptionsLookup: {
-        if (!TheCacheMgr->IsDone()) {
-            return;
-        }
-        CacheResult result = TheCacheMgr->GetLastResult();
-        unk68 = result;
-        if (result == 0) {
-            nextState = kS_GlobalDoneRead;
-        } else if (result == 7) {
-            UpdateStatus((SaveLoadMgrStatus)2);
-            nextState = kS_GlobalMount2;
-        } else if (result == 8) {
-            UpdateStatus((SaveLoadMgrStatus)2);
-            nextState = kS_GlobalOptionsAllocRead;
-        } else {
-            UpdateStatus((SaveLoadMgrStatus)2);
-            CacheResult errResult = result;
-            State errState = state;
-            const char *msg = MakeString("SaveLoadManager - unknown error %d during state %d.", &errResult, &errState);
-            MILO_NOTIFY(msg);
-            nextState = kS_GlobalCacheLookup;
-        }
-        break;
-    }
-    case kS_GlobalOptionsRead: {
-        if (!TheCacheMgr->IsDone()) {
-            return;
-        }
-        CacheResult result = TheCacheMgr->GetLastResult();
-        unk68 = result;
-        if (result == 0) {
-            unsigned long saveSize = ProfileMgr::GlobalOptionsSaveSize();
-            FixedSizeSaveableStream fs(mData, saveSize, true);
-            TheProfileMgr.LoadGlobalOptions(fs);
-            TheProfileMgr.SetGlobalOptionsSaveState((ProfileSaveState)1);
-        } else {
-            TheProfileMgr.SetGlobalOptionsSaveState((ProfileSaveState)2);
-        }
-        nextState = kS_GlobalOptionsAllocRead;
-        break;
-    }
-    case kS_GlobalOptionsAllocRead: {
+    case kS_SongCacheLookup: {
         if (!TheCacheMgr->IsDone()) {
             return;
         }
@@ -932,59 +832,219 @@ void SaveLoadManager::Poll() {
             CacheResult result = TheCacheMgr->GetLastResult();
             unk68 = result;
         }
-        ProfileSaveState pss;
         if (unk68 == 0) {
-            pss = (ProfileSaveState)1;
+            nextState = kS_GlobalOptionsSearchResult;
         } else {
-            pss = (ProfileSaveState)2;
+            nextState = kS_SongCacheFailed;
         }
-        TheProfileMgr.SetGlobalOptionsSaveState(pss);
+        break;
+    }
+    case kS_GlobalOptionsCreate: {
+        if (!TheCacheMgr->IsDone()) {
+            return;
+        }
+        unk68 = TheCacheMgr->GetLastResult();
+        if (unk68 == 0) {
+            Symbol sym(kStrGlobalCacheName);
+            TheCacheMgr->AddCacheID(mCacheID, sym);
+            nextState = kS_GlobalMount2;
+        } else if (unk68 == 6) {
+            if (mDeviceIDState == 0) {
+                nextState = kS_GlobalMount;
+            } else if (mDeviceIDState == 2) {
+                nextState = kS_GlobalMountStart;
+            } else {
+                nextState = kS_GlobalCreateNotFound_Msg;
+            }
+        } else {
+            MILO_FAIL("SaveLoadManager - CacheMgr search returned error %d", unk68);
+            nextState = kS_GlobalCacheLookup;
+        }
+        break;
+    }
+    case kS_GlobalMount:
+    case kS_GlobalMountStart: {
+        if (!TheCacheMgr->IsDone()) {
+            return;
+        }
+        CacheResult result = TheCacheMgr->GetLastResult();
+        if (result == 0) {
+            mDeviceIDState = 2;
+            mLastChosenDeviceID = mCacheID->GetDeviceID();
+            Symbol sym(kStrGlobalCacheName);
+            TheCacheMgr->AddCacheID(mCacheID, sym);
+            nextState = kS_GlobalDoneRead;
+        } else if (result == 4) {
+            nextState = kS_GlobalCreateNotFound_Msg;
+            mDeviceIDState = 1;
+        } else {
+            MILO_FAIL("SaveLoadManager - CacheMgr choose returned error %d", result);
+            nextState = kS_GlobalCacheLookup;
+        }
+        break;
+    }
+    case kS_GlobalCreate2: {
+        if (ThePlatformMgr.GuideShowing()) {
+            return;
+        }
+        nextState = kS_GlobalMount;
+        break;
+    }
+    case kS_GlobalMount2: {
+        if (!TheCacheMgr->IsDone()) {
+            return;
+        }
+        CacheResult result = TheCacheMgr->GetLastResult();
+        if (result == 0) {
+            nextState = kS_GlobalWrite;
+        } else if (result == 7) {
+            nextState = kS_GlobalCreateCorrupt;
+        } else if (result == 8) {
+            nextState = kS_GlobalOptionsLookup;
+        } else {
+            int errCode = (int)result;
+            State errState = mState;
+            MILO_NOTIFY("SaveLoadManager - unknown error %d during state %d.", errCode, errState);
+            nextState = kS_GlobalCacheLookup;
+        }
+        break;
+    }
+    case kS_GlobalRead: {
+        if (!TheCacheMgr->IsDone()) {
+            return;
+        }
+        UpdateStatus((SaveLoadMgrStatus)2);
+        nextState = kS_GlobalDoneRead;
+        break;
+    }
+    case kS_GlobalDoneRead: {
+        if (!TheCacheMgr->IsDone()) {
+            return;
+        }
+        CacheResult result = TheCacheMgr->GetLastResult();
+        if (result == 0) {
+            nextState = kS_GlobalDoneWrite;
+        } else if (result == 7) {
+            UpdateStatus((SaveLoadMgrStatus)2);
+            nextState = kS_GlobalCreateCorrupt;
+        } else if (result == 8) {
+            UpdateStatus((SaveLoadMgrStatus)2);
+            nextState = kS_GlobalOptionsLookup;
+        } else {
+            UpdateStatus((SaveLoadMgrStatus)2);
+            int errCode = (int)result;
+            State errState = mState;
+            MILO_NOTIFY("SaveLoadManager - unknown error %d during state %d.", errCode, errState);
+            nextState = kS_GlobalCacheLookup;
+        }
+        break;
+    }
+    case kS_GlobalWrite: {
+        if (!mCache->IsDone()) {
+            return;
+        }
+        CacheResult result = mCache->GetLastResult();
+        if (result == 0) {
+            unsigned long saveSize = TheProfileMgr.GlobalOptionsSaveSize();
+            FixedSizeSaveableStream fs(mData, saveSize, true);
+            TheProfileMgr.LoadGlobalOptions(fs);
+            TheProfileMgr.SetGlobalOptionsSaveState((ProfileSaveState)1);
+        } else {
+            TheProfileMgr.SetGlobalOptionsSaveState((ProfileSaveState)2);
+        }
+        nextState = kS_GlobalUnmount;
+        break;
+    }
+    case kS_GlobalUnmount: {
+        if (!TheCacheMgr->IsDone()) {
+            return;
+        }
+        CacheResult result = TheCacheMgr->GetLastResult();
+        if (result != 0) {
+            nextState = kS_SongCacheFailed;
+        } else {
+            ProfileSaveState pss = (ProfileSaveState)1;
+            TheProfileMgr.SetGlobalOptionsSaveState(pss);
+            nextState = kS_GlobalNewSignIns;
+        }
+        break;
+    }
+    case kS_GlobalDone: {
+        if (!TheCacheMgr->IsDone()) {
+            return;
+        }
+        UpdateStatus((SaveLoadMgrStatus)2);
+        if (unk68 == 0) {
+            CacheResult result = TheCacheMgr->GetLastResult();
+            unk68 = result;
+        }
+        if (unk68 == 0) {
+            TheProfileMgr.SetGlobalOptionsSaveState((ProfileSaveState)1);
+        } else {
+            TheProfileMgr.SetGlobalOptionsSaveState((ProfileSaveState)2);
+        }
         nextState = kS_GlobalNewSignIns;
+        break;
+    }
+    case kS_GlobalOptionsCreate2: {
+        if (!TheCacheMgr->IsDone()) {
+            return;
+        }
+        CacheResult result = TheCacheMgr->GetLastResult();
+        if (result == 0) {
+            mDeviceIDState = 2;
+            mLastChosenDeviceID = mCacheID->GetDeviceID();
+            Symbol sym(kStrGlobalCacheName);
+            TheCacheMgr->AddCacheID(mCacheID, sym);
+            nextState = kS_GlobalOptionsAllocRead;
+        } else if (result == 4) {
+            nextState = kS_GlobalOptionsMissing_Msg;
+            mDeviceIDState = 1;
+        } else {
+            MILO_NOTIFY("SaveLoadManager - CacheMgr choose returned error %d", result);
+            nextState = kS_GlobalOptionsFailed;
+        }
+        break;
+    }
+    case kS_GlobalOptionsRead: {
+        if (ThePlatformMgr.GuideShowing()) {
+            return;
+        }
+        nextState = kS_GlobalOptionsCreate2;
+        break;
+    }
+    case kS_GlobalOptionsAllocRead: {
+        if (!TheCacheMgr->IsDone()) {
+            return;
+        }
+        CacheResult result = TheCacheMgr->GetLastResult();
+        if (result == 0) {
+            nextState = kS_GlobalOptionsWrite;
+        } else if (result == 8) {
+            UpdateStatus((SaveLoadMgrStatus)2);
+            nextState = kS_GlobalOptionsMissing_Msg;
+        } else {
+            UpdateStatus((SaveLoadMgrStatus)2);
+            MILO_FAIL("SaveLoadManager - CacheMgr choose returned error %d", result);
+            nextState = kS_GlobalOptionsFailed;
+        }
         break;
     }
     case kS_GlobalOptionsUnmount: {
         if (!TheCacheMgr->IsDone()) {
             return;
         }
-        CacheResult result = TheCacheMgr->GetLastResult();
-        unk68 = result;
-        if (result != 0) {
-            if (result == 4) {
-                nextState = kS_GlobalOptionsMissing_Msg;
-            } else if (result == 2) {
-                mDeviceIDState = 1;
-                return;
-            } else {
-                const char *msg = MakeString("SaveLoadManager - CacheMgr choose returned error %d", &result);
-                MILO_NOTIFY(msg);
-                nextState = kS_GlobalOptionsFailed;
-            }
+        UpdateStatus((SaveLoadMgrStatus)2);
+        if (unk68 == 0) {
+            CacheResult result = TheCacheMgr->GetLastResult();
+            unk68 = result;
+        }
+        if (unk68 == 0) {
+            TheProfileMgr.SetGlobalOptionsSaveState((ProfileSaveState)1);
         } else {
-            mDeviceIDState = 2;
-            mLastChosenDeviceID = mCacheID->GetDeviceID();
-            Symbol sym(kStrGlobalCacheName);
-            TheCacheMgr->AddCacheID(mCacheID, sym);
-            nextState = kS_GlobalOptionsDone;
+            TheProfileMgr.SetGlobalOptionsSaveState((ProfileSaveState)2);
         }
-        break;
-    }
-    case kS_GlobalOptionsDone: {
-        if (!TheCacheMgr->IsDone()) {
-            return;
-        }
-        CacheResult result = TheCacheMgr->GetLastResult();
-        unk68 = result;
-        if (result == 0) {
-            nextState = kS_GlobalOptionsWrite;
-        } else if (result == 8) {
-            UpdateStatus((SaveLoadMgrStatus)2);
-            nextState = kS_GlobalOptionsAllocRead;
-        } else {
-            UpdateStatus((SaveLoadMgrStatus)2);
-            const char *msg = MakeString("SaveLoadManager - CacheMgr choose returned error %d", &result);
-            MILO_FAIL(msg);
-            nextState = kS_GlobalOptionsFailed;
-        }
+        nextState = kS_GlobalOptionsDone;
         break;
     }
     case kS_SaveOverwrite:
@@ -1004,9 +1064,7 @@ void SaveLoadManager::Poll() {
                 mDeviceIDState = 0;
                 mLastChosenDeviceID = 0;
             } else if (deviceState == 7) {
-                if (mState == kS_SaveOverwrite) {
-                    MILO_ASSERT(false, 0x2ED);
-                }
+                MILO_ASSERT(mState != kS_SaveOverwrite, 0x2ED);
                 nextState = kS_SaveConfirmOverwrite;
             } else {
                 nextState = kS_SaveFailed;
@@ -1038,8 +1096,9 @@ void SaveLoadManager::Poll() {
         if (!TheCacheMgr->IsDone()) {
             return;
         }
-        nextState = kS_Done;
-        if (mState != kS_Abort) {
+        if (mState == kS_Abort) {
+            nextState = kS_Done;
+        } else {
             nextState = kS_Idle;
         }
         break;
