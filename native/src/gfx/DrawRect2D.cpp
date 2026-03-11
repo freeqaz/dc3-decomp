@@ -1,16 +1,14 @@
 #include "gfx/DrawRect2D.h"
 #include "gfx/GpuDevice.h"
 #include "gfx/PipelineManager.h"
+#include "platform/TexGpu.h"
 #include "math/Geo.h"
 #include "math/Color.h"
 #include "rndobj/Mat.h"
 #include "rndobj/Rnd.h"
-#include "rndobj/Tex.h"
 #include "obj/Object.h"
 
 #include <cstring>
-
-extern wgpu::TextureView GetGpuTexView(RndTex*);
 
 static const char* k2DShaderSource = R"WGSL(
 struct Vertex2D {

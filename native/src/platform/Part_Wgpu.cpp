@@ -2,6 +2,7 @@
 // Generates camera-facing quads for each active particle and batch-draws them.
 
 #include "platform/Rnd_Wgpu.h"
+#include "platform/TexGpu.h"
 #include "rndobj/Part.h"
 #include "rndobj/Cam.h"
 #include "rndobj/Mat.h"
@@ -10,7 +11,6 @@
 #include <vector>
 
 extern WgpuRnd* gWgpuRnd;
-extern wgpu::TextureView GetGpuTexView(RndTex* tex);
 
 // Simple particle vertex: position + UV + color
 struct ParticleVertex {

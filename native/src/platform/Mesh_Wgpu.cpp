@@ -9,25 +9,16 @@
 #include "platform/MaterialSetup.h"
 #include "platform/MeshFilter.h"
 #include "platform/TransformUtils.h"
-#include "platform/TransparentQueue.h"
+#include "platform/TexGpu.h"
 #include "gfx/FrameCapture.h"
 #include "gfx/VertexFormats.h"
 #include "rndobj/Mesh.h"
 #include "rndobj/Mat.h"
-#include "rndobj/Tex.h"
-#include "rndobj/Trans.h"
-#include "rndobj/Cam.h"
-#include "rndobj/Env.h"
 #include "rndobj/BaseMaterial.h"
-#include "rndobj/CubeTex.h"
+#include "rndobj/Cam.h"
 #include "math/Mtx.h"
 #include <cstdio>
 #include <cstring>
-
-// External: get GPU texture view for a RndTex (defined in Tex_Wgpu.cpp)
-extern wgpu::TextureView GetGpuTexView(RndTex* tex);
-extern wgpu::TextureView GetGpuCubeTexView(RndCubeTex* cubeTex);
-
 
 // Forward declaration — draws a mesh immediately (called for both opaque and deferred).
 // Non-static: TransparentQueue.cpp calls this via extern linkage.
@@ -152,34 +143,6 @@ void RndMesh::DrawShowing() {
     RndMat* mat = Mat();
     if (!mat) {
         if (capturing) FrameCapture::Get().AddSkip(Name(), "no material");
-        return;
-    }
-
-    // Text meshes created by RndText::FontMap have empty names (not registered in ObjectDir).
-    // Draw inline — the engine's draw order already handles layering via PanelDir draw lists.
-
-    // Defer transparent meshes for back-to-front sorting.
-    bool isTextMeshEarly = false; // Text already queued above
-    if (false && IsTransparentBlend(mat->GetBlend()) && !isTextMeshEarly && !NoTransparentDefer()) {
-        float distSq = 0.0f;
-        RndCam* cam = RndCam::Current();
-        if (cam) {
-            const Vector3& camPos = cam->WorldXfm().v;
-            const Vector3& meshPos = WorldXfm().v;
-            float dx = meshPos.x - camPos.x;
-            float dy = meshPos.y - camPos.y;
-            float dz = meshPos.z - camPos.z;
-            distSq = dx*dx + dy*dy + dz*dz;
-        }
-        QueueTransparentDraw(this, distSq, RndCam::Current(), RndEnviron::Current());
-        if (capturing) {
-            auto& rec = FrameCapture::Get().AddDraw();
-            rec.meshName = Name();
-            rec.materialName = mat->Name();
-            rec.deferred = true;
-            rec.distSq = distSq;
-            rec.blend = mat->GetBlend();
-        }
         return;
     }
 

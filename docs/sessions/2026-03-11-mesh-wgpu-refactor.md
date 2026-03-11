@@ -1,15 +1,15 @@
 # Mesh_Wgpu.cpp Refactoring Plan
 
 **Date**: 2026-03-11
-**Status**: Complete (Phases 0-4)
+**Status**: Complete (Phases 0-5)
 
 ## Results
 
 | Metric | Before | After |
 |--------|--------|-------|
-| Mesh_Wgpu.cpp | 1,346 lines | 423 lines |
+| Mesh_Wgpu.cpp | 1,346 lines | 387 lines |
 | DrawMeshImmediate | 575 lines | 154 lines |
-| Largest file | 1,346 lines | 423 lines |
+| Largest file | 1,346 lines | 387 lines |
 | Material duplication | ~70 lines duplicated | 0 (shared BuildMaterialParams) |
 | Bone duplication | ~40 lines duplicated | 0 (shared FillBoneUniforms) |
 | Frame capture interleaving | 87 lines inline | 1 line call + helper |
@@ -19,11 +19,12 @@
 
 ```
 native/src/platform/
-├── Mesh_Wgpu.cpp          423 lines  Orchestrator (DrawShowing, DrawMeshImmediate, DrawMeshShadow)
+├── Mesh_Wgpu.cpp          387 lines  Orchestrator (DrawShowing, DrawMeshImmediate, DrawMeshShadow)
+├── TexGpu.h                11 lines  GetGpuTexView/GetGpuCubeTexView declarations
 ├── MeshGpuCache.h           47 lines  GpuMeshData struct + API
 ├── MeshGpuCache.cpp        339 lines  GPU resource management, upload, tangent gen, frame stats
 ├── MaterialSetup.h          26 lines  MaterialParams struct + builders
-├── MaterialSetup.cpp       326 lines  Material uniform filling, texture resolution, auto-prelit
+├── MaterialSetup.cpp       318 lines  Material uniform filling, texture resolution, auto-prelit
 ├── BoneSetup.h              17 lines  Bone API
 ├── BoneSetup.cpp            81 lines  Bone matrices + dummy bind group
 ├── TransparentQueue.h       20 lines  Queue API + blend classification
@@ -57,6 +58,12 @@ native/src/platform/
 - [x] **4a**: Extracted frame capture into RecordDrawCall() helper (single call in DrawMeshImmediate)
 - [x] **4b**: Moved NoTransparentDefer env var flag to TransparentQueue.cpp
 - [x] Cleaned up unused includes (UiRenderHeuristics.h, Text.h, unordered_set, algorithm, vector, cmath)
+
+### Phase 5: Staff Engineer review cleanup
+- [x] **5a**: Created `TexGpu.h` — shared header for `GetGpuTexView`/`GetGpuCubeTexView`, replacing 5 duplicated `extern` declarations (Mesh_Wgpu.cpp, MaterialSetup.cpp, Part_Wgpu.cpp, DrawRect2D.cpp, ViewerScene.cpp)
+- [x] **5b**: Removed dead transparent defer block in `DrawShowing` (24 lines guarded by `if (false && ...)`)
+- [x] **5c**: Made `BuildPassMaterialParams` use `ResolveMap()` helper (consistency with `BuildMaterialParams`)
+- [x] **5d**: Removed stale includes from Mesh_Wgpu.cpp (TransparentQueue.h, CubeTex.h, Env.h, Tex.h) and MaterialSetup.cpp (Tex.h)
 
 ## Verification Status
 - [x] All mesh-related .cpp files compile clean

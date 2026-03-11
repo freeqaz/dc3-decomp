@@ -19,14 +19,12 @@
 #include "utl/FilePath.h"
 #include "platform/Rnd_Wgpu.h"
 #include "platform/MeshGpuCache.h"
+#include "platform/TexGpu.h"
 
 #include <cstdio>
 #include <cstring>
 #include <cmath>
 #include <climits>
-
-// From Tex_Wgpu.cpp
-extern wgpu::TextureView GetGpuTexView(RndTex* tex);
 
 bool ViewerScene::Load(const char* miloAbsPath, const ViewerConfig& cfg) {
     printf("Milo Viewer: loading milo file...\n");

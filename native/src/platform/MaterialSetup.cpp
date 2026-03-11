@@ -4,10 +4,10 @@
 
 #include "platform/MaterialSetup.h"
 #include "platform/Rnd_Wgpu.h"
+#include "platform/TexGpu.h"
 #include "platform/UiRenderHeuristics.h"
 #include "gfx/FrameCapture.h"
 #include "rndobj/Mat.h"
-#include "rndobj/Tex.h"
 #include "rndobj/BaseMaterial.h"
 #include "rndobj/Env.h"
 #include "rndobj/CubeTex.h"
@@ -18,10 +18,6 @@
 #include <cmath>
 #include <algorithm>
 #include <cstdio>
-
-// External: get GPU texture view for a RndTex (defined in Tex_Wgpu.cpp)
-extern wgpu::TextureView GetGpuTexView(RndTex* tex);
-extern wgpu::TextureView GetGpuCubeTexView(RndCubeTex* cubeTex);
 
 // Simple render mode (MILO_SIMPLE_RENDER=1): skip multiply override, force prelit,
 // minimal material processing. For isolating shader/blend regressions.
@@ -297,10 +293,10 @@ MaterialParams BuildPassMaterialParams(BaseMaterial* nextPass) {
 
     // --- Resolve textures ---
     WgpuRnd::MaterialTexViews& npTexViews = result.texViews;
-    wgpu::TextureView npDiffuse;
-    if (nextPass->GetDiffuseTex()) {
-        npDiffuse = GetGpuTexView(nextPass->GetDiffuseTex());
-    }
+
+    // Diffuse: no PresyncBitmap needed for multi-pass (already synced by primary pass)
+    RndTex* npDiffTex = nextPass->GetDiffuseTex();
+    wgpu::TextureView npDiffuse = npDiffTex ? GetGpuTexView(npDiffTex) : wgpu::TextureView{};
     if (npDiffuse) {
         npMatUni.useTexture = 1.0f;
         npTexViews.diffuse = npDiffuse;
@@ -308,17 +304,13 @@ MaterialParams BuildPassMaterialParams(BaseMaterial* nextPass) {
         npMatUni.useTexture = 0.0f;
         npTexViews.diffuse = gWgpuRnd->WhiteTexView();
     }
-    npTexViews.normal = nextPass->NormalMap() ? GetGpuTexView(nextPass->NormalMap()) : gWgpuRnd->FlatNormalTexView();
-    if (!npTexViews.normal) npTexViews.normal = gWgpuRnd->FlatNormalTexView();
-    npTexViews.specular = nextPass->GetSpecularMap() ? GetGpuTexView(nextPass->GetSpecularMap()) : gWgpuRnd->WhiteTexView();
-    if (!npTexViews.specular) npTexViews.specular = gWgpuRnd->WhiteTexView();
-    npTexViews.emissive = nextPass->GetEmissiveMap() ? GetGpuTexView(nextPass->GetEmissiveMap()) : gWgpuRnd->BlackTexView();
-    if (!npTexViews.emissive) npTexViews.emissive = gWgpuRnd->BlackTexView();
-    npTexViews.rim = nextPass->GetRimMap() ? GetGpuTexView(nextPass->GetRimMap()) : gWgpuRnd->WhiteTexView();
-    if (!npTexViews.rim) npTexViews.rim = gWgpuRnd->WhiteTexView();
+
+    npTexViews.normal     = ResolveMap(nextPass->NormalMap(),      gWgpuRnd->FlatNormalTexView());
+    npTexViews.specular   = ResolveMap(nextPass->GetSpecularMap(), gWgpuRnd->WhiteTexView());
+    npTexViews.emissive   = ResolveMap(nextPass->GetEmissiveMap(), gWgpuRnd->BlackTexView());
+    npTexViews.rim        = ResolveMap(nextPass->GetRimMap(),      gWgpuRnd->WhiteTexView());
     npTexViews.environCube = gWgpuRnd->BlackCubeTexView();
-    npTexViews.normDetail = nextPass->GetNormDetailMap() ? GetGpuTexView(nextPass->GetNormDetailMap()) : gWgpuRnd->FlatNormalTexView();
-    if (!npTexViews.normDetail) npTexViews.normDetail = gWgpuRnd->FlatNormalTexView();
+    npTexViews.normDetail = ResolveMap(nextPass->GetNormDetailMap(), gWgpuRnd->FlatNormalTexView());
 
     // Multi-pass materials don't set their own sampler -- caller reuses primary material's sampler
     result.heuristics = 0;
