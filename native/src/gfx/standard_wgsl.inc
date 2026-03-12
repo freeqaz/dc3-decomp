@@ -10,12 +10,15 @@ const kShaderVariationNone = 0.0;
 const kShaderVariationSkin = 1.0;
 const kShaderVariationHair = 2.0;
 
+const kBoolThreshold = 0.5;
 const kTexGenNone = 0.0;
 const kTexGenXfm = 1.0;
 const kTexGenSphere = 2.0;
 const kTexGenProjected = 3.0;
 const kTexGenXfmOrigin = 4.0;
 const kTexGenEnviron = 5.0;
+const kHighlightCompressionKnee = 0.9;
+const kAlphaFringeFadeStart = 0.1;
 
 // === Bind Group 0: Per-scene (camera, environment) ===
 struct SceneUniforms {
@@ -146,15 +149,15 @@ struct LightingTerms {
 };
 
 fn isEnabled(value: f32) -> bool {
-    return value > 0.5;
+    return value > kBoolThreshold;
 }
 
 fn shaderVariationIs(value: f32, expectedVariation: f32) -> bool {
-    return value > expectedVariation - 0.5 && value < expectedVariation + 0.5;
+    return value > expectedVariation - kBoolThreshold && value < expectedVariation + kBoolThreshold;
 }
 
 fn texGenModeIs(value: f32, expectedMode: f32) -> bool {
-    return value > expectedMode - 0.5 && value < expectedMode + 0.5;
+    return value > expectedMode - kBoolThreshold && value < expectedMode + kBoolThreshold;
 }
 
 fn boneWeightAt(weights: vec4f, influenceIndex: u32) -> f32 {
@@ -272,19 +275,19 @@ fn blendDetailNormal(baseNormal: vec3f, uv: vec2f) -> vec3f {
     ));
 }
 
-fn sampleSurfaceNormal(in: VertexOutput) -> vec3f {
-    var worldNormal = normalize(in.worldNormal);
+fn sampleSurfaceNormal(surfaceInput: VertexOutput) -> vec3f {
+    var worldNormal = normalize(surfaceInput.worldNormal);
     if (!isEnabled(material.hasNormalMap)) {
         return worldNormal;
     }
 
-    let normalSample = textureSample(normalMapTex, mapSampler, in.uv);
+    let normalSample = textureSample(normalMapTex, mapSampler, surfaceInput.uv);
     var tangentSpaceNormal = decodeTangentSpaceNormal(normalSample);
     tangentSpaceNormal = applyDeNormal(tangentSpaceNormal);
-    tangentSpaceNormal = blendDetailNormal(tangentSpaceNormal, in.uv);
+    tangentSpaceNormal = blendDetailNormal(tangentSpaceNormal, surfaceInput.uv);
 
-    let worldTangent = normalize(in.worldTangent);
-    let worldBitangent = normalize(in.worldBitangent);
+    let worldTangent = normalize(surfaceInput.worldTangent);
+    let worldBitangent = normalize(surfaceInput.worldBitangent);
     worldNormal = normalize(
         worldTangent * tangentSpaceNormal.x +
         worldBitangent * tangentSpaceNormal.y +
@@ -437,14 +440,14 @@ fn computeDirectionalLight(
     lightColor: vec3f,
     worldTangent: vec3f,
     specularSample: vec4f,
-    useSkinShader: bool,
-    useHairShader: bool
+    isSkinMaterial: bool,
+    isHairMaterial: bool
 ) -> LightingTerms {
-    if (useHairShader) {
+    if (isHairMaterial) {
         return computeHairLight(surfaceNormal, viewDir, lightDir, lightColor, worldTangent, specularSample);
     }
 
-    if (useSkinShader) {
+    if (isSkinMaterial) {
         return computeSkinLight(surfaceNormal, viewDir, lightDir, lightColor, specularSample);
     }
 
@@ -535,7 +538,7 @@ fn computeEnvironmentReflection(surfaceNormal: vec3f, viewDir: vec3f, specularSa
 }
 
 fn compressHighlights(color: vec3f) -> vec3f {
-    let knee = vec3f(0.9);
+    let knee = vec3f(kHighlightCompressionKnee);
     return select(
         color,
         knee + (vec3f(1.0) - knee) * tanh((color - knee) / (vec3f(1.0) - knee)),
@@ -545,34 +548,34 @@ fn compressHighlights(color: vec3f) -> vec3f {
 
 // === Vertex Shader (static meshes) ===
 @vertex
-fn vs_main(in: VertexInput) -> VertexOutput {
-    var out: VertexOutput;
+fn vs_main(vertex: VertexInput) -> VertexOutput {
+    var vertexOutput: VertexOutput;
 
-    let worldPos = (object.world * vec4f(in.position, 1.0)).xyz;
-    let worldNormal = normalize((object.worldInvTranspose * vec4f(in.normal, 0.0)).xyz);
+    let worldPos = (object.world * vec4f(vertex.position, 1.0)).xyz;
+    let worldNormal = normalize((object.worldInvTranspose * vec4f(vertex.normal, 0.0)).xyz);
     let viewDir = normalize(scene.cameraPos - worldPos);
-    let worldTangent = normalize((object.world * vec4f(in.tangent.xyz, 0.0)).xyz);
+    let worldTangent = normalize((object.world * vec4f(vertex.tangent.xyz, 0.0)).xyz);
 
-    out.clipPos = scene.viewProj * vec4f(worldPos, 1.0);
-    out.worldPos = worldPos;
-    out.worldNormal = worldNormal;
-    out.color = in.color;
-    out.uv = computeTexGenUV(in.uv, worldPos, worldNormal, viewDir);
-    out.worldTangent = worldTangent;
-    out.worldBitangent = cross(worldNormal, worldTangent) * in.tangent.w;
+    vertexOutput.clipPos = scene.viewProj * vec4f(worldPos, 1.0);
+    vertexOutput.worldPos = worldPos;
+    vertexOutput.worldNormal = worldNormal;
+    vertexOutput.color = vertex.color;
+    vertexOutput.uv = computeTexGenUV(vertex.uv, worldPos, worldNormal, viewDir);
+    vertexOutput.worldTangent = worldTangent;
+    vertexOutput.worldBitangent = cross(worldNormal, worldTangent) * vertex.tangent.w;
 
-    return out;
+    return vertexOutput;
 }
 
 // === Vertex Shader (skinned meshes) ===
 @vertex
-fn vs_skinned(in: SkinnedVertexInput) -> VertexOutput {
-    var out: VertexOutput;
+fn vs_skinned(vertex: SkinnedVertexInput) -> VertexOutput {
+    var vertexOutput: VertexOutput;
 
     var blendedPosition = vec4f(0.0);
     var blendedNormal = vec4f(0.0);
     var blendedTangent = vec4f(0.0);
-    let normalizedWeights = normalizeBoneWeights(in.boneWeights);
+    let normalizedWeights = normalizeBoneWeights(vertex.boneWeights);
 
     for (var influenceIndex = 0u; influenceIndex < 4u; influenceIndex++) {
         let influenceWeight = boneWeightAt(normalizedWeights, influenceIndex);
@@ -580,10 +583,10 @@ fn vs_skinned(in: SkinnedVertexInput) -> VertexOutput {
             continue;
         }
 
-        let boneMatrix = bones[boneIndexAt(in.boneIndices, influenceIndex)];
-        blendedPosition += influenceWeight * (boneMatrix * vec4f(in.position, 1.0));
-        blendedNormal += influenceWeight * (boneMatrix * vec4f(in.normal, 0.0));
-        blendedTangent += influenceWeight * (boneMatrix * vec4f(in.tangent.xyz, 0.0));
+        let boneMatrix = bones[boneIndexAt(vertex.boneIndices, influenceIndex)];
+        blendedPosition += influenceWeight * (boneMatrix * vec4f(vertex.position, 1.0));
+        blendedNormal += influenceWeight * (boneMatrix * vec4f(vertex.normal, 0.0));
+        blendedTangent += influenceWeight * (boneMatrix * vec4f(vertex.tangent.xyz, 0.0));
     }
 
     let worldPos = (object.world * vec4f(blendedPosition.xyz, 1.0)).xyz;
@@ -591,25 +594,25 @@ fn vs_skinned(in: SkinnedVertexInput) -> VertexOutput {
     let viewDir = normalize(scene.cameraPos - worldPos);
     let worldTangent = normalize((object.world * vec4f(blendedTangent.xyz, 0.0)).xyz);
 
-    out.clipPos = scene.viewProj * vec4f(worldPos, 1.0);
-    out.worldPos = worldPos;
-    out.worldNormal = worldNormal;
-    out.color = in.color;
-    out.uv = computeTexGenUV(in.uv, worldPos, worldNormal, viewDir);
-    out.worldTangent = worldTangent;
-    out.worldBitangent = cross(worldNormal, worldTangent) * in.tangent.w;
+    vertexOutput.clipPos = scene.viewProj * vec4f(worldPos, 1.0);
+    vertexOutput.worldPos = worldPos;
+    vertexOutput.worldNormal = worldNormal;
+    vertexOutput.color = vertex.color;
+    vertexOutput.uv = computeTexGenUV(vertex.uv, worldPos, worldNormal, viewDir);
+    vertexOutput.worldTangent = worldTangent;
+    vertexOutput.worldBitangent = cross(worldNormal, worldTangent) * vertex.tangent.w;
 
-    return out;
+    return vertexOutput;
 }
 
 // === Fragment Shader ===
 @fragment
-fn fs_main(in: VertexOutput) -> @location(0) vec4f {
+fn fs_main(surfaceInput: VertexOutput) -> @location(0) vec4f {
     let materialAlpha = material.color.a;
-    var baseColor = vec4f(material.color.rgb * in.color.rgb, materialAlpha * in.color.a);
+    var baseColor = vec4f(material.color.rgb * surfaceInput.color.rgb, materialAlpha * surfaceInput.color.a);
 
     if (isEnabled(material.useTexture)) {
-        let diffuseSample = textureSample(diffuseTex, diffuseSampler, in.uv);
+        let diffuseSample = textureSample(diffuseTex, diffuseSampler, surfaceInput.uv);
         if (isEnabled(material.useAlphaAsRGB)) {
             baseColor = vec4f(baseColor.rgb * diffuseSample.a, baseColor.a * diffuseSample.a);
         } else {
@@ -624,47 +627,47 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
         discard;
     }
 
-    let surfaceNormal = sampleSurfaceNormal(in);
-    let viewDir = normalize(scene.cameraPos - in.worldPos);
-    let specularSample = textureSample(specularMapTex, mapSampler, in.uv);
-    let useSkinShader = shaderVariationIs(material.shaderVariation, kShaderVariationSkin);
-    let useHairShader = shaderVariationIs(material.shaderVariation, kShaderVariationHair);
-    let shadowFactor = sampleShadowFactor(in.worldPos);
+    let surfaceNormal = sampleSurfaceNormal(surfaceInput);
+    let viewDir = normalize(scene.cameraPos - surfaceInput.worldPos);
+    let specularSample = textureSample(specularMapTex, mapSampler, surfaceInput.uv);
+    let isSkinMaterial = shaderVariationIs(material.shaderVariation, kShaderVariationSkin);
+    let isHairMaterial = shaderVariationIs(material.shaderVariation, kShaderVariationHair);
+    let shadowFactor = sampleShadowFactor(surfaceInput.worldPos);
 
     var totalLighting = emptyLightingTerms();
     let directionalLightCount = i32(scene.numLights);
-    for (var lightIndex = 0; lightIndex < 4; lightIndex++) {
-        if (lightIndex >= directionalLightCount) {
+    for (var directionalLightIndex = 0; directionalLightIndex < 4; directionalLightIndex++) {
+        if (directionalLightIndex >= directionalLightCount) {
             break;
         }
 
-        let lightDir = normalize(-scene.lightDirs[lightIndex].xyz);
-        let lightColor = scene.lightColors[lightIndex].rgb;
+        let lightDir = normalize(-scene.lightDirs[directionalLightIndex].xyz);
+        let lightColor = scene.lightColors[directionalLightIndex].rgb;
         let lightContribution = computeDirectionalLight(
             surfaceNormal,
             viewDir,
             lightDir,
             lightColor,
-            in.worldTangent,
+            surfaceInput.worldTangent,
             specularSample,
-            useSkinShader,
-            useHairShader
+            isSkinMaterial,
+            isHairMaterial
         );
         totalLighting.diffuse += lightContribution.diffuse;
         totalLighting.specular += lightContribution.specular;
     }
 
     let pointLightCount = i32(scene.numPointLights);
-    for (var lightIndex = 0; lightIndex < 4; lightIndex++) {
-        if (lightIndex >= pointLightCount) {
+    for (var pointLightIndex = 0; pointLightIndex < 4; pointLightIndex++) {
+        if (pointLightIndex >= pointLightCount) {
             break;
         }
 
         let lightContribution = computePointLight(
             surfaceNormal,
             viewDir,
-            in.worldPos,
-            lightIndex,
+            surfaceInput.worldPos,
+            pointLightIndex,
             specularSample
         );
         totalLighting.diffuse += lightContribution.diffuse;
@@ -681,13 +684,13 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
             totalLighting.specular * shadowFactor;
     }
 
-    let emissiveSample = textureSample(emissiveMapTex, mapSampler, in.uv);
+    let emissiveSample = textureSample(emissiveMapTex, mapSampler, surfaceInput.uv);
     finalColor += baseColor.rgb * material.emissiveMultiplier * emissiveSample.rgb;
-    finalColor += computeRimLighting(surfaceNormal, viewDir, in.uv);
+    finalColor += computeRimLighting(surfaceNormal, viewDir, surfaceInput.uv);
     finalColor += computeEnvironmentReflection(surfaceNormal, viewDir, specularSample);
 
     if (isEnabled(scene.fogEnabled) && isEnabled(material.materialFogEnabled)) {
-        let cameraDistance = length(in.worldPos - scene.cameraPos);
+        let cameraDistance = length(surfaceInput.worldPos - scene.cameraPos);
         let fogFactor = clamp((scene.fogEnd - cameraDistance) / (scene.fogEnd - scene.fogStart), 0.0, 1.0);
         finalColor = mix(scene.fogColor, finalColor, fogFactor);
     }
@@ -695,8 +698,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     finalColor = compressHighlights(finalColor);
 
     // Fade RGB down with alpha for nearly transparent texels to suppress fringes.
-    if (baseColor.a < 0.1) {
-        finalColor *= baseColor.a / 0.1;
+    if (baseColor.a < kAlphaFringeFadeStart) {
+        finalColor *= baseColor.a / kAlphaFringeFadeStart;
     }
 
     return vec4f(finalColor, baseColor.a);
