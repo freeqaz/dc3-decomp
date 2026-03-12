@@ -37,7 +37,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-_CACHE_DB = Path(__file__).resolve().parent.parent.parent / "permuter_cache.db"
+from .repo_paths import get_cache_db_path
+
+_CACHE_DB = get_cache_db_path()
 
 _SCHEMA_STATEMENTS = [
     """CREATE TABLE IF NOT EXISTS pattern_runs (
@@ -62,6 +64,8 @@ _SCHEMA_STATEMENTS = [
     "CREATE INDEX IF NOT EXISTS idx_pattern_runs_pattern ON pattern_runs (pattern)",
     "CREATE INDEX IF NOT EXISTS idx_pattern_runs_symbol ON pattern_runs (symbol)",
     "CREATE INDEX IF NOT EXISTS idx_pattern_runs_won ON pattern_runs (won) WHERE won = 1",
+    "CREATE INDEX IF NOT EXISTS idx_pattern_runs_won_pattern ON pattern_runs (won, pattern) WHERE won = 1",
+    "CREATE INDEX IF NOT EXISTS idx_pattern_runs_diag_pattern ON pattern_runs (diagnosis_category, pattern)",
 ]
 
 # Track whether schema has been initialized in this process
@@ -216,6 +220,73 @@ def query_pattern_summary() -> list[dict]:
         return []
 
 
+def query_pattern_effectiveness(
+    diagnosis_category: str | None = None,
+) -> dict[str, tuple[float, float]]:
+    """Query per-pattern (win_rate, avg_delta) for Bayesian priority adjustment.
+
+    Args:
+        diagnosis_category: If provided, filter to runs with this diagnosis
+            category. If None, uses all runs.
+
+    Returns:
+        Dict mapping pattern name to (win_rate, avg_delta) where:
+        - win_rate = wins / total_runs (0.0 to 1.0)
+        - avg_delta = average best_delta across ALL runs (wins and losses)
+        Returns empty dict on missing/empty DB or errors.
+    """
+    try:
+        conn = sqlite3.connect(str(_CACHE_DB), timeout=10)
+        conn.row_factory = sqlite3.Row
+
+        # Check table exists
+        exists = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='pattern_runs'"
+        ).fetchone()
+        if not exists:
+            conn.close()
+            return {}
+
+        if diagnosis_category is not None:
+            rows = conn.execute(
+                """
+                SELECT pattern,
+                       COUNT(*) as runs,
+                       SUM(won) as wins,
+                       AVG(best_delta) as avg_delta
+                FROM pattern_runs
+                WHERE diagnosis_category = ?
+                GROUP BY pattern
+                HAVING runs >= 1
+                """,
+                (diagnosis_category,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT pattern,
+                       COUNT(*) as runs,
+                       SUM(won) as wins,
+                       AVG(best_delta) as avg_delta
+                FROM pattern_runs
+                GROUP BY pattern
+                HAVING runs >= 1
+                """
+            ).fetchall()
+        conn.close()
+
+        result: dict[str, tuple[float, float]] = {}
+        for r in rows:
+            total = r["runs"]
+            wins = r["wins"] or 0
+            win_rate = wins / total if total > 0 else 0.0
+            avg_delta = r["avg_delta"] or 0.0
+            result[r["pattern"]] = (win_rate, avg_delta)
+        return result
+    except Exception:
+        return {}
+
+
 def query_pattern_by_diagnosis() -> list[dict]:
     """Query pattern win rates broken down by diagnosis category.
 
@@ -251,6 +322,84 @@ def query_pattern_by_diagnosis() -> list[dict]:
         return [dict(r) for r in rows]
     except Exception:
         return []
+
+
+def query_composition_effectiveness(
+    db_path: Path | None = None,
+) -> dict[tuple[str, str], dict]:
+    """Query composition pair effectiveness from pattern_runs DB.
+
+    Extracts pairs from pattern names with compose: and chain: prefixes:
+      - compose:A+B -> pair (A, B)
+      - chain:A+B+C -> pairs (A,B), (B,C), (A,C)
+
+    Returns per-pair dict with: wins, fails, total, win_rate, avg_delta.
+    Handles missing DB gracefully (returns empty dict).
+    """
+    target = db_path or _CACHE_DB
+    try:
+        if not target.exists():
+            return {}
+        conn = sqlite3.connect(str(target))
+        conn.row_factory = sqlite3.Row
+
+        exists = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='pattern_runs'"
+        ).fetchone()
+        if not exists:
+            conn.close()
+            return {}
+
+        rows = conn.execute("""
+            SELECT pattern, won, best_delta
+            FROM pattern_runs
+            WHERE pattern LIKE 'compose:%' OR pattern LIKE 'chain:%'
+        """).fetchall()
+        conn.close()
+
+        # Accumulate per-pair stats
+        pair_data: dict[tuple[str, str], list[tuple[int, float]]] = {}
+
+        for row in rows:
+            name = row["pattern"]
+            won = int(row["won"])
+            delta = float(row["best_delta"]) if row["best_delta"] else 0.0
+
+            pairs: list[tuple[str, str]] = []
+            if name.startswith("compose:"):
+                parts = name[len("compose:"):].split("+")
+                if len(parts) == 2:
+                    pairs.append((parts[0], parts[1]))
+            elif name.startswith("chain:"):
+                parts = name[len("chain:"):].split("+")
+                # Extract all pairwise combinations: (A,B), (B,C), (A,C)
+                for i in range(len(parts)):
+                    for j in range(i + 1, len(parts)):
+                        pairs.append((parts[i], parts[j]))
+
+            for pair in pairs:
+                pair_data.setdefault(pair, []).append((won, delta))
+
+        # Compute summary stats per pair
+        result: dict[tuple[str, str], dict] = {}
+        for pair, entries in pair_data.items():
+            wins = sum(1 for w, _ in entries if w)
+            fails = sum(1 for w, _ in entries if not w)
+            total = len(entries)
+            win_rate = wins / total if total > 0 else 0.0
+            win_deltas = [d for w, d in entries if w and d > 0]
+            avg_delta = sum(win_deltas) / len(win_deltas) if win_deltas else 0.0
+            result[pair] = {
+                "wins": wins,
+                "fails": fails,
+                "total": total,
+                "win_rate": win_rate,
+                "avg_delta": avg_delta,
+            }
+
+        return result
+    except Exception:
+        return {}
 
 
 def print_summary():

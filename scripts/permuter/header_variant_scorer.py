@@ -10,6 +10,7 @@ from pathlib import Path
 from .cross_unit import AffectedFunction, lookup_functions_for_header_impact
 from .file_util import apply_file_updates, restore_tracked_files
 from .header_impact import HeaderImpact
+from .repo_paths import get_decomp_db_path
 from .score_cache import md5_file
 from .types import Variant, variant_file_updates
 
@@ -87,7 +88,7 @@ class HeaderVariantScorer:
         db_path: Path | None = None,
     ) -> None:
         self.project_root = project_root.resolve()
-        self.db_path = (db_path or (self.project_root / "decomp.db")).resolve()
+        self.db_path = (db_path or get_decomp_db_path()).resolve()
 
     def evaluate_variant(
         self,

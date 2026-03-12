@@ -52,10 +52,11 @@ import importlib
 from .hill_climber import hill_climb, install_signal_handler
 from .pattern_scan import _load_source_files, _load_match_info, _scan_file, ScanHit
 from .patterns import get_pattern, list_patterns, get_all_patterns
+from .repo_paths import get_cache_db_path, get_decomp_db_path
 from .types import extract_qualified_name
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-DECOMP_DB = REPO_ROOT / "decomp.db"
+DECOMP_DB = get_decomp_db_path()
 
 
 def parse_args() -> argparse.Namespace:
@@ -658,6 +659,10 @@ def _climb_one(
             "il_analyzed_variants": result.il_analyzed_variants,
             "il_unique_buckets": result.il_unique_buckets,
             "il_duplicate_buckets": result.il_duplicate_buckets,
+            "il_pattern_metrics": {
+                name: dict(metrics)
+                for name, metrics in result.il_pattern_metrics.items()
+            },
         }
     except Exception as e:
         print(f"  ERROR: {e}", file=sys.stderr)
@@ -746,6 +751,14 @@ def _accumulate_result(stats: dict, result: dict):
     stats["il_analyzed_variants"] += int(result.get("il_analyzed_variants", 0) or 0)
     stats["il_unique_buckets"] += int(result.get("il_unique_buckets", 0) or 0)
     stats["il_duplicate_buckets"] += int(result.get("il_duplicate_buckets", 0) or 0)
+    for pattern_name, metrics in (result.get("il_pattern_metrics") or {}).items():
+        entry = stats["il_pattern_metrics"].setdefault(
+            pattern_name,
+            {"analyzed_variants": 0, "unique_buckets": 0, "duplicate_buckets": 0},
+        )
+        entry["analyzed_variants"] += int(metrics.get("analyzed_variants", 0) or 0)
+        entry["unique_buckets"] += int(metrics.get("unique_buckets", 0) or 0)
+        entry["duplicate_buckets"] += int(metrics.get("duplicate_buckets", 0) or 0)
 
 
 _IMPROVEMENT_SCHEMA = """
@@ -766,6 +779,7 @@ CREATE TABLE IF NOT EXISTS improvement_runs (
     il_analyzed_variants INTEGER NOT NULL DEFAULT 0,
     il_unique_buckets INTEGER NOT NULL DEFAULT 0,
     il_duplicate_buckets INTEGER NOT NULL DEFAULT 0,
+    il_pattern_metrics TEXT,
     caller          TEXT NOT NULL DEFAULT 'scan_and_permute'
 );
 
@@ -776,7 +790,7 @@ CREATE INDEX IF NOT EXISTS idx_improvement_runs_delta
 ON improvement_runs (delta DESC);
 """
 
-_IMPROVEMENT_DB = REPO_ROOT / "permuter_cache.db"
+_IMPROVEMENT_DB = get_cache_db_path()
 
 
 def _store_improvement_runs(improvements: list[dict]) -> None:
@@ -793,12 +807,18 @@ def _store_improvement_runs(improvements: list[dict]) -> None:
         ("il_analyzed_variants", "INTEGER", "0"),
         ("il_unique_buckets", "INTEGER", "0"),
         ("il_duplicate_buckets", "INTEGER", "0"),
+        ("il_pattern_metrics", "TEXT", "NULL"),
     ):
         if name not in existing_cols:
-            conn.execute(
-                f"ALTER TABLE improvement_runs ADD COLUMN {name} {coltype} "
-                f"NOT NULL DEFAULT {default}"
-            )
+            if default == "NULL":
+                conn.execute(
+                    f"ALTER TABLE improvement_runs ADD COLUMN {name} {coltype}"
+                )
+            else:
+                conn.execute(
+                    f"ALTER TABLE improvement_runs ADD COLUMN {name} {coltype} "
+                    f"NOT NULL DEFAULT {default}"
+                )
 
     now = time.time()
     rows = []
@@ -824,6 +844,7 @@ def _store_improvement_runs(improvements: list[dict]) -> None:
             int(imp.get("il_analyzed_variants", 0) or 0),
             int(imp.get("il_unique_buckets", 0) or 0),
             int(imp.get("il_duplicate_buckets", 0) or 0),
+            json.dumps(imp.get("il_pattern_metrics", {}), sort_keys=True),
             "scan_and_permute",
         ))
 
@@ -832,8 +853,8 @@ def _store_improvement_runs(improvements: list[dict]) -> None:
         "(timestamp, symbol, function_name, source_path, unit, "
         "initial_pct, final_pct, delta, rounds_used, stopped_reason, "
         "elapsed_seconds, winning_rounds, il_analyzed_variants, "
-        "il_unique_buckets, il_duplicate_buckets, caller) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "il_unique_buckets, il_duplicate_buckets, il_pattern_metrics, caller) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         rows,
     )
     conn.commit()
@@ -1064,6 +1085,7 @@ def main():
         "il_analyzed_variants": 0,
         "il_unique_buckets": 0,
         "il_duplicate_buckets": 0,
+        "il_pattern_metrics": {},
     }
 
     if args.jobs <= 1:
@@ -1217,6 +1239,25 @@ def main():
             f"dup={stats['il_duplicate_buckets']}",
             file=sys.stderr,
         )
+    il_pattern_metrics = stats["il_pattern_metrics"]
+    if il_pattern_metrics:
+        top_dup_patterns = sorted(
+            il_pattern_metrics.items(),
+            key=lambda item: (
+                -item[1]["duplicate_buckets"],
+                -item[1]["analyzed_variants"],
+                item[0],
+            ),
+        )[:6]
+        dup_summary = ", ".join(
+            f"{name}:dup={metrics['duplicate_buckets']}/"
+            f"uniq={metrics['unique_buckets']}/"
+            f"an={metrics['analyzed_variants']}"
+            for name, metrics in top_dup_patterns
+            if metrics["duplicate_buckets"] > 0
+        )
+        if dup_summary:
+            print(f"  IL dup patterns: {dup_summary}", file=sys.stderr)
 
     if args.json_output:
         # Strip non-serializable fields before JSON output

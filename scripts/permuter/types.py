@@ -181,6 +181,9 @@ class FunctionContext:
     mismatch_regions: list = field(default_factory=list)  # list[MismatchRegion]
     # Target facts: normalized evidence from diagnosis, atlas, guidance
     target_facts: object | None = None  # TargetFacts or None
+    # When True, line/node_in_mismatch_region() always return True
+    # (used when all mismatch regions have low confidence)
+    blind_generation_mode: bool = False
 
     def source_text(self, node: Node) -> str:
         """Extract source text for a tree-sitter node."""
@@ -190,9 +193,13 @@ class FunctionContext:
         """Check if a source line falls within any mismatch region.
 
         Returns True if no regions are available (don't filter when no data).
+        Also returns True when blind_generation_mode is set (low-confidence
+        regions — don't trust region boundaries).
         """
         if not self.mismatch_regions:
             return True  # No attribution data — allow everything
+        if self.blind_generation_mode:
+            return True  # Low-confidence regions — allow everything
         for region in self.mismatch_regions:
             if region.start_line <= line <= region.end_line:
                 return True
@@ -203,9 +210,13 @@ class FunctionContext:
 
         Uses the node's start/end line (1-based) with an optional margin.
         Returns True if no regions are available (don't filter when no data).
+        Also returns True when blind_generation_mode is set (low-confidence
+        regions — don't trust region boundaries).
         """
         if not self.mismatch_regions:
             return True  # No attribution data — allow everything
+        if self.blind_generation_mode:
+            return True  # Low-confidence regions — allow everything
         # tree-sitter uses 0-based lines; /FAs uses 1-based
         node_start = node.start_point[0] + 1
         node_end = node.end_point[0] + 1
@@ -397,6 +408,7 @@ class HillClimbResult:
     il_analyzed_variants: int = 0
     il_unique_buckets: int = 0
     il_duplicate_buckets: int = 0
+    il_pattern_metrics: dict[str, dict[str, int]] = field(default_factory=dict)
 
 
 @dataclass
@@ -427,6 +439,16 @@ class RoundHints:
     # Atlas-derived pattern boost/suppress (from compiler_atlas lookups)
     atlas_boost_patterns: set[str] = field(default_factory=set)
     atlas_suppress_patterns: set[str] = field(default_factory=set)
+    # IL-analysis feedback from previous rounds/depths
+    il_duplicate_patterns: set[str] = field(default_factory=set)
+    il_unique_patterns: set[str] = field(default_factory=set)
+    # Composition pairs suppressed due to historical ineffectiveness
+    suppress_pairs: set[tuple[str, str]] = field(default_factory=set)
+    # Learned pattern effectiveness from historical DB data
+    # Maps pattern name -> (win_rate, avg_delta)
+    learned_effectiveness: dict[str, tuple[float, float]] = field(default_factory=dict)
+    # When True, skip loading learned effectiveness data
+    no_learned_priority: bool = False
 
     def force_pattern(self, pattern_name: str) -> bool:
         """Return True when guidance should override diagnosis gating."""
@@ -498,13 +520,19 @@ class RoundHints:
         """
         failures = self.pattern_failures.get(pattern_name, 0)
         if failures == 0:
-            return 1.0
+            base = 1.0
         elif failures == 1:
-            return 0.7
+            base = 0.7
         elif failures == 2:
-            return 0.3
+            base = 0.3
         else:
-            return 0.1
+            base = 0.1
+        if (
+            pattern_name in self.il_duplicate_patterns and
+            pattern_name not in self.il_unique_patterns
+        ):
+            base *= 0.55
+        return base
 
     def adaptive_priority_boost(self, pattern_name: str) -> float:
         """Get a positive multiplier from past wins, tags, and atlas."""
@@ -519,6 +547,14 @@ class RoundHints:
             boost += 0.3
         if pattern_name in self.atlas_suppress_patterns:
             boost *= 0.3  # Strong suppression for atlas-negative patterns
+
+        if pattern_name in self.il_unique_patterns:
+            boost += 0.12
+        if (
+            pattern_name in self.il_duplicate_patterns and
+            pattern_name not in self.il_unique_patterns
+        ):
+            boost *= 0.7
 
         tags = self.promising_tags_for_pattern(pattern_name)
         if not tags:
@@ -629,6 +665,9 @@ class BeamState:
     canonical_il_hash: str | None = None
     # Small positive tiebreak when this state's analyzed IL bucket is unique
     il_diversity_bonus: int = 0
+    # IL-guided pattern pressure carried along this lineage
+    il_duplicate_patterns: frozenset[str] = field(default_factory=frozenset)
+    il_unique_patterns: frozenset[str] = field(default_factory=frozenset)
 
     @property
     def ranking_key(self) -> tuple:
@@ -669,7 +708,9 @@ class BeamConfig:
     expand: int = 24  # Variants per state per depth
     escape: int = 4  # Perturbation budget when stalled
     diversity: int = 3  # Min distinct pattern families in beam
+    reserve_size: int = 3  # Pruned states kept as reserve for stagnation recovery
     workers: int = 0  # Parallel compile workers (0 = cpu_count)
+    auto_width: bool = True  # Auto-size width/expand based on function complexity
 
 
 @dataclass

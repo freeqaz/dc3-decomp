@@ -396,6 +396,9 @@ Live status:
 - every candidate still goes through full build + objdiff
 - IL analysis summary counts are now threaded into batch results and persisted
   in `improvement_runs` for later correlation work
+- per-pattern IL pressure metrics (`analyzed_variants`, `unique_buckets`,
+  `duplicate_buckets`) are now aggregated in batch summaries and stored in
+  `improvement_runs.il_pattern_metrics` for future tuning/reporting
 
 ### Phase 2: IL-Bucketed Search
 

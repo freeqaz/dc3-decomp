@@ -59,6 +59,7 @@ MaterialParams BuildMaterialParams(RndMat* mat, bool isTextMesh) {
         matUni.color[3] = 1.0f;
         heuristics |= kHeuristicAlphaForce;
     }
+
     if (mat->GetAlphaCut()) {
         matUni.alphaThreshold = mat->GetAlphaThreshold() / 255.0f;
     } else {

@@ -237,6 +237,7 @@ The biggest native rendering correctness gap: material alpha/color never animate
 
 4. **Label/text state wiring in choose-mode** — the `menu_only` experiment shows the choose-mode plaque and card art can be made stable without helpbar/letterbox flow spam, but the big readable labels still do not appear. That suggests some label/material state is gated behind trigger-driven flows that still never start successfully, or behind `Flow::Activate()` calls that currently fail silently.
    - First concrete targets from runtime logging: `update_rank_number.flow`, `udpate_icon_state.flow`, and `update_tier.flow` in `ui/main/main.milo`
+   - **2026-03-11 investigation**: All three flows DO activate correctly with children. But children are control-flow nodes (FlowSwitch, FlowCommand, FlowRun) not FlowAnimate — they depend on game state (rank, tier, icon state) to route to actual animations. `show_game_mode_icon.flow` runs `play_enter_anim.flow` whose FlowAnimate has `enable=0`. This is a game-state dependency, not a pipeline bug.
 
 4. **Material default state** — Materials in .milo have alpha=0 as default. On Xbox, specific PropAnims animate alpha 0→1. Without selective activation, native still needs a small text-only alpha fallback. The remaining work is to remove even that by getting the real Flow→PropAnim chain working reliably.
 
@@ -313,7 +314,7 @@ All these assets load correctly, including previously-crashing inlined subdir fi
 2. Find where the class is registered (usually in a subsystem `Init()` function)
 3. Add `REGISTER_OBJ_FACTORY(ClassName)` to `test_helpers.cpp` `EnsureEngineInit()`
 
-Currently registered for tests: `PanelDir`, `UIPanel`, `UIScreen`, `UIColor`, `UIGuide`, `UIPicture`, `UITrigger`, `UILabel`, `UIComponent`, `UIButton`, `UISlider`, `LabelNumberTicker`, `LabelShrinkWrapper`, `UILabelDir` (plus all classes from `FlowInit`, `CharInit`, `WorldInit`, `HamInit`).
+Currently registered for tests: `PanelDir`, `UIPanel`, `UIScreen`, `UIColor`, `UIGuide`, `UIPicture`, `UITrigger`, `UILabel`, `UIComponent`, `UIButton`, `UISlider`, `LabelNumberTicker`, `LabelShrinkWrapper`, `UILabelDir`, `InlineHelp`, `TexMovie`, `SynthSample`, `Sound`, `Sfx`, `SynthEmitter`, `Fader`, `MidiInstrument`, `MoggClip`, `MeterEffectMonitor`, `ADSR`, `ThreeDSound`, `AudioDuckerTrigger`, 12 `FxSend*` types, 6 `Sequence` types, UIList family (via `UIList::Init()`) (plus all classes from `FlowInit`, `CharInit`, `WorldInit`, `HamInit`).
 
 **PreLoad match% regression** (88.9% → 87.8%): The `bs >> d >>` changes shifted register allocation to a new dominant r19↔r20 swap. Could potentially be recovered by reverting the `d >>` changes for reads that are functionally identical to `bs >>` (non-rev-dependent scalar types), but the native behavioral fix is more important than the PPC match% here.
 
@@ -393,14 +394,14 @@ The native port's object factory registrations were incomplete. `UIManager::Init
 **12 UI types added to test engine** (safe — Load functions implemented):
 `UIColor`, `UIGuide`, `UIPicture`, `UITrigger`, `UILabel`, `UIComponent`, `UIButton`, `UISlider`, `LabelNumberTicker`, `LabelShrinkWrapper`, `UILabelDir` (plus `PanelDir`, `UIPanel`, `UIScreen` from earlier fix)
 
-**4 categories blocked by decomp bugs** (cannot register until Load functions are fixed):
+**Previously blocked categories — now fixed (2026-03-11):**
 
-| Category | Types | Bug | Symptom |
-|----------|-------|-----|---------|
-| TexMovie | `TexMovie` | `TexMovie::Load` stubbed | Stream desync → "String chars 8751 > 256" |
-| Synth/Sound | `SynthSample`, `Sound`, `SynthDir`, `Sfx`, `SynthPatch`, `Stream`, `Sequence`, `FxSend`, `FxSendEQ`, `FxSendReverb`, `FxSendCompress`, `FxSendDistortion` | `SynthSample::Load` / `Sound::Load` stubbed | Same stream desync |
-| UIList family | `UIList`, `UIListLabel`, `UIListMesh`, `UIListCustom`, `UIListArrow`, `UIListHighlight`, `UIListSlot`, `UIListSubList`, `UIListWidget`, `UIListDir` | `SetName` asserts null dir | `MILO_ASSERT(dir, 0xE7)` in `Object::SetName` |
-| InlineHelp | `InlineHelp` | `InlineHelp::PreLoad` stubbed | Stream desync |
+| Category | Types | Fix | Status |
+|----------|-------|-----|--------|
+| ~~TexMovie~~ | `TexMovie` | Fixed `TexMovie::Load` — wrong read order, missing movie data consumption | **Registered** |
+| ~~Synth/Sound~~ | `SynthSample`, `Sound`, `Sfx`, `SynthEmitter`, `Fader`, `MidiInstrument`, `MoggClip`, `ADSR`, `ThreeDSound`, `AudioDuckerTrigger`, `MeterEffectMonitor`, 12 `FxSend*` types, 6 `Sequence` types | `SynthPreInit()` creates TheSynth singleton; `SampleData::Dealloc` null guard; `SynthSample::Init()` sets allocator | **Registered (28 types)** |
+| ~~UIList family~~ | `UIList`, `UIListLabel`, `UIListMesh`, etc. | `UIList::Init()` already handled registration correctly — null dir assert was not triggered | **Registered** |
+| ~~InlineHelp~~ | `InlineHelp` | Implemented `InlineHelp::PreLoad` body (mirrors Save order) | **Registered** |
 
 ### Stub Function Analysis
 
@@ -417,13 +418,13 @@ Of 1,117 unimplemented functions (weak stubs in `engine_stubs_generated.cpp`):
 | Game logic (HamCharacter, Crowd, MoveDir) | ~150 | Partial — some affect gameplay |
 | Other (crypto, JSON, profile) | ~100 | Minimal |
 
-**Only the 16 Load-family stubs** directly block loading completeness. The rest are either irrelevant to native (Xbox platform, D3D9 renderer, network) or affect features beyond basic loading (audio playback, gameplay logic).
+**All 4 previously-blocked categories now fixed** (2026-03-11). Key fixes:
+1. `InlineHelp::PreLoad` — implemented body mirroring Save order
+2. `TexMovie::Load` — fixed read order (was reading `mIsLocalized` before `sRoot`), pass stream for movie data
+3. Synth types — `SynthPreInit()` for TheSynth singleton, `SampleData::Dealloc` null-guard, `SynthSample::Init()` for allocator
+4. UIList family — already worked via `UIList::Init()`, no fix needed
 
-**Key Load stubs to fix** (ordered by type count unblocked):
-1. `SynthSample::Load`, `Sound::Load` → unblocks 12 audio types
-2. `UIList::SetName` path (not a stub — needs null dir context fix) → unblocks 10 UI types
-3. `TexMovie::Load` → unblocks 1 video type
-4. `InlineHelp::PreLoad` → unblocks 1 UI type
+Bulk load: 200/200 UI files pass, 20/20 SFX files pass. All previously-segfaulting asset loading tests now pass.
 
 ## Key Architecture Notes
 

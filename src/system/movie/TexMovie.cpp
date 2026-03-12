@@ -90,7 +90,7 @@ BEGIN_SAVES(TexMovie)
     mMovie.Save(&bs);
 END_SAVES
 
-INIT_REVS(5, 1)
+INIT_REVS(8, 0)
 
 BEGIN_LOADS(TexMovie)
     LOAD_REVS(bs)
@@ -99,17 +99,19 @@ BEGIN_LOADS(TexMovie)
     LOAD_SUPERCLASS(RndDrawable)
     LOAD_SUPERCLASS(RndPollable)
     bs >> mTex >> mLoop;
-    d >> mIsLocalized;
-    if (d.rev < 4)
-        d >> mIsLocalized;
+    if (d.rev < 4) {
+        bool dummy;
+        bs >> dummy;
+    }
     bs >> sRoot;
-    if (d.rev > 5)
-        d >> mIsLocalized;
-    if (d.rev == 7)
-        d >> mIsLocalized;
-    if ((d.rev > 1) && (d.rev < 3))
-        d >> mIsLocalized;
-    DoBeginMovieFromFile(nullptr, kLoadBack);
+    if (d.rev > 5) {
+        bs >> mIsLocalized;
+    }
+    if (d.rev > 1 && d.rev < 3) {
+        bool dummy;
+        bs >> dummy;
+    }
+    DoBeginMovieFromFile(d.rev > 4 ? &bs : nullptr, kLoadBack);
 END_LOADS
 
 void TexMovie::DrawPreClear() {

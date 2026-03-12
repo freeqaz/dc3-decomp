@@ -26,7 +26,9 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-_CACHE_DB = Path(__file__).resolve().parent.parent.parent / "permuter_cache.db"
+from .repo_paths import get_cache_db_path
+
+_CACHE_DB = get_cache_db_path()
 
 _GHIDRA_SCHEMA = """
 CREATE TABLE IF NOT EXISTS ghidra_stats (

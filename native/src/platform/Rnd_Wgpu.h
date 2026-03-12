@@ -298,7 +298,9 @@ private:
     RndCam* mLastSceneCam = nullptr;
     RndEnviron* mLastSceneEnv = nullptr;
     uint32_t mLastSceneOffset = 0;
-    float mLastCamPosY = 0.0f; // detect same-pointer position changes
+    float mLastCamPosX = 0.0f; // detect same-pointer position changes
+    float mLastCamPosY = 0.0f;
+    float mLastCamPosZ = 0.0f;
 
     // Auto-screenshot capture (env-var controlled)
     std::string mScreenshotDir;

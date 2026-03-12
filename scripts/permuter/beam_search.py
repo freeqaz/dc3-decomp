@@ -20,6 +20,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 import time
 from pathlib import Path
@@ -45,6 +46,49 @@ from .types import (
     variant_file_updates,
     variant_identity_bytes,
 )
+
+
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Complexity estimation for adaptive beam width
+# ---------------------------------------------------------------------------
+
+
+def _estimate_complexity(ctx: FunctionContext | None, diagnosis: Diagnosis | None) -> str:
+    """Estimate function complexity for adaptive beam width sizing.
+
+    Uses lines-of-code from the function body and cluster count from
+    diagnosis to classify as "simple", "medium", or "complex".
+
+    Args:
+        ctx: Parsed function context (may be None if extraction failed).
+        diagnosis: Diagnosis from objdiff scoring (may be None).
+
+    Returns:
+        "simple", "medium", or "complex".
+    """
+    # Estimate LOC
+    loc = 0
+    if ctx is not None and ctx.body_node is not None:
+        loc = ctx.body_node.end_point[0] - ctx.body_node.start_point[0]
+    elif ctx is not None:
+        # Fallback: estimate from full source line count
+        loc = ctx.file_source.count(b"\n")
+
+    # Get cluster count from diagnosis
+    clusters = 0
+    if diagnosis is not None and hasattr(diagnosis, "clusters"):
+        clusters = len(diagnosis.clusters)
+
+    # Classify
+    if loc < 50 and clusters < 3:
+        return "simple"
+    elif loc > 200 or clusters > 8:
+        return "complex"
+    else:
+        return "medium"
 
 
 # ---------------------------------------------------------------------------
@@ -183,20 +227,24 @@ def _select_survivors(
     candidates: list[BeamState],
     width: int,
     diversity_min: int,
-) -> list[BeamState]:
+    reserve_size: int = 0,
+) -> tuple[list[BeamState], list[BeamState]]:
     """Select the top survivors from a pool of scored candidates.
 
     Ensures at least `diversity_min` distinct pattern families are
     represented in the beam (when possible).
+
+    Returns (survivors, reserve) where reserve contains the next best
+    states after survivors, up to `reserve_size`.
     """
     if not candidates:
-        return []
+        return [], []
 
     # Sort by ranking key (descending)
     ranked = sorted(candidates, key=lambda s: s.ranking_key, reverse=True)
 
     if len(ranked) <= width:
-        return ranked
+        return ranked, []
 
     # Phase 1: Fill diversity slots
     survivors: list[BeamState] = []
@@ -211,15 +259,26 @@ def _select_survivors(
         else:
             remaining.append(state)
         if len(survivors) >= width:
-            return survivors[:width]
-
-    # Phase 2: Fill remaining slots by raw ranking
-    for state in remaining:
-        if len(survivors) >= width:
+            survivors = survivors[:width]
+            # Everything left in remaining plus unprocessed ranked items
+            # form the pool for reserve
+            leftover = remaining
             break
-        survivors.append(state)
+    else:
+        leftover = list(remaining)
 
-    return survivors
+    # Phase 2: Fill remaining survivor slots by raw ranking
+    still_left: list[BeamState] = []
+    for state in leftover:
+        if len(survivors) >= width:
+            still_left.append(state)
+        else:
+            survivors.append(state)
+
+    # Phase 3: Build reserve from next-best pruned states
+    reserve = still_left[:reserve_size]
+
+    return survivors, reserve
 
 
 def _escape_beam(
@@ -321,6 +380,36 @@ def _compute_fact_agreement(
     return score
 
 
+def _base_pattern_names(name: str) -> list[str]:
+    """Split composed pattern names into base pattern names."""
+    for prefix in ("compose:", "chain:", "crosscompose:", "merge:", "evo_cross:", "evo_mut:"):
+        if name.startswith(prefix):
+            _, parts = name.split(":", 1)
+            return parts.split("+")
+    return [name]
+
+
+def _accumulate_il_pattern_metrics(
+    totals: dict[str, dict[str, int]],
+    result,
+    bucket_sizes: dict[str, int],
+) -> None:
+    """Accumulate per-pattern IL metrics from analyzed results."""
+    for base_name in _base_pattern_names(result.variant.pattern_name):
+        entry = totals.setdefault(
+            base_name,
+            {"analyzed_variants": 0, "unique_buckets": 0, "duplicate_buckets": 0},
+        )
+        entry["analyzed_variants"] += 1
+        il_hash = result.canonical_il_hash
+        if not il_hash:
+            continue
+        if bucket_sizes.get(il_hash, 0) > 1:
+            entry["duplicate_buckets"] += 1
+        else:
+            entry["unique_buckets"] += 1
+
+
 def _deduplicate_states(states: list[BeamState], file_path: Path) -> list[BeamState]:
     """Remove states with identical source bytes."""
     seen: set[bytes] = set()
@@ -391,6 +480,8 @@ def _expand_state(
     if state.applied_patterns:
         round_hints.last_winner = state.applied_patterns[-1]
     round_hints.last_winner_tags = state.tags
+    round_hints.il_duplicate_patterns = set(state.il_duplicate_patterns)
+    round_hints.il_unique_patterns = set(state.il_unique_patterns)
 
     # Atlas-derived pattern boost/suppress from diagnosis
     if ctx.diagnosis:
@@ -537,6 +628,7 @@ def beam_search(
     result_il_analyzed_variants = 0
     result_il_unique_buckets = 0
     result_il_duplicate_buckets = 0
+    result_il_pattern_metrics: dict[str, dict[str, int]] = {}
     all_validation_results: list = []  # list[ValidationResult] across all depths
 
     original_source = source_path.read_bytes()
@@ -569,6 +661,7 @@ def beam_search(
                 il_analyzed_variants=result_il_analyzed_variants,
                 il_unique_buckets=result_il_unique_buckets,
                 il_duplicate_buckets=result_il_duplicate_buckets,
+                il_pattern_metrics=result_il_pattern_metrics,
             )
 
         # Check for all-noise early exit
@@ -587,6 +680,7 @@ def beam_search(
                 il_analyzed_variants=result_il_analyzed_variants,
                 il_unique_buckets=result_il_unique_buckets,
                 il_duplicate_buckets=result_il_duplicate_buckets,
+                il_pattern_metrics=result_il_pattern_metrics,
             )
 
         # Capture stable target-side guidance
@@ -665,6 +759,25 @@ def beam_search(
         )
         beam = [seed]
 
+    # Adaptive beam width: auto-size based on function complexity
+    if config.auto_width:
+        seed_ctx = _reparse_context(original_source, source_path, function_name)
+        seed_diagnosis = beam[0].diagnosis if beam else None
+        complexity = _estimate_complexity(seed_ctx, seed_diagnosis)
+
+        _COMPLEXITY_SIZING = {
+            "simple": (4, 16),
+            "medium": (8, 24),
+            "complex": (12, 32),
+        }
+        auto_width, auto_expand = _COMPLEXITY_SIZING[complexity]
+        config.width = auto_width
+        config.expand = auto_expand
+        logger.info(
+            "Auto-width: complexity=%s, width=%d, expand=%d",
+            complexity, config.width, config.expand,
+        )
+
     # Cache RB3 source once
     rb3_source = _load_rb3_source(symbol, source_path)
 
@@ -728,6 +841,8 @@ def beam_search(
             scorer.get_baseline(guided=True, ghidra=False, m2c=False)
             results = scorer.score_batch(variant_list, workers=workers)
             il_bucket_sizes: dict[str, int] = {}
+            il_duplicate_pattern_names: dict[int, set[str]] = {}
+            il_unique_pattern_names: dict[int, set[str]] = {}
             build_ok_results = [r for r in results if r.build_success]
             if build_ok_results:
                 top_for_il = sorted(
@@ -745,6 +860,15 @@ def beam_search(
                         continue
                     result.canonical_il_hash = il_hash
                     il_bucket_sizes[il_hash] = il_bucket_sizes.get(il_hash, 0) + 1
+                for result in top_for_il:
+                    il_hash = result.canonical_il_hash
+                    if not il_hash:
+                        continue
+                    base_names = set(_base_pattern_names(result.variant.pattern_name))
+                    if il_bucket_sizes.get(il_hash, 0) > 1:
+                        il_duplicate_pattern_names[id(result.variant)] = base_names
+                    else:
+                        il_unique_pattern_names[id(result.variant)] = base_names
                 if il_bucket_sizes:
                     duplicate_buckets = sum(
                         1 for size in il_bucket_sizes.values() if size > 1
@@ -753,6 +877,12 @@ def beam_search(
                     result_il_analyzed_variants += analyzed
                     result_il_unique_buckets += len(il_bucket_sizes)
                     result_il_duplicate_buckets += duplicate_buckets
+                    for result in top_for_il:
+                        _accumulate_il_pattern_metrics(
+                            result_il_pattern_metrics,
+                            result,
+                            il_bucket_sizes,
+                        )
                     print(
                         f"  IL analysis: {len(il_bucket_sizes)} bucket(s) across "
                         f"{analyzed} top candidate(s), "
@@ -840,6 +970,14 @@ def beam_search(
                     )
                     else 0
                 ),
+                il_duplicate_patterns=frozenset(
+                    set(parent.il_duplicate_patterns)
+                    | il_duplicate_pattern_names.get(id(result.variant), set())
+                ),
+                il_unique_patterns=frozenset(
+                    set(parent.il_unique_patterns)
+                    | il_unique_pattern_names.get(id(result.variant), set())
+                ),
             )
             child_states.append(child)
 
@@ -877,7 +1015,10 @@ def beam_search(
 
         # Dedup and select survivors
         child_states = _deduplicate_states(child_states, source_path)
-        beam = _select_survivors(child_states, config.width, config.diversity)
+        beam, reserve = _select_survivors(
+            child_states, config.width, config.diversity,
+            reserve_size=config.reserve_size,
+        )
 
         if not beam:
             print("  Beam empty — stopping.", file=sys.stderr)
@@ -893,8 +1034,37 @@ def beam_search(
         for state in beam:
             _rediagnose_state(state, source_path, symbol, unit)
 
-        # Stagnation handling
+        # Stagnation handling: try reserve swap before escape
         stagnating = sum(1 for s in beam if s.stagnation_count >= 2)
+
+        # Phase 1: Swap reserve states into stagnating slots
+        if reserve and stagnating > 0:
+            stagnating_indices = [
+                i for i, s in enumerate(beam)
+                if s.stagnation_count >= 2
+            ]
+            swapped = 0
+            for slot_idx in stagnating_indices:
+                if not reserve:
+                    break
+                replacement = reserve.pop(0)
+                replacement.stagnation_count = 0
+                beam[slot_idx] = replacement
+                swapped += 1
+            if swapped > 0:
+                print(
+                    f"  Reserve: swapped {swapped} reserve state(s) "
+                    f"into stagnating slots",
+                    file=sys.stderr,
+                )
+                # Re-diagnose swapped-in reserve states
+                for state in beam:
+                    if state.diagnosis is None:
+                        _rediagnose_state(state, source_path, symbol, unit)
+                # Recount stagnation after reserve swaps
+                stagnating = sum(1 for s in beam if s.stagnation_count >= 2)
+
+        # Phase 2: If still all stagnating, try escape
         if stagnating == len(beam):
             # ALL stagnating — try escape before giving up
             if config.escape > 0 and depth < config.depth:
@@ -989,6 +1159,7 @@ def beam_search(
         il_analyzed_variants=result_il_analyzed_variants,
         il_unique_buckets=result_il_unique_buckets,
         il_duplicate_buckets=result_il_duplicate_buckets,
+        il_pattern_metrics=result_il_pattern_metrics,
     )
 
 
@@ -1054,6 +1225,7 @@ def _build_result(
     il_analyzed_variants: int = 0,
     il_unique_buckets: int = 0,
     il_duplicate_buckets: int = 0,
+    il_pattern_metrics: dict[str, dict[str, int]] | None = None,
 ) -> HillClimbResult:
     """Build a HillClimbResult from beam search data."""
     winning_pattern = None
@@ -1083,6 +1255,7 @@ def _build_result(
         il_analyzed_variants=il_analyzed_variants,
         il_unique_buckets=il_unique_buckets,
         il_duplicate_buckets=il_duplicate_buckets,
+        il_pattern_metrics=dict(il_pattern_metrics or {}),
     )
 
 
@@ -1100,9 +1273,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--source", type=Path, help="Path to .cpp source file")
     parser.add_argument("--function", help="Qualified C++ function name")
     parser.add_argument("--unit", help="Unit name")
-    parser.add_argument("--beam-width", type=int, default=8, help="Beam width (default: 8)")
+    parser.add_argument("--beam-width", type=int, default=None,
+                        help="Beam width (default: auto-sized by complexity; disables auto-width)")
     parser.add_argument("--beam-depth", type=int, default=4, help="Search depth (default: 4)")
-    parser.add_argument("--beam-expand", type=int, default=24, help="Proposals per state (default: 24)")
+    parser.add_argument("--beam-expand", type=int, default=None,
+                        help="Proposals per state (default: auto-sized by complexity; disables auto-width)")
     parser.add_argument("--beam-escape", type=int, default=4, help="Escape budget (default: 4)")
     parser.add_argument("--beam-diversity", type=int, default=3, help="Min diversity (default: 3)")
     parser.add_argument("--workers", type=int, default=0, help="Parallel workers")
@@ -1155,13 +1330,15 @@ def main() -> None:
         from .patterns import get_pattern
         patterns = [get_pattern(p.strip()) for p in args.patterns.split(",")]
 
+    explicit_width = args.beam_width is not None or args.beam_expand is not None
     config = BeamConfig(
-        width=args.beam_width,
+        width=args.beam_width if args.beam_width is not None else 8,
         depth=args.beam_depth,
-        expand=args.beam_expand,
+        expand=args.beam_expand if args.beam_expand is not None else 24,
         escape=args.beam_escape,
         diversity=args.beam_diversity,
         workers=args.workers,
+        auto_width=not explicit_width,
     )
 
     result = beam_search(

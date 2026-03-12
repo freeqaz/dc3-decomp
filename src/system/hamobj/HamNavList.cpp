@@ -1735,9 +1735,13 @@ void HamNavList::DrawShowing() {
 
 #ifdef HX_NATIVE
     RndCam *savedCam = RndCam::Current();
-    RndCam *drawUiCam = TheUI ? TheUI->GetCam() : nullptr;
-    if (drawUiCam && drawUiCam != savedCam) {
-        drawUiCam->Select();
+    // Use the PanelDir's scene camera (e.g. turbo_shell.cam) which frames the
+    // content correctly. Fall back to UI cam only if no scene camera is set.
+    PanelDir *ownerPanel = dynamic_cast<PanelDir*>(DataDir());
+    RndCam *drawCam = (ownerPanel && ownerPanel->Cam()) ? ownerPanel->Cam()
+        : (TheUI ? TheUI->GetCam() : nullptr);
+    if (drawCam && drawCam != savedCam) {
+        drawCam->Select();
     }
 #endif
 
@@ -1762,14 +1766,7 @@ void HamNavList::DrawShowing() {
         mListRibbonResource->mScrollAnims.SetScrollFrame(mScrollBehavior.mScrollProgress);
         mListRibbonResource->SetDisengageFrame(mDisengageSmoother.Level());
         mListRibbonResource->mMode = mRibbonMode;
-#ifdef HX_NATIVE
-        // When no header ribbon resource, draw both active and inactive items
-        // through the main ribbon. On Xbox, the header ribbon handles active items.
-        bool mainEntering = mHeaderRibbonResource ? false : true;
-        mListRibbonResource->Draw(WorldXfm(), mRibbonDrawStates, mainEntering, false);
-#else
         mListRibbonResource->Draw(WorldXfm(), mRibbonDrawStates, false, false);
-#endif
     }
 
     if (mHeaderRibbonResource) {
@@ -1781,8 +1778,8 @@ void HamNavList::DrawShowing() {
     }
 
 #ifdef HX_NATIVE
-    if (drawUiCam && drawUiCam != RndCam::Current()) {
-        drawUiCam->Select();
+    if (drawCam && drawCam != RndCam::Current()) {
+        drawCam->Select();
     }
 #endif
 

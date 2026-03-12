@@ -7,11 +7,15 @@ __pycache__
 .mypy_cache
 .cache/
 .scan_cache.db
+permuter_cache.db*
 venv/
 .claude/*
 !.claude/skills/
 function_analysis/
 scripts/bin/
+CMakeFiles/
+yolo11n-pose.pt
+/Testing/
 
 # Original files
 orig/*

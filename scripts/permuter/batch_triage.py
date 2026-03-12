@@ -19,12 +19,13 @@ import time
 from pathlib import Path
 
 from .diagnosis import diagnose_baseline, is_all_noise
+from .repo_paths import get_decomp_db_path
 from .types import Diagnosis, TriageResult
 
 # Repo root (script lives in scripts/permuter/)
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 OBJDIFF_JSON = REPO_ROOT / "objdiff.json"
-DECOMP_DB = REPO_ROOT / "decomp.db"
+DECOMP_DB = get_decomp_db_path()
 
 from .types import extract_qualified_name
 

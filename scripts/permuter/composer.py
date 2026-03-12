@@ -16,6 +16,7 @@ from typing import Iterator
 
 from .extractor import reparse_variant
 from .patterns.base import Pattern
+from .repo_paths import get_cache_db_path
 from .types import (
     ChainSpec,
     Diagnosis,
@@ -44,6 +45,7 @@ _FOLLOW_UP_MAP: dict[str, list[str]] = {
     "temp_elimination": ["declaration_reorder", "variable_extraction"],
     "member_ref_bind": ["declaration_reorder"],
     "reference_elimination": ["declaration_reorder", "temp_elimination"],
+    "value_address_caching": ["declaration_reorder", "prologue_pressure"],
     "subscript_ref_bind": ["declaration_reorder"],
     "prologue_pressure": ["declaration_reorder", "parameter_live_range"],
     "color_copy_shape": ["statement_reorder", "declaration_reorder"],
@@ -117,7 +119,7 @@ _TAG_FOLLOW_UP_MAP: dict[str, list[str]] = {
     "converted_switch_to_if": ["branch_polarity", "ternary_swap"],
 }
 
-_CACHE_DB = Path(__file__).resolve().parent.parent.parent / "permuter_cache.db"
+_CACHE_DB = get_cache_db_path()
 
 
 def _merged_follow_up_map(patterns: list[Pattern]) -> dict[str, list[str]]:
@@ -559,12 +561,15 @@ def build_adaptive_chains(
                         priority=0.5,
                     )
 
-    # Layer 3: Historical effective pairs from DB
-    effective_pairs = _query_effective_pairs()
-    for p1, p2 in effective_pairs[:5]:
+    # Layer 3: Historical effective pairs from DB (with data-driven confidence)
+    effective_pairs = _query_effective_pairs(hints)
+    for (p1, p2), confidence in effective_pairs[:5]:
+        # Skip suppressed pairs
+        if hints and (p1, p2) in hints.suppress_pairs:
+            continue
         _add_chain(
-            [p1, p2], f"historical: {p1}+{p2} won before",
-            priority=0.6,
+            [p1, p2], f"historical: {p1}+{p2} won before (conf={confidence:.2f})",
+            priority=confidence,
         )
 
     # Layer 4: Diagnosis-driven chains
@@ -725,18 +730,20 @@ def get_compose_pairs(
                 if dst in available:
                     candidates.append((pattern_name, dst, 1.5))
 
-    # Boost pairs seen in DB win history
-    historical = set(_query_effective_pairs())
+    # Boost pairs seen in DB win history, suppress ineffective pairs
+    historical_pairs = _query_effective_pairs(hints)
+    historical_map = {pair: conf for pair, conf in historical_pairs}
+    suppress = hints.suppress_pairs if hints else set()
     for i, (a, b, score) in enumerate(candidates):
-        if (a, b) in historical:
-            candidates[i] = (a, b, score + 1.0)
+        if (a, b) in historical_map:
+            candidates[i] = (a, b, score + historical_map[(a, b)])
 
-    # Sort by score descending and deduplicate
+    # Sort by score descending and deduplicate, skipping suppressed pairs
     candidates.sort(key=lambda x: -x[2])
     seen: set[tuple[str, str]] = set()
     result: list[tuple[str, str]] = []
     for a, b, _ in candidates:
-        if (a, b) not in seen:
+        if (a, b) not in seen and (a, b) not in suppress:
             seen.add((a, b))
             result.append((a, b))
             if len(result) >= max_pairs:
@@ -774,8 +781,18 @@ def _follow_up_names_for(pattern_name: str, tags: frozenset[str]) -> set[str]:
     return companion_names
 
 
-def _query_effective_pairs() -> list[tuple[str, str]]:
-    """Query pattern_runs DB for composed/chained patterns with wins."""
+def _query_effective_pairs(
+    hints: RoundHints | None = None,
+) -> list[tuple[tuple[str, str], float]]:
+    """Query pattern_runs DB for composed/chained pattern pair stats.
+
+    Returns pairs with data-driven confidence scores (wins/(wins+fails))
+    instead of hardcoded priority. Also identifies suppress pairs (5+ runs,
+    0 wins) and stores them in hints.suppress_pairs if available.
+
+    Returns list of ((pattern_a, pattern_b), confidence) sorted by
+    confidence descending.
+    """
     try:
         conn = sqlite3.connect(str(_CACHE_DB))
         conn.row_factory = sqlite3.Row
@@ -787,30 +804,60 @@ def _query_effective_pairs() -> list[tuple[str, str]]:
             conn.close()
             return []
 
+        # Query both wins and failures (not just won=1)
         rows = conn.execute("""
             SELECT pattern, SUM(won) as wins, COUNT(*) as runs
             FROM pattern_runs
-            WHERE (pattern LIKE 'compose:%' OR pattern LIKE 'chain:%') AND won = 1
+            WHERE pattern LIKE 'compose:%' OR pattern LIKE 'chain:%'
             GROUP BY pattern
-            HAVING wins > 0
             ORDER BY wins DESC
-            LIMIT 10
+            LIMIT 20
         """).fetchall()
         conn.close()
 
-        pairs = []
+        # Accumulate per-pair stats
+        pair_stats: dict[tuple[str, str], dict[str, int]] = {}
+
         for r in rows:
             name = r["pattern"]
+            wins = int(r["wins"] or 0)
+            runs = int(r["runs"] or 0)
+            fails = runs - wins
+
+            extracted: list[tuple[str, str]] = []
             if name.startswith("compose:"):
                 parts = name[len("compose:"):].split("+")
                 if len(parts) == 2:
-                    pairs.append((parts[0], parts[1]))
+                    extracted.append((parts[0], parts[1]))
             elif name.startswith("chain:"):
-                # Extract consecutive pairs from chain: "a+b+c" -> (a,b), (b,c)
                 parts = name[len("chain:"):].split("+")
                 for i in range(len(parts) - 1):
-                    pairs.append((parts[i], parts[i + 1]))
-        return pairs
+                    extracted.append((parts[i], parts[i + 1]))
+
+            for pair in extracted:
+                stats = pair_stats.setdefault(pair, {"wins": 0, "fails": 0, "total": 0})
+                stats["wins"] += wins
+                stats["fails"] += fails
+                stats["total"] += runs
+
+        # Identify suppress pairs: 5+ total runs, 0 wins
+        suppress: set[tuple[str, str]] = set()
+        for pair, stats in pair_stats.items():
+            if stats["total"] >= 5 and stats["wins"] == 0:
+                suppress.add(pair)
+
+        if hints is not None:
+            hints.suppress_pairs.update(suppress)
+
+        # Build result with data-driven confidence
+        result: list[tuple[tuple[str, str], float]] = []
+        for pair, stats in pair_stats.items():
+            if stats["wins"] > 0 and pair not in suppress:
+                confidence = stats["wins"] / (stats["wins"] + stats["fails"])
+                result.append((pair, confidence))
+
+        result.sort(key=lambda x: -x[1])
+        return result
     except Exception:
         return []
 

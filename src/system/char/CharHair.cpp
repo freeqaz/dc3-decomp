@@ -240,18 +240,18 @@ void CharHair::SimulateInternal(float fps) {
     float halfWeight = mWeight * -0.5f;
     Vector3 windForce;
     windForce.Zero();
-    if (mWindObj) {
-        if (mStrands[0].Root()) {
+    auto& _ref0 = mWindObj;
+    if (_ref0) {
+        auto& _sub0 = mStrands[0];
+        if (_sub0.Root()) {
             float secs = TheTaskMgr.Seconds(TaskMgr::kRealTime);
-            mWindObj->GetWind(mStrands[0].Root()->WorldXfm().v, secs, windForce);
+            _ref0->GetWind(_sub0.Root()->WorldXfm().v, secs, windForce);
             windForce.x *= recipFps;
             windForce.y *= recipFps;
             windForce.z *= recipFps;
         }
     }
-    stiffPow = 1.0f - stiffPow;
-
-    for (int i = 0; i < mStrands.size(); i++) {
+        for (int i = 0; i < mStrands.size(); i++) {
         Strand &modStrand = mStrands[Mod(i + 1, mStrands.size())];
         Strand &curStrand = mStrands[i];
         if (curStrand.Root() && curStrand.Root()->TransParent()) {
@@ -386,7 +386,7 @@ void CharHair::SimulateInternal(float fps) {
                 Vector3 frictionDiff;
                 Subtract(pt.lastFriction, pt.force, frictionDiff);
                 pt.lastFriction = pt.force;
-                pt.force *= stiffPow;
+                pt.force *= stiffPow = 1.0f - stiffPow;
                 ScaleAddEq(pt.force, frictionDiff, -mFriction);
                 Vector3 movement;
                 Subtract(pt.pos, oldPos, movement);
@@ -683,27 +683,27 @@ CharHair::Strand::Strand(const Strand &rhs)
 }
 
 void CharHair::Strand::SetRoot(RndTransformable *trans) {
-    mRoot = trans;
-    if (!mRoot) {
+    auto& _ref0 = mRoot;
+    _ref0 = trans;
+    if (!_ref0) {
         mPoints.resize(0);
     } else {
-        RndTransformable *root = mRoot;
         float savedLength = mPoints.size() != 0 ? mPoints.back().length : 0.0f;
-        mBaseMat = root->LocalXfm().m;
+        mBaseMat = _ref0->LocalXfm().m;
         SetAngle(mAngle);
 
         int depth = 0;
-        for (RndTransformable *it = root; ; it = it->Children().front()) {
+        for (RndTransformable *it = _ref0; ; it = it->Children().front()) {
             depth++;
             if (it->Children().empty())
                 break;
         }
 
         mPoints.resize(depth);
-        mPoints[0].bone = root;
-        if (!root->Children().empty()) {
+        mPoints[0].bone = _ref0;
+        if (!_ref0->Children().empty()) {
             int idx = 0;
-            for (RndTransformable *it = root; !it->Children().empty(); ) {
+            for (RndTransformable *it = _ref0; !it->Children().empty(); ) {
                 idx++;
                 it = it->Children().front();
                 mPoints[idx].bone = it;

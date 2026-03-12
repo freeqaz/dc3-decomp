@@ -53,10 +53,11 @@ from .extractor import (
 )
 from .patterns import get_pattern, list_patterns
 from .patterns.base import Pattern
+from .repo_paths import get_decomp_db_path
 from .types import FunctionContext, Variant
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-DECOMP_DB = REPO_ROOT / "decomp.db"
+DECOMP_DB = get_decomp_db_path()
 OBJDIFF_JSON = REPO_ROOT / "objdiff.json"
 
 

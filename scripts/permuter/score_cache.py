@@ -15,8 +15,9 @@ import sqlite3
 from pathlib import Path
 from typing import Optional
 
+from .repo_paths import get_cache_db_path
 
-_CACHE_DB = Path(__file__).resolve().parent.parent.parent / "permuter_cache.db"
+_CACHE_DB = get_cache_db_path()
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS score_cache (

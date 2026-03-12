@@ -23,11 +23,12 @@ from scripts.permuter.types import Variant, ScoreResult, extract_qualified_name
 from scripts.permuter.file_util import atomic_write_bytes
 from scripts.permuter.generator import generate_variants
 from scripts.permuter.patterns import get_all_patterns
+from scripts.permuter.repo_paths import get_decomp_db_path
 from scripts.permuter.scorer import md5_file
 from scripts.permuter.extractor import extract_function
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-DB_PATH = REPO_ROOT / "decomp.db"
+DB_PATH = get_decomp_db_path()
 OBJDIFF_CLI = REPO_ROOT / "bin" / "objdiff-cli"
 
 @dataclass

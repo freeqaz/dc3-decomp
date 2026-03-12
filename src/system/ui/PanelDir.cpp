@@ -433,6 +433,9 @@ void PanelDir::Enter() {
             it->Activate();
     }
     // Force enter PropAnims to end frame for initial positioning.
+    // On Xbox, Flows + DTA enter scripts animate these over time; on native we
+    // skip directly to the settled state. Only force "enter" anims — broader
+    // forcing activates Kinect/tutorial overlays that fight with the hide logic.
     // ObjDirItr only traverses formal SubDirs(), not nested RndDir objects
     // in the hash table (like game_mode_icon). Force PropAnims in both.
     for (ObjDirItr<RndPropAnim> pait(this, true); pait != nullptr; ++pait) {

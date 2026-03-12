@@ -14,7 +14,9 @@ import sqlite3
 import time
 from pathlib import Path
 
-_CACHE_DB = Path(__file__).resolve().parent.parent.parent / "permuter_cache.db"
+from .repo_paths import get_cache_db_path
+
+_CACHE_DB = get_cache_db_path()
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS climb_history (

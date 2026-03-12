@@ -30,8 +30,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+from .repo_paths import get_cache_db_path
+
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 DB_PATH = REPO_ROOT / "strategy.db"
+CACHE_DB_PATH = get_cache_db_path()
 BASELINES_DIR = REPO_ROOT / "build" / "373307D9" / "baselines"
 
 
@@ -318,6 +321,118 @@ class StrategyDB:
         conn.commit()
         return len(agg)
 
+    def bulk_load_from_pattern_runs(self, cache_db_path: Path) -> int:
+        """Load strategy records by mining permuter_cache.db's pattern_runs table.
+
+        Aggregates historical pattern outcomes grouped by (pattern, unit_category,
+        diagnosis_category), computing win rates, average deltas, and to-100 counts.
+        Unit paths are categorized via unit_category() before grouping, so
+        different source paths within the same subsystem are merged.
+
+        Args:
+            cache_db_path: Path to permuter_cache.db (opened read-only).
+
+        Returns:
+            Number of strategy records inserted/updated.
+        """
+        if not cache_db_path.exists():
+            return 0
+
+        # Open cache DB read-only
+        cache_uri = f"file:{cache_db_path}?mode=ro"
+        cache_conn = sqlite3.connect(cache_uri, uri=True)
+        cache_conn.row_factory = sqlite3.Row
+
+        # Verify table exists
+        exists = cache_conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='pattern_runs'"
+        ).fetchone()
+        if not exists:
+            cache_conn.close()
+            return 0
+
+        # Fetch all rows — aggregation happens in Python so unit_category()
+        # can normalise the raw unit paths before grouping.
+        rows = cache_conn.execute("""
+            SELECT
+                pattern,
+                COALESCE(unit, '') as unit,
+                COALESCE(diagnosis_category, 'unknown') as diag_cat,
+                won,
+                best_delta,
+                final_pct,
+                symbol
+            FROM pattern_runs
+        """).fetchall()
+        cache_conn.close()
+
+        if not rows:
+            return 0
+
+        # Aggregate in Python: (pattern, unit_cat, diag_cat) -> stats
+        agg: dict[tuple[str, str, str], dict] = defaultdict(
+            lambda: {
+                "wins": 0, "total": 0, "deltas": [],
+                "to_100": 0, "examples": [],
+            }
+        )
+
+        for row in rows:
+            pattern = row["pattern"]
+            unit_cat = unit_category(row["unit"]) if row["unit"] else "unknown"
+            diag_cat = row["diag_cat"]
+            key = (pattern, unit_cat, diag_cat)
+            stats = agg[key]
+            stats["total"] += 1
+            if row["won"]:
+                stats["wins"] += 1
+                sym = row["symbol"]
+                if sym and len(stats["examples"]) < 5:
+                    stats["examples"].append(sym)
+            stats["deltas"].append(row["best_delta"] or 0.0)
+            if (row["final_pct"] or 0.0) >= 100.0:
+                stats["to_100"] += 1
+
+        conn = self._connect()
+        count = 0
+
+        for (pattern, unit_cat, diag_cat), stats in agg.items():
+            avg_delta = (
+                sum(stats["deltas"]) / len(stats["deltas"])
+                if stats["deltas"] else 0.0
+            )
+            conn.execute("""
+                INSERT INTO strategy
+                    (pattern, unit_category, diagnosis_category,
+                     win_count, total_count, avg_delta, to_100_count, examples)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(pattern, unit_category, diagnosis_category) DO UPDATE SET
+                    win_count = excluded.win_count,
+                    total_count = excluded.total_count,
+                    avg_delta = excluded.avg_delta,
+                    to_100_count = excluded.to_100_count,
+                    examples = excluded.examples
+            """, (
+                pattern, unit_cat, diag_cat,
+                stats["wins"], stats["total"], avg_delta,
+                stats["to_100"], json.dumps(stats["examples"]),
+            ))
+            count += 1
+
+        # Record metadata
+        total_runs = len(rows)
+        conn.execute("""
+            INSERT OR REPLACE INTO metadata (key, value)
+            VALUES ('pattern_runs_loaded', ?)
+        """, (str(total_runs),))
+        conn.execute("""
+            INSERT OR REPLACE INTO metadata (key, value)
+            VALUES ('strategy_count_from_runs', ?)
+        """, (str(count),))
+
+        conn.commit()
+        return count
+
     # -- Read operations --
 
     def lookup(
@@ -569,6 +684,28 @@ def record_permuter_result(
         pass  # Recording is best-effort
 
 
+def bulk_load_from_pattern_runs(
+    cache_db_path: Path = CACHE_DB_PATH,
+    strategy_db_path: Path = DB_PATH,
+) -> int:
+    """Mine permuter_cache.db pattern_runs into strategy.db.
+
+    Convenience wrapper around StrategyDB.bulk_load_from_pattern_runs().
+
+    Args:
+        cache_db_path: Path to permuter_cache.db.
+        strategy_db_path: Path to strategy.db (created if needed).
+
+    Returns:
+        Number of strategy records inserted/updated.
+    """
+    db = StrategyDB(strategy_db_path)
+    try:
+        return db.bulk_load_from_pattern_runs(cache_db_path)
+    finally:
+        db.close()
+
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
@@ -595,6 +732,25 @@ def cmd_build(args):
     db.close()
 
     print(f"Created {count} strategy records in {DB_PATH}")
+    print()
+
+    # Show stats
+    db = StrategyDB()
+    stats = db.get_stats()
+    db.close()
+    _print_stats(stats)
+
+
+def cmd_build_from_runs(args):
+    """Build strategy database by mining permuter_cache.db pattern_runs."""
+    cache_path = Path(args.cache_db) if hasattr(args, "cache_db") and args.cache_db else CACHE_DB_PATH
+    if not cache_path.exists():
+        print(f"Cache database not found: {cache_path}", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"Mining pattern_runs from {cache_path}...")
+    count = bulk_load_from_pattern_runs(cache_path)
+    print(f"Loaded {count} strategy records into {DB_PATH}")
     print()
 
     # Show stats
@@ -663,6 +819,9 @@ def main():
 
     sub.add_parser("build", help="Build database from mined patterns")
 
+    bfr = sub.add_parser("build-from-runs", help="Build database from permuter_cache.db pattern_runs")
+    bfr.add_argument("--cache-db", help="Path to permuter_cache.db (default: repo root)")
+
     q = sub.add_parser("query", help="Query strategies for a function")
     q.add_argument("--unit", required=True, help="Unit category (e.g. system/rndobj)")
     q.add_argument("--diagnosis", help="Diagnosis category")
@@ -673,6 +832,8 @@ def main():
     args = parser.parse_args()
     if args.command == "build":
         cmd_build(args)
+    elif args.command == "build-from-runs":
+        cmd_build_from_runs(args)
     elif args.command == "query":
         cmd_query(args)
     elif args.command == "stats":

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import sys
 from typing import Iterator
 
@@ -17,12 +18,21 @@ from .patterns.base import Pattern, get_pattern
 from .composer import compose_variants, chain_variants
 
 _MIN_BUDGET = 3  # minimum variants per relevant pattern
+_BLIND_BUDGET_FRACTION = 0.30  # 30% of normal budget for blind variants
+_LOW_CONFIDENCE_THRESHOLD = 0.5  # below this, region is "low confidence"
 _SAFETY_TIER_WEIGHTS = {
     "conservative": 1.05,
     "normal": 1.0,
     "moderate": 0.95,
     "aggressive": 0.85,
 }
+
+# Bayesian prior parameters for learned priority adjustment
+_BAYESIAN_ALPHA = 1    # Prior pseudo-wins (optimistic prior)
+_BAYESIAN_BETA = 10    # Prior pseudo-total (strength of prior)
+_BASELINE_P = _BAYESIAN_ALPHA / (_BAYESIAN_ALPHA + _BAYESIAN_BETA)  # ~0.091
+_LEARNED_MULTIPLIER_MIN = 0.3
+_LEARNED_MULTIPLIER_MAX = 2.0
 
 
 def _winner_domains(round_hints: RoundHints | None) -> set[str]:
@@ -75,7 +85,47 @@ def _pattern_priorities(
             priority *= round_hints.suppression_factor(pattern.name)
             priority *= round_hints.adaptive_priority_boost(pattern.name)
 
+            # Apply Bayesian multiplier from historical effectiveness data
+            if round_hints.learned_effectiveness:
+                effectiveness = round_hints.learned_effectiveness.get(pattern.name)
+                if effectiveness is not None:
+                    wins_rate, _avg_delta = effectiveness
+                    # Reconstruct total from win_rate to apply Bayesian smoothing
+                    # We don't have raw counts, but the prior still applies:
+                    # P = (win_rate * N + alpha) / (N + beta)
+                    # For simplicity with rates, use:
+                    # P_adjusted = (wins + alpha) / (total + beta)
+                    # Since we only have the rate, assume N large enough
+                    # that P ≈ win_rate, then compute multiplier vs baseline
+                    p_adjusted = wins_rate  # already a rate
+                    # Blend with prior: effective_P = (p * weight + baseline * prior_weight) / (weight + prior_weight)
+                    # Using beta as prior strength (equivalent to beta pseudo-observations)
+                    # This is the standard Bayesian posterior mean for Beta-Binomial
+                    # We approximate: the DB already has enough data per pattern
+                    multiplier = max(
+                        _LEARNED_MULTIPLIER_MIN,
+                        min(
+                            _LEARNED_MULTIPLIER_MAX,
+                            p_adjusted / _BASELINE_P if _BASELINE_P > 0 else 1.0,
+                        ),
+                    )
+                    priority *= multiplier
+
         priorities[pattern.name] = priority
+
+    # Log when learned priorities are applied
+    if round_hints and round_hints.learned_effectiveness:
+        applied_count = sum(
+            1 for p in patterns
+            if p.name in round_hints.learned_effectiveness
+            and priorities.get(p.name, 0) > 0
+        )
+        if applied_count > 0:
+            print(
+                f"Learned priorities: {applied_count} patterns adjusted "
+                f"from {len(round_hints.learned_effectiveness)} historical entries",
+                file=sys.stderr,
+            )
 
     return priorities
 
@@ -149,6 +199,23 @@ def allocate_budgets(
         budgets[best.name] += total_budget - allocated
 
     return budgets
+
+
+def _all_regions_low_confidence(ctx: FunctionContext) -> bool:
+    """Check if all mismatch regions have low confidence.
+
+    Returns True when regions exist but every mismatch in every region
+    has confidence below _LOW_CONFIDENCE_THRESHOLD (e.g. all interpolated
+    at 0.4). Returns False when there are no regions or when any mismatch
+    has high confidence.
+    """
+    if not ctx.mismatch_regions:
+        return False  # No regions — not a low-confidence scenario
+    for region in ctx.mismatch_regions:
+        for m in region.mismatches:
+            if m.confidence >= _LOW_CONFIDENCE_THRESHOLD:
+                return False
+    return True
 
 
 def generate_variants(
@@ -348,6 +415,47 @@ def generate_variants(
                     f"({chain.reason})",
                     file=sys.stderr,
                 )
+
+    # Phase 4: Blind variants when all mismatch regions have low confidence.
+    # When regions exist but are all interpolated (confidence < 0.5), the
+    # region boundaries are unreliable. Generate additional variants with
+    # blind_generation_mode=True so patterns aren't filtered by bad regions.
+    if _all_regions_low_confidence(ctx):
+        blind_budget = max(1, int(max_variants * _BLIND_BUDGET_FRACTION))
+        blind_ctx = dataclasses.replace(ctx, blind_generation_mode=True)
+        blind_budgets = allocate_budgets(
+            patterns, blind_budget, blind_ctx.diagnosis,
+            round_hints=round_hints,
+        )
+        blind_count = 0
+        for pattern in ordered_patterns:
+            budget = blind_budgets.get(pattern.name, 0)
+            if budget == 0:
+                continue
+            count = 0
+            for variant in pattern.generate(blind_ctx):
+                _annotate_scope(variant)
+                source_hash = variant_identity_bytes(ctx.file_path, variant)
+                if source_hash in seen_sources:
+                    dedup_count += 1
+                    continue
+                seen_sources.add(source_hash)
+                yield variant
+                count += 1
+                total += 1
+                blind_count += 1
+                if count >= budget:
+                    break
+                if blind_count >= blind_budget:
+                    break
+            if blind_count >= blind_budget:
+                break
+        if blind_count > 0:
+            print(
+                f"Blind fallback: {blind_count} variants "
+                f"(all regions low confidence)",
+                file=sys.stderr,
+            )
 
     if dedup_count > 0:
         print(

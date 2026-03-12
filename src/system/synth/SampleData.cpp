@@ -18,6 +18,13 @@ void SampleData::SetAllocator(SampleDataAllocFunc a, SampleDataFreeFunc f) {
 void SampleData::Dealloc() {
     Hmx::CRC crc;
     crc.mCRC = mCRC.mCRC;
+#ifdef HX_NATIVE
+    if (!sFree) {
+        mData = 0;
+        mCRC.mCRC = 0;
+        return;
+    }
+#endif
     if (crc.mCRC == 0 || !TheWavMgr->ReleaseRes(crc)) {
         sFree(mData, "SampleData.cpp", 196, "SampleData");
     }

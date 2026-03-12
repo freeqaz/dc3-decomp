@@ -135,6 +135,19 @@ bool FlowAnimate::Activate() {
     mStopRequested = false;
     PushDrivenProperties();
     RndAnimatable *anim = (RndAnimatable *)mAnim;
+#ifdef HX_NATIVE
+    {
+        static int sLogFlows = -1;
+        if (sLogFlows == -1) {
+            const char *env = getenv("MILO_DEBUG_FLOW_ACTIVATE");
+            sLogFlows = (env && env[0] && strcmp(env, "0") != 0) ? 1 : 0;
+        }
+        if (sLogFlows) {
+            printf("  FlowAnimate::Activate '%s' anim=%p enable=%d period=%.1f\n",
+                   Name(), (void *)anim, (int)mEnable, mPeriod);
+        }
+    }
+#endif
     if (anim) {
         if (mImmediateRelease) {
             mAnimTask = nullptr;
@@ -183,17 +196,16 @@ bool FlowAnimate::Activate() {
 
 void FlowAnimate::Execute(QueueState state) {
     FLOW_LOG("Execute: state = %i\n", state);
-    auto& _ref0 = mAnimTask;
     if (IsRunning()) {
-        if (_ref0 && kIgnore == (int)state) {
-            _ref0->mListener = NULL;
+        if (mAnimTask && kIgnore == (int)state) {
+            mAnimTask->mListener = NULL;
             if (mStopMode != kReleaseAndContinue) {
-                AnimTask *task = _ref0;
+                AnimTask *task = mAnimTask;
                 if (task) {
                     delete task;
                 }
             }
-            _ref0 = nullptr;
+            mAnimTask = nullptr;
             FLOW_LOG("Timed Release From Parent \n");
             Timer timer;
             timer.Reset();
@@ -206,43 +218,41 @@ void FlowAnimate::Execute(QueueState state) {
         if (state == kQueue) {
             mStopDeferred = false;
             mDeferredStopMode = 0;
+            Task *task;
             if (mEnable) {
                 float period = mPeriod;
                 bool wrap = mWrap;
                 int ease = mEase;
                 Symbol type = mType;
                 int rate = mRate;
-                float easePower = mEasePower;
-                RndAnimatable *anim = (RndAnimatable *)mAnim;
-                Task *task;
                 if (!(period == 0.0f)) {
+                    float easePower = mEasePower;
                     float end = mEnd;
                     float start = mStart;
-                    float blend = mBlend;
                     float delay = mDelay;
-                    task = anim->Animate(
-                        blend, false, delay, (RndAnimatable::Rate)rate, start, end,
+                    float blend = mBlend;
+                    task = mAnim->Animate(
+                        blend, mWait, delay, (RndAnimatable::Rate)rate, start, end,
                         period, 1.0f, type, this, (EaseType)ease, easePower, wrap
                     );
                 } else {
+                    float easePower = mEasePower;
                     float scale = mScale;
                     float end = mEnd;
                     float start = mStart;
-                    float blend = mBlend;
                     float delay = mDelay;
-                    task = anim->Animate(
-                        blend, false, delay, (RndAnimatable::Rate)rate, start, end,
+                    float blend = mBlend;
+                    task = mAnim->Animate(
+                        blend, mWait, delay, (RndAnimatable::Rate)rate, start, end,
                         0.0f, scale, type, this, (EaseType)ease, easePower, wrap
                     );
                 }
-                _ref0 = static_cast<AnimTask *>(task);
             } else {
                 float delay = mDelay;
                 float blend = mBlend;
-                RndAnimatable *anim = (RndAnimatable *)mAnim;
-                Task *task = anim->Animate(blend, false, delay, this, kEaseLinear, 2.0f, false);
-                _ref0 = static_cast<AnimTask *>(task);
+                task = mAnim->Animate(blend, mWait, delay, this, kEaseLinear, 0.0f, false);
             }
+            mAnimTask = static_cast<AnimTask *>(task);
         } else if (state == kIgnore) {
             mFlowParent->ChildFinished(this);
         }
@@ -250,12 +260,16 @@ void FlowAnimate::Execute(QueueState state) {
 }
 
 void FlowAnimate::ChildFinished(FlowNode *node) {
-    FLOW_LOG("Child Finished\n");
+    FLOW_LOG("Child Finished of class:%s\n", node->ClassName());
     mRunningNodes.remove(node);
-    auto& _ref1 = mFlowParent;
     if (mRunningNodes.empty() && !mAnimTask && !mImmediateRelease) {
-        if (_ref1)
-            _ref1->ChildFinished(this);
+        FLOW_LOG("Timed Release From Parent \n");
+        Timer timer;
+        timer.Reset();
+        timer.Start();
+        mFlowParent->ChildFinished(this);
+        timer.Stop();
+        TheFlowMgr->AddMs(timer.Ms());
     }
 }
 
@@ -306,7 +320,7 @@ void FlowAnimate::OnAnimEvent(Symbol sym) {
         }
     } else {
         if (sym == sStop) {
-            if (mDeferredStopMode == kStopBetweenMarkers || mDeferredStopMode == kStopOnMarker) {
+            if (mDeferredStopMode == kStopOnMarker || mDeferredStopMode == kStopBetweenMarkers) {
                 TheFlowMgr->QueueCommand(this, kIgnore);
             }
             mDeferredStopMode = 0;

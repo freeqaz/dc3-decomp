@@ -1175,7 +1175,7 @@ static float ComputeSpotBlend(int i, float f) {
 }
 
 void LightPreset::Animate(float f) {
-    if (1.1920929E-7f > (unsigned int)(int)f)
+    if (f < 1.1920929E-7f)
         return;
     MILO_ASSERT(mSpotlights.size() == mSpotlightState.size(), 0x35a);
     for (uint i = 0; i != mSpotlights.size(); i++) {

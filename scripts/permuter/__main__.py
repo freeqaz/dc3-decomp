@@ -13,6 +13,7 @@ from .extractor import extract_function
 from .generator import generate_variants
 from .scorer import Scorer
 from .patterns import get_all_patterns, get_pattern, list_patterns
+from .repo_paths import get_decomp_db_path
 from .types import ScoreResult
 
 
@@ -100,7 +101,7 @@ def resolve_from_db(symbol: str) -> tuple[str, Path, str] | None:
     import re
     import sqlite3
 
-    db_path = Path("decomp.db")
+    db_path = get_decomp_db_path()
     if not db_path.exists():
         return None
 

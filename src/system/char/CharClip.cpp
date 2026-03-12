@@ -173,7 +173,7 @@ void CharClip::Transitions::Save(BinStream &bs) {
 void CharClip::Transitions::Load(BinStreamRev &d, int oldRev) {
     Clear();
     static ObjectDir *sDir;
-    if (oldRev < 8) {
+    if ((int)(int)oldRev <= 7) {
         int num;
         d >> num;
         if (num > 0 && mOwner->Dir() != sDir) {
@@ -216,7 +216,7 @@ void CharClip::Transitions::Load(BinStreamRev &d, int oldRev) {
 #endif
         NodeVector *it = start;
 
-        for (int i = 0; i < numNodes; i++) {
+        for (int i = 0; numNodes > i; i++) {
             char buf[0x100];
             d.stream.ReadString(buf, 0x100);
             CharClip *clip = mOwner->Dir()->Find<CharClip>(buf, false);

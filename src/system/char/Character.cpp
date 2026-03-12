@@ -917,7 +917,8 @@ void Character::DrawLodOrShadow(int lod, DrawMode drawMode) {
             return;
         }
     } else {
-        if (drawMode & 1) {
+        bool _bit0 = (drawMode && 1) != 0;
+        if (_bit0) {
             RndEnvironTracker tracker(mEnv, &WorldXfm().v);
             DrawShowing();
             if (drawMode == 1) {
@@ -1008,11 +1009,9 @@ bool CharPollableSorter::ChangedBy(Dep *a, Dep *b) {
 }
 
 void CharPollableSorter::Sort(std::vector<RndPollable *> &polls) {
-    auto _tmp0 = _ref0.size();
-    const auto& _ref0 = polls;
     std::vector<Dep *> deps;
-    deps.reserve(_tmp0);
-    for (int i = _ref0.size() - 1, last = i; i >= 0; i--) {
+    deps.reserve(polls.size());
+    for (int i = polls.size() - 1, last = i; i >= 0; i--) {
         CharPollable *c = dynamic_cast<CharPollable *>(polls[i]);
         if (c) {
             Dep &dep = mDeps[c];
@@ -1050,7 +1049,7 @@ void CharPollableSorter::Sort(std::vector<RndPollable *> &polls) {
     }
 
     std::list<Dep *> otherDepList;
-    for (int i = 0; deps.size() > i; i++) {
+    for (int i = 0; i < deps.size(); i++) {
         Dep *curDep = deps[i];
         std::list<Dep *>::iterator it = otherDepList.begin();
         for (; it != otherDepList.end(); ++it) {

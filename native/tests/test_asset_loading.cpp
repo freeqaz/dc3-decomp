@@ -559,7 +559,8 @@ TEST_F(AssetLoadingTest, BulkLoadAllFiles) {
     std::string category = catFilter ? catFilter : "all";
 
     const char *limitStr = getenv("MILO_BULK_LIMIT");
-    int limit = limitStr ? atoi(limitStr) : 0;
+    const char *bulkAll = getenv("MILO_BULK_ALL");
+    int limit = limitStr ? atoi(limitStr) : (bulkAll && std::string(bulkAll) == "1") ? 0 : 20;
 
     // Collect all .milo_xbox files
     std::vector<std::string> allFiles;
@@ -620,6 +621,10 @@ TEST_F(AssetLoadingTest, BulkLoadAllFiles) {
 }
 
 // Per-category tests — can run in parallel with ctest -j$(nproc)
+// Default subset size for large categories (sfx, songs).
+// Set MILO_BULK_ALL=1 to load every file instead of a subset.
+static const int kDefaultSubsetSize = 5;
+
 static void RunCategoryBulkLoad(const char *category) {
     std::string root = GetMiloLibRoot();
     if (root.empty()) {
@@ -642,11 +647,28 @@ static void RunCategoryBulkLoad(const char *category) {
         return;
     }
 
-    printf("Category '%s': %d files\n", category, (int)files.size());
+    // For large categories, only test a spread-out subset by default.
+    // MILO_BULK_ALL=1 runs the full set.
+    const char *bulkAll = std::getenv("MILO_BULK_ALL");
+    bool runAll = bulkAll && std::string(bulkAll) == "1";
+    std::vector<std::string> subset;
+    if (!runAll && (int)files.size() > kDefaultSubsetSize) {
+        // Pick evenly spaced files for coverage across the category
+        for (int i = 0; i < kDefaultSubsetSize; i++) {
+            int idx = i * (int)files.size() / kDefaultSubsetSize;
+            subset.push_back(files[idx]);
+        }
+        printf("Category '%s': %d files (testing subset of %d, set MILO_BULK_ALL=1 for all)\n",
+               category, (int)files.size(), (int)subset.size());
+    } else {
+        subset = files;
+        printf("Category '%s': %d files\n", category, (int)subset.size());
+    }
+
     int passed = 0, failed = 0;
     std::vector<std::string> failures;
 
-    for (auto &path : files) {
+    for (auto &path : subset) {
         ObjectDir *dir = TryLoadStandalone(path);
         if (dir) {
             passed++;

@@ -342,15 +342,16 @@ static void DrawBounds(Vector3 lookDir, const Hmx::Matrix3 &rotMat, const Vector
 
 void CharLookAt::Highlight() {
     if (mSource && mTarget) {
+        RndTransformable *source = GetSource();
         RndTransformable *target = mTarget;
         RndGraph *graph = RndGraph::GetOneFrame();
         Hmx::Color red(1, 0, 0, 1);
-        RndTransformable *source = GetSource();
         graph->AddLine(source->WorldXfm().v, target->WorldXfm().v, red, false);
         RndTransformable *parent = mPivot->TransParent();
         Transform parentXfm(parent->WorldXfm());
         const Vector3 &pivotPos = mPivot->WorldXfm().v;
-        DrawBounds(Vector3(mLookLimits.mMin.x, mLookLimits.mMin.y, 0), parentXfm.m, pivotPos, graph);
+        auto _tmp0 = Vector3(mLookLimits.mMin.x, mLookLimits.mMin.y, 0);
+        DrawBounds(_tmp0, parentXfm.m, pivotPos, graph);
         DrawBounds(Vector3(mLookLimits.mMax.x, mLookLimits.mMin.y, 0), parentXfm.m, pivotPos, graph);
         DrawBounds(Vector3(0, mLookLimits.mMin.y, mLookLimits.mMin.z), parentXfm.m, pivotPos, graph);
         DrawBounds(Vector3(0, mLookLimits.mMin.y, mLookLimits.mMax.z), parentXfm.m, pivotPos, graph);

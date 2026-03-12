@@ -14,10 +14,13 @@ from __future__ import annotations
 import re
 import sqlite3
 import sys
+import time
 from pathlib import Path
 from typing import Optional
 
-_DB_PATH = Path(__file__).resolve().parents[2] / "decomp.db"
+from .repo_paths import get_decomp_db_path
+
+_DB_PATH = get_decomp_db_path()
 
 # ---------------------------------------------------------------------------
 # Circuit breaker for Ghidra MCP fetches
@@ -26,6 +29,9 @@ GHIDRA_MAX_FAILURES = 3  # consecutive failures before the breaker trips
 
 _ghidra_consecutive_failures: int = 0
 _ghidra_circuit_open: bool = False
+_ghidra_circuit_trip_time: float = 0.0
+_ghidra_reset_interval: float = 300.0  # 5 minutes default
+_ghidra_backoff_multiplier: float = 1.0
 
 
 class GhidraCircuitOpen(Exception):
@@ -34,28 +40,66 @@ class GhidraCircuitOpen(Exception):
 
 
 def ghidra_circuit_tripped() -> bool:
-    """Return True if the circuit breaker is open (Ghidra is down)."""
-    return _ghidra_circuit_open
+    """Return True if the circuit breaker is open (Ghidra is down).
+
+    If the breaker is open but enough time has elapsed (based on the reset
+    interval and backoff multiplier), returns False to allow a probe attempt.
+    """
+    if not _ghidra_circuit_open:
+        return False
+    elapsed = time.time() - _ghidra_circuit_trip_time
+    if elapsed >= _ghidra_reset_interval * _ghidra_backoff_multiplier:
+        return False  # allow one probe attempt
+    return True
+
+
+def set_ghidra_retry_interval(seconds: float) -> None:
+    """Override the base retry interval for circuit breaker auto-reset.
+
+    The actual interval used is ``seconds * backoff_multiplier``.
+    """
+    global _ghidra_reset_interval
+    _ghidra_reset_interval = seconds
 
 
 def _ghidra_record_success() -> None:
-    global _ghidra_consecutive_failures, _ghidra_circuit_open
+    global _ghidra_consecutive_failures, _ghidra_circuit_open, _ghidra_backoff_multiplier
     _ghidra_consecutive_failures = 0
-    # Don't auto-close — once tripped, stay tripped for this process
+    if _ghidra_circuit_open:
+        _ghidra_circuit_open = False
+        _ghidra_backoff_multiplier = 1.0
+        print(
+            "  [GHIDRA] Circuit breaker recovered — Ghidra is responding again",
+            file=sys.stderr,
+            flush=True,
+        )
 
 
 def _ghidra_record_failure() -> None:
     global _ghidra_consecutive_failures, _ghidra_circuit_open
+    global _ghidra_circuit_trip_time, _ghidra_backoff_multiplier
     _ghidra_consecutive_failures += 1
-    if _ghidra_consecutive_failures >= GHIDRA_MAX_FAILURES and not _ghidra_circuit_open:
+    if _ghidra_consecutive_failures >= GHIDRA_MAX_FAILURES:
+        was_already_open = _ghidra_circuit_open
         _ghidra_circuit_open = True
-        print(
-            f"  [GHIDRA] Circuit breaker tripped after "
-            f"{_ghidra_consecutive_failures} consecutive failures — "
-            f"disabling Ghidra fetches for this run",
-            file=sys.stderr,
-            flush=True,
-        )
+        _ghidra_circuit_trip_time = time.time()
+        if was_already_open:
+            # Re-tripped after a probe attempt failed — increase backoff
+            _ghidra_backoff_multiplier = min(_ghidra_backoff_multiplier * 2.0, 16.0)
+            print(
+                f"  [GHIDRA] Circuit breaker re-tripped — "
+                f"next retry in {_ghidra_reset_interval * _ghidra_backoff_multiplier:.0f}s",
+                file=sys.stderr,
+                flush=True,
+            )
+        else:
+            print(
+                f"  [GHIDRA] Circuit breaker tripped after "
+                f"{_ghidra_consecutive_failures} consecutive failures — "
+                f"next retry in {_ghidra_reset_interval * _ghidra_backoff_multiplier:.0f}s",
+                file=sys.stderr,
+                flush=True,
+            )
 
 
 def _connect() -> sqlite3.Connection:
@@ -163,7 +207,7 @@ def get_or_cache_decompilation(symbol: str) -> str | None:
     Raises ``GhidraCircuitOpen`` when the circuit breaker has tripped,
     signalling that Ghidra is down and the caller should stop.
     """
-    if _ghidra_circuit_open:
+    if ghidra_circuit_tripped():
         raise GhidraCircuitOpen("Ghidra circuit breaker is open")
 
     cached = get_decompilation(symbol)
@@ -171,7 +215,7 @@ def get_or_cache_decompilation(symbol: str) -> str | None:
         return cached
 
     fetched = _decompile_via_ghidra(symbol)
-    if _ghidra_circuit_open:
+    if ghidra_circuit_tripped():
         raise GhidraCircuitOpen("Ghidra circuit breaker tripped during fetch")
     if not fetched:
         return None

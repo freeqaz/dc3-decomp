@@ -212,6 +212,23 @@ void DrawMeshImmediate(RndMesh* mesh) {
     MaterialParams matParams = BuildMaterialParams(mat, isTextMesh);
     heuristics |= matParams.heuristics;
 
+    // Zero-alpha floor: on Xbox, Flow/DTA scripts animate background mesh
+    // material alphas at runtime. On native those scripts don't run, leaving
+    // many srcAlpha meshes at alpha=0 (invisible). Apply a modest minimum
+    // for decorative background meshes; skip effects that should stay hidden.
+    if (!isTextMesh && matBlend == BaseMaterial::kBlendSrcAlpha
+        && matParams.uniforms.color[3] < 0.01f) {
+        const char* n = mesh->Name();
+        // Keep effects, debloom, shields (Kinect), flash, and blockers at zero
+        bool isEffect = (strstr(n, "flash") || strstr(n, "debloom")
+            || strstr(n, "shield_") || strstr(n, "ribbon_blocker")
+            || strstr(n, "char_pl_") || strstr(n, "final_impact"));
+        if (!isEffect) {
+            matParams.uniforms.color[3] = 0.20f;
+            heuristics |= kHeuristicZeroAlphaFix;
+        }
+    }
+
     uint32_t matOffset = gWgpuRnd->MaterialRing().Write(
         gWgpuRnd->Gpu().Queue(), &matParams.uniforms, sizeof(matParams.uniforms));
 

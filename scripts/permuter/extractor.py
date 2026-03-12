@@ -2,16 +2,44 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
+from collections import OrderedDict
 from pathlib import Path
 
 import tree_sitter_cpp as tscpp
-from tree_sitter import Language, Parser, Node
+from tree_sitter import Language, Parser, Node, Tree
 
 from .types import FunctionContext, PreprocRegion
 
 CPP_LANGUAGE = Language(tscpp.language())
 _PARSER = Parser(CPP_LANGUAGE)
+
+_AST_CACHE_MAX = 50
+_ast_cache: OrderedDict[bytes, Tree] = OrderedDict()
+
+
+def _cached_parse(source: bytes) -> Tree:
+    """Parse source bytes with LRU caching keyed by md5 digest."""
+    key = hashlib.md5(source).digest()
+    if key in _ast_cache:
+        _ast_cache.move_to_end(key)
+        return _ast_cache[key]
+    tree = _PARSER.parse(source)
+    _ast_cache[key] = tree
+    if len(_ast_cache) > _AST_CACHE_MAX:
+        _ast_cache.popitem(last=False)
+    return tree
+
+
+def ast_cache_stats() -> dict:
+    """Return current cache size and max capacity."""
+    return {"size": len(_ast_cache), "max": _AST_CACHE_MAX}
+
+
+def ast_cache_clear() -> None:
+    """Clear the AST parse cache."""
+    _ast_cache.clear()
 
 # Synthetic wrapper for reparsing macro bodies
 _SYNTHETIC_PREFIX = b"void _f() {\n"
@@ -368,7 +396,7 @@ def reparse_variant(
     if func_name is None:
         raise ValueError("Cannot determine function name from original context")
 
-    tree = _PARSER.parse(new_source)
+    tree = _cached_parse(new_source)
 
     for func_node in _find_all_function_defs(tree.root_node):
         name = _get_function_name(func_node)
@@ -431,7 +459,7 @@ def extract_function(file_path: Path, func_name: str) -> FunctionContext:
         ValueError: If function not found (includes list of available functions)
     """
     source = file_path.read_bytes()
-    tree = _PARSER.parse(source)
+    tree = _cached_parse(source)
 
     available: list[str] = []
 

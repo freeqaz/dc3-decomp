@@ -15,6 +15,7 @@ from .header_pattern_bridge import (
     discover_header_pattern_variants,
     supported_header_patterns,
 )
+from .repo_paths import get_decomp_db_path
 from .header_variant_scorer import HeaderVariantScore, HeaderVariantScorer
 from .header_tail_call import discover_header_tail_call_variants
 from .patterns import get_pattern
@@ -46,8 +47,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--db",
         type=Path,
-        default=Path("decomp.db"),
-        help="Path to decomp.db (default: ./decomp.db)",
+        default=get_decomp_db_path(),
+        help="Path to decomp.db (default: shared permuter DB root)",
     )
     parser.add_argument(
         "--project-root",

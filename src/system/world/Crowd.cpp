@@ -88,8 +88,7 @@ WorldCrowd::WorldCrowd()
       mModifyStamp(0) {
     if (gNumCrowd++ == 0) {
         int w, h, bpp;
-        auto _tmp0 = GetGfxMode();
-        if (_tmp0 == kNewGfx) {
+        if (GetGfxMode() == kNewGfx) {
             w = 256;
             h = 512;
             bpp = 32;
@@ -99,8 +98,7 @@ WorldCrowd::WorldCrowd()
             bpp = 16;
         }
         for (int i = 0; i < kNumLods; i++) {
-            auto _tmp1 = Hmx::Object::New<RndTex>();
-            gImpostorTex[i] = _tmp1;
+            gImpostorTex[i] = Hmx::Object::New<RndTex>();
             gImpostorTex[i]->SetBitmap(w, h, bpp, RndTex::kRendered, true, nullptr);
         }
         RELEASE(gImpostorMat);
@@ -115,9 +113,8 @@ WorldCrowd::WorldCrowd()
         mat->SetTexWrap(kTexWrapClamp);
         mat->SetPerPixelLit(false);
         mat->SetPointLights(true);
-        auto _tmp2 = Hmx::Object::New<RndCam>();
         CreateAndSetMetaMat(mat);
-        gImpostorCamera = _tmp2;
+        gImpostorCamera = Hmx::Object::New<RndCam>();
         SetMatAndCameraLod();
     }
 }
@@ -575,17 +572,18 @@ void WorldCrowd::Force3DCrowd(bool force) {
         Set3DCharAll();
     } else {
         SetFullness(1, 1);
+        Hmx::Object *obj = this;
         std::vector<std::pair<int, int> > v;
-        Set3DCharList(v, this);
+        Set3DCharList(v, obj);
     }
 }
 
 RndMesh *WorldCrowd::BuildBillboard(Character *c, float height) {
+    float halfHeight = height * 0.5f;
     c->GetSphere().GetRadius();
     RndMesh *mesh = Hmx::Object::New<RndMesh>();
-    std::vector<RndMesh::Face> &faces = mesh->Faces();
-    float halfHeight = height * 0.5;
     RndMesh::VertVector &verts = mesh->Verts();
+    std::vector<RndMesh::Face> &faces = mesh->Faces();
     float halfWidth = halfHeight * 0.5f;
     verts.resize(4);
     float negHalfWidth = -halfWidth;
@@ -706,9 +704,9 @@ void WorldCrowd::Reset3DCrowd() {
             InstanceList &instances = multiMesh->Instances();
             InstanceList::iterator instIt = instances.begin();
             int curInstIdx = 0;
-            for (int i = 0; (unsigned int)i < (int)it->m3DCharsCreated.size(); i++) {
+            for (int i = 0; (unsigned int)i != it->m3DCharsCreated.size(); i++) {
                 int targetInstIdx = (int)(intptr_t)it->m3DCharsCreated[i].mHandle;
-                while (curInstIdx < targetInstIdx) {
+                while (curInstIdx != targetInstIdx) {
                     ++instIt;
                     curInstIdx++;
                 }
@@ -1035,10 +1033,7 @@ void WorldCrowd::DrawShowing() {
     MILO_ASSERT(!dynamic_cast<RndMat*>(gImpostorMat->NextPass()), 0x3A0);
     std::vector<Hmx::Rect> rects;
     rects.reserve(12);
-    {
-        auto charIt = mCharacters.begin();
-        if (charIt != mCharacters.end()) {
-            do {
+    FOREACH (charIt, mCharacters) {
         Character *curChar = charIt->mDef.mChar;
         RndMultiMesh *mmesh = charIt->mMMesh;
         if (curChar && mmesh && !mShow3DOnly
@@ -1252,10 +1247,6 @@ void WorldCrowd::DrawShowing() {
                 // --- Draw billboarded multimesh instances ---
                 DrawMultiMeshWithEnviron(mmesh);
             }
-        }
-    
-                ++charIt;
-            } while (charIt != mCharacters.end());
         }
     }
 }

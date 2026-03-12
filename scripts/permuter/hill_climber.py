@@ -84,6 +84,36 @@ def install_signal_handler():
     return signal.signal(signal.SIGINT, _sigint_handler)
 
 
+def _base_pattern_names(name: str) -> list[str]:
+    """Split composed pattern names into base pattern names."""
+    for prefix in ("compose:", "chain:", "crosscompose:", "merge:", "evo_cross:", "evo_mut:"):
+        if name.startswith(prefix):
+            _, parts = name.split(":", 1)
+            return parts.split("+")
+    return [name]
+
+
+def _accumulate_il_pattern_metrics(
+    totals: dict[str, dict[str, int]],
+    result,
+    bucket_sizes: dict[str, int],
+) -> None:
+    """Accumulate per-pattern IL metrics from analyzed results."""
+    for base_name in _base_pattern_names(result.variant.pattern_name):
+        entry = totals.setdefault(
+            base_name,
+            {"analyzed_variants": 0, "unique_buckets": 0, "duplicate_buckets": 0},
+        )
+        entry["analyzed_variants"] += 1
+        il_hash = result.canonical_il_hash
+        if not il_hash:
+            continue
+        if bucket_sizes.get(il_hash, 0) > 1:
+            entry["duplicate_buckets"] += 1
+        else:
+            entry["unique_buckets"] += 1
+
+
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 _BANNER_START = b"/* ===== PERMUTER LOCK"
@@ -284,16 +314,16 @@ def parse_args() -> argparse.Namespace:
         help="Disable beam search, use greedy hill climbing",
     )
     parser.add_argument(
-        "--beam-width", type=int, default=8,
-        help="Beam width — survivors per depth (default: 8)",
+        "--beam-width", type=int, default=None,
+        help="Beam width — survivors per depth (default: auto-sized; disables auto-width)",
     )
     parser.add_argument(
         "--beam-depth", type=int, default=4,
         help="Beam depth — expansion rounds (default: 4)",
     )
     parser.add_argument(
-        "--beam-expand", type=int, default=24,
-        help="Proposals per state per depth (default: 24)",
+        "--beam-expand", type=int, default=None,
+        help="Proposals per state per depth (default: auto-sized; disables auto-width)",
     )
     parser.add_argument(
         "--beam-escape", type=int, default=4,
@@ -310,6 +340,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--no-validate", action="store_false", dest="validate",
         help="Disable validation tier display",
+    )
+    parser.add_argument(
+        "--no-learned-priority", action="store_true",
+        help="Disable Bayesian priority adjustment from historical pattern stats",
     )
     return parser.parse_args()
 
@@ -333,6 +367,7 @@ def hill_climb(
     adaptive: bool = False,
     constrained: bool = False,
     validate: bool = True,
+    no_learned_priority: bool = False,
 ) -> HillClimbResult:
     """Run the hill-climbing loop for a single function.
 
@@ -353,6 +388,7 @@ def hill_climb(
         adaptive: Enable adaptive per-round pattern suppression/boosting.
         constrained: Enable constraint-directed synthesis pre-pass.
         validate: Show per-variant validation tiers in output.
+        no_learned_priority: Disable Bayesian priority adjustment from DB.
 
     Returns:
         HillClimbResult with full session history.
@@ -369,6 +405,22 @@ def hill_climb(
     round_hints: RoundHints | None = None
     if chain or adaptive:
         round_hints = RoundHints()
+        round_hints.no_learned_priority = no_learned_priority
+
+        # Load historical pattern effectiveness data (unless disabled)
+        if not no_learned_priority:
+            try:
+                from .pattern_stats import query_pattern_effectiveness
+                effectiveness = query_pattern_effectiveness()
+                if effectiveness:
+                    round_hints.learned_effectiveness = effectiveness
+                    print(
+                        f"Loaded learned priorities: {len(effectiveness)} patterns "
+                        f"from historical data",
+                        file=sys.stderr,
+                    )
+            except Exception:
+                pass  # Graceful fallback — DB may not exist
     start_time = time.time()
     rounds: list[RoundResult] = []
     initial_percent = 0.0
@@ -382,6 +434,7 @@ def hill_climb(
     result_il_analyzed_variants = 0
     result_il_unique_buckets = 0
     result_il_duplicate_buckets = 0
+    result_il_pattern_metrics: dict[str, dict[str, int]] = {}
     all_validation_results: list[ValidationResult] = []
 
     # Pattern stats tracking
@@ -557,6 +610,71 @@ def hill_climb(
                             print(line, file=sys.stderr)
                 except Exception:
                     ctx.target_facts = None
+
+                # Wire target_facts and strategy DB boosts into round_hints
+                if round_hints:
+                    # Wire target_facts pattern recommendations
+                    if result_fact_boosts:
+                        round_hints.atlas_boost_patterns.update(result_fact_boosts)
+                    if result_fact_suppresses:
+                        round_hints.atlas_suppress_patterns.update(result_fact_suppresses)
+
+                    # Apply strategy DB boosts (graceful fallback if DB missing)
+                    try:
+                        from .strategy_db import apply_strategy_boosts
+                        unit_cat = None
+                        if unit:
+                            from .strategy_db import unit_category as _unit_cat
+                            unit_cat = _unit_cat(unit)
+                        diag_cat = None
+                        if scorer.diagnosis:
+                            from .strategy_db import classify_diagnosis_category
+                            diag_info = {
+                                "has_regswap": bool(scorer.diagnosis.reg_swap_pairs),
+                                "has_structural": scorer.diagnosis.replace_real > 0 or bool(scorer.diagnosis.clusters),
+                                "has_prologue": scorer.diagnosis.has_prologue_mismatch,
+                                "has_offset": bool(scorer.diagnosis.offset_deltas),
+                            }
+                            diag_cat = classify_diagnosis_category(diag_info)
+                        if unit_cat:
+                            strategy_recs = apply_strategy_boosts(
+                                round_hints, unit_cat, diag_cat,
+                            )
+                            if strategy_recs and round_num == 1:
+                                boosted = [r.pattern for r in strategy_recs if r.priority_boost > 1.2]
+                                if boosted:
+                                    print(
+                                        f"  [STRATEGY DB] Boosting {len(boosted)} patterns: "
+                                        f"{', '.join(boosted[:5])}"
+                                        + (f" (+{len(boosted)-5} more)" if len(boosted) > 5 else ""),
+                                        file=sys.stderr,
+                                    )
+                    except Exception:
+                        pass  # Strategy DB is best-effort
+
+                    # Refine learned effectiveness with diagnosis-specific data
+                    if (
+                        not no_learned_priority
+                        and diag_cat
+                        and round_num == 1
+                    ):
+                        try:
+                            from .pattern_stats import query_pattern_effectiveness
+                            diag_effectiveness = query_pattern_effectiveness(
+                                diagnosis_category=diag_cat
+                            )
+                            if diag_effectiveness:
+                                round_hints.learned_effectiveness.update(
+                                    diag_effectiveness
+                                )
+                                print(
+                                    f"  [LEARNED] Refined priorities with "
+                                    f"{len(diag_effectiveness)} diagnosis-specific "
+                                    f"entries ({diag_cat})",
+                                    file=sys.stderr,
+                                )
+                        except Exception:
+                            pass
 
                 # Ghidra preflight check
                 if ghidra and ctx.ghidra_ast and round_num == 1:
@@ -941,12 +1059,23 @@ def hill_climb(
                         limit=len(top_for_il),
                     )
                     il_bucket_sizes: dict[str, int] = {}
+                    il_duplicate_patterns: set[str] = set()
+                    il_unique_patterns: set[str] = set()
                     for result in top_for_il:
                         il_hash = il_hashes.get(id(result.variant))
                         if not il_hash:
                             continue
                         result.canonical_il_hash = il_hash
                         il_bucket_sizes[il_hash] = il_bucket_sizes.get(il_hash, 0) + 1
+                    for result in top_for_il:
+                        il_hash = result.canonical_il_hash
+                        if not il_hash:
+                            continue
+                        base_names = set(_base_pattern_names(result.variant.pattern_name))
+                        if il_bucket_sizes.get(il_hash, 0) > 1:
+                            il_duplicate_patterns |= base_names
+                        else:
+                            il_unique_patterns |= base_names
                     if il_bucket_sizes:
                         duplicate_buckets = sum(
                             1 for size in il_bucket_sizes.values() if size > 1
@@ -955,12 +1084,21 @@ def hill_climb(
                         result_il_analyzed_variants += analyzed
                         result_il_unique_buckets += len(il_bucket_sizes)
                         result_il_duplicate_buckets += duplicate_buckets
+                        for result in top_for_il:
+                            _accumulate_il_pattern_metrics(
+                                result_il_pattern_metrics,
+                                result,
+                                il_bucket_sizes,
+                            )
                         print(
                             f"IL analysis: {len(il_bucket_sizes)} bucket(s) across "
                             f"{analyzed} top candidate(s), "
                             f"{duplicate_buckets} duplicate bucket(s)",
                             file=sys.stderr,
                         )
+                        if round_hints is not None:
+                            round_hints.il_duplicate_patterns = il_duplicate_patterns
+                            round_hints.il_unique_patterns = il_unique_patterns
 
                 # Accumulate validation results for summary
                 if validate and round_validation_results:
@@ -1161,7 +1299,7 @@ def hill_climb(
             t = int(vr.tier)
             validation_dist[t] = validation_dist.get(t, 0) + 1
 
-    return HillClimbResult(
+    result = HillClimbResult(
         symbol=symbol,
         function_name=function_name,
         source_path=str(source_path),
@@ -1181,7 +1319,17 @@ def hill_climb(
         il_analyzed_variants=result_il_analyzed_variants,
         il_unique_buckets=result_il_unique_buckets,
         il_duplicate_buckets=result_il_duplicate_buckets,
+        il_pattern_metrics=result_il_pattern_metrics,
     )
+
+    # Record result in strategy DB for future recommendation feedback
+    try:
+        from .strategy_db import record_permuter_result
+        record_permuter_result(result, unit=unit)
+    except Exception:
+        pass  # Best-effort
+
+    return result
 
 
 def main():
@@ -1227,13 +1375,15 @@ def main():
 
     if args.beam:
         from .beam_search import beam_search, BeamConfig
+        explicit_width = args.beam_width is not None or args.beam_expand is not None
         config = BeamConfig(
-            width=args.beam_width,
+            width=args.beam_width if args.beam_width is not None else 8,
             depth=args.beam_depth,
-            expand=args.beam_expand,
+            expand=args.beam_expand if args.beam_expand is not None else 24,
             escape=args.beam_escape,
             diversity=args.beam_diversity,
             workers=workers,
+            auto_width=not explicit_width,
         )
         result = beam_search(
             symbol=args.symbol,
@@ -1287,6 +1437,7 @@ def main():
             adaptive=args.adaptive,
             constrained=args.constrained,
             validate=args.validate,
+            no_learned_priority=args.no_learned_priority,
         )
 
     if args.json_output:
