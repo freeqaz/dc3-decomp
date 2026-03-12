@@ -27,10 +27,19 @@ END_HANDLERS
 
 void NavListSort::DeleteItemList() {
     mList.clear();
+#ifdef HX_NATIVE
+    for (auto it = mAllNodes.begin(); it != mAllNodes.end(); ++it) {
+        if (*it) {
+            (*it)->DeleteAll();
+            RELEASE(*it);
+        }
+    }
+#else
     FOREACH (it, mAllNodes) {
         (*it)->DeleteAll();
         RELEASE(*it);
     }
+#endif
     mAllNodes.clear();
 }
 

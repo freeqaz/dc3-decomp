@@ -498,23 +498,6 @@ Flow *Flow::GetOwnerFlow() {
 
 bool Flow::ActivateTrigger() {
     mStopRequested = false;
-#ifdef HX_NATIVE
-    {
-        static int sLogFlows = -1;
-        if (sLogFlows == -1) {
-            const char *env = getenv("MILO_DEBUG_FLOW_ACTIVATE");
-            sLogFlows = (env && env[0] && strcmp(env, "0") != 0) ? 1 : 0;
-        }
-        if (sLogFlows) {
-            printf("Flow::ActivateTrigger '%s' proxy='%s' children=%d\n",
-                   Name(), ProxyFile().c_str(), (int)mChildNodes.size());
-            FOREACH (it, mChildNodes) {
-                printf("  child: '%s' class='%s'\n",
-                       it->Obj()->Name(), it->Obj()->ClassName().Str());
-            }
-        }
-    }
-#endif
     FOREACH (it, mChildNodes) {
         if (it->Obj()->ClassName() != FlowLabel::StaticClassName()) {
             ActivateChild(*it);

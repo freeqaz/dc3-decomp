@@ -50,6 +50,24 @@ int LocationCmp::Compare(const NavListItemSortCmp *cmp, NavListNodeType type) co
 }
 
 NavListHeaderNode *
+SongSortByLocation::NewHeaderNode(NavListItemNode *itemNode) const {
+    SongSortNode *ssNode = dynamic_cast<SongSortNode *>(itemNode);
+    Symbol location = ssNode->Record()->Metadata()->GameOrigin();
+    if (ConvertGameOriginSymbolToEnum(location) == 3) {
+        location = Symbol("DLC");
+    }
+    const char *name = ssNode->Record()->Metadata()->Title();
+    LocationCmp *newCmp = new LocationCmp(name, Symbol(location.Str()));
+    LocationCmp *cmp;
+    if (newCmp != 0) {
+        cmp = newCmp;
+    } else {
+        cmp = 0;
+    }
+    return new SongHeaderNode(cmp, location, true);
+}
+
+NavListHeaderNode *
 SongSortByLocation::NewHeaderNode(NavListItemNode *n1, NavListItemNode *n2) const {
     return NewHeaderNode(n1);
 }
@@ -59,10 +77,14 @@ SongSortByLocation::NewShortcutNode(NavListItemNode *itemNode) const {
     SongSortNode *ssNode = dynamic_cast<SongSortNode *>(itemNode);
     Symbol location = ssNode->Record()->Metadata()->GameOrigin();
     const char *name = ssNode->Record()->Metadata()->Title();
-    LocationCmp *cmp = new LocationCmp(name, location);
-    Symbol token = location;
-    NavListShortcutNode *shortcut = new NavListShortcutNode(cmp, token, true);
-    return shortcut;
+    LocationCmp *newCmp = new LocationCmp(name, Symbol(location.Str()));
+    LocationCmp *cmp;
+    if (newCmp != 0) {
+        cmp = newCmp;
+    } else {
+        cmp = 0;
+    }
+    return new NavListShortcutNode(cmp, location, true);
 }
 
 NavListItemNode *SongSortByLocation::NewItemNode(void *v) const {

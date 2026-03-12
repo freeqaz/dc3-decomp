@@ -150,7 +150,7 @@ void VoiceInputPanel::OnConfidenceChange(float conf) {
 }
 
 void VoiceInputPanel::CreateSongSelectGrammar(Symbol s1) const {
-    if (!TheSpeechMgr->Enabled()) {
+    if (!TheSpeechMgr || !TheSpeechMgr->Enabled()) {
         MILO_NOTIFY(
             "----- VoiceInputPanel::CreateSongSelectGrammar() - speechMgr not enabled\n"
         );

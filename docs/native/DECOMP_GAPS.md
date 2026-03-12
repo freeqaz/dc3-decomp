@@ -9,8 +9,7 @@ Inventory of decomp gaps affecting the native build. Prioritized by impact on re
 - **Track A (Engine Boot)**: Boots to `choose_mode_screen`, ~169 draw calls/frame, 10000 frames stable. Menu text, icons, description panel, and ribbons all visible.
 - **Current rendering (Session 48)**: choose_mode_screen shows menu items on right side with game_mode_icon description panel and icon image on the left. Key fix: `ObjDirItr::RecurseSubdirs()` only traverses formal `SubDirs()`, not nested RndDir objects in the hash table. `game_mode_icon` (42 objects, 6 PropAnims) was invisible to the PropAnim forcing code. Now fixed with separate nested RndDir iteration in `PanelDir::Enter()`.
 - **Reference shots**: `archive/screenshots/references/` as live-game baseline. Native progress: `archive/screenshots/session47/` (text visible, centered), `archive/screenshots/session48/` (icon panel visible, improved layout).
-- **Flow activation**: Flows activate via `ShouldActivateNativeFlow()` filter (blocks only `letterbox`). Enter PropAnims forced to end frame for positioning. Nested RndDir PropAnims (icon_enter.anim etc.) now also forced.
-- **DTA/Flow/PropAnim chain**: `RndPollable::Enter()` → `HandleType("enter")` → DTA TypeDef script → `Flow::Activate()` → PropAnim → material alpha/color. DTA execution works. Zero UITrigger/EventTrigger objects exist (created dynamically, not in .milo).
+- **Flow animation pipeline**: **Fully operational** (verified Session 58). Flow→FlowAnimate→AnimTask→PropAnim chain traced end-to-end. All UI animations use kTaskUISeconds timeline, advanced by UIManager::Poll() every frame. Enter animations fade in menu items correctly. `ShouldActivateNativeFlow()` filter handles startMode=0 flows; startMode>0 flows auto-start via Flow::Enter(). No rendering hacks needed for animation.
 - **Track B (Milo Viewer)**: Full rendering pipeline. 14/44 demo shots render (8 broken YAML paths).
 - **Weak stubs**: `engine_stubs_generated.cpp` has ~2530 weak function stubs. Any real .cpp implementation automatically overrides them.
 
@@ -95,13 +94,7 @@ These affect menu navigation, list population, and screen transitions.
 
 1. **Voice-tip overlay coverage (MOSTLY FIXED)**: Kinect speech UI (grey_alpha.mesh, warning_*.mesh) drew AFTER text with full alpha, covering it. Fixed in the renderer for meshes; `HelpBarPanel::Draw()` also needed a recursive lookup fix (`Find(..., true)`) so nested `voice_tip.lbl` suppression actually reaches the live label object.
 
-2. **PropAnim not animating (ROOT CAUSE FOUND)**: 84+ PropAnims exist across all panels but 0 UITriggers/EventTriggers exist to activate them. Investigation chain:
-   - PropAnims loaded correctly from .milo (confirmed via ObjDirItr)
-   - UITrigger factory registered correctly (REGISTER_OBJ_FACTORY in UIManager::Init)
-   - No "Can't make" errors during loading — UITrigger class isn't in .milo binary data
-   - **UITriggers are created dynamically by Flow/DTA scripts at runtime**, not stored in .milo
-   - The Flow proxy system and DTA script execution path need investigation to determine why triggers aren't being created
-   - AlphaForce hack (forcing alpha 0→1 on 198 SrcAlpha meshes) is a symptom, not the fix
+2. ~~**PropAnim not animating**~~ — **RESOLVED (Session 58)**. The Flow→PropAnim chain is fully operational. DC3 UI panels use Flow-driven PropAnims (not UITriggers/EventTriggers — zero exist in .milo). The `ShouldActivateNativeFlow()` filter activates startMode=0 flows on panel enter; FlowAnimate creates AnimTasks on the kTaskUISeconds timeline; UIManager::Poll() advances time; PropAnims animate material alpha/color. All alpha force hacks removed.
 
 3. **Multiply blend enabled**: Previously skipped, now allowed through. With dark background, multiply meshes produce near-zero (invisible) results — correct behavior. Debloom/overlay_colortexture already dark.
 
@@ -206,60 +199,32 @@ Sorted by impact x feasibility:
 
 ### Track A — Next Steps
 
-**CRITICAL PATH: DTA TypeDef → Flow → PropAnim activation chain**
+**Flow → PropAnim animation chain: VERIFIED WORKING (Session 58)**
 
-The biggest native rendering correctness gap: material alpha/color never animates because DTA-driven Flow activation doesn't fully work. Two hacks mask this:
-- **AlphaForce**: the old broad `Mesh_Wgpu.cpp` alpha=1 fallback was too aggressive and has now been removed. Native still needs a narrow replacement for text meshes until Flow/PropAnim activation is reliable enough to drive font/material alpha correctly.
-- **Auto-animate** (`PanelDir.cpp`): Starts ALL PropAnims simultaneously on Enter. Causes show/hide conflicts (fade-out PropAnims fight fade-in ones).
-- **Blanket Flow activation** (`PanelDir.cpp`): Also too aggressive. Current runtime logging shows it starts mutually exclusive flows (`show_*` and `hide_*`, `controller_mode` and `exit_controller_mode`, `enter` and `exit`) on the same panel. Env-gated filtering now proves this is only part of the problem: once helpbar/letterbox flows are suppressed, the choose-mode plaque and icon art recover, but the large list/shell text still does not. The remaining gap is likely missing trigger-driven label/material setup within `main` / `choose_mode` itself.
+The full DTA TypeDef → Flow → FlowAnimate → AnimTask → PropAnim pipeline has been traced end-to-end and confirmed operational. Menu enter animations (material alpha fade-in, transform transitions) run correctly without any rendering hacks.
 
-**What works on native (confirmed session 43):**
-- DTA TypeDef `enter` handlers fire correctly (`RndPollable::Enter()` → `HandleType("enter")`)
-- DTA script execution pipeline functional (e.g., `ui_objects.dta` letterbox `enter` handler: `{hide_mic.flow activate}`)
-- Flow proxy loading works (inline proxies loaded, objects created)
-- PropAnims loaded from .milo with valid keyframe data (84+ across all panels)
-- PropAnim::SetFrame() drives material properties correctly when called
-- SyncObjects() populates mAnims vectors after loading
+**How it works on native:**
+- `startMode > 0` flows auto-start via `Flow::Enter()` → `FlowQueueable::Execute(kQueue)` or `TheFlowMgr->QueueCommand()`
+- `startMode == 0` flows activated by `ShouldActivateNativeFlow()` filter in `PanelDir::Enter()` (replaces DTA enter scripts)
+- `FlowAnimate::Activate()` queues itself in FlowManager; `FlowAnimate::Execute(kQueue)` creates AnimTasks via `mAnim->Animate()`
+- All UI animations use `k30_fps_ui` rate → `kTaskUISeconds` timeline, advanced by `UIManager::Poll()` every frame
+- AnimTasks polled by `TaskMgr::Poll()` → `SetFrame()` on PropAnims → material alpha/color animates
 
-**What's missing — roadmap to remove hacks:**
+**Visual confirmation**: Frame 200 (title screen) → Frame 300 (menu fading in) → Frame 400 (fully rendered main menu with DANCE/STORY/FITNESS/LIVE CHALLENGES/BUY MORE SONGS). Screenshots: `archive/screenshots/2026-03-12-ui-animations/`. Session doc: [Session 58](../sessions/2026-03-12-session58-ui-animation-verification.md).
 
-1. **Flow activation on Enter** — Most panels' TypeDef `enter` handlers don't explicitly activate enter-transition Flows. The letterbox panel does (`{hide_mic.flow activate}`), but choose_mode only does `{$this update_postproc}`. The enter-transition animations may be triggered by:
-   - Flow objects with `mStartMode > 0` (auto-start on Enter) — but proxy Flows have mStartMode=0 because PostLoad proxy path skips FlowQueueable::Load. Only `kInlineAlways` proxies get mStartMode=5.
-   - EventTriggers wired to `ui_enter` events — but these need to be created first.
-   - Other screen navigation events we haven't fully traced.
-
-2. **UITrigger/EventTrigger creation** — Zero triggers exist at runtime. They're NOT in .milo binary — they're created dynamically. Possible sources:
-   - Flow graph nodes that create triggers as part of their activation
-   - DTA `{new UITrigger ...}` commands in untraced scripts
-   - Panel-specific initialization paths not yet executed
-
-3. **Selective PropAnim activation** — Replace blanket auto-animate with targeted activation of only enter-transition PropAnims. Requires knowing WHICH PropAnims to start (information normally provided by Flow/trigger wiring).
-
-4. **Label/text state wiring in choose-mode** — the `menu_only` experiment shows the choose-mode plaque and card art can be made stable without helpbar/letterbox flow spam, but the big readable labels still do not appear. That suggests some label/material state is gated behind trigger-driven flows that still never start successfully, or behind `Flow::Activate()` calls that currently fail silently.
-   - First concrete targets from runtime logging: `update_rank_number.flow`, `udpate_icon_state.flow`, and `update_tier.flow` in `ui/main/main.milo`
-   - **2026-03-11 investigation**: All three flows DO activate correctly with children. But children are control-flow nodes (FlowSwitch, FlowCommand, FlowRun) not FlowAnimate — they depend on game state (rank, tier, icon state) to route to actual animations. `show_game_mode_icon.flow` runs `play_enter_anim.flow` whose FlowAnimate has `enable=0`. This is a game-state dependency, not a pipeline bug.
-
-4. **Material default state** — Materials in .milo have alpha=0 as default. On Xbox, specific PropAnims animate alpha 0→1. Without selective activation, native still needs a small text-only alpha fallback. The remaining work is to remove even that by getting the real Flow→PropAnim chain working reliably.
-
-**Hack removal dependency chain:**
-```
-Flow activation working → triggers created → specific PropAnims activated
-  → material alpha animated correctly → AlphaForce removable
-  → no show/hide conflicts → auto-animate removable
-```
+**Remaining rendering hacks (non-animation):**
+- **Zero-alpha floor** (`Mesh_Wgpu.cpp`): 29 background meshes have alpha=0 in .milo and are NOT targeted by any Flow/PropAnim — they rely on DTA property-set scripts. Floor provides reasonable default visibility.
+- **Auto-prelit** (`MaterialSetup.cpp`): `#if 0`'d — UI renders correctly without it.
+- **MeshFilter** (`MeshFilter.cpp`): Kinect/speech/tutorial mesh suppression — permanent (no Kinect on native).
 
 **Completed steps:**
 - ~~**Flow::Enter()**~~ — **Done**. 81.8% match.
 - ~~**Locale data loading**~~ — **Done**. 2091 symbols loaded.
 - ~~**Text positioning**~~ — **Verified working** (2026-03-06).
 - ~~**DxCam::Select()**~~ — **Done** (81.3% AT_LIMIT).
-- ~~**Camera animation on native**~~ — Superseded. CameraManager only runs in WorldDir::Poll, not PanelDir. Camera positions come from .milo file data, not CameraManager animations.
-- ~~**Voice-tip overlay coverage**~~ — **Fixed** (2026-03-11). Filtering grey_alpha.mesh and warning_*.mesh in DrawMeshImmediate.
-- ~~**Re-test choose_mode_screen without camera hacks**~~ — Done. Default [ui.cam] is the baseline.
-
-**Other rendering improvements:**
-- **Shell/main panel composition** — list payload draws under `[ui.cam]`, shell overlay under `turbo_shell.cam`. Mixed-camera composition issue remains.
-- **Clean up remaining debug logging** — DC3_PROPANIM, DC3_ENTER, DC3_TYPEDEF, DC3_TRANSITION removed (session 43). Check for any remaining DC3_SYNC or DC3_EVTTRIG diagnostics.
+- ~~**Camera animation on native**~~ — Superseded. CameraManager only runs in WorldDir::Poll, not PanelDir.
+- ~~**Voice-tip overlay coverage**~~ — **Fixed** (2026-03-11).
+- ~~**Flow→PropAnim animation chain**~~ — **Verified working** (2026-03-12, Session 58). Full pipeline traced and confirmed.
 
 ### Remaining Stubs — All Resolved
 4. ~~**SaveLoadManager::Poll()**~~ — **Done** (100% match)

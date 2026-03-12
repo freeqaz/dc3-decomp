@@ -143,4 +143,10 @@ BEGIN_HANDLERS(SongMetadata)
     HANDLE_SUPERCLASS(Hmx::Object)
 END_HANDLERS
 
+int SongMetadata::ID() const { return mID; }
+
+bool SongMetadata::IsOnDisc() const { return mIsOnDisc; }
+
+Symbol SongMetadata::GameOrigin() const { return mGameOrigin; }
+
 DataArraySongInfo *SongMetadata::SongBlock() const { return mSongInfo; }

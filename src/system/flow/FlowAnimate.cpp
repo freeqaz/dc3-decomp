@@ -135,19 +135,6 @@ bool FlowAnimate::Activate() {
     mStopRequested = false;
     PushDrivenProperties();
     RndAnimatable *anim = (RndAnimatable *)mAnim;
-#ifdef HX_NATIVE
-    {
-        static int sLogFlows = -1;
-        if (sLogFlows == -1) {
-            const char *env = getenv("MILO_DEBUG_FLOW_ACTIVATE");
-            sLogFlows = (env && env[0] && strcmp(env, "0") != 0) ? 1 : 0;
-        }
-        if (sLogFlows) {
-            printf("  FlowAnimate::Activate '%s' anim=%p enable=%d period=%.1f\n",
-                   Name(), (void *)anim, (int)mEnable, mPeriod);
-        }
-    }
-#endif
     if (anim) {
         if (mImmediateRelease) {
             mAnimTask = nullptr;

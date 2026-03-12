@@ -65,7 +65,12 @@ void LoadingPanel::Unload() {
 void LoadingPanel::Load() {
     UIPanel::Load();
     sLoadingMaster = new HamMaster(sSongDB->SongData(), nullptr);
+#ifdef HX_NATIVE
+    // Skip loading music on native — MIDI/audio files not available
+    fprintf(stderr, "DC3 Native: LoadingPanel::Load — skipping PlayLoadingMusic\n");
+#else
     PlayLoadingMusic();
+#endif
     sLoadingMaster->SetMaps();
 }
 
@@ -89,12 +94,17 @@ bool LoadingPanel::Exiting() {
 void LoadingPanel::Enter() {
     UIPanel::Enter();
     TheTaskMgr.SetSecondsAndBeat(0, 0, true);
+#ifdef HX_NATIVE
+    // Skip audio stream playback on native
+    fprintf(stderr, "DC3 Native: LoadingPanel::Enter — skipping audio stream\n");
+#else
     Stream *stream = sLoadingMaster->GetHxAudio()->GetSongStream();
     MILO_ASSERT(sLoadingMaster->GetHxAudio()->IsReady(), 0x6a);
     if (stream) {
         stream->Play();
         stream->Resync(0.0f);
     }
+#endif
 }
 
 Symbol LoadingPanel::ChooseLoadingScreen() {

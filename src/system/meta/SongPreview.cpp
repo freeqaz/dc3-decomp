@@ -125,6 +125,10 @@ void SongPreview::Terminate() {
 }
 
 void SongPreview::Start(Symbol song, TexMovie *texMovie) {
+#ifdef HX_NATIVE
+    if (!mInitted)
+        return; // Audio/synth not initialized on native
+#endif
     if (mInitted || !song.Null()) {
         MILO_ASSERT(mFader && mMusicFader && mCrowdSingFader,0x6c);
         mTexMovie = texMovie;

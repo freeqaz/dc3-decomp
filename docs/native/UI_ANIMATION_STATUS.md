@@ -2,7 +2,7 @@
 
 ## Current State
 
-**Unwind plan complete.** All removable hacks removed. Most remaining items are native infrastructure. The old native panel-unload shortcuts have now been removed from `UIScreen`, and the default boot path now reaches `main_screen` cleanly on native. With the `GameMode::SetMode()` native short-circuit removed, `Perform` now routes through `choose_mode_screen` into `song_select_screen`; the current blocker has moved to native manager/provider bring-up inside song select.
+**Song loading achieved!** The full menu→song pipeline works: `main_screen → choose_mode(Perform) → song_select(YMCA) → multiuser(auto-skip) → loading → preloading → real_loading → game_screen`. The game_screen runs stably with gameplay HUD rendering (move cards, help bar). Venue/audio assets are not loaded (black background, pink placeholder textures), but the gameplay systems are active.
 
 | Step | Status | Session |
 |------|--------|---------|
@@ -23,6 +23,8 @@
 | 54 | 2026-03-12 | [Step 3: Visibility masks](../sessions/2026-03-12-session54-step3-visibility.md) — Overlay filter + voicetip hide removed; alpha floor + Kinect filter kept |
 | 55 | 2026-03-12 | [Step 4: Parity bridges](../sessions/2026-03-12-session55-step4-parity-bridges.md) — PanelDir dir-hide removed; remaining bridges classified as permanent |
 | 56 | 2026-03-12 | [Alpha floor + panel unload investigation](../sessions/2026-03-12-session56-alpha-floor-investigation.md) — Traced 29 zero-alpha meshes; older unload hypothesis later refined into lower-level FlowNode + RndGroup teardown bugs |
+| 57 | 2026-03-12 | Menu→song pipeline — Fixed 10+ crashes across SongPreview, HamGameData, MultiUserGesturePanel, SkeletonIdentifier, LoadingPanel, PreloadPanel, ProfileMgr, MoveMgr, GestureMgr, HamDirector. Game reaches `game_screen` with active gameplay HUD. |
+| 58 | 2026-03-12 | [Animation pipeline verification](../sessions/2026-03-12-session58-ui-animation-verification.md) — Full end-to-end trace of Flow→FlowAnimate→AnimTask→PropAnim chain. All working. Diagnostic logging removed. |
 
 ## Unwind Plan
 
@@ -90,10 +92,10 @@
 | File | Hack | Status |
 |------|------|--------|
 | ~~`MaterialSetup.cpp`~~ | ~~Text-only alpha force~~ | **Removed (S52)** |
-| `Mesh_Wgpu.cpp` | SrcAlpha zero-alpha floor (0.20) | Keep — still load-bearing (S54) |
+| `Mesh_Wgpu.cpp` | SrcAlpha zero-alpha floor (0.20) | `#if 0` — testing removal (S58) |
 | `MeshFilter.cpp` | Skip Kinect/speech/tutorial meshes | Keep — still load-bearing (S54) |
 | ~~`MeshFilter.cpp`~~ | ~~Skip tiny white srcAlpha overlays~~ | **Removed (S54)** — flows now animate overlays |
-| `MaterialSetup.cpp` | Auto-prelit, specular clamp, emissive guard, etc. | Keep (renderer heuristics) |
+| `MaterialSetup.cpp` | Auto-prelit (`#if 0` S58), specular clamp, emissive guard, etc. | Auto-prelit disabled; other heuristics kept |
 | `MeshGpuCache.cpp` | `FixZeroAlpha()` vertex alpha fix | Keep (compatibility) |
 
 ### C. Camera/composition
@@ -115,7 +117,24 @@
 | `CursorPanel.cpp` | Skip gesture cursor logic | Permanent — no Kinect |
 | ~~`HelpBarPanel.cpp`~~ | ~~Hide voice-tip drawables~~ | **Removed (S54)** — redundant with MeshFilter |
 
-### E. Screen/panel lifecycle
+### E. Song loading pipeline (S57)
+
+| File | Hack | Status |
+|------|------|--------|
+| `SongPreview.cpp` | Early return when `!mInitted` | Permanent — no audio init |
+| `HamGameData.cpp` | MILO_FAIL→MILO_WARN for outfit remap | Permanent — outfit DB subset |
+| `HamGameData.cpp` | `IsSkeletonPresent()` always true | Permanent — no Kinect |
+| `MultiUserGesturePanel.cpp` | Auto-skip to loading_screen in Poll | Permanent — Kinect skeleton chooser |
+| `MultiUserGesturePanel.cpp` | Null guards for SkeletonChooser | Permanent — no Kinect |
+| `LoadingPanel.cpp` | Skip PlayLoadingMusic + audio stream | Permanent — no MIDI/mogg |
+| `PreloadPanel.cpp` | Skip content mount/cache, set success | Permanent — no ark song content |
+| `ProfileMgr.cpp` | Lazy InitSliders in SliderIxToDb | Permanent — init order diff |
+| `GestureMgr.cpp` | Safe defaults for LiveCameraInput handlers | Permanent — no Kinect camera |
+| `HamDirector.cpp` | Null guard in FindNextDircut | Keep — no dircut data loaded |
+| `Game.cpp` | Null guard for TheMoveMgr in LoadSong/Reset | Keep — MoveMgr not initialized |
+| `Game.cpp` | Null guard for mMoveDir in Reset | Keep — no move assets |
+
+### F. Screen/panel lifecycle (pre-S57)
 
 | File | Hack | Status |
 |------|------|--------|
@@ -142,7 +161,7 @@
   - after that, forced-unload validation reached `choose_mode_screen` and remained stable for 1000 frames
   - `UIScreen` now uses the normal unload/load path by default
   Treat this as a resolved producer-bug chain for the real boot path too. The next work is wider interactive validation, not keeping a screen-lifecycle workaround in place.
-- **Alpha floor refinement**: 29 meshes hit the zero-alpha floor (0.20) across 5 dirs. All are DTA-script-driven — no Flow objects target their material alpha. The `background` and `main_ribbon` dirs have NO associated flows at all; `letterbox` flows are filtered; `game_mode_icon` flows don't target alpha. Current floor is a reasonable permanent workaround. Could be refined with per-dir alpha values or by implementing a DTA property-set subset on native.
+- **Alpha floor refinement**: 29 meshes hit the zero-alpha floor (0.20) across 5 dirs. All are DTA-script-driven — no Flow objects target their material alpha. The `background` and `main_ribbon` dirs have NO associated flows at all; `letterbox` flows are filtered; `game_mode_icon` flows don't target alpha. **Now `#if 0`'d (S58)** — menu renders correctly without it since Flow animations drive the material alphas for all visible UI elements. The 29 background meshes that relied on DTA scripts stay invisible, which is acceptable (they're background fill, not UI content).
 - **List widget draw traversal**: `list_choose_mode.milo` loads correctly (see `docs/sessions/NEXT_DTA_LIST_RENDERING.md`), but the populated list may not reach the renderer. Investigate whether `right_hand.hnl` is in the active drawable list and whether `HamNavList::DrawShowing()` is reached. Separate from the animation unwind — revisit after Step 4.
 - **Choose-mode selection path**: this blocker is now resolved. `choose_mode_panel` DTA handles `NAV_SELECT_MSG` by doing `{gamemode set_mode <mode>}` followed by `{ui goto_screen {gamemode get newsong_screen}}`. Native used to return early from [`GameMode::SetMode()`](/home/free/code/milohax/dc3-decomp/src/lazer/game/GameMode.cpp) before applying the merged mode TypeDef, which left properties like `newsong_screen` unset and caused `Perform` to fall back to `main_screen`. After restoring the shared `SetMode()` path and fixing `Hmx::Object::Property()` so TypeDef-backed properties resolve even when `mTypeProps` is null, `Perform` now correctly routes to `song_select_screen`.
 - **Song-select provider gap**: this was the next blocker after `GameMode::SetMode()` was fixed. A scripted run (`archive/screenshots/2026-03-12-session-gamemode-setmode-fix/run_step2.log`) showed:
@@ -172,8 +191,10 @@
 - **Choose-mode perform probe**: `archive/screenshots/2026-03-12-session074620-perform-song/`
 - **GameMode/song-select provider probe**: `archive/screenshots/2026-03-12-session-gamemode-setmode-fix/`
 - **Song-select post-provider probe**: `archive/screenshots/2026-03-12-session-gamemode-setmode-fix-postproviders/`
+- **Session 57 game_screen screenshots + video**: `archive/screenshots/session57/` (`menu_to_gameplay_30fps.mp4`)
 - **Session 55 screenshots**: `archive/screenshots/session55/`
 - **Session 54 screenshots**: `archive/screenshots/session54/`
 - **Session 53 screenshots**: `archive/screenshots/session53/`
 - **Session 52 screenshots**: `archive/screenshots/session52/`
 - **Session 49 screenshots**: `archive/screenshots/session49/`
+- **Session 58 animation verification**: `archive/screenshots/2026-03-12-ui-animations/`

@@ -5,9 +5,6 @@
 #include "rndobj/Cam.h"
 #include "rndobj/Dir.h"
 #include "rndobj/EventTrigger.h"
-#include "rndobj/MatAnim.h"
-#include "rndobj/PropAnim.h"
-#include "rndobj/TransAnim.h"
 #include "ui/UI.h"
 #include "ui/UIComponent.h"
 #include "ui/UIPanel.h"
@@ -425,65 +422,18 @@ void PanelDir::Enter() {
     static Symbol ui_enter_back("ui_enter_back");
     SendTransition(ui_enter, ui_enter_forward, ui_enter_back);
 #ifdef HX_NATIVE
-    // DIAG: trace animation pipeline
-    {
-        int numUITriggers = 0;
-        int numEventTriggers = 0;
-        int numMatAnims = 0;
-        int numTransAnims = 0;
-        int numPropAnims = 0;
-        for (ObjDirItr<UITrigger> tit(this, true); tit != nullptr; ++tit) {
-            numUITriggers++;
-            printf("DC3 DIAG:   UITrigger '%s' hasTriggerEvents=%d\n",
-                   tit->Name(), tit->HasTriggerEvents());
-        }
-        for (ObjDirItr<EventTrigger> eit(this, true); eit != nullptr; ++eit) {
-            numEventTriggers++;
-        }
-        for (ObjDirItr<RndMatAnim> ma(this, true); ma != nullptr; ++ma) {
-            numMatAnims++;
-        }
-        for (ObjDirItr<RndTransAnim> ta(this, true); ta != nullptr; ++ta) {
-            numTransAnims++;
-        }
-        for (ObjDirItr<RndPropAnim> pa(this, true); pa != nullptr; ++pa) {
-            numPropAnims++;
-        }
-        printf("DC3 DIAG: PanelDir::Enter '%s' — %d UITriggers, %d EventTriggers, "
-               "%d MatAnims, %d TransAnims, %d PropAnims, %d mTriggers cached\n",
-               Name(), numUITriggers, numEventTriggers,
-               numMatAnims, numTransAnims, numPropAnims,
-               (int)mTriggers.size());
-    }
     // Activate game-code-triggered Flows (startMode==0) that normally fire from
     // DTA enter scripts on Xbox. Flows with startMode>0 auto-start through the
     // normal Flow::Enter() path (called by RndDir::Enter above) and don't need
     // blanket activation here.
-    {
-        int numFlows = 0, numAutoStart = 0, numActivated = 0, numFiltered = 0;
-        for (ObjDirItr<Flow> it(this, true); it != nullptr; ++it) {
-            numFlows++;
-            if (it->GetStartMode() > 0) {
-                numAutoStart++;
-                printf("DC3 DIAG:   Flow '%s' startMode=%d (auto-start) running=%d\n",
-                       PathName((Hmx::Object *)it), it->GetStartMode(), it->IsRunning());
-                continue;
-            }
-            const char *flowPath = PathName((Hmx::Object *)it);
-            if (!ShouldActivateNativeFlow(Name(), flowPath)) {
-                numFiltered++;
-                continue;
-            }
-            if (!it->IsRunning()) {
-                it->Activate();
-                numActivated++;
-                printf("DC3 DIAG:   Flow '%s' ACTIVATED (startMode=0)\n", flowPath);
-            }
-        }
-        if (numFlows > 0) {
-            printf("DC3 DIAG:   Flows: %d total, %d auto-start, %d activated, %d filtered\n",
-                   numFlows, numAutoStart, numActivated, numFiltered);
-        }
+    for (ObjDirItr<Flow> it(this, true); it != nullptr; ++it) {
+        if (it->GetStartMode() > 0)
+            continue;
+        const char *flowPath = PathName((Hmx::Object *)it);
+        if (!ShouldActivateNativeFlow(Name(), flowPath))
+            continue;
+        if (!it->IsRunning())
+            it->Activate();
     }
 #endif
 }

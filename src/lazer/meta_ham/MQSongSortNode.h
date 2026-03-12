@@ -26,6 +26,7 @@ public:
     MQSongSortNode(NavListItemSortCmp *cmp, Symbol shortName, Symbol character)
         : NavListItemNode(cmp), mShortName(shortName), mCharacter(character) {}
     virtual ~MQSongSortNode();
+    virtual Symbol GetToken() const { return mShortName; }
     virtual Symbol OnSelect();
     virtual void Text(UIListLabel *, UILabel *) const;
     virtual void Custom(UIListCustom *, Hmx::Object *) const;

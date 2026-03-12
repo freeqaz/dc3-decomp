@@ -101,7 +101,7 @@ bool SongHeaderNode::IsActive() const {
     if (!TheSongSortMgr->HeadersSelectable())
         return false;
     else
-        return IsActive();
+        return NavListHeaderNode::IsActive();
 }
 
 void SongHeaderNode::UpdateItemCount(NavListItemNode *itemnode) {

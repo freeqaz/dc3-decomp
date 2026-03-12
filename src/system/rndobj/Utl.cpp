@@ -1170,7 +1170,7 @@ const char *CacheResource(const char *cc, CacheResourceResult &res) {
         if (TheLoadMgr.GetPlatform() == kPlatformPS3) {
             const char *xboxStr = strstr(localized, "_xbox");
             if (xboxStr) {
-                static char *ps3File;
+                static char ps3File[320];
                 strcpy(ps3File, localized);
                 int ps3Idx = xboxStr - localized;
                 strcpy(ps3File + ps3Idx, "_ps3");
@@ -1181,7 +1181,7 @@ const char *CacheResource(const char *cc, CacheResourceResult &res) {
         const char *filePath = FileGetPath(localized);
         const char *fileBase = FileGetBase(localized);
         const char *fileExt = FileGetExt(localized);
-        static char *cacheFile;
+        static char cacheFile[320];
         strcpy(
             cacheFile,
             MakeString(

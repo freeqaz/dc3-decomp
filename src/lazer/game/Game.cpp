@@ -461,8 +461,13 @@ void Game::Reset() {
     mHasIntro = false;
     unk68 = false;
     TheHamDirector->SetPickingDisabled(false);
-    for (int i = 0; i < 2; i++) {
-        mMoveDir->SetCurrentMove(i, nullptr);
+#ifdef HX_NATIVE
+    if (mMoveDir)
+#endif
+    {
+        for (int i = 0; i < 2; i++) {
+            mMoveDir->SetCurrentMove(i, nullptr);
+        }
     }
     TheGamePanel->ResetJitter();
     RELEASE(mGameInput);
@@ -547,9 +552,14 @@ void Game::LoadSong() {
     if (fader) {
         fader->SetVolume(0);
     }
-    TheMoveMgr->Clear();
-    if (mUseMoveGraph) {
-        TheMoveMgr->SetSong(song);
+#ifdef HX_NATIVE
+    if (TheMoveMgr)
+#endif
+    {
+        TheMoveMgr->Clear();
+        if (mUseMoveGraph) {
+            TheMoveMgr->SetSong(song);
+        }
     }
     RELEASE(mSongInfo);
     mSongInfo = new SongInfoCopy(TheHamSongMgr.SongMgr::SongAudioData(song));
@@ -663,10 +673,15 @@ void Game::LoadNewSong(Symbol s1, Symbol s2) {
     // NOTE: This Symbol is constructed but unused - required for match
     Symbol s48(TheMaster->GetAudio()->Name());
     LoadNewSongMoves(s2, true);
-    if (mUseMoveGraph) {
-        TheMoveMgr->SetSong(s2);
-    } else {
-        TheMoveMgr->Graph().Clear();
+#ifdef HX_NATIVE
+    if (TheMoveMgr)
+#endif
+    {
+        if (mUseMoveGraph) {
+            TheMoveMgr->SetSong(s2);
+        } else {
+            TheMoveMgr->Graph().Clear();
+        }
     }
     mLoadState = 0;
 }

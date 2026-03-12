@@ -86,10 +86,30 @@ struct SongRankCmp {
 };
 
 void HamSongMgr::ContentDone() {
+#ifdef HX_NATIVE
+    fprintf(stderr, "DC3 HamSongMgr::ContentDone available=%d\n", (int)mAvailableSongs.size());
+#endif
     SongMgr::ContentDone();
     mRankedSongs.clear();
     FOREACH (it, mAvailableSongs) {
         const HamSongMetadata *data = Data(*it);
+        if (!data) {
+#ifdef HX_NATIVE
+            fprintf(stderr, "DC3 HamSongMgr: missing metadata for songID=%d\n", *it);
+#endif
+            continue;
+        }
+#ifdef HX_NATIVE
+        if (data->ID() != *it) {
+            fprintf(
+                stderr,
+                "DC3 HamSongMgr: metadata ID mismatch key=%d metaID=%d short='%s'\n",
+                *it,
+                data->ID(),
+                data->ShortName().Str()
+            );
+        }
+#endif
         if (data->IsRanked()) {
             mRankedSongs.push_back(*it);
         }
@@ -244,6 +264,17 @@ void HamSongMgr::AddSongData(
         Symbol curSym = curArr->Sym(0);
         int songID = 0;
         curArr->FindData(song_id, songID, false);
+#ifdef HX_NATIVE
+        if (songID == 0) {
+            fprintf(
+                stderr,
+                "DC3 HamSongMgr: invalid song_id in AddSongData sym='%s' size=%d file='%s'\n",
+                curSym.Str(),
+                curArr->Size(),
+                a->File()
+            );
+        }
+#endif
         static Symbol missing_song_data("missing_song_data");
         DataArray *missingArr = SystemConfig(missing_song_data)->FindArray(curSym, false);
         if (HasSong(songID)) {

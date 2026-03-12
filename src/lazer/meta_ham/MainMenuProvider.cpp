@@ -52,6 +52,15 @@ void MainMenuProvider::UpdateList(UIListProvider *provider) {
     for (int i = 0; i < provider->NumData(); i++) {
         mItems.push_back(provider->DataSymbol(i));
     }
+#ifdef HX_NATIVE
+    static int sUpdateDiag = 0;
+    if (sUpdateDiag++ < 12) {
+        printf("DC3 MainMenuProvider: %d items\n", (int)mItems.size());
+        for (int i = 0; i < (int)mItems.size(); i++) {
+            printf("  [%d] '%s'\n", i, mItems[i].Str());
+        }
+    }
+#endif
 }
 
 bool MainMenuProvider::HasNewDLC() const {

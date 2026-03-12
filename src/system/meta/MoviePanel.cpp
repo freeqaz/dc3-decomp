@@ -152,7 +152,7 @@ void MoviePanel::Poll() {
             }
             if (arr->Int(1) < frame) {
                 if (mSubtitles->Size() > mCurrentSubtitleIndex + 1) {
-                    DataArray *a2 = arr->Array(mCurrentSubtitleIndex + 1);
+                    DataArray *a2 = mSubtitles->Array(mCurrentSubtitleIndex + 1);
                     if (a2) {
                         if (a2->Int(0) <= frame) {
                             mSubtitleLabel->SetSubtitle(a2);

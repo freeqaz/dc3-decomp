@@ -45,6 +45,10 @@ public:
     };
     struct CharInterestState {
         CharInterestState(Hmx::Object *owner) : mInterest(owner), mRefractoryTime(-1) {}
+        CharInterestState &operator=(const CharInterestState &s) {
+            mInterest = s.mInterest.Ptr();
+            return *this;
+        }
 
         bool IsInRefractoryPeriod();
         float RefractoryTimeRemaining();

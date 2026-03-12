@@ -375,6 +375,12 @@ std::vector<HamProfile *> ProfileMgr::GetSignedInProfiles() {
 }
 
 float ProfileMgr::SliderIxToDb(int ixVol) const {
+#ifdef HX_NATIVE
+    // On native, Init() may not have run yet when Game ctor queries volume
+    if (!mSliderConfig) {
+        const_cast<ProfileMgr *>(this)->InitSliders();
+    }
+#endif
     MILO_ASSERT(mSliderConfig, 0x34B);
     MILO_ASSERT(0 <= ixVol && ixVol < mSliderConfig->Size() - 1, 0x34C);
     return mSliderConfig->Float(ixVol + 1);
@@ -969,7 +975,7 @@ void ProfileMgr::Poll() {
                 }
             }
         }
-        if (lineCount > 0) {
+        if (lineCount != 0) {
             mProfilesOverlay->SetLines(lineCount);
         }
     }

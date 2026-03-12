@@ -139,7 +139,11 @@ Symbol GetOutfitRemap(Symbol outfit, bool fail) {
     if (outfitArr) {
         return outfitArr->Sym(1);
     } else if (fail) {
+#ifdef HX_NATIVE
+        MILO_WARN("No remap entry for outfit: %s\n", outfit.Str());
+#else
         MILO_FAIL("No remap entry for outfit: %s\n", outfit.Str());
+#endif
     }
     return "";
 }
@@ -450,8 +454,12 @@ bool HamGameData::SidesSwapped() {
 }
 
 bool HamGameData::IsSkeletonPresent(int index) const {
+#ifdef HX_NATIVE
+    return true; // No Kinect on native — always report skeleton present
+#else
     return TheGestureMgr->InControllerMode()
         || Player(index)->GetSkeletonTrackingID() > 0;
+#endif
 }
 
 int HamGameData::GetPlayerFromSkeleton(const Skeleton &skeleton) const {

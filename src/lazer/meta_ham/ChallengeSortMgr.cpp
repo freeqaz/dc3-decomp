@@ -77,7 +77,7 @@ int ChallengeSortMgr::GetPotentialChallengeExp(int i1) {
             ->GetChallengeExp();
     } else {
         auto highlight = GetHighlightItem();
-        NavListNode *header = dynamic_cast<ChallengeHeaderNode *>(highlight);
+        NavListNode *header = dynamic_cast<ChallengeHeaderNode *>(highlight->Parent());
         MILO_ASSERT(header, 0xa5);
         return static_cast<ChallengeHeaderNode *>(header)->GetPotentialChallengeExp(
             highlight

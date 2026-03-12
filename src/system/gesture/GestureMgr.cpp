@@ -81,6 +81,26 @@ GestureMgr::~GestureMgr() {
 BEGIN_HANDLERS(GestureMgr)
     HANDLE_EXPR(pause_on_skeleton_loss, mPauseOnSkeletonLossMode)
     HANDLE_EXPR(toggle_pause_on_skeleton_loss, TogglePauseOnSkeletonLoss())
+#ifdef HX_NATIVE
+    // Native: no Kinect camera — return safe defaults for LiveCameraInput queries
+    if (!mLiveCamInput) {
+        if (sym == "get_max_snapshots" || sym == "num_snapshots"
+            || sym == "num_snapshot_batches" || sym == "get_snapshot_batch_index"
+            || sym == "snapshot_tex") {
+            return 0;
+        }
+        if (sym == "init_snapshots" || sym == "clear_snapshots"
+            || sym == "start_snapshot_batch" || sym == "set_autoexposure_region"
+            || sym == "set_autoexposure" || sym == "dump_camera_properties"
+            || sym == "draw_skeletons" || sym == "set_tracked_skeletons") {
+            return 0;
+        }
+        if (sym == "toggle_autoexposure_tweak" || sym == "using_autoexposure_tweak"
+            || sym == "toggle_autoexposure") {
+            return 0;
+        }
+    }
+#endif
     HANDLE_EXPR(get_max_snapshots, mLiveCamInput->MaxSnapshots())
     HANDLE_ACTION(init_snapshots, mLiveCamInput->InitSnapshots(_msg->Int(2)))
     HANDLE_ACTION(clear_snapshots, mLiveCamInput->ClearSnapshots())

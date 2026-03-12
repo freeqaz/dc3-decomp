@@ -132,7 +132,7 @@ void* TheLeaderboards = 0;
 // TheLocale: now defined in Locale.cpp
 void* TheMaster = 0;
 void* TheMC = 0;
-void* TheMoveMgr = 0;
+// TheMoveMgr: now defined in MoveMgr.cpp
 // TheMovieSys: removed - provided by MovieSys.cpp
 void* TheMQSongSortMgr = 0;
 // TheNgRnd: removed - provided by Rnd_Stub.cpp

@@ -242,6 +242,11 @@ void SongSortMgr::RebuildSongRecordMap() {
     mRankedSongCount = rankedSongs.size();
     FOREACH (it, rankedSongs) {
         const HamSongMetadata *metadata = TheHamSongMgr.Data(*it);
+#ifdef HX_NATIVE
+        fprintf(stderr, "DC3 SongSort: songID=%d metadata=%p metaID=%d short='%s'\n",
+                *it, metadata, metadata ? metadata->ID() : -1,
+                metadata ? metadata->ShortName().Str() : "?");
+#endif
         if (metadata && !metadata->IsFake()
             && TheProfileMgr.IsContentUnlocked(metadata->ShortName())) {
             SongRecord second(metadata);

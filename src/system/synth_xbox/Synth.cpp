@@ -1,4 +1,5 @@
 #include "synth_xbox/Synth.h"
+#include "synth_xbox/HeadsetXferEffect.h"
 #include "FxSendBitCrush.h"
 #include "FxSendChorus.h"
 #include "FxSendCompress.h"
@@ -160,6 +161,31 @@ int Synth360::GetNextAvailableMicID() const {
             return i;
     }
     return -1;
+}
+
+void Synth360::SetupHeadsetSubmixes() {
+    // Ensure mHeadsetSubmixes has exactly 4 entries
+    if (mHeadsetSubmixes.size() > 4) {
+        mHeadsetSubmixes.erase(mHeadsetSubmixes.begin() + 4, mHeadsetSubmixes.end());
+    } else {
+        mHeadsetSubmixes.resize(4, 0);
+    }
+
+    for (int i = 0; i < 4; i++) {
+        // Build send descriptors for this headset submix
+        std::vector<XAUDIO2_SEND_DESCRIPTOR> sendDescs;
+        XAUDIO2_SEND_DESCRIPTOR desc;
+        memset(&desc, 0, sizeof(desc));
+        desc.Flags = 0;
+        desc.pOutputVoice = 0;
+        sendDescs.push_back(desc);
+
+        XAUDIO2_VOICE_SENDS voiceSends;
+        voiceSends.SendCount = sendDescs.size();
+        voiceSends.pSends = &sendDescs[0];
+
+        MILO_ASSERT(mHeadsetSubmixes[i] == 0, 0);
+    }
 }
 
 void Synth360::SetDolby(bool b1, bool b2) {

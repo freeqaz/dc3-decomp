@@ -475,6 +475,7 @@ void SystemInit(const char *config) {
     TheLocale.Init();
     CheatsInit();
     FileCache::Init();
+    TheContentMgr.Init();
     TheDebug.AddExitCallback(SystemTerminate);
 #else
     gSystemTitles = SystemConfig("system", "titles");

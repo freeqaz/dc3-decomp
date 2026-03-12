@@ -82,7 +82,7 @@ public:
     virtual FaderGroup &ChannelFaders(int);
     virtual void AddVirtualChannels(int);
     virtual void RemapChannel(int, int);
-    StreamReceiver *GetChannel(int i) const { return mChannels[i]; }
+    virtual StreamReceiver *GetChannel(int i) const { return mChannels[i]; }
     virtual void UpdateTime();
     virtual void UpdateTimeByFiltering();
     virtual float GetRawTime();

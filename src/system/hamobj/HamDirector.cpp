@@ -639,6 +639,10 @@ HamCamShot *HamDirector::FindNextDircut() {
     float secs = TheTaskMgr.Seconds(TaskMgr::kRealTime);
     const DircutEntry *entry = mDirCutKeys.Cross(secs, secs - TheTaskMgr.DeltaSeconds());
     HamCamShot *shot = nullptr;
+#ifdef HX_NATIVE
+    if (!entry)
+        return shot;
+#endif
     if (mNumPlayersFailed || (entry->mForced && mExcitement >= 3)) {
             shot = entry->mShot;
             if (shot) {

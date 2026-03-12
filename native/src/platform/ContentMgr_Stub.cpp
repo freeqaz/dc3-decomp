@@ -72,8 +72,10 @@ private:
             QueueCallbackDir(cb->ContentDir(), pattern);
             if (cb->HasContentAltDirs()) {
                 std::vector<String> *altDirs = cb->ContentAltDirs();
-                for (auto altIt = altDirs->begin(); altIt != altDirs->end(); ++altIt) {
-                    QueueCallbackDir(altIt->c_str(), pattern);
+                if (altDirs) {
+                    for (auto altIt = altDirs->begin(); altIt != altDirs->end(); ++altIt) {
+                        QueueCallbackDir(altIt->c_str(), pattern);
+                    }
                 }
             }
         }

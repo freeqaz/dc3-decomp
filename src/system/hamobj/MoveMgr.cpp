@@ -1,5 +1,7 @@
 #include "hamobj/MoveMgr.h"
 #include "SongUtl.h"
+
+MoveMgr *TheMoveMgr;
 #include "SuperEasyRemixer.h"
 #include "char/CharClip.h"
 #include "char/FileMerger.h"

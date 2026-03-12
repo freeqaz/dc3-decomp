@@ -1131,7 +1131,7 @@ void RndText::ReplaceMissingCharacters(HX_VECTOR(unsigned short) &wideChars) {
     std::map<RndFontBase *, std::set<unsigned short> > missingMap;
     unsigned short curChar;
     HX_VECTOR(unsigned short) origChars;
-    unsigned char copied = 0;
+    bool copied = false;
     StyleState styleState(this, 1.0f);
     unsigned short *p = &wideChars[0];
     curChar = *p;
@@ -1189,7 +1189,7 @@ void RndText::ReplaceMissingCharacters(HX_VECTOR(unsigned short) &wideChars) {
                 if (curChar != 0) {
                     if (!copied) {
                         origChars = wideChars;
-                        copied = 1;
+                        copied = true;
                     }
                     *p = curChar;
                 }
@@ -1209,9 +1209,8 @@ void RndText::ReplaceMissingCharacters(HX_VECTOR(unsigned short) &wideChars) {
             if (mapIt->second.size() <= 1) {
                 pluralS = "";
             }
-            auto _tmp0 = MakeString("%s:%s char%s (", PathName(this), TextToken(), pluralS);
             {
-                String msg(_tmp0);
+                String msg(MakeString("%s:%s char%s (", PathName(this), TextToken(), pluralS));
 
                 for (std::set<unsigned short>::iterator setIt = mapIt->second.begin();
                      setIt != mapIt->second.end(); ++setIt) {

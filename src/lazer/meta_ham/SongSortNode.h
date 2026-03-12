@@ -33,6 +33,7 @@ public:
         : NavListItemNode(cmp), unk_0x48(song), unk_0x4C(0) {}
 
     virtual DataNode Handle(DataArray *, bool);
+    virtual Symbol GetToken() const { return unk_0x48->ShortName(); }
     virtual void Text(UIListLabel *, UILabel *) const;
     virtual void Custom(UIListCustom *, Hmx::Object *) const;
     virtual Symbol Select();

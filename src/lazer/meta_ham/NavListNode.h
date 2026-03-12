@@ -153,7 +153,7 @@ public:
     virtual void Text(UIListLabel *, UILabel *) const;
     virtual void Custom(UIListCustom *, Hmx::Object *) const {}
     virtual RndMat *Mat(UIListMesh *) const;
-    virtual bool IsEnabled() const { return IsEnabled(); } // lmao what
+    virtual bool IsEnabled() const { return true; }
     virtual bool IsActive() const { return true; }
     virtual const char *GetAlbumArtPath() { return nullptr; }
     virtual void Renumber(std::vector<NavListSortNode *> &);
@@ -181,7 +181,7 @@ public:
     virtual void SetCollapseIconLabel(UILabel *) {}
     virtual int GetItemCount() { return 0; }
     virtual NavListSortNode *GetFirstActive() { return nullptr; }
-    virtual bool IsEnabled() const { return IsEnabled(); } // lmao what
+    virtual bool IsEnabled() const { return true; }
     virtual bool IsActive() const { return false; }
     virtual const char *GetAlbumArtPath() { return mAlbumArtPath.c_str(); }
     virtual void Renumber(std::vector<NavListSortNode *> &);
@@ -213,7 +213,7 @@ public:
     virtual int GetItemCount() { return 0; }
     virtual NavListSortNode *GetFirstActive() { return nullptr; }
     virtual bool IsEnabled() const;
-    virtual bool IsActive() const { return IsActive(); } // ok then
+    virtual bool IsActive() const { return IsEnabled(); }
     virtual const char *GetAlbumArtPath() { return nullptr; }
     virtual void Insert(NavListItemNode *, NavListSort *);
     virtual void UpdateItemCount(NavListItemNode *) {} // 0xb8

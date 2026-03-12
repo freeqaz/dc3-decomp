@@ -340,7 +340,7 @@ void HamUI::Draw() {
 bool HamUI::IsTimelineResetAllowed() const {
     if (!ThePassiveMessenger->HasMessages()
         && !ThePassiveMessenger->HasRecentlyDismissedMessage()
-        && TheSkeletonIdentifier->GetIDStatus() == 0 &&
+        && (!TheSkeletonIdentifier || TheSkeletonIdentifier->GetIDStatus() == 0) &&
         (!mHelpBar || (!mHelpBar->IsWriteIconShowing() && !mHelpBar->IsAnimating()))) {
         return true;
     }

@@ -981,7 +981,10 @@ def main():
 
     # Phase 2: Resolve to symbols
     print("Phase 2: Resolving symbols from decomp.db...", file=sys.stderr)
-    candidates = _resolve_symbols(all_hits, min_pct=args.min_pct, max_pct=args.max_pct)
+    candidates = _resolve_symbols(
+        all_hits, min_pct=args.min_pct, max_pct=args.max_pct,
+        status_filter=args.status,
+    )
     print(f"  Resolved {len(candidates)} function(s) with symbols", file=sys.stderr)
 
     if target_funcs:

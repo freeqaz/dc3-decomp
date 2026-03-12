@@ -36,7 +36,7 @@ namespace {
             MILO_LOG(
                 "   %d particles can be allocated, %.1f KB.\n",
                 size,
-                (float)(size * 200 * 0.0009765625f)
+                (float)((unsigned int)(size * 200) * 0.0009765625f)
             );
             MILO_LOG(
                 "   %d particles active, %d is the high water mark.\n",

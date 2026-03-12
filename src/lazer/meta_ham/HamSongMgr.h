@@ -31,6 +31,7 @@ public:
     virtual void ContentDone();
     virtual char const *ContentPattern() { return "songs*.dta"; }
     virtual char const *ContentDir() { return "songs"; }
+    virtual std::vector<String> *ContentAltDirs() { return &mContentAltDirs; }
     virtual bool HasContentAltDirs() { return mContentAltDirs.size() > 0; }
     // SongMgr
     virtual void Init();

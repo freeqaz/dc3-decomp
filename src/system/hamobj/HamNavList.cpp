@@ -1332,6 +1332,20 @@ void HamNavList::SetSelecting(bool selecting) {
         Symbol dataSym = provider->DataSymbol(selected);
         sym = dataSym;
     }
+#ifdef HX_NATIVE
+    static int sSelectDiag = 0;
+    if (sSelectDiag++ < 32) {
+        printf(
+            "DC3 HamNavList: select name='%s' selected=%d sym='%s' focus=%d selecting=%d provider=%p\n",
+            Name(),
+            selected,
+            sym.Str(),
+            TheUI->FocusComponent() == this,
+            selecting,
+            (void *)provider
+        );
+    }
+#endif
     SetRibbonMode(HamListRibbon::kRibbonSelect);
     if (TheGestureMgr && TheGestureMgr->GesturingWithVoice()) {
         TheGestureMgr->SetGesturingWithVoice(false);

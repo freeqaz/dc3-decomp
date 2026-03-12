@@ -59,6 +59,12 @@ void PreloadPanel::Load() {
     MILO_ASSERT(song_mgr, 0x5E);
     mContentNames.clear();
     mSongDoesNotExist = false;
+#ifdef HX_NATIVE
+    // Native: no ark song content to mount/cache — skip directly to success
+    fprintf(stderr, "DC3 Native: PreloadPanel::Load — skipping content mount/cache for '%s'\n", cur.Str());
+    mMounted = true;
+    mPreloadResult = kPreloadSuccess;
+#else
     if (!song_mgr->HasSong(cur, false)) {
         mSongDoesNotExist = true;
     } else {
@@ -75,6 +81,7 @@ void PreloadPanel::Load() {
     if (mContentNames.empty()) {
         StartCache();
     }
+#endif
 }
 
 bool PreloadPanel::IsLoaded() const {
