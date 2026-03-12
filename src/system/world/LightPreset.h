@@ -195,6 +195,8 @@ protected:
     void AnimateLightFromPreset(RndLight *, const LightPreset::EnvLightEntry &, float);
     void ApplyState(LightPreset::Keyframe const &);
     void SetKeyframe(Keyframe &);
+    void AnimateEnvFromPreset(RndEnviron *, const EnvironmentEntry &, float);
+    void AnimateSpotFromPreset(Spotlight *, const SpotlightEntry &, float);
     void FillEnvPresetData(RndEnviron *, EnvironmentEntry &);
     void FillSpotlightDrawerPresetData(SpotlightDrawer *, SpotlightDrawerEntry &);
     void AddSpotlight(Spotlight *, bool);

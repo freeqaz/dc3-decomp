@@ -18,6 +18,7 @@
 /** "Represents a beam and floorspot for venue modeling" */
 class Spotlight : public RndDrawable, public RndTransformable, public RndPollable {
     friend class SpotlightDrawer;
+    friend class LightPreset;
 public:
     struct BeamDef {
         enum Shape {

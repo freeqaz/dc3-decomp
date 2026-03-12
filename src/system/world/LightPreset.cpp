@@ -727,35 +727,31 @@ DataNode LightPreset::OnViewKeyframe(DataArray *da) {
 void LightPreset::SyncKeyframeTargets() {
     for (ObjDirItr<Spotlight> it(Dir(), true); it; ++it) {
         Spotlight *key = it;
-        auto found = mSpotlights.find(key);
-        if (found == mSpotlights.end()) {
+        if (mSpotlights.find(key) == mSpotlights.end()) {
             AddSpotlight(key, false);
         }
     }
     for (ObjDirItr<RndEnviron> it(Dir(), true); it; ++it) {
-        ObjPtrVec<RndEnviron, ObjectDir>::const_iterator found = mEnvironments.find(it);
-        if (found == mEnvironments.end()) {
-            AddEnvironment(it);
+        RndEnviron *key = it;
+        if (mEnvironments.find(key) == mEnvironments.end()) {
+            AddEnvironment(key);
         }
-        FOREACH (lit, it->mLightsReal) {
+        FOREACH (lit, key->mLightsReal) {
             RndLight *lkey = *lit;
-            ObjPtrVec<RndLight, ObjectDir>::const_iterator lfound = mLights.find(lkey);
-            if (lfound == mLights.end()) {
+            if (mLights.find(lkey) == mLights.end()) {
                 AddLight(lkey);
             }
         }
-        FOREACH (lit, it->mLightsApprox) {
+        FOREACH (lit, key->mLightsApprox) {
             RndLight *lkey = *lit;
-            ObjPtrVec<RndLight, ObjectDir>::const_iterator lfound = mLights.find(lkey);
-            if (lfound == mLights.end()) {
+            if (mLights.find(lkey) == mLights.end()) {
                 AddLight(lkey);
             }
         }
     }
     for (ObjDirItr<SpotlightDrawer> it(Dir(), true); it; ++it) {
         SpotlightDrawer *key = it;
-        ObjPtrVec<SpotlightDrawer, ObjectDir>::const_iterator found = mSpotlightDrawers.find(key);
-        if (found == mSpotlightDrawers.end()) {
+        if (mSpotlightDrawers.find(key) == mSpotlightDrawers.end()) {
             AddSpotlightDrawer(key);
         }
     }
@@ -956,10 +952,10 @@ void LightPreset::AnimateState(
         if (kCur.mSpotlightDrawerChanges[i]) {
             const SpotlightDrawerEntry &prev = kPrev.mSpotlightDrawerEntries[i];
             SpotlightDrawerEntry &state = mSpotlightDrawerState[i];
-            Interp(state.mTotalIntensity, prev.mTotalIntensity, t, state.mTotalIntensity);
             Interp(state.mBaseIntensity, prev.mBaseIntensity, t, state.mBaseIntensity);
             Interp(state.mSmokeIntensity, prev.mSmokeIntensity, t, state.mSmokeIntensity);
             Interp(state.mLightInfluence, prev.mLightInfluence, t, state.mLightInfluence);
+            Interp(state.mTotalIntensity, prev.mTotalIntensity, t, state.mTotalIntensity);
         }
     }
 }
@@ -1104,48 +1100,67 @@ void LightPreset::AnimateLightFromPreset(
     }
 }
 
-static void AnimateEnvFromPreset(
-    LightPreset *preset, RndEnviron *env, const LightPreset::EnvironmentEntry &entry, float f
+void LightPreset::AnimateEnvFromPreset(
+    RndEnviron *env, const EnvironmentEntry &entry, float f
 ) {
     Hmx::Color c;
-    preset->TranslateColor(entry.mAmbientColor, c);
+    TranslateColor(entry.mAmbientColor, c);
     Interp(env->AmbientColor(), c, f, c);
     env->SetAmbientColor(c);
-#ifdef HX_NATIVE
     float fogStart, fogEnd;
     if (entry.mFogEnable) {
         Hmx::Color fc;
-        preset->TranslateColor(entry.mFogColor, fc);
+        TranslateColor(entry.mFogColor, fc);
         Interp(env->FogColor(), fc, f, fc);
-        env->SetFogColor(fc);
-        Interp(env->FogStart(), entry.mFogStart, f, fogStart);
-        Interp(env->FogEnd(), entry.mFogEnd, f, fogEnd);
+        env->mAmbientFogOwner->mFogColor = fc;
+        Interp(env->mAmbientFogOwner->mFogStart, entry.mFogStart, f, fogStart);
+        Interp(env->mAmbientFogOwner->mFogEnd, entry.mFogEnd, f, fogEnd);
     } else {
         float far = RndCam::Current() ? RndCam::Current()->FarPlane() : FLT_MAX;
-        Interp(env->FogStart(), far, f, fogStart);
-        Interp(env->FogEnd(), far, f, fogEnd);
+        Interp(env->mAmbientFogOwner->mFogStart, far, f, fogStart);
+        Interp(env->mAmbientFogOwner->mFogEnd, far, f, fogEnd);
     }
-    env->SetFogRange(fogStart, fogEnd);
+    env->mAmbientFogOwner->mFogStart = fogStart;
+    env->mAmbientFogOwner->mFogEnd = fogEnd;
     if (f == 1.0f)
         env->SetFogEnable(entry.mFogEnable);
-#endif
 }
 
-static void AnimateSpotFromPreset(
-    LightPreset *preset, Spotlight *spot, const LightPreset::SpotlightEntry &entry, float f
+void LightPreset::AnimateSpotFromPreset(
+    Spotlight *spot, const SpotlightEntry &entry, float f
 ) {
     if (spot->AnimateColorFromPreset()) {
         Hmx::Color spotColor = spot->Color();
         float intensity = spot->Intensity();
         Hmx::Color col;
         col.Unpack(entry.mColor);
-        preset->TranslateColor(col, col);
+        TranslateColor(col, col);
         Interp(spotColor, col, f, spotColor);
         Interp(intensity, entry.mIntensity, f, intensity);
         spot->SetColorIntensity(spotColor, intensity);
         if (spot->GetFlare() && f == 1.0f) {
-            spot->SetFlareEnabled(entry.mFlags & LightPreset::SpotlightEntry::kEnabled);
+            spot->SetFlareEnabled(entry.mFlags & SpotlightEntry::kEnabled);
         }
+    }
+    if (spot->AnimateOrientationFromPreset()) {
+        Hmx::Quat zero(0, 0, 0, 0);
+        Hmx::Quat q;
+        if (!(entry.mFlags & 2)) {
+            spot->mTargetLoaded = false;
+            q.Reset();
+        } else {
+            if (entry.mRotation != zero) {
+                q = entry.mRotation;
+            } else {
+                entry.CalculateDirection(spot, q);
+            }
+        }
+        Interp(spot->mDampQuat, q, f, q);
+        spot->mDampQuat = q;
+        if (f == 1.0f) {
+            spot->mTarget = (RndTransformable *)entry.mTarget;
+        }
+        spot->mUpdating = true;
     }
 }
 
@@ -1182,7 +1197,7 @@ void LightPreset::Animate(float f) {
         if (mSpotlights[i]->GetAnimateFromPreset()) {
             float blend = ComputeSpotBlend(i, f);
             if (blend >= 1.1920929E-7f) {
-                AnimateSpotFromPreset(this, mSpotlights[i], mSpotlightState[i], blend);
+                AnimateSpotFromPreset(mSpotlights[i], mSpotlightState[i], blend);
             }
         }
     }
@@ -1190,7 +1205,7 @@ void LightPreset::Animate(float f) {
     MILO_ASSERT(mEnvironments.size() == _tmp4, 0x364);
     for (uint i = 0; i != mEnvironments.size(); i++) {
         if (mEnvironments[i]->GetAnimateFromPreset()) {
-            AnimateEnvFromPreset(this, mEnvironments[i], mEnvironmentState[i], f);
+            AnimateEnvFromPreset(mEnvironments[i], mEnvironmentState[i], f);
         }
     }
     MILO_ASSERT(mLights.size() == mLightState.size(), 0x36c);
@@ -1281,7 +1296,7 @@ BEGIN_LOADS(LightPreset)
         int legacyFade;
         bs >> legacyFade;
         int dummy;
-        if (d.rev != 0 && d.rev < 0x11)
+        if (d.rev > 0 && d.rev < 0x11)
             bs >> dummy;
         if (d.rev > 2 && d.rev < 0x11)
             bs >> dummy;
