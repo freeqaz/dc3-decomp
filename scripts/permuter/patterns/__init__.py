@@ -79,6 +79,10 @@ from . import loop_condition_subtract  # noqa: F401  # Rewrite a>=b to a-b>=0 in
 from . import foreach_to_dowhile  # noqa: F401  # Convert FOREACH to do-while with pre-guard
 from . import u8_to_unsigned_long  # noqa: F401  # Widen u8 intermediates to prevent rlwinm fusion
 from . import value_address_caching  # noqa: F401  # Swap ref binding <-> value caching for register alloc
+from . import scope_narrowing  # noqa: F401  # Move declarations into narrower scopes (if/else/loop/block)
+from . import redundant_guard_elimination  # noqa: F401  # Remove exhaustive else-if/if-or guards
+from . import accessor_outline  # noqa: F401  # Outline inlined accessors via noinline wrappers
+from . import handler_inline  # noqa: F401  # Named/temp Message vars and handler wrapper inlining
 
 from .base import get_all_patterns, get_pattern, list_patterns
 

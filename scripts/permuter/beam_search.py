@@ -622,6 +622,10 @@ def beam_search(
     initial_percent = 0.0
     best_ever_score = 0.0
     best_ever_state: BeamState | None = None
+
+    # Pattern stats accumulator for DB recording
+    from .pattern_stats import RunStatsAccumulator
+    pattern_accumulator = RunStatsAccumulator()
     result_codegen_shapes: list[str] = []
     result_fact_boosts: list[str] = []
     result_fact_suppresses: list[str] = []
@@ -903,6 +907,15 @@ def beam_search(
             if parent is None:
                 continue
 
+            # Record to pattern stats accumulator
+            pattern_accumulator.record_variant(
+                result.variant.pattern_name,
+                result.variant.name,
+                result.match_percent if result.build_success else 0.0,
+                baseline,
+                result.build_success,
+            )
+
             if not result.build_success:
                 build_fails += 1
                 # Track lineage build failures
@@ -980,6 +993,10 @@ def beam_search(
                 ),
             )
             child_states.append(child)
+
+        # Mark winning pattern in accumulator
+        if depth_best_score > best_ever_score and depth_best_pattern:
+            pattern_accumulator.mark_winner(depth_best_pattern)
 
         # Record round
         round_delta = depth_best_score - best_ever_score if depth_best_score > best_ever_score else 0.0
@@ -1144,6 +1161,26 @@ def beam_search(
         for vr in all_validation_results:
             t = int(vr.tier)
             validation_dist[t] = validation_dist.get(t, 0) + 1
+
+    # Persist pattern stats to DB
+    try:
+        from .pattern_stats import store_run as store_pattern_run
+        diag_cat = None
+        if best_ever_state and best_ever_state.diagnosis:
+            diag_cat = getattr(best_ever_state.diagnosis, 'category', None)
+        store_pattern_run(
+            accumulator=pattern_accumulator,
+            symbol=symbol,
+            function_name=function_name,
+            source_path=str(source_path),
+            initial_pct=initial_percent,
+            final_pct=final_percent,
+            diagnosis_category=diag_cat,
+            unit=unit,
+            caller="beam_search",
+        )
+    except Exception as e:
+        print(f"WARNING: beam pattern stats storage failed: {e}", file=sys.stderr)
 
     return _build_result(
         symbol, function_name, source_path,

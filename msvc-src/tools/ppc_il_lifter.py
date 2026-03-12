@@ -1201,6 +1201,161 @@ def detect_call_shapes(ops: list[LiftedOp]) -> list[dict[str, Any]]:
     return shapes
 
 
+def detect_argument_materialization(ops: list[LiftedOp]) -> list[dict[str, Any]]:
+    """Detect how function arguments are prepared before call sites.
+
+    Classifies argument setup strategy for each bl/bctrl:
+      - register_direct: Args loaded directly into r3-r10 from memory/immediates
+      - pre_computed: Args computed into callee-saved regs, then mr'd into arg regs
+      - stack_spilled: Args pushed to stack via stw rN, offset(r1) before call
+      - mixed: Combination of the above strategies
+    """
+    _ARG_REGS = {f"r{i}" for i in range(3, 11)}
+    _CALLEE_SAVED = {f"r{i}" for i in range(13, 32)}
+
+    results: list[dict[str, Any]] = []
+
+    for i, op in enumerate(ops):
+        if op.name not in ("CALL", "INDIRECT_CALL"):
+            continue
+
+        # Scan backward up to 8 instructions before the call
+        window_start = max(0, i - 8)
+        window = ops[window_start:i]
+
+        direct_count = 0
+        precomputed_count = 0
+        spilled_count = 0
+        details: list[dict[str, str]] = []
+
+        for w_op in window:
+            dest = w_op.dest or ""
+
+            if w_op.name == "ASSIGN" and dest in _ARG_REGS and w_op.args:
+                src = w_op.args[0]
+                if src in _CALLEE_SAVED:
+                    precomputed_count += 1
+                    details.append({"reg": dest, "kind": "pre_computed", "src": src})
+                else:
+                    direct_count += 1
+                    details.append({"reg": dest, "kind": "register_direct", "src": src})
+
+            elif w_op.name in ("LOAD", "CONST") and dest in _ARG_REGS:
+                direct_count += 1
+                details.append({"reg": dest, "kind": "register_direct"})
+
+            elif w_op.name == "STORE" and w_op.source:
+                mnemonic, operands = _split_instruction(w_op.source)
+                if mnemonic in ("stw", "std") and len(operands) >= 2:
+                    mem_arg = operands[1]
+                    if "(r1)" in mem_arg or "(sp)" in mem_arg:
+                        spilled_count += 1
+                        details.append({"reg": operands[0], "kind": "stack_spilled"})
+
+        arg_count = direct_count + precomputed_count + spilled_count
+        if arg_count == 0:
+            continue
+
+        if spilled_count > 0 and (direct_count > 0 or precomputed_count > 0):
+            strategy = "mixed"
+        elif spilled_count > 0:
+            strategy = "stack_spilled"
+        elif precomputed_count > 0 and direct_count == 0:
+            strategy = "pre_computed"
+        elif precomputed_count > 0:
+            strategy = "mixed"
+        else:
+            strategy = "register_direct"
+
+        call_target = op.args[0] if op.args else "<indirect>"
+        results.append({
+            "call_target": call_target,
+            "arg_count": arg_count,
+            "strategy": strategy,
+            "details": details,
+            "op_index": i,
+        })
+
+    return results
+
+
+def detect_sparse_switch(ops: list[LiftedOp], cfg: ControlFlowGraph | None = None) -> list[dict[str, Any]]:
+    """Detect sparse switch lowering strategies beyond jump tables.
+
+    Classifies switch implementation:
+      - binary_search: cmpwi+beq/bge/ble forming binary tree (log N compares)
+      - linear_scan: Sequential cmpwi+beq chain (N compares)
+      - hybrid: Binary search partitioning with small linear scans at leaves
+    Jump tables are already detected by detect_switch_dispatch() and skipped here.
+    """
+    results: list[dict[str, Any]] = []
+
+    # Skip if a jump table is already present (detected separately)
+    has_jump_table = any(op.name == "DISPATCH" for op in ops)
+    if has_jump_table:
+        return results
+
+    # Collect all CMP + conditional branch pairs
+    pairs: list[dict[str, Any]] = []
+    i = 0
+    while i < len(ops) - 1:
+        if ops[i].name == "CMP" and ops[i + 1].name == "BRANCH":
+            cond = ops[i + 1].attrs.get("condition", "")
+            target = ops[i + 1].args[0] if ops[i + 1].args else None
+            # Extract comparison value
+            cmp_val = None
+            if ops[i].args and len(ops[i].args) >= 2:
+                cmp_val = _parse_immediate(ops[i].args[1])
+            pairs.append({
+                "index": i,
+                "condition": cond,
+                "target": target,
+                "cmp_value": cmp_val,
+            })
+            i += 2
+        else:
+            i += 1
+
+    if len(pairs) < 3:
+        return results
+
+    # Classify: binary search uses inequality branches (bge, ble, bgt, blt)
+    # mixed with equality (beq). Linear scan uses only beq.
+    eq_count = sum(1 for p in pairs if p["condition"] == "eq")
+    ineq_count = sum(1 for p in pairs if p["condition"] in ("ge", "le", "gt", "lt"))
+
+    compare_count = len(pairs)
+    depth = 0
+
+    if ineq_count == 0 and eq_count >= 3:
+        strategy = "linear_scan"
+        depth = 1
+    elif ineq_count > 0 and eq_count == 0:
+        strategy = "binary_search"
+        # Estimate depth from compare count: depth ~= log2(cases)
+        import math
+        depth = max(1, int(math.log2(max(1, compare_count))))
+    elif ineq_count > 0 and eq_count > 0:
+        strategy = "hybrid"
+        import math
+        depth = max(1, int(math.log2(max(1, compare_count))))
+    else:
+        return results
+
+    # Estimate case count from comparison values when available
+    cmp_values = [p["cmp_value"] for p in pairs if p["cmp_value"] is not None]
+    estimated_cases = len(set(cmp_values)) if cmp_values else compare_count
+
+    results.append({
+        "strategy": strategy,
+        "estimated_cases": estimated_cases,
+        "compare_count": compare_count,
+        "depth": depth,
+    })
+
+    return results
+
+
 def detect_float_conversion(ops: list[LiftedOp]) -> list[dict[str, Any]]:
     """Detect float-to-int conversion sequences.
 
@@ -1337,6 +1492,29 @@ def derive_shape_facts(function: LiftedFunction) -> list[dict[str, Any]]:
     # ── Call/return shape facts ──
     for cs in detect_call_shapes(ops):
         facts.append(dict(cs))
+
+    # ── Argument materialization facts ──
+    for am in detect_argument_materialization(ops):
+        facts.append({
+            "kind": "argument_materialization",
+            "category": am["strategy"],
+            "confidence": 0.85,
+            "call_target": am["call_target"],
+            "arg_count": am["arg_count"],
+            "op_index": am["op_index"],
+        })
+
+    # ── Sparse switch facts ──
+    sparse = detect_sparse_switch(ops, function.cfg)
+    for sp in sparse:
+        facts.append({
+            "kind": "sparse_switch",
+            "category": sp["strategy"],
+            "confidence": 0.82,
+            "estimated_cases": sp["estimated_cases"],
+            "compare_count": sp["compare_count"],
+            "depth": sp["depth"],
+        })
 
     # ── Float conversion facts ──
     float_conversions = detect_float_conversion(ops)

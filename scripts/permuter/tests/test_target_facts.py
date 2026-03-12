@@ -503,6 +503,134 @@ class TestVirtualDispatchFacts(unittest.TestCase):
         self.assertTrue(facts[0].payload.get("has_vbtable_indirection"))
 
 
+class TestArgumentMaterializationFacts(unittest.TestCase):
+    """Tests for argument materialization shape facts routing."""
+
+    def test_pre_computed_boosts_declaration_reorder(self):
+        """Pre-computed args in callee-saved regs boost declaration_reorder."""
+        facts = extract_from_shape_facts([
+            {
+                "kind": "argument_materialization",
+                "category": "pre_computed",
+                "confidence": 0.85,
+                "call_target": "some_func",
+                "arg_count": 3,
+            },
+        ], diagnosis=_make_diagnosis())
+        self.assertEqual(len(facts), 1)
+        self.assertIn("declaration_reorder", facts[0].payload["boost_patterns"])
+        self.assertEqual(facts[0].payload["arg_strategy"], "pre_computed")
+
+    def test_mixed_boosts_declaration_reorder(self):
+        """Mixed strategy also boosts declaration_reorder."""
+        facts = extract_from_shape_facts([
+            {
+                "kind": "argument_materialization",
+                "category": "mixed",
+                "confidence": 0.85,
+                "call_target": "func",
+                "arg_count": 4,
+            },
+        ], diagnosis=_make_diagnosis())
+        self.assertEqual(len(facts), 1)
+        self.assertIn("declaration_reorder", facts[0].payload["boost_patterns"])
+
+    def test_stack_spilled_boosts_variable_extraction(self):
+        """Stack-spilled args boost variable_extraction."""
+        facts = extract_from_shape_facts([
+            {
+                "kind": "argument_materialization",
+                "category": "stack_spilled",
+                "confidence": 0.85,
+                "call_target": "many_args",
+                "arg_count": 10,
+            },
+        ], diagnosis=_make_diagnosis())
+        self.assertEqual(len(facts), 1)
+        self.assertIn("variable_extraction", facts[0].payload["boost_patterns"])
+
+    def test_register_direct_no_boost(self):
+        """Register-direct args have no boost/suppress patterns."""
+        facts = extract_from_shape_facts([
+            {
+                "kind": "argument_materialization",
+                "category": "register_direct",
+                "confidence": 0.85,
+                "call_target": "simple_func",
+                "arg_count": 2,
+            },
+        ], diagnosis=_make_diagnosis())
+        self.assertEqual(len(facts), 1)
+        self.assertNotIn("boost_patterns", facts[0].payload)
+
+
+class TestSparseSwitchFacts(unittest.TestCase):
+    """Tests for sparse switch shape facts routing."""
+
+    def test_linear_scan_boosts_switch_if_convert(self):
+        """Linear scan switch boosts switch_if_convert."""
+        facts = extract_from_shape_facts([
+            {
+                "kind": "sparse_switch",
+                "category": "linear_scan",
+                "confidence": 0.82,
+                "estimated_cases": 5,
+                "compare_count": 5,
+                "depth": 1,
+            },
+        ], diagnosis=_make_diagnosis())
+        self.assertEqual(len(facts), 1)
+        self.assertIn("switch_if_convert", facts[0].payload["boost_patterns"])
+        self.assertEqual(facts[0].payload["switch_strategy"], "linear_scan")
+
+    def test_binary_search_suppresses_switch_if_convert(self):
+        """Binary search switch suppresses switch_if_convert."""
+        facts = extract_from_shape_facts([
+            {
+                "kind": "sparse_switch",
+                "category": "binary_search",
+                "confidence": 0.82,
+                "estimated_cases": 16,
+                "compare_count": 4,
+                "depth": 4,
+            },
+        ], diagnosis=_make_diagnosis())
+        self.assertEqual(len(facts), 1)
+        self.assertIn("switch_if_convert", facts[0].payload["suppress_patterns"])
+
+    def test_hybrid_boosts_switch_if_convert(self):
+        """Hybrid switch strategy boosts switch_if_convert."""
+        facts = extract_from_shape_facts([
+            {
+                "kind": "sparse_switch",
+                "category": "hybrid",
+                "confidence": 0.82,
+                "estimated_cases": 8,
+                "compare_count": 6,
+                "depth": 2,
+            },
+        ], diagnosis=_make_diagnosis())
+        self.assertEqual(len(facts), 1)
+        self.assertIn("switch_if_convert", facts[0].payload["boost_patterns"])
+
+    def test_sparse_switch_carries_metadata(self):
+        """Sparse switch facts carry estimated_cases, compare_count, depth."""
+        facts = extract_from_shape_facts([
+            {
+                "kind": "sparse_switch",
+                "category": "linear_scan",
+                "confidence": 0.82,
+                "estimated_cases": 7,
+                "compare_count": 7,
+                "depth": 1,
+            },
+        ], diagnosis=_make_diagnosis())
+        self.assertEqual(len(facts), 1)
+        self.assertEqual(facts[0].payload["estimated_cases"], 7)
+        self.assertEqual(facts[0].payload["compare_count"], 7)
+        self.assertEqual(facts[0].payload["depth"], 1)
+
+
 class TestInlineWrapperFacts(unittest.TestCase):
     """Tests for inline wrapper shape facts routing."""
 

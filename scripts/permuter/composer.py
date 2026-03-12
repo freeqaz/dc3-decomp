@@ -58,6 +58,7 @@ _FOLLOW_UP_MAP: dict[str, list[str]] = {
     "alloca_intrinsic": ["declaration_reorder"],
     "commutative_swap": ["declaration_reorder"],
     "initializer_literal": ["declaration_reorder"],
+    "scope_narrowing": ["declaration_reorder", "value_address_caching"],
 
     # Comparison/boolean
     "comparison_equivalence": ["signed_unsigned", "comparison_flip"],
@@ -99,11 +100,16 @@ _FOLLOW_UP_MAP: dict[str, list[str]] = {
     "fsel_template": ["comparison_flip", "branch_polarity"],
     "noreturn_attr": ["branch_polarity"],
     "return_call_merge": ["branch_polarity", "declaration_reorder"],
+    "redundant_guard_elimination": ["branch_polarity", "comparison_flip"],
+
+    # Cross-unit / inlining
+    "accessor_outline": ["declaration_reorder", "value_address_caching"],
 
     # Misc
     "argument_swap": ["declaration_reorder", "comparison_flip"],
     "iterator_deref_style": ["member_ref_bind", "declaration_reorder"],
     "const_overload": ["comparison_equivalence"],
+    "handler_inline": ["temp_elimination", "declaration_reorder"],
 }
 
 _TAG_FOLLOW_UP_MAP: dict[str, list[str]] = {

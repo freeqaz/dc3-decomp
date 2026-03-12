@@ -493,6 +493,36 @@ def extract_from_shape_facts(
                 payload["counted_loop"] = True
                 payload["boost_patterns"] = ["foreach_to_dowhile"]
 
+        elif kind == "argument_materialization":
+            payload["call_target"] = shape.get("call_target")
+            payload["arg_count"] = shape.get("arg_count", 0)
+            payload["arg_strategy"] = category
+            if category == "pre_computed":
+                # Pre-computed args in callee-saved regs suggest declaration
+                # order matters — the compiler allocated regs early
+                payload["boost_patterns"] = ["declaration_reorder"]
+            elif category == "mixed":
+                # Mixed strategy hints at complex argument setup
+                payload["boost_patterns"] = ["declaration_reorder"]
+            elif category == "stack_spilled":
+                # Stack-spilled args suggest many parameters or large structs
+                payload["boost_patterns"] = ["variable_extraction"]
+
+        elif kind == "sparse_switch":
+            payload["switch_strategy"] = category
+            payload["estimated_cases"] = shape.get("estimated_cases", 0)
+            payload["compare_count"] = shape.get("compare_count", 0)
+            payload["depth"] = shape.get("depth", 0)
+            if category == "linear_scan":
+                # Linear scan = if-else chain, boost switch_if_convert
+                payload["boost_patterns"] = ["switch_if_convert"]
+            elif category == "binary_search":
+                # Binary search is a compiler optimization; suppress conversion
+                payload["suppress_patterns"] = ["switch_if_convert"]
+            elif category == "hybrid":
+                # Hybrid is mixed; mild boost for conversion
+                payload["boost_patterns"] = ["switch_if_convert"]
+
         elif kind == "float_fusion":
             payload["fma_count"] = shape.get("count", 0)
 

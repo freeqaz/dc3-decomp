@@ -24,7 +24,9 @@ from ppc_il_lifter import (
     build_cfg,
     compute_shape_delta,
     derive_shape_facts,
+    detect_argument_materialization,
     detect_float_conversion,
+    detect_sparse_switch,
     detect_switch_dispatch,
     detect_vtable_dispatch,
     lift_instruction,
@@ -1099,7 +1101,8 @@ class TestShapeDelta(unittest.TestCase):
             name="test", unsupported=[],
             ops=[
                 LiftedOp("LOAD", dest="r11", args=("0(r31)",)),
-                LiftedOp("SET_CTR", args=("r11",)),
+                LiftedOp("LOAD", dest="r12", args=("0x10(r11)",)),
+                LiftedOp("SET_CTR", args=("r12",)),
                 LiftedOp("INDIRECT_CALL"),
             ],
         )
@@ -1181,6 +1184,255 @@ class TestPrologueInfo(unittest.TestCase):
         d = info.to_dict()
         self.assertIsNone(d["first_saved_gpr"])
         self.assertIsNone(d["first_saved_fpr"])
+
+
+# ---------------------------------------------------------------------------
+# Argument materialization detection
+# ---------------------------------------------------------------------------
+
+class TestDetectArgumentMaterialization(unittest.TestCase):
+    def test_register_direct(self):
+        """Args loaded directly into r3-r10 from memory."""
+        ops = [
+            LiftedOp("LOAD", dest="r3", args=("0(r31)",), attrs={"kind": "lwz"},
+                     source="lwz r3, 0(r31)"),
+            LiftedOp("LOAD", dest="r4", args=("4(r31)",), attrs={"kind": "lwz"},
+                     source="lwz r4, 4(r31)"),
+            LiftedOp("CALL", args=("some_func",)),
+        ]
+        results = detect_argument_materialization(ops)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["strategy"], "register_direct")
+        self.assertEqual(results[0]["arg_count"], 2)
+        self.assertEqual(results[0]["call_target"], "some_func")
+
+    def test_pre_computed(self):
+        """Args mr'd from callee-saved regs into arg regs."""
+        ops = [
+            LiftedOp("ASSIGN", dest="r3", args=("r28",), source="mr r3, r28"),
+            LiftedOp("ASSIGN", dest="r4", args=("r29",), source="mr r4, r29"),
+            LiftedOp("CALL", args=("some_func",)),
+        ]
+        results = detect_argument_materialization(ops)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["strategy"], "pre_computed")
+        self.assertEqual(results[0]["arg_count"], 2)
+
+    def test_stack_spilled(self):
+        """Args pushed to stack via stw."""
+        ops = [
+            LiftedOp("STORE", args=("r5", "8(r1)"), attrs={"kind": "stw"},
+                     source="stw r5, 8(r1)"),
+            LiftedOp("STORE", args=("r6", "12(r1)"), attrs={"kind": "stw"},
+                     source="stw r6, 12(r1)"),
+            LiftedOp("CALL", args=("many_args_func",)),
+        ]
+        results = detect_argument_materialization(ops)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["strategy"], "stack_spilled")
+
+    def test_mixed_strategy(self):
+        """Mix of register-direct and pre-computed."""
+        ops = [
+            LiftedOp("LOAD", dest="r3", args=("0(r31)",), attrs={"kind": "lwz"},
+                     source="lwz r3, 0(r31)"),
+            LiftedOp("ASSIGN", dest="r4", args=("r28",), source="mr r4, r28"),
+            LiftedOp("CALL", args=("mixed_func",)),
+        ]
+        results = detect_argument_materialization(ops)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["strategy"], "mixed")
+
+    def test_indirect_call(self):
+        """Indirect call via bctrl."""
+        ops = [
+            LiftedOp("CONST", dest="r3", attrs={"constant": 42}, source="li r3, 42"),
+            LiftedOp("INDIRECT_CALL", source="bctrl"),
+        ]
+        results = detect_argument_materialization(ops)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["call_target"], "<indirect>")
+        self.assertEqual(results[0]["strategy"], "register_direct")
+
+    def test_no_args(self):
+        """Call with no argument setup in window."""
+        ops = [
+            LiftedOp("ADD", dest="r11", args=("r11", "r12")),
+            LiftedOp("CALL", args=("no_arg_func",)),
+        ]
+        results = detect_argument_materialization(ops)
+        self.assertEqual(len(results), 0)
+
+    def test_multiple_calls(self):
+        """Multiple calls in function each analyzed independently."""
+        ops = [
+            LiftedOp("CONST", dest="r3", attrs={"constant": 1}, source="li r3, 1"),
+            LiftedOp("CALL", args=("func_a",)),
+            # Enough padding so li r3 is out of the 8-instruction window for func_b
+            LiftedOp("ADD", dest="r11", args=("r11", "r12")),
+            LiftedOp("ADD", dest="r11", args=("r11", "r12")),
+            LiftedOp("ADD", dest="r11", args=("r11", "r12")),
+            LiftedOp("ADD", dest="r11", args=("r11", "r12")),
+            LiftedOp("ADD", dest="r11", args=("r11", "r12")),
+            LiftedOp("ADD", dest="r11", args=("r11", "r12")),
+            LiftedOp("ADD", dest="r11", args=("r11", "r12")),
+            LiftedOp("ASSIGN", dest="r3", args=("r31",), source="mr r3, r31"),
+            LiftedOp("CALL", args=("func_b",)),
+        ]
+        results = detect_argument_materialization(ops)
+        self.assertEqual(len(results), 2)
+        self.assertEqual(results[0]["call_target"], "func_a")
+        self.assertEqual(results[0]["strategy"], "register_direct")
+        self.assertEqual(results[1]["call_target"], "func_b")
+        self.assertEqual(results[1]["strategy"], "pre_computed")
+
+
+# ---------------------------------------------------------------------------
+# Sparse switch detection
+# ---------------------------------------------------------------------------
+
+class TestDetectSparseSwitch(unittest.TestCase):
+    def test_linear_scan(self):
+        """Sequential cmpwi+beq chain = linear scan."""
+        ops = []
+        for val in range(5):
+            ops.append(LiftedOp("CMP", args=("r3", str(val)),
+                               attrs={"signed": True, "width": "imm"},
+                               source=f"cmpwi r3, {val}"))
+            ops.append(LiftedOp("BRANCH", args=(f"case_{val}",),
+                               attrs={"condition": "eq"},
+                               source=f"beq case_{val}"))
+        ops.append(LiftedOp("RETURN"))
+        results = detect_sparse_switch(ops)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["strategy"], "linear_scan")
+        self.assertEqual(results[0]["compare_count"], 5)
+        self.assertEqual(results[0]["depth"], 1)
+
+    def test_binary_search(self):
+        """cmpwi+bge/ble forming binary tree = binary search."""
+        ops = [
+            LiftedOp("CMP", args=("r3", "10"), attrs={"signed": True},
+                     source="cmpwi r3, 10"),
+            LiftedOp("BRANCH", args=("upper_half",),
+                     attrs={"condition": "ge"}, source="bge upper_half"),
+            LiftedOp("CMP", args=("r3", "5"), attrs={"signed": True},
+                     source="cmpwi r3, 5"),
+            LiftedOp("BRANCH", args=("mid_left",),
+                     attrs={"condition": "ge"}, source="bge mid_left"),
+            LiftedOp("CMP", args=("r3", "2"), attrs={"signed": True},
+                     source="cmpwi r3, 2"),
+            LiftedOp("BRANCH", args=("leaf",),
+                     attrs={"condition": "lt"}, source="blt leaf"),
+            LiftedOp("RETURN"),
+        ]
+        results = detect_sparse_switch(ops)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["strategy"], "binary_search")
+        self.assertGreater(results[0]["depth"], 0)
+
+    def test_hybrid(self):
+        """Mix of bge and beq = hybrid."""
+        ops = [
+            LiftedOp("CMP", args=("r3", "10"), attrs={"signed": True},
+                     source="cmpwi r3, 10"),
+            LiftedOp("BRANCH", args=("upper",),
+                     attrs={"condition": "ge"}, source="bge upper"),
+            LiftedOp("CMP", args=("r3", "1"), attrs={"signed": True},
+                     source="cmpwi r3, 1"),
+            LiftedOp("BRANCH", args=("case_1",),
+                     attrs={"condition": "eq"}, source="beq case_1"),
+            LiftedOp("CMP", args=("r3", "3"), attrs={"signed": True},
+                     source="cmpwi r3, 3"),
+            LiftedOp("BRANCH", args=("case_3",),
+                     attrs={"condition": "eq"}, source="beq case_3"),
+            LiftedOp("RETURN"),
+        ]
+        results = detect_sparse_switch(ops)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["strategy"], "hybrid")
+
+    def test_skip_when_jump_table_present(self):
+        """When DISPATCH (bctr) present, skip sparse detection."""
+        ops = [
+            LiftedOp("CMP", args=("r3", "1"), attrs={"signed": True}),
+            LiftedOp("BRANCH", args=("case_1",), attrs={"condition": "eq"}),
+            LiftedOp("CMP", args=("r3", "2"), attrs={"signed": True}),
+            LiftedOp("BRANCH", args=("case_2",), attrs={"condition": "eq"}),
+            LiftedOp("CMP", args=("r3", "3"), attrs={"signed": True}),
+            LiftedOp("BRANCH", args=("case_3",), attrs={"condition": "eq"}),
+            LiftedOp("DISPATCH"),
+        ]
+        results = detect_sparse_switch(ops)
+        self.assertEqual(len(results), 0)
+
+    def test_too_few_pairs(self):
+        """Fewer than 3 CMP+BRANCH pairs = not a switch."""
+        ops = [
+            LiftedOp("CMP", args=("r3", "0"), attrs={"signed": True}),
+            LiftedOp("BRANCH", args=("label1",), attrs={"condition": "eq"}),
+            LiftedOp("RETURN"),
+        ]
+        results = detect_sparse_switch(ops)
+        self.assertEqual(len(results), 0)
+
+    def test_estimated_cases_from_values(self):
+        """Case count estimated from distinct comparison values."""
+        ops = []
+        for val in [1, 5, 10, 20]:
+            ops.append(LiftedOp("CMP", args=("r3", str(val)),
+                               attrs={"signed": True}))
+            ops.append(LiftedOp("BRANCH", args=(f"case_{val}",),
+                               attrs={"condition": "eq"}))
+        ops.append(LiftedOp("RETURN"))
+        results = detect_sparse_switch(ops)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["estimated_cases"], 4)
+
+
+# ---------------------------------------------------------------------------
+# Shape facts for new detectors
+# ---------------------------------------------------------------------------
+
+class TestShapeFactsArgumentMaterialization(unittest.TestCase):
+    def _make_func(self, ops_list, name="test"):
+        func = LiftedFunction(name=name, ops=ops_list, unsupported=[])
+        func.prologue = PrologueInfo()
+        func.cfg = build_cfg(ops_list)
+        return func
+
+    def test_arg_materialization_fact(self):
+        ops = [
+            LiftedOp("ASSIGN", dest="r3", args=("r28",), source="mr r3, r28"),
+            LiftedOp("CALL", args=("some_func",)),
+        ]
+        func = self._make_func(ops)
+        facts = derive_shape_facts(func)
+        am_facts = [f for f in facts if f["kind"] == "argument_materialization"]
+        self.assertGreater(len(am_facts), 0)
+        self.assertEqual(am_facts[0]["category"], "pre_computed")
+
+
+class TestShapeFactsSparseSwitch(unittest.TestCase):
+    def _make_func(self, ops_list, name="test"):
+        func = LiftedFunction(name=name, ops=ops_list, unsupported=[])
+        func.prologue = PrologueInfo()
+        func.cfg = build_cfg(ops_list)
+        return func
+
+    def test_sparse_switch_fact(self):
+        ops = []
+        for val in range(4):
+            ops.append(LiftedOp("CMP", args=("r3", str(val)),
+                               attrs={"signed": True}))
+            ops.append(LiftedOp("BRANCH", args=(f"case_{val}",),
+                               attrs={"condition": "eq"}))
+        ops.append(LiftedOp("RETURN"))
+        func = self._make_func(ops)
+        facts = derive_shape_facts(func)
+        sparse_facts = [f for f in facts if f["kind"] == "sparse_switch"]
+        self.assertGreater(len(sparse_facts), 0)
+        self.assertEqual(sparse_facts[0]["category"], "linear_scan")
 
 
 if __name__ == "__main__":

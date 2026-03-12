@@ -21,6 +21,8 @@ from ppc_il_lifter import (  # type: ignore
     LiftedFunction,
     compute_shape_delta,
     derive_shape_facts,
+    detect_argument_materialization,
+    detect_sparse_switch,
     lift_function_asm,
 )
 
