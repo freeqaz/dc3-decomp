@@ -5,7 +5,6 @@
 #include "platform/MaterialSetup.h"
 #include "platform/Rnd_Wgpu.h"
 #include "platform/TexGpu.h"
-#include "platform/UiRenderHeuristics.h"
 #include "gfx/FrameCapture.h"
 #include "rndobj/Mat.h"
 #include "rndobj/BaseMaterial.h"
@@ -52,13 +51,7 @@ MaterialParams BuildMaterialParams(RndMat* mat, bool isTextMesh) {
     matUni.color[2] = matColor.blue;
     matUni.color[3] = matColor.alpha;
 
-    // The broad UI AlphaForce hack is gone, but text still needs a narrow
-    // fallback until Flow-driven PropAnim activation is stable on native.
     BaseMaterial::Blend matBlend = mat->GetBlend();
-    if (NativeShouldForceTextAlpha(isTextMesh, matBlend, matUni.color[3])) {
-        matUni.color[3] = 1.0f;
-        heuristics |= kHeuristicAlphaForce;
-    }
 
     if (mat->GetAlphaCut()) {
         matUni.alphaThreshold = mat->GetAlphaThreshold() / 255.0f;

@@ -955,7 +955,7 @@ RndDrawable *DrawPtrVec::CollideShowing(const Segment &s, float &dist, Plane &pl
         RndDrawable *hit = (*it)->Collide(seg, d, pl);
         if (hit) {
             result = hit;
-            Interp(seg.start, seg.end, d, seg.start);
+            Interp(seg.start, seg.end, d, seg.end);
             dist *= d;
         }
     }

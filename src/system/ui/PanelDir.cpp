@@ -423,36 +423,18 @@ void PanelDir::Enter() {
     static Symbol ui_enter_back("ui_enter_back");
     SendTransition(ui_enter, ui_enter_forward, ui_enter_back);
 #ifdef HX_NATIVE
-    // Activate Flow objects to drive PropAnims. On Xbox, Flows auto-start via
-    // mStartMode or DTA enter scripts. On native, we activate them directly.
+    // Activate game-code-triggered Flows (startMode==0) that normally fire from
+    // DTA enter scripts on Xbox. Flows with startMode>0 auto-start through the
+    // normal Flow::Enter() path (called by RndDir::Enter above) and don't need
+    // blanket activation here.
     for (ObjDirItr<Flow> it(this, true); it != nullptr; ++it) {
+        if (it->GetStartMode() > 0)
+            continue; // auto-starts via Flow::Enter()
         const char *flowPath = PathName((Hmx::Object *)it);
         if (!ShouldActivateNativeFlow(Name(), flowPath))
             continue;
         if (!it->IsRunning())
             it->Activate();
-    }
-    // Force enter PropAnims to end frame for initial positioning.
-    // On Xbox, Flows + DTA enter scripts animate these over time; on native we
-    // skip directly to the settled state. Only force "enter" anims — broader
-    // forcing activates Kinect/tutorial overlays that fight with the hide logic.
-    // ObjDirItr only traverses formal SubDirs(), not nested RndDir objects
-    // in the hash table (like game_mode_icon). Force PropAnims in both.
-    for (ObjDirItr<RndPropAnim> pait(this, true); pait != nullptr; ++pait) {
-        float endFrame = pait->EndFrame();
-        if (endFrame <= 0.0f) continue;
-        if (std::strstr(pait->Name(), "enter") != nullptr)
-            pait->SetFrame(endFrame, 1.0f);
-    }
-    // Also force PropAnims inside nested RndDir objects (e.g. game_mode_icon)
-    for (ObjDirItr<RndDir> rdit(this, false); rdit != nullptr; ++rdit) {
-        if (&*rdit == (RndDir *)this) continue; // skip self
-        for (ObjDirItr<RndPropAnim> pait((ObjectDir *)&*rdit, false); pait != nullptr; ++pait) {
-            float endFrame = pait->EndFrame();
-            if (endFrame <= 0.0f) continue;
-            if (std::strstr(pait->Name(), "enter") != nullptr)
-                pait->SetFrame(endFrame, 1.0f);
-        }
     }
     // Hide Kinect/tutorial UI elements that render as unwanted overlays on native.
     {

@@ -70,6 +70,10 @@ HamNavList::HamNavList()
     mListState.SetSpeed(0);
     mListState.SetSelected(0, -1, true);
     SetRate(k30_fps_ui);
+#ifdef HX_NATIVE
+    mEnterAnimStartTime = 0.0f;
+    mEnterAnimDuration = 0.0f;
+#endif
 }
 
 HamNavList::~HamNavList() {
@@ -502,7 +506,8 @@ void HamNavList::Poll() {
     // Handle select mode completion
     if (mRibbonMode == HamListRibbon::kRibbonSelect) {
 #ifdef HX_NATIVE
-        if (!TheUI->InTransition() && !TheLoadMgr.EditMode()) {
+        if (TheTaskMgr.UISeconds() >= mEnterAnimStartTime + mEnterAnimDuration
+            && !TheUI->InTransition() && !TheLoadMgr.EditMode()) {
 #else
         if (!RndAnimatable::IsAnimating() && !TheUI->InTransition()
             && !TheLoadMgr.EditMode()) {
@@ -554,10 +559,18 @@ void HamNavList::Poll() {
         } else {
             if (mListRibbonResource->TestEntering()) {
 #ifdef HX_NATIVE
-                // Native: force-clear TestEntering since AnimTask never self-deletes
-                mListRibbonResource->SetTestEntering(false);
-                RndAnimatable::StopAnimation();
-                RndAnimatable::SetFrame(0.0f, 1.0f);
+                // Native: timer-based enter animation completion
+                float elapsed = TheTaskMgr.UISeconds() - mEnterAnimStartTime;
+                if (elapsed >= mEnterAnimDuration) {
+                    mListRibbonResource->SetTestEntering(false);
+                    RndAnimatable::SetFrame(0.0f, 1.0f);
+                } else {
+                    // Drive the enter animation frame
+                    float t = elapsed / Max(mEnterAnimDuration, 0.001f);
+                    float startF = mListRibbonResource->StartFrame();
+                    float endF = mListRibbonResource->EndFrame();
+                    mListRibbonResource->SetFrame(startF + t * (endF - startF), 1.0f);
+                }
 #else
                 if (!RndAnimatable::IsAnimating()) {
                     mListRibbonResource->SetTestEntering(false);
@@ -576,9 +589,16 @@ void HamNavList::Poll() {
         } else {
             if (mHeaderRibbonResource->TestEntering()) {
 #ifdef HX_NATIVE
-                mHeaderRibbonResource->SetTestEntering(false);
-                RndAnimatable::StopAnimation();
-                RndAnimatable::SetFrame(0.0f, 1.0f);
+                float elapsed = TheTaskMgr.UISeconds() - mEnterAnimStartTime;
+                if (elapsed >= mEnterAnimDuration) {
+                    mHeaderRibbonResource->SetTestEntering(false);
+                    RndAnimatable::SetFrame(0.0f, 1.0f);
+                } else {
+                    float t = elapsed / Max(mEnterAnimDuration, 0.001f);
+                    float startF = mHeaderRibbonResource->StartFrame();
+                    float endF = mHeaderRibbonResource->EndFrame();
+                    mHeaderRibbonResource->SetFrame(startF + t * (endF - startF), 1.0f);
+                }
 #else
                 if (!RndAnimatable::IsAnimating()) {
                     mHeaderRibbonResource->SetTestEntering(false);
@@ -1269,7 +1289,21 @@ void HamNavList::PlayEnterAnim() {
     }
     if ((mListRibbonResource && mListRibbonResource->TestEntering()) ||
         (mHeaderRibbonResource && mHeaderRibbonResource->TestEntering())) {
+#ifdef HX_NATIVE
+        // Compute enter animation duration from ribbon's enter anim
+        float duration = 0.5f;
+        if (mListRibbonResource && mListRibbonResource->EnterAnim()) {
+            RndAnimatable *enterAnim = mListRibbonResource->EnterAnim();
+            float frames = enterAnim->EndFrame() - enterAnim->StartFrame();
+            float fpu = enterAnim->FramesPerUnit();
+            if (fpu > 0.0f)
+                duration = frames / fpu;
+        }
+        mEnterAnimStartTime = TheTaskMgr.UISeconds();
+        mEnterAnimDuration = duration;
+#else
         RndAnimatable::Animate(0.0f, false, 0.0f, nullptr, kEaseLinear, 0.0f, false);
+#endif
     }
 }
 
@@ -1514,8 +1548,7 @@ DataNode HamNavList::OnMsg(const ButtonDownMsg &msg) {
     bool inControllerMode = InControllerMode();
     if ((inControllerMode || TheLoadMgr.EditMode())
 #ifdef HX_NATIVE
-        // Native: AnimTask with non-null mAnimTarget never self-deletes.
-        // On Xbox, DTA lifecycle scripts call StopAnimation(); on native they don't fire.
+        && (TheTaskMgr.UISeconds() >= mEnterAnimStartTime + mEnterAnimDuration)
         && mEnabled) {
 #else
         && !RndAnimatable::IsAnimating() && mEnabled) {

@@ -6,8 +6,9 @@
 
 bool ShouldSkipMesh(const char* name, RndMat* mat) {
     // Skip Kinect-specific UI elements that render incorrectly without
-    // DTA PropAnim driving their material properties. On Xbox, controller_mode.flow
-    // and DTA scripts animate these to correct alpha/visibility.
+    // the Xbox gesture/speech systems. On Xbox, controller_mode.flow and
+    // DTA scripts animate these to correct alpha/visibility. On native,
+    // these systems don't run and the elements render as opaque overlays.
 
     // Player indicator elements (Kinect skeleton tracking display)
     if (!strcmp(name, "ui_blank.mesh") ||
@@ -34,27 +35,10 @@ bool ShouldSkipMesh(const char* name, RndMat* mat) {
         strstr(name, "spotlight") || strstr(name, "nav_tut")) {
         return true;
     }
-    // Voice-tip / speech warning overlays (Kinect speech UI).
-    // On Xbox, controller_mode.flow hides these in controller mode.
-    // On native, speech is unavailable and these full-screen overlays
-    // paint over the already-rendered menu text and ribbon content.
+    // Voice-tip / speech warning overlays (Kinect speech UI)
     if (!strcmp(name, "grey_alpha.mesh") ||
         !strncmp(name, "warning_", 8)) {
         return true;
-    }
-
-    // Skip PropAnim-driven shading overlays that haven't been animated.
-    // These use a small solid-white texture (e.g. white.tex 8x8) with srcAlpha blend.
-    // On Xbox, PropAnim sets their material color/alpha at runtime to create
-    // tinted ribbon/gradient overlays. Without flow animations running, they
-    // default to opaque white rectangles that obscure the UI.
-    if (mat) {
-        RndTex* diffTex = mat->GetDiffuseTex();
-        if (diffTex && diffTex->Width() <= 8 && diffTex->Height() <= 8 &&
-            mat->GetBlend() == BaseMaterial::kBlendSrcAlpha &&
-            mat->Alpha() > 0.99f) {
-            return true;
-        }
     }
 
     return false;

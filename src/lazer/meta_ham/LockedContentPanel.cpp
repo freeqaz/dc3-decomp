@@ -68,9 +68,9 @@ void LockedContentPanel::SetVoiceOver(Sound *s, bool b) {
 
 void LockedContentPanel::FinishLoad() {
     UIPanel::FinishLoad();
+    int i = 1;
     HamLabel **ptr = &mLabels[7];
     int count = 8;
-    int i = 1;
     do {
         ptr[-7] = (HamLabel *)mDir->Find<AppLabel>(MakeString("song_name0%d.lbl", i), true);
         HamStarsDisplay *stars = mDir->Find<HamStarsDisplay>(MakeString("stars0%d.std", i), true);

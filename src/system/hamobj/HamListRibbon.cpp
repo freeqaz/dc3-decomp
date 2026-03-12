@@ -467,17 +467,6 @@ void HamListRibbon::DrawRibbon(
     SetWorldXfm(tempXfm);
 
     if (!state.mHidden) {
-#ifdef HX_NATIVE
-        // Force label alpha to 1.0 on native. On Xbox, enter flows animate this
-        // from 0→1; on native we skip directly to visible state.
-        if (mLabelPlaceholder) {
-            for (unsigned int si = 0; si < mLabelPlaceholder->NumStyles(); si++) {
-                if (mLabelPlaceholder->Style(si).GetAlpha() < 0.01f) {
-                    mLabelPlaceholder->Style(si).SetAlpha(1.0f);
-                }
-            }
-        }
-#endif
         for (RndDrawable **it = mDraws.begin(); it != mDraws.end(); ++it) {
             (*it)->Draw();
         }

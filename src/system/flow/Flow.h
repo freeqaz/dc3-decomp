@@ -79,6 +79,7 @@ public:
     NEW_OBJ(Flow)
 
     int GetNumParams() const { return mParamApplyCount; }
+    int GetStartMode() const { return mStartMode; }
     void RefreshPortLabelLists();
     FlowLabel *GetLabelForSym(Symbol);
     void ApplyParams(DataArray *, FlowTrigger *);

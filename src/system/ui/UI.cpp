@@ -628,10 +628,23 @@ void UIManager::Poll() {
             sTransCount++;
         }
 #endif
+#ifdef HX_NATIVE
+        // Wait for exit animations with timeout — lets authored animations play
+        // but prevents hangs from incomplete lifecycle paths
+        static int sExitWaitFrames = 0;
+        bool screenExited = !mCurrentScreen || !mCurrentScreen->Exiting();
+        if (!screenExited) {
+            if (++sExitWaitFrames > 30) { // ~1s timeout
+                screenExited = true;
+                sExitWaitFrames = 0;
+            }
+        } else {
+            sExitWaitFrames = 0;
+        }
+#endif
         if ((!mTransitionScreen || mTransitionScreen->CheckIsLoaded())
 #ifdef HX_NATIVE
-            // Skip exit-wait on native — animations don't complete without full
-            // animation system, so transitions would block forever
+            && screenExited
 #else
             && (!mCurrentScreen || !mCurrentScreen->Exiting())
 #endif
@@ -675,10 +688,22 @@ void UIManager::Poll() {
         }
     }
     if (mTransitionState == kTransitionFrom) {
+#ifdef HX_NATIVE
+        // Wait for enter animations with timeout
+        static int sEnterWaitFrames = 0;
+        bool screenEntered = !mCurrentScreen || !mCurrentScreen->Entering();
+        if (!screenEntered) {
+            if (++sEnterWaitFrames > 60) { // ~2s timeout for enter anims
+                screenEntered = true;
+                sEnterWaitFrames = 0;
+            }
+        } else {
+            sEnterWaitFrames = 0;
+        }
+#endif
         if (
 #ifdef HX_NATIVE
-            // Skip entering check on native — animations don't complete
-            true
+            screenEntered
 #else
             !mCurrentScreen || !mCurrentScreen->Entering()
 #endif
