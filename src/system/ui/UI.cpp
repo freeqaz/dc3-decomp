@@ -45,6 +45,15 @@
 #ifdef HX_NATIVE
 #include <cstdlib>
 #include <cstring>
+static bool sDebugUIFlow = false;
+static bool sDebugUIFlowChecked = false;
+static inline bool DebugUIFlow() {
+    if (!sDebugUIFlowChecked) {
+        sDebugUIFlow = getenv("MILO_DEBUG_UI_FLOW") != nullptr;
+        sDebugUIFlowChecked = true;
+    }
+    return sDebugUIFlow;
+}
 #endif
 
 namespace {
@@ -174,15 +183,15 @@ void UIManager::GotoFirstScreen() {
     if (overrideScreen && overrideScreen[0]) {
         UIScreen *override = ObjectDir::Main()->Find<UIScreen>(overrideScreen, false);
         if (override) {
-            printf("DC3 UI: GotoFirstScreen -> '%s' (MILO_FIRST_SCREEN override, was '%s')\n",
+            if (DebugUIFlow()) printf("DC3 UI: GotoFirstScreen -> '%s' (MILO_FIRST_SCREEN override, was '%s')\n",
                    overrideScreen, screen ? screen->Name() : "<null>");
             screen = override;
         } else {
-            printf("DC3 UI: MILO_FIRST_SCREEN='%s' not found, using default '%s'\n",
+            if (DebugUIFlow()) printf("DC3 UI: MILO_FIRST_SCREEN='%s' not found, using default '%s'\n",
                    overrideScreen, screen ? screen->Name() : "<null>");
         }
     } else {
-        printf("DC3 UI: GotoFirstScreen -> '%s'\n", screen ? screen->Name() : "<null>");
+        if (DebugUIFlow()) printf("DC3 UI: GotoFirstScreen -> '%s'\n", screen ? screen->Name() : "<null>");
     }
 #endif
     GotoScreen(screen, false, false);
@@ -276,7 +285,7 @@ UIScreen *UIManager::ScreenAtDepth(int depth) {
 
 void UIManager::UseJoypad(bool useJoypad, bool enableAutoRepeat) {
 #ifdef HX_NATIVE
-    printf("DC3 UI: UseJoypad(%d, %d)\n", (int)useJoypad, (int)enableAutoRepeat);
+    if (DebugUIFlow()) printf("DC3 UI: UseJoypad(%d, %d)\n", (int)useJoypad, (int)enableAutoRepeat);
 #endif
     if (useJoypad && !mJoyClient) {
         mJoyClient = new JoypadClient(this);
@@ -366,7 +375,7 @@ void UIManager::GotoScreenImpl(UIScreen *scr, bool b1, bool b2) {
         MILO_WARN("Skipping screen '%s' on native (campaign not supported)", scr->Name());
         return;
     }
-    printf("DC3 UI: GotoScreenImpl -> '%s' (force=%d, b2=%d)\n",
+    if (DebugUIFlow()) printf("DC3 UI: GotoScreenImpl -> '%s' (force=%d, b2=%d)\n",
            scr ? scr->Name() : "<null>", b1, b2);
 #endif
     // Only proceed if:
@@ -398,7 +407,7 @@ void UIManager::GotoScreenImpl(UIScreen *scr, bool b1, bool b2) {
         const char *newName = scr ? scr->Name() : "<none>";
         TheDebug << MakeString("transition from %s to %s\n", curName, newName);
 #ifdef HX_NATIVE
-        printf("DC3 UI: Transition '%s' -> '%s' (wentBack=%d)\n", curName, newName, (int)b2);
+        if (DebugUIFlow()) printf("DC3 UI: Transition '%s' -> '%s' (wentBack=%d)\n", curName, newName, (int)b2);
 #endif
 
         // Store transition state and notify listeners
@@ -458,8 +467,7 @@ DataNode UIManager::OnIsResource(DataArray *arr) {
 
 DataNode UIManager::OnGotoScreen(DataArray const *arr) {
 #ifdef HX_NATIVE
-    // Log the goto_screen DTA call for debugging screen flow
-    {
+    if (DebugUIFlow()) {
         const DataNode &node = arr->Evaluate(2);
         const char *curScr = mCurrentScreen ? mCurrentScreen->Name() : "<none>";
         if (node.Type() == kDataObject) {
@@ -483,7 +491,7 @@ DataNode UIManager::OnGotoScreen(DataArray const *arr) {
     if (screen == nullptr && !obj) {
         UIScreen *fallback = ObjectDir::Main()->Find<UIScreen>("main_screen", false);
         if (fallback) {
-            printf("DC3 UI: goto_screen resolved to null, falling back to 'main_screen'\n");
+            if (DebugUIFlow()) printf("DC3 UI: goto_screen resolved to null, falling back to 'main_screen'\n");
             screen = fallback;
         }
     }
@@ -591,7 +599,7 @@ void UIManager::Poll() {
                 if (!strcmp(curName, sFlow[i].from) && sStuckFrames == sFlow[i].delay) {
                     UIScreen *next = ObjectDir::Main()->Find<UIScreen>(sFlow[i].to, false);
                     if (next) {
-                        printf("DC3 UI: Boot flow '%s' -> '%s' (after %d frames)\n",
+                        if (DebugUIFlow()) printf("DC3 UI: Boot flow '%s' -> '%s' (after %d frames)\n",
                                curName, sFlow[i].to, sFlow[i].delay);
                         sStuckScreen = nullptr;
                         sStuckFrames = 0;
@@ -619,11 +627,20 @@ void UIManager::Poll() {
                 bool loaded = !mTransitionScreen || mTransitionScreen->CheckIsLoaded();
                 bool exited = !mCurrentScreen || !mCurrentScreen->Exiting();
                 bool blocked = IsBlockingTransition();
-                printf("DC3 UI: TransitionTo check: loaded=%d exited=%d blocked=%d "
+#ifdef HX_WEB
+                printf("DC3 UI: TransitionTo check #%d: loaded=%d exited=%d blocked=%d "
+                       "trans='%s' cur='%s'\n",
+                       sTransCount, loaded, exited, (int)blocked,
+                       curTrans,
+                       mCurrentScreen ? mCurrentScreen->Name() : "<null>");
+                fflush(stdout);
+#else
+                if (DebugUIFlow()) printf("DC3 UI: TransitionTo check: loaded=%d exited=%d blocked=%d "
                        "trans='%s' cur='%s'\n",
                        loaded, exited, (int)blocked,
                        curTrans,
                        mCurrentScreen ? mCurrentScreen->Name() : "<null>");
+#endif
             }
             sTransCount++;
         }
@@ -634,7 +651,9 @@ void UIManager::Poll() {
         static int sExitWaitFrames = 0;
         bool screenExited = !mCurrentScreen || !mCurrentScreen->Exiting();
         if (!screenExited) {
-            if (++sExitWaitFrames > 30) { // ~1s timeout
+            if (++sExitWaitFrames > 90) { // ~3s safety net for stuck exit animations
+                printf("DC3 UI WARNING: Exit animation timeout for '%s' — force-completing\n",
+                       mCurrentScreen ? mCurrentScreen->Name() : "<null>");
                 screenExited = true;
                 sExitWaitFrames = 0;
             }
@@ -654,18 +673,27 @@ void UIManager::Poll() {
             mTransitionState = kTransitionFrom;
             mCurrentScreen = trans;
 #ifdef HX_NATIVE
-            // Native: set_sink DTA action doesn't fire (screen-level DTA not loaded).
-            // Set mSink to current screen so HANDLE_MEMBER_PTR(mSink) routes messages.
+            // Native: DTA set_sink never fires in DC3 (investigated 2026-03-12).
+            // Screens don't have {ui set_sink} in their TypeDefs. Set mSink to
+            // current screen so HANDLE_MEMBER_PTR(mSink) routes button input.
             mSink = trans;
 #endif
             mTransitionScreen = oldCur;
+#ifdef HX_WEB
+            printf("DC3 UI: transition complete, will enter '%s'\n", trans ? trans->Name() : "<null>");
+            fflush(stdout);
+#endif
             if (trans) {
+                fprintf(stderr, "DC3 UI: [STDERR] checking AllPanelsDown for '%s'...\n", trans->Name()); fflush(stderr);
                 if (trans->AllPanelsDown() && mPushedScreens.empty()
                     && IsTimelineResetAllowed()) {
                     mTimer.Restart();
                     TheTaskMgr.SetUISeconds(0, true);
                 }
+
+                fprintf(stderr, "DC3 UI: [STDERR] calling '%s'->Enter()\n", mCurrentScreen->Name()); fflush(stderr);
                 mCurrentScreen->Enter(mTransitionScreen);
+                fprintf(stderr, "DC3 UI: [STDERR] '%s'->Enter() complete\n", mCurrentScreen->Name()); fflush(stderr);
             }
         }
     }
@@ -693,7 +721,9 @@ void UIManager::Poll() {
         static int sEnterWaitFrames = 0;
         bool screenEntered = !mCurrentScreen || !mCurrentScreen->Entering();
         if (!screenEntered) {
-            if (++sEnterWaitFrames > 60) { // ~2s timeout for enter anims
+            if (++sEnterWaitFrames > 90) { // ~3s safety net for stuck enter animations
+                printf("DC3 UI WARNING: Enter animation timeout for '%s' — force-completing\n",
+                       mCurrentScreen ? mCurrentScreen->Name() : "<null>");
                 screenEntered = true;
                 sEnterWaitFrames = 0;
             }
@@ -723,7 +753,7 @@ void UIManager::Poll() {
             mTransitionState = kTransitionNone;
             mTransitionScreen = nullptr;
 #ifdef HX_NATIVE
-            printf("DC3 UI: Transition complete -> '%s' (from '%s')\n",
+            if (DebugUIFlow()) printf("DC3 UI: Transition complete -> '%s' (from '%s')\n",
                    mCurrentScreen ? mCurrentScreen->Name() : "<null>",
                    oldTrans ? oldTrans->Name() : "<null>");
 #endif

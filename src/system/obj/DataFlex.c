@@ -2119,4 +2119,18 @@ void yy_actually_restart(YY_ONLY_ARG) {
  * the character immediately after the #include filename is lost when the
  * buffer is flushed for the included file. */
 char yyGetHoldChar(void) { return YY_G(yy_hold_char); }
-void yySetHoldChar(char c) { YY_G(yy_hold_char) = c; }
+void yySetHoldChar(char c) {
+    YY_G(yy_hold_char) = c;
+    /* After yyrestart(NULL), the buffer is flushed (yy_n_chars=0).
+     * If a non-EOB holdChar is restored, the scanner will consume it at
+     * yy_ch_buf[0] then hit EOB at yy_ch_buf[1], advancing yy_c_buf_p
+     * to &yy_ch_buf[2]. yy_get_next_buffer checks
+     *   yy_c_buf_p > &yy_ch_buf[yy_n_chars + 1]
+     * With yy_n_chars=0, the boundary is &yy_ch_buf[1] and position 2
+     * exceeds it, triggering "end of buffer missed". Setting yy_n_chars=1
+     * moves the boundary to &yy_ch_buf[2], exactly where yy_c_buf_p lands. */
+    if (c != YY_END_OF_BUFFER_CHAR) {
+        YY_G(yy_current_buffer)->yy_n_chars = 1;
+        YY_G(yy_n_chars) = 1;
+    }
+}

@@ -398,6 +398,15 @@ template BinStream &CachedRead<RndMesh::Face, std::allocator<RndMesh::Face>>(
     BinStream &, std::vector<RndMesh::Face, std::allocator<RndMesh::Face>> &);
 template BinStream &CachedRead<unsigned char, std::allocator<unsigned char>>(
     BinStream &, std::vector<unsigned char, std::allocator<unsigned char>> &);
+#else
+template <class T1, class T2>
+BinStream &CachedRead(BinStream &bs, std::vector<T1, T2> &vec) {
+    int count;
+    bs.ReadEndian(&count, 4);
+    vec.resize(count);
+    bs.Read(vec.data(), count * sizeof(T1));
+    return bs;
+}
 #endif
 
 INIT_REVS(0x26, 0)
@@ -1672,109 +1681,36 @@ void RndMesh::LoadVertices(BinStreamRev &d) {
         b58 = false;
     }
 #ifdef HX_NATIVE
-    // Native: decompress Xbox compressed vertices into regular mVerts
-    //
-    // IMPORTANT: CompressedVertex_Xbox field names are MISLEADING!
-    // The actual D3D vertex declaration layout (from rnddx9/Mesh.cpp) is:
-    //   mNormal    = FLOAT16_2  TEXCOORD  (UV as two half-floats!)
-    //   mTangent   = DEC4N      NORMAL    (normal as 10-10-10-2 signed)
-    //   mBinormal  = DEC4N      TANGENT   (tangent as 10-10-10-2 signed)
-    //   mBoneIndices = UDEC4N   BLENDWEIGHT  (bone weights)
-    //   mBoneWeights = UBYTE4   BLENDINDICES (bone indices)
+    // Native: preserve Xbox compressed vertex blobs and let the native renderer
+    // unpack them during GPU upload. The older eager decompression path lost
+    // skinned bone data on character meshes.
     if (b58) {
         unsigned int loadedCompressedSize = 0;
         unsigned int loadedVersion = 0;
         d.stream.ReadEndian(&loadedCompressedSize, 4);
         d.stream.ReadEndian(&loadedVersion, 4);
 
-        if (count > 0 && loadedCompressedSize > 0) {
+        if (loadedCompressedSize == sizeof(CompressedVertex_Xbox) && loadedVersion == 1) {
+            mNumCompressedVerts = count;
+            mVerts.resize(0);
+            if (mNumCompressedVerts != 0) {
+                unsigned int totalSize = loadedCompressedSize * count;
+                MILO_ASSERT(totalSize > 0, 0x2D4);
+                MemPushTemp();
+                mCompressedVerts = new unsigned char[totalSize];
+                MemPopTemp();
+                ReadChunks(d.stream, mCompressedVerts, totalSize, loadedCompressedSize << 9);
+            }
+        } else if (count > 0 && loadedCompressedSize > 0) {
             unsigned int totalSize = loadedCompressedSize * count;
-            unsigned char *compData = new unsigned char[totalSize];
-            ReadChunks(d.stream, compData, totalSize, loadedCompressedSize << 9);
-
-            // Byte-swap each 4-byte word from big-endian (Xbox) to little-endian (native)
-            unsigned int *words = (unsigned int *)compData;
-            for (unsigned int i = 0; i < totalSize / 4; i++) {
-                words[i] = __builtin_bswap32(words[i]);
-            }
-
-            // Decompress into regular vertices
-            mVerts.resize(count);
-            for (int i = 0; i < count; i++) {
-                CompressedVertex_Xbox *cv = (CompressedVertex_Xbox *)(compData + i * loadedCompressedSize);
-                Vert &v = mVerts[i];
-
-                // Position: float bits stored as int
-                v.pos.x = *(float *)&cv->mPosX;
-                v.pos.y = *(float *)&cv->mPosY;
-                v.pos.z = *(float *)&cv->mPosZ;
-
-                // Color: packed ABGR (alpha<<24 | blue<<16 | green<<8 | red)
-                unsigned int col = (unsigned int)cv->mColor;
-                v.color.red   = (float)(col & 0xFF) / 255.0f;
-                v.color.green = (float)((col >> 8) & 0xFF) / 255.0f;
-                v.color.blue  = (float)((col >> 16) & 0xFF) / 255.0f;
-                v.color.alpha = (float)((col >> 24) & 0xFF) / 255.0f;
-
-                // UV: FLOAT16_2 stored in mNormal field (D3D TEXCOORD)
-                {
-                    unsigned int uvPacked = (unsigned int)cv->mNormal;
-                    // After bulk bswap32, value matches Xbox's native int interpretation
-                    // FLOAT16_2: upper 16 bits = halfU (tex.x), lower 16 bits = halfV (tex.y)
-                    unsigned short halfU = (uvPacked >> 16) & 0xFFFF;
-                    unsigned short halfV = uvPacked & 0xFFFF;
-                    // IEEE 754 half-float → float conversion
-                    auto halfToFloat = [](unsigned short h) -> float {
-                        unsigned int sign = (h >> 15) & 1;
-                        unsigned int exp  = (h >> 10) & 0x1F;
-                        unsigned int mant = h & 0x3FF;
-                        if (exp == 0) {
-                            if (mant == 0) {
-                                unsigned int f = sign << 31;
-                                float r; memcpy(&r, &f, 4); return r;
-                            }
-                            float val = (float)mant / 1024.0f * (1.0f / 16384.0f);
-                            return sign ? -val : val;
-                        } else if (exp == 0x1F) {
-                            unsigned int f = (sign << 31) | 0x7F800000 | (mant << 13);
-                            float r; memcpy(&r, &f, 4); return r;
-                        }
-                        unsigned int f = (sign << 31) | ((exp - 15 + 127) << 23) | (mant << 13);
-                        float r; memcpy(&r, &f, 4); return r;
-                    };
-                    v.tex.x = halfToFloat(halfU);
-                    v.tex.y = halfToFloat(halfV);
-                }
-
-                // Normal: DEC4N stored in mTangent field (D3D NORMAL)
-                {
-                    unsigned int norm = (unsigned int)cv->mTangent;
-                    int nx = norm & 0x3FF; if (nx & 0x200) nx |= ~0x3FF;
-                    int ny = (norm >> 10) & 0x3FF; if (ny & 0x200) ny |= ~0x3FF;
-                    int nz = (norm >> 20) & 0x3FF; if (nz & 0x200) nz |= ~0x3FF;
-                    v.norm.x = (float)nx / 511.0f;
-                    v.norm.y = (float)ny / 511.0f;
-                    v.norm.z = (float)nz / 511.0f;
-                }
-
-                // Tangent vector (use normal-derived default)
-                v.tangent.Set(1, 0, 0, 1);
-
-                // Bone indices: packed 4 bytes
-                unsigned int bi = (unsigned int)cv->mBoneIndices;
-                v.boneIndices[0] = (short)(bi & 0xFF);
-                v.boneIndices[1] = (short)((bi >> 8) & 0xFF);
-                v.boneIndices[2] = (short)((bi >> 16) & 0xFF);
-                v.boneIndices[3] = (short)((bi >> 24) & 0xFF);
-
-                // Bone weights: first float only (compressed format limitation)
-                v.boneWeights.x = *(float *)&cv->mBoneWeights;
-                v.boneWeights.y = 0.0f;
-                v.boneWeights.z = 0.0f;
-                v.boneWeights.w = 0.0f;
-            }
-
-            delete[] compData;
+            MILO_NOTIFY(
+                "%s: unsupported native compressed vertex format size=%u version=%u",
+                PathName(this),
+                loadedCompressedSize,
+                loadedVersion
+            );
+            MILO_ASSERT(totalSize > 0, 0x2E7);
+            d.stream.Seek(totalSize, BinStream::kSeekCur);
         } else if (count > 0) {
             // loadedCompressedSize == 0 but count > 0: skip (shouldn't happen)
             mVerts.resize(0);
@@ -1799,7 +1735,7 @@ void RndMesh::LoadVertices(BinStreamRev &d) {
     if (b58) {
         d.stream.ReadEndian(&loadedCompressedSize, 4);
         d.stream.ReadEndian(&loadedVersion, 4);
-        MILO_ASSERT(IsVertexCompressionSupported(TheLoadMgr.GetPlatform()), 0x2D3);
+        MILO_ASSERT(IsVertexCompressionSupported(TheLoadMgr.GetPlatform()), 0x29C);
         if (TheLoadMgr.GetPlatform() != kPlatformXBox) {
             TheDebug.Fail(FormatString("Unsupported platform for vertex compression").Str(), 0);
             b4 = false;
@@ -1837,9 +1773,9 @@ void RndMesh::LoadVertices(BinStreamRev &d) {
                 ReadChunks(d.stream, mCompressedVerts, totalSize, compressedSize << 9);
             }
         } else {
-            unsigned int skipSize = loadedCompressedSize * count;
-            MILO_ASSERT(skipSize > 0, 0x2E7);
-            d.stream.Seek(skipSize, BinStream::kSeekCur);
+            loadedCompressedSize *= count;
+            MILO_ASSERT(loadedCompressedSize > 0, 0x2E7);
+            d.stream.Seek(loadedCompressedSize, BinStream::kSeekCur);
         }
     } else {
         mVerts.resize(count);
@@ -1848,7 +1784,7 @@ void RndMesh::LoadVertices(BinStreamRev &d) {
             d >> *it;
             i++;
             if (!(i & 0x1FF)) {
-                while (d.stream.Eof() == TempEof)
+                while (d.stream.Eof() != 0)
                     Timer::Sleep(0);
             }
         }

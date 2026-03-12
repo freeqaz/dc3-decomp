@@ -421,6 +421,9 @@ void PoseFatalities::Poll() {
                 }
             }
             UpdateMatchingPose(i);
+#ifdef HX_NATIVE
+            if (mPoseBeatAnims[TheGameData->Player(i)->Side()])
+#endif
             mPoseBeatAnims[TheGameData->Player(i)->Side()]->SetFrame(
                 4.0f - BeatsLeftToMatch(i), 1
             );

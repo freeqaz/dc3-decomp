@@ -218,7 +218,6 @@ DataArray *ReadEmbeddedFile(const char *file, bool b) {
     // don't save it, the included file's parsing overwrites yy_hold_char
     // and that byte is lost (the stream has already advanced past it).
     char savedHoldChar = yyGetHoldChar();
-    printf("ReadEmbeddedFile: saving holdChar='%c' (0x%02x) for file=%s\n", savedHoldChar, (unsigned char)savedHoldChar, file);
 #endif
     auto bs = gBinStream;
     yyrestart(nullptr);
@@ -231,12 +230,15 @@ DataArray *ReadEmbeddedFile(const char *file, bool b) {
     gNode = savedNode;
     gArray = savedArray;
     gOpenArray = savedOpenArray;
-    yySetHoldChar(savedHoldChar);
-    printf("ReadEmbeddedFile: restored holdChar='%c' (0x%02x)\n", savedHoldChar, (unsigned char)savedHoldChar);
 #endif
     gDataLine = dataline;
     gFile = localfile;
     yyrestart(nullptr);
+#ifdef HX_NATIVE
+    // Restore holdChar AFTER yyrestart — yy_load_buffer_state() overwrites
+    // yy_hold_char from the (flushed) buffer, so we must set it last.
+    yySetHoldChar(savedHoldChar);
+#endif
     gDataReadCrit.Exit(); // TODO: may cause IAT thunk issues at runtime
     return da;
 }

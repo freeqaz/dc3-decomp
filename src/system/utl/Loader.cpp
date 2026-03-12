@@ -354,7 +354,16 @@ Loader *LoadMgr::AddLoader(const FilePath &file, LoaderPos pos) {
 void LoadMgr::PollUntilLoaded(Loader *ldr1, Loader *ldr2) {
     AutoGlitchReport hang(50.0f, __FUNCTION__);
     float saved_period = mCurrentPeriod;
+#ifdef HX_WEB
+    int maxIter = 10000; // Safety valve: don't block browser event loop forever
+#endif
     while (!ldr1->IsLoaded()) {
+#ifdef HX_WEB
+        if (--maxIter <= 0) {
+            MILO_WARN("PollUntilLoaded: timeout waiting for %s", ldr1->DebugText());
+            break;
+        }
+#endif
         mCurrentPeriod = 1e+30f;
         if (ldr2 && ldr2 == mLoading.front()) {
 #ifdef MILO_DEBUG

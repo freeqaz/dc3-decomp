@@ -71,6 +71,9 @@
 #include "world/CameraManager.h"
 #include "world/Dir.h"
 #include <cctype>
+#ifdef HX_NATIVE
+#include "platform/MeshGpuCache.h"
+#endif
 
 HamDirector *TheHamDirector;
 OfflineCallback gOfflineCallback;
@@ -2952,6 +2955,19 @@ void HamDirector::Poll() {
     HamCharacter *player0 = TheHamWardrobe ? TheHamWardrobe->GetCharacter(0) : nullptr;
     HamCharacter *player1 = TheHamWardrobe ? TheHamWardrobe->GetCharacter(1) : nullptr;
     RndPropAnim *songAnim = SongAnim(0);
+#ifdef HX_NATIVE
+    // Re-init song anims once venue loads (not available during Enter)
+    {
+        static bool sInitialized = false;
+        if (!sInitialized && mVenue) {
+            if (!mSongAnims[kDifficultyEasy]) {
+                SetupAnims();
+                songAnim = SongAnim(0);
+            }
+            sInitialized = true;
+        }
+    }
+#endif
     if (songAnim) {
         if (player0 && player1) {
             int p0anim = player0->SongAnimation();

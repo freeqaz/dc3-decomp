@@ -16,6 +16,19 @@
 #include "utl/Symbol.h"
 #include "utl/TextStream.h"
 
+#ifdef HX_NATIVE
+#include <cstdlib>
+static bool sDebugUIFlow = false;
+static bool sDebugUIFlowChecked = false;
+static inline bool DebugUIFlow() {
+    if (!sDebugUIFlowChecked) {
+        sDebugUIFlow = getenv("MILO_DEBUG_UI_FLOW") != nullptr;
+        sDebugUIFlowChecked = true;
+    }
+    return sDebugUIFlow;
+}
+#endif
+
 UIScreen *UIScreen::sUnloadingScreen = nullptr;
 
 #ifndef HX_NATIVE
@@ -79,11 +92,13 @@ void UIScreen::SetTypeDef(DataArray *data) {
             }
 #ifdef HX_NATIVE
             if (!pr.mPanel) {
-                const char *panelName = (panelsArr->Type(i) == kDataSymbol) ? panelsArr->Sym(i).Str() : "?";
-                fprintf(stderr, "DC3 Native: UIScreen '%s' panel[%d] '%s' not found — skipping\n", Name(), i, panelName);
+                if (DebugUIFlow()) {
+                    const char *panelName = (panelsArr->Type(i) == kDataSymbol) ? panelsArr->Sym(i).Str() : "?";
+                    fprintf(stderr, "DC3 Native: UIScreen '%s' panel[%d] '%s' not found — skipping\n", Name(), i, panelName);
+                }
                 continue;
             }
-            fprintf(stderr, "DC3 Native: UIScreen '%s' panel[%d] = '%s' (state=%d)\n",
+            if (DebugUIFlow()) fprintf(stderr, "DC3 Native: UIScreen '%s' panel[%d] = '%s' (state=%d)\n",
                     Name(), i, pr.mPanel->Name(), (int)pr.mPanel->GetState());
 #endif
             mPanelList.push_back(pr);
@@ -133,10 +148,12 @@ bool UIScreen::CheckIsLoaded() {
     FOREACH (it, mPanelList) {
         if (it->Active() && !it->mPanel->CheckIsLoaded()) {
 #ifdef HX_NATIVE
-            static int sLoadDiag = 0;
-            if (sLoadDiag++ < 5) {
-                printf("DC3 UI: Screen '%s' not loaded — panel '%s' (state=%d) blocking\n",
-                       Name(), it->mPanel->Name(), (int)it->mPanel->GetState());
+            if (DebugUIFlow()) {
+                static int sLoadDiag = 0;
+                if (sLoadDiag++ < 5) {
+                    printf("DC3 UI: Screen '%s' not loaded — panel '%s' (state=%d) blocking\n",
+                           Name(), it->mPanel->Name(), (int)it->mPanel->GetState());
+                }
             }
 #endif
             return false;
@@ -177,14 +194,16 @@ void UIScreen::Poll() {
 void UIScreen::Draw() {
     if (mShowing) {
 #ifdef HX_NATIVE
-        static int sDrawDiag = 0;
-        if (sDrawDiag < 2 && strcmp(Name(), "game_screen") == 0) {
-            sDrawDiag++;
-            fprintf(stderr, "DC3 Native: UIScreen '%s' Draw — %d panels:\n", Name(), (int)mPanelList.size());
-            FOREACH (it, mPanelList) {
-                fprintf(stderr, "  panel '%s' active=%d showing=%d shouldDraw=%d state=%d\n",
-                        it->mPanel->Name(), it->Active(), it->mPanel->Showing(),
-                        TheRnd.ShouldDrawPanel(it->mPanel), (int)it->mPanel->GetState());
+        if (DebugUIFlow()) {
+            static int sDrawDiag = 0;
+            if (sDrawDiag < 2 && strcmp(Name(), "game_screen") == 0) {
+                sDrawDiag++;
+                fprintf(stderr, "DC3 Native: UIScreen '%s' Draw — %d panels:\n", Name(), (int)mPanelList.size());
+                FOREACH (it, mPanelList) {
+                    fprintf(stderr, "  panel '%s' active=%d showing=%d shouldDraw=%d state=%d\n",
+                            it->mPanel->Name(), it->Active(), it->mPanel->Showing(),
+                            TheRnd.ShouldDrawPanel(it->mPanel), (int)it->mPanel->GetState());
+                }
             }
         }
 #endif
@@ -210,8 +229,11 @@ bool UIScreen::InComponentSelect() const {
 }
 
 void UIScreen::Enter(UIScreen *scr) {
-#ifdef HX_NATIVE
+#ifdef HX_WEB
     printf("DC3 UI: Screen '%s' Enter (from '%s')\n", Name(), scr ? scr->Name() : "<null>");
+    fflush(stdout);
+#elif defined(HX_NATIVE)
+    if (DebugUIFlow()) printf("DC3 UI: Screen '%s' Enter (from '%s')\n", Name(), scr ? scr->Name() : "<null>");
 #endif
     if (scr) {
         sUnloadingScreen = scr;
@@ -230,7 +252,9 @@ void UIScreen::Enter(UIScreen *scr) {
             }
 #endif
             AutoGlitchReport report(17, EnterGlitchCB, it->mPanel);
+            fprintf(stderr, "  [UIScreen] panel '%s' Enter...\n", it->mPanel->Name()); fflush(stderr);
             it->mPanel->Enter();
+            fprintf(stderr, "  [UIScreen] panel '%s' Enter done\n", it->mPanel->Name()); fflush(stderr);
             if (Rnd::sPostProcPanelCount != i5) {
                 vec.push_back(it->mPanel->Name());
                 i5 = Rnd::sPostProcPanelCount;
@@ -257,12 +281,21 @@ void UIScreen::Enter(UIScreen *scr) {
     }
     static Message msg("enter", 0);
     msg[0] = scr;
+#ifdef HX_WEB
+    printf("  HandleType(enter)...\n"); fflush(stdout);
+#endif
     HandleType(msg);
+#ifdef HX_WEB
+    printf("  HandleType(enter) done, Poll...\n"); fflush(stdout);
+#endif
     Poll();
+#ifdef HX_WEB
+    printf("  Screen '%s' Enter complete\n", Name()); fflush(stdout);
+#endif
 
 #ifdef HX_NATIVE
-    // Dump screen typeDef handlers for debugging
-    {
+    // Dump screen typeDef handlers for debugging (gated by env var)
+    if (getenv("MILO_DEBUG_UI_FLOW")) {
         DataArray *td = TypeDef();
         if (td) {
             printf("DC3 Native: Screen '%s' typeDef:", Name());
@@ -298,7 +331,7 @@ void UIScreen::Enter(UIScreen *scr) {
                     static Message skipMsg("skip_selected");
                     HandleType(skipMsg);
                     didNavigate = TheUI->TransitionScreen() != this;
-                    printf("DC3 Native: Auto-skip '%s' via skip_selected (navigated=%d)\n",
+                    if (DebugUIFlow()) printf("DC3 Native: Auto-skip '%s' via skip_selected (navigated=%d)\n",
                            Name(), didNavigate);
                 }
             }
@@ -308,7 +341,7 @@ void UIScreen::Enter(UIScreen *scr) {
                 DataArray *nextArr = td->FindArray("next_screen", false);
                 if (nextArr && nextArr->Size() > 1) {
                     Symbol nextName = nextArr->ForceSym(1);
-                    printf("DC3 Native: Auto-skip '%s' -> '%s' via next_screen\n",
+                    if (DebugUIFlow()) printf("DC3 Native: Auto-skip '%s' -> '%s' via next_screen\n",
                            Name(), nextName.Str());
                     TheUI->GotoScreen(nextName.Str(), false, false);
                     didNavigate = true;
@@ -336,7 +369,7 @@ bool UIScreen::Entering() const {
 
 void UIScreen::Exit(UIScreen *to) {
 #ifdef HX_NATIVE
-    printf("DC3 UI: Screen '%s' Exit (to '%s')\n", Name(), to ? to->Name() : "<null>");
+    if (DebugUIFlow()) printf("DC3 UI: Screen '%s' Exit (to '%s')\n", Name(), to ? to->Name() : "<null>");
 #endif
     TheGestureMgr->SetInVoiceMode(false);
     static Message msg("exit", 0);
@@ -363,10 +396,12 @@ bool UIScreen::Exiting() const {
     FOREACH (it, mPanelList) {
         if (it->Active() && it->mPanel->Exiting()) {
 #ifdef HX_NATIVE
-            static int sExitDiag = 0;
-            if (sExitDiag++ < 5) {
-                printf("DC3 UI: Screen '%s' still exiting — panel '%s' (state=%d) blocking\n",
-                       Name(), it->mPanel->Name(), (int)it->mPanel->GetState());
+            if (DebugUIFlow()) {
+                static int sExitDiag = 0;
+                if (sExitDiag++ < 5) {
+                    printf("DC3 UI: Screen '%s' still exiting — panel '%s' (state=%d) blocking\n",
+                           Name(), it->mPanel->Name(), (int)it->mPanel->GetState());
+                }
             }
 #endif
             return true;

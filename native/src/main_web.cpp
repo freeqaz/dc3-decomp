@@ -4,10 +4,10 @@
 // Boot sequence (state machine, driven by emscripten_set_main_loop):
 //   BOOT_INIT         → create MEMFS dirs, start bundle download
 //   BOOT_FETCHING     → poll until bundle download complete
-//   BOOT_ENGINE_INIT  → SystemPreInit + SystemInit + TheRnd.Init()
+//   BOOT_ENGINE_INIT  → SystemPreInit + SystemInit + subsystem inits
 //   BOOT_GPU_WAIT     → wait for async WebGPU adapter/device
 //   BOOT_GPU_READY    → initialize GPU resources (pipelines, buffers)
-//   BOOT_RUNNING      → per-frame engine render loop
+//   BOOT_RUNNING      → per-frame engine render loop (poll + draw)
 
 #ifdef __EMSCRIPTEN__
 
@@ -22,8 +22,28 @@
 // Engine headers
 #include "os/Debug.h"
 #include "os/System.h"
+#include "os/Timer.h"
 #include "rndobj/Rnd_NG.h"
 #include "utl/MakeString.h"
+#include "utl/Cheats.h"
+#include "utl/Magnu.h"
+
+// Subsystem headers
+#include "char/Char.h"
+#include "flow/FlowManager.h"
+#include "flow/Flow.h"
+#include "game/Game.h"
+#include "game/HamUserMgr.h"
+#include "hamobj/Ham.h"
+#include "hamobj/HamGameData.h"
+#include "meta_ham/HamSongMgr.h"
+#include "meta_ham/MetaPanel.h"
+#include "meta_ham/HamUI.h"
+#include "movie/Movie.h"
+#include "synth/Synth.h"
+#include "ui/UI.h"
+#include "world/World.h"
+#include "obj/Dir.h"
 
 // WgpuRnd access
 #include "platform/Rnd_Wgpu.h"
@@ -35,6 +55,7 @@ extern void InitMakeString();
 void SetFileChecksumData();
 void SystemPreInit(const char *cmdLine, const char *cfg);
 void SystemInit(const char *cfg);
+void SystemPoll(bool);
 
 // ============================================================================
 // Boot state machine
@@ -86,7 +107,6 @@ static void mainLoop() {
         SetFileChecksumData();
 
         // Engine pre-init — loads ham_preinit_keep.dta from MEMFS
-        // Note: SetUsingCD(false) is the default, so files open directly from MEMFS
         printf("DC3 Web: SystemPreInit...\n");
         SystemPreInit("dc3-web", "config/ham_preinit_keep.dta");
 
@@ -94,9 +114,69 @@ static void mainLoop() {
         printf("DC3 Web: SystemInit...\n");
         SystemInit("config/ham_keep.dta");
 
+        // Movie system
+        Movie::Init();
+
+        // Register script functions (before Rnd, matching Xbox boot order)
+        MagnuInit();
+
         // Initialize renderer — starts async GPU init on web
+        // Must be before SynthInit (overlays are created here)
         printf("DC3 Web: TheRnd.Init()...\n");
         TheRnd.Init();
+
+        // Audio system (Fader/MoggClip factories — needs overlays from Rnd::Init)
+        printf("DC3 Web: SynthInit...\n");
+        SynthInit();
+
+        // Flow system - manages game state machine
+        printf("DC3 Web: FlowInit...\n");
+        FlowInit();
+
+        // Character system
+        CharInit();
+
+        // World system
+        WorldInit();
+
+        // Ham (game-specific) system
+        printf("DC3 Web: HamInit...\n");
+        HamInit();
+
+        // Song manager
+        printf("DC3 Web: TheHamSongMgr.Init()...\n");
+        TheHamSongMgr.Init();
+
+        // Game subsystem inits
+        printf("DC3 Web: MetaPanel::Init()...\n");
+        MetaPanel::Init();
+        printf("DC3 Web: GameInit()...\n");
+        GameInit();
+
+        // UI system — use the global TheHamUI (game-specific UIManager subclass)
+        printf("DC3 Web: TheHamUI.Init()...\n");
+        TheUI = &TheHamUI;
+        TheHamUI.Init();
+
+        // Register stub objects for DTA scripts that reference Xbox managers
+        {
+            auto registerStub = [](const char *name) {
+                if (!ObjectDir::Main()->FindObject(name, false, false)) {
+                    Hmx::Object *obj = new Hmx::Object();
+                    obj->SetName(name, ObjectDir::Main());
+                }
+            };
+            registerStub("saveload_mgr");
+            registerStub("profile_mgr");
+            registerStub("platform_mgr");
+            registerStub("content_mgr");
+            registerStub("challenges");
+            registerStub("speech_mgr");
+        }
+
+        // Go to first screen (title screen)
+        printf("DC3 Web: GotoFirstScreen...\n");
+        TheUI->GotoFirstScreen();
 
         sBootState = BOOT_GPU_WAIT;
         printf("DC3 Web: waiting for GPU...\n");
@@ -126,13 +206,38 @@ static void mainLoop() {
     }
 
     case BOOT_RUNNING: {
-        // Use engine's renderer
-        TheRnd.BeginDrawing();
-        TheRnd.EndDrawing();
-
         sFrameCount++;
+        if (sFrameCount <= 3) {
+            printf("DC3 Web: BOOT_RUNNING frame %d start\n", sFrameCount);
+            fflush(stdout);
+        }
+
+        // Full engine frame: poll systems + draw
+        SystemPoll(false);
+        if (sFrameCount <= 3) { printf("DC3 Web: after SystemPoll\n"); fflush(stdout); }
+
+        if (TheUI)
+            TheUI->Poll();
+        if (sFrameCount <= 3) { printf("DC3 Web: after UI Poll\n"); fflush(stdout); }
+
+        TheTaskMgr.Poll();
+
+        if (TheFlowMgr)
+            TheFlowMgr->Poll();
+        if (sFrameCount <= 3) { printf("DC3 Web: after FlowMgr Poll\n"); fflush(stdout); }
+
+        // Draw
+        TheRnd.BeginDrawing();
+        if (sFrameCount <= 3) { printf("DC3 Web: after BeginDrawing\n"); fflush(stdout); }
+        if (TheUI)
+            TheUI->Draw();
+        if (sFrameCount <= 3) { printf("DC3 Web: after UI Draw\n"); fflush(stdout); }
+        TheRnd.EndDrawing();
+        if (sFrameCount <= 3) { printf("DC3 Web: after EndDrawing\n"); fflush(stdout); }
+
         if (sFrameCount == 1 || sFrameCount % 300 == 0) {
             printf("DC3 Web: frame %d\n", sFrameCount);
+            fflush(stdout);
         }
         break;
     }

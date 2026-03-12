@@ -153,6 +153,11 @@ void Debug::Notify(const char *msg) {
 void Debug::Fail(const char *msg, void *v) {
 #ifdef HX_NATIVE
     fprintf(stderr, "FAIL: %s\n", msg);
+#ifdef HX_WEB
+    // Web port: never fatal — matches Xbox "Continue" dialog behavior.
+    // Many init paths trigger benign FAILs (missing assets, stubs).
+    return;
+#endif
     // Default: fatal, to catch bugs early. Set MILO_FATAL_FAILS=0 to continue
     // past MILO_FAIL (like Xbox 360 debug build "Continue" dialog).
     static int sFatalFails = -1;

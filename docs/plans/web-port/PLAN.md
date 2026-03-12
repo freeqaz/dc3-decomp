@@ -2,35 +2,37 @@
 
 ## Overview
 
-Compile the DC3 native port to run in web browsers using Emscripten (C++ → WASM) with WebGPU. The engine already renders through Dawn's `webgpu.h` API — the browser's native WebGPU API implements the same interface, so the rendering pipeline ports with minimal changes.
+Compile the DC3 native port to run in web browsers using Emscripten (C++ to WASM) with WebGPU. The engine already renders through Dawn's `webgpu.h` API — the browser's native WebGPU API implements the same interface, so the rendering pipeline ports with minimal changes.
 
 **MVP goal**: A localhost:8420 dev server that boots the engine in a browser tab, streams assets from a local API, and renders a scene (venue or character).
+
+**Current status**: Phase 5 nearly complete. Engine compiles to WASM, boots in browser, downloads all 246 assets via bundle API, parses ALL ~220 DTA config files, runs full SystemPreInit + SystemInit, and initializes WgpuRnd. WebGPU adapter/device request pending (works in real Chrome with GPU; headless Chromium lacks WebGPU).
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│  Browser Tab                                            │
-│  ┌───────────────┐  ┌────────────────────────────────┐  │
-│  │  index.html   │  │  dc3.wasm + dc3.js (glue)     │  │
-│  │  + bootstrap  │──│  Emscripten runtime            │  │
-│  │               │  │  webgpu.h → browser WebGPU     │  │
-│  └───────────────┘  └──────────┬─────────────────────┘  │
-│                                │ fetch()                 │
-│                                ▼                         │
-│  ┌─────────────────────────────────────────────────────┐ │
-│  │  Asset API  (localhost:8420/api/ark/...)            │ │
-│  │  Serves .milo files, DTA scripts, textures         │ │
-│  └─────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────┘
-                          ▲
-                          │ HTTP
-          ┌───────────────┴────────────────┐
-          │  Python dev server (:8420)      │
-          │  - Serves static WASM/HTML/JS  │
-          │  - Asset streaming API          │
-          │  - .ark extraction on-the-fly   │
-          └────────────────────────────────┘
++-----------------------------------------------------------+
+|  Browser Tab                                               |
+|  +--------------+  +-----------------------------------+  |
+|  |  index.html  |  |  dc3-web.wasm + dc3-web.js        |  |
+|  |  + bootstrap |--|  Emscripten runtime                |  |
+|  |              |  |  webgpu.h -> browser WebGPU        |  |
+|  +--------------+  +----------------+------------------+  |
+|                                     | fetch()              |
+|                                     v                      |
+|  +---------------------------------------------------------+
+|  |  Asset API  (localhost:8420/api/bundle, /api/file/...)  |
+|  |  Serves DTA scripts, .milo files, textures             |
+|  +---------------------------------------------------------+
++-----------------------------------------------------------+
+                          ^
+                          | HTTP
+          +---------------+----------------+
+          |  Python dev server (:8420)      |
+          |  - Serves static WASM/HTML/JS  |
+          |  - Bundle API (all assets)     |
+          |  - File API (individual)       |
+          +--------------------------------+
 ```
 
 ## Why Emscripten (and nothing else)
@@ -59,198 +61,125 @@ Emscripten provides:
 
 ---
 
-### Phase 0: Toolchain Setup
+### Phase 0: Toolchain Setup -- DONE
 
 **Goal**: Emscripten SDK installed, can compile a trivial C++ WebGPU triangle to the browser.
 
-**Tasks**:
-1. Install Emscripten SDK (`emsdk install latest && emsdk activate latest`)
-2. Install emdawnwebgpu package for WebGPU bindings
-3. Compile the existing `wgpu-window-test` target (minimal triangle) to WASM
-4. Serve with `python -m http.server 8420` and verify it renders in Chrome
-5. Document the toolchain in `native/web/README.md`
-
-**Key `#ifdef`s**:
-```cpp
-#ifdef __EMSCRIPTEN__
-#include <emscripten/emscripten.h>
-#include <emscripten/html5.h>
-#endif
-```
-
-**Validation**: Triangle renders in Chrome tab at localhost:8420.
+**Completed**:
+- Emscripten SDK installed at `~/emsdk`
+- emdawnwebgpu available via `--use-port=emdawnwebgpu`
+- Toolchain compiles and links C++ with WebGPU bindings
 
 ---
 
-### Phase 1: CMake Web Target
+### Phase 1: CMake Web Target -- DONE
 
 **Goal**: `native/CMakeLists.txt` gains a web build path producing `dc3-web.wasm` + `dc3-web.js`.
 
-**Tasks**:
-1. Add `HX_WEB` compile definition (gated on `EMSCRIPTEN` toolchain detection)
-2. Create `native/web/CMakeLists.txt` or extend root CMakeLists with web conditionals
-3. Platform-conditional exclusions:
-   - **Remove**: GLFW window creation (canvas replaces it), FFmpeg (no native libs in WASM), miniaudio (use Web Audio API later)
-   - **Stub**: Threading (single-threaded MVP), audio playback
-4. Link against emdawnwebgpu instead of Dawn
-5. Emscripten link flags:
-   ```cmake
-   target_link_options(dc3-web PRIVATE
-     -sUSE_WEBGPU=1
-     -sUSE_GLFW=3           # Emscripten's GLFW shim → canvas
-     -sALLOW_MEMORY_GROWTH=1
-     -sMAXIMUM_MEMORY=512MB
-     -sSTACK_SIZE=1048576   # 1MB stack
-     -sEXPORTED_FUNCTIONS=['_main']
-     -sEXPORTED_RUNTIME_METHODS=['ccall','cwrap']
-     -sASYNCIFY              # Needed for async fetch in sync C++ code
-     --preload-file assets@/ # Small bootstrap assets only
-   )
-   ```
-6. Build script: `native/web/build.sh` wrapping `emcmake cmake .. && cmake --build .`
+**Completed**:
+- `dc3-web` target in `native/CMakeLists.txt` (line 1063), gated on `EMSCRIPTEN` toolchain
+- Compile definitions: `HX_NATIVE=1`, `HX_WEB=1`, `MILO_DEBUG=1`
+- Link flags: `--use-port=emdawnwebgpu`, `-sALLOW_MEMORY_GROWTH=1`, `-sMAXIMUM_MEMORY=512MB`, `-sSTACK_SIZE=1048576`, `-sFETCH=1`, `-sUSE_ZLIB=1`
+- `-sERROR_ON_UNDEFINED_SYMBOLS=0` to tolerate asm-label stubs that wasm-ld cannot resolve
+- `native/web/build.sh` wraps `emcmake cmake` + `cmake --build`
+- Platform-conditional exclusions: HttpReqCurl.cpp, WebSvcMgrCurl.cpp removed from web sources
 
-**Validation**: `dc3-web.wasm` compiles (link errors OK at this stage).
+**Build command**:
+```bash
+cd native/web/build && source ~/emsdk/emsdk_env.sh && cmake --build . --target dc3-web
+```
 
 ---
 
-### Phase 2: Event Loop Adaptation
+### Phase 2: Event Loop Adaptation -- DONE
 
 **Goal**: Engine main loop runs in the browser without freezing the tab.
 
-**Problem**: Browser requires yielding to the event loop every frame. Native `while(running) { poll(); draw(); }` blocks forever.
-
-**Solution**:
-```cpp
-// In App::Run() or equivalent
-#ifdef HX_WEB
-void WebFrameCallback(void* arg) {
-    App* app = static_cast<App*>(arg);
-    app->RunOneFrame();
-}
-
-void App::Run() {
-    emscripten_set_main_loop_arg(WebFrameCallback, this, 0, true);
-}
-#else
-void App::Run() {
-    while (!mQuit) RunOneFrame();
-}
-#endif
-```
-
-**Tasks**:
-1. Refactor `App::RunWithoutDebugging()` to extract a single-frame `RunOneFrame()` method
-2. Wire `emscripten_set_main_loop_arg()` under `HX_WEB`
-3. Handle `emscripten_request_animation_frame()` for vsync
-4. Canvas sizing: read from HTML element, pass to engine init
-
-**Validation**: Engine boots, clears screen to teal, runs frame loop without freezing.
+**Completed**:
+- `native/src/main_web.cpp` implements a state-machine boot sequence driven by `emscripten_set_main_loop()`
+- Boot states: `BOOT_INIT` -> `BOOT_FETCHING` -> `BOOT_ENGINE_INIT` -> `BOOT_GPU_WAIT` -> `BOOT_GPU_READY` -> `BOOT_RUNNING`
+- Each frame yields to the browser event loop; no blocking while-loop
 
 ---
 
-### Phase 3: Asset Streaming API
+### Phase 3: Asset Streaming API -- DONE
 
 **Goal**: A Python dev server at `:8420` that serves WASM build artifacts + streams game assets via HTTP API.
 
-#### Server Side (Python)
+**Completed**:
 
-**File**: `native/web/server.py`
+#### Server (`native/web/server.py`)
 
 ```
-GET /                         → index.html
-GET /dc3-web.{js,wasm}       → build artifacts
-GET /api/ark/<path>           → raw bytes from .ark archive
-GET /api/milo/<path>          → extracted .milo_xbox file
-GET /api/dta/<path>           → DTA script files
-GET /api/manifest             → JSON list of available assets
+GET /                         -> index.html + build artifacts
+GET /dc3-web.{js,wasm}       -> WASM build output
+GET /api/manifest             -> JSON list of all available assets
+GET /api/bundle               -> Binary bundle of ALL assets (single request)
+GET /api/file/<path>          -> Individual asset file (with Range request support)
 ```
 
-**Implementation**:
-- Python 3, no dependencies beyond stdlib (`http.server` + custom handler)
-- `.ark` reading: reuse existing `scripts/` Python tooling or call the engine's archive reader
-- Range request support (`Accept-Ranges: bytes`) for partial loading
-- CORS headers for fetch() from WASM
-- **COOP/COEP headers** (required if we later enable threads):
-  ```
-  Cross-Origin-Opener-Policy: same-origin
-  Cross-Origin-Embedder-Policy: require-corp
-  ```
+- Python 3, stdlib only (`http.server`)
+- COOP/COEP headers for future SharedArrayBuffer support
+- `(..)` -> `..` path translation in bundle (ark extraction stores `..` as `(..)`)
+- Auto-detects extracted assets dir via `DC3_ASSETS` env or `orig-assets/extracted/`
 
-#### Client Side (C++ in WASM)
+#### Client (`native/src/platform/WebAssets.cpp`)
 
-**Tasks**:
-1. Create `native/src/platform/File_Web.cpp` implementing file I/O via `emscripten_fetch()`
-2. Replace synchronous `fopen/fread` with async fetch + ASYNCIFY (Emscripten feature that suspends/resumes C++ across async JS calls)
-3. `CDReader_Web.cpp` — fetches .ark data via `/api/ark/<file>?offset=N&size=M`
-4. Cache fetched assets in Emscripten's IDBFS (IndexedDB) to avoid re-downloading
+- `WebAssetsFetchBundle()` downloads all assets in a single HTTP request
+- Unpacks binary bundle into Emscripten MEMFS at `/data/`
+- Resolves `..` path components to clean absolute MEMFS paths (e.g. `/data/../../system/run/config/macros.dta` -> `/system/run/config/macros.dta`)
+- Individual fetch via `WebAssetsFetch()` also available
+- Polling API: `WebAssetsAllDone()`, `WebAssetsPendingCount()`, etc.
 
-**Alternative (simpler MVP)**: Use Emscripten's `--preload-file` for a small set of bootstrap assets (DTA configs), and fetch .milo files on demand.
+**Result**: 246 files, ~5.7MB downloaded and unpacked into MEMFS.
 
-**Validation**: Engine loads a DTA config from the server API and parses it.
+#### Frontend (`native/web/index.html`)
+
+- 1280x720 canvas (`#dc3-canvas`) with WebGPU detection
+- Status bar and scrolling console log (captures engine printf output)
+- Dynamic WASM module loading
+
+**Dev server command**: `python3 native/web/server.py --port 8420`
 
 ---
 
-### Phase 4: WebGPU Initialization (Browser Path)
+### Phase 4: WebGPU Initialization (Browser Path) -- DONE
 
 **Goal**: `WgpuRnd` initializes against the browser's WebGPU implementation instead of Dawn.
 
-**Key differences from native Dawn**:
-
-| Aspect | Native (Dawn) | Browser (emdawnwebgpu) |
-|--------|---------------|----------------------|
-| Instance creation | `wgpu::CreateInstance(descriptor)` | `wgpu::CreateInstance(nullptr)` — descriptor must be null |
-| Adapter request | Synchronous in Dawn | Async callback (use ASYNCIFY) |
-| Device request | Synchronous in Dawn | Async callback (use ASYNCIFY) |
-| Surface | GLFW native window handle | HTML canvas element |
-| Shader | WGSL string (same) | WGSL string (same) |
-
-**Tasks**:
-1. `GpuDevice.cpp` — add `#ifdef HX_WEB` path:
-   ```cpp
-   #ifdef HX_WEB
-   // Get canvas surface
-   wgpu::SurfaceDescriptorFromCanvasHTMLSelector canvasDesc;
-   canvasDesc.selector = "#dc3-canvas";
-   wgpu::SurfaceDescriptor surfaceDesc;
-   surfaceDesc.nextInChain = &canvasDesc;
-   mSurface = mInstance.CreateSurface(&surfaceDesc);
-   #else
-   // GLFW native surface (existing code)
-   #endif
-   ```
-2. Async adapter/device request with Emscripten callbacks or ASYNCIFY
-3. Canvas resize handling via `emscripten_set_resize_callback()`
-4. Remove GLFW dependency under `HX_WEB` (canvas IS the window)
-
-**Validation**: WebGPU device created, clear color visible on canvas.
+**Completed**:
+- `GpuDevice.cpp` has `#ifdef HX_WEB` path for canvas surface creation
+- Async adapter/device request via callbacks (browser WebGPU is async)
+- `main_web.cpp` polls `gWgpuRnd->Gpu().PollEvents()` + `IsReady()` during `BOOT_GPU_WAIT`
 
 ---
 
-### Phase 5: Rendering in Browser
+### Phase 5: Engine Boot + Rendering Integration -- NEARLY COMPLETE
 
-**Goal**: Full rendering pipeline works — meshes, materials, textures, shaders.
+**Goal**: Full engine initialization pipeline runs: DTA config parsing, subsystem init, rendering.
 
-**What should Just Work (same `webgpu.h` API)**:
-- WGSL shaders (browser natively interprets WGSL)
-- Render pipeline creation
-- Bind groups / uniform buffers
-- Texture creation and upload
-- Draw calls
-- MSAA resolve
+**Completed**:
+- `web_stubs.cpp` — proper C++ stubs replacing asm-label stubs (math, rendering, TextStream, ObjPtr, xbdm, Debug::Modal, SpewInit/Terminate, MemFindHeap, PhysMemTypeTracker, NuiSpeech*, etc.)
+- `DataParser_Native.cpp` — DTA text parser ported from RB3 decomp (ParseArray, ParseNode, PushBack, all token types)
+- `DataReadStream` global initialization (`gBinStream`, `gDataLine`, `gOpenArray`) under `#ifdef HX_NATIVE` in `DataFile.cpp`
+- `ReadEmbeddedFile` state save/restore: saves and restores `gNode`, `gArray`, `gOpenArray`, `gBinStream`, `gFile`, `gDataLine` across `#include` processing
+- Flex lexer `yy_hold_char` save/restore (`yyGetHoldChar`/`yySetHoldChar` in `DataFlex.h`/`DataFlex.c`) — preserves the lexer's lookahead byte across `#include` boundaries
+- **`yySetHoldChar` buffer fix**: after `yyrestart(nullptr)` flushes the buffer (`yy_n_chars=0`), restoring a non-EOB holdChar requires bumping `yy_n_chars=1` to prevent "end of buffer missed" fatal error
+- **`yySetHoldChar` ordering fix**: must be called AFTER `yyrestart(nullptr)` because `yy_load_buffer_state()` overwrites `yy_hold_char`
+- **ALL ~220 DTA config files parse successfully** (including synth.dta with trailing-paren `#include` pattern)
+- Full `SystemPreInit` completes (ham_preinit_keep.dta + all macros)
+- Full `SystemInit` completes (ham_keep.dta + all game configs — 150+ DTA files)
+- Locale initialization, cheats init, file cache, content manager
+- `TheRnd.Init()` — WgpuRnd WebGPU renderer initialization
+- WebGPU adapter/device request fires (async)
+- 22 unit tests for DTA parser (including `#include` with trailing paren pattern)
+- `ThreadCall_Native.cpp` — WASM single-threaded path (synchronous in `ThreadCallPoll`)
+- `xdk_shims_web.cpp` — Win32/XDK API stubs for WASM (critical sections, events, semaphores, threads, timing, memory, XGraphics)
 
-**What needs attention**:
-1. **Texture formats**: Verify BGRA8Unorm is supported (it is on Chrome)
-2. **Buffer alignment**: 256-byte uniform offset alignment (same on browser)
-3. **Shader compilation**: Browser compiles WGSL at runtime (may need error handling for validation differences)
-4. **Frame timing**: `requestAnimationFrame` cadence vs native vsync
-
-**Tasks**:
-1. Load `standard.wgsl` shader (embed as string or fetch from server)
-2. Verify ring buffer allocation works with WASM memory
-3. Test with a simple .milo scene (single mesh + material)
-4. Debug any WebGPU validation errors in browser console
-
-**Validation**: A .milo_xbox venue or character renders in the browser.
+**Remaining tasks**:
+1. Verify WebGPU adapter/device acquisition in a real Chrome tab with GPU
+2. Verify WebGPU pipeline creation and first frame render
+3. Debug any rendering issues (shader compilation, surface configuration)
 
 ---
 
@@ -298,38 +227,58 @@ GET /api/manifest             → JSON list of available assets
 
 ---
 
-## File Layout
+## Key Files
 
 ```
 native/
-├── web/
-│   ├── CMakeLists.txt          # Web-specific build config (or integrated into parent)
-│   ├── build.sh                # emcmake wrapper
-│   ├── server.py               # Dev server (localhost:8420)
-│   ├── index.html              # Bootstrap HTML + canvas
-│   ├── style.css               # Fullscreen canvas styling
-│   └── README.md               # Setup instructions
-├── src/
-│   ├── platform/
-│   │   ├── File_Web.cpp        # Emscripten fetch-based file I/O
-│   │   ├── CDReader_Web.cpp    # Asset streaming via HTTP API
-│   │   ├── System_Web.cpp      # Web platform init
-│   │   └── Audio_Web.cpp       # Web Audio API (post-MVP)
-│   └── gfx/
-│       └── GpuDevice.cpp       # +#ifdef HX_WEB canvas surface path
++-- web/
+|   +-- build/                     # Build output (dc3-web.wasm, dc3-web.js, index.html)
+|   +-- build.sh                   # emcmake wrapper
+|   +-- server.py                  # Dev server (localhost:8420)
+|   +-- index.html                 # Bootstrap HTML + canvas + console
++-- src/
+|   +-- main_web.cpp               # Entry point + boot state machine
+|   +-- web_stubs.cpp              # C++ stubs for unported engine functions
+|   +-- platform/
+|       +-- WebAssets.cpp           # Bundle download + MEMFS unpacker
+|       +-- WebAssets.h             # Public API (WebAssetsInit, WebAssetsFetchBundle, etc.)
+|       +-- DataParser_Native.cpp   # DTA text parser (ported from RB3)
+
+src/system/obj/
++-- DataFile.cpp                   # DataReadStream + ReadEmbeddedFile (#ifdef HX_NATIVE patches)
++-- DataFlex.c                     # Flex lexer (generated from DataFlex.l)
++-- DataFlex.h                     # Lexer API + yyGetHoldChar/yySetHoldChar declarations
++-- DataFlex.l                     # Flex grammar for DTA tokenization
 ```
 
-## `#ifdef HX_WEB` Guards
+## Technical Notes
 
-| File | What changes |
-|------|-------------|
-| `App.cpp` | `emscripten_set_main_loop_arg()` instead of while loop |
-| `GpuDevice.cpp` | Canvas surface instead of GLFW window |
-| `File_Native.cpp` → `File_Web.cpp` | `emscripten_fetch()` instead of POSIX |
-| `CDReader_Native.cpp` → `CDReader_Web.cpp` | HTTP range requests instead of local fread |
-| `main_native.cpp` | Remove signal handlers, simplify to `main()` |
-| `Rnd_Wgpu.cpp` | Async device init, canvas resize |
-| Stubs | FFmpeg stubs, miniaudio stubs |
+### DTA Text Parser Port
+
+The DTA (Data Text Array) parser is the engine's config file format. DC3's parser functions (`ParseArray`, `ParseNode`, `DataReadStream`) are undecompiled stubs in the PPC decomp, so the native/web port needed full implementations.
+
+The parser was ported from the RB3 (Rock Band 3) decomp, which shares the same Milo engine. Key components:
+- **DataParser_Native.cpp**: `ParseArray()` and `ParseNode()` — token-by-token parsing of DTA syntax (arrays, commands, properties, strings, symbols, ints, floats, hex, `#ifdef`/`#ifndef`/`#else`/`#endif`, `#define`/`#undef`, `#include`/`#include_opt`, `#merge`, `#autorun`)
+- **DataFlex.c** (generated from DataFlex.l): flex-based lexer that tokenizes DTA text from a `BinStream`
+- **DataFile.cpp patches**: `#ifdef HX_NATIVE` blocks in `DataReadStream()` and `ReadEmbeddedFile()` to initialize/save/restore parser globals
+
+Global state shared between lexer and parser: `gBinStream` (input stream), `gDataLine` (line number), `gFile` (filename symbol), `gNode` (current node index), `gArray` (current array being built), `gOpenArray` (bracket type tracking).
+
+### The `#include` Fix (RESOLVED)
+
+DTA files use `#include filename.dta` to include other files. This is handled by `ReadEmbeddedFile()` in `DataFile.cpp`, which is a recursive call: save state, parse included file, restore state.
+
+**The two-part fix**:
+
+1. **Ordering**: `yySetHoldChar(savedHoldChar)` must be called AFTER `yyrestart(nullptr)`, not before. `yyrestart` calls `yy_load_buffer_state()` which executes `yy_hold_char = *yy_c_buf_p`, overwriting any previously set holdChar.
+
+2. **Buffer boundary**: After `yyrestart(nullptr)` flushes the buffer (`yy_n_chars=0`), if a non-EOB holdChar is restored, the scanner consumes it at `yy_ch_buf[0]` then hits EOB at `yy_ch_buf[1]`, advancing `yy_c_buf_p` to `&yy_ch_buf[2]`. But `yy_get_next_buffer` checks `yy_c_buf_p > &yy_ch_buf[yy_n_chars + 1]` — with `yy_n_chars=0`, the boundary is `&yy_ch_buf[1]` and position 2 exceeds it, triggering "end of buffer missed". Setting `yy_n_chars=1` moves the boundary to `&yy_ch_buf[2]`, exactly where `yy_c_buf_p` lands.
+
+The critical test case is `synth.dta`: `(scenes #include metamusic_scenes.dta)` where `)` immediately follows the filename — the `)` is the holdChar that must survive the include round-trip.
+
+### Wasm-ld and ASM Labels
+
+The decomp uses `asm("")` labels on stub functions to control symbol mangling for the PPC MSVC linker. Wasm-ld (LLVM's WebAssembly linker) does not support these — they produce wrong Itanium-ABI mangled names or `unreachable` traps. `web_stubs.cpp` provides proper C++ stub implementations with correct type signatures so libc++'s `std::__2` mangling works. `-sERROR_ON_UNDEFINED_SYMBOLS=0` tolerates any remaining unresolved stubs.
 
 ## Dependencies to Clone/Install
 
@@ -339,16 +288,16 @@ native/
    cd ~/emsdk && ./emsdk install latest && ./emsdk activate latest
    source ~/emsdk/emsdk_env.sh
    ```
-2. **emdawnwebgpu**: Built into modern Emscripten — `-sUSE_WEBGPU=1` pulls it in automatically at link time. No separate install needed.
+2. **emdawnwebgpu**: Built into modern Emscripten — `--use-port=emdawnwebgpu` pulls it in automatically. No separate install needed.
 
 ## Risk Assessment
 
 | Risk | Impact | Mitigation |
 |------|--------|-----------|
-| ASYNCIFY performance overhead | ~10-30% slower | Profile; consider `-sPROXY_TO_PTHREAD` instead |
+| ~~Flex lexer state across `#include`~~ | ~~Engine can't parse config files~~ | **RESOLVED** — holdChar ordering + yy_n_chars fix |
 | WASM memory limits | OOM on large scenes | `ALLOW_MEMORY_GROWTH`, stream assets |
 | WebGPU validation differences | Shader/pipeline creation fails | Test early, browser DevTools has great WebGPU errors |
-| .ark file size (multi-GB) | Slow asset loading | Stream on demand, cache in IndexedDB |
+| .ark file size (multi-GB) | Slow asset loading | Bundle API for bootstrap, stream on demand |
 | MSVC compat flags vs Emscripten | Compile errors | `-fms-extensions` works in Emscripten's Clang |
 | Emscripten's GLFW shim limitations | Missing input features | Fall back to Emscripten HTML5 input API |
 | SharedArrayBuffer (for threads) | Requires COOP/COEP headers | Server sends headers; MVP is single-threaded |

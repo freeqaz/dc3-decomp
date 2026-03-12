@@ -1097,13 +1097,15 @@ target_link_options(dc3-web PRIVATE
     -sALLOW_MEMORY_GROWTH=1
     -sMAXIMUM_MEMORY=512MB
     -sSTACK_SIZE=1048576
-    -sENVIRONMENT=web
+    -sENVIRONMENT=web,node
     -sEXPORTED_FUNCTIONS=["_main"]
     -sEXPORTED_RUNTIME_METHODS=["ccall","cwrap"]
     # Allow undefined symbols — engine stubs use asm-labels that wasm-ld can't resolve
     -sERROR_ON_UNDEFINED_SYMBOLS=0
     -sUSE_ZLIB=1
     -sFETCH=1
+    # Debug: keep function names for stack traces
+    --profiling-funcs
 )
 
 target_compile_options(dc3-web PRIVATE
@@ -1422,7 +1424,9 @@ if(BUILD_TESTS)
         tests/test_object_lifetime.cpp
         tests/test_asset_loading.cpp
         tests/test_archive_enumeration.cpp
+        tests/test_mesh_loading.cpp
         tests/test_rndcam_projection.cpp
+        tests/test_dta_parser.cpp
         ${DC3_ENGINE_SOURCES}
         ${DC3_NATIVE_CORE_SOURCES}
         ${DC3_GFX_SOURCES}

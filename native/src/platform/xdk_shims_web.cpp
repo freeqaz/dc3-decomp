@@ -105,8 +105,12 @@ BOOL SetEvent(HANDLE h) { return TRUE; }
 BOOL ResetEvent(HANDLE h) { return TRUE; }
 
 // ============================================================================
-// Semaphore
+// Semaphore — no-ops on single-threaded WASM
 // ============================================================================
+
+HANDLE CreateSemaphoreA(LPSECURITY_ATTRIBUTES, LONG, LONG, LPCSTR) {
+    return AllocHandle(HANDLE_SEMAPHORE);
+}
 
 BOOL ReleaseSemaphore(HANDLE, LONG, LPLONG) { return TRUE; }
 

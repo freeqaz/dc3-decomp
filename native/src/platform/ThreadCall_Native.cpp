@@ -66,6 +66,11 @@ void ThreadCallInit() {
     memset(gData, 0, sizeof(gData));
     gCurCall = 0;
     gFreeCall = 0;
+#ifdef __EMSCRIPTEN__
+    // Single-threaded WASM: no worker thread. Work runs synchronously in ThreadCallPoll().
+    gThreadSema = nullptr;
+    gThreadHandle = nullptr;
+#else
     gThreadSema = CreateSemaphoreA(nullptr, 0, 1, nullptr);
     if (!gThreadSema) {
         MILO_LOG("CreateSemaphore() failed.\n");
@@ -75,6 +80,7 @@ void ThreadCallInit() {
             MILO_LOG("CreateThread() failed.\n");
         }
     }
+#endif
 }
 
 void ThreadCall(ThreadCallFunc *func, ThreadCallCallbackFunc *callback) {
@@ -98,6 +104,32 @@ void ThreadCall(ThreadCallback *callback) {
 }
 
 void ThreadCallPoll() {
+#ifdef __EMSCRIPTEN__
+    // Single-threaded WASM: run one pending job synchronously per poll
+    ThreadCallData &data = gData[gCurCall];
+    if (data.mType != kTCDT_None) {
+        int result = 0;
+        ThreadCallDataType type = data.mType;
+        switch (type) {
+        case kTCDT_Func:
+            result = data.mFunc();
+            data.mType = kTCDT_None;
+            gCurCall = (gCurCall + 1) % 12;
+            data.mCallback(result);
+            break;
+        case kTCDT_Class: {
+            ThreadCallback *cls = data.mClass;
+            result = cls->ThreadStart();
+            data.mType = kTCDT_None;
+            gCurCall = (gCurCall + 1) % 12;
+            cls->ThreadDone(result);
+            break;
+        }
+        default:
+            break;
+        }
+    }
+#else
     if (gCallDone) {
         ThreadCallData &data = gData[gCurCall];
         ThreadCallDataType oldType = data.mType;
@@ -123,13 +155,16 @@ void ThreadCallPoll() {
         gReadyForNext = false;
         ReleaseSemaphore(gThreadSema, 1, nullptr);
     }
+#endif
 }
 
 void ThreadCallPreInit() { gMainThreadID = GetCurrentThreadId(); }
 
 void ThreadCallTerminate() {
+#ifndef __EMSCRIPTEN__
     if (gThreadHandle) {
         gTerminate = true;
         ReleaseSemaphore(gThreadSema, 1, nullptr);
     }
+#endif
 }

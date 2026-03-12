@@ -11,9 +11,15 @@ The old blockers in this area are resolved:
 - the old native unload workaround is gone
 - later runtime gaps in `RndTexBlendController::GetBlendState()` and native shader-manager work material setup are fixed enough for gameplay rendering to continue
 
-**The current blocker is no longer "no character" or "no venue".** Native now loads and submits the main character path, but the rendered performer is still visibly corrupted. In the latest stable YMCA run, the venue, HUD, and crowd all render; `angel04` also renders, but the body is shredded/overlapped instead of looking like the Xbox reference.
+**The current blocker is no longer "no character", "no venue", or "bad vertex weights".** Native now loads the main character path, keeps the Xbox compressed vertex blob intact, and unpacks valid skinned weights/indices on the GPU path. In the latest stable YMCA run, the venue, HUD, and crowd all render; `angel04` also renders with valid skin data, but the visible result is still wrong because the performer is overlapped/misplaced or otherwise posed incorrectly after the load step.
 
 Fresh current-checkout revalidation confirms the old song-select crash is gone. The only subtlety is scripted input targeting: a bare `confirm` on the default `LEGIT` / `song_tier_4` header stays on `song_select_screen`, while moving the highlight onto a real song row like `YMCA` transitions into gameplay immediately.
+
+Fresh mesh-loader validation on the current checkout:
+- `RndMesh::LoadVertices()` on native now preserves Xbox compressed vertex blobs instead of eagerly decoding them into broken native `mVerts`
+- `MeshVertexLoading.*` unit tests cover the native compressed-load path, compressed skinned decode, and rev `0x26` uncompressed weight/index decode
+- current staged gameplay proof is `archive/screenshots/2026-03-12-session-mesh-compressed-fix-gameplay3/`
+- that run reaches `game_screen`, stays stable through frame 4200, and logs `angel04.1.mesh` as `compressed=1`, `invalidRefs=0`, `maxBoneIndex=14`
 
 | Step | Status | Session |
 |------|--------|---------|
@@ -220,10 +226,19 @@ Fresh current-checkout revalidation confirms the old song-select crash is gone. 
       - `archive/screenshots/2026-03-12-session-mainchar-onloadsong-fix10-gpu/ymca_20260312T142105.gfxr`
       - the converted trace contains debug names for `angel04.*.mesh`, `angel04_head.mesh`, `angel04_hair.mesh`, `lush01_bd03*.mesh`, `crowd_*`, and `newspaper*.mesh`
       - that means the remaining issue is not "character mesh never submitted". The main and backup character meshes are in the draw stream; the bug is in how those submitted character draws are posed, placed, or shaded on native
-    - the visible corruption in the latest screenshots is consistent with one of:
-      - bad skinning/bone transforms on the main or backup dancer
+    - native mesh loading was previously one concrete bug here:
+      - old native `RndMesh::LoadVertices()` eagerly decoded Xbox compressed verts into native `mVerts`
+      - that path corrupted skinned weight/index data for `angel04.1.mesh` (`invalidRefs=1061`, all-zero weights on samples)
+      - native now preserves the raw compressed blob and lets the renderer unpack it later
+      - `MeshVertexLoading.NativeCompressedLoadPreservesRawBlob`
+      - `MeshVertexLoading.CompressedSkinnedDecodePreservesBoneWeightsAndIndices`
+      - `MeshVertexLoading.UncompressedVertRev26ReadsWeightsAndIndices`
+      - current gameplay logs now show `angel04.1.mesh` as `compressed=1`, `invalidRefs=0`, with sane sample weights/indices
+    - the visible corruption in the latest screenshots is therefore now consistent with one of:
+      - bad bone transforms or animation pose application after mesh load
       - backup dancer placement/pose parity error causing `angel04` and `lush01_bd03` to overlap incorrectly
       - remaining material/tex-blender parity gap on the character path
+      - duplicate character instance submission with distinct roots but overlapping world placement in the DCI venue
   - the loading/audio path remains intentionally short-circuited in `SongPreview.cpp`, `LoadingPanel.cpp`, and `PreloadPanel.cpp`
   - stale unconditional diagnostics are still compiled in (`MainMenuProvider.cpp`, `HamNavList.cpp`, `SongSortMgr.cpp`, `HamSongMgr.cpp`, `UI.cpp`, `App.cpp`) and should be removed or re-gated once bring-up work settles
 
@@ -238,6 +253,7 @@ Fresh current-checkout revalidation confirms the old song-select crash is gone. 
 - **Song-select post-provider probe**: `archive/screenshots/2026-03-12-session-gamemode-setmode-fix-postproviders/`
 - **CharClip merge fix + shadow-path blocker**: `archive/screenshots/2026-03-12-session-charclip-ownerfix-retest2-132003/`
 - **Current stable gameplay + corrupted main character**: `archive/screenshots/2026-03-12-session-mainchar-onloadsong-fix10/`
+- **Current compressed-mesh fix revalidation**: `archive/screenshots/2026-03-12-session-mesh-compressed-fix-gameplay3/`
 - **Current gameplay GPU capture**: `archive/screenshots/2026-03-12-session-mainchar-onloadsong-fix10-gpu/`
 - **Session 57 game_screen screenshots + video**: `archive/screenshots/session57/` (`menu_to_gameplay_30fps.mp4`)
 - **Session 55 screenshots**: `archive/screenshots/session55/`

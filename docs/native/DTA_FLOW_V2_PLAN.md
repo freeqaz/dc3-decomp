@@ -2,29 +2,53 @@
 
 Goal: Remove C++ workarounds and let the real DTA screen-flow scripts drive the native port, the same way Xbox does.
 
-## Current State (v1)
+## Current State (v2 — 2026-03-12)
 
-The native port has ~15 C++ workarounds that replace DTA-driven logic:
+DTA IS mostly working on native. TypeDefs load, handlers fire, commands execute. The failures are specific DTA commands that reference Xbox-only stubs, plus animation lifecycle gaps (now fixed).
 
-| Workaround | Location | What it replaces |
-|---|---|---|
-| Screen auto-advance timer | UI.cpp:554-606 | DTA enter/exit handlers that advance screens |
-| mSink direct assignment | UI.cpp:659 | DTA `set_sink` handler |
-| IsAnimating bypass | HamNavList.cpp | DTA `anim_done` → StopAnimation lifecycle |
-| Controller mode force-on | GestureMgr.cpp:43-46 | DTA `enter_controller_mode` / `exit_controller_mode` |
-| GameMode::SetMode skip | GameMode.cpp | DTA property evaluation referencing uninitialized objects |
-| MultiUserGesturePanel auto-skip | MultiUserGesturePanel.cpp:64-112 | Kinect chooser → venue/char selection → loading_screen |
-| Provider insurance | App.cpp:161-192 | DTA `ham_init.dta` player_provider creation |
-| HamProvider fallback | Ham.cpp:84-100 | DTA `ham_init.dta` hamprovider creation |
-| Property defaults | Ham.cpp:192-213 | DTA scripts that set party/skeleton/controller state |
-| ShellInput guards | ShellInput.cpp (6 locations) | Kinect subsystems that don't exist on native |
-| 8 stub managers | App.cpp:217-230 | Xbox-only platform services |
-| EnterControllerMode no-op | ShellInput.cpp:404-409 | HelpBarPanel that may not be loaded |
-| SyncVoiceControl fallback | ShellInput.cpp:333-348 | Speech/Kinect voice control |
-| UIScreen auto-skip | UIScreen.cpp:294-318 | DTA `skip_selected` / `next_screen` handlers |
-| Exit/enter animation timeouts | UI.cpp:631-702 | Animations that never complete |
+### Completed
+- **Phase 1 (Smart Stubs)**: SaveLoadManager, ProfileMgr, PlatformMgr return sensible defaults
+- **Phase 3 (Animation Lifecycle)**: AnimTask auto-null on native, HamNavList timer bypasses removed
 
-**Key finding**: DTA IS mostly working on native (Session 39 confirmed). TypeDefs load, handlers fire, commands execute. The failures are specific DTA commands that reference Xbox-only manager stubs.
+### Active Workarounds
+
+| Workaround | Location | Status | Category |
+|---|---|---|---|
+| Screen auto-advance timer (2 entries) | UI.cpp sFlow[] | **Permanent** (intentional UX) | Boot flow |
+| Tutorial screen skip (5 entries) | UI.cpp sFlow[] | **Permanent** | No Kinect |
+| UIScreen auto-skip (next_screen/skip_selected) | UIScreen.cpp:300-333 | **Permanent** (DTA fallback) | Screen flow |
+| Exit animation timeout (90 frames) | UI.cpp:631-648 | **Permanent** (safety net, Phase 2c DONE) | Animation |
+| Enter animation timeout (90 frames) | UI.cpp:697-712 | **Permanent** (safety net, Phase 2c DONE) | Animation |
+| mSink = screen on transition | UI.cpp:656-659 | **Permanent** (Phase 5a: DTA never fires set_sink) | Button routing |
+| Campaign screen block | UI.cpp:363-370 | **Permanent** | No campaign system |
+| Null screen fallback to main_screen | UI.cpp:489-498 | **Permanent** (safety net) | Screen flow |
+| Controller mode force-on | GestureMgr.cpp:43-46 | **Permanent** | No Kinect |
+| GameMode::SetMode skip | GameMode.cpp:26-33 | **Permanent** (Phase 5b: sufficient as-is) | Game logic |
+| MultiUserGesturePanel auto-skip | MultiUserGesturePanel.cpp:64-155 | **Phase 4** — only remaining | Screen flow |
+| HamProvider property defaults | Ham.cpp | **Permanent** | Init ordering |
+| ShellInput Kinect guards | ShellInput.cpp (6 locations) | **Permanent** | No Kinect |
+| SyncVoiceControl fallback | ShellInput.cpp | **Permanent** | No voice HW |
+| Debug logging (~25 locations) | UI.cpp, UIScreen.cpp, UIPanel.cpp | **DONE** (Phase 6: gated behind MILO_DEBUG_UI_FLOW) | Debug |
+
+## Stub Manager Analysis
+
+### Smart Stubs (App.cpp) — COMPLETE
+
+| Manager | Class | Key DTA Queries | Events Fired | Status |
+|---|---|---|---|---|
+| `saveload_mgr` | NativeSaveLoadStub | `is_idle=1`, `is_initial_load_done=1`, `activate=no-op` | None needed | **Done** |
+| `profile_mgr` | NativeProfileMgrStub | `has_seen_tutorial=1`, `is_content_unlocked=1`, `get_disable_voice=1`, 30+ handlers | None needed | **Done** |
+| `platform_mgr` | NativePlatformMgrStub | `is_guide_showing=0`, `is_pad_signed_into_live=0` | None needed | **Done** |
+
+### Bare Stubs (Hmx::Object) — SUFFICIENT
+
+| Manager | Why Bare Is Enough |
+|---|---|
+| `content_mgr` | No DTA queries block boot. Content mounting uses C++ callbacks (ContentMgr::Callback), not DTA messages. `RefreshSynchronously()` called directly from App.cpp. Base Hmx::Object inherits `add_sink`/`remove_sink`. |
+| `challenges` | Network-only (Xbox Live challenges). Not boot-blocking. No critical DTA queries. |
+| `speech_mgr` | Voice recognition. ProfileMgr queries SpeechMgr via C++ (`TheSpeechMgr->SpeechSupported()`), not DTA. DTA calls to speech_mgr silently fail with no impact. |
+
+**No additional smart stubs needed.** The three bare Hmx::Object stubs are sufficient for their roles.
 
 ## Xbox Screen Flow (What DTA Does)
 
@@ -33,264 +57,180 @@ attract_screen
   └─ (skip_selected) → autosave_warning_screen
        └─ (enter) → acknowledge → title_screen
             └─ title_panel.enter:
-                  {platform_mgr add_sink $this (ui_changed)}      ← STUB
-                  {speech_mgr begin_recognition TRUE}               ← STUB
+                  {platform_mgr add_sink $this (ui_changed)}      ← STUB (accepts, never dispatches)
+                  {speech_mgr begin_recognition TRUE}               ← STUB (silently fails)
                (NAV_SELECT_MSG) → wait_main_after_saveload_screen
                     └─ (enter):
-                          {saveload_mgr activate}                   ← STUB: never fires saveload_complete
-                       (saveload_complete):
+                          {saveload_mgr activate}                   ← SMART STUB: is_idle=1
+                       (saveload_complete):                          ← DTA-DRIVEN (Phase 1)
                           {content_mgr start_refresh}
-                          {profile_mgr has_seen_tutorial ...}       ← STUB: returns null
-                          {ui goto_screen $post_load_dest_screen}   → main_screen
+                          {profile_mgr has_seen_tutorial ...}       ← SMART STUB: returns 1
+                          {ui goto_screen $post_load_dest_screen}   → main_screen (fallback)
                               └─ main_panel.enter:
-                                    {platform_mgr add_sink ...}     ← STUB
-                                    {profile_mgr add_sink ...}      ← STUB
-                                    {profile_mgr clear_critical_profile}  ← STUB
+                                    {platform_mgr add_sink ...}     ← STUB (accepts)
+                                    {profile_mgr add_sink ...}      ← STUB (accepts)
+                                    {profile_mgr clear_critical_profile}  ← SMART STUB: no-op
                                     {content_mgr start_refresh}
                                  (NAV_SELECT_MSG) → choose_mode_screen
                                      └─ (NAV_SELECT_MSG perform):
                                            {gamemode set_mode perform}
                                            {ui goto_screen song_select_screen}
                                               └─ ... → multiuser_gesture_screen
-                                                   └─ venue_select_pane.select:
-                                                         {meta_performer set_venue_pref $name}
-                                                         {meta_performer setup_venue}
-                                                      startgame_pane.on_select_play:
-                                                         {multiuser_panel start_game}
-                                                            → loading_screen
+                                                   └─ (Phase 4 scope)
 ```
 
-**5 stub managers** cause DTA commands to silently fail. The auto-advance timers paper over the missing callbacks.
+## Phase Plan
 
-## v2 Plan: Remove Workarounds by Fixing Stubs
+### Phase 1: Make Stubs Smart — DONE (2026-03-12)
 
-### Phase 1: Make Stubs Smart (LOW RISK) — DONE
+See stub analysis above. All three smart stubs implemented and verified.
 
-Instead of empty `Hmx::Object()` stubs, give each manager minimal Handle() implementations that return sensible values. This lets DTA scripts execute correctly without implementing real Xbox platform services.
+**Runtime verified**: Boot flow reaches `main_screen` in ~500 frames. The `wait_main_after_saveload_screen → main_screen` transition is DTA-driven (saveload_complete fires because is_idle=1).
 
-**Implemented**: `NativeSaveLoadStub`, `NativeProfileMgrStub`, `NativePlatformMgrStub` in App.cpp.
+### Phase 2: Refine Screen Flow (MEDIUM RISK) — PARTIALLY DONE
 
-**Verified**: `wait_main_after_saveload_screen` now transitions to `main_screen` via DTA's `saveload_complete` handler (not timer). The `is_idle` smart stub returns 1, DTA handler fires, `goto_screen` resolves to null `$post_load_dest_screen` (expected — not set by DTA), UI.cpp falls back to `main_screen`.
+#### 2a. Boot Screen Timers — KEEP (Intentional UX)
 
-#### 1a. SaveLoadManager stub — CRITICAL
-**Problem**: `{saveload_mgr activate}` does nothing → `saveload_complete` never fires → screen stuck until timer.
-**Fix**: Add `HANDLE_ACTION(activate, ...)` that immediately posts `saveload_complete` message.
-```cpp
-// In the stub or SaveLoadManager native path:
-HANDLE_ACTION(activate, {
-    // No save system on native — immediately signal completion
-    static Message saveload_complete("saveload_complete");
-    TheUI->Handle(saveload_complete, false);
-})
-HANDLE_EXPR(is_idle, 1)  // Always idle on native
-```
-**Impact**: Removes UI.cpp auto-advance timer for wait_main_after_saveload_screen. DTA's `saveload_complete` handler fires naturally → runs `content_mgr start_refresh` → checks profile state → calls `goto_screen`.
+The two remaining boot timers are **intentional** native behavior, not broken DTA flow:
 
-#### 1b. ProfileMgr stub — CRITICAL
-**Problem**: `{profile_mgr has_active_profile}` returns null → DTA conditionals fail → tutorial/save flows break.
-**Fix**: Return sensible defaults for all queries:
-```
-has_active_profile      → 1 (yes)
-get_active_profile      → stub Profile object
-has_seen_tutorial(X)    → 1 (skip all tutorials)
-get_disable_voice       → 1 (no voice)
-is_content_unlocked(X)  → 1 (unlock all)
-get_num_valid_profiles  → 1
-get_venue_preference    → "default"
-```
-**Impact**: DTA tutorial checks pass. Content unlock gates open. Profile-dependent screens work. Removes need for dedicated auto-skip of tutorial_voice_control screen.
+| Timer | Delay | Reason | Xbox Equivalent |
+|---|---|---|---|
+| `autosave_warning_screen → title_screen` | 90 frames (~3s) | Splash screen display time | Async save system completion |
+| `title_screen → wait_main_after_saveload_screen` | 60 frames (~2s) | Title screen display | "Press Start" button wait |
 
-#### 1c. PlatformMgr stub — MEDIUM
-**Problem**: `{platform_mgr add_sink $this (ui_changed)}` silently fails → no live status events.
-**Fix**: Accept `add_sink`/`remove_sink` calls (store sinks, never dispatch). DTA scripts continue past these calls without error.
-```
-add_sink         → accept and store (no-op dispatch)
-remove_sink      → accept and remove
-is_guide_showing → 0
-```
-**Impact**: DTA enter handlers for title_panel, main_panel complete fully. No functional change (no Xbox Live events to dispatch).
+On Xbox, these screens wait for async events (save completion, user pressing Start). On native, there's no save system and no signin flow, so a brief display delay is the correct UX. These timers may eventually be replaced by keyboard input triggers but are not bugs.
 
-#### 1d. ContentMgr — LOW (verify only)
-**Problem**: `RefreshSynchronously()` might hang if state machine stuck.
-**Fix**: Verify `ContentMgr.Init()` sets correct initial state. If `mRootLoaded = 0`, synchronous refresh completes immediately (current behavior appears working).
-**Impact**: Confirms existing behavior is correct; no code change likely needed.
+The Kinect tutorial entries (5 screens, 1-frame skip) are **permanent** — no gesture input system.
 
-#### 1e. SpeechMgr — NO CHANGE
-Already a stub. DTA calls silently fail with no functional impact. Voice commands don't exist on native.
+**Removed**: `wait_main_after_saveload_screen → main_screen` entry — now DTA-driven via smart stubs.
 
-### Phase 2: Remove Screen Auto-Advance (MEDIUM RISK) — IN PROGRESS
+#### 2b. UIScreen Auto-Skip — KEEP (Valuable DTA Fallback)
 
-With smart stubs in place, DTA handlers should drive screen transitions naturally. Remove the hardcoded workarounds one at a time:
+The auto-skip logic in UIScreen::Enter (lines 263-318) tries DTA `skip_selected` handler, then `next_screen` property. This is a **correct DTA-first approach** — it uses real DTA data to decide navigation. It's not a workaround; it's how screens with no interactive content should advance. Keep it.
 
-#### 2a. Remove UI.cpp auto-advance table
-**Prerequisite**: Phase 1a (saveload_mgr) and 1b (profile_mgr) complete.
-**Change**: Remove the native-only screen flow table at UI.cpp:575-588.
-**Test**: Boot to main_screen via DTA-driven flow. Each screen transition should happen through DTA `goto_screen` calls, not timer-based auto-advance.
-**Fallback**: Keep 120-frame emergency timeout as safety net (but log a warning if it fires).
+#### 2c. Relax Animation Timeouts — DONE (2026-03-12)
 
-#### 2b. Remove UIScreen auto-skip logic
-**Prerequisite**: Phase 2a verified working.
-**Change**: Remove native-only `skip_selected`/`next_screen` fallback at UIScreen.cpp:294-318.
-**Test**: Attract screen skips via DTA handler. Loading screens advance via DTA completion callbacks.
+**Prerequisite**: Phase 3 (animation lifecycle) ← DONE
 
-#### 2c. Remove animation timeouts
-**Prerequisite**: Animation lifecycle working (see Phase 3).
-**Change**: Remove 30-frame exit timeout (UI.cpp:631-643) and 60-frame enter timeout (UI.cpp:691-702).
-**Risk**: If any animation is truly stuck, the UI hangs. Keep timeout but increase to 5s and log warning.
+With AnimTask auto-null working, screen enter/exit animations complete naturally. Increased timeouts from 30/60 → 90/90 frames (~3s) with warning logging:
 
-### Phase 3: Fix Animation Lifecycle (MEDIUM RISK) — DONE
+| Timeout | Old | New | Rationale |
+|---|---|---|---|
+| Exit animation | 30 frames (~1s) | 90 frames (~3s) | Safety net — fires for attract_screen (stuck exit flow) |
+| Enter animation | 60 frames (~2s) | 90 frames (~3s) | Safety net — should not fire for normal screens |
 
-#### 3a. DTA `anim_done` → StopAnimation chain
-**Problem**: On Xbox, DTA `anim_done` handlers call `StopAnimation()` which nulls `AnimTask::mAnimTarget`, allowing the task to self-delete. On native, `anim_done` handlers may not fire because the animation system timing is different.
-**Investigation**: Check if PropAnim completion callbacks fire on native. If they do, the DTA chain should work. If not, the issue is in AnimTask polling or Timer resolution.
-**Fix**: Ensure `AnimTask::Poll()` correctly detects animation completion and fires callbacks.
+**Known timeout**: `attract_screen` exit animation times out because auto-skipped screens don't have proper exit flow (UIPanel::Exiting() returns true from DTA `exiting` handler or PanelDir exit state). This is expected — the screen was never meant to complete a full exit cycle when skipped.
 
-#### 3b. Remove IsAnimating bypass
-**Prerequisite**: Phase 3a verified.
-**Change**: Remove `#ifdef HX_NATIVE` bypass in HamNavList.cpp that skips `IsAnimating()` check.
-**Test**: Menu navigation still works — enter animations complete, input not blocked.
+### Phase 3: Fix Animation Lifecycle — DONE (2026-03-12)
 
-### Phase 4: Remove MultiUserGesturePanel Auto-Skip (HIGH RISK)
+**AnimTask::Poll auto-null**: Added `#ifdef HX_NATIVE` in Anim.cpp that auto-nulls `mAnimTarget` when non-looping animations complete (`time > mFrameSpan`). Triggers the existing self-deletion path.
 
-This is the biggest change. Currently the native port hardcodes venue/character selection and jumps to loading_screen. The real flow goes through an interactive multiuser gesture panel.
+**HamNavList cleanup**: Removed 5 timer-based `#ifdef HX_NATIVE` bypasses. `PlayEnterAnim()` now uses real `Animate()` call. All `IsAnimating()` checks use Xbox codepath. Removed `mEnterAnimStartTime`/`mEnterAnimDuration` members.
 
-#### 4a. Controller-only multiuser flow
-**Approach**: On native (no Kinect), the multiuser panel should enter controller mode and let the player navigate venue/character/difficulty selection via gamepad/keyboard.
-**DTA pane flow** (from multiuser.dta):
+### Phase 4: MultiUserGesturePanel (HIGH RISK) — FUTURE
+
+The multiuser panel auto-skip (lines 64-155) hardcodes single-player venue/character setup and jumps to loading_screen. The real Xbox flow navigates interactive panes:
+
 ```
 seldiff_pane → character_select_pane → venue_select_pane → startgame_pane → start_game
 ```
-Each pane uses HamNavList providers (VenueProvider, CharacterProvider, CrewProvider, DifficultyProvider) which are already created in MultiUserGesturePanel::Enter().
-**Fix**: Remove `mNativeAutoSkipPending` logic. Let the panel's normal Poll() run. The DTA pane handlers drive navigation via `set_pending_pane`. When the user selects "play" in startgame_pane, DTA calls `{multiuser_panel start_game}` which triggers `setup_venue` + `goto loading_screen`.
 
-#### 4b. Single-player shortcut
-For quick testing or single-player modes, add a native-only "auto-select defaults" option that programmatically navigates the panes (instead of hardcoded skip):
-```cpp
-// Instead of bypassing the panel entirely, simulate selections:
-// 1. Enter seldiff_pane, select default difficulty
-// 2. Enter character_select_pane, select default character
-// 3. Enter venue_select_pane, select default venue
-// 4. Enter startgame_pane, select "play"
+**What works**: Providers (VenueProvider, CharacterProvider, DifficultyProvider) are created in `Enter()`. MetaPerformer and GameData are initialized. `setup_venue` and `start_game` calls work.
+
+**What's missing**:
+- Pane navigation relies on SkeletonChooser (Kinect) or DTA controller-mode pane handlers
+- Player presence tracking (currently hardcoded to player 0 only)
+- DTA pane handlers (`set_pending_pane`) may reference missing panel sub-objects
+
+**Approach**: Replace the auto-skip with controller-driven pane navigation. On native, enter controller mode and let DTA pane handlers drive `set_pending_pane` via gamepad input. For quick play, add an env var `MILO_AUTO_PLAY=1` that programmatically selects defaults through the real pane handlers (not bypassing them).
+
+**Blocked by**: Need to verify DTA pane handlers work in controller mode without Kinect subsystem. Requires investigation session.
+
+### Phase 5: Cleanup (LOW RISK)
+
+#### 5a. mSink Fallback — PERMANENT (Investigated 2026-03-12)
+
+`mSink = trans` is set on every screen transition (UI.cpp:656-664). **Investigation complete**: DTA `set_sink` NEVER fires for any screen on native or Xbox. Dumped all screen TypeDef enter handlers — none contain `{ui set_sink ...}`:
+
+- `attract_screen`: skip_selected, next_screen (no enter handler)
+- `autosave_warning_screen`: enter/exit handlers (empty body)
+- `title_screen`: handle_global_commands, check_for_nag, voice commands (no enter handler with set_sink)
+- `wait_main_after_saveload_screen`: enter handler has mode names only (gameplay, campaign_mode, etc.)
+- `main_screen`: enter handler (empty body)
+
+The `HANDLE_ACTION(set_sink, ...)` in UIManager::Handle exists but DC3 doesn't use it from DTA. On Xbox, mSink routing works through `HANDLE_MEMBER_PTR(mSink)` (member pointer dispatch) or C++ code paths we haven't fully traced. The native fallback is **required and permanent**.
+
+#### 5b. GameMode::SetMode — SUFFICIENT (2026-03-12)
+
+The constructor skip (`mMode = "init"` instead of `SetMode("init", "none")`) avoids crash because SystemConfig("modes") isn't loaded during App construction. DTA later calls `{gamemode set_mode perform}` which works correctly.
+
+The `#ifdef HX_NATIVE` guard is the correct solution. On Xbox, SystemConfig IS available at construction time, so making this platform-agnostic would add unnecessary runtime checks. The guard is clean and self-documenting.
+
+#### 5c. Controller Mode — PERMANENT
+
+`mInControllerMode = true` in GestureMgr init is a **permanent platform difference**, not a workaround. No Kinect = always controller mode. The DTA `exit_controller_mode` message would break input.
+
+`SetInControllerMode()` forcing true is also permanent — prevents DTA from accidentally disabling controller input.
+
+### Phase 6: Debug Logging Cleanup — DONE (2026-03-12)
+
+All debug `printf` statements in UI.cpp, UIScreen.cpp, and UIPanel.cpp gated behind `MILO_DEBUG_UI_FLOW=1` env var. Exceptions: animation timeout WARNINGs always print (they indicate real issues).
+
+**Usage**: `MILO_DEBUG_UI_FLOW=1 native/build/dc3-native` — enables full screen flow diagnostics.
+
+Files modified: UI.cpp (~15 printfs), UIScreen.cpp (~8 printfs), UIPanel.cpp (~3 printfs). Each file has a static `DebugUIFlow()` helper that checks the env var once and caches the result.
+
+## Dependency Graph (Updated)
+
 ```
-This uses the real DTA handlers at each step, just with automated input.
+Phase 1 (smart stubs)    ──── DONE
+Phase 3 (anim lifecycle) ──── DONE
+Phase 2c (relax timeouts) ──── DONE
+Phase 5a (mSink)         ──── DONE (permanent)
+Phase 5b (GameMode)      ──── DONE (sufficient as-is)
+Phase 6 (debug cleanup)  ──── DONE
+                                │
+                                v
+                    Phase 4 (multiuser panel) ← ONLY REMAINING
 
-### Phase 5: Remove Remaining Workarounds (LOW RISK)
-
-#### 5a. mSink assignment
-**Prerequisite**: DTA `set_sink` commands execute correctly (they should after Phase 1).
-**Change**: Remove `mSink = screen` fallback in UI.cpp:659.
-**Test**: Button routing works through DTA-assigned sink.
-
-#### 5b. GameMode::SetMode
-**Prerequisite**: Profile stubs return valid data (Phase 1b).
-**Change**: Remove native guard that skips property evaluation.
-**Test**: `{gamemode set_mode perform}` correctly evaluates all properties.
-
-#### 5c. Controller mode force-on
-**Change**: Remove `mInControllerMode = true` in GestureMgr init. Let DTA `enter_controller_mode` message set it (fires when entering main_screen on Xbox).
-**Prerequisite**: ShellInput::EnterControllerMode native path works (already implemented).
-**Risk**: If `enter_controller_mode` DTA message doesn't fire on native, input breaks. Keep as last removal.
-
-## Dependency Graph
-
-```
-Phase 1a (saveload_mgr) ─┐
-Phase 1b (profile_mgr) ──┼──→ Phase 2a (remove auto-advance) ──→ Phase 2b (remove auto-skip)
-Phase 1c (platform_mgr) ─┘                                              │
-                                                                         v
-Phase 3a (anim lifecycle) ──→ Phase 3b (remove IsAnimating bypass) ──→ Phase 2c (remove timeouts)
-                                                                         │
-Phase 4a (multiuser flow) ─────────────────────────────────────────→ Phase 4b (auto-select)
-                                                                         │
-                                                                         v
-                                                                  Phase 5 (cleanup)
-```
-
-## Progress
-
-### Phase 1 — DONE (2026-03-12)
-Smart stubs implemented in App.cpp:
-- `NativeSaveLoadStub`: `is_idle=1`, `is_initial_load_done=1`, `activate=no-op`
-- `NativeProfileMgrStub`: `has_seen_tutorial=1`, `is_content_unlocked=1`, `get_disable_voice=1`, etc.
-- `NativePlatformMgrStub`: `is_guide_showing=0`, `is_pad_signed_into_live=0`
-
-**Runtime verified**: Boot flow reaches `main_screen` in ~500 frames. The `wait_main_after_saveload_screen → main_screen` transition is now DTA-driven (saveload_complete handler fires because is_idle=1).
-
-**Removed timer**: `wait_main_after_saveload_screen → main_screen` — now DTA-driven.
-
-**Still timer-driven** (kept intentionally):
-- `autosave_warning_screen → title_screen` (90 frames) — splash screen delay
-- `title_screen → wait_main_after_saveload_screen` (60 frames) — Xbox expects "press Start"
-
-These timers are appropriate on native (no Xbox Live signin needed). They could eventually be replaced by keyboard input triggers.
-
-### Phase 3 — DONE (2026-03-12)
-Animation lifecycle fix implemented in AnimTask::Poll (Anim.cpp):
-- Added `#ifdef HX_NATIVE` auto-null of `mAnimTarget` when non-looping animations complete (`time > mFrameSpan`)
-- This triggers the existing self-deletion path: AnimTask sends `on_anim_event("ended")` to listener, then `TheTaskMgr.QueueTaskDelete(this)`
-- On Xbox, `mAnimTarget` is nulled by DTA callback chain (FlowAnimate::OnAnimEvent or StopAnimation). On native, this chain never fires, so the auto-null replicates the behavior.
-
-**Removed workarounds** in HamNavList.cpp:
-- Removed 5 `#ifdef HX_NATIVE` timer-based bypasses that replaced `!IsAnimating()` checks
-- Removed `mEnterAnimStartTime`/`mEnterAnimDuration` members and timer-based animation driving
-- `PlayEnterAnim()` now uses the real `RndAnimatable::Animate()` call on native (creates AnimTask like Xbox)
-- All `IsAnimating()` checks use the Xbox codepath — AnimTask properly self-deletes when done
-
-**Runtime verified**: Boot-to-main works, interactive navigation works, no crashes. Zero regressions.
-
-## Testing Strategy
-
-Each phase should be tested independently before proceeding:
-
-1. **Boot-to-main**: `MILO_MAX_FRAMES=1000` — verify boot reaches main_screen without auto-advance timer firing
-2. **Mode select**: Input script navigating choose_mode_screen → song_select
-3. **Full flow**: Boot → mode → song → multiuser → loading → gameplay
-4. **Screenshot diff**: Compare native screenshots to Xbox reference at each screen
-
-Key env vars for testing:
-```bash
-# Verbose DTA execution logging
-MILO_DTA_TRACE=1
-
-# Skip to specific screen
-MILO_FIRST_SCREEN=main_screen
-
-# Headless with screenshots at key screens
-MILO_RENDER=1 MILO_HEADLESS=1 \
-  MILO_SCREENSHOT_FRAMES=100,300,500,800,1200 \
-  MILO_MAX_FRAMES=1500
+Permanent (not removable):
+  - Boot screen timers (intentional UX)
+  - UIScreen auto-skip (DTA fallback)
+  - Kinect tutorial skips
+  - Controller mode force-on
+  - mSink fallback (DTA never fires set_sink in DC3)
+  - ShellInput Kinect guards
+  - SyncVoiceControl fallback
+  - HamProvider property defaults
+  - Campaign screen block
+  - Null screen fallback
 ```
 
-## Files to Modify
+## What Stays (Permanent Platform Differences)
+
+These are **correct adaptations** for a non-Kinect platform, not workarounds:
+
+- **ShellInput Kinect guards**: mSkelIdentifier/mSkelExtTracker/DepthBuffer genuinely absent
+- **HamProvider property defaults**: Properties read before DTA sets them during init
+- **Controller mode force-on**: No gesture input = always controller mode
+- **SetInControllerMode force true**: Prevents DTA from disabling controller input
+- **SyncVoiceControl fallback**: No voice hardware
+- **Campaign screen block**: Campaign system not implemented
+- **GestureMgr LiveCameraInput fallback**: No Kinect camera
+- **GestureMgr native init/poll/terminate**: Native gesture stub (no Kinect)
+- **Boot screen timers**: Replace async Xbox events with brief display delays
+- **UIScreen auto-skip**: DTA-first navigation fallback
+- **Null screen fallback**: Safety net for unresolved DTA state variables
+- **mSink = screen on transition**: DTA `set_sink` handler exists but DC3 never calls it from screen TypeDefs. Fallback ensures button routing works.
+
+## Files Modified
 
 | Phase | Files | Changes |
 |---|---|---|
-| 1a | App.cpp or SaveLoadManager.cpp | SaveLoadManager native HANDLE_ACTION(activate) |
-| 1b | App.cpp or ProfileMgr.cpp | ProfileMgr native query handlers |
-| 1c | App.cpp | PlatformMgr add_sink/remove_sink handlers |
-| 2a | UI.cpp | Remove auto-advance table (lines 554-606) |
-| 2b | UIScreen.cpp | Remove auto-skip logic (lines 294-318) |
-| 2c | UI.cpp | Increase animation timeouts, add logging |
-| 3a | AnimTask or PropAnim | Fix completion callback chain |
-| 3b | HamNavList.cpp | Remove IsAnimating bypass |
-| 4a | MultiUserGesturePanel.cpp | Remove auto-skip, let normal Poll run |
-| 5a | UI.cpp | Remove mSink fallback |
-| 5b | GameMode.cpp | Remove SetMode native guard |
-| 5c | GestureMgr.cpp | Remove force controller mode |
-
-## Risk Assessment
-
-- **Phase 1**: Very low risk — adding handlers to stubs, no existing behavior changes
-- **Phase 2**: Medium — removing safety nets. Keep emergency timeouts with warnings.
-- **Phase 3**: Medium — animation lifecycle is complex. Test thoroughly.
-- **Phase 4**: High — multiuser panel is the most complex flow. May need iterative debugging.
-- **Phase 5**: Low — cleanup after everything else works.
-
-## What Stays
-
-Some workarounds are permanent (not DTA-related):
-
-- **ShellInput Kinect guards**: mSkelIdentifier/mSkelExtTracker/DepthBuffer are genuinely absent on native (no Kinect hardware). These guards are correct, not workarounds.
-- **HamProvider property defaults**: Even with full DTA flow, some properties may be read before DTA sets them during init. The defensive defaults in Ham.cpp should stay.
-- **ExitControllerMode no-op**: Without Kinect gesture input, there's no way to re-enter controller mode after exiting. This is a platform difference, not a workaround.
-- **SyncVoiceControl fallback**: No voice hardware = no voice control. Permanent.
+| 1 (DONE) | App.cpp | 3 smart stub classes + registration |
+| 2c | UI.cpp | Increase animation timeouts from 30/60 → 300 frames |
+| 3 (DONE) | Anim.cpp, HamNavList.cpp, HamNavList.h | AnimTask auto-null, remove timer bypasses |
+| 4 (future) | MultiUserGesturePanel.cpp | Replace auto-skip with controller pane nav |
+| 5a | UI.cpp | Investigate/remove mSink fallback |
+| 5b | GameMode.cpp | Deferred init (platform-agnostic) |
+| 6 | UI.cpp, UIScreen.cpp | Gate debug logging behind env var |

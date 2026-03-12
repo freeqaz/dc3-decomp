@@ -218,10 +218,19 @@ void HamUI::Poll() {
 
 void HamUI::Draw() {
     if (mHelpBar) {
+#ifdef HX_WEB
+        static int sDrawTrace = 0;
+        sDrawTrace++;
+        bool trace = (sDrawTrace <= 3);
+        if (trace) { printf("HamUI::Draw frame %d\n", sDrawTrace); fflush(stdout); }
+#endif
         RndText::ClearBlacklight();
         UIPanel::SetFinalDrawPass(false);
         bool transitioning = TheUI->InTransition();
         if (TheUIEventMgr->HasActiveDialogEvent() && !transitioning) {
+#ifdef HX_WEB
+            if (trace) { printf("  dialog path\n"); fflush(stdout); }
+#endif
             mBackgroundPanel->Draw();
             mEventDialogPanel->Draw();
             mHelpBar->Draw();
@@ -238,35 +247,67 @@ void HamUI::Draw() {
             DrawDebug();
             mShellInput->Draw();
         } else {
+#ifdef HX_WEB
+            if (trace) { printf("  normal path: UIManager::Draw...\n"); fflush(stdout); }
+#endif
             UIManager::Draw();
+#ifdef HX_WEB
+            if (trace) { printf("  after UIManager::Draw\n"); fflush(stdout); }
+#endif
             if (mOverlayPanel) {
                 RndText::ClearBlacklight();
                 mOverlayPanel->Draw();
             }
+#ifdef HX_WEB
+            if (trace) { printf("  helpbar Draw...\n"); fflush(stdout); }
+#endif
             mHelpBar->Draw();
+#ifdef HX_WEB
+            if (trace) { printf("  after helpbar\n"); fflush(stdout); }
+#endif
             if (mLetterbox) {
                 mLetterbox->Draw();
             }
             UIPanel::SetFinalDrawPass(true);
+#ifdef HX_WEB
+            if (trace) { printf("  second UIManager::Draw...\n"); fflush(stdout); }
+#endif
             UIManager::Draw();
+#ifdef HX_WEB
+            if (trace) { printf("  after second UIManager::Draw\n"); fflush(stdout); }
+#endif
             UIPanel::SetFinalDrawPass(false);
             if (RndText::IsBlacklightModeEnabled()) {
                 RndText::DrawBlacklight();
                 RndText::ClearBlacklight();
             }
             if (mBlacklight) {
+#ifdef HX_WEB
+                if (trace) { printf("  blacklight Draw...\n"); fflush(stdout); }
+#endif
                 mBlacklight->Draw();
             }
             if (transitioning && mContentLoadingPanel->Showing()) {
                 mContentLoadingPanel->Draw();
             }
+#ifdef HX_WEB
+            if (trace) { printf("  DrawDebug...\n"); fflush(stdout); }
+#endif
             DrawDebug();
+#ifdef HX_WEB
+            if (trace) { printf("  shellInput Draw...\n"); fflush(stdout); }
+#endif
             mShellInput->Draw();
+#ifdef HX_WEB
+            if (trace) { printf("  augmented photo...\n"); fflush(stdout); }
+#endif
             static bool sPollAugmentedPhoto = true;
             if (sPollAugmentedPhoto) {
                 sPollAugmentedPhoto = false;
-                mAugmentedPhoto->Poll();
-                mAugmentedPhoto->Draw();
+                if (mAugmentedPhoto) {
+                    mAugmentedPhoto->Poll();
+                    mAugmentedPhoto->Draw();
+                }
             }
             if (unk_0xFC || unk_0xFD) {
                 LiveCameraInput *cam = TheGestureMgr->GetLiveCameraInput();

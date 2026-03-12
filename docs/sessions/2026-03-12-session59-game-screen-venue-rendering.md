@@ -2,18 +2,18 @@
 
 **Date**: 2026-03-12
 **Goal**: Navigate from main menu into a song and render the 3D venue on game_screen
-**Result**: SUCCESS — venue geometry, character silhouette, and HUD elements all render. 391 draw calls/frame, stable through 9000+ frames with no crashes.
+**Result**: SUCCESS — venue geometry, fully-lit character, and HUD elements all render. 357 draw calls/frame on game_screen, stable through 9000+ frames with no crashes. Character lighting fixed (zero-color LightPreset detection).
 
 ## Milestone
 
 First time the native port has rendered a 3D venue during gameplay. The full pipeline works:
 - Menu navigation (main_screen -> choose_mode -> song_select -> YMCA -> multiuser -> loading -> game_screen)
 - Venue .milo loading (world/dci/dci.milo merges into world dir)
-- Character mesh loading (dark silhouette — materials/shading not fully wired)
-- HUD overlay (pink move card rectangles — textures not loaded but geometry renders)
-- 391 mesh draw calls per frame, 917876/921600 non-black pixels (99.6% coverage)
+- Character mesh loading with full textures and lighting (skin, hair, outfit visible)
+- HUD overlay (pink move card rectangles — TexMovie render targets not yet written to)
+- 357 mesh draw calls per frame on game_screen, 99.6% non-black pixel coverage
 
-Screenshots captured at frames 2800, 3000, 3200, 3500, 4000 — all show the DCI venue with floor, walls, DJ booth, lighting rigs, stage circles, and center-stage character.
+Screenshots show the DCI venue with floor, walls, DJ booth, lighting rigs, stage circles, and center-stage character (Angel with blue hair and outfit, fully lit).
 
 ## Challenges and Fixes
 
@@ -113,20 +113,58 @@ The `MILO_INPUT_SCRIPT` system drives menu navigation headlessly:
 
 Button names map to JoypadAction enums via the native fallback in `Joypad_Native.cpp`.
 
+### 6. Zero-Color LightPreset Lights (Character Dark Silhouette)
+
+**Problem**: Character rendered as a dark silhouette despite having correct mesh geometry, materials, and textures. Venue elements on `Cam.cam` (HUD camera) looked correct but character on `world.cam` was dark.
+
+**Root cause**: The DCI venue environment has 3 directional lights (`key_light`, `fill_light`, `rim_light`) with valid directions but ALL colors set to `(0.0, 0.0, 0.0)`. On Xbox, `LightPreset` animations (driven by DTA scripts during song start) animate these light colors to proper values. On native, the DTA song-start scripts don't fire, so the lights stay at their initial zero-color state.
+
+The renderer's fallback lighting system (`Rnd_Wgpu.cpp`) has a three-tier approach:
+1. Use environment directional lights if present
+2. Add supplemental fill lights if fewer than 2
+3. Fall back to full three-point lighting if none found
+
+The problem was that zero-color lights with valid directions passed the "are there lights?" check (tier 1), preventing the fallback (tier 3) from activating. The character was lit by lights with zero intensity.
+
+**Fix**: Added zero-color detection in `Rnd_Wgpu.cpp` before the fill/fallback logic:
+
+```cpp
+// Check if all directional lights have zero color (uninitialized LightPresets)
+bool allZeroColor = true;
+for (int li = 0; li < lightIdx; li++) {
+    if (scene.lightColors[li][0] > 0.01f || scene.lightColors[li][1] > 0.01f || scene.lightColors[li][2] > 0.01f) {
+        allZeroColor = false;
+        break;
+    }
+}
+if (allZeroColor) lightIdx = 0; // treat zero-color lights as no lights
+```
+
+This resets `lightIdx` to 0 when all directional lights have near-zero color, allowing the three-point fallback to activate. Character now renders fully textured with skin, hair, and outfit visible.
+
+**Diagnosis method**: Used `MILO_CAPTURE_FRAME` frame capture to compare character vs venue mesh properties. Both had proper materials/textures. Added temporary lighting diagnostics dumping ambient, light dirs, and colors per camera. Discovered `world.cam` had zero-color lights while `Cam.cam` (HUD overlay) had fallback lights.
+
+### 7. Pink Flashcard HUD Rectangles (Deferred)
+
+**Problem**: Move card overlay elements render as pink rectangles instead of showing move icons.
+
+**Root cause**: The `flashcard_default.mesh` elements on `Cam.cam` have `flashcard_default.mat` with uploaded textures, but those textures are `TexMovie` render-to-texture targets. The move icon rendering pipeline (which draws move icons into these textures at runtime) hasn't written to them yet. They need the `RndTexRenderer`/`TexMovie` render-to-texture pipeline to be functional on native.
+
+**Status**: Deferred — requires render-to-texture system, which is a larger task.
+
 ## What's Rendering
 
 The DCI venue (indoor dance club) renders with:
 - Floor geometry with circle/ring decals
 - Walls and DJ booth structure
 - Lighting rig geometry (purple/pink stage lights)
-- Character mesh (dark silhouette — no material colors/textures applied to character yet)
-- HUD overlay (pink rectangles = move cards with missing textures, positioned correctly)
+- **Fully-lit character** (Angel with blue hair, skin tones, outfit — three-point fallback lighting)
+- HUD overlay (pink rectangles = TexMovie render targets not yet written to)
 
 ## What's Not Rendering Correctly
 
-- **Character is a dark silhouette**: Mesh geometry loads and renders but materials/textures aren't fully applied. Likely needs character-specific material setup that happens in the Kinect skeleton pipeline.
-- **Pink HUD rectangles**: Move card geometry renders but without actual move textures. The texture loading pipeline for gameplay HUD assets may not be fully connected.
-- **No crowd**: Crowd characters aren't visible (crowd_clips merge may be skipped by the recovery handler).
+- **Pink HUD rectangles**: Move card geometry renders but textures are TexMovie render-to-texture targets. Requires render-to-texture pipeline (deferred).
+- **No crowd**: Crowd characters aren't visible (crowd_clips merge skipped by siglongjmp recovery handler).
 - **No post-processing**: Bloom, color correction, venue lighting effects are stubbed.
 - **Static scene**: No animation — venue and character are frozen in their initial pose. AnimTask/PropAnim pipeline works for UI but game-time animation (kTaskSeconds vs kTaskUISeconds) hasn't been tested.
 
@@ -143,21 +181,23 @@ The DCI venue (indoor dance club) renders with:
 | `src/system/rndobj/TexBlendController.cpp` | GetBlendState implementation | Implementation |
 | `src/system/hamobj/SongCollision.cpp` | Decomp improvements (Equals, CheckCollision, IsCollision) | Decomp |
 | `src/lazer/meta_ham/MultiUserGesturePanel.cpp` | Player state setup for native auto-skip path | Game flow |
+| `native/src/platform/Rnd_Wgpu.cpp` | Zero-color LightPreset detection, fallback lighting activation | Rendering fix |
 
 ## Technical Debt
 
 1. **siglongjmp recovery is a hack** — should find root cause of ObjRef ring corruption during multi-file merges
 2. **Ring validation is O(n)** — probes up to 100k nodes before each ReplaceRefs; could be expensive for large objects
 3. **fprintf diagnostics** — multiple `fprintf(stderr, ...)` statements throughout the merge pipeline should be removed or gated behind a debug env var once stable
-4. **Character rendering** — needs proper material/texture application for non-silhouette rendering
+4. **Zero-color light detection is a workaround** — proper fix would be running LightPreset animations on native (requires DTA song-start scripts)
 5. **Crowd merge skipped** — the recovery handler catches and skips crowd_clips merges, meaning no crowd characters render
+6. **TexMovie render-to-texture not functional** — HUD flashcard elements need the render-to-texture pipeline
 
 ## Metrics
 
 | Metric | Value |
 |--------|-------|
-| Draw calls per frame | 391 |
-| Non-black pixels | 917876 / 921600 (99.6%) |
+| Draw calls per frame | 357 (game_screen) |
+| Non-black pixels | ~99.6% coverage |
 | Frames stable | 9000+ (timeout at 180s) |
 | Crashes | 0 (merge crashes recovered via siglongjmp) |
 | Screenshots captured | 5 (frames 2800, 3000, 3200, 3500, 4000) |

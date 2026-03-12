@@ -837,6 +837,16 @@ void WgpuRnd::WriteSceneUniforms() {
             lightIdx++;
         }
 
+        // Check if all directional lights have zero color (uninitialized LightPresets)
+        bool allZeroColor = true;
+        for (int li = 0; li < lightIdx; li++) {
+            if (scene.lightColors[li][0] > 0.01f || scene.lightColors[li][1] > 0.01f || scene.lightColors[li][2] > 0.01f) {
+                allZeroColor = false;
+                break;
+            }
+        }
+        if (allZeroColor) lightIdx = 0; // treat zero-color lights as no lights
+
         // Supplement with fill lights if env has few directional lights
         if (lightIdx > 0 && lightIdx < 3) {
             // Add a front-fill light to ensure faces are visible
@@ -849,7 +859,7 @@ void WgpuRnd::WriteSceneUniforms() {
             scene.lightColors[lightIdx][3] = 1.0f;
             lightIdx++;
         }
-        // Fallback: if no lights found, use key + fill + rim lights
+        // Fallback: if no lights found (or all zero-color), use key + fill + rim lights
         if (lightIdx == 0) {
             // Key light — strong three-quarter light from front-left
             scene.lightDirs[0][0] = -0.4f;
@@ -900,6 +910,7 @@ void WgpuRnd::WriteSceneUniforms() {
             pointIdx++;
         }
         scene.numPointLights = (float)pointIdx;
+
     } else {
         // Default lighting — three-point light setup
         scene.ambientColor[0] = scene.ambientColor[1] = scene.ambientColor[2] = 0.4f;

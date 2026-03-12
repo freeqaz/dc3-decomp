@@ -117,6 +117,7 @@ void AccomplishmentProgress::LoadFixed(FixedSizeSaveableStream &fs, int i2) {
     FixedSizeSaveable::LoadStd(fs, mCharacterUseCounts, 20, 8);
 }
 
+int AccomplishmentProgress::GetFlawlessMoveCount() const { return mFlawlessMoveCount; }
 int AccomplishmentProgress::GetNiceMoveCount() const { return mNiceMoveCount; }
 void AccomplishmentProgress::IncrementDanceBattleCount() { mDanceBattleCount++; }
 void AccomplishmentProgress::ClearAllPerfectMoves() { mPerfectMovesCleared = true; }

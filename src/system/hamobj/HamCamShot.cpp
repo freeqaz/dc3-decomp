@@ -57,7 +57,8 @@ void HamCamShot::EndAnim() {
                     TeleportTarget(cacheIt->mTrans, cacheIt->mTransform, true);
                 }
                 Character *theChar = dynamic_cast<Character *>(cacheIt->mTrans);
-                theChar->SetEnv(nullptr);
+                if (theChar)
+                    theChar->SetEnv(nullptr);
                 sCache.erase(cacheIt);
             }
         }

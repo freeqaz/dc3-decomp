@@ -281,6 +281,7 @@ void HamCharacter::Init() {
             ObjectDir *clips =
                 DirLoader::LoadObjects("skeleton_clips.milo", nullptr, nullptr);
             MILO_ASSERT(clips, 0x45);
+            if (!clips) return;
             for (int i = 0; i < numSkels; i++) {
                 Symbol s = macro->Sym(i);
                 sSkeletonClips[i] =
@@ -511,6 +512,11 @@ int HamCharacter::SongAnimation() {
     CharClip *c = nullptr;
     if (Driver()) {
         c = Driver()->FirstClip();
+#ifdef HX_NATIVE
+        // On native, character clips may not be loaded (game audio/song
+        // loading partially skipped). FirstClip() can return null.
+        if (!c) return -1;
+#endif
         MILO_ASSERT(c->Type() == "main", 0x3AB);
     }
     if (InClipTest() && (c && c->Dir()->Dir() != this)) {

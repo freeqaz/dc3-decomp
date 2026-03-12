@@ -6,8 +6,8 @@ Inventory of decomp gaps affecting the native build. Prioritized by impact on re
 
 ## Current State
 
-- **Track A (Engine Boot → Gameplay)**: Boots through full menu flow to `game_screen` with 3D venue rendering. 391 draw calls/frame, 9000+ frames stable. DCI venue with floor, walls, DJ booth, lighting rigs, character silhouette, HUD move cards.
-- **Current rendering (Session 59)**: game_screen renders the DCI (indoor dance club) venue loaded from `world/dci/dci.milo`. Character appears as dark silhouette (mesh present, materials not applied). HUD move cards render as pink rectangles (geometry present, textures missing). 99.6% non-black pixel coverage.
+- **Track A (Engine Boot → Gameplay)**: Boots through full menu flow to `game_screen` with 3D venue rendering. Current checkout reaches stable YMCA gameplay through frame 4200. DCI venue, HUD, crowd, and the primary character path all render.
+- **Current rendering (Session 59+)**: `game_screen` renders the DCI venue loaded from `world/dci/dci.milo`. Native compressed skinned mesh loading is fixed, and `angel04.1.mesh` now uploads with valid weights/indices. The remaining gameplay bug is later character parity: the main performer is still visibly overlapped/misposed, not absent. HUD move cards still render as pink rectangles (geometry present, textures/materials incomplete).
 - **Menu rendering (Sessions 47-58)**: choose_mode_screen shows menu items, game_mode_icon, ribbons, text. Flow->PropAnim animation pipeline verified working end-to-end.
 - **Reference shots**: `archive/screenshots/references/` as live-game baseline.
 - **Flow animation pipeline**: **Fully operational** (verified Session 58). Flow→FlowAnimate→AnimTask→PropAnim chain traced end-to-end. All UI animations use kTaskUISeconds timeline, advanced by UIManager::Poll() every frame. Enter animations fade in menu items correctly. `ShouldActivateNativeFlow()` filter handles startMode=0 flows; startMode>0 flows auto-start via Flow::Enter(). No rendering hacks needed for animation.
@@ -416,6 +416,76 @@ Of 1,117 unimplemented functions (weak stubs in `engine_stubs_generated.cpp`):
 4. UIList family — already worked via `UIList::Init()`, no fix needed
 
 Bulk load: 200/200 UI files pass, 20/20 SFX files pass. All previously-segfaulting asset loading tests now pass.
+
+## Native Workarounds & Why DTA Callbacks Don't Fire
+
+The native port has several `#ifdef HX_NATIVE` workarounds that replace behaviors normally driven by DTA scripts. This section explains WHY these are needed.
+
+### Why DTA Callbacks Don't Fire on Native
+
+DTA (Data Array) is Harmonix's scripting system. On Xbox, DTA scripts embedded in .milo files and loaded from the ark drive screen flow, animation lifecycle, content population, and UI initialization. **DTA IS mostly working on native** — TypeDefs load, handlers fire, commands execute. The failures are specific commands that break silently:
+
+1. **Screen-level DTA handlers reference Xbox-only stubs.** Each screen's .milo embeds DTA TypeDef handlers (like `anim_done`, `saveload_complete`, `enter_controller_mode`). These handlers call commands on Xbox-only managers (`platform_mgr`, `profile_mgr`, `saveload_mgr`). Our smart stubs (Phase 1) handle common queries, but they **don't fire all events DTA expects** — e.g., `platform_mgr add_sink` accepts sinks but never dispatches `ui_changed` events. DTA conditionals downstream of failed commands silently skip their branches.
+
+2. **DTA handler chains have cascading dependencies.** Example: `wait_main_after_saveload_screen` enter handler calls `{saveload_mgr activate}`, waits for `saveload_complete` message, then calls `{profile_mgr has_seen_tutorial}` and `{ui goto_screen}`. Before smart stubs, `is_idle` returned null so `saveload_complete` never fired and the entire handler chain was dead.
+
+3. **Some DTA lifecycle management has no C++ equivalent.** On Xbox, when a screen's enter animation completes, a DTA `anim_done` handler calls `{$anim stop_animation}`. This is authored in the screen's .milo TypeDef, not in C++. On native, we start some animations from C++ directly (e.g., `HamNavList::PlayEnterAnim`), bypassing the DTA lifecycle entirely. No DTA handler exists to clean up these C++-originated animations.
+
+4. **FlowAnimate-driven animations have a different cleanup path.** FlowAnimate actively manages its AnimTask through `Deactivate()` / `Execute()`. This works on native when the flow graph is correctly set up. But contradictory flow activations (see "blanket Flow start" issue above) and missing Xbox object references can break the cleanup chain.
+
+### AnimTask Lifecycle (the "keepalive" mechanism)
+
+`AnimTask::mAnimTarget` is a "keepalive" pointer. AnimTask::Poll only self-deletes when `mAnimTarget == NULL`:
+
+```
+AnimTask created → mAnimTarget = anim->AnimTarget() (non-null)
+                 → plays animation frames each Poll()
+                 → when mAnimTarget nulled externally:
+                    → time > mFrameSpan? → send "ended" → self-delete
+```
+
+**On Xbox**, external systems null mAnimTarget:
+- **FlowAnimate**: `Deactivate()` deletes the task directly, or `OnAnimEvent("ended")` nulls mAnimTarget
+- **DTA handlers**: `{$anim stop_animation}` → `StopAnimation()` deletes all AnimTasks
+- **Object destruction**: ObjPtr auto-nulls when target is destroyed
+
+**On native**, for non-FlowAnimate animations (like HamNavList enter anims), nothing nulls mAnimTarget. The animation plays to its end frame but the AnimTask persists forever, making `IsAnimating()` return true indefinitely.
+
+**Fix** (`#ifdef HX_NATIVE` in `AnimTask::Poll`): Auto-null `mAnimTarget` when a non-looping animation has played past its frame span (`time > mFrameSpan`). This replicates what the DTA cleanup chain would do.
+
+### Active Workarounds (as of 2026-03-12)
+
+| Workaround | File | Why Needed | Category |
+|---|---|---|---|
+| **AnimTask auto-null** | Anim.cpp | DTA `anim_done` handlers don't call `stop_animation` for C++-originated animations | Animation lifecycle |
+| **Smart stubs** (3 classes) | App.cpp | `saveload_mgr`, `profile_mgr`, `platform_mgr` DTA commands need return values | DTA stub |
+| **Screen auto-advance timer** | UI.cpp | Some screen transitions still depend on DTA handlers that fail silently | Screen flow |
+| **Exit/enter animation timeouts** | UI.cpp | Safety net if animations don't complete (30/60 frame limits) | Animation lifecycle |
+| **mSink = screen on transition** | UI.cpp | DTA `set_sink` handler never fires (screen-level DTA, not system config) | Button routing |
+| **Controller mode force-on** | GestureMgr.cpp | DTA `enter_controller_mode` message depends on Kinect subsystem state | Input |
+| **GameMode::SetMode skip** | GameMode.cpp | Property evaluation references uninitialized objects before DTA sets them | Game logic |
+| **TheHamProvider property defaults** | Ham.cpp | 47+ call sites read properties with assert-on-missing before DTA initializes them | Initialization |
+| **ShellInput Kinect guards** | ShellInput.cpp | mSkelIdentifier/mSkelExtTracker genuinely absent (no Kinect hardware) | Permanent |
+| **SyncVoiceControl fallback** | ShellInput.cpp | No voice hardware — permanent platform difference | Permanent |
+| **MultiUserGesturePanel auto-skip** | MultiUserGesturePanel.cpp | Full Kinect chooser flow needs venue/char/difficulty providers working | Screen flow |
+
+### Removed Workarounds
+
+| Workaround | File | Removed | Replaced By |
+|---|---|---|---|
+| `wait_main_after_saveload_screen` timer entry | UI.cpp | Phase 1 | Smart stubs: `is_idle=1` lets DTA `saveload_complete` fire naturally |
+| HamNavList timer-based `IsAnimating()` bypass | HamNavList.cpp | Phase 3 | AnimTask auto-null: real `Animate()` + `IsAnimating()` now works |
+| HamNavList `mEnterAnimStartTime/Duration` members | HamNavList.h | Phase 3 | AnimTask auto-null |
+
+### Permanent Platform Differences (not workarounds)
+
+These are correct adaptations for a non-Kinect platform:
+- **ShellInput Kinect guards** — mSkelIdentifier/mSkelExtTracker are genuinely absent
+- **SyncVoiceControl fallback** — no voice hardware
+- **ExitControllerMode no-op** — no gesture input to re-enter from
+- **8 stub managers** — Xbox Live, challenges, speech — not applicable on native
+
+### Full plan: [DTA_FLOW_V2_PLAN.md](DTA_FLOW_V2_PLAN.md)
 
 ## Key Architecture Notes
 

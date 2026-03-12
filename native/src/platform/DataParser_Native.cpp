@@ -71,7 +71,6 @@ extern int gDataLine;
 
 extern "C" int DataInput(void *v, int x) {
     if (!gBinStream) {
-        printf("DataInput: gBinStream is NULL!\n");
         return 0;
     }
     if (gBinStream->Fail()) {
@@ -119,24 +118,8 @@ static bool Defined() {
 // ParseNode — parse a single token from the lexer
 // ============================================================================
 
-static int sParseDepth = 0;
-
 static bool ParseNode() {
     int token = yylex();
-
-    // Debug: track paren depth when parsing synth.dta
-    extern Symbol gFile;
-    bool isSynth = strstr(gFile.Str(), "synth.dta") != nullptr;
-    if (isSynth && !Defined() && token != kDataTokenIfdef && token != kDataTokenIfndef
-        && token != kDataTokenElse && token != kDataTokenEndif) {
-        if (token == kDataTokenArrayOpen || token == kDataTokenArrayClose)
-            printf("  SYNTH SKIP token=%d (paren) line=%d\n", token, gDataLine);
-        return true;
-    }
-    if (isSynth && (token == kDataTokenArrayOpen || token == kDataTokenArrayClose
-                    || token == kDataTokenFinished)) {
-        printf("  SYNTH token=%d line=%d gOpenArray=%d\n", token, gDataLine, gOpenArray);
-    }
 
     if (!Defined() && token != kDataTokenIfdef && token != kDataTokenIfndef
         && token != kDataTokenElse && token != kDataTokenEndif) {
@@ -156,10 +139,6 @@ static bool ParseNode() {
     }
 
     if (token == kDataTokenFinished) {
-        printf("ParseNode: got kDataTokenFinished, gOpenArray=%d, file=%s, line=%d, gBinStream=%p, eof=%d, fail=%d\n",
-               gOpenArray, gFile.Str(), gDataLine, gBinStream,
-               gBinStream ? gBinStream->Eof() : -1,
-               gBinStream ? gBinStream->Fail() : -1);
         switch (gOpenArray) {
         case kDataTokenArrayOpen:
             MILO_FAIL("Array closed incorrectly (file %s, line %d)", gFile, gDataLine);
@@ -258,14 +237,7 @@ static bool ParseNode() {
         if (gCachingFile) {
             PushBack(DataNode(kDataInclude, Symbol(yytext).Str()));
         } else {
-            printf("ParseNode: #include '%s' from file=%s line=%d, gBinStream=%p eof=%d\n",
-                   yytext, gFile.Str(), gDataLine, gBinStream,
-                   gBinStream ? gBinStream->Eof() : -1);
             DataArray *fileArr = ReadEmbeddedFile(yytext, required);
-            printf("ParseNode: returned from #include, gBinStream=%p eof=%d fail=%d, gFile=%s gDataLine=%d gOpenArray=%d\n",
-                   gBinStream, gBinStream ? gBinStream->Eof() : -1,
-                   gBinStream ? gBinStream->Fail() : -1,
-                   gFile.Str(), gDataLine, gOpenArray);
             if (fileArr) {
                 for (int i = 0; i < fileArr->Size(); i++) {
                     PushBack(fileArr->Node(i));

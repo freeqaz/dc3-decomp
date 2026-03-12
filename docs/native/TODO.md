@@ -144,10 +144,12 @@ Goal: Remove C++ workarounds and let real DTA screen-flow scripts drive the nati
 **Full plan**: [DTA_FLOW_V2_PLAN.md](DTA_FLOW_V2_PLAN.md)
 
 - [x] **Smart stubs** (Phase 1): SaveLoadManager, ProfileMgr, PlatformMgr return sensible defaults
-- [ ] **Remove auto-advance** (Phase 2): DTA handlers drive screen transitions naturally
+- [x] **Boot screen timers** (Phase 2): Intentional UX delays (permanent — no async Xbox events)
 - [x] **Animation lifecycle** (Phase 3): AnimTask auto-null on native, removed HamNavList timer bypasses
+- [x] **mSink investigation** (Phase 5a): DTA `set_sink` never fires in DC3 — fallback is permanent
+- [x] **GameMode guard** (Phase 5b): `#ifdef HX_NATIVE` in constructor is correct and sufficient
+- [x] **Debug logging cleanup** (Phase 6): All ~25 debug printfs gated behind `MILO_DEBUG_UI_FLOW=1`
 - [ ] **Remove multiuser auto-skip** (Phase 4): Real venue/char/difficulty selection flow
-- [ ] **Cleanup** (Phase 5): Remove mSink hack, GameMode guard, controller force-on
 - [ ] Content system integration for list population
 
 ## Phase 6: Audio (LOW PRIORITY)

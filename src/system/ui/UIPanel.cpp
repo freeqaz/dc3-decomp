@@ -13,6 +13,12 @@
 #include "obj/Dir.h"
 #include "rndobj/Mesh.h"
 #include "rndobj/Text.h"
+#include <cstdlib>
+static inline bool DebugUIFlow() {
+    static bool checked = false, val = false;
+    if (!checked) { val = getenv("MILO_DEBUG_UI_FLOW") != nullptr; checked = true; }
+    return val;
+}
 #endif
 
 ObjectDir *UIPanel::DataDir() {
@@ -45,27 +51,33 @@ bool UIPanel::CheckIsLoaded() {
         if (IsLoaded()) {
             FinishLoad();
 #ifdef HX_NATIVE
-            static int sLoadDiag = 0;
-            if (sLoadDiag++ < 20) {
-                printf("DC3 UI: Panel '%s' finished loading (state=%d)\n", Name(), (int)mState);
+            if (DebugUIFlow()) {
+                static int sLoadDiag = 0;
+                if (sLoadDiag++ < 20) {
+                    printf("DC3 UI: Panel '%s' finished loading (state=%d)\n", Name(), (int)mState);
+                }
             }
 #endif
             return true;
         } else {
 #ifdef HX_NATIVE
-            static int sCheckDiag = 0;
-            if (sCheckDiag++ < 10) {
-                printf("DC3 UI: Panel '%s' still loading: mLoader=%p loaded=%d loadRefs=%d\n",
-                       Name(), (void *)mLoader, mLoader ? mLoader->IsLoaded() : -1, mLoadRefs);
+            if (DebugUIFlow()) {
+                static int sCheckDiag = 0;
+                if (sCheckDiag++ < 10) {
+                    printf("DC3 UI: Panel '%s' still loading: mLoader=%p loaded=%d loadRefs=%d\n",
+                           Name(), (void *)mLoader, mLoader ? mLoader->IsLoaded() : -1, mLoadRefs);
+                }
             }
             // On native, if the loader is done (or doesn't exist) but the panel
             // has a custom is_loaded handler blocking, force-finish after detection.
             // Panels like "wait_for_content" check DLC/network state that doesn't
             // exist on native.
             if (!mLoader) {
-                static int sForceLoadDiag = 0;
-                if (sForceLoadDiag++ < 5) {
-                    printf("DC3 UI: Panel '%s' has no loader but is_loaded=false, force-finishing\n", Name());
+                if (DebugUIFlow()) {
+                    static int sForceLoadDiag = 0;
+                    if (sForceLoadDiag++ < 5) {
+                        printf("DC3 UI: Panel '%s' has no loader but is_loaded=false, force-finishing\n", Name());
+                    }
                 }
                 FinishLoad();
                 return true;
@@ -211,7 +223,15 @@ void UIPanel::Load() {
             mLoader = new DirLoader(fp, kLoadFront, nullptr, nullptr, nullptr, false, nullptr);
             MILO_ASSERT(mLoader, 0xA9);
             mLoaded = false;
+#ifdef HX_WEB
+            printf("UIPanel::Load '%s' PollUntilLoaded...\n", Name());
+            fflush(stdout);
+#endif
             TheLoadMgr.PollUntilLoaded(mLoader, nullptr);
+#ifdef HX_WEB
+            printf("UIPanel::Load '%s' done (loaded=%d)\n", Name(), mLoader ? mLoader->IsLoaded() : -1);
+            fflush(stdout);
+#endif
 #else
             mLoader = new DirLoader(fp, pos, nullptr, nullptr, nullptr, false, nullptr);
             MILO_ASSERT(mLoader, 0xA9);
