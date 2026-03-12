@@ -18,3 +18,7 @@ void DelayEffect::SetParameters(DelayEffect::Params const &params) {
     mDecay = DbToRatio(params.mDecayDb);
     mWetAmount = params.mWetPercent / 100.0f;
 }
+
+void DelayEffect::Process(float *, int, int) {}
+
+void DelayEffect::SetParameter(int, float) {}

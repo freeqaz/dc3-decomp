@@ -567,3 +567,141 @@ void HollaBackMinigame::SetState(State s) {
         }
     }
 }
+
+void HollaBackMinigame::OnBeat() {
+    static Symbol holla_back_stage("holla_back_stage");
+    static Symbol exit_title("exit_title");
+    static Symbol exit_instruction("exit_instruction");
+    static Symbol exit_win("exit_win");
+
+    MoveDir *theMoveDir = TheHamDirector->GetMoveDir();
+    int loopStart, loopEnd;
+    TheMaster->GetAudio()->GetCurrLoopBeats(loopStart, loopEnd);
+
+    float currentBeat = TheMaster->TotalBeat1();
+    if (currentBeat < TheMaster->TotalBeat2()) {
+        // Beat jumped backward - reset midi parsers
+        MidiParser *midiPlayer = TheMidiParserMgr->GetParser("midi_player");
+        midiPlayer->Handle(Message("reset_to_beat", (int)currentBeat), true);
+        MidiParser *countIn = TheMidiParserMgr->GetParser("count_in_player");
+        countIn->Handle(Message("reset_to_beat", (int)currentBeat), true);
+        theMoveDir->ResetDetection();
+    }
+
+    int beatInt = (int)currentBeat;
+    unk420 = beatInt / 4;
+
+    int stateVal = mState;
+    if (mSpecifyFirstMoveMeasure >= 1 && mState == 1) {
+        mSubStateIndex = (4 - mSpecifyFirstMoveMeasure) * 4 + beatInt;
+        stateVal = 1;
+    } else if (mState != 0) {
+        mSubStateIndex = mSubStateIndex + 1;
+    }
+
+    int subStateIdx = mSubStateIndex;
+    int subMeasure = subStateIdx / 4;
+    int subBeatInMeasure = subStateIdx % 4;
+    int currentBeatInMeasure = beatInt % 4;
+
+    if (subStateIdx >= 0 && subBeatInMeasure != currentBeatInMeasure) {
+        mSubStateIndex = subStateIdx + (currentBeatInMeasure - subBeatInMeasure);
+    }
+
+    if (stateVal == 1) {
+        // Instruction phase
+        if (!mGamePlaying) {
+            if (subMeasure == 3) {
+                if (currentBeatInMeasure == 0) {
+                    mGamePlaying = false;
+                    RndPropAnim *anim = TheHamDirector->GetVenueWorld()->Find<RndPropAnim>(
+                        "bid_start_character_faded_out.anim", true
+                    );
+                    anim->Animate(0, false, 0, nullptr, kEaseLinear, 0, false);
+                    TheHamProvider->Export(Message("show_char_projection"), true);
+                }
+                if (currentBeatInMeasure == 3) {
+                    MidiParser *countIn = TheMidiParserMgr->GetParser("count_in_player");
+                    countIn->SetProperty("active", 0);
+                }
+            }
+        } else {
+            if (subMeasure == 3) {
+                if (currentBeatInMeasure == 3) {
+                    MidiParser *countIn = TheMidiParserMgr->GetParser("count_in_player");
+                    countIn->SetProperty("active", 0);
+                }
+            }
+        }
+
+        if ((currentBeatInMeasure == 0 || subMeasure < 0)) {
+            if (subMeasure == 1) {
+                MidiParser *countIn = TheMidiParserMgr->GetParser("count_in_player");
+                countIn->SetProperty("active", 1);
+                int sectionEnd = mSpecifyFirstMoveMeasure * 4;
+                int sectionStart = sectionEnd - 4;
+                countIn->Handle(Message("set_section", sectionStart, sectionEnd), true);
+            }
+            if (subMeasure == 2) {
+                TheMaster->GetAudio()->SetLoop(
+                    (float)(mFirstMoveIdx + 1) * 4.0f,
+                    (float)mLastMoveIdx * 4.0f
+                );
+            }
+            if (subMeasure == mMaxRoutineSize) {
+                unk46c = true;
+                TheHamDirector->SetPlayerSpotlightsEnabled(true);
+                TheHamProvider->SetProperty(holla_back_stage, exit_instruction);
+            }
+
+            bool atEnd = unk46c && (unk420 == mSpecifyFirstMoveMeasure - 3 || unk420 == mLastMoveIdx);
+            bool nearEnd = unk46c && (unk420 == mSpecifyFirstMoveMeasure - 3 || unk420 == mLastMoveIdx - 1);
+
+            if (nearEnd) {
+                TheHamProvider->Export(Message("hide_char_projection"), true);
+            }
+            if (atEnd) {
+                TheHamDirector->SetPlayerSpotlightsEnabled(false);
+                float pct = NailedMovesInRoutinePct();
+                unk475 = pct >= 1.0f;
+                if (pct >= 1.0f) {
+                    mScoreLeft->SetShowing(true);
+                    mScoreRight->SetShowing(true);
+                    WinShoutOut();
+                    Hmx::Object *songseq = ObjectDir::Main()->Find<Hmx::Object>("songseq", true);
+                    songseq->Handle(Message("load_next_song_audio"), true);
+                    for (int i = 0; i < 2; i++) {
+                        HamPlayerData *hpd = TheGameData->Player(i);
+                        PropertyEventProvider *provider = hpd->Provider();
+                        provider->SetProperty("start_score_move_index", 1000);
+                        provider->Export(Message("hide_hud", 0), true);
+                    }
+                    if (unk484 == 0) {
+                        Hmx::Object *gamePanel = ObjectDir::Main()->Find<Hmx::Object>("game_panel", true);
+                        gamePanel->Handle(Message("earn_acc", Symbol("acc_hollaback")), true);
+                    }
+                    SetState((State)2);
+                } else {
+                    DecipherShoutOut(pct);
+                    unk484++;
+                    SetState((State)1);
+                }
+            }
+        }
+    } else if (stateVal == 2) {
+        // Win phase
+        if (mSound && mSound->IsPlaying()) {
+            return;
+        }
+        if (mWinShoutouts.size() > 1) {
+            const char *sndName = MakeString("%s.snd", mWinShoutouts[1].Str());
+            mSound = TheHamDirector->GetVenueWorld()->Find<Sound>(sndName, false);
+            if (mSound) {
+                mSound->Play(0, 0, 0, nullptr, 0);
+            }
+        }
+        TheHamDirector->SetPlayerSpotlightsEnabled(true);
+        Hmx::Object *gamePanel = ObjectDir::Main()->Find<Hmx::Object>("game_panel", true);
+        gamePanel->Handle(Message("win_hollaback"), true);
+    }
+}

@@ -394,7 +394,16 @@ void StandardStream::PollStream() {
         }
     }
 
-    // Jump handling omitted for now — requires DoJump() implementation
+    // Jump handling
+    if (mJumpFromSamples != 0 && mCurrentSamp >= mJumpFromSamples) {
+        JumpInstance ji;
+        ji.unk0 = 0;
+        ji.unk4 = 0;
+        ji.unk8 = GetTime();
+        ji.unkc = GetJumpBackTotalTime(ji.unk8);
+        mJumpInstances.push_back(ji);
+        DoJump();
+    }
 
     UpdateVolumes();
     UpdateTime();
@@ -639,4 +648,84 @@ float StandardStream::GetBufferAheadTime() const {
         time = SampToMs(mCurrentSamp);
     }
     return time;
+}
+
+int StandardStream::ConsumeData(void **v, int numSamples, int startSamp) {
+    if (mGetInfoOnly)
+        return 0;
+    int numChannels = mChannels.size();
+    int realChannels = numChannels - mVirtualChans;
+    MILO_ASSERT(numChannels != 0, 0x1A9);
+    if (startSamp >= 0 && startSamp != mCurrentSamp) {
+        MILO_LOG("sample mismatch: expected %i, got %i\n", mCurrentSamp, startSamp);
+        mCurrentSamp = startSamp;
+    }
+
+    int samplesToConsume = numSamples;
+    if (mJumpFromSamples != 0) {
+        MILO_ASSERT(mCurrentSamp <= mJumpFromSamples, 0x1CF);
+        int remaining = mJumpFromSamples - mCurrentSamp;
+        if (remaining < samplesToConsume) {
+            samplesToConsume = remaining;
+        }
+    }
+
+    int bytesPerSample = mFloatSamples ? 4 : 2;
+    int bufSize = samplesToConsume * bytesPerSample;
+    for (int i = 0; i < realChannels; i++) {
+        int chanIdx = i;
+        for (int j = 0; j < (int)mChanMaps.size(); j++) {
+            if (mChanMaps[j].first == i) {
+                chanIdx = mChanMaps[j].second;
+                break;
+            }
+        }
+        mChannels[chanIdx]->WriteData(v[i], bufSize);
+    }
+    for (int i = 0; i < mVirtualChans; i++) {
+        memcpy(mVirtBufs[i], v[realChannels + i], bufSize);
+    }
+    mCurrentSamp += samplesToConsume;
+    return samplesToConsume;
+}
+
+void StandardStream::setJumpSamplesFromMs(float fromMs, float toMs) {
+    mJumpFromSamples = kStreamEndSamples;
+    mJumpToSamples = 0;
+    if (fromMs != kStreamEndMs) {
+        mJumpFromSamples = MsToSamp(fromMs);
+    }
+    if (toMs != 0) {
+        mJumpToSamples = MsToSamp(toMs);
+    }
+    mJumpSamplesInvalid = false;
+}
+
+bool StandardStream::IsPastStreamJumpPointOfNoReturn() {
+    if (mJumpFromSamples == 0)
+        return false;
+    if (mChannels.empty())
+        return false;
+    return mCurrentSamp >= mJumpFromSamples;
+}
+
+void StandardStream::DoJump() {
+    MILO_ASSERT(mJumpFromSamples != 0, 0x314);
+    if (!mJumpFile.empty()) {
+        delete mFile;
+        delete mRdr;
+        mFile = NewFile(mJumpFile.c_str(), 2);
+        if (!mFile)
+            MILO_FAIL("\nCould not open %s", mJumpFile.c_str());
+        mRdr = TheSynth->NewStreamDecoder(mFile, this, mExt);
+        mFileStartMs = SampToMs(mJumpToSamples);
+        mCurrentSamp = 0;
+        ClearJump();
+    } else {
+        if (mJumpFromSamples != mJumpToSamples) {
+            if (mRdr)
+                mRdr->Seek(mJumpToSamples);
+            mCurrentSamp = mJumpToSamples;
+        }
+    }
 }

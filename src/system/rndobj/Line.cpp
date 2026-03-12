@@ -392,6 +392,9 @@ void RndLine::SetPointsColor(int start, int end, const Hmx::Color &color) {
     mMesh->Sync(0x1F);
 }
 
+void RndLine::UpdateLine(RndLine::Point *, RndLine::Point *) {}
+void RndLine::UpdateLinePair(RndLine::Point *, RndLine::Point *) {}
+
 #ifdef HX_NATIVE
 
 void RndLine::UpdateLine(const Transform &camXfm, float nearPlane) {
@@ -474,5 +477,9 @@ void RndLine::UpdateLine(const Transform &camXfm, float nearPlane) {
 
     mMesh->Sync(0x1F);
 }
+
+#else
+
+void RndLine::UpdateLine(const Transform &, float) {}
 
 #endif

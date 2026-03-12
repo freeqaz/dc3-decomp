@@ -471,6 +471,8 @@ void ClipDistMap::FindDists(float maxFacing, DataArray *arr) {
     dataVarDelta = varDelta;
 }
 
+void ClipDistMap::Draw(float, float, CharDriver *) {}
+
 void ClipDistMap::DrawDot(float x, float y, float f3, float f4, Hmx::Color const &color) {
     Hmx::Rect rect;
     float scale = (float)mSamplesPerBeat;

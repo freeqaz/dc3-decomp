@@ -276,3 +276,7 @@ AutoGlitchPoker::~AutoGlitchPoker() {
         TheGlitchFinder.PokeEnd(time);
     }
 }
+
+void GlitchFinder::CheckDump() {}
+
+DataNode GlitchFindScriptImpl(DataArray *, int) { return DataNode(0); }

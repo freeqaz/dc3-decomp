@@ -419,4 +419,19 @@ BEGIN_CUSTOM_PROPSYNC(InlineHelp::ActionElement)
     SYNC_PROP_SET(secondary_token, o.GetToken(true), o.SetToken(_val.Sym(), true))
 END_CUSTOM_PROPSYNC
 
+BinStream &operator>>(BinStreamRev &bs, InlineHelp::ActionElement &ae) {
+    return bs.stream >> ae;
+}
+
+void InlineHelp::ClearActionToken(JoypadAction a) {
+    for (std::vector<ActionElement>::iterator it = mConfig.begin(); it != mConfig.end();
+         ++it) {
+        if ((*it).mAction == a) {
+            mConfig.erase(it);
+            SyncLabelsToConfig();
+            return;
+        }
+    }
+}
+
 #pragma endregion InlineHelp::ActionElement

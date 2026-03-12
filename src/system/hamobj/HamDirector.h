@@ -105,6 +105,7 @@ public:
     void ArmMultiIntroMode();
     void PlayIntroShot();
     void SetupAnims();
+    void RemapSongAnimToTempoMap(TempoMap *);
     RndPropAnim *GetPropAnim(Difficulty, const char *, bool);
     void SetupRoutineBuilderAnims();
     PropKeys *GetPropKeys(Difficulty, Symbol);

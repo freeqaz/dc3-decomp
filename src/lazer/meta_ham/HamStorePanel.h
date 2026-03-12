@@ -27,6 +27,15 @@ struct HamSpecialOffer {
     bool mOwned;
 };
 
+class HamStorePanel;
+
+class SpecialOfferEnumJob {
+public:
+    SpecialOfferEnumJob(HamStorePanel *, int, std::vector<unsigned long long> &);
+    virtual ~SpecialOfferEnumJob();
+    virtual void OnCompletion(Hmx::Object *);
+};
+
 class HamStorePanel : public StorePanel, public ContentMgr::Callback {
 public:
     // Hmx::Object

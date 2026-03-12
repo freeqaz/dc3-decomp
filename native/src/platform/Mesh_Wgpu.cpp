@@ -197,7 +197,9 @@ void DrawMeshImmediate(RndMesh* mesh) {
     key.cull = isTextMesh ? (WgpuCull)0 : (WgpuCull)mat->GetCull(); // No cull for text
     key.stencil = (WgpuStencil)mat->GetStencil();
     key.layout = skinned ? VertexLayoutType::Skinned : VertexLayoutType::Static;
-    key.targetFormat = gWgpuRnd->Gpu().SurfaceFormat();
+    key.targetFormat = gWgpuRnd->CurrentTargetFormat();
+    key.sampleCount = gWgpuRnd->CurrentSampleCount();
+    key.hasDepth = gWgpuRnd->CurrentPassHasDepth();
     key.alphaCut = mat->GetAlphaCut();
     key.alphaWrite = mat->GetAlphaWrite();
     key.alphaToCoverage = mat->GetAlphaCut();

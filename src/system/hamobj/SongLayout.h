@@ -54,6 +54,7 @@ struct MoveReplacer {
 
 /** "Song layout" */
 class SongLayout : public Hmx::Object {
+    friend class MoveMgr;
 public:
     // Hmx::Object
     virtual ~SongLayout();

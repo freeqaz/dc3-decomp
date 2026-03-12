@@ -84,6 +84,9 @@ public:
     void ClearDeltas();
     CameraManager *GetCameraManager() const { return mCameraMgr; }
     PhysicsManager *GetPhysicsManager() const { return mPhysicsMgr; }
+#ifdef HX_NATIVE
+    LightPresetManager &GetLightPresetMgr() { return mLightPresetMgr; }
+#endif
 
     DataNode OnGetPhysicsManager(const DataArray *);
 

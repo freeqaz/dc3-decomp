@@ -73,6 +73,8 @@
 #include <cctype>
 #ifdef HX_NATIVE
 #include "platform/MeshGpuCache.h"
+#include "world/LightPreset.h"
+#include "world/LightPresetManager.h"
 #endif
 
 HamDirector *TheHamDirector;
@@ -478,6 +480,50 @@ void HamDirector::SetupAnims() {
     ObjDirItr<SongCollision> it(mMoveDir, true);
     if (it)
         mSongCollision = &*it;
+}
+
+void HamDirector::RemapSongAnimToTempoMap(TempoMap *newTempoMap) {
+    TempoMap *existingTempoMap = HamSongData::sInstance->GetTempoMap();
+    DataArrayPtr clipProp(Symbol("clip"));
+    DataArrayPtr moveProp(Symbol("move"));
+    DataArrayPtr practiceProp(Symbol("practice"));
+    existingTempoMap->TickToTime(1920.0f);
+    newTempoMap->TickToTime(1920.0f);
+    for (int diff = 0; diff < kNumDifficultiesDC2; diff++) {
+        RndPropAnim *songAnim = TheHamDirector->SongAnimByDifficulty((Difficulty)diff);
+        if (songAnim) {
+            PropKeys *clipPK = songAnim->GetKeys(TheHamDirector, clipProp);
+            PropKeys *movePK = songAnim->GetKeys(TheHamDirector, moveProp);
+            PropKeys *practicePK = songAnim->GetKeys(TheHamDirector, practiceProp);
+            Keys<Symbol, Symbol> *moveSymKeys = movePK->AsSymbolKeys();
+            Keys<Symbol, Symbol> *clipSymKeys = clipPK->AsSymbolKeys();
+            Keys<Symbol, Symbol> *practiceSymKeys = practicePK->AsSymbolKeys();
+            unsigned int moveCount = moveSymKeys->size();
+            unsigned int clipCount = clipSymKeys->size();
+            unsigned int practiceCount = practiceSymKeys->size();
+            for (unsigned int i = 0; i < moveCount; i++) {
+                float frame = moveSymKeys->at(i).frame;
+                float ms = frame * (1000.0f / 30.0f);
+                float tick = newTempoMap->TimeToTick(ms);
+                float newMs = existingTempoMap->TickToTime(tick);
+                movePK->ChangeFrame(i, newMs * (30.0f / 1000.0f), false);
+            }
+            for (unsigned int i = 0; i < clipCount; i++) {
+                float frame = clipSymKeys->at(i).frame;
+                float ms = frame * (1000.0f / 30.0f);
+                float tick = newTempoMap->TimeToTick(ms);
+                float newMs = existingTempoMap->TickToTime(tick);
+                clipPK->ChangeFrame(i, newMs * (30.0f / 1000.0f), false);
+            }
+            for (unsigned int i = 0; i < practiceCount; i++) {
+                float frame = practiceSymKeys->at(i).frame;
+                float ms = frame * (1000.0f / 30.0f);
+                float tick = newTempoMap->TimeToTick(ms);
+                float newMs = existingTempoMap->TickToTime(tick);
+                practicePK->ChangeFrame(i, newMs * (30.0f / 1000.0f), true);
+            }
+        }
+    }
 }
 
 WorldDir *HamDirector::GetWorld() {
@@ -931,10 +977,6 @@ void HamDirector::SetCharSpot(Symbol charType, Symbol spotState) {
 DataNode HamDirector::OnToggleCamshotFlag() { return mCamshotFlag = !mCamshotFlag; }
 
 DataNode HamDirector::OnLoadSong(DataArray *a) {
-#ifdef HX_NATIVE
-    fprintf(stderr, "DC3 Native: HamDirector::OnLoadSong — song='%s' mMerger=%p\n",
-            a->Str(2), mMerger.Ptr());
-#endif
     FilePathTracker tracker(FileRoot());
     MILO_ASSERT(TheGameData, 0xC1D);
     for (int i = 0; i < 2; i++) {
@@ -1131,10 +1173,6 @@ DataNode HamDirector::OnFileLoaded(DataArray *a) {
     static Symbol viz("viz");
     static Symbol game_hud("game_hud");
     Symbol sym = a->Sym(2);
-#ifdef HX_NATIVE
-    fprintf(stderr, "DC3 Native: HamDirector::OnFileLoaded — sym='%s' mMerger=%p\n",
-            sym.Str(), mMerger.Ptr());
-#endif
     if (sym != game_hud || mMerger) {
         mAsyncLoaded = mMerger->AsyncLoad();
         if (sym == song) {
@@ -1593,29 +1631,29 @@ void HamDirector::CheckBeginFatal(int i1, HamMove *move, int i3) {
 void HamDirector::UpdatePostProcOverlay(
     const char *cc, const RndPostProc *p1, const RndPostProc *p2, float f4
 ) {
-    static const RndPostProc *sPostProcB;
     RndOverlay *ppOverlay = RndOverlay::Find("postproc", true);
     static const RndPostProc *sPostProcA;
-    static float sPostProcBlend;
+    static const RndPostProc *sPostProcB;
+    static float sPostProcBlend = -99;
     if (!ppOverlay->Showing())
         return;
+    TextStream *reflect = TheDebug.SetReflect(ppOverlay);
     if (p1 == sPostProcA && p2 == sPostProcB && f4 == sPostProcBlend)
         return;
     static int sHamDirID = 0;
-    sHamDirID = (sHamDirID + 1) % 100;
-    TextStream *reflect = TheDebug.SetReflect(ppOverlay);
-    if (p1 != NULL) {
-        if (!(p2 != NULL)) {
-            auto _tmp2 = p1->Name();
-            MILO_LOG("%03d:HAMDIR Post Proc %s is not blended\n", sHamDirID, _tmp2);
+    sHamDirID++;
+    int displayId = sHamDirID % 100;
+    if (p1) {
+        if (!p2) {
+            MILO_LOG(
+                "%03d:HAMDIR Post Proc %s is not blended\n", displayId, p1->Name()
+            );
         } else {
-            auto _tmp3 = p1->Name();
-            MILO_LOG("%03d:HAMDIR Post Proc A %s\n", sHamDirID, _tmp3);
-            MILO_LOG("%03d:HAMDIR Post Proc B %s\n", sHamDirID, p2->Name());
+            MILO_LOG("%03d:HAMDIR Post Proc A %s\n", displayId, p1->Name());
         }
     }
-    if (p1 == NULL && p2 != NULL) {
-        MILO_LOG("%03d:HAMDIR Post Proc B %s\n", sHamDirID, p2->Name());
+    if (p2) {
+        MILO_LOG("%03d:HAMDIR Post Proc B %s\n", displayId, p2->Name());
     }
     MILO_LOG(
         "           PostProc set by %s, blend is %.2f%%\n", cc ? cc : "", f4 * 100.0f
@@ -2955,19 +2993,6 @@ void HamDirector::Poll() {
     HamCharacter *player0 = TheHamWardrobe ? TheHamWardrobe->GetCharacter(0) : nullptr;
     HamCharacter *player1 = TheHamWardrobe ? TheHamWardrobe->GetCharacter(1) : nullptr;
     RndPropAnim *songAnim = SongAnim(0);
-#ifdef HX_NATIVE
-    // Re-init song anims once venue loads (not available during Enter)
-    {
-        static bool sInitialized = false;
-        if (!sInitialized && mVenue) {
-            if (!mSongAnims[kDifficultyEasy]) {
-                SetupAnims();
-                songAnim = SongAnim(0);
-            }
-            sInitialized = true;
-        }
-    }
-#endif
     if (songAnim) {
         if (player0 && player1) {
             int p0anim = player0->SongAnimation();

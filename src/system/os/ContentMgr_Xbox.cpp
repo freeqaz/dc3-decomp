@@ -379,3 +379,7 @@ DataNode XboxContentMgr::OnMsg(const ContentInstalledMsg &msg) {
     mDirty = true;
     return 0;
 }
+
+bool XboxContentMgr::MountContent(Symbol) { return false; }
+
+void XboxContentMgr::PollRefresh() {}

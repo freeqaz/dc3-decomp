@@ -113,6 +113,47 @@ namespace {
 
 }
 
+void SetupFrame(
+    RhythmDetector::Frame &frame,
+    float frameCount,
+    float beatDiff,
+    const Vector3 *prevJoints,
+    const Vector3 *curJoints,
+    float deltaTime
+) {
+    frame.mTime = frameCount + beatDiff;
+    frame.mJointVelocities.resize(20);
+    float invDelta = 1.0f / deltaTime;
+    for (int i = 0; i < 20; i++) {
+        Vector3 vel;
+        Subtract(curJoints[i], prevJoints[i], vel);
+        Scale(vel, invDelta, vel);
+        frame.mJointVelocities[i] = vel;
+    }
+}
+
+RhythmDetector::Frame BlendFrameDataToBeat(
+    const RhythmDetector::Frame &frameA,
+    const RhythmDetector::Frame &frameB,
+    float beatTime
+) {
+    RhythmDetector::Frame result;
+    result.mTime = beatTime;
+    int numJoints = frameA.mJointVelocities.size();
+    result.mJointVelocities.resize(numJoints);
+    float timeRange = frameB.mTime - frameA.mTime;
+    float blend;
+    if (timeRange > 0.0f) {
+        blend = (beatTime - frameA.mTime) / timeRange;
+    } else {
+        blend = 0.0f;
+    }
+    for (int i = 0; i < numJoints; i++) {
+        Interp(frameA.mJointVelocities[i], frameB.mJointVelocities[i], blend, result.mJointVelocities[i]);
+    }
+    return result;
+}
+
 void EraseNewerData(std::vector<RhythmDetector::Frame> &vec, float time) {
     std::vector<RhythmDetector::Frame>::iterator found = vec.end();
     FOREACH (it, vec) {
@@ -494,3 +535,142 @@ void RhythmDetector::AddFrame(BaseSkeleton const &skel) {
 //     }
 //     return ret;
 // }
+
+const RhythmDetector::RecordData &
+RhythmDetector::GetRecord(float windowStart, float windowEnd, bool finalize, Symbol sym, TextStream *stream) {
+    if (mRecordData.mWindowStart == windowStart && mRecordData.mWindowEnd == windowEnd) {
+        if (finalize) {
+            // AnalyzeData(
+            //     mAnalysisFrames2,
+            //     mRecordData.unk8,
+            //     mRecordData.unkc,
+            //     mRhythmDecay,
+            //     mToleranceFactor,
+            //     mDebugGraphA,
+            //     true,
+            //     sym,
+            //     0
+            // );
+            mRecordData.mFinalized = true;
+        }
+    } else {
+        if (!mRecordData.mFinalized) {
+            MILO_NOTIFY(
+                "new rhythm detector window w/o finalization [%.1f,%.1f] to [%.1f, %.1f]",
+                mRecordData.mWindowStart,
+                mRecordData.mWindowEnd,
+                windowStart,
+                windowEnd
+            );
+        }
+        ClearData();
+        mRecordData.mWindowStart = windowStart;
+        mRecordData.mWindowEnd = windowEnd;
+        mRecordData.mFinalized = false;
+        mRecordData.unk10 = -1.0f;
+        mRecordData.unk14 = -1.0f;
+        mRecordData.frames.clear();
+    }
+    return mRecordData;
+}
+
+void RhythmDetector::ProcessFrames() {
+    std::list<Frame> localHistory;
+    localHistory.swap(mFrameHistory);
+
+    bool hadBlendedFrames = false;
+    if (!localHistory.empty()) {
+        float lastTime = localHistory.back().mTime;
+        EraseNewerData(mRecordData.frames, lastTime);
+        EraseNewerData(mAnalysisFrames1, lastTime);
+
+        for (std::list<Frame>::iterator it = localHistory.begin(); it != localHistory.end(); ++it) {
+            mAnalysisFrames1.push_back(*it);
+
+            int prevTick = (int)(mCurrentFrame.mTime * 10.0f);
+            int curTick = (int)(it->mTime * 10.0f);
+            int tickDiff = (curTick - prevTick) % 40;
+
+            if (!mCurrentFrame.mJointVelocities.empty() && tickDiff > 0) {
+                hadBlendedFrames = true;
+                for (int j = 0; j < tickDiff; j++) {
+                    float beatTime = (float)(prevTick + j + 1) * 0.1f;
+                    Frame blended = BlendFrameDataToBeat(mCurrentFrame, *it, beatTime);
+                    mAnalysisFrames2.push_back(blended);
+                }
+            }
+
+            mCurrentFrame.mTime = it->mTime;
+            mCurrentFrame.mJointVelocities = it->mJointVelocities;
+        }
+
+        // Trim local list to keep only the last entry
+        unsigned int count = 0;
+        for (std::list<Frame>::iterator it = localHistory.begin(); it != localHistory.end(); ++it) {
+            count++;
+        }
+        if (count > 1) {
+            std::list<Frame>::iterator last = localHistory.end();
+            --last;
+            localHistory.erase(localHistory.begin(), last);
+        }
+
+        // Trim again (same logic - ensures only 1 entry)
+        count = 0;
+        for (std::list<Frame>::iterator it = localHistory.begin(); it != localHistory.end(); ++it) {
+            count++;
+        }
+        if (count > 1) {
+            std::list<Frame>::iterator last = localHistory.end();
+            --last;
+            localHistory.erase(localHistory.begin(), last);
+        }
+
+        mCurrentFrame.mTime = localHistory.back().mTime;
+        mCurrentFrame.mJointVelocities = localHistory.back().mJointVelocities;
+    }
+
+    if (!mAnalysisFrames1.empty()) {
+        static UIPanel *panel = ObjectDir::Main()->Find<UIPanel>("rhythm_detector_panel", false);
+
+        float windowSize;
+        if (panel == nullptr) {
+            windowSize = 0.0f;
+        } else {
+            DataArray *cfg = panel->Property("analyze_beat_frequency", true)->Array();
+            static Symbol analyzePeriodCount("analyze_period_count");
+            DataArray *periodCfg = panel->Property(analyzePeriodCount, true)->Array();
+            int periodCount = periodCfg->Node(1).Int();
+            int beatFreq = cfg->Node(cfg->Size() - 1).Int();
+            windowSize = (float)beatFreq * (float)(periodCount - 1) * 2.0f;
+        }
+
+        // Trim old frames outside the analysis window
+        std::vector<Frame>::iterator trimEnd = mAnalysisFrames1.end();
+        float lastFrameTime = (mAnalysisFrames1.end() - 1)->mTime;
+        for (std::vector<Frame>::iterator it = mAnalysisFrames1.begin(); it != mAnalysisFrames1.end(); ++it) {
+            if (it->mTime >= lastFrameTime - windowSize) {
+                break;
+            }
+            trimEnd = it;
+        }
+        if (trimEnd != mAnalysisFrames1.end() && mAnalysisFrames1.begin() != trimEnd + 1) {
+            mAnalysisFrames1.erase(mAnalysisFrames1.begin(), trimEnd + 1);
+        }
+
+        if (hadBlendedFrames) {
+            static Symbol emptySym("");
+            // AnalyzeData(
+            //     mAnalysisFrames2,
+            //     mRecordData.unk10,
+            //     mRecordData.unk14,
+            //     mRhythmDecay,
+            //     mToleranceFactor,
+            //     0,
+            //     false,
+            //     emptySym,
+            //     0
+            // );
+        }
+    }
+}

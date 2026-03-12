@@ -193,6 +193,7 @@ public:
     const std::vector<BeatEvent> &BeatEvents() { return mBeatEvents; }
     int NumBeatEvents() { return mBeatEvents.size(); }
     RndAnimatable *SyncAnim() const { return mSyncAnim; }
+    int NumBlendSamples() const { return mBlendSamples.size(); }
     void SetPlayFlags(int);
     void SetDefaultBlend(int);
     void SetDefaultLoop(int);

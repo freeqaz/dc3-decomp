@@ -245,4 +245,103 @@ void DateTime::ToString(String &str) const {
     str += MakeString(" %02d:%02d:%02d", mHour, mMin, mSec);
 }
 
+int DateTime::DayOfWeek() const {
+    int y = mYear + 1899;
+    int days = y * 365 + y / 4 - y / 100 + y / 400;
+    return (DayOfYear() + days % 7) % 7;
+}
+
+int DateTime::ToDayNumber() {
+    int m = (mMonth + 10) % 12;
+    int y = mYear - m / 10;
+    return (m * 306 + 5) / 10 + mDay + y * 365 + y / 4 - y / 100 + y / 400 - 1;
+}
+
+void DateTime::FromDayNumber(int dayNumber) {
+    int y = (dayNumber * 10000 + 14780) / 3652425;
+    int doy = dayNumber - (y * 365 + y / 4 - y / 100 + y / 400);
+    if (doy < 0) {
+        y--;
+        doy = dayNumber - (y * 365 + y / 4 - y / 100 + y / 400);
+    }
+    int mi = (doy * 100 + 52) / 3060;
+    int month = mi + 2;
+    mMonth = month % 12;
+    mYear = y + month / 12;
+    mDay = doy - (mi * 306 + 5) / 10 + 1;
+}
+
+unsigned int DateTime::ToSeconds() {
+    return ((ToDayNumber() * 24 + mHour) * 60 + mMin) * 60 + mSec;
+}
+
+void DateTime::FromUtcToLocal() {
+    long bias;
+    GetTimeZoneBias(bias);
+    unsigned int secs = ToSeconds() - bias * 60;
+    int days = secs / 86400;
+    secs -= days * 86400;
+    mHour = secs / 3600;
+    secs -= mHour * 3600;
+    mMin = secs / 60;
+    mSec = secs - mMin * 60;
+    FromDayNumber(days);
+}
+
+void DateTime::ParseDate(const char *str) {
+    mSec = 0;
+    mMin = 0;
+    mHour = 0;
+    int len = strlen(str);
+    char yearBuf[5];
+    char dayBuf[3];
+    char hourBuf[3];
+    char secBuf[3];
+    char monthBuf[3];
+    char minBuf[3];
+    strncpy(yearBuf, str, 4);
+    yearBuf[4] = '\0';
+    mYear = atoi(yearBuf) - 1900;
+    strncpy(monthBuf, str + 5, 2);
+    monthBuf[2] = '\0';
+    mMonth = atoi(monthBuf) - 1;
+    if (mMonth > 11) {
+        MILO_NOTIFY("month %i out of range in %s", mMonth, str);
+        mMonth = 0;
+    }
+    strncpy(dayBuf, str + 8, 2);
+    dayBuf[2] = '\0';
+    mDay = atoi(dayBuf);
+    if (mDay < 1 || mDay > 31) {
+        MILO_NOTIFY("day %i out of range in %s", mDay, str);
+        mDay = 1;
+    }
+    if (len == 10) {
+        TheDebug << MakeString("Old format YYYY-MM-DD.\n");
+    } else {
+        strncpy(hourBuf, str + 11, 2);
+        hourBuf[2] = '\0';
+        mHour = atoi(hourBuf);
+        strncpy(minBuf, str + 14, 2);
+        minBuf[2] = '\0';
+        mMin = atoi(minBuf);
+        strncpy(secBuf, str + 17, 2);
+        secBuf[2] = '\0';
+        mSec = atoi(secBuf);
+    }
+}
+
+int DateTimeCmp(const DateTime &a, const DateTime &b) {
+    unsigned int dateA = (a.mYear * 256 + a.mMonth) * 256 + a.mDay;
+    unsigned int dateB = (b.mYear * 256 + b.mMonth) * 256 + b.mDay;
+    unsigned int timeA = (a.mHour * 256 + a.mMin) * 256 + a.mSec;
+    unsigned int timeB = (b.mHour * 256 + b.mMin) * 256 + b.mSec;
+    if (dateA < dateB) return -1;
+    if (dateA == dateB) {
+        if (timeA < timeB) return -1;
+        if (timeA == timeB) return 0;
+    }
+    return 1;
+}
+
 void DateTimeInit() {}

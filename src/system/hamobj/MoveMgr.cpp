@@ -731,3 +731,191 @@ void MoveMgr::LoadSubCategoryData() {
         mFilteredEras.push_back(GetCategoryByName(it->first));
     }
 }
+
+int MoveMgr::ComputeRandomChoiceSet(int measure) {
+    MILO_LOG("MoveMgr: compute moves for measure %d:\n", measure);
+    if (mChoiceSets.size() < (unsigned int)(measure + 1)) {
+        mChoiceSets.resize(measure + 1);
+    }
+    std::set<const MoveParent *> potentialMoves;
+    ComputePotentialMoves(potentialMoves, measure);
+    int numPlaced = 0;
+    unsigned int numPotential = potentialMoves.size();
+    if (numPotential != 0) {
+        int indices[4];
+        unsigned int numToPlace;
+        if ((int)numPotential < 5) {
+            numToPlace = numPotential;
+            for (unsigned int i = 0; i < numPotential; i++) {
+                indices[i] = i;
+            }
+        } else {
+            numToPlace = 4;
+            for (int i = 0; i < 4; i++) {
+                indices[i] = RandomInt(0, numPotential);
+            }
+            std::sort(indices, indices + 4);
+        }
+        int idx = 0;
+        std::set<const MoveParent *>::iterator it = potentialMoves.begin();
+        while (it != potentialMoves.end()) {
+            if (numPlaced >= (int)numToPlace) {
+                break;
+            }
+            if (idx >= indices[numPlaced]) {
+                MILO_LOG("\t%s\n", (*it)->Name().Str());
+                mChoiceSets[measure].mChoices[numPlaced] = *it;
+                numPlaced++;
+            }
+            ++it;
+            idx++;
+        }
+    }
+    return numPlaced;
+}
+
+void MoveMgr::ComputeLoadedMoveSet() {
+    mVariants.clear();
+    unsigned int choiceSize = mChoiceSets.size();
+    unsigned int routineSize = mRoutineMeasures[0].size();
+    unsigned int maxSize = routineSize;
+    if (maxSize <= choiceSize) {
+        maxSize = choiceSize;
+    }
+    std::pair<const MoveVariant *, const MoveVariant *> nullPair(nullptr, nullptr);
+    mRoutineMeasures[0].resize(maxSize, nullPair);
+    mChoiceSets.resize(maxSize);
+    std::pair<const MoveVariant *, const MoveVariant *> *routineData = &mRoutineMeasures[0][0];
+    MoveChoiceSet *choiceData = &mChoiceSets[0];
+    for (int i = 0; i < (int)maxSize; i++) {
+        if (routineData[i].first) {
+            mVariants.insert(routineData[i].first);
+            if (routineData[i].second && routineData[i].second != routineData[i].first) {
+                mVariants.insert(routineData[i].second);
+            }
+        } else if (choiceData[i].mChoices[0]) {
+            for (int j = 0; j < 4; j++) {
+                if (choiceData[i].mChoices[j]) {
+                    const MoveVariant *var = choiceData[i].mChoices[j]->PickRandomVariant();
+                    mVariants.insert(var);
+                }
+            }
+        }
+    }
+}
+
+void MoveMgr::FillInRoutineAt(int player, int measure) {
+    const MoveParent *curParent = mMoveParents[player][measure];
+    if (!curParent) {
+        return;
+    }
+    const MoveVariant *preferred = GetRoutinePreferredVariant(player, measure);
+    std::pair<const MoveVariant *, const MoveVariant *> &routinePair =
+        mRoutineMeasures[player].at(measure);
+    routinePair.first = nullptr;
+    routinePair.second = nullptr;
+
+    // Try to find variant pair with previous measure
+    if (measure > 0) {
+        const MoveParent *prevParent = mMoveParents[player][measure - 1];
+        const MoveVariant *prevPreferred = GetRoutinePreferredVariant(player, measure - 1);
+        if (!prevPreferred) {
+            prevPreferred = mRoutineMeasures[player][measure - 1].first;
+        }
+        if (!mMoveGraph.FindVariantPair(
+                mRoutineMeasures[player][measure - 1].second,
+                routinePair.first,
+                prevParent,
+                curParent,
+                prevPreferred,
+                preferred,
+                mCurrentSong,
+                false
+            )) {
+            if (!prevPreferred) {
+                prevPreferred = mRoutineMeasures[player][measure - 1].first;
+            }
+            mRoutineMeasures[player][measure - 1].second = prevPreferred;
+        }
+    }
+
+    // Try to find variant pair with next measure
+    if ((unsigned int)measure < (unsigned int)(mMoveParents[player].size() - 1)) {
+        const MoveParent *nextParent = mMoveParents[player][measure + 1];
+        const MoveVariant *nextPreferred = GetRoutinePreferredVariant(player, measure + 1);
+        if (!mMoveGraph.FindVariantPair(
+                routinePair.second,
+                mRoutineMeasures[player][measure + 1].first,
+                curParent,
+                nextParent,
+                preferred,
+                nextPreferred,
+                mCurrentSong,
+                false
+            )) {
+            if (!nextPreferred) {
+                nextPreferred = mRoutineMeasures[player][measure + 1].second;
+            }
+            mRoutineMeasures[player][measure + 1].first = nextPreferred;
+        }
+    }
+
+    // Fallback for .first
+    if (!routinePair.first) {
+        routinePair.first = preferred;
+        if (!preferred) {
+            routinePair.first = routinePair.second;
+            if (!routinePair.second) {
+                routinePair.first = curParent->Variants().front();
+                if (!mCurrentSong.Null()) {
+                    const std::vector<MoveVariant *> &variants = curParent->Variants();
+                    for (int i = 0; i < (int)variants.size(); i++) {
+                        if (variants[i]->Song() == mCurrentSong) {
+                            routinePair.first = variants[i];
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Fallback for .second
+    if (!routinePair.second) {
+        routinePair.second = preferred;
+        if (!preferred) {
+            routinePair.second = routinePair.first;
+        }
+    }
+}
+
+void MoveMgr::FillRoutineFromVerses(int player) {
+    FOREACH (it, mCurrentSongLayout->mSongSections) {
+        int secLen = (it->mMeasureRange.end - it->mMeasureRange.start) + 1;
+        int patLen = (it->mPatternRange.end - it->mPatternRange.start) + 1;
+        MILO_ASSERT(patLen == secLen, 0x428);
+        SongPattern *pat = it->mSongPattern;
+        for (int i = 0; i < pat->mNumMoves; i++) {
+            int measure = it->mMeasureRange.start + i;
+            unsigned int patIdx = (it->mPatternRange.start + i) - 1;
+            if (patIdx >= (unsigned int)(pat->mElements.size() - 1)) {
+                patIdx = pat->mElements.size() - 1;
+            }
+            mMoveParents[0][measure] = pat->mMoveParents[patIdx];
+        }
+    }
+    FillRoutineFromParents(player);
+}
+
+void MoveMgr::FillRoutineFromReplacer(int player) {
+    FOREACH (it, mCurrentSongLayout->mMoveReplacers) {
+        if (it->mMoveParent) {
+            for (std::vector<int>::iterator mit = it->mMeasures.begin();
+                 mit != it->mMeasures.end();
+                 ++mit) {
+                mMoveParents[0][*mit] = it->mMoveParent;
+            }
+        }
+    }
+    FillRoutineFromParents(player);
+}

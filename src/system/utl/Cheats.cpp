@@ -273,6 +273,8 @@ void CheatsManager::RebuildKeyCheatsForMode() {
     }
 }
 
+int CheatsManager::OnMsg(const ButtonDownMsg &) { return 0; }
+
 DataNode CheatsManager::OnMsg(const KeyboardKeyReleaseMsg &msg) {
     if (msg->Int(2) == 0x11 && mIsOverridingKeyboard) {
         KeyboardOverride(mPreviousOverride);

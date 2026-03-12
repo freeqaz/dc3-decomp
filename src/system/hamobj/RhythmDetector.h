@@ -108,3 +108,6 @@ private:
 void SetupFrame(
     RhythmDetector::Frame &, float, float, Vector3 const *, Vector3 const *, float
 );
+RhythmDetector::Frame BlendFrameDataToBeat(
+    const RhythmDetector::Frame &, const RhythmDetector::Frame &, float
+);

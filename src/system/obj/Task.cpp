@@ -336,6 +336,39 @@ ScriptTask::ScriptTask(DataArray *script, bool once, DataArray *updateVarsObjs)
     taskvar = old;
 }
 
+void ScriptTask::UpdateVarsObjects(DataArray *d) {
+    MILO_ASSERT(d, 0x9E);
+    int size = d->Size();
+    for (int i = 0; i < size; i++) {
+        DataType curType = d->Type(i);
+        Hmx::Object *obj = nullptr;
+        if (curType == kDataObject) {
+            obj = d->UncheckedObj(i);
+        } else if (curType == kDataSymbol || curType == kDataString) {
+            const char *name = d->LiteralStr(i);
+            ObjectDir *search = mThis ? mThis->DataDir() : ObjectDir::Main();
+            obj = search->FindObject(name, true, true);
+        } else if (curType == kDataVar) {
+            DataNode *var = d->UncheckedVar(i);
+            for (std::list<Var>::iterator it = mVars.begin(); it != mVars.end(); ++it) {
+                if (it->var == var) {
+                    var = nullptr;
+                    break;
+                }
+            }
+            if (var) {
+                mVars.push_back(Var(var));
+            }
+        } else if (curType == kDataArray || curType == kDataCommand) {
+            UpdateVarsObjects(d->UncheckedArray(i));
+        }
+
+        if (obj && obj != mThis && mObjects.find(obj) == mObjects.end()) {
+            mObjects.push_back(obj);
+        }
+    }
+}
+
 ScriptTask::~ScriptTask() { mScript->Release(); }
 
 ThreadTask::ThreadTask(DataArray *script, DataArray *updateVarsObjs)

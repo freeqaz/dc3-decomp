@@ -346,6 +346,30 @@ void RandomGroupSeq::AddToPlayedHistory(int idx) {
     }
 }
 
+void RandomGroupSeq::PickNextIndex() {
+    MILO_ASSERT(GetNumSimul() == 1 || Children().size() == 1, 0x1E0);
+    if (!sForceSerialSequences) {
+        mNextIndex = RandomInt(0, mChildren.size());
+    } else {
+        mNextIndex = (mNextIndex + 1) % mChildren.size();
+    }
+
+    if (mChildren.size() > 1 && !AllowRepeats()) {
+        if (mForceChooseIndex > 0) {
+            mNextIndex = mForceChooseIndex;
+        } else {
+            while (InPlayedHistory(mNextIndex)) {
+                if (!sForceSerialSequences) {
+                    mNextIndex = RandomInt(0, mChildren.size());
+                } else {
+                    mNextIndex = (mNextIndex + 1) % mChildren.size();
+                }
+            }
+        }
+    }
+    AddToPlayedHistory(mNextIndex);
+}
+
 int RandomGroupSeq::NextIndex() {
     if (mNextIndex == -1 && mChildren.size() != 0)
         PickNextIndex();

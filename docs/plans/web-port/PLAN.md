@@ -6,7 +6,7 @@ Compile the DC3 native port to run in web browsers using Emscripten (C++ to WASM
 
 **MVP goal**: A localhost:8420 dev server that boots the engine in a browser tab, streams assets from a local API, and renders a scene (venue or character).
 
-**Current status**: Phase 5 nearly complete. Engine compiles to WASM, boots in browser, downloads all 246 assets via bundle API, parses ALL ~220 DTA config files, runs full SystemPreInit + SystemInit, and initializes WgpuRnd. WebGPU adapter/device request pending (works in real Chrome with GPU; headless Chromium lacks WebGPU).
+**Current status**: Phase 5 in progress. Engine compiles to WASM, boots in browser, downloads 246 assets, parses all DTA configs, runs SystemPreInit + SystemInit, initializes WebGPU, and enters the render loop. Frames 1-3 render successfully (attract_screen, autosave_warning_screen). The engine hangs during `UIScreen::Enter()` for `title_screen` — a panel's `Enter()` call blocks the main thread indefinitely, preventing further rendering. See [Phase 5 status](#phase-5-engine-boot--rendering-integration----in-progress) for details.
 
 ## Architecture
 
@@ -154,7 +154,7 @@ GET /api/file/<path>          -> Individual asset file (with Range request suppo
 
 ---
 
-### Phase 5: Engine Boot + Rendering Integration -- NEARLY COMPLETE
+### Phase 5: Engine Boot + Rendering Integration -- IN PROGRESS
 
 **Goal**: Full engine initialization pipeline runs: DTA config parsing, subsystem init, rendering.
 
@@ -175,11 +175,99 @@ GET /api/file/<path>          -> Individual asset file (with Range request suppo
 - 22 unit tests for DTA parser (including `#include` with trailing paren pattern)
 - `ThreadCall_Native.cpp` — WASM single-threaded path (synchronous in `ThreadCallPoll`)
 - `xdk_shims_web.cpp` — Win32/XDK API stubs for WASM (critical sections, events, semaphores, threads, timing, memory, XGraphics)
+- Non-fatal `Debug::Fail()` on web — returns early (never fatal) to match Xbox "Continue" dialog
+- `PollUntilLoaded` safety valve — max 10000 iterations on web to prevent infinite blocking
+- `--profiling-funcs` linker flag — readable C++ function names in WASM stack traces
+- **HelpBarPanel null guards** — `mAll` null check in Draw(), early return in SyncToPanel() when DataDir/mLeftHandNavList null
+- **Render loop enters BOOT_RUNNING** — frames 1-3 complete full render cycles (SystemPoll, UI Poll, FlowMgr Poll, BeginDrawing, UI Draw, EndDrawing)
+- **UI transitions work** — attract_screen and autosave_warning_screen enter and exit correctly
 
-**Remaining tasks**:
-1. Verify WebGPU adapter/device acquisition in a real Chrome tab with GPU
-2. Verify WebGPU pipeline creation and first frame render
-3. Debug any rendering issues (shader compilation, surface configuration)
+**Current blocker — `title_screen->Enter()` hang**:
+
+The engine boots, renders 3 frames, then transitions to `title_screen`. All panels load successfully via `PollUntilLoaded`, the transition check passes, but `UIScreen::Enter()` for `title_screen` never returns. One of the screen's panel `Enter()` calls blocks the main thread.
+
+Diagnostic trace from headless Chromium (Playwright):
+```
+[XDK] transition from autosave_warning_screen to title_screen
+DC3 UI: transition complete, will enter 'title_screen'
+DC3 UI: Screen 'title_screen' Enter (from 'autosave_warning_screen')
+    <-- hangs here, no panel Enter tracing appears -->
+```
+
+Multiple `.milo` files fail to load as PanelDir (expected — not all are bundled):
+- `ui/background/background.milo`, `ui/title/title.milo`, `ui/tutorial/tutorial_nav.milo`
+- `ui/correct_identity/correct_identity.milo`, `ui/pause/pause.milo`, `ui/dialog.milo`
+
+The hang is likely a panel whose `Enter()` calls into DTA script handlers that block (synchronous network, missing subsystem, or null dereference on a virtual call causing WASM trap).
+
+**Next steps**:
+1. Add per-panel `fprintf(stderr, ...)` tracing inside `UIScreen::Enter()` to identify which panel hangs
+2. Fix the identified panel (null guard, stub, or skip)
+3. Repeat for subsequent screens until render loop runs continuously
+4. Verify WebGPU canvas actually presents frames (currently the hang prevents this)
+
+---
+
+### Phase 5.5a: Quick Test Script -- DONE
+
+**Goal**: One-command headless test + screenshot — replace ad-hoc throwaway Playwright scripts.
+
+**Problem**: Iteration loop was clunky — manually write `.mjs` in `/tmp/`, manually start server, manually build, manually kill, tweak filter patterns per run. Logs were ephemeral. No screenshots.
+
+**Implemented**: `scripts/web/test.mjs` — single ~200-line Node.js script that orchestrates the full cycle:
+
+```bash
+node scripts/web/test.mjs                    # full: build + server + headless chrome + screenshot
+node scripts/web/test.mjs --no-build         # skip build
+node scripts/web/test.mjs --frames 10        # wait for 10 frames (default: 5)
+node scripts/web/test.mjs --timeout 60       # 60s timeout (default: 30)
+node scripts/web/test.mjs --headed           # show browser window
+node scripts/web/test.mjs --keep             # leave server running after test
+```
+
+**Features**:
+- Starts `server.py`, polls `/api/health` for readiness (new endpoint)
+- Launches headless Chromium with WebGPU flags (`--enable-features=Vulkan,UseSkiaRenderer`, `--enable-unsafe-webgpu`, etc.)
+- Captures ALL console output (log + error) with timestamps
+- Detects failure modes: WASM trap, hang (no output for 5s), crash, timeout, partial progress
+- Takes canvas screenshot via Playwright's compositor capture (`element.screenshot()`) — works with GPU-rendered WebGPU content
+- Writes structured output to `scripts/web/results/<timestamp>/`:
+  - `canvas.png` — canvas element screenshot (or `page.png` on failure)
+  - `console.jsonl` — every message: `{type, time, text}`
+  - `summary.json` — result, frames, errors, last 10 messages
+
+**Supporting changes**:
+- `server.py`: Added `/api/health` endpoint for automated readiness checks
+- `main_web.cpp`: Exports `window.dc3FrameCount` via `EM_ASM` each frame for Playwright to poll
+
+---
+
+### Phase 5.5b: TypeScript Test Harness -- LATER
+
+**Goal**: Grow the quick script into a proper TypeScript harness when more test scenarios justify the structure.
+
+**Planned design**:
+
+```
+scripts/web/
+  package.json        # playwright, tsx deps
+  tsconfig.json
+  src/
+    cli.ts            # Entry: npx tsx src/cli.ts test [--no-build] [--timeout 25]
+    server.ts         # Start/stop server.py, health-check readiness
+    build.ts          # Run make dc3-web, stream output, detect errors
+    browser.ts        # Playwright session: launch, capture ALL console/errors/crashes
+    reporter.ts       # Structured output: JSONL log, summary JSON, failure detection
+    types.ts          # ConsoleMessage, TestResult, BootStage, FailureMode
+```
+
+**Future ideas**:
+- WebGPU validation error capture via Chrome DevTools Protocol
+- CI integration (GitHub Actions + headless Chrome)
+- Diff mode: compare JSONL logs between two builds for regression detection
+- Frame timing: measure inter-frame intervals
+- `cli.ts watch` — rebuild + retest on source change (fs.watch)
+- Configurable "pass criteria" (e.g., "must reach frame 10", "no WASM traps")
 
 ---
 
@@ -244,11 +332,28 @@ native/
 |       +-- WebAssets.h             # Public API (WebAssetsInit, WebAssetsFetchBundle, etc.)
 |       +-- DataParser_Native.cpp   # DTA text parser (ported from RB3)
 
-src/system/obj/
-+-- DataFile.cpp                   # DataReadStream + ReadEmbeddedFile (#ifdef HX_NATIVE patches)
-+-- DataFlex.c                     # Flex lexer (generated from DataFlex.l)
-+-- DataFlex.h                     # Lexer API + yyGetHoldChar/yySetHoldChar declarations
-+-- DataFlex.l                     # Flex grammar for DTA tokenization
+scripts/web/                        # Test tooling
++-- test.mjs                       # Headless test runner + screenshot (Phase 5.5a)
++-- .gitignore                     # Ignores results/, node_modules/
++-- results/                       # Test run output (gitignored)
+|   +-- <timestamp>/
+|       +-- canvas.png             # Canvas element screenshot
+|       +-- page.png               # Full page screenshot (on failure)
+|       +-- console.jsonl          # All console messages with timestamps
+|       +-- summary.json           # Result, frames, errors
+
+src/system/
++-- obj/DataFile.cpp               # DataReadStream + ReadEmbeddedFile (#ifdef HX_NATIVE patches)
++-- obj/DataFlex.c                 # Flex lexer (generated from DataFlex.l)
++-- obj/DataFlex.h                 # Lexer API + yyGetHoldChar/yySetHoldChar declarations
++-- obj/DataFlex.l                 # Flex grammar for DTA tokenization
++-- ui/UIScreen.cpp                # Screen Enter/Exit (web tracing, panel iteration)
++-- ui/UIPanel.cpp                 # Panel Load (PollUntilLoaded safety valve)
++-- ui/UI.cpp                      # Transition state machine (web tracing)
+
+src/lazer/meta_ham/
++-- HelpBarPanel.cpp               # Null guards for mAll, mLeftHandNavList
++-- HamUI.cpp                      # Draw() web tracing
 ```
 
 ## Technical Notes
@@ -295,12 +400,16 @@ The decomp uses `asm("")` labels on stub functions to control symbol mangling fo
 | Risk | Impact | Mitigation |
 |------|--------|-----------|
 | ~~Flex lexer state across `#include`~~ | ~~Engine can't parse config files~~ | **RESOLVED** — holdChar ordering + yy_n_chars fix |
+| ~~Null deref in HelpBarPanel~~ | ~~WASM trap (signature mismatch)~~ | **RESOLVED** — null guards on mAll, mLeftHandNavList |
+| Panel Enter() hangs | Blocks main thread, no rendering | **ACTIVE** — identify panel, add null guard / stub / skip |
+| Null virtual calls in WASM | "function signature mismatch" trap | Add null guards at call sites; WASM has no SIGSEGV |
 | WASM memory limits | OOM on large scenes | `ALLOW_MEMORY_GROWTH`, stream assets |
 | WebGPU validation differences | Shader/pipeline creation fails | Test early, browser DevTools has great WebGPU errors |
 | .ark file size (multi-GB) | Slow asset loading | Bundle API for bootstrap, stream on demand |
 | MSVC compat flags vs Emscripten | Compile errors | `-fms-extensions` works in Emscripten's Clang |
 | Emscripten's GLFW shim limitations | Missing input features | Fall back to Emscripten HTML5 input API |
 | SharedArrayBuffer (for threads) | Requires COOP/COEP headers | Server sends headers; MVP is single-threaded |
+| Main thread blocking | Canvas never presents frames | Ensure all sync loops have safety valves or are async |
 
 ## MVP Definition
 
@@ -312,3 +421,50 @@ The MVP is complete when:
 5. Basic keyboard input works (camera orbit or UI navigation)
 
 No audio, no threading, no mobile, no production hosting. Just proof-of-life in a browser tab.
+
+## Runtime Debugging Notes
+
+### WASM Failure Modes
+
+| Symptom | Root Cause | Fix Pattern |
+|---------|-----------|-------------|
+| "function signature mismatch" | Virtual call on null object — WASM reads garbage from address 0 as vtable pointer, indexes into wrong indirect call table slot | Null guard before the virtual call |
+| Page hangs (no crash) | Synchronous blocking in main thread — tight loop, infinite poll, or DTA script handler that never returns | Safety valve (max iterations), skip panel, stub handler |
+| `Aborted()` / `unreachable` | WASM trap from assertion or explicit abort | Check MILO_ASSERT / MILO_FAIL call site |
+| No output after a point | `printf` to stdout buffered; `fprintf(stderr)` goes to `console.error` not `console.log` | Use `fprintf(stderr, ...); fflush(stderr);` for tracing, capture all console types in test harness |
+
+### Emscripten stdout vs stderr
+
+- `printf` / `stdout` maps to `console.log`
+- `fprintf(stderr, ...)` maps to `console.error`
+- Playwright captures both but as different `msg.type()` values (`"log"` vs `"error"`)
+- Always use `fflush()` after trace prints — Emscripten buffers stdout
+
+### Non-fatal MILO_FAIL on Web
+
+`Debug::Fail()` on web returns early (never fatal). On Xbox, `Debug::Fail()` shows a dialog with "Continue" button — the web path simulates pressing Continue. This means `.milo` files that fail to load (e.g., "not PanelDir") log errors but don't crash. The engine continues with null data, which can cause later null dereferences.
+
+### Panel Loading Pattern
+
+`UIPanel::Load` calls `PollUntilLoaded` which is a synchronous tight loop. On web, `DirLoader::Cleanup` sets state to `DoneLoading` when a file is not found, so the loop exits. The web build adds a safety valve of 10000 iterations to prevent infinite blocking.
+
+### Key Tracing Points
+
+Tracing is gated on `#ifdef HX_WEB` (compile-time) in key locations:
+- `main_web.cpp` — boot state transitions, per-frame timing (first 3 frames)
+- `UI.cpp` — transition state machine (AllPanelsDown check, Enter/Exit calls)
+- `UIScreen.cpp` — screen Enter/Exit with panel enumeration
+- `UIPanel.cpp` — PollUntilLoaded entry/exit with load state
+- `HamUI.cpp` — Draw() sub-step tracing (UIManager::Draw, overlay, helpbar, etc.)
+
+### Headless Chromium WebGPU Flags
+
+```
+--enable-features=Vulkan,UseSkiaRenderer
+--enable-unsafe-webgpu
+--use-angle=vulkan
+--enable-gpu
+--no-sandbox
+```
+
+These enable WebGPU in headless mode by forcing Vulkan as the GPU backend. Requires a real GPU (not software rendering). Works on Linux with Mesa/NVIDIA Vulkan ICDs.

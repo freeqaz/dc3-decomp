@@ -2,6 +2,7 @@
 #include "gfx/GpuDevice.h"
 #include "gfx/VertexFormats.h"
 
+#include <cstdlib>
 #include <cstdio>
 
 // Embedded shader source — standard.wgsl is compiled into the binary
@@ -309,12 +310,14 @@ wgpu::RenderPipeline PipelineManager::CreatePipeline(const PipelineKey& key) {
     fragment.targetCount = 1;
     fragment.targets = &colorTarget;
 
-    // Depth/stencil
-    wgpu::DepthStencilState ds = MapDepthStencil(key.zMode, key.stencil);
-    if (key.depthBias != 0) {
-        ds.depthBias = key.depthBias;
-        ds.depthBiasSlopeScale = 0.0f;
-        ds.depthBiasClamp = 0.0f;
+    wgpu::DepthStencilState ds{};
+    if (key.hasDepth) {
+        ds = MapDepthStencil(key.zMode, key.stencil);
+        if (key.depthBias != 0) {
+            ds.depthBias = key.depthBias;
+            ds.depthBiasSlopeScale = 0.0f;
+            ds.depthBiasClamp = 0.0f;
+        }
     }
 
     wgpu::RenderPipelineDescriptor pipeDesc{};
@@ -325,12 +328,26 @@ wgpu::RenderPipeline PipelineManager::CreatePipeline(const PipelineKey& key) {
     pipeDesc.vertex.bufferCount = 1;
     pipeDesc.vertex.buffers = vtxLayout;
     pipeDesc.fragment = &fragment;
-    pipeDesc.depthStencil = &ds;
+    pipeDesc.depthStencil = key.hasDepth ? &ds : nullptr;
     pipeDesc.primitive.topology = wgpu::PrimitiveTopology::TriangleList;
     pipeDesc.primitive.frontFace = wgpu::FrontFace::CCW; // D3D LH CW front → WebGPU RH CCW front
     pipeDesc.primitive.cullMode = MapCull(key.cull);
-    pipeDesc.multisample.count = 4;  // 4x MSAA
+    pipeDesc.multisample.count = key.sampleCount;
     pipeDesc.multisample.alphaToCoverageEnabled = key.alphaToCoverage;
+
+    static bool sLog = getenv("MILO_DEBUG_PIPELINES") != nullptr;
+    if (sLog) {
+        printf(
+            "DC3 Pipeline: label=%s fmt=%d samples=%u depth=%d shader=%u alphaCut=%d alphaWrite=%d\n",
+            key.layout == VertexLayoutType::Skinned ? "MainSkinned" : "MainStatic",
+            (int)key.targetFormat,
+            key.sampleCount,
+            key.hasDepth ? 1 : 0,
+            key.shaderType,
+            key.alphaCut ? 1 : 0,
+            key.alphaWrite ? 1 : 0
+        );
+    }
 
     return mDevice->Device().CreateRenderPipeline(&pipeDesc);
 }

@@ -2,10 +2,37 @@
 #include "flow/Flow.h"
 #include "flow/FlowManager.h"
 #include "flow/FlowNode.h"
+#include "flow/FlowValueCase.h"
 #include "obj/Object.h"
 #include "obj/Task.h"
 #include "os/Debug.h"
 #include "rndobj/Anim.h"
+
+EventTask::EventTask(FlowTimer *owner, ObjPtrVec<FlowNode> *children, TaskUnits units, float duration)
+    : mOwner(owner), mChildNodes(children), mDuration(duration), mElapsed(0) {
+    TheTaskMgr.Start(this, units, 0);
+}
+
+EventTask::~EventTask() {}
+
+void EventTask::Poll(float time) {
+    if (!mOwner) {
+        MILO_NOTIFY("EventTask::Poll NULL mOwner");
+        delete this;
+        return;
+    }
+    FOREACH (it, *mChildNodes) {
+        FlowValueCase *node = static_cast<FlowValueCase *>(it->Obj());
+        if (time < node->Value()) {
+            break;
+        }
+        mOwner->OnKeyframe(node);
+    }
+    if (time >= mDuration) {
+        mOwner->OnTimerEnd();
+        delete this;
+    }
+}
 
 FlowTimer::FlowTimer() : mStopMode(0), mTask(this), mRate(0), mTotalTime(0.0f) {}
 

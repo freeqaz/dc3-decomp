@@ -542,9 +542,18 @@ Hmx::Object *DataNode::GetObj(const DataArray *source) const {
         if (*str != '\0') {
             ret = gDataDir->FindObject(str, true, true);
             if (!ret) {
+#ifdef HX_NATIVE
+                // Native flow lacks many game objects (HUD, score, etc.) that
+                // song animations reference. Warn instead of crashing so the
+                // LightPreset animation can still drive venue visibility.
+                const char *msg =
+                    PathName(gDataDir) != nullptr ? PathName(gDataDir) : "**no file**";
+                MILO_WARN("GetObj: %s not found in %s\n", str, msg);
+#else
                 const char *msg =
                     PathName(gDataDir) != nullptr ? PathName(gDataDir) : "**no file**";
                 MILO_FAIL_DTA(kNotObjectMsg, str, msg);
+#endif
             }
         }
         return ret;

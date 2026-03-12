@@ -1,11 +1,15 @@
 #include "world/SpotlightDrawer.h"
+#include "char/Character.h"
+#include "math/Key.h"
 #include "obj/Object.h"
 #include "os/Platform.h"
 #include "os/System.h"
+#include "rndobj/BoxMap.h"
 #include "rndobj/Draw.h"
 #include "rndobj/Env.h"
 #include "rndobj/MultiMesh.h"
 #include "rndobj/Rnd.h"
+#include "rndobj/Stats_NG.h"
 #include "utl/BinStream.h"
 #include "utl/Loader.h"
 #include "world/Spotlight.h"
@@ -19,6 +23,7 @@ bool SpotlightDrawer::sHaveFlares;
 std::vector<SpotlightDrawer::SpotlightEntry> SpotlightDrawer::sLights;
 std::vector<SpotlightDrawer::SpotMeshEntry> SpotlightDrawer::sCans;
 std::vector<Spotlight *> SpotlightDrawer::sShadowSpots;
+bool SpotlightDrawer::sNoBeams;
 
 SpotlightDrawer::SpotlightDrawer() : mParams(this) { mOrder = -100000; }
 
@@ -279,6 +284,201 @@ void SpotlightDrawer::DrawLight(Spotlight *spot) {
 
 bool SpotlightDrawer::DrawNGSpotlights() {
     return GetGfxMode() == kNewGfx && TheLoadMgr.GetPlatform() != kPlatformPC;
+}
+
+void SpotlightDrawer::DeSelect() {
+    if (sCurrent != this)
+        return;
+    if (sDefault != this) {
+        sDefault->Select();
+    } else {
+        PostProcessor *pp = sCurrent ? static_cast<PostProcessor *>(sCurrent) : nullptr;
+        TheRnd.UnregisterPostProcessor(pp);
+        sCurrent = nullptr;
+    }
+}
+
+void SpotlightDrawer::ApplyLightingApprox(BoxMapLighting &boxMap, float f2) const {
+    MILO_ASSERT(boxMap.NumQueuedLights() == 0, 0x20b);
+    std::vector<SpotlightEntry>::iterator it = sLights.begin();
+    std::vector<SpotlightEntry>::iterator itEnd = sLights.end();
+    for (; it != itEnd; ++it) {
+        Spotlight *curSpotlight = it->mSpotlight;
+        const Transform &xfm = curSpotlight->WorldXfm();
+        Hmx::Color c50(curSpotlight->Color());
+        Multiply(c50, f2, c50);
+        Multiply(c50, curSpotlight->Intensity(), c50);
+        BoxMapLighting::LightParams_Spot *params;
+        if (!boxMap.ParamsAt(params))
+            break;
+        params->mPosition = xfm.v;
+        params->mDirection = xfm.m.y;
+        params->mColor = c50;
+        params->mTopRadius = curSpotlight->mBeam.mTopRadius;
+        params->mBottomRadius = curSpotlight->mBeam.mBottomRadius * 2.0f;
+        params->mBeamLength = curSpotlight->mBeam.mLength * 2.0f;
+        boxMap.CacheData(*params);
+    }
+}
+
+void SpotlightDrawer::DrawShadow() {
+    std::vector<Spotlight *>::iterator it = sShadowSpots.begin();
+    std::vector<Spotlight *>::iterator itEnd = sShadowSpots.end();
+    for (; it != itEnd; ++it) {
+        Spotlight *shadowSpot = *it;
+        MILO_ASSERT(shadowSpot->GetTarget() && shadowSpot->mTargetShadow, 0x288);
+        Character *theChar = dynamic_cast<Character *>(shadowSpot->GetTarget());
+        if (theChar) {
+            theChar->DrawShadow(shadowSpot->WorldXfm(), 1.5f);
+        }
+    }
+}
+
+void SpotlightDrawer::UpdateBoxMap() {
+    if ((unsigned int)sNeedBoxMap != TheRnd.GetFrameID()) {
+        RndEnviron::sGlobalLighting.Clear();
+        float lightingInf = mParams.mLightingInfluence;
+        if (lightingInf > 0) {
+            ApplyLightingApprox(RndEnviron::sGlobalLighting, lightingInf);
+        }
+        sNeedBoxMap = TheRnd.GetFrameID();
+    }
+}
+
+void SpotDrawParams::Load(BinStreamRev &d) {
+    d >> mIntensity;
+    if (d.rev > 3) {
+        d >> mBaseIntensity >> mSmokeIntensity >> mHalfDistance;
+    } else {
+        float i, j, k, l;
+        d >> i >> j >> k >> l;
+        if (k < 0.5f) {
+            mSmokeIntensity = 0.5f;
+            mBaseIntensity = 0.1f;
+        } else {
+            mBaseIntensity = 0.15f;
+            mSmokeIntensity = 1.0f;
+        }
+    }
+    d >> mColor;
+    if (d.rev < 4) {
+        int a;
+        Key<float> b, c;
+        d >> a >> b >> c;
+    }
+    d >> mTexture;
+    d >> mProxy;
+    if (d.rev < 3) {
+        bool b;
+        d >> b;
+    }
+    if (d.rev > 4)
+        d >> mLightingInfluence;
+}
+
+INIT_REVS(6, 0)
+
+BEGIN_LOADS(SpotlightDrawer)
+    LOAD_REVS(bs)
+    ASSERT_REVS(6, 0)
+    if (d.rev > 0) {
+        if (d.rev > 5) {
+            Hmx::Object::Load(d.stream);
+        }
+        RndDrawable::Load(d.stream);
+    } else {
+        Hmx::Object::Load(d.stream);
+    }
+    mOrder = -100000;
+    mParams.Load(d);
+END_LOADS
+
+struct LensExtract {};
+
+template <class T>
+void DrawAccessories(
+    const SpotlightDrawer::SpotlightEntry *const &,
+    const SpotlightDrawer::SpotlightEntry *const &
+);
+
+void SpotlightDrawer::DrawWorld() {
+    int numLights = sLights.size();
+    if (numLights < TheNgStats->mSpotlights) {
+        numLights = TheNgStats->mSpotlights;
+    }
+    TheNgStats->mSpotlights = numLights;
+    if ((!sLights.empty() || !sCans.empty()) && Showing()) {
+        SortLights();
+        DrawMeshVec(sCans);
+        sCans.resize(0);
+        RndEnviron *cur = RndEnviron::sCurrent;
+        if (!sLights.empty()) {
+            Vector3 *pos = RndEnviron::CurrentPos();
+            MILO_ASSERT(sEnviron->GetUseApprox() == false, 0x1dc);
+            sEnviron->Select(nullptr);
+            if (GetGfxMode() == kOldGfx) {
+                DrawShadow();
+            }
+            std::vector<SpotlightEntry>::iterator itEnd = sLights.end();
+            if (sLights.begin() != itEnd) {
+                std::vector<SpotlightEntry>::iterator it = sLights.begin();
+                do {
+                    Spotlight *spot = it->mSpotlight;
+                    Hmx::Color c;
+                    float intensity = spot->Intensity();
+                    c.Set(
+                        spot->Color().red * intensity,
+                        spot->Color().green * intensity,
+                        spot->Color().blue * intensity,
+                        1.0f
+                    );
+                    const SpotlightEntry *e1 = &(*it);
+                    const SpotlightEntry *e2 = &(*it) + 1;
+                    for (; e2 != &(*itEnd); ++e2) {
+                        if (e2->mColorKey != it->mColorKey)
+                            break;
+                    }
+                    SetAmbientColor(c);
+                    if (sHaveAdditionals) {
+                        DrawAdditional(
+                            const_cast<SpotlightEntry *>(e1),
+                            const_cast<SpotlightEntry *const &>(e2)
+                        );
+                    }
+                    if (sHaveLenses) {
+                        DrawAccessories<LensExtract>(e1, e2);
+                    }
+                    if (!DrawNGSpotlights() && !sNoBeams
+                        && TheRnd.GetDrawMode() != Rnd::kDrawOcclusionDepth) {
+                        DrawBeams(
+                            const_cast<SpotlightEntry *>(e1),
+                            const_cast<SpotlightEntry *const &>(e2)
+                        );
+                    }
+                    if (sHaveFlares) {
+                        DrawFlares(
+                            const_cast<SpotlightEntry *>(e1),
+                            const_cast<SpotlightEntry *const &>(e2)
+                        );
+                    }
+                    it = sLights.begin()
+                        + (e2 - &(*sLights.begin()));
+                } while (it != itEnd);
+            }
+            if (cur) {
+                cur->Select(pos);
+            }
+        }
+    }
+}
+
+void SpotlightDrawer::ClearLights() {
+    sLights.resize(0);
+    sShadowSpots.resize(0);
+    sCans.resize(0);
+    sHaveAdditionals = false;
+    sHaveLenses = false;
+    sHaveFlares = false;
 }
 
 void SpotlightDrawer::EndWorld() {

@@ -3,6 +3,8 @@
 
 #include "platform/Rnd_Wgpu.h"
 #include "platform/MeshGpuCache.h"
+#include "platform/TexGpu.h"
+#include "platform/TransparentQueue.h"
 
 #include "gfx/FrameCapture.h"
 #include "gfx/GpuDevice.h"
@@ -15,6 +17,7 @@
 #include "rndobj/PostProc.h"
 #include "rndobj/ColorXfm.h"
 #include "rndobj/Dir.h"
+#include "rndobj/HiResScreen.h"
 #include "rndobj/Mesh.h"
 #include "rndobj/Utl.h"
 #include "gfx/VertexFormats.h"
@@ -183,6 +186,40 @@ static void TransformToFloat16(const Transform& xfm, float* out) {
     out[12] = xfm.v.x;   out[13] = xfm.v.y;   out[14] = xfm.v.z;   out[15] = 1;
 }
 
+static NgRnd::Viewport BuildViewportForScreenRect(
+    int width, int height, const Hmx::Rect& screenRect, float minZ, float maxZ
+) {
+    Hmx::Rect r;
+    if (TheHiResScreen.IsActive()) {
+        Hmx::Rect tileRect;
+        TheHiResScreen.CurrentTileRect(screenRect, r, tileRect);
+    } else {
+        float x = screenRect.x;
+        float y = screenRect.y;
+        float x2 = screenRect.w + x;
+        float y2 = screenRect.h + y;
+        r.x = Max(0.0f, x);
+        r.y = Max(0.0f, y);
+        x2 = Max(0.0f, x2);
+        y2 = Max(0.0f, y2);
+        r.x = Min(1.0f, r.x);
+        r.y = Min(1.0f, r.y);
+        x2 = Min(1.0f, x2);
+        y2 = Min(1.0f, y2);
+        r.w = x2 - r.x;
+        r.h = y2 - r.y;
+    }
+
+    NgRnd::Viewport vp;
+    vp.X = (unsigned int)((float)width * r.x);
+    vp.Y = (unsigned int)((float)height * r.y);
+    vp.Width = (unsigned int)((float)width * r.w);
+    vp.Height = (unsigned int)((float)height * r.h);
+    vp.MinZ = minZ;
+    vp.MaxZ = maxZ;
+    return vp;
+}
+
 // ============================================================================
 // WgpuRnd Implementation
 // ============================================================================
@@ -349,6 +386,237 @@ void WgpuRnd::Clear(unsigned int flags, const Hmx::Color& color) {
     mClearColor = color;
 }
 
+void WgpuRnd::EndActivePass() {
+    if (!mInPass) {
+        return;
+    }
+    FlushTextDraws();
+    FlushTransparentDraws();
+    mPass.End();
+    mInPass = false;
+}
+
+void WgpuRnd::SetViewport(const Viewport& v) {
+    NgRnd::SetViewport(v);
+    ApplyViewport();
+}
+
+void WgpuRnd::ApplyViewport() {
+    if (!mInPass) {
+        return;
+    }
+    const Viewport& vp = GetViewport();
+    uint32_t width = vp.Width ? vp.Width : mCurrentTargetWidth;
+    uint32_t height = vp.Height ? vp.Height : mCurrentTargetHeight;
+    mPass.SetViewport((float)vp.X, (float)vp.Y, (float)width, (float)height, vp.MinZ, vp.MaxZ);
+}
+
+void WgpuRnd::BeginFramePass(bool clear) {
+    if (!mFrameView) {
+        return;
+    }
+
+    int curW = mGpu.WindowWidth();
+    int curH = mGpu.WindowHeight();
+    bool hasPostProc = !mGpu.IsHeadless() && RndPostProc::Current() != nullptr;
+
+    wgpu::RenderPassColorAttachment colorAtt{};
+    if (kMSAASamples > 1) {
+        colorAtt.view = mMsaaView;
+        if (hasPostProc) {
+            if (mIntermediateWidth != curW || mIntermediateHeight != curH || !mIntermediateTex) {
+                wgpu::TextureDescriptor iDesc{};
+                iDesc.label = "PostProcIntermediate";
+                iDesc.size = {(uint32_t)curW, (uint32_t)curH, 1};
+                iDesc.format = mGpu.SurfaceFormat();
+                iDesc.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding;
+                iDesc.mipLevelCount = 1;
+                mIntermediateTex = mGpu.Device().CreateTexture(&iDesc);
+                mIntermediateView = mIntermediateTex.CreateView();
+                mIntermediateWidth = curW;
+                mIntermediateHeight = curH;
+            }
+            colorAtt.resolveTarget = mIntermediateView;
+        } else {
+            colorAtt.resolveTarget = mFrameView;
+        }
+        // The frame pass can be interrupted by offscreen render-to-texture work.
+        // Preserve MSAA contents so we can resume the main frame afterward.
+        colorAtt.storeOp = wgpu::StoreOp::Store;
+    } else {
+        if (hasPostProc) {
+            if (mIntermediateWidth != curW || mIntermediateHeight != curH || !mIntermediateTex) {
+                wgpu::TextureDescriptor iDesc{};
+                iDesc.label = "PostProcIntermediate";
+                iDesc.size = {(uint32_t)curW, (uint32_t)curH, 1};
+                iDesc.format = mGpu.SurfaceFormat();
+                iDesc.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding;
+                iDesc.mipLevelCount = 1;
+                mIntermediateTex = mGpu.Device().CreateTexture(&iDesc);
+                mIntermediateView = mIntermediateTex.CreateView();
+                mIntermediateWidth = curW;
+                mIntermediateHeight = curH;
+            }
+            colorAtt.view = mIntermediateView;
+        } else {
+            colorAtt.view = mFrameView;
+        }
+        colorAtt.storeOp = wgpu::StoreOp::Store;
+    }
+    colorAtt.loadOp = clear ? wgpu::LoadOp::Clear : wgpu::LoadOp::Load;
+    colorAtt.clearValue = {
+        (double)mClearColor.red,
+        (double)mClearColor.green,
+        (double)mClearColor.blue,
+        1.0
+    };
+
+    wgpu::RenderPassDepthStencilAttachment depthAtt{};
+    depthAtt.view = mDepthView;
+    depthAtt.depthLoadOp = clear ? wgpu::LoadOp::Clear : wgpu::LoadOp::Load;
+    depthAtt.depthStoreOp = wgpu::StoreOp::Store;
+    depthAtt.depthClearValue = 1.0f;
+    depthAtt.stencilLoadOp = clear ? wgpu::LoadOp::Clear : wgpu::LoadOp::Load;
+    depthAtt.stencilStoreOp = wgpu::StoreOp::Store;
+    depthAtt.stencilClearValue = 0;
+
+    wgpu::RenderPassDescriptor rpDesc{};
+    rpDesc.label = clear ? "MainPass" : "MainPassResume";
+    rpDesc.colorAttachmentCount = 1;
+    rpDesc.colorAttachments = &colorAtt;
+    rpDesc.depthStencilAttachment = &depthAtt;
+
+    mPass = mEncoder.BeginRenderPass(&rpDesc);
+    mInPass = true;
+    mActiveTargetTex = nullptr;
+    mFramePassValid = true;
+    mCurrentTargetFormat = mGpu.SurfaceFormat();
+    mCurrentSampleCount = kMSAASamples;
+    mCurrentPassHasDepth = true;
+    mCurrentTargetWidth = (uint32_t)curW;
+    mCurrentTargetHeight = (uint32_t)curH;
+    if (getenv("MILO_DEBUG_PIPELINES")) {
+        printf(
+            "DC3 Pass: MainPass clear=%d fmt=%d samples=%u depth=%d size=%ux%u\n",
+            clear ? 1 : 0,
+            (int)mCurrentTargetFormat,
+            mCurrentSampleCount,
+            mCurrentPassHasDepth ? 1 : 0,
+            mCurrentTargetWidth,
+            mCurrentTargetHeight
+        );
+    }
+    mPass.SetBindGroup(0, mSceneBindGroup);
+    RndCam* cam = RndCam::Current();
+    const Viewport& prevVp = GetViewport();
+    if (cam && cam->TargetTex() == nullptr) {
+        SetViewport(BuildViewportForScreenRect(
+            curW, curH, cam->GetScreenRect(), prevVp.MinZ, prevVp.MaxZ
+        ));
+    } else {
+        ApplyViewport();
+    }
+}
+
+void WgpuRnd::BeginTexturePass(RndTex* tex) {
+    wgpu::TextureView colorView = GetGpuTexView(tex);
+    if (!colorView) {
+        return;
+    }
+
+    wgpu::RenderPassColorAttachment colorAtt{};
+    colorAtt.view = colorView;
+    colorAtt.loadOp = wgpu::LoadOp::Clear;
+    colorAtt.storeOp = wgpu::StoreOp::Store;
+    colorAtt.clearValue = {0.0, 0.0, 0.0, 1.0};
+
+    wgpu::RenderPassDepthStencilAttachment depthAtt{};
+    wgpu::RenderPassDescriptor rpDesc{};
+    rpDesc.label = "TexturePass";
+    rpDesc.colorAttachmentCount = 1;
+    rpDesc.colorAttachments = &colorAtt;
+
+    wgpu::TextureView depthView = GetGpuTexDepthView(tex);
+    if (depthView) {
+        depthAtt.view = depthView;
+        depthAtt.depthLoadOp = wgpu::LoadOp::Clear;
+        depthAtt.depthStoreOp = wgpu::StoreOp::Store;
+        depthAtt.depthClearValue = 1.0f;
+        depthAtt.stencilLoadOp = wgpu::LoadOp::Clear;
+        depthAtt.stencilStoreOp = wgpu::StoreOp::Store;
+        depthAtt.stencilClearValue = 0;
+        rpDesc.depthStencilAttachment = &depthAtt;
+    }
+
+    mPass = mEncoder.BeginRenderPass(&rpDesc);
+    mInPass = true;
+    mActiveTargetTex = tex;
+    mCurrentTargetFormat = tex->GetType() == RndTex::kDepthVolumeMap
+        ? wgpu::TextureFormat::RGBA8Unorm
+        : wgpu::TextureFormat::RGBA8UnormSrgb;
+    mCurrentSampleCount = 1;
+    mCurrentPassHasDepth = depthView != nullptr;
+    mCurrentTargetWidth = (uint32_t)tex->Width();
+    mCurrentTargetHeight = (uint32_t)tex->Height();
+    if (getenv("MILO_DEBUG_PIPELINES")) {
+        printf(
+            "DC3 Pass: TexturePass tex='%s' fmt=%d samples=%u depth=%d size=%ux%u\n",
+            tex->Name(),
+            (int)mCurrentTargetFormat,
+            mCurrentSampleCount,
+            mCurrentPassHasDepth ? 1 : 0,
+            mCurrentTargetWidth,
+            mCurrentTargetHeight
+        );
+    }
+    mPass.SetBindGroup(0, mSceneBindGroup);
+    RndCam* cam = RndCam::Current();
+    const Viewport& prevVp = GetViewport();
+    if (cam && cam->TargetTex() == tex) {
+        SetViewport(BuildViewportForScreenRect(
+            tex->Width(), tex->Height(), cam->GetScreenRect(), prevVp.MinZ, prevVp.MaxZ
+        ));
+    } else {
+        Viewport vp;
+        vp.X = 0;
+        vp.Y = 0;
+        vp.Width = (unsigned int)tex->Width();
+        vp.Height = (unsigned int)tex->Height();
+        vp.MinZ = prevVp.MinZ;
+        vp.MaxZ = prevVp.MaxZ;
+        SetViewport(vp);
+    }
+}
+
+void WgpuRnd::SelectRenderTarget(RndTex* tex) {
+    if (!mGpu.Device() || !mFrameView) {
+        return;
+    }
+    EndActivePass();
+    BeginTexturePass(tex);
+}
+
+void WgpuRnd::FinishRenderTarget(RndTex* tex) {
+    if (mActiveTargetTex != tex) {
+        return;
+    }
+    EndActivePass();
+    mActiveTargetTex = nullptr;
+}
+
+void WgpuRnd::MakeDrawTarget() {
+    if (!mGpu.Device() || !mFrameView) {
+        return;
+    }
+    if (mActiveTargetTex) {
+        EndActivePass();
+        mActiveTargetTex = nullptr;
+    }
+    if (!mInPass) {
+        BeginFramePass(false);
+    }
+}
+
 void WgpuRnd::BeginDrawing() {
     RndMesh_ResetFrameStats();
 
@@ -454,83 +722,8 @@ void WgpuRnd::BeginDrawing() {
     // Shadow pre-pass: render depth from light's perspective
     mShadowPass.Render(mEncoder, mObjectRing, mBoneRing, mGpu);
 
-    // Begin render pass
-    wgpu::RenderPassColorAttachment colorAtt{};
-    bool hasPostProc = !mGpu.IsHeadless() && RndPostProc::Current() != nullptr;
-    if (kMSAASamples > 1) {
-        colorAtt.view = mMsaaView;            // Render to MSAA target
-        if (hasPostProc) {
-            // Ensure intermediate texture exists
-            if (mIntermediateWidth != curW || mIntermediateHeight != curH || !mIntermediateTex) {
-                wgpu::TextureDescriptor iDesc{};
-                iDesc.label = "PostProcIntermediate";
-                iDesc.size = {(uint32_t)curW, (uint32_t)curH, 1};
-                iDesc.format = mGpu.SurfaceFormat();
-                iDesc.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding;
-                iDesc.mipLevelCount = 1;
-                mIntermediateTex = mGpu.Device().CreateTexture(&iDesc);
-                mIntermediateView = mIntermediateTex.CreateView();
-                mIntermediateWidth = curW;
-                mIntermediateHeight = curH;
-            }
-            colorAtt.resolveTarget = mIntermediateView;
-        } else {
-            colorAtt.resolveTarget = mFrameView;
-        }
-        colorAtt.storeOp = wgpu::StoreOp::Discard;  // MSAA data discarded after resolve
-    } else {
-        // No MSAA — render directly to target
-        if (hasPostProc) {
-            if (mIntermediateWidth != curW || mIntermediateHeight != curH || !mIntermediateTex) {
-                wgpu::TextureDescriptor iDesc{};
-                iDesc.label = "PostProcIntermediate";
-                iDesc.size = {(uint32_t)curW, (uint32_t)curH, 1};
-                iDesc.format = mGpu.SurfaceFormat();
-                iDesc.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding;
-                iDesc.mipLevelCount = 1;
-                mIntermediateTex = mGpu.Device().CreateTexture(&iDesc);
-                mIntermediateView = mIntermediateTex.CreateView();
-                mIntermediateWidth = curW;
-                mIntermediateHeight = curH;
-            }
-            colorAtt.view = mIntermediateView;
-        } else {
-            colorAtt.view = mFrameView;
-        }
-        colorAtt.storeOp = wgpu::StoreOp::Store;
-    }
-    colorAtt.loadOp = wgpu::LoadOp::Clear;
-    // Use mClearColor (set to black in Init; Clear() can override at runtime).
-    colorAtt.clearValue = {
-        (double)mClearColor.red,
-        (double)mClearColor.green,
-        (double)mClearColor.blue,
-        1.0  // Always clear with opaque alpha (PNG/readback needs alpha=1)
-    };
-
-    wgpu::RenderPassDepthStencilAttachment depthAtt{};
-    depthAtt.view = mDepthView;
-    depthAtt.depthLoadOp = wgpu::LoadOp::Clear;
-    depthAtt.depthStoreOp = wgpu::StoreOp::Store;
-    depthAtt.depthClearValue = 1.0f;
-    depthAtt.stencilLoadOp = wgpu::LoadOp::Clear;
-    depthAtt.stencilStoreOp = wgpu::StoreOp::Store;
-    depthAtt.stencilClearValue = 0;
-
-    wgpu::RenderPassDescriptor rpDesc{};
-    rpDesc.label = "MainPass";
-    rpDesc.colorAttachmentCount = 1;
-    rpDesc.colorAttachments = &colorAtt;
-    rpDesc.depthStencilAttachment = &depthAtt;
-
-    mPass = mEncoder.BeginRenderPass(&rpDesc);
-    mInPass = true;
-
-    // Bind scene uniforms (group 0) — stays bound for entire frame
-    mPass.SetBindGroup(0, mSceneBindGroup);
+    BeginFramePass(true);
 }
-
-#include "platform/TransparentQueue.h"
 
 wgpu::Buffer& GetSceneBuffer() { return gWgpuRnd->SceneBuffer(); }
 uint32_t GetSceneOffset() { return gWgpuRnd->SceneOffset(); }
@@ -569,13 +762,7 @@ void WgpuRnd::EndDrawing() {
     }
 
     if (mInPass) {
-        // Flush text draws last — text must render on top of all other UI elements
-        FlushTextDraws();
-        // Flush deferred transparent draws (sorted back-to-front)
-        FlushTransparentDraws();
-
-        mPass.End();
-        mInPass = false;
+        EndActivePass();
 
         // Post-processing: if active, read from intermediate and draw to swapchain
         if (mIntermediateView && RndPostProc::Current()) {
@@ -596,6 +783,13 @@ void WgpuRnd::EndDrawing() {
     }
 
     mFrameView = nullptr;
+    mActiveTargetTex = nullptr;
+    mFramePassValid = false;
+    mCurrentTargetFormat = wgpu::TextureFormat::Undefined;
+    mCurrentSampleCount = 1;
+    mCurrentPassHasDepth = false;
+    mCurrentTargetWidth = 0;
+    mCurrentTargetHeight = 0;
     mDrawing = false;
 }
 

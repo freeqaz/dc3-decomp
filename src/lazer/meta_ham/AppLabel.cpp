@@ -676,3 +676,7 @@ DataNode AppLabel::OnSetUserName(const DataArray *a) {
     }
     return 1;
 }
+
+void AppLabel::SetStoreFilterName(const HamStoreFilter *) {}
+
+void AppLabel::SetTimeElapsedSince(unsigned int) {}

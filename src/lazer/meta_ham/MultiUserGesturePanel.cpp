@@ -63,92 +63,13 @@ void MultiUserGesturePanel::Enter() {
 void MultiUserGesturePanel::Poll() {
 #ifdef HX_NATIVE
     // On native, skip the Kinect skeleton chooser and auto-advance to gameplay.
-    // Wait until the UI transition completes before entering the loading flow.
-    //
-    // On Xbox, the DTA flow through the multiuser screen calls:
-    //   meta_performer set_venue_pref <venue>   (from venue_select_pane.dta)
-    //   meta_performer setup_venue              (triggers ChooseVenue())
-    // We replicate this here since the Kinect chooser flow is bypassed.
+    // Wait until the UI transition completes before calling enter_gameplay.
     if (mNativeAutoSkipPending && !TheUI->InTransition()) {
         mNativeAutoSkipPending = false;
-
-        // Native bypasses the Kinect skeleton chooser entirely, so replicate the
-        // intended single-player controller state before entering gameplay.
-        if (TheGameData) {
-            static Symbol player_present("player_present");
-            for (int i = 0; i < 2; i++) {
-                HamPlayerData *pd = TheGameData->Player(i);
-                if (!pd || !pd->Provider()) {
-                    continue;
-                }
-                bool present = i == 0;
-                pd->Provider()->SetProperty(player_present, present);
-                if (!present) {
-                    pd->SetCharacterOutfit(gNullStr);
-                }
-                fprintf(stderr,
-                    "DC3 Native: MultiUserGesturePanel — player%d present=%d"
-                    " char='%s' crew='%s' outfit='%s'\n",
-                    i,
-                    present,
-                    pd->Char().Str(),
-                    pd->Crew().Str(),
-                    pd->Outfit().Str());
-            }
-        }
-
-        // Ensure venue is set — without it, HamDirector::OnFileLoaded("song")
-        // skips venue/character/visualizer merging entirely.
-        if (TheGameData && TheGameData->Venue().Null()) {
-            MetaPerformer *performer = MetaPerformer::Current();
-            if (performer) {
-                static Message setupVenueMsg("setup_venue", 0);
-                performer->HandleType(setupVenueMsg);
-                fprintf(stderr,
-                    "DC3 Native: MultiUserGesturePanel — setup_venue dispatched"
-                    " (venue='%s')\n",
-                    TheGameData->Venue().Str());
-            } else {
-                fprintf(stderr,
-                    "DC3 Native: MultiUserGesturePanel — WARNING: no MetaPerformer,"
-                    " venue will be null!\n");
-            }
-        }
-
-        // Also set default characters/crews if not already set — these are
-        // normally chosen in the multiuser DTA flow before loading_screen.
-        MetaPerformer *performer = MetaPerformer::Current();
-        if (performer) {
-            static Symbol player_present("player_present");
-            for (int i = 0; i < 2; i++) {
-                HamPlayerData *pd = TheGameData->Player(i);
-                if (!pd) {
-                    continue;
-                }
-                bool playerPresent = false;
-                if (pd->Provider()) {
-                    const DataNode *present = pd->Provider()->Property(player_present, true);
-                    playerPresent = present && present->Int() != 0;
-                }
-                if (playerPresent
-                    && (pd->Char().Null() || pd->Crew().Null() || pd->Outfit().Null())) {
-                    performer->SetDefaultSongCharacter(i);
-                    fprintf(stderr,
-                        "DC3 Native: MultiUserGesturePanel — normalized player %d"
-                        " char='%s' crew='%s' outfit='%s'\n",
-                        i,
-                        pd->Char().Str(),
-                        pd->Crew().Str(),
-                        pd->Outfit().Str());
-                }
-            }
-        }
-
-        fprintf(stderr,
-            "DC3 Native: MultiUserGesturePanel — auto-skipping to loading_screen"
-            " (venue='%s', song='%s')\n",
-            TheGameData ? TheGameData->Venue().Str() : "<no gamedata>",
-            TheGameData ? TheGameData->GetSong().Str() : "<no gamedata>");
+        fprintf(
+            stderr,
+            "DC3 Native: MultiUserGesturePanel — auto-skipping to loading_screen\n"
+        );
         TheUI->GotoScreen("loading_screen", false, false);
         return;
     }

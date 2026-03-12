@@ -1,6 +1,6 @@
 # DC3 Native Port — Status
 
-**Last updated**: 2026-03-05
+**Last updated**: 2026-03-12
 
 ## Current State
 
@@ -38,12 +38,13 @@ gameplay screens.
 
 **Engine (Track A)**:
 - Full boot through all subsystems → main loop → screen navigation
-- Auto-skip to main menu (attract → autosave → title → tutorials → choose_mode)
-- 5000+ frames stable, clean exit
+- Full menu flow: attract → main_screen → choose_mode → song_select → multiuser → loading → **game_screen**
+- 10000 frames stable on game_screen, clean exit
+- DCI venue rendering: 505 draw calls/frame (floor, walls, DJ booth, fully-lit character, HUD overlays)
 - Audio pipeline complete (FFmpeg, Vorbis, miniaudio, DSP effects)
-- Input working (gamepad + keyboard)
-- Text rendering partially working (glyph meshes via FontMapBase)
-- 51 draw calls/frame on choose_mode_screen
+- Input working (gamepad + keyboard + scripted headless input)
+- Text rendering working (glyph meshes, DXT5 alpha shader, font loading)
+- Flow→PropAnim UI animation pipeline verified end-to-end
 
 **Shared infrastructure**: .ark archive loading (6,377 files), runtime .milo loading,
 LP64-safe DataArray scripting, BinStream endian conversion.
@@ -86,17 +87,30 @@ iterates drawables, while the engine uses `WorldDir::DrawShowing()` → `RndGrou
 | Text markup processing | MEDIUM | `<alt>` tags render as literal text instead of styling |
 | Bloom/glow post-process | LOW | Neon aesthetic from Xbox UI |
 
-### Milestone 3: Gameplay Screen
+### Milestone 3: Gameplay Screen — REVISED (Session 61)
 
 **Goal**: Navigate to a song, start gameplay, see the dance stage.
 
-| Task | Priority | Notes |
-|------|----------|-------|
-| Song select screen navigation | HIGH | From choose_mode → song select → gameplay |
-| Stage/venue loading in gameplay | HIGH | Load venue .milo + character .milo for dance stage |
-| Move card UI rendering | MEDIUM | Purple/blue move cards showing dance moves |
-| Score display | MEDIUM | Points, streak counter, rating text |
-| Song audio playback during gameplay | HIGH | Already implemented, needs wiring to gameplay flow |
+**Status**: Menu screens render at 505 draw calls. game_screen loads but venue is EMPTY (78 HUD-only draws). Root cause fully diagnosed.
+
+| Task | Status | Notes |
+|------|--------|-------|
+| Song select screen navigation | DONE | Full menu flow via input script |
+| LightPreset stub removal | DONE | 12 stubs removed, real impl links. Session 59 |
+| DataNode::GetObj graceful failure | DONE | Missing objects warn instead of crash. Session 61 |
+| **FileMerger mMerger wiring** | **BLOCKER** | mMerger is null — embedded DTA in director.milo_xbox doesn't execute. See [Session 61](../../sessions/2026-03-12-session61-merger-investigation.md) |
+| Venue merge into world.milo | BLOCKED | Needs mMerger. world_panel's world.milo is an empty shell without venue content |
+| Song animation playback | BLOCKED | Needs mMerger → GetWorld() → song.anim PropAnim |
+| LightPreset animation | BLOCKED | Needs song.anim → force_preset → LightPresetManager |
+| Move card UI rendering | **TODO** | Pink rectangles — TexMovie render-to-texture needed |
+| Score display | **TODO** | Not yet wired |
+| Song audio playback during gameplay | **TODO** | FFmpeg backend ready, not wired to game flow |
+
+**Critical path**: Fix mMerger wiring → venue loads → song.anim drives LightPresets → venue visible.
+
+**Note**: The 505 draw calls seen in session 59 were from attract_screen's own world content, NOT from the venue. With real LightPreset::Load, those objects show with their correct serialized Showing states.
+
+See [Session 61 Investigation](../../sessions/2026-03-12-session61-merger-investigation.md) for full diagnosis and fix options.
 
 ### Milestone 4: Playable Dance Gameplay
 
@@ -104,7 +118,10 @@ iterates drawables, while the engine uses `WorldDir::DrawShowing()` → `RndGrou
 
 | Task | Priority | Notes |
 |------|----------|-------|
-| Character animation in gameplay | HIGH | CharClip playback synced to beat |
+| Character animation in gameplay | HIGH | CharClip playback synced to beat. SongAnimation() returns -1 (clips present but not driven) |
+| TexMovie render-to-texture | HIGH | FFmpeg RGBA → WebGPU texture upload. See [Session 60 Plan](../../sessions/2026-03-12-session60-plan-animation-texmovie.md) |
+| LightPreset loading + animation | HIGH | Decomp source exists, just stubbed. 9 functions to un-stub |
+| Song.anim graceful DTA failure | HIGH | Guard DataNode::GetObj for missing objects |
 | Lip sync (CharFaceServo, CharLipSyncDriver) | MEDIUM | See [LIP_SYNC.md](../custom-graphics-engine/LIP_SYNC.md) |
 | Procedural blinking (CharFaceServo) | LOW | Cosmetic |
 | CharEyes gaze direction | LOW | Cosmetic |

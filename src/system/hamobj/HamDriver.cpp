@@ -92,12 +92,12 @@ float HamDriver::DisplayRecurse(Layer *layer, int indent, float y) {
         }
     } else {
         LayerClip *clip = dynamic_cast<LayerClip *>(layer);
-        if (clip->mEaseWeight != 0.0f) {
+        if (clip->mWeight != 0.0f) {
             float padding = (float)(int)indent * CharClipDisplay::LineSpacing();
             CharClipDisplay display;
             display.mPadding = padding;
             display.unk4 = (mDisplayBeat - clip->mClipBeat) + clip->mClip->StartBeat();
-            display.unk8 = clip->mEaseWeight;
+            display.unk8 = clip->mWeight;
             display.SetClip(clip->mClip, true);
             display.mDrawPosY = y;
             display.DrawTrack();
@@ -168,13 +168,13 @@ void HamDriver::SetClipMapRecurse(Layer *layer) {
         }
     } else {
         LayerClip *clip = dynamic_cast<LayerClip *>(layer);
-        if (clip && clip->mEaseWeight != 0.0f) {
+        if (clip && clip->mWeight != 0.0f) {
             CharClip *c = clip->mClip;
             std::map<CharClip *, float>::iterator it = mClipTimingMap.find(c);
             if (it != mClipTimingMap.end()) {
-                it->second += clip->mEaseWeight;
+                it->second += clip->mWeight;
             } else {
-                mClipTimingMap.insert(std::pair<CharClip *const, float>(c, clip->mEaseWeight));
+                mClipTimingMap.insert(std::pair<CharClip *const, float>(c, clip->mWeight));
             }
         }
     }
@@ -226,14 +226,14 @@ void HamDriver::LayerClip::OffsetSec(float f1) {
 void HamDriver::LayerClip::Eval(float f1) {
     float beat = TheTaskMgr.Beat();
     auto clamped = Clamp(0.0f, 1.0f, beat - mBeat);
-    mEaseWeight = EaseSigmoid(clamped, 0.0, 0.0) * f1;
+    mWeight = EaseSigmoid(clamped, 0.0, 0.0) * f1;
 }
 
 void HamDriver::LayerClip::Play(CharBones &bones) {
-    if (mEaseWeight > 0.0f) {
+    if (mWeight > 0.0f) {
         float beat = mClip->StartBeat();
         float deltaBeat = (TheTaskMgr.Beat() - mClipBeat) + beat;
-        bones.ScaleAdd(mClip, mEaseWeight, deltaBeat, TheTaskMgr.DeltaBeat());
+        bones.ScaleAdd(mClip, mWeight, deltaBeat, TheTaskMgr.DeltaBeat());
     }
 }
 

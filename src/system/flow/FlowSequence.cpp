@@ -2,12 +2,53 @@
 #include "flow/FlowNode.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
+#include "utl/MakeString.h"
 
 FlowSequence::FlowSequence()
     : mItr(), mLooping(0), mRepeats(0), mRepeatCount(0), mStopMode(kStopImmediate),
       mIsAdvancing(0) {}
 
 FlowSequence::~FlowSequence() {}
+
+bool FlowSequence::Activate() {
+    FLOW_LOG("Activate\n");
+    mStopRequested = false;
+    if (IsRunning()) {
+        MILO_NOTIFY(
+            "FlowSequence re-entrance error, activated when already running, deactivating and aborting, check your logic"
+        );
+        Deactivate(false);
+        return false;
+    }
+    if (mRepeatCount == 0) {
+        PushDrivenProperties();
+    }
+    mRepeatCount = 0;
+    mItr = mChildNodes.begin();
+    mIsAdvancing = true;
+    while (mItr != mChildNodes.end()) {
+        ActivateChild(mItr->Obj());
+        if (mStopRequested || !mRunningNodes.empty())
+            break;
+        ++mItr;
+    }
+    mIsAdvancing = false;
+    if (mStopRequested || !mRunningNodes.empty()) {
+        if (mItr != mChildNodes.end())
+            return true;
+    }
+    MILO_ASSERT(mRunningNodes.size() < 2, 0x50);
+    if (mItr != mChildNodes.end())
+        return true;
+    if (mRunningNodes.size() != 0)
+        return true;
+    if (!mLooping) {
+        if (mRepeats == 0)
+            return false;
+    }
+    MILO_NOTIFY_ONCE("Instant looping sequence in %s! Stopping Sequence", FindPathName());
+    return mRunningNodes.size() > 0;
+}
 
 BEGIN_HANDLERS(FlowSequence)
     HANDLE_SUPERCLASS(FlowNode)

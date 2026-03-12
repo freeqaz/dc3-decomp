@@ -1151,6 +1151,7 @@ target_link_options(dc3-native PRIVATE
     # -fsanitize=address  # Disabled: complex virtual inheritance VTT issues  # ASan link flag
     -Wl,--unresolved-symbols=ignore-all  # Non-virtual thunks for stubbed functions
     -Wl,--warn-unresolved-symbols  # Warn but don't error
+    -Wl,--allow-multiple-definition  # DataParser_Native duplicates DataFile symbols
 )
 
 target_link_libraries(dc3-native PRIVATE

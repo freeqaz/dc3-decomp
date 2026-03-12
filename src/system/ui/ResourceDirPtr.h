@@ -47,6 +47,11 @@ public:
 };
 
 template <class T>
+BinStream &operator<<(BinStream &bs, const ResourceDirPtr<T> &ptr) {
+    return bs << static_cast<const ObjDirPtr<T> &>(ptr);
+}
+
+template <class T>
 BinStream &operator>>(BinStream &bs, ResourceDirPtr<T> &ptr) {
     FilePath path;
     bs >> path;

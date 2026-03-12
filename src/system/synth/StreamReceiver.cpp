@@ -43,6 +43,12 @@ void StreamReceiver::Stop() {
     }
 }
 
+u64 StreamReceiver::GetBytesPlayed() { return 0; }
+
+void StreamReceiver::WriteData(const void *, int) {}
+
+void StreamReceiver::Poll() {}
+
 #ifndef HX_NATIVE
 StreamReceiver *StreamReceiver::New(int i1, int i2, bool b3, int i4) {
     MILO_ASSERT(sFactory, 0x1C);

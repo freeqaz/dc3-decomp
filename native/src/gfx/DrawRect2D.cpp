@@ -1,6 +1,7 @@
 #include "gfx/DrawRect2D.h"
 #include "gfx/GpuDevice.h"
 #include "gfx/PipelineManager.h"
+#include "platform/Rnd_Wgpu.h"
 #include "platform/TexGpu.h"
 #include "math/Geo.h"
 #include "math/Color.h"
@@ -154,9 +155,11 @@ void DrawRect2D::Draw(wgpu::RenderPassEncoder& pass, const Hmx::Rect& rect, RndM
     if (mat) blend = (WgpuBlend)mat->GetBlend();
 
     wgpu::BlendState bs = pipelines.MapBlend(blend);
+    WgpuRnd* rnd = gWgpuRnd;
+    if (!rnd) return;
 
     wgpu::ColorTargetState ct{};
-    ct.format = gpu.SurfaceFormat();
+    ct.format = rnd->CurrentTargetFormat();
     ct.blend = &bs;
     ct.writeMask = wgpu::ColorWriteMask::All;
 
@@ -178,9 +181,11 @@ void DrawRect2D::Draw(wgpu::RenderPassEncoder& pass, const Hmx::Rect& rect, RndM
     vbl.attributes = attrs;
 
     wgpu::DepthStencilState ds{};
-    ds.format = wgpu::TextureFormat::Depth24PlusStencil8;
-    ds.depthWriteEnabled = wgpu::OptionalBool::False;
-    ds.depthCompare = wgpu::CompareFunction::Always;
+    if (rnd->CurrentPassHasDepth()) {
+        ds.format = wgpu::TextureFormat::Depth24PlusStencil8;
+        ds.depthWriteEnabled = wgpu::OptionalBool::False;
+        ds.depthCompare = wgpu::CompareFunction::Always;
+    }
 
     wgpu::RenderPipelineDescriptor pipeDesc{};
     pipeDesc.layout = m2dPipelineLayout;
@@ -189,9 +194,9 @@ void DrawRect2D::Draw(wgpu::RenderPassEncoder& pass, const Hmx::Rect& rect, RndM
     pipeDesc.vertex.bufferCount = 1;
     pipeDesc.vertex.buffers = &vbl;
     pipeDesc.fragment = &frag;
-    pipeDesc.depthStencil = &ds;
+    pipeDesc.depthStencil = rnd->CurrentPassHasDepth() ? &ds : nullptr;
     pipeDesc.primitive.topology = wgpu::PrimitiveTopology::TriangleList;
-    pipeDesc.multisample.count = 4;
+    pipeDesc.multisample.count = rnd->CurrentSampleCount();
 
     wgpu::RenderPipeline pipe = dev.CreateRenderPipeline(&pipeDesc);
 

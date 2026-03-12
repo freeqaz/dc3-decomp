@@ -118,6 +118,8 @@ public:
 class BSPFace {
 public:
     void Set(const Vector3 &, const Vector3 &, const Vector3 &);
+    void Update();
+    void OnSide(const Plane &, bool &, bool &);
 
     Hmx::Polygon p; // 0x0
     Transform t; // 0xc

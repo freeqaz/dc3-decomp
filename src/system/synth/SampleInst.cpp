@@ -92,3 +92,5 @@ void SampleInst::SetBankSpeed(float bspd) {
     mBankSpeed = bspd;
     SetSpeedImpl(mSpeed * mBankSpeed);
 }
+
+void SampleInst::SynthPoll() {}

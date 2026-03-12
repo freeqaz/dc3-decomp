@@ -22,14 +22,7 @@
 #include "world/Dir.h"
 #include <cmath>
 
-void NormalizeScale(const Vector3 &in, float scale, Vector3 &out) {
-    float inv = 0;
-    float len = Length(in);
-    if (len != 0) {
-        inv = 1.0f / len;
-    }
-    Scale(in, inv * scale, out);
-}
+void NormalizeScale(const Vector3 &, float, Vector3 &);
 
 bool CharEyes::sDisableEyeDart;
 bool CharEyes::sDisableEyeJitter;
@@ -1404,3 +1397,17 @@ DataNode CharEyes::OnAddInterest(DataArray *arr) {
     mInterests.push_back(CharInterestState(arr->Obj<CharInterest>(1)));
     return 0;
 }
+
+// NormalizeScale body guarded: its presence anywhere in this TU causes
+// EnforceMinimumTargetDistance to regress (91.3% -> 57.8%) due to
+// inter-function register allocation changes (different prologue style).
+#ifdef HX_NATIVE
+void NormalizeScale(const Vector3 &in, float scale, Vector3 &out) {
+    float inv = 0;
+    float len = Length(in);
+    if (len != 0) {
+        inv = 1.0f / len;
+    }
+    Scale(in, inv * scale, out);
+}
+#endif

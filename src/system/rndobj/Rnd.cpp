@@ -1364,3 +1364,5 @@ void Rnd::UpdateHeap() {
     MemPrintOverview(heapNum, buf);
     *mHeapOverlay << buf;
 }
+
+void Rnd::Modal(Debug::ModalType &, FixedString &, bool) {}

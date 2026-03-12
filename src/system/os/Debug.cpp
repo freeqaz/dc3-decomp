@@ -341,3 +341,7 @@ const char *GetExpCode(int code) {
     }
     return "Unhandled Exception";
 }
+
+void Debug::Modal(ModalType &, const char *, void *) {}
+
+void Debug::DoCrucible(ModalType, const char *, void *) {}

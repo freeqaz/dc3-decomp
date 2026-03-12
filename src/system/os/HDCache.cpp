@@ -128,7 +128,7 @@ bool HDCache::ReadAsync(int arkfileNum, int blockNum, void *ptr) {
     return false;
 }
 
-// bool HDCache::WriteAsync(int, int, void const *) { return false; }
+bool HDCache::WriteAsync(int, int, const void *) { return false; }
 
 // void HDCache::Init() {}
 

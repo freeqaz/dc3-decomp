@@ -2,7 +2,7 @@
 
 **Date**: 2026-03-12
 **Goal**: Navigate from main menu into a song and render the 3D venue on game_screen
-**Result**: SUCCESS — venue geometry, fully-lit character, and HUD elements all render. 357 draw calls/frame on game_screen, stable through 9000+ frames with no crashes. Character lighting fixed (zero-color LightPreset detection).
+**Result**: SUCCESS — venue geometry, fully-lit character, and HUD elements all render. 505 draw calls/frame on game_screen, stable through 10000 frames with no crashes. Character lighting fixed (zero-color LightPreset detection). Scene is static (animation blocked by unimplemented LightPreset::Load and song.anim DTA script crashes).
 
 ## Milestone
 
@@ -161,12 +161,33 @@ The DCI venue (indoor dance club) renders with:
 - **Fully-lit character** (Angel with blue hair, skin tones, outfit — three-point fallback lighting)
 - HUD overlay (pink rectangles = TexMovie render targets not yet written to)
 
+### 8. Null Pointer Crashes on game_screen (Fixed)
+
+Three null pointer crashes occurred during gameplay polling, all from missing game objects on native:
+
+| Crash | Root Cause | Fix |
+|-------|-----------|-----|
+| **HamCharacter::SongAnimation** SIGSEGV | `Driver()->FirstClip()` returns null (character clips not loaded), then `c->Type()` dereferences null | `#ifdef HX_NATIVE if (!c) return -1;` guard |
+| **HamCamShot::EndAnim** SIGSEGV | `dynamic_cast<Character*>(cacheIt->mTrans)` returns null (Character not loaded as expected type) | Null check before `theChar->SetEnv(nullptr)` |
+| **PoseFatalities::Poll** SIGSEGV | `mPoseBeatAnims[side]` is null (pose beat animations not loaded) | `#ifdef HX_NATIVE` null check before `SetFrame()` |
+
+### 9. Scene Animation Investigation (Deferred)
+
+**Problem**: Venue and character are completely static — no animation, no camera movement, no lighting changes.
+
+**Root causes identified**:
+1. **LightPreset::Load is unimplemented** — only a weak stub in `engine_stubs_generated.cpp`. Factory IS registered in `WorldInit()`, but Load does nothing → 0 LightPreset objects deserialized from venue .milo (despite venue having 45 Environ + 58 Light objects).
+2. **Song.anim DTA script cascades crash** — `SongAnim(0)` SetFrame triggers CamShot::SetFrame → DTA script execution → references missing game objects → SIGABRT. The song.anim approach is not viable without a full DTA runtime.
+3. **SetupAnims() timing**: `HamDirector::Enter()` runs BEFORE venue .milo loads (`mVenue` is nil). Song anims are only populated when venue is available. Fixed by re-running `SetupAnims()` in Poll when `mVenue` becomes available.
+
+**Status**: Deferred. Implementing `LightPreset::Load` (a full decomp function) would enable venue light presets. Song.anim driving requires DTA runtime.
+
 ## What's Not Rendering Correctly
 
 - **Pink HUD rectangles**: Move card geometry renders but textures are TexMovie render-to-texture targets. Requires render-to-texture pipeline (deferred).
 - **No crowd**: Crowd characters aren't visible (crowd_clips merge skipped by siglongjmp recovery handler).
 - **No post-processing**: Bloom, color correction, venue lighting effects are stubbed.
-- **Static scene**: No animation — venue and character are frozen in their initial pose. AnimTask/PropAnim pipeline works for UI but game-time animation (kTaskSeconds vs kTaskUISeconds) hasn't been tested.
+- **Static scene**: No animation — venue and character are frozen in their initial pose. Root causes: LightPreset::Load unimplemented (0 presets deserialized), song.anim DTA scripts crash on missing objects.
 
 ## Files Modified
 
@@ -182,6 +203,10 @@ The DCI venue (indoor dance club) renders with:
 | `src/system/hamobj/SongCollision.cpp` | Decomp improvements (Equals, CheckCollision, IsCollision) | Decomp |
 | `src/lazer/meta_ham/MultiUserGesturePanel.cpp` | Player state setup for native auto-skip path | Game flow |
 | `native/src/platform/Rnd_Wgpu.cpp` | Zero-color LightPreset detection, fallback lighting activation | Rendering fix |
+| `src/system/hamobj/HamCharacter.cpp` | Null guard on FirstClip() in SongAnimation() | Crash fix |
+| `src/system/hamobj/HamCamShot.cpp` | Null guard on Character cast in EndAnim() | Crash fix |
+| `src/system/hamobj/PoseFatalities.cpp` | Null guard on mPoseBeatAnims in Poll() | Crash fix |
+| `src/system/hamobj/HamDirector.cpp` | SetupAnims re-init in Poll when venue loads; diagnostic cleanup | Game flow |
 
 ## Technical Debt
 
@@ -196,9 +221,10 @@ The DCI venue (indoor dance club) renders with:
 
 | Metric | Value |
 |--------|-------|
-| Draw calls per frame | 357 (game_screen) |
+| Draw calls per frame | 505 (game_screen) |
 | Non-black pixels | ~99.6% coverage |
-| Frames stable | 9000+ (timeout at 180s) |
-| Crashes | 0 (merge crashes recovered via siglongjmp) |
-| Screenshots captured | 5 (frames 2800, 3000, 3200, 3500, 4000) |
+| Frames stable | 10000 (clean exit) |
+| Crashes | 0 (merge crashes recovered via siglongjmp, 3 null ptr crashes fixed) |
+| Screenshots captured | frames 2800-6000+ (game_screen with venue + character) |
 | New function implementations | 4 (PrepShadow, CalcRect, RemoveFromLists, GetBlendState) |
+| Null pointer fixes | 3 (HamCharacter, HamCamShot, PoseFatalities) |

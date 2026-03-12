@@ -52,6 +52,52 @@ Flow::~Flow() {
     TheFlowMgr->CancelCommand(this);
 }
 
+void Flow::Copy(const Hmx::Object *o, CopyType ty) {
+    ObjectDir::Copy(o, ty);
+    FlowQueueable::Copy(o, ty);
+    const Flow *c = dynamic_cast<const Flow *>(o);
+    if (c) {
+        mDynamicProperties = c->mDynamicProperties;
+        // Copy dynamic property values from source
+        FOREACH (it, mDynamicProperties) {
+            Symbol name(it->mName.c_str());
+            const DataNode *prop = c->Property(name, false);
+            SetProperty(name, *prop);
+        }
+        mStartMode = c->mStartMode;
+        // Deactivate existing child nodes
+        while (mChildNodes.begin() != mChildNodes.end()) {
+            FlowNode *child = mChildNodes.begin()->Obj();
+            if (child) {
+                child->Deactivate(true);
+            }
+        }
+        // Copy child nodes from source
+        FOREACH (it, c->mChildNodes) {
+            FlowNode *srcChild = it->Obj();
+            FlowNode *newChild;
+            if (dynamic_cast<Flow *>(srcChild)) {
+                newChild = FlowNode::DuplicateChild(srcChild);
+            } else {
+                Symbol sym = srcChild->ClassName();
+                Hmx::Object *newObj = Hmx::Object::NewObject(sym);
+                newObj->InitObject();
+                newChild = dynamic_cast<FlowNode *>(newObj);
+                newChild->SetParent(this, true);
+                newChild->Copy(srcChild, kCopyShallow);
+            }
+            newChild->SetParent(this, true);
+            newChild->MoveIntoDir(Dir(), c->Dir());
+        }
+        mPrivate = c->mPrivate;
+        mHardStop = c->mHardStop;
+        RefreshPortLabelLists();
+        if (!ProxyFile().empty()) {
+            mStartMode = 5;
+        }
+    }
+}
+
 BEGIN_HANDLERS(Flow)
     HANDLE_ACTION(activate, Activate(false))
     HANDLE_ACTION(on_reflected_property_changed, OnReflectedPropertyChanged(_msg))
@@ -596,7 +642,15 @@ FlowLabel *Flow::GetLabelForSym(Symbol sym) {
     return nullptr;
 }
 
-void ScanForOutPorts(ObjPtrVec<FlowOutPort> &, FlowNode *, Flow *);
+void ScanForOutPorts(ObjPtrVec<FlowOutPort> &outPorts, FlowNode *node, Flow *flow) {
+    FOREACH (it, node->mChildNodes) {
+        FlowOutPort *port = dynamic_cast<FlowOutPort *>(it->Obj());
+        if (port && port->GetOwnerFlow() == flow) {
+            outPorts.push_back(port);
+        }
+        ScanForOutPorts(outPorts, it->Obj(), flow);
+    }
+}
 
 void Flow::RefreshPortLabelLists() {
     mFlowOutPorts.clear();

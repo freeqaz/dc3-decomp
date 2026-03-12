@@ -139,6 +139,21 @@ void LabelShrinkWrapper::DrawShowing() {
     }
 }
 
+void LabelShrinkWrapper::UpdateAndDrawWrapper() {
+    MILO_ASSERT(m_pLabel, 0x9e);
+    Box box;
+    m_pLabel->GetWidthHeightBox(box);
+    float minX = box.mMin.x - mLeftBorder;
+    float maxX = box.mMax.x + mRightBorder;
+    float maxZ = box.mMax.z + mTopBorder;
+    float minZ = box.mMin.z - mBottomBorder;
+    SetWorldXfm(m_pLabel->WorldXfm());
+    m_pTopLeftBone->SetLocalPos(Vector3(minX, 0.0f, maxZ));
+    m_pTopRightBone->SetLocalPos(Vector3(maxX, 0.0f, maxZ));
+    m_pBottomLeftBone->SetLocalPos(Vector3(minX, 0.0f, minZ));
+    m_pBottomRightBone->SetLocalPos(Vector3(maxX, 0.0f, minZ));
+}
+
 BEGIN_HANDLERS(LabelShrinkWrapper)
     HANDLE_SUPERCLASS(UIComponent)
 END_HANDLERS

@@ -19,3 +19,5 @@ MicNull::MicNull() {
         mBuf[i] = sRand.Int(-32000, 32000);
     }
 }
+
+short *MicNull::GetContinuousBuf(int &) { return nullptr; }

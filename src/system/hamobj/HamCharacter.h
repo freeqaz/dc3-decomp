@@ -109,6 +109,7 @@ protected:
     virtual void AddedObject(Hmx::Object *);
     virtual void RemovingObject(Hmx::Object *);
 
+    void ApplyBlendedSkeletons(HamDriver *, CharClip *, float);
     bool GetPropShowing(int);
 
     DataNode OnConfigureFileMerger(DataArray *);

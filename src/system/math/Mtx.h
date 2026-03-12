@@ -134,6 +134,7 @@ namespace Hmx {
     };
 
     Hmx::Matrix4 operator*(const Transform &, const Hmx::Matrix4 &);
+    Hmx::Matrix4 operator*(const Hmx::Matrix4 &, const Hmx::Matrix4 &);
 
     class Quat {
     public:

@@ -687,14 +687,9 @@ void RndText::FontMap::UpdateScrolling(float f1) {
     for (int i = 0; i < NumMeshes(); i++) {
         RndMesh *mesh = Mesh(i);
         if (mesh) {
-            RndTransformable *trans = (RndTransformable *)((char *)mesh + 0x40);
-            Hmx::Quat q = *(Hmx::Quat *)((char *)trans + 0x38);
-            bool dirty = *(bool *)((char *)mesh + 0xfd);
-            q.x = f1;
-            *(Hmx::Quat *)((char *)trans + 0x38) = q;
-            if (!dirty) {
-                trans->SetDirty_Force();
-            }
+            Vector3 pos = mesh->LocalXfm().v;
+            pos.x = f1;
+            mesh->SetLocalPos(pos);
         }
     }
 }

@@ -112,6 +112,7 @@ private:
     void Destroy();
     void UpdateVolumes();
     void UpdateSpeed(int);
+    void DoJump();
     void setJumpSamplesFromMs(float, float);
     void ClearJumpMarkers();
     void UpdateFXSends();

@@ -1,5 +1,6 @@
 #include "flow/FlowSound.h"
 #include "FlowNode.h"
+#include "flow/FlowLabel.h"
 #include "flow/FlowManager.h"
 #include "flow/FlowNode.h"
 #include "flow/FlowPtr.h"
@@ -213,6 +214,91 @@ void FlowSound::UpdateIntensity() {
         mSound->SetVolume(db, this);
     }
     FlowNode::UpdateIntensity();
+}
+
+void FlowSound::OnMarkerEvent(Symbol marker) {
+    FLOW_LOG("Event: %s\n", marker);
+
+    // Look for matching FlowLabel children and activate them
+    FOREACH (it, mChildNodes) {
+        FlowNode *child = it->Obj();
+        if (child->ClassName() == FlowLabel::StaticClassName()) {
+            FlowLabel *label = static_cast<FlowLabel *>(child);
+            if (label->Label() == marker) {
+                ActivateLabel(label);
+                break;
+            }
+        }
+    }
+
+    static Symbol ended("ended");
+    static Symbol stop("stop");
+    static Symbol no_stop("no_stop");
+    static Symbol looped("looped");
+    static Symbol interrupted("interrupted");
+    static Symbol release("release");
+
+    if (mIsPlaying && (marker == ended || marker == interrupted)) {
+        // Sound ended or was interrupted
+        mIsPlaying = false;
+        if (!mStopRequested) {
+            return;
+        }
+        if (!mFlowParent->HasRunningNode(this)) {
+            return;
+        }
+        FLOW_LOG("Timed Release From Parent \n");
+        Timer timer;
+        timer.Reset();
+        timer.Start();
+        mFlowParent->ChildFinished(this);
+        timer.Stop();
+        TheFlowMgr->AddMs(timer.Ms());
+    } else if (marker == looped) {
+        if (mStopRequested && mIsPlaying) {
+            mSound->Stop(this, false);
+            if (!mStopRequested) {
+                return;
+            }
+            if (!mFlowParent->HasRunningNode(this)) {
+                return;
+            }
+            FLOW_LOG("Timed Release From Parent \n");
+            Timer timer;
+            timer.Reset();
+            timer.Start();
+            mFlowParent->ChildFinished(this);
+            timer.Stop();
+            TheFlowMgr->AddMs(timer.Ms());
+        } else {
+            mHasMarkerFired = false;
+        }
+    } else if (marker == stop) {
+        if (mStopMarkerType == 2 || mStopMarkerType == 3) {
+            TheFlowMgr->QueueCommand(this, kIgnore);
+        }
+        mStopMarkerType = 0;
+        mHasMarkerFired = true;
+    } else if (marker == no_stop) {
+        mHasMarkerFired = false;
+        mStopMarkerType = 0;
+    } else if (marker == release) {
+        mIsPlaying = false;
+        mSound->EndLoop(this);
+        if (!mStopRequested) {
+            return;
+        }
+        if (!mFlowParent->HasRunningNode(this)) {
+            return;
+        }
+        FLOW_LOG("Timed Release From Parent \n");
+        Timer timer;
+        timer.Reset();
+        timer.Start();
+        mFlowParent->ChildFinished(this);
+        timer.Stop();
+        TheFlowMgr->AddMs(timer.Ms());
+    }
 }
 
 void FlowSound::OnSoundSelected() {

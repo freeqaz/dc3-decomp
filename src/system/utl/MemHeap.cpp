@@ -1,7 +1,11 @@
 #include "utl/MemHeap.h"
 #include "math/Utl.h"
 #include "os/Debug.h"
+#include "os/OSFuncs.h"
+#include "os/CritSec.h"
 #include "utl/MakeString.h"
+#include "utl/MemMgr.h"
+#include "utl/MemTracker.h"
 #include "utl/TextStream.h"
 #include "utl/AllocInfo.h"
 #include "utl/MemTrack.h"
@@ -265,5 +269,266 @@ void MemHeap::BestFit(int size, int align, FreeBlockInfo &blockinfo) {
         prev = block;
         block = block->mNextBlock;
     } while (block != nullptr);
+}
+
+void MemHeap::LRUFit(int size, int align, FreeBlockInfo &blockinfo) {
+    int bestTime = 0x7FFFFFFF;
+    FreeBlock *prev = nullptr;
+    for (FreeBlock *block = mFreeBlockChain; block != nullptr; ) {
+        int ts = block->mTimeStamp;
+        intptr_t start = ((intptr_t)block >> 2) + 1;
+        intptr_t pad = ((((uintptr_t)(1 << align) + start) - 1) >> align) << align;
+        pad = pad - start;
+        if (pad + size <= (int)block->mSizeWords && ts < bestTime) {
+            blockinfo.mSizeWords = block->mSizeWords;
+            blockinfo.mPadWords = pad;
+            blockinfo.mBlock = block;
+            blockinfo.mPrevBlock = prev;
+            bestTime = ts;
+        }
+        prev = block;
+        block = block->mNextBlock;
+    }
+}
+
+int MemHeap::GetAlignWords(int align) {
+    if (align == 0) return 1;
+    int bits = 0;
+    int extra = 0;
+    while (align > 1) {
+        if (align & 1) extra = 1;
+        bits++;
+        align >>= 1;
+    }
+    int result = bits + extra - 2;
+    if (result < 0) result = 0;
+    return result;
+}
+
+int *MemHeap::TryAlloc(int sizeWords, int align, int &allocSize) {
+    FreeBlockInfo info;
+    info.mBlock = nullptr;
+    info.mPrevBlock = nullptr;
+    info.mSizeWords = 0x7FFFFFFF;
+    info.mPadWords = 0x7FFFFFFF;
+
+    switch (mStrategy) {
+    case kFirstFit: FirstFit(sizeWords, align, info); break;
+    case kBestFit:  BestFit(sizeWords, align, info); break;
+    case kLRUFit:   LRUFit(sizeWords, align, info); break;
+    case kLastFit:  LastFit(sizeWords, align, info); break;
+    default:
+        MILO_ASSERT(false, 0x151);
+        return nullptr;
+    }
+
+    if (info.mBlock == nullptr) return nullptr;
+
+    FreeBlock *block = info.mBlock;
+    FreeBlock *prevBlock = info.mPrevBlock;
+    int blockSize = info.mSizeWords;
+    int padWords = info.mPadWords;
+
+    if (padWords >= 9) {
+        FreeBlock *newBlock = (FreeBlock *)((int *)block + padWords);
+        int remaining = blockSize - padWords;
+        newBlock->mSizeWords = remaining;
+        newBlock->mNextBlock = block->mNextBlock;
+        newBlock->mTimeStamp = block->mTimeStamp;
+        InsertFreeBlock(block, padWords, prevBlock, newBlock, block->mTimeStamp);
+        prevBlock = block;
+        block = newBlock;
+        blockSize = remaining;
+        padWords = 0;
+    }
+
+    int totalUsed = padWords + sizeWords;
+    int remainder = blockSize - totalUsed;
+
+    if (remainder < 9) {
+        if (prevBlock == nullptr) {
+            mFreeBlockChain = block->mNextBlock;
+        } else {
+            prevBlock->mNextBlock = block->mNextBlock;
+        }
+        totalUsed = blockSize;
+    } else {
+        InsertFreeBlock(
+            (FreeBlock *)((int *)block + totalUsed), remainder,
+            prevBlock, block->mNextBlock, block->mTimeStamp
+        );
+    }
+
+    unsigned int *header = (unsigned int *)block + padWords;
+    *header = (totalUsed << 8) | (padWords << 4) | (*header & 0xF);
+
+    int *ptr = (int *)block;
+    int *headerPtr = (int *)header;
+    for (; ptr != headerPtr; ptr++) {
+        *ptr = 0;
+    }
+
+    if (mDebugLevel > 0) {
+        unsigned int hdr = *header;
+        unsigned int dataWords = (hdr >> 8) - ((hdr >> 4) & 0xF);
+        int *end = (int *)header + dataWords;
+        int *cur = (int *)header + 1;
+        if (cur < end) {
+            for (int count = ((end - cur - 1) >> 2) + 1; count != 0; count--) {
+                cur++;
+                *cur = 0xABCDABCD;
+            }
+        }
+    }
+
+    allocSize = *header >> 8;
+    return (int *)(header + 1);
+}
+
+int *MemHeap::Alloc(int sizeWords, int align, int &allocSize) {
+    int *result = TryAlloc(sizeWords, align, allocSize);
+    if (result == nullptr) {
+        int lFrags, rFrags, freeBytes, minFreeBytes, maxFreeBlock;
+        FreeBlockStats(lFrags, rFrags, freeBytes, minFreeBytes, maxFreeBlock);
+        bool isMain = MainThread();
+        if (!isMain) {
+            extern int gInsideMemFunc;
+            extern CriticalSection *gMemLock;
+            gInsideMemFunc = 0;
+            gMemLock->Abandon();
+        }
+        extern MemTracker *gMemTracker;
+        if (gMemTracker != nullptr && !gMemTracker->GetHeapOnly()) {
+            TextFileStream tfs("alloc_fail.txt", false);
+            MemTracker::SpitAllocInfo(&tfs);
+        }
+        int wantBytes = sizeWords * 4;
+        char buf[2048];
+        const char *msg = MakeString(
+            "Allocation failure, heap \"%s\", want %d bytes\n"
+            "   lFrags=  %8d\n"
+            "   rFrags=  %8d\n"
+            "   Biggest Block=%8d\n"
+            "   Free Bytes=   %8d\n",
+            mName, wantBytes, lFrags, rFrags, maxFreeBlock, freeBytes
+        );
+        strcpy(buf, msg);
+        int len = strlen(buf);
+        MemPrintOverview(-3, buf + len);
+        MILO_FAIL(buf);
+    }
+    return result;
+}
+
+bool FreeBlock::AttemptMerge(FreeBlock *next, int debugLevel) {
+    if ((int *)this + mSizeWords == (int *)next) {
+        unsigned int ts = mTimeStamp;
+        if (mTimeStamp < next->mTimeStamp) {
+            ts = next->mTimeStamp;
+        }
+        int nextSize = next->mSizeWords;
+        FreeBlock *nextNext = next->mNextBlock;
+        mTimeStamp = ts;
+        mSizeWords += nextSize;
+        mNextBlock = nextNext;
+        if (debugLevel > 0) {
+            int *ptr = (int *)next;
+            int *end = ptr + 3;
+            if (ptr < end) {
+                do {
+                    *ptr = 0xDEADDEAD;
+                    ptr++;
+                } while (ptr < end);
+            }
+        }
+        return true;
+    }
+    return false;
+}
+
+int *MemHeap::Truncate(int *ptr, int newSizeWords, int &allocSize) {
+    if (ptr < mStart || ptr >= mStart + mSizeWords) {
+        return nullptr;
+    }
+
+    unsigned int header = *(unsigned int *)(ptr - 1);
+    unsigned int blockSizeWords = header >> 8;
+    unsigned int padWords = (header >> 4) & 0xF;
+    int truncWords = blockSizeWords - padWords - newSizeWords - 1;
+    MILO_ASSERT(truncWords >= 0, 0x1A8);
+
+    int ts = gTimeStamp;
+    unsigned int *headerPtr = (unsigned int *)(ptr - 1);
+
+    if (truncWords > 8) {
+        FreeBlock *prev = nullptr;
+        FreeBlock *next;
+        for (next = mFreeBlockChain; next != nullptr && (int *)next < ptr - 1; next = next->mNextBlock) {
+            prev = next;
+        }
+        FreeBlock *newFree = (FreeBlock *)((int *)ptr + newSizeWords);
+        gTimeStamp++;
+        InsertFreeBlock(newFree, truncWords, prev, next, ts);
+        if (mDebugLevel > 0) {
+            int *end = (int *)newFree + newFree->mSizeWords;
+            int *cur = (int *)newFree + 2;
+            if ((int *)newFree + 3 < end) {
+                for (int count = ((end - ((int *)newFree + 3)) - 1) >> 2; count >= 0; count--) {
+                    cur++;
+                    *cur = 0xDEADDEAD;
+                }
+            }
+        }
+        if (next != nullptr) {
+            newFree->AttemptMerge(next, mDebugLevel);
+        }
+        *headerPtr = (*headerPtr & 0xFF) | ((*headerPtr - (truncWords << 8)) & 0xFFFFFF00);
+    }
+
+    allocSize = *headerPtr >> 8;
+    return ptr;
+}
+
+int MemHeap::Free(int *ptr) {
+    int ts = gTimeStamp;
+    if (ptr < mStart || ptr >= mStart + mSizeWords) {
+        return 0;
+    }
+
+    unsigned int header = *(unsigned int *)(ptr - 1);
+    unsigned int *headerAddr = (unsigned int *)(ptr - 1);
+    int blockSizeBytes = (header >> 6) & 0x3FFFFFC;
+    unsigned int padBytes = (header >> 2) & 0x3C;
+    int *blockStart = (int *)((char *)headerAddr - padBytes);
+
+    FreeBlock *prev = nullptr;
+    FreeBlock *next;
+    for (next = mFreeBlockChain; next != nullptr && (int *)next < blockStart; next = next->mNextBlock) {
+        prev = next;
+    }
+
+    gTimeStamp++;
+    FreeBlock *newFree = (FreeBlock *)blockStart;
+    InsertFreeBlock(newFree, header >> 8, prev, next, ts);
+
+    if (mDebugLevel > 0) {
+        int *end = (int *)newFree + newFree->mSizeWords;
+        int *cur = (int *)newFree + 2;
+        if ((int *)newFree + 3 < end) {
+            for (int count = ((end - ((int *)newFree + 3)) - 1) >> 2; count >= 0; count--) {
+                cur++;
+                *cur = 0xDEADDEAD;
+            }
+        }
+    }
+
+    if (next != nullptr) {
+        newFree->AttemptMerge(next, mDebugLevel);
+    }
+    if (prev != nullptr) {
+        prev->AttemptMerge(newFree, mDebugLevel);
+    }
+
+    return blockSizeBytes;
 }
 

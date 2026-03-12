@@ -5,6 +5,8 @@ public:
     unsigned int mSizeWords;
     unsigned int mTimeStamp;
     FreeBlock *mNextBlock;
+
+    bool AttemptMerge(FreeBlock *, int);
 };
 
 class MemHeap {
@@ -39,6 +41,10 @@ public:
     int *End() const { return mStart + mSizeWords; }
 
     static int GetSizeWords(int);
+    static int GetAlignWords(int);
+
+    int *Alloc(int, int, int &);
+    int *TryAlloc(int, int, int &);
 
 private:
     void InsertFreeBlock(FreeBlock *, int, FreeBlock *, FreeBlock *, int);

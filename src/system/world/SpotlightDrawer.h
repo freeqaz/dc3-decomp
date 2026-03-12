@@ -113,6 +113,7 @@ protected:
     static bool sHaveAdditionals;
     static bool sHaveLenses;
     static bool sHaveFlares;
+    static bool sNoBeams;
 
     SpotDrawParams mParams; // 0x44
 };

@@ -806,3 +806,15 @@ int SkeletonChooser::GetNumValidSkeletonChoices() {
     }
     return numValidSkeletonChoices;
 }
+
+int SkeletonChooser::RoundRobinForHandRaised(int) { return 0; }
+
+int SkeletonChooser::RoundRobinForStandingStill(int) { return 0; }
+
+void SkeletonChooser::DrawDebug() {}
+
+void SkeletonChooser::SetPlayerSkeletonNavData(int, int) {}
+
+void SkeletonChooser::ChoosePlayerSides() {}
+
+void SkeletonChooser::CheckToSwitchActivePlayer() {}

@@ -281,7 +281,9 @@ void HamCharacter::Init() {
             ObjectDir *clips =
                 DirLoader::LoadObjects("skeleton_clips.milo", nullptr, nullptr);
             MILO_ASSERT(clips, 0x45);
+#ifdef HX_NATIVE
             if (!clips) return;
+#endif
             for (int i = 0; i < numSkels; i++) {
                 Symbol s = macro->Sym(i);
                 sSkeletonClips[i] =
@@ -810,5 +812,36 @@ void HamCharacter::Poll() {
 // TODO: real implementation clears a list
 void HamCharacter::Poll() {}
 #endif
+
+void HamCharacter::ApplyBlendedSkeletons(
+    HamDriver *driver, CharClip *clip, float weight
+) {
+    if (clip->NumBlendSamples() != 0) {
+        std::list<HamDriver::Layer *> &layers = driver->Layers().mLayers;
+        for (std::list<HamDriver::Layer *>::iterator it = layers.begin();
+             it != layers.end();
+             ++it) {
+            HamDriver::LayerClip *layerClip;
+            if ((*it)->FirstClip() == clip && (*it)->mWeight == weight
+                && (layerClip = dynamic_cast<HamDriver::LayerClip *>(*it))
+                       != nullptr) {
+                float beat = (TheTaskMgr.Beat() - layerClip->mClipBeat)
+                    + clip->StartBeat();
+                CharBones *bones =
+                    mSkeletonBones
+                        ? static_cast<CharBones *>(mSkeletonBones)
+                        : nullptr;
+                clip->ApplyBlendedSkeletons(
+                    sSkeletonClips, *bones, beat, weight
+                );
+                return;
+            }
+        }
+    }
+    int skelIndex = clip->Property("clip_skeleton_index", false)->Int();
+    CharBones *bones =
+        mSkeletonBones ? static_cast<CharBones *>(mSkeletonBones) : nullptr;
+    sSkeletonClips[skelIndex]->ScaleAdd(*bones, weight, 0.0f, 0.0f);
+}
 
 template class StackString<128>;

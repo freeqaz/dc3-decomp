@@ -7,4 +7,5 @@ class RndCubeTex;
 
 // GPU texture view accessors (defined in Tex_Wgpu.cpp)
 wgpu::TextureView GetGpuTexView(RndTex* tex);
+wgpu::TextureView GetGpuTexDepthView(RndTex* tex);
 wgpu::TextureView GetGpuCubeTexView(RndCubeTex* cubeTex);

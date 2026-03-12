@@ -511,3 +511,9 @@ BEGIN_HANDLERS(HamStorePanel)
     HANDLE_ACTION(buy_dc2_gond, BuySpecialOffer("dc2_gond"))
     HANDLE_SUPERCLASS(StorePanel)
 END_HANDLERS
+
+void HamStorePanel::RefreshSpecialOfferStatus() {}
+
+DataNode HamStorePanel::OnMsg(const RCJobCompleteMsg &) { return DataNode(0); }
+
+void SpecialOfferEnumJob::OnCompletion(Hmx::Object *) {}

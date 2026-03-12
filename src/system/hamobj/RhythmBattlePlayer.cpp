@@ -740,4 +740,140 @@ void RhythmBattlePlayer::UpdateScore(Hmx::Object *handler) {
     UpdateScore(i10);
 }
 
+void RhythmBattlePlayer::AnimateBoxyState(int state, bool transition, bool bad) {
+    if (mRhythmBattleAnim) {
+        float delay = 0.0f;
+        static Symbol none("none");
+        if (state > 0) {
+            // Entering "in the zone" (state 1)
+            if (transition) {
+                mRhythmBattleAnim->Animate(
+                    0.0f, false, 0.0f, RndAnimatable::k30_fps,
+                    8.0f, 12.0f, 0.0f, 1.0f,
+                    none, nullptr, kEaseLinear, 0.0f, false
+                );
+                delay = 4.0f;
+            }
+            static Symbol loop("loop");
+            mRhythmBattleAnim->Animate(
+                0.0f, false, delay, RndAnimatable::k30_fps,
+                12.0f, 20.0f, 0.0f, 1.0f,
+                loop, nullptr, kEaseLinear, 0.0f, false
+            );
+        } else if (state == 0) {
+            // Active but not in the zone
+            if (transition) {
+                if (mInTheZone == -1) {
+                    mRhythmBattleAnim->Animate(
+                        0.0f, false, 0.0f, RndAnimatable::k30_fps,
+                        36.0f, 40.0f, 0.0f, 1.0f,
+                        none, nullptr, kEaseLinear, 0.0f, false
+                    );
+                } else if (mInTheZone == 1) {
+                    mRhythmBattleAnim->Animate(
+                        0.0f, false, 0.0f, RndAnimatable::k30_fps,
+                        20.0f, 24.0f, 0.0f, 1.0f,
+                        none, nullptr, kEaseLinear, 0.0f, false
+                    );
+                }
+                delay = 4.0f;
+            }
+            static Symbol loop("loop");
+            mRhythmBattleAnim->Animate(
+                0.0f, false, delay, RndAnimatable::k30_fps,
+                0.0f, 8.0f, 0.0f, 1.0f,
+                loop, nullptr, kEaseLinear, 0.0f, false
+            );
+        } else if (state < 0) {
+            // Inactive (state -1)
+            if (transition) {
+                if (mInTheZone == 0) {
+                    mRhythmBattleAnim->Animate(
+                        0.0f, false, 0.0f, RndAnimatable::k30_fps,
+                        24.0f, 28.0f, 0.0f, 1.0f,
+                        none, nullptr, kEaseLinear, 0.0f, false
+                    );
+                } else if (mInTheZone == 1) {
+                    mRhythmBattleAnim->Animate(
+                        0.0f, false, 0.0f, RndAnimatable::k30_fps,
+                        20.0f, 28.0f, 0.0f, 2.0f,
+                        none, nullptr, kEaseLinear, 0.0f, false
+                    );
+                }
+                delay = 4.0f;
+            }
+            static Symbol loop("loop");
+            mRhythmBattleAnim->Animate(
+                0.0f, false, delay, RndAnimatable::k30_fps,
+                28.0f, 36.0f, 0.0f, 1.0f,
+                loop, nullptr, kEaseLinear, 0.0f, false
+            );
+        }
+    }
+    int oldZone = mInTheZone;
+    mInTheZone = state;
+    static Symbol swag_jacked("swag_jacked");
+    HamPlayerData *hpd = TheGameData->Player(mPlayer);
+    static Symbol rhythmbattle_inthezone("rhythmbattle_inthezone");
+    static Symbol rhythmbattle_outthezone("rhythmbattle_outthezone");
+    if (state == -1) {
+        return;
+    }
+    if (state == 0) {
+        bool useBadFlow = bad && oldZone != -1;
+        if (useBadFlow) {
+            if (mOutTheZoneBadFlow && !mSuppressRhythm) {
+                mOutTheZoneBadFlow->Activate();
+            }
+        } else {
+            if (mOutTheZoneOkFlow) {
+                mOutTheZoneOkFlow->Activate();
+            }
+        }
+        hpd->Provider()->Export(Message(rhythmbattle_outthezone), true);
+    } else {
+        if (mInTheZoneFlow) {
+            mInTheZoneFlow->Activate();
+        }
+        hpd->Provider()->Export(Message(rhythmbattle_inthezone), true);
+    }
+}
+
+void RhythmBattlePlayer::UpdateComboProgress() {
+    float increment;
+    if (!mRhythmBattle || !mRhythmBattle->InFullKTB()) {
+        increment = 8.0f;
+    } else {
+        increment = 4.0f;
+    }
+    if (mZoneLevel == 0) {
+        mComboMeter = 0.0f;
+        int targetState = 0;
+        if (!mActive) {
+            targetState = -1;
+        }
+        if (mInTheZone != targetState) {
+            AnimateBoxyState(targetState, true, true);
+        }
+        return;
+    }
+    if (mInTheZone > 0) {
+        if (mInTheZone != 1) {
+            return;
+        }
+        mComboMeter += increment;
+        return;
+    }
+    mComboMeter += increment;
+    if (mComboMeter >= 16.0f) {
+        int targetState = 1;
+        if (!mActive) {
+            targetState = -1;
+        }
+        if (mInTheZone != targetState) {
+            AnimateBoxyState(targetState, true, false);
+        }
+    }
+}
+
 void RhythmBattlePlayer::AnimateOut() {}

@@ -67,3 +67,9 @@ void EQEffect::SetParameters(EQEffect::Params const &params) {
     SetParameter(11, params.mBand4Q);
     SetParameter(12, params.mBand5Freq);
 }
+
+void EQEffect::Reset() {}
+
+void EQEffect::Process(float *, int, int) {}
+
+void EQEffect::SetParameter(int, float) {}

@@ -60,3 +60,5 @@ int WavReader::ConsumeData(void **data, int samples, int startSamp) {
     MILO_ASSERT(mOutStream, 0xb1);
     return mOutStream->ConsumeData(data, samples, startSamp);
 }
+
+void WavReader::Poll(float) {}

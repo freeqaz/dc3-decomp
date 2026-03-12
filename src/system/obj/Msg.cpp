@@ -292,6 +292,21 @@ void MsgSinks::MergeSinks(Hmx::Object *o) {
     }
 }
 
+void MsgSinks::RemovePropertySink(Hmx::Object *o, DataArray *a) {
+    Symbol path = PathToEventName(a);
+    RemoveSink(o, path);
+    if (mPropSyncHandlers) {
+        for (int i = 1; i < mPropSyncHandlers->Size(); i += 2) {
+            if (path == mPropSyncHandlers->Sym(i)) {
+                mPropSyncHandlers->Remove(i);
+                mPropSyncHandlers->Remove(i - 1);
+                return;
+            }
+        }
+    }
+    MILO_NOTIFY_ONCE("Property Sink not in the list! %s -> %s", PathName(mOwner), PathName(o));
+}
+
 bool MsgSinks::Replace(ObjRef *ref, Hmx::Object *obj) {
     for (ObjList<Sink>::iterator it = mSinks.begin(); it != mSinks.end(); ++it) {
         if (&it->obj == ref) {

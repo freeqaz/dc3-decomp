@@ -1,8 +1,23 @@
 #include "ui/LocalePanel.h"
+#include "ui/PanelDir.h"
 #include "ui/UI.h"
+#include "ui/UIList.h"
 #include "ui/UIListLabel.h"
 #include "utl/Locale.h"
+#include "utl/MakeString.h"
 #include "utl/Std.h"
+#include <algorithm>
+
+namespace {
+    struct LabelSort {
+        bool operator()(const UILabel *u1, const UILabel *u2) const {
+            return stricmp(
+                const_cast<UILabel *>(u1)->TextToken().Str(),
+                const_cast<UILabel *>(u2)->TextToken().Str()
+            ) < 0;
+        }
+    };
+}
 
 int LocalePanel::NumData() const { return mEntries.size(); }
 
@@ -65,6 +80,57 @@ void LocalePanel::Text(int i, int j, UIListLabel *listlabel, UILabel *label) con
 }
 
 LocalePanel::Entry::Entry() {}
+
+void LocalePanel::AddDirEntries(ObjectDir *dir, const char *cc) {
+    std::vector<UILabel *> labels;
+    for (ObjDirItr<UILabel> it(dir, true); it != nullptr; ++it) {
+        if (it->Showing())
+            labels.push_back(it);
+    }
+    std::sort(labels.begin(), labels.end(), LabelSort());
+    if (!labels.empty()) {
+        AddHeading(MakeString("%s: %s", cc ? cc : "proxy", PathName(dir)));
+    }
+    for (std::vector<UILabel *>::iterator it = labels.begin(); it != labels.end(); ++it) {
+        UILabel *cur = *it;
+        Entry entry;
+        entry.mLabel = cur->Name();
+        entry.mToken = TokenForLabel(cur);
+        entry.mString = cur->TextASCII().c_str();
+        mEntries.push_back(entry);
+    }
+    for (ObjDirItr<UIList> it(dir, true); it != nullptr; ++it) {
+        if (it->Showing()) {
+            AddHeading(MakeString("%s: %s", it->ClassName(), it->Name()));
+            const std::vector<UIListWidget *> &widgets = it->GetWidgets();
+            std::vector<UIListWidget *>::const_iterator wIt;
+            for (int i = 0; i < it->NumDisplay(); i++) {
+                for (wIt = widgets.begin(); wIt != widgets.end(); ++wIt) {
+                    UIListLabel *listLabel = dynamic_cast<UIListLabel *>(*wIt);
+                    if (listLabel) {
+                        UILabel *elementLabel = listLabel->ElementLabel(i);
+                        if (elementLabel) {
+                            String text = elementLabel->TextASCII();
+                            if (text.length() != 0) {
+                                Entry entry;
+                                entry.mLabel =
+                                    MakeString("%i:%s", i, listLabel->MatchName());
+                                entry.mToken = TokenForLabel(elementLabel);
+                                entry.mString = text.c_str();
+                                mEntries.push_back(entry);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    for (ObjDirItr<PanelDir> it(dir, true); it != nullptr; ++it) {
+        if (it != dir) {
+            AddDirEntries(it, 0);
+        }
+    }
+}
 
 BEGIN_HANDLERS(LocalePanel)
     HANDLE_EXPR(token, mEntries[_msg->Int(2)].mToken)

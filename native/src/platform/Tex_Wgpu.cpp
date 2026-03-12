@@ -4,6 +4,7 @@
 // Overrides weak stubs in engine_stubs_generated.cpp.
 
 #include "platform/Rnd_Wgpu.h"
+#include "platform/TexGpu.h"
 #include "gfx/TextureConvert.h"
 #include "rndobj/Tex.h"
 #include "rndobj/CubeTex.h"
@@ -19,21 +20,75 @@
 struct GpuTexData {
     wgpu::Texture texture;
     wgpu::TextureView view;
+    wgpu::Texture depthTexture;
+    wgpu::TextureView depthView;
     bool uploaded = false;
+    bool renderTarget = false;
     const uint8_t* lastPixelPtr = nullptr;  // detect bitmap data changes
     uint32_t pixelFingerprint = 0;          // quick content check
 };
 
 static std::unordered_map<RndTex*, GpuTexData> sTexGpuData;
 
+static bool NeedsDepthTarget(RndTex* tex) {
+    if (!tex) return false;
+    RndTex::Type type = tex->GetType();
+    return (type & RndTex::kRendered) && !(type & 0x20) && type != RndTex::kDepthVolumeMap;
+}
+
+static wgpu::TextureFormat ChooseRenderTargetFormat(RndTex* tex) {
+    return tex && tex->GetType() == RndTex::kDepthVolumeMap
+        ? wgpu::TextureFormat::RGBA8Unorm
+        : wgpu::TextureFormat::RGBA8UnormSrgb;
+}
+
+static GpuTexData* EnsureRenderTargetData(RndTex* tex) {
+    if (!tex || !gWgpuRnd || !gWgpuRnd->Gpu().IsReady()) return nullptr;
+    if (!tex->IsRenderTarget() || tex->Width() <= 0 || tex->Height() <= 0) return nullptr;
+
+    GpuTexData& data = sTexGpuData[tex];
+    bool needColor = !data.texture || !data.view;
+    bool needDepth = NeedsDepthTarget(tex) && (!data.depthTexture || !data.depthView);
+    if (needColor) {
+        data.texture = TextureConvert::CreateRenderTarget(
+            gWgpuRnd->Gpu(), tex->Width(), tex->Height(), ChooseRenderTargetFormat(tex)
+        );
+        data.view = data.texture.CreateView();
+    }
+    if (needDepth) {
+        data.depthTexture = TextureConvert::CreateDepthTarget(
+            gWgpuRnd->Gpu(), tex->Width(), tex->Height()
+        );
+        data.depthView = data.depthTexture.CreateView();
+    } else if (!NeedsDepthTarget(tex)) {
+        data.depthTexture = nullptr;
+        data.depthView = nullptr;
+    }
+    data.uploaded = true;
+    data.renderTarget = true;
+    return &data;
+}
+
 // Public accessor — used by Mesh_Wgpu.cpp to get texture view for binding
 wgpu::TextureView GetGpuTexView(RndTex* tex) {
     if (!tex) return wgpu::TextureView();
+    if (tex->IsRenderTarget()) {
+        GpuTexData* rt = EnsureRenderTargetData(tex);
+        if (rt) {
+            return rt->view;
+        }
+    }
     auto it = sTexGpuData.find(tex);
     if (it != sTexGpuData.end() && it->second.uploaded) {
         return it->second.view;
     }
     return wgpu::TextureView();
+}
+
+wgpu::TextureView GetGpuTexDepthView(RndTex* tex) {
+    if (!tex || !tex->IsRenderTarget()) return wgpu::TextureView();
+    GpuTexData* rt = EnsureRenderTargetData(tex);
+    return rt ? rt->depthView : wgpu::TextureView();
 }
 
 // ============================================================================
@@ -55,6 +110,7 @@ static uint32_t PixelFingerprint(const uint8_t* pixels, int size) {
 
 void RndTex::PresyncBitmap() {
     if (!gWgpuRnd) return;
+    if (!gWgpuRnd->Gpu().IsReady()) return;
 
     // Only process regular textures with bitmap data
     if (mBitmap.Width() <= 0 || mBitmap.Height() <= 0 || mBitmap.Bpp() <= 0) {
@@ -108,6 +164,17 @@ void RndTex::PresyncBitmap() {
 
 void RndTex::SyncBitmap() {
     // In Tier 1, all upload work is done in PresyncBitmap
+}
+
+void RndTex::MakeDrawTarget() {
+    if (!gWgpuRnd) return;
+    EnsureRenderTargetData(this);
+    gWgpuRnd->SelectRenderTarget(this);
+}
+
+void RndTex::FinishDrawTarget() {
+    if (!gWgpuRnd) return;
+    gWgpuRnd->FinishRenderTarget(this);
 }
 
 // ============================================================================

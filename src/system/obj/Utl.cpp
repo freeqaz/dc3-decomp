@@ -5,7 +5,9 @@
 #include "obj/Object.h"
 #include "os/File.h"
 #include "os/System.h"
+#include "utl/MakeString.h"
 #include "utl/Str.h"
+#include <algorithm>
 #include <cstdio>
 #ifdef HX_NATIVE
 #include <setjmp.h>
@@ -14,6 +16,7 @@
 
 std::list<String> sFilePaths;
 std::list<Symbol> sFiles;
+FileCallbackFunc *sCBack;
 
 const char *PathName(const Hmx::Object *o) {
     return !o ? "NULL Object" : ((Hmx::Object *)o)->FindPathName();
@@ -415,4 +418,162 @@ void ReplaceObject(
     from->ReplaceRefs(to);
     if (deleteFrom)
         delete from;
+}
+
+void FileCallbackFullPath(const char *cc1, const char *cc2) {
+    String str(MakeString("%s/%s/%s", FileRoot(), cc1, cc2));
+    str.ReplaceAll('\\', '/');
+    sFilePaths.push_back(str);
+}
+
+DataNode MakeFileListFullPath(const char *cc) {
+    char buf[256];
+    strcpy(buf, cc);
+    sFilePaths.clear();
+    FileRecursePattern(buf, &FileCallbackFullPath, true);
+    sFilePaths.sort();
+    sFilePaths.unique();
+    DataArrayPtr ptr(new DataArray(sFilePaths.size()));
+    int idx = 0;
+    for (std::list<String>::iterator it = sFilePaths.begin(); it != sFilePaths.end();
+         ++it) {
+        ptr->Node(idx) = *it;
+        idx++;
+    }
+    sFilePaths.clear();
+    return ptr;
+}
+
+void FileCallback(const char *cc1, const char *cc2) {
+    if (!sCBack) {
+        sFiles.push_back(FileGetBase(cc2));
+    } else {
+        char buf[256];
+        strcpy(buf, MakeString("%s/%s", cc1, cc2));
+        if ((*sCBack)(buf)) {
+            sFiles.push_back(FileGetBase(buf));
+        }
+    }
+}
+
+struct SymbolSort {
+    bool operator()(Symbol s1, Symbol s2) { return strcmp(s1.Str(), s2.Str()) < 0; }
+};
+
+DataNode MakeFileList(const char *cc, bool b, FileCallbackFunc *callback) {
+    char buf[256];
+    strcpy(buf, cc);
+    sCBack = callback;
+    sFiles.clear();
+    FileRecursePattern(buf, &FileCallback, true);
+    sCBack = nullptr;
+    if (b)
+        sFiles.push_back(Symbol());
+    sFiles.sort(SymbolSort());
+    sFiles.unique();
+    DataArrayPtr ptr(new DataArray(sFiles.size()));
+    int idx = 0;
+    for (std::list<Symbol>::iterator it = sFiles.begin(); it != sFiles.end(); ++it) {
+        ptr->Node(idx) = *it;
+        idx++;
+    }
+    sFiles.clear();
+    return ptr;
+}
+
+void CopyTypeProperties(Hmx::Object *from, Hmx::Object *to) {
+    bool bbb = false;
+    if (from->ClassName() != to->ClassName()) {
+        if (!from->Type().Null())
+            bbb = true;
+    }
+    if (bbb) {
+        std::list<Symbol> fromProps;
+        std::list<Symbol> toProps;
+        std::list<Symbol> fromArrayProps;
+        std::list<Symbol> toArrayProps;
+        static Symbol objects("objects");
+        static Symbol types("types");
+        static Symbol editor("editor");
+        DataArray *fromTypeArr =
+            SystemConfig(objects, from->ClassName())->FindArray(types, from->Type());
+        DataArray *fromTypeEditor = fromTypeArr->FindArray(editor, false);
+        if (fromTypeEditor) {
+            WalkProps(fromTypeEditor, fromProps, &fromArrayProps);
+        }
+        ListProperties(toProps, to->ClassName(), to->Type(), &toArrayProps, false);
+
+        fromProps.sort();
+        toProps.sort();
+        fromArrayProps.sort();
+        toArrayProps.sort();
+
+        for (std::list<Symbol>::iterator fromIt = fromProps.begin(),
+                                         toIt = toProps.begin();
+             fromIt != fromProps.end() && toIt != toProps.end();
+             ++fromIt) {
+            Symbol prop = *fromIt;
+            DataArray *fromValArr = fromTypeArr->FindArray(prop, false);
+            if (fromValArr) {
+                for (; toIt != toProps.end() && *toIt < prop; ++toIt)
+                    ;
+                if (toIt != toProps.end()) {
+                    if (*toIt == prop) {
+                        const DataNode *fromVal = from->Property(prop, true);
+                        DataType fromType = fromVal->Type();
+                        DataType toType = to->Property(prop, true)->Type();
+                        if (fromType == toType) {
+                            to->SetProperty(prop, *fromVal);
+                        } else if (fromType == kDataSymbol && toType == kDataObject) {
+                            if (!fromVal->Sym().Null()) {
+                                Hmx::Object *objProp =
+                                    from->Dir()->FindObject(fromVal->Sym().Str(), false, false);
+                                if (objProp) {
+                                    to->SetProperty(prop, objProp);
+                                } else {
+                                    MILO_WARN(
+                                        "Trying to convert Symbol prop to Object prop, but cannot find Object '%s'",
+                                        fromVal->Sym().Str()
+                                    );
+                                }
+                            }
+                        } else {
+                            MILO_LOG(
+                                "mismatched property %s, from: %d, to: %d\n",
+                                prop.Str(),
+                                fromType,
+                                toType
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        for (std::list<Symbol>::iterator fromIt = fromArrayProps.begin(),
+                                         toIt = toArrayProps.begin();
+             fromIt != fromArrayProps.end() && toIt != toArrayProps.end();
+             ++fromIt) {
+            Symbol prop = *fromIt;
+            DataArray *fromValArr = fromTypeArr->FindArray(prop, false);
+            if (fromValArr) {
+                for (; toIt != toArrayProps.end() && *toIt < prop; ++toIt)
+                    ;
+                if (toIt != toArrayProps.end()) {
+                    if (*toIt == prop) {
+                        DataArray *fromPropArr = from->Property(prop, true)->Array();
+                        DataArrayPtr propIdx(prop, 0);
+                        DataArrayPtr propTag(prop);
+                        while (to->PropertySize(propTag) != 0) {
+                            to->RemoveProperty(propIdx);
+                        }
+                        for (int i = 0; i < fromPropArr->Size(); i++) {
+                            propIdx->Node(1) = i;
+                            to->InsertProperty(propIdx, *from->Property(propIdx, true));
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

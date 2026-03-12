@@ -171,6 +171,8 @@ public:
     void Clear(unsigned int, const Hmx::Color&) override;
     void BeginDrawing() override;
     void EndDrawing() override;
+    void MakeDrawTarget() override;
+    void SetViewport(const Viewport& v) override;
 
     // Screen-space 2D drawing (NgRnd override)
     void DrawRect(const Hmx::Rect&, RndMat*, ShaderType, const Hmx::Color&,
@@ -186,6 +188,11 @@ public:
     PipelineManager& Pipelines() { return mPipelines; }
     wgpu::RenderPassEncoder& CurrentPass() { return mPass; }
     bool IsInPass() const { return mInPass; }
+    wgpu::TextureFormat CurrentTargetFormat() const { return mCurrentTargetFormat; }
+    uint32_t CurrentSampleCount() const { return mCurrentSampleCount; }
+    bool CurrentPassHasDepth() const { return mCurrentPassHasDepth; }
+    uint32_t CurrentTargetWidth() const { return mCurrentTargetWidth; }
+    uint32_t CurrentTargetHeight() const { return mCurrentTargetHeight; }
 
     // Scene bind group (group 0) — updated when camera changes
     wgpu::BindGroup& SceneBindGroup() { return mSceneBindGroup; }
@@ -239,7 +246,14 @@ public:
     wgpu::Sampler& ShadowSampler() { return mShadowPass.Sampler(); }
     bool ShadowAvailable() const { return mShadowPass.Available(); }
 
+    void SelectRenderTarget(RndTex* tex);
+    void FinishRenderTarget(RndTex* tex);
+
 private:
+    void ApplyViewport();
+    void BeginFramePass(bool clear);
+    void BeginTexturePass(RndTex* tex);
+    void EndActivePass();
     void CreateDepthTexture(int w, int h);
     void CreateDefaultTextures();
     void WriteSceneUniforms();
@@ -258,6 +272,12 @@ private:
     wgpu::RenderPassEncoder mPass;
     wgpu::TextureView mFrameView;
     bool mInPass = false;
+    RndTex* mActiveTargetTex = nullptr;
+    wgpu::TextureFormat mCurrentTargetFormat = wgpu::TextureFormat::Undefined;
+    uint32_t mCurrentSampleCount = 1;
+    bool mCurrentPassHasDepth = false;
+    uint32_t mCurrentTargetWidth = 0;
+    uint32_t mCurrentTargetHeight = 0;
 
     // Uniform buffers
     UniformRingBuffer mSceneRing;
@@ -286,6 +306,7 @@ private:
     wgpu::TextureView mIntermediateView;
     int mIntermediateWidth = 0;
     int mIntermediateHeight = 0;
+    bool mFramePassValid = false;
 
     // Default textures
     wgpu::Texture mWhiteTex;

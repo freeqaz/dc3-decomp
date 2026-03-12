@@ -13,6 +13,7 @@
 
 class RndEnviron : public RndTransformable, public RndDrawable {
     friend class LightPreset;
+    friend class SpotlightDrawer;
 public:
     virtual ~RndEnviron();
     virtual bool Replace(ObjRef *, Hmx::Object *);

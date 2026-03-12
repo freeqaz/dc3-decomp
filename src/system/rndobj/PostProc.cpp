@@ -660,3 +660,126 @@ void RndPostProc::UpdateBlendPrevious() {
         mBlendVec.Set(mTrailThreshold, mDeltaSecs / mTrailDuration, 1.0f / 3.0f);
     }
 }
+
+void RndPostProc::Interp(const RndPostProc *from, const RndPostProc *to, float pct) {
+    if ((!from && !to) || mForceCurrentInterp)
+        return;
+
+    // If one is null, use the other for both
+    if (!to) {
+        to = from;
+    } else if (!from) {
+        from = to;
+    }
+
+    // For non-interpolatable properties, pick based on blend direction
+    const RndPostProc *pick = pct > 0.0f ? to : from;
+
+    // Copy non-interpolatable bool/obj properties from pick
+    mNoiseMidtone = pick->mNoiseMidtone;
+    mNoiseStationary = pick->mNoiseStationary;
+    mNoiseMap = pick->mNoiseMap;
+    mGradientMap = pick->mGradientMap;
+    mRefractMap = pick->mRefractMap;
+    mBloomGlare = pick->mBloomGlare;
+    mMotionBlurVelocity = pick->mMotionBlurVelocity;
+    mChromaticSharpen = pick->mChromaticSharpen;
+
+    // Bloom intensity uses BloomIntensity() which accounts for glare/hires
+    float toBloom = to->BloomIntensity();
+    float fromBloom = from->BloomIntensity();
+    ::Interp(fromBloom, toBloom, pct, mBloomIntensity);
+
+    // Bloom color
+    ::Interp(from->mBloomColor, to->mBloomColor, pct, mBloomColor);
+
+    // Blend vec (Vector3)
+    ::Interp(from->mBlendVec, to->mBlendVec, pct, mBlendVec);
+
+    // Trail threshold and duration
+    ::Interp(from->mTrailDuration, to->mTrailDuration, pct, mTrailDuration);
+    ::Interp(from->mTrailThreshold, to->mTrailThreshold, pct, mTrailThreshold);
+
+    // Noise — if both have noise but different stationarity, snap noise interp to 1.0
+    float noisePct = pct;
+    if (from != to && from->mNoiseStationary != to->mNoiseStationary
+        && from->mNoiseIntensity != 0.0f && to->mNoiseIntensity != 0.0f) {
+        noisePct = 1.0f;
+    }
+    ::Interp(from->mNoiseBaseScale, to->mNoiseBaseScale, noisePct, mNoiseBaseScale);
+    ::Interp(from->mNoiseTopScale, to->mNoiseTopScale, noisePct, mNoiseTopScale);
+    ::Interp(from->mNoiseIntensity, to->mNoiseIntensity, noisePct, mNoiseIntensity);
+
+    // Kaleidoscope
+    ::Interp(from->mKaleidoscopeComplexity, to->mKaleidoscopeComplexity, pct, mKaleidoscopeComplexity);
+    ::Interp(from->mKaleidoscopeSize, to->mKaleidoscopeSize, pct, mKaleidoscopeSize);
+    ::Interp(from->mKaleidoscopeAngle, to->mKaleidoscopeAngle, pct, mKaleidoscopeAngle);
+    ::Interp(from->mKaleidoscopeRadius, to->mKaleidoscopeRadius, pct, mKaleidoscopeRadius);
+    ::Interp(from->mKaleidoscopeFlipUVs, to->mKaleidoscopeFlipUVs, pct, mKaleidoscopeFlipUVs);
+
+    // Emulate FPS
+    ::Interp(from->mEmulateFPS, to->mEmulateFPS, pct, mEmulateFPS);
+
+    // Poster
+    ::Interp(from->mPosterLevels, to->mPosterLevels, pct, mPosterLevels);
+    ::Interp(from->mPosterMin, to->mPosterMin, pct, mPosterMin);
+
+    // Color modulation
+    ::Interp(from->mColorModulation, to->mColorModulation, pct, mColorModulation);
+
+    // Color transform
+    ::Interp(from->mColorXfm.mBrightness, to->mColorXfm.mBrightness, pct, mColorXfm.mBrightness);
+    ::Interp(from->mColorXfm.mHue, to->mColorXfm.mHue, pct, mColorXfm.mHue);
+    ::Interp(from->mColorXfm.mSaturation, to->mColorXfm.mSaturation, pct, mColorXfm.mSaturation);
+    ::Interp(from->mColorXfm.mLightness, to->mColorXfm.mLightness, pct, mColorXfm.mLightness);
+    ::Interp(from->mColorXfm.mContrast, to->mColorXfm.mContrast, pct, mColorXfm.mContrast);
+    ::Interp(from->mColorXfm.mLevelInLo, to->mColorXfm.mLevelInLo, pct, mColorXfm.mLevelInLo);
+    ::Interp(from->mColorXfm.mLevelInHi, to->mColorXfm.mLevelInHi, pct, mColorXfm.mLevelInHi);
+    ::Interp(from->mColorXfm.mLevelOutLo, to->mColorXfm.mLevelOutLo, pct, mColorXfm.mLevelOutLo);
+    ::Interp(from->mColorXfm.mLevelOutHi, to->mColorXfm.mLevelOutHi, pct, mColorXfm.mLevelOutHi);
+    mColorXfm.AdjustColorXfm();
+
+    // Gradient map
+    ::Interp(from->mGradientMapOpacity, to->mGradientMapOpacity, pct, mGradientMapOpacity);
+    ::Interp(from->mGradientMapIndex, to->mGradientMapIndex, pct, mGradientMapIndex);
+    ::Interp(from->mGradientMapStart, to->mGradientMapStart, pct, mGradientMapStart);
+    ::Interp(from->mGradientMapEnd, to->mGradientMapEnd, pct, mGradientMapEnd);
+
+    // Refraction
+    ::Interp(from->mRefractDist, to->mRefractDist, pct, mRefractDist);
+    ::Interp(from->mRefractScale, to->mRefractScale, pct, mRefractScale);
+    ::Interp(from->mRefractPanning, to->mRefractPanning, pct, mRefractPanning);
+    ::Interp(from->mRefractVelocity, to->mRefractVelocity, pct, mRefractVelocity);
+    ::Interp(from->mRefractAngle, to->mRefractAngle, pct, mRefractAngle);
+
+    // Motion blur
+    ::Interp(from->mMotionBlurBlend, to->mMotionBlurBlend, pct, mMotionBlurBlend);
+    ::Interp(from->mMotionBlurWeight, to->mMotionBlurWeight, pct, mMotionBlurWeight);
+
+    // Chromatic aberration
+    ::Interp(from->mChromaticAberrationOffset, to->mChromaticAberrationOffset, pct, mChromaticAberrationOffset);
+
+    // Vignette
+    ::Interp(from->mVignetteColor, to->mVignetteColor, pct, mVignetteColor);
+    ::Interp(from->mVignetteIntensity, to->mVignetteIntensity, pct, mVignetteIntensity);
+
+    // DC3-specific members
+    ::Interp(from->mHueTarget, to->mHueTarget, pct, mHueTarget);
+    ::Interp(from->mHueFocus, to->mHueFocus, pct, mHueFocus);
+    ::Interp(from->mBlendAmount, to->mBlendAmount, pct, mBlendAmount);
+    ::Interp(from->mBrightnessPower, to->mBrightnessPower, pct, mBrightnessPower);
+
+    // Flicker bounds
+    ::Interp(from->mFlickerTimeBounds, to->mFlickerTimeBounds, pct, mFlickerTimeBounds);
+    ::Interp(from->mFlickerModBounds, to->mFlickerModBounds, pct, mFlickerModBounds);
+
+    // Hall of time — copy from 'from' if it has a non-zero rate, otherwise zero
+    if (from->mHallOfTimeRate != 0.0f) {
+        mHallOfTimeType = from->mHallOfTimeType;
+        mHallOfTimeRate = from->mHallOfTimeRate;
+        mHallOfTimeColor = from->mHallOfTimeColor;
+        mHallOfTimeMix = from->mHallOfTimeMix;
+    } else {
+        mHallOfTimeRate = 0.0f;
+    }
+}

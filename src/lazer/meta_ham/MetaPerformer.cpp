@@ -1520,3 +1520,5 @@ MetaPerformer *MetaPerformerHook::Current() {
         return mQuickplayPerformer;
     }
 }
+
+bool MetaPerformer::CheckRecommendedPracticeMove(String, int) const { return false; }

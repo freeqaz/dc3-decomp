@@ -4,11 +4,14 @@
 #include "utl/MemMgr.h"
 
 class Flow;
+class FlowOutPort;
 class DrivenPropertyEntry;
 class FlowLabel;
 
 /** "A flow node" */
 class FlowNode : public virtual Hmx::Object {
+    friend void ScanForOutPorts(ObjPtrVec<FlowOutPort> &, FlowNode *, Flow *);
+
 public:
     enum QueueState {
         /** "If we're activated, ignore the activation" */

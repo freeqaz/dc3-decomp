@@ -797,3 +797,5 @@ bool StoreEnumJob::IsFinished() {
     }
     return mEnumeration->IsEnumerating() == false;
 }
+
+void StoreEnumJob::OnCompletion(Hmx::Object *) {}

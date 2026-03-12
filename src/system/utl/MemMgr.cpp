@@ -544,3 +544,16 @@ void MemFreeBlockStats(
     MILO_ASSERT(heapNum < MAX_HEAPS, 0x154);
     gHeaps[heapNum].FreeBlockStats(i2, i3, numFreeBytes, i5, biggestFreeBlock);
 }
+
+MemHeapStack &ThreadMemStack(bool) {
+    static MemHeapStack s;
+    return s;
+}
+
+int GetCurrentHeapNum() { return 0; }
+
+void MemDelta(const char *, int) {}
+
+int MemFindHeap(const char *) { return 0; }
+
+void MemPrintOverview(int, char *const) {}

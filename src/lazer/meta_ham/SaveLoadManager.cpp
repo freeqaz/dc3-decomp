@@ -1843,3 +1843,9 @@ void SaveLoadManager::SetState(State newState) {
         break;
     }
 }
+
+DataNode SaveLoadManager::OnMsg(const MCResultMsg &) { return DataNode(0); }
+
+DataNode SaveLoadManager::OnMsg(const SigninChangedMsg &) { return DataNode(0); }
+
+void SaveLoadManager::HandleEventResponse(HamProfile *, int) {}

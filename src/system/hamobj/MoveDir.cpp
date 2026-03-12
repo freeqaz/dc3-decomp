@@ -83,9 +83,11 @@ namespace {
         return f4;
     }
 
-    float DrawDetectedBar(float, const char *, float, float, float, bool, bool);
-    void DrawBeatLine(float, float, float, const Hmx::Color &);
-    float DrawPlayClip(float, SkeletonClip *, int);
+    float DrawDetectedBar(float, const char *, float, float, float, bool, bool) {
+        return 0.0f;
+    }
+    void DrawBeatLine(float, float, float, const Hmx::Color &) {}
+    float DrawPlayClip(float, SkeletonClip *, int) { return 0.0f; }
 
 }
 
@@ -1370,7 +1372,8 @@ void MoveDir::DrawShowing() {
     }
 }
 
-#ifdef HX_NATIVE
-// TODO: complex overlay rendering
-float MoveDir::UpdateOverlay(RndOverlay *, float) { return 0; }
-#endif
+float MoveDir::UpdateOverlay(RndOverlay *, float) { return 0.0f; }
+
+float MoveDir::DetectFrac(int, int) { return 0.0f; }
+
+void MoveDir::PostUpdateFilters() {}

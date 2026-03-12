@@ -1,8 +1,11 @@
 #include "hamobj/SongLayout.h"
+#include "hamobj/HamDirector.h"
 #include "hamobj/MoveMgr.h"
 #include "obj/Data.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
+#include "rndobj/PropAnim.h"
+#include "rndobj/PropKeys.h"
 #include "utl/BinStream.h"
 #include "utl/Std.h"
 #include <cstring>
@@ -270,4 +273,78 @@ DataNode SongLayout::AddSection(DataArray *a) {
 
 DataNode SongLayout::GetPatternName(int idx) const {
     return mSongPatterns[idx].mName.Str();
+}
+
+void SongLayout::SetDefaultReplacer() {
+    SongPattern dummyPattern;
+    dummyPattern.mName = Symbol("Verse");
+    RndPropAnim *songAnim = TheHamDirector->SongAnimByDifficulty((Difficulty)0);
+    MILO_ASSERT(songAnim, "song not loaded?");
+    static Symbol move("move");
+    DataArrayPtr moveProp(move);
+    Hmx::Object *hamObj = TheHamDirector
+        ? static_cast<Hmx::Object *>(TheHamDirector)
+        : nullptr;
+    PropKeys *keys = songAnim->GetKeys(hamObj, moveProp);
+    Symbol restMove("Rest.move");
+    Symbol restMoveLower("rest.move");
+    Symbol finishingMove("Finishing_Move.move");
+    int measure = 0;
+    for (int i = 0; i < keys->NumKeys(); i++) {
+        Symbol val = keys->AsSymbolKeys()->operator[](i).value;
+        if (val != restMove && val != restMoveLower && val != finishingMove) {
+            // Search for existing replacer with this move name
+            std::vector<MoveReplacer>::iterator it;
+            for (it = mMoveReplacers.begin(); it != mMoveReplacers.end(); ++it) {
+                if (it->mFrom == val) {
+                    it->mMeasures.push_back(measure);
+                    break;
+                }
+            }
+            // If no existing replacer found, create a new one
+            if (it == mMoveReplacers.end()) {
+                MoveReplacer replacer;
+                replacer.mFrom = val;
+                replacer.mMeasures.push_back(measure);
+                mMoveReplacers.push_back(replacer);
+            }
+        }
+        measure = i + 1;
+    }
+}
+
+void SongLayout::SetDefaultPattern(int totalMeasures) {
+    ClearChosenPatterns();
+    const MoveParent *nullParent = nullptr;
+    int measureStart = 5;
+    // Create 2 verse patterns, each with 4 "Rest.move" elements
+    for (int i = 0; i < 2; i++) {
+        SongPattern pattern;
+        pattern.mName = Symbol(MakeString("%s%d", "Verse", i));
+        for (int j = 0; j < 4; j++) {
+            pattern.mElements.push_back(Symbol("Rest.move"));
+            pattern.mMoveParents.push_back(nullParent);
+        }
+        pattern.mInitialMeasureRange.start = measureStart;
+        pattern.mInitialMeasureRange.end = measureStart + 4;
+        mSongPatterns.push_back(pattern);
+        measureStart += 5;
+    }
+    // Create sections from measure 5 up to totalMeasures, alternating patterns
+    int curMeasure = 5;
+    if (curMeasure < totalMeasures) {
+        do {
+            SongPattern tempPattern(mSongPatterns[(curMeasure - 5) % 2]);
+            SongSection section;
+            section.mMeasureRange.start = curMeasure + 1;
+            section.mPattern = tempPattern.mName;
+            int remaining = totalMeasures - curMeasure;
+            if (remaining > 4) {
+                remaining = 4;
+            }
+            curMeasure += remaining;
+            section.mMeasureRange.end = curMeasure;
+            mSongSections.push_back(section);
+        } while (curMeasure < totalMeasures);
+    }
 }

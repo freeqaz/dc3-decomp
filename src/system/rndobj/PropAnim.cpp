@@ -668,6 +668,8 @@ bool RndPropAnim::ChangePropPath(Hmx::Object *o, DataArray *a1, DataArray *a2) {
     return false;
 }
 
+DataNode RndPropAnim::ForeachKeyframe(const DataArray *) { return DataNode(0); }
+
 #pragma endregion
 #pragma region Handlers
 

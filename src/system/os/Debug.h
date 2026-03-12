@@ -71,6 +71,7 @@ public:
     void Warn(const char *msg);
     void Notify(const char *msg);
     void Fail(const char *msg, void *);
+    void DoCrucible(ModalType, const char *, void *);
     TextStream *Reflect() const { return mReflect; }
     TextStream *SetReflect(TextStream *ts) {
         TextStream *ret = mReflect;

@@ -38,6 +38,8 @@ struct PipelineKey {
     WgpuStencil stencil;
     VertexLayoutType layout;
     wgpu::TextureFormat targetFormat;
+    uint32_t sampleCount = 1;
+    bool hasDepth = true;
     bool alphaCut;
     bool alphaWrite;
     bool alphaToCoverage = false;
@@ -46,7 +48,8 @@ struct PipelineKey {
     bool operator==(const PipelineKey& o) const {
         return shaderType == o.shaderType && blend == o.blend && zMode == o.zMode &&
                cull == o.cull && stencil == o.stencil && layout == o.layout &&
-               targetFormat == o.targetFormat && alphaCut == o.alphaCut &&
+               targetFormat == o.targetFormat && sampleCount == o.sampleCount &&
+               hasDepth == o.hasDepth && alphaCut == o.alphaCut &&
                alphaWrite == o.alphaWrite && alphaToCoverage == o.alphaToCoverage &&
                depthBias == o.depthBias;
     }
@@ -61,6 +64,8 @@ struct PipelineKeyHash {
         h ^= std::hash<int>{}((int)k.cull) + 0x9e3779b9 + (h << 6) + (h >> 2);
         h ^= std::hash<int>{}((int)k.layout) + 0x9e3779b9 + (h << 6) + (h >> 2);
         h ^= std::hash<int>{}((int)k.targetFormat) + 0x9e3779b9 + (h << 6) + (h >> 2);
+        h ^= std::hash<uint32_t>{}(k.sampleCount) + 0x9e3779b9 + (h << 6) + (h >> 2);
+        h ^= std::hash<bool>{}(k.hasDepth) + 0x9e3779b9 + (h << 6) + (h >> 2);
         h ^= std::hash<bool>{}(k.alphaCut) + 0x9e3779b9 + (h << 6) + (h >> 2);
         h ^= std::hash<bool>{}(k.alphaToCoverage) + 0x9e3779b9 + (h << 6) + (h >> 2);
         h ^= std::hash<int32_t>{}(k.depthBias) + 0x9e3779b9 + (h << 6) + (h >> 2);

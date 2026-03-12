@@ -333,6 +333,20 @@ bool NetLoaderRef::IsDownloading() {
         return !mCacheLoader || (int)mCacheLoader->mState == 2;
 }
 
+NetLoaderRef &NetLoaderRef::operator=(const NetLoaderRef &other) {
+    mName = other.mName;
+    mRefCount = other.mRefCount;
+    mNetLoader = other.mNetLoader;
+    mCacheLoader = other.mCacheLoader;
+    return *this;
+}
+
+bool NetLoaderRef::IsLoadedOrFailed() { return false; }
+
+void NetCacheMgr::PollLoaders() {}
+
+NetLoaderRef *NetCacheMgr::AddLoaderRef(const char *, RefType, NetLoaderPos) { return nullptr; }
+
 void NetCacheMgrInit() {
     MILO_ASSERT(TheNetCacheMgr == NULL, 0x1f);
     TheNetCacheMgr = new NetCacheMgrXbox();

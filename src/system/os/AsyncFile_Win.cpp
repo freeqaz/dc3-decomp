@@ -141,3 +141,9 @@ void AsyncFileWin::_Close() {
     CloseHandle(mFile);
     mFile = INVALID_HANDLE_VALUE;
 }
+
+void AsyncFileWin::_WriteAsync(const void *, int) {}
+
+void AsyncFileWin::_ReadAsync(void *, int) {}
+
+bool AsyncFileWin::_ReadDone() { return true; }

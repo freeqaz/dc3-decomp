@@ -16,6 +16,7 @@ scripts/bin/
 CMakeFiles/
 yolo11n-pose.pt
 /Testing/
+node_modules/
 
 # Original files
 orig/*

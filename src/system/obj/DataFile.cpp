@@ -7,6 +7,7 @@
 #include "math/FileChecksum.h"
 #include "obj/Data.h"
 #include "obj/DataFile_Flex.h"
+#include "obj/DataUtl.h"
 #include "os/CritSec.h"
 #include "os/Debug.h"
 #include "os/File.h"
@@ -20,20 +21,475 @@
 #include "utl/MemMgr.h"
 
 CriticalSection gDataReadCrit; // yes these are the bss offsets. this tu sucks
-//DataArray *gArray; // 0x28
+DataArray *gArray; // 0x28
 int gNode; // 0x2c
 Symbol gFile; // 0x30
 BinStream *gBinStream; // 0x34
-// int gOpenArray = kDataTokenFinished; // 0x38 ?
-// std::list<ConditionalInfo> gConditional; // 0x48 - actually a list of ConditionalInfo
-//                                          // structs
-std::list<bool> gConditional;
+int gOpenArray; // 0x38
+std::list<bool> gConditional; // 0x48
 int gDataLine; // 0x50
 std::map<String, DataNode> gReadFiles; // 0x60
 
 // bool gCompressCached;
-// bool gCachingFile;
+bool gCachingFile;
 bool gReadingFile;
+
+bool Defined() {
+    for (std::list<bool>::iterator it = gConditional.begin();
+         it != gConditional.end();
+         it++) {
+        if (!*it)
+            return false;
+    }
+    return true;
+}
+
+void PushBack(const DataNode &n) {
+    if (gNode == gArray->Size()) {
+        if (gNode >= 0x7FFF) {
+            MILO_FAIL(
+                "%s(%d): array size > max %d lines", gArray->File(), gArray->Line(), 0x7FFF
+            );
+        }
+        MemPushTemp();
+        int x = gNode << 1;
+        gArray->Resize(x <= 0x7FFF ? x : 0x7FFF);
+        MemPopTemp();
+    }
+    gArray->Node(gNode++) = n;
+}
+
+bool ParseNode() {
+    int token = yylex();
+    if (!Defined() && token != kDataTokenIfdef && token != kDataTokenIfndef
+        && token != kDataTokenElse && token != kDataTokenEndif) {
+        return true;
+    }
+
+    char bom[3] = { (char)0xEF, (char)0xBB, (char)0xBF };
+    if (gNode == 0 && strncmp(yytext, bom, 3) == 0) {
+        if (yyleng > 3)
+            MILO_FAIL(
+                "%s starts with a ByteOrderMark, put a line return at the top of its file",
+                gFile
+            );
+        else
+            return true;
+    }
+
+    int openArray = gOpenArray;
+
+    if (token == kDataTokenFinished) {
+        switch (gOpenArray) {
+        case kDataTokenFinished:
+            return false;
+        case kDataTokenArrayOpen:
+            MILO_FAIL("Array closed incorrectly (file %s, line %d)", gFile, gDataLine);
+            break;
+        case kDataTokenCommandOpen:
+            MILO_FAIL("Command closed incorrectly (file %s, line %d)", gFile, gDataLine);
+            break;
+        case kDataTokenPropertyOpen:
+            MILO_FAIL("Property closed incorrectly (file %s, line %d)", gFile, gDataLine);
+            break;
+        default:
+            break;
+        }
+        return false;
+    } else if (token == kDataTokenArrayClose) {
+        switch (gOpenArray) {
+        case kDataTokenArrayOpen:
+            return false;
+        case kDataTokenFinished:
+            MILO_FAIL("File %s ends with open array", gFile);
+            break;
+        case kDataTokenCommandOpen:
+            MILO_FAIL("Command closed incorrectly (file %s, line %d)", gFile, gDataLine);
+            break;
+        case kDataTokenPropertyOpen:
+            MILO_FAIL("Property closed incorrectly (file %s, line %d)", gFile, gDataLine);
+            break;
+        default:
+            break;
+        }
+        return false;
+    } else if (token == kDataTokenPropertyClose) {
+        switch (gOpenArray) {
+        case kDataTokenPropertyOpen:
+            return false;
+        case kDataTokenFinished:
+            MILO_FAIL("File %s ends with open array", gFile);
+            break;
+        case kDataTokenArrayOpen:
+            MILO_FAIL("Array closed incorrectly (file %s, line %d)", gFile, gDataLine);
+            break;
+        case kDataTokenCommandOpen:
+            MILO_FAIL("Command closed incorrectly (file %s, line %d)", gFile, gDataLine);
+            break;
+        default:
+            break;
+        }
+        return false;
+    } else if (token == kDataTokenCommandClose) {
+        switch (gOpenArray) {
+        case kDataTokenCommandOpen:
+            return false;
+        case kDataTokenFinished:
+            MILO_FAIL("File %s ends with open array", gFile);
+            break;
+        case kDataTokenArrayOpen:
+            MILO_FAIL("Array closed incorrectly (file %s, line %d)", gFile, gDataLine);
+            break;
+        case kDataTokenPropertyOpen:
+            MILO_FAIL("Property closed incorrectly (file %s, line %d)", gFile, gDataLine);
+            break;
+        default:
+            break;
+        }
+        return false;
+    }
+
+    if (token == kDataTokenMerge) {
+        if (yylex() != kDataTokenSymbol) {
+            MILO_FAIL(
+                "DataReadFile: merging a non-symbol (file %s, line %d)", gFile, gDataLine
+            );
+        }
+        if (gCachingFile) {
+            PushBack(DataNode(kDataMerge, Symbol(yytext).Str()));
+        } else {
+            bool usingEmbedded = false;
+            DataArray *fileArr = DataGetMacro(yytext);
+            if (!fileArr) {
+                fileArr = ReadEmbeddedFile(yytext, true);
+                usingEmbedded = true;
+                if (fileArr) goto merge_check;
+            } else {
+merge_check:
+                if (fileArr->Size() == 0) {
+                    MILO_FAIL("Empty merge file (possibly a re-included file): %s", yytext);
+                }
+            }
+            gArray->Resize(gNode);
+            DataMergeTags(gArray, fileArr);
+            gNode = gArray->Size();
+            if (usingEmbedded) {
+                fileArr->Release();
+            }
+        }
+        return true;
+    } else if (token == kDataTokenInclude || token == kDataTokenIncludeOptional) {
+        bool required = token == kDataTokenInclude;
+        if (yylex() != kDataTokenSymbol) {
+            MILO_FAIL(
+                "DataReadFile: including a non-symbol (file %s, line %d)",
+                gFile,
+                gDataLine
+            );
+        }
+        if (gCachingFile) {
+            PushBack(DataNode(kDataInclude, Symbol(yytext).Str()));
+        } else {
+            DataArray *fileArr = ReadEmbeddedFile(yytext, required);
+            if (fileArr) {
+                for (int i = 0; i < fileArr->Size(); i++) {
+                    PushBack(fileArr->Node(i));
+                }
+                fileArr->Release();
+            }
+        }
+        return true;
+    }
+
+    switch (token) {
+    case kDataTokenIfdef:
+    case kDataTokenIfndef: {
+        bool positive = token == kDataTokenIfdef;
+
+        int symToken = yylex();
+        if (symToken != kDataTokenSymbol && symToken != kDataTokenQuotedSymbol) {
+            MILO_FAIL(
+                "DataReadFile: not macro symbol (file %s, line %d)", gFile, gDataLine
+            );
+        }
+
+        char *text;
+        if (symToken == kDataTokenQuotedSymbol) {
+            yytext[yyleng - 1] = '\0';
+            text = yytext + 1;
+        } else {
+            text = yytext;
+        }
+
+        Symbol macro(text);
+        if (positive) {
+            if (gCachingFile) {
+                PushBack(DataNode(kDataIfdef, macro.Str()));
+            } else {
+                bool defined = DataGetMacro(macro) != 0;
+                gConditional.push_back(defined);
+            }
+        } else {
+            if (gCachingFile) {
+                PushBack(DataNode(kDataIfndef, macro.Str()));
+            } else {
+                bool ndefined = DataGetMacro(macro) == 0;
+                gConditional.push_back(ndefined);
+            }
+        }
+        return true;
+    }
+
+    case kDataTokenElse: {
+        if (gCachingFile) {
+            PushBack(DataNode(kDataElse, 0));
+        } else {
+            if (gConditional.empty()) {
+                MILO_FAIL(
+                    "DataReadFile: #else not in conditional (file %s, line %d)",
+                    gFile,
+                    gDataLine
+                );
+            }
+            gConditional.back() = !gConditional.back();
+        }
+        return true;
+    }
+
+    case kDataTokenEndif: {
+        if (gCachingFile) {
+            PushBack(DataNode(kDataEndif, 0));
+        } else {
+            if (gConditional.empty()) {
+                MILO_FAIL(
+                    "DataReadFile: #endif not in conditional (file %s, line %d)",
+                    gFile,
+                    gDataLine
+                );
+            }
+            gConditional.pop_back();
+        }
+        return true;
+    }
+
+    case kDataTokenAutorun: {
+        int cmdToken = yylex();
+        if (cmdToken != kDataTokenCommandOpen) {
+            MILO_FAIL("DataReadFile: not command (file %s, line %d)", gFile, gDataLine);
+        }
+
+        gOpenArray = cmdToken;
+        DataArray *array = ParseArray();
+        gOpenArray = openArray;
+
+        DataNode node(array, kDataCommand);
+        if (gCachingFile) {
+            PushBack(DataNode(kDataAutorun, 0));
+            PushBack(node);
+        } else {
+            node.Command(array)->Execute();
+        }
+
+        array->Release();
+        return true;
+    }
+
+    case kDataTokenDefine: {
+        if (yylex() != kDataTokenSymbol) {
+            MILO_FAIL("DataReadFile: not symbol (file %s, line %d)", gFile, gDataLine);
+        }
+
+        Symbol macro(yytext);
+
+        int cmdToken = yylex();
+        if (cmdToken != kDataTokenArrayOpen) {
+            MILO_FAIL("DataReadFile: not array (file %s, line %d)", gFile, gDataLine);
+        }
+
+        gOpenArray = cmdToken;
+        DataArray *array = ParseArray();
+        gOpenArray = openArray;
+
+        if (gCachingFile) {
+            PushBack(DataNode(kDataDefine, macro.Str()));
+            PushBack(DataNode(array, kDataArray));
+        } else {
+            DataSetMacro(macro, array);
+        }
+
+        array->Release();
+        return true;
+    }
+
+    case kDataTokenUndef: {
+        if (yylex() != kDataTokenSymbol) {
+            MILO_FAIL("DataReadFile: not synbol (file %s, line %d)", gFile, gDataLine);
+        }
+
+        Symbol macro(yytext);
+        if (gCachingFile) {
+            PushBack(DataNode(kDataUndef, macro.Str()));
+        } else {
+            DataSetMacro(macro, nullptr);
+        }
+
+        return true;
+    }
+
+    case kDataTokenArrayOpen:
+    case kDataTokenPropertyOpen:
+    case kDataTokenCommandOpen: {
+        gOpenArray = token;
+        DataArray *array = ParseArray();
+        gOpenArray = openArray;
+
+        DataType type;
+        if (token == kDataTokenArrayOpen) {
+            type = kDataArray;
+        } else if (token == kDataTokenCommandOpen) {
+            type = kDataCommand;
+        } else {
+            type = kDataProperty;
+        }
+
+        PushBack(DataNode(array, type));
+        array->Release();
+
+        return true;
+    }
+
+    case kDataTokenVar: {
+        PushBack(&DataVariable(yytext + 1));
+        return true;
+    }
+
+    case kDataTokenUnhandled: {
+        PushBack(DataNode(kDataUnhandled, 0));
+        return true;
+    }
+
+    case kDataTokenInt: {
+        PushBack(atoi(yytext));
+        return true;
+    }
+
+    case kDataTokenHex: {
+        int i = 0;
+
+        int base = 1;
+        for (char *c = yytext + strlen(yytext) - 1; *c != 'x'; --c, base <<= 4) {
+            if (*c >= 'a') {
+                i += (*c - 'a' + 10) * base;
+            } else if (*c > 'A') {
+                i += (*c - 'A' + 10) * base;
+            } else {
+                i += (*c - '0') * base;
+            }
+        }
+
+        PushBack(i);
+        return true;
+    }
+
+    case kDataTokenFloat: {
+        PushBack((float)atof(yytext));
+        return true;
+    }
+
+    default:
+        break;
+    }
+
+    if (token == kDataTokenSymbol || token == kDataTokenQuotedSymbol) {
+        char *text;
+        if (token == kDataTokenQuotedSymbol) {
+            yytext[yyleng - 1] = '\0';
+            text = yytext + 1;
+        } else {
+            text = yytext;
+        }
+
+        Symbol sym(text);
+        DataArray *macro = DataGetMacro(sym);
+        bool b = macro && !gCachingFile;
+        if (b) {
+            for (int i = 0; i < macro->Size(); i++) {
+                PushBack(macro->Node(i));
+            }
+        } else {
+            PushBack(sym);
+        }
+
+        return true;
+    } else if (token == kDataTokenString) {
+        yytext[yyleng - 1] = '\0';
+        char *text = yytext + 1;
+
+        for (char *c = text; *c != '\0'; c++) {
+            bool escaped = false;
+            if (*c == '\\') {
+                if (c[1] == 'n') {
+                    *c = '\n';
+                    escaped = true;
+                } else if (c[1] == 'q') {
+                    *c = '\"';
+                    escaped = true;
+                } else if (c[1] == 't') {
+                    *c = '\t';
+                    escaped = true;
+                }
+            } else if (*c == '\n') {
+                gDataLine++;
+            }
+
+            if (escaped) {
+                for (char *d = c + 1; *d != '\0'; d++) {
+                    *d = *(d + 1);
+                }
+            }
+        }
+
+        PushBack(text);
+        return true;
+    } else {
+        MILO_FAIL(
+            "DataReadFile: Unrecognized token %d (file %s, line %d)",
+            token,
+            gFile,
+            gDataLine
+        );
+        return false;
+    }
+}
+
+DataArray *ParseArray() {
+    DataArray *sav = gArray;
+    int nod = gNode;
+    DataArray *da = new DataArray(16);
+    gArray = da;
+    da->SetFileLine(gFile, gDataLine);
+    gNode = 0;
+    do
+        ;
+    while (ParseNode());
+    gArray->Resize(gNode);
+    da = gArray;
+    gArray = sav;
+    gNode = nod;
+    return da;
+}
+
+int DataInput(void *v, int x) {
+    if (gBinStream->Fail()) {
+        return 0;
+    } else if (gBinStream->Eof()) {
+        return 0;
+    } else {
+        gBinStream->Read(v, x);
+        MILO_ASSERT(!gBinStream->Fail(), 0x260);
+        return x;
+    }
+}
 
 void DataWriteFile(const char *file, const DataArray *da, int i) {
     TextStream *stream;

@@ -140,6 +140,7 @@ class AutoPrepTarget;
 class CamShot : public RndAnimatable, public RndTransformable {
 public:
     friend class AutoPrepTarget;
+    friend class CamShotFrame;
     friend class WorldDir;
     // Hmx::Object
     virtual ~CamShot();
@@ -205,6 +206,7 @@ protected:
     void DoHide();
     void SetShotOver();
     void GetKey(float, CamShotFrame *&, CamShotFrame *&, float &);
+    void Shake(float, float, const Vector2 &, Vector3 &, Vector3 &);
 
     DataNode OnHasTargets(DataArray *);
     DataNode OnSetPos(DataArray *);

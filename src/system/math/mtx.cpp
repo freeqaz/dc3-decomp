@@ -154,4 +154,60 @@ void Transform::LookAt(const Vector3 &target, const Vector3 &up) {
     Normalize(m, m);
 }
 
+Hmx::Matrix4 Hmx::operator*(const Hmx::Matrix4 &, const Hmx::Matrix4 &) {
+    return Hmx::Matrix4();
+}
+
+float Det(const Hmx::Matrix4 &m) {
+    float a00 = m.x.x, a01 = m.x.y, a02 = m.x.z, a03 = m.x.w;
+    float a10 = m.y.x, a11 = m.y.y, a12 = m.y.z, a13 = m.y.w;
+    float a20 = m.z.x, a21 = m.z.y, a22 = m.z.z, a23 = m.z.w;
+    float a30 = m.w.x, a31 = m.w.y, a32 = m.w.z, a33 = m.w.w;
+
+    float c00 = a11 * (a22 * a33 - a23 * a32) - a12 * (a21 * a33 - a23 * a31) + a13 * (a21 * a32 - a22 * a31);
+    float c01 = a10 * (a22 * a33 - a23 * a32) - a12 * (a20 * a33 - a23 * a30) + a13 * (a20 * a32 - a22 * a30);
+    float c02 = a10 * (a21 * a33 - a23 * a31) - a11 * (a20 * a33 - a23 * a30) + a13 * (a20 * a31 - a21 * a30);
+    float c03 = a10 * (a21 * a32 - a22 * a31) - a11 * (a20 * a32 - a22 * a30) + a12 * (a20 * a31 - a21 * a30);
+
+    return a00 * c00 - a01 * c01 + a02 * c02 - a03 * c03;
+}
+
+void Invert(const Hmx::Matrix4 &m, Hmx::Matrix4 &out) {
+    float a00 = m.x.x, a01 = m.x.y, a02 = m.x.z, a03 = m.x.w;
+    float a10 = m.y.x, a11 = m.y.y, a12 = m.y.z, a13 = m.y.w;
+    float a20 = m.z.x, a21 = m.z.y, a22 = m.z.z, a23 = m.z.w;
+    float a30 = m.w.x, a31 = m.w.y, a32 = m.w.z, a33 = m.w.w;
+
+    float c00 =  (a11 * (a22 * a33 - a23 * a32) - a12 * (a21 * a33 - a23 * a31) + a13 * (a21 * a32 - a22 * a31));
+    float c01 = -(a10 * (a22 * a33 - a23 * a32) - a12 * (a20 * a33 - a23 * a30) + a13 * (a20 * a32 - a22 * a30));
+    float c02 =  (a10 * (a21 * a33 - a23 * a31) - a11 * (a20 * a33 - a23 * a30) + a13 * (a20 * a31 - a21 * a30));
+    float c03 = -(a10 * (a21 * a32 - a22 * a31) - a11 * (a20 * a32 - a22 * a30) + a12 * (a20 * a31 - a21 * a30));
+
+    float c10 = -(a01 * (a22 * a33 - a23 * a32) - a02 * (a21 * a33 - a23 * a31) + a03 * (a21 * a32 - a22 * a31));
+    float c11 =  (a00 * (a22 * a33 - a23 * a32) - a02 * (a20 * a33 - a23 * a30) + a03 * (a20 * a32 - a22 * a30));
+    float c12 = -(a00 * (a21 * a33 - a23 * a31) - a01 * (a20 * a33 - a23 * a30) + a03 * (a20 * a31 - a21 * a30));
+    float c13 =  (a00 * (a21 * a32 - a22 * a31) - a01 * (a20 * a32 - a22 * a30) + a02 * (a20 * a31 - a21 * a30));
+
+    float c20 =  (a01 * (a12 * a33 - a13 * a32) - a02 * (a11 * a33 - a13 * a31) + a03 * (a11 * a32 - a12 * a31));
+    float c21 = -(a00 * (a12 * a33 - a13 * a32) - a02 * (a10 * a33 - a13 * a30) + a03 * (a10 * a32 - a12 * a30));
+    float c22 =  (a00 * (a11 * a33 - a13 * a31) - a01 * (a10 * a33 - a13 * a30) + a03 * (a10 * a31 - a11 * a30));
+    float c23 = -(a00 * (a11 * a32 - a12 * a31) - a01 * (a10 * a32 - a12 * a30) + a02 * (a10 * a31 - a11 * a30));
+
+    float c30 = -(a01 * (a12 * a23 - a13 * a22) - a02 * (a11 * a23 - a13 * a21) + a03 * (a11 * a22 - a12 * a21));
+    float c31 =  (a00 * (a12 * a23 - a13 * a22) - a02 * (a10 * a23 - a13 * a20) + a03 * (a10 * a22 - a12 * a20));
+    float c32 = -(a00 * (a11 * a23 - a13 * a21) - a01 * (a10 * a23 - a13 * a20) + a03 * (a10 * a21 - a11 * a20));
+    float c33 =  (a00 * (a11 * a22 - a12 * a21) - a01 * (a10 * a22 - a12 * a20) + a02 * (a10 * a21 - a11 * a20));
+
+    float det = a00 * c00 + a01 * c01 + a02 * c02 + a03 * c03;
+    float invDet = 0.0f;
+    if (det != 0.0f) {
+        invDet = 1.0f / det;
+    }
+
+    out.x.Set(c00 * invDet, c10 * invDet, c20 * invDet, c30 * invDet);
+    out.y.Set(c01 * invDet, c11 * invDet, c21 * invDet, c31 * invDet);
+    out.z.Set(c02 * invDet, c12 * invDet, c22 * invDet, c32 * invDet);
+    out.w.Set(c03 * invDet, c13 * invDet, c23 * invDet, c33 * invDet);
+}
+
 // Transpose(Matrix4) moved to Mtx.h as inline

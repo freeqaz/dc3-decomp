@@ -256,3 +256,26 @@ bool RndShaderMultimesh::CheckError(MatFlagErrorType type) {
 bool RndShaderParticles::CheckError(MatFlagErrorType type) {
         return !(type != (MatFlagErrorType)0 && type != (MatFlagErrorType)2) && TheRnd.GetDrawMode() != 4;
 }
+
+void CheckDistortionOpts(RndMat *, const ShaderOptions &) {}
+void CheckDistortion(RndMat *) {}
+void SetColorWriteMask(const ShaderOptions &, RndMat *) {}
+void CheckShadow() {}
+void CheckExtrude() {}
+
+u64 RndShaderSimple::CalcShaderOpts(NgMat *, ShaderType, bool) { return 0; }
+u64 RndShaderParticles::CalcShaderOpts(NgMat *, ShaderType, bool) { return 0; }
+u64 RndShaderMultimesh::CalcShaderOpts(NgMat *, ShaderType, bool) { return 0; }
+u64 RndShaderStandard::CalcShaderOpts(NgMat *, ShaderType, bool) { return 0; }
+u64 RndShaderPostProc::CalcShaderOpts(NgMat *, ShaderType, bool) { return 0; }
+u64 RndShaderDrawRect::CalcShaderOpts(NgMat *, ShaderType, bool) { return 0; }
+u64 RndShaderUnwrapUV::CalcShaderOpts(NgMat *, ShaderType, bool) { return 0; }
+u64 RndShaderVelocity::CalcShaderOpts(NgMat *, ShaderType, bool) { return 0; }
+u64 RndShaderVelocityCamera::CalcShaderOpts(NgMat *, ShaderType, bool) { return 0; }
+u64 RndShaderDepthVolume::CalcShaderOpts(NgMat *, ShaderType, bool) { return 0; }
+u64 RndShaderFur::CalcShaderOpts(NgMat *, ShaderType, bool) { return 0; }
+u64 RndShaderSyncTrack::CalcShaderOpts(NgMat *, ShaderType, bool) { return 0; }
+
+void RndShaderParticles::Select(RndMat *, ShaderType, bool) {}
+void RndShaderMultimesh::Select(RndMat *, ShaderType, bool) {}
+void RndShaderStandard::Select(RndMat *, ShaderType, bool) {}

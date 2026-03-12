@@ -48,8 +48,10 @@ END_PROPSYNCS
 
 void HelpBarPanel::Draw() {
     bool show = (!ShouldHideHelpbar() && !mDisabled) || TheGestureMgr->InControllerMode();
+#ifdef HX_NATIVE
     if (mAll)
-        mAll->SetShowing(show);
+#endif
+    mAll->SetShowing(show);
     UIPanel::Draw();
 }
 
@@ -222,7 +224,9 @@ bool HelpBarPanel::IsWriteIconShowing() {
 
 void HelpBarPanel::SyncToPanel(UIPanel *panel) {
     mSyncedPanel = panel;
+#ifdef HX_NATIVE
     if (!DataDir() || !mLeftHandNavList) return;
+#endif
     bool updateback = UpdateBackButton(panel);
     bool updatetert = UpdateTertiaryButton(panel);
     if (updateback || updatetert) {

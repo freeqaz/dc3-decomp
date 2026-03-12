@@ -38,3 +38,5 @@ void FlangerEffect::SetParameters(FlangerEffect::Params const &params) {
     mFeedbackFrac = params.mFeedback / 100.0f;
     mWetFrac = params.mWet / 100.0f;
 }
+
+void FlangerEffect::Process(float *, int, int) {}

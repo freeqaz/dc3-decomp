@@ -290,3 +290,9 @@ DataNode SkeletonIdentifier::OnMsg(SkeletonEnrollmentChangedMsg const &msg) {
     UpdateEnrolledPlayers();
     return DATA_UNHANDLED;
 }
+
+void SkeletonIdentifier::DrawDebug() {}
+
+DataNode SkeletonIdentifier::OnMsg(const SigninChangedMsg &) { return DataNode(0); }
+
+DataNode SkeletonIdentifier::OnMsg(const SkeletonIdentifiedMsg &) { return DataNode(0); }

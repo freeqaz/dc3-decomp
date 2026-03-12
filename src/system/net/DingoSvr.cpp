@@ -112,3 +112,17 @@ void DingoServer::CancelDelayedCalls() {
     }
     mDelayedJobs.clear();
 }
+
+DataNode DingoServer::OnMsg(const SigninChangedMsg &) { return DataNode(0); }
+
+DataNode DingoServer::OnMsg(const ConnectionStatusChangedMsg &) { return DataNode(0); }
+
+DataNode DingoServer::OnMsg(const DingoJobCompleteMsg &) { return DataNode(0); }
+
+bool DingoServer::InitAndAddJob(DingoJob *, bool, bool) { return false; }
+
+bool DingoServer::SendAuthenticateMsg(const char *, DataPoint &, Hmx::Object *) { return false; }
+
+void DingoServer::AddDelayedCalls() {}
+
+bool DingoServer::Authenticate(int, const char *) { return false; }

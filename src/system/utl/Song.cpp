@@ -415,3 +415,5 @@ float Song::GetFrameFromMBT(int m, int b, int t) {
         return 0;
     }
 }
+
+void Song::SyncState() {}

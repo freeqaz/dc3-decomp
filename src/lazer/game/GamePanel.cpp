@@ -470,6 +470,75 @@ void GamePanel::ResetJitter() {
     mCurrentJitterValue = 0;
 }
 
+void GamePanel::UpdateNowBar() {
+    MILO_ASSERT(mGame, 0x23d);
+    float songSec = TheTaskMgr.Seconds(TaskMgr::kRealTime);
+    float songDurSec = TheSongDB->GetSongDurationMs() * 0.001f;
+    float timeRemaining = songDurSec - songSec;
+    char sign = '-';
+    if (timeRemaining < 0.0f) {
+        timeRemaining = -timeRemaining;
+        sign = '+';
+    }
+    float pct = 0.0f;
+    if (songDurSec > 0.0f) {
+        pct = songSec * 100.0f / songDurSec;
+        if (pct > 100.0f)
+            pct = 100.0f;
+    }
+    *mTimeOverlay << MakeString(
+        "MBT %d:%d:%03d [%s %c%s %4.1f%%] (%.2fsec %dtk)\n",
+        TheTaskMgr.CurrentMeasure() + 1,
+        TheTaskMgr.CurrentBeat() + 1,
+        TheTaskMgr.CurrentTick(),
+        FormatTimeMSH(songSec * 1000.0f),
+        sign,
+        FormatTimeMSH(timeRemaining * 1000.0f),
+        pct,
+        0.0f,
+        (int)TheTaskMgr.TotalTick()
+    );
+}
+
+float GamePanel::DeJitter(float ms) {
+    static DataNode &noJitter = DataVariable("no_jitter");
+    float sentinel = 1.0000000150474662e+30f;
+    float result = sentinel;
+    if (noJitter.Int() == 0 && mJitterSampleCount > 8) {
+        int prevPos = (mJitterBufferIndex - 1) & 0x1F;
+        int historyPos = (prevPos - mJitterSampleCount) & 0x1F;
+        float avgDelta =
+            (mFrameTimeSamples[prevPos] - mFrameTimeSamples[historyPos])
+            / (float)mJitterSampleCount;
+        if (mCurrentJitterValue == 0.0f) {
+            mCurrentJitterValue = avgDelta;
+        }
+        float filtered =
+            (avgDelta - mCurrentJitterValue) * 0.1f + mCurrentJitterValue;
+        mCurrentJitterValue = filtered;
+        result = unkf4 + filtered;
+        if (result > ms + 16.0f) {
+            result = ms + 16.0f;
+        }
+        if (result < ms - 16.0f) {
+            result = ms - 16.0f;
+        }
+        if (result < unkf4) {
+            result = unkf4;
+        }
+    }
+    mFrameTimeSamples[mJitterBufferIndex] = ms;
+    if (result != sentinel) {
+        ms = result;
+    }
+    mJitterBufferIndex = (mJitterBufferIndex + 1) & 0x1F;
+    if (mJitterSampleCount < 30) {
+        mJitterSampleCount++;
+    }
+    unkf4 = ms;
+    return ms;
+}
+
 void GamePanel::CreateGame() {
     RELEASE(mGame);
     mGame = new Game();

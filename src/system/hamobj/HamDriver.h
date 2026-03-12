@@ -14,7 +14,7 @@
 class HamDriver : public RndHighlightable, public CharWeightable, public CharPollable {
 public:
     struct Layer {
-        Layer() : mBeat(-kHugeFloat) {}
+        Layer() : mBeat(-kHugeFloat), mWeight(0) {}
         virtual ~Layer() {}
         virtual void Eval(float) = 0;
         virtual void Play(CharBones &) = 0;
@@ -25,6 +25,7 @@ public:
         MEM_OVERLOAD(Layer, 0x27)
 
         float mBeat; // 0x4 - layer start beat position
+        float mWeight; // 0x8 - layer weight/blend value
     };
 
     struct LayerArray : public Layer {
@@ -38,8 +39,7 @@ public:
 
         void Clear();
 
-        float mWeight; // 0x8 - layer weight/blend value
-        char mName[0x20];
+        char mName[0x20]; // 0xc
         std::list<Layer *> mLayers; // 0x2c - child layers
     };
 
@@ -52,7 +52,6 @@ public:
         virtual CharClip *FirstClip();
         virtual void OffsetSec(float);
 
-        float mEaseWeight; // 0x8 - eased blend weight
         float mClipBeat; // 0xc - clip playback beat offset
         ObjOwnerPtr<CharClip> mClip; // 0x10 - character clip reference
     };

@@ -105,6 +105,8 @@ BEGIN_CUSTOM_PROPSYNC(WorldDir::PresetOverride)
     SYNC_PROP_OVERRIDE(hue, o.hue, o.Sync)
 END_CUSTOM_PROPSYNC
 
+void WorldDir::BitmapOverride::Sync(bool) {}
+
 BEGIN_CUSTOM_PROPSYNC(WorldDir::BitmapOverride)
     SYNC_PROP_OVERRIDE(original, o.original, o.Sync)
     SYNC_PROP_OVERRIDE(replacement, o.replacement, o.Sync)

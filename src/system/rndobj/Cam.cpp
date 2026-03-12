@@ -11,6 +11,7 @@
 #include "os/System.h"
 #include "rndobj/Draw.h"
 #include "rndobj/HiResScreen.h"
+#include "rndobj/Rnd_NG.h"
 #include "rndobj/Trans.h"
 
 // Transpose is inline in math/Mtx.h
@@ -182,6 +183,43 @@ void RndCam::Select() {
     if (TheRnd.GetAspect() != mAspect) {
         UpdateLocal();
     }
+#ifdef HX_NATIVE
+    if (mTargetTex) {
+        mTargetTex->MakeDrawTarget();
+    } else {
+        TheRnd.MakeDrawTarget();
+    }
+    int width = mTargetTex ? mTargetTex->Width() : TheRnd.Width();
+    int height = mTargetTex ? mTargetTex->Height() : TheRnd.Height();
+    Hmx::Rect r;
+    if (TheHiResScreen.IsActive()) {
+        Hmx::Rect tileRect;
+        TheHiResScreen.CurrentTileRect(mScreenRect, r, tileRect);
+    } else {
+        float x = mScreenRect.x;
+        float y = mScreenRect.y;
+        float x2 = mScreenRect.w + x;
+        float y2 = mScreenRect.h + y;
+        r.x = Max(0.0f, x);
+        r.y = Max(0.0f, y);
+        x2 = Max(0.0f, x2);
+        y2 = Max(0.0f, y2);
+        r.x = Min(1.0f, r.x);
+        r.y = Min(1.0f, r.y);
+        x2 = Min(1.0f, x2);
+        y2 = Min(1.0f, y2);
+        r.w = x2 - r.x;
+        r.h = y2 - r.y;
+    }
+    NgRnd::Viewport vp;
+    vp.X = (unsigned int)((float)width * r.x);
+    vp.Y = (unsigned int)((float)height * r.y);
+    vp.Width = (unsigned int)((float)width * r.w);
+    vp.Height = (unsigned int)((float)height * r.h);
+    vp.MinZ = mZRange.x;
+    vp.MaxZ = mZRange.y;
+    TheNgRnd.SetViewport(vp);
+#endif
 }
 
 Transform RndCam::GetInvViewXfm() {

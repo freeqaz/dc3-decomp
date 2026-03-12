@@ -179,3 +179,5 @@ void CharCollide::CopyOriginalToCur() {
     memcpy(mCurRadius, mOrigRadius, 8);
     memcpy(mCurLength, mOrigLength, 8);
 }
+
+void CharCollide::SyncWorldState() {}

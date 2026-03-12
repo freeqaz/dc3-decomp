@@ -684,16 +684,13 @@ void UIManager::Poll() {
             fflush(stdout);
 #endif
             if (trans) {
-                fprintf(stderr, "DC3 UI: [STDERR] checking AllPanelsDown for '%s'...\n", trans->Name()); fflush(stderr);
                 if (trans->AllPanelsDown() && mPushedScreens.empty()
                     && IsTimelineResetAllowed()) {
                     mTimer.Restart();
                     TheTaskMgr.SetUISeconds(0, true);
                 }
 
-                fprintf(stderr, "DC3 UI: [STDERR] calling '%s'->Enter()\n", mCurrentScreen->Name()); fflush(stderr);
                 mCurrentScreen->Enter(mTransitionScreen);
-                fprintf(stderr, "DC3 UI: [STDERR] '%s'->Enter() complete\n", mCurrentScreen->Name()); fflush(stderr);
             }
         }
     }

@@ -13,6 +13,7 @@
 
 #include <emscripten/emscripten.h>
 #include <emscripten/html5.h>
+#include <emscripten/em_asm.h>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -207,6 +208,8 @@ static void mainLoop() {
 
     case BOOT_RUNNING: {
         sFrameCount++;
+        // Export frame count to JS for Playwright test harness
+        EM_ASM({ window.dc3FrameCount = $0; }, sFrameCount);
         if (sFrameCount <= 3) {
             printf("DC3 Web: BOOT_RUNNING frame %d start\n", sFrameCount);
             fflush(stdout);

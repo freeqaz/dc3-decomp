@@ -18,6 +18,107 @@ FlowSwitchCase::FlowSwitchCase()
 
 FlowSwitchCase::~FlowSwitchCase() { TheFlowMgr->CancelCommand(this); }
 
+bool FlowSwitchCase::IsValidCase(
+    FlowNode *node, DataNode *curValue, const DataNode *lastValue, bool hasLast
+) {
+    PushDrivenProperties();
+    bool useLastVal = mUseLastValue;
+
+    if (mOperator == kTransition) {
+        if (useLastVal) {
+            mFromValue = *lastValue;
+        }
+        // Check that curValue matches toValue type and lastValue matches fromValue type
+        DataNode toNode = mToValue.Node();
+        bool matchesTo = (curValue->Type() == toNode.Type());
+        bool typesDontMatch = false;
+        if (matchesTo) {
+            DataNode fromNode = mFromValue.Node();
+            if (curValue->Type() != fromNode.Type()) {
+                typesDontMatch = true;
+            }
+        } else {
+            typesDontMatch = true;
+        }
+        if (typesDontMatch) {
+            return false;
+        }
+        // Check toValue equals curValue and fromValue equals lastValue
+        DataNode toNode2 = mToValue.Node();
+        bool toEquals = curValue->Equal(toNode2, nullptr, true);
+        bool result = false;
+        if (toEquals) {
+            DataNode fromNode2 = mFromValue.Node();
+            result = true;
+            if (!lastValue->Equal(fromNode2, nullptr, true)) {
+                result = false;
+            }
+        }
+        return result;
+    }
+
+    // Non-transition operators
+    if (useLastVal) {
+        mToValue = *lastValue;
+    }
+    bool result;
+    switch (mOperator) {
+    case kEqual: {
+        DataNode toNode = mToValue.Node();
+        result = curValue->Equal(toNode, nullptr, true);
+        break;
+    }
+    case kNotEqual: {
+        DataNode toNode = mToValue.Node();
+        result = *curValue != toNode;
+        break;
+    }
+    case kGreaterThan: {
+        DataNode toNode = mToValue.Node();
+        if ((curValue->Type() == kDataInt || curValue->Type() == kDataFloat)
+            && (toNode.Type() == kDataInt || toNode.Type() == kDataFloat)) {
+            result = curValue->LiteralFloat(nullptr) > toNode.LiteralFloat(nullptr);
+        } else {
+            result = false;
+        }
+        break;
+    }
+    case kGreaterThanOrEqual: {
+        DataNode toNode = mToValue.Node();
+        if ((curValue->Type() == kDataInt || curValue->Type() == kDataFloat)
+            && (toNode.Type() == kDataInt || toNode.Type() == kDataFloat)) {
+            result = curValue->LiteralFloat(nullptr) >= toNode.LiteralFloat(nullptr);
+        } else {
+            result = false;
+        }
+        break;
+    }
+    case kLessThan: {
+        DataNode toNode = mToValue.Node();
+        if ((curValue->Type() == kDataInt || curValue->Type() == kDataFloat)
+            && (toNode.Type() == kDataInt || toNode.Type() == kDataFloat)) {
+            result = curValue->LiteralFloat(nullptr) < toNode.LiteralFloat(nullptr);
+        } else {
+            result = false;
+        }
+        break;
+    }
+    case kLessThanOrEqual: {
+        DataNode toNode = mToValue.Node();
+        if ((curValue->Type() == kDataInt || curValue->Type() == kDataFloat)
+            && (toNode.Type() == kDataInt || toNode.Type() == kDataFloat)) {
+            result = curValue->LiteralFloat(nullptr) <= toNode.LiteralFloat(nullptr);
+        } else {
+            result = false;
+        }
+        break;
+    }
+    default:
+        return false;
+    }
+    return result;
+}
+
 BEGIN_HANDLERS(FlowSwitchCase)
     HANDLE_SUPERCLASS(FlowNode)
 END_HANDLERS

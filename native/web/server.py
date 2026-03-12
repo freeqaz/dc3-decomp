@@ -60,7 +60,9 @@ class DC3Handler(http.server.SimpleHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
 
-        if path == "/api/manifest":
+        if path == "/api/health":
+            self._serve_health()
+        elif path == "/api/manifest":
             self._serve_manifest()
         elif path == "/api/bundle":
             self._serve_bundle()
@@ -69,6 +71,14 @@ class DC3Handler(http.server.SimpleHTTPRequestHandler):
             self._serve_asset_file(rel)
         else:
             self._json_error(404, "Unknown API endpoint")
+
+    def _serve_health(self):
+        body = json.dumps({"status": "ok"}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     def _serve_manifest(self):
         if not ASSETS_DIR:

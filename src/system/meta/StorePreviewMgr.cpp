@@ -129,3 +129,5 @@ HANDLE_EXPR(allow_preview_download, AllowPreviewDownload(_msg->Str(2)))
 HANDLE_EXPR(is_playing, IsPlaying())
 HANDLE_SUPERCLASS(Hmx::Object)
 END_HANDLERS
+
+void StorePreviewMgr::Poll() {}

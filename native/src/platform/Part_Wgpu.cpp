@@ -254,7 +254,7 @@ void DrawParticlesBillboard(RndParticleSys* sys) {
     wgpu::BlendState bs = gWgpuRnd->Pipelines().MapBlend((WgpuBlend)mat->GetBlend());
 
     wgpu::ColorTargetState ct{};
-    ct.format = gWgpuRnd->Gpu().SurfaceFormat();
+    ct.format = gWgpuRnd->CurrentTargetFormat();
     ct.blend = &bs;
     ct.writeMask = wgpu::ColorWriteMask::All;
 
@@ -276,9 +276,11 @@ void DrawParticlesBillboard(RndParticleSys* sys) {
     vbl.attributes = attrs;
 
     wgpu::DepthStencilState ds{};
-    ds.format = wgpu::TextureFormat::Depth24PlusStencil8;
-    ds.depthWriteEnabled = wgpu::OptionalBool::False;
-    ds.depthCompare = wgpu::CompareFunction::LessEqual;
+    if (gWgpuRnd->CurrentPassHasDepth()) {
+        ds.format = wgpu::TextureFormat::Depth24PlusStencil8;
+        ds.depthWriteEnabled = wgpu::OptionalBool::False;
+        ds.depthCompare = wgpu::CompareFunction::LessEqual;
+    }
 
     wgpu::RenderPipelineDescriptor pipeDesc{};
     pipeDesc.layout = sParticlePipelineLayout;
@@ -287,10 +289,10 @@ void DrawParticlesBillboard(RndParticleSys* sys) {
     pipeDesc.vertex.bufferCount = 1;
     pipeDesc.vertex.buffers = &vbl;
     pipeDesc.fragment = &frag;
-    pipeDesc.depthStencil = &ds;
+    pipeDesc.depthStencil = gWgpuRnd->CurrentPassHasDepth() ? &ds : nullptr;
     pipeDesc.primitive.topology = wgpu::PrimitiveTopology::TriangleList;
     pipeDesc.primitive.cullMode = wgpu::CullMode::None;
-    pipeDesc.multisample.count = 4;
+    pipeDesc.multisample.count = gWgpuRnd->CurrentSampleCount();
 
     // TODO: cache pipeline by blend mode
     wgpu::RenderPipeline pipe = dev.CreateRenderPipeline(&pipeDesc);

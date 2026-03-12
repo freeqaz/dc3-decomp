@@ -45,6 +45,7 @@ void *MemResizeElem(
     const char *name
 );
 void MemFreeBlockStats(int, int &, int &, int &, int &, int &);
+void MemPrintOverview(int, char *const);
 MemHeapStack &ThreadMemStack(bool);
 
 #define kNoHeap -3

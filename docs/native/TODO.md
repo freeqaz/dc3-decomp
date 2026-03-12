@@ -1,13 +1,14 @@
 # Native Port TODO — UI Fully Working
 
 ## Current State (Session 59)
-- **3D venue rendering on game_screen** — DCI venue with 391 draw calls/frame, 9000+ frames stable
+- **3D venue rendering on game_screen** — DCI venue with 505 draw calls/frame, 10000 frames stable (clean exit)
 - Full menu navigation: main_screen → choose_mode → song_select → YMCA → multiuser → loading → game_screen
-- Venue geometry (floor, walls, DJ booth, lighting rigs), character silhouette, HUD overlays all render
+- Venue geometry (floor, walls, DJ booth, lighting rigs, graffiti), **fully-lit character** (skin, hair, outfit visible), HUD overlays all render
+- Zero-color LightPreset detection enables fallback three-point lighting for character
 - Flow→PropAnim UI animation pipeline verified working end-to-end (Session 58)
 - Text rendering, mesh rendering, material pipeline all working
 - HamUI two-pass draw pipeline active (letterbox + main draw pass)
-- 99.6% non-black pixel coverage on game_screen screenshots
+- Scene is static: LightPreset::Load unimplemented (0 presets), song.anim DTA scripts crash on missing objects
 
 ## Headless GPU Rendering
 
@@ -121,8 +122,9 @@ Note: The reference shows `main_screen` while our native shows `choose_mode_scre
 Goal: Character with proper materials, crowd, animated venue, gameplay HUD textures
 
 ### 4.1 Character Rendering
-- [ ] Character material/texture application (currently dark silhouette)
+- [x] Character material/texture application — **DONE** (zero-color LightPreset detection enables fallback lighting)
 - [ ] Skinned mesh rendering (bone transforms in vertex shader)
+- [ ] Character dance animation (clips loaded but not driven)
 
 ### 4.2 Merge Pipeline Stability
 - [ ] Fix ObjRef ring corruption root cause (eliminate siglongjmp hack)
@@ -130,13 +132,14 @@ Goal: Character with proper materials, crowd, animated venue, gameplay HUD textu
 - [ ] Enable audio merge (currently merge-crash-skipped)
 
 ### 4.3 Gameplay HUD
-- [ ] Move card textures (currently pink rectangles)
+- [ ] Move card textures (currently pink rectangles — TexMovie render-to-texture)
 - [ ] Score/progress display
 
 ### 4.4 Scene Animation
-- [ ] Game-time animation (kTaskSeconds vs kTaskUISeconds)
-- [ ] Venue lighting animation
-- [ ] Character dance animation
+- [ ] **Implement LightPreset::Load** — currently stubbed, 0 presets deserialized from venue .milo
+- [ ] Venue lighting animation (blocked by LightPreset::Load)
+- [ ] Song.anim driving (blocked by DTA script crashes on missing game objects)
+- [ ] Character dance animation (clips present but SongAnimation() returns -1)
 
 ## Phase 5: DTA/Content System
 Goal: Remove C++ workarounds and let real DTA screen-flow scripts drive the native port.
@@ -178,9 +181,11 @@ Goal: Remove C++ workarounds and let real DTA screen-flow scripts drive the nati
 | Text labels missing | Text/Font pipeline | **FIXED** (Session 47) |
 | Flow→PropAnim not animating | Animation pipeline | **FIXED** (Session 58) |
 | ObjRef ring crash during venue merge | Object.cpp, FileMerger.cpp | **HACKED** (validation + siglongjmp) |
-| Character dark silhouette | Character material pipeline | TODO — Phase 4 |
-| HUD move cards pink rectangles | Texture loading | TODO — Phase 4 |
+| Character dark silhouette | Zero-color LightPreset lights | **FIXED** (Session 59 — fallback lighting) |
+| Null crashes on game_screen (3) | HamCharacter/HamCamShot/PoseFatalities null ptrs | **FIXED** (Session 59) |
+| HUD move cards pink rectangles | TexMovie render-to-texture | TODO — Phase 4 |
 | Crowd/audio merges crash-skipped | ObjRef ring corruption | TODO — Phase 4 |
+| Static scene (no animation) | LightPreset::Load unimplemented + song.anim DTA crashes | TODO — Phase 4 |
 | Empty lists (no content) | Content system | TODO — Phase 5 |
 
 ## Crashes Fixed (Session 59)

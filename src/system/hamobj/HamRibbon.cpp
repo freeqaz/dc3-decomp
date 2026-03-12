@@ -3,6 +3,7 @@
 #include "math/Rot.h"
 #include "obj/Object.h"
 #include "obj/Task.h"
+#include "os/Debug.h"
 #include "os/File.h"
 #include "os/System.h"
 #include "rndobj/Draw.h"

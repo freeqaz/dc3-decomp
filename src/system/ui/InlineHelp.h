@@ -97,3 +97,4 @@ private:
 
 BinStream &operator<<(BinStream &, const InlineHelp::ActionElement &);
 BinStream &operator>>(BinStream &, InlineHelp::ActionElement &);
+BinStream &operator>>(BinStreamRev &, InlineHelp::ActionElement &);

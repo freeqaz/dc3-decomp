@@ -809,7 +809,92 @@ DataNode OnToggleAutoplay(DataArray *a) {
     return player_data->IsAutoplaying();
 }
 
-DataNode OnCycleAutoplay(DataArray *);
+bool Game::HandleWait() {
+    if (mWaitState != unka8) {
+        unka8 = mWaitState;
+    }
+    if (mWaitState == 0) {
+        return true;
+    }
+    // State 3 early return: still in intro countdown
+    if (mWaitState == 3) {
+        if (mHasIntro && TheTaskMgr.Seconds(TaskMgr::kRealTime) < 0.0f) {
+            return true;
+        }
+    }
+    // Common audio readiness check for all non-zero states
+    HamAudio *audio = mMaster->GetAudio();
+    if (audio->Fail()) {
+        return true;
+    }
+    if (!audio->IsReady()) {
+        TheSynth->Poll();
+        return false;
+    }
+    // Audio is ready, dispatch based on state
+    switch (mWaitState) {
+    case 0:
+        MILO_ASSERT(false, 0x555);
+        // fall through
+    case 1:
+        PostWaitStart();
+        break;
+    case 2:
+        PostWaitJump();
+        break;
+    case 3:
+        PostWaitRestart();
+        break;
+    case 4:
+        PostWaitRestart();
+        PostWaitStart();
+        break;
+    case 5: {
+        // Full song load wait — check all subsystems
+        if (!HamSongData::sInstance->GetTempoMap()) {
+            return false;
+        }
+        if (!mMaster->GetAudio()->IsReady()) {
+            return false;
+        }
+        if (!TheHamDirector->IsWorldLoaded()) {
+            return false;
+        }
+        if (TheHamDirector->GetGameModeMerger()->HasPendingFiles()) {
+            return false;
+        }
+        FileMerger *worldFm =
+            TheHamDirector->GetWorld()->Find<FileMerger>("world.fm", true);
+        if (worldFm->HasPendingFiles()) {
+            return false;
+        }
+        if (!TheHamDirector->GetWorld()->Find<MoveDir>("moves", false)) {
+            return false;
+        }
+        mMoveDir = TheHamDirector->GetWorld()->Find<MoveDir>("moves", true);
+        mMoveDir->Enter();
+        mMoveDir->ResetDetection();
+        TheHamDirector->SetupAnims();
+        if (mAltTempoMap) {
+            TheHamDirector->RemapSongAnimToTempoMap(mAltTempoMap);
+            delete mAltTempoMap;
+            mAltTempoMap = nullptr;
+        }
+        TheSongSequence.OnSongLoaded();
+        TheHamDirector->SetPollEnabled(true);
+        if (mWaitState == 5) {
+            mWaitState = 0;
+        }
+        return false;
+    }
+    default:
+        break;
+    }
+    mWaitState = 0;
+    return true;
+}
+
+DataNode OnCycleAutoplay(DataArray *) { return DataNode(0); }
 
 DataNode OnToggleCharFeedback(DataArray *a) {
     ReserveFrames();
@@ -828,8 +913,8 @@ DataNode OnToggleSongRecordDouble(DataArray *a) {
     return MoveDir::sGameRecord;
 }
 
-DataNode OnCycleTestDancer(DataArray *);
-DataNode OnDumpMoves(DataArray *);
+DataNode OnCycleTestDancer(DataArray *) { return DataNode(0); }
+DataNode OnDumpMoves(DataArray *) { return DataNode(0); }
 
 void GameInit() {
     GameModeInit();

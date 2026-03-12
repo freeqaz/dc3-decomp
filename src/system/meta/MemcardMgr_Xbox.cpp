@@ -345,6 +345,8 @@ DataNode MemcardMgr::OnMsg(const StorageChangedMsg &msg) {
     return 0;
 }
 
+MCResult MemcardMgr::ThreadCall_SaveGame() { return kMCGeneralError; }
+
 DataNode MemcardMgr::OnMsg(const SigninChangedMsg &msg) {
     if (mSelectDeviceWaiting) {
         if (ThePlatformMgr.HasPadNumsSigninChanged(mProfile->GetPadNum())) {

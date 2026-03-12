@@ -13,23 +13,6 @@
 #include "rndobj/Rnd.h"
 #include "rndobj/Tex.h"
 #include "utl/BinStream.h"
-#ifdef HX_NATIVE
-#include <setjmp.h>
-#include <signal.h>
-static sigjmp_buf sMergeRecovery;
-static volatile sig_atomic_t sMergeGuardActive = 0;
-static void MergeGuardHandler(int sig, siginfo_t *info, void *ctx) {
-    if (sMergeGuardActive) {
-        sMergeGuardActive = 0;
-        siglongjmp(sMergeRecovery, sig);
-    }
-    // Not in guarded section — re-raise with default handler
-    struct sigaction sa = {};
-    sa.sa_handler = SIG_DFL;
-    sigaction(sig, &sa, nullptr);
-    raise(sig);
-}
-#endif
 #include "utl/FilePath.h"
 #include "utl/Loader.h"
 #include "utl/MemMgr.h"
@@ -201,11 +184,19 @@ void FileMerger::PreLoad(BinStream &bs) {
         d >> str;
     }
     d >> mMergers;
-#if !defined(MILO_VIEWER)
-    // The game relies on preload-time StartLoadInternal(true, true) for
-    // world/game-mode mergers. Their DTA `change_files` handlers bootstrap the
-    // gameplay load chain by wiring HamDirector and calling load_game_song.
-    // Keep the viewer override isolated so dc3-native follows the retail path.
+#ifdef HX_NATIVE
+    // Fire change_files to let DTA type handlers wire merger properties
+    // (e.g., world type does {$hamdirector set merger $this}).
+    // Skip the full StartLoadInternal which would try to load Xbox asset paths.
+    {
+        mAsyncLoad = true;
+        mLoadingLoad = true;
+        static Message cfMsg("change_files", 0, 0);
+        cfMsg[0] = 1;
+        cfMsg[1] = 1;
+        HandleType(cfMsg);
+    }
+#else
     StartLoadInternal(true, true);
 #endif
 }
@@ -213,36 +204,7 @@ void FileMerger::PreLoad(BinStream &bs) {
 void FileMerger::FinishLoading(Loader *ldr) {
     DirLoader *dl = dynamic_cast<DirLoader *>(ldr);
     Merger *merger = NotifyFileLoaded(ldr, dl);
-#ifdef HX_NATIVE
-    fprintf(
-        stderr,
-        "DC3 Native: FileMerger::FinishLoading owner='%s' merger='%s' file='%s' dir='%s' proxy=%d\n",
-        PathName(this),
-        merger ? merger->mName.Str() : "<null>",
-        ldr ? ldr->LoaderFile().c_str() : "<null>",
-        (dl && dl->GetDir()) ? dl->GetDir()->Name() : "<null>",
-        merger ? merger->mProxy : -1
-    );
-#endif
     if (dl && !sDisableAll) {
-#ifdef HX_NATIVE
-        // Guard MergeDirs against SIGSEGV from corrupt ref rings during
-        // venue/audio/crowd merges. Recover and skip the merge.
-        struct sigaction merge_sa = {}, old_sa = {};
-        merge_sa.sa_sigaction = MergeGuardHandler;
-        merge_sa.sa_flags = SA_SIGINFO | SA_NODEFER;
-        sigemptyset(&merge_sa.sa_mask);
-        sigaction(SIGSEGV, &merge_sa, &old_sa);
-        sMergeGuardActive = 1;
-        int crashed = sigsetjmp(sMergeRecovery, 1);
-        if (crashed) {
-            sigaction(SIGSEGV, &old_sa, nullptr);
-            fprintf(stderr, "DC3 Native: FileMerger::FinishLoading recovered from signal %d — skipping merge for '%s'\n",
-                    crashed, merger ? merger->mName.Str() : "<null>");
-            PostMerge(merger, dl, true);
-            return;
-        }
-#endif
         if (merger->mProxy) {
             MILO_ASSERT(dl->GetDir(), 0x236);
             ObjectDir *dir = Dir()->Find<ObjectDir>(dl->GetDir()->Name(), false);
@@ -261,10 +223,6 @@ void FileMerger::FinishLoading(Loader *ldr) {
             ReserveToFit(dl->GetDir(), mergerDir, 0);
             MergeDirs(dl->GetDir(), mergerDir, *this);
         }
-#ifdef HX_NATIVE
-        sMergeGuardActive = 0;
-        sigaction(SIGSEGV, &old_sa, nullptr);
-#endif
     }
     PostMerge(merger, dl, true);
 }

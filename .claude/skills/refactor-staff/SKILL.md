@@ -42,3 +42,109 @@ Apply these in order of priority:
 - **Always verify match** after changes — run `run_objdiff` and confirm percentage is preserved
 - **Revert on regression** — if match drops, undo the change immediately
 - **Keep it minimal** — don't over-refactor. The goal is clean, readable decomp code, not perfection
+
+## Learned Patterns — Common First-Pass Mistakes
+
+These are real issues found during cleanup passes. Check for ALL of these in every refactor run.
+
+### 1. Null Check Removal Changes PPC Codegen
+
+**Problem**: First pass may remove null checks (e.g., `if (ptr)`) to "simplify" code. But if the target binary DOES have the null check, removing it drops match%. Conversely, if the target does NOT have a null check, adding one for "safety" adds extra instructions.
+
+**Fix**: Always verify with `run_objdiff`. If a null check needs to exist only on native for safety but not on PPC:
+```cpp
+#ifdef HX_NATIVE
+if (ptr)
+#endif
+{
+    ptr->Method();
+}
+```
+
+**Real example**: `HamUI::Draw` — first pass removed `if (mAugmentedPhoto)` check. Target didn't have it either. Adding it back "for safety" added 3 instructions and dropped from 100% to 98.7%. Fix: `#ifdef HX_NATIVE` guard. Result: 100%.
+
+### 2. `&&` vs `&` (Logical vs Bitwise AND)
+
+**Problem**: First pass may write `(flags && 1)` (logical AND) when the intent is `(flags & 1)` (bitwise AND). Logical AND returns 0 or 1; bitwise AND tests the actual bit. Different PPC codegen.
+
+**How to spot**: Look for variables named `_bit0`, `_bit1`, or code that tests individual bits. If you see `variable & 2` nearby, then `variable && 1` is almost certainly wrong.
+
+**Real example**: `Character::DrawLodOrShadow` — `bool _bit0 = (drawMode && 1) != 0;` should be `(drawMode & 1) != 0;` (next line uses `drawMode & 2`).
+
+### 3. `ASSERT_REVS` on Non-Object Classes
+
+**Problem**: `ASSERT_REVS` macro expands to `PathName(this)` and `ClassName()`, which require `Hmx::Object` inheritance. First pass may use it on classes like `SampleData` that don't inherit `Hmx::Object`, causing build failure.
+
+**Fix**: Replace with `MILO_ASSERT(d.rev <= MAX_REV, LINE_NUM)` for non-Object classes.
+
+### 4. `memcpy(&struct, &other, sizeof(Struct))` → Assignment
+
+**Problem**: First pass sometimes uses raw `memcpy` to copy Transform/Matrix structs. This works but is fragile for portability (different alignment, padding on 64-bit).
+
+**Fix**: Use C++ assignment: `tf = mWorldOffset;` or `localParent = *parentXfm;`. Generates identical PPC codegen but is safer cross-platform.
+
+### 5. `NULL` → `nullptr`
+
+**Problem**: First pass uses `NULL` in new code. While `NULL` and `nullptr` generate identical PPC codegen, `nullptr` is the codebase standard and avoids Clang warnings.
+
+**Action**: Replace all `NULL` with `nullptr` in new code. Safe — verified zero regressions across all tested functions. Common spots:
+- `== NULL` / `!= NULL` comparisons
+- Function arguments: `DrawRectScreen(rect, color, NULL, NULL, NULL)`
+- Static initializers: `static Foo *ptr = NULL`
+
+### 6. `const` Correctness with Virtual Methods
+
+**Problem**: First pass may write `const T*` parameters but call non-const virtual methods on them. MSVC PPC rejects this (`error C2662: cannot convert 'this' pointer`).
+
+**Fix**: Add `const_cast<T*>(ptr)` at the call site. This is a decomp project — the original code doesn't have const correctness.
+
+**Real example**: `LocalePanel::LabelSort::operator()` took `const UILabel*` but called `TextToken()` which is non-const virtual.
+
+### 7. Signed/Unsigned Comparison Warnings (Clang 64-bit)
+
+**Problem**: `for (int i = 0; i < vec.size(); i++)` — `size()` returns `size_t` (unsigned), `i` is `int` (signed). Clang warns. On 32-bit PPC this doesn't matter but on 64-bit it can truncate.
+
+**Fix patterns** (all generate identical PPC codegen):
+- Cast: `i < (int)vec.size()` — standard pattern in this codebase
+- `.empty()` instead of `.size() > 0` — more idiomatic
+- `.size() == 0` vs `.empty()` — check target codegen first (see CLAUDE.md patterns)
+
+### 8. `#ifdef HX_WEB` / `#ifdef HX_NATIVE` Debug Traces
+
+**Problem**: First pass leaves `printf`/`fprintf` debug traces either unguarded (prints on PPC!) or gated behind environment variables that add runtime overhead.
+
+**Rules**:
+- Debug traces that are NOT in the target binary must be guarded with `#ifdef HX_NATIVE` or `#ifdef HX_WEB`
+- Unguarded `fprintf(stderr, ...)` in non-`#ifdef` code will compile into PPC and affect match%
+- Remove `#ifdef HX_WEB` debug traces that were only needed during bringup
+
+### 9. SIGSEGV Signal Handler Hacks
+
+**Problem**: First pass may add signal handlers (`sigaction`, `sigsetjmp`) to recover from crashes during decomp bringup. These are dangerous, non-portable, and should be removed.
+
+**Fix**: Remove the signal handler code entirely. Fix the underlying bug instead.
+
+### 10. `INIT_REVS` / `SAVE_REVS` / `LOAD_REVS` Usage
+
+**Problem**: These macros declare static `gRev`/`gAltRev` variables. `INIT_REVS` must appear at file scope (not inside a function). First pass sometimes puts them in the wrong place or uses wrong argument order.
+
+**Rules**:
+- `INIT_REVS(major, alt)` — first arg is major revision, second is alt
+- `SAVE_REVS(major, alt)` — same order
+- `LOAD_REVS(bs)` just reads and creates `BinStreamRev d`
+- `ASSERT_REVS` requires `Hmx::Object` (see pattern #3)
+
+## Cross-Platform Checklist
+
+Run this mental checklist on every file with new code:
+
+- [ ] No unguarded `fprintf`/`printf` in PPC codepath
+- [ ] No `NULL` — use `nullptr`
+- [ ] No `memcpy` for struct copies — use assignment
+- [ ] No `ASSERT_REVS` on non-Object classes
+- [ ] No `&&` where `&` is intended (bitwise ops)
+- [ ] No signed/unsigned comparison warnings from `.size()`
+- [ ] No `const` issues with non-const virtual methods
+- [ ] All native-only safety checks guarded with `#ifdef HX_NATIVE`
+- [ ] Build succeeds with `ninja` before declaring done
+- [ ] Key functions verified with `run_objdiff` — no regressions

@@ -940,3 +940,5 @@ bool Challenges::GetExpireTime(int &days, int &hours, int &minutes, int &seconds
 
     return true;
 }
+
+bool Challenges::HasNewChallenges() { return false; }

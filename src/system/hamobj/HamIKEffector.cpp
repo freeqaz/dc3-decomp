@@ -511,6 +511,144 @@ void HamIKEffector::ComputeHandPullAndQuat(
     MakeRotQuat(localDir, localTarget, quatOut.q);
 }
 
+void HamIKEffector::DoFancyElbow(QuatXfm &handQ, float handWeight) {
+    RndTransformable *parent = mEffector->TransParent();
+    if (parent != nullptr) {
+        RndTransformable *grandparent = parent->TransParent();
+        if (grandparent != nullptr) {
+            // Get neutral world transform of parent
+            Transform neutralParent;
+            mSkeleton->NeutralWorldXfm(parent, neutralParent);
+
+            // Apply elbow position constraints
+            Vector3 posAccum;
+            posAccum.x = 0.0f;
+            posAccum.y = 0.0f;
+            posAccum.z = 0.0f;
+            float elbowWeight = mElbow->ApplyPosConstraints(posAccum, neutralParent.v, this);
+
+            float totalWeight = elbowWeight + handWeight;
+            if (totalWeight == 0.0f)
+                return;
+
+            // Initialize pull and quaternion accumulators
+            Vector3 pullAccum;
+            pullAccum.x = 0.0f;
+            pullAccum.y = 0.0f;
+            pullAccum.z = 0.0f;
+            Hmx::Quat quatAccum;
+            quatAccum.x = 0.0f;
+            quatAccum.y = 0.0f;
+            quatAccum.z = 0.0f;
+            quatAccum.w = 0.0f;
+
+            float remaining = 0.0f;
+            if (totalWeight < 1.0f) {
+                remaining = 1.0f - totalWeight;
+                totalWeight += remaining;
+            }
+
+            // Copy grandparent world transform
+            Transform gpXfm = grandparent->WorldXfm();
+
+            // Apply elbow contribution
+            if (elbowWeight > 0.0f) {
+                float invElbow = 1.0f / elbowWeight;
+                posAccum.x *= invElbow;
+                posAccum.y *= invElbow;
+                posAccum.z *= invElbow;
+
+                QuatXfm elbowQ;
+                ComputeElbowPullAndQuat(elbowQ, gpXfm, posAccum);
+
+                pullAccum.x += elbowQ.v.x * elbowWeight;
+                pullAccum.y += elbowQ.v.y * elbowWeight;
+                pullAccum.z += elbowQ.v.z * elbowWeight;
+                ScaleAddEq(quatAccum, elbowQ.q, elbowWeight);
+            }
+
+            // Apply hand contribution
+            Transform elbowXfm;
+            if (handWeight > 0.0f) {
+                float invHand = 1.0f / handWeight;
+                Vector3 handPos;
+                handPos.x = handQ.v.x * invHand;
+                handPos.y = handQ.v.y * invHand;
+                handPos.z = handQ.v.z * invHand;
+
+                QuatXfm handPullQ;
+                ComputeHandPullAndQuat(handPullQ, elbowXfm, gpXfm, handPos);
+
+                pullAccum.x += handPullQ.v.x * handWeight;
+                pullAccum.y += handPullQ.v.y * handWeight;
+                pullAccum.z += handPullQ.v.z * handWeight;
+                ScaleAddEq(quatAccum, handPullQ.q, handWeight);
+            }
+
+            // Normalize quaternion and compute final rotation
+            Normalize(quatAccum, quatAccum);
+            float invTotal = 1.0f / totalWeight;
+
+            // Scale pull accumulator
+            pullAccum.x *= invTotal;
+            pullAccum.y *= invTotal;
+            pullAccum.z *= invTotal;
+
+            Hmx::Matrix3 rotMat;
+            MakeRotMatrix(quatAccum, rotMat);
+            Multiply(rotMat, gpXfm.m, gpXfm.m);
+
+            // Apply scaled pull to grandparent position
+            gpXfm.v.x += pullAccum.x;
+            gpXfm.v.y += pullAccum.y;
+            gpXfm.v.z += pullAccum.z;
+
+            grandparent->SetWorldXfm(gpXfm);
+
+            // If hand contributes, blend parent (forearm) and effector (hand) rotations
+            if (handWeight > 0.0f) {
+                // Blend parent rotation between local neutral and hand-computed elbow xfm
+                Hmx::Quat parentQ;
+                parentQ.Set(parent->LocalXfm().m);
+
+                float otherWeight = remaining + elbowWeight;
+                parentQ.x *= otherWeight;
+                parentQ.y *= otherWeight;
+                parentQ.z *= otherWeight;
+                parentQ.w *= otherWeight;
+
+                Hmx::Quat elbowXfmQ;
+                elbowXfmQ.Set(elbowXfm.m);
+                ScaleAddEq(parentQ, elbowXfmQ, handWeight);
+                Normalize(parentQ, parentQ);
+
+                Hmx::Matrix3 parentRotMat;
+                MakeRotMatrix(parentQ, parentRotMat);
+
+                // Build new parent world transform: blended rotation + current position
+                Transform parentNewXfm;
+                const Transform &parentWorld = parent->WorldXfm();
+                parentNewXfm.v = parentWorld.v;
+                Multiply(parentRotMat, gpXfm.m, parentNewXfm.m);
+                parent->SetWorldXfm(parentNewXfm);
+
+                // Blend effector rotation
+                const Transform &effWorld = mEffector->WorldXfm();
+                Transform effXfm;
+                effXfm.v = effWorld.v;
+
+                Hmx::Quat effQ;
+                effQ.Set(effWorld.m);
+                ScaleAddEq(handQ.q, effQ, otherWeight);
+                Normalize(handQ.q, handQ.q);
+
+                MakeRotMatrix(handQ.q, effXfm.m);
+                mEffector->SetWorldXfm(effXfm);
+            }
+        }
+    }
+}
+
 void HamIKEffector::ComputeElbowPullAndQuat(
     QuatXfm &q, const Transform &xfm, const Vector3 &v
 ) {

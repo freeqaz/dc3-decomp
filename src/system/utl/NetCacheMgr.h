@@ -48,6 +48,7 @@ struct NetLoaderRef {
     bool IsSafeToDelete();
     void DeleteLoader();
     bool IsValid() const;
+    NetLoaderRef &operator=(const NetLoaderRef &);
 
     String mName; // 0x0
     int mRefCount; // 0x8

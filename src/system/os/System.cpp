@@ -553,6 +553,8 @@ void SetSystemArgs(const char *commandLine) {
     gPristineSystemArgs = TheSystemArgs;
 }
 
+void NormalizeSystemArgs() {}
+
 void SystemPreInit(const char *config) {
     InitMakeString();
     Symbol::PreInit(640000, 80000);

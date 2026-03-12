@@ -310,6 +310,8 @@ const ADSRImpl *Synth::DefaultADSR() {
     return mADSR;
 }
 
+void Synth::DrawMeter(float &, float, float, const char *) {}
+
 void Synth::DrawMeterScale(float &y) {
     int db = -40;
     float height = (float)TheRnd.Width();

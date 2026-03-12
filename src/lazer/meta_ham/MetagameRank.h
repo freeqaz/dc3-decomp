@@ -43,6 +43,7 @@ private:
 
     bool GetOneTimeTask(Symbol, DataArray **, int *);
     int ComputeRankNumber(bool);
+    void AwardForRankUp(int);
 
 protected:
     int mScore; // 0x34

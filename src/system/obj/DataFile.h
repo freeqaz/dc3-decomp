@@ -61,7 +61,9 @@ DataArray *ReadCacheStream(BinStream &, const char *);
 DataArray *ReadEmbeddedFile(const char *, bool);
 DataArray *DataReadFile(const char *, bool);
 DataArray *DataReadStream(BinStream *);
+bool ParseNode();
 DataArray *ParseArray();
+void PushBack(const DataNode &);
 void DataWriteFile(const char *, const DataArray *, int);
 DataArray *LoadDtz(const char *, int);
 

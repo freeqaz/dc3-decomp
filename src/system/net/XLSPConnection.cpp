@@ -66,6 +66,10 @@ void XLSPConnection::Disconnect() {
     }
 }
 
+void XLSPConnection::SetState(State s) { mState = s; }
+
+void XLSPConnection::Poll() {}
+
 void XLSPConnection::StartEnumeration() {
     DWORD res = XTitleServerCreateEnumerator(mServerInfo.c_str(), 8, &mEnumBufferSize, &mEnumHandle);
     if (res != ERROR_SUCCESS) {

@@ -27,8 +27,15 @@
 #include "synth/FxSendDelay.h"
 #include "synth/Synth.h"
 #include "utl/BeatMap.h"
+#include "utl/DebugMeter.h"
 #include "utl/OSCMessenger.h"
 #include "utl/Symbol.h"
+#include "gesture/SkeletonViz.h"
+#include "gesture/SkeletonUpdate.h"
+#include "hamobj/HamPhraseMeter.h"
+#include "hamobj/HamPlayerData.h"
+#include "char/CharClipDriver.h"
+#include "rndobj/Rnd.h"
 
 PoseFatalities::PoseFatalities()
     : mHoldDuration(0.5f), mHudPanel(0), mJumpStart(0), mJumpEnd(0), mCurrentBeat(0),
@@ -667,4 +674,201 @@ void PoseFatalities::OnBeat(int beat) {
             OnFatalResult(0, false);
         }
     }
+}
+
+void PoseFatalities::UpdateClipDriver(int player) {
+    HamCharacter *hChar = TheHamDirector->GetCharacter(player);
+    CharClipDriver *clipDriver = hChar->Driver()->First();
+    if (clipDriver != nullptr) {
+        while (clipDriver != nullptr) {
+            if (strstr(clipDriver->GetClip()->Name(), "pose_fatalities_")) {
+                break;
+            }
+            clipDriver = clipDriver->Next();
+        }
+        if (clipDriver != nullptr && clipDriver->GetClip() != nullptr) {
+            MILO_ASSERT(NUM_FATALITIES == clipDriver->NumBeatEvents(), 0x123);
+            Symbol beatSym(MakeString("pose_fatality_%i", mFatalityPoseIndex[player] - 1));
+            clipDriver->SetBeatOffset(unk1718[player], kTaskBeats, beatSym);
+            if (unk1718[player] < 0.0f) {
+                unk1718[player] += TheTaskMgr.DeltaUISeconds();
+            }
+        }
+    }
+}
+
+void PoseFatalities::DrawDebug() {
+    static SkeletonViz *sVizLeft = nullptr;
+    static SkeletonViz *sVizRight = nullptr;
+
+    if (sVizLeft == nullptr) {
+        sVizLeft = Hmx::Object::New<SkeletonViz>();
+        sVizLeft->Init();
+        sVizRight = Hmx::Object::New<SkeletonViz>();
+        sVizRight->Init();
+    }
+
+    SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
+    float screenScale = 0.25f / TheRnd.YRatio();
+
+    // Player 0
+    bool player0Active = false;
+    if (mCurrentBeat >= mFatalStartBeats[0]) {
+        player0Active = mInFatality[0];
+    }
+
+    if (player0Active) {
+        if (DataVariable("fatal_debug").Int()) {
+            const Skeleton *playerSkel = TheGameData->Player(0)->GetSkeleton();
+
+            static DebugMeter meterA(0.1f, 0.1f, 0.5f, 0.1f, Hmx::Color(0, 0, 0, 1));
+            meterA.Draw();
+
+            float rawCompare = mRecorder.CompareSkeletonPositions(
+                playerSkel, &mPlayerSkeletons[0], 1.0f
+            );
+            Hmx::Color whiteColor(0, 1, 0, 1);
+            meterA.DrawBar(0.0f, rawCompare, whiteColor, 1.0f, 0.0f);
+
+            float errorWeight = TheOSCMessenger.GetFloat("/fatalposeerrorweight", 0.0f);
+            float weightedCompare = mRecorder.CompareSkeletonPositions(
+                playerSkel, &mPlayerSkeletons[0], errorWeight
+            );
+            float thresh = TheOSCMessenger.GetFloat("/fatalposethresh", 0.0f);
+            float normalizedScore = weightedCompare / thresh;
+            normalizedScore = Clamp(0.0f, 1.0f, normalizedScore);
+
+            static DebugMeter meterB(0.1f, 0.3f, 0.5f, 0.1f, Hmx::Color(0, 0, 0, 1));
+            meterB.Draw();
+            Hmx::Color greenColor(0, 0, normalizedScore * normalizedScore, 1);
+            meterB.DrawBar(0.0f, 1.0f, greenColor, 1.0f, 0.0f);
+            Hmx::Color blueColor(0, 0, 0, 1);
+            meterB.DrawBar(0.0f, weightedCompare, blueColor, 1.0f, 0.0f);
+
+            static DebugMeter meterC(
+                0.5f + 0.25f + 0.1f, 0.0f, 0.25f, 0.03f,
+                Hmx::Color(0, 0, 0, 1)
+            );
+            meterC.Draw();
+            Hmx::Color redColor(0, 0, unk1710[0] * unk1710[0], 1);
+            meterC.DrawBar(0.0f, 1.0f, redColor, 1.0f, 0.0f);
+
+            float progressFrac = mFatalityProgress[0] / mHoldDuration;
+            Hmx::Color yellowColor(0, 1, 0, 1);
+            progressFrac = Clamp(0.0f, 1.0f, progressFrac);
+            meterC.DrawBar(0.0f, progressFrac, yellowColor, 1.0f, 0.0f);
+        }
+
+        if (TheOSCMessenger.GetInt("/posefatalitiesdrawdebugskel", 0)) {
+            Hmx::Rect rect(
+                0.25f + 0.1f, 0.0f, 0.25f, screenScale
+            );
+            Hmx::Color bgColor(0, 0, 0, 0.4f);
+            TheRnd.DrawRectScreen(rect, bgColor, nullptr, nullptr, nullptr);
+            sVizLeft->SetUsePhysicalCam(true);
+            sVizLeft->SetPhysicalCamScreenRect(rect);
+            sVizLeft->Visualize(
+                *handle.GetCameraInput(), mPlayerSkeletons[0], nullptr, false
+            );
+        }
+    }
+
+    // Player 1
+    bool player1Active = false;
+    if (mCurrentBeat >= mFatalStartBeats[1]) {
+        player1Active = mInFatality[1];
+    }
+
+    if (player1Active) {
+        if (DataVariable("fatal_debug").Int()) {
+            static DebugMeter meterD(
+                0.5f, 0.0f, 0.25f, 0.03f,
+                Hmx::Color(0, 0, 0, 1)
+            );
+            meterD.Draw();
+            Hmx::Color p1Color(0, 0, unk1710[1] * unk1710[1], 1);
+            meterD.DrawBar(0.0f, 1.0f, p1Color, 1.0f, 0.0f);
+
+            float progressFrac1 = mFatalityProgress[1] / mHoldDuration;
+            Hmx::Color p1ProgressColor(0, 1, 0, 1);
+            progressFrac1 = Clamp(0.0f, 1.0f, progressFrac1);
+            meterD.DrawBar(0.0f, progressFrac1, p1ProgressColor, 1.0f, 0.0f);
+        }
+
+        if (TheOSCMessenger.GetInt("/posefatalitiesdrawdebugskel", 0)) {
+            Hmx::Rect rect1(
+                0.5f, 0.0f, 0.25f, screenScale
+            );
+            Hmx::Color bgColor1(0, 0, 0, 0.4f);
+            TheRnd.DrawRectScreen(rect1, bgColor1, nullptr, nullptr, nullptr);
+            sVizRight->SetUsePhysicalCam(true);
+            sVizRight->SetPhysicalCamScreenRect(rect1);
+            sVizRight->Visualize(
+                *handle.GetCameraInput(), mPlayerSkeletons[1], nullptr, false
+            );
+        }
+    }
+}
+
+void PoseFatalities::UpdateMatchingPose(int player) {
+    bool matching = false;
+    unk1710[player] = 0;
+
+    float deltaBeat = TheTaskMgr.DeltaBeat();
+    float clampedDelta = Clamp(0.0f, 1.0f, deltaBeat);
+
+    if (InFatality(player)) {
+        HamPlayerData *playerData = TheGameData->Player(player);
+        const Skeleton *playerSkel = playerData->GetSkeleton();
+
+        float errorWeight = TheOSCMessenger.GetFloat("/fatalposeerrorweight", 0.0f);
+        float rawScore = mRecorder.CompareSkeletonPositions(
+            playerSkel, &mPlayerSkeletons[player], errorWeight
+        );
+
+        float thresh = TheOSCMessenger.GetFloat("/fatalposethresh", 0.0f);
+        unk1710[player] = rawScore / thresh;
+        unk1710[player] = Clamp(0.0f, 1.0f, unk1710[player]);
+
+        if (unk1710[player] >= 1.0f && mFatalityProgress[player] >= 0.0f) {
+            matching = true;
+        }
+
+        if (mFatalityProgress[player] >= 0.0f) {
+            JoypadData *jData = JoypadGetPadData(0);
+            if (player == 0) {
+                if (jData->GetRT() > 0.5f
+                    || TheGameData->Player(0)->Autoplay() != gNullStr) {
+                    matching = true;
+                }
+            }
+            if (player == 1) {
+                if (jData->GetLT() > 0.5f
+                    || TheGameData->Player(1)->Autoplay() != gNullStr) {
+                    matching = true;
+                }
+            }
+        }
+    }
+
+    float *progress = &mFatalityProgress[player];
+    if (matching) {
+        *progress = *progress + clampedDelta;
+    } else {
+        float holdDecay = TheOSCMessenger.GetFloat("/holddecay", 0.0f);
+        float decayAmount = Clamp(0.0f, 1.0f, holdDecay * clampedDelta);
+        *progress = *progress * (1.0f - decayAmount);
+    }
+
+    float displayFrac = *progress / mHoldDuration;
+    float clampedFrac = Clamp(0.0f, 1.0f, displayFrac);
+
+    HamPhraseMeter *meter = TheHamDirector->GetVenueWorld()->Find<HamPhraseMeter>(
+        MakeString("phrase_meter%i", player), true
+    );
+    meter->SetRatingFrac(Clamp(0.0f, 1.0f, clampedFrac), -1.0f);
+    meter->SetShowing(true);
+    RndAnimatable *feedbackAnim =
+        meter->Find<RndAnimatable>("perimeter_feedback_color.anim", true);
+    feedbackAnim->SetFrame(unk1710[player] * 4.0f, 1.0f);
 }

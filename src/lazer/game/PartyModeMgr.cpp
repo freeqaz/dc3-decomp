@@ -1454,3 +1454,25 @@ leave:
     }
     return 1;
 }
+
+int PartyModeMgr::GetCrewColor(int, int) { return 0; }
+
+void PartyModeMgr::ReadPartySongQueue() {}
+
+void PartyModeMgr::SetSongsFromPlaylist() {}
+
+void PartyModeMgr::PruneHistory() {}
+
+void PartyModeMgr::FinalizeTeam(int) {}
+
+void PartyModeMgr::ResetSongs() {}
+
+DataNode PartyModeMgr::OnSetSongAndDefaults(DataArray *) { return DataNode(0); }
+
+void PartyModeMgr::UpdateScores() {}
+
+void PartyModeMgr::ToggleIncludedModeOn(Symbol, bool) {}
+
+void PartyModeMgr::ResetModes(bool) {}
+
+void PartyModeMgr::FinalizeParty() {}

@@ -1510,7 +1510,13 @@ DataNode HamNavList::OnMsg(const ButtonDownMsg &msg) {
 
     bool inControllerMode = InControllerMode();
     if ((inControllerMode || TheLoadMgr.EditMode())
+#ifdef HX_NATIVE
+        // Native: DTA transition_complete handlers that call StopAnimation()
+        // don't fire, so IsAnimating() stays true forever. Skip the check.
+        && mEnabled) {
+#else
         && !RndAnimatable::IsAnimating() && mEnabled) {
+#endif
         bool gesturing = TheGestureMgr && TheGestureMgr->GesturingWithVoice();
         if (!gesturing && TheUI->FocusComponent() == this) {
             int dir = ScrollDirection(msg, false, true, 1);

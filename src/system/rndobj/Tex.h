@@ -45,8 +45,13 @@ public:
     virtual void SetMipMapK(float f) { mMipMapK = f; }
     virtual void LockBitmap(RndBitmap &, int);
     virtual void UnlockBitmap() {}
+#ifdef HX_NATIVE
+    virtual void MakeDrawTarget();
+    virtual void FinishDrawTarget();
+#else
     virtual void MakeDrawTarget() {}
     virtual void FinishDrawTarget() {}
+#endif
     virtual void Compress(AlphaCompress) {}
     virtual bool TexelsLock(void *&) { return false; }
     virtual void TexelsUnlock() {}

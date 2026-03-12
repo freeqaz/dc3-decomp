@@ -318,6 +318,183 @@ void Intersect(const Transform &trans, const Plane &plane, Hmx::Ray &ray) {
     }
 }
 
+void BSPFace::OnSide(const Plane &plane, bool &front, bool &back) {
+    front = false;
+    back = false;
+    for (int i = 0; i < (int)p.points.size(); i++) {
+        Vector3 pt(p.points[i].x, p.points[i].y, 0.0f);
+        Multiply(pt, t, pt);
+        float dot = plane.a * pt.x + plane.b * pt.y + plane.c * pt.z + plane.d;
+        if (dot > gBSPPosTol) {
+            front = true;
+        }
+        if (dot < -gBSPPosTol) {
+            back = true;
+        }
+    }
+}
+
+bool Intersect(const Vector3 &origin, const Vector3 &dir, const Box &box, float &tmin, float &tmax) {
+    tmin = 1.1920929e-07f;
+    tmax = 1e+30f;
+    for (unsigned int i = 0; i < 3; i++) {
+        float invDir = 1.0f / dir[i];
+        float t1 = (box.mMin[i] - origin[i]) * invDir;
+        float t2 = (box.mMax[i] - origin[i]) * invDir;
+        if (t2 < t1) {
+            float tmp = t1;
+            t1 = t2;
+            t2 = tmp;
+        }
+        if (t1 - tmin < 0.0f) {
+            t1 = tmin;
+        }
+        tmin = t1;
+        float tmax2 = tmax;
+        if (t2 - tmax < 0.0f) {
+            tmax2 = t2;
+        }
+        tmax = tmax2;
+        if (tmax2 < tmin) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool Intersect(const Plane &plane, const Box &box) {
+    Vector3 halfExtent;
+    halfExtent.x = (box.mMax.x - box.mMin.x) * 0.5f;
+    halfExtent.y = (box.mMax.y - box.mMin.y) * 0.5f;
+    halfExtent.z = (box.mMax.z - box.mMin.z) * 0.5f;
+
+    Vector3 pMin, pMax;
+    for (unsigned int i = 0; i < 3; i++) {
+        const Vector3 &normal = *(const Vector3 *)&plane.a;
+        if (normal[i] <= 0.0f) {
+            pMin[i] = halfExtent[i];
+            pMax[i] = -halfExtent[i];
+        } else {
+            pMin[i] = -halfExtent[i];
+            pMax[i] = halfExtent[i];
+        }
+    }
+
+    const Vector3 &normal = *(const Vector3 *)&plane.a;
+    if (0.0f < normal.x * pMin.x + normal.y * pMin.y + normal.z * pMin.z + plane.d) {
+        return false;
+    }
+    if (normal.x * pMax.x + normal.y * pMax.y + normal.z * pMax.z + plane.d < 0.0f) {
+        return false;
+    }
+    return true;
+}
+
+bool Intersect(const Triangle &tri, const Box &box) {
+    Vector3 v0 = tri.origin;
+
+    float halfX = (box.mMax.x - box.mMin.x) * 0.5f;
+    float halfY = (box.mMax.y - box.mMin.y) * 0.5f;
+    float halfZ = (box.mMax.z - box.mMin.z) * 0.5f;
+
+    float cx = box.mMin.x + halfX;
+    float cy = box.mMin.y + halfY;
+    float cz = box.mMin.z + halfZ;
+
+    // Translate triangle to box center
+    float v0x = v0.x - cx;
+    float v1x = (tri.frame.x.x + tri.origin.x) - cx;
+    float v2x = (tri.frame.y.x + tri.origin.x) - cx;
+
+    float v0y = v0.y - cy;
+    float v1y = (tri.frame.x.y + tri.origin.y) - cy;
+    float v2y = (tri.frame.y.y + tri.origin.y) - cy;
+
+    float v0z = v0.z - cz;
+    float v1z = (tri.frame.x.z + tri.origin.z) - cz;
+    float v2z = (tri.frame.y.z + tri.origin.z) - cz;
+
+    // X axis test
+    {
+        float a = v0x, b = v1x;
+        if (v0x - v1x < 0.0f) { a = v1x; b = v0x; }
+        float mn = v2x;
+        if (b - v2x < 0.0f) { mn = b; }
+        if (a - v2x < 0.0f) { a = v2x; }
+        if (!(mn <= halfX && -halfX <= a)) return false;
+    }
+
+    // Y axis test
+    {
+        float a = v0y, b = v1y;
+        if (v0y - v1y < 0.0f) { a = v1y; b = v0y; }
+        float mn = v2y;
+        if (b - v2y < 0.0f) { mn = b; }
+        if (a - v2y < 0.0f) { a = v2y; }
+        if (!(mn <= halfY && -halfY <= a)) return false;
+    }
+
+    // Z axis test
+    {
+        float a = v0z, b = v1z;
+        if (v0z - v1z < 0.0f) { a = v1z; b = v0z; }
+        float mn = v2z;
+        if (b - v2z < 0.0f) { mn = b; }
+        if (a - v2z < 0.0f) { a = v2z; }
+        if (!(mn <= halfZ && -halfZ <= a)) return false;
+    }
+
+    // Face normal plane test
+    float nx = tri.frame.z.x;
+    float ny = tri.frame.z.y;
+    float nz = tri.frame.z.z;
+    Plane facePlane;
+    facePlane.a = nx;
+    facePlane.b = ny;
+    facePlane.c = nz;
+    facePlane.d = -(nx * v0x + ny * v0y + nz * v0z);
+    if (!Intersect(facePlane, box)) return false;
+
+    // Edge cross product axes (9 tests)
+    float e0x = v1x - v0x, e0y = v1y - v0y, e0z = v1z - v0z;
+    float e1x = v2x - v1x, e1y = v2y - v1y, e1z = v2z - v1z;
+    float e2x = v0x - v2x, e2y = v0y - v2y, e2z = v0z - v2z;
+
+    // Cross products with box axes (1,0,0), (0,1,0), (0,0,1)
+    float axes[9][3] = {
+        { 0, -e0z, e0y },
+        { e0z, 0, -e0x },
+        { -e0y, e0x, 0 },
+        { 0, -e1z, e1y },
+        { e1z, 0, -e1x },
+        { -e1y, e1x, 0 },
+        { 0, -e2z, e2y },
+        { e2z, 0, -e2x },
+        { -e2y, e2x, 0 },
+    };
+
+    for (unsigned int i = 0; i < 9; i++) {
+        float ax = axes[i][0], ay = axes[i][1], az = axes[i][2];
+        float absx = ax; if (absx <= 0.0f) absx = -absx;
+        float absy = ay; if (absy <= 0.0f) absy = -absy;
+        float absz = az; if (absz <= 0.0f) absz = -absz;
+        float r = absx * halfX + absy * halfY + absz * halfZ;
+
+        float p0 = ax * v0x + ay * v0y + az * v0z;
+        float p1 = ax * v1x + ay * v1y + az * v1z;
+        float p2 = ax * v2x + ay * v2y + az * v2z;
+
+        float mn = p0, mx = p1;
+        if (p0 - p1 < 0.0f) { mx = p0; mn = p1; }
+        if (p2 - mx < 0.0f) { mx = p2; }
+        if (mx < -r) return false;
+        if (p2 - mn < 0.0f) { mn = p2; }
+        if (r < mn) return false;
+    }
+
+    return true;
+}
+
 bool Intersect(const Segment &seg, const Triangle &tri, bool b, float &out) {
     float segDirX = seg.end.x - seg.start.x;
     float segDirY = seg.end.y - seg.start.y;
@@ -691,4 +868,160 @@ bool Intersect(
         }
     }
     return false;
+}
+
+void BSPFace::Set(const Vector3 &p1, const Vector3 &p2, const Vector3 &p3) {
+    // Build the transform from the triangle's coordinate frame
+    // z-axis = normal of the triangle (cross product of edges)
+    Vector3 edge1, edge2;
+    Subtract(p2, p1, edge1);
+    Subtract(p3, p1, edge2);
+    Cross(edge1, edge2, t.m.z);
+    Normalize(t.m.z, t.m.z);
+
+    // x-axis = normalized first edge
+    Normalize(edge1, t.m.x);
+
+    // y-axis = cross(z, x) to form right-handed frame
+    Cross(t.m.z, t.m.x, t.m.y);
+
+    // translation = first vertex
+    t.v = p1;
+
+    // Project the 3 vertices into the 2D plane of the triangle
+    p.points.resize(3);
+    Vector3 v;
+
+    Subtract(p1, t.v, v);
+    p.points[0].Set(Dot(v, t.m.x), Dot(v, t.m.y));
+
+    Subtract(p2, t.v, v);
+    p.points[1].Set(Dot(v, t.m.x), Dot(v, t.m.y));
+
+    Subtract(p3, t.v, v);
+    p.points[2].Set(Dot(v, t.m.x), Dot(v, t.m.y));
+
+    Update();
+}
+
+void BSPFace::Update() {
+    // Compute area and edge planes from the 2D polygon points
+    planes.clear();
+    area = 0.0f;
+
+    int numPoints = p.points.size();
+    for (int i = 0; i < numPoints; i++) {
+        const Vector2 &p1 = p.points[i];
+        const Vector2 &p2 = p.points[(i + 1) % numPoints];
+
+        // Accumulate area using the shoelace formula
+        area += p1.x * p2.y - p2.x * p1.y;
+
+        // Build a 3D edge plane from each polygon edge
+        // Transform the 2D edge endpoints to 3D
+        Vector3 v1, v2, v3;
+        v1.Set(p1.x, p1.y, 0.0f);
+        Multiply(v1, t, v1);
+        v2.Set(p2.x, p2.y, 0.0f);
+        Multiply(v2, t, v2);
+
+        // Third point is offset along the face normal
+        v3.Set(p1.x, p1.y, 1.0f);
+        Multiply(v3, t, v3);
+
+        Plane plane;
+        plane.Set(v1, v2, v3);
+        planes.push_back(plane);
+    }
+
+    area = std::fabs(area) * 0.5f;
+}
+
+bool MakeBSPTree(BSPNode *&, std::list<BSPFace> &, int) { return false; }
+
+bool Intersect(const Transform &tf, const Hmx::Polygon &poly, const BSPNode *node) {
+    if (!node)
+        return true;
+
+    // Classify all polygon points against the BSP split plane
+    bool front = false;
+    bool back = false;
+    for (const Vector2 *i = &poly.points[0]; i != &poly.points[0] + poly.points.size(); i++) {
+        Vector3 v(i->x, i->y, 0.0f);
+        Multiply(v, tf, v);
+        float dot = node->plane.Dot(v);
+        if (dot >= 0.0f)
+            front = true;
+        if (dot < 0.0f)
+            back = true;
+    }
+
+    if (front && !back) {
+        // Entirely in front
+        return Intersect(tf, poly, node->left);
+    }
+    if (!front && back) {
+        // Entirely behind
+        return Intersect(tf, poly, node->right);
+    }
+
+    // Polygon straddles the plane - clip and test both sides
+    Hmx::Ray r;
+    Intersect(tf, node->plane, r);
+
+    Hmx::Polygon splitPoly;
+    Clip(poly, r, splitPoly);
+    if (!splitPoly.points.empty() && !Intersect(tf, splitPoly, node->left))
+        return false;
+
+    // Clip against the other side (negate the ray direction)
+    Hmx::Ray negRay;
+    negRay.base = r.base;
+    negRay.dir.Set(-r.dir.x, -r.dir.y);
+    Hmx::Polygon splitPoly2;
+    Clip(poly, negRay, splitPoly2);
+    if (!splitPoly2.points.empty() && !Intersect(tf, splitPoly2, node->right))
+        return false;
+
+    return true;
+}
+
+void Clip(const Hmx::Polygon &poly, const Hmx::Ray &ray, Hmx::Polygon &out) {
+    // Clip a 2D polygon against a half-plane defined by the ray
+    // The ray defines a line: points on the left side (positive dot) are kept
+    // Ray normal direction: (-dir.y, dir.x)
+    std::vector<Vector2> tempPoints;
+    std::vector<Vector2> *newPoints = &out.points;
+
+    float lastDot = ray.dir.x * (poly.points[poly.points.size() - 1].y - ray.base.y)
+                  - ray.dir.y * (poly.points[poly.points.size() - 1].x - ray.base.x);
+    const Vector2 *lastPoint = &poly.points[poly.points.size() - 1];
+
+    for (const Vector2 *i = &poly.points[0]; i != &poly.points[0] + poly.points.size(); i++) {
+        float dot = ray.dir.x * (i->y - ray.base.y) - ray.dir.y * (i->x - ray.base.x);
+
+        if (dot >= 0.0f) {
+            if (lastDot < 0.0f) {
+                // Entering: compute intersection and add it
+                float t = lastDot / (lastDot - dot);
+                Vector2 v;
+                v.Set(lastPoint->x + t * (i->x - lastPoint->x),
+                      lastPoint->y + t * (i->y - lastPoint->y));
+                newPoints->push_back(v);
+            }
+            newPoints->push_back(*i);
+        } else {
+            if (lastDot >= 0.0f) {
+                // Leaving: compute intersection and add it
+                float t = lastDot / (lastDot - dot);
+                Vector2 v;
+                v.Set(lastPoint->x + t * (i->x - lastPoint->x),
+                      lastPoint->y + t * (i->y - lastPoint->y));
+                newPoints->push_back(v);
+            }
+        }
+
+        lastDot = dot;
+        lastPoint = i;
+    }
 }

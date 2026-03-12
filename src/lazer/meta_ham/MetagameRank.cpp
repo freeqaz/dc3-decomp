@@ -331,7 +331,7 @@ DataNode MetagameRank::GetNextDeferredPoints(DataArray *a) {
 
 extern PropertyEventProvider *TheHamProvider;
 
-bool compare_deferred_points(DeferredPoints a, DeferredPoints b);
+bool compare_deferred_points(DeferredPoints a, DeferredPoints b) { return false; }
 
 void MetagameRank::UpdateScore(
     int songID,
@@ -870,3 +870,13 @@ void MetagameRank::AwardPointsForTask(Symbol task) {
         AwardPoints(scoreNum, disp);
     }
 }
+
+int MetagameRank::SaveSize(int) { return 0; }
+
+int MetagameRank::GetRankInTier() const { return 0; }
+
+int MetagameRank::GetTier() const { return 0; }
+
+void MetagameRank::AwardForRankUp(int) {}
+
+int MetagameRank::ComputeRankNumber(bool) { return 0; }

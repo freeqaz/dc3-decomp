@@ -50,3 +50,7 @@ int RingBuffer::Peek(void *data, int len) {
     }
     return len;
 }
+
+int RingBuffer::Write(void *, int) { return 0; }
+
+int RingBuffer::Read(void *, int) { return 0; }

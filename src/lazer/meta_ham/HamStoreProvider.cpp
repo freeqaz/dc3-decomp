@@ -415,4 +415,6 @@ BEGIN_HANDLERS(HamStoreProvider)
     HANDLE_SUPERCLASS(Hmx::Object)
 END_HANDLERS
 
+void HamStoreProvider::RefreshFilteredCartOffers() {}
+
 #pragma endregion HamStoreProvider

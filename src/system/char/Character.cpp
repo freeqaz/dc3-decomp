@@ -915,6 +915,7 @@ void Character::DrawLod(int lod) {
 
 void Character::DrawLodOrShadow(int lod, DrawMode drawMode) {
     mPollState = (PollState)5;
+#ifdef HX_NATIVE
     if (drawMode == 4) {
         if (mShadow.size() != 0) {
             mShadow.Draw();
@@ -950,6 +951,35 @@ void Character::DrawLodOrShadow(int lod, DrawMode drawMode) {
             }
         }
     }
+#else
+    mLastLod = Clamp<int>(0, mLods.size() - 1, lod);
+    if (drawMode == 4) {
+        if (mShadow.size() != 0) {
+            mShadow.Draw();
+            return;
+        }
+    } else {
+        bool _bit0 = (drawMode & 1) != 0;
+        if (_bit0) {
+            RndEnvironTracker tracker(mEnv, &WorldXfm().v);
+            DrawShowing();
+            if (drawMode == 1) {
+                unk2a0 = RndEnviron::Current();
+                unk2b4 = RndEnviron::CurrentPos();
+            }
+        }
+        if (drawMode & 2) {
+            if (drawMode == 2) {
+                RndEnvironTracker tracker(unk2a0, unk2b4);
+                DrawShowing();
+                return;
+            }
+            DrawShowing();
+            return;
+        }
+    }
+    DrawShowing();
+#endif
 }
 
 void DrawPtrVec::Draw() const {

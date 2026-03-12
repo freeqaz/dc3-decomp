@@ -200,3 +200,7 @@ bool AppMiniLeaderboardDisplay::UpdateLeaderboard(Symbol s) { // has one small d
     }
     return true;
 }
+
+void AppMiniLeaderboardDisplay::Text(int, int, UIListLabel *, UILabel *) const {}
+
+void AppMiniLeaderboardDisplay::UpdateSelfInRows() {}

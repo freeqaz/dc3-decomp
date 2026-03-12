@@ -57,8 +57,10 @@ void HamCamShot::EndAnim() {
                     TeleportTarget(cacheIt->mTrans, cacheIt->mTransform, true);
                 }
                 Character *theChar = dynamic_cast<Character *>(cacheIt->mTrans);
+#ifdef HX_NATIVE
                 if (theChar)
-                    theChar->SetEnv(nullptr);
+#endif
+                theChar->SetEnv(nullptr);
                 sCache.erase(cacheIt);
             }
         }
@@ -875,6 +877,46 @@ void HamCamShot::FlipTargetAnimGroups() {
     }
     if (p1 != mTargets.end()) {
         p1->mTarget = player0;
+    }
+}
+
+void HamCamShot::CreateFlippedShowHideList() {
+    // Only build if all flip lists are currently empty
+    if (mFlipHideList.size() > 0 || mFlipShowList.size() > 0 || mFlipGenHideList.size() > 0
+        || mFlipGenHideVector.begin() != mFlipGenHideVector.end()
+        || mFlipDrawOverrides.size() > 0
+        || mFlipPostProcOverrides.size() > 0 || mFlipEndHideList.size() > 0
+        || mFlipEndShowVector.begin() != mFlipEndShowVector.end())
+        return;
+
+    // Copy mHideList → mFlipHideList (original), mFlipDrawOverrides (flipped)
+    for (ObjPtrList<RndDrawable>::iterator it = mHideList.begin(); it != mHideList.end(); ++it) {
+        RndDrawable *draw = *it;
+        mFlipHideList.push_back(draw);
+        mFlipDrawOverrides.push_back(GetFlipCharacter(draw));
+    }
+
+    // Copy mShowList → mFlipShowList (original), mFlipPostProcOverrides (flipped)
+    for (ObjPtrList<RndDrawable>::iterator it = mShowList.begin(); it != mShowList.end(); ++it) {
+        RndDrawable *draw = *it;
+        mFlipShowList.push_back(draw);
+        mFlipPostProcOverrides.push_back(GetFlipCharacter(draw));
+    }
+
+    // Copy mGenHideList → mFlipGenHideList (original), mFlipEndHideList (flipped)
+    for (ObjPtrList<RndDrawable>::iterator it = mGenHideList.begin(); it != mGenHideList.end();
+         ++it) {
+        RndDrawable *draw = *it;
+        mFlipGenHideList.push_back(draw);
+        mFlipEndHideList.push_back(GetFlipCharacter(draw));
+    }
+
+    // Copy mGenHideVector → mFlipGenHideVector (original), mFlipEndShowVector (flipped)
+    for (std::vector<RndDrawable *>::iterator it = mGenHideVector.begin();
+         it != mGenHideVector.end(); ++it) {
+        RndDrawable *draw = *it;
+        mFlipGenHideVector.push_back(draw);
+        mFlipEndShowVector.push_back(GetFlipCharacter(draw));
     }
 }
 

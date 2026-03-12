@@ -240,7 +240,12 @@ bool ObjDirPtr<C>::IsLoaded() const {
 }
 
 template <class C>
-BinStream &operator<<(BinStream &bs, const ObjDirPtr<C> &ptr);
+BinStream &operator<<(BinStream &bs, const ObjDirPtr<C> &ptr) {
+    C *dir = ptr;
+    const char *name = dir ? dir->Name() : "";
+    bs << name;
+    return bs;
+}
 
 template <class T>
 BinStream &operator>>(BinStream &bs, ObjDirPtr<T> &ptr) {

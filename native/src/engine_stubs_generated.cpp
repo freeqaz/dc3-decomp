@@ -1230,30 +1230,7 @@ extern "C" long _stub_fn_450() { return 0; }
 // HamWardrobe::PlayCrowdAnimation(Symbol, int, bool)
 extern "C" __attribute__((weak, used)) long _stub_fn_451() __asm__("_ZN11HamWardrobe18PlayCrowdAnimationE6Symbolib");
 extern "C" long _stub_fn_451() { return 0; }
-// LightPreset::SetFrameEx(float, float, bool)
-extern "C" __attribute__((weak, used)) long _stub_fn_452() __asm__("_ZN11LightPreset10SetFrameExEffb");
-extern "C" long _stub_fn_452() { return 0; }
-// LightPreset::CacheFrames()
-extern "C" __attribute__((weak, used)) long _stub_fn_453() __asm__("_ZN11LightPreset11CacheFramesEv");
-extern "C" long _stub_fn_453() { return 0; }
-// LightPreset::SetKeyframe(LightPreset::Keyframe&)
-extern "C" __attribute__((weak, used)) long _stub_fn_454() __asm__("_ZN11LightPreset11SetKeyframeERNS_8KeyframeE");
-extern "C" long _stub_fn_454() { return 0; }
-// LightPreset::OnSetKeyframe(DataArray*)
-extern "C" __attribute__((weak, used)) long _stub_fn_455() __asm__("_ZN11LightPreset13OnSetKeyframeEP9DataArray");
-extern "C" long _stub_fn_455() { return 0; }
-// LightPreset::FillEnvPresetData(RndEnviron*, LightPreset::EnvironmentEntry&)
-extern "C" __attribute__((weak, used)) long _stub_fn_456() __asm__("_ZN11LightPreset17FillEnvPresetDataEP10RndEnvironRNS_16EnvironmentEntryE");
-extern "C" long _stub_fn_456() { return 0; }
-// LightPreset::Load(BinStream&)
-extern "C" __attribute__((weak, used)) long _stub_fn_457() __asm__("_ZN11LightPreset4LoadER9BinStream");
-extern "C" long _stub_fn_457() { return 0; }
-// LightPreset::Animate(float)
-extern "C" __attribute__((weak, used)) long _stub_fn_458() __asm__("_ZN11LightPreset7AnimateEf");
-extern "C" long _stub_fn_458() { return 0; }
-// LightPreset::Replace(ObjRef*, Hmx::Object*)
-extern "C" __attribute__((weak, used)) long _stub_fn_459() __asm__("_ZN11LightPreset7ReplaceEP6ObjRefPN3Hmx6ObjectE");
-extern "C" long _stub_fn_459() { return 0; }
+// LightPreset stubs removed — real impl in LightPreset.cpp
 // LocalePanel::AddDirEntries(ObjectDir*, char const*)
 extern "C" __attribute__((weak, used)) long _stub_fn_460() __asm__("_ZN11LocalePanel13AddDirEntriesEP9ObjectDirPKc");
 extern "C" long _stub_fn_460() { return 0; }
@@ -1925,9 +1902,7 @@ extern "C" long _stub_fn_685() { return 0; }
 // ObjRefConcrete<CharLipSync, ObjectDir>::CopyRef(ObjRefConcrete<CharLipSync, ObjectDir> const&)
 extern "C" __attribute__((weak, used)) long _stub_fn_686() __asm__("_ZN14ObjRefConcreteI11CharLipSync9ObjectDirE7CopyRefERKS2_");
 extern "C" long _stub_fn_686() { return 0; }
-// ObjRefConcrete<LightPreset, ObjectDir>::CopyRef(ObjRefConcrete<LightPreset, ObjectDir> const&)
-extern "C" __attribute__((weak, used)) long _stub_fn_687() __asm__("_ZN14ObjRefConcreteI11LightPreset9ObjectDirE7CopyRefERKS2_");
-extern "C" long _stub_fn_687() { return 0; }
+// ObjRefConcrete<LightPreset, ObjectDir>::CopyRef stub removed — real impl in LightPreset.cpp
 // ObjRefConcrete<RndDrawable, ObjectDir>::CopyRef(ObjRefConcrete<RndDrawable, ObjectDir> const&)
 extern "C" __attribute__((weak, used)) long _stub_fn_688() __asm__("_ZN14ObjRefConcreteI11RndDrawable9ObjectDirE7CopyRefERKS2_");
 extern "C" long _stub_fn_688() { return 0; }
@@ -3427,9 +3402,7 @@ extern "C" long _stub_fn_1288() { return 0; }
 // CampaignEra::GetName() const
 extern "C" __attribute__((weak, used)) long _stub_fn_1289() __asm__("_ZNK11CampaignEra7GetNameEv");
 extern "C" long _stub_fn_1289() { return 0; }
-// LightPreset::GetKey(float, int&, int&, float&) const
-extern "C" __attribute__((weak, used)) long _stub_fn_1290() __asm__("_ZNK11LightPreset6GetKeyEfRiS0_Rf");
-extern "C" long _stub_fn_1290() { return 0; }
+// LightPreset::GetKey stub removed — real impl in LightPreset.cpp
 // PlatformMgr::IsPadAGuest(int) const
 extern "C" __attribute__((weak, used)) long _stub_fn_1291() __asm__("_ZNK11PlatformMgr11IsPadAGuestEi");
 extern "C" long _stub_fn_1291() { return 0; }
@@ -3998,9 +3971,7 @@ extern "C" long _stub_fn_1497() { return 0; }
 // virtual thunk to RndEnviron::Load(BinStream&)
 extern "C" __attribute__((weak, used)) long _stub_fn_1498() __asm__("_ZTv0_n104_N10RndEnviron4LoadER9BinStream");
 extern "C" long _stub_fn_1498() { return 0; }
-// virtual thunk to LightPreset::Load(BinStream&)
-extern "C" __attribute__((weak, used)) long _stub_fn_1499() __asm__("_ZTv0_n104_N11LightPreset4LoadER9BinStream");
-extern "C" long _stub_fn_1499() { return 0; }
+// virtual thunk to LightPreset::Load stub removed — real impl in LightPreset.cpp
 // virtual thunk to DepthBuffer3D::Load(BinStream&)
 extern "C" __attribute__((weak, used)) long _stub_fn_1500() __asm__("_ZTv0_n104_N13DepthBuffer3D4LoadER9BinStream");
 extern "C" long _stub_fn_1500() { return 0; }
@@ -4065,9 +4036,7 @@ extern "C" long _stub_fn_1520() { return 0; }
 // virtual thunk to FlowAnimate::Replace(ObjRef*, Hmx::Object*)
 extern "C" __attribute__((weak, used)) long _stub_fn_1521() __asm__("_ZTv0_n40_N11FlowAnimate7ReplaceEP6ObjRefPN3Hmx6ObjectE");
 extern "C" long _stub_fn_1521() { return 0; }
-// virtual thunk to LightPreset::Replace(ObjRef*, Hmx::Object*)
-extern "C" __attribute__((weak, used)) long _stub_fn_1522() __asm__("_ZTv0_n40_N11LightPreset7ReplaceEP6ObjRefPN3Hmx6ObjectE");
-extern "C" long _stub_fn_1522() { return 0; }
+// virtual thunk to LightPreset::Replace stub removed — real impl in LightPreset.cpp
 // virtual thunk to RndParticleSys::Replace(ObjRef*, Hmx::Object*)
 extern "C" __attribute__((weak, used)) long _stub_fn_1523() __asm__("_ZTv0_n40_N14RndParticleSys7ReplaceEP6ObjRefPN3Hmx6ObjectE");
 extern "C" long _stub_fn_1523() { return 0; }
