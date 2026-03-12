@@ -677,6 +677,8 @@ DataNode AppLabel::OnSetUserName(const DataArray *a) {
     return 1;
 }
 
+// TODO: implement — SetTimeElapsedSince called by SetLastPlayedTime/PracticeTime
+#ifdef HX_NATIVE
 void AppLabel::SetStoreFilterName(const HamStoreFilter *) {}
-
 void AppLabel::SetTimeElapsedSince(unsigned int) {}
+#endif

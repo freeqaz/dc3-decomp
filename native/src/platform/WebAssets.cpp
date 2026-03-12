@@ -266,18 +266,30 @@ bool WebAssetsFetchSync(const char *memfsPath) {
     char url[512];
     snprintf(url, sizeof(url), "/api/file/%s", rel);
 
-    // Use synchronous XHR to fetch the file, then write to MEMFS via FS API
+    printf("WebAssets: on-demand fetch %s -> %s\n", url, memfsPath);
+
+    // Use synchronous XHR to fetch the file, then write to MEMFS via FS API.
+    // Note: synchronous XHR cannot set responseType="arraybuffer" in browsers,
+    // so we use overrideMimeType to force binary and manually convert the response.
     int result = EM_ASM_INT({
         try {
             var url = UTF8ToString($0);
             var memfsPath = UTF8ToString($1);
             var xhr = new XMLHttpRequest();
             xhr.open("GET", url, false);  // synchronous
-            xhr.responseType = "arraybuffer";
+            xhr.overrideMimeType("text/plain; charset=x-user-defined");
             xhr.send();
-            if (xhr.status !== 200) return 0;
+            if (xhr.status !== 200) {
+                console.log("WebAssets: XHR failed " + url + " status=" + xhr.status);
+                return 0;
+            }
 
-            var data = new Uint8Array(xhr.response);
+            // Convert binary string to Uint8Array
+            var text = xhr.responseText;
+            var data = new Uint8Array(text.length);
+            for (var i = 0; i < text.length; i++) {
+                data[i] = text.charCodeAt(i) & 0xFF;
+            }
 
             // Create parent directories
             var parts = memfsPath.split("/");
@@ -292,12 +304,15 @@ bool WebAssetsFetchSync(const char *memfsPath) {
             FS.writeFile(memfsPath, data);
             return 1;
         } catch(e) {
+            console.log("WebAssets: XHR exception: " + e);
             return 0;
         }
     }, url, memfsPath);
 
     if (result) {
-        printf("WebAssets: fetched on-demand %s\n", rel);
+        printf("WebAssets: fetched on-demand %s (%s)\n", rel, memfsPath);
+    } else {
+        printf("WebAssets: FAILED on-demand fetch %s\n", rel);
     }
     return result != 0;
 }

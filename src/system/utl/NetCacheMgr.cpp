@@ -333,6 +333,8 @@ bool NetLoaderRef::IsDownloading() {
         return !mCacheLoader || (int)mCacheLoader->mState == 2;
 }
 
+// TODO: implement — TU-level inlining effects on AddNetCacheLoader/AddNetLoader
+#ifdef HX_NATIVE
 NetLoaderRef &NetLoaderRef::operator=(const NetLoaderRef &other) {
     mName = other.mName;
     mRefCount = other.mRefCount;
@@ -340,12 +342,10 @@ NetLoaderRef &NetLoaderRef::operator=(const NetLoaderRef &other) {
     mCacheLoader = other.mCacheLoader;
     return *this;
 }
-
 bool NetLoaderRef::IsLoadedOrFailed() { return false; }
-
 void NetCacheMgr::PollLoaders() {}
-
 NetLoaderRef *NetCacheMgr::AddLoaderRef(const char *, RefType, NetLoaderPos) { return nullptr; }
+#endif
 
 void NetCacheMgrInit() {
     MILO_ASSERT(TheNetCacheMgr == NULL, 0x1f);

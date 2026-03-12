@@ -1099,8 +1099,10 @@ target_link_options(dc3-web PRIVATE
     -sENVIRONMENT=web,node
     -sEXPORTED_FUNCTIONS=["_main"]
     -sEXPORTED_RUNTIME_METHODS=["ccall","cwrap"]
-    # Allow undefined symbols — engine stubs use asm-labels that wasm-ld can't resolve
+    # Allow undefined symbols — engine stubs use asm-labels that wasm-ld can't resolve.
     -sERROR_ON_UNDEFINED_SYMBOLS=0
+    # Make missing function calls log instead of abort (many Xbox-specific funcs not needed)
+    --pre-js ${CMAKE_CURRENT_SOURCE_DIR}/web/missing_stubs.js
     -sUSE_ZLIB=1
     -sFETCH=1
     # Debug: keep function names for stack traces

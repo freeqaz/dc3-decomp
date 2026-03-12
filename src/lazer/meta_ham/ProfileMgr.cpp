@@ -981,10 +981,10 @@ void ProfileMgr::Poll() {
     }
 }
 
+// TODO: implement — GetPadExtraLag called by GetSyncOffset
+#ifdef HX_NATIVE
 float ProfileMgr::GetPadExtraLag(int, LagContext) const { return 0.0f; }
-
 Symbol ProfileMgr::GetAlternateOutfit(Symbol) { return Symbol(""); }
-
 void ProfileMgr::LoadGlobalOptions(FixedSizeSaveableStream &) {}
-
 DataNode ProfileMgr::OnMsg(const SigninChangedMsg &) { return DataNode(0); }
+#endif

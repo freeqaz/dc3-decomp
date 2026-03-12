@@ -1,8 +1,21 @@
 R"WGSL(
 // DC3 Native — Standard Material Shader
-// Supports: diffuse texture, normal mapping, specular/emissive/rim maps,
-//           multi-light directional lighting, vertex color, alpha test,
-//           fog, specular (Blinn-Phong), emissive, rim lighting, intensify
+// This file mirrors the Xbox-era material feature set, but is written to be
+// readable as authored WGSL rather than as a direct extraction artifact.
+// Supports: diffuse texture, normal mapping, detail normals, emissive/spec/rim
+// maps, directional + point lights, alpha test, fog, environment maps, skin,
+// hair, texgen, and skinned meshes.
+
+const kShaderVariationNone = 0.0;
+const kShaderVariationSkin = 1.0;
+const kShaderVariationHair = 2.0;
+
+const kTexGenNone = 0.0;
+const kTexGenXfm = 1.0;
+const kTexGenSphere = 2.0;
+const kTexGenProjected = 3.0;
+const kTexGenXfmOrigin = 4.0;
+const kTexGenEnviron = 5.0;
 
 // === Bind Group 0: Per-scene (camera, environment) ===
 struct SceneUniforms {
@@ -127,43 +140,407 @@ struct VertexOutput {
     @location(5) worldBitangent: vec3f,
 };
 
-// === TexGen UV computation ===
-fn computeTexGenUV(baseUV: vec2f, worldPos: vec3f, N: vec3f, V: vec3f) -> vec2f {
-    let mode = material.texGenMode;
-    if (mode < 0.5) {
-        return baseUV; // kTexGenNone
+struct LightingTerms {
+    diffuse: vec3f,
+    specular: vec3f,
+};
+
+fn isEnabled(value: f32) -> bool {
+    return value > 0.5;
+}
+
+fn shaderVariationIs(value: f32, expectedVariation: f32) -> bool {
+    return value > expectedVariation - 0.5 && value < expectedVariation + 0.5;
+}
+
+fn texGenModeIs(value: f32, expectedMode: f32) -> bool {
+    return value > expectedMode - 0.5 && value < expectedMode + 0.5;
+}
+
+fn boneWeightAt(weights: vec4f, influenceIndex: u32) -> f32 {
+    switch (influenceIndex) {
+        case 0u: { return weights.x; }
+        case 1u: { return weights.y; }
+        case 2u: { return weights.z; }
+        default: { return weights.w; }
     }
-    if (mode < 1.5) {
-        // kTexGenXfm: transform UV about (0.5, 0.5) center
-        let centered = baseUV - vec2f(0.5);
+}
+
+fn boneIndexAt(indices: vec4u, influenceIndex: u32) -> u32 {
+    switch (influenceIndex) {
+        case 0u: { return indices.x; }
+        case 1u: { return indices.y; }
+        case 2u: { return indices.z; }
+        default: { return indices.w; }
+    }
+}
+
+fn normalizeBoneWeights(rawWeights: vec4f) -> vec4f {
+    let totalWeight = rawWeights.x + rawWeights.y + rawWeights.z + rawWeights.w;
+    if (totalWeight > 0.0) {
+        return rawWeights / totalWeight;
+    }
+
+    // UDEC4N bone weights can decode to all zeros on bad/missing data. Preserve
+    // the original fallback of binding the vertex entirely to the first bone.
+    return vec4f(1.0, 0.0, 0.0, 0.0);
+}
+
+// === TexGen UV computation ===
+fn computeTexGenUV(baseUV: vec2f, worldPos: vec3f, worldNormal: vec3f, viewDir: vec3f) -> vec2f {
+    let texGenMode = material.texGenMode;
+    if (texGenModeIs(texGenMode, kTexGenNone)) {
+        return baseUV;
+    }
+
+    if (texGenModeIs(texGenMode, kTexGenXfm)) {
+        // kTexGenXfm: transform UV about the 0.5-centered texture origin.
+        let centeredUV = baseUV - vec2f(0.5);
         return vec2f(
-            dot(centered, material.texXfmRow0.xy) + material.texXfmRow0.z + 0.5,
-            dot(centered, material.texXfmRow1.xy) + material.texXfmRow1.z + 0.5
+            dot(centeredUV, material.texXfmRow0.xy) + material.texXfmRow0.z + 0.5,
+            dot(centeredUV, material.texXfmRow1.xy) + material.texXfmRow1.z + 0.5
         );
     }
-    if (mode < 2.5) {
-        // kTexGenSphere: sphere map from view-space normal
-        let viewNormal = (scene.view * vec4f(N, 0.0)).xyz;
-        return viewNormal.xy * 0.5 + 0.5;
+
+    if (texGenModeIs(texGenMode, kTexGenSphere)) {
+        // kTexGenSphere: classic view-space sphere map from the world normal.
+        let viewSpaceNormal = (scene.view * vec4f(worldNormal, 0.0)).xyz;
+        return viewSpaceNormal.xy * 0.5 + 0.5;
     }
-    if (mode < 3.5) {
-        // kTexGenProjected: project from xfm direction in world coords
+
+    if (texGenModeIs(texGenMode, kTexGenProjected)) {
+        // kTexGenProjected: project world position onto the stored transform rows.
         return vec2f(
             dot(worldPos, material.texXfmRow0.xyz) + material.texXfmRow0.w,
             dot(worldPos, material.texXfmRow1.xyz) + material.texXfmRow1.w
         );
     }
-    if (mode < 4.5) {
-        // kTexGenXfmOrigin: transform UV about origin (not center)
+
+    if (texGenModeIs(texGenMode, kTexGenXfmOrigin)) {
+        // kTexGenXfmOrigin: transform UVs without re-centering them around 0.5.
         return vec2f(
             dot(baseUV, material.texXfmRow0.xy) + material.texXfmRow0.z,
             dot(baseUV, material.texXfmRow1.xy) + material.texXfmRow1.z
         );
     }
-    // kTexGenEnviron: reflection-based UV (perspective-correct sphere map)
-    let R = reflect(-V, N);
-    let viewR = (scene.view * vec4f(R, 0.0)).xyz;
-    return viewR.xy * 0.5 + 0.5;
+
+    // kTexGenEnviron: reflection-based UVs for legacy environment-mapped materials.
+    let reflectionDir = reflect(-viewDir, worldNormal);
+    let viewSpaceReflection = (scene.view * vec4f(reflectionDir, 0.0)).xyz;
+    return viewSpaceReflection.xy * 0.5 + 0.5;
+}
+
+fn decodeTangentSpaceNormal(normalSample: vec4f) -> vec3f {
+    // Xbox 360 assets frequently use DXT5nm (X in alpha, Y in green). If R and B
+    // are basically empty, treat it as that encoding; otherwise use plain RGB XYZ.
+    if (normalSample.r + normalSample.b < 0.1) {
+        let tangentX = normalSample.a * 2.0 - 1.0;
+        let tangentY = normalSample.g * 2.0 - 1.0;
+        let tangentZ = sqrt(max(1.0 - tangentX * tangentX - tangentY * tangentY, 0.0));
+
+        if (normalSample.a < 0.01 && normalSample.g < 0.01) {
+            return vec3f(0.0, 0.0, 1.0);
+        }
+
+        return vec3f(tangentX, tangentY, tangentZ);
+    }
+
+    return normalSample.rgb * 2.0 - 1.0;
+}
+
+fn applyDeNormal(tangentSpaceNormal: vec3f) -> vec3f {
+    let diminishAmount = clamp(material.deNormal, -3.0, 1.0);
+    return normalize(vec3f(
+        tangentSpaceNormal.x * (1.0 - diminishAmount),
+        tangentSpaceNormal.y * (1.0 - diminishAmount),
+        mix(tangentSpaceNormal.z, 1.0, max(diminishAmount, 0.0))
+    ));
+}
+
+fn blendDetailNormal(baseNormal: vec3f, uv: vec2f) -> vec3f {
+    if (!isEnabled(material.hasNormDetailMap)) {
+        return baseNormal;
+    }
+
+    let detailUV = uv * material.normDetailTiling;
+    let detailSample = textureSample(normDetailMapTex, mapSampler, detailUV);
+    let detailNormal = detailSample.xyz * 2.0 - 1.0;
+    return normalize(vec3f(
+        baseNormal.x + detailNormal.x * material.normDetailStrength,
+        baseNormal.y + detailNormal.y * material.normDetailStrength,
+        baseNormal.z
+    ));
+}
+
+fn sampleSurfaceNormal(in: VertexOutput) -> vec3f {
+    var worldNormal = normalize(in.worldNormal);
+    if (!isEnabled(material.hasNormalMap)) {
+        return worldNormal;
+    }
+
+    let normalSample = textureSample(normalMapTex, mapSampler, in.uv);
+    var tangentSpaceNormal = decodeTangentSpaceNormal(normalSample);
+    tangentSpaceNormal = applyDeNormal(tangentSpaceNormal);
+    tangentSpaceNormal = blendDetailNormal(tangentSpaceNormal, in.uv);
+
+    let worldTangent = normalize(in.worldTangent);
+    let worldBitangent = normalize(in.worldBitangent);
+    worldNormal = normalize(
+        worldTangent * tangentSpaceNormal.x +
+        worldBitangent * tangentSpaceNormal.y +
+        worldNormal * tangentSpaceNormal.z
+    );
+
+    return worldNormal;
+}
+
+fn emptyLightingTerms() -> LightingTerms {
+    return LightingTerms(vec3f(0.0), vec3f(0.0));
+}
+
+fn pointLightRangeAt(lightIndex: i32) -> f32 {
+    switch (lightIndex) {
+        case 0: { return scene.pointLightRanges.x; }
+        case 1: { return scene.pointLightRanges.y; }
+        case 2: { return scene.pointLightRanges.z; }
+        default: { return scene.pointLightRanges.w; }
+    }
+}
+
+fn sampleShadowFactor(worldPos: vec3f) -> f32 {
+    let shadowClipPos = scene.lightViewProj * vec4f(worldPos, 1.0);
+    let shadowNdc = shadowClipPos.xyz / shadowClipPos.w;
+    let unclampedShadowUV = shadowNdc.xy * vec2f(0.5, -0.5) + 0.5;
+    let clampedShadowUV = clamp(unclampedShadowUV, vec2f(0.0), vec2f(1.0));
+    let compareDepth = clamp(shadowNdc.z - scene.shadowBias, 0.0, 1.0);
+    let texelSize = 1.0 / max(scene.shadowMapSize, 1.0);
+
+    // textureSampleCompare must stay in uniform control flow, so always sample.
+    var shadowVisibility = 0.0;
+    shadowVisibility += textureSampleCompare(shadowMap, shadowSampler, clampedShadowUV + vec2f(-texelSize, -texelSize), compareDepth);
+    shadowVisibility += textureSampleCompare(shadowMap, shadowSampler, clampedShadowUV + vec2f(0.0, -texelSize), compareDepth);
+    shadowVisibility += textureSampleCompare(shadowMap, shadowSampler, clampedShadowUV + vec2f(texelSize, -texelSize), compareDepth);
+    shadowVisibility += textureSampleCompare(shadowMap, shadowSampler, clampedShadowUV + vec2f(-texelSize, 0.0), compareDepth);
+    shadowVisibility += textureSampleCompare(shadowMap, shadowSampler, clampedShadowUV, compareDepth);
+    shadowVisibility += textureSampleCompare(shadowMap, shadowSampler, clampedShadowUV + vec2f(texelSize, 0.0), compareDepth);
+    shadowVisibility += textureSampleCompare(shadowMap, shadowSampler, clampedShadowUV + vec2f(-texelSize, texelSize), compareDepth);
+    shadowVisibility += textureSampleCompare(shadowMap, shadowSampler, clampedShadowUV + vec2f(0.0, texelSize), compareDepth);
+    shadowVisibility += textureSampleCompare(shadowMap, shadowSampler, clampedShadowUV + vec2f(texelSize, texelSize), compareDepth);
+    shadowVisibility /= 9.0;
+
+    let shadowLookupValid = isEnabled(scene.shadowEnabled)
+        && unclampedShadowUV.x >= 0.0 && unclampedShadowUV.x <= 1.0
+        && unclampedShadowUV.y >= 0.0 && unclampedShadowUV.y <= 1.0
+        && shadowNdc.z >= 0.0 && shadowNdc.z <= 1.0;
+    if (shadowLookupValid) {
+        return mix(scene.shadowStrength, 1.0, shadowVisibility);
+    }
+
+    return 1.0;
+}
+
+fn computeStandardLight(
+    surfaceNormal: vec3f,
+    viewDir: vec3f,
+    lightDir: vec3f,
+    lightColor: vec3f,
+    specularSample: vec4f
+) -> LightingTerms {
+    var lighting = emptyLightingTerms();
+    let lambert = max(dot(surfaceNormal, lightDir), 0.0);
+    lighting.diffuse = lightColor * lambert;
+
+    if (material.specularPower > 0.0) {
+        let halfVector = normalize(lightDir + viewDir);
+        let glossExponent = max(material.specularPower * specularSample.a, 1.0);
+        let specularStrength = pow(max(dot(surfaceNormal, halfVector), 0.0), glossExponent);
+        lighting.specular =
+            material.specularColor.rgb *
+            specularSample.rgb *
+            lightColor *
+            specularStrength;
+    }
+
+    return lighting;
+}
+
+fn computeSkinLight(
+    surfaceNormal: vec3f,
+    viewDir: vec3f,
+    lightDir: vec3f,
+    lightColor: vec3f,
+    specularSample: vec4f
+) -> LightingTerms {
+    var lighting = emptyLightingTerms();
+    let rawNdotL = dot(surfaceNormal, lightDir);
+
+    // Half-Lambert softens the terminator; the warm tint approximates cheap SSS.
+    let wrappedDiffuse = rawNdotL * 0.5 + 0.5;
+    let skinDiffuse = wrappedDiffuse * wrappedDiffuse;
+    let shadowZone = smoothstep(0.0, 0.5, rawNdotL);
+    let warmShadowTint = mix(vec3f(0.85, 0.45, 0.25), vec3f(1.0), shadowZone);
+    lighting.diffuse = lightColor * skinDiffuse * warmShadowTint;
+
+    let halfVector = normalize(lightDir + viewDir);
+    let specularDot = max(dot(surfaceNormal, halfVector), 0.0);
+
+    if (material.specularPower > 0.0) {
+        let primaryExponent = max(material.specularPower * specularSample.a, 1.0);
+        let primaryLobe = pow(specularDot, primaryExponent);
+        lighting.specular +=
+            material.specularColor.rgb *
+            specularSample.rgb *
+            lightColor *
+            primaryLobe;
+    }
+
+    let secondaryExponent = material.specular2Color.a;
+    if (secondaryExponent > 0.0) {
+        let secondaryLobe = pow(specularDot, secondaryExponent);
+        lighting.specular += material.specular2Color.rgb * lightColor * secondaryLobe;
+    }
+
+    return lighting;
+}
+
+fn computeHairLight(
+    surfaceNormal: vec3f,
+    viewDir: vec3f,
+    lightDir: vec3f,
+    lightColor: vec3f,
+    worldTangent: vec3f,
+    specularSample: vec4f
+) -> LightingTerms {
+    var lighting = emptyLightingTerms();
+    let wrappedDiffuse = dot(surfaceNormal, lightDir) * 0.5 + 0.5;
+    lighting.diffuse = lightColor * wrappedDiffuse;
+
+    let strandTangent = normalize(worldTangent);
+    let halfVector = normalize(lightDir + viewDir);
+    let tangentDotHalf = dot(strandTangent, halfVector);
+    let sineTerm = sqrt(max(1.0 - tangentDotHalf * tangentDotHalf, 0.0));
+    let anisotropicExponent = max(material.anisotropy, 1.0);
+    let anisotropicSpecular = pow(sineTerm, anisotropicExponent);
+    lighting.specular =
+        material.specularColor.rgb *
+        specularSample.rgb *
+        lightColor *
+        anisotropicSpecular;
+
+    return lighting;
+}
+
+fn computeDirectionalLight(
+    surfaceNormal: vec3f,
+    viewDir: vec3f,
+    lightDir: vec3f,
+    lightColor: vec3f,
+    worldTangent: vec3f,
+    specularSample: vec4f,
+    useSkinShader: bool,
+    useHairShader: bool
+) -> LightingTerms {
+    if (useHairShader) {
+        return computeHairLight(surfaceNormal, viewDir, lightDir, lightColor, worldTangent, specularSample);
+    }
+
+    if (useSkinShader) {
+        return computeSkinLight(surfaceNormal, viewDir, lightDir, lightColor, specularSample);
+    }
+
+    return computeStandardLight(surfaceNormal, viewDir, lightDir, lightColor, specularSample);
+}
+
+fn computePointLight(
+    surfaceNormal: vec3f,
+    viewDir: vec3f,
+    worldPos: vec3f,
+    lightIndex: i32,
+    specularSample: vec4f
+) -> LightingTerms {
+    var lighting = emptyLightingTerms();
+    let lightPos = scene.pointLightPos[lightIndex].xyz;
+    let toLight = lightPos - worldPos;
+    let lightDistance = length(toLight);
+    let lightDir = toLight / max(lightDistance, 0.001);
+
+    let lightRange = pointLightRangeAt(lightIndex);
+    let rangeAttenuation = saturate(1.0 - lightDistance / max(lightRange, 0.001));
+    let falloff = rangeAttenuation * rangeAttenuation;
+    let lightColor = scene.pointLightColors[lightIndex].rgb * falloff;
+
+    let lambert = max(dot(surfaceNormal, lightDir), 0.0);
+    lighting.diffuse = lightColor * lambert;
+
+    if (material.specularPower > 0.0) {
+        let halfVector = normalize(lightDir + viewDir);
+        let glossExponent = max(material.specularPower * specularSample.a, 1.0);
+        let specularStrength = pow(max(dot(surfaceNormal, halfVector), 0.0), glossExponent);
+        lighting.specular =
+            material.specularColor.rgb *
+            specularSample.rgb *
+            lightColor *
+            specularStrength;
+    }
+
+    return lighting;
+}
+
+fn computeRimLighting(surfaceNormal: vec3f, viewDir: vec3f, uv: vec2f) -> vec3f {
+    let rimPower = max(material.rimColor.a, 0.5);
+    if (rimPower <= 0.0 || length(material.rimColor.rgb) <= 0.0) {
+        return vec3f(0.0);
+    }
+
+    let rimMapSample = textureSample(rimMapTex, mapSampler, uv);
+    let rimDot = 1.0 - max(dot(surfaceNormal, viewDir), 0.0);
+    let rimExponent = max(rimPower * rimMapSample.a, 0.5);
+    var rimColor =
+        pow(rimDot, rimExponent) *
+        material.rimColor.rgb *
+        rimMapSample.rgb *
+        0.15;
+
+    // Some materials only want rim light where the main light is behind the surface.
+    if (isEnabled(material.rimLightUnder) && scene.numLights > 0.0) {
+        let primaryLightDir = normalize(-scene.lightDirs[0].xyz);
+        let backlightMask = saturate(1.0 - dot(surfaceNormal, primaryLightDir));
+        rimColor *= backlightMask;
+    }
+
+    return rimColor;
+}
+
+fn computeEnvironmentReflection(surfaceNormal: vec3f, viewDir: vec3f, specularSample: vec4f) -> vec3f {
+    if (!isEnabled(material.environMapStrength)) {
+        return vec3f(0.0);
+    }
+
+    let reflectionDir = reflect(-viewDir, surfaceNormal);
+    let environmentColor = textureSample(environMapTex, environSampler, reflectionDir).rgb;
+
+    var fresnelFactor = 1.0;
+    if (isEnabled(material.environMapFalloff)) {
+        let viewDotNormal = max(dot(surfaceNormal, viewDir), 0.0);
+        fresnelFactor = 1.0 - viewDotNormal;
+        fresnelFactor *= fresnelFactor;
+    }
+
+    var reflectionMask = 1.0;
+    if (isEnabled(material.environMapSpecMask)) {
+        reflectionMask = specularSample.a;
+    }
+
+    return environmentColor * fresnelFactor * reflectionMask;
+}
+
+fn compressHighlights(color: vec3f) -> vec3f {
+    let knee = vec3f(0.9);
+    return select(
+        color,
+        knee + (vec3f(1.0) - knee) * tanh((color - knee) / (vec3f(1.0) - knee)),
+        color > knee
+    );
 }
 
 // === Vertex Shader (static meshes) ===
@@ -172,20 +549,17 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     var out: VertexOutput;
 
     let worldPos = (object.world * vec4f(in.position, 1.0)).xyz;
+    let worldNormal = normalize((object.worldInvTranspose * vec4f(in.normal, 0.0)).xyz);
+    let viewDir = normalize(scene.cameraPos - worldPos);
+    let worldTangent = normalize((object.world * vec4f(in.tangent.xyz, 0.0)).xyz);
+
     out.clipPos = scene.viewProj * vec4f(worldPos, 1.0);
     out.worldPos = worldPos;
-    let N = normalize((object.worldInvTranspose * vec4f(in.normal, 0.0)).xyz);
-    out.worldNormal = N;
+    out.worldNormal = worldNormal;
     out.color = in.color;
-
-    // TexGen UV computation
-    let V_vs = normalize(scene.cameraPos - worldPos);
-    out.uv = computeTexGenUV(in.uv, worldPos, N, V_vs);
-
-    // Transform tangent to world space, compute bitangent
-    let T = normalize((object.world * vec4f(in.tangent.xyz, 0.0)).xyz);
-    out.worldTangent = T;
-    out.worldBitangent = cross(N, T) * in.tangent.w;
+    out.uv = computeTexGenUV(in.uv, worldPos, worldNormal, viewDir);
+    out.worldTangent = worldTangent;
+    out.worldBitangent = cross(worldNormal, worldTangent) * in.tangent.w;
 
     return out;
 }
@@ -195,54 +569,35 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 fn vs_skinned(in: SkinnedVertexInput) -> VertexOutput {
     var out: VertexOutput;
 
-    // Blend position, normal, and tangent across up to 4 bones
-    var skinnedPos = vec4f(0.0);
-    var skinnedNorm = vec4f(0.0);
-    var skinnedTan = vec4f(0.0);
-    let indices = in.boneIndices;
+    var blendedPosition = vec4f(0.0);
+    var blendedNormal = vec4f(0.0);
+    var blendedTangent = vec4f(0.0);
+    let normalizedWeights = normalizeBoneWeights(in.boneWeights);
 
-    // Normalize weights — UDEC4N (10-10-10-2) may not sum to 1.0
-    let rawWeights = in.boneWeights;
-    let totalWeight = rawWeights.x + rawWeights.y + rawWeights.z + rawWeights.w;
-    var weights: vec4f;
-    if (totalWeight > 0.0) {
-        weights = rawWeights / totalWeight;
-    } else {
-        weights = vec4f(1.0, 0.0, 0.0, 0.0); // fallback: 100% to first bone
+    for (var influenceIndex = 0u; influenceIndex < 4u; influenceIndex++) {
+        let influenceWeight = boneWeightAt(normalizedWeights, influenceIndex);
+        if (influenceWeight <= 0.0) {
+            continue;
+        }
+
+        let boneMatrix = bones[boneIndexAt(in.boneIndices, influenceIndex)];
+        blendedPosition += influenceWeight * (boneMatrix * vec4f(in.position, 1.0));
+        blendedNormal += influenceWeight * (boneMatrix * vec4f(in.normal, 0.0));
+        blendedTangent += influenceWeight * (boneMatrix * vec4f(in.tangent.xyz, 0.0));
     }
 
-    for (var i = 0u; i < 4u; i++) {
-        var w: f32;
-        var idx: u32;
-        switch(i) {
-            case 0u: { w = weights.x; idx = indices.x; }
-            case 1u: { w = weights.y; idx = indices.y; }
-            case 2u: { w = weights.z; idx = indices.z; }
-            default: { w = weights.w; idx = indices.w; }
-        }
-        if (w > 0.0) {
-            let m = bones[idx];
-            skinnedPos += w * (m * vec4f(in.position, 1.0));
-            skinnedNorm += w * (m * vec4f(in.normal, 0.0));
-            skinnedTan += w * (m * vec4f(in.tangent.xyz, 0.0));
-        }
-    }
+    let worldPos = (object.world * vec4f(blendedPosition.xyz, 1.0)).xyz;
+    let worldNormal = normalize((object.worldInvTranspose * vec4f(blendedNormal.xyz, 0.0)).xyz);
+    let viewDir = normalize(scene.cameraPos - worldPos);
+    let worldTangent = normalize((object.world * vec4f(blendedTangent.xyz, 0.0)).xyz);
 
-    // Apply object world transform
-    let worldPos = (object.world * vec4f(skinnedPos.xyz, 1.0)).xyz;
     out.clipPos = scene.viewProj * vec4f(worldPos, 1.0);
     out.worldPos = worldPos;
-    let N = normalize((object.worldInvTranspose * vec4f(skinnedNorm.xyz, 0.0)).xyz);
-    out.worldNormal = N;
+    out.worldNormal = worldNormal;
     out.color = in.color;
-
-    // TexGen UV computation
-    let V_sk = normalize(scene.cameraPos - worldPos);
-    out.uv = computeTexGenUV(in.uv, worldPos, N, V_sk);
-
-    let T = normalize((object.world * vec4f(skinnedTan.xyz, 0.0)).xyz);
-    out.worldTangent = T;
-    out.worldBitangent = cross(N, T) * in.tangent.w;
+    out.uv = computeTexGenUV(in.uv, worldPos, worldNormal, viewDir);
+    out.worldTangent = worldTangent;
+    out.worldBitangent = cross(worldNormal, worldTangent) * in.tangent.w;
 
     return out;
 }
@@ -250,289 +605,96 @@ fn vs_skinned(in: SkinnedVertexInput) -> VertexOutput {
 // === Fragment Shader ===
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
-    // Base color: material RGB tints vertex color.
-    var matAlpha = material.color.a;
-    var baseColor = vec4f(material.color.rgb * in.color.rgb, matAlpha * in.color.a);
+    let materialAlpha = material.color.a;
+    var baseColor = vec4f(material.color.rgb * in.color.rgb, materialAlpha * in.color.a);
 
-    // Sample diffuse texture if available
-    if (material.useTexture > 0.5) {
-        let texColor = textureSample(diffuseTex, diffuseSampler, in.uv);
-        // Font textures (DXT5): glyph shape is in alpha, RGB is garbage.
-        // Use alpha as grayscale RGB when useAlphaAsRGB is set.
-        if (material.useAlphaAsRGB > 0.5) {
-            baseColor = vec4f(baseColor.rgb * texColor.a, baseColor.a * texColor.a);
+    if (isEnabled(material.useTexture)) {
+        let diffuseSample = textureSample(diffuseTex, diffuseSampler, in.uv);
+        if (isEnabled(material.useAlphaAsRGB)) {
+            baseColor = vec4f(baseColor.rgb * diffuseSample.a, baseColor.a * diffuseSample.a);
         } else {
-            baseColor = vec4f(baseColor.rgb * texColor.rgb, baseColor.a * texColor.a);
+            baseColor = vec4f(baseColor.rgb * diffuseSample.rgb, baseColor.a * diffuseSample.a);
         }
     }
 
-    // Apply intensify (doubles texture brightness)
+    // Intensify is the original material toggle that doubles texture brightness.
     baseColor = vec4f(baseColor.rgb * material.intensify, baseColor.a);
 
-    // Alpha test
     if (baseColor.a < material.alphaThreshold) {
         discard;
     }
 
-    // Compute normal — apply normal map if present
-    var N = normalize(in.worldNormal);
-    if (material.hasNormalMap > 0.5) {
-        let normalSample = textureSample(normalMapTex, mapSampler, in.uv);
-        var tsNormal: vec3f;
-        // Detect format: DXT5nm has data in alpha+green only (R+B near zero)
-        // Standard RGB normal maps have data in all channels
-        if (normalSample.r + normalSample.b < 0.1) {
-            // DXT5nm format (Xbox 360): X in alpha, Y in green, reconstruct Z
-            let nx = normalSample.a * 2.0 - 1.0;
-            let ny = normalSample.g * 2.0 - 1.0;
-            let nz = sqrt(max(1.0 - nx * nx - ny * ny, 0.0));
-            tsNormal = vec3f(nx, ny, nz);
-            // If all channels are zero, the texture is missing — use flat normal
-            if (normalSample.a < 0.01 && normalSample.g < 0.01) {
-                tsNormal = vec3f(0.0, 0.0, 1.0);
-            }
-        } else {
-            // Standard RGB normal map: XYZ in RGB
-            tsNormal = normalSample.rgb * 2.0 - 1.0;
+    let surfaceNormal = sampleSurfaceNormal(in);
+    let viewDir = normalize(scene.cameraPos - in.worldPos);
+    let specularSample = textureSample(specularMapTex, mapSampler, in.uv);
+    let useSkinShader = shaderVariationIs(material.shaderVariation, kShaderVariationSkin);
+    let useHairShader = shaderVariationIs(material.shaderVariation, kShaderVariationHair);
+    let shadowFactor = sampleShadowFactor(in.worldPos);
+
+    var totalLighting = emptyLightingTerms();
+    let directionalLightCount = i32(scene.numLights);
+    for (var lightIndex = 0; lightIndex < 4; lightIndex++) {
+        if (lightIndex >= directionalLightCount) {
+            break;
         }
-        // Apply deNormal: lerp toward (0,0,1) — 0=neutral, 1=flat, -1=exaggerate
-        let diminish = clamp(material.deNormal, -3.0, 1.0);
-        tsNormal = vec3f(
-            tsNormal.x * (1.0 - diminish),
-            tsNormal.y * (1.0 - diminish),
-            mix(tsNormal.z, 1.0, max(diminish, 0.0))
+
+        let lightDir = normalize(-scene.lightDirs[lightIndex].xyz);
+        let lightColor = scene.lightColors[lightIndex].rgb;
+        let lightContribution = computeDirectionalLight(
+            surfaceNormal,
+            viewDir,
+            lightDir,
+            lightColor,
+            in.worldTangent,
+            specularSample,
+            useSkinShader,
+            useHairShader
         );
-        tsNormal = normalize(tsNormal);
-        // Blend detail normal map (UDN method)
-        if (material.hasNormDetailMap > 0.5) {
-            let detailUV = in.uv * material.normDetailTiling;
-            let detailSample = textureSample(normDetailMapTex, mapSampler, detailUV);
-            let detailNorm = detailSample.xyz * 2.0 - 1.0;
-            tsNormal = normalize(vec3f(
-                tsNormal.x + detailNorm.x * material.normDetailStrength,
-                tsNormal.y + detailNorm.y * material.normDetailStrength,
-                tsNormal.z
-            ));
-        }
-        // Build TBN matrix and transform to world space
-        let T = normalize(in.worldTangent);
-        let B = normalize(in.worldBitangent);
-        N = normalize(T * tsNormal.x + B * tsNormal.y + N * tsNormal.z);
+        totalLighting.diffuse += lightContribution.diffuse;
+        totalLighting.specular += lightContribution.specular;
     }
 
-    let V = normalize(scene.cameraPos - in.worldPos);
-
-
-
-    // Sample specular map (RGB = specular color mask, A = gloss/power mask)
-    let specMapSample = textureSample(specularMapTex, mapSampler, in.uv);
-
-    // Detect shader variation
-    let isSkin = material.shaderVariation > 0.5 && material.shaderVariation < 1.5;
-    let isHair = material.shaderVariation > 1.5 && material.shaderVariation < 2.5;
-
-    // Shadow sampling — compute once for the primary directional light
-    // Note: textureSampleCompare must be in uniform control flow (WGSL rule),
-    // so we always sample and use the UV bounds check only to mask the result.
-    var shadowFactor = 1.0;
-    let shadowClipPos = scene.lightViewProj * vec4f(in.worldPos, 1.0);
-    let shadowNdc = shadowClipPos.xyz / shadowClipPos.w;
-    let shadowUV = clamp(shadowNdc.xy * vec2f(0.5, -0.5) + 0.5, vec2f(0.0), vec2f(1.0));
-    let shadowDepth = clamp(shadowNdc.z - scene.shadowBias, 0.0, 1.0);
-    let texel = 1.0 / max(scene.shadowMapSize, 1.0);
-    // 3x3 PCF — unrolled because textureSampleCompare requires uniform control flow
-    var shadowSum = 0.0;
-    shadowSum += textureSampleCompare(shadowMap, shadowSampler, shadowUV + vec2f(-texel, -texel), shadowDepth);
-    shadowSum += textureSampleCompare(shadowMap, shadowSampler, shadowUV + vec2f(0.0, -texel), shadowDepth);
-    shadowSum += textureSampleCompare(shadowMap, shadowSampler, shadowUV + vec2f(texel, -texel), shadowDepth);
-    shadowSum += textureSampleCompare(shadowMap, shadowSampler, shadowUV + vec2f(-texel, 0.0), shadowDepth);
-    shadowSum += textureSampleCompare(shadowMap, shadowSampler, shadowUV, shadowDepth);
-    shadowSum += textureSampleCompare(shadowMap, shadowSampler, shadowUV + vec2f(texel, 0.0), shadowDepth);
-    shadowSum += textureSampleCompare(shadowMap, shadowSampler, shadowUV + vec2f(-texel, texel), shadowDepth);
-    shadowSum += textureSampleCompare(shadowMap, shadowSampler, shadowUV + vec2f(0.0, texel), shadowDepth);
-    shadowSum += textureSampleCompare(shadowMap, shadowSampler, shadowUV + vec2f(texel, texel), shadowDepth);
-    shadowSum /= 9.0;
-    // Only apply shadow when enabled and within shadow map bounds
-    let rawUV = shadowNdc.xy * vec2f(0.5, -0.5) + 0.5;
-    let inShadowBounds = scene.shadowEnabled > 0.5
-        && rawUV.x >= 0.0 && rawUV.x <= 1.0
-        && rawUV.y >= 0.0 && rawUV.y <= 1.0
-        && shadowNdc.z >= 0.0 && shadowNdc.z <= 1.0;
-    if (inShadowBounds) {
-        shadowFactor = mix(scene.shadowStrength, 1.0, shadowSum);
-    }
-
-    // Accumulate diffuse and specular from all active lights
-    var totalDiffuse = vec3f(0.0);
-    var totalSpecular = vec3f(0.0);
-    let lightCount = i32(scene.numLights);
-
-    for (var i = 0; i < 4; i++) {
-        if (i >= lightCount) { break; }
-
-        let L = normalize(-scene.lightDirs[i].xyz);
-        let lightColor = scene.lightColors[i].rgb;
-        let rawNdotL = dot(N, L);
-
-        if (isHair) {
-            // --- Hair shader: Kajiya-Kay anisotropic specular ---
-            // Wrap diffuse (same as skin — hair benefits from soft shadows)
-            let wrapNdotL = rawNdotL * 0.5 + 0.5;
-            totalDiffuse += lightColor * wrapNdotL;
-
-            // Kajiya-Kay: specular highlight shifts along strand tangent
-            let T = normalize(in.worldTangent);
-            let H = normalize(L + V);
-            let TdotH = dot(T, H);
-            let sinTH = sqrt(max(1.0 - TdotH * TdotH, 0.0));
-            let anisoExp = max(material.anisotropy, 1.0);
-            let anisoSpec = pow(sinTH, anisoExp);
-            totalSpecular += material.specularColor.rgb * specMapSample.rgb * lightColor * anisoSpec;
-        } else if (isSkin) {
-            // --- Skin shader: Half-Lambert + warm shadow tint + dual specular ---
-
-            // Half-Lambert (wrap) diffuse — softens shadow falloff
-            let wrapNdotL = rawNdotL * 0.5 + 0.5;
-            let skinDiffuse = wrapNdotL * wrapNdotL;
-
-            // Warm shadow tint at the terminator (cheap SSS approximation)
-            let shadowZone = smoothstep(0.0, 0.5, rawNdotL);
-            let warmTint = mix(vec3f(0.85, 0.45, 0.25), vec3f(1.0), shadowZone);
-            totalDiffuse += lightColor * skinDiffuse * warmTint;
-
-            // Dual specular lobes
-            let H = normalize(L + V);
-            let NdotH = max(dot(N, H), 0.0);
-
-            // Lobe 1: primary specular from material, masked by specular map
-            if (material.specularPower > 0.0) {
-                let specPower = material.specularPower * specMapSample.a;
-                let spec1 = pow(NdotH, max(specPower, 1.0));
-                totalSpecular += material.specularColor.rgb * specMapSample.rgb * lightColor * spec1;
-            }
-
-            // Lobe 2: secondary (broad "oily skin" sheen)
-            let spec2Power = material.specular2Color.a;
-            if (spec2Power > 0.0) {
-                let spec2 = pow(NdotH, spec2Power);
-                totalSpecular += material.specular2Color.rgb * lightColor * spec2;
-            }
-        } else {
-            // --- Standard Lambert + Blinn-Phong ---
-            let NdotL = max(rawNdotL, 0.0);
-            totalDiffuse += lightColor * NdotL;
-
-            if (material.specularPower > 0.0) {
-                let H = normalize(L + V);
-                let specPower = material.specularPower * specMapSample.a;
-                let spec = pow(max(dot(N, H), 0.0), max(specPower, 1.0));
-                totalSpecular += material.specularColor.rgb * specMapSample.rgb * lightColor * spec;
-            }
-        }
-    }
-
-    // Point lights
     let pointLightCount = i32(scene.numPointLights);
-    for (var pi = 0; pi < 4; pi++) {
-        if (pi >= pointLightCount) { break; }
-
-        let lightPos = scene.pointLightPos[pi].xyz;
-        let toLight = lightPos - in.worldPos;
-        let dist = length(toLight);
-        let L = toLight / max(dist, 0.001);
-
-        // Range-based attenuation (smooth falloff)
-        var range: f32;
-        switch(pi) {
-            case 0: { range = scene.pointLightRanges.x; }
-            case 1: { range = scene.pointLightRanges.y; }
-            case 2: { range = scene.pointLightRanges.z; }
-            default: { range = scene.pointLightRanges.w; }
+    for (var lightIndex = 0; lightIndex < 4; lightIndex++) {
+        if (lightIndex >= pointLightCount) {
+            break;
         }
-        let atten = saturate(1.0 - dist / max(range, 0.001));
-        let atten2 = atten * atten; // quadratic falloff
 
-        let lightColor = scene.pointLightColors[pi].rgb * atten2;
-        let NdotL = max(dot(N, L), 0.0);
-        totalDiffuse += lightColor * NdotL;
-
-        if (material.specularPower > 0.0) {
-            let H = normalize(L + V);
-            let specPower = material.specularPower * specMapSample.a;
-            let spec = pow(max(dot(N, H), 0.0), max(specPower, 1.0));
-            totalSpecular += material.specularColor.rgb * specMapSample.rgb * lightColor * spec;
-        }
+        let lightContribution = computePointLight(
+            surfaceNormal,
+            viewDir,
+            in.worldPos,
+            lightIndex,
+            specularSample
+        );
+        totalLighting.diffuse += lightContribution.diffuse;
+        totalLighting.specular += lightContribution.specular;
     }
 
-    let ambient = scene.ambientColor.rgb;
+    let ambientLight = scene.ambientColor.rgb;
     var finalColor: vec3f;
-    if (material.prelit > 0.5) {
-        // Pre-lit: vertex color already contains lighting, skip diffuse/specular
+    if (isEnabled(material.prelit)) {
         finalColor = baseColor.rgb;
     } else {
-        finalColor = baseColor.rgb * (ambient + totalDiffuse * shadowFactor) + totalSpecular * shadowFactor;
+        finalColor =
+            baseColor.rgb * (ambientLight + totalLighting.diffuse * shadowFactor) +
+            totalLighting.specular * shadowFactor;
     }
 
-    // Emissive (self-illumination) — modulated by emissive map
     let emissiveSample = textureSample(emissiveMapTex, mapSampler, in.uv);
     finalColor += baseColor.rgb * material.emissiveMultiplier * emissiveSample.rgb;
+    finalColor += computeRimLighting(surfaceNormal, viewDir, in.uv);
+    finalColor += computeEnvironmentReflection(surfaceNormal, viewDir, specularSample);
 
-    // Rim lighting — fresnel edge glow, modulated by rim map
-    // Use original power but scale intensity — without full stage lighting the
-    // pink rim color (designed for colored spot lights) overwhelms base colors
-    let rimPower = max(material.rimColor.a, 0.5);
-    if (rimPower > 0.0 && length(material.rimColor.rgb) > 0.0) {
-        let rimMapSample = textureSample(rimMapTex, mapSampler, in.uv);
-        let rimDot = 1.0 - max(dot(N, V), 0.0);
-        let rimPowerMod = rimPower * rimMapSample.a;
-        var rim = pow(rimDot, max(rimPowerMod, 0.5)) * material.rimColor.rgb * rimMapSample.rgb * 0.15;
-
-        // Rim-under: only apply rim on edges facing away from the primary light
-        if (material.rimLightUnder > 0.5 && scene.numLights > 0.0) {
-            let L = normalize(-scene.lightDirs[0].xyz);
-            let backlit = saturate(1.0 - dot(N, L));
-            rim *= backlit;
-        }
-
-        finalColor += rim;
-    }
-
-    // Environment map reflection
-    if (material.environMapStrength > 0.5) {
-        let R = reflect(-V, N);
-        let envSample = textureSample(environMapTex, environSampler, R).rgb;
-
-        // Fresnel falloff: stronger at grazing angles
-        var envFactor = 1.0;
-        if (material.environMapFalloff > 0.5) {
-            let NdotV = max(dot(N, V), 0.0);
-            envFactor = 1.0 - NdotV;  // Schlick-like: strong at edges, weak head-on
-            envFactor = envFactor * envFactor;  // square for sharper falloff
-        }
-
-        // Optionally mask by specular map alpha (gloss)
-        var envMask = 1.0;
-        if (material.environMapSpecMask > 0.5) {
-            envMask = specMapSample.a;
-        }
-
-        finalColor += envSample * envFactor * envMask;
-    }
-
-    // Fog (gated by per-material flag + blend mode)
-    if (scene.fogEnabled > 0.5 && material.materialFogEnabled > 0.5) {
-        let dist = length(in.worldPos - scene.cameraPos);
-        let fogFactor = clamp((scene.fogEnd - dist) / (scene.fogEnd - scene.fogStart), 0.0, 1.0);
+    if (isEnabled(scene.fogEnabled) && isEnabled(material.materialFogEnabled)) {
+        let cameraDistance = length(in.worldPos - scene.cameraPos);
+        let fogFactor = clamp((scene.fogEnd - cameraDistance) / (scene.fogEnd - scene.fogStart), 0.0, 1.0);
         finalColor = mix(scene.fogColor, finalColor, fogFactor);
     }
 
-    // Soft highlight compression — only affects values approaching 1.0+
-    let knee = vec3f(0.9);
-    finalColor = select(finalColor,
-                        knee + (vec3f(1.0) - knee) * tanh((finalColor - knee) / (vec3f(1.0) - knee)),
-                        finalColor > knee);
+    finalColor = compressHighlights(finalColor);
 
-    // Attenuate RGB for near-transparent pixels to prevent alpha fringe
+    // Fade RGB down with alpha for nearly transparent texels to suppress fringes.
     if (baseColor.a < 0.1) {
         finalColor *= baseColor.a / 0.1;
     }

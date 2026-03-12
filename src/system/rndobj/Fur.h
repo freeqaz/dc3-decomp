@@ -19,6 +19,7 @@ public:
     virtual void Load(BinStream &);
 
     bool LoadOld(BinStreamRev &);
+    RndTex* GetFurDetail() const { return mFurDetail; }
 
     OBJ_MEM_OVERLOAD(0x1A)
     NEW_OBJ(RndFur)

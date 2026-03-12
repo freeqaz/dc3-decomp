@@ -211,10 +211,10 @@ bool ChallengeSortMgr::SelectionIs(Symbol selection) {
 
 int ChallengeSortMgr::GetTargetChallengeScore(int i) { return 1000; }
 
+// TODO: implement
+#ifdef HX_NATIVE
 const char *ChallengeSortMgr::GetBestChallengeScoreGamertag(int) { return ""; }
-
 int ChallengeSortMgr::GetChallengerXp(int) { return 0; }
-
 const char *ChallengeSortMgr::GetChallengerGamertag(int) { return ""; }
-
 void ChallengeSortMgr::OnEnter() {}
+#endif

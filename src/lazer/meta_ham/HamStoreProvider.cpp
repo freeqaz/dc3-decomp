@@ -415,6 +415,9 @@ BEGIN_HANDLERS(HamStoreProvider)
     HANDLE_SUPERCLASS(Hmx::Object)
 END_HANDLERS
 
+// TODO: implement — called by UpdateOffersInCart
+#ifdef HX_NATIVE
 void HamStoreProvider::RefreshFilteredCartOffers() {}
+#endif
 
 #pragma endregion HamStoreProvider

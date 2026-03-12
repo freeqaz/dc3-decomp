@@ -105,7 +105,10 @@ BEGIN_CUSTOM_PROPSYNC(WorldDir::PresetOverride)
     SYNC_PROP_OVERRIDE(hue, o.hue, o.Sync)
 END_CUSTOM_PROPSYNC
 
+// TODO: implement
+#ifdef HX_NATIVE
 void WorldDir::BitmapOverride::Sync(bool) {}
+#endif
 
 BEGIN_CUSTOM_PROPSYNC(WorldDir::BitmapOverride)
     SYNC_PROP_OVERRIDE(original, o.original, o.Sync)

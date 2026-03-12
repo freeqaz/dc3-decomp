@@ -201,6 +201,8 @@ bool AppMiniLeaderboardDisplay::UpdateLeaderboard(Symbol s) { // has one small d
     return true;
 }
 
+// TODO: implement
+#ifdef HX_NATIVE
 void AppMiniLeaderboardDisplay::Text(int, int, UIListLabel *, UILabel *) const {}
-
 void AppMiniLeaderboardDisplay::UpdateSelfInRows() {}
+#endif

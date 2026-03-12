@@ -108,35 +108,24 @@ void NgSpotlightDrawer::SpotlightResources::Clear() {
 }
 
 
+// TODO: implement rendering functions
+#ifdef HX_NATIVE
 void NgSpotlightDrawer::SetupFogDensityMap() {}
-
 void NgSpotlightDrawer::RenderFogProxy() {}
-
 void NgSpotlightDrawer::RenderSphere(Spotlight *) {}
-
 void NgSpotlightDrawer::RenderSheet(Spotlight *) {}
-
 bool NgSpotlightDrawer::CheckRTs(NgSpotlightDrawer::SpotlightResources *) { return false; }
-
 void NgSpotlightDrawer::SetupXSection(Spotlight *, const Spotlight::BeamDef &) {}
-
 void NgSpotlightDrawer::RenderConeDefs(Spotlight *, const Hmx::Color &) {}
-
 void NgSpotlightDrawer::SetupFogDensityState() {}
-
 void NgSpotlightDrawer::RenderCone(Spotlight *) {}
-
 void NgSpotlightDrawer::RenderBeams(const Hmx::Matrix4 &) {}
-
 bool NgSpotlightDrawer::CheckCam() { return false; }
-
 void NgSpotlightDrawer::BlurRT(float, float) {}
-
 void NgSpotlightDrawer::BlurRT() {}
-
 void NgSpotlightDrawer::SetupForPostProcess() {}
-
 void NgSpotlightDrawer::RenderScene() {}
+#endif
 
 void NgSpotlightDrawer::SetXSectionTexture(const Spotlight::BeamDef &def) {
     RndTex *tex = def.mXSection;

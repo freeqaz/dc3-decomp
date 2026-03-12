@@ -159,7 +159,6 @@ public:
     bool FadeOut() const { return mFadeout; }
     bool Prelit() const { return mPrelit; }
     Blend GetBlend() const { return mBlend; }
-#ifdef HX_NATIVE
     Cull GetCull() const { return mCull; }
     StencilMode GetStencil() const { return mStencilMode; }
     bool GetAlphaCut() const { return mAlphaCut; }
@@ -186,7 +185,11 @@ public:
     RndCubeTex* GetEnvironMap() const { return mEnvironMap; }
     bool GetEnvironMapFalloff() const { return mEnvironMapFalloff; }
     bool GetEnvironMapSpecMask() const { return mEnvironMapSpecMask; }
-#endif
+    bool GetPerPixelLit() const { return mPerPixelLit; }
+    bool GetScreenAligned() const { return mScreenAligned; }
+    bool GetRecvProjLights() const { return mPerfSettings.mRecvProjLights; }
+    bool GetRecvPointCubeTex() const { return mPerfSettings.mRecvPointCubeTex; }
+    RndFur* GetFur() const { return mFur; }
 
 protected:
     BaseMaterial();

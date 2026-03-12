@@ -75,6 +75,9 @@ public:
     void SetFogEnable(bool b) { mAmbientFogOwner->mFogEnable = b; }
     ObjPtrList<RndLight>& LightsReal() { return mLightsReal; }
     ObjPtrList<RndLight>& LightsApprox() { return mLightsApprox; }
+    bool AOEnabled() const { return mAOEnabled; }
+    float AOStrength() const { return mAOStrength; }
+    bool UseToneMapping() const { return mUseToneMapping; }
 #ifdef HX_NATIVE
     float FogStart() const { return mAmbientFogOwner->mFogStart; }
     float FogEnd() const { return mAmbientFogOwner->mFogEnd; }

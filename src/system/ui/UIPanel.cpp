@@ -103,6 +103,14 @@ bool UIPanel::Entering() const {
 }
 
 void UIPanel::Draw() {
+#ifdef HX_NATIVE
+    static int sPanelDrawDiag = 0;
+    if (sPanelDrawDiag < 20) {
+        sPanelDrawDiag++;
+        printf("DC3 UIPanel::Draw '%s' finalFlag=%d==static%d dir=%p loaded=%d\n",
+               Name(), mFinalDrawPassFlag, sIsFinalDrawPass, mDir, mLoaded);
+    }
+#endif
     if (mFinalDrawPassFlag == sIsFinalDrawPass && mDir && !mLoaded) {
         mDir->DrawShowing();
     }

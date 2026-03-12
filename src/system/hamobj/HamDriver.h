@@ -14,7 +14,7 @@
 class HamDriver : public RndHighlightable, public CharWeightable, public CharPollable {
 public:
     struct Layer {
-        Layer() : mBeat(-kHugeFloat), mWeight(0) {}
+        Layer() : mBeat(-kHugeFloat) {}
         virtual ~Layer() {}
         virtual void Eval(float) = 0;
         virtual void Play(CharBones &) = 0;

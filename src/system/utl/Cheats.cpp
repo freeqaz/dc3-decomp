@@ -273,7 +273,10 @@ void CheatsManager::RebuildKeyCheatsForMode() {
     }
 }
 
+// TODO: implement — referenced via HANDLE_MESSAGE
+#ifdef HX_NATIVE
 int CheatsManager::OnMsg(const ButtonDownMsg &) { return 0; }
+#endif
 
 DataNode CheatsManager::OnMsg(const KeyboardKeyReleaseMsg &msg) {
     if (msg->Int(2) == 0x11 && mIsOverridingKeyboard) {

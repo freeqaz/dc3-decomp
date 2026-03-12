@@ -807,14 +807,12 @@ int SkeletonChooser::GetNumValidSkeletonChoices() {
     return numValidSkeletonChoices;
 }
 
+// TODO: implement — RoundRobin* called by ResolveSinglePlayer
+#ifdef HX_NATIVE
 int SkeletonChooser::RoundRobinForHandRaised(int) { return 0; }
-
 int SkeletonChooser::RoundRobinForStandingStill(int) { return 0; }
-
 void SkeletonChooser::DrawDebug() {}
-
 void SkeletonChooser::SetPlayerSkeletonNavData(int, int) {}
-
 void SkeletonChooser::ChoosePlayerSides() {}
-
 void SkeletonChooser::CheckToSwitchActivePlayer() {}
+#endif

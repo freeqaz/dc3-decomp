@@ -227,6 +227,7 @@ protected:
 template <class C>
 ObjDirPtr<C>::ObjDirPtr(C *dir) : ObjRefConcrete<C>(dir), mLoader(nullptr) {
     if (dir) {
+        dir->AddRef(this);
 #ifdef HX_NATIVE
         DirPtrRefCounts()[(const void *)dir]++;
 #endif
@@ -238,6 +239,7 @@ bool ObjDirPtr<C>::IsLoaded() const {
     return mObject != nullptr || (mLoader != nullptr && mLoader->IsLoaded());
 }
 
+#ifdef HX_NATIVE
 template <class C>
 BinStream &operator<<(BinStream &bs, const ObjDirPtr<C> &ptr) {
     C *dir = ptr;
@@ -245,6 +247,10 @@ BinStream &operator<<(BinStream &bs, const ObjDirPtr<C> &ptr) {
     bs << name;
     return bs;
 }
+#else
+template <class C>
+BinStream &operator<<(BinStream &bs, const ObjDirPtr<C> &ptr);
+#endif
 
 template <class T>
 BinStream &operator>>(BinStream &bs, ObjDirPtr<T> &ptr) {

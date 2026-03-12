@@ -152,6 +152,7 @@ public:
     void SetMetaMat(MetaMaterial *, bool);
     MetaMaterial *CreateMetaMaterial(bool);
     MetaMaterial *GetMetaMaterial() const { return mMetaMaterial; }
+    int GetUnk20c() const { return unk20c; }
 
     static void Init();
     static void Terminate();

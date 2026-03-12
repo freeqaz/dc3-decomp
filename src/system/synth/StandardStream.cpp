@@ -650,6 +650,8 @@ float StandardStream::GetBufferAheadTime() const {
     return time;
 }
 
+// TODO: implement
+#ifdef HX_NATIVE
 int StandardStream::ConsumeData(void **v, int numSamples, int startSamp) {
     if (mGetInfoOnly)
         return 0;
@@ -729,3 +731,4 @@ void StandardStream::DoJump() {
         }
     }
 }
+#endif

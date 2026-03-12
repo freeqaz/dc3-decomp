@@ -5,6 +5,11 @@
 #include "rnddx9/RenderState.h"
 
 class NgMat : public RndMat {
+    friend class RndShaderMultimesh;
+    friend class RndShaderStandard;
+    friend class RndShaderParticles;
+    friend class RndShaderFur;
+    friend class RndShaderSyncTrack;
 public:
     NgMat();
     virtual ~NgMat();

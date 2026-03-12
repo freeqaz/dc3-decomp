@@ -146,6 +146,8 @@ void DepthBuffer3D::ForceDrawSkeletonIndex(int i1, bool b2) {
     mForceDrawEnabled = b2;
 }
 
+void DepthBuffer3D::ListDrawChildren(std::list<RndDrawable *> &) {}
+
 #ifdef HX_NATIVE
 // TODO: implement Save/Copy/Load — DepthBuffer3D has complex rendering state
 void DepthBuffer3D::Save(BinStream &) {}

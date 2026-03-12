@@ -342,6 +342,8 @@ const char *GetExpCode(int code) {
     return "Unhandled Exception";
 }
 
+// TODO: implement — Modal called by Warn/Notify/Fail
+#ifdef HX_NATIVE
 void Debug::Modal(ModalType &, const char *, void *) {}
-
 void Debug::DoCrucible(ModalType, const char *, void *) {}
+#endif

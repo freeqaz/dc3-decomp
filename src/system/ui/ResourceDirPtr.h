@@ -46,10 +46,12 @@ public:
     }
 };
 
+#ifdef HX_NATIVE
 template <class T>
 BinStream &operator<<(BinStream &bs, const ResourceDirPtr<T> &ptr) {
     return bs << static_cast<const ObjDirPtr<T> &>(ptr);
 }
+#endif
 
 template <class T>
 BinStream &operator>>(BinStream &bs, ResourceDirPtr<T> &ptr) {

@@ -285,6 +285,12 @@ void Rnd::PreInit() {
     if (OptionBool("widescreen", false))
         mAspect = kWidescreen;
     mWidth = ((float)mHeight / Rnd::YRatio()) + 0.5f;
+#ifdef HX_NATIVE
+    // Xbox config has height=432 (internal render res, upscaled to 720p).
+    // Native renders at full GPU surface resolution — override to match.
+    mWidth = 1280;
+    mHeight = 720;
+#endif
     MILO_ASSERT((mScreenBpp == 16) || (mScreenBpp == 32), 0x209);
     SetupFont();
     RndGraph::Init();

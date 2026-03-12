@@ -395,6 +395,8 @@ void ObjectDir::SetSubDir(bool isSubdir) {
     }
 }
 
+InlineDirType ObjectDir::InlineSubDirType() { return mInlineSubDirType; }
+
 void ObjectDir::SyncObjects() {
     static Message sync_objects("sync_objects");
     HandleType(sync_objects);

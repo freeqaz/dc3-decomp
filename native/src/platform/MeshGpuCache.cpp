@@ -30,7 +30,7 @@ static int sDrawCallsThisFrame = 0;
 static int sFrameCounter = 0;
 
 void RndMesh_ResetFrameStats() {
-    if (sFrameCounter > 0 && sFrameCounter % 300 == 0) {
+    if (sFrameCounter > 0 && (sFrameCounter <= 5 || sFrameCounter % 300 == 0)) {
         printf("DC3 Render: Frame %d — %d mesh draw calls\n", sFrameCounter, sDrawCallsThisFrame);
     }
     sDrawCallsThisFrame = 0;

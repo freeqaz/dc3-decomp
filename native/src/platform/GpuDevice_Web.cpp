@@ -60,11 +60,13 @@ bool GpuDevice::Init(const GpuDeviceDesc& desc) {
             deviceDesc.SetDeviceLostCallback(
                 wgpu::CallbackMode::AllowSpontaneous,
                 [](const wgpu::Device&, wgpu::DeviceLostReason reason, wgpu::StringView msg) {
-                    fprintf(stderr, "GpuDevice: device lost: %.*s\n", (int)msg.length, msg.data);
+                    fprintf(stderr, "GpuDevice: device lost (reason=%d): %.*s\n",
+                            (int)reason, (int)msg.length, msg.data);
                 });
             deviceDesc.SetUncapturedErrorCallback(
                 [](const wgpu::Device&, wgpu::ErrorType type, wgpu::StringView msg) {
-                    fprintf(stderr, "GpuDevice: error: %.*s\n", (int)msg.length, msg.data);
+                    fprintf(stderr, "GpuDevice: uncaptured error (type=%d): %.*s\n",
+                            (int)type, (int)msg.length, msg.data);
                 });
 
             mAdapter.RequestDevice(
@@ -92,8 +94,16 @@ bool GpuDevice::Init(const GpuDeviceDesc& desc) {
                         return;
                     }
 
-                    // Chrome/WebGPU preferred format is BGRA8Unorm
-                    mSurfaceFormat = wgpu::TextureFormat::BGRA8Unorm;
+                    // Query the preferred surface format from the adapter
+                    wgpu::SurfaceCapabilities caps;
+                    mSurface.GetCapabilities(mAdapter, &caps);
+                    if (caps.formatCount > 0 && caps.formats) {
+                        mSurfaceFormat = caps.formats[0];
+                        printf("GpuDevice: preferred surface format: %d\n", (int)mSurfaceFormat);
+                    } else {
+                        mSurfaceFormat = wgpu::TextureFormat::BGRA8Unorm;
+                        printf("GpuDevice: no preferred format, using BGRA8Unorm\n");
+                    }
                     ConfigureSurface();
 
                     printf("GpuDevice: initialized (%dx%d, web)\n", mWidth, mHeight);

@@ -19,6 +19,8 @@ void DelayEffect::SetParameters(DelayEffect::Params const &params) {
     mWetAmount = params.mWetPercent / 100.0f;
 }
 
+// TODO: implement — SetParameter inlined into SetParameters above
+#ifdef HX_NATIVE
 void DelayEffect::Process(float *, int, int) {}
-
 void DelayEffect::SetParameter(int, float) {}
+#endif

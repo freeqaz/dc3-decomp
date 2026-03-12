@@ -553,7 +553,10 @@ void SetSystemArgs(const char *commandLine) {
     gPristineSystemArgs = TheSystemArgs;
 }
 
+// TODO: implement
+#ifdef HX_NATIVE
 void NormalizeSystemArgs() {}
+#endif
 
 void SystemPreInit(const char *config) {
     InitMakeString();

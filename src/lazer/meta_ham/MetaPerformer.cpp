@@ -1521,4 +1521,7 @@ MetaPerformer *MetaPerformerHook::Current() {
     }
 }
 
+// TODO: implement — called by GenerateRecommendedPracticeMoves
+#ifdef HX_NATIVE
 bool MetaPerformer::CheckRecommendedPracticeMove(String, int) const { return false; }
+#endif

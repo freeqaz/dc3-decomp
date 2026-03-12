@@ -416,4 +416,7 @@ float Song::GetFrameFromMBT(int m, int b, int t) {
     }
 }
 
+// TODO: implement
+#ifdef HX_NATIVE
 void Song::SyncState() {}
+#endif

@@ -545,15 +545,14 @@ void MemFreeBlockStats(
     gHeaps[heapNum].FreeBlockStats(i2, i3, numFreeBytes, i5, biggestFreeBlock);
 }
 
+// TODO: implement — ThreadMemStack called by MemPush/PopTemp/Heap
+#ifdef HX_NATIVE
 MemHeapStack &ThreadMemStack(bool) {
     static MemHeapStack s;
     return s;
 }
-
 int GetCurrentHeapNum() { return 0; }
-
 void MemDelta(const char *, int) {}
-
 int MemFindHeap(const char *) { return 0; }
-
 void MemPrintOverview(int, char *const) {}
+#endif

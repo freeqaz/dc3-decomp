@@ -512,8 +512,9 @@ BEGIN_HANDLERS(HamStorePanel)
     HANDLE_SUPERCLASS(StorePanel)
 END_HANDLERS
 
+// TODO: implement
+#ifdef HX_NATIVE
 void HamStorePanel::RefreshSpecialOfferStatus() {}
-
 DataNode HamStorePanel::OnMsg(const RCJobCompleteMsg &) { return DataNode(0); }
-
 void SpecialOfferEnumJob::OnCompletion(Hmx::Object *) {}
+#endif

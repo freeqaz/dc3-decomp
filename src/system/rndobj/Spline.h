@@ -59,6 +59,7 @@ protected:
 
     friend void CheckDistortion(class RndMat *);
     friend void CheckDistortionOpts(class RndMat *, struct ShaderOptions &);
+    friend class RndShaderSyncTrack;
 
 private:
     void SyncPristineCtrlPoints();

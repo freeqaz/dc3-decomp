@@ -125,9 +125,12 @@ public:
     int BoneCount() const { return mBoneCount; }
     bool UseAO() const { return mUseAO; }
     bool AllowPerPixel() const { return mAllowPerPixel; }
+    bool GetUnk41() const { return unk41; }
 
     friend class NgPostProc;
     friend class RndShaderDepthVolume;
+    friend class RndShaderPostProc;
+    friend class RndShaderSimple;
 
 protected:
     virtual void LoadShaders(const char *);

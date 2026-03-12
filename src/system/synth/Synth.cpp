@@ -310,7 +310,10 @@ const ADSRImpl *Synth::DefaultADSR() {
     return mADSR;
 }
 
+// TODO: implement — called by UpdateOverlay, inlined empty body breaks it
+#ifdef HX_NATIVE
 void Synth::DrawMeter(float &, float, float, const char *) {}
+#endif
 
 void Synth::DrawMeterScale(float &y) {
     int db = -40;

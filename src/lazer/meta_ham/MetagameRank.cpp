@@ -331,7 +331,12 @@ DataNode MetagameRank::GetNextDeferredPoints(DataArray *a) {
 
 extern PropertyEventProvider *TheHamProvider;
 
+// TODO: implement real comparison — stub inlined into UpdateScore via sort
+#ifdef HX_NATIVE
 bool compare_deferred_points(DeferredPoints a, DeferredPoints b) { return false; }
+#else
+bool compare_deferred_points(DeferredPoints a, DeferredPoints b);
+#endif
 
 void MetagameRank::UpdateScore(
     int songID,
@@ -871,12 +876,11 @@ void MetagameRank::AwardPointsForTask(Symbol task) {
     }
 }
 
+// TODO: implement
+#ifdef HX_NATIVE
 int MetagameRank::SaveSize(int) { return 0; }
-
 int MetagameRank::GetRankInTier() const { return 0; }
-
 int MetagameRank::GetTier() const { return 0; }
-
 void MetagameRank::AwardForRankUp(int) {}
-
 int MetagameRank::ComputeRankNumber(bool) { return 0; }
+#endif

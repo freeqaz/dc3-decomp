@@ -277,6 +277,8 @@ AutoGlitchPoker::~AutoGlitchPoker() {
     }
 }
 
+// TODO: implement
+#ifdef HX_NATIVE
 void GlitchFinder::CheckDump() {}
-
 DataNode GlitchFindScriptImpl(DataArray *, int) { return DataNode(0); }
+#endif

@@ -615,6 +615,9 @@ File *NewFile(const char *iFilename, int iMode) {
     return result;
 }
 
+// TODO: implement
+#ifdef HX_NATIVE
 extern "C" {
 void RecursePatternInternal(const char *, void (*)(char const *, char const *), bool, bool) {}
 }
+#endif

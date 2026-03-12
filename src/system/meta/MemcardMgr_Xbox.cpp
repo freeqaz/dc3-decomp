@@ -345,7 +345,10 @@ DataNode MemcardMgr::OnMsg(const StorageChangedMsg &msg) {
     return 0;
 }
 
+// TODO: implement — called by ThreadStart
+#ifdef HX_NATIVE
 MCResult MemcardMgr::ThreadCall_SaveGame() { return kMCGeneralError; }
+#endif
 
 DataNode MemcardMgr::OnMsg(const SigninChangedMsg &msg) {
     if (mSelectDeviceWaiting) {

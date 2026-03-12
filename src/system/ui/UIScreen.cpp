@@ -178,13 +178,14 @@ void UIScreen::Draw() {
     if (mShowing) {
 #ifdef HX_NATIVE
         static int sDrawDiag = 0;
-        if (sDrawDiag < 2 && strcmp(Name(), "game_screen") == 0) {
+        if (sDrawDiag < 5) {
             sDrawDiag++;
-            fprintf(stderr, "DC3 Native: UIScreen '%s' Draw — %d panels:\n", Name(), (int)mPanelList.size());
+            printf("DC3 UIScreen '%s' Draw — %d panels:\n", Name(), (int)mPanelList.size());
             FOREACH (it, mPanelList) {
-                fprintf(stderr, "  panel '%s' active=%d showing=%d shouldDraw=%d state=%d\n",
+                printf("  panel '%s' active=%d showing=%d shouldDraw=%d state=%d dir=%p loaded=%d\n",
                         it->mPanel->Name(), it->Active(), it->mPanel->Showing(),
-                        TheRnd.ShouldDrawPanel(it->mPanel), (int)it->mPanel->GetState());
+                        TheRnd.ShouldDrawPanel(it->mPanel), (int)it->mPanel->GetState(),
+                        it->mPanel->LoadedDir(), it->mPanel->IsLoaded());
             }
         }
 #endif

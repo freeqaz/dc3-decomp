@@ -68,8 +68,11 @@ void EQEffect::SetParameters(EQEffect::Params const &params) {
     SetParameter(12, params.mBand5Freq);
 }
 
+// TODO: implement these — guarded because SetParameter is called by
+// SetParameters above and the empty body causes it to be inlined,
+// destroying SetParameters' codegen (100% → 1.6%)
+#ifdef HX_NATIVE
 void EQEffect::Reset() {}
-
 void EQEffect::Process(float *, int, int) {}
-
 void EQEffect::SetParameter(int, float) {}
+#endif

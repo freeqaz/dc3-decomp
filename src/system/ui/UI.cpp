@@ -205,6 +205,13 @@ void UIManager::ToggleLoadTimes() {
 
 void UIManager::Draw() {
 #ifdef HX_NATIVE
+    static int sDrawDiag = 0;
+    if (sDrawDiag < 5) {
+        printf("DC3 UI::Draw: cam=%p env=%p screen=%s pushed=%d\n",
+               mCam, mEnv,
+               mCurrentScreen ? mCurrentScreen->Name() : "<null>",
+               (int)mPushedScreens.size());
+    }
     // Select the UI camera and environment for screen-space rendering.
     // On Xbox 360, NgRnd's draw pipeline did this per-panel. Our native
     // renderer uses a single pass, so we select once before UI draws.
@@ -244,6 +251,7 @@ void UIManager::Draw() {
     // Restore previous camera/environment
     if (savedCam) savedCam->Select();
     if (savedEnv) savedEnv->Select(nullptr);
+    sDrawDiag++;
 #endif
 }
 
