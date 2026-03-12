@@ -218,6 +218,37 @@ TEST_F(ObjectLifetimeTest, RemoveSubDirReleasesDirPtrRef) {
     delete owner;
 }
 
+TEST_F(ObjectLifetimeTest, ObjDirPtrConstructorKeepsSingleWellFormedRefRingNode) {
+    ObjectDir *dir = Hmx::Object::New<ObjectDir>();
+    ObjDirPtr<ObjectDir> keeper;
+    keeper = dir;
+
+    {
+        ObjDirPtr<ObjectDir> hold(dir);
+
+        const ObjRef &refs = dir->Refs();
+        ObjRef::iterator it = refs.begin();
+        ASSERT_NE(it, refs.end());
+
+        ObjRef *first = it;
+        ++it;
+        ASSERT_NE(it, refs.end());
+
+        ObjRef *second = it;
+        EXPECT_NE(second, first);
+        ++it;
+        EXPECT_EQ(it, refs.end());
+    }
+
+    const ObjRef &refs = dir->Refs();
+    ObjRef::iterator it = refs.begin();
+    ASSERT_NE(it, refs.end());
+    ++it;
+    EXPECT_EQ(it, refs.end());
+
+    keeper = nullptr;
+}
+
 // Fixture-backed safety baseline on real archive content.
 TEST_F(ObjectLifetimeTest, MergeDirsRealFixturesLeaveOnlyLiveEntries) {
     FilePath toPath("char/shared/main_resource.milo");

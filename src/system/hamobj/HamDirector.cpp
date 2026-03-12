@@ -1000,12 +1000,6 @@ DataNode HamDirector::OnLoadSong(DataArray *a) {
         if (!playerPresent) {
             mCrews[i] = gNullStr;
             mCharacterOutfits[i] = gNullStr;
-            fprintf(stderr,
-                "DC3 Native: OnLoadSong player%d absent char='%s' crew='%s' outfit='%s'\n",
-                i,
-                character.Str(),
-                hpd->Crew().Str(),
-                outfit.Str());
             continue;
         }
 
@@ -1024,13 +1018,6 @@ DataNode HamDirector::OnLoadSong(DataArray *a) {
         } else {
             mCharacterOutfits[i] = outfit.Null() ? hpd->CharacterOutfit(mCrews[i]) : outfit;
         }
-        fprintf(stderr,
-            "DC3 Native: OnLoadSong player%d present=%d char='%s' crew='%s' outfit='%s'\n",
-            i,
-            playerPresent,
-            character.Str(),
-            mCrews[i].Str(),
-            mCharacterOutfits[i].Str());
 #else
         mCharacterOutfits[i] = hpd->CharacterOutfit(mCrews[i]);
 #endif

@@ -112,11 +112,16 @@ class DC3Handler(http.server.SimpleHTTPRequestHandler):
             self._json_error(503, "No assets directory configured")
             return
 
-        # Collect all files
+        # Collect config files only (DTA/DTB) for the boot bundle.
+        # Binary assets (.milo_xbox etc.) are fetched on demand by the engine.
         # Ark extraction stores ".." as "(..)" in directory names — restore them
+        BUNDLE_EXTS = {".dta", ".dtb"}
         entries = []
         for root, _dirs, filenames in os.walk(ASSETS_DIR):
             for f in filenames:
+                _name, ext = os.path.splitext(f)
+                if ext.lower() not in BUNDLE_EXTS:
+                    continue
                 full = os.path.join(root, f)
                 rel = os.path.relpath(full, ASSETS_DIR)
                 rel = rel.replace("(..)", "..")
@@ -267,8 +272,8 @@ def main():
         print(f"  Assets:  {ASSETS_DIR}")
     else:
         print("  Assets:  NOT CONFIGURED (set --assets-dir or DC3_ASSETS)")
-    print(f"  URL:     http://localhost:{args.port}")
-    print(f"  API:     http://localhost:{args.port}/api/manifest")
+    print(f"  URL:     http://0.0.0.0:{args.port} (accessible remotely)")
+    print(f"  API:     http://0.0.0.0:{args.port}/api/manifest")
     print(f"  COOP/COEP headers enabled")
     print()
 

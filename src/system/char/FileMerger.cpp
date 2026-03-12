@@ -184,21 +184,11 @@ void FileMerger::PreLoad(BinStream &bs) {
         d >> str;
     }
     d >> mMergers;
-#ifdef HX_NATIVE
-    // Fire change_files to let DTA type handlers wire merger properties
-    // (e.g., world type does {$hamdirector set merger $this}).
-    // Skip the full StartLoadInternal which would try to load Xbox asset paths.
-    {
-        mAsyncLoad = true;
-        mLoadingLoad = true;
-        static Message cfMsg("change_files", 0, 0);
-        cfMsg[0] = 1;
-        cfMsg[1] = 1;
-        HandleType(cfMsg);
-    }
-#else
+    // StartLoadInternal fires change_files (which lets DTA type handlers
+    // wire merger properties, e.g. {$hamdirector set merger $this}),
+    // then iterates mergers to start loading any files that were selected
+    // during change_files (e.g. the song .milo queued by load_game_song).
     StartLoadInternal(true, true);
-#endif
 }
 
 void FileMerger::FinishLoading(Loader *ldr) {

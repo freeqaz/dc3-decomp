@@ -16,30 +16,7 @@ StreamReceiver *StreamReceiver::New(int numBuffers, int sampleRate, bool slip, i
     return sFactory(numBuffers, sampleRate, slip, channel);
 }
 
-// StreamReceiver::GetBytesPlayed — track total bytes via cursor wrap detection
-// Called by StandardStream::GetRawTime() for audio-visual sync
-u64 StreamReceiver::GetBytesPlayed() {
-    // Use mLastPlayCursor to detect wraps around kStreamRcvrBufSize ring buffer.
-    // On native, StreamReceiverNative tracks mTotalBytesPlayed directly from
-    // the audio callback, but this base-class method also needs to work.
-    // We reconstruct total from the virtual GetPlayCursor() + wrap tracking.
-    int cursor = GetPlayCursor();
-    if (cursor < mLastPlayCursor) {
-        // Cursor wrapped around the ring buffer
-        mDoneBufferCounter += kStreamRcvrBufSize;
-    }
-    mLastPlayCursor = cursor;
-    return (u64)mDoneBufferCounter + (u64)cursor;
-}
-
-// StreamReceiver::Poll — base class buffer management
-void StreamReceiver::Poll() {
-    // Check if the hardware has consumed enough for a new send
-    if (mSending && SendDoneImpl()) {
-        mSending = false;
-        mBuffersSent++;
-    }
-}
+// StreamReceiver::GetBytesPlayed and ::Poll — now in StreamReceiver.cpp
 
 StreamReceiverNative::StreamReceiverNative(int numBuffers, bool slip)
     : StreamReceiver(numBuffers, slip),

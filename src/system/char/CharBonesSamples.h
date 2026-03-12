@@ -13,9 +13,7 @@ public:
 
     int NumSamples() const { return mNumSamples; }
     int NumFrames() const { return mFrames.size(); }
-#ifdef HX_NATIVE
     const std::vector<float>& Frames() const { return mFrames; }
-#endif
     int AllocateSize();
     void Load(BinStream &);
     void Save(BinStream &);

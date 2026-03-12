@@ -6,7 +6,7 @@ Compile the DC3 native port to run in web browsers using Emscripten (C++ to WASM
 
 **MVP goal**: A localhost:8420 dev server that boots the engine in a browser tab, streams assets from a local API, and renders a scene (venue or character).
 
-**Current status**: Phase 5 in progress. Engine compiles to WASM, boots in browser, downloads 246 assets, parses all DTA configs, runs SystemPreInit + SystemInit, initializes WebGPU, and enters the render loop. Frames 1-3 render successfully (attract_screen, autosave_warning_screen). The engine hangs during `UIScreen::Enter()` for `title_screen` — a panel's `Enter()` call blocks the main thread indefinitely, preventing further rendering. See [Phase 5 status](#phase-5-engine-boot--rendering-integration----in-progress) for details.
+**Current status**: Phase 5 DONE. Engine compiles to WASM, boots in browser, downloads 246 assets, parses all DTA configs, runs SystemPreInit + SystemInit, initializes WebGPU, and enters the render loop. WebGPU canvas rendering confirmed working — clear color visible, GPU submit pipeline operational. 5+ frames render continuously with no hangs or crashes. See [Phase 5 status](#phase-5-engine-boot--rendering-integration----done) for details.
 
 ## Architecture
 
@@ -154,13 +154,13 @@ GET /api/file/<path>          -> Individual asset file (with Range request suppo
 
 ---
 
-### Phase 5: Engine Boot + Rendering Integration -- IN PROGRESS
+### Phase 5: Engine Boot + Rendering Integration -- DONE
 
 **Goal**: Full engine initialization pipeline runs: DTA config parsing, subsystem init, rendering.
 
 **Completed**:
-- `web_stubs.cpp` — proper C++ stubs replacing asm-label stubs (math, rendering, TextStream, ObjPtr, xbdm, Debug::Modal, SpewInit/Terminate, MemFindHeap, PhysMemTypeTracker, NuiSpeech*, etc.)
-- `DataParser_Native.cpp` — DTA text parser ported from RB3 decomp (ParseArray, ParseNode, PushBack, all token types)
+- `web_stubs.cpp` — proper C++ stubs replacing asm-label stubs (rendering, TextStream, ObjPtr, xbdm, SpewInit/Terminate, PhysMemTypeTracker, NuiSpeech*, etc.)
+- `DataParser_Native.cpp` — DTA text parser ported from RB3 decomp (now only used by native desktop target; web uses decomp DataFile.cpp directly)
 - `DataReadStream` global initialization (`gBinStream`, `gDataLine`, `gOpenArray`) under `#ifdef HX_NATIVE` in `DataFile.cpp`
 - `ReadEmbeddedFile` state save/restore: saves and restores `gNode`, `gArray`, `gOpenArray`, `gBinStream`, `gFile`, `gDataLine` across `#include` processing
 - Flex lexer `yy_hold_char` save/restore (`yyGetHoldChar`/`yySetHoldChar` in `DataFlex.h`/`DataFlex.c`) — preserves the lexer's lookahead byte across `#include` boundaries
@@ -179,32 +179,22 @@ GET /api/file/<path>          -> Individual asset file (with Range request suppo
 - `PollUntilLoaded` safety valve — max 10000 iterations on web to prevent infinite blocking
 - `--profiling-funcs` linker flag — readable C++ function names in WASM stack traces
 - **HelpBarPanel null guards** — `mAll` null check in Draw(), early return in SyncToPanel() when DataDir/mLeftHandNavList null
-- **Render loop enters BOOT_RUNNING** — frames 1-3 complete full render cycles (SystemPoll, UI Poll, FlowMgr Poll, BeginDrawing, UI Draw, EndDrawing)
+- **Render loop enters BOOT_RUNNING** — 5+ frames complete full render cycles (SystemPoll, UI Poll, FlowMgr Poll, BeginDrawing, UI Draw, EndDrawing)
 - **UI transitions work** — attract_screen and autosave_warning_screen enter and exit correctly
+- **Duplicate symbol cleanup** — removed 20+ redundant stubs from native_link_glue.cpp, web_stubs.cpp, thunk_stubs.cpp, StreamReceiver_Native.cpp that conflicted with real decomp implementations (DataParser, Shader, Geo, MemMgr, Debug, etc.)
+- **WebGPU surface format fix** — RGBA8Unorm → BGRA8Unorm (Chrome's preferred canvas format)
+- **MSAA disabled for web** — browser WebGPU path uses sampleCount=1 (native keeps 4x)
+- **WebGPU rendering confirmed** — GPU submit pipeline operational, clear color renders to canvas
+- **xvfb-run required** — headless Chromium has no `navigator.gpu`; `xvfb-run -a` provides virtual display for WebGPU
 
-**Current blocker — `title_screen->Enter()` hang**:
-
-The engine boots, renders 3 frames, then transitions to `title_screen`. All panels load successfully via `PollUntilLoaded`, the transition check passes, but `UIScreen::Enter()` for `title_screen` never returns. One of the screen's panel `Enter()` calls blocks the main thread.
-
-Diagnostic trace from headless Chromium (Playwright):
-```
-[XDK] transition from autosave_warning_screen to title_screen
-DC3 UI: transition complete, will enter 'title_screen'
-DC3 UI: Screen 'title_screen' Enter (from 'autosave_warning_screen')
-    <-- hangs here, no panel Enter tracing appears -->
-```
-
-Multiple `.milo` files fail to load as PanelDir (expected — not all are bundled):
+Multiple `.milo` files fail to load as PanelDir (expected — not all UI assets are bundled):
 - `ui/background/background.milo`, `ui/title/title.milo`, `ui/tutorial/tutorial_nav.milo`
-- `ui/correct_identity/correct_identity.milo`, `ui/pause/pause.milo`, `ui/dialog.milo`
+- Engine handles failures gracefully and continues
 
-The hang is likely a panel whose `Enter()` calls into DTA script handlers that block (synchronous network, missing subsystem, or null dereference on a virtual call causing WASM trap).
-
-**Next steps**:
-1. Add per-panel `fprintf(stderr, ...)` tracing inside `UIScreen::Enter()` to identify which panel hangs
-2. Fix the identified panel (null guard, stub, or skip)
-3. Repeat for subsequent screens until render loop runs continuously
-4. Verify WebGPU canvas actually presents frames (currently the hang prevents this)
+**Next steps** (Phase 6+):
+1. Bundle UI `.milo` assets for attract_screen/title_screen to get actual UI rendering
+2. Implement keyboard input via Emscripten GLFW shim
+3. Load venue `.milo` for 3D scene rendering
 
 ---
 
@@ -217,17 +207,18 @@ The hang is likely a panel whose `Enter()` calls into DTA script handlers that b
 **Implemented**: `scripts/web/test.mjs` — single ~200-line Node.js script that orchestrates the full cycle:
 
 ```bash
-node scripts/web/test.mjs                    # full: build + server + headless chrome + screenshot
-node scripts/web/test.mjs --no-build         # skip build
-node scripts/web/test.mjs --frames 10        # wait for 10 frames (default: 5)
-node scripts/web/test.mjs --timeout 60       # 60s timeout (default: 30)
-node scripts/web/test.mjs --headed           # show browser window
-node scripts/web/test.mjs --keep             # leave server running after test
+xvfb-run -a node scripts/web/test.mjs                # full: build + server + headed chrome + screenshot
+xvfb-run -a node scripts/web/test.mjs --no-build     # skip build
+xvfb-run -a node scripts/web/test.mjs --frames 10    # wait for 10 frames (default: 5)
+xvfb-run -a node scripts/web/test.mjs --timeout 60   # 60s timeout (default: 30)
+node scripts/web/test.mjs --headless                  # headless (no GPU — white canvas)
+xvfb-run -a node scripts/web/test.mjs --keep          # leave server running after test
 ```
 
 **Features**:
 - Starts `server.py`, polls `/api/health` for readiness (new endpoint)
-- Launches headless Chromium with WebGPU flags (`--enable-features=Vulkan,UseSkiaRenderer`, `--enable-unsafe-webgpu`, etc.)
+- Launches **headed** Chromium by default (WebGPU requires real display) with flags (`--enable-features=Vulkan,UseSkiaRenderer`, `--enable-unsafe-webgpu`, etc.)
+- Use `xvfb-run -a` on headless servers to provide a virtual display
 - Captures ALL console output (log + error) with timestamps
 - Detects failure modes: WASM trap, hang (no output for 5s), crash, timeout, partial progress
 - Takes canvas screenshot via Playwright's compositor capture (`element.screenshot()`) — works with GPU-rendered WebGPU content
@@ -330,7 +321,7 @@ native/
 |   +-- platform/
 |       +-- WebAssets.cpp           # Bundle download + MEMFS unpacker
 |       +-- WebAssets.h             # Public API (WebAssetsInit, WebAssetsFetchBundle, etc.)
-|       +-- DataParser_Native.cpp   # DTA text parser (ported from RB3)
+|       +-- GpuDevice_Web.cpp       # WebGPU device init (browser path — async adapter/device)
 
 scripts/web/                        # Test tooling
 +-- test.mjs                       # Headless test runner + screenshot (Phase 5.5a)

@@ -127,9 +127,9 @@ Goal: Character with proper materials, crowd, animated venue, gameplay HUD textu
 - [ ] Character dance animation (clips loaded but not driven)
 
 ### 4.2 Merge Pipeline Stability
-- [ ] Fix ObjRef ring corruption root cause (eliminate siglongjmp hack)
-- [ ] Enable crowd character rendering (currently merge-crash-skipped)
-- [ ] Enable audio merge (currently merge-crash-skipped)
+- [x] Fix ObjRef ring corruption root cause — **DONE** (`ObjDirPtr(C*)` was double-linking the same ref node; `ObjRefConcrete` already links the node in its base ctor, so the extra `AddRef` corrupted the ring at creation time)
+- [ ] Revalidate crowd character rendering now that the ring producer bug is fixed
+- [ ] Revalidate audio merge now that the ring producer bug is fixed
 
 ### 4.3 Gameplay HUD
 - [ ] Move card textures (currently pink rectangles — TexMovie render-to-texture)
@@ -137,8 +137,9 @@ Goal: Character with proper materials, crowd, animated venue, gameplay HUD textu
 
 ### 4.4 Scene Animation
 - [ ] **Implement LightPreset::Load** — currently stubbed, 0 presets deserialized from venue .milo
-- [ ] Venue lighting animation (blocked by LightPreset::Load)
-- [ ] Song.anim driving (blocked by DTA script crashes on missing game objects)
+- [ ] Revalidate song/venue animation after the ObjRef ring fix, then narrow remaining blockers
+- [ ] Venue lighting animation (still blocked by `LightPreset::Load`)
+- [ ] Song.anim driving (remaining DTA crashes on missing game objects still need investigation)
 - [ ] Character dance animation (clips present but SongAnimation() returns -1)
 
 ## Phase 5: DTA/Content System
@@ -152,8 +153,24 @@ Goal: Remove C++ workarounds and let real DTA screen-flow scripts drive the nati
 - [x] **mSink investigation** (Phase 5a): DTA `set_sink` never fires in DC3 — fallback is permanent
 - [x] **GameMode guard** (Phase 5b): `#ifdef HX_NATIVE` in constructor is correct and sufficient
 - [x] **Debug logging cleanup** (Phase 6): All ~25 debug printfs gated behind `MILO_DEBUG_UI_FLOW=1`
-- [ ] **Remove multiuser auto-skip** (Phase 4): Real venue/char/difficulty selection flow
+- [x] **Remove multiuser auto-skip** (Phase 4): DTA `enter` handler drives game start naturally. IsAnimating() bypass in HamNavList.cpp enables button input.
 - [ ] Content system integration for list population
+
+## Null-on-Native Subsystems (TODO: Implement stubs or init)
+
+These globals are null on native because their init is suppressed with `#ifndef HX_NATIVE`. Every use site needs a null-check guard. The fix is to implement proper native init/stubs so the guards become unnecessary.
+
+| Global | Init suppressed at | Null-check guard locations | Why null |
+|--------|-------------------|---------------------------|----------|
+| `TheNetCacheMgr` | `System.cpp:493` (`NetCacheMgrInit()`) | System.cpp:228, StorePanel.cpp:60, MainMenuPanel.cpp:72/146/165/562 | Xbox Live cache download |
+| `TheGameMode` | `GameMode.cpp:26` (DTA-driven init) | GameMode.cpp:242 | DTA scripts drive mode setup |
+| `TheMoveMgr` | Not initialized on native | Game.cpp:556/677 | Move/gesture graph |
+| `TheCampaign` | `MetaPanel.cpp:95` (ctor skipped) | CampaignSongSelectPanel.cpp:137 | Campaign system |
+| `TheMetaMusic` | `MetaPanel.cpp:95` (ctor skipped) | MetaPanel.cpp:280/293/307/340 | Shell music system |
+| `TheHamProvider` | Factory stub in App.cpp | HamNavList.cpp:528/738/794/1092/1097/1312 | UI nav provider |
+| `TheSkeletonIdentifier` | Kinect subsystem not init'd | HamUI.cpp:348 | Kinect skeleton tracking |
+| `ThePassiveMessenger` | Kinect subsystem not init'd | HamUI.cpp:348 | Kinect gesture messages |
+| `TheCacheMgr` | Defensive (may be init'd) | System.cpp:227 | Cache manager |
 
 ## Phase 6: Audio (LOW PRIORITY)
 - [ ] UI click/select/scroll sounds via miniaudio backend
@@ -180,16 +197,16 @@ Goal: Remove C++ workarounds and let real DTA screen-flow scripts drive the nati
 | UI elements mispositioned | Rendering pipeline | **FIXED** (Session 41) |
 | Text labels missing | Text/Font pipeline | **FIXED** (Session 47) |
 | Flow→PropAnim not animating | Animation pipeline | **FIXED** (Session 58) |
-| ObjRef ring crash during venue merge | Object.cpp, FileMerger.cpp | **HACKED** (validation + siglongjmp) |
+| ObjRef ring crash during venue merge | Dir.h `ObjDirPtr(C*)`, Object.cpp, FileMerger.cpp | **ROOT CAUSE FIXED** (extra `AddRef` removed); legacy validation/recovery guards still present pending crowd/audio/song revalidation |
 | Character dark silhouette | Zero-color LightPreset lights | **FIXED** (Session 59 — fallback lighting) |
 | Null crashes on game_screen (3) | HamCharacter/HamCamShot/PoseFatalities null ptrs | **FIXED** (Session 59) |
 | HUD move cards pink rectangles | TexMovie render-to-texture | TODO — Phase 4 |
-| Crowd/audio merges crash-skipped | ObjRef ring corruption | TODO — Phase 4 |
-| Static scene (no animation) | LightPreset::Load unimplemented + song.anim DTA crashes | TODO — Phase 4 |
+| Crowd/audio merges crash-skipped | Previously ObjRef ring corruption; now needs fresh runtime validation after ctor fix | TODO — Phase 4 |
+| Static scene (no animation) | ObjRef ring bug was a shared blocker; remaining blockers appear to be `LightPreset::Load` + song.anim DTA object gaps | TODO — Phase 4 |
 | Empty lists (no content) | Content system | TODO — Phase 5 |
 
 ## Crashes Fixed (Session 59)
-1. ObjRef ring corruption → SIGSEGV during MergeDirs (recovered via siglongjmp)
+1. ObjRef ring corruption producer bug in `ObjDirPtr(C*)` → fixed by removing the extra `AddRef`; direct lifetime regression test added
 2. RndShadowMap::PrepShadow undefined → runtime link error (implemented)
 3. RndFlare::CalcRect undefined → runtime link error (implemented)
 4. SpotlightDrawer::RemoveFromLists undefined → runtime link error (implemented)

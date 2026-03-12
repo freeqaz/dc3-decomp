@@ -43,6 +43,7 @@ public:
     virtual void Poll();
 
     void PrepareShader(float, float) const;
+    void PrepareShader() const;
 
     OBJ_MEM_OVERLOAD(0x18);
     NEW_OBJ(RndSpline)
@@ -55,6 +56,9 @@ public:
 
 protected:
     RndSpline();
+
+    friend void CheckDistortion(class RndMat *);
+    friend void CheckDistortionOpts(class RndMat *, struct ShaderOptions &);
 
 private:
     void SyncPristineCtrlPoints();

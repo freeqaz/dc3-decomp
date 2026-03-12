@@ -227,7 +227,6 @@ protected:
 template <class C>
 ObjDirPtr<C>::ObjDirPtr(C *dir) : ObjRefConcrete<C>(dir), mLoader(nullptr) {
     if (dir) {
-        dir->AddRef(this);
 #ifdef HX_NATIVE
         DirPtrRefCounts()[(const void *)dir]++;
 #endif

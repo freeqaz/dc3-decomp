@@ -2,11 +2,7 @@
 #include "obj/Object.h"
 #include "rndobj/Mesh.h"
 
-#ifdef HX_NATIVE
-RndMultiMeshProxy::RndMultiMeshProxy() : mMultiMesh(this), mIndex() {}
-#else
 RndMultiMeshProxy::RndMultiMeshProxy() : mMultiMesh(this), mIndex(0) {}
-#endif
 
 BEGIN_HANDLERS(RndMultiMeshProxy)
 END_HANDLERS

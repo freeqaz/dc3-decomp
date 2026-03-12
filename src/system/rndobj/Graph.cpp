@@ -10,11 +10,7 @@ std::list<RndGraph *> *sGraphs;
 std::list<FakeGraph> sFakes;
 ObjPtr<RndCam> sCam(nullptr);
 
-#ifdef HX_NATIVE
 void *Drawable::operator new(size_t s) {
-#else
-void *Drawable::operator new(unsigned int s) {
-#endif
     return MemAlloc(s, __FILE__, 0xA9, "Drawable");
 }
 void Drawable::operator delete(void *v) { MemFree(v, __FILE__, 0xA9, "Drawable"); }
@@ -179,20 +175,12 @@ DataNode OnGraphReset(DataArray *) {
 
 void RndGraph::Terminate() {
     std::list<RndGraph*> *temp = sGraphs;
-#ifdef HX_NATIVE
     if (temp != nullptr) {
-#else
-    if (temp > 0) {
-#endif
         temp->clear();
         delete temp;
     }
     sGraphs = nullptr;
-#ifdef HX_NATIVE
     if (sOneFrame != nullptr) {
-#else
-    if (sOneFrame > 0) {
-#endif
         delete sOneFrame;
     }
     sOneFrame = nullptr;

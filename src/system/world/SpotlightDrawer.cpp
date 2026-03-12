@@ -326,10 +326,10 @@ void SpotlightDrawer::DrawShadow() {
     std::vector<Spotlight *>::iterator itEnd = sShadowSpots.end();
     for (; it != itEnd; ++it) {
         Spotlight *shadowSpot = *it;
-        MILO_ASSERT(shadowSpot->GetTarget() && shadowSpot->mTargetShadow, 0x288);
-        Character *theChar = dynamic_cast<Character *>(shadowSpot->GetTarget());
-        if (theChar) {
-            theChar->DrawShadow(shadowSpot->WorldXfm(), 1.5f);
+        MILO_ASSERT(shadowSpot->GetTarget() && shadowSpot->TargetShadow(), 0x288);
+        RndDrawable *draw = dynamic_cast<RndDrawable *>(shadowSpot->GetTarget());
+        if (draw) {
+            draw->DrawShadow(shadowSpot->WorldXfm(), 1.5f);
         }
     }
 }

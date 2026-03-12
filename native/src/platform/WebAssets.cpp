@@ -8,6 +8,7 @@
 #include "platform/WebAssets.h"
 
 #include <emscripten/fetch.h>
+#include <emscripten/em_asm.h>
 #include <cstdio>
 #include <cstring>
 #include <cerrno>
@@ -250,6 +251,55 @@ void WebAssetsFetchBundle() {
 
     emscripten_fetch(&attr, "/api/bundle");
     sPending++;
+}
+
+// ---------------------------------------------------------------------------
+// Synchronous single-file fetch (blocks main thread via XHR)
+// ---------------------------------------------------------------------------
+
+bool WebAssetsFetchSync(const char *memfsPath) {
+    // Strip "/data/" prefix to get the server-relative path
+    const char *rel = memfsPath;
+    if (strncmp(rel, "/data/", 6) == 0) rel += 6;
+
+    // Build server URL
+    char url[512];
+    snprintf(url, sizeof(url), "/api/file/%s", rel);
+
+    // Use synchronous XHR to fetch the file, then write to MEMFS via FS API
+    int result = EM_ASM_INT({
+        try {
+            var url = UTF8ToString($0);
+            var memfsPath = UTF8ToString($1);
+            var xhr = new XMLHttpRequest();
+            xhr.open("GET", url, false);  // synchronous
+            xhr.responseType = "arraybuffer";
+            xhr.send();
+            if (xhr.status !== 200) return 0;
+
+            var data = new Uint8Array(xhr.response);
+
+            // Create parent directories
+            var parts = memfsPath.split("/");
+            var dir = "";
+            for (var i = 0; i < parts.length - 1; i++) {
+                if (parts[i] === "") continue;
+                dir += "/" + parts[i];
+                try { FS.mkdir(dir); } catch(e) {}
+            }
+
+            // Write file to MEMFS
+            FS.writeFile(memfsPath, data);
+            return 1;
+        } catch(e) {
+            return 0;
+        }
+    }, url, memfsPath);
+
+    if (result) {
+        printf("WebAssets: fetched on-demand %s\n", rel);
+    }
+    return result != 0;
 }
 
 bool WebAssetsAllDone() { return sPending == 0; }

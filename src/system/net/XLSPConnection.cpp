@@ -66,7 +66,68 @@ void XLSPConnection::Disconnect() {
     }
 }
 
-void XLSPConnection::SetState(State s) { mState = s; }
+void XLSPConnection::SetState(State s) {
+    if (mState == s)
+        return;
+    do {
+        State oldState = mState;
+        State newState = s;
+        bool skipCleanup = false;
+        if (oldState == 1) {
+            if (mEnumHandle != INVALID_HANDLE_VALUE) {
+                if (mXOverlapped.InternalLow == ERROR_IO_PENDING) {
+                    if (newState == 5) {
+                        skipCleanup = true;
+                    } else {
+                        XCancelOverlapped(&mXOverlapped);
+                    }
+                }
+                if (!skipCleanup) {
+                    memset(&mXOverlapped, 0, sizeof(XOVERLAPPED));
+                    CloseHandle(mEnumHandle);
+                    mEnumHandle = INVALID_HANDLE_VALUE;
+                }
+            }
+            if (!skipCleanup) {
+                mEnumBufferSize = 0;
+                if (mEnumBuffer) {
+                    MemFree(mEnumBuffer, __FILE__, __LINE__);
+                    mEnumBuffer = nullptr;
+                }
+            }
+        } else if (oldState == 2) {
+            if (newState != 3) {
+                SecureDisconnect(*(in_addr *)&unk44);
+            }
+        } else if (oldState == 3) {
+            SecureDisconnect(*(in_addr *)&unk44);
+        }
+
+        mState = newState;
+
+        if (newState == 1) {
+            StartEnumeration();
+            return;
+        } else if (newState == 2) {
+            int ret = StartGatewayConnection(*(in_addr *)&unk44);
+            if (ret == 0) {
+                return;
+            }
+            s = (State)4;
+        } else if (newState == 4) {
+            mReconnectTimer.Restart();
+            return;
+        } else if (newState == 5) {
+            if (mEnumHandle != INVALID_HANDLE_VALUE) {
+                ThreadCall(this);
+                return;
+            }
+            s = (State)0;
+        } else {
+            return;
+        }
+    } while (mState != s);
+}
 
 void XLSPConnection::Poll() {}
 

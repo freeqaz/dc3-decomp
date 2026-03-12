@@ -45,6 +45,7 @@
 #include "ui/UI.h"
 #include "world/World.h"
 #include "obj/Dir.h"
+#include "obj/DirLoader.h"
 
 // WgpuRnd access
 #include "platform/Rnd_Wgpu.h"
@@ -114,6 +115,10 @@ static void mainLoop() {
         // Full engine init — loads ham_keep.dta and all subsystems
         printf("DC3 Web: SystemInit...\n");
         SystemInit("config/ham_keep.dta");
+
+        // Enable cache mode so DirLoader::CachedPath() transforms
+        // "ui/foo.milo" → "ui/gen/foo.milo_xbox" (matching ark extraction layout)
+        DirLoader::SetCacheMode(true);
 
         // Movie system
         Movie::Init();

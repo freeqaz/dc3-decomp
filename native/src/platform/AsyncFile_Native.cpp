@@ -11,6 +11,10 @@
 #include <cstring>
 #include <sys/stat.h>
 
+#ifdef __EMSCRIPTEN__
+#include "platform/WebAssets.h"
+#endif
+
 // Native async file - actually synchronous (good enough for initial port)
 class AsyncFileNative : public AsyncFile {
 public:
@@ -31,6 +35,14 @@ protected:
         // mFilename is already qualified by AsyncFile::Init()
         printf("DC3 Native: AsyncFile opening '%s' mode='%s'\n", mFilename.c_str(), fmode);
         mFp = fopen(mFilename.c_str(), fmode);
+#ifdef __EMSCRIPTEN__
+        // On-demand fetch: if file isn't in MEMFS, try fetching from server
+        if (!mFp && !(mMode & 0x300)) {  // read-only modes only
+            if (WebAssetsFetchSync(mFilename.c_str())) {
+                mFp = fopen(mFilename.c_str(), fmode);
+            }
+        }
+#endif
         if (!mFp) {
             printf("DC3 Native: AsyncFile FAILED to open '%s'\n", mFilename.c_str());
             mFail = true;

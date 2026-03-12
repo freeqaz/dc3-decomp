@@ -1,0 +1,16 @@
+# Boot to song_select_screen
+#
+# Route: boot → main_screen → choose_mode (gameplay) → song_select (perform)
+# song_select_screen is stable at ~frame 700.
+# From here you can scroll with down/up and select with confirm.
+#
+# Usage:
+#   MILO_HEADLESS=1 MILO_MAX_FRAMES=900 \
+#     MILO_INPUT_SCRIPT=scripts/dc3-input-flows/to-song-select.txt \
+#     timeout 60 native/build/dc3-native
+
+# main_screen: select "gameplay"
+400 confirm
+
+# choose_mode_screen: select "perform"
+600 confirm

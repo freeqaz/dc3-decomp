@@ -1085,21 +1085,12 @@ CharBoneDir *CharClip::GetResource() const {
 }
 
 float CharClip::SampleToBeat(int sample) const {
-#ifdef HX_NATIVE
-    const float *end = mFull.Frames().data() + mFull.Frames().size();
-    const float *begin = mFull.Frames().data();
-#else
-    const float *end = *(const float **)((char *)this + 0xfc);
-    const float *begin = *(const float **)((char *)this + 0xf8);
-#endif
-
-    bool _bit0 = ((end - begin) && ~3) != 0;
-    if (!(_bit0)) {
-        return FrameToBeat((float)sample);
+    if (mFull.Frames().empty()) {
+        return FrameToBeat(sample);
     } else {
-        const float *lower = std::lower_bound(begin, end, (float)sample);
-        auto _tmp2 = FrameToBeat(lower - begin);
-        return _tmp2;
+        const float *lower =
+            std::lower_bound(mFull.Frames().begin(), mFull.Frames().end(), (float)sample);
+        return FrameToBeat(lower - mFull.Frames().begin());
     }
 }
 

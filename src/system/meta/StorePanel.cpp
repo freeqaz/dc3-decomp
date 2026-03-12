@@ -180,11 +180,7 @@ void StorePanel::Poll() {
                         for (size_t i = 0; i < mCartOffers.size(); i++) {
                             songIds.push_back(mCartOffers[i].first->songID);
                         }
-#ifdef HX_NATIVE
                         void *mem = operator new(sizeof(MultipleItemsPostPurchaseEnumJob));
-#else
-                        void *mem = operator new(0x64);
-#endif
                         MultipleItemsPostPurchaseEnumJob *job = 0;
                         job = new (mem) MultipleItemsPostPurchaseEnumJob(
                                 this,
@@ -208,11 +204,7 @@ void StorePanel::Poll() {
                         } else if (mPurchaser->IsSuccess()) {
                             // purchased
                         } else if (mCheckoutProfile != 0) {
-#ifdef HX_NATIVE
                             void *mem = operator new(sizeof(PostPurchaseEnumJob));
-#else
-                            void *mem = operator new(0x50);
-#endif
                             PostPurchaseEnumJob *job = 0;
                             job = new (mem) PostPurchaseEnumJob(
                                     this,
@@ -291,11 +283,7 @@ void StorePanel::CheckOut(StorePurchaseable *p) {
     mCheckoutProfile = (int)profile;
 
     // Allocate and construct XboxPurchaser
-#ifdef HX_NATIVE
     void *mem = operator new(sizeof(XboxPurchaser));
-#else
-    void *mem = operator new(0x50);
-#endif
     if (mem) {
         purchaser = new (mem) XboxPurchaser(
             profile->GetPadNum(),
@@ -402,11 +390,7 @@ void StorePanel::MultipleItemsCheckout(std::list<StoreOffer *> *offers) {
         mCartOffers.push_back(pair);
     }
 
-#ifdef HX_NATIVE
     void* mem = operator new(sizeof(XboxMultipleItemsPurchaser));
-#else
-    void* mem = operator new(0x50);
-#endif
     StorePurchaser *purchaser;
     if (mem) {
         purchaser = new (mem) XboxMultipleItemsPurchaser(

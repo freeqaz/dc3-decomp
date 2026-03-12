@@ -125,6 +125,7 @@ public:
     }
     bool IsFlareEnabled() const { return mFlareEnabled; }
     RndTransformable *GetTarget() const { return mTarget; }
+    bool TargetShadow() const { return mTargetShadow; }
     void SetFlareEnabled(bool);
     bool GetAnimateFromPreset() const { return mAnimateColorFromPreset || mAnimateOrientationFromPreset; }
     bool AnimateColorFromPreset() const { return mAnimateColorFromPreset; }

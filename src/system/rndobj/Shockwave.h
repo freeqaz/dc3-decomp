@@ -25,6 +25,9 @@ public:
 
     void PrepareShader(float);
 
+    friend void CheckDistortion(class RndMat *);
+    friend void CheckDistortionOpts(class RndMat *, struct ShaderOptions &);
+
 private:
     static RndShockwave *sSelected;
 

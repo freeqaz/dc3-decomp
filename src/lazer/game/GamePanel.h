@@ -83,8 +83,8 @@ protected:
     Profiler mPerformanceProfiler;
     bool mIsReplay; // 0xd8
     std::vector<float> mFrameTimeSamples;
-    int mJitterBufferIndex;
     int mJitterSampleCount;
+    int mJitterBufferIndex;
     float mCurrentJitterValue;
     float unkf4;
     bool unkf8;

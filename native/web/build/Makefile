@@ -18825,30 +18825,6 @@ src/platform/ContentMgr_Stub.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dc3-web.dir/build.make CMakeFiles/dc3-web.dir/src/platform/ContentMgr_Stub.cpp.s
 .PHONY : src/platform/ContentMgr_Stub.cpp.s
 
-src/platform/DataParser_Native.o: src/platform/DataParser_Native.cpp.o
-.PHONY : src/platform/DataParser_Native.o
-
-# target to build an object file
-src/platform/DataParser_Native.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/dc3-web.dir/build.make CMakeFiles/dc3-web.dir/src/platform/DataParser_Native.cpp.o
-.PHONY : src/platform/DataParser_Native.cpp.o
-
-src/platform/DataParser_Native.i: src/platform/DataParser_Native.cpp.i
-.PHONY : src/platform/DataParser_Native.i
-
-# target to preprocess a source file
-src/platform/DataParser_Native.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/dc3-web.dir/build.make CMakeFiles/dc3-web.dir/src/platform/DataParser_Native.cpp.i
-.PHONY : src/platform/DataParser_Native.cpp.i
-
-src/platform/DataParser_Native.s: src/platform/DataParser_Native.cpp.s
-.PHONY : src/platform/DataParser_Native.s
-
-# target to generate assembly for a file
-src/platform/DataParser_Native.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/dc3-web.dir/build.make CMakeFiles/dc3-web.dir/src/platform/DataParser_Native.cpp.s
-.PHONY : src/platform/DataParser_Native.cpp.s
-
 src/platform/File_Web.o: src/platform/File_Web.cpp.o
 .PHONY : src/platform/File_Web.o
 
@@ -22083,9 +22059,6 @@ help:
 	@echo "... src/platform/ContentMgr_Stub.o"
 	@echo "... src/platform/ContentMgr_Stub.i"
 	@echo "... src/platform/ContentMgr_Stub.s"
-	@echo "... src/platform/DataParser_Native.o"
-	@echo "... src/platform/DataParser_Native.i"
-	@echo "... src/platform/DataParser_Native.s"
 	@echo "... src/platform/File_Web.o"
 	@echo "... src/platform/File_Web.i"
 	@echo "... src/platform/File_Web.s"

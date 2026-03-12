@@ -1,7 +1,7 @@
 # Native Port Progress (x86_64 Linux)
 
-## Current Status: Session 59 - Game Screen Venue Rendering
-**Goal**: Load a song and render the 3D venue on game_screen
+## Current Status: Session 61+ - FileMerger/ObjRef Root Cause Fix
+**Goal**: Keep the full song -> venue -> gameplay pipeline stable while removing merge-path root causes
 
 ### Sessions Complete
 - **Sessions 1-19**: Foundation through mesh rendering (see git history)
@@ -28,6 +28,7 @@
 - **Session 48**: **game_mode_icon panel visible.** Key discovery: `ObjDirItr::RecurseSubdirs()` only traverses formal `SubDirs()`, NOT nested `RndDir` objects in the hash table. `game_mode_icon` is an RndDir object (not a subdir) with 42 objects including 6 PropAnims (`icon_enter.anim`, etc.). Added nested RndDir PropAnim forcing in PanelDir::Enter(). Also identified `list_choose_mode.milo` (UIListDir) PostLoad resolving to nullptr — file loads but dir creation fails. Screenshots: `archive/screenshots/session48/`. See `docs/native/UI_ANIMATION_STATUS.md` for full analysis.
 - **Sessions 52-58**: UI animation unwind — verified Flow->FlowAnimate->AnimTask->PropAnim chain end-to-end. Removed rendering hacks. Alpha floor for 29 DTA-driven meshes. Menu enter animations work correctly.
 - **Session 59**: **Game screen venue rendering.** Navigated full menu flow into YMCA song. DCI venue renders with 505 draw calls/frame — floor, walls, DJ booth, lighting rigs, **fully-lit character** (skin/hair/outfit visible via zero-color LightPreset fallback), HUD move cards. Stable 10000 frames (clean exit). Key fixes: ObjRef ring validation, siglongjmp crash recovery, 4 new function implementations, zero-color light detection, 3 null pointer crash fixes (HamCharacter/HamCamShot/PoseFatalities), SetupAnims re-init for venue loading timing. Scene is static (LightPreset::Load unimplemented, song.anim DTA crashes). See `docs/sessions/2026-03-12-session59-game-screen-venue-rendering.md`.
+- **Session 61+**: **FileMerger pipeline restored and ObjRef producer bug fixed.** `FileMerger::PreLoad()` now runs `StartLoadInternal(true, true)` on native, restoring song -> venue -> viz -> HUD chain loading. Follow-up root-cause work found that `ObjDirPtr(C*)` was double-linking the same ref node into an object's ObjRef ring: `ObjRefConcrete` already links in its base ctor, and the derived ctor's extra `dir->AddRef(this)` corrupted the ring immediately. Removed the extra link, added a direct lifetime regression test, and revalidated scripted boot-to-`game_screen` without `ReplaceRefs` corruption warnings or merge crashes.
 
 ### Completed Phases
 - **Phase 0**: Foundation — COMPLETE
@@ -46,7 +47,7 @@ Engine boots, navigates full menu flow, loads a song, and renders the 3D venue o
 5. **Interactive navigation**: Up/Down/Confirm navigate menus. Input script (`MILO_INPUT_SCRIPT`) drives headless navigation
 6. **Venue rendering**: 505 draw calls/frame on game_screen — DCI venue with floor, walls, DJ booth, lighting rigs, fully-lit character, HUD overlays
 7. **HamUI two-pass draw**: Uses TheHamUI (game-specific UIManager) for proper letterbox/blacklight/helpbar rendering
-8. **10000 frames stable** on game_screen with clean exit (merge crashes recovered via siglongjmp, 3 null ptr crashes fixed)
+8. **Boot-to-gameplay remains stable after the ObjRef root-cause fix**. Headless scripted YMCA run reaches `game_screen` through frame 2500 without merge crash/recovery output.
 9. **Env vars**: `MILO_RENDER=1` + `MILO_HEADLESS=1` for headless GPU, `MILO_SCREENSHOT_DIR=path` + `MILO_SCREENSHOT_FRAMES=100,300,500` for auto-capture, `MILO_FIRST_SCREEN=main_screen` skips attract, `MILO_MAX_FRAMES=N`, `MILO_INPUT_SCRIPT=path`
 
 ### Session 22 Fixes (MsgSinks + Button Dispatch)
@@ -404,7 +405,7 @@ Non-Kinect TODOs:
 
 ### Next Steps
 1. **Implement LightPreset::Load** — Currently stubbed, 0 presets deserialized from venue .milo. Would enable venue light animation (45 Environs + 58 Lights available in DCI venue).
-2. **Fix ObjRef ring corruption root cause** — The siglongjmp recovery in FileMerger is a hack. Crowd and audio merges currently crash-and-recover. Finding the root cause would let these merges complete properly (crowd characters, audio).
+2. **Revalidate crowd/audio/song merges after the ObjRef root-cause fix** — the known producer bug in `ObjDirPtr(C*)` is fixed; the next step is to confirm crowd rendering and scene animation now advance normally, then remove the remaining merge-time safety hacks.
 3. **HUD textures** — Move card geometry renders as pink rectangles. Requires TexMovie render-to-texture pipeline.
 4. **Scene animation** — Venue and character are static. Song.anim DTA scripts crash on missing game objects. LightPreset-based animation needs Load implementation. Character dance clips present but SongAnimation() returns -1.
 5. **Post-processing** — Bloom, color correction, venue lighting effects are all stubbed.

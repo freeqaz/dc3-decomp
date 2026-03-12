@@ -1879,30 +1879,18 @@ RndText::FontMapBase *RndText::AcquireFontMap(RndFontBase *font) {
 
     auto _tmp9 = FontMap3d::StaticClassName();
     if (fontMapClassName == FontMap::StaticClassName()) {
-#ifdef HX_NATIVE
         result = (FontMapBase *)MemAlloc(sizeof(FontMap), __FILE__, 0xd7, "FontMapBase", 0);
-#else
-        result = (FontMapBase *)MemAlloc(0x18, __FILE__, 0xd7, "FontMapBase", 0);
-#endif
         if (result) {
             new (result) FontMap();
         }
     } else if (fontMapClassName == _tmp9) {
-#ifdef HX_NATIVE
         result = (FontMapBase *)MemAlloc(sizeof(FontMap3d), __FILE__, 0xd7, "FontMapBase", 0);
-#else
-        result = (FontMapBase *)MemAlloc(0x20, __FILE__, 0xd7, "FontMapBase", 0);
-#endif
         if (result) {
             new (result) FontMap3d();
         }
     } else {
         TheDebug.Fail(MakeString("Unknown FontMap type: %s", fontMapClassName), 0);
-#ifdef HX_NATIVE
         result = (FontMapBase *)MemAlloc(sizeof(FontMap), __FILE__, 0xd7, "FontMapBase", 0);
-#else
-        result = (FontMapBase *)MemAlloc(0x18, __FILE__, 0xd7, "FontMapBase", 0);
-#endif
         if (result) {
             new (result) FontMap();
         }
@@ -2215,16 +2203,7 @@ void RndText::DrawShowing() {
         FontMapBase *fontMap = *it;
         for (int i = 0; i < fontMap->NumMaterials(); i++) {
             RndMat *mat = fontMap->Material(i);
-#ifdef HX_NATIVE
             savedColors[vlaIdx] = mat->GetColor();
-#else
-            int *src = (int *)((char *)mat + 0x2c);
-            int *dst = (int *)&savedColors[vlaIdx];
-            dst[0] = src[0];
-            dst[1] = src[1];
-            dst[2] = src[2];
-            dst[3] = src[3];
-#endif
             vlaIdx++;
         }
     }
@@ -2242,18 +2221,8 @@ void RndText::DrawShowing() {
                 int numMats = fontMap->NumMaterials();
                 for (int i = 0; i < numMats; i++) {
                     RndMat *mat = fontMap->Material(i);
-#ifdef HX_NATIVE
                     mat->GetColor() = style.mFontColor;
                     mat->MarkDirty(1);
-#else
-                    int *dst = (int *)((char *)mat + 0x2c);
-                    int *src = (int *)&style.mFontColor;
-                    dst[0] = src[0];
-                    dst[1] = src[1];
-                    dst[2] = src[2];
-                    dst[3] = src[3];
-                    *(int *)((char *)mat + 0x228) |= 1;
-#endif
                 }
             }
         }
@@ -2292,20 +2261,11 @@ void RndText::DrawShowing() {
             auto numMaterials = fontMap->NumMaterials();
             for (int i = 0; i < numMaterials; i++) {
                 RndMat *mat = fontMap->Material(i);
-#ifdef HX_NATIVE
                 Hmx::Color &color = mat->GetColor();
                 color.red = savedColors[vlaIdx].red;
                 color.green = savedColors[vlaIdx].green;
                 color.blue = savedColors[vlaIdx].blue;
                 mat->MarkDirty(1);
-#else
-                int *src = (int *)&savedColors[vlaIdx];
-                int *dst = (int *)((char *)mat + 0x2c);
-                dst[0] = src[0];
-                dst[1] = src[1];
-                dst[2] = src[2];
-                *(int *)((char *)mat + 0x228) |= 1;
-#endif
                 vlaIdx++;
             }
         }

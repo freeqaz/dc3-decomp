@@ -29,14 +29,17 @@ All components exist and compile — nothing is stubbed:
 
 `HamDirector::mMerger` is an `ObjPtr<FileMerger>` that starts null. It's a DTA property (`SYNC_PROP(merger, mMerger)`) — NOT binary-serialized in `HamDirector::Load`.
 
-**The merger is set by the embedded DTA inside `director.milo_xbox`** (a subdir of `world.milo`). When this subdir loads, it creates a HamDirector and FileMerger objects, then runs embedded init scripts that wire `merger → <FileMerger object>`.
+**The merger is wired by DTA type handlers** in `char_objects.dta`. Each FileMerger has a type ("world", "game_mode", "modular") with a `change_files` handler that does `{$hamdirector set merger $this}`. This handler fires from `FileMerger::StartLoadInternal()`, which is called from `FileMerger::PreLoad()`.
 
-**Diagnostic findings:**
+**Root cause found:** `PreLoad` had `#ifndef HX_NATIVE` guarding the `StartLoadInternal(true, true)` call. This prevented the `change_files` message from firing on native, so the merger was never wired.
+
+**Fix applied:** Fire the `change_files` message directly on native (without the full `StartLoadInternal` which would try to load Xbox asset paths). The DTA type handlers then wire all three mergers (`merger`, `move_merger`, `game_mode_merger`) on the HamDirector.
+
+**Diagnostic findings (prior to fix):**
 - HamDirector IS constructed from `director.milo_xbox` during world.milo load
 - 7 FileMerger objects ARE constructed
-- HamDirector's TypeProps are EMPTY (no inline properties for `merger`)
-- The `merger` SyncProperty set callback NEVER fires
-- Therefore: the embedded DTA init script in `director.milo_xbox` either fails silently or never executes
+- HamDirector's TypeProps are EMPTY — merger is NOT set via TypeProps
+- The `merger` SyncProperty set callback NEVER fired because `change_files` was suppressed
 
 ### 5. The Full Loading Chain (Original Game)
 
@@ -76,32 +79,78 @@ MetaPerformer → Game::LoadSong() → HamDirector::OnLoadSong()
 - `src/system/synth/SampleData.cpp` — compilation errors
 - `src/system/synth/StandardStream.cpp` — PushData missing
 
-## Next Steps: Fixing the Merger
+## Fix Applied
 
-### Option A: Fix embedded DTA execution (correct approach)
-Debug why `director.milo_xbox`'s embedded DTA init doesn't wire the `merger` property. This requires:
-1. Adding diagnostics to `ObjectDir::PostLoad` or `DirLoader::LoadObjs` to trace DTA init execution
-2. Checking if `director.milo_xbox`'s objects are even being loaded (subdirs might be skipped)
-3. Verifying the FileMerger objects inside director.milo_xbox get proper names
+### Phase 1: change_files only (partially correct)
 
-### Option B: Manual merger setup (pragmatic workaround)
-In HamDirector's native-only Enter/Poll code:
-1. Find a FileMerger object in the dir hierarchy by iterating: `ObjDirItr<FileMerger>`
-2. If found, assign it to `mMerger`
-3. Then call `OnLoadSong` manually with the venue path
+Initial fix fired only the `change_files` DTA message on native, skipping the full `StartLoadInternal`. This successfully wired all three mergers (mMerger, mMoveMerger, mGameModeMerger) via the DTA type handlers, but the venue didn't render (0 draw calls on game_screen).
 
-### Option C: Direct venue load (bypass merger)
-Skip the merger entirely. In native code:
-1. Create a DirLoader pointing at a venue .milo_xbox file
-2. Load it directly into world_panel's WorldDir
-3. Force the first LightPreset
-This is the simplest approach but doesn't exercise the full engine.
+### Phase 2: Full StartLoadInternal (correct fix)
+
+**Root cause:** `FileMerger::PreLoad` had `#ifndef HX_NATIVE` (added commit `72538161a`, 2026-03-02) suppressing `StartLoadInternal(true, true)`. This was added during early native port bring-up when the ark file system wasn't resolving Xbox paths. Once the ark was working, the guard was stale.
+
+**Why change_files alone wasn't enough:** `StartLoadInternal` does TWO things:
+1. Fires `change_files` → DTA handler wires `$hamdirector set merger $this` AND calls `$hamdirector load_game_song FALSE` (which selects the song file via `mMerger->Select("song", ...)` but does NOT start loading because `$load=FALSE`)
+2. **Iterates all mergers checking `NeedsLoading()`** → the song file just selected in step 1 is found, `AppendLoader` creates a DirLoader, and `TheFileMergerOrganizer->AddFileMerger(this)` kicks off async loading
+
+Without step 2, the song was selected but never loaded. The entire chain (song load → `OnFileLoaded("song")` → select venue/viz → load venue → `OnFileLoaded("venue")` → set mVenue) never fired.
+
+**Fix:** Removed the `#ifdef HX_NATIVE` guard entirely. `StartLoadInternal(true, true)` runs unconditionally:
+```cpp
+    d >> mMergers;
+    // StartLoadInternal fires change_files (which lets DTA type handlers
+    // wire merger properties, e.g. {$hamdirector set merger $this}),
+    // then iterates mergers to start loading any files that were selected
+    // during change_files (e.g. the song .milo queued by load_game_song).
+    StartLoadInternal(true, true);
+```
+
+### The loading chain (now working end-to-end)
+
+```
+FileMerger::PreLoad → StartLoadInternal(true, true)
+  → change_files DTA handler:
+    → {$hamdirector set merger $this}        // wire merger
+    → {$hamdirector load_game_song FALSE}    // select song (if game_panel exists)
+  → NeedsLoading("song") = true → AppendLoader → async load
+    → song .milo loads → on_pre_merge → {$hamdirector on_file_loaded song ...}
+    → OnFileLoaded("song"):
+      → TheHamWardrobe->LoadCharacters(...)
+      → mMerger->Select("viz", "ui/visualizer/visualizer.milo")
+      → mMerger->Select("venue", "world/rollerrink/rollerrink.milo")
+      → mMerger->StartLoad(async)
+        → venue .milo loads → OnFileLoaded("venue") → mVenue = WorldDir
+        → viz .milo loads → OnFileLoaded("viz") → mVisualizer = HamVisDir
+        → game_hud .milo loads → OnFileLoaded("game_hud")
+```
+
+**Result:** 415 mesh draw calls on game_screen. Roller rink venue (YMCA's assigned venue) renders with dance floor, railing, arcade machines, neon signs, and character model.
+
+### Additional fixes
+- **SampleData::Load** — ChunkStream can't seek; added read-and-discard fallback under `HX_NATIVE`
+- **CamShotFrame::Interp** — `blendT` undeclared; added `float blendT = f1;`
+- **Geo.cpp BSPFace::Update** — `next` variable scoped inside do-while but used in while condition
+
+## Next Steps
+
+1. **LightPreset activation** — Venue objects load with correct serialized `Showing` state, but song-time LightPresets that dynamically show/hide venue elements need the song animation pipeline
+2. **Character materials** — Character model renders but needs proper material/texture setup
+3. **TexMovie/HUD** — Move cards and HUD elements need render-to-texture support
+4. **Song-time animation** — Beat-synced venue/character animations (kTaskSeconds pipeline)
 
 ## Files Modified
 | File | Change |
 |------|--------|
-| `src/system/obj/DataNode.cpp` | GetObj graceful null return under HX_NATIVE |
-| `native/src/engine_stubs_generated.cpp` | 12 LightPreset stubs removed (from session 59) |
-| `native/CMakeLists.txt` | `--allow-multiple-definition` for dc3-native |
-| `src/system/ui/UIScreen.cpp` | Local DebugUIFlow() for HX_NATIVE |
-| `src/system/world/Dir.h` | GetLightPresetMgr() getter under HX_NATIVE |
+| `src/system/char/FileMerger.cpp` | Removed `#ifndef HX_NATIVE` guard — `StartLoadInternal(true,true)` runs unconditionally |
+| `src/system/synth/SampleData.cpp` | Read-and-discard for cached audio on ChunkStream (no seek support) |
+| `src/system/world/CameraShot.cpp` | Declare `blendT` variable (was undeclared) |
+| `src/system/math/Geo.cpp` | Fix `next` variable scope in BSPFace::Update do-while |
+| `src/system/obj/DataNode.cpp` | GetObj graceful null return under HX_NATIVE (prior session) |
+| `src/system/hamobj/HamDirector.cpp` | Removed diagnostic fprintf statements |
+
+## Screenshots
+
+`archive/screenshots/2026-03-12-venue-rendering/`
+- `frame_00500.png` — choose_mode_screen (main menu)
+- `frame_01000.png` — song_select_screen (browsing songs)
+- `frame_01500.png` — game_screen with roller rink venue, character, 415 draw calls

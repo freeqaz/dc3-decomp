@@ -8,12 +8,15 @@
  * Usage:
  *   node scripts/web/test.mjs [options]
  *
+ * WebGPU requires a real display — run with xvfb-run on headless servers:
+ *   xvfb-run -a node scripts/web/test.mjs [options]
+ *
  * Options:
  *   --no-build       Skip WASM build step
  *   --timeout <sec>  Max seconds to wait for frames (default: 30)
  *   --frames <n>     Target frame count before screenshotting (default: 5)
  *   --port <n>       Server port (default: 8420)
- *   --headed         Show the browser window (for manual debugging)
+ *   --headless       Force headless mode (no GPU rendering — white canvas)
  *   --keep           Keep server running after test (for manual inspection)
  */
 
@@ -43,7 +46,7 @@ const NO_BUILD = flag('no-build');
 const TIMEOUT = parseInt(opt('timeout', '30'), 10) * 1000;
 const TARGET_FRAMES = parseInt(opt('frames', '5'), 10);
 const PORT = parseInt(opt('port', '8420'), 10);
-const HEADED = flag('headed');
+const HEADLESS = flag('headless');  // Default: headed (WebGPU needs real display)
 const KEEP = flag('keep');
 
 // ---------------------------------------------------------------------------
@@ -145,10 +148,10 @@ async function runTest() {
     let pageError = null;
     let wasmTrap = null;
 
-    console.log(`[test] Launching ${HEADED ? 'headed' : 'headless'} Chromium...`);
+    console.log(`[test] Launching ${HEADLESS ? 'headless' : 'headed'} Chromium...`);
 
     const browser = await chromium.launch({
-        headless: !HEADED,
+        headless: HEADLESS,
         args: [
             '--enable-features=Vulkan,UseSkiaRenderer',
             '--enable-unsafe-webgpu',

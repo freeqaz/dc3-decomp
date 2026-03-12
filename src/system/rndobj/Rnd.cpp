@@ -979,11 +979,7 @@ void Rnd::CreateDefaults() {
 
 Rnd::CompressTexDesc::~CompressTexDesc() {
     if (callback) {
-#ifdef HX_NATIVE
         callback->TextureCompressed((intptr_t)this);
-#else
-        callback->TextureCompressed((int)this);
-#endif
     }
 }
 

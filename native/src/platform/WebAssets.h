@@ -26,6 +26,11 @@ bool WebAssetsAllDone();
 // Unpacks into /data/ in MEMFS.
 void WebAssetsFetchBundle();
 
+// Synchronously fetch a single file from the server into MEMFS.
+// memfsPath is the full MEMFS path (e.g. "/data/ui/gen/helpbar.milo_xbox").
+// Returns true if the file was fetched and written successfully.
+bool WebAssetsFetchSync(const char *memfsPath);
+
 // Counters
 int WebAssetsPendingCount();
 int WebAssetsCompletedCount();

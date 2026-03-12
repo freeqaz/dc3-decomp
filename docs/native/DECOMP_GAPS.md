@@ -6,8 +6,8 @@ Inventory of decomp gaps affecting the native build. Prioritized by impact on re
 
 ## Current State
 
-- **Track A (Engine Boot → Gameplay)**: Boots through full menu flow to `game_screen` with 3D venue rendering. Current checkout reaches stable YMCA gameplay through frame 4200. DCI venue, HUD, crowd, and the primary character path all render.
-- **Current rendering (Session 59+)**: `game_screen` renders the DCI venue loaded from `world/dci/dci.milo`. Native compressed skinned mesh loading is fixed, and `angel04.1.mesh` now uploads with valid weights/indices. The remaining gameplay bug is later character parity: the main performer is still visibly overlapped/misposed, not absent. HUD move cards still render as pink rectangles (geometry present, textures/materials incomplete).
+- **Track A (Engine Boot → Gameplay)**: Boots through full menu flow to `game_screen` with 3D venue rendering via scripted button input (see "Scripted Input" section below). Current checkout reaches stable YMCA gameplay through frame 2500+. Roller rink venue with full geometry (dance floor, railing, arcade machines, neon signs), character model, HUD, and visualizer all render. 415 mesh draw calls on game_screen. The multiuser_screen DTA `enter` handler now drives the game start flow naturally — no auto-skip needed.
+- **Current rendering (Session 61+)**: `game_screen` loads and renders the full venue via the FileMerger pipeline. Song → venue → viz → HUD all chain-load through `HamDirector::OnFileLoaded`. Venue is `rollerrink` (YMCA's assigned venue). Character model renders on the dance floor. 415 draw calls/frame, stable.
 - **Menu rendering (Sessions 47-58)**: choose_mode_screen shows menu items, game_mode_icon, ribbons, text. Flow->PropAnim animation pipeline verified working end-to-end.
 - **Reference shots**: `archive/screenshots/references/` as live-game baseline.
 - **Flow animation pipeline**: **Fully operational** (verified Session 58). Flow→FlowAnimate→AnimTask→PropAnim chain traced end-to-end. All UI animations use kTaskUISeconds timeline, advanced by UIManager::Poll() every frame. Enter animations fade in menu items correctly. `ShouldActivateNativeFlow()` filter handles startMode=0 flows; startMode>0 flows auto-start via Flow::Enter(). No rendering hacks needed for animation.
@@ -226,15 +226,15 @@ The full DTA TypeDef → Flow → FlowAnimate → AnimTask → PropAnim pipeline
 - ~~**Camera animation on native**~~ — Superseded. CameraManager only runs in WorldDir::Poll, not PanelDir.
 - ~~**Voice-tip overlay coverage**~~ — **Fixed** (2026-03-11).
 - ~~**Flow→PropAnim animation chain**~~ — **Verified working** (2026-03-12, Session 58). Full pipeline traced and confirmed.
-- ~~**Game screen venue rendering**~~ — **Working** (2026-03-12, Session 59). DCI venue with 391 draw calls/frame, 9000+ frames stable. Character silhouette, HUD overlay visible.
+- ~~**Game screen venue rendering**~~ — **Working** (2026-03-12, Session 61). FileMerger pipeline fully operational. Song→venue→viz→HUD chain-load. Roller rink venue, 415 draw calls/frame, stable. See [Session 61](../sessions/2026-03-12-session61-merger-investigation.md).
 
 ### Track A — Current Focus: Gameplay Visual Quality
 
-Now that game_screen renders the venue, focus shifts to visual quality:
-1. **Character materials** — Silhouette needs proper material/texture application (currently dark because character material setup happens in Kinect skeleton pipeline)
-2. **ObjRef ring corruption root cause** — siglongjmp recovery in FileMerger is a hack. Crowd/audio merges crash and get skipped. Finding root cause enables crowd rendering and proper audio.
+Now that game_screen renders the venue with full FileMerger loading, focus shifts to visual quality:
+1. **Character materials** — Character model renders but needs proper material/texture application
+2. **LightPreset activation** — Venue objects have correct serialized `Showing` state, but LightPresets that dynamically show/hide venue elements during gameplay need the song animation pipeline
 3. **HUD textures** — Move card geometry renders as pink rectangles. Texture loading for gameplay HUD assets not connected.
-4. **Game-time animation** — Venue/character static. kTaskSeconds pipeline untested (kTaskUISeconds works for UI).
+4. **Game-time animation** — Song .milo contains beat-synced animations (kTaskSeconds pipeline). UI animations work (kTaskUISeconds), but gameplay animations untested.
 5. **Post-processing** — Bloom, color correction, venue lighting effects stubbed.
 
 ### Remaining Stubs — All Resolved
@@ -251,11 +251,28 @@ Now that game_screen renders the venue, focus shifts to visual quality:
 | `SpotlightDrawer::RemoveFromLists()` | SpotlightDrawer.cpp | N/A (new) | Removes spotlight from static/dynamic entry lists |
 | `RndTexBlendController::GetBlendState()` | TexBlendController.cpp | N/A (new) | Camera-distance-based texture blend factor |
 
+### Session 61: FileMerger Pipeline Fix
+
+**Root cause**: `FileMerger::PreLoad` had `#ifndef HX_NATIVE` (commit 72538161a, 2026-03-02) suppressing `StartLoadInternal(true, true)`. This was added during early native port bring-up when the ark file system wasn't properly resolving Xbox asset paths. Once the ark system was working, the guard was no longer needed but was never removed.
+
+**Impact**: `StartLoadInternal` does two critical things: (1) fires the `change_files` DTA message (which wires `HamDirector::mMerger` and calls `load_game_song FALSE` to select the song file), and (2) runs the loading loop that picks up selected files and starts async loading. Without step 2, the song was selected but never loaded, so the entire chain (song→venue→viz→HUD) never kicked off.
+
+**Fix**: Removed the `#ifdef HX_NATIVE` guard — `StartLoadInternal(true, true)` now runs unconditionally. The ark system handles all file path resolution.
+
+**Additional fixes this session**:
+| Fix | File | Details |
+|-----|------|---------|
+| ChunkStream seek crash | SampleData.cpp | Read-and-discard instead of `bs.Seek()` under `#ifdef HX_NATIVE` |
+| Undeclared `blendT` | CameraShot.cpp | Added `float blendT = f1;` in `CamShotFrame::Interp` |
+| `next` variable scope | Geo.cpp | Moved declaration outside do-while loop |
+| DataNode::GetObj graceful failure | DataNode.cpp | Log warning instead of crash for missing objects under `#ifdef HX_NATIVE` |
+
+Session doc: [Session 61](../sessions/2026-03-12-session61-merger-investigation.md)
+
 ### Session 59: Safety Hacks (Technical Debt)
 | Hack | File | Why | Proper Fix |
 |------|------|-----|-----------|
-| ObjRef ring validation | Object.cpp | Corrupt rings crash ReplaceRefs during merge | Find root cause of ring corruption in multi-file merges |
-| siglongjmp crash recovery | FileMerger.cpp | SIGSEGV during MergeDirs for crowd/audio merges | Fix ring corruption so merges don't crash |
+| ObjRef ring validation + merge recovery | Object.cpp, FileMerger.cpp | Added while the ref-ring producer bug was unknown | **Root cause found in `ObjDirPtr(C*)`**: `ObjRefConcrete` already links the node in its base ctor, and the derived ctor's extra `dir->AddRef(this)` double-linked the same node and corrupted the ring. Remaining work is revalidating crowd/audio/song merges, then deleting the legacy guards. |
 | SA_RESETHAND removal | main_native.cpp | Signal handler consumed after first recovery | Already fixed (permanent) |
 
 ## Priority 5: Inlined Subdir Loading (Asset Loading Chain) — FIXED
@@ -467,7 +484,7 @@ AnimTask created → mAnimTarget = anim->AnimTarget() (non-null)
 | **TheHamProvider property defaults** | Ham.cpp | 47+ call sites read properties with assert-on-missing before DTA initializes them | Initialization |
 | **ShellInput Kinect guards** | ShellInput.cpp | mSkelIdentifier/mSkelExtTracker genuinely absent (no Kinect hardware) | Permanent |
 | **SyncVoiceControl fallback** | ShellInput.cpp | No voice hardware — permanent platform difference | Permanent |
-| **MultiUserGesturePanel auto-skip** | MultiUserGesturePanel.cpp | Full Kinect chooser flow needs venue/char/difficulty providers working | Screen flow |
+| **HamNavList IsAnimating() bypass** | HamNavList.cpp | DTA `transition_complete` handlers never fire → `IsAnimating()` stays true forever → all button input rejected | Input |
 
 ### Removed Workarounds
 
@@ -476,6 +493,7 @@ AnimTask created → mAnimTarget = anim->AnimTarget() (non-null)
 | `wait_main_after_saveload_screen` timer entry | UI.cpp | Phase 1 | Smart stubs: `is_idle=1` lets DTA `saveload_complete` fire naturally |
 | HamNavList timer-based `IsAnimating()` bypass | HamNavList.cpp | Phase 3 | AnimTask auto-null: real `Animate()` + `IsAnimating()` now works |
 | HamNavList `mEnterAnimStartTime/Duration` members | HamNavList.h | Phase 3 | AnimTask auto-null |
+| MultiUserGesturePanel auto-skip | MultiUserGesturePanel.cpp | Phase 4 | DTA `enter` handler on multiuser_screen drives game start naturally |
 
 ### Permanent Platform Differences (not workarounds)
 
@@ -487,9 +505,83 @@ These are correct adaptations for a non-Kinect platform:
 
 ### Full plan: [DTA_FLOW_V2_PLAN.md](DTA_FLOW_V2_PLAN.md)
 
+## Scripted Input (MILO_INPUT_SCRIPT)
+
+The native port supports scripted button input for automated testing and agent workflows.
+
+### Setup
+
+Create a text file with one command per line: `frame_number button_name`
+
+```
+# comments start with #
+400 confirm        # A button (kAction_Confirm)
+600 confirm
+800 down           # D-pad down (kAction_Down)
+900 down
+1000 confirm
+```
+
+Available buttons: `confirm` (A/X), `cancel` (B/Circle), `start`, `up`, `down`, `left`, `right`
+
+### Running
+
+```bash
+MILO_HEADLESS=1 MILO_MAX_FRAMES=2000 MILO_INPUT_SCRIPT=/path/to/script.txt \
+  timeout 120 native/build/dc3-native 2>&1 | grep -E "goto_screen|current="
+```
+
+Add `MILO_DEBUG_UI_FLOW=1` for verbose UI transition logging.
+
+### Timing
+
+- **Boot screens auto-advance** (attract → autosave → title → wait_main → main_screen) — takes ~300 frames
+- **main_screen is ready at frame ~380** — first confirm should be at 400+
+- **Space buttons 100+ frames apart** — tighter spacing can miss frames (engine frame counter may skip)
+- **Each button is active for exactly 1 frame** — if the frame counter doesn't hit that exact number, the press is missed
+
+### Working Menu Flow (as of 2026-03-12)
+
+```
+Frame 400: confirm → main_screen selects "gameplay" → choose_mode_screen
+Frame 600: confirm → choose_mode selects "perform" → song_select_screen
+Frame 800: down    → scroll song list
+Frame 900: down    → scroll song list
+Frame 1000: down   → scroll song list
+Frame 1100: confirm → select song → multiuser_screen → loading → game_screen
+```
+
+**game_screen** is reached at ~frame 1500, stable through 2000+.
+
+### Key Requirement: IsAnimating() Bypass
+
+`HamNavList::OnMsg(ButtonDownMsg)` gates ALL input behind `!RndAnimatable::IsAnimating()`. On native, DTA `transition_complete` handlers that call `StopAnimation()` never fire, so `IsAnimating()` stays true forever. **The `#ifdef HX_NATIVE` bypass in `HamNavList.cpp` is required for any button input to work.**
+
+Without it, every button press reaches the HamNavList but returns `kDataUnhandled` (the `anim=1` guard rejects it).
+
+### Example: Full Headless Test
+
+```bash
+cat > /tmp/test_input.txt << 'EOF'
+400 confirm
+600 confirm
+800 down
+900 down
+1000 down
+1100 confirm
+EOF
+
+MILO_HEADLESS=1 MILO_MAX_FRAMES=2000 \
+  MILO_INPUT_SCRIPT=/tmp/test_input.txt \
+  timeout 120 native/build/dc3-native 2>&1 | \
+  grep -E "goto_screen|GotoScreenImpl|current=" | head -20
+```
+
+Expected output includes transitions through main → choose_mode → song_select → multiuser → loading → game_screen.
+
 ## Key Architecture Notes
 
 - **Weak stubs**: `native/src/engine_stubs_generated.cpp` uses `__attribute__((weak))` — any real implementation in a compiled .cpp automatically overrides the stub. **Critical**: If a class's "key function" (first non-inline virtual) is missing from its .cpp file, GCC can't emit the vtable and the weak zero-filled stub wins -> null vtable dispatch crash. Fixed for: MemStream, OvershellSlot, StreamReceiverFile, RandomIntervalGroupSeqInst.
-- **ObjRef ring corruption**: Largely resolved. Two-pass deletion + ref ring snapshots + gSuppressRefErase handle object lifecycle correctly.
+- **ObjRef ring corruption**: Root cause fixed in `ObjDirPtr(C*)` (`Dir.h`) by removing an extra `AddRef` that double-linked the same ref node into an object's ring. Added a native regression test covering direct constructor behavior (`ObjectLifetimeTest.ObjDirPtrConstructorKeepsSingleWellFormedRefRingNode`). Two-pass deletion + ref ring snapshots + `gSuppressRefErase` remain as separate lifetime protections.
 - **Stream deserialization**: Multiple guards against corrupt data suggest some Load() functions have bugs or version mismatches.
 - **Vtable key function pattern**: If a class in `engine_stubs_generated.cpp` has zero-filled weak vtable, check if its first non-inline virtual is defined in its `.cpp` file. See `memory/MEMORY.md` for details.

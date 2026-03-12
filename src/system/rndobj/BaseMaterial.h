@@ -124,6 +124,10 @@ public:
         kDarken = 10
     };
 
+    friend void SetColorWriteMask(const struct ShaderOptions &, class RndMat *);
+    friend void CheckDistortion(class RndMat *);
+    friend void CheckDistortionOpts(class RndMat *, struct ShaderOptions &);
+
     virtual ~BaseMaterial() {}
     OBJ_CLASSNAME(BaseMaterial);
     OBJ_SET_TYPE(BaseMaterial);

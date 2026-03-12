@@ -1027,7 +1027,6 @@ set(DC3_WEB_CORE_SOURCES
     src/platform/NetworkSocket_Stub.cpp
     src/platform/SynthCommon_Stub.cpp
     src/platform/RndTex_Native.cpp
-    src/platform/DataParser_Native.cpp
     src/engine_stubs_generated.cpp
     src/native_link_glue.cpp
     src/thunk_stubs.cpp

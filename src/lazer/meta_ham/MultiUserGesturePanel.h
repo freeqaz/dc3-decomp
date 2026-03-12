@@ -73,6 +73,6 @@ protected:
 private:
     void UpdateNavLists(int);
 #ifdef HX_NATIVE
-    bool mNativeAutoSkipPending;
+    bool mNativeEnterPending;
 #endif
 };

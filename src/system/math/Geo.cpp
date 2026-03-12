@@ -7,6 +7,7 @@
 #include "obj/DataFunc.h"
 #include "os/System.h"
 #include "utl/BinStream.h"
+#include <cfloat>
 #include <cmath>
 
 void Triangle::Set(const Vector3 &v0, const Vector3 &v1, const Vector3 &v2) {
@@ -321,22 +322,28 @@ void Intersect(const Transform &trans, const Plane &plane, Hmx::Ray &ray) {
 void BSPFace::OnSide(const Plane &plane, bool &front, bool &back) {
     front = false;
     back = false;
-    for (int i = 0; i < (int)p.points.size(); i++) {
-        Vector3 pt(p.points[i].x, p.points[i].y, 0.0f);
-        Multiply(pt, t, pt);
-        float dot = plane.a * pt.x + plane.b * pt.y + plane.c * pt.z + plane.d;
-        if (dot > gBSPPosTol) {
-            front = true;
-        }
-        if (dot < -gBSPPosTol) {
-            back = true;
-        }
+    const Vector2 *it = p.points.begin();
+    if (it != p.points.end()) {
+        float posTol = gBSPPosTol;
+        float negTol = -gBSPPosTol;
+        do {
+            Vector3 pt(it->x, it->y, 0.0f);
+            Multiply(pt, t, pt);
+            float dot = plane.a * pt.x + plane.b * pt.y + plane.c * pt.z + plane.d;
+            if (dot > posTol) {
+                front = true;
+            }
+            if (dot < negTol) {
+                back = true;
+            }
+            it++;
+        } while (it != p.points.end());
     }
 }
 
 bool Intersect(const Vector3 &origin, const Vector3 &dir, const Box &box, float &tmin, float &tmax) {
     tmin = 1.1920929e-07f;
-    tmax = 1e+30f;
+    tmax = FLT_MAX;
     for (unsigned int i = 0; i < 3; i++) {
         float invDir = 1.0f / dir[i];
         float t1 = (box.mMin[i] - origin[i]) * invDir;
@@ -346,16 +353,9 @@ bool Intersect(const Vector3 &origin, const Vector3 &dir, const Box &box, float 
             t1 = t2;
             t2 = tmp;
         }
-        if (t1 - tmin < 0.0f) {
-            t1 = tmin;
-        }
-        tmin = t1;
-        float tmax2 = tmax;
-        if (t2 - tmax < 0.0f) {
-            tmax2 = t2;
-        }
-        tmax = tmax2;
-        if (tmax2 < tmin) {
+        tmin = t1 - tmin >= 0.0f ? t1 : tmin;
+        tmax = t2 - tmax < 0.0f ? t2 : tmax;
+        if (tmax < tmin) {
             return false;
         }
     }
@@ -363,28 +363,29 @@ bool Intersect(const Vector3 &origin, const Vector3 &dir, const Box &box, float 
 }
 
 bool Intersect(const Plane &plane, const Box &box) {
+    float hx = (box.mMax.x - box.mMin.x) * 0.5f;
+    float hy = (box.mMax.y - box.mMin.y) * 0.5f;
+    float hz = (box.mMax.z - box.mMin.z) * 0.5f;
     Vector3 halfExtent;
-    halfExtent.x = (box.mMax.x - box.mMin.x) * 0.5f;
-    halfExtent.y = (box.mMax.y - box.mMin.y) * 0.5f;
-    halfExtent.z = (box.mMax.z - box.mMin.z) * 0.5f;
+    halfExtent.x = box.mMax.x - (box.mMin.x + hx);
+    halfExtent.y = box.mMax.y - (box.mMin.y + hy);
+    halfExtent.z = box.mMax.z - (box.mMin.z + hz);
 
     Vector3 pMin, pMax;
     for (unsigned int i = 0; i < 3; i++) {
         const Vector3 &normal = *(const Vector3 *)&plane.a;
-        if (normal[i] <= 0.0f) {
-            pMin[i] = halfExtent[i];
-            pMax[i] = -halfExtent[i];
-        } else {
+        if (normal[i] > 0.0f) {
             pMin[i] = -halfExtent[i];
             pMax[i] = halfExtent[i];
+        } else {
+            pMin[i] = halfExtent[i];
+            pMax[i] = -halfExtent[i];
         }
     }
 
     const Vector3 &normal = *(const Vector3 *)&plane.a;
-    if (0.0f < normal.x * pMin.x + normal.y * pMin.y + normal.z * pMin.z + plane.d) {
-        return false;
-    }
-    if (normal.x * pMax.x + normal.y * pMax.y + normal.z * pMax.z + plane.d < 0.0f) {
+    if (0.0f < normal.x * pMin.x + normal.y * pMin.y + normal.z * pMin.z + plane.d
+        || normal.x * pMax.x + normal.y * pMax.y + normal.z * pMax.z + plane.d < 0.0f) {
         return false;
     }
     return true;
@@ -414,45 +415,51 @@ bool Intersect(const Triangle &tri, const Box &box) {
     float v1z = (tri.frame.x.z + tri.origin.z) - cz;
     float v2z = (tri.frame.y.z + tri.origin.z) - cz;
 
-    // X axis test
+    // X axis separation test (fsel ternary for min/max)
     {
-        float a = v0x, b = v1x;
-        if (v0x - v1x < 0.0f) { a = v1x; b = v0x; }
-        float mn = v2x;
-        if (b - v2x < 0.0f) { mn = b; }
-        if (a - v2x < 0.0f) { a = v2x; }
-        if (!(mn <= halfX && -halfX <= a)) return false;
+        float diff = v0x - v1x;
+        float mn = diff >= 0.0f ? v1x : v0x;
+        float mx = diff >= 0.0f ? v0x : v1x;
+        float sub_mn = mn - v2x;
+        float sub_mx = mx - v2x;
+        mn = sub_mn >= 0.0f ? v2x : mn;
+        mx = sub_mx >= 0.0f ? mx : v2x;
+        if (mn > halfX || mx < -halfX) return false;
     }
 
-    // Y axis test
+    // Y axis separation test
     {
-        float a = v0y, b = v1y;
-        if (v0y - v1y < 0.0f) { a = v1y; b = v0y; }
-        float mn = v2y;
-        if (b - v2y < 0.0f) { mn = b; }
-        if (a - v2y < 0.0f) { a = v2y; }
-        if (!(mn <= halfY && -halfY <= a)) return false;
+        float diff = v0y - v1y;
+        float mn = diff >= 0.0f ? v1y : v0y;
+        float mx = diff >= 0.0f ? v0y : v1y;
+        float sub_mn = mn - v2y;
+        float sub_mx = mx - v2y;
+        mn = sub_mn >= 0.0f ? v2y : mn;
+        mx = sub_mx >= 0.0f ? mx : v2y;
+        if (mn > halfY || mx < -halfY) return false;
     }
 
-    // Z axis test
+    // Z axis separation test
     {
-        float a = v0z, b = v1z;
-        if (v0z - v1z < 0.0f) { a = v1z; b = v0z; }
-        float mn = v2z;
-        if (b - v2z < 0.0f) { mn = b; }
-        if (a - v2z < 0.0f) { a = v2z; }
-        if (!(mn <= halfZ && -halfZ <= a)) return false;
+        float diff = v0z - v1z;
+        float mn = diff >= 0.0f ? v1z : v0z;
+        float mx = diff >= 0.0f ? v0z : v1z;
+        float sub_mn = mn - v2z;
+        float sub_mx = mx - v2z;
+        mn = sub_mn >= 0.0f ? v2z : mn;
+        mx = sub_mx >= 0.0f ? mx : v2z;
+        if (mn > halfZ || mx < -halfZ) return false;
     }
 
-    // Face normal plane test
-    float nx = tri.frame.z.x;
+    // Face normal plane test — reuse v0 stack for plane
     float ny = tri.frame.z.y;
     float nz = tri.frame.z.z;
+    float nx = tri.frame.z.x;
     Plane facePlane;
     facePlane.a = nx;
     facePlane.b = ny;
     facePlane.c = nz;
-    facePlane.d = -(nx * v0x + ny * v0y + nz * v0z);
+    facePlane.d = -(nx * v0x + (nz * v0z + ny * v0y));
     if (!Intersect(facePlane, box)) return false;
 
     // Edge cross product axes (9 tests)
@@ -460,37 +467,47 @@ bool Intersect(const Triangle &tri, const Box &box) {
     float e1x = v2x - v1x, e1y = v2y - v1y, e1z = v2z - v1z;
     float e2x = v0x - v2x, e2y = v0y - v2y, e2z = v0z - v2z;
 
-    // Cross products with box axes (1,0,0), (0,1,0), (0,0,1)
-    float axes[9][3] = {
-        { 0, -e0z, e0y },
-        { e0z, 0, -e0x },
-        { -e0y, e0x, 0 },
-        { 0, -e1z, e1y },
-        { e1z, 0, -e1x },
-        { -e1y, e1x, 0 },
-        { 0, -e2z, e2y },
-        { e2z, 0, -e2x },
-        { -e2y, e2x, 0 },
+    // Cross products with box axes — 4-float stride (ax, ay, az, pad)
+    float axes[9][4] = {
+        { 0, -e0z, e0y, 0 },
+        { e0z, 0, -e0x, 0 },
+        { -e0y, e0x, 0, 0 },
+        { 0, -e1z, e1y, 0 },
+        { e1z, 0, -e1x, 0 },
+        { -e1y, e1x, 0, 0 },
+        { 0, -e2z, e2y, 0 },
+        { e2z, 0, -e2x, 0 },
+        { -e2y, e2x, 0, 0 },
     };
 
-    for (unsigned int i = 0; i < 9; i++) {
-        float ax = axes[i][0], ay = axes[i][1], az = axes[i][2];
+    float radii[9];
+    float *pfAxis = &axes[0][1];
+    float *pfR = radii;
+    unsigned int i = 0;
+    do {
+        float ax = pfAxis[-1], ay = pfAxis[0], az = pfAxis[1];
         float absx = ax; if (absx <= 0.0f) absx = -absx;
         float absy = ay; if (absy <= 0.0f) absy = -absy;
         float absz = az; if (absz <= 0.0f) absz = -absz;
         float r = absx * halfX + absy * halfY + absz * halfZ;
+        *pfR = r;
 
         float p0 = ax * v0x + ay * v0y + az * v0z;
         float p1 = ax * v1x + ay * v1y + az * v1z;
         float p2 = ax * v2x + ay * v2y + az * v2z;
 
-        float mn = p0, mx = p1;
-        if (p0 - p1 < 0.0f) { mx = p0; mn = p1; }
-        if (p2 - mx < 0.0f) { mx = p2; }
+        float diff = p1 - p2;
+        float mx = diff >= 0.0f ? p1 : p2;
+        float mn = diff >= 0.0f ? p2 : p1;
+        mx = p0 - mx >= 0.0f ? p0 : mx;
         if (mx < -r) return false;
-        if (p2 - mn < 0.0f) { mn = p2; }
+        mn = p0 - mn >= 0.0f ? mn : p0;
         if (r < mn) return false;
-    }
+
+        i++;
+        pfAxis += 4;
+        pfR++;
+    } while (i < 9);
 
     return true;
 }
@@ -871,70 +888,91 @@ bool Intersect(
 }
 
 void BSPFace::Set(const Vector3 &p1, const Vector3 &p2, const Vector3 &p3) {
-    // Build the transform from the triangle's coordinate frame
-    // z-axis = normal of the triangle (cross product of edges)
-    Vector3 edge1, edge2;
-    Subtract(p2, p1, edge1);
-    Subtract(p3, p1, edge2);
-    Cross(edge1, edge2, t.m.z);
+    Subtract(p2, p1, t.m.x);
+    Normalize(t.m.x, t.m.x);
+
+    Subtract(p3, p1, t.m.y);
+    Cross(t.m.x, t.m.y, t.m.z);
     Normalize(t.m.z, t.m.z);
-
-    // x-axis = normalized first edge
-    Normalize(edge1, t.m.x);
-
-    // y-axis = cross(z, x) to form right-handed frame
     Cross(t.m.z, t.m.x, t.m.y);
 
-    // translation = first vertex
     t.v = p1;
 
-    // Project the 3 vertices into the 2D plane of the triangle
-    p.points.resize(3);
+    p.points.clear();
     Vector3 v;
+    Vector2 pt;
 
-    Subtract(p1, t.v, v);
-    p.points[0].Set(Dot(v, t.m.x), Dot(v, t.m.y));
+    MultiplyTranspose(p1, t, v);
+    pt.Set(v.x, v.y);
+    p.points.push_back(pt);
 
-    Subtract(p2, t.v, v);
-    p.points[1].Set(Dot(v, t.m.x), Dot(v, t.m.y));
+    MultiplyTranspose(p2, t, v);
+    pt.Set(v.x, v.y);
+    p.points.push_back(pt);
 
-    Subtract(p3, t.v, v);
-    p.points[2].Set(Dot(v, t.m.x), Dot(v, t.m.y));
+    MultiplyTranspose(p3, t, v);
+    pt.Set(v.x, v.y);
+    p.points.push_back(pt);
 
     Update();
 }
 
 void BSPFace::Update() {
-    // Compute area and edge planes from the 2D polygon points
-    planes.clear();
+    MILO_ASSERT(p.points.size() > 2, 0x6c2);
+
+    const Vector2 *anchor = p.points.begin();
+    const Vector2 *v1 = anchor + 1;
+    const Vector2 *v2 = anchor + 2;
     area = 0.0f;
-
-    int numPoints = p.points.size();
-    for (int i = 0; i < numPoints; i++) {
-        const Vector2 &p1 = p.points[i];
-        const Vector2 &p2 = p.points[(i + 1) % numPoints];
-
-        // Accumulate area using the shoelace formula
-        area += p1.x * p2.y - p2.x * p1.y;
-
-        // Build a 3D edge plane from each polygon edge
-        // Transform the 2D edge endpoints to 3D
-        Vector3 v1, v2, v3;
-        v1.Set(p1.x, p1.y, 0.0f);
-        Multiply(v1, t, v1);
-        v2.Set(p2.x, p2.y, 0.0f);
-        Multiply(v2, t, v2);
-
-        // Third point is offset along the face normal
-        v3.Set(p1.x, p1.y, 1.0f);
-        Multiply(v3, t, v3);
-
-        Plane plane;
-        plane.Set(v1, v2, v3);
-        planes.push_back(plane);
+    if (v2 != p.points.end()) {
+        const Vector2 *nextPt;
+        do {
+            nextPt = v2 + 1;
+            area += (v1->y * anchor->x - v1->x * anchor->y +
+                     v2->x * anchor->y - v2->y * anchor->x +
+                     v2->y * v1->x - v2->x * v1->y) * 0.5f;
+            v1 = v2;
+            v2 = nextPt;
+        } while (nextPt != p.points.end());
     }
 
-    area = std::fabs(area) * 0.5f;
+    planes.clear();
+
+    Plane facePlane;
+    facePlane.a = t.m.z.x;
+    facePlane.b = t.m.z.y;
+    facePlane.c = t.m.z.z;
+    facePlane.d = -(t.m.z.x * t.v.x + t.m.z.y * t.v.y + t.m.z.z * t.v.z);
+    planes.insert(planes.end(), facePlane);
+
+    Vector3 prevPt(p.points.back().x, p.points.back().y, 0.0f);
+    Multiply(prevPt, t, prevPt);
+
+    for (const Vector2 *it = p.points.begin(); it != p.points.end(); it++) {
+        Vector3 curPt(it->x, it->y, 0.0f);
+        Multiply(curPt, t, curPt);
+
+        float dx = curPt.x - prevPt.x;
+        float dy = curPt.y - prevPt.y;
+        float dz = curPt.z - prevPt.z;
+
+        if (dx != 0.0f || dy != 0.0f || dz != 0.0f) {
+            Vector3 normal;
+            normal.x = t.m.z.z * dy - t.m.z.y * dz;
+            normal.y = t.m.z.x * dz - t.m.z.z * dx;
+            normal.z = t.m.z.y * dx - t.m.z.x * dy;
+            Normalize(normal, normal);
+
+            Plane edgePlane;
+            edgePlane.a = normal.x;
+            edgePlane.b = normal.y;
+            edgePlane.c = normal.z;
+            edgePlane.d = -(normal.x * curPt.x + (normal.y * curPt.y + normal.z * curPt.z));
+            planes.insert(planes.end(), edgePlane);
+
+            prevPt = curPt;
+        }
+    }
 }
 
 bool MakeBSPTree(BSPNode *&, std::list<BSPFace> &, int) { return false; }
@@ -946,7 +984,7 @@ bool Intersect(const Transform &tf, const Hmx::Polygon &poly, const BSPNode *nod
     // Classify all polygon points against the BSP split plane
     bool front = false;
     bool back = false;
-    for (const Vector2 *i = &poly.points[0]; i != &poly.points[0] + poly.points.size(); i++) {
+    for (const Vector2 *i = poly.points.begin(); i != poly.points.end(); i++) {
         Vector3 v(i->x, i->y, 0.0f);
         Multiply(v, tf, v);
         float dot = node->plane.Dot(v);
@@ -993,11 +1031,11 @@ void Clip(const Hmx::Polygon &poly, const Hmx::Ray &ray, Hmx::Polygon &out) {
     std::vector<Vector2> tempPoints;
     std::vector<Vector2> *newPoints = &out.points;
 
-    float lastDot = ray.dir.x * (poly.points[poly.points.size() - 1].y - ray.base.y)
-                  - ray.dir.y * (poly.points[poly.points.size() - 1].x - ray.base.x);
-    const Vector2 *lastPoint = &poly.points[poly.points.size() - 1];
+    float lastDot = ray.dir.x * (poly.points.back().y - ray.base.y)
+                  - ray.dir.y * (poly.points.back().x - ray.base.x);
+    const Vector2 *lastPoint = &poly.points.back();
 
-    for (const Vector2 *i = &poly.points[0]; i != &poly.points[0] + poly.points.size(); i++) {
+    for (const Vector2 *i = poly.points.begin(); i != poly.points.end(); i++) {
         float dot = ray.dir.x * (i->y - ray.base.y) - ray.dir.y * (i->x - ray.base.x);
 
         if (dot >= 0.0f) {

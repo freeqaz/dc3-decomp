@@ -1,0 +1,15 @@
+# Test back navigation (cancel button)
+#
+# Route: boot → main_screen → choose_mode → cancel back → main_screen
+# Verifies the go_back_screen DTA handler works.
+#
+# Usage:
+#   MILO_HEADLESS=1 MILO_MAX_FRAMES=900 \
+#     MILO_INPUT_SCRIPT=scripts/dc3-input-flows/back-navigation.txt \
+#     timeout 60 native/build/dc3-native
+
+# main_screen: select "gameplay" → choose_mode_screen
+400 confirm
+
+# choose_mode_screen: press cancel → back to main_screen
+650 cancel

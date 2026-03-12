@@ -10,7 +10,4 @@
 // DingoJob.cpp references this label-named string constant from .rodata
 const char *lbl_82066608 = "";
 
-// SkeletonChooser — unimplemented Kinect methods (no-op on native/web)
-#include "meta_ham/SkeletonChooser.h"
-void SkeletonChooser::SetPlayerSkeletonNavData(int, int) {}
-void SkeletonChooser::ChoosePlayerSides() {}
+// SkeletonChooser stubs — now in SkeletonChooser.cpp

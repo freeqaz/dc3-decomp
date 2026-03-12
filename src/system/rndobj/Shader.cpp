@@ -2,16 +2,21 @@
 #include "Rnd.h"
 #include "os/System.h"
 #include "rnddx9/RenderState.h"
+#include "rndobj/Cam.h"
 #include "rndobj/Env.h"
 #include "rndobj/Mat_NG.h"
 #include "rndobj/Env_NG.h"
 #include "os/Debug.h"
 #include "rndobj/Mat.h"
 #include "rndobj/Rnd.h"
+#include "rndobj/Rnd_NG.h"
 #include "rndobj/ShaderMgr.h"
 #include "rndobj/ShaderOptions.h"
 #include "rndobj/ShaderProgram.h"
+#include "rndobj/Shockwave.h"
+#include "rndobj/Spline.h"
 #include "rndobj/Stats_NG.h"
+#include "math/Utl.h"
 #include "utl/Loader.h"
 #include "utl/Str.h"
 #include <set>
@@ -40,7 +45,7 @@ unsigned int StrHash(const char *str) {
     return hash;
 }
 
-void CheckDistortionOpts(RndMat *, const ShaderOptions &);
+void CheckDistortionOpts(RndMat *, ShaderOptions &);
 void CheckDistortion(RndMat *);
 void SetColorWriteMask(const ShaderOptions &, RndMat *);
 void CheckShadow();
@@ -257,11 +262,84 @@ bool RndShaderParticles::CheckError(MatFlagErrorType type) {
         return !(type != (MatFlagErrorType)0 && type != (MatFlagErrorType)2) && TheRnd.GetDrawMode() != 4;
 }
 
-void CheckDistortionOpts(RndMat *, const ShaderOptions &) {}
-void CheckDistortion(RndMat *) {}
-void SetColorWriteMask(const ShaderOptions &, RndMat *) {}
-void CheckShadow() {}
-void CheckExtrude() {}
+void SetColorWriteMask(const ShaderOptions &opts, RndMat *mat) {
+    bool writeAlpha = mat->mAlphaWrite;
+    if (!mat->mForceAlphaWrite
+        && ((opts.flags & 0x400000) != 0 || ((NgMat *)mat)->AllowHDR() || writeAlpha)) {
+        writeAlpha = true;
+    }
+    TheRenderState.SetColorWriteMask((-(unsigned int)writeAlpha & 8) + 7);
+}
+
+void CheckDistortionOpts(RndMat *mat, ShaderOptions &opts) {
+    RndSpline *spline = RndSpline::sGlobalDefaultSpline;
+    if (spline && !mat->mNeverFitToSpline && spline->mCtrlPoints.size() > 1) {
+        opts.flags = ((u64)(spline->mPulseDrawing & 1) << 56)
+            | (opts.flags & ~((u64)1 << 56))
+            | ((u64)1 << 55);
+    }
+    if (RndShockwave::sSelected
+        && Abs(RndShockwave::sSelected->mAmplitude) >= 0.0001f
+        && mat->mAllowDistortionEffects
+        && Abs(mat->mShockwaveMult) >= 0.0001f) {
+        opts.flags |= (u64)1 << 60;
+    }
+}
+
+void CheckDistortion(RndMat *mat) {
+    if (RndSpline::sGlobalDefaultSpline
+        && !mat->mNeverFitToSpline
+        && !RndSpline::sGlobalDefaultSpline->mManual
+        && RndSpline::sGlobalDefaultSpline->mCtrlPoints.size() > 1) {
+        RndSpline::sGlobalDefaultSpline->PrepareShader();
+    }
+    if (RndShockwave::sSelected
+        && Abs(RndShockwave::sSelected->mAmplitude) >= 0.0001f
+        && mat->mAllowDistortionEffects
+        && Abs(mat->mShockwaveMult) >= 0.0001f) {
+        RndShockwave::sSelected->PrepareShader(mat->mShockwaveMult);
+    }
+}
+
+void CheckShadow() {
+    RndCam *shadowCam = TheNgRnd.GetShadowCam();
+    if (shadowCam) {
+        Transform viewXfm;
+        Hmx::Matrix4 projMtx;
+        shadowCam->GetViewProjectXfms(viewXfm, projMtx);
+        Hmx::Matrix4 viewProj = Hmx::operator*(viewXfm, projMtx);
+        static Hmx::Matrix4 sShadowTexMatrix;
+        static bool sInit;
+        if (!sInit) {
+            sShadowTexMatrix.x = Vector4(0.0f, 0.0f, 0.0f, 0.0f);
+            sShadowTexMatrix.y = Vector4(0.0f, -0.5f, 0.0f, 0.0f);
+            sShadowTexMatrix.z = Vector4(0.0f, 0.0f, 1.0f, 0.0f);
+            sShadowTexMatrix.w = Vector4(0.0f, 0.501953125f, 0.0f, 1.0f);
+            sInit = true;
+        }
+        Hmx::Matrix4 result = Hmx::operator*(viewProj, sShadowTexMatrix);
+        TheShaderMgr.SetVConstant((VShaderConstant)0x28, result);
+    }
+}
+
+void CheckExtrude() {
+    if (TheRnd.GetDrawMode() == Rnd::kDrawShadowColor) {
+        TheRenderState.SetDepthTestEnable(true);
+        TheRenderState.SetDepthWriteEnable(true);
+        TheRenderState.SetBlendEnable(true);
+        TheRenderState.SetBlend(
+            (RndRenderState::Blend)0, (RndRenderState::Blend)1,
+            (RndRenderState::Blend)1, (RndRenderState::Blend)1
+        );
+        TheRenderState.SetDepthFunc((RndRenderState::TestFunc)1);
+        TheRenderState.SetAlphaTestEnable(false);
+        Transform viewXfm;
+        Hmx::Matrix4 projMtx;
+        RndCam::Current()->GetViewProjectXfms(viewXfm, projMtx);
+        Hmx::Matrix4 viewProj = Hmx::operator*(viewXfm, projMtx);
+        TheShaderMgr.SetVConstant(kVS_ViewProjMatrix, viewProj);
+    }
+}
 
 u64 RndShaderSimple::CalcShaderOpts(NgMat *, ShaderType, bool) { return 0; }
 u64 RndShaderParticles::CalcShaderOpts(NgMat *, ShaderType, bool) { return 0; }
@@ -276,6 +354,181 @@ u64 RndShaderDepthVolume::CalcShaderOpts(NgMat *, ShaderType, bool) { return 0; 
 u64 RndShaderFur::CalcShaderOpts(NgMat *, ShaderType, bool) { return 0; }
 u64 RndShaderSyncTrack::CalcShaderOpts(NgMat *, ShaderType, bool) { return 0; }
 
-void RndShaderParticles::Select(RndMat *, ShaderType, bool) {}
-void RndShaderMultimesh::Select(RndMat *, ShaderType, bool) {}
-void RndShaderStandard::Select(RndMat *, ShaderType, bool) {}
+void RndShaderParticles::Select(RndMat *mat, ShaderType s, bool b) {
+    if (!mat) mat = TheRnd.DefaultMat();
+    TheRenderState.SetFillMode((RndRenderState::FillMode)0);
+    if (!RedundantState(mat, s, false, false, b)) {
+        TheNgStats->mMats++;
+        ((NgMat *)mat)->SetupShader(false, true);
+        u64 optsVal = CalcShaderOpts((NgMat *)mat, s, b);
+        SetColorWriteMask(ShaderOptions(optsVal), mat);
+        Cache(s, ShaderOptions(optsVal), mat);
+    }
+}
+
+void RndShaderMultimesh::Select(RndMat *mat, ShaderType s, bool b) {
+    if (!mat) mat = TheRnd.DefaultMat();
+    TheRenderState.SetFillMode((RndRenderState::FillMode)0);
+    if (!RedundantState(mat, s, false, TheShaderMgr.UseAO(), b)) {
+        TheNgStats->mMats++;
+        ((NgMat *)mat)->SetupShader(TheShaderMgr.AllowPerPixel(), true);
+        u64 optsVal = CalcShaderOpts((NgMat *)mat, s, b);
+        SetColorWriteMask(ShaderOptions(optsVal), mat);
+        CheckForceCull(kMultimeshShader);
+        CheckDistortion(mat);
+        Cache(kMultimeshShader, ShaderOptions(optsVal), mat);
+    }
+}
+
+void RndShaderStandard::Select(RndMat *mat, ShaderType s, bool b) {
+    if (!mat) mat = TheRnd.DefaultMat();
+    TheRenderState.SetFillMode((RndRenderState::FillMode)0);
+    bool skinned = TheShaderMgr.BoneCount() != 0;
+    if (!RedundantState(mat, s, skinned, TheShaderMgr.UseAO(), b)) {
+        TheNgStats->mMats++;
+        ((NgMat *)mat)->SetupShader(TheShaderMgr.AllowPerPixel(), true);
+        CheckShadow();
+        u64 optsVal = CalcShaderOpts((NgMat *)mat, s, b);
+        MILO_ASSERT(s == kStandardShader || s == kStandardBBShader || s == kAllWhiteShader, 0x4BB);
+        if (s != kStandardShader) {
+            s = kStandardShader;
+        }
+        SetColorWriteMask(ShaderOptions(optsVal), mat);
+        CheckExtrude();
+        CheckForceCull(s);
+        CheckDistortion(mat);
+        Cache(s, ShaderOptions(optsVal), mat);
+    }
+}
+
+void RndShaderPostProc::Select(RndMat *mat, ShaderType s, bool b) {
+    if (!mat) mat = TheRnd.DefaultMat();
+    TheRenderState.SetFillMode((RndRenderState::FillMode)0);
+    if (!RedundantState(mat, s, false, false, b)) {
+        TheNgStats->mMats++;
+        ((NgMat *)mat)->SetupShader(TheShaderMgr.AllowPerPixel(), false);
+        u64 optsVal = CalcShaderOpts((NgMat *)mat, s, b);
+        TheRenderState.SetColorWriteMask(0xF);
+        Cache(s, ShaderOptions(optsVal), mat);
+    }
+}
+
+void RndShaderDrawRect::Select(RndMat *mat, ShaderType s, bool b) {
+    if (!mat) mat = TheShaderMgr.DrawRectMat();
+    TheRenderState.SetFillMode((RndRenderState::FillMode)0);
+    if (!RedundantState(mat, s, false, false, b)) {
+        TheNgStats->mMats++;
+        ((NgMat *)mat)->SetupShader(TheShaderMgr.AllowPerPixel(), true);
+        u64 optsVal = CalcShaderOpts((NgMat *)mat, s, b);
+        SetColorWriteMask(ShaderOptions(optsVal), mat);
+        TheShaderMgr.SetVConstant(kVS_AmbientColor, Vector4(1.0f, 1.0f, 1.0f, 1.0f));
+        TheShaderMgr.SetPConstant(kPS_AmbientColor, Vector4(1.0f, 1.0f, 1.0f, 1.0f));
+        CheckForceCull(kStandardShader);
+        Cache(kStandardShader, ShaderOptions(optsVal), mat);
+    }
+}
+
+void RndShaderUnwrapUV::Select(RndMat *mat, ShaderType s, bool b) {
+    if (!mat) mat = TheRnd.DefaultMat();
+    TheRenderState.SetFillMode((RndRenderState::FillMode)0);
+    if (!RedundantState(mat, s, false, false, b)) {
+        TheNgStats->mMats++;
+        ((NgMat *)mat)->SetupShader(TheShaderMgr.AllowPerPixel(), true);
+        u64 optsVal = CalcShaderOpts((NgMat *)mat, s, b);
+        TheRenderState.SetColorWriteMask(7);
+        TheShaderMgr.SetVConstant(kVS_AmbientColor, Vector4(mat->GetColor().red, mat->GetColor().green, mat->GetColor().blue, mat->GetColor().alpha));
+        TheShaderMgr.SetPConstant(kPS_AmbientColor, Vector4(mat->GetColor().red, mat->GetColor().green, mat->GetColor().blue, mat->GetColor().alpha));
+        CheckForceCull(s);
+        Cache(s, ShaderOptions(optsVal), mat);
+    }
+}
+
+void RndShaderVelocity::Select(RndMat *mat, ShaderType s, bool b) {
+    if (!mat) mat = TheRnd.DefaultMat();
+    TheRenderState.SetFillMode((RndRenderState::FillMode)0);
+    bool skinned = TheShaderMgr.BoneCount() != 0;
+    if (!RedundantState(mat, s, skinned, false, b)) {
+        TheNgStats->mMats++;
+        ((NgMat *)mat)->SetupShader(false, false);
+        u64 optsVal = CalcShaderOpts((NgMat *)mat, s, b);
+        SetColorWriteMask(ShaderOptions(optsVal), mat);
+        CheckForceCull(s);
+        Cache(s, ShaderOptions(optsVal), mat);
+    }
+}
+
+void RndShaderVelocityCamera::Select(RndMat *mat, ShaderType s, bool b) {
+    if (!mat) mat = TheRnd.DefaultMat();
+    TheRenderState.SetFillMode((RndRenderState::FillMode)0);
+    if (!RedundantState(mat, s, false, false, b)) {
+        TheNgStats->mMats++;
+        ((NgMat *)mat)->SetupShader(false, false);
+        u64 optsVal = CalcShaderOpts((NgMat *)mat, s, b);
+        SetColorWriteMask(ShaderOptions(optsVal), mat);
+        CheckForceCull(s);
+        Cache(s, ShaderOptions(optsVal), mat);
+    }
+}
+
+void RndShaderDepthVolume::Select(RndMat *mat, ShaderType s, bool b) {
+    if (!mat) mat = TheRnd.DefaultMat();
+    TheRenderState.SetFillMode((RndRenderState::FillMode)0);
+    bool skinned = TheShaderMgr.BoneCount() != 0;
+    if (!RedundantState(mat, s, skinned, false, b)) {
+        TheNgStats->mMats++;
+        ((NgMat *)mat)->SetupShader(TheShaderMgr.AllowPerPixel(), true);
+        u64 optsVal = CalcShaderOpts((NgMat *)mat, s, b);
+        SetColorWriteMask(ShaderOptions(optsVal), mat);
+        if (TheShaderMgr.InDepthVolume()) {
+            TheRenderState.SetBlendOp(TheShaderMgr.unk24
+                ? (RndRenderState::BlendOp)4 : (RndRenderState::BlendOp)0);
+            TheRenderState.SetBlendEnable(true);
+            TheRenderState.SetBlend(
+                (RndRenderState::Blend)1, (RndRenderState::Blend)1,
+                (RndRenderState::Blend)1, (RndRenderState::Blend)1
+            );
+            TheRenderState.SetDepthTestEnable(false);
+            TheRenderState.SetDepthWriteEnable(false);
+        }
+        CheckExtrude();
+        TheShaderMgr.SetVConstant(kVS_AmbientColor, Vector4(1.0f, 1.0f, 1.0f, 1.0f));
+        TheShaderMgr.SetPConstant(kPS_AmbientColor, Vector4(1.0f, 1.0f, 1.0f, 1.0f));
+        CheckForceCull(s);
+        Cache(s, ShaderOptions(optsVal), mat);
+    }
+}
+
+void RndShaderFur::Select(RndMat *mat, ShaderType s, bool b) {
+    if (!mat) mat = TheRnd.DefaultMat();
+    TheRenderState.SetFillMode((RndRenderState::FillMode)0);
+    bool skinned = TheShaderMgr.BoneCount() != 0;
+    if (!RedundantState(mat, s, skinned, false, b)) {
+        TheNgStats->mMats++;
+        ((NgMat *)mat)->SetupShader(false, true);
+        CheckShadow();
+        u64 optsVal = CalcShaderOpts((NgMat *)mat, s, b);
+        SetColorWriteMask(ShaderOptions(optsVal), mat);
+        CheckForceCull(s);
+        Cache(s, ShaderOptions(optsVal), mat);
+    }
+}
+
+void RndShaderSyncTrack::Select(RndMat *mat, ShaderType s, bool b) {
+    if (!mat) mat = TheRnd.DefaultMat();
+    TheRenderState.SetFillMode((RndRenderState::FillMode)0);
+    bool skinned = TheShaderMgr.BoneCount() != 0;
+    if (!RedundantState(mat, s, skinned, TheShaderMgr.UseAO(), b)) {
+        TheNgStats->mMats++;
+        ((NgMat *)mat)->SetupShader(TheShaderMgr.AllowPerPixel(), true);
+        CheckShadow();
+        u64 optsVal = CalcShaderOpts((NgMat *)mat, s, b);
+        MILO_ASSERT(s == kSyncTrackShader || s == kSyncTrackChargeEffectShader, 0x749);
+        if (s != kSyncTrackShader) {
+            s = kSyncTrackShader;
+        }
+        SetColorWriteMask(ShaderOptions(optsVal), mat);
+        CheckExtrude();
+        CheckForceCull(s);
+        Cache(s, ShaderOptions(optsVal), mat);
+    }
+}

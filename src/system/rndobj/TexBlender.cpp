@@ -313,17 +313,7 @@ void RndTexBlender::DrawBlendList(
 ) {
     RndTex *texmap = (state != 2) ? mNearMap : mFarMap;
 
-#ifdef HX_NATIVE
-    // On native, just check if texmap is non-null (LP64 offsets differ)
     bool texValid = (texmap != nullptr);
-#else
-    // Offset 0xC in Hmx::Object is within mRefs (ObjRef prev pointer).
-    // This check verifies texture validity - non-null indicates the texture
-    // has valid internal state. Platform-specific, no accessor available.
-    u32 texdata = 0;
-    texdata = *(u32 *)((char *)texmap + 0xC);
-    bool texValid = (texdata != 0);
-#endif
     if ((texValid || (state == 8)) && (!list.empty())) {
         mRenderedStates |= state;
 

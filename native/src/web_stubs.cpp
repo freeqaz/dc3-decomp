@@ -35,12 +35,7 @@
 
 void ScaleAddEq(Transform &, const Transform &, float) {}
 
-bool MakeBSPTree(BSPNode *&, std::list<BSPFace> &, int) { return false; }
-
-void BSPFace::Set(const Vector3 &, const Vector3 &, const Vector3 &) {}
-
-bool Intersect(const Vector3 &, const Vector3 &, const Box &, float &, float &) { return false; }
-bool Intersect(const Triangle &, const Box &) { return false; }
+// MakeBSPTree, BSPFace::Set, Intersect overloads — now in Geo.cpp
 
 void BuildSphereStratified(unsigned int, std::vector<Vector3> &) {}
 
@@ -105,9 +100,7 @@ void HolmesClientPrint(const char *) {}
 void SpewInit() {}
 void SpewTerminate() {}
 
-// Memory heap management — single heap on WASM
-int MemFindHeap(const char *) { return 0; }
-int GetCurrentHeapNum() { return 0; }
+// MemFindHeap, GetCurrentHeapNum — now in MemMgr.cpp
 
 // File system operations not available in MEMFS
 void FileRecursePattern(const char *, void (*)(const char *, const char *), bool) {}
@@ -136,7 +129,7 @@ PhysMemTypeTracker::PhysMemTypeTracker(Symbol) {}
 PhysMemTypeTracker::~PhysMemTypeTracker() {}
 void JoypadSetActuatorsImp(int, int, int) {}
 
-void RecursePatternInternal(const char *, void (*)(const char *, const char *), bool, bool) {}
+// RecursePatternInternal — now in File.cpp
 
 // NUI speech stubs (Kinect) — use exact XDK signatures
 #include "xdk/nui/nuispeech.h"
@@ -172,27 +165,9 @@ bool RndParticleSys::Replace(ObjRef *ref, Hmx::Object *obj) {
 
 void RndSoftParticleBuffer::DoPost() {}
 
-// ============================================================================
-// Debug::Modal — shows dialog on Xbox, just prints on web
-// ============================================================================
+// Debug::Modal — now in Debug.cpp
 
-#include "os/Debug.h"
-
-void Debug::Modal(Debug::ModalType &type, const char *msg, void *) {
-    const char *prefix = "MODAL";
-    if (type == kModalWarn) prefix = "WARN";
-    else if (type == kModalNotify) prefix = "NOTIFY";
-    else if (type == kModalFail) prefix = "FAIL";
-    printf("DC3 Web [%s]: %s\n", prefix, msg ? msg : "(null)");
-}
-
-// ============================================================================
-// System stubs — functions only implemented in Xbox/Win platform code
-// ============================================================================
-
-#include "os/System.h"
-
-void NormalizeSystemArgs() {}
+// NormalizeSystemArgs — now in System.cpp
 
 // ============================================================================
 // Xbox Debug Monitor (xbdm) stubs
@@ -281,32 +256,21 @@ class SpeechRecoMessage;
 DataNode VoiceInputPanel::OnMsg(const SpeechRecoMessage &) { return DataNode(); }
 
 
-// ============================================================================
-// Rendering stubs — functions that need Xbox GPU features
-// ============================================================================
-
-#include "world/SpotlightDrawer_NG.h"
-
-bool NgSpotlightDrawer::CheckRTs(SpotlightResources *) { return false; }
-
-#include "world/SpotlightDrawer.h"
-
-void SpotlightDrawer::DeSelect() {}
+// SpotlightDrawer stubs — now in SpotlightDrawer.cpp / SpotlightDrawer_NG.cpp
+// MemPrintOverview — now in MemMgr.cpp
+// CopyTypeProperties — now in Utl.cpp
 
 // Memory tracking — no-ops on web
 void BeginMemTrackFileName(const char *) {}
 void EndMemTrackFileName() {}
 void BeginMemTrackObjectName(const char *) {}
 void EndMemTrackObjectName() {}
-void MemPrintOverview(int, char *) {}
 void HolmesClientTerminate() {}
 void TerminateMakeString() {}
 char *MakeFileListFullPath(const char *) { return nullptr; }
 
 #include "rndobj/Mat.h"
 void SetColorWriteMask(const MatShaderOptions &, RndMat *) {}
-
-void CopyTypeProperties(Hmx::Object *, Hmx::Object *) {}
 
 // Platform-specific inits — no-ops on web
 #include "meta/Achievements.h"
@@ -333,7 +297,7 @@ void ScoreUtlInit(const DataArray *) {}
 void SynthUtlTerm() {}
 void altCfg(DataNode, DataNode) {}
 void CacheWav(const char *, CacheResourceResult &r) { r = kCacheUnnecessary; }
-int DateTimeCmp(const DateTime &, const DateTime &) { return 0; }
+// DateTimeCmp — now in DateTime.cpp
 
 // ============================================================================
 // AudioDevice — no-op for web (no miniaudio)

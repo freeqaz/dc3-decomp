@@ -24,7 +24,7 @@ DTA IS mostly working on native. TypeDefs load, handlers fire, commands execute.
 | Null screen fallback to main_screen | UI.cpp:489-498 | **Permanent** (safety net) | Screen flow |
 | Controller mode force-on | GestureMgr.cpp:43-46 | **Permanent** | No Kinect |
 | GameMode::SetMode skip | GameMode.cpp:26-33 | **Permanent** (Phase 5b: sufficient as-is) | Game logic |
-| MultiUserGesturePanel auto-skip | MultiUserGesturePanel.cpp:64-155 | **Phase 4** — only remaining | Screen flow |
+| HamNavList IsAnimating() bypass | HamNavList.cpp | **Permanent** (DTA transition_complete never fires) | Input |
 | HamProvider property defaults | Ham.cpp | **Permanent** | Init ordering |
 | ShellInput Kinect guards | ShellInput.cpp (6 locations) | **Permanent** | No Kinect |
 | SyncVoiceControl fallback | ShellInput.cpp | **Permanent** | No voice HW |
@@ -127,24 +127,21 @@ With AnimTask auto-null working, screen enter/exit animations complete naturally
 
 **HamNavList cleanup**: Removed 5 timer-based `#ifdef HX_NATIVE` bypasses. `PlayEnterAnim()` now uses real `Animate()` call. All `IsAnimating()` checks use Xbox codepath. Removed `mEnterAnimStartTime`/`mEnterAnimDuration` members.
 
-### Phase 4: MultiUserGesturePanel (HIGH RISK) — FUTURE
+### Phase 4: MultiUserGesturePanel — DONE (2026-03-12)
 
-The multiuser panel auto-skip (lines 64-155) hardcodes single-player venue/character setup and jumps to loading_screen. The real Xbox flow navigates interactive panes:
+**Root cause**: `HamNavList::OnMsg(ButtonDownMsg)` gates all input behind `!RndAnimatable::IsAnimating()`. On native, DTA `transition_complete` handlers that call `StopAnimation()` never fire, so `IsAnimating()` stays true forever. Every button press reached the HamNavList but was rejected by the `anim=1` guard.
 
+**Fix**: Skip `IsAnimating()` check on native (`#ifdef HX_NATIVE` in HamNavList.cpp). This enables button navigation through all menu screens.
+
+**Result**: The multiuser panel auto-skip was replaced with diagnostic tracing (now removed). The DTA `enter` handler on `multiuser_screen` fires naturally and drives the game start flow: `multiuser_screen → loading_screen → preloading_screen → real_loading_screen → game_screen`.
+
+**Full menu flow via scripted input** (see `scripts/dc3-input-flows/ymca.txt`):
 ```
-seldiff_pane → character_select_pane → venue_select_pane → startgame_pane → start_game
+main_screen → choose_mode (gameplay) → song_select (perform) → scroll to YMCA
+→ multiuser_screen → loading → game_screen
 ```
 
-**What works**: Providers (VenueProvider, CharacterProvider, DifficultyProvider) are created in `Enter()`. MetaPerformer and GameData are initialized. `setup_venue` and `start_game` calls work.
-
-**What's missing**:
-- Pane navigation relies on SkeletonChooser (Kinect) or DTA controller-mode pane handlers
-- Player presence tracking (currently hardcoded to player 0 only)
-- DTA pane handlers (`set_pending_pane`) may reference missing panel sub-objects
-
-**Approach**: Replace the auto-skip with controller-driven pane navigation. On native, enter controller mode and let DTA pane handlers drive `set_pending_pane` via gamepad input. For quick play, add an env var `MILO_AUTO_PLAY=1` that programmatically selects defaults through the real pane handlers (not bypassing them).
-
-**Blocked by**: Need to verify DTA pane handlers work in controller mode without Kinect subsystem. Requires investigation session.
+No auto-skip needed. DTA handles the multiuser → loading transition.
 
 ### Phase 5: Cleanup (LOW RISK)
 
@@ -189,9 +186,9 @@ Phase 2c (relax timeouts) ──── DONE
 Phase 5a (mSink)         ──── DONE (permanent)
 Phase 5b (GameMode)      ──── DONE (sufficient as-is)
 Phase 6 (debug cleanup)  ──── DONE
-                                │
-                                v
-                    Phase 4 (multiuser panel) ← ONLY REMAINING
+Phase 4 (multiuser panel) ──── DONE (IsAnimating bypass + DTA enter handler)
+
+ALL PHASES COMPLETE.
 
 Permanent (not removable):
   - Boot screen timers (intentional UX)

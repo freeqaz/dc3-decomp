@@ -295,7 +295,11 @@ private:
     int mDepthHeight = 0;
 
     // MSAA render target (4x) — resolves to surface texture
+#ifdef __EMSCRIPTEN__
+    static constexpr uint32_t kMSAASamples = 1; // Browser WebGPU — no MSAA for now
+#else
     static constexpr uint32_t kMSAASamples = 4;
+#endif
     wgpu::Texture mMsaaTex;
     wgpu::TextureView mMsaaView;
     int mMsaaWidth = 0;

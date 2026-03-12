@@ -443,8 +443,8 @@ void CamShotFrame::BuildTransform(RndCam *cam, Transform &tf, bool b3) const {
 
 void CamShotFrame::Interp(const CamShotFrame &other, float f1, float f2, RndCam *cam) {
     float blendT = f1;
-    float easeOffset = 0;
     if (mBlendEase) {
+        float easeOffset = 0;
         float easeEnd = 1.0f;
         if (mBlendEaseMode) {
             switch (mBlendEaseMode) {
@@ -460,8 +460,9 @@ void CamShotFrame::Interp(const CamShotFrame &other, float f1, float f2, RndCam 
             }
         }
         ATanInterpolator aint("", "");
+        auto _tmp0 = Vector2(easeOffset, easeOffset);
         aint.Reset(
-            Vector2(easeOffset, easeOffset),
+            _tmp0,
             Vector2(easeEnd, easeEnd),
             mBlendEase
         );
@@ -469,7 +470,8 @@ void CamShotFrame::Interp(const CamShotFrame &other, float f1, float f2, RndCam 
     }
 
     // Interpolate FOV
-    float blendedFOV = ::Interp(cam->YFov(), ::Interp(mFOV, other.mFOV, blendT), f2);
+    float interpFOV = ::Interp(mFOV, other.mFOV, blendT);
+    float blendedFOV = ::Interp(cam->YFov(), interpFOV, f2);
     cam->SetFrustum(mCamShot->mNearPlane, mCamShot->mFarPlane, blendedFOV, 1.0f);
 
     bool hasTarget = HasTargets();
@@ -503,8 +505,7 @@ void CamShotFrame::Interp(const CamShotFrame &other, float f1, float f2, RndCam 
 
         Vector2 screenOfs;
         if (hasTarget && !thasTarget) {
-            auto _tmp5 = Distance(mLastTargetPos, resultTf.v);
-            targetDist = _tmp5;
+            targetDist = Distance(mLastTargetPos, resultTf.v);
             screenOfs = mScreenOffset;
         } else if (!hasTarget && thasTarget) {
             targetDist = Distance(other.mLastTargetPos, resultTf.v);
@@ -528,10 +529,8 @@ void CamShotFrame::Interp(const CamShotFrame &other, float f1, float f2, RndCam 
     // Interpolate zoom FOV and apply
     float zoomFOV;
     ::Interp(mZoomFOV, other.mZoomFOV, blendT, zoomFOV);
-    CamShot *shot = mCamShot;
-    float zoomOffset = shot->ZoomFovOffset();
     cam->SetFrustum(
-        shot->mNearPlane, shot->mFarPlane, (blendedFOV + (zoomFOV + zoomOffset)), 1.0f
+        mCamShot->mNearPlane, mCamShot->mFarPlane, blendedFOV + zoomFOV + mCamShot->ZoomFovOffset(), 1.0f
     );
 
     // Depth of field

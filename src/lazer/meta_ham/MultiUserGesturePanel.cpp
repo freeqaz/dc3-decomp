@@ -43,7 +43,7 @@ MultiUserGesturePanel::MultiUserGesturePanel() {
         mDifficultyProviders[i].SetPlayer(i);
     }
 #ifdef HX_NATIVE
-    mNativeAutoSkipPending = false;
+    mNativeEnterPending = false;
 #endif
 }
 
@@ -56,27 +56,26 @@ void MultiUserGesturePanel::Enter() {
     }
     UpdateProviders();
 #ifdef HX_NATIVE
-    mNativeAutoSkipPending = true;
+    mNativeEnterPending = true;
 #endif
 }
 
 void MultiUserGesturePanel::Poll() {
-#ifdef HX_NATIVE
-    // On native, skip the Kinect skeleton chooser and auto-advance to gameplay.
-    // Wait until the UI transition completes before calling enter_gameplay.
-    if (mNativeAutoSkipPending && !TheUI->InTransition()) {
-        mNativeAutoSkipPending = false;
-        fprintf(
-            stderr,
-            "DC3 Native: MultiUserGesturePanel — auto-skipping to loading_screen\n"
-        );
-        TheUI->GotoScreen("loading_screen", false, false);
-        return;
-    }
-#endif
     if (!TheUI->InTransition()) {
+#ifdef HX_NATIVE
+        // No Kinect skeleton chooser on native — fire enter_gameplay directly
+        // (on Xbox, this fires from DTA once skeleton assignment completes)
+        if (mNativeEnterPending) {
+            mNativeEnterPending = false;
+            static Symbol enter_gameplay("enter_gameplay");
+            static DataArrayPtr dataPtr(enter_gameplay);
+            dataPtr->Execute();
+        }
+#else
+        // UpdateNavLists manages Kinect skeleton tracking IDs for nav lists
         for (int i = 0; i < 2; i++)
             UpdateNavLists(i);
+#endif
         UpdateProviderPlayerIndices();
     }
     TexLoadPanel::Poll();

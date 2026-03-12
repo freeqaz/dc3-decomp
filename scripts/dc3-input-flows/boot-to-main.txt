@@ -1,0 +1,15 @@
+# Boot to main_screen — no input needed
+#
+# The boot screens auto-advance via timers in UI.cpp:
+#   attract → autosave_warning (90 frames) → title (60 frames)
+#   → wait_main_after_saveload (DTA-driven) → main_screen
+#
+# main_screen is stable at ~frame 380. No button presses needed.
+# Use this as a baseline to verify the boot flow works.
+#
+# Usage:
+#   MILO_HEADLESS=1 MILO_MAX_FRAMES=500 \
+#     MILO_INPUT_SCRIPT=scripts/dc3-input-flows/boot-to-main.txt \
+#     timeout 60 native/build/dc3-native
+
+# No inputs — boot flow is automatic

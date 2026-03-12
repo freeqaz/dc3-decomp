@@ -59,20 +59,11 @@ public:
             tangent.Set(1, 0, 0, 1);
         }
 
-#ifdef HX_NATIVE
         static void *operator new(size_t s) {
-#else
-        static void *operator new(unsigned int s) {
-#endif
             return _MemAllocTemp(s, __FILE__, 0x78, "Vert", 0);
         }
-#ifdef HX_NATIVE
         static void *operator new(size_t s, void *place) { return place; }
         static void *operator new[](size_t s) {
-#else
-        static void *operator new(unsigned int s, void *place) { return place; }
-        static void *operator new[](unsigned int s) {
-#endif
             return _MemAllocTemp(s, __FILE__, 0x78, "Vert", 0);
         }
         static void operator delete(void *v) { MemFree(v, __FILE__, 0x78, "Vert"); }

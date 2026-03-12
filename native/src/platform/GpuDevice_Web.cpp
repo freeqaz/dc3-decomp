@@ -92,7 +92,8 @@ bool GpuDevice::Init(const GpuDeviceDesc& desc) {
                         return;
                     }
 
-                    mSurfaceFormat = wgpu::TextureFormat::RGBA8Unorm;
+                    // Chrome/WebGPU preferred format is BGRA8Unorm
+                    mSurfaceFormat = wgpu::TextureFormat::BGRA8Unorm;
                     ConfigureSurface();
 
                     printf("GpuDevice: initialized (%dx%d, web)\n", mWidth, mHeight);

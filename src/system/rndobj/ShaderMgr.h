@@ -127,6 +127,7 @@ public:
     bool AllowPerPixel() const { return mAllowPerPixel; }
 
     friend class NgPostProc;
+    friend class RndShaderDepthVolume;
 
 protected:
     virtual void LoadShaders(const char *);
