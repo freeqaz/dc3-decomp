@@ -856,6 +856,14 @@ void DirLoader::CreateObjects() {
             obj = Hmx::Object::NewObject(classSym);
             EndMemTrackObjectName();
 #ifdef HX_NATIVE
+            // Log ALL types for UI panels
+            {
+                static bool sDumpTypes = true;
+                if (sDumpTypes) {
+                    printf("DC3 DIAG: CreateObj dir='%s' type=%-20s name='%s' file=%s\n",
+                           mDir ? mDir->Name() : "?", classSym.Str(), buf, mFile.c_str());
+                }
+            }
             if (!obj) {
                 MILO_NOTIFY("DirLoader: NewObject returned null for class %s in %s",
                             classSym.Str(), mFile.c_str());

@@ -168,7 +168,9 @@ App::App(int argc, char **argv) {
     // Trigger content refresh to load base game songs from ark.
     // This must happen after HamSongMgr.Init() (registers callback) and
     // MetaPanel::Init() (registers SongSortMgr etc.) so all callbacks fire.
+    fprintf(stderr, "DC3 Native: About to call ContentMgr::RefreshSynchronously\n");
     TheContentMgr.RefreshSynchronously();
+    fprintf(stderr, "DC3 Native: ContentMgr::RefreshSynchronously returned\n");
 
     // UI system — use the global TheHamUI (game-specific UIManager subclass)
     // for proper two-pass draw pipeline (letterbox, blacklight, helpbar, shell input)

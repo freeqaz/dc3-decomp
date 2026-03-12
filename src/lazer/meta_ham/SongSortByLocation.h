@@ -7,8 +7,6 @@ int ConvertGameOriginSymbolToEnum(Symbol);
 class LocationCmp : public NavListItemSortCmp {
 public:
     LocationCmp(const char *name, Symbol location) : mName(name), mLocation(location) {}
-    LocationCmp(const char *name, const Symbol &location, bool)
-        : mName(name), mLocation(location) {}
     virtual ~LocationCmp() {}
 
     virtual int Compare(const NavListItemSortCmp *, NavListNodeType) const;

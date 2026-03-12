@@ -459,14 +459,31 @@ void PanelDir::Enter() {
     // DTA enter scripts on Xbox. Flows with startMode>0 auto-start through the
     // normal Flow::Enter() path (called by RndDir::Enter above) and don't need
     // blanket activation here.
-    for (ObjDirItr<Flow> it(this, true); it != nullptr; ++it) {
-        if (it->GetStartMode() > 0)
-            continue; // auto-starts via Flow::Enter()
-        const char *flowPath = PathName((Hmx::Object *)it);
-        if (!ShouldActivateNativeFlow(Name(), flowPath))
-            continue;
-        if (!it->IsRunning())
-            it->Activate();
+    {
+        int numFlows = 0, numAutoStart = 0, numActivated = 0, numFiltered = 0;
+        for (ObjDirItr<Flow> it(this, true); it != nullptr; ++it) {
+            numFlows++;
+            if (it->GetStartMode() > 0) {
+                numAutoStart++;
+                printf("DC3 DIAG:   Flow '%s' startMode=%d (auto-start) running=%d\n",
+                       PathName((Hmx::Object *)it), it->GetStartMode(), it->IsRunning());
+                continue;
+            }
+            const char *flowPath = PathName((Hmx::Object *)it);
+            if (!ShouldActivateNativeFlow(Name(), flowPath)) {
+                numFiltered++;
+                continue;
+            }
+            if (!it->IsRunning()) {
+                it->Activate();
+                numActivated++;
+                printf("DC3 DIAG:   Flow '%s' ACTIVATED (startMode=0)\n", flowPath);
+            }
+        }
+        if (numFlows > 0) {
+            printf("DC3 DIAG:   Flows: %d total, %d auto-start, %d activated, %d filtered\n",
+                   numFlows, numAutoStart, numActivated, numFiltered);
+        }
     }
 #endif
 }

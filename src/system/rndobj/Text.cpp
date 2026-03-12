@@ -1131,7 +1131,7 @@ void RndText::ReplaceMissingCharacters(HX_VECTOR(unsigned short) &wideChars) {
     std::map<RndFontBase *, std::set<unsigned short> > missingMap;
     unsigned short curChar;
     HX_VECTOR(unsigned short) origChars;
-    bool copied = false;
+    unsigned char copied = 0;
     StyleState styleState(this, 1.0f);
     unsigned short *p = &wideChars[0];
     curChar = *p;
@@ -1189,7 +1189,7 @@ void RndText::ReplaceMissingCharacters(HX_VECTOR(unsigned short) &wideChars) {
                 if (curChar != 0) {
                     if (!copied) {
                         origChars = wideChars;
-                        copied = true;
+                        copied = 1;
                     }
                     *p = curChar;
                 }
@@ -1209,53 +1209,56 @@ void RndText::ReplaceMissingCharacters(HX_VECTOR(unsigned short) &wideChars) {
             if (mapIt->second.size() <= 1) {
                 pluralS = "";
             }
-            String msg(MakeString("%s:%s char%s (", PathName(this), TextToken(), pluralS));
+            auto _tmp0 = MakeString("%s:%s char%s (", PathName(this), TextToken(), pluralS);
+            {
+                String msg(_tmp0);
 
-            for (std::set<unsigned short>::iterator setIt = mapIt->second.begin();
-                 setIt != mapIt->second.end(); ++setIt) {
-                unsigned short ch = *setIt;
-                bool printable = true;
-                if (ch < 0x20 || ch >= 0xff || ch == 0x25 || ch == 0x7f) {
-                    printable = false;
-                }
-                char displayChar;
-                if (printable) {
-                    displayChar = (char)ch;
-                } else {
-                    displayChar = '?';
-                }
-                const char *sep = "";
-                if (setIt != mapIt->second.begin()) {
-                    sep = ", ";
-                }
-                msg += MakeString("%s\'%c\' 0x%02X", sep, displayChar, ch);
-            }
-
-            msg += MakeString(") missing from %s in string \"", PathName(font));
-
-            unsigned int k = 0;
-            unsigned short *qp = &origChars[0];
-            if (origSize != 0) {
-                do {
-                    unsigned short qch = *qp;
-                    if (qch == 0)
-                        break;
+                for (std::set<unsigned short>::iterator setIt = mapIt->second.begin();
+                     setIt != mapIt->second.end(); ++setIt) {
+                    unsigned short ch = *setIt;
                     bool printable = true;
-                    if (qch < 0x20 || qch >= 0xff || qch == 0x25 || qch == 0x7f) {
+                    if (ch < 0x20 || ch >= 0xff || ch == 0x25 || ch == 0x7f) {
                         printable = false;
                     }
+                    char displayChar;
                     if (printable) {
-                        msg += MakeString("%c", (char)qch);
+                        displayChar = (char)ch;
                     } else {
-                        msg += MakeString("\\x%02X", qch);
+                        displayChar = '?';
                     }
-                    k = k + 1;
-                    qp = qp + 1;
-                } while (k < origSize);
-            }
+                    const char *sep = "";
+                    if (setIt != mapIt->second.begin()) {
+                        sep = ", ";
+                    }
+                    msg += MakeString("%s\'%c\' 0x%02X", sep, displayChar, ch);
+                }
 
-            msg += "\"";
-            MILO_NOTIFY(msg.c_str());
+                msg += MakeString(") missing from %s in string \"", PathName(font));
+
+                unsigned int k = 0;
+                unsigned short *qp = &origChars[0];
+                if (origSize != 0) {
+                    do {
+                        unsigned short qch = *qp;
+                        if (qch == 0)
+                            break;
+                        bool printable = true;
+                        if (qch < 0x20 || qch >= 0xff || qch == 0x25 || qch == 0x7f) {
+                            printable = false;
+                        }
+                        if (printable) {
+                            msg += MakeString("%c", (char)qch);
+                        } else {
+                            msg += MakeString("\\x%02X", qch);
+                        }
+                        k = k + 1;
+                        qp = qp + 1;
+                    } while (k < origSize);
+                }
+
+                msg += "\"";
+                MILO_NOTIFY(msg.c_str());
+            }
             ++mapIt;
         } while (mapIt != missingMap.end());
         }

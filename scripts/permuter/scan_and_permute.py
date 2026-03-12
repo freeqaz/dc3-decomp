@@ -90,6 +90,12 @@ def parse_args() -> argparse.Namespace:
         help="Only process functions above this match %% (default: 0)",
     )
     parser.add_argument(
+        "--status", type=str, default=None,
+        choices=["at_limit", "workable", "all"],
+        help="Filter by decomp.db verdict: at_limit (only AT_LIMIT), "
+             "workable (excludes COMPLETE/AT_LIMIT), all (no filter)",
+    )
+    parser.add_argument(
         "--max-rounds", type=int, default=5,
         help="Max hill-climbing rounds per function (default: 5)",
     )
@@ -220,6 +226,7 @@ def _resolve_symbols(
     hits: list[ScanHit],
     min_pct: float = 0.0,
     max_pct: float = 99.99,
+    status_filter: str | None = None,
 ) -> list[dict]:
     """Resolve scan hits to mangled symbols via decomp.db.
 
@@ -234,7 +241,7 @@ def _resolve_symbols(
     conn = sqlite3.connect(str(DECOMP_DB))
     conn.row_factory = sqlite3.Row
     rows = conn.execute(
-        "SELECT symbol, demangled, unit, current_percent "
+        "SELECT symbol, demangled, unit, current_percent, verdict "
         "FROM functions WHERE current_percent IS NOT NULL"
     ).fetchall()
     conn.close()
@@ -246,6 +253,11 @@ def _resolve_symbols(
         if qname:
             pct = row["current_percent"]
             if pct < min_pct or pct >= max_pct:
+                continue
+            verdict = row["verdict"] or ""
+            if status_filter == "at_limit" and verdict != "AT_LIMIT":
+                continue
+            if status_filter == "workable" and verdict in ("COMPLETE", "AT_LIMIT"):
                 continue
             name_to_info[qname] = (row["symbol"], row["unit"], pct)
 

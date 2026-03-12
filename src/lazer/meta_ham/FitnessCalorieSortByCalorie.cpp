@@ -9,12 +9,17 @@
 FitnessCalorieSortCmp::~FitnessCalorieSortCmp() {}
 FitnessCalorieSortByCalorie::~FitnessCalorieSortByCalorie() {}
 
+FitnessCalorieSortNode::FitnessCalorieSortNode(NavListItemSortCmp *cmp, int i)
+    : NavListItemNode(cmp) {
+    mCalories = i;
+}
+
 // Returns 0 for item nodes, 1 for all other node types
 int FitnessCalorieSortCmp::Compare(
     NavListItemSortCmp const *cmp, NavListNodeType type
 ) const {
     int diff = type - kNodeItem;
-    return (diff != 0) - 1;
+    return diff ? 0 : -1;
 }
 
 FitnessCalorieSortByCalorie::FitnessCalorieSortByCalorie() {

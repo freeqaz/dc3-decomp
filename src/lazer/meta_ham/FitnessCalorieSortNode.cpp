@@ -12,12 +12,6 @@
 
 #pragma region FitnessCalorieSortNode
 
-FitnessCalorieSortNode::FitnessCalorieSortNode(NavListItemSortCmp *cmp, int i)
-    : NavListItemNode(cmp) {
-    mHeader = gNullStr;
-    mCalories = i;
-}
-
 Symbol FitnessCalorieSortNode::GetToken() const {
     return MakeString("calorie_node_%i", mCalories);
 }

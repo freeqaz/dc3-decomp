@@ -1,28 +1,30 @@
-// DC3 Native Port - ContentMgr with root song loading
-// Replaces ContentMgr_Xbox.cpp - no DLC, but loads base game content from ark roots.
+// DC3 Native Port - ContentMgr with extracted DTA loading
+// Replaces ContentMgr_Xbox.cpp - no DLC, but loads base-game content metadata.
 
 #include "obj/Data.h"
 #include "os/ContentMgr.h"
+#include "os/Debug.h"
+#include "os/File.h"
 #include "os/System.h"
-#include <vector>
+#include <dirent.h>
+#include <sys/stat.h>
 
-// Native ContentMgr: enumerate configured root content directories and feed them
-// through the shared ContentMgr callback/loader pipeline. DLC/LIVE discovery stays
-// disabled, but root content such as songs*.dta now loads through the same path the
-// Xbox code expects.
+// Native ContentMgr: keep the shared refresh lifecycle, but source callback files
+// from `orig-assets/extracted/...` instead of Xbox content devices. This is enough
+// for root song metadata and other static DTA-backed providers.
 class NativeContentMgr : public ContentMgr {
 public:
     NativeContentMgr() = default;
-    virtual ~NativeContentMgr() { ClearRoots(); }
+    virtual ~NativeContentMgr() = default;
 
     virtual void Init() {
         ContentMgr::Init();
-        RebuildRoots();
     }
 
-    virtual void Terminate() { ClearRoots(); }
+    virtual void Terminate() {}
 
     virtual void StartRefresh() {
+        fprintf(stderr, "DC3 ContentMgr: StartRefresh called, mDirty=%d\n", (int)mDirty);
         if (!mDirty) {
             return;
         }
@@ -30,48 +32,95 @@ public:
         mDirty = false;
         mCallbackFiles.clear();
         RELEASE(mLoader);
-        RebuildRoots();
 
         for (auto it = mCallbacks.begin(); it != mCallbacks.end(); ++it) {
             (*it)->ContentStarted();
         }
+        for (auto it = mCallbacks.begin(); it != mCallbacks.end(); ++it) {
+            (*it)->ContentAllMounted();
+        }
 
-        // Skip native DLC enumeration and mount bookkeeping, but enter the shared
-        // "loading" phase so ContentMgr::PollRefresh() performs ContentAllMounted,
-        // file discovery, loader dispatch, and final ContentDone callbacks.
-        mState = kDiscoveryLoading;
+        QueueCallbackFiles();
+        fprintf(stderr, "DC3 ContentMgr: StartRefresh — %d callback files queued, %d callbacks\n",
+                (int)mCallbackFiles.size(), (int)mCallbacks.size());
+        if (mCallbackFiles.empty()) {
+            mState = kDiscoveryEnumerating;
+            for (auto it = mCallbacks.begin(); it != mCallbacks.end(); ++it) {
+                (*it)->ContentDone();
+            }
+            return;
+        }
+
+        // Reuse the shared loader dispatch in ContentMgr::PollRefresh(), but skip
+        // Xbox discovery by starting directly in the callback-file phase.
+        mState = kDiscoveryCheckIfDone;
     }
 
 private:
-    void ClearRoots() {
-        for (RootContent *root : mOwnedRoots) {
-            delete root;
-        }
-        mOwnedRoots.clear();
-        mContents.clear();
-        mRootLoaded = 0;
-    }
+    void QueueCallbackFiles() {
+        for (auto it = mCallbacks.begin(); it != mCallbacks.end(); ++it) {
+            Callback *cb = *it;
+            const char *pattern = cb->ContentPattern();
+            if (!pattern || !*pattern) {
+                continue;
+            }
 
-    void RebuildRoots() {
-        ClearRoots();
+            mCallback = cb;
+            mLocation = kLocationRoot;
+            mName = ".";
 
-        DataArray *roots = SystemConfig("content_mgr", "roots");
-        for (int i = 1; i < roots->Size(); ++i) {
-            RootContent *root = new RootContent(roots->Str(i));
-            mOwnedRoots.push_back(root);
-            mContents.push_back(root);
-            ++mRootLoaded;
-        }
-
-        for (auto it = mExtraContents.begin(); it != mExtraContents.end(); ++it) {
-            RootContent *root = new RootContent(it->c_str());
-            mOwnedRoots.push_back(root);
-            mContents.push_back(root);
-            ++mRootLoaded;
+            QueueCallbackDir(cb->ContentDir(), pattern);
+            if (cb->HasContentAltDirs()) {
+                std::vector<String> *altDirs = cb->ContentAltDirs();
+                for (auto altIt = altDirs->begin(); altIt != altDirs->end(); ++altIt) {
+                    QueueCallbackDir(altIt->c_str(), pattern);
+                }
+            }
         }
     }
 
-    std::vector<RootContent *> mOwnedRoots;
+    void QueueCallbackDir(const char *virtualDir, const char *pattern) {
+        char extractedDir[256];
+        if (virtualDir && *virtualDir && strcmp(virtualDir, ".") != 0) {
+            snprintf(extractedDir, sizeof(extractedDir), "extracted/%s", virtualDir);
+        } else {
+            snprintf(extractedDir, sizeof(extractedDir), "extracted");
+        }
+
+        char qualifiedDir[256];
+        FileQualifiedFilename(qualifiedDir, sizeof(qualifiedDir), extractedDir);
+
+        DIR *dir = opendir(qualifiedDir);
+        if (!dir) {
+            return;
+        }
+
+        struct dirent *entry;
+        while ((entry = readdir(dir)) != nullptr) {
+            if (entry->d_name[0] == '.') {
+                continue;
+            }
+
+            char fullPath[512];
+            snprintf(fullPath, sizeof(fullPath), "%s/%s", qualifiedDir, entry->d_name);
+
+            struct stat st;
+            if (stat(fullPath, &st) != 0 || S_ISDIR(st.st_mode)) {
+                continue;
+            }
+
+            // Match just the filename against the pattern (e.g. "songs*.dta")
+            if (FileMatch(entry->d_name, pattern)) {
+                AddCallbackFile(
+                    (virtualDir && *virtualDir && strcmp(virtualDir, ".") != 0) ? virtualDir
+                                                                                 : ".",
+                    entry->d_name
+                );
+            }
+        }
+
+        closedir(dir);
+    }
 };
 
 static NativeContentMgr gContentMgr;

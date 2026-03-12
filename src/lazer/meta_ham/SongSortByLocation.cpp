@@ -59,14 +59,10 @@ SongSortByLocation::NewShortcutNode(NavListItemNode *itemNode) const {
     SongSortNode *ssNode = dynamic_cast<SongSortNode *>(itemNode);
     Symbol location = ssNode->Record()->Metadata()->GameOrigin();
     const char *name = ssNode->Record()->Metadata()->Title();
-    LocationCmp *newCmp = new LocationCmp(name, location, true);
-    LocationCmp *cmp;
-    if (newCmp != 0) {
-        cmp = newCmp;
-    } else {
-        cmp = 0;
-    }
-    return new NavListShortcutNode(cmp, location, true);
+    LocationCmp *cmp = new LocationCmp(name, location);
+    Symbol token = location;
+    NavListShortcutNode *shortcut = new NavListShortcutNode(cmp, token, true);
+    return shortcut;
 }
 
 NavListItemNode *SongSortByLocation::NewItemNode(void *v) const {
