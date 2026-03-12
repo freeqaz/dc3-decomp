@@ -36,6 +36,7 @@ orig-assets/
 build/*
 !build/.gitkeep
 native/build*/
+native/web/build/
 .ninja_*
 build.ninja
 
