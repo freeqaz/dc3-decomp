@@ -27,6 +27,11 @@
 #define CREATE_SUSPENDED 0x00000004
 #endif
 
+// All Win32 / XDK stubs must be extern "C" to match the header declarations.
+// Without this, WINAPI (__stdcall) on the definition causes the compiler to
+// treat them as separate C++ overloads instead of matching the extern "C" decls.
+extern "C" {
+
 // ============================================================================
 // Critical Section — no-ops on single-threaded WASM
 // ============================================================================
@@ -44,7 +49,7 @@ int RtlTryEnterCriticalSection(RTL_CRITICAL_SECTION *cs) {
 }
 
 // ============================================================================
-// Handle table — minimal stub
+// Handle table — minimal stub (C++ internals, but C-linkage API wrappers)
 // ============================================================================
 
 enum HandleType {
@@ -52,25 +57,37 @@ enum HandleType {
     HANDLE_FILE, HANDLE_TIMER, HANDLE_NOTIFICATION, HANDLE_FILE_FIND,
 };
 
+} // extern "C" — pause for C++ map/vector usage
+
 struct HandleEntry {
     HandleType type;
     void *data;
 };
 
-static std::map<HANDLE, HandleEntry> sHandles;
 static HANDLE sNextHandle = (HANDLE)0x100;
+
+// Use function-local static to avoid static initialization order fiasco —
+// CreateEventA can be called from global constructors before file-scope
+// statics in this TU are initialized.
+static std::map<HANDLE, HandleEntry> &GetHandles() {
+    static std::map<HANDLE, HandleEntry> sHandles;
+    return sHandles;
+}
 
 static HANDLE AllocHandle(HandleType type, void *data = nullptr) {
     HANDLE h = sNextHandle;
     sNextHandle = (HANDLE)((uintptr_t)sNextHandle + 1);
-    sHandles[h] = {type, data};
+    GetHandles()[h] = {type, data};
     return h;
 }
 
-BOOL WINAPI CloseHandle(HANDLE h) {
-    auto it = sHandles.find(h);
-    if (it != sHandles.end()) {
-        sHandles.erase(it);
+extern "C" {
+
+BOOL CloseHandle(HANDLE h) {
+    auto &handles = GetHandles();
+    auto it = handles.find(h);
+    if (it != handles.end()) {
+        handles.erase(it);
         return TRUE;
     }
     return FALSE;
@@ -80,19 +97,25 @@ BOOL WINAPI CloseHandle(HANDLE h) {
 // Event objects — stubs
 // ============================================================================
 
-HANDLE WINAPI CreateEventA(void *, BOOL manual, BOOL initial, const char *name) {
+HANDLE CreateEventA(LPSECURITY_ATTRIBUTES, BOOL manual, BOOL initial, LPCSTR name) {
     return AllocHandle(HANDLE_EVENT);
 }
 
-BOOL WINAPI SetEvent(HANDLE h) { return TRUE; }
-BOOL WINAPI ResetEvent(HANDLE h) { return TRUE; }
+BOOL SetEvent(HANDLE h) { return TRUE; }
+BOOL ResetEvent(HANDLE h) { return TRUE; }
+
+// ============================================================================
+// Semaphore
+// ============================================================================
+
+BOOL ReleaseSemaphore(HANDLE, LONG, LPLONG) { return TRUE; }
 
 // ============================================================================
 // Thread stubs — no threading in browser WASM
 // ============================================================================
 
-HANDLE WINAPI CreateThread(void *, DWORD, LPTHREAD_START_ROUTINE fn, LPVOID param,
-                           DWORD flags, LPDWORD tid) {
+HANDLE CreateThread(LPSECURITY_ATTRIBUTES, DWORD, LPTHREAD_START_ROUTINE fn, LPVOID param,
+                    DWORD flags, LPDWORD tid) {
     if (tid) *tid = 1;
     // Execute synchronously in single-threaded WASM
     if (fn && !(flags & CREATE_SUSPENDED)) {
@@ -101,36 +124,36 @@ HANDLE WINAPI CreateThread(void *, DWORD, LPTHREAD_START_ROUTINE fn, LPVOID para
     return AllocHandle(HANDLE_THREAD);
 }
 
-DWORD WINAPI WaitForSingleObject(HANDLE h, DWORD timeout) { return 0; }
-DWORD WINAPI WaitForMultipleObjects(DWORD n, const HANDLE *h, BOOL all, DWORD t) { return 0; }
-BOOL WINAPI GetExitCodeThread(HANDLE h, LPDWORD code) { if (code) *code = 0; return TRUE; }
-DWORD WINAPI ResumeThread(HANDLE h) { return 1; }
-DWORD WINAPI SuspendThread(HANDLE h) { return 0; }
-void WINAPI Sleep(DWORD ms) {}  // Can't sleep on main thread in browser
+DWORD WaitForSingleObject(HANDLE h, DWORD timeout) { return 0; }
+DWORD WaitForMultipleObjects(DWORD n, const HANDLE *h, BOOL all, DWORD t) { return 0; }
+BOOL GetExitCodeThread(HANDLE h, LPDWORD code) { if (code) *code = 0; return TRUE; }
+DWORD ResumeThread(HANDLE h) { return 1; }
+DWORD SuspendThread(HANDLE h) { return 0; }
+void Sleep(DWORD ms) {}  // Can't sleep on main thread in browser
 
 // ============================================================================
 // Timing
 // ============================================================================
 
-BOOL WINAPI QueryPerformanceCounter(LARGE_INTEGER *lpCounter) {
+BOOL QueryPerformanceCounter(LARGE_INTEGER *lpCounter) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     lpCounter->QuadPart = (long long)ts.tv_sec * 1000000000LL + ts.tv_nsec;
     return TRUE;
 }
 
-BOOL WINAPI QueryPerformanceFrequency(LARGE_INTEGER *lpFrequency) {
+BOOL QueryPerformanceFrequency(LARGE_INTEGER *lpFrequency) {
     lpFrequency->QuadPart = 1000000000LL;  // nanoseconds
     return TRUE;
 }
 
-DWORD WINAPI GetTickCount() {
+DWORD GetTickCount() {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (DWORD)(ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
 }
 
-void WINAPI GetSystemTimeAsFileTime(FILETIME *ft) {
+void GetSystemTimeAsFileTime(FILETIME *ft) {
     struct timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
     long long t = ((long long)ts.tv_sec + 11644473600LL) * 10000000LL + ts.tv_nsec / 100;
@@ -142,11 +165,11 @@ void WINAPI GetSystemTimeAsFileTime(FILETIME *ft) {
 // Memory — passthrough to WASM heap
 // ============================================================================
 
-LPVOID WINAPI VirtualAlloc(LPVOID addr, SIZE_T size, DWORD type, DWORD protect) {
+LPVOID VirtualAlloc(LPVOID addr, SIZE_T size, DWORD type, DWORD protect) {
     return malloc(size);
 }
 
-BOOL WINAPI VirtualFree(LPVOID addr, SIZE_T size, DWORD type) {
+BOOL VirtualFree(LPVOID addr, SIZE_T size, DWORD type) {
     free(addr);
     return TRUE;
 }
@@ -155,9 +178,9 @@ BOOL WINAPI VirtualFree(LPVOID addr, SIZE_T size, DWORD type) {
 // String / misc
 // ============================================================================
 
-int WINAPI lstrlenA(const char *s) { return s ? (int)strlen(s) : 0; }
-int WINAPI MultiByteToWideChar(UINT cp, DWORD flags, const char *s, int cb,
-                               wchar_t *ws, int cch) {
+int lstrlenA(const char *s) { return s ? (int)strlen(s) : 0; }
+int MultiByteToWideChar(UINT cp, DWORD flags, const char *s, int cb,
+                        wchar_t *ws, int cch) {
     if (!s) return 0;
     int len = (cb < 0) ? (int)strlen(s) + 1 : cb;
     if (!ws || cch == 0) return len;
@@ -165,7 +188,7 @@ int WINAPI MultiByteToWideChar(UINT cp, DWORD flags, const char *s, int cb,
     return len;
 }
 
-void WINAPI OutputDebugStringA(const char *s) {
+void OutputDebugStringA(const char *s) {
     if (s) fprintf(stderr, "[XDK] %s", s);
 }
 
@@ -177,11 +200,24 @@ DWORD GetCurrentThreadId() { return 1; }
 // XGraphics stubs
 // ============================================================================
 
-HRESULT WINAPI XGCopySurface(void* dst, void* rect, int w, int h,
-                             int fmt, void* data1, int data2, void* src, void* srect,
-                             int filter, float r) {
+HRESULT XGCopySurface(void* dst, void* rect, int w, int h,
+                      int fmt, void* data1, int data2, void* src, void* srect,
+                      int filter, float r) {
     return 0;
 }
+
+// ============================================================================
+// Xbox-specific API stubs
+// ============================================================================
+
+DWORD XCancelOverlapped(XOVERLAPPED *) { return 0; }
+DWORD XUserAwardGamerPicture(DWORD, DWORD, DWORD, XOVERLAPPED *) { return 0; }
+DWORD XUserAwardAvatarAssets(DWORD, const XUSER_AVATARASSET *, XOVERLAPPED *) { return 0; }
+DWORD XUserGetXUID(DWORD, XUID *) { return 0; }
+DWORD XShowNuiGuideUI(DWORD) { return 0; }
+void GetLocalTime(LPSYSTEMTIME) {}
+
+} // extern "C"
 
 // ============================================================================
 // WebSvcMgr stub — replaces curl-based networking (not available in WASM)
@@ -200,16 +236,5 @@ public:
 };
 static WebSvcMgrStub gWebSvcMgrStub;
 WebSvcMgr &TheWebSvcMgr = gWebSvcMgrStub;
-
-// ============================================================================
-// Xbox-specific API stubs (declared in xdk/xapilibi/xbox.h as extern "C")
-// ============================================================================
-
-DWORD XCancelOverlapped(void*) { return 0; }
-DWORD XUserAwardGamerPicture(DWORD, DWORD, void*) { return 0; }
-DWORD XUserAwardAvatarAssets(DWORD, DWORD, void*, void*) { return 0; }
-DWORD XUserGetXUID(DWORD, void*) { return 0; }
-DWORD XShowNuiGuideUI(DWORD) { return 0; }
-void GetLocalTime(void*) {}
 
 #endif // __EMSCRIPTEN__

@@ -19,7 +19,7 @@
         #dc3-canvas {
             border: 1px solid #333;
             max-width: 100vw;
-            max-height: 90vh;
+            max-height: 80vh;
         }
         #status {
             margin-top: 12px;
@@ -28,58 +28,88 @@
         }
         #status.error { color: #e55; }
         #status.ok { color: #5e5; }
+        #status.loading { color: #5ae; }
+        #console {
+            margin-top: 8px;
+            max-width: 1280px;
+            width: 100%;
+            max-height: 140px;
+            overflow-y: auto;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 11px;
+            color: #666;
+            background: #111;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #222;
+        }
+        #console .err { color: #c66; }
     </style>
 </head>
 <body>
     <canvas id="dc3-canvas" width="1280" height="720"></canvas>
-    <div id="status">Initializing WebGPU...</div>
+    <div id="status">Initializing...</div>
+    <div id="console"></div>
 
     <script>
         const status = document.getElementById('status');
+        const logDiv = document.getElementById('console');
 
-        // Check WebGPU support before loading WASM
+        function log(text, isErr) {
+            const line = document.createElement('div');
+            line.textContent = text;
+            if (isErr) line.className = 'err';
+            logDiv.appendChild(line);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
         if (!navigator.gpu) {
-            status.textContent = 'WebGPU not supported in this browser. Use Chrome 113+.';
+            status.textContent = 'WebGPU not supported. Use Chrome 113+.';
             status.className = 'error';
         } else {
             status.textContent = 'Loading WASM...';
+            status.className = 'loading';
 
-            // Emscripten module config — must be set before loading the generated JS
             var Module = {
                 canvas: document.getElementById('dc3-canvas'),
                 onRuntimeInitialized: function() {
-                    status.textContent = 'Engine running';
-                    status.className = 'ok';
+                    console.log('RUNTIME_INIT_OK');
+                    status.textContent = 'Downloading assets...';
+                    status.className = 'loading';
                 },
                 print: function(text) {
                     console.log(text);
-                    if (text.includes('ready, rendering')) {
+                    log(text);
+                    // Update status based on engine output
+                    if (text.includes('downloads complete')) {
+                        status.textContent = 'Assets loaded, initializing GPU...';
+                        status.className = 'loading';
+                    }
+                    if (text.includes('GPU ready')) {
                         status.textContent = 'Rendering';
                         status.className = 'ok';
+                    }
+                    if (text.includes('GPU init failed')) {
+                        status.textContent = 'GPU not available (headless mode)';
+                        status.className = 'error';
                     }
                 },
                 printErr: function(text) {
                     console.error(text);
-                    if (text.includes('failed') || text.includes('error')) {
-                        status.textContent = 'Error: ' + text;
-                        status.className = 'error';
-                    }
+                    log(text, true);
                 }
             };
 
-            // Dynamically load the Emscripten-generated JS
-            // Try dc3-web.js (CMake target) first, fall back to dc3_web_test.js
+            console.log('LOADING_WASM_JS');
             var script = document.createElement('script');
             script.src = 'dc3-web.js';
-            script.onerror = function() {
-                // Fall back to standalone test build
-                var fallback = document.createElement('script');
-                fallback.src = 'dc3_web_test.js';
-                fallback.onerror = function() {
-                    status.textContent = 'Failed to load WASM module';
-                    status.className = 'error';
-                };
-                document.body.appendChild(fallback);
+            script.onload = function() {
+                console.log('WASM_JS_LOADED');
+            };
+            script.onerror = function(e) {
+                console.error('WASM_JS_ERROR: ' + e);
+                status.textContent = 'Failed to load dc3-web.js — build first (native/web/build.sh)';
+                status.className = 'error';
             };
             document.body.appendChild(script);
         }

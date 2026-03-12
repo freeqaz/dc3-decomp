@@ -9,6 +9,10 @@
 class DataArray;
 
 extern "C" {
+
+// Function stubs with incorrect signatures — skip on Emscripten where the
+// real definitions exist in decomp source and wasm-ld flags the mismatch.
+#ifndef __EMSCRIPTEN__
 int BinkGetError() { return 0; }
 int BinkGoto() { return 0; }
 int BinkInit() { return 0; }
@@ -18,7 +22,7 @@ int BinkSetVideoOnOff() { return 0; }
 int ctr_reinit() { return 0; }
 int ctr_start() { return 0; }
 int D3DResource_Release() { return 0; }
-int DataInput(void*, int) { return 0; }
+__attribute__((weak)) int DataInput(void*, int) { return 0; }
 int DmCaptureStackBackTrace() { return 0; }
 int DmGetSystemInfo() { return 0; }
 int DmMapDevkitDrive() { return 0; }
@@ -27,14 +31,18 @@ void expand(complex*, int, complex*, ...) {}
 complex expj(double) { return {0, 0}; }
 int FileRecursePattern() { return 0; }
 int FileTimeToSystemTime() { return 0; }
+#endif // !__EMSCRIPTEN__
 void* gCharHighlightY = 0;
 // void* gCheatsManager = 0; // now defined in Cheats.cpp
 // void* gDataThisPtr = 0; // now defined in DataFunc.cpp
 // void* gDebugDepth = 0; // now defined in LiveCameraInput.cpp
+#ifndef __EMSCRIPTEN__
 int GetLastError() { return 0; }
 int GetOverlappedResult() { return 0; }
 int GetTimeZoneInformation() { return 0; }
+#endif
 void* gMemStackLock = 0;
+#ifndef __EMSCRIPTEN__
 int JoypadSetActuatorsImp() { return 0; }
 int json_object_array_get_idx() { return 0; }
 int json_object_array_length() { return 0; }
@@ -47,6 +55,7 @@ int json_object_get_type() { return 0; }
 int json_object_new_array() { return 0; }
 int json_object_put() { return 0; }
 int json_tokener_parse() { return 0; }
+#endif
 extern "C" float lbl_82F0BE80 = 2.0f;
 int lbl_82F14008 = 0;
 DataArray *lbl_830A4100 = nullptr;
@@ -57,6 +66,7 @@ unsigned int lbl_82F1ABA0 = 86400;  // seconds per day
 void* lbl_8316EB70 = 0;  // complex* (filterdesign)
 void* lbl_8316EBA8 = 0;  // complex* (filterdesign)
 void* lbl_83172BB0 = 0;  // complex* (filterdesign)
+#ifndef __EMSCRIPTEN__
 int lh_table_lookup() { return 0; }
 int NuiAudioCreate() { return 0; }
 int NuiAudioRegisterCallbacks() { return 0; }
@@ -106,6 +116,7 @@ int OutputDebugStringA() { return 0; }
 int printbuf_free() { return 0; }
 int printbuf_memappend() { return 0; }
 int printbuf_new() { return 0; }
+#endif // !__EMSCRIPTEN__
 // Floating-point constants referenced by symbol name (loaded via address)
 double __real_0000000000000000 = 0.0;
 double __real_3f50624dd2f1a9fc = 0.001;
@@ -113,12 +124,16 @@ double __real_3fe0000000000000 = 0.5;
 double __real_4000000000000000 = 2.0;
 double __real_400921fb60000000 = 3.14159274101257324;   // pi (float precision)
 double __real_401921fb60000000 = 6.28318548202514648;   // 2*pi (float precision)
+#ifndef __EMSCRIPTEN__
 int register_cipher() { return 0; }
+#endif
 struct _cipher_descriptor { char dummy[256]; };
-const _cipher_descriptor rijndael_desc = {};
+extern "C" const _cipher_descriptor rijndael_desc = {};
+#ifndef __EMSCRIPTEN__
 int rijndael_ecb_decrypt() { return 0; }
 int rijndael_setup() { return 0; }
 int SetUnhandledExceptionFilter() { return 0; }
+#endif
 // The* global pointer stubs - must be void* (not functions!) since C++ code
 // declares them as extern ClassName* and dereferences them as pointers.
 // Function stubs at these symbols would be read as non-null garbage pointers.
@@ -146,6 +161,7 @@ void* TheSkeletonIdentifier = 0;
 void* TheSkeletonViz = 0;
 void* TheSongSortMgr = 0;
 // TheUI: removed - provided as proper UIManager* in Rnd_Stub.cpp
+#ifndef __EMSCRIPTEN__
 int vorbis_synthesis_poll() { return 0; }
 int WideCharToMultiByte() { return 0; }
 int XBackgroundDownloadSetMode() { return 0; }
@@ -159,7 +175,13 @@ int XNetXnAddrToMachineId() { return 0; }
 int XShowMarketplaceDownloadItemsUI() { return 0; }
 int XShowNuiTroubleshooterUI() { return 0; }
 int XTitleServerCreateEnumerator() { return 0; }
+#endif
 } // extern "C"
+
+// asm-label stubs: provide mangled C++ symbols via __asm__ name redirection.
+// Variable stubs work fine on all platforms (just zero-initialized memory).
+// Function stubs only work with ELF linkers — wasm-ld generates wrong
+// signatures that insert 'unreachable' traps at call sites.
 
 // C++ global variables
 __attribute__((weak, used)) char _stub_var_0[256] __asm__("_ZN10FileMerger11sDisableAllE") = {};
@@ -277,7 +299,9 @@ __attribute__((weak, used)) char _stub_var_111[256] __asm__("_ZTT15StubCameraInp
 __attribute__((weak, used)) char _stub_var_112[256] __asm__("_ZTT17CharSignalApplier") = {};
 __attribute__((weak, used)) char _stub_var_113[256] __asm__("_ZTT8AppLabel") = {};
 
-// C++ function stubs
+// C++ function stubs — skip on Emscripten (asm-label functions cause
+// signature mismatches that insert 'unreachable' traps in wasm-ld)
+#ifndef __EMSCRIPTEN__
 // AttachMesh(RndMesh*, RndMesh*)
 extern "C" __attribute__((weak, used)) long _stub_fn_0() __asm__("_Z10AttachMeshP7RndMeshS0_");
 extern "C" long _stub_fn_0() { return 0; }
@@ -4180,3 +4204,5 @@ extern "C" long _stub_eventtask_c2() { return 0; }
 // ScanForOutPorts
 extern "C" __attribute__((weak, used)) long _stub_scanoutports() __asm__("_Z15ScanForOutPortsR9ObjPtrVecI11FlowOutPort9ObjectDirEP8FlowNodeP4Flow");
 extern "C" long _stub_scanoutports() { return 0; }
+
+#endif // !__EMSCRIPTEN__

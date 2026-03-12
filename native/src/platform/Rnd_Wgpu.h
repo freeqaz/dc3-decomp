@@ -129,8 +129,8 @@ public:
     WgpuShaderMgr() {}
     virtual ~WgpuShaderMgr() {}
 
-    void Init() override {}
-    void Terminate() override {}
+    void Init() override;
+    void Terminate() override;
 
     // For Tier 1, most constants are captured but not used —
     // scene/material/object uniforms are written directly from engine state
@@ -163,6 +163,10 @@ public:
     virtual ~WgpuRnd() {}
 
     void Init() override;
+    // Deferred GPU resource setup — called after mGpu.IsReady() on web,
+    // or inline from Init() on native.  Sets up pipelines, ring buffers,
+    // depth texture, default textures, shadow/post-proc passes.
+    void InitGpuResources();
     void Terminate() override;
     void Clear(unsigned int, const Hmx::Color&) override;
     void BeginDrawing() override;

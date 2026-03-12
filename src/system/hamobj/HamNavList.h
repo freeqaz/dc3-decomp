@@ -203,8 +203,4 @@ protected:
     /** "Elements that match these will be bigger than the other elements" */
     std::vector<Symbol> mBigElements; // 0x200
     std::vector<unsigned int> mBigElementIndices; // 0x20c
-#ifdef HX_NATIVE
-    float mEnterAnimStartTime;
-    float mEnterAnimDuration;
-#endif
 };

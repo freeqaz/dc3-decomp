@@ -64,9 +64,13 @@ attract_screen
 
 ## v2 Plan: Remove Workarounds by Fixing Stubs
 
-### Phase 1: Make Stubs Smart (LOW RISK)
+### Phase 1: Make Stubs Smart (LOW RISK) — DONE
 
 Instead of empty `Hmx::Object()` stubs, give each manager minimal Handle() implementations that return sensible values. This lets DTA scripts execute correctly without implementing real Xbox platform services.
+
+**Implemented**: `NativeSaveLoadStub`, `NativeProfileMgrStub`, `NativePlatformMgrStub` in App.cpp.
+
+**Verified**: `wait_main_after_saveload_screen` now transitions to `main_screen` via DTA's `saveload_complete` handler (not timer). The `is_idle` smart stub returns 1, DTA handler fires, `goto_screen` resolves to null `$post_load_dest_screen` (expected — not set by DTA), UI.cpp falls back to `main_screen`.
 
 #### 1a. SaveLoadManager stub — CRITICAL
 **Problem**: `{saveload_mgr activate}` does nothing → `saveload_complete` never fires → screen stuck until timer.
@@ -114,7 +118,7 @@ is_guide_showing → 0
 #### 1e. SpeechMgr — NO CHANGE
 Already a stub. DTA calls silently fail with no functional impact. Voice commands don't exist on native.
 
-### Phase 2: Remove Screen Auto-Advance (MEDIUM RISK)
+### Phase 2: Remove Screen Auto-Advance (MEDIUM RISK) — IN PROGRESS
 
 With smart stubs in place, DTA handlers should drive screen transitions naturally. Remove the hardcoded workarounds one at a time:
 
@@ -134,7 +138,7 @@ With smart stubs in place, DTA handlers should drive screen transitions naturall
 **Change**: Remove 30-frame exit timeout (UI.cpp:631-643) and 60-frame enter timeout (UI.cpp:691-702).
 **Risk**: If any animation is truly stuck, the UI hangs. Keep timeout but increase to 5s and log warning.
 
-### Phase 3: Fix Animation Lifecycle (MEDIUM RISK)
+### Phase 3: Fix Animation Lifecycle (MEDIUM RISK) — DONE
 
 #### 3a. DTA `anim_done` → StopAnimation chain
 **Problem**: On Xbox, DTA `anim_done` handlers call `StopAnimation()` which nulls `AnimTask::mAnimTarget`, allowing the task to self-delete. On native, `anim_done` handlers may not fire because the animation system timing is different.
@@ -201,6 +205,38 @@ Phase 4a (multiuser flow) ──────────────────
                                                                          v
                                                                   Phase 5 (cleanup)
 ```
+
+## Progress
+
+### Phase 1 — DONE (2026-03-12)
+Smart stubs implemented in App.cpp:
+- `NativeSaveLoadStub`: `is_idle=1`, `is_initial_load_done=1`, `activate=no-op`
+- `NativeProfileMgrStub`: `has_seen_tutorial=1`, `is_content_unlocked=1`, `get_disable_voice=1`, etc.
+- `NativePlatformMgrStub`: `is_guide_showing=0`, `is_pad_signed_into_live=0`
+
+**Runtime verified**: Boot flow reaches `main_screen` in ~500 frames. The `wait_main_after_saveload_screen → main_screen` transition is now DTA-driven (saveload_complete handler fires because is_idle=1).
+
+**Removed timer**: `wait_main_after_saveload_screen → main_screen` — now DTA-driven.
+
+**Still timer-driven** (kept intentionally):
+- `autosave_warning_screen → title_screen` (90 frames) — splash screen delay
+- `title_screen → wait_main_after_saveload_screen` (60 frames) — Xbox expects "press Start"
+
+These timers are appropriate on native (no Xbox Live signin needed). They could eventually be replaced by keyboard input triggers.
+
+### Phase 3 — DONE (2026-03-12)
+Animation lifecycle fix implemented in AnimTask::Poll (Anim.cpp):
+- Added `#ifdef HX_NATIVE` auto-null of `mAnimTarget` when non-looping animations complete (`time > mFrameSpan`)
+- This triggers the existing self-deletion path: AnimTask sends `on_anim_event("ended")` to listener, then `TheTaskMgr.QueueTaskDelete(this)`
+- On Xbox, `mAnimTarget` is nulled by DTA callback chain (FlowAnimate::OnAnimEvent or StopAnimation). On native, this chain never fires, so the auto-null replicates the behavior.
+
+**Removed workarounds** in HamNavList.cpp:
+- Removed 5 `#ifdef HX_NATIVE` timer-based bypasses that replaced `!IsAnimating()` checks
+- Removed `mEnterAnimStartTime`/`mEnterAnimDuration` members and timer-based animation driving
+- `PlayEnterAnim()` now uses the real `RndAnimatable::Animate()` call on native (creates AnimTask like Xbox)
+- All `IsAnimating()` checks use the Xbox codepath — AnimTask properly self-deletes when done
+
+**Runtime verified**: Boot-to-main works, interactive navigation works, no crashes. Zero regressions.
 
 ## Testing Strategy
 

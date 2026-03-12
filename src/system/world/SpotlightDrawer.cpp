@@ -240,6 +240,43 @@ void SpotlightDrawer::SetAmbientColor(const Hmx::Color &c) {
     sEnviron->Select(nullptr);
 }
 
+void SpotlightDrawer::RemoveFromLists(Spotlight *spot) {
+    for (std::vector<SpotlightEntry>::iterator it = sLights.begin(); it != sLights.end();) {
+        if (it->mSpotlight == spot) {
+            it = sLights.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    for (std::vector<SpotMeshEntry>::iterator it = sCans.begin(); it != sCans.end();) {
+        if (it->mSpotlight == spot) {
+            it = sCans.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    for (std::vector<Spotlight *>::iterator it = sShadowSpots.begin();
+         it != sShadowSpots.end();) {
+        if (*it == spot) {
+            it = sShadowSpots.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+void SpotlightDrawer::DrawLight(Spotlight *spot) {
+#ifdef HX_NATIVE
+    // Native spotlight batching is still incomplete. Skip the deferred
+    // spotlight pass for now so venue/world bring-up can progress.
+    (void)spot;
+    return;
+#else
+    RndMesh *mesh;
+    MILO_ASSERT(mesh, 0x0);
+#endif
+}
+
 bool SpotlightDrawer::DrawNGSpotlights() {
     return GetGfxMode() == kNewGfx && TheLoadMgr.GetPlatform() != kPlatformPC;
 }
@@ -255,4 +292,3 @@ void SpotlightDrawer::EndWorld() {
     }
     MILO_ASSERT(!sNeedDraw, 0x165);
 }
-

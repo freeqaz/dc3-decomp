@@ -98,6 +98,13 @@ void NativeDetectDataDir() {
 // Native archive initialization - simplified from ArchiveInit()
 // Skips TheContentMgr dependency, directly creates archive from known path
 void NativeArchiveInit() {
+#ifdef __EMSCRIPTEN__
+    // Web port: files are pre-extracted and served via HTTP into MEMFS.
+    // No .ark archive needed — disable the CD/archive system so files
+    // are opened directly via POSIX (backed by Emscripten MEMFS).
+    SetUsingCD(false);
+    printf("DC3 Web: archive system bypassed (MEMFS mode)\n");
+#else
     Symbol plat = PlatformSymbol(TheLoadMgr.GetPlatform());
     const char *mainArk = MakeString("gen/main_%s", plat);
     printf("DC3 Native: Loading archive %s.hdr\n", mainArk);
@@ -107,6 +114,7 @@ void NativeArchiveInit() {
     printf("DC3 Native: Archive loaded, %d ark files\n", TheArchive->NumArkFiles());
     TheBlockMgr.Init();
     printf("DC3 Native: BlockMgr initialized\n");
+#endif
 }
 
 // Native version of SystemPreInit(argc, argv, config)

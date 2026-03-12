@@ -576,7 +576,7 @@ void UIManager::Poll() {
                 // Boot splash: DTA enter handlers fail, auto-advance after delay
                 {"autosave_warning_screen", "title_screen", 90},        // ~3s
                 {"title_screen", "wait_main_after_saveload_screen", 60}, // ~2s
-                {"wait_main_after_saveload_screen", "main_screen", 30},  // ~1s (save never completes)
+                // wait_main_after_saveload_screen: now DTA-driven (Phase 1 smart stubs)
                 // Kinect tutorials: skip immediately if we somehow land on them
                 {"title_screen_to_voice_control_tutorial_screen", "main_screen", 1},
                 {"tutorial_voice_control_screen_0", "main_screen", 1},

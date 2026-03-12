@@ -97,6 +97,44 @@ bool RndTexBlendController::GetCurrentDistance(float &dist) const {
     }
 }
 
+RndTexBlendController::BlendState
+RndTexBlendController::GetBlendState(float &blend, float influence) const {
+    blend = 0.0f;
+    if (!IsValid() || influence <= 0.0f) {
+        return kBlendNone;
+    }
+
+    if (mTex) {
+        blend = influence;
+        return kBlendCustom;
+    }
+
+    float dist = 0.0f;
+    if (!GetCurrentDistance(dist)) {
+        return kBlendNone;
+    }
+
+    if (dist < mReferenceDistance && mReferenceDistance > mMinDistance) {
+        blend = (mReferenceDistance - dist) / (mReferenceDistance - mMinDistance);
+        if (blend > 1.0f) {
+            blend = 1.0f;
+        }
+        blend *= influence;
+        return blend > 0.0f ? kBlendNear : kBlendNone;
+    }
+
+    if (dist > mReferenceDistance && mMaxDistance > mReferenceDistance) {
+        blend = (dist - mReferenceDistance) / (mMaxDistance - mReferenceDistance);
+        if (blend > 1.0f) {
+            blend = 1.0f;
+        }
+        blend *= influence;
+        return blend > 0.0f ? kBlendFar : kBlendNone;
+    }
+
+    return kBlendNone;
+}
+
 void RndTexBlendController::UpdateReferenceDistance() {
     GetCurrentDistance(mReferenceDistance);
     mMinDistance = Min(mMinDistance, mReferenceDistance);

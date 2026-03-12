@@ -72,6 +72,8 @@ public:
         mAmbientFogOwner->mFogColor.Set(col.red, col.green, col.blue);
     }
     void SetFogEnable(bool b) { mAmbientFogOwner->mFogEnable = b; }
+    ObjPtrList<RndLight>& LightsReal() { return mLightsReal; }
+    ObjPtrList<RndLight>& LightsApprox() { return mLightsApprox; }
 #ifdef HX_NATIVE
     float FogStart() const { return mAmbientFogOwner->mFogStart; }
     float FogEnd() const { return mAmbientFogOwner->mFogEnd; }
@@ -79,8 +81,6 @@ public:
         mAmbientFogOwner->mFogStart = start;
         mAmbientFogOwner->mFogEnd = end;
     }
-    ObjPtrList<RndLight>& LightsReal() { return mLightsReal; }
-    ObjPtrList<RndLight>& LightsApprox() { return mLightsApprox; }
 #endif
 
 protected:

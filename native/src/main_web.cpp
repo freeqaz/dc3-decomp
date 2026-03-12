@@ -1,6 +1,13 @@
-// DC3 Web Port — Entry Point
+// DC3 Web Port — Entry Point (Phase 5: Engine Rendering)
 // Bootstraps the engine in the browser via Emscripten.
-// Uses emscripten_set_main_loop for the browser event loop.
+//
+// Boot sequence (state machine, driven by emscripten_set_main_loop):
+//   BOOT_INIT         → create MEMFS dirs, start bundle download
+//   BOOT_FETCHING     → poll until bundle download complete
+//   BOOT_ENGINE_INIT  → SystemPreInit + SystemInit + TheRnd.Init()
+//   BOOT_GPU_WAIT     → wait for async WebGPU adapter/device
+//   BOOT_GPU_READY    → initialize GPU resources (pipelines, buffers)
+//   BOOT_RUNNING      → per-frame engine render loop
 
 #ifdef __EMSCRIPTEN__
 
@@ -8,86 +15,144 @@
 #include <emscripten/html5.h>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 
-// Engine globals
-class App;
-extern App* TheApp;
+#include "platform/WebAssets.h"
 
-// Forward declarations from App
-void WebRunOneFrame();
+// Engine headers
+#include "os/Debug.h"
+#include "os/System.h"
+#include "rndobj/Rnd_NG.h"
+#include "utl/MakeString.h"
 
-// For now — minimal boot that clears the screen
-// Full engine boot comes later (needs ASYNCIFY for file I/O)
+// WgpuRnd access
+#include "platform/Rnd_Wgpu.h"
+extern WgpuRnd *gWgpuRnd;
 
-#include "gfx/GpuDevice.h"
+// Forward declarations from other TUs
+extern void NativeSetDataDir(const char *);
+extern void InitMakeString();
+void SetFileChecksumData();
+void SystemPreInit(const char *cmdLine, const char *cfg);
+void SystemInit(const char *cfg);
 
-static GpuDevice sGpu;
-static bool sGpuReady = false;
+// ============================================================================
+// Boot state machine
+// ============================================================================
+
+enum BootState {
+    BOOT_INIT,
+    BOOT_FETCHING,
+    BOOT_ENGINE_INIT,
+    BOOT_GPU_WAIT,
+    BOOT_GPU_READY,
+    BOOT_RUNNING,
+    BOOT_ERROR,
+};
+
+static BootState sBootState = BOOT_INIT;
 static int sFrameCount = 0;
 
+// ============================================================================
+// Main loop — drives the boot state machine
+// ============================================================================
+
 static void mainLoop() {
-    if (!sGpu.IsReady()) {
-        // Still waiting for async WebGPU init
-        sGpu.PollEvents();
-        return;
+    switch (sBootState) {
+
+    case BOOT_INIT: {
+        printf("DC3 Web: downloading assets (bundle)...\n");
+        WebAssetsInit();
+        WebAssetsFetchBundle();
+        sBootState = BOOT_FETCHING;
+        break;
     }
 
-    if (!sGpuReady) {
-        sGpuReady = true;
-        printf("DC3 Web: GPU ready, starting render\n");
+    case BOOT_FETCHING: {
+        if (!WebAssetsAllDone()) break;
+
+        int ok = WebAssetsCompletedCount();
+        int fail = WebAssetsFailedCount();
+        printf("DC3 Web: assets ready (%d files, %d errors)\n", ok, fail);
+        sBootState = BOOT_ENGINE_INIT;
+        break;
     }
 
-    // Acquire frame and clear
-    wgpu::TextureView frameView = sGpu.AcquireNextFrame();
-    if (!frameView) return;
+    case BOOT_ENGINE_INIT: {
+        printf("DC3 Web: initializing engine...\n");
 
-    wgpu::RenderPassColorAttachment colorAtt{};
-    colorAtt.view = frameView;
-    colorAtt.loadOp = wgpu::LoadOp::Clear;
-    colorAtt.storeOp = wgpu::StoreOp::Store;
-    // DC3 teal clear color (matches native port)
-    colorAtt.clearValue = {0.06, 0.09, 0.12, 1.0};
-    colorAtt.depthSlice = WGPU_DEPTH_SLICE_UNDEFINED;
+        // Initialize string utilities (must be first)
+        InitMakeString();
+        SetFileChecksumData();
 
-    wgpu::RenderPassDescriptor rpDesc{};
-    rpDesc.colorAttachmentCount = 1;
-    rpDesc.colorAttachments = &colorAtt;
+        // Engine pre-init — loads ham_preinit_keep.dta from MEMFS
+        // Note: SetUsingCD(false) is the default, so files open directly from MEMFS
+        printf("DC3 Web: SystemPreInit...\n");
+        SystemPreInit("dc3-web", "config/ham_preinit_keep.dta");
 
-    wgpu::CommandEncoder encoder = sGpu.Device().CreateCommandEncoder();
-    wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&rpDesc);
-    pass.End();
+        // Full engine init — loads ham_keep.dta and all subsystems
+        printf("DC3 Web: SystemInit...\n");
+        SystemInit("config/ham_keep.dta");
 
-    wgpu::CommandBuffer cmd = encoder.Finish();
-    sGpu.Queue().Submit(1, &cmd);
+        // Initialize renderer — starts async GPU init on web
+        printf("DC3 Web: TheRnd.Init()...\n");
+        TheRnd.Init();
 
-    sGpu.PresentFrame();
+        sBootState = BOOT_GPU_WAIT;
+        printf("DC3 Web: waiting for GPU...\n");
+        break;
+    }
 
-    sFrameCount++;
-    if (sFrameCount == 1 || sFrameCount % 100 == 0) {
-        printf("DC3 Web: frame %d\n", sFrameCount);
+    case BOOT_GPU_WAIT: {
+        // Poll WebGPU instance to process async callbacks
+        if (gWgpuRnd) {
+            gWgpuRnd->Gpu().PollEvents();
+            if (gWgpuRnd->Gpu().IsReady()) {
+                sBootState = BOOT_GPU_READY;
+            }
+        } else {
+            printf("DC3 Web: ERROR — gWgpuRnd is null\n");
+            sBootState = BOOT_ERROR;
+        }
+        break;
+    }
+
+    case BOOT_GPU_READY: {
+        printf("DC3 Web: GPU ready, initializing resources...\n");
+        gWgpuRnd->InitGpuResources();
+        printf("DC3 Web: entering render loop\n");
+        sBootState = BOOT_RUNNING;
+        break;
+    }
+
+    case BOOT_RUNNING: {
+        // Use engine's renderer
+        TheRnd.BeginDrawing();
+        TheRnd.EndDrawing();
+
+        sFrameCount++;
+        if (sFrameCount == 1 || sFrameCount % 300 == 0) {
+            printf("DC3 Web: frame %d\n", sFrameCount);
+        }
+        break;
+    }
+
+    case BOOT_ERROR:
+        break;
     }
 }
 
-int main(int argc, char** argv) {
+// ============================================================================
+// Entry point
+// ============================================================================
+
+int main(int argc, char **argv) {
     printf("DC3 Web Port — Initializing\n");
 
-    // Read canvas size from HTML element
-    int canvasW = 1280, canvasH = 720;
-    emscripten_get_canvas_element_size("#dc3-canvas", &canvasW, &canvasH);
+    // Set MEMFS data directory for File_Web.cpp
+    NativeSetDataDir("/data");
 
-    GpuDeviceDesc desc{};
-    desc.width = canvasW;
-    desc.height = canvasH;
-    desc.headless = false;
-
-    if (!sGpu.Init(desc)) {
-        fprintf(stderr, "DC3 Web: GPU init failed\n");
-        return EXIT_FAILURE;
-    }
-
-    printf("DC3 Web: starting main loop (waiting for GPU...)\n");
     emscripten_set_main_loop(mainLoop, 0, true);
-
     return EXIT_SUCCESS;
 }
 

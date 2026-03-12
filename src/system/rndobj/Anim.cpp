@@ -423,6 +423,15 @@ void AnimTask::Poll(float time) {
 
     mPrevFrame = frame;
 
+#ifdef HX_NATIVE
+    // On native, DTA callbacks that would call StopAnimation() or null mAnimTarget
+    // never fire. Auto-null when a non-looping animation has completed.
+    if (mAnimTarget && !mLoop && !mBlending && !mBlendPeriod) {
+        if (time > mFrameSpan && mFrameSpan > 0.0f) {
+            mAnimTarget = NULL;
+        }
+    }
+#endif
     if (!mAnimTarget) {
         if (!mLoop && !mBlending && !mBlendPeriod) {
             if (time > mFrameSpan || mScale == 0.0f) {

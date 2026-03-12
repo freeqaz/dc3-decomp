@@ -16,6 +16,7 @@
 #include "rndobj/ColorXfm.h"
 #include "rndobj/Dir.h"
 #include "rndobj/Mesh.h"
+#include "rndobj/Utl.h"
 #include "gfx/VertexFormats.h"
 #include "obj/Dir.h"
 #include "ui/UI.h"
@@ -50,6 +51,84 @@ GLFWwindow *gNativeWindow = nullptr;
 #endif
 
 UIManager* TheUI = nullptr;
+
+void WgpuShaderMgr::Init() {
+    if (mPreInitialized) {
+        return;
+    }
+
+    mUseAO = 0;
+    mPreInitialized = true;
+    mBoneCount = 0;
+    unk14 = 1;
+    mInDepthVolume = 0;
+    unk1c = 0;
+    mCullModeOverride = 0;
+    unk24 = 0;
+    unk25 = 0;
+    unk26 = 0;
+    unk27 = 0;
+    unk28 = 0;
+    unk29 = 0;
+    unk2a = 0;
+    unk2b = 0;
+    unk2c = 0;
+    unk2d = 0;
+    unk2e = 0;
+    unk2f = 0;
+    unk30 = 0;
+    unk31 = 0;
+    unk34 = 0;
+    unk38 = 0;
+    unk39 = 0;
+    unk3a = 0;
+    unk3b = 0;
+    unk3c = 0;
+    unk3d = 0;
+    unk3e = 0;
+    unk3f = 0;
+    mAllowPerPixel = 1;
+    unk41 = 1;
+    mDisplayShaderError = true;
+    mShaderSize = 0x38;
+
+    RELEASE(mWorkMat);
+    RELEASE(mPostProcMat);
+    RELEASE(mDrawHighlightMat);
+    RELEASE(mDrawRectMat);
+    mWorkMat = Hmx::Object::New<RndMat>();
+    mPostProcMat = Hmx::Object::New<RndMat>();
+    mDrawHighlightMat = Hmx::Object::New<RndMat>();
+    mDrawRectMat = Hmx::Object::New<RndMat>();
+    CreateAndSetMetaMat(mWorkMat);
+    CreateAndSetMetaMat(mPostProcMat);
+    mDrawHighlightMat->SetUseEnv(false);
+    mDrawHighlightMat->SetZMode(kZModeForce);
+    mDrawHighlightMat->SetBlend(BaseMaterial::kBlendSrc);
+    mDrawHighlightMat->SetAlphaCut(false);
+    CreateAndSetMetaMat(mDrawHighlightMat);
+    mDrawRectMat->SetZMode(kZModeDisable);
+    mDrawRectMat->SetUseEnv(false);
+    mDrawRectMat->SetPreLit(true);
+    mDrawRectMat->SetBlend(BaseMaterial::kBlendSrcAlpha);
+    mDrawRectMat->SetAlphaCut(false);
+    CreateAndSetMetaMat(mDrawRectMat);
+
+    MILO_ASSERT(mConstantCache == NULL, 0);
+    mConstantCacheSize = 516;
+    {
+        MemTemp tmp;
+        mConstantCache = new float[mConstantCacheSize];
+    }
+}
+
+void WgpuShaderMgr::Terminate() {
+    RELEASE(mDrawHighlightMat);
+    RELEASE(mDrawRectMat);
+    RELEASE(mWorkMat);
+    RELEASE(mPostProcMat);
+    RndShaderMgr::Terminate();
+}
 
 // ============================================================================
 // UniformRingBuffer
@@ -113,6 +192,7 @@ void WgpuRnd::Init() {
 
     // Register subsystem types (creates default cam/env/mat/etc.)
     PreInit();
+    TheShaderMgr.Init();
 
     // Override clear color — DTA config isn't loaded in the native port.
     // Default to medium-dark teal to approximate the turbo_shell venue.
@@ -130,6 +210,15 @@ void WgpuRnd::Init() {
 
     // Create GPU device and window
     GpuDeviceDesc desc{};
+#ifdef __EMSCRIPTEN__
+    // On web: always init GPU (canvas surface, async adapter/device request).
+    // InitGpuResources() must be called after mGpu.IsReady().
+    desc.headless = false;
+    desc.width = 1280;
+    desc.height = 720;
+    mGpu.Init(desc);
+    printf("DC3 Web: WgpuRnd::Init() — GPU init started (async)\n");
+#else
     // Skip GPU initialization unless MILO_RENDER is set (Phase 1A: just reach main loop)
     if (getenv("MILO_RENDER")) {
         desc.headless = (getenv("MILO_HEADLESS") != nullptr);
@@ -146,74 +235,71 @@ void WgpuRnd::Init() {
             }
         }
 
-        // NOTE: Do NOT override mWidth/mHeight here. The Rnd base class sets these
-        // from config (height=432, width=768 for widescreen) in PreInit(). The UI layout
-        // system uses Width()/Height() to position elements in the camera's visible area.
-        // Overriding them with the GPU framebuffer dimensions (1280x720) causes UI content
-        // to appear at ~60% scale because elements are positioned for a 1280x720 view but
-        // the projection only covers 768x432 world units.
-#ifndef __EMSCRIPTEN__
         gNativeWindow = mGpu.Window();
-#endif
-
-        // Initialize pipeline manager
-        mPipelines.Init(&mGpu);
-        // Create per-draw ring buffers (64KB each — enough for ~250 draws/frame at 256-byte alignment)
-        // Scene ring handles mid-frame camera switches (each camera gets its own offset)
-        mSceneRing.Init(mGpu.Device(), 16 * 1024, "SceneUniforms");
-        mMaterialRing.Init(mGpu.Device(), 64 * 1024, "MaterialUniforms");
-        mObjectRing.Init(mGpu.Device(), 64 * 1024, "ObjectUniforms");
-        // Bone ring needs more space: 2560 bytes per skinned draw (rounded to 2816 at 256 alignment)
-        mBoneRing.Init(mGpu.Device(), 256 * 1024, "BoneUniforms");
-
-        // Create depth texture (use GPU framebuffer dimensions, not Rnd virtual resolution)
-        CreateDepthTexture(mGpu.WindowWidth(), mGpu.WindowHeight());
-
-        // Create default textures (1x1 white for untextured materials)
-        CreateDefaultTextures();
-
-        // Initialize render passes
-        mShadowPass.Init(mGpu);
-        mPostProcPass.Init(mGpu);
-
-        printf("DC3 Native: WgpuRnd initialized (GPU %dx%d, Rnd %dx%d, %s)\n",
-               mGpu.WindowWidth(), mGpu.WindowHeight(), mWidth, mHeight,
-               mGpu.HasBCCompression() ? "BC supported" : "software DXT");
-
-        // Frame capture setup (env-var controlled)
-        const char* captureFrame = getenv("MILO_CAPTURE_FRAME");
-        if (captureFrame && captureFrame[0]) {
-            int frame = atoi(captureFrame);
-            if (frame > 0) {
-                FrameCapture::Get().SetCaptureFrame(frame);
-                printf("DC3 Native: frame capture armed for frame %d\n", frame);
-            }
-        }
-
-        // Auto-screenshot setup (env-var controlled)
-        const char* ssDir = getenv("MILO_SCREENSHOT_DIR");
-        if (ssDir && ssDir[0]) {
-            mScreenshotDir = ssDir;
-            const char* ssFrames = getenv("MILO_SCREENSHOT_FRAMES");
-            if (!ssFrames || !ssFrames[0]) ssFrames = "100,600,900,1500";
-            std::istringstream iss(ssFrames);
-            std::string token;
-            while (std::getline(iss, token, ',')) {
-                int frame = atoi(token.c_str());
-                if (frame > 0) mCaptureFrames.push_back(frame);
-            }
-            mCaptureIndex = 0;
-            printf("DC3 Native: auto-screenshot enabled — dir=%s frames=", mScreenshotDir.c_str());
-            for (size_t i = 0; i < mCaptureFrames.size(); i++) {
-                if (i > 0) printf(",");
-                printf("%d", mCaptureFrames[i]);
-            }
-            printf("\n");
-        }
+        InitGpuResources();
     } else {
         printf("DC3 Native: GPU init skipped (set MILO_RENDER=1 to enable)\n");
-        // mWidth/mHeight stay at config values from PreInit (768x432 for widescreen)
     }
+#endif
+}
+
+void WgpuRnd::InitGpuResources() {
+    // Initialize pipeline manager
+    mPipelines.Init(&mGpu);
+    // Create per-draw ring buffers (64KB each — enough for ~250 draws/frame at 256-byte alignment)
+    // Scene ring handles mid-frame camera switches (each camera gets its own offset)
+    mSceneRing.Init(mGpu.Device(), 16 * 1024, "SceneUniforms");
+    mMaterialRing.Init(mGpu.Device(), 64 * 1024, "MaterialUniforms");
+    mObjectRing.Init(mGpu.Device(), 64 * 1024, "ObjectUniforms");
+    // Bone ring needs more space: 2560 bytes per skinned draw (rounded to 2816 at 256 alignment)
+    mBoneRing.Init(mGpu.Device(), 256 * 1024, "BoneUniforms");
+
+    // Create depth texture (use GPU framebuffer dimensions, not Rnd virtual resolution)
+    CreateDepthTexture(mGpu.WindowWidth(), mGpu.WindowHeight());
+
+    // Create default textures (1x1 white for untextured materials)
+    CreateDefaultTextures();
+
+    // Initialize render passes
+    mShadowPass.Init(mGpu);
+    mPostProcPass.Init(mGpu);
+
+    printf("WgpuRnd: GPU resources initialized (%dx%d, Rnd %dx%d, %s)\n",
+           mGpu.WindowWidth(), mGpu.WindowHeight(), mWidth, mHeight,
+           mGpu.HasBCCompression() ? "BC supported" : "software DXT");
+
+#ifndef __EMSCRIPTEN__
+    // Frame capture setup (env-var controlled, native only)
+    const char* captureFrame = getenv("MILO_CAPTURE_FRAME");
+    if (captureFrame && captureFrame[0]) {
+        int frame = atoi(captureFrame);
+        if (frame > 0) {
+            FrameCapture::Get().SetCaptureFrame(frame);
+            printf("DC3 Native: frame capture armed for frame %d\n", frame);
+        }
+    }
+
+    // Auto-screenshot setup (env-var controlled, native only)
+    const char* ssDir = getenv("MILO_SCREENSHOT_DIR");
+    if (ssDir && ssDir[0]) {
+        mScreenshotDir = ssDir;
+        const char* ssFrames = getenv("MILO_SCREENSHOT_FRAMES");
+        if (!ssFrames || !ssFrames[0]) ssFrames = "100,600,900,1500";
+        std::istringstream iss(ssFrames);
+        std::string token;
+        while (std::getline(iss, token, ',')) {
+            int frame = atoi(token.c_str());
+            if (frame > 0) mCaptureFrames.push_back(frame);
+        }
+        mCaptureIndex = 0;
+        printf("DC3 Native: auto-screenshot enabled — dir=%s frames=", mScreenshotDir.c_str());
+        for (size_t i = 0; i < mCaptureFrames.size(); i++) {
+            if (i > 0) printf(",");
+            printf("%d", mCaptureFrames[i]);
+        }
+        printf("\n");
+    }
+#endif
 }
 
 void WgpuRnd::Terminate() {

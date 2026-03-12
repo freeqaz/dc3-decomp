@@ -4,6 +4,8 @@
 #include "os/NetworkSocket.h"
 #include "utl/Str.h"
 
+NetworkSocket::~NetworkSocket() {}
+
 // Stub socket that does nothing
 class NativeNetworkSocket : public NetworkSocket {
 public:

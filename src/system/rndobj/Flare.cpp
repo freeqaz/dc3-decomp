@@ -235,6 +235,43 @@ void RndFlare::SetPointTest(bool test) {
     mPointTest = test;
 }
 
+Hmx::Rect &RndFlare::CalcRect(Vector2 &screenPos, float &visibleArea) {
+    float flareSize = mSizes.x;
+    if (flareSize != mSizes.y) {
+        RndCam *cam = RndCam::Current();
+        float dot = Dot(cam->WorldXfm().m.y, WorldXfm().m.y);
+        float blend = Max(0.0f, -dot);
+        flareSize = Interp(mSizes.x, mSizes.y, blend);
+    }
+
+    int width = TheRnd.Width();
+    int height = TheRnd.Height();
+    if (TheHiResScreen.IsActive()) {
+        width *= TheHiResScreen.GetTiling();
+        int paddingX = TheHiResScreen.GetPaddingX();
+        int tiling = TheHiResScreen.GetTiling();
+        width -= paddingX * tiling;
+        height *= tiling;
+        int paddingY = TheHiResScreen.GetPaddingY();
+        height -= paddingY * TheHiResScreen.GetTiling();
+        Hmx::Rect screenRect = TheHiResScreen.ScreenRect();
+        screenPos.x -= screenRect.x;
+        screenPos.y -= screenRect.y;
+    }
+    CalcScale();
+
+    mArea.w = (flareSize * (width * mScaleFactors.x));
+    mArea.h = ((height * (flareSize * (width * mScaleFactors.y)))) / (width * TheRnd.YRatio());
+    mArea.x = screenPos.x * width - mArea.w * 0.5f;
+    mArea.y = screenPos.y * height - mArea.h * 0.5f;
+
+    auto _tmp0 = Min<float>(width, mArea.x + mArea.w);
+    float visibleHeight = Min<float>(height, mArea.y + mArea.h) - Max(0.0f, mArea.y);
+    float visibleWidth = _tmp0 - Max(0.0f, mArea.x);
+    visibleArea = visibleWidth * visibleHeight;
+    return mArea;
+}
+
 bool RndFlare::RectOffscreen(const Hmx::Rect &r) const {
     if (r.x + r.w < 0)
         return true;

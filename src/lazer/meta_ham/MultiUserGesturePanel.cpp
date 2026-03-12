@@ -72,6 +72,31 @@ void MultiUserGesturePanel::Poll() {
     if (mNativeAutoSkipPending && !TheUI->InTransition()) {
         mNativeAutoSkipPending = false;
 
+        // Native bypasses the Kinect skeleton chooser entirely, so replicate the
+        // intended single-player controller state before entering gameplay.
+        if (TheGameData) {
+            static Symbol player_present("player_present");
+            for (int i = 0; i < 2; i++) {
+                HamPlayerData *pd = TheGameData->Player(i);
+                if (!pd || !pd->Provider()) {
+                    continue;
+                }
+                bool present = i == 0;
+                pd->Provider()->SetProperty(player_present, present);
+                if (!present) {
+                    pd->SetCharacterOutfit(gNullStr);
+                }
+                fprintf(stderr,
+                    "DC3 Native: MultiUserGesturePanel — player%d present=%d"
+                    " char='%s' crew='%s' outfit='%s'\n",
+                    i,
+                    present,
+                    pd->Char().Str(),
+                    pd->Crew().Str(),
+                    pd->Outfit().Str());
+            }
+        }
+
         // Ensure venue is set — without it, HamDirector::OnFileLoaded("song")
         // skips venue/character/visualizer merging entirely.
         if (TheGameData && TheGameData->Venue().Null()) {
@@ -94,10 +119,27 @@ void MultiUserGesturePanel::Poll() {
         // normally chosen in the multiuser DTA flow before loading_screen.
         MetaPerformer *performer = MetaPerformer::Current();
         if (performer) {
+            static Symbol player_present("player_present");
             for (int i = 0; i < 2; i++) {
                 HamPlayerData *pd = TheGameData->Player(i);
-                if (pd && pd->Char().Null()) {
+                if (!pd) {
+                    continue;
+                }
+                bool playerPresent = false;
+                if (pd->Provider()) {
+                    const DataNode *present = pd->Provider()->Property(player_present, true);
+                    playerPresent = present && present->Int() != 0;
+                }
+                if (playerPresent
+                    && (pd->Char().Null() || pd->Crew().Null() || pd->Outfit().Null())) {
                     performer->SetDefaultSongCharacter(i);
+                    fprintf(stderr,
+                        "DC3 Native: MultiUserGesturePanel — normalized player %d"
+                        " char='%s' crew='%s' outfit='%s'\n",
+                        i,
+                        pd->Char().Str(),
+                        pd->Crew().Str(),
+                        pd->Outfit().Str());
                 }
             }
         }

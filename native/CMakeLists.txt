@@ -922,6 +922,7 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/NetworkSocket_Stub.cpp
     src/platform/SynthCommon_Stub.cpp
     src/platform/RndTex_Native.cpp
+    src/platform/DataParser_Native.cpp
     src/engine_stubs_generated.cpp
     src/native_link_glue.cpp
     src/thunk_stubs.cpp
@@ -987,9 +988,10 @@ set(DC3_WEB_CORE_SOURCES
     src/platform/Memory_Native.cpp
     src/platform/PlatformMgr_Native.cpp
     src/platform/System_Native.cpp
-    src/platform/File_Native.cpp
+    src/platform/File_Web.cpp
     src/platform/AsyncFile_Native.cpp
-    src/platform/CDReader_Native.cpp
+    src/platform/CDReader_Web.cpp
+    src/platform/WebAssets.cpp
     src/platform/ThreadCall_Native.cpp
     src/platform/Joypad_Native.cpp
     src/platform/Keyboard_Native.cpp
@@ -1025,9 +1027,11 @@ set(DC3_WEB_CORE_SOURCES
     src/platform/NetworkSocket_Stub.cpp
     src/platform/SynthCommon_Stub.cpp
     src/platform/RndTex_Native.cpp
+    src/platform/DataParser_Native.cpp
     src/engine_stubs_generated.cpp
     src/native_link_glue.cpp
     src/thunk_stubs.cpp
+    src/web_stubs.cpp
 )
 
 # Web GFX sources — use GpuDevice_Web.cpp instead of GpuDevice.cpp
@@ -1099,6 +1103,7 @@ target_link_options(dc3-web PRIVATE
     # Allow undefined symbols — engine stubs use asm-labels that wasm-ld can't resolve
     -sERROR_ON_UNDEFINED_SYMBOLS=0
     -sUSE_ZLIB=1
+    -sFETCH=1
 )
 
 target_compile_options(dc3-web PRIVATE

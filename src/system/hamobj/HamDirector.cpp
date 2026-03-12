@@ -934,14 +934,62 @@ DataNode HamDirector::OnLoadSong(DataArray *a) {
 #endif
     FilePathTracker tracker(FileRoot());
     MILO_ASSERT(TheGameData, 0xC1D);
-#ifndef HX_NATIVE
     for (int i = 0; i < 2; i++) {
         HamPlayerData *hpd = TheGameData->Player(i);
         MILO_ASSERT(hpd, 0xC21);
         mCrews[i] = hpd->Crew();
+#ifdef HX_NATIVE
+        static Symbol player_present("player_present");
+        Symbol outfit = hpd->Outfit();
+        Symbol character = hpd->Char();
+        bool playerPresent = false;
+        if (hpd->Provider()) {
+            const DataNode *present = hpd->Provider()->Property(player_present, true);
+            playerPresent = present && present->Int() != 0;
+        }
+
+        // Native single-player flows can leave the secondary slot populated with
+        // stale crew state even when no second player is present. Clear those
+        // slots before wardrobe resolution so we don't derive an outfit for a
+        // nonexistent performer.
+        if (!playerPresent) {
+            mCrews[i] = gNullStr;
+            mCharacterOutfits[i] = gNullStr;
+            fprintf(stderr,
+                "DC3 Native: OnLoadSong player%d absent char='%s' crew='%s' outfit='%s'\n",
+                i,
+                character.Str(),
+                hpd->Crew().Str(),
+                outfit.Str());
+            continue;
+        }
+
+        // Native single-player bring-up can skip parts of the multiuser DTA flow,
+        // leaving only the character token populated. Reconstruct the derived
+        // crew/outfit pair here so wardrobe loading still sees the main dancer.
+        if (mCrews[i].Null() && !character.Null()) {
+            mCrews[i] = GetCrewForCharacter(character, false);
+        }
+        if (outfit.Null() && !character.Null()) {
+            outfit = GetCharacterOutfit(character, 0, false);
+        }
+
+        if (mCrews[i].Null() && outfit.Null()) {
+            mCharacterOutfits[i] = gNullStr;
+        } else {
+            mCharacterOutfits[i] = outfit.Null() ? hpd->CharacterOutfit(mCrews[i]) : outfit;
+        }
+        fprintf(stderr,
+            "DC3 Native: OnLoadSong player%d present=%d char='%s' crew='%s' outfit='%s'\n",
+            i,
+            playerPresent,
+            character.Str(),
+            mCrews[i].Str(),
+            mCharacterOutfits[i].Str());
+#else
         mCharacterOutfits[i] = hpd->CharacterOutfit(mCrews[i]);
-    }
 #endif
+    }
     int i3 = a->Int(3);
     bool i4 = a->Int(4);
     bool b5 = a->Int(5);

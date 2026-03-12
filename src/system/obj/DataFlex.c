@@ -2113,3 +2113,10 @@ void yy_actually_restart(YY_ONLY_ARG) {
     yyrestart(NULL YY_CALL_LAST_ARG);
 }
 #endif
+
+/* Accessors for yy_hold_char — needed by ReadEmbeddedFile to save/restore
+ * the lexer's lookahead byte across #include processing. Without this,
+ * the character immediately after the #include filename is lost when the
+ * buffer is flushed for the included file. */
+char yyGetHoldChar(void) { return YY_G(yy_hold_char); }
+void yySetHoldChar(char c) { YY_G(yy_hold_char) = c; }

@@ -2,7 +2,16 @@
 
 ## Current State
 
-**Song loading progressed again.** The full menu→song pipeline still works: `main_screen → choose_mode(Perform) → song_select(YMCA) → multiuser(auto-skip) → loading → preloading → real_loading → game_screen`. The important change is that native now gets past the old `crowd_clips.fm` / `CharClip` merge crash. The next blocker is later: after venue/viz/crowd merges complete, runtime trips over a render-path symbol lookup for `RndShadowMap::PrepShadow(RndDrawable*, RndEnviron*)`.
+**Song loading and gameplay bring-up progressed again.** The full menu→song pipeline now runs stably: `main_screen → choose_mode(Perform) → song_select(YMCA) → multiuser(auto-skip) → loading → preloading → real_loading → game_screen`, and the latest binary run survives through frame 4800 with no crash.
+
+The old blockers in this area are resolved:
+- `Perform` routing now reaches `song_select_screen`
+- `song_select_screen` is stable
+- the old `crowd_clips.fm` / `CharClip` merge crash is gone
+- the old native unload workaround is gone
+- later runtime gaps in `RndTexBlendController::GetBlendState()` and native shader-manager work material setup are fixed enough for gameplay rendering to continue
+
+**The current blocker is no longer "no character" or "no venue".** Native now loads and submits the main character path, but the rendered performer is still visibly corrupted. In the latest stable YMCA run, the venue, HUD, and crowd all render; `angel04` also renders, but the body is shredded/overlapped instead of looking like the Xbox reference.
 
 Fresh current-checkout revalidation confirms the old song-select crash is gone. The only subtlety is scripted input targeting: a bare `confirm` on the default `LEGIT` / `song_tier_4` header stays on `song_select_screen`, while moving the highlight onto a real song row like `YMCA` transitions into gameplay immediately.
 
@@ -162,11 +171,14 @@ Fresh current-checkout revalidation confirms the old song-select crash is gone. 
     - `frame_00820.png` / `frame_00900.png`: expanded song list on `song_select_screen`
     - `frame_00980.png`: `YMCA` highlighted before confirm
     - `frame_01060.png`, `frame_01400.png`, `frame_02200.png`: stable `game_screen`
-  - newer bring-up runs changed the next blocker:
+  - newer bring-up runs changed the next blockers again:
     - `archive/screenshots/2026-03-12-session-crowd-merge-trace-131011/` pinned the old crash to `MergeObject()` on colliding `CharClip` data inside `crowd_clips.fm`, specifically `crouching_bad_01` during `female_medium.milo -> female_base.milo`
-    - native-only `CharClip::Transitions` fixes now let that merge complete
-    - `archive/screenshots/2026-03-12-session-charclip-ownerfix-retest2-132003/` shows the app then getting farther, through `female_tempo`, `female_era`, `female_tempo_era`, venue merge, and viz merge, before failing on `RndShadowMap::PrepShadow`
-  Treat the old song-select crash and old crowd-clip merge crash as resolved. The current blocker is later render/shadow bring-up.
+    - native-only `CharClip::Transitions` fixes let that merge complete
+    - the next two runtime gaps were then exposed and fixed:
+      - missing `RndTexBlendController::GetBlendState()`
+      - native `WgpuShaderMgr` / `WgpuRnd` not creating the shared `mWorkMat` that `RndTexBlender` needs
+    - `archive/screenshots/2026-03-12-session-mainchar-onloadsong-fix10/` is the current truth: gameplay is stable through frame 4800, venue/crowd/HUD render, and the main character is present but corrupted
+  Treat the old song-select crash, old crowd-clip merge crash, old `RndShadowMap::PrepShadow` runtime gap, and old `RndTexBlendController` / shader-manager crashes as resolved. The current blocker is later character-render correctness.
 - **Panel unload teardown**: the older Session 56 note that blamed `FlowSwitchCase` and hash-table deletion order is superseded. The verified chain is now:
   - deleting a flow child leaves a null `ObjPtrVec` tombstone under suppressed ref erasure
   - `FlowNode::~FlowNode()` used to spin forever on that tombstone
@@ -198,12 +210,20 @@ Fresh current-checkout revalidation confirms the old song-select crash is gone. 
     - native transition nodes must be real `ObjOwnerPtr<CharClip>` objects before assignment in `Transitions::Load()`
     - native transition-node ownership must route `Replace()` through the `Transitions` container, not the outer `CharClip`
     - these are native-port fixes and are wrapped under `#ifdef HX_NATIVE`
-  - the next hard blocker is no longer content merge. It is a runtime render-path symbol failure:
-    - `native/build/dc3-native: undefined symbol: _ZN12RndShadowMap10PrepShadowEP11RndDrawableP10RndEnviron`
-    - this appears only after venue/viz/crowd merges finish, so it is downstream of the world-content load path
-  - representative evidence:
-    - `archive/screenshots/2026-03-12-session-charclip-ownerfix-retest2-132003/frame_01060.png`
-    - `archive/screenshots/2026-03-12-session-charclip-ownerfix-retest2-132003/frame_01200.png`
+  - the next hard blocker is no longer content merge or a runtime undefined symbol. It is character-render correctness after the real performer path activates:
+    - native multiuser auto-skip was leaving `player_present = 0` for both slots, so `HamDirector::OnLoadSong()` treated both performers as absent and only venue/crowd rendered
+    - native now explicitly marks player 0 present and clears player 1 during auto-skip, so `HamDirector::OnLoadSong()` loads `angel04` for the primary performer
+    - representative evidence:
+      - `archive/screenshots/2026-03-12-session-mainchar-onloadsong-fix10/frame_01400.png`
+      - `archive/screenshots/2026-03-12-session-mainchar-onloadsong-fix10/frame_03000.png`
+    - GPU trace evidence:
+      - `archive/screenshots/2026-03-12-session-mainchar-onloadsong-fix10-gpu/ymca_20260312T142105.gfxr`
+      - the converted trace contains debug names for `angel04.*.mesh`, `angel04_head.mesh`, `angel04_hair.mesh`, `lush01_bd03*.mesh`, `crowd_*`, and `newspaper*.mesh`
+      - that means the remaining issue is not "character mesh never submitted". The main and backup character meshes are in the draw stream; the bug is in how those submitted character draws are posed, placed, or shaded on native
+    - the visible corruption in the latest screenshots is consistent with one of:
+      - bad skinning/bone transforms on the main or backup dancer
+      - backup dancer placement/pose parity error causing `angel04` and `lush01_bd03` to overlap incorrectly
+      - remaining material/tex-blender parity gap on the character path
   - the loading/audio path remains intentionally short-circuited in `SongPreview.cpp`, `LoadingPanel.cpp`, and `PreloadPanel.cpp`
   - stale unconditional diagnostics are still compiled in (`MainMenuProvider.cpp`, `HamNavList.cpp`, `SongSortMgr.cpp`, `HamSongMgr.cpp`, `UI.cpp`, `App.cpp`) and should be removed or re-gated once bring-up work settles
 
@@ -217,6 +237,8 @@ Fresh current-checkout revalidation confirms the old song-select crash is gone. 
 - **GameMode/song-select provider probe**: `archive/screenshots/2026-03-12-session-gamemode-setmode-fix/`
 - **Song-select post-provider probe**: `archive/screenshots/2026-03-12-session-gamemode-setmode-fix-postproviders/`
 - **CharClip merge fix + shadow-path blocker**: `archive/screenshots/2026-03-12-session-charclip-ownerfix-retest2-132003/`
+- **Current stable gameplay + corrupted main character**: `archive/screenshots/2026-03-12-session-mainchar-onloadsong-fix10/`
+- **Current gameplay GPU capture**: `archive/screenshots/2026-03-12-session-mainchar-onloadsong-fix10-gpu/`
 - **Session 57 game_screen screenshots + video**: `archive/screenshots/session57/` (`menu_to_gameplay_30fps.mp4`)
 - **Session 55 screenshots**: `archive/screenshots/session55/`
 - **Session 54 screenshots**: `archive/screenshots/session54/`

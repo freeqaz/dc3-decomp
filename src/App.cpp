@@ -8,7 +8,99 @@
 #include "rndobj/Dir.h"
 #include "meta_ham/HamUI.h"
 extern GLFWwindow *gNativeWindow;
-#endif
+
+// ---------------------------------------------------------------------------
+// Native-only "smart stubs" for Xbox manager objects that DTA scripts reference.
+// These replace bare Hmx::Object stubs with classes that return sensible defaults
+// so DTA handlers (set_sink, has_active_profile, is_idle, etc.) execute correctly
+// instead of silently failing.
+// ---------------------------------------------------------------------------
+
+// SaveLoadManager stub — DTA polls {saveload_mgr is_idle} after {saveload_mgr activate}
+// to fire saveload_complete. We're always idle (no save system on native).
+class NativeSaveLoadStub : public Hmx::Object {
+public:
+    NativeSaveLoadStub() {}
+    virtual DataNode Handle(DataArray *msg, bool rev) {
+        Symbol sym = msg->Sym(1);
+        // DTA: {saveload_mgr activate} — start save/load process
+        if (sym == "activate") return 0;
+        // DTA: {saveload_mgr is_idle} — always idle, no save in progress
+        if (sym == "is_idle") return DataNode(1);
+        // DTA: {saveload_mgr is_initial_load_done} — always done
+        if (sym == "is_initial_load_done") return DataNode(1);
+        // DTA: {saveload_mgr is_autosave_enabled ...}
+        if (sym == "is_autosave_enabled") return DataNode(0);
+        return Hmx::Object::Handle(msg, rev);
+    }
+};
+
+// ProfileMgr stub — DTA queries profile state for tutorial gating, content unlocks,
+// and save routing. Returns "seen all tutorials, everything unlocked, no voice."
+class NativeProfileMgrStub : public Hmx::Object {
+public:
+    NativeProfileMgrStub() {}
+    virtual DataNode Handle(DataArray *msg, bool rev) {
+        Symbol sym = msg->Sym(1);
+        // Profile existence — no real profiles on native
+        if (sym == "has_active_profile") return DataNode(0);
+        if (sym == "has_active_profile_no_override") return DataNode(0);
+        if (sym == "get_active_profile") return DataNode(0);
+        if (sym == "get_non_active_profile") return DataNode(0);
+        if (sym == "get_num_valid_profiles") return DataNode(0);
+        // Tutorials — pretend all seen (skip tutorial flows)
+        if (sym == "has_seen_tutorial") return DataNode(1);
+        if (sym == "mark_tutorial_seen") return DataNode(0);
+        // Content — unlock everything
+        if (sym == "is_content_unlocked") return DataNode(1);
+        if (sym == "is_difficulty_unlocked") return DataNode(1);
+        // Voice — disabled (no Kinect microphone)
+        if (sym == "get_disable_voice") return DataNode(1);
+        if (sym == "get_disable_voice_commander") return DataNode(1);
+        if (sym == "get_disable_voice_pause") return DataNode(1);
+        if (sym == "get_disable_voice_practice") return DataNode(1);
+        if (sym == "get_show_voice_tip") return DataNode(0);
+        if (sym == "is_voice_commander_suboptimal") return DataNode(1);
+        // Profile management no-ops
+        if (sym == "clear_critical_profile") return DataNode(0);
+        if (sym == "set_critical_profile") return DataNode(0);
+        if (sym == "pose_found") return DataNode(0);
+        if (sym == "on_player_name_change") return DataNode(0);
+        // Audio defaults
+        if (sym == "get_music_volume") return DataNode(8);
+        if (sym == "get_fx_volume") return DataNode(8);
+        if (sym == "get_crowd_volume") return DataNode(8);
+        if (sym == "get_venue_preference") return DataNode(Symbol("default"));
+        // Settings
+        if (sym == "get_overscan") return DataNode(0);
+        if (sym == "get_mono") return DataNode(0);
+        if (sym == "get_disable_photos") return DataNode(0);
+        if (sym == "get_disable_freestyle") return DataNode(0);
+        if (sym == "get_no_flashcards") return DataNode(0);
+        if (sym == "has_finished_campaign") return DataNode(0);
+        if (sym == "get_all_unlocked") return DataNode(0);
+        if (sym == "needs_upload") return DataNode(0);
+        if (sym == "global_options_needs_save") return DataNode(0);
+        if (sym == "is_any_profile_signed_into_live") return DataNode(0);
+        return Hmx::Object::Handle(msg, rev);
+    }
+};
+
+// PlatformMgr stub — DTA calls add_sink/remove_sink for Xbox Live events
+// and queries guide/signin state. Base Hmx::Object handles add_sink/remove_sink.
+class NativePlatformMgrStub : public Hmx::Object {
+public:
+    NativePlatformMgrStub() {}
+    virtual DataNode Handle(DataArray *msg, bool rev) {
+        Symbol sym = msg->Sym(1);
+        if (sym == "is_guide_showing") return DataNode(0);
+        if (sym == "is_pad_signed_into_live") return DataNode(0);
+        if (sym == "show_controller_required") return DataNode(0);
+        return Hmx::Object::Handle(msg, rev);
+    }
+};
+
+#endif // HX_NATIVE
 #include "ChecksumData_xbox.h"
 #include "char/Char.h"
 #include "flow/FlowManager.h"
@@ -210,23 +302,24 @@ App::App(int argc, char **argv) {
     // HamUI::Init() calls UIEventMgr::Init() + UIManager::Init() internally
     TheUI = &TheHamUI;
     TheHamUI.Init();
-    // Register stub objects for DTA scripts that reference Xbox managers.
-    // These managers aren't fully initialized on native (they need Xbox Live,
-    // profiles, content DLC, etc.), but DTA scripts reference them by name.
-    // Without stubs, DTA commands like (platform_mgr add_sink ...) fail silently.
-    static const char *stubNames[] = {
-        "platform_mgr",
-        "profile_mgr",
-        "content_mgr",
-        "challenges",
-        "saveload_mgr",
-        "speech_mgr",
-    };
-    for (const char *name : stubNames) {
-        if (!ObjectDir::Main()->FindObject(name, false, false)) {
-            Hmx::Object *stub = new Hmx::Object();
-            stub->SetName(name, ObjectDir::Main());
-        }
+    // Register smart stub objects for DTA scripts that reference Xbox managers.
+    // These return sensible defaults so DTA handlers execute correctly instead
+    // of silently failing. See DTA_FLOW_V2_PLAN.md Phase 1.
+    {
+        auto registerStub = [](const char *name, Hmx::Object *obj) {
+            if (!ObjectDir::Main()->FindObject(name, false, false)) {
+                obj->SetName(name, ObjectDir::Main());
+            } else {
+                delete obj;
+            }
+        };
+        registerStub("saveload_mgr", new NativeSaveLoadStub());
+        registerStub("profile_mgr", new NativeProfileMgrStub());
+        registerStub("platform_mgr", new NativePlatformMgrStub());
+        // These don't need smart handlers — bare stubs are sufficient
+        registerStub("content_mgr", new Hmx::Object());
+        registerStub("challenges", new Hmx::Object());
+        registerStub("speech_mgr", new Hmx::Object());
     }
 
     // Go to first screen (title screen)

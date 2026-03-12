@@ -1,14 +1,13 @@
 # Native Port TODO — UI Fully Working
 
-## Current State (Session 40)
-- **Interactive menu navigation working** — Up/Down/Confirm on choose_mode_screen
-- Full boot flow renders: autosave_warning → title_screen → tutorial_voice_control → main_screen → choose_mode_screen
+## Current State (Session 59)
+- **3D venue rendering on game_screen** — DCI venue with 391 draw calls/frame, 9000+ frames stable
+- Full menu navigation: main_screen → choose_mode → song_select → YMCA → multiuser → loading → game_screen
+- Venue geometry (floor, walls, DJ booth, lighting rigs), character silhouette, HUD overlays all render
+- Flow→PropAnim UI animation pipeline verified working end-to-end (Session 58)
 - Text rendering, mesh rendering, material pipeline all working
 - HamUI two-pass draw pipeline active (letterbox + main draw pass)
-- ScrollDirection decomp fixed to 100% match (was 66.1%)
-- 3800+ frames stable with navigation input, zero crashes
-- Screenshots: `archive/screenshots/session40/`
-- Reference: `archive/screenshots/references/dc3_main_menu.jpg`
+- 99.6% non-black pixel coverage on game_screen screenshots
 
 ## Headless GPU Rendering
 
@@ -103,52 +102,60 @@ Note: The reference shows `main_screen` while our native shows `choose_mode_scre
 - [x] Keyboard arrows → menu highlight movement (verified headless)
 - [x] Confirm button → screen transition (verified headless)
 
-## Phase 2: UI Layout & Visual Fidelity (NEXT)
-Goal: UI elements positioned and sized correctly, matching Xbox reference
+## Phase 2: UI Layout & Visual Fidelity — COMPLETE
+- [x] Camera & projection (sFlipYZ, Transform::Multiply decomp fix, [ui.cam] verified)
+- [x] Transform hierarchy (WorldXfm from .milo, parent-child chain, PanelDir camera)
+- [x] Text rendering (DXT5 alpha shader, depth test, backface cull, font loading)
+- [x] Help bar & overlays (HamUI two-pass draw, voice-tip suppression)
+- [x] Flow → PropAnim animation chain (verified Session 58)
 
-### 2.1 Camera & Projection
-- [ ] Verify [ui.cam] transform matches Xbox (position, FOV, near/far)
-- [ ] Check aspect ratio (1280x720 → 16:9)
-- [ ] Verify projection matrix (orthographic vs perspective for UI?)
+## Phase 3: Song Loading & Venue Rendering — COMPLETE (Session 59)
+- [x] Menu navigation to game_screen (input script driven)
+- [x] Venue .milo loading (FileMerger → MergeDirs pipeline)
+- [x] 3D venue rendering (DCI: floor, walls, DJ booth, lights — 391 draw calls)
+- [x] Character mesh loading (silhouette visible)
+- [x] HUD overlay rendering (move card geometry)
+- [x] Crash recovery for merge failures (siglongjmp in FileMerger)
 
-### 2.2 Transform Hierarchy
-- [ ] Check RndTransformable::WorldXfm is populated from .milo data
-- [ ] Verify parent-child transform chain (group → mesh)
-- [ ] Check if RndDir/PanelDir camera is being selected
+## Phase 4: Gameplay Visual Quality (CURRENT)
+Goal: Character with proper materials, crowd, animated venue, gameplay HUD textures
 
-### 2.3 Text Rendering
-- [ ] Verify RndText objects load and create font meshes
-- [ ] Check if font .milo files load (default.milo_xbox)
-- [ ] Verify text positioning in world space
-- [ ] Fix missing "MAIN MENU", copyright, help bar text
+### 4.1 Character Rendering
+- [ ] Character material/texture application (currently dark silhouette)
+- [ ] Skinned mesh rendering (bone transforms in vertex shader)
 
-### 2.4 Help Bar & Overlays
-- [ ] Verify HamUI help bar rendering (ShellInput overlay)
-- [ ] Check InlineHelp component visibility
+### 4.2 Merge Pipeline Stability
+- [ ] Fix ObjRef ring corruption root cause (eliminate siglongjmp hack)
+- [ ] Enable crowd character rendering (currently merge-crash-skipped)
+- [ ] Enable audio merge (currently merge-crash-skipped)
 
-## Phase 3: DTA/Content System (HIGH PRIORITY)
+### 4.3 Gameplay HUD
+- [ ] Move card textures (currently pink rectangles)
+- [ ] Score/progress display
+
+### 4.4 Scene Animation
+- [ ] Game-time animation (kTaskSeconds vs kTaskUISeconds)
+- [ ] Venue lighting animation
+- [ ] Character dance animation
+
+## Phase 5: DTA/Content System
 Goal: Remove C++ workarounds and let real DTA screen-flow scripts drive the native port.
 
 **Full plan**: [DTA_FLOW_V2_PLAN.md](DTA_FLOW_V2_PLAN.md)
 
-- [ ] **Smart stubs** (Phase 1): SaveLoadManager, ProfileMgr, PlatformMgr return sensible defaults
+- [x] **Smart stubs** (Phase 1): SaveLoadManager, ProfileMgr, PlatformMgr return sensible defaults
 - [ ] **Remove auto-advance** (Phase 2): DTA handlers drive screen transitions naturally
-- [ ] **Animation lifecycle** (Phase 3): Fix `anim_done` → StopAnimation chain
+- [x] **Animation lifecycle** (Phase 3): AnimTask auto-null on native, removed HamNavList timer bypasses
 - [ ] **Remove multiuser auto-skip** (Phase 4): Real venue/char/difficulty selection flow
 - [ ] **Cleanup** (Phase 5): Remove mSink hack, GameMode guard, controller force-on
+- [ ] Content system integration for list population
 
-## Phase 4: Visual Polish
-- [ ] PropAnim → material → GPU uniform path verification
-- [ ] Letterbox / blacklight two-pass draw verification
-- [ ] Background venue rendering (or fallback)
-
-## Phase 5: Audio (LOW PRIORITY)
+## Phase 6: Audio (LOW PRIORITY)
 - [ ] UI click/select/scroll sounds via miniaudio backend
 - [ ] Background music playback
 
-## Phase 6: Advanced Rendering (LOW PRIORITY)
-- [ ] Skinned mesh rendering (bone transforms in vertex shader)
-- [ ] Post-processing: bloom, color correction
+## Phase 7: Post-Processing (LOW PRIORITY)
+- [ ] Bloom, color correction, venue lighting effects
 - [ ] Multiply blend mode (needs bright destination)
 
 ---
@@ -158,17 +165,27 @@ Goal: Remove C++ workarounds and let real DTA screen-flow scripts drive the nati
 |-------|------|--------|
 | HamRibbon::UpdateChase resize-before-copy UB | HamRibbon.cpp | **FIXED** |
 | UIListWidget::DisplayColor assert on corrupted mElementState | UIListWidget.cpp | **FIXED** |
-| IsAnimating() blocks input forever | HamNavList.cpp | **FIXED** (bypassed) |
+| IsAnimating() blocks input forever | HamNavList.cpp + Anim.cpp | **FIXED** (AnimTask auto-null) |
 | mSink null — button dispatch broken | UI.cpp | **FIXED** (set on transition) |
 | Controller mode gate blocks input | GestureMgr.cpp | **FIXED** (force on) |
 | TheHamProvider null crash | HamNavList.cpp + App.cpp | **FIXED** (factory stub) |
 | GameMode::SetMode crash | GameMode.cpp | **FIXED** (skip eval on native) |
 | ScrollDirection vertical mode missing | Utl.cpp | **FIXED** (100% match) |
-| UI elements mispositioned | Rendering pipeline | TODO — Phase 2 |
-| Text labels missing | Text/Font pipeline | TODO — Phase 2 |
-| Empty lists (no content) | Content system | TODO — Phase 3 |
+| Transform::Multiply decomp bug (y/z swap) | mtx.cpp | **FIXED** (Session 41) |
+| UI elements mispositioned | Rendering pipeline | **FIXED** (Session 41) |
+| Text labels missing | Text/Font pipeline | **FIXED** (Session 47) |
+| Flow→PropAnim not animating | Animation pipeline | **FIXED** (Session 58) |
+| ObjRef ring crash during venue merge | Object.cpp, FileMerger.cpp | **HACKED** (validation + siglongjmp) |
+| Character dark silhouette | Character material pipeline | TODO — Phase 4 |
+| HUD move cards pink rectangles | Texture loading | TODO — Phase 4 |
+| Crowd/audio merges crash-skipped | ObjRef ring corruption | TODO — Phase 4 |
+| Empty lists (no content) | Content system | TODO — Phase 5 |
 
-## Crashes Fixed (Session 40)
-1. HamNavList::SetSelecting → TheHamProvider null (virtual inheritance vbtable at offset 0x8)
-2. GameMode::SetMode → Property("battle_mode")->Sym() null DataArray evaluation
-3. All previous session crashes (see NATIVE_PORT_STATUS.md for full history)
+## Crashes Fixed (Session 59)
+1. ObjRef ring corruption → SIGSEGV during MergeDirs (recovered via siglongjmp)
+2. RndShadowMap::PrepShadow undefined → runtime link error (implemented)
+3. RndFlare::CalcRect undefined → runtime link error (implemented)
+4. SpotlightDrawer::RemoveFromLists undefined → runtime link error (implemented)
+5. RndTexBlendController::GetBlendState undefined → runtime link error (implemented)
+6. Signal handler consumed after first recovery (SA_RESETHAND removed)
+7. All previous session crashes (see NATIVE_PORT_STATUS.md for full history)

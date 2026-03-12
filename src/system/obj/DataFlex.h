@@ -122,6 +122,10 @@ extern int yyget_leng(YY_ONLY_ARG);
 extern void yy_actually_restart(YY_ONLY_ARG);
 #endif
 
+/* Save/restore lexer lookahead byte across #include processing */
+extern char yyGetHoldChar(YY_ONLY_ARG);
+extern void yySetHoldChar(char c YY_LAST_ARG);
+
 #ifdef __cplusplus
 }
 #endif

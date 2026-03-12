@@ -171,14 +171,17 @@ bool SongCollision::Equals(SongCollision *other) {
         for (unsigned int j = 0; j < mData[i].size(); j++) {
             BeatCollisionData &a = mData[i][j];
             BeatCollisionData &b = other->mData[i][j];
-            if (std::fabs(a.mMaxX - b.mMaxX) >= 0.0001f)
+            bool close = std::fabs(a.mMaxX - b.mMaxX) < 0.0001f;
+            if (!close)
                 return false;
-            if (std::fabs(a.mMinX - b.mMinX) >= 0.0001f)
+            close = std::fabs(a.mMinX - b.mMinX) < 0.0001f;
+            if (!close)
                 return false;
+            float dz = a.mOffset.z - b.mOffset.z;
             float dx = a.mOffset.x - b.mOffset.x;
             float dy = a.mOffset.y - b.mOffset.y;
-            float dz = a.mOffset.z - b.mOffset.z;
-            if (std::sqrt(dx * dx + dy * dy + dz * dz) >= 0.0001f)
+            close = std::fabs(std::sqrt(dz * dz + dx * dx + dy * dy)) < 0.0001f;
+            if (!close)
                 return false;
         }
     }
@@ -378,14 +381,18 @@ void SongCollision::CheckCollision(
             Vector3 maxVec(bd->mMaxX, 0.0f, 0.0f);
             Multiply(maxVec, transforms[i], *maxEdge);
 
-            float proj = normalDir.x * (minEdge->x - transforms[i].v.x)
-                + normalDir.y * (minEdge->y - transforms[i].v.y)
-                + normalDir.z * (minEdge->z - transforms[i].v.z);
+            // Pre-compute all differences (target interleaves min/max loads)
+            float minDz = minEdge->z - transforms[i].v.z;
+            float minDy = minEdge->y - transforms[i].v.y;
+            float maxDy = maxEdge->y - transforms[i].v.y;
+            float minDx = minEdge->x - transforms[i].v.x;
+            float maxDx = maxEdge->x - transforms[i].v.x;
+            float maxDz = maxEdge->z - transforms[i].v.z;
+
+            float proj = normalDir.z * minDz + normalDir.y * minDy + normalDir.x * minDx;
 
             if ((proj <= 0.0f || i != 0) && (proj >= 0.0f || i != 1)) {
-                proj = normalDir.x * (maxEdge->x - transforms[i].v.x)
-                    + normalDir.y * (maxEdge->y - transforms[i].v.y)
-                    + normalDir.z * (maxEdge->z - transforms[i].v.z);
+                proj = normalDir.z * maxDz + normalDir.y * maxDy + normalDir.x * maxDx;
             }
 
             Scale(normalDir, proj, *push);
@@ -393,13 +400,13 @@ void SongCollision::CheckCollision(
         i++;
     } while (i < 2);
 
+    float distance = Length(dir);
     float totalExtent = 0.0f;
     for (int j = 0; j < 2; j++) {
         totalExtent += Length(*reinterpret_cast<Vector3 *>(out._data + 0x40 + j * 0x10));
     }
 
-    float distance = Length(dir);
-    SetSongCollisionColliding(out, distance < totalExtent - sCollisionTolerance);
+    SetSongCollisionColliding(out, totalExtent - sCollisionTolerance > distance);
 }
 
 bool SongCollision::IsCollision(
@@ -411,12 +418,16 @@ bool SongCollision::IsCollision(
 ) const {
     // Copy transforms locally so we can accumulate beat offsets
     Transform localXfms[2];
-    memcpy(localXfms, transforms, sizeof(localXfms));
+    __int64 *dst = (__int64 *)localXfms;
+    const __int64 *src = (const __int64 *)transforms;
+    for (int k = 0; k < 16; k++) {
+        dst[k] = src[k];
+    }
 
     bool anyCollision = false;
     int beat = startBeat;
     do {
-        if (endBeat <= beat) {
+        if (beat >= endBeat) {
             return anyCollision;
         }
         SongCollisionOutput out;

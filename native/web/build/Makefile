@@ -18705,29 +18705,29 @@ src/platform/BoneSetup.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dc3-web.dir/build.make CMakeFiles/dc3-web.dir/src/platform/BoneSetup.cpp.s
 .PHONY : src/platform/BoneSetup.cpp.s
 
-src/platform/CDReader_Native.o: src/platform/CDReader_Native.cpp.o
-.PHONY : src/platform/CDReader_Native.o
+src/platform/CDReader_Web.o: src/platform/CDReader_Web.cpp.o
+.PHONY : src/platform/CDReader_Web.o
 
 # target to build an object file
-src/platform/CDReader_Native.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/dc3-web.dir/build.make CMakeFiles/dc3-web.dir/src/platform/CDReader_Native.cpp.o
-.PHONY : src/platform/CDReader_Native.cpp.o
+src/platform/CDReader_Web.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/dc3-web.dir/build.make CMakeFiles/dc3-web.dir/src/platform/CDReader_Web.cpp.o
+.PHONY : src/platform/CDReader_Web.cpp.o
 
-src/platform/CDReader_Native.i: src/platform/CDReader_Native.cpp.i
-.PHONY : src/platform/CDReader_Native.i
+src/platform/CDReader_Web.i: src/platform/CDReader_Web.cpp.i
+.PHONY : src/platform/CDReader_Web.i
 
 # target to preprocess a source file
-src/platform/CDReader_Native.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/dc3-web.dir/build.make CMakeFiles/dc3-web.dir/src/platform/CDReader_Native.cpp.i
-.PHONY : src/platform/CDReader_Native.cpp.i
+src/platform/CDReader_Web.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/dc3-web.dir/build.make CMakeFiles/dc3-web.dir/src/platform/CDReader_Web.cpp.i
+.PHONY : src/platform/CDReader_Web.cpp.i
 
-src/platform/CDReader_Native.s: src/platform/CDReader_Native.cpp.s
-.PHONY : src/platform/CDReader_Native.s
+src/platform/CDReader_Web.s: src/platform/CDReader_Web.cpp.s
+.PHONY : src/platform/CDReader_Web.s
 
 # target to generate assembly for a file
-src/platform/CDReader_Native.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/dc3-web.dir/build.make CMakeFiles/dc3-web.dir/src/platform/CDReader_Native.cpp.s
-.PHONY : src/platform/CDReader_Native.cpp.s
+src/platform/CDReader_Web.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/dc3-web.dir/build.make CMakeFiles/dc3-web.dir/src/platform/CDReader_Web.cpp.s
+.PHONY : src/platform/CDReader_Web.cpp.s
 
 src/platform/Cache_Stub.o: src/platform/Cache_Stub.cpp.o
 .PHONY : src/platform/Cache_Stub.o
@@ -18825,29 +18825,53 @@ src/platform/ContentMgr_Stub.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dc3-web.dir/build.make CMakeFiles/dc3-web.dir/src/platform/ContentMgr_Stub.cpp.s
 .PHONY : src/platform/ContentMgr_Stub.cpp.s
 
-src/platform/File_Native.o: src/platform/File_Native.cpp.o
-.PHONY : src/platform/File_Native.o
+src/platform/DataParser_Native.o: src/platform/DataParser_Native.cpp.o
+.PHONY : src/platform/DataParser_Native.o
 
 # target to build an object file
-src/platform/File_Native.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/dc3-web.dir/build.make CMakeFiles/dc3-web.dir/src/platform/File_Native.cpp.o
-.PHONY : src/platform/File_Native.cpp.o
+src/platform/DataParser_Native.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/dc3-web.dir/build.make CMakeFiles/dc3-web.dir/src/platform/DataParser_Native.cpp.o
+.PHONY : src/platform/DataParser_Native.cpp.o
 
-src/platform/File_Native.i: src/platform/File_Native.cpp.i
-.PHONY : src/platform/File_Native.i
+src/platform/DataParser_Native.i: src/platform/DataParser_Native.cpp.i
+.PHONY : src/platform/DataParser_Native.i
 
 # target to preprocess a source file
-src/platform/File_Native.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/dc3-web.dir/build.make CMakeFiles/dc3-web.dir/src/platform/File_Native.cpp.i
-.PHONY : src/platform/File_Native.cpp.i
+src/platform/DataParser_Native.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/dc3-web.dir/build.make CMakeFiles/dc3-web.dir/src/platform/DataParser_Native.cpp.i
+.PHONY : src/platform/DataParser_Native.cpp.i
 
-src/platform/File_Native.s: src/platform/File_Native.cpp.s
-.PHONY : src/platform/File_Native.s
+src/platform/DataParser_Native.s: src/platform/DataParser_Native.cpp.s
+.PHONY : src/platform/DataParser_Native.s
 
 # target to generate assembly for a file
-src/platform/File_Native.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/dc3-web.dir/build.make CMakeFiles/dc3-web.dir/src/platform/File_Native.cpp.s
-.PHONY : src/platform/File_Native.cpp.s
+src/platform/DataParser_Native.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/dc3-web.dir/build.make CMakeFiles/dc3-web.dir/src/platform/DataParser_Native.cpp.s
+.PHONY : src/platform/DataParser_Native.cpp.s
+
+src/platform/File_Web.o: src/platform/File_Web.cpp.o
+.PHONY : src/platform/File_Web.o
+
+# target to build an object file
+src/platform/File_Web.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/dc3-web.dir/build.make CMakeFiles/dc3-web.dir/src/platform/File_Web.cpp.o
+.PHONY : src/platform/File_Web.cpp.o
+
+src/platform/File_Web.i: src/platform/File_Web.cpp.i
+.PHONY : src/platform/File_Web.i
+
+# target to preprocess a source file
+src/platform/File_Web.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/dc3-web.dir/build.make CMakeFiles/dc3-web.dir/src/platform/File_Web.cpp.i
+.PHONY : src/platform/File_Web.cpp.i
+
+src/platform/File_Web.s: src/platform/File_Web.cpp.s
+.PHONY : src/platform/File_Web.s
+
+# target to generate assembly for a file
+src/platform/File_Web.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/dc3-web.dir/build.make CMakeFiles/dc3-web.dir/src/platform/File_Web.cpp.s
+.PHONY : src/platform/File_Web.cpp.s
 
 src/platform/FxSendNative.o: src/platform/FxSendNative.cpp.o
 .PHONY : src/platform/FxSendNative.o
@@ -19617,6 +19641,30 @@ src/platform/VirtualKeyboard_Stub.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dc3-web.dir/build.make CMakeFiles/dc3-web.dir/src/platform/VirtualKeyboard_Stub.cpp.s
 .PHONY : src/platform/VirtualKeyboard_Stub.cpp.s
 
+src/platform/WebAssets.o: src/platform/WebAssets.cpp.o
+.PHONY : src/platform/WebAssets.o
+
+# target to build an object file
+src/platform/WebAssets.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/dc3-web.dir/build.make CMakeFiles/dc3-web.dir/src/platform/WebAssets.cpp.o
+.PHONY : src/platform/WebAssets.cpp.o
+
+src/platform/WebAssets.i: src/platform/WebAssets.cpp.i
+.PHONY : src/platform/WebAssets.i
+
+# target to preprocess a source file
+src/platform/WebAssets.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/dc3-web.dir/build.make CMakeFiles/dc3-web.dir/src/platform/WebAssets.cpp.i
+.PHONY : src/platform/WebAssets.cpp.i
+
+src/platform/WebAssets.s: src/platform/WebAssets.cpp.s
+.PHONY : src/platform/WebAssets.s
+
+# target to generate assembly for a file
+src/platform/WebAssets.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/dc3-web.dir/build.make CMakeFiles/dc3-web.dir/src/platform/WebAssets.cpp.s
+.PHONY : src/platform/WebAssets.cpp.s
+
 src/platform/xdk_shims_web.o: src/platform/xdk_shims_web.cpp.o
 .PHONY : src/platform/xdk_shims_web.o
 
@@ -19664,6 +19712,30 @@ src/thunk_stubs.s: src/thunk_stubs.cpp.s
 src/thunk_stubs.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dc3-web.dir/build.make CMakeFiles/dc3-web.dir/src/thunk_stubs.cpp.s
 .PHONY : src/thunk_stubs.cpp.s
+
+src/web_stubs.o: src/web_stubs.cpp.o
+.PHONY : src/web_stubs.o
+
+# target to build an object file
+src/web_stubs.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/dc3-web.dir/build.make CMakeFiles/dc3-web.dir/src/web_stubs.cpp.o
+.PHONY : src/web_stubs.cpp.o
+
+src/web_stubs.i: src/web_stubs.cpp.i
+.PHONY : src/web_stubs.i
+
+# target to preprocess a source file
+src/web_stubs.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/dc3-web.dir/build.make CMakeFiles/dc3-web.dir/src/web_stubs.cpp.i
+.PHONY : src/web_stubs.cpp.i
+
+src/web_stubs.s: src/web_stubs.cpp.s
+.PHONY : src/web_stubs.s
+
+# target to generate assembly for a file
+src/web_stubs.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/dc3-web.dir/build.make CMakeFiles/dc3-web.dir/src/web_stubs.cpp.s
+.PHONY : src/web_stubs.cpp.s
 
 # Help Target
 help:
@@ -21996,9 +22068,9 @@ help:
 	@echo "... src/platform/BoneSetup.o"
 	@echo "... src/platform/BoneSetup.i"
 	@echo "... src/platform/BoneSetup.s"
-	@echo "... src/platform/CDReader_Native.o"
-	@echo "... src/platform/CDReader_Native.i"
-	@echo "... src/platform/CDReader_Native.s"
+	@echo "... src/platform/CDReader_Web.o"
+	@echo "... src/platform/CDReader_Web.i"
+	@echo "... src/platform/CDReader_Web.s"
 	@echo "... src/platform/Cache_Stub.o"
 	@echo "... src/platform/Cache_Stub.i"
 	@echo "... src/platform/Cache_Stub.s"
@@ -22011,9 +22083,12 @@ help:
 	@echo "... src/platform/ContentMgr_Stub.o"
 	@echo "... src/platform/ContentMgr_Stub.i"
 	@echo "... src/platform/ContentMgr_Stub.s"
-	@echo "... src/platform/File_Native.o"
-	@echo "... src/platform/File_Native.i"
-	@echo "... src/platform/File_Native.s"
+	@echo "... src/platform/DataParser_Native.o"
+	@echo "... src/platform/DataParser_Native.i"
+	@echo "... src/platform/DataParser_Native.s"
+	@echo "... src/platform/File_Web.o"
+	@echo "... src/platform/File_Web.i"
+	@echo "... src/platform/File_Web.s"
 	@echo "... src/platform/FxSendNative.o"
 	@echo "... src/platform/FxSendNative.i"
 	@echo "... src/platform/FxSendNative.s"
@@ -22110,12 +22185,18 @@ help:
 	@echo "... src/platform/VirtualKeyboard_Stub.o"
 	@echo "... src/platform/VirtualKeyboard_Stub.i"
 	@echo "... src/platform/VirtualKeyboard_Stub.s"
+	@echo "... src/platform/WebAssets.o"
+	@echo "... src/platform/WebAssets.i"
+	@echo "... src/platform/WebAssets.s"
 	@echo "... src/platform/xdk_shims_web.o"
 	@echo "... src/platform/xdk_shims_web.i"
 	@echo "... src/platform/xdk_shims_web.s"
 	@echo "... src/thunk_stubs.o"
 	@echo "... src/thunk_stubs.i"
 	@echo "... src/thunk_stubs.s"
+	@echo "... src/web_stubs.o"
+	@echo "... src/web_stubs.i"
+	@echo "... src/web_stubs.s"
 .PHONY : help
 
 

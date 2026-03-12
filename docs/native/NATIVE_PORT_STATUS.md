@@ -1,7 +1,7 @@
 # Native Port Progress (x86_64 Linux)
 
-## Current Status: Session 48 - Nested RndDir PropAnim Fix
-**Goal**: Bright, animated UI matching the original game's cyan neon aesthetic
+## Current Status: Session 59 - Game Screen Venue Rendering
+**Goal**: Load a song and render the 3D venue on game_screen
 
 ### Sessions Complete
 - **Sessions 1-19**: Foundation through mesh rendering (see git history)
@@ -26,6 +26,8 @@
 - **Session 41**: **UI layout fix — Transform::Multiply decomp bug.** Fixed fundamental decomp bug in `Multiply(Transform, Transform, Transform)` (mtx.cpp, was 48% match) — the translation y/z coefficients were swapped due to decompiler mis-mapping of struct field offsets. This caused ALL transform compositions to produce wrong results for non-trivial rotations, including the `sFlipYZ` axis swap in `GetViewProjectXfms()`. The `[ui.cam]` view translation went from `(0, 768, 768)` (wrong — y duplicated into z) to `(0, 0, 768)` (correct). Made transparent queue flush unconditional on panel camera switch (was env-var gated). Result: autosave_warning_screen now shows correctly positioned player indicators (~100px, matching Xbox reference), centered autosave icon with metallic orb, full readable text, and Kinect prompt. Screenshots: `archive/screenshots/session41/`.
 - **Session 47**: **Main menu text visible.** Three fixes: HamListRibbon draw filter bypass (`entering=true` when no header ribbon), label alpha force (1.0 on native), Flow activation + PropAnim end-frame forcing. Menu items render but still centered.
 - **Session 48**: **game_mode_icon panel visible.** Key discovery: `ObjDirItr::RecurseSubdirs()` only traverses formal `SubDirs()`, NOT nested `RndDir` objects in the hash table. `game_mode_icon` is an RndDir object (not a subdir) with 42 objects including 6 PropAnims (`icon_enter.anim`, etc.). Added nested RndDir PropAnim forcing in PanelDir::Enter(). Also identified `list_choose_mode.milo` (UIListDir) PostLoad resolving to nullptr — file loads but dir creation fails. Screenshots: `archive/screenshots/session48/`. See `docs/native/UI_ANIMATION_STATUS.md` for full analysis.
+- **Sessions 52-58**: UI animation unwind — verified Flow->FlowAnimate->AnimTask->PropAnim chain end-to-end. Removed rendering hacks. Alpha floor for 29 DTA-driven meshes. Menu enter animations work correctly.
+- **Session 59**: **Game screen venue rendering.** Navigated full menu flow into YMCA song. DCI venue (indoor dance club) renders with 391 draw calls/frame — floor, walls, DJ booth, lighting rigs, character silhouette, HUD move cards. Stable 9000+ frames. Key fixes: ObjRef ring validation in ReplaceRefs, siglongjmp crash recovery in FileMerger::FinishLoading, 4 new function implementations (PrepShadow, CalcRect, RemoveFromLists, GetBlendState), player state setup in MultiUserGesturePanel auto-skip path. See `docs/sessions/2026-03-12-session59-game-screen-venue-rendering.md`.
 
 ### Completed Phases
 - **Phase 0**: Foundation — COMPLETE
@@ -36,15 +38,15 @@
 - **Phase 4**: Input — COMPLETE (Joypad_Native + Keyboard_Native + 19 tests)
 
 ### Current Boot Progress
-Engine boots, enters main loop, auto-navigates through all screens to main menu. Full interactive navigation works:
+Engine boots, navigates full menu flow, loads a song, and renders the 3D venue on game_screen:
 1. Archive loading → config → all subsystem inits → main loop
-2. **Full boot screen flow**: attract_screen → autosave_warning_screen → title_screen → wait_main_after_saveload_screen → tutorial_voice_control_screen_0..4 → main_screen → choose_mode_screen
+2. **Full screen flow**: attract_screen → autosave_warning → title_screen → tutorial_voice_control → main_screen → choose_mode_screen → song_select_screen → multiuser_screen → loading_screen → preloading_screen → real_loading_screen → **game_screen**
 3. **Auto-skip mechanism**: UIScreen::Enter() fires DTA handlers (`skip_selected`, `next_screen`) on enter. Timer-based fallback in UIManager::Poll auto-advances stuck screens after 120 frames
 4. **Button dispatch working**: JoypadPoll → Export → MsgSinks → JoypadClient → UIManager → UIScreen → PanelDir → HamNavList
-5. **Interactive navigation**: Up/Down move highlight on choose_mode_screen, Confirm triggers screen transition. Full dispatch chain verified.
-6. **Mesh rendering**: 47+ draw calls/frame on choose_mode_screen (headless Dawn GPU)
+5. **Interactive navigation**: Up/Down/Confirm navigate menus. Input script (`MILO_INPUT_SCRIPT`) drives headless navigation
+6. **Venue rendering**: 391 draw calls/frame on game_screen — DCI venue with floor, walls, DJ booth, lighting rigs, character silhouette, HUD overlays
 7. **HamUI two-pass draw**: Uses TheHamUI (game-specific UIManager) for proper letterbox/blacklight/helpbar rendering
-8. **3800+ frames stable** with navigation input, clean exit
+8. **9000+ frames stable** on game_screen with zero crashes (merge crashes recovered via siglongjmp)
 9. **Env vars**: `MILO_RENDER=1` + `MILO_HEADLESS=1` for headless GPU, `MILO_SCREENSHOT_DIR=path` + `MILO_SCREENSHOT_FRAMES=100,300,500` for auto-capture, `MILO_FIRST_SCREEN=main_screen` skips attract, `MILO_MAX_FRAMES=N`, `MILO_INPUT_SCRIPT=path`
 
 ### Session 22 Fixes (MsgSinks + Button Dispatch)
@@ -401,13 +403,14 @@ Non-Kinect TODOs:
 | **Post-processing** | Bloom, color correction, etc. | Low |
 
 ### Next Steps
-1. **Fix `list_choose_mode.milo` loading** — UIListDir PostLoad resolves to nullptr. File opens but DirLoader fails. May fix list widget layout and header ribbon resource.
-2. **Flow animation pipeline** — Flows activate but don't drive PropAnims through full timeline. "Force to end frame" hack works but skips intermediate states.
-3. **Remove native workarounds** — `entering=true` hack, label alpha force, nested RndDir PropAnim forcing should all be removable once Flow pipeline works and list resources load.
-4. Content system integration for list population (currently 0 items from providers)
-5. DTA script execution improvements (many DTA commands fail silently due to missing Xbox globals)
-6. Skinned mesh rendering (bone transforms, vertex skinning shader)
-7. Post-processing, background venue rendering
+1. **Character rendering** — Character loads as dark silhouette (mesh geometry present, materials/textures not applied). Needs character material setup that normally happens via Kinect skeleton pipeline.
+2. **Fix ObjRef ring corruption root cause** — The siglongjmp recovery in FileMerger is a hack. Crowd and audio merges currently crash-and-recover. Finding the root cause would let these merges complete properly (crowd characters, audio).
+3. **HUD textures** — Move card geometry renders as pink rectangles. Texture loading for gameplay HUD assets not connected.
+4. **Game-time animation** — Venue and character are static. kTaskSeconds (game time) animation pipeline untested; kTaskUISeconds (UI time) works.
+5. **Post-processing** — Bloom, color correction, venue lighting effects are all stubbed.
+6. **Remove diagnostic fprintf** — Multiple `fprintf(stderr, ...)` throughout merge pipeline should be removed or gated behind debug env var.
+7. Content system integration for list population (currently 0 items from providers)
+8. Skinned mesh rendering (bone transforms, vertex skinning shader)
 
 ### Build Commands
 ```bash

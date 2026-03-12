@@ -131,6 +131,14 @@ DataArray *DataReadFile(const char *file, bool warn) {
 
 DataArray *DataReadStream(BinStream *bs) {
     gDataReadCrit.Enter(); // TODO: may cause IAT thunk issues at runtime
+#ifdef HX_NATIVE
+    // These initializations are handled by the undecompiled original on PPC.
+    // For native/web builds, ParseArray (in DataParser_Native.cpp) needs them.
+    gBinStream = bs;
+    gDataLine = 1;
+    extern int gOpenArray;
+    gOpenArray = 0;
+#endif
     Symbol stream(bs->Name());
     gNode = 0;
     unsigned int conds1 = 0;
@@ -198,19 +206,34 @@ DataArray *ReadEmbeddedFile(const char *file, bool b) {
     const char *madePath = FileMakePath(filepath, file);
     Symbol localfile = gFile;
     int dataline = gDataLine;
-    //dat_82f6d14 - are these dats gArray?
+#ifdef HX_NATIVE
+    // Save parser state — undecompiled in DC3 but essential for #include
+    extern DataArray *gArray;
+    extern int gOpenArray;
+    int savedNode = gNode;
+    DataArray *savedArray = gArray;
+    int savedOpenArray = gOpenArray;
+    // Save the lexer's lookahead byte — after matching the #include filename,
+    // the lexer has already read one byte past it (e.g. ')' or '\n'). If we
+    // don't save it, the included file's parsing overwrites yy_hold_char
+    // and that byte is lost (the stream has already advanced past it).
+    char savedHoldChar = yyGetHoldChar();
+    printf("ReadEmbeddedFile: saving holdChar='%c' (0x%02x) for file=%s\n", savedHoldChar, (unsigned char)savedHoldChar, file);
+#endif
     auto bs = gBinStream;
-    //dat_82f64d0c
-    //dat_82f64d08
     yyrestart(nullptr);
     DataArray *da = DataReadFile(madePath, b);
     if (b && !da) {
         MILO_FAIL("Couldn\'t open embedded file: %s (file %s, line %d)", madePath, da->File(), da->Line());
     }
-    //dat_82f64d08
-    //dat_82f64d0c
     gBinStream = bs;
-    //dat_82f64d14
+#ifdef HX_NATIVE
+    gNode = savedNode;
+    gArray = savedArray;
+    gOpenArray = savedOpenArray;
+    yySetHoldChar(savedHoldChar);
+    printf("ReadEmbeddedFile: restored holdChar='%c' (0x%02x)\n", savedHoldChar, (unsigned char)savedHoldChar);
+#endif
     gDataLine = dataline;
     gFile = localfile;
     yyrestart(nullptr);

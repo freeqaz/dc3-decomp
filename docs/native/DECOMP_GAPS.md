@@ -6,9 +6,10 @@ Inventory of decomp gaps affecting the native build. Prioritized by impact on re
 
 ## Current State
 
-- **Track A (Engine Boot)**: Boots to `choose_mode_screen`, ~169 draw calls/frame, 10000 frames stable. Menu text, icons, description panel, and ribbons all visible.
-- **Current rendering (Session 48)**: choose_mode_screen shows menu items on right side with game_mode_icon description panel and icon image on the left. Key fix: `ObjDirItr::RecurseSubdirs()` only traverses formal `SubDirs()`, not nested RndDir objects in the hash table. `game_mode_icon` (42 objects, 6 PropAnims) was invisible to the PropAnim forcing code. Now fixed with separate nested RndDir iteration in `PanelDir::Enter()`.
-- **Reference shots**: `archive/screenshots/references/` as live-game baseline. Native progress: `archive/screenshots/session47/` (text visible, centered), `archive/screenshots/session48/` (icon panel visible, improved layout).
+- **Track A (Engine Boot → Gameplay)**: Boots through full menu flow to `game_screen` with 3D venue rendering. 391 draw calls/frame, 9000+ frames stable. DCI venue with floor, walls, DJ booth, lighting rigs, character silhouette, HUD move cards.
+- **Current rendering (Session 59)**: game_screen renders the DCI (indoor dance club) venue loaded from `world/dci/dci.milo`. Character appears as dark silhouette (mesh present, materials not applied). HUD move cards render as pink rectangles (geometry present, textures missing). 99.6% non-black pixel coverage.
+- **Menu rendering (Sessions 47-58)**: choose_mode_screen shows menu items, game_mode_icon, ribbons, text. Flow->PropAnim animation pipeline verified working end-to-end.
+- **Reference shots**: `archive/screenshots/references/` as live-game baseline.
 - **Flow animation pipeline**: **Fully operational** (verified Session 58). Flow→FlowAnimate→AnimTask→PropAnim chain traced end-to-end. All UI animations use kTaskUISeconds timeline, advanced by UIManager::Poll() every frame. Enter animations fade in menu items correctly. `ShouldActivateNativeFlow()` filter handles startMode=0 flows; startMode>0 flows auto-start via Flow::Enter(). No rendering hacks needed for animation.
 - **Track B (Milo Viewer)**: Full rendering pipeline. 14/44 demo shots render (8 broken YAML paths).
 - **Weak stubs**: `engine_stubs_generated.cpp` has ~2530 weak function stubs. Any real .cpp implementation automatically overrides them.
@@ -225,12 +226,37 @@ The full DTA TypeDef → Flow → FlowAnimate → AnimTask → PropAnim pipeline
 - ~~**Camera animation on native**~~ — Superseded. CameraManager only runs in WorldDir::Poll, not PanelDir.
 - ~~**Voice-tip overlay coverage**~~ — **Fixed** (2026-03-11).
 - ~~**Flow→PropAnim animation chain**~~ — **Verified working** (2026-03-12, Session 58). Full pipeline traced and confirmed.
+- ~~**Game screen venue rendering**~~ — **Working** (2026-03-12, Session 59). DCI venue with 391 draw calls/frame, 9000+ frames stable. Character silhouette, HUD overlay visible.
+
+### Track A — Current Focus: Gameplay Visual Quality
+
+Now that game_screen renders the venue, focus shifts to visual quality:
+1. **Character materials** — Silhouette needs proper material/texture application (currently dark because character material setup happens in Kinect skeleton pipeline)
+2. **ObjRef ring corruption root cause** — siglongjmp recovery in FileMerger is a hack. Crowd/audio merges crash and get skipped. Finding root cause enables crowd rendering and proper audio.
+3. **HUD textures** — Move card geometry renders as pink rectangles. Texture loading for gameplay HUD assets not connected.
+4. **Game-time animation** — Venue/character static. kTaskSeconds pipeline untested (kTaskUISeconds works for UI).
+5. **Post-processing** — Bloom, color correction, venue lighting effects stubbed.
 
 ### Remaining Stubs — All Resolved
 4. ~~**SaveLoadManager::Poll()**~~ — **Done** (100% match)
 5. ~~**MoveDir::DrawShowing()**~~ — **Done** (88.8% match)
 6. ~~**BinkMovieImpl::Poll()**~~ — **Done** (95.6% match)
 7. ~~**RandomIntervalGroupSeqInst::Poll()**~~ — **Done** (99.4% match)
+
+### Session 59: New Implementations
+| Function | File | Match | Notes |
+|----------|------|-------|-------|
+| `RndShadowMap::PrepShadow()` | ShadowMap.cpp | N/A (new) | Full shadow map setup — light frustum, depth pass, shadow map assignment |
+| `RndFlare::CalcRect()` | Flare.cpp | N/A (new) | Screen-space flare rect with HiResScreen support, visible area clipping |
+| `SpotlightDrawer::RemoveFromLists()` | SpotlightDrawer.cpp | N/A (new) | Removes spotlight from static/dynamic entry lists |
+| `RndTexBlendController::GetBlendState()` | TexBlendController.cpp | N/A (new) | Camera-distance-based texture blend factor |
+
+### Session 59: Safety Hacks (Technical Debt)
+| Hack | File | Why | Proper Fix |
+|------|------|-----|-----------|
+| ObjRef ring validation | Object.cpp | Corrupt rings crash ReplaceRefs during merge | Find root cause of ring corruption in multi-file merges |
+| siglongjmp crash recovery | FileMerger.cpp | SIGSEGV during MergeDirs for crowd/audio merges | Fix ring corruption so merges don't crash |
+| SA_RESETHAND removal | main_native.cpp | Signal handler consumed after first recovery | Already fixed (permanent) |
 
 ## Priority 5: Inlined Subdir Loading (Asset Loading Chain) — FIXED
 
