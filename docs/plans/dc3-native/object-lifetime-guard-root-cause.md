@@ -29,6 +29,21 @@ timeout 180s native/build/milo-tests '--gtest_filter=ObjectLifetimeTest.*:DirLoa
 
 These slices currently pass.
 
+Additional focused repros now exist in
+[`native/tests/test_object_lifetime.cpp`](/home/free/code/milohax/dc3-decomp/native/tests/test_object_lifetime.cpp):
+
+- `DeleteOrderDoesNotRequireTopologicalSortForObjPtr`
+  - proves the basic `ObjPtr` contract survives plain delete ordering
+- `DeleteAutosaveWarningRawDir`
+  - loads `ui/title/gen/autosave_warning.milo_xbox` from `MILO_LIB` and then
+    hangs on raw `ObjectDir` deletion
+- `DeleteAutosavingIconSubdirOnly`
+  - detaches the `autosaving_icon` child dir from that asset and still hangs on
+    deleting the isolated subdir
+
+This matters because it narrows the modern unload blocker to a small raw asset
+teardown repro, rather than requiring a full UI screen transition.
+
 Current outcome:
 
 - the destructor-side `gSuppressDirPtrDelete` guard in `src/system/obj/Dir.cpp`
@@ -39,11 +54,20 @@ Current outcome:
 
 Concrete fixes that changed the result:
 
-1. `MergeObjectsRecurse` no longer creates a temporary `ObjDirPtr<ObjectDir>`
-   when moving a subdir from source to destination. It now appends the existing
-   source `ObjDirPtr` directly before erasing the source vector entry.
+1. The `kMoveAllSubdirs` subdir-transfer path in `MergeObjectsRecurse` no longer
+   creates a temporary `ObjDirPtr<ObjectDir>` when moving a subdir from source
+   to destination. It now appends the existing source `ObjDirPtr` directly
+   before erasing the source vector entry.
 2. `ObjectDir::RemoveSubDir` no longer compares `ObjDirPtr` internals using a
    hard-coded `+0xc` offset. It now compares actual `ObjectDir *` values.
+
+Important current nuance:
+
+- the top-level `!b` / `kMergeReplace` path in
+  [`src/system/obj/Utl.cpp`](/home/free/code/milohax/dc3-decomp/src/system/obj/Utl.cpp)
+  still constructs a temporary `ObjDirPtr<ObjectDir>` before `AppendSubDir()`
+- the "temporary ObjDirPtr eliminated" conclusion is therefore only fully true
+  for the moved-subdir loop, not globally for every merge/subdir path
 
 ## Test Architecture
 
@@ -238,8 +262,8 @@ without being erased from the source parent vector.
 
 The remaining problem is different:
 
-- after ownership is correct, native teardown can still encounter a corrupted
-  subdir ref ring during destruction
+- after ownership is correct, native teardown may still encounter a corrupted
+  or pathologically expensive subdir/object teardown path during destruction
 
 So:
 
@@ -334,7 +358,7 @@ To keep the destructor guard removed cleanly, all of the following must stay tru
 2. The moved subdir's `mRefs` ring contains only valid live nodes
 3. Destroying the parent dir can clear `mSubDirs` without suppressing delete
    decisions
-4. `ObjectDir::HasDirPtrs()` can walk the ring safely during teardown
+4. `ObjectDir::HasDirPtrs()` can answer safely during teardown
 5. `ObjectLifetimeTest.MergeDirsMoveAllSubdirsTransfersOwnership` passes without
    `gSuppressDirPtrDelete`
 
@@ -365,9 +389,16 @@ Focus on the iterator-side filter:
 ### Phase 3: only then re-attempt `ObjDirItr` guard removal
 
 Do not treat the iterator guard like the destructor guard. The destructor guard
-was removable because the bug that required it was in the move/remove path and
-could be fixed directly. The iterator guard should only be removed once we can
-prove the stale-entry invariant itself has been eliminated.
+was removable because the validated bug was in the move/remove path and could be
+fixed directly. The iterator guard should only be removed once we can prove the
+stale-entry invariant itself has been eliminated.
+
+Also do not over-fit later unload issues to "hash-table order requires
+topological deletion" without a fresh repro. `Hmx::Object::~Object()` already
+calls `ReplaceRefs(nullptr)`, which is specifically intended to make simple
+object-teardown order irrelevant. If a real workload still breaks, that points
+to a producer bug in ref cleanup or a separate teardown-cost problem, not yet to
+an architectural requirement for dependency-ordered deletion.
 
 ## Concrete TODOs
 

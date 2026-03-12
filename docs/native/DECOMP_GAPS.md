@@ -150,7 +150,7 @@ These affect menu navigation, list population, and screen transitions.
   - the newly logged `Flow::Activate()` failures in `ui/main/main.milo` are the best concrete lead for that missing state
 
 ### Screen Transition Workarounds (src/system/ui/UIScreen.cpp)
-- ~~`UnloadPanels()` — Skipped on native (ObjRef crash)~~ **FIXED**: Real crash was null `sHamMaster` in `MetaPanel::Load`, not ObjRef corruption. UnloadPanels fully re-enabled.
+- `UnloadPanels()` — **Still skipped by default on native.** The old "ObjRef crash" attribution is stale: `MILO_NATIVE_UNLOAD_PANELS=1` shows early screen unloads can succeed, but `autosave_warning_panel` teardown later gets stuck in `UIPanel::Unload() -> RELEASE(mDir) -> ObjectDir::DeleteObjects()` for 40s+ during `autosave_warning_screen -> title_screen`. `MetaPanel::Load` null-guards fixed one old crash, but unload is not fully re-enabled.
 - `SetTypeDef()` — Skips null panels
 
 ### Object System Workarounds (src/system/obj/)

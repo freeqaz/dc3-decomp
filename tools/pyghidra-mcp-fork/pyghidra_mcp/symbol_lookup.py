@@ -362,7 +362,7 @@ class SymbolMatcher:
 
 
 # Default map file location for DC3 project
-DEFAULT_MAP_FILE = Path("/home/free/code/milohax/dc3-decomp/orig/373307D9/ham_xbox_r.map")
+DEFAULT_MAP_FILE = Path(__file__).resolve().parent.parent.parent.parent / "orig" / "373307D9" / "ham_xbox_r.map"
 
 
 def get_default_matcher() -> SymbolMatcher:

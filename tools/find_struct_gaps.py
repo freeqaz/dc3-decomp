@@ -193,7 +193,7 @@ def analyze_members(filepath, struct_name, members, issues):
             else:
                 pad_note = f"gap={actual_gap} (0x{actual_gap:x}), expected={expected} (0x{expected:x})"
             
-            relpath = os.path.relpath(filepath, '/home/free/code/milohax/dc3-decomp')
+            relpath = os.path.relpath(filepath, str(Path(__file__).resolve().parent.parent))
             issues.append({
                 'file': relpath,
                 'struct': struct_name,
@@ -210,7 +210,7 @@ def analyze_members(filepath, struct_name, members, issues):
             })
 
 def main():
-    src_dir = Path('/home/free/code/milohax/dc3-decomp/src')
+    src_dir = Path(__file__).resolve().parent.parent / 'src'
     all_issues = []
     
     for hdr in sorted(src_dir.rglob('*.h')):

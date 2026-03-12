@@ -57,13 +57,12 @@ void ThreeDSoundManager::Poll() {
         }
         int loopCount = 0;
         FOREACH (it, mSounds) {
-            ThreeDSound *sound = *it;
-            if ((listenerMoved || sound->HasMoved() || sound->StartedPlaying())
-                && sound->IsPlaying()) {
+            if ((listenerMoved || (*it)->HasMoved() || (*it)->StartedPlaying())
+                && (*it)->IsPlaying()) {
                 float distance, radius;
-                CalculateDistance(sound, listenerXfm, distance, radius);
-                if (!sound->mLoop || distance > sound->mSilenceDistance) {
-                    sound->SetDistance(distance, radius);
+                CalculateDistance(*it, listenerXfm, distance, radius);
+                if (!(*it)->mLoop || distance > (*it)->mSilenceDistance) {
+                    (*it)->SetDistance(distance, radius);
                 } else {
                     if (loopCount == 100) {
                         MILO_NOTIFY_ONCE(
@@ -71,23 +70,23 @@ void ThreeDSoundManager::Poll() {
                             "ignoring some",
                             100
                         );
-                        sound->SetDistance(FLT_MAX, FLT_MAX);
+                        (*it)->SetDistance(FLT_MAX, FLT_MAX);
                     } else {
-                        sound->SetDistance(distance, radius);
+                        (*it)->SetDistance(distance, radius);
                         loopCount++;
                     }
                 }
-                if (sound->mPanEnabled) {
-                    float angle = CalculateAngle(sound, listenerXfm);
-                    sound->SetAngle(angle);
+                if ((*it)->mPanEnabled) {
+                    float angle = CalculateAngle(*it, listenerXfm);
+                    (*it)->SetAngle(angle);
                 }
-                if (sound->mDopplerEnabled && !mListenerDirty) {
+                if ((*it)->mDopplerEnabled && !mListenerDirty) {
                     float doppler =
-                        CalculateDoppler(sound, listenerXfm, dt, invDt, distance);
-                    sound->SetDoppler(doppler);
+                        CalculateDoppler(*it, listenerXfm, dt, invDt, distance);
+                    (*it)->SetDoppler(doppler);
                 }
             }
-            sound->SaveWorldXfm();
+            (*it)->SaveWorldXfm();
         }
         mListenerDirty = false;
         memcpy(&mLastListenerXfm, &listenerXfm, sizeof(Transform));
@@ -141,16 +140,18 @@ float ThreeDSoundManager::CalculateDoppler(
     }
 
     float listenerApproach = (Dot(listenerVel, dir) * (invDist * invDt));
-    float soundApproach = Dot(soundVel, dir) * invDist * invDt;
+    float soundApproach = (Dot(soundVel, dir) * (invDist * invDt));
 
-    const float speedOfSound = 340.29f;
-    float ratio = (-listenerApproach + speedOfSound) / (soundApproach + speedOfSound);
+    static const float kDopplerConsts[3] = { 340.29f, 0.7491535544395447f, 1.3348398208618164f };
+    float speedOfSound = kDopplerConsts[0];
+    listenerApproach = -listenerApproach;
+    float ratio = (listenerApproach + speedOfSound) / (soundApproach + speedOfSound);
     float result = powf(ratio, mDopplerPower);
 
     // Clamp to +-5 semitones
-    const float kMaxDoppler = 1.3348398208618164f;
-    const float kMinDoppler = 0.7491535544395447f;
-    result = Max(kMinDoppler, result);
-    result = Min(kMaxDoppler, result);
+    float kMaxDoppler = kDopplerConsts[2];
+    float kMinDoppler = kDopplerConsts[1];
+    result = Min(result, kMaxDoppler);
+    result = Max(result, kMinDoppler);
     return result;
 }

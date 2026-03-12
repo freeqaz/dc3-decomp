@@ -18,13 +18,16 @@ HOST=127.0.0.1
 PROJECT_PATH="$PROJECT_DIR/ghidra_projects/DC3/DC3"
 XEX_PATH="$PROJECT_DIR/orig/373307D9/default.xex"
 MAP_FILE="$PROJECT_DIR/orig/373307D9/ham_xbox_r.map"
-PYGHIDRA_MCP="$HOME/code/milohax/pyghidra-mcp"
+MILOHAX_DIR="$(cd "$PROJECT_DIR/.." && pwd)"
+PYGHIDRA_MCP="$MILOHAX_DIR/pyghidra-mcp"
 PIDFILE="/tmp/claude/pyghidra-mcp-dc3.pid"
 LOGFILE="/tmp/claude/pyghidra-mcp-dc3.log"
 
 export JAVA_HOME="/usr/lib/jvm/java-17-openjdk"
-# Use VMX128-enabled Ghidra build (not stock /opt/ghidra)
-export GHIDRA_INSTALL_DIR="$HOME/code/milohax/vmx128-research/ghidra-test/ghidra_12.0_DEV"
+# Use VMX128-enabled Ghidra fork (not stock /opt/ghidra)
+# Build: cd ../ghidra && gradle buildGhidra
+# The setup script extracts build/dist/*.zip → build/ghidra/
+export GHIDRA_INSTALL_DIR="$MILOHAX_DIR/ghidra/build/ghidra"
 # Use writable temp directory for Ghidra user home (avoids read-only filesystem issues)
 export GHIDRA_USER_HOME="/tmp/claude/ghidra_user"
 

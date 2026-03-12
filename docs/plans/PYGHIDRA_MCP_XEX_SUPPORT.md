@@ -31,7 +31,7 @@ This document describes the integration of XEX (Xbox 360 executable) support int
 
 The extension is pre-installed at:
 ```
-/home/free/code/milohax/vmx128-research/ghidra-test/ghidra_12.0_DEV/Extensions/XEXLoaderWV/
+../ghidra/build/ghidra/Extensions/XEXLoaderWV/
 ```
 
 Verification:
@@ -56,7 +56,7 @@ pip install -e tools/pyghidra-mcp-fork/
 
 Set in `tools/ghidra/pyghidra-service.sh`:
 ```bash
-export GHIDRA_INSTALL_DIR="/home/free/code/milohax/vmx128-research/ghidra-test/ghidra_12.0_DEV"
+export GHIDRA_INSTALL_DIR="../ghidra/build/ghidra"
 export GHIDRA_USER_HOME="/tmp/claude/ghidra_user"
 ```
 
@@ -160,8 +160,8 @@ for bin_path in bin_paths:
 Expected output:
 ```
 Starting pyghidra-mcp service...
-  Project: /home/free/code/milohax/dc3-decomp/ghidra_projects/DC3
-  Binary: /home/free/code/milohax/dc3-decomp/orig/373307D9/default.xex
+  Project: $HOME/code/milohax/dc3-decomp/ghidra_projects/DC3
+  Binary: $HOME/code/milohax/dc3-decomp/orig/373307D9/default.xex
   ...
 Service process is running (PID: XXXXX)
 ```

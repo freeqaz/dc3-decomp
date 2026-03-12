@@ -1,6 +1,7 @@
 import json, subprocess, os
+from pathlib import Path
 
-REPO = "/home/free/code/milohax/dc3-decomp"
+REPO = str(Path(__file__).resolve().parent.parent.parent)
 m = json.loads(open(os.path.join(REPO, "scratch/patches/manifest.json")).read())
 
 ready = [e for e in m if e["category"] == "ready"

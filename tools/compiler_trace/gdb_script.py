@@ -29,7 +29,7 @@ from .rr_record import _find_rr, CUSTOM_RR_LIB
 
 
 # Wibo source location (for source-level debugging)
-WIBO_SOURCE = Path("/home/free/code/wibo")
+WIBO_SOURCE = Path.home() / "code" / "wibo"
 
 
 def generate_gdb_script(

@@ -61,7 +61,7 @@ template <class T1, class T2>
 void ObjPtrVec<T1, T2>::merge(const ObjPtrVec<T1, T2> &other) {
     for (const_iterator it = other.begin(); it != other.end(); ++it) {
         T1 *obj = it->Obj();
-        if (obj && find(obj) == end()) {
+        if (obj != NULL && find(obj) == end()) {
             push_back(obj);
         }
     }

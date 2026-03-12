@@ -19,7 +19,8 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 # Default map file for DC3 project
-DEFAULT_MAP_FILE = Path("/home/free/code/milohax/dc3-decomp/orig/373307D9/ham_xbox_r.map")
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+DEFAULT_MAP_FILE = _PROJECT_ROOT / "orig" / "373307D9" / "ham_xbox_r.map"
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -358,7 +359,7 @@ def main():
     parser.add_argument("symbol", help="Function symbol to decompile")
     parser.add_argument(
         "--binary",
-        default="/home/free/code/milohax/dc3-decomp/orig/373307D9/default.xex",
+        default=str(_PROJECT_ROOT / "orig" / "373307D9" / "default.xex"),
         help="Path to binary file",
     )
     parser.add_argument(

@@ -15,6 +15,9 @@
 #include "utl/Std.h"
 #include "utl/Symbol.h"
 #include "utl/TextStream.h"
+#ifdef HX_NATIVE
+#include <cstdlib>
+#endif
 
 UIScreen *UIScreen::sUnloadingScreen = nullptr;
 
@@ -209,10 +212,21 @@ void UIScreen::Enter(UIScreen *scr) {
     if (scr) {
         sUnloadingScreen = scr;
 #ifdef HX_NATIVE
-        // Skip panel unload on native — ObjRef lifecycle issues cause SIGSEGV
-        // during bulk object deletion (ObjPtrList::Unlink on freed nodes).
-        // Instead, hide the old screen so it stops drawing.
-        scr->mShowing = false;
+        static int sForceNativeUnload = -1;
+        if (sForceNativeUnload == -1) {
+            const char *env = std::getenv("MILO_NATIVE_UNLOAD_PANELS");
+            sForceNativeUnload = (env && env[0] && std::strcmp(env, "0") != 0) ? 1 : 0;
+        }
+        if (sForceNativeUnload) {
+            printf("DC3 UI: Forcing UnloadPanels for '%s' (MILO_NATIVE_UNLOAD_PANELS)\n",
+                   scr->Name());
+            scr->UnloadPanels();
+        } else {
+            // Skip panel unload on native — current workaround. Historical notes
+            // disagree on the exact crash root cause, so keep a runtime gate for
+            // direct validation.
+            scr->mShowing = false;
+        }
 #else
         scr->UnloadPanels();
 #endif

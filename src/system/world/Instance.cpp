@@ -247,7 +247,8 @@ void WorldInstance::PostLoad(BinStream &bs) {
     BinStreamRev d(bs, revs);
     RndDir::PostLoad(bs);
     if (d.rev > 0) {
-        mDir = dynamic_cast<WorldInstance *>((ObjectDir *)PostLoadInlined());
+        ObjDirPtr<ObjectDir> dirPtr = PostLoadInlined();
+        mDir = dynamic_cast<WorldInstance *>((ObjectDir *)dirPtr);
     } else {
         mDir.PostLoad(0);
     }

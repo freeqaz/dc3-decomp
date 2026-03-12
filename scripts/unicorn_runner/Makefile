@@ -1,6 +1,6 @@
 PY_INCLUDE := $(shell python3 -c "import sysconfig; print(sysconfig.get_path('include'))")
 EXT_SUFFIX := $(shell python3 -c "import sysconfig; print(sysconfig.get_config_var('EXT_SUFFIX'))")
-UC_DIR     := /home/free/code/milohax/unicorn
+UC_DIR     := $(HOME)/code/milohax/unicorn
 
 TARGET := _trampoline_hook$(EXT_SUFFIX)
 

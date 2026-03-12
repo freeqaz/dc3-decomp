@@ -11,9 +11,12 @@ import unittest
 from scripts.unicorn_runner.engine import CL_INDEX, CL_TRAMP_ADDR
 
 # Unicorn imports (must match engine.py's path setup)
-UNICORN_PATH = "/home/free/code/milohax/unicorn/bindings/python"
+from pathlib import Path
+_MILOHAX_DIR = Path(__file__).resolve().parent.parent.parent.parent.parent
+_UNICORN_DIR = _MILOHAX_DIR / "unicorn"
+UNICORN_PATH = str(_UNICORN_DIR / "bindings" / "python")
 sys.path.insert(0, UNICORN_PATH)
-os.environ["LIBUNICORN_PATH"] = "/home/free/code/milohax/unicorn/build"
+os.environ["LIBUNICORN_PATH"] = str(_UNICORN_DIR / "build")
 
 try:
     from unicorn import Uc

@@ -44,17 +44,21 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+# Project root (dc3-decomp) and sibling repos
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+_MILOHAX_DIR = _PROJECT_ROOT.parent
+
 # Default RB3 source path
-DEFAULT_RB3_PATH = Path.home() / "code" / "milohax" / "rb3" / "src"
+DEFAULT_RB3_PATH = _MILOHAX_DIR / "rb3" / "src"
 
 # m2c decompiler paths
-DEFAULT_M2C_PATH = Path.home() / "code" / "milohax" / "m2c" / "m2c.py"
-DEFAULT_ASM_TO_M2C = Path("/home/free/code/milohax/dc3-decomp/tools/asm_to_m2c.py")
-DEFAULT_ASM_DIR = Path("/home/free/code/milohax/dc3-decomp/build/373307D9/asm")
+DEFAULT_M2C_PATH = _MILOHAX_DIR / "m2c" / "m2c.py"
+DEFAULT_ASM_TO_M2C = _PROJECT_ROOT / "tools" / "asm_to_m2c.py"
+DEFAULT_ASM_DIR = _PROJECT_ROOT / "build" / "373307D9" / "asm"
 
 # New m2c pipeline tools (Phase 1 additions)
-DEFAULT_OBJDIFF_TO_M2C = Path("/home/free/code/milohax/dc3-decomp/tools/objdiff_to_m2c.py")
-DEFAULT_EXPORT_TYPES = Path("/home/free/code/milohax/dc3-decomp/tools/ghidra/export_types.py")
+DEFAULT_OBJDIFF_TO_M2C = _PROJECT_ROOT / "tools" / "objdiff_to_m2c.py"
+DEFAULT_EXPORT_TYPES = _PROJECT_ROOT / "tools" / "ghidra" / "export_types.py"
 
 # =============================================================================
 # Token Budget System
@@ -802,7 +806,7 @@ def run_m2c_from_objdiff_json(
         return result
 
 
-DEFAULT_PROJECT_DIR = str(Path("/home/free/code/milohax/dc3-decomp"))
+DEFAULT_PROJECT_DIR = str(_PROJECT_ROOT)
 
 
 def run_m2c_decompile(

@@ -38,8 +38,10 @@ Critical environment configuration for XEX support:
 # Java environment
 export JAVA_HOME="/usr/lib/jvm/java-17-openjdk"
 
-# VMX128-enabled Ghidra build (not stock /opt/ghidra)
-export GHIDRA_INSTALL_DIR="$HOME/code/milohax/vmx128-research/ghidra-test/ghidra_12.0_DEV"
+# VMX128-enabled Ghidra fork (not stock /opt/ghidra)
+# After cloning freeqaz/ghidra, build with: gradle buildGhidra
+# Then extract the zip from build/dist/ into ghidra-install/
+export GHIDRA_INSTALL_DIR="../ghidra/build/ghidra"  # relative to dc3-decomp
 
 # Writable temp directory for Ghidra user home (avoids read-only filesystem issues)
 export GHIDRA_USER_HOME="/tmp/claude/ghidra_user"

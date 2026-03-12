@@ -25,8 +25,9 @@ from .invoker import CompilerInvoker, PROJECT_ROOT
 
 # Custom rr build with 32-bit support (librrpage_32.so).
 # The system rr package on Arch Linux lacks 32-bit libraries.
-CUSTOM_RR = Path("/home/free/code/milohax/rr/build/bin/rr")
-CUSTOM_RR_LIB = Path("/home/free/code/milohax/rr/build/lib/rr")
+_MILOHAX_DIR = Path(__file__).resolve().parent.parent.parent.parent
+CUSTOM_RR = _MILOHAX_DIR / "rr" / "build" / "bin" / "rr"
+CUSTOM_RR_LIB = _MILOHAX_DIR / "rr" / "build" / "lib" / "rr"
 
 
 def _find_rr() -> str:

@@ -845,7 +845,7 @@ void DirLoader::CreateObjects() {
             *mStream >> b8;
         }
         if (!Hmx::Object::RegisteredFactory(classSym)) {
-            MILO_NOTIFY("%s unknown class %s, skipping", mFile, classSym);
+            MILO_NOTIFY("%s: Can't make %s", mFile.c_str(), classSym);
             goto release_obj;
         } else {
             MemPoint begin(MemPoint::kInitType0);

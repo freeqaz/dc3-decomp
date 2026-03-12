@@ -91,19 +91,10 @@ void MetagameRank::SaveFixed(FixedSizeSaveableStream &fs) const {
     bool b1 = mFirstTimePlayed;
     if (!b1) {
         static Symbol play_first_time_disp("play_first_time_disp");
-        auto _tmp1 = mDeferredPoints.end();
-        {
-            auto it = mDeferredPoints.begin();
-            if (it != _tmp1) {
-                auto _tmp2 = mDeferredPoints.end();
-                do {
+        FOREACH (it, mDeferredPoints) {
             if (it->mSource == play_first_time_disp) {
                 b1 = true;
                 break;
-            }
-        
-                    ++it;
-                } while (it != _tmp2);
             }
         }
     }
@@ -111,10 +102,9 @@ void MetagameRank::SaveFixed(FixedSizeSaveableStream &fs) const {
     fs << mAtMaxRank;
     fs.Write(mOneTimeTaskFlags, 0x40);
     fs.Write(unk79, 0x40);
-    auto _tmp3 = mDeferredPoints.size();
     static Symbol combined_xp_disp("combined_xp_disp");
     int sum;
-    if (_tmp3 != 0) {
+    if (mDeferredPoints.size() != 0) {
         sum = 0;
         FOREACH (it, mDeferredPoints) {
             sum += it->mPoints;

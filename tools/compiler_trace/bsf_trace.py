@@ -41,7 +41,8 @@ _STMW_RE = re.compile(r"\bstmw\s+r(\d+)")
 _INDIVIDUAL_SAVE_RE = re.compile(r"\bst[dw]\s+r(\d+)\s*,\s*-")
 
 # 32-bit wibo build (required for GDB — the 64-bit one crashes)
-WIBO_32 = Path("/home/free/code/milohax/wibo/build/debug/wibo")
+_MILOHAX_DIR = Path(__file__).resolve().parent.parent.parent.parent
+WIBO_32 = _MILOHAX_DIR / "wibo" / "build" / "debug" / "wibo"
 
 # BSF function address in c2.dll
 BSF_RVA = 0x026780
@@ -385,7 +386,7 @@ def trace_bsf(
     if not WIBO_32.exists():
         raise FileNotFoundError(
             f"32-bit wibo not found at {WIBO_32}. "
-            "Build with: cd /home/free/code/milohax/wibo && mkdir -p build/debug && "
+            f"Build with: cd {_MILOHAX_DIR / 'wibo'} && mkdir -p build/debug && "
             "cd build/debug && cmake -DCMAKE_BUILD_TYPE=Debug ../.. && make"
         )
 

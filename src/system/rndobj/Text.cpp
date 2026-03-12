@@ -106,8 +106,8 @@ RndText::RndText()
     : mWidth(0), mHeight(0), mCircle(0), mAlignment(kMiddleCenter), mFitType(kFitWrap),
       mCapsMode(kCapsModeNone), mLeading(1), mFixedLength(0), mMarkup(true),
       mBasicMarkup(true), mScrollDelay(0), mScrollRate(1), mScrollPause(0), mWrapEnabled(0),
-      mScrollSpeed(0), mTotalWidth(0), mLineHeight(0), mScrollCopies(0), mIndentation(0),
-      mAltStyle(nullptr), mScrollOffset(0), mCurScrollChars(0), mScrollOutIndex(-1),
+      mLineHeight(0), mScrollCopies(0), mNumLines(0), mIndentation(0),
+      mAltStyle(nullptr), mScrollOffset(0), mCurScrollChars(-1), mScrollOutIndex(-1),
       mStyles(this), mBoundsLeft(0), mBoundsTop(0), mBoundsRight(0), mBoundsBottom(0),
       mNumLinesRendered(0), mConstructScale(0) {
     mStyles.resize(1);
@@ -1351,59 +1351,6 @@ void RndText::DrawBlacklight() {
     }
 }
 
-void RndText::SizeCheck() {
-#ifdef HX_NATIVE
-    UpdateText();
-#else
-    static float sLastHeight;
-    static RndText *sLastText;
-
-    StyleState ss(this, mConstructScale);
-    for (FontMapBase **it = mFontMaps.begin(); it != mFontMaps.end(); ++it) {
-        RndFontBase *font = (*it)->Font();
-        if (font != nullptr && font->BitmapFont()) {
-            for (int i = 0; i < (*it)->NumMeshes(); i++) {
-                RndMesh *mesh = (*it)->Mesh(i);
-                if (mesh != nullptr) {
-                    float screenHeight;
-                    if (!CalcScreenHeight(
-                            ss.mSize * font->AspectRatio(), mesh, screenHeight
-                        )) {
-                        return;
-                    }
-                    float fontUnit = font->FontUnit();
-                    float aspectRatio = font->AspectRatio();
-                    float cap = 127.5f;
-                    if (screenHeight < 127.5f) {
-                        cap = screenHeight;
-                    }
-                    if (cap <= fontUnit * aspectRatio * 1.25f) {
-                        return;
-                    }
-                    if (sLastText == this && screenHeight <= sLastHeight) {
-                        return;
-                    }
-                    int heightInt = (int)screenHeight;
-                    int productInt = (int)(fontUnit * aspectRatio);
-                    MILO_NOTIFY(
-                        "oversized: %s font: %s token:'%s' text:'%s' %d < %d",
-                        PathName(this),
-                        font->Name(),
-                        TextToken(),
-                        mText,
-                        productInt,
-                        heightInt
-                    );
-                    sLastHeight = screenHeight;
-                    sLastText = this;
-                    return;
-                }
-            }
-        }
-    }
-#endif
-}
-
 void RndText::UpdateScrollOffsets() {
     float fVar1 = TheTaskMgr.DeltaUISeconds();
     mScrollTimer += fVar1;
@@ -1443,7 +1390,7 @@ void RndText::UpdateScrollOffsets() {
             mScrollPos = 0.0f;
             bVar10 = true;
         }
-        mScrollState = fVar3;
+        mLineHeight = fVar3;
         break;
 
     case kFitScrollPingPong:
@@ -1496,10 +1443,8 @@ void RndText::UpdateScrollOffsets() {
         mScrollTimer = 0.0f;
     }
 
-    unsigned int count = 0;
     for (auto puVar7 = mFontMaps.begin(); puVar7 != mFontMaps.end(); ++puVar7) {
         (*puVar7)->UpdateScrolling(mScrollPos);
-        count++;
     }
 }
 
@@ -1720,35 +1665,34 @@ void RndText::FitTextScroll() {
 
     if (mWrapEnabled) {
         mWidth = bounds.w;
-        mCurScrollChars = 1;
-        mScrollOffset = 0.0f;
+        mScrollCopies = 1;
+        mScrollTimer = 0.0f;
         mScrollSpeed = (mScrollRate * scrollCharWidth) * -0.001f;
 
         if (mFitType == kFitScrollMarqueeWrapAlways) {
-            mTotalWidth = bounds.w;
-            mNumLines = mCurScrollChars + 1;
-            mScrollCopies = bounds.w;
-            mLineHeight = (mIndentation * (float)mCurScrollChars) + charWidths[numChars];
+            mScrollPos = bounds.w;
+            mNumLines = mNumLines + 1;
+            mScrollOffset = bounds.w;
+            mTotalWidth = (mIndentation * (float)mNumLines) + charWidths[numChars];
             mLineWidths.push_back(bounds.w);
             mLineOffsets.push_back(0.0f);
             mLineWidths.push_back(charWidths[numChars]);
             mLineOffsets.push_back(scrollCharWidth);
-            mTotalWidth = mLineHeight;
-            mScrollOffset = charWidths[numChars];
+            mLineHeight = mTotalWidth;
 
-            if (mLineHeight > 0.0f) {
-                float f = mLineHeight;
+            if (mTotalWidth > 0.0f) {
+                float f = mTotalWidth;
                 while (!(f > mWidth)) {
-                    f += mLineHeight;
-                    mCurScrollChars += 1;
+                    f += mTotalWidth;
+                    mScrollCopies += 1;
                 }
             }
-            mScrollState = -1;
-            mScrollPos = -1;
+            mCurScrollChars = -1;
+            mScrollOutIndex = -1;
         } else {
-            mTotalWidth = 0.0f;
-            mLineHeight = charWidths[numChars];
-            mScrollCopies = 0.0f;
+            mScrollPos = 0.0f;
+            mTotalWidth = charWidths[numChars];
+            mLineHeight = 0.0f;
         }
 
         mScrollState = mScrollDelay;
@@ -2230,6 +2174,12 @@ void RndText::DrawShowing() {
             }
         }
     }
+}
+
+void RndText::SizeCheck() {
+#ifdef HX_NATIVE
+    UpdateText();
+#endif
 }
 
 void RndText::GetWidthHeightBox(Box &box) const {

@@ -19,6 +19,8 @@
 #include "math/Mtx.h"
 #include <cstdio>
 #include <cstring>
+#include <set>
+#include <string>
 
 // Forward declaration — draws a mesh immediately (called for both opaque and deferred).
 // Non-static: TransparentQueue.cpp calls this via extern linkage.
@@ -224,6 +226,20 @@ void DrawMeshImmediate(RndMesh* mesh) {
             || strstr(n, "shield_") || strstr(n, "ribbon_blocker")
             || strstr(n, "char_pl_") || strstr(n, "final_impact"));
         if (!isEffect) {
+            // Trace: log unique mesh names hitting the floor (once per name)
+            if (getenv("MILO_TRACE_ALPHA_FLOOR")) {
+                static std::set<std::string> sLogged;
+                std::string key(n);
+                if (mat) { key += " ("; key += mat->Name(); key += ")"; }
+                if (sLogged.find(key) == sLogged.end()) {
+                    sLogged.insert(key);
+                    ObjectDir* dir = mesh->Dir();
+                    printf("  ALPHA_FLOOR: mesh='%s' mat='%s' dir='%s' alpha=%.4f\n",
+                           n, mat ? mat->Name() : "?",
+                           dir ? dir->Name() : "?",
+                           matParams.uniforms.color[3]);
+                }
+            }
             matParams.uniforms.color[3] = 0.20f;
             heuristics |= kHeuristicZeroAlphaFix;
         }

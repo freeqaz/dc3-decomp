@@ -1,10 +1,10 @@
 {
   "mcpServers": {
     "orchestrator": {
-      "command": "/home/free/code/milohax/dc3-decomp/venv/bin/python",
-      "args": ["-m", "scripts.orchestrator.mcp_server", "--db", "/home/free/code/milohax/dc3-decomp/decomp.db"],
+      "command": "${PWD}/venv/bin/python",
+      "args": ["-m", "scripts.orchestrator.mcp_server", "--db", "${PWD}/decomp.db"],
       "env": {
-        "PYTHONPATH": "/home/free/code/milohax/dc3-decomp"
+        "PYTHONPATH": "${PWD}"
       }
     }
   }

@@ -26,7 +26,7 @@ from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional
 
-PROJECT_ROOT = Path("/home/free/code/milohax/dc3-decomp")
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 OBJDIFF_CLI = PROJECT_ROOT / "bin" / "objdiff-cli"
 
 # PowerPC register name -> number mapping

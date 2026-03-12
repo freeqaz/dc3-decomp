@@ -50,7 +50,7 @@ The integration consists of four key components:
 
 **GHIDRA_INSTALL_DIR**
 ```bash
-export GHIDRA_INSTALL_DIR="/home/free/code/milohax/vmx128-research/ghidra-test/ghidra_12.0_DEV"
+export GHIDRA_INSTALL_DIR="../ghidra/build/ghidra"
 ```
 - Points to the VMX128-enabled Ghidra build with PowerPC extensions
 - Must include the XEXLoaderWV extension for Xbox 360 binary support
@@ -132,7 +132,7 @@ The extension provides:
 
 **Verification:**
 ```bash
-ls -la /home/free/code/milohax/vmx128-research/ghidra-test/ghidra_12.0_DEV/Extensions/XEXLoaderWV/lib/XEXLoaderWV.jar
+ls -la ../ghidra/build/ghidra/Extensions/XEXLoaderWV/lib/XEXLoaderWV.jar
 ```
 
 **For detailed XEX support information**, see [PYGHIDRA_MCP_XEX_SUPPORT.md](PYGHIDRA_MCP_XEX_SUPPORT.md)
@@ -152,8 +152,8 @@ The `pyghidra-service.sh` script provides a complete service lifecycle managemen
 Expected output:
 ```
 Starting pyghidra-mcp service...
-  Project: /home/free/code/milohax/dc3-decomp/ghidra_projects/DC3
-  Binary: /home/free/code/milohax/dc3-decomp/orig/373307D9/default.xex
+  Project: $HOME/code/milohax/dc3-decomp/ghidra_projects/DC3
+  Binary: $HOME/code/milohax/dc3-decomp/orig/373307D9/default.xex
   Port: 8000
   ...
 Service process is running (PID: XXXXX)
@@ -460,7 +460,7 @@ When re-indexing, ensure batch sizes <= 5000 (max is 5461). The local pyghidra-m
 
 **Version:** 0.1.6+ with FastMCP
 **Transport:** streamable-http on port 8000 (Uvicorn)
-**Project:** `/home/free/code/milohax/dc3-decomp/ghidra_projects/DC3`
+**Project:** `$HOME/code/milohax/dc3-decomp/ghidra_projects/DC3`
 **ChromaDB:** 59,513 embeddings (code + strings)
 
 ### Tool Signatures

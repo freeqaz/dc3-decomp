@@ -4,11 +4,25 @@
 #include "obj/Dir.h"
 #include "obj/DirLoader.h"
 #include "obj/Object.h"
+#include "ui/UIPanel.h"
 #include "obj/Utl.h"
+#include "utl/FilePath.h"
+#include <ctime>
 
 namespace {
 
 class ObjectLifetimeTest : public EngineTestFixture {};
+
+class TestRefHolder : public Hmx::Object {
+public:
+    TestRefHolder() : mTarget(this, nullptr) {}
+
+    void SetTarget(Hmx::Object *obj) { mTarget = obj; }
+    Hmx::Object *Target() const { return mTarget.Ptr(); }
+
+private:
+    ObjPtr<Hmx::Object> mTarget;
+};
 
 // Expose protected FindEntry for corruption simulation tests.
 class ExposedDir : public ObjectDir {
@@ -117,6 +131,28 @@ TEST_F(ObjectLifetimeTest, ReplaceRefsRedirectsObjPtr) {
     delete to;
 }
 
+// Hash-order deletion should not require dependency ordering for basic ObjPtr
+// ownership: deleting the target must null incoming refs before later owners die.
+TEST_F(ObjectLifetimeTest, DeleteOrderDoesNotRequireTopologicalSortForObjPtr) {
+    ObjectDir *dir = Hmx::Object::New<ObjectDir>();
+
+    TestRefHolder *a = new TestRefHolder();
+    TestRefHolder *b = new TestRefHolder();
+    a->SetName("a.obj", dir);
+    b->SetName("b.obj", dir);
+
+    a->SetTarget(b);
+    ASSERT_EQ(a->Target(), b);
+    EXPECT_EQ(b->RefCount(), 1);
+
+    delete b;
+
+    EXPECT_EQ(a->Target(), nullptr);
+
+    delete a;
+    delete dir;
+}
+
 TEST_F(ObjectLifetimeTest, RemoveSubDirReleasesDirPtrRef) {
     ObjectDir *owner = Hmx::Object::New<ObjectDir>();
     ObjectDir *subdir = Hmx::Object::New<ObjectDir>();
@@ -218,6 +254,87 @@ TEST_F(ObjectLifetimeTest, MergeDirsMoveAllSubdirsTransfersOwnership) {
     delete fromDir;
     EXPECT_NE(movedSubdir, nullptr);
     delete toDir;
+}
+
+TEST_F(ObjectLifetimeTest, DeleteAutosaveWarningRawDir) {
+    const char *root = getenv("MILO_LIB");
+    if (!root || !root[0]) {
+        GTEST_SKIP() << "MILO_LIB not set";
+    }
+
+    std::string full = std::string(root) + "/ui/title/gen/autosave_warning.milo_xbox";
+    std::clock_t loadStart = std::clock();
+    printf("DeleteAutosaveWarningRawDir: loading %s\n", full.c_str());
+    ObjectDir *dir = DirLoader::LoadObjects(FilePath(full.c_str()), nullptr, nullptr);
+    double loadSeconds = double(std::clock() - loadStart) / CLOCKS_PER_SEC;
+    ASSERT_NE(dir, nullptr) << full;
+    printf("DeleteAutosaveWarningRawDir: load complete in %.3fs\n", loadSeconds);
+
+    int count = 0;
+    for (ObjDirItr<Hmx::Object> it(dir, false); it != nullptr; ++it) {
+        printf("  top[%d]: '%s' (%s)\n", count, ((Hmx::Object *)it)->Name(),
+               ((Hmx::Object *)it)->ClassName().Str());
+        count++;
+    }
+    EXPECT_GT(count, 0);
+
+    std::clock_t start = std::clock();
+    printf("DeleteAutosaveWarningRawDir: deleting dir '%s' objects=%d\n", dir->Name(), count);
+    delete dir;
+    double seconds = double(std::clock() - start) / CLOCKS_PER_SEC;
+    printf("DeleteAutosaveWarningRawDir: %.3fs\n", seconds);
+}
+
+TEST_F(ObjectLifetimeTest, DeleteAutosavingIconSubdirOnly) {
+    const char *root = getenv("MILO_LIB");
+    if (!root || !root[0]) {
+        GTEST_SKIP() << "MILO_LIB not set";
+    }
+
+    std::string full = std::string(root) + "/ui/title/gen/autosave_warning.milo_xbox";
+    ObjectDir *dir = DirLoader::LoadObjects(FilePath(full.c_str()), nullptr, nullptr);
+    ASSERT_NE(dir, nullptr) << full;
+
+    ObjectDir *subdir = dir->Find<ObjectDir>("autosaving_icon", false);
+    ASSERT_NE(subdir, nullptr) << "autosaving_icon subdir not found";
+    ObjDirPtr<ObjectDir> hold(subdir);
+    dir->RemoveSubDir(hold);
+
+    int count = 0;
+    for (ObjDirItr<Hmx::Object> it(subdir, false); it != nullptr; ++it) {
+        count++;
+    }
+    printf("DeleteAutosavingIconSubdirOnly: deleting '%s' objects=%d\n",
+           subdir->Name(), count);
+
+    std::clock_t start = std::clock();
+    delete subdir;
+    double seconds = double(std::clock() - start) / CLOCKS_PER_SEC;
+    printf("DeleteAutosavingIconSubdirOnly: %.3fs\n", seconds);
+
+    delete dir;
+}
+
+TEST_F(ObjectLifetimeTest, ManualReproAutosaveWarningPanelUnload) {
+    if (!getenv("MILO_REPRO_UNLOAD")) {
+        GTEST_SKIP() << "Set MILO_REPRO_UNLOAD=1 to enable manual panel unload repro";
+    }
+
+    UIPanel *panel = ObjectDir::Main()->Find<UIPanel>("autosave_warning_panel", false);
+    if (!panel) {
+        GTEST_SKIP() << "autosave_warning_panel not found; EngineTestFixture does not build the full UI object graph";
+    }
+
+    panel->CheckLoad();
+    ASSERT_TRUE(panel->CheckIsLoaded()) << "panel failed to load";
+
+    std::clock_t start = std::clock();
+    panel->CheckUnload();
+    double seconds = double(std::clock() - start) / CLOCKS_PER_SEC;
+    printf("ManualReproAutosaveWarningPanelUnload: %.3fs state=%d loadRefs=%d\n",
+           seconds, (int)panel->GetState(), panel->IsReferenced());
+
+    EXPECT_EQ(panel->GetState(), UIPanel::kUnloaded);
 }
 
 } // namespace

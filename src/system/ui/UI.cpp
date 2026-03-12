@@ -1143,7 +1143,8 @@ DataNode Automator::OnMsg(const UIComponentSelectMsg &msg) {
 }
 
 DataNode Automator::OnMsg(const UIComponentScrollMsg &msg) {
-    HandleMessage(msg.Data()->Sym(1));
+    Symbol s = msg.Data()->Sym(1);
+    HandleMessage(s);
     return DATA_UNHANDLED;
 }
 

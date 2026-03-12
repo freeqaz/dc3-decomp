@@ -114,9 +114,10 @@ class AgentRunner:
         processes connect directly — the parent's sandbox proxy doesn't work
         for child claude processes making their own API calls.
         """
+        _project_root = Path(__file__).resolve().parent.parent.parent
         agent_home = Path(os.environ.get(
             "AGENT_HOME",
-            "/home/free/code/milohax/dc3-decomp/agent-home",
+            str(_project_root / "agent-home"),
         ))
         agent_home.mkdir(parents=True, exist_ok=True)
 

@@ -268,7 +268,8 @@ class DecompOrchestrator:
                           or _get_openrouter_enabled() or _get_zai_enabled())
         cli_model = "sonnet" if use_alt_backend else get_model_id(model)
 
-        agent_home = Path(os.environ.get("AGENT_HOME", "/home/free/code/milohax/dc3-decomp/agent-home"))
+        _project_root = Path(__file__).resolve().parent.parent.parent
+        agent_home = Path(os.environ.get("AGENT_HOME", str(_project_root / "agent-home")))
         agent_home.mkdir(parents=True, exist_ok=True)
 
         # Strip stale system proxy vars so child doesn't inherit broken proxy config.

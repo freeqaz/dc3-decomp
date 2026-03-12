@@ -15,9 +15,12 @@ import os
 import time
 
 # Use local Unicorn checkout
-UNICORN_PATH = "/home/free/code/milohax/unicorn/bindings/python"
+from pathlib import Path
+_MILOHAX_DIR = Path(__file__).resolve().parent.parent.parent.parent
+_UNICORN_DIR = _MILOHAX_DIR / "unicorn"
+UNICORN_PATH = str(_UNICORN_DIR / "bindings" / "python")
 sys.path.insert(0, UNICORN_PATH)
-os.environ["LIBUNICORN_PATH"] = "/home/free/code/milohax/unicorn/build"
+os.environ["LIBUNICORN_PATH"] = str(_UNICORN_DIR / "build")
 
 from unicorn import Uc, UC_ARCH_PPC, UC_MODE_PPC32, UC_MODE_PPC64, UC_MODE_BIG_ENDIAN
 from unicorn import UC_HOOK_CODE, UC_HOOK_INTR, UC_HOOK_MEM_READ_UNMAPPED, UC_HOOK_MEM_WRITE_UNMAPPED
