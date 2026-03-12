@@ -79,9 +79,12 @@ void UIScreen::SetTypeDef(DataArray *data) {
             }
 #ifdef HX_NATIVE
             if (!pr.mPanel) {
-                MILO_WARN("UIScreen '%s': panel at index %d failed to construct", Name(), i);
+                const char *panelName = (panelsArr->Type(i) == kDataSymbol) ? panelsArr->Sym(i).Str() : "?";
+                fprintf(stderr, "DC3 Native: UIScreen '%s' panel[%d] '%s' not found — skipping\n", Name(), i, panelName);
                 continue;
             }
+            fprintf(stderr, "DC3 Native: UIScreen '%s' panel[%d] = '%s' (state=%d)\n",
+                    Name(), i, pr.mPanel->Name(), (int)pr.mPanel->GetState());
 #endif
             mPanelList.push_back(pr);
         }
@@ -173,6 +176,18 @@ void UIScreen::Poll() {
 
 void UIScreen::Draw() {
     if (mShowing) {
+#ifdef HX_NATIVE
+        static int sDrawDiag = 0;
+        if (sDrawDiag < 2 && strcmp(Name(), "game_screen") == 0) {
+            sDrawDiag++;
+            fprintf(stderr, "DC3 Native: UIScreen '%s' Draw — %d panels:\n", Name(), (int)mPanelList.size());
+            FOREACH (it, mPanelList) {
+                fprintf(stderr, "  panel '%s' active=%d showing=%d shouldDraw=%d state=%d\n",
+                        it->mPanel->Name(), it->Active(), it->mPanel->Showing(),
+                        TheRnd.ShouldDrawPanel(it->mPanel), (int)it->mPanel->GetState());
+            }
+        }
+#endif
         FOREACH (it, mPanelList) {
             if (it->Active() && it->mPanel->Showing()
                 && TheRnd.ShouldDrawPanel(it->mPanel)) {

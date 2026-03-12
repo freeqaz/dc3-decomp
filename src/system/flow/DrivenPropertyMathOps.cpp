@@ -130,16 +130,14 @@ float FlowMathOp::Apply(float val) {
                     DataNode temp(parsed, kDataArray);
                     scriptHolder = temp;
                 }
-                DataArray *arr = scriptHolder.Array(0);
-                arr->Release();
-                arr = scriptHolder.Array(0);
-                if (arr->Node(0).Type() == kDataCommand && arr->Size() == 1) {
-                    arr = scriptHolder.Array(0);
+                scriptHolder.Array(0)->Release();
+                if (scriptHolder.Array(0)->Node(0).Type() == kDataCommand
+                    && scriptHolder.Array(0)->Size() == 1) {
+                    DataArray *arr = scriptHolder.Array(0);
                     DataNode execResult = arr->Node(0).Command(arr)->Execute(true);
                     result = execResult.Float(0);
                 } else {
-                    arr = scriptHolder.Array(0);
-                    DataNode execResult = arr->Execute(true);
+                    DataNode execResult = scriptHolder.Array(0)->Execute(true);
                     result = execResult.Float(0);
                 }
                 TheDebug.SetTry(false);

@@ -4,6 +4,8 @@
 
 **Song loading achieved!** The full menu→song pipeline works: `main_screen → choose_mode(Perform) → song_select(YMCA) → multiuser(auto-skip) → loading → preloading → real_loading → game_screen`. The game_screen runs stably with gameplay HUD rendering (move cards, help bar). Venue/audio assets are not loaded (black background, pink placeholder textures), but the gameplay systems are active.
 
+Fresh current-checkout revalidation confirms the old song-select crash is gone. The only subtlety is scripted input targeting: a bare `confirm` on the default `LEGIT` / `song_tier_4` header stays on `song_select_screen`, while moving the highlight onto a real song row like `YMCA` transitions into gameplay immediately.
+
 | Step | Status | Session |
 |------|--------|---------|
 | 1. Restore animation lifetime | Done | [Session 52](../sessions/2026-03-12-session52-animation-lifetime.md) |
@@ -151,6 +153,16 @@
 
 ## Follow-Up Items
 
+- **Fresh binary revalidation on current checkout**: the current binary behavior is:
+  - `archive/screenshots/2026-03-12-session-recheck-song-loading/` shows `song_select_screen` is now stable for 10000 frames. That run did not leave song select because the scripted `confirm` at frame 900 selected the `LEGIT` header (`song_tier_4`), not a playable song row.
+  - `archive/screenshots/2026-03-12-session-recheck-song-loading-ymca/` shows the actual gameplay path still works. Scripted input `520 confirm`, `700 confirm`, `860 down`, `900 down`, `940 down`, `980 confirm` moves the highlight to `YMCA`, then transitions:
+    - `song_select_screen -> multiuser_screen -> loading_screen -> preloading_screen -> real_loading_screen -> game_screen`
+    - `game_screen` remains stable past frame 4000 in the current run
+  - representative screenshots:
+    - `frame_00820.png` / `frame_00900.png`: expanded song list on `song_select_screen`
+    - `frame_00980.png`: `YMCA` highlighted before confirm
+    - `frame_01060.png`, `frame_01400.png`, `frame_02200.png`: stable `game_screen`
+  Treat the old song-select crash as resolved. The remaining work is content/audio/venue parity and cleanup, not menu bring-up.
 - **Panel unload teardown**: the older Session 56 note that blamed `FlowSwitchCase` and hash-table deletion order is superseded. The verified chain is now:
   - deleting a flow child leaves a null `ObjPtrVec` tombstone under suppressed ref erasure
   - `FlowNode::~FlowNode()` used to spin forever on that tombstone
@@ -170,17 +182,17 @@
   - `confirm` on `Perform` now resolves `newsong_screen` correctly and transitions into `song_select_screen`
   - native then crashes in `UIListState::SetProvider()` because `right_hand.hnl set_provider song_offer_provider` receives a null `UIListProvider`
   Root cause: native was still skipping sort/provider manager init in `MetaPanel` (`SongSortMgr`, `ChallengeSortMgr`, `PlaylistSortMgr`, `MQSongSortMgr`, `FitnessCalorieSortMgr`) and then masking the missing objects with generic DTA-name stubs in `App.cpp`. That produced a no-op `song_offer_provider` object that could accept generic DTA messages like `enter`, but failed the typed `UIListProvider` cast used by `HamNavList`. A native fix is now in progress: restore those provider-manager inits and stop stubbing `song_offer_provider` / `challenge_provider`.
-- **Song-select bring-up after provider fix**: after restoring those provider-manager inits and removing the `song_offer_provider` / `challenge_provider` stub fallback, the same scripted path changed behavior again (`archive/screenshots/2026-03-12-session-gamemode-setmode-fix-postproviders/run_step2.log`):
-  - the `song_offer_provider` null-cast crash is gone
-  - `Perform` still reaches `song_select_screen`
-  - native now crashes later during `song_select_screen` enter, before the first song-select screenshot frame
-  This is progress: the DTA-visible provider object is now real, and the remaining crash is deeper in song-select bring-up rather than a masked missing-manager stub. Keep the provider-manager fix and debug the next `song_select_screen` enter failure from there.
+- **Song-select bring-up after provider fix**: this bullet is now historical context only. After restoring those provider-manager inits and removing the `song_offer_provider` / `challenge_provider` stub fallback, follow-up fixes removed the later `song_select_screen` enter crashes as well. The fresh revalidation above is the current truth: song select is stable and a real song can be loaded end-to-end.
 - **Native manager/stub inventory**: the remaining "missing manager" work is now concrete, not hypothetical. There are two classes:
   - restored now: `song_offer_provider`, `challenge_provider`
   - still native-skipped in `MetaPanel::Init()`: `SongStatusMgr::Init()`, `TheMemcardMgr.Init()`, `TheProfileMgr.Init()`, `Leaderboards::Init()`, `Challenges::Init()`, `FitnessGoalMgr::Init()`
   - still present in `App.cpp` fallback stub list: `platform_mgr`, `profile_mgr`, `content_mgr`, `challenges`, `saveload_mgr`, `speech_mgr`
   - already have real named implementations in-tree and should be audited as concrete bring-up targets: `content_mgr`, `profile_mgr`, `challenges`, `saveload_mgr`, `speech_mgr`
-  Treat these as the next parity backlog after `song_select_screen` is stable. Each remaining stub should be removed only after its real native init path exists and survives a binary run.
+  Treat these as the next parity backlog now that `song_select_screen` and `game_screen` are stable. Each remaining stub should be removed only after its real native init path exists and survives a binary run.
+- **Current song-loading cleanup backlog**:
+  - gameplay is functional, but venue/background assets are still absent in the fresh `game_screen` captures, leaving a mostly black stage with pink placeholder panels
+  - the loading/audio path remains intentionally short-circuited in `SongPreview.cpp`, `LoadingPanel.cpp`, and `PreloadPanel.cpp`
+  - stale unconditional diagnostics are still compiled in (`MainMenuProvider.cpp`, `HamNavList.cpp`, `SongSortMgr.cpp`, `HamSongMgr.cpp`, `UI.cpp`, `App.cpp`) and should be removed or re-gated once bring-up work settles
 
 ## References
 

@@ -10,8 +10,8 @@
 #include "gesture/Skeleton.h"
 #include "net_ham/RockCentral.h"
 #include "math/Rot.h"
-#include "char/CharEyeDartRuleset.h"
-#include "rndobj/Draw.h"
+#include "rndobj/Mat.h"
+#include "ui/PanelDir.h"
 
 CursorPanel::CursorPanel() {}
 
@@ -30,40 +30,31 @@ void CursorPanel::Poll() {
 
     int crownPlayerIdx = pCrownPlayerNode->Int();
 
-    static Symbol player_present("player_present");
-
-    float pi_over_2 = 1.5707963705062866f;
-    float scale_y = 4.0f;
-
     for (int playerIdx = 0; playerIdx < 2; playerIdx++) {
-        HamPlayerData *player = TheGameData->Player(playerIdx);
-        int side = player->Side();
+        SkeletonSide side = TheGameData->Player(playerIdx)->Side();
 
-        const DataNode *playerPresentNode = player->Property(player_present, true);
-        int playerPresent = playerPresentNode->Int();
+        static Symbol player_present("player_present");
+        bool playerPresent = TheGameData->Player(playerIdx)->Provider()->Property(player_present, true)->Int();
 
-        ObjectDir *objDir = DataDir();
-        RndTex *crownTex = objDir->Find<RndTex>("depth_buffer_left_crown.tex", true);
+        RndTex *crownTex = mDir->Find<RndTex>("depth_buffer_left_crown.tex", true);
         const char *matName = (side == 0) ? "depth_buffer_left_crown.mat" : "depth_buffer_right_crown.mat";
-        RndMat *crownMat = objDir->Find<RndMat>(matName, true);
+        RndMat *crownMat = mDir->Find<RndMat>(matName, true);
 
-        // RockCentral::mMiscArt (RndTex* at 0xD8) reused as depth tex reference
-        CharEyeDartRuleset *dartRuleset = *(CharEyeDartRuleset **)(((char *)&TheRockCentral) + 0xD8);
-        if (dartRuleset == 0) {
-            dartRuleset = (CharEyeDartRuleset *)crownTex;
+        RndTex *miscArt = TheRockCentral.GetMiscArt();
+        if (miscArt == 0) {
+            miscArt = crownTex;
         }
 
-        // BaseMaterial::mDiffuseTex (ObjPtr<RndTex> at 0x40)
-        void **matRef = (void **)(((char *)crownMat) + 0x40);
-        *matRef = dartRuleset;
+        crownMat->SetDiffuseTex(miscArt);
 
-        crownMat->MarkDirty(2);
+        Transform localXfm;
+        memcpy(&localXfm, ((char *)crownMat) + 0x74, 0x40);
 
         int skeletonId = TheGestureMgr->GetPlayerSkeletonID(playerIdx);
 
         bool hasCrown = true;
         Skeleton *skeleton = 0;
-        if (playerPresent == 0 || side != crownPlayerIdx || skeletonId < 0) {
+        if (!playerPresent || side != crownPlayerIdx || skeletonId < 0) {
             hasCrown = false;
         } else {
             skeleton = TheGestureMgr->GetSkeletonByTrackingID(skeletonId);
@@ -78,44 +69,41 @@ void CursorPanel::Poll() {
         }
 
         if (playerIdx == lastCrownPlayer) {
-            if (!hasCrown) {
-                TheDebug << MakeString("player %d lost his crown\n", &lastCrownPlayer);
-                lastCrownPlayer = -1;
-                DataNode emptyNode;
-                TheHamProvider->SetProperty(ui_crown_player, &emptyNode);
-            }
+            if (!hasCrown) goto crown_loss;
         } else if (hasCrown) {
-            TheDebug << MakeString("player %d lost his crown\n", &lastCrownPlayer);
+        crown_loss:
+            TheDebug << MakeString("player %d lost his crown\n", lastCrownPlayer);
             lastCrownPlayer = -1;
-            DataNode emptyNode;
-            TheHamProvider->SetProperty(ui_crown_player, &emptyNode);
+            DataNode node(-1);
+            TheHamProvider->SetProperty(ui_crown_player, node);
+            hasCrown = false;
         }
 
         if (hasCrown) {
-            Vector2 joint3Pos, joint2Pos;
+            Vector2 joint2Pos, joint3Pos;
             skeleton->ScreenPos((SkeletonJoint)3, joint3Pos);
             skeleton->ScreenPos((SkeletonJoint)2, joint2Pos);
+
+            localXfm.v.x = joint3Pos.x;
+            localXfm.v.y = -joint3Pos.y;
 
             float dx = joint3Pos.x - joint2Pos.x;
             float dy = joint3Pos.y - joint2Pos.y;
 
-            float angle = atan2f(dy, dx) + pi_over_2;
+            float angle = atan2f(dy, dx) + 1.5707963705062866f;
 
             Vector3 rotAxis(0.0f, 0.0f, angle);
-            Hmx::Matrix3 rotMatrix;
-            MakeRotMatrix(rotAxis, rotMatrix, true);
+            MakeRotMatrix(rotAxis, localXfm.m, true);
 
-            float *matPtr = (float *)&rotMatrix;
-            for (int i = 0; i < 9; i++) {
-                matPtr[i] *= scale_y;
-            }
-
-            memcpy(((char *)crownMat) + 0x74, &rotMatrix, 0x40);
+            localXfm.m.z *= 4.0f;
+            localXfm.m.y *= 4.0f;
+            localXfm.m.x *= 4.0f;
         } else {
-            float scaleMatrix[9] = {2.0f, 0.0f, 0.0f, 0.0f, 2.0f, 0.0f, 0.0f, 0.0f, 2.0f};
-            memcpy(((char *)crownMat) + 0x74, scaleMatrix, 0x40);
+            localXfm.v.x = 2.0f;
+            localXfm.v.y = 2.0f;
         }
 
+        memcpy(((char *)crownMat) + 0x74, &localXfm, 0x40);
         crownMat->MarkDirty(2);
     }
 }

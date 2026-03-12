@@ -687,20 +687,14 @@ void RndText::FontMap::UpdateScrolling(float f1) {
     for (int i = 0; i < NumMeshes(); i++) {
         RndMesh *mesh = Mesh(i);
         if (mesh) {
-#ifdef HX_NATIVE
-            // Friend access to RndTransformable members via RndText friendship
-            mesh->mLocalXfm.v.x = f1;
-            if (!mesh->mDirty) {
-                mesh->SetDirty_Force();
-            }
-#else
-            Hmx::Quat q = *(Hmx::Quat *)((char *)mesh + 0x78);
+            RndTransformable *trans = (RndTransformable *)((char *)mesh + 0x40);
+            Hmx::Quat q = *(Hmx::Quat *)((char *)trans + 0x38);
+            bool dirty = *(bool *)((char *)mesh + 0xfd);
             q.x = f1;
-            *(Hmx::Quat *)((char *)mesh + 0x78) = q;
-            if (!*(bool *)((char *)mesh + 0xfd)) {
-                mesh->SetDirty_Force();
+            *(Hmx::Quat *)((char *)trans + 0x38) = q;
+            if (!dirty) {
+                trans->SetDirty_Force();
             }
-#endif
         }
     }
 }
@@ -2417,11 +2411,7 @@ void RndText::ReFitTextScroll(String str) {
         if (*mLineWidths.begin() == mTotalWidth) {
             mScrollOffset += maxWidth;
         }
-        unsigned int count = 0;
-        for (auto it = mLineWidths.begin(); it != mLineWidths.end(); ++it) {
-            count++;
-        }
-        if ((unsigned int)mNumLines == count) {
+        if ((unsigned int)mNumLines == (unsigned int)mLineWidths.size()) {
             mLineWidths.insert(mLineWidths.end(), *mLineWidths.begin());
         }
         mLineWidths.erase(mLineWidths.begin());

@@ -144,7 +144,9 @@ Symbol PlaylistHeaderNode::OnSelectDone() {
 }
 
 bool PlaylistHeaderNode::IsActive() const {
-    return ThePlaylistSortMgr->HeadersSelectable() ? IsActive() : false;
+    if (!ThePlaylistSortMgr->HeadersSelectable())
+        return false;
+    return IsEnabled();
 }
 
 NavListSortNode *PlaylistHeaderNode::GetFirstActive() {

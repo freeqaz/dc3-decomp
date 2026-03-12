@@ -134,6 +134,14 @@ SkeletonSide SkeletonChooser::GetPlayerSide(int player) {
     HamPlayerData *pPlayer = TheGameData->Player(player);
     MILO_ASSERT(pPlayer, 0x89);
     Hmx::Object *pPlayerProvider = pPlayer->Provider();
+#ifdef HX_NATIVE
+    // On native without Kinect, providers may not be set yet (DTA flow hasn't
+    // assigned them). Default: player 0 = right side, player 1 = left side
+    // (matches the typical DC3 single-player layout).
+    if (!pPlayerProvider) {
+        return player == 0 ? kSkeletonRight : kSkeletonLeft;
+    }
+#endif
     MILO_ASSERT(pPlayerProvider, 0x8B);
     static Symbol side("side");
     const DataNode *pPlayerSide = pPlayerProvider->Property(side);

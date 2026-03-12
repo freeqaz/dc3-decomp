@@ -53,7 +53,7 @@ void NavListSort::UpdateHighlight() {
         i6 = mHighlightNode->StartIndex();
     }
     int idx = mHighlightNode->StartIndex();
-    while (!mHighlightNode->IsEnabled()) {
+    while (!mHighlightNode->IsActive()) {
         idx = (idx + 1) % mList.size();
         if (i6 == idx)
             break;

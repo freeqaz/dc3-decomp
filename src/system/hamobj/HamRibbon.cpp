@@ -289,33 +289,36 @@ void HamRibbon::UpdateChase() {
 }
 
 void HamRibbon::UpdateMesh() {
-    auto& _ref0 = mChaseKeys;
-    int histSize = _ref0.size();
-    if (histSize == 0) {
-        return;
-    }
-
-    float endTime = _ref0.back().frame;
-    Keys<Transform, Transform>::iterator keyIt = _ref0.begin();
-    int i = 0;
-    for (ObjPtrList<RndTransformable>::iterator it = mSegTrans.begin();
-         it != mSegTrans.end() && i < mNumSegments;
-         ++it, ++i) {
-        MILO_ASSERT(histSize > 0, 0x12A);
-
-        Transform tf = keyIt->value;
-        if (mTaper) {
-            Hmx::Matrix3 taper;
-            float scale = 1.0f - (endTime - keyIt->frame) / mDecay;
-            taper.Set(scale, 0.0f, 0.0f, 0.0f, scale, 0.0f, 0.0f, 0.0f, scale);
-            Multiply(taper, tf.m, tf.m);
+    int histSize = mChaseKeys.size();
+    if (histSize != 0) {
+        ObjPtrList<RndTransformable>::iterator it = mSegTrans.begin();
+        float lastFrame = mChaseKeys.back().frame;
+        Key<Transform> *keyPtr;
+        if (histSize > 0) {
+            keyPtr = &mChaseKeys[0];
         }
-
-        RndTransformable *trans = *it;
-        trans->SetLocalXfm(tf);
-        ++keyIt;
-        if (i + 1 >= histSize) {
-            keyIt = _ref0.begin() + histSize - 1;
+        int segIdx = 0;
+        if (mNumSegments > 0) {
+            do {
+                MILO_ASSERT(histSize > 0, 0x12A);
+                Key<Transform> keyLocal = *keyPtr;
+                Transform xfm = keyLocal.value;
+                if (mTaper) {
+                    float scale = 1.0f - (lastFrame - keyLocal.frame) / mDecay;
+                    Hmx::Matrix3 taperMtx;
+                    taperMtx.x.Set(scale, 0, 0);
+                    taperMtx.y.Set(0, scale, 0);
+                    taperMtx.z.Set(0, 0, scale);
+                    Multiply(taperMtx, xfm.m, xfm.m);
+                }
+                RndTransformable *t = *it;
+                t->SetLocalXfm(xfm);
+                ++segIdx;
+                ++it;
+                if (segIdx < histSize) {
+                    keyPtr++;
+                }
+            } while (segIdx < mNumSegments);
         }
     }
 }

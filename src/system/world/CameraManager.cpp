@@ -221,45 +221,46 @@ void CameraManager::Poll() {
                 float oldFar = cam->FarPlane();
 
                 float frame = CalcFrame();
-                float blend_ratio = 1.0f;
                 mCurrentShot->SetFrame(frame, 1.0f);
 
                 if (mBlendTime > 0.0f) {
-                    blend_ratio = Clamp(0.0f, 1.0f, frame / mBlendTime);
+                    frame = Clamp(0.0f, 1.0f, frame / mBlendTime);
+                } else {
+                    frame = 1.0f;
                 }
 
                 if (mShotChanged) {
-                    blend_ratio = 0.0f;
+                    frame = 0.0f;
                 }
 
-                if (blend_ratio < 1.0f) {
+                if (frame < 1.0f) {
                     Transform &localXfm = cam->DirtyLocalXfm();
-                    Interp(savedXfm.v, localXfm.v, blend_ratio, localXfm.v);
-                    Interp(savedXfm.m.y, localXfm.m.y, blend_ratio, localXfm.m.y);
+                    Interp(savedXfm.v, localXfm.v, frame, localXfm.v);
+                    Interp(savedXfm.m.y, localXfm.m.y, frame, localXfm.m.y);
                     Normalize(localXfm.m.y, localXfm.m.y);
-                    Interp(savedXfm.m.x, localXfm.m.x, blend_ratio, localXfm.m.x);
+                    Interp(savedXfm.m.x, localXfm.m.x, frame, localXfm.m.x);
                     Cross(localXfm.m.x, localXfm.m.y, localXfm.m.z);
                     Normalize(localXfm.m.z, localXfm.m.z);
                     Cross(localXfm.m.y, localXfm.m.z, localXfm.m.x);
                     cam->SetFrustum(
-                        Interp(oldNear, cam->NearPlane(), blend_ratio),
-                        Interp(oldFar, cam->FarPlane(), blend_ratio),
-                        Interp(oldYFov, cam->YFov(), blend_ratio),
+                        Interp(oldNear, cam->NearPlane(), frame),
+                        Interp(oldFar, cam->FarPlane(), frame),
+                        Interp(oldYFov, cam->YFov(), frame),
                         1.0f
                     );
                 } else if (mBlendRatio < 1.0f) {
                     static Message msg("blend_finished", DataNode(0));
                     msg[0] = DataNode(mCurrentShot.Ptr());
-                    Handle(msg, true);
+                    Export(msg, true);
                 }
 
-                mBlendRatio = blend_ratio;
+                mBlendRatio = frame;
             }
 
             if (!shot_over && mCurrentShot && mCurrentShot->ShotOver()) {
                 static Message msg("shot_over", DataNode(0));
                 msg[0] = DataNode(mCurrentShot.Ptr());
-                Handle(msg, true);
+                Export(msg, true);
             }
         }
 

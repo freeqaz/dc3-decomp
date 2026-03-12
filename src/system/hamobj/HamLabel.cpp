@@ -98,11 +98,10 @@ void HamLabel::Poll() {
         float f3 = 0;
         float ui_ms = TheTaskMgr.UISeconds() * 1000;
         mCountKeys.AtFrame(ui_ms, f3);
-        SetTokenFmt(mCountToken, LocalizeSeparatedInt(0, TheLocale));
-        if (f3 < ui_ms) {
+        SetTokenFmt(mCountToken, LocalizeSeparatedInt((int)f3, TheLocale));
+        if (ui_ms > mCountKeys.back().frame) {
             mCountKeys.clear();
-            auto _tmp1 = HamLabelCountDoneMsg(this);
-            TheUI->Handle(_tmp1, false);
+            TheUI->Handle(HamLabelCountDoneMsg(this), false);
         }
     }
     UpdateHandler();

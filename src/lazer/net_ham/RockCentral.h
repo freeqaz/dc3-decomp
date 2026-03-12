@@ -73,6 +73,7 @@ public:
     void SetControllerModeEnterCount(int i) { mControllerModeEnterCount = i; }
     bool GetMotdXPFlag() const { return mMotdXPFlag; }
     int GetMotdFreq() const { return mMotdFreq; }
+    RndTex *GetMiscArt() const { return mMiscArt; }
 
 private:
     static const String kServerVer;

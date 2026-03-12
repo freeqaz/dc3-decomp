@@ -81,8 +81,8 @@ public:
     virtual void Text(UIListLabel *, UILabel *) const;
     virtual void Custom(UIListCustom *, Hmx::Object *) const;
     virtual RndMat *Mat(UIListMesh *) const { return nullptr; }
-    virtual bool IsEnabled() const = 0; // 0x9c
-    virtual bool IsActive() const = 0; // 0xa0
+    virtual bool IsActive() const = 0; // 0x9c
+    virtual bool IsEnabled() const = 0; // 0xa0
     virtual const char *GetAlbumArtPath() = 0; // 0xa4
     virtual void DeleteAll();
     virtual void Renumber(std::vector<NavListSortNode *> &);

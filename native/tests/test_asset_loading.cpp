@@ -9,6 +9,8 @@
 //   MILO_BULK_CATEGORY=ui ctest -R BulkLoad --output-on-failure
 
 #include "test_helpers.h"
+#include "char/FileMerger.h"
+#include "hamobj/HamCharacter.h"
 #include "obj/Dir.h"
 #include "obj/DirLoader.h"
 #include "obj/Object.h"
@@ -453,6 +455,50 @@ TEST_F(AssetLoadingTest, LoadMainCharacter) {
     printf("  main.milo_xbox: '%s' class='%s' objects=%d\n",
            dir->Name(), dir->ClassName().Str(), count);
     EXPECT_GT(count, 0);
+}
+
+TEST_F(AssetLoadingTest, MainCharacterFileMergerConfiguresOutfitAndVisemeByDefault) {
+    std::string root = GetMiloLibRoot();
+    if (root.empty())
+        GTEST_SKIP() << "MILO_LIB not set";
+
+    std::string path = root + "/char/main/gen/main.milo_xbox";
+    if (!FileExists(path))
+        GTEST_SKIP() << "char/main not found";
+
+    ObjectDir *dir = TryLoadStandalone(path);
+    ASSERT_NE(dir, nullptr) << "Failed to load main character";
+
+    HamCharacter *character = dynamic_cast<HamCharacter *>(dir);
+    if (!character) {
+        ObjDirItr<HamCharacter> it(dir, true);
+        if (it)
+            character = it;
+    }
+    ASSERT_NE(character, nullptr) << "No HamCharacter found in main.milo_xbox";
+
+    FileMerger *fm = character->Find<FileMerger>("char.fm", false);
+    ASSERT_NE(fm, nullptr) << "main.milo_xbox missing char.fm";
+
+    character->SetOutfit("mo01");
+    character->SetOutfitDir("char/main/dancer");
+    character->StartLoad(false);
+
+    FileMerger::Merger *outfitMerger = nullptr;
+    FileMerger::Merger *visemeMerger = nullptr;
+    ObjVector<FileMerger::Merger> &mergers = fm->Mergers();
+    for (int i = 0; i < mergers.size(); i++) {
+        if (mergers[i].mName == "outfit")
+            outfitMerger = &mergers[i];
+        else if (mergers[i].mName == "viseme")
+            visemeMerger = &mergers[i];
+    }
+
+    ASSERT_NE(outfitMerger, nullptr);
+    ASSERT_NE(visemeMerger, nullptr);
+    EXPECT_FALSE(outfitMerger->mSelected.empty());
+    EXPECT_FALSE(visemeMerger->mSelected.empty());
+    EXPECT_NE(character->Find<ObjectDir>("viseme", false), nullptr);
 }
 
 // ============================================================================

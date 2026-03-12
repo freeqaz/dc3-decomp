@@ -1073,6 +1073,7 @@ target_compile_options(milo-viewer PRIVATE
 
 target_compile_definitions(milo-viewer PRIVATE
     HX_NATIVE=1
+    MILO_VIEWER=1
     MILO_DEBUG=1
     _DEBUG=1
 )

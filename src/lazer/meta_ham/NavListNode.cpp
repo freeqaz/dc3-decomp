@@ -159,7 +159,7 @@ void NavListShortcutNode::Renumber(std::vector<NavListSortNode *> &nodes) {
 
 bool NavListShortcutNode::IsActive() const {
     FOREACH (it, mChildren) {
-        if ((*it)->IsActive())
+        if ((*it)->IsEnabled())
             return true;
     }
     return false;
@@ -208,7 +208,7 @@ void NavListShortcutNode::InsertHeaderRange(
 #pragma region NavListItemNode
 
 NavListSortNode *NavListItemNode::GetFirstActive() {
-    return IsEnabled() ? this : nullptr;
+    return IsActive() ? this : nullptr;
 }
 
 BEGIN_HANDLERS(NavListItemNode)
@@ -282,7 +282,7 @@ Symbol NavListHeaderNode::Select() { return SelectChildren(mChildren, 0); }
 
 bool NavListHeaderNode::IsEnabled() const {
     FOREACH (it, mChildren) {
-        if ((*it)->IsEnabled())
+        if ((*it)->IsActive())
             return true;
     }
     return false;

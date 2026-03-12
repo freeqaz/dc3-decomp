@@ -100,12 +100,12 @@ char *curl_getenv(const char *) { return 0; }
 struct jpeg_common_struct;
 
 void jpeg_mem_term(jpeg_common_struct *) {}
-void *jpeg_get_small(jpeg_common_struct *, unsigned int) { return 0; }
-void *jpeg_get_large(jpeg_common_struct *, unsigned int) { return 0; }
-void jpeg_free_small(jpeg_common_struct *, void *, unsigned int) {}
-void jpeg_free_large(jpeg_common_struct *, void *, unsigned int) {}
+void *jpeg_get_small(jpeg_common_struct *, unsigned int sz) { return malloc(sz); }
+void *jpeg_get_large(jpeg_common_struct *, unsigned int sz) { return malloc(sz); }
+void jpeg_free_small(jpeg_common_struct *, void *ptr, unsigned int) { free(ptr); }
+void jpeg_free_large(jpeg_common_struct *, void *ptr, unsigned int) { free(ptr); }
 long jpeg_mem_init(jpeg_common_struct *) { return 0; }
-long jpeg_mem_available(jpeg_common_struct *, long, long, long) { return 0; }
+long jpeg_mem_available(jpeg_common_struct *, long, long max_bytes, long) { return max_bytes; }
 
 // ============================================================================
 // Xbox SDK stubs (C++ mangled)

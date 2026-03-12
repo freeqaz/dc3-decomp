@@ -832,6 +832,10 @@ void GamePanel::PollForLoading() {
             if (!TheHamDirector) {
                 return;
             }
+#ifdef HX_NATIVE
+            // Note: venue loading is triggered by world.milo DTA scripts during world_panel load.
+            // HamDirector::OnLoadSong fires automatically — no manual trigger needed.
+#endif
             if (!TheHamDirector->IsWorldLoaded()) {
                 return;
             }

@@ -92,12 +92,15 @@ void ShellInput::PostUpdate(const SkeletonUpdateData *updata) {
 void ShellInput::Init() {
     SetName("shell_input", ObjectDir::Main());
 #ifdef HX_NATIVE
-    // On native, skip Kinect/gesture infrastructure init (SkeletonIdentifier,
-    // DepthBuffer, skeleton callbacks, speech). Just set up cursor panel.
+    // On native, skip Xbox-specific Kinect init (SkeletonUpdate thread, DepthBuffer,
+    // SkeletonIdentifier, speech) but create SkeletonChooser so player assignment
+    // logic works. Without it, GetSkeletonChooser() returns null and functions like
+    // GetPlayerIndex/UpdateNavLists bail out with fallback values.
     mCursorPanel = ObjectDir::Main()->Find<UIPanel>("cursor_panel");
     if (mCursorPanel && mCursorPanel->CheckIsLoaded() && mCursorPanel->LoadedDir()) {
         mCursorPanel->Enter();
     }
+    mSkelChooser = new SkeletonChooser;
     static Symbol reset_controller_mode_timeout("reset_controller_mode_timeout");
     TheHamUI.AddSink(this, reset_controller_mode_timeout);
 #else

@@ -1111,17 +1111,16 @@ def main():
                 print(f"\nSkipping remaining {len(candidates) - i} functions.",
                       file=sys.stderr)
                 break
-            # Check Ghidra circuit breaker between functions
+            # Check Ghidra circuit breaker between functions — degrade gracefully
             if args.ghidra:
                 from .ghidra_cache import ghidra_circuit_tripped
                 if ghidra_circuit_tripped():
-                    remaining = len(candidates) - i
-                    print(
-                        f"\n[GHIDRA] Ghidra is down — stopping batch "
-                        f"({remaining} functions remaining).",
-                        file=sys.stderr, flush=True,
-                    )
-                    break
+                    if not getattr(args, '_ghidra_warned', False):
+                        print(
+                            f"\n[GHIDRA] Circuit breaker tripped — continuing without Ghidra guidance.",
+                            file=sys.stderr, flush=True,
+                        )
+                        args._ghidra_warned = True
             result_dict = _climb_one(
                 candidate, patterns_map, args, len(candidates), i,
             )

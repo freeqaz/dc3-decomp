@@ -4,16 +4,6 @@
 #include "xdk/XAPILIB.h"
 #include <cstring>
 
-#ifndef HX_NATIVE
-namespace stlpmtx_std {
-template <>
-_List_node_base* list<EnumProduct, StlNodeAlloc<EnumProduct>>::_M_create_node(const EnumProduct& __x) {
-    _List_node<EnumProduct>* p = (_List_node<EnumProduct>*)this->_M_node.allocate(1);
-    _Copy_Construct(&p->_M_data, __x);
-    return p;
-}
-}
-#endif
 
 XboxEnumeration::XboxEnumeration(int i, std::vector<unsigned long long> *offerIDs)
     : mUserIndex(i), mOfferIDCount(0), mOfferIDsBegin(0), mCurOffers(0), mEnumerating(false), mHandle(0), mBufferSize(0), mEnumBuffer(0) {
@@ -30,24 +20,6 @@ XboxEnumeration::XboxEnumeration(int i, std::vector<unsigned long long> *offerID
     }
 }
 
-#ifndef HX_NATIVE
-// Template specialization for _List_base<EnumProduct>::clear()
-// EnumProduct is a POD struct with no destructor, so skip _Destroy
-namespace stlpmtx_std {
-    template <>
-    void _List_base<EnumProduct, StlNodeAlloc<EnumProduct>>::clear() {
-        typedef _List_node<EnumProduct> _Node;
-        _Node* __cur = (_Node*)_M_node._M_data._M_next;
-        while (&(_M_node._M_data) != __cur) {
-            _Node* __tmp = __cur;
-            __cur = (_Node*)__cur->_M_next;
-            _M_node.deallocate(__tmp, 1);
-        }
-        _M_node._M_data._M_next = &_M_node._M_data;
-        _M_node._M_data._M_prev = &_M_node._M_data;
-    }
-}
-#endif
 
 XboxEnumeration::~XboxEnumeration() {
     delete[] mOfferIDsBegin;
@@ -148,7 +120,8 @@ void XboxEnumeration::Poll() {
             str = buf;
 
             EnumProduct prod;
-            *(u64 *)&prod.mOfferIDLo = *(u64 *)entryPtr;
+            prod.mName = str;
+            prod.mOfferID = *(u64 *)entryPtr;
             prod.mPurchased = *(int *)(entryPtr + 0x48);
             mContentList.insert(it, prod);
             prod.mPrice = *(int *)(entryPtr + 0x64);

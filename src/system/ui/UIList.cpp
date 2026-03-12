@@ -1,5 +1,6 @@
 #include "ui/UIList.h"
 #include "ui/Utl.h"
+#include "char/FileMerger.h"
 #include "math/Geo.h"
 #include "math/Utl.h"
 #include "math/Vec.h"
@@ -9,6 +10,7 @@
 #include "os/JoypadMsgs.h"
 #include "os/User.h"
 #include "rndobj/Draw.h"
+#include "rndobj/EventTrigger.h"
 #include "rndobj/FontBase.h"
 #include "ui/UI.h"
 #include "ui/UIComponent.h"
@@ -209,31 +211,26 @@ float UIList::Speed() const { return mListState.Speed(); }
 
 void UIList::SetParent(UIList *uilist) { mParent = uilist; }
 
-// noinline: Prevents inlining of this stub implementation. Remove once fully implemented.
-// TODO: implement properly - 524 bytes in target
-// See RB3: box.Set(WorldXfm().v, WorldXfm().v);
-//          mListDir->DrawWidgets(mListState, mWidgets, WorldXfm(), DrawState(this), &box, ...);
-__declspec(noinline) void UIList::CalcBoundingBox(Box &box) {
-    Transform xfm = WorldXfm();
-    box.Set(xfm.v, xfm.v);
+void UIList::CalcBoundingBox(Box &box) {
+    box.Set(WorldXfm().v, WorldXfm().v);
 
-    float elementSpacing = 0.0f;
     int selectedDisplay = mListState.SelectedDisplay();
-
     UIList *subList = mListDir->SubList(selectedDisplay, mWidgets);
-    if (subList) {
-        int subSelectedDisplay = mListState.SelectedDisplay();
-        float spacing = mListDir->ElementSpacing();
+    float elementSpacing;
+    if (subList != NULL) {
+        int subSelectedDisplay = subList->mListState.SelectedDisplay();
+        float spacing = subList->GetUIListDir()->ElementSpacing();
         elementSpacing = spacing * (float)(double)subSelectedDisplay;
+    } else {
+        elementSpacing = 0.0f;
     }
 
     UIListWidgetDrawState drawState;
     UIComponent::State state = DrawState(this);
     mListDir->BuildDrawState(drawState, mListState, state, elementSpacing, true);
 
-    Transform xfm2 = WorldXfm();
     UIComponent::State state2 = DrawState(this);
-    mListDir->DrawWidgets(drawState, mListState, mWidgets, xfm2, state2, &box, (bool)mDrawManuallyControlledWidgets);
+    mListDir->DrawWidgets(drawState, mListState, mWidgets, WorldXfm(), state2, &box, (bool)mAllowHighlight);
 }
 
 Symbol UIList::SelectedSym(bool fail) const {
@@ -1005,3 +1002,52 @@ int UIList::CollidePlane(const Plane &p) {
     }
     return result;
 }
+
+// Explicit specializations for ObjPtrList methods that the original
+// compiler emitted from this TU (via broader PCH or include chain).
+// On PPC, these were originally in link_glue.cpp as explicit specializations.
+// We define the primary template bodies here, then force instantiation.
+#ifndef HX_NATIVE
+
+// Primary template definitions (needed for explicit instantiation)
+template <class T1, class T2>
+typename ObjPtrList<T1, T2>::Node *ObjPtrList<T1, T2>::Unlink(Node *n) {
+    MILO_ASSERT(n != NULL && mNodes != NULL, 0x26b);
+    Node *head = mNodes;
+    Node *result;
+    if (n == head) {
+        if (head->next != NULL) {
+            head->next->prev = head->prev;
+            result = mNodes->next;
+        } else {
+            result = NULL;
+        }
+        mNodes = result;
+    } else if (n == head->prev) {
+        head->prev = head->prev->prev;
+        mNodes->prev->next = NULL;
+        result = mNodes->prev;
+    } else {
+        n->prev->next = n->next;
+        n->next->prev = n->prev;
+        result = n->next;
+    }
+    mSize--;
+    return result;
+}
+
+template <class T1, class T2>
+typename ObjPtrList<T1, T2>::iterator ObjPtrList<T1, T2>::erase(iterator it) {
+    Node *node = it.mNode;
+    Node *next = Unlink(node);
+    delete node;
+    return iterator(next);
+}
+
+// Force instantiation for specific types
+template ObjPtrList<EventTrigger, ObjectDir>::Node *
+ObjPtrList<EventTrigger, ObjectDir>::Unlink(ObjPtrList<EventTrigger, ObjectDir>::Node *);
+template ObjPtrList<ObjectDir, ObjectDir>::iterator
+ObjPtrList<ObjectDir, ObjectDir>::erase(ObjPtrList<ObjectDir, ObjectDir>::iterator);
+
+#endif

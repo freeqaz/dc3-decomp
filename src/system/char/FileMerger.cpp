@@ -184,7 +184,11 @@ void FileMerger::PreLoad(BinStream &bs) {
         d >> str;
     }
     d >> mMergers;
-#ifndef HX_NATIVE
+#if !defined(MILO_VIEWER)
+    // The game relies on preload-time StartLoadInternal(true, true) for
+    // world/game-mode mergers. Their DTA `change_files` handlers bootstrap the
+    // gameplay load chain by wiring HamDirector and calling load_game_song.
+    // Keep the viewer override isolated so dc3-native follows the retail path.
     StartLoadInternal(true, true);
 #endif
 }
@@ -419,10 +423,11 @@ void FileMerger::Select(Symbol name, const FilePath &fp, bool b3) {
 bool FileMerger::StartLoadInternal(bool async, bool loading) {
     mAsyncLoad = async;
     mLoadingLoad = loading;
-#ifndef HX_NATIVE
-    // In the game, this lets the owning type (e.g. HamCharacter) reconfigure
-    // selections via OnConfigureFileMerger. In the native viewer, we configure
-    // selections explicitly before calling StartLoad, so skip this.
+#if !defined(MILO_VIEWER)
+    // The game relies on change_files to translate high-level selections like
+    // HamCharacter::mOutfit into concrete merger paths before loading.
+    // milo-viewer configures char.fm explicitly via --char-setup, so keep the
+    // viewer override there instead of short-circuiting the game binary.
     static Message msg("change_files", 0, 0);
     msg[0] = async;
     msg[1] = loading;

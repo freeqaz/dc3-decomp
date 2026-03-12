@@ -20,12 +20,10 @@ enum StoreError {
 };
 
 struct EnumProduct {
-    u32 unk0;
-    u32 unk4;
-    u32 mOfferIDLo;
-    u32 mOfferIDHi;
-    int mPurchased;
-    int mPrice;
+    String mName;       // 0x00
+    u64 mOfferID;       // 0x08
+    int mPurchased;     // 0x10
+    int mPrice;         // 0x14
 };
 
 class StoreEnumeration {

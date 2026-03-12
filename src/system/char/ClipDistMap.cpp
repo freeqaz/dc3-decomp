@@ -66,7 +66,9 @@ ClipDistMap::ClipDistMap(
     mBeatAlignPeriod = (int)((double)(mBeatAlign * mSamplesPerBeat) + 0.5);
 
     if (mBeatAlignPeriod != 0) {
-        int diff = (int)(-mBStart * mSamplesPerBeat) - (int)(-mAStart * mSamplesPerBeat);
+        float negB = -mBStart;
+        float negA = -mAStart;
+        int diff = (int)(negB * mSamplesPerBeat) - (int)(negA * mSamplesPerBeat);
         diff = diff - (diff / mBeatAlignPeriod) * mBeatAlignPeriod;
         if (diff < 0)
             diff += mBeatAlignPeriod;

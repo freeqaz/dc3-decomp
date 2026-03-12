@@ -184,7 +184,7 @@ void NavListSortMgr::DoUncollapse() {
 
 UIComponent::State
 NavListSortMgr::ComponentStateOverride(int i1, int i2, UIComponent::State state) const {
-    if (!mSorts[mCurrentSortIdx]->GetListFromIdx(i2)->IsActive()) {
+    if (!mSorts[mCurrentSortIdx]->GetListFromIdx(i2)->IsEnabled()) {
         return UIComponent::State::kDisabled;
     }
     return state;
@@ -287,7 +287,7 @@ bool NavListSortMgr::IsActive(int data) const {
     if (data < 0 || data >= NumData())
         return false;
 
-    return mSorts[mCurrentSortIdx]->GetListFromIdx(data)->IsEnabled();
+    return mSorts[mCurrentSortIdx]->GetListFromIdx(data)->IsActive();
 }
 
 Symbol NavListSortMgr::DataSymbol(int i1) const {
@@ -379,7 +379,7 @@ int NavListSortMgr::FirstDataIndex(Symbol s) {
 }
 
 bool NavListSortMgr::IsDisabled(int i) {
-    return mSorts[mCurrentSortIdx]->GetListFromIdx(i)->IsActive();
+    return mSorts[mCurrentSortIdx]->GetListFromIdx(i)->IsEnabled();
 }
 
 void NavListSortMgr::SetHighlightedIx(int i) {

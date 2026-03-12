@@ -34,7 +34,9 @@ END_PROPSYNCS
 
 BEGIN_SAVES(LabelShrinkWrapper)
     SAVE_REVS(2, 0)
-    bs << m_pLabel;
+    bool show = m_pShow;
+    bs << m_pLabel << show;
+    bs << mResourceDir;
     bs << mLeftBorder;
     bs << mRightBorder;
     bs << mTopBorder;

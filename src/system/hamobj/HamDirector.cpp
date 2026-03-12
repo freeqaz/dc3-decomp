@@ -928,14 +928,20 @@ void HamDirector::SetCharSpot(Symbol charType, Symbol spotState) {
 DataNode HamDirector::OnToggleCamshotFlag() { return mCamshotFlag = !mCamshotFlag; }
 
 DataNode HamDirector::OnLoadSong(DataArray *a) {
+#ifdef HX_NATIVE
+    fprintf(stderr, "DC3 Native: HamDirector::OnLoadSong — song='%s' mMerger=%p\n",
+            a->Str(2), mMerger.Ptr());
+#endif
     FilePathTracker tracker(FileRoot());
     MILO_ASSERT(TheGameData, 0xC1D);
+#ifndef HX_NATIVE
     for (int i = 0; i < 2; i++) {
         HamPlayerData *hpd = TheGameData->Player(i);
         MILO_ASSERT(hpd, 0xC21);
         mCrews[i] = hpd->Crew();
         mCharacterOutfits[i] = hpd->CharacterOutfit(mCrews[i]);
     }
+#endif
     int i3 = a->Int(3);
     bool i4 = a->Int(4);
     bool b5 = a->Int(5);
@@ -1074,6 +1080,10 @@ DataNode HamDirector::OnFileLoaded(DataArray *a) {
     static Symbol viz("viz");
     static Symbol game_hud("game_hud");
     Symbol sym = a->Sym(2);
+#ifdef HX_NATIVE
+    fprintf(stderr, "DC3 Native: HamDirector::OnFileLoaded — sym='%s' mMerger=%p\n",
+            sym.Str(), mMerger.Ptr());
+#endif
     if (sym != game_hud || mMerger) {
         mAsyncLoaded = mMerger->AsyncLoad();
         if (sym == song) {
@@ -1532,27 +1542,29 @@ void HamDirector::CheckBeginFatal(int i1, HamMove *move, int i3) {
 void HamDirector::UpdatePostProcOverlay(
     const char *cc, const RndPostProc *p1, const RndPostProc *p2, float f4
 ) {
+    RndOverlay *ppOverlay = RndOverlay::Find("postproc", true);
     static const RndPostProc *sPostProcA;
     static const RndPostProc *sPostProcB;
-    static float sPostProcBlend;
-    RndOverlay *ppOverlay = RndOverlay::Find("postproc", true);
+    static float sPostProcBlend = -99;
     if (!ppOverlay->Showing())
         return;
+    TextStream *reflect = TheDebug.SetReflect(ppOverlay);
     if (p1 == sPostProcA && p2 == sPostProcB && f4 == sPostProcBlend)
         return;
     static int sHamDirID = 0;
-    sHamDirID = (sHamDirID + 1) % 100;
-    TextStream *reflect = TheDebug.SetReflect(ppOverlay);
-    if (p1 != NULL) {
-        if (!(p2 != NULL)) {
-            MILO_LOG("%03d:HAMDIR Post Proc %s is not blended\n", sHamDirID, p1->Name());
+    sHamDirID++;
+    int displayId = sHamDirID % 100;
+    if (p1) {
+        if (!p2) {
+            MILO_LOG(
+                "%03d:HAMDIR Post Proc %s is not blended\n", displayId, p1->Name()
+            );
         } else {
-            MILO_LOG("%03d:HAMDIR Post Proc A %s\n", sHamDirID, p1->Name());
-            MILO_LOG("%03d:HAMDIR Post Proc B %s\n", sHamDirID, p2->Name());
+            MILO_LOG("%03d:HAMDIR Post Proc A %s\n", displayId, p1->Name());
         }
     }
-    if (p1 == NULL && p2 != NULL) {
-        MILO_LOG("%03d:HAMDIR Post Proc B %s\n", sHamDirID, p2->Name());
+    if (p2) {
+        MILO_LOG("%03d:HAMDIR Post Proc B %s\n", displayId, p2->Name());
     }
     MILO_LOG(
         "           PostProc set by %s, blend is %.2f%%\n", cc ? cc : "", f4 * 100.0f

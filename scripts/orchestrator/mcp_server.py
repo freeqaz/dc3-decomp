@@ -305,6 +305,10 @@ class DecompMCPServer:
                                 "type": "boolean",
                                 "description": "Show ALL instructions (matching + mismatched) instead of only mismatches. Use when diagnosing isolated mismatches where surrounding matching instructions provide data flow context. Default: false.",
                             },
+                            "unit": {
+                                "type": "string",
+                                "description": "Unit name to disambiguate when a symbol exists in multiple units (e.g. 'default/link_glue'). Required when objdiff reports 'Multiple instances found'.",
+                            },
                         },
                         "required": ["symbol", "project_dir"],
                     },
@@ -358,6 +362,10 @@ class DecompMCPServer:
                             "baseline_json": {
                                 "type": "string",
                                 "description": "Optional: path to baseline JSON file for compare mode. If omitted, auto-finds baseline saved by orchestrator.",
+                            },
+                            "unit": {
+                                "type": "string",
+                                "description": "Unit name to disambiguate when a symbol exists in multiple units (e.g. 'default/link_glue').",
                             },
                         },
                         "required": ["symbol", "mode", "project_dir"],
@@ -1279,6 +1287,7 @@ class DecompMCPServer:
         context = args.get("context", 3)
         concise = args.get("concise", True)
         full_listing = args.get("full_listing", False)
+        unit = args.get("unit", None)
 
         if not symbol:
             return [TextContent(type="text", text="Error: No symbol provided.")]
@@ -1329,6 +1338,8 @@ class DecompMCPServer:
             "--verdict",
             "-c", "functionRelocDiffs=none",
         ]
+        if unit:
+            base_args.extend(["-u", unit])
 
         build_flag = ["--build"]
         if full_build:
@@ -1637,6 +1648,7 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
         mode = args.get("mode", "")
         project_dir_arg = args.get("project_dir", None)
         baseline_json = args.get("baseline_json", None)
+        unit = args.get("unit", None)
 
         if not symbol:
             return [TextContent(type="text", text="Error: No symbol provided.")]
@@ -1685,6 +1697,8 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
                     "-c", "functionRelocDiffs=none",
                     "-f", "json",
                 ]
+                if unit:
+                    cmd.extend(["-u", unit])
                 result = subprocess.run(
                     cmd, capture_output=True, text=True,
                     timeout=300, cwd=str(project_dir),
@@ -1725,6 +1739,8 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
                     "-c", "functionRelocDiffs=none",
                     "-f", "json",
                 ]
+                if unit:
+                    cmd.extend(["-u", unit])
                 result = subprocess.run(
                     cmd, capture_output=True, text=True,
                     timeout=300, cwd=str(project_dir),
@@ -1776,6 +1792,8 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
                     "-c", "functionRelocDiffs=none",
                     "-f", "json",
                 ]
+                if unit:
+                    cmd.extend(["-u", unit])
                 result = subprocess.run(
                     cmd, capture_output=True, text=True,
                     timeout=300, cwd=str(project_dir),
@@ -1862,6 +1880,8 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
                     f"--{mode}",
                     "--project-dir", str(project_dir),
                 ]
+                if unit:
+                    cmd.extend(["--unit", unit])
                 result = subprocess.run(
                     cmd, capture_output=True, text=True,
                     timeout=300,

@@ -391,14 +391,14 @@ void StorePanel::MultipleItemsCheckout(std::list<StoreOffer *> *offers) {
     std::vector<u64> songIds;
 
     FOREACH(it, *offers) {
-        StoreOffer *offer = *it;
         MILO_ASSERT((*it)->IsAvailable(), 0x2ef);
 
-        u64 songId = offer->songID;
+        u64 songId = (*it)->songID;
         songIds.push_back(songId);
 
         std::pair<StorePurchaseable*, const Profile*> pair;
-        pair.first = offer;
+        pair.first = *it;
+        pair.second = profile;
         mCartOffers.push_back(pair);
     }
 
@@ -407,19 +407,20 @@ void StorePanel::MultipleItemsCheckout(std::list<StoreOffer *> *offers) {
 #else
     void* mem = operator new(0x50);
 #endif
+    StorePurchaser *purchaser;
     if (mem) {
-        mPurchaser = new (mem) XboxMultipleItemsPurchaser(
+        purchaser = new (mem) XboxMultipleItemsPurchaser(
             profile->GetPadNum(),
             songIds,
             mPurchaseSource,
             0
         );
+    } else {
+        purchaser = 0;
     }
+    mPurchaser = purchaser;
 
-    typedef void (*VirtFunc)(void*);
-    void** vptr = (void**)mPurchaser;
-    VirtFunc vf = (VirtFunc)vptr[1];
-    vf(mPurchaser);
+    mPurchaser->Initiate();
 }
 
 void StorePanel::PopulateOffers(DataArray *arr, bool b) {
@@ -561,7 +562,7 @@ StoreError StorePanel::UpdateOffers(std::list<EnumProduct> const &enumList, bool
             enumIt = enumList.begin();
             bool match = false;
             while (enumIt != enumList.end()) {
-                if (offer->songID == enumIt->mOfferIDLo) {
+                if (offer->songID == enumIt->mOfferID) {
                     match = true;
                     break;
                 }

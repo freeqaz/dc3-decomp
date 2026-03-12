@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DC3 — WebGPU</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0a0a0a;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            color: #ccc;
+        }
+        #dc3-canvas {
+            border: 1px solid #333;
+            max-width: 100vw;
+            max-height: 90vh;
+        }
+        #status {
+            margin-top: 12px;
+            font-size: 14px;
+            color: #888;
+        }
+        #status.error { color: #e55; }
+        #status.ok { color: #5e5; }
+    </style>
+</head>
+<body>
+    <canvas id="dc3-canvas" width="1280" height="720"></canvas>
+    <div id="status">Initializing WebGPU...</div>
+
+    <script>
+        const status = document.getElementById('status');
+
+        // Check WebGPU support before loading WASM
+        if (!navigator.gpu) {
+            status.textContent = 'WebGPU not supported in this browser. Use Chrome 113+.';
+            status.className = 'error';
+        } else {
+            status.textContent = 'Loading WASM...';
+
+            // Emscripten module config
+            var Module = {
+                canvas: document.getElementById('dc3-canvas'),
+                onRuntimeInitialized: function() {
+                    status.textContent = 'Engine running';
+                    status.className = 'ok';
+                },
+                print: function(text) {
+                    console.log(text);
+                    if (text.includes('render loop')) {
+                        status.textContent = 'Rendering';
+                        status.className = 'ok';
+                    }
+                },
+                printErr: function(text) {
+                    console.error(text);
+                    if (text.includes('failed') || text.includes('error')) {
+                        status.textContent = 'Error: ' + text;
+                        status.className = 'error';
+                    }
+                }
+            };
+        </script>
+        <script src="dc3_web_test.js"></script>
+    </script>
+</body>
+</html>

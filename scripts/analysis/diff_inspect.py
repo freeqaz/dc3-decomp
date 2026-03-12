@@ -1016,7 +1016,7 @@ def cmd_attributed(instrs, symbol, project_dir=None):
 
 # ── Symbol invocation ───────────────────────────────────────────────────────
 
-def run_objdiff_for_symbol(symbol, project_dir=None):
+def run_objdiff_for_symbol(symbol, project_dir=None, unit=None):
     """Run objdiff-cli diff and return path to JSON output."""
     # Deterministic filename from symbol
     h = hashlib.md5(symbol.encode()).hexdigest()[:12]
@@ -1049,6 +1049,8 @@ def run_objdiff_for_symbol(symbol, project_dir=None):
         "--include-instructions", "--build", "--incremental",
         "-f", "json", "-o", json_path
     ]
+    if unit:
+        cmd.extend(["-u", unit])
 
     result = subprocess.run(cmd, cwd=str(effective_project_dir),
                             capture_output=True, text=True)
@@ -1130,6 +1132,9 @@ Filter modes:
         "--project-dir", type=str, default=None,
         help="Project directory for objdiff builds (worktree support)")
     parser.add_argument(
+        "--unit", type=str, default=None,
+        help="Unit name for objdiff disambiguation (e.g. 'default/link_glue')")
+    parser.add_argument(
         "--compare", nargs=2, metavar=("BASELINE_JSON", "CANDIDATE_JSON"),
         help="Compare two objdiff JSON files")
     parser.add_argument(
@@ -1151,7 +1156,7 @@ Filter modes:
     # Resolve JSON input
     json_file = args.json_file
     if args.symbol:
-        json_file = run_objdiff_for_symbol(args.symbol, project_dir=args.project_dir)
+        json_file = run_objdiff_for_symbol(args.symbol, project_dir=args.project_dir, unit=args.unit)
     if not json_file:
         parser.error("Either json_file or --symbol is required")
 

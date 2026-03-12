@@ -338,9 +338,14 @@ void HamUI::Draw() {
 }
 
 bool HamUI::IsTimelineResetAllowed() const {
+#ifdef HX_NATIVE
+    // TheSkeletonIdentifier and ThePassiveMessenger are null on native (no Kinect)
+    if (!ThePassiveMessenger || !TheSkeletonIdentifier)
+        return true;
+#endif
     if (!ThePassiveMessenger->HasMessages()
         && !ThePassiveMessenger->HasRecentlyDismissedMessage()
-        && (!TheSkeletonIdentifier || TheSkeletonIdentifier->GetIDStatus() == 0) &&
+        && TheSkeletonIdentifier->GetIDStatus() == 0 &&
         (!mHelpBar || (!mHelpBar->IsWriteIconShowing() && !mHelpBar->IsAnimating()))) {
         return true;
     }
