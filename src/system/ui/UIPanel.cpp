@@ -261,7 +261,6 @@ void UIPanel::Enter() {
     // DTA handlers call {$tutorial_nav_panel enter} which bypasses our
     // UIScreen::Enter() skip. Suppress here at the panel level.
     if (strstr(Name(), "tutorial")) {
-        printf("DC3 UI: Blocking tutorial panel '%s' Enter()\n", Name());
         return;
     }
 #endif

@@ -226,12 +226,8 @@ void UIScreen::Enter(UIScreen *scr) {
             // Skip Kinect tutorial panels — no gesture input on native.
             // On Xbox, DTA scripts suppress these in controller mode.
             if (strstr(it->mPanel->Name(), "tutorial")) {
-                printf("DC3 UI: Skipping tutorial panel '%s' on screen '%s'\n",
-                       it->mPanel->Name(), Name());
                 continue;
             }
-            printf("DC3 UI: Entering panel '%s' on screen '%s'\n",
-                   it->mPanel->Name(), Name());
 #endif
             AutoGlitchReport report(17, EnterGlitchCB, it->mPanel);
             it->mPanel->Enter();

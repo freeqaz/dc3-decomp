@@ -2,14 +2,14 @@
 
 ## Current State
 
-**Steps 1-3 partially complete.** Animation lifetime restored, synthetic panel entry removed, 2 of 3 visibility hacks removed. Remaining: alpha floor + Kinect mesh filter (both still load-bearing).
+**Unwind plan complete.** All removable hacks removed. Remaining items are permanent native infrastructure.
 
 | Step | Status | Session |
 |------|--------|---------|
 | 1. Restore animation lifetime | Done | [Session 52](../sessions/2026-03-12-session52-animation-lifetime.md) |
 | 2. Stop synthetic panel entry | Done | [Session 53](../sessions/2026-03-12-session53-step2-paneldir.md) |
-| 3. Remove visibility masks | **Partial** — 2/3 removed | [Session 54](../sessions/2026-03-12-session54-step3-visibility.md) |
-| 4. Revisit parity bridges | **Next** | — |
+| 3. Remove visibility masks | Done (2/3 removed) | [Session 54](../sessions/2026-03-12-session54-step3-visibility.md) |
+| 4. Revisit parity bridges | Done (1 removed) | [Session 55](../sessions/2026-03-12-session55-step4-parity-bridges.md) |
 
 ## Session Log
 
@@ -21,6 +21,7 @@
 | 52 | 2026-03-12 | [Animation lifetime fix](../sessions/2026-03-12-session52-animation-lifetime.md) — Timer-based enter anim, transition waits, alpha hack removal |
 | 53 | 2026-03-12 | [Step 2: PanelDir refactor](../sessions/2026-03-12-session53-step2-paneldir.md) — PropAnim forcing removed, flow activation narrowed to startMode=0 |
 | 54 | 2026-03-12 | [Step 3: Visibility masks](../sessions/2026-03-12-session54-step3-visibility.md) — Overlay filter + voicetip hide removed; alpha floor + Kinect filter kept |
+| 55 | 2026-03-12 | [Step 4: Parity bridges](../sessions/2026-03-12-session55-step4-parity-bridges.md) — PanelDir dir-hide removed; remaining bridges classified as permanent |
 
 ## Unwind Plan
 
@@ -44,12 +45,14 @@
   - Zero-alpha floor — background meshes stay invisible without it (DTA scripts needed)
   - Kinect mesh filter — white opaque overlays appear without it
 
-### Step 4: Revisit broad parity bridges
+### Step 4: Revisit broad parity bridges (DONE)
 
-**Targets:**
-- Forced controller mode / never-exit-controller-mode
-- Boot screen auto-advance
-- Synchronous/force-finish panel load shortcuts
+- PanelDir Kinect/tutorial dir-hide block removed — redundant with MeshFilter
+- All other bridges classified as permanent native infrastructure:
+  - Boot flow auto-advance (DTA handlers don't work on native)
+  - Controller mode forcing (no Kinect gesture input)
+  - Panel loading shortcuts (ObjRef lifecycle issues)
+  - Tutorial suppression (gesture UI conflicts with controller mode)
 
 ## Hack Inventory
 
@@ -59,7 +62,7 @@
 |------|------|--------|
 | `PanelDir.cpp` | Flow activation for `startMode=0` flows via `ShouldActivateNativeFlow()` | Narrowed (S53) — only game-code-triggered flows |
 | ~~`PanelDir.cpp`~~ | ~~Force `"enter"` PropAnims to end frame (+ nested RndDirs)~~ | **Removed (S53)** |
-| `PanelDir.cpp` | Hide tutorial/gesture/silhouette subdirs on enter | Keep until Step 4 |
+| ~~`PanelDir.cpp`~~ | ~~Hide tutorial/gesture/silhouette subdirs on enter~~ | **Removed (S55)** — redundant with MeshFilter |
 | ~~`HamListRibbon.cpp`~~ | ~~Label alpha force to 1.0~~ | **Removed (S52)** |
 | ~~`HamNavList.cpp`~~ | ~~Native StopAnimation + frame reset~~ | **Replaced (S52)** |
 | ~~`HamNavList.cpp`~~ | ~~Input bypass of IsAnimating check~~ | **Fixed (S52)** |
@@ -89,26 +92,26 @@
 
 | File | Hack | Status |
 |------|------|--------|
-| `GestureMgr_Native.cpp` | Force controller mode | Step 4 |
-| `HamScreen.cpp` | Force controller mode on first enter | Step 4 |
-| `ShellInput.cpp` | Skip Kinect init, never exit controller mode | Step 4 |
-| `CursorPanel.cpp` | Skip gesture cursor logic | Step 4 |
+| `GestureMgr_Native.cpp` | Force controller mode | Permanent — no Kinect |
+| `HamScreen.cpp` | Force controller mode on first enter | Permanent — no Kinect |
+| `ShellInput.cpp` | Skip Kinect init, never exit controller mode | Permanent — no Kinect |
+| `CursorPanel.cpp` | Skip gesture cursor logic | Permanent — no Kinect |
 | ~~`HelpBarPanel.cpp`~~ | ~~Hide voice-tip drawables~~ | **Removed (S54)** — redundant with MeshFilter |
 
 ### E. Screen/panel lifecycle
 
 | File | Hack | Status |
 |------|------|--------|
-| `UI.cpp` | Auto-advance stuck boot/tutorial screens | Step 4 |
+| `UI.cpp` | Auto-advance stuck boot/tutorial screens | Permanent — DTA handlers fail |
 | ~~`UI.cpp`~~ | ~~Skip transition exit/enter waits~~ | **Replaced (S52)** — timeouts |
-| `UI.cpp` | Set `mSink = current screen` | Likely permanent |
-| `UIPanel.cpp` | Synchronous panel loading | Step 4 |
-| `UIPanel.cpp` | Force-finish panels without loader | Step 4 |
-| `UIPanel.cpp` | Block tutorial panel enter | Step 4 |
-| `UIScreen.cpp` | Skip null panels in SetTypeDef | Defensive — keep |
-| `UIScreen.cpp` | Always load all panels | Re-evaluate |
-| `UIScreen.cpp` | Hide previous screen instead of unload | Re-evaluate |
-| `UIScreen.cpp` | Skip tutorial panels on enter | Step 4 |
+| `UI.cpp` | Set `mSink = current screen` | Permanent — input routing |
+| `UIPanel.cpp` | Synchronous panel loading | Permanent — LoadMgr queue issue |
+| `UIPanel.cpp` | Force-finish panels without loader | Permanent — no DLC/save state |
+| `UIPanel.cpp` | Block tutorial panel enter | Permanent — gesture UI conflicts |
+| `UIScreen.cpp` | Skip null panels in SetTypeDef | Permanent — defensive |
+| `UIScreen.cpp` | Always load all panels | Permanent — skipped UnloadPanels |
+| `UIScreen.cpp` | Hide previous screen instead of unload | Permanent — ObjRef SIGSEGV |
+| `UIScreen.cpp` | Skip tutorial panels on enter | Permanent — gesture UI conflicts |
 
 ## Follow-Up Items
 
@@ -117,6 +120,7 @@
 ## References
 
 - **Xbox reference**: `archive/screenshots/references/dc3_main_menu.jpg`
+- **Session 55 screenshots**: `archive/screenshots/session55/`
 - **Session 54 screenshots**: `archive/screenshots/session54/`
 - **Session 53 screenshots**: `archive/screenshots/session53/`
 - **Session 52 screenshots**: `archive/screenshots/session52/`

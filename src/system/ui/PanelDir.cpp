@@ -436,25 +436,6 @@ void PanelDir::Enter() {
         if (!it->IsRunning())
             it->Activate();
     }
-    // Hide Kinect/tutorial UI elements that render as unwanted overlays on native.
-    {
-        static const char *sHideDirs[] = {
-            "NewSkeletonDir", "silhouette_guy_left", "silhouette_guy_right", nullptr
-        };
-        for (const char **d = sHideDirs; *d; d++) {
-            RndDir *sub = Find<RndDir>(*d, false);
-            if (sub && sub->Showing())
-                sub->SetShowing(false);
-        }
-        for (ObjDirItr<RndDir> dit(this, false); dit != nullptr; ++dit) {
-            const char *dname = dit->Name();
-            if (strstr(dname, "tutorial") || strstr(dname, "gesture")
-                || strstr(dname, "nav_tut") || strstr(dname, "spotlight")) {
-                if (dit->Showing())
-                    dit->SetShowing(false);
-            }
-        }
-    }
 #endif
 }
 
