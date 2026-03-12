@@ -10281,30 +10281,6 @@ home/free/code/milohax/dc3-decomp/src/system/net/HttpReq.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dc3-web.dir/build.make CMakeFiles/dc3-web.dir/home/free/code/milohax/dc3-decomp/src/system/net/HttpReq.cpp.s
 .PHONY : home/free/code/milohax/dc3-decomp/src/system/net/HttpReq.cpp.s
 
-home/free/code/milohax/dc3-decomp/src/system/net/HttpReqCurl.o: home/free/code/milohax/dc3-decomp/src/system/net/HttpReqCurl.cpp.o
-.PHONY : home/free/code/milohax/dc3-decomp/src/system/net/HttpReqCurl.o
-
-# target to build an object file
-home/free/code/milohax/dc3-decomp/src/system/net/HttpReqCurl.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/dc3-web.dir/build.make CMakeFiles/dc3-web.dir/home/free/code/milohax/dc3-decomp/src/system/net/HttpReqCurl.cpp.o
-.PHONY : home/free/code/milohax/dc3-decomp/src/system/net/HttpReqCurl.cpp.o
-
-home/free/code/milohax/dc3-decomp/src/system/net/HttpReqCurl.i: home/free/code/milohax/dc3-decomp/src/system/net/HttpReqCurl.cpp.i
-.PHONY : home/free/code/milohax/dc3-decomp/src/system/net/HttpReqCurl.i
-
-# target to preprocess a source file
-home/free/code/milohax/dc3-decomp/src/system/net/HttpReqCurl.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/dc3-web.dir/build.make CMakeFiles/dc3-web.dir/home/free/code/milohax/dc3-decomp/src/system/net/HttpReqCurl.cpp.i
-.PHONY : home/free/code/milohax/dc3-decomp/src/system/net/HttpReqCurl.cpp.i
-
-home/free/code/milohax/dc3-decomp/src/system/net/HttpReqCurl.s: home/free/code/milohax/dc3-decomp/src/system/net/HttpReqCurl.cpp.s
-.PHONY : home/free/code/milohax/dc3-decomp/src/system/net/HttpReqCurl.s
-
-# target to generate assembly for a file
-home/free/code/milohax/dc3-decomp/src/system/net/HttpReqCurl.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/dc3-web.dir/build.make CMakeFiles/dc3-web.dir/home/free/code/milohax/dc3-decomp/src/system/net/HttpReqCurl.cpp.s
-.PHONY : home/free/code/milohax/dc3-decomp/src/system/net/HttpReqCurl.cpp.s
-
 home/free/code/milohax/dc3-decomp/src/system/net/JsonMemory.o: home/free/code/milohax/dc3-decomp/src/system/net/JsonMemory.cpp.o
 .PHONY : home/free/code/milohax/dc3-decomp/src/system/net/JsonMemory.o
 
@@ -10376,30 +10352,6 @@ home/free/code/milohax/dc3-decomp/src/system/net/WebSvcMgr.s: home/free/code/mil
 home/free/code/milohax/dc3-decomp/src/system/net/WebSvcMgr.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dc3-web.dir/build.make CMakeFiles/dc3-web.dir/home/free/code/milohax/dc3-decomp/src/system/net/WebSvcMgr.cpp.s
 .PHONY : home/free/code/milohax/dc3-decomp/src/system/net/WebSvcMgr.cpp.s
-
-home/free/code/milohax/dc3-decomp/src/system/net/WebSvcMgrCurl.o: home/free/code/milohax/dc3-decomp/src/system/net/WebSvcMgrCurl.cpp.o
-.PHONY : home/free/code/milohax/dc3-decomp/src/system/net/WebSvcMgrCurl.o
-
-# target to build an object file
-home/free/code/milohax/dc3-decomp/src/system/net/WebSvcMgrCurl.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/dc3-web.dir/build.make CMakeFiles/dc3-web.dir/home/free/code/milohax/dc3-decomp/src/system/net/WebSvcMgrCurl.cpp.o
-.PHONY : home/free/code/milohax/dc3-decomp/src/system/net/WebSvcMgrCurl.cpp.o
-
-home/free/code/milohax/dc3-decomp/src/system/net/WebSvcMgrCurl.i: home/free/code/milohax/dc3-decomp/src/system/net/WebSvcMgrCurl.cpp.i
-.PHONY : home/free/code/milohax/dc3-decomp/src/system/net/WebSvcMgrCurl.i
-
-# target to preprocess a source file
-home/free/code/milohax/dc3-decomp/src/system/net/WebSvcMgrCurl.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/dc3-web.dir/build.make CMakeFiles/dc3-web.dir/home/free/code/milohax/dc3-decomp/src/system/net/WebSvcMgrCurl.cpp.i
-.PHONY : home/free/code/milohax/dc3-decomp/src/system/net/WebSvcMgrCurl.cpp.i
-
-home/free/code/milohax/dc3-decomp/src/system/net/WebSvcMgrCurl.s: home/free/code/milohax/dc3-decomp/src/system/net/WebSvcMgrCurl.cpp.s
-.PHONY : home/free/code/milohax/dc3-decomp/src/system/net/WebSvcMgrCurl.s
-
-# target to generate assembly for a file
-home/free/code/milohax/dc3-decomp/src/system/net/WebSvcMgrCurl.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/dc3-web.dir/build.make CMakeFiles/dc3-web.dir/home/free/code/milohax/dc3-decomp/src/system/net/WebSvcMgrCurl.cpp.s
-.PHONY : home/free/code/milohax/dc3-decomp/src/system/net/WebSvcMgrCurl.cpp.s
 
 home/free/code/milohax/dc3-decomp/src/system/net/WebSvcReq.o: home/free/code/milohax/dc3-decomp/src/system/net/WebSvcReq.cpp.o
 .PHONY : home/free/code/milohax/dc3-decomp/src/system/net/WebSvcReq.o
@@ -20991,9 +20943,6 @@ help:
 	@echo "... home/free/code/milohax/dc3-decomp/src/system/net/HttpReq.o"
 	@echo "... home/free/code/milohax/dc3-decomp/src/system/net/HttpReq.i"
 	@echo "... home/free/code/milohax/dc3-decomp/src/system/net/HttpReq.s"
-	@echo "... home/free/code/milohax/dc3-decomp/src/system/net/HttpReqCurl.o"
-	@echo "... home/free/code/milohax/dc3-decomp/src/system/net/HttpReqCurl.i"
-	@echo "... home/free/code/milohax/dc3-decomp/src/system/net/HttpReqCurl.s"
 	@echo "... home/free/code/milohax/dc3-decomp/src/system/net/JsonMemory.o"
 	@echo "... home/free/code/milohax/dc3-decomp/src/system/net/JsonMemory.i"
 	@echo "... home/free/code/milohax/dc3-decomp/src/system/net/JsonMemory.s"
@@ -21003,9 +20952,6 @@ help:
 	@echo "... home/free/code/milohax/dc3-decomp/src/system/net/WebSvcMgr.o"
 	@echo "... home/free/code/milohax/dc3-decomp/src/system/net/WebSvcMgr.i"
 	@echo "... home/free/code/milohax/dc3-decomp/src/system/net/WebSvcMgr.s"
-	@echo "... home/free/code/milohax/dc3-decomp/src/system/net/WebSvcMgrCurl.o"
-	@echo "... home/free/code/milohax/dc3-decomp/src/system/net/WebSvcMgrCurl.i"
-	@echo "... home/free/code/milohax/dc3-decomp/src/system/net/WebSvcMgrCurl.s"
 	@echo "... home/free/code/milohax/dc3-decomp/src/system/net/WebSvcReq.o"
 	@echo "... home/free/code/milohax/dc3-decomp/src/system/net/WebSvcReq.i"
 	@echo "... home/free/code/milohax/dc3-decomp/src/system/net/WebSvcReq.s"

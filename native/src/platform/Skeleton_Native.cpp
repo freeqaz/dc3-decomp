@@ -2,6 +2,7 @@
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
+#ifndef __EMSCRIPTEN__
 #include <unistd.h>
 #include <signal.h>
 #include <sys/socket.h>
@@ -9,8 +10,22 @@
 #include <sys/wait.h>
 #include <poll.h>
 #include <linux/limits.h>
+#endif
 
 NativeSkeletonProvider *TheSkeletonProvider = nullptr;
+
+#ifdef __EMSCRIPTEN__
+// Stubs — no Kinect skeleton tracking on web
+NativeSkeletonProvider::NativeSkeletonProvider() { memset(mFront, 0, sizeof(mFront)); memset(mBack, 0, sizeof(mBack)); memset(mPersons, 0, sizeof(mPersons)); }
+NativeSkeletonProvider::~NativeSkeletonProvider() {}
+bool NativeSkeletonProvider::Start(const std::string&, const std::string&, int) { return false; }
+void NativeSkeletonProvider::Stop() {}
+void NativeSkeletonProvider::Poll() {}
+int NativeSkeletonProvider::FindByTrackId(int) const { return -1; }
+Vector3 NativeSkeletonProvider::NormalizedToMeters(float, float) const { return Vector3(0,0,0); }
+void NativeSkeletonProvider::MapCOCOToDC3(const float[][3], PersonData&) {}
+void NativeSkeletonProvider::FillSkeleton(Skeleton&, int) const {}
+#else
 
 // COCO keypoint indices
 enum COCOKeypoint {
@@ -338,3 +353,5 @@ void NativeSkeletonProvider::FillSkeleton(Skeleton &skel, int personIdx) const {
     skel.mTracking = kSkeletonTracked;
     skel.mTrackingID = person.trackId;
 }
+
+#endif // !__EMSCRIPTEN__

@@ -100,7 +100,11 @@ void CharClip::Transitions::AddNode(CharClip *clip, const CharGraphNode &node) {
         );
     } else {
         resized = Resize(BytesInMemory() + sizeof(NodeVector), mNodeEnd);
+#ifdef HX_NATIVE
         new (&resized->clip) ObjOwnerPtr<CharClip>(this, (CharClip *)NULL);
+#else
+        new (&resized->clip) ObjOwnerPtr<CharClip>(mOwner, (CharClip *)NULL);
+#endif
         resized->clip = clip;
         resized->size = 0;
     }
@@ -222,7 +226,9 @@ void CharClip::Transitions::Load(BinStreamRev &d, int oldRev) {
             d.stream.ReadString(buf, 0x100);
             CharClip *clip = mOwner->Dir()->Find<CharClip>(buf, false);
             if (clip) {
+#ifdef HX_NATIVE
                 new (&it->clip) ObjOwnerPtr<CharClip>(this, (CharClip *)NULL);
+#endif
                 it->clip = clip;
                 d >> it->size;
                 for (int j = 0; j < it->size; j++) {

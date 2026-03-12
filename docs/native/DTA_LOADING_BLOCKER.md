@@ -1,5 +1,7 @@
 # DTA Execution — Native Port Status
 
+> **See also**: [DTA_FLOW_V2_PLAN.md](DTA_FLOW_V2_PLAN.md) — the plan to remove C++ workarounds and run real DTA flow end-to-end.
+
 ## Update (Session 39, late): DTA IS Working!
 
 **Critical discovery**: DTA TypeDefs ARE loaded and handlers DO execute on native. The system config DTAs load from the ark, screen TypeDefs are applied via `SetType()`, and `HandleType()` fires for enter/exit/load/sync_objects messages. For example, `main_panel.enter` executes 23 DTA commands, `autosave_warning_screen.enter` executes 17 commands.

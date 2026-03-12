@@ -263,9 +263,11 @@ void RndGenerator::DrawParticleSys(Transform &t, float) {
 typedef void (RndGenerator::*DrawFunc)(Transform &, float);
 
 void RndGenerator::DrawShowing() {
-    if (mPath && (mMesh || mMultiMesh || mParticleSys)) {
+    auto& _ref1 = mMesh;
+    auto& _ref2 = mParticleSys;
+    if (mPath && (_ref1 || mMultiMesh || _ref2)) {
         DrawFunc func = nullptr;
-        if (mMesh)
+        if (_ref1)
             func = &RndGenerator::DrawMesh;
         else if (mMultiMesh) {
             RndMultiMesh::InstanceList &meshInsts = mMultiMesh->Instances();
@@ -274,27 +276,33 @@ void RndGenerator::DrawShowing() {
             }
             mCurMultiMesh = meshInsts.begin();
             func = &RndGenerator::DrawMultiMesh;
-        } else if (mParticleSys) {
-            mCurParticle = mParticleSys->ActiveParticles();
+        } else if (_ref2) {
+            mCurParticle = _ref2->ActiveParticles();
             func = &RndGenerator::DrawParticleSys;
         }
 
         if (func) {
             int dir = mPathEndFrame - mPathStartFrame > 0 ? 1 : -1;
-            FOREACH (it, mInstances) {
-                float elapsed = GetFrame() - it->startFrame;
-                Transform xfm;
-                mPath->MakeTransform(elapsed * dir + mPathStartFrame, xfm, true, 1);
-                Scale(it->scale, xfm.m, xfm.m);
-                Multiply(xfm, it->xfm, xfm);
-                (this->*func)(xfm, elapsed);
+            {
+                auto it = mInstances.begin();
+                if (it != mInstances.end()) {
+                    do {
+                        float elapsed = GetFrame() - (*it).startFrame;
+                        Transform xfm;
+                        mPath->MakeTransform(elapsed * dir + mPathStartFrame, xfm, true, 1);
+                        Scale(it->scale, xfm.m, xfm.m);
+                        Multiply(xfm, it->xfm, xfm);
+                        (this->*func)(xfm, elapsed);
+                        ++it;
+                    } while (it != mInstances.end());
+                }
             }
         }
 
         if (mMultiMesh) {
             mMultiMesh->Draw();
-        } else if (mParticleSys) {
-            mParticleSys->Draw();
+        } else if (_ref2) {
+            _ref2->Draw();
         }
     }
 }

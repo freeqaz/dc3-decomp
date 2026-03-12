@@ -2,7 +2,7 @@
 
 ## Current State
 
-**Song loading achieved!** The full menu→song pipeline works: `main_screen → choose_mode(Perform) → song_select(YMCA) → multiuser(auto-skip) → loading → preloading → real_loading → game_screen`. The game_screen runs stably with gameplay HUD rendering (move cards, help bar). Venue/audio assets are not loaded (black background, pink placeholder textures), but the gameplay systems are active.
+**Song loading progressed again.** The full menu→song pipeline still works: `main_screen → choose_mode(Perform) → song_select(YMCA) → multiuser(auto-skip) → loading → preloading → real_loading → game_screen`. The important change is that native now gets past the old `crowd_clips.fm` / `CharClip` merge crash. The next blocker is later: after venue/viz/crowd merges complete, runtime trips over a render-path symbol lookup for `RndShadowMap::PrepShadow(RndDrawable*, RndEnviron*)`.
 
 Fresh current-checkout revalidation confirms the old song-select crash is gone. The only subtlety is scripted input targeting: a bare `confirm` on the default `LEGIT` / `song_tier_4` header stays on `song_select_screen`, while moving the highlight onto a real song row like `YMCA` transitions into gameplay immediately.
 
@@ -157,12 +157,16 @@ Fresh current-checkout revalidation confirms the old song-select crash is gone. 
   - `archive/screenshots/2026-03-12-session-recheck-song-loading/` shows `song_select_screen` is now stable for 10000 frames. That run did not leave song select because the scripted `confirm` at frame 900 selected the `LEGIT` header (`song_tier_4`), not a playable song row.
   - `archive/screenshots/2026-03-12-session-recheck-song-loading-ymca/` shows the actual gameplay path still works. Scripted input `520 confirm`, `700 confirm`, `860 down`, `900 down`, `940 down`, `980 confirm` moves the highlight to `YMCA`, then transitions:
     - `song_select_screen -> multiuser_screen -> loading_screen -> preloading_screen -> real_loading_screen -> game_screen`
-    - `game_screen` remains stable past frame 4000 in the current run
+    - the older run remained in a black/pink-placeholder `game_screen`, but that is no longer the latest truth
   - representative screenshots:
     - `frame_00820.png` / `frame_00900.png`: expanded song list on `song_select_screen`
     - `frame_00980.png`: `YMCA` highlighted before confirm
     - `frame_01060.png`, `frame_01400.png`, `frame_02200.png`: stable `game_screen`
-  Treat the old song-select crash as resolved. The remaining work is content/audio/venue parity and cleanup, not menu bring-up.
+  - newer bring-up runs changed the next blocker:
+    - `archive/screenshots/2026-03-12-session-crowd-merge-trace-131011/` pinned the old crash to `MergeObject()` on colliding `CharClip` data inside `crowd_clips.fm`, specifically `crouching_bad_01` during `female_medium.milo -> female_base.milo`
+    - native-only `CharClip::Transitions` fixes now let that merge complete
+    - `archive/screenshots/2026-03-12-session-charclip-ownerfix-retest2-132003/` shows the app then getting farther, through `female_tempo`, `female_era`, `female_tempo_era`, venue merge, and viz merge, before failing on `RndShadowMap::PrepShadow`
+  Treat the old song-select crash and old crowd-clip merge crash as resolved. The current blocker is later render/shadow bring-up.
 - **Panel unload teardown**: the older Session 56 note that blamed `FlowSwitchCase` and hash-table deletion order is superseded. The verified chain is now:
   - deleting a flow child leaves a null `ObjPtrVec` tombstone under suppressed ref erasure
   - `FlowNode::~FlowNode()` used to spin forever on that tombstone
@@ -190,7 +194,16 @@ Fresh current-checkout revalidation confirms the old song-select crash is gone. 
   - already have real named implementations in-tree and should be audited as concrete bring-up targets: `content_mgr`, `profile_mgr`, `challenges`, `saveload_mgr`, `speech_mgr`
   Treat these as the next parity backlog now that `song_select_screen` and `game_screen` are stable. Each remaining stub should be removed only after its real native init path exists and survives a binary run.
 - **Current song-loading cleanup backlog**:
-  - gameplay is functional, but venue/background assets are still absent in the fresh `game_screen` captures, leaving a mostly black stage with pink placeholder panels
+  - gameplay now gets through the former `crowd_clips.fm` `CharClip` merge crash via native-only `CharClip::Transitions` fixes:
+    - native transition nodes must be real `ObjOwnerPtr<CharClip>` objects before assignment in `Transitions::Load()`
+    - native transition-node ownership must route `Replace()` through the `Transitions` container, not the outer `CharClip`
+    - these are native-port fixes and are wrapped under `#ifdef HX_NATIVE`
+  - the next hard blocker is no longer content merge. It is a runtime render-path symbol failure:
+    - `native/build/dc3-native: undefined symbol: _ZN12RndShadowMap10PrepShadowEP11RndDrawableP10RndEnviron`
+    - this appears only after venue/viz/crowd merges finish, so it is downstream of the world-content load path
+  - representative evidence:
+    - `archive/screenshots/2026-03-12-session-charclip-ownerfix-retest2-132003/frame_01060.png`
+    - `archive/screenshots/2026-03-12-session-charclip-ownerfix-retest2-132003/frame_01200.png`
   - the loading/audio path remains intentionally short-circuited in `SongPreview.cpp`, `LoadingPanel.cpp`, and `PreloadPanel.cpp`
   - stale unconditional diagnostics are still compiled in (`MainMenuProvider.cpp`, `HamNavList.cpp`, `SongSortMgr.cpp`, `HamSongMgr.cpp`, `UI.cpp`, `App.cpp`) and should be removed or re-gated once bring-up work settles
 
@@ -203,6 +216,7 @@ Fresh current-checkout revalidation confirms the old song-select crash is gone. 
 - **Choose-mode perform probe**: `archive/screenshots/2026-03-12-session074620-perform-song/`
 - **GameMode/song-select provider probe**: `archive/screenshots/2026-03-12-session-gamemode-setmode-fix/`
 - **Song-select post-provider probe**: `archive/screenshots/2026-03-12-session-gamemode-setmode-fix-postproviders/`
+- **CharClip merge fix + shadow-path blocker**: `archive/screenshots/2026-03-12-session-charclip-ownerfix-retest2-132003/`
 - **Session 57 game_screen screenshots + video**: `archive/screenshots/session57/` (`menu_to_gameplay_30fps.mp4`)
 - **Session 55 screenshots**: `archive/screenshots/session55/`
 - **Session 54 screenshots**: `archive/screenshots/session54/`

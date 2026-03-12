@@ -278,36 +278,42 @@ void RndAmbientOcclusion::BuildTrees(Quality quality) {
 
         Box box(Vector3(FLT_MAX, FLT_MAX, FLT_MAX), Vector3(-FLT_MAX, -FLT_MAX, -FLT_MAX));
 
-        FOREACH (it, mObjectsCast) {
-            RndMesh *mesh = *it;
-            const Transform &xfm = mesh->WorldXfm();
+        {
+            auto it = mObjectsCast.begin();
+            if (it != mObjectsCast.end()) {
+                do {
+                    RndMesh *mesh = *it;
+                    const Transform &xfm = mesh->WorldXfm();
 
-            for (unsigned int i = 0; i < mesh->Faces().size(); i++) {
-                RndMesh::Face &face = mesh->Faces(i);
-                Vector3 v0, v1, v2;
-                Multiply(mesh->Verts()[face.v1].pos, xfm, v0);
-                Multiply(mesh->Verts()[face.v2].pos, xfm, v1);
-                Multiply(mesh->Verts()[face.v3].pos, xfm, v2);
+                    for (unsigned int i = 0; i < mesh->Faces().size(); i++) {
+                        RndMesh::Face &face = mesh->Faces(i);
+                        Vector3 v0, v1, v2;
+                        Multiply(mesh->Verts()[face.v1].pos, xfm, v0);
+                        Multiply(mesh->Verts()[face.v2].pos, xfm, v1);
+                        Multiply(mesh->Verts()[face.v3].pos, xfm, v2);
 
-                float d01 = Distance(v1, v0);
-                float d12 = Distance(v1, v2);
-                float d20 = Distance(v0, v2);
+                        float d01 = Distance(v1, v0);
+                        float d12 = Distance(v1, v2);
+                        float d20 = Distance(v0, v2);
 
-                if ((d01 + d12 + d20) > 9.999999747378752e-05f && (d01 * d12 * d20) > 1.1920928955078125e-07f) {
-                    box.GrowToContain(v0, false);
-                    box.GrowToContain(v1, false);
-                    box.GrowToContain(v2, false);
+                        if ((d01 + d12 + d20) > 9.999999747378752e-05f && (d01 * d12 * d20) > 1.1920928955078125e-07f) {
+                            box.GrowToContain(v0, false);
+                            box.GrowToContain(v1, false);
+                            box.GrowToContain(v2, false);
 
-                    Triangle tri;
-                    tri.Set(v0, v1, v2);
-                    mTriList.push_back(tri);
+                            Triangle tri;
+                            tri.Set(v0, v1, v2);
+                            mTriList.push_back(tri);
 
-                    if (mIntersectBackFaces) {
-                        Triangle triBack;
-                        triBack.Set(v0, v2, v1);
-                        mTriList.push_back(triBack);
+                            if (mIntersectBackFaces) {
+                                Triangle triBack;
+                                triBack.Set(v0, v2, v1);
+                                mTriList.push_back(triBack);
+                            }
+                        }
                     }
-                }
+                    ++it;
+                } while (it != mObjectsCast.end());
             }
         }
 

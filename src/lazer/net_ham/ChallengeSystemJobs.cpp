@@ -9,8 +9,8 @@
 
 FlauntScoreJob::FlauntScoreJob(Hmx::Object *callback, FlauntScoreData &data)
     : RCJob("leaderboards/flauntscore/", callback) {
-    DataPoint pt;
     static Symbol pid("pid");
+    DataPoint pt;
     static Symbol song_id("song_id");
     static Symbol score("score");
     static Symbol diff("diff");

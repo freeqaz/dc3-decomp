@@ -796,6 +796,11 @@ void Character::DrawShowing() {
     if (mSelfShadow && TheRnd.GetDrawMode() == 0 && lod <= 1 && (mDrawMode & 1)) {
         doSelfShadow = true;
     }
+    #ifdef HX_NATIVE
+    // Native shadow-map prep is not brought up yet. Keep gameplay rendering
+    // on the main path until RndShadowMap parity work is ready.
+    doSelfShadow = false;
+    #endif
     if (doSelfShadow) {
         int savedForceLod = _ref0;
         _ref0 = (LODType)lod;
@@ -910,33 +915,41 @@ void Character::DrawLod(int lod) {
 
 void Character::DrawLodOrShadow(int lod, DrawMode drawMode) {
     mPollState = (PollState)5;
-    mLastLod = Clamp<int>(0, mLods.size() - 1, lod);
     if (drawMode == 4) {
         if (mShadow.size() != 0) {
             mShadow.Draw();
-            return;
         }
-    } else {
-        bool _bit0 = (drawMode && 1) != 0;
-        if (_bit0) {
-            RndEnvironTracker tracker(mEnv, &WorldXfm().v);
-            DrawShowing();
-            if (drawMode == 1) {
-                unk2a0 = RndEnviron::Current();
-                unk2b4 = RndEnviron::CurrentPos();
-            }
+        return;
+    }
+
+    mLastLod = Clamp<int>(0, mLods.size() - 1, lod);
+    Lod *curLod = mLods.empty() ? nullptr : &mLods[mLastLod];
+
+    if (drawMode & 1) {
+        RndDir::DrawShowing();
+        if (curLod) {
+            curLod->mOpaque.Draw();
         }
-        if (drawMode & 2) {
-            if (drawMode == 2) {
-                RndEnvironTracker tracker(unk2a0, unk2b4);
-                DrawShowing();
-                return;
-            }
-            DrawShowing();
-            return;
+        if (drawMode == 1) {
+            unk2a0 = RndEnviron::Current();
+            unk2b4 = RndEnviron::CurrentPos();
         }
     }
-    DrawShowing();
+
+    if (drawMode & 2) {
+        if (drawMode == 2) {
+            RndEnvironTracker tracker(unk2a0, unk2b4);
+            mTranslucent.Draw();
+            if (curLod) {
+                curLod->mTranslucent.Draw();
+            }
+        } else {
+            mTranslucent.Draw();
+            if (curLod) {
+                curLod->mTranslucent.Draw();
+            }
+        }
+    }
 }
 
 void DrawPtrVec::Draw() const {

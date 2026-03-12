@@ -34,6 +34,7 @@
 #include "synth/FxSend.h"
 #include "synth/FxSendMeterEffect.h"
 #include "hamobj/HamCamShot.h"
+#include "hamobj/HamCharacter.h"
 #include "hamobj/HamIKEffector.h"
 #include "hamobj/HamIKSkeleton.h"
 #include "hamobj/HamLabel.h"
@@ -167,6 +168,7 @@ OBJREFCONCRETE_COPYREF(UILabel)
 OBJREFCONCRETE_COPYREF(UILabelDir)
 OBJREFCONCRETE_COPYREF(UIList)
 OBJREFCONCRETE_COPYREF(WorldCrowd)
+OBJREFCONCRETE_COPYREF(HamCharacter)
 
 #undef OBJREFCONCRETE_COPYREF
 

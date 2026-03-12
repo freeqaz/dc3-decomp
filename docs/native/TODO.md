@@ -127,11 +127,15 @@ Goal: UI elements positioned and sized correctly, matching Xbox reference
 - [ ] Check InlineHelp component visibility
 
 ## Phase 3: DTA/Content System (HIGH PRIORITY)
-Goal: Load and execute DTA scripts so the game's event system works natively
+Goal: Remove C++ workarounds and let real DTA screen-flow scripts drive the native port.
 
-- [ ] DTA autoload on Dir/Object load
-- [ ] Content population for HamNavList providers
-- [ ] Screen-level DTA hooks (enter/exit/transition)
+**Full plan**: [DTA_FLOW_V2_PLAN.md](DTA_FLOW_V2_PLAN.md)
+
+- [ ] **Smart stubs** (Phase 1): SaveLoadManager, ProfileMgr, PlatformMgr return sensible defaults
+- [ ] **Remove auto-advance** (Phase 2): DTA handlers drive screen transitions naturally
+- [ ] **Animation lifecycle** (Phase 3): Fix `anim_done` → StopAnimation chain
+- [ ] **Remove multiuser auto-skip** (Phase 4): Real venue/char/difficulty selection flow
+- [ ] **Cleanup** (Phase 5): Remove mSink hack, GameMode guard, controller force-on
 
 ## Phase 4: Visual Polish
 - [ ] PropAnim → material → GPU uniform path verification

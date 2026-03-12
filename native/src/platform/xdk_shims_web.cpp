@@ -16,20 +16,31 @@
 #include <map>
 #include <vector>
 
+// Windows constants not defined in XDK headers
+#ifndef TRUE
+#define TRUE 1
+#endif
+#ifndef FALSE
+#define FALSE 0
+#endif
+#ifndef CREATE_SUSPENDED
+#define CREATE_SUSPENDED 0x00000004
+#endif
+
 // ============================================================================
 // Critical Section — no-ops on single-threaded WASM
 // ============================================================================
 
-void WINAPI RtlInitializeCriticalSection(RTL_CRITICAL_SECTION *cs) {
+void RtlInitializeCriticalSection(RTL_CRITICAL_SECTION *cs) {
     if (cs) memset(cs, 0, sizeof(*cs));
 }
 
-void WINAPI RtlEnterCriticalSection(RTL_CRITICAL_SECTION *cs) {}
-void WINAPI RtlLeaveCriticalSection(RTL_CRITICAL_SECTION *cs) {}
-void WINAPI RtlDeleteCriticalSection(RTL_CRITICAL_SECTION *cs) {}
+void RtlEnterCriticalSection(RTL_CRITICAL_SECTION *cs) {}
+void RtlLeaveCriticalSection(RTL_CRITICAL_SECTION *cs) {}
+void RtlDeleteCriticalSection(RTL_CRITICAL_SECTION *cs) {}
 
-BOOLEAN WINAPI RtlTryEnterCriticalSection(RTL_CRITICAL_SECTION *cs) {
-    return TRUE;
+int RtlTryEnterCriticalSection(RTL_CRITICAL_SECTION *cs) {
+    return 1;
 }
 
 // ============================================================================
@@ -158,8 +169,9 @@ void WINAPI OutputDebugStringA(const char *s) {
     if (s) fprintf(stderr, "[XDK] %s", s);
 }
 
-DWORD WINAPI GetLastError() { return 0; }
-void WINAPI SetLastError(DWORD err) {}
+// GetLastError provided by engine_stubs_generated.cpp
+void SetLastError(DWORD err) {}
+DWORD GetCurrentThreadId() { return 1; }
 
 // ============================================================================
 // XGraphics stubs
@@ -170,5 +182,34 @@ HRESULT WINAPI XGCopySurface(void* dst, void* rect, int w, int h,
                              int filter, float r) {
     return 0;
 }
+
+// ============================================================================
+// WebSvcMgr stub — replaces curl-based networking (not available in WASM)
+// ============================================================================
+
+#include "net/WebSvcMgr.h"
+
+class WebSvcMgrStub : public WebSvcMgr {
+public:
+    bool DoRequest(ReqType, unsigned int, unsigned short, const char*,
+                   const char*, unsigned int, const char*, unsigned int) override { return false; }
+    bool InitRequest(WebSvcRequest*, ReqType, const char*, unsigned short,
+                     const char*, unsigned int) override { return false; }
+    bool InitRequest(WebSvcRequest*, ReqType, unsigned int, unsigned short,
+                     const char*, unsigned int) override { return false; }
+};
+static WebSvcMgrStub gWebSvcMgrStub;
+WebSvcMgr &TheWebSvcMgr = gWebSvcMgrStub;
+
+// ============================================================================
+// Xbox-specific API stubs (declared in xdk/xapilibi/xbox.h as extern "C")
+// ============================================================================
+
+DWORD XCancelOverlapped(void*) { return 0; }
+DWORD XUserAwardGamerPicture(DWORD, DWORD, void*) { return 0; }
+DWORD XUserAwardAvatarAssets(DWORD, DWORD, void*, void*) { return 0; }
+DWORD XUserGetXUID(DWORD, void*) { return 0; }
+DWORD XShowNuiGuideUI(DWORD) { return 0; }
+void GetLocalTime(void*) {}
 
 #endif // __EMSCRIPTEN__

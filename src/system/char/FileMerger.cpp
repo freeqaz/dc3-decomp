@@ -13,6 +13,23 @@
 #include "rndobj/Rnd.h"
 #include "rndobj/Tex.h"
 #include "utl/BinStream.h"
+#ifdef HX_NATIVE
+#include <setjmp.h>
+#include <signal.h>
+static sigjmp_buf sMergeRecovery;
+static volatile sig_atomic_t sMergeGuardActive = 0;
+static void MergeGuardHandler(int sig, siginfo_t *info, void *ctx) {
+    if (sMergeGuardActive) {
+        sMergeGuardActive = 0;
+        siglongjmp(sMergeRecovery, sig);
+    }
+    // Not in guarded section — re-raise with default handler
+    struct sigaction sa = {};
+    sa.sa_handler = SIG_DFL;
+    sigaction(sig, &sa, nullptr);
+    raise(sig);
+}
+#endif
 #include "utl/FilePath.h"
 #include "utl/Loader.h"
 #include "utl/MemMgr.h"
@@ -208,6 +225,24 @@ void FileMerger::FinishLoading(Loader *ldr) {
     );
 #endif
     if (dl && !sDisableAll) {
+#ifdef HX_NATIVE
+        // Guard MergeDirs against SIGSEGV from corrupt ref rings during
+        // venue/audio/crowd merges. Recover and skip the merge.
+        struct sigaction merge_sa = {}, old_sa = {};
+        merge_sa.sa_sigaction = MergeGuardHandler;
+        merge_sa.sa_flags = SA_SIGINFO | SA_NODEFER;
+        sigemptyset(&merge_sa.sa_mask);
+        sigaction(SIGSEGV, &merge_sa, &old_sa);
+        sMergeGuardActive = 1;
+        int crashed = sigsetjmp(sMergeRecovery, 1);
+        if (crashed) {
+            sigaction(SIGSEGV, &old_sa, nullptr);
+            fprintf(stderr, "DC3 Native: FileMerger::FinishLoading recovered from signal %d — skipping merge for '%s'\n",
+                    crashed, merger ? merger->mName.Str() : "<null>");
+            PostMerge(merger, dl, true);
+            return;
+        }
+#endif
         if (merger->mProxy) {
             MILO_ASSERT(dl->GetDir(), 0x236);
             ObjectDir *dir = Dir()->Find<ObjectDir>(dl->GetDir()->Name(), false);
@@ -226,6 +261,10 @@ void FileMerger::FinishLoading(Loader *ldr) {
             ReserveToFit(dl->GetDir(), mergerDir, 0);
             MergeDirs(dl->GetDir(), mergerDir, *this);
         }
+#ifdef HX_NATIVE
+        sMergeGuardActive = 0;
+        sigaction(SIGSEGV, &old_sa, nullptr);
+#endif
     }
     PostMerge(merger, dl, true);
 }

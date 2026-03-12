@@ -84,20 +84,6 @@ void AddClassExt(char *file, Symbol s) {
     }
 }
 
-#ifdef HX_NATIVE
-static sigjmp_buf sMergeRecovery;
-static volatile sig_atomic_t sMergeGuardActive = 0;
-
-static void MergeSegvHandler(int sig, siginfo_t *info, void *ctx) {
-    if (sMergeGuardActive) {
-        siglongjmp(sMergeRecovery, 1);
-    }
-    // Re-raise for default handler
-    signal(sig, SIG_DFL);
-    raise(sig);
-}
-#endif
-
 void MergeObject(
     Hmx::Object *o1, Hmx::Object *o2, ObjectDir *dir, MergeFilter::Action act
 ) {
@@ -107,23 +93,6 @@ void MergeObject(
         ObjectDir *o1Dir = dynamic_cast<ObjectDir *>(o1);
         ObjectDir *o2Dir = dynamic_cast<ObjectDir *>(o2);
         bool redirectRefs = !(act == 2 && o1Dir && o2Dir);
-#ifdef HX_NATIVE
-        // Guard against SIGSEGV during merge — corrupt ref rings in
-        // audio/venue merges can crash. Recover and continue.
-        struct sigaction sa = {}, old_sa = {};
-        sa.sa_sigaction = MergeSegvHandler;
-        sa.sa_flags = SA_SIGINFO;
-        sigaction(SIGSEGV, &sa, &old_sa);
-        sMergeGuardActive = 1;
-        if (sigsetjmp(sMergeRecovery, 1) != 0) {
-            // Recovered from SIGSEGV during merge
-            sMergeGuardActive = 0;
-            sigaction(SIGSEGV, &old_sa, nullptr);
-            fprintf(stderr, "DC3 Native: MergeObject recovered from SIGSEGV — from='%s' to='%s'\n",
-                    o1 ? o1->Name() : "<null>", o2 ? o2->Name() : "<null>");
-            return;
-        }
-#endif
         if (redirectRefs) {
             o1->ReplaceRefs(o2);
         }
@@ -131,10 +100,6 @@ void MergeObject(
             o2->Copy(o1, Hmx::Object::kCopyFromMax);
         else if (act == 1)
             o2->Copy(o1, Hmx::Object::kCopyDeep);
-#ifdef HX_NATIVE
-        sMergeGuardActive = 0;
-        sigaction(SIGSEGV, &old_sa, nullptr);
-#endif
     } else if (act != 2) {
         o1->SetName(o1->Name(), dir);
     }

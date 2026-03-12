@@ -121,6 +121,7 @@ Tool-specific deep docs live in subdirectories:
 | [runtime/XENIA_HEADLESS_STATUS.md](runtime/XENIA_HEADLESS_STATUS.md) | **Main status doc** — all xenia changes, rendering investigation, debug flags, roadmap |
 | [runtime/BOOT_ANALYSIS.md](runtime/BOOT_ANALYSIS.md) | Boot progress (~70-80%), thread architecture, how to run |
 | [runtime/SCRIPTED_INPUT_TESTING.md](runtime/SCRIPTED_INPUT_TESTING.md) | Xenia scripted input — `--scripted_input` usage and DC3 navigation strategy |
+| [native/DTA_FLOW_V2_PLAN.md](native/DTA_FLOW_V2_PLAN.md) | **DTA Flow v2** — plan to remove C++ workarounds and run real DTA screen-flow scripts |
 | [native/HEADLESS_TESTING.md](native/HEADLESS_TESTING.md) | dc3-native headless testing — scripted input + screenshots via env vars |
 | [native/TESTING.md](native/TESTING.md) | Native build testing guide — GTest fixtures, ASan, debugging workflow |
 | [sessions/2026-02-18-xenia-screenshot-breakthrough.md](sessions/2026-02-18-xenia-screenshot-breakthrough.md) | **Screenshot breakthrough** — full journey from black frames to rendered DC3 boot animation |

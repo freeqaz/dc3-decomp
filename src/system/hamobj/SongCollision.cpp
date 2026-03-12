@@ -353,50 +353,53 @@ void SongCollision::CheckCollision(
     const Transform *const transforms,
     SongCollisionOutput &out
 ) const {
-    memset(&out, 0, sizeof(out));
-    MILO_ASSERT(diffs, 0x145);
-    MILO_ASSERT(transforms, 0x146);
+    Vector3 dir;
+    Subtract(transforms[1].v, transforms[0].v, dir);
+    Vector3 normalDir;
+    Normalize(dir, normalDir);
 
-    const BeatCollisionData *beatData[2] = {
-        BeatData(beat, diffs[0]),
-        BeatData(beat, diffs[1]),
-    };
+    int i = 0;
+    do {
+        memcpy(out._data + 0x60 + i * 0x40, &transforms[i], sizeof(Transform));
 
-    bool haveBeatData = beatData[0] && beatData[1];
-    float minX[2] = { 0.0f, 0.0f };
-    float maxX[2] = { 0.0f, 0.0f };
+        const BeatCollisionData *bd = BeatData(beat, diffs[i]);
+        Vector3 *minEdge = reinterpret_cast<Vector3 *>(out._data + i * 0x10);
+        Vector3 *maxEdge = reinterpret_cast<Vector3 *>(out._data + (i + 2) * 0x10);
+        Vector3 *push = reinterpret_cast<Vector3 *>(out._data + (i + 4) * 0x10);
 
-    for (int i = 0; i < 2; i++) {
-        const Vector3 &worldPos = transforms[i].v;
-        SetSongCollisionWorldPos(out, i, worldPos);
+        if (!bd) {
+            minEdge->Zero();
+            maxEdge->Zero();
+            push->Zero();
+        } else {
+            Vector3 minVec(bd->mMinX, 0.0f, 0.0f);
+            Multiply(minVec, transforms[i], *minEdge);
 
-        if (!beatData[i]) {
-            SetSongCollisionOffset(out, i, worldPos);
-            SetSongCollisionOffset(out, i + 2, worldPos);
-            continue;
+            Vector3 maxVec(bd->mMaxX, 0.0f, 0.0f);
+            Multiply(maxVec, transforms[i], *maxEdge);
+
+            float proj = normalDir.x * (minEdge->x - transforms[i].v.x)
+                + normalDir.y * (minEdge->y - transforms[i].v.y)
+                + normalDir.z * (minEdge->z - transforms[i].v.z);
+
+            if ((proj <= 0.0f || i != 0) && (proj >= 0.0f || i != 1)) {
+                proj = normalDir.x * (maxEdge->x - transforms[i].v.x)
+                    + normalDir.y * (maxEdge->y - transforms[i].v.y)
+                    + normalDir.z * (maxEdge->z - transforms[i].v.z);
+            }
+
+            Scale(normalDir, proj, *push);
         }
+        i++;
+    } while (i < 2);
 
-        Vector3 beatStart;
-        Add(worldPos, beatData[i]->mOffset, beatStart);
-
-        Vector3 leftEdge = beatStart;
-        leftEdge.x += beatData[i]->mMinX;
-        Vector3 rightEdge = beatStart;
-        rightEdge.x += beatData[i]->mMaxX;
-
-        SetSongCollisionOffset(out, i, leftEdge);
-        SetSongCollisionOffset(out, i + 2, rightEdge);
-
-        minX[i] = leftEdge.x;
-        maxX[i] = rightEdge.x;
+    float totalExtent = 0.0f;
+    for (int j = 0; j < 2; j++) {
+        totalExtent += Length(*reinterpret_cast<Vector3 *>(out._data + 0x40 + j * 0x10));
     }
 
-    bool colliding = false;
-    if (haveBeatData) {
-        colliding = maxX[0] + sCollisionTolerance >= minX[1]
-            && maxX[1] + sCollisionTolerance >= minX[0];
-    }
-    SetSongCollisionColliding(out, colliding);
+    float distance = Length(dir);
+    SetSongCollisionColliding(out, distance < totalExtent - sCollisionTolerance);
 }
 
 bool SongCollision::IsCollision(

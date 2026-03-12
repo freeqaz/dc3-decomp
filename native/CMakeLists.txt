@@ -1049,9 +1049,16 @@ set(DC3_WEB_GFX_SOURCES
 set_source_files_properties(src/gfx/mikktspace.c PROPERTIES LANGUAGE C)
 
 # Full engine + web platform layer
+# Filter out files that can't compile under Emscripten
+set(DC3_WEB_ENGINE_SOURCES ${DC3_ENGINE_SOURCES})
+list(REMOVE_ITEM DC3_WEB_ENGINE_SOURCES
+    ${CMAKE_SOURCE_DIR}/../src/system/net/HttpReqCurl.cpp
+    ${CMAKE_SOURCE_DIR}/../src/system/net/WebSvcMgrCurl.cpp
+)
+
 add_executable(dc3-web
     src/main_web.cpp
-    ${DC3_ENGINE_SOURCES}
+    ${DC3_WEB_ENGINE_SOURCES}
     ${DC3_WEB_CORE_SOURCES}
     ${DC3_WEB_GFX_SOURCES}
 )
@@ -1066,6 +1073,11 @@ target_compile_definitions(dc3-web PRIVATE
     HX_WEB=1
     MILO_DEBUG=1
     _DEBUG=1
+    # libc++ removed deprecated C++ features in C++17 mode; re-enable them
+    _LIBCPP_ENABLE_CXX17_REMOVED_RANDOM_SHUFFLE
+    _LIBCPP_ENABLE_CXX17_REMOVED_BINDERS
+    _LIBCPP_ENABLE_CXX17_REMOVED_AUTO_PTR
+    _LIBCPP_ENABLE_CXX17_REMOVED_UNARY_BINARY_FUNCTION
 )
 
 target_include_directories(dc3-web PRIVATE
@@ -1084,6 +1096,9 @@ target_link_options(dc3-web PRIVATE
     -sENVIRONMENT=web
     -sEXPORTED_FUNCTIONS=["_main"]
     -sEXPORTED_RUNTIME_METHODS=["ccall","cwrap"]
+    # Allow undefined symbols — engine stubs use asm-labels that wasm-ld can't resolve
+    -sERROR_ON_UNDEFINED_SYMBOLS=0
+    -sUSE_ZLIB=1
 )
 
 target_compile_options(dc3-web PRIVATE

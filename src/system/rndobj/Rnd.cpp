@@ -1173,7 +1173,7 @@ void Rnd::DrawPreClear() {
     }
 #ifndef HX_NATIVE
     unsigned int event = 0;
-    if ((unsigned char)gRndTextureEvent) {
+    if (!(!((unsigned char)gRndTextureEvent))) {
         sTexture->FinishCompress(gRndTextureEvent);
         unsigned int eventVal = (unsigned int)gRndTextureEvent;
         gRndTextureEvent = 0;
@@ -1203,7 +1203,7 @@ void Rnd::DrawPreClear() {
     if (event == 0) {
         auto it_end = mCompressTexQueue.end();
         auto it_begin = mCompressTexQueue.begin();
-        if (it_begin != it_end) {
+        if (it_end != it_begin) {
             auto it = it_begin;
             do {
                 CompressTexDesc *desc = *it;

@@ -18,12 +18,13 @@ int BinkSetVideoOnOff() { return 0; }
 int ctr_reinit() { return 0; }
 int ctr_start() { return 0; }
 int D3DResource_Release() { return 0; }
-void* DataInput = 0;
+int DataInput(void*, int) { return 0; }
 int DmCaptureStackBackTrace() { return 0; }
 int DmGetSystemInfo() { return 0; }
 int DmMapDevkitDrive() { return 0; }
-void* expand = 0;
-void* expj = 0;
+struct complex { double x, y; };
+void expand(complex*, int, complex*, ...) {}
+complex expj(double) { return {0, 0}; }
 int FileRecursePattern() { return 0; }
 int FileTimeToSystemTime() { return 0; }
 void* gCharHighlightY = 0;
@@ -50,12 +51,12 @@ extern "C" float lbl_82F0BE80 = 2.0f;
 int lbl_82F14008 = 0;
 DataArray *lbl_830A4100 = nullptr;
 int lbl_830A4104 = 0;
-int lbl_82F1AB98() { return 0; }
-int lbl_82F1AB9C() { return 0; }
-int lbl_82F1ABA0() { return 0; }
-int lbl_8316EB70() { return 0; }
-int lbl_8316EBA8() { return 0; }
-int lbl_83172BB0() { return 0; }
+unsigned int lbl_82F1AB98 = 60;     // seconds per minute
+unsigned int lbl_82F1AB9C = 3600;   // seconds per hour
+unsigned int lbl_82F1ABA0 = 86400;  // seconds per day
+void* lbl_8316EB70 = 0;  // complex* (filterdesign)
+void* lbl_8316EBA8 = 0;  // complex* (filterdesign)
+void* lbl_83172BB0 = 0;  // complex* (filterdesign)
 int lh_table_lookup() { return 0; }
 int NuiAudioCreate() { return 0; }
 int NuiAudioRegisterCallbacks() { return 0; }
@@ -113,7 +114,8 @@ double __real_4000000000000000 = 2.0;
 double __real_400921fb60000000 = 3.14159274101257324;   // pi (float precision)
 double __real_401921fb60000000 = 6.28318548202514648;   // 2*pi (float precision)
 int register_cipher() { return 0; }
-int rijndael_desc() { return 0; }
+struct _cipher_descriptor { char dummy[256]; };
+const _cipher_descriptor rijndael_desc = {};
 int rijndael_ecb_decrypt() { return 0; }
 int rijndael_setup() { return 0; }
 int SetUnhandledExceptionFilter() { return 0; }

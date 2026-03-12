@@ -22,7 +22,14 @@
 #include "world/Dir.h"
 #include <cmath>
 
-void NormalizeScale(const Vector3 &, float, Vector3 &);
+void NormalizeScale(const Vector3 &in, float scale, Vector3 &out) {
+    float inv = 0;
+    float len = Length(in);
+    if (len != 0) {
+        inv = 1.0f / len;
+    }
+    Scale(in, inv * scale, out);
+}
 
 bool CharEyes::sDisableEyeDart;
 bool CharEyes::sDisableEyeJitter;
@@ -33,7 +40,9 @@ bool CharLookAt::sDisableJitter;
 
 INIT_REVS(18, 0)
 
+#ifndef __EMSCRIPTEN__
 float pow(float base, float exp) { return std::pow(base, exp); }
+#endif
 
 CharEyes::CharEyes()
     : mEyes(this), mInterests(this), mFaceServo(this), mCamWeight(this), mTarget(0, 0, 0),
@@ -531,6 +540,14 @@ bool CharEyes::SetFocusInterest(CharInterest *interest, int i) {
         mFocusTimer = -1;
 
     return true;
+}
+
+CharInterest *CharEyes::GetCurrentInterest() {
+    if (mFocusInterest)
+        return mFocusInterest;
+    if (mCurrentInterest)
+        return mCurrentInterest;
+    return 0;
 }
 
 void CharEyes::ToggleInterestsDebugOverlay() {

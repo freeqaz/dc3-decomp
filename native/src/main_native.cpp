@@ -34,7 +34,7 @@ int main(int argc, char **argv) {
     // Use sigaction for reliable signal handling
     struct sigaction sa;
     sa.sa_sigaction = SignalHandler;
-    sa.sa_flags = SA_SIGINFO | SA_RESETHAND;
+    sa.sa_flags = SA_SIGINFO;
     sigemptyset(&sa.sa_mask);
     sigaction(SIGSEGV, &sa, nullptr);
     sigaction(SIGABRT, &sa, nullptr);

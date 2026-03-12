@@ -297,6 +297,23 @@ const char *Hmx::Object::FindPathName() {
 
 void Hmx::Object::ReplaceRefs(Hmx::Object *obj) {
     if (mRefs.begin() != mRefs.end()) {
+#ifdef HX_NATIVE
+        // Validate ref ring before walking — corrupt rings crash during merge
+        ObjRef *probe = mRefs.next;
+        int count = 0;
+        while (probe != &mRefs && probe != nullptr && count < 100000) {
+            if (!probe->next || !probe->prev) {
+                fprintf(stderr, "DC3 Native: ReplaceRefs skipping corrupt ring for '%s'\n", Name());
+                return;
+            }
+            probe = probe->next;
+            count++;
+        }
+        if (count >= 100000 || probe == nullptr) {
+            fprintf(stderr, "DC3 Native: ReplaceRefs skipping corrupt/infinite ring for '%s'\n", Name());
+            return;
+        }
+#endif
         ObjRef other(mRefs);
         other.prev->next = &other;
         other.next->prev = &other;
