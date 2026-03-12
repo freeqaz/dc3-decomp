@@ -20,7 +20,9 @@
 #include "obj/Dir.h"
 #include "ui/UI.h"
 
+#ifndef __EMSCRIPTEN__
 #include <GLFW/glfw3.h>
+#endif
 
 #include <algorithm>
 #include <cmath>
@@ -43,7 +45,9 @@ RndShaderMgr& TheShaderMgr = gWgpuShaderMgr;
 WgpuRnd* gWgpuRnd = &gWgpuRndInstance;
 
 // Exposed for input subsystem (Joypad_Native, Keyboard_Native)
+#ifndef __EMSCRIPTEN__
 GLFWwindow *gNativeWindow = nullptr;
+#endif
 
 UIManager* TheUI = nullptr;
 
@@ -148,7 +152,9 @@ void WgpuRnd::Init() {
         // Overriding them with the GPU framebuffer dimensions (1280x720) causes UI content
         // to appear at ~60% scale because elements are positioned for a 1280x720 view but
         // the projection only covers 768x432 world units.
+#ifndef __EMSCRIPTEN__
         gNativeWindow = mGpu.Window();
+#endif
 
         // Initialize pipeline manager
         mPipelines.Init(&mGpu);
@@ -211,7 +217,9 @@ void WgpuRnd::Init() {
 }
 
 void WgpuRnd::Terminate() {
+#ifndef __EMSCRIPTEN__
     gNativeWindow = nullptr;
+#endif
 
     // Release all GPU objects BEFORE device shutdown to avoid
     // use-after-free in static destructor (Dawn/Vulkan teardown ordering)
@@ -288,10 +296,12 @@ void WgpuRnd::BeginDrawing() {
     FrameCapture::Get().BeginFrame(mFrameID);
 
     // F12 triggers capture for next frame
+#ifndef __EMSCRIPTEN__
     if (gNativeWindow && !mGpu.IsHeadless()) {
         if (glfwGetKey(gNativeWindow, GLFW_KEY_F12) == GLFW_PRESS)
             FrameCapture::Get().CaptureNextFrame();
     }
+#endif
 
     // Select default camera and environment (base Rnd::BeginDrawing does this)
     // Only if no camera is already current (viewer sets its own orbit camera)

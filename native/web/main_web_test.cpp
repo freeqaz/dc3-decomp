@@ -1,22 +1,25 @@
 // DC3 Web Port — Minimal WebGPU Canvas Test
 // Clears an HTML canvas to cornflower blue via WebGPU in the browser.
-// This is the Phase 0 proof-of-life: C++ → WASM → browser WebGPU.
+// Phase 0 proof-of-life: C++ → WASM → browser WebGPU.
 
 #include <webgpu/webgpu.h>
 #include <emscripten/emscripten.h>
 #include <emscripten/html5.h>
-#include <emscripten/html5_webgpu.h>
 #include <cstdio>
 #include <cstdlib>
 
+static WGPUInstance gInstance = nullptr;
 static WGPUDevice gDevice = nullptr;
 static WGPUQueue gQueue = nullptr;
 static WGPUSurface gSurface = nullptr;
-static WGPUTextureFormat gSurfaceFormat = WGPUTextureFormat_BGRA8Unorm;
 static int gWidth = 1280;
 static int gHeight = 720;
+static bool gReady = false;
+static bool gInitStarted = false;
 
-static void frame() {
+static void renderFrame() {
+    if (!gReady) return;
+
     WGPUSurfaceTexture surfTex;
     wgpuSurfaceGetCurrentTexture(gSurface, &surfTex);
     if (surfTex.status != WGPUSurfaceGetCurrentTextureStatus_SuccessOptimal &&
@@ -47,30 +50,19 @@ static void frame() {
     wgpuCommandBufferRelease(cmd);
     wgpuCommandEncoderRelease(encoder);
 
-    wgpuSurfacePresent(gSurface);
+    // No wgpuSurfacePresent() — browser auto-presents at end of requestAnimationFrame
     wgpuTextureViewRelease(view);
 }
 
-static void onDeviceReady(WGPURequestDeviceStatus status, WGPUDevice device,
-                          WGPUStringView message, void* /*userdata*/) {
-    if (status != WGPURequestDeviceStatus_Success) {
-        fprintf(stderr, "Device request failed: %.*s\n", (int)message.length, message.data);
-        return;
-    }
-
-    gDevice = device;
-    gQueue = wgpuDeviceGetQueue(gDevice);
-
-    // Create surface from the canvas
-    WGPUSurfaceSourceCanvasHTMLSelector_HTMLString canvasDesc = {};
-    canvasDesc.chain.sType = WGPUSType_SurfaceSourceCanvasHTMLSelector_HTMLString;
-    canvasDesc.selector = (WGPUStringView){"#dc3-canvas", 11};
+static void configureSurfaceAndStart() {
+    // Create surface from the HTML canvas
+    WGPUEmscriptenSurfaceSourceCanvasHTMLSelector canvasDesc = {};
+    canvasDesc.chain.sType = WGPUSType_EmscriptenSurfaceSourceCanvasHTMLSelector;
+    canvasDesc.selector = {"#dc3-canvas", 11};
 
     WGPUSurfaceDescriptor surfDesc = {};
     surfDesc.nextInChain = &canvasDesc.chain;
-    // Get the instance from emscripten
-    WGPUInstance instance = emscripten_webgpu_get_instance();
-    gSurface = wgpuInstanceCreateSurface(instance, &surfDesc);
+    gSurface = wgpuInstanceCreateSurface(gInstance, &surfDesc);
 
     if (!gSurface) {
         fprintf(stderr, "Failed to create surface from canvas\n");
@@ -80,7 +72,7 @@ static void onDeviceReady(WGPURequestDeviceStatus status, WGPUDevice device,
     // Configure surface
     WGPUSurfaceConfiguration config = {};
     config.device = gDevice;
-    config.format = gSurfaceFormat;
+    config.format = WGPUTextureFormat_RGBA8Unorm;  // Browser preferred format
     config.width = gWidth;
     config.height = gHeight;
     config.usage = WGPUTextureUsage_RenderAttachment;
@@ -88,12 +80,25 @@ static void onDeviceReady(WGPURequestDeviceStatus status, WGPUDevice device,
     config.alphaMode = WGPUCompositeAlphaMode_Opaque;
     wgpuSurfaceConfigure(gSurface, &config);
 
-    printf("WebGPU device ready, starting render loop\n");
-    emscripten_set_main_loop(frame, 0, false);
+    printf("WebGPU ready, rendering\n");
+    gReady = true;
+}
+
+static void onDeviceReady(WGPURequestDeviceStatus status, WGPUDevice device,
+                          WGPUStringView message, void* /*userdata1*/, void* /*userdata2*/) {
+    if (status != WGPURequestDeviceStatus_Success) {
+        fprintf(stderr, "Device request failed: %.*s\n", (int)message.length, message.data);
+        return;
+    }
+
+    printf("WebGPU device acquired\n");
+    gDevice = device;
+    gQueue = wgpuDeviceGetQueue(gDevice);
+    configureSurfaceAndStart();
 }
 
 static void onAdapterReady(WGPURequestAdapterStatus status, WGPUAdapter adapter,
-                           WGPUStringView message, void* /*userdata*/) {
+                           WGPUStringView message, void* /*userdata1*/, void* /*userdata2*/) {
     if (status != WGPURequestAdapterStatus_Success) {
         fprintf(stderr, "Adapter request failed: %.*s\n", (int)message.length, message.data);
         return;
@@ -102,24 +107,51 @@ static void onAdapterReady(WGPURequestAdapterStatus status, WGPUAdapter adapter,
     printf("WebGPU adapter acquired\n");
 
     WGPUDeviceDescriptor deviceDesc = {};
-    wgpuAdapterRequestDevice(adapter, &deviceDesc, onDeviceReady, nullptr);
+    WGPURequestDeviceCallbackInfo cbInfo = {};
+    cbInfo.mode = WGPUCallbackMode_AllowSpontaneous;
+    cbInfo.callback = onDeviceReady;
+    wgpuAdapterRequestDevice(adapter, &deviceDesc, cbInfo);
+}
+
+// Main loop callback — drives both init and rendering
+static void mainLoop() {
+    if (!gInitStarted) {
+        gInitStarted = true;
+
+        // Create WebGPU instance
+        gInstance = wgpuCreateInstance(nullptr);
+        if (!gInstance) {
+            fprintf(stderr, "Failed to create WebGPU instance\n");
+            return;
+        }
+
+        // Request adapter (async — callback fires on a future frame)
+        WGPURequestAdapterOptions opts = {};
+        opts.powerPreference = WGPUPowerPreference_HighPerformance;
+
+        WGPURequestAdapterCallbackInfo cbInfo = {};
+        cbInfo.mode = WGPUCallbackMode_AllowSpontaneous;
+        cbInfo.callback = onAdapterReady;
+        wgpuInstanceRequestAdapter(gInstance, &opts, cbInfo);
+
+        printf("Waiting for WebGPU adapter...\n");
+        return;
+    }
+
+    // Process pending WebGPU events (delivers async callbacks)
+    if (gInstance) {
+        wgpuInstanceProcessEvents(gInstance);
+    }
+
+    renderFrame();
 }
 
 int main() {
     printf("DC3 Web Port — Phase 0 WebGPU Test\n");
 
-    // Get the pre-created WebGPU instance from Emscripten
-    WGPUInstance instance = emscripten_webgpu_get_instance();
-    if (!instance) {
-        fprintf(stderr, "No WebGPU instance (browser may not support WebGPU)\n");
-        return EXIT_FAILURE;
-    }
+    // Start the main loop immediately — this keeps the runtime alive
+    // and provides a frame callback for async WebGPU initialization
+    emscripten_set_main_loop(mainLoop, 0, true);
 
-    // Request adapter (async in browser)
-    WGPURequestAdapterOptions opts = {};
-    opts.powerPreference = WGPUPowerPreference_HighPerformance;
-    wgpuInstanceRequestAdapter(instance, &opts, onAdapterReady, nullptr);
-
-    // Don't return from main — Emscripten keeps the runtime alive
     return EXIT_SUCCESS;
 }

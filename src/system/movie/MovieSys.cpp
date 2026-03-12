@@ -7,8 +7,9 @@
 #include "utl/MemMgr.h"
 
 #ifdef HX_NATIVE
-static MovieSys sMovieSys;
-MovieSys &TheMovieSys = sMovieSys;
+#include "moviebink/BinkMovieSys.h"
+extern BinkMovieSys gBinkMovieSys;
+MovieSys &TheMovieSys = gBinkMovieSys;
 #endif
 
 MovieSys::MovieSys() : isInitalized(false) {}

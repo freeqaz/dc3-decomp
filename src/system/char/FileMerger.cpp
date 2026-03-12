@@ -196,6 +196,17 @@ void FileMerger::PreLoad(BinStream &bs) {
 void FileMerger::FinishLoading(Loader *ldr) {
     DirLoader *dl = dynamic_cast<DirLoader *>(ldr);
     Merger *merger = NotifyFileLoaded(ldr, dl);
+#ifdef HX_NATIVE
+    fprintf(
+        stderr,
+        "DC3 Native: FileMerger::FinishLoading owner='%s' merger='%s' file='%s' dir='%s' proxy=%d\n",
+        PathName(this),
+        merger ? merger->mName.Str() : "<null>",
+        ldr ? ldr->LoaderFile().c_str() : "<null>",
+        (dl && dl->GetDir()) ? dl->GetDir()->Name() : "<null>",
+        merger ? merger->mProxy : -1
+    );
+#endif
     if (dl && !sDisableAll) {
         if (merger->mProxy) {
             MILO_ASSERT(dl->GetDir(), 0x236);

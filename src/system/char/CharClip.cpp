@@ -99,8 +99,8 @@ void CharClip::Transitions::AddNode(CharClip *clip, const CharGraphNode &node) {
             (intptr_t)end - (intptr_t)next
         );
     } else {
-        resized = Resize(BytesInMemory() + 0x20, mNodeEnd);
-        new (&resized->clip) ObjOwnerPtr<CharClip>(mOwner, (CharClip *)NULL);
+        resized = Resize(BytesInMemory() + sizeof(NodeVector), mNodeEnd);
+        new (&resized->clip) ObjOwnerPtr<CharClip>(this, (CharClip *)NULL);
         resized->clip = clip;
         resized->size = 0;
     }
@@ -121,10 +121,11 @@ void CharClip::Transitions::AddNode(CharClip *clip, const CharGraphNode &node) {
     resized->size++;
     // Fix up ObjRef linked list pointers after potential reallocation
     for (NodeVector *it = mNodeStart; it < mNodeEnd; it = it->Next()) {
-        ObjRef **prev = (ObjRef **)((char *)it + 4);
-        ObjRef **next = (ObjRef **)((char *)it + 8);
-        *(ObjRef **)((char *)*next + 4) = (ObjRef *)it;
-        *(ObjRef **)((char *)*prev + 8) = (ObjRef *)it;
+        ObjRef *clipRef = (ObjRef *)&it->clip;
+        ObjRef **next = (ObjRef **)((char *)clipRef + sizeof(void *));
+        ObjRef **prev = (ObjRef **)((char *)clipRef + sizeof(void *) * 2);
+        *(ObjRef **)((char *)*next + sizeof(void *) * 2) = clipRef;
+        *(ObjRef **)((char *)*prev + sizeof(void *)) = clipRef;
     }
 }
 
@@ -221,6 +222,7 @@ void CharClip::Transitions::Load(BinStreamRev &d, int oldRev) {
             d.stream.ReadString(buf, 0x100);
             CharClip *clip = mOwner->Dir()->Find<CharClip>(buf, false);
             if (clip) {
+                new (&it->clip) ObjOwnerPtr<CharClip>(this, (CharClip *)NULL);
                 it->clip = clip;
                 d >> it->size;
                 for (int j = 0; j < it->size; j++) {

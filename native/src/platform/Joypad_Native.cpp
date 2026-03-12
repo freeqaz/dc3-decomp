@@ -16,7 +16,9 @@
 #include "os/System.h"
 #include "rndobj/Rnd.h"
 
+#ifndef __EMSCRIPTEN__
 #include <GLFW/glfw3.h>
+#endif
 
 #include <cstdlib>
 #include <cstdio>
@@ -24,8 +26,10 @@
 #include <vector>
 #include <algorithm>
 
+#ifndef __EMSCRIPTEN__
 // Set by Rnd_Wgpu during Init()
 extern GLFWwindow *gNativeWindow;
+#endif
 
 static const float kTriggerThreshold = 0.3f;
 
@@ -179,6 +183,7 @@ void JoypadPoll() {
 
         unsigned int newButtons = 0;
 
+#ifndef __EMSCRIPTEN__
         if (gNativeWindow) {
             // --- Windowed mode: GLFW Gamepad ---
             GLFWgamepadstate gpState;
@@ -237,7 +242,9 @@ void JoypadPoll() {
                 if (glfwGetKey(gNativeWindow, GLFW_KEY_Q)     == GLFW_PRESS) newButtons |= (1 << kPad_L1);
                 if (glfwGetKey(gNativeWindow, GLFW_KEY_E)     == GLFW_PRESS) newButtons |= (1 << kPad_R1);
             }
-        } else if (pad == 0) {
+        } else
+#endif // !__EMSCRIPTEN__
+        if (pad == 0) {
             // --- Headless mode: scripted input (pad 0 only) ---
             newButtons = GetScriptedButtons(currentFrame);
             if (newButtons && !gInputScript.empty()) {

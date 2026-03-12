@@ -133,12 +133,40 @@ void ShellInput::Draw() { mCursorPanel->Draw(); }
 
 void ShellInput::Poll() {
 #ifdef HX_NATIVE
-    // Most of ShellInput::Poll relies on Kinect gesture infrastructure
-    // (HandsUpGestureFilter, SkeletonIdentifier, etc) which aren't init'd on native.
-    // Only poll the cursor panel if it exists.
-    if (mCursorPanel) mCursorPanel->Poll();
-    return;
-#endif
+    // Native poll: skip gesture filters (HandInvoke, HandsUp) and Kinect-specific
+    // subsystems (DepthBuffer, SkeletonIdentifier, SkeletonExtentTracker) that
+    // aren't initialized. But poll the SkeletonChooser and cursor panel.
+
+    // No hands-up gesture filter on native — keep NavList disengage off
+    HamNavList::sForceDisengage = false;
+
+    if (mCursorPanel)
+        mCursorPanel->Poll();
+
+    // Poll SkeletonChooser when there are tracked skeletons (YOLO pose server).
+    // With default properties now set in HamInit, SkeletonChooser code paths
+    // that read ui_nav_mode etc. are safe.
+    if (mSkelChooser && NumTrackedSkeletons() > 0)
+        mSkelChooser->Poll();
+
+    // Track skeleton presence changes — drives "has_skeleton" property on
+    // hamprovider which UI scripts use for Kinect-vs-controller mode switching.
+    {
+        static bool lastHasSkeleton = false;
+        bool hasSkel = HasSkeleton();
+        if (hasSkel != lastHasSkeleton) {
+            static Symbol has_skeleton_sym("has_skeleton");
+            static Message updateSkeletonStatus("update_skeleton_status");
+            Handle(updateSkeletonStatus, false);
+            TheHamProvider->SetProperty(has_skeleton_sym, hasSkel);
+        }
+        lastHasSkeleton = hasSkel;
+    }
+
+    if (TheUI->InTransition()) {
+        SetCursorAlpha(0);
+    }
+#else // !HX_NATIVE
     static Symbol is_in_shell_pause("is_in_shell_pause");
     static Symbol is_in_party_mode("is_in_party_mode");
     static Symbol is_in_infinite_party_mode("is_in_infinite_party_mode");
@@ -281,6 +309,7 @@ after_main:
     if (TheUI->InTransition()) {
         SetCursorAlpha(0);
     }
+#endif // HX_NATIVE
 }
 
 void ShellInput::UpdateInputPanel(UIPanel *panel) { mInputPanel = panel; }
@@ -373,6 +402,12 @@ void ShellInput::SyncVoiceControl() { // almost done
 }
 
 void ShellInput::EnterControllerMode(bool b) {
+#ifdef HX_NATIVE
+    // Native stays permanently in controller mode — skip helpbar/Kinect logic.
+    // GestureMgr already has mInControllerMode=true set in init.
+    TheGestureMgr->SetInControllerMode(true);
+    return;
+#endif
     HelpBarPanel *pHelpbarPanel = TheHamUI.GetHelpBarPanel();
     MILO_ASSERT(pHelpbarPanel, 0x230);
     if (pHelpbarPanel->AllowController() || b) {
@@ -426,8 +461,14 @@ void ShellInput::DrawDebug() {
             list->DrawDebug();
         }
     }
+#ifdef HX_NATIVE
+    // mSkelIdentifier is null on native (Kinect-only subsystem)
+    if (mSkelChooser)
+        mSkelChooser->DrawDebug();
+#else
     mSkelIdentifier->DrawDebug();
     mSkelChooser->DrawDebug();
+#endif
 }
 
 void ShellInput::SetCursorAlpha(float f1) const {
@@ -454,6 +495,9 @@ void ShellInput::SyncToCurrentScreen() {
         mInputPanel = TheHamUI.FocusPanel();
     }
     TheGestureMgr->SetInShellMode(!IsGameplayPanel());
+#ifdef HX_NATIVE
+    if (TheHamUI.GetHelpBarPanel())
+#endif
     TheHamUI.GetHelpBarPanel()->SyncToPanel(mInputPanel);
     unk_0x98 = 5000;
     if (TheHamUI.GetHelpBarPanel()) {

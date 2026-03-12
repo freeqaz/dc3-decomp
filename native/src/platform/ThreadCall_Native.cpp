@@ -6,7 +6,9 @@
 #include "os/Debug.h"
 #include "xdk/XAPILIB.h"
 
+#ifndef __EMSCRIPTEN__
 #include <pthread.h>
+#endif
 #include <cstring>
 
 namespace {

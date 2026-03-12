@@ -4,7 +4,9 @@
 #include <string>
 #include <unordered_map>
 
+#ifndef __EMSCRIPTEN__
 struct GLFWwindow;
+#endif
 
 struct GpuDeviceDesc {
     bool headless = false;
@@ -54,7 +56,9 @@ public:
     wgpu::Device& Device() { return mDevice; }
     wgpu::Queue& Queue() { return mQueue; }
     wgpu::Instance& Instance() { return mInstance; }
+#ifndef __EMSCRIPTEN__
     GLFWwindow* Window() { return mWindow; }
+#endif
 
     // Surface management
     wgpu::TextureFormat SurfaceFormat() const { return mSurfaceFormat; }
@@ -83,11 +87,13 @@ public:
     bool IsHeadless() const { return mHeadless; }
 
 private:
+#ifndef __EMSCRIPTEN__
     bool InitInstance();
     bool InitAdapter();
     bool InitDevice();
     bool InitWindow(const GpuDeviceDesc& desc);
     bool InitSurface();
+#endif
     void ConfigureSurface();
 
     wgpu::Instance mInstance;
@@ -98,7 +104,9 @@ private:
     wgpu::TextureFormat mSurfaceFormat = wgpu::TextureFormat::BGRA8Unorm;
 
     bool mNullBackend = false;
+#ifndef __EMSCRIPTEN__
     GLFWwindow* mWindow = nullptr;
+#endif
     int mWidth = 0;
     int mHeight = 0;
     bool mHeadless = false;

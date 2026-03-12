@@ -1,22 +1,26 @@
 cmake_minimum_required(VERSION 3.22)
 
 # This project requires Clang due to MSVC compatibility flags (-fms-extensions, etc.)
-if(NOT DEFINED CMAKE_C_COMPILER AND NOT DEFINED ENV{CC})
-    find_program(CLANG_C_COMPILER clang)
-    if(CLANG_C_COMPILER)
-        set(CMAKE_C_COMPILER "${CLANG_C_COMPILER}" CACHE FILEPATH "C compiler" FORCE)
+# (Emscripten provides its own Clang — skip manual detection)
+if(NOT EMSCRIPTEN)
+    if(NOT DEFINED CMAKE_C_COMPILER AND NOT DEFINED ENV{CC})
+        find_program(CLANG_C_COMPILER clang)
+        if(CLANG_C_COMPILER)
+            set(CMAKE_C_COMPILER "${CLANG_C_COMPILER}" CACHE FILEPATH "C compiler" FORCE)
+        endif()
     endif()
-endif()
-if(NOT DEFINED CMAKE_CXX_COMPILER AND NOT DEFINED ENV{CXX})
-    find_program(CLANG_CXX_COMPILER clang++)
-    if(CLANG_CXX_COMPILER)
-        set(CMAKE_CXX_COMPILER "${CLANG_CXX_COMPILER}" CACHE FILEPATH "C++ compiler" FORCE)
+    if(NOT DEFINED CMAKE_CXX_COMPILER AND NOT DEFINED ENV{CXX})
+        find_program(CLANG_CXX_COMPILER clang++)
+        if(CLANG_CXX_COMPILER)
+            set(CMAKE_CXX_COMPILER "${CLANG_CXX_COMPILER}" CACHE FILEPATH "C++ compiler" FORCE)
+        endif()
     endif()
 endif()
 
 project(dc3-native LANGUAGES C CXX)
 
 # Verify we're using Clang (the MSVC compat flags won't work with GCC)
+# Emscripten's compiler identifies as Clang, so this check passes.
 if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     message(FATAL_ERROR
         "This project requires Clang (found ${CMAKE_CXX_COMPILER_ID}).\n"
@@ -84,13 +88,18 @@ endif()
 # Xbox 360 MSVC's old STL behavior and fixing 600+ call sites.
 include_directories(BEFORE SYSTEM ${CMAKE_SOURCE_DIR}/include)
 
-find_package(Threads REQUIRED)
-find_package(Dawn REQUIRED)
-find_package(glfw3 REQUIRED)
+if(EMSCRIPTEN)
+    # Emscripten provides its own threading, WebGPU (emdawnwebgpu), and GLFW shim
+    set(ENABLE_FFMPEG OFF)
+else()
+    find_package(Threads REQUIRED)
+    find_package(Dawn REQUIRED)
+    find_package(glfw3 REQUIRED)
+endif()
 
 # FFmpeg — used for Bink video/audio decoding (replaces RAD Bink SDK)
 option(ENABLE_FFMPEG "Enable FFmpeg for Bink video/audio decoding" ON)
-if(ENABLE_FFMPEG)
+if(ENABLE_FFMPEG AND NOT EMSCRIPTEN)
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(FFMPEG REQUIRED libavformat libavcodec libswscale libavutil)
 endif()
@@ -963,8 +972,125 @@ set(DC3_EXPORT_SOURCES
 )
 
 # ============================================================================
-# Build target
+# Build targets
 # ============================================================================
+
+if(EMSCRIPTEN)
+
+# ============================================================================
+# Web target (Emscripten + emdawnwebgpu)
+# ============================================================================
+
+# Web-specific platform sources (replace native platform files)
+set(DC3_WEB_CORE_SOURCES
+    src/platform/xdk_shims_web.cpp
+    src/platform/Memory_Native.cpp
+    src/platform/PlatformMgr_Native.cpp
+    src/platform/System_Native.cpp
+    src/platform/File_Native.cpp
+    src/platform/AsyncFile_Native.cpp
+    src/platform/CDReader_Native.cpp
+    src/platform/ThreadCall_Native.cpp
+    src/platform/Joypad_Native.cpp
+    src/platform/Keyboard_Native.cpp
+    src/platform/Synth_Stub.cpp
+    src/platform/Skeleton_Native.cpp
+    src/platform/GestureMgr_Native.cpp
+    src/platform/StreamReceiver_Native.cpp
+    src/platform/SampleInst_Native.cpp
+    src/platform/FxSendNative.cpp
+    src/platform/Rnd_Wgpu.cpp
+    src/platform/MeshFilter.cpp
+    src/platform/BoneSetup.cpp
+    src/platform/MeshGpuCache.cpp
+    src/platform/MaterialSetup.cpp
+    src/platform/Mesh_Wgpu.cpp
+    src/platform/TransparentQueue.cpp
+    src/platform/Part_Wgpu.cpp
+    src/platform/Tex_Wgpu.cpp
+    src/platform/Cam_Native.cpp
+    src/platform/Net_Stub.cpp
+    src/platform/Memcard_Stub.cpp
+    src/platform/ContentMgr_Stub.cpp
+    src/platform/MapFile_Stub.cpp
+    src/platform/VirtualKeyboard_Stub.cpp
+    src/platform/Achievements_Stub.cpp
+    src/platform/MemcardMgr_Stub.cpp
+    src/platform/BinkMovie_Stub.cpp
+    src/platform/NetXbox_Stub.cpp
+    src/platform/KinectShare_Stub.cpp
+    src/platform/Cache_Stub.cpp
+    src/platform/ChecksumData_Stub.cpp
+    src/platform/Keygen_Stub.cpp
+    src/platform/NetworkSocket_Stub.cpp
+    src/platform/SynthCommon_Stub.cpp
+    src/platform/RndTex_Native.cpp
+    src/engine_stubs_generated.cpp
+    src/native_link_glue.cpp
+    src/thunk_stubs.cpp
+)
+
+# Web GFX sources — use GpuDevice_Web.cpp instead of GpuDevice.cpp
+set(DC3_WEB_GFX_SOURCES
+    src/platform/GpuDevice_Web.cpp
+    src/gfx/Screenshot.cpp
+    src/gfx/TextureConvert.cpp
+    src/gfx/VertexFormats.cpp
+    src/gfx/PipelineManager.cpp
+    src/gfx/FrameCapture.cpp
+    src/gfx/ShadowPass.cpp
+    src/gfx/BloomPass.cpp
+    src/gfx/DofPass.cpp
+    src/gfx/PostProcPass.cpp
+    src/gfx/DrawRect2D.cpp
+    src/gfx/GpuResourceRegistry.cpp
+    src/gfx/mikktspace.c
+)
+set_source_files_properties(src/gfx/mikktspace.c PROPERTIES LANGUAGE C)
+
+# Full engine + web platform layer
+add_executable(dc3-web
+    src/main_web.cpp
+    ${DC3_ENGINE_SOURCES}
+    ${DC3_WEB_CORE_SOURCES}
+    ${DC3_WEB_GFX_SOURCES}
+)
+
+target_compile_options(dc3-web PRIVATE
+    ${DC3_MSVC_COMPAT_FLAGS}
+    ${DC3_DECOMP_FLAGS}
+)
+
+target_compile_definitions(dc3-web PRIVATE
+    HX_NATIVE=1
+    HX_WEB=1
+    MILO_DEBUG=1
+    _DEBUG=1
+)
+
+target_include_directories(dc3-web PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/../src
+    ${CMAKE_SOURCE_DIR}/../src/system
+    ${CMAKE_SOURCE_DIR}/../src/lazer
+    ${CMAKE_SOURCE_DIR}/../include
+)
+
+target_link_options(dc3-web PRIVATE
+    "SHELL:--use-port=emdawnwebgpu"
+    -sALLOW_MEMORY_GROWTH=1
+    -sMAXIMUM_MEMORY=512MB
+    -sSTACK_SIZE=1048576
+    -sENVIRONMENT=web
+    -sEXPORTED_FUNCTIONS=["_main"]
+    -sEXPORTED_RUNTIME_METHODS=["ccall","cwrap"]
+)
+
+target_compile_options(dc3-web PRIVATE
+    "SHELL:--use-port=emdawnwebgpu"
+)
+
+else() # NOT EMSCRIPTEN — native targets
 
 add_executable(dc3-native
     ${DC3_ENGINE_SOURCES}
@@ -1317,3 +1443,5 @@ if(BUILD_TESTS)
     include(GoogleTest)
     gtest_discover_tests(milo-tests)
 endif()
+
+endif() # NOT EMSCRIPTEN

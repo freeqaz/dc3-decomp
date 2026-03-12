@@ -25,3 +25,8 @@ void RndShadowMap::Init() {
 }
 
 void RndShadowMap::EndShadow() { TheRnd.SetShadowMap(nullptr, nullptr, nullptr); }
+
+bool RndShadowMap::PrepShadow(RndDrawable *, RndEnviron *) {
+    // TODO: implement shadow map preparation
+    return false;
+}

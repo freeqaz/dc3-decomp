@@ -297,18 +297,18 @@ void SongSequence::OnSongLoaded() {
         static Symbol holla_back("holla_back");
         static Symbol mind_control("mind_control");
         MILO_LOG("Time to advance song sequence = %.3f\n", TheTaskMgr.UISeconds() - mCurrentPlaybackPosition);
-        Entry &curEntry = mEntries[mCurrentIndex];
+        const Entry &curEntry = mEntries[mCurrentIndex];
         UIPanel *gamePanel = ObjectDir::Main()->Find<UIPanel>("game_panel");
-        bool hasIntro = TheGame->HasIntro();
+        unsigned char hasIntro = (unsigned char)(TheGame->HasIntro());
         Symbol gameMode = TheGameMode->Property(gameplay_mode)->Sym();
         bool inHollaback = gameMode == holla_back;
         bool inMindControl = gameMode == mind_control;
         TheHamDirector->SetProperty("disabled", false);
         gamePanel->Handle(Message(set_type, curEntry.mGameplayMode), true);
         gamePanel->Handle(Message(init), true);
-        for (int i = 0; i < 2; i++) {
+        for (int i = 0; 2 > i; i++) {
             HamPlayerData *hpd = TheGameData->Player(i);
-            if (hpd->IsPlaying()) {
+            if (!(!(hpd->IsPlaying()))) {
                 hpd->Provider()->SetProperty(start_score_move_index, -1);
             } else {
                 hpd->Provider()->SetProperty(start_score_move_index, 1000);
@@ -331,7 +331,7 @@ void SongSequence::OnSongLoaded() {
                 BeatToMs(curEntry.mIntroLoopMeasure * 4.0f), BeatToMs(curEntry.mOutroLoopMeasure * 4.0f)
             );
         }
-        if (curEntry.mEventStartMeasure >= 0 && curEntry.mEventEndMeasure >= 1) {
+        if (0 <= curEntry.mEventStartMeasure && curEntry.mEventEndMeasure >= 1) {
             TheMaster->GetAudio()->SetLoop(curEntry.mEventStartMeasure * 4.0f, curEntry.mEventEndMeasure * 4.0f);
             TheGame->Jump(curEntry.mEventStartMeasure * 4.0f, true);
         }

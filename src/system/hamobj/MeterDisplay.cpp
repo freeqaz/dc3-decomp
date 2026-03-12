@@ -173,6 +173,11 @@ void MeterDisplay::UpdateDisplay() {
     }
 }
 
+template <class _T>
+__declspec(noinline) auto _outline_UISeconds(_T* _obj) -> decltype(_obj->UISeconds()) {
+    return _obj->UISeconds();
+}
+
 void MeterDisplay::DrawShowing() {
     if (!mResourceDir)
         return;
@@ -181,9 +186,9 @@ void MeterDisplay::DrawShowing() {
 
     if (mMaxValue > 0) {
         f = (float)mCurrentValue / (float)mMaxValue;
-        float f1 = TheTaskMgr.UISeconds() - unk4c;
+        float f1 = _outline_UISeconds(&TheTaskMgr) - unk4c;
         if (mAnimPeriod > 0) {
-            int itouse = unk50;
+            unsigned int itouse = unk50;
             if (itouse >= 0 && f1 > 0) {
                 if (f1 < mAnimPeriod) {
                     f = ((f1 / mAnimPeriod) * (float)(itouse - mCurrentValue)

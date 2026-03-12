@@ -158,6 +158,39 @@ App::App(int argc, char **argv) {
     // Ham (game-specific) system
     HamInit();
 
+    // Ensure player providers exist — ham_init.dta normally creates these via DTA,
+    // but if the config chain fails on native, players have null mProvider which
+    // breaks SkeletonChooser::GetPlayerSide(), HamPlayerData::Side(), etc.
+    if (TheGameData) {
+        for (int i = 0; i < 2; i++) {
+            HamPlayerData *pd = TheGameData->Player(i);
+            if (pd && !pd->Provider()) {
+                char providerName[32];
+                snprintf(providerName, sizeof(providerName), "player_provider_%d", i + 1);
+                // Check if DTA already created it but didn't wire it up
+                PropertyEventProvider *provider =
+                    ObjectDir::Main()->Find<PropertyEventProvider>(providerName, false);
+                if (!provider) {
+                    provider = Hmx::Object::New<PropertyEventProvider>();
+                    provider->SetName(providerName, ObjectDir::Main());
+                }
+                // Wire provider to player data via property sync
+                DataNode provNode(provider);
+                pd->SetProperty(Symbol("provider"), provNode);
+                // Set side: player 0 = right, player 1 = left (matches ham_init.dta)
+                static Symbol side("side");
+                static Symbol player_present("player_present");
+                provider->SetProperty(side, i == 0 ? 1 : 0); // kSkeletonRight=1, kSkeletonLeft=0
+                // Mark player 0 as present (controller-based play).
+                // Many providers (Character/Crew/Outfit/Venue/Difficulty) gate their
+                // lists on player_present — if it's 0 for both, lists may swap or empty.
+                provider->SetProperty(player_present, i == 0 ? 1 : 0);
+                fprintf(stderr, "DC3 Native: Created player provider '%s' (side=%d)\n",
+                        providerName, i == 0 ? 1 : 0);
+            }
+        }
+    }
+
     // Song manager
     TheHamSongMgr.Init();
 

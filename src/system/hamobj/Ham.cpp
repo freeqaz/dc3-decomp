@@ -186,6 +186,35 @@ void HamInit() {
         else {
             TheHamProvider = EnsureHamProvider();
         }
+        // Ensure properties that various subsystems read are initialized.
+        // On Xbox these get set by DTA screen-flow scripts; on native many
+        // subsystems poll before those scripts run, causing asserts/crashes.
+        if (TheHamProvider) {
+            static Symbol ui_nav_mode("ui_nav_mode");
+            static Symbol shell("shell");
+            if (!TheHamProvider->Property(ui_nav_mode, false))
+                TheHamProvider->SetProperty(ui_nav_mode, DataNode(shell));
+
+            // Party mode flags — read by PresenceMgr, GamePanel, ShellInput::Poll(),
+            // BustAMovePanel, PartyModeMgr with assert-on-missing (true flag).
+            static Symbol is_in_party_mode("is_in_party_mode");
+            static Symbol is_in_infinite_party_mode("is_in_infinite_party_mode");
+            static Symbol is_in_shell_pause("is_in_shell_pause");
+            if (!TheHamProvider->Property(is_in_party_mode, false))
+                TheHamProvider->SetProperty(is_in_party_mode, 0);
+            if (!TheHamProvider->Property(is_in_infinite_party_mode, false))
+                TheHamProvider->SetProperty(is_in_infinite_party_mode, 0);
+            if (!TheHamProvider->Property(is_in_shell_pause, false))
+                TheHamProvider->SetProperty(is_in_shell_pause, 0);
+
+            // Skeleton/controller state — read by ShellInput, SkeletonChooser, UI scripts
+            static Symbol has_skeleton("has_skeleton");
+            static Symbol in_controller_mode("in_controller_mode");
+            if (!TheHamProvider->Property(has_skeleton, false))
+                TheHamProvider->SetProperty(has_skeleton, 0);
+            if (!TheHamProvider->Property(in_controller_mode, false))
+                TheHamProvider->SetProperty(in_controller_mode, 1);
+        }
 #endif
         PreloadSharedSubdirs("ham");
     }

@@ -53,7 +53,9 @@ void UIPicture::SetTypeDef(DataArray *da) {
     if (da) {
         DataArray *findtex = da->FindArray("tex_file", false);
         if (findtex) {
-            if (strlen(findtex->Str(1))) {
+            auto _tmp2 = findtex->Str(1);
+            auto _tmp1 = strlen(_tmp2);
+            if (_tmp1) {
                 FilePath fp(FilePath(FileGetPath(findtex->File()), findtex->Str(1)));
                 SetTex(fp);
             }

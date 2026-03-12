@@ -458,26 +458,26 @@ DataNode op36(DataArray *msg) {
 
 DataNode op37(DataArray *msg) {
     unsigned long l = msg->Int(1);
-    unsigned long r = msg->Int(2);
-    unsigned long br = u8(r);
+    unsigned long br = u8(msg->Int(2));
     unsigned long rot = (br >> 5) | ((~br) << 3);
-    return DataNode(kDataInt, (int)((rot ^ l) & 0xFF));
+    auto _tmp4 = DataNode(kDataInt, (int)((rot ^ l) & 0xFF));
+    return _tmp4;
 }
 
 DataNode op38(DataArray *msg) {
     unsigned long l = msg->Int(1);
-    unsigned long r = msg->Int(2);
-    unsigned long br = u8(r);
+    unsigned long br = u8(msg->Int(2));
     unsigned long rot = (br >> 6) | ((~br) << 2);
-    return DataNode(kDataInt, (int)((rot ^ l) & 0xFF));
+    auto _tmp6 = DataNode(kDataInt, (int)((rot ^ l) & 0xFF));
+    return _tmp6;
 }
 
 DataNode op39(DataArray *msg) {
     unsigned long l = msg->Int(1);
-    unsigned long r = msg->Int(2);
-    unsigned long br = u8(r);
+    unsigned long br = u8(msg->Int(2));
     unsigned long rot = (br >> 3) | ((~br) << 5);
-    return DataNode(kDataInt, (int)((rot ^ l) & 0xFF));
+    auto _tmp5 = DataNode(kDataInt, (int)((rot ^ l) & 0xFF));
+    return _tmp5;
 }
 
 DataNode op40(DataArray *msg) {

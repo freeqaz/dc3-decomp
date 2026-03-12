@@ -1222,7 +1222,7 @@ void ObjectDir::PostLoad(BinStream &bs) {
     }
 
     if (d.rev > 0x17) {
-        int revs2 = bs.Cached() ? 0 : bs.PopRev(this);
+        int revs2 = d.stream.Cached() ? 0 : bs.PopRev(this);
         int offset = bs.PopRev(this);
         MILO_ASSERT_RANGE_EQ(offset, 0, mSubDirs.size(), 0x466);
         if (revs2 != 2) {

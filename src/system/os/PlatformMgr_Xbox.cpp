@@ -538,8 +538,8 @@ PostPurchaseEnumJob::~PostPurchaseEnumJob() {}
 void PostPurchaseEnumJob::OnCompletion(Hmx::Object *obj) {
     if ((mStatus == 2) && (mSuccess != 0)) {
         static Symbol sSourceSymbol("source");
-        static Symbol sPurchaserSymbol("purchaser");
         static Symbol sOfferSymbol("offer");
+        static Symbol sPurchaserSymbol("purchaser");
 
         String dataStr(MakeString("%016llX", mItemID));
         SendDataPoint("store/purchase", sSourceSymbol, mOfferSymbol, sOfferSymbol, dataStr.c_str(), sPurchaserSymbol, mPurchaserID);

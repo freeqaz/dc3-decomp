@@ -30,10 +30,9 @@ void compute_z_mzt(void) {
     complex* dst_ptr;
     int loop_count;
 
-    src_base = (char*)lbl_8316EBA8;
-    dst_base = (char*)lbl_83172BB0;
+        dst_base = (char*)lbl_83172BB0;
 
-    src_count1 = *(int*)(src_base + 0x4000);
+    src_count1 = *(int*)(src_base = (char*)lbl_8316EBA8 + 0x4000);
     src_count2 = *(int*)(src_base + 0x4004);
     *(int*)(dst_base + 0x4000) = src_count1;
     *(int*)(dst_base + 0x4004) = src_count2;

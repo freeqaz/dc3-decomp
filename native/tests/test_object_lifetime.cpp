@@ -284,6 +284,35 @@ TEST_F(ObjectLifetimeTest, RepeatedFixtureMergesKeepIteratorSafe) {
     delete base;
 }
 
+TEST_F(ObjectLifetimeTest, MergeKeepCharClipSetRootDoesNotCorruptRefs) {
+    const char *root = getenv("MILO_LIB");
+    if (!root || !root[0]) {
+        GTEST_SKIP() << "MILO_LIB not set";
+    }
+
+    std::string toFull = std::string(root) + "/char/crowd/anim/female_base.milo";
+    std::string fromFull = std::string(root) + "/char/crowd/anim/female_medium.milo";
+
+    ObjectDir *toDir = DirLoader::LoadObjects(FilePath(toFull.c_str()), nullptr, nullptr);
+    ObjectDir *fromDir = DirLoader::LoadObjects(FilePath(fromFull.c_str()), nullptr, nullptr);
+    ASSERT_NE(toDir, nullptr) << toFull;
+    ASSERT_NE(fromDir, nullptr) << fromFull;
+
+    MergeObject(fromDir, toDir, toDir, (MergeFilter::Action)2);
+
+    delete fromDir;
+
+    int itrCount = 0;
+    for (ObjDirItr<Hmx::Object> it(toDir, false); it != nullptr; ++it) {
+        EXPECT_NE(&*it, nullptr);
+        itrCount++;
+        ASSERT_LT(itrCount, 10000);
+    }
+    EXPECT_GT(itrCount, 0);
+
+    delete toDir;
+}
+
 // Parity-oracle: kMoveAllSubdirs should transfer subdir ownership from source
 // to destination (source no longer reports the moved subdir).
 TEST_F(ObjectLifetimeTest, MergeDirsMoveAllSubdirsTransfersOwnership) {

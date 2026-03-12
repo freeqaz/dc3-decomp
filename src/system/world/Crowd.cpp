@@ -930,16 +930,18 @@ void WorldCrowd::Set3DCharList(
 void WorldCrowd::Mats(std::list<RndMat *> &mats, bool additive) {
     if (additive) {
         MatShaderOptions opts;
+        auto _tmp2 = mCharacters.end();
         opts.pack = 0x12;
 
         if (gImpostorMat) {
+            auto _tmp0 = mats.end();
             RndMat *newMat = (RndMat *)RndMat::NewObject();
             gImpostorMat->Copy(newMat, Hmx::Object::kCopyDeep);
             newMat->SetShaderOpts(opts);
-            mats.insert(mats.end(), newMat);
+            mats.insert(_tmp0, newMat);
         }
 
-        for (std::list<CharData>::iterator charIt = mCharacters.begin(); charIt != mCharacters.end(); ++charIt) {
+        for (std::list<CharData>::iterator charIt = mCharacters.begin(); charIt != _tmp2; ++charIt) {
             if (charIt->mDef.mChar && charIt->mMMesh) {
                 for (std::vector<CharData::Char3D>::const_iterator it = charIt->m3DChars.begin(); it != charIt->m3DChars.end(); ++it) {
                     RndMat *mat = (RndMat *)RndMat::NewObject();

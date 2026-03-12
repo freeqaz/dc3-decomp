@@ -342,29 +342,30 @@ char const *UIFontImporter::GetMatVariationName(RndFontBase *font) const {
     if (!font)
         return "";
 
-    if (!font->Type())
+    if (!font->Mat())
         return "";
 
-    int count = mMatVariations.size();
-    Symbol type = font->Type();
+    RndMat *mat = font->Mat();
 
-    if (count > 0) {
-        RndMat *first = mMatVariations.front();
-        if (first && first->Type() == type) {
+    if (mGennedFonts.size() > 0) {
+        RndFontBase *first = mGennedFonts.front();
+        if (mat == first->Mat()) {
             return "";
         }
-    } else {
-        return "";
     }
 
+    if (mMatVariations.size() == 0)
+        return "";
+
     FOREACH (it, mMatVariations) {
-        RndMat *mat = *it;
-        if (mat && mat->Type() == type) {
-            return FileGetBase(type.Str());
+        RndMat *varMat = *it;
+        if (varMat == mat) {
+            return FileGetBase(mat->Name());
         }
     }
 
-    MILO_NOTIFY("%s not found in resource dir %s", PathName(this), PathName(font));
+    const char *selfPath = PathName(this);
+    MILO_NOTIFY("%s not found in resource dir %s", PathName(font), selfPath);
     return "";
 }
 
@@ -473,11 +474,7 @@ String UIFontImporter::GetASCIIPlusChars() {
 
 String UIFontImporter::GetASCIIMinusChars() {
     static String minusChars;
-    static int initialized = 0;
-    if (!initialized) {
-        minusChars = WideVectorToASCII(mMinus);
-        initialized = 1;
-    }
+    minusChars = WideVectorToASCII(mMinus);
     return minusChars;
 }
 

@@ -1542,36 +1542,36 @@ void HamDirector::CheckBeginFatal(int i1, HamMove *move, int i3) {
 void HamDirector::UpdatePostProcOverlay(
     const char *cc, const RndPostProc *p1, const RndPostProc *p2, float f4
 ) {
+    static const RndPostProc *sPostProcB;
     RndOverlay *ppOverlay = RndOverlay::Find("postproc", true);
     static const RndPostProc *sPostProcA;
-    static const RndPostProc *sPostProcB;
-    static float sPostProcBlend = -99;
+    static float sPostProcBlend;
     if (!ppOverlay->Showing())
         return;
-    TextStream *reflect = TheDebug.SetReflect(ppOverlay);
     if (p1 == sPostProcA && p2 == sPostProcB && f4 == sPostProcBlend)
         return;
     static int sHamDirID = 0;
-    sHamDirID++;
-    int displayId = sHamDirID % 100;
-    if (p1) {
-        if (!p2) {
-            MILO_LOG(
-                "%03d:HAMDIR Post Proc %s is not blended\n", displayId, p1->Name()
-            );
+    sHamDirID = (sHamDirID + 1) % 100;
+    TextStream *reflect = TheDebug.SetReflect(ppOverlay);
+    if (p1 != NULL) {
+        if (!(p2 != NULL)) {
+            auto _tmp2 = p1->Name();
+            MILO_LOG("%03d:HAMDIR Post Proc %s is not blended\n", sHamDirID, _tmp2);
         } else {
-            MILO_LOG("%03d:HAMDIR Post Proc A %s\n", displayId, p1->Name());
+            auto _tmp3 = p1->Name();
+            MILO_LOG("%03d:HAMDIR Post Proc A %s\n", sHamDirID, _tmp3);
+            MILO_LOG("%03d:HAMDIR Post Proc B %s\n", sHamDirID, p2->Name());
         }
     }
-    if (p2) {
-        MILO_LOG("%03d:HAMDIR Post Proc B %s\n", displayId, p2->Name());
+    if (p1 == NULL && p2 != NULL) {
+        MILO_LOG("%03d:HAMDIR Post Proc B %s\n", sHamDirID, p2->Name());
     }
     MILO_LOG(
         "           PostProc set by %s, blend is %.2f%%\n", cc ? cc : "", f4 * 100.0f
     );
-    sPostProcA = p1;
-    sPostProcB = p2;
     sPostProcBlend = f4;
+    sPostProcB = p2;
+    sPostProcA = p1;
     TheDebug.SetReflect(reflect);
 }
 

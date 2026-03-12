@@ -15,8 +15,10 @@
 #include "utl/BinStream.h"
 #include "utl/Std.h"
 #include "utl/TimeConversion.h"
+#include <float.h>
 
 std::vector<const char *> sCollisionUsefulBoneNames;
+float sCollisionToleranceValue = 0.0f;
 
 void bones_min_max_x(
     float &minX,
@@ -32,12 +34,51 @@ void bones_min_max_x(
     }
 }
 
+namespace {
+    void SetSongCollisionOffset(SongCollisionOutput &out, int idx, const Vector3 &pos) {
+        *reinterpret_cast<Vector3 *>(out._data + idx * 0x10) = pos;
+    }
+
+    void SetSongCollisionWorldPos(SongCollisionOutput &out, int idx, const Vector3 &pos) {
+        *reinterpret_cast<Vector3 *>(out._data + 0x90 + idx * 0x40) = pos;
+    }
+
+    void SetSongCollisionColliding(SongCollisionOutput &out, bool colliding) {
+        *reinterpret_cast<bool *>(out._data + 0xE0) = colliding;
+    }
+}
+
 bool AreDancersColliding1D(
-    std::vector<RndTransformable *> &,
-    std::vector<RndTransformable *> &,
-    const Vector3 &,
-    const Vector3 &
-);
+    std::vector<RndTransformable *> &bones0,
+    std::vector<RndTransformable *> &bones1,
+    const Vector3 &worldPos0,
+    const Vector3 &worldPos1
+) {
+    if (bones0.empty() || bones1.empty())
+        return false;
+
+    Transform xfm;
+    xfm.v = worldPos0;
+    xfm.m.x.Set(worldPos1.x - worldPos0.x, worldPos1.y - worldPos0.y, 0.0f);
+    Normalize(xfm.m.x, xfm.m.x);
+    xfm.m.z.Set(0.0f, 0.0f, 1.0f);
+    Cross(xfm.m.z, xfm.m.x, xfm.m.y);
+
+    float min0 = FLT_MAX, min1 = FLT_MAX;
+    float max1 = FLT_MIN, max0 = FLT_MIN;
+
+    bones_min_max_x(min0, max0, bones0, xfm);
+    bones_min_max_x(min1, max1, bones1, xfm);
+
+    float overlap;
+    if (min0 < min1) {
+        overlap = max0 - min1;
+    } else {
+        overlap = max1 - min0;
+    }
+
+    return overlap > SongCollision::sCollisionTolerance;
+}
 
 #pragma region BeatCollisionData
 
@@ -208,6 +249,7 @@ void SongCollision::Init() {
     DataArray *tolerance = DataGetMacro("SONG_COLLISION_TOLERANCE");
     if (tolerance) {
         sCollisionTolerance = tolerance->Float(0);
+        sCollisionToleranceValue = sCollisionTolerance;
     }
     sCollisionUsefulBoneNames.clear();
     DataArray *bones = DataGetMacro("SONG_COLLISION_BONES");
@@ -303,4 +345,96 @@ void SongCollision::Update(MoveDir *moveDir) {
         sizeKB /= 1024;
         MILO_LOG("Approx size = %ikB\n", sizeKB);
     }
+}
+
+void SongCollision::CheckCollision(
+    int beat,
+    const Difficulty *const diffs,
+    const Transform *const transforms,
+    SongCollisionOutput &out
+) const {
+    memset(&out, 0, sizeof(out));
+    MILO_ASSERT(diffs, 0x145);
+    MILO_ASSERT(transforms, 0x146);
+
+    const BeatCollisionData *beatData[2] = {
+        BeatData(beat, diffs[0]),
+        BeatData(beat, diffs[1]),
+    };
+
+    bool haveBeatData = beatData[0] && beatData[1];
+    float minX[2] = { 0.0f, 0.0f };
+    float maxX[2] = { 0.0f, 0.0f };
+
+    for (int i = 0; i < 2; i++) {
+        const Vector3 &worldPos = transforms[i].v;
+        SetSongCollisionWorldPos(out, i, worldPos);
+
+        if (!beatData[i]) {
+            SetSongCollisionOffset(out, i, worldPos);
+            SetSongCollisionOffset(out, i + 2, worldPos);
+            continue;
+        }
+
+        Vector3 beatStart;
+        Add(worldPos, beatData[i]->mOffset, beatStart);
+
+        Vector3 leftEdge = beatStart;
+        leftEdge.x += beatData[i]->mMinX;
+        Vector3 rightEdge = beatStart;
+        rightEdge.x += beatData[i]->mMaxX;
+
+        SetSongCollisionOffset(out, i, leftEdge);
+        SetSongCollisionOffset(out, i + 2, rightEdge);
+
+        minX[i] = leftEdge.x;
+        maxX[i] = rightEdge.x;
+    }
+
+    bool colliding = false;
+    if (haveBeatData) {
+        colliding = maxX[0] + sCollisionTolerance >= minX[1]
+            && maxX[1] + sCollisionTolerance >= minX[0];
+    }
+    SetSongCollisionColliding(out, colliding);
+}
+
+bool SongCollision::IsCollision(
+    int startBeat,
+    int endBeat,
+    const Difficulty *const diffs,
+    const Transform *const transforms,
+    std::vector<SongCollisionOutput> *outputs
+) const {
+    // Copy transforms locally so we can accumulate beat offsets
+    Transform localXfms[2];
+    memcpy(localXfms, transforms, sizeof(localXfms));
+
+    bool anyCollision = false;
+    int beat = startBeat;
+    do {
+        if (endBeat <= beat) {
+            return anyCollision;
+        }
+        SongCollisionOutput out;
+        CheckCollision(beat, diffs, localXfms, out);
+        if (out.Colliding()) {
+            if (!outputs) {
+                return true;
+            }
+            anyCollision = true;
+        }
+        if (outputs) {
+            outputs->push_back(out);
+        }
+
+        // Accumulate beat offsets into local transforms
+        for (int i = 0; i < 2; i++) {
+            const BeatCollisionData *bd = BeatData(beat, diffs[i]);
+            if (bd) {
+                localXfms[i].v += bd->mOffset;
+            }
+        }
+        beat++;
+    } while (true);
 }

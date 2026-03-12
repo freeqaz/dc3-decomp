@@ -1337,8 +1337,8 @@ void TestTexturePaths(ObjectDir *dir) {
             continue;
         String relative(FileRelativePath(FileRoot(), fp.c_str()));
         FileNormalizePath(str.c_str());
-        const char *normalized = relative.c_str();
         if (strstr(relative.c_str(), "..") == relative.c_str()) {
+            const char *normalized = relative.c_str();
             if (strstr(relative.c_str(), "../../system/run") != normalized) {
                 MILO_WARN("%s: %s is outside project path", PathName(it), relative);
             }

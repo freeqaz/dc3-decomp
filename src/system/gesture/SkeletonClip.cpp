@@ -121,8 +121,9 @@ const RecordedFrame *SkeletonClip::RecordedFrameAt(
         loopCount++;
     }
 
+    auto _tmp0 = frames.begin();
     std::vector<RecordedFrame>::const_iterator it = std::lower_bound(
-        frames.begin(), frames.end(), seconds, [](const RecordedFrame &f, float value) {
+        _tmp0, frames.end(), seconds, [](const RecordedFrame &f, float value) {
             return f.mSongSeconds < value;
         }
     );

@@ -28,7 +28,7 @@ void ObjRef::ReplaceList(Hmx::Object *obj) {
     // By snapshotting first, we avoid following next-pointers that have been
     // re-linked into a different object's ref ring.
     std::vector<ObjRef *> refs;
-    for (ObjRef *cur = next; cur != this; cur = cur->next) {
+    for (ObjRef *cur = next; cur != this && cur != nullptr; cur = cur->next) {
         refs.push_back(cur);
     }
     Clear();

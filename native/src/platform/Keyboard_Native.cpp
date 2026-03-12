@@ -4,6 +4,7 @@
 #include "os/Keyboard.h"
 #include "os/Debug.h"
 
+#ifndef __EMSCRIPTEN__
 #include <GLFW/glfw3.h>
 
 // Set by Rnd_Wgpu during Init()
@@ -42,23 +43,29 @@ static void GlfwKeyCallback(GLFWwindow *, int key, int /*scancode*/, int action,
         PushKeyEvent(key, action, mods);
     }
 }
+#endif // !__EMSCRIPTEN__
 
 void KeyboardInit() {
     MILO_LOG("[Native] KeyboardInit\n");
     KeyboardInitCommon();
+#ifndef __EMSCRIPTEN__
     if (gNativeWindow) {
         glfwSetKeyCallback(gNativeWindow, GlfwKeyCallback);
     }
+#endif
 }
 
 void KeyboardTerminate() {
+#ifndef __EMSCRIPTEN__
     if (gNativeWindow) {
         glfwSetKeyCallback(gNativeWindow, nullptr);
     }
+#endif
     KeyboardTerminateCommon();
 }
 
 void KeyboardPoll() {
+#ifndef __EMSCRIPTEN__
     KeyEvent ev;
     while (PopKeyEvent(ev)) {
         if (ev.action == GLFW_PRESS) {
@@ -69,4 +76,5 @@ void KeyboardPoll() {
         }
         // KeyboardKeyReleaseMsg has no payload in the engine — skip for now
     }
+#endif
 }

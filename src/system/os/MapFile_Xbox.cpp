@@ -162,11 +162,11 @@ void TryDemangleParams(char *demangled, const char *mangled) {
 }
 
 void TryDemangleFunc(char *demangled, const char *mangled) {
-    int idx = 0;
     *demangled = '\0';
     if (*mangled && *mangled == '?') {
         const char *p = mangled + 1;
         if (*p == '?') {
+            int idx = 0;
             p++;
             while (p[idx] == '_') {
                 idx++;

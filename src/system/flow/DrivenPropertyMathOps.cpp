@@ -39,14 +39,15 @@ void FlowMathOp::Load(BinStream &bs, ObjectDir *dir) {
 
     if (d.rev > gRev) {
         const char *dirPath = dir ? PathName(dir) : "";
-        TheDebug.Fail(
-            MakeString(
+        auto _tmp0 = MakeString(
                 "%s can't load new %s version %d > %d",
                 dirPath,
                 "FlowMathOp",
                 d.rev,
                 gRev
-            ),
+            );
+        TheDebug.Fail(
+            _tmp0,
             nullptr
         );
     }
@@ -200,7 +201,7 @@ float FlowMathOp::Apply(float val) {
         if (rhs == 0.0f) {
             rhs = 1.0f;
         }
-        val = (float)(int)((val + rhs * 0.5f) / rhs);
+        val = (float)(int)((val + rhs * 0.5) / rhs);
         rhs = val * rhs;
         break;
     case kMathOp_Floor:

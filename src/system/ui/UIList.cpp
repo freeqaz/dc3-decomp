@@ -155,10 +155,10 @@ BEGIN_LOADS(UIList)
     PostLoad(bs);
 END_LOADS
 
-void UIList::Copy(const Hmx::Object *obj, CopyType ty) {
-    UIComponent::Copy(obj, ty);
+void UIList::Copy(const Hmx::Object *o, CopyType ty) {
+    UIComponent::Copy(o, ty);
 
-    const UIList *c = dynamic_cast<const UIList *>(obj);
+    const UIList *c = dynamic_cast<const UIList *>(o);
     if (c) {
         mListDir = c->mListDir;
 
@@ -166,27 +166,26 @@ void UIList::Copy(const Hmx::Object *obj, CopyType ty) {
         mListState.SetNumDisplay(c->mListState.NumDisplay(), true);
         mListState.SetGridSpan(c->mListState.GridSpan(), true);
         mListState.SetSpeed(c->mListState.Speed());
+        mPaginate = c->mPaginate;
+        mSelectToScroll = c->mSelectToScroll;
         mListState.SetMinDisplay(c->mListState.MinDisplay());
         mListState.SetScrollPastMinDisplay(c->mListState.ScrollPastMinDisplay());
         mListState.SetMaxDisplay(c->mListState.MaxDisplay());
         mListState.SetScrollPastMaxDisplay(c->mListState.ScrollPastMaxDisplay());
-
         mNumData = c->mNumData;
-        mPaginate = c->mPaginate;
         mAutoScrollPause = c->mAutoScrollPause;
         mAutoScrollSendMsgs = c->mAutoScrollSendMsgs;
-        mUncappedNumDisplay = c->mUncappedNumDisplay;
-        mLimitCircularDisplayNumToDataNum = c->mLimitCircularDisplayNumToDataNum;
-        mAllowHighlight = c->mAllowHighlight;
-
         mExtendedLabelEntries = c->mExtendedLabelEntries;
         mExtendedMeshEntries = c->mExtendedMeshEntries;
         mExtendedCustomEntries = c->mExtendedCustomEntries;
-
-        CopyHandlerData(c);
-
-        Update();
+        mLimitCircularDisplayNumToDataNum = c->mLimitCircularDisplayNumToDataNum;
+        mUncappedNumDisplay = c->mUncappedNumDisplay;
     }
+    const UIList *c2 = dynamic_cast<const UIList *>(o);
+    if (c2) {
+        CopyHandlerData(c2);
+    }
+    Update();
 }
 
 UIListDir *UIList::GetUIListDir() const { return mListDir; }

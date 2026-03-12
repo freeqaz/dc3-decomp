@@ -77,6 +77,13 @@ public:
 private:
     static float sCollisionTolerance;
 
+    friend bool AreDancersColliding1D(
+        std::vector<RndTransformable *> &,
+        std::vector<RndTransformable *> &,
+        const Vector3 &,
+        const Vector3 &
+    );
+
     const BeatCollisionData *BeatData(int, Difficulty) const;
     void CheckCollision(
         int, const Difficulty *const, const Transform *const, SongCollisionOutput &
