@@ -6,6 +6,7 @@ class FitnessCalorieSortCmp : public NavListItemSortCmp {
 public:
     virtual ~FitnessCalorieSortCmp();
     virtual int Compare(NavListItemSortCmp const *, NavListNodeType) const;
+    virtual const FitnessCalorieSortCmp *GetFitnessCalorieSortCmp() const { return this; }
 
     FitnessCalorieSortCmp() {}
 };

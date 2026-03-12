@@ -340,8 +340,8 @@ void HiResScreen::DownSample(RndBitmap &outBm) {
     int newHeight = (tiling * 270 + accum_h) / tiling;
     float scaleX = (float)accum_w / (float)newWidth;
     float scaleY = (float)accum_h / (float)newHeight;
-    outBm.Create(newWidth, newHeight, 32, 0, 0, 0, 0, 0);
-    memset(outBm.Buffer(), 0, outBm.PixelBytes());
+    outBm.Create(newWidth, newHeight, 0, 0x20, 0, 0, 0, 0);
+    memset(outBm.Pixels(), 0, outBm.PixelBytes());
     for (int y = 0; y < newHeight; y++) {
         int srcY = (int)(y * scaleY);
         mCache->LoadCache(srcY);

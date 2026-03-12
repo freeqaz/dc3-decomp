@@ -5,6 +5,13 @@
 #include "meta_ham/SongSortNode.h"
 #include "ui/UIListWidget.h"
 
+SongSortBySong::SongSortBySong() {
+    static Symbol by_song("by_song");
+    SetSortName(by_song);
+}
+
+SongSortBySong::~SongSortBySong() {}
+
 SongCmp::~SongCmp() {}
 
 int SongCmp::Compare(const NavListItemSortCmp *cmp, NavListNodeType type) const {
@@ -14,13 +21,13 @@ int SongCmp::Compare(const NavListItemSortCmp *cmp, NavListNodeType type) const 
 
     case kNodeHeader: {
         const SongCmp *songCmp = cmp->GetSongCmp();
-        int iVar3 = mSortKey - songCmp->mSortKey;
+        int iVar3 = (signed char)*mSortKey - (signed char)*songCmp->mSortKey;
         if (mSortKeyEnd == 0)
             return iVar3;
         if (0 < iVar3)
             return iVar3;
-        return mSortKeyEnd - songCmp->mSortKey >> 31 & mSortKeyEnd - songCmp->mSortKey; // something strange
-                                                                  // here
+        int iVar4 = (signed char)*mSortKeyEnd - (signed char)*songCmp->mSortKey;
+        return iVar4 >> 31 & iVar4;
     }
     case kNodeItem: {
         const SongCmp *songCmp = cmp->GetSongCmp();
@@ -35,28 +42,41 @@ int SongCmp::Compare(const NavListItemSortCmp *cmp, NavListNodeType type) const 
 NavListHeaderNode *SongSortBySong::NewHeaderNode(NavListItemNode *p1) const {
     SongSortNode *node = dynamic_cast<SongSortNode *>(p1);
     const char *title = node->Record()->Metadata()->Title();
-    SongCmp *cmp = new SongCmp(title, nullptr);
-
+    SongCmp *newCmp = new SongCmp(title, 0);
+    SongCmp *cmp;
+    if (newCmp != 0) {
+        cmp = newCmp;
+    } else {
+        cmp = 0;
+    }
     char sortLetter[2];
-
-    sortLetter[1] = '\0';
+    sortLetter[0] = 0;
+    sortLetter[1] = 0;
     sortLetter[0] = title[0];
-
     Symbol sortSym(sortLetter);
 
     return new SongHeaderNode(cmp, sortSym, true);
 }
 
+NavListHeaderNode *
+SongSortBySong::NewHeaderNode(NavListItemNode *n1, NavListItemNode *n2) const {
+    return NewHeaderNode(n1);
+}
+
 NavListShortcutNode *SongSortBySong::NewShortcutNode(NavListItemNode *p1) const {
     SongSortNode *node = dynamic_cast<SongSortNode *>(p1);
     const char *title = node->Record()->Metadata()->Title();
-    SongCmp *cmp = new SongCmp(title, nullptr);
-
+    SongCmp *newCmp = new SongCmp(title, 0);
+    SongCmp *cmp;
+    if (newCmp != 0) {
+        cmp = newCmp;
+    } else {
+        cmp = 0;
+    }
     char sortLetter[2];
-
-    sortLetter[1] = '\0';
+    sortLetter[0] = 0;
+    sortLetter[1] = 0;
     sortLetter[0] = title[0];
-
     Symbol sortSym(sortLetter);
 
     return new NavListShortcutNode(cmp, sortSym, true);

@@ -2,6 +2,7 @@
 #include "meta_ham/FitnessCalorieSortMgr.h"
 #include "meta_ham/FitnessCalorieSortNode.h"
 #include "meta_ham/NavListNode.h"
+#include "world/CameraShot.h"
 #include "utl/MakeString.h"
 #include "utl/Symbol.h"
 
@@ -12,7 +13,8 @@ FitnessCalorieSortByCalorie::~FitnessCalorieSortByCalorie() {}
 int FitnessCalorieSortCmp::Compare(
     NavListItemSortCmp const *cmp, NavListNodeType type
 ) const {
-    return !(type == kNodeItem);
+    int diff = type - kNodeItem;
+    return (diff != 0) - 1;
 }
 
 FitnessCalorieSortByCalorie::FitnessCalorieSortByCalorie() {
@@ -22,20 +24,24 @@ FitnessCalorieSortByCalorie::FitnessCalorieSortByCalorie() {
 
 NavListShortcutNode *
 FitnessCalorieSortByCalorie::NewShortcutNode(NavListItemNode *node) const {
-    Symbol s = MakeString(
-        "calorie_shortcut_%i", static_cast<FitnessCalorieSortNode *>(node)->GetCalories()
-    );
+    CamShotFrame::BlendEaseMode calories =
+        (CamShotFrame::BlendEaseMode)static_cast<FitnessCalorieSortNode *>(node)->GetCalories();
+    Symbol s(MakeString("calorie_shortcut_%i", calories));
+    Symbol token = s;
     FitnessCalorieSortCmp *cmp = new FitnessCalorieSortCmp();
-    return new NavListShortcutNode(cmp, s, true);
+    NavListShortcutNode *shortcut = new NavListShortcutNode(cmp, token, true);
+    return shortcut;
 }
 
 NavListHeaderNode *
 FitnessCalorieSortByCalorie::NewHeaderNode(NavListItemNode *node) const {
-    Symbol s = MakeString(
-        "calorie_header_%i", static_cast<FitnessCalorieSortNode *>(node)->GetCalories()
-    );
+    CamShotFrame::BlendEaseMode calories =
+        (CamShotFrame::BlendEaseMode)static_cast<FitnessCalorieSortNode *>(node)->GetCalories();
+    Symbol s(MakeString("calorie_header_%i", calories));
+    Symbol token = s;
     FitnessCalorieSortCmp *cmp = new FitnessCalorieSortCmp();
-    return new FitnessCalorieHeaderNode(cmp, s, true);
+    FitnessCalorieHeaderNode *header = new FitnessCalorieHeaderNode(cmp, token, true);
+    return header;
 }
 
 NavListHeaderNode *

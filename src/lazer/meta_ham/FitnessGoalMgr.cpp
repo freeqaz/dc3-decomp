@@ -93,26 +93,26 @@ void FitnessGoalMgr::BroadcastSyncMsg(Symbol s) {
 }
 
 void FitnessGoalMgr::StartCmdSendFitnessGoalToRC() {
-    QueueableCommand *cmd = mCommandQueue.front();
+    CmdSendFitnessGoalToRC *cmd = (CmdSendFitnessGoalToRC *)mCommandQueue.front();
     mCurrentRCJob = new SetFitnessGoalJob(this, cmd->mData.profile);
     TheRockCentral.ManageJob(mCurrentRCJob);
 }
 
 void FitnessGoalMgr::StartCmdUpdateFitnessGoalToRC() {
-    QueueableCommand *cmd = mCommandQueue.front();
+    CmdUpdateFitnessGoalToRC *cmd = (CmdUpdateFitnessGoalToRC *)mCommandQueue.front();
     mCurrentRCJob = new UpdateFitnessGoalJob(this, cmd->mData.profile);
     TheRockCentral.ManageJob(mCurrentRCJob);
 }
 
 void FitnessGoalMgr::StartCmdDeleteFitnessGoalFromRC() {
-    QueueableCommand *cmd = mCommandQueue.front();
+    CmdDeleteFitnessGoalFromRC *cmd = (CmdDeleteFitnessGoalFromRC *)mCommandQueue.front();
     mCurrentRCJob = new DeleteFitnessGoalJob(this, cmd->mData.profile);
     TheRockCentral.ManageJob(mCurrentRCJob);
 }
 
 void FitnessGoalMgr::HandleCmdChangeProfileOnlineID() {
     MILO_LOG("===== HandleCmdChangeProfileOnlineID\n");
-    mOnlineID = mCommandQueue.front()->mData.onlineID;
+    mOnlineID = ((CmdChangeProfileOnlineID *)mCommandQueue.front())->mData.onlineID;
     RELEASE(mCommandQueue.front());
     mCommandQueue.pop_front();
     ProcessNextCommand();

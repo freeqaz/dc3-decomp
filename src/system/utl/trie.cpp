@@ -119,7 +119,7 @@ void Trie::delete_node(unsigned int index) {
     CountField(node) = 0;
     check_index(index);
 
-    Character(node) = (unsigned char)-1;
+    *(char *)(node + 0x10) = -1;
 
     // Get old free list head and link
     unsigned int oldHead = FreeListHead(this);

@@ -143,24 +143,24 @@ MaterialParams BuildMaterialParams(RndMat* mat, bool isTextMesh) {
     matUni.materialFogEnabled = allowFog ? 1.0f : 0.0f;
     if (!allowFog && mat->GetFog()) heuristics |= kHeuristicFogBlendCheck;
 
-    // --- Auto-detect fullbright UI ---
-    // Environments with near-zero ambient and few/no lights are typically UI panels
-    // where lighting isn't meaningful. On Xbox, these meshes use simpler shaders
-    // that bypass lighting entirely.
-    bool forcePrelit = IsSimpleRender(); // Simple mode forces all prelit
+    // HACK DISABLED: Auto-detect fullbright UI
+    // Was: scan environment lights, force fullbright for UI panels with zero ambient
+    // and 0-1 directional lights. Testing showed UI renders correctly without this
+    // heuristic — materials are already marked prelit where needed.
+    // Once menus are finished and working, we can remove this code.
+    bool forcePrelit = IsSimpleRender();
+#if 0
     if (!forcePrelit && !mat->Prelit() && !isTextMesh) {
         RndEnviron* env = RndEnviron::Current();
         if (env) {
             const Hmx::Color& amb = env->AmbientColor();
             if (amb.red < 0.01f && amb.green < 0.01f && amb.blue < 0.01f) {
-                // Zero-ambient environment -- count real directional lights
                 int numDirLights = 0;
                 ObjPtrList<RndLight>& approx = env->LightsApprox();
                 for (auto it = approx.begin(); it != approx.end(); ++it) {
                     if (*it && (*it)->Showing() && (*it)->GetType() == RndLight::kDirectional)
                         numDirLights++;
                 }
-                // 0-1 lights with zero ambient = UI panel, force fullbright
                 if (numDirLights <= 1) {
                     forcePrelit = true;
                     heuristics |= kHeuristicAutoPrelit;
@@ -168,6 +168,7 @@ MaterialParams BuildMaterialParams(RndMat* mat, bool isTextMesh) {
             }
         }
     }
+#endif
     if (isTextMesh) heuristics |= kHeuristicTextMeshDetect;
     matUni.prelit = (mat->Prelit() || isTextMesh || forcePrelit) ? 1.0f : 0.0f;
     matUni.useAlphaAsRGB = isTextMesh ? 1.0f : 0.0f;

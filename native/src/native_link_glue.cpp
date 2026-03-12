@@ -30,6 +30,7 @@
 #include "hamobj/DancerSequence.h"
 #include "synth/Faders.h"
 #include "flow/Flow.h"
+#include "flow/FlowNode.h"
 #include "synth/FxSend.h"
 #include "synth/FxSendMeterEffect.h"
 #include "hamobj/HamCamShot.h"
@@ -121,6 +122,7 @@ OBJREFCONCRETE_COPYREF(DancerSequence)
 OBJREFCONCRETE_COPYREF(EventTrigger)
 OBJREFCONCRETE_COPYREF(Fader)
 OBJREFCONCRETE_COPYREF(Flow)
+OBJREFCONCRETE_COPYREF(FlowNode)
 OBJREFCONCRETE_COPYREF(FxSend)
 OBJREFCONCRETE_COPYREF(FxSendMeterEffect)
 OBJREFCONCRETE_COPYREF(HamCamShot)

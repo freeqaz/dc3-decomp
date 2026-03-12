@@ -294,7 +294,7 @@ bool MoveVariant::IsValidForMinigame() const {
         return false;
     }
     int size = (int)mNextCandidates.size();
-    if (size < 8) {
+    if (size < 1) {
         return false;
     }
     bool omitMinigame = (mFlags >> 5) & 1;

@@ -757,6 +757,9 @@ void StorePanel::SetSource(Symbol src, bool backup) {
         mBackupPurchaseSource = src;
 }
 
+StoreOffer *StorePanel::FindOffer(Symbol) const { return nullptr; }
+void StorePanel::StoreUserProfileSwappedToUser(LocalUser *) {}
+
 BEGIN_HANDLERS(StorePanel)
     HANDLE_EXPR(toggle_test_offers, mShowTestOffers = !mShowTestOffers)
     HANDLE_EXPR(test_offers, mShowTestOffers)

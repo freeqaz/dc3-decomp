@@ -25,3 +25,28 @@ TEST_F(HamProviderTest, NativeBootCreatesTypedHamProvider) {
         EXPECT_NE(TheHamProvider->Property(isInInfinitePartyMode, false), nullptr);
     }
 }
+
+TEST_F(HamProviderTest, TypedProviderReadsTypeDefWithoutTypeProps) {
+    DataArray *types = SystemConfig("objects", "PropertyEventProvider", "types");
+    ASSERT_NE(types, nullptr);
+
+    DataArray *hamTypeDef = types->FindArray("HamProvider", false);
+    if (!hamTypeDef) {
+        GTEST_SKIP() << "HamProvider type definition not present";
+    }
+
+    static Symbol hamProviderType("HamProvider");
+    static Symbol isInPartyMode("is_in_party_mode");
+
+    PropertyEventProvider *provider = Hmx::Object::New<PropertyEventProvider>();
+    ASSERT_NE(provider, nullptr);
+    EXPECT_FALSE(provider->HasTypeProps());
+
+    provider->SetType(hamProviderType);
+    EXPECT_EQ(provider->Type(), hamProviderType);
+    EXPECT_EQ(provider->TypeDef(), hamTypeDef);
+    EXPECT_FALSE(provider->HasTypeProps());
+    EXPECT_NE(provider->Property(isInPartyMode, false), nullptr);
+
+    delete provider;
+}

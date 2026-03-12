@@ -178,7 +178,7 @@ void LockedContentPanel::SetUp(Symbol song) {
                 MakeString("%s%s%s", "award_", song, "_instruction")
             );
         } else {
-            MILO_ASSERT(false, 0xbe);
+            MILO_ASSERT(false, 0xed);
         }
     }
 }

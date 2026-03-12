@@ -1,4 +1,7 @@
 // Native lifetime/merge safety regression tests.
+#include "flow/Flow.h"
+#include "flow/FlowAnimate.h"
+#include "rndobj/Group.h"
 #include "test_helpers.h"
 
 #include "obj/Dir.h"
@@ -22,6 +25,21 @@ public:
 
 private:
     ObjPtr<Hmx::Object> mTarget;
+};
+
+class ExposedFlow : public Flow {
+public:
+    ExposedFlow() : Flow() {}
+
+    int ChildCount() const { return mChildNodes.size(); }
+    FlowNode *FrontChild() const { return mChildNodes.empty() ? nullptr : mChildNodes.front(); }
+};
+
+class ExposedRndGroup : public RndGroup {
+public:
+    ExposedRndGroup() : RndGroup() {}
+
+    int ObjectCount() const { return mObjects.size(); }
 };
 
 // Expose protected FindEntry for corruption simulation tests.
@@ -151,6 +169,38 @@ TEST_F(ObjectLifetimeTest, DeleteOrderDoesNotRequireTopologicalSortForObjPtr) {
 
     delete a;
     delete dir;
+}
+
+TEST_F(ObjectLifetimeTest, DeletingFlowChildLeavesNullTombstoneUntilParentTeardown) {
+    ExposedFlow *flow = new ExposedFlow();
+    FlowAnimate *child = Hmx::Object::New<FlowAnimate>();
+
+    child->SetParent(flow, true);
+    ASSERT_EQ(flow->ChildCount(), 1);
+    ASSERT_EQ(flow->FrontChild(), child);
+
+    delete child;
+
+    EXPECT_EQ(flow->ChildCount(), 1);
+    EXPECT_EQ(flow->FrontChild(), nullptr);
+
+    delete flow;
+}
+
+TEST_F(ObjectLifetimeTest, DeletingRndGroupMemberRemovesOwnerControlNode) {
+    ExposedRndGroup *group = new ExposedRndGroup();
+    Hmx::Object *child = Hmx::Object::New<Hmx::Object>();
+
+    group->AddObject(child);
+    ASSERT_EQ(group->ObjectCount(), 1);
+
+    delete child;
+
+    EXPECT_EQ(group->ObjectCount(), 0);
+
+    if (group->ObjectCount() == 0) {
+        delete group;
+    }
 }
 
 TEST_F(ObjectLifetimeTest, RemoveSubDirReleasesDirPtrRef) {
@@ -302,6 +352,8 @@ TEST_F(ObjectLifetimeTest, DeleteAutosavingIconSubdirOnly) {
 
     int count = 0;
     for (ObjDirItr<Hmx::Object> it(subdir, false); it != nullptr; ++it) {
+        printf("  sub[%d]: '%s' (%s)\n", count, ((Hmx::Object *)it)->Name(),
+               ((Hmx::Object *)it)->ClassName().Str());
         count++;
     }
     printf("DeleteAutosavingIconSubdirOnly: deleting '%s' objects=%d\n",

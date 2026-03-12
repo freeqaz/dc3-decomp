@@ -256,7 +256,7 @@ void CharEyes::UpdateOverlay() {
             *mEyeStatusOverlay << "Foc(" << mFocusInterest->Name() << " p(" << mFocusTimer << ") v(" << str << ")) ";
         } else
             *mEyeStatusOverlay << "Foc(NA) ";
-        *mEyeStatusOverlay << "t(" << mLastCang << ") ";
+        *mEyeStatusOverlay << "t(" << mLastLook << ") ";
         Vector3 headPos(GetHead()->WorldXfm().v);
         Vector3 diff;
         Vector3 target(mTarget);
@@ -485,7 +485,7 @@ BEGIN_COPYS(CharEyes)
         COPY_MEMBER(mInterests)
         COPY_MEMBER(mFaceServo)
         COPY_MEMBER(mLastFacing)
-        COPY_MEMBER(mLastCang)
+        COPY_MEMBER(mLastLook)
         COPY_MEMBER(mCamWeight)
         COPY_MEMBER(mDefaultFilterFlags)
         COPY_MEMBER(mViewDirection)
@@ -712,8 +712,8 @@ Vector3 CharEyes::GenerateDartOffset() {
     float start = mData.mMinRadius;
     float end = mData.mMaxRadius;
     if (mData.mScaleWithDistance && mData.mReferenceDistance > 0.1f) {
-        Vector3 diff;
-        Subtract(mTarget, GetHead()->WorldXfm().v, diff);
+        const Vector3 &v = GetHead()->WorldXfm().v;
+        Vector3 diff(mTarget.x - v.x, mTarget.y - v.y, mTarget.z - v.z);
         float len = Length(diff);
         start *= len / mData.mReferenceDistance;
         end *= len / mData.mReferenceDistance;

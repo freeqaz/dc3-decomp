@@ -85,11 +85,10 @@ void ObjPtrVec<T1, T2>::unique() {
 
 template <class T1, class T2>
 bool ObjPtrVec<T1, T2>::remove(T1 *obj) {
-    for (iterator it = begin(); it != end(); ++it) {
-        if (it->Obj() == obj) {
-            erase(it);
-            return true;
-        }
+    iterator it = find(obj);
+    if (it != end()) {
+        erase(it);
+        return true;
     }
     return false;
 }

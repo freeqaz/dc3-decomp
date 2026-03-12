@@ -59,8 +59,8 @@ public:
     virtual void Copy(const Hmx::Object *, Hmx::Object::CopyType);
     virtual void Load(BinStream &);
     virtual float CharWidth(unsigned short) const;
-    virtual bool CharAdvance(unsigned short, unsigned short, float &) const;
     virtual float CharAdvance(unsigned short) const;
+    virtual bool CharAdvance(unsigned short, unsigned short, float &) const;
     virtual bool CharDefined(unsigned short) const;
     virtual float AspectRatio() const { return mCellSize.y / mCellSize.x; }
     virtual RndMat *Mat() const {
@@ -111,9 +111,9 @@ public:
         ~CharInfo() {}
 
         Box unk0; // 0x0
-        float advance; // 0x18
-        ObjRefConcrete<RndMesh, ObjectDir> mMesh; // 0x1c
-        bool visible; // 0x2c
+        float advance; // 0x20
+        ObjPtr<RndMesh> mMesh; // 0x24
+        bool visible; // 0x38
 
         MEM_OVERLOAD(CharInfo, 0x12A);
     };
@@ -126,8 +126,8 @@ public:
     virtual void Copy(const Hmx::Object *, Hmx::Object::CopyType);
     virtual void Load(BinStream &);
     virtual float CharWidth(unsigned short) const;
-    virtual bool CharAdvance(unsigned short, unsigned short, float &) const;
     virtual float CharAdvance(unsigned short) const;
+    virtual bool CharAdvance(unsigned short, unsigned short, float &) const;
     virtual float Kerning(unsigned short, unsigned short) const;
     virtual float AspectRatio() const;
     virtual RndMat *Mat() const;

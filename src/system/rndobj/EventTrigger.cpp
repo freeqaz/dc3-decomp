@@ -398,6 +398,11 @@ void EventTrigger::TriggerSelf() {
     }
     FOREACH (it, mAnims) {
         if (it->mAnim) {
+#ifdef HX_NATIVE
+            printf("DC3 DIAG:   TriggerSelf anim '%s' (class=%s) rate=%d start=%.1f end=%.1f enable=%d\n",
+                   it->mAnim->Name(), it->mAnim->ClassName(), (int)it->mRate,
+                   it->mStart, it->mEnd, it->mEnable);
+#endif
             if (it->mEnable) {
                 mSpawnedTasks.push_back(it->mAnim->Animate(
                     it->mBlend, it->mWait, it->mDelay,
@@ -592,6 +597,10 @@ void EventTrigger::CleanupEventCase(std::list<Symbol> &syms) {
 }
 
 DataNode EventTrigger::OnTrigger(DataArray *) {
+#ifdef HX_NATIVE
+    printf("DC3 DIAG: EventTrigger::OnTrigger '%s' (dir=%s) enabled=%d anims=%d\n",
+           Name(), Dir() ? Dir()->Name() : "<null>", mEnabled, (int)mAnims.size());
+#endif
     if (mEnabled) {
         if (!mWaitForEvents.empty()) {
             mWaiting = true;

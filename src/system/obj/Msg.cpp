@@ -30,13 +30,15 @@ Symbol MsgSinks::GetPropSyncHandler(DataArray *arr) {
 }
 
 Symbol PathToEventName(DataArray *arr) {
+    int val;
     StackString<100> str("on_");
     str += arr->Sym(0).Str();
     for (int i = 1; i < arr->Size(); i++) {
         if (arr->Type(i) == kDataSymbol) {
             str += arr->LiteralSym(i).Str();
         } else {
-            str += MakeString("%i", (CamShotFrame::BlendEaseMode)arr->Int(i));
+            val = arr->Int(i);
+            str += MakeString("%i", (CamShotFrame::BlendEaseMode)val);
         }
     }
     str += "_change";

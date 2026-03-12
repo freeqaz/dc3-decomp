@@ -1,5 +1,6 @@
 #include "rndobj/Text.h"
 #include "Text.h"
+#include "obj/Msg.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
 #include "os/System.h"
@@ -18,12 +19,13 @@
 #include "wordwrap.h"
 #include "ui/UI.h"
 #include <algorithm>
+#include <map>
+#include <set>
 #ifdef HX_NATIVE
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #endif
-
 
 // Explicit template instantiation for MakeString<char>
 template const char *MakeString<char>(const char *, const char &);
@@ -1125,9 +1127,139 @@ int RndText::ConvertTextToWide(const char *str, HX_VECTOR(unsigned short) &wideC
     return (int)(out - &wideChars[0]);
 }
 
-// FIXME: stub - full implementation is 0x568 bytes
-__declspec(noinline)
 void RndText::ReplaceMissingCharacters(HX_VECTOR(unsigned short) &wideChars) {
+    std::map<RndFontBase *, std::set<unsigned short> > missingMap;
+    unsigned short curChar;
+    HX_VECTOR(unsigned short) origChars;
+    bool copied = false;
+    StyleState styleState(this, 1.0f);
+    unsigned short *p = &wideChars[0];
+    curChar = *p;
+    while (curChar != 0) {
+        curChar = *p;
+        if (curChar == 0x3c && mMarkup) {
+            p = (unsigned short *)ParseMarkup(p, styleState, curChar);
+            p = p - 1;
+        } else if (curChar != 10 && styleState.mFontMapIdx != -1) {
+            FontMapBase *fm = mFontMaps[styleState.mFontMapIdx];
+            RndFontBase *font;
+            if (fm != 0 && (font = fm->Font()) != 0
+                && !font->CharDefined(curChar)) {
+                missingMap[font].insert(curChar);
+
+                unsigned short replacements[] = {0x25a1, 0x3f, 0x23, 0x2a, 0x21, 0x39};
+                curChar = 0;
+                int i = 0;
+                unsigned short *rp = replacements;
+                do {
+                    unsigned short tryChar = *rp;
+                    if (font->CharDefined(tryChar)) {
+                        curChar = tryChar;
+                        break;
+                    }
+                    i = i + 1;
+                    rp = rp + 1;
+                } while (i < 6);
+
+                if (curChar == 0) {
+                    std::vector<unsigned short> fontChars(font->mChars);
+                    unsigned int j = 0;
+                    unsigned int count = fontChars.size();
+                    unsigned short *fp = &fontChars[0];
+                    unsigned short c = curChar;
+                    if (count != 0) {
+                        do {
+                            c = *fp;
+                            bool skip;
+                            if (c == 0x20 || c == 0xa0) {
+                                skip = true;
+                            } else {
+                                skip = false;
+                            }
+                            if (!skip)
+                                break;
+                            j = j + 1;
+                            fp = fp + 1;
+                            c = curChar;
+                        } while (j < count);
+                    }
+                    curChar = c;
+                }
+
+                if (curChar != 0) {
+                    if (!copied) {
+                        origChars = wideChars;
+                        copied = true;
+                    }
+                    *p = curChar;
+                }
+            }
+        }
+        p = p + 1;
+        curChar = *p;
+    }
+
+    {
+        std::map<RndFontBase *, std::set<unsigned short> >::iterator mapIt = missingMap.begin();
+        if (mapIt != missingMap.end()) {
+        unsigned int origSize = origChars.size();
+        do {
+            RndFontBase *font = mapIt->first;
+            const char *pluralS = "s";
+            if (mapIt->second.size() <= 1) {
+                pluralS = "";
+            }
+            String msg(MakeString("%s:%s char%s (", PathName(this), TextToken(), pluralS));
+
+            for (std::set<unsigned short>::iterator setIt = mapIt->second.begin();
+                 setIt != mapIt->second.end(); ++setIt) {
+                unsigned short ch = *setIt;
+                bool printable = true;
+                if (ch < 0x20 || ch >= 0xff || ch == 0x25 || ch == 0x7f) {
+                    printable = false;
+                }
+                char displayChar;
+                if (printable) {
+                    displayChar = (char)ch;
+                } else {
+                    displayChar = '?';
+                }
+                const char *sep = "";
+                if (setIt != mapIt->second.begin()) {
+                    sep = ", ";
+                }
+                msg += MakeString("%s\'%c\' 0x%02X", sep, displayChar, ch);
+            }
+
+            msg += MakeString(") missing from %s in string \"", PathName(font));
+
+            unsigned int k = 0;
+            unsigned short *qp = &origChars[0];
+            if (origSize != 0) {
+                do {
+                    unsigned short qch = *qp;
+                    if (qch == 0)
+                        break;
+                    bool printable = true;
+                    if (qch < 0x20 || qch >= 0xff || qch == 0x25 || qch == 0x7f) {
+                        printable = false;
+                    }
+                    if (printable) {
+                        msg += MakeString("%c", (char)qch);
+                    } else {
+                        msg += MakeString("\\x%02X", qch);
+                    }
+                    k = k + 1;
+                    qp = qp + 1;
+                } while (k < origSize);
+            }
+
+            msg += "\"";
+            MILO_NOTIFY(msg.c_str());
+            ++mapIt;
+        } while (mapIt != missingMap.end());
+        }
+    }
 }
 
 int RndText::OnComputeCharWidths(const unsigned short *wideChars, float *widths, bool marqueeWrap) {
@@ -1363,9 +1495,8 @@ void RndText::UpdateScrollOffsets() {
     int iVar9 = mFitType;
     float fVar3 = mTotalWidth;
     bool bVar10 = false;
-    double dVar11 = 0.0;
-    double dVar12 = (double)(fVar2 * fVar1 * 1000.0f);
-    float fVar13 = (float)((double)mScrollPos + dVar12);
+    float dVar12 = fVar2 * fVar1 * 1000.0f;
+    float fVar13 = mScrollPos + dVar12;
     mScrollPos = fVar13;
     float widthDiff = fVar3 - mWidth;
 
@@ -1401,34 +1532,48 @@ void RndText::UpdateScrollOffsets() {
         break;
 
     case kFitScrollMarqueeWrapAlways: {
-        static int flags = 0;
+        static Message textScrolledIn("text_scrolled_in", -1);
+        static Message textScrolledOut("text_scrolled_out", -1);
 
-        if ((flags & 1) == 0) {
-            flags = flags | 1;
-        }
-        if ((flags & 2) == 0) {
-            flags = flags | 2;
-        }
+        mScrollOffset += dVar12;
 
-        mScrollOffset += (float)dVar12;
-
-        if (mFontMaps.size() > 0) {
-            float fw = *(float *)((char *)mFontMaps[0]->Mesh(0) + 8);
-            if (!((mWidth - mScrollOffset) < fw)) {
-                mCurScrollChars++;
-                if (mCurScrollChars >= (int)mNumLines) {
-                    mCurScrollChars = 0;
-                }
+        float firstWidth = *mLineWidths.begin();
+        if (!((mWidth - mScrollOffset) < firstWidth)) {
+            mCurScrollChars++;
+            if (mCurScrollChars >= mNumLines) {
+                mCurScrollChars = 0;
+            }
+            textScrolledIn[0] = DataNode(mCurScrollChars);
+            if (firstWidth == mTotalWidth) {
+                mScrollOffset = mWidth;
+            }
+            unsigned int count = 0;
+            for (auto it = mLineWidths.begin(); it != mLineWidths.end(); ++it) {
+                count++;
+            }
+            if ((unsigned int)mNumLines == count) {
+                mLineWidths.insert(mLineWidths.end(), firstWidth);
+            }
+            mLineWidths.erase(mLineWidths.begin());
+            Hmx::Object *alt = mAltStyle;
+            if (alt != nullptr) {
+                alt->Handle(textScrolledIn, false);
             }
         }
 
-        if (mFontMaps.size() > 1) {
-            float fw = *(float *)((char *)mFontMaps[1]->Mesh(0) + 8);
-            if (!(mScrollPos > -fw)) {
+        float firstOffset = *mLineOffsets.begin();
+        if (!(mScrollPos > -firstOffset)) {
+            mScrollOutIndex++;
+            textScrolledOut[0] = DataNode(mScrollOutIndex);
+            if (firstOffset == mTotalWidth) {
                 mScrollPos = 0.0f;
-                if (fw == fVar3) {
-                    mCurScrollChars = -1;
-                }
+                mScrollOutIndex = -1;
+            }
+            mLineOffsets.insert(mLineOffsets.end(), firstOffset);
+            mLineOffsets.erase(mLineOffsets.begin());
+            Hmx::Object *alt2 = mAltStyle;
+            if (alt2 != nullptr) {
+                alt2->Handle(textScrolledOut, false);
             }
         }
         break;
@@ -2014,13 +2159,13 @@ void RndText::UpdateText() {
         return;
     }
     if (mStyles[0].mSize > 0.0f && mWidth > 0.0f) {
-        if (mFitType == kFitScrollMarqueeWrap) {
+        if (mFitType == kFitStretch) {
             FitTextEllipsis();
             return;
         }
         if (mFitType == kFitScrollPingPong
             || mFitType == kFitScrollMarqueeReset
-            || mFitType == kFitStretch
+            || mFitType == kFitScrollMarqueeWrap
             || mFitType == kFitScrollMarqueeWrapAlways) {
             for (unsigned int i = 0; i < (unsigned int)mStyles.size(); i++) {
                 RndFontBase *font = mStyles[i].mFont;
@@ -2038,7 +2183,7 @@ void RndText::UpdateText() {
                     "%s %s requests scrolling, but uses a font that does not support it (%s)",
                     PathName(this), Name(), fontName
                 );
-                mFitType = kFitScrollMarqueeWrap;
+                mFitType = kFitStretch;
                 FitTextEllipsis();
                 return;
             }
@@ -2179,6 +2324,53 @@ void RndText::DrawShowing() {
 void RndText::SizeCheck() {
 #ifdef HX_NATIVE
     UpdateText();
+#else
+    static float sLastHeight;
+    static RndText *sLastText;
+
+    StyleState ss(this, mConstructScale);
+    for (FontMapBase **it = mFontMaps.begin(); it != mFontMaps.end(); ++it) {
+        RndFontBase *font = (*it)->Font();
+        if (font != nullptr && font->BitmapFont()) {
+            for (int i = 0; i < (*it)->NumMeshes(); i++) {
+                RndMesh *mesh = (*it)->Mesh(i);
+                if (mesh != nullptr) {
+                    float screenHeight;
+                    if (!CalcScreenHeight(
+                            ss.mSize * font->AspectRatio(), mesh, screenHeight
+                        )) {
+                        return;
+                    }
+                    float fontUnit = font->FontUnit();
+                    float aspectRatio = font->AspectRatio();
+                    float cap = 127.5f;
+                    if (screenHeight < 127.5f) {
+                        cap = screenHeight;
+                    }
+                    if (cap <= fontUnit * aspectRatio * 1.25f) {
+                        return;
+                    }
+                    if (sLastText == this && screenHeight <= sLastHeight) {
+                        return;
+                    }
+                    int heightInt = (int)screenHeight;
+                    int productInt = (int)(fontUnit * aspectRatio);
+                    MILO_NOTIFY(
+                        "oversized: %s font: %s token:'%s' text:'%s' %d < %d",
+                        PathName(this),
+                        font->Name(),
+                        TextToken(),
+                        mText,
+                        productInt,
+                        heightInt
+                    );
+                    sLastHeight = screenHeight;
+                    sLastText = this;
+                    return;
+                }
+            }
+        }
+    }
 #endif
 }
 
@@ -2208,32 +2400,32 @@ void RndText::GetWidthHeightBox(Box &box) const {
 void RndText::ReFitTextScroll(String str) {
     auto& maxWidth = mWidth;
     if (mFitType != kFitScrollMarqueeWrapAlways) {
-    } else {
-        SetText(str.c_str());
-        FitTextScroll();
-        *(float *)&mScrollPos = 0.0f;
-        mScrollOffset = 0.0f;
-        float width = maxWidth;
-        while (width >= *mLineWidths.begin()) {
-            mCurScrollChars++;
-            if (mCurScrollChars >= (int)mTotalWidth) {
-                mCurScrollChars = 0;
-            }
-            if (*mLineWidths.begin() == *(float *)&mNumLines) {
-                mScrollOffset += maxWidth;
-            }
-            unsigned int count = 0;
-            for (auto it = mLineWidths.begin(); it != mLineWidths.end(); ++it) {
-                count++;
-            }
-            if ((unsigned int)mTotalWidth == count) {
-                mLineWidths.insert(mLineWidths.end(), *mLineWidths.begin());
-            }
-            mLineWidths.erase(mLineWidths.begin());
-            width = maxWidth - mScrollOffset;
-        }
-        *(float *)&mScrollState = *(float *)&mScrollOffset;
+        return;
     }
+    SetText(str.c_str());
+    FitTextScroll();
+    *(float *)&mScrollPos = 0.0f;
+    mScrollOffset = 0.0f;
+    float width = maxWidth;
+    while (width >= *mLineWidths.begin()) {
+        mCurScrollChars++;
+        if (mCurScrollChars >= mNumLines) {
+            mCurScrollChars = 0;
+        }
+        if (*mLineWidths.begin() == mTotalWidth) {
+            mScrollOffset += maxWidth;
+        }
+        unsigned int count = 0;
+        for (auto it = mLineWidths.begin(); it != mLineWidths.end(); ++it) {
+            count++;
+        }
+        if ((unsigned int)mNumLines == count) {
+            mLineWidths.insert(mLineWidths.end(), *mLineWidths.begin());
+        }
+        mLineWidths.erase(mLineWidths.begin());
+        width = maxWidth - mScrollOffset;
+    }
+    mScrollTimer = mScrollState;
 }
 
 float RndText::ComputeCharWidthsForText(String str) {
@@ -2250,7 +2442,8 @@ float RndText::ComputeCharWidthsForText(String str) {
 }
 
 void RndText::FontMap3d::IncrementDisplayableChars(unsigned short us) {
-    if (mFont && mFont->CharDefined(us)) {
+    RndFont3d::CharInfo *info = mFont->GetCharInfo(us);
+    if (info != nullptr && *(int *)((char *)info + 0x30) != 0) {
         mDisplayableChars++;
     }
 }

@@ -6,6 +6,7 @@
 class ChallengeScoreCmp : public NavListItemSortCmp {
 public:
     int Compare(const NavListItemSortCmp *, NavListNodeType) const;
+    virtual const ChallengeScoreCmp *GetChallengeScoreCmp() const { return this; }
 };
 
 class ChallengeSortByScore : public ChallengeSort {

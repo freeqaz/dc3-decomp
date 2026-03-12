@@ -35,8 +35,8 @@ BEGIN_LOADS(HamCamShot)
     d >> mMaxTime;
     mNextShots.Load(bs, 1, nullptr, true);
     mOriginalSizeNextShots = mNextShots.size();
+    int temp;
     if (d.rev > 1) {
-        int temp;
         bs.ReadEndian(&temp, 4);
         mPlayerFlag = (HamPlayerFlags)temp;
     }

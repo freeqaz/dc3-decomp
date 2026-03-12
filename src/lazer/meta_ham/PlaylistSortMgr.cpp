@@ -193,25 +193,25 @@ void PlaylistSortMgr::OnEnter() {
 }
 
 void PlaylistSortMgr::StartCmdGetPlaylistFromRC() {
-    QueueableCommand *cmd = mCommandQueue.front();
+    CmdGetPlaylistFromRC *cmd = (CmdGetPlaylistFromRC *)mCommandQueue.front();
     mCurrentJob = new GetPlaylistJob(this, mOnlineID.c_str(), cmd->mData.i);
     TheRockCentral.ManageJob(mCurrentJob);
 }
 
 void PlaylistSortMgr::StartCmdAddPlaylistToRC() {
-    QueueableCommand *cmd = mCommandQueue.front();
+    CmdAddPlaylistToRC *cmd = (CmdAddPlaylistToRC *)mCommandQueue.front();
     mCurrentJob = new AddPlaylistJob(this, mOnlineID.c_str(), cmd->mData.playlist);
     TheRockCentral.ManageJob(mCurrentJob);
 }
 
 void PlaylistSortMgr::StartCmdDeletePlaylistFromRC() {
-    QueueableCommand *cmd = mCommandQueue.front();
+    CmdDeletePlaylistFromRC *cmd = (CmdDeletePlaylistFromRC *)mCommandQueue.front();
     mCurrentJob = new DeletePlaylistJob(this, mOnlineID.c_str(), cmd->mData.i);
     TheRockCentral.ManageJob(mCurrentJob);
 }
 
 void PlaylistSortMgr::StartCmdEditPlaylist() {
-    QueueableCommand *cmd = mCommandQueue.front();
+    CmdEditPlaylist *cmd = (CmdEditPlaylist *)mCommandQueue.front();
     mCurrentJob = new EditPlaylistJob(this, mOnlineID.c_str(), cmd->mData.playlist);
     TheRockCentral.ManageJob(mCurrentJob);
 }
@@ -323,7 +323,7 @@ void PlaylistSortMgr::HandleCmdDeletePlaylistFromRC() {
 
 void PlaylistSortMgr::HandleCmdAddPlaylistToRC() {
     MILO_LOG("===== HandleCmdAddPlaylistToRC\n");
-    ((AddPlaylistJob *)mCurrentJob)->GetPlaylistID(mCommandQueue.front()->mData.customPlaylist);
+    ((AddPlaylistJob *)mCurrentJob)->GetPlaylistID(((CmdAddPlaylistToRC *)mCommandQueue.front())->mData.customPlaylist);
     mCurrentJob = nullptr;
     RELEASE(mCommandQueue.front());
     mCommandQueue.pop_front();

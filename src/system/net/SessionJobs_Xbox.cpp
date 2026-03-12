@@ -18,7 +18,7 @@ XboxSessionJob::~XboxSessionJob() {
 bool XboxSessionJob::IsFinished() {
     DWORD dw;
     DWORD res = XGetOverlappedResult(&mXOverlapped, &dw, false);
-    bool result = res != ERROR_IO_PENDING;
+    bool result = res != ERROR_IO_INCOMPLETE;
     if (!result == false) {
         CheckError(res, &mXOverlapped);
     }

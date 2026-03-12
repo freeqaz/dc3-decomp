@@ -184,6 +184,16 @@ public:
             return t;                                                                    \
         }
 
+#define DECLARE_MESSAGE_NOINLINE_DTOR(classname, type)                                   \
+    class classname : public Message {                                                   \
+    public:                                                                              \
+        classname(DataArray *da) : Message(da) {}                                        \
+        virtual ~classname();                                                            \
+        static Symbol Type() {                                                           \
+            static Symbol t(type);                                                       \
+            return t;                                                                    \
+        }
+
 #define END_MESSAGE                                                                      \
     }                                                                                    \
     ;

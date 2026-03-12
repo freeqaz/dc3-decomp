@@ -31,7 +31,8 @@ NavListHeaderNode *MQSongSortByCharacter::NewHeaderNode(NavListItemNode *node) c
     const char *songName = cmp->mSongName;
     const char *characterName = cmp->mCharacterName;
     MQSongCharCmp *songCharCmp = new MQSongCharCmp(songName, characterName);
-    Symbol sym(MakeString(characterName, "mqheader_%s"));
+    const char *name = characterName;
+    Symbol sym(MakeString("mqheader_%s", name));
     return new MQSongHeaderNode(songCharCmp, sym, true);
 }
 
@@ -41,10 +42,10 @@ MQSongSortByCharacter::NewHeaderNode(NavListItemNode *n1, NavListItemNode *n2) c
 }
 
 NavListShortcutNode *MQSongSortByCharacter::NewShortcutNode(NavListItemNode *node) const {
-    const char *characterName = node->GetCmp()->GetMQSongCharCmp()->mCharacterName;
     const char *songName = node->GetCmp()->GetMQSongCharCmp()->mSongName;
+    const char *characterName = node->GetCmp()->GetMQSongCharCmp()->mCharacterName;
     MQSongCharCmp *songCharCmp = new MQSongCharCmp(songName, characterName);
-    return new NavListShortcutNode(songCharCmp, characterName, true);
+    return new NavListShortcutNode(songCharCmp, STR_TO_SYM(songName), true);
 }
 
 NavListItemNode *MQSongSortByCharacter::NewItemNode(void *songSymbol) const {

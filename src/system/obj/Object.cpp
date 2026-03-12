@@ -428,25 +428,24 @@ const DataNode *Hmx::Object::Property(DataArray *prop, bool fail) const {
     if (const_cast<Hmx::Object *>(this)->SyncProperty(n, prop, 0, kPropGet))
         return &n;
     Symbol propKey = prop->Sym(0);
+    const DataNode *propValue = nullptr;
 
     if (mTypeProps) {
         // retrieve property val from typeprops array
-        const DataNode *propValue = mTypeProps->KeyValue(propKey, false);
-        if (!propValue) {
-            if (mTypeDef) {
-                DataArray *found = mTypeDef->FindArray(propKey, fail);
-                if (found)
-                    propValue = &found->Evaluate(1);
-            }
-        }
-        if (propValue) {
-            int cnt = prop->Size();
-            if (cnt == 1)
-                return propValue;
-            if (cnt == 2 && propValue->Type() == kDataArray) {
-                DataArray *ret = propValue->UncheckedArray();
-                return &ret->Node(prop->Int(1));
-            }
+        propValue = mTypeProps->KeyValue(propKey, false);
+    }
+    if (!propValue && mTypeDef) {
+        DataArray *found = mTypeDef->FindArray(propKey, fail);
+        if (found)
+            propValue = &found->Evaluate(1);
+    }
+    if (propValue) {
+        int cnt = prop->Size();
+        if (cnt == 1)
+            return propValue;
+        if (cnt == 2 && propValue->Type() == kDataArray) {
+            DataArray *ret = propValue->UncheckedArray();
+            return &ret->Node(prop->Int(1));
         }
     }
     if (fail) {

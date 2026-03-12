@@ -25,7 +25,7 @@ RndGroup::RndGroup()
     : mObjects(this, kObjListOwnerControl), mDrawOnly(this), mSortInWorld(false) {}
 
 bool RndGroup::Replace(ObjRef *ref, Hmx::Object *obj) {
-    if (ref->Parent() != &mObjects) {
+    if (ref->Parent() == &mObjects) {
         if (!obj) {
             Hmx::Object *theObj = ref->GetObj();
             mObjects.remove(theObj);

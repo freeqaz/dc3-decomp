@@ -457,7 +457,7 @@ namespace {
     }
 
     void XbcRecieveMsg(unsigned long clientID, HJSONREADER__ *reader) {
-        DataArrayPtr dta = JsonToDta(reader, false);
+        DataArrayPtr dta = JsonToDta(reader, true);
         SmartGlassMsg msg(clientID, (DataArray *)dta);
         ThePlatformMgr.Handle(msg.Data(), true);
     }

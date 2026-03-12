@@ -15,14 +15,6 @@ struct QueueableCommand {
 public:
     virtual int GetType() = 0;
     ~QueueableCommand() {}
-
-    union {
-        int i;
-        HamProfile *profile;
-        Playlist *playlist;
-        CustomPlaylist *customPlaylist;
-        const char *onlineID;
-    } mData;
 };
 
 struct CmdGetFitnessGoalFromRC : public QueueableCommand {
@@ -35,24 +27,57 @@ struct CmdSendFitnessGoalToRC : public QueueableCommand {
 public:
     virtual int GetType() { return 1; } // fix
     CmdSendFitnessGoalToRC(HamProfile *p) { mData.profile = p; }
+
+    union {
+        int i;
+        HamProfile *profile;
+        Playlist *playlist;
+        CustomPlaylist *customPlaylist;
+        const char *onlineID;
+    } mData;
 };
 
 struct CmdUpdateFitnessGoalToRC : public QueueableCommand {
 public:
     virtual int GetType() { return 1; } // fix
     CmdUpdateFitnessGoalToRC(HamProfile *p) { mData.profile = p; }
+
+    union {
+        int i;
+        HamProfile *profile;
+        Playlist *playlist;
+        CustomPlaylist *customPlaylist;
+        const char *onlineID;
+    } mData;
 };
 
 struct CmdDeleteFitnessGoalFromRC : public QueueableCommand {
 public:
     virtual int GetType() { return 1; } // fix
     CmdDeleteFitnessGoalFromRC(HamProfile *p) { mData.profile = p; }
+
+    union {
+        int i;
+        HamProfile *profile;
+        Playlist *playlist;
+        CustomPlaylist *customPlaylist;
+        const char *onlineID;
+    } mData;
 };
 
 struct CmdChangeProfileOnlineID : public QueueableCommand {
 public:
     virtual int GetType() { return 1; } // fix
     CmdChangeProfileOnlineID(String s) : str() { str = s; }
+
+    union {
+        int i;
+        HamProfile *profile;
+        Playlist *playlist;
+        CustomPlaylist *customPlaylist;
+        const char *onlineID;
+    } mData;
+
     String str;
 };
 

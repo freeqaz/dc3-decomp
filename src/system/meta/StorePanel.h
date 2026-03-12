@@ -48,9 +48,14 @@ public:
     virtual void Poll();
     virtual bool IsLoaded() const;
     virtual void Unload();
-    virtual void LoadArt(char const *, UIPanel *);
+    virtual bool IsSongInLibrary(int const &) const { return false; }
     virtual void ExitStore(StoreError) const;
     virtual Profile *StoreProfile() const;
+    virtual StoreOffer *MakeNewOffer(DataArray *arr) { return new StoreOffer(arr, 0); }
+    virtual StoreOffer *FindOffer(Symbol) const;
+    virtual bool EnumerateSubsetOfOfferIDs() const { return false; }
+    virtual void GetOfferIDsToEnumerate(std::vector<u64> &, bool) const {}
+    virtual void LoadArt(char const *, UIPanel *);
 
     StorePanel();
     void CheckOut(StorePurchaseable *);
@@ -85,12 +90,10 @@ protected:
     // UIPanel
     virtual void PopulateOffers(DataArray *, bool);
     virtual void EnumerateOffers(bool);
-    virtual bool EnumerateSubsetOfOfferIDs() const { return false; }
-    virtual void GetOfferIDsToEnumerate(std::vector<u64> &, bool) const {}
     virtual void FinishEnum(std::list<EnumProduct> const &, bool);
     virtual StoreError UpdateOffers(std::list<EnumProduct> const &, bool);
     virtual void UpdateFromEnumProduct(StorePurchaseable *, EnumProduct const *);
-    virtual StoreOffer *MakeNewOffer(DataArray *arr) { return new StoreOffer(arr, 0); }
+    virtual void StoreUserProfileSwappedToUser(LocalUser *);
 
     void StartReEnum();
     DataNode OnMsg(SigninChangedMsg const &);

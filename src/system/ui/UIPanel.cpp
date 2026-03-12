@@ -205,9 +205,9 @@ void UIPanel::Load() {
         if (!fp.empty()) {
             MemPushHeap(heapNum);
 #ifdef HX_NATIVE
-            // Load panels synchronously on native — the LoadMgr queue can get
-            // backed up when we skip UnloadPanels, leaving loaders that block
-            // new panel loaders from being polled.
+            // Load panels synchronously on native — several native-only screens
+            // still depend on deterministic loader completion because async
+            // loader polling does not yet mirror Xbox behavior.
             mLoader = new DirLoader(fp, kLoadFront, nullptr, nullptr, nullptr, false, nullptr);
             MILO_ASSERT(mLoader, 0xA9);
             mLoaded = false;

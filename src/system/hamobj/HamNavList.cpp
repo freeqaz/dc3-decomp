@@ -1659,97 +1659,78 @@ void HamNavList::LinkRibbonDrawState(
         ribbonStates.resize(widgetElemCount, defaultState);
     }
     for (int i = 0; i < widgetElemCount; i++) {
-        UIListElementDrawState &elem = widgetState.mElements[i];
-        HamListRibbonDrawState &state = ribbonStates[i];
-
-        int selectedDisplay = mListState.SelectedDisplay();
-        state.mSelected = (selectedDisplay == i);
+        ribbonStates[i].mSelected = (mListState.SelectedDisplay() == i);
 
         int numShowing = mListState.NumShowing();
         bool scrollable = mListRibbonResource && mListRibbonResource->IsScrollable(numShowing);
 
-        bool isActive;
-        if (!scrollable) {
-            isActive = mListState.Provider()->IsActive(i);
+        if (scrollable) {
+            ribbonStates[i].mActive = mListState.Provider()->IsHeader(
+                mListState.FirstShowing() + i - mListState.MinDisplay()
+            );
         } else {
-            int firstShowing = mListState.FirstShowing();
-            isActive = mListState.Provider()->IsActive(firstShowing + i);
+            ribbonStates[i].mActive = mListState.Provider()->IsHeader(i);
         }
-        state.mActive = isActive;
 
-        state.mBigScale = (float)IsElementBig(i);
-        state.mElemDrawState = &elem;
+        ribbonStates[i].mBigScale = (float)IsElementBig(i);
 
-        // Conditionally clear ribbon interaction state
-        if (elem.mShowing == 1) {
-            bool shouldClear = false;
+        UIListElementDrawState &elem = widgetState.mElements[i];
+        ribbonStates[i].mElemDrawState = &elem;
+
+        if (elem.mElementState == kUIListWidgetHighlight) {
+            bool shouldSet = true;
             if (mListRibbonResource && !mListRibbonResource->TestEntering()
                 && mRibbonMode != HamListRibbon::kRibbonDisengaged) {
                 if (TheUI->FocusComponent() == this) {
-                    shouldClear = true;
+                    shouldSet = false;
                 } else {
                     bool controllerMode = TheGestureMgr && TheGestureMgr->InControllerMode();
                     if (!controllerMode) {
-                        shouldClear = true;
+                        shouldSet = false;
                     }
                 }
             }
-            if (shouldClear) {
+            if (shouldSet) {
                 elem.mElementState = kUIListWidgetActive;
             }
         }
     }
 #else
-    // ILP32 (Xbox 360) version: raw pointer arithmetic matches original binary
-    int *elemBeginPtr = *(int **)((char *)&widgetState + 0x38);
-    int *elemEndPtr = *(int **)((char *)&widgetState + 0x3c);
-    int widgetElemCount = (int)((elemEndPtr - elemBeginPtr) / (sizeof(UIListElementDrawState) / sizeof(int)));
-    if (widgetElemCount != (int)ribbonStates.size()) {
+    // ILP32 (Xbox 360) version
+    unsigned int widgetElemCount = widgetState.mElements.size();
+    if (widgetElemCount != ribbonStates.size()) {
         HamListRibbonDrawState defaultState;
         ribbonStates.resize(widgetElemCount, defaultState);
     }
-    UIListElementDrawState *elems = (UIListElementDrawState *)elemBeginPtr;
-    for (int i = 0; i < widgetElemCount; i++) {
-        UIListElementDrawState &elem = elems[i];
-        HamListRibbonDrawState &state = ribbonStates[i];
-
-        int selectedDisplay = mListState.SelectedDisplay();
-        state.mSelected = (selectedDisplay == i);
+    for (int i = 0; i < (int)widgetElemCount; i++) {
+        ribbonStates[i].mSelected = (mListState.SelectedDisplay() == i);
 
         int numShowing = mListState.NumShowing();
-        bool scrollable = mListRibbonResource && mListRibbonResource->IsScrollable(numShowing);
+        bool scrollable = mListRibbonResource->IsScrollable(numShowing);
 
-        bool isActive;
-        if (!scrollable) {
-            isActive = mListState.Provider()->IsActive(i);
-        } else {
-            int firstShowing = mListState.FirstShowing();
-            isActive = mListState.Provider()->IsActive(firstShowing + i);
-        }
-        state.mActive = isActive;
+                ribbonStates[i].mActive = scrollable ? mListState.Provider()->IsHeader(
+                mListState.FirstShowing() + i - mListState.MinDisplay()
+            ) : mListState.Provider()->IsHeader(i);
 
-        state.mBigScale = (float)IsElementBig(i);
-        state.mElemDrawState = (unsigned int)&elem;
+        ribbonStates[i].mBigScale = (float)IsElementBig(i);
+        ribbonStates[i].mElemDrawState = (unsigned int)&widgetState.mElements[i];
 
-        // Store vtable pointer into mComponentState for AdjustTrans
-        *(int *)&elem.mComponentState = *(int *)((char *)this + 4);
+        UIListElementDrawState *elemPtr =
+            (UIListElementDrawState *)ribbonStates[i].mElemDrawState;
+        *(int *)&elemPtr->mComponentState = *(int *)((char *)this + 8);
 
-        // Conditionally clear element state
-        if (elem.mShowing == 1) {
-            bool shouldClear = false;
-            if (mListRibbonResource && !mListRibbonResource->TestEntering()
-                && mRibbonMode != HamListRibbon::kRibbonDisengaged) {
-                if (TheUI->FocusComponent() == this) {
-                    shouldClear = true;
-                } else {
-                    bool controllerMode = TheGestureMgr && TheGestureMgr->InControllerMode();
-                    if (!controllerMode) {
-                        shouldClear = true;
-                    }
+        elemPtr = (UIListElementDrawState *)ribbonStates[i].mElemDrawState;
+        if (elemPtr->mElementState == kUIListWidgetHighlight) {
+            if (mListRibbonResource->TestEntering()
+                || mRibbonMode == HamListRibbon::kRibbonDisengaged) {
+                elemPtr = (UIListElementDrawState *)ribbonStates[i].mElemDrawState;
+                elemPtr->mElementState = kUIListWidgetActive;
+            } else if (TheUI->FocusComponent() != this) {
+                bool controllerMode = TheGestureMgr && TheGestureMgr->InControllerMode();
+                if (controllerMode) {
+                    elemPtr = (UIListElementDrawState *)ribbonStates[i].mElemDrawState;
+                    elemPtr->mElementState = kUIListWidgetActive;
                 }
-            }
-            if (shouldClear) {
-                elem.mElementState = kUIListWidgetActive;
             }
         }
     }

@@ -37,13 +37,22 @@ INIT_REVS(5, 0)
 void InlineHelp::PreLoad(BinStream &bs) {
     LOAD_REVS(bs);
     ASSERT_REVS(5, 0);
-    bs >> mHorizontal;
-    bs >> mSpacing;
-    bs >> mConfig;
-    bs >> mTextColor;
-    bs >> mUseConnectedControllers;
-    bs >> mResourceDir;
-    UIComponent::PreLoad(bs);
+    d >> mHorizontal;
+    d >> mSpacing;
+    d >> mConfig;
+    if (d.rev >= 1)
+        d >> mTextColor;
+    if (d.rev >= 2 && d.rev < 4) {
+        int x;
+        d.stream >> x;
+    }
+    if (d.rev >= 3) {
+        d >> mUseConnectedControllers;
+    }
+    if (d.rev >= 5) {
+        d.stream >> mResourceDir;
+    }
+    UIComponent::PreLoad(d.stream);
     bs.PushRev(packRevs(d.altRev, d.rev), this);
 }
 

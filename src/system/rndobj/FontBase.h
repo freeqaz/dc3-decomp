@@ -6,6 +6,7 @@
 
 class RndFontBase : public Hmx::Object {
     friend class UIFontImporter;
+    friend class RndText;
 public:
     class KernInfo {
     public:
@@ -21,10 +22,10 @@ public:
     virtual void Copy(const Hmx::Object *, Hmx::Object::CopyType);
     virtual void Load(BinStream &);
     virtual float CharWidth(unsigned short) const { return 0; }
+    virtual float CharAdvance(unsigned short) const { return 0; }
     virtual bool CharAdvance(unsigned short, unsigned short, float &) const {
         return false;
     }
-    virtual float CharAdvance(unsigned short) const { return 0; }
     virtual float Kerning(unsigned short, unsigned short) const;
     virtual bool CharDefined(unsigned short) const;
     virtual float AspectRatio() const { return 0; }

@@ -9,6 +9,7 @@ public:
     virtual ~SongCmp();
 
     virtual int Compare(const NavListItemSortCmp *, NavListNodeType) const;
+    virtual const SongCmp *GetSongCmp() const { return this; }
 
     const char *mSortKey;
     const char *mSortKeyEnd;

@@ -246,7 +246,7 @@ void Splash::Draw() {
                     if (mCurrentMovie != NULL) break;
                 } while (mCurrentTrigger == NULL && ++i < 2);
                 if (mCurrentMovie == NULL && mCurrentTrigger == NULL) {
-                    TheNgRnd.Suspend();
+                    TheNgRnd.Resume();
                 }
             }
             mHasDrawn = 1;
@@ -316,7 +316,7 @@ void Splash::WaitForState(Splash::SplashState state) {
 void Splash::CheckWorkerSuspend(bool b) {
     MILO_ASSERT(!MainThread(), 0x1f0);
     while (mState == kSuspending) {
-        TheNgRnd.Suspend();
+        TheNgRnd.Resume();
         if (mCurrentMovie != NULL) {
             mCurrentMovie->SetShowing(false);
             mCurrentMovie->GetMovie().UnlockThread();
@@ -328,7 +328,7 @@ void Splash::CheckWorkerSuspend(bool b) {
             mWorkerEvent.Set();
         }
         WaitForState(kResuming);
-        TheNgRnd.Resume();
+        TheNgRnd.Suspend();
         {
             CritSecTracker cst(&mStateLock);
             MILO_ASSERT(mState == kResuming, 0x209);
@@ -467,7 +467,7 @@ void Splash::UpdateThread() {
         } while (!SetImmutableState(kWaitingForTerminating));
     }
 
-    TheNgRnd.Suspend();
+    TheNgRnd.Resume();
 
     float elapsed = timer.SplitMs();
     if (TheArchive && Archive::DebugArkOrder()) {

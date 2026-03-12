@@ -12,19 +12,66 @@
 #include "utl/Symbol.h"
 #include <list>
 
+struct CmdGetPlaylistsFromRC : public QueueableCommand {
+    virtual int GetType() { return 1; } // fix
+    CmdGetPlaylistsFromRC() {}
+};
+
+struct CmdGetPlaylistFromRC : public QueueableCommand {
+    virtual int GetType() { return 1; } // fix
+    CmdGetPlaylistFromRC(int i) { mData.i = i; }
+
+    union {
+        int i;
+        HamProfile *profile;
+        Playlist *playlist;
+        CustomPlaylist *customPlaylist;
+        const char *onlineID;
+    } mData;
+};
+
+struct CmdResolvePlaylists : public QueueableCommand {
+    virtual int GetType() { return 1; } // fix
+    CmdResolvePlaylists() {}
+};
+
 struct CmdAddPlaylistToRC : public QueueableCommand {
     virtual int GetType() { return 4; }
     CmdAddPlaylistToRC(Playlist *pl) { mData.playlist = pl; }
+
+    union {
+        int i;
+        HamProfile *profile;
+        Playlist *playlist;
+        CustomPlaylist *customPlaylist;
+        const char *onlineID;
+    } mData;
 };
 
 struct CmdDeletePlaylistFromRC : public QueueableCommand {
     virtual int GetType() { return 6; }
     CmdDeletePlaylistFromRC(int i) { mData.i = i; }
+
+    union {
+        int i;
+        HamProfile *profile;
+        Playlist *playlist;
+        CustomPlaylist *customPlaylist;
+        const char *onlineID;
+    } mData;
 };
 
 struct CmdEditPlaylist : public QueueableCommand {
     virtual int GetType() { return 5; }
     CmdEditPlaylist(Playlist *pl) { mData.playlist = pl; }
+
+    union {
+        int i;
+        HamProfile *profile;
+        Playlist *playlist;
+        CustomPlaylist *customPlaylist;
+        const char *onlineID;
+    } mData;
 };
 
 class PlaylistSortMgr : public NavListSortMgr {

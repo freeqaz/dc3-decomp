@@ -455,10 +455,10 @@ DataNode RndAnimatable::OnAnimate(DataArray *arr) {
     bool animTaskLoop = Loop();
     float p = FramesPerUnit();
     TaskUnits local_units = Units();
-    float local_delay = 0.0f;
     const char *local_name = nullptr;
-    bool local_wait = false;
+    float local_delay = 0.0f;
     bool local_wrap = false;
+    bool local_wait = false;
     float local_ease_power = 2;
     EaseType local_ease = kEaseLinear;
     Hmx::Object *local_listener = nullptr;
@@ -487,7 +487,7 @@ DataNode RndAnimatable::OnAnimate(DataArray *arr) {
     arr->FindData(ease, (int &)local_ease, false);
 
     if (arr->FindArray(listener, false)) {
-        local_listener = arr->FindArray(listener, true)->Obj<Hmx::Object>(1);
+        local_listener = arr->FindArray(listener, true)->GetObj(1);
     }
     DataArray *rangeArr = arr->FindArray(range, false);
     if (rangeArr) {

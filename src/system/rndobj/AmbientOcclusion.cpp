@@ -104,7 +104,28 @@ unsigned int GatherObjectsFromDir(ObjectDir *dir, std::vector<T *> &objects) {
 }
 
 template <class T>
-unsigned int GatherObjectsFromGroup(RndGroup *, std::vector<T *> &objects);
+unsigned int GatherObjectsFromGroup(RndGroup *grp, std::vector<T *> &objects) {
+    if (grp->Showing()) {
+        std::list<RndDrawable *> drawChildren;
+        grp->ListDrawChildren(drawChildren);
+        for (std::list<RndDrawable *>::iterator it = drawChildren.begin();
+             it != drawChildren.end(); ++it) {
+            RndGroup *subGrp = dynamic_cast<RndGroup *>(*it);
+            if (subGrp && subGrp != grp) {
+                GatherObjectsFromGroup(subGrp, objects);
+            }
+            ObjectDir *curDir = dynamic_cast<ObjectDir *>(*it);
+            if (curDir && dynamic_cast<WorldInstance *>((Hmx::Object *)curDir)) {
+                GatherObjectsFromDir(curDir, objects);
+            }
+            T *curObj = dynamic_cast<T *>(*it);
+            if (curObj) {
+                objects.push_back(curObj);
+            }
+        }
+    }
+    return objects.size();
+}
 
 template <class T>
 unsigned int GatherObject(Hmx::Object *object, std::vector<T *> &objects) {

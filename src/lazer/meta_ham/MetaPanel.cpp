@@ -103,13 +103,16 @@ MetaPanel::MetaPanel() : mLoopHistoryCursor(0), mSongPreview(TheHamSongMgr), mXM
 #endif
     auto& songPreview = mSongPreview;
     songPreview.SetName("song_preview", ObjectDir::Main());
-#ifndef HX_NATIVE
+    // These provider managers back shell/song-selection UI. Native originally
+    // skipped them along with deeper metagame systems, which left DTA-visible
+    // names like `song_offer_provider` unresolved and later backfilled by
+    // generic stubs. That masked the real gap until song_select started using
+    // the typed UIListProvider path.
     SongSortMgr::Init(songPreview);
     ChallengeSortMgr::Init(songPreview);
     PlaylistSortMgr::Init(songPreview);
     MQSongSortMgr::Init(songPreview);
     FitnessCalorieSortMgr::Init(songPreview);
-#endif
     mLoopHistory.reserve(3);
     for (int i = 3; i != 0; i--) {
         mLoopHistory.push_back(-1);

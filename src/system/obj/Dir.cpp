@@ -23,6 +23,9 @@
 #include "utl/Std.h"
 #include "utl/Symbol.h"
 #include "utl/BinStream.h"
+#ifdef HX_NATIVE
+#include <cstdlib>
+#endif
 #include <algorithm>
 #include <utility>
 
@@ -654,9 +657,30 @@ void ObjectDir::RemovingSubDir(ObjDirPtr<ObjectDir> &subdir) {
 }
 
 void ObjectDir::DeleteObjects() {
+#ifdef HX_NATIVE
+    static int sTraceDeleteObjects = -1;
+    if (sTraceDeleteObjects == -1) {
+        const char *env = std::getenv("MILO_TRACE_DELETE_OBJECTS");
+        sTraceDeleteObjects = (env && env[0] && strcmp(env, "0") != 0) ? 1 : 0;
+    }
+    int idx = 0;
+#endif
     for (ObjDirItr<Hmx::Object> it(this, false); it != nullptr; ++it) {
         if (it != this) {
+#ifdef HX_NATIVE
+            if (sTraceDeleteObjects) {
+                printf("TRACE DeleteObjects[%s] #%d pre '%s' (%s)\n",
+                       Name(), idx, ((Hmx::Object *)it)->Name(),
+                       ((Hmx::Object *)it)->ClassName().Str());
+            }
+#endif
             delete it;
+#ifdef HX_NATIVE
+            if (sTraceDeleteObjects) {
+                printf("TRACE DeleteObjects[%s] #%d post\n", Name(), idx);
+            }
+            idx++;
+#endif
         }
     }
 }

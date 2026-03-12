@@ -833,6 +833,14 @@ bool ProfileMgr::IsDifficultyUnlocked(Symbol s1, Symbol s2) const {
 }
 
 bool ProfileMgr::IsContentUnlocked(Symbol s) const {
+#ifdef HX_NATIVE
+    // Temporary native bring-up fallback: until profile/save initialization is
+    // restored, treat content as unlocked so shell and song-select providers
+    // can populate instead of collapsing to empty lists.
+    if (mProfiles.empty()) {
+        return true;
+    }
+#endif
     if (MetaPanel::sUnlockAll) {
         return true;
     } else {

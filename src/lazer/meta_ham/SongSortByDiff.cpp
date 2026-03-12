@@ -3,6 +3,7 @@
 #include "HamSongMgr.h"
 #include "meta/SongMgr.h"
 #include "SongRecord.h"
+#include "SongSortNode.h"
 #include "meta/Sorting.h"
 
 int DifficultyCmp::Compare(const NavListItemSortCmp *cmp, NavListNodeType type) const {
@@ -46,12 +47,29 @@ int DifficultyCmp::Compare(const NavListItemSortCmp *cmp, NavListNodeType type) 
 
 DifficultyCmp::~DifficultyCmp() {}
 
+SongSortByDiff::~SongSortByDiff() {}
+
+NavListItemNode *SongSortByDiff::NewItemNode(void *v) const {
+    SongRecord *record = static_cast<SongRecord *>(v);
+    const HamSongMetadata *metadata = record->Metadata();
+    DifficultyCmp *cmp = new DifficultyCmp(
+        TheHamSongMgr.RankTier(metadata->Rank()), metadata->Rank(), metadata->Title()
+    );
+    return new SongSortNode(cmp, record);
+}
+
 NavListShortcutNode *SongSortByDiff::NewShortcutNode(NavListItemNode *node) const {
-    auto cmp = node->GetCmp()->GetDifficultyCmp();
-    auto newCmp = new DifficultyCmp(cmp->mTier, 0, "");
+    int tier = node->GetCmp()->GetDifficultyCmp()->mTier;
+    DifficultyCmp *newCmp = new DifficultyCmp(tier, 0, "");
+    DifficultyCmp *cmp;
+    if (newCmp != 0) {
+        cmp = newCmp;
+    } else {
+        cmp = 0;
+    }
     static Symbol no_part("no_part");
-    Symbol tierToken = cmp->mTier != -1 ? TheHamSongMgr.RankTierToken(cmp->mTier) : no_part;
-    return new NavListShortcutNode(newCmp, tierToken, true);
+    Symbol tierToken = tier != -1 ? TheHamSongMgr.RankTierToken(tier) : no_part;
+    return new NavListShortcutNode(cmp, tierToken, true);
 }
 
 NavListHeaderNode *SongSortByDiff::NewHeaderNode(NavListItemNode *node) const {
@@ -60,4 +78,9 @@ NavListHeaderNode *SongSortByDiff::NewHeaderNode(NavListItemNode *node) const {
     static Symbol no_part("no_part");
     Symbol tierToken = tier != -1 ? TheHamSongMgr.RankTierToken(tier) : no_part;
     return new SongHeaderNode(newCmp, tierToken, true);
+}
+
+NavListHeaderNode *
+SongSortByDiff::NewHeaderNode(NavListItemNode *n1, NavListItemNode *n2) const {
+    return NewHeaderNode(n1);
 }

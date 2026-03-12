@@ -35,9 +35,11 @@ The alpha floor at 0.20 is the correct permanent workaround. DTA script executio
 
 ## Panel Unload Investigation
 
-Note: this section captured the working hypothesis from Session 56. Later forced-
-unload revalidation refined the conclusion: unload is still blocked, but the
-root cause is not yet proven to be hash-order deletion itself.
+Note: this section captured the working hypothesis from Session 56. Later
+focused repro work superseded that diagnosis: the raw `autosave_warning`
+teardown problem was reproduced below `UIPanel::Unload()` and fixed as a
+two-step producer bug chain in `FlowNode::~FlowNode()` and `RndGroup::Replace()`
+rather than a proven need for topological deletion.
 
 Enabled `MILO_NATIVE_UNLOAD_PANELS=1` runtime gate (already existed in the code) to test whether `UnloadPanels()` can work.
 
@@ -69,14 +71,15 @@ The hide-instead-of-unload workaround is correct and should remain. A proper fix
 
 All three are significant architectural changes. The current workaround has zero visual impact (previous screen just stays hidden).
 
-Later revalidation changed the confidence level on that diagnosis:
+Later focused repro work changed the diagnosis further:
 
-- forced unloads now succeed for early screen transitions
-- the reproducible current blocker is 40s+ spent inside nested `DeleteObjects()`
-  during `autosave_warning_panel` teardown
-- because `Hmx::Object::~Object()` already performs `ReplaceRefs(nullptr)`,
-  plain hash-table deletion order is not yet proven to require a topological
-  teardown rewrite
+- deleting a flow child was shown to leave a null `ObjPtrVec` tombstone, and
+  `FlowNode::~FlowNode()` spun on it
+- after that fix, `RndGroup::Replace()` was shown to leave deleted members in
+  its owner-control `ObjPtrList`, later crashing `ObjPtrList::clear()` /
+  `Unlink()` during `RndGroup` teardown
+- after both fixes, the raw repros `DeleteAutosaveWarningRawDir` and
+  `DeleteAutosavingIconSubdirOnly` delete cleanly
 
 ## Changes
 

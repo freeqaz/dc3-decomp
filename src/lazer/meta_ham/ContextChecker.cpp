@@ -183,7 +183,7 @@ namespace {
     }
 
     bool CheckContextVoicePracticeEnabled(const DataArray *arr) {
-        MILO_ASSERT(arr->Size() >= 2, 0x103);
+        MILO_ASSERT(arr->Size() >= 2, 0x10F);
         bool expected = arr->Int(1);
         bool enabled = !TheProfileMgr.GetDisableVoicePractice();
         return expected == enabled;

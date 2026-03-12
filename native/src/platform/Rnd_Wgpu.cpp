@@ -449,17 +449,6 @@ void WgpuRnd::EnsureSceneUniformsCurrent() {
     const Vector3 &camPos = cam ? cam->WorldXfm().v : Vector3(0, 0, 0);
     bool camChanged = (cam != mLastSceneCam || env != mLastSceneEnv
         || camPos.x != mLastCamPosX || camPos.y != mLastCamPosY || camPos.z != mLastCamPosZ);
-    // Debug: track turbo_shell camera switches
-    if (cam && strstr(cam->Name(), "turbo")) {
-        static int sDbg = 0;
-        if (sDbg < 5) {
-            fprintf(stderr, "ENSURE cam='%s' changed=%d last='%s' pos=(%.1f,%.1f,%.1f)\n",
-                cam->Name(), camChanged,
-                mLastSceneCam ? mLastSceneCam->Name() : "null",
-                camPos.x, camPos.y, camPos.z);
-            sDbg++;
-        }
-    }
     if (camChanged) {
         if (HasTransparentDraws() && !IsFlushingTransparentDraws()) {
             FlushTransparentDraws();
@@ -644,22 +633,6 @@ void WgpuRnd::WriteSceneUniforms() {
     // Camera
     RndCam* cam = RndCam::Current();
     if (cam) {
-        // Debug: log turbo_shell camera transforms for orientation analysis
-        if (strstr(cam->Name(), "turbo") || strstr(cam->Name(), "shellbg")) {
-            static int sTurboLogCount = 0;
-            if (sTurboLogCount < 5) {
-                const Transform& cwx = cam->WorldXfm();
-                fprintf(stderr, "CAM '%s' world: pos=(%.1f,%.1f,%.1f) "
-                    "x=(%.3f,%.3f,%.3f) y=(%.3f,%.3f,%.3f) z=(%.3f,%.3f,%.3f) "
-                    "fov=%.3f near=%.1f far=%.1f\n",
-                    cam->Name(), cwx.v.x, cwx.v.y, cwx.v.z,
-                    cwx.m.x.x, cwx.m.x.y, cwx.m.x.z,
-                    cwx.m.y.x, cwx.m.y.y, cwx.m.y.z,
-                    cwx.m.z.x, cwx.m.z.y, cwx.m.z.z,
-                    cam->YFov(), cam->NearPlane(), cam->FarPlane());
-                sTurboLogCount++;
-            }
-        }
         // Check if mViewProjMatrix was externally set (milo-viewer does this).
         const Hmx::Matrix4& vp = cam->GetViewProjMatrix();
         bool isIdentity = (vp.x.x == 1 && vp.x.y == 0 && vp.x.z == 0 && vp.x.w == 0 &&

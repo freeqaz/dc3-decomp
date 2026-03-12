@@ -57,15 +57,12 @@ SongSortByLocation::NewHeaderNode(NavListItemNode *n1, NavListItemNode *n2) cons
 NavListShortcutNode *
 SongSortByLocation::NewShortcutNode(NavListItemNode *itemNode) const {
     SongSortNode *ssNode = dynamic_cast<SongSortNode *>(itemNode);
-    LocationCmp *newCmp;
-    LocationCmp *cmp;
     Symbol location = ssNode->Record()->Metadata()->GameOrigin();
     const char *name = ssNode->Record()->Metadata()->Title();
-    newCmp = new LocationCmp();
-    cmp = newCmp;
+    LocationCmp *newCmp = new LocationCmp(name, location, true);
+    LocationCmp *cmp;
     if (newCmp != 0) {
-        newCmp->mName = name;
-        newCmp->mLocation = location;
+        cmp = newCmp;
     } else {
         cmp = 0;
     }
@@ -76,8 +73,6 @@ NavListItemNode *SongSortByLocation::NewItemNode(void *v) const {
     SongRecord *record = static_cast<SongRecord *>(v);
     Symbol location = record->Metadata()->GameOrigin();
     const char *title = record->Metadata()->Title();
-    LocationCmp *cmp = new LocationCmp();
-    cmp->mName = title;
-    cmp->mLocation = location;
+    LocationCmp *cmp = new LocationCmp(title, location);
     return new SongSortNode(cmp, record);
 }

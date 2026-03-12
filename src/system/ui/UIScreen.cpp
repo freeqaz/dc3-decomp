@@ -15,9 +15,6 @@
 #include "utl/Std.h"
 #include "utl/Symbol.h"
 #include "utl/TextStream.h"
-#ifdef HX_NATIVE
-#include <cstdlib>
-#endif
 
 UIScreen *UIScreen::sUnloadingScreen = nullptr;
 
@@ -109,20 +106,12 @@ void UIScreen::LoadPanels() {
         MILO_LOG("ArkFile: ;%s\n", Name());
 
     FOREACH (it, mPanelList) {
-#ifdef HX_NATIVE
-        // On native, always load all panels. We skip UnloadPanels (ObjRef crash
-        // workaround), so mLoadRefs stays >0 for previously loaded panels but new
-        // panels with mAlwaysLoad=false and mLoadRefs=0 would never load.
-        it->mPanel->CheckLoad();
-        it->mLoaded = true;
-#else
         if (it->mAlwaysLoad || it->mPanel->IsReferenced()) {
             it->mPanel->CheckLoad();
             it->mLoaded = true;
         } else {
             it->mLoaded = false;
         }
-#endif
     }
     static Message load_panels("load_panels");
     HandleType(load_panels);
@@ -211,25 +200,7 @@ void UIScreen::Enter(UIScreen *scr) {
 #endif
     if (scr) {
         sUnloadingScreen = scr;
-#ifdef HX_NATIVE
-        static int sForceNativeUnload = -1;
-        if (sForceNativeUnload == -1) {
-            const char *env = std::getenv("MILO_NATIVE_UNLOAD_PANELS");
-            sForceNativeUnload = (env && env[0] && std::strcmp(env, "0") != 0) ? 1 : 0;
-        }
-        if (sForceNativeUnload) {
-            printf("DC3 UI: Forcing UnloadPanels for '%s' (MILO_NATIVE_UNLOAD_PANELS)\n",
-                   scr->Name());
-            scr->UnloadPanels();
-        } else {
-            // Skip panel unload on native — current workaround. Historical notes
-            // disagree on the exact crash root cause, so keep a runtime gate for
-            // direct validation.
-            scr->mShowing = false;
-        }
-#else
         scr->UnloadPanels();
-#endif
     }
     Rnd::sPostProcPanelCount = 0;
     std::vector<const char *> vec;

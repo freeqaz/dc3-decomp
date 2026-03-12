@@ -165,6 +165,11 @@ App::App(int argc, char **argv) {
     MetaPanel::Init();
     GameInit();
 
+    // Trigger content refresh to load base game songs from ark.
+    // This must happen after HamSongMgr.Init() (registers callback) and
+    // MetaPanel::Init() (registers SongSortMgr etc.) so all callbacks fire.
+    TheContentMgr.RefreshSynchronously();
+
     // UI system — use the global TheHamUI (game-specific UIManager subclass)
     // for proper two-pass draw pipeline (letterbox, blacklight, helpbar, shell input)
     // HamUI::Init() calls UIEventMgr::Init() + UIManager::Init() internally
@@ -178,8 +183,6 @@ App::App(int argc, char **argv) {
         "platform_mgr",
         "profile_mgr",
         "content_mgr",
-        "song_offer_provider",
-        "challenge_provider",
         "challenges",
         "saveload_mgr",
         "speech_mgr",

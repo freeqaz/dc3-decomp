@@ -174,8 +174,8 @@ void UsbMidiGuitar::Poll() {
                     SendMessage(sbMsg);
                 }
                 unsigned char *pgRaw = (unsigned char *)proData;
-                int programChange = (pgRaw[0xc] >> 5 & 4)
-                    + (pgRaw[0xb] >> 6 & 2) + (pgRaw[0xa] >> 7);
+                int programChange = (pgRaw[0xb] >> 6 & 2)
+                    + (pgRaw[0xc] >> 5 & 4) + (pgRaw[0xa] >> 7);
                 if (programChange != TheGuitar->GetProgramChange(i)) {
                     TheGuitar->SetProgramChange(i, programChange);
                     RGProgramChangeMsg pcMsg(programChange, i);
@@ -249,4 +249,7 @@ void Queue::Initialize(int i) {
     mQueueStart = mArrayStart;
     mQueueEnd = mArrayStart;
 }
+
+KeyboardModMsg::~KeyboardModMsg() {}
+
 DECOMP_FORCEACTIVE(UsbMidiGuitar, "queue full\n", "queue empty\n")

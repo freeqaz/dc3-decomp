@@ -191,7 +191,7 @@ float CharClipDriver::AlignToBeat(float oldBeat) {
         float delta = Mod(oldBeat - mBeat, align);
         if (delta > align * 0.5f) {
             delta -= align;
-            if (delta + mBeat < mClip->EndBeat()) {
+            if (delta + mBeat < mClip->StartBeat()) {
                 delta += align;
             }
         }

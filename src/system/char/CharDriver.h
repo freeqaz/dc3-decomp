@@ -85,7 +85,7 @@ protected:
         }
     }
     void SetApply(ApplyMode m) {
-        if (mApply != m) {
+        if (m != mApply) {
             mApply = m;
             SyncInternalBones();
         }

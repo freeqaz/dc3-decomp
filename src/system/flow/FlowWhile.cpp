@@ -105,7 +105,7 @@ void FlowWhile::ChildFinished(FlowNode *n) {
                     ActivateValueCases(mValue, dupe);
                 }
             } else {
-                ActivateValueCases(mValue, mPreviousValue);
+                ActivateValueCases(mValue, mValue);
             }
         } else {
             if (mValue != mPreviousValue) {

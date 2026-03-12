@@ -19,8 +19,6 @@
 #include "math/Mtx.h"
 #include <cstdio>
 #include <cstring>
-#include <set>
-#include <string>
 
 // Forward declaration — draws a mesh immediately (called for both opaque and deferred).
 // Non-static: TransparentQueue.cpp calls this via extern linkage.
@@ -214,36 +212,25 @@ void DrawMeshImmediate(RndMesh* mesh) {
     MaterialParams matParams = BuildMaterialParams(mat, isTextMesh);
     heuristics |= matParams.heuristics;
 
-    // Zero-alpha floor: on Xbox, Flow/DTA scripts animate background mesh
-    // material alphas at runtime. On native those scripts don't run, leaving
-    // many srcAlpha meshes at alpha=0 (invisible). Apply a modest minimum
-    // for decorative background meshes; skip effects that should stay hidden.
+    // HACK DISABLED: Zero-alpha floor
+    // Was: force alpha=0.20 on srcAlpha meshes with alpha < 0.01 to compensate
+    // for Flow/DTA scripts not animating material alphas. This made invisible
+    // meshes ghostly-visible, masking real animation bugs. Disabled so we can
+    // see the true state of UI animation progress.
+    // Once menus are finished and working, we can remove this code.
+#if 0
     if (!isTextMesh && matBlend == BaseMaterial::kBlendSrcAlpha
         && matParams.uniforms.color[3] < 0.01f) {
         const char* n = mesh->Name();
-        // Keep effects, debloom, shields (Kinect), flash, and blockers at zero
         bool isEffect = (strstr(n, "flash") || strstr(n, "debloom")
             || strstr(n, "shield_") || strstr(n, "ribbon_blocker")
             || strstr(n, "char_pl_") || strstr(n, "final_impact"));
         if (!isEffect) {
-            // Trace: log unique mesh names hitting the floor (once per name)
-            if (getenv("MILO_TRACE_ALPHA_FLOOR")) {
-                static std::set<std::string> sLogged;
-                std::string key(n);
-                if (mat) { key += " ("; key += mat->Name(); key += ")"; }
-                if (sLogged.find(key) == sLogged.end()) {
-                    sLogged.insert(key);
-                    ObjectDir* dir = mesh->Dir();
-                    printf("  ALPHA_FLOOR: mesh='%s' mat='%s' dir='%s' alpha=%.4f\n",
-                           n, mat ? mat->Name() : "?",
-                           dir ? dir->Name() : "?",
-                           matParams.uniforms.color[3]);
-                }
-            }
             matParams.uniforms.color[3] = 0.20f;
             heuristics |= kHeuristicZeroAlphaFix;
         }
     }
+#endif
 
     uint32_t matOffset = gWgpuRnd->MaterialRing().Write(
         gWgpuRnd->Gpu().Queue(), &matParams.uniforms, sizeof(matParams.uniforms));

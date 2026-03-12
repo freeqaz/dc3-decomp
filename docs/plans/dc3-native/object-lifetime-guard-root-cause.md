@@ -34,15 +34,22 @@ Additional focused repros now exist in
 
 - `DeleteOrderDoesNotRequireTopologicalSortForObjPtr`
   - proves the basic `ObjPtr` contract survives plain delete ordering
+- `DeletingFlowChildLeavesNullTombstoneUntilParentTeardown`
+  - proves `FlowNode` child deletion leaves a null `ObjPtrVec` tombstone under
+    suppressed ref erasure
+- `DeletingRndGroupMemberRemovesOwnerControlNode`
+  - proves deleting a `RndGroup` member must remove the owner-control
+    `ObjPtrList` node immediately
 - `DeleteAutosaveWarningRawDir`
-  - loads `ui/title/gen/autosave_warning.milo_xbox` from `MILO_LIB` and then
-    hangs on raw `ObjectDir` deletion
+  - loads `ui/title/gen/autosave_warning.milo_xbox` from `MILO_LIB` and now
+    deletes cleanly after the fixes below
 - `DeleteAutosavingIconSubdirOnly`
-  - detaches the `autosaving_icon` child dir from that asset and still hangs on
-    deleting the isolated subdir
+  - detaches the `autosaving_icon` child dir from that asset and now deletes
+    cleanly after the fixes below
 
-This matters because it narrows the modern unload blocker to a small raw asset
-teardown repro, rather than requiring a full UI screen transition.
+This matters because the unload failure is now reproduced and fixed below the
+screen/panel layer, rather than being treated as an opaque full-screen
+transition problem.
 
 Current outcome:
 
@@ -51,6 +58,9 @@ Current outcome:
 - `ObjDirItr` dead-entry filtering in `src/system/obj/Dir.h` is not required by
   the current real test workload; the old failing oracle was injecting a stale
   freed pointer directly into the hash table
+- full app boot now reaches `choose_mode_screen` and remains stable for 1000
+  frames on the default path; the last blocker was not lifetime-related but a
+  native link omission noted below
 
 Concrete fixes that changed the result:
 
@@ -60,6 +70,19 @@ Concrete fixes that changed the result:
    before erasing the source vector entry.
 2. `ObjectDir::RemoveSubDir` no longer compares `ObjDirPtr` internals using a
    hard-coded `+0xc` offset. It now compares actual `ObjectDir *` values.
+3. `FlowNode::~FlowNode()` now erases null `mChildNodes` tombstones during
+   teardown. Native `ReplaceRefs(nullptr)` snapshots ref rings and suppresses
+   `ObjPtrVec` erasure while a child's refs are being nulled, so deleting a
+   `FlowNode` child can leave a temporary null slot behind.
+4. `RndGroup::Replace()` now handles owner-control `mObjects` list-node
+   replacement on the `ref->Parent() == &mObjects` path. The previous branch
+   direction left deleted group members in the list, which later crashed
+   `ObjPtrList::clear()` / `Unlink()` during `RndGroup` teardown.
+5. `native/src/native_link_glue.cpp` now explicitly instantiates
+   `ObjRefConcrete<FlowNode, ObjectDir>::CopyRef`. The first full binary retest
+   after the lifetime fixes reached `main_screen` enter and then failed on a
+   runtime undefined symbol for that specialization. That issue was native
+   build glue, not object lifetime.
 
 Important current nuance:
 
@@ -68,6 +91,19 @@ Important current nuance:
   still constructs a temporary `ObjDirPtr<ObjectDir>` before `AppendSubDir()`
 - the "temporary ObjDirPtr eliminated" conclusion is therefore only fully true
   for the moved-subdir loop, not globally for every merge/subdir path
+
+Binary validation evidence:
+
+- `archive/screenshots/2026-03-12-session072504/run_after_linkfix.log`
+  shows forced unload surviving:
+  `attract_screen -> autosave_warning_screen -> title_screen -> wait_main_after_saveload_screen -> main_screen -> choose_mode_screen`
+- `archive/screenshots/2026-03-12-session072504/run_forced_unload_1000.log`
+  shows the same path staying stable through a 1000-frame soak
+- `archive/screenshots/2026-03-12-session073910-default-unload/run.log`
+  shows the same path still working after removing the `UIScreen` unload
+  workaround from the default native path
+- representative screenshots are in the same folder (`frame_00160.png`,
+  `frame_00280.png`, `frame_00320.png`, `frame_00420.png`)
 
 ## Test Architecture
 
@@ -331,24 +367,74 @@ After both fixes:
 - the destructor-side `gSuppressDirPtrDelete` wrapper around `mSubDirs.clear()`
   can be removed for the validated native slices
 
+## Additional Proven Root Causes
+
+### Root Cause 3: `FlowNode` teardown was spinning on null `ObjPtrVec` tombstones
+
+Minimal repro:
+
+- `ObjectLifetimeTest.DeletingFlowChildLeavesNullTombstoneUntilParentTeardown`
+
+Observed behavior:
+
+- deleting a child `FlowAnimate` leaves `mChildNodes.size() == 1`
+- `mChildNodes.front()` is `nullptr`
+- the old `FlowNode::~FlowNode()` loop only checked `empty()` and repeatedly
+  did `delete mChildNodes.front()`
+
+Why it happened:
+
+- native `ObjRef::ReplaceList()` snapshots ref rings and sets
+  `gSuppressRefErase = true`
+- while that flag is set, `ObjPtrVec<...>::ReplaceNode()` in `kObjListNoNull`
+  mode nulls the node but does not erase it
+- deleting a flow child therefore leaves a temporary null tombstone in the
+  parent's `mChildNodes`
+
+Fix:
+
+- `FlowNode::~FlowNode()` now erases null front entries before continuing
+
+### Root Cause 4: `RndGroup` was not removing deleted members from `mObjects`
+
+Minimal repro:
+
+- `ObjectLifetimeTest.DeletingRndGroupMemberRemovesOwnerControlNode`
+
+Observed behavior before fix:
+
+- `group->AddObject(child)` set `mObjects.size() == 1`
+- `delete child` left `mObjects.size() == 1`
+- later `DeleteAutosaveWarningRawDir` and `DeleteAutosavingIconSubdirOnly`
+  advanced past the flow hang and then crashed in:
+  - `ObjPtrList<Hmx::Object>::Unlink()`
+  - `ObjPtrList<Hmx::Object>::clear()`
+  - `RndGroup::~RndGroup()`
+
+Why it happened:
+
+- `RndGroup::mObjects` is an owner-control `ObjPtrList`
+- when a member object is deleted, the replacing `ObjRef` is the actual
+  `mObjects` list node, so `ref->Parent() == &mObjects`
+- the old native code handled the `!= &mObjects` path instead, which meant the
+  list node was never removed when the member died
+
+Fix:
+
+- `RndGroup::Replace()` now removes/replaces members on the
+  `ref->Parent() == &mObjects` path and delegates non-list refs to
+  `RndTransformable::Replace()`
+
 ## Remaining Root Cause Hypotheses
 
-These are the concrete hypotheses to test, in order.
-
-### Hypothesis A: a real native path still leaves stale freed pointers in `Entry::obj`
-
-Possible mechanism:
-
-- some real native path still leaves stale pointers in `ObjectDir::Entry::obj`
-- `ObjDirItr` currently avoids crashing by checking liveness/vtable state before
-  `dynamic_cast`
-
-Why this now looks weaker:
+After the two teardown fixes above, the small raw asset repros are no longer
+blocked. The older iterator/hash-order hypotheses now look even weaker:
 
 - removing the iterator-side filter did not break the broader native suite
-- the old failing test was synthetic and not representative of normal removal
-- code tracing shows `Hmx::Object::RemoveFromDir()` nulls the hash entry before
-  the object is fully destroyed
+- the old stale-hash-entry oracle was synthetic
+- `Hmx::Object::~Object()` still calls `ReplaceRefs(nullptr)` before free
+- `ui/title/gen/autosave_warning.milo_xbox` and detached `autosaving_icon` now
+  delete cleanly without topological ordering or two-pass deletion
 
 ## What Is Expected To Be True After The Real Fix
 
@@ -378,13 +464,12 @@ Protect the proven fixes with tests:
 - `ObjectLifetimeTest.RemoveSubDirReleasesDirPtrRef`
 - `ObjectLifetimeTest.MergeDirsMoveAllSubdirsTransfersOwnership`
 
-### Phase 2: investigate stale hash entries
+### Phase 2: investigate any remaining stale-hash producers
 
-Focus on the iterator-side filter:
+Focus on the iterator-side filter only if a new real repro appears:
 
-- identify real non-synthetic flows that can leave stale `Entry::obj` pointers
-- prove whether those flows are still possible after the current merge/remove
-  fixes
+- identify real non-synthetic flows that leave stale `Entry::obj` pointers
+- prove whether those flows still exist after the merge/flow/group fixes
 
 ### Phase 3: only then re-attempt `ObjDirItr` guard removal
 
@@ -405,7 +490,9 @@ an architectural requirement for dependency-ordered deletion.
 - [x] Eliminate the temporary `ObjDirPtr` from `MergeObjectsRecurse` move path
 - [x] Replace `RemoveSubDir`'s native-invalid `+0xc` pointer comparison
 - [x] Remove the destructor-side `gSuppressDirPtrDelete` wrapper and revalidate the native slices
-- [ ] Identify real flows that can still leave stale `ObjectDir::Entry::obj` pointers
+- [x] Reproduce and fix the `FlowNode` teardown tombstone hang
+- [x] Reproduce and fix the `RndGroup` owner-control list teardown crash
+- [ ] Identify any remaining real flows that can still leave stale `ObjectDir::Entry::obj` pointers
 - [ ] Re-evaluate whether iterator liveness filtering can become shared behavior, or whether the real invariant is "stale hash entries must never persist"
 
 ## Acceptance Criteria
@@ -415,6 +502,11 @@ This bug is fixed for the validated scope because:
 - `ObjectLifetimeTest.RemoveSubDirReleasesDirPtrRef` passes
 - `ObjectLifetimeTest.MergeDirsMoveAllSubdirsTransfersOwnership` passes without
   the destructor-side `gSuppressDirPtrDelete`
+- `ObjectLifetimeTest.DeletingFlowChildLeavesNullTombstoneUntilParentTeardown`
+  passes and `FlowNode` teardown no longer hangs
+- `ObjectLifetimeTest.DeletingRndGroupMemberRemovesOwnerControlNode` passes
+- `ObjectLifetimeTest.DeleteAutosaveWarningRawDir` passes
+- `ObjectLifetimeTest.DeleteAutosavingIconSubdirOnly` passes
 - the broader native slice still passes
 - the explanation now points to concrete bookkeeping bugs in the move/remove
   path, not to an irreducible native-only requirement

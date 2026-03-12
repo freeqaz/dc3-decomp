@@ -111,7 +111,7 @@ Vector3 RndFont3d::CharOriginOffset() const {
     if (mTextureOwner != this) {
         return mTextureOwner->CharOriginOffset();
     }
-    float unit = FontUnit();
+    float unit = FontUnitInverse();
     Vector3 result;
     result.x = unk8c.x * unit;
     result.y = unk8c.y * unit;
@@ -129,11 +129,11 @@ bool RndFont3d::CharWidthAdvanceMesh(
     if (it != mCharInfoMap.end()) {
         CharInfo *info = it->second;
         if (info->unk0.Volume() > 0.0f || info->advance > 0.0f) {
-            width = FontUnit() * Max(info->unk0.mMax.x, 0.f);
+            width = FontUnitInverse() * Max(info->unk0.mMax.x, 0.f);
             if (mMonospace) {
                 advance = 1.0f;
             } else {
-                advance = FontUnit() * info->advance;
+                advance = FontUnitInverse() * info->advance;
             }
             *mesh = info->mMesh;
             return true;
@@ -150,7 +150,7 @@ float RndFont3d::CharWidth(unsigned short c) const {
     CharInfo *info = mTextureOwner->mCharInfoMap.find(c)->second;
     float w = Max(info->unk0.mMax.x, 0.f);
     MILO_ASSERT(w >= 0.f, 0xCC);
-    return FontUnit() * w;
+    return FontUnitInverse() * w;
 }
 
 bool RndFont3d::CharAdvance(unsigned short us1, unsigned short us2, float &f) const {
@@ -164,7 +164,7 @@ bool RndFont3d::CharAdvance(unsigned short us1, unsigned short us2, float &f) co
             if (mMonospace) {
                 f = 1.0f;
             } else {
-                f = FontUnit() * info->advance;
+                f = FontUnitInverse() * info->advance;
             }
             f += Kerning(us1, us2);
             return true;
@@ -173,17 +173,17 @@ bool RndFont3d::CharAdvance(unsigned short us1, unsigned short us2, float &f) co
     return false;
 }
 
-float RndFont3d::CharAdvance(unsigned short us) const {
+float RndFont3d::CharAdvance(unsigned short c) const {
     if (mTextureOwner != this) {
-        return mTextureOwner->CharAdvance(us);
+        return mTextureOwner->CharAdvance(c);
     }
-    MILO_ASSERT(HasChar(us), 0xD5);
+    MILO_ASSERT(HasChar(c), 0xD5);
     if (mMonospace)
         return 1.0f;
-    CharInfo *info = mCharInfoMap.find(us)->second;
+    CharInfo *info = mCharInfoMap.find(c)->second;
     float a = info->advance;
-    MILO_ASSERT(a >= 0.0f, 0xDB);
-    return FontUnit() * a;
+    MILO_ASSERT(a >= 0.f, 0xDB);
+    return FontUnitInverse() * a;
 }
 
 float RndFont3d::Kerning(unsigned short us1, unsigned short us2) const {

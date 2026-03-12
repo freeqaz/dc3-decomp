@@ -32,10 +32,10 @@ public:
         ObjPtr<RndTransformable> mFinger02; // 0x3c
         ObjPtr<RndTransformable> mFinger03; // 0x50
         ObjPtr<RndTransformable> mFingertip; // 0x64
-        float mCurFinger02Angle; // 0x78
-        float mCurFinger03Angle; // 0x7c
-        float mDestFinger02Angle; // 0x80
-        float mDestFinger03Angle; // 0x84
+        float mDestFinger02Angle; // 0x78
+        float mDestFinger03Angle; // 0x7c
+        float mCurFinger02Angle; // 0x80
+        float mCurFinger03Angle; // 0x84
         int mBlendFrames; // 0x88
         int mBlendOutFrames; // 0x8c
         bool mNeedsUpdate; // 0x90

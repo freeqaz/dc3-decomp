@@ -1,6 +1,7 @@
 #include "movie/TexMovie.h"
 #include "macros.h"
 #include "obj/Data.h"
+#include "obj/Msg.h"
 #include "obj/Object.h"
 #include "obj/PropSync.h"
 #include "os/Debug.h"
@@ -101,17 +102,28 @@ BEGIN_LOADS(TexMovie)
     bs >> mTex >> mLoop;
     if (d.rev < 4) {
         bool dummy;
-        bs >> dummy;
+        d >> dummy;
     }
     bs >> sRoot;
     if (d.rev > 5) {
-        bs >> mIsLocalized;
+        d >> mIsLocalized;
+    }
+    if (d.rev == 7) {
+        bool dummy;
+        d >> dummy;
+    }
+    static Message msg("change_file");
+    DataNode handled = HandleType(msg);
+    if (handled.Type() == kDataString) {
+        const char *str = handled.Str(nullptr);
+        sRoot.Set(FilePath::Root().c_str(), str);
     }
     if (d.rev > 1 && d.rev < 3) {
         bool dummy;
-        bs >> dummy;
+        d >> dummy;
     }
-    DoBeginMovieFromFile(d.rev > 4 ? &bs : nullptr, kLoadBack);
+    FilePathTracker tracker(".");
+    DoBeginMovieFromFile(d.rev > 4 ? &bs : nullptr, kLoadFront);
 END_LOADS
 
 void TexMovie::DrawPreClear() {

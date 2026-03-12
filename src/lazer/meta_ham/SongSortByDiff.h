@@ -14,6 +14,7 @@ public:
     virtual ~DifficultyCmp();
 
     virtual int Compare(const NavListItemSortCmp *, NavListNodeType) const;
+    virtual const DifficultyCmp *GetDifficultyCmp() const { return this; }
 
     int mTier; // 0x0
     float mRank; // 0x4
@@ -23,7 +24,7 @@ public:
 class SongSortByDiff : public SongSort {
 public:
     SongSortByDiff();
-    virtual ~SongSortByDiff() {};
+    virtual ~SongSortByDiff();
 
     virtual NavListItemNode *NewItemNode(void *) const;
     virtual NavListHeaderNode *NewHeaderNode(NavListItemNode *) const;

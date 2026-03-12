@@ -152,6 +152,9 @@ void Archive::Enumerate(
         dirp++;
     } while (*(dirp - 1) != '\0');
     int dirLen = dirp - dir - 1;
+    while (dirLen > 0 && (dir[dirLen - 1] == '/' || dir[dirLen - 1] == '\\')) {
+        dirLen--;
+    }
 
     bool matches = false;
     const char *lastPath = nullptr;
@@ -161,18 +164,12 @@ void Archive::Enumerate(
 
         if (lastPath != curPath) {
             if (recurse) {
-                matches = strncmp(dir, curPath, dirLen) == 0;
+                matches = strncmp(dir, curPath, dirLen) == 0
+                    && (curPath[dirLen] == '\0' || curPath[dirLen] == '/'
+                        || curPath[dirLen] == '\\');
             } else {
-                const char *dp = dir;
-                const char *cp = curPath;
-                int result;
-                do {
-                    result = (unsigned char)*cp - (unsigned char)*dp;
-                    if (*cp == '\0') break;
-                    dp++;
-                    cp++;
-                } while (result == 0);
-                matches = result == 0;
+                matches = strlen(curPath) == (unsigned int)dirLen
+                    && strncmp(dir, curPath, dirLen) == 0;
             }
             lastPath = curPath;
         }

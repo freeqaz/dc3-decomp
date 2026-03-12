@@ -26,6 +26,15 @@ FlowNode::~FlowNode() {
     }
     while (!mChildNodes.empty()) {
         FlowNode *cur = mChildNodes.front();
+#ifdef HX_NATIVE
+        // Native ReplaceRefs() snapshots ObjRef rings and suppresses ObjPtrVec
+        // node erasure while child refs are being nulled. That can leave a
+        // tombstoned null entry in mChildNodes during destruction.
+        if (!cur) {
+            mChildNodes.erase(mChildNodes.begin());
+            continue;
+        }
+#endif
         delete cur;
     }
 }
