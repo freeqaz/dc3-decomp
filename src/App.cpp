@@ -7,6 +7,7 @@
 #include "ui/PanelDir.h"
 #include "rndobj/Dir.h"
 #include "world/Dir.h"
+#include "char/Character.h"
 #include "meta_ham/HamUI.h"
 extern GLFWwindow *gNativeWindow;
 
@@ -920,8 +921,16 @@ void App::RunWithoutDebugging() {
         // WorldDir::Poll/DrawShowing manage TheWorld internally (set→work→clear).
         if (gNativeVenueDir) {
             WorldDir* venueWorld = dynamic_cast<WorldDir*>(gNativeVenueDir);
-            if (venueWorld)
+            if (venueWorld) {
                 venueWorld->Poll();
+                // Reset character root positions to prevent drift from root motion.
+                // The menu clips have facing deltas that accumulate each frame.
+                for (ObjDirItr<Character> it(venueWorld, true); it != nullptr; ++it) {
+                    Transform& xfm = it->DirtyLocalXfm();
+                    xfm.v.Set(0, 0, 0);
+                    xfm.m.Identity();
+                }
+            }
         }
 
         TheRnd.BeginDrawing();

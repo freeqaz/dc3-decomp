@@ -1,6 +1,6 @@
 # DC3 Native Port — Status
 
-**Last updated**: 2026-03-12
+**Last updated**: 2026-03-13
 
 ## Current State
 
@@ -18,8 +18,8 @@ gameplay screens.
 | Phase 1A: Headless Engine | NEARLY COMPLETE | ~95% |
 | Phase 1B: Milo Viewer | COMPLETE | 100% |
 | Phase 1.5: Asset Pipeline | COMPLETE | 100% |
-| Phase 2: Rendering | IN PROGRESS | ~85% |
-| Phase 2.5: Character Animation | IN PROGRESS | ~60% |
+| Phase 2: Rendering | IN PROGRESS | ~90% |
+| Phase 2.5: Character Animation | WORKING | ~90% |
 | Phase 3: Audio | COMPLETE | 100% |
 | Phase 4: Input | COMPLETE | 100% |
 | Phase 5: Motion Capture | NOT STARTED | 0% |
@@ -41,6 +41,7 @@ gameplay screens.
 - Full menu flow: attract → main_screen → choose_mode → song_select → multiuser → loading → **game_screen**
 - 10000 frames stable on game_screen, clean exit
 - DCI venue rendering: 505 draw calls/frame (floor, walls, DJ booth, fully-lit character, HUD overlays)
+- **Character animation on main menu**: outfit loading via FileMerger, CharDriver clip playback, GPU-skinned bone animation
 - Audio pipeline complete (FFmpeg, Vorbis, miniaudio, DSP effects)
 - Input working (gamepad + keyboard + scripted headless input)
 - Text rendering working (glyph meshes, DXT5 alpha shader, font loading)
