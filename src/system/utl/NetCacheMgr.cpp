@@ -365,7 +365,6 @@ NetLoaderRef &NetLoaderRef::operator=(const NetLoaderRef &other) {
     mCacheLoader = other.mCacheLoader;
     return *this;
 }
-bool NetLoaderRef::IsLoadedOrFailed() { return false; }
 void NetCacheMgr::PollLoaders() {}
 NetLoaderRef *NetCacheMgr::AddLoaderRef(const char *, RefType, NetLoaderPos) { return nullptr; }
 #endif

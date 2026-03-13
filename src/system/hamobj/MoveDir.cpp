@@ -1114,8 +1114,8 @@ void MoveDir::ResetDetectFrames(int player, Difficulty diff) {
         mFilterQueue->CancelJob();
     }
     MovePlayerData &mpd = mMovePlayerData[player];
-    mDebugLoopMarker = -1.0f;
     mpd.mFeedbackMode = 0;
+    mDebugLoopMarker = -1.0f;
     if (mpd.mDetectFrames.begin() != mpd.mDetectFrames.end()) {
         mpd.mDetectFrames.erase(mpd.mDetectFrames.begin(), mpd.mDetectFrames.end());
     }
