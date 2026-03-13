@@ -1,5 +1,6 @@
 #include "hamobj/ClipPlayer.h"
 #include "HamRegulate.h"
+#include "HamGameData.h"
 #include "MoveMgr.h"
 #include "char/CharClip.h"
 #include "flow/PropertyEventProvider.h"
@@ -230,6 +231,94 @@ void ClipPlayer::GetRoutineCrossoverClips(
     if (!*c2) {
         *c2 = *c1;
     }
+}
+
+void ClipPlayer::PushClip(int idx, HamDriver::LayerArray *arr) {
+    if (idx < 0) return;
+    if (mClipKeys->empty()) return;
+
+    // Clamp index to valid range
+    int maxIdx = (int)mClipKeys->size() - 1;
+    if (maxIdx < idx) idx = maxIdx;
+
+    Key<Symbol> &key = mClipKeys->at(idx);
+    float beat = FrameToBeat(key.frame);
+
+    // Get transition clip if we haven't passed this beat yet
+    CharClip *transClip;
+    if (beat + 1.0f <= mBeat) {
+        transClip = nullptr;
+    } else {
+        transClip = GetTransitionBefore(&key);
+    }
+
+    // Calculate transition offset
+    float offset;
+    if (!transClip) {
+        offset = 0.0f;
+    } else {
+        offset = ClipLength(transClip) - 2.0f;
+    }
+
+    // Recurse for earlier clips if needed
+    if (mBeat < beat - offset) {
+        PushClip(idx - 1, arr);
+    }
+
+    // Play transition clip and calculate blend beat
+    float blendBeat;
+    if (!transClip) {
+        blendBeat = beat - 1.0f;
+    } else {
+        float transLen = ClipLength(transClip);
+        float transStart = (float)((double)(beat - transLen) + 1.0);
+        blendBeat = beat;
+        PlayClip(transClip, transStart, transStart, arr);
+    }
+
+    // If within beat range, set up practice section via master clip keys
+    if (blendBeat < mBeat) {
+        Symbol clipName(key.value.Str());
+
+        Key<Symbol> *practiceKey = TheHamDirector->GetMasterPracticeFrame(clipName);
+        if (!practiceKey) {
+            MILO_NOTIFY_ONCE(
+                "%s: can't find %s in expert practice track",
+                TheGameData->Name(), clipName
+            );
+        } else {
+            // Save state, switch to master keys
+            Keys<Symbol, Symbol> *savedKeys = mClipKeys;
+            mClipKeys = mMasterClipKeys;
+
+            float practBeat = FrameToBeat(practiceKey->frame);
+            float beatDiff = (float)((double)practBeat - (double)beat);
+
+            // Offset all beat fields
+            mBeatOffset += beatDiff;
+            mBeat += beatDiff;
+            mPracticeStart += beatDiff;
+            mPracticeEnd += beatDiff;
+
+            // Recursive PlayNormal with offset
+            PlayNormal(mBeatOffset + blendBeat, arr, clipName.Str());
+
+            // Restore all fields
+            mBeat -= beatDiff;
+            mPracticeStart -= beatDiff;
+            mClipKeys = savedKeys;
+            mPracticeEnd -= beatDiff;
+            mBeatOffset -= beatDiff;
+        }
+    }
+}
+
+bool ClipPlayer::PushRoutineBuilderClip(int idx, HamDriver::LayerArray *arr) {
+    // Routine builder mode — simplified stub for native
+    // Falls back to expert clip behavior
+    if (idx < 0) return false;
+    if (mClipKeys->empty()) return false;
+    return PushExpertClip(idx, arr);
 }
 
 void ClipPlayer::PlayNormal(float f1, HamDriver::LayerArray *arr, const char *cc) {

@@ -870,6 +870,13 @@ DataNode OnToggleAutoplay(DataArray *a) {
 }
 
 bool Game::HandleWait() {
+#ifdef HX_NATIVE
+    static int sHWDbg = 0;
+    if (sHWDbg++ < 20) {
+        MILO_LOG("Game::HandleWait waitState=%d loadState=%d audioReady=%d\n",
+            mWaitState, mLoadState, mMaster->GetAudio()->IsReady());
+    }
+#endif
     if (mWaitState != unka8) {
         unka8 = mWaitState;
     }
@@ -911,6 +918,17 @@ bool Game::HandleWait() {
         break;
     case 5: {
         // Full song load wait — check all subsystems
+#ifdef HX_NATIVE
+        {
+            static int sC5Dbg = 0;
+            if (sC5Dbg++ < 10)
+                MILO_LOG("HandleWait case5: tempo=%p audioReady=%d worldLoaded=%d gmPending=%d\n",
+                    HamSongData::sInstance ? HamSongData::sInstance->GetTempoMap() : nullptr,
+                    mMaster->GetAudio()->IsReady(),
+                    TheHamDirector->IsWorldLoaded(),
+                    TheHamDirector->GetGameModeMerger()->HasPendingFiles());
+        }
+#endif
         if (!HamSongData::sInstance->GetTempoMap()) {
             return false;
         }

@@ -515,9 +515,10 @@ int HamCharacter::SongAnimation() {
     if (Driver()) {
         c = Driver()->FirstClip();
 #ifdef HX_NATIVE
-        // On native, character clips may not be loaded (game audio/song
-        // loading partially skipped). FirstClip() can return null.
-        if (!c) return -1;
+        // On native, Driver() exists but may have no clips yet (PlayAnims
+        // hasn't run). Fall through to SongDriver check so PlayAnims can fire.
+        if (!c) { /* fall through */ }
+        else
 #endif
         MILO_ASSERT(c->Type() == "main", 0x3AB);
     }
@@ -724,6 +725,7 @@ DataNode HamCharacter::OnSoundPlay(const DataArray *a) {
 }
 
 #ifndef HX_NATIVE
+// PPC codegen variant — body uses Set() instead of initializer list
 QuatXfm::QuatXfm(const Transform &t) : v(t.v) { q.Set(t.m); }
 #endif
 
@@ -809,8 +811,21 @@ void HamCharacter::Poll() {
     }
 }
 #else
-// TODO: real implementation clears a list
-void HamCharacter::Poll() {}
+void HamCharacter::Poll() {
+    int songAnim = SongAnimation();
+    if (songAnim == -1 || InClipTest()) {
+        if (mDriver) mDriver->SetWeight(1.0f);
+    } else {
+        if (mDriver) mDriver->SetWeight(0.0f);
+    }
+
+    bool wasShowing = mShowing;
+    if (!wasShowing && mPollWhenHidden) {
+        SetShowing(true);
+    }
+    Character::Poll();
+    SetShowing(wasShowing);
+}
 #endif
 
 void HamCharacter::ApplyBlendedSkeletons(

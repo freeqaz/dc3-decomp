@@ -1,4 +1,6 @@
 #include "game/GamePanel.h"
+#include "char/FileMerger.h"
+#include "utl/Loader.h"
 #include "flow/PropertyEventProvider.h"
 #include "math/Utl.h"
 #include "game/Game.h"
@@ -38,6 +40,7 @@
 #include "os/System.h"
 #include "os/Timer.h"
 #include "rndobj/Anim.h"
+#include "rndobj/PropAnim.h"
 #include "rndobj/Overlay.h"
 #include "rndobj/PostProc.h"
 #include "rndobj/Rnd.h"
@@ -562,6 +565,57 @@ void GamePanel::StartGame() {
 #ifdef HX_NATIVE
     // DTA-driven intro timing is not functional on native — always start
     mGame->Start();
+
+    // On native, the DTA SongSequence/LoadNewSong flow doesn't trigger,
+    // so the song data merger, SetupAnims, and character registration never happen.
+    // Manually initialize the full animation pipeline here.
+    if (TheHamDirector && TheHamDirector->GetWorld()) {
+        // Step 1: Load song data into world via world.fm "song" merger
+        Symbol song = TheGameData->GetSong();
+        const char *miloPath = MakeString("%s.milo", TheHamSongMgr.SongPath(song, 0));
+        MILO_LOG("Native: loading song data '%s' into world.fm\n", miloPath);
+        FileMerger *worldFm = TheHamDirector->GetWorld()->Find<FileMerger>("world.fm", false);
+        if (worldFm) {
+            static Symbol songSym("song");
+            FileMerger::Merger *merger = worldFm->FindMerger(songSym, false);
+            if (merger) {
+                merger->Clear(true);
+                merger->SetSelected(miloPath, true);
+                worldFm->StartLoad(false);
+                // Poll until merged
+                while (worldFm->HasPendingFiles()) {
+                    TheLoadMgr.Poll();
+                }
+                MILO_LOG("Native: world.fm song merger complete\n");
+            }
+        }
+
+        // Step 2: Set up song animations from merged data
+        TheHamDirector->SetupAnims();
+        TheHamDirector->SetPollEnabled(true);
+
+        // Step 2b: Start the song PropAnim (mirrors HamDirector::Enter)
+        RndPropAnim *songAnim = TheHamDirector->SongAnim(0);
+        if (songAnim) {
+            songAnim->StartAnim();
+            songAnim->SetFrame(-kHugeFloat, 1);
+        }
+        MILO_LOG("Native: SetupAnims complete, SongAnim(0)=%p\n", songAnim);
+    }
+
+    // Step 3: Populate HamWardrobe main characters
+    if (TheHamWardrobe && TheHamWardrobe->Dir()) {
+        // The DTA load_characters flow doesn't run on native.
+        // Trigger it with default outfits for the song's characters.
+        Symbol venue = TheGameData->Venue();
+        TheHamWardrobe->LoadCharacters(
+            Symbol("mo01"), Symbol("emilia01"),
+            Symbol("crew01"), Symbol("crew02"),
+            kBackupDancersOutfit, Symbol(), venue, false
+        );
+        MILO_LOG("Native: LoadCharacters done, AllCharsLoaded=%d\n",
+            TheHamWardrobe->AllCharsLoaded());
+    }
 #else
     if (mGame->HasIntro()) {
         mGame->Start();

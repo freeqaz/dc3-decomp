@@ -62,8 +62,8 @@ void HamDriver::PreLoad(BinStream &bs) {
 void HamDriver::PostLoad(BinStream &) {}
 
 void HamDriver::Poll() {
-    if (mBones && mLayers.mWeight > 0.0f) {
-        mLayers.Eval(mLayers.mWeight);
+    if (mBones && Weight() > 0.0f) {
+        mLayers.Eval(Weight());
         mBones->ScaleDown(*mBones, 1.0f - mLayers.mWeight);
         mLayers.Play(*mBones);
         mDisplayBeat = TheTaskMgr.Beat();

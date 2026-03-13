@@ -955,7 +955,7 @@ void App::RunWithoutDebugging() {
                    frameCount, curScreen, transScreen, (int)TheUI->InTransition());
         }
 
-        // Auto-navigate: DC3_SCREEN=song_select_screen to skip menus
+        // Auto-navigate: DC3_SCREEN=game_screen to skip menus and start gameplay
         {
             static bool sAutoNavDone = false;
             if (!sAutoNavDone && TheUI && TheUI->CurrentScreen() && !TheUI->InTransition()) {
@@ -964,6 +964,25 @@ void App::RunWithoutDebugging() {
                     const char *curName = TheUI->CurrentScreen()->Name();
                     if (strcmp(curName, "main_screen") == 0) {
                         sAutoNavDone = true;
+
+                        // If targeting game_screen, set up song/mode first
+                        if (strcmp(targetScreen, "game_screen") == 0 && TheGameData && TheGameMode) {
+                            const char *songName = getenv("DC3_SONG");
+                            if (!songName || !songName[0]) songName = "boyfriend";
+                            TheGameData->SetSong(Symbol(songName));
+                            TheGameMode->SetMode(Symbol("perform"), Symbol("none"));
+                            // Ensure normal gameplay (not routine builder)
+                            if (TheHamProvider) {
+                                TheHamProvider->SetProperty("merge_moves", 0);
+                                TheHamProvider->SetProperty("use_movegraph", 0);
+                            }
+                            HamPlayerData *p0 = TheGameData->Player(0);
+                            HamPlayerData *p1 = TheGameData->Player(1);
+                            if (p0) p0->SetDifficulty(kDifficultyEasy);
+                            if (p1) p1->SetDifficulty(kDifficultyEasy);
+                            printf("DC3 Native: Game setup — song='%s' mode=perform\n", songName);
+                        }
+
                         UIScreen *target = ObjectDir::Main()->Find<UIScreen>(targetScreen, false);
                         if (target) {
                             printf("DC3 Native: Auto-navigating to '%s'\n", targetScreen);
