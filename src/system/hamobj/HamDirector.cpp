@@ -412,6 +412,21 @@ void HamDirector::ListPollChildren(std::list<RndPollable *> &polls) const {
 void HamDirector::DrawShowing() {
     static Symbol hide_venue("hide_venue");
     bool hide = TheHamProvider->Property(hide_venue, true)->Int();
+#ifdef HX_NATIVE
+    static int sDiag = 0;
+    if (sDiag < 3 && mVenue) {
+        sDiag++;
+        int usedSize = mVenue->HashTableUsedSize();
+        int subdirCount = (int)mVenue->SubDirs().size();
+        printf("DC3 venue '%s' hash=%d subdirs=%d\n",
+               mVenue->Name(), usedSize, subdirCount);
+        // Check subdirs for content
+        for (int i = 0; i < subdirCount; i++) {
+            ObjectDir *sub = mVenue->SubDirs()[i];
+            if (sub) printf("  subdir[%d] '%s' hash=%d\n", i, sub->Name(), sub->HashTableUsedSize());
+        }
+    }
+#endif
     if (mVenue && !hide) {
         mVenue->DrawShowing();
     }
@@ -1224,14 +1239,14 @@ DataNode HamDirector::OnFileLoaded(DataArray *a) {
             if (sym == venue && dir) {
                 mVenue = dynamic_cast<WorldDir *>(dir);
 #ifdef HX_NATIVE
-                if (DebugWorldLoad()) {
-                    MILO_LOG(
-                        "DC3 HamDirector::OnFileLoaded(venue) dir=%p venue=%p name='%s'\n",
-                        (void *)dir,
-                        (void *)mVenue.Ptr(),
-                        dir ? dir->Name() : "<null>"
-                    );
-                }
+                MILO_LOG(
+                    "DC3 OnFileLoaded(venue) dir=%p venue=%p '%s' hash=%d subdirs=%d\n",
+                    (void *)dir,
+                    (void *)mVenue.Ptr(),
+                    dir ? dir->Name() : "<null>",
+                    dir ? dir->HashTableUsedSize() : -1,
+                    mVenue ? (int)mVenue->SubDirs().size() : -1
+                );
 #endif
             } else if (sym == viz && dir) {
                 mVisualizer = dynamic_cast<HamVisDir *>(dir);

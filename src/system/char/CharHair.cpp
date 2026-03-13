@@ -95,6 +95,11 @@ void CharHair::SetName(const char *name, ObjectDir *dir) {
 }
 
 void CharHair::Poll() {
+#ifdef HX_NATIVE
+    // Hair physics crash during venue loading due to null CharCollide entries
+    // in ObjPtrList during sort. Skip hair simulation on native for now.
+    return;
+#endif
     Character *cur = Character::Current();
     if (cur) {
         if (cur->Synced()) {

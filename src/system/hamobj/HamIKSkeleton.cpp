@@ -78,6 +78,7 @@ void HamIKSkeleton::NeutralWorldXfm(RndTransformable *t, Transform &xfm) {
 }
 
 void HamIKSkeleton::SetBone(RndTransformable *t1, RndTransformable *t2) {
+    if (!t2) return;
     if (t2->Dirty()) {
         if (!t1) {
             MILO_NOTIFY_ONCE("%s bone is NULL, neutral is %s", PathName(this), t2->Name());

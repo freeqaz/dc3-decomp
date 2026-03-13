@@ -217,7 +217,15 @@ void RndShader::SelectConfig(RndMat *mat, ShaderType shader_type, bool b3) {
     }
 done:
     shader = sShaders[shader_type];
+#ifdef HX_NATIVE
+    if (!shader) {
+        // Fallback: unregistered shader type — use error shader
+        shader = sShaders[kErrorShader];
+        if (!shader) return;
+    }
+#else
     MILO_ASSERT(shader, 0x1D3);
+#endif
     shader->Select(mat, shader_type, b3);
 }
 

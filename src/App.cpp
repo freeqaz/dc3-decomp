@@ -965,11 +965,14 @@ void App::RunWithoutDebugging() {
                     if (strcmp(curName, "main_screen") == 0) {
                         sAutoNavDone = true;
 
-                        // If targeting game_screen, set up song/mode first
+                        // If targeting game_screen, set up song/mode/venue first
                         if (strcmp(targetScreen, "game_screen") == 0 && TheGameData && TheGameMode) {
                             const char *songName = getenv("DC3_SONG");
                             if (!songName || !songName[0]) songName = "boyfriend";
+                            const char *venueName = getenv("DC3_VENUE");
+                            if (!venueName || !venueName[0]) venueName = "glitterati";
                             TheGameData->SetSong(Symbol(songName));
+                            TheGameData->SetVenue(Symbol(venueName));
                             TheGameMode->SetMode(Symbol("perform"), Symbol("none"));
                             // Ensure normal gameplay (not routine builder)
                             if (TheHamProvider) {
@@ -980,7 +983,8 @@ void App::RunWithoutDebugging() {
                             HamPlayerData *p1 = TheGameData->Player(1);
                             if (p0) p0->SetDifficulty(kDifficultyEasy);
                             if (p1) p1->SetDifficulty(kDifficultyEasy);
-                            printf("DC3 Native: Game setup — song='%s' mode=perform\n", songName);
+                            printf("DC3 Native: Game setup — song='%s' venue='%s' mode=perform\n",
+                                   songName, venueName);
                         }
 
                         UIScreen *target = ObjectDir::Main()->Find<UIScreen>(targetScreen, false);

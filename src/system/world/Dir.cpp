@@ -448,10 +448,11 @@ void WorldDir::DrawShowing() {
     static int sWorldDrawDiag = 0;
     if (sWorldDrawDiag < 5) {
         sWorldDrawDiag++;
-        printf("DC3 WorldDir::DrawShowing '%s' TheWorld=%p draws=%d cameraMgr=%p\n",
-               Name(), (void*)TheWorld, (int)mDraws.size(), (void*)mCameraMgr);
+        int showCount = 0;
         for (auto it = mDraws.begin(); it != mDraws.end(); ++it)
-            printf("  draw: %s\n", dynamic_cast<Hmx::Object*>(*it) ? dynamic_cast<Hmx::Object*>(*it)->Name() : "?");
+            if ((*it)->Showing()) showCount++;
+        printf("DC3 WorldDir::DrawShowing '%s' TheWorld=%p draws=%d showing=%d\n",
+               Name(), (void*)TheWorld, (int)mDraws.size(), showCount);
     }
 #endif
     if (TheWorld) {

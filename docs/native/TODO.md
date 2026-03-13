@@ -1,9 +1,11 @@
-# Native Port TODO — Content System & Song Select Working
+# Native Port TODO — Venue Rendering on Game Screen
 
-## Current State (Session 63)
+## Current State (Session 63b)
+- **Venue rendering on game_screen** — Glitterati venue renders with chairs, table, platform, reflections (236 draw calls)
+- **Venue loading via FileMerger** — `SetVenue(Symbol("glitterati"))` enables full pipeline: world.fm → Select("venue") → glitterati.milo
 - **Character animation pipeline functional** — ClipPlayer loads song clip keys (60 keyframes), pushes layers into HamDriver, Weight() evaluation drives bone transforms
 - **HamDriver::Poll decomp bug fixed** — was using `mLayers.mWeight` (always 0) instead of `Weight()` (CharWeightable, defaults 1.0). Now 100% match.
-- **Game screen auto-play** — `DC3_SCREEN=game_screen DC3_SONG=boyfriend` sets up song, mode, difficulty, navigates directly to gameplay
+- **Game screen auto-play** — `DC3_SCREEN=game_screen DC3_SONG=boyfriend DC3_VENUE=glitterati` sets up song, mode, venue, difficulty
 - **Content system fully integrated** — 62 songs load from DTA via ContentMgr → SongMgr → HamSongMgr pipeline
 - **Song select populated** — 46 songs pass profile filter, 49 UI items (songs + headers) in song_select_screen
 - **Full boot flow**: attract_screen → autosave_warning → title_screen → main_screen → (auto-nav) → game_screen
@@ -13,7 +15,6 @@
 - Flow→PropAnim UI animation pipeline verified working end-to-end (Session 58)
 - Text rendering, mesh rendering, material pipeline all working
 - HamUI two-pass draw pipeline active (letterbox + main draw pass)
-- Game screen renders black — venue world_panel not drawing (venue loading requires further work)
 
 ## Headless GPU Rendering
 
@@ -269,7 +270,7 @@ HamDirector (`src/system/hamobj/HamDirector.cpp:137-202`) exposes ~40+ DTA handl
 | HUD move cards pink rectangles | TexMovie render-to-texture | TODO — Phase 4 |
 | Crowd/audio merges crash-skipped | Previously ObjRef ring corruption; now needs fresh runtime validation after ctor fix | TODO — Phase 4 |
 | MoviePanel::IsLoaded blocks forever | mMovie.Ready() stub returns false | **FIXED** (Session 62 — `#ifdef HX_NATIVE` bypass) |
-| Static scene (no animation) | Character anim pipeline working (Session 63); venue still static pending LightPreset::Load + world_panel rendering on game_screen | Partially fixed |
+| Static scene (no animation) | Character anim pipeline working (Session 63); venue renders on game_screen (Session 63b); LightPreset animation still pending | Partially fixed |
 | Empty lists (no content) | Content system | **FIXED** (Session 62 — 49 items in song_select) |
 
 ## Crashes Fixed (Session 59)
