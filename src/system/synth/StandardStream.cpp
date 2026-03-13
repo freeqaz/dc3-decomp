@@ -730,6 +730,97 @@ int StandardStream::ConsumeData(void **v, int numSamples, int startSamp) {
     mCurrentSamp += samplesToConsume;
     return samplesToConsume;
 }
+#else
+int StandardStream::ConsumeData(void **v, int numSamples, int startSamp) {
+    if (mGetInfoOnly)
+        return 0;
+    int numChannels = mChannels.size();
+    int realChannels = numChannels - mVirtualChans;
+    MILO_ASSERT(numChannels != 0, 0x1A9);
+    if (startSamp >= 0 && startSamp != mCurrentSamp) {
+        MILO_LOG("sample mismatch: expected %i, got %i\n", mCurrentSamp, startSamp);
+        mCurrentSamp = startSamp;
+    }
+    MILO_ASSERT(numChannels < 0x1E, 0x1B3);
+
+    void *pcm[0x1E];
+    int i;
+    for (i = 0; i < numChannels; i++) {
+        if (i < realChannels)
+            pcm[i] = v[i];
+        else
+            pcm[i] = mVirtBufs[i - realChannels];
+    }
+
+    int samplesToConsume = numSamples;
+    if (samplesToConsume >= 0x800)
+        samplesToConsume = 0x800;
+
+    if (mJumpFromSamples > 0) {
+        if (mJumpFromSamples < mJumpToSamples) {
+            if (mCurrentSamp < mJumpToSamples) {
+                if (mCurrentSamp > mJumpFromSamples) {
+                    samplesToConsume = 0;
+                } else {
+                    int remaining = mJumpFromSamples - mCurrentSamp;
+                    if (remaining < samplesToConsume)
+                        samplesToConsume = remaining;
+                }
+            }
+        } else if (mJumpFromSamples > mJumpToSamples) {
+            MILO_ASSERT(mCurrentSamp <= mJumpFromSamples, 0x1CF);
+            int remaining = mJumpFromSamples - mCurrentSamp;
+            if (remaining < samplesToConsume)
+                samplesToConsume = remaining;
+        }
+    }
+
+    StreamReceiver **ch = &mChannels[0];
+    StreamReceiver **end = &mChannels[numChannels];
+    while (ch < end) {
+        int bytes = (*ch)->BytesWriteable() >> 1;
+        if (bytes < samplesToConsume)
+            samplesToConsume = bytes;
+        ch++;
+    }
+
+    if (samplesToConsume > 0) {
+        std::pair<int, int> *map = &mChanMaps[0];
+        std::pair<int, int> *mapEnd = &mChanMaps[mChanMaps.size()];
+        int bytesPerSample = mFloatSamples ? 4 : 2;
+        int copySize = samplesToConsume * bytesPerSample;
+        while (map < mapEnd) {
+            void *src = pcm[map->first];
+            void *dst = pcm[map->second];
+            memcpy(dst, src, copySize);
+            map++;
+        }
+
+        short convBuf[0x800];
+        int chIdx = 0;
+        while (chIdx < numChannels) {
+            void *data;
+            if (mFloatSamples) {
+                data = pcm[chIdx];
+            } else {
+                int j = 0;
+                while (j < samplesToConsume) {
+                    float f = ((float *)pcm[chIdx])[j];
+                    f = f > 1.0f ? 1.0f : f;
+                    f = f < -1.0f ? -1.0f : f;
+                    convBuf[j] = (short)(f * 32767.0f);
+                    j++;
+                }
+                data = convBuf;
+            }
+            mChannels[chIdx]->WriteData(data, copySize);
+            chIdx++;
+        }
+    }
+
+    mCurrentSamp += samplesToConsume;
+    return samplesToConsume;
+}
 #endif
 
 void StandardStream::setJumpSamplesFromMs(float fromMs, float toMs) {

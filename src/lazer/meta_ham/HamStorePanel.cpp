@@ -512,9 +512,68 @@ BEGIN_HANDLERS(HamStorePanel)
     HANDLE_SUPERCLASS(StorePanel)
 END_HANDLERS
 
-// TODO: implement
-#ifdef HX_NATIVE
 void HamStorePanel::RefreshSpecialOfferStatus() {}
-DataNode HamStorePanel::OnMsg(const RCJobCompleteMsg &) { return DataNode(0); }
+DataNode HamStorePanel::OnMsg(const RCJobCompleteMsg &msg) {
+    RCJob *job = msg.Job();
+    int success = msg.Success();
+
+    if (job == mJobs[0]) {
+        if (success != 0) {
+            ReadLockData();
+            GetCart();
+        } else {
+            TheDebug << "HamStorePanel::OnMsg Cart fail\n";
+            DisableCart();
+        }
+    } else if (job == mJobs[1]) {
+        if (success == 0) {
+            TheDebug << "HamStorePanel::OnMsg Cart unload\n";
+        } else {
+            TheDebug << "HamStorePanel::OnMsg Cart fail\n";
+        }
+    } else if (job == mJobs[2]) {
+        if (success != 0) {
+            ReadCartData();
+        } else {
+            TheDebug << "Failed to read cart data\n";
+            DisableCart();
+        }
+    } else if (job == mJobs[3]) {
+        if (success == 0) {
+            TheDebug << "HamStorePanel::OnMsg Cart fail\n";
+            ExitError(kStoreErrorNoContent);
+        } else {
+            std::list<int>::iterator it = mPendingRemoves.begin();
+            if (it != mPendingRemoves.end()) {
+                RemoveNextDLCFromCart();
+                mPendingRemoves.erase(it);
+            } else {
+                mLockData = 0;
+                mRemovingFromCart = 0;
+            }
+        }
+    } else if (job == mJobs[4]) {
+        if (success == 0) {
+            TheDebug << "HamStorePanel::OnMsg Cart fail\n";
+            ExitError(kStoreErrorNoContent);
+        } else {
+            std::list<int>::iterator it = mPendingAdds.begin();
+            if (it != mPendingAdds.end()) {
+                AddNextDLCToCart();
+                mPendingAdds.erase(it);
+            } else {
+                mLockData = 0;
+                mAddingToCart = 0;
+            }
+        }
+    } else if (job == mJobs[5]) {
+        if (success == 0) {
+            TheDebug << "HamStorePanel::OnMsg Cart fail\n";
+            ExitError(kStoreErrorNoContent);
+        } else {
+            TheDebug << "HamStorePanel::OnMsg Cart empty\n";
+        }
+    }
+    return DataNode(1);
+}
 void SpecialOfferEnumJob::OnCompletion(Hmx::Object *) {}
-#endif

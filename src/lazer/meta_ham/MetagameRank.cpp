@@ -932,6 +932,63 @@ int MetagameRank::GetTier() const {
 
     return tierCount;
 }
-void MetagameRank::AwardForRankUp(int) {}
-int MetagameRank::ComputeRankNumber(bool) { return 0; }
 #endif
+void MetagameRank::AwardForRankUp(int) {}
+int MetagameRank::ComputeRankNumber(bool forceAward) {
+    if (mFirstTimePlayed) {
+        mRankNumber = 0;
+        mPctToNextRank = 0.0f;
+        return 0;
+    }
+
+    if (mAtMaxRank) {
+        int maxRank = gRanksArray->Size() - 1;
+        mPctToNextRank = 0.0f;
+        mRankNumber = maxRank;
+        return maxRank;
+    }
+
+    int currentRank = 1;
+    int prevScore = 0;
+
+    if (gRanksArray->Size() > 1) {
+        int arraySize = gRanksArray->Size();
+        do {
+            DataArray *rankArray = gRanksArray->Node(currentRank).Array();
+            int scoreReq = rankArray->Int(0);
+
+            if (mScore < scoreReq) {
+                int deltaScore = mScore - prevScore;
+                int deltaRank = scoreReq - prevScore;
+                mPctToNextRank = (float)deltaScore / (float)deltaRank;
+                break;
+            }
+
+            prevScore = scoreReq;
+            currentRank++;
+
+            if (currentRank >= arraySize) {
+                mPctToNextRank = 0.0f;
+                mAtMaxRank = true;
+                currentRank = arraySize - 1;
+                break;
+            }
+        } while (true);
+    } else {
+        mPctToNextRank = 0.0f;
+        mAtMaxRank = true;
+        currentRank = 0;
+    }
+
+    if (mRankNumber != currentRank) {
+        if (mAtMaxRank) {
+            mHasNewRank = true;
+        }
+        if (!forceAward) {
+            AwardForRankUp(currentRank - mRankNumber);
+        }
+        mRankNumber = currentRank;
+    }
+
+    return mRankNumber;
+}
