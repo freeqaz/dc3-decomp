@@ -1845,8 +1845,129 @@ void SaveLoadManager::SetState(State newState) {
 }
 
 // TODO: implement
+DataNode SaveLoadManager::OnMsg(const MCResultMsg &msg) {
+    MILO_ASSERT(mWaiting, 0x8E8);
+    mWaiting = false;
+
+    int result = msg->Int(2);
+
+    if (mState < kS_SaveNoOverwrite) {
+        if (mState != kS_SaveConfirmOverwrite && mState != 4) {
+            if (mState != 0xB) {
+                MILO_FAIL("Unhandled MCResultMsg in state %d and mode %d", mState, mMode);
+            } else {
+                if (result < 9) {
+                    switch (result) {
+                    case 8:
+                    case 6:
+                        SetState(kS_SaveLookForFile);
+                        break;
+                    case 5:
+                        SetState(kS_AutoloadCorrupt);
+                        break;
+                    case 1:
+                        SetState(kS_AutoloadDeviceMissing);
+                        break;
+                    }
+                } else {
+                    switch (result) {
+                    case 25:
+                        SetState(kS_AutoloadNotOwner);
+                        break;
+                    }
+                }
+                goto block_54;
+            }
+        } else {
+            mDeviceIDState = result;
+        }
+    } else {
+        switch (mState) {
+        case kS_ManualLoadStartLoad:
+            switch (result) {
+            case 11:
+                SetState(kS_AutoloadDone);
+                break;
+            case 10:
+                SetState(kS_AutoloadFuture);
+                break;
+            default:
+                SetState(kS_LoadFailed);
+                break;
+            case 25:
+                SetState(kS_ManualLoadNotOwner);
+                break;
+            case 8:
+                SetState(kS_ManualLoadMissing);
+                break;
+            case 5:
+                SetState(kS_ManualLoadCorrupt);
+                break;
+            case 1:
+                SetState(kS_ManualLoadNoFile);
+                break;
+            }
+            break;
+        case kS_SaveDeleteSaves:
+            SetState(kS_SaveDone);
+            break;
+        case kS_SaveLookForFile:
+            if (result > 0) {
+                switch (result) {
+                default:
+                    SetState(kS_SaveFailed);
+                    break;
+                case 6:
+                case 8:
+                    SetState(kS_SaveOverwrite);
+                    break;
+                case 1:
+                    SetState(kS_SaveDeviceInvalid);
+                    break;
+                }
+            } else {
+                switch (result) {
+                case 5:
+                case 7:
+                case 25:
+                    SetState(kS_SaveConfirmOverwrite);
+                    break;
+                }
+            }
+            break;
+        }
+    }
+
+block_54:
+    return DataNode(0);
+}
+
+DataNode SaveLoadManager::OnMsg(const SigninChangedMsg &msg) {
+    static Symbol saveload_dialog_event("saveload_dialog_event");
+
+    // TODO: replace raw offset with proper member name once identified
+    *(int*)((char*)this + 0x50) = 0;
+
+    if (static_cast<int>(mState) <= 0x67) {
+        return DataNode(0);
+    }
+
+    if (msg.GetMask() != 0 && ThePlatformMgr.HasPadNumsSigninChanged(msg.GetMask())) {
+        *(int*)((char*)this + 0x50) = msg.GetMask();
+        TheDebug.Notify("SIGNOUT on pad not expected");
+        SetState(kS_Abort);
+    }
+
+    if (TheUIEventMgr->HasActiveDialogEvent()) {
+        Symbol currentEvent = TheUIEventMgr->CurrentEvent();
+        if (currentEvent != gNullStr && currentEvent == saveload_dialog_event) {
+            TheUIEventMgr->DismissEvent(currentEvent);
+        }
+    }
+
+    return DataNode(0);
+}
+
 #ifdef HX_NATIVE
-DataNode SaveLoadManager::OnMsg(const MCResultMsg &) { return DataNode(0); }
-DataNode SaveLoadManager::OnMsg(const SigninChangedMsg &) { return DataNode(0); }
 void SaveLoadManager::HandleEventResponse(HamProfile *, int) {}
 #endif

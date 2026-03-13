@@ -553,10 +553,33 @@ void SetSystemArgs(const char *commandLine) {
     gPristineSystemArgs = TheSystemArgs;
 }
 
-// TODO: implement
-#ifdef HX_NATIVE
-void NormalizeSystemArgs() {}
-#endif
+void NormalizeSystemArgs() {
+    size_t size = TheSystemArgs.size();
+    size_t word_size = size >> 2;
+
+    if (word_size == 0)
+        return;
+
+    size_t i = 0;
+    do {
+        char* arg = TheSystemArgs[i];
+        if (arg && *arg != '\0') {
+            char* p = arg;
+            do {
+                unsigned char c = *p;
+                // Replace Windows-1252 special characters with ASCII equivalents
+                if (c == 0x96) {
+                    *p = '-';
+                }
+                if (c == 0x9d || c == 0x9c) {
+                    *p = '"';
+                }
+                p++;
+            } while (*p != '\0');
+        }
+        i++;
+    } while (i < word_size);
+}
 
 void SystemPreInit(const char *config) {
     InitMakeString();

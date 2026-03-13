@@ -352,8 +352,8 @@ bool NetLoaderRef::IsLoadedOrFailed() {
         return true;
     }
 
-    bool failed = mCacheLoader->HasFailed();
-    return failed;
+    char failed = mCacheLoader->HasFailed();
+    return failed != '\0';
 }
 
 // TODO: implement — TU-level inlining effects on AddNetCacheLoader/AddNetLoader

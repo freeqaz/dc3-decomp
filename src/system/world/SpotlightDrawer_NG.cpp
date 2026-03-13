@@ -122,10 +122,15 @@ void NgSpotlightDrawer::RenderCone(Spotlight *) {}
 void NgSpotlightDrawer::RenderBeams(const Hmx::Matrix4 &) {}
 bool NgSpotlightDrawer::CheckCam() { return false; }
 void NgSpotlightDrawer::BlurRT(float, float) {}
-void NgSpotlightDrawer::BlurRT() {}
 void NgSpotlightDrawer::SetupForPostProcess() {}
 void NgSpotlightDrawer::RenderScene() {}
 #endif
+
+#include "rnddx9/Rnd.h"
+
+void NgSpotlightDrawer::BlurRT() {
+    BlurRT(0.5f, 0.5f);
+}
 
 void NgSpotlightDrawer::SetXSectionTexture(const Spotlight::BeamDef &def) {
     RndTex *tex = def.mXSection;

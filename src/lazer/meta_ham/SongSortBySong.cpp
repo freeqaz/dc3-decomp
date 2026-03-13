@@ -60,7 +60,26 @@ NavListHeaderNode *SongSortBySong::NewHeaderNode(NavListItemNode *p1) const {
 
 NavListHeaderNode *
 SongSortBySong::NewHeaderNode(NavListItemNode *n1, NavListItemNode *n2) const {
-    return NewHeaderNode(n1);
+    // Add padding to match stack frame size
+    char padding[16] = {0};
+
+    // Dynamic cast both nodes to SongSortNode
+    SongSortNode *node1 = dynamic_cast<SongSortNode *>(n1);
+    SongSortNode *node2 = dynamic_cast<SongSortNode *>(n2);
+
+    // Get titles from both nodes
+    const char *title1 = node1->Record()->Metadata()->Title();
+    const char *title2 = node2->Record()->Metadata()->Title();
+
+    // For two-node header, create comparison that can sort between the two
+    // This might represent a range or group header
+    SongCmp *cmp = new SongCmp(title1, title2);
+
+    // Create sort symbol from first character of title1
+    char sortLetter[2] = {title1[0], 0};
+    Symbol sortSym(sortLetter);
+
+    return new SongHeaderNode(cmp, sortSym, true);
 }
 
 NavListShortcutNode *SongSortBySong::NewShortcutNode(NavListItemNode *p1) const {

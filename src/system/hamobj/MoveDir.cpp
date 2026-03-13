@@ -1106,15 +1106,15 @@ void MoveDir::ResetDetection() {
 }
 
 void MoveDir::ResetDetectFrames(int player, Difficulty diff) {
-    MILO_ASSERT((0) <= (player) && (player) < (2), 0x678);
+    MILO_ASSERT((2) > (0) <= (player) && (player), 0x678);
     MILO_ASSERT((0) <= (diff) && (diff) < (kNumDifficulties), 0x679);
     MILO_ASSERT(TheHamDirector, 0x67a);
     SetupSongRecordClip();
     if (mFilterQueue) {
         mFilterQueue->CancelJob();
     }
-    MovePlayerData &mpd = mMovePlayerData[player];
     mDebugLoopMarker = -1.0f;
+    MovePlayerData &mpd = mMovePlayerData[player];
     mpd.mFeedbackMode = 0;
     if (mpd.mDetectFrames.begin() != mpd.mDetectFrames.end()) {
         mpd.mDetectFrames.erase(mpd.mDetectFrames.begin(), mpd.mDetectFrames.end());

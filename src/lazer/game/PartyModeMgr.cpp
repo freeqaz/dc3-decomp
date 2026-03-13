@@ -1471,12 +1471,12 @@ void PartyModeMgr::FinalizeTeam(int team) {
         MILO_ASSERT(team == 1 || team == 2, 0x1EE);
         break;
     }
-    int numTeamPlayers = teamPlayers->size();
-    int totalPlayers = mPlayers.size();
     std::vector<int> indices;
+    int numTeamPlayers = teamPlayers->size();
+    int offset = mPlayers.size() - numTeamPlayers;
     indices.resize(numTeamPlayers);
     for (int i = 0; i < numTeamPlayers; i++) {
-        indices[i] = i + (totalPlayers - numTeamPlayers);
+        indices[i] = i + offset;
     }
     teamPicker->AddItems(indices);
     teamPicker->mNumGets = 0;
@@ -1620,12 +1620,11 @@ void PartyModeMgr::PruneHistory() {
 }
 
 DataNode PartyModeMgr::OnSetSongAndDefaults(DataArray *_msg) {
-    Symbol song;
-    Symbol mode;
+    Symbol song(gNullStr);
+    Symbol mode(gNullStr);
     bool force = false;
     int sz = _msg->Size();
     if (sz == 3) {
-        mode = Symbol(gNullStr);
         song = _msg->Sym(2);
     } else if (sz == 4) {
         mode = _msg->Sym(2);
@@ -1634,9 +1633,6 @@ DataNode PartyModeMgr::OnSetSongAndDefaults(DataArray *_msg) {
         song = _msg->Sym(2);
         mode = _msg->Sym(3);
         force = _msg->Int(4) != 0;
-    } else {
-        song = Symbol(gNullStr);
-        mode = Symbol(gNullStr);
     }
     SetSongAndDefaults(song, mode, force);
     return DataNode(0);
