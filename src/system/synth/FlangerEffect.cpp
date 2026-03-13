@@ -44,13 +44,13 @@ void FlangerEffect::Process(float *buf, int numSamples, int numChans) {
     MILO_ASSERT(numChans <= 2, 0x27);
 
     float phaseOffset[2];
-    float temp_f22;
-    float temp_f21;
-    float temp_f0_2;
+    float curRate;
     float var_f30;
     float var_f26;
     float var_f25;
-    float curRate;
+    float temp_f0_2;
+    float temp_f22;
+    float temp_f21;
 
     var_f26 = unk24;
     if (numChans == 1) {
@@ -75,7 +75,7 @@ void FlangerEffect::Process(float *buf, int numSamples, int numChans) {
         float temp_f29 = 0.5f;
 
         do {
-            float temp_f13 = (double)mDelaySamples;
+            float temp_f13 = (float)mDelaySamples;
             int var_r28 = 0;
             if (numChans > 0) {
                 int temp_r25 = ((mWritePos + var_r22) % 9600) * 4;

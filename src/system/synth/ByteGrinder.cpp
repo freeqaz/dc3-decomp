@@ -89,13 +89,28 @@ DataNode hashTo6Bits(DataArray *da) {
     bool moreThanTwo = da->Size() > 2;
     if (moreThanTwo) {
         seed = da->Int(1);
+#ifdef HX_NATIVE
+        fprintf(stderr, "DC3 hashTo6Bits INIT: seed=0x%x\n", seed);
+#endif
         int max = DIM(hashMapping);
         for (int idx = 0; idx < max; idx++) {
             hashMapping[idx] = (seed >> 2) & 0x3F;
             seed = (seed * 0x19660D) + 0x3C6EF35F;
         }
+#ifdef HX_NATIVE
+        fprintf(stderr, "DC3 hashTo6Bits: map[0x2b]=%d map[0xda]=%d map[0xa6]=%d map[0x4d]=%d\n",
+            hashMapping[0x2b], hashMapping[0xda], hashMapping[0xa6], hashMapping[0x4d]);
+#endif
         return DataNode(kDataInt, 0);
     }
+#ifdef HX_NATIVE
+    static int sCallCount = 0;
+    if (sCallCount < 20) {
+        fprintf(stderr, "DC3 hashTo6Bits LOOKUP: input=%d (0x%02x) → hash=%d\n",
+            da->Int(1), (unsigned)(da->Int(1) & 0xFF), ret);
+        sCallCount++;
+    }
+#endif
     return DataNode(kDataInt, ret);
 }
 
@@ -160,6 +175,14 @@ DataNode getRandomSequence32B(DataArray *da) {
 DataNode op0(DataArray *msg) {
     unsigned long operand = msg->Int(1);
     unsigned long w = msg->Int(2);
+#ifdef HX_NATIVE
+    static int sCallCount = 0;
+    if (sCallCount < 5) {
+        fprintf(stderr, "DC3 op0 XOR: operand=%ld (0x%lx) w=%ld (0x%lx) → %d\n",
+            operand, operand, w, w, (int)u8(w ^ operand));
+        sCallCount++;
+    }
+#endif
     return DataNode(kDataInt, u8(w ^ operand));
 }
 

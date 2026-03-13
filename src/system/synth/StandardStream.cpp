@@ -732,6 +732,7 @@ int StandardStream::ConsumeData(void **v, int numSamples, int startSamp) {
     mCurrentSamp += samplesToConsume;
     return samplesToConsume;
 }
+#endif
 
 void StandardStream::setJumpSamplesFromMs(float fromMs, float toMs) {
     mJumpFromSamples = kStreamEndSamples;
@@ -739,10 +740,12 @@ void StandardStream::setJumpSamplesFromMs(float fromMs, float toMs) {
     if (fromMs != kStreamEndMs) {
         mJumpFromSamples = MsToSamp(fromMs);
     }
-    if (toMs != 0) {
+    if (toMs != 0.0f) {
         mJumpToSamples = MsToSamp(toMs);
+        if (SampToMs(mJumpToSamples) < toMs) {
+            mJumpToSamples++;
+        }
     }
-    mJumpSamplesInvalid = false;
 }
 
 bool StandardStream::IsPastStreamJumpPointOfNoReturn() {
@@ -754,7 +757,7 @@ bool StandardStream::IsPastStreamJumpPointOfNoReturn() {
 }
 
 void StandardStream::DoJump() {
-    MILO_ASSERT(mJumpFromSamples != 0, 0x314);
+    MILO_ASSERT(mJumpFromSamples != 0, 0x316);
     if (!mJumpFile.empty()) {
         delete mFile;
         delete mRdr;
@@ -769,8 +772,18 @@ void StandardStream::DoJump() {
         if (mJumpFromSamples != mJumpToSamples) {
             if (mRdr)
                 mRdr->Seek(mJumpToSamples);
-            mCurrentSamp = mJumpToSamples;
         }
+        mCurrentSamp = mJumpToSamples;
     }
+    JumpInstance ji;
+    ji.unk0 = mJumpFromMs;
+    ji.unk4 = mJumpToMs;
+    if (mJumpInstances.empty()) {
+        ji.unkc = mJumpToMs - mJumpFromMs;
+        ji.unk8 = mJumpFromMs;
+    } else {
+        ji.unkc = (mJumpToMs - mJumpFromMs) + mJumpInstances.back().unkc;
+        ji.unk8 = (mJumpFromMs - mJumpInstances.back().unk0) + mJumpInstances.back().unk4;
+    }
+    mJumpInstances.push_back(ji);
 }
-#endif
