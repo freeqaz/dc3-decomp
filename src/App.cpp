@@ -248,8 +248,6 @@ App::App(int argc, char **argv) {
         const char *soundBankPath = soundBanksConfig->Node(1).Str(soundBanksConfig);
         commonBankDir.LoadFile(soundBankPath, false, true, kLoadFront, false);
         TheSynth->SetDir(commonBankDir);
-        fprintf(stderr, "DC3 CommonBank: path='%s' loaded=%d\n",
-                soundBankPath, TheSynth->CheckCommonBank(false));
     }
 
     // Character system

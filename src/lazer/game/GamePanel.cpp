@@ -49,6 +49,10 @@
 #include "utl/MBT.h"
 #include "utl/TimeConversion.h"
 #include "world/Dir.h"
+#ifdef HX_NATIVE
+#include <cstdlib>
+#include <cstdio>
+#endif
 GamePanel *TheGamePanel = nullptr;
 LoopVizCallback gLoopVizCallback;
 LatencyCallback gGamePanelCallback;
@@ -266,12 +270,12 @@ float LoopVizCallback::UpdateOverlay(RndOverlay *o, float y) {
 #pragma region GamePanel
 
 GamePanel::GamePanel()
-    : mGame(0), mTimeOverlay(RndOverlay::Find("time")),
+    : mGame(nullptr), mTimeOverlay(RndOverlay::Find("time")),
       mLatencyOverlay(RndOverlay::Find("latency")),
       mFitnessOverlay(RndOverlay::Find("fitness")),
-      mLoopVizOverlay(RndOverlay::Find("loop_viz")), mStartPaused(0), mState(), mEndGameResult(0),
-      mPerformanceProfiler("game_panel_load", 1), mIsReplay(0), mJitterSampleCount(0), mJitterBufferIndex(-2), mCurrentJitterValue(0), unkf8(1),
-      mPauseCountInTimer(new Timer()), mNormalPauseEnabled(1), mCheatPaused(0), mPollLoadState(0), mSoundEventReceiverSet(0) {
+      mLoopVizOverlay(RndOverlay::Find("loop_viz")), mStartPaused(false), mState(), mEndGameResult(0),
+      mPerformanceProfiler("game_panel_load", 1), mIsReplay(false), mJitterSampleCount(0), mJitterBufferIndex(-2), mCurrentJitterValue(0), unkf8(true),
+      mPauseCountInTimer(new Timer()), mNormalPauseEnabled(true), mCheatPaused(false), mPollLoadState(0), mSoundEventReceiverSet(false) {
     mFitnessFilters[0].SetPlayerIndex(0);
     mFitnessFilters[1].SetPlayerIndex(1);
     mFrameTimeSamples.resize(32);
@@ -906,10 +910,21 @@ void GamePanel::PollForLoading() {
         if (TheUI->TransitionScreen()
             && TheUI->TransitionScreen()->HasPanel(worldPanel)) {
             if (!TheHamDirector) {
+#ifdef HX_NATIVE
+                static int sDirDbg = 0;
+                if (DebugWorldLoad() && sDirDbg++ < 3)
+                    fprintf(stderr, "DC3 GamePanel::PollForLoading — no TheHamDirector\n");
+#endif
                 return;
             }
             if (!TheHamDirector->IsWorldLoaded()) {
+#ifdef HX_NATIVE
+                static int sWlDbg = 0;
+                if (DebugWorldLoad() && sWlDbg++ < 3)
+                    fprintf(stderr, "DC3 GamePanel::PollForLoading — world not fully loaded, proceeding\n");
+#else
                 return;
+#endif
             }
         }
         mPollLoadState = 2;
@@ -920,6 +935,12 @@ void GamePanel::PollForLoading() {
         mPollLoadState = 3;
         if (mGame->IsReady()) {
             mPollLoadState = 4;
+        } else {
+#ifdef HX_NATIVE
+            static int sGrDbg = 0;
+            if (DebugWorldLoad() && sGrDbg++ < 5)
+                fprintf(stderr, "DC3 GamePanel::PollForLoading — game not ready (state 3)\n");
+#endif
         }
     }
 }

@@ -176,12 +176,12 @@ void FlowSlider::UpdateActivations() {
             float nextPos = nextCase->Value();
             if (mValue >= curPos) {
                 if (mValue <= nextPos) {
-                if (curPos != nextPos) {
-                    t = (mValue - curPos) / (nextPos - curPos);
+                    if (curPos != nextPos) {
+                        t = (mValue - curPos) / (nextPos - curPos);
+                    }
+                    t = 1.0f - t;
+                    goto ease;
                 }
-                t = 1.0f - t;
-                goto ease;
-            }
             }
         }
 
@@ -197,14 +197,14 @@ void FlowSlider::UpdateActivations() {
         }
 
         if (next == mChildNodes.end()) {
-            if (mValue > curPos) {
-            intensity = 1.0f;
-        } else if (cur == mChildNodes.begin() && mValue < curPos) {
-            intensity = 1.0f;
-        } else {
-            intensity = 0.0f;
-        }
-        } else if (cur == mChildNodes.begin() && mValue < curPos) {
+            if (mValue >= curPos) {
+                intensity = 1.0f;
+            } else if (cur == mChildNodes.begin() && mValue <= curPos) {
+                intensity = 1.0f;
+            } else {
+                intensity = 0.0f;
+            }
+        } else if (cur == mChildNodes.begin() && mValue <= curPos) {
             intensity = 1.0f;
         } else {
             intensity = 0.0f;
@@ -218,14 +218,14 @@ void FlowSlider::UpdateActivations() {
     apply:
         FlowNode::sIntensity = intensity * savedIntensity;
 
-        if (!(!curCase->IsRunning())) {
+        if (curCase->IsRunning() > 0) {
             curCase->UpdateIntensity();
-            if (FlowNode::sIntensity == 0.0f && !mAlwaysRun) {
+            if (FlowNode::sIntensity == 0.0f && mAlwaysRun == 0) {
                 mRunningNodes.remove(curCase);
                 curCase->Deactivate(false);
             }
         } else {
-            if (mAlwaysRun || FlowNode::sIntensity != 0.0f) {
+            if (mAlwaysRun > 0 || FlowNode::sIntensity > 0.0f) {
                 ActivateChild(curCase);
             }
         }

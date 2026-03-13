@@ -7,12 +7,15 @@
 #include "obj/Data.h"
 #include "obj/DataFunc.h"
 #include "obj/Object.h"
+#include "obj/Task.h"
 #include "os/DateTime.h"
 #include "rndobj/Tex.h"
 #include "utl/FileStream.h"
 #include "utl/Symbol.h"
+#include "xdk/LIBCMT/ppcintrinsics.h"
 
 DancerSkeleton sLastComparedDancerSkel;
+static int sLastBeatMod;
 
 FreestyleMoveRecorder::FreestyleMoveRecorder()
     : mPlaybackSpeed(0), mClipFrames(0), mClipFrameCount(0), mRecordingFrames(0), mLastFrameIndex(-1), mMaxFrames(60), mRecordPos(-1), mPlaybackPos(-1),
@@ -85,6 +88,15 @@ void FreestyleMoveRecorder::Free() {
     for (int i = 4; i != 0; i--) {
         mTakes[mCurrentTakeIndex].Free();
     }
+}
+
+void FreestyleMoveRecorder::UpdateFakeSkeleton() {
+    mPlaybackSpeed += TheTaskMgr.DeltaUISeconds();
+    int beatMod = (int)TheTaskMgr.Beat() % 4;
+    if (beatMod == 0 && sLastBeatMod != 0) {
+        mPlaybackSpeed = 0;
+    }
+    sLastBeatMod = beatMod;
 }
 
 void FreestyleMoveRecorder::StartRecording() {
@@ -328,24 +340,51 @@ void FreestyleMoveRecorder::CompareDisplacementVectors(
                  + invLen2 * v2.z * invLen1 * v1.z)
         * 0.87f;
     float angleDiff = -(dot - 1.0f);
-    float clamped = zero;
-    if (-angleDiff < 0.0f) {
-        clamped = angleDiff;
-    }
-    float clamped1 = 1.0f;
-    if (clamped - 1.0f < 0.0f) {
-        clamped1 = clamped;
-    }
+    float clamped = (float)__fsel(-angleDiff, angleDiff, zero);
+    float clamped1 = (float)__fsel(clamped - 1.0f, 1.0f, clamped);
     float score = clamped1 * clamped1 * 20.0f;
-    float finalScore = zero;
-    if (-score < 0.0f) {
-        finalScore = score;
-    }
-    float finalClamped = 1.0f;
-    if (finalScore - 1.0f < 0.0f) {
-        finalClamped = finalScore;
-    }
+    float finalScore = (float)__fsel(-score, score, zero);
+    float finalClamped = (float)__fsel(finalScore - 1.0f, 1.0f, finalScore);
     outSimilarity = 1.0f - finalClamped;
+}
+
+float FreestyleMoveRecorder::CompareSkeletonPositions(
+    const BaseSkeleton *skel1, const BaseSkeleton *skel2, float scale
+) const {
+    if (skel1 && skel2) {
+        if (skel1->IsTracked()) {
+            if (skel2->IsTracked()) {
+                unsigned int count = 0;
+                float totalDist = 0.0f;
+                float zero = 0.0f;
+                if (mPositions.size() != 0) {
+                    int idx = 0;
+                    do {
+                        Vector3 pos1, pos2;
+                        skel1->NormPos(
+                            (SkeletonCoordSys)mPositions[count].unk4,
+                            (SkeletonJoint)mPositions[count].mJoint, pos1
+                        );
+                        skel2->NormPos(
+                            (SkeletonCoordSys)mPositions[count].unk4,
+                            (SkeletonJoint)mPositions[count].mJoint, pos2
+                        );
+                        count++;
+                        idx += 8;
+                        totalDist = (pos1.y - pos2.y) * (pos1.y - pos2.y)
+                            + (pos1.z - pos2.z) * (pos1.z - pos2.z)
+                            + (pos1.x - pos2.x) * (pos1.x - pos2.x) + totalDist;
+                    } while (count < (unsigned int)mPositions.size());
+                }
+                float avg = totalDist / (float)(unsigned int)mAngleLimits.size();
+                float result = avg * scale;
+                float clamped = (float)__fsel(-result, result, zero);
+                float clamped1 = (float)__fsel(clamped - 1.0f, 1.0f, clamped);
+                return 1.0f - clamped1;
+            }
+        }
+    }
+    return 0.0f;
 }
 
 float FreestyleMoveRecorder::GetScore(int i1, int i2, float f, bool b) {

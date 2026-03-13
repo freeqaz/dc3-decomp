@@ -217,13 +217,27 @@ class MergerAgent:
                 import shutil
                 shutil.rmtree(patch_dir, ignore_errors=True)
 
-            # Check if more patches arrived while we were running
+            # Check if more patches arrived while we were running.
+            # Defer respawn to let the SDK's async generators fully close
+            # before starting a new agent session.
             remaining = self._count_pending()
             if remaining > 0:
-                logger.info(f"Merger: {remaining} more patches pending, respawning")
-                # Don't await — let the event loop pick it up
-                self._running = True
-                self._task = asyncio.create_task(self._run_merger())
+                logger.info(f"Merger: {remaining} more patches pending, respawning after cleanup delay")
+                asyncio.get_event_loop().call_later(
+                    2.0, self._deferred_respawn
+                )
+
+    def _deferred_respawn(self):
+        """Respawn merger after a delay. Called via call_later to avoid
+        conflicting with the previous SDK session's async generator cleanup."""
+        if self._running:
+            return
+        pending = self._count_pending()
+        if pending == 0:
+            return
+        self._running = True
+        self._task = asyncio.create_task(self._run_merger())
+        logger.info(f"Merger respawned for {pending} pending patches")
 
     def _claim_batch(self, session_id: str) -> list[dict]:
         """Claim up to max_batch pending patches. Returns list of patch dicts."""

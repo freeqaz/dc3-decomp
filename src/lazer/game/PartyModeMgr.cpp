@@ -138,7 +138,7 @@ PartyModeMgr::PartyModeMgr() : mFrameSmoothers() {
     static Symbol event_scoring("event_scoring");
     mEventScoring = mPartyModeCfg->FindArray(event_scoring);
     mUsePlaytestData = false;
-    mPartyModePlaytestEvents = 0;
+    mPartyModePlaytestEvents = nullptr;
     static Symbol party_mode_playtest_data("party_mode_playtest_data");
     mPartyModePlaytestData = mPartyModeCfg->FindArray(party_mode_playtest_data);
     if (mPartyModePlaytestData) {
@@ -178,7 +178,7 @@ PartyModeMgr::PartyModeMgr() : mFrameSmoothers() {
         mARObjectIndices[i] = mARObjectIndices[randIdx];
         mARObjectIndices[randIdx] = old;
     }
-    mCurrEvent = 0;
+    mCurrEvent = nullptr;
     InitCharacters();
     for (int i = 0; i < 6; i++) {
         mFrameSmoothers[i].SetSmoothParameters(10, 1);
@@ -197,12 +197,12 @@ PartyModeMgr::PartyModeMgr() : mFrameSmoothers() {
     mCustomParty = false;
     mUsingPerSongOptions = false;
     mSetPartyOptionsJob = nullptr;
-    mGetPartyOptionsJob = 0;
-    mGetPartySongQueueJob = 0;
-    mAddSongToPartySongQueueJob = 0;
-    mDeleteSongFromPartySongQueueJob = 0;
-    mQueueStateValid = 0;
-    mPlaytestEventSequences = 0;
+    mGetPartyOptionsJob = nullptr;
+    mGetPartySongQueueJob = nullptr;
+    mAddSongToPartySongQueueJob = nullptr;
+    mDeleteSongFromPartySongQueueJob = nullptr;
+    mQueueStateValid = false;
+    mPlaytestEventSequences = nullptr;
 }
 
 PartyModeMgr::~PartyModeMgr() { ResetPlayers(); }
@@ -1067,7 +1067,8 @@ int PartyModeMgr::PickNextPlayer() {
 
 void PartyModeMgr::ShufflePlaylist(bool b1) {
     MILO_ASSERT(IsUsingPlaylist(), 0x731);
-    if (!b1 && mIsPlaylistShuffled) {
+    if (b1) {
+    } else if (mIsPlaylistShuffled) {
         SetSongsFromPlaylist();
     }
     mIsPlaylistShuffled = b1;
@@ -1097,7 +1098,7 @@ void PartyModeMgr::ResetParty() {
     pPlayerData->SetCrew(crew);
     mWinningSide = 2;
     mJustWonSide = 2;
-    mPlaytestEventSequences = 0;
+    mPlaytestEventSequences = nullptr;
 }
 
 void PartyModeMgr::InitCharacters() {
@@ -1294,7 +1295,7 @@ void PartyModeMgr::UseSelectedPlaylist(bool b1) {
         if (mPlaylist) {
             ResetSongs();
         }
-        mPlaylist = 0;
+        mPlaylist = nullptr;
     }
 }
 
@@ -1311,8 +1312,8 @@ void PartyModeMgr::SetCurrEvent() {
     mCurrEvent = CreateEventA();
     static Symbol showdown("showdown");
     mIsShowdown = mCurrEvent->mModeName == showdown;
-    mLeftPlayer = mCurrEvent->mNumPlayers > 0 ? mPlayers[mCurrEvent->mPlayerIndices[0]] : 0;
-    mRightPlayer = mCurrEvent->mNumPlayers > 1 ? mPlayers[mCurrEvent->mPlayerIndices[1]] : 0;
+    mLeftPlayer = mCurrEvent->mNumPlayers > 0 ? mPlayers[mCurrEvent->mPlayerIndices[0]] : nullptr;
+    mRightPlayer = mCurrEvent->mNumPlayers > 1 ? mPlayers[mCurrEvent->mPlayerIndices[1]] : nullptr;
 }
 
 DataNode PartyModeMgr::OnGetSmoothedFramePos(const DataArray *a) {

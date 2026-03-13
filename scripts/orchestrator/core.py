@@ -1474,7 +1474,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
                 # Spawn agent asynchronously
                 task = asyncio.create_task(
                     self._run_batch_agent(
-                        session_id, func, model, verbose, use_incremental=current_use_incremental, refactor=refactor, reviewer_model=reviewer_model, use_merger=self.patch_applier.enabled
+                        session_id, func, model, verbose, use_incremental=current_use_incremental, refactor=refactor, reviewer_model=reviewer_model, use_merger=True
                     )
                 )
                 self.active_sessions[session_id] = task
@@ -1494,8 +1494,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
         errors = await self._drain_active_sessions(results, errors, verbose)
 
         # Drain merger agent if it's running
-        if self.patch_applier.enabled:
-            await self.merger_agent.drain()
+        await self.merger_agent.drain()
 
         # Generate summary
         summary = self._generate_batch_summary(results, pattern)
@@ -1503,7 +1502,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
         summary["periodic_validation"] = periodic_full_interval if use_incremental else 0
         summary["build_metrics"] = build_metrics
         summary["auto_apply_stats"] = self.patch_applier.stats()
-        summary["merger_stats"] = self.merger_agent.status() if self.patch_applier.enabled else {}
+        summary["merger_stats"] = self.merger_agent.status()
         summary["skipped_complete"] = skipped_complete
         if circuit_tripped:
             summary["circuit_breaker_tripped"] = True
@@ -1677,7 +1676,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
                 # Spawn agent asynchronously
                 task = asyncio.create_task(
                     self._run_batch_agent(
-                        session_id, func, model, verbose, use_incremental=current_use_incremental, refactor=refactor, reviewer_model=reviewer_model, use_merger=self.patch_applier.enabled
+                        session_id, func, model, verbose, use_incremental=current_use_incremental, refactor=refactor, reviewer_model=reviewer_model, use_merger=True
                     )
                 )
                 self.active_sessions[session_id] = task
@@ -1698,15 +1697,14 @@ Focus on readability and maintainability while preserving exact behavior and mat
         errors = await self._drain_active_sessions(results, errors, verbose)
 
         # Drain merger agent if it's running
-        if self.patch_applier.enabled:
-            await self.merger_agent.drain()
+        await self.merger_agent.drain()
 
         # Generate summary
         summary = self._generate_batch_summary(results, f"<{len(targets)} priority targets>")
         summary["build_strategy"] = "incremental" if use_incremental else "full"
         summary["periodic_validation"] = periodic_full_interval if use_incremental else 0
         summary["auto_apply_stats"] = self.patch_applier.stats()
-        summary["merger_stats"] = self.merger_agent.status() if self.patch_applier.enabled else {}
+        summary["merger_stats"] = self.merger_agent.status()
         summary["target_count"] = len(targets)
         summary["processed_count"] = processed
         summary["skipped_complete"] = skipped_complete

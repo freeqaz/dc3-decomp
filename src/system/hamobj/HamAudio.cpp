@@ -65,22 +65,10 @@ bool HamAudio::IsReady() {
         if (mFileLoader && mFileLoader->IsLoaded()) {
             FinishLoad();
         } else {
-#ifdef HX_NATIVE
-            static int sDbg2 = 0;
-            if (sDbg2++ < 3)
-                fprintf(stderr, "DC3 HamAudio::IsReady — not ready: stream=%p buf=%p loader=%p\n",
-                        (void *)mSongStream, (void *)mRawBuffer, (void *)mFileLoader);
-#endif
             return false;
         }
     }
     mReady = mSongStream && mSongStream->IsReady();
-#ifdef HX_NATIVE
-    static int sDbg3 = 0;
-    if (sDbg3++ < 3)
-        fprintf(stderr, "DC3 HamAudio::IsReady — stream=%p ready=%d\n",
-                (void *)mSongStream, mReady);
-#endif
     return mReady;
 }
 
@@ -340,10 +328,6 @@ DataNode HamAudio::OnSetCrossfadeJump(DataArray *a) {
 }
 
 void HamAudio::FinishLoad() {
-#ifdef HX_NATIVE
-    fprintf(stderr, "DC3 HamAudio::FinishLoad — commonBank=%d\n",
-            TheSynth->CheckCommonBank(false));
-#endif
     auto& stream0 = mStreams[0];
     unsigned int counter = 2;
 

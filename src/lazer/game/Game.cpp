@@ -983,9 +983,10 @@ DataNode OnDumpMoves(DataArray *) {
     std::vector<HamMoveKey> keys;
     TheHamDirector->MoveKeys(kDifficultyExpert, TheHamDirector->GetMoveDir(), keys);
     int i = 0;
+    Debug &dbg = TheDebug;
     for (std::vector<HamMoveKey>::iterator it = keys.begin(); it != keys.end(); ++it) {
         const char *name = it->move ? it->move->Name() : "NULL";
-        TheDebug << MakeString("move %d: beat %.2f: name: '%s'\n", i++, it->beat, name);
+        dbg << MakeString("move %d: beat %.2f: name: '%s'\n", i++, it->beat, name);
     }
     return DataNode(0);
 }
