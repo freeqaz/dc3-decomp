@@ -1620,20 +1620,27 @@ void PartyModeMgr::PruneHistory() {
 }
 
 DataNode PartyModeMgr::OnSetSongAndDefaults(DataArray *_msg) {
-    Symbol song(gNullStr);
-    Symbol mode(gNullStr);
-    bool force = false;
+    Symbol song;
+    Symbol mode;
+    bool force;
     int sz = _msg->Size();
     if (sz == 3) {
+        mode = Symbol(gNullStr);
         song = _msg->Sym(2);
     } else if (sz == 4) {
         mode = _msg->Sym(2);
         song = _msg->Sym(3);
     } else if (sz == 5) {
-        song = _msg->Sym(2);
-        mode = _msg->Sym(3);
         force = _msg->Int(4) != 0;
+        mode = _msg->Sym(2);
+        song = _msg->Sym(3);
+        goto done;
+    } else {
+        mode = Symbol(gNullStr);
+        song = Symbol(gNullStr);
     }
+    force = false;
+done:
     SetSongAndDefaults(song, mode, force);
     return DataNode(0);
 }
