@@ -75,35 +75,32 @@ void SampleData::Save(BinStream &bs) const {
 }
 
 int SampleData::SizeAs(Format fmt) const {
-    switch (fmt) {
-    case kPCM:
-        return mNumSamples * 2;
-    case kBigEndPCM:
-        return mNumSamples * 2;
-    case kVAG: {
-        int tmp = (mNumSamples + 0x6F) / 0x70 + (mNumSamples + 0x6F >> 0x1F);
-        return (tmp - (tmp >> 0x1F)) * 0x40;
-    }
-    case kATRAC: {
-        int tmpa = mNumSamples + 0x3FF;
-        return (tmpa >> 10) + (tmpa < 0 && (tmpa & 0x3FF) != 0) * 0xC0;
-    }
-    case kMP3: {
-        int tmpm = mNumSamples + 0x3FF;
-        return (tmpm >> 10) + (tmpm < 0 && (tmpm & 0x3FF) != 0) * 0xC0;
-    }
-    case kXMA: {
-        MILO_WARN("don't know size as XMA");
-        int tmpx = mNumSamples / 5 + (mNumSamples >> 0x1F);
-        return tmpx - (tmpx >> 0x1F);
-    }
-    case kNintendoADPCM: {
-        return ((mNumSamples * 2) / 3.4f) + 0x60;
-    }
-    default: {
+    if (fmt > 7U) {
         MILO_ASSERT(0, 0x136);
         return 0;
     }
+
+    switch ((int)fmt) {
+    case 1:
+    case 0:
+        return mNumChannels * mNumSamples * 2;
+    case 2:
+        return (((mNumSamples + 0x6F) / 0x70) + (mNumSamples + 0x6F >> 0x1F)) * mNumChannels * 0x40;
+    case 3: {
+        MILO_WARN("don't know size as XMA");
+        return mNumSamples / 5;
+    }
+    case 4:
+    case 5: {
+        unsigned int tmp = mNumSamples + 0x3FF;
+        return ((int)(tmp >> 10) + (tmp < 0 && (tmp & 0x3FF) != 0)) * mNumChannels * 0xc0;
+    }
+    case 6: {
+        int tmp = mNumChannels * mNumSamples * 2;
+        return 0x60 - (int)((float)tmp * -0.29411763f);
+    }
+    default:
+        return 0;
     }
 }
 

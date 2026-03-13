@@ -52,6 +52,14 @@
 #ifdef HX_NATIVE
 #include <cstdlib>
 #include <cstdio>
+static inline bool DebugWorldLoad() {
+    static bool checked = false, val = false;
+    if (!checked) {
+        val = std::getenv("MILO_DEBUG_WORLD_LOAD") != nullptr;
+        checked = true;
+    }
+    return val;
+}
 #endif
 GamePanel *TheGamePanel = nullptr;
 LoopVizCallback gLoopVizCallback;

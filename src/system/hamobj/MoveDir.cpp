@@ -24,6 +24,7 @@
 #include "hamobj/HamGameData.h"
 #include "hamobj/HamMove.h"
 #include "hamobj/HamPhraseMeter.h"
+#include "hamobj/MoveMgr.h"
 #include "hamobj/HamPlayerData.h"
 #include "hamobj/MoveDetector.h"
 #include "hamobj/PracticeSection.h"
@@ -998,6 +999,82 @@ void MoveDir::LoadScoring(const DataArray *cfg) {
     MILO_ASSERT(!sFilterVersions.empty(), 0x2E2);
 }
 
+void MoveDir::FinalPoseStateMachine() {
+    float songBeat = (float)(TheTaskMgr.CurrentMeasure() * 4);
+    float beatInMeasure = TheTaskMgr.TotalBeat() - songBeat;
+    for (int i = 0; i < 2; i++) {
+        int other_player = 1 - i;
+        MovePlayerData &mpd = mMovePlayerData[i];
+        HamMove *move = mpd.mCurMove;
+        HamPlayerData *playerData = TheGameData->Player(i);
+        if (playerData->IsPlaying() && !InGracePeriod(i) && move
+            && move->IsFinalPose()) {
+            const FilterVersion *fv = move->FilterVer();
+            if (move->IsFinalPose() && mpd.mFeedbackMode != 2) {
+                float frac;
+                if (TheMoveMgr->HasRoutine()) {
+                    frac = mAsyncDetector->MoveRatingFrac(
+                        i, (MoveAsyncDetector::RatingBar)0, move
+                    );
+                } else {
+                    frac = DetectFrac(i, -1);
+                }
+                const std::vector<MoveFrame> &moveFrames =
+                    ((const HamMove *)move)->GetMoveFrames();
+                if (moveFrames.begin() != moveFrames.end()) {
+                    float lastFrameBeat = (moveFrames.end() - 1)->GetBeat();
+                    if (mpd.mFeedbackMode == 0 && lastFrameBeat <= beatInMeasure) {
+                        MILO_ASSERT(
+                            (0) <= (other_player) && (other_player) < (2), 0x4ce
+                        );
+                        if (mMovePlayerData[other_player].mFeedbackMode == 0) {
+                            static Message msg("final_pose_photo");
+                            TheHamProvider->Export(msg, true);
+                        }
+                        mpd.mFeedbackMode = 1;
+                    }
+                    if (mpd.mFeedbackMode == 1) {
+                        float measureBeat =
+                            (float)(TheTaskMgr.CurrentMeasure() * 4);
+                        float lastFrameSeconds =
+                            BeatToSeconds(lastFrameBeat + measureBeat);
+                        float errorDist = ScaleFullErrorDist(fv->mScaleOp);
+                        float detectEndSeconds =
+                            errorDist + sLatencySeconds + lastFrameSeconds;
+                        float detectEndBeat = SecondsToBeat(detectEndSeconds);
+                        if ((float)(detectEndBeat - measureBeat) >= 4.0f) {
+                            MILO_NOTIFY_ONCE(
+                                "%s last frame is too late, end pose won't be "
+                                "scored correctly",
+                                PathName(move)
+                            );
+                        }
+                        if (detectEndSeconds <= unk30c
+                            || beatInMeasure
+                                   >= (float)(4.0f
+                                              - HamMove::sMinFrameDistBeats)) {
+                            static Symbol final_pose_rating(
+                                "final_pose_rating"
+                            );
+                            const std::vector<float> *ratings =
+                                move->RatingOverride();
+                            DataNode ratingNode(
+                                DetectFracToRating(frac, ratings, nullptr)
+                            );
+                            HamPlayerData *pd =
+                                TheGameData->Player(i);
+                            pd->Provider()->SetProperty(
+                                final_pose_rating, ratingNode
+                            );
+                            mpd.mFeedbackMode = 2;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 void MoveDir::ReloadScoring() {
     MILO_ASSERT(TheLoadMgr.EditMode(), 0x1268);
     DataArray *cfg = SystemConfig("scoring");
@@ -1025,6 +1102,115 @@ void MoveDir::ResetDetection() {
             }
         }
         SetupSongRecordClip();
+    }
+}
+
+void MoveDir::ResetDetectFrames(int player, Difficulty diff) {
+    MILO_ASSERT((0) <= (player) && (player) < (2), 0x678);
+    MILO_ASSERT((0) <= (diff) && (diff) < (kNumDifficulties), 0x679);
+    MILO_ASSERT(TheHamDirector, 0x67a);
+    SetupSongRecordClip();
+    if (mFilterQueue) {
+        mFilterQueue->CancelJob();
+    }
+    MovePlayerData &mpd = mMovePlayerData[player];
+    mDebugLoopMarker = -1.0f;
+    mpd.mFeedbackMode = 0;
+    if (mpd.mDetectFrames.begin() != mpd.mDetectFrames.end()) {
+        mpd.mDetectFrames.erase(mpd.mDetectFrames.begin(), mpd.mDetectFrames.end());
+    }
+    if (diff != kDifficultyBeginner) {
+        DancerSequence *seq;
+        if (TheHamDirector->InPracticeMode()) {
+            seq = SkillsSequence(
+                diff, TheHamDirector->mPracticeStart, TheHamDirector->mPracticeEnd
+            );
+        } else {
+            seq = PerformanceSequence(diff);
+        }
+        if (!seq) {
+            const char *mode;
+            if (TheHamDirector->InPracticeMode()) {
+                mode = "skills";
+            } else {
+                mode = "perform";
+            }
+            MILO_NOTIFY(
+                "%s: could not find %s DancerSequence (%s)",
+                PathName(this), DifficultyToSym(diff), mode
+            );
+        } else {
+            const std::vector<DancerFrame> &dancerFrames = seq->GetDancerFrames();
+            const DancerFrame *dfIt = &*dancerFrames.begin();
+            if (dfIt == &*dancerFrames.end()) {
+                TheDebug << MakeString(
+                    "%s %s: could not reset detect frames, no DancerFrames\n",
+                    PathName(this), DifficultyToSym(diff)
+                );
+            } else {
+                unsigned int prevCapacity = mpd.mMoveKeys.capacity();
+                TheHamDirector->MoveKeys(diff, this, mpd.mMoveKeys);
+                unsigned int newSize = mpd.mMoveKeys.size();
+                if (newSize > prevCapacity) {
+                    MILO_NOTIFY(
+                        "%s move keys size (%i) above capacity (%i)",
+                        PathName(this), newSize, prevCapacity
+                    );
+                }
+                unsigned int detectCapacity = mpd.mDetectFrames.capacity();
+                for (int moveKeyIdx = 0;
+                     moveKeyIdx < (int)mpd.mMoveKeys.size();
+                     moveKeyIdx++) {
+                    if (dfIt->mMoveIdx == moveKeyIdx) {
+                        HamMove *curMove = mpd.mMoveKeys[moveKeyIdx].move;
+                        const std::vector<MoveFrame> &moveFrames =
+                            ((const HamMove *)curMove)->GetMoveFrames();
+                        MoveMirrored mirrored = curMove->Mirrored();
+                        unsigned int numMoveFrames = (unsigned int)moveFrames.size();
+                        if (numMoveFrames != 0) {
+                            for (unsigned int j = 0;
+                                 j < (unsigned int)moveFrames.size();
+                                 j++) {
+                                if (dfIt->mMoveFrameIdx == (int)j) {
+                                    DetectFrame df;
+                                    float secs =
+                                        moveFrames[j].QuantizedSeconds(
+                                            mpd.mMoveKeys[moveKeyIdx].beat
+                                        );
+                                    df.Reset(
+                                        mFilterVer, secs, &moveFrames[j],
+                                        dfIt, mirrored
+                                    );
+                                    mpd.mDetectFrames.push_back(df);
+                                    dfIt++;
+                                    if (dfIt == &*dancerFrames.end()) {
+                                        unsigned int detectSize =
+                                            mpd.mDetectFrames.size();
+                                        if (detectSize > detectCapacity) {
+                                            MILO_NOTIFY(
+                                                "%s detect frames size (%i) "
+                                                "above capacity (%i)",
+                                                PathName(this), detectSize,
+                                                detectCapacity
+                                            );
+                                        }
+                                        return;
+                                    }
+                                } else {
+                                    TheDebug << MakeString(
+                                        "%s %s: invalid DancerFrame at move "
+                                        "%i frame %i\n",
+                                        PathName(this),
+                                        DifficultyToSym(diff), moveKeyIdx,
+                                        dfIt->mMoveFrameIdx
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -1367,6 +1553,32 @@ void MoveDir::DrawShowing() {
         } else {
             SkeletonDir::DrawShowing();
         }
+    }
+}
+
+namespace {
+    // Global data for beat line rendering - exact layout from assembly
+    struct BeatLineData {
+        float minValue;
+        float maxValue;
+        float rangeOffset;
+        float rangeScale;
+    };
+
+    extern const BeatLineData gBeatLineData = { 0.0f, 1.0f, 0.0f, 1.0f };
+    extern const float gFourPointZero = 4.0f;
+
+    void DrawBeatLine(float x, float y, float z, const Hmx::Color& color) {
+        float sum = x + y;
+        float numerator = gBeatLineData.rangeOffset + z;
+        float denominator = gBeatLineData.rangeScale + gBeatLineData.rangeOffset + gFourPointZero;
+        float t = numerator / denominator;
+        float linePos = t * (gBeatLineData.maxValue - gBeatLineData.minValue) + gBeatLineData.minValue;
+
+        Vector2 startPos(x, linePos);
+        Vector2 endPos(linePos, sum);
+
+        UtilDrawLine(startPos, endPos, color);
     }
 }
 

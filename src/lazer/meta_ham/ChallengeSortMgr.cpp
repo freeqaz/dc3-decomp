@@ -212,9 +212,53 @@ bool ChallengeSortMgr::SelectionIs(Symbol selection) {
 int ChallengeSortMgr::GetTargetChallengeScore(int i) { return 1000; }
 
 // TODO: implement
-#ifdef HX_NATIVE
-const char *ChallengeSortMgr::GetBestChallengeScoreGamertag(int) { return ""; }
+const char *ChallengeSortMgr::GetBestChallengeScoreGamertag(int songID) {
+    ChallengeRecord* records = mChallengeRecords.data();
+    void* recordsEnd = (void*)((uintptr_t)records + mChallengeRecords.size() * sizeof(ChallengeRecord));
+
+    int bestScore = -1;
+    int bestIndex = -1;
+
+    int recordCount = ((uintptr_t)recordsEnd - (uintptr_t)records) / sizeof(ChallengeRecord);
+
+    if (recordCount > 0) {
+        for (int i = 0; i < recordCount; i++) {
+            ChallengeRow* row = &records[i].GetChallengeRow();
+
+            if (row->mSongID == songID && row->mScore > bestScore) {
+                bestScore = row->mScore;
+                bestIndex = i;
+            }
+        }
+
+        if (bestIndex != -1) {
+            ChallengeRow* bestRow = &records[bestIndex].GetChallengeRow();
+            int type = bestRow->mType;
+
+            if ((type < 0) || (type > 2)) {
+                if ((type < 3) || (type > 5)) {
+                    return "HARMONIX";
+                }
+            }
+
+            return records[bestIndex].GetChallengeRow().mGamertag.c_str();
+        }
+    }
+
+    return gNullStr;
+}
+
 int ChallengeSortMgr::GetChallengerXp(int) { return 0; }
-const char *ChallengeSortMgr::GetChallengerGamertag(int) { return ""; }
+
+const char *ChallengeSortMgr::GetChallengerGamertag(int i) {
+    if (IsIndexHeader(i)) {
+        int songID = GetSongID(i);
+        return GetBestChallengeScoreGamertag(songID);
+    } else {
+        NavListNode* listNode = mSorts[mCurrentSortIdx]->GetList()[i];
+        ChallengeSortNode* node = static_cast<ChallengeSortNode*>(listNode);
+        return node->GetChallengerGamertag();
+    }
+}
+
 void ChallengeSortMgr::OnEnter() {}
-#endif

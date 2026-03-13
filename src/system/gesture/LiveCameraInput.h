@@ -97,6 +97,8 @@ public:
     static void NuiAudioDataCallback(NUIAUDIO_RESULTS *);
     static LiveCameraInput *sInstance;
 
+    friend class FreestyleMoveRecorder;
+
 protected:
     LiveCameraInput();
     virtual ~LiveCameraInput();

@@ -47,15 +47,24 @@ void StreamReceiver::Stop() {
 }
 
 u64 StreamReceiver::GetBytesPlayed() {
-#ifdef HX_NATIVE
-    // TODO: This is a hack — GetBytesPlayed() is non-virtual so we static_cast
-    // to the native subclass. Once the audio subsystem is properly wired up,
-    // this should be revisited (make virtual, or track in base class).
-    auto *native = static_cast<StreamReceiverNative *>(this);
-    return native->GetTotalBytesPlayed();
-#else
-    return 0;
-#endif
+    if (mState == kInit) {
+        return 0;
+    }
+
+    u64 numBuffers = (u64)mNumBuffers;
+    u64 buffersSent = (u64)mBuffersSent;
+    u64 bufferOffset = buffersSent << 0xe;  // * 0x4000
+
+    // Calculate total bytes played
+    u64 quotient = buffersSent / numBuffers;
+    u64 totalPlayed = quotient * numBuffers * 0x4000 + (u64)mLastPlayCursor;
+
+    // Wrap around if needed
+    while (bufferOffset <= totalPlayed) {
+        totalPlayed += numBuffers * -0x4000;
+    }
+
+    return totalPlayed;
 }
 
 void StreamReceiver::WriteData(const void *data, int size) {

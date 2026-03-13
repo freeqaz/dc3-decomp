@@ -271,15 +271,72 @@ void SpotlightDrawer::RemoveFromLists(Spotlight *spot) {
 }
 
 void SpotlightDrawer::DrawLight(Spotlight *spot) {
-#ifdef HX_NATIVE
-    // Native spotlight batching is still incomplete. Skip the deferred
-    // spotlight pass for now so venue/world bring-up can progress.
-    (void)spot;
-    return;
-#else
-    RndMesh *mesh;
-    MILO_ASSERT(mesh, 0x0);
-#endif
+    if (!spot)
+        return;
+
+    const Hmx::Color& color = spot->Color();
+    float intensity = spot->Intensity();
+
+    float baseR = color.red * intensity * 255.0f;
+    float baseG = color.green * intensity * 255.0f;
+    float baseB = color.blue * intensity * 255.0f;
+
+    uint packedColor = ((uint)baseB & 0xff) << 16 | ((uint)baseG & 0xff) << 8 | (uint)baseR & 0xff;
+
+    bool shouldProcess = (baseR > 5) || ((baseG > 3) || (baseB > 7));
+
+    if (shouldProcess && spot->GetTarget()) {
+        GfxMode gfxMode = GetGfxMode();
+
+        if (gfxMode == kOldGfx && spot->TargetShadow()) {
+            sShadowSpots.push_back(spot);
+        }
+
+        SpotlightEntry entry;
+        entry.mColorKey = packedColor;
+        entry.mSpotlight = spot;
+        sLights.push_back(entry);
+
+        if (sHaveAdditionals || spot->GetAdditionalObjects().size() > 0) {
+            sHaveAdditionals = true;
+        }
+
+        if (sHaveFlares && (!spot->GetFlare() || spot->mFlareOffset == 0)) {
+            sHaveFlares = false;
+        } else {
+            sHaveFlares = true;
+        }
+
+        if (sHaveLenses || spot->LensMesh()) {
+            sHaveLenses = true;
+        }
+
+        if (sNeedBoxMap == (int)TheRnd.GetFrameID()) {
+            static bool boxMapLogged = false;
+            if (!boxMapLogged) {
+                boxMapLogged = true;
+                const char* objName = PathName(spot);
+                MILO_WARN("%s drawn after SpotlightEnder", objName);
+            }
+        }
+
+        sNeedDraw = true;
+    }
+
+    RndMesh* lightCanMesh = spot->mLightCanMesh;
+    if (lightCanMesh && !spot->mLightCanSort) {
+        const Transform& xfm = spot->WorldXfm();
+        float nearDist = spot->mLightCanOffset;
+        if (nearDist <= 0.0f) {
+            SpotMeshEntry meshEntry;
+            meshEntry.mCanMesh = lightCanMesh;
+            meshEntry.mEnvMesh = nullptr;
+            meshEntry.mSpotlight = spot;
+            meshEntry.mTransform = xfm;
+            sCans.push_back(meshEntry);
+            sNeedDraw = true;
+        }
+    }
 }
 
 bool SpotlightDrawer::DrawNGSpotlights() {

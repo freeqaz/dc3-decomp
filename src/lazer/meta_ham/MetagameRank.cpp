@@ -876,11 +876,63 @@ void MetagameRank::AwardPointsForTask(Symbol task) {
     }
 }
 
+int MetagameRank::SaveSize(int saveVersion) {
+    int version = saveVersion;
+    int fieldCount = 4;
+
+    if (version > 0x45) {
+        fieldCount = 5;
+    }
+    if (version > 0x4e) {
+        fieldCount += 1;
+    }
+    int size = fieldCount + 0x80;
+    if (size > 0x3d) {
+        if (size <= 0x5a) {
+            size = fieldCount + 0x84;
+            goto checkSize;
+        }
+        return size + 8;
+    }
+checkSize:
+    if (size > 0x5a) {
+        return size + 8;
+    }
+    return size;
+}
+
 // TODO: implement
 #ifdef HX_NATIVE
-int MetagameRank::SaveSize(int) { return 0; }
 int MetagameRank::GetRankInTier() const { return 0; }
-int MetagameRank::GetTier() const { return 0; }
+int MetagameRank::GetTier() const {
+    if (mRankNumber == 0) {
+        return 0;
+    }
+
+    extern std::vector<std::vector<Unlockable*>> gTiers;
+    uint tierCount = gTiers.size();
+    if (tierCount == 0) {
+        return 0;
+    }
+
+    uint currentTier = 0;
+    uint rankRemaining = mRankNumber;
+
+    for (uint i = 0; i < tierCount; i++) {
+        uint rankCount = gTiers[i].size();
+        if (rankCount == 0) {
+            continue;
+        }
+
+        rankRemaining -= 1;
+        if (rankRemaining == 0) {
+            return currentTier + 1;
+        }
+        currentTier += 1;
+    }
+
+    return tierCount;
+}
 void MetagameRank::AwardForRankUp(int) {}
 int MetagameRank::ComputeRankNumber(bool) { return 0; }
 #endif

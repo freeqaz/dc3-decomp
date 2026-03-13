@@ -142,6 +142,27 @@ Goal: Character with proper materials, crowd, animated venue, gameplay HUD textu
 - [ ] Song.anim driving (remaining DTA crashes on missing game objects still need investigation)
 - [ ] Character dance animation (clips present but SongAnimation() returns -1)
 
+### 4.5 Loading State Machines — Analysis Complete (Session 60)
+
+Ghidra DB analysis (22,397 decompiled functions) confirms all loading state setters/checkers are **fully decomped at 100%**. The loading pipeline itself is not the blocker — upstream subsystem init is.
+
+**GamePanel::PollForLoading** (5 states, `src/lazer/game/GamePanel.cpp:908-954`):
+- State 0: Check `TheGame->IsLoaded()`
+- State 1: Wait for `HamDirector::OnFileLoaded` → merge pipeline
+- State 2: Wait for `HamDirector::IsWorldLoaded`
+- State 3: Call `HamDirector::Initialize` + `HudEntered`
+- State 4: Done — `IsLoaded()` returns true
+
+**Game::IsLoaded** (4 states, `src/lazer/game/Game.cpp:712-775`):
+- State 0: `HamMaster::IsLoaded()` + world loaded + `PostLoad()`
+- State 1: Move merger (requires `TheMoveMgr` — **null on native**)
+- State 2: Audio ready (requires audio subsystem — **not init'd on native**)
+- State 3: Done
+
+**MetaPanel::IsLoaded** — has game_screen shortcut: if bottom screen is `game_screen`, returns `UIPanel::IsLoaded()` immediately (bypasses TheMetaMusic check). Our source already has `!TheMetaMusic` null guard.
+
+**Conclusion**: The loading pipeline works end-to-end on native via null guards and state skips. The real gaps are the **null-on-native subsystems** (see priority list below) and **stubbed functions** (see STUB_BURNDOWN.md).
+
 ## Phase 5: DTA/Content System
 Goal: Remove C++ workarounds and let real DTA screen-flow scripts drive the native port.
 
@@ -156,21 +177,60 @@ Goal: Remove C++ workarounds and let real DTA screen-flow scripts drive the nati
 - [x] **Remove multiuser auto-skip** (Phase 4): DTA `enter` handler drives game start naturally. IsAnimating() bypass in HamNavList.cpp enables button input.
 - [ ] Content system integration for list population
 
-## Null-on-Native Subsystems (TODO: Implement stubs or init)
+## Null-on-Native Subsystems — Prioritized (Updated Session 60)
 
-These globals are null on native because their init is suppressed with `#ifndef HX_NATIVE`. Every use site needs a null-check guard. The fix is to implement proper native init/stubs so the guards become unnecessary.
+These globals are null on native because their init is suppressed with `#ifndef HX_NATIVE`. Prioritized by impact on gameplay pipeline.
 
-| Global | Init suppressed at | Null-check guard locations | Why null |
-|--------|-------------------|---------------------------|----------|
-| `TheNetCacheMgr` | `System.cpp:493` (`NetCacheMgrInit()`) | System.cpp:228, StorePanel.cpp:60, MainMenuPanel.cpp:72/146/165/562 | Xbox Live cache download |
-| `TheGameMode` | `GameMode.cpp:26` (DTA-driven init) | GameMode.cpp:242 | DTA scripts drive mode setup |
-| `TheMoveMgr` | Not initialized on native | Game.cpp:556/677 | Move/gesture graph |
-| `TheCampaign` | `MetaPanel.cpp:95` (ctor skipped) | CampaignSongSelectPanel.cpp:137 | Campaign system |
-| `TheMetaMusic` | `MetaPanel.cpp:95` (ctor skipped) | MetaPanel.cpp:280/293/307/340 | Shell music system |
-| `TheHamProvider` | Factory stub in App.cpp | HamNavList.cpp:528/738/794/1092/1097/1312 | UI nav provider |
-| `TheSkeletonIdentifier` | Kinect subsystem not init'd | HamUI.cpp:348 | Kinect skeleton tracking |
-| `ThePassiveMessenger` | Kinect subsystem not init'd | HamUI.cpp:348 | Kinect gesture messages |
-| `TheCacheMgr` | Defensive (may be init'd) | System.cpp:227 | Cache manager |
+### Priority A — Blocks Game::IsLoaded State Machine
+
+| Global | Init suppressed at | Impact | Action |
+|--------|-------------------|--------|--------|
+| `TheMoveMgr` | Not initialized on native | Game::IsLoaded state 1 requires move merger. Currently skipped via null guard at `Game.cpp:556/677` | Implement lightweight native stub (no Kinect, just move routine generation) |
+| `TheGameMode` | `GameMode.cpp:26` (DTA-driven init) | Controls game mode properties (difficulty, scoring rules). Null guard at `GameMode.cpp:242` | Init with hardcoded defaults for `perform` mode |
+
+### Priority B — Blocks Content & UI Population
+
+| Global | Init suppressed at | Impact | Action |
+|--------|-------------------|--------|--------|
+| `TheHamProvider` | Factory stub in App.cpp | Nav list content (song lists, mode lists). 6 null guards in `HamNavList.cpp` | Current PropertyEventProvider stub works; full impl needs content system |
+| `TheCampaign` | `MetaPanel.cpp:95` (ctor skipped) | Campaign song select. Guard at `CampaignSongSelectPanel.cpp:137` | Low priority — perform mode doesn't need campaign |
+| `TheMetaMusic` | `MetaPanel.cpp:95` (ctor skipped) | Shell music. Guards at `MetaPanel.cpp:280/293/307/340`. MetaPanel::IsLoaded has game_screen shortcut that bypasses this | Low priority — audio Phase 6 |
+
+### Priority C — Platform/Kinect (Not Needed)
+
+| Global | Init suppressed at | Impact | Action |
+|--------|-------------------|--------|--------|
+| `TheNetCacheMgr` | `System.cpp:493` | Xbox Live DLC cache. Guards at System.cpp, StorePanel, MainMenuPanel | Not applicable to native |
+| `TheSkeletonIdentifier` | Kinect subsystem | Kinect player tracking. Guard at `HamUI.cpp:348` | Not applicable (controller mode) |
+| `ThePassiveMessenger` | Kinect subsystem | Kinect gesture messages. Guard at `HamUI.cpp:348` | Not applicable (controller mode) |
+| `TheCacheMgr` | Defensive | Cache manager. Guard at `System.cpp:227` | May already be init'd |
+
+## Key DTA Config Files (Ghidra String Literal Search)
+
+These `.dta`/`.dtb` files are loaded during boot and drive game configuration:
+
+| File | Purpose | Loaded by |
+|------|---------|-----------|
+| `ham_preinit_keep.dta` | Pre-init persistent objects | HamUI early boot |
+| `ham_keep.dta` | Persistent UI objects (screens, providers) | HamUI init |
+| `flow.dtb` | Flow graph definitions (screen transitions, logic) | FlowDir |
+| `loading_screens.dtb` | Loading screen configuration | Loading system |
+| `gameconfig_macros.dtb` | Game config macros (difficulty, scoring) | GameConfig |
+| `system.dtb` | System-level config (paths, memory, etc.) | SystemInit |
+
+## Key DTA Handlers — HamDirector
+
+HamDirector (`src/system/hamobj/HamDirector.cpp:137-202`) exposes ~40+ DTA handlers via `BEGIN_HANDLERS`. Key ones for the native loading pipeline:
+
+| Handler | What it does | Native status |
+|---------|-------------|---------------|
+| `on_file_loaded` | Callback after .milo file load completes | Works (99.99% AT_LIMIT) |
+| `on_file_merged` | Callback after FileMerger merges dirs | Works |
+| `is_world_loaded` | Checks if venue world dir is ready | Works |
+| `initialize` | Full director initialization after loading | Works |
+| `hud_entered` | HUD panel entered callback | Works |
+| `load_song` | Triggers song asset loading | Works |
+| `remap_song_anim_to_tempo_map` | Maps song.anim to tempo | **STUB** (Tier 1) |
 
 ## Phase 6: Audio (LOW PRIORITY)
 - [ ] UI click/select/scroll sounds via miniaudio backend

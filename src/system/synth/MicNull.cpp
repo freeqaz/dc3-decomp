@@ -20,4 +20,16 @@ MicNull::MicNull() {
     }
 }
 
-short *MicNull::GetContinuousBuf(int &) { return nullptr; }
+short *MicNull::GetContinuousBuf(int &size) {
+    mTimer.Restart();
+    size = GetSampleRate() * mTimer.GetLastMs() / 1000;
+    if (size > 10000) {
+        size = 10000;
+    }
+    int padding = size % 8;
+    if (padding != 0) {
+        size += padding;
+    }
+    memcpy(mContinuousBuf, mBuf, size * 2);
+    return mContinuousBuf;
+}

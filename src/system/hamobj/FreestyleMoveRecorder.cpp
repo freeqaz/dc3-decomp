@@ -1,14 +1,19 @@
 #include "hamobj/FreestyleMoveRecorder.h"
 #include "gesture/BaseSkeleton.h"
 #include "gesture/GestureMgr.h"
+#include "gesture/SkeletonUpdate.h"
+#include "gesture/SkeletonViz.h"
 #include "hamobj/DancerSkeleton.h"
 #include "hamobj/FreestyleMove.h"
+#include "math/Color.h"
+#include "math/Geo.h"
 #include "math/Vec.h"
 #include "obj/Data.h"
 #include "obj/DataFunc.h"
 #include "obj/Object.h"
 #include "obj/Task.h"
 #include "os/DateTime.h"
+#include "rndobj/Rnd.h"
 #include "rndobj/Tex.h"
 #include "utl/FileStream.h"
 #include "utl/Symbol.h"
@@ -16,6 +21,11 @@
 
 DancerSkeleton sLastComparedDancerSkel;
 static int sLastBeatMod;
+static SkeletonViz *sVizRecorded = nullptr;
+static SkeletonViz *sVizLive = nullptr;
+static float sDebugRectX = 0.1f;
+static float sDebugRectY = 0.3f;
+static float sDebugRectW = 0.3f;
 
 FreestyleMoveRecorder::FreestyleMoveRecorder()
     : mPlaybackSpeed(0), mClipFrames(0), mClipFrameCount(0), mRecordingFrames(0), mLastFrameIndex(-1), mMaxFrames(60), mRecordPos(-1), mPlaybackPos(-1),
@@ -97,6 +107,208 @@ void FreestyleMoveRecorder::UpdateFakeSkeleton() {
         mPlaybackSpeed = 0;
     }
     sLastBeatMod = beatMod;
+}
+
+void FreestyleMoveRecorder::Poll() {
+    int recordFrame;
+    if (mRecordPos >= 0.0f) {
+        recordFrame = (int)(mDefaultTimeout * mRecordPos) - 2;
+    } else {
+        recordFrame = -1;
+    }
+
+    int playbackFrame;
+    if (mPlaybackPos >= 0.0f) {
+        playbackFrame = (int)(mDefaultTimeout * mPlaybackPos);
+    } else {
+        playbackFrame = -1;
+    }
+
+    int maxFrame = mMaxFrames - 1;
+    if (maxFrame < recordFrame) {
+        recordFrame = maxFrame;
+    }
+
+    if (recordFrame >= 0 && mLastFrameIndex != mCurrentTakeIndex) {
+        LiveCameraInput *camInput = TheGestureMgr->GetLiveCameraInput();
+        if (!camInput->mDepthPolled) {
+            camInput->PollNewStream(LiveCameraInput::kBufferDepth);
+        }
+        RndTex *streamTex = camInput->GetStreamTex(LiveCameraInput::kBufferDepth);
+        if (streamTex) {
+            void *texels = nullptr;
+            char *depthDst =
+                (char *)mTakes[mCurrentTakeIndex].mDepthFrames + recordFrame * 0x12c0;
+            streamTex->TexelsLock(texels);
+            if (texels) {
+                int playerIdx = mSkeletonIndex;
+                mTakes[mCurrentTakeIndex].unkc = playerIdx;
+                unsigned short *src = (unsigned short *)texels;
+                char *dst = depthDst - 0x50;
+                int col = 0;
+                do {
+                    for (int row = 0x3c; row != 0; row--) {
+                        int pixelPlayer = (*src & 7) - 1;
+                        unsigned char depth;
+                        if (pixelPlayer != playerIdx) {
+                            if (playerIdx >= 0) {
+                                depth = (unsigned char)((*src >> 7) & 0xFF);
+                            } else {
+                                depth = 0;
+                            }
+                        } else {
+                            depth = (unsigned char)((*src >> 7) & 0xFF);
+                        }
+                        src += 0x600;
+                        *(unsigned char *)(dst += 0x50) = depth;
+                    }
+                    col++;
+                    texels = (char *)texels + 8;
+                    src = (unsigned short *)texels;
+                } while (col < 0x50);
+            }
+            streamTex->TexelsUnlock();
+        }
+
+        if (recordFrame == 0) {
+            mTakes[mCurrentTakeIndex].CalcCentering(0);
+        }
+
+        int nextFrame = recordFrame + 1;
+        if (nextFrame < mPlaybackIndex || mPlaybackIndex == -1) {
+            if (!mRecording) {
+                mTakes[mCurrentTakeIndex].mNumFrames = nextFrame;
+                float beat = mRecordPos * 1000.0f;
+                BaseSkeleton *skel = GetLiveSkeleton();
+                mTakes[mCurrentTakeIndex].RecordSkeletonFrame(skel, recordFrame, beat);
+            } else {
+                BaseSkeleton *skel = GetLiveSkeleton();
+                DancerSkeleton tempSkel;
+                tempSkel.Init();
+                float beat = mRecordPos * 1000.0f;
+                if (skel && skel->IsTracked()) {
+                    tempSkel.Set(*skel);
+                }
+                mFrameBuffer[recordFrame].skeleton = tempSkel;
+                mFrameBuffer[recordFrame].mBeat = beat;
+                mDancerTakeFrameCount = nextFrame;
+            }
+
+            int frameIdx = mFrameIndex;
+            if (mFrameIndex < nextFrame) {
+                frameIdx = nextFrame;
+            }
+            mFrameIndex = frameIdx;
+        } else {
+            mRecording = false;
+            mPlaybackIndex = -1;
+            mRecordPos = -1.0f;
+        }
+    }
+
+    if (playbackFrame >= 0
+        && (playbackFrame < mTakes[mCurrentTakeIndex].mNumFrames || mPlaybackActive)) {
+        void *texels;
+        mPlayerPalette->TexelsLock(texels);
+
+        int prevFrame = playbackFrame - 1;
+        int lastFrame = mFrameIndex - 1;
+        if (prevFrame <= lastFrame) {
+            lastFrame = prevFrame;
+            if (prevFrame < 0) {
+                lastFrame = 0;
+            }
+        }
+
+        int takeIdx = mCurrentTakeIndex;
+        char *depthBase = (char *)mTakes[takeIdx].mDepthFrames;
+        int centerX = mTakes[takeIdx].unkc << 2;
+        int unkVal = mTakes[takeIdx].unk14;
+        int minDepth = unkVal - 0x7a;
+
+        if (mPlaybackActive) {
+            centerX = 0;
+            minDepth = 0;
+        }
+
+        int pixelX = 0;
+        unsigned short *rowPtr = (unsigned short *)((char *)texels - 0x300);
+        int unkColor = mTakes[takeIdx].unkc;
+        for (int col = 0; col < 0x140; col++) {
+            int x = pixelX + centerX;
+            unsigned int row = 0;
+            unsigned short *ptr = rowPtr;
+            for (int r = 0xf0; r != 0; r--) {
+                unsigned int depthVal = 0;
+                if ((int)x >= 0 && (int)x < 0x140) {
+                    int depthY = ((int)row >> 2) + ((int)row < 0 && (row & 3) != 0 ? 1 : 0);
+                    int depthX = ((int)x >> 2) + ((int)x < 0 && (x & 3) != 0 ? 1 : 0);
+                    depthVal = (unsigned int)*(unsigned char *)(
+                        depthBase + lastFrame * 0x12c0 + depthY * 0x50 + depthX
+                    );
+                }
+                row++;
+                ptr += 0x180;
+                *ptr = (unsigned short)(((depthVal - minDepth) & 0xffffffff) << 7)
+                    | (unsigned short)(-(unsigned short)(depthVal != 0)
+                                       & ((short)unkColor + 1));
+            }
+            pixelX++;
+            rowPtr = (unsigned short *)((char *)rowPtr + 2);
+        }
+
+        mPlayerPalette->TexelsUnlock();
+    }
+
+    if (0.0f <= mRecordPos) {
+        mRecordPos += TheTaskMgr.DeltaUISeconds();
+    }
+    if (0.0f <= mPlaybackPos) {
+        mPlaybackPos += TheTaskMgr.DeltaUISeconds();
+    }
+    UpdateFakeSkeleton();
+}
+
+void FreestyleMoveRecorder::DrawDebug() {
+    if (DataVariable("bam_debug").Int()) {
+        if (sVizRecorded == nullptr) {
+            sVizRecorded = Hmx::Object::New<SkeletonViz>();
+            sVizRecorded->Init();
+            sVizLive = Hmx::Object::New<SkeletonViz>();
+            sVizLive->Init();
+        }
+
+        SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
+
+        std::vector<SkeletonCallback *> callbacks;
+        callbacks.push_back(this);
+
+        float screenScale = sDebugRectW / TheRnd.YRatio();
+
+        Hmx::Rect rect1(sDebugRectX, sDebugRectY, sDebugRectW, screenScale);
+        Hmx::Color bgColor1(0, 0, 0, 0.4f);
+        TheRnd.DrawRectScreen(rect1, bgColor1, nullptr, nullptr, nullptr);
+
+        sVizRecorded->SetUsePhysicalCam(true);
+        sVizRecorded->SetPhysicalCamScreenRect(rect1);
+        sVizRecorded->Visualize(
+            *handle.GetCameraInput(), sLastComparedDancerSkel, &callbacks, false
+        );
+
+        float screenScale2 = sDebugRectW / TheRnd.YRatio();
+        Hmx::Rect rect2(sDebugRectX + sDebugRectW + 0.1f, sDebugRectY, sDebugRectW, screenScale2);
+        Hmx::Color bgColor2(0, 0, 0, 0.4f);
+        TheRnd.DrawRectScreen(rect2, bgColor2, nullptr, nullptr, nullptr);
+
+        sVizLive->SetUsePhysicalCam(true);
+        sVizLive->SetPhysicalCamScreenRect(rect2);
+        BaseSkeleton *liveSkel = GetLiveSkeleton();
+        if (liveSkel) {
+            sVizLive->Visualize(
+                *handle.GetCameraInput(), *liveSkel, &callbacks, false
+            );
+        }
+    }
 }
 
 void FreestyleMoveRecorder::StartRecording() {

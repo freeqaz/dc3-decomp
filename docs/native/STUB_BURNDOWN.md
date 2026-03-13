@@ -106,6 +106,29 @@ Party mode, challenges, profiles, Xbox Live, save/load, memory management. These
 
 **Total: ~157 stubs. Unblocks: secondary modes, platform features, polish.**
 
+### Loading Pipeline Analysis (Session 60 — Ghidra DB)
+
+Searched 22,397 Ghidra decompilations for `mReady`/`mLoaded` references and loading state machines. **Key finding: all loading state setter functions are fully decomped at 100%.** The loading pipeline is NOT the blocker — the blockers are null-on-native subsystems and stubbed functions listed in the tiers above.
+
+**Loading state machines (all COMPLETE in decomp):**
+- `GamePanel::PollForLoading` — 5-state machine (GamePanel.cpp:908-954)
+- `Game::IsLoaded` — 4-state machine (Game.cpp:712-775), state 1 needs TheMoveMgr, state 2 needs audio
+- `MetaPanel::IsLoaded` — delegates to UIPanel + TheMetaMusic. Has game_screen shortcut (bypasses MetaMusic)
+- `UIPanel::PollForLoading` — base panel loading (mLoaded field)
+
+**What `mLoaded` touches (only 5 Ghidra decompilations):**
+- `UIPanel::PollForLoading` — sets mLoaded when resources finish
+- `MetaPanel` ctor — initializes mLoaded
+- `StorePanel` ctor — initializes mLoaded
+- `OptionsPanel::Poll` (×2) — checks mLoaded
+
+**DTA config files loaded at boot** (from Ghidra string literal search):
+- `ham_preinit_keep.dta`, `ham_keep.dta` — UI persistent objects
+- `flow.dtb` — flow graph definitions
+- `loading_screens.dtb`, `gameconfig_macros.dtb`, `system.dtb` — game config
+
+**PartyModeMgr::Handle** has 20+ DTA handlers (add_player_to_team, finalize_team, clear_team, finalize_party, store_player_frame_pos, etc.) — all Tier 5 priority.
+
 ### Quick Reference: What to Work on When
 
 | If you're working on... | Start with |

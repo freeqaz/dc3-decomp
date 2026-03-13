@@ -5,6 +5,7 @@
 #include "obj/Object.h"
 #include "meta_ham/HamProfile.h"
 #include "game/HamUser.h"
+#include "os/Joypad.h"
 #include "os/PlatformMgr.h"
 #include "rndobj/Overlay.h"
 #include "utl/Symbol.h"

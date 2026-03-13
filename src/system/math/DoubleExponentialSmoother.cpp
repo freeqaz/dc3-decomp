@@ -47,3 +47,36 @@ void Vector3DESmoother::ForceValue(Vector3 v) {
     mY.SetParams(v.y, v.y, 0);
     mZ.SetParams(v.z, v.z, 0);
 }
+
+void Vector2DESmoother::Smooth(Vector2 v, float dt, bool normalize) {
+    mX.Smooth(v.x, dt);
+    mY.Smooth(v.y, dt);
+    if (normalize) {
+        float x = mX.mLevel;
+        float y = mY.mLevel;
+        float len = std::sqrt(x * x + y * y);
+        if (len != 0.0f) {
+            float inv = 1.0f / len;
+            mX.mLevel = x * inv;
+            mY.mLevel = y * inv;
+        }
+        mX.mTrend = 0;
+        mY.mTrend = 0;
+    }
+}
+
+void Vector3DESmoother::Smooth(Vector3 v, float dt, bool normalize) {
+    mX.Smooth(v.x, dt);
+    mY.Smooth(v.y, dt);
+    mZ.Smooth(v.z, dt);
+    if (normalize) {
+        Vector3 val(mX.mLevel, mY.mLevel, mZ.mLevel);
+        Normalize(val, val);
+        mX.mLevel = val.x;
+        mY.mLevel = val.y;
+        mZ.mLevel = val.z;
+        mX.mTrend = 0;
+        mY.mTrend = 0;
+        mZ.mTrend = 0;
+    }
+}

@@ -892,7 +892,7 @@ void Spotlight::UpdateFloorSpotTransform(const Transform &tf) {
     if (DoFloorSpot()) {
         float f1 = GetFloorSpotTarget()->WorldXfm().v.z;
         Vector3 vac(tf.m.y);
-        if (vac.z != 0) {
+        if (vac.z > 0) {
             float absed = std::fabs(((f1 - tf.v.z) / vac.z) / (f1 - tf.v.z));
             vac = tf.m.y;
             float curz = vac.z;
@@ -919,39 +919,46 @@ void Spotlight::BuildBeam(BeamDef &def) {
     def.mIsCone = false;
     def.mBeam = Hmx::Object::New<RndMesh>();
     RndMesh *mesh = def.mBeam;
-#ifdef HX_NATIVE
     RndMesh::VertVector &verts = mesh->Verts();
     std::vector<RndMesh::Face> &faces = mesh->Faces();
-#else
-    int dxIdx = *(int *)((char *)mesh + 0x148);
-    RndMesh::VertVector &verts = *(RndMesh::VertVector *)(dxIdx + 0x100);
-    std::vector<RndMesh::Face> &faces = *(std::vector<RndMesh::Face> *)(dxIdx + 0x110);
-#endif
 
     float len = def.mLength;
     float bottomBorderLen = def.mBottomBorder * len;
-    if (len - bottomBorderLen < 0.0f) {
+    float borderTopRadius;
+    float borderY;
+    if (len - bottomBorderLen <= 0.0f) {
         bottomBorderLen = len;
     }
-    float borderY = len - bottomBorderLen;
-    float borderTopRadius = (borderY / len) * (def.mBottomRadius - def.mTopRadius) + def.mTopRadius;
+    borderY = len - bottomBorderLen;
+    borderTopRadius = (borderY / len) * (def.mBottomRadius - def.mTopRadius) + def.mTopRadius;
 
-    // 4 rows of 16 verts = 64 verts, 60 faces (4 per column pair * 15 columns)
-    verts.resize(0x40);
+    // Calculate number of sections based on border lengths (from Ghidra)
+    int numSectionsTop = (int)((len - bottomBorderLen) * 15.0f);
+    if (numSectionsTop <= 4) numSectionsTop = 4;
+
+    int numSectionsBottom = (int)(bottomBorderLen * 15.0f);
+    if (numSectionsBottom <= 1) numSectionsBottom = 1;
+
+    int totalSections = numSectionsTop + numSectionsBottom;
+
+    // 4 rows of vertices per ring (matching original implementation)
+    verts.resize(60);
     faces.resize(60);
 
     float angle = 0.0f;
-    float angleStep = (float)(2.0 * 3.14159265358979323846 / 15.0);
+    float angleStep = 0.4188790f;
     float uvStep = 1.0f / 15.0f;
+    float cosA, sinA;
 
-    for (int i = 0; i < 15; i++) {
-        float cosA = std::cos(angle);
-        float sinA = std::sin(angle);
+    int i = 0;
+    do {
+        cosA = std::cos(angle);
+        sinA = std::sin(angle);
 
         int row0 = i;
-        int row1 = i + 16;
-        int row2 = i + 32;
-        int row3 = i + 48;
+        int row1 = i + 15;
+        int row2 = i + 30;
+        int row3 = i + 45;
 
         float topSideBorder = def.mTopSideBorder;
         float bottomSideBorder = def.mBottomSideBorder;
@@ -988,29 +995,8 @@ void Spotlight::BuildBeam(BeamDef &def) {
         faces[fi + 3].Set(s, s + 16, s + 1);
 
         angle += angleStep;
-    }
-
-    // Last vertex in each row wraps around
-    verts[15].pos.Set(def.mTopRadius, 0.0f, 0.0f);
-    verts[15].color = Hmx::Color(1, 1, 1, 1);
-    verts[15].tex.Set(1.0f, 0.0f);
-
-    verts[31].pos.Set(borderTopRadius, borderY, 0.0f);
-    verts[31].color = Hmx::Color(1, 1, 1, 1);
-    verts[31].tex.Set(1.0f, 1.0f);
-
-    // Duplicate for wrap
-    verts[15].pos.Set(def.mTopRadius, 0.0f, 0.0f);
-    verts[15].color = Hmx::Color(1, 1, 1, 1);
-    verts[15].tex.Set(1.0f, 0.0f);
-
-    verts[31].pos.Set(borderTopRadius, borderY, 0.0f);
-    verts[31].color = Hmx::Color(1, 1, 1, 1);
-    verts[31].tex.Set(1.0f, borderY / len);
-
-    verts[47].pos.Set(def.mBottomRadius, len, 0.0f);
-    verts[47].color = Hmx::Color(0, 0, 0, 0);
-    verts[47].tex.Set(1.0f, 1.0f);
+        i++;
+    } while (i < 15);
 
     mesh->Sync(0x13F);
     RndTransformable *parent = this ? static_cast<RndTransformable *>(this) : nullptr;
@@ -1023,14 +1009,8 @@ void Spotlight::BuildCone(BeamDef &def) {
     def.mIsCone = true;
     def.mBeam = Hmx::Object::New<RndMesh>();
     RndMesh *mesh = def.mBeam;
-#ifdef HX_NATIVE
     RndMesh::VertVector &verts = mesh->Verts();
     std::vector<RndMesh::Face> &faces = mesh->Faces();
-#else
-    int dxIdx = *(int *)((char *)mesh + 0x148);
-    RndMesh::VertVector &verts = *(RndMesh::VertVector *)(dxIdx + 0x100);
-    std::vector<RndMesh::Face> &faces = *(std::vector<RndMesh::Face> *)(dxIdx + 0x110);
-#endif
 
     // 3 rows of 16 verts = 48 verts, 60 faces
     verts.resize(0x30);
@@ -1046,7 +1026,7 @@ void Spotlight::BuildCone(BeamDef &def) {
 
     float angle = 0.0f;
     float uvStep = 1.0f / 15.0f;
-    float angleStep = (float)(2.0 * 3.14159265358979323846 / 15.0);
+    float angleStep = 0.4188790f;
 
     for (int i = 0; i < 15; i++) {
         float cosA = std::cos(angle);
@@ -1115,14 +1095,8 @@ void Spotlight::BuildCone(BeamDef &def) {
 void Spotlight::BuildNGCone(BeamDef &def, int numSegments) {
     def.mBeam = Hmx::Object::New<RndMesh>();
     RndMesh *mesh = def.mBeam;
-#ifdef HX_NATIVE
     RndMesh::VertVector &verts = mesh->Verts();
     std::vector<RndMesh::Face> &faces = mesh->Faces();
-#else
-    int dxIdx = *(int *)((char *)mesh + 0x148);
-    RndMesh::VertVector &verts = *(RndMesh::VertVector *)(dxIdx + 0x100);
-    std::vector<RndMesh::Face> &faces = *(std::vector<RndMesh::Face> *)(dxIdx + 0x110);
-#endif
 
     int numSections = def.mNumSections;
     if (numSections < 2) numSections = 5;
@@ -1206,14 +1180,8 @@ void Spotlight::BuildNGSheet(BeamDef &def) {
 
     def.mBeam = Hmx::Object::New<RndMesh>();
     RndMesh *mesh = def.mBeam;
-#ifdef HX_NATIVE
     RndMesh::VertVector &verts = mesh->Verts();
     std::vector<RndMesh::Face> &faces = mesh->Faces();
-#else
-    int dxIdx = *(int *)((char *)mesh + 0x148);
-    RndMesh::VertVector &verts = *(RndMesh::VertVector *)(dxIdx + 0x100);
-    std::vector<RndMesh::Face> &faces = *(std::vector<RndMesh::Face> *)(dxIdx + 0x110);
-#endif
 
     int numSections = def.mNumSections;
     if (numSections < 2) numSections = 5;
@@ -1301,14 +1269,8 @@ void Spotlight::BuildNGSheet(BeamDef &def) {
 void Spotlight::BuildNGQuad(BeamDef &def, RndTransformable::Constraint constraint) {
     def.mBeam = Hmx::Object::New<RndMesh>();
     RndMesh *mesh = def.mBeam;
-#ifdef HX_NATIVE
     RndMesh::VertVector &verts = mesh->Verts();
     std::vector<RndMesh::Face> &faces = mesh->Faces();
-#else
-    int dxIdx = *(int *)((char *)mesh + 0x148);
-    RndMesh::VertVector &verts = *(RndMesh::VertVector *)(dxIdx + 0x100);
-    std::vector<RndMesh::Face> &faces = *(std::vector<RndMesh::Face> *)(dxIdx + 0x110);
-#endif
 
     int gridSize = def.mNumSegments;
     if (def.mNumSections > gridSize) {

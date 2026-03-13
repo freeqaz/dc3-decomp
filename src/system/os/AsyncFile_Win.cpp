@@ -146,4 +146,31 @@ void AsyncFileWin::_WriteAsync(const void *, int) {}
 
 void AsyncFileWin::_ReadAsync(void *, int) {}
 
-bool AsyncFileWin::_ReadDone() { return true; }
+bool AsyncFileWin::_ReadDone() {
+    if (gFakeFileErrors) {
+        SetLastError(0x20000002);
+        ReadError(mFilename.c_str());
+        mReadInProgress = false;
+        mFail = 1;
+        return false;
+    }
+    if (!mReadInProgress) {
+        return true;
+    }
+    if (mOverlapped.Internal == 0x103) {
+        return false;
+    }
+    DWORD bytesTransferred;
+    if (GetOverlappedResult(mFile, &mOverlapped, &bytesTransferred, false)) {
+        if (unk58 == 0) {
+            memcpy(unk5c, (char *)unk60 + unk64, unk68);
+            MemFree(unk60, "unknown", 0, "unknown");
+        }
+        mReadInProgress = false;
+        return true;
+    }
+    ReadError(mFilename.c_str());
+    mReadInProgress = false;
+    mFail = 1;
+    return false;
+}

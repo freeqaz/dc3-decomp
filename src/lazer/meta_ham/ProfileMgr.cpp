@@ -981,10 +981,111 @@ void ProfileMgr::Poll() {
     }
 }
 
-// TODO: implement — GetPadExtraLag called by GetSyncOffset
+Symbol ProfileMgr::GetAlternateOutfit(Symbol outfit) {
+    Symbol result;
+    Symbol tempChar;
+    Symbol altChar;
+    Symbol altOutfit;
+    DataArray* outfitEntry;
+    char tempStr[98];
+    char* p;
+    int len;
+    int i;
+
+    // Get the character for the outfit
+    tempChar = GetOutfitCharacter(outfit, false);
+    if (!tempChar.Null()) {
+        // Get alternate character
+        altChar = GetAlternateCharacter(tempChar);
+        if (!altChar.Null()) {
+            // Get outfit entry for alternate character
+            outfitEntry = GetCharacterOutfitEntry(altChar, 0, false);
+            if (outfitEntry) {
+                // Copy outfit name to tempStr starting at index 1
+                p = tempStr + 1;
+                const char* outfitName = outfitEntry->Sym(0).Str();
+                if (outfitName) {
+                    while (*outfitName) {
+                        *p++ = *outfitName++;
+                    }
+                    *p = '\0';
+                }
+
+                // Create remapped outfit symbol from tempStr + 1
+                result = Symbol(tempStr + 1);
+
+                // Check if content is unlocked
+                i = 1;
+                while (!IsContentUnlocked(result)) {
+                    // Try next outfit
+                    i++;
+                    outfitEntry = GetCharacterOutfitEntry(altChar, i, false);
+                    if (outfitEntry) {
+                        const char* newName = outfitEntry->Sym(0).Str();
+                        if (newName) {
+                            p = tempStr + 1;
+                            while (*newName) {
+                                *p++ = *newName++;
+                            }
+                            *p = '\0';
+                            result = Symbol(tempStr + 1);
+                        }
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    return result;
+}
+
+float ProfileMgr::GetPadExtraLag(int padNum, LagContext ctx) const {
+    JoypadData* padData = JoypadGetPadData(padNum);
+    int padType = padData->mType;
+
+    if ((padType - 5) <= 0x17) {
+        switch (padType) {
+        case 5:
+        case 6:
+        case 7:
+            return ctx == kVCal ? 27.0f : 18.0f;
+        case 8:
+        case 9:
+        case 0xb:
+            if (ctx == kVCal) return 43.0f;
+            if (ctx == kACal) return 19.0f;
+            return 36.0f;
+        case 0xc:
+        case 0x19:
+            if (ctx == kVCal) return 25.0f;
+            return 14.0f;
+        case 0xd:
+        case 0x1a:
+            if (ctx == kVCal) return 35.0f;
+            return 20.0f;
+        case 0xe:
+        case 0xf:
+        case 0x11:
+        case 0x12:
+        case 0x18:
+        case 0x1b:
+        case 0x1c:
+            if (ctx == kVCal) return 24.0f;
+            if (ctx == kACal) return -1.0f;
+            return 16.0f;
+        case 0x10:
+        case 0x17:
+            return 10.0f;
+        default:
+            return 14.0f;
+        }
+    }
+    return 14.0f;
+}
+
 #ifdef HX_NATIVE
-float ProfileMgr::GetPadExtraLag(int, LagContext) const { return 0.0f; }
-Symbol ProfileMgr::GetAlternateOutfit(Symbol) { return Symbol(""); }
 void ProfileMgr::LoadGlobalOptions(FixedSizeSaveableStream &) {}
 DataNode ProfileMgr::OnMsg(const SigninChangedMsg &) { return DataNode(0); }
 #endif

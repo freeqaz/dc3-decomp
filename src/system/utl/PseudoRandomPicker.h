@@ -20,12 +20,53 @@ public:
         }
     }
 
-    void Randomize();
+    void Randomize() {
+        MILO_ASSERT(Size() > 0, 0x83);
+        int size = Size();
+        for (int n = Size(); n != 0; n--) {
+            // Pop the first element
+            typename std::list<T>::iterator first = mItems.begin();
+            T val = *first;
+            mItems.erase(first);
+            // Pick a random position and insert there
+            int idx = rand() % size;
+            typename std::list<T>::iterator it = mItems.begin();
+            if (idx != 0) {
+                for (int i = idx; i != 0; i--) {
+                    ++it;
+                }
+            }
+            mItems.insert(it, val);
+        }
+    }
 
     int Size() const { return mItems.size(); }
     void Clear() { mItems.resize(0); }
 
-    const T GetItem(int);
+    const T GetItem(int idx) {
+        if (idx >= 0) {
+            // Count list size
+            int size = 0;
+            typename std::list<T>::iterator it = mItems.begin();
+            for (; it != mItems.end(); ++it) {
+                size++;
+            }
+            if ((unsigned int)idx <= (unsigned int)size) {
+                // Walk to idx-th node
+                it = mItems.begin();
+                if (idx != 0) {
+                    for (int i = idx; i != 0; i--) {
+                        ++it;
+                    }
+                }
+                T val = *it;
+                mItems.erase(it);
+                mItems.insert(mItems.end(), val);
+                return val;
+            }
+        }
+        return T();
+    }
     const T GetNext() {
         MILO_ASSERT(Size() > 0, 0x52);
         int idx;

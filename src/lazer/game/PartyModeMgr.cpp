@@ -31,6 +31,7 @@
 #include "utl/Locale.h"
 #include "utl/Std.h"
 #include "utl/Symbol.h"
+#include <cstdio>
 #include <cstdlib>
 
 PartyModeMgr *ThePartyModeMgr;
@@ -1068,7 +1069,10 @@ int PartyModeMgr::PickNextPlayer() {
 void PartyModeMgr::ShufflePlaylist(bool b1) {
     MILO_ASSERT(IsUsingPlaylist(), 0x731);
     if (b1) {
+        mSubModeSongPicker.mMode = 2;
+        mSubModeSongPicker.mNumGets = 0;
     } else if (mIsPlaylistShuffled) {
+        mSubModeSongPicker.mMode = 0;
         SetSongsFromPlaylist();
     }
     mIsPlaylistShuffled = b1;
@@ -1451,17 +1455,376 @@ leave:
     return 1;
 }
 
-// TODO: implement
-#ifdef HX_NATIVE
-int PartyModeMgr::GetCrewColor(int, int) { return 0; }
-void PartyModeMgr::ReadPartySongQueue() {}
+void PartyModeMgr::FinalizeTeam(int team) {
+    std::vector<PartyModePlayer *> *teamPlayers;
+    PseudoRandomPicker<int> *teamPicker;
+    switch (team) {
+    case 1:
+        teamPlayers = &mTeam1Players;
+        teamPicker = &mTeam1PlayerPicker;
+        break;
+    case 2:
+        teamPlayers = &mTeam2Players;
+        teamPicker = &mTeam2PlayerPicker;
+        break;
+    default:
+        MILO_ASSERT(team == 1 || team == 2, 0x1EE);
+        break;
+    }
+    int numTeamPlayers = teamPlayers->size();
+    int totalPlayers = mPlayers.size();
+    std::vector<int> indices;
+    indices.resize(numTeamPlayers);
+    for (int i = 0; i < numTeamPlayers; i++) {
+        indices[i] = i + (totalPlayers - numTeamPlayers);
+    }
+    teamPicker->AddItems(indices);
+    teamPicker->mNumGets = 0;
+    teamPicker->mMode = 2;
+}
+
+void PartyModeMgr::FinalizeParty() {
+    if (mUsePlaytestData) {
+        FinalizePlaytestParty();
+        return;
+    }
+    if (mSubModeSongPicker.mItems.empty()) {
+        ResetSongs();
+    }
+    if (mModePicker.mItems.empty()) {
+        ResetModes(true);
+    }
+    static Symbol crew_showdown_num_events("crew_showdown_num_events");
+    static Symbol use_events_per_player("use_events_per_player");
+    static Symbol events_per_player("events_per_player");
+    static Symbol total_events("total_events");
+    DataArray *numEventsArr = mPartyModeCfg->FindArray(crew_showdown_num_events, true);
+    int team1Size = mTeam1Players.size();
+    int team2Size = mTeam2Players.size();
+    int maxTeamSize = team2Size;
+    if (team2Size <= team1Size) {
+        maxTeamSize = team1Size;
+    }
+    DataArray *usePerPlayerArr = numEventsArr->FindArray(use_events_per_player, true);
+    int usePerPlayer = usePerPlayerArr->Node(1).Int(usePerPlayerArr);
+    if (usePerPlayer == 0) {
+        DataArray *totalArr = numEventsArr->FindArray(total_events, true);
+        mRoundsTotal = totalArr->Node(maxTeamSize).Int(totalArr);
+    } else {
+        DataArray *perPlayerArr = numEventsArr->FindArray(events_per_player, true);
+        int perPlayer = perPlayerArr->Node(1).Int(perPlayerArr);
+        mRoundsTotal = perPlayer * maxTeamSize;
+    }
+    mRoundsUntilShowdown = mRoundsTotal;
+    mMaxPointsPerEvent = (float)mRoundsTotal + 1.0f;
+    {
+        static Symbol six_star_bonus("six_star_bonus");
+        DataArray *sixStarArr = mEventScoring->FindArray(six_star_bonus, true);
+        mSixStarBonus = sixStarArr->Node(1).Float(sixStarArr);
+    }
+    static Symbol player_sequences("player_sequences");
+    DataArray *playerSeqArr = mPartyModeCfg->FindArray(player_sequences, true);
+    char buf[8];
+    int minTeam = team2Size;
+    int maxTeam = team1Size;
+    if (team1Size < team2Size) {
+        minTeam = team1Size;
+        maxTeam = team2Size;
+    }
+    sprintf(buf, "%dv%d", minTeam, maxTeam);
+    mPlayerSequences = playerSeqArr->FindArray(Symbol(buf), true);
+    if (mPlayerSequences == nullptr) {
+        FormatString fmt("Not enough player sequence. There will be problems.");
+        TheDebug.Notify(fmt.Str());
+    } else {
+        TheDebug << FormatString("There is a player sequence. There will be no problems.\n").Str();
+    }
+    static Symbol dj_logic("dj_logic");
+    static Symbol number_of_songs("number_of_songs");
+    static Symbol intensity_sequence("intensity_sequence");
+    static Symbol bucket_sequence("bucket_sequence");
+    DataArray *djLogicArr = mPartyModeCfg->FindArray(dj_logic, true);
+    DataArray *numSongsArr = djLogicArr->FindArray(number_of_songs, true);
+    DataArray *roundsArr = numSongsArr->FindArray(mRoundsTotal, false);
+    if (roundsArr == nullptr) {
+        mPlaytestEventSequences = nullptr;
+        mEventBucketSequences = nullptr;
+    } else {
+        mPlaytestEventSequences = roundsArr->FindArray(intensity_sequence, true);
+        if (mPlaytestEventSequences == nullptr) {
+            FormatString fmt("Not enough DJ logic. There will be problems.");
+            TheDebug.Notify(fmt.Str());
+        } else {
+            TheDebug << FormatString("There is enough DJ logic. There will be no problems.\n").Str();
+        }
+        mEventBucketSequences = roundsArr->FindArray(bucket_sequence, true);
+        if (mEventBucketSequences == nullptr) {
+            FormatString fmt("Not enough mode bucket. There will be problems.");
+            TheDebug.Notify(fmt.Str());
+        } else {
+            TheDebug << FormatString("There is mode bucket. There will be no problems.\n").Str();
+        }
+    }
+    static Symbol team_1_size("team_1_size");
+    static Symbol team_2_size("team_2_size");
+    static Symbol team_1_crew("team_1_crew");
+    static Symbol team_2_crew("team_2_crew");
+    static Symbol difficulty("difficulty");
+    SendDataPoint(
+        "crew_throwdown/finalize",
+        team_1_size, team1Size,
+        team_2_size, team2Size,
+        team_1_crew, mLeftTeamCrew,
+        team_2_crew, mRightTeamCrew,
+        difficulty, (int)mDifficulty
+    );
+    SetCurrEvent();
+}
+
+int PartyModeMgr::GetCrewColor(int team, int colorIdx) {
+    float r = 0.0f, g = 0.0f, b = 0.0f;
+    DataArray *colorArr = nullptr;
+    if (team == 0) {
+        if (colorIdx == 1) {
+            colorArr = GetRightCrewColor1AsArray();
+        } else if (colorIdx == 2) {
+            colorArr = GetRightCrewColor2AsArray();
+        }
+    } else if (team == 1) {
+        if (colorIdx == 1) {
+            colorArr = GetLeftCrewColor1AsArray();
+        } else if (colorIdx == 2) {
+            colorArr = GetLeftCrewColor2AsArray();
+        }
+    }
+    if (colorArr != nullptr) {
+        r = colorArr->Node(0).Float(colorArr);
+        g = colorArr->Node(1).Float(colorArr);
+        b = colorArr->Node(2).Float(colorArr);
+    }
+    return (((int)(b * 255.0f) & 0xFF) << 8 | (int)(g * 255.0f) & 0xFF) << 8 |
+           (int)(r * 255.0f) & 0xFF;
+}
+
+void PartyModeMgr::PruneHistory() {
+    int now = SystemMs();
+    int count = (int)mCfgHistories.size();
+    for (int i = count - 1; i >= 0; i--) {
+        if (now - mCfgHistories[i].mTimeStamp > 0x2ee) {
+            if (i > 0) {
+                mCfgHistories.erase(mCfgHistories.begin(), mCfgHistories.begin() + i);
+            }
+            return;
+        }
+    }
+}
+
+DataNode PartyModeMgr::OnSetSongAndDefaults(DataArray *_msg) {
+    Symbol song;
+    Symbol mode;
+    bool force = false;
+    int sz = _msg->Size();
+    if (sz == 3) {
+        mode = Symbol(gNullStr);
+        song = _msg->Sym(2);
+    } else if (sz == 4) {
+        mode = _msg->Sym(2);
+        song = _msg->Sym(3);
+    } else if (sz == 5) {
+        song = _msg->Sym(2);
+        mode = _msg->Sym(3);
+        force = _msg->Int(4) != 0;
+    } else {
+        song = Symbol(gNullStr);
+        mode = Symbol(gNullStr);
+    }
+    SetSongAndDefaults(song, mode, force);
+    return DataNode(0);
+}
+
+void PartyModeMgr::ResetSongs() {
+    int count = (int)mRandomSongPool.size();
+    Symbol shortname;
+    std::vector<Symbol> songNames(count, Symbol());
+    mSubModeSongPicker.mItems.resize(0, Symbol());
+    for (int i = 0; i < count; i++) {
+        songNames[i] = TheHamSongMgr.GetShortNameFromSongID(mRandomSongPool[i]);
+    }
+    mSubModeSongPicker.AddItems(songNames);
+    mSubModeSongPicker.Randomize();
+    for (int i = 0; i < 4; i++) {
+        mSubModeSongPickers[i].mItems.resize(0, Symbol());
+    }
+    for (int i = 0; i < count; i++) {
+        const HamSongMetadata *data = TheHamSongMgr.Data(mRandomSongPool[i]);
+        int rank = data->DJIntensityRank();
+        shortname = TheHamSongMgr.GetShortNameFromSongID(mRandomSongPool[i]);
+        mSubModeSongPickers[rank - 1].mItems.push_back(shortname);
+    }
+    for (int i = 0; i < 4; i++) {
+        if (mSubModeSongPickers[i].Size() > 0) {
+            mSubModeSongPickers[i].Randomize();
+        }
+    }
+}
+
+void PartyModeMgr::ReadPartySongQueue() {
+    GetPartySongQueueJob *job = mGetPartySongQueueJob;
+    mPartySongQueue.clear();
+    job->GetSongQueue(&mPartySongQueue);
+    mGetPartySongQueueJob = nullptr;
+    if (mPartySongQueue.size() != 0) {
+        mCurrSyncedSongID = 0;
+        while (mPartySongQueue.size() != 0) {
+            Symbol shortname = TheHamSongMgr.GetShortNameFromSongID(mPartySongQueue.front().mSongID, false);
+            if (!shortname.Null()) {
+                break;
+            }
+            DeleteSongFromRCPartySongQueue(mPartySongQueue.front().mQueueIndex);
+            mPartySongQueue.pop_front();
+        }
+        if (mPartySongQueue.size() != 0) {
+            mCurrSyncedSongID = mPartySongQueue.front().mSongID;
+            DeleteSongFromRCPartySongQueue(mPartySongQueue.front().mQueueIndex);
+            mPartySongQueue.pop_front();
+        }
+    } else {
+        mCurrSyncedSongID = 0;
+        Symbol updated("song_queue_updated");
+        BroadcastSyncMsg(updated);
+    }
+}
+
+void PartyModeMgr::ToggleIncludedModeOn(Symbol mode, bool on) {
+    if (on) {
+        if (!IsModeIncluded(mode))
+            goto toggle;
+    }
+    if (!on) {
+        if (IsModeIncluded(mode))
+            goto toggle;
+    }
+    return;
+toggle:
+    ToggleIncludedMode(mode);
+}
+
+void PartyModeMgr::ResetModes(bool resetAll) {
+    unk40 = true;
+    mModePicker.mItems.resize(0, Symbol());
+    Symbol is_in_party_mode("is_in_party_mode");
+    int isPartyMode = TheHamProvider->Property(is_in_party_mode)->Int();
+    DataArray *cfgArr;
+    if (isPartyMode) {
+        Symbol crew_showdown_weighted_event_types("crew_showdown_weighted_event_types");
+        cfgArr = mPartyModeCfg->FindArray(crew_showdown_weighted_event_types);
+    } else {
+        Symbol party_mode_weighted_event_types("party_mode_weighted_event_types");
+        cfgArr = mPartyModeCfg->FindArray(party_mode_weighted_event_types);
+    }
+    if (resetAll) {
+        for (int i = 0; i < 5; i++) {
+            ToggleIncludedModeOn(GetModeNameFromEnum(i), false);
+        }
+    }
+    for (int i = 1; i < cfgArr->Size(); i++) {
+        DataArray *subArr = cfgArr->Node(i).Array(cfgArr);
+        if (subArr) {
+            Symbol sym = subArr->Sym(0);
+            int weight = subArr->Node(2).Int(subArr);
+            if ((resetAll && weight != 0) || IsModeIncluded(sym)) {
+                int count = subArr->Node(1).Int(subArr);
+                for (int j = 0; j < count; j++) {
+                    mModePicker.mItems.insert(mModePicker.mItems.end(), sym);
+                }
+                ToggleIncludedModeOn(sym, true);
+            }
+        }
+    }
+    mModePicker.mNumGets = 0;
+    mModePicker.mMode = 2;
+    unk40 = false;
+}
+
+void PartyModeMgr::UpdateScores() {
+    HamPlayerData *pPlayer1Data = TheGameData->Player(0);
+    MILO_ASSERT(pPlayer1Data, 0x66c);
+    PropertyEventProvider *pPlayer1Provider = pPlayer1Data->Provider();
+    MILO_ASSERT(pPlayer1Provider, 0x66f);
+    HamPlayerData *pPlayer2Data = TheGameData->Player(1);
+    MILO_ASSERT(pPlayer2Data, 0x672);
+    PropertyEventProvider *pPlayer2Provider = pPlayer2Data->Provider();
+    MILO_ASSERT(pPlayer2Provider, 0x675);
+    static Symbol score("score");
+    int score1 = pPlayer1Provider->Property(score, true)->Int();
+    int score2 = pPlayer2Provider->Property(score, true)->Int();
+    static Symbol side("side");
+    int side1 = pPlayer1Provider->Property(side, true)->Int();
+    int side2 = pPlayer2Provider->Property(side, true)->Int();
+    if (score2 < score1) {
+        mJustWonSide = side1;
+    } else if (score1 < score2) {
+        mJustWonSide = side2;
+    } else {
+        mJustWonSide = 2;
+    }
+    if (mJustWonSide == 0) {
+        mLeftTeamPrevScore = mLeftTeamScore;
+        mLeftTeamScore += GetPointsForWin();
+        mRightTeamPrevScore = mRightTeamScore;
+        mRightTeamScore += GetPointsForLoss();
+    } else if (mJustWonSide == 1) {
+        mLeftTeamPrevScore = mLeftTeamScore;
+        mLeftTeamScore += GetPointsForLoss();
+        mRightTeamPrevScore = mRightTeamScore;
+        mRightTeamScore += GetPointsForWin();
+    } else if (mJustWonSide < 3) {
+        mLeftTeamPrevScore = mLeftTeamScore;
+        mLeftTeamScore += GetPointsForWin();
+        mRightTeamPrevScore = mRightTeamScore;
+        mRightTeamScore += GetPointsForWin();
+    }
+    SetLeftTeamStarBonus();
+    SetRightTeamStarBonus();
+    float diff = (mLeftTeamStarBonus + mLeftTeamScore) - (mRightTeamStarBonus + mRightTeamScore);
+    if (diff < -0.001f) {
+        mWinningSide = 1;
+        return;
+    }
+    if (diff > 0.001f) {
+        mWinningSide = 0;
+        return;
+    }
+    if (!mIsShowdown) {
+        mWinningSide = 2;
+        return;
+    }
+    mWinningSide = mJustWonSide;
+    static Symbol left("left");
+    static Symbol right("right");
+    static Symbol random("random");
+    if (mWinningSide == 0) {
+        mLeftTeamPrevScore = mLeftTeamScore;
+        mLeftTeamScore += GetPointsForWin();
+        SendDataPoint("crew_throwdown/tiebreaker", side, left, random, 0);
+    } else if (mWinningSide == 1) {
+        mRightTeamPrevScore = mRightTeamScore;
+        mRightTeamScore += GetPointsForWin();
+        SendDataPoint("crew_throwdown/tiebreaker", side, right, random, 0);
+    } else if (mWinningSide == 2) {
+        if (rand() % 2) {
+            mWinningSide = 0;
+            mLeftTeamPrevScore = mLeftTeamScore;
+            mLeftTeamScore += GetPointsForWin();
+            SendDataPoint("crew_throwdown/tiebreaker", side, left, random, 1);
+        } else {
+            mWinningSide = 1;
+            mRightTeamPrevScore = mRightTeamScore;
+            mRightTeamScore += GetPointsForWin();
+            SendDataPoint("crew_throwdown/tiebreaker", side, right, random, 1);
+        }
+    }
+}
+
+// TODO: implement SetSongsFromPlaylist
 void PartyModeMgr::SetSongsFromPlaylist() {}
-void PartyModeMgr::PruneHistory() {}
-void PartyModeMgr::FinalizeTeam(int) {}
-void PartyModeMgr::ResetSongs() {}
-DataNode PartyModeMgr::OnSetSongAndDefaults(DataArray *) { return DataNode(0); }
-void PartyModeMgr::UpdateScores() {}
-void PartyModeMgr::ToggleIncludedModeOn(Symbol, bool) {}
-void PartyModeMgr::ResetModes(bool) {}
-void PartyModeMgr::FinalizeParty() {}
-#endif

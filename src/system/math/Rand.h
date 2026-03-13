@@ -5,6 +5,7 @@ class Rand {
 public:
     Rand(int);
     void Seed(int);
+
     int Int();
     int Int(int, int);
     int FastInt(int, int);

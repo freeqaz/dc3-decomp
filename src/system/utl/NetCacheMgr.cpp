@@ -333,6 +333,29 @@ bool NetLoaderRef::IsDownloading() {
         return !mCacheLoader || (int)mCacheLoader->mState == 2;
 }
 
+bool NetLoaderRef::IsLoadedOrFailed() {
+    MILO_ASSERT(IsValid(), 0x327);
+
+    if (!mCacheLoader) {
+        if (mNetLoader) {
+            return true;
+        }
+        return false;
+    }
+
+    if (!mNetLoader) {
+        return true;
+    }
+
+    bool loaded = mCacheLoader->IsLoaded();
+    if (loaded) {
+        return true;
+    }
+
+    bool failed = mCacheLoader->HasFailed();
+    return failed;
+}
+
 // TODO: implement — TU-level inlining effects on AddNetCacheLoader/AddNetLoader
 #ifdef HX_NATIVE
 NetLoaderRef &NetLoaderRef::operator=(const NetLoaderRef &other) {

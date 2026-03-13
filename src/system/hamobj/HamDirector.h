@@ -45,6 +45,7 @@ public:
 
 /** "Hammer Director, sits in each song file and manages camera + scene changes" */
 class HamDirector : public RndPollable, public RndDrawable {
+    friend class MoveDir;
 public:
     struct DircutEntry {
         HamCamShot *mShot;

@@ -293,6 +293,43 @@ DataNode SkeletonIdentifier::OnMsg(SkeletonEnrollmentChangedMsg const &msg) {
 
 void SkeletonIdentifier::DrawDebug() {}
 
-DataNode SkeletonIdentifier::OnMsg(const SigninChangedMsg &) { return DataNode(0); }
+DataNode SkeletonIdentifier::OnMsg(const SigninChangedMsg &msg) {
+    // Check if identity status is WaitingForSignIn (4)
+    if (mIdentityStatus == kIdentityStatus_WaitingForSignIn) {
+        mIdentityStatus = kIdentityStatus_None;
+    }
+
+    // Get pad number from message
+    int padNum = -1;
+    if (msg.mData->Size() > 3) {
+        for (int i = 0; i < 4; i++) {
+            if (msg.mData->Node(3).Int(msg.mData) & (1 << i)) {
+                padNum = i;
+                break;
+            }
+        }
+
+        // If pad found, check if it's already associated with a player
+        if (padNum >= 0) {
+            HamPlayerData *p0 = TheGameData->Player(0);
+            HamPlayerData *p1 = TheGameData->Player(1);
+
+            if (p0->PadNum() != padNum && p1->PadNum() != padNum) {
+                if (p0->PadNum() < 0) {
+                    TheGameData->SetAssociatedPadNum(0, padNum);
+                } else if (p1->PadNum() < 0) {
+                    TheGameData->SetAssociatedPadNum(1, padNum);
+                }
+            }
+        }
+    }
+
+    // Update enrolled players and associated pads
+    UpdateEnrolledPlayers();
+    TheGameData->UpdateAssociatedPads();
+
+    // Return empty DataNode (handled)
+    return DataNode(0);
+}
 
 DataNode SkeletonIdentifier::OnMsg(const SkeletonIdentifiedMsg &) { return DataNode(0); }

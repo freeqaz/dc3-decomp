@@ -1,5 +1,6 @@
 #include "net/DingoSvr.h"
-#include "DingoJob.h"
+#include "net/DingoJob.h"
+#include "net/DingoAuthJob.h"
 #include "WebSvcReq.h"
 #include "meta/ConnectionStatusPanel.h"
 #include "obj/Data.h"
@@ -119,7 +120,29 @@ DataNode DingoServer::OnMsg(const SigninChangedMsg &) { return DataNode(0); }
 DataNode DingoServer::OnMsg(const ConnectionStatusChangedMsg &) { return DataNode(0); }
 DataNode DingoServer::OnMsg(const DingoJobCompleteMsg &) { return DataNode(0); }
 bool DingoServer::InitAndAddJob(DingoJob *, bool, bool) { return false; }
-bool DingoServer::SendAuthenticateMsg(const char *, DataPoint &, Hmx::Object *) { return false; }
 void DingoServer::AddDelayedCalls() {}
-bool DingoServer::Authenticate(int, const char *) { return false; }
 #endif
+bool DingoServer::Authenticate(int padnum, const char *url) {
+    if (mAuthState != 0) {
+        return true;
+    }
+
+    mAuthState = kServerAuthenticating;
+    mAuthUrl = url;
+
+    DataPoint pt;
+    if (padnum < 0) {
+        FillAuthParams(pt);
+        return SendAuthenticateMsg(url, pt, this);
+    }
+
+    if (FillAuthParamsFromPadNum(pt, padnum)) {
+        return SendAuthenticateMsg(url, pt, this);
+    }
+    return false;
+}
+
+bool DingoServer::SendAuthenticateMsg(const char *url, DataPoint &pt, Hmx::Object *callback) {
+    AuthenticateReqJob *job = new AuthenticateReqJob(url, pt, callback);
+    return InitAndAddJob(job, true, false);
+}

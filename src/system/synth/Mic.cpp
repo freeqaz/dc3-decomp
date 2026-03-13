@@ -53,4 +53,31 @@ int RingBuffer::Peek(void *data, int len) {
 
 int RingBuffer::Write(void *, int) { return 0; }
 
-int RingBuffer::Read(void *, int) { return 0; }
+int RingBuffer::Read(void *data, int len) {
+    int readLen = len;
+    if (readLen >= mTotal) {
+        readLen = mTotal;
+    }
+
+    if (readLen <= 0) {
+        return 0;
+    }
+
+    int readPos = mReadIx;
+    int available = mSize - readPos;
+    int chunk1 = readLen;
+    if (chunk1 >= available) {
+        chunk1 = available;
+    }
+
+    memcpy(data, (char *)mBuffer + readPos, chunk1);
+
+    if (chunk1 < readLen) {
+        memcpy((char *)data + chunk1, mBuffer, readLen - chunk1);
+    }
+
+    mTotal -= readLen;
+    mReadIx = (readPos + readLen) % mSize;
+
+    return readLen;
+}

@@ -162,12 +162,18 @@ float Det(const Hmx::Matrix4 &m) {
     float a20 = m.z.x, a21 = m.z.y, a22 = m.z.z, a23 = m.z.w;
     float a30 = m.w.x, a31 = m.w.y, a32 = m.w.z, a33 = m.w.w;
 
-    float c00 = a11 * (a22 * a33 - a23 * a32) - a12 * (a21 * a33 - a23 * a31) + a13 * (a21 * a32 - a22 * a31);
-    float c01 = a10 * (a22 * a33 - a23 * a32) - a12 * (a20 * a33 - a23 * a30) + a13 * (a20 * a32 - a22 * a30);
-    float c02 = a10 * (a21 * a33 - a23 * a31) - a11 * (a20 * a33 - a23 * a30) + a13 * (a20 * a31 - a21 * a30);
-    float c03 = a10 * (a21 * a32 - a22 * a31) - a11 * (a20 * a32 - a22 * a30) + a12 * (a20 * a31 - a21 * a30);
+    // Cofactor expansion along row 0 using Matrix3 Det for each minor
+    Hmx::Matrix3 minor00(a11, a12, a13, a21, a22, a23, a31, a32, a33);
+    Hmx::Matrix3 minor01(a10, a12, a13, a20, a22, a23, a30, a32, a33);
+    Hmx::Matrix3 minor02(a10, a11, a13, a20, a21, a23, a30, a31, a33);
+    Hmx::Matrix3 minor03(a10, a11, a12, a20, a21, a22, a30, a31, a32);
 
-    return a00 * c00 - a01 * c01 + a02 * c02 - a03 * c03;
+    float det = a00 * Det(minor00);
+    det -= a01 * Det(minor01);
+    det += a02 * Det(minor02);
+    det -= a03 * Det(minor03);
+
+    return det;
 }
 
 void Invert(const Hmx::Matrix4 &m, Hmx::Matrix4 &out) {

@@ -21,7 +21,6 @@ void Rand::Seed(int seed) {
     mRandIndex2 = 0x67;
 }
 
-#ifdef HX_NATIVE
 int Rand::Int() {
     unsigned int u3 = mRandTable[mRandIndex1];
     unsigned int u1 = mRandTable[mRandIndex2];
@@ -37,7 +36,6 @@ int Rand::Int(int low, int high) {
     MILO_ASSERT(high > low, 0x2B);
     return low + Int() % (high - low);
 }
-#endif
 
 float Rand::Float() { return ((Int() & 0xFFFF) / 65536.0f); }
 float Rand::Float(float f1, float f2) { return ((f2 - f1) * Float() + f1); }
