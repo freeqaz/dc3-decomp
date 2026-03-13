@@ -439,10 +439,6 @@ bool FileMerger::StartLoadInternal(bool async, bool loading) {
     static Message msg("change_files", 0, 0);
     msg[0] = async;
     msg[1] = loading;
-#ifdef HX_NATIVE
-    printf("DC3 FileMerger::StartLoadInternal '%s' async=%d loading=%d mergers=%d\n",
-           Name(), async, loading, (int)mMergers.size());
-#endif
     HandleType(msg);
 #endif
     for (int i = 0; i < mMergers.size(); i++) {

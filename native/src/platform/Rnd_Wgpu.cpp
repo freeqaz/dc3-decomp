@@ -23,6 +23,10 @@
 #include "gfx/VertexFormats.h"
 #include "obj/Dir.h"
 #include "ui/UI.h"
+#include "hamobj/HamDirector.h"
+#include "hamobj/HamCharacter.h"
+#include "world/Dir.h"
+#include "char/Character.h"
 
 #ifndef __EMSCRIPTEN__
 #include <GLFW/glfw3.h>
@@ -641,6 +645,72 @@ void WgpuRnd::MakeDrawTarget() {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Native-port venue initialization
+// On Xbox, HamDirector::Enter() calls VenueEnter(mVenue) which enters the
+// WorldDir hierarchy (including chars_base and all Characters). HamDirector
+// lives in the meta_game panel, which is only active during gameplay screens.
+// At main_screen/attract, the venue is visible but HamDirector is never
+// entered. We detect this and manually trigger the venue enter sequence.
+// ---------------------------------------------------------------------------
+void WgpuRnd::NativeVenueInit() {
+    if (mVenueInited)
+        return;
+
+    // gNativeVenueDir is set by ObjectDir::AddedSubDir when chars_base is added
+    // to a venue dir. This is the venue (e.g., glitterati) that contains all
+    // character and scene objects.
+    if (!gNativeVenueDir)
+        return;
+
+    WorldDir* venue = dynamic_cast<WorldDir*>(gNativeVenueDir);
+    if (!venue)
+        return;
+
+    mVenueInited = true;
+    printf("DC3 Native: venue init — entering '%s' (%s) with %d subdirs\n",
+           venue->Name(), venue->ClassName(), (int)venue->SubDirs().size());
+
+    // Enter the venue hierarchy — this cascades to all objects including
+    // Characters, RndDrawables, etc.
+    // Note: WorldDir::Enter() sets TheWorld temporarily then clears it.
+    // VenueEnter also calls Enter() and finds Characters by name.
+    if (TheHamDirector) {
+        TheHamDirector->VenueEnter(venue);
+    } else {
+        venue->Enter();
+    }
+
+    // Load default outfits for characters so they have visible meshes.
+    // On Xbox, HamWardrobe::LoadCharacters does this via DTA message flow.
+    // We trigger it directly: SetOutfit → configure_file_merger → StartLoad.
+    static const char* sDefaultOutfits[] = { "emilia01", "bodie01" };
+    int charIdx = 0;
+    for (ObjDirItr<HamCharacter> it(venue, true); it != nullptr; ++it) {
+        const char* name = it->Name();
+        // Only load outfits for player characters
+        if (strstr(name, "player") && charIdx < 2) {
+            Symbol outfit(sDefaultOutfits[charIdx]);
+            it->SetOutfit(outfit);
+            it->SetOutfitDir(Symbol("char/main/dancer"));
+            printf("  Loading outfit '%s' for '%s'\n", sDefaultOutfits[charIdx], name);
+            it->StartLoad(false);  // synchronous
+            charIdx++;
+        }
+    }
+
+    // Log Characters found
+    int nChars = 0;
+    for (ObjDirItr<Character> it(venue, true); it != nullptr; ++it) {
+        printf("  Character '%s': showing=%d dir='%s'\n",
+               it->Name(), (int)it->Showing(),
+               it->Dir() ? it->Dir()->Name() : "nil");
+        nChars++;
+    }
+    printf("DC3 Native: venue entered — %d Characters, TheWorld=%s\n",
+           nChars, TheWorld ? TheWorld->Name() : "nil");
+}
+
 void WgpuRnd::BeginDrawing() {
     RndMesh_ResetFrameStats();
 
@@ -650,6 +720,14 @@ void WgpuRnd::BeginDrawing() {
         mWorldEnded = false;
         mDrawCount++;
         mFrameID++;
+
+        // Native port: one-shot venue initialization
+        // On Xbox, HamDirector::Enter() calls VenueEnter() which enters the
+        // WorldDir hierarchy and all Characters. But HamDirector is only entered
+        // from the meta_game panel (gameplay screens). At main_screen, the venue
+        // is visible but HamDirector is never entered. We do it manually here.
+        NativeVenueInit();
+
         return;
     }
     // Poll GLFW events
@@ -670,6 +748,9 @@ void WgpuRnd::BeginDrawing() {
     mWorldEnded = false;
     mDrawCount++;
     mFrameID++;
+
+    // Native port: one-shot venue initialization (same as headless path above)
+    NativeVenueInit();
 
     FrameCapture::Get().BeginFrame(mFrameID);
 
@@ -995,31 +1076,6 @@ void WgpuRnd::WriteSceneUniforms() {
                 }
             }
             memcpy(scene.view, view, sizeof(view));
-
-            // Diagnostic: dump view, proj, viewProj for first few frames
-            static int sVPDumpCount = 0;
-            if (sVPDumpCount < 3) {
-                sVPDumpCount++;
-                printf("DC3 ViewProj[%d]: cam='%s' pos=(%.1f,%.1f,%.1f) fov=%.1f near=%.1f far=%.1f\n",
-                       sVPDumpCount, cam->Name(),
-                       cam->WorldXfm().v.x, cam->WorldXfm().v.y, cam->WorldXfm().v.z,
-                       cam->YFov(), cam->NearPlane(), cam->FarPlane());
-                printf("  view: [%.4f %.4f %.4f %.4f] [%.4f %.4f %.4f %.4f] [%.4f %.4f %.4f %.4f] [%.4f %.4f %.4f %.4f]\n",
-                       view[0], view[1], view[2], view[3],
-                       view[4], view[5], view[6], view[7],
-                       view[8], view[9], view[10], view[11],
-                       view[12], view[13], view[14], view[15]);
-                printf("  proj: [%.4f %.4f %.4f %.4f] [%.4f %.4f %.4f %.4f] [%.4f %.4f %.4f %.4f] [%.4f %.4f %.4f %.4f]\n",
-                       proj[0], proj[1], proj[2], proj[3],
-                       proj[4], proj[5], proj[6], proj[7],
-                       proj[8], proj[9], proj[10], proj[11],
-                       proj[12], proj[13], proj[14], proj[15]);
-                printf("  viewProj: [%.6f %.6f %.6f %.6f] [%.6f %.6f %.6f %.6f] [%.6f %.6f %.6f %.6f] [%.6f %.6f %.6f %.6f]\n",
-                       scene.viewProj[0], scene.viewProj[1], scene.viewProj[2], scene.viewProj[3],
-                       scene.viewProj[4], scene.viewProj[5], scene.viewProj[6], scene.viewProj[7],
-                       scene.viewProj[8], scene.viewProj[9], scene.viewProj[10], scene.viewProj[11],
-                       scene.viewProj[12], scene.viewProj[13], scene.viewProj[14], scene.viewProj[15]);
-            }
         }
 
         // Camera position (in world space, before axis flip)

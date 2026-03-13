@@ -26,6 +26,9 @@
 #include "world/Spotlight.h"
 
 WorldDir *TheWorld;
+#ifdef HX_NATIVE
+ObjectDir *gNativeVenueDir;
+#endif
 std::vector<FilePath> gOldChars;
 ObjectDir *gOldTexDir;
 

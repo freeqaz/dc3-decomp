@@ -211,6 +211,22 @@ bool RndGroup::MakeWorldSphere(Sphere &s, bool b) {
 }
 
 void RndGroup::DrawShowing() {
+#ifdef HX_NATIVE
+    // Log the Group.grp used by TexRenderer (the one containing the character)
+    if (RndCam::Current() && RndCam::Current()->TargetTex()) {
+        static int sRttGrpDiag = 0;
+        if (sRttGrpDiag < 3) {
+            fprintf(stderr, "GRPDRAW(RTT) %s: nDraws=%d sortInWorld=%d showing=%d\n",
+                Name(), (int)mDraws.size(), (int)mSortInWorld, (int)mShowing);
+            for (size_t i = 0; i < mDraws.size(); i++) {
+                fprintf(stderr, "  draw[%zu] = %s (showing=%d)\n", i,
+                    mDraws[i] ? mDraws[i]->Name() : "null",
+                    mDraws[i] ? mDraws[i]->Showing() : -1);
+            }
+            sRttGrpDiag++;
+        }
+    }
+#endif
     RndEnvironTracker tracker(nullptr, nullptr);
     if (!mSortInWorld) {
         for (std::vector<RndDrawable *>::iterator it = mDraws.begin(); it != mDraws.end();

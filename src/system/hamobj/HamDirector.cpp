@@ -412,21 +412,6 @@ void HamDirector::ListPollChildren(std::list<RndPollable *> &polls) const {
 void HamDirector::DrawShowing() {
     static Symbol hide_venue("hide_venue");
     bool hide = TheHamProvider->Property(hide_venue, true)->Int();
-#ifdef HX_NATIVE
-    static int sDiag = 0;
-    if (sDiag < 3 && mVenue) {
-        sDiag++;
-        int usedSize = mVenue->HashTableUsedSize();
-        int subdirCount = (int)mVenue->SubDirs().size();
-        printf("DC3 venue '%s' hash=%d subdirs=%d\n",
-               mVenue->Name(), usedSize, subdirCount);
-        // Check subdirs for content
-        for (int i = 0; i < subdirCount; i++) {
-            ObjectDir *sub = mVenue->SubDirs()[i];
-            if (sub) printf("  subdir[%d] '%s' hash=%d\n", i, sub->Name(), sub->HashTableUsedSize());
-        }
-    }
-#endif
     if (mVenue && !hide) {
         mVenue->DrawShowing();
     }

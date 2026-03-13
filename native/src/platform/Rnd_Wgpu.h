@@ -250,6 +250,7 @@ public:
 
     void SelectRenderTarget(RndTex* tex);
     void FinishRenderTarget(RndTex* tex);
+    RndTex* ActiveTargetTex() const { return mActiveTargetTex; }
 
 private:
     void ApplyViewport();
@@ -261,6 +262,7 @@ private:
     void WriteSceneUniforms();
     void MaybeCaptureFrame();
     void MaybeEncodeVideoFrame();
+    void NativeVenueInit();
 
     GpuDevice mGpu;
     PipelineManager mPipelines;
@@ -333,6 +335,9 @@ private:
     float mLastCamPosX = 0.0f; // detect same-pointer position changes
     float mLastCamPosY = 0.0f;
     float mLastCamPosZ = 0.0f;
+
+    // Native venue initialization (one-shot)
+    bool mVenueInited = false;
 
     // Auto-screenshot capture (env-var controlled)
     std::string mScreenshotDir;

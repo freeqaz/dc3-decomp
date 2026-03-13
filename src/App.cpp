@@ -6,6 +6,7 @@
 #include "ui/UIPanel.h"
 #include "ui/PanelDir.h"
 #include "rndobj/Dir.h"
+#include "world/Dir.h"
 #include "meta_ham/HamUI.h"
 extern GLFWwindow *gNativeWindow;
 
@@ -913,7 +914,25 @@ void App::RunWithoutDebugging() {
         if (TheFlowMgr)
             TheFlowMgr->Poll();
 
+        // Native port: poll and draw the venue WorldDir.
+        // On Xbox, HamDirector handles this through the meta_game panel, but
+        // that panel isn't active at menu screens. We drive the venue directly.
+        // WorldDir::Poll/DrawShowing manage TheWorld internally (set→work→clear).
+        if (gNativeVenueDir) {
+            WorldDir* venueWorld = dynamic_cast<WorldDir*>(gNativeVenueDir);
+            if (venueWorld)
+                venueWorld->Poll();
+        }
+
         TheRnd.BeginDrawing();
+
+        // Draw venue background before UI overlay
+        if (gNativeVenueDir) {
+            WorldDir* venueWorld = dynamic_cast<WorldDir*>(gNativeVenueDir);
+            if (venueWorld)
+                venueWorld->DrawShowing();
+        }
+
         if (TheUI)
             TheUI->Draw();
 

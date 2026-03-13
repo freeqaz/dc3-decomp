@@ -83,6 +83,16 @@ void CharDriver::Enter() {
     RndPollable::Enter();
     if (mDefaultClip)
         Play(DataNode(mDefaultClip), 1, -1.0f, kHugeFloat, 0.0f);
+#ifdef HX_NATIVE
+    // Native fallback: if no default clip and no clip playing, try to find any clip
+    if (!mFirst && mClips) {
+        for (ObjDirItr<CharClip> it(mClips, true); it != nullptr; ++it) {
+            // Prefer "idle" clips, but take anything
+            Play(DataNode(it.operator->()), 1, -1.0f, kHugeFloat, 0.0f);
+            break;
+        }
+    }
+#endif
 }
 
 void CharDriver::Exit() { RndPollable::Exit(); }

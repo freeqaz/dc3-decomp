@@ -143,3 +143,10 @@ protected:
 void SetTheWorld(WorldDir *);
 
 extern WorldDir *TheWorld;
+
+#ifdef HX_NATIVE
+// Set by ObjectDir::AddedSubDir when chars_base is added to a venue dir.
+// Used by the native renderer to find the venue (which isn't connected
+// to Main() or HamDirector at menu screens). Cast to WorldDir* at use site.
+extern ObjectDir *gNativeVenueDir;
+#endif

@@ -152,6 +152,17 @@ void RndMesh::DrawShowing() {
 void DrawMeshImmediate(RndMesh* mesh) {
     if (!gWgpuRnd || !gWgpuRnd->IsInPass()) return;
 
+    // Log draws during texture pass (RTT)
+    static int sRttDrawDiag = 0;
+    if (gWgpuRnd->ActiveTargetTex() && sRttDrawDiag < 20) {
+        RndMesh* geom = mesh->GetGeomOwner();
+        if (!geom) geom = mesh;
+        fprintf(stderr, "RTT_DRAW %s: nBones=%d verts=%d compVerts=%d geomOwner=%s faces=%d\n",
+            mesh->Name(), mesh->NumBones(), geom->NumVerts(), geom->NumCompressedVerts(),
+            geom->Name(), geom->NumFaces());
+        sRttDrawDiag++;
+    }
+
     bool capturing = FrameCapture::Get().IsCapturing();
     uint32_t heuristics = 0;
 

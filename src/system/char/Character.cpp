@@ -779,6 +779,15 @@ DataNode Character::OnGetCurrentInterests(DataArray *da) {
 
 void Character::DrawShowing() {
     START_AUTO_TIMER("char_draw");
+#ifdef HX_NATIVE
+    static int sCharDrawDiag = 0;
+    if (sCharDrawDiag < 5) {
+        float ss = ComputeScreenSize(RndCam::Current());
+        fprintf(stderr, "CHARDRAW %s: forceLod=%d nLods=%d screenSize=%.3f drawMode=%d\n",
+            Name(), (int)mForceLod, (int)mLods.size(), ss, (int)mDrawMode);
+        sCharDrawDiag++;
+    }
+#endif
     if (mTest)
         mTest->Draw();
     int lod;

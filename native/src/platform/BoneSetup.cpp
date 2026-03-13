@@ -19,12 +19,16 @@ void FillBoneUniforms(RndMesh* mesh, BoneUniforms& out) {
     int numBones = mesh->NumBones();
     if (numBones > kMaxBones) numBones = kMaxBones;
 
+    // Force all bones dirty to ensure fresh WorldXfm computation
+    for (int i = 0; i < numBones; i++) {
+        RndTransformable* bt = mesh->BoneTransAt(i);
+        if (bt) bt->DirtyLocalXfm();
+    }
+
     for (int i = 0; i < numBones; i++) {
         RndTransformable* boneTrans = mesh->BoneTransAt(i);
         if (boneTrans) {
             const Transform& wt = boneTrans->WorldXfm();
-            // Sanity check: if bone WorldXfm has garbage values,
-            // fall back to identity to prevent vertices from going to infinity
             bool valid = (fabsf(wt.v.x) < 100000.0f &&
                           fabsf(wt.v.y) < 100000.0f &&
                           fabsf(wt.v.z) < 100000.0f);
@@ -33,7 +37,6 @@ void FillBoneUniforms(RndMesh* mesh, BoneUniforms& out) {
                 Multiply(mesh->BoneOffsetAt(i), wt, skinMatrix);
                 TransformToMat4(skinMatrix, out.bones[i]);
             } else {
-                // Bad bone — use identity
                 out.bones[i][0]  = 1.0f;
                 out.bones[i][5]  = 1.0f;
                 out.bones[i][10] = 1.0f;

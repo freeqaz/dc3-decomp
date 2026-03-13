@@ -233,6 +233,15 @@ BEGIN_LOADS(RndTexRenderer)
 END_LOADS
 
 void RndTexRenderer::DrawToTexture() {
+#ifdef HX_NATIVE
+    static int sTexRendDiag = 0;
+    bool doDiag = (sTexRendDiag < 3);
+    if (doDiag) {
+        fprintf(stderr, "TEXREND %s: drawMode=%d showing=%d drawable=%p outputTex=%p unk58=%d\n",
+            Name(), TheRnd.GetDrawMode(), Showing(), (void*)((RndDrawable*)mDrawable), (void*)((RndTex*)mOutputTexture), (int)unk_0x58);
+        sTexRendDiag++;
+    }
+#endif
     if (TheRnd.GetDrawMode() != 0)
         return;
     if (((Hmx::Object *)Dir() == (Hmx::Object *)mDrawable) || !Showing())
@@ -240,6 +249,12 @@ void RndTexRenderer::DrawToTexture() {
     if (mDrawWorldOnly && !(TheRnd.ProcCmds() & kProcessWorld))
         return;
     if (unk_0x58 && mDrawable && mOutputTexture) {
+#ifdef HX_NATIVE
+        fprintf(stderr, "TEXREND %s: outputTex=%s type=0x%x isRT=%d w=%d h=%d kProcessPost=0x%x\n",
+            Name(), mOutputTexture->Name(), mOutputTexture->GetType(),
+            mOutputTexture->IsRenderTarget(), mOutputTexture->Width(), mOutputTexture->Height(),
+            (int)kProcessPost);
+#endif
         if (!(mOutputTexture->GetType() & kProcessPost)) {
             MILO_NOTIFY_ONCE("%s not renderable", mOutputTexture->Name());
             return;
@@ -428,6 +443,11 @@ void RndTexRenderer::DrawToTexture() {
         if (mClearBuffer)
             TheRnd.Clear(1, mClearColor);
         int cap = (unk_0xB5 && mPrimeDraw) ? 2 : 1;
+#ifdef HX_NATIVE
+        fprintf(stderr, "TEXREND %s: drawing drawable=%s rdir=%p impostorH=%.1f cam=%s cap=%d\n",
+            Name(), mDrawable->Name(), (void*)rdir, mImpostorHeight,
+            cam ? cam->Name() : "null", cap);
+#endif
         if (cap > 0) {
             int j = cap;
             do {
