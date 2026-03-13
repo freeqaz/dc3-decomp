@@ -8,6 +8,10 @@
 #include "rndobj/Dir.h"
 #include "world/Dir.h"
 #include "char/Character.h"
+#include "world/LightPreset.h"
+#include "world/LightPresetManager.h"
+#include "hamobj/HamDirector.h"
+#include "rndobj/Lit.h"
 #include "meta_ham/HamUI.h"
 extern GLFWwindow *gNativeWindow;
 
@@ -915,16 +919,47 @@ void App::RunWithoutDebugging() {
         if (TheFlowMgr)
             TheFlowMgr->Poll();
 
-        // Native port: poll and draw the venue WorldDir.
-        // On Xbox, HamDirector handles this through the meta_game panel, but
-        // that panel isn't active at menu screens. We drive the venue directly.
-        // WorldDir::Poll/DrawShowing manage TheWorld internally (set→work→clear).
-        if (gNativeVenueDir) {
-            WorldDir* venueWorld = dynamic_cast<WorldDir*>(gNativeVenueDir);
+        // Native port: poll the venue WorldDir for animation/lighting.
+        // The venue renders through world_panel as part of TheUI->Draw() —
+        // no separate DrawShowing call needed. NaN camera protection is in
+        // CameraManager::CalcFrame() and CamShot::SetFrame().
+        {
+            WorldDir* venueWorld = nullptr;
+            if (TheHamDirector) {
+                venueWorld = TheHamDirector->GetVenueWorld();
+            }
+            if (!venueWorld && gNativeVenueDir) {
+                venueWorld = dynamic_cast<WorldDir*>(gNativeVenueDir);
+            }
             if (venueWorld) {
+                // Ensure venue has an active LightPreset so lights have real colors.
+                // LightPresetManager::Poll() resets lights to preset values every
+                // frame. Without a forced preset, lights stay at zero (black).
+                {
+                    static WorldDir* sLastPresetVenue = nullptr;
+                    if (venueWorld != sLastPresetVenue) {
+                        sLastPresetVenue = venueWorld;
+                        LightPresetManager& lpm = venueWorld->GetLightPresetMgr();
+                        lpm.SyncObjects();
+                        LightPreset* bestPreset = nullptr;
+                        for (ObjDirItr<LightPreset> it(venueWorld, true); it != nullptr; ++it) {
+                            if (it->PlatformOk()) {
+                                bestPreset = it;
+                                if (strstr(it->Name(), "default") || strstr(it->Name(), "basic"))
+                                    break;
+                            }
+                        }
+                        if (bestPreset) {
+                            lpm.ForcePreset(bestPreset, 0.0f);
+                            printf("DC3 Native: forced LightPreset '%s' in venue '%s'\n",
+                                   bestPreset->Name(), venueWorld->Name());
+                        }
+                    }
+                }
+
                 venueWorld->Poll();
+
                 // Reset character root positions to prevent drift from root motion.
-                // The menu clips have facing deltas that accumulate each frame.
                 for (ObjDirItr<Character> it(venueWorld, true); it != nullptr; ++it) {
                     Transform& xfm = it->DirtyLocalXfm();
                     xfm.v.Set(0, 0, 0);
@@ -933,41 +968,12 @@ void App::RunWithoutDebugging() {
             }
         }
 
+        // Draw: matches Xbox flow — BeginDrawing → TheUI->Draw() → EndDrawing.
+        // The venue renders through world_panel (loads ../world/world.milo).
+        // HUD panels (game_panel etc.) render over the 3D scene.
         TheRnd.BeginDrawing();
-
-        // Draw venue background before UI overlay
-        if (gNativeVenueDir) {
-            WorldDir* venueWorld = dynamic_cast<WorldDir*>(gNativeVenueDir);
-            if (venueWorld)
-                venueWorld->DrawShowing();
-        }
-
         if (TheUI)
             TheUI->Draw();
-
-        // Optional: force-draw a specific panel (for render debugging)
-        // Set MILO_FORCE_DRAW_PANEL=cursor_panel to enable
-        {
-            static bool sForceDrawChecked = false;
-            static PanelDir *sForceDrawDir = nullptr;
-            if (!sForceDrawChecked && frameCount >= 50) {
-                sForceDrawChecked = true;
-                const char *forcePanelName = getenv("MILO_FORCE_DRAW_PANEL");
-                if (forcePanelName && forcePanelName[0]) {
-                    UIPanel *p = ObjectDir::Main()->Find<UIPanel>(forcePanelName, false);
-                    if (p && p->LoadedDir()) {
-                        sForceDrawDir = p->LoadedDir();
-                        printf("DC3 Render: Force-drawing panel '%s'\n", forcePanelName);
-                    } else {
-                        printf("DC3 Render: Panel '%s' not found or not loaded\n", forcePanelName);
-                    }
-                }
-            }
-            if (sForceDrawDir) {
-                sForceDrawDir->DrawShowing();
-            }
-        }
-
         TheRnd.EndDrawing();
 
         frameCount++;

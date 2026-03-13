@@ -548,6 +548,13 @@ void WgpuRnd::BeginFramePass(bool clear) {
 }
 
 void WgpuRnd::BeginTexturePass(RndTex* tex) {
+    if (!tex) return;
+    // Only textures with a proper RGBA GPU render target can be used as
+    // color attachments. Compressed textures (BC1/BC3) lack RenderAttachment
+    // usage and would invalidate the entire command encoder.
+    if (!IsGpuTexRenderable(tex)) {
+        return;
+    }
     wgpu::TextureView colorView = GetGpuTexView(tex);
     if (!colorView) {
         return;
@@ -655,7 +662,8 @@ void WgpuRnd::MakeDrawTarget() {
 // entered. We detect this and manually trigger the venue enter sequence.
 // ---------------------------------------------------------------------------
 void WgpuRnd::NativeVenueInit() {
-    if (mVenueInited)
+    // Re-run init if gNativeVenueDir changed (new venue loaded for gameplay)
+    if (mVenueInited && gNativeVenueDir == mLastVenueDir)
         return;
 
     // gNativeVenueDir is set by ObjectDir::AddedSubDir when chars_base is added
@@ -669,6 +677,7 @@ void WgpuRnd::NativeVenueInit() {
         return;
 
     mVenueInited = true;
+    mLastVenueDir = gNativeVenueDir;
     printf("DC3 Native: venue init — entering '%s' (%s) with %d subdirs\n",
            venue->Name(), venue->ClassName(), (int)venue->SubDirs().size());
 
@@ -680,6 +689,28 @@ void WgpuRnd::NativeVenueInit() {
         TheHamDirector->VenueEnter(venue);
     } else {
         venue->Enter();
+    }
+
+    // Activate a LightPreset so the venue has valid lighting.
+    // WorldDir::Enter() calls LightPresetManager::Reset() which clears all presets.
+    // During normal gameplay, song.anim drives preset selection via ForcePreset().
+    // Without that, we force the first available preset so lights aren't all black.
+    {
+        LightPresetManager& lpm = venue->GetLightPresetMgr();
+        lpm.SyncObjects();
+        LightPreset* firstPreset = nullptr;
+        for (ObjDirItr<LightPreset> it(venue, true); it != nullptr; ++it) {
+            if (it->PlatformOk()) {
+                firstPreset = it;
+                break;
+            }
+        }
+        if (firstPreset) {
+            lpm.ForcePreset(firstPreset, 0.0f);
+            printf("  LightPreset: forced '%s'\n", firstPreset->Name());
+        } else {
+            printf("  LightPreset: no presets found in venue\n");
+        }
     }
 
     // Load default outfits for characters so they have visible meshes.
@@ -1050,6 +1081,17 @@ void WgpuRnd::WriteSceneUniforms() {
     // Camera
     RndCam* cam = RndCam::Current();
     if (cam) {
+        // Guard: skip rewriting scene uniforms if camera has NaN/inf position.
+        // CamShot animation can produce NaN during game_screen transition.
+        // Keep the previous good scene uniforms instead of poisoning them.
+        const Vector3& camP = cam->WorldXfm().v;
+        if (camP.x != camP.x || camP.y != camP.y || camP.z != camP.z
+            || camP.x > 1e30f || camP.x < -1e30f
+            || camP.y > 1e30f || camP.y < -1e30f
+            || camP.z > 1e30f || camP.z < -1e30f) {
+            return;  // keep previous good uniforms
+        }
+
         // Check if mViewProjMatrix was externally set (milo-viewer does this).
         const Hmx::Matrix4& vp = cam->GetViewProjMatrix();
         bool isIdentity = (vp.x.x == 1 && vp.x.y == 0 && vp.x.z == 0 && vp.x.w == 0 &&

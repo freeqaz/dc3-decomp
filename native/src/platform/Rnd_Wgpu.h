@@ -336,8 +336,9 @@ private:
     float mLastCamPosY = 0.0f;
     float mLastCamPosZ = 0.0f;
 
-    // Native venue initialization (one-shot)
+    // Native venue initialization — re-runs when gNativeVenueDir changes
     bool mVenueInited = false;
+    ObjectDir* mLastVenueDir = nullptr;  // detect venue dir changes
 
     // Auto-screenshot capture (env-var controlled)
     std::string mScreenshotDir;

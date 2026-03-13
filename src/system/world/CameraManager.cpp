@@ -106,6 +106,13 @@ void CameraManager::ForceCamShot(CamShot *shot) {
 float CameraManager::CalcFrame() {
     float ttime = TheTaskMgr.Time(mCurrentShot->Units()) - mCamStartTime;
     ttime *= mCurrentShot->FramesPerUnit();
+#ifdef HX_NATIVE
+    // Guard: native port may have uninitialized task timers that produce
+    // NaN/inf frame values. CamShot::SetFrame with NaN poisons camera
+    // transforms, making the entire scene invisible. Return 0 (first keyframe).
+    if (ttime != ttime || ttime > 1e15f || ttime < -1e15f)
+        ttime = 0.0f;
+#endif
     return ttime;
 }
 

@@ -1324,6 +1324,11 @@ void CamShot::SetFrame(float frame, float blend) {
     START_AUTO_TIMER("camera");
     if (mSetFrameActive)
         return;
+#ifdef HX_NATIVE
+    // Guard: reject NaN/inf frame values that would poison camera transforms
+    if (frame != frame || frame > 1e15f || frame < -1e15f)
+        return;
+#endif
     RndAnimatable::SetFrame(frame, blend);
     RndCam *cam = GetCam();
     if (!cam)

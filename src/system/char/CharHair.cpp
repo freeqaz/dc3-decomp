@@ -126,6 +126,12 @@ void CharHair::Poll() {
 void CharHair::Enter() {
     mReset = 1;
     RndPollable::Enter();
+#ifdef HX_NATIVE
+    // Hookup crashes during venue Enter — CharCollide objects may not be
+    // fully initialized yet, causing null dereference in SortCollides.
+    // Hair physics are skipped on native anyway (Poll returns early).
+    return;
+#endif
     Hookup();
 }
 

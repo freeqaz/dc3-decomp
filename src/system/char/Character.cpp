@@ -988,7 +988,8 @@ void Character::DrawLodOrShadow(int lod, DrawMode drawMode) {
 
 void DrawPtrVec::Draw() const {
     for (const_iterator it = begin(); it != end(); ++it) {
-        it->Obj()->DrawShowing();
+        RndDrawable* d = it->Obj();
+        if (d) d->DrawShowing();
     }
 }
 

@@ -91,6 +91,12 @@ wgpu::TextureView GetGpuTexDepthView(RndTex* tex) {
     return rt ? rt->depthView : wgpu::TextureView();
 }
 
+bool IsGpuTexRenderable(RndTex* tex) {
+    if (!tex) return false;
+    auto it = sTexGpuData.find(tex);
+    return it != sTexGpuData.end() && it->second.renderTarget;
+}
+
 // ============================================================================
 // RndTex::PresyncBitmap — create GPU texture from bitmap data
 // ============================================================================
