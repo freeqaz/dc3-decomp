@@ -420,7 +420,17 @@ BEGIN_CUSTOM_PROPSYNC(InlineHelp::ActionElement)
 END_CUSTOM_PROPSYNC
 
 BinStream &operator>>(BinStreamRev &bs, InlineHelp::ActionElement &ae) {
-    return bs.stream >> ae;
+    int x;
+    bs >> x;
+    ae.mAction = (JoypadAction)x;
+    Symbol s;
+    bs >> s;
+    ae.SetToken(s, false);
+    if (bs.rev >= 2) {
+        bs >> s;
+        ae.SetToken(s, true);
+    }
+    return bs.stream;
 }
 
 void InlineHelp::ClearActionToken(JoypadAction a) {

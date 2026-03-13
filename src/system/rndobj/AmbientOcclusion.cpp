@@ -1561,3 +1561,28 @@ DataNode RndAmbientOcclusion::OnGetValidObjects(DataArray *) const {
     return ptr;
 }
 
+namespace stlpmtx_std {
+
+template <>
+Triangle* vector<Triangle, StlNodeAlloc<Triangle>>::_M_erase(
+    Triangle* __first,
+    Triangle* __last,
+    const __false_type&
+) {
+    Triangle* __pos = __first;
+    Triangle* __src = __last;
+    int __count = (int)((this->_M_finish - __src) / (unsigned int)sizeof(Triangle));
+
+    for (; __count > 0; __count--) {
+        memcpy(__pos, __src, sizeof(Triangle));
+        __pos += 1;
+        __src += 1;
+    }
+
+    this->_M_finish = __pos;
+    return __first;
+}
+
+}  // namespace stlpmtx_std
+
+

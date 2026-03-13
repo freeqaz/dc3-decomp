@@ -28,6 +28,8 @@ class Skeleton : public BaseSkeleton {
 public:
     Skeleton();
     virtual void JointPos(SkeletonCoordSys, SkeletonJoint, Vector3 &) const; // 0x4
+
+    friend class SkeletonChooser;
     virtual bool Displacement(
         const SkeletonHistory *, SkeletonCoordSys, SkeletonJoint, int, Vector3 &, int &
     ) const; // 0x8

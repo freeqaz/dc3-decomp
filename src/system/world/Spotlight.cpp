@@ -918,109 +918,162 @@ void Spotlight::BuildBeam(BeamDef &def) {
     MILO_ASSERT(!SpotlightDrawer::DrawNGSpotlights(), 0x609);
     def.mIsCone = false;
     def.mBeam = Hmx::Object::New<RndMesh>();
+    float bottomBorderLen = def.mBottomBorder * def.mLength;
     RndMesh *mesh = def.mBeam;
+    float topSideBorderVal = def.mTopSideBorder * def.mTopRadius;
     RndMesh::VertVector &verts = mesh->Verts();
+    float bottomSideBorderVal = def.mBottomSideBorder * def.mBottomRadius;
     std::vector<RndMesh::Face> &faces = mesh->Faces();
 
-    float len = def.mLength;
-    float bottomBorderLen = def.mBottomBorder * len;
-    float borderTopRadius;
-    float borderY;
-    if (len - bottomBorderLen <= 0.0f) {
-        bottomBorderLen = len;
-    }
-    borderY = len - bottomBorderLen;
-    borderTopRadius = (borderY / len) * (def.mBottomRadius - def.mTopRadius) + def.mTopRadius;
-
-    // Calculate number of sections based on border lengths (from Ghidra)
-    int numSectionsTop = (int)((len - bottomBorderLen) * 15.0f);
+    int numSectionsTop = (int)((def.mLength - bottomBorderLen) / 15.0f);
     if (numSectionsTop <= 4) numSectionsTop = 4;
 
-    int numSectionsBottom = (int)(bottomBorderLen * 15.0f);
+    int numSectionsBottom = (int)(bottomBorderLen / 15.0f);
     if (numSectionsBottom <= 1) numSectionsBottom = 1;
 
-    int totalSections = numSectionsTop + numSectionsBottom;
+    int totalSections = numSectionsBottom + numSectionsTop;
 
-    // 4 rows of vertices per ring (matching original implementation)
-    verts.resize(60);
-    faces.resize(60);
+    verts.resize(totalSections * 4);
+    faces.resize(totalSections * 6);
 
-    float angle = 0.0f;
-    float angleStep = 0.4188790f;
-    float uvStep = 1.0f / 15.0f;
-    float cosA, sinA;
+    float topLen = def.mLength - bottomBorderLen;
+    float topRadius = def.mTopRadius;
+    float bottomRadius = def.mBottomRadius;
+    float borderTopRadius = (topLen / def.mLength) * (bottomRadius - topRadius) + topRadius;
+    float radiusStepTop = borderTopRadius - topRadius;
+    float topSectionLen = 1.0f / (float)numSectionsTop;
+    float botSectionLen = 1.0f / (float)numSectionsBottom;
 
-    int i = 0;
-    do {
-        cosA = std::cos(angle);
-        sinA = std::sin(angle);
+    if (totalSections != 0) {
+        float halfWidth = topRadius;
+        int fi = 0;
+        int lVar31 = -numSectionsTop;
+        short s = 6;
+        int count = totalSections;
+        unsigned int i = 0;
+        do {
+            float y;
+            float alpha;
+            if (i == (unsigned int)(totalSections - 1)) {
+                y = def.mLength;
+                alpha = 0.0f;
+            } else if (i < (unsigned int)numSectionsTop) {
+                y = (topLen * topSectionLen) * (float)i;
+                alpha = 1.0f;
+            } else {
+                y = (botSectionLen * bottomBorderLen) * (float)lVar31 + topLen;
+                alpha = 1.0f - (float)lVar31 / (float)numSectionsBottom;
+            }
 
-        int row0 = i;
-        int row1 = i + 15;
-        int row2 = i + 30;
-        int row3 = i + 45;
+            float yFrac = y / def.mLength;
+            float negY = -y;
+            float sideBorder = (bottomSideBorderVal - topSideBorderVal) * yFrac + topSideBorderVal;
+            float borderRatio = sideBorder / (halfWidth * 2.0f);
 
-        float topSideBorder = def.mTopSideBorder;
-        float bottomSideBorder = def.mBottomSideBorder;
-        float uvX = (float)i * uvStep;
+            // Column 0: left edge
+            verts[i * 4].pos.z = negY;
+            verts[i * 4].pos.x = -halfWidth;
+            verts[i * 4].pos.y = 0.0f;
+            verts[i * 4].color.Set(0.0f, 0.0f, 0.0f, 0.0f);
+            verts[i * 4].tex.Set(0.0f, yFrac);
 
-        // Row 0: top outer edge
-        verts[row0].pos.Set(def.mTopRadius * cosA, 0.0f, def.mTopRadius * sinA);
-        verts[row0].color = Hmx::Color(1, 1, 1, 1);
-        verts[row0].tex.Set(uvX, 0.0f);
+            // Column 1: left inner
+            float leftInner = sideBorder - halfWidth;
+            if (-leftInner < 0.0f) leftInner = 0.0f;
+            verts[i * 4 + 1].pos.x = leftInner;
+            verts[i * 4 + 1].pos.y = 0.0f;
+            verts[i * 4 + 1].pos.z = negY;
+            verts[i * 4 + 1].color.Set(alpha, alpha, alpha, alpha);
+            verts[i * 4 + 1].tex.Set(borderRatio, yFrac);
 
-        // Row 1: top inner (after border)
-        float innerTopRadius = def.mTopRadius * (1.0f - topSideBorder);
-        verts[row1].pos.Set(innerTopRadius * cosA, 0.0f, innerTopRadius * sinA);
-        verts[row1].color = Hmx::Color(1, 1, 1, 1);
-        verts[row1].tex.Set(uvX, 0.0f);
+            // Column 2: right inner
+            float rightInner = 0.0f;
+            if (-(halfWidth - sideBorder) < 0.0f) rightInner = halfWidth - sideBorder;
+            verts[i * 4 + 2].pos.x = rightInner;
+            verts[i * 4 + 2].pos.y = 0.0f;
+            verts[i * 4 + 2].pos.z = negY;
+            verts[i * 4 + 2].color.Set(alpha, alpha, alpha, alpha);
+            verts[i * 4 + 2].tex.Set(1.0f - borderRatio, yFrac);
 
-        // Row 2: bottom inner (before border)
-        float innerBotRadius = borderTopRadius * (1.0f - bottomSideBorder);
-        verts[row2].pos.Set(innerBotRadius * cosA, borderY, innerBotRadius * sinA);
-        verts[row2].color = Hmx::Color(1, 1, 1, 1);
-        verts[row2].tex.Set(uvX, borderY / len);
+            // Column 3: right edge
+            verts[i * 4 + 3].pos.x = halfWidth;
+            verts[i * 4 + 3].pos.y = 0.0f;
+            verts[i * 4 + 3].pos.z = negY;
+            verts[i * 4 + 3].color.Set(0.0f, 0.0f, 0.0f, 0.0f);
+            verts[i * 4 + 3].tex.Set(1.0f, yFrac);
 
-        // Row 3: bottom outer
-        verts[row3].pos.Set(def.mBottomRadius * cosA, len, def.mBottomRadius * sinA);
-        verts[row3].color = Hmx::Color(0, 0, 0, 0);
-        verts[row3].tex.Set(uvX, 1.0f);
+            if (i != (unsigned int)(totalSections - 1)) {
+                short c0 = s - 6;
+                short c1 = s - 5;
+                short c2 = s - 4;
+                short c3 = s - 3;
+                short n0 = s - 2;
+                short n1 = s - 1;
+                short n2 = s;
+                short n3 = s + 1;
 
-        // Faces - 4 faces per column
-        int fi = i * 4;
-        short s = (short)(i + 16);
-        faces[fi].Set(s - 16, s - 1, s);
-        faces[fi + 1].Set(s - 16, s, s + 1);
-        faces[fi + 2].Set(s - 1 + 16, s + 16, s);
-        faces[fi + 3].Set(s, s + 16, s + 1);
+                if ((i & 1) == 0) {
+                    faces[fi].Set(c0, n0, c1);
+                    faces[fi + 1].Set(c1, n0, n1);
+                    faces[fi + 2].Set(c1, n2, c2);
+                    faces[fi + 3].Set(c1, n1, n2);
+                    faces[fi + 4].Set(c2, n2, c3);
+                    faces[fi + 5].v1 = c3;
+                } else {
+                    faces[fi].Set(c0, n0, n1);
+                    faces[fi + 1].Set(c0, n1, c1);
+                    faces[fi + 2].Set(c1, n1, c2);
+                    faces[fi + 3].Set(c2, n1, n2);
+                    faces[fi + 4].Set(c2, n3, c3);
+                    faces[fi + 5].v1 = c2;
+                }
+                faces[fi + 5].v2 = n2;
+                faces[fi + 5].v3 = n3;
 
-        angle += angleStep;
-        i++;
-    } while (i < 15);
+                if (i == (unsigned int)(totalSections - 2)) {
+                    faces[fi].Set(c0, n0, c1);
+                    faces[fi + 1].Set(c1, n0, n1);
+                    faces[fi + 4].Set(c2, n2, n3);
+                    faces[fi + 5].Set(c3, c2, n3);
+                }
+            }
+
+            float radiusStep;
+            if ((unsigned int)numSectionsTop <= i) {
+                radiusStep = (bottomRadius - borderTopRadius) * botSectionLen;
+            } else {
+                radiusStep = radiusStepTop * topSectionLen;
+            }
+            halfWidth = radiusStep + halfWidth;
+
+            i++;
+            lVar31++;
+            s += 4;
+            fi += 6;
+            count--;
+        } while (count != 0);
+    }
 
     mesh->Sync(0x13F);
+    mesh->SetMat(def.mMat);
+    mesh->SetTransConstraint(kConstraintBillboardZ, nullptr, false);
     RndTransformable *parent = this ? static_cast<RndTransformable *>(this) : nullptr;
     mesh->SetTransParent(parent, false);
-    mesh->SetMat(def.mMat);
 }
 
 void Spotlight::BuildCone(BeamDef &def) {
     MILO_ASSERT(!SpotlightDrawer::DrawNGSpotlights(), 0x5B6);
     def.mIsCone = true;
     def.mBeam = Hmx::Object::New<RndMesh>();
-    RndMesh *mesh = def.mBeam;
-    RndMesh::VertVector &verts = mesh->Verts();
-    std::vector<RndMesh::Face> &faces = mesh->Faces();
+    RndMesh::VertVector &verts = def.mBeam->Verts();
+    std::vector<RndMesh::Face> &faces = def.mBeam->Faces();
 
-    // 3 rows of 16 verts = 48 verts, 60 faces
     verts.resize(0x30);
     faces.resize(60);
 
     float len = def.mLength;
     float bottomBorderLen = def.mBottomBorder * len;
-    if (len - bottomBorderLen < 0.0f) {
-        bottomBorderLen = len;
-    }
+    bottomBorderLen = (float)__fsel(len - bottomBorderLen, bottomBorderLen, len);
     float borderY = len - bottomBorderLen;
     float borderRadius = (borderY / len) * (def.mBottomRadius - def.mTopRadius) + def.mTopRadius;
 
@@ -1032,28 +1085,20 @@ void Spotlight::BuildCone(BeamDef &def) {
         float cosA = std::cos(angle);
         float sinA = std::sin(angle);
 
-        int row0 = i;
-        int row1 = i + 16;
-        int row2 = i + 32;
-
         float uvX = (float)i * uvStep;
 
-        // Row 0: top ring
-        verts[row0].pos.Set(def.mTopRadius * cosA, 0.0f, def.mTopRadius * sinA);
-        verts[row0].color = Hmx::Color(1, 1, 1, 1);
-        verts[row0].tex.Set(uvX, 0.0f);
+        verts[i].pos.Set(def.mTopRadius * cosA, 0.0f, def.mTopRadius * sinA);
+        verts[i].color.Set(1.0f, 1.0f, 1.0f, 1.0f);
+        verts[i].tex.Set(uvX, 0.0f);
 
-        // Row 1: border ring
-        verts[row1].pos.Set(borderRadius * cosA, borderY, borderRadius * sinA);
-        verts[row1].color = Hmx::Color(1, 1, 1, 1);
-        verts[row1].tex.Set(uvX, borderY / len);
+        verts[i + 16].pos.Set(borderRadius * cosA, borderY, borderRadius * sinA);
+        verts[i + 16].color.Set(1.0f, 1.0f, 1.0f, 1.0f);
+        verts[i + 16].tex.Set(uvX, borderY / len);
 
-        // Row 2: bottom ring
-        verts[row2].pos.Set(def.mBottomRadius * cosA, len, def.mBottomRadius * sinA);
-        verts[row2].color = Hmx::Color(0, 0, 0, 0);
-        verts[row2].tex.Set(uvX, 1.0f);
+        verts[i + 32].pos.Set(def.mBottomRadius * cosA, len, def.mBottomRadius * sinA);
+        verts[i + 32].color.Set(0.0f, 0.0f, 0.0f, 0.0f);
+        verts[i + 32].tex.Set(uvX, 1.0f);
 
-        // Faces: 4 per column
         short s = (short)(i + 17);
         int fi = i * 4;
         faces[fi].Set(s - 17, s - 1, s);
@@ -1064,101 +1109,182 @@ void Spotlight::BuildCone(BeamDef &def) {
         angle += angleStep;
     }
 
-    // Wrap-around vertices
     verts[15].pos.Set(def.mTopRadius, 0.0f, 0.0f);
-    verts[15].color = Hmx::Color(1, 1, 1, 1);
+    verts[15].color.Set(1.0f, 1.0f, 1.0f, 1.0f);
     verts[15].tex.Set(1.0f, 0.0f);
 
     verts[31].pos.Set(borderRadius, borderY, 0.0f);
-    verts[31].color = Hmx::Color(1, 1, 1, 1);
-    verts[31].tex.Set(1.0f, borderY / len);
-
-    // Duplicate for wrap
-    verts[15].pos.Set(def.mTopRadius, 0.0f, 0.0f);
-    verts[15].color = Hmx::Color(1, 1, 1, 1);
-    verts[15].tex.Set(1.0f, 0.0f);
-
-    verts[31].pos.Set(borderRadius, borderY, 0.0f);
-    verts[31].color = Hmx::Color(1, 1, 1, 1);
+    verts[31].color.Set(1.0f, 1.0f, 1.0f, 1.0f);
     verts[31].tex.Set(1.0f, 1.0f);
 
+    verts[15].pos.Set(def.mTopRadius, 0.0f, 0.0f);
+    verts[15].color.Set(1.0f, 1.0f, 1.0f, 1.0f);
+    verts[15].tex.Set(1.0f, 0.0f);
+
+    verts[31].pos.Set(borderRadius, borderY, 0.0f);
+    verts[31].color.Set(1.0f, 1.0f, 1.0f, 1.0f);
+    verts[31].tex.Set(1.0f, borderY / len);
+
     verts[47].pos.Set(def.mBottomRadius, len, 0.0f);
-    verts[47].color = Hmx::Color(0, 0, 0, 0);
+    verts[47].color.Set(0.0f, 0.0f, 0.0f, 0.0f);
     verts[47].tex.Set(1.0f, 1.0f);
 
-    mesh->Sync(0x13F);
+    def.mBeam->Sync(0x13F);
     RndTransformable *parent = this ? static_cast<RndTransformable *>(this) : nullptr;
-    mesh->SetTransParent(parent, false);
-    mesh->SetMat(def.mMat);
+    def.mBeam->SetTransParent(parent, false);
+    def.mBeam->SetMat(def.mMat);
 }
 
 void Spotlight::BuildNGCone(BeamDef &def, int numSegments) {
+    Hmx::Matrix3 identMtx(
+        1.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f,
+        0.0f, 0.0f, 1.0f
+    );
+    Hmx::Matrix3 rotMtx;
+    if (!def.mIsCone) {
+        rotMtx.Set(
+            1.0f, 0.0f, 0.0f,
+            0.0f, 0.0f, -1.0f,
+            0.0f, 1.0f, 0.0f
+        );
+    } else {
+        rotMtx = identMtx;
+    }
+    Hmx::Matrix3 orientMtx;
+    memcpy(&orientMtx, &rotMtx, 0x30);
+
     def.mBeam = Hmx::Object::New<RndMesh>();
     RndMesh *mesh = def.mBeam;
+    int numVerts = numSegments * 3;
     RndMesh::VertVector &verts = mesh->Verts();
     std::vector<RndMesh::Face> &faces = mesh->Faces();
 
-    int numSections = def.mNumSections;
-    if (numSections < 2) numSections = 5;
+    verts.resize(numVerts + 2);
+    faces.resize(numSegments * 6);
 
-    int numSegs = numSegments;
-    if (numSegs < 3) numSegs = 10;
-
-    int numVertsPerRing = numSegs + 1;
-    int numRings = numSections + 1;
-    int totalVerts = numVertsPerRing * numRings;
-    int totalFaces = numSegs * numSections * 2;
-
-    verts.resize(totalVerts);
-    faces.resize(totalFaces);
-
+    float length = def.mLength;
     Vector2 radii = def.NGRadii();
     float topRadius = radii.x;
     float bottomRadius = radii.y;
+    float halfStep = 0.5f;
+    float numSegsF = (float)numSegments;
+    float angleStep = 6.2831855f / numSegsF;
+    float halfAngle = angleStep * 0.5f;
+    float invCosHalf = 1.0f / (float)std::cos((double)halfAngle);
+    topRadius = topRadius * invCosHalf;
+    bottomRadius = bottomRadius * invCosHalf;
 
+    bool flip = false;
     int iVert = 0;
-    for (int section = 0; section < numRings; section++) {
-        float t = (float)section / (float)numSections;
-        float oneMinusT = 1.0f - t;
-        for (int seg = 0; seg < numVertsPerRing; seg++) {
-            float segT = (float)seg / (float)numSegs;
-            float angle = segT * (float)(2.0 * 3.14159265358979323846);
-            float cosA = std::cos(angle);
-            float sinA = std::sin(angle);
-            float radius = topRadius + (bottomRadius - topRadius) * t;
+    float csAngle = 0.0f;
+    float xsAngle = 0.7853982f;
+    int iFace = 0;
+    short baseIdx = 2;
+    for (int seg = 0; seg < numSegments; seg++) {
+        float cosH = (float)std::cos((double)halfAngle);
+        float sinH = (float)std::sin((double)halfAngle);
+        float segU = (float)seg / numSegsF;
 
-            verts[iVert].pos.Set(radius * cosA, def.mLength * t, radius * sinA);
-            verts[iVert].norm.Set(cosA, 0.0f, sinA);
-            verts[iVert].color = Hmx::Color(oneMinusT, oneMinusT, oneMinusT, oneMinusT);
-            verts[iVert].tex.Set(segT, t);
+        for (unsigned int v = 0; v < 3; v++) {
+            float uvV = (float)v * halfStep;
+            if (v < 2) {
+                float t = (float)v;
+                float radius = (bottomRadius - topRadius) * t + topRadius;
+                verts[iVert].pos.Set(radius * cosH, t * length, radius * sinH);
+
+                float px = verts[iVert].pos.x;
+                float py = verts[iVert].pos.y;
+                float pz = verts[iVert].pos.z;
+                verts[iVert].pos.x =
+                    orientMtx.x.x * px + orientMtx.z.x * pz + orientMtx.y.x * py;
+                verts[iVert].pos.z =
+                    orientMtx.y.z * py + orientMtx.x.z * px + orientMtx.z.z * pz;
+                verts[iVert].pos.y =
+                    orientMtx.y.y * py + orientMtx.x.y * px + orientMtx.z.y * pz;
+            } else {
+                float cosCs = (float)std::cos((double)csAngle);
+                float sinCs = (float)std::sin((double)csAngle);
+                csAngle = csAngle + xsAngle;
+                verts[iVert].pos.Set(
+                    cosCs * cosH * bottomRadius,
+                    sinCs * bottomRadius + length,
+                    cosCs * sinH * bottomRadius
+                );
+
+                float px = verts[iVert].pos.x;
+                float py = verts[iVert].pos.y;
+                float pz = verts[iVert].pos.z;
+                verts[iVert].pos.x =
+                    orientMtx.x.x * px + orientMtx.y.x * py + orientMtx.z.x * pz;
+                verts[iVert].pos.z =
+                    orientMtx.z.z * pz + orientMtx.x.z * px + orientMtx.y.z * py;
+                verts[iVert].pos.y =
+                    orientMtx.z.y * pz + orientMtx.x.y * px + orientMtx.y.y * py;
+            }
+            verts[iVert].color.Set(1.0f, 1.0f, 1.0f, 1.0f);
+            verts[iVert].tex.Set(segU, uvV);
             iVert++;
         }
-    }
-    MILO_ASSERT(iVert == totalVerts, 0x4FE);
 
-    int iFace = 0;
-    for (int section = 0; section < numSections; section++) {
-        for (int seg = 0; seg < numSegs; seg++) {
-            short base = (short)(section * numVertsPerRing + seg);
-            short next = base + 1;
-            short baseNext = base + (short)numVertsPerRing;
-            short nextNext = baseNext + 1;
-            if ((iFace & 2) == 0) {
-                faces[iFace].Set(base, next, baseNext);
-                faces[iFace + 1].Set(baseNext, next, nextNext);
-            } else {
-                faces[iFace].Set(baseNext, base, nextNext);
-                faces[iFace + 1].Set(nextNext, base, next);
-            }
-            iFace += 2;
+        short sideWidth;
+        if (seg < numSegments - 1) {
+            sideWidth = 3;
+        } else {
+            sideWidth = 3 - (short)numVerts;
         }
-    }
-    MILO_ASSERT(iFace == totalFaces, 0x517);
 
-    mesh->Sync(0x13F);
-    mesh->SetMat(def.mMat);
+        short cur = baseIdx - 1;
+        bool curFlip = flip;
+        int fCount = 2;
+        do {
+            flip = !curFlip;
+            short nextRow = cur - 1 + sideWidth;
+            if (curFlip) {
+                faces[iFace].Set(nextRow, nextRow + 1, cur - 1);
+                faces[iFace + 1].Set(nextRow + 1, cur, cur - 1);
+            } else {
+                faces[iFace].Set(nextRow, cur, cur - 1);
+                faces[iFace + 1].Set(nextRow, nextRow + 1, cur);
+            }
+            cur = cur + 1;
+            iFace += 2;
+            curFlip = flip;
+            fCount--;
+        } while (fCount != 0);
+
+        halfAngle = halfAngle + angleStep;
+        faces[iFace].Set(baseIdx - 2, baseIdx + sideWidth - 2, numVerts);
+        faces[iFace + 1].Set(baseIdx + sideWidth, baseIdx, numVerts + 1);
+        baseIdx = baseIdx + 3;
+        iFace += 2;
+    }
+
+    // Apex center vertex (index numVerts)
+    verts[numVerts].pos.Set(0.0f, 0.0f, 0.0f);
+    verts[numVerts].color.Set(1.0f, 1.0f, 1.0f, 1.0f);
+    verts[numVerts].tex.Set(0.0f, 0.0f);
+
+    // Base center vertex (index numVerts + 1)
+    int baseVertIdx = numVerts + 1;
+    verts[baseVertIdx].pos.Set(0.0f, length, 0.0f);
+    // Transform base center
+    float px = verts[baseVertIdx].pos.x;
+    float py = verts[baseVertIdx].pos.y;
+    float pz = verts[baseVertIdx].pos.z;
+    verts[baseVertIdx].pos.z =
+        orientMtx.y.z * py + orientMtx.x.z * px + orientMtx.z.z * pz;
+    verts[baseVertIdx].pos.y =
+        orientMtx.y.y * py + orientMtx.x.y * px + orientMtx.z.y * pz;
+    verts[baseVertIdx].pos.x =
+        px * orientMtx.x.x + orientMtx.z.x * pz + orientMtx.y.x * py;
+    verts[baseVertIdx].color.Set(1.0f, 1.0f, 1.0f, 1.0f);
+    verts[baseVertIdx].tex.Set(0.0f, 1.0f);
+
+    def.mBeam->Sync(0x13F);
+    def.mBeam->SetMat(def.mMat);
     RndTransformable *parent = this ? static_cast<RndTransformable *>(this) : nullptr;
-    mesh->SetTransParent(parent, false);
+    def.mBeam->SetTransParent(parent, false);
 }
 
 void Spotlight::BuildNGSheet(BeamDef &def) {
@@ -1266,28 +1392,29 @@ void Spotlight::BuildNGSheet(BeamDef &def) {
     mesh->SetTransParent(parent, false);
 }
 
+
 void Spotlight::BuildNGQuad(BeamDef &def, RndTransformable::Constraint constraint) {
     def.mBeam = Hmx::Object::New<RndMesh>();
-    RndMesh *mesh = def.mBeam;
-    RndMesh::VertVector &verts = mesh->Verts();
-    std::vector<RndMesh::Face> &faces = mesh->Faces();
+    RndMesh::VertVector &verts = def.mBeam->Verts();
+    std::vector<RndMesh::Face> &faces = def.mBeam->Faces();
 
     int gridSize = def.mNumSegments;
-    if (def.mNumSections > gridSize) {
+    if (def.mNumSections >= gridSize) {
         gridSize = def.mNumSections;
     }
-    static int sGridSize = 0;
-    if (sGridSize == 0) {
-        sGridSize = (gridSize < 1) ? 2 : gridSize + 1;
-    }
+    static int sGridSize = (gridSize > 0) ? gridSize + 1 : 2;
 
-    int n = sGridSize;
-    int nMinus1 = n - 1;
-    int totalVerts = n * n;
+    int nMinus1 = sGridSize - 1;
+    int totalVerts = sGridSize * sGridSize;
     int totalFaces = nMinus1 * nMinus1 * 2;
 
     verts.resize(totalVerts);
     faces.resize(totalFaces);
+
+    int n = sGridSize;
+
+    Hmx::Matrix3 rot;
+    rot.Set(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, -1.0f, 0.0f, 1.0f, 0.0f);
 
     float topRadius = def.mLength;
     float bottomRadius = def.mBottomRadius;
@@ -1298,15 +1425,17 @@ void Spotlight::BuildNGQuad(BeamDef &def, RndTransformable::Constraint constrain
             float colFrac = (float)col / (float)nMinus1;
             int idx = row * n + col;
 
-            // Position
-            float px = (colFrac * 2.0f - 1.0f) * bottomRadius;
-            float py = (rowFrac * 2.0f - 1.0f) * topRadius;
-            float pz = 0.0f;
+            verts[idx].pos.Set(
+                (colFrac * 2.0f - 1.0f) * bottomRadius,
+                (rowFrac * 2.0f - 1.0f) * topRadius,
+                0.0f
+            );
+            Multiply(verts[idx].pos, rot, verts[idx].pos);
 
-            // Rotate 90 degrees around X (swap y/z, negate new z)
-            verts[idx].pos.Set(px, pz, -py);
-            verts[idx].norm.Set(0.0f, 1.0f, 0.0f);
-            verts[idx].color = Hmx::Color(1, 1, 1, 1);
+            verts[idx].norm.Set(0.0f, 0.0f, 1.0f);
+            Multiply(verts[idx].norm, rot, verts[idx].norm);
+
+            verts[idx].color.Set(1.0f, 1.0f, 1.0f, 1.0f);
             verts[idx].tex.Set(colFrac, rowFrac);
         }
     }
@@ -1315,22 +1444,32 @@ void Spotlight::BuildNGQuad(BeamDef &def, RndTransformable::Constraint constrain
     for (int row = 0; row < nMinus1; row++) {
         for (int col = 0; col < nMinus1; col++) {
             short base = (short)(row + 1 + col * n);
-            short prev = base - 1;
-            short baseN = base + (short)n - 1;
+            unsigned short uBase = (unsigned short)base;
+            unsigned short uPrev = (unsigned short)(base - 1);
+            unsigned short uBaseN = (unsigned short)(base + (short)n - 1);
+            unsigned short uBasePN = (unsigned short)(base + (short)n);
             if ((iFace & 2) == 0) {
-                faces[iFace].Set(prev, base, baseN);
-                faces[iFace + 1].Set(baseN, base + (short)n, base);
+                faces[iFace].v1 = uPrev;
+                faces[iFace].v2 = uBase;
+                faces[iFace].v3 = uBaseN;
+                faces[iFace + 1].v1 = uBaseN;
+                faces[iFace + 1].v2 = uBase;
+                faces[iFace + 1].v3 = uBasePN;
             } else {
-                faces[iFace].Set(baseN, prev, base + (short)n);
-                faces[iFace + 1].Set(base + (short)n, base, prev);
+                faces[iFace].v1 = uBaseN;
+                faces[iFace].v2 = uPrev;
+                faces[iFace].v3 = uBasePN;
+                faces[iFace + 1].v1 = uBasePN;
+                faces[iFace + 1].v2 = uPrev;
+                faces[iFace + 1].v3 = uBase;
             }
             iFace += 2;
         }
     }
 
-    mesh->Sync(0x13F);
-    mesh->SetMat(def.mMat);
-    mesh->SetTransConstraint(constraint, nullptr, false);
+    def.mBeam->Sync(0x13F);
+    def.mBeam->SetMat(def.mMat);
+    def.mBeam->SetTransConstraint(constraint, nullptr, false);
     RndTransformable *parent = this ? static_cast<RndTransformable *>(this) : nullptr;
-    mesh->SetTransParent(parent, false);
+    def.mBeam->SetTransParent(parent, false);
 }

@@ -149,18 +149,16 @@ void FreestyleMoveRecorder::Poll() {
                 do {
                     for (int row = 0x3c; row != 0; row--) {
                         int pixelPlayer = (*src & 7) - 1;
-                        unsigned char depth;
-                        if (pixelPlayer != playerIdx) {
-                            if (playerIdx >= 0) {
-                                depth = (unsigned char)((*src >> 7) & 0xFF);
-                            } else {
-                                depth = 0;
-                            }
+                        unsigned long depth;
+                        if (pixelPlayer == playerIdx) {
+                            depth = (*src >> 7) & 0xFF;
+                        } else if (playerIdx >= 0) {
+                            depth = (*src >> 7) & 0xFF;
                         } else {
-                            depth = (unsigned char)((*src >> 7) & 0xFF);
+                            depth = 0;
                         }
                         src += 0x600;
-                        *(unsigned char *)(dst += 0x50) = depth;
+                        *(unsigned char *)(dst += 0x50) = (unsigned char)depth;
                     }
                     col++;
                     texels = (char *)texels + 8;
@@ -178,8 +176,9 @@ void FreestyleMoveRecorder::Poll() {
         if (nextFrame < mPlaybackIndex || mPlaybackIndex == -1) {
             if (!mRecording) {
                 mTakes[mCurrentTakeIndex].mNumFrames = nextFrame;
-                float beat = mRecordPos * 1000.0f;
+                float recordPosVal = mRecordPos;
                 BaseSkeleton *skel = GetLiveSkeleton();
+                float beat = recordPosVal * 1000.0f;
                 mTakes[mCurrentTakeIndex].RecordSkeletonFrame(skel, recordFrame, beat);
             } else {
                 BaseSkeleton *skel = GetLiveSkeleton();
@@ -189,8 +188,9 @@ void FreestyleMoveRecorder::Poll() {
                 if (skel && skel->IsTracked()) {
                     tempSkel.Set(*skel);
                 }
-                mFrameBuffer[recordFrame].skeleton = tempSkel;
-                mFrameBuffer[recordFrame].mBeat = beat;
+                FreestyleMoveFrame *frame = &mFrameBuffer[recordFrame];
+                frame->skeleton = tempSkel;
+                frame->mBeat = beat;
                 mDancerTakeFrameCount = nextFrame;
             }
 
@@ -208,7 +208,7 @@ void FreestyleMoveRecorder::Poll() {
 
     if (playbackFrame >= 0
         && (playbackFrame < mTakes[mCurrentTakeIndex].mNumFrames || mPlaybackActive)) {
-        void *texels;
+        void *texels = nullptr;
         mPlayerPalette->TexelsLock(texels);
 
         int prevFrame = playbackFrame - 1;
@@ -221,40 +221,42 @@ void FreestyleMoveRecorder::Poll() {
         }
 
         int takeIdx = mCurrentTakeIndex;
-        char *depthBase = (char *)mTakes[takeIdx].mDepthFrames;
-        int centerX = mTakes[takeIdx].unkc << 2;
-        int unkVal = mTakes[takeIdx].unk14;
-        int minDepth = unkVal - 0x7a;
+        char *depthBase = (char *)mTakes[takeIdx].mDepthFrames + lastFrame * 0x12c0;
+        int centerX = mTakes[takeIdx].unk10 << 2;
+        int minDepth = mTakes[takeIdx].unk14 - 0x7a;
 
         if (mPlaybackActive) {
             centerX = 0;
             minDepth = 0;
         }
 
-        int pixelX = 0;
-        unsigned short *rowPtr = (unsigned short *)((char *)texels - 0x300);
         int unkColor = mTakes[takeIdx].unkc;
+        int colorMask = unkColor + 1;
+        int pixelX = 0;
+        char *texelPtr = (char *)texels;
         for (int col = 0; col < 0x140; col++) {
             int x = pixelX + centerX;
             unsigned int row = 0;
-            unsigned short *ptr = rowPtr;
+            unsigned short *ptr = (unsigned short *)(texelPtr - 0x300);
             for (int r = 0xf0; r != 0; r--) {
                 unsigned int depthVal = 0;
                 if ((int)x >= 0 && (int)x < 0x140) {
-                    int depthY = ((int)row >> 2) + ((int)row < 0 && (row & 3) != 0 ? 1 : 0);
-                    int depthX = ((int)x >> 2) + ((int)x < 0 && (x & 3) != 0 ? 1 : 0);
+                    int depthY = (int)row / 4;
+                    int depthX = (int)x / 4;
                     depthVal = (unsigned int)*(unsigned char *)(
-                        depthBase + lastFrame * 0x12c0 + depthY * 0x50 + depthX
+                        depthBase + depthY * 0x50 + depthX
                     );
                 }
                 row++;
                 ptr += 0x180;
-                *ptr = (unsigned short)(((depthVal - minDepth) & 0xffffffff) << 7)
-                    | (unsigned short)(-(unsigned short)(depthVal != 0)
-                                       & ((short)unkColor + 1));
+                unsigned short depthU16 = (unsigned short)depthVal;
+                unsigned int diff = depthVal - minDepth;
+                unsigned int shifted = diff << 7;
+                unsigned int depthMask = (depthU16 > 0) ? 0xFFFFFFFF : 0;
+                *ptr = (unsigned short)(shifted | (depthMask & colorMask));
             }
             pixelX++;
-            rowPtr = (unsigned short *)((char *)rowPtr + 2);
+            texelPtr += 2;
         }
 
         mPlayerPalette->TexelsUnlock();

@@ -1,6 +1,7 @@
 #include "world/SpotlightDrawer_NG.h"
 #include "macros.h"
 #include "math/Color.h"
+#include "math/Mtx.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
 #include "rnddx9/RenderState.h"
@@ -117,7 +118,6 @@ void NgSpotlightDrawer::RenderSheet(Spotlight *) {}
 bool NgSpotlightDrawer::CheckRTs(NgSpotlightDrawer::SpotlightResources *) { return false; }
 void NgSpotlightDrawer::SetupXSection(Spotlight *, const Spotlight::BeamDef &) {}
 void NgSpotlightDrawer::RenderConeDefs(Spotlight *, const Hmx::Color &) {}
-void NgSpotlightDrawer::SetupFogDensityState() {}
 void NgSpotlightDrawer::RenderCone(Spotlight *) {}
 void NgSpotlightDrawer::RenderBeams(const Hmx::Matrix4 &) {}
 bool NgSpotlightDrawer::CheckCam() { return false; }
@@ -125,6 +125,26 @@ void NgSpotlightDrawer::BlurRT(float, float) {}
 void NgSpotlightDrawer::SetupForPostProcess() {}
 void NgSpotlightDrawer::RenderScene() {}
 #endif
+
+void NgSpotlightDrawer::SetupFogDensityState() {
+    if (mFogDensityMap) {
+        TheShaderMgr.SetPConstant((PShaderConstant)5, 1);
+        TheRenderState.SetTextureClamp(5, (RndRenderState::ClampMode)2);
+    }
+
+    Hmx::Matrix4 viewProj;
+    mSpotCam->GetInfiniteViewProj(viewProj);
+    TheShaderMgr.SetVConstant((VShaderConstant)4, &viewProj);
+
+    float nearPlane = mSpotCam->NearPlane();
+    float fogDensity = 0.0f;
+    if (nearPlane > 0.0f) {
+        fogDensity = 1.0f / nearPlane;
+    }
+
+    float fogParams[4] = { fogDensity * 0.0f, fogDensity, fogDensity * 0.0f, fogDensity * 0.0f };
+    TheShaderMgr.SetPConstant((PShaderConstant)0x7F, fogParams);
+}
 
 #include "rnddx9/Rnd.h"
 

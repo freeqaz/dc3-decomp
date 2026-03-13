@@ -1463,10 +1463,10 @@ void PartyModeMgr::FinalizeParty() {
         FinalizePlaytestParty();
         return;
     }
-    if (mSubModeSongPicker.mItems.empty()) {
+    if (mSubModeSongPicker.Size() == 0) {
         ResetSongs();
     }
-    if (mModePicker.mItems.empty()) {
+    if (mModePicker.Size() == 0) {
         ResetModes(true);
     }
     static Symbol crew_showdown_num_events("crew_showdown_num_events");
@@ -1482,37 +1482,35 @@ void PartyModeMgr::FinalizeParty() {
     }
     DataArray *usePerPlayerArr = numEventsArr->FindArray(use_events_per_player, true);
     int usePerPlayer = usePerPlayerArr->Node(1).Int(usePerPlayerArr);
-    if (usePerPlayer == 0) {
-        DataArray *totalArr = numEventsArr->FindArray(total_events, true);
-        mRoundsTotal = totalArr->Node(maxTeamSize).Int(totalArr);
-    } else {
+    if (usePerPlayer != 0) {
         DataArray *perPlayerArr = numEventsArr->FindArray(events_per_player, true);
         int perPlayer = perPlayerArr->Node(1).Int(perPlayerArr);
         mRoundsTotal = perPlayer * maxTeamSize;
+    } else {
+        DataArray *totalArr = numEventsArr->FindArray(total_events, true);
+        mRoundsTotal = totalArr->Node(maxTeamSize).Int(totalArr);
     }
     mRoundsUntilShowdown = mRoundsTotal;
     mMaxPointsPerEvent = (float)mRoundsTotal + 1.0f;
-    {
-        static Symbol six_star_bonus("six_star_bonus");
-        DataArray *sixStarArr = mEventScoring->FindArray(six_star_bonus, true);
-        mSixStarBonus = sixStarArr->Node(1).Float(sixStarArr);
-    }
+    static Symbol six_star_bonus("six_star_bonus");
+    DataArray *sixStarArr = mEventScoring->FindArray(six_star_bonus, true);
+    mSixStarBonus = sixStarArr->Node(1).Float(sixStarArr);
     static Symbol player_sequences("player_sequences");
     DataArray *playerSeqArr = mPartyModeCfg->FindArray(player_sequences, true);
     char buf[8];
     int minTeam = team2Size;
     int maxTeam = team1Size;
-    if (team1Size < team2Size) {
+    if (team1Size <= team2Size) {
         minTeam = team1Size;
         maxTeam = team2Size;
     }
     sprintf(buf, "%dv%d", minTeam, maxTeam);
     mPlayerSequences = playerSeqArr->FindArray(Symbol(buf), true);
-    if (mPlayerSequences == nullptr) {
+    if (mPlayerSequences != nullptr) {
+        TheDebug << FormatString("There is a player sequence. There will be no problems.\n").Str();
+    } else {
         FormatString fmt("Not enough player sequence. There will be problems.");
         TheDebug.Notify(fmt.Str());
-    } else {
-        TheDebug << FormatString("There is a player sequence. There will be no problems.\n").Str();
     }
     static Symbol dj_logic("dj_logic");
     static Symbol number_of_songs("number_of_songs");
@@ -1521,24 +1519,24 @@ void PartyModeMgr::FinalizeParty() {
     DataArray *djLogicArr = mPartyModeCfg->FindArray(dj_logic, true);
     DataArray *numSongsArr = djLogicArr->FindArray(number_of_songs, true);
     DataArray *roundsArr = numSongsArr->FindArray(mRoundsTotal, false);
-    if (roundsArr == nullptr) {
-        mPlaytestEventSequences = nullptr;
-        mEventBucketSequences = nullptr;
-    } else {
+    if (roundsArr != nullptr) {
         mPlaytestEventSequences = roundsArr->FindArray(intensity_sequence, true);
-        if (mPlaytestEventSequences == nullptr) {
+        if (mPlaytestEventSequences != nullptr) {
+            TheDebug << FormatString("There is enough DJ logic. There will be no problems.\n").Str();
+        } else {
             FormatString fmt("Not enough DJ logic. There will be problems.");
             TheDebug.Notify(fmt.Str());
-        } else {
-            TheDebug << FormatString("There is enough DJ logic. There will be no problems.\n").Str();
         }
         mEventBucketSequences = roundsArr->FindArray(bucket_sequence, true);
-        if (mEventBucketSequences == nullptr) {
+        if (mEventBucketSequences != nullptr) {
+            TheDebug << FormatString("There is mode bucket. There will be no problems.\n").Str();
+        } else {
             FormatString fmt("Not enough mode bucket. There will be problems.");
             TheDebug.Notify(fmt.Str());
-        } else {
-            TheDebug << FormatString("There is mode bucket. There will be no problems.\n").Str();
         }
+    } else {
+        mPlaytestEventSequences = nullptr;
+        mEventBucketSequences = nullptr;
     }
     static Symbol team_1_size("team_1_size");
     static Symbol team_2_size("team_2_size");
@@ -1621,23 +1619,24 @@ void PartyModeMgr::PruneHistory() {
 
 DataNode PartyModeMgr::OnSetSongAndDefaults(DataArray *_msg) {
     int sz = _msg->Size();
+    bool force = false;
     if (sz == 3) {
         Symbol mode(gNullStr);
         Symbol song = _msg->Sym(2);
-        SetSongAndDefaults(song, mode, false);
+        SetSongAndDefaults(song, mode, force);
     } else if (sz == 4) {
         Symbol mode = _msg->Sym(3);
         Symbol song = _msg->Sym(2);
-        SetSongAndDefaults(song, mode, false);
+        SetSongAndDefaults(song, mode, force);
     } else if (sz == 5) {
         int rawForce = _msg->Node(4).Int(_msg);
         Symbol mode = _msg->Sym(3);
         Symbol song = _msg->Sym(2);
         SetSongAndDefaults(song, mode, rawForce != 0);
     } else {
-        Symbol song(gNullStr);
         Symbol mode(gNullStr);
-        SetSongAndDefaults(song, mode, false);
+        Symbol song(gNullStr);
+        SetSongAndDefaults(song, mode, force);
     }
     return DataNode(0);
 }
@@ -1766,21 +1765,27 @@ void PartyModeMgr::UpdateScores() {
     } else {
         mJustWonSide = 2;
     }
-    if (mJustWonSide == 0) {
-        mLeftTeamPrevScore = mLeftTeamScore;
-        mLeftTeamScore += GetPointsForWin();
-        mRightTeamPrevScore = mRightTeamScore;
-        mRightTeamScore += GetPointsForLoss();
-    } else if (mJustWonSide == 1) {
+    switch (mJustWonSide) {
+    case 1:
         mLeftTeamPrevScore = mLeftTeamScore;
         mLeftTeamScore += GetPointsForLoss();
         mRightTeamPrevScore = mRightTeamScore;
         mRightTeamScore += GetPointsForWin();
-    } else if (mJustWonSide < 3) {
+        break;
+    default:
+        if ((unsigned)mJustWonSide < 3) {
+            mLeftTeamPrevScore = mLeftTeamScore;
+            mLeftTeamScore += GetPointsForWin();
+            mRightTeamPrevScore = mRightTeamScore;
+            mRightTeamScore += GetPointsForWin();
+        }
+        break;
+    case 0:
         mLeftTeamPrevScore = mLeftTeamScore;
         mLeftTeamScore += GetPointsForWin();
         mRightTeamPrevScore = mRightTeamScore;
-        mRightTeamScore += GetPointsForWin();
+        mRightTeamScore += GetPointsForLoss();
+        break;
     }
     SetLeftTeamStarBonus();
     SetRightTeamStarBonus();
@@ -1793,34 +1798,40 @@ void PartyModeMgr::UpdateScores() {
         mWinningSide = 0;
         return;
     }
-    if (!mIsShowdown) {
-        mWinningSide = 2;
-        return;
-    }
-    mWinningSide = mJustWonSide;
-    static Symbol left("left");
-    static Symbol right("right");
-    static Symbol random("random");
-    if (mWinningSide == 0) {
-        mLeftTeamPrevScore = mLeftTeamScore;
-        mLeftTeamScore += GetPointsForWin();
-        SendDataPoint("crew_throwdown/tiebreaker", side, left, random, 0);
-    } else if (mWinningSide == 1) {
-        mRightTeamPrevScore = mRightTeamScore;
-        mRightTeamScore += GetPointsForWin();
-        SendDataPoint("crew_throwdown/tiebreaker", side, right, random, 0);
-    } else if (mWinningSide == 2) {
-        if (rand() % 2) {
-            mWinningSide = 0;
-            mLeftTeamPrevScore = mLeftTeamScore;
-            mLeftTeamScore += GetPointsForWin();
-            SendDataPoint("crew_throwdown/tiebreaker", side, left, random, 1);
-        } else {
-            mWinningSide = 1;
+    if (mIsShowdown) {
+        mWinningSide = mJustWonSide;
+        static Symbol left("left");
+        static Symbol right("right");
+        static Symbol random("random");
+        switch (mWinningSide) {
+        case 1:
             mRightTeamPrevScore = mRightTeamScore;
             mRightTeamScore += GetPointsForWin();
-            SendDataPoint("crew_throwdown/tiebreaker", side, right, random, 1);
+            SendDataPoint("crew_throwdown/tiebreaker", side, right, random, 0);
+            break;
+        default:
+            if ((unsigned)mWinningSide < 3) {
+                if (rand() % 2) {
+                    mWinningSide = 0;
+                    mLeftTeamPrevScore = mLeftTeamScore;
+                    mLeftTeamScore += GetPointsForWin();
+                    SendDataPoint("crew_throwdown/tiebreaker", side, left, random, 1);
+                } else {
+                    mWinningSide = 1;
+                    mRightTeamPrevScore = mRightTeamScore;
+                    mRightTeamScore += GetPointsForWin();
+                    SendDataPoint("crew_throwdown/tiebreaker", side, right, random, 1);
+                }
+            }
+            break;
+        case 0:
+            mLeftTeamPrevScore = mLeftTeamScore;
+            mLeftTeamScore += GetPointsForWin();
+            SendDataPoint("crew_throwdown/tiebreaker", side, left, random, 0);
+            break;
         }
+    } else {
+        mWinningSide = 2;
     }
 }
 

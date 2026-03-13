@@ -51,7 +51,41 @@ int RingBuffer::Peek(void *data, int len) {
     return len;
 }
 
-int RingBuffer::Write(void *, int) { return 0; }
+int RingBuffer::Write(void *data, int len) {
+    int writeLen = len;
+
+    if (writeLen > mSize) {
+        writeLen = mSize;
+    }
+
+    if (writeLen > mTotal) {
+        writeLen = mTotal;
+    }
+
+    if (writeLen <= 0) {
+        return 0;
+    }
+
+    int writePos = mWriteIx;
+    int available = mSize - writePos;
+    int chunk1 = writeLen;
+
+    if (chunk1 >= available) {
+        chunk1 = available;
+    }
+
+    memcpy((char *)mBuffer + writePos, data, chunk1);
+
+    if (chunk1 < writeLen) {
+        memcpy(mBuffer, (char *)data + chunk1, writeLen - chunk1);
+    }
+
+    int newTotal = mTotal + writeLen;
+    mWriteIx = (writePos + writeLen) % mSize;
+    mTotal = newTotal;
+
+    return writeLen;
+}
 
 int RingBuffer::Read(void *data, int len) {
     int readLen = len;

@@ -13,6 +13,7 @@
 #include "utl/TextStream.h"
 #include "xdk/XAPILIB.h"
 #include <cstdlib>
+#include <cstring>
 
 extern MemTracker *gMemTracker;
 CriticalSection *gMemLock;
@@ -33,7 +34,7 @@ extern String gMemLogType;
 std::vector<String> gUseLowestMipExceptions;
 MemHeapStack gNullMemStack;
 int gNumThreads;
-unsigned long gThreadIds[MAX_BUF_THREADS];
+int gThreadIds[MAX_BUF_THREADS];
 
 bool gInitted;
 
@@ -545,14 +546,20 @@ void MemFreeBlockStats(
     gHeaps[heapNum].FreeBlockStats(i2, i3, numFreeBytes, i5, biggestFreeBlock);
 }
 
-// TODO: implement — ThreadMemStack called by MemPush/PopTemp/Heap
-#ifdef HX_NATIVE
-MemHeapStack &ThreadMemStack(bool) {
-    static MemHeapStack s;
+// Global data structures for thread-local memory heaps
+static MemHeapStack gThreadBuf[MAX_BUF_THREADS];
+static int gThreadBufCurrentIndex = -1;
+static unsigned long gThreadBufCurrentId = 0;
+static int gThreadBufCur = 0;
+
+// Global variables for thread management (matching original binary)
+
+// Native implementation - simple per-thread allocation
+MemHeapStack &ThreadMemStack(bool createIfMissing) {
+    static __declspec(thread) MemHeapStack s;
     return s;
 }
 int GetCurrentHeapNum() { return 0; }
 void MemDelta(const char *, int) {}
 int MemFindHeap(const char *) { return 0; }
 void MemPrintOverview(int, char *const) {}
-#endif

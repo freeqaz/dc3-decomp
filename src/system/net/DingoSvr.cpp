@@ -2,6 +2,7 @@
 #include "net/DingoJob.h"
 #include "net/DingoAuthJob.h"
 #include "WebSvcReq.h"
+#include "WebSvcMgr.h"
 #include "meta/ConnectionStatusPanel.h"
 #include "obj/Data.h"
 #include "obj/Dir.h"

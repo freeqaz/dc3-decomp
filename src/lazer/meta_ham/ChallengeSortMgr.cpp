@@ -248,7 +248,26 @@ const char *ChallengeSortMgr::GetBestChallengeScoreGamertag(int songID) {
     return gNullStr;
 }
 
-int ChallengeSortMgr::GetChallengerXp(int) { return 0; }
+int ChallengeSortMgr::GetChallengerXp(int i) {
+    if (IsIndexHeader(i)) {
+        int songID = GetSongID(i);
+        int highestScore = 0;
+        int recordCount = (mChallengeRecords.size() * 84) / 0x54;
+        int result = 0;
+        for (int j = 0; j < recordCount; j++) {
+            ChallengeRecord* record = &mChallengeRecords[j];
+            int score = record->GetChallengeRow().mScore;
+            if (songID == record->GetChallengeRow().mSongID && highestScore < score) {
+                highestScore = score;
+                result = record->GetChallengeRow().mChallengerXp;
+            }
+        }
+        return result;
+    } else {
+        ChallengeSortNode* node = static_cast<ChallengeSortNode*>(mSorts[mCurrentSortIdx]->GetList()[i]);
+        return node->GetChallengerXp();
+    }
+}
 
 const char *ChallengeSortMgr::GetChallengerGamertag(int i) {
     if (IsIndexHeader(i)) {

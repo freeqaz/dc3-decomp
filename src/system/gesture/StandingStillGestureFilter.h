@@ -12,6 +12,8 @@ public:
     virtual DataNode Handle(DataArray *, bool);
     virtual bool SyncProperty(DataNode &, DataArray *, int, PropOp);
 
+    friend class SkeletonChooser;
+
     void SetForwardFacingCutoff(float);
     void RestoreDefaultForwardFacingCutoff();
     void Update(const Skeleton &, int);

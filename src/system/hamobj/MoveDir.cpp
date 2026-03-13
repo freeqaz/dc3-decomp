@@ -86,7 +86,30 @@ namespace {
 
     float DrawDetectedBar(float, const char *, float, float, float, bool, bool);
     void DrawBeatLine(float, float, float, const Hmx::Color &);
-    float DrawPlayClip(float, SkeletonClip *, int);
+    float DrawPlayClip(float farg0, SkeletonClip *clip, int player) {
+        MILO_ASSERT(clip, 0x762);
+        String str;
+        str = clip->Name();
+        if (player < clip->NumMoveRatings()) {
+            const SkeletonClip::MoveRating rating = clip->GetMoveRating(player);
+            const Symbol *symbol = &rating.mExpected;
+            if (symbol->Null()) {
+                symbol = new Symbol("<none>");
+                str += MakeString(" (bar %i: expected=%s)", player, symbol->Str());
+                delete (Symbol*)symbol;
+            } else {
+                str += MakeString(" (bar %i: expected=%s)", player, symbol->Str());
+            }
+        } else {
+            str += " (no rating overrides)";
+        }
+
+        Hmx::Rect rect(0.009999999776482582f, farg0, 0, 0);
+        TheRnd.DrawRectScreen(rect, Hmx::Color(), nullptr, nullptr, nullptr);
+        Vector2 pos(0.009999999776482582f, farg0);
+        TheRnd.DrawStringScreen(str.c_str(), pos, sLightGray, true);
+        return pos.y;
+    }
 
 }
 

@@ -351,7 +351,10 @@ class DecompOrchestrator:
             )
             output = stdout_bytes.decode("utf-8", errors="replace") if stdout_bytes else ""
         except asyncio.TimeoutError:
-            process.kill()
+            try:
+                process.kill()
+            except ProcessLookupError:
+                pass
             await process.wait()
             log.warning("Quota preflight timed out after 30s. Proceeding anyway.")
             return
