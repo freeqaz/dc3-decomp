@@ -18,7 +18,7 @@ gameplay screens.
 | Phase 1A: Headless Engine | NEARLY COMPLETE | ~95% |
 | Phase 1B: Milo Viewer | COMPLETE | 100% |
 | Phase 1.5: Asset Pipeline | COMPLETE | 100% |
-| Phase 2: Rendering | IN PROGRESS | ~90% |
+| Phase 2: Rendering | IN PROGRESS | ~95% |
 | Phase 2.5: Character Animation | WORKING | ~90% |
 | Phase 3: Audio | COMPLETE | 100% |
 | Phase 4: Input | COMPLETE | 100% |
@@ -41,6 +41,7 @@ gameplay screens.
 - Full menu flow: attract → main_screen → choose_mode → song_select → multiuser → loading → **game_screen**
 - 10000 frames stable on game_screen, clean exit
 - DCI venue rendering: 505 draw calls/frame (floor, walls, DJ booth, fully-lit character, HUD overlays)
+- **game_screen venue rendering**: 482 draw calls/frame — venue renders through world_panel with animated CamShot cameras, LightPreset lighting, and character skinning
 - **Character animation on main menu**: outfit loading via FileMerger, CharDriver clip playback, GPU-skinned bone animation
 - Audio pipeline complete (FFmpeg, Vorbis, miniaudio, DSP effects)
 - Input working (gamepad + keyboard + scripted headless input)
@@ -88,30 +89,27 @@ iterates drawables, while the engine uses `WorldDir::DrawShowing()` → `RndGrou
 | Text markup processing | MEDIUM | `<alt>` tags render as literal text instead of styling |
 | Bloom/glow post-process | LOW | Neon aesthetic from Xbox UI |
 
-### Milestone 3: Gameplay Screen — REVISED (Session 61)
+### Milestone 3: Gameplay Screen — WORKING (Session 63)
 
 **Goal**: Navigate to a song, start gameplay, see the dance stage.
 
-**Status**: Menu screens render at 505 draw calls. game_screen loads but venue is EMPTY (78 HUD-only draws). Root cause fully diagnosed.
+**Status**: VENUE RENDERING WORKING. 482 draw calls/frame during gameplay. Disco balls, neon signs, characters, stage all visible. Camera animated via CamShot system.
 
 | Task | Status | Notes |
 |------|--------|-------|
 | Song select screen navigation | DONE | Full menu flow via input script |
-| LightPreset stub removal | DONE | 12 stubs removed, real impl links. Session 59 |
-| DataNode::GetObj graceful failure | DONE | Missing objects warn instead of crash. Session 61 |
-| **FileMerger mMerger wiring** | **BLOCKER** | mMerger is null — embedded DTA in director.milo_xbox doesn't execute. See [Session 61](../../sessions/2026-03-12-session61-merger-investigation.md) |
-| Venue merge into world.milo | BLOCKED | Needs mMerger. world_panel's world.milo is an empty shell without venue content |
-| Song animation playback | BLOCKED | Needs mMerger → GetWorld() → song.anim PropAnim |
-| LightPreset animation | BLOCKED | Needs song.anim → force_preset → LightPresetManager |
+| LightPreset stub removal | DONE | 12 stubs removed, real impl links |
+| DataNode::GetObj graceful failure | DONE | Missing objects warn instead of crash |
+| **Venue rendering through world_panel** | **DONE** | Fixed NaN camera in CalcFrame/SetFrame. Venue renders through TheUI->Draw() matching Xbox architecture |
+| **LightPreset forcing** | **DONE** | Auto-force first valid preset on venue change. Baked lights work for venues without presets |
+| **HamDirector venue selection** | **DONE** | GetVenueWorld() for gameplay venue, fallback to gNativeVenueDir for menu |
+| Song animation playback | **TODO** | song.anim PropAnim for camera/light/character sync |
+| LightPreset animation | **TODO** | song.anim → force_preset → preset cycling during gameplay |
 | Move card UI rendering | **TODO** | Pink rectangles — TexMovie render-to-texture needed |
 | Score display | **TODO** | Not yet wired |
 | Song audio playback during gameplay | **TODO** | FFmpeg backend ready, not wired to game flow |
 
-**Critical path**: Fix mMerger wiring → venue loads → song.anim drives LightPresets → venue visible.
-
-**Note**: The 505 draw calls seen in session 59 were from attract_screen's own world content, NOT from the venue. With real LightPreset::Load, those objects show with their correct serialized Showing states.
-
-See [Session 61 Investigation](../../sessions/2026-03-12-session61-merger-investigation.md) for full diagnosis and fix options.
+**Key fix (Session 63)**: `CameraManager::CalcFrame()` produced NaN from uninitialized task timers, poisoning camera transforms and making the entire scene invisible. Guards in CalcFrame and CamShot::SetFrame clamp NaN to 0 (first keyframe). Removed redundant explicit DrawShowing — venue correctly renders through world_panel as part of TheUI->Draw().
 
 ### Milestone 4: Playable Dance Gameplay
 
