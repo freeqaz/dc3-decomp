@@ -1630,7 +1630,7 @@ DataNode PartyModeMgr::OnSetSongAndDefaults(DataArray *_msg) {
         Symbol song = _msg->Sym(2);
         SetSongAndDefaults(song, mode, false);
     } else if (sz == 5) {
-        int rawForce = _msg->Int(4);
+        int rawForce = _msg->Node(4).Int(_msg);
         Symbol mode = _msg->Sym(3);
         Symbol song = _msg->Sym(2);
         SetSongAndDefaults(song, mode, rawForce != 0);
@@ -1715,8 +1715,11 @@ void PartyModeMgr::ResetModes(bool resetAll) {
     Symbol is_in_party_mode("is_in_party_mode");
     int isPartyMode = TheHamProvider->Property(is_in_party_mode)->Int();
     DataArray *cfgArr;
-    Symbol cfgSym(isPartyMode ? "crew_showdown_weighted_event_types" : "party_mode_weighted_event_types");
-    cfgArr = mPartyModeCfg->FindArray(cfgSym);
+    if (isPartyMode) {
+        cfgArr = mPartyModeCfg->FindArray(Symbol("crew_showdown_weighted_event_types"));
+    } else {
+        cfgArr = mPartyModeCfg->FindArray(Symbol("party_mode_weighted_event_types"));
+    }
     if (resetAll) {
         for (int i = 0; i < 5; i++) {
             ToggleIncludedModeOn(GetModeNameFromEnum(i), false);
