@@ -458,7 +458,7 @@ template <class T>
 void DrawAccessories(
     const SpotlightDrawer::SpotlightEntry *const &,
     const SpotlightDrawer::SpotlightEntry *const &
-);
+) {}
 
 void SpotlightDrawer::DrawWorld() {
     int numLights = sLights.size();

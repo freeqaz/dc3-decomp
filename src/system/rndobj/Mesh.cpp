@@ -1308,20 +1308,19 @@ void RndMesh::InstanceGeomOwnerBones() {
     if (mBones.empty())
         return;
 
-    auto& _bones = mGeomOwner->mBones;
-    bool needsCopy = mGeomOwner && _bones[0].mBone != mBones[0].mBone;
+    bool needsCopy = mGeomOwner && mGeomOwner->mBones[0].mBone != mBones[0].mBone;
     if (needsCopy) {
         DeleteBones(true);
         if (!(!mGeomOwner)) {
-            mBones = _bones;
+            mBones = mGeomOwner->mBones;
         } else {
             mBones.erase(mBones.begin(), mBones.end());
         }
     }
 
     // Find the root bone in the geom owner's hierarchy
-    RndTransformable *oldRoot = NULL;
-    for (RndTransformable *parent = _bones[0].mBone; parent != NULL;
+    RndTransformable *oldRoot = nullptr;
+    for (RndTransformable *parent = mGeomOwner->mBones[0].mBone; nullptr != parent;
          parent = parent->TransParent()) {
         RndTransformable *transParent =
             dynamic_cast<RndTransformable *>(parent->TransParent());
@@ -1343,13 +1342,14 @@ void RndMesh::InstanceGeomOwnerBones() {
     // Create new bone transforms for each bone
     for (unsigned int i = 0; i < mBones.size(); i++) {
         RndTransformable *newBone = Hmx::Object::New<RndTransformable>();
-        newBone->SetName(NextName(_bones[i].mBone->Name(), Dir()), Dir());
-        newBone->Copy(_bones[i].mBone, Hmx::Object::kCopyDeep);
+        newBone->SetName(NextName(mGeomOwner->mBones[i].mBone->Name(), Dir()), Dir());
+        newBone->Copy(mGeomOwner->mBones[i].mBone, Hmx::Object::kCopyDeep);
         mBones[i].mBone = newBone;
 
         // Find parent in owner hierarchy and reparent
-        int parentIdx = mGeomOwner->GetBoneIndex(_bones[i].mBone->TransParent());
-        RndTransformable *parent = (parentIdx != -1) ? (RndTransformable *)mBones[parentIdx].mBone : newRoot;
+        int parentIdx = mGeomOwner->GetBoneIndex(mGeomOwner->mBones[i].mBone->TransParent());
+        RndTransformable *parent;
+        parent = !((parentIdx != -1)) ? newRoot : (RndTransformable *)mBones[parentIdx].mBone;
         newBone->SetTransParent(parent, false);
     }
 }

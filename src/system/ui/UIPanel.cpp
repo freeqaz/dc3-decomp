@@ -58,21 +58,15 @@ bool UIPanel::CheckIsLoaded() {
             FinishLoad();
 #ifdef HX_NATIVE
             if (DebugUIFlow()) {
-                static int sLoadDiag = 0;
-                if (sLoadDiag++ < 20) {
-                    printf("DC3 UI: Panel '%s' finished loading (state=%d)\n", Name(), (int)mState);
-                }
+                printf("DC3 UI: Panel '%s' finished loading (state=%d)\n", Name(), (int)mState);
             }
 #endif
             return true;
         } else {
 #ifdef HX_NATIVE
             if (DebugUIFlow()) {
-                static int sCheckDiag = 0;
-                if (sCheckDiag++ < 10) {
-                    printf("DC3 UI: Panel '%s' still loading: mLoader=%p loaded=%d loadRefs=%d\n",
-                           Name(), (void *)mLoader, mLoader ? mLoader->IsLoaded() : -1, mLoadRefs);
-                }
+                printf("DC3 UI: Panel '%s' still loading: mLoader=%p loaded=%d loadRefs=%d\n",
+                       Name(), (void *)mLoader, mLoader ? mLoader->IsLoaded() : -1, mLoadRefs);
             }
 #endif
             return false;
@@ -223,30 +217,23 @@ void UIPanel::Load() {
             heapNum = MemFindHeap(heapArr->Str(1));
         }
         if (!fp.empty()) {
-            MemPushHeap(heapNum);
 #ifdef HX_NATIVE
-            // Load panels synchronously on native — several native-only screens
-            // still depend on deterministic loader completion because async
-            // loader polling does not yet mirror Xbox behavior.
-            mLoader = new DirLoader(fp, kLoadFront, nullptr, nullptr, nullptr, false, nullptr);
-            MILO_ASSERT(mLoader, 0xA9);
-            mLoaded = false;
-#ifdef HX_WEB
-            printf("UIPanel::Load '%s' PollUntilLoaded...\n", Name());
-            fflush(stdout);
+            if (DebugUIFlow()) {
+                printf("DC3 UI: Panel '%s' starting load from '%s' pos=%d\n",
+                       Name(), fp.c_str(), (int)pos);
+            }
 #endif
-            TheLoadMgr.PollUntilLoaded(mLoader, nullptr);
-#ifdef HX_WEB
-            printf("UIPanel::Load '%s' done (loaded=%d)\n", Name(), mLoader ? mLoader->IsLoaded() : -1);
-            fflush(stdout);
-#endif
-#else
+            MemPushHeap(heapNum);
             mLoader = new DirLoader(fp, pos, nullptr, nullptr, nullptr, false, nullptr);
             MILO_ASSERT(mLoader, 0xA9);
             mLoaded = false;
-#endif
             MemPopHeap();
         }
+#ifdef HX_NATIVE
+        else if (DebugUIFlow()) {
+            printf("DC3 UI: Panel '%s' load skipped: empty file path\n", Name());
+        }
+#endif
     }
 }
 

@@ -279,13 +279,22 @@ void SongLayout::SetDefaultReplacer() {
     SongPattern dummyPattern;
     dummyPattern.mName = Symbol("Verse");
     RndPropAnim *songAnim = TheHamDirector->SongAnimByDifficulty((Difficulty)0);
-    MILO_ASSERT(songAnim, "song not loaded?");
+    if (!songAnim) {
+        MILO_FAIL("song not loaded?");
+    }
     static Symbol move("move");
-    DataArrayPtr moveProp(move);
-    Hmx::Object *hamObj = TheHamDirector
-        ? static_cast<Hmx::Object *>(TheHamDirector)
-        : nullptr;
-    PropKeys *keys = songAnim->GetKeys(hamObj, moveProp);
+    PropKeys *keys;
+    {
+        DataNode moveNode(move);
+        Hmx::Object *hamObj;
+        if (!TheHamDirector) {
+            hamObj = nullptr;
+        } else {
+            hamObj = static_cast<Hmx::Object *>(TheHamDirector);
+        }
+        DataArrayPtr moveProp(moveNode);
+        keys = songAnim->GetKeys(hamObj, moveProp);
+    }
     Symbol restMove("Rest.move");
     Symbol restMoveLower("rest.move");
     Symbol finishingMove("Finishing_Move.move");
@@ -293,7 +302,6 @@ void SongLayout::SetDefaultReplacer() {
     for (int i = 0; i < keys->NumKeys(); i++) {
         Symbol val = keys->AsSymbolKeys()->operator[](i).value;
         if (val != restMove && val != restMoveLower && val != finishingMove) {
-            // Search for existing replacer with this move name
             std::vector<MoveReplacer>::iterator it;
             for (it = mMoveReplacers.begin(); it != mMoveReplacers.end(); ++it) {
                 if (it->mFrom == val) {
@@ -301,7 +309,6 @@ void SongLayout::SetDefaultReplacer() {
                     break;
                 }
             }
-            // If no existing replacer found, create a new one
             if (it == mMoveReplacers.end()) {
                 MoveReplacer replacer;
                 replacer.mFrom = val;
@@ -330,12 +337,13 @@ void SongLayout::SetDefaultPattern(int totalMeasures) {
         measureStart += 5;
         mSongPatterns.push_back(pattern);
     }
-    // Create sections from measure 5 up to totalMeasures, alternating patterns
     int curMeasure = 5;
     if (curMeasure < totalMeasures) {
+        SongSection section;
+        section.mPatternRange.start = 0;
+        section.mPatternRange.end = 0;
         do {
             SongPattern tempPattern(mSongPatterns[(curMeasure - 5) % 2]);
-            SongSection section;
             section.mMeasureRange.start = curMeasure + 1;
             section.mPattern = tempPattern.mName;
             int remaining = totalMeasures - curMeasure;

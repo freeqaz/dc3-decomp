@@ -292,7 +292,7 @@ void MemHeap::LRUFit(int size, int align, FreeBlockInfo &blockinfo) {
 }
 
 int MemHeap::GetAlignWords(int align) {
-    if (align == 0) return 1;
+    if ((int)align == 0) return 1;
     int bits = 0;
     int extra = 0;
     while (align > 1) {
@@ -301,7 +301,7 @@ int MemHeap::GetAlignWords(int align) {
         align >>= 1;
     }
     int result = bits + extra - 2;
-    if (result < 0) result = 0;
+    if (0 > result) result = 0;
     return result;
 }
 
@@ -324,20 +324,19 @@ int *MemHeap::TryAlloc(int sizeWords, int align, int &allocSize) {
 
     if (info.mBlock == nullptr) return nullptr;
 
-    FreeBlock *block = info.mBlock;
     FreeBlock *prevBlock = info.mPrevBlock;
     int blockSize = info.mSizeWords;
     int padWords = info.mPadWords;
 
     if (padWords >= 9) {
-        FreeBlock *newBlock = (FreeBlock *)((int *)block + padWords);
+        FreeBlock *newBlock = (FreeBlock *)((int *)info.mBlock + padWords);
         int remaining = blockSize - padWords;
         newBlock->mSizeWords = remaining;
-        newBlock->mNextBlock = block->mNextBlock;
-        newBlock->mTimeStamp = block->mTimeStamp;
-        InsertFreeBlock(block, padWords, prevBlock, newBlock, block->mTimeStamp);
-        prevBlock = block;
-        block = newBlock;
+        newBlock->mNextBlock = info.mBlock->mNextBlock;
+        newBlock->mTimeStamp = info.mBlock->mTimeStamp;
+        InsertFreeBlock(info.mBlock, padWords, prevBlock, newBlock, info.mBlock->mTimeStamp);
+        prevBlock = info.mBlock;
+        info.mBlock = newBlock;
         blockSize = remaining;
         padWords = 0;
     }
@@ -345,24 +344,24 @@ int *MemHeap::TryAlloc(int sizeWords, int align, int &allocSize) {
     int totalUsed = padWords + sizeWords;
     int remainder = blockSize - totalUsed;
 
-    if (remainder < 9) {
+    if (!(remainder < 9)) {
+        InsertFreeBlock(
+            (FreeBlock *)((int *)info.mBlock + totalUsed), remainder,
+            prevBlock, info.mBlock->mNextBlock, info.mBlock->mTimeStamp
+        );
+    } else {
         if (prevBlock == nullptr) {
-            mFreeBlockChain = block->mNextBlock;
+            mFreeBlockChain = info.mBlock->mNextBlock;
         } else {
-            prevBlock->mNextBlock = block->mNextBlock;
+            prevBlock->mNextBlock = info.mBlock->mNextBlock;
         }
         totalUsed = blockSize;
-    } else {
-        InsertFreeBlock(
-            (FreeBlock *)((int *)block + totalUsed), remainder,
-            prevBlock, block->mNextBlock, block->mTimeStamp
-        );
     }
 
-    unsigned int *header = (unsigned int *)block + padWords;
+    unsigned int *header = (unsigned int *)info.mBlock + padWords;
     *header = (totalUsed << 8) | (padWords << 4) | (*header & 0xF);
 
-    int *ptr = (int *)block;
+    int *ptr = (int *)info.mBlock;
     int *headerPtr = (int *)header;
     for (; ptr != headerPtr; ptr++) {
         *ptr = 0;
@@ -457,7 +456,6 @@ int *MemHeap::Truncate(int *ptr, int newSizeWords, int &allocSize) {
     int truncWords = blockSizeWords - padWords - newSizeWords - 1;
     MILO_ASSERT(truncWords >= 0, 0x1A8);
 
-    int ts = gTimeStamp;
     unsigned int *headerPtr = (unsigned int *)(ptr - 1);
 
     if (truncWords > 8) {
@@ -466,14 +464,15 @@ int *MemHeap::Truncate(int *ptr, int newSizeWords, int &allocSize) {
         for (next = mFreeBlockChain; next != nullptr && (int *)next < ptr - 1; next = next->mNextBlock) {
             prev = next;
         }
+        int ts = gTimeStamp;
         FreeBlock *newFree = (FreeBlock *)((int *)ptr + newSizeWords);
         gTimeStamp++;
         InsertFreeBlock(newFree, truncWords, prev, next, ts);
         if (mDebugLevel > 0) {
             int *end = (int *)newFree + newFree->mSizeWords;
-            int *cur = (int *)newFree + 2;
             if ((int *)newFree + 3 < end) {
                 for (int count = ((end - ((int *)newFree + 3)) - 1) >> 2; count >= 0; count--) {
+                    int *cur = (int *)newFree + 2;
                     cur++;
                     *cur = 0xDEADDEAD;
                 }
@@ -490,7 +489,6 @@ int *MemHeap::Truncate(int *ptr, int newSizeWords, int &allocSize) {
 }
 
 int MemHeap::Free(int *ptr) {
-    int ts = gTimeStamp;
     if (ptr < mStart || ptr >= mStart + mSizeWords) {
         return 0;
     }
@@ -509,12 +507,12 @@ int MemHeap::Free(int *ptr) {
 
     gTimeStamp++;
     FreeBlock *newFree = (FreeBlock *)blockStart;
-    InsertFreeBlock(newFree, header >> 8, prev, next, ts);
+    InsertFreeBlock(newFree, header >> 8, prev, next, gTimeStamp);
 
     if (mDebugLevel > 0) {
         int *end = (int *)newFree + newFree->mSizeWords;
-        int *cur = (int *)newFree + 2;
         if ((int *)newFree + 3 < end) {
+            int *cur = (int *)newFree + 2;
             for (int count = ((end - ((int *)newFree + 3)) - 1) >> 2; count >= 0; count--) {
                 cur++;
                 *cur = 0xDEADDEAD;

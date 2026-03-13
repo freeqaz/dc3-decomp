@@ -183,10 +183,9 @@ lol:
 
 bool MoviePanel::IsLoaded() const {
 #ifdef HX_NATIVE
-    // If no movies were loaded (e.g. missing 'videos' property), skip readiness check
-    if (mMovies.empty()) {
-        return UIPanel::IsLoaded();
-    }
+    // Native Movie stub's Ready() always returns false — skip the check
+    // so screen transitions don't block forever on video playback.
+    return UIPanel::IsLoaded();
 #endif
     if (!mMovie.Ready()) {
         return false;

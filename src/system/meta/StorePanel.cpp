@@ -539,8 +539,8 @@ StoreError StorePanel::UpdateOffers(std::list<EnumProduct> const &enumList, bool
     auto offersEnd = offers->end();
     for (it = offers->begin(); it != offersEnd; ++it) {
         StoreOffer *offer = *it;
-        bool _cond = offer->Exists();
-        if (_cond) {
+        bool exists = offer->Exists();
+        if (exists) {
             // Check if offer matches enum list
             std::list<EnumProduct>::const_iterator enumIt;
             enumIt = enumList.begin();
@@ -656,8 +656,8 @@ void StorePanel::ValidateOffers(std::vector<StoreOffer *> &offers) {
     static Symbol album_sym("album");
 
     std::vector<StoreOffer *>::iterator it;
-    auto _tmp4 = offers.end();
-    for (it = offers.begin(); it != _tmp4; ++it) {
+    auto offersEnd2 = offers.end();
+    for (it = offers.begin(); it != offersEnd2; ++it) {
         StoreOffer *offer = *it;
         Symbol offer_type = offer->OfferType();
 
@@ -698,8 +698,8 @@ void StorePanel::ValidateOffers(std::vector<StoreOffer *> &offers) {
             }
             if (count > 1) {
                 Symbol song_name = song_offer->StoreOfferData()->Sym(0);
-                auto _tmp0 = MakeString("Song %s is in more than one %s", song_name, cur_type);
-                TheDebug.Notify(_tmp0);
+                auto msg = MakeString("Song %s is in more than one %s", song_name, cur_type);
+                TheDebug.Notify(msg);
             }
         }
     }

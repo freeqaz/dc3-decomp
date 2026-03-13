@@ -125,7 +125,9 @@ namespace {
         CheckReads(b);
     };
 
-    CacheResourceResult HolmesClientCacheResource(const char *filename, const char *resourceName) {
+    CacheResourceResult HolmesClientCacheResourceImpl(
+        const char *filename, const char *resourceName
+    ) {
         AutoSlowFrame frame("HolmesClientCacheFile", 1000.0f);
         CritSecTracker cst(&gCrit);
 
@@ -149,6 +151,10 @@ namespace {
         return gLastCacheResult;
     }
 
+}
+
+CacheResourceResult HolmesClientCacheResource(const char *filename, const char *resourceName) {
+    return HolmesClientCacheResourceImpl(filename, resourceName);
 }
 
 #pragma region Public API
@@ -435,15 +441,16 @@ bool HolmesClientOpen(const char *filename, int mode, unsigned int &fileSize, in
     }
 
     BeginCmd(Holmes::kOpenFile, true);
-    *gStreamBuffer << u8(Holmes::kOpenFile);
+    auto cmd = u8(Holmes::kOpenFile);
+    *gStreamBuffer << cmd;
     *gStreamBuffer << filename;
-    *gStreamBuffer << u8((mode >> 1) & 1);   // read mode
-    *gStreamBuffer << u8((mode >> 0x12) & 1); // truncate flag
-
     if (!((mode >> 1) & 1)) {
         *gStreamBuffer << u8((mode >> 8) & 1); // write mode
         *gStreamBuffer << u8((mode >> 9) & 1); // create flag
     }
+    auto readFlag = u8((mode >> 1) & 1);
+    *gStreamBuffer << u8((mode >> 0x12) & 1); // truncate flag
+    *gStreamBuffer << readFlag; // read mode
 
     HolmesFlushStreamBuffer();
     WaitForResponse(Holmes::kOpenFile);

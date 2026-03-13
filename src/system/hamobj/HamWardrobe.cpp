@@ -144,8 +144,8 @@ Symbol GetDanceBattleBackupOutfit(Symbol s1, Symbol s2) {
     String str88(s1);
     String str90(str88);
     str90 = str90.substr(0, str90.length() - 2);
-    int i = 1;
     if (charArr->Size() > 1) {
+        int i = 1;
         Symbol s;
         while (i < charArr->Size()) {
             s = charArr->Sym(i);
@@ -351,8 +351,7 @@ void HamWardrobe::SetDir(ObjectDir *dir) {
 }
 
 void HamWardrobe::PlayCrowdAnimation(Symbol animName, int flags, bool override) {
-    auto& _ref0 = mCrowdMembers;
-    if (_ref0.size() == 0) return;
+    if (mCrowdMembers.size() == 0) return;
 
     mPreviousCrowdAnimation = animName;
     mCrowdAnimationFlags = flags;
@@ -365,14 +364,14 @@ void HamWardrobe::PlayCrowdAnimation(Symbol animName, int flags, bool override) 
             maxRandomBeat = 4.0f;
         }
 
-        for (ObjPtrList<Character>::iterator it = _ref0.begin();
-             it != _ref0.end(); ++it) {
+        for (ObjPtrList<Character>::iterator it = mCrowdMembers.begin();
+             it != mCrowdMembers.end(); ++it) {
             Character *c = *it;
             if (animName == (int)gNullStr) {
                 c->Exit();
             } else {
-                static Symbol stanceSym("stance");
-                Symbol stance = c->Property(stanceSym, true)->Sym(NULL);
+                auto stanceSym = ("stance");
+                Symbol stance = c->Property(stanceSym, true)->Sym(nullptr);
                 if (stance == gNullStr) {
                     TheDebug << "    stance = NULL!\n";
                 }
@@ -382,7 +381,7 @@ void HamWardrobe::PlayCrowdAnimation(Symbol animName, int flags, bool override) 
                 CharClipDriver *cd = c->Driver()->PlayGroup(
                     buf, flags | 0x30, -1.0f, 1e30f, 0.0f
                 );
-                if (NULL == cd) {
+                if (nullptr == cd) {
                     auto errMsg = MakeString("clip not found - groupName = %s\n", buf);
                     TheDebug << errMsg;
                     MILO_NOTIFY(
@@ -393,7 +392,7 @@ void HamWardrobe::PlayCrowdAnimation(Symbol animName, int flags, bool override) 
                     cd = c->Driver()->PlayGroup(
                         buf, flags | 0x30, -1.0f, 1e30f, 0.0
                     );
-                    if (cd == NULL) {
+                    if (cd == nullptr) {
                         auto errMsg2 = MakeString(
                             "  clip not found - groupName = %s\n", buf
                         );
@@ -410,6 +409,11 @@ void HamWardrobe::PlayCrowdAnimation(Symbol animName, int flags, bool override) 
             }
         }
     }
+}
+
+template <class _T>
+__declspec(noinline) auto _outline_Null(_T* _obj) -> decltype(_obj->Null()) {
+    return _obj->Null();
 }
 
 void HamWardrobe::LoadCharacters(
@@ -431,12 +435,12 @@ void HamWardrobe::LoadCharacters(
         mMainCharacters.push_back(c);
     }
 
-    if (!outfit1.Null()) {
+    unk34 = speed;
+
+    if (!_outline_Null(&outfit1)) {
         LoadMainCharacter(0, outfit1, asyncLoad);
     }
-
-    unk34 = speed;
-    if (!outfit2.Null()) {
+    if (!_outline_Null(&outfit2)) {
         LoadMainCharacter(1, outfit2, asyncLoad);
     }
 
@@ -512,10 +516,9 @@ DataNode HamWardrobe::OnSetVenue(DataArray *a) {
 
 DataNode HamWardrobe::OnAddCrowd(DataArray *a) {
     WorldCrowd *crowd = a->Obj<WorldCrowd>(2);
-    auto crowdEnd = crowd->mCharacters.end();
     auto& crowdMembers = mCrowdMembers;
     for (std::list<WorldCrowd::CharData>::iterator it = crowd->mCharacters.begin();
-         it != crowdEnd; ++it) {
+         crowd->mCharacters.end() != it; ++it) {
         Character *c = it->mDef.mChar;
         if (c) {
             ObjPtrList<Character>::iterator mit = crowdMembers.begin();

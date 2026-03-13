@@ -2,12 +2,13 @@
 
 Inventory of decomp gaps affecting the native build. Prioritized by impact on rendering and UI.
 
-**Last updated**: 2026-03-12
+**Last updated**: 2026-03-13
 
 ## Current State
 
-- **Track A (Engine Boot → Gameplay)**: Boots through full menu flow to `game_screen` with 3D venue rendering via scripted button input (see "Scripted Input" section below). Current checkout reaches stable YMCA gameplay through frame 2500+. Roller rink venue with full geometry (dance floor, railing, arcade machines, neon signs), character model, HUD, and visualizer all render. 415 mesh draw calls on game_screen. The multiuser_screen DTA `enter` handler now drives the game start flow naturally — no auto-skip needed.
+- **Track A (Engine Boot → Gameplay)**: Boots through full menu flow to `game_screen` with 3D venue rendering via scripted button input (see "Scripted Input" section below). Current checkout reaches stable YMCA gameplay through frame 4500+. Roller rink venue with full geometry (dance floor, railing, arcade machines, neon signs), character model, HUD, and visualizer all render. 415 mesh draw calls on game_screen. The multiuser_screen DTA `enter` handler now drives the game start flow naturally — no auto-skip needed.
 - **Current rendering (Session 61+)**: `game_screen` loads and renders the full venue via the FileMerger pipeline. Song → venue → viz → HUD all chain-load through `HamDirector::OnFileLoaded`. Venue is `rollerrink` (YMCA's assigned venue). Character model renders on the dance floor. 415 draw calls/frame, stable.
+- **Session 63 follow-up**: `SkeletonViz` was no longer blocked by missing files but by two native-specific issues: `FileSystemRoot()` resolved to the wrong `system/run` tree on desktop native, and `SkeletonViz`'s `mResource` field was mis-typed as `ObjDirPtr<UILabelDir>` even though decomp shows `ObjDirPtr<ObjectDir>` and `ham/skeleton.milo` loads a `RndDir`. Fixing both restores `MoveDir::Enter()` and lets scripted gameplay remain stable through frame 4500.
 - **Menu rendering (Sessions 47-58)**: choose_mode_screen shows menu items, game_mode_icon, ribbons, text. Flow->PropAnim animation pipeline verified working end-to-end.
 - **Reference shots**: `archive/screenshots/references/` as live-game baseline.
 - **Flow animation pipeline**: **Fully operational** (verified Session 58). Flow→FlowAnimate→AnimTask→PropAnim chain traced end-to-end. All UI animations use kTaskUISeconds timeline, advanced by UIManager::Poll() every frame. Enter animations fade in menu items correctly. `ShouldActivateNativeFlow()` filter handles startMode=0 flows; startMode>0 flows auto-start via Flow::Enter(). No rendering hacks needed for animation.

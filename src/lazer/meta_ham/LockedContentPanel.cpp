@@ -72,7 +72,8 @@ void LockedContentPanel::FinishLoad() {
     int count = 8;
     int i = 1;
     do {
-        ptr[-7] = (HamLabel *)mDir->Find<AppLabel>(MakeString("song_name0%d.lbl", i), true);
+        if (mDir)
+            ptr[-7] = (HamLabel *)mDir->Find<AppLabel>(MakeString("song_name0%d.lbl", i), true);
         HamStarsDisplay *stars = mDir->Find<HamStarsDisplay>(MakeString("stars0%d.std", i), true);
         *++ptr = (HamLabel *)stars;
         count -= 1;
@@ -132,8 +133,8 @@ void LockedContentPanel::SetUpCampaignMasterQuestHeader(Symbol song) {
         MILO_NOTIFY("Could not find accomplishment for %s", song);
     } else {
         auto accomplishmentType = pAccomplishment->GetType();
-        auto _tmp1 = pAccomplishment->GetType();
-        if (_tmp1 == kAccomplishmentTypeLessonSongListConditional
+        auto type = pAccomplishment->GetType();
+        if (type == kAccomplishmentTypeLessonSongListConditional
             || accomplishmentType == kAccomplishmentTypeTourConditional) {
             AccomplishmentCountConditional *pAccomplishmentCountConditional =
                 dynamic_cast<AccomplishmentCountConditional *>(pAccomplishment);

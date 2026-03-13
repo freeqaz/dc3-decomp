@@ -20,6 +20,14 @@
 #include <cstdio>
 #include <cstring>
 #include <list>
+#ifdef HX_NATIVE
+#include <limits.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#undef st_ctime
+#undef st_atime
+#undef st_mtime
+#endif
 
 static char gSystemRoot[256]; // 0x0
 static char gExecRoot[256]; // 0x100
@@ -39,6 +47,47 @@ const int File::MaxFileNameLen = 0x100;
 const char *FileRoot() { return gRoot; }
 const char *FileExecRoot() { return gExecRoot; }
 const char *FileSystemRoot() { return gSystemRoot; }
+
+#ifdef HX_NATIVE
+extern const char *NativeGetDataDir();
+
+static bool NativeDirExists(const char *path) {
+    struct stat st;
+    return path && *path && stat(path, &st) == 0 && S_ISDIR(st.st_mode);
+}
+
+static void NativeSetCanonicalPath(char *dst, size_t dstSize, const char *path) {
+    char resolved[PATH_MAX];
+    if (path && *path && realpath(path, resolved)) {
+        strncpy(dst, resolved, dstSize - 1);
+    } else if (path) {
+        strncpy(dst, path, dstSize - 1);
+    } else {
+        *dst = '\0';
+        return;
+    }
+    dst[dstSize - 1] = '\0';
+}
+
+static void NativeInitSystemRoot() {
+    char extractedSystemRun[PATH_MAX];
+    const char *dataDir = NativeGetDataDir();
+    if (dataDir && *dataDir) {
+        snprintf(
+            extractedSystemRun,
+            sizeof(extractedSystemRun),
+            "%s/extracted/(..)/(..)/system/run",
+            dataDir
+        );
+        if (NativeDirExists(extractedSystemRun)) {
+            NativeSetCanonicalPath(gSystemRoot, sizeof(gSystemRoot), extractedSystemRun);
+            return;
+        }
+    }
+
+    NativeSetCanonicalPath(gSystemRoot, sizeof(gSystemRoot), "../../system/run");
+}
+#endif
 
 void FileTerminate() {
     RELEASE(gOpenCaptureFile);
@@ -316,7 +365,11 @@ DataNode OnEnumerateFrameRateResults(DataArray *da) {
 void FileInit() {
     strcpy(gRoot, ".");
     strcpy(gExecRoot, ".");
+#ifdef HX_NATIVE
+    NativeInitSystemRoot();
+#else
     strcpy(gSystemRoot, FileMakePath(gExecRoot, "../../system/run"));
+#endif
     FilePath::Root().Set(gRoot, gRoot);
     DataRegisterFunc("file_root", OnFileRoot);
     DataRegisterFunc("file_exec_root", OnFileExecRoot);

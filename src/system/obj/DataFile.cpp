@@ -80,37 +80,25 @@ bool ParseNode() {
     int openArray = gOpenArray;
 
     if (token == kDataTokenFinished) {
-        switch (gOpenArray) {
-        case kDataTokenFinished:
+        if (gOpenArray == kDataTokenFinished) {
             return false;
-        case kDataTokenArrayOpen:
+        } else if (gOpenArray == kDataTokenArrayOpen) {
             MILO_FAIL("Array closed incorrectly (file %s, line %d)", gFile, gDataLine);
-            break;
-        case kDataTokenCommandOpen:
+        } else if (gOpenArray == kDataTokenCommandOpen) {
             MILO_FAIL("Command closed incorrectly (file %s, line %d)", gFile, gDataLine);
-            break;
-        case kDataTokenPropertyOpen:
+        } else if (gOpenArray == kDataTokenPropertyOpen) {
             MILO_FAIL("Property closed incorrectly (file %s, line %d)", gFile, gDataLine);
-            break;
-        default:
-            break;
         }
         return false;
     } else if (token == kDataTokenArrayClose) {
-        switch (gOpenArray) {
-        case kDataTokenArrayOpen:
+        if (gOpenArray == kDataTokenArrayOpen) {
             return false;
-        case kDataTokenFinished:
+        } else if (gOpenArray == kDataTokenFinished) {
             MILO_FAIL("File %s ends with open array", gFile);
-            break;
-        case kDataTokenCommandOpen:
+        } else if (gOpenArray == kDataTokenCommandOpen) {
             MILO_FAIL("Command closed incorrectly (file %s, line %d)", gFile, gDataLine);
-            break;
-        case kDataTokenPropertyOpen:
+        } else if (gOpenArray == kDataTokenPropertyOpen) {
             MILO_FAIL("Property closed incorrectly (file %s, line %d)", gFile, gDataLine);
-            break;
-        default:
-            break;
         }
         return false;
     } else if (token == kDataTokenPropertyClose) {
@@ -131,20 +119,14 @@ bool ParseNode() {
         }
         return false;
     } else if (token == kDataTokenCommandClose) {
-        switch (gOpenArray) {
-        case kDataTokenCommandOpen:
+        if (gOpenArray == kDataTokenCommandOpen) {
             return false;
-        case kDataTokenFinished:
+        } else if (gOpenArray == kDataTokenFinished) {
             MILO_FAIL("File %s ends with open array", gFile);
-            break;
-        case kDataTokenArrayOpen:
+        } else if (gOpenArray == kDataTokenArrayOpen) {
             MILO_FAIL("Array closed incorrectly (file %s, line %d)", gFile, gDataLine);
-            break;
-        case kDataTokenPropertyOpen:
+        } else if (gOpenArray == kDataTokenPropertyOpen) {
             MILO_FAIL("Property closed incorrectly (file %s, line %d)", gFile, gDataLine);
-            break;
-        default:
-            break;
         }
         return false;
     }
@@ -158,9 +140,9 @@ bool ParseNode() {
         if (gCachingFile) {
             PushBack(DataNode(kDataMerge, Symbol(yytext).Str()));
         } else {
-            bool usingEmbedded = false;
             DataArray *fileArr = DataGetMacro(yytext);
-            if (!fileArr) {
+            bool usingEmbedded = false;
+            if (!(!(!fileArr))) {
                 fileArr = ReadEmbeddedFile(yytext, true);
                 usingEmbedded = true;
                 if (fileArr) goto merge_check;

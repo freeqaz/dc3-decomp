@@ -145,8 +145,8 @@ void MoveAsyncDetector::EnableDetector(HamMove *move) {
     MoveDetector *detector = FindDetector(move);
     if (detector != nullptr)
         goto activate;
-    auto _tmp0 = MakeString("Could not enable detector for %s", move->Name());
-    TheDebug.Notify(_tmp0);
+    auto msg = MakeString("Could not enable detector for %s", move->Name());
+    TheDebug.Notify(msg);
     return;
 activate:
     int active = detector->mActive;
@@ -201,14 +201,14 @@ void MoveAsyncDetector::ClearLoopedRatingFrac(const HamMove *move) {
 }
 
 void MoveAsyncDetector::DisableDetector(HamMove *move) {
-    if (move != 0) {
+    if ((unsigned long)0 != (int)move) {
         MoveDetector *detector = FindDetector(move);
-        if (detector != 0) {
+        if (detector != (int)0) {
             detector->Reset();
             mActiveDetectors.erase(detector);
         } else {
-            auto _tmp0 = MakeString("Could not disable detector for %s", PathName(move));
-            TheDebug.Notify(_tmp0);
+            auto msg = MakeString("Could not disable detector for %s", PathName(move));
+            TheDebug.Notify(msg);
         }
     }
 }

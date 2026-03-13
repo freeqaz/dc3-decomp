@@ -746,7 +746,7 @@ int MoveMgr::ComputeRandomChoiceSet(int measure) {
         unsigned int numToPlace;
         if ((int)numPotential < 5) {
             numToPlace = numPotential;
-            for (unsigned int i = 0; i < numPotential; i++) {
+            for (int i = 0; i < (int)numPotential; i++) {
                 indices[i] = i;
             }
         } else {
@@ -757,6 +757,7 @@ int MoveMgr::ComputeRandomChoiceSet(int measure) {
             std::sort(indices, indices + 4);
         }
         int idx = 0;
+        MoveChoiceSet *choiceSet = &mChoiceSets[measure];
         std::set<const MoveParent *>::iterator it = potentialMoves.begin();
         while (it != potentialMoves.end()) {
             if (numPlaced >= (int)numToPlace) {
@@ -764,7 +765,7 @@ int MoveMgr::ComputeRandomChoiceSet(int measure) {
             }
             if (idx >= indices[numPlaced]) {
                 MILO_LOG("\t%s\n", (*it)->Name().Str());
-                mChoiceSets[measure].mChoices[numPlaced] = *it;
+                choiceSet->mChoices[numPlaced] = *it;
                 numPlaced++;
             }
             ++it;
@@ -787,20 +788,30 @@ void MoveMgr::ComputeLoadedMoveSet() {
     mChoiceSets.resize(maxSize);
     std::pair<const MoveVariant *, const MoveVariant *> *routineData = &mRoutineMeasures[0][0];
     MoveChoiceSet *choiceData = &mChoiceSets[0];
-    for (int i = 0; i < (int)maxSize; i++) {
-        if (routineData[i].first) {
-            mVariants.insert(routineData[i].first);
-            if (routineData[i].second && routineData[i].second != routineData[i].first) {
-                mVariants.insert(routineData[i].second);
-            }
-        } else if (choiceData[i].mChoices[0]) {
-            for (int j = 0; j < 4; j++) {
-                if (choiceData[i].mChoices[j]) {
-                    const MoveVariant *var = choiceData[i].mChoices[j]->PickRandomVariant();
-                    mVariants.insert(var);
+    int count = (int)maxSize;
+    if (count > 0) {
+        do {
+            if (routineData->first) {
+                mVariants.insert(routineData->first);
+                if (routineData->second && routineData->second != routineData->first) {
+                    mVariants.insert(routineData->second);
                 }
+            } else if (choiceData->mChoices[0]) {
+                const MoveParent *const *choice = choiceData->mChoices;
+                int j = 4;
+                do {
+                    if (*choice) {
+                        const MoveVariant *var = (*choice)->Variants().front();
+                        mVariants.insert(var);
+                    }
+                    j--;
+                    choice++;
+                } while (j != 0);
             }
-        }
+            count--;
+            routineData++;
+            choiceData++;
+        } while (count != 0);
     }
 }
 
@@ -810,21 +821,22 @@ void MoveMgr::FillInRoutineAt(int player, int measure) {
         return;
     }
     const MoveVariant *preferred = GetRoutinePreferredVariant(player, measure);
-    std::pair<const MoveVariant *, const MoveVariant *> &routinePair =
-        mRoutineMeasures[player].at(measure);
-    routinePair.first = nullptr;
-    routinePair.second = nullptr;
+    std::pair<const MoveVariant *, const MoveVariant *> *routinePair =
+        &mRoutineMeasures[player].at(measure);
+    routinePair->first = nullptr;
+    routinePair->second = nullptr;
 
     // Try to find variant pair with previous measure
     if (measure > 0) {
+        std::pair<const MoveVariant *, const MoveVariant *> *prevPair = routinePair - 1;
         const MoveParent *prevParent = mMoveParents[player][measure - 1];
         const MoveVariant *prevPreferred = GetRoutinePreferredVariant(player, measure - 1);
         if (!prevPreferred) {
-            prevPreferred = mRoutineMeasures[player][measure - 1].first;
+            prevPreferred = prevPair->first;
         }
         if (!mMoveGraph.FindVariantPair(
-                mRoutineMeasures[player][measure - 1].second,
-                routinePair.first,
+                prevPair->second,
+                routinePair->first,
                 prevParent,
                 curParent,
                 prevPreferred,
@@ -833,19 +845,20 @@ void MoveMgr::FillInRoutineAt(int player, int measure) {
                 false
             )) {
             if (!prevPreferred) {
-                prevPreferred = mRoutineMeasures[player][measure - 1].first;
+                prevPreferred = prevPair->first;
             }
-            mRoutineMeasures[player][measure - 1].second = prevPreferred;
+            prevPair->second = prevPreferred;
         }
     }
 
     // Try to find variant pair with next measure
     if ((unsigned int)measure < (unsigned int)(mMoveParents[player].size() - 1)) {
+        std::pair<const MoveVariant *, const MoveVariant *> *nextPair = routinePair + 1;
         const MoveParent *nextParent = mMoveParents[player][measure + 1];
         const MoveVariant *nextPreferred = GetRoutinePreferredVariant(player, measure + 1);
         if (!mMoveGraph.FindVariantPair(
-                routinePair.second,
-                mRoutineMeasures[player][measure + 1].first,
+                routinePair->second,
+                nextPair->first,
                 curParent,
                 nextParent,
                 preferred,
@@ -854,24 +867,24 @@ void MoveMgr::FillInRoutineAt(int player, int measure) {
                 false
             )) {
             if (!nextPreferred) {
-                nextPreferred = mRoutineMeasures[player][measure + 1].second;
+                nextPreferred = nextPair->second;
             }
-            mRoutineMeasures[player][measure + 1].first = nextPreferred;
+            nextPair->first = nextPreferred;
         }
     }
 
     // Fallback for .first
-    if (!routinePair.first) {
-        routinePair.first = preferred;
+    if (!routinePair->first) {
+        routinePair->first = preferred;
         if (!preferred) {
-            routinePair.first = routinePair.second;
-            if (!routinePair.second) {
-                routinePair.first = curParent->Variants().front();
+            routinePair->first = routinePair->second;
+            if (!routinePair->second) {
+                routinePair->first = curParent->Variants().front();
                 if (!mCurrentSong.Null()) {
                     const std::vector<MoveVariant *> &variants = curParent->Variants();
                     for (int i = 0; i < (int)variants.size(); i++) {
                         if (variants[i]->Song() == mCurrentSong) {
-                            routinePair.first = variants[i];
+                            routinePair->first = variants[i];
                             break;
                         }
                     }
@@ -881,10 +894,10 @@ void MoveMgr::FillInRoutineAt(int player, int measure) {
     }
 
     // Fallback for .second
-    if (!routinePair.second) {
-        routinePair.second = preferred;
+    if (!routinePair->second) {
+        routinePair->second = preferred;
         if (!preferred) {
-            routinePair.second = routinePair.first;
+            routinePair->second = routinePair->first;
         }
     }
 }
@@ -894,14 +907,13 @@ void MoveMgr::FillRoutineFromVerses(int player) {
         int secLen = (it->mMeasureRange.end - it->mMeasureRange.start) + 1;
         int patLen = (it->mPatternRange.end - it->mPatternRange.start) + 1;
         MILO_ASSERT(patLen == secLen, 0x428);
-        SongPattern *pat = it->mSongPattern;
-        for (int i = 0; i < pat->mNumMoves; i++) {
+        for (int i = 0; i < it->mSongPattern->mNumMoves; i++) {
             int measure = it->mMeasureRange.start + i;
             unsigned int patIdx = (it->mPatternRange.start + i) - 1;
-            if (patIdx >= (unsigned int)(pat->mElements.size() - 1)) {
-                patIdx = pat->mElements.size() - 1;
+            if (patIdx >= (unsigned int)(it->mSongPattern->mElements.size() - 1)) {
+                patIdx = it->mSongPattern->mElements.size() - 1;
             }
-            mMoveParents[0][measure] = pat->mMoveParents[patIdx];
+            mMoveParents[0][measure] = it->mSongPattern->mMoveParents[patIdx];
         }
     }
     FillRoutineFromParents(player);

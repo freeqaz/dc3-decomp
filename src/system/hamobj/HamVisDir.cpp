@@ -17,6 +17,8 @@
 #include "utl/BinStream.h"
 #include "utl/Loader.h"
 
+#include <cmath>
+
 PoseOwner::PoseOwner() : pose(0), holder(0), in_pose(0) {}
 
 PoseOwner::~PoseOwner() {
@@ -318,6 +320,29 @@ void HamVisDir::UpdateGestureFilter(const Skeleton &skel, int playerIdx) {
             }
         }
     }
+}
+
+static float JointDistance(const TrackedJoint &a, const TrackedJoint &b) {
+    const Vector3 &pa = a.mJointPos[0];
+    const Vector3 &pb = b.mJointPos[0];
+    float dx = pb.x - pa.x;
+    float dy = pb.y - pa.y;
+    float dz = pb.z - pa.z;
+    return std::sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+void HamVisDir::CalcArmLengths(std::vector<float> &armLengths, const Skeleton &skel) {
+    if (armLengths.size() < 2) {
+        armLengths.resize(2, 0.0f);
+    }
+
+    const TrackedJoint *joints = skel.TrackedJoints();
+    armLengths[0] =
+        JointDistance(joints[kJointShoulderLeft], joints[kJointElbowLeft])
+        + JointDistance(joints[kJointElbowLeft], joints[kJointWristLeft]);
+    armLengths[1] =
+        JointDistance(joints[kJointShoulderRight], joints[kJointElbowRight])
+        + JointDistance(joints[kJointElbowRight], joints[kJointWristRight]);
 }
 
 void HamVisDir::SetGrooviness(float groove) {

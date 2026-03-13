@@ -955,6 +955,27 @@ void App::RunWithoutDebugging() {
                    frameCount, curScreen, transScreen, (int)TheUI->InTransition());
         }
 
+        // Auto-navigate: DC3_SCREEN=song_select_screen to skip menus
+        {
+            static bool sAutoNavDone = false;
+            if (!sAutoNavDone && TheUI && TheUI->CurrentScreen() && !TheUI->InTransition()) {
+                const char *targetScreen = getenv("DC3_SCREEN");
+                if (targetScreen && targetScreen[0]) {
+                    const char *curName = TheUI->CurrentScreen()->Name();
+                    if (strcmp(curName, "main_screen") == 0) {
+                        sAutoNavDone = true;
+                        UIScreen *target = ObjectDir::Main()->Find<UIScreen>(targetScreen, false);
+                        if (target) {
+                            printf("DC3 Native: Auto-navigating to '%s'\n", targetScreen);
+                            TheUI->GotoScreen(target, false, false);
+                        } else {
+                            printf("DC3 Native: Screen '%s' not found\n", targetScreen);
+                        }
+                    }
+                }
+            }
+        }
+
         if (windowed) {
             if (glfwWindowShouldClose(gNativeWindow))
                 break;

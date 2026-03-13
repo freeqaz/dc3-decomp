@@ -1,4 +1,5 @@
 #include "world/FreeCamera.h"
+#include "world/Dir.h"
 #include "obj/Object.h"
 #include "math/Rot.h"
 #include "rndobj/Cam.h"
@@ -31,11 +32,15 @@ void FreeCamera::SetParentDof(bool b1, bool b2, bool b3) {
     mUseParentRotateZ = b3;
 }
 
-// void FreeCamera::UpdateFromCamera() {
-//     RndCam *cam = mWorld->GetCam();
-//     mFov = cam->YFov();
-//     mXfm = cam->WorldXfm();
-//     MakeEuler(mXfm.m, mRot);
-//     mParent = 0;
-//     mFocalPlane = TheDOFProc->FocalPlane();
-// }
+void FreeCamera::Poll() {}
+
+void FreeCamera::UpdateFromCamera() {
+    RndCam *cam = mWorld->Cam();
+    if (!cam)
+        return;
+    mFov = cam->YFov();
+    mXfm = cam->WorldXfm();
+    MakeEuler(mXfm.m, mRot);
+    mParent = 0;
+    mFocalPlane = TheDOFProc->FocalPlane();
+}

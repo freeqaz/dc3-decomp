@@ -678,9 +678,9 @@ void RndPostProc::Interp(const RndPostProc *from, const RndPostProc *to, float p
     // Copy non-interpolatable bool/obj properties from pick
     mNoiseMidtone = pick->mNoiseMidtone;
     mNoiseStationary = pick->mNoiseStationary;
-    mNoiseMap = pick->mNoiseMap;
-    mGradientMap = pick->mGradientMap;
-    mRefractMap = pick->mRefractMap;
+    mNoiseMap = pick->mNoiseMap.Ptr();
+    mGradientMap = pick->mGradientMap.Ptr();
+    mRefractMap = pick->mRefractMap.Ptr();
     mBloomGlare = pick->mBloomGlare;
     mMotionBlurVelocity = pick->mMotionBlurVelocity;
     mChromaticSharpen = pick->mChromaticSharpen;
@@ -702,7 +702,7 @@ void RndPostProc::Interp(const RndPostProc *from, const RndPostProc *to, float p
 
     // Noise — if both have noise but different stationarity, snap noise interp to 1.0
     float noisePct = pct;
-    if (from != to && from->mNoiseStationary != to->mNoiseStationary
+    if (from != to && from->mNoiseMidtone != to->mNoiseMidtone
         && from->mNoiseIntensity != 0.0f && to->mNoiseIntensity != 0.0f) {
         noisePct = 1.0f;
     }
@@ -715,7 +715,7 @@ void RndPostProc::Interp(const RndPostProc *from, const RndPostProc *to, float p
     ::Interp(from->mKaleidoscopeSize, to->mKaleidoscopeSize, pct, mKaleidoscopeSize);
     ::Interp(from->mKaleidoscopeAngle, to->mKaleidoscopeAngle, pct, mKaleidoscopeAngle);
     ::Interp(from->mKaleidoscopeRadius, to->mKaleidoscopeRadius, pct, mKaleidoscopeRadius);
-    ::Interp(from->mKaleidoscopeFlipUVs, to->mKaleidoscopeFlipUVs, pct, mKaleidoscopeFlipUVs);
+    mKaleidoscopeFlipUVs = pct >= 1.0f ? to->mKaleidoscopeFlipUVs : from->mKaleidoscopeFlipUVs;
 
     // Emulate FPS
     ::Interp(from->mEmulateFPS, to->mEmulateFPS, pct, mEmulateFPS);

@@ -85,15 +85,9 @@
         }
 
         if (!navigator.gpu) {
-            let hint = 'WebGPU not available.';
-            if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-                hint += ' WebGPU requires localhost or HTTPS — try http://localhost:' + location.port;
-            } else {
-                hint += ' Use Chrome 113+ or Safari 18+. Check chrome://gpu for WebGPU status.';
-            }
-            status.textContent = hint;
-            status.className = 'error';
-        } else {
+            log('WebGPU not available — engine will run without rendering', true);
+        }
+        {
             status.textContent = 'Loading WASM...';
             status.className = 'loading';
 

@@ -33,6 +33,11 @@ void DingoJob::Start() {
     StartImpl();
 }
 
+template <class _T>
+__declspec(noinline) auto _outline_c_str(_T* _obj) -> decltype(_obj->c_str()) {
+    return _obj->c_str();
+}
+
 void DingoJob::SendCallback(bool success, bool cancelled) {
     // Validate the response if the request succeeded
     if (success) {
@@ -57,9 +62,9 @@ void DingoJob::SendCallback(bool success, bool cancelled) {
             pt.AddPair("location", "DingoJob::SendCallback");
             pt.AddPair("mResult", mResult);
             pt.AddPair("mJsonResponse", mJsonResponse ? "non-NULL" : "NULL");
-            pt.AddPair("mResponseStr", mResponseStr.c_str());
-            pt.AddPair("mBaseUrl", mBaseUrl.c_str());
+            pt.AddPair("mBaseUrl", _outline_c_str(&mBaseUrl));
             pt.AddPair("mResponseStatusCode", (int)GetResponseStatusCode());
+            pt.AddPair("mResponseStr", _outline_c_str(&mResponseStr));
             TheDataPointMgr.RecordDataPoint(pt);
             TheWebSvcMgr.CancelOutstandingCalls();
         }
@@ -116,8 +121,8 @@ void DingoJob::AddContent(HttpReq *httpReq) {
     mDataPoint->ToJSON(str1);
     URLEncode(str1.c_str(), str2, false);
 
-    // Find the end of the encoded string
     const char *scan;
+    // Find the end of the encoded string
     for (scan = str2.c_str(); '\0' != *scan; scan++) {
     }
 
@@ -133,12 +138,12 @@ void DingoJob::AddContent(HttpReq *httpReq) {
 
     // Find the end of the prefix (after the null terminator byte)
     char *end;
-    for (end = (char *)mContentBuffer; '\0' != *end; end++) {
-    }
     end--;
 
     // Append the encoded data to the prefix
     const char *data;
+    for (end = (char *)mContentBuffer; '\0' != *end; end++) {
+    }
     for (data = str2.c_str(); *data != '\0'; data++) {
         *end++ = *data;
     }

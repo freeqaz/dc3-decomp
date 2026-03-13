@@ -1,6 +1,6 @@
 # Native Port Progress (x86_64 Linux)
 
-## Current Status: Session 61+ - FileMerger/ObjRef Root Cause Fix
+## Current Status: Session 63+ - Gameplay Enter Path Stabilized
 **Goal**: Keep the full song -> venue -> gameplay pipeline stable while removing merge-path root causes
 
 ### Sessions Complete
@@ -30,6 +30,7 @@
 - **Session 59**: **Game screen venue rendering.** Navigated full menu flow into YMCA song. DCI venue renders with 505 draw calls/frame — floor, walls, DJ booth, lighting rigs, **fully-lit character** (skin/hair/outfit visible via zero-color LightPreset fallback), HUD move cards. Stable 10000 frames (clean exit). Key fixes: ObjRef ring validation, siglongjmp crash recovery, 4 new function implementations, zero-color light detection, 3 null pointer crash fixes (HamCharacter/HamCamShot/PoseFatalities), SetupAnims re-init for venue loading timing. Scene is static (LightPreset::Load unimplemented, song.anim DTA crashes). See `docs/sessions/2026-03-12-session59-game-screen-venue-rendering.md`.
 - **Session 62+**: **Audio pipeline end-to-end.** StandardStream kInit→kBuffering decomp fix (was missing `mState = kBuffering` after channel creation). VorbisReader native single-threaded decode (Poll/DoFileRead/Decrypt via `#ifdef HX_NATIVE`). StreamReceiver WriteData/Poll native implementation. HamAudio `.mogg` extension fix. NativeSynth `expectMap=true`. VorbisReader `#ifndef HX_NATIVE` thread guard (prevents destructor infinite loop from stubbed DecodeThread). Game now reaches gameplay with `audioFail=0` and advancing songMs.
 - **Session 61+**: **FileMerger pipeline restored and ObjRef producer bug fixed.** `FileMerger::PreLoad()` now runs `StartLoadInternal(true, true)` on native, restoring song -> venue -> viz -> HUD chain loading. Follow-up root-cause work found that `ObjDirPtr(C*)` was double-linking the same ref node into an object's ObjRef ring: `ObjRefConcrete` already links in its base ctor, and the derived ctor's extra `dir->AddRef(this)` corrupted the ring immediately. Removed the extra link, added a direct lifetime regression test, and revalidated scripted boot-to-`game_screen` without `ReplaceRefs` corruption warnings or merge crashes.
+- **Session 63+**: **SkeletonViz/MoveDir enter path fixed.** Native `FileSystemRoot()` now canonicalizes to the extracted `system/run` tree under `orig-assets`, so direct system-run resources load from disk instead of going through bad archive-relative paths. Follow-up decomp validation showed `SkeletonViz` field `mResource` at offset `0x168` is `ObjDirPtr<ObjectDir>`, not `ObjDirPtr<UILabelDir>`; the wrong type caused successful `ham/skeleton.milo` loads to be discarded because the asset class is `RndDir`. Added direct regressions for system-run `ham/skeleton.milo` loading and `SkeletonViz::Init()`, then revalidated headless YMCA boot through frame 4500 with `game_screen` entered and stable.
 
 ### Completed Phases
 - **Phase 0**: Foundation — COMPLETE
@@ -48,7 +49,7 @@ Engine boots, navigates full menu flow, loads a song, and renders the 3D venue o
 5. **Interactive navigation**: Up/Down/Confirm navigate menus. Input script (`MILO_INPUT_SCRIPT`) drives headless navigation
 6. **Venue rendering**: 505 draw calls/frame on game_screen — DCI venue with floor, walls, DJ booth, lighting rigs, fully-lit character, HUD overlays
 7. **HamUI two-pass draw**: Uses TheHamUI (game-specific UIManager) for proper letterbox/blacklight/helpbar rendering
-8. **Boot-to-gameplay remains stable after the ObjRef root-cause fix**. Headless scripted YMCA run reaches `game_screen` through frame 2500 without merge crash/recovery output.
+8. **Boot-to-gameplay remains stable after the ObjRef + SkeletonViz root-cause fixes**. Headless scripted YMCA run reaches `game_screen` through frame 4500 without merge crash/recovery output.
 9. **Env vars**: `MILO_RENDER=1` + `MILO_HEADLESS=1` for headless GPU, `MILO_SCREENSHOT_DIR=path` + `MILO_SCREENSHOT_FRAMES=100,300,500` for auto-capture, `MILO_FIRST_SCREEN=main_screen` skips attract, `MILO_MAX_FRAMES=N`, `MILO_INPUT_SCRIPT=path`
 
 ### Session 22 Fixes (MsgSinks + Button Dispatch)

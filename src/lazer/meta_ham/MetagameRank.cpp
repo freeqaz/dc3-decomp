@@ -909,7 +909,6 @@ int MetagameRank::GetTier() const {
         return 0;
     }
 
-    extern std::vector<std::vector<Unlockable*>> gTiers;
     uint tierCount = gTiers.size();
     if (tierCount == 0) {
         return 0;

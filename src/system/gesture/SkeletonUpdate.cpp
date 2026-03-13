@@ -80,6 +80,13 @@ void SkeletonUpdateHandle::PostUpdate() {
     mInst->PostUpdate();
 }
 
+const SkeletonHistory *SkeletonUpdateHandle::History() const {
+#ifdef HX_NATIVE
+    if (!mInst) return nullptr;
+#endif
+    return mInst;
+}
+
 #pragma endregion
 #pragma region SkeletonUpdate
 

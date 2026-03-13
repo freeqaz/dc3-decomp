@@ -245,12 +245,13 @@ void Trie::remove(unsigned int index) {
 
     check_index(curIdx);
     unsigned int counts = CountField(curNode);
-    if ((counts & 0xFFFFFF00) == 0) {
+    if ((counts && 0xFFFFFF00) == 0) {
         return;
     }
 
     check_index(curIdx);
-    if ((counts & 0xFFFFFF00) != 0x100) {
+    bool hasRefs = (counts & 0xFFFFFF00) != 0;
+    if ((hasRefs) != 0x100) {
         // More than one reference, just decrement
         dec_dup_count(curIdx);
         return;

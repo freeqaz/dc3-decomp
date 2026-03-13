@@ -53,6 +53,21 @@ DistEntry::DistEntry(const DistEntry &entry) : beat(entry.beat), bones(entry.bon
     memcpy(facing, entry.facing, sizeof(entry.facing));
 }
 
+void ClipDistMap::GenerateDistEntry(
+    CharBonesMeshes &, DistEntry &entry, float beat, CharClip *,
+    const std::vector<RndTransformable *> &transes
+) {
+    entry.beat = beat;
+    entry.bones.resize(transes.size());
+    for (int i = 0; i < (int)transes.size(); i++) {
+        RndTransformable *trans = transes[i];
+        entry.bones[i] = trans ? trans->WorldXfm().v : Vector3(0.0f, 0.0f, 0.0f);
+    }
+    for (int i = 0; i < 4; i++) {
+        entry.facing[i] = 0.0f;
+    }
+}
+
 ClipDistMap::ClipDistMap(
     CharClip *clip1, CharClip *clip2, float f1, float f2, int i, const DataArray *a
 )

@@ -347,11 +347,11 @@ void Character::UpdateSphere() {
 
 void Character::DrawShadow(const Transform &xfm, float planeD) {
     if (mShowing && !mShadow.empty()) {
-        MILO_ASSERT(GetGfxMode() == kOldGfx, 0x2E7);
 
         Transform tf40;
         Transpose(xfm, tf40);
 
+        MILO_ASSERT(GetGfxMode() == kOldGfx, 0x2E7);
         Plane pl70;
         pl70.Set(0, 0, 1, planeD);
         Plane plb0;
@@ -533,8 +533,8 @@ void Character::CalcBoundingSphere() {
         RndTransformable *transRHand = CharUtlFindBoneTrans("bone_R-hand", this);
         if (transRHand) {
             Vector3 vClavicle = transRClavicle->WorldXfm().v;
-            auto _tmp10 = Distance(vClavicle, transRHand->WorldXfm().v);
-            vClavicle.z += _tmp10;
+            auto dist = Distance(vClavicle, transRHand->WorldXfm().v);
+            vClavicle.z += dist;
             mBounding.GrowToContain(Sphere(vClavicle, 7.0f));
         }
     }
@@ -758,11 +758,16 @@ DataNode Character::OnPlayClip(DataArray *msg) {
         return 0;
 }
 
+template <class _T>
+__declspec(noinline) auto _outline_NumInterests(_T* _obj) -> decltype(_obj->NumInterests()) {
+    return _obj->NumInterests();
+}
+
 DataNode Character::OnGetCurrentInterests(DataArray *da) {
     int size = 0;
     CharEyes *eyes = GetEyes();
     if (eyes)
-        size = eyes->NumInterests();
+        size = bool(_outline_NumInterests(eyes));
     DataArrayPtr ptr;
     ptr->Resize(size + 1);
     ptr->Node(0) = Symbol();
@@ -776,10 +781,9 @@ void Character::DrawShowing() {
     START_AUTO_TIMER("char_draw");
     if (mTest)
         mTest->Draw();
-    float screenSize = ComputeScreenSize(RndCam::Current());
     int lod;
-    auto& _ref0 = mForceLod;
-    if (_ref0 < 0) {
+    if (mForceLod < 0) {
+        float screenSize = ComputeScreenSize(RndCam::Current());
         for (lod = 0; (int)lod < (int)mLods.size() - 1; lod++) {
             float hysteresis;
             if (lod < mLastLod)
@@ -790,7 +794,7 @@ void Character::DrawShowing() {
                 break;
         }
     } else {
-        lod = Clamp<int>(0, mLods.size() - 1, _ref0);
+        lod = Clamp<int>(0, mLods.size() - 1, mForceLod);
     }
     bool doSelfShadow = false;
     if (mSelfShadow && TheRnd.GetDrawMode() == 0 && lod <= 1 && (mDrawMode & 1)) {
@@ -802,10 +806,10 @@ void Character::DrawShowing() {
     doSelfShadow = false;
     #endif
     if (doSelfShadow) {
-        int savedForceLod = _ref0;
-        _ref0 = (LODType)lod;
+        int savedForceLod = mForceLod;
+        mForceLod = (LODType)lod;
         RndShadowMap::PrepShadow(this, mEnv);
-        _ref0 = (LODType)savedForceLod;
+        mForceLod = (LODType)savedForceLod;
     }
     DrawLod(lod);
     if (doSelfShadow)
@@ -959,8 +963,8 @@ void Character::DrawLodOrShadow(int lod, DrawMode drawMode) {
             return;
         }
     } else {
-        bool _bit0 = (drawMode & 1) != 0;
-        if (_bit0) {
+        bool drawNormal = (drawMode & 1) != 0;
+        if (drawNormal) {
             RndEnvironTracker tracker(mEnv, &WorldXfm().v);
             DrawShowing();
             if (drawMode == 1) {

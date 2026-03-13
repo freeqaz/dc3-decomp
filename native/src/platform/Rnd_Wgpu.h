@@ -11,6 +11,8 @@
 #include "rndobj/Rnd_NG.h"
 #include "rndobj/ShaderMgr.h"
 
+#include "gfx/VideoEncoder.h"
+
 #include <string>
 #include <vector>
 #include <webgpu/webgpu_cpp.h>
@@ -258,6 +260,7 @@ private:
     void CreateDefaultTextures();
     void WriteSceneUniforms();
     void MaybeCaptureFrame();
+    void MaybeEncodeVideoFrame();
 
     GpuDevice mGpu;
     PipelineManager mPipelines;
@@ -335,6 +338,11 @@ private:
     std::string mScreenshotDir;
     std::vector<int> mCaptureFrames;
     int mCaptureIndex = 0;
+
+    // Video recording (MILO_VIDEO env var)
+    VideoEncoder mVideoEncoder;
+    uint8_t* mVideoPixels = nullptr;
+    size_t mVideoPixelSize = 0;
 };
 
 // Global accessor — set during Init

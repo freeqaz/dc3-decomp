@@ -18,6 +18,18 @@
 
 UIScreen *UIScreen::sUnloadingScreen = nullptr;
 
+#ifdef HX_NATIVE
+static inline bool DebugUIFlow() {
+    static bool checked = false;
+    static bool val = false;
+    if (!checked) {
+        val = std::getenv("MILO_DEBUG_UI_FLOW") != nullptr;
+        checked = true;
+    }
+    return val;
+}
+#endif
+
 #ifndef HX_NATIVE
 void EnterGlitchCB(float ms, void *panel) {
     UIPanel *uiPanel = static_cast<UIPanel *>(panel);
@@ -133,8 +145,7 @@ bool UIScreen::CheckIsLoaded() {
     FOREACH (it, mPanelList) {
         if (it->Active() && !it->mPanel->CheckIsLoaded()) {
 #ifdef HX_NATIVE
-            static int sLoadDiag = 0;
-            if (sLoadDiag++ < 5) {
+            if (DebugUIFlow()) {
                 printf("DC3 UI: Screen '%s' not loaded — panel '%s' (state=%d) blocking\n",
                        Name(), it->mPanel->Name(), (int)it->mPanel->GetState());
             }

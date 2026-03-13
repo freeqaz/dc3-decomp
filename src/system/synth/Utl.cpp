@@ -15,6 +15,8 @@ void SynthUtlInit() {
     FileCache::RegisterWavCacheHelper(&gWavFileCacheHelper);
 }
 
+void SynthUtlTerm() {}
+
 float CalcSpeedFromTranspose(float f1) {
     return std::pow(2.0, f1 * 0.083333333f);
 }

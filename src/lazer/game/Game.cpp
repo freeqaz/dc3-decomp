@@ -132,7 +132,7 @@ BEGIN_HANDLERS(Game)
     HANDLE_EXPR(using_serial_sequences, RandomGroupSeq::UsingSerialSequences())
     HANDLE(reset_detection, OnResetDetection)
     HANDLE_ACTION(set_cur_move, SetHamMove(_msg->Int(2), _msg->Obj<HamMove>(3), true))
-    HANDLE_EXPR(get_cur_move, mMoveDir->CurrentMove(_msg->Int(2)))
+    HANDLE_EXPR(get_cur_move, mMoveDir ? mMoveDir->CurrentMove(_msg->Int(2)) : (Hmx::Object*)0)
     HANDLE_ACTION(reload_song, ReloadSong())
     HANDLE_EXPR(is_ready, IsReady())
     HANDLE_ACTION(
@@ -208,7 +208,11 @@ void Game::SetIntroRealTime(float f) {
 void Game::PostLoad() {
     WorldDir *world = TheHamDirector->GetWorld();
     MILO_ASSERT(world, 0x259);
+#ifdef HX_NATIVE
+    mMoveDir = world->Find<MoveDir>("moves", false);
+#else
     mMoveDir = world->Find<MoveDir>("moves");
+#endif
     RELEASE(mOvershell);
     mOvershell = new Overshell();
     mOvershell->Init();
@@ -248,11 +252,17 @@ void Game::LoadNewSongAudio(Symbol s) {
 }
 
 void Game::FlushMoveRecord() {
+#ifdef HX_NATIVE
+    if (!mMoveDir) return;
+#endif
     MILO_ASSERT(mMoveDir, 0x3a7);
     mMoveDir->FlushMoveRecord();
 }
 
 void Game::SwapMoveRecord() {
+#ifdef HX_NATIVE
+    if (!mMoveDir) return;
+#endif
     MILO_ASSERT(mMoveDir, 0x3af);
     mMoveDir->SwapMoveRecord();
 }
@@ -725,7 +735,11 @@ bool Game::IsLoaded() {
                 return false;
             }
             if (mUseMoveGraph && !TheHamDirector->IsWorldLoaded()) {
+#ifdef HX_NATIVE
+                // Async file loading — proceed without waiting
+#else
                 return false;
+#endif
             }
             TheSongDB->PostLoad(mMaster->GetMidiParserMgr()->GetEventsList());
             PostLoad();
@@ -745,7 +759,11 @@ bool Game::IsLoaded() {
         }
         if (mLoadState == 1) {
             if (mUseMoveGraph && !TheHamDirector->IsMoveMergerFinished()) {
+#ifdef HX_NATIVE
+                // Async move merger — proceed without waiting
+#else
                 return false;
+#endif
             }
             MILO_LOG("Game::IsLoaded() - Done waiting for MoveGraph\n");
             mLoadState = 2;
@@ -797,6 +815,9 @@ DataNode Game::OnSetShuttle(DataArray *arr) {
 }
 
 DataNode Game::OnResetDetection(DataArray *a) {
+#ifdef HX_NATIVE
+    if (!mMoveDir) return 0;
+#endif
     MILO_ASSERT(mMoveDir, 0x392);
     if (a->Size() > 2) {
         int index = a->Int(2);
@@ -888,12 +909,20 @@ bool Game::HandleWait() {
         if (worldFm->HasPendingFiles()) {
             return false;
         }
+#ifdef HX_NATIVE
+        mMoveDir = TheHamDirector->GetWorld()->Find<MoveDir>("moves", false);
+        if (mMoveDir) {
+            mMoveDir->Enter();
+            mMoveDir->ResetDetection();
+        }
+#else
         if (!TheHamDirector->GetWorld()->Find<MoveDir>("moves", false)) {
             return false;
         }
         mMoveDir = TheHamDirector->GetWorld()->Find<MoveDir>("moves", true);
         mMoveDir->Enter();
         mMoveDir->ResetDetection();
+#endif
         TheHamDirector->SetupAnims();
         if (mAltTempoMap) {
             TheHamDirector->RemapSongAnimToTempoMap(mAltTempoMap);

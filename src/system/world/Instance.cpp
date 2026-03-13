@@ -208,13 +208,11 @@ void WorldInstance::LoadPersistentObjects(BinStreamRev &bs) {
 }
 
 void WorldInstance::DeleteTransientObjects() {
-    if (!Dir() || Dir() == DirLoader::TopSaveDir()
-        || Dir()->InlineSubDirType() != kInlineAlways) {
-        DeleteObjects();
-    } else {
+    if (!(!Dir() || Dir() == DirLoader::TopSaveDir()
+        || Dir()->InlineSubDirType() != kInlineAlways)) {
         for (ObjDirItr<Hmx::Object> obj(this, false); obj != nullptr; ++obj) {
-            if (obj != this) {
-                const ObjRef &refs = obj->Refs();
+            if (this != obj) {
+                auto refs = obj->Refs();
                 ObjectDir *dir_ref = Dir();
                 Hmx::Object *to = mDir->Find<Hmx::Object>(obj->Name(), true);
                 MILO_ASSERT(obj->ClassName() == to->ClassName(), 0x1CB);
@@ -229,6 +227,8 @@ void WorldInstance::DeleteTransientObjects() {
                 delete obj;
             }
         }
+    } else {
+        DeleteObjects();
     }
 }
 

@@ -35,6 +35,8 @@ Hmx::Matrix4 &Hmx::Matrix4::Zero() {
     return *this;
 }
 
+Hmx::Quat::Quat(const Vector3 &v, float f) { Set(v, f); }
+
 void Hmx::Quat::Set(const Vector3 &v, float f) {
     float scale = Sine(f / 2);
     w = Cosine(f / 2);

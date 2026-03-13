@@ -20,17 +20,21 @@
 #include "char/CharEyeDartRuleset.h"
 #include "char/CharFaceServo.h"
 #include "char/CharIKFoot.h"
+#include "char/CharInterest.h"
 #include "char/CharLipSync.h"
 #include "char/CharLipSyncDriver.h"
 #include "char/CharLookAt.h"
 #include "char/CharPollable.h"
+#include "char/Waypoint.h"
 #include "char/CharWeightSetter.h"
 #include "char/CharWeightable.h"
 #include "char/Character.h"
 #include "hamobj/DancerSequence.h"
 #include "synth/Faders.h"
 #include "flow/Flow.h"
+#include "flow/FlowLabel.h"
 #include "flow/FlowNode.h"
+#include "flow/FlowOutPort.h"
 #include "synth/FxSend.h"
 #include "synth/FxSendMeterEffect.h"
 #include "hamobj/HamCamShot.h"
@@ -41,6 +45,7 @@
 #include "hamobj/HamMove.h"
 #include "hamobj/HamNavProvider.h"
 #include "hamobj/HamPhraseMeter.h"
+#include "hamobj/RhythmDetector.h"
 #include "world/LightHue.h"
 #include "world/LightPreset.h"
 #include "rndobj/MetaMaterial.h"
@@ -67,6 +72,7 @@
 #include "world/CameraShot.h"
 #include "rndobj/EventTrigger.h"
 #include "world/Spotlight.h"
+#include "world/SpotlightDrawer.h"
 #include "gesture/SkeletonClip.h"
 #include "synth/MoggClip.h"
 #include "synth/Sequence.h"
@@ -112,6 +118,7 @@ OBJREFCONCRETE_COPYREF(CharDriver)
 OBJREFCONCRETE_COPYREF(CharEyeDartRuleset)
 OBJREFCONCRETE_COPYREF(CharFaceServo)
 OBJREFCONCRETE_COPYREF(CharIKFoot)
+OBJREFCONCRETE_COPYREF(CharInterest)
 OBJREFCONCRETE_COPYREF(CharLipSync)
 OBJREFCONCRETE_COPYREF(CharLipSyncDriver)
 OBJREFCONCRETE_COPYREF(CharLookAt)
@@ -123,7 +130,9 @@ OBJREFCONCRETE_COPYREF(DancerSequence)
 OBJREFCONCRETE_COPYREF(EventTrigger)
 OBJREFCONCRETE_COPYREF(Fader)
 OBJREFCONCRETE_COPYREF(Flow)
+OBJREFCONCRETE_COPYREF(FlowLabel)
 OBJREFCONCRETE_COPYREF(FlowNode)
+OBJREFCONCRETE_COPYREF(FlowOutPort)
 OBJREFCONCRETE_COPYREF(FxSend)
 OBJREFCONCRETE_COPYREF(FxSendMeterEffect)
 OBJREFCONCRETE_COPYREF(HamCamShot)
@@ -139,6 +148,7 @@ OBJREFCONCRETE_COPYREF(LightPreset)
 OBJREFCONCRETE_COPYREF(MetaMaterial)
 OBJREFCONCRETE_COPYREF(MoggClip)
 OBJREFCONCRETE_COPYREF(ObjectDir)
+OBJREFCONCRETE_COPYREF(RhythmDetector)
 OBJREFCONCRETE_COPYREF(RhythmBattlePlayer)
 OBJREFCONCRETE_COPYREF(RndCam)
 OBJREFCONCRETE_COPYREF(RndCubeTex)
@@ -158,15 +168,18 @@ OBJREFCONCRETE_COPYREF(RndTex)
 OBJREFCONCRETE_COPYREF(RndTransAnim)
 OBJREFCONCRETE_COPYREF(RndWind)
 OBJREFCONCRETE_COPYREF(Sfx)
+OBJREFCONCRETE_COPYREF(SeqInst)
 OBJREFCONCRETE_COPYREF(SkeletonClip)
 OBJREFCONCRETE_COPYREF(Sound)
 OBJREFCONCRETE_COPYREF(Spotlight)
+OBJREFCONCRETE_COPYREF(SpotlightDrawer)
 OBJREFCONCRETE_COPYREF(SynthSample)
 OBJREFCONCRETE_COPYREF(UIColor)
 OBJREFCONCRETE_COPYREF(UIComponent)
 OBJREFCONCRETE_COPYREF(UILabel)
 OBJREFCONCRETE_COPYREF(UILabelDir)
 OBJREFCONCRETE_COPYREF(UIList)
+OBJREFCONCRETE_COPYREF(Waypoint)
 OBJREFCONCRETE_COPYREF(WorldCrowd)
 OBJREFCONCRETE_COPYREF(HamCharacter)
 

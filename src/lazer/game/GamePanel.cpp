@@ -1,5 +1,6 @@
 #include "game/GamePanel.h"
 #include "flow/PropertyEventProvider.h"
+#include "math/Utl.h"
 #include "game/Game.h"
 #include "game/GameMode.h"
 #include "game/PresenceMgr.h"
@@ -484,15 +485,16 @@ void GamePanel::ResetJitter() {
 void GamePanel::UpdateNowBar() {
     MILO_ASSERT(mGame, 0x23d);
     float songSec = TheTaskMgr.Seconds(TaskMgr::kRealTime);
-    float songDurSec = TheSongDB->GetSongDurationMs() * 0.001f;
-    float timeRemaining = songDurSec - songSec;
+    float songDurMs = TheSongDB->GetSongDurationMs();
+    float timeRemaining = songDurMs * 0.001f - songSec;
     char sign = '-';
     if (timeRemaining < 0.0f) {
         timeRemaining = -timeRemaining;
         sign = '+';
     }
     float pct = 0.0f;
-    if (songDurSec > 0.0f) {
+    if (songDurMs > 0.0f) {
+        float songDurSec = songDurMs * 0.001f;
         pct = songSec * 100.0f / songDurSec;
         if (pct > 100.0f)
             pct = 100.0f;
@@ -512,15 +514,15 @@ void GamePanel::UpdateNowBar() {
 }
 
 float GamePanel::DeJitter(float ms) {
-    static DataNode &noJitter = DataVariable("no_jitter");
     float sentinel = 1.0000000150474662e+30f;
+    static DataNode &noJitter = DataVariable("no_jitter");
     float result = sentinel;
-    if (noJitter.Int() == 0 && mJitterSampleCount > 8) {
-        int prevPos = (mJitterBufferIndex - 1) & 0x1F;
-        int historyPos = (prevPos - mJitterSampleCount) & 0x1F;
+    if (noJitter.Int() == 0 && mJitterBufferIndex > 8) {
+        int prevPos = (mJitterSampleCount - 1) & 0x1F;
+        int historyPos = (prevPos - mJitterBufferIndex) & 0x1F;
         float avgDelta =
             (mFrameTimeSamples[prevPos] - mFrameTimeSamples[historyPos])
-            / (float)mJitterSampleCount;
+            / (float)mJitterBufferIndex;
         if (mCurrentJitterValue == 0.0f) {
             mCurrentJitterValue = avgDelta;
         }
@@ -528,27 +530,23 @@ float GamePanel::DeJitter(float ms) {
             (avgDelta - mCurrentJitterValue) * 0.1f + mCurrentJitterValue;
         mCurrentJitterValue = filtered;
         result = unkf4 + filtered;
-        if (result > ms + 16.0f) {
-            result = ms + 16.0f;
-        }
-        if (result < ms - 16.0f) {
-            result = ms - 16.0f;
-        }
+        result = Max(ms - 16.0f, result);
+        result = Min(result, ms + 16.0f);
         if (result < unkf4) {
             result = unkf4;
         }
     }
 #ifdef HX_NATIVE
-    mFrameTimeSamples[mJitterBufferIndex & 0x1F] = ms;
+    mFrameTimeSamples[mJitterSampleCount & 0x1F] = ms;
 #else
-    mFrameTimeSamples[mJitterBufferIndex] = ms;
+    mFrameTimeSamples[mJitterSampleCount] = ms;
 #endif
     if (result != sentinel) {
         ms = result;
     }
-    mJitterBufferIndex = (mJitterBufferIndex + 1) & 0x1F;
-    if (mJitterSampleCount < 30) {
-        mJitterSampleCount++;
+    mJitterSampleCount = (mJitterSampleCount + 1) & 0x1F;
+    if (mJitterBufferIndex < 30) {
+        mJitterBufferIndex++;
     }
     unkf4 = ms;
     return ms;
@@ -907,29 +905,18 @@ bool GamePanel::IsPastStreamJumpPointOfNoReturn() {
 
 void GamePanel::PollForLoading() {
     mPollLoadState = 0;
-#ifdef HX_NATIVE
-    // Native loads UIPanel synchronously in Load() — only poll if still unloaded
-    if (!UIPanel::IsLoaded())
-#endif
-        UIPanel::PollForLoading();
+    UIPanel::PollForLoading();
     if (UIPanel::IsLoaded()) {
         mPollLoadState = 1;
         UIPanel *worldPanel = ObjectDir::Main()->Find<UIPanel>("world_panel");
         if (TheUI->TransitionScreen()
             && TheUI->TransitionScreen()->HasPanel(worldPanel)) {
             if (!TheHamDirector) {
-#ifdef HX_NATIVE
-                static int sDirDbg = 0;
-                if (DebugWorldLoad() && sDirDbg++ < 3)
-                    fprintf(stderr, "DC3 GamePanel::PollForLoading — no TheHamDirector\n");
-#endif
                 return;
             }
             if (!TheHamDirector->IsWorldLoaded()) {
 #ifdef HX_NATIVE
-                static int sWlDbg = 0;
-                if (DebugWorldLoad() && sWlDbg++ < 3)
-                    fprintf(stderr, "DC3 GamePanel::PollForLoading — world not fully loaded, proceeding\n");
+                // Async world loading — proceed without waiting
 #else
                 return;
 #endif
@@ -938,17 +925,15 @@ void GamePanel::PollForLoading() {
         mPollLoadState = 2;
         const DataNode *prop = TheGameMode->Property("load_chars");
         if (prop->Int() != 0 && !TheHamWardrobe->AllCharsLoaded()) {
+#ifdef HX_NATIVE
+            // Async character loading — proceed without waiting
+#else
             return;
+#endif
         }
         mPollLoadState = 3;
         if (mGame->IsReady()) {
             mPollLoadState = 4;
-        } else {
-#ifdef HX_NATIVE
-            static int sGrDbg = 0;
-            if (DebugWorldLoad() && sGrDbg++ < 5)
-                fprintf(stderr, "DC3 GamePanel::PollForLoading — game not ready (state 3)\n");
-#endif
         }
     }
 }

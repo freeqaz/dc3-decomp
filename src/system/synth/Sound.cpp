@@ -200,12 +200,14 @@ void Sound::SynthPoll() {
             float faderVol, faderPan, faderTranspose;
             mFaders.GetVal(faderVol, faderPan, faderTranspose);
             (*it)->SetVolume(mVolume + faderVol);
-            (*it)->SetPan(Clamp(-4.0f, sSpeedCaps[1], mPan + faderPan));
-            (*it)->SetSpeed(Clamp(
+            auto clampedPan = Clamp(-4.0f, sSpeedCaps[1], mPan + faderPan);
+            (*it)->SetPan(clampedPan);
+            auto clampedSpeed = Clamp(
                 sSpeedCaps[0],
                 sSpeedCaps[1],
                 CalcSpeedFromTranspose(faderTranspose) * mSpeed
-            ));
+            );
+            (*it)->SetSpeed(clampedSpeed);
         }
         mFaders.ClearDirty();
     }
@@ -469,18 +471,19 @@ void Sound::SetSpeed(float f1, Hmx::Object *o2) {
 }
 
 void Sound::SetPan(float pan, Hmx::Object *obj) {
+    auto maxPan = sSpeedCaps[1];
     float faderPan = mFaders.GetPan();
     if (obj) {
         FOREACH (it, mSamples) {
             if ((*it)->GetEventReceiver() == obj) {
-                (*it)->SetPan(Clamp(-4.0f, sSpeedCaps[1], faderPan + pan));
+                (*it)->SetPan(Clamp(-4.0f, maxPan, faderPan + pan));
                 return;
             }
         }
     } else {
         mPan = pan;
         FOREACH (it, mSamples) {
-            (*it)->SetPan(Clamp(-4.0f, sSpeedCaps[1], faderPan + pan));
+            (*it)->SetPan(Clamp(-4.0f, maxPan, faderPan + pan));
         }
     }
 }

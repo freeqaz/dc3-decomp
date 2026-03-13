@@ -25,6 +25,10 @@
 #include "utl/Loader.h"
 #include "world/LightPreset.h"
 
+#ifdef HX_NATIVE
+inline double __fsel(double a, double b, double c) { return a >= 0.0 ? b : c; }
+#endif
+
 RndEnviron *Spotlight::sEnviron;
 
 #pragma region BeamDef
@@ -796,7 +800,7 @@ void Spotlight::Poll() {
     if (!TheLoadMgr.EditMode()) {
         if (!Showing())
             return;
-        if (mColorOwner->mIntensity == 0)
+        if (mIntensity == 0)
             return;
     }
     Hmx::Matrix3 m;
@@ -805,8 +809,6 @@ void Spotlight::Poll() {
         if (!target || (!mSnapToTarget && target->WorldXfm().v == mLastTargetPos)) {
             if (!target && !mAnimateOrientationFromPreset && !DoFloorSpot()) {
                 UpdateTransforms();
-                Normalize(mLocalXfm.m, m);
-                SetLocalRot(m);
                 return;
             }
             CheckFloorSpotTransform();
@@ -857,7 +859,7 @@ void Spotlight::UpdateTransforms() {
         Multiply(m48, thetf.m, m48);
         Vector3 vd8(0.0f, mLensOffset, 0.0f);
         vd8.Set(
-            thetf.v.x + thetf.m.x.x * 0.0f + thetf.m.y.x * mLensOffset + thetf.m.z.x * 0.0f,
+            (thetf.v.x + (thetf.m.x.x * 0.0f + (thetf.m.y.x * mLensOffset + thetf.m.z.x * 0.0f))),
             thetf.v.y + thetf.m.x.y * 0.0f + thetf.m.y.y * mLensOffset + thetf.m.z.y * 0.0f,
             thetf.v.z + thetf.m.x.z * 0.0f + thetf.m.y.z * mLensOffset + thetf.m.z.z * 0.0f
         );
@@ -919,11 +921,10 @@ void Spotlight::BuildBeam(BeamDef &def) {
     def.mIsCone = false;
     def.mBeam = Hmx::Object::New<RndMesh>();
     float bottomBorderLen = def.mBottomBorder * def.mLength;
-    RndMesh *mesh = def.mBeam;
     float topSideBorderVal = def.mTopSideBorder * def.mTopRadius;
-    RndMesh::VertVector &verts = mesh->Verts();
+    RndMesh::VertVector &verts = def.mBeam->Verts();
+    std::vector<RndMesh::Face> &faces = def.mBeam->Faces();
     float bottomSideBorderVal = def.mBottomSideBorder * def.mBottomRadius;
-    std::vector<RndMesh::Face> &faces = mesh->Faces();
 
     int numSectionsTop = (int)((def.mLength - bottomBorderLen) / 15.0f);
     if (numSectionsTop <= 4) numSectionsTop = 4;
@@ -938,11 +939,12 @@ void Spotlight::BuildBeam(BeamDef &def) {
 
     float topLen = def.mLength - bottomBorderLen;
     float topRadius = def.mTopRadius;
-    float bottomRadius = def.mBottomRadius;
-    float borderTopRadius = (topLen / def.mLength) * (bottomRadius - topRadius) + topRadius;
+    float borderTopRadius = (topLen / def.mLength) * (def.mBottomRadius - topRadius) + topRadius;
     float radiusStepTop = borderTopRadius - topRadius;
     float topSectionLen = 1.0f / (float)numSectionsTop;
     float botSectionLen = 1.0f / (float)numSectionsBottom;
+    float radiusStepTopVal = radiusStepTop * topSectionLen;
+    float radiusStepBotVal = (def.mBottomRadius - borderTopRadius) * botSectionLen;
 
     if (totalSections != 0) {
         float halfWidth = topRadius;
@@ -957,18 +959,21 @@ void Spotlight::BuildBeam(BeamDef &def) {
             if (i == (unsigned int)(totalSections - 1)) {
                 y = def.mLength;
                 alpha = 0.0f;
-            } else if (i < (unsigned int)numSectionsTop) {
-                y = (topLen * topSectionLen) * (float)i;
-                alpha = 1.0f;
-            } else {
+            } else if (!(i < (unsigned int)numSectionsTop)) {
                 y = (botSectionLen * bottomBorderLen) * (float)lVar31 + topLen;
                 alpha = 1.0f - (float)lVar31 / (float)numSectionsBottom;
+            } else {
+                y = (topLen * topSectionLen) * (float)i;
+                alpha = 1.0f;
             }
 
             float yFrac = y / def.mLength;
             float negY = -y;
             float sideBorder = (bottomSideBorderVal - topSideBorderVal) * yFrac + topSideBorderVal;
             float borderRatio = sideBorder / (halfWidth * 2.0f);
+
+            float leftInner = sideBorder - halfWidth;
+            float rightInner = halfWidth - sideBorder;
 
             // Column 0: left edge
             verts[i * 4].pos.z = negY;
@@ -978,7 +983,6 @@ void Spotlight::BuildBeam(BeamDef &def) {
             verts[i * 4].tex.Set(0.0f, yFrac);
 
             // Column 1: left inner
-            float leftInner = sideBorder - halfWidth;
             if (-leftInner < 0.0f) leftInner = 0.0f;
             verts[i * 4 + 1].pos.x = leftInner;
             verts[i * 4 + 1].pos.y = 0.0f;
@@ -987,8 +991,7 @@ void Spotlight::BuildBeam(BeamDef &def) {
             verts[i * 4 + 1].tex.Set(borderRatio, yFrac);
 
             // Column 2: right inner
-            float rightInner = 0.0f;
-            if (-(halfWidth - sideBorder) < 0.0f) rightInner = halfWidth - sideBorder;
+            if (-rightInner < 0.0f) rightInner = 0.0f;
             verts[i * 4 + 2].pos.x = rightInner;
             verts[i * 4 + 2].pos.y = 0.0f;
             verts[i * 4 + 2].pos.z = negY;
@@ -1038,13 +1041,11 @@ void Spotlight::BuildBeam(BeamDef &def) {
                 }
             }
 
-            float radiusStep;
-            if ((unsigned int)numSectionsTop <= i) {
-                radiusStep = (bottomRadius - borderTopRadius) * botSectionLen;
+            if (i < (unsigned int)numSectionsTop) {
+                halfWidth = radiusStepTopVal + halfWidth;
             } else {
-                radiusStep = radiusStepTop * topSectionLen;
+                halfWidth = radiusStepBotVal + halfWidth;
             }
-            halfWidth = radiusStep + halfWidth;
 
             i++;
             lVar31++;
@@ -1054,11 +1055,12 @@ void Spotlight::BuildBeam(BeamDef &def) {
         } while (count != 0);
     }
 
-    mesh->Sync(0x13F);
-    mesh->SetMat(def.mMat);
-    mesh->SetTransConstraint(kConstraintBillboardZ, nullptr, false);
-    RndTransformable *parent = this ? static_cast<RndTransformable *>(this) : nullptr;
-    mesh->SetTransParent(parent, false);
+    def.mBeam->Sync(0x13F);
+    def.mBeam->SetMat(def.mMat);
+    def.mBeam->SetTransConstraint(kConstraintBillboardZ, nullptr, false);
+    RndTransformable *parent;
+    parent = this ? static_cast<RndTransformable *>(this) : nullptr;
+    def.mBeam->SetTransParent(parent, false);
 }
 
 void Spotlight::BuildCone(BeamDef &def) {
@@ -1081,7 +1083,7 @@ void Spotlight::BuildCone(BeamDef &def) {
     float uvStep = 1.0f / 15.0f;
     float angleStep = 0.4188790f;
 
-    for (int i = 0; i < 15; i++) {
+    for (int i = 0; i != 15; i++) {
         float cosA = std::cos(angle);
         float sinA = std::sin(angle);
 
@@ -1142,21 +1144,27 @@ void Spotlight::BuildNGCone(BeamDef &def, int numSegments) {
         0.0f, 0.0f, 1.0f
     );
     Hmx::Matrix3 rotMtx;
-    if (!def.mIsCone) {
+    Hmx::Matrix3 rotCopy;
+    Hmx::Matrix3 *pSrc;
+    if (def.mIsCone) {
+        pSrc = &identMtx;
+    } else {
         rotMtx.Set(
             1.0f, 0.0f, 0.0f,
             0.0f, 0.0f, -1.0f,
             0.0f, 1.0f, 0.0f
         );
-    } else {
-        rotMtx = identMtx;
+        rotCopy.x = rotMtx.x;
+        rotCopy.y = rotMtx.y;
+        rotCopy.z = rotMtx.z;
+        pSrc = &rotCopy;
     }
     Hmx::Matrix3 orientMtx;
-    memcpy(&orientMtx, &rotMtx, 0x30);
+    memcpy(&orientMtx, pSrc, 0x30);
 
     def.mBeam = Hmx::Object::New<RndMesh>();
-    RndMesh *mesh = def.mBeam;
     int numVerts = numSegments * 3;
+    RndMesh *mesh = def.mBeam;
     RndMesh::VertVector &verts = mesh->Verts();
     std::vector<RndMesh::Face> &faces = mesh->Faces();
 
@@ -1165,30 +1173,28 @@ void Spotlight::BuildNGCone(BeamDef &def, int numSegments) {
 
     float length = def.mLength;
     Vector2 radii = def.NGRadii();
-    float topRadius = radii.x;
-    float bottomRadius = radii.y;
     float halfStep = 0.5f;
     float numSegsF = (float)numSegments;
     float angleStep = 6.2831855f / numSegsF;
     float halfAngle = angleStep * 0.5f;
     float invCosHalf = 1.0f / (float)std::cos((double)halfAngle);
-    topRadius = topRadius * invCosHalf;
-    bottomRadius = bottomRadius * invCosHalf;
+    float topRadius = radii.x * invCosHalf;
+    float bottomRadius = radii.y * invCosHalf;
 
-    bool flip = false;
+    int flip = 0;
     int iVert = 0;
     float csAngle = 0.0f;
     float xsAngle = 0.7853982f;
-    int iFace = 0;
     short baseIdx = 2;
-    for (int seg = 0; seg < numSegments; seg++) {
+    int iFace = 0;
+    for (int seg = 0; seg != numSegments; seg++) {
         float cosH = (float)std::cos((double)halfAngle);
         float sinH = (float)std::sin((double)halfAngle);
         float segU = (float)seg / numSegsF;
 
         for (unsigned int v = 0; v < 3; v++) {
             float uvV = (float)v * halfStep;
-            if (v < 2) {
+            if (v <= 1) {
                 float t = (float)v;
                 float radius = (bottomRadius - topRadius) * t + topRadius;
                 verts[iVert].pos.Set(radius * cosH, t * length, radius * sinH);
@@ -1197,30 +1203,28 @@ void Spotlight::BuildNGCone(BeamDef &def, int numSegments) {
                 float py = verts[iVert].pos.y;
                 float pz = verts[iVert].pos.z;
                 verts[iVert].pos.x =
-                    orientMtx.x.x * px + orientMtx.z.x * pz + orientMtx.y.x * py;
+                    orientMtx.x.x * px + (orientMtx.z.x * pz + orientMtx.y.x * py);
                 verts[iVert].pos.z =
-                    orientMtx.y.z * py + orientMtx.x.z * px + orientMtx.z.z * pz;
+                    orientMtx.y.z * py + (orientMtx.x.z * px + orientMtx.z.z * pz);
                 verts[iVert].pos.y =
-                    orientMtx.y.y * py + orientMtx.x.y * px + orientMtx.z.y * pz;
+                    orientMtx.y.y * py + (orientMtx.x.y * px + orientMtx.z.y * pz);
             } else {
                 float cosCs = (float)std::cos((double)csAngle);
                 float sinCs = (float)std::sin((double)csAngle);
                 csAngle = csAngle + xsAngle;
-                verts[iVert].pos.Set(
-                    cosCs * cosH * bottomRadius,
-                    sinCs * bottomRadius + length,
-                    cosCs * sinH * bottomRadius
-                );
+                verts[iVert].pos.y = sinCs * bottomRadius + length;
+                verts[iVert].pos.z = cosCs * sinH * bottomRadius;
+                verts[iVert].pos.x = cosCs * cosH * bottomRadius;
 
                 float px = verts[iVert].pos.x;
-                float py = verts[iVert].pos.y;
                 float pz = verts[iVert].pos.z;
+                float py = verts[iVert].pos.y;
                 verts[iVert].pos.x =
-                    orientMtx.x.x * px + orientMtx.y.x * py + orientMtx.z.x * pz;
+                    orientMtx.x.x * px + (orientMtx.y.x * py + orientMtx.z.x * pz);
                 verts[iVert].pos.z =
-                    orientMtx.z.z * pz + orientMtx.x.z * px + orientMtx.y.z * py;
+                    orientMtx.z.z * pz + (orientMtx.x.z * px + orientMtx.y.z * py);
                 verts[iVert].pos.y =
-                    orientMtx.z.y * pz + orientMtx.x.y * px + orientMtx.y.y * py;
+                    orientMtx.z.y * pz + (orientMtx.x.y * px + orientMtx.y.y * py);
             }
             verts[iVert].color.Set(1.0f, 1.0f, 1.0f, 1.0f);
             verts[iVert].tex.Set(segU, uvV);
@@ -1235,17 +1239,17 @@ void Spotlight::BuildNGCone(BeamDef &def, int numSegments) {
         }
 
         short cur = baseIdx - 1;
-        bool curFlip = flip;
+        int curFlip = flip;
         int fCount = 2;
         do {
-            flip = !curFlip;
+            flip = curFlip + 1;
             short nextRow = cur - 1 + sideWidth;
-            if (curFlip) {
-                faces[iFace].Set(nextRow, nextRow + 1, cur - 1);
-                faces[iFace + 1].Set(nextRow + 1, cur, cur - 1);
+            if (curFlip & 1) {
+                faces[iFace].Set(nextRow, cur - 1, nextRow + 1);
+                faces[iFace + 1].Set(nextRow + 1, cur - 1, cur);
             } else {
-                faces[iFace].Set(nextRow, cur, cur - 1);
-                faces[iFace + 1].Set(nextRow, nextRow + 1, cur);
+                faces[iFace].Set(cur - 1, cur, nextRow);
+                faces[iFace + 1].Set(nextRow, cur, nextRow + 1);
             }
             cur = cur + 1;
             iFace += 2;
@@ -1260,24 +1264,21 @@ void Spotlight::BuildNGCone(BeamDef &def, int numSegments) {
         iFace += 2;
     }
 
-    // Apex center vertex (index numVerts)
     verts[numVerts].pos.Set(0.0f, 0.0f, 0.0f);
     verts[numVerts].color.Set(1.0f, 1.0f, 1.0f, 1.0f);
     verts[numVerts].tex.Set(0.0f, 0.0f);
 
-    // Base center vertex (index numVerts + 1)
     int baseVertIdx = numVerts + 1;
     verts[baseVertIdx].pos.Set(0.0f, length, 0.0f);
-    // Transform base center
     float px = verts[baseVertIdx].pos.x;
     float py = verts[baseVertIdx].pos.y;
     float pz = verts[baseVertIdx].pos.z;
     verts[baseVertIdx].pos.z =
-        orientMtx.y.z * py + orientMtx.x.z * px + orientMtx.z.z * pz;
+        orientMtx.y.z * py + (orientMtx.x.z * px + orientMtx.z.z * pz);
     verts[baseVertIdx].pos.y =
-        orientMtx.y.y * py + orientMtx.x.y * px + orientMtx.z.y * pz;
+        orientMtx.y.y * py + (orientMtx.x.y * px + orientMtx.z.y * pz);
     verts[baseVertIdx].pos.x =
-        px * orientMtx.x.x + orientMtx.z.x * pz + orientMtx.y.x * py;
+        px * orientMtx.x.x + (orientMtx.z.x * pz + orientMtx.y.x * py);
     verts[baseVertIdx].color.Set(1.0f, 1.0f, 1.0f, 1.0f);
     verts[baseVertIdx].tex.Set(0.0f, 1.0f);
 
@@ -1286,7 +1287,6 @@ void Spotlight::BuildNGCone(BeamDef &def, int numSegments) {
     RndTransformable *parent = this ? static_cast<RndTransformable *>(this) : nullptr;
     def.mBeam->SetTransParent(parent, false);
 }
-
 void Spotlight::BuildNGSheet(BeamDef &def) {
     Hmx::Matrix3 identMtx(
         Vector3(1.0f, 0.0f, 0.0f), Vector3(0.0f, 1.0f, 0.0f), Vector3(0.0f, 0.0f, 1.0f)
@@ -1305,16 +1305,15 @@ void Spotlight::BuildNGSheet(BeamDef &def) {
     memcpy(&orientMtx, &rotMtx, 0x30);
 
     def.mBeam = Hmx::Object::New<RndMesh>();
-    RndMesh *mesh = def.mBeam;
-    RndMesh::VertVector &verts = mesh->Verts();
-    std::vector<RndMesh::Face> &faces = mesh->Faces();
-
+    RndMesh::VertVector &verts = def.mBeam->Verts();
     int numSections = def.mNumSections;
+
+    std::vector<RndMesh::Face> &faces = def.mBeam->Faces();
     if (numSections < 2) numSections = 5;
     int numSegments = def.mNumSegments;
     if (numSegments < 3) numSegments = 10;
 
-    int numRows = numSections + 1;
+    int numRows = 1 + numSections;
     int numCols = numSegments + 1;
     int totalVerts = numRows * numCols;
     int totalFaces = numSegments * numSections * 2;
@@ -1331,7 +1330,7 @@ void Spotlight::BuildNGSheet(BeamDef &def) {
     int iVert = 0;
     for (int row = 0; row < numRows; row++) {
         float t = (float)row / (float)numSections;
-        float oneMinusT = 1.0f - t;
+        float oneMinusT = -(t - 1.0f);
         for (int col = 0; col < numCols; col++) {
             float segFrac = (float)col / (float)numSegments * 2.0f - 1.0f;
             float xTop = segFrac * topRadius;
@@ -1360,7 +1359,9 @@ void Spotlight::BuildNGSheet(BeamDef &def) {
             n.z = ny * orientMtx.y.z + nx * orientMtx.x.z + nz * orientMtx.z.z;
             n.y = ny * orientMtx.y.y + nx * orientMtx.x.y + nz * orientMtx.z.y;
 
-            verts[iVert].color = Hmx::Color(oneMinusT, oneMinusT, oneMinusT, oneMinusT);
+            verts[iVert].color.red = Hmx::Color(oneMinusT, oneMinusT, oneMinusT, oneMinusT).red;
+            verts[iVert].color.green = Hmx::Color(oneMinusT, oneMinusT, oneMinusT, oneMinusT).green;
+            verts[iVert].color.blue = Hmx::Color(oneMinusT, oneMinusT, oneMinusT, oneMinusT).blue;
             verts[iVert].tex.Set(absSegFrac, t);
             iVert++;
         }
@@ -1386,19 +1387,19 @@ void Spotlight::BuildNGSheet(BeamDef &def) {
     }
     MILO_ASSERT(iFace == (int)totalFaces, 0x53F);
 
-    mesh->Sync(0x13F);
-    mesh->SetMat(def.mMat);
+    def.mBeam->Sync(0x13F);
+    def.mBeam->SetMat(def.mMat);
     RndTransformable *parent = this ? static_cast<RndTransformable *>(this) : nullptr;
-    mesh->SetTransParent(parent, false);
+    def.mBeam->SetTransParent(parent, false);
 }
 
 
 void Spotlight::BuildNGQuad(BeamDef &def, RndTransformable::Constraint constraint) {
-    def.mBeam = Hmx::Object::New<RndMesh>();
+    auto mesh = Hmx::Object::New<RndMesh>();
+    def.mBeam = mesh;
+    int gridSize = def.mNumSegments;
     RndMesh::VertVector &verts = def.mBeam->Verts();
     std::vector<RndMesh::Face> &faces = def.mBeam->Faces();
-
-    int gridSize = def.mNumSegments;
     if (def.mNumSections >= gridSize) {
         gridSize = def.mNumSections;
     }
@@ -1406,24 +1407,23 @@ void Spotlight::BuildNGQuad(BeamDef &def, RndTransformable::Constraint constrain
 
     int nMinus1 = sGridSize - 1;
     int totalVerts = sGridSize * sGridSize;
-    int totalFaces = nMinus1 * nMinus1 * 2;
+    int totalFaces = (nMinus1 * (nMinus1 * 2));
 
     verts.resize(totalVerts);
     faces.resize(totalFaces);
 
     int n = sGridSize;
+    float topRadius = def.mLength;
+    float bottomRadius = def.mBottomRadius;
 
     Hmx::Matrix3 rot;
     rot.Set(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, -1.0f, 0.0f, 1.0f, 0.0f);
 
-    float topRadius = def.mLength;
-    float bottomRadius = def.mBottomRadius;
-
+    int idx = 0;
     for (int row = 0; row < n; row++) {
-        float rowFrac = (float)row / (float)nMinus1;
+        float rowFrac = (float)row / (float)(n - 1);
         for (int col = 0; col < n; col++) {
-            float colFrac = (float)col / (float)nMinus1;
-            int idx = row * n + col;
+            float colFrac = (float)col / (float)(n - 1);
 
             verts[idx].pos.Set(
                 (colFrac * 2.0f - 1.0f) * bottomRadius,
@@ -1437,6 +1437,7 @@ void Spotlight::BuildNGQuad(BeamDef &def, RndTransformable::Constraint constrain
 
             verts[idx].color.Set(1.0f, 1.0f, 1.0f, 1.0f);
             verts[idx].tex.Set(colFrac, rowFrac);
+            idx++;
         }
     }
 
@@ -1448,20 +1449,20 @@ void Spotlight::BuildNGQuad(BeamDef &def, RndTransformable::Constraint constrain
             unsigned short uPrev = (unsigned short)(base - 1);
             unsigned short uBaseN = (unsigned short)(base + (short)n - 1);
             unsigned short uBasePN = (unsigned short)(base + (short)n);
-            if ((iFace & 2) == 0) {
-                faces[iFace].v1 = uPrev;
-                faces[iFace].v2 = uBase;
-                faces[iFace].v3 = uBaseN;
-                faces[iFace + 1].v1 = uBaseN;
-                faces[iFace + 1].v2 = uBase;
-                faces[iFace + 1].v3 = uBasePN;
-            } else {
+            if (!((iFace & 2) == 0)) {
                 faces[iFace].v1 = uBaseN;
                 faces[iFace].v2 = uPrev;
                 faces[iFace].v3 = uBasePN;
                 faces[iFace + 1].v1 = uBasePN;
                 faces[iFace + 1].v2 = uPrev;
                 faces[iFace + 1].v3 = uBase;
+            } else {
+                faces[iFace].v1 = uPrev;
+                faces[iFace].v2 = uBase;
+                faces[iFace].v3 = uBaseN;
+                faces[iFace + 1].v1 = uBaseN;
+                faces[iFace + 1].v2 = uBase;
+                faces[iFace + 1].v3 = uBasePN;
             }
             iFace += 2;
         }

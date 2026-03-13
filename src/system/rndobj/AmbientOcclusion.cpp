@@ -1561,6 +1561,7 @@ DataNode RndAmbientOcclusion::OnGetValidObjects(DataArray *) const {
     return ptr;
 }
 
+#ifndef HX_NATIVE
 namespace stlpmtx_std {
 
 template <>
@@ -1584,5 +1585,5 @@ Triangle* vector<Triangle, StlNodeAlloc<Triangle>>::_M_erase(
 }
 
 }  // namespace stlpmtx_std
-
+#endif
 

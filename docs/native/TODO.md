@@ -1,6 +1,11 @@
-# Native Port TODO — UI Fully Working
+# Native Port TODO — Content System & Song Select Working
 
-## Current State (Session 59)
+## Current State (Session 62)
+- **Content system fully integrated** — 62 songs load from DTA via ContentMgr → SongMgr → HamSongMgr pipeline
+- **Song select populated** — 46 songs pass profile filter, 49 UI items (songs + headers) in song_select_screen
+- **Full boot flow**: attract_screen → autosave_warning → title_screen → main_screen → (auto-nav or manual) → song_select_screen
+- **DC3_SCREEN env var** — auto-navigate to any screen after reaching main_screen (e.g. `DC3_SCREEN=song_select_screen`)
+- **MoviePanel fix** — `IsLoaded()` bypasses `mMovie.Ready()` on native (stub always returns false, was blocking all screen transitions)
 - **3D venue rendering on game_screen** — DCI venue with 505 draw calls/frame, 10000 frames stable (clean exit)
 - Full menu navigation: main_screen → choose_mode → song_select → YMCA → multiuser → loading → game_screen
 - Venue geometry (floor, walls, DJ booth, lighting rigs, graffiti), **fully-lit character** (skin, hair, outfit visible), HUD overlays all render
@@ -128,6 +133,7 @@ Goal: Character with proper materials, crowd, animated venue, gameplay HUD textu
 
 ### 4.2 Merge Pipeline Stability
 - [x] Fix ObjRef ring corruption root cause — **DONE** (`ObjDirPtr(C*)` was double-linking the same ref node; `ObjRefConcrete` already links the node in its base ctor, so the extra `AddRef` corrupted the ring at creation time)
+- [x] Fix SkeletonViz system-run resource loading — **DONE** (`FileSystemRoot()` was pointing at a bad native path, and `SkeletonViz` was typed as `ObjDirPtr<UILabelDir>` even though `ham/skeleton.milo` loads a `RndDir`; decomp shows `ObjDirPtr<ObjectDir>` at offset `0x168`)
 - [ ] Revalidate crowd character rendering now that the ring producer bug is fixed
 - [ ] Revalidate audio merge now that the ring producer bug is fixed
 
@@ -175,7 +181,7 @@ Goal: Remove C++ workarounds and let real DTA screen-flow scripts drive the nati
 - [x] **GameMode guard** (Phase 5b): `#ifdef HX_NATIVE` in constructor is correct and sufficient
 - [x] **Debug logging cleanup** (Phase 6): All ~25 debug printfs gated behind `MILO_DEBUG_UI_FLOW=1`
 - [x] **Remove multiuser auto-skip** (Phase 4): DTA `enter` handler drives game start naturally. IsAnimating() bypass in HamNavList.cpp enables button input.
-- [ ] Content system integration for list population
+- [x] **Content system integration** (Phase 5): 62 songs load from DTA, 46 populate song_select list (49 items with headers). Full pipeline: ContentMgr → SongMgr → HamSongMgr → SongSortMgr → UIList. MoviePanel::IsLoaded() fix unblocks attract_screen transition. Engine boots to main_screen, auto-nav to song_select_screen works via `DC3_SCREEN` env var.
 
 ## Null-on-Native Subsystems — Prioritized (Updated Session 60)
 
@@ -262,8 +268,9 @@ HamDirector (`src/system/hamobj/HamDirector.cpp:137-202`) exposes ~40+ DTA handl
 | Null crashes on game_screen (3) | HamCharacter/HamCamShot/PoseFatalities null ptrs | **FIXED** (Session 59) |
 | HUD move cards pink rectangles | TexMovie render-to-texture | TODO — Phase 4 |
 | Crowd/audio merges crash-skipped | Previously ObjRef ring corruption; now needs fresh runtime validation after ctor fix | TODO — Phase 4 |
+| MoviePanel::IsLoaded blocks forever | mMovie.Ready() stub returns false | **FIXED** (Session 62 — `#ifdef HX_NATIVE` bypass) |
 | Static scene (no animation) | ObjRef ring bug was a shared blocker; remaining blockers appear to be `LightPreset::Load` + song.anim DTA object gaps | TODO — Phase 4 |
-| Empty lists (no content) | Content system | TODO — Phase 5 |
+| Empty lists (no content) | Content system | **FIXED** (Session 62 — 49 items in song_select) |
 
 ## Crashes Fixed (Session 59)
 1. ObjRef ring corruption producer bug in `ObjDirPtr(C*)` → fixed by removing the extra `AddRef`; direct lifetime regression test added

@@ -838,13 +838,13 @@ void PoseFatalities::UpdateMatchingPose(int player) {
             JoypadData *jData = JoypadGetPadData(0);
             if (player == 0) {
                 if (jData->GetRT() > 0.5f
-                    || TheGameData->Player(0)->Autoplay() != gNullStr) {
+                    || !TheGameData->Player(0)->Autoplay().Null()) {
                     matching = true;
                 }
             }
             if (player == 1) {
                 if (jData->GetLT() > 0.5f
-                    || TheGameData->Player(1)->Autoplay() != gNullStr) {
+                    || !TheGameData->Player(1)->Autoplay().Null()) {
                     matching = true;
                 }
             }
@@ -863,7 +863,8 @@ void PoseFatalities::UpdateMatchingPose(int player) {
     float displayFrac = *progress / mHoldDuration;
     float clampedFrac = Clamp(0.0f, 1.0f, displayFrac);
 
-    HamPhraseMeter *meter = TheHamDirector->GetVenueWorld()->Find<HamPhraseMeter>(
+    ObjectDir *venueWorld = TheHamDirector->GetVenueWorld();
+    HamPhraseMeter *meter = venueWorld->Find<HamPhraseMeter>(
         MakeString("phrase_meter%i", player), true
     );
     meter->SetRatingFrac(Clamp(0.0f, 1.0f, clampedFrac), -1.0f);

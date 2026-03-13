@@ -336,10 +336,34 @@ void WgpuRnd::InitGpuResources() {
         }
         printf("\n");
     }
+
+    // Video recording setup (env-var controlled, native only)
+    const char* videoPath = getenv("MILO_VIDEO");
+    if (videoPath && videoPath[0]) {
+        int w = mGpu.WindowWidth();
+        int h = mGpu.WindowHeight();
+        int fps = 30;
+        const char* fpsEnv = getenv("MILO_VIDEO_FPS");
+        if (fpsEnv && fpsEnv[0]) fps = atoi(fpsEnv);
+        if (fps <= 0) fps = 30;
+
+        mVideoPixelSize = (size_t)w * h * 4;
+        mVideoPixels = (uint8_t*)malloc(mVideoPixelSize);
+        if (mVideoPixels) {
+            mVideoEncoder.Start(videoPath, w, h, fps);
+        }
+    }
 #endif
 }
 
 void WgpuRnd::Terminate() {
+    // Finalize video recording before GPU teardown
+    mVideoEncoder.Finish();
+    if (mVideoPixels) {
+        free(mVideoPixels);
+        mVideoPixels = nullptr;
+    }
+
 #ifndef __EMSCRIPTEN__
     gNativeWindow = nullptr;
 #endif
@@ -775,6 +799,7 @@ void WgpuRnd::EndDrawing() {
         mGpu.Queue().Submit(1, &cmd);
 
         MaybeCaptureFrame();
+        MaybeEncodeVideoFrame();
         FrameCapture::Get().EndFrame();
 
         if (!mGpu.IsHeadless()) {
@@ -1312,6 +1337,16 @@ void WgpuRnd::MaybeCaptureFrame() {
 
     free(pixels);
     mCaptureIndex++;
+}
+
+void WgpuRnd::MaybeEncodeVideoFrame() {
+    if (!mVideoPixels) return;
+    if (mGpu.ReadbackHeadlessFrame(mVideoPixels, mVideoPixelSize)) {
+        mVideoEncoder.WriteFrame(mVideoPixels, mVideoPixelSize);
+        if (mVideoEncoder.FrameCount() % 150 == 0) {
+            printf("DC3 Video: encoded %d frames\n", mVideoEncoder.FrameCount());
+        }
+    }
 }
 
 // ============================================================================

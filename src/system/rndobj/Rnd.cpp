@@ -1039,8 +1039,13 @@ void Rnd::UpdateRate() {
 // noinline: Prevents inlining of this stub implementation. Remove once fully implemented.
 #include "os/Timer.h"
 
+template <class _T>
+__declspec(noinline) auto _outline_Int(_T* _obj) -> decltype(_obj->Int()) {
+    return _obj->Int();
+}
+
 float Rnd::DrawTimers(float f) {
-    if ((lbl_830A4104 & 1) == 0) {
+    if (0 == (lbl_830A4104 & 1)) {
         lbl_830A4104 = lbl_830A4104 | 1;
         Symbol timerSym("timer_script");
         Symbol rndSym("rnd");
@@ -1050,7 +1055,7 @@ float Rnd::DrawTimers(float f) {
 
     if (lbl_830A4100) {
         DataNode res = lbl_830A4100->ExecuteScript(1, nullptr, nullptr, 0);
-        if ((res.Int() & 0x10) != 0) {
+        if ((_outline_Int(&res) & 0x10) != 0) {
             lbl_830A4100->Release();
         }
     }
@@ -1085,7 +1090,6 @@ float Rnd::DrawTimers(float f) {
     Hmx::Color inclColor(0.5f, 0.5f, 0.0f, 1.0f);
     Hmx::Color warnColor(0.0f, 0.0f, 0.5f, 1.0f);
 
-    y += bgTop;
     float x = bgLeft;
 
     for (std::list<std::pair<Timer, TimerStats> >::iterator it = timers.begin();
@@ -1103,7 +1107,7 @@ float Rnd::DrawTimers(float f) {
             float barHeight = lastMs * width;
             Hmx::Rect barRect(x, y, barHeight, width);
             DrawRectScreen(barRect, ownColor, nullptr, nullptr, nullptr);
-            y += barHeight;
+            y = bgTop += barHeight;
 
             float ownTime = lastMs - worstMs;
             if (ownTime > 0.0f) {
@@ -1129,9 +1133,8 @@ float Rnd::DrawTimers(float f) {
         y += width * 0.5f;
     }
 
-    y = f + bgTop;
     for (int i = 0; i < 10; i++) {
-        Hmx::Rect tickRect(x, y, 0.001f, width);
+        Hmx::Rect tickRect(x, y = f + bgTop, 0.001f, width);
         Hmx::Color tickColor(1.0f, 1.0f, 1.0f, 1.0f);
         DrawRectScreen(tickRect, tickColor, nullptr, nullptr, nullptr);
         y += width;
@@ -1175,11 +1178,13 @@ void Rnd::DrawPreClear() {
     }
 #ifndef HX_NATIVE
     unsigned int event = 0;
-    if (!(!((unsigned char)gRndTextureEvent))) {
+    if (!(!(!((unsigned char)gRndTextureEvent)))) {
+        event = (unsigned int)gRndTextureEvent;
+    } else {
         sTexture->FinishCompress(gRndTextureEvent);
         unsigned int eventVal = (unsigned int)gRndTextureEvent;
         gRndTextureEvent = 0;
-        if (eventVal == 0) {
+        if (0 == eventVal) {
             MILO_ASSERT(sTexture, 0x481);
             eventVal = (unsigned int)gRndTextureEvent;
         }
@@ -1199,8 +1204,6 @@ void Rnd::DrawPreClear() {
         event = 0;
         gRndTextureEvent = 0;
         gRndTextureEvent = 0;
-    } else {
-        event = (unsigned int)gRndTextureEvent;
     }
     if (event == 0) {
         auto it_end = mCompressTexQueue.end();
@@ -1215,7 +1218,7 @@ void Rnd::DrawPreClear() {
                     it = mCompressTexQueue.erase(it);
                     delete desc;
                 }
-            } while (it != it_end);
+            } while (it_end != it);
             it_begin = mCompressTexQueue.begin();
             unsigned int count = 0;
             if (it_begin != it_end) {
@@ -1242,11 +1245,7 @@ void Rnd::DrawPreClear() {
     }
 #endif // !HX_NATIVE
     ObjPtrList<RndDrawable> *drawList;
-    if (!mReleaseImmediate) {
-        drawList = &mPreClearDraws;
-    } else {
-        drawList = &mDraws;
-    }
+    drawList = mReleaseImmediate ? &mDraws : &mPreClearDraws;
     if (drawList->size() > 0) {
         mWorldCamCopied = true;
         RndCam *prevCam = RndCam::Current();
@@ -1255,7 +1254,7 @@ void Rnd::DrawPreClear() {
              ++it) {
             (*it)->DrawPreClear();
         }
-        if ((prevCam != NULL) && (prevCam != RndCam::Current())) {
+        if ((prevCam != nullptr) && (prevCam != RndCam::Current())) {
             prevCam->Select();
         }
         mWorldCamCopied = false;

@@ -10,10 +10,12 @@
 
 #include "test_helpers.h"
 #include "char/FileMerger.h"
+#include "gesture/SkeletonViz.h"
 #include "hamobj/HamCharacter.h"
 #include "obj/Dir.h"
 #include "obj/DirLoader.h"
 #include "obj/Object.h"
+#include "os/File.h"
 #include "utl/FilePath.h"
 
 #include <sys/stat.h>
@@ -197,6 +199,27 @@ TEST_F(AssetLoadingTest, LoadWorldAssets) {
     if (loaded == 0)
         GTEST_SKIP() << "No archive world assets available";
     printf("WorldAssets: loaded=%d skipped=%d\n", loaded, skipped);
+}
+
+TEST_F(AssetLoadingTest, LoadSystemRunHamSkeletonResource) {
+    FilePath fp(FileSystemRoot(), "ham/skeleton.milo");
+    ObjectDir *dir = DirLoader::LoadObjects(fp, nullptr, nullptr);
+    ASSERT_NE(dir, nullptr) << "system-run ham/skeleton.milo failed to load from "
+                            << FileSystemRoot();
+
+    int count = 0;
+    for (ObjDirItr<Hmx::Object> it(dir, false); it != nullptr; ++it)
+        count++;
+    EXPECT_GT(count, 0) << "skeleton resource dir should contain objects";
+    printf("  OK: %s -> '%s' class='%s' objects=%d\n",
+           fp.c_str(), dir->Name(), dir->ClassName().Str(), count);
+}
+
+TEST_F(AssetLoadingTest, SkeletonVizInitLoadsSystemResource) {
+    SkeletonViz *viz = Hmx::Object::New<SkeletonViz>();
+    ASSERT_NE(viz, nullptr);
+    viz->Init();
+    delete viz;
 }
 
 // ============================================================================

@@ -33,8 +33,7 @@
 // Math / Geometry stubs
 // ============================================================================
 
-void ScaleAddEq(Transform &, const Transform &, float) {}
-
+// ScaleAddEq — now in Vec.cpp
 // MakeBSPTree, BSPFace::Set, Intersect overloads — now in Geo.cpp
 
 void BuildSphereStratified(unsigned int, std::vector<Vector3> &) {}
@@ -84,9 +83,7 @@ void ListProperties(std::list<Symbol> &, Symbol, Symbol, std::list<Symbol> *, bo
 // Holmes (debug network) stub
 // ============================================================================
 
-CacheResourceResult HolmesClientCacheResource(const char *, const char *) {
-    return kCacheUnnecessary;
-}
+// HolmesClientCacheResource — now in HolmesClient.cpp
 
 void HolmesClientPrint(const char *) {}
 
@@ -293,8 +290,7 @@ void XNetDnsRelease(void *) {}
 int XSetThreadProcessor(int, int) { return 0; }
 
 // Scoring / game utilities — stubs for web
-void ScoreUtlInit(const DataArray *) {}
-void SynthUtlTerm() {}
+// SynthUtlTerm — now in synth/Utl.cpp
 void altCfg(DataNode, DataNode) {}
 void CacheWav(const char *, CacheResourceResult &r) { r = kCacheUnnecessary; }
 // DateTimeCmp — now in DateTime.cpp
@@ -320,3 +316,172 @@ void AudioDevice::MixSources(float *output, int frameCount) {
 }
 
 #endif // __EMSCRIPTEN__
+
+// HX_NATIVE-only stubs — guarded against __EMSCRIPTEN__ for symbols
+// already defined in the __EMSCRIPTEN__ section above
+#if defined(HX_NATIVE) && !defined(__EMSCRIPTEN__)
+
+#include "gesture/LiveCameraInput.h"
+#include "math/Geo.h"
+#include "obj/Dir.h"
+#include "obj/ObjPtr_p.h"
+#include "rnddx9/RenderState.h"
+#include "rndobj/Font.h"
+#include "rndobj/Utl.h"
+#include "utl/BinStream.h"
+#include "utl/JobMgr.h"
+#include "utl/TextStream.h"
+#include "xdk/LIBCMT/ppcintrinsics.h"
+#include "xdk/LIBCMT/vectorintrinsics.h"
+#include "xdk/nui/nuiidentity.h"
+#include "xdk/nui/nuiskeleton.h"
+#include "xdk/xbdm/xbdm.h"
+
+#include <cstring>
+
+struct symmetric_CTR;
+
+TextStream &TextStream::operator<<(double) { return *this; }
+
+template <>
+BinStream &operator<<(BinStream &bs, const ObjOwnerPtr<RndFont3d> &) {
+    return bs;
+}
+
+BuildPoly::BuildPoly() : mPoly(), mTransform() {}
+
+void BuildSphereStratified(unsigned int, std::vector<Vector3> &) {}
+
+void LiveCameraInput::LockStream(const void *, LockedRect &) {}
+
+void LiveCameraInput::UnlockStream(const void *) {}
+
+void RndRenderState::SetColorWriteMask(uint) {}
+
+extern "C" {
+
+double __fsel(double fComparand, double fValGE, double fValLT) {
+    return fComparand >= 0.0 ? fValGE : fValLT;
+}
+
+XMVECTOR __vspltw(XMVECTOR vSrcA, unsigned int uImmed) {
+    XMVECTOR out = {};
+    float value = vSrcA.v[uImmed & 3];
+    out.x = value;
+    out.y = value;
+    out.z = value;
+    out.w = value;
+    return out;
+}
+
+XMVECTOR __vmaddfp(XMVECTOR mul1, XMVECTOR mul2, XMVECTOR addend) {
+    XMVECTOR out = {};
+    out.x = mul1.x * mul2.x + addend.x;
+    out.y = mul1.y * mul2.y + addend.y;
+    out.z = mul1.z * mul2.z + addend.z;
+    out.w = mul1.w * mul2.w + addend.w;
+    return out;
+}
+
+HRESULT DmIsDebuggerPresent() { return 0; }
+
+HRESULT NuiIdentityEnroll(
+    DWORD, int, DWORD, NUI_IDENTITY_CALLBACK *, VOID *
+) {
+    return 0;
+}
+
+HRESULT NuiSkeletonGetNextFrame(DWORD, NUI_SKELETON_FRAME *pSkeletonFrame) {
+    if (pSkeletonFrame) {
+        std::memset(pSkeletonFrame, 0, sizeof(*pSkeletonFrame));
+    }
+    return 0;
+}
+
+int ctr_decrypt(
+    const unsigned char *ct, unsigned char *pt, unsigned long len, symmetric_CTR *
+) {
+    if (ct != pt) {
+        std::memcpy(pt, ct, len);
+    }
+    return 0;
+}
+
+}
+
+XMMATRIX NuiTransformMatrixLevel(XMVECTOR) { return XMMATRIX(); }
+
+void NuiTransformSkeletonToDepthImage(
+    XMVECTOR, LONG *plDepthX, LONG *plDepthY, USHORT *pusDepthValue
+) {
+    if (plDepthX) *plDepthX = 0;
+    if (plDepthY) *plDepthY = 0;
+    if (pusDepthValue) *pusDepthValue = 0;
+}
+
+#endif // HX_NATIVE && !__EMSCRIPTEN__
+
+// ============================================================================
+// Shared HX_NATIVE stubs (both desktop native and web/emscripten)
+// ============================================================================
+#ifdef HX_NATIVE
+
+#include "utl/JobMgr.h"
+#include "xdk/LIBCMT/vectorintrinsics.h"
+#include <cstring>
+
+_XMMATRIX::_XMMATRIX() { std::memset(this, 0, sizeof(*this)); }
+
+SingleItemEnumJob::SingleItemEnumJob(Hmx::Object *obj, int idx, u64 id)
+    : Job(), mObject(obj), mUnkc(idx), mItemID(id), mStatus(0), mSuccess(false),
+      unk20(0), unk24(0), mOverlapped() {
+    std::memset(&mOverlapped, 0, sizeof(mOverlapped));
+}
+SingleItemEnumJob::~SingleItemEnumJob() {}
+void SingleItemEnumJob::Start() { mStatus = 2; }
+bool SingleItemEnumJob::IsFinished() { return true; }
+void SingleItemEnumJob::Cancel(Hmx::Object *) {}
+void SingleItemEnumJob::OnCompletion(Hmx::Object *) {}
+
+MultipleItemsEnumJob::MultipleItemsEnumJob(
+    Hmx::Object *obj, int userIndex, std::vector<u64> &itemIDs
+) : Job(), mObject(obj), mUserIndex(userIndex), mItemIDs(itemIDs), mPurchased(), mStatus(0),
+    mSuccess(false), mEnumBuffer(nullptr), mEnumHandle(0), mOverlapped(), mOfferSymbol(),
+    mPurchaserID(0) {
+    std::memset(&mOverlapped, 0, sizeof(mOverlapped));
+}
+
+MultipleItemsEnumJob::~MultipleItemsEnumJob() {}
+
+void MultipleItemsEnumJob::Start() { mStatus = 2; }
+
+bool MultipleItemsEnumJob::IsFinished() { return true; }
+
+void MultipleItemsEnumJob::Cancel(Hmx::Object *) {}
+
+void MultipleItemsEnumJob::OnCompletion(Hmx::Object *) {}
+
+PostPurchaseEnumJob::PostPurchaseEnumJob(
+    Hmx::Object *obj, int userIndex, u64 itemID, Symbol offerSym, unsigned int purchaserID
+) : SingleItemEnumJob(obj, userIndex, itemID), mOfferSymbol(offerSym),
+    mPurchaserID(purchaserID) {}
+PostPurchaseEnumJob::~PostPurchaseEnumJob() {}
+void PostPurchaseEnumJob::OnCompletion(Hmx::Object *obj) {
+    SingleItemEnumJob::OnCompletion(obj);
+}
+
+MultipleItemsPostPurchaseEnumJob::MultipleItemsPostPurchaseEnumJob(
+    Hmx::Object *obj, int userIndex, std::vector<u64> &itemIDs, Symbol offerSym,
+    unsigned int purchaserID
+) : MultipleItemsEnumJob(obj, userIndex, itemIDs) {
+    mOfferSymbol = offerSym;
+    mPurchaserID = purchaserID;
+}
+MultipleItemsPostPurchaseEnumJob::~MultipleItemsPostPurchaseEnumJob() {}
+void MultipleItemsPostPurchaseEnumJob::OnCompletion(Hmx::Object *obj) {
+    MultipleItemsEnumJob::OnCompletion(obj);
+}
+
+unsigned long long SingleItemEnumCompleteMsg::OfferID() const { return 0ULL; }
+
+#endif // HX_NATIVE

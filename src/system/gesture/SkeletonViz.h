@@ -14,7 +14,6 @@
 #include "rndobj/Mesh.h"
 #include "rndobj/Poll.h"
 #include "rndobj/Trans.h"
-#include "ui/UILabelDir.h"
 #include "utl/MemMgr.h"
 
 /** "Visualization of one natural input skeleton" */
@@ -72,7 +71,7 @@ protected:
     SkeletonCoordSys mAxesCoordSys; // 0x114
     RndLine *mBoneLines[kNumBones]; // 0x118
     RndLine *mUtlLine; // 0x164
-    ObjDirPtr<UILabelDir> mResource; // 0x168
+    ObjDirPtr<ObjectDir> mResource; // 0x168
     RndEnviron *mSkeletonEnv; // 0x17c
     RndMesh *mCamMesh; // 0x180
     RndMesh *mJointMesh; // 0x184

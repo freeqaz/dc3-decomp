@@ -654,10 +654,9 @@ const Transform &RndTransformable::WorldXfm_Force() {
 }
 
 void RndTransformable::ApplyDynamicConstraint() {
-    auto& constraint = mConstraint;
-    if (kConstraintTargetWorld == constraint) {
+    if (kConstraintTargetWorld == mConstraint) {
         mWorldXfm = mTarget->WorldXfm();
-    } else if (mTarget && constraint == kConstraintShadowTarget) {
+    } else if (mTarget && mConstraint == kConstraintShadowTarget) {
         Transform tf;
         Transpose(mTarget->WorldXfm(), tf);
         Multiply(mWorldXfm, tf, mWorldXfm);
@@ -674,7 +673,7 @@ void RndTransformable::ApplyDynamicConstraint() {
         if (mPreserveScale) {
             MakeScale(mWorldXfm.m, scaleVec);
         }
-        switch (constraint) {
+        switch (mConstraint) {
         case kConstraintFastBillboardXYZ:
             mWorldXfm.m = camWorld.m;
             break;

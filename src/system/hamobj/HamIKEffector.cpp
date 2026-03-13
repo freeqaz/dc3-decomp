@@ -331,9 +331,7 @@ void HamIKEffector::Poll() {
     float totalWeight = ApplyConstraints(q, neutral, this);
 
     // Hand with elbow: call DoFancyElbow and return
-    if (t == kEffectorTypeHand && mElbow != nullptr) {
-        DoFancyElbow(q, totalWeight);
-    } else {
+    if (!(!(!(t == kEffectorTypeHand && mElbow != nullptr)))) {
         // Assert weight == 1
         if (weight != 1.0f) {
             MILO_ASSERT(weight == 1, 0x135);
@@ -368,10 +366,8 @@ void HamIKEffector::Poll() {
                         float blend =
                             (effQ.v.y - groundHeight - lowerBound)
                             / (kneeLen * 0.8f + ankleLen - lowerBound);
-                        if (blend < 0.0f)
-                            blend = 0.0f;
-                        if (blend > 1.0f)
-                            blend = 1.0f;
+                        blend = Max(blend, 0.0f);
+                        blend = Min(blend, 1.0f);
                         float ratio =
                             (ankle->WorldXfm().v.z + knee->WorldXfm().v.z)
                             / (kneeLen + ankleLen);
@@ -385,10 +381,8 @@ void HamIKEffector::Poll() {
                     Vector3 savedPos = effQ.v;
                     float clampFactor =
                         (neutralQ.v.y - groundHeight - 5.0f) * 0.09090909f;
-                    if (clampFactor < 0.0f)
-                        clampFactor = 0.0f;
-                    if (clampFactor > 1.0f)
-                        clampFactor = 1.0f;
+                    clampFactor = Max(clampFactor, 0.0f);
+                    clampFactor = Min(clampFactor, 1.0f);
                     Interp(neutralQ.v, effQ.v, clampFactor, q.v);
                     Interp(neutralQ.q, effQ.q, clampFactor, q.q);
                     if (effQ.v.y < groundHeight) {
@@ -446,6 +440,8 @@ void HamIKEffector::Poll() {
 
         // Set effector world transform
         mEffector->SetWorldXfm(finalXfm);
+    } else {
+        DoFancyElbow(q, totalWeight);
     }
 done:;
 }

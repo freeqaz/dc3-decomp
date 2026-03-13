@@ -390,7 +390,7 @@ void AnimTask::Poll(float time) {
     if (mLoop) {
         frame = Mod(frame - mMin, mMax - mMin) + mMin;
         mAnim->SetFrame(frame, blend);
-        if (!mAnimTarget)
+        if (!mListener)
             goto done;
         float range = mMax - mMin;
         float prevNorm = mPrevFrame / range;

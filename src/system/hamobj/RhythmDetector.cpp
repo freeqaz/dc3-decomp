@@ -112,6 +112,24 @@ namespace {
         return 0.0f;
     }
 
+    const std::vector<float> &minJointSpeedVector() {
+        static std::vector<float> data;
+        static UIPanel *panel =
+            ObjectDir::Main()->Find<UIPanel>("rhythm_detector_panel", false);
+        DataArray *typeDef = panel->TypeDef();
+        if (data.empty()) {
+            static Symbol minJointSpeedSym("min_joint_speed");
+            DataArray *minJoints = typeDef->FindArray(minJointSpeedSym, true);
+            MILO_ASSERT(minJoints->Size() == kNumJoints + 1, 0x4c3);
+            for (int i = 1; i < minJoints->Size(); i++) {
+                float val = minJoints->Node(i).Float();
+                data.push_back(val);
+            }
+            MILO_ASSERT(data.size() == kNumJoints, 0x4cb);
+        }
+        return data;
+    }
+
 }
 
 void SetupFrame(
@@ -122,15 +140,25 @@ void SetupFrame(
     const Vector3 *curJoints,
     float deltaTime
 ) {
-    frame.mTime = frameCount + beatDiff;
+    MILO_ASSERT(frameCount >= 0, 0x4d7);
+    MILO_ASSERT(beatDiff >= 0, 0x4d8);
+    MILO_ASSERT(prevJoints, 0x4d9);
+    MILO_ASSERT(curJoints, 0x4da);
+
+    static UIPanel *panel =
+        ObjectDir::Main()->Find<UIPanel>("rhythm_detector_panel", false);
+    minJointSpeedVector();
+
     frame.mJointVelocities.resize(20);
     float invDelta = 1.0f / deltaTime;
     for (int i = 0; i < 20; i++) {
+        int joint = kAnalyzeJoints[i];
         Vector3 vel;
-        Subtract(curJoints[i], prevJoints[i], vel);
+        Subtract(curJoints[joint], prevJoints[joint], vel);
         Scale(vel, invDelta, vel);
         frame.mJointVelocities[i] = vel;
     }
+    frame.mTime = frameCount + beatDiff;
 }
 
 RhythmDetector::Frame BlendFrameDataToBeat(
@@ -139,18 +167,32 @@ RhythmDetector::Frame BlendFrameDataToBeat(
     float beatTime
 ) {
     RhythmDetector::Frame result;
-    result.mTime = beatTime;
-    int numJoints = frameA.mJointVelocities.size();
-    result.mJointVelocities.resize(numJoints);
-    float timeRange = frameB.mTime - frameA.mTime;
-    float blend;
-    if (timeRange > 0.0f) {
-        blend = (beatTime - frameA.mTime) / timeRange;
-    } else {
-        blend = 0.0f;
+
+    if (beatTime < frameA.mTime || frameB.mTime < beatTime) {
+        MILO_NOTIFY(
+            "bad rhythm detector floating point precision at %f %f %f\n",
+            frameA.mTime, frameB.mTime, beatTime
+        );
     }
+
+    int numJoints = frameA.mJointVelocities.size();
+    MILO_ASSERT(numJoints == frameB.mJointVelocities.size(), 0x5a9);
+
+    float timeA = frameA.mTime;
+    float timeB = frameB.mTime;
+    float blend = (beatTime - timeA) / (timeB - timeA);
+    blend = -blend >= 0.0f ? 0.0f : blend;
+    blend = blend - 1.0f >= 0.0f ? 1.0f : blend;
+
+    result.mTime = beatTime;
+    result.mJointVelocities.resize(numJoints);
+
     for (int i = 0; i < numJoints; i++) {
-        Interp(frameA.mJointVelocities[i], frameB.mJointVelocities[i], blend, result.mJointVelocities[i]);
+        for (int j = 0; j < 3; j++) {
+            float valB = frameB.mJointVelocities[i][j];
+            float valA = frameA.mJointVelocities[i][j];
+            result.mJointVelocities[i][j] = (valB - valA) * blend + valA;
+        }
     }
     return result;
 }
@@ -613,9 +655,7 @@ void RhythmDetector::ProcessFrames() {
             count++;
         }
         if (count > 1) {
-            std::list<Frame>::iterator last = localHistory.end();
-            --last;
-            localHistory.erase(localHistory.begin(), last);
+            localHistory.erase(localHistory.begin());
         }
 
         // Trim again (same logic - ensures only 1 entry)
@@ -624,9 +664,7 @@ void RhythmDetector::ProcessFrames() {
             count++;
         }
         if (count > 1) {
-            std::list<Frame>::iterator last = localHistory.end();
-            --last;
-            localHistory.erase(localHistory.begin(), last);
+            localHistory.erase(localHistory.begin());
         }
 
         mCurrentFrame.mTime = localHistory.back().mTime;
@@ -640,10 +678,13 @@ void RhythmDetector::ProcessFrames() {
         if (panel == nullptr) {
             windowSize = 0.0f;
         } else {
-            DataArray *cfg = panel->Property("analyze_beat_frequency", true)->Array();
+            DataArray *typeDef = panel->TypeDef();
+            static Symbol analyzeBeatFrequency("analyze_beat_frequency");
+            DataArray *cfg = typeDef->FindArray(analyzeBeatFrequency, true);
             static Symbol analyzePeriodCount("analyze_period_count");
-            DataArray *periodCfg = panel->Property(analyzePeriodCount, true)->Array();
+            DataArray *periodCfg = typeDef->FindArray(analyzePeriodCount, true);
             int periodCount = periodCfg->Node(1).Int();
+            cfg->Node(cfg->Size() - 1).Int();
             int beatFreq = cfg->Node(cfg->Size() - 1).Int();
             windowSize = (float)beatFreq * (float)(periodCount - 1) * 2.0f;
         }
@@ -663,17 +704,19 @@ void RhythmDetector::ProcessFrames() {
 
         if (hadBlendedFrames) {
             static Symbol emptySym("");
-            // AnalyzeData(
-            //     mAnalysisFrames2,
-            //     mRecordData.unk10,
-            //     mRecordData.unk14,
-            //     mRhythmDecay,
-            //     mToleranceFactor,
-            //     0,
-            //     false,
-            //     emptySym,
-            //     0
-            // );
+            AnalyzeData(
+                mAnalysisFrames2,
+                mRecordData.unk10,
+                mRecordData.unk14,
+                mRhythmDecay,
+                mToleranceFactor,
+                false,
+                emptySym,
+                false,
+                nullptr,
+                gLog,
+                nullptr
+            );
         }
     }
 }

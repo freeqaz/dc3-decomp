@@ -337,11 +337,12 @@ void HamSkeletonConverter::SetLeg(
     int side
 ) {
     Vector3 dir;
-    Subtract(mJointPositions[knee], mJointPositions[hip], dir);
+    auto& kneePos = mJointPositions[knee];
+    Subtract(kneePos, mJointPositions[hip], dir);
+    Vector3 dir2;
     Normalize(dir, dir);
 
-    Vector3 dir2;
-    Subtract(mJointPositions[ankle], mJointPositions[knee], dir2);
+    Subtract(mJointPositions[ankle], kneePos, dir2);
     Normalize(dir2, dir2);
 
     float angle = acos(Dot(dir, dir2));
@@ -353,18 +354,18 @@ void HamSkeletonConverter::SetLeg(
         GetParentWorldXfm(mesh, parentXfm, parent);
 
         Plane plane;
-        plane.Set(mJointPositions[hip], mJointPositions[knee], mJointPositions[ankle]);
+        plane.Set(mJointPositions[hip], kneePos, mJointPositions[ankle]);
+
+        PaddedJointPos *hipZAxisInit = &mLeftHipZAxisInit + side;
 
         if (-angle < 0.2) {
             plane.a = mPelvisTransform.m.z.x;
             plane.b = mPelvisTransform.m.z.y;
             plane.c = mPelvisTransform.m.z.z;
-            plane.d = -(plane.a * (mJointPositions[hip].x - mJointPositions[knee].x)
-                + plane.b * (mJointPositions[hip].y - mJointPositions[knee].y)
-                + plane.c * (mJointPositions[hip].z - mJointPositions[knee].z));
+            plane.d = -(plane.a * (mJointPositions[hip].x - kneePos.x)
+                + plane.b * (mJointPositions[hip].y - kneePos.y)
+                + plane.c * (mJointPositions[hip].z - kneePos.z));
         }
-
-        PaddedJointPos *hipZAxisInit = &mLeftHipZAxisInit + side;
         hipZAxisInit->x = plane.a * -1.0f;
         hipZAxisInit->y = plane.b * -1.0f;
         hipZAxisInit->z = plane.c * -1.0f;
@@ -372,7 +373,7 @@ void HamSkeletonConverter::SetLeg(
         Vector3 worldPos;
         Multiply(mesh->LocalXfm().v, parentXfm, worldPos);
 
-        Subtract(mJointPositions[knee], mJointPositions[hip], dir);
+        Subtract(kneePos, mJointPositions[hip], dir);
         Normalize(dir, dir);
 
         PaddedJointPos *hipZAxis = &mLeftHipZAxis + side;
@@ -423,12 +424,12 @@ void HamSkeletonConverter::SetLeg(
 }
 
 void HamSkeletonConverter::Set(const BaseSkeleton *skel) {
-    auto& _ref0 = mCharacter;
+    auto& character = mCharacter;
     if (skel && skel->IsTracked()) {
         if (!unk751) {
             unk751 = true;
         }
-        if (_ref0) {
+        if (character) {
             // Initialize unk40 to identity
             unk40.m = Hmx::Matrix3::GetIdentity();
             unk40.v.Zero();
@@ -443,9 +444,9 @@ void HamSkeletonConverter::Set(const BaseSkeleton *skel) {
             flipX.v.Zero();
 
             Transform flipZ;
+            flipZ.m.z.Set(1.0f, 0.0f, 0.0f);
             flipZ.m.x.Set(0.0f, -1.0f, 0.0f);
             flipZ.m.y.Set(0.0f, 0.0f, 1.0f);
-            flipZ.m.z.Set(1.0f, 0.0f, 0.0f);
             flipZ.v.Zero();
 
             Multiply(flipX, unk40, unk40);
@@ -462,7 +463,7 @@ void HamSkeletonConverter::Set(const BaseSkeleton *skel) {
             unk40.v.x = pelvisOffset.x;
             unk40.v.y = pelvisOffset.y;
 
-            Multiply(unk40, _ref0->WorldXfm(), unk40);
+            Multiply(unk40, character->WorldXfm(), unk40);
 
             // Get camera-space joint positions and transform to world
             PaddedJointPos worldJoints[kNumJoints];
@@ -479,7 +480,7 @@ void HamSkeletonConverter::Set(const BaseSkeleton *skel) {
             mPelvisTransform.v.z = (worldJoints[kJointHipLeft].z + worldJoints[kJointHipRight].z) * 0.5f;
 
             Transform invCharXfm;
-            Invert(_ref0->WorldXfm(), invCharXfm);
+            Invert(character->WorldXfm(), invCharXfm);
 
             // Set pelvis position bone value in local space
             Vector3 pelvisLocal;

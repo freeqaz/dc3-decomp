@@ -741,11 +741,11 @@ void RhythmBattlePlayer::UpdateScore(Hmx::Object *handler) {
 }
 
 void RhythmBattlePlayer::AnimateBoxyState(int state, bool transition, bool bad) {
+    bool useBadFlow = (mInTheZone != -1) & bad;
     if (mRhythmBattleAnim) {
         float delay = 0.0f;
         static Symbol none("none");
         if (state > 0) {
-            // Entering "in the zone" (state 1)
             if (transition) {
                 mRhythmBattleAnim->Animate(
                     0.0f, false, 0.0f, RndAnimatable::k30_fps,
@@ -761,7 +761,6 @@ void RhythmBattlePlayer::AnimateBoxyState(int state, bool transition, bool bad) 
                 loop, nullptr, kEaseLinear, 0.0f, false
             );
         } else if (state == 0) {
-            // Active but not in the zone
             if (transition) {
                 if (mInTheZone == -1) {
                     mRhythmBattleAnim->Animate(
@@ -785,7 +784,6 @@ void RhythmBattlePlayer::AnimateBoxyState(int state, bool transition, bool bad) 
                 loop, nullptr, kEaseLinear, 0.0f, false
             );
         } else if (state < 0) {
-            // Inactive (state -1)
             if (transition) {
                 if (mInTheZone == 0) {
                     mRhythmBattleAnim->Animate(
@@ -810,7 +808,6 @@ void RhythmBattlePlayer::AnimateBoxyState(int state, bool transition, bool bad) 
             );
         }
     }
-    int oldZone = mInTheZone;
     mInTheZone = state;
     static Symbol swag_jacked("swag_jacked");
     HamPlayerData *hpd = TheGameData->Player(mPlayer);
@@ -819,23 +816,25 @@ void RhythmBattlePlayer::AnimateBoxyState(int state, bool transition, bool bad) 
     if (state == -1) {
         return;
     }
-    if (state == 0) {
-        bool useBadFlow = bad && oldZone != -1;
-        if (useBadFlow) {
-            if (mOutTheZoneBadFlow && !mSuppressRhythm) {
-                mOutTheZoneBadFlow->Activate();
-            }
-        } else {
-            if (mOutTheZoneOkFlow) {
-                mOutTheZoneOkFlow->Activate();
-            }
-        }
-        hpd->Provider()->Export(Message(rhythmbattle_outthezone), true);
-    } else {
+    if (state != 0) {
         if (mInTheZoneFlow) {
             mInTheZoneFlow->Activate();
         }
         hpd->Provider()->Export(Message(rhythmbattle_inthezone), true);
+    } else {
+        Flow *flow;
+        if (useBadFlow) {
+            flow = mOutTheZoneBadFlow;
+            if (!flow || mSuppressRhythm)
+                goto no_activate;
+        } else {
+            flow = mOutTheZoneOkFlow;
+            if (!flow)
+                goto no_activate;
+        }
+        flow->Activate();
+    no_activate:
+        hpd->Provider()->Export(Message(rhythmbattle_outthezone), true);
     }
 }
 

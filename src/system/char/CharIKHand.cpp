@@ -1,3 +1,4 @@
+#include "char/CharBlendBone.h"
 #include "char/CharIKHand.h"
 #include "char/CharWeightable.h"
 #include "math/Color.h"
@@ -52,6 +53,12 @@ END_PROPSYNCS
 BinStream &operator<<(BinStream &bs, const CharIKHand::IKTarget &t) {
     bs << t.mTarget;
     bs << t.mExtent;
+    return bs;
+}
+
+BinStream &operator<<(BinStream &bs, const CharBlendBone::ConstraintSystem &cs) {
+    bs << cs.mTarget;
+    bs << cs.mWeight;
     return bs;
 }
 

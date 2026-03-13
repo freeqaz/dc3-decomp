@@ -930,11 +930,13 @@ void UtilDrawCigar(
     const Transform &tf, const float *const radii, const float *const lengths,
     const Hmx::Color &col, int segments
 ) {
-    float len0 = lengths[0];
-    float len1 = lengths[1];
     float len2 = lengths[2];
+    float len1 = lengths[1];
+    float len0 = lengths[0];
     float scale = sqrtf(len2 * len2 + len0 * len0 + len1 * len1);
     float scaledLens[3];
+    Hmx::Matrix3 basis;
+
     {
         int cnt = 3;
         float *dst = scaledLens;
@@ -948,8 +950,6 @@ void UtilDrawCigar(
             cnt--;
         } while (cnt != 0);
     }
-
-    Hmx::Matrix3 basis;
     memcpy(&basis, lengths, 0x30);
     Normalize(basis, basis);
 
@@ -1460,7 +1460,6 @@ void ComputeFaceTangentBasis(RndMesh *m, int faceIdx, Hmx::Matrix3 &outBasis) {
             float dx21 = vert2.pos.x - vert1.pos.x;
             float dy21 = vert2.pos.y - vert1.pos.y;
             float dz21 = vert2.pos.z - vert1.pos.z;
-            float dx31 = vert3.pos.x - vert1.pos.x;
             float dy31 = vert3.pos.y - vert1.pos.y;
             float dz31 = vert3.pos.z - vert1.pos.z;
 
@@ -1470,6 +1469,7 @@ void ComputeFaceTangentBasis(RndMesh *m, int faceIdx, Hmx::Matrix3 &outBasis) {
             float dv31 = vert3.tex.y - vert1.tex.y;
 
             if (dx21 != 0.0f || dy21 != 0.0f || dz21 != 0.0f) {
+                float dx31 = vert3.pos.x - vert1.pos.x;
                 if (dx31 != 0.0f || dy31 != 0.0f || dz31 != 0.0f) {
                     if (du21 != 0.0f || dv21 != 0.0f) {
                         if (du31 != 0.0f || dv31 != 0.0f) {
@@ -2249,12 +2249,12 @@ void BuildFromBSP(RndMesh *mesh) {
     RndMesh *geomOwner = mesh->GetGeomOwner();
     BuildVisit(geomOwner->GetBSPTree());
 
-    unsigned int totalFaces = 0;
     int totalVerts = 0;
 
     // First pass: count vertices and faces, erase polys with < 3 points
     std::list<BuildPoly>::iterator it = gChildPolys.begin();
-    while (it != gChildPolys.end()) {
+    unsigned int totalFaces = 0;
+    while (gChildPolys.end() != it) {
         unsigned int numPoints = (unsigned int)it->mPoly.points.size();
         if (numPoints < 3U) {
             it = gChildPolys.erase(it);
@@ -2285,8 +2285,8 @@ void BuildFromBSP(RndMesh *mesh) {
     }
 
     int vertIdx = 0;
-    int faceIdx = 0;
     float z = 0.0f;
+    int faceIdx = 0;
 
     // Second pass: transform vertices and create faces
     std::list<BuildPoly>::iterator pit = gChildPolys.begin();

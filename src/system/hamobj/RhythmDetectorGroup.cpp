@@ -99,11 +99,13 @@ void RhythmDetectorGroup::RemoveDebugGraphs() {
 void RhythmDetectorGroup::AddDebugGraphs() {
     // Simplified version focusing on core logic
     float f6 = 1.0f / (float)(mDetectors.size() + 1);
-    float f7 = f6 * 0.9f;
     float f10 = f6;
+    float f7 = f6 * 0.9f;
 
-    delete mDebugGraph;
-    mDebugGraph = new DebugGraph(
+    auto& debugGraph = mDebugGraph;
+    delete debugGraph;
+    float f29 = f10;
+    debugGraph = new DebugGraph(
         0.1f,
         0.0f,
         0.8f,
@@ -115,10 +117,8 @@ void RhythmDetectorGroup::AddDebugGraphs() {
         2.0,
         ""
     );
-    mDebugGraph->SetThresholdValue(1);
+    debugGraph->SetThresholdValue(1);
 
-    // Use different variable names to affect register allocation
-    float f29 = f10;
     float f28 = 0.8f;
     float f27 = 0.4f;
     float f31 = 1.0f;

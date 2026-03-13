@@ -484,6 +484,7 @@ set(DC3_ENGINE_SOURCES
     ${CMAKE_SOURCE_DIR}/../src/system/math/StreamChecksum.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/math/Trig.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/math/mtx.cpp
+    ${CMAKE_SOURCE_DIR}/../src/system/math/Vec.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/math/vec.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/meta/Achievements.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/meta/ButtonHolder.cpp
@@ -742,6 +743,7 @@ set(DC3_ENGINE_SOURCES
     ${CMAKE_SOURCE_DIR}/../src/system/synth/WavReader.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/synth/complex.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/synth/filterdesign.cpp
+    ${CMAKE_SOURCE_DIR}/../src/system/synth/tomcrypt/crypt.c
     ${CMAKE_SOURCE_DIR}/../src/system/synth/tomcrypt/TomCryptLicense.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/ui/CheatProvider.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/ui/InlineHelp.cpp
@@ -926,6 +928,7 @@ set(DC3_NATIVE_CORE_SOURCES
     src/engine_stubs_generated.cpp
     src/native_link_glue.cpp
     src/thunk_stubs.cpp
+    src/web_stubs.cpp
 )
 
 # Full native sources (core + entry point)
@@ -957,6 +960,7 @@ set(DC3_GFX_SOURCES
     src/gfx/PostProcPass.cpp
     src/gfx/DrawRect2D.cpp
     src/gfx/GpuResourceRegistry.cpp
+    src/gfx/VideoEncoder.cpp
     src/gfx/mikktspace.c
 )
 set_source_files_properties(src/gfx/mikktspace.c PROPERTIES LANGUAGE C)
@@ -1423,6 +1427,7 @@ if(BUILD_TESTS)
         tests/test_subsystems.cpp
         tests/test_bone_ground_truth.cpp
         tests/test_headless_boot.cpp
+        tests/test_loading_panel.cpp
         tests/test_milo_viewer_screenshot.cpp
         tests/test_object_lifetime.cpp
         tests/test_asset_loading.cpp

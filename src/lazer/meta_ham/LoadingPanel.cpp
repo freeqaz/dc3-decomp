@@ -20,10 +20,15 @@
 #include "utl/MakeString.h"
 #include "utl/MemMgr.h"
 #include "utl/Symbol.h"
+#include "utl/TimeConversion.h"
 #include "utl/TempoMap.h"
 
 HamMaster *LoadingPanel::sLoadingMaster = nullptr;
 SongDB *LoadingPanel::sSongDB = nullptr;
+
+#ifdef HX_NATIVE
+static bool sSkipLoadingMusicReadyGate = false;
+#endif
 
 LoadingPanel::LoadingPanel() : mSongInfo(0), mTempoMap(), mBeatMap(0) { sSongDB = new SongDB(); }
 
@@ -65,6 +70,9 @@ void LoadingPanel::Unload() {
 void LoadingPanel::Load() {
     UIPanel::Load();
     sLoadingMaster = new HamMaster(sSongDB->SongData(), nullptr);
+#ifdef HX_NATIVE
+    sSkipLoadingMusicReadyGate = false;
+#endif
     PlayLoadingMusic();
     sLoadingMaster->SetMaps();
 }
@@ -75,8 +83,16 @@ bool LoadingPanel::IsLoaded() const {
         MILO_NOTIFY("missing audio object!\n");
     }
 
+#ifdef HX_NATIVE
+    bool audioReady = !pAudio || pAudio->Fail() || pAudio->IsReady();
+    if (!audioReady && sSkipLoadingMusicReadyGate) {
+        audioReady = true;
+    }
+    return TheContentMgr.RefreshDone() && UIPanel::IsLoaded() && audioReady;
+#else
     return TheContentMgr.RefreshDone() && UIPanel::IsLoaded()
         && (!pAudio || pAudio->Fail() || pAudio->IsReady());
+#endif
 }
 
 bool LoadingPanel::Exiting() {
@@ -106,6 +122,37 @@ void LoadingPanel::Enter() {
 #endif
 }
 
+void LoadingPanel::Poll() {
+    UIPanel::Poll();
+#ifdef HX_NATIVE
+    if (sSkipLoadingMusicReadyGate) {
+        return;
+    }
+#endif
+
+    Stream *pStream = sLoadingMaster->GetHxAudio()->GetSongStream();
+    MILO_ASSERT(pStream && pStream->IsPlaying(), 0x46);
+
+    float streamMs = pStream->GetTime();
+    TempoMap *tempoMap = sLoadingMaster->SongData()->GetTempoMap();
+    if (TheTempoMap != tempoMap) {
+        mTempoMap = TheTempoMap;
+        SetTheTempoMap(tempoMap);
+    }
+
+    BeatMap *beatMap = sLoadingMaster->SongData()->GetBeatMap();
+    if (TheBeatMap != beatMap) {
+        mBeatMap = TheBeatMap;
+        SetTheBeatMap(beatMap);
+    }
+
+    sLoadingMaster->Poll(streamMs);
+    float beat = MsToBeat(sLoadingMaster->StreamMs());
+    if (beat > 0.0f) {
+        TheTaskMgr.SetSecondsAndBeat(sLoadingMaster->StreamMs() * 0.001f, beat, false);
+    }
+}
+
 Symbol LoadingPanel::ChooseLoadingScreen() {
     Symbol randomItem =
         RandomContextSensitiveItem(SystemConfig("loading_screen_context"));
@@ -127,6 +174,7 @@ void LoadingPanel::PlayLoadingMusic() {
 #ifdef HX_NATIVE
         if (!f) {
             MILO_WARN("LoadingPanel: loading music MIDI not found: %s", filePath.c_str());
+            sSkipLoadingMusicReadyGate = true;
             return;
         }
 #else

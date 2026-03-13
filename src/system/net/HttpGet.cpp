@@ -547,11 +547,11 @@ bool HttpPost::CanRetry() {
 }
 
 void HttpPost::StartSending() {
-    auto& _ref0 = mSocket;
-    MILO_ASSERT(_ref0, 0x3CD);
-    if (_ref0->CanSend()) {
+    auto socket = mSocket;
+    MILO_ASSERT(socket, 0x3CD);
+    if (socket->CanSend()) {
         mHeaderLength = mRequestHeaders.length();
-        if (_ref0->Send(mRequestHeaders.c_str(), mHeaderLength) == mHeaderLength) {
+        if (socket->Send(mRequestHeaders.c_str(), mHeaderLength) == mHeaderLength) {
             SetState(kHttpGet_SendingBody);
             return;
         }
