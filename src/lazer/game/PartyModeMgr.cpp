@@ -1309,17 +1309,6 @@ void PartyModeMgr::SetPlaylist(Playlist *playlist) {
     SetSongsFromPlaylist();
 }
 
-void PartyModeMgr::SetCurrEvent() {
-    if (mCurrEvent) {
-        RELEASE(mCurrEvent);
-    }
-    mCurrEvent = CreateEventA();
-    static Symbol showdown("showdown");
-    mIsShowdown = mCurrEvent->mModeName == showdown;
-    mLeftPlayer = mCurrEvent->mNumPlayers > 0 ? mPlayers[mCurrEvent->mPlayerIndices[0]] : nullptr;
-    mRightPlayer = mCurrEvent->mNumPlayers > 1 ? mPlayers[mCurrEvent->mPlayerIndices[1]] : nullptr;
-}
-
 DataNode PartyModeMgr::OnGetSmoothedFramePos(const DataArray *a) {
     MILO_ASSERT(a->Size() == 5, 0x65E);
     int idx = a->Int(2);
@@ -1581,6 +1570,17 @@ void PartyModeMgr::FinalizeParty() {
     SetCurrEvent();
 }
 
+void PartyModeMgr::SetCurrEvent() {
+    if (mCurrEvent) {
+        RELEASE(mCurrEvent);
+    }
+    mCurrEvent = CreateEventA();
+    static Symbol showdown("showdown");
+    mIsShowdown = mCurrEvent->mModeName == showdown;
+    mLeftPlayer = mCurrEvent->mNumPlayers > 0 ? mPlayers[mCurrEvent->mPlayerIndices[0]] : nullptr;
+    mRightPlayer = mCurrEvent->mNumPlayers > 1 ? mPlayers[mCurrEvent->mPlayerIndices[1]] : nullptr;
+}
+
 int PartyModeMgr::GetCrewColor(int team, int colorIdx) {
     float r = 0.0f, g = 0.0f, b = 0.0f;
     DataArray *colorArr = nullptr;
@@ -1620,27 +1620,20 @@ void PartyModeMgr::PruneHistory() {
 }
 
 DataNode PartyModeMgr::OnSetSongAndDefaults(DataArray *_msg) {
-    Symbol song;
-    Symbol mode;
-    bool force;
+    Symbol song(gNullStr);
+    Symbol mode(gNullStr);
+    bool force = false;
     int sz = _msg->Size();
     if (sz == 3) {
-        mode = Symbol(gNullStr);
         song = _msg->Sym(2);
     } else if (sz == 4) {
         mode = _msg->Sym(2);
         song = _msg->Sym(3);
     } else if (sz == 5) {
-        force = _msg->Int(4) != 0;
-        mode = _msg->Sym(2);
-        song = _msg->Sym(3);
-        goto done;
-    } else {
-        mode = Symbol(gNullStr);
-        song = Symbol(gNullStr);
+        song = _msg->Sym(2);
+        mode = _msg->Sym(3);
+        force = _msg->Node(4).Int(_msg) != 0;
     }
-    force = false;
-done:
     SetSongAndDefaults(song, mode, force);
     return DataNode(0);
 }
@@ -1718,13 +1711,8 @@ void PartyModeMgr::ResetModes(bool resetAll) {
     Symbol is_in_party_mode("is_in_party_mode");
     int isPartyMode = TheHamProvider->Property(is_in_party_mode)->Int();
     DataArray *cfgArr;
-    if (isPartyMode) {
-        Symbol crew_showdown_weighted_event_types("crew_showdown_weighted_event_types");
-        cfgArr = mPartyModeCfg->FindArray(crew_showdown_weighted_event_types);
-    } else {
-        Symbol party_mode_weighted_event_types("party_mode_weighted_event_types");
-        cfgArr = mPartyModeCfg->FindArray(party_mode_weighted_event_types);
-    }
+    Symbol cfgSym(isPartyMode ? "crew_showdown_weighted_event_types" : "party_mode_weighted_event_types");
+    cfgArr = mPartyModeCfg->FindArray(cfgSym);
     if (resetAll) {
         for (int i = 0; i < 5; i++) {
             ToggleIncludedModeOn(GetModeNameFromEnum(i), false);
@@ -1752,11 +1740,11 @@ void PartyModeMgr::ResetModes(bool resetAll) {
 void PartyModeMgr::UpdateScores() {
     HamPlayerData *pPlayer1Data = TheGameData->Player(0);
     MILO_ASSERT(pPlayer1Data, 0x66c);
-    PropertyEventProvider *pPlayer1Provider = pPlayer1Data->Provider();
+    Hmx::Object *pPlayer1Provider = pPlayer1Data->Provider();
     MILO_ASSERT(pPlayer1Provider, 0x66f);
     HamPlayerData *pPlayer2Data = TheGameData->Player(1);
     MILO_ASSERT(pPlayer2Data, 0x672);
-    PropertyEventProvider *pPlayer2Provider = pPlayer2Data->Provider();
+    Hmx::Object *pPlayer2Provider = pPlayer2Data->Provider();
     MILO_ASSERT(pPlayer2Provider, 0x675);
     static Symbol score("score");
     int score1 = pPlayer1Provider->Property(score, true)->Int();
