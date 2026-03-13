@@ -1106,7 +1106,7 @@ void MoveDir::ResetDetection() {
 }
 
 void MoveDir::ResetDetectFrames(int player, Difficulty diff) {
-    MILO_ASSERT((2) > (unsigned long)(0) <= (player) && (player), 0x678);
+    MILO_ASSERT((unsigned long)(2) > (unsigned long)(0) <= (player) && (player), 0x678);
     MILO_ASSERT((0) <= (diff) && (diff) < (kNumDifficulties), 0x679);
     MILO_ASSERT(TheHamDirector, 0x67a);
     SetupSongRecordClip();
@@ -1142,7 +1142,7 @@ void MoveDir::ResetDetectFrames(int player, Difficulty diff) {
         } else {
             const std::vector<DancerFrame> &dancerFrames = seq->GetDancerFrames();
             const DancerFrame *dfIt = &*dancerFrames.begin();
-            if (dfIt == &*dancerFrames.end()) {
+            if (&*dancerFrames.end() == dfIt) {
                 TheDebug << MakeString(
                     "%s %s: could not reset detect frames, no DancerFrames\n",
                     PathName(this), DifficultyToSym(diff)
@@ -1157,10 +1157,10 @@ void MoveDir::ResetDetectFrames(int player, Difficulty diff) {
                         PathName(this), newSize, prevCapacity
                     );
                 }
+                unsigned int detectCapacity = mpd.mDetectFrames.capacity();
                 for (int moveKeyIdx = 0;
                      moveKeyIdx < (int)mpd.mMoveKeys.size();
                      moveKeyIdx++) {
-                    unsigned int detectCapacity = mpd.mDetectFrames.capacity();
                     if (dfIt->mMoveIdx == moveKeyIdx) {
                         HamMove *curMove = mpd.mMoveKeys[moveKeyIdx].move;
                         const std::vector<MoveFrame> &moveFrames =
