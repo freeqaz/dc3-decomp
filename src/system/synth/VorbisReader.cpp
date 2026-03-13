@@ -113,10 +113,6 @@ void VorbisReader::Seek(int sample) {
 
 void VorbisReader::Init() {
     MILO_ASSERT(mStream, 0x41F);
-#ifdef HX_NATIVE
-    fprintf(stderr, "DC3 VorbisReader::Init — channels=%d rate=%d songLen=%d\n",
-        mNumChannels, mSampleRate, mOggMap.GetSongLengthSamples());
-#endif
     mStream->InitInfo(mNumChannels, mSampleRate, false, mOggMap.GetSongLengthSamples());
 }
 
@@ -141,11 +137,6 @@ void VorbisReader::setupCypher(int moggVersion) {
     // to copy masher data into masterKey as an anti-tamper measure.
     // On 64-bit this truncates the pointer. Just call getMasher directly.
     KeyChain::getMasher(masterKey);
-    fprintf(stderr, "DC3 masher: %02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x\n",
-        masterKey[0],masterKey[1],masterKey[2],masterKey[3],masterKey[4],masterKey[5],masterKey[6],masterKey[7],
-        masterKey[8],masterKey[9],masterKey[10],masterKey[11],masterKey[12],masterKey[13],masterKey[14],masterKey[15],
-        masterKey[16],masterKey[17],masterKey[18],masterKey[19],masterKey[20],masterKey[21],masterKey[22],masterKey[23],
-        masterKey[24],masterKey[25],masterKey[26],masterKey[27],masterKey[28],masterKey[29],masterKey[30],masterKey[31]);
 #else
     DataArray *arr = DataReadString("{Na 42 'O32'}");
     unsigned int iEval = arr->Evaluate(0).Int();
@@ -159,32 +150,11 @@ void VorbisReader::setupCypher(int moggVersion) {
     buf118Arr->Release();
 #endif
     KeyChain::getKey(mKeyIndex, gKey, masterKey);
-#ifdef HX_NATIVE
-    fprintf(stderr, "DC3 key after getKey: %02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x\n",
-        gKey[0],gKey[1],gKey[2],gKey[3],gKey[4],gKey[5],gKey[6],gKey[7],
-        gKey[8],gKey[9],gKey[10],gKey[11],gKey[12],gKey[13],gKey[14],gKey[15]);
-#endif
     TheSynth->Grinder().GrindArray(mMagicA, mMagicB, gKey, 0x10, moggVersion);
-#ifdef HX_NATIVE
-    fprintf(stderr, "DC3 key after GrindArray: %02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x\n",
-        gKey[0],gKey[1],gKey[2],gKey[3],gKey[4],gKey[5],gKey[6],gKey[7],
-        gKey[8],gKey[9],gKey[10],gKey[11],gKey[12],gKey[13],gKey[14],gKey[15]);
-#endif
     for (int i = 0; i < 16; i++) {
         gKey[i] ^= mKeyMask[i];
     }
     int ret = ctr_start(gCipher, mNonce, gKey, gKeySize, 0, mCtrState);
-#ifdef HX_NATIVE
-    fprintf(stderr, "DC3 ctr_start: nonce=%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x\n",
-        mNonce[0], mNonce[1], mNonce[2], mNonce[3], mNonce[4], mNonce[5], mNonce[6], mNonce[7],
-        mNonce[8], mNonce[9], mNonce[10], mNonce[11], mNonce[12], mNonce[13], mNonce[14], mNonce[15]);
-    fprintf(stderr, "DC3 ctr_start: key=%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x\n",
-        gKey[0], gKey[1], gKey[2], gKey[3], gKey[4], gKey[5], gKey[6], gKey[7],
-        gKey[8], gKey[9], gKey[10], gKey[11], gKey[12], gKey[13], gKey[14], gKey[15]);
-    fprintf(stderr, "DC3 ctr_start: keyMask=%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x\n",
-        mKeyMask[0], mKeyMask[1], mKeyMask[2], mKeyMask[3], mKeyMask[4], mKeyMask[5], mKeyMask[6], mKeyMask[7],
-        mKeyMask[8], mKeyMask[9], mKeyMask[10], mKeyMask[11], mKeyMask[12], mKeyMask[13], mKeyMask[14], mKeyMask[15]);
-#endif
     memset(gKey, 0, gKeySize);
     MILO_ASSERT(ret == 0, 0xB0);
 
@@ -197,39 +167,12 @@ void VorbisReader::setupCypher(int moggVersion) {
     DataArray *magicGenB = DataReadString(script);
     mMagicHashB = magicGenB->Evaluate(0).Int();
     magicGenB->Release();
-#ifdef HX_NATIVE
-    fprintf(stderr, "DC3 setupCypher: version=%d keyIndex=%d magicA=%d magicB=%d magicHashA=0x%x magicHashB=0x%x\n",
-        moggVersion, mKeyIndex, mMagicA, mMagicB, mMagicHashA, mMagicHashB);
-    fprintf(stderr, "DC3 setupCypher: initial pad (keystream[0..15])=%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x\n",
-        mCtrState->pad[0], mCtrState->pad[1], mCtrState->pad[2], mCtrState->pad[3],
-        mCtrState->pad[4], mCtrState->pad[5], mCtrState->pad[6], mCtrState->pad[7],
-        mCtrState->pad[8], mCtrState->pad[9], mCtrState->pad[10], mCtrState->pad[11],
-        mCtrState->pad[12], mCtrState->pad[13], mCtrState->pad[14], mCtrState->pad[15]);
-    fprintf(stderr, "DC3 setupCypher: ctr=%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x padlen=%d\n",
-        mCtrState->ctr[0], mCtrState->ctr[1], mCtrState->ctr[2], mCtrState->ctr[3],
-        mCtrState->ctr[4], mCtrState->ctr[5], mCtrState->ctr[6], mCtrState->ctr[7],
-        mCtrState->ctr[8], mCtrState->ctr[9], mCtrState->ctr[10], mCtrState->ctr[11],
-        mCtrState->ctr[12], mCtrState->ctr[13], mCtrState->ctr[14], mCtrState->ctr[15],
-        mCtrState->padlen);
-#endif
 }
 
 bool VorbisReader::TryReadHeader() {
     if (!mOggStream) {
         ogg_page page;
         int pageOut = ogg_sync_pageout(mOggSync, &page);
-#ifdef HX_NATIVE
-        if (mVersion >= 0xC) {
-            int queued = mOggSync->fill - mOggSync->returned;
-            unsigned char *data = (unsigned char*)mOggSync->data + mOggSync->returned;
-            fprintf(stderr, "DC3 TryReadHeader: pageOut=%d queued=%d headersRead=%d first4=[%02x %02x %02x %02x] ('%c%c%c%c')\n",
-                pageOut, queued, mHeadersRead,
-                queued > 0 ? data[0] : 0, queued > 1 ? data[1] : 0,
-                queued > 2 ? data[2] : 0, queued > 3 ? data[3] : 0,
-                queued > 0 && data[0] >= 0x20 ? data[0] : '.', queued > 1 && data[1] >= 0x20 ? data[1] : '.',
-                queued > 2 && data[2] >= 0x20 ? data[2] : '.', queued > 3 && data[3] >= 0x20 ? data[3] : '.');
-        }
-#endif
         if (pageOut < 0)
             VORBIS_FAIL("StreamInit", pageOut);
         if (pageOut > 0) {
@@ -253,9 +196,6 @@ bool VorbisReader::TryReadHeader() {
             if (vorbisErr < 0)
                 VORBIS_FAIL("HeaderIn", vorbisErr);
             mHeadersRead++;
-#ifdef HX_NATIVE
-            fprintf(stderr, "DC3 TryReadHeader: header %d parsed OK\n", mHeadersRead);
-#endif
             return true;
         } else
             return false;
@@ -408,10 +348,6 @@ bool VorbisReader::CheckHmxHeader() {
             BufStream bs(mHdrBuf, 60000, true);
             bs >> mVersion;
             bs >> mHdrSize;
-#ifdef HX_NATIVE
-            fprintf(stderr, "DC3 VorbisReader::CheckHmxHeader — version=0x%x (%d) hdrSize=%d bytes=%d\n",
-                mVersion, mVersion, mHdrSize, bytes);
-#endif
             MILO_ASSERT(mVersion >= 10, 0x239);
             MILO_ASSERT(mVersion <= 16, 0x23A);
             MILO_ASSERT(mHdrSize <= kMaxHeader, 0x23B);
@@ -422,42 +358,17 @@ bool VorbisReader::CheckHmxHeader() {
             mMagicA = mMagicB = 0;
             mMagicHashA = mMagicHashB = 0;
             if (mVersion >= 0xC && mVersion <= 0x10) {
-#ifdef HX_NATIVE
-                fprintf(stderr, "DC3 CheckHmxHeader: pos before nonce=%d\n", bs.Tell());
-#endif
                 bs.Read(mNonce, sizeof(mNonce));
                 s64 idx;
                 bs >> idx;
                 mMagicA = idx;
-#ifdef HX_NATIVE
-                fprintf(stderr, "DC3 CheckHmxHeader: pos after magicA=%d magicA_raw=0x%llx magicA=%d\n",
-                    bs.Tell(), (long long)idx, mMagicA);
-#endif
                 bs >> idx;
                 mMagicB = idx;
-#ifdef HX_NATIVE
-                fprintf(stderr, "DC3 CheckHmxHeader: pos after magicB=%d magicB_raw=0x%llx magicB=%d\n",
-                    bs.Tell(), (long long)idx, mMagicB);
-#endif
                 unsigned char stuff[16];
                 bs.Read(stuff, sizeof(stuff));
-#ifdef HX_NATIVE
-                fprintf(stderr, "DC3 CheckHmxHeader: stuff1=%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x\n",
-                    stuff[0],stuff[1],stuff[2],stuff[3],stuff[4],stuff[5],stuff[6],stuff[7],
-                    stuff[8],stuff[9],stuff[10],stuff[11],stuff[12],stuff[13],stuff[14],stuff[15]);
-#endif
                 bs.Read(stuff, sizeof(stuff));
-#ifdef HX_NATIVE
-                fprintf(stderr, "DC3 CheckHmxHeader: stuff2=%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x\n",
-                    stuff[0],stuff[1],stuff[2],stuff[3],stuff[4],stuff[5],stuff[6],stuff[7],
-                    stuff[8],stuff[9],stuff[10],stuff[11],stuff[12],stuff[13],stuff[14],stuff[15]);
-#endif
                 bs >> idx;
                 mKeyIndex = (int)idx % 6 + 6;
-#ifdef HX_NATIVE
-                fprintf(stderr, "DC3 CheckHmxHeader: pos after keyIndex=%d keyIndex_raw=0x%llx keyIndex=%d\n",
-                    bs.Tell(), (long long)idx, mKeyIndex);
-#endif
                 TheSynth->Grinder().HvDecrypt(stuff, mKeyMask, mVersion);
                 gCipher = register_cipher(&rijndael_desc);
                 MILO_ASSERT(gCipher >= 0, 0x268);
@@ -490,16 +401,6 @@ static void Decrypt(VorbisReader *reader, unsigned char *data, int bytes,
                     symmetric_CTR *ctrState, int magicHashA, int magicHashB) {
     if (!ctrState)
         return;
-    static bool sFirstDecrypt = true;
-    if (sFirstDecrypt && magicHashA != 0) {
-        sFirstDecrypt = false;
-        fprintf(stderr, "DC3 Decrypt: FIRST v0xE decrypt — ctr pad=%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x padlen=%d\n",
-            ctrState->pad[0], ctrState->pad[1], ctrState->pad[2], ctrState->pad[3],
-            ctrState->pad[4], ctrState->pad[5], ctrState->pad[6], ctrState->pad[7],
-            ctrState->pad[8], ctrState->pad[9], ctrState->pad[10], ctrState->pad[11],
-            ctrState->pad[12], ctrState->pad[13], ctrState->pad[14], ctrState->pad[15],
-            ctrState->padlen);
-    }
     int i = 0;
     while (i < bytes) {
         const int dataLen = 1024;
@@ -529,8 +430,6 @@ static void Decrypt(VorbisReader *reader, unsigned char *data, int bytes,
     }
 }
 
-static bool sDoFileReadDbg = true;
-
 bool VorbisReader::DoFileRead() {
     bool ret = false;
     if (mFail)
@@ -550,18 +449,7 @@ bool VorbisReader::DoFileRead() {
         if (mFail)
             return false;
         MILO_ASSERT(bytes > 0, 0x1F9);
-        if (sDoFileReadDbg) {
-            unsigned char *raw = (unsigned char *)mReadBuffer;
-            fprintf(stderr, "DC3 DoFileRead[v%x]: bytes=%d pos=%d eof=%d raw[0..3]=%02x %02x %02x %02x magicHashA=%x magicHashB=%x\n",
-                mVersion, bytes, mFile->Tell(), mFile->Eof(), raw[0], raw[1], raw[2], raw[3],
-                mMagicHashA, mMagicHashB);
-        }
         Decrypt(this, (unsigned char *)mReadBuffer, bytes, mCtrState, mMagicHashA, mMagicHashB);
-        if (sDoFileReadDbg) {
-            unsigned char *dec = (unsigned char *)mReadBuffer;
-            fprintf(stderr, "DC3 DoFileRead[v%x]: after decrypt[0..7]=%02x %02x %02x %02x %02x %02x %02x %02x\n",
-                mVersion, dec[0], dec[1], dec[2], dec[3], dec[4], dec[5], dec[6], dec[7]);
-        }
         ogg_sync_wrote(mOggSync, bytes);
         mReadBuffer = 0;
         ret = true;
@@ -571,12 +459,6 @@ bool VorbisReader::DoFileRead() {
 }
 
 void VorbisReader::Poll(float until) {
-    static int sPollDbg = 0;
-    if (mVersion >= 0xC && sPollDbg < 20) {
-        sPollDbg++;
-        fprintf(stderr, "DC3 VorbisReader::Poll[v%x]: fail=%d unk44=%d hdrBuf=%p done=%d seekTarget=%d headersRead=%d\n",
-            mVersion, (int)mFail, (int)unk44, (void*)mHdrBuf, (int)mDone, mSeekTarget, mHeadersRead);
-    }
     if (!mFail && !unk44 && CheckHmxHeader() && !mDone && (mSeekTarget < 0 || DoSeek())) {
         DoFileRead();
         mEof = mFile->Eof();

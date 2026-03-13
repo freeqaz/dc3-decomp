@@ -137,8 +137,11 @@ static void getKeyImpl(unsigned char *uc1, char *c, unsigned char *uc2) {
 }
 
 void KeyChain::getMasher(unsigned char *uc) {
+    // Xbox PPC (big-endian) byte-swaps masher values to little-endian.
+    // On x86_64 (little-endian), values are already little-endian — no swap needed.
+    // The original Xbox check was: byte[+3] == 1 → true on big-endian → swap to LE.
     unsigned int m = 1;
-    int needs_byteswap = (*((unsigned char *)&m) == 1); // little-endian = true
+    int needs_byteswap = (*(((unsigned char *)&m) + 3) == 1); // big-endian = true
     unsigned int *masher_p = reinterpret_cast<unsigned int *>(uc);
     for (int i = 0; i < 8; i++) {
         *masher_p = random((0 == i) ? 0xEB : 0);

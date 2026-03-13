@@ -61,16 +61,6 @@ DataNode hashTo5Bits(DataArray *da) {
     bool moreThanTwo = da->Size() > 2;
     if (moreThanTwo) {
         seed = da->Int(1);
-#ifdef HX_NATIVE
-        static bool sOnce = false;
-        if (!sOnce) {
-            sOnce = true;
-            u32 test = seed;
-            test = (test * 0x19660D) + 0x3C6EF35F;
-            fprintf(stderr, "DC3 hashTo5Bits: sizeof(u32)=%zu seed=0x%x after1=0x%x\n",
-                sizeof(u32), (unsigned)da->Int(1), (unsigned)test);
-        }
-#endif
         int max = DIM(hashMapping);
         for (int idx = 0; idx < max; idx++) {
             hashMapping[idx] = (seed >> 3) & 0x1F;
@@ -89,28 +79,13 @@ DataNode hashTo6Bits(DataArray *da) {
     bool moreThanTwo = da->Size() > 2;
     if (moreThanTwo) {
         seed = da->Int(1);
-#ifdef HX_NATIVE
-        fprintf(stderr, "DC3 hashTo6Bits INIT: seed=0x%x\n", seed);
-#endif
         int max = DIM(hashMapping);
         for (int idx = 0; idx < max; idx++) {
             hashMapping[idx] = (seed >> 2) & 0x3F;
             seed = (seed * 0x19660D) + 0x3C6EF35F;
         }
-#ifdef HX_NATIVE
-        fprintf(stderr, "DC3 hashTo6Bits: map[0x2b]=%d map[0xda]=%d map[0xa6]=%d map[0x4d]=%d\n",
-            hashMapping[0x2b], hashMapping[0xda], hashMapping[0xa6], hashMapping[0x4d]);
-#endif
         return DataNode(kDataInt, 0);
     }
-#ifdef HX_NATIVE
-    static int sCallCount = 0;
-    if (sCallCount < 20) {
-        fprintf(stderr, "DC3 hashTo6Bits LOOKUP: input=%d (0x%02x) → hash=%d\n",
-            da->Int(1), (unsigned)(da->Int(1) & 0xFF), ret);
-        sCallCount++;
-    }
-#endif
     return DataNode(kDataInt, ret);
 }
 
@@ -175,14 +150,6 @@ DataNode getRandomSequence32B(DataArray *da) {
 DataNode op0(DataArray *msg) {
     unsigned long operand = msg->Int(1);
     unsigned long w = msg->Int(2);
-#ifdef HX_NATIVE
-    static int sCallCount = 0;
-    if (sCallCount < 5) {
-        fprintf(stderr, "DC3 op0 XOR: operand=%ld (0x%lx) w=%ld (0x%lx) → %d\n",
-            operand, operand, w, w, (int)u8(w ^ operand));
-        sCallCount++;
-    }
-#endif
     return DataNode(kDataInt, u8(w ^ operand));
 }
 
@@ -854,16 +821,7 @@ void ByteGrinder::GrindArray(
     }
 
     mainScript += "}{O70 $ix}}}$foo";
-#ifdef HX_NATIVE
-    fprintf(stderr, "DC3 GrindArray script: %s\n", mainScript.c_str());
-#endif
     mainScriptArray = DataReadString(mainScript.c_str());
-#ifdef HX_NATIVE
-    fprintf(stderr, "DC3 GrindArray: parsed DataArray size=%d\n", mainScriptArray->Size());
-    for (int d = 0; d < mainScriptArray->Size() && d < 5; d++) {
-        fprintf(stderr, "DC3 GrindArray: element[%d] type=%d\n", d, mainScriptArray->Type(d));
-    }
-#endif
     for (int i = 0; i < arrayLen; i++) {
         char itoaBuffer[32];
         unsigned char w = arrayToGrind[i];
@@ -879,9 +837,6 @@ void ByteGrinder::GrindArray(
         stringArgs += ")";
         DataArray *args = DataReadString(stringArgs.c_str());
         int result = mainScriptArray->ExecuteScript(0, nullptr, args, 0).Int();
-#ifdef HX_NATIVE
-        fprintf(stderr, "DC3 GrindArray[%d]: in=%02x → out=%02x\n", i, w, (unsigned char)result);
-#endif
         arrayToGrind[i] = result;
         args->Release();
     }
@@ -942,9 +897,6 @@ void ByteGrinder::Init() {
     for (int i = 0; i < funPtrs.size(); i++) {
         int oNum = pickOneOf32A(false, 0);
         sprintf(functionName, "O%d", oNum);
-#ifdef HX_NATIVE
-        fprintf(stderr, "DC3 Init: registering %s (op%d)\n", functionName, i);
-#endif
         DataRegisterFunc(functionName, funPtrs[i]);
     }
     funPtrs.clear();
@@ -984,23 +936,6 @@ void ByteGrinder::Init() {
     for (int i = 0; i < funPtrs.size(); i++) {
         int oNum = pickOneOf32A(false, 0) + 32;
         sprintf(functionName, "O%d", oNum);
-#ifdef HX_NATIVE
-        fprintf(stderr, "DC3 Init: registering %s (op%d)\n", functionName, i + 32);
-#endif
         DataRegisterFunc(functionName, funPtrs[i]);
     }
-#ifdef HX_NATIVE
-    // Self-test: call GrindArray with known inputs to verify O64-O70 resolution
-    {
-        unsigned char testKey[16] = {0x2b,0xda,0xa6,0x4d,0x4d,0x77,0x2c,0x76,
-                                     0xa9,0x02,0x34,0x86,0xfb,0x01,0x3c,0x81};
-        fprintf(stderr, "DC3 Init self-test: GrindArray input=");
-        for (int i = 0; i < 16; i++) fprintf(stderr, "%02x", testKey[i]);
-        fprintf(stderr, "\n");
-        GrindArray(602494344, 625836951, testKey, 16, 0xE);
-        fprintf(stderr, "DC3 Init self-test: GrindArray output=");
-        for (int i = 0; i < 16; i++) fprintf(stderr, "%02x", testKey[i]);
-        fprintf(stderr, "\n");
-    }
-#endif
 }
