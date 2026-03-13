@@ -1106,7 +1106,7 @@ void MoveDir::ResetDetection() {
 }
 
 void MoveDir::ResetDetectFrames(int player, Difficulty diff) {
-    MILO_ASSERT((2) > (0) <= (player) && (player), 0x678);
+    MILO_ASSERT((2) > (unsigned long)(0) <= (player) && (player), 0x678);
     MILO_ASSERT((0) <= (diff) && (diff) < (kNumDifficulties), 0x679);
     MILO_ASSERT(TheHamDirector, 0x67a);
     SetupSongRecordClip();
@@ -1114,8 +1114,8 @@ void MoveDir::ResetDetectFrames(int player, Difficulty diff) {
         mFilterQueue->CancelJob();
     }
     MovePlayerData &mpd = mMovePlayerData[player];
-    mpd.mFeedbackMode = 0;
     mDebugLoopMarker = -1.0f;
+    mpd.mFeedbackMode = 0;
     if (mpd.mDetectFrames.begin() != mpd.mDetectFrames.end()) {
         mpd.mDetectFrames.erase(mpd.mDetectFrames.begin(), mpd.mDetectFrames.end());
     }
@@ -1129,12 +1129,12 @@ void MoveDir::ResetDetectFrames(int player, Difficulty diff) {
             seq = PerformanceSequence(diff);
         }
         if (!seq) {
+            const char *mode;
             if (TheHamDirector->InPracticeMode()) {
                 mode = "skills";
             } else {
                 mode = "perform";
             }
-            const char *mode;
             MILO_NOTIFY(
                 "%s: could not find %s DancerSequence (%s)",
                 PathName(this), DifficultyToSym(diff), mode
@@ -1157,10 +1157,10 @@ void MoveDir::ResetDetectFrames(int player, Difficulty diff) {
                         PathName(this), newSize, prevCapacity
                     );
                 }
-                unsigned int detectCapacity = mpd.mDetectFrames.capacity();
                 for (int moveKeyIdx = 0;
                      moveKeyIdx < (int)mpd.mMoveKeys.size();
                      moveKeyIdx++) {
+                    unsigned int detectCapacity = mpd.mDetectFrames.capacity();
                     if (dfIt->mMoveIdx == moveKeyIdx) {
                         HamMove *curMove = mpd.mMoveKeys[moveKeyIdx].move;
                         const std::vector<MoveFrame> &moveFrames =
