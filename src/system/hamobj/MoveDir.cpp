@@ -1106,18 +1106,17 @@ void MoveDir::ResetDetection() {
 }
 
 void MoveDir::ResetDetectFrames(int player, Difficulty diff) {
-    MILO_ASSERT((unsigned long)(2) > (unsigned long)(0) <= (player) && (player), 0x678);
+    MILO_ASSERT((0) <= (player) && (player) < (2), 0x678);
     MILO_ASSERT((0) <= (diff) && (diff) < (kNumDifficulties), 0x679);
     MILO_ASSERT(TheHamDirector, 0x67a);
     SetupSongRecordClip();
     if (mFilterQueue) {
         mFilterQueue->CancelJob();
     }
-    MovePlayerData &mpd = mMovePlayerData[player];
     mDebugLoopMarker = -1.0f;
-    mpd.mFeedbackMode = 0;
-    if (mpd.mDetectFrames.begin() != mpd.mDetectFrames.end()) {
-        mpd.mDetectFrames.erase(mpd.mDetectFrames.begin(), mpd.mDetectFrames.end());
+    mMovePlayerData[player].mFeedbackMode = 0;
+    if (mMovePlayerData[player].mDetectFrames.begin() != mMovePlayerData[player].mDetectFrames.end()) {
+        mMovePlayerData[player].mDetectFrames.erase(mMovePlayerData[player].mDetectFrames.begin(), mMovePlayerData[player].mDetectFrames.end());
     }
     if (diff != kDifficultyBeginner) {
         DancerSequence *seq;
@@ -1142,27 +1141,27 @@ void MoveDir::ResetDetectFrames(int player, Difficulty diff) {
         } else {
             const std::vector<DancerFrame> &dancerFrames = seq->GetDancerFrames();
             const DancerFrame *dfIt = &*dancerFrames.begin();
-            if (&*dancerFrames.end() == dfIt) {
+            if (dfIt == &*dancerFrames.end()) {
                 TheDebug << MakeString(
                     "%s %s: could not reset detect frames, no DancerFrames\n",
                     PathName(this), DifficultyToSym(diff)
                 );
             } else {
-                unsigned int prevCapacity = mpd.mMoveKeys.capacity();
-                TheHamDirector->MoveKeys(diff, this, mpd.mMoveKeys);
-                unsigned int newSize = mpd.mMoveKeys.size();
+                int prevCapacity = mMovePlayerData[player].mMoveKeys.capacity();
+                TheHamDirector->MoveKeys(diff, this, mMovePlayerData[player].mMoveKeys);
+                unsigned int newSize = mMovePlayerData[player].mMoveKeys.size();
                 if (newSize > prevCapacity) {
                     MILO_NOTIFY(
                         "%s move keys size (%i) above capacity (%i)",
                         PathName(this), newSize, prevCapacity
                     );
                 }
-                unsigned int detectCapacity = mpd.mDetectFrames.capacity();
+                unsigned int detectCapacity = mMovePlayerData[player].mDetectFrames.capacity();
                 for (int moveKeyIdx = 0;
-                     moveKeyIdx < (int)mpd.mMoveKeys.size();
+                     moveKeyIdx < (int)mMovePlayerData[player].mMoveKeys.size();
                      moveKeyIdx++) {
                     if (dfIt->mMoveIdx == moveKeyIdx) {
-                        HamMove *curMove = mpd.mMoveKeys[moveKeyIdx].move;
+                        HamMove *curMove = mMovePlayerData[player].mMoveKeys[moveKeyIdx].move;
                         const std::vector<MoveFrame> &moveFrames =
                             ((const HamMove *)curMove)->GetMoveFrames();
                         MoveMirrored mirrored = curMove->Mirrored();
@@ -1175,17 +1174,17 @@ void MoveDir::ResetDetectFrames(int player, Difficulty diff) {
                                     DetectFrame df;
                                     float secs =
                                         moveFrames[j].QuantizedSeconds(
-                                            mpd.mMoveKeys[moveKeyIdx].beat
+                                            mMovePlayerData[player].mMoveKeys[moveKeyIdx].beat
                                         );
                                     df.Reset(
                                         mFilterVer, secs, &moveFrames[j],
                                         dfIt, mirrored
                                     );
-                                    mpd.mDetectFrames.push_back(df);
+                                    mMovePlayerData[player].mDetectFrames.push_back(df);
                                     dfIt++;
                                     if (dfIt == &*dancerFrames.end()) {
                                         unsigned int detectSize =
-                                            mpd.mDetectFrames.size();
+                                            mMovePlayerData[player].mDetectFrames.size();
                                         if (detectSize > detectCapacity) {
                                             MILO_NOTIFY(
                                                 "%s detect frames size (%i) "
