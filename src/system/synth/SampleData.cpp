@@ -77,42 +77,6 @@ void SampleData::Save(BinStream &bs) const {
     bs << mNumChannels;
 }
 
-int SampleData::SizeAs(Format fmt) const {
-    if ((unsigned int)fmt <= 7U) {
-        switch (fmt) {
-        case 1:
-            return mNumChannels * mNumSamples * 2;
-        case 0:
-            return mNumChannels * mNumSamples * 2;
-        case 2:
-            return ((mNumSamples + 0x6F) / 0x70) * mNumChannels * 0x40;
-        case 3:
-            MILO_WARN("don't know size as XMA");
-            return mNumSamples / 5;
-        case 4: {
-            unsigned int uVar3 = mNumSamples + 0x3FF;
-            return (((int)uVar3 >> 10) + ((int)uVar3 < 0 && (uVar3 & 0x3FF) != 0)) * mNumChannels * 0xC0;
-        }
-        case 5: {
-            unsigned int uVar3 = mNumSamples + 0x3FF;
-            return (((int)uVar3 >> 10) + ((int)uVar3 < 0 && (uVar3 & 0x3FF) != 0)) * mNumChannels * 0xC0;
-        }
-        case 6: {
-            int iVar2 = mNumChannels * mNumSamples;
-            return 0x60 - (int)((float)(long long)(iVar2 * 2) * -0.29411763f);
-        }
-        case 7: {
-            int iVar2 = mNumChannels * mNumSamples;
-            return 0x60 - (int)((float)(long long)(iVar2 * 2) * -0.29411763f);
-        }
-        }
-    } else {
-        MILO_FAIL(0, 0x136);
-        return 0;
-    }
-    return 0;
-}
-
 void SampleData::LoadWAV(BinStream &bs, const FilePath &fp, bool bigEndian) {
     Reset();
     WaveFile wav(bs);
@@ -151,20 +115,55 @@ void SampleData::LoadWAV(BinStream &bs, const FilePath &fp, bool bigEndian) {
     }
 }
 
+int SampleData::SizeAs(Format fmt) const {
+    if ((unsigned int)fmt <= 7U) {
+        switch (fmt) {
+        case 1:
+            return mNumChannels * mNumSamples * 2;
+        case 0:
+            return mNumChannels * mNumSamples * 2;
+        case 2:
+            return ((mNumSamples + 0x6F) / 0x70) * mNumChannels * 0x40;
+        case 3:
+            MILO_WARN("don't know size as XMA");
+            return mNumSamples / 5;
+        case 4: {
+            unsigned int uVar3 = mNumSamples + 0x3FF;
+            return (((int)uVar3 >> 10) + ((int)uVar3 < 0 && (uVar3 & 0x3FF) != 0)) * mNumChannels * 0xC0;
+        }
+        case 5: {
+            unsigned int uVar3 = mNumSamples + 0x3FF;
+            return (((int)uVar3 >> 10) + ((int)uVar3 < 0 && (uVar3 & 0x3FF) != 0)) * mNumChannels * 0xC0;
+        }
+        case 6: {
+            int iVar2 = mNumChannels * mNumSamples;
+            return 0x60 - (int)((float)(long long)(iVar2 * 2) * -0.29411763f);
+        }
+        case 7: {
+            int iVar2 = mNumChannels * mNumSamples;
+            return 0x60 - (int)((float)(long long)(iVar2 * 2) * -0.29411763f);
+        }
+        }
+    } else {
+        MILO_FAIL(0, 0x136);
+        return 0;
+    }
+    return 0;
+}
+
 void SampleData::Load(BinStream &bs, const FilePath &fp) {
     Reset();
     LOAD_REVS(bs);
     if (d.rev > gSampleDataMaxRev) {
-        MILO_FAIL("%s can't load new %s version %d > %d", fp, "SampleData", (int)d.rev, gSampleDataMaxRev);
+        MILO_FAIL("%s can't load new %s version %d > %d", fp, "SampleData", d.rev, gSampleDataMaxRev);
     }
     if (d.altRev > gSampleDataMaxAltRev) {
-        MILO_FAIL("%s can't load new %s alt version %d > %d", fp, "SampleData", (int)d.altRev, gSampleDataMaxAltRev);
+        MILO_FAIL("%s can't load new %s alt version %d > %d", fp, "SampleData", d.altRev, gSampleDataMaxAltRev);
     }
     if (d.rev > 0xE) {
-        d >> mCRC;
+        d.stream.ReadEndian(&mCRC, 4);
     } else {
-        const char *relPath = FileRelativePath(FileExecRoot(), fp.c_str());
-        mCRC = Hmx::CRC(relPath);
+        mCRC = Hmx::CRC(FileRelativePath(FileExecRoot(), fp.c_str()));
     }
     int fmt;
     d >> fmt >> mNumSamples >> mSampleRate >> mSizeBytes;

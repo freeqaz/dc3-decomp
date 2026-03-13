@@ -14,8 +14,6 @@
 #include "math/Decibels.h"
 #include "math/Utl.h"
 
-const float StandardStream::kStreamEndMs = -1.1920929E-7f;
-
 bool StandardStream::sReportLargeTimerErrors = true;
 #ifdef HX_NATIVE
 float StandardStream::sAudioOffsetMs = 0.0f;
@@ -737,7 +735,7 @@ int StandardStream::ConsumeData(void **v, int numSamples, int startSamp) {
 void StandardStream::setJumpSamplesFromMs(float fromMs, float toMs) {
     mJumpFromSamples = kStreamEndSamples;
     mJumpToSamples = 0;
-    if (fromMs != kStreamEndMs) {
+    if (kStreamEndMs != fromMs) {
         mJumpFromSamples = MsToSamp(fromMs);
     }
     if (toMs != 0.0f) {
