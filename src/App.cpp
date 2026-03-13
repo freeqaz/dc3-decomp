@@ -960,10 +960,15 @@ void App::RunWithoutDebugging() {
                 venueWorld->Poll();
 
                 // Reset character root positions to prevent drift from root motion.
-                for (ObjDirItr<Character> it(venueWorld, true); it != nullptr; ++it) {
-                    Transform& xfm = it->DirtyLocalXfm();
-                    xfm.v.Set(0, 0, 0);
-                    xfm.m.Identity();
+                // Only for menu venues — gameplay venues need characters at stage positions.
+                bool isMenuVenue = (venueWorld == dynamic_cast<WorldDir*>(gNativeVenueDir))
+                                && !(TheHamDirector && TheHamDirector->GetVenueWorld());
+                if (isMenuVenue) {
+                    for (ObjDirItr<Character> it(venueWorld, true); it != nullptr; ++it) {
+                        Transform& xfm = it->DirtyLocalXfm();
+                        xfm.v.Set(0, 0, 0);
+                        xfm.m.Identity();
+                    }
                 }
             }
         }
