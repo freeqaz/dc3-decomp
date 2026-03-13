@@ -76,8 +76,7 @@ int RingBuffer::Write(void *data, int len) {
         memcpy(mBuffer, src + chunk1, writeLen - chunk1);
     }
 
-    int newWriteIx = (mWriteIx + writeLen) % mSize;
-    mWriteIx = newWriteIx;
+    mWriteIx = (mWriteIx + writeLen) % mSize;
 
     int newTotal;
     if (mSize <= mTotal + writeLen) {
@@ -88,16 +87,18 @@ int RingBuffer::Write(void *data, int len) {
     mTotal = newTotal;
 
     if (newTotal == mSize) {
-        mReadIx = newWriteIx;
+        mReadIx = mWriteIx;
     }
 
     return returnVal;
 }
 
 int RingBuffer::Read(void *data, int len) {
-    int readLen = mTotal;
+    int readLen;
     if (mTotal >= len) {
         readLen = len;
+    } else {
+        readLen = mTotal;
     }
     int stk[2];
     stk[0] = readLen;
@@ -106,14 +107,16 @@ int RingBuffer::Read(void *data, int len) {
         return 0;
     }
 
-    stk[1] = mSize - mReadIx;
+    int available = mSize - mReadIx;
     int *pChunk = &stk[0];
-    if (readLen >= stk[1]) {
-        pChunk = &stk[1];
+    if (readLen < available) {
+        pChunk = &readLen;
+    } else {
+        pChunk = &available;
     }
     int chunk1 = *pChunk;
 
-    memcpy(data, (char *)mBuffer + mReadIx, chunk1);
+    memcpy(data, mReadIx + (char *)mBuffer, chunk1);
 
     if (chunk1 != readLen) {
         memcpy((char *)data + chunk1, mBuffer, readLen - chunk1);

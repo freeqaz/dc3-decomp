@@ -23,12 +23,14 @@ MicNull::MicNull() {
 short *MicNull::GetContinuousBuf(int &size) {
     mTimer.Restart();
     size = (GetSampleRate() / 1000) * mTimer.GetLastMs();
-    if (size > 10000) {
-        size = 10000;
+    int sz = size;
+    if (sz > 10000) {
+        sz = 10000;
     }
-    int padding = size % 8;
+    size = sz;
+    int padding = sz % 8;
     if (padding != 0) {
-        size += padding;
+        size = sz + padding;
     }
     memcpy(mContinuousBuf, mBuf, size * 2);
     return mContinuousBuf;

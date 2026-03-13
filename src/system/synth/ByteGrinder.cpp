@@ -54,13 +54,23 @@ void ByteGrinder::HvDecrypt(unsigned char *inBlock, unsigned char *outBlock, int
 }
 
 DataNode hashTo5Bits(DataArray *da) {
-    static unsigned long hashMapping[0x100];
-    unsigned long seed = da->Int(1) & 0xFF;
-    unsigned long ret = hashMapping[seed];
+    static u32 hashMapping[0x100];
+    u32 seed = da->Int(1) & 0xFF;
+    u32 ret = hashMapping[seed];
 
     bool moreThanTwo = da->Size() > 2;
     if (moreThanTwo) {
         seed = da->Int(1);
+#ifdef HX_NATIVE
+        static bool sOnce = false;
+        if (!sOnce) {
+            sOnce = true;
+            u32 test = seed;
+            test = (test * 0x19660D) + 0x3C6EF35F;
+            fprintf(stderr, "DC3 hashTo5Bits: sizeof(u32)=%zu seed=0x%x after1=0x%x\n",
+                sizeof(u32), (unsigned)da->Int(1), (unsigned)test);
+        }
+#endif
         int max = DIM(hashMapping);
         for (int idx = 0; idx < max; idx++) {
             hashMapping[idx] = (seed >> 3) & 0x1F;
@@ -72,9 +82,9 @@ DataNode hashTo5Bits(DataArray *da) {
 }
 
 DataNode hashTo6Bits(DataArray *da) {
-    static unsigned long hashMapping[0x100];
-    unsigned long seed = da->Int(1) & 0xFF;
-    unsigned long ret = hashMapping[seed];
+    static u32 hashMapping[0x100];
+    u32 seed = da->Int(1) & 0xFF;
+    u32 ret = hashMapping[seed];
 
     bool moreThanTwo = da->Size() > 2;
     if (moreThanTwo) {
@@ -90,7 +100,7 @@ DataNode hashTo6Bits(DataArray *da) {
 }
 
 DataNode getRandomSequence32A(DataArray *da) {
-    static unsigned long s_seed = 0x521;
+    static u32 s_seed = 0x521;
     static bool usedUp[0x20];
 
     bool hasArgs = da->Size() > 1;
@@ -117,7 +127,7 @@ DataNode getRandomSequence32A(DataArray *da) {
 }
 
 DataNode getRandomSequence32B(DataArray *da) {
-    static unsigned long s_seed = 0x303F;
+    static u32 s_seed = 0x303F;
     static bool usedUp[0x20];
 
     bool hasArgs = da->Size() > 1;
@@ -727,30 +737,30 @@ DataNode op63(DataArray *msg) {
 
 extern DataArray *DataReadString(const char *);
 
-unsigned long ByteGrinder::pickOneOf32A(bool b, long l) {
+unsigned int ByteGrinder::pickOneOf32A(bool b, int l) {
     DataArray *a;
     char script[256];
     if (b) {
-        sprintf(script, "{xa %d}");
+        sprintf(script, "{xa %d}", l);
         a = DataReadString(script);
     } else {
         a = DataReadString("{xa}");
     }
-    unsigned long result = a->Evaluate(0).Int();
+    unsigned int result = a->Evaluate(0).Int();
     a->Release();
     return result;
 }
 
-unsigned long ByteGrinder::pickOneOf32B(bool b, long l) {
+unsigned int ByteGrinder::pickOneOf32B(bool b, int l) {
     DataArray *a;
     char script[256];
     if (b) {
-        sprintf(script, "{ya %d}");
+        sprintf(script, "{ya %d}", l);
         a = DataReadString(script);
     } else {
         a = DataReadString("{ya}");
     }
-    unsigned long result = a->Evaluate(0).Int();
+    unsigned int result = a->Evaluate(0).Int();
     a->Release();
     return result;
 }
@@ -765,12 +775,12 @@ DataNode getRandomLong(DataArray *da) {
 }
 
 DataNode magicNumberGenerator(DataArray *da) {
-    long magic = 0x5c5c5c5c;
+    int magic = 0x5c5c5c5c;
     if (da->Int(2) == 2) {
         magic = 0x36363636;
     }
     int idx = da->Int(1);
-    long v = ((idx ^ magic) * 0x19660d + 0x3c6ef35f);
+    int v = ((idx ^ magic) * 0x19660d + 0x3c6ef35f);
     if (da->Int(2) == 1) {
         v = (v * 0x19660d + 0x3c6ef35f);
     }
@@ -778,7 +788,7 @@ DataNode magicNumberGenerator(DataArray *da) {
 }
 
 void ByteGrinder::GrindArray(
-    long seedA, long seedB, unsigned char *arrayToGrind, int arrayLen, int moggVersion
+    int seedA, int seedB, unsigned char *arrayToGrind, int arrayLen, int moggVersion
 ) {
     char script[256];
     DataArray *mainScriptArray;
@@ -836,7 +846,11 @@ void ByteGrinder::GrindArray(
         }
         stringArgs += ")";
         DataArray *args = DataReadString(stringArgs.c_str());
-        arrayToGrind[i] = mainScriptArray->ExecuteScript(0, nullptr, args, 0).Int();
+        int result = mainScriptArray->ExecuteScript(0, nullptr, args, 0).Int();
+#ifdef HX_NATIVE
+        fprintf(stderr, "DC3 GrindArray[%d]: in=%02x → out=%02x\n", i, w, (unsigned char)result);
+#endif
+        arrayToGrind[i] = result;
         args->Release();
     }
     mainScriptArray->Release();
@@ -894,7 +908,11 @@ void ByteGrinder::Init() {
     funPtrs.push_back(op31);
     pickOneOf32A(true, 0xD5);
     for (int i = 0; i < funPtrs.size(); i++) {
-        sprintf(functionName, "O%d", pickOneOf32A(false, 0));
+        int oNum = pickOneOf32A(false, 0);
+        sprintf(functionName, "O%d", oNum);
+#ifdef HX_NATIVE
+        fprintf(stderr, "DC3 Init: registering %s (op%d)\n", functionName, i);
+#endif
         DataRegisterFunc(functionName, funPtrs[i]);
     }
     funPtrs.clear();
@@ -932,7 +950,11 @@ void ByteGrinder::Init() {
     funPtrs.push_back(op63);
     pickOneOf32A(true, 0x23E);
     for (int i = 0; i < funPtrs.size(); i++) {
-        sprintf(functionName, "O%d", pickOneOf32A(false, 0) + 32);
+        int oNum = pickOneOf32A(false, 0) + 32;
+        sprintf(functionName, "O%d", oNum);
+#ifdef HX_NATIVE
+        fprintf(stderr, "DC3 Init: registering %s (op%d)\n", functionName, i + 32);
+#endif
         DataRegisterFunc(functionName, funPtrs[i]);
     }
 }

@@ -472,19 +472,28 @@ void Sound::SetSpeed(float f1, Hmx::Object *o2) {
 }
 
 void Sound::SetPan(float pan, Hmx::Object *obj) {
-    auto maxPan = sSpeedCaps[1];
-    float faderPan = mFaders.GetPan();
-    if (obj) {
-        FOREACH (it, mSamples) {
-            if ((*it)->GetEventReceiver() == obj) {
-                (*it)->SetPan(Clamp(-4.0f, maxPan, faderPan + pan));
-                return;
-            }
-        }
+    float faderPan;
+    bool disabled;
+    if (mMoggClip && mMoggClip->NumChannels() > 1) {
+        mPan = 0;
+        disabled = true;
     } else {
-        mPan = pan;
-        FOREACH (it, mSamples) {
-            (*it)->SetPan(Clamp(-4.0f, maxPan, faderPan + pan));
+        disabled = false;
+    }
+    if (!disabled) {
+        faderPan = mFaders.GetPan();
+        if (obj) {
+            FOREACH (it, mSamples) {
+                if ((*it)->GetEventReceiver() == obj) {
+                    (*it)->SetPan(Clamp(-4.0f, 4.0f, faderPan + pan));
+                    return;
+                }
+            }
+        } else {
+            mPan = pan;
+            FOREACH (it, mSamples) {
+                (*it)->SetPan(Clamp(-4.0f, 4.0f, faderPan + pan));
+            }
         }
     }
 }

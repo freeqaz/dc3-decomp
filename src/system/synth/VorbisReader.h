@@ -56,11 +56,11 @@ protected:
     vorbis_comment *mVorbisComment; // 0x5c
     vorbis_dsp_state *mVorbisDsp; // 0x60
     vorbis_block *mVorbisBlock; // 0x64
-    long mMagicA; // 0x68 - byte grinder seed A
-    long mMagicB; // 0x6c - byte grinder seed B
-    long mKeyIndex; // 0x70
-    long mMagicHashA; // 0x74
-    long mMagicHashB; // 0x78
+    int mMagicA; // 0x68 - byte grinder seed A
+    int mMagicB; // 0x6c - byte grinder seed B
+    int mKeyIndex; // 0x70
+    int mMagicHashA; // 0x74
+    int mMagicHashB; // 0x78
     int unk7c; // 0x7c
     ogg_packet mPendingPacket; // 0x80
     bool mHasPendingPacket;

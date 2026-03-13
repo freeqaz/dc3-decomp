@@ -116,9 +116,12 @@ void SampleData::LoadWAV(BinStream &bs, const FilePath &fp, bool bigEndian) {
         return;
     } else {
         Hmx::CRC crc;
+        int markerIdx = 0;
+        int crcInit = 0;
         if (!bigEndian) {
+            const char *fpStr = fp.c_str();
             const char *root = FileExecRoot();
-            const char *relPath = FileRelativePath(root, fp.c_str());
+            const char *relPath = FileRelativePath(root, fpStr);
             crc = Hmx::CRC(relPath);
         }
         mFormat = kPCM;
@@ -137,25 +140,27 @@ void SampleData::LoadWAV(BinStream &bs, const FilePath &fp, bool bigEndian) {
                 wavdata.Read(mData, mSizeBytes);
             }
         }
-        for (int i = 0; i < wav.NumMarkers(); i++) {
+        for (markerIdx = 0; markerIdx < wav.NumMarkers(); markerIdx++) {
             mMarkers.push_back(
-                SampleMarker(wav.Markers()[i].GetName(), wav.Markers()[i].GetFrame())
+                SampleMarker(wav.Markers()[markerIdx].GetName(), wav.Markers()[markerIdx].GetFrame())
             );
         }
     }
 }
 
 void SampleData::Load(BinStream &bs, const FilePath &fp) {
+    static const int kMaxRev = 0x10;
+    static const int kMaxAltRev = 0;
     Reset();
     LOAD_REVS(bs);
-    if (d.rev > 0x10) {
-        MILO_FAIL("%s can't load new %s version %d > %d", fp, "SampleData", d.rev, 0x10);
+    if (d.rev > kMaxRev) {
+        MILO_FAIL("%s can't load new %s version %d > %d", fp, "SampleData", (int)d.rev, kMaxRev);
     }
-    if (d.altRev > 0) {
-        MILO_FAIL("%s can't load new %s alt version %d > %d", fp, "SampleData", d.altRev, 0);
+    if (d.altRev > kMaxAltRev) {
+        MILO_FAIL("%s can't load new %s alt version %d > %d", fp, "SampleData", (int)d.altRev, kMaxAltRev);
     }
     Hmx::CRC crc;
-    if (d.rev >= 0xF) {
+    if (d.rev > 0xE) {
         d >> mCRC;
     } else {
         const char *root = FileExecRoot();

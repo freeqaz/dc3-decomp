@@ -43,109 +43,103 @@ void FlangerEffect::SetParameters(FlangerEffect::Params const &params) {
 void FlangerEffect::Process(float *buf, int numSamples, int numChans) {
     MILO_ASSERT(numChans <= 2, 0x27);
 
-    // Load LFO phase and smoothed parameter state
-    double lfoPhase = (double)(float)unk24;
+    float phaseOffset;
+    float phaseOffset1;
+    float var_f0;
+    float curRate;
+    float var_f25;
+    float var_f26;
+    float var_f30;
+    float temp_f0_2;
+    float temp_f21;
+    float temp_f22;
 
-    float phaseOffsets[2];
+    var_f26 = unk24;
     if (numChans == 1) {
-        phaseOffsets[0] = 0.0f;
-        phaseOffsets[1] = 0.0f;
+        var_f0 = 0.0f;
+        phaseOffset1 = var_f0;
     } else {
-        phaseOffsets[1] = (float)mWetFrac * 1.5707964f;
-        phaseOffsets[0] = (float)mWetFrac * -1.5707964f;
+        phaseOffset1 = mWetFrac * 1.5707964f;
+        var_f0 = mWetFrac * -1.5707964f;
     }
+    phaseOffset = var_f0;
+    curRate = unk2c;
+    var_f25 = curRate;
+    var_f30 = unk1c;
+    temp_f0_2 = (float)(numSamples * 0x14);
+    temp_f22 = (mDepthFrac - var_f30) / temp_f0_2;
+    temp_f21 = (mRateRadians - curRate) / temp_f0_2;
 
-    double curRate = (double)(float)unk2c;
-    double curDepth = (double)(float)unk1c;
-    long long local_e8 = (long long)(numSamples * 0x14);
-    double depthStep = (double)((float)((double)(float)mDepthFrac - curDepth) / (float)local_e8);
-    double rateStep = (double)((float)((double)(float)mRateRadians - curRate) / (float)local_e8);
-
-    if (0 < numSamples) {
-        long long frameBase = 0;
-        long long sampleIdx = 0;
+    if (numSamples > 0) {
+        int var_r22 = 0;
+        float temp_f23 = 2.0f;
+        float temp_f24 = 4799.0f;
+        float temp_f31 = 1.0f;
+        float temp_f29 = 0.5f;
 
         do {
-            local_e8 = (long long)mDelaySamples;
-            long long chanIdx = 0;
-            double delayCenter = (double)(float)(-(double)(float)((float)(curDepth * 0.5) - (float)1.0) * (double)local_e8);
-            double delayRange = (double)(float)((double)(float)((double)local_e8 * curDepth) * 0.5);
-
-            if (0 < numChans) {
-                int writeOff = (int)(((unsigned int)mWritePos + sampleIdx +
-                                      (long long)((int)((unsigned int)mWritePos + sampleIdx) / 0x2580) * -0x2580 &
-                                     0xffffffff) << 2);
-                float **chanPtr = mDelayBuffers;
+            float temp_f13 = (float)mDelaySamples;
+            int var_r28 = 0;
+            if (numChans > 0) {
+                int temp_r25 = ((mWritePos + var_r22) % 9600) * 4;
+                float **var_r29 = mDelayBuffers;
                 do {
-                    double lfo = (double)sin((double)(float)((double)*(float *)((int)phaseOffsets + ((int)chanPtr - (int)mDelayBuffers)) + lfoPhase));
-
-                    unsigned long long frameAndChan = (unsigned long long)(frameBase + chanIdx);
-                    int chanBuf = (int)*chanPtr;
-                    chanIdx = chanIdx + 1;
-                    unsigned int writePos = mWritePos;
-                    int chanBuf2 = (int)chanPtr[2];
-                    chanPtr = chanPtr + 1;
-
-                    int frameBufOff = (int)((frameAndChan & 0x3fffffff) << 2);
-                    float input = *(float *)(frameBufOff + (int)buf);
-
-                    *(float *)(chanBuf + writeOff) = input;
-
-                    double delayF = (double)(float)((double)(float)lfo * delayRange + delayCenter);
-                    double clamped = 1.0;
-                    if ((float)(1.0 - delayF) < 0.0f) clamped = delayF;
-                    double finalDelay = 4799.0;
-                    if ((float)(clamped - 4799.0) < 0.0f) finalDelay = clamped;
-
-                    long long intDelay1 = (long long)(int)finalDelay;
-                    long long rp1 = ((unsigned long long)writePos - (unsigned long long)(unsigned int)(int)finalDelay) + sampleIdx;
-                    long long rp1hi = rp1 + 0x2580;
-                    long long rp1lo = rp1 + 0x257f;
-
-                    unsigned int intDelay2 = (unsigned int)(finalDelay * 2.0);
-                    long long intDelay2L = (long long)(int)intDelay2;
-                    double frac2 = (double)((float)(finalDelay * 2.0) - (float)intDelay2L);
-                    long long rp2 = ((unsigned long long)writePos - (unsigned long long)intDelay2) + sampleIdx;
-                    long long rp2hi = rp2 + 0x2580;
-                    long long rp2lo = rp2 + 0x257f;
-
-                    *(float *)(frameBufOff + (int)buf) =
-                        *(float *)((int)((rp1hi + (long long)((int)rp1hi / 0x2580) * -0x2580 & 0xffffffffU) << 2) + chanBuf) *
-                        (float)(1.0 - (double)(float)(finalDelay - (double)intDelay1)) + input;
-
-                    float mixed = (float)((double)(float)(
-                        (double)*(float *)((int)((rp1lo + (long long)((int)rp1lo / 0x2580) * -0x2580 & 0xffffffffU) << 2) + chanBuf) *
-                        (double)(float)(finalDelay - (double)intDelay1) +
-                        (double)*(float *)(frameBufOff + (int)buf)) * 0.5);
-                    *(float *)(frameBufOff + (int)buf) = mixed;
-
-                    *(float *)(frameBufOff + (int)buf) =
-                        *(float *)((int)((rp2hi + (long long)((int)rp2hi / 0x2580) * -0x2580 & 0xffffffffU) << 2) + chanBuf2) *
-                        (float)(1.0 - frac2) * (float)mFeedbackFrac + mixed;
-
-                    float outSample = (float)((double)*(float *)((int)((rp2lo + (long long)((int)rp2lo / 0x2580) * -0x2580 & 0xffffffffU) << 2) + chanBuf2) * frac2) *
-                        (float)mFeedbackFrac + *(float *)(frameBufOff + (int)buf);
-                    *(float *)(frameBufOff + (int)buf) = outSample;
-
-                    *(float *)(chanBuf2 + writeOff) = outSample;
-
-                    *(float *)(frameBufOff + (int)buf) = (float)((double)outSample * 2.0 - (double)input);
-                } while ((int)chanIdx < numChans);
+                    float temp_f0_3 = sinf((float)*(float *)((int)&phaseOffset + (int)var_r29 - (int)mDelayBuffers) + var_f26);
+                    int temp_r11 = var_r22 + var_r28;
+                    int temp_r9 = (int)*var_r29;
+                    var_r28++;
+                    int temp_r11_2 = temp_r11 * 4;
+                    int temp_r8 = mWritePos;
+                    int temp_r7 = (int)var_r29[2];
+                    var_r29++;
+                    float temp_f13_2 = *(float *)((int)buf + temp_r11_2);
+                    *(float *)(temp_r9 + temp_r25) = temp_f13_2;
+                    float temp_f0_4 = (temp_f0_3 * (temp_f13 * var_f30 * temp_f29)) + (-((var_f30 * temp_f29) - temp_f31) * temp_f13);
+                    float temp_f0_5;
+                    if (temp_f31 - temp_f0_4 >= 0.0f) {
+                        temp_f0_5 = temp_f31;
+                    } else {
+                        temp_f0_5 = temp_f0_4;
+                    }
+                    float temp_f0_6;
+                    if (temp_f0_5 - temp_f24 >= 0.0f) {
+                        temp_f0_6 = temp_f24;
+                    } else {
+                        temp_f0_6 = temp_f0_5;
+                    }
+                    int temp_r10 = (int)temp_f0_6;
+                    float temp_f10 = temp_f0_6 * temp_f23;
+                    int temp_r10_2 = (temp_r8 - temp_r10) + var_r22;
+                    int temp_r3 = (int)temp_f10;
+                    float temp_f0_7 = temp_f0_6 - (float)temp_r10;
+                    float temp_f11 = temp_f10 - (float)temp_r3;
+                    int temp_r10_3 = (temp_r8 - temp_r3) + var_r22;
+                    *(float *)((int)buf + temp_r11_2) =
+                        *(float *)((((temp_r10_2 + 0x2580) % 9600) * 4) + temp_r9) * (temp_f31 - temp_f0_7) + *(float *)((int)buf + temp_r11_2);
+                    float temp_f0_8 =
+                        (*(float *)((((temp_r10_2 + 0x257F) % 9600) * 4) + temp_r9) * temp_f0_7 + *(float *)((int)buf + temp_r11_2)) * temp_f29;
+                    *(float *)((int)buf + temp_r11_2) = temp_f0_8;
+                    *(float *)((int)buf + temp_r11_2) =
+                        *(float *)((((temp_r10_3 + 0x2580) % 9600) * 4) + temp_r7) * (temp_f31 - temp_f11) * mFeedbackFrac + temp_f0_8;
+                    float temp_f0_9 =
+                        *(float *)((((temp_r10_3 + 0x257F) % 9600) * 4) + temp_r7) * temp_f11 * mFeedbackFrac + *(float *)((int)buf + temp_r11_2);
+                    *(float *)((int)buf + temp_r11_2) = temp_f0_9;
+                    *(float *)(temp_r7 + temp_r25) = temp_f0_9;
+                    *(float *)((int)buf + temp_r11_2) = *(float *)((int)buf + temp_r11_2) * temp_f23 - temp_f13_2;
+                } while (var_r28 < numChans);
             }
-
-            sampleIdx = sampleIdx + 1;
-            lfoPhase = (double)(float)(curRate + lfoPhase);
-            curRate = (double)(float)(rateStep + curRate);
-            frameBase = frameBase + (long long)numChans;
-            curDepth = (double)(float)(depthStep + curDepth);
-        } while ((int)sampleIdx < numSamples);
+            var_r22++;
+            var_f26 += var_f25;
+            var_f25 += temp_f21;
+            var_r22 += numChans;
+            var_f30 += temp_f22;
+        } while (var_r22 < numSamples);
     }
-
-    unk1c = (float)curDepth;
-    unk2c = (float)curRate;
-    unk24 = (float)lfoPhase;
-    mWritePos = (mWritePos + numSamples) % 0x2580;
-    if (6.2831854820251465 < lfoPhase) {
-        unk24 = (float)(lfoPhase - 6.2831854820251465);
+    unk1c = var_f30;
+    unk2c = var_f25;
+    unk24 = var_f26;
+    mWritePos = (mWritePos + numSamples) % 9600;
+    if (var_f26 > 6.2831854820251465f) {
+        unk24 = var_f26 - 6.2831854820251465f;
     }
 }

@@ -238,9 +238,11 @@ void Synth::Poll() {
 
 Stream *Synth::NewStream(const char *filename, float f1, float f2, bool) {
 #ifdef HX_NATIVE
+    fprintf(stderr, "DC3 Synth::NewStream('%s', %.2f, %.2f)\n", filename, f1, f2);
     File *file;
     Symbol ext;
     NewStreamFile(filename, file, ext);
+    fprintf(stderr, "DC3 Synth::NewStream: file=%p ext='%s'\n", (void*)file, ext.Str());
     return new StandardStream(file, f1, f2, ext, true, false, false);
 #else
     return new StreamNull(f1);
@@ -249,6 +251,8 @@ Stream *Synth::NewStream(const char *filename, float f1, float f2, bool) {
 
 Stream *Synth::NewBufStream(const void *buf, int size, Symbol ext, float f1, bool b1) {
 #ifdef HX_NATIVE
+    fprintf(stderr, "DC3 Synth::NewBufStream(buf=%p, size=%d, ext='%s', f1=%.2f, b1=%d)\n",
+        buf, size, ext.Str(), f1, b1);
     File *file = new BufFile(buf, size);
     return new StandardStream(file, 0, f1, ext, b1, true, false);
 #else

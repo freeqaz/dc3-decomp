@@ -5,11 +5,11 @@ class ByteGrinder {
 public:
     ByteGrinder() {}
     virtual ~ByteGrinder() {} // generic dtor
-    void GrindArray(long, long, unsigned char *, int, int);
+    void GrindArray(int, int, unsigned char *, int, int);
     void Init();
     void HvDecrypt(unsigned char *, unsigned char *, int);
 
 private:
-    unsigned long pickOneOf32A(bool, long);
-    unsigned long pickOneOf32B(bool, long);
+    unsigned int pickOneOf32A(bool, int);
+    unsigned int pickOneOf32B(bool, int);
 };
