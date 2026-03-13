@@ -4,7 +4,7 @@
 
 DC3's audio pipeline has two sides:
 - **Decode side** (DONE): `StreamReader` decoders produce PCM samples
-- **Output side** (MISSING): `StreamReceiver` feeds PCM to hardware
+- **Output side** (DONE): `StreamReceiver` feeds PCM to hardware
 
 ```
                          DECODE SIDE (done)
@@ -15,7 +15,7 @@ DC3's audio pipeline has two sides:
 │ .ogg/.mogg  │────>│ VorbisReader      │────>│                  │
 └─────────────┘     └───────────────────┘     └────────┬─────────┘
                                                        │
-                         OUTPUT SIDE (missing)          │
+                         OUTPUT SIDE (done)              │
                     ┌──────────────────────┐            │
                     │ StreamReceiverNative │<───────────┘
                     │ (ring buffer → PCM)  │   per-channel
@@ -101,16 +101,21 @@ volume scaling, L/R pan. All passing.
 **Wiring**: `SynthSample::NewInst()` overridden via `#ifdef HX_NATIVE` in header, with
 implementation in `SampleInst_Native.cpp` that creates `SampleInstNative`.
 
-### Sub-phase 3.5: OGG/Vorbis Streaming
+### Sub-phase 3.5: OGG/Vorbis Streaming — COMPLETE
 
-The game's song audio is in `.mogg` format (multi-channel OGG). `vorbis` and
-`vorbisfile` are already linked. Need a `VorbisReader : StreamReader` that:
-- Opens `.mogg`/`.ogg` via `ov_open_callbacks()`
-- Decodes PCM in `Poll()` via `ov_read()`
-- Supports seek via `ov_pcm_seek()`
+**Files**: `src/system/synth/VorbisReader.cpp` (native Poll/DoFileRead/Decrypt),
+`src/system/synth/StandardStream.cpp` (kBuffering fix),
+`src/system/synth/StreamReceiver.cpp` (WriteData/Poll native impl)
 
-**Test**: If a `.mogg` fixture is available, decode a few frames and verify
-sample rate / channel count.
+VorbisReader uses single-threaded main-loop decode on native (no background DecodeThread).
+The constructor/destructor thread management is guarded with `#ifndef HX_NATIVE` to prevent
+destructor infinite loop (stubbed DecodeThread never clears `mTerminating`).
+
+Key fixes:
+- `StandardStream::InitInfo` was missing `mState = kBuffering` after channel creation (decomp bug)
+- `VorbisReader::Poll` early return removed — real OGG decode via `ogg_sync`/`vorbis_synthesis`
+- `VorbisReader::DoFileRead` reads async file data, decrypts HMXA→OggS headers
+- `HamAudio::Load` appends `.mogg` extension, `NativeSynth` sets `expectMap=true`
 
 ### Sub-phase 3.6: Audio Mixing + FX
 
@@ -139,6 +144,9 @@ The engine's `FxSend` system is mostly Xbox DSP-specific. For MVP, bypass all FX
 | `src/system/synth/Synth.cpp` | **DONE** — `#ifdef HX_NATIVE` for NativeSynth | 3.3 |
 | `src/system/synth/SampleData.h` | **DONE** — added `DataPtr()` for LP64 | 3.4 |
 | `src/system/synth/SynthSample.h` | **DONE** — added `GetSampleData()` accessor | 3.4 |
+| `src/system/synth/VorbisReader.cpp` | **DONE** — native Poll/DoFileRead/Decrypt, thread guard | 3.5 |
+| `src/system/synth/StandardStream.cpp` | **DONE** — `mState = kBuffering` decomp fix | 3.5 |
+| `src/system/synth/StreamReceiver.cpp` | **DONE** — WriteData/Poll native implementation | 3.5 |
 
 ## Testing Strategy
 

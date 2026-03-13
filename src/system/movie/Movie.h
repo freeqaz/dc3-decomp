@@ -33,6 +33,7 @@ public:
     bool Poll();
     void SetWidthHeight(int, int);
     FaderGroup *Faders() const { return mFaderGroup; }
+    MovieImpl *GetImpl() const { return mImpl; }
 
 protected:
     FaderGroup *mFaderGroup; // 0x0

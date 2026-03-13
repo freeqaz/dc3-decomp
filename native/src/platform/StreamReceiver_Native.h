@@ -33,6 +33,9 @@ public:
     // Factory function — register with StreamReceiver::sFactory
     static StreamReceiver *Create(int numBuffers, int sampleRate, bool slip, int channel);
 
+    // Called by base StreamReceiver::GetBytesPlayed() (non-virtual, uses static_cast)
+    u64 GetTotalBytesPlayed() const { return mTotalBytesPlayed; }
+
 private:
     // PCM ring buffer (16-bit mono samples from the engine, converted to float on output)
     static const int kPCMBufSize = 0x10000; // 64KB

@@ -57,7 +57,8 @@ public:
 #endif
         // Vorbis/OGG/MOGG — the primary song audio format
         if (type == "ogg" || type == "mogg") {
-            return new VorbisReader(file, false, stream, false);
+            bool expectMap = (type == "mogg"); // .mogg has HMX header with OggMap + encryption
+            return new VorbisReader(file, expectMap, stream, false);
         }
         return nullptr;
     }

@@ -108,16 +108,32 @@ static uint32_t PixelFingerprint(const uint8_t* pixels, int size) {
     return h;
 }
 
+static int sPresyncCalls = 0;
+static int sPresyncNoGpu = 0;
+static int sPresyncNoBitmap = 0;
+static int sPresyncNoPixels = 0;
+static int sPresyncAlreadyDone = 0;
+static int sPresyncCreateFail = 0;
+static int sPresyncOk = 0;
+
+void RndTex_PrintPresyncStats() {
+    printf("DC3 TexPresync: calls=%d noGpu=%d noBitmap=%d noPixels=%d done=%d fail=%d ok=%d total_uploaded=%d\n",
+           sPresyncCalls, sPresyncNoGpu, sPresyncNoBitmap, sPresyncNoPixels,
+           sPresyncAlreadyDone, sPresyncCreateFail, sPresyncOk, (int)sTexGpuData.size());
+}
+
 void RndTex::PresyncBitmap() {
-    if (!gWgpuRnd) return;
-    if (!gWgpuRnd->Gpu().IsReady()) return;
+    sPresyncCalls++;
+    if (!gWgpuRnd) { sPresyncNoGpu++; return; }
+    if (!gWgpuRnd->Gpu().IsReady()) { sPresyncNoGpu++; return; }
 
     // Only process regular textures with bitmap data
     if (mBitmap.Width() <= 0 || mBitmap.Height() <= 0 || mBitmap.Bpp() <= 0) {
+        sPresyncNoBitmap++;
         return;
     }
     const uint8_t* curPixels = mBitmap.Pixels();
-    if (!curPixels) return;
+    if (!curPixels) { sPresyncNoPixels++; return; }
 
     // Check if already uploaded AND bitmap data hasn't changed.
     // Font textures may be uploaded before their data is loaded from
@@ -126,8 +142,10 @@ void RndTex::PresyncBitmap() {
     auto it = sTexGpuData.find(this);
     if (it != sTexGpuData.end() && it->second.uploaded) {
         uint32_t fp = PixelFingerprint(curPixels, mBitmap.PixelBytes());
-        if (it->second.lastPixelPtr == curPixels && it->second.pixelFingerprint == fp)
+        if (it->second.lastPixelPtr == curPixels && it->second.pixelFingerprint == fp) {
+            sPresyncAlreadyDone++;
             return; // Same data, skip
+        }
         // Data changed — re-upload
     }
 
@@ -143,10 +161,16 @@ void RndTex::PresyncBitmap() {
         gWgpuRnd->Gpu(), mBitmap, numMips);
 
     if (!gpuTex) {
-        fprintf(stderr, "Tex_Wgpu: failed to create GPU texture for '%s' (%dx%d, %d bpp, %d mips)\n",
-                Name(), mBitmap.Width(), mBitmap.Height(), mBitmap.Bpp(), numMips);
+        sPresyncCreateFail++;
+        static int sFailLog = 0;
+        if (sFailLog < 10) {
+            sFailLog++;
+            fprintf(stderr, "Tex_Wgpu: failed to create GPU texture for '%s' (%dx%d, %d bpp, %d mips)\n",
+                    Name(), mBitmap.Width(), mBitmap.Height(), mBitmap.Bpp(), numMips);
+        }
         return;
     }
+    sPresyncOk++;
 
     GpuTexData data;
     data.texture = gpuTex;
@@ -186,6 +210,23 @@ void RndTex::FinishDrawTarget() {
 
 void CleanupGpuTex(RndTex* tex) {
     sTexGpuData.erase(tex);
+}
+
+void UploadRGBAToRndTex(RndTex* tex, const uint8_t* rgba, int w, int h) {
+    if (!tex || !rgba || !gWgpuRnd || !gWgpuRnd->Gpu().IsReady()) return;
+    GpuTexData* rtData = EnsureRenderTargetData(tex);
+    if (!rtData || !rtData->texture) return;
+
+    wgpu::TexelCopyTextureInfo dest{};
+    dest.texture = rtData->texture;
+    dest.mipLevel = 0;
+    dest.origin = {0, 0, 0};
+
+    wgpu::TexelCopyBufferLayout layout{};
+    layout.bytesPerRow = (uint32_t)(w * 4);
+
+    wgpu::Extent3D size{(uint32_t)w, (uint32_t)h, 1};
+    gWgpuRnd->Gpu().Queue().WriteTexture(&dest, rgba, (size_t)(w * h * 4), &layout, &size);
 }
 
 // ============================================================================

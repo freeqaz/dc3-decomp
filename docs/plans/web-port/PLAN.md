@@ -292,6 +292,21 @@ scripts/web/
 
 ---
 
+### Phase 7b: Video Playback (Post-MVP)
+
+**Goal**: FMV/attract movie playback in browser.
+
+**Current state**: FFmpeg (libavformat/libavcodec) is used on native desktop but unavailable on Emscripten — requires native OS libraries. `TexMovie::DrawToTexture()` falls back to the Xbox Bink path (stubbed on web). Movies are silently skipped.
+
+**Options**:
+1. **ffmpeg.wasm** — FFmpeg compiled to WASM. Mature project, supports decode of common formats. Adds ~8-25MB to WASM payload. Would slot into `FFmpegMovieImpl` with minimal changes.
+2. **Browser `<video>` element** — Transcode Bink FMVs to H.264/WebM offline, play via HTML5 `<video>`, composite onto WebGPU canvas via `copyExternalImageToTexture()`. Smallest runtime cost, but requires asset preprocessing pipeline.
+3. **Bink decoder in WASM** — Port a Bink decoder (e.g., ffmpeg's bink demuxer/decoder) to WASM directly. Most faithful to original, but Bink format is proprietary.
+
+**Recommended**: Option 2 (browser `<video>`) for MVP — zero runtime overhead, leverages hardware decode. Add ffmpeg.wasm as fallback for formats `<video>` can't handle.
+
+---
+
 ### Phase 8: Optimization & Polish
 
 **Goal**: Acceptable load times and frame rates.

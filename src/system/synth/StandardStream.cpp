@@ -536,6 +536,7 @@ void StandardStream::InitInfo(int i1, int sampleRate, bool floatSamples, int i4)
                 );
                 mVirtBufs.push_back(buf);
             }
+            mState = kBuffering;
         } else {
             MILO_ASSERT(numChannels == mChannels.size(), 0x161);
             MILO_ASSERT(_ref2 == sampleRate, 0x162);

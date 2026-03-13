@@ -11,6 +11,8 @@
 
 #ifdef HX_FFMPEG
 #include "platform/FFmpegMovieImpl.h"
+#elif defined(__EMSCRIPTEN__)
+#include "platform/WebMovieImpl.h"
 #endif
 
 BinkMovieSys gBinkMovieSys;
@@ -103,6 +105,8 @@ void BinkMovieSys::Terminate() {
 MovieImpl* BinkMovieSys::CreateMovieImpl() {
 #ifdef HX_FFMPEG
     return new FFmpegMovieImpl();
+#elif defined(__EMSCRIPTEN__)
+    return new WebMovieImpl();
 #else
     return new BinkMovieImpl();
 #endif

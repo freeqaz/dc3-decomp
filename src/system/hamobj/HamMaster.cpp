@@ -203,19 +203,24 @@ float HamMaster::EventBeat(Symbol s) {
 }
 
 void HamMaster::LoaderPoll() {
-    if (mSongData->Poll()) {
+    bool songPoll = mSongData->Poll();
+    if (songPoll) {
+        fprintf(stderr, "DC3 LoaderPoll — songPoll=true, loading audio...\n");
         if (TheLoadMgr.EditMode() && !TheSynth->CheckCommonBank(false)) {
             ObjDirPtr<ObjectDir> dir;
             DataArray *cfg = SystemConfig("sound", "banks", "common");
             dir.LoadFile(cfg->Str(1), false, true, kLoadFront, false);
             TheSynth->SetDir(dir);
         }
+        fprintf(stderr, "DC3 LoaderPoll — calling mAudio->Load(mSongInfo=%p)\n", (void*)mSongInfo);
         mAudio->Load(mSongInfo, mSyncLoad);
+        fprintf(stderr, "DC3 LoaderPoll — audio loaded, finishing up\n");
         mSongInfo = nullptr;
         if (mMidiParserMgr) {
             mMidiParserMgr->FinishLoad();
         }
         mLoaded = true;
+        fprintf(stderr, "DC3 LoaderPoll — mLoaded=true! Releasing loader\n");
         RELEASE(mLoader);
     }
 }

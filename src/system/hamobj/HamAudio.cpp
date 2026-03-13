@@ -198,6 +198,10 @@ void HamAudio::Load(SongInfo *info, bool b2) {
 void HamAudio::Play() {
     MILO_ASSERT(mSongStream, 0x11B);
     mSongStream->Play();
+#ifdef HX_NATIVE
+    // TODO: No real audio FX on native — skip FxSend setup.
+    mFXSendApplied = true;
+#else
     if (!mFXSendApplied) {
         if (TheSynth->CheckCommonBank(false)) {
             FxSend *send = TheSynth->Find<FxSend>("song.send", false);
@@ -213,6 +217,7 @@ void HamAudio::Play() {
             }
         }
     }
+#endif
 }
 
 void HamAudio::PrintFaders() {

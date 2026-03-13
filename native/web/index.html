@@ -29,6 +29,19 @@
         #status.error { color: #e55; }
         #status.ok { color: #5e5; }
         #status.loading { color: #5ae; }
+        #controls {
+            margin-top: 8px;
+            font-size: 12px;
+            color: #555;
+        }
+        #controls span {
+            color: #888;
+            background: #1a1a1a;
+            padding: 1px 5px;
+            border-radius: 3px;
+            border: 1px solid #333;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+        }
         #console {
             margin-top: 8px;
             max-width: 1280px;
@@ -47,8 +60,16 @@
     </style>
 </head>
 <body>
-    <canvas id="dc3-canvas" width="1280" height="720"></canvas>
+    <canvas id="dc3-canvas" width="1280" height="720" tabindex="0"></canvas>
     <div id="status">Initializing...</div>
+    <div id="controls">
+        <span>Arrows/WASD</span> navigate &nbsp;
+        <span>Enter</span> confirm &nbsp;
+        <span>Esc</span> back &nbsp;
+        <span>Space</span> start &nbsp;
+        <span>Tab</span> select &nbsp;
+        <span>Q/E</span> LB/RB
+    </div>
     <div id="console"></div>
 
     <script>
@@ -64,7 +85,13 @@
         }
 
         if (!navigator.gpu) {
-            status.textContent = 'WebGPU not supported. Use Chrome 113+.';
+            let hint = 'WebGPU not available.';
+            if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+                hint += ' WebGPU requires localhost or HTTPS — try http://localhost:' + location.port;
+            } else {
+                hint += ' Use Chrome 113+ or Safari 18+. Check chrome://gpu for WebGPU status.';
+            }
+            status.textContent = hint;
             status.className = 'error';
         } else {
             status.textContent = 'Loading WASM...';

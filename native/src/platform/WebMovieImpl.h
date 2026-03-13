@@ -1,7 +1,7 @@
-// DC3 Native Port - FFmpegMovieImpl
-// Replaces BinkMovieImpl for FMV/cutscene video playback using FFmpeg.
-// Decodes Bink video (.bik files) via libavcodec's open-source Bink decoder,
-// converts YUV frames to RGBA, and uploads to an RndTex for display.
+// DC3 Web Port - WebMovieImpl
+// Video playback using browser's native <video> element + WebGPU texture upload.
+// Pre-transcoded videos (BINK → WebM/MP4) are served alongside game assets.
+// Uses EM_JS for JavaScript interop to control <video> and extract frames.
 
 #pragma once
 
@@ -9,18 +9,12 @@
 #include "os/Timer.h"
 #include "utl/Str.h"
 
-extern "C" {
-#include <libavformat/avformat.h>
-#include <libavcodec/avcodec.h>
-#include <libswscale/swscale.h>
-}
-
 #include <vector>
 
-class FFmpegMovieImpl : public MovieImpl {
+class WebMovieImpl : public MovieImpl {
 public:
-    FFmpegMovieImpl();
-    virtual ~FFmpegMovieImpl();
+    WebMovieImpl();
+    virtual ~WebMovieImpl();
 
     virtual void SetWidthHeight(int w, int h) override;
     virtual bool Ready() const override;
@@ -41,22 +35,19 @@ public:
     virtual int GetFrame() const override { return mCurrentFrame; }
     virtual float MsPerFrame() const override;
     virtual int NumFrames() const override { return mNumFrames; }
-    virtual void SetVolume(float) override {}
+    virtual void SetVolume(float vol) override;
 
     void Terminate();
 
-private:
-    bool OpenVideo(const char *path);
-    bool DecodeNextVideoFrame();
-    void Close();
+    // Accessors for texture upload
+    const uint8_t* GetRGBABuffer() const { return mRGBABuffer.data(); }
+    int GetDecodedWidth() const { return mVideoWidth; }
+    int GetDecodedHeight() const { return mVideoHeight; }
+    bool HasDecodedFrame() const { return mFrameDecoded; }
 
-    // FFmpeg state
-    AVFormatContext *mFmtCtx;
-    AVCodecContext *mVideoCtx;
-    int mVideoStreamIdx;
-    SwsContext *mSwsCtx;
-    AVPacket *mPacket;
-    AVFrame *mAvFrame;
+private:
+    // JavaScript video element handle
+    int mVideoHandle;
 
     // Decoded RGBA pixel buffer
     std::vector<uint8_t> mRGBABuffer;
@@ -72,7 +63,6 @@ private:
     int mCurrentFrame;
     int mNumFrames;
     float mFrameRate;
-    Timer mPlayTimer;
 
     // Requested display dimensions
     int mDisplayWidth;
@@ -80,11 +70,4 @@ private:
 
     // Whether a new frame is decoded and ready for upload
     bool mFrameDecoded;
-
-public:
-    // Accessors for native render-to-texture upload
-    const uint8_t* GetRGBABuffer() const { return mRGBABuffer.data(); }
-    int GetDecodedWidth() const { return mVideoWidth; }
-    int GetDecodedHeight() const { return mVideoHeight; }
-    bool HasDecodedFrame() const { return mFrameDecoded; }
 };

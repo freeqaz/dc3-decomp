@@ -418,7 +418,7 @@ Of 1,117 unimplemented functions (weak stubs in `engine_stubs_generated.cpp`):
 | Subsystem | Stub Count | Native Impact |
 |-----------|-----------|---------------|
 | Xbox platform (XDK, D3D9, Kinect, XNet) | ~400 | None — replaced by native implementations |
-| Audio backend (Bink, Synth internals) | ~150 | Blocks audio playback only |
+| Audio backend (Bink, Synth internals) | ~150 | DONE — VorbisReader/StreamReceiver/StandardStream pipeline working |
 | Rendering (DxMesh, DxShader, DxCam internals) | ~120 | None — WebGPU renderer bypasses |
 | Network/Online (RockCentral, DingoServer) | ~80 | None — single-player only |
 | Editor/Debug tools | ~100 | None — runtime only |

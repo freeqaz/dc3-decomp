@@ -43,7 +43,13 @@ public:
     virtual void Poll();
 
     void PrepareShader(float, float) const;
-    void PrepareShader() const;
+    void PrepareShader() const {
+        int startIdx = mStartCtrlPoint;
+        if (startIdx == -1) {
+            startIdx = 0;
+        }
+        PrepareShader(-(startIdx * mYPerCtrlPoint - mYOffset), mYPerCtrlPoint);
+    }
 
     OBJ_MEM_OVERLOAD(0x18);
     NEW_OBJ(RndSpline)

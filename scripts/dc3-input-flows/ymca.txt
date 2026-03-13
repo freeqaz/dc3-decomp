@@ -4,23 +4,23 @@
 #        → scroll to YMCA → select → multiuser → loading → game_screen
 #
 # YMCA is at song list index 5 (3 downs from default position 2).
-# game_screen reached at ~frame 1500, stable through 2000+.
+# game_screen reached at ~frame 2000, stable through 3000+.
 #
 # Usage:
-#   MILO_HEADLESS=1 MILO_MAX_FRAMES=2000 \
+#   MILO_HEADLESS=1 MILO_MAX_FRAMES=3000 \
 #     MILO_INPUT_SCRIPT=scripts/dc3-input-flows/ymca.txt \
 #     timeout 120 native/build/dc3-native
 
 # main_screen: select "gameplay" (first item)
-400 confirm
+500 confirm
 
-# choose_mode_screen: select "perform" (first item)
-600 confirm
+# choose_mode_screen: select "perform" (first item, already highlighted)
+800 confirm
 
 # song_select_screen: scroll down to YMCA
-800 down
-900 down
-1000 down
+1100 down
+1200 down
+1300 down
 
 # song_select_screen: select YMCA
-1100 confirm
+1500 confirm

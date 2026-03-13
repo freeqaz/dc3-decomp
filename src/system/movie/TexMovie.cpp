@@ -1,4 +1,11 @@
 #include "movie/TexMovie.h"
+#if defined(HX_NATIVE) && !defined(__EMSCRIPTEN__)
+#include "platform/FFmpegMovieImpl.h"
+#include "platform/TexGpu.h"
+#elif defined(__EMSCRIPTEN__)
+#include "platform/WebMovieImpl.h"
+#include "platform/TexGpu.h"
+#endif
 #include "macros.h"
 #include "obj/Data.h"
 #include "obj/Msg.h"
@@ -157,7 +164,13 @@ void TexMovie::Enter() {
     if (b) {
         mTex->MakeDrawTarget();
         Hmx::Rect r(0, 0, 1, 1);
+#ifdef __EMSCRIPTEN__
+        // Web: clear to transparent black so movie overlay doesn't block UI
+        // when no video is playing (videos need pre-transcoding to .webm)
+        Hmx::Color c(0, 0, 0, 0);
+#else
         Hmx::Color c(0, 0, 0, 1);
+#endif
         TheRnd.DrawRectScreen(r, c, nullptr, nullptr, nullptr);
         mTex->FinishDrawTarget();
         TheRnd.MakeDrawTarget();
@@ -195,10 +208,28 @@ void TexMovie::DrawToTexture() {
     bool b = (mTex != nullptr && mTex->Width() && mTex->Height());
 
     if (b) {
+#if defined(HX_NATIVE) && !defined(__EMSCRIPTEN__)
+        // Native: decode frame then upload RGBA pixels directly to GPU texture
+        mMovie.Draw();
+        FFmpegMovieImpl* impl = dynamic_cast<FFmpegMovieImpl*>(mMovie.GetImpl());
+        if (impl && impl->HasDecodedFrame()) {
+            UploadRGBAToRndTex(mTex, impl->GetRGBABuffer(),
+                               impl->GetDecodedWidth(), impl->GetDecodedHeight());
+        }
+#elif defined(__EMSCRIPTEN__)
+        // Web: decode frame via browser <video> then upload RGBA pixels
+        mMovie.Draw();
+        WebMovieImpl* impl = dynamic_cast<WebMovieImpl*>(mMovie.GetImpl());
+        if (impl && impl->HasDecodedFrame()) {
+            UploadRGBAToRndTex(mTex, impl->GetRGBABuffer(),
+                               impl->GetDecodedWidth(), impl->GetDecodedHeight());
+        }
+#else
         mTex->MakeDrawTarget();
         mMovie.Draw();
         mTex->FinishDrawTarget();
         TheRnd.MakeDrawTarget();
+#endif
     }
 }
 

@@ -970,6 +970,31 @@ void WgpuRnd::WriteSceneUniforms() {
                 }
             }
             memcpy(scene.view, view, sizeof(view));
+
+            // Diagnostic: dump view, proj, viewProj for first few frames
+            static int sVPDumpCount = 0;
+            if (sVPDumpCount < 3) {
+                sVPDumpCount++;
+                printf("DC3 ViewProj[%d]: cam='%s' pos=(%.1f,%.1f,%.1f) fov=%.1f near=%.1f far=%.1f\n",
+                       sVPDumpCount, cam->Name(),
+                       cam->WorldXfm().v.x, cam->WorldXfm().v.y, cam->WorldXfm().v.z,
+                       cam->YFov(), cam->NearPlane(), cam->FarPlane());
+                printf("  view: [%.4f %.4f %.4f %.4f] [%.4f %.4f %.4f %.4f] [%.4f %.4f %.4f %.4f] [%.4f %.4f %.4f %.4f]\n",
+                       view[0], view[1], view[2], view[3],
+                       view[4], view[5], view[6], view[7],
+                       view[8], view[9], view[10], view[11],
+                       view[12], view[13], view[14], view[15]);
+                printf("  proj: [%.4f %.4f %.4f %.4f] [%.4f %.4f %.4f %.4f] [%.4f %.4f %.4f %.4f] [%.4f %.4f %.4f %.4f]\n",
+                       proj[0], proj[1], proj[2], proj[3],
+                       proj[4], proj[5], proj[6], proj[7],
+                       proj[8], proj[9], proj[10], proj[11],
+                       proj[12], proj[13], proj[14], proj[15]);
+                printf("  viewProj: [%.6f %.6f %.6f %.6f] [%.6f %.6f %.6f %.6f] [%.6f %.6f %.6f %.6f] [%.6f %.6f %.6f %.6f]\n",
+                       scene.viewProj[0], scene.viewProj[1], scene.viewProj[2], scene.viewProj[3],
+                       scene.viewProj[4], scene.viewProj[5], scene.viewProj[6], scene.viewProj[7],
+                       scene.viewProj[8], scene.viewProj[9], scene.viewProj[10], scene.viewProj[11],
+                       scene.viewProj[12], scene.viewProj[13], scene.viewProj[14], scene.viewProj[15]);
+            }
         }
 
         // Camera position (in world space, before axis flip)

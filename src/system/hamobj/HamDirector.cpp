@@ -72,9 +72,19 @@
 #include "world/Dir.h"
 #include <cctype>
 #ifdef HX_NATIVE
+#include <cstdlib>
 #include "platform/MeshGpuCache.h"
 #include "world/LightPreset.h"
 #include "world/LightPresetManager.h"
+
+static inline bool DebugWorldLoad() {
+    static bool checked = false, val = false;
+    if (!checked) {
+        val = std::getenv("MILO_DEBUG_WORLD_LOAD") != nullptr;
+        checked = true;
+    }
+    return val;
+}
 #endif
 
 HamDirector *TheHamDirector;
@@ -977,6 +987,15 @@ void HamDirector::SetCharSpot(Symbol charType, Symbol spotState) {
 DataNode HamDirector::OnToggleCamshotFlag() { return mCamshotFlag = !mCamshotFlag; }
 
 DataNode HamDirector::OnLoadSong(DataArray *a) {
+#ifdef HX_NATIVE
+    if (DebugWorldLoad()) {
+        MILO_LOG(
+            "DC3 HamDirector::OnLoadSong merger=%p song='%s'\n",
+            (void *)mMerger.Ptr(),
+            a->Str(2)
+        );
+    }
+#endif
     FilePathTracker tracker(FileRoot());
     MILO_ASSERT(TheGameData, 0xC1D);
     for (int i = 0; i < 2; i++) {
@@ -1155,6 +1174,15 @@ void GetVenuePath(FilePath &path, const char *cc) {
 }
 
 DataNode HamDirector::OnFileLoaded(DataArray *a) {
+#ifdef HX_NATIVE
+    if (DebugWorldLoad()) {
+        MILO_LOG(
+            "DC3 HamDirector::OnFileLoaded sym='%s' merger=%p\n",
+            a->Sym(2).Str(),
+            (void *)mMerger.Ptr()
+        );
+    }
+#endif
     static Symbol song("song");
     static Symbol venue("venue");
     static Symbol viz("viz");
@@ -1195,6 +1223,16 @@ DataNode HamDirector::OnFileLoaded(DataArray *a) {
             ObjectDir *dir = a->Obj<ObjectDir>(3);
             if (sym == venue && dir) {
                 mVenue = dynamic_cast<WorldDir *>(dir);
+#ifdef HX_NATIVE
+                if (DebugWorldLoad()) {
+                    MILO_LOG(
+                        "DC3 HamDirector::OnFileLoaded(venue) dir=%p venue=%p name='%s'\n",
+                        (void *)dir,
+                        (void *)mVenue.Ptr(),
+                        dir ? dir->Name() : "<null>"
+                    );
+                }
+#endif
             } else if (sym == viz && dir) {
                 mVisualizer = dynamic_cast<HamVisDir *>(dir);
             }
@@ -1599,8 +1637,18 @@ Symbol HamDirector::ClosestMove() {
 }
 
 bool HamDirector::IsWorldLoaded() const {
+#ifdef HX_NATIVE
+    // Native now gets mVenue from the FileMerger on_pre_merge ->
+    // {$hamdirector on_file_loaded ...} path in char_objects.dta.
+    // Keep this relaxed merge-based readiness check until venue-load ordering is
+    // fully revalidated across crowd/audio/song merges.
+    bool mergeDone = mMerger && !mMerger->HasPendingFiles();
+    bool moveDone = mMoveMerger && !mMoveMerger->HasPendingFiles();
+    return mergeDone && moveDone;
+#else
     return mVenue && mMerger && !mMerger->HasPendingFiles() && mMoveMerger
         && !mMoveMerger->HasPendingFiles();
+#endif
 }
 
 void HamDirector::CheckBeginFatal(int i1, HamMove *move, int i3) {

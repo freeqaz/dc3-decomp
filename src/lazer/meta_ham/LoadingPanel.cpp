@@ -65,12 +65,7 @@ void LoadingPanel::Unload() {
 void LoadingPanel::Load() {
     UIPanel::Load();
     sLoadingMaster = new HamMaster(sSongDB->SongData(), nullptr);
-#ifdef HX_NATIVE
-    // Skip loading music on native — MIDI/audio files not available
-    fprintf(stderr, "DC3 Native: LoadingPanel::Load — skipping PlayLoadingMusic\n");
-#else
     PlayLoadingMusic();
-#endif
     sLoadingMaster->SetMaps();
 }
 
@@ -94,17 +89,13 @@ bool LoadingPanel::Exiting() {
 void LoadingPanel::Enter() {
     UIPanel::Enter();
     TheTaskMgr.SetSecondsAndBeat(0, 0, true);
-#ifdef HX_NATIVE
-    // Skip audio stream playback on native
-    fprintf(stderr, "DC3 Native: LoadingPanel::Enter — skipping audio stream\n");
-#else
-    Stream *stream = sLoadingMaster->GetHxAudio()->GetSongStream();
-    MILO_ASSERT(sLoadingMaster->GetHxAudio()->IsReady(), 0x6a);
-    if (stream) {
-        stream->Play();
-        stream->Resync(0.0f);
+    if (sLoadingMaster->GetHxAudio()->IsReady()) {
+        Stream *stream = sLoadingMaster->GetHxAudio()->GetSongStream();
+        if (stream) {
+            stream->Play();
+            stream->Resync(0.0f);
+        }
     }
-#endif
 }
 
 Symbol LoadingPanel::ChooseLoadingScreen() {
@@ -125,7 +116,14 @@ void LoadingPanel::PlayLoadingMusic() {
     {
         String filePath = MakeString("sfx/samples/shell/%s.mid", fileBase);
         File *f = FileCache::GetFileAll(filePath.c_str());
+#ifdef HX_NATIVE
+        if (!f) {
+            MILO_WARN("LoadingPanel: loading music MIDI not found: %s", filePath.c_str());
+            return;
+        }
+#else
         MILO_ASSERT(f != NULL, 0xb7);
+#endif
         delete f;
     }
 

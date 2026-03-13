@@ -16,7 +16,10 @@
 #include "os/System.h"
 #include "rndobj/Rnd.h"
 
-#ifndef __EMSCRIPTEN__
+#ifdef __EMSCRIPTEN__
+#include <emscripten/emscripten.h>
+#include <emscripten/html5.h>
+#else
 #include <GLFW/glfw3.h>
 #endif
 
@@ -30,6 +33,91 @@
 // Set by Rnd_Wgpu during Init()
 extern GLFWwindow *gNativeWindow;
 #endif
+
+// ============================================================================
+// Web keyboard state (JS keydown/keyup → shared bitmask read from C)
+// ============================================================================
+
+#ifdef __EMSCRIPTEN__
+#include <emscripten/em_asm.h>
+
+static bool sWebInputInitialized = false;
+
+// Read the current button bitmask from JS (set by keydown/keyup listeners)
+static unsigned int GetWebKeyButtons() {
+    return (unsigned int)EM_ASM_INT({ return window._dc3Keys || 0; });
+}
+
+static void InitWebInput() {
+    if (sWebInputInitialized) return;
+    sWebInputInitialized = true;
+
+    // Install JS keydown/keyup listeners that maintain a bitmask.
+    // Bit positions match JoypadButton enum:
+    //   L2=0 R2=1 L1=2 R1=3 Tri=4 Circle=5 X=6 Square=7
+    //   Select=8 L3=9 R3=10 Start=11 DUp=12 DRight=13 DDown=14 DLeft=15
+    // EM_ASM JS blocks cannot contain C-style comments or unescaped braces in
+    // object literals, so we build the key map with bracket assignment.
+    EM_ASM({
+        window._dc3Keys = 0;
+        var m = new Object();
+        m['ArrowUp']    = 1<<12;
+        m['ArrowDown']  = 1<<14;
+        m['ArrowLeft']  = 1<<15;
+        m['ArrowRight'] = 1<<13;
+        m['w'] = 1<<12;
+        m['W'] = 1<<12;
+        m['s'] = 1<<14;
+        m['S'] = 1<<14;
+        m['a'] = 1<<15;
+        m['A'] = 1<<15;
+        m['d'] = 1<<13;
+        m['D'] = 1<<13;
+        m['Enter']     = 1<<6;
+        m['Escape']    = 1<<5;
+        m['Backspace'] = 1<<5;
+        m[' ']         = 1<<11;
+        m['Tab']       = 1<<8;
+        m['q'] = 1<<2;
+        m['Q'] = 1<<2;
+        m['e'] = 1<<3;
+        m['E'] = 1<<3;
+        m['z'] = 1<<0;
+        m['Z'] = 1<<0;
+        m['c'] = 1<<1;
+        m['C'] = 1<<1;
+        m['x'] = 1<<7;
+        m['X'] = 1<<7;
+        m['y'] = 1<<4;
+        m['Y'] = 1<<4;
+        var consume = new Object();
+        consume['ArrowUp'] = 1;
+        consume['ArrowDown'] = 1;
+        consume['ArrowLeft'] = 1;
+        consume['ArrowRight'] = 1;
+        consume[' '] = 1;
+        consume['Tab'] = 1;
+        consume['Escape'] = 1;
+        consume['Backspace'] = 1;
+        document.addEventListener('keydown', function(e) {
+            var bit = m[e.key];
+            if (bit) {
+                window._dc3Keys |= bit;
+                if (consume[e.key]) e.preventDefault();
+            }
+        }, true);
+        document.addEventListener('keyup', function(e) {
+            var bit = m[e.key];
+            if (bit) {
+                window._dc3Keys &= ~bit;
+            }
+        }, true);
+        console.log('DC3 Web: keyboard input ready');
+    });
+
+    printf("DC3 Web: keyboard input initialized\n");
+}
+#endif // __EMSCRIPTEN__
 
 static const float kTriggerThreshold = 0.3f;
 
@@ -146,6 +234,9 @@ void JoypadInit() {
     DataArray *cfg = SystemConfig("joypad");
     JoypadInitCommon(cfg);
     JoypadReset();
+#ifdef __EMSCRIPTEN__
+    InitWebInput();
+#endif
 }
 
 void JoypadReset() {
@@ -183,7 +274,12 @@ void JoypadPoll() {
 
         unsigned int newButtons = 0;
 
-#ifndef __EMSCRIPTEN__
+#ifdef __EMSCRIPTEN__
+        if (pad == 0) {
+            // --- Web: keyboard mapped to joypad buttons via JS state ---
+            newButtons = GetWebKeyButtons();
+        }
+#else
         if (gNativeWindow) {
             // --- Windowed mode: GLFW Gamepad ---
             GLFWgamepadstate gpState;
@@ -242,15 +338,14 @@ void JoypadPoll() {
                 if (glfwGetKey(gNativeWindow, GLFW_KEY_Q)     == GLFW_PRESS) newButtons |= (1 << kPad_L1);
                 if (glfwGetKey(gNativeWindow, GLFW_KEY_E)     == GLFW_PRESS) newButtons |= (1 << kPad_R1);
             }
-        } else
-#endif // !__EMSCRIPTEN__
-        if (pad == 0) {
+        } else if (pad == 0) {
             // --- Headless mode: scripted input (pad 0 only) ---
             newButtons = GetScriptedButtons(currentFrame);
             if (newButtons && !gInputScript.empty()) {
                 printf("DC3 Input: Frame %d — scripted buttons 0x%x\n", currentFrame, newButtons);
             }
         }
+#endif // __EMSCRIPTEN__
 
         // Translate analog sticks to digital buttons
         if (data->mTranslateSticks) {

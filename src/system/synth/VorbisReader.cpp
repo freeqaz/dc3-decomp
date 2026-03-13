@@ -7,6 +7,7 @@
 #include "os/CritSec.h"
 #include "os/Debug.h"
 #include "os/Endian.h"
+#include "os/Timer.h"
 #include "synth/Synth.h"
 #include "utl/BufStream.h"
 #include "xdk/win_types.h"
@@ -47,6 +48,7 @@ VorbisReader::VorbisReader(File *file, bool expectMap, StandardStream *stream, b
     mOggSync = new ogg_sync_state;
     ogg_sync_init(mOggSync);
     mTerminating = false;
+#ifndef HX_NATIVE
     if (gEvent == INVALID_HANDLE_VALUE) {
         gEvent = CreateEventA(nullptr, false, false, nullptr);
         MILO_ASSERT(gEvent, 0xFE);
@@ -59,16 +61,19 @@ VorbisReader::VorbisReader(File *file, bool expectMap, StandardStream *stream, b
     }
     CritSecTracker tracker(&gLock);
     gNewReaders.push_front(this);
+#endif
 }
 
 VorbisReader::~VorbisReader() {
 
+#ifndef HX_NATIVE
     auto& terminating = mTerminating;
     terminating = true;
     unked = false;
     while (terminating) {
         SetEvent(gEvent);
     }
+#endif
     delete[] mHdrBuf;
     mHdrBuf = nullptr;
     if (mOggStream) {
@@ -381,3 +386,106 @@ bool VorbisReader::CheckHmxHeader() {
         return !mHdrBuf;
     }
 }
+
+#ifdef HX_NATIVE
+
+static void Decrypt(VorbisReader *reader, unsigned char *data, int bytes,
+                    symmetric_CTR *ctrState, long magicHashA, long magicHashB) {
+    if (!ctrState)
+        return;
+    int i = 0;
+    while (i < bytes) {
+        const int dataLen = 1024;
+        unsigned char buf1[dataLen];
+        unsigned char buf2[dataLen];
+        int n = Min(bytes - i, dataLen);
+        memcpy(buf1, data + i, n);
+        ctr_decrypt(buf1, buf2, n, ctrState);
+        unsigned char *after = buf2;
+        if ((magicHashA != 0 || magicHashB != 0)
+            && after[0] == 'H' && after[1] == 'M' && after[2] == 'X' && after[3] == 'A') {
+            after[0] = 'O';
+            after[1] = 'g';
+            after[2] = 'g';
+            after[3] = 'S';
+            if (n >= 16) {
+                unsigned int *ui = (unsigned int *)&after[12];
+                *ui ^= magicHashA;
+            }
+            if (n >= 24) {
+                unsigned int *ui = (unsigned int *)&after[20];
+                *ui ^= magicHashB;
+            }
+        }
+        memcpy(data + i, buf2, n);
+        i += n;
+    }
+}
+
+bool VorbisReader::DoFileRead() {
+    bool ret = false;
+    if (mFail)
+        return false;
+
+    int queuedBytes = mOggSync->fill - mOggSync->returned;
+    if (mEnableReads && !mReadBuffer && !mFile->Eof() && queuedBytes < 0x10000) {
+        mReadBuffer = ogg_sync_buffer(mOggSync, 0x4000);
+        mFile->ReadAsync(mReadBuffer, 0x4000);
+        mFail = mFile->Fail();
+        ret = true;
+    }
+
+    int bytes = 0;
+    if (!mFail && mReadBuffer && mFile->ReadDone(bytes) && !unk40) {
+        mFail = mFile->Fail();
+        if (mFail)
+            return false;
+        MILO_ASSERT(bytes > 0, 0x1F9);
+        Decrypt(this, (unsigned char *)mReadBuffer, bytes, mCtrState, mMagicHashA, mMagicHashB);
+        ogg_sync_wrote(mOggSync, bytes);
+        mReadBuffer = 0;
+        ret = true;
+    }
+    mFail = mFile->Fail();
+    return ret;
+}
+
+void VorbisReader::Poll(float until) {
+    if (!mFail && !unk44 && CheckHmxHeader() && !mDone && (mSeekTarget < 0 || DoSeek())) {
+        DoFileRead();
+        mEof = mFile->Eof();
+        if (mHeadersRead < 3) {
+            while (TryReadHeader())
+                ;
+            if (mHeadersRead >= 3) {
+                mNumChannels = mVorbisInfo->channels;
+                mSampleRate = mVorbisInfo->rate;
+                Init();
+                InitDecoder();
+            }
+        } else {
+            Timer timer;
+            timer.Start();
+            bool first = !unkec;
+            while (timer.Ms() < until || first) {
+                first = false;
+                // Consume decoded PCM and push to stream
+                {
+                    float **pcm;
+                    int pcmAvail = vorbis_synthesis_pcmout(mVorbisDsp, &pcm);
+                    if (pcmAvail > 0) {
+                        int consumed = ConsumeData((void **)pcm, pcmAvail,
+                                                   mVorbisDsp->granulepos - pcmAvail);
+                        vorbis_synthesis_read(mVorbisDsp, consumed);
+                    }
+                }
+                if (!TryDecode())
+                    return;
+                DoFileRead();
+                timer.Split();
+            }
+        }
+    }
+}
+
+#endif // HX_NATIVE

@@ -536,11 +536,13 @@ void Game::LoadSong() {
     MetaPerformer::Current()->Handle(Message("on_load_song", 0), true);
     mUseMoveGraph = false;
     static Symbol cascade("cascade");
+#ifndef HX_NATIVE
     if (TheGameMode->Property("use_movegraph")->Int() != 0
         || TheHamProvider->Property("microgame")->Sym() == cascade
         || TheGameMode->Property("battle_mode")->Sym() == cascade) {
         mUseMoveGraph = true;
     }
+#endif
     const HamSongMetadata *data =
         TheHamSongMgr.Data(TheHamSongMgr.GetSongIDFromShortName(song));
     auto isOnDisc = data->IsOnDisc();
@@ -658,7 +660,9 @@ void Game::LoadNewSong(Symbol s1, Symbol s2) {
     // NOTE: These static Symbols appear unused but are required for match
     static Symbol cascade("cascade");
     static Symbol holla_back("holla_back");
+#ifndef HX_NATIVE
     mUseMoveGraph = TheGameMode->Property("use_movegraph")->Int();
+#endif
     if (s1 != s2) {
         RELEASE(mSongInfo);
         mSongInfo = new SongInfoCopy(TheHamSongMgr.SongMgr::SongAudioData(s2));
@@ -714,7 +718,10 @@ bool Game::IsLoaded() {
                 return false;
             }
             if (mUseMoveGraph && !TheHamDirector->IsWorldLoaded()) {
+#ifdef HX_NATIVE
+#else
                 return false;
+#endif
             }
             TheSongDB->PostLoad(mMaster->GetMidiParserMgr()->GetEventsList());
             PostLoad();
@@ -734,7 +741,10 @@ bool Game::IsLoaded() {
         }
         if (mLoadState == 1) {
             if (mUseMoveGraph && !TheHamDirector->IsMoveMergerFinished()) {
+#ifdef HX_NATIVE
+#else
                 return false;
+#endif
             }
             MILO_LOG("Game::IsLoaded() - Done waiting for MoveGraph\n");
             mLoadState = 2;
@@ -744,8 +754,17 @@ bool Game::IsLoaded() {
                 return true;
             }
             if (!mMaster->GetAudio()->IsReady()) {
+#ifdef HX_NATIVE
+                // Audio may never be ready on web — bypass after timeout
+                static int sAudioPoll = 0;
+                if (sAudioPoll++ < 60) {
+                    TheSynth->Poll();
+                    return false;
+                }
+#else
                 TheSynth->Poll();
                 return false;
+#endif
             }
             mLoadState = 3;
             TheProfileMgr.PushAllOptions();

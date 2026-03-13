@@ -1019,6 +1019,7 @@ set(DC3_WEB_CORE_SOURCES
     src/platform/Achievements_Stub.cpp
     src/platform/MemcardMgr_Stub.cpp
     src/platform/BinkMovie_Stub.cpp
+    src/platform/WebMovieImpl.cpp
     src/platform/NetXbox_Stub.cpp
     src/platform/KinectShare_Stub.cpp
     src/platform/Cache_Stub.cpp

@@ -19,6 +19,12 @@ static inline bool DebugUIFlow() {
     if (!checked) { val = getenv("MILO_DEBUG_UI_FLOW") != nullptr; checked = true; }
     return val;
 }
+
+static inline bool DebugSharedPanelDirs() {
+    static bool checked = false, val = false;
+    if (!checked) { val = getenv("MILO_DEBUG_SHARED_PANELS") != nullptr; checked = true; }
+    return val;
+}
 #endif
 
 ObjectDir *UIPanel::DataDir() {
@@ -103,14 +109,6 @@ bool UIPanel::Entering() const {
 }
 
 void UIPanel::Draw() {
-#ifdef HX_NATIVE
-    static int sPanelDrawDiag = 0;
-    if (sPanelDrawDiag < 20) {
-        sPanelDrawDiag++;
-        printf("DC3 UIPanel::Draw '%s' finalFlag=%d==static%d dir=%p loaded=%d\n",
-               Name(), mFinalDrawPassFlag, sIsFinalDrawPass, mDir, mLoaded);
-    }
-#endif
     if (mFinalDrawPassFlag == sIsFinalDrawPass && mDir && !mLoaded) {
         mDir->DrawShowing();
     }
@@ -132,6 +130,17 @@ UIPanel::UIPanel()
 void UIPanel::SetLoadedDir(PanelDir *dir, bool loaded) {
     MILO_ASSERT(!mLoader, 0x65);
     MILO_ASSERT(dir, 0x66);
+#ifdef HX_NATIVE
+    if (DebugSharedPanelDirs()) {
+        printf(
+            "DC3 UI: UIPanel '%s' SetLoadedDir dir='%s' shared=%d prev='%s'\n",
+            Name(),
+            dir->Name(),
+            loaded,
+            mDir ? mDir->Name() : "<null>"
+        );
+    }
+#endif
     if (mDir) {
         mDir->SetOwnerPanel(nullptr);
     }
@@ -142,6 +151,11 @@ void UIPanel::SetLoadedDir(PanelDir *dir, bool loaded) {
 
 void UIPanel::UnsetLoadedDir() {
     MILO_ASSERT(!mLoader, 0x73);
+#ifdef HX_NATIVE
+    if (DebugSharedPanelDirs() && mDir) {
+        printf("DC3 UI: UIPanel '%s' UnsetLoadedDir dir='%s'\n", Name(), mDir->Name());
+    }
+#endif
     if (mDir) {
         mDir->SetOwnerPanel(nullptr);
     }
@@ -271,15 +285,19 @@ void UIPanel::FinishLoad() {
 }
 
 bool UIPanel::Exiting() const {
+#ifdef __EMSCRIPTEN__
+    return false;
+#else
     if (mDir && !mLoaded && mDir->Exiting()) {
         return true;
     }
     static Message msg("exiting");
     DataNode node = const_cast<UIPanel *>(this)->HandleType(msg);
-    if (node.Type() != kDataUnhandled)
+    if (node.Type() != kDataUnhandled) {
         return node.Int();
-    else
+    } else
         return false;
+#endif
 }
 
 void UIPanel::Enter() {

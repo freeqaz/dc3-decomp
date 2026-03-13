@@ -1,5 +1,8 @@
 #include "synth/StreamReceiver.h"
 #include "os/Debug.h"
+#ifdef HX_NATIVE
+#include "platform/StreamReceiver_Native.h"
+#endif
 
 StreamReceiver::StreamReceiver(int numBuffers, bool slip)
     : mSlipEnabled(slip), mNumBuffers(numBuffers), mBuffer(), mRingFreeSpace(0),
@@ -43,11 +46,35 @@ void StreamReceiver::Stop() {
     }
 }
 
-u64 StreamReceiver::GetBytesPlayed() { return 0; }
+u64 StreamReceiver::GetBytesPlayed() {
+#ifdef HX_NATIVE
+    // TODO: This is a hack — GetBytesPlayed() is non-virtual so we static_cast
+    // to the native subclass. Once the audio subsystem is properly wired up,
+    // this should be revisited (make virtual, or track in base class).
+    auto *native = static_cast<StreamReceiverNative *>(this);
+    return native->GetTotalBytesPlayed();
+#else
+    return 0;
+#endif
+}
 
-void StreamReceiver::WriteData(const void *, int) {}
+void StreamReceiver::WriteData(const void *data, int size) {
+#ifdef HX_NATIVE
+    // On native, write directly to platform ring buffer via StartSendImpl
+    StartSendImpl((unsigned char *)data, size, 0);
+    if (mState == kInit)
+        mState = kReady;
+#endif
+}
 
-void StreamReceiver::Poll() {}
+void StreamReceiver::Poll() {
+#ifdef HX_NATIVE
+    if (mSending && SendDoneImpl()) {
+        mSending = false;
+        mBuffersSent++;
+    }
+#endif
+}
 
 #ifndef HX_NATIVE
 StreamReceiver *StreamReceiver::New(int i1, int i2, bool b3, int i4) {

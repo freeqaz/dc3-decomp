@@ -113,7 +113,11 @@ extern const char *kAssertStr;
 #endif
 #define MILO_NOTIFY(...) TheDebugNotifier << MakeString(__VA_ARGS__)
 #define MILO_NOTIFY_BETA(...) DebugBeta() << MakeString(__VA_ARGS__)
+#ifdef HX_NATIVE
+#define MILO_LOG(...) do { TheDebug << MakeString(__VA_ARGS__); fprintf(stderr, "%s", MakeString(__VA_ARGS__)); } while(0)
+#else
 #define MILO_LOG(...) TheDebug << MakeString(__VA_ARGS__)
+#endif
 
 // Usage:
 // MILO_TRY {

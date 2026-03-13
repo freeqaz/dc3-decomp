@@ -205,12 +205,19 @@ void UIManager::ToggleLoadTimes() {
 
 void UIManager::Draw() {
 #ifdef HX_NATIVE
-    static int sDrawDiag = 0;
-    if (sDrawDiag < 5) {
+    if (false) {
         printf("DC3 UI::Draw: cam=%p env=%p screen=%s pushed=%d\n",
                mCam, mEnv,
                mCurrentScreen ? mCurrentScreen->Name() : "<null>",
                (int)mPushedScreens.size());
+        if (mCam) {
+            const Vector3& cp = mCam->WorldXfm().v;
+            const Hmx::Matrix3& cm = mCam->WorldXfm().m;
+            printf("  UI cam pos=(%.1f,%.1f,%.1f) near=%.1f far=%.1f fov=%.1f\n",
+                   cp.x, cp.y, cp.z, mCam->NearPlane(), mCam->FarPlane(), mCam->YFov());
+            printf("  UI cam rot: fwd=(%.2f,%.2f,%.2f) up=(%.2f,%.2f,%.2f) right=(%.2f,%.2f,%.2f)\n",
+                   cm.z.x, cm.z.y, cm.z.z, cm.y.x, cm.y.y, cm.y.z, cm.x.x, cm.x.y, cm.x.z);
+        }
     }
     // Select the UI camera and environment for screen-space rendering.
     // On Xbox 360, NgRnd's draw pipeline did this per-panel. Our native
@@ -251,7 +258,6 @@ void UIManager::Draw() {
     // Restore previous camera/environment
     if (savedCam) savedCam->Select();
     if (savedEnv) savedEnv->Select(nullptr);
-    sDrawDiag++;
 #endif
 }
 
@@ -589,10 +595,13 @@ void UIManager::Poll() {
                 int delay; // frames to wait (0 = skip in Enter, not here)
             };
             static const ScreenAdvance sFlow[] = {
+                // Attract screen: skip immediately — intro movie can't play without
+                // video decoder (web) or BINK SDK (native). Jump to title_screen.
+                {"attract_screen", "title_screen", 1},                  // skip immediately
                 // Boot splash: DTA enter handlers fail, auto-advance after delay
                 {"autosave_warning_screen", "title_screen", 90},        // ~3s
                 {"title_screen", "wait_main_after_saveload_screen", 60}, // ~2s
-                // wait_main_after_saveload_screen: now DTA-driven (Phase 1 smart stubs)
+                {"wait_main_after_saveload_screen", "main_screen", 120}, // ~4s wait for save
                 // Kinect tutorials: skip immediately if we somehow land on them
                 {"title_screen_to_voice_control_tutorial_screen", "main_screen", 1},
                 {"tutorial_voice_control_screen_0", "main_screen", 1},

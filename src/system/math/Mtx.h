@@ -134,7 +134,38 @@ namespace Hmx {
     };
 
     Hmx::Matrix4 operator*(const Transform &, const Hmx::Matrix4 &);
-    Hmx::Matrix4 operator*(const Hmx::Matrix4 &, const Hmx::Matrix4 &);
+    inline Hmx::Matrix4 operator*(const Hmx::Matrix4 &a, const Hmx::Matrix4 &b) {
+        Vector4 c0 = a.Col4(0);
+        Vector4 c1 = a.Col4(1);
+        Vector4 c2 = a.Col4(2);
+        Vector4 c3 = a.Col4(3);
+        return Hmx::Matrix4(
+            Vector4(
+                b.x.x * c0.x + b.x.y * c1.x + b.x.z * c2.x + b.x.w * c3.x,
+                b.x.x * c0.y + b.x.y * c1.y + b.x.z * c2.y + b.x.w * c3.y,
+                b.x.x * c0.z + b.x.y * c1.z + b.x.z * c2.z + b.x.w * c3.z,
+                b.x.x * c0.w + b.x.y * c1.w + b.x.z * c2.w + b.x.w * c3.w
+            ),
+            Vector4(
+                b.y.x * c0.x + b.y.y * c1.x + b.y.z * c2.x + b.y.w * c3.x,
+                b.y.x * c0.y + b.y.y * c1.y + b.y.z * c2.y + b.y.w * c3.y,
+                b.y.x * c0.z + b.y.y * c1.z + b.y.z * c2.z + b.y.w * c3.z,
+                b.y.x * c0.w + b.y.y * c1.w + b.y.z * c2.w + b.y.w * c3.w
+            ),
+            Vector4(
+                b.z.x * c0.x + b.z.y * c1.x + b.z.z * c2.x + b.z.w * c3.x,
+                b.z.x * c0.y + b.z.y * c1.y + b.z.z * c2.y + b.z.w * c3.y,
+                b.z.x * c0.z + b.z.y * c1.z + b.z.z * c2.z + b.z.w * c3.z,
+                b.z.x * c0.w + b.z.y * c1.w + b.z.z * c2.w + b.z.w * c3.w
+            ),
+            Vector4(
+                b.w.x * c0.x + b.w.y * c1.x + b.w.z * c2.x + b.w.w * c3.x,
+                b.w.x * c0.y + b.w.y * c1.y + b.w.z * c2.y + b.w.w * c3.y,
+                b.w.x * c0.z + b.w.y * c1.z + b.w.z * c2.z + b.w.w * c3.z,
+                b.w.x * c0.w + b.w.y * c1.w + b.w.z * c2.w + b.w.w * c3.w
+            )
+        );
+    }
 
     class Quat {
     public:

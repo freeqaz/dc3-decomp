@@ -129,6 +129,8 @@ public:
     void Error(const char *msg) { mRcvr.Error(msg, mCurTick); }
 
     bool Fail() const { return mFail; }
+    State GetState() const { return mState; }
+    bool HasFailed() const { return mFail; }
     class MultiTempoTempoMap *GetTempoMap() const { return mTempoMap; }
     class MeasureMap *GetMeasureMap() const { return mMeasureMap; }
     const char *CurrentTrackName() const { return mCurTrackName.c_str(); }

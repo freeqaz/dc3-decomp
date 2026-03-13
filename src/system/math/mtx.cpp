@@ -154,9 +154,7 @@ void Transform::LookAt(const Vector3 &target, const Vector3 &up) {
     Normalize(m, m);
 }
 
-Hmx::Matrix4 Hmx::operator*(const Hmx::Matrix4 &, const Hmx::Matrix4 &) {
-    return Hmx::Matrix4();
-}
+// Matrix4 operator*(Matrix4, Matrix4) is inline in Mtx.h
 
 float Det(const Hmx::Matrix4 &m) {
     float a00 = m.x.x, a01 = m.x.y, a02 = m.x.z, a03 = m.x.w;

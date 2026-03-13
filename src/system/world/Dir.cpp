@@ -444,6 +444,16 @@ void WorldDir::SyncObjects() {
 
 void WorldDir::DrawShowing() {
     START_AUTO_TIMER("world_draw");
+#ifdef HX_NATIVE
+    static int sWorldDrawDiag = 0;
+    if (sWorldDrawDiag < 5) {
+        sWorldDrawDiag++;
+        printf("DC3 WorldDir::DrawShowing '%s' TheWorld=%p draws=%d cameraMgr=%p\n",
+               Name(), (void*)TheWorld, (int)mDraws.size(), (void*)mCameraMgr);
+        for (auto it = mDraws.begin(); it != mDraws.end(); ++it)
+            printf("  draw: %s\n", dynamic_cast<Hmx::Object*>(*it) ? dynamic_cast<Hmx::Object*>(*it)->Name() : "?");
+    }
+#endif
     if (TheWorld) {
         MILO_ASSERT(TheWorld != this, 0x25c);
         if (Showing())

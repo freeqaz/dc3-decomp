@@ -49,12 +49,26 @@
 #include "utl/MBT.h"
 #include "utl/TimeConversion.h"
 #include "world/Dir.h"
+#ifdef HX_NATIVE
+#include <cstdlib>
+#endif
 
 GamePanel *TheGamePanel = nullptr;
 LoopVizCallback gLoopVizCallback;
 LatencyCallback gGamePanelCallback;
 static float sFloat1 = 0;
 static float sFloat2 = 0;
+
+#ifdef HX_NATIVE
+static inline bool DebugWorldLoad() {
+    static bool checked = false, val = false;
+    if (!checked) {
+        val = std::getenv("MILO_DEBUG_WORLD_LOAD") != nullptr;
+        checked = true;
+    }
+    return val;
+}
+#endif
 
 float LatencyCallback::UpdateOverlay(RndOverlay *o, float f2) {
     Hmx::Color color = unk4 ? Hmx::Color(1, 1, 1) : Hmx::Color(0, 0, 0);
@@ -367,6 +381,7 @@ void GamePanel::Poll() {
     START_AUTO_TIMER("game_poll");
     SetSoundEventReceiver();
     if (!IsLoaded()) {
+        PollForLoading();
         return;
     } else {
         if (mPauseCountInTimer->SplitMs() >= 100.0f) {
@@ -527,7 +542,11 @@ float GamePanel::DeJitter(float ms) {
             result = unkf4;
         }
     }
+#ifdef HX_NATIVE
+    mFrameTimeSamples[mJitterBufferIndex & 0x1F] = ms;
+#else
     mFrameTimeSamples[mJitterBufferIndex] = ms;
+#endif
     if (result != sentinel) {
         ms = result;
     }
@@ -892,13 +911,36 @@ bool GamePanel::IsPastStreamJumpPointOfNoReturn() {
 
 void GamePanel::PollForLoading() {
     mPollLoadState = 0;
-    UIPanel::PollForLoading();
+    if (!UIPanel::IsLoaded()) {
+        UIPanel::PollForLoading();
+    }
     if (UIPanel::IsLoaded()) {
         mPollLoadState = 1;
         UIPanel *worldPanel = ObjectDir::Main()->Find<UIPanel>("world_panel");
+#ifdef HX_NATIVE
+        if (DebugWorldLoad()) {
+            static int sWorldLoadDiag = 0;
+            if (sWorldLoadDiag++ < 20) {
+                WorldDir *baseWorld = TheHamDirector ? TheHamDirector->GetWorld() : nullptr;
+                WorldDir *venueWorld = TheHamDirector ? TheHamDirector->GetVenueWorld() : nullptr;
+                PanelDir *loadedDir = worldPanel ? worldPanel->LoadedDir() : nullptr;
+                fprintf(
+                    stderr,
+                    "DC3 GamePanel::PollForLoading current='%s' panelDir='%s' baseWorld='%s' venueWorld='%s'\n",
+                    TheUI->TransitionScreen() ? TheUI->TransitionScreen()->Name() : "<null>",
+                    loadedDir ? loadedDir->Name() : "<null>",
+                    baseWorld ? baseWorld->Name() : "<null>",
+                    venueWorld ? venueWorld->Name() : "<null>"
+                );
+            }
+        }
+#endif
         if (TheUI->TransitionScreen()
             && TheUI->TransitionScreen()->HasPanel(worldPanel)) {
             if (!TheHamDirector) {
+                static int sDirDbg = 0;
+                if (DebugWorldLoad() && sDirDbg++ < 3)
+                    fprintf(stderr, "DC3 GamePanel::PollForLoading — no TheHamDirector\n");
                 return;
             }
 #ifdef HX_NATIVE
@@ -906,17 +948,35 @@ void GamePanel::PollForLoading() {
             // HamDirector::OnLoadSong fires automatically — no manual trigger needed.
 #endif
             if (!TheHamDirector->IsWorldLoaded()) {
+#ifdef HX_NATIVE
+                // Async file loading not fully wired on native/web — proceed anyway.
+                static int sWlDbg = 0;
+                if (DebugWorldLoad() && sWlDbg++ < 3)
+                    fprintf(stderr, "DC3 GamePanel::PollForLoading — world not fully loaded, proceeding\n");
+#else
                 return;
+#endif
             }
         }
         mPollLoadState = 2;
         const DataNode *prop = TheGameMode->Property("load_chars");
         if (prop->Int() != 0 && !TheHamWardrobe->AllCharsLoaded()) {
+#ifdef HX_NATIVE
+            // Characters load asynchronously via FileMerger — bypass on native/web.
+            static int sChDbg = 0;
+            if (DebugWorldLoad() && sChDbg++ < 3)
+                fprintf(stderr, "DC3 GamePanel::PollForLoading — chars not loaded, proceeding\n");
+#else
             return;
+#endif
         }
         mPollLoadState = 3;
         if (mGame->IsReady()) {
             mPollLoadState = 4;
+        } else {
+            static int sGrDbg = 0;
+            if (DebugWorldLoad() && sGrDbg++ < 5)
+                fprintf(stderr, "DC3 GamePanel::PollForLoading — game not ready (state 3)\n");
         }
     }
 }

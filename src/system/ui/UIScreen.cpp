@@ -178,9 +178,9 @@ void UIScreen::Draw() {
     if (mShowing) {
 #ifdef HX_NATIVE
         static int sDrawDiag = 0;
-        if (sDrawDiag < 5) {
+        if (sDrawDiag < 3 && strstr(Name(), "game_screen")) {
             sDrawDiag++;
-            printf("DC3 UIScreen '%s' Draw — %d panels:\n", Name(), (int)mPanelList.size());
+            printf("DC3 UIScreen '%s' Draw — %d panels, showing=%d:\n", Name(), (int)mPanelList.size(), mShowing);
             FOREACH (it, mPanelList) {
                 printf("  panel '%s' active=%d showing=%d shouldDraw=%d state=%d dir=%p loaded=%d\n",
                         it->mPanel->Name(), it->Active(), it->mPanel->Showing(),
@@ -272,13 +272,14 @@ void UIScreen::Enter(UIScreen *scr) {
     msg[0] = scr;
     HandleType(msg);
 #ifdef HX_WEB
-    fprintf(stderr, "DC3 Web: UIScreen '%s' 'enter' msg done, calling Poll()...\n", Name());
+    fprintf(stderr, "DC3 Web: UIScreen '%s' 'enter' msg done\n", Name());
     fflush(stderr);
-#endif
+    // Web: skip the synchronous Poll() call here. On web, async file loading
+    // (fetch) needs the browser event loop to progress, so calling Poll()
+    // synchronously during Enter() causes a deadlock if panels are still loading.
+    // The main loop will call Poll() on subsequent frames.
+#else
     Poll();
-#ifdef HX_WEB
-    fprintf(stderr, "DC3 Web: UIScreen '%s' Enter() complete\n", Name());
-    fflush(stderr);
 #endif
 
 #ifdef HX_NATIVE
@@ -381,6 +382,11 @@ void UIScreen::Exit(UIScreen *to) {
 }
 
 bool UIScreen::Exiting() const {
+#ifdef __EMSCRIPTEN__
+    // Web: exit animations never complete (Flow/timer/movie subsystems not
+    // fully functional). Skip all exit waits to prevent stuck transitions.
+    return false;
+#else
     FOREACH (it, mPanelList) {
         if (it->Active() && it->mPanel->Exiting()) {
 #ifdef HX_NATIVE
@@ -395,6 +401,7 @@ bool UIScreen::Exiting() const {
     }
 
     return false;
+#endif
 }
 
 void UIScreen::Print(TextStream &s) {

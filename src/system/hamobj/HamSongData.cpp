@@ -60,6 +60,8 @@ bool HamSongData::Poll() {
     if (mMidiReader) {
         bool ret = mMidiReader->ReadSomeEvents(20);
         if (ret) {
+            fprintf(stderr, "DC3 HamSongData::Poll — MIDI read complete! tell=%d\n",
+                    mStream ? mStream->Tell() : -1);
             PostLoad();
         }
         return ret;
@@ -109,7 +111,9 @@ void HamSongData::Load(const char *cc, const SongInfo *info, bool b3) {
 
 void HamSongData::Load(const SongInfo *info, bool b2, HamSongDataValidate v) {
     const char *midi = FakeSongMgr::MidiFile(info);
+    fprintf(stderr, "DC3 HamSongData::Load — midi='%s'\n", midi);
     FileStream fStream(midi, FileStream::kRead, false);
+    fprintf(stderr, "DC3 HamSongData::Load — fStream size=%d\n", (int)fStream.Size());
     mStream = new MemStream();
     {
         MemTemp tmp;

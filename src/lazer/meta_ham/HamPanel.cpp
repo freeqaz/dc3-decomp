@@ -28,12 +28,16 @@ void HamPanel::Enter() {
 }
 
 bool HamPanel::Exiting() const {
+#ifdef __EMSCRIPTEN__
+    return false;
+#else
     if (UIPanel::Exiting()) {
         return true;
     } else if (ShouldUseLocalNavlist() && mNavList) {
         return !mNavList->IsAnimating();
     }
     return false;
+#endif
 }
 
 void HamPanel::Poll() { UIPanel::Poll(); }

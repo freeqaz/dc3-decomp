@@ -333,7 +333,8 @@ wgpu::RenderPipeline PipelineManager::CreatePipeline(const PipelineKey& key) {
     pipeDesc.primitive.frontFace = wgpu::FrontFace::CCW; // D3D LH CW front → WebGPU RH CCW front
     pipeDesc.primitive.cullMode = MapCull(key.cull);
     pipeDesc.multisample.count = key.sampleCount;
-    pipeDesc.multisample.alphaToCoverageEnabled = key.alphaToCoverage;
+    // WebGPU spec: alphaToCoverageEnabled requires count > 1
+    pipeDesc.multisample.alphaToCoverageEnabled = key.alphaToCoverage && key.sampleCount > 1;
 
     static bool sLog = getenv("MILO_DEBUG_PIPELINES") != nullptr;
     if (sLog) {
