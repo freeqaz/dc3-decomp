@@ -919,6 +919,9 @@ void App::RunWithoutDebugging() {
         if (TheFlowMgr)
             TheFlowMgr->Poll();
 
+        if (TheSynth)
+            TheSynth->Poll();
+
         // Native port: poll the venue WorldDir for animation/lighting.
         // The venue renders through world_panel as part of TheUI->Draw() —
         // no separate DrawShowing call needed. NaN camera protection is in

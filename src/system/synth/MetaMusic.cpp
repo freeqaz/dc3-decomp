@@ -17,7 +17,6 @@
 #include "synth/FxSendEQ.h"
 #include "os/System.h"
 #include "utl/Std.h"
-#include <cstdio>
 
 MetaMusic *TheMetaMusic;
 

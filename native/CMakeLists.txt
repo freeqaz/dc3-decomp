@@ -743,7 +743,9 @@ set(DC3_ENGINE_SOURCES
     ${CMAKE_SOURCE_DIR}/../src/system/synth/WavReader.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/synth/complex.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/synth/filterdesign.cpp
+    ${CMAKE_SOURCE_DIR}/../src/system/synth/tomcrypt/aes.c
     ${CMAKE_SOURCE_DIR}/../src/system/synth/tomcrypt/crypt.c
+    ${CMAKE_SOURCE_DIR}/../src/system/synth/tomcrypt/ctr.c
     ${CMAKE_SOURCE_DIR}/../src/system/synth/tomcrypt/TomCryptLicense.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/ui/CheatProvider.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/ui/InlineHelp.cpp
@@ -1231,6 +1233,7 @@ target_compile_definitions(milo-viewer PRIVATE
     MILO_VIEWER=1
     MILO_DEBUG=1
     _DEBUG=1
+    $<$<BOOL:${ENABLE_FFMPEG}>:HX_FFMPEG=1>
 )
 
 target_include_directories(milo-viewer PRIVATE
@@ -1240,6 +1243,7 @@ target_include_directories(milo-viewer PRIVATE
     ${CMAKE_SOURCE_DIR}/../src/lazer
     ${CMAKE_SOURCE_DIR}/../include
     ${CMAKE_SOURCE_DIR}/include  # cgltf headers
+    ${FFMPEG_INCLUDE_DIRS}
 )
 
 target_link_options(milo-viewer PRIVATE
@@ -1261,6 +1265,7 @@ target_link_libraries(milo-viewer PRIVATE
     vorbisfile
     ogg
     z
+    $<$<BOOL:${ENABLE_FFMPEG}>:${FFMPEG_LIBRARIES}>
 )
 
 # ============================================================================

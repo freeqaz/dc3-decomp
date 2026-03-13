@@ -97,8 +97,21 @@ public:
         if (!buf || size <= 0) {
             return new StreamNull(vol);
         }
+        // HamAudio passes sym="main" (mixer bus name), not a codec type.
+        // Detect mogg vs ogg from header:
+        //   OGG: starts with "OggS" (0x4F 0x67 0x67 0x53)
+        //   MOGG: starts with version byte (0x0A-0x0F for Harmonix mogg variants)
+        Symbol codecType = sym;
+        if (sym != "ogg" && sym != "mogg" && sym != "bink" && size >= 4) {
+            const unsigned char *hdr = (const unsigned char *)buf;
+            if (hdr[0] == 'O' && hdr[1] == 'g' && hdr[2] == 'g' && hdr[3] == 'S') {
+                codecType = "ogg";
+            } else {
+                codecType = "mogg";
+            }
+        }
         File *file = new BufFile(buf, size);
-        return new StandardStream(file, vol, 0.0f, sym, loop, true, false);
+        return new StandardStream(file, vol, 0.0f, codecType, loop, true, false);
     }
 };
 

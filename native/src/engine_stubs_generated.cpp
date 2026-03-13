@@ -19,8 +19,7 @@ int BinkInit() { return 0; }
 int BinkOpen() { return 0; }
 int BinkSetSoundTrack() { return 0; }
 int BinkSetVideoOnOff() { return 0; }
-int ctr_reinit() { return 0; }
-int ctr_start() { return 0; }
+// ctr_reinit and ctr_start now provided by tomcrypt/ctr.c
 int D3DResource_Release() { return 0; }
 __attribute__((weak)) int DataInput(void*, int) { return 0; }
 int DmCaptureStackBackTrace() { return 0; }
@@ -127,11 +126,8 @@ double __real_401921fb60000000 = 6.28318548202514648;   // 2*pi (float precision
 #ifndef __EMSCRIPTEN__
 int register_cipher() { return 0; }
 #endif
-struct _cipher_descriptor { char dummy[256]; };
-extern "C" const _cipher_descriptor rijndael_desc = {};
+// rijndael_desc, rijndael_setup, rijndael_ecb_decrypt now provided by tomcrypt/aes.c
 #ifndef __EMSCRIPTEN__
-int rijndael_ecb_decrypt() { return 0; }
-int rijndael_setup() { return 0; }
 int SetUnhandledExceptionFilter() { return 0; }
 #endif
 // The* global pointer stubs - must be void* (not functions!) since C++ code
@@ -162,7 +158,12 @@ void* TheSkeletonViz = 0;
 void* TheSongSortMgr = 0;
 // TheUI: removed - provided as proper UIManager* in Rnd_Stub.cpp
 #ifndef __EMSCRIPTEN__
-int vorbis_synthesis_poll() { return 0; }
+// vorbis_synthesis_poll was Harmonix's incremental decoder for Xbox.
+// On native, delegate to standard vorbis_synthesis which does full decode at once.
+struct vorbis_block;
+struct ogg_packet;
+extern "C" int vorbis_synthesis(vorbis_block *vb, ogg_packet *op);
+int vorbis_synthesis_poll(vorbis_block *vb, ogg_packet *op) { return vorbis_synthesis(vb, op); }
 int WideCharToMultiByte() { return 0; }
 int XBackgroundDownloadSetMode() { return 0; }
 int XInputGetCapabilities() { return 0; }

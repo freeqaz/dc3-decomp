@@ -129,18 +129,26 @@ int VorbisReader::ConsumeData(void **v, int i1, int i2) {
 }
 
 void VorbisReader::setupCypher(int moggVersion) {
+    char script[256];
+    unsigned char masterKey[256];
+#ifdef HX_NATIVE
+    // On native, bypass the DTA obfuscation for masterKey initialization.
+    // Xbox uses DTA scripting with (int)masterKey pointer math (32-bit only)
+    // to copy masher data into masterKey as an anti-tamper measure.
+    // On 64-bit this truncates the pointer. Just call getMasher directly.
+    KeyChain::getMasher(masterKey);
+#else
     DataArray *arr = DataReadString("{Na 42 'O32'}");
     unsigned int iEval = arr->Evaluate(0).Int();
     arr->Release();
 
     char i6 = (iEval % 13);
     i6 = i6 + 'A';
-    char script[256];
-    unsigned char masterKey[256];
     sprintf(script, "{%c %d %c}", i6, (int)masterKey ^ iEval, i6);
     DataArray *buf118Arr = DataReadString(script);
     buf118Arr->Evaluate(0);
     buf118Arr->Release();
+#endif
     KeyChain::getKey(mKeyIndex, gKey, masterKey);
     TheSynth->Grinder().GrindArray(mMagicA, mMagicB, gKey, 0x10, moggVersion);
     for (int i = 0; i < 16; i++) {
@@ -460,6 +468,7 @@ void VorbisReader::Poll(float until) {
             if (mHeadersRead >= 3) {
                 mNumChannels = mVorbisInfo->channels;
                 mSampleRate = mVorbisInfo->rate;
+                mPcmBuffers.resize(mNumChannels);
                 Init();
                 InitDecoder();
             }
@@ -479,8 +488,9 @@ void VorbisReader::Poll(float until) {
                         vorbis_synthesis_read(mVorbisDsp, consumed);
                     }
                 }
-                if (!TryDecode())
+                if (!TryDecode()) {
                     return;
+                }
                 DoFileRead();
                 timer.Split();
             }

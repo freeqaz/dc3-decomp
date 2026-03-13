@@ -181,10 +181,9 @@ void Synth::Init() {
 }
 
 void Synth::InitSecurity() {
-#ifdef HX_NATIVE
-    // DRM security init not needed on native
-    return;
-#endif
+#ifndef HX_NATIVE
+    // Letter-function DTA handlers (A-M) for masterKey obfuscation.
+    // Not needed on native — setupCypher bypasses the DTA address dance.
     char buf[256];
     buf[1] = '\0';
     for (int i = 0; i < 3; i++) {
@@ -195,6 +194,9 @@ void Synth::InitSecurity() {
     }
     buf[0] = 'M';
     DataRegisterFunc(buf, returnMasterKey);
+#endif
+    // ByteGrinder must init on ALL platforms — registers Na, ha, O## DTA functions
+    // needed by setupCypher (GrindArray, magic hash generation).
     mByteGrinder.Init();
 }
 

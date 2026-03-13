@@ -319,6 +319,13 @@ void MetaPanel::Enter() {
 #endif
     sHamMaster->SetMaps();
     TheTaskMgr.SetAutoSecondsBeats(true);
+#ifdef HX_NATIVE
+    // On Xbox, DTA script fires {metamusic start} during screen transitions.
+    // Native doesn't execute those scripts, so start shell music explicitly.
+    if (TheMetaMusic && TheMetaMusic->Loaded()) {
+        TheMetaMusic->Start();
+    }
+#endif
 }
 
 void MetaPanel::Exit() {

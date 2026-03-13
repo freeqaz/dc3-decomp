@@ -64,6 +64,16 @@ int StandardStream::GetNumChannels() const { return mChannels.size(); }
 int StandardStream::GetNumChanParams() const { return mChanParams.size(); }
 
 void StandardStream::Play() {
+#ifdef HX_NATIVE
+    // On Xbox, a background decode thread processes Vorbis headers between
+    // stream creation and Play(). On native there's no decode thread, so we
+    // must pump the reader until the stream transitions from kInit → kReady.
+    if (mState == kInit && mRdr) {
+        for (int i = 0; i < 500 && !IsReady(); i++) {
+            PollStream();
+        }
+    }
+#endif
     if (!IsReady() && mState != kSuspended) {
         MILO_FAIL(
             "StandardStream::Play() failed. IsReady=%d mState=%d", IsReady(), mState
@@ -383,7 +393,7 @@ void StandardStream::PollStream() {
             if (StuffChannels()) {
                 mState = kReady;
             }
-        } else if (mState > kReady && mState < kFinished) {
+        } else if (mState >= kReady && mState < kFinished) {
             StuffChannels();
             // Check if reader is done and all data consumed
             if (mRdr && mRdr->Done() && mJumpFromSamples == 0) {
@@ -395,7 +405,16 @@ void StandardStream::PollStream() {
     }
 
     // Jump handling
-    if (mJumpFromSamples != 0 && mCurrentSamp >= mJumpFromSamples) {
+    // kStreamEndSamples (-1) means "at end of stream" — check reader done, not signed compare
+    bool jumpReady = false;
+    if (mJumpFromSamples != 0) {
+        if (mJumpFromSamples == kStreamEndSamples) {
+            jumpReady = mRdr && mRdr->Done();
+        } else {
+            jumpReady = mCurrentSamp >= mJumpFromSamples;
+        }
+    }
+    if (jumpReady) {
         JumpInstance ji;
         ji.unk0 = 0;
         ji.unk4 = 0;
@@ -665,7 +684,7 @@ int StandardStream::ConsumeData(void **v, int numSamples, int startSamp) {
     }
 
     int samplesToConsume = numSamples;
-    if (mJumpFromSamples != 0) {
+    if (mJumpFromSamples != 0 && mJumpFromSamples != kStreamEndSamples) {
         MILO_ASSERT(mCurrentSamp <= mJumpFromSamples, 0x1CF);
         int remaining = mJumpFromSamples - mCurrentSamp;
         if (remaining < samplesToConsume) {
