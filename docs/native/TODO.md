@@ -161,7 +161,7 @@ Ghidra DB analysis (22,397 decompiled functions) confirms all loading state sett
 
 **MetaPanel::IsLoaded** — has game_screen shortcut: if bottom screen is `game_screen`, returns `UIPanel::IsLoaded()` immediately (bypasses TheMetaMusic check). Our source already has `!TheMetaMusic` null guard.
 
-**Conclusion**: The loading pipeline works end-to-end on native via null guards and state skips. The real gaps are the **null-on-native subsystems** (see priority list below) and **stubbed functions** (see STUB_BURNDOWN.md).
+**Conclusion**: The loading pipeline works end-to-end on native via null guards and state skips. The real gaps are the **null-on-native subsystems** (see priority list below). All Tier 1 stubs (flow, camera, animation) are now implemented — see STUB_BURNDOWN.md (updated 2026-03-13).
 
 ## Phase 5: DTA/Content System
 Goal: Remove C++ workarounds and let real DTA screen-flow scripts drive the native port.

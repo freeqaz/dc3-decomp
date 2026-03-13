@@ -1274,20 +1274,6 @@ PartyModeMgr::SubMode *PartyModeMgr::CreateEventA() {
     return event;
 }
 
-void PartyModeMgr::ToggleIncludedMode(Symbol mode) {
-    mIncludedModesMask ^= 1 << GetEnumFromModeName(mode);
-    bool high = (1 << GetEnumFromModeName(mode)) & mIncludedModesMask;
-    MILO_LOG("----- TOGGLING %s to %s\n", mode.Str(), high ? "true" : "false");
-    static Symbol is_in_infinite_party_mode("is_in_infinite_party_mode");
-    if (!unk40) {
-        if (TheHamProvider->Property(is_in_infinite_party_mode)->Int() != 0) {
-            SendDataPoint("partymode/mode_toggle", mode, high);
-        } else {
-            SendDataPoint("crew_throwdown/mode_toggle", mode, high);
-        }
-    }
-}
-
 void PartyModeMgr::UseSelectedPlaylist(bool b1) {
     if (b1) {
         MetaPerformer *pPerformer = MetaPerformer::Current();
@@ -1570,6 +1556,20 @@ void PartyModeMgr::FinalizeParty() {
     SetCurrEvent();
 }
 
+void PartyModeMgr::ToggleIncludedMode(Symbol mode) {
+    mIncludedModesMask ^= 1 << GetEnumFromModeName(mode);
+    bool high = (1 << GetEnumFromModeName(mode)) & mIncludedModesMask;
+    MILO_LOG("----- TOGGLING %s to %s\n", mode.Str(), high ? "true" : "false");
+    static Symbol is_in_infinite_party_mode("is_in_infinite_party_mode");
+    if (!unk40) {
+        if (TheHamProvider->Property(is_in_infinite_party_mode)->Int() != 0) {
+            SendDataPoint("partymode/mode_toggle", mode, high);
+        } else {
+            SendDataPoint("crew_throwdown/mode_toggle", mode, high);
+        }
+    }
+}
+
 void PartyModeMgr::SetCurrEvent() {
     if (mCurrEvent) {
         RELEASE(mCurrEvent);
@@ -1620,21 +1620,25 @@ void PartyModeMgr::PruneHistory() {
 }
 
 DataNode PartyModeMgr::OnSetSongAndDefaults(DataArray *_msg) {
-    Symbol song(gNullStr);
-    Symbol mode(gNullStr);
-    bool force = false;
     int sz = _msg->Size();
     if (sz == 3) {
-        song = _msg->Sym(2);
+        Symbol mode(gNullStr);
+        Symbol song = _msg->Sym(2);
+        SetSongAndDefaults(song, mode, false);
     } else if (sz == 4) {
-        mode = _msg->Sym(2);
-        song = _msg->Sym(3);
+        Symbol mode = _msg->Sym(3);
+        Symbol song = _msg->Sym(2);
+        SetSongAndDefaults(song, mode, false);
     } else if (sz == 5) {
-        song = _msg->Sym(2);
-        mode = _msg->Sym(3);
-        force = _msg->Node(4).Int(_msg) != 0;
+        bool force = _msg->Int(4) != 0;
+        Symbol mode = _msg->Sym(3);
+        Symbol song = _msg->Sym(2);
+        SetSongAndDefaults(song, mode, force);
+    } else {
+        Symbol song(gNullStr);
+        Symbol mode(gNullStr);
+        SetSongAndDefaults(song, mode, false);
     }
-    SetSongAndDefaults(song, mode, force);
     return DataNode(0);
 }
 

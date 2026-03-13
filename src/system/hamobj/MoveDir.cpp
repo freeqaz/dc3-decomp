@@ -1114,10 +1114,10 @@ void MoveDir::ResetDetectFrames(int player, Difficulty diff) {
         mFilterQueue->CancelJob();
     }
     MovePlayerData &mpd = mMovePlayerData[player];
-    mDebugLoopMarker = -1.0f;
     mpd.mFeedbackMode = 0;
+    mDebugLoopMarker = -1.0f;
     if (mpd.mDetectFrames.begin() != mpd.mDetectFrames.end()) {
-        mpd.mDetectFrames.erase(mpd.mDetectFrames.end(), mpd.mDetectFrames.begin());
+        mpd.mDetectFrames.erase(mpd.mDetectFrames.begin(), mpd.mDetectFrames.end());
     }
     if (diff != kDifficultyBeginner) {
         DancerSequence *seq;
@@ -1129,12 +1129,12 @@ void MoveDir::ResetDetectFrames(int player, Difficulty diff) {
             seq = PerformanceSequence(diff);
         }
         if (!seq) {
-            const char *mode;
             if (TheHamDirector->InPracticeMode()) {
                 mode = "skills";
             } else {
                 mode = "perform";
             }
+            const char *mode;
             MILO_NOTIFY(
                 "%s: could not find %s DancerSequence (%s)",
                 PathName(this), DifficultyToSym(diff), mode
