@@ -70,28 +70,46 @@ These improve visual quality — venue lights, post-processing, line effects, sp
 
 **Total: ~53 stubs. Unblocks: spotlight rendering, post-processing, line effects, NG shaders.**
 
-### TIER 4 — Medium-Low: Audio Pipeline (Phase 6)
+### TIER 4 — ~~Medium-Low~~ PARTIALLY COMPLETE: Audio Pipeline (Phase 6)
 
-Audio stubs. The engine is silent; these enable sound effects and music playback.
+Shell music audio now plays end-to-end (Session 64). The mogg decryption → vorbis decode → PCM → miniaudio pipeline is working. Remaining stubs are for SFX, DSP effects, and song audio during gameplay.
+
+**RESOLVED (Session 64):**
+- **StandardStream.cpp**: `ConsumeData` — implemented (native `#ifdef HX_NATIVE` path), `setJumpSamplesFromMs` — implemented, `IsPastStreamJumpPointOfNoReturn` — implemented, `DoJump` — implemented
+- **StreamReceiver.cpp**: `GetBytesPlayed` — implemented, `WriteData` — implemented, `Poll` — implemented (all in StreamReceiver_Native.cpp)
+- **MetaMusic.cpp**: `Load` — implemented (shell music loads and plays)
+- **VorbisReader.cpp**: Full decode pipeline working — `vorbis_synthesis_poll` stub replaced with real `vorbis_synthesis` delegation
+- **Synth.cpp**: `InitSecurity` — fixed ByteGrinder init path for native
+- **Keygen_Stub.cpp**: Full KeyChain implementation (getMasher, getKey, LCG random)
+- **tomcrypt aes.c/ctr.c**: Real AES-128 CTR decryption (removed stubs from engine_stubs_generated.cpp)
+
+**Bugs fixed (Session 64):**
+1. LCG random overflow: `long` → `int` (32-bit Xbox PPC match)
+2. InitSecurity early return: ByteGrinder::Init() must run on all platforms
+3. setupCypher 64-bit pointer truncation: bypass DTA masterKey obfuscation on native
+4. Missing Synth::Poll in native main loop
+5. vorbis_synthesis_poll stub: was no-op, now delegates to real vorbis_synthesis
+6. kStreamEndSamples signed comparison: -1 sentinel caused infinite Seek(0) loop
+7. mPcmBuffers never resized after header parse
+8. MetaMusic::Start() never called (Xbox triggers via DTA script, native needs explicit call)
+9. PollStream state machine didn't handle kReady state
+
+**REMAINING STUBS:**
 
 | File | Stubs | Impact |
 |------|-------|--------|
-| **SampleData.cpp** | `Load`, `LoadWAV`, `SizeAs`, `SampleMarker::Load` (4) | Audio sample loading from .mogg/.wav files. |
-| **StandardStream.cpp** | `ConsumeData`, `setJumpSamplesFromMs`, `IsPastStreamJumpPointOfNoReturn`, `DoJump` (4) | Streaming audio playback (song music). |
-| **StreamReceiver.cpp** | `GetBytesPlayed`, `WriteData`, `Poll` (3) | Audio stream output buffer management. |
+| **SampleData.cpp** | `Load`, `LoadWAV`, `SizeAs`, `SampleMarker::Load` (4) | Audio sample loading from .mogg/.wav files. Blocks SFX. |
 | **SampleInst.cpp** | `SynthPoll` (1) | Sample instance polling (SFX playback). |
-| **Sound.cpp** | `SetPan` (1) | Stereo panning. |
+| **Sound.cpp** | `SetPan` (1) | Stereo panning for positioned sounds. |
 | **Sequence.cpp** | `ComputeNextTime`, `PickNextIndex` (2) | Random audio sequence scheduling. |
-| **MetaMusic.cpp** | `Load` (1) | Menu/meta music loading. |
-| **WavReader.cpp** | `Poll` (1) | WAV file reader polling. |
-| **Synth.cpp** | `DrawMeter` (1) | Audio level meter (debug). |
-| **DelayEffect/Flanger/EQ** | `Process`, `SetParameter`, `Reset` (7) | DSP audio effects. |
-| **Mic.cpp** | `RingBuffer::Write`, `Read` (2) | Microphone input buffer. |
+| **WavReader.cpp** | `Poll` (1) | WAV file reader polling. Blocks WAV-based SFX. |
+| **Synth.cpp** | `DrawMeter` (1) | Audio level meter (debug only). |
+| **DelayEffect/Flanger/EQ** | `Process`, `SetParameter`, `Reset` (7) | DSP audio effects. Nice-to-have, not blocking. |
+| **Mic.cpp** | `RingBuffer::Write`, `Read` (2) | Microphone input buffer. Not needed for native. |
 | **MicNull.cpp** | `GetContinuousBuf` (1) | Null mic fallback. |
 | **complex.cpp** | `eval` (1) | FFT/complex math for audio processing. |
-| **ctr.cpp** | `ctr_encrypt_fast` (1) | Encryption (audio DRM?). |
 
-**Total: ~30 stubs. Unblocks: song audio, SFX, music streaming.**
+**Total remaining: ~21 stubs. Shell music WORKING. Song audio needs testing (same pipeline, different mogg version).**
 
 ### TIER 5 — Low: Meta/Online/Platform Features
 

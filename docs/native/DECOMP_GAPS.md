@@ -171,6 +171,36 @@ These affect gameplay but not the menu/rendering flow.
 | ~~`GroupSeqInst`~~ | ~~`Poll()`~~ | **Done** | All subclasses implemented in Sequence.cpp |
 | `StarsDisplay` | `Poll()` | **100%** | Star rating display |
 
+### Audio Pipeline (Session 64 — WORKING)
+
+Shell music audio plays end-to-end through the full decode pipeline:
+
+```
+.mogg file → AES-128 CTR decrypt → OGG pages → vorbis decode → PCM int16
+  → StandardStream::ConsumeData (float→int16) → StreamReceiverNative ring buffer
+  → RenderAudio (miniaudio callback) → AudioDevice (ALSA/PulseAudio)
+```
+
+**Key components working:**
+- **Mogg decryption**: Version 0xB uses hardcoded `gRB1Key`; version 0xC+ uses KeyChain-derived keys with ByteGrinder. Full AES-128 CTR via libtomcrypt.
+- **VorbisReader**: Parses OGG headers, decodes via `vorbis_synthesis` (native delegates from `vorbis_synthesis_poll` stub).
+- **StandardStream**: State machine (kInit→kBuffering→kReady→kPlaying→kFinished) with native synchronous pump loop in Play().
+- **MetaMusic**: Start/Poll/Stop lifecycle working. Fader fade-in from silence. Loop support via `SetJump(kStreamEndMs, 0)`.
+- **StreamReceiverNative**: 64KB ring buffer, int16→float conversion, volume/pan in RenderAudio callback.
+
+**Remaining audio stubs (~21):**
+- `SampleData` (4): Load, LoadWAV, SizeAs, SampleMarker::Load — blocks SFX playback
+- `SampleInst` (1): SynthPoll — sample instance polling
+- `Sound` (1): SetPan — stereo panning
+- `Sequence` (2): ComputeNextTime, PickNextIndex — random sequence scheduling
+- `WavReader` (1): Poll — WAV file reader
+- `Synth` (1): DrawMeter — debug audio meter
+- `DSP effects` (7): DelayEffect/Flanger/EQ Process/SetParameter/Reset
+- `Mic` (2+1): RingBuffer Write/Read + MicNull::GetContinuousBuf
+- `complex` (1): eval — FFT for audio processing
+
+**Song audio during gameplay**: Uses same pipeline but different mogg version (0xC-0x10). Untested.
+
 ### Animation/Character Workarounds
 - `HamRibbon::UpdateChase()` — Stubbed (needs Interp<Transform>)
 - `MoveDir::UpdateOverlay()` — Returns 0 (complex overlay rendering)
@@ -229,14 +259,17 @@ The full DTA TypeDef → Flow → FlowAnimate → AnimTask → PropAnim pipeline
 - ~~**Flow→PropAnim animation chain**~~ — **Verified working** (2026-03-12, Session 58). Full pipeline traced and confirmed.
 - ~~**Game screen venue rendering**~~ — **Working** (2026-03-12, Session 61). FileMerger pipeline fully operational. Song→venue→viz→HUD chain-load. Roller rink venue, 415 draw calls/frame, stable. See [Session 61](../sessions/2026-03-12-session61-merger-investigation.md).
 
-### Track A — Current Focus: Gameplay Visual Quality
+### Track A — Current Focus: Gameplay Visual Quality + Audio
 
-Now that game_screen renders the venue with full FileMerger loading, focus shifts to visual quality:
-1. **Character materials** — Character model renders but needs proper material/texture application
-2. **LightPreset activation** — Venue objects have correct serialized `Showing` state, but LightPresets that dynamically show/hide venue elements during gameplay need the song animation pipeline
-3. **HUD textures** — Move card geometry renders as pink rectangles. Texture loading for gameplay HUD assets not connected.
-4. **Game-time animation** — Song .milo contains beat-synced animations (kTaskSeconds pipeline). UI animations work (kTaskUISeconds), but gameplay animations untested.
-5. **Post-processing** — Bloom, color correction, venue lighting effects stubbed.
+Now that game_screen renders the venue and shell music plays, focus shifts to visual quality and gameplay audio:
+1. **Shell music** — **WORKING** (Session 64). Full mogg→vorbis→PCM→miniaudio pipeline.
+2. **Song audio** — Uses same pipeline but untested with gameplay mogg files (version 0xC-0x10 vs shell's 0xB).
+3. **Character materials** — Character model renders but needs proper material/texture application
+4. **LightPreset activation** — Venue objects have correct serialized `Showing` state, but LightPresets that dynamically show/hide venue elements during gameplay need the song animation pipeline
+5. **Song.anim camera shots** — Camera shot cycling during gameplay
+6. **HUD textures** — Move card geometry renders as pink rectangles. Texture loading for gameplay HUD assets not connected.
+7. **Game-time animation** — Song .milo contains beat-synced animations (kTaskSeconds pipeline). UI animations work (kTaskUISeconds), but gameplay animations untested.
+8. **Post-processing** — Bloom, color correction, venue lighting effects stubbed.
 
 ### Remaining Stubs — All Resolved
 4. ~~**SaveLoadManager::Poll()**~~ — **Done** (100% match)
@@ -419,7 +452,7 @@ Of 1,117 unimplemented functions (weak stubs in `engine_stubs_generated.cpp`):
 | Subsystem | Stub Count | Native Impact |
 |-----------|-----------|---------------|
 | Xbox platform (XDK, D3D9, Kinect, XNet) | ~400 | None — replaced by native implementations |
-| Audio backend (Bink, Synth internals) | ~150 | DONE — VorbisReader/StreamReceiver/StandardStream pipeline working |
+| Audio backend (Bink, Synth internals) | ~150 | **Shell music WORKING** (Session 64). ~21 remaining stubs (SFX, DSP, Mic). See Tier 4 in STUB_BURNDOWN.md |
 | Rendering (DxMesh, DxShader, DxCam internals) | ~120 | None — WebGPU renderer bypasses |
 | Network/Online (RockCentral, DingoServer) | ~80 | None — single-player only |
 | Editor/Debug tools | ~100 | None — runtime only |
