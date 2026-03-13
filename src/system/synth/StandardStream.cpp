@@ -675,6 +675,12 @@ int StandardStream::ConsumeData(void **v, int numSamples, int startSamp) {
 
     int bytesPerSample = mFloatSamples ? 4 : 2;
     int bufSize = samplesToConsume * bytesPerSample;
+
+    // Vorbis decoder always outputs float PCM (vorbis_synthesis_pcmout returns float**),
+    // but mFloatSamples=false so bytesPerSample=2. Convert float→int16 before sending
+    // to StreamReceiverNative which stores int16 in its ring buffer.
+    int16_t *convBuf = (int16_t *)alloca(samplesToConsume * sizeof(int16_t));
+
     for (int i = 0; i < realChannels; i++) {
         int chanIdx = i;
         for (int j = 0; j < (int)mChanMaps.size(); j++) {
@@ -683,10 +689,24 @@ int StandardStream::ConsumeData(void **v, int numSamples, int startSamp) {
                 break;
             }
         }
-        mChannels[chanIdx]->WriteData(v[i], bufSize);
+        float *src = (float *)v[i];
+        for (int s = 0; s < samplesToConsume; s++) {
+            float clamped = src[s];
+            if (clamped > 1.0f) clamped = 1.0f;
+            if (clamped < -1.0f) clamped = -1.0f;
+            convBuf[s] = (int16_t)(clamped * 32767.0f);
+        }
+        mChannels[chanIdx]->WriteData(convBuf, samplesToConsume * 2);
     }
     for (int i = 0; i < mVirtualChans; i++) {
-        memcpy(mVirtBufs[i], v[realChannels + i], bufSize);
+        float *src = (float *)v[realChannels + i];
+        for (int s = 0; s < samplesToConsume; s++) {
+            float clamped = src[s];
+            if (clamped > 1.0f) clamped = 1.0f;
+            if (clamped < -1.0f) clamped = -1.0f;
+            convBuf[s] = (int16_t)(clamped * 32767.0f);
+        }
+        memcpy(mVirtBufs[i], convBuf, samplesToConsume * 2);
     }
     mCurrentSamp += samplesToConsume;
     return samplesToConsume;

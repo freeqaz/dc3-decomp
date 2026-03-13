@@ -50,7 +50,11 @@ u64 StreamReceiver::GetBytesPlayed() {
     if (mState == kInit) {
         return 0;
     }
-
+#ifdef HX_NATIVE
+    // Native: GetPlayCursor() updates mLastPlayCursor with total bytes consumed
+    GetPlayCursor();
+    return (u64)mLastPlayCursor;
+#else
     u64 numBuffers = (u64)mNumBuffers;
     u64 buffersSent = (u64)mBuffersSent;
     u64 bufferOffset = buffersSent << 0xe;  // * 0x4000
@@ -65,6 +69,7 @@ u64 StreamReceiver::GetBytesPlayed() {
     }
 
     return totalPlayed;
+#endif
 }
 
 void StreamReceiver::WriteData(const void *data, int size) {

@@ -1,0 +1,27 @@
+# Full flow video: boot → main → choose_mode → song_select → YMCA → game_screen
+#
+# Route: boot screens auto-advance → main_screen (frame ~380)
+#        → choose_mode → song_select → scroll to YMCA → select → game_screen
+#
+# YMCA is known-working for game_screen entry.
+# YMCA is at song list index 5 (3 downs from default position 2).
+#
+# For video recording:
+#   MILO_HEADLESS=1 MILO_RENDER=1 MILO_MAX_FRAMES=4500 \
+#     MILO_VIDEO=archive/screenshots/session62/full_flow.mp4 \
+#     MILO_INPUT_SCRIPT=scripts/dc3-input-flows/video-full-flow.txt \
+#     timeout 300 native/build/dc3-native
+
+# main_screen: select "Dance" (first item = gameplay)
+500 confirm
+
+# choose_mode_screen: select "Perform" (first item)
+800 confirm
+
+# song_select_screen: scroll down to YMCA (3 downs from position 2)
+1050 down
+1100 down
+1150 down
+
+# song_select_screen: select YMCA
+1300 confirm

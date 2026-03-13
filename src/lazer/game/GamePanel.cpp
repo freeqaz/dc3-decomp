@@ -559,9 +559,14 @@ void GamePanel::CreateGame() {
 
 void GamePanel::StartGame() {
     AutoTimer::SetCollectStats(true, TheRnd.VerboseTimers());
+#ifdef HX_NATIVE
+    // DTA-driven intro timing is not functional on native — always start
+    mGame->Start();
+#else
     if (mGame->HasIntro()) {
         mGame->Start();
     }
+#endif
     ThePresenceMgr.SetInGame(TheHamSongMgr.GetSongIDFromShortName(TheGameData->GetSong()));
     mState = kGamePlaying;
 }
@@ -904,6 +909,10 @@ bool GamePanel::IsPastStreamJumpPointOfNoReturn() {
 }
 
 void GamePanel::PollForLoading() {
+#ifdef HX_NATIVE
+    static int sPollCount = 0;
+    if (sPollCount++ < 10) fprintf(stderr, "DC3 GamePanel::PollForLoading() — entry (poll #%d)\n", sPollCount);
+#endif
     mPollLoadState = 0;
     UIPanel::PollForLoading();
     if (UIPanel::IsLoaded()) {
@@ -934,6 +943,10 @@ void GamePanel::PollForLoading() {
         mPollLoadState = 3;
         if (mGame->IsReady()) {
             mPollLoadState = 4;
+#ifdef HX_NATIVE
+            static bool sReported = false;
+            if (!sReported) { fprintf(stderr, "DC3 GamePanel::PollForLoading() — DONE (state 4)!\n"); sReported = true; }
+#endif
         }
     }
 }

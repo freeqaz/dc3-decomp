@@ -118,15 +118,8 @@ MetaPanel::MetaPanel() : mLoopHistoryCursor(0), mSongPreview(TheHamSongMgr), mXM
         mLoopHistory.push_back(-1);
     }
     ThePlatformMgr.AddSink(this, "xmp_state_changed");
-#ifdef HX_NATIVE
-    // SongDB/HamMaster init requires song MIDI data from ark
-    // Skip for now — MetaMusic will be null-guarded
-    sSongDB = nullptr;
-    sHamMaster = nullptr;
-#else
     sSongDB = new SongDB();
     sHamMaster = new HamMaster(sSongDB->SongData(), nullptr);
-#endif
 }
 
 MetaPanel::~MetaPanel() {

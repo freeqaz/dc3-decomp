@@ -538,11 +538,20 @@ bool Game::IsSongDefaultPlayerPlaying() {
 }
 
 void Game::LoadSong() {
+#ifdef HX_NATIVE
+    fprintf(stderr, "DC3 Game::LoadSong() — entry\n");
+#endif
     if (!TheSongSequence.Done() && TheSongSequence.CurrentIndex() < 0) {
+#ifdef HX_NATIVE
+        fprintf(stderr, "DC3 Game::LoadSong() — SongSequence not done, DoNext\n");
+#endif
         TheSongSequence.DoNext(true, false);
         return;
     }
     Symbol song = TheGameData->GetSong();
+#ifdef HX_NATIVE
+    fprintf(stderr, "DC3 Game::LoadSong() — song='%s'\n", song.Str());
+#endif
     MetaPerformer::Current()->Handle(Message("on_load_song", 0), true);
     mUseMoveGraph = false;
     static Symbol cascade("cascade");
@@ -580,6 +589,9 @@ void Game::LoadSong() {
     }
 #endif
     mMaster->Load(mSongInfo, false, 0, false, v, nullptr);
+#ifdef HX_NATIVE
+    fprintf(stderr, "DC3 Game::LoadSong() — mMaster->Load() called, done\n");
+#endif
 }
 
 void Game::SetPaused(bool b1, bool b2) {
@@ -726,14 +738,21 @@ bool Game::IsLoaded() {
         if ((int)mMaster && !mMaster->IsLoaded()) {
 #ifdef HX_NATIVE
             static int sDbg = 0;
-            if (sDbg++ < 5) fprintf(stderr, "Game::IsLoaded: mMaster=%p IsLoaded=false (pre-check)\n", (void*)mMaster);
+            if (sDbg++ < 5) fprintf(stderr, "Game::IsLoaded: mMaster=%p IsLoaded=false mLoadState=%d (pre-check)\n", (void*)mMaster, mLoadState);
 #endif
             return false;
         }
         if (mLoadState == 0) {
             if (!mMaster->IsLoaded()) {
+#ifdef HX_NATIVE
+                static int sDbg2 = 0;
+                if (sDbg2++ < 5) fprintf(stderr, "Game::IsLoaded: mMaster not loaded (state 0)\n");
+#endif
                 return false;
             }
+#ifdef HX_NATIVE
+            fprintf(stderr, "Game::IsLoaded: mMaster loaded! transitioning state 0→1\n");
+#endif
             if (mUseMoveGraph && !TheHamDirector->IsWorldLoaded()) {
 #ifdef HX_NATIVE
                 // Async file loading — proceed without waiting

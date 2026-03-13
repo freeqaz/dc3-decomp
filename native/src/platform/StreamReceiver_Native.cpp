@@ -70,6 +70,8 @@ bool StreamReceiverNative::SendDoneImpl() {
 }
 
 int StreamReceiverNative::GetPlayCursor() {
+    // Update base class mLastPlayCursor with total bytes played for GetBytesPlayed()
+    mLastPlayCursor = mPlayCursor;
     return mPlayCursor % kStreamRcvrBufSize;
 }
 
