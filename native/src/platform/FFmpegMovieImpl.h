@@ -87,4 +87,13 @@ public:
     int GetDecodedWidth() const { return mVideoWidth; }
     int GetDecodedHeight() const { return mVideoHeight; }
     bool HasDecodedFrame() const { return mFrameDecoded; }
+
+    // Virtual time: override wall-clock timer for headless/capture rendering.
+    // When enabled, Poll() uses the provided time instead of mPlayTimer.
+    void SetVirtualTime(float ms) { mVirtualTimeMs = ms; mUseVirtualTime = true; }
+    void ClearVirtualTime() { mUseVirtualTime = false; }
+
+private:
+    float mVirtualTimeMs = 0.0f;
+    bool  mUseVirtualTime = false;
 };

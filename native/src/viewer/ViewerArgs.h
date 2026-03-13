@@ -24,6 +24,7 @@ struct ViewerConfig {
     const char* testBoneName = nullptr;
     const char* testBoneAxis = "x";
     const char* charSetupPath = nullptr;
+    const char* movieFilePath = nullptr;  // --movie <video.mp4> for TexMovie test
 
     struct SubdirEntry {
         std::string path;

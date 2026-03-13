@@ -69,6 +69,16 @@ bool HamAudio::IsReady() {
         }
     }
     mReady = mSongStream && mSongStream->IsReady();
+#ifdef HX_NATIVE
+    static int sDbg = 0;
+    if (!mReady && sDbg < 10) {
+        sDbg++;
+        fprintf(stderr, "DC3 HamAudio::IsReady=false stream=%p isReady=%d isPlaying=%d numCh=%d\n",
+            (void*)mSongStream, mSongStream ? mSongStream->IsReady() : -1,
+            mSongStream ? mSongStream->IsPlaying() : -1,
+            mSongStream ? mSongStream->GetNumChannels() : -1);
+    }
+#endif
     return mReady;
 }
 

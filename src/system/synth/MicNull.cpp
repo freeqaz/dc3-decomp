@@ -22,7 +22,7 @@ MicNull::MicNull() {
 
 short *MicNull::GetContinuousBuf(int &size) {
     mTimer.Restart();
-    size = GetSampleRate() * mTimer.GetLastMs() / 1000;
+    size = (GetSampleRate() / 1000) * mTimer.GetLastMs();
     if (size > 10000) {
         size = 10000;
     }

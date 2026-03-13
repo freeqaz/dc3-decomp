@@ -83,9 +83,7 @@ public:
     virtual void ResetMicsChanged() {}
     virtual Stream *NewStream(const char *, float, float, bool);
     virtual Stream *NewBufStream(const void *, int, Symbol, float, bool);
-    virtual StreamReader *NewStreamDecoder(File *, StandardStream *, Symbol) {
-        return nullptr;
-    }
+    virtual StreamReader *NewStreamDecoder(File *, StandardStream *, Symbol);
     virtual void NewStreamFile(const char *, File *&, Symbol &);
     virtual void EnableLevels(bool) {}
     virtual void RequirePushToTalk(bool, int) {}

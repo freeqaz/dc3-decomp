@@ -145,6 +145,12 @@ scenes:
     primary: world/dclive/gen/dclive.milo_xbox
     hide: [shadow, Shadow]
 
+  # --- Movie test (TexMovie pipeline validation) ---
+
+  movie_test:
+    primary: world/shared/props/gen/discoballsml.milo_xbox
+    movie: native/test_assets/test_pattern.mp4
+
   # --- Props ---
 
   discoball:
@@ -373,6 +379,19 @@ shots:
   kerith_front:
     scene: kerith_throneroom
     camera: { azimuth: 0, elevation: 18, distance: 130 }
+
+  # --- Movie test: validates TexMovie decode → GPU upload → render pipeline ---
+
+  movie_test_screenshot:
+    scene: movie_test
+    camera: { azimuth: 0, elevation: 0, distance: 100 }
+
+  movie_test_video:
+    scene: movie_test
+    type: video
+    duration: 3
+    fps: 30
+    camera: { azimuth: 0, elevation: 0, distance: 100 }
 
   # --- Venue-only shots ---
 

@@ -563,11 +563,8 @@ void GamePanel::CreateGame() {
 void GamePanel::StartGame() {
     AutoTimer::SetCollectStats(true, TheRnd.VerboseTimers());
 #ifdef HX_NATIVE
-    // DTA-driven intro timing is not functional on native — always start
     mGame->Start();
 
-    // On native, the DTA SongSequence/LoadNewSong flow doesn't trigger,
-    // so the song data merger, SetupAnims, and character registration never happen.
     // Manually initialize the full animation pipeline here.
     if (TheHamDirector && TheHamDirector->GetWorld()) {
         // Step 1: Load song data into world via world.fm "song" merger
@@ -706,6 +703,15 @@ void GamePanel::UpdateLatency() {
 }
 
 void GamePanel::StartIntro() {
+#ifdef HX_NATIVE
+    // On native, the DTA SongSequence/LoadNewSong flow doesn't trigger.
+    // Load audio here so it's ready before HandleWait polls.
+    {
+        Symbol song = TheGameData->GetSong();
+        fprintf(stderr, "DC3 Native: StartIntro — loading song audio for '%s'\n", song.Str());
+        mGame->LoadNewSongAudio(song);
+    }
+#endif
     mState = kGameInIntro;
     static Message pick_intro("pick_intro");
     HandleType(pick_intro);

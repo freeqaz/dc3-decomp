@@ -209,20 +209,26 @@ void TexMovie::DrawToTexture() {
 
     if (b) {
 #if defined(HX_NATIVE) && !defined(__EMSCRIPTEN__)
-        // Native: decode frame then upload RGBA pixels directly to GPU texture
-        mMovie.Draw();
-        FFmpegMovieImpl* impl = dynamic_cast<FFmpegMovieImpl*>(mMovie.GetImpl());
-        if (impl && impl->HasDecodedFrame()) {
-            UploadRGBAToRndTex(mTex, impl->GetRGBABuffer(),
-                               impl->GetDecodedWidth(), impl->GetDecodedHeight());
+        // Native: check for decoded frame BEFORE Draw() clears the flag,
+        // then upload RGBA pixels directly to GPU texture
+        {
+            FFmpegMovieImpl* impl = dynamic_cast<FFmpegMovieImpl*>(mMovie.GetImpl());
+            if (impl && impl->HasDecodedFrame()) {
+                UploadRGBAToRndTex(mTex, impl->GetRGBABuffer(),
+                                   impl->GetDecodedWidth(), impl->GetDecodedHeight());
+            }
+            mMovie.Draw(); // marks frame as consumed
         }
 #elif defined(__EMSCRIPTEN__)
-        // Web: decode frame via browser <video> then upload RGBA pixels
-        mMovie.Draw();
-        WebMovieImpl* impl = dynamic_cast<WebMovieImpl*>(mMovie.GetImpl());
-        if (impl && impl->HasDecodedFrame()) {
-            UploadRGBAToRndTex(mTex, impl->GetRGBABuffer(),
-                               impl->GetDecodedWidth(), impl->GetDecodedHeight());
+        // Web: check for decoded frame BEFORE Draw() clears the flag,
+        // then upload RGBA pixels
+        {
+            WebMovieImpl* impl = dynamic_cast<WebMovieImpl*>(mMovie.GetImpl());
+            if (impl && impl->HasDecodedFrame()) {
+                UploadRGBAToRndTex(mTex, impl->GetRGBABuffer(),
+                                   impl->GetDecodedWidth(), impl->GetDecodedHeight());
+            }
+            mMovie.Draw(); // marks frame as consumed
         }
 #else
         mTex->MakeDrawTarget();

@@ -41,6 +41,10 @@
 #include "synth/Sfx.h"
 #include "synth/StreamNull.h"
 #include "synth/SynthSample.h"
+#ifdef HX_NATIVE
+#include "synth/StandardStream.h"
+#include "synth/VorbisReader.h"
+#endif
 #include "synth/WavMgr.h"
 #include "utl/Cache.h"
 #include "utl/Loader.h"
@@ -232,18 +236,56 @@ void Synth::Poll() {
     }
 }
 
-Stream *Synth::NewStream(const char *, float f1, float, bool) {
+Stream *Synth::NewStream(const char *filename, float f1, float f2, bool) {
+#ifdef HX_NATIVE
+    File *file;
+    Symbol ext;
+    NewStreamFile(filename, file, ext);
+    return new StandardStream(file, f1, f2, ext, true, false, false);
+#else
     return new StreamNull(f1);
+#endif
 }
 
-Stream *Synth::NewBufStream(const void *, int, Symbol, float f1, bool) {
+Stream *Synth::NewBufStream(const void *buf, int size, Symbol ext, float f1, bool b1) {
+#ifdef HX_NATIVE
+    File *file = new BufFile(buf, size);
+    return new StandardStream(file, 0, f1, ext, b1, true, false);
+#else
     return new StreamNull(f1);
+#endif
 }
 
 void Synth::NewStreamFile(const char *cc, File *&file, Symbol &sym) {
+#ifdef HX_NATIVE
+    // Resolve mogg file from ark/filesystem
+    String path(MakeString("%s.mogg", cc));
+    file = NewFile(path.c_str(), 2); // 2 = kRead
+    sym = "mogg";
+    if (!file) {
+        // Fallback: try without .mogg extension
+        file = NewFile(cc, 2);
+        sym = "mogg";
+    }
+    if (!file) {
+        static char gFakeFile[16];
+        file = new BufFile(gFakeFile, sizeof(gFakeFile));
+        sym = "fake";
+    }
+#else
     static char gFakeFile[16];
     file = new BufFile(gFakeFile, sizeof(gFakeFile));
     sym = "fake";
+#endif
+}
+
+StreamReader *Synth::NewStreamDecoder(File *file, StandardStream *stream, Symbol ext) {
+#ifdef HX_NATIVE
+    if (ext == "mogg" || ext == "main") {
+        return new VorbisReader(file, true, stream, true);
+    }
+#endif
+    return nullptr;
 }
 
 FxSendPitchShift *Synth::CreatePitchShift(int stage, SendChannels channels) {
@@ -312,10 +354,53 @@ const ADSRImpl *Synth::DefaultADSR() {
     return mADSR;
 }
 
-// TODO: implement — called by UpdateOverlay, inlined empty body breaks it
-#ifdef HX_NATIVE
-void Synth::DrawMeter(float &, float, float, const char *) {}
-#endif
+void Synth::DrawMeter(float &y, float level, float peakHold, const char *name) {
+    Hmx::Color white(1.0f, 1.0f, 1.0f, 1.0f);
+    Hmx::Color black(0.0f, 0.0f, 0.0f, 1.0f);
+    Hmx::Color grey(0.5f, 0.5f, 0.5f, 1.0f);
+    Hmx::Color yellow(0.5f, 0.5f, 0.0f, 1.0f);
+
+    float rndWidth = (float)TheRnd.Width();
+    float labelX = rndWidth * 0.1f;
+    Vector2 labelPos(labelX, y);
+    TheRnd.DrawString(name, labelPos, white, true);
+
+    float barLeft = rndWidth * 0.2f;
+    float barWidth = rndWidth * 0.7f;
+    Hmx::Rect bgRect(barLeft, y, barWidth, 12.0f);
+    TheRnd.DrawRect(bgRect, black, 0, 0, 0);
+
+    double levelNorm = (double)(float)((level + 40.0f) * 0.025f);
+    double clampedLevel = 0.0;
+    if (-levelNorm < 0.0)
+        clampedLevel = levelNorm;
+    double clampedLevel2 = 1.0;
+    if ((float)(clampedLevel - 1.0) < 0.0)
+        clampedLevel2 = clampedLevel;
+
+    Hmx::Rect levelRect(barLeft, y, (float)(clampedLevel2 * barWidth), 12.0f);
+    TheRnd.DrawRect(levelRect, grey, 0, 0, 0);
+
+    double peakNorm = (double)(float)((peakHold + 40.0f) * 0.025f);
+    double clampedPeak = 0.0;
+    if (-peakNorm < 0.0)
+        clampedPeak = peakNorm;
+    double clampedPeak2 = 1.0;
+    if ((float)(clampedPeak - 1.0) < 0.0)
+        clampedPeak2 = clampedPeak;
+
+    Hmx::Color *peakColor = &white;
+    if (clampedPeak2 != 1.0)
+        peakColor = &yellow;
+
+    Hmx::Rect peakRect((float)(clampedPeak2 * barWidth + barLeft), y, 8.0f, 12.0f);
+    TheRnd.DrawRect(peakRect, *peakColor, 0, 0, 0);
+
+    Vector2 dbLabelPos((float)(barWidth + barLeft), y);
+    TheRnd.DrawString(MakeString("%i", (int)peakHold), dbLabelPos, white, true);
+
+    y += 16.0f;
+}
 
 void Synth::DrawMeterScale(float &y) {
     int db = -40;

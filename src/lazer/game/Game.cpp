@@ -180,6 +180,10 @@ void Game::ClearState() {
 }
 
 void Game::PostWaitRestart() {
+#ifdef HX_NATIVE
+    fprintf(stderr, "DC3 Game::PostWaitRestart — hasIntro=%d songStream=%p\n",
+        mHasIntro, (void*)(mMaster->GetAudio()->GetSongStream()));
+#endif
     SetMusicSpeed(1.0f);
     if (!mHasIntro)
         PostWaitStart();
@@ -301,12 +305,19 @@ void Game::SetTimePaused(bool b) {
 }
 
 void Game::PostWaitStart() {
+#ifdef HX_NATIVE
+    fprintf(stderr, "DC3 Game::PostWaitStart — audioFail=%d songStream=%p\n",
+        mMaster->GetAudio()->Fail(), (void*)(mMaster->GetAudio()->GetSongStream()));
+#endif
     if (!mMaster->GetAudio()->Fail()) {
         static Symbol gameplay_mode("gameplay_mode");
         static Symbol just_intro("just_intro");
         if (TheHamProvider->Property(gameplay_mode, true)->Sym() == just_intro) {
             mMaster->GetAudio()->SetMuteMaster(true);
         }
+#ifdef HX_NATIVE
+        fprintf(stderr, "DC3 Game::PostWaitStart — calling Play()\n");
+#endif
         mMaster->GetAudio()->Play();
         mPaused = false;
         MetaPerformer::Current()->StartGameplayTimer();

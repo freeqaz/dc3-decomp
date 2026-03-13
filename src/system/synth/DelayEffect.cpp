@@ -45,6 +45,47 @@ void DelayEffect::SetParameter(int param, float value) {
     }
     mDelaySamples = delaySamples;
 }
-
-void DelayEffect::Process(float *, int, int) {}
 #endif
+
+static const int kMaxDelaySamps = 96000;
+
+void DelayEffect::Process(float *buf, int numSamples, int numChans) {
+    MILO_ASSERT(numChans <= 2, 0x27);
+    int writePos = mWritePos;
+    if (numChans == 1) {
+        for (int i = 0; i < numSamples; i++) {
+            int readPos = writePos - mDelaySamples;
+            if (readPos < 0) readPos += kMaxDelaySamps;
+            MILO_ASSERT((0) <= (readPos) && (readPos) < (kMaxDelaySamps), 0x32);
+            MILO_ASSERT((0) <= (writePos) && (writePos) < (kMaxDelaySamps), 0x33);
+            float input = buf[i];
+            float delayed = mBuffer[readPos] * mDecay;
+            buf[i] = delayed;
+            int nextWritePos = writePos + 1;
+            if (nextWritePos >= kMaxDelaySamps) nextWritePos = 0;
+            mBuffer[writePos] = delayed + input;
+            writePos = nextWritePos;
+        }
+    } else {
+        float wetAmount = mWetAmount;
+        float dryAmount = 1.0f - wetAmount;
+        for (int i = 0; i < numSamples; i++) {
+            int readPos = writePos - mDelaySamples;
+            if (readPos < 0) readPos += kMaxDelaySamps;
+            float *frame = &buf[i * numChans];
+            float inLeft = frame[0];
+            float inRight = frame[1];
+            int nextWritePos = writePos + 1;
+            if (nextWritePos >= kMaxDelaySamps) nextWritePos = 0;
+            float outLeft = (mBuffer[readPos] * dryAmount + mBuffer[readPos + kMaxDelaySamps] * wetAmount) * mDecay;
+            frame[0] = outLeft;
+            mBuffer[writePos] = (inRight + inLeft) * 0.5f * wetAmount + inLeft * dryAmount + outLeft;
+            float outRight = mBuffer[readPos + kMaxDelaySamps] * mDecay * dryAmount +
+                             mBuffer[readPos] * mDecay * wetAmount;
+            frame[1] = outRight;
+            mBuffer[writePos + kMaxDelaySamps] = inRight * dryAmount + outRight;
+            writePos = nextWritePos;
+        }
+    }
+    mWritePos = writePos;
+}

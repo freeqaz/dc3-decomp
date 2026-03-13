@@ -9,6 +9,8 @@ class RndMesh;
 class RndLight;
 class RndEnviron;
 class RndCam;
+class RndTex;
+class TexMovie;
 class Character;
 struct OrbitCamera;
 struct ViewerConfig;
@@ -28,6 +30,13 @@ struct ViewerScene {
     // Synthetic resources created at runtime
     std::vector<RndLight*> syntheticLights;
 
+    // TexMovie objects found in the scene (non-owning)
+    std::vector<TexMovie*> movies;
+
+    // Synthetic TexMovie created for --movie flag (owned)
+    TexMovie* syntheticMovie = nullptr;
+    RndTex*   syntheticMovieTex = nullptr;
+
     // Set when FileMerger is used for outfit/viseme loading
     bool fileMergerActive = false;
 
@@ -44,6 +53,11 @@ struct ViewerScene {
     void ResolveMeshVisibility(const ViewerConfig& cfg);
     void SetupSyntheticLights(const ViewerConfig& cfg);
     void AutoFrameCamera(OrbitCamera& cam, RndCam* rndCam, const ViewerConfig& cfg) const;
+
+    // --- Movie support ---
+    void EnterMovies(const ViewerConfig& cfg);
+    void PollMovies(float seconds = -1.0f); // seconds >= 0 forces virtual time
+    void DrawMovieOverlay();
 
     // --- Rendering ---
     void DrawAllMeshes(const ViewerConfig& cfg) const;

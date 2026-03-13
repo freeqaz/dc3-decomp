@@ -185,15 +185,16 @@ void Sound::SynthPoll() {
     }
     for (auto it = mSamples.begin(); it != mSamples.end();) {
         PlayableSample *cur = *it;
-        it++;
         if (mIsSynthSample || mMoggClip) {
             if (cur->DonePlaying()) {
-                mSamples.erase(it);
+                it = mSamples.erase(it);
+                continue;
             }
         } else {
             mDuckers.Unduck();
             CancelPolling();
         }
+        it++;
     }
     if (mFaders.Dirty()) {
         FOREACH (it, mSamples) {

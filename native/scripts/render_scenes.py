@@ -148,6 +148,11 @@ def build_command(shot: dict, scene: dict, settings: dict, viewer: str) -> list[
     for pat in shot.get("hide", scene.get("hide", [])):
         cmd += ["--hide", pat]
 
+    # Movie file (TexMovie test)
+    movie = shot.get("movie", scene.get("movie"))
+    if movie:
+        cmd += ["--movie", str(movie)]
+
     # Output: screenshot or video
     shot_type = shot.get("type", "screenshot")
     shot_name = shot["_name"]

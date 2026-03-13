@@ -1,4 +1,5 @@
 #include "synth/MetaMusic.h"
+#include <stdio.h>
 #include "beatmatch/HxAudio.h"
 #include "beatmatch/HxMaster.h"
 #include "math/Utl.h"

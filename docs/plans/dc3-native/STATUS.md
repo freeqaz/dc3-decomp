@@ -104,8 +104,8 @@ iterates drawables, while the engine uses `WorldDir::DrawShowing()` → `RndGrou
 | **LightPreset forcing** | **DONE** | Auto-force first valid preset on venue change. Baked lights work for venues without presets |
 | **HamDirector venue selection** | **DONE** | GetVenueWorld() for gameplay venue, fallback to gNativeVenueDir for menu |
 | Song animation playback | **TODO** | song.anim PropAnim for camera/light/character sync |
-| LightPreset animation | **TODO** | song.anim → force_preset → preset cycling during gameplay |
-| Move card UI rendering | **TODO** | Pink rectangles — TexMovie render-to-texture needed |
+| LightPreset animation | **TODO** | song.anim → force_preset → preset cycling during gameplay. Load/forcing already works. |
+| Move card UI rendering | **TODO** | Pink rectangles — asset/wiring issue, not missing code. TexMovie + render-to-texture pipeline fully implemented. |
 | Score display | **TODO** | Not yet wired |
 | Song audio playback during gameplay | **TODO** | FFmpeg backend ready, not wired to game flow |
 
@@ -118,8 +118,8 @@ iterates drawables, while the engine uses `WorldDir::DrawShowing()` → `RndGrou
 | Task | Priority | Notes |
 |------|----------|-------|
 | Character animation in gameplay | HIGH | CharClip playback synced to beat. SongAnimation() returns -1 (clips present but not driven) |
-| TexMovie render-to-texture | HIGH | FFmpeg RGBA → WebGPU texture upload. See [Session 60 Plan](../../sessions/2026-03-12-session60-plan-animation-texmovie.md) |
-| LightPreset loading + animation | HIGH | Decomp source exists, just stubbed. 9 functions to un-stub |
+| TexMovie render-to-texture | DONE | Full pipeline: FFmpeg decode → UploadRGBAToRndTex → WebGPU. MakeDrawTarget/FinishDrawTarget implemented. Pink rectangles are asset/wiring issue. |
+| LightPreset loading + animation | PARTIAL | Load is DONE (99.2% match, stubs removed session 61, ForcePreset active). Animation cycling via song.anim still TODO. |
 | Song.anim graceful DTA failure | HIGH | Guard DataNode::GetObj for missing objects |
 | Lip sync (CharFaceServo, CharLipSyncDriver) | MEDIUM | See [LIP_SYNC.md](../custom-graphics-engine/LIP_SYNC.md) |
 | Procedural blinking (CharFaceServo) | LOW | Cosmetic |

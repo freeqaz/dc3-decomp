@@ -231,9 +231,12 @@ int RunScreenshot(ScreenshotMode& m, ViewerScene& scene,
 
     // Render a few frames to let GPU resources settle
     for (int frame = 0; frame < m.warmupFrames; frame++) {
+        float warmupSec = (float)frame / 30.0f; // virtual time at 30fps
+        scene.PollMovies(warmupSec);
         gOrbitCam.Update(cam);
         TheRnd.BeginDrawing();
         scene.DrawAllMeshes(cfg);
+        scene.DrawMovieOverlay();
         TheRnd.EndDrawing();
     }
 
@@ -363,9 +366,11 @@ int RunVideo(VideoMode& m, ViewerScene& scene,
 
         if (autoOrbit) gOrbitCam.azimuth += 0.005f;
 
+        scene.PollMovies(seconds);
         gOrbitCam.Update(cam);
         TheRnd.BeginDrawing();
         scene.DrawAllMeshes(cfg);
+        scene.DrawMovieOverlay();
         TheRnd.EndDrawing();
 
         if (gWgpuRnd->Gpu().ReadbackHeadlessFrame(pixels, pixelSize)) {
@@ -468,9 +473,11 @@ int RunInteractive(InteractiveMode& /*m*/, ViewerScene& scene,
             gOrbitCam.azimuth += 0.002f * (float)dt * 60.0f;
         }
 
+        scene.PollMovies();
         gOrbitCam.Update(cam);
         TheRnd.BeginDrawing();
         scene.DrawAllMeshes(cfg);
+        scene.DrawMovieOverlay();
         TheRnd.EndDrawing();
 
         frameCount++;

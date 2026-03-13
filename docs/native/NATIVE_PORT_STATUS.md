@@ -406,13 +406,13 @@ Non-Kinect TODOs:
 | **Post-processing** | Bloom, color correction, etc. | Low |
 
 ### Next Steps
-1. **Implement LightPreset::Load** — Currently stubbed, 0 presets deserialized from venue .milo. Would enable venue light animation (45 Environs + 58 Lights available in DCI venue).
+1. ~~**Implement LightPreset::Load**~~ — **DONE** (stubs removed session 61, real impl at 99.2% match, ForcePreset active on venue load). Venue lighting animation via song.anim still TODO.
 2. **Revalidate crowd/audio/song merges after the ObjRef root-cause fix** — the known producer bug in `ObjDirPtr(C*)` is fixed; the next step is to confirm crowd rendering and scene animation now advance normally, then remove the remaining merge-time safety hacks.
-3. **HUD textures** — Move card geometry renders as pink rectangles. Requires TexMovie render-to-texture pipeline.
-4. **Scene animation** — Venue and character are static. Song.anim DTA scripts crash on missing game objects. LightPreset-based animation needs Load implementation. Character dance clips present but SongAnimation() returns -1.
+3. **HUD textures** — Move card geometry renders as pink rectangles. TexMovie + RndTexRenderer + WebGPU render-to-texture pipeline is fully implemented; issue is asset loading/wiring, not missing render code.
+4. **Scene animation** — LightPreset loading works; animation cycling via song.anim still TODO. Song.anim DTA scripts crash on missing game objects. Character dance animation now working (Session 63).
 5. **Post-processing** — Bloom, color correction, venue lighting effects are all stubbed.
-6. **Skinned mesh rendering** — Bone transforms in vertex shader for character animation.
-7. Content system integration for list population (currently 0 items from providers)
+6. ~~**Skinned mesh rendering**~~ — **DONE** (Session 63: GPU skinning with 4-bone blending, 40-bone palettes).
+7. ~~Content system integration~~ — **DONE** (Session 62: 62 songs load, 49 items in song_select).
 
 ### Build Commands
 ```bash

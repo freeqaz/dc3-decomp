@@ -167,6 +167,10 @@ void VorbisReader::setupCypher(int moggVersion) {
     DataArray *magicGenB = DataReadString(script);
     mMagicHashB = magicGenB->Evaluate(0).Int();
     magicGenB->Release();
+#ifdef HX_NATIVE
+    fprintf(stderr, "DC3 setupCypher: version=%d keyIndex=%d magicA=%ld magicB=%ld magicHashA=0x%lx magicHashB=0x%lx\n",
+        moggVersion, mKeyIndex, mMagicA, mMagicB, mMagicHashA, mMagicHashB);
+#endif
 }
 
 bool VorbisReader::TryReadHeader() {
@@ -348,6 +352,10 @@ bool VorbisReader::CheckHmxHeader() {
             BufStream bs(mHdrBuf, 60000, true);
             bs >> mVersion;
             bs >> mHdrSize;
+#ifdef HX_NATIVE
+            fprintf(stderr, "DC3 VorbisReader::CheckHmxHeader — version=0x%x (%d) hdrSize=%d bytes=%d\n",
+                mVersion, mVersion, mHdrSize, bytes);
+#endif
             MILO_ASSERT(mVersion >= 10, 0x239);
             MILO_ASSERT(mVersion <= 16, 0x23A);
             MILO_ASSERT(mHdrSize <= kMaxHeader, 0x23B);
@@ -430,6 +438,8 @@ static void Decrypt(VorbisReader *reader, unsigned char *data, int bytes,
     }
 }
 
+static bool sDoFileReadDbg = true;
+
 bool VorbisReader::DoFileRead() {
     bool ret = false;
     if (mFail)
@@ -449,7 +459,19 @@ bool VorbisReader::DoFileRead() {
         if (mFail)
             return false;
         MILO_ASSERT(bytes > 0, 0x1F9);
+        if (sDoFileReadDbg) {
+            unsigned char *raw = (unsigned char *)mReadBuffer;
+            fprintf(stderr, "DC3 DoFileRead: bytes=%d pos=%d eof=%d raw[0..3]=%02x %02x %02x %02x magicA=%lx magicB=%lx\n",
+                bytes, mFile->Tell(), mFile->Eof(), raw[0], raw[1], raw[2], raw[3],
+                mMagicHashA, mMagicHashB);
+        }
         Decrypt(this, (unsigned char *)mReadBuffer, bytes, mCtrState, mMagicHashA, mMagicHashB);
+        if (sDoFileReadDbg) {
+            unsigned char *dec = (unsigned char *)mReadBuffer;
+            fprintf(stderr, "DC3 DoFileRead: after decrypt[0..3]=%02x %02x %02x %02x ('%c%c%c%c')\n",
+                dec[0], dec[1], dec[2], dec[3], dec[0], dec[1], dec[2], dec[3]);
+            sDoFileReadDbg = false;
+        }
         ogg_sync_wrote(mOggSync, bytes);
         mReadBuffer = 0;
         ret = true;

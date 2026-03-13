@@ -67,7 +67,7 @@ protected:
     virtual void Poll();
     virtual void StartImpl();
 
-    void ComputeNextTime(unsigned int idx);
+    void ComputeNextTime(int idx);
 
 public:
     POOL_OVERLOAD(RandomIntervalGroupSeqInst, 0x90);

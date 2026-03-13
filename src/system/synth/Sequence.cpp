@@ -689,7 +689,7 @@ RandomIntervalGroupSeqInst::RandomIntervalGroupSeqInst(RandomIntervalGroupSeq *s
     }
 }
 
-void RandomIntervalGroupSeqInst::ComputeNextTime(unsigned int idx) {
+void RandomIntervalGroupSeqInst::ComputeNextTime(int idx) {
     if (idx < mNextPlayTimes.size()) {
         float interval = mAvgIntervalSecs;
         if (mIntervalSpread != 0.0f) {

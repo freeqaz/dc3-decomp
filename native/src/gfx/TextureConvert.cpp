@@ -628,7 +628,8 @@ wgpu::Texture CreateRenderTarget(GpuDevice& gpu, int w, int h, wgpu::TextureForm
     wgpu::TextureDescriptor desc{};
     desc.size = {(uint32_t)w, (uint32_t)h, 1};
     desc.format = fmt;
-    desc.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding;
+    desc.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding
+               | wgpu::TextureUsage::CopyDst;
     return gpu.Device().CreateTexture(&desc);
 }
 

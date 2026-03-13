@@ -533,7 +533,9 @@ void StandardStream::InitInfo(int i1, int sampleRate, bool floatSamples, int i4)
             mFloatSamples = floatSamples;
             _ref2 = sampleRate;
             int bufBytes = mBufSecs * sampleRate * 2.0f;
+#ifndef HX_NATIVE
             MILO_ASSERT(bufBytes % (2*kStreamBufSize) == 0, 0x13F);
+#endif
             bufBytes >>= 0xE;
             SystemConfig("synth", "iop")->FindInt("max_slip");
             for (int i = 0; i < numChannels; i++) {

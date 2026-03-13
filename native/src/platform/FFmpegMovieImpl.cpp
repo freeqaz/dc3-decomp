@@ -165,10 +165,12 @@ bool FFmpegMovieImpl::DecodeNextVideoFrame() {
 }
 
 bool FFmpegMovieImpl::Poll() {
-    if (!mOpen || mPaused) return false;
+    // Convention: return true = still playing, false = done/ended
+    // (TexMovie::Poll checks `if (!mMovie.Poll()) mMovie.End()`)
+    if (!mOpen || mPaused) return true;
 
     // Check if it's time for the next frame
-    float elapsed = mPlayTimer.SplitMs();
+    float elapsed = mUseVirtualTime ? mVirtualTimeMs : mPlayTimer.SplitMs();
     float msPerFrame = MsPerFrame();
     int targetFrame = (int)(elapsed / msPerFrame);
 
@@ -182,12 +184,11 @@ bool FFmpegMovieImpl::Poll() {
                 mPlayTimer.Restart();
                 return true;
             }
-            // Video ended
-            return true; // return true = "done"
+            return false; // Video ended
         }
     }
 
-    return false;
+    return true; // Still playing
 }
 
 void FFmpegMovieImpl::Draw() {

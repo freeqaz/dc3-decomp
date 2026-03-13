@@ -26,6 +26,7 @@
 #include "world/World.h"
 #include "hamobj/Ham.h"
 #include "flow/Flow.h"
+#include "movie/Movie.h"
 #include "platform/Rnd_Wgpu.h"
 #include "gfx/GpuDevice.h"
 #include "export/TextureExporter.h"
@@ -205,6 +206,7 @@ int main(int argc, char** argv) {
     CharInit();
     WorldInit();
     HamInit();
+    Movie::Init();
     printf("Milo Viewer: subsystem init complete\n");
 
     GLFWwindow* window = gWgpuRnd->Gpu().Window();
@@ -432,6 +434,7 @@ int main(int argc, char** argv) {
     }
 
     scene.ResolveMeshVisibility(cfg);
+    scene.EnterMovies(cfg);
     scene.PrintSummary(cfg.verbose);
 
     // ---- Scan for animation data ----

@@ -58,3 +58,25 @@ complex operator*(complex cplx1, complex cplx2) {
     result.y = cplx2.x * cplx1.y + cplx2.y * cplx1.x;
     return result;
 }
+
+// Evaluate polynomial using Horner's method.
+// coeff[0..degree] are the coefficients, z is the evaluation point.
+// Returns: coeff[0] + coeff[1]*z + ... + coeff[degree]*z^degree
+complex eval(complex * const coeff, int degree, complex z) {
+    complex result;
+    result.x = 0.0;
+    result.y = 0.0;
+    if (degree >= 0) {
+        int count = degree + 1;
+        complex *c = coeff + degree;
+        do {
+            double oldY = result.y;
+            double cx = c->x;
+            count--;
+            c--;
+            result.y = z.x * oldY + z.y * result.x + c[1].y;
+            result.x = (z.x * result.x - z.y * oldY) + cx;
+        } while (count != 0);
+    }
+    return result;
+}

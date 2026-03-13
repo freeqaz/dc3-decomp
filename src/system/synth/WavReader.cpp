@@ -61,4 +61,54 @@ int WavReader::ConsumeData(void **data, int samples, int startSamp) {
     return mOutStream->ConsumeData(data, samples, startSamp);
 }
 
-void WavReader::Poll(float) {}
+void WavReader::Poll(float dt) {
+    if (!mInitted) {
+        mInitted = true;
+        Init();
+    }
+    if (mBufNumSamples != 0) {
+        void *bufs[2] = { mInputBuffers[0] + mBufOffset, mInputBuffers[1] + mBufOffset };
+        int consumed = ConsumeData((void **)bufs, mBufNumSamples, mTotalSamplesConsumed);
+        mBufNumSamples -= consumed;
+        mTotalSamplesConsumed += consumed;
+        mBufOffset += consumed;
+        if (mBufNumSamples != 0) {
+            return;
+        }
+    }
+    if (mEnableReads) {
+        while (mSamplesLeft != 0) {
+            int samplesPerRead = mSamplesLeft / mNumChannels;
+            if (samplesPerRead > 0x1000) {
+                samplesPerRead = 0x1000;
+            }
+            mBufNumSamples = samplesPerRead;
+            mInWaveFileData->Read(mRawInputBuffer, mNumChannels * samplesPerRead * 2);
+            mBufOffset = 0;
+            mSamplesLeft -= samplesPerRead;
+            if (mNumChannels == 1) {
+                for (int i = 0; i < mBufNumSamples; i++) {
+                    unsigned short s = mRawInputBuffer[i];
+                    mInputBuffers[0][i] = (s << 8) | (s >> 8);
+                }
+            } else {
+                for (int i = 0; i < mBufNumSamples; i++) {
+                    unsigned short s0 = mRawInputBuffer[i * 2];
+                    mInputBuffers[0][i] = (s0 << 8) | (s0 >> 8);
+                    unsigned short s1 = mRawInputBuffer[i * 2 + 1];
+                    mInputBuffers[1][i] = (s1 << 8) | (s1 >> 8);
+                }
+            }
+            if (mBufNumSamples != 0) {
+                void *bufs[2] = { mInputBuffers[0], mInputBuffers[1] };
+                int consumed = ConsumeData((void **)bufs, mBufNumSamples, mTotalSamplesConsumed);
+                mBufNumSamples -= consumed;
+                mTotalSamplesConsumed += consumed;
+                mBufOffset += consumed;
+                if (mBufNumSamples != 0) {
+                    return;
+                }
+            }
+        }
+    }
+}

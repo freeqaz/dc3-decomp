@@ -1,5 +1,6 @@
 #include "synth/SampleInst.h"
 #include "math/Decibels.h"
+#include "obj/Msg.h"
 #include "obj/Object.h"
 #include "synth/SynthSample.h"
 
@@ -93,4 +94,34 @@ void SampleInst::SetBankSpeed(float bspd) {
     SetSpeedImpl(mSpeed * mBankSpeed);
 }
 
-void SampleInst::SynthPoll() {}
+void SampleInst::SynthPoll() {
+    if (IsPlaying() && mEventReceiver) {
+        int sampleRate = mSample->GetSampleRate();
+        double progress = (double)GetProgress();
+        double lengthMs = (double)mSample->LengthMs();
+        double currentSample = lengthMs * (double)sampleRate * progress * 0.001;
+
+        static Message msg("on_marker_event", 0L);
+        std::vector<SampleMarker> markers = mSample->AccessMarkers();
+        for (auto it = markers.begin(); it != markers.end(); ++it) {
+            double markerPos = (double)it->Sample();
+            if (unk98 < markerPos && markerPos <= currentSample) {
+                msg->Node(2) = DataNode(Symbol(it->Name().c_str()));
+                mEventReceiver->Handle(msg, false);
+            }
+        }
+
+        if (currentSample < unk98) {
+            msg->Node(2) = DataNode(Symbol("looped"));
+            mEventReceiver->Handle(msg, false);
+        }
+
+        unk98 = currentSample;
+    } else {
+        if (mEventReceiver && unka0) {
+            static Message msg("on_marker_event", Symbol("ended"));
+            mEventReceiver->Handle(msg, false);
+        }
+    }
+    unka0 = IsPlaying();
+}

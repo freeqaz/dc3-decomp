@@ -10,9 +10,15 @@
 #include "rndobj/Cam.h"
 #include "rndobj/Mesh.h"
 #include "rndobj/Mat.h"
+#include "rndobj/Tex.h"
 #include "rndobj/Trans.h"
 #include "rndobj/Rnd.h"
 #include "rndobj/Draw.h"
+#include "movie/TexMovie.h"
+#include "movie/Movie.h"
+#ifdef HX_FFMPEG
+#include "platform/FFmpegMovieImpl.h"
+#endif
 #include "char/Character.h"
 #include "char/FileMerger.h"
 #include "math/Vec.h"
@@ -575,6 +581,119 @@ bool ViewerScene::HasUnresolvedTexture(const RndMesh* mesh) {
         }
     }
     return false;
+}
+
+// ============================================================================
+// Movie support
+// ============================================================================
+
+void ViewerScene::EnterMovies(const ViewerConfig& cfg) {
+    // Scan scene for existing TexMovie objects
+    if (baseScene) {
+        ObjDirItr<TexMovie> it(baseScene, true);
+        while (it) {
+            movies.push_back(it);
+            printf("Milo Viewer: found TexMovie '%s' (showing=%d, empty=%d)\n",
+                   it->Name(), it->Showing(), it->IsEmpty());
+            ++it;
+        }
+    }
+
+    // Override movie file paths if --movie was specified
+    if (cfg.movieFilePath) {
+        FilePath movieFp(cfg.movieFilePath);
+
+        if (!movies.empty()) {
+            // Override existing TexMovies' file paths
+            for (TexMovie* tm : movies) {
+                tm->SetFile(movieFp);
+                tm->SetShowing(true);
+                printf("Milo Viewer: overriding TexMovie '%s' with '%s'\n",
+                       tm->Name(), cfg.movieFilePath);
+            }
+        } else {
+            // No TexMovie in scene — create a synthetic one for testing
+            printf("Milo Viewer: creating synthetic TexMovie for '%s'\n", cfg.movieFilePath);
+
+            ObjectDir* owner = baseScene ? baseScene : ObjectDir::Main();
+
+            // Create render target texture (512x512 RGBA)
+            syntheticMovieTex = Hmx::Object::New<RndTex>();
+            syntheticMovieTex->SetName("movie_test_tex", owner);
+            syntheticMovieTex->SetBitmap(512, 512, 32, RndTex::kRendered, false, "");
+
+            // Create TexMovie
+            syntheticMovie = Hmx::Object::New<TexMovie>();
+            syntheticMovie->SetName("movie_test", owner);
+
+            // Wire output texture via SetProperty (string-based property set)
+            syntheticMovie->SetProperty(Symbol("output_texture"), DataNode(syntheticMovieTex));
+            syntheticMovie->SetFile(movieFp);
+            syntheticMovie->SetShowing(true);
+            movies.push_back(syntheticMovie);
+
+            printf("Milo Viewer: synthetic TexMovie created (tex=%dx%d)\n",
+                   syntheticMovieTex->Width(), syntheticMovieTex->Height());
+        }
+    }
+
+    // Enter all movies
+    for (TexMovie* tm : movies) {
+        tm->Enter();
+        printf("Milo Viewer: TexMovie '%s' entered (open=%d)\n",
+               tm->Name(), tm->IsOpen());
+    }
+
+    if (!movies.empty()) {
+        printf("Milo Viewer: %d TexMovie(s) active\n", (int)movies.size());
+    }
+}
+
+void ViewerScene::PollMovies(float seconds) {
+    for (TexMovie* tm : movies) {
+#ifdef HX_FFMPEG
+        if (seconds >= 0.0f) {
+            // Virtual time mode: override wall-clock for headless/capture
+            Movie& mov = tm->GetMovie();
+            FFmpegMovieImpl* impl = dynamic_cast<FFmpegMovieImpl*>(mov.GetImpl());
+            if (impl)
+                impl->SetVirtualTime(seconds * 1000.0f);
+        }
+#endif
+        tm->Poll();
+    }
+}
+
+void ViewerScene::DrawMovieOverlay() {
+    // Draw synthetic movie as a fullscreen quad if present
+    if (!syntheticMovie || !syntheticMovieTex) return;
+
+    // Trigger frame decode + texture upload
+    syntheticMovie->DrawToTexture();
+
+    // Only draw overlay if texture has GPU data
+    if (!GetGpuTexView(syntheticMovieTex))
+        return;
+
+    // Create a material with the movie texture (lazy, reuse after first call)
+    static RndMat* sMovieMat = nullptr;
+    if (!sMovieMat) {
+        sMovieMat = Hmx::Object::New<RndMat>();
+        sMovieMat->SetName("movie_overlay_mat", baseScene ? baseScene : ObjectDir::Main());
+        sMovieMat->SetDiffuseTex(syntheticMovieTex);
+        sMovieMat->SetZMode(kZModeDisable);
+        sMovieMat->SetUseEnv(false);
+        sMovieMat->SetPreLit(true);
+        sMovieMat->SetBlend(BaseMaterial::kBlendSrcAlpha);
+        sMovieMat->SetAlphaCut(false);
+    }
+
+    // Draw fullscreen textured quad (DrawRect uses Rnd pixel coordinates)
+    float rw = (float)TheRnd.Width();
+    float rh = (float)TheRnd.Height();
+    Hmx::Rect rect(0.0f, 0.0f, rw, rh);
+    Hmx::Color white(1.0f, 1.0f, 1.0f, 1.0f);
+    TheRnd.DrawRect(rect, white, sMovieMat, nullptr, nullptr);
 }
 
 void ViewerScene::DrawAllMeshes(const ViewerConfig& cfg) const {

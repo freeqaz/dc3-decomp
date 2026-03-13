@@ -129,7 +129,7 @@ Goal: Character with proper materials, crowd, animated venue, gameplay HUD textu
 
 ### 4.1 Character Rendering
 - [x] Character material/texture application — **DONE** (zero-color LightPreset detection enables fallback lighting)
-- [ ] Skinned mesh rendering (bone transforms in vertex shader)
+- [x] Skinned mesh rendering (bone transforms in vertex shader) — **DONE** (Session 63: GPU skinning, 4-bone blending, 40-bone palettes)
 - [x] Character dance animation pipeline — **DONE** (Session 63: ClipPlayer loads 60 clip keys, PushClip/PushExpertClip push layers, HamDriver::Poll Weight() fix evaluates bones. Game screen venue rendering still needed to visually verify.)
 
 ### 4.2 Merge Pipeline Stability
@@ -139,13 +139,13 @@ Goal: Character with proper materials, crowd, animated venue, gameplay HUD textu
 - [ ] Revalidate audio merge now that the ring producer bug is fixed
 
 ### 4.3 Gameplay HUD
-- [ ] Move card textures (currently pink rectangles — TexMovie render-to-texture)
+- [ ] Move card textures (pink rectangles — TexMovie + RndTexRenderer pipeline is COMPLETE; issue is asset loading/wiring, not missing render code)
 - [ ] Score/progress display
 
 ### 4.4 Scene Animation
-- [ ] **Implement LightPreset::Load** — currently stubbed, 0 presets deserialized from venue .milo
+- [x] **LightPreset::Load** — **DONE** (stubs removed session 61, real impl links at 99.2% match, ForcePreset active on venue load)
 - [ ] Revalidate song/venue animation after the ObjRef ring fix, then narrow remaining blockers
-- [ ] Venue lighting animation (still blocked by `LightPreset::Load`)
+- [ ] Venue lighting animation (LightPreset loading works; animation cycling via song.anim still TODO)
 - [ ] Song.anim driving (remaining DTA crashes on missing game objects still need investigation)
 - [x] Character dance animation — **DONE** (Session 63: HamDriver::Poll decomp fix, full ClipPlayer pipeline, GamePanel native init)
 

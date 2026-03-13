@@ -42,7 +42,8 @@ void ViewerConfig::PrintHelp(FILE* f) {
     fprintf(f, "  --export-gltf <path>       Export scene as glTF 2.0 and exit\n");
     fprintf(f, "  --light <type> <X> <Y> <Z> <R> <G> <B> [intensity]\n");
     fprintf(f, "                             Add synthetic light (type: dir, point). Repeatable.\n");
-    fprintf(f, "  --ambient <R> <G> <B>      Set ambient light color (0.0-1.0)\n\n");
+    fprintf(f, "  --ambient <R> <G> <B>      Set ambient light color (0.0-1.0)\n");
+    fprintf(f, "  --movie <file>             Play a video file via TexMovie pipeline (tests FFmpeg→GPU)\n\n");
     fprintf(f, "Controls (windowed mode):\n");
     fprintf(f, "  Left drag     orbit\n");
     fprintf(f, "  Scroll        zoom\n");
@@ -180,6 +181,8 @@ ViewerConfig ViewerConfig::Parse(int argc, char** argv) {
             cfg.ambientR = (float)atof(argv[++i]);
             cfg.ambientG = (float)atof(argv[++i]);
             cfg.ambientB = (float)atof(argv[++i]);
+        } else if (strcmp(argv[i], "--movie") == 0 && i + 1 < argc) {
+            cfg.movieFilePath = argv[++i];
         } else if (strcmp(argv[i], "--dump-bones") == 0) {
             cfg.dumpBones = true;
         } else if (strcmp(argv[i], "--direct-pose") == 0) {

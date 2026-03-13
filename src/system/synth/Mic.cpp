@@ -53,65 +53,74 @@ int RingBuffer::Peek(void *data, int len) {
 
 int RingBuffer::Write(void *data, int len) {
     int writeLen = len;
+    char *src = (char *)data;
 
     if (writeLen > mSize) {
+        src = src + (len - mSize);
         writeLen = mSize;
     }
 
-    if (writeLen > mTotal) {
-        writeLen = mTotal;
+    int available = mSize - mWriteIx;
+    int returnVal = (mTotal - mSize) + writeLen;
+    int *pChunk;
+    if (writeLen >= available) {
+        pChunk = &available;
+    } else {
+        pChunk = &writeLen;
+    }
+    int chunk1 = *pChunk;
+
+    memcpy((char *)mBuffer + mWriteIx, src, chunk1);
+
+    if (chunk1 != writeLen) {
+        memcpy(mBuffer, src + chunk1, writeLen - chunk1);
     }
 
-    if (writeLen <= 0) {
-        return 0;
+    int newWriteIx = (mWriteIx + writeLen) % mSize;
+    mWriteIx = newWriteIx;
+
+    int newTotal;
+    if (mSize <= mTotal + writeLen) {
+        newTotal = mSize;
+    } else {
+        newTotal = mTotal + writeLen;
     }
-
-    int writePos = mWriteIx;
-    int available = mSize - writePos;
-    int chunk1 = writeLen;
-
-    if (chunk1 >= available) {
-        chunk1 = available;
-    }
-
-    memcpy((char *)mBuffer + writePos, data, chunk1);
-
-    if (chunk1 < writeLen) {
-        memcpy(mBuffer, (char *)data + chunk1, writeLen - chunk1);
-    }
-
-    int newTotal = mTotal + writeLen;
-    mWriteIx = (writePos + writeLen) % mSize;
     mTotal = newTotal;
 
-    return writeLen;
+    if (newTotal == mSize) {
+        mReadIx = newWriteIx;
+    }
+
+    return returnVal;
 }
 
 int RingBuffer::Read(void *data, int len) {
-    int readLen = len;
-    if (readLen >= mTotal) {
-        readLen = mTotal;
+    int readLen = mTotal;
+    if (mTotal >= len) {
+        readLen = len;
     }
+    int stk[2];
+    stk[0] = readLen;
 
-    if (readLen <= 0) {
+    if (readLen == 0) {
         return 0;
     }
 
-    int readPos = mReadIx;
-    int available = mSize - readPos;
-    int chunk1 = readLen;
-    if (chunk1 >= available) {
-        chunk1 = available;
+    stk[1] = mSize - mReadIx;
+    int *pChunk = &stk[0];
+    if (readLen >= stk[1]) {
+        pChunk = &stk[1];
     }
+    int chunk1 = *pChunk;
 
-    memcpy(data, (char *)mBuffer + readPos, chunk1);
+    memcpy(data, (char *)mBuffer + mReadIx, chunk1);
 
-    if (chunk1 < readLen) {
+    if (chunk1 != readLen) {
         memcpy((char *)data + chunk1, mBuffer, readLen - chunk1);
     }
 
     mTotal -= readLen;
-    mReadIx = (readPos + readLen) % mSize;
+    mReadIx = (mReadIx + readLen) % mSize;
 
     return readLen;
 }
