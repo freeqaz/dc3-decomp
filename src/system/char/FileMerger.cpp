@@ -194,16 +194,6 @@ void FileMerger::PreLoad(BinStream &bs) {
 void FileMerger::FinishLoading(Loader *ldr) {
     DirLoader *dl = dynamic_cast<DirLoader *>(ldr);
     Merger *merger = NotifyFileLoaded(ldr, dl);
-#ifdef HX_NATIVE
-    if (dl) {
-        printf("DC3 FileMerger::FinishLoading '%s' merger='%s' proxy=%d dlDir='%s' hash=%d file='%s' isLoaded=%d\n",
-               Name(), merger->mName.Str(), merger->mProxy,
-               dl->GetDir() ? dl->GetDir()->Name() : "<null>",
-               dl->GetDir() ? dl->GetDir()->HashTableUsedSize() : -1,
-               merger->mLoaded.c_str(),
-               dl->IsLoaded());
-    }
-#endif
     if (dl && !sDisableAll) {
         if (merger->mProxy) {
             MILO_ASSERT(dl->GetDir(), 0x236);

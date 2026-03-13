@@ -27,6 +27,7 @@
 #include "hamobj/HamCharacter.h"
 #include "world/Dir.h"
 #include "char/Character.h"
+#include "math/Utl.h"
 
 #ifndef __EMSCRIPTEN__
 #include <GLFW/glfw3.h>
@@ -699,16 +700,36 @@ void WgpuRnd::NativeVenueInit() {
         }
     }
 
-    // Log Characters found
-    int nChars = 0;
+    // Re-enter character drivers now that outfits (and their clips) are loaded.
+    // CharDriver::Enter() ran during venue->Enter() but the clip directories
+    // were empty at that point. Re-entering picks up the merged clips.
     for (ObjDirItr<Character> it(venue, true); it != nullptr; ++it) {
-        printf("  Character '%s': showing=%d dir='%s'\n",
-               it->Name(), (int)it->Showing(),
-               it->Dir() ? it->Dir()->Name() : "nil");
-        nChars++;
+        CharDriver* drv = it->Driver();
+        if (!drv) continue;
+        ObjectDir* clipDir = drv->ClipDir();
+        if (!clipDir) continue;
+
+        // Find a good clip to play — prefer dynamic animations over static talk clips
+        CharClip* bestClip = nullptr;
+        for (ObjDirItr<CharClip> clipIt(clipDir, true); clipIt != nullptr; ++clipIt) {
+            const char* clipName = clipIt->Name();
+            if (!bestClip) bestClip = clipIt;
+            // Prefer victory move clips for more visible animation
+            if (strstr(clipName, "win_move_great")) {
+                bestClip = clipIt;
+                break;  // best choice
+            }
+            if (strstr(clipName, "win_move_good")) {
+                bestClip = clipIt;
+            }
+        }
+
+        if (bestClip) {
+            // Play with loop flags (flag 0x44 = loop, like default play starved)
+            drv->Play(DataNode(bestClip), 0x44, -1.0f, kHugeFloat, 0.0f);
+            printf("  Character '%s': playing '%s'\n", it->Name(), bestClip->Name());
+        }
     }
-    printf("DC3 Native: venue entered — %d Characters, TheWorld=%s\n",
-           nChars, TheWorld ? TheWorld->Name() : "nil");
 }
 
 void WgpuRnd::BeginDrawing() {
