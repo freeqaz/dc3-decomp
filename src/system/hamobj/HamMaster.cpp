@@ -18,6 +18,9 @@
 #include "utl/MakeString.h"
 #include "utl/SongPos.h"
 #include "utl/TimeConversion.h"
+#ifdef HX_NATIVE
+#include <cstdio>
+#endif
 
 HamMaster::HamMaster(HamSongData *data, MidiParserMgr *mgr)
     : mSongData(data), mAudio(nullptr), mMidiParserMgr(mgr), mSongInfo(nullptr),
@@ -205,22 +208,30 @@ float HamMaster::EventBeat(Symbol s) {
 void HamMaster::LoaderPoll() {
     bool songPoll = mSongData->Poll();
     if (songPoll) {
+#ifdef HX_NATIVE
         fprintf(stderr, "DC3 LoaderPoll — songPoll=true, loading audio...\n");
+#endif
         if (TheLoadMgr.EditMode() && !TheSynth->CheckCommonBank(false)) {
             ObjDirPtr<ObjectDir> dir;
             DataArray *cfg = SystemConfig("sound", "banks", "common");
             dir.LoadFile(cfg->Str(1), false, true, kLoadFront, false);
             TheSynth->SetDir(dir);
         }
+#ifdef HX_NATIVE
         fprintf(stderr, "DC3 LoaderPoll — calling mAudio->Load(mSongInfo=%p)\n", (void*)mSongInfo);
+#endif
         mAudio->Load(mSongInfo, mSyncLoad);
+#ifdef HX_NATIVE
         fprintf(stderr, "DC3 LoaderPoll — audio loaded, finishing up\n");
+#endif
         mSongInfo = nullptr;
         if (mMidiParserMgr) {
             mMidiParserMgr->FinishLoad();
         }
         mLoaded = true;
+#ifdef HX_NATIVE
         fprintf(stderr, "DC3 LoaderPoll — mLoaded=true! Releasing loader\n");
+#endif
         RELEASE(mLoader);
     }
 }

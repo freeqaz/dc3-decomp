@@ -125,9 +125,9 @@ public:
     bool AllowRepeats() const { return mAllowRepeats; }
     void AddToPlayedHistory(int idx);
     bool InPlayedHistory(int idx) const {
-        std::list<int>::const_reverse_iterator it;
-        for (it = mPlayHistory.rbegin(); it != mPlayHistory.rend(); it++) {
-            if (*it == idx)
+        std::list<int>::const_iterator it;
+        for (it = mPlayHistory.begin(); it != mPlayHistory.end(); it++) {
+            if (idx == *it)
                 return true;
         }
         return false;

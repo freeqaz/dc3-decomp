@@ -403,6 +403,29 @@ class DecompMCPServer:
                         "required": ["address"],
                     },
                 ),
+                Tool(
+                    name="mark_patch_result",
+                    description="Mark a queued patch as applied, failed, or skipped. Used by the merger agent after attempting to apply a patch.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "patch_queue_id": {
+                                "type": "integer",
+                                "description": "Patch queue ID from the manifest",
+                            },
+                            "status": {
+                                "type": "string",
+                                "enum": ["applied", "failed", "skipped"],
+                                "description": "Result of applying the patch",
+                            },
+                            "reason": {
+                                "type": "string",
+                                "description": "Explanation if failed or skipped",
+                            },
+                        },
+                        "required": ["patch_queue_id", "status"],
+                    },
+                ),
             ]
 
         @self.server.call_tool()
@@ -425,6 +448,8 @@ class DecompMCPServer:
                 return await self._lookup_struct_offset(arguments)
             elif name == "lookup_merged_symbol":
                 return await self._lookup_merged_symbol(arguments)
+            elif name == "mark_patch_result":
+                return await self._mark_patch_result(arguments)
             else:
                 return [TextContent(type="text", text=f"Unknown tool: {name}")]
 
@@ -2219,6 +2244,29 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
 
         except Exception as e:
             return [TextContent(type="text", text=f"Error looking up merged symbol: {e}")]
+
+    async def _mark_patch_result(self, args: dict) -> list[TextContent]:
+        """Handle mark_patch_result tool call."""
+        queue_id = args.get("patch_queue_id")
+        status = args.get("status", "")
+        reason = args.get("reason", "")
+
+        if queue_id is None:
+            return [TextContent(type="text", text="Error: patch_queue_id is required.")]
+        if not status:
+            return [TextContent(type="text", text="Error: status is required.")]
+
+        try:
+            from .merger_agent import mark_patch_result
+            result = mark_patch_result(
+                queue_id=int(queue_id),
+                status=status,
+                reason=reason,
+                db_path=self.db_path,
+            )
+            return [TextContent(type="text", text=json.dumps(result))]
+        except Exception as e:
+            return [TextContent(type="text", text=f"Error marking patch result: {e}")]
 
     async def run(self):
         """Run the MCP server."""

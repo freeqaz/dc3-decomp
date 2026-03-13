@@ -25,29 +25,32 @@ bool FlowSequence::Activate() {
     }
     mRepeatCount = 0;
     mItr = mChildNodes.begin();
-    mIsAdvancing = true;
-    while (mItr != mChildNodes.end()) {
-        ActivateChild(mItr->Obj());
-        if (mStopRequested || !mRunningNodes.empty())
-            break;
-        ++mItr;
-    }
-    mIsAdvancing = false;
-    if (mStopRequested || !mRunningNodes.empty()) {
-        if (mItr != mChildNodes.end())
-            return true;
+    if (!mChildNodes.empty()) {
+        mIsAdvancing = true;
+        while (mItr != mChildNodes.end()) {
+            if (!mRunningNodes.empty())
+                break;
+            ActivateChild(mItr->Obj());
+            if (mStopRequested || !mRunningNodes.empty())
+                break;
+            ++mItr;
+        }
+        mIsAdvancing = false;
     }
     MILO_ASSERT(mRunningNodes.size() < 2, 0x50);
-    if (mItr != mChildNodes.end())
-        return true;
-    if (mRunningNodes.size() != 0)
-        return true;
-    if (!mLooping) {
-        if (mRepeats == 0)
-            return false;
+    if (mItr == mChildNodes.end()) {
+        if (mRunningNodes.size() != 0)
+            return true;
+        if (!mLooping) {
+            if (mRepeats == 0)
+                return false;
+        }
+        MILO_NOTIFY_ONCE(
+            "Instant looping sequence in %s! Stopping Sequence", FindPathName()
+        );
+        return mRunningNodes.size() > 0;
     }
-    MILO_NOTIFY_ONCE("Instant looping sequence in %s! Stopping Sequence", FindPathName());
-    return mRunningNodes.size() > 0;
+    return true;
 }
 
 BEGIN_HANDLERS(FlowSequence)

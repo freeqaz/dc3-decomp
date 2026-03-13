@@ -536,4 +536,22 @@ inline bool operator<(const Sphere &s, const Plane &p) {
 
 void ScaleAddEq(Hmx::Matrix3 &, const Hmx::Matrix3 &, float);
 void ScaleAddEq(Transform &, const Transform &, float);
-void ScaleAddEq(Hmx::Quat &, const Hmx::Quat &, float);
+
+inline void ScaleAddEq(Hmx::Quat &q1, const Hmx::Quat &q2, float f) {
+    float abs_f = std::fabs(f);
+    float sx = q2.x * abs_f;
+    float sy = q2.y * abs_f;
+    float sz = q2.z * abs_f;
+    float sw = q2.w * f;
+    if (q1.x * sx + q1.y * sy + q1.z * sz + q1.w * sw < 0.0f) {
+        q1.x -= sx;
+        q1.y -= sy;
+        q1.z -= sz;
+        q1.w -= sw;
+    } else {
+        q1.x += sx;
+        q1.y += sy;
+        q1.z += sz;
+        q1.w += sw;
+    }
+}

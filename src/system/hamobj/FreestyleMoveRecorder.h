@@ -62,8 +62,18 @@ public:
 
 private:
     void UpdateRecordingAttempt(const BaseSkeleton *, float);
+    void UpdateFakeSkeleton();
     void RecordMoveAttempt(String);
     void WriteRecordedMoveAttempt();
+    void CompareDisplacementVectors(
+        const Vector3 &, int, const Vector3 &, int, float &, float &
+    ) const;
+    float CompareSkeletonJointDisplacement(
+        const FreestyleMoveFrame *, int, const BaseSkeleton *, float &
+    ) const;
+    void CalcFrameScore(
+        FreestyleFrameScores &, const FreestyleMoveFrame *, int, const BaseSkeleton *, float
+    ) const;
     void WriteFreestyleMoveClip(String, int, FreestyleMoveFrame *);
     void ClearFreestyleMoveClip();
 

@@ -15,6 +15,9 @@
 #include "utl/SongInfoCopy.h"
 #include "utl/SongPos.h"
 #include "utl/TempoMap.h"
+#ifdef HX_NATIVE
+#include <cstdio>
+#endif
 
 HamSongData::HamSongData()
     : mLoaded(0), mSongInfo(0), mTempoMap(nullptr), mMeasureMap(nullptr), mBeatMap(nullptr),
@@ -60,8 +63,10 @@ bool HamSongData::Poll() {
     if (mMidiReader) {
         bool ret = mMidiReader->ReadSomeEvents(20);
         if (ret) {
+#ifdef HX_NATIVE
             fprintf(stderr, "DC3 HamSongData::Poll — MIDI read complete! tell=%d\n",
                     mStream ? mStream->Tell() : -1);
+#endif
             PostLoad();
         }
         return ret;
@@ -111,9 +116,13 @@ void HamSongData::Load(const char *cc, const SongInfo *info, bool b3) {
 
 void HamSongData::Load(const SongInfo *info, bool b2, HamSongDataValidate v) {
     const char *midi = FakeSongMgr::MidiFile(info);
+#ifdef HX_NATIVE
     fprintf(stderr, "DC3 HamSongData::Load — midi='%s'\n", midi);
+#endif
     FileStream fStream(midi, FileStream::kRead, false);
+#ifdef HX_NATIVE
     fprintf(stderr, "DC3 HamSongData::Load — fStream size=%d\n", (int)fStream.Size());
+#endif
     mStream = new MemStream();
     {
         MemTemp tmp;

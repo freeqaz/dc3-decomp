@@ -857,23 +857,23 @@ void RhythmBattlePlayer::UpdateComboProgress() {
         }
         return;
     }
-    if (mInTheZone > 0) {
-        if (mInTheZone != 1) {
-            return;
-        }
+    if (mInTheZone < 1) {
         mComboMeter += increment;
+        if (mComboMeter >= 16.0f) {
+            int targetState = 1;
+            if (!mActive) {
+                targetState = -1;
+            }
+            if (mInTheZone != targetState) {
+                AnimateBoxyState(targetState, true, false);
+            }
+        }
+        return;
+    }
+    if (mInTheZone != 1) {
         return;
     }
     mComboMeter += increment;
-    if (mComboMeter >= 16.0f) {
-        int targetState = 1;
-        if (!mActive) {
-            targetState = -1;
-        }
-        if (mInTheZone != targetState) {
-            AnimateBoxyState(targetState, true, false);
-        }
-    }
 }
 
 void RhythmBattlePlayer::AnimateOut() {}

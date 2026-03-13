@@ -14,6 +14,7 @@
 #include "synth/StreamNull.h"
 #include "synth/VorbisReader.h"
 #include "os/File.h"
+#include "os/BufFile.h"
 #include "utl/Symbol.h"
 #include "audio/AudioDevice.h"
 #include "platform/StreamReceiver_Native.h"
@@ -90,6 +91,14 @@ public:
             return new StreamNull(vol);
         }
         return new StandardStream(file, vol, pan, sym, loop, true, false);
+    }
+
+    virtual Stream *NewBufStream(const void *buf, int size, Symbol sym, float vol, bool loop) override {
+        if (!buf || size <= 0) {
+            return new StreamNull(vol);
+        }
+        File *file = new BufFile(buf, size);
+        return new StandardStream(file, vol, 0.0f, sym, loop, true, false);
     }
 };
 

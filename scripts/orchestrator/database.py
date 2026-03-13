@@ -14,7 +14,7 @@ from typing import Any
 DEFAULT_DB_PATH = "decomp.db"
 
 # Schema version for migrations
-SCHEMA_VERSION = 13
+SCHEMA_VERSION = 14
 
 # Default maximum attempts before deprioritizing a function
 # Functions with >= this many attempts are excluded from normal queries
@@ -439,6 +439,30 @@ def _run_migrations(conn: sqlite3.Connection, from_version: int, to_version: int
             "CREATE INDEX IF NOT EXISTS idx_functions_is_stub "
             "ON functions(is_stub) WHERE is_stub = 1"
         )
+
+    if from_version < 14 <= to_version:
+        # Migration v13 -> v14: Add patch_queue table for intelligent merger agent
+        print("  Migration v14: Adding patch_queue table...")
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS patch_queue (
+                id INTEGER PRIMARY KEY,
+                attempt_id INTEGER REFERENCES attempts(id),
+                function_id INTEGER REFERENCES functions(id),
+                symbol TEXT NOT NULL,
+                demangled TEXT,
+                unit TEXT,
+                patch TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                priority INTEGER DEFAULT 0,
+                start_percent REAL,
+                end_percent REAL,
+                failure_reason TEXT,
+                merger_session_id TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                applied_at TIMESTAMP
+            );
+            CREATE INDEX IF NOT EXISTS idx_patch_queue_status ON patch_queue(status);
+        """)
 
     # Update schema version
     conn.execute("UPDATE schema_version SET version = ?", (to_version,))

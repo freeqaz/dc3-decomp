@@ -49,6 +49,8 @@ public:
     Symbol MiniGameCharacter() const { return mMiniGameCharacter; }
     void SetAutoplay(Symbol s) { mAutoplay = s; }
     const String &CurrentDancer() const { return mCurrentDancer; }
+    String &CurrentDancer() { return mCurrentDancer; }
+    std::vector<String> &AvailableDancers() { return mAvailableDancers; }
 
 private:
     void SetSkeletonTrackingID(int);

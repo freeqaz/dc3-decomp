@@ -327,8 +327,8 @@ void SongLayout::SetDefaultPattern(int totalMeasures) {
         }
         pattern.mInitialMeasureRange.start = measureStart;
         pattern.mInitialMeasureRange.end = measureStart + 4;
-        mSongPatterns.push_back(pattern);
         measureStart += 5;
+        mSongPatterns.push_back(pattern);
     }
     // Create sections from measure 5 up to totalMeasures, alternating patterns
     int curMeasure = 5;

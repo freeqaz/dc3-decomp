@@ -138,7 +138,7 @@ PartyModeMgr::PartyModeMgr() : mFrameSmoothers() {
     static Symbol event_scoring("event_scoring");
     mEventScoring = mPartyModeCfg->FindArray(event_scoring);
     mUsePlaytestData = false;
-    mPartyModePlaytestEvents = nullptr;
+    mPartyModePlaytestEvents = 0;
     static Symbol party_mode_playtest_data("party_mode_playtest_data");
     mPartyModePlaytestData = mPartyModeCfg->FindArray(party_mode_playtest_data);
     if (mPartyModePlaytestData) {
@@ -178,14 +178,14 @@ PartyModeMgr::PartyModeMgr() : mFrameSmoothers() {
         mARObjectIndices[i] = mARObjectIndices[randIdx];
         mARObjectIndices[randIdx] = old;
     }
-    mCurrEvent = nullptr;
+    mCurrEvent = 0;
     InitCharacters();
     for (int i = 0; i < 6; i++) {
         mFrameSmoothers[i].SetSmoothParameters(10, 1);
         mFrameSmoothers[i].ForceValue(Vector2(0.5, 0.5));
     }
     mDifficulty = DefaultDifficulty();
-    mPlaylist = 0;
+    mPlaylist = nullptr;
     mIsPlaylistShuffled = false;
     mIncludedModesMask = -1;
     mUseFullLengthSongs = false;
@@ -197,11 +197,11 @@ PartyModeMgr::PartyModeMgr() : mFrameSmoothers() {
     mCustomParty = false;
     mUsingPerSongOptions = false;
     mSetPartyOptionsJob = nullptr;
-    mGetPartyOptionsJob = nullptr;
-    mGetPartySongQueueJob = nullptr;
-    mAddSongToPartySongQueueJob = nullptr;
-    mDeleteSongFromPartySongQueueJob = nullptr;
-    mQueueStateValid = false;
+    mGetPartyOptionsJob = 0;
+    mGetPartySongQueueJob = 0;
+    mAddSongToPartySongQueueJob = 0;
+    mDeleteSongFromPartySongQueueJob = 0;
+    mQueueStateValid = 0;
     mPlaytestEventSequences = 0;
 }
 
@@ -351,7 +351,7 @@ void PartyModeMgr::ContentMounted(const char *contentName, const char *) {
 }
 
 void PartyModeMgr::Init() {
-    MILO_ASSERT(ThePartyModeMgr == NULL, 0x142);
+    MILO_ASSERT(ThePartyModeMgr == nullptr, 0x142);
     ThePartyModeMgr = new PartyModeMgr();
     if (ObjectDir::Main()) {
         ThePartyModeMgr->SetName("partymode_mgr", ObjectDir::Main());
@@ -457,7 +457,7 @@ HamProfile *PartyModeMgr::GetValidProfile() {
             return profile;
         }
     }
-    return nullptr;
+    return 0;
 }
 
 void PartyModeMgr::SetLeftTeamStarBonus() {
@@ -843,7 +843,7 @@ void PartyModeMgr::GetPartyOptionsFromRC() {
 
 void PartyModeMgr::ReadPartyOptions() {
     mGetPartyOptionsJob->GetOptions();
-    mGetPartyOptionsJob = nullptr;
+    mGetPartyOptionsJob = 0;
     BroadcastSyncMsg("options_updated");
 }
 
@@ -939,15 +939,15 @@ void PartyModeMgr::DetermineSubModeSong(Symbol *pShortName, int *pSongID) {
         if (arr) {
             int rank = arr->Int(rand() % arr->Size());
             MILO_ASSERT_FMT(
-                rank >= 1 && rank <= 4, "%d is an invalid DJ logic intensity rank\n", rank
+                rank >= 1 && rank <= 4, "0x%08X is an invalid DJ logic intensity rank\n", (int)rank
             );
             *pShortName = mSubModeSongPickers[rank].GetNext();
             *pSongID = TheHamSongMgr.GetSongIDFromShortName(*pShortName);
             return;
         } else {
             MILO_NOTIFY(
-                "DJ logic data doesn't contain enough information for %d rounds, picking random song instead",
-                mRoundsPlayed
+                "DJ logic data doesn't contain enough information for 0x%08X rounds, picking random song instead",
+                (int)mRoundsPlayed
             );
         }
     }
@@ -1019,8 +1019,8 @@ void PartyModeMgr::ResetPlayers() {
     mTeam2Players.clear();
     mTeam1PlayerPicker.Clear();
     mTeam2PlayerPicker.Clear();
-    mLeftPlayer = nullptr;
-    mRightPlayer = nullptr;
+    mLeftPlayer = 0;
+    mRightPlayer = 0;
 }
 
 void PartyModeMgr::ResetMicrogames() {
@@ -1067,11 +1067,7 @@ int PartyModeMgr::PickNextPlayer() {
 
 void PartyModeMgr::ShufflePlaylist(bool b1) {
     MILO_ASSERT(IsUsingPlaylist(), 0x731);
-    if (b1) {
-        // mSubModeSongPicker.unk8 = 2;
-        // mSubModeSongPicker.unk10 = 0;
-    } else if (mIsPlaylistShuffled) {
-        // mSubModeSongPicker.unk8 = 0;
+    if (!b1 && mIsPlaylistShuffled) {
         SetSongsFromPlaylist();
     }
     mIsPlaylistShuffled = b1;
@@ -1101,7 +1097,7 @@ void PartyModeMgr::ResetParty() {
     pPlayerData->SetCrew(crew);
     mWinningSide = 2;
     mJustWonSide = 2;
-    mPlaytestEventSequences = nullptr;
+    mPlaytestEventSequences = 0;
 }
 
 void PartyModeMgr::InitCharacters() {
@@ -1298,7 +1294,7 @@ void PartyModeMgr::UseSelectedPlaylist(bool b1) {
         if (mPlaylist) {
             ResetSongs();
         }
-        mPlaylist = nullptr;
+        mPlaylist = 0;
     }
 }
 
@@ -1315,8 +1311,8 @@ void PartyModeMgr::SetCurrEvent() {
     mCurrEvent = CreateEventA();
     static Symbol showdown("showdown");
     mIsShowdown = mCurrEvent->mModeName == showdown;
-    mLeftPlayer = mCurrEvent->mNumPlayers > 0 ? mPlayers[mCurrEvent->mPlayerIndices[0]] : nullptr;
-    mRightPlayer = mCurrEvent->mNumPlayers > 1 ? mPlayers[mCurrEvent->mPlayerIndices[1]] : nullptr;
+    mLeftPlayer = mCurrEvent->mNumPlayers > 0 ? mPlayers[mCurrEvent->mPlayerIndices[0]] : 0;
+    mRightPlayer = mCurrEvent->mNumPlayers > 1 ? mPlayers[mCurrEvent->mPlayerIndices[1]] : 0;
 }
 
 DataNode PartyModeMgr::OnGetSmoothedFramePos(const DataArray *a) {
@@ -1385,8 +1381,7 @@ void PartyModeMgr::FinalizePlaytestParty() {
     mRoundsTotal = numEvents - 1;
     mRoundsUntilShowdown = numEvents - 1;
     mMaxPointsPerEvent = (float)(numEvents - 1) + 1.0f;
-    auto _tmp0 = mEventScoring->FindArray(("six_star_bonus"))->Float(1);
-    mSixStarBonus = _tmp0;
+    mSixStarBonus = mEventScoring->FindArray("six_star_bonus")->Float(1);
     SetCurrEvent();
 }
 
@@ -1400,7 +1395,7 @@ DataNode PartyModeMgr::OnMsg(const RCJobCompleteMsg &msg) {
         do {
             if (*pJob == msg.Job()) {
                 (*pJob)->Cancel(false);
-                *pJob = nullptr;
+                *pJob = 0;
             }
             count--;
             pJob++;
@@ -1415,7 +1410,7 @@ DataNode PartyModeMgr::OnMsg(const RCJobCompleteMsg &msg) {
     // Handle successful job completion - dispatch based on job type
     if (msg.Job() == mSetPartyOptionsJob) {
         BroadcastSyncMsg("options_sent");
-        mSetPartyOptionsJob = nullptr;
+        mSetPartyOptionsJob = 0;
         b = true;
     } else {
         if (msg.Job() == mGetPartyOptionsJob) {
@@ -1425,18 +1420,18 @@ DataNode PartyModeMgr::OnMsg(const RCJobCompleteMsg &msg) {
                 ReadPartySongQueue();
             } else {
                 if (msg.Job() == mDeleteSongFromPartySongQueueJob) {
-                    mDeleteSongFromPartySongQueueJob = nullptr;
+                    mDeleteSongFromPartySongQueueJob = 0;
                 } else {
                     if (msg.Job() != mAddSongToPartySongQueueJob) {
                         goto leave;
                     }
-                    mAddSongToPartySongQueueJob = nullptr;
+                    mAddSongToPartySongQueueJob = 0;
                     mPartySongQueue.pop_front();
                     if (!mPartySongQueue.empty()) {
                         AddNextSongToRCPartySongQueue();
                         b = true;
                     } else {
-                        mAddSongToPartySongQueueJob = nullptr;
+                        mAddSongToPartySongQueueJob = 0;
                         mQueueStateValid = false;
                     }
                 }

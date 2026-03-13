@@ -1031,14 +1031,16 @@ void CharPollableSorter::AddDeps(
 }
 
 bool CharPollableSorter::ChangedByRecurse(Dep *dep) {
+    if (!dep)
+        return false;
+    if (dep == mTarget)
+        return true;
     if (dep->searchID == sSearchID)
         return false;
     dep->searchID = sSearchID;
     for (std::list<Dep *>::iterator it = dep->changedBy.begin();
          it != dep->changedBy.end();
          ++it) {
-        if (*it == mTarget)
-            return true;
         if (ChangedByRecurse(*it))
             return true;
     }

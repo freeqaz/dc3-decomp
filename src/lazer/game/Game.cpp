@@ -543,9 +543,8 @@ void Game::LoadSong() {
         mUseMoveGraph = true;
     }
 #endif
-    const HamSongMetadata *data =
-        TheHamSongMgr.Data(TheHamSongMgr.GetSongIDFromShortName(song));
-    auto isOnDisc = data->IsOnDisc();
+    const HamSongMetadata *data = TheHamSongMgr.Data(TheHamSongMgr.GetSongIDFromShortName(song));
+    bool isOnDisc = data->IsOnDisc();
     HamSongDataValidate v = (HamSongDataValidate)0;
     if (isOnDisc) {
         v = (HamSongDataValidate)2;
@@ -565,7 +564,12 @@ void Game::LoadSong() {
     }
     RELEASE(mSongInfo);
     mSongInfo = new SongInfoCopy(TheHamSongMgr.SongMgr::SongAudioData(song));
-    mMaster->Load(mSongInfo, false, 0, false, v, 0);
+#ifdef HX_NATIVE
+    if (mMaster && mMaster->GetAudio()) {
+        mMaster->GetAudio()->SetPracticeMode(false);
+    }
+#endif
+    mMaster->Load(mSongInfo, false, 0, false, v, nullptr);
 }
 
 void Game::SetPaused(bool b1, bool b2) {
@@ -635,7 +639,7 @@ void Game::LoadNewSongMoves(Symbol s1, bool b2) {
     if (b2 || song != s1 || s50 != song) {
         TheGameData->SetSong(s1);
         const char *milo = MakeString("%s.milo", TheHamSongMgr.SongPath(s1, 0));
-        if (b2) {
+        if (loaded) {
             static Symbol song("song");
             FileMerger *fm = TheHamDirector->GetWorld()->Find<FileMerger>("world.fm");
             FileMerger::Merger *merger = fm->FindMerger(song, true);
@@ -674,7 +678,6 @@ void Game::LoadNewSong(Symbol s1, Symbol s2) {
         RELEASE(mAltTempoMap);
     }
     LoadNewSongAudio(s1);
-    // NOTE: This Symbol is constructed but unused - required for match
     Symbol s48(TheMaster->GetAudio()->Name());
     LoadNewSongMoves(s2, true);
 #ifdef HX_NATIVE
@@ -711,6 +714,10 @@ bool Game::IsLoaded() {
         return true;
     } else {
         if ((int)mMaster && !mMaster->IsLoaded()) {
+#ifdef HX_NATIVE
+            static int sDbg = 0;
+            if (sDbg++ < 5) fprintf(stderr, "Game::IsLoaded: mMaster=%p IsLoaded=false (pre-check)\n", (void*)mMaster);
+#endif
             return false;
         }
         if (mLoadState == 0) {
@@ -718,10 +725,7 @@ bool Game::IsLoaded() {
                 return false;
             }
             if (mUseMoveGraph && !TheHamDirector->IsWorldLoaded()) {
-#ifdef HX_NATIVE
-#else
                 return false;
-#endif
             }
             TheSongDB->PostLoad(mMaster->GetMidiParserMgr()->GetEventsList());
             PostLoad();
@@ -741,10 +745,7 @@ bool Game::IsLoaded() {
         }
         if (mLoadState == 1) {
             if (mUseMoveGraph && !TheHamDirector->IsMoveMergerFinished()) {
-#ifdef HX_NATIVE
-#else
                 return false;
-#endif
             }
             MILO_LOG("Game::IsLoaded() - Done waiting for MoveGraph\n");
             mLoadState = 2;
@@ -754,8 +755,8 @@ bool Game::IsLoaded() {
                 return true;
             }
             if (!mMaster->GetAudio()->IsReady()) {
-#ifdef HX_NATIVE
-                // Audio may never be ready on web — bypass after timeout
+#ifdef __EMSCRIPTEN__
+                // Web has no real audio — bypass after timeout
                 static int sAudioPoll = 0;
                 if (sAudioPoll++ < 60) {
                     TheSynth->Poll();
@@ -913,7 +914,30 @@ bool Game::HandleWait() {
     return true;
 }
 
-DataNode OnCycleAutoplay(DataArray *) { return DataNode(0); }
+DataNode OnCycleAutoplay(DataArray *arr) {
+    HamPlayerData *player_data = TheGameData->Player(arr->Int(1));
+    MILO_ASSERT(player_data, 0x7e);
+    Symbol newState;
+    if (!player_data->IsAutoplaying()) {
+        newState = sAutoplayStates.back();
+    } else {
+        int size = sAutoplayStates.size();
+        int i = 0;
+        for (; (unsigned)i < (unsigned)size; i++) {
+            if (sAutoplayStates[i] == player_data->Autoplay()) {
+                break;
+            }
+        }
+        if (size != 0) {
+            i = (i + 1) % size;
+        } else {
+            i = 0;
+        }
+        newState = sAutoplayStates[i];
+    }
+    player_data->SetAutoplay(newState);
+    return DataNode(newState);
+}
 
 DataNode OnToggleCharFeedback(DataArray *a) {
     ReserveFrames();
@@ -932,8 +956,39 @@ DataNode OnToggleSongRecordDouble(DataArray *a) {
     return MoveDir::sGameRecord;
 }
 
-DataNode OnCycleTestDancer(DataArray *) { return DataNode(0); }
-DataNode OnDumpMoves(DataArray *) { return DataNode(0); }
+DataNode OnCycleTestDancer(DataArray *) {
+    HamPlayerData *player_data = TheGameData->Player(0);
+    MILO_ASSERT(player_data, 0xaf);
+    String name(player_data->CurrentDancer());
+    std::vector<String> &dancers = player_data->AvailableDancers();
+    int i = 0;
+    if (!dancers.empty()) {
+        for (; (unsigned)i < (unsigned)dancers.size(); i++) {
+            if (dancers[i] == name) {
+                break;
+            }
+        }
+        int size = (int)dancers.size();
+        if (size != 0) {
+            i = (i + 1) % size;
+        } else {
+            i = 0;
+        }
+    }
+    name = dancers[i];
+    player_data->CurrentDancer() = name;
+    return DataNode(name);
+}
+DataNode OnDumpMoves(DataArray *) {
+    std::vector<HamMoveKey> keys;
+    TheHamDirector->MoveKeys(kDifficultyExpert, TheHamDirector->GetMoveDir(), keys);
+    int i = 0;
+    for (std::vector<HamMoveKey>::iterator it = keys.begin(); it != keys.end(); ++it) {
+        const char *name = it->move ? it->move->Name() : "NULL";
+        TheDebug << MakeString("move %d: beat %.2f: name: '%s'\n", i++, it->beat, name);
+    }
+    return DataNode(0);
+}
 
 void GameInit() {
     GameModeInit();

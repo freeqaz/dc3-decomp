@@ -12,9 +12,3 @@ void ScaleAddEq(Transform &tf1, const Transform &tf2, float f) {
     ScaleAdd(tf1.v, tf2.v, f, tf1.v);
 }
 
-void ScaleAddEq(Hmx::Quat &q1, const Hmx::Quat &q2, float f) {
-    q1.x += q2.x * f;
-    q1.y += q2.y * f;
-    q1.z += q2.z * f;
-    q1.w += q2.w * f;
-}

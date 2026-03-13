@@ -170,10 +170,10 @@ public:
     float TotalTick() const { return mSongPos.GetTotalTick(); }
     void SetAutoSecondsBeats(bool b) { mAutoSecondsBeats = b; }
     void SetSongPos(const SongPos &pos) { mSongPos = pos; }
+    const SongPos &GetSongPos() const { return mSongPos; }
 
 private:
     DataNode OnTimeTilNext(DataArray *);
-        // const SongPos &GetSongPos() const { return mSongPos; }
 
     TaskTimeline *mTimelines; // 0x2c
     SongPos mSongPos; // 0x30

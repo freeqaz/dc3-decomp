@@ -9,7 +9,9 @@
 #include "rndobj/Anim.h"
 
 EventTask::EventTask(FlowTimer *owner, ObjPtrVec<FlowNode> *children, TaskUnits units, float duration)
-    : mOwner(owner), mChildNodes(children), mDuration(duration), mElapsed(0) {
+    : mOwner(this), mChildNodes(children), mCurNode(), mDuration(duration) {
+    mOwner = owner;
+    mCurNode = children->begin();
     TheTaskMgr.Start(this, units, 0);
 }
 
@@ -21,12 +23,15 @@ void EventTask::Poll(float time) {
         delete this;
         return;
     }
-    FOREACH (it, *mChildNodes) {
-        FlowValueCase *node = static_cast<FlowValueCase *>(it->Obj());
-        if (time < node->Value()) {
-            break;
-        }
-        mOwner->OnKeyframe(node);
+    if (mCurNode != mChildNodes->end()) {
+        do {
+            FlowValueCase *node = static_cast<FlowValueCase *>(mCurNode->Obj());
+            if (time < node->Value()) {
+                break;
+            }
+            mOwner->OnKeyframe(node);
+            ++mCurNode;
+        } while (mCurNode != mChildNodes->end());
     }
     if (time >= mDuration) {
         mOwner->OnTimerEnd();

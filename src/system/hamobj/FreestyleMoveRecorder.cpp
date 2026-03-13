@@ -3,6 +3,7 @@
 #include "gesture/GestureMgr.h"
 #include "hamobj/DancerSkeleton.h"
 #include "hamobj/FreestyleMove.h"
+#include "math/Vec.h"
 #include "obj/Data.h"
 #include "obj/DataFunc.h"
 #include "obj/Object.h"
@@ -122,6 +123,41 @@ void FreestyleMoveRecorder::StopPlayback() { mPlaybackPos = -1; }
 void FreestyleMoveRecorder::ClearDancerTake() { mDancerTakeFrameCount = 0; }
 
 void FreestyleMoveRecorder::AssignStaticInstance() { sInstance = this; }
+
+BaseSkeleton *FreestyleMoveRecorder::GetLiveSkeleton() {
+    int numFrames = mClipFrameCount;
+    if (numFrames > 0) {
+        int count = 0;
+        int idx = 0;
+        int byteOff = 0;
+        do {
+            if (count == unk40)
+                break;
+            float *base = (float *)((char *)mClipFrames + byteOff);
+            if (base[0x2d8 / 4] > base[0x5b4 / 4]) {
+                count++;
+            }
+            idx++;
+            byteOff += 0x2dc;
+        } while (idx < numFrames);
+
+        if (idx < numFrames) {
+            int off = idx * 0x2dc;
+            do {
+                if (*(float *)((char *)mClipFrames + off + 0x2d8) > mPlaybackSpeed * 1000.0f)
+                    break;
+                idx++;
+                off += 0x2dc;
+            } while (idx < numFrames);
+        }
+
+        return (BaseSkeleton *)((char *)mClipFrames + idx * 0x2dc);
+    }
+    if (mSkeletonIndex >= 0) {
+        return &TheGestureMgr->GetSkeleton(mSkeletonIndex);
+    }
+    return NULL;
+}
 
 void FreestyleMoveRecorder::UpdateRecordingAttempt(
     const BaseSkeleton *skeleton, float f2
@@ -258,6 +294,58 @@ DataNode FreestyleMoveRecorder::OnReadAttempt(DataArray *a) {
 DataNode FreestyleMoveRecorder::OnClearAttempt(DataArray *a) {
     sInstance->ClearFreestyleMoveClip();
     return 0;
+}
+
+void FreestyleMoveRecorder::CompareDisplacementVectors(
+    const Vector3 &v1, int count1, const Vector3 &v2, int count2, float &outSimilarity, float &outMaxDisp
+) const {
+    float zero = 0.0f;
+    float len1 = Length(v1);
+    float len2 = Length(v2);
+    float avgDisp1 = zero;
+    if (count1 != 0) {
+        avgDisp1 = len1 / (float)count1;
+    }
+    float avgDisp2 = zero;
+    if (count2 != 0) {
+        avgDisp2 = len2 / (float)count2;
+    }
+    float maxDisp = avgDisp1;
+    if (avgDisp1 - avgDisp2 < 0.0f) {
+        maxDisp = avgDisp2;
+    }
+    outMaxDisp = maxDisp + 1e-5f;
+    float invLen1 = zero;
+    if (0.0f < len1) {
+        invLen1 = 1.0f / len1;
+    }
+    float invLen2 = zero;
+    if (0.0f < len2) {
+        invLen2 = 1.0f / len2;
+    }
+    float dot = (v2.y * invLen2 * v1.y * invLen1
+                 + v2.x * invLen2 * v1.x * invLen1
+                 + invLen2 * v2.z * invLen1 * v1.z)
+        * 0.87f;
+    float angleDiff = -(dot - 1.0f);
+    float clamped = zero;
+    if (-angleDiff < 0.0f) {
+        clamped = angleDiff;
+    }
+    float clamped1 = 1.0f;
+    if (clamped - 1.0f < 0.0f) {
+        clamped1 = clamped;
+    }
+    float score = clamped1 * clamped1 * 20.0f;
+    float finalScore = zero;
+    if (-score < 0.0f) {
+        finalScore = score;
+    }
+    float finalClamped = 1.0f;
+    if (finalScore - 1.0f < 0.0f) {
+        finalClamped = finalScore;
+    }
+    outSimilarity = 1.0f - finalClamped;
 }
 
 float FreestyleMoveRecorder::GetScore(int i1, int i2, float f, bool b) {

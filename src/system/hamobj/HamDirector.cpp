@@ -1637,18 +1637,8 @@ Symbol HamDirector::ClosestMove() {
 }
 
 bool HamDirector::IsWorldLoaded() const {
-#ifdef HX_NATIVE
-    // Native now gets mVenue from the FileMerger on_pre_merge ->
-    // {$hamdirector on_file_loaded ...} path in char_objects.dta.
-    // Keep this relaxed merge-based readiness check until venue-load ordering is
-    // fully revalidated across crowd/audio/song merges.
-    bool mergeDone = mMerger && !mMerger->HasPendingFiles();
-    bool moveDone = mMoveMerger && !mMoveMerger->HasPendingFiles();
-    return mergeDone && moveDone;
-#else
     return mVenue && mMerger && !mMerger->HasPendingFiles() && mMoveMerger
         && !mMoveMerger->HasPendingFiles();
-#endif
 }
 
 void HamDirector::CheckBeginFatal(int i1, HamMove *move, int i3) {

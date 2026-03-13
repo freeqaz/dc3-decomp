@@ -21,8 +21,8 @@ public:
 protected:
     ObjPtr<FlowTimer> mOwner; // 0x2C
     ObjPtrVec<FlowNode> *mChildNodes; // 0x40
-    float mDuration; // 0x44
-    float mElapsed; // 0x48
+    ObjPtrVec<FlowNode>::iterator mCurNode; // 0x44
+    float mDuration; // 0x48
 };
 
 class FlowTimer : public FlowNode {

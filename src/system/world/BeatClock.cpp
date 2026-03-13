@@ -1,8 +1,10 @@
 #include "world/BeatClock.h"
 #include "obj/Msg.h"
 #include "obj/Object.h"
+#include "obj/Task.h"
 #include "rndobj/Poll.h"
 #include "utl/MeasureMap.h"
+#include <cmath>
 
 BeatClock::BeatClock()
     : mMeasureMap(new MeasureMap()), mSound(this), mBeatsPerMinute(100),
@@ -107,3 +109,98 @@ BEGIN_LOADS(BeatClock)
     }
     SetBeatsPerMeasure(mBeatsPerMeasure);
 END_LOADS
+
+void BeatClock::UpdateSongPos() {
+    SongPos pos;
+    float seconds = 0.0f;
+    float totalBeat = 0.0f;
+
+    if (mUseGlobal) {
+        pos = TheTaskMgr.GetSongPos();
+        seconds = TheTaskMgr.Time(mTimeline);
+    } else {
+        if (mSound) {
+            seconds = mSound->ElapsedTime();
+        } else {
+            float time = TheTaskMgr.Time(mTimeline);
+            float delta = time - unk50;
+            unk50 = time;
+            if (delta == 0.0f)
+                return;
+            if (!mIsRunning)
+                return;
+            seconds = mTotalSeconds + delta;
+        }
+        totalBeat = mBeatsPerMinute * seconds * (1.0f / 60.0f);
+        float totalTick = totalBeat * 480.0f;
+        pos.AccessTotalTick() = totalTick;
+        int tick = (int)totalTick;
+        int measure, beat, tickRem;
+        mMeasureMap->TickToMeasureBeatTick(tick, measure, beat, tickRem);
+        pos.AccessMeasure() = measure;
+        pos.AccessBeat() = beat;
+        pos.AccessTick() = tickRem;
+    }
+
+    int measPerPhrase = mMeasuresPerPhrase;
+    if (measPerPhrase != 0) {
+        pos.AccessPhrase() = pos.GetMeasure() / measPerPhrase;
+        pos.AccessMeasure() = pos.GetMeasure() % measPerPhrase;
+    }
+    int subdivision = pos.GetTick() / 120;
+
+    if (measPerPhrase != 0) {
+        SetProperty("phrase", pos.GetPhrase());
+    }
+    SetProperty("measure", pos.GetMeasure());
+    SetProperty("beat", pos.GetBeat());
+    SetProperty("tick", pos.GetTick());
+    SetProperty("total_beat", totalBeat);
+    SetProperty("sub_division", subdivision);
+    SetProperty("seconds", seconds);
+}
+
+DataNode BeatClock::OnSyncState(DataArray *msg) {
+    BeatClock *src = msg->Obj<BeatClock>(2);
+    int mode = msg->Node(3).Int(msg);
+
+    if (src) {
+        SongPos srcPos = src->mSongPos;
+        SongPos oldPos = mSongPos;
+
+        switch (mode) {
+        case kSync_TicksOnly:
+            SetProperty("tick", srcPos.GetTick());
+            SetProperty("sub_division", src->mSubDivision);
+            break;
+        case kSync_BeatsAndTicks:
+            SetProperty("tick", srcPos.GetTick());
+            SetProperty("sub_division", src->mSubDivision);
+            SetProperty("beat", srcPos.GetBeat());
+            break;
+        case kSync_MeasuresBeatsAndTicks:
+        default:
+            SetProperty("tick", srcPos.GetTick());
+            SetProperty("sub_division", src->mSubDivision);
+            SetProperty("beat", srcPos.GetBeat());
+            SetProperty("measure", srcPos.GetMeasure());
+            break;
+        }
+
+        float delta =
+            (float)(mSongPos.GetBeat() - oldPos.GetBeat())
+            + (float)((mSongPos.GetMeasure() - oldPos.GetMeasure()) * mBeatsPerMeasure)
+            + (float)(mSongPos.GetTick() - oldPos.GetTick()) * (1.0f / 480.0f);
+
+        if (std::fabs(delta) >= 0.0001f) {
+            float newTotalBeat = mSongPos.GetTotalBeat() + delta;
+            mSongPos.AccessTotalBeat() = newTotalBeat;
+            mSongPos.AccessTotalTick() = newTotalBeat * 480.0f;
+            BroadcastPropertyChange(Symbol("total_beat"));
+            mTotalSeconds += (60.0f / mBeatsPerMinute) * delta;
+            BroadcastPropertyChange(Symbol("seconds"));
+        }
+    }
+
+    return DataNode(0);
+}

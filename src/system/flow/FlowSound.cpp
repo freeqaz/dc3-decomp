@@ -217,7 +217,7 @@ void FlowSound::UpdateIntensity() {
 }
 
 void FlowSound::OnMarkerEvent(Symbol marker) {
-    FLOW_LOG("Event: %s\n", marker);
+    FLOW_LOG("Event: %s\n", (char *)marker.Str());
 
     // Look for matching FlowLabel children and activate them
     FOREACH (it, mChildNodes) {
@@ -241,7 +241,7 @@ void FlowSound::OnMarkerEvent(Symbol marker) {
     if (mIsPlaying && (marker == ended || marker == interrupted)) {
         // Sound ended or was interrupted
         mIsPlaying = false;
-        if (!mStopRequested) {
+        if (!mRunningNodes.empty()) {
             return;
         }
         if (!mFlowParent->HasRunningNode(this)) {
@@ -257,7 +257,7 @@ void FlowSound::OnMarkerEvent(Symbol marker) {
     } else if (marker == looped) {
         if (mStopRequested && mIsPlaying) {
             mSound->Stop(this, false);
-            if (!mStopRequested) {
+            if (!mRunningNodes.empty()) {
                 return;
             }
             if (!mFlowParent->HasRunningNode(this)) {
@@ -285,7 +285,7 @@ void FlowSound::OnMarkerEvent(Symbol marker) {
     } else if (marker == release) {
         mIsPlaying = false;
         mSound->EndLoop(this);
-        if (!mStopRequested) {
+        if (!mRunningNodes.empty()) {
             return;
         }
         if (!mFlowParent->HasRunningNode(this)) {

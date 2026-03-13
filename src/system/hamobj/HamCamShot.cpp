@@ -883,10 +883,10 @@ void HamCamShot::FlipTargetAnimGroups() {
 void HamCamShot::CreateFlippedShowHideList() {
     // Only build if all flip lists are currently empty
     if (mFlipHideList.size() > 0 || mFlipShowList.size() > 0 || mFlipGenHideList.size() > 0
-        || mFlipGenHideVector.begin() != mFlipGenHideVector.end()
+        || mFlipGenHideVector.size() > 0
         || mFlipDrawOverrides.size() > 0
         || mFlipPostProcOverrides.size() > 0 || mFlipEndHideList.size() > 0
-        || mFlipEndShowVector.begin() != mFlipEndShowVector.end())
+        || mFlipEndShowVector.size() > 0)
         return;
 
     // Copy mHideList → mFlipHideList (original), mFlipDrawOverrides (flipped)

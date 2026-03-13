@@ -40,6 +40,7 @@ public:
     void SetBackgroundVolume(float);
     void SetForegroundVolume(float);
     void SetStereo(bool);
+    void SetPracticeMode(bool) {}
 
     DataNode OnGetCurrentLoopBeats(DataArray *);
     DataNode OnSetCrossfadeJump(DataArray *);

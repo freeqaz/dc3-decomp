@@ -26,6 +26,11 @@ REFACTOR_TOOLS = [
     "mcp__orchestrator__refactor_complete",
 ]
 
+MERGER_TOOLS = [
+    "Read", "Write", "Edit", "Bash", "Glob", "Grep",
+    "mcp__orchestrator__mark_patch_result",
+]
+
 
 @dataclass
 class AgentRunConfig:

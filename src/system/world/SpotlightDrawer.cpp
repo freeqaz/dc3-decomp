@@ -364,7 +364,9 @@ void SpotDrawParams::Load(BinStreamRev &d) {
     if (d.rev < 4) {
         int a;
         Key<float> b, c;
-        d >> a >> b >> c;
+        d >> a;
+        d.stream >> b;
+        d.stream >> c;
     }
     d >> mTexture;
     d >> mProxy;

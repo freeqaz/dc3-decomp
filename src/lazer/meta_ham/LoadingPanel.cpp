@@ -89,13 +89,21 @@ bool LoadingPanel::Exiting() {
 void LoadingPanel::Enter() {
     UIPanel::Enter();
     TheTaskMgr.SetSecondsAndBeat(0, 0, true);
+#ifdef HX_NATIVE
+    // Loading music stream may not be ready on native (DTA variable not set)
     if (sLoadingMaster->GetHxAudio()->IsReady()) {
         Stream *stream = sLoadingMaster->GetHxAudio()->GetSongStream();
         if (stream) {
+            stream->SetJump(Stream::kStreamEndMs, 0.0f, nullptr);
             stream->Play();
-            stream->Resync(0.0f);
         }
     }
+#else
+    Stream *stream = sLoadingMaster->GetHxAudio()->GetSongStream();
+    MILO_ASSERT(sLoadingMaster->GetHxAudio()->IsReady(), 0x6a);
+    stream->SetJump(Stream::kStreamEndMs, 0.0f, nullptr);
+    stream->Play();
+#endif
 }
 
 Symbol LoadingPanel::ChooseLoadingScreen() {

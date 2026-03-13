@@ -1,5 +1,6 @@
 #include "hamobj/FilterQueue.h"
 #include "os/Debug.h"
+#include "os/Timer.h"
 #include "utl/Loader.h"
 
 FilterQueue::FilterQueue() : mJobFinished(false), mLastPollMs(0.0f) {}
@@ -70,4 +71,44 @@ void FilterQueue::StartJob() {
     for (int frameIdx = 0; frameIdx < frameCount; frameIdx++) {
         mOutput.frames[frameIdx].mInputFrame = &mQueuedJob.frames[frameIdx];
     }
+}
+
+void FilterQueue::Poll(const SkeletonUpdateData &skelData) {
+    Timer timer;
+    timer.Start();
+    float songSpeed = mOutput.songSpeed;
+    MoveMode moveMode = mOutput.moveMode;
+    std::vector<FilterOutputFrame> &oframes = mOutput.frames;
+    for (std::vector<FilterOutputFrame>::iterator it = oframes.begin(); it != oframes.end(); ++it) {
+        FilterInputFrame *inFrame = it->mInputFrame;
+        const FilterVersion *filterVer = inFrame->mFilterVersion;
+        BaseSkeleton *skel = skelData.mSkeletonsLeft[inFrame->mSlot];
+        int numNodes = filterVer->NumNodes();
+        if (skel == nullptr || !skel->IsTracked()) {
+            for (int n = 0; n < numNodes; n++) {
+                it->mErrors[n].Set(1.0f, 1.0f, 1.0f);
+            }
+        } else {
+            DetectFrame *detectFrame = inFrame->mDetectFrame;
+            const MoveFrame *moveFrame = detectFrame->GetMoveFrame();
+            ErrorFrameInput errorInput(
+                skelData.mHistory,
+                detectFrame->GetDancerFrame()->mSkeleton,
+                *skel,
+                songSpeed
+            );
+            for (int n = 0; n < numNodes; n++) {
+                ErrorNode *errorNode = filterVer->mErrorNodes[n];
+                if (errorNode->Type() & moveFrame->TypeMask()) {
+                    ErrorNodeInput nodeInput;
+                    filterVer->NodeInput(n, detectFrame, moveMode, nodeInput);
+                    errorNode->CalcError(errorInput, nodeInput, it->mErrors[n]);
+                } else {
+                    it->mErrors[n].Set(1.0f, 1.0f, 1.0f);
+                }
+            }
+        }
+    }
+    mJobFinished = true;
+    mLastPollMs = Timer::CyclesToMs(timer.Stop());
 }

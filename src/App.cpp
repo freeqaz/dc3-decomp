@@ -241,6 +241,17 @@ App::App(int argc, char **argv) {
     // Flow system - manages game state machine
     FlowInit();
 
+    // Load common sound bank (Faders, FxSend, Sound objects used by gameplay)
+    {
+        ObjDirPtr<ObjectDir> commonBankDir;
+        DataArray *soundBanksConfig = SystemConfig("sound", "banks", "common");
+        const char *soundBankPath = soundBanksConfig->Node(1).Str(soundBanksConfig);
+        commonBankDir.LoadFile(soundBankPath, false, true, kLoadFront, false);
+        TheSynth->SetDir(commonBankDir);
+        fprintf(stderr, "DC3 CommonBank: path='%s' loaded=%d\n",
+                soundBankPath, TheSynth->CheckCommonBank(false));
+    }
+
     // Character system
     CharInit();
 

@@ -49,6 +49,7 @@ from .config import (
     _get_zai_base_url,
     _get_zai_timeout,
 )
+from .merger_agent import MergerAgent
 from .patch_applier import PatchApplier
 from .rb3_pairing import get_rb3_source_for_unit
 
@@ -217,6 +218,14 @@ class DecompOrchestrator:
         self.patch_applier = PatchApplier(
             main_repo=self.main_repo,
             enabled=auto_apply,
+        )
+
+        # Intelligent merger agent for batch mode patch application
+        self.merger_agent = MergerAgent(
+            main_repo=self.main_repo,
+            db_path=self.db_path,
+            agent_runner=self.runner,
+            max_batch=5,
         )
 
         # Active sessions: session_id -> asyncio.Task
@@ -607,6 +616,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
         dry_run_handler: Callable[[dict, str, dict], dict] | None = None,
         refactor: bool = False,
         reviewer_model: str = "sonnet",
+        use_merger: bool = False,
     ) -> dict[str, Any]:
         """Execute a session flow shared by run_single and run_rb3_merge_single.
 
@@ -927,7 +937,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
 
             # 12. Record attempt
             log.info(f"Recording attempt to database (status={exit_status}, {start_percent}% -> {end_percent}%)...")
-            record_attempt(
+            attempt_id = record_attempt(
                 function_id=func["id"],
                 session_id=session_id,
                 model=selected_model,
@@ -958,14 +968,38 @@ Focus on readability and maintainability while preserving exact behavior and mat
                 db_path=self.db_path,
             )
 
-            # 14. Auto-apply patch to main repo if enabled and there was progress
-            apply_result = self.patch_applier.maybe_apply(
-                patch=patch,
-                start_percent=start_percent,
-                end_percent=end_percent if end_percent is not None else start_percent,
-                exit_status=exit_status,
-                symbol=func["symbol"],
-            )
+            # 14. Apply patch to main repo
+            if use_merger and patch and patch.strip() and exit_status != "error":
+                # Batch mode: enqueue to intelligent merger agent
+                queue_id = self.merger_agent.enqueue(
+                    attempt_id=attempt_id,
+                    function_id=func["id"],
+                    symbol=func["symbol"],
+                    demangled=func.get("demangled"),
+                    unit=func.get("unit"),
+                    patch=patch,
+                    start_percent=start_percent,
+                    end_percent=end_percent if end_percent is not None else start_percent,
+                )
+                # Also write patch file for audit trail
+                self.patch_applier.write_patch_file(patch, func["symbol"], end_percent or 0)
+                # Try to spawn merger if not already running
+                spawned = await self.merger_agent.maybe_spawn()
+                if spawned:
+                    log.info("Spawned merger agent for queued patches")
+                apply_result = {
+                    "applied": False,
+                    "message": f"Enqueued to merger (queue_id={queue_id})",
+                }
+            else:
+                # Single mode: direct apply via PatchApplier
+                apply_result = self.patch_applier.maybe_apply(
+                    patch=patch,
+                    start_percent=start_percent,
+                    end_percent=end_percent if end_percent is not None else start_percent,
+                    exit_status=exit_status,
+                    symbol=func["symbol"],
+                )
 
             log.info(
                 f"Session complete for {func['symbol']}: "
@@ -1040,6 +1074,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
         refactor: bool = False,
         custom_prompt: Optional[str] = None,
         reviewer_model: str = "sonnet",
+        use_merger: bool = False,
     ) -> dict[str, Any]:
         """
         Run single agent on one function.
@@ -1055,6 +1090,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
             refactor: Run refactor-staff cleanup pass after the main agent
             custom_prompt: Custom instructions to append to agent prompt
             reviewer_model: Model to use for the refactor-staff pass (default: sonnet)
+            use_merger: If True, enqueue patches to merger agent instead of direct apply
 
         Returns:
             Result dict with status, percent, patch, etc.
@@ -1187,6 +1223,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
             dry_run_handler=run_single_dry_run_handler if dry_run else None,
             refactor=refactor,
             reviewer_model=reviewer_model,
+            use_merger=use_merger,
         )
 
         # Print verbose footer
@@ -1437,7 +1474,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
                 # Spawn agent asynchronously
                 task = asyncio.create_task(
                     self._run_batch_agent(
-                        session_id, func, model, verbose, use_incremental=current_use_incremental, refactor=refactor, reviewer_model=reviewer_model
+                        session_id, func, model, verbose, use_incremental=current_use_incremental, refactor=refactor, reviewer_model=reviewer_model, use_merger=self.patch_applier.enabled
                     )
                 )
                 self.active_sessions[session_id] = task
@@ -1456,12 +1493,17 @@ Focus on readability and maintainability while preserving exact behavior and mat
         # Wait for remaining agents (drain — no new spawns, just collect results)
         errors = await self._drain_active_sessions(results, errors, verbose)
 
+        # Drain merger agent if it's running
+        if self.patch_applier.enabled:
+            await self.merger_agent.drain()
+
         # Generate summary
         summary = self._generate_batch_summary(results, pattern)
         summary["build_strategy"] = "incremental" if use_incremental else "full"
         summary["periodic_validation"] = periodic_full_interval if use_incremental else 0
         summary["build_metrics"] = build_metrics
         summary["auto_apply_stats"] = self.patch_applier.stats()
+        summary["merger_stats"] = self.merger_agent.status() if self.patch_applier.enabled else {}
         summary["skipped_complete"] = skipped_complete
         if circuit_tripped:
             summary["circuit_breaker_tripped"] = True
@@ -1635,7 +1677,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
                 # Spawn agent asynchronously
                 task = asyncio.create_task(
                     self._run_batch_agent(
-                        session_id, func, model, verbose, use_incremental=current_use_incremental, refactor=refactor, reviewer_model=reviewer_model
+                        session_id, func, model, verbose, use_incremental=current_use_incremental, refactor=refactor, reviewer_model=reviewer_model, use_merger=self.patch_applier.enabled
                     )
                 )
                 self.active_sessions[session_id] = task
@@ -1655,11 +1697,16 @@ Focus on readability and maintainability while preserving exact behavior and mat
         # Wait for remaining agents (drain — no new spawns, just collect results)
         errors = await self._drain_active_sessions(results, errors, verbose)
 
+        # Drain merger agent if it's running
+        if self.patch_applier.enabled:
+            await self.merger_agent.drain()
+
         # Generate summary
         summary = self._generate_batch_summary(results, f"<{len(targets)} priority targets>")
         summary["build_strategy"] = "incremental" if use_incremental else "full"
         summary["periodic_validation"] = periodic_full_interval if use_incremental else 0
         summary["auto_apply_stats"] = self.patch_applier.stats()
+        summary["merger_stats"] = self.merger_agent.status() if self.patch_applier.enabled else {}
         summary["target_count"] = len(targets)
         summary["processed_count"] = processed
         summary["skipped_complete"] = skipped_complete
@@ -1691,6 +1738,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
         use_incremental: bool = True,
         refactor: bool = True,
         reviewer_model: str = "sonnet",
+        use_merger: bool = False,
     ) -> dict[str, Any]:
         """Run single agent as part of batch (handles its own errors).
 
@@ -1702,6 +1750,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
             use_incremental: Use incremental build
             refactor: Run refactor-staff cleanup pass after main agent
             reviewer_model: Model to use for the refactor-staff pass (default: sonnet)
+            use_merger: If True, enqueue patches to merger agent instead of direct apply
         """
         try:
             return await self.run_single(
@@ -1713,6 +1762,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
                 pre_locked=True,  # Batch already locked the function
                 refactor=refactor,
                 reviewer_model=reviewer_model,
+                use_merger=use_merger,
             )
         except Exception as e:
             self.logger.error(f"[{session_id}] {type(e).__name__}: {e}", exc_info=True)
@@ -1949,6 +1999,26 @@ Focus on readability and maintainability while preserving exact behavior and mat
             if extra:
                 parts.append(f"({', '.join(extra)})")
             print(f"  {' '.join(parts)}")
+
+        # --- Merger stats ---
+        merger_stats = summary.get("merger_stats", {})
+        if merger_stats:
+            m_applied = merger_stats.get("applied", 0)
+            m_pending = merger_stats.get("pending", 0)
+            m_failed = merger_stats.get("failed", 0)
+            m_skipped = merger_stats.get("skipped", 0)
+            if m_applied > 0 or m_pending > 0 or m_failed > 0:
+                parts = [f"Merger: {m_applied} applied"]
+                extra = []
+                if m_pending > 0:
+                    extra.append(f"{m_pending} pending")
+                if m_failed > 0:
+                    extra.append(f"{m_failed} failed")
+                if m_skipped > 0:
+                    extra.append(f"{m_skipped} skipped")
+                if extra:
+                    parts.append(f"({', '.join(extra)})")
+                print(f"  {' '.join(parts)}")
 
         # --- Per-file progress ---
         per_file = summary.get("per_file", {})

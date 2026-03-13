@@ -1426,7 +1426,7 @@ void CamShot::CacheFrames() {
 }
 
 void CamShot::GetKey(float frame, CamShotFrame *&prev, CamShotFrame *&next, float &keyBlend) {
-    MILO_ASSERT(!mKeyframes.empty(), 0x29B);
+    MILO_ASSERT(!mKeyframes.empty(), 0x256);
     if (frame <= 0 || mDuration <= 0) {
         prev = nullptr;
         next = mKeyframes.begin();
@@ -1438,7 +1438,7 @@ void CamShot::GetKey(float frame, CamShotFrame *&prev, CamShotFrame *&next, floa
             if (frame >= mDuration) {
                 float duration = mDuration - mKeyframes[mLoopKeyframe].mFrame;
                 frame -= mDuration;
-                MILO_ASSERT(duration > 0, 0x2AF);
+                MILO_ASSERT(duration > 0, 0x26A);
                 float remainder = std::fmod(frame, duration);
                 frame = remainder + mKeyframes[mLoopKeyframe].mFrame;
             }
@@ -1451,7 +1451,7 @@ void CamShot::GetKey(float frame, CamShotFrame *&prev, CamShotFrame *&next, floa
                 }
                 float holdEnd = mKeyframes.back().mFrame + mKeyframes.back().mDuration;
                 if (frame > holdEnd) {
-                    MILO_ASSERT(mKeyframes.back().mBlend > 0, 0x2C4);
+                    MILO_ASSERT(mKeyframes.back().mBlend > 0, 0x27F);
                     prev = &mKeyframes.back();
                     next = &mKeyframes[mLoopKeyframe];
                     keyBlend = (frame - holdEnd) / mKeyframes.back().mBlend;
@@ -1487,10 +1487,10 @@ void CamShot::GetKey(float frame, CamShotFrame *&prev, CamShotFrame *&next, floa
             after = avg;
         }
     }
-    MILO_ASSERT(frame >= mKeyframes[before].mFrame && frame < mKeyframes[after].mFrame, 0x2F4);
+    MILO_ASSERT(frame >= mKeyframes[before].mFrame && frame < mKeyframes[after].mFrame, 0x2AF);
     float holdEnd = mKeyframes[before].mFrame + mKeyframes[before].mDuration;
     if (frame > holdEnd) {
-        MILO_ASSERT(mKeyframes[before].mBlend > 0, 0x2F9);
+        MILO_ASSERT(mKeyframes[before].mBlend > 0, 0x2B4);
         prev = &mKeyframes[before];
         next = &mKeyframes[after];
         keyBlend = (frame - holdEnd) / mKeyframes[before].mBlend;

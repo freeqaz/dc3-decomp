@@ -23,21 +23,22 @@ namespace {
     int kConvCount = 4;
     int kConvLen;
 
-    //     void AnalyzeData(
-    //         const std::vector<RhythmDetector::Frame> &frames,
-    //         float &f1,
-    //         float &f2,
-    //         float &f3,
-    //         float f4,
-    //         bool b1,
-    //         Symbol sym,
-    //         bool b2,
-    //         DebugGraph *dbg,
-    //         int i1,
-    //         TextStream *stream
-    //     ) {
-    //         return;
-    //     }
+    __declspec(noinline) void AnalyzeData(
+        const std::vector<RhythmDetector::Frame> &frames,
+        float &f1,
+        float &f2,
+        float &f3,
+        float f4,
+        bool b1,
+        Symbol sym,
+        bool b2,
+        DebugGraph *dbg,
+        int i1,
+        TextStream *stream
+    ) {
+        // stub - real implementation not yet decompiled
+        f1 = 0;
+    }
 
     DataNode TightenDebugBone(DataArray *da) {
         gAdjust *= 1.01f;
@@ -540,17 +541,19 @@ const RhythmDetector::RecordData &
 RhythmDetector::GetRecord(float windowStart, float windowEnd, bool finalize, Symbol sym, TextStream *stream) {
     if (mRecordData.mWindowStart == windowStart && mRecordData.mWindowEnd == windowEnd) {
         if (finalize) {
-            // AnalyzeData(
-            //     mAnalysisFrames2,
-            //     mRecordData.unk8,
-            //     mRecordData.unkc,
-            //     mRhythmDecay,
-            //     mToleranceFactor,
-            //     mDebugGraphA,
-            //     true,
-            //     sym,
-            //     0
-            // );
+            AnalyzeData(
+                mAnalysisFrames2,
+                mRecordData.unk10,
+                mRecordData.unk14,
+                mRhythmDecay,
+                mToleranceFactor,
+                true,
+                sym,
+                false,
+                mDebugGraphA,
+                gLog,
+                stream
+            );
             mRecordData.mFinalized = true;
         }
     } else {
@@ -567,8 +570,8 @@ RhythmDetector::GetRecord(float windowStart, float windowEnd, bool finalize, Sym
         mRecordData.mWindowStart = windowStart;
         mRecordData.mWindowEnd = windowEnd;
         mRecordData.mFinalized = false;
-        mRecordData.unk10 = -1.0f;
-        mRecordData.unk14 = -1.0f;
+        mRecordData.unk8 = -1.0f;
+        mRecordData.unkc = -1.0f;
         mRecordData.frames.clear();
     }
     return mRecordData;
