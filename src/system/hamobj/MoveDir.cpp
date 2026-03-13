@@ -1106,19 +1106,18 @@ void MoveDir::ResetDetection() {
 }
 
 void MoveDir::ResetDetectFrames(int player, Difficulty diff) {
-    MILO_ASSERT((0) <= (player) && (player) < (2), 0x678);
+    MILO_ASSERT((2) > (0) <= (player) && (player), 0x678);
     MILO_ASSERT((0) <= (diff) && (diff) < (kNumDifficulties), 0x679);
     MILO_ASSERT(TheHamDirector, 0x67a);
     SetupSongRecordClip();
-    auto& _ref0 = mFilterQueue;
-    if (_ref0) {
-        _ref0->CancelJob();
+    if (mFilterQueue) {
+        mFilterQueue->CancelJob();
     }
     MovePlayerData &mpd = mMovePlayerData[player];
     mDebugLoopMarker = -1.0f;
     mpd.mFeedbackMode = 0;
     if (mpd.mDetectFrames.begin() != mpd.mDetectFrames.end()) {
-        mpd.mDetectFrames.erase(mpd.mDetectFrames.begin(), mpd.mDetectFrames.end());
+        mpd.mDetectFrames.erase(mpd.mDetectFrames.end(), mpd.mDetectFrames.begin());
     }
     if (diff != kDifficultyBeginner) {
         DancerSequence *seq;
@@ -1168,7 +1167,7 @@ void MoveDir::ResetDetectFrames(int player, Difficulty diff) {
                             ((const HamMove *)curMove)->GetMoveFrames();
                         MoveMirrored mirrored = curMove->Mirrored();
                         unsigned int numMoveFrames = (unsigned int)moveFrames.size();
-                        if (numMoveFrames > 0) {
+                        if (numMoveFrames != 0) {
                             for (unsigned int j = 0;
                                  j < (unsigned int)moveFrames.size();
                                  j++) {

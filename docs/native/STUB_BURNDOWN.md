@@ -1,6 +1,6 @@
 # Stub Function Burndown
 
-Consolidated report of stub functions across the decomp, categorized by type and grouped by source file. Generated 2026-03-12 from orchestrator queries (50 per unit pattern, 16 patterns).
+Consolidated report of stub functions across the decomp, categorized by type and grouped by source file. Generated 2026-03-12, updated 2026-03-13 from source verification.
 
 ---
 
@@ -8,22 +8,17 @@ Consolidated report of stub functions across the decomp, categorized by type and
 
 Stubs ranked by impact on the native port roadmap (Session 59 → Milestone 4: Playable Dance Gameplay). Current state: game_screen renders 505 draw calls but scene is static, HUD shows pink rectangles, no character animation.
 
-### TIER 1 — Critical: Blocks Scene Animation & Camera (Phase 4.4)
+### TIER 1 — ~~Critical~~ COMPLETE (verified 2026-03-13)
 
-These stubs directly block the transition from "static screenshot" to "animated venue with moving camera." Session 60's immediate goals depend on these.
-
-| File | Stubs | Why Critical |
-|------|-------|-------------|
-| **CameraShot.cpp** | `Shake`, `GetKey`, `SetPos`, `BuildTransform`, `Interp` (5) | Camera movement during gameplay — song.anim drives CamShot keyframes. Without these, camera is frozen. |
-| **HamDirector.cpp** | `RemapSongAnimToTempoMap` (1) | Maps song animation timing to tempo. Blocks beat-synced venue animation. |
-| **HamCharacter.cpp** | `ApplyBlendedSkeletons` (1) | Blends dance clip skeletons onto character. Blocks character animation on game_screen. |
-| **FlowSequence.cpp** | `Activate` (1) | Flow graph sequence activation. Many UI and gameplay flows use FlowSequence nodes. |
-| **FlowSwitchCase.cpp** | `IsValidCase` (1) | Flow graph branching logic. Blocks conditional flow paths (mode selection, state machines). |
-| **FlowSound.cpp** | `OnMarkerEvent` (1) | Audio marker sync from flow graph. Blocks audio-visual sync events. |
-| **FlowTimer.cpp** | `EventTask` class (5: ctor, dtor, ClassName, StaticClassName, Poll) | Timed events in flow graph. Blocks delayed/scheduled flow actions. |
-| **Flow.cpp** | `ScanForOutPorts`, `Copy` (2) | Flow graph wiring and cloning. Needed for complex flow setups. |
-
-**Total: ~17 stubs. Unblocks: camera animation, character dance, flow-driven game logic.**
+All Tier 1 stubs have been implemented:
+- **CameraShot.cpp**: `Shake`, `GetKey`, `SetPos`, `BuildTransform`, `Interp` — all implemented
+- **HamDirector.cpp**: `RemapSongAnimToTempoMap` — implemented
+- **HamCharacter.cpp**: `ApplyBlendedSkeletons` — implemented
+- **FlowSequence.cpp**: `Activate` — implemented
+- **FlowSwitchCase.cpp**: `IsValidCase` — implemented
+- **FlowSound.cpp**: `OnMarkerEvent` — implemented
+- **FlowTimer.cpp**: `EventTask` (ctor, dtor, ClassName, StaticClassName, Poll) — all implemented (ClassName/StaticClassName via OBJ_CLASSNAME macro)
+- **Flow.cpp**: `ScanForOutPorts`, `Copy` — both implemented
 
 ### TIER 2 — High: Enables Gameplay Scoring & HUD (Phase 4.1–4.3)
 
