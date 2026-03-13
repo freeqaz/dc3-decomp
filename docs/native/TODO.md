@@ -1,19 +1,19 @@
 # Native Port TODO — Content System & Song Select Working
 
-## Current State (Session 62)
+## Current State (Session 63)
+- **Character animation pipeline functional** — ClipPlayer loads song clip keys (60 keyframes), pushes layers into HamDriver, Weight() evaluation drives bone transforms
+- **HamDriver::Poll decomp bug fixed** — was using `mLayers.mWeight` (always 0) instead of `Weight()` (CharWeightable, defaults 1.0). Now 100% match.
+- **Game screen auto-play** — `DC3_SCREEN=game_screen DC3_SONG=boyfriend` sets up song, mode, difficulty, navigates directly to gameplay
 - **Content system fully integrated** — 62 songs load from DTA via ContentMgr → SongMgr → HamSongMgr pipeline
 - **Song select populated** — 46 songs pass profile filter, 49 UI items (songs + headers) in song_select_screen
-- **Full boot flow**: attract_screen → autosave_warning → title_screen → main_screen → (auto-nav or manual) → song_select_screen
-- **DC3_SCREEN env var** — auto-navigate to any screen after reaching main_screen (e.g. `DC3_SCREEN=song_select_screen`)
-- **MoviePanel fix** — `IsLoaded()` bypasses `mMovie.Ready()` on native (stub always returns false, was blocking all screen transitions)
-- **3D venue rendering on game_screen** — DCI venue with 505 draw calls/frame, 10000 frames stable (clean exit)
-- Full menu navigation: main_screen → choose_mode → song_select → YMCA → multiuser → loading → game_screen
+- **Full boot flow**: attract_screen → autosave_warning → title_screen → main_screen → (auto-nav) → game_screen
+- **3D venue rendering on main_screen** — DCI venue with 534 draw calls/frame, 10000 frames stable
 - Venue geometry (floor, walls, DJ booth, lighting rigs, graffiti), **fully-lit character** (skin, hair, outfit visible), HUD overlays all render
 - Zero-color LightPreset detection enables fallback three-point lighting for character
 - Flow→PropAnim UI animation pipeline verified working end-to-end (Session 58)
 - Text rendering, mesh rendering, material pipeline all working
 - HamUI two-pass draw pipeline active (letterbox + main draw pass)
-- Scene is static: LightPreset::Load unimplemented (0 presets), song.anim DTA scripts crash on missing objects
+- Game screen renders black — venue world_panel not drawing (venue loading requires further work)
 
 ## Headless GPU Rendering
 
@@ -129,7 +129,7 @@ Goal: Character with proper materials, crowd, animated venue, gameplay HUD textu
 ### 4.1 Character Rendering
 - [x] Character material/texture application — **DONE** (zero-color LightPreset detection enables fallback lighting)
 - [ ] Skinned mesh rendering (bone transforms in vertex shader)
-- [ ] Character dance animation (clips loaded but not driven)
+- [x] Character dance animation pipeline — **DONE** (Session 63: ClipPlayer loads 60 clip keys, PushClip/PushExpertClip push layers, HamDriver::Poll Weight() fix evaluates bones. Game screen venue rendering still needed to visually verify.)
 
 ### 4.2 Merge Pipeline Stability
 - [x] Fix ObjRef ring corruption root cause — **DONE** (`ObjDirPtr(C*)` was double-linking the same ref node; `ObjRefConcrete` already links the node in its base ctor, so the extra `AddRef` corrupted the ring at creation time)
@@ -146,7 +146,7 @@ Goal: Character with proper materials, crowd, animated venue, gameplay HUD textu
 - [ ] Revalidate song/venue animation after the ObjRef ring fix, then narrow remaining blockers
 - [ ] Venue lighting animation (still blocked by `LightPreset::Load`)
 - [ ] Song.anim driving (remaining DTA crashes on missing game objects still need investigation)
-- [ ] Character dance animation (clips present but SongAnimation() returns -1)
+- [x] Character dance animation — **DONE** (Session 63: HamDriver::Poll decomp fix, full ClipPlayer pipeline, GamePanel native init)
 
 ### 4.5 Loading State Machines — Analysis Complete (Session 60)
 
@@ -269,7 +269,7 @@ HamDirector (`src/system/hamobj/HamDirector.cpp:137-202`) exposes ~40+ DTA handl
 | HUD move cards pink rectangles | TexMovie render-to-texture | TODO — Phase 4 |
 | Crowd/audio merges crash-skipped | Previously ObjRef ring corruption; now needs fresh runtime validation after ctor fix | TODO — Phase 4 |
 | MoviePanel::IsLoaded blocks forever | mMovie.Ready() stub returns false | **FIXED** (Session 62 — `#ifdef HX_NATIVE` bypass) |
-| Static scene (no animation) | ObjRef ring bug was a shared blocker; remaining blockers appear to be `LightPreset::Load` + song.anim DTA object gaps | TODO — Phase 4 |
+| Static scene (no animation) | Character anim pipeline working (Session 63); venue still static pending LightPreset::Load + world_panel rendering on game_screen | Partially fixed |
 | Empty lists (no content) | Content system | **FIXED** (Session 62 — 49 items in song_select) |
 
 ## Crashes Fixed (Session 59)
