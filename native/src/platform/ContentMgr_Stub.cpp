@@ -24,7 +24,6 @@ public:
     virtual void Terminate() {}
 
     virtual void StartRefresh() {
-        fprintf(stderr, "DC3 ContentMgr: StartRefresh called, mDirty=%d\n", (int)mDirty);
         if (!mDirty) {
             return;
         }
@@ -41,8 +40,6 @@ public:
         }
 
         QueueCallbackFiles();
-        fprintf(stderr, "DC3 ContentMgr: StartRefresh — %d callback files queued, %d callbacks\n",
-                (int)mCallbackFiles.size(), (int)mCallbacks.size());
         if (mCallbackFiles.empty()) {
             mState = kDiscoveryEnumerating;
             for (auto it = mCallbacks.begin(); it != mCallbacks.end(); ++it) {
@@ -83,11 +80,20 @@ private:
 
     void QueueCallbackDir(const char *virtualDir, const char *pattern) {
         char extractedDir[256];
+#ifdef __EMSCRIPTEN__
+        // MEMFS: assets are directly under /data/, no "extracted/" prefix
+        if (virtualDir && *virtualDir && strcmp(virtualDir, ".") != 0) {
+            snprintf(extractedDir, sizeof(extractedDir), "%s", virtualDir);
+        } else {
+            snprintf(extractedDir, sizeof(extractedDir), ".");
+        }
+#else
         if (virtualDir && *virtualDir && strcmp(virtualDir, ".") != 0) {
             snprintf(extractedDir, sizeof(extractedDir), "extracted/%s", virtualDir);
         } else {
             snprintf(extractedDir, sizeof(extractedDir), "extracted");
         }
+#endif
 
         char qualifiedDir[256];
         FileQualifiedFilename(qualifiedDir, sizeof(qualifiedDir), extractedDir);

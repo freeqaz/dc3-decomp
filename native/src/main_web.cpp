@@ -46,10 +46,58 @@
 #include "world/World.h"
 #include "obj/Dir.h"
 #include "obj/DirLoader.h"
+#include "obj/Data.h"
+#include "obj/Object.h"
 
 // WgpuRnd access
 #include "platform/Rnd_Wgpu.h"
 extern WgpuRnd *gWgpuRnd;
+
+// ============================================================================
+// Web stub manager classes — respond to DTA script messages
+// ============================================================================
+
+// SaveLoadMgr stub: {saveload_mgr is_idle} → TRUE, {saveload_mgr activate} → no-op
+class WebSaveLoadMgr : public Hmx::Object {
+public:
+    WebSaveLoadMgr() {}
+    virtual DataNode Handle(DataArray *msg, bool b) {
+        Symbol type = msg->Sym(1);
+        if (type == "is_idle") return DataNode(1);
+        if (type == "activate") return DataNode(0);
+        if (type == "autosave") return DataNode(0);
+        if (type == "get_dialog_msg") return DataNode("");
+        if (type == "get_dialog_opt1") return DataNode("");
+        if (type == "get_dialog_opt2") return DataNode("");
+        if (type == "get_dialog_focus_option") return DataNode(0);
+        return Hmx::Object::Handle(msg, b);
+    }
+};
+
+// ProfileMgr stub: responds to profile queries with safe defaults
+class WebProfileMgr : public Hmx::Object {
+public:
+    WebProfileMgr() {}
+    virtual DataNode Handle(DataArray *msg, bool b) {
+        Symbol type = msg->Sym(1);
+        if (type == "has_active_profile") return DataNode(0);
+        if (type == "get_active_profile") return DataNode(0);
+        if (type == "get_disable_voice") return DataNode(1);
+        if (type == "has_seen_tutorial") return DataNode(1);
+        if (type == "get_num_valid_profiles") return DataNode(0);
+        if (type == "get_active_profile_name") return DataNode("");
+        return Hmx::Object::Handle(msg, b);
+    }
+};
+
+// Generic stub that returns 0/false for any message
+class WebGenericStub : public Hmx::Object {
+public:
+    WebGenericStub() {}
+    virtual DataNode Handle(DataArray *msg, bool b) {
+        return DataNode(0);
+    }
+};
 
 // Forward declarations from other TUs
 extern void NativeSetDataDir(const char *);
@@ -75,6 +123,9 @@ enum BootState {
 
 static BootState sBootState = BOOT_INIT;
 static int sFrameCount = 0;
+static int sGpuWaitFrames = 0;
+static bool sGpuReady = false;
+static const int kGpuWaitTimeout = 300; // ~5 seconds at 60fps
 
 // ============================================================================
 // Main loop — drives the boot state machine
@@ -164,20 +215,18 @@ static void mainLoop() {
         TheUI = &TheHamUI;
         TheHamUI.Init();
 
-        // Register stub objects for DTA scripts that reference Xbox managers
+        // Register stub objects for DTA scripts that reference Xbox managers.
+        // Objects already registered by engine init (content_mgr, player_provider_*,
+        // ui_event_mgr, voice_input_panel) are skipped — the real ones handle those.
         {
-            auto registerStub = [](const char *name) {
-                if (!ObjectDir::Main()->FindObject(name, false, false)) {
-                    Hmx::Object *obj = new Hmx::Object();
-                    obj->SetName(name, ObjectDir::Main());
-                }
+            auto registerStub = [](const char *name, Hmx::Object *obj) {
+                obj->SetName(name, ObjectDir::Main());
             };
-            registerStub("saveload_mgr");
-            registerStub("profile_mgr");
-            registerStub("platform_mgr");
-            registerStub("content_mgr");
-            registerStub("challenges");
-            registerStub("speech_mgr");
+            registerStub("saveload_mgr", new WebSaveLoadMgr());
+            registerStub("profile_mgr", new WebProfileMgr());
+            registerStub("platform_mgr", new WebGenericStub());
+            registerStub("challenges", new WebGenericStub());
+            registerStub("speech_mgr", new WebGenericStub());
         }
 
         // Go to first screen (title screen)
@@ -190,15 +239,20 @@ static void mainLoop() {
     }
 
     case BOOT_GPU_WAIT: {
+        sGpuWaitFrames++;
         // Poll WebGPU instance to process async callbacks
         if (gWgpuRnd) {
             gWgpuRnd->Gpu().PollEvents();
             if (gWgpuRnd->Gpu().IsReady()) {
                 sBootState = BOOT_GPU_READY;
+                break;
             }
-        } else {
-            printf("DC3 Web: ERROR — gWgpuRnd is null\n");
-            sBootState = BOOT_ERROR;
+        }
+        // Timeout — proceed without GPU (headless/no-WebGPU mode)
+        if (sGpuWaitFrames >= kGpuWaitTimeout) {
+            printf("DC3 Web: GPU not ready after %d frames — proceeding without rendering\n", sGpuWaitFrames);
+            sGpuReady = false;
+            sBootState = BOOT_RUNNING;
         }
         break;
     }
@@ -207,6 +261,7 @@ static void mainLoop() {
         printf("DC3 Web: GPU ready, initializing resources...\n");
         gWgpuRnd->InitGpuResources();
         printf("DC3 Web: entering render loop\n");
+        sGpuReady = true;
         sBootState = BOOT_RUNNING;
         break;
     }
@@ -234,14 +289,16 @@ static void mainLoop() {
             TheFlowMgr->Poll();
         if (sFrameCount <= 3) { printf("DC3 Web: after FlowMgr Poll\n"); fflush(stdout); }
 
-        // Draw
-        TheRnd.BeginDrawing();
-        if (sFrameCount <= 3) { printf("DC3 Web: after BeginDrawing\n"); fflush(stdout); }
-        if (TheUI)
-            TheUI->Draw();
-        if (sFrameCount <= 3) { printf("DC3 Web: after UI Draw\n"); fflush(stdout); }
-        TheRnd.EndDrawing();
-        if (sFrameCount <= 3) { printf("DC3 Web: after EndDrawing\n"); fflush(stdout); }
+        // Draw (skip if GPU not available)
+        if (sGpuReady) {
+            TheRnd.BeginDrawing();
+            if (sFrameCount <= 3) { printf("DC3 Web: after BeginDrawing\n"); fflush(stdout); }
+            if (TheUI)
+                TheUI->Draw();
+            if (sFrameCount <= 3) { printf("DC3 Web: after UI Draw\n"); fflush(stdout); }
+            TheRnd.EndDrawing();
+            if (sFrameCount <= 3) { printf("DC3 Web: after EndDrawing\n"); fflush(stdout); }
+        }
 
         if (sFrameCount == 1 || sFrameCount % 300 == 0) {
             printf("DC3 Web: frame %d\n", sFrameCount);

@@ -86,30 +86,13 @@ struct SongRankCmp {
 };
 
 void HamSongMgr::ContentDone() {
-#ifdef HX_NATIVE
-    fprintf(stderr, "DC3 HamSongMgr::ContentDone available=%d\n", (int)mAvailableSongs.size());
-#endif
     SongMgr::ContentDone();
     mRankedSongs.clear();
     FOREACH (it, mAvailableSongs) {
         const HamSongMetadata *data = Data(*it);
         if (!data) {
-#ifdef HX_NATIVE
-            fprintf(stderr, "DC3 HamSongMgr: missing metadata for songID=%d\n", *it);
-#endif
             continue;
         }
-#ifdef HX_NATIVE
-        if (data->ID() != *it) {
-            fprintf(
-                stderr,
-                "DC3 HamSongMgr: metadata ID mismatch key=%d metaID=%d short='%s'\n",
-                *it,
-                data->ID(),
-                data->ShortName().Str()
-            );
-        }
-#endif
         if (data->IsRanked()) {
             mRankedSongs.push_back(*it);
         }

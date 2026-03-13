@@ -234,19 +234,6 @@ void DrawMeshImmediate(RndMesh* mesh) {
     }
 #endif
 
-    // First-frame mesh dump
-    {
-        static int sDumpCount = 0;
-        if (sDumpCount < 160) {
-            sDumpCount++;
-            printf("DC3 MeshDraw[%d]: '%s' mat='%s' blend=%d color=(%.2f,%.2f,%.2f,%.2f) useTex=%.0f prelit=%.0f\n",
-                   sDumpCount, mesh->Name(), mat->Name(), (int)matBlend,
-                   matParams.uniforms.color[0], matParams.uniforms.color[1],
-                   matParams.uniforms.color[2], matParams.uniforms.color[3],
-                   matParams.uniforms.useTexture, matParams.uniforms.prelit);
-        }
-    }
-
     uint32_t matOffset = gWgpuRnd->MaterialRing().Write(
         gWgpuRnd->Gpu().Queue(), &matParams.uniforms, sizeof(matParams.uniforms));
 

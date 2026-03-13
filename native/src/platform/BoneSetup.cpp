@@ -22,9 +22,23 @@ void FillBoneUniforms(RndMesh* mesh, BoneUniforms& out) {
     for (int i = 0; i < numBones; i++) {
         RndTransformable* boneTrans = mesh->BoneTransAt(i);
         if (boneTrans) {
-            Transform skinMatrix;
-            Multiply(mesh->BoneOffsetAt(i), boneTrans->WorldXfm(), skinMatrix);
-            TransformToMat4(skinMatrix, out.bones[i]);
+            const Transform& wt = boneTrans->WorldXfm();
+            // Sanity check: if bone WorldXfm has garbage values,
+            // fall back to identity to prevent vertices from going to infinity
+            bool valid = (fabsf(wt.v.x) < 100000.0f &&
+                          fabsf(wt.v.y) < 100000.0f &&
+                          fabsf(wt.v.z) < 100000.0f);
+            if (valid) {
+                Transform skinMatrix;
+                Multiply(mesh->BoneOffsetAt(i), wt, skinMatrix);
+                TransformToMat4(skinMatrix, out.bones[i]);
+            } else {
+                // Bad bone — use identity
+                out.bones[i][0]  = 1.0f;
+                out.bones[i][5]  = 1.0f;
+                out.bones[i][10] = 1.0f;
+                out.bones[i][15] = 1.0f;
+            }
         } else {
             out.bones[i][0]  = 1.0f;
             out.bones[i][5]  = 1.0f;

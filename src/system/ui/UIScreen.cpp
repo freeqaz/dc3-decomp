@@ -187,19 +187,6 @@ void UIScreen::Poll() {
 
 void UIScreen::Draw() {
     if (mShowing) {
-#ifdef HX_NATIVE
-        static int sDrawDiag = 0;
-        if (sDrawDiag < 3 && strstr(Name(), "game_screen")) {
-            sDrawDiag++;
-            printf("DC3 UIScreen '%s' Draw — %d panels, showing=%d:\n", Name(), (int)mPanelList.size(), mShowing);
-            FOREACH (it, mPanelList) {
-                printf("  panel '%s' active=%d showing=%d shouldDraw=%d state=%d dir=%p loaded=%d\n",
-                        it->mPanel->Name(), it->Active(), it->mPanel->Showing(),
-                        TheRnd.ShouldDrawPanel(it->mPanel), (int)it->mPanel->GetState(),
-                        it->mPanel->LoadedDir(), it->mPanel->IsLoaded());
-            }
-        }
-#endif
         FOREACH (it, mPanelList) {
             if (it->Active() && it->mPanel->Showing()
                 && TheRnd.ShouldDrawPanel(it->mPanel)) {

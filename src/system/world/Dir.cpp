@@ -444,17 +444,6 @@ void WorldDir::SyncObjects() {
 
 void WorldDir::DrawShowing() {
     START_AUTO_TIMER("world_draw");
-#ifdef HX_NATIVE
-    static int sWorldDrawDiag = 0;
-    if (sWorldDrawDiag < 5) {
-        sWorldDrawDiag++;
-        int showCount = 0;
-        for (auto it = mDraws.begin(); it != mDraws.end(); ++it)
-            if ((*it)->Showing()) showCount++;
-        printf("DC3 WorldDir::DrawShowing '%s' TheWorld=%p draws=%d showing=%d\n",
-               Name(), (void*)TheWorld, (int)mDraws.size(), showCount);
-    }
-#endif
     if (TheWorld) {
         MILO_ASSERT(TheWorld != this, 0x25c);
         if (Showing())

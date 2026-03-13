@@ -121,10 +121,6 @@ void SongMgr::ContentLoaded(Loader *loader, ContentLocT location, Symbol content
     DataLoader *d = dynamic_cast<DataLoader *>(loader);
     MILO_ASSERT(d, 0xDC);
     DataArray *data = d->Data();
-#ifdef HX_NATIVE
-    fprintf(stderr, "DC3 SongMgr::ContentLoaded name='%s' data=%p dataSize=%d\n",
-            contentName.Str(), data, data ? data->Size() : 0);
-#endif
     if (data) {
         if (AllowContentToBeAdded(data, location)) {
             if (!streq(contentName.Str(), ".")) {
