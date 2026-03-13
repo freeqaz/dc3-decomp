@@ -1630,10 +1630,10 @@ DataNode PartyModeMgr::OnSetSongAndDefaults(DataArray *_msg) {
         Symbol song = _msg->Sym(2);
         SetSongAndDefaults(song, mode, false);
     } else if (sz == 5) {
-        bool force = _msg->Int(4) != 0;
+        int rawForce = _msg->Int(4);
         Symbol mode = _msg->Sym(3);
         Symbol song = _msg->Sym(2);
-        SetSongAndDefaults(song, mode, force);
+        SetSongAndDefaults(song, mode, rawForce != 0);
     } else {
         Symbol song(gNullStr);
         Symbol mode(gNullStr);
