@@ -43,30 +43,27 @@ void FlangerEffect::SetParameters(FlangerEffect::Params const &params) {
 void FlangerEffect::Process(float *buf, int numSamples, int numChans) {
     MILO_ASSERT(numChans <= 2, 0x27);
 
-    float phaseOffset;
-    float phaseOffset1;
-    float var_f0;
-    float curRate;
-    float var_f25;
-    float var_f26;
-    float var_f30;
-    float temp_f0_2;
-    float temp_f21;
+    float phaseOffset[2];
     float temp_f22;
+    float temp_f21;
+    float temp_f0_2;
+    float var_f30;
+    float var_f26;
+    float var_f25;
+    float curRate;
 
     var_f26 = unk24;
     if (numChans == 1) {
-        var_f0 = 0.0f;
-        phaseOffset1 = var_f0;
+        phaseOffset[0] = 0.0f;
+        phaseOffset[1] = 0.0f;
     } else {
-        phaseOffset1 = mWetFrac * 1.5707964f;
-        var_f0 = mWetFrac * -1.5707964f;
+        phaseOffset[1] = mWetFrac * 1.5707964f;
+        phaseOffset[0] = mWetFrac * -1.5707964f;
     }
-    phaseOffset = var_f0;
     curRate = unk2c;
     var_f25 = curRate;
     var_f30 = unk1c;
-    temp_f0_2 = (float)(numSamples * 0x14);
+    temp_f0_2 = (double)(numSamples * 20);
     temp_f22 = (mDepthFrac - var_f30) / temp_f0_2;
     temp_f21 = (mRateRadians - curRate) / temp_f0_2;
 
@@ -78,13 +75,13 @@ void FlangerEffect::Process(float *buf, int numSamples, int numChans) {
         float temp_f29 = 0.5f;
 
         do {
-            float temp_f13 = (float)mDelaySamples;
+            float temp_f13 = (double)mDelaySamples;
             int var_r28 = 0;
             if (numChans > 0) {
                 int temp_r25 = ((mWritePos + var_r22) % 9600) * 4;
                 float **var_r29 = mDelayBuffers;
                 do {
-                    float temp_f0_3 = sinf((float)*(float *)((int)&phaseOffset + (int)var_r29 - (int)mDelayBuffers) + var_f26);
+                    float temp_f0_3 = sinf(phaseOffset[var_r28] + var_f26);
                     int temp_r11 = var_r22 + var_r28;
                     int temp_r9 = (int)*var_r29;
                     var_r28++;

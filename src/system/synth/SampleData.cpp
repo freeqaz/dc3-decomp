@@ -8,6 +8,8 @@
 
 SampleDataAllocFunc SampleData::sAlloc = nullptr;
 SampleDataFreeFunc SampleData::sFree = nullptr;
+static const int gSampleDataMaxRev = 0x10;
+static const int gSampleDataMaxAltRev = 0;
 
 SampleData::SampleData() : mData(0), mMarkers() { Reset(); }
 SampleData::~SampleData() { Dealloc(); }
@@ -76,33 +78,39 @@ void SampleData::Save(BinStream &bs) const {
 }
 
 int SampleData::SizeAs(Format fmt) const {
-    if (fmt > 7U) {
-        MILO_ASSERT(0, 0x136);
-        return 0;
+    int iVar2;
+    if ((unsigned int)fmt <= 7U) {
+        if (fmt != 1) {
+            if (fmt != 2) {
+                if (fmt != 3) {
+                    if (fmt != 4) {
+                        if (fmt != 5) {
+                            if (fmt != 6) {
+                                if (fmt == 0)
+                                    goto LAB_8276e324;
+                                iVar2 = mNumChannels * mNumSamples;
+                            } else {
+                                iVar2 = mNumChannels * mNumSamples;
+                            }
+                            iVar2 = 0x60 - (int)((float)(long long)(iVar2 * 2) * -0.29411763f);
+                            return iVar2;
+                        }
+                        unsigned int uVar3 = mNumSamples + 0x3FF;
+                        return (((int)uVar3 >> 10) + ((int)uVar3 < 0 && (uVar3 & 0x3FF) != 0)) * mNumChannels * 0xC0;
+                    }
+                    unsigned int uVar3 = mNumSamples + 0x3FF;
+                    return (((int)uVar3 >> 10) + ((int)uVar3 < 0 && (uVar3 & 0x3FF) != 0)) * mNumChannels * 0xC0;
+                }
+                MILO_WARN("don't know size as XMA");
+                return mNumSamples / 5;
+            }
+            return ((mNumSamples + 0x6F) / 0x70) * mNumChannels * 0x40;
+        }
+LAB_8276e324:
+        iVar2 = mNumChannels * mNumSamples * 2;
     }
-
-    switch ((int)fmt) {
-    case kPCM:
-    case kBigEndPCM:
-        return mNumChannels * mNumSamples * 2;
-    case kVAG:
-        return (((mNumSamples + 0x6F) / 0x70) + (mNumSamples + 0x6F >> 0x1F)) * mNumChannels * 0x40;
-    case kXMA: {
-        MILO_WARN("don't know size as XMA");
-        return mNumSamples / 5;
-    }
-    case kATRAC:
-    case kMP3: {
-        unsigned int tmp = mNumSamples + 0x3FF;
-        return ((int)(tmp >> 10) + (tmp < 0 && (tmp & 0x3FF) != 0)) * mNumChannels * 0xC0;
-    }
-    case kNintendoADPCM: {
-        int tmp = mNumChannels * mNumSamples * 2;
-        return 0x60 - (int)((float)tmp * -0.29411763f);
-    }
-    default:
-        return 0;
-    }
+    MILO_FAIL(0, 0x136);
+    return 0;
 }
 
 void SampleData::LoadWAV(BinStream &bs, const FilePath &fp, bool bigEndian) {
@@ -111,62 +119,54 @@ void SampleData::LoadWAV(BinStream &bs, const FilePath &fp, bool bigEndian) {
     if (wav.BitsPerSample() != 0x10) {
         MILO_WARN("Wave file %s is not 16-bit", fp);
         return;
-    } else if (wav.Format() != 1) {
+    }
+    if (wav.Format() != 1) {
         MILO_WARN("Wave file %s is compressed", fp);
         return;
+    }
+    Hmx::CRC crc;
+    if (!bigEndian) {
+        crc = Hmx::CRC(FileRelativePath(FileExecRoot(), fp.c_str()));
     } else {
-        Hmx::CRC crc;
-        int markerIdx = 0;
-        int crcInit = 0;
-        if (!bigEndian) {
-            const char *fpStr = fp.c_str();
-            const char *root = FileExecRoot();
-            const char *relPath = FileRelativePath(root, fpStr);
-            crc = Hmx::CRC(relPath);
-        }
-        mFormat = kPCM;
-        mCRC.mCRC = crc.mCRC;
-        mNumChannels = wav.NumChannels();
-        mNumSamples = wav.NumSamples();
-        mSampleRate = wav.SamplesPerSec();
-        mSizeBytes = SizeAs(kPCM);
-        if (crc.mCRC == 0) {
-            mData = sAlloc(mSizeBytes, fp.c_str(), 0, "SampleData", 0);
+        crc.mCRC = 0;
+    }
+    mFormat = kPCM;
+    mCRC.mCRC = crc.mCRC;
+    mNumChannels = wav.NumChannels();
+    mNumSamples = wav.NumSamples();
+    mSampleRate = wav.SamplesPerSec();
+    mSizeBytes = mNumChannels * mNumSamples * 2;
+    if (crc.mCRC != 0) {
+        if (!TheWavMgr->CreateSample(crc, mData, mSizeBytes)) {
             WaveFileData wavdata(wav);
             wavdata.Read(mData, mSizeBytes);
-        } else {
-            if (!TheWavMgr->CreateSample(crc, mData, mSizeBytes)) {
-                WaveFileData wavdata(wav);
-                wavdata.Read(mData, mSizeBytes);
-            }
         }
-        for (markerIdx = 0; markerIdx < wav.NumMarkers(); markerIdx++) {
-            mMarkers.push_back(
-                SampleMarker(wav.Markers()[markerIdx].GetName(), wav.Markers()[markerIdx].GetFrame())
-            );
-        }
+    } else {
+        mData = sAlloc(mSizeBytes, fp.c_str(), 0, "SampleData", 0);
+        WaveFileData wavdata(wav);
+        wavdata.Read(mData, mSizeBytes);
+    }
+    for (int i = 0; i < wav.NumMarkers(); i++) {
+        mMarkers.push_back(
+            SampleMarker(wav.Markers()[i].GetName(), wav.Markers()[i].GetFrame())
+        );
     }
 }
 
 void SampleData::Load(BinStream &bs, const FilePath &fp) {
-    static const int kMaxRev = 0x10;
-    static const int kMaxAltRev = 0;
     Reset();
     LOAD_REVS(bs);
-    if (d.rev > kMaxRev) {
-        MILO_FAIL("%s can't load new %s version %d > %d", fp, "SampleData", (int)d.rev, kMaxRev);
+    if (d.rev > gSampleDataMaxRev) {
+        MILO_FAIL("%s can't load new %s version %d > %d", fp, "SampleData", (int)d.rev, gSampleDataMaxRev);
     }
-    if (d.altRev > kMaxAltRev) {
-        MILO_FAIL("%s can't load new %s alt version %d > %d", fp, "SampleData", (int)d.altRev, kMaxAltRev);
+    if (d.altRev > gSampleDataMaxAltRev) {
+        MILO_FAIL("%s can't load new %s alt version %d > %d", fp, "SampleData", (int)d.altRev, gSampleDataMaxAltRev);
     }
-    Hmx::CRC crc;
     if (d.rev > 0xE) {
         d >> mCRC;
     } else {
-        const char *root = FileExecRoot();
-        const char *relPath = FileRelativePath(root, fp.c_str());
-        crc = Hmx::CRC(relPath);
-        mCRC.mCRC = crc.mCRC;
+        const char *relPath = FileRelativePath(FileExecRoot(), fp.c_str());
+        mCRC = Hmx::CRC(relPath);
     }
     int fmt;
     d >> fmt >> mNumSamples >> mSampleRate >> mSizeBytes;
@@ -176,11 +176,10 @@ void SampleData::Load(BinStream &bs, const FilePath &fp) {
         d >> hasData;
     }
     if (hasData) {
-        crc.mCRC = mCRC.mCRC;
-        if (crc.mCRC != 0) {
-            TheWavMgr->CreateSample(crc, mData, mSizeBytes);
+        if (mCRC.mCRC != 0) {
+            TheWavMgr->CreateSample(mCRC, mData, mSizeBytes);
         } else {
-            mData = sAlloc(mSizeBytes, fp.c_str(), 0x6f, "SampleData", 0);
+            mData = sAlloc(mSizeBytes, __FILE__, 0x6f, "SampleData", 0);
         }
         ReadChunks(bs, mData, mSizeBytes, 0x8000);
     }

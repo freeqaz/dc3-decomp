@@ -67,8 +67,8 @@ void DelayEffect::Process(float *buf, int numSamples, int numChans) {
             writePos = nextWritePos;
         }
     } else {
+        float dryAmount = 1.0f - mWetAmount;
         float wetAmount = mWetAmount;
-        float dryAmount = 1.0f - wetAmount;
         for (int i = 0; i < numSamples; i++) {
             int readPos = writePos - mDelaySamples;
             if (readPos < 0) readPos += kMaxDelaySamps;
@@ -77,11 +77,12 @@ void DelayEffect::Process(float *buf, int numSamples, int numChans) {
             float inRight = frame[1];
             int nextWritePos = writePos + 1;
             if (nextWritePos >= kMaxDelaySamps) nextWritePos = 0;
-            float outLeft = (mBuffer[readPos] * dryAmount + mBuffer[readPos + kMaxDelaySamps] * wetAmount) * mDecay;
+            float outLeft = (mBuffer[readPos + kMaxDelaySamps] * wetAmount + mBuffer[readPos] * dryAmount) * mDecay;
             frame[0] = outLeft;
-            mBuffer[writePos] = (inRight + inLeft) * 0.5f * wetAmount + inLeft * dryAmount + outLeft;
-            float outRight = mBuffer[readPos + kMaxDelaySamps] * mDecay * dryAmount +
-                             mBuffer[readPos] * mDecay * wetAmount;
+            mBuffer[writePos] = outLeft + inLeft * dryAmount + (inRight + inLeft) * 0.5f * wetAmount;
+            float delayedDry = mBuffer[readPos + kMaxDelaySamps] * mDecay;
+            float delayedWet = mBuffer[readPos] * mDecay;
+            float outRight = delayedDry * dryAmount + delayedWet * wetAmount;
             frame[1] = outRight;
             mBuffer[writePos + kMaxDelaySamps] = inRight * dryAmount + outRight;
             writePos = nextWritePos;

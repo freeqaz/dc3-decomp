@@ -69,23 +69,27 @@ void WavReader::Poll(float dt) {
     if (mBufNumSamples != 0) {
         void *bufs[2] = { mInputBuffers[0] + mBufOffset, mInputBuffers[1] + mBufOffset };
         int consumed = ConsumeData((void **)bufs, mBufNumSamples, mTotalSamplesConsumed);
-        mBufOffset += consumed;
-        mTotalSamplesConsumed += consumed;
         mBufNumSamples -= consumed;
+        mTotalSamplesConsumed += consumed;
+        mBufOffset += consumed;
         if (mBufNumSamples != 0) {
             return;
         }
     }
     if (mEnableReads) {
         while (mSamplesLeft != 0) {
-            int samplesPerRead = mSamplesLeft / mNumChannels;
-            if (samplesPerRead > 0x1000) {
-                samplesPerRead = 0x1000;
+            if (mSamplesLeft >= mNumChannels) {
+                int tmp = mSamplesLeft / mNumChannels;
+                if (tmp > 0x1000) {
+                    tmp = 0x1000;
+                }
+                mBufNumSamples = tmp;
+            } else {
+                mBufNumSamples = 0;
             }
-            mBufNumSamples = samplesPerRead;
-            mInWaveFileData->Read(mRawInputBuffer, mNumChannels * samplesPerRead * 2);
+            mInWaveFileData->Read(mRawInputBuffer, mNumChannels * mBufNumSamples * 2);
             mBufOffset = 0;
-            mSamplesLeft -= samplesPerRead;
+            mSamplesLeft -= mBufNumSamples;
             if (mNumChannels == 1) {
                 for (int i = 0; i < mBufNumSamples; i++) {
                     unsigned short s = mRawInputBuffer[i];
@@ -102,8 +106,8 @@ void WavReader::Poll(float dt) {
             if (mBufNumSamples != 0) {
                 void *bufs[2] = { mInputBuffers[0], mInputBuffers[1] };
                 int consumed = ConsumeData((void **)bufs, mBufNumSamples, mTotalSamplesConsumed);
-                mBufNumSamples -= consumed;
                 mTotalSamplesConsumed += consumed;
+                mBufNumSamples -= consumed;
                 mBufOffset += consumed;
                 if (mBufNumSamples != 0) {
                     return;

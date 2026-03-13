@@ -831,7 +831,16 @@ void ByteGrinder::GrindArray(
     }
 
     mainScript += "}{O70 $ix}}}$foo";
+#ifdef HX_NATIVE
+    fprintf(stderr, "DC3 GrindArray script: %s\n", mainScript.c_str());
+#endif
     mainScriptArray = DataReadString(mainScript.c_str());
+#ifdef HX_NATIVE
+    fprintf(stderr, "DC3 GrindArray: parsed DataArray size=%d\n", mainScriptArray->Size());
+    for (int d = 0; d < mainScriptArray->Size() && d < 5; d++) {
+        fprintf(stderr, "DC3 GrindArray: element[%d] type=%d\n", d, mainScriptArray->Type(d));
+    }
+#endif
     for (int i = 0; i < arrayLen; i++) {
         char itoaBuffer[32];
         unsigned char w = arrayToGrind[i];
@@ -957,4 +966,18 @@ void ByteGrinder::Init() {
 #endif
         DataRegisterFunc(functionName, funPtrs[i]);
     }
+#ifdef HX_NATIVE
+    // Self-test: call GrindArray with known inputs to verify O64-O70 resolution
+    {
+        unsigned char testKey[16] = {0x2b,0xda,0xa6,0x4d,0x4d,0x77,0x2c,0x76,
+                                     0xa9,0x02,0x34,0x86,0xfb,0x01,0x3c,0x81};
+        fprintf(stderr, "DC3 Init self-test: GrindArray input=");
+        for (int i = 0; i < 16; i++) fprintf(stderr, "%02x", testKey[i]);
+        fprintf(stderr, "\n");
+        GrindArray(602494344, 625836951, testKey, 16, 0xE);
+        fprintf(stderr, "DC3 Init self-test: GrindArray output=");
+        for (int i = 0; i < 16; i++) fprintf(stderr, "%02x", testKey[i]);
+        fprintf(stderr, "\n");
+    }
+#endif
 }

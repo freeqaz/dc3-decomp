@@ -52,18 +52,18 @@ int RingBuffer::Peek(void *data, int len) {
 }
 
 int RingBuffer::Write(void *data, int len) {
-    int writeLen = len;
     char *src = (char *)data;
+    int writeLen = len;
 
     if (writeLen > mSize) {
-        src = src + (len - mSize);
+        src = src + len - mSize;
         writeLen = mSize;
     }
 
     int available = mSize - mWriteIx;
     int returnVal = (mTotal - mSize) + writeLen;
     int *pChunk;
-    if (writeLen >= available) {
+    if (writeLen > available) {
         pChunk = &available;
     } else {
         pChunk = &writeLen;
@@ -79,10 +79,10 @@ int RingBuffer::Write(void *data, int len) {
     mWriteIx = (mWriteIx + writeLen) % mSize;
 
     int newTotal;
-    if (mSize <= mTotal + writeLen) {
-        newTotal = mSize;
-    } else {
+    if (mSize < mTotal + writeLen) {
         newTotal = mTotal + writeLen;
+    } else {
+        newTotal = mSize;
     }
     mTotal = newTotal;
 
