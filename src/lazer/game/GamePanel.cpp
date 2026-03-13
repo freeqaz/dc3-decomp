@@ -594,13 +594,10 @@ void GamePanel::StartGame() {
         TheHamDirector->SetupAnims();
         TheHamDirector->SetPollEnabled(true);
 
-        // Step 2b: Start the song PropAnim (mirrors HamDirector::Enter)
-        RndPropAnim *songAnim = TheHamDirector->SongAnim(0);
-        if (songAnim) {
-            songAnim->StartAnim();
-            songAnim->SetFrame(-kHugeFloat, 1);
-        }
-        MILO_LOG("Native: SetupAnims complete, SongAnim(0)=%p\n", songAnim);
+        // Step 2b: Full director enter (camera, post-proc, scene sync)
+        TheHamDirector->Enter();
+        MILO_LOG("Native: HamDirector::Enter complete, SongAnim(0)=%p\n",
+            TheHamDirector->SongAnim(0));
     }
 
     // Step 3: Populate HamWardrobe main characters
