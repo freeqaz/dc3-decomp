@@ -1309,6 +1309,27 @@ void WgpuRnd::WriteSceneUniforms() {
             scene.lightColors[2][3] = 1.0f;
             lightIdx = 3;
         }
+        // Cap total directional light energy to prevent overexposure.
+        // On Xbox, LightPresets animate which lights are active — only a subset
+        // is on at any time. Without LightPreset animation, we pick the top 4
+        // brightest which can stack to massive overexposure. Cap total luminance
+        // to ~1.5 (equivalent to one bright key + soft fill).
+        if (lightIdx > 0) {
+            float totalEnergy = 0.0f;
+            for (int li = 0; li < lightIdx; li++) {
+                totalEnergy += scene.lightColors[li][0] + scene.lightColors[li][1] + scene.lightColors[li][2];
+            }
+            const float maxEnergy = 4.5f; // ~1.5 per RGB channel across all lights
+            if (totalEnergy > maxEnergy) {
+                float scale = maxEnergy / totalEnergy;
+                for (int li = 0; li < lightIdx; li++) {
+                    scene.lightColors[li][0] *= scale;
+                    scene.lightColors[li][1] *= scale;
+                    scene.lightColors[li][2] *= scale;
+                }
+            }
+        }
+
         scene.numLights = (float)lightIdx;
         // Point lights (kPoint and kFakeSpot are in LightsReal)
         int pointIdx = 0;

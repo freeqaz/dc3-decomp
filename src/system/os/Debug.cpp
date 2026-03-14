@@ -158,12 +158,13 @@ void Debug::Fail(const char *msg, void *v) {
     // Many init paths trigger benign FAILs (missing assets, stubs).
     return;
 #endif
-    // Default: fatal, to catch bugs early. Set MILO_FATAL_FAILS=0 to continue
-    // past MILO_FAIL (like Xbox 360 debug build "Continue" dialog).
+    // Default: non-fatal (match Xbox 360 "Continue" dialog behavior).
+    // DTA scripts trigger many benign FAILs during gameplay (missing assets,
+    // songs not in lookup tables, etc.). Set MILO_FATAL_FAILS=1 to abort.
     static int sFatalFails = -1;
     if (sFatalFails == -1) {
         const char *env = getenv("MILO_FATAL_FAILS");
-        sFatalFails = (!env || atoi(env) != 0) ? 1 : 0;
+        sFatalFails = (env && atoi(env) != 0) ? 1 : 0;
     }
     if (sFatalFails)
         abort();
