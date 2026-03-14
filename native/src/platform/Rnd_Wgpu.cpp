@@ -39,6 +39,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <vector>
 #include <cstdlib>
 #include <cstring>
 #include <sstream>
@@ -1192,79 +1193,84 @@ void WgpuRnd::WriteSceneUniforms() {
             scene.fogColor[2] = fc.blue;
         }
 
-        // Read directional lights from the environment's approx light list.
-        // RndEnviron::IsValidRealLight() classifies only kPoint and kFakeSpot
-        // as "real" lights — directional lights always go into LightsApprox().
-        int lightIdx = 0;
+        // Collect directional lights from environment approx list AND venue WorldDir.
+        // Only take lights with non-zero color (LightPresets may leave some at black).
+        // Sort by brightness and pick the top 4.
+        struct LightCandidate {
+            float dir[3];
+            float color[3];
+            float brightness;
+        };
+        std::vector<LightCandidate> candidates;
+        candidates.reserve(16);
+
+        auto addLight = [&](RndLight* light) {
+            const Hmx::Color& lc = light->GetColor();
+            if (lc.red < 0.01f && lc.green < 0.01f && lc.blue < 0.01f) return;
+            LightCandidate c;
+            const Transform& lxfm = light->WorldXfm();
+            c.dir[0] = lxfm.m.y.x;
+            c.dir[1] = lxfm.m.y.y;
+            c.dir[2] = lxfm.m.y.z;
+            c.color[0] = lc.red;
+            c.color[1] = lc.green;
+            c.color[2] = lc.blue;
+            c.brightness = lc.red + lc.green + lc.blue;
+            candidates.push_back(c);
+        };
+
+        // From environment's approx list
         ObjPtrList<RndLight>& approxLights = env->LightsApprox();
         for (ObjPtrList<RndLight>::iterator it = approxLights.begin();
-             it != approxLights.end() && lightIdx < 4; ++it) {
+             it != approxLights.end(); ++it) {
             RndLight* light = *it;
             if (!light || !light->Showing()) continue;
             if (light->GetType() != RndLight::kDirectional) continue;
-
-            // Light direction = Y-axis of the light's world transform
-            const Transform& lxfm = light->WorldXfm();
-            scene.lightDirs[lightIdx][0] = lxfm.m.y.x;
-            scene.lightDirs[lightIdx][1] = lxfm.m.y.y;
-            scene.lightDirs[lightIdx][2] = lxfm.m.y.z;
-            scene.lightDirs[lightIdx][3] = 0.0f;
-
-            const Hmx::Color& lc = light->GetColor();
-            scene.lightColors[lightIdx][0] = lc.red;
-            scene.lightColors[lightIdx][1] = lc.green;
-            scene.lightColors[lightIdx][2] = lc.blue;
-            scene.lightColors[lightIdx][3] = 1.0f;
-            lightIdx++;
+            addLight(light);
         }
 
-        // Supplement from venue WorldDir lights — the environment's light
-        // lists may not contain all venue lights (especially from component
-        // .milo files loaded via DTA extras.fm).  Scan the venue directly.
-        if (lightIdx < 4) {
+        // From venue WorldDir (may have lights not in environment)
+        {
             WorldDir* venueDir = TheHamDirector ? TheHamDirector->GetVenueWorld() : nullptr;
             if (!venueDir && gNativeVenueDir)
                 venueDir = dynamic_cast<WorldDir*>(gNativeVenueDir);
             if (venueDir) {
-                for (ObjDirItr<RndLight> lit(venueDir, true);
-                     lit != nullptr && lightIdx < 4; ++lit) {
+                for (ObjDirItr<RndLight> lit(venueDir, true); lit != nullptr; ++lit) {
                     if (!lit->Showing()) continue;
                     if (lit->GetType() != RndLight::kDirectional) continue;
-                    const Hmx::Color& lc = lit->GetColor();
-                    if (lc.red < 0.01f && lc.green < 0.01f && lc.blue < 0.01f) continue;
-                    // Skip if already in the approx list
-                    bool dup = false;
-                    for (int di = 0; di < lightIdx; di++) {
-                        if (std::abs(scene.lightColors[di][0] - lc.red) < 0.001f &&
-                            std::abs(scene.lightColors[di][1] - lc.green) < 0.001f &&
-                            std::abs(scene.lightColors[di][2] - lc.blue) < 0.001f) {
-                            dup = true; break;
-                        }
-                    }
-                    if (dup) continue;
-                    const Transform& lxfm = lit->WorldXfm();
-                    scene.lightDirs[lightIdx][0] = lxfm.m.y.x;
-                    scene.lightDirs[lightIdx][1] = lxfm.m.y.y;
-                    scene.lightDirs[lightIdx][2] = lxfm.m.y.z;
-                    scene.lightDirs[lightIdx][3] = 0.0f;
-                    scene.lightColors[lightIdx][0] = lc.red;
-                    scene.lightColors[lightIdx][1] = lc.green;
-                    scene.lightColors[lightIdx][2] = lc.blue;
-                    scene.lightColors[lightIdx][3] = 1.0f;
-                    lightIdx++;
+                    addLight(lit);
                 }
             }
         }
 
-        // Check if all directional lights have zero color (uninitialized LightPresets)
-        bool allZeroColor = true;
-        for (int li = 0; li < lightIdx; li++) {
-            if (scene.lightColors[li][0] > 0.01f || scene.lightColors[li][1] > 0.01f || scene.lightColors[li][2] > 0.01f) {
-                allZeroColor = false;
-                break;
+        // Sort by brightness (brightest first) and take top 4
+        std::sort(candidates.begin(), candidates.end(),
+            [](const LightCandidate& a, const LightCandidate& b) {
+                return a.brightness > b.brightness;
+            });
+
+        int lightIdx = 0;
+        for (size_t i = 0; i < candidates.size() && lightIdx < 4; i++) {
+            // Skip duplicates (same color within tolerance)
+            bool dup = false;
+            for (int di = 0; di < lightIdx; di++) {
+                if (std::abs(scene.lightColors[di][0] - candidates[i].color[0]) < 0.01f &&
+                    std::abs(scene.lightColors[di][1] - candidates[i].color[1]) < 0.01f &&
+                    std::abs(scene.lightColors[di][2] - candidates[i].color[2]) < 0.01f) {
+                    dup = true; break;
+                }
             }
+            if (dup) continue;
+            scene.lightDirs[lightIdx][0] = candidates[i].dir[0];
+            scene.lightDirs[lightIdx][1] = candidates[i].dir[1];
+            scene.lightDirs[lightIdx][2] = candidates[i].dir[2];
+            scene.lightDirs[lightIdx][3] = 0.0f;
+            scene.lightColors[lightIdx][0] = candidates[i].color[0];
+            scene.lightColors[lightIdx][1] = candidates[i].color[1];
+            scene.lightColors[lightIdx][2] = candidates[i].color[2];
+            scene.lightColors[lightIdx][3] = 1.0f;
+            lightIdx++;
         }
-        if (allZeroColor) lightIdx = 0; // treat zero-color lights as no lights
 
         // Supplement with fill lights if env has few directional lights
         if (lightIdx > 0 && lightIdx < 3) {
