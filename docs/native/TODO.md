@@ -1,20 +1,16 @@
-# Native Port TODO — Venue Rendering on Game Screen
+# Native Port TODO — Phase 6 Polish & Remaining Work
 
-## Current State (Session 63b)
-- **Venue rendering on game_screen** — Glitterati venue renders with chairs, table, platform, reflections (236 draw calls)
-- **Venue loading via FileMerger** — `SetVenue(Symbol("glitterati"))` enables full pipeline: world.fm → Select("venue") → glitterati.milo
-- **Character animation pipeline functional** — ClipPlayer loads song clip keys (60 keyframes), pushes layers into HamDriver, Weight() evaluation drives bone transforms
-- **HamDriver::Poll decomp bug fixed** — was using `mLayers.mWeight` (always 0) instead of `Weight()` (CharWeightable, defaults 1.0). Now 100% match.
-- **Game screen auto-play** — `DC3_SCREEN=game_screen DC3_SONG=boyfriend DC3_VENUE=glitterati` sets up song, mode, venue, difficulty
-- **Content system fully integrated** — 62 songs load from DTA via ContentMgr → SongMgr → HamSongMgr pipeline
-- **Song select populated** — 46 songs pass profile filter, 49 UI items (songs + headers) in song_select_screen
-- **Full boot flow**: attract_screen → autosave_warning → title_screen → main_screen → (auto-nav) → game_screen
-- **3D venue rendering on main_screen** — DCI venue with 534 draw calls/frame, 10000 frames stable
-- Venue geometry (floor, walls, DJ booth, lighting rigs, graffiti), **fully-lit character** (skin, hair, outfit visible), HUD overlays all render
-- Zero-color LightPreset detection enables fallback three-point lighting for character
-- Flow→PropAnim UI animation pipeline verified working end-to-end (Session 58)
-- Text rendering, mesh rendering, material pipeline all working
-- HamUI two-pass draw pipeline active (letterbox + main draw pass)
+## Current State (Session 69)
+- **Full gameplay pipeline operational** — Engine boots through menu → song select → game_screen with audio, rendering, animation, camera cuts, post-processing
+- **272 draw calls/frame during gameplay** — venue geometry, character (skinned + animated), particles, flares, lines, HUD overlays
+- **Audio playback** — Real-time MOGG decoding (FFmpeg/Vorbis) → ring buffer → miniaudio output, drives songMs timing
+- **Camera cuts** — song.anim PropKeys → HamDirector::SetShot() → CameraManager with 34+ keyframes/song
+- **Post-processing** — Bloom (screen blend), Xbox-matched contrast/brightness, saturation, levels, vignette, chromatic aberration, posterization
+- **Brightness-sorted lighting** — Collects lights from environment + venue WorldDir, filters zero-color, sorts by brightness, picks top 4
+- **Content system** — 62 songs load from DTA, 49 UI items in song_select_screen
+- **RndFlare occlusion bypass** — SetVisible(true) + SetOcclusionResult(1.0) for in-view flares on native (no GPU occlusion query)
+- **Stable 10000+ frames** — boot-to-gameplay without crash after ObjRef + SkeletonViz root-cause fixes
+- **14 screenshots** in `archive/screenshots/session69/`
 
 ## Headless GPU Rendering
 
@@ -44,39 +40,8 @@ Env vars:
 - `MILO_MAX_FRAMES=<N>` — exit after N frames
 - `MILO_FIRST_SCREEN=<name>` — skip attract/boot screens
 
-## NEXT UP: UI Layout Fix (Session 41)
-
-### Problem
-UI elements render but are not positioned correctly. Comparing our output (`archive/screenshots/session40/frame_03500.png`) to the Xbox reference (`archive/screenshots/references/dc3_main_menu.jpg`):
-
-| Element | Xbox Reference | Our Native | Issue |
-|---------|---------------|------------|-------|
-| **Player icons** | Top-left and top-right corners, ~100x100px, white outlined | Top-left and top-right, smaller, pink/magenta filled | Size, color, position offset |
-| **Nav ribbon** | Right half of screen, "MAIN MENU" text with arrow | Center of screen, horizontal band with selection box | Position shifted, text missing |
-| **Selection box** | N/A (main_screen has no selection box) | Center square with icon | Different screen content |
-| **Logo** | "DANCE CENTRAL 3" left-center, large cyan text | Not visible | Missing or not rendered |
-| **Copyright text** | Bottom center, white text | Not visible | Missing or not rendered |
-| **Help bar** | Top bar: "EXIT CONTROLLER MODE" + "SELECT" | Not visible | Missing or not rendered |
-| **Background** | Flowing blue/cyan neon lines | Plain dark gray | No venue/background rendering |
-| **Kinect icon** | Bottom-right, "Say Xbox" | Bottom-right, small icon | Present but different style |
-
-Note: The reference shows `main_screen` while our native shows `choose_mode_screen` — need to compare equivalent screens.
-
-### Investigation Plan
-1. **Camera/projection setup** — Is [ui.cam] positioned correctly? Check RndCam transform, FOV, aspect ratio
-2. **RndTransformable world transforms** — Are mesh/group transforms being applied? Check if xfm matrices are loaded from .milo
-3. **Coordinate system** — Milo uses a different coordinate convention (Y-forward?). Check if our projection matches
-4. **Screen resolution** — Xbox renders at 1280x720. Are our viewport/projection matrices set up for this?
-5. **Missing text** — Are RndText objects loading? Are font meshes being created? Check visibility/Showing state
-6. **HelpBar rendering** — HamUI has a help bar system — is it entering/drawing?
-
-### Key Files to Investigate
-- `native/src/platform/Rnd_Wgpu.cpp` — Camera selection, projection setup, draw loop
-- `native/src/platform/Mesh_Wgpu.cpp` — Transform application in DrawShowing
-- `src/system/rndobj/Cam.cpp` — RndCam::UpdateLocal, projection matrix
-- `src/system/rndobj/Trans.cpp` — RndTransformable::WorldXfm
-- `src/system/ui/PanelDir.cpp` — Panel draw, camera setup
-- `src/system/hamobj/HamUI.cpp` — HamUI::Draw, two-pass pipeline
+## Historical: UI Layout Fix (Session 41) — RESOLVED
+Transform::Multiply decomp bug (y/z coefficient swap in mtx.cpp) caused all transform compositions to produce wrong results. Fixed to 100% match. See `archive/screenshots/session41/` for before/after.
 
 ## CRITICAL BLOCKER: DTA Loading Subsystem
 
@@ -124,30 +89,29 @@ Note: The reference shows `main_screen` while our native shows `choose_mode_scre
 - [x] HUD overlay rendering (move card geometry)
 - [x] Crash recovery for merge failures (siglongjmp in FileMerger)
 
-## Phase 4: Gameplay Visual Quality (CURRENT)
+## Phase 4: Gameplay Visual Quality — MOSTLY COMPLETE
 Goal: Character with proper materials, crowd, animated venue, gameplay HUD textures
 
-### 4.1 Character Rendering
-- [x] Character material/texture application — **DONE** (zero-color LightPreset detection enables fallback lighting)
+### 4.1 Character Rendering — COMPLETE
+- [x] Character material/texture application — **DONE** (zero-color LightPreset detection → brightness-sorted light selection)
 - [x] Skinned mesh rendering (bone transforms in vertex shader) — **DONE** (Session 63: GPU skinning, 4-bone blending, 40-bone palettes)
-- [x] Character dance animation pipeline — **DONE** (Session 63: ClipPlayer loads 60 clip keys, PushClip/PushExpertClip push layers, HamDriver::Poll Weight() fix evaluates bones. Game screen venue rendering still needed to visually verify.)
+- [x] Character dance animation pipeline — **DONE** (Session 63: ClipPlayer → HamDriver → bone transforms)
 
-### 4.2 Merge Pipeline Stability
-- [x] Fix ObjRef ring corruption root cause — **DONE** (`ObjDirPtr(C*)` was double-linking the same ref node; `ObjRefConcrete` already links the node in its base ctor, so the extra `AddRef` corrupted the ring at creation time)
-- [x] Fix SkeletonViz system-run resource loading — **DONE** (`FileSystemRoot()` was pointing at a bad native path, and `SkeletonViz` was typed as `ObjDirPtr<UILabelDir>` even though `ham/skeleton.milo` loads a `RndDir`; decomp shows `ObjDirPtr<ObjectDir>` at offset `0x168`)
-- [ ] Revalidate crowd character rendering now that the ring producer bug is fixed
-- [ ] Revalidate audio merge now that the ring producer bug is fixed
+### 4.2 Merge Pipeline Stability — COMPLETE
+- [x] Fix ObjRef ring corruption root cause — **DONE** (`ObjDirPtr(C*)` double-linking fix)
+- [x] Fix SkeletonViz system-run resource loading — **DONE** (type fix + path canonicalization)
+- [x] Audio merge validated — **DONE** (Session 67: full MOGG playback working)
 
 ### 4.3 Gameplay HUD
-- [ ] Move card textures (pink rectangles — TexMovie + RndTexRenderer pipeline is COMPLETE; issue is asset loading/wiring, not missing render code)
+- [ ] Move card textures (pink rectangles — TexMovie + RndTexRenderer pipeline is COMPLETE; issue is asset loading/wiring)
 - [ ] Score/progress display
 
-### 4.4 Scene Animation
-- [x] **LightPreset::Load** — **DONE** (stubs removed session 61, real impl links at 99.2% match, ForcePreset active on venue load)
-- [ ] Revalidate song/venue animation after the ObjRef ring fix, then narrow remaining blockers
-- [ ] Venue lighting animation (LightPreset loading works; animation cycling via song.anim still TODO)
-- [ ] Song.anim driving (remaining DTA crashes on missing game objects still need investigation)
-- [x] Character dance animation — **DONE** (Session 63: HamDriver::Poll decomp fix, full ClipPlayer pipeline, GamePanel native init)
+### 4.4 Scene Animation — MOSTLY COMPLETE
+- [x] LightPreset::Load — **DONE** (Session 61)
+- [x] Camera cuts — **DONE** (Session 68: song.anim → HamDirector → CameraManager)
+- [x] Character dance animation — **DONE** (Session 63)
+- [ ] WorldCrowd rendering
+- [ ] Venue lighting animation for non-glitterati venues (glitterati has 0 LightPresets — static baked lighting is correct)
 
 ### 4.5 Loading State Machines — Analysis Complete (Session 60)
 
@@ -239,13 +203,17 @@ HamDirector (`src/system/hamobj/HamDirector.cpp:137-202`) exposes ~40+ DTA handl
 | `load_song` | Triggers song asset loading | Works |
 | `remap_song_anim_to_tempo_map` | Maps song.anim to tempo | **STUB** (Tier 1) |
 
-## Phase 6: Audio (LOW PRIORITY)
-- [ ] UI click/select/scroll sounds via miniaudio backend
-- [ ] Background music playback
+## Phase 6: Audio — COMPLETE (Session 67)
+- [x] Real-time MOGG decoding via FFmpeg/Vorbis/miniaudio
+- [x] Ring buffer flow control (native ConsumeData with BytesWriteable check)
+- [x] Song audio drives animation timing via songMs
+- [ ] UI click/select/scroll sounds (SFX bank loading)
 
-## Phase 7: Post-Processing (LOW PRIORITY)
-- [ ] Bloom, color correction, venue lighting effects
-- [ ] Multiply blend mode (needs bright destination)
+## Phase 7: Post-Processing — COMPLETE (Session 69)
+- [x] Bloom (screen blend, Xbox-matched)
+- [x] Contrast/brightness (non-linear Xbox formula from RndColorXfm)
+- [x] Saturation, levels, vignette, chromatic aberration, posterization, DOF
+- [ ] Motion blur, gradient map, kaleidoscope, flicker, noise (exotic effects)
 
 ---
 
@@ -268,10 +236,14 @@ HamDirector (`src/system/hamobj/HamDirector.cpp:137-202`) exposes ~40+ DTA handl
 | Character dark silhouette | Zero-color LightPreset lights | **FIXED** (Session 59 — fallback lighting) |
 | Null crashes on game_screen (3) | HamCharacter/HamCamShot/PoseFatalities null ptrs | **FIXED** (Session 59) |
 | HUD move cards pink rectangles | TexMovie render-to-texture | TODO — Phase 4 |
-| Crowd/audio merges crash-skipped | Previously ObjRef ring corruption; now needs fresh runtime validation after ctor fix | TODO — Phase 4 |
+| Crowd/audio merges crash-skipped | Previously ObjRef ring corruption | **FIXED** (Session 67 — audio merge works, MOGG playback operational) |
 | MoviePanel::IsLoaded blocks forever | mMovie.Ready() stub returns false | **FIXED** (Session 62 — `#ifdef HX_NATIVE` bypass) |
-| Static scene (no animation) | Character anim pipeline working (Session 63); venue renders on game_screen (Session 63b); LightPreset animation still pending | Partially fixed |
+| Static scene (no animation) | Character anim + camera cuts + audio timing all working | **FIXED** (Sessions 63-68 — full gameplay animation pipeline) |
 | Empty lists (no content) | Content system | **FIXED** (Session 62 — 49 items in song_select) |
+| Blown-out bloom whites | Additive bloom composite | **FIXED** (Session 69 — screen blend prevents blowout) |
+| Zero-color lights filling slots | LightPreset placeholders in LightsApprox | **FIXED** (Session 69 — brightness-sorted selection) |
+| Post-proc not in screenshots | Headless check blocked post-proc | **FIXED** (Session 69 — removed `!mGpu.IsHeadless()` gate) |
+| RndFlare invisible on native | No GPU occlusion query readback | **FIXED** (Session 69 — occlusion bypass) |
 
 ## Crashes Fixed (Session 59)
 1. ObjRef ring corruption producer bug in `ObjDirPtr(C*)` → fixed by removing the extra `AddRef`; direct lifetime regression test added

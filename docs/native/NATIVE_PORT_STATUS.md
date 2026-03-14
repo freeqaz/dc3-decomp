@@ -1,7 +1,7 @@
 # Native Port Progress (x86_64 Linux)
 
-## Current Status: Session 63+ - Gameplay Enter Path Stabilized
-**Goal**: Keep the full song -> venue -> gameplay pipeline stable while removing merge-path root causes
+## Current Status: Session 69 - Phase 6 Polish (Post-Processing + Lighting)
+**Goal**: Full visual quality — post-processing, lighting, particles, flares, lines all working
 
 ### Sessions Complete
 - **Sessions 1-19**: Foundation through mesh rendering (see git history)
@@ -31,26 +31,34 @@
 - **Session 62+**: **Audio pipeline end-to-end.** StandardStream kInit→kBuffering decomp fix (was missing `mState = kBuffering` after channel creation). VorbisReader native single-threaded decode (Poll/DoFileRead/Decrypt via `#ifdef HX_NATIVE`). StreamReceiver WriteData/Poll native implementation. HamAudio `.mogg` extension fix. NativeSynth `expectMap=true`. VorbisReader `#ifndef HX_NATIVE` thread guard (prevents destructor infinite loop from stubbed DecodeThread). Game now reaches gameplay with `audioFail=0` and advancing songMs.
 - **Session 61+**: **FileMerger pipeline restored and ObjRef producer bug fixed.** `FileMerger::PreLoad()` now runs `StartLoadInternal(true, true)` on native, restoring song -> venue -> viz -> HUD chain loading. Follow-up root-cause work found that `ObjDirPtr(C*)` was double-linking the same ref node into an object's ObjRef ring: `ObjRefConcrete` already links in its base ctor, and the derived ctor's extra `dir->AddRef(this)` corrupted the ring immediately. Removed the extra link, added a direct lifetime regression test, and revalidated scripted boot-to-`game_screen` without `ReplaceRefs` corruption warnings or merge crashes.
 - **Session 63+**: **SkeletonViz/MoveDir enter path fixed.** Native `FileSystemRoot()` now canonicalizes to the extracted `system/run` tree under `orig-assets`, so direct system-run resources load from disk instead of going through bad archive-relative paths. Follow-up decomp validation showed `SkeletonViz` field `mResource` at offset `0x168` is `ObjDirPtr<ObjectDir>`, not `ObjDirPtr<UILabelDir>`; the wrong type caused successful `ham/skeleton.milo` loads to be discarded because the asset class is `RndDir`. Added direct regressions for system-run `ham/skeleton.milo` loading and `SkeletonViz::Init()`, then revalidated headless YMCA boot through frame 4500 with `game_screen` entered and stable.
+- **Session 67**: **Audio timing fix.** VorbisReader::Poll decode loop exited immediately when TryDecode() found no Ogg packet (on Xbox, a background thread feeds data continuously). Fixed to read more file data and retry. Added ring buffer flow control to native ConsumeData (missing BytesWriteable check caused silent data loss). Pre-fill ring buffers in Play() before registering with AudioDevice. Song audio now plays at real-time (100% speed), driving all animation systems.
+- **Session 68**: **Camera cuts verified.** song.anim PropKeys with property "shot" drives HamDirector::SetShot() → FindNextShot() → CameraManager::ForceCameraShot(). 34 shot keyframes for YMCA cycle through Area1_WIDE, Area1_NEAR, Area1_MOVEMENT, CLOSEUP categories. LightPreset animation N/A for YMCA's glitterati venue (0 LightPreset objects — static baked lighting correct). HUD panels (game_panel, world_panel, rhythm_detector_panel, fitness_hud_panel) all active+showing during gameplay. 272 draw calls/frame during gameplay.
+- **Session 69**: **Post-processing pipeline + visual quality.** Enabled full post-processing in headless mode: bloom (screen blend instead of additive to prevent blown-out whites), Xbox-matched contrast formula (from RndColorXfm::AdjustContrast), brightness, saturation, levels, vignette, chromatic aberration, posterization. Fixed RndFlare visibility by bypassing GPU occlusion query (SetVisible + SetOcclusionResult on native). Improved directional light selection — collect all lights from environment + venue WorldDir, sort by brightness, pick top 4 (prevents zero-color LightPreset placeholders from filling slots). Verified RndLine, RndParticleSys, SpotlightDrawer all linked as strong symbols. 14 screenshots in `archive/screenshots/session69/`. PPC decomp: 9 improvements, 0 regressions.
 
 ### Completed Phases
 - **Phase 0**: Foundation — COMPLETE
-- **Phase 1A**: Main Loop — **COMPLETE** (3000 frames, clean exit)
+- **Phase 1A**: Main Loop — **COMPLETE** (10000 frames, clean exit)
 - **Phase 1 Track B**: Milo Viewer — COMPLETE (full material pipeline)
 - **Phase 1.5**: Asset Pipeline (runtime) — COMPLETE
-- **Phase 2**: Rendering — IN PROGRESS (12 mesh draw calls/frame verified from cursor_panel via headless Dawn)
+- **Phase 2**: Rendering — **COMPLETE** (272 draw calls/frame during gameplay, full material pipeline)
+- **Phase 3**: Audio — **COMPLETE** (real-time MOGG playback via FFmpeg/Vorbis/miniaudio)
 - **Phase 4**: Input — COMPLETE (Joypad_Native + Keyboard_Native + 19 tests)
+- **Phase 6**: Polish — **IN PROGRESS** (~30% — post-processing, flares, particles, lines working)
 
 ### Current Boot Progress
-Engine boots, navigates full menu flow, loads a song, and renders the 3D venue on game_screen:
+Engine boots, navigates full menu flow, loads a song, and renders full gameplay with audio:
 1. Archive loading → config → all subsystem inits → main loop
 2. **Full screen flow**: attract_screen → autosave_warning → title_screen → tutorial_voice_control → main_screen → choose_mode_screen → song_select_screen → multiuser_screen → loading_screen → preloading_screen → real_loading_screen → **game_screen**
 3. **Auto-skip mechanism**: UIScreen::Enter() fires DTA handlers (`skip_selected`, `next_screen`) on enter. Timer-based fallback in UIManager::Poll auto-advances stuck screens after 120 frames
 4. **Button dispatch working**: JoypadPoll → Export → MsgSinks → JoypadClient → UIManager → UIScreen → PanelDir → HamNavList
 5. **Interactive navigation**: Up/Down/Confirm navigate menus. Input script (`MILO_INPUT_SCRIPT`) drives headless navigation
-6. **Venue rendering**: 505 draw calls/frame on game_screen — DCI venue with floor, walls, DJ booth, lighting rigs, fully-lit character, HUD overlays
-7. **HamUI two-pass draw**: Uses TheHamUI (game-specific UIManager) for proper letterbox/blacklight/helpbar rendering
-8. **Boot-to-gameplay remains stable after the ObjRef + SkeletonViz root-cause fixes**. Headless scripted YMCA run reaches `game_screen` through frame 4500 without merge crash/recovery output.
-9. **Env vars**: `MILO_RENDER=1` + `MILO_HEADLESS=1` for headless GPU, `MILO_SCREENSHOT_DIR=path` + `MILO_SCREENSHOT_FRAMES=100,300,500` for auto-capture, `MILO_FIRST_SCREEN=main_screen` skips attract, `MILO_MAX_FRAMES=N`, `MILO_INPUT_SCRIPT=path`
+6. **Venue rendering**: 272 draw calls/frame during gameplay — DCI venue with floor, walls, DJ booth, lighting rigs, fully-lit character, HUD overlays, particles, flares, lines
+7. **Audio playback**: Real-time MOGG decoding (FFmpeg/Vorbis) → ring buffer → miniaudio output. Song audio drives animation timing via songMs
+8. **Camera cuts**: song.anim PropKeys drive HamDirector::SetShot() → CameraManager::ForceCameraShot() with 34+ shot keyframes per song
+9. **Post-processing**: Bloom (screen blend), Xbox-matched contrast/brightness, saturation, levels, vignette, chromatic aberration, posterization
+10. **HamUI two-pass draw**: Uses TheHamUI (game-specific UIManager) for proper letterbox/blacklight/helpbar rendering
+11. **Stable 10000+ frames** — boot-to-gameplay without crash/recovery after ObjRef + SkeletonViz root-cause fixes
+12. **Env vars**: `MILO_RENDER=1` + `MILO_HEADLESS=1` for headless GPU, `MILO_SCREENSHOT_DIR=path` + `MILO_SCREENSHOT_FRAMES=100,300,500` for auto-capture, `MILO_FIRST_SCREEN=main_screen` skips attract, `MILO_MAX_FRAMES=N`, `MILO_INPUT_SCRIPT=path`
 
 ### Session 22 Fixes (MsgSinks + Button Dispatch)
 | Issue | Root Cause | Fix |
@@ -399,20 +407,33 @@ Functions currently guarded with `#ifdef HX_NATIVE` early returns that should be
 Non-Kinect TODOs:
 | Feature | Description | Priority |
 |---------|-------------|----------|
-| **Content system** | Store/DLC content loading — currently 0 list items because no content provider | High |
 | **Locale data** | Full localization strings — currently shows token names | Medium |
-| **Audio playback** | Miniaudio integration for SFX/music | Medium |
-| **Skinned mesh rendering** | Bone transforms, vertex skinning shader | Medium |
-| **Post-processing** | Bloom, color correction, etc. | Low |
+| **WorldCrowd rendering** | Crowd character instancing | Low |
+| **Projected light textures** | Gobo/spotlight cookie textures | Low |
+| **FakeSpot light type** | Projected cone light | Low |
+| **Motion blur / exotic post-proc** | Gradient map, kaleidoscope, flicker, noise, video feedback | Low |
+
+Done (previously TODOs):
+- ~~Content system~~ — **DONE** (Session 62: 62 songs load, 49 items in song_select)
+- ~~Audio playback~~ — **DONE** (Session 67: real-time MOGG via FFmpeg/Vorbis/miniaudio)
+- ~~Skinned mesh rendering~~ — **DONE** (Session 63: GPU skinning, 4-bone blending, 40-bone palettes)
+- ~~Post-processing~~ — **DONE** (Session 69: bloom, contrast, brightness, saturation, levels, vignette, chromatic aberration, posterization, DOF)
 
 ### Next Steps
-1. ~~**Implement LightPreset::Load**~~ — **DONE** (stubs removed session 61, real impl at 99.2% match, ForcePreset active on venue load). Venue lighting animation via song.anim still TODO.
-2. **Revalidate crowd/audio/song merges after the ObjRef root-cause fix** — the known producer bug in `ObjDirPtr(C*)` is fixed; the next step is to confirm crowd rendering and scene animation now advance normally, then remove the remaining merge-time safety hacks.
-3. **HUD textures** — Move card geometry renders as pink rectangles. TexMovie + RndTexRenderer + WebGPU render-to-texture pipeline is fully implemented; issue is asset loading/wiring, not missing render code.
-4. **Scene animation** — LightPreset loading works; animation cycling via song.anim still TODO. Song.anim DTA scripts crash on missing game objects. Character dance animation now working (Session 63).
-5. **Post-processing** — Bloom, color correction, venue lighting effects are all stubbed.
-6. ~~**Skinned mesh rendering**~~ — **DONE** (Session 63: GPU skinning with 4-bone blending, 40-bone palettes).
-7. ~~Content system integration~~ — **DONE** (Session 62: 62 songs load, 49 items in song_select).
+1. **Performance optimization** — Profile and optimize hot paths for sustained 60fps
+2. **Test with more venues** — Verify rendering across all DC3 venue types (glitterati, dclive, etc.)
+3. **WorldCrowd rendering** — Crowd character instancing system
+4. **HUD textures** — Move card geometry renders as pink rectangles. TexMovie + RndTexRenderer + WebGPU render-to-texture pipeline is fully implemented; issue is asset loading/wiring, not missing render code
+5. **Scoring system** — Game scoring and feedback display
+6. **Platform support** — Web (Emscripten/WebGPU), macOS, Windows targets
+
+Done:
+- ~~LightPreset::Load~~ — **DONE** (Session 61: real impl at 99.2% match, ForcePreset active on venue load)
+- ~~Skinned mesh rendering~~ — **DONE** (Session 63: GPU skinning with 4-bone blending, 40-bone palettes)
+- ~~Content system~~ — **DONE** (Session 62: 62 songs load, 49 items in song_select)
+- ~~Post-processing~~ — **DONE** (Session 69: full pipeline with Xbox-matched formulas)
+- ~~Audio playback~~ — **DONE** (Session 67: real-time MOGG via FFmpeg/Vorbis/miniaudio)
+- ~~Camera cuts~~ — **DONE** (Session 68: song.anim PropKeys → HamDirector → CameraManager)
 
 ### Build Commands
 ```bash

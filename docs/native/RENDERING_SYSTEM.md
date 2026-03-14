@@ -184,16 +184,35 @@ The native port (WebGPU/Dawn) currently implements a **Tier 1 subset**:
 - Linear fog
 - 4 directional lights + ambient
 
+### What's implemented (as of Session 69)
+- Normal maps (TBN matrix, DXT5nm auto-detection, tangent generation via MikkTSpace)
+- Specular maps (RGB color + alpha glossiness, per-pixel lighting)
+- Emissive maps (scalar-multiplied self-illumination)
+- Environment/cube maps (reflection-based UVs, Fresnel falloff)
+- Detail normal maps (separate tiling + strength)
+- Rim maps (per-pixel rim lighting with texture masking)
+- UV channel 0 and 1
+- Vertex skinning (4-bone blending, 40-bone palettes)
+- 4 directional lights + 4 point lights + ambient (brightness-sorted selection)
+- Linear fog (per-environment settings)
+- Highlight compression (soft tone mapping via tanh)
+- Post-processing pipeline (bloom with screen blend, Xbox-matched contrast/brightness,
+  saturation, levels adjustment, vignette, chromatic aberration, posterization, DOF)
+- Intensify flag (×2 brightness for glowing materials)
+- All blend modes, depth modes, cull modes, stencil modes
+- Shadow mapping (depth-based shadow pass)
+- RndParticleSys (billboard renderer)
+- RndLine (perspective-corrected CPU geometry → mesh pipeline)
+- RndFlare (DrawRect rendering, visibility bypass for native)
+- Text rendering (glyph meshes, DXT5 alpha shader, font loading)
+- TexMovie render-to-texture (FFmpeg decode → WebGPU upload)
+
 ### What's missing
-- Normal maps (no TBN matrix, no tangent vertex attributes)
-- Specular maps (specular is uniform-only)
-- Emissive maps (uniform-only)
-- Environment/cube maps
-- Detail normal maps, rim maps
-- UV channel 1 (only UV0 is unpacked)
-- Shader variation programs (skin, hair, world projection)
-- True `worldInvTranspose` (currently = `world`, wrong for non-uniform scale)
-- Post-processing pipeline
+- Motion blur, gradient map, kaleidoscope, flicker, noise, video feedback post-proc effects
+- GPU occlusion queries (flares use visibility bypass instead)
+- WorldCrowd rendering
+- Projected light textures (gobo/spotlight cookies)
+- FakeSpot light type
 
 ---
 
