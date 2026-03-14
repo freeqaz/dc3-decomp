@@ -805,23 +805,27 @@ void Spotlight::Poll() {
     }
     Hmx::Matrix3 m;
     if (!mUpdating) {
-        RndTransformable *target = mTargetLoaded ? (RndTransformable *)mTarget : nullptr;
-        if (!target || (!mSnapToTarget && target->WorldXfm().v == mLastTargetPos)) {
+        RndTransformable *target = nullptr;
+        if (mTargetLoaded)
+            target = mTarget;
+        if (!target
+            || (!TheLoadMgr.EditMode() && !mSnapToTarget
+                && target->WorldXfm().v == mLastTargetPos)) {
             if (!target && !mAnimateOrientationFromPreset && !DoFloorSpot()) {
                 UpdateTransforms();
-                return;
+            } else {
+                CheckFloorSpotTransform();
+                mOrientMatrix = WorldXfm().m;
+                UpdateSlaves();
             }
-            CheckFloorSpotTransform();
-            mOrientMatrix = WorldXfm().m;
-            UpdateSlaves();
             Normalize(mLocalXfm.m, m);
             SetLocalRot(m);
             return;
         }
         mLastTargetPos = target->WorldXfm().v;
         CalculateDirection(target, m);
-        if (!mSnapToTarget && mDampingConstant != 1) {
-            Interp(mOrientMatrix, m, mDampingConstant * TheTaskMgr.DeltaSeconds(), m);
+        if (!mSnapToTarget && mDampingConstant != 1.0f) {
+            Interp(mOrientMatrix, m, TheTaskMgr.DeltaSeconds() * mDampingConstant, m);
         } else {
             mSnapToTarget = false;
         }

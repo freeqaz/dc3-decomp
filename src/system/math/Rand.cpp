@@ -37,9 +37,6 @@ int Rand::Int(int low, int high) {
     return low + Int() % (high - low);
 }
 
-float Rand::Float() { return ((Int() & 0xFFFF) / 65536.0f); }
-float Rand::Float(float f1, float f2) { return ((f2 - f1) * Float() + f1); }
-
 int RandomInt() {
     MILO_ASSERT(MainThread(), 0x5C);
     return Rand::sRand.Int();
@@ -59,6 +56,9 @@ float RandomFloat(float f1, float f2) {
     MILO_ASSERT(MainThread(), 0x6F);
     return Rand::sRand.Float(f1, f2);
 }
+
+float Rand::Float() { return ((Int() & 0xFFFF) / 65536.0f); }
+float Rand::Float(float f1, float f2) { return ((f2 - f1) * Float() + f1); }
 
 int Rand::FastInt(int low, int high) {
     MILO_ASSERT(high > low, 0x33);

@@ -10,7 +10,7 @@ public:
     int Int(int, int);
     int FastInt(int, int);
     float Float();
-    float Float(float, float);
+    __declspec(noinline) float Float(float, float);
     float Gaussian();
 
     MEM_OVERLOAD(Rand, 0x16);
