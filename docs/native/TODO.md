@@ -1,16 +1,20 @@
 # Native Port TODO — Phase 6 Polish & Remaining Work
 
-## Current State (Session 69)
+## Current State (Session 70)
 - **Full gameplay pipeline operational** — Engine boots through menu → song select → game_screen with audio, rendering, animation, camera cuts, post-processing
-- **272 draw calls/frame during gameplay** — venue geometry, character (skinned + animated), particles, flares, lines, HUD overlays
+- **6 venues tested** — dci, dclive, rollerrink, houseparty, streetside, throneroom — all render correctly
+- **Per-song venue resolution** — Songs load their correct venue from metadata (HamSongMetadata::Venue())
+- **~350-518 draw calls/frame** — varies by venue (houseparty=350, rollerrink=518)
 - **Audio playback** — Real-time MOGG decoding (FFmpeg/Vorbis) → ring buffer → miniaudio output, drives songMs timing
+- **Audio loading fix** — Game::IsLoaded() state 2 initiates audio from within load poll (fixes circular dependency)
 - **Camera cuts** — song.anim PropKeys → HamDirector::SetShot() → CameraManager with 34+ keyframes/song
 - **Post-processing** — Bloom (screen blend), Xbox-matched contrast/brightness, saturation, levels, vignette, chromatic aberration, posterization
-- **Brightness-sorted lighting** — Collects lights from environment + venue WorldDir, filters zero-color, sorts by brightness, picks top 4
+- **Light energy cap** — Total directional light energy capped to prevent overexposure without LightPreset animation
+- **Non-fatal Debug::Fail** — Matches Xbox "Continue" dialog (MILO_FATAL_FAILS=1 to restore abort)
+- **Render-to-texture** — RndTexRenderer::DrawToTexture pipeline working (venue decorations)
 - **Content system** — 62 songs load from DTA, 49 UI items in song_select_screen
 - **RndFlare occlusion bypass** — SetVisible(true) + SetOcclusionResult(1.0) for in-view flares on native (no GPU occlusion query)
-- **Stable 10000+ frames** — boot-to-gameplay without crash after ObjRef + SkeletonViz root-cause fixes
-- **14 screenshots** in `archive/screenshots/session69/`
+- **Stable 2500+ frames per song** — all tested songs run through gameplay without crash
 
 ## Headless GPU Rendering
 
@@ -110,8 +114,9 @@ Goal: Character with proper materials, crowd, animated venue, gameplay HUD textu
 - [x] LightPreset::Load — **DONE** (Session 61)
 - [x] Camera cuts — **DONE** (Session 68: song.anim → HamDirector → CameraManager)
 - [x] Character dance animation — **DONE** (Session 63)
+- [x] Light energy cap — **DONE** (Session 70: prevents overexposure across all 6 venues)
 - [ ] WorldCrowd rendering
-- [ ] Venue lighting animation for non-glitterati venues (glitterati has 0 LightPresets — static baked lighting is correct)
+- [ ] LightPreset animation (dynamic lighting changes during song — currently all lights active simultaneously)
 
 ### 4.5 Loading State Machines — Analysis Complete (Session 60)
 
@@ -244,6 +249,10 @@ HamDirector (`src/system/hamobj/HamDirector.cpp:137-202`) exposes ~40+ DTA handl
 | Zero-color lights filling slots | LightPreset placeholders in LightsApprox | **FIXED** (Session 69 — brightness-sorted selection) |
 | Post-proc not in screenshots | Headless check blocked post-proc | **FIXED** (Session 69 — removed `!mGpu.IsHeadless()` gate) |
 | RndFlare invisible on native | No GPU occlusion query readback | **FIXED** (Session 69 — occlusion bypass) |
+| All songs loading same venue | App.cpp hardcoded glitterati fallback | **FIXED** (Session 70 — venue metadata from HamSongMetadata) |
+| DCI venue stuck on loading | Audio loading circular dependency in Game::IsLoaded() | **FIXED** (Session 70 — initiate audio from load poll) |
+| Characters blown out/overexposed | All venue lights active simultaneously | **FIXED** (Session 70 — light energy cap) |
+| DTA script crashes on native | Debug::Fail calls abort() | **FIXED** (Session 70 — non-fatal by default) |
 
 ## Crashes Fixed (Session 59)
 1. ObjRef ring corruption producer bug in `ObjDirPtr(C*)` → fixed by removing the extra `AddRef`; direct lifetime regression test added
