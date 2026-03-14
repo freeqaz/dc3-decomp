@@ -36,6 +36,12 @@ public:
     // Called by base StreamReceiver::GetBytesPlayed() (non-virtual, uses static_cast)
     u64 GetTotalBytesPlayed() const { return mTotalBytesPlayed; }
 
+    // Available write space in the ring buffer (bytes)
+    int AvailableWriteBytes() const {
+        int avail = kPCMBufSize - (mWriteCursor - mPlayCursor);
+        return (avail > 0) ? avail : 0;
+    }
+
 private:
     // PCM ring buffer (16-bit mono samples from the engine, converted to float on output)
     static const int kPCMBufSize = 0x10000; // 64KB

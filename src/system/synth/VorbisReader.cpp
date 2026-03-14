@@ -484,7 +484,7 @@ void VorbisReader::Poll(float until) {
             bool first = !unkec;
             while (timer.Ms() < until || first) {
                 first = false;
-                // Consume decoded PCM and push to stream
+                // Step 1: Push any decoded PCM to ring buffers
                 {
                     float **pcm;
                     int pcmAvail = vorbis_synthesis_pcmout(mVorbisDsp, &pcm);
@@ -492,11 +492,20 @@ void VorbisReader::Poll(float until) {
                         int consumed = ConsumeData((void **)pcm, pcmAvail,
                                                    mVorbisDsp->granulepos - pcmAvail);
                         vorbis_synthesis_read(mVorbisDsp, consumed);
+                        if (consumed == 0)
+                            break; // Ring buffer full — wait for audio callback to drain
                     }
                 }
+                // Step 2: Decode more Vorbis blocks
                 if (!TryDecode()) {
-                    return;
+                    // No packet available — on native there's no background decode
+                    // thread, so read more file data and retry before giving up.
+                    if (!DoFileRead())
+                        break; // Can't read more (EOF, error, or ogg buffer full)
+                    if (!TryDecode())
+                        break; // Still no packet — give up this poll cycle
                 }
+                // Step 3: Feed raw data for next iteration
                 DoFileRead();
                 timer.Split();
             }

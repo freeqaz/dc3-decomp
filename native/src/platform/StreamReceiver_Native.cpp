@@ -41,10 +41,6 @@ StreamReceiver *StreamReceiverNative::Create(int numBuffers, int sampleRate, boo
 }
 
 void StreamReceiverNative::PlayImpl() {
-    static int sPlayCount = 0;
-    sPlayCount++;
-    fprintf(stderr, "DC3 StreamReceiverNative::PlayImpl[%d] this=%p wc=%d pc=%d\n",
-        sPlayCount, (void*)this, mWriteCursor, mPlayCursor);
     mPlaying = true;
     mPaused = false;
     AudioDevice::GetInstance().AddSource(this);
@@ -55,12 +51,6 @@ void StreamReceiverNative::PauseImpl(bool pause) {
 }
 
 void StreamReceiverNative::StartSendImpl(unsigned char *data, int size, int /*targetIdx*/) {
-    static int sSendCount = 0;
-    sSendCount++;
-    if (sSendCount <= 10) {
-        fprintf(stderr, "DC3 StartSendImpl[%d] size=%d wc=%d pc=%d\n",
-            sSendCount, size, mWriteCursor, mPlayCursor);
-    }
     int wc = mWriteCursor;
     int pc = mPlayCursor;
     int bufSamples = kPCMBufSize / 2;
@@ -95,12 +85,7 @@ int StreamReceiverNative::GetPlayCursor() {
 }
 
 int StreamReceiverNative::RenderAudio(float *output, int frameCount) {
-    static int sRenderDbg = 0;
     if (!mPlaying || mPaused) {
-        if (sRenderDbg < 5) {
-            sRenderDbg++;
-            fprintf(stderr, "DC3 RenderAudio: NOT playing/paused — playing=%d paused=%d\n", mPlaying, mPaused);
-        }
         memset(output, 0, frameCount * 2 * sizeof(float));
         return frameCount;
     }
@@ -109,11 +94,6 @@ int StreamReceiverNative::RenderAudio(float *output, int frameCount) {
     int pc = mPlayCursor;
     int availBytes = wc - pc;
     int availSamples = availBytes / 2;
-    if (sRenderDbg < 20) {
-        sRenderDbg++;
-        fprintf(stderr, "DC3 RenderAudio: wc=%d pc=%d avail=%d frames=%d vol=%.3f\n",
-            wc, pc, availSamples, frameCount, mVolume);
-    }
     int samplesToRender = std::min(frameCount, availSamples);
 
     if (samplesToRender <= 0) {

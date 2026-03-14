@@ -159,4 +159,9 @@ protected:
     bool mPollingEnabled; // 0x150
     int unk154; // 0x154
     bool unk158; // 0x158
+#ifdef HX_NATIVE
+    bool mUseTimerFallback = false; // true when audio output is too slow (headless mode)
+    Timer mWallClock; // independent wall-clock timer for detecting audio lag
+    bool mWallClockStarted = false;
+#endif
 };

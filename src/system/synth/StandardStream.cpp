@@ -8,6 +8,9 @@
 #include "utl/Std.h"
 #include "synth/StreamReceiver.h"
 #include "synth/StreamReceiverFile.h"
+#ifdef HX_NATIVE
+#include "platform/StreamReceiver_Native.h"
+#endif
 #include "utl/Symbol.h"
 #include <cmath>
 #include <functional>
@@ -78,6 +81,15 @@ void StandardStream::Play() {
         );
     }
     UpdateVolumes();
+#ifdef HX_NATIVE
+    // Pre-fill ring buffers before registering with AudioDevice.
+    // The IsReady pump above only runs until header parsing completes (kReady).
+    // Without pre-filling, the audio callback fires on empty buffers for the
+    // first frame(s), causing an audible gap and delayed timing.
+    for (int i = 0; i < 20; i++) {
+        PollStream();
+    }
+#endif
     std::for_each(mChannels.begin(), mChannels.end(), std::mem_fun(&StreamReceiver::Play));
     mState = kPlaying;
     mTimer.Start();
@@ -434,6 +446,34 @@ void StandardStream::UpdateTime() {
 
     float rawTime = GetRawTime();
 
+#ifdef HX_NATIVE
+    // In headless mode (no real audio device), the audio callback fires very
+    // slowly, making rawTime lag far behind wall-clock time. Use an independent
+    // wall-clock timer (not mTimer, which gets drift-corrected toward rawTime)
+    // to detect this. Once detected, bypass drift correction permanently.
+    if (mState == kPlaying && !mUseTimerFallback) {
+        if (!mWallClockStarted) {
+            mWallClock.Start();
+            mWallClockStarted = true;
+        }
+        mWallClock.Split();
+        float wallElapsed = mWallClock.Ms();
+        if (wallElapsed > 500.0f) {
+            float audioElapsed = rawTime - mStartMs;
+            if (audioElapsed < wallElapsed * 0.1f) {
+                // Audio output is < 10% real-time — switch to wall-clock timing
+                mUseTimerFallback = true;
+                // Sync mTimer to match current wall-clock elapsed time from song start
+                mTimer.Reset(mStartMs + wallElapsed);
+            }
+        }
+    }
+    if (mUseTimerFallback) {
+        mLastStreamTime = mTimer.Ms();
+        return;
+    }
+#endif
+
     float quantized = floorf(rawTime * 0.1875f + 0.5f) * 5.3333335f;
 
     float timerMs = mTimer.Ms();
@@ -691,6 +731,19 @@ int StandardStream::ConsumeData(void **v, int numSamples, int startSamp) {
             samplesToConsume = remaining;
         }
     }
+
+    // Flow control: limit to what the ring buffers can accept.
+    // Without this, decoded audio is silently dropped when the buffer is full,
+    // causing the Vorbis decoder to advance past unconsumed data.
+    for (int i = 0; i < (int)mChannels.size(); i++) {
+        StreamReceiverNative *rcvr = static_cast<StreamReceiverNative *>(mChannels[i]);
+        int availSamples = rcvr->AvailableWriteBytes() / 2; // bytes → samples (16-bit)
+        if (availSamples < samplesToConsume) {
+            samplesToConsume = availSamples;
+        }
+    }
+    if (samplesToConsume <= 0)
+        return 0;
 
     int bytesPerSample = mFloatSamples ? 4 : 2;
     int bufSize = samplesToConsume * bytesPerSample;
