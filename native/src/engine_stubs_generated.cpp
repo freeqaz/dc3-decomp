@@ -136,7 +136,13 @@ int SetUnhandledExceptionFilter() { return 0; }
 void* TheChallengeSortMgr = 0;
 // TheContentMgr: provided by ContentMgr_Stub.cpp
 void* TheDebugNotifyOncePrinter = 0;
-// TheDxRnd: removed - provided by Rnd_Stub.cpp (not needed, rnddx9 excluded)
+// TheDxRnd: DxRnd is Xbox-only (D3D9 renderer), provide zero storage for native
+__attribute__((weak, used)) char TheDxRnd[8192] = {};
+// D3DDevice_SetDepthStencilSurface: Xbox D3D9 API stub
+extern "C" __attribute__((weak)) void D3DDevice_SetDepthStencilSurface(void*, int) {}
+// MemHeapStack::sDefaultHeap: static member definition
+#include "utl/MemHeap.h"
+int MemHeapStack::sDefaultHeap = 0;
 void* TheFitnessGoalMgr = 0;
 // TheGameMode: now defined properly in GameMode.cpp
 // TheHamUI: now defined in HamUI.cpp
