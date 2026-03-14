@@ -3050,7 +3050,16 @@ void HamDirector::Poll() {
     if (!mPollEnabled) return;
     HamCharacter *player0 = TheHamWardrobe ? TheHamWardrobe->GetCharacter(0) : nullptr;
     HamCharacter *player1 = TheHamWardrobe ? TheHamWardrobe->GetCharacter(1) : nullptr;
+#ifdef HX_NATIVE
+    // On native, use the difficulty-specific song.anim (not the routine builder).
+    // SongAnim(0) returns the routine builder when merge_moves=1, but OnSelectCamera
+    // advances the original song.anim. We must read from the same object.
+    HamPlayerData *hpd0 = TheGameData->Player(0);
+    RndPropAnim *songAnim = hpd0 ? SongAnimByDifficulty(LegacyDifficulty(hpd0->GetDifficulty())) : nullptr;
+    if (!songAnim) songAnim = SongAnim(0);
+#else
     RndPropAnim *songAnim = SongAnim(0);
+#endif
     if (songAnim) {
         if (player0 && player1) {
             int p0anim = player0->SongAnimation();
