@@ -50,6 +50,7 @@ void DelayEffect::SetParameter(int param, float value) {
 static const int kMaxDelaySamps = 96000;
 
 void DelayEffect::Process(float *buf, int numSamples, int numChans) {
+    if (!mBuffer) return;
     MILO_ASSERT(numChans <= 2, 0x27);
     int writePos = mWritePos;
     if (numChans == 1) {
@@ -67,8 +68,8 @@ void DelayEffect::Process(float *buf, int numSamples, int numChans) {
             writePos = nextWritePos;
         }
     } else {
-        float wetAmount = mWetAmount;
         float dryAmount = 1.0f - mWetAmount;
+        float wetAmount = mWetAmount;
         for (int i = 0; i < numSamples; i++) {
             int readPos = writePos - mDelaySamples;
             if (readPos < 0) readPos += kMaxDelaySamps;

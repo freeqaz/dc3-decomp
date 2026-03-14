@@ -100,7 +100,6 @@ public:
     void SetBufSecs(float secs) { mBufSecs = secs; }
     int NumInfoChannels() const { return mInfoChannels; }
 
-    static const float kStreamEndMs;
 #ifdef HX_NATIVE
     static float sAudioOffsetMs;
 #endif

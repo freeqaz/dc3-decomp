@@ -102,10 +102,11 @@ int SampleInstNative::RenderAudio(float *output, int frameCount) {
         mPlayPos++;
     }
 
-    // Apply FxSend effect chain if one is assigned
-    if (mFxSend) {
-        FxSendNative_ProcessChain(mFxSend, output, frameCount, 2);
-    }
+    // TODO: FxSend processing disabled — dangling pointer crash during song reload.
+    // Need proper FxSend lifecycle management (weak refs or cleanup on destroy).
+    // if (mFxSend) {
+    //     FxSendNative_ProcessChain(mFxSend, output, frameCount, 2);
+    // }
 
     return frameCount;
 }

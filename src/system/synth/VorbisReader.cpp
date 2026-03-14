@@ -197,8 +197,9 @@ bool VorbisReader::TryReadHeader() {
                 VORBIS_FAIL("HeaderIn", vorbisErr);
             mHeadersRead++;
             return true;
-        } else
+        } else {
             return false;
+        }
     }
 }
 
@@ -246,9 +247,9 @@ bool VorbisReader::TryReadPacket(ogg_packet &pk) {
             return true;
         ogg_page page;
         int syncErr = ogg_sync_pageout(mOggSync, &page);
-        if (syncErr > 0)
+        if (syncErr > 0) {
             ogg_stream_pagein(mOggStream, &page);
-        else
+        } else
             return false;
     }
 }
@@ -401,32 +402,37 @@ static void Decrypt(VorbisReader *reader, unsigned char *data, int bytes,
                     symmetric_CTR *ctrState, int magicHashA, int magicHashB) {
     if (!ctrState)
         return;
-    int i = 0;
-    while (i < bytes) {
-        const int dataLen = 1024;
-        unsigned char buf1[dataLen];
-        unsigned char buf2[dataLen];
-        int n = Min(bytes - i, dataLen);
-        memcpy(buf1, data + i, n);
-        ctr_decrypt(buf1, buf2, n, ctrState);
-        unsigned char *after = buf2;
-        if ((magicHashA != 0 || magicHashB != 0)
-            && after[0] == 'H' && after[1] == 'M' && after[2] == 'X' && after[3] == 'A') {
-            after[0] = 'O';
-            after[1] = 'g';
-            after[2] = 'g';
-            after[3] = 'S';
-            if (n >= 16) {
-                unsigned int *ui = (unsigned int *)&after[12];
-                *ui ^= magicHashA;
-            }
-            if (n >= 24) {
-                unsigned int *ui = (unsigned int *)&after[20];
-                *ui ^= magicHashB;
+
+    // Step 1: Decrypt the entire buffer in-place using AES-CTR (stream cipher)
+    unsigned char *tmp = new unsigned char[bytes];
+    ctr_decrypt(data, tmp, bytes, ctrState);
+    memcpy(data, tmp, bytes);
+    delete[] tmp;
+
+    // Step 2: Scan for all HMXA page headers and apply anti-tamper reversal.
+    // v0xE encryption replaces OggS with HMXA and XORs bytes 12-15 and 20-23
+    // with magicHash values. The XOR was designed for big-endian (Xbox 360),
+    // so we must byte-swap the hash values on little-endian before XORing.
+    if (magicHashA != 0 || magicHashB != 0) {
+        unsigned int xorA = __builtin_bswap32((unsigned int)magicHashA);
+        unsigned int xorB = __builtin_bswap32((unsigned int)magicHashB);
+        for (int i = 0; i <= bytes - 4; i++) {
+            if (data[i] == 'H' && data[i+1] == 'M'
+                && data[i+2] == 'X' && data[i+3] == 'A') {
+                data[i]   = 'O';
+                data[i+1] = 'g';
+                data[i+2] = 'g';
+                data[i+3] = 'S';
+                if (i + 16 <= bytes) {
+                    unsigned int *ui = (unsigned int *)&data[i + 12];
+                    *ui ^= xorA;
+                }
+                if (i + 24 <= bytes) {
+                    unsigned int *ui = (unsigned int *)&data[i + 20];
+                    *ui ^= xorB;
+                }
             }
         }
-        memcpy(data + i, buf2, n);
-        i += n;
     }
 }
 

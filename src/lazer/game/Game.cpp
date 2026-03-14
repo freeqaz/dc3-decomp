@@ -50,6 +50,9 @@
 #include "utl/TempoMap.h"
 #include "utl/TimeConversion.h"
 #include "world/Dir.h"
+#ifdef HX_NATIVE
+#include "audio/AudioDevice.h"
+#endif
 
 Game *TheGame;
 static bool sMoveOverlayToggle;
@@ -180,10 +183,6 @@ void Game::ClearState() {
 }
 
 void Game::PostWaitRestart() {
-#ifdef HX_NATIVE
-    fprintf(stderr, "DC3 Game::PostWaitRestart — hasIntro=%d songStream=%p\n",
-        mHasIntro, (void*)(mMaster->GetAudio()->GetSongStream()));
-#endif
     SetMusicSpeed(1.0f);
     if (!mHasIntro)
         PostWaitStart();
@@ -284,16 +283,31 @@ bool Game::IsReady() { return IsLoaded() != false; }
 void Game::Restart(bool b) {
     mRestartCount++;
     TheGamePanel->ResetJitter();
+#ifdef HX_NATIVE
+    // Suspend audio rendering before destroying audio objects to prevent
+    // the audio callback from accessing freed memory (race condition)
+    AudioDevice::GetInstance().Suspend();
+#endif
     TheSynth->StopAllSfx(false);
     TheSynth->StopAllSounds();
     if (b) {
         mMaster->Reset();
     }
+#ifdef HX_NATIVE
+    AudioDevice::GetInstance().Resume();
+#endif
     if (mWaitState != 5) {
         mWaitState = 3;
     }
     if (TheHamDirector)
         TheHamDirector->ResetFacialAnimation();
+#ifdef HX_NATIVE
+    // StopAllSounds destroys the song streams (via MoggClip::KillStream).
+    // The song will be reloaded by LoaderPoll, but mLoadState stays at 3,
+    // so Game::IsLoaded() never re-polls HamAudio::IsReady() to trigger
+    // FinishLoad. Reset to 0 so the load state machine runs again.
+    mLoadState = 0;
+#endif
 }
 
 void Game::SetTimePaused(bool b) {
@@ -305,19 +319,12 @@ void Game::SetTimePaused(bool b) {
 }
 
 void Game::PostWaitStart() {
-#ifdef HX_NATIVE
-    fprintf(stderr, "DC3 Game::PostWaitStart — audioFail=%d songStream=%p\n",
-        mMaster->GetAudio()->Fail(), (void*)(mMaster->GetAudio()->GetSongStream()));
-#endif
     if (!mMaster->GetAudio()->Fail()) {
         static Symbol gameplay_mode("gameplay_mode");
         static Symbol just_intro("just_intro");
         if (TheHamProvider->Property(gameplay_mode, true)->Sym() == just_intro) {
             mMaster->GetAudio()->SetMuteMaster(true);
         }
-#ifdef HX_NATIVE
-        fprintf(stderr, "DC3 Game::PostWaitStart — calling Play()\n");
-#endif
         mMaster->GetAudio()->Play();
         mPaused = false;
         MetaPerformer::Current()->StartGameplayTimer();
@@ -549,20 +556,11 @@ bool Game::IsSongDefaultPlayerPlaying() {
 }
 
 void Game::LoadSong() {
-#ifdef HX_NATIVE
-    fprintf(stderr, "DC3 Game::LoadSong() — entry\n");
-#endif
     if (!TheSongSequence.Done() && TheSongSequence.CurrentIndex() < 0) {
-#ifdef HX_NATIVE
-        fprintf(stderr, "DC3 Game::LoadSong() — SongSequence not done, DoNext\n");
-#endif
         TheSongSequence.DoNext(true, false);
         return;
     }
     Symbol song = TheGameData->GetSong();
-#ifdef HX_NATIVE
-    fprintf(stderr, "DC3 Game::LoadSong() — song='%s'\n", song.Str());
-#endif
     MetaPerformer::Current()->Handle(Message("on_load_song", 0), true);
     mUseMoveGraph = false;
     static Symbol cascade("cascade");
@@ -600,9 +598,6 @@ void Game::LoadSong() {
     }
 #endif
     mMaster->Load(mSongInfo, false, 0, false, v, nullptr);
-#ifdef HX_NATIVE
-    fprintf(stderr, "DC3 Game::LoadSong() — mMaster->Load() called, done\n");
-#endif
 }
 
 void Game::SetPaused(bool b1, bool b2) {
@@ -747,23 +742,12 @@ bool Game::IsLoaded() {
         return true;
     } else {
         if ((int)mMaster && !mMaster->IsLoaded()) {
-#ifdef HX_NATIVE
-            static int sDbg = 0;
-            if (sDbg++ < 5) fprintf(stderr, "Game::IsLoaded: mMaster=%p IsLoaded=false mLoadState=%d (pre-check)\n", (void*)mMaster, mLoadState);
-#endif
             return false;
         }
         if (mLoadState == 0) {
             if (!mMaster->IsLoaded()) {
-#ifdef HX_NATIVE
-                static int sDbg2 = 0;
-                if (sDbg2++ < 5) fprintf(stderr, "Game::IsLoaded: mMaster not loaded (state 0)\n");
-#endif
                 return false;
             }
-#ifdef HX_NATIVE
-            fprintf(stderr, "Game::IsLoaded: mMaster loaded! transitioning state 0→1\n");
-#endif
             if (mUseMoveGraph && !TheHamDirector->IsWorldLoaded()) {
 #ifdef HX_NATIVE
                 // Async file loading — proceed without waiting
@@ -881,13 +865,6 @@ DataNode OnToggleAutoplay(DataArray *a) {
 }
 
 bool Game::HandleWait() {
-#ifdef HX_NATIVE
-    static int sHWDbg = 0;
-    if (sHWDbg++ < 20) {
-        MILO_LOG("Game::HandleWait waitState=%d loadState=%d audioReady=%d\n",
-            mWaitState, mLoadState, mMaster->GetAudio()->IsReady());
-    }
-#endif
     if (mWaitState != unka8) {
         unka8 = mWaitState;
     }
@@ -929,17 +906,6 @@ bool Game::HandleWait() {
         break;
     case 5: {
         // Full song load wait — check all subsystems
-#ifdef HX_NATIVE
-        {
-            static int sC5Dbg = 0;
-            if (sC5Dbg++ < 10)
-                MILO_LOG("HandleWait case5: tempo=%p audioReady=%d worldLoaded=%d gmPending=%d\n",
-                    HamSongData::sInstance ? HamSongData::sInstance->GetTempoMap() : nullptr,
-                    mMaster->GetAudio()->IsReady(),
-                    TheHamDirector->IsWorldLoaded(),
-                    TheHamDirector->GetGameModeMerger()->HasPendingFiles());
-        }
-#endif
         if (!HamSongData::sInstance->GetTempoMap()) {
             return false;
         }

@@ -69,8 +69,8 @@ void WavReader::Poll(float dt) {
     if (mBufNumSamples != 0) {
         void *bufs[2] = { mInputBuffers[0] + mBufOffset, mInputBuffers[1] + mBufOffset };
         int consumed = ConsumeData((void **)bufs, mBufNumSamples, mTotalSamplesConsumed);
-        mBufNumSamples -= consumed;
         mTotalSamplesConsumed += consumed;
+        mBufNumSamples -= consumed;
         mBufOffset += consumed;
         if (mBufNumSamples != 0) {
             return;
@@ -104,8 +104,7 @@ void WavReader::Poll(float dt) {
                 }
             }
             if (mBufNumSamples != 0) {
-                void *bufs[2] = { mInputBuffers[0], mInputBuffers[1] };
-                int consumed = ConsumeData((void **)bufs, mBufNumSamples, mTotalSamplesConsumed);
+                int consumed = ConsumeData((void **)mInputBuffers, mBufNumSamples, mTotalSamplesConsumed);
                 mTotalSamplesConsumed += consumed;
                 mBufNumSamples -= consumed;
                 mBufOffset += consumed;

@@ -89,15 +89,18 @@ void SampleData::LoadWAV(BinStream &bs, const FilePath &fp, bool bigEndian) {
         return;
     }
     if (!bigEndian) {
-        mCRC = Hmx::CRC(FileRelativePath(FileExecRoot(), fp.c_str()));
+        mCRC.mCRC = Hmx::CRC(FileRelativePath(FileExecRoot(), fp.c_str())).mCRC;
     } else {
         mCRC.mCRC = 0;
     }
-    mNumChannels = wav.NumChannels();
-    mNumSamples = wav.NumSamples();
+    int numSamples = wav.NumSamples();
+    int numChannels = wav.NumChannels();
+    mNumSamples = numSamples;
+    mNumChannels = numChannels;
     mSampleRate = wav.SamplesPerSec();
+    int size = numSamples * numChannels << 1;
+    mSizeBytes = size;
     mFormat = kPCM;
-    mSizeBytes = SizeAs(kPCM);
     if (mCRC.mCRC != 0) {
         if (!TheWavMgr->CreateSample(mCRC, mData, mSizeBytes)) {
             WaveFileData wavdata(wav);

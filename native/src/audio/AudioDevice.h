@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <mutex>
 #include <vector>
@@ -39,8 +40,19 @@ public:
     void AddSource(AudioSource *source);
     void RemoveSource(AudioSource *source);
 
-    // Called from miniaudio callback thread
+    // Suspend/resume: blocks audio callback from accessing sources
+    // Call Suspend() before destroying audio objects, Resume() after
+    void Suspend();
+    void Resume();
+
+    // Called from miniaudio callback thread (desktop) or PumpAudio (web)
     void MixSources(float *output, int frameCount);
+
+#ifdef __EMSCRIPTEN__
+    // Web only: called each frame from main loop to push mixed audio
+    // into the SharedArrayBuffer ring buffer for the AudioWorklet
+    void PumpAudio();
+#endif
 
 private:
     AudioDevice();
@@ -55,4 +67,6 @@ private:
 
     // Temp mix buffer for individual sources (stereo interleaved)
     std::vector<float> mMixBuffer;
+
+    std::atomic<bool> mSuspended{false};
 };

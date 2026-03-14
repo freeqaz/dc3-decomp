@@ -65,20 +65,18 @@ bool HamAudio::IsReady() {
         if (mFileLoader && mFileLoader->IsLoaded()) {
             FinishLoad();
         } else {
+#ifdef HX_NATIVE
+            // On native, the FileLoader may not be polled by TheLoadMgr
+            // (e.g. after Game::Restart when there's no loading screen).
+            // Drive it from here so IsReady() is self-contained.
+            if (mFileLoader) {
+                mFileLoader->PollLoading();
+            }
+#endif
             return false;
         }
     }
     mReady = mSongStream && mSongStream->IsReady();
-#ifdef HX_NATIVE
-    static int sDbg = 0;
-    if (!mReady && sDbg < 10) {
-        sDbg++;
-        fprintf(stderr, "DC3 HamAudio::IsReady=false stream=%p isReady=%d isPlaying=%d numCh=%d\n",
-            (void*)mSongStream, mSongStream ? mSongStream->IsReady() : -1,
-            mSongStream ? mSongStream->IsPlaying() : -1,
-            mSongStream ? mSongStream->GetNumChannels() : -1);
-    }
-#endif
     return mReady;
 }
 
@@ -194,9 +192,6 @@ void HamAudio::Load(SongInfo *info, bool b2) {
     Clear();
     mSongInfo = info;
     String str(info->GetBaseFileName());
-#ifdef HX_NATIVE
-    fprintf(stderr, "DC3 HamAudio::Load — base='%s' sync=%d\n", str.c_str(), b2);
-#endif
     if (b2) {
         Stream *stream = TheSynth->NewStream(str.c_str(), 0, 0, false);
         mSongStream = stream;
@@ -210,18 +205,8 @@ void HamAudio::Load(SongInfo *info, bool b2) {
 }
 
 void HamAudio::Play() {
-#ifdef HX_NATIVE
-    fprintf(stderr, "DC3 HamAudio::Play() — mSongStream=%p\n", (void*)mSongStream);
-#endif
     MILO_ASSERT(mSongStream, 0x11B);
-#ifdef HX_NATIVE
-    fprintf(stderr, "DC3 HamAudio::Play() — mSongStream=%p isReady=%d isPlaying=%d numCh=%d\n",
-        (void*)mSongStream, mSongStream->IsReady(), mSongStream->IsPlaying(), mSongStream->GetNumChannels());
-#endif
     mSongStream->Play();
-#ifdef HX_NATIVE
-    fprintf(stderr, "DC3 HamAudio::Play() — Play() returned successfully\n");
-#endif
     if (!mFXSendApplied) {
         if (TheSynth->CheckCommonBank(false)) {
             FxSend *send = TheSynth->Find<FxSend>("song.send", false);
@@ -358,18 +343,10 @@ void HamAudio::FinishLoad() {
         mRawBuffer = mFileLoader->GetBuffer(&mRawBufferSize);
         delete mFileLoader;
         mFileLoader = NULL;
-#ifdef HX_NATIVE
-        fprintf(stderr, "DC3 HamAudio::FinishLoad — rawBuf=%p rawSize=%d\n",
-            (void*)mRawBuffer, mRawBufferSize);
-#endif
         static Symbol main("main");
         stream0 = TheSynth->NewBufStream(mRawBuffer, mRawBufferSize, main, 0.25f, true);
         mStreams[1] = TheSynth->NewBufStream(mRawBuffer, mRawBufferSize, main, 0.25f, false);
         mSongStream = stream0;
-#ifdef HX_NATIVE
-        fprintf(stderr, "DC3 HamAudio::FinishLoad — stream0=%p stream1=%p songStream=%p\n",
-            (void*)stream0, (void*)mStreams[1], (void*)mSongStream);
-#endif
     }
     Stream **pStream = &stream0;
     do {

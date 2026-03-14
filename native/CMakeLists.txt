@@ -55,23 +55,29 @@ set(DC3_MSVC_COMPAT_FLAGS
     # GCC 15 headers: clang in MSVC mode drops __GNUC__ macros, breaking
     # glibc's sys/cdefs.h and libstdc++'s atomic_base.h. These defines restore
     # the compiler builtins that GCC 15 headers expect.
-    -D__GNUC_STDC_INLINE__
-    -D__GCC_ATOMIC_TEST_AND_SET_TRUEVAL=1
+    # Not needed on macOS (uses libc++, not libstdc++).
+    $<$<NOT:$<PLATFORM_ID:Darwin>>:-D__GNUC_STDC_INLINE__>
+    $<$<NOT:$<PLATFORM_ID:Darwin>>:-D__GCC_ATOMIC_TEST_AND_SET_TRUEVAL=1>
 )
 # GCC 15 <atomic>/<thread>/<mutex> need __GCC_ATOMIC_*_LOCK_FREE builtins,
 # which clang drops in -fms-compatibility mode. Define them all (=2 on x86_64).
-set(DC3_ATOMIC_COMPAT_FLAGS
-    -D__GCC_ATOMIC_BOOL_LOCK_FREE=2
-    -D__GCC_ATOMIC_CHAR_LOCK_FREE=2
-    -D__GCC_ATOMIC_WCHAR_T_LOCK_FREE=2
-    -D__GCC_ATOMIC_CHAR16_T_LOCK_FREE=2
-    -D__GCC_ATOMIC_CHAR32_T_LOCK_FREE=2
-    -D__GCC_ATOMIC_SHORT_LOCK_FREE=2
-    -D__GCC_ATOMIC_INT_LOCK_FREE=2
-    -D__GCC_ATOMIC_LONG_LOCK_FREE=2
-    -D__GCC_ATOMIC_LLONG_LOCK_FREE=2
-    -D__GCC_ATOMIC_POINTER_LOCK_FREE=2
-)
+# Not needed on macOS (uses libc++, not libstdc++).
+if(NOT APPLE)
+    set(DC3_ATOMIC_COMPAT_FLAGS
+        -D__GCC_ATOMIC_BOOL_LOCK_FREE=2
+        -D__GCC_ATOMIC_CHAR_LOCK_FREE=2
+        -D__GCC_ATOMIC_WCHAR_T_LOCK_FREE=2
+        -D__GCC_ATOMIC_CHAR16_T_LOCK_FREE=2
+        -D__GCC_ATOMIC_CHAR32_T_LOCK_FREE=2
+        -D__GCC_ATOMIC_SHORT_LOCK_FREE=2
+        -D__GCC_ATOMIC_INT_LOCK_FREE=2
+        -D__GCC_ATOMIC_LONG_LOCK_FREE=2
+        -D__GCC_ATOMIC_LLONG_LOCK_FREE=2
+        -D__GCC_ATOMIC_POINTER_LOCK_FREE=2
+    )
+else()
+    set(DC3_ATOMIC_COMPAT_FLAGS "")
+endif()
 set(DC3_DECOMP_FLAGS
     -ferror-limit=0
     -fno-omit-frame-pointer
@@ -102,6 +108,56 @@ option(ENABLE_FFMPEG "Enable FFmpeg for Bink video/audio decoding" ON)
 if(ENABLE_FFMPEG AND NOT EMSCRIPTEN)
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(FFMPEG REQUIRED libavformat libavcodec libswscale libavutil)
+endif()
+
+# Platform-specific linker flags and libraries (Linux vs macOS)
+if(NOT EMSCRIPTEN)
+    if(APPLE)
+        # macOS: Apple ld uses -undefined dynamic_lookup for unresolved symbols
+        set(DC3_PLATFORM_LINK_OPTIONS
+            -Wl,-undefined,dynamic_lookup
+        )
+        # macOS needs ObjC++ for MetalSurface.mm
+        enable_language(OBJCXX)
+        set(DC3_PLATFORM_LIBS
+            Threads::Threads
+            dawn::webgpu_dawn
+            glfw
+            curl
+            jpeg
+            vorbis
+            vorbisfile
+            ogg
+            z
+            "-framework Cocoa"
+            "-framework IOKit"
+            "-framework Metal"
+            "-framework QuartzCore"
+        )
+        # MetalSurface.mm — ObjC++ helper for CAMetalLayer creation
+        set(DC3_METAL_SURFACE_SOURCE src/gfx/MetalSurface.mm)
+    else()
+        # Linux: GNU ld flags
+        set(DC3_PLATFORM_LINK_OPTIONS
+            -rdynamic
+            -Wl,--unresolved-symbols=ignore-all
+            -Wl,--warn-unresolved-symbols
+            -Wl,--allow-multiple-definition
+        )
+        set(DC3_PLATFORM_LIBS
+            Threads::Threads
+            dawn::webgpu_dawn
+            glfw
+            dl
+            curl
+            jpeg
+            vorbis
+            vorbisfile
+            ogg
+            z
+        )
+        set(DC3_METAL_SURFACE_SOURCE "")
+    endif()
 endif()
 
 # ============================================================================
@@ -557,6 +613,8 @@ set(DC3_ENGINE_SOURCES
     ${CMAKE_SOURCE_DIR}/../src/system/obj/TextFile.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/obj/TypeProps.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/obj/Utl.cpp
+    ${CMAKE_SOURCE_DIR}/../src/system/oggvorbis/bitwise.c
+    ${CMAKE_SOURCE_DIR}/../src/system/oggvorbis/framing.c
     ${CMAKE_SOURCE_DIR}/../src/system/oggvorbis/VorbisMem.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/os/AppChild.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/os/Archive.cpp
@@ -946,6 +1004,7 @@ set(DC3_NATIVE_SOURCES
 # Core GPU utilities (no decomp dependencies — standalone tools can use these)
 set(DC3_GFX_CORE_SOURCES
     src/gfx/GpuDevice.cpp
+    ${DC3_METAL_SURFACE_SOURCE}
 )
 
 # Full graphics sources (depend on decomp types like RndBitmap, RndMesh)
@@ -1004,6 +1063,7 @@ set(DC3_WEB_CORE_SOURCES
     src/platform/Synth_Stub.cpp
     src/platform/Skeleton_Native.cpp
     src/platform/GestureMgr_Native.cpp
+    src/audio/AudioDevice_Web.cpp
     src/platform/StreamReceiver_Native.cpp
     src/platform/SampleInst_Native.cpp
     src/platform/FxSendNative.cpp
@@ -1064,6 +1124,9 @@ set(DC3_WEB_ENGINE_SOURCES ${DC3_ENGINE_SOURCES})
 list(REMOVE_ITEM DC3_WEB_ENGINE_SOURCES
     ${CMAKE_SOURCE_DIR}/../src/system/net/HttpReqCurl.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/net/WebSvcMgrCurl.cpp
+    # Emscripten provides ogg/vorbis via -sUSE_OGG=1 -sUSE_VORBIS=1
+    ${CMAKE_SOURCE_DIR}/../src/system/oggvorbis/bitwise.c
+    ${CMAKE_SOURCE_DIR}/../src/system/oggvorbis/framing.c
 )
 
 add_executable(dc3-web
@@ -1111,6 +1174,8 @@ target_link_options(dc3-web PRIVATE
     # Make missing function calls log instead of abort (many Xbox-specific funcs not needed)
     --pre-js ${CMAKE_CURRENT_SOURCE_DIR}/web/missing_stubs.js
     -sUSE_ZLIB=1
+    -sUSE_OGG=1
+    -sUSE_VORBIS=1
     -sFETCH=1
     # Debug: keep function names for stack traces
     --profiling-funcs
@@ -1147,6 +1212,7 @@ target_include_directories(dc3-native PRIVATE
     ${CMAKE_SOURCE_DIR}/src             # Native-specific headers (shims take priority)
     ${CMAKE_SOURCE_DIR}/../src          # Main source root
     ${CMAKE_SOURCE_DIR}/../src/system   # system/ headers use bare includes
+    ${CMAKE_SOURCE_DIR}/../src/system/oggvorbis  # libogg/vorbis bundled headers
     ${CMAKE_SOURCE_DIR}/../src/lazer    # lazer/ headers use bare includes (game/, meta_ham/, etc.)
     # NOTE: src/xdk/LIBCMT is NOT included - it shadows system headers with Xbox-specific
     # types (size_t=unsigned int, etc.) that break 64-bit compilation
@@ -1155,24 +1221,12 @@ target_include_directories(dc3-native PRIVATE
 )
 
 target_link_options(dc3-native PRIVATE
-    -rdynamic
-    # -fsanitize=address  # Disabled: complex virtual inheritance VTT issues  # ASan link flag
-    -Wl,--unresolved-symbols=ignore-all  # Non-virtual thunks for stubbed functions
-    -Wl,--warn-unresolved-symbols  # Warn but don't error
-    -Wl,--allow-multiple-definition  # DataParser_Native duplicates DataFile symbols
+    # -fsanitize=address  # Disabled: complex virtual inheritance VTT issues
+    ${DC3_PLATFORM_LINK_OPTIONS}
 )
 
 target_link_libraries(dc3-native PRIVATE
-    Threads::Threads
-    dawn::webgpu_dawn
-    glfw
-    dl
-    curl
-    jpeg
-    vorbis
-    vorbisfile
-    ogg
-    z
+    ${DC3_PLATFORM_LIBS}
     ${FFMPEG_LIBRARIES}
 )
 
@@ -1197,9 +1251,7 @@ target_include_directories(wgpu-window-test PRIVATE
     ${CMAKE_SOURCE_DIR}/src
 )
 target_link_libraries(wgpu-window-test PRIVATE
-    Threads::Threads
-    dawn::webgpu_dawn
-    glfw
+    ${DC3_PLATFORM_LIBS}
 )
 
 # ============================================================================
@@ -1247,24 +1299,12 @@ target_include_directories(milo-viewer PRIVATE
 )
 
 target_link_options(milo-viewer PRIVATE
-    -rdynamic
     # -fsanitize=address  # Disabled: complex virtual inheritance VTT issues
-    -Wl,--unresolved-symbols=ignore-all
-    -Wl,--warn-unresolved-symbols
-    -Wl,--allow-multiple-definition
+    ${DC3_PLATFORM_LINK_OPTIONS}
 )
 
 target_link_libraries(milo-viewer PRIVATE
-    Threads::Threads
-    dawn::webgpu_dawn
-    glfw
-    dl
-    curl
-    jpeg
-    vorbis
-    vorbisfile
-    ogg
-    z
+    ${DC3_PLATFORM_LIBS}
     $<$<BOOL:${ENABLE_FFMPEG}>:${FFMPEG_LIBRARIES}>
 )
 
@@ -1302,23 +1342,11 @@ target_include_directories(render-test PRIVATE
 )
 
 target_link_options(render-test PRIVATE
-    -rdynamic
-    -Wl,--unresolved-symbols=ignore-all
-    -Wl,--warn-unresolved-symbols
-    -Wl,--allow-multiple-definition
+    ${DC3_PLATFORM_LINK_OPTIONS}
 )
 
 target_link_libraries(render-test PRIVATE
-    Threads::Threads
-    dawn::webgpu_dawn
-    glfw
-    dl
-    curl
-    jpeg
-    vorbis
-    vorbisfile
-    ogg
-    z
+    ${DC3_PLATFORM_LIBS}
 )
 
 # ============================================================================
@@ -1342,18 +1370,7 @@ set(DC3_EXPORT_TOOL_INCLUDES
     ${CMAKE_SOURCE_DIR}/include
 )
 
-set(DC3_EXPORT_TOOL_LIBS
-    Threads::Threads
-    dawn::webgpu_dawn
-    glfw
-    dl
-    curl
-    jpeg
-    vorbis
-    vorbisfile
-    ogg
-    z
-)
+set(DC3_EXPORT_TOOL_LIBS ${DC3_PLATFORM_LIBS})
 
 # --- milo-tex-export ---
 add_executable(milo-tex-export
@@ -1367,9 +1384,7 @@ target_compile_options(milo-tex-export PRIVATE
 )
 target_compile_definitions(milo-tex-export PRIVATE HX_NATIVE=1 MILO_DEBUG=1 _DEBUG=1)
 target_include_directories(milo-tex-export PRIVATE ${DC3_EXPORT_TOOL_INCLUDES})
-target_link_options(milo-tex-export PRIVATE
-    -rdynamic -Wl,--unresolved-symbols=ignore-all -Wl,--warn-unresolved-symbols -Wl,--allow-multiple-definition
-)
+target_link_options(milo-tex-export PRIVATE ${DC3_PLATFORM_LINK_OPTIONS})
 target_link_libraries(milo-tex-export PRIVATE ${DC3_EXPORT_TOOL_LIBS})
 
 # --- milo-mat-export ---
@@ -1384,9 +1399,7 @@ target_compile_options(milo-mat-export PRIVATE
 )
 target_compile_definitions(milo-mat-export PRIVATE HX_NATIVE=1 MILO_DEBUG=1 _DEBUG=1)
 target_include_directories(milo-mat-export PRIVATE ${DC3_EXPORT_TOOL_INCLUDES})
-target_link_options(milo-mat-export PRIVATE
-    -rdynamic -Wl,--unresolved-symbols=ignore-all -Wl,--warn-unresolved-symbols -Wl,--allow-multiple-definition
-)
+target_link_options(milo-mat-export PRIVATE ${DC3_PLATFORM_LINK_OPTIONS})
 target_link_libraries(milo-mat-export PRIVATE ${DC3_EXPORT_TOOL_LIBS})
 
 # --- milo2gltf ---
@@ -1401,9 +1414,7 @@ target_compile_options(milo2gltf PRIVATE
 )
 target_compile_definitions(milo2gltf PRIVATE HX_NATIVE=1 MILO_DEBUG=1 _DEBUG=1)
 target_include_directories(milo2gltf PRIVATE ${DC3_EXPORT_TOOL_INCLUDES})
-target_link_options(milo2gltf PRIVATE
-    -rdynamic -Wl,--unresolved-symbols=ignore-all -Wl,--warn-unresolved-symbols -Wl,--allow-multiple-definition
-)
+target_link_options(milo2gltf PRIVATE ${DC3_PLATFORM_LINK_OPTIONS})
 target_link_libraries(milo2gltf PRIVATE ${DC3_EXPORT_TOOL_LIBS})
 
 # ============================================================================
@@ -1466,15 +1477,12 @@ if(BUILD_TESTS)
         ${FFMPEG_INCLUDE_DIRS}
     )
     target_link_options(milo-tests PRIVATE
-        -rdynamic
         # -fsanitize=address  # Disabled: complex virtual inheritance VTT issues
-        -Wl,--unresolved-symbols=ignore-all
-        -Wl,--warn-unresolved-symbols
-        -Wl,--allow-multiple-definition
+        ${DC3_PLATFORM_LINK_OPTIONS}
     )
     target_link_libraries(milo-tests PRIVATE
-        GTest::gtest GTest::gtest_main Threads::Threads
-        dawn::webgpu_dawn glfw dl curl jpeg vorbis vorbisfile ogg z
+        GTest::gtest GTest::gtest_main
+        ${DC3_PLATFORM_LIBS}
         ${FFMPEG_LIBRARIES}
     )
     include(GoogleTest)

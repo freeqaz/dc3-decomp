@@ -568,32 +568,37 @@ long ogg_sync_pageseek(ogg_sync_state *oy,ogg_page *og){
   if(oy->bodybytes+oy->headerbytes>bytes)return(0);
   
   /* The whole test page is buffered.  Verify the checksum */
+#ifndef HX_NATIVE
+  /* On Xbox, v0xE mogg decryption (HMXA→OggS + magicHash XOR) intentionally
+     corrupts the CRC field as an anti-tamper measure. The game never validates
+     Ogg CRCs — skip the check on native to match Xbox behavior. */
   {
     /* Grab the checksum bytes, set the header field to zero */
     char chksum[4];
     ogg_page log;
-    
+
     memcpy(chksum,page+22,4);
     memset(page+22,0,4);
-    
+
     /* set up a temp page struct and recompute the checksum */
     log.header=page;
     log.header_len=oy->headerbytes;
     log.body=page+oy->headerbytes;
     log.body_len=oy->bodybytes;
     ogg_page_checksum_set(&log);
-    
+
     /* Compare */
     if(memcmp(chksum,page+22,4)){
       /* D'oh.  Mismatch! Corrupt page (or miscapture and not a page
 	 at all) */
       /* replace the computed checksum with the one actually read in */
       memcpy(page+22,chksum,4);
-      
+
       /* Bad checksum. Lose sync */
       goto sync_fail;
     }
   }
+#endif
   
   /* yes, have a whole page all ready to go */
   {

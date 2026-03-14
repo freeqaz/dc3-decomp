@@ -68,8 +68,17 @@ u64 StreamReceiver::GetBytesPlayed() {
 
 void StreamReceiver::WriteData(const void *data, int size) {
     MILO_ASSERT(size > 0 && size <= BytesWriteable(), 0x51);
+#ifdef HX_NATIVE
+    // On native, forward data directly to the platform receiver's ring buffer
+    // via StartSendImpl, then reset mRingFreeSpace. The base class mBuffer is
+    // not used — audio output reads from StreamReceiverNative::mPCMBuf instead.
+    StartSendImpl((unsigned char *)data, size, 0);
+    // Keep mRingFreeSpace at 0 so BytesWriteable() always returns full capacity.
+    // Flow control is handled by the PCM ring buffer's write/play cursor gap.
+#else
     memcpy(mBuffer + mRingFreeSpace, data, size);
     mRingFreeSpace += size;
+#endif
 }
 
 void StreamReceiver::Poll() {
