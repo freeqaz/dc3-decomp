@@ -230,6 +230,35 @@ void CameraManager::Poll() {
                 float frame = CalcFrame();
                 mCurrentShot->SetFrame(frame, 1.0f);
 
+#ifdef HX_NATIVE
+                // Guard: CamShot::SetFrame may produce NaN/inf transforms when
+                // keyframe targets are missing or at degenerate positions.
+                // Restore saved transform if camera ended up invalid.
+                {
+                    const Transform &check = cam->LocalXfm();
+                    bool bad = false;
+                    if (check.v.x != check.v.x || check.v.y != check.v.y
+                        || check.v.z != check.v.z)
+                        bad = true;
+                    if (check.v.x < -1e30f || check.v.x > 1e30f
+                        || check.v.y < -1e30f || check.v.y > 1e30f
+                        || check.v.z < -1e30f || check.v.z > 1e30f)
+                        bad = true;
+                    if (bad) {
+                        // Also check if savedXfm is valid
+                        if (savedXfm.v.x == savedXfm.v.x
+                            && savedXfm.v.x > -1e30f && savedXfm.v.x < 1e30f)
+                            cam->SetLocalXfm(savedXfm);
+                        else {
+                            // Both bad — reset to identity at origin
+                            Transform t;
+                            t.Reset();
+                            cam->SetLocalXfm(t);
+                        }
+                    }
+                }
+#endif
+
                 if (mBlendTime > 0.0f) {
                     frame = Clamp(0.0f, 1.0f, frame / mBlendTime);
                 } else {

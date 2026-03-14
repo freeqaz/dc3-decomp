@@ -379,6 +379,11 @@ void PoseFatalities::PollVO() {
 }
 
 void PoseFatalities::Poll() {
+#ifdef HX_NATIVE
+    // Strike-a-pose battle mode not yet supported on native port.
+    // Player data/side lookups crash (LP64 struct mismatch).
+    return;
+#endif
     if (InStrikeAPose()) {
         TheHamDirector->GetVenueWorld()
             ->Find<HamCharacter>("backup0", true)

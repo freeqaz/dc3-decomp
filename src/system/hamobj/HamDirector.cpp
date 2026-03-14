@@ -2249,6 +2249,15 @@ void HamDirector::FindNextShot() {
         mNextShot = dynamic_cast<HamCamShot *>(
             mVenue->GetCameraManager()->FindCameraShot(mShot, propFilters)
         );
+#ifdef HX_NATIVE
+        // Fallback: if the shot category wasn't found, try Area1_WIDE
+        if (!mNextShot) {
+            static Symbol Area1_WIDE("Area1_WIDE");
+            mNextShot = dynamic_cast<HamCamShot *>(
+                mVenue->GetCameraManager()->FindCameraShot(Area1_WIDE, propFilters)
+            );
+        }
+#endif
         if (!mNextShot) {
             MILO_NOTIFY(
                 "could not find HamCamShot %s in %s at %s, ignoring",
@@ -2262,7 +2271,14 @@ void HamDirector::FindNextShot() {
 
 void HamDirector::SetShot(Symbol s) {
     if (TheTaskMgr.Seconds(TaskMgr::kRealTime) >= 0
+#ifdef HX_NATIVE
+        // On native we drive the original song.anim, not the routine builder.
+        // SongAnim(0) returns the routine builder whose frame is never set,
+        // so skip the frame<0 guard — rt>=0 already covers this.
+        ) {
+#else
         && !(SongAnim(0) && SongAnim(0)->GetFrame() < 0)) {
+#endif
         static Symbol review("review");
         static Symbol skills_mode("skills_mode");
         bool inReview = TheHamProvider->Property(skills_mode, true)->Sym() == review;
@@ -2480,14 +2496,31 @@ void HamDirector::PlayNextShot() {
     }
     mLastShotTime = lastShotTime;
     mCurShot = nextShot;
+    // Apply shot to the CameraManager that controls rendering.
+    // On original, mMerger->Dir() is the root world that runs camera management
+    // during DrawShowing(). On native, we explicitly select the venue's camera
+    // in App.cpp, so apply to the venue's CameraManager directly.
+#ifdef HX_NATIVE
+    WorldDir *world = mVenue;
+#else
     WorldDir *world = dynamic_cast<WorldDir *>(mMerger ? mMerger->Dir() : nullptr);
+#endif
     if (world) {
         world->GetCameraManager()->ForceCameraShot(mCurShot, false);
     }
 }
 
 DataNode HamDirector::OnSelectCamera(DataArray *a) {
+#ifdef HX_NATIVE
+    // On native, always use the original song.anim (not the routine builder).
+    // SongAnim(0) returns the routine builder when merge_moves=1, which strips
+    // dircut/LightPreset/camera events. We need the full song.anim for visuals.
+    HamPlayerData *hpd0 = TheGameData->Player(0);
+    RndPropAnim *songAnim = hpd0 ? SongAnimByDifficulty(LegacyDifficulty(hpd0->GetDifficulty())) : nullptr;
+    if (!songAnim) songAnim = SongAnim(0); // fallback
+#else
     RndPropAnim *songAnim = SongAnim(0);
+#endif
     if (!mDisabled) {
         float beat = TheTaskMgr.Beat();
         float seconds = BeatToSeconds(beat);

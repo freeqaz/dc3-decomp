@@ -299,8 +299,9 @@ void RndPropAnim::SetFrame(float frame, float blend) {
                     if (objFrame >= mLastFrame && mLastFrame != myframe) {
                         EventTrigger *trig =
                             dynamic_cast<EventTrigger *>((*objkeys)[i].value.Ptr());
-                        if (trig)
+                        if (trig) {
                             trig->Trigger();
+                        }
                     }
                 }
             }

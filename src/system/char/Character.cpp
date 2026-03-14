@@ -988,8 +988,10 @@ void Character::DrawLodOrShadow(int lod, DrawMode drawMode) {
 
 void DrawPtrVec::Draw() const {
     for (const_iterator it = begin(); it != end(); ++it) {
-        RndDrawable* d = it->Obj();
-        if (d) d->DrawShowing();
+#ifdef HX_NATIVE
+        if (it->Obj())
+#endif
+            it->Obj()->DrawShowing();
     }
 }
 

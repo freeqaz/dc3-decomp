@@ -10,9 +10,15 @@
 #include "char/Character.h"
 #include "world/LightPreset.h"
 #include "world/LightPresetManager.h"
+#include "world/CameraManager.h"
+#include "world/CameraShot.h"
+#include "rndobj/Cam.h"
 #include "hamobj/HamDirector.h"
 #include "rndobj/Lit.h"
 #include "meta_ham/HamUI.h"
+#include "synth/StandardStream.h"
+#include "synth/VorbisReader.h"
+#include "os/BufFile.h"
 extern GLFWwindow *gNativeWindow;
 
 // ---------------------------------------------------------------------------
@@ -945,7 +951,9 @@ void App::RunWithoutDebugging() {
                         LightPresetManager& lpm = venueWorld->GetLightPresetMgr();
                         lpm.SyncObjects();
                         LightPreset* bestPreset = nullptr;
+                        int presetCount = 0;
                         for (ObjDirItr<LightPreset> it(venueWorld, true); it != nullptr; ++it) {
+                            presetCount++;
                             if (it->PlatformOk()) {
                                 bestPreset = it;
                                 if (strstr(it->Name(), "default") || strstr(it->Name(), "basic"))
@@ -954,8 +962,35 @@ void App::RunWithoutDebugging() {
                         }
                         if (bestPreset) {
                             lpm.ForcePreset(bestPreset, 0.0f);
-                            printf("DC3 Native: forced LightPreset '%s' in venue '%s'\n",
-                                   bestPreset->Name(), venueWorld->Name());
+                            printf("DC3 Native: forced LightPreset '%s' in venue '%s' (%d presets total)\n",
+                                   bestPreset->Name(), venueWorld->Name(), presetCount);
+                        } else {
+                            printf("DC3 Native: no LightPreset found in venue '%s' (%d presets, none PlatformOk)\n",
+                                   venueWorld->Name(), presetCount);
+                            // Dump light state for debugging
+                            int lightCount = 0;
+                            int litLights = 0;
+                            for (ObjDirItr<RndLight> lit(venueWorld, true); lit != nullptr; ++lit) {
+                                lightCount++;
+                                Hmx::Color c = lit->GetColor();
+                                if (c.red > 0.01f || c.green > 0.01f || c.blue > 0.01f) {
+                                    litLights++;
+                                    if (lightCount <= 10)
+                                        printf("  light '%s' color=(%.2f,%.2f,%.2f) showing=%d\n",
+                                               lit->Name(), c.red, c.green, c.blue, lit->Showing());
+                                }
+                            }
+                            printf("  %d lights total, %d with non-zero color\n", lightCount, litLights);
+                            // Force all lights to show
+                            for (ObjDirItr<RndLight> lit(venueWorld, true); lit != nullptr; ++lit) {
+                                lit->SetShowing(true);
+                            }
+                            // Also show spotlights.grp if present
+                            RndDrawable* spotGrp = venueWorld->Find<RndDrawable>("spotlights.grp", false);
+                            if (spotGrp) {
+                                spotGrp->SetShowing(true);
+                                printf("  forced spotlights.grp showing=1\n");
+                            }
                         }
                     }
                 }
@@ -971,6 +1006,29 @@ void App::RunWithoutDebugging() {
                         Transform& xfm = it->DirtyLocalXfm();
                         xfm.v.Set(0, 0, 0);
                         xfm.m.Identity();
+                    }
+                }
+            }
+        }
+
+        // Select the venue's camera before drawing so the 3D scene uses
+        // the correct camera position from the CameraManager's current shot.
+        // WorldDir::DrawShowing() only runs camera management for the ROOT world
+        // (TheWorld==nullptr). The venue is drawn as a child, so its camera
+        // setup is skipped. We must Select() the venue's camera manually.
+        {
+            WorldDir *drawVenue = TheHamDirector ? TheHamDirector->GetVenueWorld() : nullptr;
+            if (!drawVenue && gNativeVenueDir)
+                drawVenue = dynamic_cast<WorldDir *>(gNativeVenueDir);
+            if (drawVenue) {
+                CameraManager *camMgr = drawVenue->GetCameraManager();
+                if (camMgr) {
+                    CamShot *curShot = camMgr->CurrentShot();
+                    if (curShot) {
+                        curShot = curShot->CurrentShot();
+                        RndCam *cam = curShot ? curShot->GetCam() : nullptr;
+                        if (cam)
+                            cam->Select();
                     }
                 }
             }
@@ -997,17 +1055,25 @@ void App::RunWithoutDebugging() {
                    frameCount, curScreen, transScreen, (int)TheUI->InTransition());
         }
 
-        // Auto-navigate: DC3_SCREEN=game_screen to skip menus and start gameplay
+        // Auto-navigate: DC3_SCREEN=<target> to skip menus
+        // For game_screen: navigate step-by-step through the screen chain
         {
             static bool sAutoNavDone = false;
+            static bool sGameSetupDone = false;
             if (!sAutoNavDone && TheUI && TheUI->CurrentScreen() && !TheUI->InTransition()) {
                 const char *targetScreen = getenv("DC3_SCREEN");
                 if (targetScreen && targetScreen[0]) {
                     const char *curName = TheUI->CurrentScreen()->Name();
-                    if (strcmp(curName, "main_screen") == 0) {
-                        sAutoNavDone = true;
 
-                        // If targeting game_screen, set up song/mode/venue first
+                    // If we've reached the target, stop navigating
+                    if (strcmp(curName, targetScreen) == 0) {
+                        sAutoNavDone = true;
+                    }
+                    // Set up game data once when on main_screen and targeting game_screen
+                    else if (strcmp(curName, "main_screen") == 0 && !sGameSetupDone) {
+                        sGameSetupDone = true;
+                        fprintf(stderr, "DC3 Native: Auto-nav at main_screen — target='%s' GameData=%p GameMode=%p\n",
+                            targetScreen, (void*)TheGameData, (void*)TheGameMode);
                         if (strcmp(targetScreen, "game_screen") == 0 && TheGameData && TheGameMode) {
                             const char *songName = getenv("DC3_SONG");
                             if (!songName || !songName[0]) songName = "boyfriend";
@@ -1016,7 +1082,6 @@ void App::RunWithoutDebugging() {
                             TheGameData->SetSong(Symbol(songName));
                             TheGameData->SetVenue(Symbol(venueName));
                             TheGameMode->SetMode(Symbol("perform"), Symbol("none"));
-                            // Ensure normal gameplay (not routine builder)
                             if (TheHamProvider) {
                                 TheHamProvider->SetProperty("merge_moves", 0);
                                 TheHamProvider->SetProperty("use_movegraph", 0);
@@ -1025,16 +1090,47 @@ void App::RunWithoutDebugging() {
                             HamPlayerData *p1 = TheGameData->Player(1);
                             if (p0) p0->SetDifficulty(kDifficultyEasy);
                             if (p1) p1->SetDifficulty(kDifficultyEasy);
-                            printf("DC3 Native: Game setup — song='%s' venue='%s' mode=perform\n",
+                            fprintf(stderr, "DC3 Native: Game setup — song='%s' venue='%s' mode=perform\n",
                                    songName, venueName);
                         }
-
+                        // Navigate to choose_mode_screen (next in chain)
+                        UIScreen *next = ObjectDir::Main()->Find<UIScreen>("choose_mode_screen", false);
+                        if (next) {
+                            fprintf(stderr, "DC3 Native: Auto-nav chain: main_screen → choose_mode_screen\n");
+                            TheUI->GotoScreen(next, false, false);
+                        }
+                    }
+                    // Chain: choose_mode → song_select
+                    else if (strcmp(curName, "choose_mode_screen") == 0) {
+                        UIScreen *next = ObjectDir::Main()->Find<UIScreen>("song_select_screen", false);
+                        if (next) {
+                            fprintf(stderr, "DC3 Native: Auto-nav chain: choose_mode → song_select\n");
+                            TheUI->GotoScreen(next, false, false);
+                        }
+                    }
+                    // Chain: song_select → multiuser_screen
+                    else if (strcmp(curName, "song_select_screen") == 0) {
+                        UIScreen *next = ObjectDir::Main()->Find<UIScreen>("multiuser_screen", false);
+                        if (next) {
+                            fprintf(stderr, "DC3 Native: Auto-nav chain: song_select → multiuser\n");
+                            TheUI->GotoScreen(next, false, false);
+                        }
+                    }
+                    // Chain: multiuser → loading_screen
+                    else if (strcmp(curName, "multiuser_screen") == 0) {
+                        UIScreen *next = ObjectDir::Main()->Find<UIScreen>("loading_screen", false);
+                        if (next) {
+                            fprintf(stderr, "DC3 Native: Auto-nav chain: multiuser → loading\n");
+                            TheUI->GotoScreen(next, false, false);
+                        }
+                    }
+                    // Non-game targets: direct jump from main_screen
+                    else if (strcmp(curName, "main_screen") == 0) {
+                        sAutoNavDone = true;
                         UIScreen *target = ObjectDir::Main()->Find<UIScreen>(targetScreen, false);
                         if (target) {
-                            printf("DC3 Native: Auto-navigating to '%s'\n", targetScreen);
+                            fprintf(stderr, "DC3 Native: Auto-navigating to '%s'\n", targetScreen);
                             TheUI->GotoScreen(target, false, false);
-                        } else {
-                            printf("DC3 Native: Screen '%s' not found\n", targetScreen);
                         }
                     }
                 }
