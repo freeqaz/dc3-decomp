@@ -450,7 +450,7 @@ void WgpuRnd::BeginFramePass(bool clear) {
 
     int curW = mGpu.WindowWidth();
     int curH = mGpu.WindowHeight();
-    bool hasPostProc = !mGpu.IsHeadless() && RndPostProc::Current() != nullptr;
+    bool hasPostProc = RndPostProc::Current() != nullptr;
 
     wgpu::RenderPassColorAttachment colorAtt{};
     if (kMSAASamples > 1) {

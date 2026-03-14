@@ -92,8 +92,19 @@ struct VOut {
     let normalized = clamp((color - pp.levelInLo.rgb) / inRange, vec3f(0.0), vec3f(1.0));
     color = mix(pp.levelOutLo.rgb, pp.levelOutHi.rgb, normalized);
 
-    color = (color - 0.5) * (1.0 + pp.contrast / 100.0) + 0.5;
-    color = color + pp.brightness / 100.0;
+    // Match Xbox's non-linear contrast formula (from RndColorXfm::AdjustContrast)
+    var contrastMul: f32;
+    let contrastNorm = pp.contrast / 100.0;
+    if (contrastNorm > 0.0) {
+        contrastMul = 1.0 / (contrastNorm * -0.9921875 + 1.0);
+    } else {
+        contrastMul = -(contrastNorm * -0.992126 - 1.0);
+    }
+    let contrastOff = (1.0 - contrastMul) * 0.5;
+    color = color * contrastMul + contrastOff;
+    // Brightness: match Xbox formula
+    let brightnessAdj = (pp.brightness + 100.0) / 200.0 - 0.5;
+    color = color + brightnessAdj;
 
     let luma = dot(color, vec3f(0.2126, 0.7152, 0.0722));
     color = mix(vec3f(luma), color, 1.0 + pp.saturation / 100.0);
@@ -115,7 +126,9 @@ struct VOut {
 
     if (pp.bloomIntensity > 0.0) {
         let bloom = textureSample(bloomTex, sceneSampler, in.uv).rgb;
-        color += bloom * pp.bloomIntensity * pp.bloomColor.rgb;
+        let bloomContrib = bloom * pp.bloomIntensity * pp.bloomColor.rgb;
+        // Screen blend instead of additive — prevents blown-out whites
+        color = 1.0 - (1.0 - color) * (1.0 - bloomContrib * 0.5);
     }
 
     return vec4f(clamp(color, vec3f(0.0), vec3f(1.0)), 1.0);

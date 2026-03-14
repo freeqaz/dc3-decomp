@@ -566,12 +566,18 @@ void Rnd::TestPoint(const Vector3 &pos, RndFlare *flare) {
         float depth = cam->WorldToScreen(pos, screen);
         if (depth >= cam->NearPlane() && depth <= cam->FarPlane()
             && screen.x >= 0.0f && screen.y >= 0.0f && screen.x < 1.0f && screen.y < 1.0f) {
+#ifdef HX_NATIVE
+            // Native: no GPU occlusion query — treat in-view flares as fully visible
+            flare->SetVisible(true);
+            flare->SetOcclusionResult(1.0f);
+#else
             PointTest pt = { 0, 0, 0, 0 };
             std::list<PointTest>::iterator it = mPointTests.insert(mPointTests.begin(), pt);
             it->mFlare = flare;
             it->x = (int)((float)mWidth * screen.x);
             it->y = (int)((float)mHeight * screen.y);
             it->z = cam->ProjectZ(depth);
+#endif
         } else {
             flare->SetVisible(false);
         }
