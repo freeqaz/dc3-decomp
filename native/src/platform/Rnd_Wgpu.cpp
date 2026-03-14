@@ -553,13 +553,16 @@ void WgpuRnd::BeginFramePass(bool clear) {
 
 void WgpuRnd::BeginTexturePass(RndTex* tex) {
     if (!tex) return;
+    // Ensure the GPU render target exists (lazy creation).
+    // GetGpuTexView calls EnsureRenderTargetData for render-target textures,
+    // which sets up the texture + depth + renderTarget flag.
+    wgpu::TextureView colorView = GetGpuTexView(tex);
     // Only textures with a proper RGBA GPU render target can be used as
     // color attachments. Compressed textures (BC1/BC3) lack RenderAttachment
     // usage and would invalidate the entire command encoder.
     if (!IsGpuTexRenderable(tex)) {
         return;
     }
-    wgpu::TextureView colorView = GetGpuTexView(tex);
     if (!colorView) {
         return;
     }
