@@ -19,6 +19,8 @@
 #include "synth/StandardStream.h"
 #include "synth/VorbisReader.h"
 #include "os/BufFile.h"
+#include "meta_ham/HamSongMgr.h"
+#include "meta_ham/HamSongMetadata.h"
 extern GLFWwindow *gNativeWindow;
 
 // ---------------------------------------------------------------------------
@@ -1105,9 +1107,25 @@ void App::RunWithoutDebugging() {
                         if (strcmp(targetScreen, "game_screen") == 0 && TheGameData && TheGameMode) {
                             const char *songName = getenv("DC3_SONG");
                             if (!songName || !songName[0]) songName = "boyfriend";
-                            const char *venueName = getenv("DC3_VENUE");
-                            if (!venueName || !venueName[0]) venueName = "glitterati";
                             TheGameData->SetSong(Symbol(songName));
+
+                            // Venue: DC3_VENUE override > song metadata > fallback
+                            const char *venueEnv = getenv("DC3_VENUE");
+                            const char *venueName = nullptr;
+                            if (venueEnv && venueEnv[0]) {
+                                venueName = venueEnv;
+                            } else {
+                                int songID = TheHamSongMgr.GetSongIDFromShortName(Symbol(songName), false);
+                                if (songID >= 0) {
+                                    const HamSongMetadata *meta = TheHamSongMgr.Data(songID);
+                                    if (meta) {
+                                        Symbol v = meta->Venue();
+                                        if (v != Symbol() && v.Str()[0])
+                                            venueName = v.Str();
+                                    }
+                                }
+                            }
+                            if (!venueName || !venueName[0]) venueName = "glitterati";
                             TheGameData->SetVenue(Symbol(venueName));
                             TheGameMode->SetMode(Symbol("perform"), Symbol("none"));
                             if (TheHamProvider) {

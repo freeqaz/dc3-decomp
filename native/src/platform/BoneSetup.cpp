@@ -19,12 +19,6 @@ void FillBoneUniforms(RndMesh* mesh, BoneUniforms& out) {
     int numBones = mesh->NumBones();
     if (numBones > kMaxBones) numBones = kMaxBones;
 
-    // Force all bones dirty to ensure fresh WorldXfm computation
-    for (int i = 0; i < numBones; i++) {
-        RndTransformable* bt = mesh->BoneTransAt(i);
-        if (bt) bt->DirtyLocalXfm();
-    }
-
     for (int i = 0; i < numBones; i++) {
         RndTransformable* boneTrans = mesh->BoneTransAt(i);
         if (boneTrans) {
