@@ -216,6 +216,10 @@ void Game::PostLoad() {
     WorldDir *world = TheHamDirector->GetWorld();
     MILO_ASSERT(world, 0x259);
 #ifdef HX_NATIVE
+    if (!world) {
+        mMoveDir = nullptr;
+        return;
+    }
     mMoveDir = world->Find<MoveDir>("moves", false);
 #else
     mMoveDir = world->Find<MoveDir>("moves");
@@ -277,6 +281,9 @@ void Game::SwapMoveRecord() {
 void Game::ReloadSong() {
     WorldDir *world = TheHamDirector->GetWorld();
     MILO_ASSERT(world, 0x1c7);
+#ifdef HX_NATIVE
+    if (!world) return;
+#endif
     mMoveDir = world->Find<MoveDir>("moves");
     mLoadState = 0;
     LoadSong();
