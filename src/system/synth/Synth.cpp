@@ -365,8 +365,7 @@ void Synth::DrawMeter(float &y, float level, float peakHold, const char *name) {
     Hmx::Color yellow(0.5f, 0.5f, 0.0f, 1.0f);
 
     float rndWidth = (float)TheRnd.Width();
-    float labelX = rndWidth * 0.1f;
-    Vector2 labelPos(labelX, y);
+    Vector2 labelPos(rndWidth * 0.1f, y);
     TheRnd.DrawString(name, labelPos, white, true);
 
     float barLeft = rndWidth * 0.2f;
@@ -374,33 +373,29 @@ void Synth::DrawMeter(float &y, float level, float peakHold, const char *name) {
     Hmx::Rect bgRect(barLeft, y, barWidth, 12.0f);
     TheRnd.DrawRect(bgRect, black, 0, 0, 0);
 
-    double levelNorm = (double)(float)((level + 40.0f) * 0.025f);
-    double clampedLevel = 0.0;
-    if (-levelNorm < 0.0)
-        clampedLevel = levelNorm;
-    double clampedLevel2 = 1.0;
-    if ((float)(clampedLevel - 1.0) < 0.0)
-        clampedLevel2 = clampedLevel;
+    float levelNorm = (level + 40.0f) * 0.025f;
+    if (levelNorm < 0.0f)
+        levelNorm = 0.0f;
+    if (levelNorm > 1.0f)
+        levelNorm = 1.0f;
 
-    Hmx::Rect levelRect(barLeft, y, (float)(clampedLevel2 * barWidth), 12.0f);
+    Hmx::Rect levelRect(barLeft, y, levelNorm * barWidth, 12.0f);
     TheRnd.DrawRect(levelRect, grey, 0, 0, 0);
 
-    double peakNorm = (double)(float)((peakHold + 40.0f) * 0.025f);
-    double clampedPeak = 0.0;
-    if (-peakNorm < 0.0)
-        clampedPeak = peakNorm;
-    double clampedPeak2 = 1.0;
-    if ((float)(clampedPeak - 1.0) < 0.0)
-        clampedPeak2 = clampedPeak;
+    float peakNorm = (peakHold + 40.0f) * 0.025f;
+    if (peakNorm < 0.0f)
+        peakNorm = 0.0f;
+    if (peakNorm > 1.0f)
+        peakNorm = 1.0f;
 
     Hmx::Color *peakColor = &white;
-    if (clampedPeak2 != 1.0)
+    if (peakNorm != 1.0f)
         peakColor = &yellow;
 
-    Hmx::Rect peakRect((float)(clampedPeak2 * barWidth + barLeft), y, 8.0f, 12.0f);
+    Hmx::Rect peakRect(peakNorm * barWidth + barLeft, y, 8.0f, 12.0f);
     TheRnd.DrawRect(peakRect, *peakColor, 0, 0, 0);
 
-    Vector2 dbLabelPos((float)(barWidth + barLeft), y);
+    Vector2 dbLabelPos(barWidth + barLeft, y);
     TheRnd.DrawString(MakeString("%i", (int)peakHold), dbLabelPos, white, true);
 
     y += 16.0f;
