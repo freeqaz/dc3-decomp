@@ -6,6 +6,11 @@
 #define GLFW_EXPOSE_NATIVE_WAYLAND
 #include <GLFW/glfw3native.h>
 #undef Success // X11 defines this, conflicts with wgpu enum
+#elif defined(__APPLE__)
+#define GLFW_EXPOSE_NATIVE_COCOA
+#include <GLFW/glfw3native.h>
+// Defined in MetalSurface.mm — creates CAMetalLayer for an NSWindow
+extern "C" void* CreateMetalLayerForWindow(void* nsWindow);
 #endif
 
 #include <cstdio>
@@ -224,6 +229,13 @@ bool GpuDevice::InitSurface() {
         surfDesc.nextInChain = &x11Desc;
         mSurface = mInstance.CreateSurface(&surfDesc);
     }
+#elif defined(__APPLE__)
+    // macOS: create CAMetalLayer via ObjC++ helper, pass to Dawn
+    void* metalLayer = CreateMetalLayerForWindow(glfwGetCocoaWindow(mWindow));
+    wgpu::SurfaceSourceMetalLayer metalDesc{};
+    metalDesc.layer = metalLayer;
+    surfDesc.nextInChain = &metalDesc;
+    mSurface = mInstance.CreateSurface(&surfDesc);
 #else
     #error "Unsupported platform"
 #endif

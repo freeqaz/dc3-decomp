@@ -1046,6 +1046,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
         refactor: bool = True,
         custom_prompt: Optional[str] = None,
         reviewer_model: str = "sonnet",
+        use_merger: bool = False,
     ) -> dict[str, Any]:
         """
         Run single agent on one function (synchronous wrapper).
@@ -1059,11 +1060,30 @@ Focus on readability and maintainability while preserving exact behavior and mat
             refactor: Run a cleanup pass after the first agent (default: True)
             custom_prompt: Custom instructions to append to agent prompt
             reviewer_model: Model to use for the refactor-staff pass (default: sonnet)
+            use_merger: If True, enqueue patches to merger agent instead of direct apply
 
         Returns:
             Result dict with status, percent, patch, etc.
         """
-        return asyncio.run(self.run_single(symbol, model, verbose, dry_run, use_incremental, refactor=refactor, custom_prompt=custom_prompt, reviewer_model=reviewer_model))
+        return asyncio.run(self._run_single_with_merger(symbol, model, verbose, dry_run, use_incremental, refactor=refactor, custom_prompt=custom_prompt, reviewer_model=reviewer_model, use_merger=use_merger))
+
+    async def _run_single_with_merger(
+        self,
+        symbol: str,
+        model: Optional[str] = None,
+        verbose: int = 1,
+        dry_run: bool = False,
+        use_incremental: bool = True,
+        refactor: bool = True,
+        custom_prompt: Optional[str] = None,
+        reviewer_model: str = "sonnet",
+        use_merger: bool = False,
+    ) -> dict[str, Any]:
+        """Run single agent, draining merger if used."""
+        result = await self.run_single(symbol, model, verbose, dry_run, use_incremental, refactor=refactor, custom_prompt=custom_prompt, reviewer_model=reviewer_model, use_merger=use_merger)
+        if use_merger and not dry_run:
+            await self.merger_agent.drain()
+        return result
 
     async def run_single(
         self,

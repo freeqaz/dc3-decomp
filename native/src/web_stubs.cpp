@@ -295,25 +295,7 @@ void altCfg(DataNode, DataNode) {}
 void CacheWav(const char *, CacheResourceResult &r) { r = kCacheUnnecessary; }
 // DateTimeCmp — now in DateTime.cpp
 
-// ============================================================================
-// AudioDevice — no-op for web (no miniaudio)
-// ============================================================================
-
-#include "audio/AudioDevice.h"
-
-AudioDevice &AudioDevice::GetInstance() {
-    static AudioDevice instance;
-    return instance;
-}
-AudioDevice::AudioDevice() : mDevice(nullptr), mInitialized(false), mSampleRate(0) {}
-AudioDevice::~AudioDevice() {}
-bool AudioDevice::Init(int) { mSampleRate = 44100; return true; }
-void AudioDevice::Terminate() {}
-void AudioDevice::AddSource(AudioSource *) {}
-void AudioDevice::RemoveSource(AudioSource *) {}
-void AudioDevice::MixSources(float *output, int frameCount) {
-    memset(output, 0, frameCount * 2 * sizeof(float));
-}
+// AudioDevice — now in AudioDevice_Web.cpp (AudioWorklet + SharedArrayBuffer)
 
 #endif // __EMSCRIPTEN__
 

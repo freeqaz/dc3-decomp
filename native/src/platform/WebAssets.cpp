@@ -111,6 +111,7 @@ void WebAssetsInit() {
     mkdir("/data/char", 0755);
     mkdir("/data/songs", 0755);
     mkdir("/data/gen", 0755);
+    mkdir("/data/videos", 0755);
     printf("WebAssets: MEMFS initialized\n");
 }
 

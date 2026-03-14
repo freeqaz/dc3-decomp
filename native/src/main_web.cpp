@@ -42,6 +42,7 @@
 #include "meta_ham/HamUI.h"
 #include "movie/Movie.h"
 #include "synth/Synth.h"
+#include "audio/AudioDevice.h"
 #include "ui/UI.h"
 #include "world/World.h"
 #include "obj/Dir.h"
@@ -288,6 +289,13 @@ static void mainLoop() {
         if (TheFlowMgr)
             TheFlowMgr->Poll();
         if (sFrameCount <= 3) { printf("DC3 Web: after FlowMgr Poll\n"); fflush(stdout); }
+
+        // Poll synth subsystem — drives SynthPollable (StandardStream/VorbisReader)
+        if (TheSynth)
+            TheSynth->Poll();
+
+        // Pump audio: mix all sources and push to AudioWorklet ring buffer
+        AudioDevice::GetInstance().PumpAudio();
 
         // Draw (skip if GPU not available)
         if (sGpuReady) {

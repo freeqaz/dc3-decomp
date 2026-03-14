@@ -157,13 +157,15 @@ void* TheSkeletonIdentifier = 0;
 void* TheSkeletonViz = 0;
 void* TheSongSortMgr = 0;
 // TheUI: removed - provided as proper UIManager* in Rnd_Stub.cpp
-#ifndef __EMSCRIPTEN__
+
 // vorbis_synthesis_poll was Harmonix's incremental decoder for Xbox.
-// On native, delegate to standard vorbis_synthesis which does full decode at once.
+// On native/web, delegate to standard vorbis_synthesis which does full decode at once.
 struct vorbis_block;
 struct ogg_packet;
 extern "C" int vorbis_synthesis(vorbis_block *vb, ogg_packet *op);
 int vorbis_synthesis_poll(vorbis_block *vb, ogg_packet *op) { return vorbis_synthesis(vb, op); }
+
+#ifndef __EMSCRIPTEN__
 int WideCharToMultiByte() { return 0; }
 int XBackgroundDownloadSetMode() { return 0; }
 int XInputGetCapabilities() { return 0; }

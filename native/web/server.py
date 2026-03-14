@@ -46,6 +46,8 @@ class DC3Handler(http.server.SimpleHTTPRequestHandler):
             return "application/javascript"
         if path.endswith(".dta"):
             return "text/plain"
+        if path.endswith(".webm"):
+            return "video/webm"
         return super().guess_type(path)
 
     def do_GET(self):
@@ -277,7 +279,7 @@ def main():
     print(f"  COOP/COEP headers enabled")
     print()
 
-    server = http.server.HTTPServer(("0.0.0.0", args.port), DC3Handler)
+    server = http.server.ThreadingHTTPServer(("0.0.0.0", args.port), DC3Handler)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

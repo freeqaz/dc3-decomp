@@ -77,10 +77,20 @@ public:
             } else {
                 sym = "ogg"; // default to ogg
             }
+            file = NewFile(path, 2);
         } else {
-            sym = "ogg";
+            // No extension — try .mogg first (HMX encrypted), then .ogg
+            char buf[256];
+            snprintf(buf, sizeof(buf), "%s.mogg", path);
+            file = NewFile(buf, 2);
+            if (file) {
+                sym = "mogg";
+            } else {
+                snprintf(buf, sizeof(buf), "%s.ogg", path);
+                file = NewFile(buf, 2);
+                sym = "ogg";
+            }
         }
-        file = NewFile(path, 2); // read mode
     }
 
     virtual Stream *NewStream(const char *path, float vol, float pan, bool loop) override {

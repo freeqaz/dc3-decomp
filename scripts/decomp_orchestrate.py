@@ -234,6 +234,7 @@ def cmd_single(args):
         refactor=not args.no_refactor,
         custom_prompt=args.prompt,
         reviewer_model=args.reviewer_model,
+        use_merger=args.merger,
     )
 
     if args.json:
@@ -1399,6 +1400,11 @@ def main():
         choices=available_models,
         default="sonnet",
         help="Model for the refactor-staff reviewer pass (default: sonnet)",
+    )
+    p_single.add_argument(
+        "--merger",
+        action="store_true",
+        help="Use the merger agent to apply patches (reconciles concurrent edits to modified files)",
     )
 
     # batch

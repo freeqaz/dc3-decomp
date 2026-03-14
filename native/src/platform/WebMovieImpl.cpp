@@ -30,7 +30,9 @@ EM_JS(int, web_movie_create, (const char* url, int loop), {
     video.muted = false;  // Will be set by SetVolume
     video.loop = !!loop;
     video.preload = 'auto';
-    video.src = UTF8ToString(url);
+    // Prepend /api/file/ so the browser fetches from the asset server
+    var rawUrl = UTF8ToString(url);
+    video.src = rawUrl.startsWith('/') ? '/api/file' + rawUrl : '/api/file/' + rawUrl;
 
     // Canvas for pixel readback
     var canvas = document.createElement('canvas');
@@ -257,7 +259,9 @@ bool WebMovieImpl::BeginFromFile(
 }
 
 bool WebMovieImpl::Poll() {
-    if (!mOpen || mPaused || mVideoHandle <= 0) return false;
+    // Convention: return true = still playing, false = done/ended
+    // (TexMovie::Poll checks `if (!mMovie.Poll()) mMovie.End()`)
+    if (!mOpen || mPaused || mVideoHandle <= 0) return true;
 
     // Check if metadata is loaded
     if (!mReady && web_movie_is_ready(mVideoHandle)) {
@@ -272,7 +276,7 @@ bool WebMovieImpl::Poll() {
         }
     }
 
-    if (!mReady) return false;
+    if (!mReady) return true;
 
     // Check for new frame
     if (web_movie_has_new_frame(mVideoHandle)) {
@@ -287,11 +291,11 @@ bool WebMovieImpl::Poll() {
     // Check if ended
     if (web_movie_ended(mVideoHandle)) {
         if (!mLoop) {
-            return true; // Signal done
+            return false; // Video ended
         }
     }
 
-    return false;
+    return true; // Still playing
 }
 
 void WebMovieImpl::Draw() {

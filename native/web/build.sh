@@ -48,6 +48,7 @@ cmake --build "$BUILD_DIR" --target dc3-web -j$(nproc) 2>&1
 
 # Copy web assets to build dir
 cp "$SCRIPT_DIR/index.html" "$BUILD_DIR/index.html"
+cp "$SCRIPT_DIR/audio-worklet.js" "$BUILD_DIR/audio-worklet.js"
 touch "$BUILD_DIR/favicon.ico"
 
 echo ""

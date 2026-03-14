@@ -191,10 +191,7 @@ Multiple `.milo` files fail to load as PanelDir (expected — not all UI assets 
 - `ui/background/background.milo`, `ui/title/title.milo`, `ui/tutorial/tutorial_nav.milo`
 - Engine handles failures gracefully and continues
 
-**Next steps** (Phase 6+):
-1. Bundle UI `.milo` assets for attract_screen/title_screen to get actual UI rendering
-2. Implement keyboard input via Emscripten GLFW shim
-3. Load venue `.milo` for 3D scene rendering
+**Next steps**: Phase 6 (input) done. Phase 7a (audio core) done. Phase 7b (video) done. See below.
 
 ---
 
@@ -262,48 +259,69 @@ scripts/web/
 
 ---
 
-### Phase 6: Input & Interaction
+### Phase 6: Input & Interaction — DONE
 
-**Goal**: Keyboard/mouse input works for camera control and UI navigation.
+**Goal**: Keyboard input works for UI navigation.
 
-**Tasks**:
-1. Emscripten's GLFW shim handles keyboard/mouse events on the canvas automatically
-2. If GLFW shim is insufficient, add `emscripten_set_keydown_callback()` etc.
-3. Touch events for mobile (future)
-4. Pointer lock for mouse look (`emscripten_request_pointerlock()`)
-
-**Validation**: Can orbit camera, navigate UI menus.
-
----
-
-### Phase 7: Audio (Post-MVP)
-
-**Goal**: Audio playback in browser via Web Audio API.
-
-**Options**:
-- **Option A**: Emscripten's SDL_audio or OpenAL shim (maps to Web Audio internally)
-- **Option B**: Direct Web Audio API via JS interop
-- **Option C**: Replace miniaudio backend with Emscripten audio worklet
-
-**Tasks**:
-1. Stub audio for MVP (silent)
-2. Later: implement `AudioDevice_Web.cpp` using Emscripten's audio API
-3. Music/SFX streaming from server API
+**Completed**:
+- Keyboard input works via Emscripten's HTML5 input API
+- Full UI navigation: `attract_screen` → `title_screen` → `main_screen` → `choose_mode_screen` → `song_select_screen`
+- Song select shows 46 unlocked songs (out of 62 total, filtered by `ProfileMgr.IsContentUnlocked()`)
+- Song selection advances: `song_select_screen` → `multiuser_screen` → `loading_screen` → `real_loading_screen`
+- `ContentMgr_Stub.cpp` fixed for MEMFS paths — `QueueCallbackDir` skips `extracted/` prefix on Emscripten so the refresh cycle naturally finds `songs/songs.dta` at `/data/songs/`
+- Game gets stuck at `real_loading_screen` because song content (MOGG audio, MIDI, venue) isn't fully available yet — this is the audio/content loading frontier
 
 ---
 
-### Phase 7b: Video Playback (Post-MVP)
+### Phase 7: Audio — IN PROGRESS (7a DONE)
+
+**Goal**: Audio playback in browser via Web Audio API AudioWorklet.
+
+**Decision**: Custom AudioWorklet + SharedArrayBuffer ring buffer. See [AUDIO.md](AUDIO.md) for full research, option analysis, and implementation plan.
+
+**Approach**: WASM-side VorbisReader decrypts/decodes MOGG → StandardStream → StreamReceiverNative → AudioDevice mixes all sources → pushes PCM to a SharedArrayBuffer ring buffer → JS AudioWorkletProcessor pulls from ring buffer on a dedicated thread → speaker output. No ASYNCIFY needed.
+
+**Phase 7a completed**:
+- `native/web/audio-worklet.js` — AudioWorkletProcessor that reads from SAB ring buffer (deinterleaves stereo)
+- `native/src/audio/AudioDevice_Web.cpp` — Web AudioDevice using EM_JS for JS interop: creates AudioContext + AudioWorklet, manages 32768-frame SAB ring buffer (~743ms at 44100Hz), PumpAudio() called each frame
+- `native/src/audio/AudioDevice.h` — Added `PumpAudio()` method (web-only)
+- `native/src/main_web.cpp` — Calls PumpAudio() in render loop after FlowMgr::Poll()
+- `native/CMakeLists.txt` — AudioDevice_Web.cpp in DC3_WEB_CORE_SOURCES
+- `native/web/build.sh` — Copies audio-worklet.js to build dir
+- AudioDevice stubs removed from web_stubs.cpp
+- User gesture handler (keydown/click/touchstart) auto-resumes AudioContext
+- Confirmed working: AudioWorklet connects at 44100Hz, no errors
+
+**Remaining phases**:
+- 7b: Video playback — **DONE** (see below)
+- 7c: Shell/menu music (serve sfx/samples files)
+- 7d: Sample rate resampling (44.1→48kHz mismatch)
+- End-to-end MOGG playback testing (requires song content assets to be served)
+
+---
+
+### Phase 7b: Video Playback — DONE
 
 **Goal**: FMV/attract movie playback in browser.
 
-**Current state**: FFmpeg (libavformat/libavcodec) is used on native desktop but unavailable on Emscripten — requires native OS libraries. `TexMovie::DrawToTexture()` falls back to the Xbox Bink path (stubbed on web). Movies are silently skipped.
+**Completed**:
+- `WebMovieImpl` (`native/src/platform/WebMovieImpl.cpp`) — feature-complete browser video player using EM_JS bridge (11 JS interop functions) to control a hidden `<video>` element
+- `TexMovie.cpp` integration — `#ifdef __EMSCRIPTEN__` sections wire WebMovieImpl into the engine's TexMovie pipeline (BeginFromFile, Poll, DrawToTexture)
+- Path rewriting: `.bik` extensions automatically rewritten to `.webm` at playback time
+- Pre-transcoded `.webm` files in `orig-assets/extracted/videos/` (offline Bink-to-WebM conversion)
+- `requestVideoFrameCallback` for frame-accurate new-frame detection (with time-based fallback)
+- RGBA pixel extraction via offscreen `<canvas>` + `getImageData()` → `UploadRGBAToRndTex` → WebGPU texture
+- CopyDst usage added to render target textures to support `WriteTexture()` uploads
+- Poll() return convention bug fixed — was inverted (returning false = still playing), would have ended movies on the first frame. Corrected to match TexMovie's `if (!mMovie.Poll()) mMovie.End()` contract
+- Autoplay with muted fallback: attempts unmuted playback first, falls back to muted if browser autoplay policy blocks
 
-**Options**:
-1. **ffmpeg.wasm** — FFmpeg compiled to WASM. Mature project, supports decode of common formats. Adds ~8-25MB to WASM payload. Would slot into `FFmpegMovieImpl` with minimal changes.
-2. **Browser `<video>` element** — Transcode Bink FMVs to H.264/WebM offline, play via HTML5 `<video>`, composite onto WebGPU canvas via `copyExternalImageToTexture()`. Smallest runtime cost, but requires asset preprocessing pipeline.
-3. **Bink decoder in WASM** — Port a Bink decoder (e.g., ffmpeg's bink demuxer/decoder) to WASM directly. Most faithful to original, but Bink format is proprietary.
+**Known limitations**:
+- `canvas.getImageData()` for frame extraction is CPU-bound. Future optimization: `createImageBitmap()` + WebGPU `copyExternalImageToTexture()` for GPU-side copy
+- Browser autoplay policies require user interaction for unmuted video. Muted fallback exists but audio-carrying FMVs will be silent until the user interacts
 
-**Recommended**: Option 2 (browser `<video>`) for MVP — zero runtime overhead, leverages hardware decode. Add ffmpeg.wasm as fallback for formats `<video>` can't handle.
+**Remaining**:
+- Server must serve `.webm` files from the video asset directory
+- Autoplay user-gesture UI (prompt overlay before first video plays with audio)
 
 ---
 
@@ -337,6 +355,12 @@ native/
 |       +-- WebAssets.cpp           # Bundle download + MEMFS unpacker
 |       +-- WebAssets.h             # Public API (WebAssetsInit, WebAssetsFetchBundle, etc.)
 |       +-- GpuDevice_Web.cpp       # WebGPU device init (browser path — async adapter/device)
+|       +-- WebMovieImpl.cpp        # Browser <video> element movie player (EM_JS bridge)
+|       +-- WebMovieImpl.h          # WebMovieImpl class declaration
+
+docs/plans/web-port/
++-- PLAN.md                       # This file — overall web port plan
++-- AUDIO.md                      # Audio subsystem research + implementation plan
 
 scripts/web/                        # Test tooling
 +-- test.mjs                       # Headless test runner + screenshot (Phase 5.5a)
