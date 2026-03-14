@@ -4,11 +4,12 @@
 
 ## Current State
 
-The DC3 native port (x86_64 Linux) has a fully operational rendering pipeline in the
-standalone viewer (Track B) and a mostly-functional engine boot path (Track A). Audio,
-input, and asset loading are all complete. The focus now shifts to **getting the actual
-game working** — merging the viewer's rendering quality into the engine path and reaching
-gameplay screens.
+The DC3 native port (x86_64 Linux) has a fully operational rendering and gameplay pipeline.
+The standalone viewer (Track B) is complete and the engine (Track A) runs the full game flow
+from boot to gameplay with rendering, audio, animation, and camera systems all working.
+Post-processing (bloom, color grading) and scene lighting improvements round out the visual
+quality. The focus now shifts to **polish** — particle effects, light beam rendering, scoring,
+and platform support.
 
 ### Phase Summary
 
