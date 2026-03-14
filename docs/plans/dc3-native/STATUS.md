@@ -23,7 +23,7 @@ gameplay screens.
 | Phase 3: Audio | COMPLETE | 100% (real-time MOGG playback verified) |
 | Phase 4: Input | COMPLETE | 100% |
 | Phase 5: Motion Capture | NOT STARTED | 0% |
-| Phase 6: Polish & Platforms | NOT STARTED | 5% |
+| Phase 6: Polish & Platforms | IN PROGRESS | ~30% |
 
 ### What Works Today
 
@@ -48,6 +48,10 @@ gameplay screens.
 - Input working (gamepad + keyboard + scripted headless input)
 - Text rendering working (glyph meshes, DXT5 alpha shader, font loading)
 - Flow→PropAnim UI animation pipeline verified end-to-end
+- **Post-processing pipeline**: bloom (screen blend), Xbox-matched contrast/brightness formulas, saturation, levels, vignette, chromatic aberration, posterization
+- **RndFlare**: visible in-view flares (occlusion bypass), DrawRect rendering
+- **RndParticleSys**: full Load + WebGPU billboard renderer
+- **RndLine**: CPU-side perspective geometry → mesh rendering pipeline
 
 **Shared infrastructure**: .ark archive loading (6,377 files), runtime .milo loading,
 LP64-safe DataArray scripting, BinStream endian conversion.
@@ -140,13 +144,17 @@ iterates drawables, while the engine uses `WorldDir::DrawShowing()` → `RndGrou
 
 | Task | Priority | Notes |
 |------|----------|-------|
-| Particle systems (RndParticleSys) | MEDIUM | Stage effects, confetti |
-| Lines/Flares (RndLine, RndFlare) | LOW | Light beams, glow |
+| **Post-processing pipeline** | **DONE** | Bloom (screen blend), contrast (Xbox formula), brightness, saturation, levels, vignette, chromatic aberration, posterization. Works in headless mode. |
+| **RndFlare visibility** | **DONE** | Bypass GPU occlusion query on native — treat in-view flares as fully visible. DrawRect rendering via DrawRect2D WebGPU pipeline. |
+| Particle systems (RndParticleSys) | **DONE** | Full Load (rev 0x29), WebGPU billboard renderer (Part_Wgpu.cpp). Real implementations linked (strong symbols override weak stubs). |
+| Lines (RndLine) | **DONE** | Full UpdateLine implementation linked. CPU-side perspective-corrected geometry → RndMesh::DrawShowing via existing WebGPU pipeline. |
 | Save/load game progress | MEDIUM | Profile, unlocks |
 | DLC content loading | LOW | Extra songs |
 | macOS / Windows support | MEDIUM | WebGPU handles backends |
 | Web build (Emscripten) | LOW | Future |
 | Performance optimization | MEDIUM | Draw call batching, culling |
+
+**Session 69 — Post-processing + visual quality**: Enabled full post-processing pipeline in headless mode. Fixed bloom composite (screen blend instead of additive prevents blown-out whites). Matched Xbox's non-linear contrast formula from `RndColorXfm::AdjustContrast`. Fixed RndFlare visibility by bypassing GPU occlusion query. RndLine and RndParticleSys implementations already linked via strong symbols.
 
 ---
 
