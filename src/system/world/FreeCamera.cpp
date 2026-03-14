@@ -36,8 +36,6 @@ void FreeCamera::Poll() {}
 
 void FreeCamera::UpdateFromCamera() {
     RndCam *cam = mWorld->Cam();
-    if (!cam)
-        return;
     mFov = cam->YFov();
     mXfm = cam->WorldXfm();
     MakeEuler(mXfm.m, mRot);

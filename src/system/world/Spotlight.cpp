@@ -894,7 +894,7 @@ void Spotlight::UpdateFloorSpotTransform(const Transform &tf) {
     if (DoFloorSpot()) {
         float f1 = GetFloorSpotTarget()->WorldXfm().v.z;
         Vector3 vac(tf.m.y);
-        if (vac.z > 0) {
+        if (vac.z != 0) {
             float absed = std::fabs(((f1 - tf.v.z) / vac.z) / (f1 - tf.v.z));
             vac = tf.m.y;
             float curz = vac.z;

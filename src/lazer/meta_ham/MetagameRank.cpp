@@ -901,38 +901,44 @@ checkSize:
     return size;
 }
 
-// TODO: implement
-#ifdef HX_NATIVE
-int MetagameRank::GetRankInTier() const { return 0; }
+int MetagameRank::GetRankInTier() const {
+    if (mAtMaxRank) return 0;
+
+    int remaining = mRankNumber;
+    unsigned int tierCount = gTiers.size();
+
+    for (unsigned int i = 0; i < tierCount; i++) {
+        int tierSize = gTiers[i].size();
+        if (tierSize >= remaining) {
+            return remaining;
+        }
+        remaining -= tierSize;
+    }
+    return remaining;
+}
+
 int MetagameRank::GetTier() const {
     if (mRankNumber == 0) {
         return 0;
     }
 
-    uint tierCount = gTiers.size();
-    if (tierCount == 0) {
-        return 0;
-    }
+    unsigned int tierCount = gTiers.size();
 
-    uint currentTier = 0;
-    uint rankRemaining = mRankNumber;
+    int remaining = mRankNumber;
 
-    for (uint i = 0; i < tierCount; i++) {
-        uint rankCount = gTiers[i].size();
-        if (rankCount == 0) {
-            continue;
+    for (unsigned int i = 0; i < tierCount; i++) {
+        unsigned int rankCount = gTiers[i].size();
+        for (unsigned int j = 0; j < rankCount; j++) {
+            remaining--;
+            if (remaining <= 0) {
+                return i + 1;
+            }
         }
-
-        rankRemaining -= 1;
-        if (rankRemaining == 0) {
-            return currentTier + 1;
-        }
-        currentTier += 1;
     }
 
     return tierCount;
 }
-#endif
+
 void MetagameRank::AwardForRankUp(int) {}
 int MetagameRank::ComputeRankNumber(bool forceAward) {
     if (mFirstTimePlayed) {
