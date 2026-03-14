@@ -11,6 +11,7 @@
 
 class PlaylistSortNode : public NavListItemNode {
 public:
+    virtual Symbol GetToken() const;
     virtual Symbol Select();
     virtual void Text(UIListLabel *, UILabel *) const;
     virtual void Custom(UIListCustom *, Hmx::Object *) const;
@@ -31,12 +32,14 @@ public:
     virtual DataNode Handle(DataArray *, bool);
 
     // NavListSortNode
+    virtual Symbol Select();
     virtual Symbol OnSelect();
     virtual Symbol OnSelectDone();
     virtual void OnHighlight();
     virtual NavListSortNode *GetFirstActive();
     virtual void Text(UIListLabel *, UILabel *) const;
     virtual bool IsActive() const;
+    virtual void UpdateItemCount(NavListItemNode *);
     char const *GetAlbumArtPath();
     virtual void Renumber(std::vector<NavListSortNode *> &);
 

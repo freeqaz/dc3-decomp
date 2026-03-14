@@ -11,10 +11,7 @@
 namespace {
     struct LabelSort {
         bool operator()(const UILabel *u1, const UILabel *u2) const {
-            return stricmp(
-                const_cast<UILabel *>(u1)->TextToken().Str(),
-                const_cast<UILabel *>(u2)->TextToken().Str()
-            ) < 0;
+            return stricmp(u1->GetTextToken().Str(), u2->GetTextToken().Str()) < 0;
         }
     };
 }
@@ -96,7 +93,7 @@ void LocalePanel::AddDirEntries(ObjectDir *dir, const char *cc) {
         Entry entry;
         entry.mLabel = cur->Name();
         entry.mToken = TokenForLabel(cur);
-        entry.mString = cur->TextASCII().c_str();
+        entry.mString = cur->GetText();
         mEntries.push_back(entry);
     }
     for (ObjDirItr<UIList> it(dir, true); it != nullptr; ++it) {
@@ -110,13 +107,12 @@ void LocalePanel::AddDirEntries(ObjectDir *dir, const char *cc) {
                     if (listLabel) {
                         UILabel *elementLabel = listLabel->ElementLabel(i);
                         if (elementLabel) {
-                            String text = elementLabel->TextASCII();
-                            if (text.length() != 0) {
+                            if (elementLabel->GetText().length() != 0) {
                                 Entry entry;
                                 entry.mLabel =
                                     MakeString("%i:%s", i, listLabel->MatchName());
                                 entry.mToken = TokenForLabel(elementLabel);
-                                entry.mString = text.c_str();
+                                entry.mString = elementLabel->GetText();
                                 mEntries.push_back(entry);
                             }
                         }

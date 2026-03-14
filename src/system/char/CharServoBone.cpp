@@ -14,12 +14,6 @@
 #include "obj/Object.h"
 #include "utl/Symbol.h"
 
-static inline void ScaleAddEq(Vector3 &v1, const Vector3 &v2, float f) {
-    v1.x += v2.x * f;
-    v1.y += v2.y * f;
-    v1.z += v2.z * f;
-}
-
 void RotateAboutZ(const Vector3 &v, float f, Vector3 &res) {
     float c = Cosine(f);
     float s = Sine(f);

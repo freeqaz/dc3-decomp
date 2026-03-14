@@ -19,13 +19,13 @@ public:
 
 struct CmdGetFitnessGoalFromRC : public QueueableCommand {
 public:
-    virtual int GetType() { return 1; } // fix
+    virtual int GetType() { return 1; }
     CmdGetFitnessGoalFromRC() {}
 };
 
 struct CmdSendFitnessGoalToRC : public QueueableCommand {
 public:
-    virtual int GetType() { return 1; } // fix
+    virtual int GetType() { return 2; }
     CmdSendFitnessGoalToRC(HamProfile *p) { mData.profile = p; }
 
     union {
@@ -39,7 +39,7 @@ public:
 
 struct CmdUpdateFitnessGoalToRC : public QueueableCommand {
 public:
-    virtual int GetType() { return 1; } // fix
+    virtual int GetType() { return 4; }
     CmdUpdateFitnessGoalToRC(HamProfile *p) { mData.profile = p; }
 
     union {
@@ -53,7 +53,7 @@ public:
 
 struct CmdDeleteFitnessGoalFromRC : public QueueableCommand {
 public:
-    virtual int GetType() { return 1; } // fix
+    virtual int GetType() { return 3; }
     CmdDeleteFitnessGoalFromRC(HamProfile *p) { mData.profile = p; }
 
     union {
@@ -67,18 +67,10 @@ public:
 
 struct CmdChangeProfileOnlineID : public QueueableCommand {
 public:
-    virtual int GetType() { return 1; } // fix
-    CmdChangeProfileOnlineID(String s) : str() { str = s; }
+    virtual int GetType() { return 0; }
+    CmdChangeProfileOnlineID(String s) : mOnlineID() { mOnlineID = s; }
 
-    union {
-        int i;
-        HamProfile *profile;
-        Playlist *playlist;
-        CustomPlaylist *customPlaylist;
-        const char *onlineID;
-    } mData;
-
-    String str;
+    String mOnlineID;
 };
 
 class FitnessGoalMgr : public Hmx::Object {

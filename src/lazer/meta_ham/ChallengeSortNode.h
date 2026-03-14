@@ -41,6 +41,7 @@ public:
     virtual void Custom(UIListCustom *, Hmx::Object *) const;
     virtual Symbol OnSelect();
     virtual Symbol Select();
+    virtual const char *GetAlbumArtPath();
     virtual void OnContentMounted(const char *, const char *);
 
     int GetChallengeExp();

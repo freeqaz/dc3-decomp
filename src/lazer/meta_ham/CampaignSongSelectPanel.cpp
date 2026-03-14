@@ -1,4 +1,5 @@
 #include "meta_ham/CampaignSongSelectPanel.h"
+#include "meta_ham/CampaignMasterQuestCrewSelectPanel.h"
 #include "HamPanel.h"
 #include "TexLoadPanel.h"
 #include "hamobj/Difficulty.h"
@@ -382,3 +383,15 @@ void CampaignSongSelectPanel::CheatWinEraSong(Symbol s, int i) {
 }
 
 #pragma endregion
+
+void CampaignMasterQuestCrewSelectPanel::Enter() {
+    GetDateAndTime(mDateTime);
+    mPreviewDelayFinished = false;
+    HamPanel::Enter();
+}
+
+void CampaignMasterQuestCrewSelectPanel::Unload() {
+    TexLoadPanel::Unload();
+    delete m_pCampaignMqCrewProvider;
+    m_pCampaignMqCrewProvider = nullptr;
+}

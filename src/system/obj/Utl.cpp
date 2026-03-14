@@ -299,6 +299,42 @@ void ListSuperClasses(Symbol classSym, std::vector<Symbol> &classes) {
     classes.push_back("Object");
 }
 
+void ListProperties(
+    std::list<Symbol> &props, Symbol classnm, Symbol type, std::list<Symbol> *arrayProps, bool walkSuper
+) {
+    static Symbol objects("objects");
+    DataArray *cfg = SystemConfig(objects, classnm);
+    if (type != gNullStr) {
+        DataArray *typesArr = cfg->FindArray("types", false);
+        if (typesArr) {
+            typesArr = typesArr->FindArray(type, false);
+        } else {
+            typesArr = NULL;
+        }
+        DataArray *ed = typesArr->FindArray("editor", false);
+        if (ed) {
+            WalkProps(ed, props, arrayProps);
+        }
+    }
+    DataArray *ed = cfg->FindArray("editor", false);
+    if (ed) {
+        WalkProps(ed, props, arrayProps);
+    }
+    if (walkSuper) {
+        std::vector<Symbol> superclasses;
+        ListSuperClasses(classnm, superclasses);
+        for (std::vector<Symbol>::iterator it = superclasses.begin();
+             it != superclasses.end();
+             ++it) {
+            DataArray *scfg = SystemConfig(objects, *it);
+            DataArray *sced = scfg->FindArray("editor", false);
+            if (sced) {
+                WalkProps(sced, props, arrayProps);
+            }
+        }
+    }
+}
+
 void MergeObjectsRecurse(ObjectDir *fromDir, ObjectDir *toDir, MergeFilter &filt, bool b) {
     if (!b) {
         switch (filt.FilterSubdir(fromDir, toDir)) {

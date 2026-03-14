@@ -18,6 +18,7 @@ public:
     // UIPanel
     virtual void Draw();
     virtual void Enter();
+    virtual void Exit();
     virtual void Poll();
     virtual void Unload();
 

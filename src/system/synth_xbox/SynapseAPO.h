@@ -34,10 +34,8 @@ namespace ATG {
 
 template <typename T, typename Params>
 class CSampleXAPOBase : public CXAPOParametersBase {
-public:
-    virtual ~CSampleXAPOBase() {}
-
 protected:
+    virtual ~CSampleXAPOBase() {}
     __declspec(noinline) CSampleXAPOBase();
     virtual void OnSetParameters(const Params& params) = 0;
     virtual void DoProcess(const Params& params, unsigned int* arg1, float& arg2, unsigned int arg3, unsigned int arg4) = 0;

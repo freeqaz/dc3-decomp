@@ -34,6 +34,7 @@ void SetPurchased(int index, bool b);
 END_MESSAGE
 
 class StorePanel : public UIPanel {
+    friend class StoreEnumJob;
 public:
     // Hmx::Object
     virtual ~StorePanel();
@@ -48,6 +49,7 @@ public:
     virtual void Poll();
     virtual bool IsLoaded() const;
     virtual void Unload();
+    virtual bool Unloading() const;
     virtual bool IsSongInLibrary(int const &) const { return false; }
     virtual void ExitStore(StoreError) const;
     virtual Profile *StoreProfile() const;

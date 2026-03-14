@@ -9,6 +9,7 @@
 #include "meta_ham/MainMenuProvider.h"
 #include "meta_ham/MetaPanel.h"
 #include "meta_ham/MetagameStats.h"
+#include "meta/StorePanel.h"
 #include "net_ham/RockCentral.h"
 #include "obj/Data.h"
 #include "obj/Msg.h"
@@ -96,6 +97,12 @@ bool MainMenuPanel::Unloading() const {
         return true;
     else
         return UIPanel::Unloading();
+}
+
+bool StorePanel::Unloading() const {
+    if (mState != 1 && !TheNetCacheMgr->IsUnloaded())
+        return true;
+    return UIPanel::Unloading();
 }
 
 void MainMenuPanel::Poll() {
@@ -571,7 +578,7 @@ void MainMenuPanel::UpdateArtLoaders() {
         if (TheNetCacheMgr->IsReady()) {
             if (mDLCArtPending) {
                 mDLCArtPending = false;
-                LoadArt(TheRockCentral.GetDLCImage());
+                LoadArt(TheRockCentral.GetDlcImage());
             }
             if (mUtilityArtPending) {
                 mUtilityArtPending = false;
@@ -592,7 +599,7 @@ void MainMenuPanel::UpdateArtLoaders() {
                     bitmap.Load(stream);
                     bitmap.SetMip(nullptr);
                     TheNetCacheMgr->DeleteNetCacheLoader(loader);
-                    if (TheRockCentral.GetDLCImage() == loader->GetRemotePath()) {
+                    if (TheRockCentral.GetDlcImage() == loader->GetRemotePath()) {
                         mDownloadedTexture1->SetBitmap(bitmap, nullptr, false, RndTex::kRegular);
                         if (mState == 1) {
                             static Message dlc_image_loaded("dlc_image_loaded");
@@ -637,5 +644,19 @@ BEGIN_HANDLERS(MainMenuPanel)
     HANDLE_ACTION(text_scrolled_out, MotdHandleTextScrolledOut(_msg->Int(2)))
     HANDLE_SUPERCLASS(HamPanel)
 END_HANDLERS
+
+void MainMenuPanel::LoadArt(String path) {
+    if (path == gNullStr)
+        return;
+    FOREACH (it, mNetCacheLoaders) {
+        if (path == (*it)->GetRemotePath()) {
+            return;
+        }
+    }
+    NetCacheLoader *loader = TheNetCacheMgr->AddNetCacheLoader(path.c_str(), (NetLoaderPos)0);
+    if (loader) {
+        mNetCacheLoaders.push_back(loader);
+    }
+}
 
 #pragma endregion MainMenuPanel

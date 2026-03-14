@@ -19,6 +19,7 @@ public:
     virtual void Enter();
     virtual void Poll();
     virtual void Unload();
+    virtual void Load();
     virtual void FinishLoad();
 
     NEW_OBJ(CampaignMasterQuestSongSelectPanel)

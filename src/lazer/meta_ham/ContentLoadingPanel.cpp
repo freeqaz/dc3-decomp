@@ -32,6 +32,11 @@ void ContentLoadingPanel::ContentMountBegun(int i) {
     ShowIfPossible();
 }
 
+void ContentLoadingPanel::ContentFailed(const char *) {
+    mMountedCount++;
+    ShowIfPossible();
+}
+
 void ContentLoadingPanel::ShowIfPossible() {
     if (!mShowing) {
         if (mAllowedToShow && (bool)(mContentCount > 1)) {

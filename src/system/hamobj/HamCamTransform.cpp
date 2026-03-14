@@ -44,16 +44,6 @@ BEGIN_COPYS(HamCamTransform)
     END_COPYING_MEMBERS
 END_COPYS
 
-BinStream &operator>>(BinStreamRev &d, ObjVector<TransformArea> &areas) {
-    int count;
-    d.stream >> count;
-    areas.resize(count);
-    for (int i = 0; i < count; i++) {
-        areas[i].Load(d);
-    }
-    return d.stream;
-}
-
 BEGIN_LOADS(HamCamTransform)
     LOAD_REVS(bs)
     ASSERT_REVS(3, 0)

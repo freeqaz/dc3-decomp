@@ -74,6 +74,7 @@ public:
     bool CheckValid(bool);
     void SetEditText(char const *);
 
+    Symbol GetTextToken() const { return mTextToken; }
     char const *GetDefaultText() const;
     void CenterWithLabel(UILabel *, bool, float);
     LabelStyle &LStyle(int);

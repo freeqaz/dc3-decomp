@@ -10,6 +10,7 @@
 #include "rndobj/Draw.h"
 #include "rndobj/Env.h"
 #include "rndobj/Mat.h"
+#include "rndobj/Mesh.h"
 #include "rndobj/MultiMesh.h"
 #include "rndobj/Poll.h"
 #include "rndobj/Rnd.h"
@@ -34,6 +35,24 @@ RndCam *gImpostorCamera;
 RndMat *gImpostorMat;
 int gNumCrowd;
 WorldCrowd *gParent;
+
+namespace {
+    void GetMeshShaderFlags(RndMat *mat, std::list<unsigned int> &flags) {
+        ObjRef::iterator it = mat->Refs().begin();
+        ObjRef::iterator itEnd = mat->Refs().end();
+        for (; it != itEnd; ++it) {
+            RndMesh *mesh = dynamic_cast<RndMesh *>(it->RefOwner());
+            if (mesh) {
+                unsigned int flag = 0;
+                flag |= mesh->IsSkinned();
+                flag |= -(mesh->HasAOCalc()) & 2;
+                flags.push_back(flag);
+            }
+        }
+        flags.sort();
+        flags.unique();
+    }
+}
 
 const Hmx::Color &ColorPalette::GetColor(int idx) const {
     MILO_ASSERT(mColors.size(), 0x18);
@@ -351,6 +370,12 @@ BEGIN_LOADS(WorldCrowd)
     }
 END_LOADS
 
+void RndMultiMesh::UpdateSphere() {
+    Sphere s;
+    MakeWorldSphere(s, true);
+    SetSphere(s);
+}
+
 void WorldCrowd::UpdateSphere() {
     Sphere s;
     MakeWorldSphere(s, true);
@@ -608,7 +633,7 @@ RndMesh *WorldCrowd::BuildBillboard(Character *c, float height) {
 }
 
 #ifndef HX_NATIVE
-void SetMatColorFlags(ObjPtrList<RndMat, ObjectDir> &, int, stlpmtx_std::vector<Hmx::Color> *);
+void SetMatColorFlags(ObjPtrList<RndMat, ObjectDir> &, BaseMaterial::ColorModFlags, stlpmtx_std::vector<Hmx::Color> *);
 #endif
 
 void WorldCrowd::Draw3DChars() {
@@ -633,7 +658,7 @@ void WorldCrowd::Draw3DChars() {
             Apply3DCharXfm(charIt, i, RndCam::Current());
 #ifndef HX_NATIVE
             if (charIt->mDef.mUseRandomColor) {
-                SetMatColorFlags(charIt->mDef.mMats, 3, &charIt->m3DChars[i].mColors);
+                SetMatColorFlags(charIt->mDef.mMats, RndMat::kColorModModulate, &charIt->m3DChars[i].mColors);
             }
             bool savedSelfShadow = curChar->SelfShadow();
             bool savedUnk252 = *(bool *)((char *)curChar + 0x252);
@@ -1254,41 +1279,17 @@ void WorldCrowd::DrawShowing() {
 }
 
 #ifndef HX_NATIVE
-void SetMatColorFlags(ObjPtrList<RndMat, ObjectDir> &matList, int flags,
-                      stlpmtx_std::vector<Hmx::Color> *colors) {
-    RndMat **head = (RndMat **)((char *)&matList + 0x8);
-    if (*head == NULL) {
-        return;
-    }
-
-    RndMat *current = *head;
-    do {
-        current->SetColorMod(*(Hmx::Color *)flags, 0);
-        u32 *modNum = (u32 *)((char *)current + 0x228);
-        *modNum = *modNum | 2;
-
-        if (colors != NULL) {
-            int *pBegin = (int *)colors;
-            int *pEnd = (int *)colors + 1;
-            int size = *pEnd - *pBegin;
-            int alignedSize = size & 0xFFFFFFF0;
-
-            if (alignedSize != 0x30) {
-                TheDebug.Fail(MakeString(kAssertStr, "Crowd.cpp", 0x33b, "RndMat::kColorModNum != modulate"), nullptr);
-            }
-
-            int colorCount = size >> 4;
-            if (colorCount > 0) {
-                for (u32 i = 0; i < (u32)colorCount; i++) {
-                    current->SetColorMod(colors->at(i), i);
-                }
-            } else {
-                stlpmtx_std::__stl_throw_out_of_range("vector");
+void SetMatColorFlags(ObjPtrList<RndMat, ObjectDir> &matList, BaseMaterial::ColorModFlags flags,
+                      stlpmtx_std::vector<Hmx::Color> *modulate) {
+    FOREACH (it, matList) {
+        (*it)->SetColorModFlags(flags);
+        if (modulate) {
+            MILO_ASSERT(BaseMaterial::kColorModNum == modulate->size(), 0x33b);
+            for (int i = 0; i < modulate->size(); i++) {
+                (*it)->SetColorMod(modulate->at(i), i);
             }
         }
-
-        current = *(RndMat **)((char *)current + 0x14);
-    } while (current != NULL);
+    }
 }
 #endif // HX_NATIVE
 

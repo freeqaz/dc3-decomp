@@ -1,4 +1,5 @@
 #include "meta_ham/CampaignMasterQuestCrewSelectPanel.h"
+#include "meta_ham/CampaignMasterQuestSongSelectPanel.h"
 #include "HamProfile.h"
 #include "ProfileMgr.h"
 #include "TexLoadPanel.h"
@@ -153,3 +154,5 @@ void CampaignMasterQuestCrewSelectPanel::Refresh() {
 }
 
 #pragma endregion
+
+void CampaignMasterQuestSongSelectPanel::Load() { TexLoadPanel::Load(); }

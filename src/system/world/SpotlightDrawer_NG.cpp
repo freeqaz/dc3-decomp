@@ -16,24 +16,9 @@
 
 void GetLightPosition(Spotlight *s, Vector3 &v) {
     v = s->WorldXfm().v;
-    if (s)
-        Multiply(v, s->WorldXfm().m, v);
-    // clang-format off
-    //   if (param_1[0xfd] == 0x0) {
-    //     pTVar11 = param_1 + 0x88;
-    //   }
-    //   else {
-    //     pTVar11 = RndTransformable::WorldXfm_Force(param_1 + 0x40);
-    //   }
-    //   iVar10 = *(param_1 + 0x1f4);
-    //   fVar4 = *(iVar10 + 0x80);
-    //   fVar5 = *(iVar10 + 0x7c);
-    //   fVar6 = *(iVar10 + 0x78);
-    // Multiply(V, M, V)
-    //   param_2->x += (pTVar11->m).x.x * fVar6 + (pTVar11->m).y.x * fVar5 + (pTVar11->m).z.x * fVar4;
-    //   param_2->y += (pTVar11->m).x.y * fVar6 + (pTVar11->m).y.y * fVar5 + (pTVar11->m).z.y * fVar4;
-    //   param_2->z += (pTVar11->m).x.z * fVar6 + (pTVar11->m).y.z * fVar5 + (pTVar11->m).z.z * fVar4;
-    // clang-format on
+    Vector3 offset;
+    Multiply(s->mBeam.mBeam->LocalXfm().v, s->WorldXfm().m, offset);
+    v += offset;
 }
 
 NgSpotlightDrawer::NgSpotlightDrawer()
@@ -166,6 +151,14 @@ void NgSpotlightDrawer::RenderCone(Spotlight *sl) {
     }
     RenderConeDefs(sl, color);
 }
+
+void NgSpotlightDrawer::SetupFogDensityMap() {
+    float base = mParams.mBaseIntensity * 0.01f;
+    float smoke = mParams.mSmokeIntensity * 0.01f;
+    smoke *= 1.0f - base;
+    Vector4 fogParams(base, smoke, 0.0f, 0.0f);
+    TheShaderMgr.SetPConstant((PShaderConstant)0x7F, fogParams);
+}
 #endif
 
 void NgSpotlightDrawer::SetupFogDensityState() {
@@ -192,8 +185,17 @@ void NgSpotlightDrawer::SetupFogDensityState() {
 
 #include "rnddx9/Rnd.h"
 
+static float sBlurAmount = 0.5f;
+static bool sSeparateBlurPasses = false;
+
 void NgSpotlightDrawer::BlurRT() {
-    BlurRT(0.5f, 0.5f);
+    D3DDevice_SetDepthStencilSurface(TheDxRnd.Device(), 0);
+    if (sSeparateBlurPasses) {
+        BlurRT(sBlurAmount, 0.0f);
+        BlurRT(0.0f, sBlurAmount);
+    } else {
+        BlurRT(sBlurAmount, sBlurAmount);
+    }
 }
 
 void NgSpotlightDrawer::SetXSectionTexture(const Spotlight::BeamDef &def) {

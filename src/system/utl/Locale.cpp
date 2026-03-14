@@ -42,6 +42,27 @@ void LocaleChunkSort::Sort(OrderedLocaleChunk *chunks, int count) {
     qsort(chunks, count, sizeof(OrderedLocaleChunk), LocaleChunkSortFunc);
 }
 
+namespace LocaleChunkSort {
+template <int N>
+int FastSort(const void *a, const void *b) {
+    int offset = (int)a - (int)b;
+    int i = 0;
+    do {
+        int valA = *(int *)((char *)b + offset);
+        int valB = *(int *)b;
+        if (valA < valB)
+            return -1;
+        if (valA > valB)
+            return 1;
+        i++;
+        b = (const char *)b + 8;
+    } while (i < N);
+    return 0;
+}
+
+template int FastSort<3>(const void *, const void *);
+}
+
 const char *Locale::Localize(Symbol token, bool success) const {
     if (token.Null()) {
         return "";

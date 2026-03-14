@@ -1,5 +1,6 @@
 #include "meta_ham/PracticeChoosePanel.h"
 #include "HamPanel.h"
+#include "meta_ham/SongSelectPlaylistPanel.h"
 #include "HamProfile.h"
 #include "ProfileMgr.h"
 #include "flow/PropertyEventProvider.h"
@@ -406,3 +407,5 @@ std::vector<HamMove *> PracticeChoosePanel::GetMovesInStep(PracticeStep step) {
 }
 
 #pragma endregion
+
+void SongSelectPlaylistPanel::Enter() { HamPanel::Enter(); }

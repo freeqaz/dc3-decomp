@@ -228,12 +228,6 @@ void CharHair::SimulateLoops(int count, float fps) {
     }
 }
 
-static inline void ScaleAddEq(Vector3 &v1, const Vector3 &v2, float f) {
-    v1.x += v2.x * f;
-    v1.y += v2.y * f;
-    v1.z += v2.z * f;
-}
-
 static inline float RecipSqrtAccurate(float x) {
 #ifdef HX_NATIVE
     float est = 1.0f / sqrtf(x);
@@ -538,8 +532,6 @@ void CharHair::SimulateZeroTime() {
 
 INIT_REVS(11, 0)
 
-BinStream &operator>>(BinStreamRev &bsrev, ObjVector<CharHair::Strand> &vec);
-
 void CharHair::Load(BinStream &bs) {
     LOAD_REVS(bs);
     ASSERT_REVS(13, 0);
@@ -647,21 +639,6 @@ void operator>>(BinStreamRev &d, CharHair::Point &pt) {
     pt.force.Zero();
     pt.lastFriction.Zero();
     pt.lastZ.Zero();
-}
-
-BinStream &operator>>(BinStreamRev &bsrev, ObjVector<CharHair::Point> &vec) {
-    BinStream &bs = bsrev.stream;
-    int count;
-    bs.ReadEndian(&count, 4);
-    vec.resize(count);
-
-    CharHair::Point *pt = vec.begin();
-    while (pt != vec.end()) {
-        bsrev >> *pt;
-        pt++;
-    }
-
-    return bs;
 }
 
 CharHair::Point::Point(Hmx::Object *owner)
@@ -788,19 +765,8 @@ void ObjVector<CharHair::Strand>::resize(unsigned int n) {
     std::vector<CharHair::Strand>::resize(n, CharHair::Strand(mOwner));
 }
 
-BinStream &operator>>(BinStreamRev &bsrev, ObjVector<CharHair::Strand> &vec) {
-    BinStream &bs = bsrev.stream;
-    int count;
-    bs.ReadEndian(&count, 4);
-    vec.resize(count);
-
-    CharHair::Strand *strand = vec.begin();
-    while (strand != vec.end()) {
-        strand->Load(bsrev);
-        strand++;
-    }
-
-    return bs;
+void operator>>(BinStreamRev &bsrev, CharHair::Strand &strand) {
+    strand.Load(bsrev);
 }
 
 #pragma endregion ObjVector_Strand

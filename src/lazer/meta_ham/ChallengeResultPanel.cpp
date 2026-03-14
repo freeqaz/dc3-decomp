@@ -1,5 +1,6 @@
 #include "meta_ham/ChallengeResultPanel.h"
 #include "HamPanel.h"
+#include "flow/Flow.h"
 #include "flow/PropertyEventProvider.h"
 #include "hamobj/HamGameData.h"
 #include "hamobj/HamNavList.h"
@@ -107,6 +108,17 @@ done:;
 }
 
 int ChallengeResultPanel::NumData() const { return mItems.size(); }
+
+DataNode ChallengeResultPanel::OnMsg(const UIComponentScrollMsg &msg) {
+    UIComponent *comp = msg.mData->Obj<UIComponent>(2);
+    if (comp == mChallengeList
+        && mRivalIndex - mChallengeList->FirstShowing() == mHalfDisplayCount) {
+        mChallengeList->StopAutoScroll();
+        mPhase = 2;
+        DataDir()->Find<Flow>("rival_result.flow")->Activate();
+    }
+    return DataNode(1);
+}
 
 void ChallengeResultPanel::FinishLoad() {
     UIPanel::FinishLoad();

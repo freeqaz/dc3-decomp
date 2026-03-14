@@ -140,14 +140,13 @@ void LabelShrinkWrapper::DrawShowing() {
 }
 
 void LabelShrinkWrapper::UpdateAndDrawWrapper() {
-    MILO_ASSERT(m_pLabel, 0x9e);
-    Box box;
-    m_pLabel->GetWidthHeightBox(box);
-    float minX = box.mMin.x - mLeftBorder;
-    float maxX = box.mMax.x + mRightBorder;
-    float maxZ = box.mMax.z + mTopBorder;
-    float minZ = box.mMin.z - mBottomBorder;
-    SetWorldXfm(m_pLabel->WorldXfm());
+    MILO_ASSERT(m_pLabel, 0x86);
+    UILabel *label = m_pLabel;
+    float minX = label->mBoundsLeft - mLeftBorder;
+    float minZ = label->mBoundsTop - mBottomBorder;
+    float maxX = mRightBorder + label->mBoundsRight + label->mBoundsLeft;
+    float maxZ = mTopBorder + label->mBoundsBottom + label->mBoundsTop;
+    SetWorldXfm(label->WorldXfm());
     m_pTopLeftBone->SetLocalPos(Vector3(minX, 0.0f, maxZ));
     m_pTopRightBone->SetLocalPos(Vector3(maxX, 0.0f, maxZ));
     m_pBottomLeftBone->SetLocalPos(Vector3(minX, 0.0f, minZ));

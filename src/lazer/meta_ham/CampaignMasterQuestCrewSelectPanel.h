@@ -30,6 +30,8 @@ public:
     OBJ_SET_TYPE(CampaignMasterQuestCrewSelectPanel)
     virtual DataNode Handle(DataArray *, bool);
     virtual void Poll();
+    virtual void Enter();
+    virtual void Unload();
     virtual void Load();
     virtual void FinishLoad();
 

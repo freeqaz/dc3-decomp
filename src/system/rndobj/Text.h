@@ -304,6 +304,7 @@ public:
     OBJ_MEM_OVERLOAD(0x19);
     NEW_OBJ(RndText);
 
+    const String &GetText() const { return mText; }
     String TextASCII() const;
     void SetTextASCII(const char *);
     void SetFixedLength(int);
@@ -335,9 +336,13 @@ public:
     Alignment GetAlignment() const { return mAlignment; }
     void SetAlignment(Alignment a) { mAlignment = a; }
 #endif
+    float BoundsLeft() const { return mBoundsLeft; }
+    float BoundsTop() const { return mBoundsTop; }
     float BoundsRight() const { return mBoundsRight; }
+    float BoundsBottom() const { return mBoundsBottom; }
 
     friend class UIFontImporter;
+    friend class LabelShrinkWrapper;
     friend class UIListLabelElement;
 
     // Line class for text layout — size 0x14

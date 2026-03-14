@@ -611,7 +611,7 @@ u64 RndShaderMultimesh::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
     } else {
         colorAdjust = mat->ColorAdjust();
     }
-    u64 shaderOpts = ((((s64)mat->GetUnk20c() & 3U) << 2
+    u64 shaderOpts = ((((s64)mat->GetColorModFlags() & 3U) << 2
         | (u64)(uint)mat->GetShaderVariation() & 0xffffffff00000003) << 9
         | (u64)(colorAdjust & 1)) << 0x15
         | (u64)(s == kMultimeshBBShader) << 0x19
@@ -814,7 +814,7 @@ u64 RndShaderStandard::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
     } else {
         colorAdjust = mat->ColorAdjust();
     }
-    u64 shaderOpts = ((((s64)mat->GetUnk20c() & 3U) << 2
+    u64 shaderOpts = ((((s64)mat->GetColorModFlags() & 3U) << 2
         | (u64)(uint)mat->GetShaderVariation() & 0xffffffff00000003) << 9
         | (u64)(colorAdjust & 1)) << 0x15
         | (u64)(s == kStandardBBShader) << 0x19
@@ -1153,7 +1153,7 @@ u64 RndShaderSyncTrack::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
     } else {
         colorAdjust = mat->ColorAdjust();
     }
-    u64 shaderOpts = ((((s64)mat->GetUnk20c() & 3U) << 2
+    u64 shaderOpts = ((((s64)mat->GetColorModFlags() & 3U) << 2
         | (u64)(uint)mat->GetShaderVariation() & 0xffffffff00000003) << 9
         | (u64)(colorAdjust & 1)) << 0x15
         | (u64)fog << 0x12

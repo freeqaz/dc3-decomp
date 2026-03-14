@@ -38,6 +38,7 @@ public:
     String GetGlobalChallengeSongName();
     String GetDlcChallengeSongName();
     int CalculateChallengeXp(int, int);
+    int GetConsolationXP() const { return mConsolationXP; }
     int GetMedalCount(int);
     bool GetBeatenChallengeXPs(const HamPlayerData *, int, std::vector<int> &);
     void GetPlayerChallenges(std::vector<ChallengeRow> &);

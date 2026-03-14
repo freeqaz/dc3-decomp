@@ -241,6 +241,29 @@ int RndMeshAnim::NumVerts() {
     return num;
 }
 
+void RndMeshAnim::ShrinkVerts(int num) {
+    for (Keys<std::vector<Vector3>, std::vector<RndMesh::Vert> >::iterator it =
+             VertPointsKeys().begin();
+         it != VertPointsKeys().end(); ++it) {
+        it->value.resize(num);
+    }
+    for (Keys<std::vector<Vector3>, std::vector<RndMesh::Vert> >::iterator it =
+             VertNormalsKeys().begin();
+         it != VertNormalsKeys().end(); ++it) {
+        it->value.resize(num);
+    }
+    for (Keys<std::vector<Vector2>, std::vector<RndMesh::Vert> >::iterator it =
+             VertTexsKeys().begin();
+         it != VertTexsKeys().end(); ++it) {
+        it->value.resize(num);
+    }
+    for (Keys<std::vector<Hmx::Color>, std::vector<RndMesh::Vert> >::iterator it =
+             VertColorsKeys().begin();
+         it != VertColorsKeys().end(); ++it) {
+        it->value.resize(num);
+    }
+}
+
 void RndMeshAnim::ShrinkKeys(int num) {
     if (VertPointsKeys().size() != 0) {
         VertPointsKeys().resize(num);

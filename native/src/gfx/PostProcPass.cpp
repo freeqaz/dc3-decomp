@@ -219,6 +219,12 @@ void PostProcPass::Run(wgpu::CommandEncoder& encoder, wgpu::TextureView& interme
 
     // Run bloom if active
     float bloomIntensity = pp->GetBloomIntensity();
+    static int sLogPP = 0;
+    if (sLogPP++ < 3) {
+        const RndColorXfm& dbgCxfm = pp->GetColorXfm();
+        fprintf(stderr, "DC3 PostProc: bloom=%.2f thresh=%.2f contrast=%.1f bright=%.1f sat=%.1f poster=%d\n",
+            bloomIntensity, pp->GetBloomThreshold(), dbgCxfm.mContrast, dbgCxfm.mBrightness, dbgCxfm.mSaturation, pp->GetPosterLevels());
+    }
     if (bloomIntensity > 0.0f) {
         mBloom.Run(encoder, intermediateView, intermediateW, intermediateH,
                    bloomIntensity, pp->GetBloomThreshold(), pp->GetBloomColor(), gpu);

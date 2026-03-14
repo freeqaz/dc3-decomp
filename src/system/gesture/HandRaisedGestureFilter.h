@@ -25,6 +25,8 @@ public:
 
     NEW_OBJ(HandRaisedGestureFilter)
 
+    friend class SkeletonChooser;
+
 protected:
     HandRaisedGestureFilter();
 

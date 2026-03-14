@@ -33,6 +33,7 @@ void RndScaleObject(Hmx::Object *, float, float);
 float ConvertFov(float, float);
 void PreMultiplyAlpha(Hmx::Color &);
 
+bool AnimContains(const RndAnimatable *, const RndAnimatable *);
 bool SortDraws(RndDrawable *, RndDrawable *);
 bool SortPolls(const RndPollable *, const RndPollable *);
 

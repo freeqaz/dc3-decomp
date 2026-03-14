@@ -7,9 +7,10 @@ struct MeterEffectParams {
 // Stub for the parent template class
 template <typename Derived, typename Params>
 class CSampleXAPOBase {
-public:
+protected:
     CSampleXAPOBase() {}
     virtual ~CSampleXAPOBase() {}
+public:
     virtual void SetParameters(const void *pParameters, unsigned int cbParameters) {}
     virtual void GetParameters(void *pParameters, unsigned int cbParameters) {}
 };

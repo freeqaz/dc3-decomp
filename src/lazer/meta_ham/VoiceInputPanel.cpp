@@ -1,6 +1,7 @@
 #include "meta_ham/VoiceInputPanel.h"
 #include "gesture/SpeechMgr.h"
 #include "meta_ham/HamPanel.h"
+#include "meta_ham/LetterboxPanel.h"
 #include "meta_ham/HamSongMgr.h"
 #include "meta_ham/HamUI.h"
 #include "obj/Data.h"
@@ -218,3 +219,5 @@ void VoiceInputPanel::CreateSongSelectGrammar(Symbol s1) const {
         TheSpeechMgr->SetRecognizing(recognizing);
     }
 }
+
+void LetterboxPanel::Exit() { UIPanel::Exit(); }

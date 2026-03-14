@@ -13,6 +13,19 @@
 #include "meta_ham/HamProfile.h"
 #include "hamobj/HamDirector.h"
 #include "obj/Dir.h"
+#include "os/Debug.h"
+#include "utl/MakeString.h"
+#include "xdk/xapilibi/xbox.h"
+
+const char *GameEndedDataPointJob::GetXUIDStrFromProfile(HamProfile *profile) {
+    int padNum = profile->GetPadNum();
+    XUID xuid = 0;
+    DWORD result = XUserGetXUID(padNum, &xuid);
+    if (result != 0) {
+        TheDebug.Notify(MakeString("XUserGetXUID returned %u", result));
+    }
+    return MakeString("%016I64X", xuid);
+}
 
 GameEndedDataPointJob::GameEndedDataPointJob(
     Hmx::Object *callback, EndGameResult const &result

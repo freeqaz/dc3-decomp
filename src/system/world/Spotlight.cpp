@@ -1397,9 +1397,9 @@ void Spotlight::BuildNGSheet(BeamDef &def) {
 void Spotlight::BuildNGQuad(BeamDef &def, RndTransformable::Constraint constraint) {
     auto mesh = Hmx::Object::New<RndMesh>();
     def.mBeam = mesh;
+    std::vector<RndMesh::Face> &faces = def.mBeam->Faces();
     int gridSize = def.mNumSegments;
     RndMesh::VertVector &verts = def.mBeam->Verts();
-    std::vector<RndMesh::Face> &faces = def.mBeam->Faces();
     if (def.mNumSections >= gridSize) {
         gridSize = def.mNumSections;
     }
@@ -1413,17 +1413,19 @@ void Spotlight::BuildNGQuad(BeamDef &def, RndTransformable::Constraint constrain
     faces.resize(totalFaces);
 
     int n = sGridSize;
-    float topRadius = def.mLength;
     float bottomRadius = def.mBottomRadius;
+    float topRadius = def.mLength;
 
     Hmx::Matrix3 rot;
     rot.Set(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, -1.0f, 0.0f, 1.0f, 0.0f);
 
     int idx = 0;
+    float rowFrac;
     for (int row = 0; row < n; row++) {
-        float rowFrac = (float)row / (float)(n - 1);
+                rowFrac = (float)row / (float)(n - 1);
+        float colFrac;
         for (int col = 0; col < n; col++) {
-            float colFrac = (float)col / (float)(n - 1);
+                        colFrac = (float)col / (float)(n - 1);
 
             verts[idx].pos.Set(
                 (colFrac * 2.0f - 1.0f) * bottomRadius,

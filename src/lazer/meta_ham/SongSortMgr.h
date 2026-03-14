@@ -13,6 +13,7 @@ public:
     virtual bool HeadersSelectable(); // 0x6c
     virtual bool SelectionIs(Symbol);
     virtual bool DataIs(int, Symbol);
+    virtual DataNode OnCancel();
     virtual Symbol MoveOn();
     virtual void OnEnter();
     virtual int GetListIndexFromHeaderIndex(int);

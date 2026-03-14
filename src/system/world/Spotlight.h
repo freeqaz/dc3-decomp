@@ -20,6 +20,7 @@ class Spotlight : public RndDrawable, public RndTransformable, public RndPollabl
     friend class SpotlightDrawer;
     friend class NgSpotlightDrawer;
     friend class LightPreset;
+    friend void GetLightPosition(Spotlight *, Vector3 &);
 public:
     struct BeamDef {
         enum Shape {

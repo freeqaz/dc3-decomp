@@ -554,31 +554,25 @@ void SetSystemArgs(const char *commandLine) {
 }
 
 void NormalizeSystemArgs() {
-    size_t size = TheSystemArgs.size();
-    size_t word_size = size >> 2;
-
-    if (word_size == 0)
+    unsigned int i = 0;
+    if (TheSystemArgs.size() == 0)
         return;
 
-    size_t i = 0;
     do {
-        char* arg = TheSystemArgs[i];
-        if (arg && *arg != '\0') {
-            char* p = arg;
-            do {
-                unsigned char c = *p;
-                // Replace Windows-1252 special characters with ASCII equivalents
-                if (c == 0x96) {
-                    *p = '-';
-                }
-                if (c == 0x9d || c == 0x9c) {
-                    *p = '"';
-                }
-                p++;
-            } while (*p != '\0');
+        char *p = TheSystemArgs[i];
+        char c = *p;
+        while (c != '\0') {
+            if (*p == (char)0x96) {
+                *p = '-';
+            }
+            if (*p == (char)0x93 || *p == (char)0x94) {
+                *p = '"';
+            }
+            p++;
+            c = *p;
         }
         i++;
-    } while (i < word_size);
+    } while (i < TheSystemArgs.size());
 }
 
 void SystemPreInit(const char *config) {

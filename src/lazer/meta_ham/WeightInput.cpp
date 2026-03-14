@@ -66,6 +66,23 @@ float WeightInputProvider::GetWeight(int i_iIndex) const {
     }
 }
 
+float WeightInputProvider::GetKgForPounds(float pounds) const {
+    HamProfile *pProfile = TheProfileMgr.GetActiveProfile(true);
+    MILO_ASSERT(pProfile, 0x89);
+    float kgs = pProfile->GetKgFromPounds(pounds);
+    float result = 20.0f;
+    if (kgs > 20.0f) {
+        for (int i = 0; i < 73; i++) {
+            result = (float)i * 2.5f + 20.0f;
+            if (1.25f >= fabs(kgs - result)) {
+                return result;
+            }
+        }
+        result = 200.0f;
+    }
+    return result;
+}
+
 float WeightInputProvider::GetPoundsForKgs(float kgs) const {
     HamProfile *pProfile = TheProfileMgr.GetActiveProfile(true);
     MILO_ASSERT(pProfile, 0xa7);

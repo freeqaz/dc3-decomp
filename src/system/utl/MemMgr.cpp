@@ -6,6 +6,7 @@
 #include "obj/Data.h"
 #include "os/CritSec.h"
 #include "os/Debug.h"
+#include "os/OSFuncs.h"
 #include "os/System.h"
 #include "utl/Option.h"
 #include "utl/PoolAlloc.h"
@@ -546,20 +547,118 @@ void MemFreeBlockStats(
     gHeaps[heapNum].FreeBlockStats(i2, i3, numFreeBytes, i5, biggestFreeBlock);
 }
 
-// Global data structures for thread-local memory heaps
 static MemHeapStack gThreadBuf[MAX_BUF_THREADS];
-static int gThreadBufCurrentIndex = -1;
-static unsigned long gThreadBufCurrentId = 0;
-static int gThreadBufCur = 0;
+static int gThreadBufCurrentIndex;
 
-// Global variables for thread management (matching original binary)
-
-// Native implementation - simple per-thread allocation
 MemHeapStack &ThreadMemStack(bool createIfMissing) {
-    static __declspec(thread) MemHeapStack s;
-    return s;
+    int idx;
+    CriticalSection *lock = gMemStackLock;
+    if (lock) {
+        lock->Enter();
+    }
+    if (gNumThreads == 0) {
+        gNumThreads = 1;
+        gThreadIds[0] = GetCurrentThreadId();
+        idx = gThreadBufCurrentIndex;
+    } else {
+        DWORD currentThreadId = GetCurrentThreadId();
+        idx = gThreadBufCurrentIndex;
+        if ((unsigned long)gThreadIds[gThreadBufCurrentIndex] != currentThreadId) {
+            unsigned long *threadIdSlot = (unsigned long *)&gThreadIds[0];
+            idx = 0;
+            if (gNumThreads > 0) {
+                unsigned long *slot = threadIdSlot;
+                do {
+                    unsigned long tid = GetCurrentThreadId();
+                    if (*slot == tid)
+                        break;
+                    idx++;
+                    slot++;
+                } while (idx < gNumThreads);
+            }
+            if (!createIfMissing) {
+                if (lock) {
+                    lock->Exit();
+                }
+                return gNullMemStack;
+            }
+            if (idx == gNumThreads) {
+                int cur = 0;
+                int activeCount = gNumThreads;
+                if (gNumThreads > 0) {
+                    do {
+                        if (!ValidateThreadId(*threadIdSlot)) {
+                            MILO_ASSERT(gThreadBuf[cur].mSize == 0, 0x12e);
+                            MILO_ASSERT(gThreadBuf[cur].mTempRefs == 0, 0x12f);
+                            gThreadIds[cur] = GetCurrentThreadId();
+                            activeCount = gNumThreads;
+                            break;
+                        }
+                        cur++;
+                        threadIdSlot++;
+                        activeCount = gNumThreads;
+                    } while (cur < gNumThreads);
+                }
+                idx = cur;
+                if (cur == activeCount) {
+                    MILO_ASSERT(gNumThreads < MAX_BUF_THREADS, 0x138);
+                    gThreadIds[cur] = GetCurrentThreadId();
+                    gNumThreads++;
+                }
+            }
+        }
+    }
+    gThreadBufCurrentIndex = idx;
+    MemHeapStack &result = gThreadBuf[gThreadBufCurrentIndex];
+    if (lock) {
+        lock->Exit();
+    }
+    return result;
 }
-int GetCurrentHeapNum() { return 0; }
-void MemDelta(const char *, int) {}
-int MemFindHeap(const char *) { return 0; }
+int GetCurrentHeapNum() {
+    MemHeapStack &stack = ThreadMemStack(false);
+    if (stack.mSize != 0) {
+        return stack.mStack[stack.mSize - 1];
+    }
+    return MemHeapStack::sDefaultHeap;
+}
+static int gPrevFree[MAX_HEAPS] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
+
+void MemDelta(const char *name, int heapNum) {
+    int numLargeFrags = 0;
+    int numRightFrags = 0;
+    int numFreeBytes = 0;
+    int biggestFreeBlock = 0;
+    int minFreeBytes = 0;
+    MemFreeBlockStats(heapNum, numLargeFrags, numRightFrags, numFreeBytes, biggestFreeBlock, minFreeBytes);
+    if (gPrevFree[heapNum] == -1) {
+        gPrevFree[heapNum] = numFreeBytes;
+    }
+    int delta = gPrevFree[heapNum] - numFreeBytes;
+    int fragmentation = numFreeBytes - minFreeBytes;
+    TheDebug << name << " lfrag:" << numLargeFrags << " rfrag:" << numRightFrags
+             << " largest:" << minFreeBytes << " free:" << numFreeBytes
+             << " fragmentation:" << fragmentation << " delta:" << delta << "\n";
+    gPrevFree[heapNum] = numFreeBytes;
+}
+int MemFindHeap(const char *name) {
+    for (int i = 0; i < gNumHeaps; i++) {
+        if (gHeaps[i].Name() && strcmp(gHeaps[i].Name(), name) == 0) {
+            return i;
+        }
+    }
+    if (strcmp(name, "char") == 0) {
+        return 0;
+    }
+    if (strcmp(name, "physical") == 0) {
+        return -2;
+    }
+    if (gSingleHeap) {
+        return 0;
+    }
+    if (gInitted && gNumHeaps > 0) {
+        MILO_FAIL("could not find heap \"%s\"", name);
+    }
+    return -1;
+}
 void MemPrintOverview(int, char *const) {}

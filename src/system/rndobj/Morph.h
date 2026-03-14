@@ -43,6 +43,7 @@ public:
     int NumPoses() const { return mPoses.size(); }
     void SetNumPoses(int num) { mPoses.resize(num); }
     Pose &PoseAt(int idx) { return mPoses[idx]; }
+    float InterpWeight(const Keys<float, float> &, float);
     void SetIntensity(float intensity) { mIntensity = intensity; }
     void SetTarget(RndMesh *target) { mTarget = target; }
 

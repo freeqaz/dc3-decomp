@@ -44,10 +44,10 @@ private:
 };
 
 DECLARE_MESSAGE(TokenRedeemedMsg, "token_redeemed")
-    TokenRedeemedMsg(bool b, const String &s, Symbol e) : Message(Type(), b, s, e) {}
+    TokenRedeemedMsg(bool b, const String &s, const Symbol &e) : Message(Type(), b, s, e) {}
     void SetSuccess(bool b) { mData->Node(2) = b; }
     void SetOfferString(const String &s) { mData->Node(3) = s; }
-    void SetError(Symbol e) { mData->Node(4) = e; }
+    void SetError(const Symbol &e) { mData->Node(4) = e; }
 END_MESSAGE
 
 DECLARE_MESSAGE(LinkingCodeRetrievedMsg, "linking_code_retrieved")

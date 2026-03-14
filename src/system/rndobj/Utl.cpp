@@ -1998,10 +1998,10 @@ void TessellateMesh(RndMesh *mesh) {
     auto vertCount = geomOwner->Verts().size();
     newVerts.reserve(vertCount * 3);
 
-    unsigned short nextVert = (unsigned short)geomOwner->Verts().size();
+    unsigned int nextVert = (unsigned short)geomOwner->Verts().size();
 
     for (unsigned int i = 0; i < (unsigned int)geomOwner->Faces().size(); i++) {
-        RndMesh::Face &face = geomOwner->Faces()[i];
+        auto face = geomOwner->Faces()[i];
         unsigned short v2 = face.v2;
         unsigned short v1 = face.v1;
         unsigned short v3 = face.v3;
@@ -2085,7 +2085,8 @@ void TessellateMesh(RndMesh *mesh) {
     int origNumVerts = geomOwner->Verts().size();
     geomOwner->Verts().resize(origNumVerts + (int)newVerts.size());
 
-    if ((unsigned int)origNumVerts < (unsigned int)(nextVert & 0xFFFF)) {
+    bool hasNewVerts = (nextVert & 0xFFFF) != 0;
+    if ((unsigned int)origNumVerts < (unsigned int)(hasNewVerts)) {
         int offset = origNumVerts * 0x60;
         int count = (nextVert & 0xFFFF) - origNumVerts;
         RndMesh::Vert *src = &newVerts[0];

@@ -17,6 +17,7 @@ public:
 
     // ContentMgr::Callback
     virtual void ContentMountBegun(int);
+    virtual void ContentFailed(const char *);
     virtual void ContentDone();
 
     NEW_OBJ(ContentLoadingPanel)

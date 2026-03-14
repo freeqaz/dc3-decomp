@@ -68,14 +68,14 @@ complex eval(complex * const coeff, int degree, complex z) {
     result.y = 0.0;
     if (degree >= 0) {
         int count = degree + 1;
-        complex *c = coeff + degree;
+        complex *c = &coeff[degree];
         do {
-            double oldY = result.y;
-            double cx = c->x;
+            complex old = result;
+            complex cf = *c;
             count--;
             c--;
-            result.y = z.x * oldY + z.y * result.x + c[1].y;
-            result.x = (z.x * result.x - z.y * oldY) + cx;
+            result.y = z.x * old.y + z.y * old.x + cf.y;
+            result.x = (z.x * old.x - z.y * old.y) + cf.x;
         } while (count != 0);
     }
     return result;

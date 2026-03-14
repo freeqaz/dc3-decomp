@@ -1,6 +1,7 @@
 #include "SongSortNode.h"
 
 #include "HamProfile.h"
+#include "meta_ham/PlaylistSortNode.h"
 #include "SongSortMgr.h"
 #include "meta/SongMgr.h"
 #include "meta_ham/AccomplishmentManager.h"
@@ -57,6 +58,28 @@ void SongHeaderNode::SetCollapseStateIcon(bool b) const {
         }
         iconLabel->SetTextToken(s);
     }
+}
+
+const char *SongHeaderNode::GetAlbumArtPath() {
+    static Symbol by_album("by_album");
+    static Symbol singles("singles");
+
+    NavListSort *sort = TheSongSortMgr->GetCurrentSort();
+    if (sort->GetSortName() == by_album && GetToken() != singles
+        && !mChildren.empty()) {
+        return mChildren.front()->GetAlbumArtPath();
+    }
+    return nullptr;
+}
+
+NavListSortNode *SongHeaderNode::GetFirstActive() {
+    FOREACH (it, mChildren) {
+        NavListSortNode *active = (*it)->GetFirstActive();
+        if (active != nullptr) {
+            return TheSongSortMgr->HeadersSelectable() ? this : active;
+        }
+    }
+    return nullptr;
 }
 
 Symbol SongHeaderNode::OnSelect() {
@@ -419,4 +442,8 @@ void SongFunctionNode::Text(UIListLabel *listlabel, UILabel *label) const {
     } else {
         label->SetTextToken(gNullStr);
     }
+}
+
+Symbol PlaylistSortNode::GetToken() const {
+    return mPlaylist->GetName();
 }

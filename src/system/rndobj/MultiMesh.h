@@ -116,6 +116,7 @@ public:
     virtual bool MakeWorldSphere(Sphere &, bool);
     virtual void Mats(std::list<class RndMat *> &, bool);
     virtual void DrawShowing();
+    virtual void UpdateSphere();
     virtual void ListDrawChildren(std::list<RndDrawable *> &);
     virtual void CollideList(const Segment &, std::list<Collision> &);
 

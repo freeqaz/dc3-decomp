@@ -21,6 +21,7 @@ public:
     virtual void UpdateItemCount(NavListItemNode *);
     virtual void SetItemCountString(UILabel *) const;
     virtual void SetCollapseStateIcon(bool) const;
+    virtual const char *GetAlbumArtPath();
 
 private:
     u32 mDiscSongs;

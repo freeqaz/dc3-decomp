@@ -95,6 +95,13 @@ struct MatPerfSettings {
 // size 0x1f8
 class BaseMaterial : public Hmx::Object {
 public:
+    enum ColorModFlags {
+        kColorModNone = 0,
+        kColorModAlphaPack = 1,
+        kColorModAlphaUnpackModulate = 2,
+        kColorModModulate = 3,
+        kColorModNum = 3
+    };
     enum Blend {
         /** "Don't show this material at all; just show the frame buffer" */
         kBlendDest = 0,

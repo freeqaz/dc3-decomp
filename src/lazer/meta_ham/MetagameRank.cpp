@@ -40,6 +40,7 @@ namespace {
 
     // size 0x14
     struct DeferredAward {
+        DeferredAward() {}
         String unk0;
         Symbol unk8;
         Symbol unkc;
@@ -60,7 +61,7 @@ namespace {
     std::list<DeferredAward> gDeferredAwardQueue;
 
     void BuildUnlockablesList(
-        const char *flags, std::vector<const Unlockable *> &out
+        const bool *flags, std::vector<const Unlockable *> &out
     ) {
         for (unsigned int i = 0; i < gTiers.size(); i++) {
             if (!out.empty())
@@ -1015,7 +1016,7 @@ update:
 void MetagameRank::AwardForRankUp(int numRanks) {
     std::vector<const Unlockable *> available;
 
-    for (int i = 0; i < numRanks; i++) {
+    while (numRanks > 0) {
         if (available.empty()) {
             BuildUnlockablesList(unk79, available);
             if (available.empty()) {
@@ -1026,29 +1027,29 @@ void MetagameRank::AwardForRankUp(int numRanks) {
         const Unlockable *unlock = available.back();
         available.pop_back();
 
-        String gamerTag;
+        DeferredAward award;
         if (mProfile) {
             HamUser *user = mProfile->GetHamUser();
             if (user) {
-                user = mProfile->GetHamUser();
+                award.unk0 = mProfile->GetHamUser()->UserName();
             }
         }
 
         unk79[unlock->unk0] = 1;
+        award.unk8 = unlock->unk4;
+        award.unkc = unlock->unk8;
+        award.unk10 = unlock->unk10;
 
         char noUnlock[11];
         memcpy(noUnlock, "no_unlock_", 11);
         if (strncmp(unlock->unk4.Str(), noUnlock, strlen(noUnlock)) != 0) {
-            DeferredAward award;
-            award.unk0 = gamerTag;
-            award.unk8 = unlock->unk4;
-            award.unkc = unlock->unk8;
-            award.unk10 = unlock->unk10;
             gDeferredAwardQueue.push_back(award);
 
-            for (unsigned int j = 0; j < unlock->unk14.size(); j++) {
-                mProfile->UnlockContent(unlock->unk14[j]);
+            for (std::vector<Symbol>::const_iterator it = unlock->unk14.begin();
+                 it != unlock->unk14.end(); ++it) {
+                mProfile->UnlockContent(*it);
             }
         }
+        numRanks--;
     }
 }

@@ -9,7 +9,7 @@ struct PitchShiftEffectParams {
 
 template<typename T, typename P>
 class CSampleXAPOBase {
-public:
+protected:
     CSampleXAPOBase();
     virtual ~CSampleXAPOBase();
 };

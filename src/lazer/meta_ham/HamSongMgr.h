@@ -70,6 +70,7 @@ public:
     void GetValidSongs(class MetaPerformer const &, std::vector<Symbol> &) const;
     const char *MidiFile(Symbol) const;
     bool ToggleRandomSongDebug();
+    int GetNumPlaylists() const { return mPlaylists.size(); }
     const std::vector<int> &RankedSongs(SongType) const;
     void GetRandomlySelectableRankedSongs(std::vector<int> &) const;
 

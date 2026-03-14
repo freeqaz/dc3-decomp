@@ -14,7 +14,7 @@
 namespace {
     class WidgetDrawSort {
     public:
-        bool operator()(UIListWidget *w1, UIListWidget *w2) {
+        bool operator()(const UIListWidget *w1, const UIListWidget *w2) const {
             return w1->DrawOrder() < w2->DrawOrder();
         }
     };

@@ -1,4 +1,5 @@
 #include "synth/Synth.h"
+#include "math/Utl.h"
 #include "AudioDucker.h"
 #include "Emitter.h"
 #include "FxSendBitCrush.h"
@@ -359,10 +360,10 @@ const ADSRImpl *Synth::DefaultADSR() {
 }
 
 void Synth::DrawMeter(float &y, float level, float peakHold, const char *name) {
-    Hmx::Color white(1.0f, 1.0f, 1.0f, 1.0f);
-    Hmx::Color black(0.0f, 0.0f, 0.0f, 1.0f);
-    Hmx::Color grey(0.5f, 0.5f, 0.5f, 1.0f);
     Hmx::Color yellow(0.5f, 0.5f, 0.0f, 1.0f);
+    Hmx::Color white(1.0f, 1.0f, 1.0f, 1.0f);
+    Hmx::Color grey(0.5f, 0.5f, 0.5f, 1.0f);
+    Hmx::Color black(0.0f, 0.0f, 0.0f, 1.0f);
 
     float rndWidth = (float)TheRnd.Width();
     Vector2 labelPos(rndWidth * 0.1f, y);
@@ -371,25 +372,17 @@ void Synth::DrawMeter(float &y, float level, float peakHold, const char *name) {
     float barLeft = rndWidth * 0.2f;
     float barWidth = rndWidth * 0.7f;
     Hmx::Rect bgRect(barLeft, y, barWidth, 12.0f);
+    float levelNorm = Clamp(0.0f, 1.0f, (level + 40.0f) * 0.025f);
     TheRnd.DrawRect(bgRect, black, 0, 0, 0);
 
-    float levelNorm = (level + 40.0f) * 0.025f;
-    if (levelNorm < 0.0f)
-        levelNorm = 0.0f;
-    if (levelNorm > 1.0f)
-        levelNorm = 1.0f;
 
     Hmx::Rect levelRect(barLeft, y, levelNorm * barWidth, 12.0f);
     TheRnd.DrawRect(levelRect, grey, 0, 0, 0);
 
-    float peakNorm = (peakHold + 40.0f) * 0.025f;
-    if (peakNorm < 0.0f)
-        peakNorm = 0.0f;
-    if (peakNorm > 1.0f)
-        peakNorm = 1.0f;
+    float peakNorm = Clamp(0.0f, 1.0f, (peakHold + 40.0f) * 0.025f);
 
     Hmx::Color *peakColor = &white;
-    if (peakNorm != 1.0f)
+    if (1.0f != peakNorm)
         peakColor = &yellow;
 
     Hmx::Rect peakRect(peakNorm * barWidth + barLeft, y, 8.0f, 12.0f);

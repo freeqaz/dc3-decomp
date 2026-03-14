@@ -1,7 +1,60 @@
 #include "rndobj/ColorXfm.h"
 #include "utl/BinStream.h"
+#include <cmath>
+
+static int ModChan(int chan) {
+    int i = chan % 3;
+    if (i < 0)
+        return i + 3;
+    else
+        return i;
+}
 
 void RndColorXfm::Reset() { mColorXfm.Reset(); }
+
+void RndColorXfm::AdjustHue() {
+    Transform tf68;
+    tf68.Reset();
+    float hue = mHue;
+    if (hue >= 120.0f) {
+        hue = ((hue - 120.0f) / 120.0f) * 1.5707964f;
+        float cosHue = std::cos(hue);
+        float sinHue = std::sin(hue);
+        for (int i = 0; i < 3; i++) {
+            tf68.m[i][i] = 0;
+            tf68.m[ModChan(i + 1)][i] = cosHue;
+            tf68.m[ModChan(i + 2)][i] = sinHue;
+        }
+    } else if (hue > 0) {
+        hue = (hue / 120.0f) * 1.5707964f;
+        float cosHue = std::cos(hue);
+        float sinHue = std::sin(hue);
+        for (int i = 0; i < 3; i++) {
+            tf68.m[i][i] = cosHue;
+            tf68.m[ModChan(i + 1)][i] = sinHue;
+            tf68.m[ModChan(i + 2)][i] = 0;
+        }
+    } else if (hue <= -120.0f) {
+        hue = ((-hue - 120.0f) / 120.0f) * 1.5707964f;
+        float cosHue = std::cos(hue);
+        float sinHue = std::sin(hue);
+        for (int i = 0; i < 3; i++) {
+            tf68.m[i][i] = 0;
+            tf68.m[ModChan(i + 1)][i] = sinHue;
+            tf68.m[ModChan(i + 2)][i] = cosHue;
+        }
+    } else if (hue < 0) {
+        hue = (-hue / 120.0f) * 1.5707964f;
+        float cosHue = std::cos(hue);
+        float sinHue = std::sin(hue);
+        for (int i = 0; i < 3; i++) {
+            tf68.m[i][i] = cosHue;
+            tf68.m[ModChan(i + 1)][i] = 0;
+            tf68.m[ModChan(i + 2)][i] = sinHue;
+        }
+    }
+    Multiply(mColorXfm, tf68, mColorXfm);
+}
 
 void RndColorXfm::AdjustLevels() {
     Vector3 v50(
@@ -103,6 +156,24 @@ void RndColorXfm::AdjustContrast() {
     tf58.m[0][0] = contrast;
     tf58.v.Set(f2, f2, f2);
     Multiply(mColorXfm, tf58, mColorXfm);
+}
+
+void RndColorXfm::AdjustSaturation() {
+    Transform tf68;
+    tf68.Reset();
+    float sat = mSaturation / 100.0f;
+    if (sat > 0) {
+        sat += 1.0f;
+    } else {
+        sat = -(sat * -0.6666666f - 1.0f);
+    }
+    float f2 = (1.0f - sat) * 0.5f;
+    for (int i = 0; i < 3; i++) {
+        tf68.m[i][i] = sat;
+        tf68.m[i][ModChan(i + 1)] = f2;
+        tf68.m[i][ModChan(i + 2)] = f2;
+    }
+    Multiply(mColorXfm, tf68, mColorXfm);
 }
 
 void RndColorXfm::AdjustColorXfm() {

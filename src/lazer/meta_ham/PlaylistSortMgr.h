@@ -13,12 +13,12 @@
 #include <list>
 
 struct CmdGetPlaylistsFromRC : public QueueableCommand {
-    virtual int GetType() { return 1; } // fix
+    virtual int GetType() { return 1; }
     CmdGetPlaylistsFromRC() {}
 };
 
 struct CmdGetPlaylistFromRC : public QueueableCommand {
-    virtual int GetType() { return 1; } // fix
+    virtual int GetType() { return 3; }
     CmdGetPlaylistFromRC(int i) { mData.i = i; }
 
     union {
@@ -31,7 +31,7 @@ struct CmdGetPlaylistFromRC : public QueueableCommand {
 };
 
 struct CmdResolvePlaylists : public QueueableCommand {
-    virtual int GetType() { return 1; } // fix
+    virtual int GetType() { return 2; }
     CmdResolvePlaylists() {}
 };
 

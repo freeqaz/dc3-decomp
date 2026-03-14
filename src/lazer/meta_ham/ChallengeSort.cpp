@@ -1,6 +1,7 @@
 #include "ChallengeSort.h"
 #include "AppLabel.h"
 #include "ChallengeSortMgr.h"
+#include "meta_ham/MQSongSort.h"
 #include "meta_ham/NavListSort.h"
 #include "obj/Object.h"
 
@@ -95,3 +96,7 @@ void ChallengeSort::BuildItemList() {
 }
 
 #pragma endregion
+
+BEGIN_HANDLERS(MQSongSort)
+    HANDLE_SUPERCLASS(NavListSort)
+END_HANDLERS

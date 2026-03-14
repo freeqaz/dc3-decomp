@@ -11,6 +11,9 @@
 #include "gesture/StandingStillGestureFilter.h"
 #include "hamobj/HamGameData.h"
 #include "hamobj/HamPlayerData.h"
+#include "meta_ham/HamPanel.h"
+#include "meta_ham/HamUI.h"
+#include "meta_ham/PassiveMessenger.h"
 #include "math/Vec.h"
 #include "obj/Data.h"
 #include "obj/Dir.h"
@@ -838,11 +841,106 @@ int SkeletonChooser::RoundRobinForStandingStill(int player) {
     return iVar3;
 }
 
-// TODO: implement — RoundRobin* called by ResolveSinglePlayer
+void SkeletonChooser::CheckToSwitchActivePlayer() {
+    int otherPlayer = !mActivePlayerIndex;
+    int activeID = GetAssignedPlayerSkeletonID(mActivePlayerIndex);
+    int otherID = GetAssignedPlayerSkeletonID(otherPlayer);
+    if (otherID >= 0) {
+        if (activeID < 0) goto switchImmediate;
+        Skeleton *activeSkel = TheGestureMgr->GetSkeletonByTrackingID(activeID);
+        if (!activeSkel) goto switchImmediate;
+        Skeleton *otherSkel = TheGestureMgr->GetSkeletonByTrackingID(otherID);
+        if (otherSkel && otherSkel->IsValid()) {
+            HamPanel *panel = dynamic_cast<HamPanel *>(TheHamUI.FocusPanel());
+            if (!panel) return;
+            if (!panel->HasNavList()) return;
+            bool otherHandUp = IsHandUp(otherID);
+            bool activeHandUp = IsHandUp(activeID);
+            bool activeValid = activeSkel->IsValid();
+            if (!activeValid && otherHandUp) goto switchImmediate;
+            if (!activeHandUp && otherHandUp) {
+                QueueActivePlayerSwitch(otherPlayer);
+                return;
+            }
+        }
+    }
+    mPendingPlayerSwitchIndex = -1;
+    return;
+switchImmediate:
+    SwitchActiveToPlayerIndexImmediate(otherPlayer);
+}
+
+int SkeletonChooser::RoundRobinForHandRaised(int player) {
+    float dVar9 = 0.0f;
+    int trackingID = -1;
+    float dVar8 = 2.0f;
+    int numValid = GetNumValidSkeletonChoices();
+
+    if (numValid > unk90) {
+        unk84 = 2.0f;
+        unk88 = 0.0f;
+        unk8c = 0;
+    }
+    unk90 = numValid;
+    float fVar4 = 0.08f;
+
+    if (mNextSkelIdxToTrack < 0 || unk80 <= 0.0f) {
+        mNextSkelIdxToTrack = NextSkeletonIndexToTrack(mNextSkelIdxToTrack);
+        unk80 = fVar4;
+        mSkeletonHandRaisedFilters[0]->Clear();
+    }
+
+    if (mNextSkelIdxToTrack >= 0) {
+        trackingID = TheGestureMgr->GetSkeleton(mNextSkelIdxToTrack).mTrackingID;
+        float delta = TheTaskMgr.DeltaUISeconds();
+        mSkeletonHandRaisedFilters[0]->Update(trackingID, (int)(delta * 1000.0f));
+
+        if (mSkeletonHandRaisedFilters[0]->mHandRaised) {
+            static Symbol join_complete("join_in_progress_complete");
+            static Symbol none1("none");
+            ThePassiveMessenger->TriggerGenericMsg(
+                join_complete, none1, kPassiveMessageGeneral, gNullStr, -1
+            );
+            mNextSkelIdxToTrack = -1;
+        } else {
+            if (mSkeletonHandRaisedFilters[0]->mRaisedMs <= dVar9) {
+                unk80 -= TheTaskMgr.DeltaUISeconds();
+                if (trackingID >= 0 && unk8c < 2) {
+                    unk84 -= TheTaskMgr.DeltaUISeconds();
+                    float newUnk88 = unk88 - TheTaskMgr.DeltaUISeconds();
+                    unk88 = newUnk88;
+                    if (unk84 <= 0.0f && newUnk88 <= 0.0f
+                        && mSkeletonHandRaisedFilters[0]->mStandingStillFilter.StandingStill()) {
+                        unk80 = fVar4;
+                        unk8c++;
+                        unk88 = 13.0f;
+                        static Symbol stupid_trick("doing_stupid_kinect_trick");
+                        if (!IsAutoplaying()) {
+                            const DataNode *prop =
+                                TheHamProvider->Property(stupid_trick, true);
+                            if (prop->Int() == 0) {
+                                static Symbol join_progress("join_in_progress");
+                                static Symbol none2("none");
+                                ThePassiveMessenger->TriggerGenericMsg(
+                                    join_progress, none2, kPassiveMessageGeneral, gNullStr, -1
+                                );
+                            }
+                        }
+                    }
+                }
+            } else {
+                unk80 = fVar4;
+            }
+        }
+    } else {
+        unk84 = dVar8;
+        unk88 = dVar9;
+    }
+    return trackingID;
+}
+
 #ifdef HX_NATIVE
-int SkeletonChooser::RoundRobinForHandRaised(int) { return 0; }
 void SkeletonChooser::DrawDebug() {}
 void SkeletonChooser::SetPlayerSkeletonNavData(int, int) {}
 void SkeletonChooser::ChoosePlayerSides() {}
-void SkeletonChooser::CheckToSwitchActivePlayer() {}
 #endif

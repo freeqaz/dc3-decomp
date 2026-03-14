@@ -1844,101 +1844,106 @@ void SaveLoadManager::SetState(State newState) {
     }
 }
 
-// TODO: implement
 DataNode SaveLoadManager::OnMsg(const MCResultMsg &msg) {
     MILO_ASSERT(mWaiting, 0x8E8);
     mWaiting = false;
 
     int result = msg->Int(2);
+    State nextState;
 
-    if (mState < kS_SaveNoOverwrite) {
-        if (mState != kS_SaveConfirmOverwrite && mState != 4) {
-            if (mState != 0xB) {
-                MILO_FAIL("Unhandled MCResultMsg in state %d and mode %d", mState, mMode);
-            } else {
-                if (result < 9) {
-                    switch (result) {
-                    case 8:
-                    case 6:
-                        SetState(kS_SaveLookForFile);
-                        break;
-                    case 5:
-                        SetState(kS_AutoloadCorrupt);
-                        break;
-                    case 1:
-                        SetState(kS_AutoloadDeviceMissing);
-                        break;
-                    }
-                } else {
-                    switch (result) {
-                    case 25:
-                        SetState(kS_AutoloadNotOwner);
-                        break;
-                    }
-                }
-                goto block_54;
-            }
-        } else {
-            mDeviceIDState = result;
+    if (mState < kS_SaveConfirmOverwrite) {
+        if (mState > kS_SaveLookForFile || mState == kS_AutoloadSearchDevice) {
+            unk64 = result;
+            return DataNode(0);
         }
-    } else {
-        switch (mState) {
-        case kS_ManualLoadStartLoad:
-            switch (result) {
-            case 11:
-                SetState(kS_AutoloadDone);
-                break;
-            case 10:
-                SetState(kS_AutoloadFuture);
-                break;
-            default:
-                SetState(kS_LoadFailed);
-                break;
-            case 25:
-                SetState(kS_ManualLoadNotOwner);
-                break;
-            case 8:
-                SetState(kS_ManualLoadMissing);
-                break;
-            case 5:
-                SetState(kS_ManualLoadCorrupt);
-                break;
-            case 1:
-                SetState(kS_ManualLoadNoFile);
-                break;
-            }
-            break;
-        case kS_SaveDeleteSaves:
-            SetState(kS_SaveDone);
-            break;
-        case kS_SaveLookForFile:
-            if (result > 0) {
-                switch (result) {
-                default:
-                    SetState(kS_SaveFailed);
-                    break;
-                case 6:
-                case 8:
-                    SetState(kS_SaveOverwrite);
-                    break;
-                case 1:
-                    SetState(kS_SaveDeviceInvalid);
-                    break;
+        if (mState == kS_AutoloadStartLoad) {
+            if (result < 9) {
+                if (result == 8) {
+                    nextState = kS_SaveLookForFile;
+                } else {
+                    if (result == 0) {
+                        unk64 = 0;
+                        nextState = kS_SaveLoadError2;
+                    } else if (result == 1) {
+                        nextState = kS_AutoloadDeviceMissing;
+                    } else if (result != 5) {
+                        if (result != 6) {
+                            nextState = kS_LoadFailed;
+                        } else {
+                            nextState = kS_SaveLookForFile;
+                        }
+                    } else {
+                        nextState = kS_AutoloadCorrupt;
+                    }
                 }
+            } else if (result == 10) {
+                nextState = kS_AutoloadObsolete;
+            } else if (result == 11) {
+                nextState = kS_AutoloadFuture;
+            } else if (result == 25) {
+                nextState = kS_AutoloadNotOwner;
             } else {
-                switch (result) {
-                case 5:
-                case 7:
-                case 25:
-                    SetState(kS_SaveConfirmOverwrite);
-                    break;
+                nextState = kS_LoadFailed;
+            }
+        } else if (mState == kS_SaveLookForFile) {
+            if (result != 0) {
+                if (result == 1) {
+                    nextState = kS_SaveDeviceInvalid;
+                    goto set_state;
+                }
+                if (result != 5) {
+                    if (result == 6) {
+                        nextState = kS_SaveOverwrite;
+                        goto set_state;
+                    }
+                    if (result != 7) {
+                        if (result == 8) {
+                            nextState = kS_SaveOverwrite;
+                            goto set_state;
+                        }
+                        if (result != 25) {
+                            nextState = kS_SaveFailed;
+                            goto set_state;
+                        }
+                    }
                 }
             }
-            break;
+            nextState = kS_SaveConfirmOverwrite;
+        } else {
+            MILO_FAIL("Unhandled MCResultMsg in state %d and mode %d", mState, mMode);
+            return DataNode(0);
+        }
+    } else if (mState == kS_SaveDeleteSaves) {
+        nextState = kS_SaveNoOverwrite;
+    } else {
+        if (mState != kS_ManualLoadStartLoad) {
+            if (mState > kS_ManualLoadDone && mState <= kS_Finish) {
+                return DataNode(0);
+            }
+            MILO_FAIL("Unhandled MCResultMsg in state %d and mode %d", mState, mMode);
+            return DataNode(0);
+        }
+        if (result == 0) {
+            unk64 = 0;
+            nextState = kS_SaveLoadError2;
+        } else if (result == 1) {
+            nextState = kS_ManualLoadMissing;
+        } else if (result == 5) {
+            nextState = kS_ManualLoadCorrupt;
+        } else if (result == 8) {
+            nextState = kS_ManualLoadNoFile;
+        } else if (result == 10) {
+            nextState = kS_AutoloadObsolete;
+        } else if (result == 11) {
+            nextState = kS_AutoloadFuture;
+        } else if (result == 25) {
+            nextState = kS_ManualLoadNotOwner;
+        } else {
+            nextState = kS_LoadFailed;
         }
     }
-
-block_54:
+set_state:
+    SetState(nextState);
     return DataNode(0);
 }
 

@@ -277,7 +277,7 @@ void NgMat::SetRegularShaderConst(bool perPixel) {
     }
 
     // Color mod
-    if (unk20c) {
+    if (mColorModFlags) {
         for (int i = 0; i < 3; i++) {
             const Hmx::Color &c = mColorMod[i];
             Vector4 v(c.red, c.green, c.blue, c.alpha);

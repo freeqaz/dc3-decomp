@@ -17,6 +17,7 @@ public:
     virtual void SendCallback(bool success, bool cancelled);
 
     const char *GetResponseString();
+    int GetTimeoutMs() const { return mTimeoutMs; }
 
 private:
     void ParseResponse(JsonConverter *reader, JsonObject **response, int *retVersion);

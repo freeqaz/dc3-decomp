@@ -132,14 +132,17 @@ void CharPollableSorter::AddDeps(
 ) {
     for (std::list<Hmx::Object *>::const_iterator it = objs.begin(); it != objs.end();
          ++it) {
-        Hmx::Object *obj = *it;
-        if (!obj)
-            continue;
-        std::map<Hmx::Object *, Dep>::iterator found = mDeps.find(obj);
-        if (found != mDeps.end()) {
-            Dep *other = &found->second;
+        Hmx::Object *cur = *it;
+        if (cur) {
+            Dep *mapDep = &mDeps[cur];
+            if (!mapDep->obj) {
+                mapDep->obj = cur;
+                deps.push_back(mapDep);
+            }
             if (isChangedBy) {
-                dep->changedBy.push_back(other);
+                dep->changedBy.push_back(mapDep);
+            } else {
+                mapDep->changedBy.push_back(dep);
             }
         }
     }

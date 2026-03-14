@@ -116,6 +116,20 @@ public:
     bool empty() const { return next == this; }
 
     void Clear() { next = prev = this; }
+
+    // Splice this ref from its current ring and insert at end of targetRing.
+    // Returns predecessor in the original ring for safe iteration.
+    ObjRef *SpliceToRing(ObjRef *targetRing) {
+        ObjRef *p = prev;
+        prev->next = next;
+        next->prev = prev;
+        next = targetRing;
+        prev = targetRing->prev;
+        targetRing->prev = this;
+        prev->next = this;
+        return p;
+    }
+
 #ifdef HX_NATIVE
     void ReplaceList(Hmx::Object *obj);
 #else

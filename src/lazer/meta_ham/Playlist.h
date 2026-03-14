@@ -54,6 +54,7 @@ public:
     bool GetIsBattlePlaylist() const { return mIsBattlePlaylist; }
     void SetIsFriendPlaylist(bool b) { mIsFriendPlaylist = b; }
     bool GetIsFriendPlaylist() const { return mIsFriendPlaylist; }
+    Playlist &operator=(const Playlist &);
 
 protected:
     virtual void HandleChange() {}
@@ -78,6 +79,7 @@ public:
 
     void SetParentProfile(class HamProfile *);
     void Copy(CustomPlaylist *);
+    CustomPlaylist &operator=(const CustomPlaylist &);
 
     static int SaveSize(int);
 

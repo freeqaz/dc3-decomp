@@ -32,6 +32,7 @@ public:
     virtual DataNode Handle(DataArray *, bool);
 
     // UIPanel
+    virtual void Enter();
     virtual void Unload();
     virtual void FinishLoad();
 

@@ -28,6 +28,4 @@ public:
     virtual NavListHeaderNode *NewHeaderNode(NavListItemNode *, NavListItemNode *) const;
 
     PlaylistSortByType();
-
-    static Symbol unk58;
 };

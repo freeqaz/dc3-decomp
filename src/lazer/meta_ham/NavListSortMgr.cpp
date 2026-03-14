@@ -1,6 +1,7 @@
 #include "NavListSortMgr.h"
 
 #include "NavListSort.h"
+#include "meta_ham/SongSortMgr.h"
 #include "macros.h"
 #include "meta/SongPreview.h"
 #include "meta_ham/NavListNode.h"
@@ -460,3 +461,5 @@ BEGIN_HANDLERS(NavListSortMgr)
     HANDLE_SUPERCLASS(UIListProvider)
     HANDLE_SUPERCLASS(Hmx::Object)
 END_HANDLERS
+
+DataNode SongSortMgr::OnCancel() { return DATA_UNHANDLED; }

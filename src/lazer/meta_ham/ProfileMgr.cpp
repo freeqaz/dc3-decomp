@@ -982,60 +982,55 @@ void ProfileMgr::Poll() {
 }
 
 Symbol ProfileMgr::GetAlternateOutfit(Symbol outfit) {
-    Symbol result;
-    Symbol tempChar;
-    Symbol altChar;
-    Symbol altOutfit;
-    DataArray* outfitEntry;
-    char tempStr[98];
-    char* p;
-    int len;
-    int i;
+    // Get the character for the outfit, then get their alternate
+    Symbol outfitChar = GetOutfitCharacter(outfit, true);
+    Symbol altChar = GetAlternateCharacter(outfitChar);
 
-    // Get the character for the outfit
-    tempChar = GetOutfitCharacter(outfit, false);
-    if (!tempChar.Null()) {
-        // Get alternate character
-        altChar = GetAlternateCharacter(tempChar);
-        if (!altChar.Null()) {
-            // Get outfit entry for alternate character
-            outfitEntry = GetCharacterOutfitEntry(altChar, 0, false);
-            if (outfitEntry) {
-                // Copy outfit name to tempStr starting at index 1
-                p = tempStr + 1;
-                const char* outfitName = outfitEntry->Sym(0).Str();
-                if (outfitName) {
-                    while (*outfitName) {
-                        *p++ = *outfitName++;
-                    }
-                    *p = '\0';
-                }
+    // Get the first outfit for the alternate character
+    outfitChar = GetCharacterOutfit(altChar, 0, true);
 
-                // Create remapped outfit symbol from tempStr + 1
-                result = Symbol(tempStr + 1);
+    // Copy alt outfit name to buffer
+    char buf[96];
+    const char *altStr = outfitChar.Str();
+    char *dst = buf - 1;
+    altStr--;
+    char c;
+    do {
+        c = *++altStr;
+        *++dst = c;
+    } while (c);
 
-                // Check if content is unlocked
-                i = 1;
-                while (!IsContentUnlocked(result)) {
-                    // Try next outfit
-                    i++;
-                    outfitEntry = GetCharacterOutfitEntry(altChar, i, false);
-                    if (outfitEntry) {
-                        const char* newName = outfitEntry->Sym(0).Str();
-                        if (newName) {
-                            p = tempStr + 1;
-                            while (*newName) {
-                                *p++ = *newName++;
-                            }
-                            *p = '\0';
-                            result = Symbol(tempStr + 1);
-                        }
-                    } else {
-                        break;
-                    }
-                }
-            }
-        }
+    // Compute length of original outfit name
+    const char *origEnd = outfit.Str();
+    unsigned char ch2;
+    do {
+        ch2 = *origEnd;
+        origEnd++;
+    } while (ch2);
+    int origLen = origEnd - outfit.Str() - 1;
+
+    // Compute length of buffer
+    const char *bufEnd = buf;
+    unsigned char ch3;
+    do {
+        ch3 = *bufEnd;
+        bufEnd++;
+    } while (ch3);
+    int bufLen = bufEnd - buf - 1;
+
+    // Replace last 2 chars with original outfit's suffix
+    buf[bufLen - 2] = outfit.Str()[origLen - 2];
+    buf[bufLen - 1] = outfit.Str()[origLen - 1];
+
+    // Create remapped outfit symbol
+    Symbol result = GetOutfitRemap(Symbol(buf), true);
+
+    // Check if content is unlocked, try other outfits if not
+    int i = 0;
+    while (!IsContentUnlocked(result)) {
+        Symbol nextOutfit = GetCharacterOutfit(altChar, i, true);
+        result = GetOutfitRemap(nextOutfit, true);
+        i++;
     }
 
     return result;

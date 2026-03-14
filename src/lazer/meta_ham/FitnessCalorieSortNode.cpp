@@ -39,7 +39,25 @@ FitnessCalorieHeaderNode::FitnessCalorieHeaderNode(
 )
     : NavListHeaderNode(cmp, s, b), unk58() {}
 
+bool FitnessCalorieHeaderNode::IsActive() const {
+    return TheFitnessCalorieSortMgr->HeadersSelectable();
+}
+
+NavListSortNode *FitnessCalorieHeaderNode::GetFirstActive() {
+    FOREACH (it, Children()) {
+        NavListSortNode *node = (*it)->GetFirstActive();
+        if (node) {
+            if (TheFitnessCalorieSortMgr->HeadersSelectable())
+                return this;
+            return node;
+        }
+    }
+    return nullptr;
+}
+
 void FitnessCalorieHeaderNode::OnHighlight() { SetCollapseStateIcon(true); }
+
+void FitnessCalorieHeaderNode::OnUnHighlight() { SetCollapseStateIcon(false); }
 
 Symbol FitnessCalorieHeaderNode::OnSelect() {
     if (!TheFitnessCalorieSortMgr->IsInHeaderMode()) {

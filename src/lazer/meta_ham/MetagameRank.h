@@ -49,7 +49,7 @@ protected:
     int mScore; // 0x34
     bool mFirstTimePlayed;
     char mOneTimeTaskFlags[0x40];
-    char unk79[0x40];
+    bool unk79[0x40];
     HamProfile *mProfile; // 0xbc
     int mRankNumber; // 0xc0 - current level?
     float mPctToNextRank; // 0xc4

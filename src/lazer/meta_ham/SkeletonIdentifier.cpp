@@ -294,41 +294,37 @@ DataNode SkeletonIdentifier::OnMsg(SkeletonEnrollmentChangedMsg const &msg) {
 void SkeletonIdentifier::DrawDebug() {}
 
 DataNode SkeletonIdentifier::OnMsg(const SigninChangedMsg &msg) {
-    // Check if identity status is WaitingForSignIn (4)
-    if (mIdentityStatus == kIdentityStatus_WaitingForSignIn) {
-        mIdentityStatus = kIdentityStatus_None;
-    }
-
-    // Get pad number from message
-    int padNum = -1;
-    if (msg.mData->Size() > 3) {
-        for (int i = 0; i < 4; i++) {
-            if (msg.mData->Node(3).Int(msg.mData) & (1 << i)) {
-                padNum = i;
-                break;
+    unsigned int signInMask = msg.mData->Node(3).Int(msg.mData);
+    if (signInMask != 0) {
+        unsigned int signOutMask = msg.mData->Node(2).Int(msg.mData);
+        if (signOutMask != 0) {
+            if (mIdentityStatus == kIdentityStatus_WaitingForSignIn) {
+                mIdentityStatus = kIdentityStatus_None;
             }
-        }
 
-        // If pad found, check if it's already associated with a player
-        if (padNum >= 0) {
-            HamPlayerData *p0 = TheGameData->Player(0);
-            HamPlayerData *p1 = TheGameData->Player(1);
+            int signedInPad = -1;
+            for (int i = 0; i < 4; i++) {
+                if (msg.mData->Node(3).Int(msg.mData) & (1 << i)) {
+                    signedInPad = i;
+                    break;
+                }
+            }
+            MILO_ASSERT(signedInPad != -1, 0x217);
 
-            if (p0->PadNum() != padNum && p1->PadNum() != padNum) {
-                if (p0->PadNum() < 0) {
-                    TheGameData->SetAssociatedPadNum(0, padNum);
-                } else if (p1->PadNum() < 0) {
-                    TheGameData->SetAssociatedPadNum(1, padNum);
+            if (TheGameData->Player(0)->PadNum() != signedInPad
+                && TheGameData->Player(1)->PadNum() != signedInPad) {
+                if (TheGameData->Player(0)->PadNum() < 0) {
+                    TheGameData->SetAssociatedPadNum(0, signedInPad);
+                } else if (TheGameData->Player(1)->PadNum() < 0) {
+                    TheGameData->SetAssociatedPadNum(1, signedInPad);
                 }
             }
         }
     }
 
-    // Update enrolled players and associated pads
     UpdateEnrolledPlayers();
     TheGameData->UpdateAssociatedPads();
 
-    // Return empty DataNode (handled)
     return DataNode(0);
 }
 

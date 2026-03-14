@@ -32,7 +32,7 @@ public:
 // Template base class for sample XAPOs
 template <typename Derived, typename Params>
 class CSampleXAPOBase : public CXAPOBase {
-public:
+protected:
     CSampleXAPOBase();
     virtual ~CSampleXAPOBase() {}
 

@@ -11,6 +11,7 @@
 #include "HamSongMgr.h"
 #include "meta/SongPreview.h"
 #include "meta_ham/Challenges.h"
+#include "meta_ham/MQSongSortNode.h"
 #include "meta_ham/MetaPerformer.h"
 #include "meta_ham/NavListNode.h"
 #include "obj/Object.h"
@@ -34,6 +35,39 @@ int ChallengeHeaderNode::GetChallengeExp() {
         NavListSortNode *node = *it;
         MILO_ASSERT(node, 0xd0);
         xp += static_cast<ChallengeSortNode *>(node)->GetChallengeExp();
+    }
+    return xp;
+}
+
+int ChallengeHeaderNode::GetPotentialChallengeExp(NavListSortNode *startNode) {
+    auto it = mChildren.begin();
+    auto end = mChildren.end();
+    for (; it != end && *it != startNode; ++it) {
+    }
+    int xp = 0;
+    for (; it != end; ++it) {
+        NavListSortNode *node = *it;
+        MILO_ASSERT(node, 0xe7);
+        xp += static_cast<ChallengeSortNode *>(node)->GetChallengeExp();
+    }
+    return xp;
+}
+
+int ChallengeHeaderNode::GetTotalEarnedExp(int playerScore) {
+    int xp = 0;
+    FOREACH (it, mChildren) {
+        NavListSortNode *node = *it;
+        MILO_ASSERT(node, 0xf5);
+        if (playerScore
+            >= static_cast<ChallengeSortNode *>(node)
+                   ->GetChallengeRecord()
+                   ->GetChallengeRow()
+                   .mScore) {
+            xp += static_cast<ChallengeSortNode *>(node)->GetChallengeExp();
+        }
+    }
+    if (xp == 0) {
+        xp = TheChallenges->GetConsolationXP();
     }
     return xp;
 }
@@ -82,6 +116,11 @@ void ChallengeHeaderNode::OnHighlight() {
     SongPreview *preview = TheChallengeSortMgr->GetSongPreview();
     preview->Start(0, 0);
     SetCollapseStateIcon(true);
+}
+
+bool ChallengeHeaderNode::IsActive() const {
+    bool ret = TheChallengeSortMgr->HeadersSelectable();
+    return ret;
 }
 
 Symbol ChallengeHeaderNode::Select() { return gNullStr; }
@@ -142,11 +181,34 @@ int ChallengeHeaderNode::GetSongID() {
     return _result;
 }
 
+String ChallengeHeaderNode::GetSongShortTitle() {
+    auto _tmp1 = mChildren.size();
+    const char *title = gNullStr;
+    if (_tmp1 != 0) {
+        ChallengeSortNode *node = static_cast<ChallengeSortNode *>(mChildren.front());
+        MILO_ASSERT(node, 0x149);
+        title = node->GetChallengeRecord()->GetSongTitle().Str();
+    }
+    return String(title);
+}
+
 Symbol ChallengeHeaderNode::GetSongShortName() {
     if (!mChildren.size()) {
         return gNullStr;
     }
     return mChildren.front()->GetToken();
+}
+
+const char *ChallengeHeaderNode::GetAlbumArtPath() {
+    static Symbol by_album("by_album");
+    static Symbol singles("singles");
+
+    NavListSort *sort = TheChallengeSortMgr->GetCurrentSort();
+    if (sort->GetSortName() == by_album && GetToken() != singles
+        && !mChildren.empty()) {
+        return mChildren.front()->GetAlbumArtPath();
+    }
+    return nullptr;
 }
 
 BEGIN_HANDLERS(ChallengeHeaderNode)
@@ -426,6 +488,10 @@ Symbol ChallengeSortNode::OnSelect() {
     }
 }
 
+const char *ChallengeSortNode::GetAlbumArtPath() {
+    return TheHamSongMgr.GetAlbumArtPath(GetToken());
+}
+
 void ChallengeSortNode::OnContentMounted(const char *contentName, const char *c2) {
     MILO_ASSERT(contentName, 0x1c1);
     if (!TheContentMgr.RefreshInProgress()) {
@@ -457,3 +523,7 @@ void ChallengeSortNode::Custom(UIListCustom *list, Hmx::Object *obj) const {
 }
 
 #pragma endregion
+
+BEGIN_HANDLERS(MQSongSortNode)
+    HANDLE_SUPERCLASS(NavListItemNode)
+END_HANDLERS

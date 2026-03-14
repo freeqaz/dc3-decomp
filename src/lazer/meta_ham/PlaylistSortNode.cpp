@@ -2,6 +2,7 @@
 #include "hamobj/HamLabel.h"
 #include "meta_ham/HamSongMgr.h"
 #include "meta_ham/LockedContentPanel.h"
+#include "meta_ham/MQSongSortNode.h"
 #include "meta_ham/PlaylistSortNode.h"
 
 #include "Accomplishment.h"
@@ -20,6 +21,7 @@
 #include "meta_ham/PlaylistSortMgr.h"
 #include "ui/UIListLabel.h"
 #include "utl/Symbol.h"
+#include <cstdio>
 
 #pragma region PlaylistSortNode
 
@@ -159,6 +161,15 @@ NavListSortNode *PlaylistHeaderNode::GetFirstActive() {
     return nullptr;
 }
 
+Symbol PlaylistHeaderNode::Select() {
+    return SelectChildren(mChildren, mChallengeCount);
+}
+
+void PlaylistHeaderNode::UpdateItemCount(NavListItemNode *item) {
+    if (item)
+        mChallengeCount++;
+}
+
 char const *PlaylistHeaderNode::GetAlbumArtPath() {
     static Symbol by_album("by_album");
     static Symbol singles("singles");
@@ -200,3 +211,10 @@ void PlaylistHeaderNode::Text(UIListLabel *uiListLabel, UILabel *uiLabel) const 
 }
 
 #pragma endregion PlaylistHeaderNode
+
+void MQSongHeaderNode::SetItemCountString(UILabel *lbl) const {
+    char buf[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+    sprintf(buf, "(%d)", mChallengeCount);
+    Symbol s = buf;
+    lbl->SetPrelocalizedString(String(s));
+}

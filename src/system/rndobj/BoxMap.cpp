@@ -1,10 +1,11 @@
 #include "rndobj/BoxMap.h"
+#include "math/Utl.h"
 #include "os/Timer.h"
 #include "rndobj/Lit.h"
 
 static int gLightIndex = 0;
-static Vector3 gLightBuffer1[150];
-static Vector3 gLightBuffer2[150];
+static Hmx::Color gLightBuffer1[150];
+static Hmx::Color gLightBuffer2[150];
 
 BoxMapLighting::BoxMapLighting() { Clear(); }
 
@@ -170,5 +171,80 @@ bool BoxMapLighting::CacheData(LightParams_Spot &spot) {
     } else {
         mQueued_Spot.RemoveEntry();
         return false;
+    }
+}
+
+void BoxMapLighting::ApplyLight(
+    const BoxLightArray<LightParams_Directional, 50> &arr
+) const {
+    int idx = gLightIndex;
+    for (unsigned int i = 0; i < arr.NumElements(); i++) {
+        const Hmx::Color *src = (const Hmx::Color *)&arr[i];
+        gLightBuffer1[idx] = src[0];
+        gLightBuffer2[idx] = src[1];
+        idx++;
+    }
+    gLightIndex = idx;
+}
+
+void BoxMapLighting::ApplyLight(
+    const BoxLightArray<LightParams_Point, 50> &arr, const Vector3 &viewPos
+) const {
+    int idx = gLightIndex;
+    for (unsigned int i = 0; i < arr.NumElements(); i++) {
+        const LightParams_Point &light = arr[i];
+        if (light.mFalloffStart < light.mRange) {
+            float dx = light.mPosition.x - viewPos.x;
+            float dy = light.mPosition.y - viewPos.y;
+            float dz = light.mPosition.z - viewPos.z;
+            float *buf1 = (float *)&gLightBuffer1[idx];
+            buf1[0] = dx;
+            buf1[1] = dy;
+            buf1[2] = dz;
+            float distSq = dx * dx + dy * dy + dz * dz;
+            if (0.0f < distSq) {
+                float invDist = 1.0f / sqrtf(distSq);
+                float dist = Max(0.0f, invDist * distSq - light.mFalloffStart);
+                float atten = Max(0.0f, 1.0f - dist / (light.mRange - light.mFalloffStart));
+                gLightBuffer2[idx].red = light.mColor.red * atten;
+                gLightBuffer2[idx].green = light.mColor.green * atten;
+                gLightIndex = idx + 1;
+                buf1[2] = dz * invDist;
+                gLightBuffer2[idx].blue = light.mColor.blue * atten;
+                buf1[0] = dx * invDist;
+                buf1[1] = dy * invDist;
+                idx++;
+            }
+        }
+    }
+}
+
+void BoxMapLighting::ApplyLight(
+    const BoxLightArray<LightParams_Spot, 50> &arr, const Vector3 &viewPos
+) const {
+    int idx = gLightIndex;
+    for (unsigned int i = 0; i < arr.NumElements(); i++) {
+        const LightParams_Spot &light = arr[i];
+        float dz = viewPos.z - light.mApex.z;
+        float dx = viewPos.x - light.mApex.x;
+        float dy = viewPos.y - light.mApex.y;
+        float distSq = dy * dy + dx * dx + dz * dz;
+        float invDist = 1.0f / sqrtf(distSq);
+        float dist = invDist * distSq * light.mHalfLengthRecip - light.mOffsetFactor;
+        float cone = light.mDirection.y * dy * invDist
+            + light.mDirection.x * dx * invDist + light.mDirection.z * dz * invDist;
+        dist = Min(1.0f, dist);
+        float coneClamped = Min(1.0f, cone) - light.mConeAngleFactor;
+        float distAtten = Max(0.0f, 1.0f - dist);
+        float coneAtten = Max(0.0f, coneClamped);
+        float atten = distAtten * coneAtten * light.mConeAngleInverse;
+        gLightBuffer2[idx].red = atten * light.mColor.red;
+        gLightBuffer2[idx].green = atten * light.mColor.green;
+        gLightBuffer2[idx].blue = atten * light.mColor.blue;
+        gLightBuffer1[idx].red = -(dx * invDist);
+        gLightBuffer1[idx].green = -(dy * invDist);
+        gLightBuffer1[idx].blue = -(dz * invDist);
+        gLightIndex = idx + 1;
+        idx++;
     }
 }

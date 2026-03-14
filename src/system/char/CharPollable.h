@@ -29,7 +29,6 @@ public:
 
     void Sort(std::vector<RndPollable *> &);
     bool ChangedBy(Dep *, Dep *);
-    void AddDeps(Dep *, const std::list<Hmx::Object *> &, std::list<Dep *> &, bool);
 
     static int sSearchID;
 
@@ -37,5 +36,6 @@ public:
     Dep *mTarget;
 
 protected:
+    void AddDeps(Dep *, const std::list<Hmx::Object *> &, std::list<Dep *> &, bool);
     bool ChangedByRecurse(Dep *);
 };

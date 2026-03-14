@@ -1,10 +1,36 @@
 #include "net_ham/PlaylistJobs.h"
+#include "net/JsonUtils.h"
 #include "net_ham/RCJobDingo.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
 #include "utl/DataPointMgr.h"
 #include "utl/MakeString.h"
 #include "utl/Symbol.h"
+
+void GetPlaylist(JsonConverter &converter, const JsonObject *jsonObj, CustomPlaylist *playlist) {
+    unsigned int size = ((JsonArray *)jsonObj)->GetSize();
+    for (unsigned int i = 0; i < size; i++) {
+        JsonObject *value = converter.GetValue((JsonArray *)jsonObj, i);
+        JsonObject *innerValue = converter.GetValue((JsonArray *)value, 0);
+        playlist->AddSong(innerValue->Int());
+    }
+}
+
+void GetPlaylists(
+    JsonConverter &converter, const JsonObject *jsonObj, std::vector<CustomPlaylist> *playlists
+) {
+    unsigned int size = ((JsonArray *)jsonObj)->GetSize();
+    for (unsigned int i = 0; i < size; i++) {
+        JsonObject *value = converter.GetValue((JsonArray *)jsonObj, i);
+        CustomPlaylist cp;
+        playlists->push_back(cp);
+        CustomPlaylist &last = playlists->back();
+        JsonObject *idValue = converter.GetValue((JsonArray *)value, 0);
+        last.SetOnlineID(idValue->Int());
+        JsonObject *nameValue = converter.GetValue((JsonArray *)value, 1);
+        last.SetName(Symbol(nameValue->Str()));
+    }
+}
 
 GetPlaylistsJob::GetPlaylistsJob(Hmx::Object *callback, char const *onlineID)
     : RCJob("playlists/getplaylists/", callback) {
@@ -103,4 +129,30 @@ SyncAvailableDynamicPlaylistsJob::SyncAvailableDynamicPlaylistsJob(
     dataP.AddPair(pid, onlineID);
     dataP.AddPair(flags, flagAmount);
     SetDataPoint(dataP);
+}
+
+void GetPlaylistJob::GetPlaylist(CustomPlaylist *playlist) {
+    if (mResult != 1)
+        return;
+    if (!mJsonResponse)
+        return;
+    ::GetPlaylist(mJsonReader, mJsonResponse, playlist);
+}
+
+void GetPlaylistsJob::GetPlaylists(std::vector<CustomPlaylist> *playlists) {
+    if (mResult != 1)
+        return;
+    if (!mJsonResponse)
+        return;
+    ::GetPlaylists(mJsonReader, mJsonResponse, playlists);
+}
+
+void AddPlaylistJob::GetPlaylistID(CustomPlaylist *playlist) {
+    if (mResult == 1 && mJsonResponse) {
+        JsonObject *idObj = mJsonReader.GetByName(mJsonResponse, "id");
+        if (idObj) {
+            MILO_LOG("===== Added playlistID %i\n", idObj->Int());
+            playlist->SetOnlineID(idObj->Int());
+        }
+    }
 }

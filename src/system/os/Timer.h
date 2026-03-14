@@ -220,7 +220,12 @@ public:
         }
     }
     static void EnableCallback();
-    static void EndExternal(float, float, const char *, AutoTimerCallback, void *);
+    static void EndExternal(float elapsed, float limit, const char *func, AutoTimerCallback cb, void *ctx) {
+        if (MainThread()) {
+            sDepth--;
+            SendCallback(elapsed, limit, func, cb, ctx);
+        }
+    }
     static void SendCallback(float, float, const char *, AutoTimerCallback, void *);
     static int sDepth;
 

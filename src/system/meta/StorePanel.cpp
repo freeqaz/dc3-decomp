@@ -782,4 +782,9 @@ bool StoreEnumJob::IsFinished() {
     return mEnumeration->IsEnumerating() == false;
 }
 
-void StoreEnumJob::OnCompletion(Hmx::Object *) {}
+void StoreEnumJob::OnCompletion(Hmx::Object *) {
+    if (mStorePanel && mStorePanel->mEnumJobID == ID()) {
+        bool success = mEnumeration->IsSuccess();
+        mStorePanel->FinishEnum(mEnumeration->mContentList, success);
+    }
+}

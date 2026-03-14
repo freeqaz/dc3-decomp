@@ -152,6 +152,15 @@ RndParticleSys::RndParticleSys()
     SetSubSamples(0);
 }
 
+bool RndParticleSys::Replace(ObjRef *ref, Hmx::Object *obj) {
+    if (ref == &mMotionParent) {
+        RndTransformable *trans = dynamic_cast<RndTransformable *>(obj);
+        SetRelativeMotion(mRelativeMotion, trans);
+        return true;
+    }
+    return RndTransformable::Replace(ref, obj);
+}
+
 RndParticleSys::~RndParticleSys() {
     if (mPreserveParticles) {
         if (mPersistentParticles)

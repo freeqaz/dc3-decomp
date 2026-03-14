@@ -108,10 +108,39 @@ BEGIN_CUSTOM_PROPSYNC(WorldDir::PresetOverride)
     SYNC_PROP_OVERRIDE(hue, o.hue, o.Sync)
 END_CUSTOM_PROPSYNC
 
-// TODO: implement
-#ifdef HX_NATIVE
-void WorldDir::BitmapOverride::Sync(bool) {}
-#endif
+void WorldDir::BitmapOverride::Sync(bool b) {
+    if (!original)
+        return;
+    if (!replacement)
+        return;
+    if (!b) {
+        ObjRef localRing;
+        localRing.Clear();
+        ObjRef::iterator it = replacement->Refs().begin();
+        while (it != replacement->Refs().end()) {
+            ObjRef *ref = it;
+            if (ref->RefOwner()->Dir() != replacement->Dir()) {
+                ObjRef *p = ref->SpliceToRing(&localRing);
+                it = ObjRef::iterator(p);
+            }
+            ++it;
+        }
+        localRing.ReplaceList(original);
+    } else {
+        ObjRef localRing;
+        localRing.Clear();
+        ObjRef::iterator it = original->Refs().begin();
+        while (it != original->Refs().end()) {
+            ObjRef *ref = it;
+            if (ref->RefOwner() && ref->RefOwner()->Dir() != replacement->Dir()) {
+                ObjRef *p = ref->SpliceToRing(&localRing);
+                it = ObjRef::iterator(p);
+            }
+            ++it;
+        }
+        localRing.ReplaceList(replacement);
+    }
+}
 
 BEGIN_CUSTOM_PROPSYNC(WorldDir::BitmapOverride)
     SYNC_PROP_OVERRIDE(original, o.original, o.Sync)

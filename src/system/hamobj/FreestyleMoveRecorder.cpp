@@ -528,36 +528,53 @@ void FreestyleMoveRecorder::CompareDisplacementVectors(
     float zero = 0.0f;
     float len1 = Length(v1);
     float len2 = Length(v2);
-    float avgDisp1 = zero;
+
+    float avgDisp1;
     if (count1 != 0) {
         avgDisp1 = len1 / (float)count1;
+    } else {
+        avgDisp1 = zero;
     }
-    float avgDisp2 = zero;
+
+    float avgDisp2;
     if (count2 != 0) {
         avgDisp2 = len2 / (float)count2;
+    } else {
+        avgDisp2 = zero;
     }
-    float maxDisp = avgDisp1;
-    if (avgDisp1 - avgDisp2 < 0.0f) {
-        maxDisp = avgDisp2;
-    }
+
+    float maxDisp = (float)__fsel(avgDisp1 - avgDisp2, avgDisp1, avgDisp2);
     outMaxDisp = maxDisp + 1e-5f;
-    float invLen1 = zero;
+
+    float invLen1;
     if (0.0f < len1) {
         invLen1 = 1.0f / len1;
+    } else {
+        invLen1 = zero;
     }
-    float invLen2 = zero;
+
+    float n1x = v1.x * invLen1;
+    float n1y = v1.y * invLen1;
+    float n1z = invLen1 * v1.z;
+
+    float invLen2;
     if (0.0f < len2) {
         invLen2 = 1.0f / len2;
+    } else {
+        invLen2 = zero;
     }
-    float dot = (v2.y * invLen2 * v1.y * invLen1
-                 + v2.x * invLen2 * v1.x * invLen1
-                 + invLen2 * v2.z * invLen1 * v1.z)
-        * 0.87f;
+
+    float n2z = invLen2 * v2.z;
+    float n2x = v2.x * invLen2;
+    float n2y = v2.y * invLen2;
+
+    float dot = (n2x * n1x + n2y * n1y + n2z * n1z) * 0.87f;
     float angleDiff = -(dot - 1.0f);
-    float clamped = (float)__fsel(-angleDiff, angleDiff, zero);
+
+    float clamped = (float)__fsel(-angleDiff, zero, angleDiff);
     float clamped1 = (float)__fsel(clamped - 1.0f, 1.0f, clamped);
     float score = clamped1 * clamped1 * 20.0f;
-    float finalScore = (float)__fsel(-score, score, zero);
+    float finalScore = (float)__fsel(-score, zero, score);
     float finalClamped = (float)__fsel(finalScore - 1.0f, 1.0f, finalScore);
     outSimilarity = 1.0f - finalClamped;
 }
@@ -568,10 +585,10 @@ float FreestyleMoveRecorder::CompareSkeletonPositions(
     if (skel1 && skel2) {
         if (skel1->IsTracked()) {
             if (skel2->IsTracked()) {
-                unsigned int count = 0;
+                int count = 0;
                 float totalDist = 0.0f;
                 float zero = 0.0f;
-                if (mPositions.size() != 0) {
+                if ((int)mPositions.size() != 0) {
                     int idx = 0;
                     do {
                         Vector3 pos1, pos2;
@@ -585,14 +602,14 @@ float FreestyleMoveRecorder::CompareSkeletonPositions(
                         );
                         count++;
                         idx += 8;
-                        totalDist = (pos1.y - pos2.y) * (pos1.y - pos2.y)
-                            + (pos1.z - pos2.z) * (pos1.z - pos2.z)
+                        totalDist = (pos1.z - pos2.z) * (pos1.z - pos2.z)
+                            + (pos1.y - pos2.y) * (pos1.y - pos2.y)
                             + (pos1.x - pos2.x) * (pos1.x - pos2.x) + totalDist;
-                    } while (count < (unsigned int)mPositions.size());
+                    } while ((unsigned int)count < (unsigned int)mPositions.size());
                 }
                 float avg = totalDist / (float)(unsigned int)mAngleLimits.size();
                 float result = avg * scale;
-                float clamped = (float)__fsel(-result, result, zero);
+                float clamped = (float)__fsel(-result, zero, result);
                 float clamped1 = (float)__fsel(clamped - 1.0f, 1.0f, clamped);
                 return 1.0f - clamped1;
             }

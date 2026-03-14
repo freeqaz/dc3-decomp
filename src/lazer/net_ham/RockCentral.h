@@ -60,7 +60,7 @@ public:
     DataNode OnMsg(const UserLoginMsg &);
 
     bool IsLoginBlocked() const { return mLoginBlocked; }
-    String GetDLCImage() { return mDLCImagePath; }
+    String GetDlcImage() { return mDLCImagePath; }
     String GetUtilityImage() { return mUtilityImagePath; }
     String GetUtilitySound() { return mUtilitySoundPath; }
     String GetMiscImage() { return mMiscArtImagePath; }

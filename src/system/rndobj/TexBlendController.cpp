@@ -1,5 +1,6 @@
 #include "rndobj/TexBlendController.h"
 #include "math/Mtx.h"
+#include "math/Utl.h"
 #include "obj/Object.h"
 
 RndTexBlendController::RndTexBlendController()
@@ -99,40 +100,44 @@ bool RndTexBlendController::GetCurrentDistance(float &dist) const {
 
 RndTexBlendController::BlendState
 RndTexBlendController::GetBlendState(float &blend, float influence) const {
+    BlendState state = kBlendNone;
     blend = 0.0f;
-    if (!IsValid() || influence <= 0.0f) {
-        return kBlendNone;
-    }
 
-    if (mTex) {
-        blend = influence;
-        return kBlendCustom;
-    }
-
-    float dist = 0.0f;
-    if (!GetCurrentDistance(dist)) {
-        return kBlendNone;
-    }
-
-    if (dist < mReferenceDistance && mReferenceDistance > mMinDistance) {
-        blend = (mReferenceDistance - dist) / (mReferenceDistance - mMinDistance);
-        if (blend > 1.0f) {
+    if (IsValid()) {
+        if (mTex) {
             blend = 1.0f;
+            state = kBlendCustom;
+        } else {
+            float dist;
+            if (GetCurrentDistance(dist) && mReferenceDistance > 0.0f) {
+                if (dist < mReferenceDistance) {
+                    float denom = mReferenceDistance - mMinDistance;
+                    if (denom > 0.0f) {
+                        state = kBlendNear;
+                        blend = (mReferenceDistance - Max(dist, mMinDistance)) / denom;
+                    }
+                } else if (dist > mReferenceDistance) {
+                    float denom = mMaxDistance - mReferenceDistance;
+                    if (denom > 0.0f) {
+                        state = kBlendFar;
+                        blend = (Min(dist, mMaxDistance) - mReferenceDistance) / denom;
+                    }
+                }
+            }
+            float t2 = blend * blend;
+            float t3 = blend * t2;
+            blend = t3 * (-2.0f) + t2 * 3.0f;
         }
-        blend *= influence;
-        return blend > 0.0f ? kBlendNear : kBlendNone;
     }
 
-    if (dist > mReferenceDistance && mMaxDistance > mReferenceDistance) {
-        blend = (dist - mReferenceDistance) / (mMaxDistance - mReferenceDistance);
-        if (blend > 1.0f) {
-            blend = 1.0f;
-        }
-        blend *= influence;
-        return blend > 0.0f ? kBlendFar : kBlendNone;
+    blend *= influence;
+    blend = Clamp(0.0f, 1.0f, blend);
+    blend = (float)((long long)(blend * 255.0f) & 0xFF) * (1.0f / 255.0f);
+    if (blend < 1.0f / 255.0f) {
+        state = kBlendNone;
     }
 
-    return kBlendNone;
+    return state;
 }
 
 void RndTexBlendController::UpdateReferenceDistance() {

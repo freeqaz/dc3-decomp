@@ -14,6 +14,7 @@ public:
     virtual void Text(UIListLabel *, UILabel *) const;
     virtual bool IsActive() const;
     virtual const char *GetAlbumArtPath();
+    virtual void SetItemCountString(UILabel *) const;
     virtual void SetCollapseStateIcon(bool) const;
     virtual void Renumber(std::vector<NavListSortNode *> &);
 
@@ -26,6 +27,7 @@ public:
     MQSongSortNode(NavListItemSortCmp *cmp, Symbol shortName, Symbol character)
         : NavListItemNode(cmp), mShortName(shortName), mCharacter(character) {}
     virtual ~MQSongSortNode();
+    virtual DataNode Handle(DataArray *, bool);
     virtual Symbol GetToken() const { return mShortName; }
     virtual Symbol OnSelect();
     virtual void Text(UIListLabel *, UILabel *) const;

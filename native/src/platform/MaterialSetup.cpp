@@ -199,15 +199,7 @@ MaterialParams BuildMaterialParams(RndMat* mat, bool isTextMesh) {
     texViews.normal   = ResolveMap(mat->NormalMap(),      gWgpuRnd->FlatNormalTexView());
     texViews.specular = ResolveMap(mat->GetSpecularMap(), gWgpuRnd->WhiteTexView());
 
-    // Eye materials: boost emissive so sclera/iris stay bright (compensates for
-    // missing environment map reflections that the real game uses for eye shine)
-    bool isEyeMat = strstr(mat->Name(), "eyes") || strstr(mat->Name(), "eye_");
-    if (isEyeMat) {
-        matUni.emissiveMultiplier = std::max(matUni.emissiveMultiplier, 1.0f);
-        heuristics |= kHeuristicEyeEmissiveBoost;
-    }
-    texViews.emissive = ResolveMap(mat->GetEmissiveMap(),
-        isEyeMat ? gWgpuRnd->WhiteTexView() : gWgpuRnd->BlackTexView());
+    texViews.emissive = ResolveMap(mat->GetEmissiveMap(), gWgpuRnd->BlackTexView());
     texViews.rim      = ResolveMap(mat->GetRimMap(),      gWgpuRnd->WhiteTexView());
 
     // Detail normal map
@@ -215,7 +207,7 @@ MaterialParams BuildMaterialParams(RndMat* mat, bool isTextMesh) {
 
     // --- Environment cube map ---
     RndCubeTex* environMap = mat->GetEnvironMap();
-    if (environMap && mat->GetUseEnviron()) {
+    if (environMap) {
         wgpu::TextureView cubeView = GetGpuCubeTexView(environMap);
         texViews.environCube = cubeView ? cubeView : gWgpuRnd->BlackCubeTexView();
         matUni.environMapStrength = 1.0f;
@@ -224,12 +216,6 @@ MaterialParams BuildMaterialParams(RndMat* mat, bool isTextMesh) {
     } else {
         texViews.environCube = gWgpuRnd->BlackCubeTexView();
         matUni.environMapStrength = 0.0f;
-        // If material references an env map we can't render, boost emissive
-        // so the diffuse texture stays bright (e.g. eye sclera, glossy surfaces)
-        if (environMap) {
-            matUni.emissiveMultiplier = std::max(matUni.emissiveMultiplier, 0.6f);
-            heuristics |= kHeuristicMissingEnvironBoost;
-        }
     }
 
     // --- Sampler descriptors ---

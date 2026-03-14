@@ -84,28 +84,68 @@ namespace {
         return f4;
     }
 
-    float DrawDetectedBar(float, const char *, float, float, float, bool, bool);
+    float DrawDetectedBar(
+        float y, const char *name, float detectFrac, float startX, float endX, bool halfAlpha, bool asPercent
+    ) {
+        Hmx::Color bgColor = sDarkerGray;
+        Hmx::Color fillColor = sGreen;
+        Hmx::Color textColor = sLightGray;
+
+        if (halfAlpha) {
+            bgColor.red *= 0.5f;
+            bgColor.green *= 0.5f;
+            bgColor.blue *= 0.5f;
+            fillColor.red *= 0.5f;
+            fillColor.green *= 0.5f;
+            fillColor.blue *= 0.5f;
+            textColor.red *= 0.5f;
+            textColor.green *= 0.5f;
+            textColor.blue *= 0.5f;
+        }
+
+        String str(name);
+        const char *fmt;
+        float dispValue;
+        if (asPercent) {
+            dispValue = detectFrac * 100.0f;
+            fmt = ": %.2f%%";
+        } else {
+            dispValue = detectFrac;
+            fmt = ": %.2f";
+        }
+        str += MakeString(fmt, dispValue);
+
+        float barHeight = 0.01f;
+        float filledWidth = (endX - startX) * detectFrac;
+        DrawOverlayBar(y, startX, endX, bgColor, barHeight);
+        DrawOverlayBar(y, startX, filledWidth + startX, fillColor, barHeight);
+
+        Vector2 pos(startX, y);
+        TheRnd.DrawStringScreen(str.c_str(), pos, textColor, true);
+
+        return y + barHeight;
+    }
+
     void DrawBeatLine(float, float, float, const Hmx::Color &);
     float DrawPlayClip(float farg0, SkeletonClip *clip, int player) {
         MILO_ASSERT(clip, 0x762);
-        String str;
-        str = clip->Name();
+        String str(clip->Name());
+        const char *suffix;
         if (player < clip->NumMoveRatings()) {
-            const SkeletonClip::MoveRating rating = clip->GetMoveRating(player);
-            const Symbol *symbol = &rating.mExpected;
-            if (symbol->Null()) {
-                symbol = new Symbol("<none>");
-                str += MakeString(" (bar %i: expected=%s)", player, symbol->Str());
-                delete (Symbol*)symbol;
-            } else {
-                str += MakeString(" (bar %i: expected=%s)", player, symbol->Str());
+            const SkeletonClip::MoveRating &rating = clip->GetMoveRating(player);
+            const Symbol *sym = &rating.mExpected;
+            if (sym->Null()) {
+                Symbol none("<none>");
+                sym = &none;
             }
+            suffix = MakeString(" (bar %i: expected=%s)", player, *sym);
         } else {
-            str += " (no rating overrides)";
+            suffix = " (no rating overrides)";
         }
+        str += suffix;
 
-        Hmx::Rect rect(0.009999999776482582f, farg0, 0, 0);
-        TheRnd.DrawRectScreen(rect, Hmx::Color(), nullptr, nullptr, nullptr);
+        Hmx::Rect rect(0.009999999776482582f, farg0, 0.9f, 0.01f);
+        TheRnd.DrawRectScreen(rect, sDarkGray, nullptr, nullptr, nullptr);
         Vector2 pos(0.009999999776482582f, farg0);
         TheRnd.DrawStringScreen(str.c_str(), pos, sLightGray, true);
         return pos.y;
@@ -1587,8 +1627,8 @@ namespace {
         float rangeScale;
     };
 
-    extern const BeatLineData gBeatLineData = { 0.0f, 1.0f, 0.0f, 1.0f };
-    extern const float gFourPointZero = 4.0f;
+    extern BeatLineData gBeatLineData = { 0.0f, 1.0f, 0.0f, 1.0f };
+    extern float gFourPointZero = 4.0f;
 
     void DrawBeatLine(float x, float y, float z, const Hmx::Color& color) {
         float sum = x + y;
@@ -1597,8 +1637,8 @@ namespace {
         float t = numerator / denominator;
         float linePos = t * (gBeatLineData.maxValue - gBeatLineData.minValue) + gBeatLineData.minValue;
 
-        Vector2 startPos(x, linePos);
         Vector2 endPos(linePos, sum);
+        Vector2 startPos(linePos, x);
 
         UtilDrawLine(startPos, endPos, color);
     }

@@ -115,13 +115,53 @@ void DingoServer::CancelDelayedCalls() {
     mDelayedJobs.clear();
 }
 
+void DingoServer::AddDelayedCalls() {
+    for (std::vector<DingoJob *>::iterator it = mDelayedJobs.begin();
+         it != mDelayedJobs.end();
+         ++it) {
+        DingoJob *job = *it;
+        if (!TheWebSvcMgr.AddRequest(job, job->GetTimeoutMs(), false, false)) {
+            MILO_NOTIFY("Unable to add delayed job!");
+            job->Cancel(true);
+            delete job;
+        }
+    }
+    mDelayedJobs.erase(mDelayedJobs.begin(), mDelayedJobs.end());
+}
+
+DataNode DingoServer::OnMsg(const ConnectionStatusChangedMsg &msg) {
+    if (msg.Data()->Int(2) != 0) {
+        return DataNode(0);
+    }
+    Disconnect();
+    return DataNode(1);
+}
+
+DataNode DingoServer::OnMsg(const SigninChangedMsg &msg) {
+    unsigned int signedInMask = msg.Data()->Int(2);
+    unsigned int signinMask = msg.Data()->Int(3);
+
+    if (!IsAuthenticated()) {
+        return DataNode(0);
+    }
+
+    if (((1 << mAuthedPadNum) & signedInMask) == 0) {
+        Logout();
+    } else {
+        for (int i = 0; i < 4; i++) {
+            if (i != mAuthedPadNum && ((1 << i) & signinMask) != 0) {
+                mPadAuthed[i] = false;
+            }
+        }
+        DoAdditionalLogin();
+    }
+    return DataNode(1);
+}
+
 // TODO: implement
 #ifdef HX_NATIVE
-DataNode DingoServer::OnMsg(const SigninChangedMsg &) { return DataNode(0); }
-DataNode DingoServer::OnMsg(const ConnectionStatusChangedMsg &) { return DataNode(0); }
 DataNode DingoServer::OnMsg(const DingoJobCompleteMsg &) { return DataNode(0); }
 bool DingoServer::InitAndAddJob(DingoJob *, bool, bool) { return false; }
-void DingoServer::AddDelayedCalls() {}
 #endif
 bool DingoServer::Authenticate(int padnum, const char *url) {
     if (mAuthState != 0) {
@@ -134,13 +174,10 @@ bool DingoServer::Authenticate(int padnum, const char *url) {
     DataPoint pt;
     if (padnum < 0) {
         FillAuthParams(pt);
-        return SendAuthenticateMsg(url, pt, this);
+    } else if (!FillAuthParamsFromPadNum(pt, padnum)) {
+        return false;
     }
-
-    if (FillAuthParamsFromPadNum(pt, padnum)) {
-        return SendAuthenticateMsg(url, pt, this);
-    }
-    return false;
+    return SendAuthenticateMsg(url, pt, this);
 }
 
 bool DingoServer::SendAuthenticateMsg(const char *url, DataPoint &pt, Hmx::Object *callback) {

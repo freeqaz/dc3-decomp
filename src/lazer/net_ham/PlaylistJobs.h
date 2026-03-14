@@ -6,11 +6,13 @@
 class GetPlaylistsJob : public RCJob {
 public:
     GetPlaylistsJob(Hmx::Object *, char const *);
+    void GetPlaylists(std::vector<CustomPlaylist> *);
 };
 
 class GetPlaylistJob : public RCJob {
 public:
     GetPlaylistJob(Hmx::Object *, char const *, int);
+    void GetPlaylist(CustomPlaylist *);
 };
 
 class AddPlaylistJob : public RCJob {

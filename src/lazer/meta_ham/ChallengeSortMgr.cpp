@@ -2,6 +2,7 @@
 
 #include "ChallengeSortByScore.h"
 #include "ChallengeSortNode.h"
+#include "Challenges.h"
 #include "NavListSortMgr.h"
 #include "hamobj/HamGameData.h"
 #include "game/GameMode.h"
@@ -277,4 +278,28 @@ const char *ChallengeSortMgr::GetChallengerGamertag(int i) {
     }
 }
 
-void ChallengeSortMgr::OnEnter() {}
+void ChallengeSortMgr::OnEnter() {
+    mChallengeRecords.clear();
+    std::vector<ChallengeRow> officialChallenges;
+    std::vector<ChallengeRow> playerChallenges;
+    TheChallenges->GetOfficialChallenges(officialChallenges);
+    TheChallenges->GetPlayerChallenges(playerChallenges);
+    for (unsigned int i = 0; i < officialChallenges.size(); i++) {
+        ChallengeRecord record(officialChallenges[i]);
+        mChallengeRecords.push_back(record);
+    }
+    for (unsigned int i = 0; i < playerChallenges.size(); i++) {
+        ChallengeRecord record(playerChallenges[i]);
+        mChallengeRecords.push_back(record);
+    }
+    FOREACH (it, mSorts) {
+        (*it)->BuildTree();
+    }
+    NavListSort *sort = mSorts[mCurrentSortIdx];
+    sort->BuildItemList();
+    if (mHighlightSaved) {
+        sort->SetHighlightID(mSavedHighlightID);
+        mHighlightSaved = false;
+    }
+    sort->UpdateHighlight();
+}

@@ -2,6 +2,7 @@
 #include "obj/Object.h"
 #include "os/Debug.h"
 #include "synth/FxSend.h"
+#include "synth/FxSendBitCrush.h"
 #include "utl/BinStream.h"
 
 FxSendSynapse::FxSendSynapse()
@@ -58,6 +59,10 @@ void FxSendSynapse::Load(BinStream &bs) {
         OnParametersChanged();
     }
 }
+
+BEGIN_HANDLERS(FxSendBitCrush)
+    HANDLE_SUPERCLASS(FxSend)
+END_HANDLERS
 
 BEGIN_HANDLERS(FxSendSynapse)
     HANDLE_SUPERCLASS(FxSend)

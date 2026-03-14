@@ -6,6 +6,7 @@
 class MQSongSortMgr : public NavListSortMgr {
 public:
     static void Init(SongPreview &);
+    virtual DataNode Handle(DataArray *, bool);
     virtual bool SelectionIs(Symbol);
     virtual Symbol MoveOn();
     virtual void OnEnter();

@@ -9,12 +9,6 @@
 
 void NormalizeScale(const Vector3 &, float, Vector3 &);
 
-static inline void ScaleAddEq(Vector3 &v1, const Vector3 &v2, float f) {
-    v1.x += v2.x * f;
-    v1.y += v2.y * f;
-    v1.z += v2.z * f;
-}
-
 CharSleeve::CharSleeve()
     : mSleeve(this), mTopSleeve(this), mPos(0, 0, 0), mLastPos(0, 0, 0), mLastDT(0),
       mInertia(0.5f), mGravity(1.0f), mRange(0), mNegLength(0), mPosLength(0),
