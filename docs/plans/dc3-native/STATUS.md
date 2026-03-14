@@ -1,6 +1,6 @@
 # DC3 Native Port — Status
 
-**Last updated**: 2026-03-13
+**Last updated**: 2026-03-14
 
 ## Current State
 
@@ -41,9 +41,10 @@ gameplay screens.
 - Full menu flow: attract → main_screen → choose_mode → song_select → multiuser → loading → **game_screen**
 - 10000 frames stable on game_screen, clean exit
 - DCI venue rendering: 505 draw calls/frame (floor, walls, DJ booth, fully-lit character, HUD overlays)
-- **game_screen venue rendering**: 482 draw calls/frame — venue renders through world_panel with animated CamShot cameras, LightPreset lighting, and character skinning
+- **game_screen gameplay**: 272 draw calls/frame — venue rendering, camera cuts (34 shot keys/song), character dance animation via song.anim ClipPlayer, real-time MOGG audio playback
+- **Camera cuts working**: song.anim PropKeys "shot" → SetShot → FindNextShot → ForceCameraShot cycles through Area1_WIDE/NEAR/MOVEMENT/CLOSEUP
 - **Character animation on main menu**: outfit loading via FileMerger, CharDriver clip playback, GPU-skinned bone animation
-- Audio pipeline complete (FFmpeg, Vorbis, miniaudio, DSP effects)
+- Audio pipeline complete (FFmpeg, Vorbis, miniaudio, DSP effects, real-time MOGG decode)
 - Input working (gamepad + keyboard + scripted headless input)
 - Text rendering working (glyph meshes, DXT5 alpha shader, font loading)
 - Flow→PropAnim UI animation pipeline verified end-to-end
@@ -93,7 +94,7 @@ iterates drawables, while the engine uses `WorldDir::DrawShowing()` → `RndGrou
 
 **Goal**: Navigate to a song, start gameplay, see the dance stage.
 
-**Status**: VENUE RENDERING WORKING. 482 draw calls/frame during gameplay. Disco balls, neon signs, characters, stage all visible. Camera animated via CamShot system.
+**Status**: FULLY WORKING. 272 draw calls/frame during gameplay. Characters animate via CharClip playback, camera cuts cycle through 34 shot keyframes (Area1_WIDE, Area1_NEAR, Area1_MOVEMENT, CLOSEUP), song audio plays at real-time via MOGG decode. HUD panels active but move card content not yet visible.
 
 | Task | Status | Notes |
 |------|--------|-------|
@@ -105,13 +106,16 @@ iterates drawables, while the engine uses `WorldDir::DrawShowing()` → `RndGrou
 | **HamDirector venue selection** | **DONE** | GetVenueWorld() for gameplay venue, fallback to gNativeVenueDir for menu |
 | Song animation playback | **DONE** | song.anim PropAnim loads, SetFrame advances at 30fps song time, PlayAnims drives character clips |
 | Song audio playback during gameplay | **DONE** | VorbisReader decode loop fix + ring buffer flow control. Real-time MOGG decryption + Vorbis decode. |
-| LightPreset animation | **PARTIAL** | song.anim drives preset cycling. Verify visuals. |
-| Move card UI rendering | **TODO** | Pink rectangles — asset/wiring issue, not missing code. TexMovie + render-to-texture pipeline fully implemented. |
+| **Camera cuts (dircut)** | **DONE** | 34 shot keys in song.anim. Categories: Area1_WIDE, Area1_NEAR, Area1_MOVEMENT, CLOSEUP. ForceCameraShot applied each cut. |
+| LightPreset animation | **N/A for YMCA** | glitterati venue has 0 LightPreset objects — static lighting is correct. Other venues with presets use ForcePreset. |
+| Move card UI rendering | **TODO** | HUD panels (game_panel, fitness_hud_panel) are active+showing during gameplay but move card content invisible — likely needs TexMovie data or asset wiring. |
 | Score display | **TODO** | Not yet wired |
 
 **Key fix (Session 63)**: `CameraManager::CalcFrame()` produced NaN from uninitialized task timers, poisoning camera transforms and making the entire scene invisible. Guards in CalcFrame and CamShot::SetFrame clamp NaN to 0 (first keyframe). Removed redundant explicit DrawShowing — venue correctly renders through world_panel as part of TheUI->Draw().
 
 **Key fix (Session 67 — Audio timing)**: VorbisReader::Poll decode loop exited immediately when TryDecode() found no Ogg packet (on Xbox, a background thread feeds data continuously). Fixed to read more file data and retry. Also added ring buffer flow control to native ConsumeData (missing BytesWriteable check caused silent data loss). Pre-fill ring buffers in Play() before registering with AudioDevice. Song audio now plays at real-time (100% speed), driving all animation systems.
+
+**Session 68 — Camera cuts verified**: song.anim PropKeys with property "shot" drives HamDirector::SetShot() → FindNextShot() → CameraManager::ForceCameraShot(). 34 shot keyframes for YMCA cycle through Area1_WIDE, Area1_NEAR, Area1_MOVEMENT, CLOSEUP categories. Camera angle changes visible in screenshots. LightPreset animation N/A for YMCA's glitterati venue (0 LightPreset objects — static baked lighting correct). HUD panels (game_panel, world_panel, rhythm_detector_panel, fitness_hud_panel) all active+showing during gameplay.
 
 ### Milestone 4: Playable Dance Gameplay
 
@@ -121,8 +125,9 @@ iterates drawables, while the engine uses `WorldDir::DrawShowing()` → `RndGrou
 |------|----------|-------|
 | Character animation in gameplay | **DONE** | CharClip playback synced to beat. SongAnimation() returns 0 (SongDriver has clips). ClipPlayer.PlayAnims drives skeleton from song.anim frame. |
 | TexMovie render-to-texture | DONE | Full pipeline: FFmpeg decode → UploadRGBAToRndTex → WebGPU. MakeDrawTarget/FinishDrawTarget implemented. Pink rectangles are asset/wiring issue. |
-| LightPreset loading + animation | PARTIAL | Load is DONE (99.2% match, stubs removed session 61, ForcePreset active). Animation cycling via song.anim still TODO. |
-| Song.anim graceful DTA failure | HIGH | Guard DataNode::GetObj for missing objects |
+| **Camera cuts via song.anim** | **DONE** | PropKeys "shot" property drives HamDirector::SetShot → FindNextShot → ForceCameraShot. 34 keys for YMCA. |
+| LightPreset loading + animation | **DONE** | ForcePreset active on venue load. YMCA's glitterati venue has no LightPreset objects — static lighting correct. Venues with presets animate via force_preset messages. |
+| Song.anim graceful DTA failure | DONE | DataNode::GetObj returns nullptr gracefully for missing objects (non-fatal MILO_FAIL_DTA) |
 | Lip sync (CharFaceServo, CharLipSyncDriver) | MEDIUM | See [LIP_SYNC.md](../custom-graphics-engine/LIP_SYNC.md) |
 | Procedural blinking (CharFaceServo) | LOW | Cosmetic |
 | CharEyes gaze direction | LOW | Cosmetic |
