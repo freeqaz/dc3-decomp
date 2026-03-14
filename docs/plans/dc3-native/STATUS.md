@@ -20,7 +20,7 @@ gameplay screens.
 | Phase 1.5: Asset Pipeline | COMPLETE | 100% |
 | Phase 2: Rendering | IN PROGRESS | ~95% |
 | Phase 2.5: Character Animation | WORKING | ~90% |
-| Phase 3: Audio | COMPLETE | 100% |
+| Phase 3: Audio | COMPLETE | 100% (real-time MOGG playback verified) |
 | Phase 4: Input | COMPLETE | 100% |
 | Phase 5: Motion Capture | NOT STARTED | 0% |
 | Phase 6: Polish & Platforms | NOT STARTED | 5% |
@@ -103,13 +103,15 @@ iterates drawables, while the engine uses `WorldDir::DrawShowing()` → `RndGrou
 | **Venue rendering through world_panel** | **DONE** | Fixed NaN camera in CalcFrame/SetFrame. Venue renders through TheUI->Draw() matching Xbox architecture |
 | **LightPreset forcing** | **DONE** | Auto-force first valid preset on venue change. Baked lights work for venues without presets |
 | **HamDirector venue selection** | **DONE** | GetVenueWorld() for gameplay venue, fallback to gNativeVenueDir for menu |
-| Song animation playback | **TODO** | song.anim PropAnim for camera/light/character sync |
-| LightPreset animation | **TODO** | song.anim → force_preset → preset cycling during gameplay. Load/forcing already works. |
+| Song animation playback | **DONE** | song.anim PropAnim loads, SetFrame advances at 30fps song time, PlayAnims drives character clips |
+| Song audio playback during gameplay | **DONE** | VorbisReader decode loop fix + ring buffer flow control. Real-time MOGG decryption + Vorbis decode. |
+| LightPreset animation | **PARTIAL** | song.anim drives preset cycling. Verify visuals. |
 | Move card UI rendering | **TODO** | Pink rectangles — asset/wiring issue, not missing code. TexMovie + render-to-texture pipeline fully implemented. |
 | Score display | **TODO** | Not yet wired |
-| Song audio playback during gameplay | **TODO** | FFmpeg backend ready, not wired to game flow |
 
 **Key fix (Session 63)**: `CameraManager::CalcFrame()` produced NaN from uninitialized task timers, poisoning camera transforms and making the entire scene invisible. Guards in CalcFrame and CamShot::SetFrame clamp NaN to 0 (first keyframe). Removed redundant explicit DrawShowing — venue correctly renders through world_panel as part of TheUI->Draw().
+
+**Key fix (Session 67 — Audio timing)**: VorbisReader::Poll decode loop exited immediately when TryDecode() found no Ogg packet (on Xbox, a background thread feeds data continuously). Fixed to read more file data and retry. Also added ring buffer flow control to native ConsumeData (missing BytesWriteable check caused silent data loss). Pre-fill ring buffers in Play() before registering with AudioDevice. Song audio now plays at real-time (100% speed), driving all animation systems.
 
 ### Milestone 4: Playable Dance Gameplay
 
@@ -117,7 +119,7 @@ iterates drawables, while the engine uses `WorldDir::DrawShowing()` → `RndGrou
 
 | Task | Priority | Notes |
 |------|----------|-------|
-| Character animation in gameplay | HIGH | CharClip playback synced to beat. SongAnimation() returns -1 (clips present but not driven) |
+| Character animation in gameplay | **DONE** | CharClip playback synced to beat. SongAnimation() returns 0 (SongDriver has clips). ClipPlayer.PlayAnims drives skeleton from song.anim frame. |
 | TexMovie render-to-texture | DONE | Full pipeline: FFmpeg decode → UploadRGBAToRndTex → WebGPU. MakeDrawTarget/FinishDrawTarget implemented. Pink rectangles are asset/wiring issue. |
 | LightPreset loading + animation | PARTIAL | Load is DONE (99.2% match, stubs removed session 61, ForcePreset active). Animation cycling via song.anim still TODO. |
 | Song.anim graceful DTA failure | HIGH | Guard DataNode::GetObj for missing objects |
