@@ -339,6 +339,7 @@ private:
     // Native venue initialization — re-runs when gNativeVenueDir changes
     bool mVenueInited = false;
     ObjectDir* mLastVenueDir = nullptr;  // detect venue dir changes
+    int mLastVenueHashSize = 0;  // detect venue content reload
 
     // Auto-screenshot capture (env-var controlled)
     std::string mScreenshotDir;

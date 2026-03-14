@@ -666,8 +666,18 @@ void WgpuRnd::MakeDrawTarget() {
 // ---------------------------------------------------------------------------
 void WgpuRnd::NativeVenueInit() {
     // Re-run init if gNativeVenueDir changed (new venue loaded for gameplay)
-    if (mVenueInited && gNativeVenueDir == mLastVenueDir)
-        return;
+    // Also re-run if the venue's content was reloaded by the game (detected
+    // by hash table growth — the early skeleton has ~1 entry, the full venue
+    // has hundreds).
+    if (mVenueInited && gNativeVenueDir == mLastVenueDir) {
+        int curHash = gNativeVenueDir ? gNativeVenueDir->HashTableUsedSize() : 0;
+        if (curHash <= mLastVenueHashSize)
+            return;
+        // Venue content grew — the game loaded the full .milo
+        printf("DC3 Native: venue content changed (%d → %d objects), re-initializing\n",
+               mLastVenueHashSize, curHash);
+        mVenueInited = false;
+    }
 
     // gNativeVenueDir is set by ObjectDir::AddedSubDir when chars_base is added
     // to a venue dir. This is the venue (e.g., glitterati) that contains all
@@ -681,8 +691,9 @@ void WgpuRnd::NativeVenueInit() {
 
     mVenueInited = true;
     mLastVenueDir = gNativeVenueDir;
-    printf("DC3 Native: venue init — entering '%s' (%s) with %d subdirs\n",
-           venue->Name(), venue->ClassName(), (int)venue->SubDirs().size());
+    mLastVenueHashSize = gNativeVenueDir->HashTableUsedSize();
+    printf("DC3 Native: venue init — '%s' dir=%p hash=%d subdirs=%d\n",
+           venue->Name(), (void*)gNativeVenueDir, mLastVenueHashSize, (int)venue->SubDirs().size());
 
     // Enter the venue hierarchy — this cascades to all objects including
     // Characters, RndDrawables, etc.
@@ -716,40 +727,9 @@ void WgpuRnd::NativeVenueInit() {
         }
     }
 
-    // Load venue component .milo files (buildings, sky, set, etc.)
-    // On Xbox, these are loaded by DTA scripts via the venue's extras.fm FileMerger.
-    // We load them directly and merge into the venue WorldDir.
-    {
-        const char* venueName = TheGameData ? TheGameData->Venue().Str() : nullptr;
-        if (!venueName || !*venueName) venueName = "glitterati";
-        static const char* componentSuffixes[] = {
-            "_buildings", "_sky", "_set", "_chairs", "_table_glasses", nullptr
-        };
-        int totalMerged = 0;
-        for (const char** suffix = componentSuffixes; *suffix; suffix++) {
-            const char* miloPath = MakeString("world/%s/%s%s.milo", venueName, venueName, *suffix);
-            FilePath fp;
-            fp.Set(FilePath::Root().c_str(), miloPath);
-            ObjectDir* componentDir = DirLoader::LoadObjects(fp, nullptr, nullptr);
-            if (componentDir) {
-                MergeFilter filt((MergeFilter::Action)0, MergeFilter::kMergeInlinedMoveSharedSubdirs);
-                MergeDirs(componentDir, venue, filt);
-                totalMerged++;
-            }
-        }
-        if (totalMerged > 0) {
-            printf("  Loaded %d venue components for '%s'\n", totalMerged, venueName);
-            // Rebuild draw list so merged drawables appear in rendering
-            venue->SyncObjects();
-            // Room geometry normals face inward — gameplay cameras often see
-            // back faces from below/outside the room. Disable backface culling
-            // on component materials so the room is visible from all angles.
-            for (ObjDirItr<RndMat> mi(venue, true); mi != nullptr; ++mi) {
-                if (strstr(mi->Name(), "GLI_"))
-                    mi->SetCull(kCullNone);
-            }
-        }
-    }
+    // Note: Venue component .milo files are loaded from the App main loop
+    // (App.cpp) when the game venue is detected — not here, since this runs
+    // before the game fully loads the venue content.
 
     // Load default outfits for characters so they have visible meshes.
     // On Xbox, HamWardrobe::LoadCharacters does this via DTA message flow.
@@ -1195,7 +1175,7 @@ void WgpuRnd::WriteSceneUniforms() {
     if (env) {
         // Ambient color (with minimum floor for visibility)
         const Hmx::Color& amb = env->AmbientColor();
-        float minAmbient = 0.35f;
+        float minAmbient = 0.08f;
         scene.ambientColor[0] = amb.red > minAmbient ? amb.red : minAmbient;
         scene.ambientColor[1] = amb.green > minAmbient ? amb.green : minAmbient;
         scene.ambientColor[2] = amb.blue > minAmbient ? amb.blue : minAmbient;
@@ -1236,6 +1216,44 @@ void WgpuRnd::WriteSceneUniforms() {
             scene.lightColors[lightIdx][2] = lc.blue;
             scene.lightColors[lightIdx][3] = 1.0f;
             lightIdx++;
+        }
+
+        // Supplement from venue WorldDir lights — the environment's light
+        // lists may not contain all venue lights (especially from component
+        // .milo files loaded via DTA extras.fm).  Scan the venue directly.
+        if (lightIdx < 4) {
+            WorldDir* venueDir = TheHamDirector ? TheHamDirector->GetVenueWorld() : nullptr;
+            if (!venueDir && gNativeVenueDir)
+                venueDir = dynamic_cast<WorldDir*>(gNativeVenueDir);
+            if (venueDir) {
+                for (ObjDirItr<RndLight> lit(venueDir, true);
+                     lit != nullptr && lightIdx < 4; ++lit) {
+                    if (!lit->Showing()) continue;
+                    if (lit->GetType() != RndLight::kDirectional) continue;
+                    const Hmx::Color& lc = lit->GetColor();
+                    if (lc.red < 0.01f && lc.green < 0.01f && lc.blue < 0.01f) continue;
+                    // Skip if already in the approx list
+                    bool dup = false;
+                    for (int di = 0; di < lightIdx; di++) {
+                        if (std::abs(scene.lightColors[di][0] - lc.red) < 0.001f &&
+                            std::abs(scene.lightColors[di][1] - lc.green) < 0.001f &&
+                            std::abs(scene.lightColors[di][2] - lc.blue) < 0.001f) {
+                            dup = true; break;
+                        }
+                    }
+                    if (dup) continue;
+                    const Transform& lxfm = lit->WorldXfm();
+                    scene.lightDirs[lightIdx][0] = lxfm.m.y.x;
+                    scene.lightDirs[lightIdx][1] = lxfm.m.y.y;
+                    scene.lightDirs[lightIdx][2] = lxfm.m.y.z;
+                    scene.lightDirs[lightIdx][3] = 0.0f;
+                    scene.lightColors[lightIdx][0] = lc.red;
+                    scene.lightColors[lightIdx][1] = lc.green;
+                    scene.lightColors[lightIdx][2] = lc.blue;
+                    scene.lightColors[lightIdx][3] = 1.0f;
+                    lightIdx++;
+                }
+            }
         }
 
         // Check if all directional lights have zero color (uninitialized LightPresets)
@@ -1309,6 +1327,32 @@ void WgpuRnd::WriteSceneUniforms() {
 
             scene.pointLightRanges[pointIdx] = light->Range();
             pointIdx++;
+        }
+        // Supplement point lights from venue WorldDir
+        if (pointIdx < 4) {
+            WorldDir* venueDir = TheHamDirector ? TheHamDirector->GetVenueWorld() : nullptr;
+            if (!venueDir && gNativeVenueDir)
+                venueDir = dynamic_cast<WorldDir*>(gNativeVenueDir);
+            if (venueDir) {
+                for (ObjDirItr<RndLight> lit(venueDir, true);
+                     lit != nullptr && pointIdx < 4; ++lit) {
+                    if (!lit->Showing()) continue;
+                    if (lit->GetType() != RndLight::kPoint) continue;
+                    const Hmx::Color& lc = lit->GetColor();
+                    if (lc.red < 0.01f && lc.green < 0.01f && lc.blue < 0.01f) continue;
+                    const Transform& lxfm = lit->WorldXfm();
+                    scene.pointLightPos[pointIdx][0] = lxfm.v.x;
+                    scene.pointLightPos[pointIdx][1] = lxfm.v.y;
+                    scene.pointLightPos[pointIdx][2] = lxfm.v.z;
+                    scene.pointLightPos[pointIdx][3] = 0.0f;
+                    scene.pointLightColors[pointIdx][0] = lc.red;
+                    scene.pointLightColors[pointIdx][1] = lc.green;
+                    scene.pointLightColors[pointIdx][2] = lc.blue;
+                    scene.pointLightColors[pointIdx][3] = 1.0f;
+                    scene.pointLightRanges[pointIdx] = lit->Range();
+                    pointIdx++;
+                }
+            }
         }
         scene.numPointLights = (float)pointIdx;
 

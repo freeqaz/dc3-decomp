@@ -941,13 +941,41 @@ void App::RunWithoutDebugging() {
                 venueWorld = dynamic_cast<WorldDir*>(gNativeVenueDir);
             }
             if (venueWorld) {
-                // Ensure venue has an active LightPreset so lights have real colors.
-                // LightPresetManager::Poll() resets lights to preset values every
-                // frame. Without a forced preset, lights stay at zero (black).
+                // One-shot venue setup: load components, force lighting
                 {
                     static WorldDir* sLastPresetVenue = nullptr;
                     if (venueWorld != sLastPresetVenue) {
                         sLastPresetVenue = venueWorld;
+
+                        // Load venue component .milo files not handled by DTA flow
+                        {
+                            const char* venueName = TheGameData ? TheGameData->Venue().Str() : nullptr;
+                            if (!venueName || !*venueName) venueName = "glitterati";
+                            static const char* componentSuffixes[] = {
+                                "_buildings", "_sky", "_set", "_chairs", "_table_glasses", nullptr
+                            };
+                            int totalMerged = 0;
+                            for (const char** suffix = componentSuffixes; *suffix; suffix++) {
+                                const char* miloPath = MakeString(
+                                    "world/%s/%s%s.milo", venueName, venueName, *suffix);
+                                FilePath fp;
+                                fp.Set(FilePath::Root().c_str(), miloPath);
+                                ObjectDir* componentDir = DirLoader::LoadObjects(fp, nullptr, nullptr);
+                                if (componentDir) {
+                                    MergeFilter filt(
+                                        (MergeFilter::Action)0,
+                                        MergeFilter::kMergeInlinedMoveSharedSubdirs);
+                                    MergeDirs(componentDir, venueWorld, filt);
+                                    totalMerged++;
+                                }
+                            }
+                            if (totalMerged > 0) {
+                                printf("DC3 Native: loaded %d venue components for '%s'\n",
+                                       totalMerged, venueName);
+                                venueWorld->SyncObjects();
+                            }
+                        }
+
                         LightPresetManager& lpm = venueWorld->GetLightPresetMgr();
                         lpm.SyncObjects();
                         LightPreset* bestPreset = nullptr;
