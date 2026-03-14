@@ -9,6 +9,8 @@
 #include "rndobj/Rnd.h"
 #include "rndobj/Rnd_NG.h"
 #include "rndobj/ShaderMgr.h"
+#include "utl/Loader.h"
+#include "world/Dir.h"
 #include "world/Spotlight.h"
 #include "world/SpotlightDrawer.h"
 
@@ -120,13 +122,31 @@ void NgSpotlightDrawer::SetupXSection(Spotlight *, const Spotlight::BeamDef &) {
 void NgSpotlightDrawer::RenderConeDefs(Spotlight *, const Hmx::Color &) {}
 void NgSpotlightDrawer::RenderCone(Spotlight *) {}
 void NgSpotlightDrawer::RenderBeams(const Hmx::Matrix4 &) {}
-bool NgSpotlightDrawer::CheckCam() { return false; }
+bool NgSpotlightDrawer::CheckCam() { return true; }
 void NgSpotlightDrawer::BlurRT(float, float) {}
 void NgSpotlightDrawer::SetupForPostProcess() {}
 void NgSpotlightDrawer::RenderScene() {}
 #endif
 
 #ifndef HX_NATIVE
+bool NgSpotlightDrawer::CheckCam() {
+    mSavedCam = RndCam::Current();
+    RndCam *cam;
+    if (TheLoadMgr.EditMode()) {
+        cam = RndCam::Current();
+    } else if (TheWorld && TheWorld->Cam()) {
+        cam = TheWorld->Cam();
+    } else {
+        cam = RndCam::Current();
+        if (!cam) {
+            cam = TheRnd.GetDefaultCam();
+        }
+    }
+    mSpotCam->Copy(cam, Hmx::Object::kCopyShallow);
+    mSpotCam->SetTransParent(nullptr, false);
+    return true;
+}
+
 void NgSpotlightDrawer::RenderCone(Spotlight *sl) {
     MILO_ASSERT(sl->HasBeam(), 0x45d);
     Spotlight *colorOwner = sl->mColorOwner;
@@ -150,21 +170,23 @@ void NgSpotlightDrawer::RenderCone(Spotlight *sl) {
 
 void NgSpotlightDrawer::SetupFogDensityState() {
     if (mFogDensityMap) {
-        TheShaderMgr.SetPConstant((PShaderConstant)5, 1);
+        TheShaderMgr.SetPConstant((PShaderConstant)5, mFogDensityMap);
         TheRenderState.SetTextureClamp(5, (RndRenderState::ClampMode)2);
     }
 
     Hmx::Matrix4 viewProj;
-    mSpotCam->GetInfiniteViewProj(viewProj);
-    TheShaderMgr.SetVConstant((VShaderConstant)4, &viewProj);
+    RndCam::Current()->GetInfiniteViewProj(viewProj);
+    TheShaderMgr.SetVConstant((VShaderConstant)4, viewProj);
 
+    float fogDensity;
     float nearPlane = mSpotCam->NearPlane();
-    float fogDensity = 0.0f;
     if (nearPlane > 0.0f) {
         fogDensity = 1.0f / nearPlane;
+    } else {
+        fogDensity = 0.0f;
     }
 
-    float fogParams[4] = { fogDensity * 0.0f, fogDensity, fogDensity * 0.0f, fogDensity * 0.0f };
+    Vector4 fogParams(0.0f, fogDensity, 0.0f, 0.0f);
     TheShaderMgr.SetPConstant((PShaderConstant)0x7F, fogParams);
 }
 

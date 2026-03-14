@@ -142,6 +142,10 @@ void ListProperties(std::list<Symbol> &, Symbol, Symbol, std::list<Symbol> *, bo
 class MergeFilter {
 public:
     enum Action {
+        kMerge,
+        kReplace,
+        kKeep,
+        kIgnore
     };
     enum SubdirAction {
         kMergeMerge,

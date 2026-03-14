@@ -46,14 +46,16 @@ bool Defined() {
 
 void PushBack(const DataNode &n) {
     if (gNode == gArray->Size()) {
+        int maxLines = 0x7FFF;
         if (gNode >= 0x7FFF) {
             MILO_FAIL(
-                "%s(%d): array size > max %d lines", gArray->File(), gArray->Line(), 0x7FFF
+                "%s(%d): array size > max %d lines", gArray->File(), gArray->Line(), maxLines
             );
         }
         MemPushTemp();
         int x = gNode << 1;
-        gArray->Resize(x <= 0x7FFF ? x : 0x7FFF);
+        if (x > 0x7FFF) x = 0x7FFF;
+        gArray->Resize(x);
         MemPopTemp();
     }
     gArray->Node(gNode++) = n;

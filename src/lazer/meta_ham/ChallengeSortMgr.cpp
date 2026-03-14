@@ -211,40 +211,33 @@ bool ChallengeSortMgr::SelectionIs(Symbol selection) {
 
 int ChallengeSortMgr::GetTargetChallengeScore(int i) { return 1000; }
 
-// TODO: implement
 const char *ChallengeSortMgr::GetBestChallengeScoreGamertag(int songID) {
-    ChallengeRecord* records = mChallengeRecords.data();
-    void* recordsEnd = (void*)((uintptr_t)records + mChallengeRecords.size() * sizeof(ChallengeRecord));
-
     int bestScore = -1;
     int bestIndex = -1;
-
-    int recordCount = ((uintptr_t)recordsEnd - (uintptr_t)records) / sizeof(ChallengeRecord);
-
-    if (recordCount > 0) {
-        for (int i = 0; i < recordCount; i++) {
-            ChallengeRow* row = &records[i].GetChallengeRow();
-
-            if (row->mSongID == songID && row->mScore > bestScore) {
-                bestScore = row->mScore;
-                bestIndex = i;
+    unsigned int recordCount = mChallengeRecords.size();
+    unsigned int j = 0;
+    if (recordCount != 0) {
+        do {
+            ChallengeRecord &record = mChallengeRecords[j];
+            int score = record.GetChallengeRow().mScore;
+            if (songID == record.GetChallengeRow().mSongID && bestScore < score) {
+                bestScore = score;
+                bestIndex = j;
             }
-        }
-
+            j++;
+        } while (j < recordCount);
         if (bestIndex != -1) {
-            ChallengeRow* bestRow = &records[bestIndex].GetChallengeRow();
-            int type = bestRow->mType;
-
-            if ((type < 0) || (type > 2)) {
-                if ((type < 3) || (type > 5)) {
-                    return "HARMONIX";
+            int type = mChallengeRecords[bestIndex].GetChallengeRow().mType;
+            bool inRange = (type >= 0 && type <= 2);
+            if (!inRange) {
+                inRange = (type >= 3 && type <= 5);
+                if (!inRange) {
+                    return mChallengeRecords[bestIndex].GetChallengerGamertag().Str();
                 }
             }
-
-            return records[bestIndex].GetChallengeRow().mGamertag.c_str();
+            return "HARMONIX";
         }
     }
-
     return gNullStr;
 }
 
@@ -252,15 +245,19 @@ int ChallengeSortMgr::GetChallengerXp(int i) {
     if (IsIndexHeader(i)) {
         int songID = GetSongID(i);
         int highestScore = 0;
-        int recordCount = (mChallengeRecords.size() * 84) / 0x54;
+        unsigned int recordCount = mChallengeRecords.size();
         int result = 0;
-        for (int j = 0; j < recordCount; j++) {
-            ChallengeRecord* record = &mChallengeRecords[j];
-            int score = record->GetChallengeRow().mScore;
-            if (songID == record->GetChallengeRow().mSongID && highestScore < score) {
-                highestScore = score;
-                result = record->GetChallengeRow().mChallengerXp;
-            }
+        unsigned int j = 0;
+        if (recordCount != 0) {
+            do {
+                ChallengeRecord &record = mChallengeRecords[j];
+                int score = record.GetChallengeRow().mScore;
+                if (songID == record.GetChallengeRow().mSongID && highestScore < score) {
+                    result = record.GetChallengeRow().mChallengerXp;
+                    highestScore = score;
+                }
+                j++;
+            } while (j < recordCount);
         }
         return result;
     } else {

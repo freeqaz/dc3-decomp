@@ -808,35 +808,31 @@ int SkeletonChooser::GetNumValidSkeletonChoices() {
 }
 
 int SkeletonChooser::RoundRobinForStandingStill(int player) {
-    int iVar1;
-    Skeleton *pSVar2;
     int iVar3 = -1;
-    float fVar4 = 0.08f;
     float dVar5 = 0.0f;
-    float fVar6;
+    float fVar4 = 0.08f;
 
     if (mNextSkelIdxToTrack < 0 || unk80 <= 0.0f) {
-        iVar1 = NextSkeletonIndexToTrack(mNextSkelIdxToTrack);
+        int iVar1 = NextSkeletonIndexToTrack(mNextSkelIdxToTrack);
         mNextSkelIdxToTrack = iVar1;
         unk80 = fVar4;
         mSkeletonStandingStillFilters[0]->Clear();
     }
 
     if (mNextSkelIdxToTrack >= 0) {
-        Skeleton& pSVar2 = TheGestureMgr->GetSkeleton(mNextSkelIdxToTrack);
-        iVar3 = pSVar2.mTrackingID;
+        iVar3 = TheGestureMgr->GetSkeleton(mNextSkelIdxToTrack).mTrackingID;
         float fVar6 = TheTaskMgr.DeltaUISeconds();
-        mSkeletonStandingStillFilters[0]->Update(pSVar2, (int)(fVar6 * 1000.0f));
+        mSkeletonStandingStillFilters[0]->Update(iVar3, (int)(fVar6 * 1000.0f));
 
-        if (!mSkeletonStandingStillFilters[0]->StandingStill()) {
+        if (mSkeletonStandingStillFilters[0]->StandingStill()) {
+            mNextSkelIdxToTrack = -1;
+        } else {
             if (mSkeletonStandingStillFilters[0]->RaisedMs() <= dVar5) {
                 fVar6 = TheTaskMgr.DeltaUISeconds();
                 unk80 = unk80 - fVar6;
             } else {
                 unk80 = fVar4;
             }
-        } else {
-            mNextSkelIdxToTrack = -1;
         }
     }
     return iVar3;

@@ -28,6 +28,7 @@ public:
             typename std::list<T>::iterator first = mItems.begin();
             T val = *first;
             mItems.erase(first);
+            Size();
             // Pick a random position and insert there
             int idx = rand() % size;
             typename std::list<T>::iterator it = mItems.begin();
@@ -37,6 +38,7 @@ public:
                 }
             }
             mItems.insert(it, val);
+            Size();
         }
     }
 
@@ -65,7 +67,7 @@ public:
                 return val;
             }
         }
-        return T();
+        return T(0);
     }
     const T GetNext() {
         MILO_ASSERT(Size() > 0, 0x52);
@@ -74,17 +76,19 @@ public:
         case 0:
             idx = 0;
             break;
-        case 2:
-            // this is the only wrong case
-            idx = rand() % (mNumGets % Size());
+        case 2: {
+            int s = Size();
+            idx = rand() % (s - mNumGets % s);
             break;
+        }
         case 3:
             idx = rand() % Size();
             break;
-        default:
+        default: {
             int i1 = mSeed * (float)Size() + 1.01f;
             idx = rand() % i1;
             break;
+        }
         }
         mNumGets++;
         return GetItem(idx);

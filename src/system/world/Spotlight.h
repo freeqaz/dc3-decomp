@@ -18,6 +18,7 @@
 /** "Represents a beam and floorspot for venue modeling" */
 class Spotlight : public RndDrawable, public RndTransformable, public RndPollable {
     friend class SpotlightDrawer;
+    friend class NgSpotlightDrawer;
     friend class LightPreset;
 public:
     struct BeamDef {
@@ -112,6 +113,7 @@ public:
     const Hmx::Color &Color() const { return mColorOwner->mColor; }
     float Intensity() const { return mColorOwner->mIntensity; }
     BeamDef GetBeam() const { return mBeam; }
+    bool HasBeam() const { return mBeam.HasLength(); }
     RndFlare *GetFlare() const { return mFlare; }
     ObjPtrList<RndDrawable> GetAdditionalObjects() const { return mAdditionalObjects; }
     RndMat *LensMesh() const { return mLensMaterial; }

@@ -1042,48 +1042,116 @@ Symbol ProfileMgr::GetAlternateOutfit(Symbol outfit) {
 }
 
 float ProfileMgr::GetPadExtraLag(int padNum, LagContext ctx) const {
-    JoypadData* padData = JoypadGetPadData(padNum);
-    int padType = padData->mType;
-
-    if ((padType - 5) <= 0x17) {
-        switch (padType) {
-        case 5:
-        case 6:
-        case 7:
-            return ctx == kVCal ? 27.0f : 18.0f;
-        case 8:
-        case 9:
-        case 0xb:
-            if (ctx == kVCal) return 43.0f;
-            if (ctx == kACal) return 19.0f;
-            return 36.0f;
-        case 0xc:
-        case 0x19:
-            if (ctx == kVCal) return 25.0f;
-            return 14.0f;
-        case 0xd:
-        case 0x1a:
-            if (ctx == kVCal) return 35.0f;
-            return 20.0f;
-        case 0xe:
-        case 0xf:
-        case 0x11:
-        case 0x12:
-        case 0x18:
-        case 0x1b:
-        case 0x1c:
-            if (ctx == kVCal) return 24.0f;
-            if (ctx == kACal) return -1.0f;
-            return 16.0f;
-        case 0x10:
-        case 0x17:
-            return 10.0f;
-        default:
-            return 14.0f;
+    float lag;
+    JoypadData *padData = JoypadGetPadData(padNum);
+    switch (padData->mType) {
+    case 5:
+    case 6:
+    case 7:
+        if (ctx == kVCal) {
+            lag = 27.0f;
+        } else {
+            lag = 18.0f;
         }
+        break;
+    case 8:
+    case 9:
+    case 0xb:
+        if (ctx == kVCal) {
+            lag = 43.0f;
+        } else if (ctx == kACal) {
+            lag = 19.0f;
+        } else {
+            lag = 36.0f;
+        }
+        break;
+    case 0xc:
+    case 0x19:
+        if (ctx == kVCal) {
+            return 25.0f;
+        }
+        lag = 10.0f;
+        break;
+    case 0xd:
+    case 0x1a:
+        if (ctx == kVCal) {
+            lag = 35.0f;
+        } else {
+            lag = 20.0f;
+        }
+        break;
+    case 0xe:
+    case 0xf:
+    case 0x11:
+    case 0x12:
+    case 0x18:
+    case 0x1b:
+    case 0x1c:
+        if (ctx == kACal) {
+            lag = -1.0f;
+        } else if (ctx == kVCal) {
+            lag = 24.0f;
+        } else {
+            lag = 16.0f;
+        }
+        break;
+    case 0x10:
+    case 0x17:
+        lag = 10.0f;
+        break;
+    default:
+        lag = 14.0f;
+        break;
     }
-    return 14.0f;
+    return lag;
 }
+
+#ifndef HX_NATIVE
+void ProfileMgr::LoadGlobalOptions(FixedSizeSaveableStream &fs) {
+    int version;
+    fs >> version;
+    if (version > 0x1c) {
+        MILO_NOTIFY(
+            "Found System Settings with version %d, while this build only recognizes up "
+            "to %d.  Unable to load System Settings.\n",
+            version,
+            0x1c
+        );
+    } else if (version == 0x1c) {
+        fs >> mMono;
+        fs >> mSyncOffset;
+        fs >> mSongToTaskMgrMs;
+        fs >> mMusicVolume;
+        fs >> mFxVolume;
+        fs >> mBassBoost;
+        fs >> mCrowdVolume;
+        fs >> mDolby;
+        fs >> mDisablePhotos;
+        fs >> mNoFlashcards;
+        fs >> mDisableVoice;
+        fs >> mDisableVoiceCommander;
+        fs >> mDisableVoicePause;
+        fs >> mDisableVoicePractice;
+        fs >> mShowVoiceTip;
+        fs >> mDisableFreestyle;
+        fs >> mSyncPresetIx;
+        fs >> mOverscan;
+        fs >> mTutorialsSeen;
+        int weightUnits;
+        fs >> weightUnits;
+        mWeightUnits = weightUnits;
+        fs >> mForceSpeechLanguageSupport;
+        u64 locale;
+        fs >> locale;
+        mSystemLocale = (int)locale;
+        u64 language;
+        fs >> language;
+        unk45 = true;
+        mSystemLanguage = (int)language;
+    }
+    PushAllOptions();
+}
+#endif
 
 #ifdef HX_NATIVE
 void ProfileMgr::LoadGlobalOptions(FixedSizeSaveableStream &) {}

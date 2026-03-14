@@ -495,12 +495,13 @@ void GamePanel::UpdateNowBar() {
         timeRemaining = -timeRemaining;
         sign = '+';
     }
-    float pct = 0.0f;
+    int totalTick = (int)TheTaskMgr.TotalTick();
+    float pct;
     if (songDurMs > 0.0f) {
-        float songDurSec = songDurMs * 0.001f;
-        pct = songSec * 100.0f / songDurSec;
-        if (pct > 100.0f)
-            pct = 100.0f;
+        pct = 100.0f;
+        float computed = songSec * 100.0f / (songDurMs * 0.001f);
+        if (computed <= 100.0f)
+            pct = computed;
     }
     *mTimeOverlay << MakeString(
         "MBT %d:%d:%03d [%s %c%s %4.1f%%] (%.2fsec %dtk)\n",
@@ -511,8 +512,8 @@ void GamePanel::UpdateNowBar() {
         sign,
         FormatTimeMSH(timeRemaining * 1000.0f),
         pct,
-        0.0f,
-        (int)TheTaskMgr.TotalTick()
+        songSec,
+        totalTick
     );
 }
 

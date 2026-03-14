@@ -4,6 +4,7 @@
 #include "meta_ham/NavListNode.h"
 #include "meta_ham/SongSortNode.h"
 #include "ui/UIListWidget.h"
+#include <cstdio>
 
 SongSortBySong::SongSortBySong() {
     static Symbol by_song("by_song");
@@ -60,24 +61,38 @@ NavListHeaderNode *SongSortBySong::NewHeaderNode(NavListItemNode *p1) const {
 
 NavListHeaderNode *
 SongSortBySong::NewHeaderNode(NavListItemNode *n1, NavListItemNode *n2) const {
-    // Add padding to match stack frame size
-    char padding[16] = {0};
-
-    // Dynamic cast both nodes to SongSortNode
     SongSortNode *node1 = dynamic_cast<SongSortNode *>(n1);
     SongSortNode *node2 = dynamic_cast<SongSortNode *>(n2);
 
-    // Get titles from both nodes
     const char *title1 = node1->Record()->Metadata()->Title();
     const char *title2 = node2->Record()->Metadata()->Title();
 
-    // For two-node header, create comparison that can sort between the two
-    // This might represent a range or group header
     SongCmp *cmp = new SongCmp(title1, title2);
 
-    // Create sort symbol from first character of title1
-    char sortLetter[2] = {title1[0], 0};
-    Symbol sortSym(sortLetter);
+    char letter1[2];
+    letter1[0] = 0;
+    letter1[1] = 0;
+    letter1[0] = title1[0];
+    char letter2[2];
+    letter2[0] = 0;
+    letter2[1] = 0;
+    letter2[0] = title2[0];
+
+    char sortLabel[8];
+    sortLabel[0] = 0;
+    sortLabel[1] = 0;
+    sortLabel[2] = 0;
+    sortLabel[3] = 0;
+    sortLabel[4] = 0;
+    sortLabel[5] = 0;
+    sortLabel[6] = 0;
+    sortLabel[7] = 0;
+    if (*title1 == *title2) {
+        sprintf(sortLabel, "%s", letter1);
+    } else {
+        sprintf(sortLabel, "%s-%s", letter1, letter2);
+    }
+    Symbol sortSym(sortLabel);
 
     return new SongHeaderNode(cmp, sortSym, true);
 }

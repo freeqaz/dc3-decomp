@@ -678,7 +678,6 @@ DataNode AppLabel::OnSetUserName(const DataArray *a) {
 }
 
 void AppLabel::SetStoreFilterName(const HamStoreFilter *filter) {
-    if (!filter) return;
     SetDisplayText(filter->mDisplayName.c_str(), true);
 }
 

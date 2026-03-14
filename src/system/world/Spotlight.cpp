@@ -853,20 +853,16 @@ void Spotlight::UpdateTransforms() {
         Vector3(1.0f, 0.0f, 0.0f), Vector3(0.0f, 0.0f, 1.0f), Vector3(0.0f, -1.0f, 0.0f)
     );
     if (mLensMaterial) {
-        float lensSize = mLensSize;
+        Vector3 vd8(0.0f, mLensOffset, 0.0f);
+        Multiply(vd8, thetf.m, vd8);
+        Add(vd8, thetf.v, vd8);
         Hmx::Matrix3 m48;
         m48.Set(
-            Vector3(-lensSize, 0.0f, 0.0f),
-            Vector3(0.0f, 0.0f, lensSize),
-            Vector3(0.0f, lensSize, 0.0f)
+            Vector3(-mLensSize, 0.0f, 0.0f),
+            Vector3(0.0f, 0.0f, mLensSize),
+            Vector3(0.0f, mLensSize, 0.0f)
         );
         Multiply(m48, thetf.m, m48);
-        Vector3 vd8(0.0f, mLensOffset, 0.0f);
-        vd8.Set(
-            (thetf.v.x + (thetf.m.x.x * 0.0f + (thetf.m.y.x * mLensOffset + thetf.m.z.x * 0.0f))),
-            thetf.v.y + thetf.m.x.y * 0.0f + thetf.m.y.y * mLensOffset + thetf.m.z.y * 0.0f,
-            thetf.v.z + thetf.m.x.z * 0.0f + thetf.m.y.z * mLensOffset + thetf.m.z.z * 0.0f
-        );
         mLensXfm = Transform(m48, vd8);
     }
     if (mBeam.mBeam) {

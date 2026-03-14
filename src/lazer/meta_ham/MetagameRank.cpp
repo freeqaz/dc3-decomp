@@ -30,6 +30,7 @@
 #include "utl/Symbol.h"
 #include <algorithm>
 #include <cstdio>
+#include <cstring>
 #include <vector>
 
 namespace {
@@ -57,6 +58,22 @@ namespace {
     std::vector<Unlockable> gUnlockables;
     std::vector<std::vector<Unlockable *>> gTiers;
     std::list<DeferredAward> gDeferredAwardQueue;
+
+    void BuildUnlockablesList(
+        const char *flags, std::vector<const Unlockable *> &out
+    ) {
+        for (unsigned int i = 0; i < gTiers.size(); i++) {
+            if (!out.empty())
+                break;
+            for (unsigned int j = 0; j < gTiers[i].size(); j++) {
+                const Unlockable *u = gTiers[i][j];
+                if (!flags[u->unk0]) {
+                    out.push_back(u);
+                }
+            }
+        }
+        std::random_shuffle(out.begin(), out.end());
+    }
 }
 
 MetagameRank::MetagameRank(HamProfile *p) : mProfile(p) {
@@ -939,7 +956,6 @@ int MetagameRank::GetTier() const {
     return tierCount;
 }
 
-void MetagameRank::AwardForRankUp(int) {}
 int MetagameRank::ComputeRankNumber(bool forceAward) {
     if (mFirstTimePlayed) {
         mRankNumber = 0;
@@ -948,44 +964,41 @@ int MetagameRank::ComputeRankNumber(bool forceAward) {
     }
 
     if (mAtMaxRank) {
-        int maxRank = gRanksArray->Size() - 1;
         mPctToNextRank = 0.0f;
-        mRankNumber = maxRank;
-        return maxRank;
+        mAtMaxRank = true;
+        mRankNumber = gRanksArray->Size() - 1;
+        return mRankNumber;
     }
 
     int currentRank = 1;
     int prevScore = 0;
+    float pct;
 
-    if (gRanksArray->Size() > 1) {
-        int arraySize = gRanksArray->Size();
+    if (1 < gRanksArray->Size()) {
         do {
-            DataArray *rankArray = gRanksArray->Node(currentRank).Array();
-            int scoreReq = rankArray->Int(0);
+            DataArray *rankEntry = gRanksArray->Array(currentRank);
+            int scoreReq = rankEntry->Int(0);
 
-            if (mScore < scoreReq) {
-                int deltaScore = mScore - prevScore;
-                int deltaRank = scoreReq - prevScore;
-                mPctToNextRank = (float)deltaScore / (float)deltaRank;
+            if (scoreReq > mScore) {
+                currentRank--;
+                if (currentRank != -1) {
+                    pct = (float)(mScore - prevScore) / (float)(scoreReq - prevScore);
+                    goto update;
+                }
                 break;
             }
 
-            prevScore = scoreReq;
             currentRank++;
-
-            if (currentRank >= arraySize) {
-                mPctToNextRank = 0.0f;
-                mAtMaxRank = true;
-                currentRank = arraySize - 1;
-                break;
-            }
-        } while (true);
-    } else {
-        mPctToNextRank = 0.0f;
-        mAtMaxRank = true;
-        currentRank = 0;
+            prevScore = scoreReq;
+        } while (currentRank < gRanksArray->Size());
     }
 
+    pct = 0.0f;
+    mAtMaxRank = true;
+    currentRank = gRanksArray->Size() - 1;
+
+update:
+    mPctToNextRank = pct;
     if (mRankNumber != currentRank) {
         if (mAtMaxRank) {
             mHasNewRank = true;
@@ -997,4 +1010,45 @@ int MetagameRank::ComputeRankNumber(bool forceAward) {
     }
 
     return mRankNumber;
+}
+
+void MetagameRank::AwardForRankUp(int numRanks) {
+    std::vector<const Unlockable *> available;
+
+    for (int i = 0; i < numRanks; i++) {
+        if (available.empty()) {
+            BuildUnlockablesList(unk79, available);
+            if (available.empty()) {
+                return;
+            }
+        }
+
+        const Unlockable *unlock = available.back();
+        available.pop_back();
+
+        String gamerTag;
+        if (mProfile) {
+            HamUser *user = mProfile->GetHamUser();
+            if (user) {
+                user = mProfile->GetHamUser();
+            }
+        }
+
+        unk79[unlock->unk0] = 1;
+
+        char noUnlock[11];
+        memcpy(noUnlock, "no_unlock_", 11);
+        if (strncmp(unlock->unk4.Str(), noUnlock, strlen(noUnlock)) != 0) {
+            DeferredAward award;
+            award.unk0 = gamerTag;
+            award.unk8 = unlock->unk4;
+            award.unkc = unlock->unk8;
+            award.unk10 = unlock->unk10;
+            gDeferredAwardQueue.push_back(award);
+
+            for (unsigned int j = 0; j < unlock->unk14.size(); j++) {
+                mProfile->UnlockContent(unlock->unk14[j]);
+            }
+        }
+    }
 }

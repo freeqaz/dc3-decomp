@@ -90,20 +90,15 @@ void AddClassExt(char *file, Symbol s) {
 void MergeObject(
     Hmx::Object *o1, Hmx::Object *o2, ObjectDir *dir, MergeFilter::Action act
 ) {
-    if (o1 == o2 || act == 3)
+    if (o1 == o2 || act == MergeFilter::kIgnore)
         return;
     if (o2) {
-        ObjectDir *o1Dir = dynamic_cast<ObjectDir *>(o1);
-        ObjectDir *o2Dir = dynamic_cast<ObjectDir *>(o2);
-        bool redirectRefs = !(act == 2 && o1Dir && o2Dir);
-        if (redirectRefs) {
-            o1->ReplaceRefs(o2);
-        }
-        if (act == 0)
+        o1->ReplaceRefs(o2);
+        if (act == MergeFilter::kMerge)
             o2->Copy(o1, Hmx::Object::kCopyFromMax);
-        else if (act == 1)
+        else if (act == MergeFilter::kReplace)
             o2->Copy(o1, Hmx::Object::kCopyDeep);
-    } else if (act != 2) {
+    } else if (act != MergeFilter::kKeep) {
         o1->SetName(o1->Name(), dir);
     }
 }

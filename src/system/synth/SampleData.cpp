@@ -81,33 +81,30 @@ void SampleData::LoadWAV(BinStream &bs, const FilePath &fp, bool bigEndian) {
     Reset();
     WaveFile wav(bs);
     if (wav.BitsPerSample() != 0x10) {
-        MILO_WARN("Wave file %s is not 16-bit", fp);
+        MILO_NOTIFY("Wave file %s is not 16-bit", fp);
         return;
     }
     if (wav.Format() != 1) {
-        MILO_WARN("Wave file %s is compressed", fp);
+        MILO_NOTIFY("Wave file %s is compressed", fp);
         return;
     }
+    Hmx::CRC crc;
     if (!bigEndian) {
-        mCRC.mCRC = Hmx::CRC(FileRelativePath(FileExecRoot(), fp.c_str())).mCRC;
-    } else {
-        mCRC.mCRC = 0;
+        crc = Hmx::CRC(FileRelativePath(FileExecRoot(), fp.c_str()));
     }
-    int numSamples = wav.NumSamples();
-    int numChannels = wav.NumChannels();
-    mNumSamples = numSamples;
-    mNumChannels = numChannels;
-    mSampleRate = wav.SamplesPerSec();
-    int size = numSamples * numChannels << 1;
-    mSizeBytes = size;
     mFormat = kPCM;
+    mCRC.mCRC = crc.mCRC;
+    mNumChannels = wav.NumChannels();
+    mNumSamples = wav.NumSamples();
+    mSampleRate = wav.SamplesPerSec();
+    mSizeBytes = SizeAs(mFormat);
     if (mCRC.mCRC != 0) {
         if (!TheWavMgr->CreateSample(mCRC, mData, mSizeBytes)) {
             WaveFileData wavdata(wav);
             wavdata.Read(mData, mSizeBytes);
         }
     } else {
-        mData = sAlloc(mSizeBytes, __FILE__, 0, "SampleData", 0);
+        mData = sAlloc(mSizeBytes, __FILE__, 0xa5, "SampleData", 0);
         WaveFileData wavdata(wav);
         wavdata.Read(mData, mSizeBytes);
     }
@@ -127,17 +124,12 @@ int SampleData::SizeAs(Format fmt) const {
             return mNumChannels * mNumSamples * 2;
         case 2:
             return ((mNumSamples + 0x6F) / 0x70) * mNumChannels * 0x40;
+        case 4:
+        case 5:
+            return ((mNumSamples + 0x3FF) / 0x400) * mNumChannels * 0xC0;
         case 3:
-            MILO_WARN("don't know size as XMA");
+            MILO_NOTIFY("don't know size as XMA");
             return mNumSamples / 5;
-        case 4: {
-            unsigned int uVar3 = mNumSamples + 0x3FF;
-            return (((int)uVar3 >> 10) + ((int)uVar3 < 0 && (uVar3 & 0x3FF) != 0)) * mNumChannels * 0xC0;
-        }
-        case 5: {
-            unsigned int uVar3 = mNumSamples + 0x3FF;
-            return (((int)uVar3 >> 10) + ((int)uVar3 < 0 && (uVar3 & 0x3FF) != 0)) * mNumChannels * 0xC0;
-        }
         case 6: {
             int iVar2 = mNumChannels * mNumSamples;
             return 0x60 - (int)((float)(long long)(iVar2 * 2) * -0.29411763f);
@@ -148,7 +140,7 @@ int SampleData::SizeAs(Format fmt) const {
         }
         }
     } else {
-        MILO_FAIL(0, 0x136);
+        MILO_ASSERT(0, 0x12B);
         return 0;
     }
     return 0;
