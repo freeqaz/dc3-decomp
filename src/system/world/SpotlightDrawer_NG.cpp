@@ -126,6 +126,28 @@ void NgSpotlightDrawer::SetupForPostProcess() {}
 void NgSpotlightDrawer::RenderScene() {}
 #endif
 
+#ifndef HX_NATIVE
+void NgSpotlightDrawer::RenderCone(Spotlight *sl) {
+    MILO_ASSERT(sl->HasBeam(), 0x45d);
+    Spotlight *colorOwner = sl->mColorOwner;
+    float scale = colorOwner->mIntensity * 8.0f;
+    Hmx::Color color(
+        colorOwner->mColor.red * scale,
+        colorOwner->mColor.green * scale,
+        colorOwner->mColor.blue * scale,
+        colorOwner->mColor.alpha * scale
+    );
+    if (!sl->mAnimateColorFromPreset && sl->mBeam.mMat) {
+        const Hmx::Color &matColor = sl->mBeam.mMat->GetColor();
+        color.red *= matColor.red;
+        color.green *= matColor.green;
+        color.blue *= matColor.blue;
+        color.alpha *= matColor.alpha;
+    }
+    RenderConeDefs(sl, color);
+}
+#endif
+
 void NgSpotlightDrawer::SetupFogDensityState() {
     if (mFogDensityMap) {
         TheShaderMgr.SetPConstant((PShaderConstant)5, 1);

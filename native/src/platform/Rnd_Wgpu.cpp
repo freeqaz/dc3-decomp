@@ -22,9 +22,12 @@
 #include "rndobj/Utl.h"
 #include "gfx/VertexFormats.h"
 #include "obj/Dir.h"
+#include "obj/DirLoader.h"
+#include "obj/Utl.h"
 #include "ui/UI.h"
 #include "hamobj/HamDirector.h"
 #include "hamobj/HamCharacter.h"
+#include "hamobj/HamGameData.h"
 #include "world/Dir.h"
 #include "char/Character.h"
 #include "math/Utl.h"
@@ -710,6 +713,41 @@ void WgpuRnd::NativeVenueInit() {
             printf("  LightPreset: forced '%s'\n", firstPreset->Name());
         } else {
             printf("  LightPreset: no presets found in venue\n");
+        }
+    }
+
+    // Load venue component .milo files (buildings, sky, set, etc.)
+    // On Xbox, these are loaded by DTA scripts via the venue's extras.fm FileMerger.
+    // We load them directly and merge into the venue WorldDir.
+    {
+        const char* venueName = TheGameData ? TheGameData->Venue().Str() : nullptr;
+        if (!venueName || !*venueName) venueName = "glitterati";
+        static const char* componentSuffixes[] = {
+            "_buildings", "_sky", "_set", "_chairs", "_table_glasses", nullptr
+        };
+        int totalMerged = 0;
+        for (const char** suffix = componentSuffixes; *suffix; suffix++) {
+            const char* miloPath = MakeString("world/%s/%s%s.milo", venueName, venueName, *suffix);
+            FilePath fp;
+            fp.Set(FilePath::Root().c_str(), miloPath);
+            ObjectDir* componentDir = DirLoader::LoadObjects(fp, nullptr, nullptr);
+            if (componentDir) {
+                MergeFilter filt((MergeFilter::Action)0, MergeFilter::kMergeInlinedMoveSharedSubdirs);
+                MergeDirs(componentDir, venue, filt);
+                totalMerged++;
+            }
+        }
+        if (totalMerged > 0) {
+            printf("  Loaded %d venue components for '%s'\n", totalMerged, venueName);
+            // Rebuild draw list so merged drawables appear in rendering
+            venue->SyncObjects();
+            // Room geometry normals face inward — gameplay cameras often see
+            // back faces from below/outside the room. Disable backface culling
+            // on component materials so the room is visible from all angles.
+            for (ObjDirItr<RndMat> mi(venue, true); mi != nullptr; ++mi) {
+                if (strstr(mi->Name(), "GLI_"))
+                    mi->SetCull(kCullNone);
+            }
         }
     }
 

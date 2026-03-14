@@ -160,6 +160,9 @@ public:
     bool Prelit() const { return mPrelit; }
     Blend GetBlend() const { return mBlend; }
     Cull GetCull() const { return mCull; }
+#ifdef HX_NATIVE
+    void SetCull(Cull c) { mCull = c; }
+#endif
     StencilMode GetStencil() const { return mStencilMode; }
     bool GetAlphaCut() const { return mAlphaCut; }
     bool GetAlphaWrite() const { return mAlphaWrite; }
