@@ -56,6 +56,10 @@
 
 Game *TheGame;
 static bool sMoveOverlayToggle;
+#if defined(HX_NATIVE) || defined(__EMSCRIPTEN__)
+static bool sNativeAudioInitiated = false;
+static int sNativeAudioPollCount = 0;
+#endif
 std::vector<Symbol> sAutoplayStates;
 
 Game::Game()
@@ -781,19 +785,32 @@ bool Game::IsLoaded() {
             }
             MILO_LOG("Game::IsLoaded() - Done waiting for MoveGraph\n");
             mLoadState = 2;
+#if defined(HX_NATIVE) || defined(__EMSCRIPTEN__)
+            sNativeAudioInitiated = false;
+            sNativeAudioPollCount = 0;
+#endif
         }
         if (mLoadState == 2) {
             if (mMaster->GetAudio()->Fail()) {
                 return true;
             }
             if (!mMaster->GetAudio()->IsReady()) {
-#ifdef __EMSCRIPTEN__
-                // Web has no real audio — bypass after timeout
-                static int sAudioPoll = 0;
-                if (sAudioPoll++ < 60) {
+#if defined(HX_NATIVE) || defined(__EMSCRIPTEN__)
+                // On native/web, the DTA SongSequence/load_new_song flow may not
+                // trigger before PollForLoading reaches this point. Start audio
+                // loading here, then give it time to buffer. Bypass after timeout
+                // so gameplay loads even if audio is slow (it continues in bg).
+                if (!sNativeAudioInitiated) {
+                    sNativeAudioInitiated = true;
+                    Symbol song = TheGameData->GetSong();
+                    fprintf(stderr, "Game::IsLoaded() — initiating audio load for '%s'\n", song.Str());
+                    LoadNewSongAudio(song);
+                }
+                if (sNativeAudioPollCount++ < 120) {
                     TheSynth->Poll();
                     return false;
                 }
+                fprintf(stderr, "Game::IsLoaded() — audio timeout, proceeding without audio ready\n");
 #else
                 TheSynth->Poll();
                 return false;
