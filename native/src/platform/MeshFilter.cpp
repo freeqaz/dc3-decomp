@@ -35,6 +35,10 @@ bool ShouldSkipMesh(const char* name, RndMat* mat) {
     if (!strncmp(name, "pose_flash", 10)) {
         return true;
     }
+    // Kinect camera preview (render-target texture never filled on native)
+    if (!strcmp(name, "preview.mesh")) {
+        return true;
+    }
     // Tutorial/gesture overlay content
     if (strstr(name, "tutorial") || strstr(name, "gesture") ||
         strstr(name, "spotlight") || strstr(name, "nav_tut")) {
