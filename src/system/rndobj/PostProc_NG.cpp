@@ -1,10 +1,14 @@
 #include "rndobj/PostProc_NG.h"
 #include "Memory.h"
 #include "Tex.h"
+#include "hamobj/HamDirector.h"
+#include "math/Color.h"
 #include "math/Rand.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
 #include "rnddx9/RenderState.h"
+#include "rndobj/Mat.h"
+#include "rndobj/Overlay.h"
 #include "rndobj/PostProc.h"
 #include "rndobj/Rnd.h"
 #include "rndobj/Rnd_NG.h"
@@ -13,13 +17,205 @@
 #include "rndobj/HiResScreen.h"
 #include "rndobj/ShaderMgr.h"
 #include "utl/Loader.h"
+#include "utl/MakeString.h"
 #include <math.h>
 
 extern void merged_ObjPtrListPopBack(void *);
+void SetBloomBlurWeights(bool, float, float);
+void SetBloomBlurWeightsStreak(bool, float, float, float, int, float);
 
 Hmx::Color NgPostProc::s_prevBloomColor(-1, -1, -1, -1);
 float NgPostProc::s_prevBloomIntensity = -1;
 NgPostProc::BloomTextures<3> NgPostProc::sBloom;
+
+static RndOverlay *sPostProcOverlay;
+
+static int sBloomDebugCounter;
+
+void Bloom_Downsample(ShaderType shader, RndTex *texSrc, RndTex *texDst) {
+    MILO_ASSERT((shader == kBloomShader) || (shader == kDownsample4xShader), 0x17b);
+    MILO_ASSERT(texDst->Width() > 0, 0x17c);
+    MILO_ASSERT(texDst->Height() > 0, 0x17d);
+    MILO_ASSERT(texDst->Width() < texSrc->Width(), 0x17e);
+    MILO_ASSERT(texDst->Height() < texSrc->Height(), 0x17f);
+
+    RndMat *workMat = TheShaderMgr.GetWork();
+    workMat->SetBlend(BaseMaterial::kBlendSrc);
+    workMat->SetZMode(kZModeDisable);
+    workMat->SetTexWrap(kTexWrapClamp);
+    workMat->MarkDirty(2);
+
+    texDst->MakeDrawTarget();
+    TheShaderMgr.SetPConstant((PShaderConstant)kPS_BloomParams, texSrc);
+    workMat->SetDiffuseTex(texSrc);
+    workMat->MarkDirty(2);
+
+    Hmx::Rect rect(0, 0, (float)texDst->Width(), (float)texDst->Height());
+    TheNgRnd.DrawRect(rect, workMat, shader, Hmx::Color(1, 1, 1), nullptr, nullptr);
+
+    texDst->FinishDrawTarget();
+}
+
+void Bloom_Blur(RndTex *texDst, RndTex *texSrc, BloomBlurStyle style, BloomBlurDirection direction, unsigned int pass, float attenuation, float angle) {
+    MILO_ASSERT(texDst->Width() > 0, 0x1b2);
+    MILO_ASSERT(texDst->Height() > 0, 0x1b3);
+    MILO_ASSERT(texDst->Width() == texSrc->Width(), 0x1b4);
+    MILO_ASSERT(texDst->Height() == texSrc->Height(), 0x1b5);
+    MILO_ASSERT(TheShaderMgr.NumTaps() == 1, 0x1b6);
+
+    RndMat *workMat = TheShaderMgr.GetWork();
+    workMat->SetZMode(kZModeDisable);
+    workMat->SetTexWrap(kTexWrapClamp);
+    workMat->SetBlend(BaseMaterial::kBlendSrc);
+    workMat->MarkDirty(2);
+
+    texDst->MakeDrawTarget();
+    workMat->SetDiffuseTex(texSrc);
+
+    ShaderType blurShader = kBlurShader;
+    bool horizontal = (direction == kBloomBlurHorizontal);
+    workMat->MarkDirty(2);
+
+    if (style == kBloomBlurNormal) {
+        SetBloomBlurWeights(horizontal, (float)texDst->Width(), (float)texDst->Height());
+    } else if (style == kBloomBlurStreak) {
+        SetBloomBlurWeightsStreak(horizontal, (float)texDst->Width(), (float)texDst->Height(), attenuation, pass, angle);
+    } else if (style < kBloomBlurGlare + 1) {
+        blurShader = kBloomGlareShader;
+    }
+
+    Hmx::Rect rect(0, 0, (float)texDst->Width(), (float)texDst->Height());
+    TheNgRnd.DrawRect(rect, workMat, blurShader, Hmx::Color(1, 1, 1), nullptr, nullptr);
+
+    TheShaderMgr.SetNumTaps(1);
+    texDst->FinishDrawTarget();
+}
+
+NgPostProc *NgPostProc::s_BloomSetter;
+
+void NgPostProc::DoBloom() {
+    float bloomIntensity = BloomIntensity();
+    bool doBloom = (0.0f < bloomIntensity) || (0.0f < mBloomColor.alpha);
+    bool doGlare = mBloomGlare && !TheHiResScreen.IsActive();
+
+    if (!doBloom && s_BloomSetter) {
+        RndOverlay *overlay = RndOverlay::Find("postproc", true);
+        RndOverlay *prevOverlay = sPostProcOverlay;
+        if (overlay->Showing()) {
+            sPostProcOverlay = overlay;
+            FormatString fmt("BLOOM : NONE\n");
+            TheDebug << fmt.Str();
+        }
+        s_BloomSetter = nullptr;
+        s_prevBloomIntensity = -1.0f;
+        s_prevBloomColor = Hmx::Color(-1, -1, -1, -1);
+        sPostProcOverlay = prevOverlay;
+    }
+
+    if (doBloom) {
+        bloomIntensity = BloomIntensity();
+        float redScaled = mBloomColor.red * sBloomLocFactor * bloomIntensity;
+        float greenScaled = mBloomColor.green * sBloomLocFactor * bloomIntensity;
+        float blueScaled = mBloomColor.blue * sBloomLocFactor * bloomIntensity;
+
+        bool paramsChanged = !(mBloomColor == s_prevBloomColor)
+            || BloomIntensity() != s_prevBloomIntensity
+            || s_BloomSetter != this;
+
+        if (paramsChanged) {
+            s_prevBloomColor = mBloomColor;
+            s_prevBloomIntensity = BloomIntensity();
+            s_BloomSetter = this;
+
+            RndOverlay *overlay = RndOverlay::Find("postproc", true);
+            RndOverlay *prevOverlay = sPostProcOverlay;
+            if (overlay->Showing()) {
+                sPostProcOverlay = overlay;
+                const char *worldName = PathName(*(Hmx::Object**)(((char*)TheHamDirector)+0x198));
+                float intensity = BloomIntensity();
+                int r = (int)(mBloomColor.red * 256.0f);
+                int g = (int)(mBloomColor.green * 256.0f);
+                int b = (int)(mBloomColor.blue * 256.0f);
+                int counter = sBloomDebugCounter % 100;
+                sBloomDebugCounter++;
+                TheDebug << MakeString("%03d:BLOOM: C=<%3d,%3d,%3d> I=%5.2f : %s\n", counter, r, g, b, intensity, worldName);
+            }
+            sPostProcOverlay = prevOverlay;
+        }
+
+        Vector4 bloomColorVec(redScaled, greenScaled, blueScaled, 0.0f);
+        TheShaderMgr.SetPConstant((PShaderConstant)6, bloomColorVec);
+        TheShaderMgr.SetPConstant((PShaderConstant)kPS_BloomParams, TheRnd.GetDefaultTex(Rnd::kDefaultTex_Black));
+        TheShaderMgr.SetPConstant((PShaderConstant)kPS_SpotlightTex, TheRnd.GetDefaultTex(Rnd::kDefaultTex_Black));
+        TheShaderMgr.SetPConstant((PShaderConstant)kPS_NgMatCustom, TheRnd.GetDefaultTex(Rnd::kDefaultTex_Black));
+        TheRenderState.SetTextureFilter(kPS_BloomParams, (RndRenderState::FilterMode)1, false);
+        TheRenderState.SetTextureClamp(kPS_BloomParams, (RndRenderState::ClampMode)2);
+        TheRenderState.SetTextureFilter(kPS_BloomParams, (RndRenderState::FilterMode)1, false);
+        TheRenderState.SetTextureClamp(kPS_BloomParams, (RndRenderState::ClampMode)2);
+        TheRenderState.SetTextureFilter(kPS_SpotlightTex, (RndRenderState::FilterMode)1, false);
+        TheRenderState.SetTextureClamp(kPS_SpotlightTex, (RndRenderState::ClampMode)2);
+        TheRenderState.SetTextureFilter(kPS_NgMatCustom, (RndRenderState::FilterMode)1, false);
+        TheRenderState.SetTextureClamp(kPS_NgMatCustom, (RndRenderState::ClampMode)2);
+
+        RndTex *preprocess = TheNgRnd.PreProcessTexture();
+        if (preprocess) {
+            RndTex *bloomTex;
+            PShaderConstant finalSlot;
+            if (doGlare) {
+                Bloom_Downsample(kBloomShader, preprocess, sBloom.mTextures[0].mBloomTexture[1]);
+                Bloom_Blur(sBloom.mTextures[0].mBloomTexture[1], sBloom.mTextures[0].mBloomTexture[0], kBloomBlurNormal, kBloomBlurHorizontal, 0, 0.0f, 0.0f);
+                Bloom_Blur(sBloom.mTextures[0].mBloomTexture[0], sBloom.mTextures[0].mBloomTexture[1], kBloomBlurNormal, kBloomBlurVertical, 0, 0.0f, 0.0f);
+                Bloom_Blur(sBloom.mTextures[0].mBloomTexture[1], sBloom.mTextures[0].mBloomTexture[0], kBloomBlurGlare, kBloomBlurHorizontal, 0, 0.0f, 0.0f);
+                bloomTex = sBloom.mTextures[0].mBloomTexture[0];
+                finalSlot = kPS_BloomParams;
+            } else if (!mBloomStreak || mBloomGlare) {
+                Bloom_Downsample(kBloomShader, preprocess, sBloom.mTextures[0].mBloomTexture[1]);
+                Bloom_Blur(sBloom.mTextures[0].mBloomTexture[1], sBloom.mTextures[0].mBloomTexture[0], kBloomBlurNormal, kBloomBlurHorizontal, 0, 0.0f, 0.0f);
+                Bloom_Blur(sBloom.mTextures[0].mBloomTexture[0], sBloom.mTextures[0].mBloomTexture[1], kBloomBlurNormal, kBloomBlurVertical, 0, 0.0f, 0.0f);
+                Bloom_Downsample(kDownsample4xShader, sBloom.mTextures[0].mBloomTexture[1], sBloom.mTextures[1].mBloomTexture[0]);
+                Bloom_Blur(sBloom.mTextures[1].mBloomTexture[0], sBloom.mTextures[1].mBloomTexture[1], kBloomBlurNormal, kBloomBlurHorizontal, 0, 0.0f, 0.0f);
+                Bloom_Blur(sBloom.mTextures[1].mBloomTexture[1], sBloom.mTextures[1].mBloomTexture[0], kBloomBlurNormal, kBloomBlurVertical, 0, 0.0f, 0.0f);
+                Bloom_Downsample(kDownsample4xShader, sBloom.mTextures[1].mBloomTexture[0], sBloom.mTextures[2].mBloomTexture[0]);
+                Bloom_Blur(sBloom.mTextures[2].mBloomTexture[0], sBloom.mTextures[2].mBloomTexture[1], kBloomBlurNormal, kBloomBlurHorizontal, 0, 0.0f, 0.0f);
+                Bloom_Blur(sBloom.mTextures[2].mBloomTexture[1], sBloom.mTextures[2].mBloomTexture[0], kBloomBlurNormal, kBloomBlurVertical, 0, 0.0f, 0.0f);
+                TheShaderMgr.SetPConstant((PShaderConstant)kPS_BloomParams, sBloom.mTextures[0].mBloomTexture[1]);
+                TheShaderMgr.SetPConstant((PShaderConstant)kPS_SpotlightTex, sBloom.mTextures[1].mBloomTexture[0]);
+                bloomTex = sBloom.mTextures[2].mBloomTexture[0];
+                finalSlot = kPS_NgMatCustom;
+            } else {
+                Bloom_Downsample(kBloomShader, preprocess, sBloom.mTextures[0].mBloomTexture[1]);
+                Bloom_Blur(sBloom.mTextures[0].mBloomTexture[1], sBloom.mTextures[0].mBloomTexture[0], kBloomBlurStreak, kBloomBlurHorizontal, 0, mBloomStreakAttenuation, mBloomStreakAngle);
+                Bloom_Blur(sBloom.mTextures[0].mBloomTexture[0], sBloom.mTextures[0].mBloomTexture[1], kBloomBlurStreak, kBloomBlurHorizontal, 1, mBloomStreakAttenuation, mBloomStreakAngle);
+                Bloom_Blur(sBloom.mTextures[0].mBloomTexture[1], sBloom.mTextures[0].mBloomTexture[0], kBloomBlurStreak, kBloomBlurHorizontal, 2, mBloomStreakAttenuation, mBloomStreakAngle);
+                Bloom_Downsample(kBloomShader, preprocess, sBloom.mTextures[1].mBloomTexture[1]);
+                Bloom_Blur(sBloom.mTextures[1].mBloomTexture[1], sBloom.mTextures[1].mBloomTexture[0], kBloomBlurStreak, kBloomBlurVertical, 0, mBloomStreakAttenuation, mBloomStreakAngle);
+                Bloom_Blur(sBloom.mTextures[1].mBloomTexture[0], sBloom.mTextures[1].mBloomTexture[1], kBloomBlurStreak, kBloomBlurVertical, 1, mBloomStreakAttenuation, mBloomStreakAngle);
+                Bloom_Blur(sBloom.mTextures[1].mBloomTexture[1], sBloom.mTextures[1].mBloomTexture[0], kBloomBlurStreak, kBloomBlurVertical, 2, mBloomStreakAttenuation, mBloomStreakAngle);
+                TheShaderMgr.SetPConstant((PShaderConstant)kPS_BloomParams, sBloom.mTextures[0].mBloomTexture[0]);
+                bloomTex = sBloom.mTextures[1].mBloomTexture[0];
+                finalSlot = kPS_SpotlightTex;
+            }
+            TheShaderMgr.SetPConstant(finalSlot, bloomTex);
+        }
+    } else {
+        s_BloomSetter = nullptr;
+        s_prevBloomIntensity = -1.0f;
+        s_prevBloomColor = Hmx::Color(-1, -1, -1, -1);
+    }
+
+    if (doBloom) {
+        if (doGlare) {
+            TheShaderMgr.unk28 = true;
+            TheShaderMgr.unk27 = false;
+        } else {
+            TheShaderMgr.unk28 = false;
+            TheShaderMgr.unk27 = true;
+        }
+    } else {
+        TheShaderMgr.unk27 = false;
+        TheShaderMgr.unk28 = false;
+    }
+}
 
 NgPostProc::BloomTextureSet::BloomTextureSet() {
     mBloomTexture[0] = (RndTex*)0;

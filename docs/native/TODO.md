@@ -1,6 +1,6 @@
 # Native Port TODO — Phase 6 Polish & Remaining Work
 
-## Current State (Session 73)
+## Current State (Session 74)
 - **Full gameplay pipeline operational** — Engine boots through menu → song select → game_screen with audio, rendering, animation, camera cuts, post-processing
 - **6 venues tested** — dci, dclive, rollerrink, houseparty, streetside, throneroom — all render correctly
 - **Per-song venue resolution** — Songs load their correct venue from metadata (HamSongMetadata::Venue())
@@ -220,6 +220,34 @@ HamDirector (`src/system/hamobj/HamDirector.cpp:137-202`) exposes ~40+ DTA handl
 - [x] Saturation, levels, vignette, chromatic aberration, posterization, DOF
 - [x] Exotic effects (motion blur, gradient map, kaleidoscope, flicker, noise) — **NOT NEEDED** (debug/test effects never triggered in shipped game content)
 
+## Phase 8: Polish & Remaining Gaps
+
+### 8.1 Challenges System — COMPLETE (Session 74)
+- [x] TheChallenges null crash fixed — enabled `Challenges::Init()` on native (constructor reads DTA config only, no Xbox Live calls)
+- [x] `HasNewChallenges()` returns false (empty profile data — expected for native)
+- [x] Root cause: blanket `#ifndef HX_NATIVE` suppression in MetaPanel.cpp included safe systems
+
+### 8.2 Build Stability — COMPLETE (Session 74)
+- [x] FreestyleMoveRecorder.cpp — PPC-only code (`__fsel` intrinsics, STLport) guarded with `#ifdef HX_NATIVE` stubs
+- [x] MoveAsyncDetector.cpp — `stlpmtx_std` STLport namespace guarded for native
+- [x] PostProc_NG.cpp Bloom_Blur — Xbox shader code (`SetBloomBlurWeights`, `unk14`) guarded
+- [x] SpecialOfferEnumJob virtual dtor — implemented (Session 73)
+
+### 8.3 Character Animation Verification — CONFIRMED (Session 74)
+- [x] Characters animate in gameplay (NOT T-pose) — confirmed via 1920x1080 screenshots
+- [x] Multiple dance poses visible across frames 800-1800 (YMCA)
+- [x] Camera cuts working (different angles between frames)
+- [x] Face rendering functional (head shapes with features visible)
+- [x] Bone garbage mitigation in place (FillBoneUniforms sanity check)
+- See `docs/native/ANIMATION_PIPELINE.md` for full pipeline documentation
+
+### 8.4 Remaining Polish Items
+- [ ] **Bone garbage root cause** — Some leg/foot bones produce invalid translations (~1e16). Currently mitigated by identity fallback. Need to trace through CharBones data to find source of corruption.
+- [ ] **Face servo explicit polling** — Verify CharFaceServo is in Character::mPolls. If not, add explicit poll in gameplay path.
+- [ ] **movemgr DTA error** — `movemgr not function or object` spam every frame during gameplay. TheMoveMgr is null on native; DTA scripts reference it. Low priority (cosmetic log noise).
+- [ ] **Letterboxing artifact** — Some camera angles show black bars on right side. May be aspect ratio mismatch in camera framing.
+- [ ] **Missing mmat references** — Shell/HUD materials can't find `shell_basic.mmat` in some .milo dirs. Cosmetic only (fallback material used).
+
 ---
 
 ## Known Issues to Fix
@@ -253,6 +281,9 @@ HamDirector (`src/system/hamobj/HamDirector.cpp:137-202`) exposes ~40+ DTA handl
 | DCI venue stuck on loading | Audio loading circular dependency in Game::IsLoaded() | **FIXED** (Session 70 — initiate audio from load poll) |
 | Characters blown out/overexposed | All venue lights active simultaneously | **FIXED** (Session 70 — light energy cap) |
 | DTA script crashes on native | Debug::Fail calls abort() | **FIXED** (Session 70 — non-fatal by default) |
+| TheChallenges null crash on main menu | MetaPanel.cpp — Challenges::Init() suppressed | **FIXED** (Session 74 — enabled Init on native, reads DTA config only) |
+| FreestyleMoveRecorder PPC intrinsics | __fsel, STLport not available on native | **FIXED** (Session 74 — native stubs for Kinect gesture code) |
+| SpecialOfferEnumJob undefined vtable | HamStorePanel.cpp — missing dtor | **FIXED** (Session 73 — implemented dtor) |
 
 ## Crashes Fixed (Session 59)
 1. ObjRef ring corruption producer bug in `ObjDirPtr(C*)` → fixed by removing the extra `AddRef`; direct lifetime regression test added

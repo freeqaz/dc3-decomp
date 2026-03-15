@@ -581,6 +581,8 @@ SpecialOfferEnumJob::SpecialOfferEnumJob(
 )
     : MultipleItemsEnumJob(nullptr, sessionID, offerIDs), mPanel(panel) {}
 
+SpecialOfferEnumJob::~SpecialOfferEnumJob() {}
+
 void SpecialOfferEnumJob::OnCompletion(Hmx::Object *) {
     HamStorePanel *panel = mPanel;
     if (!panel)

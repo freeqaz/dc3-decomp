@@ -17,7 +17,45 @@
 #include "rndobj/Tex.h"
 #include "utl/FileStream.h"
 #include "utl/Symbol.h"
+#include "utl/OSCMessenger.h"
+#ifndef HX_NATIVE
 #include "xdk/LIBCMT/ppcintrinsics.h"
+#endif
+#include <cfloat>
+
+#ifdef HX_NATIVE
+// Kinect gesture recording — entirely PPC-specific (__fsel intrinsics, STLport).
+// Stub constructor/destructor + referenced methods for native linking.
+FreestyleMoveRecorder *FreestyleMoveRecorder::sInstance = nullptr;
+FreestyleMoveRecorder::FreestyleMoveRecorder()
+    : mPlaybackSpeed(0), mClipFrames(0), mClipFrameCount(0), mRecordingFrames(0),
+      mLastFrameIndex(-1), mMaxFrames(60), mRecordPos(-1), mPlaybackPos(-1),
+      mDefaultTimeout(15), mPlaybackIndex(-1), mRecording(0), mPlaybackActive(0),
+      mSkeletonIndex(-1), mCurrentTakeIndex(0) {
+    mPlayerPalette = nullptr;
+}
+FreestyleMoveRecorder::~FreestyleMoveRecorder() {}
+void FreestyleMoveRecorder::AssignStaticInstance() { sInstance = this; }
+void FreestyleMoveRecorder::Poll() {}
+void FreestyleMoveRecorder::Free() {}
+void FreestyleMoveRecorder::StartRecording() {}
+void FreestyleMoveRecorder::StartRecordingDancerTake() {}
+void FreestyleMoveRecorder::StopRecording() {}
+void FreestyleMoveRecorder::ClearRecording() {}
+void FreestyleMoveRecorder::StartPlayback(bool) {}
+void FreestyleMoveRecorder::StopPlayback() {}
+void FreestyleMoveRecorder::ClearDancerTake() {}
+BaseSkeleton *FreestyleMoveRecorder::GetLiveSkeleton() { return nullptr; }
+float FreestyleMoveRecorder::CompareSkeletonPositions(const BaseSkeleton *, const BaseSkeleton *, float) const { return 0.0f; }
+void FreestyleMoveRecorder::DrawDebug() {}
+void FreestyleMoveRecorder::PlaybackComplete() {}
+void FreestyleMoveRecorder::ClearFrameScores() {}
+void FreestyleMoveRecorder::ReadFreestyleMoveClip(String, int &, FreestyleMoveFrame *) {}
+float FreestyleMoveRecorder::GetScore(const BaseSkeleton *, int, float, bool) { return 0.0f; }
+float FreestyleMoveRecorder::GetScore(int, int, float, bool) { return 0.0f; }
+#else // PPC
+
+static const float kE = 2.71828182845905f;
 
 DancerSkeleton sLastComparedDancerSkel;
 static int sLastBeatMod;
@@ -618,6 +656,215 @@ float FreestyleMoveRecorder::CompareSkeletonPositions(
     return 0.0f;
 }
 
+float FreestyleMoveRecorder::CompareSkeletonJointDisplacement(
+    const FreestyleMoveFrame *frames, int frameIdx, const BaseSkeleton *liveSkel, float &outTotalWeight
+) const {
+    int trackedCount = (int)((mTrackedJoints.end() - mTrackedJoints.begin()));
+    // Compute clamped prev-frame index: max(0, frameIdx-1)
+    unsigned int prevBase = (unsigned int)(frameIdx - 1);
+    unsigned int clampedPrev = (~((int)prevBase >> 31)) & prevBase;
+    float totalScore = 0.0f;
+    float totalWeight = 0.0f;
+    if (trackedCount == 0) {
+        outTotalWeight = totalWeight;
+        return totalScore;
+    }
+    const FreestyleMoveFrame *curFrame = &frames[frameIdx];
+    const FreestyleMoveFrame *prevFrame = &frames[clampedPrev];
+    int jointIdx = 0;
+    unsigned int i = 0;
+    do {
+        SkeletonJoint joint = mTrackedJoints[i];
+        Vector3 curJointPos, prevJointPos;
+        curFrame->skeleton.JointPos(kCoordCamera, joint, curJointPos);
+        prevFrame->skeleton.JointPos(kCoordCamera, joint, prevJointPos);
+        int beatDiff = (int)(curFrame->mBeat - prevFrame->mBeat);
+        // Build displacement vector (y=0.0 zeroed — ignore depth component)
+        Vector3 dispOffset;
+        dispOffset.x = curJointPos.x - prevJointPos.x;
+        dispOffset.y = 0.0f;
+        dispOffset.z = curJointPos.z - prevJointPos.z;
+        float similarity = 0.0f;
+        float maxDisp = 0.0f;
+        {
+            SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
+            const SkeletonHistory *history = handle.History();
+            handle.~SkeletonUpdateHandle();
+            Vector3 liveDisp;
+            int liveCount = 0;
+            bool hasDisp = liveSkel->Displacement(history, kCoordCamera, joint, beatDiff, liveDisp, liveCount);
+            if (hasDisp) {
+                CompareDisplacementVectors(dispOffset, beatDiff, liveDisp, liveCount, similarity, maxDisp);
+            }
+        }
+        i++;
+        jointIdx += 4;
+        totalScore += similarity * maxDisp;
+        totalWeight += similarity;
+    } while (i < (unsigned int)trackedCount);
+    if (0.0f < totalWeight) {
+        totalScore /= totalWeight;
+    }
+    outTotalWeight = totalWeight;
+    return totalScore;
+}
+
+void FreestyleMoveRecorder::CalcFrameScore(
+    FreestyleFrameScores &scores, const FreestyleMoveFrame *frames, int numFrames,
+    const BaseSkeleton *liveSkel, float beatOffset
+) const {
+    struct TemporalWindow {
+        int frameIdx;
+        float weight;
+    };
+    std::vector<TemporalWindow> windows;
+    float oscTimeout = TheOSCMessenger.GetFloat(String("/temporalwindow"), 1000.0f);
+    float bestDist = FLT_MAX;
+    int bestIdx = 0;
+    int i = 0;
+    if (numFrames > 0) {
+        do {
+            float dist = frames[i].mBeat - beatOffset;
+            float absDist = (float)fabs((double)dist);
+            if (absDist < bestDist) {
+                bestDist = absDist;
+                bestIdx = i;
+            }
+            if (absDist < oscTimeout) {
+                TemporalWindow tw;
+                tw.frameIdx = i;
+                // Gaussian weight: exp(-dist^2 / (oscTimeout*0.5)^2)
+                float distSq = (float)pow((double)dist, 2.0);
+                float halfSq = (float)pow((double)(oscTimeout * 0.5f), 2.0);
+                float ratio = distSq / halfSq;
+                tw.weight = (float)pow(2.718281828459045, (double)(-ratio));
+                windows.push_back(tw);
+            }
+            i++;
+        } while (i < numFrames);
+    }
+    // Fallback: push best frame with weight 1.0 if no windows found
+    if (windows.begin() == windows.end()) {
+        TemporalWindow tw;
+        tw.frameIdx = bestIdx;
+        tw.weight = 1.0f;
+        windows.push_back(tw);
+    }
+    // Accumulate score across windows if liveSkel is valid
+    float totalScore = 0.0f;
+    if (liveSkel != nullptr) {
+        int windowCount = (int)(windows.end() - windows.begin());
+        if (windowCount != 0) {
+            const TemporalWindow *winPtr = windows.begin();
+            int i = 0;
+            do {
+                int frameIdx = winPtr->frameIdx;
+                float twWeight = winPtr->weight;
+                // Best frame always gets weight 1.0
+                if (frameIdx == bestIdx) {
+                    twWeight = 1.0f;
+                }
+                // Displacement score
+                float outTotalWeight;
+                float dispScore = CompareSkeletonJointDisplacement(frames, frameIdx, liveSkel, outTotalWeight);
+                float dispContrib = outTotalWeight * (dispScore * twWeight);
+                // Position score
+                float poseWeight = TheOSCMessenger.GetFloat(String("/poserrorweight"), 3.5f);
+                float posScore = CompareSkeletonPositions(
+                    (const BaseSkeleton *)&frames[frameIdx].skeleton, liveSkel, poseWeight
+                );
+                float posContrib = posScore * twWeight;
+                // Select contribution: max(dispContrib, posContrib)
+                float maxContrib = (float)__fsel(dispContrib - posContrib, dispContrib, posContrib);
+                if (maxContrib == 0.0f) {
+                    // nothing
+                } else if (maxContrib == dispContrib) {
+                    // dispContrib wins — normalize by outTotalWeight
+                    totalScore += dispContrib / outTotalWeight;
+                } else if (maxContrib == posContrib) {
+                    // posContrib wins
+                    totalScore += posContrib;
+                }
+                i++;
+                winPtr++;
+            } while ((unsigned int)i < (unsigned int)windowCount);
+        }
+    }
+    // Clamp totalScore to [0, 1]
+    float clampedScore = (float)__fsel(-totalScore, 0.0f, totalScore);
+    clampedScore = (float)__fsel(clampedScore - 1.0f, 1.0f, clampedScore);
+    // Debug OSC send
+    TheOSCMessenger.SendOSCFloat(String("/framescore"), clampedScore);
+    // Store max(clampedScore, existing) at bestIdx in scores
+    float *scoreData = scores.unk0.begin();
+    float prev = scoreData[bestIdx];
+    scoreData[bestIdx] = (float)__fsel(clampedScore - prev, clampedScore, prev);
+    // Update unkc = max(unkc, bestIdx + 1)
+    int newCount = bestIdx + 1;
+    int maxCount = newCount;
+    if (scores.unkc >= newCount)
+        maxCount = scores.unkc;
+    scores.unkc = maxCount;
+}
+
+float FreestyleMoveRecorder::GetScore(const BaseSkeleton *liveSkel, int playerIdx, float beatParam, bool useDancerTake) {
+    if (mLastFrameIndex == mCurrentTakeIndex && beatParam > 0.0f) {
+        return 1.0f;
+    }
+    // Use mDefaultTimeout if beatParam == -1.0f, else use beatParam
+    float beat = mDefaultTimeout;
+    if (beatParam != -1.0f) {
+        beat = beatParam;
+    }
+    UpdateRecordingAttempt(liveSkel, beat * 1000.0f);
+    const FreestyleMoveFrame *frames;
+    int numFrames;
+    if (useDancerTake) {
+        frames = mFrameBuffer;
+        numFrames = mDancerTakeFrameCount;
+    } else {
+        frames = mTakes[mCurrentTakeIndex].mFrames;
+        numFrames = mTakes[mCurrentTakeIndex].mNumFrames;
+    }
+    // Compute reference frame index: clamp(int(mDefaultTimeout * beat) - 2, 0, numFrames-1)
+    unsigned int maxIdx = (unsigned int)(numFrames - 1);
+    // clamp maxIdx to 0 if negative (numFrames was 0)
+    maxIdx = maxIdx & (unsigned int)(~((int)maxIdx >> 31));
+    int frameIdxRaw = (int)(mDefaultTimeout * beat) - 2;
+    // clamp to max
+    unsigned int frameIdx;
+    if (frameIdxRaw > (int)maxIdx) {
+        // clamp to min(frameIdxRaw, maxIdx) using carry tricks matching original
+        unsigned int raw = (unsigned int)frameIdxRaw;
+        frameIdx = raw & (unsigned int)(~(((int)raw >> 31) - 1)) & maxIdx;
+    } else {
+        frameIdx = (unsigned int)frameIdxRaw & (unsigned int)(~((int)((unsigned int)frameIdxRaw >> 31) - 1));
+    }
+    // Copy reference frame skeleton into debug global
+    sLastComparedDancerSkel.Set(frames[frameIdx].skeleton);
+    // Compute score offset for this player's FreestyleFrameScores
+    int scoreOffset = playerIdx << 4;
+    FreestyleFrameScores &frameScores = *(FreestyleFrameScores *)((char *)unke4 + scoreOffset);
+    if (liveSkel != nullptr && liveSkel->IsTracked()) {
+        CalcFrameScore(frameScores, frames, numFrames, liveSkel, beat * 1000.0f - 100.0f);
+    }
+    // Accumulate scores: sum(scores[i] / numFrames) for i in 0..unkc
+    int scoreCount = frameScores.unkc;
+    float total = 0.0f;
+    if (scoreCount > 0) {
+        float invNumFrames = 1.0f / (float)numFrames;
+        int byteIdx = 0;
+        int j = 0;
+        float *scoresData = frameScores.unk0.begin();
+        do {
+            j++;
+            total += *(float *)((char *)scoresData + byteIdx) * invNumFrames;
+            byteIdx += 4;
+        } while (j < scoreCount);
+    }
+    return total;
+}
+
 float FreestyleMoveRecorder::GetScore(int i1, int i2, float f, bool b) {
     // Default: use skeleton from gesture manager if player index is valid
     BaseSkeleton *skeletonToScore = nullptr;
@@ -644,3 +891,4 @@ float FreestyleMoveRecorder::GetScore(int i1, int i2, float f, bool b) {
 
     return GetScore(skeletonToScore, i2, f, b);
 }
+#endif // !HX_NATIVE

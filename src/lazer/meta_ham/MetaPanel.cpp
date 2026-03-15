@@ -181,9 +181,12 @@ void MetaPanel::Init() {
     MetagameRank::Preinit();
     TheProfileMgr.Init();
     Leaderboards::Init();
-    Challenges::Init();
     FitnessGoalMgr::Init();
 #endif
+    // Challenges reads DTA config only (no Xbox Live calls) — safe on native.
+    // Without this, TheChallenges is null and MainMenuProvider::Text() crashes
+    // when the main menu "challenges" item renders its "new" badge.
+    Challenges::Init();
     REGISTER_OBJ_FACTORY(HamStarsDisplay)
     REGISTER_OBJ_FACTORY(WeightInputPanel)
     REGISTER_OBJ_FACTORY(AppNavProvider)
