@@ -30,6 +30,11 @@ bool ShouldSkipMesh(const char* name, RndMat* mat) {
     if (!strncmp(name, "shield_hand", 11)) {
         return true;
     }
+    // Player silhouette projections (Kinect depth buffer → render target texture)
+    // Without skeleton tracking, projection.tex/projectionp2.tex stay white
+    if (!strncmp(name, "pose_flash", 10)) {
+        return true;
+    }
     // Tutorial/gesture overlay content
     if (strstr(name, "tutorial") || strstr(name, "gesture") ||
         strstr(name, "spotlight") || strstr(name, "nav_tut")) {

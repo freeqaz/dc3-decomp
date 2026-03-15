@@ -1,6 +1,6 @@
 # Native Port TODO — Phase 6 Polish & Remaining Work
 
-## Current State (Session 71)
+## Current State (Session 72)
 - **Full gameplay pipeline operational** — Engine boots through menu → song select → game_screen with audio, rendering, animation, camera cuts, post-processing
 - **6 venues tested** — dci, dclive, rollerrink, houseparty, streetside, throneroom — all render correctly
 - **Per-song venue resolution** — Songs load their correct venue from metadata (HamSongMetadata::Venue())
@@ -107,7 +107,7 @@ Goal: Character with proper materials, crowd, animated venue, gameplay HUD textu
 - [x] Audio merge validated — **DONE** (Session 67: full MOGG playback working)
 
 ### 4.3 Gameplay HUD
-- [ ] Move card textures (pink rectangles — TexMovie + RndTexRenderer pipeline is COMPLETE; issue is asset loading/wiring)
+- [x] Move card textures (white rectangles) — **DONE** (Session 72: pose_flash_p0/p1 meshes use Kinect render-target textures; filtered in MeshFilter)
 - [ ] Score/progress display
 
 ### 4.4 Scene Animation — MOSTLY COMPLETE
@@ -240,7 +240,7 @@ HamDirector (`src/system/hamobj/HamDirector.cpp:137-202`) exposes ~40+ DTA handl
 | ObjRef ring crash during venue merge | Dir.h `ObjDirPtr(C*)`, Object.cpp, FileMerger.cpp | **ROOT CAUSE FIXED** (extra `AddRef` removed); legacy validation/recovery guards still present pending crowd/audio/song revalidation |
 | Character dark silhouette | Zero-color LightPreset lights | **FIXED** (Session 59 — fallback lighting) |
 | Null crashes on game_screen (3) | HamCharacter/HamCamShot/PoseFatalities null ptrs | **FIXED** (Session 59) |
-| HUD move cards pink rectangles | TexMovie render-to-texture | TODO — Phase 4 |
+| HUD move cards white rectangles | Kinect pose_flash render targets | **FIXED** (Session 72 — filtered pose_flash meshes) |
 | Crowd/audio merges crash-skipped | Previously ObjRef ring corruption | **FIXED** (Session 67 — audio merge works, MOGG playback operational) |
 | MoviePanel::IsLoaded blocks forever | mMovie.Ready() stub returns false | **FIXED** (Session 62 — `#ifdef HX_NATIVE` bypass) |
 | Static scene (no animation) | Character anim + camera cuts + audio timing all working | **FIXED** (Sessions 63-68 — full gameplay animation pipeline) |
