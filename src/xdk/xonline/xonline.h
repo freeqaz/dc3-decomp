@@ -7,6 +7,11 @@
 extern "C" {
 #endif
 
+typedef struct _XTITLE_SERVER_INFO { /* Size=0xd0 */
+    /* 0x0000 */ IN_ADDR inaServer;
+    /* 0x0004 */ char pad[0xcc];
+} XTITLE_SERVER_INFO;
+
 typedef struct _XSESSION_VIEW_PROPERTIES { /* Size=0xc */
     /* 0x0000 */ DWORD dwViewId;
     /* 0x0004 */ DWORD dwNumProperties;

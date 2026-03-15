@@ -239,12 +239,10 @@ void Synth::Poll() {
 
 Stream *Synth::NewStream(const char *filename, float f1, float f2, bool) {
 #ifdef HX_NATIVE
-    fprintf(stderr, "DC3 Synth::NewStream('%s', %.2f, %.2f)\n", filename, f1, f2);
     File *file;
     Symbol ext;
     NewStreamFile(filename, file, ext);
-    fprintf(stderr, "DC3 Synth::NewStream: file=%p ext='%s'\n", (void*)file, ext.Str());
-    return new StandardStream(file, f1, f2, ext, true, false, false);
+    return new StandardStream(file, f1, f2, ext, true, true, false);
 #else
     return new StreamNull(f1);
 #endif
@@ -252,8 +250,6 @@ Stream *Synth::NewStream(const char *filename, float f1, float f2, bool) {
 
 Stream *Synth::NewBufStream(const void *buf, int size, Symbol ext, float f1, bool b1) {
 #ifdef HX_NATIVE
-    fprintf(stderr, "DC3 Synth::NewBufStream(buf=%p, size=%d, ext='%s', f1=%.2f, b1=%d)\n",
-        buf, size, ext.Str(), f1, b1);
     File *file = new BufFile(buf, size);
     return new StandardStream(file, 0, f1, ext, b1, true, false);
 #else
@@ -362,8 +358,8 @@ const ADSRImpl *Synth::DefaultADSR() {
 void Synth::DrawMeter(float &y, float level, float peakHold, const char *name) {
     Hmx::Color yellow(0.5f, 0.5f, 0.0f, 1.0f);
     Hmx::Color white(1.0f, 1.0f, 1.0f, 1.0f);
-    Hmx::Color grey(0.5f, 0.5f, 0.5f, 1.0f);
     Hmx::Color black(0.0f, 0.0f, 0.0f, 1.0f);
+    Hmx::Color grey(0.5f, 0.5f, 0.5f, 1.0f);
 
     float rndWidth = (float)TheRnd.Width();
     Vector2 labelPos(rndWidth * 0.1f, y);
@@ -372,9 +368,9 @@ void Synth::DrawMeter(float &y, float level, float peakHold, const char *name) {
     float barLeft = rndWidth * 0.2f;
     float barWidth = rndWidth * 0.7f;
     Hmx::Rect bgRect(barLeft, y, barWidth, 12.0f);
-    float levelNorm = Clamp(0.0f, 1.0f, (level + 40.0f) * 0.025f);
     TheRnd.DrawRect(bgRect, black, 0, 0, 0);
 
+    float levelNorm = Clamp(0.0f, 1.0f, (level + 40.0f) * 0.025f);
 
     Hmx::Rect levelRect(barLeft, y, levelNorm * barWidth, 12.0f);
     TheRnd.DrawRect(levelRect, grey, 0, 0, 0);
@@ -382,10 +378,10 @@ void Synth::DrawMeter(float &y, float level, float peakHold, const char *name) {
     float peakNorm = Clamp(0.0f, 1.0f, (peakHold + 40.0f) * 0.025f);
 
     Hmx::Color *peakColor = &white;
-    if (1.0f != peakNorm)
+    if (peakNorm != 1.0f)
         peakColor = &yellow;
 
-    Hmx::Rect peakRect(peakNorm * barWidth + barLeft, y, 8.0f, 12.0f);
+    Hmx::Rect peakRect(barLeft + peakNorm * barWidth, y, 8.0f, 12.0f);
     TheRnd.DrawRect(peakRect, *peakColor, 0, 0, 0);
 
     Vector2 dbLabelPos(barWidth + barLeft, y);

@@ -34,9 +34,18 @@ public:
     SpecialOfferEnumJob(HamStorePanel *, int, std::vector<unsigned long long> &);
     virtual ~SpecialOfferEnumJob();
     virtual void OnCompletion(Hmx::Object *);
+
+    int mSessionID;         // 0x04
+    char unk8[0x14];        // 0x08
+    std::vector<bool> mOwnedFlags; // 0x1c
+    int mResult;            // 0x30
+    char unk34[0x28];       // 0x34
+    HamStorePanel *mPanel;  // 0x5c
 };
 
 class HamStorePanel : public StorePanel, public ContentMgr::Callback {
+    friend class SpecialOfferEnumJob;
+
 public:
     // Hmx::Object
     virtual ~HamStorePanel();

@@ -19,33 +19,32 @@ void DelayEffect::SetParameters(DelayEffect::Params const &params) {
     mWetAmount = params.mWetPercent / 100.0f;
 }
 
-// SetParameter must NOT be in this TU on PPC — the compiler inlines it
-// into SetParameters, breaking the 100% match. On native it's needed for linking.
-#ifdef HX_NATIVE
 void DelayEffect::SetParameter(int param, float value) {
-    if ((unsigned int)param >= 1) {
-        if ((unsigned int)param != 1) {
-            if ((unsigned int)param >= 3) {
-                TheDebug.Fail(MakeString("bad parameter %i", param), 0);
-                return;
+    switch (param) {
+    case 0: {
+        int delaySamples = (int)(value * 48000.0f);
+        mDelaySamples = delaySamples;
+        int clamped = 95999;
+        if (delaySamples < 96000) {
+            clamped = delaySamples;
+            if (delaySamples < 1) {
+                clamped = 1;
             }
-            mWetAmount = value * 0.01f;
-            return;
         }
+        mDelaySamples = clamped;
+        break;
+    }
+    case 1:
         mDecay = DbToRatio(value);
-        return;
+        break;
+    case 2:
+        mWetAmount = value * 0.01f;
+        break;
+    default:
+        MILO_FAIL("bad parameter %i", param);
+        break;
     }
-
-    int delaySamples = (int)(value * 48000.0f);
-    mDelaySamples = delaySamples;
-    if (delaySamples > 0x176FF) {
-        delaySamples = 0x176FF;
-    } else if (delaySamples < 1) {
-        delaySamples = 1;
-    }
-    mDelaySamples = delaySamples;
 }
-#endif
 
 static const int kMaxDelaySamps = 96000;
 

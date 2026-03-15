@@ -576,4 +576,11 @@ DataNode HamStorePanel::OnMsg(const RCJobCompleteMsg &msg) {
     }
     return DataNode(1);
 }
-void SpecialOfferEnumJob::OnCompletion(Hmx::Object *) {}
+void SpecialOfferEnumJob::OnCompletion(Hmx::Object *) {
+    HamStorePanel *panel = mPanel;
+    if (!panel)
+        return;
+    if (panel->unk184 != mSessionID)
+        return;
+    panel->FinishSpecialOfferEnum(mOwnedFlags, mResult == 2);
+}

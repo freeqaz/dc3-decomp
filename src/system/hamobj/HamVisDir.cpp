@@ -332,17 +332,21 @@ static float JointDistance(const TrackedJoint &a, const TrackedJoint &b) {
 }
 
 void HamVisDir::CalcArmLengths(std::vector<float> &armLengths, const Skeleton &skel) {
-    if (armLengths.size() < 2) {
-        armLengths.resize(2, 0.0f);
-    }
+    struct {
+        int upper;
+        int lower;
+    } arms[2] = {
+        { kBoneArmUpperLeft, kBoneArmLowerLeft },
+        { kBoneArmUpperRight, kBoneArmLowerRight }
+    };
 
-    const TrackedJoint *joints = skel.TrackedJoints();
-    armLengths[0] =
-        JointDistance(joints[kJointShoulderLeft], joints[kJointElbowLeft])
-        + JointDistance(joints[kJointElbowLeft], joints[kJointWristLeft]);
-    armLengths[1] =
-        JointDistance(joints[kJointShoulderRight], joints[kJointElbowRight])
-        + JointDistance(joints[kJointElbowRight], joints[kJointWristRight]);
+    for (unsigned int i = 0; i < 2; i++) {
+        MILO_ASSERT((0) <= (arms[i].upper) && (arms[i].upper) < (kNumJoints), 0x12d);
+        MILO_ASSERT((0) <= (arms[i].lower) && (arms[i].lower) < (kNumJoints), 0x12e);
+        armLengths[i] =
+            skel.BoneLength((SkeletonBone)arms[i].upper, kCoordCamera)
+            + skel.BoneLength((SkeletonBone)arms[i].lower, kCoordCamera);
+    }
 }
 
 void HamVisDir::SetGrooviness(float groove) {

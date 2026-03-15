@@ -1,4 +1,5 @@
 #include "net/XLSPConnection.h"
+#include "math/Rand.h"
 #include "utl/MemMgr.h"
 #include "xdk/XAPILIB.h"
 #include "xdk/XNET.h"
@@ -129,7 +130,86 @@ void XLSPConnection::SetState(State s) {
     } while (mState != s);
 }
 
-void XLSPConnection::Poll() {}
+void XLSPConnection::Poll() {
+    switch (mState) {
+    case 0:
+        if (mConnectionRequest == 3) {
+            SetState((State)1);
+        }
+        return;
+    case 1:
+        if (mEnumHandle != INVALID_HANDLE_VALUE && mXOverlapped.InternalLow != ERROR_IO_PENDING) {
+            DWORD count = 0;
+            DWORD result = XGetOverlappedResult(&mXOverlapped, &count, false);
+            if (result != 0) {
+                XGetOverlappedExtendedError(&mXOverlapped);
+            } else {
+                memset(&mXOverlapped, 0, sizeof(XOVERLAPPED));
+                if (count > 0) {
+                    int idx = RandomInt(0, (int)count);
+                    XTITLE_SERVER_INFO *servers = (XTITLE_SERVER_INFO *)mEnumBuffer;
+                    int ret = XNetServerToInAddr(servers[idx].inaServer, mServiceId, (IN_ADDR *)&unk44);
+                    if ((unsigned int)ret == 0) {
+                        CloseHandle(mEnumHandle);
+                        mEnumHandle = INVALID_HANDLE_VALUE;
+                        if (mEnumBuffer) {
+                            MemFree(mEnumBuffer, __FILE__, 0xAA);
+                            mEnumBuffer = nullptr;
+                        }
+                        SetState((State)2);
+                        return;
+                    }
+                }
+            }
+            SetState((State)4);
+            return;
+        }
+        if (mConnectionRequest != 0)
+            return;
+        break;
+    case 3:
+        if (mConnectionRequest != 0) {
+            DWORD status = XNetGetConnectStatus(*(IN_ADDR *)&unk44);
+            if (status <= 1) {
+                MILO_NOTIFY("XLSPConnection: Idle/establishing status while connected?");
+            } else if (status == 2) {
+                return;
+            } else if (status == 3) {
+            } else {
+                MILO_NOTIFY("XNetGetConnectStatus() unhandled return: %d", status);
+                return;
+            }
+            SetState((State)4);
+            return;
+        }
+        break;
+    case 2:
+        if (mConnectionRequest != 0) {
+            DWORD status = XNetGetConnectStatus(*(IN_ADDR *)&unk44);
+            if (status == 0) {
+            } else if (status == 1) {
+                return;
+            } else if (status < 3) {
+                SetState((State)3);
+                return;
+            } else if (status == 3) {
+            } else {
+                MILO_NOTIFY("XNetGetConnectStatus() unhandled return: %d", status);
+                return;
+            }
+            SetState((State)4);
+            return;
+        }
+        break;
+    case 4:
+        if (mConnectionRequest != 0)
+            return;
+        break;
+    default:
+        return;
+    }
+    SetState((State)5);
+}
 
 void XLSPConnection::StartEnumeration() {
     DWORD res = XTitleServerCreateEnumerator(mServerInfo.c_str(), 8, &mEnumBufferSize, &mEnumHandle);

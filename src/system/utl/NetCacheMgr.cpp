@@ -356,6 +356,26 @@ bool NetLoaderRef::IsLoadedOrFailed() {
     return failed != '\0';
 }
 
+void NetCacheMgr::PollLoaders() {
+    bool firstDownload = true;
+    std::list<NetLoaderRef>::iterator it = mNetLoaderRefs.begin();
+    while (it != mNetLoaderRefs.end()) {
+        MILO_ASSERT(it->IsValid(), 0xE9);
+        if (!it->NeedsToDownload() || it->IsLoadedOrFailed()) {
+            it->Poll();
+        } else if (firstDownload) {
+            it->Poll();
+            firstDownload = false;
+        }
+        if (it->mRefCount < 1 && it->IsSafeToDelete()) {
+            it->DeleteLoader();
+            it = mNetLoaderRefs.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
 // TODO: implement — TU-level inlining effects on AddNetCacheLoader/AddNetLoader
 #ifdef HX_NATIVE
 NetLoaderRef &NetLoaderRef::operator=(const NetLoaderRef &other) {
@@ -365,7 +385,6 @@ NetLoaderRef &NetLoaderRef::operator=(const NetLoaderRef &other) {
     mCacheLoader = other.mCacheLoader;
     return *this;
 }
-void NetCacheMgr::PollLoaders() {}
 NetLoaderRef *NetCacheMgr::AddLoaderRef(const char *, RefType, NetLoaderPos) { return nullptr; }
 #endif
 
