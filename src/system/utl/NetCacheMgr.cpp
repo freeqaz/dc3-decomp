@@ -376,8 +376,6 @@ void NetCacheMgr::PollLoaders() {
     }
 }
 
-// TODO: implement — TU-level inlining effects on AddNetCacheLoader/AddNetLoader
-#ifdef HX_NATIVE
 NetLoaderRef &NetLoaderRef::operator=(const NetLoaderRef &other) {
     mName = other.mName;
     mRefCount = other.mRefCount;
@@ -385,8 +383,73 @@ NetLoaderRef &NetLoaderRef::operator=(const NetLoaderRef &other) {
     mCacheLoader = other.mCacheLoader;
     return *this;
 }
-NetLoaderRef *NetCacheMgr::AddLoaderRef(const char *, RefType, NetLoaderPos) { return nullptr; }
-#endif
+
+NetLoaderRef *NetCacheMgr::AddLoaderRef(const char *name, RefType type, NetLoaderPos pos) {
+    NetLoaderRef *pNetLoaderRef = NULL;
+    if (*name == '\0') {
+        return NULL;
+    }
+    if (!IsReady()) {
+        return NULL;
+    }
+    std::list<NetLoaderRef>::iterator it = mNetLoaderRefs.begin();
+    for (; it != mNetLoaderRefs.end(); ++it) {
+        NetLoaderRef &ref = *it;
+        if (stricmp(ref.mName.c_str(), name) == 0) {
+            if ((RefType)0 == type && ref.mCacheLoader) {
+                MILO_ASSERT(ref.mNetLoader == NULL, 0x17A);
+            } else if ((RefType)1 == type && ref.mNetLoader) {
+                MILO_ASSERT(ref.mCacheLoader == NULL, 0x180);
+            } else {
+                TheDebug << MakeString("Found loader for %s, but it was not type %d.\n", ref.mName.c_str(), (int)type);
+                continue;
+            }
+            pNetLoaderRef = &ref;
+            break;
+        }
+    }
+
+    NetLoaderRef newRef;
+    newRef.mRefCount = 0;
+    newRef.mNetLoader = NULL;
+    newRef.mCacheLoader = NULL;
+
+    if (!pNetLoaderRef) {
+        if ((unsigned int)type == 1) {
+            NetLoader *nl = NetLoader::Create(String(name));
+            String s(name);
+            NetLoaderRef tmp = { String(s), 0, nl, NULL };
+            newRef = tmp;
+        } else if ((unsigned int)type == 0) {
+            NetCacheLoader *ncl = new NetCacheLoader(mCache, String(name));
+            String s(name);
+            NetLoaderRef tmp = { String(s), 0, NULL, ncl };
+            newRef = tmp;
+        } else {
+            MILO_FAIL("Unknown ref type %d.\n", type);
+        }
+
+        if ((unsigned int)pos == 1) {
+            mNetLoaderRefs.insert(mNetLoaderRefs.end(), newRef);
+            pNetLoaderRef = &mNetLoaderRefs.back();
+        } else if ((unsigned int)pos == 0) {
+            std::list<NetLoaderRef>::iterator insertIt;
+            for (insertIt = mNetLoaderRefs.begin(); insertIt != mNetLoaderRefs.end(); ++insertIt) {
+                if (!insertIt->IsDownloading() && !insertIt->IsLoadedOrFailed()) {
+                    break;
+                }
+            }
+            std::list<NetLoaderRef>::iterator inserted = mNetLoaderRefs.insert(insertIt, newRef);
+            pNetLoaderRef = &*inserted;
+        } else {
+            MILO_FAIL("Unknown net loader pos %d.\n", pos);
+        }
+
+        MILO_ASSERT(pNetLoaderRef, 0x1C2);
+    }
+    pNetLoaderRef->mRefCount++;
+    return pNetLoaderRef;
+}
 
 void NetCacheMgrInit() {
     MILO_ASSERT(TheNetCacheMgr == NULL, 0x1f);

@@ -21,7 +21,7 @@ protected:
     virtual bool _ReadDone();
     virtual void _Close();
 
-    int unk34; // 0x34
+    int mSectorBytes; // 0x34
     HANDLE mFile; // 0x38
     int mFd; // 0x3c
     bool mReadInProgress; // 0x40

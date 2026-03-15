@@ -7,6 +7,8 @@
 class RndBitmap;
 
 class HiResScreen {
+    friend class NgSpotlightDrawer;
+
 public:
     class BmpCache {
     public:

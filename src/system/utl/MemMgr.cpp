@@ -9,6 +9,7 @@
 #include "os/OSFuncs.h"
 #include "os/System.h"
 #include "utl/Option.h"
+#include "utl/MakeString.h"
 #include "utl/PoolAlloc.h"
 #include "utl/Std.h"
 #include "utl/TextStream.h"
@@ -661,4 +662,44 @@ int MemFindHeap(const char *name) {
     }
     return -1;
 }
-void MemPrintOverview(int, char *const) {}
+static SIZE_T sMinPhysFree = (SIZE_T)-1;
+
+void MemPrintOverview(int heapId, char *const buf) {
+    char *p = buf;
+    if ((int)-2 == heapId || heapId == -3) {
+        MEMORYSTATUS status;
+        GlobalMemoryStatus(&status);
+        if (sMinPhysFree >= status.dwAvailPhys) {
+            sMinPhysFree = status.dwAvailPhys;
+        }
+        int usage = PhysicalUsage();
+        unsigned long minFreeKB = sMinPhysFree >> 10;
+        unsigned long availKB = status.dwAvailPhys >> 10;
+        int usageKB = usage >> 10;
+        const char *str = MakeString(
+            " [%5s] KB free:%7u(%7u) usage:%5i\n",
+            "physical", availKB, minFreeKB, usageKB
+        );
+        strcpy(p, str);
+        auto _tmp0 = strlen(p);
+        p += _tmp0;
+    }
+    for (int i = 0; i < gNumHeaps; i++) {
+        if (heapId == -3 || heapId == i) {
+            int leftFrag, rightFrag, numFreeBytes, biggestFree, minFreeBytes;
+            MemFreeBlockStats(i, leftFrag, rightFrag, numFreeBytes, biggestFree, minFreeBytes);
+            int wasteKB = (numFreeBytes - minFreeBytes) >> 10;
+            int bigKB = minFreeBytes >> 10;
+            int freeKB = biggestFree >> 10;
+            int totalFreeKB = numFreeBytes >> 10;
+            const char *name = MemHeapName(i);
+            const char *str = MakeString(
+                " [%5s] KB free:%7d(%7d) big:%7d lfrag:%5d rfrag:%5d waste:%5d\n",
+                name, totalFreeKB, freeKB, bigKB, leftFrag, rightFrag, wasteKB
+            );
+            strcpy(p, str);
+            auto _tmp1 = strlen(p);
+            p += _tmp1;
+        }
+    }
+}

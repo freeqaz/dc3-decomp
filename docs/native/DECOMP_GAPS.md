@@ -2,7 +2,7 @@
 
 Inventory of decomp gaps affecting the native build. Prioritized by impact on rendering and UI.
 
-**Last updated**: 2026-03-13
+**Last updated**: 2026-03-15
 
 ## Current State
 
@@ -188,18 +188,22 @@ Shell music audio plays end-to-end through the full decode pipeline:
 - **MetaMusic**: Start/Poll/Stop lifecycle working. Fader fade-in from silence. Loop support via `SetJump(kStreamEndMs, 0)`.
 - **StreamReceiverNative**: 64KB ring buffer, int16→float conversion, volume/pan in RenderAudio callback.
 
-**Remaining audio stubs (~21):**
-- `SampleData` (4): Load, LoadWAV, SizeAs, SampleMarker::Load — blocks SFX playback
-- `SampleInst` (1): SynthPoll — sample instance polling
-- `Sound` (1): SetPan — stereo panning
-- `Sequence` (2): ComputeNextTime, PickNextIndex — random sequence scheduling
-- `WavReader` (1): Poll — WAV file reader
-- `Synth` (1): DrawMeter — debug audio meter
-- `DSP effects` (7): DelayEffect/Flanger/EQ Process/SetParameter/Reset
-- `Mic` (2+1): RingBuffer Write/Read + MicNull::GetContinuousBuf
-- `complex` (1): eval — FFT for audio processing
+**Remaining audio stubs (~8, updated 2026-03-15):**
+- `SampleData` (4): Load, LoadWAV, SizeAs, SampleMarker::Load — **blocks SFX playback** (only real blocker)
+- `Synth` (1): DrawMeter — debug audio meter (low priority)
+- `Mic` (2+1): RingBuffer Write/Read + MicNull::GetContinuousBuf — not needed for native
 
-**Song audio during gameplay**: Uses same pipeline but different mogg version (0xC-0x10). Untested.
+**Previously listed as stubs, now DONE:**
+- ~~`SampleInst::SynthPoll`~~ — **100% COMPLETE**
+- ~~`Sound::SetPan`~~ — **100% COMPLETE**
+- ~~`Sequence::ComputeNextTime`~~ — **97.3% AT_LIMIT**, ~~`PickNextIndex`~~ — **100% COMPLETE**
+- ~~`WavReader::Poll`~~ — **94.8% AT_LIMIT**
+- ~~`DelayEffect::Process`~~ — **99.4% AT_LIMIT**, ~~`SetParameter`~~ — **100% COMPLETE**
+- ~~`FlangerEffect::Process`~~ — **78.8% AT_LIMIT**
+- ~~`EQEffect::Reset/Process/SetParameter`~~ — **81.8%/78.2%/0.07% AT_LIMIT**
+- ~~`complex::eval`~~ — no workable stubs remain in unit
+
+**Song audio during gameplay**: Full v0xE mogg pipeline working (Session 73). Shell + song audio operational.
 
 ### Animation/Character Workarounds
 - `HamRibbon::UpdateChase()` — Stubbed (needs Interp<Transform>)

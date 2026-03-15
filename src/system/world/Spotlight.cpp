@@ -1138,29 +1138,25 @@ void Spotlight::BuildCone(BeamDef &def) {
 }
 
 void Spotlight::BuildNGCone(BeamDef &def, int numSegments) {
-    Hmx::Matrix3 identMtx(
-        1.0f, 0.0f, 0.0f,
-        0.0f, 1.0f, 0.0f,
-        0.0f, 0.0f, 1.0f
-    );
+    Hmx::Matrix3 identMtx;
+    identMtx.x.Set(1.0f, 0.0f, 0.0f);
+    identMtx.y.Set(0.0f, 1.0f, 0.0f);
+    identMtx.z.Set(0.0f, 0.0f, 1.0f);
+
+    Hmx::Matrix3 *pMtx;
     Hmx::Matrix3 rotMtx;
-    Hmx::Matrix3 rotCopy;
-    Hmx::Matrix3 *pSrc;
     if (def.mIsCone) {
-        pSrc = &identMtx;
+        pMtx = &identMtx;
     } else {
         rotMtx.Set(
-            1.0f, 0.0f, 0.0f,
-            0.0f, 0.0f, -1.0f,
-            0.0f, 1.0f, 0.0f
+            Vector3(1.0f, 0.0f, 0.0f),
+            Vector3(0.0f, 0.0f, -1.0f),
+            Vector3(0.0f, 1.0f, 0.0f)
         );
-        rotCopy.x = rotMtx.x;
-        rotCopy.y = rotMtx.y;
-        rotCopy.z = rotMtx.z;
-        pSrc = &rotCopy;
+        pMtx = &rotMtx;
     }
     Hmx::Matrix3 orientMtx;
-    memcpy(&orientMtx, pSrc, 0x30);
+    memcpy(&orientMtx, pMtx, 0x30);
 
     def.mBeam = Hmx::Object::New<RndMesh>();
     int numVerts = numSegments * 3;
@@ -1203,7 +1199,7 @@ void Spotlight::BuildNGCone(BeamDef &def, int numSegments) {
                 float py = verts[iVert].pos.y;
                 float pz = verts[iVert].pos.z;
                 verts[iVert].pos.x =
-                    orientMtx.x.x * px + (orientMtx.z.x * pz + orientMtx.y.x * py);
+                    orientMtx.y.x * py + orientMtx.z.x * pz + orientMtx.x.x * px;
                 verts[iVert].pos.z =
                     orientMtx.y.z * py + (orientMtx.x.z * px + orientMtx.z.z * pz);
                 verts[iVert].pos.y =
@@ -1288,38 +1284,42 @@ void Spotlight::BuildNGCone(BeamDef &def, int numSegments) {
     def.mBeam->SetTransParent(parent, false);
 }
 void Spotlight::BuildNGSheet(BeamDef &def) {
-    Hmx::Matrix3 identMtx(
-        Vector3(1.0f, 0.0f, 0.0f), Vector3(0.0f, 1.0f, 0.0f), Vector3(0.0f, 0.0f, 1.0f)
-    );
+    Hmx::Matrix3 identMtx;
+    identMtx.x.Set(1.0f, 0.0f, 0.0f);
+    identMtx.y.Set(0.0f, 1.0f, 0.0f);
+    identMtx.z.Set(0.0f, 0.0f, 1.0f);
+
     Hmx::Matrix3 rotMtx;
-    if (!def.mIsCone) {
+    Hmx::Matrix3 *pMtx;
+    if (def.mIsCone) {
+        pMtx = &identMtx;
+    } else {
         rotMtx.Set(
             Vector3(1.0f, 0.0f, 0.0f),
             Vector3(0.0f, 0.0f, -1.0f),
             Vector3(0.0f, 1.0f, 0.0f)
         );
-    } else {
-        rotMtx = identMtx;
+        pMtx = &rotMtx;
     }
     Hmx::Matrix3 orientMtx;
-    memcpy(&orientMtx, &rotMtx, 0x30);
+    memcpy(&orientMtx, pMtx, 0x30);
 
     def.mBeam = Hmx::Object::New<RndMesh>();
-    RndMesh::VertVector &verts = def.mBeam->Verts();
     int numSections = def.mNumSections;
-
     std::vector<RndMesh::Face> &faces = def.mBeam->Faces();
-    if (numSections < 2) numSections = 5;
+
+    RndMesh::VertVector &verts = def.mBeam->Verts();
+    if (numSections <= 1) numSections = 5;
     int numSegments = def.mNumSegments;
-    if (numSegments < 3) numSegments = 10;
+    if (numSegments <= 2) numSegments = 10;
 
-    int numRows = 1 + numSections;
+    int numRows = numSections + 1;
     int numCols = numSegments + 1;
-    int totalVerts = numRows * numCols;
-    int totalFaces = numSegments * numSections * 2;
+    int kNumVerts = numRows * numCols;
+    int kNumFaces = (numSegments * (numSections * 2));
 
-    verts.resize(totalVerts);
-    faces.resize(totalFaces);
+    verts.resize(kNumVerts);
+    faces.resize(kNumFaces);
 
     Vector2 radii = def.NGRadii();
     float topRadius = radii.x;
@@ -1330,7 +1330,7 @@ void Spotlight::BuildNGSheet(BeamDef &def) {
     int iVert = 0;
     for (int row = 0; row < numRows; row++) {
         float t = (float)row / (float)numSections;
-        float oneMinusT = -(t - 1.0f);
+        float oneMinusT = 1.0f - t;
         for (int col = 0; col < numCols; col++) {
             float segFrac = (float)col / (float)numSegments * 2.0f - 1.0f;
             float xTop = segFrac * topRadius;
@@ -1343,35 +1343,35 @@ void Spotlight::BuildNGSheet(BeamDef &def) {
                 (1.0f - absSegFrac) * kSheetFade
             );
 
-            // Transform pos by orient matrix
             Vector3 &p = verts[iVert].pos;
             float px = p.x, py = p.y, pz = p.z;
-            p.x = px * orientMtx.x.x + pz * orientMtx.z.x + py * orientMtx.y.x;
+            p.x = (pz * orientMtx.z.x + (px * orientMtx.x.x + py * orientMtx.y.x));
             p.z = py * orientMtx.y.z + px * orientMtx.x.z + pz * orientMtx.z.z;
             p.y = py * orientMtx.y.y + px * orientMtx.x.y + pz * orientMtx.z.y;
 
             verts[iVert].norm.Set(0.0f, 0.0f, 1.0f);
 
-            // Transform norm by orient matrix
             Vector3 &n = verts[iVert].norm;
             float nx = n.x, ny = n.y, nz = n.z;
             n.x = nx * orientMtx.x.x + nz * orientMtx.z.x + ny * orientMtx.y.x;
             n.z = ny * orientMtx.y.z + nx * orientMtx.x.z + nz * orientMtx.z.z;
             n.y = ny * orientMtx.y.y + nx * orientMtx.x.y + nz * orientMtx.z.y;
 
-            verts[iVert].color.red = Hmx::Color(oneMinusT, oneMinusT, oneMinusT, oneMinusT).red;
-            verts[iVert].color.green = Hmx::Color(oneMinusT, oneMinusT, oneMinusT, oneMinusT).green;
-            verts[iVert].color.blue = Hmx::Color(oneMinusT, oneMinusT, oneMinusT, oneMinusT).blue;
+            verts[iVert].color.red = oneMinusT;
+            verts[iVert].color.green = oneMinusT;
+            verts[iVert].color.blue = oneMinusT;
+            verts[iVert].color.alpha = oneMinusT;
             verts[iVert].tex.Set(absSegFrac, t);
             iVert++;
         }
     }
-    MILO_ASSERT(iVert == totalVerts, 0x526);
+    MILO_ASSERT(iVert == kNumVerts, 0x526);
 
     int iFace = 0;
+    int rowStart = 0;
     for (int row = 0; row < numSections; row++) {
         for (int col = 0; col < numSegments; col++) {
-            short base = (short)(row * numCols + col);
+            short base = (short)(rowStart + col);
             short next = base + 1;
             short baseNext = base + (short)numCols;
             short nextNext = baseNext + 1;
@@ -1384,8 +1384,9 @@ void Spotlight::BuildNGSheet(BeamDef &def) {
             }
             iFace += 2;
         }
+        rowStart += numCols;
     }
-    MILO_ASSERT(iFace == (int)totalFaces, 0x53F);
+    MILO_ASSERT(iFace == kNumFaces, 0x53F);
 
     def.mBeam->Sync(0x13F);
     def.mBeam->SetMat(def.mMat);

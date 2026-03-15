@@ -4,6 +4,7 @@
 #include <list>
 #include <string.h>
 
+class DataPoint;
 typedef void ExitCallbackFunc(void);
 typedef void FixedStringFunc(FixedString &);
 
@@ -34,17 +35,17 @@ private:
     std::list<ExitCallbackFunc *> mFailCallbacks; // 0x20
     std::list<ExitCallbackFunc *> mExitCallbacks; // 0x28
     std::list<FixedStringFunc *> mFailAppendCallbacks; // 0x30
-    int unk38; // 0x38
+    void (*mCrucibleCallback)(ModalType, DataPoint &); // 0x38
     // 0x3c is a struct, StackData
     unsigned int mFailThreadStack[50]; // starts at 0x3c
     const char *mFailThreadMsg; // 0x104
     const char *mNotifyThreadMsg; // 0x108
-    int unk10c;
-    int unk110;
-    String unk114;
-    String mKernelVersion;
-    String unk124;
-    String mHostName;
+    const char *mCrucibleHostname; // 0x10c
+    const char *mCrucibleApp; // 0x110
+    String mCrucibleProject; // 0x114
+    String mKernelVersion; // 0x11c
+    String unk124; // 0x124
+    String mHostName; // 0x12c
 
 public:
     Debug();

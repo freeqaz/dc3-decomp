@@ -60,7 +60,7 @@ public:
         return ret;
     }
     /** "Cache world state for collision queries during simulation" */
-    void SyncWorldState();
+    void SyncWorldState(); // defined in CharHair.cpp (target TU)
 
 protected:
     CharCollide();

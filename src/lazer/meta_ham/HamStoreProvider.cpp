@@ -56,7 +56,7 @@ HamStoreProvider::HamStoreProvider(
     std::vector<CartRow> *rows
 )
     : mAllOffers(offers), mFilters(filters), mCurrentFilter(0), mFilteredOffers(0),
-      mCartRows(rows), unkb8(0) {
+      mCartRows(rows), mCartCheckout(0) {
     mFilterProvider = new HamStoreFilterProvider(mFilters);
 }
 
@@ -415,9 +415,54 @@ BEGIN_HANDLERS(HamStoreProvider)
     HANDLE_SUPERCLASS(Hmx::Object)
 END_HANDLERS
 
-// TODO: implement — called by UpdateOffersInCart
-#ifdef HX_NATIVE
-void HamStoreProvider::RefreshFilteredCartOffers() {}
-#endif
+void HamStoreProvider::RefreshFilteredCartOffers() {
+    // Remove existing "store_filter_shopping_cart" entry from map
+    static Symbol store_filter_shopping_cart("store_filter_shopping_cart");
+    std::map<Symbol, std::vector<StoreOffer *> *>::iterator it =
+        unk38.find(store_filter_shopping_cart);
+    if (it != unk38.end()) {
+        if (it->second) {
+            delete it->second;
+        }
+        it->second = 0;
+        unk38.erase(it);
+    }
+
+    // Count cart offers
+    unsigned int count = 0;
+    for (std::list<StoreOffer *>::iterator cit = mCartOffers.begin();
+         cit != mCartOffers.end();
+         ++cit) {
+        count++;
+    }
+
+    if (count != 0) {
+        // Find the store_checkout offer if mCartCheckout is not set
+        if (!mCartCheckout) {
+            static Symbol store_checkout("store_checkout");
+            StoreOffer **end = mAllOffers->end();
+            while (end != mAllOffers->begin()) {
+                --end;
+                if ((*end)->StoreOfferData()->Sym(0) == store_checkout) {
+                    mCartCheckout = *end;
+                    break;
+                }
+            }
+        }
+        MILO_ASSERT(mCartCheckout, 0x242);
+
+        // Build new vector with checkout offer + all cart offers
+        std::vector<StoreOffer *> *vec = new std::vector<StoreOffer *>();
+        vec->push_back(mCartCheckout);
+        for (std::list<StoreOffer *>::iterator cit = mCartOffers.begin();
+             cit != mCartOffers.end();
+             ++cit) {
+            vec->push_back(*cit);
+        }
+        unk38.insert(
+            std::pair<Symbol, std::vector<StoreOffer *> *>(store_filter_shopping_cart, vec)
+        );
+    }
+}
 
 #pragma endregion HamStoreProvider

@@ -328,6 +328,15 @@ config.custom_build_steps = {
             },
         },
         {
+            "outputs": str(stamp_dir / "bool_mangle_patched.stamp"),
+            "rule": "run_script",
+            "order_only": "all_source",
+            "variables": {
+                "cmd": "python3 scripts/obj_bool_mangle_patcher.py --batch --apply",
+                "desc": "PATCH bool parameter back-reference mangling",
+            },
+        },
+        {
             "outputs": str(stamp_dir / "data_stubs.stamp"),
             "rule": "run_script",
             "variables": {

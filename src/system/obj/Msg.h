@@ -261,6 +261,8 @@ public:
 
     MEM_OVERLOAD(MsgSinks, 0xAF);
 
+    friend bool PropSync(MsgSinks &, DataNode &, DataArray *, int, PropOp);
+
 private:
     DataArray *mPropSyncHandlers; // 0x0 - array of {DataArray*, Symbol} pairs for property sync export handlers
     ObjList<Sink> mSinks; // 0x4

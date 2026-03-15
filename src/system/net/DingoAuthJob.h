@@ -13,6 +13,8 @@ public:
 
     bool ParseResponse();
 
+    friend class DingoServer;
+
 private:
     String mSessionID; // 0xb0
 };

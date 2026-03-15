@@ -321,7 +321,42 @@ bool PropSync(
 }
 
 template <class T>
-bool PropSync(ObjPtrVec<T, ObjectDir> &, DataNode &, DataArray *, int, PropOp);
+bool PropSync(
+    ObjPtrVec<T, ObjectDir> &vec, DataNode &node, DataArray *prop, int i, PropOp op
+) {
+    if (op == kPropUnknown0x40)
+        return false;
+    else if (i == prop->Size()) {
+        MILO_ASSERT(op == kPropSize || op == kPropInsert, 0x1D9);
+        node = (int)vec.size();
+        return true;
+    } else {
+        typename ObjPtrVec<T, ObjectDir>::iterator it = vec.begin() + prop->Int(i++);
+        if (i < prop->Size() || (op & (kPropGet | kPropSet | kPropSize))) {
+            if (op == kPropGet) {
+                node = (Hmx::Object *)(T *)*it;
+                return true;
+            }
+            if (op == kPropSet) {
+                MILO_ASSERT(i == prop->Size() && op <= kPropInsert, 0x66);
+                vec.Set(it, dynamic_cast<T *>(node.GetObj()));
+                return true;
+            }
+            return false;
+        } else {
+            if (op == kPropRemove) {
+                vec.erase(it);
+                return true;
+            }
+            if (op == kPropInsert) {
+                MILO_ASSERT(i == prop->Size() && op <= kPropInsert, 0x66);
+                vec.insert(it, dynamic_cast<T *>(node.GetObj()));
+                return true;
+            }
+            return false;
+        }
+    }
+}
 
 template <class T>
 bool PropSync(ObjVector<T> &objVec, DataNode &node, DataArray *prop, int i, PropOp op) {

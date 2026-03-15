@@ -681,7 +681,45 @@ void AppLabel::SetStoreFilterName(const HamStoreFilter *filter) {
     SetDisplayText(filter->mDisplayName.c_str(), true);
 }
 
-// TODO: implement — SetTimeElapsedSince called by SetLastPlayedTime/PracticeTime
 #ifdef HX_NATIVE
 void AppLabel::SetTimeElapsedSince(unsigned int) {}
+#endif
+
+#ifndef HX_NATIVE
+void AppLabel::SetTimeElapsedSince(unsigned int timestamp) {
+    static Symbol last_played_today("last_played_today");
+    static Symbol last_played_yesterday("last_played_yesterday");
+    static Symbol last_played_days("last_played_days");
+    static Symbol last_played_one_week("last_played_one_week");
+    static Symbol last_played_weeks("last_played_weeks");
+    static Symbol last_played_one_month("last_played_one_month");
+    static Symbol last_played_months("last_played_months");
+
+    if (timestamp == 0) {
+        SetDisplayText(gNullStr, true);
+        return;
+    }
+
+    DateTime now;
+    GetDateAndTime(now);
+    unsigned int nowCode = now.ToCode();
+
+    int elapsed = (int)(nowCode - nowCode % 86400) - (int)timestamp;
+
+    if (elapsed < 0) {
+        SetTextToken(last_played_today);
+    } else if (elapsed < 86400) {
+        SetTextToken(last_played_yesterday);
+    } else if (elapsed < 518400) {
+        SetTokenFmt(last_played_days, elapsed / 86400 + 1);
+    } else if (elapsed < 1123200) {
+        SetTextToken(last_played_one_week);
+    } else if (elapsed < 2332800) {
+        SetTokenFmt(last_played_weeks, elapsed / 604800);
+    } else if (elapsed < 5097600) {
+        SetTextToken(last_played_one_month);
+    } else {
+        SetTokenFmt(last_played_months, elapsed / 2592000);
+    }
+}
 #endif

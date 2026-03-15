@@ -2,6 +2,8 @@
 #include "os/Debug.h"
 #ifdef HX_NATIVE
 #include "platform/StreamReceiver_Native.h"
+#else
+extern "C" void XMemCpy(void *, const void *, int);
 #endif
 
 StreamReceiver::StreamReceiver(int numBuffers, bool slip)
@@ -86,6 +88,69 @@ void StreamReceiver::Poll() {
     if (mSending && SendDoneImpl()) {
         mSending = false;
         mBuffersSent++;
+    }
+#else
+    if (kInit != (unsigned int)mState) {
+        if (mState == kReady) {
+            goto ready;
+        }
+        if (mState > kStopped) {
+            MILO_FAIL("bad state logic.\n");
+            goto ready;
+        }
+        int playCursor = GetPlayCursor();
+        int activeBuf = playCursor / 0x4000;
+        mLastPlayCursor = playCursor;
+        MILO_ASSERT(activeBuf >= 0 && activeBuf < mNumBuffers, 0xc2);
+        if (!mSlipEnabled && activeBuf != mSendTarget) {
+            mWantToSend = true;
+        }
+        int halfBufs = mNumBuffers / 2;
+        int diff = activeBuf - mSendTarget;
+        if (diff != halfBufs && diff != -halfBufs) {
+            goto ready;
+        }
+    }
+    mWantToSend = true;
+ready:
+    if (mWantToSend && mState != kInit && mRingFreeSpace != kStreamRcvrBufSize) {
+        mStarving = true;
+    }
+    if (mWantToSend && mRingFreeSpace >= 0x4000 && !mSending) {
+        StartSendImpl(mBuffer, 0x4000, mSendTarget);
+        mBuffersSent++;
+        if (mBuffersSent >= 700000) {
+            mBuffersSent -= mNumBuffers;
+        }
+        int sendTarget = mSendTarget;
+        mWantToSend = false;
+        mSending = true;
+        mSendTarget = sendTarget + 1;
+        if (sendTarget + 1 == mNumBuffers) {
+            mSendTarget = 0;
+        }
+    }
+    if (mSending) {
+        if (SendDoneImpl()) {
+            mSending = false;
+            mStarving = false;
+            if (mSendTarget == 0 && mState == kInit) {
+                mState = kReady;
+                mWantToSend = false;
+            }
+            int overflow = mRingFreeSpace - 0x4000;
+            MILO_ASSERT(overflow >= 0, 0x134);
+            if (overflow != 0) {
+                XMemCpy(mBuffer, mBuffer + 0x4000, overflow);
+            }
+            int ringFreeSpace = mRingFreeSpace;
+            mRingFreeSpace = ringFreeSpace - 0x4000;
+            if (mEndData) {
+                memset(&mBuffer[ringFreeSpace - 0x4000], 0, kStreamRcvrBufSize - (ringFreeSpace - 0x4000));
+                mRingFreeSpace = kStreamRcvrBufSize;
+                mDoneBufferCounter++;
+            }
+        }
     }
 #endif
 }

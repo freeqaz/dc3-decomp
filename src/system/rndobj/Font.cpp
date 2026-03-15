@@ -6,6 +6,7 @@
 #include "obj/PropSync.h"
 #include "utl/BinStream.h"
 #include "math/Rot.h"
+#include "math/Utl.h"
 #include "utl/FilePath.h"
 #include "utl/MakeString.h"
 #include "utl/UTF8.h"
@@ -451,6 +452,134 @@ BEGIN_LOADS(RndFont)
         nextFont.Load(bs, true, NULL);
     }
 END_LOADS
+
+void RndFont::UpdateChars() {
+    if (mPacked) {
+        SetBitmapSize(mCellSize);
+    } else {
+        if (!mChars.empty() && mChars[0] == 160) {
+            MILO_NOTIFY(
+                "%s: first character is ascii 160, converting to the space character.",
+                Name()
+            );
+            mChars[0] = ' ';
+        }
+        mCharInfoMap.clear();
+        int pageIdx = 0;
+        BitmapLocker locker(this, 0);
+        RndBitmap *bmap = locker.mBitmapPtr;
+        if (bmap) {
+            if (mMaterialOffsets.size() != mMats.size()) {
+                mMaterialOffsets.resize(mMats.size());
+            }
+            float posX = 0;
+            float posY = 0;
+            mMaterialOffsets[0].x = mCellSize.x / (float)bmap->Width();
+            mMaterialOffsets[0].y = mCellSize.y / (float)bmap->Height();
+            for (unsigned int i = 0; i < mChars.size(); i++) {
+                unsigned short curChar = mChars[i];
+                if (posX + mCellSize.x > (float)bmap->Width()) {
+                    posY += mCellSize.y;
+                    posX = 0;
+                }
+                if (posY + mCellSize.y > (float)bmap->Height()) {
+                    pageIdx++;
+                    if (pageIdx >= (int)mMats.size()) {
+                        MILO_NOTIFY(
+                            "%s: too many characters for bitmap, truncating.", Name()
+                        );
+                        mChars.resize(i);
+                        break;
+                    }
+                    posX = 0;
+                    posY = 0;
+                    locker.LoadPage(pageIdx);
+                    mMaterialOffsets[pageIdx].x =
+                        mCellSize.x / (float)locker.mBitmapPtr->Width();
+                    mMaterialOffsets[pageIdx].y =
+                        mCellSize.y / (float)locker.mBitmapPtr->Height();
+                    bmap = locker.mBitmapPtr;
+                }
+                Vector2 pos(posX, posY);
+                SetCharInfo(&mCharInfoMap[curChar], *bmap, pos, pageIdx);
+                posX += mCellSize.x;
+                if (curChar == 0x20) {
+                    mCharInfoMap[curChar].mCharWidth = 0;
+                } else if (curChar == 9) {
+                    MILO_ASSERT(HasChar(L' ' ), 0x284);
+                    mCharInfoMap[curChar] = mCharInfoMap[0x20];
+                    mCharInfoMap[curChar].mAdvance *= 3.0f;
+                }
+            }
+        }
+    }
+}
+
+void RndFont::BleedTest() {
+    String errStr;
+    for (unsigned int i = 0; i < mChars.size(); i++) {
+        unsigned short curChar = mChars[i];
+        CharInfo &curInfo = mCharInfoMap[curChar];
+        BitmapLocker locker(this, curInfo.mPage);
+        RndBitmap *bmap = locker.mBitmapPtr;
+        if (bmap) {
+            bool haswrap = ((RndMat *)mMats[curInfo.mPage])->GetTexWrap() == kTexWrapClamp;
+            int row_y = Round(curInfo.mV * (float)bmap->Height());
+            int col_left = Round(curInfo.mU * (float)bmap->Width());
+            int col_right = Round(curInfo.mCharWidth * mCellSize.x) + col_left;
+            int iptr;
+            if (row_y != 0 || !haswrap) {
+                unsigned char row = bmap->RowNonTransparent(col_left, col_right, row_y, &iptr);
+                if (row) {
+                    errStr += MakeString(
+                        "Top bleeding in 0x%04x, alpha %d, pixel %d,%d\n",
+                        curChar, row, iptr, row_y
+                    );
+                }
+            }
+            row_y += (int)mCellSize.y - 1;
+            if (!haswrap && row_y >= bmap->Height() - 1) {
+                unsigned char row = bmap->RowNonTransparent(col_left, col_right, row_y, &iptr);
+                if (row) {
+                    errStr += MakeString(
+                        "Bottom bleeding in 0x%04x, alpha %d, pixel %d,%d\n",
+                        curChar, row, iptr, row_y
+                    );
+                }
+            }
+            row_y = Round(curInfo.mV * (float)bmap->Height());
+            int ia0 = col_left - 1;
+            if (col_left != 0 || (!haswrap && ia0 <= 0)) {
+                MaxEq(ia0, 0);
+                unsigned char row =
+                    bmap->ColumnNonTransparent(ia0, row_y, row_y + (int)mCellSize.y, &iptr);
+                if (row) {
+                    errStr += MakeString(
+                        "Left bleeding in 0x%04x, alpha %d, pixel %d,%d\n",
+                        curChar, row, ia0, iptr
+                    );
+                }
+            }
+            ia0 = col_right;
+            if (!haswrap && ia0 >= bmap->Width() - 1) {
+                MinEq(ia0, bmap->Width() - 1);
+                unsigned char row =
+                    bmap->ColumnNonTransparent(ia0, row_y, row_y + (int)mCellSize.y, &iptr);
+                if (row) {
+                    errStr += MakeString(
+                        "Right bleeding in 0x%04x, alpha %d, pixel %d,%d\n",
+                        curChar, row, ia0, iptr
+                    );
+                }
+            }
+        }
+    }
+    if (errStr.length() != 0) {
+        MILO_NOTIFY("Bleeding in %s:\n%s", Name(), errStr);
+    } else {
+        MILO_NOTIFY("No bleeding over found.  ");
+    }
+}
 
 float RndFont::CharWidth(unsigned short c) const {
     MILO_ASSERT(HasChar(c), 0x143);

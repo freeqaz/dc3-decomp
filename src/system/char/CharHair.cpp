@@ -11,6 +11,17 @@
 #include "utl/BinStream.h"
 #include "world/Dir.h"
 
+void CharCollide::SyncWorldState() {
+    unk20c = WorldXfm().v;
+    if (mShape >= 3 || mShape == 0) {
+        unk1fc = WorldXfm().m.x;
+        unk1f8 = 1.0f / LengthSquared(unk1fc);
+    }
+    if (mShape >= 3) {
+        unk1f4 = 1.0f / (mCurLength[1] - mCurLength[0]);
+    }
+}
+
 CharHair *gHair;
 CharHair::Strand *gStrand;
 

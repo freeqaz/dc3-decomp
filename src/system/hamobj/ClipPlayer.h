@@ -33,9 +33,11 @@ protected:
     void PlayClip(CharClip *, float, float, HamDriver::LayerArray *);
     bool PushExpertClip(int, HamDriver::LayerArray *);
     CharClip *GetTransitionBefore(Key<Symbol> *);
+    CharClip *GetPrevRoutineTransition(int);
     CharClip *GetRoutineTransition(const char *, Key<Symbol> *);
     void GetRoutineCrossoverClips(float, const char *, CharClip **, CharClip **);
     bool PushRoutineBuilderClip(int, HamDriver::LayerArray *);
+    bool GetClipRange(const char *, const char *, float, float &, float &, float &);
     void PushClip(int, HamDriver::LayerArray *);
 
     Keys<Symbol, Symbol> *mClipKeys; // 0x0

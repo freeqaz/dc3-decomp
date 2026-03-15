@@ -5,9 +5,12 @@ class PhysMemTypeTracker {
 public:
     PhysMemTypeTracker(Symbol);
     ~PhysMemTypeTracker();
+
+    bool mActive; // 0x0
 };
 
 int PhysicalUsage();
+void *PhysicalAlloc(int size);
 void PhysicalFree(void *);
 int ForceLinkXMemFuncs();
 

@@ -939,8 +939,168 @@ int SkeletonChooser::RoundRobinForHandRaised(int player) {
     return trackingID;
 }
 
+void SkeletonChooser::SetPlayerSkeletonNavData(int p1ID, int p2ID) {
+    static Symbol player_present("player_present");
+    static Symbol ui_nav_player("ui_nav_player");
+
+    // Get current skeleton tracking IDs for both players
+    int cur0 = TheGameData->Player(0)->GetSkeletonTrackingID();
+    int cur1 = TheGameData->Player(1)->GetSkeletonTrackingID();
+
+    // If a player's current skeleton doesn't match either new ID, unassign
+    if (cur0 != p1ID && cur0 != p2ID) {
+        TheGameData->AssignSkeleton(0, -1);
+        cur0 = -1;
+    }
+    if (cur1 != p1ID && cur1 != p2ID) {
+        TheGameData->AssignSkeleton(1, -1);
+        cur1 = -1;
+    }
+
+    // Determine if sided assignment matters
+    static Symbol sided_colors_locked("sided_colors_locked");
+    static Symbol bustamove("bustamove");
+    bool sidesOk = true;
+
+    if (TheHamProvider->Property(sided_colors_locked, true)->Int() != 0) {
+        bool inBustamove = TheGameMode->InMode(bustamove, true);
+        sidesOk = !inBustamove;
+    } else {
+        sidesOk = false;
+    }
+
+    if (sidesOk) {
+        Skeleton *pSkel1 = TheGestureMgr->GetSkeletonByTrackingID(p1ID);
+        Skeleton *pSkel2 = TheGestureMgr->GetSkeletonByTrackingID(p2ID);
+        SkeletonSide side0 = GetPlayerSide(0);
+
+        // Determine side for skeleton 1
+        int side1 = 2; // 2 = unknown/no skeleton
+        if (pSkel1 != NULL) {
+            if (side0 == kSkeletonRight) {
+                if (pSkel1->GetUnkab0().x < -0.15f) {
+                    side1 = 0;
+                } else {
+                    side1 = 1;
+                }
+            } else {
+                if (pSkel1->GetUnkab0().x > 0.15f) {
+                    side1 = 1;
+                } else {
+                    side1 = 0;
+                }
+            }
+        }
+
+        // Determine side for skeleton 2
+        SkeletonSide side0b = GetPlayerSide(1);
+        int side2 = 2;
+        if (pSkel2 != NULL) {
+            if (side0b == kSkeletonRight) {
+                if (pSkel2->GetUnkab0().x < -0.15f) {
+                    side2 = 0;
+                } else {
+                    side2 = 1;
+                }
+            } else {
+                if (pSkel2->GetUnkab0().x > 0.15f) {
+                    side2 = 1;
+                } else {
+                    side2 = 0;
+                }
+            }
+        }
+
+        sidesOk = (side2 != side1);
+    }
+
+    // Assign p1ID to a player
+    if (p1ID > 0 && p1ID != cur0 && p1ID != cur1) {
+        if (p2ID <= 0 || p2ID != cur0) {
+            if (sidesOk) {
+                TheGameData->AssignSkeleton(0, p1ID);
+                cur0 = p1ID;
+            } else {
+                TheGameData->AssignSkeleton(0, -1);
+                cur0 = -1;
+            }
+        } else {
+            if (sidesOk) {
+                TheGameData->AssignSkeleton(1, p1ID);
+                cur1 = p1ID;
+            } else {
+                TheGameData->AssignSkeleton(1, -1);
+                cur1 = -1;
+            }
+        }
+    }
+
+    // Assign p2ID to a player
+    if (p2ID > 0 && p2ID != cur0 && p2ID != cur1) {
+        if (p1ID <= 0 || p1ID != cur1) {
+            if (sidesOk) {
+                TheGameData->AssignSkeleton(1, p2ID);
+                cur1 = p2ID;
+            } else {
+                TheGameData->AssignSkeleton(1, -1);
+                cur1 = -1;
+            }
+        } else {
+            if (sidesOk) {
+                TheGameData->AssignSkeleton(0, p2ID);
+                cur0 = p2ID;
+            } else {
+                TheGameData->AssignSkeleton(0, -1);
+                cur0 = -1;
+            }
+        }
+    }
+
+    // Determine player presence
+    // Player is present if their skeleton tracking ID > 0 OR player is autoplaying
+    bool present0 = cur0 > 0;
+    bool present1 = cur1 > 0;
+
+    if (TheGameData->Player(0)->IsAutoplaying()) {
+        present0 = true;
+    }
+    if (TheGameData->Player(1)->IsAutoplaying()) {
+        present1 = true;
+    }
+
+    SetPlayerPresent(0, present0);
+    SetPlayerPresent(1, present1);
+
+    // If not tracking all skeletons, set the active navigation player
+    int activeIdx = mActivePlayerIndex;
+    if (!TheGestureMgr->IsTrackingAllSkeletons()) {
+        TheHamProvider->SetProperty(ui_nav_player, DataNode(activeIdx));
+    }
+
+    // Timeout: if no skeletons visible and not in freestyle and not in controller mode,
+    // after 5 seconds, reset active player to 0 and ensure right side
+    static float sNoSkeletonTimer = 0.0f;
+    if (p1ID > 0 || p2ID > 0 || IsFreestyleMode() || TheGestureMgr->InControllerMode()) {
+        sNoSkeletonTimer = 0.0f;
+    } else {
+        sNoSkeletonTimer += TheTaskMgr.DeltaUISeconds();
+        if (sNoSkeletonTimer > 5.0f) {
+            TheHamProvider->SetProperty(ui_nav_player, DataNode(0));
+            mActivePlayerIndex = 0;
+            HamPlayerData *pPlayer = TheGameData->Player(0);
+            TheGestureMgr->SetActiveSkeletonTrackingID(pPlayer->GetSkeletonTrackingID());
+            if (GetPlayerSide(0) != kSkeletonRight) {
+                SwapPlayerSides();
+            }
+        }
+    }
+
+    // Always keep the active skeleton tracking ID in sync
+    HamPlayerData *pActivePlayer = TheGameData->Player(mActivePlayerIndex);
+    TheGestureMgr->SetActiveSkeletonTrackingID(pActivePlayer->GetSkeletonTrackingID());
+}
+
 #ifdef HX_NATIVE
 void SkeletonChooser::DrawDebug() {}
-void SkeletonChooser::SetPlayerSkeletonNavData(int, int) {}
 void SkeletonChooser::ChoosePlayerSides() {}
 #endif

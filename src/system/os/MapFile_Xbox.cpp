@@ -1,6 +1,7 @@
 #include "os/MapFile_Xbox.h"
 #include "os/File.h"
 #include "os/Debug.h"
+#include "os/System.h"
 #include "utl/MemMgr.h"
 #include <cstdio>
 
@@ -238,6 +239,26 @@ void XboxMapFile::ReadLine(char *line, int size) {
     }
     line[idx] = '\0';
 }
+
+template <typename T>
+void InsertSort(int *keys, T *data, int count) {
+    unsigned int *arr = (unsigned int *)data;
+    int offset = keys - (int *)arr;
+    for (int i = 1; i < count; i++) {
+        unsigned int savedVal = arr[i];
+        int savedKey = keys[i];
+        int j = i;
+        while (j > 0 && savedVal < arr[j - 1]) {
+            arr[j] = arr[j - 1];
+            keys[j] = keys[j - 1];
+            j--;
+        }
+        arr[j] = savedVal;
+        keys[j] = savedKey;
+    }
+}
+
+template void InsertSort<StackData>(int *, StackData *, int);
 
 const char *XboxMapFile::GetFunction(unsigned int ui, bool b2) {
     static char sBuffer[0x400];

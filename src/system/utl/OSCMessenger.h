@@ -17,8 +17,10 @@ public:
     void Poll();
     int GetInt(String, int);
     float GetFloat(String, float);
+    void SendOSCFloat(String, float);
 
 private:
+    int MakeOSCAddress(String, char *);
     OSCValue *GetValue(String);
 
     NetworkSocket *mSocket1; // 0x4

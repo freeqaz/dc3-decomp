@@ -81,6 +81,56 @@ bool RndLight::Replace(ObjRef *ref, Hmx::Object *obj) {
     return RndTransformable::Replace(ref, obj);
 }
 
+Transform RndLight::Projection() {
+    Transform result;
+    if (mRange == 0.0f) {
+        result.Reset();
+    } else {
+        Vector3 xRow = WorldXfm().m.x;
+
+        const Transform &wz = WorldXfm();
+        float nzy = -wz.m.z.y;
+        float nzx = -wz.m.z.x;
+        float nzz = -wz.m.z.z;
+
+        Vector3 yRow = WorldXfm().m.y;
+
+        Vector3 pos = WorldXfm().v;
+
+        float topR = mTopRadius;
+        float slope = (mBotRadius - topR) / mRange;
+
+        result.m.x.y = nzx;
+        result.m.y.z = yRow.y * slope;
+        result.m.z.z = yRow.z * slope;
+        result.m.x.z = yRow.x * slope;
+
+        result.v.x = -(pos.x * xRow.x + pos.y * xRow.y + pos.z * xRow.z);
+        result.v.y = -(pos.x * nzx + pos.y * nzy + pos.z * nzz);
+        result.v.z = topR - (pos.x * yRow.x * slope + pos.y * yRow.y * slope + pos.z * yRow.z * slope);
+
+        result.m.x.x = xRow.x;
+        result.m.y.x = xRow.y;
+        result.m.z.x = xRow.z;
+        result.m.y.y = nzy;
+        result.m.z.y = nzz;
+
+        Multiply(result, mTextureXfm, result);
+
+        static bool sInit;
+        static Transform sBias;
+        if (!sInit) {
+            sInit = true;
+            sBias.m.x.Set(0.5f, 0.0f, 0.0f);
+            sBias.m.y.Set(0.0f, 0.5f, 0.0f);
+            sBias.m.z.Set(0.5f, 0.5f, 1.0f);
+            sBias.v.Set(0.0f, 0.0f, 0.0f);
+        }
+        Multiply(result, sBias, result);
+    }
+    return result;
+}
+
 BEGIN_HANDLERS(RndLight)
     HANDLE_ACTION(set_showing, SetShowing(_msg->Int(2)))
     HANDLE_SUPERCLASS(RndTransformable)

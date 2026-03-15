@@ -24,14 +24,12 @@ void DelayEffect::SetParameter(int param, float value) {
     case 0: {
         int delaySamples = (int)(value * 48000.0f);
         mDelaySamples = delaySamples;
-        int clamped = 95999;
-        if (delaySamples < 96000) {
-            clamped = delaySamples;
-            if (delaySamples < 1) {
-                clamped = 1;
-            }
+        if (delaySamples > 95999) {
+            delaySamples = 95999;
+        } else if (delaySamples < 1) {
+            delaySamples = 1;
         }
-        mDelaySamples = clamped;
+        mDelaySamples = delaySamples;
         break;
     }
     case 1:

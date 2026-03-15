@@ -119,15 +119,32 @@ MsgSinks::~MsgSinks() {
 MsgSinks::MsgSinks(Hmx::Object *o)
     : mPropSyncHandlers(nullptr), mSinks(o), mEventSinks(o), mExporting(0), mOwner(o) {}
 
-// BEGIN_CUSTOM_PROPSYNC(MsgSinks::Sink)
-//     SYNC_PROP(obj, (Hmx::Object *&)o.obj)
-//     SYNC_PROP(mode, (int &)o.mode)
-// END_CUSTOM_PROPSYNC
+BEGIN_CUSTOM_PROPSYNC(MsgSinks::Sink)
+    SYNC_PROP(obj, o.obj)
+    SYNC_PROP(mode, (int &)o.mode)
+END_CUSTOM_PROPSYNC
 
-// BEGIN_CUSTOM_PROPSYNC(MsgSinks)
-//     SYNC_PROP(sinks, o.mSinks)
-//     SYNC_PROP(event_sinks, o.mEventSinks)
-// END_PROPSYNCS
+BEGIN_CUSTOM_PROPSYNC(MsgSinks::EventSinkElem)
+    SYNC_PROP(handler, o.handler)
+    SYNC_PROP(obj, o.obj)
+    SYNC_PROP(mode, (int &)o.mode)
+END_CUSTOM_PROPSYNC
+
+BEGIN_CUSTOM_PROPSYNC(MsgSinks::EventSink)
+    SYNC_PROP(event, o.event)
+    SYNC_PROP(sinks, o.sinks)
+END_CUSTOM_PROPSYNC
+
+bool PropSync(MsgSinks &o, DataNode &_val, DataArray *_prop, int _i, PropOp _op) {
+    if (_i == _prop->Size())
+        return true;
+    else {
+        Symbol sym = _prop->Sym(_i);
+        SYNC_PROP(sinks, o.Sinks())
+        SYNC_PROP(event_sinks, o.mEventSinks)
+        return false;
+    }
+}
 
 void MsgSinks::AddSink(
     Hmx::Object *s, Symbol ev, Symbol handler, Hmx::Object::SinkMode mode, bool chainProxy

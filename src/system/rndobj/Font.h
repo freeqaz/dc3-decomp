@@ -92,6 +92,7 @@ protected:
     virtual bool HasChar(unsigned short) const;
     virtual void SetASCIIChars(String);
 
+    void SetCharInfo(CharInfo *, RndBitmap &, const Vector2 &, int);
     void UpdateChars();
     void SetBitmapSize(const Vector2 &);
 
@@ -159,6 +160,8 @@ protected:
 };
 
 class BitmapLocker {
+    friend class RndFont;
+
 public:
     BitmapLocker(RndFont *, int);
     ~BitmapLocker();

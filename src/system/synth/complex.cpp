@@ -80,3 +80,14 @@ complex eval(complex * const coeff, int degree, complex z) {
     }
     return result;
 }
+
+// Evaluate rational function: numerator(z) / denominator(z)
+complex evaluate(complex *const num, int numDeg, complex *const den, int denDeg, complex z) {
+    complex denom = eval(den, denDeg, z);
+    complex numer = eval(num, numDeg, z);
+    complex result;
+    double invMagSq = 1.0 / (denom.x * denom.x + denom.y * denom.y);
+    result.x = (numer.y * denom.y + numer.x * denom.x) * invMagSq;
+    result.y = (numer.y * denom.x - numer.x * denom.y) * invMagSq;
+    return result;
+}

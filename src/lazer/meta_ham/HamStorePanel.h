@@ -15,6 +15,7 @@
 #include "os/User.h"
 #include "stl/_vector.h"
 #include "types.h"
+#include "utl/JobMgr.h"
 #include "utl/NetLoader.h"
 #include "utl/Str.h"
 #include "utl/Symbol.h"
@@ -29,17 +30,12 @@ struct HamSpecialOffer {
 
 class HamStorePanel;
 
-class SpecialOfferEnumJob {
+class SpecialOfferEnumJob : public MultipleItemsEnumJob {
 public:
     SpecialOfferEnumJob(HamStorePanel *, int, std::vector<unsigned long long> &);
     virtual ~SpecialOfferEnumJob();
     virtual void OnCompletion(Hmx::Object *);
 
-    int mSessionID;         // 0x04
-    char unk8[0x14];        // 0x08
-    std::vector<bool> mOwnedFlags; // 0x1c
-    int mResult;            // 0x30
-    char unk34[0x28];       // 0x34
     HamStorePanel *mPanel;  // 0x5c
 };
 

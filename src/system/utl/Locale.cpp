@@ -9,9 +9,9 @@
 #include "xdk/xbdm/xbdm.h"
 #include <vector>
 
-#ifdef HX_NATIVE
 Locale TheLocale;
 
+#ifdef HX_NATIVE
 Locale::~Locale() {}
 #endif
 bool gShowTokensCheat = false;

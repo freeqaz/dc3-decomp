@@ -104,6 +104,28 @@ OSCMessenger::OSCValue *OSCMessenger::GetValue(String str) {
     return 0;
 }
 
+void OSCMessenger::SendOSCFloat(String str, float value) {
+    if (mSocket2) {
+        char buf[0x120];
+        int len = MakeOSCAddress(str, buf);
+        int i = len;
+        buf[i++] = ',';
+        buf[i++] = 'f';
+        buf[i++] = '\0';
+        buf[i++] = '\0';
+        *(int *)&buf[i] = *(int *)&value;
+        mSocket2->Send(buf, i + 4);
+    }
+}
+
+int OSCMessenger::MakeOSCAddress(String str, char *buf) {
+    int len = strlen(str.c_str());
+    strncpy(buf, str.c_str(), 0x80);
+    int rem = len % 4;
+    memset(buf + len, 0, 4 - rem);
+    return len - rem + 4;
+}
+
 float OSCMessenger::GetFloat(String str, float fValue) {
     OSCValue *val = GetValue(str);
     if (val) {

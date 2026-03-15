@@ -18,9 +18,8 @@ LoadMgr TheLoadMgr;
 int gLoadCount;
 
 struct LoaderGlitchContext {
-    const char *name;       // 0x0
-    int depth;              // 0x4
-    String file;            // 0x8
+    String file;            // 0x0
+    const char *name;       // 0x8
     const char *fromState;  // 0xC
     LoaderPos toPos;        // 0x10
 };
@@ -292,6 +291,64 @@ void LoadMgr::PollFrontLoader() {
     if (!mLoading.empty()) {
         mLoading.front()->PollLoading();
     }
+}
+#else
+void LoadMgr::PollFrontLoader() {
+    Loader *front = mLoading.front();
+    LoaderPos savedPos = mLoaderPos;
+    mLoaderPos = front->mPos;
+
+    LoaderGlitchContext ctx;
+    ctx.file = front->mFile.c_str();
+    ctx.toPos = front->mPos;
+    ctx.name = front->StateName();
+
+    if (TheArchive && Archive::DebugArkOrder()) {
+        if (front->mLoadStartMs == -1) {
+            front->mLoadStartMs = SystemMs();
+            if (gLoadCount == 0) {
+                int depth = 0;
+                TheDebug << MakeString("Loading%s Start '%s'\n",
+                    WhiteSpace(depth), ctx.file);
+            }
+            gLoadCount++;
+        }
+    }
+
+    int savedStartMs = front->mLoadStartMs;
+    bool isLoaded = false;
+    bool deleted = false;
+    MemPushHeap(front->mHeap);
+    if (UsingCD()) {
+        AutoGlitchReport hang(mPeriod * 3.0f, FrontLoaderGlitchCB, &ctx);
+        front->PollLoading();
+        if (!ListFind(mLoading, front)) {
+            isLoaded = true;
+            deleted = true;
+            ctx.fromState = "deleted";
+        } else {
+            ctx.fromState = front->StateName();
+            isLoaded = front->IsLoaded();
+        }
+    } else {
+        front->PollLoading();
+    }
+    MemPopHeap();
+
+    if (TheArchive && Archive::DebugArkOrder() && isLoaded) {
+        int endMs = SystemMs();
+        if (!deleted) {
+            gLoadCount--;
+            front->mLoadStartMs = -1;
+        }
+        if (endMs - savedStartMs > 20 || gLoadCount == 0) {
+            int elapsed = endMs - savedStartMs;
+            TheDebug << MakeString("Loading%s End   %4d [%5d,%5d]  '%s'\n",
+                WhiteSpace(gLoadCount), elapsed, savedStartMs, endMs, ctx.file);
+        }
+    }
+
+    mLoaderPos = savedPos;
 }
 #endif
 

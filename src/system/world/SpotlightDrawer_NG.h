@@ -63,6 +63,7 @@ protected:
     static bool CheckRTs(SpotlightResources *);
 
     static SpotlightResources *sSharedResources;
+    static bool sActiveFrame;
 
     bool RestoreCam();
     bool CheckFogTexture();

@@ -154,6 +154,48 @@ void DefaultPhysicsManager::ActivateCollidable(Hmx::Object *o) {
     }
 }
 
+void DefaultPhysicsManager::DeactivateCollidable(Hmx::Object *o) {
+    auto it = std::find(mInactiveCollidables.begin(), mInactiveCollidables.end(), o);
+    if (it != mInactiveCollidables.end()) {
+        RndMesh *mesh = *it;
+        mActiveCollidables.erase(it);
+        mInactiveCollidables.insert(mInactiveCollidables.begin(), mesh);
+    }
+}
+
+void DefaultPhysicsManager::AddCollidable(Hmx::Object *o, ObjectDir *dir, bool active) {
+    RndMesh *mesh = dynamic_cast<RndMesh *>(o);
+    if (mesh) {
+        if (mCollidableDirs.find(mesh) == mCollidableDirs.end()) {
+            mCollidableDirs[mesh] = dir;
+            if (active) {
+                mActiveCollidables.insert(mActiveCollidables.begin(), mesh);
+            } else {
+                mInactiveCollidables.insert(mInactiveCollidables.begin(), mesh);
+            }
+            mCollidables.insert(mCollidables.begin(), o);
+        }
+    }
+}
+
+void DefaultPhysicsManager::RemoveCollidable(Hmx::Object *o) {
+    std::map<Hmx::Object *, ObjectDir *>::iterator mapIt = mCollidableDirs.find(o);
+    if (mapIt == mCollidableDirs.end()) {
+        return;
+    }
+    auto it = std::find(mActiveCollidables.begin(), mActiveCollidables.end(), o);
+    if (it != mActiveCollidables.end()) {
+        mActiveCollidables.erase(it);
+    } else {
+        it = std::find(mInactiveCollidables.begin(), mInactiveCollidables.end(), o);
+        if (it != mInactiveCollidables.end()) {
+            mInactiveCollidables.erase(it);
+        }
+    }
+    mCollidableDirs.erase(mapIt);
+    mCollidables.remove(o);
+}
+
 void DefaultPhysicsManager::RemoveAll() {
     mCollidableDirs.clear();
     mActiveCollidables.clear();

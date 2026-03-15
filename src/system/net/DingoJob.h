@@ -19,6 +19,8 @@ public:
     const char *GetResponseString();
     int GetTimeoutMs() const { return mTimeoutMs; }
 
+    friend class DingoServer;
+
 private:
     void ParseResponse(JsonConverter *reader, JsonObject **response, int *retVersion);
 

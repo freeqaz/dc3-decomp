@@ -2,6 +2,7 @@
 #include "ContentLoadingPanel.h"
 #include "SongSelectPanel.h"
 #include "flow/Flow.h"
+#include "meta_ham/BlacklightPanel.h"
 #include "meta_ham/HamPanel.h"
 #include "meta_ham/HamSongMgr.h"
 #include "meta_ham/HamUI.h"
@@ -13,6 +14,14 @@
 #include "ui/UIPanel.h"
 #include "utl/MakeString.h"
 #include "utl/Symbol.h"
+
+void BlacklightPanel::Exit() {
+    if (TheHamUI.GetLetterboxPanel()) {
+        TheHamUI.GetLetterboxPanel()->RemoveSink(this, "enter_blacklight_mode");
+        TheHamUI.GetLetterboxPanel()->RemoveSink(this, "exit_blacklight_mode");
+    }
+    UIPanel::Exit();
+}
 
 SongSelectPanel::SongSelectPanel() {}
 

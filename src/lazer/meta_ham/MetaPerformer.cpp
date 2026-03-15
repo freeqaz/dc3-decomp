@@ -1521,7 +1521,33 @@ MetaPerformer *MetaPerformerHook::Current() {
     }
 }
 
-// TODO: implement — called by GenerateRecommendedPracticeMoves
-#ifdef HX_NATIVE
-bool MetaPerformer::CheckRecommendedPracticeMove(String, int) const { return false; }
-#endif
+bool MetaPerformer::CheckRecommendedPracticeMove(String name, int player) const {
+    MILO_ASSERT(player >= 0 && player < MULTIPLAYER_SLOTS, 0x4EB);
+    int total = 0;
+    bool _result = true;
+    int good = 0;
+    unsigned int i = 0;
+    auto _tmp0 = mMoveScores[player].size();
+    bool lastGood = false;
+    if (_tmp0 != 0) {
+        i = 0;
+        total = 0;
+        good = 0;
+        do {
+            int rating = mMoveScores[player][i].mRatingStateIndex;
+            if (name == mMoveScores[player][i].mMove->DisplayName()) {
+                total++;
+                lastGood = false;
+                if (rating > 2) {
+                    good++;
+                    lastGood = true;
+                }
+            }
+            i++;
+        } while (i < mMoveScores[player].size());
+    }
+    if (!lastGood && (float)good / (float)total <= 0.49f) {
+                _result = false;
+    }
+    return _result;
+}

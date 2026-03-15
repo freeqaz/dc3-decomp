@@ -94,6 +94,8 @@ struct MatPerfSettings {
 
 // size 0x1f8
 class BaseMaterial : public Hmx::Object {
+    friend class NgSpotlightDrawer;
+
 public:
     enum ColorModFlags {
         kColorModNone = 0,

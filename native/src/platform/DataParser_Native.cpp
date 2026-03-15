@@ -61,7 +61,7 @@ static bool ParseNode();
 extern int gNode;
 extern Symbol gFile;
 extern BinStream *gBinStream;
-extern int gDataLine;
+extern DataType gDataLine;
 
 // ============================================================================
 // DataInput — feeds data from BinStream to the flex lexer
@@ -488,7 +488,7 @@ static bool ParseNode() {
                     escaped = true;
                 }
             } else if (*c == '\n') {
-                gDataLine++;
+                gDataLine = (DataType)((int)gDataLine + 1);
             }
 
             if (escaped) {

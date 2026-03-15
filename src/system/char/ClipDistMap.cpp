@@ -486,7 +486,128 @@ void ClipDistMap::FindDists(float maxFacing, DataArray *arr) {
     dataVarDelta = varDelta;
 }
 
-void ClipDistMap::Draw(float, float, CharDriver *) {}
+void ClipDistMap::Draw(float x, float y, CharDriver *driver) {
+    Hmx::Rect rect;
+
+    // Draw left border
+    rect.x = x - 1.0f;
+    rect.y = y - 1.0f;
+    rect.w = 1.0f;
+    rect.h = ((float)mDists.mHeight + 1.0f) * 2.0f;
+    Hmx::Color borderColor1(1.0f, 1.0f, 1.0f, 1.0f);
+    TheRnd.DrawRect(rect, borderColor1, nullptr, nullptr, nullptr);
+
+    // Draw right border
+    Hmx::Color borderColor2(1.0f, 1.0f, 1.0f, 1.0f);
+    rect.x = (float)(mDists.mWidth * 2) + x;
+    TheRnd.DrawRect(rect, borderColor2, nullptr, nullptr, nullptr);
+
+    // Draw top border
+    Hmx::Color borderColor3(1.0f, 1.0f, 1.0f, 1.0f);
+    rect.x = x - 1.0f;
+    rect.h = 1.0f;
+    rect.w = ((float)mDists.mWidth + 1.0f) * 2.0f;
+    TheRnd.DrawRect(rect, borderColor3, nullptr, nullptr, nullptr);
+
+    // Draw bottom border
+    Hmx::Color borderColor4(1.0f, 1.0f, 1.0f, 1.0f);
+    rect.y = (float)(mDists.mHeight * 2) + y;
+    TheRnd.DrawRect(rect, borderColor4, nullptr, nullptr, nullptr);
+
+    // Draw vertical grid lines at integer beats for clip A
+    Hmx::Color gridColor1(0.0f, 0.0f, 0.0f, 1.0f);
+    float beat = (float)ceil((double)mAStart);
+    for (; (float)beat < (float)((float)mDists.mWidth / (float)mSamplesPerBeat + mAStart); beat = (float)((float)beat + 1.0f)) {
+        rect.x = (beat - mAStart) * (float)mSamplesPerBeat * 2.0f + x;
+        rect.y = y;
+        rect.w = 1.0f;
+        rect.h = (float)(mDists.mHeight * 2);
+        TheRnd.DrawRect(rect, gridColor1, nullptr, nullptr, nullptr);
+    }
+
+    // Draw horizontal grid lines at integer beats for clip B
+    Hmx::Color gridColor2(0.0f, 0.0f, 0.0f, 1.0f);
+    beat = (float)ceil((double)mBStart);
+    for (; (float)beat < (float)((float)mDists.mHeight / (float)mSamplesPerBeat + mBStart); beat = (float)((float)beat + 1.0f)) {
+        rect.x = x;
+        rect.y = ((float)(mDists.mHeight - 1) - (beat - mBStart) * (float)mSamplesPerBeat) * 2.0f + y;
+        rect.w = (float)(mDists.mWidth * 2);
+        rect.h = 1.0f;
+        TheRnd.DrawRect(rect, gridColor2, nullptr, nullptr, nullptr);
+    }
+
+    // Draw distance map cells
+    Hmx::Rect cellRect;
+    Hmx::Color cellColor;
+    cellRect.w = 2.0f;
+    cellRect.h = 2.0f;
+    for (int col = 0; col < mDists.mWidth; col++) {
+        cellRect.x = (float)(col * 2) + x;
+        for (int row = 0; row < mDists.mHeight; row++) {
+            float err = mDists(col, row);
+            if (err != kHugeFloat) {
+                float c = (mWorstErr - err) / mWorstErr;
+                cellColor.red = c;
+                cellColor.green = c;
+                cellColor.blue = c;
+                cellColor.alpha = 1.0f;
+                cellRect.y = (float)((mDists.mHeight - 1 - row) * 2) + y;
+                if (err > mLastMinErr) {
+                    cellColor.red = (c + 1.0f) * 0.5f;
+                    cellColor.green = 0.0f;
+                    cellColor.blue = 0.0f;
+                }
+                TheRnd.DrawRect(cellRect, cellColor, nullptr, nullptr, nullptr);
+            }
+        }
+    }
+
+    // Draw local minima
+    for (int col = 0; col < mDists.mWidth; col++) {
+        cellRect.x = (float)(col * 2) + x;
+        for (int row = 0; row < mDists.mHeight; row++) {
+            cellRect.y = (float)((mDists.mHeight - 1 - row) * 2) + y;
+            if (LocalMin(col, row)) {
+                Hmx::Color minColor(1.0f, 1.0f, 0.0f, 1.0f);
+                TheRnd.DrawRect(cellRect, minColor, nullptr, nullptr, nullptr);
+            }
+        }
+    }
+
+    // Draw transition nodes
+    Hmx::Color nodeColor(1.0f, 0.0f, 0.0f, 1.0f);
+    for (unsigned int i = 0; i < mNodes.size(); i++) {
+        DrawDot(x + 1.0f, y - 1.0f, mNodes[i].curBeat, mNodes[i].nextBeat, nodeColor);
+    }
+
+    // Draw current playback position if driver is provided
+    if (driver && driver->First()) {
+        float curBeatA = mClipA->StartBeat();
+        CharClipDriver *cd = driver->First();
+        do {
+            if (cd->GetClip() == mClipA) {
+                curBeatA = cd->mBeat;
+            }
+            cd = cd->Next();
+        } while (cd != nullptr);
+
+        float curBeatB = mClipB->StartBeat();
+        cd = driver->First();
+        do {
+            if (cd->GetClip() == mClipB) {
+                curBeatB = cd->mBeat;
+                break;
+            }
+            cd = cd->Next();
+        } while (cd != nullptr);
+
+        if (mClipA == mClipB && curBeatA == curBeatB) {
+            curBeatB = mBStart;
+        }
+        Hmx::Color driverColor(0.0f, 1.0f, 1.0f, 1.0f);
+        DrawDot(x, y, curBeatA, curBeatB, driverColor);
+    }
+}
 
 void ClipDistMap::DrawDot(float x, float y, float f3, float f4, Hmx::Color const &color) {
     Hmx::Rect rect;

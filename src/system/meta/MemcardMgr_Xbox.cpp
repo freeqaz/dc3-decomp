@@ -345,10 +345,73 @@ DataNode MemcardMgr::OnMsg(const StorageChangedMsg &msg) {
     return 0;
 }
 
-// TODO: implement — called by ThreadStart
-#ifdef HX_NATIVE
-MCResult MemcardMgr::ThreadCall_SaveGame() { return kMCGeneralError; }
-#endif
+MCResult MemcardMgr::ThreadCall_SaveGame() {
+    MCContainer *container = mContainers[mPadNum];
+    ULONGLONG sizeNeeded = XContentCalculateSize((ULONGLONG)mSaveDataLength * 2, 0);
+    ULONGLONG freeSpace = 0;
+    MCResult res = container->Mount((CreateType)0);
+    switch (res) {
+    case kMCNoError:
+        if (mSaveCreateType == 0)
+            goto unmount_return;
+        {
+            u64 pathFree = 0;
+            if (container->GetPathFreeSpace("", &pathFree) != kMCNoError || (freeSpace = pathFree, mSaveCreateType != 0)) {
+                int existingSize = -1;
+                container->GetSize(kSaveFilename, &existingSize);
+                if (existingSize > 0) {
+                    if ((ULONGLONG)existingSize < sizeNeeded) {
+                        sizeNeeded = sizeNeeded - (ULONGLONG)existingSize;
+                    } else {
+                        sizeNeeded = 0;
+                    }
+                }
+                break;
+            }
+        }
+    unmount_return:
+        container->Unmount();
+        res = kMCFileExists;
+        break;
+    case kMCCorrupt:
+        if (mSaveCreateType == 0) {
+            return res;
+        }
+        res = TheMC.DeleteContainer(container->Cid());
+        if (res != kMCNoError) {
+            return res;
+        }
+        break;
+    case kMCFileNotFound:
+        break;
+    default:
+        return res;
+    }
+
+    u64 deviceFree = 0;
+    res = container->GetDeviceFreeSpace(&deviceFree);
+    if (res == kMCNoError) {
+        if (sizeNeeded > (ULONGLONG)(deviceFree + freeSpace)) {
+            if (container->IsMounted()) {
+                container->Unmount();
+            }
+            res = kMCNotEnoughSpace;
+        } else {
+            if (!container->IsMounted()) {
+                res = container->Mount((CreateType)1);
+                if (res != kMCNoError) {
+                    return res;
+                }
+            }
+            MCResult writeRes = PerformWrite(container);
+            res = container->Unmount();
+            if (writeRes != kMCNoError) {
+                res = writeRes;
+            }
+        }
+    }
+    return res;
+}
 
 DataNode MemcardMgr::OnMsg(const SigninChangedMsg &msg) {
     if (mSelectDeviceWaiting) {

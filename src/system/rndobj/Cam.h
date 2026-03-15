@@ -12,6 +12,8 @@
 #include "utl/MemMgr.h"
 
 class RndCam : public RndTransformable {
+    friend class NgSpotlightDrawer;
+
 public:
     virtual ~RndCam();
     OBJ_CLASSNAME(Cam);

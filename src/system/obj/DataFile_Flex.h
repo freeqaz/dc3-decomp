@@ -5,7 +5,11 @@
 extern "C" {
 #endif
 
+#ifdef __cplusplus
+extern DataType gDataLine;
+#else
 extern int gDataLine;
+#endif
 
 extern void DataFail(const char *);
 extern int DataInput(void *, int);

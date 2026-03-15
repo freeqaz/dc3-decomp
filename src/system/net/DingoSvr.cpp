@@ -158,11 +158,73 @@ DataNode DingoServer::OnMsg(const SigninChangedMsg &msg) {
     return DataNode(1);
 }
 
-// TODO: implement
-#ifdef HX_NATIVE
-DataNode DingoServer::OnMsg(const DingoJobCompleteMsg &) { return DataNode(0); }
-bool DingoServer::InitAndAddJob(DingoJob *, bool, bool) { return false; }
-#endif
+bool DingoServer::InitAndAddJob(DingoJob *job, bool immediate, bool delay) {
+    ReqType reqType = kHttpReqType_POST;
+    unsigned short port = GetPort();
+    if (GetSSLEnable()) {
+        reqType = kHttpReqType_PUT;
+        port = 443;
+    }
+    bool initSuccess;
+    if (GetIPAddr() != 0) {
+        initSuccess = TheWebSvcMgr.InitRequest(job, reqType, GetIPAddr(), port, 0, 0);
+    } else {
+        initSuccess = TheWebSvcMgr.InitRequest(job, reqType, GetHostName(), port, 0, 0);
+    }
+    if (initSuccess) {
+        job->SetUserAgent(mUserAgent.c_str());
+        if (delay) {
+            DelayJob(job);
+            return true;
+        }
+        return TheWebSvcMgr.AddRequest(job, job->GetTimeoutMs(), immediate, false);
+    }
+    MILO_NOTIFY("InitAndAddJob failed.");
+    return false;
+}
+
+DataNode DingoServer::OnMsg(const DingoJobCompleteMsg &msg) {
+    if (mAuthState != kServerAuthenticating) {
+        MILO_NOTIFY("Got auth response in wrong state: %d.", mAuthState);
+    } else {
+        if (msg.Data()->Int(3) != 0) {
+            AuthenticateReqJob *job = dynamic_cast<AuthenticateReqJob *>(msg.Data()->Obj<DingoJob>(2));
+            MILO_ASSERT(job, 0x14e);
+            job->ParseResponse();
+            if (job->mResult == 1) {
+                unk40 = job->mSessionID.c_str();
+                mAuthState = kServerAuthed;
+                OnAuthSuccess();
+                AddDelayedCalls();
+                Handle(ServerStatusChangedMsg(kServerStatusConnected).Data(), false);
+                DoAdditionalLogin();
+            } else {
+                DataPoint pt("svr_sent_non_success_on_auth");
+                pt.AddPair("location", "DingoSvr::OnMsg1");
+                pt.AddPair("result", job->mResult);
+                pt.AddPair("response_str", job->GetResponseString());
+                pt.AddPair("mBaseUrl", job->GetBaseURL());
+                pt.AddPair("mResponseStatusCode", (int)job->GetResponseStatusCode());
+                pt.AddPair("severity", "warn");
+                pt.AddPair("project", "sync");
+                TheDataPointMgr.RecordDebugDataPoint(pt);
+                CancelDelayedCalls();
+                TheWebSvcMgr.CancelOutstandingCalls();
+                Disconnect();
+                Handle(ServerStatusChangedMsg(kServerStatusDisconnected).Data(), false);
+                return DataNode(0);
+            }
+        } else {
+            SendDebugDataPoint("auth_msg_send_failure", "location", "DingoSvr::OnMsg2", "severity", "warn", "project", "sync");
+            CancelDelayedCalls();
+            TheWebSvcMgr.CancelOutstandingCalls();
+            Disconnect();
+            Handle(ServerStatusChangedMsg(kServerStatusDisconnected).Data(), false);
+            return DataNode(0);
+        }
+    }
+    return DataNode(1);
+}
 bool DingoServer::Authenticate(int padnum, const char *url) {
     if (mAuthState != 0) {
         return true;

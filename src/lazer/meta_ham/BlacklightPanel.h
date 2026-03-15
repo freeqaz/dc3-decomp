@@ -15,6 +15,7 @@ public:
 
     // UIPanel
     virtual void Enter();
+    virtual void Exit();
 
     NEW_OBJ(BlacklightPanel)
 

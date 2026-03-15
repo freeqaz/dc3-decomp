@@ -284,7 +284,7 @@ bool XboxContentMgr::DeleteContent(Symbol contentName) {
         if (contentName == (*it)->FileName()) {
             notFound = false;
             (*it)->Delete();
-            mState = kContentMgrState6;
+            mState = kContentMgrState7;
             mDirty = true;
             break;
         }
@@ -380,6 +380,51 @@ DataNode XboxContentMgr::OnMsg(const ContentInstalledMsg &msg) {
     return 0;
 }
 
-bool XboxContentMgr::MountContent(Symbol) { return false; }
+bool XboxContentMgr::MountContent(Symbol name) {
+    bool alreadyMounted = false;
+    bool found = false;
+    FOREACH (it, mContents) {
+        if (name == (*it)->FileName()) {
+            found = true;
+            (*it)->Mount();
+            mState = kContentMgrState7;
+            if ((*it)->GetState() == Content::kMounted) {
+                alreadyMounted = true;
+            }
+            break;
+        }
+    }
+    if (!found) {
+        MILO_NOTIFY("\"%s\" not found to mount.", name.Str());
+    }
+    int prevCount = 0;
+    bool done = false;
+    do {
+        int mountingCount = 0;
+        Content *oldest = nullptr;
+        unsigned int oldestLRM = 0xFFFFFFFF;
+        FOREACH (it, mContents) {
+            Content::State state = (*it)->GetState();
+            if (state == Content::kMounted || state == Content::kMounting
+                || state == Content::kNeedsMounting) {
+                mountingCount++;
+                if (name != (*it)->FileName()
+                    && (*it)->GetLRM() < oldestLRM
+                    && (*it)->GetState() != Content::kMounting) {
+                    oldest = *it;
+                    oldestLRM = oldest->GetLRM();
+                }
+            }
+        }
+        if (mountingCount == prevCount) {
+            done = true;
+        } else if (mountingCount > 6 && oldest) {
+            oldest->Unmount();
+            mState = kContentMgrState7;
+        }
+        prevCount = mountingCount;
+    } while (!done);
+    return alreadyMounted;
+}
 
 void XboxContentMgr::PollRefresh() {}

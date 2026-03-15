@@ -1,5 +1,6 @@
 #pragma once
 #include "stdlib.h"
+#include "string.h"
 
 namespace std {
 
@@ -17,10 +18,33 @@ namespace std {
         }
         virtual const char *what() const { return str ? str : "Unknown exception"; }
 
-        exception &operator=(const exception &e);
+        exception &operator=(const exception &e) {
+            if (this != &e) {
+                if (unk8)
+                    free((void *)str);
+                unk8 = false;
+                str = 0;
+                if (e.unk8) {
+                    _Copy_str(e.str);
+                } else {
+                    str = e.str;
+                }
+            }
+            return *this;
+        }
 
     private:
-        void _Copy_str(const char *);
+        void _Copy_str(const char *s) {
+            if (s != 0) {
+                size_t len = strlen(s) + 1;
+                char *buf = (char *)malloc(len);
+                str = buf;
+                if (buf != 0) {
+                    strcpy_s(buf, len, s);
+                    unk8 = true;
+                }
+            }
+        }
 
     protected:
         const char *str; // 0x4

@@ -78,6 +78,8 @@
 #include "utl/FileStream.h"
 #include "utl/Option.h"
 #include "utl/TextStream.h"
+#include "os/Joypad.h"
+#include "os/PlatformMgr.h"
 #include "xdk/XAPILIB.h"
 
 // Rnd & TheRnd;
@@ -1372,4 +1374,63 @@ void Rnd::UpdateHeap() {
     *mHeapOverlay << buf;
 }
 
-void Rnd::Modal(Debug::ModalType &, FixedString &, bool) {}
+void Rnd::Modal(Debug::ModalType &type, FixedString &str, bool bb) {
+    if (bb) {
+        char *s = (char *)str.c_str();
+        MILO_LOG("%s\n", s);
+    }
+    if (CanModal(type)) {
+        AutoSlowFrame frame("Rnd::Modal", 6000000.0f);
+        char buf[0x1000];
+        WordWrap(str.c_str(), 0x5a, buf, 0x1000);
+        if (!bb) {
+            strcat(buf, "\n\n-- Waiting on Stack Trace --\n");
+        } else if (type == Debug::kModalFail) {
+            strcat(buf, "\n\n-- Program ended --\n");
+        } else {
+            strcat(buf, "\n\n-- Press any button to continue --\n");
+        }
+        bool oldShowing = ConsoleShowing();
+        ShowConsole(false);
+        if (type != Debug::kModalFail || !bb) {
+            RndSplasherSuspend();
+        }
+        ModalDraw(type, buf);
+        bool oldScreenSaver = ThePlatformMgr.ScreenSaver();
+        if (bb) {
+            ThePlatformMgr.SetScreenSaver(false);
+            ThePlatformMgr.SetScreenSaver(oldScreenSaver);
+            gFailKeepGoing = false;
+            gNotifyKeepGoing = false;
+            gFailRestartConsole = false;
+            ModalKeyListener mkl;
+            KeyboardSubscribe(&mkl);
+            unsigned int mask = 0x800;
+            if (type != Debug::kModalFail) {
+                mask = 0xFFFFFFFF;
+            }
+            while (!(mask & JoypadPollForButton(-1))) {
+                KeyboardPoll();
+                ModalDraw(type, buf);
+                if (type == Debug::kModalFail) {
+                    if (gFailKeepGoing) {
+                        type = Debug::kModalNotify;
+                        break;
+                    }
+                } else {
+                    if (gNotifyKeepGoing) break;
+                    if (type != Debug::kModalFail) continue;
+                }
+                if (gFailRestartConsole) {
+                    XLaunchNewImage(TheSystemArgs.front(), 0);
+                    return;
+                }
+            }
+            KeyboardUnsubscribe(&mkl);
+            ShowConsole(false);
+            ModalDraw(type, "");
+            RndSplasherResume();
+        }
+        ShowConsole(oldShowing);
+    }
+}

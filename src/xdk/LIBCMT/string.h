@@ -6,6 +6,7 @@ extern "C" {
 #endif
 
 char *strcpy(char *dest, const char *src);
+int strcpy_s(char *dest, size_t destsz, const char *src);
 char *strncpy(char *dest, const char *src, size_t count);
 char *strcat(char *dest, const char *src);
 char *strncat(char *dest, const char *src, size_t count);

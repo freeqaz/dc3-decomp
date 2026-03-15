@@ -987,11 +987,11 @@ Symbol ProfileMgr::GetAlternateOutfit(Symbol outfit) {
     outfitChar = GetCharacterOutfit(altChar, 0, true);
 
     char buf[96];
-    char *dst = buf - 1;
     const char *altStr = outfitChar.Str();
     altStr--;
     char c;
     do {
+        char *dst = buf - 1;
         c = *++altStr;
         *++dst = c;
     } while (c);

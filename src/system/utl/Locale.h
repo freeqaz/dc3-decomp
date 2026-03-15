@@ -41,10 +41,15 @@ private:
     bool mInitialized; // 0x1c - checked in Init
     DataArray *mMagnuStrings; // 0x20
 public:
-    // mInitialized is never written in the original binary (UB). On Xbox debug builds,
-    // BSS wasn't zeroed so it happened to be true. Initialize it properly here.
+#ifdef HX_NATIVE
+    // Native builds need explicit init since globals aren't BSS-zeroed
     Locale() : mSize(0), mSymTable(0), mStrTable(0), mStringData(0),
         mUploadedFlags(0), mNumFilesLoaded(0), mInitialized(true), mMagnuStrings(0) {}
+#else
+    // PPC: BSS zeroes all members. Only Symbol mFile needs construction (sets gNullStr).
+    // mInitialized is UB in original binary — never written, happens to be nonzero.
+    Locale() {}
+#endif
     ~Locale();
 
     void Init();

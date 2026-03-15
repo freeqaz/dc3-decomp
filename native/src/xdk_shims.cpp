@@ -774,7 +774,7 @@ VOID XGetVideoMode(XVIDEO_MODE *pMode) {
 }
 VOID *XMemSet(VOID *dest, INT c, SIZE_T count) { return memset(dest, c, count); }
 VOID *XMemAlloc(SIZE_T dwSize, DWORD) { return malloc(dwSize); }
-VOID *XMemFree(LPVOID lpHandle, DWORD) { free(lpHandle); return nullptr; }
+VOID XMemFree(LPVOID lpHandle, DWORD) { free(lpHandle); }
 INT XMemSize(LPVOID, DWORD) { return 0; }
 DWORD XPhysicalSize(LPVOID) { return 0; }
 DWORD XUserAwardGamerPicture(DWORD, DWORD, DWORD, XOVERLAPPED *) { return 0; }

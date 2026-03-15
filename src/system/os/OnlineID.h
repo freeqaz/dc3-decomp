@@ -15,6 +15,7 @@ private:
     bool mValid; // 0x10
 public:
     OnlineID();
+    OnlineID(const OnlineID &);
     OnlineID(const XUID &);
     void Clear();
     void SetXUID(const XUID &);

@@ -74,14 +74,50 @@ void EQEffect::SetParameters(EQEffect::Params const &params) {
 static const double kSmoothBase = 4.6414757e-01;
 
 void EQEffect::Reset() {
-    // Zero filter delay state
-    mBand0Z1 = 0;
-    mBand1B0 = 0;
-    mBand1Z1 = 0;
-    mBand1Z2 = 0;
-    mBand2Z1 = 0;
+    // Zero all per-channel filter delay state
+    // Uses flat indexing to match target's loop structure
+    int lVar5 = 0;
+    int iVar10 = 0x40;
+    float *puVar11 = (float *)this + 0xC8 / 4;
+    do {
+        // Band 0/1/2 allpass and bell delay lines (6 floats per channel, stride 8 bytes)
+        puVar11[-2] = 0;
+        puVar11[0] = 0;
+        int iVar12 = 0;
+        puVar11[2] = 0;
+        puVar11[4] = 0;
+        puVar11[6] = 0;
+        puVar11[8] = 0;
 
-    // Copy target → current for smoothed parameters
+        // Band 3/4 bandpass delay lines
+        for (int tap = 0; tap < 2; tap++) {
+            int a = iVar10 - 4 + iVar12;
+            int b = iVar10 + iVar12;
+            int c = iVar10 + 4 + iVar12;
+            int d = iVar10 + 8 + iVar12;
+            iVar12 = iVar12 + 1;
+            ((float *)this)[a] = 0;
+            ((float *)this)[b] = 0;
+            ((float *)this)[c] = 0;
+            ((float *)this)[d] = 0;
+        }
+
+        // Crossover delay lines - 3 stages, 2 passes, 5 taps each
+        for (int stage = 0; stage < 3; stage++) {
+            for (int pass = 0; pass < 2; pass++) {
+                for (int tap = 0; tap < 5; tap++) {
+                    ((float *)this)[lVar5 + tap + 0x97] = 0;
+                    ((float *)this)[lVar5 + tap + 0x5b] = 0;
+                }
+                lVar5 += 5;
+            }
+        }
+
+        iVar10 += 2;
+        puVar11++;
+    } while (iVar10 < 0x44);
+
+    // Copy target to current for smoothed parameters
     mBand0B2 = mBand0B1;  // band0 gain current = target
     mBand1A1 = mBand1B2;  // band1 gain current = target
     mBand2B2 = mBand2B1;  // band2 gain current = target
@@ -90,71 +126,214 @@ void EQEffect::Reset() {
     mBand2A2 = mBand2A1;  // band2 shelf current = target
 
     // Compute smoothing coefficient from crossover frequency
-    if (mBand5Freq == 0.0f) {
-        mSmoothCoeff = 1.0f;
-    } else {
+    if (mBand5Freq != 0.0f) {
         mSmoothCoeff = (float)pow(kSmoothBase, (double)(1.0f / (mBand5Freq * 48.0f)));
+    } else {
+        mSmoothCoeff = 1.0f;
     }
 }
 
 void EQEffect::Process(float *samples, int numSamples, int numChans) {
-    MILO_ASSERT(numChans <= 2, 0x78);
     if (mBand4Q != 0.0f) {
         // Crossover filter path
-        MILO_ASSERT(numChans <= 2, 0xd9);
-        for (int chan = 0; chan < numChans; chan++) {
-            for (int i = 0; i < numSamples; i++) {
-                float *s = &samples[i * numChans + chan];
-                // Smooth interpolated output mix coefficients
-                float k = mSmoothCoeff;
-                mBand0B2 = (mBand0B2 - mBand0B1) * k + mBand0B1;
-                mBand2B2 = (mBand2B2 - mBand2B1) * k + mBand2B1;
-                mBand1A1 = (mBand1A1 - mBand1B2) * k + mBand1B2;
+        MILO_ASSERT(numChans <= 2, 0x78);
+        if (numChans > 0) {
+            float *chanBase = (float *)this;
+            for (int chan = 0; chan < numChans; chan++) {
+                if (numSamples > 0) {
+                    for (int i = 0; i < numSamples; i++) {
+                        float *s = &samples[i * numChans + chan];
+
+                        // Crossover filter stage 0 (lowpass): 2nd-order applied twice
+                        // Pass 1
+                        float *xd0 = &mXoverInputDelay[chan][0]; // 5-tap input delay
+                        float *yd0 = &mXoverOutputDelay[chan][0]; // 5-tap output delay
+                        xd0[0] = xd0[1];
+                        xd0[1] = xd0[2];
+                        xd0[2] = *s / mXoverGain[0];
+                        float oldY0 = yd0[0];
+                        yd0[0] = yd0[1];
+                        float fVar2 = xd0[1] * 2.0f + mXoverCoeffs[0][1] * yd0[1]
+                            + mXoverCoeffs[0][0] * oldY0 + xd0[0] + xd0[2];
+                        yd0[1] = fVar2;
+
+                        // Pass 2
+                        float *xd0b = &mXoverInputDelay[chan][5];
+                        float *yd0b = &mXoverOutputDelay[chan][5];
+                        float oldX0b = xd0b[1];
+                        xd0b[1] = xd0b[2];
+                        xd0b[0] = oldX0b;
+                        xd0b[2] = fVar2 / mXoverGain[0];
+                        yd0b[0] = yd0b[1];
+                        yd0b[1] = yd0b[2];
+                        float fVar3 = xd0b[1] * 2.0f + mXoverCoeffs[0][1] * yd0b[1]
+                            + mXoverCoeffs[0][0] * yd0b[0] + xd0b[0] + xd0b[2];
+                        yd0b[2] = fVar3;
+
+                        // Crossover filter stage 1 (bandpass): 4th-order
+                        // Pass 1
+                        float *xd1 = &mXoverInputDelay[chan][10];
+                        float *yd1 = &mXoverOutputDelay[chan][10];
+                        float oldX1_1 = xd1[1];
+                        xd1[1] = xd1[2];
+                        xd1[2] = xd1[3];
+                        xd1[0] = oldX1_1;
+                        xd1[3] = xd1[4];
+                        xd1[4] = *s / mXoverGain[1];
+                        float oldY1_1 = yd1[1];
+                        yd1[1] = yd1[2];
+                        yd1[0] = oldY1_1;
+                        yd1[2] = yd1[3];
+                        yd1[3] = yd1[4];
+                        fVar2 = mXoverCoeffs[1][0] * yd1[0] + mXoverCoeffs[1][1] * yd1[1]
+                            + mXoverCoeffs[1][2] * yd1[2] + mXoverCoeffs[1][3] * yd1[4]
+                            + -(xd1[2] * 2.0f - (xd1[4] + xd1[0]));
+                        yd1[4] = fVar2;
+
+                        // Pass 2
+                        float *xd1b = &mXoverInputDelay[chan][15];
+                        float *yd1b = &mXoverOutputDelay[chan][15];
+                        xd1b[0] = xd1b[1];
+                        float oldX1b_2 = xd1b[2];
+                        xd1b[2] = xd1b[3];
+                        xd1b[1] = oldX1b_2;
+                        xd1b[3] = xd1b[4];
+                        xd1b[4] = fVar2 / mXoverGain[1];
+                        yd1b[0] = yd1b[1];
+                        float oldY1b_2 = yd1b[2];
+                        yd1b[2] = yd1b[3];
+                        yd1b[3] = yd1b[4];
+                        yd1b[1] = oldY1b_2;
+                        float fVar4 = mXoverCoeffs[1][0] * yd1b[0] + mXoverCoeffs[1][1] * yd1b[1]
+                            + mXoverCoeffs[1][2] * yd1b[2] + mXoverCoeffs[1][3] * yd1b[4]
+                            + -(xd1b[2] * 2.0f - (xd1b[4] + xd1b[0]));
+                        yd1b[4] = fVar4;
+
+                        // Crossover filter stage 2 (highpass): 2nd-order applied twice
+                        // Pass 1
+                        float *xd2 = &mXoverInputDelay[chan][20];
+                        float *yd2 = &mXoverOutputDelay[chan][20];
+                        xd2[0] = xd2[1];
+                        xd2[1] = xd2[2];
+                        xd2[2] = *s / mXoverGain[2];
+                        float oldY2 = yd2[1];
+                        yd2[1] = yd2[2];
+                        yd2[0] = oldY2;
+                        fVar2 = mXoverCoeffs[2][0] * yd2[0] + mXoverCoeffs[2][1] * yd2[2]
+                            + -(xd2[1] * 2.0f - (xd2[0] + xd2[2]));
+                        yd2[2] = fVar2;
+
+                        // Pass 2
+                        float *xd2b = &mXoverInputDelay[chan][25];
+                        float *yd2b = &mXoverOutputDelay[chan][25];
+                        xd2b[0] = xd2b[1];
+                        xd2b[1] = xd2b[2];
+                        xd2b[2] = fVar2 / mXoverGain[2];
+                        float oldY2b = yd2b[1];
+                        yd2b[0] = oldY2b;
+                        yd2b[1] = yd2b[2];
+                        fVar2 = mXoverCoeffs[2][0] * oldY2b + mXoverCoeffs[2][1] * yd2b[2]
+                            + -(xd2b[1] * 2.0f - (xd2b[0] + xd2b[2]));
+                        yd2b[2] = fVar2;
+
+                        // Mix crossover bands using smoothed gains
+                        *s = fVar4 * mBand1A1 + fVar2 * mBand0B2 + mBand2B2 * fVar3;
+
+                        // Smooth interpolated output mix coefficients
+                        float k = mSmoothCoeff;
+                        mBand0B2 = (mBand0B2 - mBand0B1) * k + mBand0B1;
+                        mBand2B2 = (mBand2B2 - mBand2B1) * k + mBand2B1;
+                        mBand1A1 = (mBand1A1 - mBand1B2) * k + mBand1B2;
+                    }
+                }
             }
         }
     } else {
         // Biquad filter path
         MILO_ASSERT(numChans <= 2, 0xd9);
-        for (int chan = 0; chan < numChans; chan++) {
-            float *z1Band0 = &mBand0Z1 + chan;
-            float *z1Band1a = &mBand1B0 + chan;
-            float *z2Band1 = &mBand1Z1 + chan;
-            float *z1Band2 = &mBand2Z1 + chan;
-            for (int i = 0; i < numSamples; i++) {
-                float *s = &samples[i * numChans + chan];
-                float x = *s;
-                if (mBand0Enabled) {
-                    float z1 = *z1Band0;
-                    float coeff = mBand0A2;
-                    float y = -(coeff * z1 - x);
-                    *s = (x - (coeff * y + z1)) * coeff + x;
-                    *z1Band0 = y;
+        if (numChans > 0) {
+            float *z1Band0 = &mBand0DelayZ1[0];
+            float *z1Band2 = &mBand2DelayZ1[0];
+            for (int chan = 0; chan < numChans; chan++) {
+                if (numSamples > 0) {
+                    for (int i = 0; i < numSamples; i++) {
+                        float *s = &samples[i * numChans + chan];
+                        if (mBand0Enabled) {
+                            float x = *s;
+                            float z1 = *z1Band0;
+                            float coeff = mBand0Z1;
+                            float y = -(coeff * z1 - x);
+                            *s = (x - (coeff * y + z1)) * mBand0A2 + x;
+                            *z1Band0 = y;
+                        }
+                        if (mBand1Enabled) {
+                            float x = *s;
+                            float b0 = mBand1B0;
+                            float cosCoeff = mBand1Z2;
+                            float gainCur = mBand1Z1;
+                            float xn1 = mBand1DelayXn[chan];
+                            float xn2 = mBand1DelayXn1[chan];
+                            mBand1DelayXn1[chan] = xn1;
+                            float zn1 = mBand1DelayZ1[chan];
+                            mBand1DelayXn[chan] = x;
+                            mBand1DelayZ1[chan] = mBand1DelayZ[chan];
+                            float y = zn1 * b0 + -(mBand1DelayZ[chan] * cosCoeff - (xn1 * cosCoeff + -(x * b0) + xn2));
+                            mBand1DelayZ[chan] = y;
+                            *s = (x - y) * gainCur + x;
+                        }
+                        if (mBand2Enabled) {
+                            float x = *s;
+                            float z1 = z1Band2[chan];
+                            float coeff = mBand2Z1;
+                            float y = -(z1 * coeff - x);
+                            *s = (coeff * y + z1 + x) * mBand2A2 + x;
+                            z1Band2[chan] = y;
+                        }
+                        if (mBand3Enabled) {
+                            float x = *s;
+                            float b0 = mBand3B0;
+                            float b1 = mBand3B1;
+                            float b2 = mBand3B2;
+                            float a1 = mBand3A1;
+                            float a2 = mBand3A2;
+                            float xn = mBand3DelayX[chan][0];
+                            float xn1 = mBand3DelayX[chan][1];
+                            float zn = mBand3DelayZ[chan][0];
+                            float zn1 = mBand3DelayZ[chan][1];
+                            mBand3DelayX[chan][1] = xn;
+                            mBand3DelayX[chan][0] = x;
+                            mBand3DelayZ[chan][1] = zn;
+                            float out = -(a2 * zn1 - -(a1 * zn - (b2 * xn1 + b0 * x + b1 * xn)));
+                            mBand3DelayZ[chan][0] = out;
+                            *s = out;
+                        }
+                        if (mBand4Enabled) {
+                            float x = *s;
+                            float b0 = mBand4B0;
+                            float b1 = mBand4B1;
+                            float b2 = mBand4B2;
+                            float a1 = mBand4A1;
+                            float a2 = mBand4A2;
+                            float xn = mBand4DelayX[chan][0];
+                            float xn1 = mBand4DelayX[chan][1];
+                            float zn = mBand4DelayZ[chan][0];
+                            float zn1 = mBand4DelayZ[chan][1];
+                            mBand4DelayX[chan][1] = xn;
+                            mBand4DelayX[chan][0] = x;
+                            mBand4DelayZ[chan][1] = zn;
+                            float out = -(a2 * zn1 - -(a1 * zn - (b2 * xn1 + b0 * x + b1 * xn)));
+                            mBand4DelayZ[chan][0] = out;
+                            *s = out;
+                        }
+                        // Smooth interpolated coefficients
+                        float k = mSmoothCoeff;
+                        mBand0A2 = (mBand0A2 - mBand0A1) * k + mBand0A1;
+                        mBand1Z1 = (mBand1Z1 - mBand1A2) * k + mBand1A2;
+                        mBand2A2 = (mBand2A2 - mBand2A1) * k + mBand2A1;
+                    }
                 }
-                if (mBand1Enabled) {
-                    float z1 = *z1Band1a;
-                    float b0 = mBand1B0;
-                    float gainCur = mBand1A1;
-                    float z1prev = mBand1Z1;
-                    float z2 = *z2Band1;
-                    float cosCoeff = mBand1Z2;
-                    *z1Band1a = x;
-                    *z2Band1 = z1;
-                    float y = z2 * b0 - (z1 * cosCoeff - (z1prev * cosCoeff + -(x * b0) + z1));
-                    *z2Band1 = y;
-                    *s = (x - y) * gainCur + x;
-                }
-                if (mBand2Enabled) {
-                    float z1 = *z1Band2;
-                    float coeff = mBand2Z1;
-                    float y = -(z1 * coeff - x);
-                    *s = (coeff * y + z1 + x) * mBand2A2 + x;
-                    *z1Band2 = y;
-                }
-                // Smooth interpolated coefficients
-                float k = mSmoothCoeff;
-                mBand0B2 = (mBand0B2 - mBand0B1) * k + mBand0B1;
-                mBand1Z1 = (mBand1Z1 - mBand1A2) * k + mBand1A2;
-                mBand2A2 = (mBand2A2 - mBand2A1) * k + mBand2A1;
+                z1Band0++;
+                z1Band2++;
             }
         }
     }

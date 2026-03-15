@@ -126,6 +126,55 @@ DataNode ClipPlayer::AnnotatePractice() {
     return node;
 }
 
+DataNode ClipPlayer::AnnotateClip(float frame) {
+    int idx = mClipKeys->KeyLessEq(frame);
+    if (idx < 0) goto fail;
+    {
+        Key<Symbol> &key = mClipKeys->at(idx);
+        DataArray *arr;
+        const char *name;
+        float annotBeat;
+
+        if (mClipKeys == mMasterClipKeys) {
+            const char *nextName = "";
+            auto _tmp0 = mClipKeys->size();
+            if ((unsigned int)(idx + 1) < _tmp0) {
+                nextName = mClipKeys->at(idx + 1).value.Str();
+            }
+            name = key.value.Str();
+            float clipBeat = FrameToBeat(key.frame);
+            float outStart, outEnd, outNextStart;
+            if (!GetClipRange(name, nextName, clipBeat, outStart, outEnd, outNextStart))
+                goto fail;
+            arr = new DataArray(0);
+            Annotate(arr, outStart, "start");
+            Annotate(arr, outEnd, "end");
+            if (outNextStart != kHugeFloat) {
+                name = "blend";
+                annotBeat = outNextStart;
+                goto do_annotate;
+            }
+        } else {
+            if ((unsigned int)(idx + 1) >= mClipKeys->size())
+                goto fail;
+            Key<Symbol> &nextKey = mClipKeys->at(idx + 1);
+            CharClip *transClip = GetTransitionBefore(&nextKey);
+            if (!transClip) goto fail;
+            arr = new DataArray(0);
+            float transLen = ClipLength(transClip);
+            name = transClip->Name();
+            annotBeat = FrameToBeat(nextKey.frame) - transLen + 1.0f;
+        do_annotate:
+            Annotate(arr, annotBeat, name);
+        }
+        DataNode node(arr, kDataArray);
+        arr->Release();
+        return node;
+    }
+fail:
+    return 0;
+}
+
 void ClipPlayer::PlayAnims(HamCharacter *c, float f1, float f2, int x) {
     mTargetClip = x;
     mBeat = FrameToBeat(f1);
@@ -139,7 +188,23 @@ void ClipPlayer::PlayAnims(HamCharacter *c, float f1, float f2, int x) {
 }
 
 namespace {
-    float ClipStart(CharClip *, float, float &, float &);
+    float ClipStart(CharClip *clip, float beat, float &outClipBeat, float &outEndBeat) {
+        float frac = fmodf(beat, 1.0f);
+        if (frac != 0.0f) {
+            float ceiling = ceilf(beat);
+            if (ceiling - beat < 0.0001f) {
+                beat = ceilf(beat);
+            }
+        }
+        unsigned int loopCount = (clip->PlayFlags() >> 12) & 0xF;
+        float loopOffset = 0.0f;
+        if ((float)loopCount != 0.0f) {
+            loopOffset = Mod(beat - clip->StartBeat(), (float)loopCount);
+        }
+        outClipBeat = beat - loopOffset;
+        outEndBeat = clip->LengthBeats() + (beat - loopOffset);
+        return clip->StartBeat() + loopOffset;
+    }
 }
 
 void ClipPlayer::PlayClip(CharClip *clip, float f1, float f2, HamDriver::LayerArray *arr) {
@@ -190,6 +255,36 @@ CharClip *ClipPlayer::GetTransitionBefore(Key<Symbol> *key) {
     return nullptr;
 }
 
+template <class _T>
+__declspec(noinline) auto _outline_EditMode(_T* _obj) -> decltype(_obj->EditMode()) {
+    return _obj->EditMode();
+}
+
+CharClip *ClipPlayer::GetPrevRoutineTransition(int idx) {
+    if (idx > 0) {
+        int maxIdx = (int)mClipKeys->size() - 1;
+        if (maxIdx < idx) idx = maxIdx;
+
+        if (!_outline_EditMode(&TheLoadMgr) || !TheHamDirector->NoTransitions()) {
+            Key<Symbol> &curKey = mClipKeys->at(idx);
+            (void)mClipKeys->at(idx - 1);
+            Key<Symbol> *prevKey = &curKey - 1;
+
+            float beat = FrameToBeat(prevKey->frame);
+            if (beat > 0.0f) {
+                beat += 1.0f;
+            }
+
+            CharClip *c2 = nullptr;
+            CharClip *c1 = nullptr;
+            GetRoutineCrossoverClips(beat, prevKey->value.Str(), &c1, &c2);
+
+            return GetRoutineTransition(c1->Name(), &curKey);
+        }
+    }
+    return nullptr;
+}
+
 CharClip *ClipPlayer::GetRoutineTransition(const char *cc, Key<Symbol> *key) {
     if (key) {
         if (key != &mClipKeys->at(0)
@@ -233,92 +328,193 @@ void ClipPlayer::GetRoutineCrossoverClips(
     }
 }
 
+bool ClipPlayer::GetClipRange(
+    const char *clipName1, const char *clipName2, float beat,
+    float &outStart, float &outEnd, float &outNextStart
+) {
+    CharClip *clip1 = mClipDir->Find<CharClip>(clipName1, false);
+    if (clip1) {
+        beat = ClipStart(clip1, beat, outStart, outEnd);
+        outNextStart = kHugeFloat;
+
+        CharClip *clip2 = mClipDir->Find<CharClip>(clipName2, false);
+        if (clip2) {
+            const CharGraphNode *node = clip1->FindLastNode(clip2, beat);
+            if (node) {
+                outNextStart = (node->curBeat - clip1->StartBeat()) + outEnd;
+            }
+        }
+        return true;
+    }
+    return false;
+}
+
 void ClipPlayer::PushClip(int idx, HamDriver::LayerArray *arr) {
     if (idx < 0) return;
     if (mClipKeys->empty()) return;
 
-    // Clamp index to valid range
     int maxIdx = (int)mClipKeys->size() - 1;
     if (maxIdx < idx) idx = maxIdx;
 
     Key<Symbol> &key = mClipKeys->at(idx);
-    float beat = FrameToBeat(key.frame);
 
-    // Get transition clip if we haven't passed this beat yet
     CharClip *transClip;
-    if (beat + 1.0f <= mBeat) {
-        transClip = nullptr;
-    } else {
-        transClip = GetTransitionBefore(&key);
-    }
-
-    // Calculate transition offset
     float offset;
-    if (!transClip) {
-        offset = 0.0f;
+    float beat = FrameToBeat(key.frame);
+    if (beat + 1.0f > mBeat) {
+        transClip = GetTransitionBefore(&key);
     } else {
-        offset = ClipLength(transClip) - 2.0f;
+        transClip = nullptr;
     }
 
-    // Recurse for earlier clips if needed
+    if (transClip) {
+        offset = ClipLength(transClip) - 2.0f;
+    } else {
+        offset = 0.0f;
+    }
+
     if (mBeat < beat - offset) {
         PushClip(idx - 1, arr);
     }
 
-    // Play transition clip and calculate blend beat
     float blendBeat;
-    if (!transClip) {
-        blendBeat = beat - 1.0f;
-    } else {
+    if (transClip) {
         float transLen = ClipLength(transClip);
-        float transStart = (float)((double)(beat - transLen) + 1.0);
-        blendBeat = beat;
+        float transStart = (beat - transLen) + 1.0f;
         PlayClip(transClip, transStart, transStart, arr);
+        blendBeat = beat;
+    } else {
+        blendBeat = beat - 1.0f;
     }
 
-    // If within beat range, set up practice section via master clip keys
     if (blendBeat < mBeat) {
-        Symbol clipName(key.value.Str());
+        const Symbol& clipName = (key.value.Str());
 
         Key<Symbol> *practiceKey = TheHamDirector->GetMasterPracticeFrame(clipName);
-        if (!practiceKey) {
-            MILO_NOTIFY_ONCE(
-                "%s: can't find %s in expert practice track",
-                TheGameData->Name(), clipName
-            );
-        } else {
-            // Save state, switch to master keys
+        if (practiceKey) {
             Keys<Symbol, Symbol> *savedKeys = mClipKeys;
             mClipKeys = mMasterClipKeys;
 
             float practBeat = FrameToBeat(practiceKey->frame);
-            float beatDiff = (float)((double)practBeat - (double)beat);
+            float beatDiff = practBeat - beat;
 
-            // Offset all beat fields
             mBeatOffset += beatDiff;
             mBeat += beatDiff;
             mPracticeStart += beatDiff;
             mPracticeEnd += beatDiff;
 
-            // Recursive PlayNormal with offset
             PlayNormal(mBeatOffset + blendBeat, arr, clipName.Str());
 
-            // Restore all fields
             mBeat -= beatDiff;
             mPracticeStart -= beatDiff;
             mClipKeys = savedKeys;
             mPracticeEnd -= beatDiff;
             mBeatOffset -= beatDiff;
+        } else {
+            MILO_NOTIFY_ONCE(
+                "%s: can't find %s in expert practice track",
+                TheGameData->GetSong(), key.value.Str()
+            );
         }
     }
 }
 
 bool ClipPlayer::PushRoutineBuilderClip(int idx, HamDriver::LayerArray *arr) {
-    // Routine builder mode — simplified stub for native
-    // Falls back to expert clip behavior
-    if (idx < 0) return false;
-    if (mClipKeys->empty()) return false;
-    return PushExpertClip(idx, arr);
+    if (idx < 0 || mClipKeys->size() < 1) return false;
+
+    Difficulty difficulty = TheGameData->Player(mPlayerIndex)->GetDifficulty();
+
+    int maxIdx = (int)mClipKeys->size() - 1;
+    int nextIdx = idx + 1;
+    if (maxIdx < idx) idx = maxIdx;
+    int maxIdx2 = (int)mClipKeys->size() - 1;
+    if (maxIdx2 < nextIdx) nextIdx = maxIdx2;
+
+    Key<Symbol> &curKey = mClipKeys->at(idx);
+
+    CharClip *prevTrans = GetPrevRoutineTransition(idx);
+    if (prevTrans) {
+        if (!(prevTrans->DifficultyMask() & (1 << difficulty))) {
+            prevTrans = nullptr;
+        }
+    }
+
+    CharClip *nextTrans = nullptr;
+    bool pushed = false;
+    float beat = FrameToBeat(curKey.frame);
+    float one = 1.0f;
+    float startBeat;
+    if (beat > 0.0f) {
+        startBeat = beat + one;
+    } else {
+        startBeat = beat;
+    }
+    float crossoverBeat = startBeat + 1.5f;
+    float startBeatPlusOne = startBeat + one;
+    float blendStart = prevTrans ? startBeat : beat;
+
+    if (mBeat < startBeatPlusOne) {
+        pushed = PushRoutineBuilderClip(idx - 1, arr);
+    }
+
+    if (prevTrans && mBeat < startBeat) {
+        return false;
+    }
+
+    CharClip *c2 = nullptr;
+    CharClip *c1 = nullptr;
+    GetRoutineCrossoverClips(startBeat, curKey.value.Str(), &c1, &c2);
+
+    float nextBeat;
+    if (idx != nextIdx) {
+        Key<Symbol> &nextKey = mClipKeys->at(nextIdx);
+        nextTrans = GetRoutineTransition(c1->Name(), &nextKey);
+        if (nextTrans) {
+            if (!(nextTrans->DifficultyMask() & (1 << difficulty))) {
+                nextTrans = nullptr;
+            }
+        }
+        nextBeat = FrameToBeat(nextKey.frame);
+    } else {
+        nextBeat = startBeat + 3.0f;
+    }
+
+    float two = 2.0f;
+    float transStart = startBeat + two;
+    if (nextTrans) {
+        transStart = (nextBeat - ClipLength(nextTrans)) + two;
+        nextBeat = transStart + one;
+    }
+
+    float hugeNeg = -kHugeFloat;
+    float blend;
+
+    if (c1 == c2) {
+        if (mBeat >= beat && (nextTrans == nullptr || mBeat <= nextBeat)) {
+            blend = pushed ? blendStart : hugeNeg;
+            goto playClipC1;
+        }
+    } else {
+        if (mBeat >= beat && mBeat <= crossoverBeat + one) {
+            blend = pushed ? blendStart : hugeNeg;
+            PlayClip(c2, beat, blend, arr);
+            pushed = true;
+        }
+        if (mBeat >= crossoverBeat && (nextTrans == nullptr || mBeat <= nextBeat)) {
+            blend = pushed ? crossoverBeat : hugeNeg;
+        playClipC1:
+            PlayClip(c1, beat, blend, arr);
+            pushed = true;
+        }
+    }
+
+    if (nextTrans && mBeat >= transStart) {
+        blend = pushed ? transStart : hugeNeg;
+        PlayClip(nextTrans, transStart, blend, arr);
+        pushed = true;
+    }
+
+    return pushed;
 }
 
 void ClipPlayer::PlayNormal(float f1, HamDriver::LayerArray *arr, const char *cc) {

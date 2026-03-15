@@ -239,6 +239,8 @@ public:
         mask = mask & 0xffff09ff | alignFlag;
     }
 
+    int DifficultyMask() const { return unk198; }
+
     friend class CharClipDriver;
 
 #ifdef HX_NATIVE

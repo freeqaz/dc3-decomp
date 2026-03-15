@@ -162,35 +162,34 @@ void SetupFrame(
 }
 
 RhythmDetector::Frame BlendFrameDataToBeat(
-    const RhythmDetector::Frame &frameA,
-    const RhythmDetector::Frame &frameB,
+    const RhythmDetector::Frame &a,
+    const RhythmDetector::Frame &b,
     float beatTime
 ) {
-    RhythmDetector::Frame result;
-
-    if (beatTime < frameA.mTime || frameB.mTime < beatTime) {
+    if (beatTime < a.mTime || b.mTime < beatTime) {
         MILO_NOTIFY(
             "bad rhythm detector floating point precision at %f %f %f\n",
-            frameA.mTime, frameB.mTime, beatTime
+            a.mTime, b.mTime, beatTime
         );
     }
 
-    int numJoints = frameA.mJointVelocities.size();
-    MILO_ASSERT(numJoints == frameB.mJointVelocities.size(), 0x5a9);
+    int kSize = a.mJointVelocities.size();
+    MILO_ASSERT(kSize == b.mJointVelocities.size(), 0x5a9);
 
-    float timeA = frameA.mTime;
-    float timeB = frameB.mTime;
+    float timeA = a.mTime;
+    float timeB = b.mTime;
     float blend = (beatTime - timeA) / (timeB - timeA);
     blend = -blend >= 0.0f ? 0.0f : blend;
     blend = blend - 1.0f >= 0.0f ? 1.0f : blend;
 
+    RhythmDetector::Frame result;
     result.mTime = beatTime;
-    result.mJointVelocities.resize(numJoints);
+    result.mJointVelocities.resize(kSize);
 
-    for (int i = 0; i < numJoints; i++) {
+    for (int i = 0; i < kSize; i++) {
         for (int j = 0; j < 3; j++) {
-            float valB = frameB.mJointVelocities[i][j];
-            float valA = frameA.mJointVelocities[i][j];
+            float valB = b.mJointVelocities[i][j];
+            float valA = a.mJointVelocities[i][j];
             result.mJointVelocities[i][j] = (valB - valA) * blend + valA;
         }
     }

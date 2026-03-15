@@ -54,6 +54,8 @@ struct MatShaderOptions {
 };
 
 class RndMat : public BaseMaterial {
+    friend class NgSpotlightDrawer;
+
 public:
     enum PropDisplay {
         kPropDisplayHidden = 0,

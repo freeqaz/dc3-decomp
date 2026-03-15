@@ -576,11 +576,16 @@ DataNode HamStorePanel::OnMsg(const RCJobCompleteMsg &msg) {
     }
     return DataNode(1);
 }
+SpecialOfferEnumJob::SpecialOfferEnumJob(
+    HamStorePanel *panel, int sessionID, std::vector<unsigned long long> &offerIDs
+)
+    : MultipleItemsEnumJob(nullptr, sessionID, offerIDs), mPanel(panel) {}
+
 void SpecialOfferEnumJob::OnCompletion(Hmx::Object *) {
     HamStorePanel *panel = mPanel;
     if (!panel)
         return;
-    if (panel->unk184 != mSessionID)
+    if (panel->unk184 != ID())
         return;
-    panel->FinishSpecialOfferEnum(mOwnedFlags, mResult == 2);
+    panel->FinishSpecialOfferEnum(mPurchased, mStatus == 2);
 }

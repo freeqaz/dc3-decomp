@@ -941,4 +941,59 @@ bool Challenges::GetExpireTime(int &days, int &hours, int &minutes, int &seconds
     return true;
 }
 
-bool Challenges::HasNewChallenges() { return false; }
+bool Challenges::HasNewChallenges() {
+    if (!mProfileChallenges.empty()) {
+        HamProfile *profile = TheProfileMgr.GetActiveProfile(true);
+        if (profile) {
+            String name(profile->GetName());
+            std::map<String, std::vector<ChallengeRow> >::iterator it =
+                mProfileChallenges.find(name);
+            if (it != mProfileChallenges.end()) {
+                std::vector<ChallengeRow> &rows = it->second;
+                std::map<int, int> bestScores;
+
+                for (unsigned int i = 0; i < rows.size(); i++) {
+                    if (rows[i].mGamertag == rows[i].mNotes) {
+                        int songID = rows[i].mSongID;
+                        bestScores[songID] = (int)rows[i].mTimeStamp;
+                    }
+                }
+
+                for (unsigned int i = 0; i < rows.size(); i++) {
+                    Symbol shortName =
+                        TheHamSongMgr.GetShortNameFromSongID(rows[i].mSongID, false);
+                    if (shortName.Null()
+                        || TheProfileMgr.IsContentUnlocked(shortName)) {
+                        int songID = rows[i].mSongID;
+                        std::map<int, int>::iterator found =
+                            bestScores.find(songID);
+                        if (found == bestScores.end()) {
+                            goto found_new;
+                        }
+                        if (found->second < (int)rows[i].mTimeStamp) {
+                            goto found_new;
+                        }
+                    }
+                }
+
+                for (unsigned int i = 0; i < mOfficialChallenges.size(); i++) {
+                    int songID = mOfficialChallenges[i].mSongID;
+                    std::map<int, int>::iterator found =
+                        bestScores.find(songID);
+                    if (found == bestScores.end()) {
+                        goto found_new;
+                    }
+                    if (found->second < (int)mOfficialChallenges[i].mTimeStamp) {
+                        goto found_new;
+                    }
+                }
+            }
+            return false;
+
+        found_new:
+            return true;
+        }
+        return false;
+    }
+    return mOfficialChallenges.size() > 0;
+}

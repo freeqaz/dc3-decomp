@@ -17,6 +17,8 @@ CMakeFiles/
 yolo11n-pose.pt
 /Testing/
 node_modules/
+native/web/dc3-web.js
+native/web/dc3-web.wasm
 
 # Original files
 orig/*

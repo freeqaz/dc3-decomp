@@ -2,6 +2,7 @@
 #include "SkeletonIdentifier.h"
 #include <stdio.h>
 #include "flow/PropertyEventProvider.h"
+#include "rndobj/Rnd.h"
 
 #ifndef HX_NATIVE
 template int sprintf_s<200>(char (&)[200], const char *, ...);
@@ -291,7 +292,79 @@ DataNode SkeletonIdentifier::OnMsg(SkeletonEnrollmentChangedMsg const &msg) {
     return DATA_UNHANDLED;
 }
 
-void SkeletonIdentifier::DrawDebug() {}
+static float sLineHeight = 0.03f;
+static float sX = 0.1f;
+static float sWidth = 0.8f;
+static float sBaseY = 0.7f;
+static float sHeight = 0.25f;
+
+void SkeletonIdentifier::DrawDebug() {
+#ifndef HX_NATIVE
+    if (mDrawDebug) {
+        static Hmx::Color bgColor(0.2f, 0.2f, 0.2f, 0.7f);
+        static Hmx::Color textColor(1.0f, 1.0f, 1.0f, 1.0f);
+        Skeleton *activeSkel = TheGestureMgr->GetActiveSkeleton();
+        Hmx::Rect rect(sX, sBaseY - 0.05f, sWidth, sHeight + 0.05f);
+        TheRnd.DrawRectScreen(rect, bgColor, nullptr, nullptr, nullptr);
+        char buf[200];
+        for (int i = 0; i < 7; i++) {
+            switch (i) {
+            case 0:
+                if (activeSkel) {
+                    if (activeSkel->IsTracked()) {
+                        int enrollIdx = activeSkel->GetEnrollmentIndex();
+                        sprintf_s<200>(buf, "Active skeleton tracked: %d %s", mEnrolledPlayers[enrollIdx].mPadNum, EnrollmentIndexString(enrollIdx));
+                        break;
+                    }
+                }
+                sprintf_s<200>(buf, "Skeleton not tracked");
+                break;
+            case 1: {
+                int secondaryIdx = TheGestureMgr->GetSecondarySkeletonIndex(false);
+                if (secondaryIdx < 0) {
+                    sprintf_s<200>(buf, "Skeleton not tracked");
+                } else {
+                    Skeleton &otherSkel = TheGestureMgr->GetSkeleton(secondaryIdx);
+                    int enrollIdx = otherSkel.GetEnrollmentIndex();
+                    sprintf_s<200>(buf, "Other skeleton tracked: %d %s", mEnrolledPlayers[enrollIdx].mPadNum, EnrollmentIndexString(enrollIdx));
+                }
+                break;
+            }
+            case 2:
+            case 5:
+                buf[0] = '\0';
+                break;
+            case 3: {
+                PropertyEventProvider *provider = TheGameData->Player(0)->Provider();
+                int padNum = TheGameData->Player(0)->PadNum();
+                Symbol player_name("player_name");
+                const char *name = provider->Property(player_name, true)->Str(nullptr);
+                sprintf_s<200>(buf, "Player 1: %d %s", padNum, name);
+                break;
+            }
+            case 4: {
+                PropertyEventProvider *provider = TheGameData->Player(1)->Provider();
+                int padNum = TheGameData->Player(1)->PadNum();
+                Symbol player_name("player_name");
+                const char *name = provider->Property(player_name, true)->Str(nullptr);
+                sprintf_s<200>(buf, "Player 2: %d %s", padNum, name);
+                break;
+            }
+            default:
+                sprintf_s<200>(buf, "Identity Status: %i", mIdentityStatus);
+                break;
+            }
+            Vector2 pos(sX, (float)i * sLineHeight + sBaseY);
+            TheRnd.DrawStringScreen(buf, pos, textColor, true);
+        }
+        for (int i = 0; i < 8; i++) {
+            Vector2 pos(0.3f, (float)i * sLineHeight + 0.1f);
+            const char *str = MakeString("%d. %d %s", i, mEnrolledPlayers[i].mPadNum, mEnrolledPlayers[i].mName);
+            TheRnd.DrawStringScreen(str, pos, textColor, true);
+        }
+    }
+#endif
+}
 
 DataNode SkeletonIdentifier::OnMsg(const SigninChangedMsg &msg) {
     unsigned int signInMask = msg.mData->Node(3).Int(msg.mData);

@@ -4,6 +4,8 @@
 #include "rndobj/Anim.h"
 #include "rndobj/Part.h"
 
+template BinStream &operator>><Hmx::Color>(BinStream &, Key<Hmx::Color> &);
+
 #pragma region Hmx::Object
 
 RndParticleSysAnim::RndParticleSysAnim() : mParticleSys(this), mKeysOwner(this, this) {}

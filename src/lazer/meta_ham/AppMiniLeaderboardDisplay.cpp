@@ -5,6 +5,7 @@
 #include "meta/SongMgr.h"
 #include "meta_ham/HamProfile.h"
 #include "meta_ham/ProfileMgr.h"
+#include "meta_ham/SongStatusMgr.h"
 #include "net/DingoSvr.h"
 #include "net_ham/LeaderboardJobs.h"
 #include "net_ham/RCJobDingo.h"
@@ -16,7 +17,10 @@
 #include "os/PlatformMgr.h"
 #include "rndobj/Dir.h"
 #include "ui/UIComponent.h"
+#include "ui/UILabel.h"
 #include "ui/UIList.h"
+#include "ui/UIListLabel.h"
+#include "ui/UIListSlot.h"
 #include "ui/UIListWidget.h"
 #include "utl/Symbol.h"
 
@@ -201,8 +205,122 @@ bool AppMiniLeaderboardDisplay::UpdateLeaderboard(Symbol s) { // has one small d
     return true;
 }
 
-// TODO: implement
-#ifdef HX_NATIVE
-void AppMiniLeaderboardDisplay::Text(int, int, UIListLabel *, UILabel *) const {}
-void AppMiniLeaderboardDisplay::UpdateSelfInRows() {}
-#endif
+void AppMiniLeaderboardDisplay::Text(int, int data, UIListLabel *slot, UILabel *label) const {
+    String selfName(gNullStr);
+    if (data >= NumData()) {
+        label->SetTextToken(gNullStr);
+    } else {
+        HamProfile *profile = TheProfileMgr.GetActiveProfile(true);
+        if (profile) {
+            selfName = profile->GetName();
+        }
+        if (slot->Matches("gamertag")) {
+            static Symbol gamertag("gamertag");
+            if (selfName == mLBRows[data].mName) {
+                label->SetTextToken(gNullStr);
+            } else {
+                label->SetTokenFmt(gamertag, mLBRows[data].mName);
+            }
+        } else if (slot->Matches("score")) {
+            label->SetInt(mLBRows[data].mScore, false);
+        } else if (slot->Matches("no_flashcards")) {
+            static Symbol no_flashcards_icon("no_flashcards_icon");
+            if (mLBRows[data].mNoFlashcards) {
+                label->SetTextToken(no_flashcards_icon);
+            } else {
+                label->SetTextToken(gNullStr);
+            }
+        } else if (slot->Matches("rank")) {
+            static Symbol rank_fmt("rank_fmt");
+            label->SetInt(mLBRows[data].mModeID, false);
+        } else if (slot->Matches("difficulty")) {
+            static Symbol beginner_short("beginner_short");
+            static Symbol easy_short("easy_short");
+            static Symbol medium_short("medium_short");
+            static Symbol expert_short("expert_short");
+            Difficulty d = mLBRows[data].mDiffID;
+            switch (d) {
+            case kDifficultyEasy:
+                label->SetTextToken(easy_short);
+                break;
+            case kDifficultyMedium:
+                label->SetTextToken(medium_short);
+                break;
+            case kDifficultyExpert:
+                label->SetTextToken(expert_short);
+                break;
+            case kDifficultyBeginner:
+                label->SetTextToken(beginner_short);
+                break;
+            default:
+                MILO_NOTIFY(
+                    "Bad difficulty %d retrieved from leaderboards for user                    %s at rank %d!",
+                    d,
+                    mLBRows[data].mName,
+                    mLBRows[data].mRank
+                );
+                break;
+            }
+        } else if (slot->Matches("self")) {
+            static Symbol gamertag2("gamertag");
+            if (selfName == mLBRows[data].mName) {
+                label->SetTokenFmt(gamertag2, mLBRows[data].mName);
+            } else {
+                label->SetTextToken(gNullStr);
+            }
+        }
+    }
+}
+
+void AppMiniLeaderboardDisplay::UpdateSelfInRows() {
+    HamProfile *profile = TheProfileMgr.GetActiveProfile(true);
+    if (profile) {
+        profile->UpdateOnlineID();
+        bool bHasOnlineID = profile->IsSignedIn();
+        MILO_ASSERT(bHasOnlineID, 0x107);
+        XUID xuid = profile->GetOnlineID()->GetXUID();
+        SongStatusMgr *pSongStatusMgr = profile->GetSongStatusMgr();
+        MILO_ASSERT(pSongStatusMgr, 0x10b);
+        bool noFlashcards = false;
+        unsigned int score = pSongStatusMgr->GetScore(mSongID, noFlashcards);
+        Difficulty diff = pSongStatusMgr->GetDifficulty(mSongID);
+        if ((int)score > 0) {
+            bool found = false;
+            for (std::vector<LeaderboardRow>::iterator it = mLBRows.begin(); it != mLBRows.end(); ++it) {
+                if (it->mXUID == xuid && score > (unsigned int)it->mScore) {
+                    mLBRows.erase(it);
+                    found = true;
+                    break;
+                }
+            }
+            if (found) {
+                LeaderboardRow row;
+                row.mScore = score;
+                row.mIsPercentile = false;
+                row.mRank = 0;
+                row.mIsHardcore = true;
+                row.mXUID = xuid;
+                row.mName = profile->GetName();
+                row.mNoFlashcards = noFlashcards;
+                row.mDiffID = diff;
+                bool inserted = false;
+                for (std::vector<LeaderboardRow>::iterator it = mLBRows.begin(); it != mLBRows.end(); ++it) {
+                    if (score >= (unsigned int)it->mScore) {
+                        mLBRows.insert(it, 1, row);
+                        inserted = true;
+                        break;
+                    }
+                }
+                if (!inserted) {
+                    row.mModeID = 1;
+                    mLBRows.push_back(row);
+                }
+                int rank = 1;
+                for (std::vector<LeaderboardRow>::iterator it = mLBRows.begin(); it != mLBRows.end(); ++it) {
+                    it->mModeID = rank;
+                    rank++;
+                }
+            }
+        }
+    }
+}
