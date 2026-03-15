@@ -194,6 +194,8 @@ bool AudioDevice::Init(int sampleRate) {
 
         sDumpFile = fopen(dumpPath, "wb");
         if (sDumpFile) {
+            // Unbuffered writes so _exit(0) doesn't lose data
+            setvbuf(sDumpFile, nullptr, _IONBF, 0);
             WriteWavHeader(sDumpFile, mSampleRate, 0); // placeholder header
             printf("AudioDevice: WAV dump enabled — %s (%d seconds, %d Hz)\n",
                    dumpPath, dumpSecs, mSampleRate);
@@ -249,50 +251,53 @@ void AudioDevice::MixSources(float *output, int frameCount) {
     int totalSamples = frameCount * 2; // stereo
     memset(output, 0, totalSamples * sizeof(float));
 
-    if (mSuspended.load(std::memory_order_acquire))
-        return;
-
-    std::lock_guard<std::mutex> lock(mSourceMutex);
-
-    if (mSources.empty())
-        return;
-
-    // Ensure temp buffer is large enough
-    if ((int)mMixBuffer.size() < totalSamples) {
-        mMixBuffer.resize(totalSamples);
+    if (mSuspended.load(std::memory_order_acquire)) {
+        goto wav_dump;
     }
 
-    for (auto it = mSources.begin(); it != mSources.end(); ) {
-        AudioSource *src = *it;
-        if (!src) {
-            it = mSources.erase(it);
-            continue;
-        }
-        memset(mMixBuffer.data(), 0, totalSamples * sizeof(float));
+    {
+        std::lock_guard<std::mutex> lock(mSourceMutex);
 
-        int framesWritten = src->RenderAudio(mMixBuffer.data(), frameCount);
+        if (!mSources.empty()) {
+            // Ensure temp buffer is large enough
+            if ((int)mMixBuffer.size() < totalSamples) {
+                mMixBuffer.resize(totalSamples);
+            }
 
-        // Additive mix into output
-        int samplesToMix = framesWritten * 2;
-        for (int i = 0; i < samplesToMix; i++) {
-            output[i] += mMixBuffer[i];
-        }
+            for (auto it = mSources.begin(); it != mSources.end(); ) {
+                AudioSource *src = *it;
+                if (!src) {
+                    it = mSources.erase(it);
+                    continue;
+                }
+                memset(mMixBuffer.data(), 0, totalSamples * sizeof(float));
 
-        // Remove finished sources
-        if (src->IsFinished()) {
-            it = mSources.erase(it);
-        } else {
-            ++it;
+                int framesWritten = src->RenderAudio(mMixBuffer.data(), frameCount);
+
+                // Additive mix into output
+                int samplesToMix = framesWritten * 2;
+                for (int i = 0; i < samplesToMix; i++) {
+                    output[i] += mMixBuffer[i];
+                }
+
+                // Remove finished sources
+                if (src->IsFinished()) {
+                    it = mSources.erase(it);
+                } else {
+                    ++it;
+                }
+            }
+
+            // Clamp output to [-1, 1]
+            for (int i = 0; i < totalSamples; i++) {
+                if (output[i] > 1.0f) output[i] = 1.0f;
+                else if (output[i] < -1.0f) output[i] = -1.0f;
+            }
         }
     }
 
-    // Clamp output to [-1, 1]
-    for (int i = 0; i < totalSamples; i++) {
-        if (output[i] > 1.0f) output[i] = 1.0f;
-        else if (output[i] < -1.0f) output[i] = -1.0f;
-    }
-
-    // WAV dump: capture post-mix output
+wav_dump:
+    // WAV dump: capture post-mix output (including silence)
     if (sDumpFile && !sDumpFinalized) {
         DumpFramesToWav(output, frameCount);
         if (sDumpFramesWritten >= sDumpMaxFrames) {
