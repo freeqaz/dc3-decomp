@@ -59,8 +59,10 @@ public:
 };
 
 // size 0x10
-class FreestyleFrameScores {
-public:
+class FreestyleMoveRecorder;
+
+struct FreestyleFrameScores {
+    friend class FreestyleMoveRecorder;
     FreestyleFrameScores() {
         unk0.resize(60);
         Clear();
