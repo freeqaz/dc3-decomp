@@ -12,6 +12,7 @@
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavutil/channel_layout.h>
+#include <libavutil/log.h>
 #include <libavutil/mem.h>
 }
 
@@ -38,6 +39,9 @@ bool DecodeXMAToPCM(
 
     AVCodecContext* ctx = avcodec_alloc_context3(codec);
     if (!ctx) return false;
+
+    // Suppress "Could not update timestamps for skipped samples" info messages
+    av_log_set_level(AV_LOG_ERROR);
 
     ctx->sample_rate = sampleRate;
     av_channel_layout_default(&ctx->ch_layout, numChannels);
