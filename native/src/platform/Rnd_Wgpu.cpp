@@ -709,27 +709,9 @@ void WgpuRnd::NativeVenueInit() {
         venue->Enter();
     }
 
-    // Activate a LightPreset so the venue has valid lighting.
-    // WorldDir::Enter() calls LightPresetManager::Reset() which clears all presets.
-    // During normal gameplay, song.anim drives preset selection via ForcePreset().
-    // Without that, we force the first available preset so lights aren't all black.
-    {
-        LightPresetManager& lpm = venue->GetLightPresetMgr();
-        lpm.SyncObjects();
-        LightPreset* firstPreset = nullptr;
-        for (ObjDirItr<LightPreset> it(venue, true); it != nullptr; ++it) {
-            if (it->PlatformOk()) {
-                firstPreset = it;
-                break;
-            }
-        }
-        if (firstPreset) {
-            lpm.ForcePreset(firstPreset, 0.0f);
-            printf("  LightPreset: forced '%s'\n", firstPreset->Name());
-        } else {
-            printf("  LightPreset: no presets found in venue\n");
-        }
-    }
+    // DC3 doesn't use the LightPreset system. Venue lighting is driven by
+    // PropAnims that directly animate RndLight properties (color, showing).
+    // Lights retain their artist-authored initial states from the .milo file.
 
     // Note: Venue component .milo files are loaded from the App main loop
     // (App.cpp) when the game venue is detected — not here, since this runs
@@ -1176,6 +1158,9 @@ void WgpuRnd::WriteSceneUniforms() {
 
     // Environment (fog, ambient, lights)
     RndEnviron* env = RndEnviron::Current();
+    if (mFrameID == 1000) {
+        printf("DC3 Frame600: env=%p\n", (void*)env);
+    }
     if (env) {
         // Ambient color (with minimum floor for visibility)
         const Hmx::Color& amb = env->AmbientColor();
@@ -1203,33 +1188,49 @@ void WgpuRnd::WriteSceneUniforms() {
             float dir[3];
             float color[3];
             float brightness;
+            const char* name;
         };
         std::vector<LightCandidate> candidates;
         candidates.reserve(16);
 
-        auto addLight = [&](RndLight* light) {
+        auto addLight = [&](RndLight* light, const float* sceneCenter) {
             const Hmx::Color& lc = light->GetColor();
             if (lc.red < 0.01f && lc.green < 0.01f && lc.blue < 0.01f) return;
             LightCandidate c;
             const Transform& lxfm = light->WorldXfm();
-            c.dir[0] = lxfm.m.y.x;
-            c.dir[1] = lxfm.m.y.y;
-            c.dir[2] = lxfm.m.y.z;
+            if (light->GetType() == RndLight::kDirectional) {
+                c.dir[0] = lxfm.m.y.x;
+                c.dir[1] = lxfm.m.y.y;
+                c.dir[2] = lxfm.m.y.z;
+            } else {
+                // Point light: approximate direction as light→sceneCenter
+                float dx = sceneCenter[0] - lxfm.v.x;
+                float dy = sceneCenter[1] - lxfm.v.y;
+                float dz = sceneCenter[2] - lxfm.v.z;
+                float len = sqrtf(dx*dx + dy*dy + dz*dz);
+                if (len < 0.001f) return;
+                c.dir[0] = dx / len;
+                c.dir[1] = dy / len;
+                c.dir[2] = dz / len;
+            }
             c.color[0] = lc.red;
             c.color[1] = lc.green;
             c.color[2] = lc.blue;
             c.brightness = lc.red + lc.green + lc.blue;
+            c.name = light->Name();
             candidates.push_back(c);
         };
+        // Scene center — approximate as camera look-at or origin
+        float sceneCenter[3] = {0, 1.0f, 0}; // characters are roughly at origin, ~1m tall
 
-        // From environment's approx list
+        // From environment's approx list (directional + point lights)
         ObjPtrList<RndLight>& approxLights = env->LightsApprox();
         for (ObjPtrList<RndLight>::iterator it = approxLights.begin();
              it != approxLights.end(); ++it) {
             RndLight* light = *it;
             if (!light || !light->Showing()) continue;
-            if (light->GetType() != RndLight::kDirectional) continue;
-            addLight(light);
+            if (light->GetType() != RndLight::kDirectional && light->GetType() != RndLight::kPoint) continue;
+            addLight(light, sceneCenter);
         }
 
         // From venue WorldDir (may have lights not in environment)
@@ -1240,13 +1241,31 @@ void WgpuRnd::WriteSceneUniforms() {
             if (venueDir) {
                 for (ObjDirItr<RndLight> lit(venueDir, true); lit != nullptr; ++lit) {
                     if (!lit->Showing()) continue;
-                    if (lit->GetType() != RndLight::kDirectional) continue;
-                    addLight(lit);
+                    if (lit->GetType() != RndLight::kDirectional && lit->GetType() != RndLight::kPoint) continue;
+                    addLight(lit, sceneCenter);
                 }
             }
         }
 
-        // Sort by brightness (brightest first) and take top 4
+        // Smart light selection: prefer default/stage lights (base illumination)
+        // over rim/peak/area accent lights which are designed for specific moments.
+        // Check rim/peak/backup FIRST since they may contain other substrings.
+        for (auto& c : candidates) {
+            float priority = 1.0f;
+            const char* name = c.name;
+            if (name) {
+                // Accent lights (check first — may contain "area" or "stage" substrings)
+                if (strstr(name, "_rim") || strstr(name, "rim_")) priority = 0.1f;
+                else if (strstr(name, "peak_") || strstr(name, "Peak")) priority = 0.2f;
+                else if (strstr(name, "backup")) priority = 0.3f;
+                // Base illumination lights
+                else if (strstr(name, "default_") || strstr(name, "Default")) priority = 10.0f;
+                else if (strstr(name, "stage") || strstr(name, "Stage")) priority = 8.0f;
+                else if (strstr(name, "main") || strstr(name, "Main")) priority = 6.0f;
+            }
+            c.brightness *= priority;
+        }
+
         std::sort(candidates.begin(), candidates.end(),
             [](const LightCandidate& a, const LightCandidate& b) {
                 return a.brightness > b.brightness;
@@ -1313,10 +1332,9 @@ void WgpuRnd::WriteSceneUniforms() {
             lightIdx = 3;
         }
         // Cap total directional light energy to prevent overexposure.
-        // On Xbox, LightPresets animate which lights are active — only a subset
-        // is on at any time. Without LightPreset animation, we pick the top 4
-        // brightest which can stack to massive overexposure. Cap total luminance
-        // to ~1.5 (equivalent to one bright key + soft fill).
+        // DC3 venues have 30-69 lights all active simultaneously. On Xbox,
+        // PropAnims in song.anim control which lights are on during gameplay.
+        // Without that animation, our top-4 selection can over-expose.
         if (lightIdx > 0) {
             float totalEnergy = 0.0f;
             for (int li = 0; li < lightIdx; li++) {

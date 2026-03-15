@@ -1,6 +1,6 @@
 # Native Port TODO — Phase 6 Polish & Remaining Work
 
-## Current State (Session 70)
+## Current State (Session 71)
 - **Full gameplay pipeline operational** — Engine boots through menu → song select → game_screen with audio, rendering, animation, camera cuts, post-processing
 - **6 venues tested** — dci, dclive, rollerrink, houseparty, streetside, throneroom — all render correctly
 - **Per-song venue resolution** — Songs load their correct venue from metadata (HamSongMetadata::Venue())
@@ -9,7 +9,7 @@
 - **Audio loading fix** — Game::IsLoaded() state 2 initiates audio from within load poll (fixes circular dependency)
 - **Camera cuts** — song.anim PropKeys → HamDirector::SetShot() → CameraManager with 34+ keyframes/song
 - **Post-processing** — Bloom (screen blend), Xbox-matched contrast/brightness, saturation, levels, vignette, chromatic aberration, posterization
-- **Light energy cap** — Total directional light energy capped to prevent overexposure without LightPreset animation
+- **Smart light selection** — DC3 doesn't use LightPresets; base illumination is point lights. Priority-weighted selection: default/stage > main > generic > backup > peak > rim. Point lights approximated as directional toward scene center.
 - **Non-fatal Debug::Fail** — Matches Xbox "Continue" dialog (MILO_FATAL_FAILS=1 to restore abort)
 - **Render-to-texture** — RndTexRenderer::DrawToTexture pipeline working (venue decorations)
 - **Content system** — 62 songs load from DTA, 49 UI items in song_select_screen
@@ -115,8 +115,8 @@ Goal: Character with proper materials, crowd, animated venue, gameplay HUD textu
 - [x] Camera cuts — **DONE** (Session 68: song.anim → HamDirector → CameraManager)
 - [x] Character dance animation — **DONE** (Session 63)
 - [x] Light energy cap — **DONE** (Session 70: prevents overexposure across all 6 venues)
+- [x] Smart light selection — **DONE** (Session 71: DC3 doesn't use LightPresets — base illumination uses point lights, not directional. Smart priority: default/stage > main > generic > backup > peak > rim)
 - [ ] WorldCrowd rendering
-- [ ] LightPreset animation (dynamic lighting changes during song — currently all lights active simultaneously)
 
 ### 4.5 Loading State Machines — Analysis Complete (Session 60)
 

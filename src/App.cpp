@@ -978,49 +978,18 @@ void App::RunWithoutDebugging() {
                             }
                         }
 
-                        LightPresetManager& lpm = venueWorld->GetLightPresetMgr();
-                        lpm.SyncObjects();
-                        LightPreset* bestPreset = nullptr;
-                        int presetCount = 0;
-                        for (ObjDirItr<LightPreset> it(venueWorld, true); it != nullptr; ++it) {
-                            presetCount++;
-                            if (it->PlatformOk()) {
-                                bestPreset = it;
-                                if (strstr(it->Name(), "default") || strstr(it->Name(), "basic"))
-                                    break;
-                            }
-                        }
-                        if (bestPreset) {
-                            lpm.ForcePreset(bestPreset, 0.0f);
-                            printf("DC3 Native: forced LightPreset '%s' in venue '%s' (%d presets total)\n",
-                                   bestPreset->Name(), venueWorld->Name(), presetCount);
-                        } else {
-                            printf("DC3 Native: no LightPreset found in venue '%s' (%d presets, none PlatformOk)\n",
-                                   venueWorld->Name(), presetCount);
-                            // Dump light state for debugging
+                        // DC3 doesn't use the LightPreset system — lighting is driven
+                        // by PropAnims that directly animate RndLight properties.
+                        // Lights have artist-authored initial on/off states; respect them.
+                        {
                             int lightCount = 0;
-                            int litLights = 0;
+                            int showingCount = 0;
                             for (ObjDirItr<RndLight> lit(venueWorld, true); lit != nullptr; ++lit) {
                                 lightCount++;
-                                Hmx::Color c = lit->GetColor();
-                                if (c.red > 0.01f || c.green > 0.01f || c.blue > 0.01f) {
-                                    litLights++;
-                                    if (lightCount <= 10)
-                                        printf("  light '%s' color=(%.2f,%.2f,%.2f) showing=%d\n",
-                                               lit->Name(), c.red, c.green, c.blue, lit->Showing());
-                                }
+                                if (lit->Showing()) showingCount++;
                             }
-                            printf("  %d lights total, %d with non-zero color\n", lightCount, litLights);
-                            // Force all lights to show
-                            for (ObjDirItr<RndLight> lit(venueWorld, true); lit != nullptr; ++lit) {
-                                lit->SetShowing(true);
-                            }
-                            // Also show spotlights.grp if present
-                            RndDrawable* spotGrp = venueWorld->Find<RndDrawable>("spotlights.grp", false);
-                            if (spotGrp) {
-                                spotGrp->SetShowing(true);
-                                printf("  forced spotlights.grp showing=1\n");
-                            }
+                            printf("DC3 Native: venue '%s' — %d lights (%d showing)\n",
+                                   venueWorld->Name(), lightCount, showingCount);
                         }
                     }
                 }
