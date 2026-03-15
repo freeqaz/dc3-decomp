@@ -5,6 +5,9 @@
 #include "utl/BinStream.h"
 #include "utl/ChunkStream.h"
 #include "utl/WaveFile.h"
+#ifdef HX_FFMPEG
+#include "platform/XmaSampleDecoder.h"
+#endif
 
 SampleDataAllocFunc SampleData::sAlloc = nullptr;
 SampleDataFreeFunc SampleData::sFree = nullptr;
@@ -181,4 +184,23 @@ void SampleData::Load(BinStream &bs, const FilePath &fp) {
     if (d.rev >= 0x10) {
         d >> mNumChannels;
     }
+#ifdef HX_FFMPEG
+    // Decode XMA to PCM at load time so SampleInstNative can play it
+    if (mFormat == kXMA && mData && mSizeBytes > 0) {
+        void* pcm = nullptr;
+        int pcmSize = 0;
+        if (DecodeXMAToPCM(mData, mSizeBytes, mNumSamples, mSampleRate, mNumChannels,
+                           &pcm, &pcmSize)) {
+            // Free original XMA data via proper path (handles WavMgr vs sAlloc)
+            Dealloc();
+            // Allocate decoded PCM with engine allocator (CRC=0 so sFree used on destruction)
+            mData = sAlloc(pcmSize, "SampleData.cpp", 0x6f, "SampleData", 0);
+            memcpy(mData, pcm, pcmSize);
+            free(pcm);
+            mSizeBytes = pcmSize;
+            mFormat = kPCM;
+            mNumSamples = pcmSize / (2 * mNumChannels);
+        }
+    }
+#endif
 }

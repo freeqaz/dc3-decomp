@@ -976,6 +976,7 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/BinkMovie_Stub.cpp
     $<$<BOOL:${ENABLE_FFMPEG}>:src/platform/FFmpegAudioReader.cpp>
     $<$<BOOL:${ENABLE_FFMPEG}>:src/platform/FFmpegMovieImpl.cpp>
+    $<$<BOOL:${ENABLE_FFMPEG}>:src/platform/XmaSampleDecoder.cpp>
     src/platform/NetXbox_Stub.cpp
     src/platform/KinectShare_Stub.cpp
     src/platform/Cache_Stub.cpp
@@ -1439,6 +1440,7 @@ if(BUILD_TESTS)
         tests/test_extract_bik.cpp
         tests/test_input.cpp
         tests/test_audio.cpp
+        tests/test_mogg_decode.cpp
         tests/test_ham_provider.cpp
         tests/test_subsystems.cpp
         tests/test_bone_ground_truth.cpp
@@ -1471,6 +1473,7 @@ if(BUILD_TESTS)
         ${CMAKE_SOURCE_DIR}/src
         ${CMAKE_SOURCE_DIR}/../src
         ${CMAKE_SOURCE_DIR}/../src/system
+        ${CMAKE_SOURCE_DIR}/../src/system/oggvorbis
         ${CMAKE_SOURCE_DIR}/../src/lazer
         ${CMAKE_SOURCE_DIR}/../include
         ${CMAKE_SOURCE_DIR}/tests

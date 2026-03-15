@@ -107,8 +107,8 @@ Goal: Character with proper materials, crowd, animated venue, gameplay HUD textu
 - [x] Audio merge validated — **DONE** (Session 67: full MOGG playback working)
 
 ### 4.3 Gameplay HUD
-- [x] Move card textures (white rectangles) — **DONE** (Session 72: pose_flash_p0/p1 meshes use Kinect render-target textures; filtered in MeshFilter)
-- [ ] Score/progress display
+- [x] Move card textures (white rectangles) — **DONE** (Session 72: pose_flash_p0/p1 + preview.mesh filtered in MeshFilter)
+- [x] Score/progress display — **DONE** (MeterDisplay uses real implementation; shows 0 without Kinect gesture scoring — expected behavior)
 
 ### 4.4 Scene Animation — MOSTLY COMPLETE
 - [x] LightPreset::Load — **DONE** (Session 61)
@@ -116,7 +116,7 @@ Goal: Character with proper materials, crowd, animated venue, gameplay HUD textu
 - [x] Character dance animation — **DONE** (Session 63)
 - [x] Light energy cap — **DONE** (Session 70: prevents overexposure across all 6 venues)
 - [x] Smart light selection — **DONE** (Session 71: DC3 doesn't use LightPresets — base illumination uses point lights, not directional. Smart priority: default/stage > main > generic > backup > peak > rim)
-- [ ] WorldCrowd rendering
+- [x] WorldCrowd rendering — **DONE** (real DrawShowing implementation linked; crowd meshes visible in gameplay)
 
 ### 4.5 Loading State Machines — Analysis Complete (Session 60)
 
