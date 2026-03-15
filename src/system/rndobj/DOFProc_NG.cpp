@@ -1,11 +1,14 @@
 #include "rndobj/DOFProc_NG.h"
+#include "math/Utl.h"
 #include "obj/Data.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
+#include "rndobj/Cam.h"
 #include "rndobj/DOFProc.h"
 #include "rndobj/Rnd.h"
 #include "rndobj/Rnd_NG.h"
 #include "rndobj/Tex.h"
+#include "ui/UI.h"
 
 NgDOFProc::NgDOFProc()
     : mEnabled(0), mDepthOfFieldScale(1), mDepthOfFieldBias(0), mFocalPlane(1), mBlurDepth(1), mMinBlur(0),
@@ -19,7 +22,50 @@ NgDOFProc::NgDOFProc()
     mBlurTex[1] = mBlurTex[0];
 }
 
-void NgDOFProc::Set(RndCam *, float, float, float, float) {}
+bool NgDOFProc::Enabled() const { return mEnabled; }
+
+void NgDOFProc::Set(const RndCam *cam, float focalPlane, float blurDepth, float maxBlur, float minBlur) {
+    MILO_ASSERT(cam, 0xBF);
+
+    mFocalPlane = focalPlane;
+
+    DOFOverrideParams &dof = RndPostProc::DOFOverrides();
+
+    mBlurDepth = Max(dof.mDepthScale * blurDepth + dof.mDepthOffset, 0.0f);
+    mMaxBlur = Clamp(0.0f, 1.0f, dof.mMaxBlurScale * maxBlur + dof.mMaxBlurOffset);
+    mMinBlur = Clamp(0.0f, 1.0f, dof.mMinBlurScale * minBlur + dof.mMinBlurOffset);
+
+    if (mMaxBlur > 0.0f && TheUI->IsGameScreenActive()) {
+        mEnabled = true;
+    }
+
+    if (mBlurDepth <= 0.001f) {
+        mBlurDepth = 0.001f;
+    }
+
+    float nearPlane = cam->NearPlane();
+    float farPlane = cam->FarPlane();
+
+    float scale = 0.0f;
+    if (nearPlane <= focalPlane) {
+        scale = (farPlane - farPlane / focalPlane * nearPlane) / (farPlane - nearPlane)
+            * (cam->ZRange().y - cam->ZRange().x) + cam->ZRange().x;
+    }
+    mDepthOfFieldScale = scale;
+
+    float farFocal = focalPlane - focalPlane * mBlurDepth;
+
+    float bias = 0.0f;
+    if (nearPlane <= farFocal) {
+        bias = (farPlane - farPlane / farFocal * nearPlane) / (farPlane - nearPlane)
+            * (cam->ZRange().y - cam->ZRange().x) + cam->ZRange().x;
+    }
+    mDepthOfFieldBias = bias;
+
+    if (scale < bias + 0.001f) {
+        mDepthOfFieldScale = bias + 0.001f;
+    }
+}
 
 NgDOFProc::~NgDOFProc() {
     RELEASE(mBlurTex[0]);

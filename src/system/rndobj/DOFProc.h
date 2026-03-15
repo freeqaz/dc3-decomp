@@ -11,7 +11,7 @@ public:
     OBJ_CLASSNAME(DOFProc);
     OBJ_SET_TYPE(DOFProc);
     virtual DataNode Handle(DataArray *, bool);
-    virtual void Set(RndCam *, float, float, float, float) {}
+    virtual void Set(const RndCam *, float, float, float, float) {}
     virtual void UnSet() {}
     virtual bool Enabled() const { return 0; }
     virtual int Blur() { return 0; }

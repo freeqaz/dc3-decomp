@@ -4,6 +4,7 @@
 #include "math/Rand.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
+#include "rnddx9/RenderState.h"
 #include "rndobj/PostProc.h"
 #include "rndobj/Rnd.h"
 #include "rndobj/Rnd_NG.h"
@@ -12,6 +13,7 @@
 #include "rndobj/HiResScreen.h"
 #include "rndobj/ShaderMgr.h"
 #include "utl/Loader.h"
+#include <math.h>
 
 extern void merged_ObjPtrListPopBack(void *);
 
@@ -198,6 +200,65 @@ void NgPostProc::CheckGradientMap() {
     }
 }
 
+void NgPostProc::CheckHueConverge() {
+    if (ColorXfmEnabled()) {
+        Vector4 hueParams(mHueTarget * (1.0f / 360.0f) + 0.5f, mHueFocus, mBlendAmount, mBrightnessPower);
+        TheShaderMgr.SetPConstant(kPS_HueConverge, hueParams);
+        TheShaderMgr.unk2a = (0.0f < mBlendAmount);
+    }
+}
+
+void NgPostProc::CheckRefract() {
+    if (DoRefraction()) {
+        float angleRad = mRefractAngle * 0.017453292f;
+        float sinAngle = (float)sin((double)angleRad);
+        float cosAngle = (float)cos((double)angleRad);
+
+        unk234 += mRefractVelocity.x * mDeltaSecs;
+        unk238 += mRefractVelocity.y * mDeltaSecs;
+
+        Vector4 refractParams(angleRad, sinAngle, cosAngle, mRefractDist);
+
+        unk234 = (float)fmod((double)unk234, 1.0);
+        unk238 = (float)fmod((double)unk238, 1.0);
+
+        Vector4 panningParams(mRefractScale.x, mRefractScale.y,
+                              mRefractPanning.x + unk234, mRefractPanning.y + unk238);
+        TheShaderMgr.SetPConstant(kPS_RefractStrength, refractParams);
+        TheShaderMgr.SetPConstant(kPS_RefractPanning, panningParams);
+
+        TheShaderMgr.SetPConstant((PShaderConstant)1, mRefractMap.Ptr());
+        TheRenderState.SetTextureFilter(1, (RndRenderState::FilterMode)1, false);
+        TheRenderState.SetTextureClamp(1, (RndRenderState::ClampMode)0);
+        TheShaderMgr.unk3b = true;
+    } else {
+        unk234 = 0.0f;
+        unk238 = 0.0f;
+    }
+}
+
+void NgPostProc::CheckNoise() {
+    bool doNoise = mNoiseIntensity != 0.0f && mNoiseMap;
+    if (doNoise) {
+        if (!mNoiseStationary) {
+            Vector4 seeds(RandomFloat(), RandomFloat(), RandomFloat(), RandomFloat());
+            TheShaderMgr.SetPConstant(kPS_NoiseSeeds, seeds);
+            Vector4 params(mNoiseBaseScale.x, mNoiseBaseScale.y, mNoiseTopScale, mNoiseIntensity);
+            TheShaderMgr.SetPConstant(kPS_NoiseParams, params);
+        } else {
+            Vector4 seeds(mRandomSeed1, mRandomSeed2, mRandomSeed1, mRandomSeed2);
+            TheShaderMgr.SetPConstant(kPS_NoiseSeeds, seeds);
+            Vector4 params(mNoiseBaseScale.x, mNoiseBaseScale.y, 1.0f, mNoiseIntensity);
+            TheShaderMgr.SetPConstant(kPS_NoiseParams, params);
+        }
+        TheShaderMgr.SetPConstant(kPS_Anisotropy, mNoiseMap.Ptr());
+        TheRenderState.SetTextureFilter(0xd, (RndRenderState::FilterMode)1, false);
+        TheRenderState.SetTextureClamp(0xd, (RndRenderState::ClampMode)0);
+    }
+    TheShaderMgr.unk2d = doNoise;
+    TheShaderMgr.unk2e = doNoise ? mNoiseMidtone : false;
+}
+
 void NgPostProc::ReleaseTex() {
     for (int i = 0; (unsigned int)i < 3; i++) {
         sBloom.mTextures[i].FreeTextures();
@@ -214,6 +275,45 @@ void NgPostProc::EndWorld() {
 void NgPostProc::OnSelect() {
     RndPostProc::OnSelect();
     mMotionBlurDrawList.clear();
+}
+
+void NgPostProc::ModulateColorXfm() {
+    float mod = mColorModulation;
+    Transform xfm = mColorXfm.mColorXfm;
+    if (mod != 1.0f) {
+        xfm.m.x.x *= mod;
+        xfm.m.x.y *= mod;
+        xfm.m.x.z *= mod;
+        xfm.m.y.x *= mod;
+        xfm.m.y.y *= mod;
+        xfm.m.y.z *= mod;
+        xfm.m.z.x *= mod;
+        xfm.m.z.y *= mod;
+        xfm.m.z.z *= mod;
+    }
+    RndShaderMgr &mgr = TheShaderMgr;
+    mgr.SetPConstant4x3((PShaderConstant)kVS_WorldTransform, Hmx::Matrix4(xfm));
+}
+
+void NgPostProc::DoPost() {
+    RndPostProc::DoPost();
+    DoVelocity();
+    DoBloom();
+    ModulateColorXfm();
+    CheckNoise();
+    CheckBlendPrevious();
+    CheckHallOfTime();
+    CheckMotionBlur();
+    CheckGradientMap();
+    CheckHueConverge();
+    CheckRefract();
+    CheckChromaticAberration();
+    CheckPosterizeAndKaleidoscope();
+    CheckVignette();
+    bool xfm = ColorXfmEnabled();
+    TheShaderMgr.unk29 = xfm;
+    TheShaderMgr.unk2f = BlendPrevious();
+    mMotionBlurEnabled = false;
 }
 
 void NgPostProc::OnUnselect() {

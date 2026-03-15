@@ -63,6 +63,8 @@ public:
 
 protected:
     void DoVelocity();
+    void DoBloom();
+    void CheckNoise();
     void CheckBlendPrevious();
     void CheckVignette();
     void CheckMotionBlur();

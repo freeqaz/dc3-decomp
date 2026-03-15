@@ -42,6 +42,7 @@ public:
     Transform &LocalProjectXfm() { return mLocalProjectXfm; }
     RndTex *TargetTex() const { return mTargetTex; }
     const Frustum &WorldFrustum() const { return mWorldFrustum; }
+    const Vector2 &ZRange() const { return mZRange; }
     void SetZRange(float f1, float f2) { mZRange.Set(f1, f2); }
     void SetScreenRect(const Hmx::Rect &rect) {
         mScreenRect = rect;
