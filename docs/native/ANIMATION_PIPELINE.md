@@ -50,9 +50,38 @@ The character animation system flows from .milo clip data through bone transform
 3. **Bone garbage mitigation** (commit d6dffa637) — Sanity check in FillBoneUniforms for invalid translations.
 4. **GPU skinning pipeline** (Session 63) — Skinned vertex format, 4-bone blending, 40-bone palettes.
 
+## Milo-Viewer vs DC3-Native Differences (Detailed)
+
+The viewer uses three playback modes, all with explicit control:
+
+1. **Interactive mode** — `AdvanceBeat()` manually enumerates all `CharPollable` objects via `ObjDirItr`, calls `Poll()` on each
+2. **Video mode** — Direct pose evaluation: `clip->ScaleDown()` + `clip->ScaleAdd()` + `meshes.PoseMeshes()` (bypasses CharDriver entirely)
+3. **Screenshot mode** — Same as video mode
+
+Key viewer-specific setup:
+- Manually creates `CharDriver` + `CharServoBone` if missing from .milo
+- Calls `clip->StuffBones(*servo)` for each clip to populate bone lists
+- Custom `CharTwistSolver::SolveAll()` fallback for outfit-only .milo files missing twist pollables
+- Manual `CharFaceServo` creation with blink timer
+
+DC3-native relies on the normal game loop: `Character::Poll()` → `RndDir::Poll()` → all `CharPollable::Poll()` including `CharDriver`.
+
+## Debugging Checklist
+
+If characters don't animate, verify:
+1. `CharDriver` exists in character (game auto-creates it)
+2. `driver->SetBones(boneServo)` wiring is correct
+3. `driver->SetClips(clipDirectory)` points to `CharClipSet`
+4. `CharDriver::Enter()` has been called
+5. `CharDriver::Poll()` runs each frame (via `RndDir::Poll()`)
+6. Beat/time is advancing (`TheTaskMgr.SetSecondsAndBeat()`)
+7. No `#ifdef HX_NATIVE` guards blocking clip evaluation (confirmed: NONE exist)
+
 ## Current Status (Session 74)
 
-- Characters animate correctly in gameplay (confirmed via screenshots)
-- T-pose issue reported earlier has been resolved by CharDriver fixes
-- Bone garbage fallback still in place (leg bones occasionally use bind-pose)
-- Face rendering appears functional (head shapes with features visible)
+- Characters animate correctly in gameplay (confirmed via 1920x1080 screenshots)
+- T-pose issue reported earlier has been resolved by CharDriver fixes (Session 63)
+- No `#ifdef HX_NATIVE` guards exist in CharClipDriver, CharServoBone, or CharBones
+- Bone garbage fallback still in place (leg bones occasionally use bind-pose identity)
+- Face rendering functional — no special face mesh filtering in MeshFilter
+- Face servo (`CharFaceServo`) polled via normal `RndDir::mPolls` iteration
