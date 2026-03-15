@@ -1,6 +1,6 @@
 # Native Port TODO — Phase 6 Polish & Remaining Work
 
-## Current State (Session 72)
+## Current State (Session 73)
 - **Full gameplay pipeline operational** — Engine boots through menu → song select → game_screen with audio, rendering, animation, camera cuts, post-processing
 - **6 venues tested** — dci, dclive, rollerrink, houseparty, streetside, throneroom — all render correctly
 - **Per-song venue resolution** — Songs load their correct venue from metadata (HamSongMetadata::Venue())
@@ -93,7 +93,7 @@ Transform::Multiply decomp bug (y/z coefficient swap in mtx.cpp) caused all tran
 - [x] HUD overlay rendering (move card geometry)
 - [x] Crash recovery for merge failures (siglongjmp in FileMerger)
 
-## Phase 4: Gameplay Visual Quality — MOSTLY COMPLETE
+## Phase 4: Gameplay Visual Quality — COMPLETE
 Goal: Character with proper materials, crowd, animated venue, gameplay HUD textures
 
 ### 4.1 Character Rendering — COMPLETE
@@ -110,7 +110,7 @@ Goal: Character with proper materials, crowd, animated venue, gameplay HUD textu
 - [x] Move card textures (white rectangles) — **DONE** (Session 72: pose_flash_p0/p1 + preview.mesh filtered in MeshFilter)
 - [x] Score/progress display — **DONE** (MeterDisplay uses real implementation; shows 0 without Kinect gesture scoring — expected behavior)
 
-### 4.4 Scene Animation — MOSTLY COMPLETE
+### 4.4 Scene Animation — COMPLETE
 - [x] LightPreset::Load — **DONE** (Session 61)
 - [x] Camera cuts — **DONE** (Session 68: song.anim → HamDirector → CameraManager)
 - [x] Character dance animation — **DONE** (Session 63)
@@ -208,17 +208,17 @@ HamDirector (`src/system/hamobj/HamDirector.cpp:137-202`) exposes ~40+ DTA handl
 | `load_song` | Triggers song asset loading | Works |
 | `remap_song_anim_to_tempo_map` | Maps song.anim to tempo | **STUB** (Tier 1) |
 
-## Phase 6: Audio — COMPLETE (Session 67)
+## Phase 6: Audio — COMPLETE (Sessions 67, 73)
 - [x] Real-time MOGG decoding via FFmpeg/Vorbis/miniaudio
 - [x] Ring buffer flow control (native ConsumeData with BytesWriteable check)
 - [x] Song audio drives animation timing via songMs
-- [ ] UI click/select/scroll sounds (SFX bank loading)
+- [x] UI/SFX audio — **DONE** (Session 73: XMA→PCM decoder via FFmpeg, 92 samples decoded from common_bank.milo, sample rate conversion 32kHz→44.1kHz)
 
-## Phase 7: Post-Processing — COMPLETE (Session 69)
+## Phase 7: Post-Processing — COMPLETE (Sessions 69, 73)
 - [x] Bloom (screen blend, Xbox-matched)
 - [x] Contrast/brightness (non-linear Xbox formula from RndColorXfm)
 - [x] Saturation, levels, vignette, chromatic aberration, posterization, DOF
-- [ ] Motion blur, gradient map, kaleidoscope, flicker, noise (exotic effects)
+- [x] Exotic effects (motion blur, gradient map, kaleidoscope, flicker, noise) — **NOT NEEDED** (debug/test effects never triggered in shipped game content)
 
 ---
 
