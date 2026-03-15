@@ -33,7 +33,7 @@ private:
     FxSend *mFxSend = nullptr;
     const int16_t *mPCMData;    // pointer into SampleData's buffer
     int mPCMSamples;            // total samples available
-    int mPlayPos;               // current sample position
+    double mPlayPos;            // fractional sample position for resampling
     int mEndSample;             // where to stop (-1 = end of data)
     bool mLoop;
     volatile bool mPlaying;

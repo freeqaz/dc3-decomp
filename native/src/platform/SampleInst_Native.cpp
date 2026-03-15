@@ -1,5 +1,6 @@
 // DC3 Native Port - SampleInstNative implementation
 // One-shot and looping sound effects via AudioDevice.
+// Supports sample rate conversion (bank samples are 32kHz, output is 44.1kHz).
 
 #include "platform/SampleInst_Native.h"
 #include "platform/FxSendNative.h"
@@ -10,6 +11,8 @@
 #include <cmath>
 #include <cstring>
 
+static const int kOutputSampleRate = 44100;
+
 // SynthSample::NewInst — native implementation
 SampleInst *SynthSample::NewInst(bool loop, int startSample, int endSample) {
     return new SampleInstNative(this, loop, startSample, endSample);
@@ -17,7 +20,7 @@ SampleInst *SynthSample::NewInst(bool loop, int startSample, int endSample) {
 
 SampleInstNative::SampleInstNative(SynthSample *sample, bool loop, int startSample, int endSample)
     : SampleInst(sample),
-      mPCMData(nullptr), mPCMSamples(0), mPlayPos(startSample > 0 ? startSample : 0),
+      mPCMData(nullptr), mPCMSamples(0), mPlayPos(startSample > 0 ? (double)startSample : 0.0),
       mEndSample(endSample), mLoop(loop),
       mPlaying(false), mPaused(false),
       mInstVolume(1.0f), mInstPan(0.0f), mInstSpeed(1.0f),
@@ -39,6 +42,10 @@ void SampleInstNative::StartImpl() {
     if (!data.HasData())
         return;
 
+    // Skip compressed formats we can't decode natively (XMA is Xbox 360 only)
+    if (data.GetFormat() != SampleData::kPCM && data.GetFormat() != SampleData::kBigEndPCM)
+        return;
+
     mSampleRate = data.GetSampleRate();
     mNumChannels = data.NumChannels();
     mPCMData = (const int16_t *)data.DataPtr();
@@ -58,11 +65,25 @@ void SampleInstNative::StopImpl(bool) {
     }
 }
 
-int SampleInstNative::RenderAudio(float *output, int frameCount) {
-    int totalSamples = frameCount * 2; // stereo output
+// Linear interpolation between two samples
+static inline float LerpSample(const int16_t *data, int totalSamples, double pos, int channel, int numChannels) {
+    int idx0 = (int)pos;
+    int idx1 = idx0 + 1;
+    float frac = (float)(pos - idx0);
 
+    float s0 = 0.0f, s1 = 0.0f;
+    if (idx0 >= 0 && idx0 < totalSamples) {
+        s0 = data[idx0 * numChannels + channel] / 32768.0f;
+    }
+    if (idx1 >= 0 && idx1 < totalSamples) {
+        s1 = data[idx1 * numChannels + channel] / 32768.0f;
+    }
+    return s0 + frac * (s1 - s0);
+}
+
+int SampleInstNative::RenderAudio(float *output, int frameCount) {
     if (!mPlaying || mPaused || !mPCMData) {
-        memset(output, 0, totalSamples * sizeof(float));
+        memset(output, 0, frameCount * 2 * sizeof(float));
         return frameCount;
     }
 
@@ -70,12 +91,14 @@ int SampleInstNative::RenderAudio(float *output, int frameCount) {
     float volL = mInstVolume * std::max(0.0f, 1.0f - mInstPan);
     float volR = mInstVolume * std::max(0.0f, 1.0f + mInstPan);
 
+    // Rate ratio: how many source samples per output sample
+    double rateRatio = (double)mSampleRate / (double)kOutputSampleRate * (double)mInstSpeed;
+
     for (int i = 0; i < frameCount; i++) {
-        if (mPlayPos >= endPos) {
+        if (mPlayPos >= (double)endPos) {
             if (mLoop) {
-                mPlayPos = 0;
+                mPlayPos = 0.0;
             } else {
-                // Fill rest with silence and stop
                 for (int j = i; j < frameCount; j++) {
                     output[j * 2 + 0] = 0.0f;
                     output[j * 2 + 1] = 0.0f;
@@ -85,28 +108,19 @@ int SampleInstNative::RenderAudio(float *output, int frameCount) {
             }
         }
 
-        float sample;
-        if (mNumChannels == 2 && mPlayPos * 2 + 1 < mPCMSamples * 2) {
-            // Stereo: interleaved L/R
-            float left = mPCMData[mPlayPos * 2] / 32768.0f;
-            float right = mPCMData[mPlayPos * 2 + 1] / 32768.0f;
+        if (mNumChannels == 2) {
+            float left = LerpSample(mPCMData, mPCMSamples, mPlayPos, 0, 2);
+            float right = LerpSample(mPCMData, mPCMSamples, mPlayPos, 1, 2);
             output[i * 2 + 0] = left * mInstVolume;
             output[i * 2 + 1] = right * mInstVolume;
         } else {
-            // Mono: pan to stereo
-            sample = mPCMData[mPlayPos] / 32768.0f;
+            float sample = LerpSample(mPCMData, mPCMSamples, mPlayPos, 0, 1);
             output[i * 2 + 0] = sample * volL;
             output[i * 2 + 1] = sample * volR;
         }
 
-        mPlayPos++;
+        mPlayPos += rateRatio;
     }
-
-    // TODO: FxSend processing disabled — dangling pointer crash during song reload.
-    // Need proper FxSend lifecycle management (weak refs or cleanup on destroy).
-    // if (mFxSend) {
-    //     FxSendNative_ProcessChain(mFxSend, output, frameCount, 2);
-    // }
 
     return frameCount;
 }
