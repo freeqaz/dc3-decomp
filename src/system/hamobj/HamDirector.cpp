@@ -337,7 +337,9 @@ void HamDirector::Enter() {
 #ifdef HX_NATIVE
     // On native, the DTA merger pipeline isn't used. Run the venue-related
     // parts of Enter() directly — post-proc, crowd init, venue Enter().
-    if (!mMerger && mVenue) {
+    // mMerger is set from venue data (SYNC_PROP) but the merger pipeline
+    // doesn't run on native. Always take this path when venue exists.
+    if (mVenue) {
         mExcitement = 3;
         mNumPlayersFailed = 0;
         mLastShotTime = -kHugeFloat;
@@ -375,9 +377,11 @@ void HamDirector::Enter() {
         mPlayerFreestyle = false;
         unk1d4 = 0;
         mPlayerFreestylePaused = false;
-        if (TheHamWardrobe) {
-            TheHamWardrobe->PlayCrowdAnimation("realtime_idle", 2, true);
-        }
+        // PlayCrowdAnimation crashes on null CharClip refs in crowd
+        // instances. Skip for now — crowd animation is cosmetic.
+        // if (TheHamWardrobe) {
+        //     TheHamWardrobe->PlayCrowdAnimation("realtime_idle", 2, true);
+        // }
         return;
     }
 #endif

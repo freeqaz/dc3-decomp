@@ -1,21 +1,22 @@
 # WorldCrowd System — Native Port Status
 
-## Current Status: Billboard Crowd Rendering Working (2026-03-16)
+## Current Status: Cached Impostor RTT Working (2026-03-16)
 
-The crowd billboard rendering pipeline is fully functional on native. DCI venue loads
-10 WorldCrowd objects with 80 billboard instances across 35 character types. Billboard
-quads render at instance positions via RndMultiMesh. The engine runs at 1700 draw calls
-per frame on game_screen with crowd + venue + HUD.
+The crowd billboard rendering pipeline is fully functional on native with cached
+impostor textures. DCI venue loads 10 WorldCrowd objects with 80 billboard instances
+across 35 character types. Each character type is rendered to its own dedicated
+impostor texture ONCE (first frame only), then all subsequent frames reuse the cached
+texture — zero ongoing RTT cost.
 
-Key fixes this session:
+Key fixes:
+- **Cached impostor RTT**: Each character type renders to a dedicated 256x512 render
+  target on first draw. Cached in `sImpostorCache` (static `unordered_map<Character*, RndTex*>`).
+  Characters don't animate on native (no clip subdirs), so a single snapshot suffices.
+  First frame pays ~35 character RTT draws, then zero RTT cost on all subsequent frames.
 - **Force3DCrowd(false) on native**: The .milo saves `force=true` which moves all
   MultiMesh instances to `m3DChars` (for 3D character rendering). On native, we only
   have billboard rendering, so we always use `Force3DCrowd(false)` to keep instances
   in the MultiMesh.
-- **Skip impostor RTT on native**: The original engine renders 3D characters to an
-  impostor texture per-frame, then displays that texture on billboard quads. This is
-  extremely expensive (~1000 extra draw calls). On native, we skip RTT and draw
-  billboards directly with the impostor material.
 - **GPU rendering on by default**: Changed from `MILO_RENDER=1` opt-in to
   `MILO_NORENDER=1` opt-out.
 
@@ -66,8 +67,8 @@ WorldCrowd is a billboard impostor crowd rendering system:
    - **On native**: Always `Force3DCrowd(false)` — keeps instances in MultiMesh for billboard rendering
 
 5. **Impostor rendering pipeline** (`DrawShowing`):
-   - **On Xbox**: `Draw3DChars()` → impostor camera setup → render character to texture → billboard draw
-   - **On native**: Skip RTT, draw billboard quads directly via `DrawMultiMeshWithEnviron(mmesh)`
+   - **On Xbox**: `Draw3DChars()` → impostor camera setup → render character to texture → billboard draw (every frame)
+   - **On native**: Cached RTT — render each character type to dedicated texture ONCE, then draw billboards with cached texture on all frames. Cache keyed on `Character*` in static `sImpostorCache`.
 
 6. **Animation** (`HamWardrobe::PlayCrowdAnimation`):
    - Iterates `mCrowdMembers` (populated via DTA `{$hamwardrobe add_crowd $this}`)
@@ -104,22 +105,11 @@ Later, when `dir->Enter()` fires on the venue:
 - RndMultiMesh instancing (TransformListAlloc LP64 fix)
 - Instance transforms loaded from .milo binary data (80 instances across 10 objects)
 - Force3DCrowd(false) keeps instances in MultiMesh for billboard rendering
-- Billboard rendering via DrawMultiMeshWithEnviron (skip impostor RTT)
+- **Cached impostor RTT**: per-character-type textures rendered once, reused forever
 - Null clip guards prevent crashes (CharClipGroup, CharDriver)
 - DCI venue: 10 WorldCrowd objects, 35 characters, 80 instances
 - Full game flow: auto-nav to game_screen, HamDirector::Enter(), VenueEnter()
-- Stable rendering at 1700 draw calls per frame (venue + crowd + HUD)
-
-## What Needs Work
-
-### Impostor Texture Content
-
-Billboard quads render as white/placeholder because the impostor RTT (rendering 3D
-characters to the impostor texture) is skipped on native. To get actual crowd
-silhouettes, need either:
-- Optimized character RTT (expensive, ~1000 draw calls per frame)
-- Pre-baked impostor textures (static crowd character snapshots)
-- Simplified crowd geometry (flat colored quads)
+- Stable rendering (venue + crowd + HUD)
 
 ### Crowd Animation (clip subdirs)
 
@@ -157,7 +147,7 @@ looks for `.milo` but files are `.milo_xbox`. Needs path suffix fix.
 | File | Change |
 |------|--------|
 | `src/system/world/World.cpp` | WorldCrowd factory enabled (guard removed) |
-| `src/system/world/Crowd.cpp` | Force3DCrowd(false) on native; skip impostor RTT; simplified billboard draw |
+| `src/system/world/Crowd.cpp` | Force3DCrowd(false) on native; cached per-character impostor RTT; sImpostorCache cleanup |
 | `src/system/rndobj/MultiMesh.h` | TransformListAlloc uses malloc/free on native |
 | `src/system/hamobj/HamWardrobe.cpp` | PlayCrowdAnimation early-returns on native |
 | `src/system/hamobj/HamDirector.cpp` | GetWorld() falls back to mVenue; Enter() native path |

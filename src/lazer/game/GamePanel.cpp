@@ -384,6 +384,15 @@ void GamePanel::Exit() {
 
 void GamePanel::Poll() {
     START_AUTO_TIMER("game_poll");
+#ifdef HX_NATIVE
+    {
+        static int sPollTop = 0;
+        if (sPollTop++ < 3) {
+            fprintf(stderr, "DC3 GamePanel::Poll() TOP — loaded=%d pollLoadState=%d panelState=%d\n",
+                    IsLoaded(), mPollLoadState, (int)GetState());
+        }
+    }
+#endif
     SetSoundEventReceiver();
     if (!IsLoaded()) {
         return;
@@ -413,6 +422,16 @@ void GamePanel::Poll() {
             && !TheHamDirector->IsGameStartHold()) {
             StartGame();
         }
+#ifdef HX_NATIVE
+        {
+            static int sPollDiag = 0;
+            if (sPollDiag++ < 5) {
+                fprintf(stderr, "DC3 GamePanel::Poll diag: state=%d taskMgrSec=%.3f gameStartHold=%d\n",
+                        mState, TheTaskMgr.Seconds(TaskMgr::kRealTime),
+                        TheHamDirector ? TheHamDirector->IsGameStartHold() : -1);
+            }
+        }
+#endif
         for (int i = 0; i < 2; i++) {
             FitnessFilter *filt = GetFitnessFilter(i);
             if (filt) {
@@ -1069,15 +1088,22 @@ void GamePanel::PollForLoading() {
                     }
                     venue->SyncObjects();
 
-                    // Debug: check what HUD objects exist
+                    // After MergeDirs, phrase_meter0/1 are regular objects in
+                    // venue's hash table (not subdirs). Venue's SyncDrawables
+                    // adds them to venue->mDraws, but their OWN mDraws are
+                    // empty — meshes are in their own hash tables, never synced.
+                    // Call SyncObjects on each to populate their internal draw
+                    // lists so DrawShowing() renders their meshes.
                     HamPhraseMeter *pm0 = venue->Find<HamPhraseMeter>("phrase_meter0", false);
                     HamPhraseMeter *pm1 = venue->Find<HamPhraseMeter>("phrase_meter1", false);
-                    RndDrawable *mf0 = venue->Find<RndDrawable>("move_feedback0", false);
-                    RndDrawable *tf0 = venue->Find<RndDrawable>("text_feedback0", false);
-                    fprintf(stderr, "DC3 HUD objects: pm0=%p pm1=%p mf0=%p tf0=%p\n",
-                            (void*)pm0, (void*)pm1, (void*)mf0, (void*)tf0);
-                    if (pm0) fprintf(stderr, "  pm0 showing=%d\n", pm0->Showing());
-                    if (pm1) fprintf(stderr, "  pm1 showing=%d\n", pm1->Showing());
+                    if (pm0) {
+                        pm0->SyncObjects();
+                        MILO_LOG("Native: pm0 synced, %d draws\n", pm0->NumDraws());
+                    }
+                    if (pm1) {
+                        pm1->SyncObjects();
+                        MILO_LOG("Native: pm1 synced, %d draws\n", pm1->NumDraws());
+                    }
                 }
             }
         }

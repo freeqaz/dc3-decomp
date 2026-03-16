@@ -353,9 +353,30 @@ void HamWardrobe::SetDir(ObjectDir *dir) {
 void HamWardrobe::PlayCrowdAnimation(Symbol animName, int flags, bool override) {
     if (mCrowdMembers.size() == 0) return;
 #ifdef HX_NATIVE
-    // On native, crowd character clip subdirs aren't loaded (char/crowd/anim/),
-    // so clip groups contain null ObjPtrs. Skip crowd animation to avoid crashes.
-    return;
+    // Crowd clip animation requires the FileMerger to have loaded and merged
+    // the animation .milo files into the crowd characters' clip dirs.
+    {
+        FileMerger *fm = Dir() ? Dir()->Find<FileMerger>("crowd_clips.fm", false) : nullptr;
+        if (fm) {
+            if (fm->HasPendingFiles()) {
+                return; // Files still loading
+            }
+            // Check if any mergers have actually loaded files
+            static bool sFirstCall = true;
+            if (sFirstCall) {
+                sFirstCall = false;
+                auto &mergers = fm->Mergers();
+                printf("DC3 Native: crowd_clips.fm has %d mergers:\n", (int)mergers.size());
+                for (int i = 0; i < mergers.size(); i++) {
+                    auto &m = mergers[i];
+                    printf("  [%d] name='%s' selected='%s' loaded='%s' dir=%p (%s)\n",
+                           i, m.mName.Str(), m.mSelected.c_str(), m.mLoaded.c_str(),
+                           (void*)m.MergerDir(),
+                           m.MergerDir() ? m.MergerDir()->Name() : "null");
+                }
+            }
+        }
+    }
 #endif
 
     mPreviousCrowdAnimation = animName;
@@ -372,13 +393,23 @@ void HamWardrobe::PlayCrowdAnimation(Symbol animName, int flags, bool override) 
         for (ObjPtrList<Character>::iterator it = mCrowdMembers.begin();
              it != mCrowdMembers.end(); ++it) {
             Character *c = *it;
+#ifdef HX_NATIVE
+            if (!c || !c->Driver()) continue;
+#endif
             if (animName == (int)gNullStr) {
                 c->Exit();
             } else {
                 auto stanceSym = ("stance");
-                Symbol stance = c->Property(stanceSym, true)->Sym(nullptr);
+                const DataNode *stanceProp = c->Property(stanceSym, true);
+#ifdef HX_NATIVE
+                if (!stanceProp) continue;
+#endif
+                Symbol stance = stanceProp->Sym(nullptr);
                 if (stance == gNullStr) {
                     TheDebug << "    stance = NULL!\n";
+#ifdef HX_NATIVE
+                    continue;
+#endif
                 }
                 char buf[120];
                 _snprintf(buf, 0x78, "%s_%s", stance.Str(), animName.Str());
