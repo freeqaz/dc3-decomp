@@ -33,6 +33,7 @@
 #include "hamobj/HamGameData.h"
 #include "obj/DirLoader.h"
 #include "ui/UILabel.h"
+#include "platform/Rnd_Wgpu.h"
 extern GLFWwindow *gNativeWindow;
 static ObjectDir *gNativeHudDir = nullptr;
 static bool gFaceAnimInitDone = false;
@@ -1007,7 +1008,19 @@ void App::RunWithoutDebugging() {
                         printf("DC3 Native: Loading gameplay venue '%s' from '%s'\n", venueName, fp.c_str());
                         ObjectDir *venueDir = DirLoader::LoadObjects(fp, nullptr, nullptr);
                         if (venueDir) {
+                            printf("DC3 Native: DirLoader returned '%s' class=%s proxy=%d Dir='%s'\n",
+                                   venueDir->Name(), venueDir->ClassName(),
+                                   venueDir->IsProxy(),
+                                   venueDir->Dir() ? venueDir->Dir()->Name() : "null");
+                            // If the returned dir is a wrapper, find the actual WorldDir subdir
                             WorldDir *wdir = dynamic_cast<WorldDir*>(venueDir);
+                            if (!wdir) {
+                                // Check subdirs for a WorldDir
+                                for (ObjDirItr<WorldDir> it(venueDir, true); it != nullptr; ++it) {
+                                    wdir = &*it;
+                                    break;
+                                }
+                            }
                             if (wdir) {
                                 if (TheHamDirector) {
                                     TheHamDirector->SetNativeVenueWorld(wdir);
@@ -1337,15 +1350,25 @@ void App::RunWithoutDebugging() {
                         // properly triggers LabelUpdate + UpdateText mesh generation.
                         UILabel *scoreLbl = sub->Find<UILabel>("score2.lbl", true);
                         if (scoreLbl) {
-                            scoreLbl->SetInt(0, true); // localized format
+                            scoreLbl->SetInt(0, false);
                             scoreLbl->SetShowing(true);
                             // HACK: score2.lbl has width=0 from the milo file.
                             // Width is normally set by DTA flow. Set directly.
                             if (scoreLbl->Width() < 1.0f)
                                 scoreLbl->SetWidth(200.0f);
-                            // Fix font alpha (same issue as song labels)
-                            for (int si = 0; si < scoreLbl->NumStyles(); si++)
+                            // Fix font alpha and size (same DTA flow issue as song labels)
+                            for (int si = 0; si < scoreLbl->NumStyles(); si++) {
                                 scoreLbl->Styles()[si].SetAlpha(1.0f);
+                                if (scoreLbl->Styles()[si].mSize < 1.0f)
+                                    scoreLbl->Styles()[si].mSize = 40.0f;
+                            }
+                            // HACK: Reparent score label directly to the score slot
+                            // and position at slot origin. score.milo's internal
+                            // transform hierarchy puts labels off-screen otherwise.
+                            scoreLbl->SetTransParent(sub, false);
+                            Transform identXfm;
+                            identXfm.Reset();
+                            scoreLbl->SetLocalXfm(identXfm);
                             // Add to parent draw list so rdir->DrawShowing() renders it
                             if (rdir) rdir->NativeAddDraw(scoreLbl);
                             fprintf(stderr, "DC3 Native: Score label '%s/%s' added to draw list\n",
@@ -1364,35 +1387,61 @@ void App::RunWithoutDebugging() {
             }
         }
 
-        // Select the venue's camera before drawing so the 3D scene uses
-        // the correct camera position from the CameraManager's current shot.
-        // WorldDir::DrawShowing() only runs camera management for the ROOT world
-        // (TheWorld==nullptr). The venue is drawn as a child, so its camera
-        // setup is skipped. We must Select() the venue's camera manually.
+        // Draw: BeginDrawing → Venue 3D → UI overlay → HUD → EndDrawing.
+        // On Xbox, the venue renders via world_panel in the screen hierarchy.
+        // On native, the DTA panel system doesn't connect the venue to the
+        // draw chain, so we draw it explicitly.
+        TheRnd.BeginDrawing();
+#ifdef HX_NATIVE
         {
             WorldDir *drawVenue = TheHamDirector ? TheHamDirector->GetVenueWorld() : nullptr;
             if (!drawVenue && gNativeVenueDir)
                 drawVenue = dynamic_cast<WorldDir *>(gNativeVenueDir);
-            if (drawVenue) {
-                CameraManager *camMgr = drawVenue->GetCameraManager();
-                if (camMgr) {
-                    CamShot *curShot = camMgr->CurrentShot();
-                    if (curShot) {
-                        curShot = curShot->CurrentShot();
-                        RndCam *cam = curShot ? curShot->GetCam() : nullptr;
-                        if (cam)
-                            cam->Select();
+            if (drawVenue && !getenv("DC3_HUD_ONLY")) {
+                if (!drawVenue->IsProxy()) {
+                    // Non-proxy venue: use normal WorldDir draw path
+                    drawVenue->DrawShowing();
+                } else {
+                    // Proxy venue (loaded by DTA flow): draw meshes directly.
+                    // WorldDir::DrawShowing on a proxy takes the subdir path which
+                    // only calls RndDir::DrawShowing on its stale draw list.
+                    // Instead, select the venue's environment and iterate all meshes.
+                    RndEnviron *savedEnv = RndEnviron::Current();
+
+                    // Find and select the venue's primary environment
+                    RndEnviron *venueEnv = drawVenue->GetEnv();
+                    if (!venueEnv) {
+                        for (ObjDirItr<RndEnviron> eit(drawVenue, true); eit != nullptr; ++eit) {
+                            venueEnv = &*eit;
+                            break;
+                        }
                     }
+                    if (venueEnv)
+                        venueEnv->Select(nullptr);
+
+                    // Select venue camera. CameraManager::Poll() updates this
+                    // via CamShot animation (driven by HamDirector::OnSelectCamera
+                    // → PlayNextShot). GetViewProjectXfms computes view/proj from
+                    // the engine's internal camera matrices.
+                    RndCam *venueCam = drawVenue->Find<RndCam>("world.cam", true);
+                    if (venueCam) {
+                        venueCam->Select();
+                    }
+
+                    // Draw all venue meshes
+                    for (ObjDirItr<RndMesh> it(drawVenue, true); it != nullptr; ++it) {
+                        it->DrawShowing();
+                    }
+
+                    // Restore previous environment
+                    if (savedEnv)
+                        savedEnv->Select(nullptr);
                 }
             }
         }
-
-        // Draw: matches Xbox flow — BeginDrawing → TheUI->Draw() → EndDrawing.
-        // The venue renders through world_panel (loads ../world/world.milo).
-        // HUD panels (game_panel etc.) render over the 3D scene.
-        TheRnd.BeginDrawing();
+#endif
         // TEMP: When DC3_HUD_ONLY is set, skip venue and draw only HUD
-        if (TheUI && !getenv("DC3_HUD_ONLY"))
+        if (TheUI && !getenv("DC3_HUD_ONLY") && !getenv("DC3_NO_UI"))
             TheUI->Draw();
         // Draw HUD overlay — on Xbox this is drawn as part of the game_screen
         // panel hierarchy via FileMerger. On native we draw it explicitly.
@@ -1401,10 +1450,11 @@ void App::RunWithoutDebugging() {
         if (gNativeHudDir && !getenv("DC3_NO_HUD_DRAW")) {
             RndDir *rdir = dynamic_cast<RndDir *>(gNativeHudDir);
             if (rdir) {
-                // Switch to HUD rendering: clear depth (preserve venue color),
-                // select the HUD's own 3D perspective camera (Cam.cam at y=-768).
+                // Switch to HUD rendering: flush post-processing first so the
+                // HUD draws AFTER bloom/DOF (directly to framebuffer).
+                // This prevents the HUD from being washed out by bloom.
                 TheRnd.EndWorld();
-                TheRnd.ClearDepthForOverlay();
+                gWgpuRnd->FlushPostProcessingForOverlay();
 
                 RndCam *prevCam = RndCam::Current();
                 RndCam *hudCam = gNativeHudDir->Find<RndCam>("Cam.cam", false);
@@ -1468,11 +1518,23 @@ void App::RunWithoutDebugging() {
 
                 // Fix score labels every frame — Flow system inside
                 // score.milo resets text/width/alpha continuously.
+                // Detach score slots from flow-animated parent chain and
+                // position them directly. left_score.trans/right_score.trans
+                // get rotated by flow animations each frame, moving scores
+                // off-screen. Bypassing the parent chain entirely is more
+                // reliable than fighting the flow system.
                 {
+                    // Correct world positions for score displays (from .milo defaults)
+                    static const Vector3 kScoreLeftPos(-330.0f, -143.8f, 161.6f);
+                    static const Vector3 kScoreRightPos(327.0f, -146.3f, 157.8f);
                     const char *slots[] = {"score_left", "score_right", nullptr};
-                    for (const char **sp = slots; *sp; sp++) {
-                        RndDir *slot = gNativeHudDir->Find<RndDir>(*sp, true);
+                    const Vector3 *positions[] = {&kScoreLeftPos, &kScoreRightPos};
+                    for (int si = 0; slots[si]; si++) {
+                        RndDir *slot = gNativeHudDir->Find<RndDir>(slots[si], true);
                         if (!slot) continue;
+                        // Detach from animated parent and position directly
+                        slot->SetTransParent(nullptr, false);
+                        slot->SetLocalPos(*positions[si]);
                         UILabel *scoreLbl = slot->Find<UILabel>("score2.lbl", true);
                         if (scoreLbl) {
                             scoreLbl->SetShowing(true);
@@ -1480,8 +1542,16 @@ void App::RunWithoutDebugging() {
                                 scoreLbl->SetInt(0, false);
                             if (scoreLbl->Width() < 1.0f)
                                 scoreLbl->SetWidth(200.0f);
-                            for (int sti = 0; sti < scoreLbl->NumStyles(); sti++)
+                            for (int sti = 0; sti < scoreLbl->NumStyles(); sti++) {
                                 scoreLbl->Styles()[sti].SetAlpha(1.0f);
+                                // HACK: Font size comes from DTA flow — force a visible size.
+                                if (scoreLbl->Styles()[sti].mSize < 1.0f)
+                                    scoreLbl->Styles()[sti].mSize = 40.0f;
+                            }
+                            // HACK: Re-anchor label to slot origin every frame.
+                            // SetInt triggers ConstructMeshes which resets the
+                            // mesh's transform parent chain from score.milo.
+                            scoreLbl->SetTransParent(slot, false);
                         }
                     }
                 }
