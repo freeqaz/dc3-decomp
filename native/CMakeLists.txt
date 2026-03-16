@@ -58,6 +58,12 @@ set(DC3_MSVC_COMPAT_FLAGS
     # Not needed on macOS (uses libc++, not libstdc++).
     $<$<NOT:$<PLATFORM_ID:Darwin>>:-D__GNUC_STDC_INLINE__>
     $<$<NOT:$<PLATFORM_ID:Darwin>>:-D__GCC_ATOMIC_TEST_AND_SET_TRUEVAL=1>
+    # macOS: -fms-compatibility changes __builtin_va_list from void* to char*,
+    # conflicting with the SDK's va_list typedef. Force-include <stdarg.h> so
+    # clang's definition wins first, then suppress the SDK's redefinition.
+    $<$<PLATFORM_ID:Darwin>:-include>
+    $<$<PLATFORM_ID:Darwin>:stdarg.h>
+    $<$<PLATFORM_ID:Darwin>:-D_VA_LIST_T>
 )
 # GCC 15 <atomic>/<thread>/<mutex> need __GCC_ATOMIC_*_LOCK_FREE builtins,
 # which clang drops in -fms-compatibility mode. Define them all (=2 on x86_64).
@@ -81,6 +87,7 @@ endif()
 set(DC3_DECOMP_FLAGS
     -ferror-limit=0
     -fno-omit-frame-pointer
+    "SHELL:-include ${CMAKE_SOURCE_DIR}/src/msvc_compat.h"
 )
 if(LP64_AUDIT)
     list(APPEND DC3_DECOMP_FLAGS -Wno-everything -Wpointer-to-int-cast -Wint-to-pointer-cast)
@@ -113,12 +120,19 @@ endif()
 # Platform-specific linker flags and libraries (Linux vs macOS)
 if(NOT EMSCRIPTEN)
     if(APPLE)
-        # macOS: Apple ld uses -undefined dynamic_lookup for unresolved symbols
+        # macOS: Apple ld uses -undefined dynamic_lookup for unresolved symbols.
+        # -ld_classic: use classic linker which supports -multiply_defined suppress
+        # (the decomp has intentional duplicate symbols from stub/real pairs).
         set(DC3_PLATFORM_LINK_OPTIONS
+            -Wl,-ld_classic
             -Wl,-undefined,dynamic_lookup
+            -Wl,-multiply_defined,suppress
         )
         # macOS needs ObjC++ for MetalSurface.mm
         enable_language(OBJCXX)
+        # Homebrew library/include paths (Apple Silicon default prefix)
+        include_directories(SYSTEM /opt/homebrew/include)
+        link_directories(/opt/homebrew/lib)
         set(DC3_PLATFORM_LIBS
             Threads::Threads
             dawn::webgpu_dawn
@@ -1240,6 +1254,28 @@ set_source_files_properties(
     PROPERTIES LANGUAGE C
 )
 
+# macOS: files that include macOS SDK/framework headers (ObjC++, GLFW native,
+# miniaudio) break under -fms-compatibility because the SDK's ConditionalMacros.h
+# can't identify the compiler. Disable MSVC compat for these specific files.
+if(APPLE)
+    set_source_files_properties(
+        ${CMAKE_SOURCE_DIR}/src/gfx/MetalSurface.mm
+        ${CMAKE_SOURCE_DIR}/src/gfx/GpuDevice.cpp
+        ${CMAKE_SOURCE_DIR}/src/audio/AudioDevice.cpp
+        PROPERTIES SKIP_PRECOMPILE_HEADERS ON
+                   COMPILE_OPTIONS "-fno-ms-extensions;-fno-ms-compatibility;-fno-delayed-template-parsing"
+    )
+    # tomcrypt C files: -fms-compatibility causes __sigbits from <signal.h> to
+    # emit as a non-inline global, producing duplicate symbols across TUs.
+    set_source_files_properties(
+        ${CMAKE_SOURCE_DIR}/../src/system/synth/tomcrypt/aes.c
+        ${CMAKE_SOURCE_DIR}/../src/system/synth/tomcrypt/crypt.c
+        ${CMAKE_SOURCE_DIR}/../src/system/synth/tomcrypt/ctr.c
+        PROPERTIES SKIP_PRECOMPILE_HEADERS ON
+                   COMPILE_OPTIONS "-fno-ms-extensions;-fno-ms-compatibility"
+    )
+endif()
+
 # ============================================================================
 # Standalone WebGPU window test (does not link engine — just GLFW + Dawn)
 # ============================================================================
@@ -1292,6 +1328,7 @@ target_include_directories(milo-viewer PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/../src
     ${CMAKE_SOURCE_DIR}/../src/system
+    ${CMAKE_SOURCE_DIR}/../src/system/oggvorbis  # libogg/vorbis bundled headers
     ${CMAKE_SOURCE_DIR}/../src/lazer
     ${CMAKE_SOURCE_DIR}/../include
     ${CMAKE_SOURCE_DIR}/include  # cgltf headers
@@ -1336,6 +1373,7 @@ target_include_directories(render-test PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/../src
     ${CMAKE_SOURCE_DIR}/../src/system
+    ${CMAKE_SOURCE_DIR}/../src/system/oggvorbis  # libogg/vorbis bundled headers
     ${CMAKE_SOURCE_DIR}/../src/lazer
     ${CMAKE_SOURCE_DIR}/../include
     ${CMAKE_SOURCE_DIR}/include
@@ -1365,6 +1403,7 @@ set(DC3_EXPORT_TOOL_INCLUDES
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/../src
     ${CMAKE_SOURCE_DIR}/../src/system
+    ${CMAKE_SOURCE_DIR}/../src/system/oggvorbis  # libogg/vorbis bundled headers
     ${CMAKE_SOURCE_DIR}/../src/lazer
     ${CMAKE_SOURCE_DIR}/../include
     ${CMAKE_SOURCE_DIR}/include

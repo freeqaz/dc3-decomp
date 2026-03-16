@@ -380,6 +380,9 @@ HRESULT NuiSkeletonGetNextFrame(DWORD, NUI_SKELETON_FRAME *pSkeletonFrame) {
     return 0;
 }
 
+#ifdef __APPLE__
+__attribute__((weak))
+#endif
 int ctr_decrypt(
     const unsigned char *ct, unsigned char *pt, unsigned long len, symmetric_CTR *
 ) {

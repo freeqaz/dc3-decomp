@@ -26,10 +26,18 @@
 //   gNode, gFile, gBinStream, gDataLine, gConditional, gReadFiles, gReadingFile
 // We need to define the ones that are commented out in DC3's DataFile.cpp:
 
-DataArray *gArray;
-int gOpenArray = 0; // kDataTokenFinished = 0
+// On macOS, the linker doesn't support --allow-multiple-definition,
+// so mark these as weak to let DataFile.cpp's definitions win.
+#ifdef __APPLE__
+#define WEAK_SYMBOL __attribute__((weak))
+#else
+#define WEAK_SYMBOL
+#endif
 
-bool gCachingFile;
+WEAK_SYMBOL DataArray *gArray;
+WEAK_SYMBOL int gOpenArray = 0; // kDataTokenFinished = 0
+
+WEAK_SYMBOL bool gCachingFile;
 
 // ============================================================================
 // Conditional info for #ifdef/#ifndef tracking
@@ -53,9 +61,9 @@ static std::list<ConditionalInfo> sConditional;
 // Forward declarations
 // ============================================================================
 
-static void PushBack(const DataNode &n);
+WEAK_SYMBOL void PushBack(const DataNode &n);
 static bool Defined();
-static bool ParseNode();
+WEAK_SYMBOL bool ParseNode();
 
 // Extern globals from DataFile.cpp
 extern int gNode;
@@ -69,7 +77,7 @@ extern int gDataLine;
 // We use __attribute__((used)) to ensure the linker picks this over the stub.
 // ============================================================================
 
-extern "C" int DataInput(void *v, int x) {
+extern "C" WEAK_SYMBOL int DataInput(void *v, int x) {
     if (!gBinStream) {
         return 0;
     }
@@ -87,7 +95,7 @@ extern "C" int DataInput(void *v, int x) {
 // PushBack — add a node to the current parse array
 // ============================================================================
 
-static void PushBack(const DataNode &n) {
+WEAK_SYMBOL void PushBack(const DataNode &n) {
     if (gNode == gArray->Size()) {
         if (gNode >= 0x7FFF) {
             MILO_FAIL(
@@ -118,7 +126,7 @@ static bool Defined() {
 // ParseNode — parse a single token from the lexer
 // ============================================================================
 
-static bool ParseNode() {
+WEAK_SYMBOL bool ParseNode() {
     int token = yylex();
 
     if (!Defined() && token != kDataTokenIfdef && token != kDataTokenIfndef
@@ -513,7 +521,7 @@ static bool ParseNode() {
 // ParseArray — parse a complete DTA array (top-level or nested)
 // ============================================================================
 
-DataArray *ParseArray() {
+WEAK_SYMBOL DataArray *ParseArray() {
     DataArray *sav = gArray;
     int nod = gNode;
     DataArray *da = new DataArray(16);

@@ -8,7 +8,7 @@
 
 #pragma once
 
-#ifdef HX_NATIVE
+#if defined(HX_NATIVE) && defined(__cplusplus)
 
 // std::random_shuffle was removed in C++17. libc++ enforces this.
 // The DC3 codebase uses it in several places. Provide a compat shim.

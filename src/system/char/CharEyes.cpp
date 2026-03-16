@@ -33,7 +33,7 @@ bool CharLookAt::sDisableJitter;
 
 INIT_REVS(18, 0)
 
-#ifndef __EMSCRIPTEN__
+#if !defined(__EMSCRIPTEN__) && !defined(__APPLE__)
 float pow(float base, float exp) { return std::pow(base, exp); }
 #endif
 

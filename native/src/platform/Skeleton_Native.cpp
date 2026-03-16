@@ -9,7 +9,11 @@
 #include <sys/un.h>
 #include <sys/wait.h>
 #include <poll.h>
+#ifdef __linux__
 #include <linux/limits.h>
+#else
+#include <limits.h>
+#endif
 #endif
 
 NativeSkeletonProvider *TheSkeletonProvider = nullptr;
