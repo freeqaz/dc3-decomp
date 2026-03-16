@@ -137,8 +137,6 @@ void RndMesh::DrawShowing() {
         return;
     }
 
-    IncrementMeshDrawCalls();
-
     // Get material
     RndMat* mat = Mat();
     if (!mat) {
@@ -146,6 +144,7 @@ void RndMesh::DrawShowing() {
         return;
     }
 
+    IncrementMeshDrawCalls();
     DrawMeshImmediate(this);
 }
 

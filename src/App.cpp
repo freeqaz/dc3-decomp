@@ -12,6 +12,7 @@
 #include "char/CharFaceServo.h"
 #include "char/CharLipSyncDriver.h"
 #include "char/CharEyes.h"
+#include "char/CharInterest.h"
 #include "hamobj/HamCharacter.h"
 #include "world/LightPreset.h"
 #include "world/LightPresetManager.h"
@@ -1138,6 +1139,24 @@ void App::RunWithoutDebugging() {
                             it->SetBlinking(true);
                             fprintf(stderr, "DC3 Native: Enabled blinking for '%s'\n", it->Name());
                         }
+                        // Create interest objects so characters have something to look at.
+                        // On Xbox these come from the character .milo files.
+                        // Create one "audience" interest at the front of the stage.
+                        if (eyes && eyes->NumInterests() == 0) {
+                            CharInterest *camInterest = Hmx::Object::New<CharInterest>();
+                            if (camInterest) {
+                                // Position the interest 120 inches in front of the character
+                                // at roughly audience/camera height
+                                const Vector3 &charPos = it->WorldXfm().v;
+                                Transform interestXfm;
+                                interestXfm.m.Identity();
+                                interestXfm.v.Set(charPos.x, charPos.y + 120.0f, charPos.z + 24.0f);
+                                camInterest->SetLocalXfm(interestXfm);
+                                eyes->AddInterestObject(camInterest);
+                                fprintf(stderr, "DC3 Native: Added audience interest for '%s' at (%.1f,%.1f,%.1f)\n",
+                                    it->Name(), interestXfm.v.x, interestXfm.v.y, interestXfm.v.z);
+                            }
+                        }
                     }
                 }
             }
@@ -1186,6 +1205,33 @@ void App::RunWithoutDebugging() {
                 for (ObjDirItr<RndDir> dit(hudDir, true); dit != nullptr; ++dit) {
                     if (&*dit == rdir) continue;
                     dit->SyncObjects();
+                }
+
+                // Load score.milo into score_left and score_right subdirs.
+                // On Xbox, FileMerger handles this via load_game_hud.
+                // HACK: Direct load bypasses FileMerger pipeline.
+                {
+                    FilePath scoreFp;
+                    scoreFp.Set(FilePath::Root().c_str(), "ui/hud/score.milo");
+                    const char *scoreSlots[] = {"score_left", "score_right", nullptr};
+                    for (const char **sp = scoreSlots; *sp; sp++) {
+                        RndDir *slot = hudDir->Find<RndDir>(*sp, true);
+                        if (!slot) continue;
+                        ObjectDir *scoreDir = DirLoader::LoadObjects(scoreFp, nullptr, nullptr);
+                        if (scoreDir) {
+                            ObjDirPtr<ObjectDir> scoreDirPtr(scoreDir);
+                            slot->AppendSubDir(scoreDirPtr);
+                            RndDir *rScore = dynamic_cast<RndDir*>(scoreDir);
+                            if (rScore) {
+                                rScore->SyncObjects();
+                                rScore->Enter();
+                            }
+                            slot->SyncObjects();
+                            fprintf(stderr, "DC3 Native: Loaded score.milo into '%s'\n", *sp);
+                        }
+                    }
+                    // Re-sync parent draw list to include score subdirs
+                    if (rdir) rdir->SyncObjects();
                 }
 
                 // Show everything, then selectively hide noisy elements.
@@ -1273,16 +1319,25 @@ void App::RunWithoutDebugging() {
                         artistLbl->SetShowing(true);
                     }
 
-                    // Set score labels to "0"
+                    // Set score labels — search recursively since score.milo
+                    // is appended as a subdir of score_left.
                     const char *scoreLabels[] = {"score_left", "score_right", nullptr};
                     for (const char **sp = scoreLabels; *sp; sp++) {
                         RndDir *sub = hudDir->Find<RndDir>(*sp, true);
                         if (!sub) continue;
-                        RndText *scoreLbl = sub->Find<RndText>("score2.lbl", false);
+                        RndText *scoreLbl = sub->Find<RndText>("score2.lbl", true);
                         if (scoreLbl) {
                             scoreLbl->SetText("0");
                             scoreLbl->SetShowing(true);
+                            // Fix font alpha (same issue as song labels)
+                            for (int si = 0; si < scoreLbl->NumStyles(); si++)
+                                scoreLbl->Styles()[si].SetAlpha(1.0f);
+                            fprintf(stderr, "DC3 Native: Score label '%s/%s' set to '0'\n",
+                                *sp, scoreLbl->Name());
                         }
+                        // Also show all drawables in the score subdir
+                        for (ObjDirItr<RndDrawable> dit(sub, true); dit != nullptr; ++dit)
+                            dit->SetShowing(true);
                     }
                     fprintf(stderr, "DC3 Native: HUD labels set — song='%s'\n", songName);
                 }
@@ -1396,6 +1451,30 @@ void App::RunWithoutDebugging() {
                 }
 
                 rdir->DrawShowing();
+
+                // Score subdirs loaded via AppendSubDir have IsSubDir=true,
+                // so their mDraws is empty. Draw score drawables manually.
+                // HACK: Should be integrated into parent draw list.
+                {
+                    const char *slots[] = {"score_left", "score_right", nullptr};
+                    for (const char **sp = slots; *sp; sp++) {
+                        RndDir *slot = gNativeHudDir->Find<RndDir>(*sp, true);
+                        if (!slot) continue;
+                        for (int si = 0; si < (int)slot->SubDirs().size(); si++) {
+                            ObjectDir *od = slot->SubDirs()[si];
+                            // Force-show and draw all drawables in the score subdir
+                            for (ObjDirItr<RndDrawable> dit(od, true); dit != nullptr; ++dit) {
+                                dit->SetShowing(true);
+                                dit->Draw();
+                            }
+                            // Fix score text font alpha
+                            for (ObjDirItr<RndText> tit(od, true); tit != nullptr; ++tit) {
+                                for (int sti = 0; sti < tit->NumStyles(); sti++)
+                                    tit->Styles()[sti].SetAlpha(1.0f);
+                            }
+                        }
+                    }
+                }
 
                 // Restore previous camera and environment
                 if (prevCam && prevCam != RndCam::Current()) {

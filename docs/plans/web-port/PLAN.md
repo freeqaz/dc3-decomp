@@ -487,6 +487,29 @@ Tracing is gated on `#ifdef HX_WEB` (compile-time) in key locations:
 - `UIPanel.cpp` — PollUntilLoaded entry/exit with load state
 - `HamUI.cpp` — Draw() sub-step tracing (UIManager::Draw, overlay, helpbar, etc.)
 
+### HUD Overlay Architecture (native port)
+
+The gameplay HUD loads from `ui/hud/_default_hud.milo` into `game_mode_hud` (RndDir).
+
+**Working (as of 2026-03-16):**
+- Overlay rendering via `ClearDepthForOverlay()` (clear depth, preserve venue color)
+- HUD camera selection (`Cam.cam`: pos=(0,-768,0), yFov=0.602, near=126, far=7300)
+- Song name + artist text labels (force font alpha to 1.0)
+- Move grid mesh (`grid_80by60_cube.mesh`)
+
+**Key fixes applied:**
+- Force-show ALL drawables every frame (Flow/DTA visibility control doesn't run)
+- Force `mFontColor.alpha` to 1.0 on RndText styles (DTA animates this)
+- Force RndMat alpha to 1.0 (same reason)
+- Hide debug elements: skeleton.lbl, camera.mesh, blacken, freestyle_bloom, photo
+
+**Not yet working — needs FileMerger pipeline:**
+- Score display: `score_left`/`score_right` are empty template containers. On Xbox, `FileMerger` loads additional .milo content into them via `load_game_hud` message (dispatched from `GameMode::SetGameplayMode()`). The handler is in `char_objects.dta` (lines 466-597) and selects mode-specific HUD files.
+- Flashcard dock: `flashcard_dock` PanelDir — same issue, empty template
+- Icon meshes: no materials assigned (DTA assigns at runtime)
+
+**Root cause pattern:** Most HUD content requires the DTA script + FileMerger pipeline to populate empty container subdirs with actual widgets. Without DTA running, only the template shell is available.
+
 ### Headless Chromium WebGPU Flags
 
 ```
