@@ -9,6 +9,10 @@
 #include "rndobj/Text.h"
 #include "world/Dir.h"
 #include "char/Character.h"
+#include "char/CharFaceServo.h"
+#include "char/CharLipSyncDriver.h"
+#include "char/CharEyes.h"
+#include "hamobj/HamCharacter.h"
 #include "world/LightPreset.h"
 #include "world/LightPresetManager.h"
 #include "world/CameraManager.h"
@@ -25,8 +29,11 @@
 #include "platform/TransparentQueue.h"
 #include "rndobj/BaseMaterial.h"
 #include "rndobj/Mat.h"
+#include "hamobj/HamGameData.h"
+#include "obj/DirLoader.h"
 extern GLFWwindow *gNativeWindow;
 static ObjectDir *gNativeHudDir = nullptr;
+static bool gFaceAnimInitDone = false;
 
 // ---------------------------------------------------------------------------
 // Native-only "smart stubs" for Xbox manager objects that DTA scripts reference.
@@ -1095,6 +1102,69 @@ void App::RunWithoutDebugging() {
                         xfm.m.Identity();
                     }
                 }
+                // One-time face animation init: load viseme clips, wire CharEyes,
+                // enable procedural blinking. On Xbox, FileMerger loads visemes
+                // via OnConfigureFileMerger. On native we load them directly.
+                if (!gFaceAnimInitDone) {
+                    gFaceAnimInitDone = true;
+                    for (ObjDirItr<HamCharacter> it(venueWorld, true); it != nullptr; ++it) {
+                        CharFaceServo *servo = it->Find<CharFaceServo>("face.faceservo", false);
+                        // Load viseme clips if face servo exists but has no base clip
+                        if (servo && !servo->BaseClip() && !it->Outfit().Null()) {
+                            Symbol charSym = GetOutfitCharacter(it->Outfit(), false);
+                            if (!charSym.Null()) {
+                                const char *visemePath = GetCharacterViseme(charSym, false);
+                                if (visemePath && visemePath[0]) {
+                                    FilePath fp;
+                                    fp.Set(FilePath::Root().c_str(), visemePath);
+                                    ObjectDir *visemeDir = DirLoader::LoadObjects(fp, nullptr, nullptr);
+                                    if (visemeDir) {
+                                        servo->SetClips(visemeDir);
+                                        CharLipSyncDriver *lipDrv = it->Find<CharLipSyncDriver>("face.lipdrv", false);
+                                        if (lipDrv) lipDrv->SetClips(visemeDir);
+                                        fprintf(stderr, "DC3 Native: Loaded visemes for '%s' from '%s' — base=%p\n",
+                                            it->Name(), visemePath, servo->BaseClip());
+                                    }
+                                }
+                            }
+                        }
+                        // Wire CharEyes — AddedObject doesn't fire for pre-loaded objects.
+                        // Search all Hmx::Object children for a CharEyes instance.
+                        if (!it->GetEyes()) {
+                            // Try direct Find first
+                            CharEyes *eyes = it->Find<CharEyes>("CharEyes.eyes", true);
+                            if (!eyes) {
+                                // Search recursively
+                                for (ObjDirItr<CharEyes> eit(&*it, true); eit != nullptr; ++eit) {
+                                    eyes = &*eit;
+                                    break;
+                                }
+                            }
+                            if (!eyes) {
+                                // Search venueWorld for CharEyes matching this character
+                                for (ObjDirItr<CharEyes> eit(venueWorld, true); eit != nullptr; ++eit) {
+                                    if (eit->Dir() == &*it || eit->Dir()->Dir() == &*it) {
+                                        eyes = &*eit;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (eyes) {
+                                it->SetEyes(eyes);
+                                if (servo) eyes->SetFaceServo(servo);
+                                fprintf(stderr, "DC3 Native: Wired CharEyes '%s' for '%s'\n",
+                                    eyes->Name(), it->Name());
+                            } else {
+                                fprintf(stderr, "DC3 Native: No CharEyes found for '%s'\n", it->Name());
+                            }
+                        }
+                        // Enable blinking if we have viseme clips now
+                        if (servo && servo->BaseClip()) {
+                            it->SetBlinking(true);
+                            fprintf(stderr, "DC3 Native: Enabled blinking for '%s'\n", it->Name());
+                        }
+                    }
+                }
             }
         }
 
@@ -1302,24 +1372,23 @@ void App::RunWithoutDebugging() {
                 RndEnviron *hudEnv = gNativeHudDir->Find<RndEnviron>("static_hud.env", true);
                 if (hudEnv) hudEnv->Select(nullptr);
 
-                // Force-show key labels every frame — DTA flows reset
-                // showing state, so we must re-apply before each draw.
-                static const char *forceShowLabels[] = {
-                    "song_name.lbl", "song_artist.lbl", nullptr
-                };
-                for (const char **lp = forceShowLabels; *lp; lp++) {
-                    RndText *lbl = gNativeHudDir->Find<RndText>(*lp, true);
-                    if (lbl) lbl->SetShowing(true);
-                }
-                // Force-show score labels in subdirs
-                static const char *scoreDirs[] = {"score_left", "score_right", nullptr};
-                for (const char **sp = scoreDirs; *sp; sp++) {
-                    RndDir *sub = gNativeHudDir->Find<RndDir>(*sp, true);
-                    if (sub) {
-                        sub->SetShowing(true);
-                        for (ObjDirItr<RndDrawable> dit(sub, true); dit != nullptr; ++dit)
-                            dit->SetShowing(true);
+                // Force-show ALL drawables every frame — the Flow/DTA
+                // animation system normally controls visibility, but it
+                // doesn't run on native. Without this, everything stays
+                // at showing=0 and DrawShowing() draws nothing.
+                // HACK: Skip elements that shouldn't show without gameplay.
+                for (ObjDirItr<RndDrawable> drawIt(gNativeHudDir, true); drawIt != nullptr; ++drawIt) {
+                    const char *n = drawIt->Name();
+                    // Explicitly hide elements that shouldn't show without gameplay
+                    if (strcmp(n, "blacken.mesh") == 0 ||
+                        strcmp(n, "freestyle_bloom") == 0 ||
+                        strcmp(n, "skeleton.lbl") == 0 ||
+                        strcmp(n, "camera.mesh") == 0 ||
+                        strstr(n, "photo")) {
+                        drawIt->SetShowing(false);
+                        continue;
                     }
+                    drawIt->SetShowing(true);
                 }
 
                 // Force HUD material alpha to 1.0 — DTA flow animations that
@@ -1328,6 +1397,27 @@ void App::RunWithoutDebugging() {
                 for (ObjDirItr<RndMat> matIt(gNativeHudDir, true); matIt != nullptr; ++matIt) {
                     if (matIt->Alpha() < 0.01f)
                         matIt->SetAlpha(1.0f);
+                }
+
+                // Force text font color alpha to 1.0 — DTA flows normally
+                // animate mFontColor.alpha for text labels, but without flows
+                // running, labels like song_name.lbl stay at fontAlpha=0.
+                for (ObjDirItr<RndText> tit(gNativeHudDir, true); tit != nullptr; ++tit) {
+                    for (int si = 0; si < tit->NumStyles(); si++) {
+                        if (tit->Styles()[si].GetAlpha() < 0.01f)
+                            tit->Styles()[si].SetAlpha(1.0f);
+                    }
+                }
+
+                // Update HUD text labels every frame — song data may
+                // not be available when HUD first loads.
+                {
+                    RndText *songLbl = gNativeHudDir->Find<RndText>("song_name.lbl", true);
+                    if (songLbl && songLbl->GetText().length() == 0) {
+                        const char *song = TheGameData ? TheGameData->GetSong().Str() : "";
+                        if (song[0]) songLbl->SetText(song);
+                        else songLbl->SetText("BOYFRIEND");
+                    }
                 }
 
                 rdir->DrawShowing();
