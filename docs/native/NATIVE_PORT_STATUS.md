@@ -1,6 +1,6 @@
 # Native Port Progress (x86_64 Linux)
 
-## Current Status: Session 75 - Phase 8 Polish (White Rectangle Elimination + 6-Venue Gameplay)
+## Current Status: Session 76 - Song/Venue Stability (21/21 Combinations Stable)
 **Goal**: Full visual quality — post-processing, lighting, particles, flares, lines all working
 
 ### Sessions Complete
@@ -38,6 +38,7 @@
 - **Session 71**: **Venue rendering fix + CameraManager-driven camera.** Root-caused "black venue" bug: BC3 compressed textures used as render-to-texture targets lacked `RenderAttachment` usage, invalidating the ENTIRE WebGPU command buffer for every gameplay frame. Fix: detect non-renderable textures in `EnsureRenderTargetData` and replace with proper RGBA targets. Replaced hard-coded orbit camera with engine's CameraManager animation — `HamDirector::OnSelectCamera` → `PlayNextShot()` → `CameraManager::ForceCameraShot()` → `CamShot::SetFrame()` drives proper cinematic camera angles. Both dclive (outdoor concert) and glitterati (nightclub) venues render correctly with animated cameras, characters, HUD, and post-processing.
 - **Session 72**: **DrawPreClear pipeline + HUD overlay + choreo crash fix.** Three major rendering pipeline additions: (1) `DrawPreClear()` — iterates `mPreClearDraws` list to execute render-to-texture passes (TexRenderer, TexMovie) before the main scene. TexRenderer now renders Group.grp → keep_me.tex (640x480) via render_cam.cam. (2) `FlushPostProcessingForOverlay()` — ends venue render pass, runs post-processing (bloom/contrast/etc), starts new HUD overlay pass drawing directly to framebuffer (HUD bypasses post-proc). (3) SuperEasyRemixer crash fix — move graph fails to load on native → `MILO_FAIL` is non-fatal → `mTotalMeasures` uninitialized → `vector::reserve(garbage)` → `std::length_error`. Added `#ifdef HX_NATIVE return` guards. Also hid 30 Kinect-dependent venue meshes (TV screens, projectors, textureless white panels) that appeared as white rectangles without camera feed. Draw calls during gameplay: 1094/frame.
 - **Session 75**: **White rectangle elimination + 6-venue gameplay stability.** Eliminated all white rectangle artifacts across all venues: (1) Fixed WebGPU BGL mismatch — particle pipeline reuses main renderer's SceneBGL instead of creating mismatched 1-binding layout. (2) DrawRect2D bind group restore — after 2D rect drawing, restore scene bind group at slot 0 to prevent subsequent mesh draw validation failures. (3) Hide kBlendDest meshes (refraction/reflection without framebuffer feedback), render-target textures (empty File() = Kinect projections), and TexRenderers in both venue init and per-frame paths. (4) Skip TheUI->Draw() during game_screen — game panels (flashcard_dock, bustamove, fitness_hud) have white background meshes. (5) HUD whitelist — hide all drawables, show only song_name/artist labels. (6) RockCentral::ManageJob crash fix — SendDropInDatapoint calls null-on-native Xbox Live analytics. (7) MoveGraph deserialization crash fix — CacheLinks interprets Xbox serialized pointers as native pointers. All 6 venues tested stable: glitterati (416), dclive (2011), rollerrink (1404), houseparty (898), streetside (1048), throneroom (1063) draw calls/frame.
+- **Session 76**: **Song validation + cross-venue stability sweep.** Fixed SongMetadata::IsOnDisc() null crash for DLC songs (gangnamstyle/toxic) — root cause: songs not present in on-disc database have no SongAudioData. Added HasSong() validation at setup time in App.cpp instead of hacking around null audio data. Added defensive null guards in Game::LoadSong/LoadNewSongAudio. Enabled MoveGraph loading with graceful fallback when move_data missing on native. Force billboard crowd rendering (Force3DCrowd=false) since 3D character RTT pipeline isn't available. Loaded shared world components (phrase_meter.milo). **21/21 venue×song combinations tested stable** (7 venues × 3 songs, zero crashes). 30+ on-disc songs validated.
 
 ### Completed Phases
 - **Phase 0**: Foundation — COMPLETE
@@ -47,7 +48,7 @@
 - **Phase 2**: Rendering — **COMPLETE** (272 draw calls/frame during gameplay, full material pipeline)
 - **Phase 3**: Audio — **COMPLETE** (real-time MOGG playback via FFmpeg/Vorbis/miniaudio)
 - **Phase 4**: Input — COMPLETE (Joypad_Native + Keyboard_Native + 19 tests)
-- **Phase 6**: Polish — **IN PROGRESS** (~75% — post-processing, flares, particles, lines, venue rendering, camera animation, DrawPreClear/RTT, HUD overlay, white rectangle elimination, 6-venue gameplay stability)
+- **Phase 6**: Polish — **IN PROGRESS** (~80% — post-processing, flares, particles, lines, venue rendering, camera animation, DrawPreClear/RTT, HUD overlay, white rectangle elimination, 7-venue × 30+ song stability)
 
 ### Current Boot Progress
 Engine boots, navigates full menu flow, loads a song, and renders full gameplay with audio:
