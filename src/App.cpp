@@ -1127,7 +1127,19 @@ void App::RunWithoutDebugging() {
                         it->SetShowing(true);
                     }
                 }
-                fprintf(stderr, "DC3 Native: HUD initialized with force-show on meshes/labels\n");
+                // Try to activate HUD state flows for proper initialization
+                static const char *flowNames[] = {
+                    "reset_common.flow", "hud_state.flow", nullptr
+                };
+                for (const char **fn = flowNames; *fn; fn++) {
+                    Hmx::Object *flow = hudDir->FindObject(*fn, true, false);
+                    if (flow) {
+                        static Message activateMsg("activate");
+                        flow->Handle(activateMsg, true);
+                        fprintf(stderr, "  HUD: activated '%s'\n", *fn);
+                    }
+                }
+                fprintf(stderr, "DC3 Native: HUD initialized\n");
             } else {
                 fprintf(stderr, "DC3 Native: Failed to load HUD from '%s'\n", hudFp.c_str());
             }
