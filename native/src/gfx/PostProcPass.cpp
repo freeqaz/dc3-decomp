@@ -4,6 +4,7 @@
 #include "rndobj/ColorXfm.h"
 
 #include <cstring>
+#include <cstdlib>
 
 struct PostProcUniforms {
     float contrast;
@@ -20,12 +21,16 @@ struct PostProcUniforms {
     float levelOutLo[4];
     float levelOutHi[4];
     float bloomIntensity;
+    float noiseIntensity;
+    float noiseMidtone;
+    float flickerMul;
+    float bloomColor[4];
+    float time;
     float _pad0;
     float _pad1;
     float _pad2;
-    float bloomColor[4];
 };
-static_assert(sizeof(PostProcUniforms) == 144, "PostProcUniforms must be 144 bytes");
+static_assert(sizeof(PostProcUniforms) == 160, "PostProcUniforms must be 160 bytes");
 
 static const char* kPostProcShaderSource = R"WGSL(
 struct PostProcUB {
@@ -43,10 +48,14 @@ struct PostProcUB {
     levelOutLo: vec4f,
     levelOutHi: vec4f,
     bloomIntensity: f32,
+    noiseIntensity: f32,
+    noiseMidtone: f32,
+    flickerMul: f32,
+    bloomColor: vec4f,
+    time: f32,
     _pad0: f32,
     _pad1: f32,
     _pad2: f32,
-    bloomColor: vec4f,
 };
 
 @group(0) @binding(0) var sceneTex: texture_2d<f32>;
@@ -122,6 +131,26 @@ struct VOut {
         let dist = length(center) * 1.414;
         let vig = 1.0 - smoothstep(0.4, 1.0, dist) * pp.vignetteIntensity;
         color = mix(pp.vignetteColor.rgb, color, vig);
+    }
+
+    // Flicker: time-based brightness modulation
+    if (pp.flickerMul != 1.0) {
+        color = color * pp.flickerMul;
+    }
+
+    // Noise/grain: procedural hash-based noise overlay
+    if (pp.noiseIntensity != 0.0) {
+        let px = in.uv * vec2f(textureDimensions(sceneTex));
+        let n1 = fract(sin(dot(px + pp.time * 43.17, vec2f(12.9898, 78.233))) * 43758.5453);
+        let noise = (n1 - 0.5) * pp.noiseIntensity;
+        if (pp.noiseMidtone > 0.5) {
+            // Overlay blend: noise affects midtones more than highlights/shadows
+            let luma = dot(color, vec3f(0.2126, 0.7152, 0.0722));
+            let midtoneMask = 4.0 * luma * (1.0 - luma);
+            color = color + noise * midtoneMask;
+        } else {
+            color = color + noise;
+        }
     }
 
     if (pp.bloomIntensity > 0.0) {
@@ -256,6 +285,40 @@ void PostProcPass::Run(wgpu::CommandEncoder& encoder, wgpu::TextureView& interme
     uni.bloomColor[1] = bc.green;
     uni.bloomColor[2] = bc.blue;
     uni.bloomColor[3] = 1.0f;
+
+    // Time tracking for noise animation
+    auto now = std::chrono::steady_clock::now();
+    if (!mTimeInit) { mLastTime = now; mTimeInit = true; }
+    float dt = std::chrono::duration<float>(now - mLastTime).count();
+    mLastTime = now;
+    static float sTime = 0.0f;
+    sTime += dt;
+    uni.time = sTime;
+
+    // Noise/grain
+    uni.noiseIntensity = pp->GetNoiseIntensity();
+    uni.noiseMidtone = pp->GetNoiseMidtone() ? 1.0f : 0.0f;
+
+    // Flicker: random brightness modulation between bounds over time
+    const Vector2& flickerMod = pp->GetFlickerModBounds();
+    const Vector2& flickerTime = pp->GetFlickerTimeBounds();
+    if (flickerMod.x > 0.0f || flickerMod.y < 1.0f) {
+        mFlickerTimer -= dt;
+        if (mFlickerTimer <= 0.0f) {
+            // Pick new random target and duration
+            float t = (float)rand() / (float)RAND_MAX;
+            mFlickerTarget = flickerMod.x + t * (flickerMod.y - flickerMod.x);
+            float dur = flickerTime.x + ((float)rand() / (float)RAND_MAX) * (flickerTime.y - flickerTime.x);
+            mFlickerTimer = dur > 0.0f ? dur : 0.1f;
+        }
+        // Lerp toward target
+        float rate = dt * 10.0f;
+        if (rate > 1.0f) rate = 1.0f;
+        mFlickerCurrent += (mFlickerTarget - mFlickerCurrent) * rate;
+        uni.flickerMul = mFlickerCurrent;
+    } else {
+        uni.flickerMul = 1.0f;
+    }
 
     gpu.Queue().WriteBuffer(mPostProcUniformBuffer, 0, &uni, sizeof(uni));
 

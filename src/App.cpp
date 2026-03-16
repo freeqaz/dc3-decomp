@@ -1453,25 +1453,24 @@ void App::RunWithoutDebugging() {
                 rdir->DrawShowing();
 
                 // Score subdirs loaded via AppendSubDir have IsSubDir=true,
-                // so their mDraws is empty. Draw score drawables manually.
+                // so their mDraws is empty. Draw score labels manually.
                 // HACK: Should be integrated into parent draw list.
                 {
                     const char *slots[] = {"score_left", "score_right", nullptr};
                     for (const char **sp = slots; *sp; sp++) {
                         RndDir *slot = gNativeHudDir->Find<RndDir>(*sp, true);
                         if (!slot) continue;
-                        for (int si = 0; si < (int)slot->SubDirs().size(); si++) {
-                            ObjectDir *od = slot->SubDirs()[si];
-                            // Force-show and draw all drawables in the score subdir
-                            for (ObjDirItr<RndDrawable> dit(od, true); dit != nullptr; ++dit) {
-                                dit->SetShowing(true);
-                                dit->Draw();
-                            }
-                            // Fix score text font alpha
-                            for (ObjDirItr<RndText> tit(od, true); tit != nullptr; ++tit) {
-                                for (int sti = 0; sti < tit->NumStyles(); sti++)
-                                    tit->Styles()[sti].SetAlpha(1.0f);
-                            }
+                        RndText *scoreLbl = slot->Find<RndText>("score2.lbl", true);
+                        if (scoreLbl) {
+                            scoreLbl->SetShowing(true);
+                            scoreLbl->SetText("0");
+                            // HACK: score2.lbl has width=0 which prevents mesh
+                            // generation. Set a reasonable width for score display.
+                            if (scoreLbl->Width() < 1.0f)
+                                scoreLbl->SetWidth(200.0f);
+                            for (int sti = 0; sti < scoreLbl->NumStyles(); sti++)
+                                scoreLbl->Styles()[sti].SetAlpha(1.0f);
+                            scoreLbl->DrawShowing();
                         }
                     }
                 }

@@ -2,6 +2,7 @@
 #include "gfx/BloomPass.h"
 #include "gfx/DofPass.h"
 #include <webgpu/webgpu_cpp.h>
+#include <chrono>
 
 class GpuDevice;
 
@@ -30,4 +31,11 @@ private:
     wgpu::Buffer mPostProcUniformBuffer;
     wgpu::Sampler mDefaultSampler;
     bool mPostProcReady = false;
+
+    // Flicker state
+    float mFlickerTarget = 1.0f;
+    float mFlickerCurrent = 1.0f;
+    float mFlickerTimer = 0.0f;
+    std::chrono::steady_clock::time_point mLastTime{};
+    bool mTimeInit = false;
 };
