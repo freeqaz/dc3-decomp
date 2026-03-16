@@ -37,6 +37,8 @@
 #include "game/HamUserMgr.h"
 #include "hamobj/Ham.h"
 #include "hamobj/HamGameData.h"
+#include "hamobj/MoveMgr.h"
+#include "hamobj/MiniGameMgr.h"
 #include "meta_ham/HamSongMgr.h"
 #include "meta_ham/MetaPanel.h"
 #include "meta_ham/HamUI.h"
@@ -212,13 +214,11 @@ static void mainLoop() {
         printf("DC3 Web: GameInit()...\n");
         GameInit();
 
-        // DTA scripts reference "movemgr" — register a lightweight stub.
-        // Full MoveMgr::Init() is too heavy (creates SuperEasyRemixer, SongLayout,
-        // loads category.dta) and can hang if factories aren't ready yet.
-        {
-            Hmx::Object *moveMgrStub = Hmx::Object::NewObject("Object");
-            moveMgrStub->SetName("movemgr", ObjectDir::Main());
-        }
+        // MoveMgr — real init (creates SuperEasyRemixer, SongLayout, loads category.dta).
+        // Must be after HamInit() which registers the SongLayout factory.
+        printf("DC3 Web: MoveMgr::Init()...\n");
+        MoveMgr::Init(0);
+        MiniGameMgr::Init();
 
         // UI system — use the global TheHamUI (game-specific UIManager subclass)
         printf("DC3 Web: TheHamUI.Init()...\n");

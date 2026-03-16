@@ -357,6 +357,12 @@ App::App(int argc, char **argv) {
         registerStub("speech_mgr", new Hmx::Object());
     }
 
+    // Move manager — required for gameplay HUD. DTA scripts reference {movemgr ...}
+    // to query move data, char clips, and routine info during game_screen.
+    // Must be after SystemConfig is fully loaded (SuperEasyRemixer ctor reads config).
+    MoveMgr::Init(0);
+    MiniGameMgr::Init();
+
     // Go to first screen (title screen)
     TheUI->GotoFirstScreen();
 #else
