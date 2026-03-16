@@ -59,6 +59,9 @@ public:
     virtual void Exit();
     // Character
     virtual CharEyes *GetEyes() { return mEyes; }
+#ifdef HX_NATIVE
+    void SetEyes(CharEyes *eyes) { mEyes = eyes; }
+#endif
 
     OBJ_MEM_OVERLOAD(0x19)
     NEW_OBJ(HamCharacter)

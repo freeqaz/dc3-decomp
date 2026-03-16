@@ -165,25 +165,29 @@ iterates drawables, while the engine uses `WorldDir::DrawShowing()` → `RndGrou
 | Task | Status | Notes |
 |------|--------|-------|
 | DC3 logo on main menu | **DONE** | Session 71: MetaMaterials loading enabled on native. `shell_basic.mmat` resolves correctly. 198 warnings → 0. |
-| Score display wiring | PARTIAL | HUD draw pipeline works (skeleton.lbl visible). Score labels positioned in HUD's 3D camera space but DTA flows reset visibility. Per-frame force-show applied. |
+| Score display wiring | **DONE** | Song name + artist visible in HUD (per-frame force-show + alpha fix). Score labels set to "0". |
 | HUD rendering pipeline | **DONE** | Loads _default_hud.milo, SyncObjects, Enter, 49 draws per frame. ClearDepthForOverlay for proper 2D overlay. Uses HUD's Cam.cam (3D perspective at y=-768) and static_hud.env. |
 
 #### Medium Effort
 | Task | Status | Notes |
 |------|--------|-------|
-| Move card UI content | BLOCKED | Needs MoveMgr::Init() on native — `movemgr not function or object` errors every frame. DTA flow animations require move graph data. |
+| Move card UI content | PARTIAL | MoveMgr initialized on native (no more "not function or object" errors). Choreography pipeline guarded for missing Kinect data. Move graph data not loaded (no gesture detection). |
 | WorldCrowd rendering | **DONE** | 3D crowd characters visible on dclive venue. 5 crowd character types, 30+ instances placed via placement mesh. Key fix: SetFullness was capping m3DChars to empty instance list after Set3DCharAll transferred them. See [PHASE_C_WORLDCROWD.md](PHASE_C_WORLDCROWD.md) |
 
 **Session 71 — MetaMaterials + GCC 15 compat**: Removed `#ifdef HX_NATIVE` guard in `RndMat::Init()` that disabled `LoadMetaMaterials()` on native. `sMetaMaterials` now loads `metamaterials.milo` and all shared MatAnim objects (`shell_basic.mmat` etc.) resolve correctly. Fixed GCC 15 compat: `std::random_shuffle` and `std::mem_fun` restored in libstdc++ 15 — guarded compat shims with `_GLIBCXX_RELEASE < 15`.
 
 **Session 74 — WorldCrowd + HUD**: WorldCrowd 3D crowd rendering working on dclive (733 draw calls/frame). HUD rendering pipeline fully wired — loads milo, SyncObjects, Enter, 49 draws with ClearDepthForOverlay. skeleton.lbl visible confirming draw pipeline works. Song name/score labels positioned in HUD 3D camera space (Cam.cam at y=-768), need coordinate/orientation fix. Multiple venues verified: dclive (crowd), glitterati (no crowd). Key bugs fixed: SetFullness erasing m3DChars, DumpSongLayout crash on empty vectors, ChunkStream seek corruption.
 
+**Session 75 — HUD camera fix + MoveMgr + venue sweep**: Fixed HUD camera to use Cam.cam (y=-768 perspective) instead of venue camera — labels now project correctly onto screen. Added MoveMgr::Init(0) + MiniGameMgr::Init() to native init — eliminates "movemgr not function or object" DTA errors. Guarded choreography pipeline (OriginalChoreoRemixer, DanceRemixer, MoveAsyncDetector) against missing Kinect data. Verified 6 venues: dclive, glitterati, houseparty, rollerrink, bid, dci — all rendering with HUD overlay. 827 draw calls/frame on dclive with HUD.
+
+**Session 76 — Facial animation + HUD text**: Loaded per-character viseme .milo files on native (bypasses FileMerger which doesn't fire). CharFaceServo now has Base clip + Blink clips for all 4 game characters (player0/1, backup0/1). Procedural blinking enabled via CharEyes → CharFaceServo pipeline. HUD song name ("YMCA") and artist ("Village People") labels now visible with per-frame alpha force. 2047 draw calls/frame on dclive with full face animation.
+
 #### Cosmetic / Low Priority
 | Task | Status | Notes |
 |------|--------|-------|
-| Lip sync | TODO | CharFaceServo, CharLipSyncDriver |
-| Procedural blinking | TODO | CharFaceServo cosmetic |
-| CharEyes gaze direction | TODO | Cosmetic |
+| Facial animation base | **DONE** | Viseme .milo loaded per-character, CharFaceServo base clip wired, procedural blinking enabled via CharEyes. |
+| Lip sync | TODO | Needs .lipsync files from ark loaded + OnSoundPlay handler triggering |
+| CharEyes gaze/darts | PARTIAL | CharEyes polled, face servo wired. Interest objects not loaded (needs venue CharInterest). |
 | Projected light textures | TODO | Gobo/spotlight cookies |
 | Exotic post-processing | TODO | Gradient map, kaleidoscope, flicker, noise, video feedback |
 | Performance optimization | TODO | Draw call batching, culling, profiling |

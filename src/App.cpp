@@ -1128,35 +1128,10 @@ void App::RunWithoutDebugging() {
                                 }
                             }
                         }
-                        // Wire CharEyes — AddedObject doesn't fire for pre-loaded objects.
-                        // Search all Hmx::Object children for a CharEyes instance.
-                        if (!it->GetEyes()) {
-                            // Try direct Find first
-                            CharEyes *eyes = it->Find<CharEyes>("CharEyes.eyes", true);
-                            if (!eyes) {
-                                // Search recursively
-                                for (ObjDirItr<CharEyes> eit(&*it, true); eit != nullptr; ++eit) {
-                                    eyes = &*eit;
-                                    break;
-                                }
-                            }
-                            if (!eyes) {
-                                // Search venueWorld for CharEyes matching this character
-                                for (ObjDirItr<CharEyes> eit(venueWorld, true); eit != nullptr; ++eit) {
-                                    if (eit->Dir() == &*it || eit->Dir()->Dir() == &*it) {
-                                        eyes = &*eit;
-                                        break;
-                                    }
-                                }
-                            }
-                            if (eyes) {
-                                it->SetEyes(eyes);
-                                if (servo) eyes->SetFaceServo(servo);
-                                fprintf(stderr, "DC3 Native: Wired CharEyes '%s' for '%s'\n",
-                                    eyes->Name(), it->Name());
-                            } else {
-                                fprintf(stderr, "DC3 Native: No CharEyes found for '%s'\n", it->Name());
-                            }
+                        // Ensure CharEyes has reference to face servo for procedural blinking
+                        CharEyes *eyes = it->GetEyes();
+                        if (eyes && servo) {
+                            eyes->SetFaceServo(servo);
                         }
                         // Enable blinking if we have viseme clips now
                         if (servo && servo->BaseClip()) {
