@@ -1,6 +1,6 @@
 # DC3 Native Port — Status
 
-**Last updated**: 2026-03-14
+**Last updated**: 2026-03-16
 
 ## Current State
 
@@ -42,7 +42,7 @@ and platform support.
 - Full menu flow: attract → main_screen → choose_mode → song_select → multiuser → loading → **game_screen**
 - 10000 frames stable on game_screen, clean exit
 - DCI venue rendering: 505 draw calls/frame (floor, walls, DJ booth, fully-lit character, HUD overlays)
-- **game_screen gameplay**: 272 draw calls/frame — venue rendering, camera cuts (34 shot keys/song), character dance animation via song.anim ClipPlayer, real-time MOGG audio playback
+- **game_screen gameplay**: 733 draw calls/frame — venue rendering, camera cuts (34 shot keys/song), character dance animation via song.anim ClipPlayer, real-time MOGG audio playback, **WorldCrowd 3D characters** (5 crowd types × 6+ instances on dclive)
 - **Camera cuts working**: song.anim PropKeys "shot" → SetShot → FindNextShot → ForceCameraShot cycles through Area1_WIDE/NEAR/MOVEMENT/CLOSEUP
 - **Character animation on main menu**: outfit loading via FileMerger, CharDriver clip playback, GPU-skinned bone animation
 - Audio pipeline complete (FFmpeg, Vorbis, miniaudio, DSP effects, real-time MOGG decode)
@@ -171,7 +171,7 @@ iterates drawables, while the engine uses `WorldDir::DrawShowing()` → `RndGrou
 | Task | Status | Notes |
 |------|--------|-------|
 | Move card UI content | TODO | HUD panels active but content invisible. TexMovie pipeline implemented — needs asset/data flow tracing for game_panel. |
-| WorldCrowd rendering | PARTIAL | Factory enabled, null guards prevent crashes. Verified on dclive venue (no crashes). Crowd not visible yet — PlayCrowdAnimation returns early, clip subdirs not fully loaded. See [PHASE_C_WORLDCROWD.md](PHASE_C_WORLDCROWD.md) |
+| WorldCrowd rendering | **DONE** | 3D crowd characters visible on dclive venue. 5 crowd character types, 30+ instances placed via placement mesh. Key fix: SetFullness was capping m3DChars to empty instance list after Set3DCharAll transferred them. See [PHASE_C_WORLDCROWD.md](PHASE_C_WORLDCROWD.md) |
 
 **Session 71 — MetaMaterials + GCC 15 compat**: Removed `#ifdef HX_NATIVE` guard in `RndMat::Init()` that disabled `LoadMetaMaterials()` on native. `sMetaMaterials` now loads `metamaterials.milo` and all shared MatAnim objects (`shell_basic.mmat` etc.) resolve correctly. Fixed GCC 15 compat: `std::random_shuffle` and `std::mem_fun` restored in libstdc++ 15 — guarded compat shims with `_GLIBCXX_RELEASE < 15`.
 
