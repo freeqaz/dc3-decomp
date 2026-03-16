@@ -296,6 +296,13 @@ void MoveMgr::LoadMoveData(ObjectDir *dir) {
         mMoveDataDir = dir;
         if (dir) {
             MoveGraph *dirGraph = dir->Find<MoveGraph>("move_graph", true);
+#ifdef HX_NATIVE
+            if (!dirGraph) {
+                MILO_LOG("MoveMgr::LoadMoveData - move_graph not found in dir '%s'\n",
+                    dir->Name());
+                return;
+            }
+#endif
             mMoveGraph.Copy(dirGraph, kCopyDeep);
             LoadSubCategoryData();
         } else {

@@ -351,18 +351,6 @@ void Game::SetMusicVolume(float vol) {
 void Game::Poll() {
     static float sLastBeat;
 
-#ifdef HX_NATIVE
-    {
-        static int sPollTrace = 0;
-        if (sPollTrace < 20 || (sPollTrace % 300 == 0 && sPollTrace < 3000)) {
-            fprintf(stderr, "Game::Poll #%d: waitState=%d paused=%d realTime=%d loaded=%d measure=%d beat=%.1f\n",
-                sPollTrace, mWaitState, (int)mPaused, (int)mRealTime, (int)IsLoaded(),
-                TheTaskMgr.CurrentMeasure(), TheTaskMgr.TotalBeat());
-        }
-        sPollTrace++;
-    }
-#endif
-
     if (!HandleWait()) {
         if (!TheSongSequence.Done()) {
             float songMs = mGameInput->CurrentMs(mRealTime);

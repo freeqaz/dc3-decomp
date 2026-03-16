@@ -592,14 +592,11 @@ void GamePanel::StartGame() {
         // Step 2: Set up song animations from merged data
         TheHamDirector->SetupAnims();
 
-        // Step 2b: Populate move graph — loads song move data and generates routines.
-        // On Xbox this is triggered by DTA "populate_movemgr" message.
-        if (TheMoveMgr) {
-            static Message populateMsg("populate_movemgr");
-            TheHamDirector->Handle(populateMsg, true);
-            MILO_LOG("Native: MoveMgr populated — %d move parents\n",
-                (int)TheMoveMgr->MoveParents().size());
-        }
+        // Note: Move graph population (OnPopulateMoveMgr) requires song-specific
+        // move_data.milo_xbox deserialization which crashes due to MoveGraph::CacheLinks
+        // interpreting serialized Xbox pointers as native pointers. Until the MoveGraph
+        // loader is fixed for native, autoplay and scoring won't advance.
+        // TODO: Fix MoveGraph deserialization for native (see TODO.md Phase 8.4)
 
         TheHamDirector->SetPollEnabled(true);
 
