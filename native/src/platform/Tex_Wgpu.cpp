@@ -47,7 +47,9 @@ static GpuTexData* EnsureRenderTargetData(RndTex* tex) {
     if (!tex->IsRenderTarget() || tex->Width() <= 0 || tex->Height() <= 0) return nullptr;
 
     GpuTexData& data = sTexGpuData[tex];
-    bool needColor = !data.texture || !data.view;
+    // If the existing texture was uploaded as BC compressed (from PresyncBitmap),
+    // it lacks RenderAttachment usage and must be replaced with a proper RGBA target.
+    bool needColor = !data.texture || !data.view || (data.texture && !data.renderTarget);
     bool needDepth = NeedsDepthTarget(tex) && (!data.depthTexture || !data.depthView);
     if (needColor) {
         data.texture = TextureConvert::CreateRenderTarget(
@@ -151,7 +153,10 @@ void RndTex::PresyncBitmap() {
         return;
     }
     const uint8_t* curPixels = mBitmap.Pixels();
-    if (!curPixels) { sPresyncNoPixels++; return; }
+    if (!curPixels) {
+        sPresyncNoPixels++;
+        return;
+    }
 
     // Check if already uploaded AND bitmap data hasn't changed.
     // Font textures may be uploaded before their data is loaded from
