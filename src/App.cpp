@@ -6,6 +6,7 @@
 #include "ui/UIPanel.h"
 #include "ui/PanelDir.h"
 #include "rndobj/Dir.h"
+#include "rndobj/Text.h"
 #include "world/Dir.h"
 #include "char/Character.h"
 #include "world/LightPreset.h"
@@ -1105,45 +1106,118 @@ void App::RunWithoutDebugging() {
 
                 RndDir *rdir = dynamic_cast<RndDir *>(hudDir);
                 if (rdir) {
-                    // Ensure draw/poll lists are populated from loaded objects
                     rdir->SyncObjects();
-                    fprintf(stderr, "DC3 Native: HUD SyncObjects done — %d draws\n",
-                           rdir->NumDraws());
                     rdir->Enter();
-                    fprintf(stderr, "DC3 Native: HUD Enter() called — %d draws\n",
+                    fprintf(stderr, "DC3 Native: HUD Enter() — %d draws\n",
                            rdir->NumDraws());
                 }
 
-                // Force-show ALL drawables except blackouts/postproc.
-                // On Xbox, DTA flows control visibility; we bypass that.
-                // HACK: Full HUD needs MoveMgr::Init() working on native.
-                int showCount = 0;
-                for (ObjDirItr<RndDrawable> it(hudDir, true); it != nullptr; ++it) {
-                    const char *name = it->Name();
-                    // Skip full-screen overlays that obscure the venue
-                    if (strcmp(name, "blacken.mesh") == 0
-                        || strcmp(name, "PostProcer") == 0
-                        || strcmp(name, "camera.mesh") == 0
-                        || strcmp(name, "freestyle_bloom") == 0) {
-                        it->SetShowing(false);
-                        continue;
-                    }
-                    it->SetShowing(true);
-                    showCount++;
-                }
-                fprintf(stderr, "DC3 Native: HUD force-showed %d drawables\n", showCount);
-
-                // Also force-show inside sub-RndDirs (score_left, score_right, etc.)
-                // and sync their draw lists
+                // Sync sub-RndDir draw lists (score_left, score_right, etc.)
                 for (ObjDirItr<RndDir> dit(hudDir, true); dit != nullptr; ++dit) {
-                    if (&*dit == rdir) continue; // skip root
+                    if (&*dit == rdir) continue;
                     dit->SyncObjects();
-                    int subDraws = dit->NumDraws();
-                    if (subDraws > 0) {
-                        fprintf(stderr, "  HUD subdir '%s' — %d draws\n",
-                               dit->Name(), subDraws);
+                }
+
+                // Show everything, then selectively hide noisy elements.
+                // ObjDirItr only recurses SubDirs(), so iterate sub-RndDirs too.
+                // HACK: Full HUD needs MoveMgr::Init() on native.
+                auto showAllInDir = [](ObjectDir *dir) {
+                    for (ObjDirItr<RndDrawable> it(dir, true); it != nullptr; ++it) {
+                        const char *n = it->Name();
+                        // Always hide these fullscreen overlays
+                        if (strcmp(n, "blacken.mesh") == 0
+                            || strcmp(n, "PostProcer") == 0
+                            || strcmp(n, "camera.mesh") == 0)
+                            continue;
+                        it->SetShowing(true);
+                    }
+                };
+                showAllInDir(hudDir);
+                for (ObjDirItr<RndDir> dit(hudDir, true); dit != nullptr; ++dit) {
+                    if (&*dit == hudDir) continue;
+                    showAllInDir(&*dit);
+                }
+
+                // Hide noisy containers that need game data we don't have.
+                // Must also hide children since they're in separate namespaces.
+                const char *hideDirs[] = {
+                    "flashcard_dock", "photo_display", "photo_award_counter",
+                    "text_recap", "challenge_target_left", "challenge_target_right",
+                    "challenge_mission_info", nullptr
+                };
+                for (const char **hp = hideDirs; *hp; hp++) {
+                    RndDir *sub = hudDir->Find<RndDir>(*hp, true);
+                    if (sub) {
+                        sub->SetShowing(false);
+                        for (ObjDirItr<RndDrawable> it(sub, true); it != nullptr; ++it)
+                            it->SetShowing(false);
                     }
                 }
+                // Also hide specific parent-level noisy elements
+                // Iterate all drawables and hide by name pattern
+                for (ObjDirItr<RndDrawable> it(hudDir, true); it != nullptr; ++it) {
+                    const char *n = it->Name();
+                    if (strstr(n, "photo") || strstr(n, "freestyle")
+                        || strstr(n, "miss_streak")
+                        || strstr(n, "instructional")) {
+                        it->SetShowing(false);
+                    }
+                }
+                // Same for sub-RndDirs
+                for (ObjDirItr<RndDir> dit(hudDir, true); dit != nullptr; ++dit) {
+                    if (&*dit == hudDir) continue;
+                    const char *dn = dit->Name();
+                    if (strstr(dn, "photo")) {
+                        for (ObjDirItr<RndDrawable> it(&*dit, true); it != nullptr; ++it)
+                            it->SetShowing(false);
+                    }
+                }
+                // Hide flashcard subdirs inside hud_left/hud_right
+                for (ObjDirItr<RndDir> dit(hudDir, true); dit != nullptr; ++dit) {
+                    const char *n = dit->Name();
+                    if (strstr(n, "flashcard_") || strstr(n, "freestyle_card")) {
+                        dit->SetShowing(false);
+                        for (ObjDirItr<RndDrawable> it(&*dit, true); it != nullptr; ++it)
+                            it->SetShowing(false);
+                    }
+                }
+
+                // Set text on labels — normally done by DTA handlers
+                {
+                    const char *songName = TheGameData ? TheGameData->GetSong().Str() : "BOYFRIEND";
+                    RndText *songLbl = hudDir->Find<RndText>("song_name.lbl", true);
+                    if (songLbl) songLbl->SetText(songName);
+
+                    RndText *artistLbl = hudDir->Find<RndText>("song_artist.lbl", true);
+                    if (artistLbl) {
+                        const char *artist = "Unknown Artist";
+                        if (TheGameData) {
+                            int songID = TheHamSongMgr.GetSongIDFromShortName(
+                                TheGameData->GetSong(), false);
+                            if (songID >= 0) {
+                                const HamSongMetadata *meta = TheHamSongMgr.Data(songID);
+                                if (meta) artist = meta->Artist();
+                            }
+                        }
+                        artistLbl->SetText(artist);
+                        artistLbl->SetShowing(true);
+                    }
+
+                    // Set score labels to "0"
+                    const char *scoreLabels[] = {"score_left", "score_right", nullptr};
+                    for (const char **sp = scoreLabels; *sp; sp++) {
+                        RndDir *sub = hudDir->Find<RndDir>(*sp, true);
+                        if (!sub) continue;
+                        RndText *scoreLbl = sub->Find<RndText>("score2.lbl", false);
+                        if (scoreLbl) {
+                            scoreLbl->SetText("0");
+                            scoreLbl->SetShowing(true);
+                        }
+                    }
+                    fprintf(stderr, "DC3 Native: HUD labels set — song='%s'\n", songName);
+                }
+
+                fprintf(stderr, "DC3 Native: HUD initialized\n");
             } else {
                 fprintf(stderr, "DC3 Native: Failed to load HUD from '%s'\n", hudFp.c_str());
             }
@@ -1182,40 +1256,39 @@ void App::RunWithoutDebugging() {
         // panel hierarchy via FileMerger. On native we draw it explicitly.
         // Replicates PanelDir::DrawShowing() setup: EndWorld() transitions to
         // 2D overlay mode, then select the HUD's own camera for 2D projection.
-        if (gNativeHudDir) {
+        if (gNativeHudDir && !getenv("DC3_NO_HUD_DRAW")) {
             RndDir *rdir = dynamic_cast<RndDir *>(gNativeHudDir);
             if (rdir) {
                 static int sHudDrawLog = 0;
                 // Transition from 3D world to 2D overlay mode
                 TheRnd.EndWorld();
+                TheRnd.ClearDepthForOverlay();
                 RndCam *prevCam = RndCam::Current();
 
-                // Try the HUD's own camera first (authored for HUD layout),
-                // fall back to TheUI->GetCam() for generic 2D projection
+                // Try HUD's own camera first, fall back to UI camera.
+                // The HUD meshes may be authored for Cam.cam's projection.
                 RndCam *hudCam = gNativeHudDir->Find<RndCam>("Cam.cam", false);
-                if (!hudCam)
-                    hudCam = TheUI ? TheUI->GetCam() : nullptr;
+                if (!hudCam) hudCam = TheUI ? TheUI->GetCam() : nullptr;
                 if (hudCam && hudCam != prevCam) {
                     FlushTransparentDraws();
                     hudCam->Select();
                 }
-                RndEnviron *hudEnv = gNativeHudDir->Find<RndEnviron>("static_hud.env", false);
-                if (!hudEnv && TheUI)
-                    hudEnv = TheUI->GetEnv();
+                RndEnviron *hudEnv = gNativeHudDir->Find<RndEnviron>("static_hud.env", true);
+                if (!hudEnv && TheUI) hudEnv = TheUI->GetEnv();
                 if (hudEnv)
                     hudEnv->Select(nullptr);
 
                 if (sHudDrawLog < 3) {
                     sHudDrawLog++;
-                    fprintf(stderr, "DC3 HUD Draw: draws=%d cam=%s env=%s prevCam=%s\n",
+                    fprintf(stderr, "DC3 HUD Draw: draws=%d cam=%s env=%s\n",
                            rdir->NumDraws(),
                            hudCam ? hudCam->Name() : "<null>",
-                           hudEnv ? hudEnv->Name() : "<null>",
-                           prevCam ? prevCam->Name() : "<null>");
+                           hudEnv ? hudEnv->Name() : "<null>");
                 }
 
                 rdir->DrawShowing();
 
+                // Restore previous camera
                 if (prevCam && prevCam != RndCam::Current()) {
                     FlushTransparentDraws();
                     prevCam->Select();
