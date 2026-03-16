@@ -171,7 +171,7 @@ iterates drawables, while the engine uses `WorldDir::DrawShowing()` → `RndGrou
 | Task | Status | Notes |
 |------|--------|-------|
 | Move card UI content | TODO | HUD panels active but content invisible. TexMovie pipeline implemented — needs asset/data flow tracing for game_panel. |
-| WorldCrowd rendering | **N/A** | DC3 does not use WorldCrowd — all 6 venues have zero crowd objects. Abstract dance stages, not concert venues. |
+| WorldCrowd rendering | BLOCKED | Some venues (dclive) have WorldCrowd objects. Blocked by: missing crowd asset loading, 11 weak stubs, DTA handler pipeline. See [PHASE_C_WORLDCROWD.md](PHASE_C_WORLDCROWD.md) |
 
 **Session 71 — MetaMaterials + GCC 15 compat**: Removed `#ifdef HX_NATIVE` guard in `RndMat::Init()` that disabled `LoadMetaMaterials()` on native. `sMetaMaterials` now loads `metamaterials.milo` and all shared MatAnim objects (`shell_basic.mmat` etc.) resolve correctly. Fixed GCC 15 compat: `std::random_shuffle` and `std::mem_fun` restored in libstdc++ 15 — guarded compat shims with `_GLIBCXX_RELEASE < 15`.
 
@@ -191,6 +191,66 @@ iterates drawables, while the engine uses `WorldDir::DrawShowing()` → `RndGrou
 | Item | Reason |
 |------|--------|
 | Text `<alt>` markup tags | ParseMarkup fully implemented — missing alt font style entries in .milo asset files |
+
+### Milestone 7: Platform Correctness (DTA / Init / Hack Removal)
+
+**Goal**: Fix upstream issues that `#ifdef HX_NATIVE` hacks currently cover. Remove hacks where possible.
+
+**Research**: [PLATFORM_HACKS_ANALYSIS.md](PLATFORM_HACKS_ANALYSIS.md) — full audit of 298 HX_NATIVE guards.
+
+#### DTA Handler Pipeline (Critical Path)
+
+The single biggest category of hacks exists because DTA script handlers don't fire on native. Root cause analysis in [DTA_HANDLER_ANALYSIS.md](DTA_HANDLER_ANALYSIS.md).
+
+| Task | Priority | Notes |
+|------|----------|-------|
+| Add `ContextCheckerInit()` to native init | HIGH | Registers 5+ DTA script functions. May unblock DTA handler execution. |
+| Add `MidiParser::Init()` to native init | HIGH | Enables MidiParser object deserialization from .milo files. |
+| Verify mTypeDef population after Init fixes | HIGH | If mTypeDef is non-null, DTA handlers should fire → can remove AnimTask auto-null hack. |
+| Test `on_anim_event("ended")` dispatch | HIGH | End-to-end: AnimTask completes → handler fires → StopAnimation() → IsAnimating() false. |
+| Remove Anim.cpp auto-null hack (426-434) | BLOCKED | Depends on DTA handlers working. |
+| Remove HamNavList IsAnimating skip (505-509) | BLOCKED | Depends on DTA handlers working. |
+
+#### Upstream Bug Fixes
+
+| Task | Priority | Notes |
+|------|----------|-------|
+| Audio suspend/resume (Game.cpp:297-310) | HIGH | Real threading bug. Should be permanent, not hack. Add `#ifdef HX_THREADED_AUDIO`. |
+| Load state reset (Game.cpp:315-321) | MEDIUM | Stream lifecycle gap. Fix in MoggClip::KillStream(). |
+
+#### Missing Init Calls (Incremental)
+
+| Init Call | Priority | What It Unblocks |
+|-----------|----------|-----------------|
+| `ContextCheckerInit()` | HIGH | DTA script functions (random_context, etc.) |
+| `MidiParser::Init()` | HIGH | MidiParser factory registration |
+| `DirLoader::SetPathEvalCallback()` | MEDIUM | Content path resolution |
+| `AccomplishmentManager::Init()` | LOW | Achievement system |
+| `MetagameRank::Init()` | LOW | XP/level system |
+| `SaveLoadManager::Init()` | LOW | Save/load (needs NativeSaveLoadStub upgrade) |
+
+#### Acceptable Platform Differences (Keep)
+
+These hacks are correct and should remain:
+- MoveDir null safety (6 instances) — MoveGraph is Kinect-specific
+- MoveGraph loading skip — no gesture detection on native
+- Audio timeout bypass — async loading architectural difference
+- LP64 pointer fixes (26+ instances) — required for 64-bit
+- STL container differences — libstdc++ vs STLport
+- `__fsel` replacement — PPC intrinsic
+
+### Testing Roadmap
+
+See [TEST_GAP_ANALYSIS.md](TEST_GAP_ANALYSIS.md) for detailed test gap analysis.
+
+| Test | Priority | Validates |
+|------|----------|-----------|
+| DTA handler dispatch | HIGH | mTypeDef population, ExecuteScript(), handler chain |
+| System init completeness | HIGH | Factory registration, DTA function availability |
+| AnimTask completion flow | HIGH | End-to-end animation lifecycle |
+| Audio thread safety | MEDIUM | Suspend/resume race condition fix |
+| Visual regression automation | MEDIUM | Rendering correctness across changes |
+| Flow state machine traversal | MEDIUM | UIPanel lifecycle, transitions |
 
 ---
 
@@ -300,3 +360,9 @@ LP64 issues, iterator compat, vtable crashes, stream desyncs, and rendering pipe
 - [VIEWER_STATUS.md](VIEWER_STATUS.md) — Track B: standalone milo viewer status & roadmap
 - [../custom-graphics-engine/PLAN.md](../custom-graphics-engine/PLAN.md) — master native port plan
 - [../../native/NATIVE_PORT_STATUS.md](../../native/NATIVE_PORT_STATUS.md) — detailed session log
+- [PLATFORM_HACKS_ANALYSIS.md](PLATFORM_HACKS_ANALYSIS.md) — full audit of HX_NATIVE guards (298 files)
+- [DTA_HANDLER_ANALYSIS.md](DTA_HANDLER_ANALYSIS.md) — root cause: why DTA script handlers don't fire
+- [TEST_GAP_ANALYSIS.md](TEST_GAP_ANALYSIS.md) — test coverage gaps and proposed tests
+- [PHASE_A_MOVE_CARDS.md](PHASE_A_MOVE_CARDS.md) — move card UI visibility research
+- [PHASE_B_SCORE_HUD.md](PHASE_B_SCORE_HUD.md) — score/HUD display research
+- [PHASE_C_WORLDCROWD.md](PHASE_C_WORLDCROWD.md) — WorldCrowd rendering (blocked by DTA + assets)

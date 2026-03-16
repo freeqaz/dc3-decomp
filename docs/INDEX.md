@@ -113,6 +113,9 @@ Tool-specific deep docs live in subdirectories:
 | [plans/XENIA_BOOT_VALIDATION.md](plans/XENIA_BOOT_VALIDATION.md) | Xenia emulator build, hybrid XEX boot validation, headless mode plan |
 | [plans/custom-graphics-engine/PLAN.md](plans/custom-graphics-engine/PLAN.md) | **Native port master plan** — phased roadmap, rendering/audio/input/motion |
 | [plans/dc3-native/STATUS.md](plans/dc3-native/STATUS.md) | **Native port status** — boot flow, error handling, env vars, test commands |
+| [plans/dc3-native/PLATFORM_HACKS_ANALYSIS.md](plans/dc3-native/PLATFORM_HACKS_ANALYSIS.md) | **HX_NATIVE hacks audit** — 298 guards categorized, upstream fix recommendations |
+| [plans/dc3-native/DTA_HANDLER_ANALYSIS.md](plans/dc3-native/DTA_HANDLER_ANALYSIS.md) | **DTA handler root cause** — why script handlers don't fire on native |
+| [plans/dc3-native/TEST_GAP_ANALYSIS.md](plans/dc3-native/TEST_GAP_ANALYSIS.md) | **Test gaps** — high-value missing tests for native port correctness |
 
 ## Runtime & Testing
 
