@@ -11,27 +11,25 @@
 
 ## Category 1: Gameplay Hacks (Upstream Fixable)
 
-### 1.1 DTA Animation Completion (CRITICAL)
+### 1.1 Animation Completion Timing (CORRECT FIX — NOT DTA-RELATED)
 
 **Files**: `src/system/rndobj/Anim.cpp:426-434`, `src/system/hamobj/HamNavList.cpp:505-509,1522-1526`
 
-**Problem**: When AnimTask finishes playing, it sends `on_anim_event("ended")` to its listener. The listener's `Handle()` dispatches to DTA typedef handlers via `HANDLE_ARRAY(mTypeDef)`, which should call `StopAnimation()`. On native, these DTA handlers never execute, so `IsAnimating()` stays true forever.
+**Problem**: `AnimTask::Poll()` dispatch block (line 435) only runs when `mAnimTarget` is null. On Xbox, `mAnimTarget` becomes null through object lifecycle timing. On native, the ObjPtr reference persists because destruction timing differs.
 
-**Current Hack**:
+**Current Fix** (correctly implemented):
 - `Anim.cpp`: Auto-null `mAnimTarget` when non-looping animation exceeds `mFrameSpan`
 - `HamNavList.cpp`: Skip `IsAnimating()` check in kRibbonSelect completion
 
-**Root Cause Investigation** (see [DTA_HANDLER_ANALYSIS.md](DTA_HANDLER_ANALYSIS.md)):
-- The execution path: `AnimTask::Poll()` → `mListener->Handle(msg)` → `HANDLE_ARRAY(mTypeDef)` → `ExecuteScript()`
-- Likely break point: `mTypeDef` is null (type definitions not loaded from DTA), OR script functions referenced in handlers are not registered
-- **Missing Init calls** on native (see Section 2.3) mean DataRegisterFunc calls from `ContextCheckerInit()` and others never run, so DTA scripts referencing those functions fail silently
+**Verified (2026-03-16)**: This is NOT a DTA issue.
+- Added diagnostic logging: `mTypeDef` is null for ALL animated objects
+- `on_anim_event` is NOT defined in any DTA config file (objects.dta, ham_objects.dta)
+- The `on_anim_event` message returns `kDataUnhandled` for every listener
+- See [DTA_HANDLER_ANALYSIS.md](DTA_HANDLER_ANALYSIS.md) for full analysis
 
-**Upstream Fix Path**:
-1. Ensure `mTypeDef` is populated for AnimTask listeners during .milo object loading
-2. Register all DTA script functions that handlers reference (see missing Init calls below)
-3. Verify `ExecuteScript()` doesn't silently fail when encountering unregistered functions
+**The auto-null hack is the correct fix** — it compensates for native object lifecycle timing differences. No DTA fix would help.
 
-**User Impact**: Menu selections hang in kRibbonSelect animation forever without the hack.
+**User Impact**: Menu selections hang in kRibbonSelect animation forever without the fix.
 
 ---
 

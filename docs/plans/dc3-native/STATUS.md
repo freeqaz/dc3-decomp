@@ -171,7 +171,7 @@ iterates drawables, while the engine uses `WorldDir::DrawShowing()` → `RndGrou
 | Task | Status | Notes |
 |------|--------|-------|
 | Move card UI content | TODO | HUD panels active but content invisible. TexMovie pipeline implemented — needs asset/data flow tracing for game_panel. |
-| WorldCrowd rendering | BLOCKED | Some venues (dclive) have WorldCrowd objects. Blocked by: missing crowd asset loading, 11 weak stubs, DTA handler pipeline. See [PHASE_C_WORLDCROWD.md](PHASE_C_WORLDCROWD.md) |
+| WorldCrowd rendering | PARTIAL | Factory enabled, null guards prevent crashes. Verified on dclive venue (no crashes). Crowd not visible yet — PlayCrowdAnimation returns early, clip subdirs not fully loaded. See [PHASE_C_WORLDCROWD.md](PHASE_C_WORLDCROWD.md) |
 
 **Session 71 — MetaMaterials + GCC 15 compat**: Removed `#ifdef HX_NATIVE` guard in `RndMat::Init()` that disabled `LoadMetaMaterials()` on native. `sMetaMaterials` now loads `metamaterials.milo` and all shared MatAnim objects (`shell_basic.mmat` etc.) resolve correctly. Fixed GCC 15 compat: `std::random_shuffle` and `std::mem_fun` restored in libstdc++ 15 — guarded compat shims with `_GLIBCXX_RELEASE < 15`.
 
@@ -198,32 +198,35 @@ iterates drawables, while the engine uses `WorldDir::DrawShowing()` → `RndGrou
 
 **Research**: [PLATFORM_HACKS_ANALYSIS.md](PLATFORM_HACKS_ANALYSIS.md) — full audit of 298 HX_NATIVE guards.
 
-#### DTA Handler Pipeline (Critical Path)
+#### DTA Handler Pipeline — RESOLVED (2026-03-16)
 
-The single biggest category of hacks exists because DTA script handlers don't fire on native. Root cause analysis in [DTA_HANDLER_ANALYSIS.md](DTA_HANDLER_ANALYSIS.md).
+Root cause analysis in [DTA_HANDLER_ANALYSIS.md](DTA_HANDLER_ANALYSIS.md).
 
-| Task | Priority | Notes |
-|------|----------|-------|
-| Add `ContextCheckerInit()` to native init | HIGH | Registers 5+ DTA script functions. May unblock DTA handler execution. |
-| Add `MidiParser::Init()` to native init | HIGH | Enables MidiParser object deserialization from .milo files. |
-| Verify mTypeDef population after Init fixes | HIGH | If mTypeDef is non-null, DTA handlers should fire → can remove AnimTask auto-null hack. |
-| Test `on_anim_event("ended")` dispatch | HIGH | End-to-end: AnimTask completes → handler fires → StopAnimation() → IsAnimating() false. |
-| Remove Anim.cpp auto-null hack (426-434) | BLOCKED | Depends on DTA handlers working. |
-| Remove HamNavList IsAnimating skip (505-509) | BLOCKED | Depends on DTA handlers working. |
+**Finding**: Animation completion issue is **NOT DTA-related**. `mTypeDef` is null for all animated objects, and `on_anim_event` has no DTA handler in any config. The `Anim.cpp` auto-null hack is the correct fix for native object lifecycle timing differences.
 
-#### Upstream Bug Fixes
+| Task | Status | Notes |
+|------|--------|-------|
+| Add `ContextCheckerInit()` to native init | **DONE** | Registers 5 DTA script functions. Builds clean, 500-frame smoke test passes. |
+| Add `MidiParser::Init()` to native init | **DONE** | Enables MidiParser object deserialization from .milo files. |
+| Add `DirLoader::SetPathEvalCallback(IsUselessLoad)` | **DONE** | Filters unnecessary asset loads by game mode. |
+| Verify mTypeDef population | **DONE** | mTypeDef is null for all animated objects — confirmed via diagnostics. |
+| Test `on_anim_event` dispatch | **DONE** | Returns kDataUnhandled — no DTA handler exists anywhere. |
+| Anim.cpp auto-null hack (426-434) | **KEEP** | Correct fix for native timing, not a DTA issue. |
+| HamNavList IsAnimating skip (505-509) | **KEEP** | Depends on animation completion, which is correctly handled by auto-null. |
 
-| Task | Priority | Notes |
-|------|----------|-------|
-| Audio suspend/resume (Game.cpp:297-310) | HIGH | Real threading bug. Should be permanent, not hack. Add `#ifdef HX_THREADED_AUDIO`. |
-| Load state reset (Game.cpp:315-321) | MEDIUM | Stream lifecycle gap. Fix in MoggClip::KillStream(). |
+#### Upstream Bug Fixes — Already Correct
 
-#### Missing Init Calls (Incremental)
+| Task | Status | Notes |
+|------|--------|-------|
+| Audio suspend/resume (Game.cpp:297-310) | **IN PLACE** | Real threading bug. `#ifdef HX_NATIVE` is appropriate — only native has threaded audio. |
+| Load state reset (Game.cpp:315-321) | **IN PLACE** | Correctly resets mLoadState after sync stream destruction. |
 
-| Init Call | Priority | What It Unblocks |
-|-----------|----------|-----------------|
-| `ContextCheckerInit()` | HIGH | DTA script functions (random_context, etc.) |
-| `MidiParser::Init()` | HIGH | MidiParser factory registration |
+#### Missing Init Calls — ADDED (2026-03-16)
+
+| Init Call | Status | What It Unblocks |
+|-----------|--------|-----------------|
+| `ContextCheckerInit()` | **DONE** | DTA script functions (random_context, etc.) |
+| `MidiParser::Init()` | **DONE** | MidiParser factory registration |
 | `DirLoader::SetPathEvalCallback()` | MEDIUM | Content path resolution |
 | `AccomplishmentManager::Init()` | LOW | Achievement system |
 | `MetagameRank::Init()` | LOW | XP/level system |
