@@ -23,6 +23,8 @@
 #include "meta_ham/HamSongMgr.h"
 #include "meta_ham/HamSongMetadata.h"
 #include "platform/TransparentQueue.h"
+#include "rndobj/BaseMaterial.h"
+#include "rndobj/Mat.h"
 extern GLFWwindow *gNativeWindow;
 static ObjectDir *gNativeHudDir = nullptr;
 
@@ -308,6 +310,11 @@ App::App(int argc, char **argv) {
             }
         }
     }
+
+    // MoveMgr — creates SuperEasyRemixer, SongLayout, loads category.dta.
+    // Must be after HamInit() which registers the SongLayout factory.
+    MoveMgr::Init(0);
+    MiniGameMgr::Init();
 
     // Song manager
     TheHamSongMgr.Init();
@@ -1080,7 +1087,8 @@ void App::RunWithoutDebugging() {
         // needs GameMode::SetGameplayMode() wired, which requires
         // MoveMgr::Init() (currently crashes on native).
         if (!gNativeHudDir && TheUI && TheUI->CurrentScreen()
-            && strcmp(TheUI->CurrentScreen()->Name(), "game_screen") == 0) {
+            && (strcmp(TheUI->CurrentScreen()->Name(), "game_screen") == 0
+                || strcmp(TheUI->CurrentScreen()->Name(), "main_screen") == 0)) {
             const char *hudMilo = "ui/hud/_default_hud.milo";
             if (TheGameMode) {
                 const DataNode *modeProp = TheGameMode->Property("gameplay_mode");

@@ -120,6 +120,9 @@ void OriginalChoreoRemixer::Init() {
         TheMoveMgr->InitSong();
         if (TheMoveMgr->MoveParents().size() == 0) {
             MILO_FAIL("Failed to load move graph for: %s\n", TheGameData->GetSong());
+#ifdef HX_NATIVE
+            return; // Move graph not loaded — skip init to avoid null crash
+#endif
         }
     }
     SaveOriginalMoveParents();

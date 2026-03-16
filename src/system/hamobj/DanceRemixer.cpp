@@ -182,8 +182,14 @@ DataNode DanceRemixer::OnMovePassed(DataArray *a) {
 void DanceRemixer::PostMoveFinished() {
     int moveIdx = (int)TheTaskMgr.Beat() / 4 + 1;
     UpdateHamDirector();
-    MoveDir *moveDir = TheHamDirector->GetMoveDir();
+    MoveDir *moveDir = TheHamDirector ? TheHamDirector->GetMoveDir() : nullptr;
+#ifdef HX_NATIVE
+    if (!moveDir) return; // No move directory loaded (no Kinect)
+#endif
     MoveAsyncDetector *detector = moveDir->GetAsyncDetector();
+#ifdef HX_NATIVE
+    if (!detector) return;
+#endif
     for (int i = 0; i < 2; i++) {
         auto _tmp1 = JumpedMoveIdx(moveIdx - 1);
         auto scored = ScoredDanceMeasure(i, _tmp1 + 1);

@@ -390,9 +390,22 @@ void MoveMgr::AutoFillParents() {
 SongLayout *MoveMgr::GetSongLayout() {
     if (!mCurrentSongLayout) {
         mCurrentSongLayout = mDefaultSongLayout;
+#ifdef HX_NATIVE
+        if (!mCurrentSongLayout) {
+            mDefaultSongLayout = new SongLayout();
+            mCurrentSongLayout = mDefaultSongLayout;
+        }
+#endif
         mDefaultSongLayout->SetDefaultPattern(0x40);
     }
     if (mCurrentSongLayout->NumReplacers() == 0) {
+#ifdef HX_NATIVE
+        // SetDefaultReplacer needs a loaded song.anim (SongAnimByDifficulty).
+        // On native the song may not be fully loaded at this point.
+        RndPropAnim *songAnim = TheHamDirector ?
+            TheHamDirector->SongAnimByDifficulty((Difficulty)0) : nullptr;
+        if (songAnim)
+#endif
         mCurrentSongLayout->SetDefaultReplacer();
     }
     return mCurrentSongLayout;
