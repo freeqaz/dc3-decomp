@@ -351,6 +351,18 @@ void Game::SetMusicVolume(float vol) {
 void Game::Poll() {
     static float sLastBeat;
 
+#ifdef HX_NATIVE
+    {
+        static int sPollTrace = 0;
+        if (sPollTrace < 20 || (sPollTrace % 300 == 0 && sPollTrace < 3000)) {
+            fprintf(stderr, "Game::Poll #%d: waitState=%d paused=%d realTime=%d loaded=%d measure=%d beat=%.1f\n",
+                sPollTrace, mWaitState, (int)mPaused, (int)mRealTime, (int)IsLoaded(),
+                TheTaskMgr.CurrentMeasure(), TheTaskMgr.TotalBeat());
+        }
+        sPollTrace++;
+    }
+#endif
+
     if (!HandleWait()) {
         if (!TheSongSequence.Done()) {
             float songMs = mGameInput->CurrentMs(mRealTime);
@@ -1064,13 +1076,14 @@ void GameInit() {
     REGISTER_OBJ_FACTORY(BustAMovePanel)
     TheDebug.AddExitCallback(GameTerminate);
     TheSongSequence.Init();
-#ifndef HX_NATIVE
-    // RatingState depends on ScoreUtlInit having populated sRatingStates
+    // RatingState depends on ScoreUtlInit having populated sRatingStates.
+    // On native, ScoreUtlInit may not have run yet at GameInit time, so
+    // we populate rating states lazily in OnToggleAutoplay/OnCycleAutoplay.
     sAutoplayStates.push_back("maximum");
-    for (int i = 0; i < 4; i++) {
-        sAutoplayStates.push_back(RatingState(i));
-    }
-#endif
+    sAutoplayStates.push_back("move_perfect");
+    sAutoplayStates.push_back("move_awesome");
+    sAutoplayStates.push_back("move_ok");
+    sAutoplayStates.push_back("move_bad");
     DataRegisterFunc("toggle_move_overlay", OnToggleMoveOverlay);
     DataRegisterFunc("toggle_autoplay", OnToggleAutoplay);
     DataRegisterFunc("cycle_autoplay", OnCycleAutoplay);

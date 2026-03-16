@@ -121,10 +121,15 @@ void OriginalChoreoRemixer::Init() {
         if (TheMoveMgr->MoveParents().size() == 0) {
             MILO_FAIL("Failed to load move graph for: %s\n", TheGameData->GetSong());
 #ifdef HX_NATIVE
-            return; // Move graph not loaded — skip init to avoid null crash
+            return;
 #endif
         }
     }
+#ifdef HX_NATIVE
+    // Guard against partially loaded move data — MoveVariant pointers may be
+    // null if CacheLinks failed (missing move subdirs on native)
+    if (TheMoveMgr->MoveParents().empty()) return;
+#endif
     SaveOriginalMoveParents();
     DanceRemixer::Init(mMoveParentsByDiff[0].size());
     for (int i = 0; i < 3; i++) {

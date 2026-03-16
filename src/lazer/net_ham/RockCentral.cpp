@@ -238,6 +238,10 @@ void RockCentral::GetUtilityMsg(String &str) const { str = mUtilityMsg; }
 DataNode RockCentral::OnMsg(const UserLoginMsg &) { return 1; }
 
 void RockCentral::ManageJob(RCJob *job) {
+#ifdef HX_NATIVE
+    delete job;
+    return;
+#endif
     if (!mLoginBlocked) {
         TheServer.ManageJob(job);
     }

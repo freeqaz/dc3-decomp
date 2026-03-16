@@ -265,7 +265,7 @@ BINSTREAM_OP_OBJPTRVEC(RhythmDetector)
 BINSTREAM_OP_OBJPTRVEC(RndDrawable)
 BINSTREAM_OP_OBJPTRVEC(RndEnviron)
 BINSTREAM_OP_OBJPTRVEC(RndLight)
-BINSTREAM_OP_OBJPTRVEC(RndMat)
+// RndMat: explicit specialization in CharClipGroup.cpp (custom body)
 BINSTREAM_OP_OBJPTRVEC(Spotlight)
 BINSTREAM_OP_OBJPTRVEC(SpotlightDrawer)
 

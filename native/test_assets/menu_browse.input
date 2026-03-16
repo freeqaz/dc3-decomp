@@ -1,0 +1,19 @@
+# Navigate through main menus without entering gameplay
+# Use with: MILO_FIRST_SCREEN=main_screen MILO_INPUT_SCRIPT=scripts/input/menu_browse.input
+
+# main_screen: select DANCE
+30 confirm
+
+# choose_mode_screen: select "perform"
+120 confirm
+
+# song_select_screen: browse the song list
+300 down
+330 down
+360 down
+390 up
+420 up
+
+# back out
+500 cancel
+600 cancel

@@ -334,6 +334,58 @@ END_LOADS
 
 void HamDirector::Enter() {
     RndPollable::Enter();
+#ifdef HX_NATIVE
+    // On native, the DTA merger pipeline isn't used. Run the venue-related
+    // parts of Enter() directly — post-proc, crowd init, venue Enter().
+    MILO_LOG("HamDirector::Enter native path: mMerger=%p mVenue=%p\n",
+        (void*)mMerger.Ptr(), (void*)mVenue.Ptr());
+    if (!mMerger && mVenue) {
+        MILO_LOG("HamDirector::Enter — native venue enter for '%s'\n", mVenue->Name());
+        mExcitement = 3;
+        mNumPlayersFailed = 0;
+        mLastShotTime = -kHugeFloat;
+        mLastCollisionTime = -kHugeFloat;
+        mShot = "";
+        mCurShot = nullptr;
+        mSyncScene = true;
+        mGameStartHold = false;
+        // Post-processing setup (GetWorld() falls back to mVenue on native)
+        mWorldPostProc = GetWorld()->Find<RndPostProc>("world.pp", true);
+        RndPostProc *start = GetWorld()->Find<RndPostProc>("world_start.pp", true);
+        if (start && mWorldPostProc) {
+            mWorldPostProc->Copy(start, kCopyDeep);
+        }
+        if (mWorldPostProc) mWorldPostProc->Select();
+        mPostProcInterpA = mWorldPostProc;
+        mPostProcInterpB = mWorldPostProc;
+        mPostProcInterpBlend = 0;
+        mCamPostProc = nullptr;
+        mForcePostProc = nullptr;
+        mForcePostProcBlend = 0;
+        mForcePostProcBlendRate = 1;
+        mSavedForcePostProc = nullptr;
+        mVisualizerPostProc = nullptr;
+        unk2e4 = -kHugeFloat;
+        mDisabled = false;
+        mVisualizerRunning = false;
+        if (TheHamWardrobe) {
+            TheHamWardrobe->ClearCrowd();
+        }
+        MILO_LOG("HamDirector::Enter — calling VenueEnter('%s')\n", mVenue->Name());
+        VenueEnter(mVenue);
+        MILO_LOG("HamDirector::Enter — VenueEnter complete\n");
+        // Skip Initialize/SetupAnims/SyncScene/PlayIntroShot — need merger
+        mDisablePicking = false;
+        mNextShot = nullptr;
+        mPlayerFreestyle = false;
+        unk1d4 = 0;
+        mPlayerFreestylePaused = false;
+        if (TheHamWardrobe) {
+            TheHamWardrobe->PlayCrowdAnimation("realtime_idle", 2, true);
+        }
+        return;
+    }
+#endif
     if (mMerger) {
         mExcitement = 3;
         mNumPlayersFailed = 0;
@@ -537,6 +589,10 @@ void HamDirector::RemapSongAnimToTempoMap(TempoMap *newTempoMap) {
 }
 
 WorldDir *HamDirector::GetWorld() {
+#ifdef HX_NATIVE
+    // On native, the DTA merger pipeline isn't used. Fall back to venue world.
+    if (!mMerger) return mVenue;
+#endif
     return mMerger ? dynamic_cast<WorldDir *>(mMerger->Dir()) : nullptr;
 }
 

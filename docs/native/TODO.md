@@ -242,6 +242,10 @@ HamDirector (`src/system/hamobj/HamDirector.cpp:137-202`) exposes ~40+ DTA handl
 - See `docs/native/ANIMATION_PIPELINE.md` for full pipeline documentation
 
 ### 8.4 Remaining Polish Items
+- [ ] **Move graph loading** — `"Failed to load move graph for: <song>"` — DanceRemixer::Init requires TheMoveMgr->MoveParents() to be populated. Without this, autoplay/flashcards/phrase meters/scoring all dead. Root cause: TheMoveMgr is null on native (move routine generation suppressed). Need lightweight native stub or full MoveMgr init.
+- [ ] **RockCentral::ManageJob unstub** — Currently guarded with `#ifdef HX_NATIVE delete job; return;`. The actual TheServer needs null-safe ManageJob or the network layer needs proper stub initialization. Crashes on `SendDropInDatapoint` / `SendDropOutDatapoint` during game start.
+- [ ] **Flashcard rendering during game_screen** — `TheUI->Draw()` is skipped on game_screen (skipUIDraw) to prevent white rectangle artifacts. This also prevents flashcard_dock_panel from rendering. Need selective panel drawing or separate flashcard draw pass.
+- [ ] **Phrase meter objects** — Need to verify phrase_meter0/phrase_meter1 exist in venue worlds. These are HamPhraseMeter objects looked up by MoveDir from the venue WorldDir.
 - [ ] **Bone garbage root cause** — Some leg/foot bones produce invalid translations (~1e16). Currently mitigated by identity fallback. Need to trace through CharBones data to find source of corruption.
 - [ ] **Face servo explicit polling** — Verify CharFaceServo is in Character::mPolls. If not, add explicit poll in gameplay path.
 - [ ] **movemgr DTA error** — `movemgr not function or object` spam every frame during gameplay. TheMoveMgr is null on native; DTA scripts reference it. Low priority (cosmetic log noise).

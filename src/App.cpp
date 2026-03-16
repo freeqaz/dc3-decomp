@@ -1026,7 +1026,11 @@ void App::RunWithoutDebugging() {
                             if (wdir) {
                                 if (TheHamDirector) {
                                     TheHamDirector->SetNativeVenueWorld(wdir);
-                                    printf("DC3 Native: Venue '%s' set on HamDirector\n", wdir->Name());
+                                    // Call VenueEnter to trigger dir->Enter() on the venue,
+                                    // which fires DTA type handlers on WorldCrowd objects
+                                    // (set_fullness, add_crowd via HamWardrobe)
+                                    TheHamDirector->VenueEnter(wdir);
+                                    printf("DC3 Native: Venue '%s' set + entered on HamDirector\n", wdir->Name());
                                 } else {
                                     // No HamDirector — register as fallback venue
                                     gNativeVenueDir = wdir;
@@ -1316,7 +1320,7 @@ void App::RunWithoutDebugging() {
                 // Hide noisy containers that need game data we don't have.
                 // Must also hide children since they're in separate namespaces.
                 const char *hideDirs[] = {
-                    "flashcard_dock", "photo_display", "photo_award_counter",
+                    "photo_display", "photo_award_counter",
                     "text_recap", "challenge_target_left", "challenge_target_right",
                     "challenge_mission_info", nullptr
                 };
@@ -1347,15 +1351,7 @@ void App::RunWithoutDebugging() {
                             it->SetShowing(false);
                     }
                 }
-                // Hide flashcard subdirs inside hud_left/hud_right
-                for (ObjDirItr<RndDir> dit(hudDir, true); dit != nullptr; ++dit) {
-                    const char *n = dit->Name();
-                    if (strstr(n, "flashcard_") || strstr(n, "freestyle_card")) {
-                        dit->SetShowing(false);
-                        for (ObjDirItr<RndDrawable> it(&*dit, true); it != nullptr; ++it)
-                            it->SetShowing(false);
-                    }
-                }
+                // Note: flashcard subdirs left visible — populated by game flow
 
                 // Set text on labels — normally done by DTA handlers
                 {
@@ -1505,9 +1501,24 @@ void App::RunWithoutDebugging() {
             }
         }
 #endif
-        // TEMP: When DC3_HUD_ONLY is set, skip venue and draw only HUD
-        if (TheUI && !getenv("DC3_HUD_ONLY") && !getenv("DC3_NO_UI"))
-            TheUI->Draw();
+        // Draw UI panels (menus, transitions). Skip during gameplay when
+        // venue is drawn explicitly — game_screen panels include flashcard
+        // and fitness overlays with white backgrounds.
+        {
+            bool skipUIDraw = false;
+#ifdef HX_NATIVE
+            {
+                WorldDir *venue = TheHamDirector ? TheHamDirector->GetVenueWorld() : nullptr;
+                if (!venue && gNativeVenueDir)
+                    venue = dynamic_cast<WorldDir *>(gNativeVenueDir);
+                if (venue && TheUI && TheUI->CurrentScreen()
+                    && strcmp(TheUI->CurrentScreen()->Name(), "game_screen") == 0)
+                    skipUIDraw = true;
+            }
+#endif
+            if (TheUI && !skipUIDraw && !getenv("DC3_HUD_ONLY") && !getenv("DC3_NO_UI"))
+                TheUI->Draw();
+        }
         // Draw HUD overlay — on Xbox this is drawn as part of the game_screen
         // panel hierarchy via FileMerger. On native we draw it explicitly.
         // Replicates PanelDir::DrawShowing() setup: EndWorld() transitions to
@@ -1699,8 +1710,14 @@ void App::RunWithoutDebugging() {
                             }
                             HamPlayerData *p0 = TheGameData->Player(0);
                             HamPlayerData *p1 = TheGameData->Player(1);
-                            if (p0) p0->SetDifficulty(kDifficultyEasy);
-                            if (p1) p1->SetDifficulty(kDifficultyEasy);
+                            if (p0) {
+                                p0->SetDifficulty(kDifficultyEasy);
+                                p0->SetAutoplay(Symbol("maximum"));
+                            }
+                            if (p1) {
+                                p1->SetDifficulty(kDifficultyEasy);
+                                p1->SetAutoplay(Symbol("maximum"));
+                            }
                             fprintf(stderr, "DC3 Native: Game setup — song='%s' venue='%s' mode=perform\n",
                                    songName, venueName);
                         }

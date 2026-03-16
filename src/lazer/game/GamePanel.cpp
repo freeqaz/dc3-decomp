@@ -16,6 +16,7 @@
 #include "hamobj/HamPlayerData.h"
 #include "hamobj/HamWardrobe.h"
 #include "hamobj/MoveDir.h"
+#include "hamobj/MoveMgr.h"
 #include "meta/HAQManager.h"
 #include "meta/PreloadPanel.h"
 #include "meta_ham/HamProfile.h"
@@ -590,9 +591,19 @@ void GamePanel::StartGame() {
 
         // Step 2: Set up song animations from merged data
         TheHamDirector->SetupAnims();
+
+        // Step 2b: Populate move graph — loads song move data and generates routines.
+        // On Xbox this is triggered by DTA "populate_movemgr" message.
+        if (TheMoveMgr) {
+            static Message populateMsg("populate_movemgr");
+            TheHamDirector->Handle(populateMsg, true);
+            MILO_LOG("Native: MoveMgr populated — %d move parents\n",
+                (int)TheMoveMgr->MoveParents().size());
+        }
+
         TheHamDirector->SetPollEnabled(true);
 
-        // Step 2b: Full director enter (camera, post-proc, scene sync)
+        // Step 2c: Full director enter (camera, post-proc, scene sync)
         TheHamDirector->Enter();
         MILO_LOG("Native: HamDirector::Enter complete, SongAnim(0)=%p\n",
             TheHamDirector->SongAnim(0));

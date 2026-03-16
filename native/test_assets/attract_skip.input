@@ -1,0 +1,3 @@
+# Skip attract screen and reach main menu
+# Use with: MILO_INPUT_SCRIPT=scripts/input/attract_skip.input
+60 start

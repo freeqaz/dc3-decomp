@@ -1,0 +1,12 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "orchestrator": {
+      "type": "local",
+      "command": ["./venv/bin/python", "-m", "scripts.orchestrator.mcp_server", "--db", "./decomp.db"],
+      "environment": {
+        "PYTHONPATH": "."
+      }
+    }
+  }
+}

@@ -300,14 +300,16 @@ void PostProcPass::Run(wgpu::CommandEncoder& encoder, wgpu::TextureView& interme
     uni.noiseMidtone = pp->GetNoiseMidtone() ? 1.0f : 0.0f;
 
     // Flicker: random brightness modulation between bounds over time
+    // Match original engine guard: all three must be positive for flicker to activate
     const Vector2& flickerMod = pp->GetFlickerModBounds();
     const Vector2& flickerTime = pp->GetFlickerTimeBounds();
-    if (flickerMod.x > 0.0f || flickerMod.y < 1.0f) {
+    if (flickerTime.x > 0.0f && flickerTime.y > 0.0f && flickerMod.y > 0.0f) {
         mFlickerTimer -= dt;
         if (mFlickerTimer <= 0.0f) {
             // Pick new random target and duration
+            // Original: mFlickerMod = 1.0f - RandomFloat(modBounds.x, modBounds.y)
             float t = (float)rand() / (float)RAND_MAX;
-            mFlickerTarget = flickerMod.x + t * (flickerMod.y - flickerMod.x);
+            mFlickerTarget = 1.0f - (flickerMod.x + t * (flickerMod.y - flickerMod.x));
             float dur = flickerTime.x + ((float)rand() / (float)RAND_MAX) * (flickerTime.y - flickerTime.x);
             mFlickerTimer = dur > 0.0f ? dur : 0.1f;
         }

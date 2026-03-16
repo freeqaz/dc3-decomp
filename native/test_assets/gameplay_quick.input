@@ -1,0 +1,25 @@
+# Navigate from main_screen to gameplay (quickplay mode)
+# Use with: MILO_FIRST_SCREEN=main_screen MILO_INPUT_SCRIPT=scripts/input/gameplay_quick.input
+#
+# Flow: main_screen → choose_mode → song_select → scroll to song → confirm → ready → game
+# Reaches game_screen around frame ~700
+
+# main_screen: DANCE is first item (focused by default)
+30 confirm
+
+# choose_mode_screen: "perform" is first item
+120 confirm
+
+# song_select_screen: list has tier headers first, scroll down to an actual song
+250 down
+260 down
+270 down
+280 down
+290 down
+
+# confirm on a song triggers Select() → MoveOn()
+350 confirm
+
+# intermediate screens (multiuser auto-skip, loading, ready)
+450 confirm
+520 confirm

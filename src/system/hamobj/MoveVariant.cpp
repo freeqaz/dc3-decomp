@@ -24,8 +24,15 @@ MoveCandidate::MoveCandidate(const MoveCandidate &c) {
 }
 
 void MoveCandidate::CacheLinks(MoveGraph *graph) {
-    const char *variantName =
-        mAdjacencyFlag & 1 ? mValue.mVariant->mVariantName.Str() : mValue.mVariantName;
+    const char *variantName;
+    if (mAdjacencyFlag & 1) {
+#ifdef HX_NATIVE
+        if (!mValue.mVariant) { return; }
+#endif
+        variantName = mValue.mVariant->mVariantName.Str();
+    } else {
+        variantName = mValue.mVariantName;
+    }
     mValue.mVariant = graph->FindNonConstMoveByVariantName(variantName);
     if (!mValue.mVariant) {
         MILO_FAIL("Could not find link to %s", variantName);

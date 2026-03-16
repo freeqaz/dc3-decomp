@@ -891,11 +891,15 @@ void MetaPerformer::SendOmgDatapoint(int p1Score, int p2Score) {
 }
 
 void MetaPerformer::SendDropInDatapoint(int playerIdx) {
+#ifndef HX_NATIVE
     TheRockCentral.ManageJob(new PlayerDroppedInJob(nullptr, playerIdx));
+#endif
 }
 
 void MetaPerformer::SendDropOutDatapoint(int playerIdx) {
+#ifndef HX_NATIVE
     TheRockCentral.ManageJob(new PlayerDroppedOutJob(nullptr, playerIdx));
+#endif
 }
 
 String MetaPerformer::GetPlaylistElapsedTimeString() const {
