@@ -1009,9 +1009,6 @@ void WgpuRnd::BeginDrawing() {
     BeginFramePass(true);
 }
 
-wgpu::Buffer& GetSceneBuffer() { return gWgpuRnd->SceneBuffer(); }
-uint32_t GetSceneOffset() { return gWgpuRnd->SceneOffset(); }
-
 void WgpuRnd::EnsureSceneUniformsCurrent() {
     RndCam* cam = RndCam::Current();
     RndEnviron* env = RndEnviron::Current();
@@ -1730,4 +1727,8 @@ void WgpuRnd::DrawRect(const Hmx::Rect& rect, RndMat* mat, ShaderType,
     if (!mInPass) return;
     mDrawRect2D.Draw(mPass, rect, mat, color, topRight, botLeft,
                      mGpu, mPipelines, mWhiteTexView, mDefaultSampler);
+    // DrawRect2D uses its own pipeline/bind group at slot 0.
+    // Restore the scene bind group so subsequent mesh draws don't mismatch.
+    if (mSceneBindGroup)
+        mPass.SetBindGroup(0, mSceneBindGroup);
 }

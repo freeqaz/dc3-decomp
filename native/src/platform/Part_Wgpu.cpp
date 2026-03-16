@@ -25,9 +25,8 @@ static wgpu::Buffer sParticleIB;
 static int sParticleVBCapacity = 0;  // in vertices
 static int sParticleIBCapacity = 0;  // in indices
 
-// Particle 2D pipeline (reuses WgpuRnd's 2D shader concept but in 3D)
+// Particle pipeline state — reuses main renderer's SceneBGL at group 0
 static wgpu::ShaderModule sParticleShader;
-static wgpu::BindGroupLayout sParticleSceneBGL;  // group 0: scene viewProj
 static wgpu::BindGroupLayout sParticleBGL;       // group 1: texture + sampler
 static wgpu::PipelineLayout sParticlePipelineLayout;
 static bool sParticlePipelineReady = false;
@@ -80,18 +79,9 @@ static void EnsureParticlePipeline() {
     smDesc.nextInChain = &src;
     sParticleShader = dev.CreateShaderModule(&smDesc);
 
-    // Group 0: scene viewProj uniform
-    wgpu::BindGroupLayoutEntry e0{};
-    e0.binding = 0;
-    e0.visibility = wgpu::ShaderStage::Vertex;
-    e0.buffer.type = wgpu::BufferBindingType::Uniform;
-    e0.buffer.minBindingSize = 64;
-
-    wgpu::BindGroupLayoutDescriptor bgl0Desc{};
-    bgl0Desc.entryCount = 1;
-    bgl0Desc.entries = &e0;
-    sParticleSceneBGL = dev.CreateBindGroupLayout(&bgl0Desc);
-    wgpu::BindGroupLayout bgl0 = sParticleSceneBGL;
+    // Group 0: reuse main renderer's SceneBGL (shader only reads binding 0,
+    // but unused BGL entries for shadow depth/sampler are allowed by WebGPU)
+    wgpu::BindGroupLayout bgl0 = gWgpuRnd->Pipelines().SceneLayout();
 
     // Group 1: texture + sampler
     wgpu::BindGroupLayoutEntry e1[2] = {};
@@ -297,25 +287,8 @@ void DrawParticlesBillboard(RndParticleSys* sys) {
     // TODO: cache pipeline by blend mode
     wgpu::RenderPipeline pipe = dev.CreateRenderPipeline(&pipeDesc);
 
-    // Bind group 0: scene viewProj — reuse the scene buffer
-    wgpu::BindGroupEntry sceneEntry{};
-    sceneEntry.binding = 0;
-    // We need the scene uniform buffer. Use the existing scene bind group's buffer.
-    // For simplicity, write viewProj to a small buffer from SceneUniforms.
-    // Actually, reuse the existing scene buffer which starts with viewProj.
-    // But the bind group layout expects minBindingSize=64 and our scene buffer is 496 bytes.
-    // Create a temporary bind group pointing to the scene buffer.
-    extern wgpu::Buffer& GetSceneBuffer();
-    extern uint32_t GetSceneOffset();
-    sceneEntry.buffer = GetSceneBuffer();
-    sceneEntry.offset = GetSceneOffset();
-    sceneEntry.size = 64;
-
-    wgpu::BindGroupDescriptor bg0Desc{};
-    bg0Desc.layout = sParticleSceneBGL;
-    bg0Desc.entryCount = 1;
-    bg0Desc.entries = &sceneEntry;
-    wgpu::BindGroup sceneBG = dev.CreateBindGroup(&bg0Desc);
+    // Bind group 0: reuse the main renderer's scene bind group (same SceneBGL)
+    wgpu::BindGroup& sceneBG = gWgpuRnd->SceneBindGroup();
 
     // Bind group 1: texture + sampler
     wgpu::TextureView texView;

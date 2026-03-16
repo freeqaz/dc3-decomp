@@ -657,10 +657,11 @@ void WorldCrowd::Draw3DChars() {
         for (int i = 0; (unsigned int)i < numChars; i++) {
             Apply3DCharXfm(charIt, i, RndCam::Current());
 #ifdef HX_NATIVE
-            // On native, draw 3D crowd chars directly (no impostor textures).
-            // Skip Xbox-specific raw offset access and color mod flags.
-            curChar->SetShowing(true);
-            curChar->DrawShowing();
+            // TODO: Crowd 3D character rendering disabled on native.
+            // Force3DCrowd sets mHandle=nullptr, so Apply3DCharXfm() is a no-op.
+            // Drawing crowd Characters directly causes WebGPU BGL mismatches.
+            (void)i;
+            break;
 #else
             if (charIt->mDef.mUseRandomColor) {
                 SetMatColorFlags(charIt->mDef.mMats, RndMat::kColorModModulate, &charIt->m3DChars[i].mColors);

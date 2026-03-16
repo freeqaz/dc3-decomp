@@ -30,6 +30,8 @@
 #include "platform/TransparentQueue.h"
 #include "rndobj/BaseMaterial.h"
 #include "rndobj/Mat.h"
+#include "rndobj/TexRenderer.h"
+#include "world/Crowd.h"
 #include "hamobj/HamGameData.h"
 #include "obj/DirLoader.h"
 #include "ui/UILabel.h"
@@ -1106,7 +1108,9 @@ void App::RunWithoutDebugging() {
                                     || strstr(matName, "projection")
                                     || strstr(meshName, "TVScreen")
                                     || strstr(meshName, "Reflect")
-                                    || strstr(meshName, "projection");
+                                    || strstr(meshName, "projection")
+                                    || strstr(meshName, "refract")
+                                    || mat->GetBlend() == BaseMaterial::kBlendDest;
                                 // Textureless opaque white meshes (e.g. DLV_PanelHoodLights)
                                 if (!hide && mat && !dtex
                                     && mat->GetBlend() == BaseMaterial::kBlendSrc) {
@@ -1120,23 +1124,28 @@ void App::RunWithoutDebugging() {
                                     hidden++;
                                 }
                             }
+                            // Also hide meshes whose diffuse texture is a render target
+                            // (no file path = created at runtime for Kinect projections)
+                            for (ObjDirItr<RndMesh> mit2(venueWorld, true); mit2 != nullptr; ++mit2) {
+                                if (!mit2->Showing()) continue;
+                                RndMat* m2 = mit2->Mat();
+                                if (!m2) continue;
+                                RndTex* dt = m2->GetDiffuseTex();
+                                if (dt && dt->File().empty()) {
+                                    mit2->SetShowing(false);
+                                    hidden++;
+                                }
+                            }
+                            // Hide TexRenderers (render-to-texture, no output on native)
+                            for (ObjDirItr<RndTexRenderer> trit(venueWorld, true); trit != nullptr; ++trit)
+                                trit->SetShowing(false);
                             if (hidden > 0)
-                                printf("DC3 Native: hidden %d camera/projection meshes\n", hidden);
+                                printf("DC3 Native: hidden %d camera/projection/RT meshes\n", hidden);
                         }
 
                         // DC3 doesn't use the LightPreset system — lighting is driven
                         // by PropAnims that directly animate RndLight properties.
                         // Lights have artist-authored initial on/off states; respect them.
-                        {
-                            int lightCount = 0;
-                            int showingCount = 0;
-                            for (ObjDirItr<RndLight> lit(venueWorld, true); lit != nullptr; ++lit) {
-                                lightCount++;
-                                if (lit->Showing()) showingCount++;
-                            }
-                            printf("DC3 Native: venue '%s' — %d lights (%d showing)\n",
-                                   venueWorld->Name(), lightCount, showingCount);
-                        }
                     }
                 }
 
@@ -1430,6 +1439,25 @@ void App::RunWithoutDebugging() {
             if (!drawVenue && gNativeVenueDir)
                 drawVenue = dynamic_cast<WorldDir *>(gNativeVenueDir);
             if (drawVenue && !getenv("DC3_HUD_ONLY")) {
+                // Per-venue one-shot: hide Kinect/render-target meshes
+                {
+                    static WorldDir *sLastVenue = nullptr;
+                    if (sLastVenue != drawVenue) {
+                        sLastVenue = drawVenue;
+                        for (ObjDirItr<RndTexRenderer> trit(drawVenue, true); trit != nullptr; ++trit)
+                            trit->SetShowing(false);
+                        for (ObjDirItr<RndMesh> mit(drawVenue, true); mit != nullptr; ++mit) {
+                            if (!mit->Showing()) continue;
+                            RndMat *m = mit->Mat();
+                            if (!m) continue;
+                            RndTex *dtex = m->GetDiffuseTex();
+                            bool hide = (dtex && dtex->File().empty())
+                                || m->GetBlend() == BaseMaterial::kBlendDest;
+                            if (hide)
+                                mit->SetShowing(false);
+                        }
+                    }
+                }
                 if (!drawVenue->IsProxy()) {
                     // Non-proxy venue: use normal WorldDir draw path
                     drawVenue->DrawShowing();
@@ -1460,8 +1488,13 @@ void App::RunWithoutDebugging() {
                         venueCam->Select();
                     }
 
-                    // Draw all venue meshes
-                    for (ObjDirItr<RndMesh> it(drawVenue, true); it != nullptr; ++it) {
+                    // Draw all venue drawables — meshes, crowds, particles, lines, flares.
+                    // Use RndDrawable iterator (not just RndMesh) to pick up WorldCrowd,
+                    // RndParticleSys, RndLine, RndFlare etc. Skip RndDir/PanelDir/WorldDir
+                    // to avoid recursive sub-draw (those manage their own draw lists).
+                    for (ObjDirItr<RndDrawable> it(drawVenue, true); it != nullptr; ++it) {
+                        // Skip directory types to avoid recursive draw loops
+                        if (dynamic_cast<RndDir*>(&*it)) continue;
                         it->DrawShowing();
                     }
 
@@ -1505,18 +1538,30 @@ void App::RunWithoutDebugging() {
                 // doesn't run on native. Without this, everything stays
                 // at showing=0 and DrawShowing() draws nothing.
                 // HACK: Skip elements that shouldn't show without gameplay.
+                // Whitelist approach: hide everything, then show only what we need.
+                // The DTA flow system normally manages visibility — without it,
+                // showing everything produces white rectangles from flashcards,
+                // grid overlays, and background panels.
                 for (ObjDirItr<RndDrawable> drawIt(gNativeHudDir, true); drawIt != nullptr; ++drawIt) {
-                    const char *n = drawIt->Name();
-                    // Explicitly hide elements that shouldn't show without gameplay
-                    if (strcmp(n, "blacken.mesh") == 0 ||
-                        strcmp(n, "freestyle_bloom") == 0 ||
-                        strcmp(n, "skeleton.lbl") == 0 ||
-                        strcmp(n, "camera.mesh") == 0 ||
-                        strstr(n, "photo")) {
-                        drawIt->SetShowing(false);
-                        continue;
+                    drawIt->SetShowing(false);
+                }
+                // Show score subdirs and their contents
+                const char *scoreSubdirs[] = {"score_left", "score_right", nullptr};
+                for (const char **sp = scoreSubdirs; *sp; sp++) {
+                    RndDir *sub = gNativeHudDir->Find<RndDir>(*sp, true);
+                    if (sub) {
+                        sub->SetShowing(true);
+                        for (ObjDirItr<RndDrawable> it(sub, true); it != nullptr; ++it)
+                            it->SetShowing(true);
                     }
-                    drawIt->SetShowing(true);
+                }
+                // Show specific text labels only
+                const char *showLabels[] = {
+                    "song_name.lbl", "song_artist.lbl", "score2.lbl", nullptr
+                };
+                for (const char **lp = showLabels; *lp; lp++) {
+                    RndText *lbl = gNativeHudDir->Find<RndText>(*lp, true);
+                    if (lbl) lbl->SetShowing(true);
                 }
 
                 // Force HUD material alpha to 1.0 — DTA flow animations that
