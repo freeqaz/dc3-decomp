@@ -50,6 +50,7 @@ public:
         if (sym == "is_initial_load_done") return DataNode(1);
         // DTA: {saveload_mgr is_autosave_enabled ...}
         if (sym == "is_autosave_enabled") return DataNode(0);
+        if (sym == "autosave") return DataNode(0);
         return Hmx::Object::Handle(msg, rev);
     }
 };
@@ -115,6 +116,23 @@ public:
         if (sym == "is_guide_showing") return DataNode(0);
         if (sym == "is_pad_signed_into_live") return DataNode(0);
         if (sym == "show_controller_required") return DataNode(0);
+        if (sym == "enable_xmp") return DataNode(0);
+        if (sym == "disable_xmp") return DataNode(0);
+        if (sym == "guide_showing") return DataNode(0);
+        return Hmx::Object::Handle(msg, rev);
+    }
+};
+
+// SpeechMgr stub — Kinect voice recognition. No microphone on native.
+class NativeSpeechMgrStub : public Hmx::Object {
+public:
+    NativeSpeechMgrStub() {}
+    virtual DataNode Handle(DataArray *msg, bool rev) {
+        Symbol sym = msg->Sym(1);
+        if (sym == "set_rule") return DataNode(0);
+        if (sym == "begin_recognition") return DataNode(0);
+        if (sym == "set_recognizing") return DataNode(0);
+        if (sym == "end_recognition") return DataNode(0);
         return Hmx::Object::Handle(msg, rev);
     }
 };
@@ -364,7 +382,7 @@ App::App(int argc, char **argv) {
         // These don't need smart handlers — bare stubs are sufficient
         registerStub("content_mgr", new Hmx::Object());
         registerStub("challenges", new Hmx::Object());
-        registerStub("speech_mgr", new Hmx::Object());
+        registerStub("speech_mgr", new NativeSpeechMgrStub());
     }
 
     // Go to first screen (title screen)
@@ -1084,8 +1102,7 @@ void App::RunWithoutDebugging() {
         // load_game_hud handler (GameMode::SetGameplayMode → char_objects.dta),
         // which doesn't fire on native. Load directly instead.
         // HACK: This bypasses the FileMerger pipeline. The full flow
-        // needs GameMode::SetGameplayMode() wired, which requires
-        // MoveMgr::Init() (currently crashes on native).
+        // needs GameMode::SetGameplayMode() wired via FileMerger.
         if (!gNativeHudDir && TheUI && TheUI->CurrentScreen()
             && (strcmp(TheUI->CurrentScreen()->Name(), "game_screen") == 0
                 || strcmp(TheUI->CurrentScreen()->Name(), "main_screen") == 0)) {
@@ -1305,12 +1322,15 @@ void App::RunWithoutDebugging() {
                     }
                 }
 
-                {
-                    extern bool gHudDrawPhase;
-                    gHudDrawPhase = true;
-                    rdir->DrawShowing();
-                    gHudDrawPhase = false;
+                // Force HUD material alpha to 1.0 — DTA flow animations that
+                // normally control alpha never run on native, leaving materials
+                // at alpha=0 (invisible).
+                for (ObjDirItr<RndMat> matIt(gNativeHudDir, true); matIt != nullptr; ++matIt) {
+                    if (matIt->Alpha() < 0.01f)
+                        matIt->SetAlpha(1.0f);
                 }
+
+                rdir->DrawShowing();
 
                 // Restore previous camera and environment
                 if (prevCam && prevCam != RndCam::Current()) {
