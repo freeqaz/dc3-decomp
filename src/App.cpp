@@ -1278,7 +1278,7 @@ void App::RunWithoutDebugging() {
                 if (hudEnv)
                     hudEnv->Select(nullptr);
 
-                if (sHudDrawLog < 3) {
+                if (sHudDrawLog < 1) {
                     sHudDrawLog++;
                     fprintf(stderr, "DC3 HUD Draw: draws=%d cam=%s env=%s\n",
                            rdir->NumDraws(),
@@ -1288,7 +1288,7 @@ void App::RunWithoutDebugging() {
 
                 rdir->DrawShowing();
 
-                // Restore previous camera
+                // Restore previous camera and environment
                 if (prevCam && prevCam != RndCam::Current()) {
                     FlushTransparentDraws();
                     prevCam->Select();
