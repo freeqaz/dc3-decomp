@@ -1,25 +1,43 @@
 # WorldCrowd System — Native Port Status
 
-## Current Status: Factory Enabled, Crowd Not Visible (2026-03-16)
+## Current Status: Working on Data-Baked Venues (2026-03-16)
 
-WorldCrowd factory is now registered on native. Null clip guards prevent crashes.
-Verified: dclive venue boots to main menu with 546 draw calls/frame, no crashes.
-PlayCrowdAnimation still returns early — crowd animation clips not fully loaded.
+WorldCrowd factory is registered on native. Billboard crowd rendering works for venues
+that have crowd data baked into .milo files (e.g. DCI — 10 WorldCrowd objects, all with
+placement meshes, character refs, and billboard quads). DTA-scripted venues (e.g. throneroom)
+have empty crowd data and need the DTA pipeline to populate — not yet supported.
 
-~~WorldCrowd factory registration was guarded by `#ifndef HX_NATIVE` in `World.cpp`.~~ Guard removed — factory now registered on native. Null clip guards in CharClipGroup and CharDriver prevent SIGSEGV. TransformListAlloc LP64 pointer truncation fixed in MultiMesh.h.
+Null clip guards in CharClipGroup and CharDriver prevent crashes from unresolved clip
+references. PlayCrowdAnimation returns early on native to avoid null clip group traversal.
+TransformListAlloc LP64 pointer truncation fixed in MultiMesh.h.
 
 ## Architecture
+
+### Two Venue Crowd Patterns
+
+**Pattern 1 — Data-Baked (works on native)**:
+Venues like DCI have all crowd data serialized in the .milo file:
+- Placement mesh with instance transforms
+- Character references pointing to loaded subdirs
+- `WorldCrowd::Load()` → `CreateMeshes()` → billboard quads ready for rendering
+
+**Pattern 2 — DTA-Scripted (not yet supported)**:
+Venues like throneroom have empty crowd objects in the .milo (`mNum=0`, no characters,
+no placement mesh). The DTA scripting pipeline populates them at runtime:
+- `{$this set_type band}` → triggers init handler
+- `{$this set_fullness 1 1}` + `{handle ($hamwardrobe add_crowd $this)}`
+- FileMerger + HamWardrobe scripting fills in crowd data
 
 ### How WorldCrowd Works
 
 WorldCrowd is a billboard impostor crowd rendering system:
 
-1. **Object creation**: WorldCrowd objects are embedded in venue `.milo_xbox` files. Not all venues have them — `glitterati` does NOT, but `dclive`, `dci`, `streetside`, `houseparty`, `rollerrink`, `throneroom`, and `default` do.
+1. **Object creation**: WorldCrowd objects are embedded in venue `.milo_xbox` files.
 
 2. **Data loading** (`WorldCrowd::Load`):
    - Placement mesh (defines where crowd instances go)
-   - List of `CharData` entries, each with a `Character*` reference (crowd char model) + height
-   - Instance transforms per character type (world positions from the placement mesh)
+   - List of `CharData` entries, each with a `Character*` reference + height
+   - Instance transforms per character type
 
 3. **Mesh creation** (`CreateMeshes` → `BuildBillboard`):
    - Creates a 4-vert billboard quad per character type
@@ -28,8 +46,7 @@ WorldCrowd is a billboard impostor crowd rendering system:
 
 4. **Impostor rendering pipeline** (`DrawShowing`):
    - `Draw3DChars()` — renders 3D crowd characters to impostor textures via RTT
-   - For each character type: iterate `RndMultiMesh` instances and draw billboard quads at world positions
-   - Billboard mesh uses impostor texture as diffuse map
+   - For each character type: draw billboard quads at world positions via `RndMultiMesh`
 
 5. **Animation** (`HamWardrobe::PlayCrowdAnimation`):
    - Iterates `mCrowdMembers` (populated via DTA `{$hamwardrobe add_crowd $this}`)
@@ -50,84 +67,68 @@ DTA merger system requests venue load
   → HamDirector::Enter calls PlayCrowdAnimation("realtime_idle", ...)
 ```
 
-### Venue Flow on Native (simplified)
+### Venue Flow on Native (current)
 
 ```
 App.cpp loads venue .milo + component suffixes (_buildings, _sky, _set, etc.)
-  → WorldCrowd objects NOT created (factory disabled)
-  → No crowd clip subdirs loaded
-  → No crowd rendering
+  → WorldCrowd objects created for data-baked venues (DCI: 10 objects)
+  → CreateMeshes builds billboard quads
+  → PlayCrowdAnimation returns early (clip subdirs not loaded)
+  → DrawShowing renders billboard quads at instance positions (static, no animation)
 ```
 
-## Root Cause Analysis
+## What Works
 
-### Why it crashes when enabled
+- WorldCrowd factory registered (World.cpp)
+- Billboard quad creation via BuildBillboard
+- RndMultiMesh instancing (TransformListAlloc LP64 fix)
+- Null clip guards prevent crashes (CharClipGroup, CharDriver)
+- DCI venue: 10 WorldCrowd objects load successfully with placement meshes
 
-When `REGISTER_OBJ_FACTORY(WorldCrowd)` is enabled on native:
+## What Needs Work
 
-1. **WorldCrowd objects created** — 5+ per venue, with character references ✓
-2. **CreateMeshes / BuildBillboard** — creates billboard quads ✓
-3. **Instance transforms loaded** — world positions for each crowd member ✓
-4. **CRASH: `HamDirector::Enter`** calls `PlayCrowdAnimation("realtime_idle", 2, true)`
-   - `HamWardrobe::PlayCrowdAnimation` iterates crowd members
-   - Calls `CharDriver::PlayGroup("stance_idle_realtime_idle", ...)`
-   - `CharClipGroup::GetClip(0)` accesses `ObjPtrVec<CharClip>` which contains null entries
-   - `ObjPtrVec::swap` calls `SetObjConcrete` → `AddRef` on null → SIGSEGV
+### Crowd Animation (clip subdirs)
 
-### Why clips are null
+Crowd characters reference clips from subdirs like `char/crowd/anim/shared_clips.milo`.
+These are loaded by the Xbox DTA pipeline but not by the native port's simplified loading.
+The `ObjPtrVec<CharClip>` entries resolve to null without these subdirs.
 
-Crowd characters reference clips from subdirectories like `char/crowd/anim/shared_clips.milo`. These subdirs are loaded by the Xbox DTA pipeline but NOT by the native port's simplified venue loading in App.cpp.
-
-The `ObjPtrVec<CharClip>` entries in each `CharClipGroup` store `ObjRefConcrete<CharClip>` nodes that reference clip objects by name. When the clip subdir isn't loaded, these references resolve to null.
-
-### Secondary issue: TransformListAlloc (64-bit crash)
-
-`RndMultiMesh::Instance` uses a custom STL allocator (`TransformListAlloc`) backed by `FixedSizeAlloc`. The free list uses `int*` and casts pointers via `*cur = (int)next` — this **truncates 64-bit pointers to 32 bits**. Fixed by bypassing the pool allocator on native (`malloc`/`free` in `MultiMesh.h`).
-
-## What Needs to Be Done
-
-### Phase 1: Load crowd clip subdirs
-
-The native port needs to load crowd character subdirs alongside the venue:
-
-1. After loading venue components, detect WorldCrowd objects in the venue dir
-2. For each crowd character referenced by a WorldCrowd:
-   - Load the character's clip subdir (e.g., `char/crowd/anim/shared_clips.milo`)
-   - The path is stored in the character's `mClips` ObjDirPtr
-3. Register these clips before `HamDirector::Enter` runs
-
-### Phase 2: Enable WorldCrowd factory
-
-1. Remove `#ifndef HX_NATIVE` guard in `World.cpp`
+To enable animation:
+1. Load crowd clip subdirs alongside the venue
 2. Remove `return;` guard in `HamWardrobe::PlayCrowdAnimation`
-3. Test with a venue that has crowds (e.g., `dclive`)
+3. Verify clip groups resolve correctly
 
-### Phase 3: Verify impostor rendering pipeline
+### DTA-Scripted Venues
 
-1. Verify `Draw3DChars()` renders to impostor textures via RTT
-2. Verify billboard quads bind the impostor texture correctly
-3. Verify `RndMultiMesh::DrawShowing()` places billboards at correct positions
+Venues like throneroom need the DTA init/enter script pipeline to populate crowd data.
+This is a larger task requiring DTA script execution for WorldCrowd handlers.
+
+### Impostor RTT Verification
+
+`Draw3DChars()` renders 3D characters to impostor textures via render-to-texture.
+Needs GPU testing to verify the full pipeline works end-to-end.
 
 ## Venues with WorldCrowd
 
-| Venue | Has WorldCrowd | Crowd count |
-|-------|---------------|-------------|
-| dci | Yes | 5 |
-| dclive | Yes | unknown |
-| default | Yes | unknown |
-| glitterati | **No** | - |
-| houseparty | Yes | unknown |
-| rollerrink | Yes | unknown |
-| streetside | Yes | unknown |
-| throneroom | Yes | unknown |
+| Venue | Pattern | Status |
+|-------|---------|--------|
+| dci | Data-baked | Working (10 objects) |
+| dclive | Data-baked | Untested |
+| default | Unknown | Untested |
+| glitterati | **None** | No crowd objects |
+| houseparty | Unknown | Untested |
+| rollerrink | Unknown | Untested |
+| streetside | Unknown | Untested |
+| tancinematics | Unknown | Untested (cutscene venue) |
+| throneroom | DTA-scripted | Needs DTA pipeline |
 
 ## Files Changed
 
 | File | Change |
 |------|--------|
-| `src/system/world/World.cpp` | WorldCrowd factory guarded `#ifndef HX_NATIVE` |
+| `src/system/world/World.cpp` | WorldCrowd factory enabled (guard removed) |
 | `src/system/rndobj/MultiMesh.h` | TransformListAlloc uses malloc/free on native |
 | `src/system/hamobj/HamWardrobe.cpp` | PlayCrowdAnimation early-returns on native |
 | `src/system/char/CharDriver.cpp` | Null clip guard in PlayGroup |
-| `src/system/char/CharClipGroup.cpp` | Null clip guard in GetClip |
-| `src/system/world/Crowd.cpp` | Removed `#ifndef HX_NATIVE` around CreateMeshes |
+| `src/system/char/CharClipGroup.cpp` | Null clip guards in GetClip, FindClip, Copy |
+| `src/system/world/Crowd.cpp` | Diagnostic logging for CreateMeshes, Set3DCharAll |
