@@ -429,6 +429,56 @@ void WgpuRnd::EndActivePass() {
     mInPass = false;
 }
 
+void WgpuRnd::ClearDepthForOverlay() {
+    if (!mInPass || !mFrameView) return;
+    // End current pass, restart with depth cleared but color preserved
+    EndActivePass();
+    BeginFramePass(false); // false = Load color (preserve), but we override depth below
+    // BeginFramePass(false) uses LoadOp::Load for depth too, which is wrong.
+    // We need to restart with cleared depth. End and manually build the pass.
+    EndActivePass();
+
+    int curW = mGpu.WindowWidth();
+    int curH = mGpu.WindowHeight();
+    bool hasPostProc = RndPostProc::Current() != nullptr;
+
+    wgpu::RenderPassColorAttachment colorAtt{};
+    if (kMSAASamples > 1) {
+        colorAtt.view = mMsaaView;
+        colorAtt.resolveTarget = hasPostProc ? mIntermediateView : mFrameView;
+        colorAtt.storeOp = wgpu::StoreOp::Store;
+    } else {
+        colorAtt.view = hasPostProc ? mIntermediateView : mFrameView;
+        colorAtt.storeOp = wgpu::StoreOp::Store;
+    }
+    colorAtt.loadOp = wgpu::LoadOp::Load; // preserve color from venue
+
+    wgpu::RenderPassDepthStencilAttachment depthAtt{};
+    depthAtt.view = mDepthView;
+    depthAtt.depthLoadOp = wgpu::LoadOp::Clear; // clear depth for overlay
+    depthAtt.depthStoreOp = wgpu::StoreOp::Store;
+    depthAtt.depthClearValue = 1.0f;
+    depthAtt.stencilLoadOp = wgpu::LoadOp::Clear;
+    depthAtt.stencilStoreOp = wgpu::StoreOp::Store;
+    depthAtt.stencilClearValue = 0;
+
+    wgpu::RenderPassDescriptor rpDesc{};
+    rpDesc.label = "OverlayPass";
+    rpDesc.colorAttachmentCount = 1;
+    rpDesc.colorAttachments = &colorAtt;
+    rpDesc.depthStencilAttachment = &depthAtt;
+
+    mPass = mEncoder.BeginRenderPass(&rpDesc);
+    mInPass = true;
+    mActiveTargetTex = nullptr;
+    mCurrentTargetFormat = mGpu.SurfaceFormat();
+    mCurrentSampleCount = kMSAASamples;
+    mCurrentPassHasDepth = true;
+    mCurrentTargetWidth = (uint32_t)curW;
+    mCurrentTargetHeight = (uint32_t)curH;
+    ApplyViewport();
+}
+
 void WgpuRnd::SetViewport(const Viewport& v) {
     NgRnd::SetViewport(v);
     ApplyViewport();

@@ -165,6 +165,9 @@ public:
     void ShowConsole(bool);
     bool ConsoleShowing();
     void EndWorld();
+#ifdef HX_NATIVE
+    virtual void ClearDepthForOverlay() {} // Override in WgpuRnd
+#endif
     void SetShowTimers(bool, bool);
     void SetProcAndLock(bool);
     bool ProcAndLock() const;

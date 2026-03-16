@@ -257,6 +257,10 @@ private:
     void BeginFramePass(bool clear);
     void BeginTexturePass(RndTex* tex);
     void EndActivePass();
+public:
+    // Clear depth buffer for 2D overlay rendering (HUD on top of 3D scene).
+    // Ends current pass, restarts with depth cleared but color preserved.
+    void ClearDepthForOverlay() override;
     void CreateDepthTexture(int w, int h);
     void CreateDefaultTextures();
     void WriteSceneUniforms();
