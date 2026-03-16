@@ -20,11 +20,11 @@ and platform support.
 | Phase 1B: Milo Viewer | COMPLETE | 100% |
 | Phase 1.5: Asset Pipeline | COMPLETE | 100% |
 | Phase 2: Rendering | IN PROGRESS | ~95% |
-| Phase 2.5: Character Animation | WORKING | ~90% |
+| Phase 2.5: Character Animation | WORKING | ~95% |
 | Phase 3: Audio | COMPLETE | 100% (real-time MOGG playback verified) |
 | Phase 4: Input | COMPLETE | 100% |
 | Phase 5: Motion Capture | NOT STARTED | 0% |
-| Phase 6: Polish & Platforms | IN PROGRESS | ~30% |
+| Phase 6: Polish & Platforms | IN PROGRESS | ~40% |
 
 ### What Works Today
 
@@ -180,17 +180,20 @@ iterates drawables, while the engine uses `WorldDir::DrawShowing()` → `RndGrou
 
 **Session 75 — HUD camera fix + MoveMgr + venue sweep**: Fixed HUD camera to use Cam.cam (y=-768 perspective) instead of venue camera — labels now project correctly onto screen. Added MoveMgr::Init(0) + MiniGameMgr::Init() to native init — eliminates "movemgr not function or object" DTA errors. Guarded choreography pipeline (OriginalChoreoRemixer, DanceRemixer, MoveAsyncDetector) against missing Kinect data. Verified 6 venues: dclive, glitterati, houseparty, rollerrink, bid, dci — all rendering with HUD overlay. 827 draw calls/frame on dclive with HUD.
 
-**Session 76 — Facial animation + HUD text**: Loaded per-character viseme .milo files on native (bypasses FileMerger which doesn't fire). CharFaceServo now has Base clip + Blink clips for all 4 game characters (player0/1, backup0/1). Procedural blinking enabled via CharEyes → CharFaceServo pipeline. HUD song name ("YMCA") and artist ("Village People") labels now visible with per-frame alpha force. 2047 draw calls/frame on dclive with full face animation.
+**Session 76 — Facial animation + HUD text**: Loaded per-character viseme .milo files on native (bypasses FileMerger which doesn't fire). CharFaceServo now has Base clip + Blink clips for all 4 game characters (player0/1, backup0/1). Procedural blinking enabled via CharEyes → CharFaceServo pipeline. HUD song name ("YMCA") and artist ("Village People") labels now visible with per-frame alpha force.
+
+**Session 77 — Eye gaze + draw call accuracy + score display**: Created CharInterest objects per character for eye gaze tracking (on Xbox these come from .milo files via FileMerger). Fixed draw call counter — was reporting 2047 (including 1223 no-material mesh traversals); actual GPU draws are ~840. Loaded score.milo into HUD score_left/score_right slots. Frame capture analysis: 787 GPU draws (407 world.cam, 202 Cam.cam HUD, 141 text, 37 UI), 30 unique meshes account for all 1223 no-material skips (move card/feedback UI with 45 instances each).
 
 #### Cosmetic / Low Priority
 | Task | Status | Notes |
 |------|--------|-------|
 | Facial animation base | **DONE** | Viseme .milo loaded per-character, CharFaceServo base clip wired, procedural blinking enabled via CharEyes. |
+| CharEyes gaze/darts | **DONE** | CharInterest objects created per character, audience position interests wired, procedural look system active. |
+| Score display | **DONE** | score.milo loaded into HUD subdirs, explicit subdir drawing. |
 | Lip sync | TODO | Needs .lipsync files from ark loaded + OnSoundPlay handler triggering |
-| CharEyes gaze/darts | PARTIAL | CharEyes polled, face servo wired. Interest objects not loaded (needs venue CharInterest). |
 | Projected light textures | TODO | Gobo/spotlight cookies |
 | Exotic post-processing | TODO | Gradient map, kaleidoscope, flicker, noise, video feedback |
-| Performance optimization | TODO | Draw call batching, culling, profiling |
+| Performance optimization | ANALYZED | ~840 actual GPU draws per gameplay frame. 787 draws + 1223 no-material skips (30 unique UI meshes × ~45 instances). RTX 3090 handles this easily. |
 | Save/load game progress | TODO | Profile, unlocks |
 | macOS / Windows | TODO | WebGPU handles backends |
 
