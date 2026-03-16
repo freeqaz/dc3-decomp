@@ -1250,7 +1250,8 @@ void App::RunWithoutDebugging() {
         // The venue renders through world_panel (loads ../world/world.milo).
         // HUD panels (game_panel etc.) render over the 3D scene.
         TheRnd.BeginDrawing();
-        if (TheUI)
+        // TEMP: When DC3_HUD_ONLY is set, skip venue and draw only HUD
+        if (TheUI && !getenv("DC3_HUD_ONLY"))
             TheUI->Draw();
         // Draw HUD overlay — on Xbox this is drawn as part of the game_screen
         // panel hierarchy via FileMerger. On native we draw it explicitly.
@@ -1259,33 +1260,22 @@ void App::RunWithoutDebugging() {
         if (gNativeHudDir && !getenv("DC3_NO_HUD_DRAW")) {
             RndDir *rdir = dynamic_cast<RndDir *>(gNativeHudDir);
             if (rdir) {
-                static int sHudDrawLog = 0;
-                // Transition from 3D world to 2D overlay mode
+                // Switch to HUD rendering: clear depth (preserve venue color),
+                // select the HUD's own 3D perspective camera (Cam.cam at y=-768).
                 TheRnd.EndWorld();
                 TheRnd.ClearDepthForOverlay();
-                RndCam *prevCam = RndCam::Current();
 
-                // Use TheUI's 2D camera — PanelDir::DrawShowing always uses
-                // CamOverride or TheUI->GetCam(), NOT the milo's embedded Cam.cam.
-                RndCam *hudCam = TheUI ? TheUI->GetCam() : nullptr;
+                RndCam *prevCam = RndCam::Current();
+                RndCam *hudCam = gNativeHudDir->Find<RndCam>("Cam.cam", false);
+                if (!hudCam && TheUI) hudCam = TheUI->GetCam();
                 if (hudCam && hudCam != prevCam) {
                     FlushTransparentDraws();
                     hudCam->Select();
                 }
-                RndEnviron *hudEnv = gNativeHudDir->Find<RndEnviron>("static_hud.env", true);
-                if (!hudEnv && TheUI) hudEnv = TheUI->GetEnv();
-                if (hudEnv)
-                    hudEnv->Select(nullptr);
 
-                if (sHudDrawLog < 3) {
-                    sHudDrawLog++;
-                    if (hudCam) {
-                        const Transform &ct = hudCam->WorldXfm();
-                        fprintf(stderr, "DC3 HUD: cam pos=(%.1f,%.1f,%.1f) near=%.1f far=%.1f\n",
-                               ct.v.x, ct.v.y, ct.v.z,
-                               hudCam->NearPlane(), hudCam->FarPlane());
-                    }
-                }
+                // Select HUD environment for correct ambient lighting
+                RndEnviron *hudEnv = gNativeHudDir->Find<RndEnviron>("static_hud.env", true);
+                if (hudEnv) hudEnv->Select(nullptr);
 
                 // Force-show key labels every frame — DTA flows reset
                 // showing state, so we must re-apply before each draw.
