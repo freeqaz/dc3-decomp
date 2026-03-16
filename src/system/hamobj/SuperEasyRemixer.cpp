@@ -58,6 +58,12 @@ void SuperEasyRemixer::Reset() { OriginalChoreoRemixer::Reset(); }
 
 void SuperEasyRemixer::Init() {
     OriginalChoreoRemixer::Init();
+#ifdef HX_NATIVE
+    // Guard: if move graph failed to load, OriginalChoreoRemixer::Init()
+    // returned early and mTotalMeasures is uninitialized. Skip the rest.
+    if (TheMoveMgr->MoveParents().size() == 0)
+        return;
+#endif
     SaveSuperEasyMoveParents();
     for (Difficulty d = EasiestDifficulty(); d != kNumDifficulties;
          d = DifficultyOneHarder(d)) {
@@ -216,10 +222,16 @@ void SuperEasyRemixer::LoadAllVariants() {
     const char *song = TheGameData->GetSong().Str();
     if (TheMoveMgr->MoveParents().size() == 0) {
         MILO_FAIL("Failed to load move graph for: %s\n", (char *)song);
+#ifdef HX_NATIVE
+        return; // No move graph — skip variant loading to avoid null deref
+#endif
     }
     DataArray *layout = TheMoveMgr->Graph().Layout();
     if (!layout) {
         MILO_FAIL("couldn't load layout for: %s", (char *)song);
+#ifdef HX_NATIVE
+        return; // No layout — skip to avoid null deref on layout->FindArray()
+#endif
     }
     for (int i = 0; i < 3; i++) {
         Symbol diffSym = DifficultyToSym((Difficulty)i);

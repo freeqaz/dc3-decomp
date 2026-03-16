@@ -261,6 +261,10 @@ public:
     // Clear depth buffer for 2D overlay rendering (HUD on top of 3D scene).
     // Ends current pass, restarts with depth cleared but color preserved.
     void ClearDepthForOverlay() override;
+    // Flush post-processing NOW, then start a new pass that draws directly
+    // to the framebuffer (bypassing post-proc). Used for HUD overlay that
+    // should not be affected by bloom/DOF.
+    void FlushPostProcessingForOverlay();
     void CreateDepthTexture(int w, int h);
     void CreateDefaultTextures();
     void WriteSceneUniforms();
@@ -281,6 +285,7 @@ public:
     wgpu::RenderPassEncoder mPass;
     wgpu::TextureView mFrameView;
     bool mInPass = false;
+    bool mPostProcFlushed = false;
     RndTex* mActiveTargetTex = nullptr;
     wgpu::TextureFormat mCurrentTargetFormat = wgpu::TextureFormat::Undefined;
     uint32_t mCurrentSampleCount = 1;

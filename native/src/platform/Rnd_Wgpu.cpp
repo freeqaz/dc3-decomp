@@ -477,6 +477,72 @@ void WgpuRnd::ClearDepthForOverlay() {
     mCurrentTargetWidth = (uint32_t)curW;
     mCurrentTargetHeight = (uint32_t)curH;
     ApplyViewport();
+
+    // Force re-bind scene uniforms on the new pass — the previous pass
+    // had them bound, but the new pass starts without any bind groups.
+    mLastSceneCam = nullptr;
+}
+
+void WgpuRnd::FlushPostProcessingForOverlay() {
+    if (!mInPass || !mFrameView) return;
+
+    // End the current pass (venue + any existing draws)
+    EndActivePass();
+
+    // Run post-processing now (reads intermediate, writes to framebuffer)
+    if (mIntermediateView && RndPostProc::Current()) {
+        mPostProcPass.Run(mEncoder, mIntermediateView, mIntermediateTex,
+                          mIntermediateWidth, mIntermediateHeight,
+                          mDepthView, mFrameView, mBlackTexView, mGpu);
+    }
+
+    int curW = mGpu.WindowWidth();
+    int curH = mGpu.WindowHeight();
+
+    // Start a new pass that draws directly to the framebuffer (no MSAA, no post-proc).
+    // This is for HUD overlay that should not be bloom/DOF-affected.
+    wgpu::RenderPassColorAttachment colorAtt{};
+    if (kMSAASamples > 1) {
+        // With MSAA: draw to MSAA texture, resolve directly to framebuffer
+        // (not to intermediate — bypass post-proc)
+        colorAtt.view = mMsaaView;
+        colorAtt.resolveTarget = mFrameView;
+        colorAtt.storeOp = wgpu::StoreOp::Store;
+    } else {
+        colorAtt.view = mFrameView;
+        colorAtt.storeOp = wgpu::StoreOp::Store;
+    }
+    colorAtt.loadOp = wgpu::LoadOp::Load; // preserve post-processed venue
+
+    wgpu::RenderPassDepthStencilAttachment depthAtt{};
+    depthAtt.view = mDepthView;
+    depthAtt.depthLoadOp = wgpu::LoadOp::Clear;
+    depthAtt.depthStoreOp = wgpu::StoreOp::Store;
+    depthAtt.depthClearValue = 1.0f;
+    depthAtt.stencilLoadOp = wgpu::LoadOp::Clear;
+    depthAtt.stencilStoreOp = wgpu::StoreOp::Store;
+    depthAtt.stencilClearValue = 0;
+
+    wgpu::RenderPassDescriptor rpDesc{};
+    rpDesc.label = "HudOverlayPass";
+    rpDesc.colorAttachmentCount = 1;
+    rpDesc.colorAttachments = &colorAtt;
+    rpDesc.depthStencilAttachment = &depthAtt;
+
+    mPass = mEncoder.BeginRenderPass(&rpDesc);
+    mInPass = true;
+    mActiveTargetTex = nullptr;
+    mCurrentTargetFormat = mGpu.SurfaceFormat();
+    mCurrentSampleCount = kMSAASamples;
+    mCurrentPassHasDepth = true;
+    mCurrentTargetWidth = (uint32_t)curW;
+    mCurrentTargetHeight = (uint32_t)curH;
+    ApplyViewport();
+
+    // Force scene uniforms re-bind on the new pass
+    mLastSceneCam = nullptr;
+    // Mark post-proc as already done so EndDrawing doesn't run it again
+    mPostProcFlushed = true;
 }
 
 void WgpuRnd::SetViewport(const Viewport& v) {
@@ -819,6 +885,7 @@ void WgpuRnd::NativeVenueInit() {
 
 void WgpuRnd::BeginDrawing() {
     RndMesh_ResetFrameStats();
+    mPostProcFlushed = false;
 
     // Skip if GPU not initialized (Phase 1A headless mode)
     if (!mGpu.Device()) {
@@ -933,6 +1000,12 @@ void WgpuRnd::BeginDrawing() {
     // Shadow pre-pass: render depth from light's perspective
     mShadowPass.Render(mEncoder, mObjectRing, mBoneRing, mGpu);
 
+    // Pre-clear: render-to-texture passes (TexRenderer, TexMovie)
+    // Must happen after encoder creation but before main frame pass.
+    // TexRenderer::DrawPreClear() calls SelectRenderTarget() which creates
+    // temporary texture passes, then FinishDrawTarget() restores state.
+    DrawPreClear();
+
     BeginFramePass(true);
 }
 
@@ -976,7 +1049,8 @@ void WgpuRnd::EndDrawing() {
         EndActivePass();
 
         // Post-processing: if active, read from intermediate and draw to swapchain
-        if (mIntermediateView && RndPostProc::Current()) {
+        // Skip if already flushed (e.g., FlushPostProcessingForOverlay was called)
+        if (mIntermediateView && RndPostProc::Current() && !mPostProcFlushed) {
             mPostProcPass.Run(mEncoder, mIntermediateView, mIntermediateTex,
                               mIntermediateWidth, mIntermediateHeight,
                               mDepthView, mFrameView, mBlackTexView, mGpu);
@@ -1200,6 +1274,7 @@ void WgpuRnd::WriteSceneUniforms() {
         scene.cameraPos[0] = worldXfm.v.x;
         scene.cameraPos[1] = worldXfm.v.y;
         scene.cameraPos[2] = worldXfm.v.z;
+
     } else {
         // Identity viewProj if no camera
         scene.viewProj[0] = scene.viewProj[5] = scene.viewProj[10] = scene.viewProj[15] = 1;
@@ -1208,9 +1283,6 @@ void WgpuRnd::WriteSceneUniforms() {
 
     // Environment (fog, ambient, lights)
     RndEnviron* env = RndEnviron::Current();
-    if (mFrameID == 1000) {
-        printf("DC3 Frame600: env=%p\n", (void*)env);
-    }
     if (env) {
         // Ambient color (with minimum floor for visibility)
         const Hmx::Color& amb = env->AmbientColor();

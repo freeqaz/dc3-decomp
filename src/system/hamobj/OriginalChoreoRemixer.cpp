@@ -154,6 +154,9 @@ void OriginalChoreoRemixer::SaveOriginalMoveParents() {
     Symbol song = TheGameData->GetSong();
     if (!layout) {
         MILO_FAIL("couldn't load layout for: %s\n", song.Str());
+#ifdef HX_NATIVE
+        return; // No layout — skip to avoid null deref
+#endif
     }
     for (int i = 0; i < kNumDifficultiesDC2; i++) {
         Symbol diffSym = DifficultyToSym((Difficulty)i);
