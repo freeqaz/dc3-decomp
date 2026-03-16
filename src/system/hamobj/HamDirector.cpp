@@ -2517,16 +2517,9 @@ void HamDirector::PlayNextShot() {
 }
 
 DataNode HamDirector::OnSelectCamera(DataArray *a) {
-#ifdef HX_NATIVE
-    // On native, always use the original song.anim (not the routine builder).
-    // SongAnim(0) returns the routine builder when merge_moves=1, which strips
-    // dircut/LightPreset/camera events. We need the full song.anim for visuals.
-    HamPlayerData *hpd0 = TheGameData->Player(0);
-    RndPropAnim *songAnim = hpd0 ? SongAnimByDifficulty(LegacyDifficulty(hpd0->GetDifficulty())) : nullptr;
-    if (!songAnim) songAnim = SongAnim(0); // fallback
-#else
+    // Full songAnim path — Debug::Fail is non-fatal on native, so DTA
+    // handler FAILs (missing panels, stubs) are harmless warnings.
     RndPropAnim *songAnim = SongAnim(0);
-#endif
     if (!mDisabled) {
         float beat = TheTaskMgr.Beat();
         float seconds = BeatToSeconds(beat);
