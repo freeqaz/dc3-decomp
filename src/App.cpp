@@ -313,6 +313,18 @@ App::App(int argc, char **argv) {
     MetaPanel::Init();
     GameInit();
 
+    // Register MidiParser factory so .milo files can deserialize MidiParser objects.
+    // Missing this caused silent null returns from NewObject("MidiParser").
+    MidiParser::Init();
+
+    // Set path eval callback to skip loading unnecessary assets based on game mode.
+    // Same callback used in PPC path — filters out mode-specific loads.
+    DirLoader::SetPathEvalCallback(IsUselessLoad);
+
+    // Register DTA script functions (random_context, etc.) so DTA handlers that
+    // reference them don't silently fail. This is critical for DTA handler execution.
+    ContextCheckerInit();
+
     // Trigger content refresh to load base game songs from ark.
     // This must happen after HamSongMgr.Init() (registers callback) and
     // MetaPanel::Init() (registers SongSortMgr etc.) so all callbacks fire.
@@ -952,6 +964,12 @@ void App::RunWithoutDebugging() {
                         // Load venue component .milo files not handled by DTA flow
                         {
                             const char* venueName = TheGameData ? TheGameData->Venue().Str() : nullptr;
+#ifdef HX_NATIVE
+                            if (venueName && *venueName)
+                                printf("DC3 Native: venue from GameData = '%s'\n", venueName);
+                            else
+                                printf("DC3 Native: venue from GameData is empty, using fallback\n");
+#endif
                             if (!venueName || !*venueName) venueName = "glitterati";
                             static const char* componentSuffixes[] = {
                                 "_buildings", "_sky", "_set", "_chairs", "_table_glasses", nullptr

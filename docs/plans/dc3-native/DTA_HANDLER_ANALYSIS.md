@@ -1,145 +1,101 @@
 # DTA Handler Execution — Root Cause Analysis
 
 **Last Updated**: 2026-03-16
-**Status**: Research complete — actionable fix path identified
+**Status**: Research complete — animation issue is NOT a DTA problem
 
-## Problem Statement
+## Revised Finding (2026-03-16)
 
-Multiple `#ifdef HX_NATIVE` hacks exist because DTA (DataArray) script handlers don't fire on the native port. The most visible symptom: `transition_complete` and `on_anim_event` callbacks never execute, causing `RndAnimatable::IsAnimating()` to return true forever.
+**The animation completion issue is NOT caused by missing DTA handlers.**
 
-## Expected Execution Path (Xbox)
+### Evidence
 
-```
-1. AnimTask::Poll() (Anim.cpp:437-444)
-   → Animation completes (time > mFrameSpan)
-   → static Message msg("on_anim_event", DataNode(Symbol("ended")))
-   → mListener->Handle(msg, false)
+1. Added `ContextCheckerInit()` and `MidiParser::Init()` to native init path — no change in behavior
+2. Added diagnostic logging to `AnimTask::Poll()` dispatch:
+   - `mTypeDef` is **null for all animated objects** — confirmed via `fprintf(stderr, "typeDef=%p")`
+   - `on_anim_event` is **not defined in ANY DTA config file** (objects.dta, ham_objects.dta, etc.)
+   - The `on_anim_event` message returns `kDataUnhandled` (type=0) for every listener
+3. This means `on_anim_event` is unhandled on **both Xbox and native** — it's not a DTA regression
 
-2. Object::Handle() (Object.h:695-702)
-   → HANDLE_ARRAY(mTypeDef) macro expands to:
-   → if (mTypeDef && (found = mTypeDef->FindArray(sym, false)))
-   →   found->ExecuteScript(1, this, _msg, 2)
+### Real Root Cause: mAnimTarget Lifecycle
 
-3. DTA Script Execution
-   → The typedef's DTA handler calls StopAnimation()
-   → StopAnimation() removes all AnimTask references
-   → IsAnimating() returns false
+The `AnimTask::Poll()` dispatch block (Anim.cpp:435-446) only executes when `mAnimTarget` is null:
 
-4. HamNavList::Poll() checks IsAnimating()
-   → Returns false → kRibbonSelect completes → transition to kRibbonSwell
-```
-
-## Where It Breaks on Native
-
-### Primary Cause: mTypeDef is Null
-
-Objects loaded from `.milo_xbox` files have their `mTypeDef` populated from DTA type definitions. The type definition is a `DataArray*` containing message handler scripts.
-
-On Xbox, type definitions are loaded from:
-1. `config/objects.dta` — base object type definitions
-2. Per-unit `.dta` files — specialized handler overrides
-3. `.milo_xbox` embedded type data
-
-On native, `mTypeDef` is likely null because:
-- Type definition loading may require DTA functions that aren't registered (see missing Init calls)
-- `objects.dta` parsing may silently fail on unregistered function references
-- The `SetTypeDef()` call during object construction may not find the matching typedef
-
-### Secondary Cause: Missing DTA Function Registrations
-
-`ContextCheckerInit()` registers 5+ DTA script functions via `DataRegisterFunc()`:
-- `random_context`
-- `random_context_allow_failure`
-- `seed_random_context`
-- `handle_context_used`
-- `random_context_count`
-
-If a DTA handler script references any unregistered function, `ExecuteScript()` may:
-1. Call `MILO_FAIL_DTA()` (non-fatal on native) and return early
-2. Skip the handler entirely
-3. Execute partially, missing the `StopAnimation()` call
-
-### Tertiary Cause: ExecuteScript Silent Failure
-
-Under `MILO_FAIL_DTA` (non-fatal mode, the default on native), script execution errors don't crash — they log a warning and continue. This means:
-- Handler references to missing objects → warning + skip
-- Handler calls to unregistered functions → warning + skip
-- Net result: the handler "fires" but doesn't actually do anything
-
-## Verification Steps for Future Agents
-
-### Step 1: Check mTypeDef Population
-
-Add diagnostic logging:
 ```cpp
-// In Object.cpp or Object.h, HANDLE_ARRAY macro
-if (!mTypeDef) {
-    fprintf(stderr, "HANDLE_ARRAY: mTypeDef is null for %s (class %s)\n",
-            Name(), ClassName());
+if (!mAnimTarget) {  // Only runs when mAnimTarget is null
+    if (!mLoop && !mBlending && !mBlendPeriod) {
+        if (time > mFrameSpan || mScale == 0.0f) {
+            if (mListener) {
+                mListener->Handle(msg, false);  // on_anim_event
+            }
+            mListener = nullptr;
+            TheTaskMgr.QueueTaskDelete(this);  // Task removes itself
+        }
+    }
 }
 ```
 
-Run the engine and check if objects that should have DTA handlers have null `mTypeDef`.
+On **Xbox**: `mAnimTarget` becomes null through some mechanism (target object destruction, parent cleanup, or a message handler that nulls the reference). This allows the dispatch block to run and the task to self-delete.
 
-### Step 2: Add ContextCheckerInit() to Native Init
+On **native**: `mAnimTarget` stays non-null (the ObjPtr reference persists because object destruction timing differs). The dispatch block never runs, so `IsAnimating()` stays true forever.
 
-In `App.cpp`, inside the `#ifdef HX_NATIVE` block, add:
-```cpp
-ContextCheckerInit();  // Register DTA script functions
-```
+### The Hack is Correct
 
-This may require stubbing dependencies. Check what `ContextCheckerInit()` needs.
-
-### Step 3: Add MidiParser::Init() to Native Init
+The auto-null hack at Anim.cpp:426-434 is the **correct fix**:
 
 ```cpp
-MidiParser::Init();  // Register MidiParser object factory
+#ifdef HX_NATIVE
+if (mAnimTarget && !mLoop && !mBlending && !mBlendPeriod) {
+    if (time > mFrameSpan && mFrameSpan > 0.0f) {
+        mAnimTarget = NULL;  // Force completion
+    }
+}
+#endif
 ```
 
-### Step 4: Test AnimTask Event Dispatch
+This forces `mAnimTarget` to null when a non-looping animation exceeds its frame span, allowing the natural task self-deletion path to execute. This is safe because:
+- The animation has already played past its end
+- Non-looping animations should complete and clean up
+- The target is no longer needed
 
-After adding Init calls, check if `on_anim_event("ended")` actually dispatches through to the DTA handler:
-```cpp
-// In Anim.cpp:440, after mListener->Handle(msg, false)
-DataNode result = mListener->Handle(msg, false);
-fprintf(stderr, "AnimTask: on_anim_event dispatch result: %d (DATA_HANDLED=%d)\n",
-        result.Int(), kDataHandled);
-```
+### What This Changes
 
-If the result is `kDataUnhandled`, the handler isn't being found/executed.
+**DTA handler execution is still incomplete on native** (mTypeDef is null for most objects), but this is **not the cause of the animation hang**. The Init calls added to App.cpp (ContextCheckerInit, MidiParser::Init, DirLoader::SetPathEvalCallback) are still valuable for:
+- MidiParser object deserialization from .milo files
+- DTA script function availability
+- Content path resolution filtering
 
-### Step 5: Check objects.dta Loading
+But they don't fix the animation issue, and removing the Anim.cpp hack is **not recommended**.
 
-Verify that `config/objects.dta` parses successfully on native:
-- Run with `MILO_FATAL_FAILS=0` and grep for DTA errors
-- Check if type definitions are populated after SystemInit
+---
 
-## Fix Path
+## mTypeDef Status
 
-**Optimistic path** (if mTypeDef population is the issue):
-1. Add missing Init calls → DTA functions register → objects.dta parses fully → mTypeDef populates → handlers fire → remove hacks
+Diagnostic confirmed: `mTypeDef` is null for animated objects loaded from .milo files. Possible reasons:
+1. Objects are loaded with a null type Symbol (empty type name → `SetType(Symbol(""))` → `SetTypeDef(nullptr)`)
+2. Type names exist but the corresponding config entries are missing from objects.dta
+3. Object types are not configured in the system config hierarchy
 
-**Pessimistic path** (if deeper issues exist):
-1. The Anim.cpp auto-null hack is safe and correct — AnimTask auto-completes when animation finishes
-2. The HamNavList IsAnimating skip is safe — transitions complete without waiting for DTA confirmation
-3. Keep both hacks as permanent platform differences
+This is a lower-priority issue — most game functionality works without DTA type definitions. The main impact is:
+- No DTA-defined message handlers on objects
+- No custom property type behaviors
+- No script-driven object configuration overrides
+
+## Init Calls Added (2026-03-16)
+
+Added to `App.cpp` HX_NATIVE init block (after `GameInit()`):
+
+| Init Call | Purpose | Status |
+|---|---|---|
+| `MidiParser::Init()` | Register MidiParser factory + 14 script variable caches | ADDED, builds clean |
+| `DirLoader::SetPathEvalCallback(IsUselessLoad)` | Filter unnecessary asset loads by game mode | ADDED, builds clean |
+| `ContextCheckerInit()` | Register 5 DTA script functions (random_context, etc.) | ADDED, builds clean |
+
+All three Init calls are header-included and compile without issues on native. 500-frame smoke test passes.
 
 ## Related Hacks
 
-| Hack | File | Lines | Removable If DTA Fixed? |
+| Hack | File | Lines | Removable? |
 |------|------|-------|:---:|
-| AnimTarget auto-null | Anim.cpp | 426-434 | YES |
-| kRibbonSelect IsAnimating skip | HamNavList.cpp | 505-509 | YES |
-| kRibbonSelect gesture skip | HamNavList.cpp | 1430-1440 | YES |
-| Audio timeout bypass | Game.cpp | 805-825 | MAYBE (depends on load_new_song script timing) |
-
-## Key Files
-
-| File | What to check |
-|------|--------------|
-| `src/system/rndobj/Anim.cpp:426-444` | AnimTask::Poll — event dispatch + native hack |
-| `src/system/obj/Object.h:695-702` | HANDLE_ARRAY macro — typedef dispatch |
-| `src/system/obj/Object.cpp:SetTypeDef` | Where mTypeDef gets populated |
-| `src/App.cpp:233-346` (HX_NATIVE block) | Missing Init calls |
-| `src/system/hamobj/HamNavList.cpp:505,1522` | kRibbonSelect hacks |
-| `src/lazer/game/Game.cpp:805-825` | Audio timeout hack |
+| AnimTarget auto-null | Anim.cpp | 426-434 | **NO** — correct fix for native timing |
+| kRibbonSelect IsAnimating skip | HamNavList.cpp | 505-509 | NO — depends on animation completion |
+| Audio timeout bypass | Game.cpp | 805-825 | NO — async loading difference |

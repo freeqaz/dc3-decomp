@@ -6,6 +6,7 @@
 #include "math/Utl.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
+#include "rndobj/Mat.h"
 #include "utl/Str.h"
 #include <cstring>
 
@@ -100,6 +101,13 @@ CharClip *CharClipGroup::GetClip(int flags) {
     if (!mClips.size()) {
         return nullptr;
     }
+#ifdef HX_NATIVE
+    // Guard against null clip pointers (unresolved references from missing subdirs).
+    // On Xbox, all subdirs are loaded; on native, crowd char clips may be missing.
+    for (int i = 0; i < mClips.size(); i++) {
+        if (!mClips[i]) return nullptr;
+    }
+#endif
 
     if (mClips.size() <= mWhich) {
         mWhich = mClips.size() - 1;
@@ -121,6 +129,9 @@ CharClip *CharClipGroup::GetClip(int flags) {
             int swapIdx = QueueRandom(pos, origUnk24);
             mClips.swap(pos, swapIdx);
             CharClip *clip = mClips[pos];
+#ifdef HX_NATIVE
+            if (!clip) { pos = origWhich; break; }
+#endif
             if ((clip->Flags() & flags) == flags) {
                 mClips.swap(pos, mWhich);
                 int newUnk24 = origUnk24 + 1;
@@ -181,11 +192,14 @@ void CharClipGroup::DeleteRemaining(int x) {
 }
 
 CharClip *CharClipGroup::FindClip(const char *name) const {
-    for (int i = 0; i < (int)mClips.size(); i++) {
-        CharClip *clip = (CharClip *)mClips[i];
-        auto _tmp0 = streq(name, clip->Name());
-        if (clip && _tmp0)
-            return clip;
+    for (int i = 0; i < mClips.size(); i++) {
+#ifdef HX_NATIVE
+        // Crowd char clips may be null (unresolved references from missing subdirs)
+        if (!mClips[i]) continue;
+#endif
+        if (streq(name, ((CharClip *)mClips[i])->Name())) {
+            return (CharClip *)mClips[i];
+        }
     }
     return nullptr;
 }
@@ -196,4 +210,16 @@ void CharClipGroup::SetClipFlags(int flags) {
         if (clip)
             clip->SetFlags(flags);
     }
+}
+
+template <>
+BinStream &operator<<(BinStream &bs, const ObjPtrVec<RndMat, ObjectDir> &c) {
+    bs << (int)c.size();
+    MILO_ASSERT(c.Owner(), 0x525);
+    for (int i = 0; i < (int)c.size(); i++) {
+        const Hmx::Object *obj = c[i];
+        const char *name = obj ? obj->Name() : "";
+        bs << name;
+    }
+    return bs;
 }
