@@ -355,25 +355,22 @@ void HamWardrobe::PlayCrowdAnimation(Symbol animName, int flags, bool override) 
 #ifdef HX_NATIVE
     // Crowd clip animation requires the FileMerger to have loaded and merged
     // the animation .milo files into the crowd characters' clip dirs.
+    // On native, crowd clips may not be loaded yet when PlayCrowdAnimation
+    // is first called — trigger sync loading if needed.
     {
         FileMerger *fm = Dir() ? Dir()->Find<FileMerger>("crowd_clips.fm", false) : nullptr;
         if (fm) {
             if (fm->HasPendingFiles()) {
-                return; // Files still loading
+                return; // Files still loading async
             }
-            // Check if any mergers have actually loaded files
-            static bool sFirstCall = true;
-            if (sFirstCall) {
-                sFirstCall = false;
-                auto &mergers = fm->Mergers();
-                printf("DC3 Native: crowd_clips.fm has %d mergers:\n", (int)mergers.size());
-                for (int i = 0; i < mergers.size(); i++) {
-                    auto &m = mergers[i];
-                    printf("  [%d] name='%s' selected='%s' loaded='%s' dir=%p (%s)\n",
-                           i, m.mName.Str(), m.mSelected.c_str(), m.mLoaded.c_str(),
-                           (void*)m.MergerDir(),
-                           m.MergerDir() ? m.MergerDir()->Name() : "null");
-                }
+            auto &mergers = fm->Mergers();
+            bool anyLoaded = false;
+            for (int i = 0; i < mergers.size(); i++) {
+                if (!mergers[i].mLoaded.empty()) { anyLoaded = true; break; }
+            }
+            if (!anyLoaded) {
+                Symbol venue = TheGameData ? TheGameData->Venue() : Symbol("");
+                LoadCrowdClips("medium", venue, false); // sync load
             }
         }
     }

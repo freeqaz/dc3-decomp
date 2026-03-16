@@ -105,10 +105,19 @@ CharClip *CharClipGroup::GetClip(int flags) {
         return nullptr;
     }
 #ifdef HX_NATIVE
-    // Guard against null clip pointers (unresolved references from missing subdirs).
-    // On Xbox, all subdirs are loaded; on native, crowd char clips may be missing.
-    for (int i = 0; i < mClips.size(); i++) {
-        if (!mClips[i]) return nullptr;
+    // Purge null clip pointers (unresolved references from subdirs not yet loaded).
+    // On Xbox, all subdirs are pre-loaded so references always resolve.
+    // On native, crowd char clips may not exist at CharClipGroup load time,
+    // resulting in null ObjPtr entries. FileMerger later adds valid clips via
+    // Copy(kCopyFromMax), but the original nulls persist. Purge them here so
+    // the LRU rotation/swap logic doesn't crash on null dereference.
+    for (int i = mClips.size() - 1; i >= 0; i--) {
+        if (!mClips[i]) {
+            mClips.erase(mClips.begin() + i);
+        }
+    }
+    if (!mClips.size()) {
+        return nullptr;
     }
 #endif
 
@@ -132,9 +141,6 @@ CharClip *CharClipGroup::GetClip(int flags) {
             int swapIdx = QueueRandom(pos, origUnk24);
             mClips.swap(pos, swapIdx);
             CharClip *clip = mClips[pos];
-#ifdef HX_NATIVE
-            if (!clip) { pos = origWhich; break; }
-#endif
             if ((clip->Flags() & flags) == flags) {
                 mClips.swap(pos, mWhich);
                 int newUnk24 = origUnk24 + 1;

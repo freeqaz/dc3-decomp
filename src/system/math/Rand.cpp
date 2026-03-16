@@ -62,7 +62,14 @@ float Rand::Float(float f1, float f2) { return ((f2 - f1) * Float() + f1); }
 
 int Rand::FastInt(int low, int high) {
     MILO_ASSERT(high > low, 0x33);
+#ifdef HX_NATIVE
+    // PPC original: `(Int() * range) >> 16` relies on 32-bit overflow behavior
+    // that produces out-of-range indices (UB on both PPC and x86, but PPC has
+    // no bounds checking so it silently corrupts). Use modulo for correctness.
+    return low + ((unsigned int)Int() % (unsigned int)(high - low));
+#else
     return ((Int() * (high - low)) >> 0x10) + low;
+#endif
 }
 
 float Rand::Gaussian() {
