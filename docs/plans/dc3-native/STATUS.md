@@ -165,15 +165,18 @@ iterates drawables, while the engine uses `WorldDir::DrawShowing()` → `RndGrou
 | Task | Status | Notes |
 |------|--------|-------|
 | DC3 logo on main menu | **DONE** | Session 71: MetaMaterials loading enabled on native. `shell_basic.mmat` resolves correctly. 198 warnings → 0. |
-| Score display wiring | TODO | Connect scoring outputs to HUD labels during gameplay. Infrastructure exists. |
+| Score display wiring | PARTIAL | HUD draw pipeline works (skeleton.lbl visible). Score labels positioned in HUD's 3D camera space but DTA flows reset visibility. Per-frame force-show applied. |
+| HUD rendering pipeline | **DONE** | Loads _default_hud.milo, SyncObjects, Enter, 49 draws per frame. ClearDepthForOverlay for proper 2D overlay. Uses HUD's Cam.cam (3D perspective at y=-768) and static_hud.env. |
 
 #### Medium Effort
 | Task | Status | Notes |
 |------|--------|-------|
-| Move card UI content | TODO | HUD panels active but content invisible. TexMovie pipeline implemented — needs asset/data flow tracing for game_panel. |
+| Move card UI content | BLOCKED | Needs MoveMgr::Init() on native — `movemgr not function or object` errors every frame. DTA flow animations require move graph data. |
 | WorldCrowd rendering | **DONE** | 3D crowd characters visible on dclive venue. 5 crowd character types, 30+ instances placed via placement mesh. Key fix: SetFullness was capping m3DChars to empty instance list after Set3DCharAll transferred them. See [PHASE_C_WORLDCROWD.md](PHASE_C_WORLDCROWD.md) |
 
 **Session 71 — MetaMaterials + GCC 15 compat**: Removed `#ifdef HX_NATIVE` guard in `RndMat::Init()` that disabled `LoadMetaMaterials()` on native. `sMetaMaterials` now loads `metamaterials.milo` and all shared MatAnim objects (`shell_basic.mmat` etc.) resolve correctly. Fixed GCC 15 compat: `std::random_shuffle` and `std::mem_fun` restored in libstdc++ 15 — guarded compat shims with `_GLIBCXX_RELEASE < 15`.
+
+**Session 74 — WorldCrowd + HUD**: WorldCrowd 3D crowd rendering working on dclive (733 draw calls/frame). HUD rendering pipeline fully wired — loads milo, SyncObjects, Enter, 49 draws with ClearDepthForOverlay. skeleton.lbl visible confirming draw pipeline works. Song name/score labels positioned in HUD 3D camera space (Cam.cam at y=-768), need coordinate/orientation fix. Multiple venues verified: dclive (crowd), glitterati (no crowd). Key bugs fixed: SetFullness erasing m3DChars, DumpSongLayout crash on empty vectors, ChunkStream seek corruption.
 
 #### Cosmetic / Low Priority
 | Task | Status | Notes |
