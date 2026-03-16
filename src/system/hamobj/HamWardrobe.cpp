@@ -370,7 +370,14 @@ void HamWardrobe::PlayCrowdAnimation(Symbol animName, int flags, bool override) 
             }
             if (!anyLoaded) {
                 Symbol venue = TheGameData ? TheGameData->Venue() : Symbol("");
+#ifdef __EMSCRIPTEN__
+                // Web: use async loading — sync XHR blocks main thread and can
+                // cause infinite hang if fetch fails or times out.
+                LoadCrowdClips("medium", venue, true); // async load
+                return; // Skip animation this frame, clips will load async
+#else
                 LoadCrowdClips("medium", venue, false); // sync load
+#endif
             }
         }
     }
