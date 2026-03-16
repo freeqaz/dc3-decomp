@@ -22,10 +22,8 @@ void WorldInit() {
     REGISTER_OBJ_FACTORY(BeatClock)
     REGISTER_OBJ_FACTORY(CameraManager)
     REGISTER_OBJ_FACTORY(ColorPalette)
-#ifndef HX_NATIVE
     REGISTER_OBJ_FACTORY(WorldCrowd)
     REGISTER_OBJ_FACTORY(WorldCrowd3DCharHandle)
-#endif
     CamShot::Init();
     REGISTER_OBJ_FACTORY(WorldReflection)
     Spotlight::Init();

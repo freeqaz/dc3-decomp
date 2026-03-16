@@ -501,7 +501,15 @@ void HamNavList::Poll() {
 
     // Handle select mode completion
     if (mRibbonMode == HamListRibbon::kRibbonSelect) {
-        if (!RndAnimatable::IsAnimating() && !TheUI->InTransition()
+        if (
+#ifdef HX_NATIVE
+            // Native: DTA transition_complete handlers that call StopAnimation()
+            // don't fire, so IsAnimating() stays true forever. Skip the check
+            // so nav_select_done fires and the select flow completes.
+            !TheUI->InTransition()
+#else
+            !RndAnimatable::IsAnimating() && !TheUI->InTransition()
+#endif
             && !TheLoadMgr.EditMode()) {
             SetRibbonMode(HamListRibbon::kRibbonSwell);
 

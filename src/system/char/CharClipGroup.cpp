@@ -68,6 +68,9 @@ BEGIN_COPYS(CharClipGroup)
         if (ty == kCopyFromMax) {
             for (int i = 0; i < c->mClips.size(); i++) {
                 CharClip *curClip = (CharClip *)c->mClips[i];
+#ifdef HX_NATIVE
+                if (!curClip) continue;
+#endif
                 if (!FindClip(curClip->Name())) {
                     mClips.push_back(ObjOwnerPtr<CharClip>(this, curClip));
                 }

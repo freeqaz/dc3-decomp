@@ -267,6 +267,9 @@ CharClipDriver *
 CharDriver::PlayGroup(CharClipGroup *grp, int i, float f1, float f2, float f3) {
     mClipGroup = grp;
     CharClip *clip = grp->GetClip(0);
+#ifdef HX_NATIVE
+    if (!clip) return nullptr;
+#endif
     return Play(clip, i, f1, f2, f3);
 }
 

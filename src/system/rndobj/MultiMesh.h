@@ -59,12 +59,22 @@ namespace std {
         bool operator!=(const TransformListAlloc&) const { return false; }
 
         pointer allocate(const size_type count, const void *hint = nullptr) const {
+#ifdef HX_NATIVE
+            // FixedSizeAlloc free list uses int* (32-bit), truncates 64-bit pointers.
+            // Bypass the pool allocator on native and use malloc directly.
+            return reinterpret_cast<pointer>(malloc(count * sizeof(T)));
+#else
             return reinterpret_cast<pointer>(gTransListAlloc.CustAlloc(count * sizeof(T))
             );
+#endif
         }
 
         void deallocate(pointer ptr, size_type count) const {
+#ifdef HX_NATIVE
+            free(ptr);
+#else
             gTransListAlloc.CustFree(ptr);
+#endif
         }
     };
 

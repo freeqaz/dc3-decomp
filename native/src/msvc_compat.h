@@ -15,7 +15,7 @@
 #include <algorithm>
 #include <cstdlib>
 
-#if !defined(_GLIBCXX_RELEASE) || _GLIBCXX_RELEASE < 15
+#if !defined(_LIBCPP_VERSION) && (!defined(_GLIBCXX_RELEASE) || _GLIBCXX_RELEASE < 15)
 namespace std {
 template <class RandomIt>
 void random_shuffle(RandomIt first, RandomIt last) {
@@ -29,7 +29,7 @@ void random_shuffle(RandomIt first, RandomIt last) {
 
 // std::mem_fun was removed in C++17. Provide a compat shim using mem_fn.
 #include <functional>
-#if !defined(_GLIBCXX_RELEASE) || _GLIBCXX_RELEASE < 15
+#if !defined(_LIBCPP_VERSION) && (!defined(_GLIBCXX_RELEASE) || _GLIBCXX_RELEASE < 15)
 namespace std {
 template <class Ret, class T>
 auto mem_fun(Ret (T::*f)()) { return std::mem_fn(f); }

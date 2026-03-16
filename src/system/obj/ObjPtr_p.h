@@ -638,10 +638,11 @@ BinStream &operator<<(BinStream &bs, const ObjPtrList<T1, ObjectDir> &list) {
 // -- BinStream operator<< for ObjPtrVec --
 
 template <class T1>
-BinStream &operator<<(BinStream &bs, const ObjPtrVec<T1, ObjectDir> &vec) {
-    bs << (int)vec.size();
-    for (int i = 0; i < (int)vec.size(); i++) {
-        const Hmx::Object *obj = vec[i];
+BinStream &operator<<(BinStream &bs, const ObjPtrVec<T1, ObjectDir> &c) {
+    bs << (int)c.size();
+    MILO_ASSERT(c.Owner(), 0x525);
+    for (int i = 0; i < (int)c.size(); i++) {
+        const Hmx::Object *obj = c[i];
         const char *name = obj ? obj->Name() : "";
         bs << name;
     }

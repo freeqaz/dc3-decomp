@@ -352,6 +352,11 @@ void HamWardrobe::SetDir(ObjectDir *dir) {
 
 void HamWardrobe::PlayCrowdAnimation(Symbol animName, int flags, bool override) {
     if (mCrowdMembers.size() == 0) return;
+#ifdef HX_NATIVE
+    // On native, crowd character clip subdirs aren't loaded (char/crowd/anim/),
+    // so clip groups contain null ObjPtrs. Skip crowd animation to avoid crashes.
+    return;
+#endif
 
     mPreviousCrowdAnimation = animName;
     mCrowdAnimationFlags = flags;

@@ -1063,30 +1063,6 @@ void WorldCrowd::DrawShowing() {
     Draw3DChars();
     if (Rnd::kDrawOcclusionDepth == TheRnd.GetDrawMode()) return;
     MILO_ASSERT(!dynamic_cast<RndMat*>(gImpostorMat->NextPass()), 0x3A0);
-#ifdef HX_NATIVE
-    static int sCrowdDrawDbg = 0;
-    if (sCrowdDrawDbg < 3) {
-        sCrowdDrawDbg++;
-        int ci = 0;
-        FOREACH (dbgIt, mCharacters) {
-            int ni = dbgIt->mMMesh ? (int)dbgIt->mMMesh->Instances().size() : -1;
-            MILO_LOG("Crowd::DrawShowing char[%d] char=%p mmesh=%p instances=%d height=%.1f show3D=%d\n",
-                ci, dbgIt->mDef.mChar, dbgIt->mMMesh, ni, dbgIt->mDef.mHeight, mShow3DOnly);
-            if (dbgIt->mMMesh && ni > 0) {
-                auto it2 = dbgIt->mMMesh->Instances().begin();
-                for (int j = 0; j < 3 && it2 != dbgIt->mMMesh->Instances().end(); ++j, ++it2) {
-                    MILO_LOG("  inst[%d] pos=(%.2f, %.2f, %.2f) vis=%d\n",
-                        j, it2->mXfm.v.x, it2->mXfm.v.y, it2->mXfm.v.z, it2->mIsVisible);
-                }
-            }
-            ci++;
-        }
-        MILO_LOG("Crowd: impostorTex=%p (%dx%d) impostorCam=%p impostorMat=%p\n",
-            gImpostorTex[0], gImpostorTex[0] ? gImpostorTex[0]->Width() : 0,
-            gImpostorTex[0] ? gImpostorTex[0]->Height() : 0,
-            gImpostorCamera, gImpostorMat);
-    }
-#endif
     std::vector<Hmx::Rect> rects;
     rects.reserve(12);
     FOREACH (charIt, mCharacters) {
