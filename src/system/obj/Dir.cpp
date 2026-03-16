@@ -616,6 +616,9 @@ void PreloadArray(DataArray *arr, int idx) {
                     shouldPop = true;
                 }
                 MILO_ASSERT(gPreloadIdx < DIM(gPreloaded), 0xA35);
+#ifdef HX_NATIVE
+                MILO_LOG("  PreloadArray[%d]: '%s'\n", gPreloadIdx, str);
+#endif
                 gPreloaded[gPreloadIdx++].LoadFile(str, false, true, kLoadFront, false);
                 if (shouldPop) {
                     MemPopHeap();
@@ -627,6 +630,10 @@ void PreloadArray(DataArray *arr, int idx) {
 
 void PreloadSharedSubdirs(Symbol s) {
     DataArray *arr = SystemConfig("preload_subdirs")->FindArray(s, false);
+#ifdef HX_NATIVE
+    MILO_LOG("PreloadSharedSubdirs('%s') arr=%p entries=%d\n",
+        s.Str(), arr, arr ? arr->Size() - 1 : 0);
+#endif
     if (arr) {
         PreloadArray(arr, 1);
     }
