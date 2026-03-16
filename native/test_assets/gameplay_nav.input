@@ -1,0 +1,42 @@
+# Navigate from main_screen to gameplay
+# Use with: MILO_FIRST_SCREEN=main_screen MILO_INPUT_SCRIPT=native/test_assets/gameplay_nav.input
+#
+# Flow: main_screen → choose_mode → song_select → select song → MoveOn → ready/game
+# Key: on song_select, confirm on a SONG (not a header) triggers
+#      SongSortNode::OnSelect() → MoveOn() → move_on_quickplay
+
+# main_screen: DANCE is first item (focused by default)
+30 confirm
+
+# choose_mode_screen: "perform" is first item
+120 confirm
+
+# song_select_screen: list has tier headers first, need to scroll to a song
+# Navigate down past header items to reach an actual song
+250 down
+260 down
+270 down
+280 down
+290 down
+
+# confirm on a song triggers Select() → MoveOn()
+350 confirm
+
+# difficulty select: "Beginner" is first item
+450 confirm
+
+# multiuser_screen: confirm player setup
+520 confirm
+
+# loading/ready screens
+580 start
+640 confirm
+
+# practice_welcome_screen: "Full Song Session" (practice_all) is default/first option
+# Confirm to advance to game_screen with dance HUD
+700 confirm
+
+# extra confirms in case of additional intermediate screens
+800 confirm
+860 start
+920 confirm

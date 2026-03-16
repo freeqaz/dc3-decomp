@@ -787,11 +787,25 @@ void WorldCrowd::SetFullness(float flatFullness, float charFullness) {
             // handle m3DChars (visible 3D chars)
             int totalChars3D = (int)it->m3DChars.size() + (int)it->m3DCharsCreated.size();
             int targetChars3D = (int)((float)totalChars3D * flatFullness);
+#ifdef HX_NATIVE
+            // When mForce3DCrowd is true, MultiMesh instances have been
+            // transferred to m3DChars and the instance list is empty. Don't
+            // cap 3DChars to instances.size() (0) — that would erase them all.
+            // Also guard against empty m3DCharsCreated (can happen during
+            // Reset3DCrowd → SetFullness call before Sort3DCharList runs).
+            if (!mForce3DCrowd)
+#endif
             targetChars3D = Min(targetChars3D, (int)instances.size());
             int currentChars3D = (int)it->m3DChars.size();
             if (currentChars3D < targetChars3D) {
                 int toAdd = targetChars3D - currentChars3D;
                 int startIdx = currentChars3D;
+#ifdef HX_NATIVE
+                // Guard: m3DCharsCreated may not be populated yet
+                if (startIdx + toAdd > (int)it->m3DCharsCreated.size()) {
+                    toAdd = Max(0, (int)it->m3DCharsCreated.size() - startIdx);
+                }
+#endif
                 InstanceList::iterator instIt = instances.begin();
                 // advance to startIdx in m3DCharsCreated
                 for (int i = 0; i < startIdx; i++) ++instIt;

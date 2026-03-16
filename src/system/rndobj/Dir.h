@@ -62,6 +62,9 @@ public:
     void SetEnv(RndEnviron *env) { mEnv = env; }
     RndEnviron *GetEnv() const { return mEnv; }
     void SyncDrawables();
+#ifdef HX_NATIVE
+    int NumDraws() const { return mDraws.size(); }
+#endif
 
 protected:
     RndDir();

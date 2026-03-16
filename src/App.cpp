@@ -21,7 +21,9 @@
 #include "os/BufFile.h"
 #include "meta_ham/HamSongMgr.h"
 #include "meta_ham/HamSongMetadata.h"
+#include "platform/TransparentQueue.h"
 extern GLFWwindow *gNativeWindow;
+static ObjectDir *gNativeHudDir = nullptr;
 
 // ---------------------------------------------------------------------------
 // Native-only "smart stubs" for Xbox manager objects that DTA scripts reference.
@@ -356,12 +358,6 @@ App::App(int argc, char **argv) {
         registerStub("challenges", new Hmx::Object());
         registerStub("speech_mgr", new Hmx::Object());
     }
-
-    // Move manager — required for gameplay HUD. DTA scripts reference {movemgr ...}
-    // to query move data, char clips, and routine info during game_screen.
-    // Must be after SystemConfig is fully loaded (SuperEasyRemixer ctor reads config).
-    MoveMgr::Init(0);
-    MiniGameMgr::Init();
 
     // Go to first screen (title screen)
     TheUI->GotoFirstScreen();
@@ -957,6 +953,48 @@ void App::RunWithoutDebugging() {
             if (TheHamDirector) {
                 venueWorld = TheHamDirector->GetVenueWorld();
             }
+#ifdef HX_NATIVE
+            // Native: The DTA merger pipeline doesn't load venues automatically.
+            // When entering game_screen with no venue world, load it explicitly.
+            if (!venueWorld && TheUI && TheUI->CurrentScreen()) {
+                static bool sVenueLoadAttempted = false;
+                const char *curScreenName = TheUI->CurrentScreen()->Name();
+                if (!sVenueLoadAttempted && strcmp(curScreenName, "game_screen") == 0) {
+                    sVenueLoadAttempted = true;
+                    const char *venueName = TheGameData ? TheGameData->Venue().Str() : nullptr;
+                    if (venueName && *venueName) {
+                        const char *miloPath = MakeString("world/%s/%s.milo", venueName, venueName);
+                        FilePath fp;
+                        fp.Set(FilePath::Root().c_str(), miloPath);
+                        printf("DC3 Native: Loading gameplay venue '%s' from '%s'\n", venueName, fp.c_str());
+                        ObjectDir *venueDir = DirLoader::LoadObjects(fp, nullptr, nullptr);
+                        if (venueDir) {
+                            WorldDir *wdir = dynamic_cast<WorldDir*>(venueDir);
+                            if (wdir) {
+                                if (TheHamDirector) {
+                                    TheHamDirector->SetNativeVenueWorld(wdir);
+                                    printf("DC3 Native: Venue '%s' set on HamDirector\n", wdir->Name());
+                                } else {
+                                    // No HamDirector — register as fallback venue
+                                    gNativeVenueDir = wdir;
+                                    printf("DC3 Native: Venue '%s' set as fallback (no HamDirector)\n", wdir->Name());
+                                }
+                                venueWorld = wdir;
+                                // Register video_recorder.srec stub (DTA scripts expect it)
+                                if (!wdir->FindObject("video_recorder.srec", false, false)) {
+                                    Hmx::Object *stub = Hmx::Object::NewObject("Object");
+                                    stub->SetName("video_recorder.srec", wdir);
+                                }
+                            } else {
+                                printf("DC3 Native: Venue '%s' loaded but is NOT a WorldDir\n", venueName);
+                            }
+                        } else {
+                            printf("DC3 Native: Failed to load venue '%s' from '%s'\n", venueName, fp.c_str());
+                        }
+                    }
+                }
+            }
+#endif
             if (!venueWorld && gNativeVenueDir) {
                 venueWorld = dynamic_cast<WorldDir*>(gNativeVenueDir);
             }
@@ -1034,6 +1072,67 @@ void App::RunWithoutDebugging() {
             }
         }
 
+        // Load game HUD milo on game_screen — the Xbox flow uses FileMerger's
+        // load_game_hud handler (GameMode::SetGameplayMode → char_objects.dta),
+        // which doesn't fire on native. Load directly instead.
+        // HACK: This bypasses the FileMerger pipeline. The full flow
+        // needs GameMode::SetGameplayMode() wired, which requires
+        // MoveMgr::Init() (currently crashes on native).
+        if (!gNativeHudDir && TheUI && TheUI->CurrentScreen()
+            && strcmp(TheUI->CurrentScreen()->Name(), "game_screen") == 0) {
+            const char *hudMilo = "ui/hud/_default_hud.milo";
+            if (TheGameMode) {
+                const DataNode *modeProp = TheGameMode->Property("gameplay_mode");
+                if (modeProp && modeProp->Type() != kDataUnhandled) {
+                    Symbol mode = modeProp->ForceSym(nullptr);
+                    if (mode == "practice" || mode == "campaign_practice")
+                        hudMilo = "ui/hud/_practice_hud.milo";
+                    else if (mode == "bustamove")
+                        hudMilo = "ui/hud/_bustamove_hud.milo";
+                    else if (mode == "cascade")
+                        hudMilo = "ui/hud/_cascade_hud.milo";
+                }
+            }
+            FilePath hudFp;
+            hudFp.Set(FilePath::Root().c_str(), hudMilo);
+            fprintf(stderr, "DC3 Native: Loading HUD from '%s'\n", hudFp.c_str());
+            ObjectDir *hudDir = DirLoader::LoadObjects(hudFp, nullptr, nullptr);
+            if (hudDir) {
+                gNativeHudDir = hudDir;
+                DataVariable("hud_panel") = DataNode(hudDir);
+                fprintf(stderr, "DC3 Native: HUD loaded — set $hud_panel to '%s' (%s)\n",
+                       hudDir->Name(), hudDir->ClassName());
+                // Enter the HUD dir — triggers DTA flows that show HUD elements
+                RndDir *rdir = dynamic_cast<RndDir *>(hudDir);
+                if (rdir) {
+                    rdir->Enter();
+                    fprintf(stderr, "DC3 Native: HUD Enter() called\n");
+                }
+                // HACK: Without the full DTA flow pipeline (MoveMgr, GameMode
+                // flows, hud_state.flow), HUD elements start hidden.
+                // Force-show content elements and disable transition overlays.
+                for (ObjDirItr<RndDrawable> it(hudDir, true); it != nullptr; ++it) {
+                    const char *name = it->Name();
+                    Symbol cls = it->ClassName();
+                    // Disable full-screen overlays that obscure the venue
+                    if (strcmp(name, "blacken.mesh") == 0
+                        || strcmp(name, "PostProcer") == 0
+                        || strcmp(name, "freestyle_bloom.mat") == 0) {
+                        it->SetShowing(false);
+                    }
+                    // Show all mesh/label content in the HUD
+                    else if (cls == "Mesh" || cls == "HamLabel"
+                        || cls == "UILabel" || cls == "BandLabel"
+                        || cls == "Group") {
+                        it->SetShowing(true);
+                    }
+                }
+                fprintf(stderr, "DC3 Native: HUD initialized with force-show on meshes/labels\n");
+            } else {
+                fprintf(stderr, "DC3 Native: Failed to load HUD from '%s'\n", hudFp.c_str());
+            }
+        }
+
         // Select the venue's camera before drawing so the 3D scene uses
         // the correct camera position from the CameraManager's current shot.
         // WorldDir::DrawShowing() only runs camera management for the ROOT world
@@ -1063,6 +1162,31 @@ void App::RunWithoutDebugging() {
         TheRnd.BeginDrawing();
         if (TheUI)
             TheUI->Draw();
+        // Draw HUD overlay — on Xbox this is drawn as part of the game_screen
+        // panel hierarchy via FileMerger. On native we draw it explicitly.
+        // Replicates PanelDir::DrawShowing() setup: EndWorld() transitions to
+        // 2D overlay mode, UI camera provides screen-space projection.
+        if (gNativeHudDir) {
+            RndDir *rdir = dynamic_cast<RndDir *>(gNativeHudDir);
+            if (rdir) {
+                // Transition from 3D world to 2D overlay mode
+                TheRnd.EndWorld();
+                RndCam *prevCam = RndCam::Current();
+                RndCam *uiCam = TheUI ? TheUI->GetCam() : nullptr;
+                if (uiCam && uiCam != prevCam) {
+                    FlushTransparentDraws();
+                    uiCam->Select();
+                }
+                RndEnviron *uiEnv = TheUI ? TheUI->GetEnv() : nullptr;
+                if (uiEnv)
+                    uiEnv->Select(nullptr);
+                rdir->DrawShowing();
+                if (prevCam && prevCam != RndCam::Current()) {
+                    FlushTransparentDraws();
+                    prevCam->Select();
+                }
+            }
+        }
         TheRnd.EndDrawing();
 
         frameCount++;

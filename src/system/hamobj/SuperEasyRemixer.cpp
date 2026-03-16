@@ -104,6 +104,13 @@ bool InsertVariants(std::set<const MoveVariant *> &vars, Symbol name) {
 }
 
 void SuperEasyRemixer::DumpSongLayout() {
+#ifdef HX_NATIVE
+    // Guard: on native, move data may not be fully loaded when Init runs.
+    // Skip dump if any difficulty track is empty.
+    for (Difficulty d = EasiestDifficulty(); d != kNumDifficulties; d = DifficultyOneHarder(d)) {
+        if (GetMoveParentsByDifficulty(d).empty()) return;
+    }
+#endif
     MILO_LOG("\tSUPEREASY\t\tEASY\t\tMEDIUM\t\tHARD\n");
     String str;
     for (int i = 0; i < mTotalMeasures; i++) {

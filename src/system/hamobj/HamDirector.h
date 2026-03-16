@@ -117,6 +117,9 @@ public:
     PropKeys *GetPropKeysByPlayer(int, Symbol);
     void TriggerNextIntro();
     WorldDir *GetVenueWorld();
+#ifdef HX_NATIVE
+    void SetNativeVenueWorld(WorldDir *venue) { mVenue = venue; }
+#endif
     void UnselectVisualizerPostProc();
     bool GetPracticeFrames(Key<Symbol> *&, Key<Symbol> *&);
     HamCharacter *GetCharacter(int) const;
