@@ -90,6 +90,19 @@ Animation .milo files in `char/crowd/anim/gen/`:
 - `{gender}_base_{era}s.milo_xbox` — era-specific clips (70s, 80s, 90s, 00s, 10s)
 - `{gender}_{tempo}_{era}s.milo_xbox` — combined tempo+era clips
 
+### FileMerger Sync Loading Infinite Hang (Web)
+
+**Root cause**: `FileMerger::StartLoadInternal(async=false)` polls `TheLoadMgr.Poll()`
+in a tight `while (!mFilesPending.empty())` loop with no timeout. If a file load fails
+(web XHR timeout, 404, network error), the loader stays in the queue because the
+failure callback chain (`NotifyFileLoaded` → `PostMerge` → `mFilesPending.pop_front()`)
+never fires. The loop spins forever, freezing the browser.
+
+**Fix**:
+- Native: Added 100k-iteration timeout with force-drain of pending queue
+- Web (Emscripten): Use async loading instead of sync for crowd clips. Sync XHR
+  blocks the browser main thread and can deadlock.
+
 ## Known Limitations
 
 - Camera person clips (`_00s_cameraperson_skills_ok`) not found — these may need
@@ -97,3 +110,5 @@ Animation .milo files in `char/crowd/anim/gen/`:
 - `FastInt` on PPC is fundamentally broken (UB from 32-bit overflow) but has "worked"
   for years via silent memory corruption. The native fix uses modulo which has different
   distribution characteristics (uniform vs shift-biased)
+- On web, crowd clips load async — crowd may appear in T-pose for the first few frames
+  until the animation files finish fetching and merging
