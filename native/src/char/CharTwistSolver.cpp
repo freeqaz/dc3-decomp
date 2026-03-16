@@ -17,11 +17,7 @@
 #include <cstdio>
 #include <cstring>
 
-static void NormalizeAboutX(Hmx::Matrix3& m) {
-    Cross(m.x, m.y, m.z);
-    Normalize(m.z, m.z);
-    Cross(m.z, m.x, m.y);
-}
+// NormalizeAboutX is declared in math/Rot.h and defined in CharUpperTwist.cpp
 
 // Exact CharUpperTwist::Poll() math.
 static void SolveUpperTwistPoll(
@@ -50,12 +46,9 @@ static void SolveUpperTwistPoll(
     twist1->SetWorldXfm(tf);
 }
 
-// Replicates CharForeTwist::Poll() — distributes hand twist along forearm
-static float LimitAng(float ang) {
-    float r = fmod(ang + PI, 2.0f * PI);
-    return r < 0 ? r + PI : r - PI;
-}
+// LimitAng is declared in math/Trig.h and defined in CharForeTwist.cpp
 
+// Replicates CharForeTwist::Poll() — distributes hand twist along forearm
 static void SolveForeTwist(RndTransformable* hand, RndTransformable* twist2,
                            float offset, float bias) {
     if (!hand || !twist2 || !hand->TransParent() || !twist2->TransParent())

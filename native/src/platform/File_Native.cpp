@@ -40,9 +40,15 @@ int FileGetStat(const char *iFilename, FileStat *iBuffer) {
     if (stat(fullName.c_str(), &st) != 0) return -1;
     iBuffer->st_mode = st.st_mode;
     iBuffer->st_size = st.st_size;
+#ifdef __APPLE__
+    iBuffer->st_ctime = st.st_ctimespec.tv_sec;
+    iBuffer->st_atime = st.st_atimespec.tv_sec;
+    iBuffer->st_mtime = st.st_mtimespec.tv_sec;
+#else
     iBuffer->st_ctime = st.st_ctim.tv_sec;
     iBuffer->st_atime = st.st_atim.tv_sec;
     iBuffer->st_mtime = st.st_mtim.tv_sec;
+#endif
     return 0;
 }
 
