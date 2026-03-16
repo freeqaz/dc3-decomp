@@ -1092,6 +1092,38 @@ void App::RunWithoutDebugging() {
                             }
                         }
 
+                        // Hide Kinect-dependent venue meshes (no camera on native):
+                        // TV screens show white placeholder, projectors show white rects
+                        {
+                            int hidden = 0;
+                            for (ObjDirItr<RndMesh> mit(venueWorld, true); mit != nullptr; ++mit) {
+                                if (!mit->Showing()) continue;
+                                const char* meshName = mit->Name();
+                                RndMat* mat = mit->Mat();
+                                const char* matName = mat ? mat->Name() : "";
+                                RndTex* dtex = mat ? mat->GetDiffuseTex() : nullptr;
+                                bool hide = strstr(matName, "TVScreen")
+                                    || strstr(matName, "projection")
+                                    || strstr(meshName, "TVScreen")
+                                    || strstr(meshName, "Reflect")
+                                    || strstr(meshName, "projection");
+                                // Textureless opaque white meshes (e.g. DLV_PanelHoodLights)
+                                if (!hide && mat && !dtex
+                                    && mat->GetBlend() == BaseMaterial::kBlendSrc) {
+                                    const Hmx::Color& c = mat->GetColor();
+                                    if (c.red > 0.9f && c.green > 0.9f && c.blue > 0.9f
+                                        && c.alpha > 0.5f)
+                                        hide = true;
+                                }
+                                if (hide) {
+                                    mit->SetShowing(false);
+                                    hidden++;
+                                }
+                            }
+                            if (hidden > 0)
+                                printf("DC3 Native: hidden %d camera/projection meshes\n", hidden);
+                        }
+
                         // DC3 doesn't use the LightPreset system — lighting is driven
                         // by PropAnims that directly animate RndLight properties.
                         // Lights have artist-authored initial on/off states; respect them.
