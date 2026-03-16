@@ -164,14 +164,16 @@ iterates drawables, while the engine uses `WorldDir::DrawShowing()` → `RndGrou
 #### Quick Wins
 | Task | Status | Notes |
 |------|--------|-------|
-| DC3 logo on main menu | TODO | Most visible gap. Likely TexRenderer/render-to-texture not triggered or subdir not traversed during scene load. |
+| DC3 logo on main menu | **DONE** | Session 71: MetaMaterials loading enabled on native. `shell_basic.mmat` resolves correctly. 198 warnings → 0. |
 | Score display wiring | TODO | Connect scoring outputs to HUD labels during gameplay. Infrastructure exists. |
 
 #### Medium Effort
 | Task | Status | Notes |
 |------|--------|-------|
 | Move card UI content | TODO | HUD panels active but content invisible. TexMovie pipeline implemented — needs asset/data flow tracing for game_panel. |
-| WorldCrowd rendering | TODO | Crowd character instancing for venue backgrounds. |
+| WorldCrowd rendering | **N/A** | DC3 does not use WorldCrowd — all 6 venues have zero crowd objects. Abstract dance stages, not concert venues. |
+
+**Session 71 — MetaMaterials + GCC 15 compat**: Removed `#ifdef HX_NATIVE` guard in `RndMat::Init()` that disabled `LoadMetaMaterials()` on native. `sMetaMaterials` now loads `metamaterials.milo` and all shared MatAnim objects (`shell_basic.mmat` etc.) resolve correctly. Fixed GCC 15 compat: `std::random_shuffle` and `std::mem_fun` restored in libstdc++ 15 — guarded compat shims with `_GLIBCXX_RELEASE < 15`.
 
 #### Cosmetic / Low Priority
 | Task | Status | Notes |

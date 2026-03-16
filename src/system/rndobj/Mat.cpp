@@ -228,19 +228,13 @@ void RndMat::Init() {
     REGISTER_OBJ_FACTORY(RndMat);
     RndMat *mat = Hmx::Object::New<RndMat>();
     BaseMaterial::SetDefaultMat(mat);
-#ifdef HX_NATIVE
-    // TODO(native-guard-investigation): Remove this platform guard once root cause is fixed.
-    // Validate by running native tests and engine flows with MetaMaterials enabled, then
-    // fix upstream load/prop mismatches so Xbox/native can share one path.
-    // Skip metamaterial loading on native — not needed for basic rendering
-    sMetaMaterials = nullptr;
-#else
     RELEASE(sMetaMaterials);
     sMetaMaterials = LoadMetaMaterials();
-    int hashsize = (sMetaMaterials->HashTableUsedSize() + 200) * 2;
-    sMetaMaterials->Reserve(hashsize, sMetaMaterials->StrTableUsedSize() + 4400);
-    CreateAndSetMetaMat(mat);
-#endif
+    if (sMetaMaterials) {
+        int hashsize = (sMetaMaterials->HashTableUsedSize() + 200) * 2;
+        sMetaMaterials->Reserve(hashsize, sMetaMaterials->StrTableUsedSize() + 4400);
+        CreateAndSetMetaMat(mat);
+    }
 }
 
 void RndMat::Terminate() { RELEASE(sMetaMaterials); }

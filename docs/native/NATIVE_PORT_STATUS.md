@@ -461,6 +461,7 @@ Done:
 - ~~Camera cuts~~ — **DONE** (Session 68: song.anim PropKeys → HamDirector → CameraManager)
 - ~~Locale/localization~~ — **DONE** (Session 70: RegionInit fix, 2091 tokens loaded)
 - ~~Web build~~ — **DONE** (Emscripten/WASM port, `scripts/build/web.sh`)
+- ~~MetaMaterials / DC3 logo~~ — **DONE** (Session 71: enabled MetaMaterials loading on native, DC3 logo visible on main menu, 198 shell_basic.mmat warnings → 0)
 
 ### Build Commands
 ```bash
