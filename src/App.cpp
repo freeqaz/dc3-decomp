@@ -1098,33 +1098,39 @@ void App::RunWithoutDebugging() {
                             }
                         }
 
-                        // Load shared world HUD components into venue
-                        // Note: move_feedback.milo and text_feedback.milo contain flow
-                        // scripts that hang during merge (referencing missing anims).
-                        // Only phrase_meter loads cleanly for now.
+#ifdef HX_NATIVE
+                        // Diagnostic: check for WorldCrowd objects in venue
                         {
-                            static const char* sharedComponents[] = {
-                                "world/shared/phrase_meter.milo",
-                                nullptr
-                            };
-                            int totalShared = 0;
-                            for (const char** comp = sharedComponents; *comp; comp++) {
-                                FilePath fp;
-                                fp.Set(FilePath::Root().c_str(), *comp);
-                                ObjectDir* sharedDir = DirLoader::LoadObjects(fp, nullptr, nullptr);
-                                if (sharedDir) {
-                                    MergeFilter filt(
-                                        (MergeFilter::Action)0,
-                                        MergeFilter::kMergeInlinedMoveSharedSubdirs);
-                                    MergeDirs(sharedDir, venueWorld, filt);
-                                    totalShared++;
+                            int crowdCount = 0, totalInstances = 0;
+                            for (ObjDirItr<WorldCrowd> cit(venueWorld, true); cit != nullptr; ++cit) {
+                                crowdCount++;
+                                int inst = 0;
+                                int charsWithRef = 0, charsNull = 0;
+                                for (auto &cd : cit->GetCharacters()) {
+                                    if (cd.mDef.mChar)
+                                        charsWithRef++;
+                                    else
+                                        charsNull++;
+                                    if (cd.mMMesh) {
+                                        for (auto jt = cd.mMMesh->Instances().begin();
+                                             jt != cd.mMMesh->Instances().end(); ++jt)
+                                            inst++;
+                                    }
                                 }
+                                printf("DC3 Native: WorldCrowd '%s' — %d instances, "
+                                       "%d chars (ref=%d, null=%d), placement=%p\n",
+                                       cit->Name(), inst, charsWithRef + charsNull,
+                                       charsWithRef, charsNull,
+                                       (void*)cit->GetPlacementMesh());
+                                totalInstances += inst;
                             }
-                            if (totalShared > 0) {
-                                printf("DC3 Native: loaded %d shared HUD components\n", totalShared);
-                                venueWorld->SyncObjects();
-                            }
+                            if (crowdCount > 0)
+                                printf("DC3 Native: %d WorldCrowd objects, %d total instances\n",
+                                       crowdCount, totalInstances);
+                            else
+                                printf("DC3 Native: no WorldCrowd objects found in venue\n");
                         }
+#endif
 
                         // Hide Kinect-dependent venue meshes (no camera on native):
                         // TV screens show white placeholder, projectors show white rects

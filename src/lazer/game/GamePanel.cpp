@@ -11,6 +11,8 @@
 #include "gesture/WaveToTurnOnLight.h"
 #include "hamobj/CharFeedback.h"
 #include "hamobj/HamDirector.h"
+#include "hamobj/HamPhraseMeter.h"
+#include "hamobj/TransConstraint.h"
 #include "hamobj/HamGameData.h"
 #include "hamobj/HamMaster.h"
 #include "hamobj/HamPlayerData.h"
@@ -41,6 +43,7 @@
 #include "os/System.h"
 #include "os/Timer.h"
 #include "rndobj/Anim.h"
+#include "rndobj/Dir.h"
 #include "rndobj/PropAnim.h"
 #include "rndobj/Overlay.h"
 #include "rndobj/PostProc.h"
@@ -687,6 +690,32 @@ void GamePanel::StartIntro() {
         TheHamDirector->SetupAnims();
         TheHamDirector->SetPollEnabled(true);
         TheHamDirector->Enter();
+        TheHamDirector->SetPlayerSpotlightsEnabled(true);
+
+        // Wire phrase meters to follow players.
+        // TransConstraint.mChild is null because phrase_meter didn't exist
+        // when the venue loaded. Parent phrase meters directly to players.
+        {
+            WorldDir *ven = TheHamDirector->GetVenueWorld();
+            if (ven) {
+                for (int i = 0; i < 2; i++) {
+                    HamPhraseMeter *pm = ven->Find<HamPhraseMeter>(
+                        MakeString("phrase_meter%d", i), false);
+                    RndTransformable *player = ven->Find<RndTransformable>(
+                        MakeString("player%d", i), false);
+                    if (pm && player) {
+                        pm->SetTransParent(player, false);
+                        // Offset slightly above the player
+                        Vector3 offset(0, 80.0f, 0);
+                        pm->SetLocalPos(offset);
+                        pm->SetShowing(true);
+                        fprintf(stderr, "DC3 phrase_meter%d: parented to player%d at (%.1f,%.1f,%.1f)\n",
+                                i, i, player->WorldXfm().v.x, player->WorldXfm().v.y,
+                                player->WorldXfm().v.z);
+                    }
+                }
+            }
+        }
         MILO_LOG("Native: HamDirector::Enter complete, SongAnim(0)=%p\n",
             TheHamDirector->SongAnim(0));
     }
@@ -1000,6 +1029,55 @@ void GamePanel::PollForLoading() {
                         }
                         MILO_LOG("Native PollForLoading: world.fm song merger complete\n");
                     }
+                }
+            }
+        }
+
+        // Load shared HUD components into venue world
+        {
+            static bool sHudMerged = false;
+            if (!sHudMerged && TheHamDirector) {
+                WorldDir *venue = TheHamDirector->GetVenueWorld();
+                if (venue) {
+                    sHudMerged = true;
+
+                    // phrase_meter.milo — phrase meter progress bars
+                    FilePath pmFp;
+                    pmFp.Set(FilePath::Root().c_str(), "world/shared/phrase_meter.milo");
+                    ObjectDir *pmDir = DirLoader::LoadObjects(pmFp, nullptr, nullptr);
+                    if (pmDir) {
+                        MergeFilter pmFilt(
+                            (MergeFilter::Action)0,
+                            MergeFilter::kMergeInlinedMoveSharedSubdirs);
+                        MergeDirs(pmDir, venue, pmFilt);
+                        MILO_LOG("Native PollForLoading: merged phrase_meter.milo into venue\n");
+                    }
+
+                    // Stub objects for move_feedback/text_feedback (move_feedback.milo
+                    // hangs due to flow scripts referencing missing animations)
+                    static const char *kStubNames[] = {
+                        "move_feedback0", "move_feedback1",
+                        "text_feedback0", "text_feedback1",
+                        nullptr
+                    };
+                    for (const char **name = kStubNames; *name; name++) {
+                        if (!venue->Find<RndDir>(*name, false)) {
+                            RndDir *stub = Hmx::Object::New<RndDir>();
+                            stub->SetName(*name, venue);
+                            stub->SetShowing(false);
+                        }
+                    }
+                    venue->SyncObjects();
+
+                    // Debug: check what HUD objects exist
+                    HamPhraseMeter *pm0 = venue->Find<HamPhraseMeter>("phrase_meter0", false);
+                    HamPhraseMeter *pm1 = venue->Find<HamPhraseMeter>("phrase_meter1", false);
+                    RndDrawable *mf0 = venue->Find<RndDrawable>("move_feedback0", false);
+                    RndDrawable *tf0 = venue->Find<RndDrawable>("text_feedback0", false);
+                    fprintf(stderr, "DC3 HUD objects: pm0=%p pm1=%p mf0=%p tf0=%p\n",
+                            (void*)pm0, (void*)pm1, (void*)mf0, (void*)tf0);
+                    if (pm0) fprintf(stderr, "  pm0 showing=%d\n", pm0->Showing());
+                    if (pm1) fprintf(stderr, "  pm1 showing=%d\n", pm1->Showing());
                 }
             }
         }

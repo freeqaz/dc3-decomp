@@ -690,7 +690,10 @@ void WgpuRnd::BeginTexturePass(RndTex* tex) {
     colorAtt.view = colorView;
     colorAtt.loadOp = wgpu::LoadOp::Clear;
     colorAtt.storeOp = wgpu::StoreOp::Store;
-    colorAtt.clearValue = {0.0, 0.0, 0.0, 1.0};
+    // Use transparent black so impostor/billboard RTT can alpha-cut
+    // the background away. Other RTT users (TexRenderer) don't rely on
+    // background alpha — they overwrite every pixel.
+    colorAtt.clearValue = {0.0, 0.0, 0.0, 0.0};
 
     wgpu::RenderPassDepthStencilAttachment depthAtt{};
     wgpu::RenderPassDescriptor rpDesc{};
@@ -1734,8 +1737,4 @@ void WgpuRnd::DrawRect(const Hmx::Rect& rect, RndMat* mat, ShaderType,
     // Restore the scene bind group so subsequent mesh draws don't mismatch.
     if (mSceneBindGroup)
         mPass.SetBindGroup(0, mSceneBindGroup);
-}
-
-bool WgpuRnd_IsInPass() {
-    return gWgpuRnd && gWgpuRnd->IsInPass();
 }

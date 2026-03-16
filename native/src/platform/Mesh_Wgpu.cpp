@@ -120,21 +120,7 @@ static void RecordDrawCall(
 }
 
 void RndMesh::DrawShowing() {
-    // Crowd billboard meshes have empty names and are drawn via RndMultiMesh.
-    // Track anonymous mesh draws separately to diagnose crowd rendering.
-    static int sCrowdDrawDiag = 0;
-    bool isAnonymous = !Name()[0];
-
-    if (!gWgpuRnd || !gWgpuRnd->IsInPass()) {
-        if (isAnonymous && NumVerts() == 4 && sCrowdDrawDiag < 10) {
-            fprintf(stderr, "  SKIP billboard mesh: inPass=%d activeTarget=%p verts=%d mat=%s\n",
-                gWgpuRnd ? (int)gWgpuRnd->IsInPass() : -1,
-                gWgpuRnd ? (void*)gWgpuRnd->ActiveTargetTex() : nullptr,
-                (int)NumVerts(), Mat() ? Mat()->Name() : "null");
-            sCrowdDrawDiag++;
-        }
-        return;
-    }
+    if (!gWgpuRnd || !gWgpuRnd->IsInPass()) return;
     bool capturing = FrameCapture::Get().IsCapturing();
 
     // Text meshes (created by RndText::FontMap) have empty names and may not have
@@ -161,18 +147,8 @@ void RndMesh::DrawShowing() {
     // Get material
     RndMat* mat = Mat();
     if (!mat) {
-        if (isAnonymous && sCrowdDrawDiag < 5) {
-            fprintf(stderr, "  SKIP anonymous mesh: no material\n");
-            sCrowdDrawDiag++;
-        }
         if (capturing) FrameCapture::Get().AddSkip(Name(), "no material");
         return;
-    }
-
-    if (isAnonymous && sCrowdDrawDiag < 5) {
-        fprintf(stderr, "  DRAW anonymous mesh: verts=%d faces=%d mat=%s showing=%d\n",
-            (int)Verts().size(), (int)Faces().size(), mat->Name(), (int)Showing());
-        sCrowdDrawDiag++;
     }
 
     IncrementMeshDrawCalls();
@@ -181,17 +157,6 @@ void RndMesh::DrawShowing() {
 
 void DrawMeshImmediate(RndMesh* mesh) {
     if (!gWgpuRnd || !gWgpuRnd->IsInPass()) return;
-
-    // Log draws during texture pass (RTT)
-    static int sRttDrawDiag = 0;
-    if (gWgpuRnd->ActiveTargetTex() && sRttDrawDiag < 20) {
-        RndMesh* geom = mesh->GetGeomOwner();
-        if (!geom) geom = mesh;
-        fprintf(stderr, "RTT_DRAW %s: nBones=%d verts=%d compVerts=%d geomOwner=%s faces=%d\n",
-            mesh->Name(), mesh->NumBones(), geom->NumVerts(), geom->NumCompressedVerts(),
-            geom->Name(), geom->NumFaces());
-        sRttDrawDiag++;
-    }
 
     bool capturing = FrameCapture::Get().IsCapturing();
     uint32_t heuristics = 0;

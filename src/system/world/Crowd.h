@@ -105,6 +105,8 @@ public:
     void Set3DCharXfm(const std::list<CharData>::iterator &, int, const Transform &);
     void Apply3DCharXfm(const std::list<CharData>::iterator &, int, RndCam *);
     int GetModifyStamp() const { return mModifyStamp; }
+    const std::list<CharData> &GetCharacters() const { return mCharacters; }
+    RndMesh *GetPlacementMesh() const { return mPlacementMesh; }
 
 protected:
     WorldCrowd();
