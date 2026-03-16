@@ -99,6 +99,8 @@ MoveVariant::MoveVariant(MoveGraph *graph, const MoveVariant *other, MoveParent 
     }
     if (other->mLinkedFrom.mVariant) {
         mLinkedFrom.mVariantName = other->mLinkedFrom.mVariant->mVariantName.Str();
+    } else {
+        mLinkedFrom.mVariant = nullptr;
     }
     mPositionOffset = other->mPositionOffset;
     graph->mMoveVariants[mVariantName] = this;

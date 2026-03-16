@@ -1098,6 +1098,34 @@ void App::RunWithoutDebugging() {
                             }
                         }
 
+                        // Load shared world HUD components into venue
+                        // Note: move_feedback.milo and text_feedback.milo contain flow
+                        // scripts that hang during merge (referencing missing anims).
+                        // Only phrase_meter loads cleanly for now.
+                        {
+                            static const char* sharedComponents[] = {
+                                "world/shared/phrase_meter.milo",
+                                nullptr
+                            };
+                            int totalShared = 0;
+                            for (const char** comp = sharedComponents; *comp; comp++) {
+                                FilePath fp;
+                                fp.Set(FilePath::Root().c_str(), *comp);
+                                ObjectDir* sharedDir = DirLoader::LoadObjects(fp, nullptr, nullptr);
+                                if (sharedDir) {
+                                    MergeFilter filt(
+                                        (MergeFilter::Action)0,
+                                        MergeFilter::kMergeInlinedMoveSharedSubdirs);
+                                    MergeDirs(sharedDir, venueWorld, filt);
+                                    totalShared++;
+                                }
+                            }
+                            if (totalShared > 0) {
+                                printf("DC3 Native: loaded %d shared HUD components\n", totalShared);
+                                venueWorld->SyncObjects();
+                            }
+                        }
+
                         // Hide Kinect-dependent venue meshes (no camera on native):
                         // TV screens show white placeholder, projectors show white rects
                         {
@@ -1683,6 +1711,11 @@ void App::RunWithoutDebugging() {
                         if (strcmp(targetScreen, "game_screen") == 0 && TheGameData && TheGameMode) {
                             const char *songName = getenv("DC3_SONG");
                             if (!songName || !songName[0]) songName = "boyfriend";
+                            // Validate song exists in the song database (DLC songs aren't on disc)
+                            if (!TheHamSongMgr.HasSong(Symbol(songName), false)) {
+                                fprintf(stderr, "DC3 Native: Song '%s' not found in song database — check DC3_SONG env var\n", songName);
+                                songName = "boyfriend";
+                            }
                             TheGameData->SetSong(Symbol(songName));
 
                             // Venue: DC3_VENUE override > song metadata > fallback
@@ -1706,7 +1739,8 @@ void App::RunWithoutDebugging() {
                             TheGameMode->SetMode(Symbol("perform"), Symbol("none"));
                             if (TheHamProvider) {
                                 TheHamProvider->SetProperty("merge_moves", 0);
-                                TheHamProvider->SetProperty("use_movegraph", 0);
+                                TheHamProvider->SetProperty("use_movegraph", 1);
+                                TheGameMode->SetProperty("use_movegraph", 1);
                             }
                             HamPlayerData *p0 = TheGameData->Player(0);
                             HamPlayerData *p1 = TheGameData->Player(1);

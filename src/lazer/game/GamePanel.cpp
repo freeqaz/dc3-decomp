@@ -567,45 +567,6 @@ void GamePanel::StartGame() {
 #ifdef HX_NATIVE
     mGame->Start();
 
-    // Manually initialize the full animation pipeline here.
-    if (TheHamDirector && TheHamDirector->GetWorld()) {
-        // Step 1: Load song data into world via world.fm "song" merger
-        Symbol song = TheGameData->GetSong();
-        const char *miloPath = MakeString("%s.milo", TheHamSongMgr.SongPath(song, 0));
-        MILO_LOG("Native: loading song data '%s' into world.fm\n", miloPath);
-        FileMerger *worldFm = TheHamDirector->GetWorld()->Find<FileMerger>("world.fm", false);
-        if (worldFm) {
-            static Symbol songSym("song");
-            FileMerger::Merger *merger = worldFm->FindMerger(songSym, false);
-            if (merger) {
-                merger->Clear(true);
-                merger->SetSelected(miloPath, true);
-                worldFm->StartLoad(false);
-                // Poll until merged
-                while (worldFm->HasPendingFiles()) {
-                    TheLoadMgr.Poll();
-                }
-                MILO_LOG("Native: world.fm song merger complete\n");
-            }
-        }
-
-        // Step 2: Set up song animations from merged data
-        TheHamDirector->SetupAnims();
-
-        // Note: Move graph population (OnPopulateMoveMgr) requires song-specific
-        // move_data.milo_xbox deserialization which crashes due to MoveGraph::CacheLinks
-        // interpreting serialized Xbox pointers as native pointers. Until the MoveGraph
-        // loader is fixed for native, autoplay and scoring won't advance.
-        // TODO: Fix MoveGraph deserialization for native (see TODO.md Phase 8.4)
-
-        TheHamDirector->SetPollEnabled(true);
-
-        // Step 2c: Full director enter (camera, post-proc, scene sync)
-        TheHamDirector->Enter();
-        MILO_LOG("Native: HamDirector::Enter complete, SongAnim(0)=%p\n",
-            TheHamDirector->SongAnim(0));
-    }
-
     // Step 3: Populate HamWardrobe main characters
     if (TheHamWardrobe && TheHamWardrobe->Dir()) {
         // The DTA load_characters flow doesn't run on native.
@@ -715,10 +676,19 @@ void GamePanel::StartIntro() {
 #ifdef HX_NATIVE
     // On native, the DTA SongSequence/LoadNewSong flow doesn't trigger.
     // Load audio here so it's ready before HandleWait polls.
+    // Song data (moves.milo etc.) is already loaded in PollForLoading().
     {
         Symbol song = TheGameData->GetSong();
         fprintf(stderr, "DC3 Native: StartIntro — loading song audio for '%s'\n", song.Str());
         mGame->LoadNewSongAudio(song);
+    }
+
+    if (TheHamDirector && TheHamDirector->GetWorld()) {
+        TheHamDirector->SetupAnims();
+        TheHamDirector->SetPollEnabled(true);
+        TheHamDirector->Enter();
+        MILO_LOG("Native: HamDirector::Enter complete, SongAnim(0)=%p\n",
+            TheHamDirector->SongAnim(0));
     }
 #endif
     mState = kGameInIntro;
@@ -1007,6 +977,33 @@ void GamePanel::PollForLoading() {
 #endif
         }
         mPollLoadState = 3;
+#ifdef HX_NATIVE
+        // Load song data into the world BEFORE Game::IsReady/IsLoaded runs.
+        // This ensures the "moves" MoveDir is available when PostLoad() searches for it.
+        {
+            static bool sSongMerged = false;
+            if (!sSongMerged && TheHamDirector && TheHamDirector->GetWorld()) {
+                sSongMerged = true;
+                Symbol song = TheGameData->GetSong();
+                const char *miloPath = MakeString("%s.milo", TheHamSongMgr.SongPath(song, 0));
+                MILO_LOG("Native PollForLoading: loading song data '%s' into world.fm\n", miloPath);
+                FileMerger *worldFm = TheHamDirector->GetWorld()->Find<FileMerger>("world.fm", false);
+                if (worldFm) {
+                    static Symbol songSym("song");
+                    FileMerger::Merger *merger = worldFm->FindMerger(songSym, false);
+                    if (merger) {
+                        merger->Clear(true);
+                        merger->SetSelected(miloPath, true);
+                        worldFm->StartLoad(false);
+                        while (worldFm->HasPendingFiles()) {
+                            TheLoadMgr.Poll();
+                        }
+                        MILO_LOG("Native PollForLoading: world.fm song merger complete\n");
+                    }
+                }
+            }
+        }
+#endif
         if (mGame->IsReady()) {
             mPollLoadState = 4;
 #ifdef HX_NATIVE

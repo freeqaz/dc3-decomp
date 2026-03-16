@@ -1,15 +1,18 @@
 # WorldCrowd System — Native Port Status
 
-## Current Status: Working on Data-Baked Venues (2026-03-16)
+## Current Status: Full Game Flow Working (2026-03-16)
 
-WorldCrowd factory is registered on native. Billboard crowd rendering works for venues
-that have crowd data baked into .milo files (e.g. DCI — 10 WorldCrowd objects, all with
-placement meshes, character refs, and billboard quads). DTA-scripted venues (e.g. throneroom)
-have empty crowd data and need the DTA pipeline to populate — not yet supported.
+The full game flow (auto-nav to game_screen) works with DCI venue. `HamDirector::Enter()`
+runs successfully — `VenueEnter()` triggers `dir->Enter()` on the venue, firing DTA type
+handlers on all WorldCrowd objects. The engine is stable at 500+ draw calls per frame.
 
-Null clip guards in CharClipGroup and CharDriver prevent crashes from unresolved clip
-references. PlayCrowdAnimation returns early on native to avoid null clip group traversal.
-TransformListAlloc LP64 pointer truncation fixed in MultiMesh.h.
+Key fixes this session:
+- `HamDirector::GetWorld()` falls back to `mVenue` when merger is absent
+- `HamDirector::Enter()` native path works without merger (venue enter, crowd init, post-proc)
+- `OriginalChoreoRemixer::Init()` bypassed on native (corrupt move graph data from incomplete DTA merger)
+- `MoveCandidate::CacheLinks` null guard for null variant pointers
+- `MoveMgr::LoadMoveData` null guard for missing move_graph
+- `VenueEnter()` called from App.cpp after venue load
 
 ## Architecture
 
@@ -53,29 +56,28 @@ WorldCrowd is a billboard impostor crowd rendering system:
    - Calls `CharDriver::PlayGroup()` on each crowd character
    - Looks up stance-specific clip groups (e.g. `stance_idle_realtime_idle`)
 
-### Venue Flow on Xbox (DTA-driven)
+### Game Flow on Native
 
 ```
-DTA merger system requests venue load
-  → Async loads venue .milo (contains WorldCrowd objects)
-  → WorldCrowd::Load() creates billboard meshes, loads instance transforms
-  → DTA handler fires {$hamwardrobe add_crowd $this}
-  → HamWardrobe registers crowd characters
-  → Crowd clip subdirs loaded via character loading pipeline:
-    - char/crowd/gen/crowd_f_*.milo_xbox (character models)
-    - char/crowd/anim/shared_clips.milo (animation clips)
-  → HamDirector::Enter calls PlayCrowdAnimation("realtime_idle", ...)
+Auto-nav: attract → title → main → choose_mode → song_select → multiuser → loading → game_screen
+  → GamePanel::StartIntro DTA handler fires
+    → OriginalChoreoRemixer::Init bypassed on native (corrupt move graph)
+  → HamDirector::Enter()
+    → mMerger exists (loaded from DTA): normal Enter path runs
+    → VenueEnter(mVenue): dir->Enter() triggers DTA type handlers
+      → WorldCrowd objects get Enter() → set_fullness, add_crowd
+    → HamWardrobe::PlayCrowdAnimation("realtime_idle", 2, true)
+  → App.cpp poll loop: explicit venue load + VenueEnter for component milos
 ```
 
-### Venue Flow on Native (current)
+### DTA Type Handler Flow
 
-```
-App.cpp loads venue .milo + component suffixes (_buildings, _sky, _set, etc.)
-  → WorldCrowd objects created for data-baked venues (DCI: 10 objects)
-  → CreateMeshes builds billboard quads
-  → PlayCrowdAnimation returns early (clip subdirs not loaded)
-  → DrawShowing renders billboard quads at instance positions (static, no animation)
-```
+When WorldCrowd loads from .milo, `LoadType` calls `SetType("band")` → `SetTypeDef(found)`.
+Later, when `dir->Enter()` fires on the venue:
+1. `RndPollable::Enter()` calls `HandleType(Message("enter"))`
+2. Finds `(band (enter ...))` in world_objects.dta
+3. Executes `{$this set_fullness 1 1}` → redistributes crowd instances
+4. Executes `{handle ($hamwardrobe add_crowd $this)}` → registers with HamWardrobe
 
 ## What Works
 
@@ -84,6 +86,8 @@ App.cpp loads venue .milo + component suffixes (_buildings, _sky, _set, etc.)
 - RndMultiMesh instancing (TransformListAlloc LP64 fix)
 - Null clip guards prevent crashes (CharClipGroup, CharDriver)
 - DCI venue: 10 WorldCrowd objects load successfully with placement meshes
+- Full game flow: auto-nav to game_screen, HamDirector::Enter(), VenueEnter()
+- Stable rendering at 500+ draw calls per frame
 
 ## What Needs Work
 
@@ -92,11 +96,7 @@ App.cpp loads venue .milo + component suffixes (_buildings, _sky, _set, etc.)
 Crowd characters reference clips from subdirs like `char/crowd/anim/shared_clips.milo`.
 These are loaded by the Xbox DTA pipeline but not by the native port's simplified loading.
 The `ObjPtrVec<CharClip>` entries resolve to null without these subdirs.
-
-To enable animation:
-1. Load crowd clip subdirs alongside the venue
-2. Remove `return;` guard in `HamWardrobe::PlayCrowdAnimation`
-3. Verify clip groups resolve correctly
+`PlayCrowdAnimation` returns early on native to avoid null clip traversal.
 
 ### DTA-Scripted Venues
 
@@ -106,13 +106,19 @@ This is a larger task requiring DTA script execution for WorldCrowd handlers.
 ### Impostor RTT Verification
 
 `Draw3DChars()` renders 3D characters to impostor textures via render-to-texture.
-Needs GPU testing to verify the full pipeline works end-to-end.
+3D character rendering is disabled on native (WebGPU BGL mismatches).
+Billboard rendering should work for static quads.
+
+### Venue Component Files
+
+Venue components (`_buildings`, `_sky`, `_set`, etc.) fail to load because App.cpp
+looks for `.milo` but files are `.milo_xbox`. Needs path suffix fix.
 
 ## Venues with WorldCrowd
 
 | Venue | Pattern | Status |
 |-------|---------|--------|
-| dci | Data-baked | Working (10 objects) |
+| dci | Data-baked | Working (10 objects, 581 draw calls) |
 | dclive | Data-baked | Untested |
 | default | Unknown | Untested |
 | glitterati | **None** | No crowd objects |
@@ -129,6 +135,11 @@ Needs GPU testing to verify the full pipeline works end-to-end.
 | `src/system/world/World.cpp` | WorldCrowd factory enabled (guard removed) |
 | `src/system/rndobj/MultiMesh.h` | TransformListAlloc uses malloc/free on native |
 | `src/system/hamobj/HamWardrobe.cpp` | PlayCrowdAnimation early-returns on native |
+| `src/system/hamobj/HamDirector.cpp` | GetWorld() falls back to mVenue; Enter() native path |
+| `src/system/hamobj/OriginalChoreoRemixer.cpp` | Init() bypassed on native |
+| `src/system/hamobj/MoveVariant.cpp` | CacheLinks null guard for null variant pointer |
+| `src/system/hamobj/MoveMgr.cpp` | LoadMoveData null guard for missing move_graph |
 | `src/system/char/CharDriver.cpp` | Null clip guard in PlayGroup |
 | `src/system/char/CharClipGroup.cpp` | Null clip guards in GetClip, FindClip, Copy |
 | `src/system/world/Crowd.cpp` | Diagnostic logging for CreateMeshes, Set3DCharAll |
+| `src/App.cpp` | VenueEnter() called after explicit venue load |

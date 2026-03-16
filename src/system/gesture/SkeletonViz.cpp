@@ -163,7 +163,14 @@ void SkeletonViz::LoadResource(bool postload) {
 void SkeletonViz::UpdateResource() {
     Transform xfm;
     xfm.Reset();
+#ifdef HX_NATIVE
+    if (!mResource.IsLoaded()) {
+        MILO_LOG("SkeletonViz::UpdateResource - skeleton resource not loaded, skipping\n");
+        return;
+    }
+#else
     MILO_ASSERT(mResource.IsLoaded(), 0x1E8);
+#endif
     mSkeletonEnv = mResource->Find<RndEnviron>("skeleton.env", true);
     mCamMesh = mResource->Find<RndMesh>("camera.mesh", true);
     mCamMesh->SetTransParent(this, false);
@@ -465,10 +472,19 @@ void SkeletonViz::Visualize(
     bool faded
 ) {
     if (!mResource) {
+#ifdef HX_NATIVE
+        Init();
+        if (!mResource.IsLoaded()) return;
+#else
         MILO_ASSERT(TheLoadMgr.EditMode(), 0x72);
         Init();
+#endif
     }
+#ifdef HX_NATIVE
+    if (!mResource.IsLoaded()) return;
+#else
     MILO_ASSERT(mResource.IsLoaded(), 0x76);
+#endif
 
     RndEnvironTracker environTracker(mSkeletonEnv, nullptr);
 

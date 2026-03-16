@@ -265,8 +265,11 @@ void WgpuRnd::Init() {
     mGpu.Init(desc);
     printf("DC3 Web: WgpuRnd::Init() — GPU init started (async)\n");
 #else
-    // Skip GPU initialization unless MILO_RENDER is set (Phase 1A: just reach main loop)
-    if (getenv("MILO_RENDER")) {
+    // GPU rendering is enabled by default. Set MILO_NORENDER=1 to disable.
+    // Legacy MILO_RENDER=1 still works for backwards compat.
+    bool enableGpu = !getenv("MILO_NORENDER");
+    if (getenv("MILO_RENDER")) enableGpu = true;  // explicit override
+    if (enableGpu) {
         desc.headless = (getenv("MILO_HEADLESS") != nullptr);
         desc.width = getenv("MILO_WIDTH") ? atoi(getenv("MILO_WIDTH")) : 1280;
         desc.height = getenv("MILO_HEIGHT") ? atoi(getenv("MILO_HEIGHT")) : 720;
@@ -284,7 +287,7 @@ void WgpuRnd::Init() {
         gNativeWindow = mGpu.Window();
         InitGpuResources();
     } else {
-        printf("DC3 Native: GPU init skipped (set MILO_RENDER=1 to enable)\n");
+        printf("DC3 Native: GPU init skipped (set MILO_RENDER=1 or unset MILO_NORENDER to enable)\n");
     }
 #endif
 }
@@ -1731,4 +1734,8 @@ void WgpuRnd::DrawRect(const Hmx::Rect& rect, RndMat* mat, ShaderType,
     // Restore the scene bind group so subsequent mesh draws don't mismatch.
     if (mSceneBindGroup)
         mPass.SetBindGroup(0, mSceneBindGroup);
+}
+
+bool WgpuRnd_IsInPass() {
+    return gWgpuRnd && gWgpuRnd->IsInPass();
 }

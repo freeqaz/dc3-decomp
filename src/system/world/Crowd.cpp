@@ -351,7 +351,14 @@ BEGIN_LOADS(WorldCrowd)
     if (d.rev > 0xC) {
         bool force = false;
         d >> force;
+#ifdef HX_NATIVE
+        // On native we only have billboard rendering (no 3D character RTT pipeline).
+        // Force3DCrowd(true) moves all instances from MultiMesh to m3DChars,
+        // emptying the billboard instance list. Always use billboard path instead.
+        Force3DCrowd(false);
+#else
         Force3DCrowd(force);
+#endif
     }
     if (d.rev > 5) {
         d >> mShow3DOnly;
@@ -657,9 +664,9 @@ void WorldCrowd::Draw3DChars() {
         for (int i = 0; (unsigned int)i < numChars; i++) {
             Apply3DCharXfm(charIt, i, RndCam::Current());
 #ifdef HX_NATIVE
-            // TODO: Crowd 3D character rendering disabled on native.
-            // Force3DCrowd sets mHandle=nullptr, so Apply3DCharXfm() is a no-op.
-            // Drawing crowd Characters directly causes WebGPU BGL mismatches.
+            // 3D crowd characters not used in normal rendering —
+            // Force3DCrowd is always false on native, so m3DChars is empty.
+            // The impostor billboard path in DrawShowing handles all crowd rendering.
             (void)i;
             break;
 #else

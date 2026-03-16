@@ -248,12 +248,19 @@ void Game::LoadNewSongAudio(Symbol s) {
             MILO_LOG("new_songaudio_name = '%s'\n", s.Str());
             int songID = TheHamSongMgr.GetSongIDFromShortName(s);
             const HamSongMetadata *pMetadata = TheHamSongMgr.Data(songID);
-            if (pMetadata->IsOnDisc()) {
+            if (pMetadata && pMetadata->IsOnDisc()) {
                 hsvd = (HamSongDataValidate)2;
             }
         }
         RELEASE(mSongInfo);
-        mSongInfo = new SongInfoCopy(TheHamSongMgr.SongMgr::SongAudioData(s));
+        SongInfo *audioData = TheHamSongMgr.SongMgr::SongAudioData(s);
+#ifdef HX_NATIVE
+        if (!audioData) {
+            MILO_WARN("Game::LoadNewSongAudio: no audio data for '%s'\n", s.Str());
+            return;
+        }
+#endif
+        mSongInfo = new SongInfoCopy(audioData);
         mMaster->Load(mSongInfo, false, 0, false, hsvd, nullptr);
         Fader *fader = TheSynth->Find<Fader>("per_song_sfx_level.fade", false);
         if (fader) {
@@ -575,15 +582,13 @@ void Game::LoadSong() {
     MetaPerformer::Current()->Handle(Message("on_load_song", 0), true);
     mUseMoveGraph = false;
     static Symbol cascade("cascade");
-#ifndef HX_NATIVE
     if (TheGameMode->Property("use_movegraph")->Int() != 0
         || TheHamProvider->Property("microgame")->Sym() == cascade
         || TheGameMode->Property("battle_mode")->Sym() == cascade) {
         mUseMoveGraph = true;
     }
-#endif
     const HamSongMetadata *data = TheHamSongMgr.Data(TheHamSongMgr.GetSongIDFromShortName(song));
-    bool isOnDisc = data->IsOnDisc();
+    bool isOnDisc = data && data->IsOnDisc();
     HamSongDataValidate v = (HamSongDataValidate)0;
     if (isOnDisc) {
         v = (HamSongDataValidate)2;
@@ -602,7 +607,14 @@ void Game::LoadSong() {
         }
     }
     RELEASE(mSongInfo);
-    mSongInfo = new SongInfoCopy(TheHamSongMgr.SongMgr::SongAudioData(song));
+    SongInfo *songAudioData = TheHamSongMgr.SongMgr::SongAudioData(song);
+#ifdef HX_NATIVE
+    if (!songAudioData) {
+        MILO_WARN("Game::LoadSong: no audio data for '%s', skipping load\n", song.Str());
+        return;
+    }
+#endif
+    mSongInfo = new SongInfoCopy(songAudioData);
 #ifdef HX_NATIVE
     if (mMaster && mMaster->GetAudio()) {
         mMaster->GetAudio()->SetPracticeMode(false);
@@ -703,9 +715,7 @@ void Game::LoadNewSong(Symbol s1, Symbol s2) {
     // NOTE: These static Symbols appear unused but are required for match
     static Symbol cascade("cascade");
     static Symbol holla_back("holla_back");
-#ifndef HX_NATIVE
     mUseMoveGraph = TheGameMode->Property("use_movegraph")->Int();
-#endif
     if (s1 != s2) {
         RELEASE(mSongInfo);
         mSongInfo = new SongInfoCopy(TheHamSongMgr.SongMgr::SongAudioData(s2));
@@ -769,6 +779,22 @@ bool Game::IsLoaded() {
             TheSongDB->PostLoad(mMaster->GetMidiParserMgr()->GetEventsList());
             PostLoad();
             if (mUseMoveGraph) {
+#ifdef HX_NATIVE
+                if (!mMoveDir) {
+                    MILO_LOG("Game::IsLoaded() - mMoveDir is null, proceeding without MoveGraph\n");
+                    mUseMoveGraph = false;
+                } else {
+                    ObjectDir *moveData = mMoveDir->Find<ObjectDir>("move_data", false);
+                    if (moveData) {
+                        MILO_LOG("Game::IsLoaded() - Loading MoveGraph from move_data dir\n");
+                        TheMoveMgr->LoadMoveData(moveData);
+                        SuperEasyRemixer::LoadAllVariants();
+                    } else {
+                        MILO_LOG("Game::IsLoaded() - move_data not found in moves dir\n");
+                        mUseMoveGraph = false;
+                    }
+                }
+#else
                 MILO_ASSERT(mMoveDir, 0x224);
                 ObjectDir *moveData = mMoveDir->Find<ObjectDir>("move_data", false);
                 MILO_ASSERT_FMT(
@@ -777,6 +803,7 @@ bool Game::IsLoaded() {
                 );
                 TheMoveMgr->LoadMoveData(moveData);
                 SuperEasyRemixer::LoadAllVariants();
+#endif
             } else {
                 MILO_LOG("Game::IsLoaded() - not using MoveGraph");
             }
