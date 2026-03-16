@@ -1100,46 +1100,50 @@ void App::RunWithoutDebugging() {
             if (hudDir) {
                 gNativeHudDir = hudDir;
                 DataVariable("hud_panel") = DataNode(hudDir);
-                fprintf(stderr, "DC3 Native: HUD loaded — set $hud_panel to '%s' (%s)\n",
+                fprintf(stderr, "DC3 Native: HUD loaded — '%s' (%s)\n",
                        hudDir->Name(), hudDir->ClassName());
-                // Enter the HUD dir — triggers DTA flows that show HUD elements
+
                 RndDir *rdir = dynamic_cast<RndDir *>(hudDir);
                 if (rdir) {
+                    // Ensure draw/poll lists are populated from loaded objects
+                    rdir->SyncObjects();
+                    fprintf(stderr, "DC3 Native: HUD SyncObjects done — %d draws\n",
+                           rdir->NumDraws());
                     rdir->Enter();
-                    fprintf(stderr, "DC3 Native: HUD Enter() called\n");
+                    fprintf(stderr, "DC3 Native: HUD Enter() called — %d draws\n",
+                           rdir->NumDraws());
                 }
-                // HACK: Without the full DTA flow pipeline (MoveMgr, GameMode
-                // flows, hud_state.flow), HUD elements start hidden.
-                // Force-show content elements and disable transition overlays.
+
+                // Force-show ALL drawables except blackouts/postproc.
+                // On Xbox, DTA flows control visibility; we bypass that.
+                // HACK: Full HUD needs MoveMgr::Init() working on native.
+                int showCount = 0;
                 for (ObjDirItr<RndDrawable> it(hudDir, true); it != nullptr; ++it) {
                     const char *name = it->Name();
-                    Symbol cls = it->ClassName();
-                    // Disable full-screen overlays that obscure the venue
+                    // Skip full-screen overlays that obscure the venue
                     if (strcmp(name, "blacken.mesh") == 0
                         || strcmp(name, "PostProcer") == 0
-                        || strcmp(name, "freestyle_bloom.mat") == 0) {
+                        || strcmp(name, "camera.mesh") == 0
+                        || strcmp(name, "freestyle_bloom") == 0) {
                         it->SetShowing(false);
+                        continue;
                     }
-                    // Show all mesh/label content in the HUD
-                    else if (cls == "Mesh" || cls == "HamLabel"
-                        || cls == "UILabel" || cls == "BandLabel"
-                        || cls == "Group") {
-                        it->SetShowing(true);
+                    it->SetShowing(true);
+                    showCount++;
+                }
+                fprintf(stderr, "DC3 Native: HUD force-showed %d drawables\n", showCount);
+
+                // Also force-show inside sub-RndDirs (score_left, score_right, etc.)
+                // and sync their draw lists
+                for (ObjDirItr<RndDir> dit(hudDir, true); dit != nullptr; ++dit) {
+                    if (&*dit == rdir) continue; // skip root
+                    dit->SyncObjects();
+                    int subDraws = dit->NumDraws();
+                    if (subDraws > 0) {
+                        fprintf(stderr, "  HUD subdir '%s' — %d draws\n",
+                               dit->Name(), subDraws);
                     }
                 }
-                // Try to activate HUD state flows for proper initialization
-                static const char *flowNames[] = {
-                    "reset_common.flow", "hud_state.flow", nullptr
-                };
-                for (const char **fn = flowNames; *fn; fn++) {
-                    Hmx::Object *flow = hudDir->FindObject(*fn, true, false);
-                    if (flow) {
-                        static Message activateMsg("activate");
-                        flow->Handle(activateMsg, true);
-                        fprintf(stderr, "  HUD: activated '%s'\n", *fn);
-                    }
-                }
-                fprintf(stderr, "DC3 Native: HUD initialized\n");
             } else {
                 fprintf(stderr, "DC3 Native: Failed to load HUD from '%s'\n", hudFp.c_str());
             }
@@ -1177,22 +1181,41 @@ void App::RunWithoutDebugging() {
         // Draw HUD overlay — on Xbox this is drawn as part of the game_screen
         // panel hierarchy via FileMerger. On native we draw it explicitly.
         // Replicates PanelDir::DrawShowing() setup: EndWorld() transitions to
-        // 2D overlay mode, UI camera provides screen-space projection.
+        // 2D overlay mode, then select the HUD's own camera for 2D projection.
         if (gNativeHudDir) {
             RndDir *rdir = dynamic_cast<RndDir *>(gNativeHudDir);
             if (rdir) {
+                static int sHudDrawLog = 0;
                 // Transition from 3D world to 2D overlay mode
                 TheRnd.EndWorld();
                 RndCam *prevCam = RndCam::Current();
-                RndCam *uiCam = TheUI ? TheUI->GetCam() : nullptr;
-                if (uiCam && uiCam != prevCam) {
+
+                // Try the HUD's own camera first (authored for HUD layout),
+                // fall back to TheUI->GetCam() for generic 2D projection
+                RndCam *hudCam = gNativeHudDir->Find<RndCam>("Cam.cam", false);
+                if (!hudCam)
+                    hudCam = TheUI ? TheUI->GetCam() : nullptr;
+                if (hudCam && hudCam != prevCam) {
                     FlushTransparentDraws();
-                    uiCam->Select();
+                    hudCam->Select();
                 }
-                RndEnviron *uiEnv = TheUI ? TheUI->GetEnv() : nullptr;
-                if (uiEnv)
-                    uiEnv->Select(nullptr);
+                RndEnviron *hudEnv = gNativeHudDir->Find<RndEnviron>("static_hud.env", false);
+                if (!hudEnv && TheUI)
+                    hudEnv = TheUI->GetEnv();
+                if (hudEnv)
+                    hudEnv->Select(nullptr);
+
+                if (sHudDrawLog < 3) {
+                    sHudDrawLog++;
+                    fprintf(stderr, "DC3 HUD Draw: draws=%d cam=%s env=%s prevCam=%s\n",
+                           rdir->NumDraws(),
+                           hudCam ? hudCam->Name() : "<null>",
+                           hudEnv ? hudEnv->Name() : "<null>",
+                           prevCam ? prevCam->Name() : "<null>");
+                }
+
                 rdir->DrawShowing();
+
                 if (prevCam && prevCam != RndCam::Current()) {
                     FlushTransparentDraws();
                     prevCam->Select();
