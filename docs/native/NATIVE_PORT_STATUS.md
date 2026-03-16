@@ -1,6 +1,6 @@
 # Native Port Progress (x86_64 Linux)
 
-## Current Status: Session 69 - Phase 6 Polish (Post-Processing + Lighting)
+## Current Status: Session 71 - Phase 6 Polish (Venue Rendering + Camera Animation)
 **Goal**: Full visual quality — post-processing, lighting, particles, flares, lines all working
 
 ### Sessions Complete
@@ -35,6 +35,7 @@
 - **Session 68**: **Camera cuts verified.** song.anim PropKeys with property "shot" drives HamDirector::SetShot() → FindNextShot() → CameraManager::ForceCameraShot(). 34 shot keyframes for YMCA cycle through Area1_WIDE, Area1_NEAR, Area1_MOVEMENT, CLOSEUP categories. LightPreset animation N/A for YMCA's glitterati venue (0 LightPreset objects — static baked lighting correct). HUD panels (game_panel, world_panel, rhythm_detector_panel, fitness_hud_panel) all active+showing during gameplay. 272 draw calls/frame during gameplay.
 - **Session 69**: **Post-processing pipeline + visual quality.** Enabled full post-processing in headless mode: bloom (screen blend instead of additive to prevent blown-out whites), Xbox-matched contrast formula (from RndColorXfm::AdjustContrast), brightness, saturation, levels, vignette, chromatic aberration, posterization. Fixed RndFlare visibility by bypassing GPU occlusion query (SetVisible + SetOcclusionResult on native). Improved directional light selection — collect all lights from environment + venue WorldDir, sort by brightness, pick top 4 (prevents zero-color LightPreset placeholders from filling slots). Verified RndLine, RndParticleSys, SpotlightDrawer all linked as strong symbols. 14 screenshots in `archive/screenshots/session69/`. PPC decomp: 9 improvements, 0 regressions.
 - **Session 70+**: **Rendering decomp batch — ribbons, particles, spotlights, Bink.** PPC decomp improvements across rendering subsystems: RndRibbon (UpdateMesh 61.4% AT_LIMIT, UpdateChase 54.7% AT_LIMIT, ConstructMesh 44.4% AT_LIMIT — all large functions dominated by register swaps), NgSpotlightDrawer::RenderConeDefs 66.3% AT_LIMIT (Vector4 aggregate parameter passing), RndParticleSys::InitParticle 62.1→64.6% AT_LIMIT (virtual call elimination + memcpy block copy), BinkFileReadFrame 84.7% AT_LIMIT (base pointer caching + branchless conditional), ReadFunc 78.6% AT_LIMIT (EndianSwap 64-bit scheduling). Particle rendering confirmed working in native build — Part_Wgpu.cpp billboard renderer already fully wired.
+- **Session 71**: **Venue rendering fix + CameraManager-driven camera.** Root-caused "black venue" bug: BC3 compressed textures used as render-to-texture targets lacked `RenderAttachment` usage, invalidating the ENTIRE WebGPU command buffer for every gameplay frame. Fix: detect non-renderable textures in `EnsureRenderTargetData` and replace with proper RGBA targets. Replaced hard-coded orbit camera with engine's CameraManager animation — `HamDirector::OnSelectCamera` → `PlayNextShot()` → `CameraManager::ForceCameraShot()` → `CamShot::SetFrame()` drives proper cinematic camera angles. Both dclive (outdoor concert) and glitterati (nightclub) venues render correctly with animated cameras, characters, HUD, and post-processing.
 
 ### Completed Phases
 - **Phase 0**: Foundation — COMPLETE
@@ -44,7 +45,7 @@
 - **Phase 2**: Rendering — **COMPLETE** (272 draw calls/frame during gameplay, full material pipeline)
 - **Phase 3**: Audio — **COMPLETE** (real-time MOGG playback via FFmpeg/Vorbis/miniaudio)
 - **Phase 4**: Input — COMPLETE (Joypad_Native + Keyboard_Native + 19 tests)
-- **Phase 6**: Polish — **IN PROGRESS** (~30% — post-processing, flares, particles, lines working)
+- **Phase 6**: Polish — **IN PROGRESS** (~50% — post-processing, flares, particles, lines, venue rendering, camera animation working)
 
 ### Current Boot Progress
 Engine boots, navigates full menu flow, loads a song, and renders full gameplay with audio:
