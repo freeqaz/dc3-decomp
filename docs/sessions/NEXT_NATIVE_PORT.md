@@ -1,6 +1,6 @@
 # Native Port: Remaining Work
 
-**Status**: Core features complete. Visual polish phases in progress.
+**Status**: Gameplay reached! Menu flow → song select → venue load → game_screen all working.
 **Last Updated**: 2026-03-16
 
 ## What's Done
@@ -12,8 +12,31 @@
 - **Audio**: Full MOGG decryption + Vorbis decode pipeline. Real-time song playback verified.
 - **Camera**: Song.anim PropKeys drive camera cuts during gameplay.
 - **Character Animation**: CharClip playback synced to beat during gameplay.
-- **Web Build**: Emscripten/WASM port running in browser (`scripts/build/web.sh`).
-- **MetaMaterials**: `shell_basic.mmat` and shared MatAnim resources load correctly. DC3 logo visible on main menu. (198 warnings → 0)
+- **Web Build**: Emscripten/WASM port running in browser (`scripts/build/web.sh`). Manual navigation to gameplay works.
+- **MetaMaterials**: `shell_basic.mmat` and shared MatAnim resources load correctly. DC3 logo visible on main menu.
+- **Full Gameplay Navigation** (session 76): Headless input script navigates main_screen → choose_mode → song_select → multiuser → loading → game_screen. Venue renders, practice mode UI works, pause dialog functional.
+
+## Active Workarounds / Hacks (follow-up needed)
+
+These are temporary fixes to unblock gameplay. Each needs a proper root-cause investigation:
+
+### 1. HamNavList::Poll IsAnimating() bypass (`HamNavList.cpp:504`)
+**Hack**: Skipped `!RndAnimatable::IsAnimating()` check on HX_NATIVE in the select-completion poll.
+**Why**: DTA `transition_complete` handlers that call `StopAnimation()` don't fire on native, so `IsAnimating()` stays true forever and `nav_select_done` never fires.
+**Root cause to investigate**: Why don't DTA transition_complete handlers fire? The same bypass was already in the ButtonDownMsg handler (line 1513-1516) but not in Poll.
+**Impact**: Without this fix, confirm on song_select (and other HamNavList screens) never completes the selection.
+
+### 2. CharClipGroup null clip guards (`CharClipGroup.cpp`)
+**Hack**: Added `#ifdef HX_NATIVE` null checks in `FindClip()` and `GetClip()` to skip null clip pointers.
+**Why**: Crowd characters reference clips from subdirectories like `char/crowd/anim/shared_clips.milo`. On native, the venue loading path (App.cpp) doesn't load these subdirs, so CharClip ObjPtrVec entries resolve to null.
+**Root cause to investigate**: Native venue loading should load crowd character clip subdirs. The DTA character loading pipeline (`{$hamwardrobe add_crowd $this}`) handles this on Xbox but isn't wired on native. Needed assets:
+  - `world/shared/gen/crowd_plane_small.milo_xbox` (crowd mesh)
+  - `char/crowd/anim/shared_clips.milo` (crowd animation clips)
+  - Any other crowd character subdirs referenced by venue WorldCrowd objects
+**Impact**: Without this fix, CharClipGroup::Copy crashes with null deref during venue .milo merge.
+
+### 3. WorldCrowd rendering stubs
+**Status**: `BuildBillboard()`, `DrawShowing()`, `AssignRandomColors()` etc. are still weak stubs. WorldCrowd IS used in some venues (e.g., dclive) — the Phase C "NOT APPLICABLE" conclusion was wrong. Crowd billboard rendering won't work until BuildBillboard returns a real mesh and the impostor texture pipeline is wired.
 
 ## Remaining Work — Phased
 
@@ -33,8 +56,11 @@ Score numbers not wired to gameplay HUD. Need to understand what drives score up
 - Which stubs need real implementations vs which can be wired with simple hooks?
 - Are the HUD label elements rendering but showing 0, or not rendering at all?
 
-### ~~Phase C: WorldCrowd Rendering~~ — NOT APPLICABLE
-DC3 does not use WorldCrowd. All 6 venues checked — zero WorldCrowd objects. DC3 has abstract dance stages without audience sections (unlike Rock Band). The WorldCrowd system is inherited from the shared Milo engine but unused in DC3.
+### Phase C: WorldCrowd Rendering
+WorldCrowd IS used in some venues (dclive has WorldCrowd objects, glitterati does not). The billboard impostor system needs:
+- `BuildBillboard()` real implementation (creates 4-vert quad mesh with impostor material)
+- Impostor texture pipeline (RTT for crowd characters)
+- Loading crowd character subdirs during native venue load
 
 ### Phase D: Cosmetic Polish
 Lower-priority visual items that improve fidelity but aren't blocking gameplay:
@@ -66,6 +92,7 @@ Each native port session has historically uncovered 1-2 real decomp bugs:
 - Session 12: FlowAnimate::Load skip mAnim at rev>=3 (85.9% → 90.7%)
 - Session 70: UIListSlot async element race condition (WASM crash fix)
 - Session 71: MetaMaterials disabled on native (198 shell_basic.mmat warnings)
+- Session 76: CharClipGroup::FindClip null deref (null check before Name() call)
 
 This makes native port work a force multiplier for decomp quality.
 
@@ -78,6 +105,10 @@ cmake --build native/build --target dc3-native -- -j$(nproc)
 # Web (Emscripten/WASM)
 scripts/build/web.sh
 
-# Screenshots
+# Screenshots — default menu flow
 bash scripts/gpu/screenshot.sh -f 300,500 native/build/dc3-native
+
+# Screenshots — gameplay flow (with input script)
+MILO_FIRST_SCREEN=main_screen MILO_INPUT_SCRIPT=native/test_assets/gameplay_nav.input \
+  bash scripts/gpu/screenshot.sh -f 100,400,500,800 native/build/dc3-native
 ```
