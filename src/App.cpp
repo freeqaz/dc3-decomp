@@ -1110,7 +1110,7 @@ void App::RunWithoutDebugging() {
                                     || strstr(meshName, "Reflect")
                                     || strstr(meshName, "projection")
                                     || strstr(meshName, "refract")
-                                    || mat->GetBlend() == BaseMaterial::kBlendDest;
+                                    || (mat && mat->GetBlend() == BaseMaterial::kBlendDest);
                                 // Textureless opaque white meshes (e.g. DLV_PanelHoodLights)
                                 if (!hide && mat && !dtex
                                     && mat->GetBlend() == BaseMaterial::kBlendSrc) {
@@ -1545,19 +1545,9 @@ void App::RunWithoutDebugging() {
                 for (ObjDirItr<RndDrawable> drawIt(gNativeHudDir, true); drawIt != nullptr; ++drawIt) {
                     drawIt->SetShowing(false);
                 }
-                // Show score subdirs and their contents
-                const char *scoreSubdirs[] = {"score_left", "score_right", nullptr};
-                for (const char **sp = scoreSubdirs; *sp; sp++) {
-                    RndDir *sub = gNativeHudDir->Find<RndDir>(*sp, true);
-                    if (sub) {
-                        sub->SetShowing(true);
-                        for (ObjDirItr<RndDrawable> it(sub, true); it != nullptr; ++it)
-                            it->SetShowing(true);
-                    }
-                }
-                // Show specific text labels only
+                // Show only specific HUD text labels
                 const char *showLabels[] = {
-                    "song_name.lbl", "song_artist.lbl", "score2.lbl", nullptr
+                    "song_name.lbl", "song_artist.lbl", nullptr
                 };
                 for (const char **lp = showLabels; *lp; lp++) {
                     RndText *lbl = gNativeHudDir->Find<RndText>(*lp, true);
