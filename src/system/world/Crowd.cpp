@@ -1218,7 +1218,15 @@ void WorldCrowd::DrawShowing() {
                 }
 
                 gImpostorMat->SetDiffuseTex(cachedTex);
+                // Character materials don't write alpha, so the RT alpha stays
+                // at the clear value (0). Use additive blend to bypass alpha:
+                // black background adds nothing (0+scene=scene), character
+                // color adds on top. Disable alpha cut since alpha is all zero.
+                gImpostorMat->SetAlphaCut(false);
+                gImpostorMat->SetBlend(RndMat::kBlendAdd);
                 DrawMultiMeshWithEnviron(mmesh);
+                gImpostorMat->SetAlphaCut(true);
+                gImpostorMat->SetBlend(RndMat::kBlendSrc);
                 continue;
 #endif
                 SetMatAndCameraLod();
