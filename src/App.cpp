@@ -1265,10 +1265,9 @@ void App::RunWithoutDebugging() {
                 TheRnd.ClearDepthForOverlay();
                 RndCam *prevCam = RndCam::Current();
 
-                // Try HUD's own camera first, fall back to UI camera.
-                // The HUD meshes may be authored for Cam.cam's projection.
-                RndCam *hudCam = gNativeHudDir->Find<RndCam>("Cam.cam", false);
-                if (!hudCam) hudCam = TheUI ? TheUI->GetCam() : nullptr;
+                // Use TheUI's 2D camera — PanelDir::DrawShowing always uses
+                // CamOverride or TheUI->GetCam(), NOT the milo's embedded Cam.cam.
+                RndCam *hudCam = TheUI ? TheUI->GetCam() : nullptr;
                 if (hudCam && hudCam != prevCam) {
                     FlushTransparentDraws();
                     hudCam->Select();
@@ -1278,15 +1277,42 @@ void App::RunWithoutDebugging() {
                 if (hudEnv)
                     hudEnv->Select(nullptr);
 
-                if (sHudDrawLog < 1) {
+                if (sHudDrawLog < 3) {
                     sHudDrawLog++;
-                    fprintf(stderr, "DC3 HUD Draw: draws=%d cam=%s env=%s\n",
-                           rdir->NumDraws(),
-                           hudCam ? hudCam->Name() : "<null>",
-                           hudEnv ? hudEnv->Name() : "<null>");
+                    if (hudCam) {
+                        const Transform &ct = hudCam->WorldXfm();
+                        fprintf(stderr, "DC3 HUD: cam pos=(%.1f,%.1f,%.1f) near=%.1f far=%.1f\n",
+                               ct.v.x, ct.v.y, ct.v.z,
+                               hudCam->NearPlane(), hudCam->FarPlane());
+                    }
                 }
 
-                rdir->DrawShowing();
+                // Force-show key labels every frame — DTA flows reset
+                // showing state, so we must re-apply before each draw.
+                static const char *forceShowLabels[] = {
+                    "song_name.lbl", "song_artist.lbl", nullptr
+                };
+                for (const char **lp = forceShowLabels; *lp; lp++) {
+                    RndText *lbl = gNativeHudDir->Find<RndText>(*lp, true);
+                    if (lbl) lbl->SetShowing(true);
+                }
+                // Force-show score labels in subdirs
+                static const char *scoreDirs[] = {"score_left", "score_right", nullptr};
+                for (const char **sp = scoreDirs; *sp; sp++) {
+                    RndDir *sub = gNativeHudDir->Find<RndDir>(*sp, true);
+                    if (sub) {
+                        sub->SetShowing(true);
+                        for (ObjDirItr<RndDrawable> dit(sub, true); dit != nullptr; ++dit)
+                            dit->SetShowing(true);
+                    }
+                }
+
+                {
+                    extern bool gHudDrawPhase;
+                    gHudDrawPhase = true;
+                    rdir->DrawShowing();
+                    gHudDrawPhase = false;
+                }
 
                 // Restore previous camera and environment
                 if (prevCam && prevCam != RndCam::Current()) {
