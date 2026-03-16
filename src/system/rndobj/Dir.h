@@ -64,6 +64,9 @@ public:
     void SyncDrawables();
 #ifdef HX_NATIVE
     int NumDraws() const { return mDraws.size(); }
+    // Add a drawable to this dir's draw list (native only).
+    // Used to inject subdir drawables that SyncDrawables misses.
+    void NativeAddDraw(RndDrawable *d) { mDraws.push_back(d); }
 #endif
 
 protected:

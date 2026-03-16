@@ -192,7 +192,7 @@ iterates drawables, while the engine uses `WorldDir::DrawShowing()` → `RndGrou
 | Score display | **DONE** | score.milo loaded into HUD subdirs, explicit subdir drawing. |
 | Lip sync | TODO | Needs .lipsync files from ark loaded + OnSoundPlay handler triggering |
 | Projected light textures | TODO | Gobo/spotlight cookies |
-| Exotic post-processing | TODO | Gradient map, kaleidoscope, flicker, noise, video feedback |
+| Exotic post-processing | PARTIAL | Noise/grain + flicker done. Gradient map, kaleidoscope, video feedback still TODO. |
 | Performance optimization | ANALYZED | ~840 actual GPU draws per gameplay frame. 787 draws + 1223 no-material skips (30 unique UI meshes × ~45 instances). RTX 3090 handles this easily. |
 | Save/load game progress | TODO | Profile, unlocks |
 | macOS / Windows | TODO | WebGPU handles backends |

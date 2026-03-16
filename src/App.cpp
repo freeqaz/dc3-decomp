@@ -32,6 +32,7 @@
 #include "rndobj/Mat.h"
 #include "hamobj/HamGameData.h"
 #include "obj/DirLoader.h"
+#include "ui/UILabel.h"
 extern GLFWwindow *gNativeWindow;
 static ObjectDir *gNativeHudDir = nullptr;
 static bool gFaceAnimInitDone = false;
@@ -996,6 +997,9 @@ void App::RunWithoutDebugging() {
                 if (!sVenueLoadAttempted && strcmp(curScreenName, "game_screen") == 0) {
                     sVenueLoadAttempted = true;
                     const char *venueName = TheGameData ? TheGameData->Venue().Str() : nullptr;
+                    // GameData may have been cleared — fall back to env var
+                    if (!venueName || !*venueName) venueName = getenv("DC3_VENUE");
+                    if (!venueName || !*venueName) venueName = "glitterati";
                     if (venueName && *venueName) {
                         const char *miloPath = MakeString("world/%s/%s.milo", venueName, venueName);
                         FilePath fp;
@@ -1043,10 +1047,11 @@ void App::RunWithoutDebugging() {
                         {
                             const char* venueName = TheGameData ? TheGameData->Venue().Str() : nullptr;
 #ifdef HX_NATIVE
-                            if (venueName && *venueName)
-                                printf("DC3 Native: venue from GameData = '%s'\n", venueName);
-                            else
-                                printf("DC3 Native: venue from GameData is empty, using fallback\n");
+                            // GameData may have been cleared by HamDirector::~HamDirector
+                            // during screen transitions. Fall back to DC3_VENUE env var.
+                            if (!venueName || !*venueName) {
+                                venueName = getenv("DC3_VENUE");
+                            }
 #endif
                             if (!venueName || !*venueName) venueName = "glitterati";
                             static const char* componentSuffixes[] = {
@@ -1321,18 +1326,29 @@ void App::RunWithoutDebugging() {
 
                     // Set score labels — search recursively since score.milo
                     // is appended as a subdir of score_left.
+                    // Also add them to the HUD's draw list since AppendSubDir
+                    // sets IsSubDir=true which prevents SyncDrawables from
+                    // including them automatically.
                     const char *scoreLabels[] = {"score_left", "score_right", nullptr};
                     for (const char **sp = scoreLabels; *sp; sp++) {
                         RndDir *sub = hudDir->Find<RndDir>(*sp, true);
                         if (!sub) continue;
-                        RndText *scoreLbl = sub->Find<RndText>("score2.lbl", true);
+                        // Use UILabel API instead of RndText — UILabel::SetInt
+                        // properly triggers LabelUpdate + UpdateText mesh generation.
+                        UILabel *scoreLbl = sub->Find<UILabel>("score2.lbl", true);
                         if (scoreLbl) {
-                            scoreLbl->SetText("0");
+                            scoreLbl->SetInt(0, true); // localized format
                             scoreLbl->SetShowing(true);
+                            // HACK: score2.lbl has width=0 from the milo file.
+                            // Width is normally set by DTA flow. Set directly.
+                            if (scoreLbl->Width() < 1.0f)
+                                scoreLbl->SetWidth(200.0f);
                             // Fix font alpha (same issue as song labels)
                             for (int si = 0; si < scoreLbl->NumStyles(); si++)
                                 scoreLbl->Styles()[si].SetAlpha(1.0f);
-                            fprintf(stderr, "DC3 Native: Score label '%s/%s' set to '0'\n",
+                            // Add to parent draw list so rdir->DrawShowing() renders it
+                            if (rdir) rdir->NativeAddDraw(scoreLbl);
+                            fprintf(stderr, "DC3 Native: Score label '%s/%s' added to draw list\n",
                                 *sp, scoreLbl->Name());
                         }
                         // Also show all drawables in the score subdir
@@ -1450,30 +1466,30 @@ void App::RunWithoutDebugging() {
                     }
                 }
 
-                rdir->DrawShowing();
-
-                // Score subdirs loaded via AppendSubDir have IsSubDir=true,
-                // so their mDraws is empty. Draw score labels manually.
-                // HACK: Should be integrated into parent draw list.
+                // Fix score labels every frame — Flow system inside
+                // score.milo resets text/width/alpha continuously.
                 {
                     const char *slots[] = {"score_left", "score_right", nullptr};
                     for (const char **sp = slots; *sp; sp++) {
                         RndDir *slot = gNativeHudDir->Find<RndDir>(*sp, true);
                         if (!slot) continue;
-                        RndText *scoreLbl = slot->Find<RndText>("score2.lbl", true);
+                        UILabel *scoreLbl = slot->Find<UILabel>("score2.lbl", true);
                         if (scoreLbl) {
                             scoreLbl->SetShowing(true);
-                            scoreLbl->SetText("0");
-                            // HACK: score2.lbl has width=0 which prevents mesh
-                            // generation. Set a reasonable width for score display.
+                            if (scoreLbl->GetText().length() == 0)
+                                scoreLbl->SetInt(0, false);
                             if (scoreLbl->Width() < 1.0f)
                                 scoreLbl->SetWidth(200.0f);
                             for (int sti = 0; sti < scoreLbl->NumStyles(); sti++)
                                 scoreLbl->Styles()[sti].SetAlpha(1.0f);
-                            scoreLbl->DrawShowing();
                         }
                     }
                 }
+
+                rdir->DrawShowing();
+
+                // Score labels are now in rdir's draw list via NativeAddDraw
+                // (added during HUD init). No explicit DrawShowing needed.
 
                 // Restore previous camera and environment
                 if (prevCam && prevCam != RndCam::Current()) {

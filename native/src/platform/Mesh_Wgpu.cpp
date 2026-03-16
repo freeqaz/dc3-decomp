@@ -137,6 +137,13 @@ void RndMesh::DrawShowing() {
         return;
     }
 
+    // Skip Kinect-specific meshes that have no data on native
+    // grid_80by60_cube = Kinect depth sensor visualization (80x60 resolution)
+    if (strstr(Name(), "grid_80by60")) {
+        if (capturing) FrameCapture::Get().AddSkip(Name(), "Kinect grid");
+        return;
+    }
+
     // Get material
     RndMat* mat = Mat();
     if (!mat) {
