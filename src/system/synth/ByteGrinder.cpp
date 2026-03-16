@@ -727,7 +727,7 @@ DataNode op63(DataArray *msg) {
 
 extern DataArray *DataReadString(const char *);
 
-unsigned int ByteGrinder::pickOneOf32A(bool b, int l) {
+unsigned long ByteGrinder::pickOneOf32A(bool b, long l) {
     DataArray *a;
     char script[256];
     if (b) {
@@ -736,12 +736,12 @@ unsigned int ByteGrinder::pickOneOf32A(bool b, int l) {
     } else {
         a = DataReadString("{xa}");
     }
-    unsigned int result = a->Evaluate(0).Int();
+    unsigned long result = a->Evaluate(0).Int();
     a->Release();
     return result;
 }
 
-unsigned int ByteGrinder::pickOneOf32B(bool b, int l) {
+unsigned long ByteGrinder::pickOneOf32B(bool b, long l) {
     DataArray *a;
     char script[256];
     if (b) {
@@ -750,7 +750,7 @@ unsigned int ByteGrinder::pickOneOf32B(bool b, int l) {
     } else {
         a = DataReadString("{ya}");
     }
-    unsigned int result = a->Evaluate(0).Int();
+    unsigned long result = a->Evaluate(0).Int();
     a->Release();
     return result;
 }
@@ -778,7 +778,7 @@ DataNode magicNumberGenerator(DataArray *da) {
 }
 
 void ByteGrinder::GrindArray(
-    int seedA, int seedB, unsigned char *arrayToGrind, int arrayLen, int moggVersion
+    long seedA, long seedB, unsigned char *arrayToGrind, int arrayLen, int moggVersion
 ) {
     char script[256];
     DataArray *mainScriptArray;
@@ -836,8 +836,7 @@ void ByteGrinder::GrindArray(
         }
         stringArgs += ")";
         DataArray *args = DataReadString(stringArgs.c_str());
-        int result = mainScriptArray->ExecuteScript(0, nullptr, args, 0).Int();
-        arrayToGrind[i] = result;
+        arrayToGrind[i] = mainScriptArray->ExecuteScript(0, nullptr, args, 0).Int();
         args->Release();
     }
     mainScriptArray->Release();

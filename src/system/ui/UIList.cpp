@@ -503,14 +503,10 @@ DataNode UIList::OnSetSelected(DataArray *da) {
         SetSelected(node.Int(), i6);
         return 1;
     } else if (node.Type() == kDataSymbol || node.Type() == kDataString) {
-        int i3;
-        if (da->Size() == 4)
-            i3 = bool(da->Int(3));
-        else
-            i3 = 1;
+        bool i3 = da->Size() == 4 ? da->Int(3) : true;
         if (da->Size() == 5)
             i6 = da->Int(4);
-        return SetSelected(node.ForceSym(), i3 != 0, i6);
+        return SetSelected(node.ForceSym(), i3, i6);
     } else {
         MILO_FAIL("bad arg to set_selected");
         return 0;
@@ -832,8 +828,8 @@ void UIList::SetProvider(UIListProvider *prov) {
         LimitCircularDisplay(mLimitCircularDisplayNumToDataNum);
         SetSelected(0, -1);
     }
-    if (UIList *child = mListDir->SubList(mListState.SelectedDisplay(), mWidgets))
-        child->Poll();
+    if (mListDir->SubList(mListState.SelectedDisplay(), mWidgets))
+        Poll();
 }
 
 DataNode UIList::OnSetData(DataArray *da) {

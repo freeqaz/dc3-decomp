@@ -45,24 +45,21 @@ Current: `archive/screenshots/session30/frame_00600.png`
 
 ## Remaining Root Causes (Priority Order)
 
-### 1. Missing intensify/glow blend modes (HIGH)
+### ~~1. Missing intensify/glow blend modes~~ (DONE)
 
-The reference shows bright cyan neon effects from additive glow layers. Current shader doesn't implement the `intensify` material flag (which doubles color output) or additive blend mode. This is why the UI appears dim despite correct alpha values.
+Implemented: shader 2.0x color multiplier for `intensify` materials. PipelineManager maps Add/SrcAlphaAdd blend modes. Bright cyan neon effects now render correctly.
 
-### 2. Colors desaturated — not bright cyan (MEDIUM)
+### ~~2. Colors desaturated~~ (DONE)
 
-Material colors like `color_edge_gradient.mat` have correct values (0.00, 0.47, 0.85, 0.60) but appear dark because:
-- Intensify flag not doubling color
-- Additive glow layers not stacking brightness
-- Possible missing emissive/ambient term in shader
+Fixed by intensify shader + additive blend pipeline.
 
-### 3. Missing DANCE CENTRAL 3 logo (HIGH)
+### 3. Missing DANCE CENTRAL 3 logo (MEDIUM)
 
 The big logo is absent. Likely rendered by a TexRenderer (render-to-texture) or loaded from a subdir not yet processed.
 
-### 4. Missing text labels (MEDIUM)
+### ~~4. Missing text labels~~ (DONE)
 
-Reference shows more labels than current output. Depend on screen enter DTA scripts and PropAnim visibility.
+Fixed: locale loading now works (RegionInit + Locale::Init populates 2091 tokens). All menu text renders localized strings.
 
 ## Stubs Status
 
@@ -87,6 +84,7 @@ Most are for systems not yet needed (Kinect, networking, advanced char animation
 
 ## Next Steps
 
-1. **Implement intensify blend mode** — materials with `intensify=true` should use additive blending or doubled color output in the shader
-2. **Add additive blend pipeline** — create a separate render pipeline key for additive materials
+1. ~~Implement intensify blend mode~~ — DONE (shader 2.0x multiplier)
+2. ~~Add additive blend pipeline~~ — DONE (PipelineManager blend modes)
 3. **Find the logo** — search for DC3 logo texture/mesh in the milo hierarchy
+4. **Move card UI** — HUD panels active but move card content invisible (TexMovie/asset wiring)

@@ -46,6 +46,9 @@ public:
     void ReadFreestyleMoveClip(String, int &, FreestyleMoveFrame *);
     float GetScore(const BaseSkeleton *, int, float, bool);
     float GetScore(int, int, float, bool);
+    void CalcFrameScore(
+        FreestyleFrameScores &, const FreestyleMoveFrame *, int, const BaseSkeleton *, float
+    ) const;
     RndTex *GetPlayerPalette() const { return mPlayerPalette; }
     int GetDancerTakeFrameCount() const { return mDancerTakeFrameCount; }
     int GetCurrentMoveNumFrames() const { return mTakes[mCurrentTakeIndex].mNumFrames; }
@@ -70,9 +73,6 @@ private:
     ) const;
     float CompareSkeletonJointDisplacement(
         const FreestyleMoveFrame *, int, const BaseSkeleton *, float &
-    ) const;
-    void CalcFrameScore(
-        FreestyleFrameScores &, const FreestyleMoveFrame *, int, const BaseSkeleton *, float
     ) const;
     void WriteFreestyleMoveClip(String, int, FreestyleMoveFrame *);
     void ClearFreestyleMoveClip();

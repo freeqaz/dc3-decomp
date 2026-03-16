@@ -210,9 +210,10 @@ void NgSpotlightDrawer::RenderSheet(Spotlight *sl) {
     float b = colorOwner->mColor.blue * intensity;
 
     if (!sl->mAnimateColorFromPreset && sl->mBeam.mMat) {
-        r = sl->mBeam.mMat->GetColor().red * r;
-        g = sl->mBeam.mMat->GetColor().green * g;
-        b = sl->mBeam.mMat->GetColor().blue * b;
+        RndMat *mat = sl->mBeam.mMat;
+        r = mat->GetColor().red * r;
+        g = mat->GetColor().green * g;
+        b = mat->GetColor().blue * b;
     }
 
     Vector4 colorVec(r * brighten, g * brighten, b * brighten, 1.0f);

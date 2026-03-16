@@ -76,16 +76,25 @@ void Bloom_Blur(RndTex *texDst, RndTex *texSrc, BloomBlurStyle style, BloomBlurD
     bool horizontal = (direction == kBloomBlurHorizontal);
     workMat->MarkDirty(2);
 
-    if (style == kBloomBlurNormal) {
-        SetBloomBlurWeights(horizontal, (float)texDst->Width(), (float)texDst->Height());
-    } else if (style == kBloomBlurStreak) {
-        SetBloomBlurWeightsStreak(horizontal, (float)texDst->Width(), (float)texDst->Height(), attenuation, pass, angle);
-    } else if (style < kBloomBlurGlare + 1) {
-        blurShader = kBloomGlareShader;
+    {
+        float w = (float)texDst->Width();
+        float h = (float)texDst->Height();
+        if ((unsigned int)style >= (unsigned int)kBloomBlurStreak) {
+            if ((unsigned int)style != (unsigned int)kBloomBlurStreak) {
+                if ((unsigned int)style < (unsigned int)(kBloomBlurGlare + 1)) {
+                    blurShader = kBloomGlareShader;
+                }
+            } else {
+                SetBloomBlurWeightsStreak(horizontal, w, h, attenuation, pass, angle);
+            }
+        } else {
+            SetBloomBlurWeights(horizontal, w, h);
+        }
     }
 
+    Hmx::Color color;
     Hmx::Rect rect(0, 0, (float)texDst->Width(), (float)texDst->Height());
-    TheNgRnd.DrawRect(rect, workMat, blurShader, Hmx::Color(1, 1, 1), nullptr, nullptr);
+    TheNgRnd.DrawRect(rect, workMat, blurShader, color, nullptr, nullptr);
 
     TheShaderMgr.SetNumTaps(1);
     texDst->FinishDrawTarget();

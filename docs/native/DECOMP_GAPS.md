@@ -31,6 +31,13 @@ These directly affect what's visible on screen.
 | `MoveDir` | `DrawShowing()` | **90.4%** (MI this-adjust, r27/r28 regswap) | Dance move overlay (debug) |
 | `InlineHelp` | `DrawShowing()` | **96.2%** (r30/r31 regswap) | On-screen help text positioning |
 | ~~`RndParticleSys`~~ | ~~`Poll()`~~ | **100%** | Particles now animate |
+| `RndParticleSys` | `InitParticle(float,...)` | **64.6%** AT_LIMIT (28 reg swap pairs, condition inversions) | Particle initialization — native rendering works regardless |
+| `RndRibbon` | `UpdateMesh()` | **61.4%** AT_LIMIT (reg swaps, float scheduling) | Ribbon tube mesh generation |
+| `RndRibbon` | `UpdateChase()` | **54.7%** AT_LIMIT (reg swaps dominate) | Ribbon chase transform updates |
+| `RndRibbon` | `ConstructMesh()` | **44.4%** AT_LIMIT (reg swaps, float scheduling) | Ribbon initial mesh construction |
+| `NgSpotlightDrawer` | `RenderConeDefs()` | **66.3%** AT_LIMIT (Vector4 aggregate param passing) | Spotlight cone geometry |
+| `BinkIntegration` | `BinkFileReadFrame()` | **84.7%** AT_LIMIT (base ptr caching, branchless conditional) | Bink video frame reading |
+| `BinkIntegration` | `ReadFunc()` | **78.6%** AT_LIMIT (EndianSwap 64-bit scheduling) | Bink file I/O callback |
 | `LabelShrinkWrapper` | `Poll()` | **Done** (pass-through to UIComponent::Poll) | Label auto-sizing |
 | ~~`TexProc`~~ | ~~`DrawShowing()`, `Poll()`~~ | **Done** | Poll 100%, DrawToTexture 92.3% |
 

@@ -57,15 +57,6 @@ ln -sf "$MAIN_REPO/orig" "$WORKTREE_PATH/orig"
 echo "==> Symlinking bin/objdiff-cli"
 ln -sf "$MAIN_REPO/bin/objdiff-cli" "$WORKTREE_PATH/bin/objdiff-cli"
 
-echo "==> Running configure.py with absolute tool paths"
-(
-    cd "$WORKTREE_PATH"
-    python3 configure.py \
-        --dtk "$DTK_PATH" \
-        --objdiff "$OBJDIFF_PATH" \
-        --wibo "$WIBO_PATH"
-)
-
 echo "==> Symlinking shared build artifacts"
 WT_BUILD="$WORKTREE_PATH/build/373307D9"
 MAIN_BUILD="$MAIN_REPO/build/373307D9"
@@ -77,9 +68,17 @@ touch "$WT_BUILD/pch/system.pch"
 # Target objects (original binary, never changes)
 ln -sf "$MAIN_BUILD/obj" "$WT_BUILD/obj"
 
-# Pre-split config (avoid re-running dtk xex split)
+# Pre-split config — MUST exist BEFORE configure.py runs.
+# configure.py generates a two-phase build.ninja: phase 1 only has the xex
+# split rule, phase 2 (triggered by ninja generator re-run) has all compile
+# rules. By providing config.json first, configure.py sees it immediately
+# and generates the full build.ninja in one pass.
+#
+# COPY instead of symlink: the build.ninja "split" rule writes to config.json,
+# so a symlink would corrupt the main repo's file. Concurrent worktrees would
+# also race on the shared file. A copy (447KB) is safe for parallel use.
 if [ -f "$MAIN_BUILD/config.json" ]; then
-    ln -sf "$MAIN_BUILD/config.json" "$WT_BUILD/config.json"
+    cp "$MAIN_BUILD/config.json" "$WT_BUILD/config.json"
 fi
 
 # Downloaded tools (compilers, binutils, sjiswrap)
@@ -88,6 +87,20 @@ for dir in compilers binutils tools; do
         ln -sf "$MAIN_REPO/build/$dir" "$WORKTREE_PATH/build/$dir"
     fi
 done
+
+echo "==> Symlinking Python venv"
+if [ -d "$MAIN_REPO/venv" ]; then
+    ln -sf "$MAIN_REPO/venv" "$WORKTREE_PATH/venv"
+fi
+
+echo "==> Running configure.py with absolute tool paths"
+(
+    cd "$WORKTREE_PATH"
+    python3 configure.py \
+        --dtk "$DTK_PATH" \
+        --objdiff "$OBJDIFF_PATH" \
+        --wibo "$WIBO_PATH"
+)
 
 echo ""
 echo "Worktree ready at: $WORKTREE_PATH"

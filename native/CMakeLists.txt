@@ -1172,6 +1172,8 @@ target_link_options(dc3-web PRIVATE
     -sEXPORTED_RUNTIME_METHODS=["ccall","cwrap"]
     # Allow undefined symbols — engine stubs use asm-labels that wasm-ld can't resolve.
     -sERROR_ON_UNDEFINED_SYMBOLS=0
+    # Note: EMULATE_FUNCTION_POINTER_CASTS was previously tried here but is not needed.
+    # The real fix is null-checking mNextElement in UIListSlot::StartScroll.
     # Make missing function calls log instead of abort (many Xbox-specific funcs not needed)
     --pre-js ${CMAKE_CURRENT_SOURCE_DIR}/web/missing_stubs.js
     -sUSE_ZLIB=1

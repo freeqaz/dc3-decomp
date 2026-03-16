@@ -414,7 +414,10 @@ void MoveMgr::SongInit() {
     mLoadingProgressCounter = 0;
     MILO_ASSERT(TheHamDirector, 0x123);
     mMovesDir = TheHamDirector->GetWorld()->Find<MoveDir>("moves", false);
+#ifndef HX_NATIVE
     MILO_ASSERT(mMovesDir, 0x126);
+#endif
+    if (!mMovesDir) return;
     static Symbol move("move");
     static Symbol clip("clip");
     static Symbol practice("practice");
@@ -422,8 +425,15 @@ void MoveMgr::SongInit() {
         unk54[i].clear();
         PropKeys *pMovePropKeys = TheHamDirector->GetPropKeys((Difficulty)i, move);
         PropKeys *pClipPropKeys = TheHamDirector->GetPropKeys((Difficulty)i, clip);
+#ifndef HX_NATIVE
         MILO_ASSERT(pMovePropKeys, 0x132);
         MILO_ASSERT(pClipPropKeys, 0x133);
+#endif
+        if (!pMovePropKeys || !pClipPropKeys) {
+            mMovePropKeys[i] = nullptr;
+            mClipPropKeys[i] = nullptr;
+            continue;
+        }
         mMovePropKeys[i] = pMovePropKeys->AsSymbolKeys();
         mClipPropKeys[i] = pClipPropKeys->AsSymbolKeys();
     }
@@ -700,7 +710,9 @@ void MoveMgr::InitSong() {
     ComputeRandomChoiceSet(0);
     ComputeLoadedMoveSet();
     TheHamDirector->CleanOriginalMoveData();
-    LoadMoveData(mMovesDir->Find<ObjectDir>("move_data", false));
+    if (mMovesDir) {
+        LoadMoveData(mMovesDir->Find<ObjectDir>("move_data", false));
+    }
 }
 
 void MoveMgr::LoadSubCategoryData() {

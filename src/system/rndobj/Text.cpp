@@ -748,7 +748,6 @@ float RndText::ComputeHeight(int i1, float f2, float &f3) {
     return ((i1 - 1) * mLeading + 1.0f) * f1;
 }
 
-#ifdef HX_NATIVE
 struct WrapPoint {
     int charIdx;
     unsigned int cost;
@@ -763,31 +762,40 @@ void RndText::WrapText(
     const unsigned short *wideChars, int numChars, float *charWidths,
     HX_VECTOR(Line) &lines, Hmx::Rect &bounds, float scale
 ) {
-    StyleState styleState(this, scale);
-    const unsigned short *baseChars = wideChars;
-    { MemTemp tmp; lines.reserve(100); }
+    MemPushTemp();
+    lines.reserve(100);
     lines.erase(lines.begin(), lines.end());
-    bool hasFont = (mFontMaps.begin() != mFontMaps.end());
-    if (!hasFont || numChars == 0 || mStyles[0].mFont == 0) {
-        Line emptyLine = {};
-        if (lines.size() < 1) lines.insert(lines.end(), 1 - lines.size(), emptyLine);
-        else lines.erase(lines.begin() + 1, lines.end());
+    StyleState styleState(this, scale);
+    MemPopTemp();
+    if (!(mFontMaps.end() != mFontMaps.begin()) || numChars == 0 || mStyles[0].mFont == 0) {
+        Line emptyLine;
+        emptyLine.mStart = 0;
+        emptyLine.mEnd = 0;
+        emptyLine.mWidth = 0.0f;
+        emptyLine.mXStart = 0.0f;
+        emptyLine.mYPos = 0.0f;
+        if (lines.size() > 1) lines.erase(lines.begin() + 1, lines.end());
+        else lines.insert(lines.end(), 1 - lines.size(), emptyLine);
         lines[0].mWidth = 0.0f;
-        lines[0].mStart = baseChars;
-        lines[0].mEnd = baseChars;
+        lines[0].mStart = wideChars;
+        lines[0].mEnd = wideChars;
     } else if (mWidth == 0.0f) {
-        Line emptyLine = {};
-        if (lines.size() < 1) lines.insert(lines.end(), 1 - lines.size(), emptyLine);
-        else lines.erase(lines.begin() + 1, lines.end());
+        Line emptyLine;
+        emptyLine.mStart = 0;
+        emptyLine.mEnd = 0;
+        emptyLine.mWidth = 0.0f;
+        emptyLine.mXStart = 0.0f;
+        emptyLine.mYPos = 0.0f;
+        if (lines.size() > 1) lines.erase(lines.begin() + 1, lines.end());
+        else lines.insert(lines.end(), 1 - lines.size(), emptyLine);
         lines[0].mYPos = 0.0f;
         lines[0].mXStart = 0.0f;
-        lines[0].mStart = baseChars;
-        lines[0].mEnd = baseChars + numChars;
-        lines[0].mWidth = SegmentLength(0, numChars, charWidths, baseChars, scale);
+        lines[0].mStart = wideChars;
+        lines[0].mEnd = wideChars + numChars;
+        lines[0].mWidth = SegmentLength(0, numChars, charWidths, wideChars, scale);
     } else {
         WrapPoint *wps = (WrapPoint *)_alloca((numChars + 1) * sizeof(WrapPoint));
         bool activeMarkup = styleState.mActive;
-        int markupCount = 0;
         wps[0].charIdx = 0;
         wps[0].lineWidth = 0.0f;
         wps[0].cost = 0;
@@ -797,66 +805,72 @@ void RndText::WrapText(
         wps[0].isHardBreak = true;
         float minW = mWidth * 0.7f;
         float goodW = mWidth * 0.95f;
-        const unsigned short *brkChars = baseChars;
+        const unsigned short *brkChars = wideChars;
         if (mMarkup) {
             unsigned short *stripped = (unsigned short *)_alloca((numChars + 1) * 2);
             brkChars = stripped;
-            const unsigned short *s = baseChars;
-            unsigned short *d = stripped;
+            const unsigned short *s = wideChars;
             unsigned short c = *s;
             while (c != 0) {
                 if (c == 0x3c) {
-                    short t = c;
+                    unsigned short t = c;
                     do { if (t == 0x3e) break; s++; t = *s; } while (t != 0);
                     if (t != 0) s++;
-                } else { *d = c; d++; s++; }
+                } else { *stripped = c; stripped++; s++; }
                 c = *s;
             }
-            *d = 0;
+            *stripped = 0;
         }
-        // Convert brkChars from unsigned short to wchar_t for WordWrap_CanBreakLineAt.
+#ifdef HX_NATIVE
         // On Linux, wchar_t is 4 bytes but our text buffers are unsigned short (2 bytes).
-        // Passing unsigned short* cast to wchar_t* causes the function to read garbled
-        // 4-byte values, producing spurious line breaks.
+        // Convert brkChars to wchar_t for WordWrap_CanBreakLineAt.
         // Allocate +2 padding: WordWrap_CanBreakLineAt reads cur[1] (lookahead)
         // which can read one past the null terminator.
-        int brkLen = 0;
+        int brkLen = 0.0f;
         { const unsigned short *t = brkChars; while (*t++) brkLen++; }
-        wchar_t *brkWide = (wchar_t *)_alloca((brkLen + 2) * sizeof(wchar_t));
-        for (int bi = 0; bi <= brkLen; bi++) brkWide[bi] = (wchar_t)brkChars[bi];
-        brkWide[brkLen + 1] = 0;
+        wchar_t *brkWideBuf = (wchar_t *)_alloca((brkLen + 2) * sizeof(wchar_t));
+        for (int bi = 0; bi <= brkLen; bi++) brkWideBuf[bi] = (wchar_t)brkChars[bi];
+        brkWideBuf[brkLen + 1] = 0;
+#define BRKWIDE_BASE brkWideBuf
+#else
+        // On PPC, wchar_t is 2 bytes (same as unsigned short) — cast directly.
+#define BRKWIDE_BASE ((const wchar_t *)brkChars)
+#endif
 
-        int nWp = 1, wpI = 0;
-        const unsigned short *cur = baseChars;
-        const unsigned short *curBrk = brkChars;
+        int wpI = 0, nWp = 1;
+        const unsigned short *cur = wideChars;
         int cCount = 0;
         for (;;) {
             unsigned short ch = *cur;
-            const wchar_t *brkW = &brkWide[cCount];
+            const wchar_t *brkW = &BRKWIDE_BASE[cCount];
             int prevI = wpI;
             WrapPoint *nxt = &wps[nWp];
             if (ch == 0 || ch == '\n') {
                 int best = -1, bestC = 100000;
                 bool ovf = false;
                 float bestW = 0.0f;
-                int endI = (int)(cur - baseChars);
-                MILO_ASSERT(prevI >= 0, 0x6ed);
+                int endI = (int)(cur - wideChars);
                 float mxW = mWidth;
                 for (int wi = wpI; wi >= 0; wi--) {
-                    float sw = SegmentLength(wps[wi].charIdx, endI, charWidths, baseChars, scale);
+                    float sw = SegmentLength(wps[wi].charIdx, endI, charWidths, wideChars, scale);
                     unsigned int pen = 10;
-                    if (sw <= mxW) {
-                        if (!(mAlignment & 0x20)) {
+                    if (sw > mxW) {
+                        if (wi != prevI) {
+                            if (best != -1) { ovf = true; }
+                        }
+                    } else {
+                        bool _bit0 = (mAlignment & 0x20) != 0;
+                        if (!(_bit0)) {
                             if (endI - wps[wi].charIdx < 5) pen = 50;
                         } else {
-                            float fw = SegmentLength(wps[wi].charIdx, numChars, charWidths, baseChars, scale);
-                            if (mxW <= fw) {
-                                pen = (unsigned int)((1.0f - sw / mxW) * 30.0f);
+                            float fw = SegmentLength(wps[wi].charIdx, numChars, charWidths, wideChars, scale);
+                            if (fw >= mxW) {
+                                pen = (unsigned int)(int)((1.0f - sw / mxW) * 30.0f);
                                 if (sw < minW) pen += 100;
                             }
                         }
-                    } else if (wi != prevI && best != -1) { pen = 2010; ovf = true; }
-                    int tc = wps[wi].cost + pen;
+                    }
+                    int tc = (int)pen + wps[wi].cost;
                     if (tc < bestC) { bestC = tc; best = wi; bestW = sw; }
                     if (wps[wi].isHardBreak || ovf) break;
                 }
@@ -874,37 +888,44 @@ void RndText::WrapText(
                 if (ch == 0) goto buildLines;
             } else {
                 unsigned short mc = ch;
-                if (ch == 0x3c && mMarkup) {
+                if (ch == 0x3c) {
+                    if (mMarkup) {
                     cur = ParseMarkup(cur, styleState, mc);
                     cCount--;
-                    brkW = &brkWide[cCount];
+                    brkW = &BRKWIDE_BASE[cCount];
                     cur--;
-                    if (styleState.mActive != activeMarkup && styleState.mActive)
-                        activeMarkup = true;
+                    if (styleState.mActive != activeMarkup)
+                        {
+                        if (styleState.mActive) activeMarkup = true;
+                    }
+                }
                 }
                 if (mc != 0) {
-                    int ci = (int)(cur - baseChars);
+                    int ci = (int)(cur - wideChars);
                     if (activeMarkup) {
-                        bool canBrk = cCount >= 1 && WordWrap_CanBreakLineAt(brkW, brkWide);
+                        bool canBrk = cCount > 0 && WordWrap_CanBreakLineAt(brkW, BRKWIDE_BASE);
                         if (canBrk) {
                             int best = -1, bestC = 100000;
                             bool ovf = false;
                             float bestW = 0.0f;
-                            MILO_ASSERT(prevI >= 0, 0x690);
                             for (int wi = wpI; wi >= 0; wi--) {
-                                float sw = SegmentLength(wps[wi].charIdx, ci, charWidths, baseChars, scale);
+                                float sw = SegmentLength(wps[wi].charIdx, ci, charWidths, wideChars, scale);
                                 MILO_ASSERT(sw >= bestW, 0x65d);
                                 unsigned int pen = 10;
                                 float mxW2 = mWidth;
-                                if (sw <= mxW2) {
+                                if (sw > mxW2) {
+                                    if (wi != prevI) {
+                                        if (best != -1) { ovf = true; }
+                                    }
+                                } else {
                                     if (sw < goodW) {
-                                        float fw = SegmentLength(wps[wi].charIdx, numChars, charWidths, baseChars, scale);
-                                        if (mxW2 <= fw) {
-                                            pen = (unsigned int)((1.0f - sw / mxW2) * 60.0f);
+                                        float fw = SegmentLength(wps[wi].charIdx, numChars, charWidths, wideChars, scale);
+                                        if (fw >= mxW2) {
+                                            pen = (unsigned int)(int)((1.0f - sw / mxW2) * 60.0f);
                                             if (sw < minW) pen += 200;
                                         }
                                     }
-                                } else if (wi != prevI && best != -1) { pen = 2010; ovf = true; }
+                                }
                                 if ((int)(wps[wi].cost + pen) <= bestC) {
                                     bestC = wps[wi].cost + pen;
                                     best = wi; bestW = sw;
@@ -930,7 +951,7 @@ void RndText::WrapText(
                     }
                 }
             }
-            cur++; cCount++; curBrk++;
+            cur++; cCount++;
         }
     buildLines:
         if (nWp > 1) {
@@ -941,19 +962,24 @@ void RndText::WrapText(
                 idx = pi;
             } while (idx != 0);
         }
+        Line ol;
+        ol.mStart = 0;
+        ol.mEnd = 0;
+        ol.mWidth = 0.0f;
+        ol.mXStart = 0.0f;
+        ol.mYPos = 0.0f;
         int chi = wps[0].nextIdx;
         while (chi != -1) {
             WrapPoint *wp = &wps[chi];
             WrapPoint *pw = &wps[wp->bestPrevIdx];
-            const unsigned short *cs = baseChars + (pw->charIdx & 0x7fffffff);
-            const unsigned short *ce = baseChars + (wp->charIdx & 0x7fffffff);
+            const unsigned short *cs = wideChars + (pw->charIdx & 0x7fffffff);
+            const unsigned short *ce = wideChars + (wp->charIdx & 0x7fffffff);
             while (cs < ce && (*cs == ' ' || *cs == '\t')) cs++;
             while (ce > cs) {
                 unsigned short p = *(ce - 1);
                 if (p != ' ' && p != '\n' && p != '\t') break;
                 ce--;
             }
-            Line ol;
             ol.mStart = cs;
             ol.mEnd = ce;
             ol.mWidth = wp->lineWidth;
@@ -963,20 +989,19 @@ void RndText::WrapText(
             chi = wp->nextIdx;
         }
         if (lines.empty()) {
-            Line el = {};
-            lines.push_back(el);
+            lines.push_back(ol);
         }
     }
     float ls;
+    float topY = 0.0f;
     float th = ComputeHeight((int)lines.size(), scale, ls);
     bounds.h = th;
-    float topY = 0.0f;
     if (mAlignment & 0x20) topY = th * 0.5f;
     else if (mAlignment & 0x40) topY = th;
     bounds.w = 0.0f;
     for (unsigned int i = 0; i < lines.size(); i++) {
         Line &l = lines[i];
-        if (bounds.w < l.mWidth) bounds.w = l.mWidth;
+        bounds.w = Max(bounds.w, l.mWidth);
         if (mAlignment & 0x2) l.mXStart = l.mWidth * -0.5f;
         else if (mAlignment & 0x4) l.mXStart = -l.mWidth;
         else l.mXStart = 0.0f;
@@ -986,7 +1011,7 @@ void RndText::WrapText(
     bounds.x = lines[0].mXStart;
     bounds.y = lines[0].mYPos - bounds.h;
 }
-#endif
+#undef BRKWIDE_BASE
 
 void RndText::SetText(const char *str) {
     if (mFixedLength != 0) {

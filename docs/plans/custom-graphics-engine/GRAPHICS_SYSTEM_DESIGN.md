@@ -547,8 +547,10 @@ struct ObjectUniforms {      // Group 2, 128 bytes
 
 No FrameGraph module — the engine's pass order is fixed and linear.
 
-**Tier 1 (current)**: Single render pass in `BeginDrawing()` → `EndDrawing()`.
-Renders directly to the surface texture (no intermediate targets).
+**Tier 1.5 (current)**: Main frame pass in `BeginDrawing()` → `EndDrawing()`, with
+render-to-texture support for mid-frame camera switches. RTT is fully wired:
+`RndCam::Select()` → `RndTex::MakeDrawTarget()` → `BeginTexturePass()` interrupts
+the frame pass, renders to a `kRendered` texture, then `FinishDrawTarget()` resumes.
 
 ```
 BeginDrawing():
@@ -561,11 +563,16 @@ BeginDrawing():
   7. SetBindGroup(0, sceneBindGroup)
 
 [Engine draws all drawables — each calls RndMesh::DrawShowing()]
+[Mid-frame RTT: RndCam::Select() with TargetTex → BeginTexturePass → draw → FinishDrawTarget → resume]
 
 EndDrawing():
   8. EndRenderPass, Finish → Submit
   9. PresentFrame (if windowed)
 ```
+
+RTT GPU resources are lazy-allocated via `EnsureRenderTargetData()` in `Tex_Wgpu.cpp`.
+See [docs/native/RENDER_TO_TEXTURE.md](../../docs/native/RENDER_TO_TEXTURE.md) for full
+architecture, consumer status, and known issues.
 
 **Tier 2/3 (planned)**:
 ```

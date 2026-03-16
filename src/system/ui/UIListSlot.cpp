@@ -86,6 +86,25 @@ void UIListSlot::CreateElements(UIList *uilist, int count) {
     }
 }
 
+#ifdef HX_NATIVE
+// Lazy element creation for async loading: if RootTrans() is now valid
+// but CreateElements was skipped (assets weren't loaded yet), create them now.
+void UIListSlot::EnsureElements() {
+    if (!RootTrans() || !mElements.empty() || mNextElement)
+        return;
+    UIList *list = ParentList();
+    if (!list)
+        return;
+    int count = list->NumDisplay();
+    if (count <= 0)
+        return;
+    for (int i = 0; i < count; i++) {
+        mElements.push_back(CreateElement(list));
+    }
+    mNextElement = CreateElement(list);
+}
+#endif
+
 void UIListSlot::Draw(
     const UIListWidgetDrawState &drawstate,
     const UIListState &liststate,
@@ -96,6 +115,9 @@ void UIListSlot::Draw(
 ) {
     RndTransformable *root = RootTrans();
     if (root) {
+#ifdef HX_NATIVE
+        EnsureElements();
+#endif
         int thesize = drawstate.mElements.size();
         if (thesize > mElements.size()) {
             int numSlotElements = mElements.size();
@@ -202,6 +224,7 @@ void UIListSlot::Draw(
 void UIListSlot::Fill(const UIListProvider &prov, int display, int j, int k) {
     if (RootTrans()) {
 #ifdef HX_NATIVE
+        EnsureElements();
         if ((size_t)display >= mElements.size())
             return;
 #endif
@@ -212,6 +235,11 @@ void UIListSlot::Fill(const UIListProvider &prov, int display, int j, int k) {
 
 void UIListSlot::StartScroll(int i, bool b) {
     if (b && RootTrans()) {
+#ifdef HX_NATIVE
+        EnsureElements();
+        if (!mNextElement)
+            return;
+#endif
         mElements.insert(i < 0 ? mElements.begin() : mElements.end(), mNextElement);
         mNextElement = 0;
     }

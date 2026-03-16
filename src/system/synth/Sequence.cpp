@@ -347,7 +347,7 @@ void RandomGroupSeq::AddToPlayedHistory(int idx) {
 }
 
 void RandomGroupSeq::PickNextIndex() {
-    MILO_ASSERT(GetNumSimul() == 1 || Children().size() == 1, 0x1E0);
+    MILO_ASSERT(GetNumSimul() == 1 || Children().size() == 1, 0x1B2);
     if (!sForceSerialSequences) {
         mNextIndex = RandomInt(0, mChildren.size());
     } else {

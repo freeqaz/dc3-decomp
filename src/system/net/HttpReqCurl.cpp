@@ -8,7 +8,21 @@
 #include "utl/Std.h"
 
 namespace {
-    unsigned int WriteMemoryCallback(void *, unsigned int, unsigned int, void *);
+    unsigned int WriteMemoryCallback(void *contents, unsigned int size, unsigned int nmemb, void *userp) {
+        unsigned int totalSize = nmemb * size;
+        if (*(void **)userp != nullptr) {
+            void *newBuf = MemRealloc(*(void **)userp, *((unsigned int *)userp + 1) + totalSize, __FILE__, 0x1b, "HttpReqCurl", 0);
+            *(void **)userp = newBuf;
+            MILO_ASSERT(newBuf, 0x1c);
+        } else {
+            void *newBuf = MemAlloc(totalSize, __FILE__, 0x21, "HttpReqCurl", 0);
+            *(void **)userp = newBuf;
+            MILO_ASSERT(newBuf, 0x22);
+        }
+        memcpy(*(char **)userp + *((unsigned int *)userp + 1), contents, totalSize);
+        *((unsigned int *)userp + 1) += totalSize;
+        return totalSize;
+    }
 }
 
 HttpReqCurl::HttpReqCurl(

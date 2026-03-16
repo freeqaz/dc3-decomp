@@ -1656,11 +1656,22 @@ namespace {
 }
 
 float MoveDir::DetectFrac(int player, int idx) {
-    HamMove *move = mMovePlayerData[player].mCurMove;
-    if (!move)
+    MILO_ASSERT_RANGE(player, 0, 2, 0x16a);
+    int moveIdx = MoveIdx();
+    if (idx == -1) {
+        idx = moveIdx;
+    }
+    MovePlayerData &playerData = mMovePlayerData[player];
+    unsigned int numMoveKeys = (unsigned int)playerData.mMoveKeys.size();
+    HamMove *move;
+    if (idx < 0 || (unsigned int)idx >= numMoveKeys
+        || !(move = playerData.mMoveKeys[idx].move))
         return 0.0f;
     std::pair<DetectFrame *, DetectFrame *> range;
-    DetectRange(mMovePlayerData[player].mDetectFrames, range, MoveIdx(), idx);
+    DetectRange(playerData.mDetectFrames, range, idx, idx);
+    if (range.first == range.second) {
+        return mAsyncDetector->MoveRatingFrac(player, (MoveAsyncDetector::RatingBar)(idx != moveIdx), move);
+    }
     return DetectFrac(player, move, range);
 }
 

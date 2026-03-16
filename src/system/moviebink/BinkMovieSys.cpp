@@ -6,6 +6,7 @@
 #include "os/CritSec.h"
 #include "os/Debug.h"
 #include "os/System.h"
+#include "utl/MakeString.h"
 #include "utl/MemMgr.h"
 #include "utl/Symbol.h"
 
@@ -42,9 +43,7 @@ void BinkMovieSys::Init() {
 
     MovieSys::Init();
 
-    if (!isInitalized) {
-        TheDebug.Fail("IsInitialized", nullptr);
-    }
+    MILO_ASSERT(isInitalized, 0x67);
 
     if (mCriticalSection == nullptr) {
         void *ptr = MemAlloc(sizeof(CriticalSection), __FILE__, __LINE__, "CriticalSection", 0);
@@ -67,10 +66,10 @@ void BinkMovieSys::Init() {
     if (!wasInit) {
 #ifndef HX_FFMPEG
         BinkSetMemory(RadAlloc, operator delete);
-        PlatformInit();
+        BinkMovieSys::PlatformInit();
 
         if (mHasAsyncThread && (BinkStartAsyncThread(mBinkCore0, 0) == 0 || BinkStartAsyncThread(mBinkCore1, 0) == 0)) {
-            TheDebug.Fail("Error starting bink async thread", nullptr);
+            TheDebug.Fail(FormatString("Error starting bink async thread").Str(), nullptr);
         }
 #endif
     }

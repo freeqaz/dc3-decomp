@@ -146,12 +146,22 @@ EM_JS(int, web_movie_ended, (int id), {
     return (m && m.ended) ? 1 : 0;
 });
 
-// Set volume (0.0 - 1.0)
-EM_JS(void, web_movie_set_volume, (int id, float vol), {
+// Set volume (dB scale: 0 = full, negative = quieter, <= -96 = silence)
+// HTML <video>.volume expects linear 0.0-1.0, so convert from dB.
+EM_JS(void, web_movie_set_volume, (int id, float volDb), {
     var m = Module._webMovies && Module._webMovies[id];
     if (m) {
-        m.video.volume = vol;
-        m.video.muted = (vol <= 0);
+        // Convert dB to linear: 10^(dB/20), clamped to [0, 1]
+        var linear;
+        if (volDb <= -96.0) {
+            linear = 0.0;
+        } else if (volDb >= 0.0) {
+            linear = 1.0;
+        } else {
+            linear = Math.pow(10.0, volDb / 20.0);
+        }
+        m.video.volume = Math.min(1.0, Math.max(0.0, linear));
+        m.video.muted = (linear <= 0);
     }
 });
 

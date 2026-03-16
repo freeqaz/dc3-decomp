@@ -659,51 +659,49 @@ float FreestyleMoveRecorder::CompareSkeletonPositions(
 float FreestyleMoveRecorder::CompareSkeletonJointDisplacement(
     const FreestyleMoveFrame *frames, int frameIdx, const BaseSkeleton *liveSkel, float &outTotalWeight
 ) const {
-    int trackedCount = (int)((mTrackedJoints.end() - mTrackedJoints.begin()));
+    // Compute trackedCount from vector pointers: (end - begin) >> 2 (4 bytes per element)
+    auto _tmp0 = mTrackedJoints.end();
+    auto _tmp1 = mTrackedJoints.begin();
+    int trackedCount = (int)(_tmp0 - _tmp1) >> 2;
     // Compute clamped prev-frame index: max(0, frameIdx-1)
-    unsigned int prevBase = (unsigned int)(frameIdx - 1);
-    unsigned int clampedPrev = (~((int)prevBase >> 31)) & prevBase;
+    unsigned int clampedPrev = (~((int)(unsigned int)(frameIdx - 1) >> 31)) & (unsigned int)(frameIdx - 1);
     float totalScore = 0.0f;
     float totalWeight = 0.0f;
-    if (trackedCount == 0) {
-        outTotalWeight = totalWeight;
-        return totalScore;
-    }
-    const FreestyleMoveFrame *curFrame = &frames[frameIdx];
-    const FreestyleMoveFrame *prevFrame = &frames[clampedPrev];
-    int jointIdx = 0;
-    unsigned int i = 0;
-    do {
-        SkeletonJoint joint = mTrackedJoints[i];
-        Vector3 curJointPos, prevJointPos;
-        curFrame->skeleton.JointPos(kCoordCamera, joint, curJointPos);
-        prevFrame->skeleton.JointPos(kCoordCamera, joint, prevJointPos);
-        int beatDiff = (int)(curFrame->mBeat - prevFrame->mBeat);
-        // Build displacement vector (y=0.0 zeroed — ignore depth component)
-        Vector3 dispOffset;
-        dispOffset.x = curJointPos.x - prevJointPos.x;
-        dispOffset.y = 0.0f;
-        dispOffset.z = curJointPos.z - prevJointPos.z;
-        float similarity = 0.0f;
-        float maxDisp = 0.0f;
-        {
-            SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
-            const SkeletonHistory *history = handle.History();
-            handle.~SkeletonUpdateHandle();
-            Vector3 liveDisp;
-            int liveCount = 0;
-            bool hasDisp = liveSkel->Displacement(history, kCoordCamera, joint, beatDiff, liveDisp, liveCount);
-            if (hasDisp) {
-                CompareDisplacementVectors(dispOffset, beatDiff, liveDisp, liveCount, similarity, maxDisp);
+    if (trackedCount != 0) {
+        const FreestyleMoveFrame *prevFrame = &frames[clampedPrev];
+        const FreestyleMoveFrame *curFrame = &frames[frameIdx];
+        unsigned int i = 0;
+        do {
+            SkeletonJoint joint = mTrackedJoints[i];
+            Vector3 curJointPos, prevJointPos;
+            curFrame->skeleton.JointPos(kCoordCamera, joint, curJointPos);
+            prevFrame->skeleton.JointPos(kCoordCamera, joint, prevJointPos);
+            int beatDiff = (int)(curFrame->mBeat - prevFrame->mBeat);
+            // Build displacement vector (y=0.0 zeroed — ignore depth component)
+            Vector3 dispOffset;
+            dispOffset.x = curJointPos.x - prevJointPos.x;
+            dispOffset.y = 0.0f;
+            dispOffset.z = curJointPos.z - prevJointPos.z;
+            float similarity = 0.0f;
+            float maxDisp = 0.0f;
+            {
+                SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
+                const SkeletonHistory *history = handle.History();
+                handle.~SkeletonUpdateHandle();
+                Vector3 liveDisp;
+                int liveCount = 0;
+                bool hasDisp = liveSkel->Displacement(history, kCoordCamera, joint, beatDiff, liveDisp, liveCount);
+                if (hasDisp) {
+                    CompareDisplacementVectors(dispOffset, beatDiff, liveDisp, liveCount, similarity, maxDisp);
+                }
             }
+            i++;
+            totalScore += similarity * maxDisp;
+            totalWeight += similarity;
+        } while (i < (unsigned int)trackedCount);
+        if (0.0f < totalWeight) {
+            totalScore /= totalWeight;
         }
-        i++;
-        jointIdx += 4;
-        totalScore += similarity * maxDisp;
-        totalWeight += similarity;
-    } while (i < (unsigned int)trackedCount);
-    if (0.0f < totalWeight) {
-        totalScore /= totalWeight;
     }
     outTotalWeight = totalWeight;
     return totalScore;
@@ -718,7 +716,7 @@ void FreestyleMoveRecorder::CalcFrameScore(
         float weight;
     };
     std::vector<TemporalWindow> windows;
-    float oscTimeout = TheOSCMessenger.GetFloat(String("/temporalwindow"), 1000.0f);
+    float oscTimeout = TheOSCMessenger.GetFloat(String("/temporalwindow"), 250.0f);
     float bestDist = FLT_MAX;
     int bestIdx = 0;
     int i = 0;
@@ -808,15 +806,19 @@ void FreestyleMoveRecorder::CalcFrameScore(
 }
 
 float FreestyleMoveRecorder::GetScore(const BaseSkeleton *liveSkel, int playerIdx, float beatParam, bool useDancerTake) {
+    float initScore = 0.0f;
     if (mLastFrameIndex == mCurrentTakeIndex && beatParam > 0.0f) {
         return 1.0f;
     }
-    // Use mDefaultTimeout if beatParam == -1.0f, else use beatParam
-    float beat = mDefaultTimeout;
-    if (beatParam != -1.0f) {
+    // Use mPlaybackPos if beatParam == -1.0f, else use beatParam
+    // Evaluates beatParam != -1.0f BEFORE loading mPlaybackPos for correct FPR ordering
+    bool useInputBeat = (beatParam != -1.0f);
+    float beat = mPlaybackPos;
+    if (useInputBeat) {
         beat = beatParam;
     }
-    UpdateRecordingAttempt(liveSkel, beat * 1000.0f);
+    float beatMillis = beat * 1000.0f;
+    UpdateRecordingAttempt(liveSkel, beatMillis);
     const FreestyleMoveFrame *frames;
     int numFrames;
     if (useDancerTake) {
@@ -826,39 +828,37 @@ float FreestyleMoveRecorder::GetScore(const BaseSkeleton *liveSkel, int playerId
         frames = mTakes[mCurrentTakeIndex].mFrames;
         numFrames = mTakes[mCurrentTakeIndex].mNumFrames;
     }
-    // Compute reference frame index: clamp(int(mDefaultTimeout * beat) - 2, 0, numFrames-1)
+    // Compute maxIdx = max(0, numFrames-1)
     unsigned int maxIdx = (unsigned int)(numFrames - 1);
-    // clamp maxIdx to 0 if negative (numFrames was 0)
     maxIdx = maxIdx & (unsigned int)(~((int)maxIdx >> 31));
+    // Compute raw frame index: int(mDefaultTimeout * beat) - 2
     int frameIdxRaw = (int)(mDefaultTimeout * beat) - 2;
-    // clamp to max
-    unsigned int frameIdx;
-    if (frameIdxRaw > (int)maxIdx) {
-        // clamp to min(frameIdxRaw, maxIdx) using carry tricks matching original
-        unsigned int raw = (unsigned int)frameIdxRaw;
-        frameIdx = raw & (unsigned int)(~(((int)raw >> 31) - 1)) & maxIdx;
-    } else {
-        frameIdx = (unsigned int)frameIdxRaw & (unsigned int)(~((int)((unsigned int)frameIdxRaw >> 31) - 1));
+    // frameIdx defaults to maxIdx (used when frameIdxRaw > maxIdx)
+    unsigned int frameIdx = maxIdx;
+    if (frameIdxRaw <= (int)maxIdx) {
+        // clamp negative to 0: srwi/subi/and pattern
+        unsigned int r10 = (unsigned int)frameIdxRaw >> 31;
+        r10 = r10 - 1;
+        frameIdx = r10 & (unsigned int)frameIdxRaw;
     }
     // Copy reference frame skeleton into debug global
     sLastComparedDancerSkel.Set(frames[frameIdx].skeleton);
-    // Compute score offset for this player's FreestyleFrameScores
-    int scoreOffset = playerIdx << 4;
-    FreestyleFrameScores &frameScores = *(FreestyleFrameScores *)((char *)unke4 + scoreOffset);
+    // Compute pointer to this player's FreestyleFrameScores
+    FreestyleFrameScores &frameScores = *(FreestyleFrameScores *)((char *)unke4 + (playerIdx << 4));
     if (liveSkel != nullptr && liveSkel->IsTracked()) {
-        CalcFrameScore(frameScores, frames, numFrames, liveSkel, beat * 1000.0f - 100.0f);
+        CalcFrameScore(frameScores, frames, numFrames, liveSkel, beatMillis - 100.0f);
     }
     // Accumulate scores: sum(scores[i] / numFrames) for i in 0..unkc
     int scoreCount = frameScores.unkc;
-    float total = 0.0f;
+    float total = initScore;
     if (scoreCount > 0) {
-        float invNumFrames = 1.0f / (float)numFrames;
+        float invNumFrames = 1.0f / (float)(long long)(int)numFrames;
+        float *scoresData = frameScores.unk0.begin();
         int byteIdx = 0;
         int j = 0;
-        float *scoresData = frameScores.unk0.begin();
         do {
             j++;
-            total += *(float *)((char *)scoresData + byteIdx) * invNumFrames;
+            total = *(float *)((char *)scoresData + byteIdx) * invNumFrames + total;
             byteIdx += 4;
         } while (j < scoreCount);
     }

@@ -22,8 +22,19 @@ int gNumDiffs;
 TextFileStream *gLog;
 String gMemTrackSourceFile;
 String gMemTrackSourceObject;
-char CharArrayArray[256]; // CHAR_ARRAY_ARRAY_830e58f8
-char MemTrackObjectName[256];
+// Struct packing: array of 65 pointer-sized entries (260 = 0x104 bytes) followed immediately
+// by an int stack position counter. This ensures counter is at array_base + 0x104 so the
+// compiler can access it as lwz r11, 0x104(r_array_base).
+struct MemTrackStack {
+    char ptrs[260]; // (STACK_SIZE+1) * sizeof(void*) = 65 * 4 = 260 bytes
+    int pos;        // stack position, at offset 0x104 from ptrs base
+};
+static MemTrackStack s_MemTrackObjectNameStack; // MemTrackObjectName + s_MemTrackObjectNameStackPos
+static MemTrackStack s_MemTrackFileNameStack;   // CharArrayArray + s_MemTrackFileNameStackPos
+#define MemTrackObjectName s_MemTrackObjectNameStack.ptrs
+#define CharArrayArray s_MemTrackFileNameStack.ptrs
+#define s_MemTrackObjectNameStackPos s_MemTrackObjectNameStack.pos
+#define s_MemTrackFileNameStackPos s_MemTrackFileNameStack.pos
 
 void StopLog() {
     if (gLog) {
@@ -203,6 +214,61 @@ DataNode MemTrackLogDF(DataArray *a) {
     return 0;
 }
 
+static const int STACK_SIZE = 64;
+
+void BeginMemTrackObjectName(const char *name) {
+    if (gMemTracker) {
+        s_MemTrackObjectNameStackPos++;
+        MILO_ASSERT(s_MemTrackObjectNameStackPos <= STACK_SIZE, 0xBE);
+        strncpy(((char **)MemTrackObjectName)[s_MemTrackObjectNameStackPos],
+                gMemTracker->unk181b4.c_str(), 0x80);
+        ((char **)MemTrackObjectName)[s_MemTrackObjectNameStackPos][0x7f] = '\0';
+        static bool sCampfireToggle = false;
+        if (strcmp(name, "flow/nav_player.milo") == 0) {
+            sCampfireToggle = !sCampfireToggle;
+        }
+        gMemTracker->unk181b4 = name;
+    }
+}
+
+void EndMemTrackObjectName() {
+    if (gMemTracker) {
+        int pos = s_MemTrackObjectNameStackPos - 1;
+        s_MemTrackObjectNameStackPos = pos;
+        MILO_ASSERT(0 <= s_MemTrackObjectNameStackPos && s_MemTrackObjectNameStackPos < STACK_SIZE, 0xCF);
+        if (s_MemTrackObjectNameStackPos >= 0) {
+            gMemTracker->unk181b4 =
+                ((char **)MemTrackObjectName)[s_MemTrackObjectNameStackPos];
+        }
+    }
+}
+
+void BeginMemTrackFileName(const char *name) {
+    if (gMemTracker) {
+        s_MemTrackFileNameStackPos++;
+        MILO_ASSERT(s_MemTrackFileNameStackPos <= STACK_SIZE, 0xDA);
+        strncpy(((char **)CharArrayArray)[s_MemTrackFileNameStackPos], name, 0x80);
+        ((char **)CharArrayArray)[s_MemTrackFileNameStackPos][0x7f] = '\0';
+        String *prev = &gMemTracker->unk181ac;
+        gMemTracker->unk181a4 = *prev;
+        *prev = name;
+    }
+}
+
+void EndMemTrackFileName() {
+    if (gMemTracker) {
+        int pos = s_MemTrackFileNameStackPos - 1;
+        s_MemTrackFileNameStackPos = pos;
+        MILO_ASSERT(0 <= s_MemTrackFileNameStackPos && s_MemTrackFileNameStackPos < STACK_SIZE, 0xE6);
+        if (s_MemTrackFileNameStackPos >= 0) {
+            char *name = ((char **)CharArrayArray)[s_MemTrackFileNameStackPos];
+            String *prev = &gMemTracker->unk181ac;
+            gMemTracker->unk181a4 = *prev;
+            *prev = name;
+        }
+    }
+}
+
 void MemTrackInit(int heap, int numAllocs, bool heapOnly) {
     CritSecTracker tracker(gMemLock);
     MILO_ASSERT(!gMemTracker, 0x82);
@@ -219,12 +285,14 @@ void MemTrackInit(int heap, int numAllocs, bool heapOnly) {
     DataRegisterFunc("mem_log", MemTrackLogDF);
     MemTrackReport(0, false);
     AllocInfoInit();
-    for (int i = 0; i < sizeof(CharArrayArray); i++) {
+    int i = 0;
+    do {
         void *mem = MemAlloc(0x80, __FILE__, 0x9a, "MemTrackStack", 0);
-        CharArrayArray[i] = (char)mem;
+        *(void **)((int)CharArrayArray + i) = mem;
         memset(mem, 0, 0x80);
         mem = MemAlloc(0x80, __FILE__, 0x9c, "MemTrackStack", 0);
-        MemTrackObjectName[i] = (char)mem;
+        *(void **)((int)MemTrackObjectName + i) = mem;
         memset(mem, 0, 0x80);
-    }
+        i += 4;
+    } while (i <= 0x100);
 }

@@ -656,7 +656,12 @@ void WorldCrowd::Draw3DChars() {
         int numChars = (int)charIt->m3DChars.size();
         for (int i = 0; (unsigned int)i < numChars; i++) {
             Apply3DCharXfm(charIt, i, RndCam::Current());
-#ifndef HX_NATIVE
+#ifdef HX_NATIVE
+            // On native, draw 3D crowd chars directly (no impostor textures).
+            // Skip Xbox-specific raw offset access and color mod flags.
+            curChar->SetShowing(true);
+            curChar->DrawShowing();
+#else
             if (charIt->mDef.mUseRandomColor) {
                 SetMatColorFlags(charIt->mDef.mMats, RndMat::kColorModModulate, &charIt->m3DChars[i].mColors);
             }

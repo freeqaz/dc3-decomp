@@ -579,6 +579,7 @@ void SystemPreInit(const char *config) {
     InitMakeString();
     Symbol::PreInit(640000, 80000);
 #ifdef HX_NATIVE
+    ThePlatformMgr.RegionInit();
     OptionInit();
     TimeConversionInit();
     Timer::Init();

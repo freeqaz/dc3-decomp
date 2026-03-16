@@ -2,9 +2,12 @@
 #include "NetCacheMgr.h"
 #include "os/Debug.h"
 #include "os/FileCache.h"
+#include "utl/FilePath.h"
 #include "utl/Loader.h"
 #include "utl/NetCacheMgr.h"
 #include "utl/Str.h"
+
+extern void BinkFree(void *);
 
 NetCacheLoader::NetCacheLoader(FileCache *f, const String &s)
     : mState(kS_Nil), mCache(f), mRemotePath(s), mFileLoader(0), mFileLoaderBuffer(0),
@@ -48,7 +51,44 @@ char *NetCacheLoader::GetBuffer() {
         return nullptr;
 }
 
-// void NetCacheLoader::SetState(NetCacheLoader::State state);
+void NetCacheLoader::SetState(NetCacheLoader::State state) {
+    if (mState == state)
+        return;
+    switch (mState) {
+    case 0:
+        if (state == 3)
+            goto lab;
+        goto cleanup;
+    case 2:
+        if (state != 3) {
+            MILO_ASSERT(!mNetLoader || mNetLoader->IsSafeToDelete(), 0xc1);
+            RELEASE(mNetLoader);
+        }
+        goto lab;
+    case 3:
+        MILO_ASSERT(!mNetLoader || mNetLoader->IsSafeToDelete(), 0xc7);
+        RELEASE(mNetLoader);
+        mNetLoaderBuffer = nullptr;
+        break;
+    }
+cleanup:
+    RELEASE(mFileLoader);
+    delete mFileLoaderBuffer;
+    mFileLoaderBuffer = nullptr;
+lab:
+    mState = state;
+    if (state != 0) {
+        if (state == 2) {
+            MILO_ASSERT(!mNetLoader, 0xef);
+            mNetLoader = NetLoader::Create(mRemotePath);
+        }
+    } else {
+        MILO_ASSERT(!mFileLoader, 0xe3);
+        const char *strPath = mRemotePath.c_str();
+        MILO_ASSERT(TheNetCacheMgr->IsLocalFile(strPath), 0xe6);
+        mFileLoader = new FileLoader(FilePath(strPath), strPath, kLoadFront, 0, false, true, nullptr, nullptr);
+    }
+}
 
 void NetCacheLoader::WriteToCache() {
     if (!TheNetCacheMgr->IsReady()) {

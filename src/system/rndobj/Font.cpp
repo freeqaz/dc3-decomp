@@ -663,6 +663,63 @@ RndTex *RndFont::ValidTexture(int idx) const {
         return nullptr;
 }
 
+void RndFont::SetCharInfo(CharInfo *info, RndBitmap &bmap, const Vector2 &pos, int page) {
+    info->mPage = page;
+    if (!(!(!(!(mMonospace))))) {
+        int width = bmap.Width();
+        info->mAdvance = 1.0f;
+        info->mCharWidth = 1.0f;
+        info->mU = pos.x / (float)width;
+    } else {
+        int left = (int)pos.x;
+        int top = (int)pos.y;
+        int right = (int)(mCellSize.x + pos.x);
+        int bottom = (int)(mCellSize.y + pos.y);
+        int dummy;
+        int leftCol = left;
+        if (right != leftCol) {
+            auto _tmp0 = bmap.ColumnNonTransparent(leftCol, top, bottom, &dummy);
+            while (_tmp0 == 0) {
+                if (right > left) {
+                    leftCol++;
+                } else {
+                    leftCol--;
+                }
+                if (right == leftCol)
+                    break;
+            }
+        }
+        float leftColF = (float)(long long)leftCol;
+        int rightCol = right - 1;
+        if (left - 1 != rightCol) {
+            auto _tmp1 = bmap.ColumnNonTransparent(rightCol, top, bottom, &dummy);
+            while (_tmp1 == 0) {
+                if (right - 1 < left - 1) {
+                    rightCol++;
+                } else {
+                    rightCol--;
+                }
+                if (rightCol == left - 1)
+                    break;
+            }
+        }
+        int width = bmap.Width();
+        float charW = (float)(long long)rightCol + 1.0f - leftColF;
+        if (0.0f < charW) {
+            info->mU = leftColF / (float)width;
+            float widthFrac = charW / mCellSize.x;
+            info->mAdvance = widthFrac;
+            info->mCharWidth = widthFrac;
+        } else {
+            info->mU = pos.x / (float)width;
+            info->mAdvance = 0.25f;
+            info->mCharWidth = 0.25f;
+        }
+    }
+    info->mV = pos.y / (float)bmap.Height();
+    MILO_ASSERT(info->mCharWidth >= 0, 0x422);
+}
+
 void RndFont::SetBitmapSize(const Vector2 &cs) {
     mCellSize = cs;
     if (mMaterialOffsets.size() != mMats.size()) {

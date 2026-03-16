@@ -819,8 +819,11 @@ void HamCharacter::Poll() {
         if (mDriver) mDriver->SetWeight(0.0f);
     }
 
+    // On native, always force Showing(true) during poll so RndDir::Poll()
+    // runs child pollables (CharDriver, etc.) and animations advance.
+    // On Xbox, DTA scripts manage visibility; on native we skip that flow.
     bool wasShowing = mShowing;
-    if (!wasShowing && mPollWhenHidden) {
+    if (!wasShowing) {
         SetShowing(true);
     }
     Character::Poll();

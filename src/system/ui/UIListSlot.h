@@ -59,6 +59,9 @@ public:
 
 private:
     void ClearElements();
+#ifdef HX_NATIVE
+    void EnsureElements();
+#endif
 
 protected:
     UIListSlot();

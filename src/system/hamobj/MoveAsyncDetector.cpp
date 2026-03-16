@@ -82,19 +82,35 @@ MoveAsyncDetector::MoveAsyncDetector(MoveDir *md) : mDir(md) {
             TheHamDirector->MoveKeys(kDifficultyExpert, md, keys);
             for (ObjDirItr<HamMove> it(md, true); nullptr != it; ++it) {
                 if (it->Scored()) {
+                    int keyIdx = -1;
                     for (int i = 0; i < keys.size(); i++) {
                         if (keys[i].move == it) {
-                            // ...
+                            keyIdx = i;
+                            break;
                         }
                     }
-                }
-                DancerSequence *seq = it->GetDancerSequence();
-                if (!(seq)) {
-                    MILO_NOTIFY("Could not find %s in expert keys", PathName(it));
-                } else {
-                    const FilterVersion *curFv = it->FilterVer();
-                    const DancerFrame *curFrame = seq->GetDancerFrames().begin();
-                    mDetectors.push_back(new MoveDetector(curFv, it, curFrame));
+                    if (keyIdx != -1) {
+                        const DancerFrame *curFrame = frames.end();
+                        for (const DancerFrame *df = frames.begin(); df != frames.end(); ++df) {
+                            if ((int)df->mMoveIdx == keyIdx) {
+                                curFrame = df;
+                                break;
+                            }
+                        }
+                        if (curFrame != frames.end()) {
+                            const FilterVersion *curFv = it->FilterVer();
+                            mDetectors.push_back(new MoveDetector(curFv, it, curFrame));
+                        }
+                    } else {
+                        DancerSequence *seq = it->GetDancerSequence();
+                        if (!(seq)) {
+                            MILO_NOTIFY("Could not find %s in expert keys", PathName(it));
+                        } else {
+                            const FilterVersion *curFv = it->FilterVer();
+                            const DancerFrame *curFrame = seq->GetDancerFrames().begin();
+                            mDetectors.push_back(new MoveDetector(curFv, it, curFrame));
+                        }
+                    }
                 }
             }
             std::sort(mDetectors.begin(), mDetectors.end(), MoveDetectorCmp());
@@ -155,10 +171,10 @@ activate:
     if (!(!(active == 1))) {
         // skip
     } else {
-        detector->mDetectFrameOffset = -1;
         *(int *)&detector->mLastDetectFracs[0] = 0;
         *(int *)&detector->mLastDetectFracs[1] = 0;
         detector->mLastDetectFrameIdx = -1;
+        detector->mDetectFrameOffset = -1;
         detector->mActive = true;
     }
     mActiveDetectors.insert(detector);
@@ -209,6 +225,9 @@ void MoveDetector::Poll(int moveIdx, int moveBeat, MoveDir *dir) {
         if (mDetectFrameOffset != -1) {
             for (int player = 0; player < 2; player++) {
                 float frac = ActiveDetectFrac(player, dir);
+                float prevLast = mDetectThresholds[player][3];
+                if (prevLast < frac)
+                    frac -= prevLast;
                 // Shift thresholds[player][1..3] down to [0..2]
                 for (int j = 1; j <= 3; j++) {
                     mDetectThresholds[player][j - 1] = mDetectThresholds[player][j];
@@ -246,45 +265,36 @@ void MoveDetector::Poll(int moveIdx, int moveBeat, MoveDir *dir) {
 float MoveAsyncDetector::MoveRatingFrac(int, RatingBar, const HamMove *) { return 0.0f; }
 void MoveAsyncDetector::DisableDetector(HamMove *) {}
 #else
-namespace {
-    static stlpmtx_std::list<String> _dw;
-
-    bool AddToStrings(const char *msg, stlpmtx_std::list<String> *strings) {
-        for (auto it = strings->begin(); it != strings->end(); ++it) {
-            if (*it == msg)
-                return false;
-        }
-        strings->push_back(String(msg));
-        return true;
-    }
-}
-
 float MoveAsyncDetector::MoveRatingFrac(int player, RatingBar bar, const HamMove *move) {
-    if (move == nullptr || !move->Scored())
-        return 0.0f;
-    MILO_ASSERT((0) <= (player) && (player) < (2), 0x144);
-    MoveDetector *det = FindDetector(move);
-    if (det == nullptr) {
-        const char *msg = MakeString("Could not find rating for %s", PathName(move));
-        TheDebug.Notify(msg);
-        return 0.0f;
-    }
-    if (det->mActive) {
-        int beat = mDir->MoveBeat();
-        int idx = mDir->MoveIdx();
-        det->Poll(idx, beat, mDir);
-        if (bar == 0) {
-            return det->ActiveDetectFrac(player, mDir);
-        } else if (bar != 2) {
-            return det->LastDetectFrac(player);
+    if (move != nullptr && move->Scored()) {
+        MILO_ASSERT((0) <= (player) && (player) < (2), 0x144);
+        MoveDetector *det = FindDetector(move);
+        if (det != nullptr) {
+            if (!det->mActive) {
+                static stlpmtx_std::list<String> _dw;
+                char *name = (char *)move->Name();
+                const char *msg = MakeString("MoveRatingFrac for %s called, but it's disabled", name);
+                if (!AddToStrings(msg, _dw)) {
+                    return 0.0f;
+                }
+                TheDebug.Notify(msg);
+            } else {
+                MoveDir *dir = mDir;
+                int beat = dir->MoveBeat();
+                int idx = mDir->MoveIdx();
+                det->Poll(idx, beat, dir);
+                if (bar == 0) {
+                    return det->ActiveDetectFrac(player, mDir);
+                } else if (bar == 2) {
+                    return det->Last4BeatsDetectFrac(player);
+                } else {
+                    return det->LastDetectFrac(player);
+                }
+            }
         } else {
-            return det->Last4BeatsDetectFrac(player);
+            char *name2 = (char *)move->Name();
+            TheDebug.Notify(MakeString("Could not find rating for %s", name2));
         }
-    }
-    static stlpmtx_std::list<String> dw;
-    const char *msg = MakeString("MoveRatingFrac for %s called, but it's disabled", PathName(move));
-    if (AddToStrings(msg, &dw)) {
-        TheDebug.Notify(msg);
     }
     return 0.0f;
 }
@@ -296,7 +306,8 @@ void MoveAsyncDetector::DisableDetector(HamMove *move) {
             detector->Reset();
             mActiveDetectors.erase(detector);
         } else {
-            auto msg = MakeString("Could not disable detector for %s", PathName(move));
+            char *name = (char *)move->Name();
+            auto msg = MakeString("Could not disable detector for %s", name);
             TheDebug.Notify(msg);
         }
     }

@@ -1078,7 +1078,7 @@ void UtilDrawPlane(
 }
 
 void AttachMesh(RndMesh *main, RndMesh *attach) {
-    MILO_ASSERT(main && attach, 0x536);
+    MILO_ASSERT(main && attach, 0x525);
     int nummainfaces = main->Faces().size();
     int numattachfaces = attach->Faces().size();
     main->Faces().resize(nummainfaces + numattachfaces);

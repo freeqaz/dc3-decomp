@@ -11,6 +11,7 @@
 #include "rndobj/PropAnim.h"
 #include "rndobj/Trans.h"
 #include "rndobj/TransAnim.h"
+#include "rndobj/Utl.h"
 #include "world/Instance.h"
 #include "os/Timer.h"
 #include <float.h>
@@ -596,6 +597,73 @@ bool RndAmbientOcclusion::CanBurnXfm(const RndMesh *mesh) const {
     }
 }
 
+void RndAmbientOcclusion::BurnTransform(
+    RndMesh *mesh, std::list<RndMesh *> &meshes
+) const {
+    // Find and remove mesh from the work list
+    std::list<RndMesh *>::iterator found = meshes.end();
+    for (std::list<RndMesh *>::iterator it = meshes.begin(); it != meshes.end(); ++it) {
+        if (*it == mesh) {
+            found = it;
+            break;
+        }
+    }
+    if (found == meshes.end())
+        return;
+    meshes.erase(found);
+
+    float det = Det(mesh->WorldXfm().m);
+    bool canBurn = false;
+    if (mQuality == 0) {
+        canBurn = CanBurnXfm(mesh);
+    } else {
+        if (Abs(1.0f - det) > 0.0001f) {
+            MILO_NOTIFY_ONCE(
+                "%s: Mesh has scale or mirroring applied. Re-export mesh to ensure accurate AO calculation.",
+                PathName(mesh)
+            );
+        }
+    }
+
+    if (canBurn) {
+        // Build a zero-translation copy of parent world rotation matrix
+        Transform parentRot;
+        memcpy(&parentRot, &mesh->WorldXfm(), 0x30);
+        parentRot.v.Set(0.0f, 0.0f, 0.0f);
+
+        const std::list<RndTransformable *> &children = mesh->Children();
+        for (std::list<RndTransformable *>::const_iterator it = children.begin();
+             it != children.end(); ++it) {
+            RndMesh *childMesh = dynamic_cast<RndMesh *>(*it);
+            if (childMesh) {
+                BurnTransform(childMesh, meshes);
+
+                Transform childXfm;
+                RndTransformable::Constraint constraint = childMesh->TransConstraint();
+                if (constraint == 0) {
+                    Multiply(childMesh->WorldXfm(), parentRot, childXfm);
+                    childMesh->SetWorldXfm(childXfm);
+                } else if (constraint == 2) {
+                    memcpy(&childXfm, &mesh->WorldXfm(), 0x40);
+                    childMesh->SetWorldXfm(childXfm);
+                    childMesh->SetTransConstraint(
+                        childMesh->TransConstraint(),
+                        childMesh->mTarget,
+                        childMesh->mPreserveScale
+                    );
+                } else {
+                    memcpy(&childXfm, &childMesh->WorldXfm(), 0x40);
+                    childMesh->SetWorldXfm(childXfm);
+                }
+                if (!childMesh->mPreserveScale) {
+                    childMesh->SetDirty_Force();
+                }
+            }
+        }
+        BurnXfm(mesh, true);
+    }
+}
+
 void RndAmbientOcclusion::PreprocessMesh() {
     std::list<RndMesh *> meshes;
     FOREACH (it, mObjectsReceive) {
@@ -617,6 +685,50 @@ void RndAmbientOcclusion::OnCalculate(bool b1) {
     CalculateAO(&f1);
     Tessellate(&f2, &f3);
     Clean();
+}
+
+template <>
+bool kdTree<Triangle>::kdTreeNode::FindSplit_SAH(
+    const Box &box, const std::list<Triangle *> &items
+) {
+    unsigned int count = 0;
+    for (auto it = items.begin(); it != items.end(); ++it)
+        count++;
+
+    float invSteps = 0.05882352963089943f; // 1.0f / 17
+    float fCount = (float)count;
+
+    float bestCost[3] = { FLT_MAX, FLT_MAX, FLT_MAX };
+    float bestPos[3] = { FLT_MAX, FLT_MAX, FLT_MAX };
+
+    unsigned char axis = 0;
+    do {
+        float step = (box.mMax[axis] - box.mMin[axis]) * invSteps;
+        float current = box.mMin[axis];
+        int splits = 16;
+        do {
+            current += step;
+            float cost = EvaluateSplit(box, items, axis, current);
+            if (cost < bestCost[axis]) {
+                bestCost[axis] = cost;
+                bestPos[axis] = current;
+            }
+            splits--;
+        } while (splits != 0);
+        axis = (axis + 1) & 0xff;
+    } while (axis < 3);
+
+    unsigned char bestAxis = 0;
+    if (bestCost[1] < bestCost[0])
+        bestAxis = 1;
+    if (bestCost[2] < bestCost[bestAxis])
+        bestAxis = 2;
+
+    if (!(bestCost[bestAxis] < fCount))
+        return false;
+    mData.real = bestPos[bestAxis];
+    mData.index = bestAxis;
+    return true;
 }
 
 template <>

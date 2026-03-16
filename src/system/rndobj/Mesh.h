@@ -199,6 +199,7 @@ public:
     RndMultiMesh *CreateMultiMesh();
 
     friend void FaceCenter(RndMesh *, Face *, Vector3 &);
+    friend class RndVelocityBuffer;
 
 protected:
     RndMesh();

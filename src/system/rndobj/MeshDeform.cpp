@@ -163,6 +163,70 @@ void RndMeshDeform::VertArray::SetSize(int size) {
     }
 }
 
+int RndMeshDeform::VertArray::AppendWeights(int num, int *const boneIndices, float *const weights) {
+    MILO_ASSERT(num < VertArray::kMaxWeights, 0x5F);
+    // count existing verts
+    auto& _ref0 = mData;
+    u8 *ptr = (u8 *)_ref0;
+    u8 *end = ptr + mSize;
+    int vertCount = 0;
+    while (ptr < end) {
+        vertCount++;
+        ptr += (*ptr * 2) + 1;
+    }
+    float sum = 0.0f;
+    // deduplicate bone entries: if two entries share the same bone index, merge them
+    for (int i = 1; i < num; i++) {
+        for (int j = 0; j < i; j++) {
+            if (boneIndices[i] == boneIndices[j]) {
+                weights[j] += weights[i];
+                num--;
+                int last = num;
+                boneIndices[i] = boneIndices[last];
+                weights[i] = weights[last];
+                i--;
+                break;
+            }
+        }
+    }
+    // validate weights
+    int vertIdx = vertCount;
+    for (int i = 0; i < num; i++) {
+        if (!(weights[i] > 0.0f)) {
+            auto _tmp0 = PathName(mParent);
+            MILO_NOTIFY(
+                "%s vert %d has negative weight %g on bone, won't export",
+                _tmp0,
+                vertIdx,
+                weights[i]
+            );
+            weights[i] = 0.0f;
+        }
+        sum += weights[i];
+    }
+    if (Abs(sum - 1.0f) > 0.05f) {
+        MILO_NOTIFY(
+            "%s vert %d weights sum to %g, not close enough to 1, check the skinning",
+            PathName(mParent),
+            vertIdx,
+            sum
+        );
+    }
+    float scale = 1.0f / sum;
+    // append (num*2+1) bytes at end of buffer
+    u8 *newEntry = (u8 *)MemResizeElem(
+        _ref0, mSize, (void *)((char *)_ref0 + mSize), 0, (num * 2) + 1, __FILE__, 0x85, "RndMeshDeform"
+    );
+    *newEntry = (u8)num;
+    for (int i = 0; i < num; i++) {
+        newEntry[i * 2 + 1] = (u8)boneIndices[i];
+        float w = weights[i] * scale;
+        float clamped = w < 0.0f ? 0.0f : (w > 1.0f ? 1.0f : w);
+        newEntry[i * 2 + 2] = (u8)(int)(clamped * 255.0f + 0.5f);
+    }
+    return vertCount;
+}
+
 void RndMeshDeform::VertArray::Copy(const RndMeshDeform::VertArray &a) {
     SetSize(a.mSize);
     memcpy(mData, a.mData, mSize);

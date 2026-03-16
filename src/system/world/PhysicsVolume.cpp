@@ -11,6 +11,7 @@
 #include "rndobj/Draw.h"
 #include "rndobj/Poll.h"
 #include "rndobj/Trans.h"
+#include "rndobj/Utl.h"
 
 namespace {
     Box gPhysicsVolumeBox;
@@ -238,7 +239,70 @@ DataNode PhysicsVolume::OnIterateOverlaps(const DataArray *args) {
     }
 }
 
-#ifdef HX_NATIVE
-// TODO: complex deserialization with revision checks
-void PhysicsVolume::Load(BinStream &) {}
-#endif
+INIT_REVS(7, 0)
+
+BEGIN_LOADS(PhysicsVolume)
+    LOAD_REVS(bs)
+    ASSERT_REVS(7, 0)
+    if (d.rev < 1) {
+        LOAD_SUPERCLASS(RndTransformable)
+        LOAD_SUPERCLASS(RndDrawable)
+        LOAD_SUPERCLASS(Hmx::Object)
+        LOAD_SUPERCLASS(Hmx::Object)
+    } else {
+        LOAD_SUPERCLASS(Hmx::Object)
+        LOAD_SUPERCLASS(RndTransformable)
+        LOAD_SUPERCLASS(RndDrawable)
+    }
+    d >> mActive;
+    if (d.rev > 1) {
+        d >> mRadialForce;
+        d >> mDirectionalForce;
+    }
+    if (d.rev > 2) {
+        d >> mDirectionalVelocity;
+    }
+    if (d.rev > 3) {
+        d >> (int &)mShapeType;
+    }
+    if (d.rev > 4) {
+        d >> mReportOnOverlaps;
+    }
+    if (d.rev > 5) {
+        int filter;
+        d >> filter;
+        mFilter = (CollisionFilter)filter;
+    }
+    if (d.rev > 6) {
+        d >> mTangentialForce;
+    }
+    Vector3 halfExt;
+    HalfExtends(halfExt);
+    Sphere s;
+    s.radius = Length(halfExt);
+    s.center = WorldXfm().v;
+    SetSphere(s);
+END_LOADS
+
+void PhysicsVolume::DrawShowing() {
+    if (!sShowing) return;
+    Hmx::Color col;
+    if (!mActive) {
+        col = Hmx::Color(0.5f, 0.5f, 0.5f, 1.0f);
+    } else {
+        if (mOverlapCount != 0) {
+            col = Hmx::Color(1.0f, 0.0f, 0.0f, 1.0f);
+        } else {
+            col = Hmx::Color(1.0f, 1.0f, 0.0f, 1.0f);
+        }
+    }
+    if (mShapeType == kPhysicsVolumeBox) {
+        UtilDrawBox(WorldXfm(), gPhysicsVolumeBox, col, true);
+    } else {
+        Vector3 scale;
+        MakeScale(WorldXfm().m, scale);
+        scale /= 2;
+        float radius = Length(scale);
+        UtilDrawSphere(WorldXfm().v, radius, col, nullptr);
+    }
+}

@@ -132,8 +132,8 @@ public:
         Style *mStyle; // 0x34
         int mFontMapIdx; // 0x38
         float mBaseSize; // 0x3c
-        bool brk; // 0x40
-        bool mActive; // 0x41
+        bool mActive; // 0x40
+        bool brk; // 0x41
     };
 
     class BlacklightPacket {

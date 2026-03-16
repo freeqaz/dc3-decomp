@@ -2,7 +2,22 @@
 #include "obj/Object.h"
 #include "rndobj/Draw.h"
 #include "rndobj/PostProc.h"
+#include "rndobj/ShaderOptions.h"
 #include "rndobj/Tex.h"
+
+enum BloomBlurStyle {
+    kBloomBlurNormal = 0,
+    kBloomBlurStreak = 1,
+    kBloomBlurGlare = 2,
+};
+
+enum BloomBlurDirection {
+    kBloomBlurHorizontal = 0,
+    kBloomBlurVertical = 1,
+};
+
+void Bloom_Downsample(ShaderType shader, RndTex *texSrc, RndTex *texDst);
+void Bloom_Blur(RndTex *texDst, RndTex *texSrc, BloomBlurStyle style, BloomBlurDirection direction, unsigned int pass, float attenuation, float angle);
 
 class NgPostProc : public RndPostProc {
 public:
@@ -13,9 +28,12 @@ public:
 
         void AllocateTextures(unsigned int, unsigned int);
         void FreeTextures();
+        RndTex *Tex(int i) { return mBloomTexture[i]; }
 
     private:
         RndTex *mBloomTexture[2]; // 0x4
+
+        friend class NgPostProc;
     };
 
     template <int N>

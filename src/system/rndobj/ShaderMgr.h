@@ -111,6 +111,8 @@ public:
     virtual RndMat *DrawRectMat() { return mDrawRectMat; }
 
     bool CacheShaders() const { return mCacheShaders; }
+    int NumTaps() const { return unk14; }
+    void SetNumTaps(int n) { unk14 = n; }
     void UpdateCache(const Transform &, int);
     void SetMeshInfo(int, bool);
     void SetShaderErrorDisplay(bool);
@@ -132,10 +134,13 @@ public:
     bool AllowPerPixel() const { return mAllowPerPixel; }
     bool GetUnk41() const { return unk41; }
 
+    friend class NgDOFProc;
+    friend class NgLight;
     friend class NgPostProc;
     friend class RndShaderDepthVolume;
     friend class RndShaderPostProc;
     friend class RndShaderSimple;
+    friend class RndSoftParticleBuffer;
 
 protected:
     virtual void LoadShaders(const char *);

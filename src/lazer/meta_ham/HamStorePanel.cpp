@@ -512,7 +512,43 @@ BEGIN_HANDLERS(HamStorePanel)
     HANDLE_SUPERCLASS(StorePanel)
 END_HANDLERS
 
-void HamStorePanel::RefreshSpecialOfferStatus() {}
+StoreError HamStorePanel::UpdateOffers(std::list<EnumProduct> const &enumList, bool pending) {
+    HamSpecialOffer *cur = mSpecialOffers.begin();
+    HamSpecialOffer *end = mSpecialOffers.end();
+    if (cur != end) {
+        do {
+            if (!cur->mOwned) {
+                bool found = false;
+                for (std::list<EnumProduct>::const_iterator it = enumList.begin();
+                     it != enumList.end(); ++it) {
+                    if (it->mOfferID == cur->mOfferID) {
+                        found = true;
+                        cur->mOwned = (it->mPurchased != 0);
+                        break;
+                    }
+                }
+                if (found) {
+                    const char *status = "owned";
+                    if (!cur->mOwned) {
+                        status = "not owned";
+                    }
+                    TheDebug << MakeString("Store: special offer %s is %s\n", cur->mName.Str(), status);
+                }
+            }
+            cur++;
+        } while (cur != end);
+    }
+    return StorePanel::UpdateOffers(enumList, pending);
+}
+
+void HamStorePanel::RefreshSpecialOfferStatus() {
+    Profile *profile = StoreProfile();
+    if (profile && unk184 == -1) {
+        SpecialOfferEnumJob *job = new SpecialOfferEnumJob(this, profile->GetPadNum(), mSpecialOfferIDs);
+        ThePlatformMgr.QueueEnumJob(job);
+        unk184 = job->ID();
+    }
+}
 DataNode HamStorePanel::OnMsg(const RCJobCompleteMsg &msg) {
     RCJob *job = msg.Job();
     int success = msg.Success();

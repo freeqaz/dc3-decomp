@@ -8,7 +8,9 @@
 #include "os/Friend.h"
 #include "stl/_vector.h"
 
-DECLARE_MESSAGE(PlatformMgrOpCompleteMsg, "platform_mgr_op_complete_msg") // idk
+DECLARE_MESSAGE(PlatformMgrOpCompleteMsg, "platform_mgr_op_complete_msg")
+PlatformMgrOpCompleteMsg(int i) : Message(Type(), i) {}
+bool Success() const { return mData->Int(2) != 0; }
 END_MESSAGE
 
 enum FriendsListJobState {

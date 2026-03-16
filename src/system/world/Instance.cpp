@@ -61,6 +61,44 @@ BEGIN_COPYS(WorldInstance)
     COPY_SUPERCLASS(RndDir)
 END_COPYS
 
+void WorldInstance::SavePersistentObjects(BinStream &bs) {
+    if (!IsProxy())
+        return;
+    int hashUsed = HashTableUsedSize();
+    int strUsed = StrTableUsedSize();
+    DeleteTransientObjects();
+    for (ObjDirItr<Hmx::Object> it(this, false); it != nullptr; ++it) {
+        if (it != this) {
+            MILO_ASSERT(dynamic_cast<ObjectDir *>((Hmx::Object *)it) == NULL, 0x12F);
+            it->PreSave(bs);
+        }
+    }
+    bs.WriteEndian(&hashUsed, 4);
+    bs.WriteEndian(&strUsed, 4);
+    std::list<Hmx::Object *> objects;
+    for (ObjDirItr<Hmx::Object> it(this, false); it != nullptr; ++it) {
+        if (it != this) {
+            objects.push_back(it);
+        }
+    }
+    DirLoader::ClassAndNameSort sorter;
+    objects.sort(sorter);
+    int count = objects.size();
+    bs.WriteEndian(&count, 4);
+    for (std::list<Hmx::Object *>::iterator it = objects.begin(); it != objects.end(); ++it) {
+        bs << (*it)->ClassName();
+        bs << (*it)->Name();
+    }
+    for (std::list<Hmx::Object *>::iterator it = objects.begin(); it != objects.end(); ++it) {
+        (*it)->Save(bs);
+    }
+    if (!bs.Cached()) {
+        for (std::list<Hmx::Object *>::iterator it = objects.begin(); it != objects.end(); ++it) {
+            (*it)->PostSave(bs);
+        }
+    }
+}
+
 void WorldInstance::PostSave(BinStream &bs) { SyncDir(); }
 
 void WorldInstance::PreSave(BinStream &) {}

@@ -206,13 +206,17 @@ The native port (WebGPU/Dawn) currently implements a **Tier 1 subset**:
 - RndFlare (DrawRect rendering, visibility bypass for native)
 - Text rendering (glyph meshes, DXT5 alpha shader, font loading)
 - TexMovie render-to-texture (FFmpeg decode → WebGPU upload)
+- Render-to-texture infrastructure (lazy GPU allocation, mid-frame pass switching)
+  See [RENDER_TO_TEXTURE.md](RENDER_TO_TEXTURE.md) for architecture details.
 
-### What's missing
+### What's missing / partially working
 - Motion blur, gradient map, kaleidoscope, flicker, noise, video feedback post-proc effects
 - GPU occlusion queries (flares use visibility bypass instead)
-- WorldCrowd rendering
+- WorldCrowd billboard impostor system (RTT infra works, but impostor pipeline has bugs — crowd chars stack at origin; see [RENDER_TO_TEXTURE.md](RENDER_TO_TEXTURE.md#worldcrowd-impostor-system-known-issue))
 - Projected light textures (gobo/spotlight cookies)
 - FakeSpot light type
+- SpotlightDrawer depth/fog rendering (untested, RTT consumer)
+- Reflection camera rendering (untested, RTT consumer)
 
 ---
 

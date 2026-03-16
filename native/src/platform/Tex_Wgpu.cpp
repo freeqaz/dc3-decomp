@@ -54,6 +54,18 @@ static GpuTexData* EnsureRenderTargetData(RndTex* tex) {
             gWgpuRnd->Gpu(), tex->Width(), tex->Height(), ChooseRenderTargetFormat(tex)
         );
         data.view = data.texture.CreateView();
+
+        // Clear to black — WebGPU spec allows undefined initial contents,
+        // which browsers often display as purple/magenta.
+        int w = tex->Width(), h = tex->Height();
+        size_t sz = (size_t)w * h * 4;
+        std::vector<uint8_t> black(sz, 0);
+        wgpu::TexelCopyTextureInfo dest{};
+        dest.texture = data.texture;
+        wgpu::TexelCopyBufferLayout layout{};
+        layout.bytesPerRow = (uint32_t)(w * 4);
+        wgpu::Extent3D extent{(uint32_t)w, (uint32_t)h, 1};
+        gWgpuRnd->Gpu().Queue().WriteTexture(&dest, black.data(), sz, &layout, &extent);
     }
     if (needDepth) {
         data.depthTexture = TextureConvert::CreateDepthTarget(

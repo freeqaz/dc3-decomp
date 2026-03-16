@@ -1,10 +1,12 @@
 #include "world/SpotlightDrawer.h"
 #include "char/Character.h"
+#include "math/Geo.h"
 #include "math/Key.h"
 #include "obj/Object.h"
 #include "os/Platform.h"
 #include "os/System.h"
 #include "rndobj/BoxMap.h"
+#include "rndobj/Cam.h"
 #include "rndobj/Draw.h"
 #include "rndobj/Env.h"
 #include "rndobj/MultiMesh.h"
@@ -452,13 +454,77 @@ BEGIN_LOADS(SpotlightDrawer)
     mParams.Load(d);
 END_LOADS
 
-struct LensExtract {};
+class LensExtract {};
 
 template <class T>
 void DrawAccessories(
-    const SpotlightDrawer::SpotlightEntry *const &,
-    const SpotlightDrawer::SpotlightEntry *const &
-) {}
+    SpotlightDrawer::SpotlightEntry *const &,
+    SpotlightDrawer::SpotlightEntry *const &
+);
+
+template <>
+void DrawAccessories<LensExtract>(
+    SpotlightDrawer::SpotlightEntry *const &spotBegin,
+    SpotlightDrawer::SpotlightEntry *const &spotEnd
+) {
+    SpotlightDrawer::SpotlightEntry *it = spotBegin;
+    RndMat *curMat = nullptr;
+    RndMesh *curDisk = nullptr;
+    RndMultiMesh *multiMesh = nullptr;
+    if (it == spotEnd)
+        return;
+    do {
+        Spotlight *sl = it->mSpotlight;
+        if (sl->LensMesh() != nullptr) {
+            RndMesh *disk = Spotlight::GetDiskMesh();
+            RndMultiMesh *nextMesh;
+            if (disk != curDisk) {
+                nextMesh = disk->CreateMultiMesh();
+            } else {
+                nextMesh = multiMesh;
+            }
+            const Transform &lensXfm = sl->LensXfm();
+            bool visible;
+            if (!disk->Showing()) {
+                visible = false;
+            } else {
+                Sphere sphere = disk->GetSphere();
+                if (sphere.radius > 0.0f) {
+                    Multiply(sphere, lensXfm, sphere);
+                    visible = !(sphere > RndCam::Current()->WorldFrustum());
+                } else {
+                    visible = true;
+                }
+            }
+            if (visible) {
+                bool diskChanged = (curDisk != disk);
+                RndMat *lensMat = sl->LensMesh();
+                bool matChanged = (curMat != lensMat);
+                if ((diskChanged || matChanged) && multiMesh != nullptr
+                    && !multiMesh->Instances().empty()) {
+                    multiMesh->DrawShowing();
+                    multiMesh->Instances().resize(0, RndMultiMesh::Instance());
+                }
+                if (diskChanged) {
+                    curDisk = disk;
+                    nextMesh = disk->CreateMultiMesh();
+                }
+                if (matChanged || diskChanged) {
+                    curMat = lensMat;
+                    curDisk->SetMat(lensMat);
+                }
+                RndMultiMesh::Instance inst(lensXfm);
+                nextMesh->Instances().insert(nextMesh->Instances().end(), inst);
+                multiMesh = nextMesh;
+            }
+        }
+        ++it;
+    } while (it != spotEnd);
+    if (multiMesh != nullptr && !multiMesh->Instances().empty()) {
+        multiMesh->DrawShowing();
+        multiMesh->Instances().resize(0, RndMultiMesh::Instance());
+    }
+}
 
 void SpotlightDrawer::DrawWorld() {
     int numLights = sLights.size();
@@ -505,7 +571,10 @@ void SpotlightDrawer::DrawWorld() {
                         );
                     }
                     if (sHaveLenses) {
-                        DrawAccessories<LensExtract>(e1, e2);
+                        DrawAccessories<LensExtract>(
+                            const_cast<SpotlightEntry *>(e1),
+                            const_cast<SpotlightEntry *const &>(e2)
+                        );
                     }
                     if (!DrawNGSpotlights() && !sNoBeams
                         && TheRnd.GetDrawMode() != Rnd::kDrawOcclusionDepth) {

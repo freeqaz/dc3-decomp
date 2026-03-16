@@ -668,9 +668,84 @@ File *NewFile(const char *iFilename, int iMode) {
     return result;
 }
 
-// TODO: implement
-#ifdef HX_NATIVE
-extern "C" {
-void RecursePatternInternal(const char *, void (*)(char const *, char const *), bool, bool) {}
+#ifndef HX_NATIVE
+// PPC (Xbox 360) implementation — logic derived from Ghidra decompile
+void RecursePatternInternal(
+    const char *pattern,
+    void (*cb)(const char *, const char *),
+    bool recurse,
+    bool recurse_dirs
+) {
+    MILO_ASSERT(pattern && pattern[0], 0x5B8);
+    String pttn(pattern);
+
+    // Find split point: first '&', or end-of-string if absent
+    unsigned int ampPos = (int)pttn.find_first_of("&", 0);
+    int wildcardPos = (int)pttn.find_first_of("?*", 0);
+
+    int splitPos;
+    if ((unsigned int)ampPos == (int)FixedString::npos) {
+        splitPos = (int)pttn.length() - 1;
+    } else {
+        splitPos = ampPos;
+    }
+    if ((unsigned int)wildcardPos != (int)FixedString::npos && wildcardPos < splitPos) {
+        splitPos = wildcardPos;
+    }
+
+    // If recurse enabled and no & wildcard: check for path-separator past splitPos
+    if (recurse && ampPos == (int)FixedString::npos) {
+        int pttnLen = (int)pttn.length() - 1;
+        // Walk forward from splitPos looking for path separator
+        int forwardPos = splitPos;
+        while (forwardPos < pttnLen &&
+               '/' != pttn[forwardPos] && pttn[forwardPos] != '\\') {
+            forwardPos++;
+        }
+        if (forwardPos != pttnLen) {
+            // Path separator found: we need to recurse into subdirectories
+            String subPattern = pttn.substr((unsigned int)forwardPos);
+            pttn = pttn.substr(0);
+
+            // Enumerate subdirectories at this level
+            RecursePatternInternal(pttn.c_str(), DirListCB, false, true);
+            std::vector<String> dirs(gDirList);
+            if (gDirList.begin() != gDirList.end()) {
+                gDirList.erase(gDirList.begin(), gDirList.end());
+            }
+
+            MainThread();
+            static char pathBuf[256];
+            const char *dirBase = FileGetPathBuf(pttn.c_str(), pathBuf);
+            pttn = dirBase;
+
+            unsigned int numDirs = dirs.size();
+            for (unsigned int i = 0; i < numDirs; i++) {
+                const char *combined =
+                    MakeString("%s/%s%s", pttn.c_str(), dirs[i].c_str(), subPattern.c_str());
+                RecursePatternInternal(combined, cb, recurse, recurse_dirs);
+            }
+            return;
+        }
+        // No path separator found — disable recurse for FileEnumerate
+        recurse = false;
+    }
+
+    // Walk backward from splitPos to find last path separator
+    String dirStr;
+    if (splitPos >= 1) {
+        int pos = splitPos;
+        while (pos >= 0 && pttn[pos] != '/' && pttn[pos] != '\\') {
+            pos--;
+        }
+        if (pos >= 1) {
+            dirStr = pttn.substr(0, (unsigned int)pos);
+        } else {
+            dirStr = ".";
+        }
+    } else {
+        dirStr = ".";
+    }
+    FileEnumerate(dirStr.c_str(), cb, recurse, pttn.c_str(), recurse_dirs);
 }
 #endif

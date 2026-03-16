@@ -611,8 +611,8 @@ RhythmDetector::GetRecord(float windowStart, float windowEnd, bool finalize, Sym
         mRecordData.mWindowStart = windowStart;
         mRecordData.mWindowEnd = windowEnd;
         mRecordData.mFinalized = false;
-        mRecordData.unk8 = -1.0f;
         mRecordData.unkc = -1.0f;
+        mRecordData.unk8 = -1.0f;
         mRecordData.frames.clear();
     }
     return mRecordData;

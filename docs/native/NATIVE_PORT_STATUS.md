@@ -34,6 +34,7 @@
 - **Session 67**: **Audio timing fix.** VorbisReader::Poll decode loop exited immediately when TryDecode() found no Ogg packet (on Xbox, a background thread feeds data continuously). Fixed to read more file data and retry. Added ring buffer flow control to native ConsumeData (missing BytesWriteable check caused silent data loss). Pre-fill ring buffers in Play() before registering with AudioDevice. Song audio now plays at real-time (100% speed), driving all animation systems.
 - **Session 68**: **Camera cuts verified.** song.anim PropKeys with property "shot" drives HamDirector::SetShot() → FindNextShot() → CameraManager::ForceCameraShot(). 34 shot keyframes for YMCA cycle through Area1_WIDE, Area1_NEAR, Area1_MOVEMENT, CLOSEUP categories. LightPreset animation N/A for YMCA's glitterati venue (0 LightPreset objects — static baked lighting correct). HUD panels (game_panel, world_panel, rhythm_detector_panel, fitness_hud_panel) all active+showing during gameplay. 272 draw calls/frame during gameplay.
 - **Session 69**: **Post-processing pipeline + visual quality.** Enabled full post-processing in headless mode: bloom (screen blend instead of additive to prevent blown-out whites), Xbox-matched contrast formula (from RndColorXfm::AdjustContrast), brightness, saturation, levels, vignette, chromatic aberration, posterization. Fixed RndFlare visibility by bypassing GPU occlusion query (SetVisible + SetOcclusionResult on native). Improved directional light selection — collect all lights from environment + venue WorldDir, sort by brightness, pick top 4 (prevents zero-color LightPreset placeholders from filling slots). Verified RndLine, RndParticleSys, SpotlightDrawer all linked as strong symbols. 14 screenshots in `archive/screenshots/session69/`. PPC decomp: 9 improvements, 0 regressions.
+- **Session 70+**: **Rendering decomp batch — ribbons, particles, spotlights, Bink.** PPC decomp improvements across rendering subsystems: RndRibbon (UpdateMesh 61.4% AT_LIMIT, UpdateChase 54.7% AT_LIMIT, ConstructMesh 44.4% AT_LIMIT — all large functions dominated by register swaps), NgSpotlightDrawer::RenderConeDefs 66.3% AT_LIMIT (Vector4 aggregate parameter passing), RndParticleSys::InitParticle 62.1→64.6% AT_LIMIT (virtual call elimination + memcpy block copy), BinkFileReadFrame 84.7% AT_LIMIT (base pointer caching + branchless conditional), ReadFunc 78.6% AT_LIMIT (EndianSwap 64-bit scheduling). Particle rendering confirmed working in native build — Part_Wgpu.cpp billboard renderer already fully wired.
 
 ### Completed Phases
 - **Phase 0**: Foundation — COMPLETE
@@ -333,7 +334,7 @@ Two mechanisms work together:
 | **Purple font texture** | DXT5/BC3 font atlas: glyph in alpha, RGB is garbage (purple) | `useAlphaAsRGB` shader uniform + WGSL: `baseColor.rgb * texColor.a` instead of `texColor.rgb` |
 | **Backface culling text** | Text quads face direction depends on camera; font meshes shouldn't cull | Disable culling (`cull=None`) for nameless text meshes |
 | **Dawn Null backend** | Sandbox blocks Vulkan ICD → Dawn falls back to no-op null backend | Must use `dangerouslyDisableSandbox: true` for any rendering commands |
-| **Localization tokens unresolved** | `Localize()` returns token name when locale data not found | Known issue — locale files need loading (TheLocale.Init works but data not populated) |
+| ~~**Localization tokens unresolved**~~ | `PlatformMgr::RegionInit()` was a no-op stub → region stayed `kRegionNone` → `LanguageInit` warning but locale loading worked. Also missing `RegionInit()` call in native SystemPreInit path. | **FIXED**: `RegionInit()` sets `kRegionNA`, added call to native SystemPreInit. 2091 locale tokens load correctly. |
 
 Key findings:
 - Text meshes created by `RndText::FontMap` via `Hmx::Object::New<RndMesh>()` have empty names (`Name()[0]=='\0'`)
@@ -407,7 +408,7 @@ Functions currently guarded with `#ifdef HX_NATIVE` early returns that should be
 Non-Kinect TODOs:
 | Feature | Description | Priority |
 |---------|-------------|----------|
-| **Locale data** | Full localization strings — currently shows token names | Medium |
+| ~~**Locale data**~~ | ~~Full localization strings~~ | ~~Medium~~ DONE |
 | **WorldCrowd rendering** | Crowd character instancing | Low |
 | **Projected light textures** | Gobo/spotlight cookie textures | Low |
 | **FakeSpot light type** | Projected cone light | Low |
@@ -419,13 +420,37 @@ Done (previously TODOs):
 - ~~Skinned mesh rendering~~ — **DONE** (Session 63: GPU skinning, 4-bone blending, 40-bone palettes)
 - ~~Post-processing~~ — **DONE** (Session 69: bloom, contrast, brightness, saturation, levels, vignette, chromatic aberration, posterization, DOF)
 
-### Next Steps
-1. **Performance optimization** — Profile and optimize hot paths for sustained 60fps
-2. **Test with more venues** — Verify rendering across all DC3 venue types (glitterati, dclive, etc.)
-3. **WorldCrowd rendering** — Crowd character instancing system
-4. **HUD textures** — Move card geometry renders as pink rectangles. TexMovie + RndTexRenderer + WebGPU render-to-texture pipeline is fully implemented; issue is asset loading/wiring, not missing render code
-5. **Scoring system** — Game scoring and feedback display
-6. **Platform support** — Web (Emscripten/WebGPU), macOS, Windows targets
+### Next Steps — Phase 7: Visual Completeness
+
+High-visibility items remaining to complete the native port's visual experience.
+
+#### Quick Wins
+| Task | Description | Effort |
+|------|-------------|--------|
+| **DC3 logo** | Main menu logo missing — likely a TexRenderer/render-to-texture not being triggered, or a subdir not traversed during scene loading. Most visible gap on the main menu. | Low-Medium |
+| **Score display wiring** | Connect scoring system outputs to HUD label elements during gameplay. Infrastructure exists, just needs data flow. | Low |
+
+#### Medium Effort
+| Task | Description | Effort |
+|------|-------------|--------|
+| **Move card UI** | HUD panels active but move card content invisible. TexMovie render-to-texture pipeline is implemented; issue is that game_panel's TexMovie objects aren't receiving source content. Needs tracing what assets/data flow game_panel expects. | Medium |
+| **WorldCrowd rendering** | Crowd character instancing system — would significantly improve venue visuals with background dancers/audience. | Medium-High |
+
+#### Low Priority / Cosmetic
+| Task | Description | Effort |
+|------|-------------|--------|
+| **Lip sync** | CharFaceServo, CharLipSyncDriver — character mouth movement during songs | Medium |
+| **Procedural blinking** | CharFaceServo eye blink animation | Low |
+| **CharEyes gaze** | Eye gaze direction tracking | Low |
+| **Projected light textures** | Gobo/spotlight cookie textures for stage lighting | Medium |
+| **Exotic post-processing** | Gradient map, kaleidoscope, flicker, noise, video feedback | Medium |
+| **Performance optimization** | Profile and optimize hot paths for sustained 60fps, draw call batching | Medium |
+| **Platform support** | macOS, Windows targets (WebGPU handles backends) | Medium |
+
+#### Not Code-Fixable
+| Item | Reason |
+|------|--------|
+| Text `<alt>` markup | ParseMarkup code is complete — issue is missing alt font style entries in .milo asset files |
 
 Done:
 - ~~LightPreset::Load~~ — **DONE** (Session 61: real impl at 99.2% match, ForcePreset active on venue load)
@@ -434,6 +459,8 @@ Done:
 - ~~Post-processing~~ — **DONE** (Session 69: full pipeline with Xbox-matched formulas)
 - ~~Audio playback~~ — **DONE** (Session 67: real-time MOGG via FFmpeg/Vorbis/miniaudio)
 - ~~Camera cuts~~ — **DONE** (Session 68: song.anim PropKeys → HamDirector → CameraManager)
+- ~~Locale/localization~~ — **DONE** (Session 70: RegionInit fix, 2091 tokens loaded)
+- ~~Web build~~ — **DONE** (Emscripten/WASM port, `scripts/build/web.sh`)
 
 ### Build Commands
 ```bash

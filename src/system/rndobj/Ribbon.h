@@ -34,6 +34,7 @@ public:
 
     void ConstructMesh();
     void UpdateChase();
+    void UpdateMesh();
 
 protected:
     RndRibbon();

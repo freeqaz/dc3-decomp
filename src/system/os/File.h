@@ -158,10 +158,11 @@ void FileEnumerate(
     bool
 );
 void FileRecursePattern(const char *, void (*)(char const *, char const *), bool);
-void RecursePatternInternal(const char *, void (*)(char const *, char const *), bool, bool);
 
 class BinStream &operator>>(class BinStream &, FileStat &);
 }
+
+void RecursePatternInternal(const char *, void (*)(char const *, char const *), bool, bool);
 
 inline int FileGetStat(const char *iFilename) {
     FileStat buffer;

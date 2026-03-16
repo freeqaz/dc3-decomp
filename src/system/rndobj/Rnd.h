@@ -143,6 +143,7 @@ public:
     int Width() const { return mWidth; }
     int Height() const { return mHeight; }
     int Bpp() const { return mScreenBpp; }
+    int DrawCount() const { return mDrawCount; }
     bool Drawing() const { return mDrawing; }
     bool WorldEnded() const { return mWorldEnded; }
     bool GetReleaseImmediate() { return mReleaseImmediate; }
@@ -206,6 +207,7 @@ public:
 
 protected:
     friend class NgPostProc;
+    friend class RndSoftParticleBuffer;
 
     virtual void PushClipPlanesInternal(ObjPtrVec<RndTransformable> &) {}
     virtual void PopClipPlanesInternal(ObjPtrVec<RndTransformable> &) {}

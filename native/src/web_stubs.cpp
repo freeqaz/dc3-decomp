@@ -40,22 +40,15 @@ void BuildSphereStratified(unsigned int, std::vector<Vector3> &) {}
 
 BuildPoly::BuildPoly() : mPoly(), mTransform() {}
 
-// ============================================================================
-// kdTree template stub
-// ============================================================================
-
-template <>
-bool kdTree<Triangle>::kdTreeNode::FindSplit_SAH(
-    const Box &, const std::list<Triangle *> &
-) { return false; }
+// kdTree::FindSplit_SAH — now in Geo.cpp
 
 // ============================================================================
 // Rendering stubs
 // ============================================================================
 
-void NgLight::RenderShadows(std::vector<RndDrawable *> &) {}
+// NgLight::RenderShadows — now in Lit_NG.cpp
 
-void RndAmbientOcclusion::BurnTransform(RndMesh *, std::list<RndMesh *> &) const {}
+// RndAmbientOcclusion::BurnTransform — now in AmbientOcclusion.cpp
 
 // ============================================================================
 // TextStream stub
@@ -77,7 +70,7 @@ BinStream &operator<<(BinStream &bs, const ObjOwnerPtr<RndFont3d> &) { return bs
 // Object property listing
 // ============================================================================
 
-void ListProperties(std::list<Symbol> &, Symbol, Symbol, std::list<Symbol> *, bool) {}
+// ListProperties — now in Utl.cpp
 
 // ============================================================================
 // Holmes (debug network) stub
@@ -148,19 +141,8 @@ HRESULT NuiSpeechCommitGrammar(NUI_SPEECH_GRAMMAR *) { return 0; }
 HRESULT NuiWaveSetEnabled(BOOL) { return 0; }
 }
 
-// ============================================================================
-// RndParticleSys — virtual method stubs for thunk generation
-// ============================================================================
-
-bool RndParticleSys::Replace(ObjRef *ref, Hmx::Object *obj) {
-    return Hmx::Object::Replace(ref, obj);
-}
-
-// ============================================================================
-// RndSoftParticleBuffer — virtual method stub for thunk generation
-// ============================================================================
-
-void RndSoftParticleBuffer::DoPost() {}
+// RndParticleSys::Replace — now in Part.cpp
+// RndSoftParticleBuffer::DoPost — now in SoftParticleBuffer.cpp
 
 // Debug::Modal — now in Debug.cpp
 
@@ -185,14 +167,7 @@ HRESULT DmGetSystemInfo(DM_SYSTEM_INFO *) { return -1; }  // E_FAIL
 
 DataNode CharSignalApplier::Handle(DataArray *d, bool b) { return Hmx::Object::Handle(d, b); }
 
-#include "meta_ham/ChallengeSortByScore.h"
-
-NavListItemNode *ChallengeSortByScore::NewItemNode(void *) const { return nullptr; }
-NavListShortcutNode *ChallengeSortByScore::NewShortcutNode(NavListItemNode *) const { return nullptr; }
-NavListHeaderNode *ChallengeSortByScore::NewHeaderNode(NavListItemNode *) const { return nullptr; }
-NavListHeaderNode *ChallengeSortByScore::NewHeaderNode(NavListItemNode *, NavListItemNode *) const { return nullptr; }
-
-int ChallengeScoreCmp::Compare(const NavListItemSortCmp *, NavListNodeType) const { return 0; }
+// ChallengeSortByScore / ChallengeScoreCmp — now in ChallengeSortByScore.cpp
 
 #include "char/Waypoint.h"
 
@@ -240,8 +215,7 @@ void WebSvcMgr::Poll() {}
 #include "os/VirtualKeyboard.h"
 void VirtualKeyboard::PlatformPoll() {}
 
-// Profiling/debug stubs
-void AutoGlitchReport::EndExternal(float, float, const char *, AutoTimerCallback, void *) {}
+// Profiling/debug stubs (AutoGlitchReport::EndExternal now defined inline in Timer.h)
 
 // Kinect voice/speech — not available on web
 #include "meta_ham/VoiceInputPanel.h"
@@ -257,11 +231,7 @@ DataNode VoiceInputPanel::OnMsg(const SpeechRecoMessage &) { return DataNode(); 
 // MemPrintOverview — now in MemMgr.cpp
 // CopyTypeProperties — now in Utl.cpp
 
-// Memory tracking — no-ops on web
-void BeginMemTrackFileName(const char *) {}
-void EndMemTrackFileName() {}
-void BeginMemTrackObjectName(const char *) {}
-void EndMemTrackObjectName() {}
+// BeginMemTrackFileName etc. — now in MemMgr.cpp
 void HolmesClientTerminate() {}
 void TerminateMakeString() {}
 char *MakeFileListFullPath(const char *) { return nullptr; }
@@ -273,8 +243,7 @@ void SetColorWriteMask(const MatShaderOptions &, RndMat *) {}
 #include "meta/Achievements.h"
 void Achievements::PlatformInit() {}
 
-#include "meta_ham/PlaylistSort.h"
-PlaylistSortByType::PlaylistSortByType() {}
+// PlaylistSortByType — now in PlaylistSortMgr.cpp
 
 // Network — not available on web
 #include "os/NetworkSocket.h"

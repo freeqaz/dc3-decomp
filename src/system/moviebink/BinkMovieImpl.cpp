@@ -7,12 +7,14 @@
 #ifndef HX_NATIVE
 #include <stl/_vector.h>
 #include <stl/_algobase.h>
+#include <map>
 #endif
 #include <algorithm>
 
 std::vector<BinkMovieImpl *> BinkMovieImpl::sActiveMovies;
 
 extern void *kNoHandle;
+
 
 #ifndef HX_NATIVE
 // Explicit template instantiation for vector<BINK*, StlNodeAlloc<BINK*>>
@@ -106,4 +108,7 @@ BinkMovieImpl::~BinkMovieImpl() {
     }
 done:
     End();
+#ifndef HX_NATIVE
+    reinterpret_cast<std::map<void*, String>*>(&mTreeColor)->clear();
+#endif
 }

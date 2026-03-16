@@ -551,6 +551,47 @@ bool Spotlight::MakeWorldSphere(Sphere &s, bool b) {
         return false;
 }
 
+void Spotlight::Mats(std::list<RndMat *> &mats, bool addAO) {
+    if (mLensMaterial && addAO) {
+        mats.push_back(mLensMaterial);
+        for (unsigned int i = 0; i < 2U; i++) {
+            MatShaderOptions opts;
+            opts.SetLast5(0xC);
+            opts.mTempMat = true;
+            opts.SetHasAOCalc(i);
+            RndMat *mat = Hmx::Object::New<RndMat>();
+            mat->Copy(mLensMaterial, kCopyDeep);
+            mat->SetShaderOpts(opts);
+            mats.push_back(mat);
+        }
+    }
+    if (mSpotMaterial) {
+        mats.push_back(mSpotMaterial);
+    }
+    if (mLightCanMesh && mLightCanMesh->Mat()) {
+        MatShaderOptions opts;
+        opts.SetLast5(0xC);
+        RndMat *lightMat = mLightCanMesh->Mat();
+        lightMat->SetShaderOpts(opts);
+        mats.push_back(lightMat);
+        if (addAO) {
+            for (unsigned int i = 0; i < 2U; i++) {
+                MatShaderOptions opts2;
+                opts2.SetLast5(0xC);
+                opts2.mTempMat = true;
+                opts2.SetHasAOCalc(i);
+                RndMat *mat = Hmx::Object::New<RndMat>();
+                mat->Copy(mLightCanMesh->Mat(), kCopyDeep);
+                mat->SetShaderOpts(opts2);
+                mats.push_back(mat);
+            }
+        }
+    }
+    if (mBeam.mMat) {
+        mats.push_back(mBeam.mMat);
+    }
+}
+
 void Spotlight::ListDrawChildren(std::list<RndDrawable *> &draws) {
     if (mLightCanMesh)
         draws.push_back(mLightCanMesh);

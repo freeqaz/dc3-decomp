@@ -1,13 +1,21 @@
 #include "rndobj/ShaderProgram.h"
+#include "Memory.h"
 #include "ShaderMgr.h"
 #include "os/Debug.h"
 #include "os/File.h"
 #include "os/OSFuncs.h"
+#include "os/System.h"
+#include "os/Timer.h"
+#include "rndobj/Env.h"
+#include "rndobj/Mat_NG.h"
 #include "rndobj/ShaderOptions.h"
 #include "utl/BinStream.h"
+#include "utl/DataPointMgr.h"
 #include "utl/FileStream.h"
+#include "utl/Loader.h"
 #include "utl/MemMgr.h"
 #include "math/Utl.h"
+#include "obj/Data.h"
 
 void RndShaderProgram::SaveShaderBuffer(const char *file, RndShaderBuffer &buffer) {
     FileMkDir(FileGetPath(file));
@@ -89,4 +97,133 @@ void RndShaderProgram::CopyErrorShader(ShaderType shader, const ShaderOptions &o
         Cache(errorType, newOpts, nullptr, nullptr);
     }
     Copy(program);
+}
+
+bool RndShaderProgram::Cache(
+    ShaderType shaderType,
+    const ShaderOptions &opts,
+    RndShaderBuffer *vsBuffer,
+    RndShaderBuffer *psBuffer
+) {
+    if (mCached)
+        return true;
+    mCached = true;
+    Platform platform = TheLoadMgr.GetPlatform();
+    if (platform != kPlatformNone && platform != kPlatformWii && GetGfxMode() != kOldGfx) {
+        PhysMemTypeTracker tracker("D3D(phys):Shader");
+        bool needsCompile =
+            (vsBuffer == nullptr || vsBuffer->Size() == 0) ||
+            (psBuffer == nullptr || psBuffer->Size() == 0);
+        if (needsCompile) {
+            if (TheShaderMgr.CacheShaders()) {
+                AutoSlowFrame slowFrame("RndShaderProgram::Cache", 5.0f);
+                char sourcePath[320];
+                char cachedVsPath[256];
+                char cachedPsPath[256];
+                strcpy(sourcePath, ShaderSourcePath(ShaderTypeName(shaderType)));
+                strcpy(cachedVsPath, ShaderCachedPath(sourcePath, opts.flags, false));
+                strcpy(cachedPsPath, ShaderCachedPath(sourcePath, opts.flags, true));
+                FileStat stat;
+                unsigned int vsModTime = 0;
+                if (FileGetStat(cachedVsPath, &stat) == 0) {
+                    vsModTime = stat.st_mtime;
+                }
+                unsigned int psModTime = vsModTime;
+                if (FileGetStat(cachedPsPath, &stat) == 0) {
+                    if (stat.st_mtime < vsModTime) {
+                        psModTime = stat.st_mtime;
+                    }
+                } else {
+                    psModTime = 0;
+                }
+                if (psModTime < gModTime) {
+                    static DataNode *sCompileVerbose;
+                    if (!sCompileVerbose) {
+                        sCompileVerbose = &DataVariable("shader_compile_print_opts");
+                    }
+                    if (sCompileVerbose->Int(nullptr) == 0) {
+                        MILO_LOG(
+                            "Compiling shader: %s_%llx (%s)\n",
+                            ShaderTypeName(shaderType),
+                            opts.flags,
+                            PlatformSymbol(ConsolePlatform())
+                        );
+                    } else {
+                        String optsStr;
+                        ShaderMakeOptionsString(shaderType, opts, optsStr);
+                        MILO_LOG(
+                            "Compiling shader: %s_%llx (%s) (compile options: %s)\n",
+                            ShaderTypeName(shaderType),
+                            opts.flags,
+                            PlatformSymbol(ConsolePlatform()),
+                            optsStr.c_str()
+                        );
+                    }
+                    if (!MainThread() || !Compile(shaderType, opts, vsBuffer, psBuffer)) {
+                        CopyErrorShader(shaderType, opts);
+                        return false;
+                    }
+                    SaveShaderBuffer(cachedVsPath, *vsBuffer);
+                    SaveShaderBuffer(cachedPsPath, *psBuffer);
+                } else {
+                    LoadShaderBuffer(cachedVsPath, vsBuffer);
+                    LoadShaderBuffer(cachedPsPath, psBuffer);
+                }
+                CreateVertexShader(*vsBuffer);
+                CreatePixelShader(*psBuffer, shaderType);
+                if (vsBuffer) {
+                    vsBuffer->~RndShaderBuffer();
+                }
+                if (psBuffer) {
+                    psBuffer->~RndShaderBuffer();
+                }
+            } else {
+                CopyErrorShader(shaderType, opts);
+                String optsStr;
+                ShaderMakeOptionsString(shaderType, opts, optsStr);
+                const char *envName =
+                    RndEnviron::Current()
+                        ? PathName(static_cast<Hmx::Object *>(RndEnviron::Current()))
+                        : nullptr;
+                const char *matPath = PathName(NgMat::Current());
+                MILO_NOTIFY(
+                    "Missing shader %s_%llx\n(material: %s)\n(environment: %s)\n(compile options: %s)",
+                    ShaderTypeName(shaderType),
+                    opts.flags,
+                    matPath,
+                    envName,
+                    optsStr.c_str()
+                );
+                if (UsingCD()) {
+                    const char *shaderTypeName = ShaderTypeName(shaderType);
+                    DataArray *cfg = SystemConfig("rnd", "title");
+                    const char *dataRoot = cfg->Node(1).Str(nullptr);
+                    const char *envPath = PathName(
+                        RndEnviron::Current()
+                            ? static_cast<Hmx::Object *>(RndEnviron::Current())
+                            : nullptr
+                    );
+                    const char *matPath2 = PathName(NgMat::Current());
+                    const char *shaderHex = MakeString("%s_%llx", shaderTypeName, opts.flags);
+                    const char *flagsHex = MakeString("%llx", opts.flags);
+                    shaderTypeName = ShaderTypeName(shaderType);
+                    const char *reportPath =
+                        MakeString("debug/%s/rnd/missing_shaders", dataRoot);
+                    SendDebugDataPoint(
+                        reportPath,
+                        "type", shaderTypeName,
+                        "flags", flagsHex,
+                        "shader", shaderHex,
+                        "mat", matPath2,
+                        "environ", envPath
+                    );
+                }
+                return false;
+            }
+        } else {
+            CreateVertexShader(*vsBuffer);
+            CreatePixelShader(*psBuffer, shaderType);
+        }
+    }
+    return true;
 }

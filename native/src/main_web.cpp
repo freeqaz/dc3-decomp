@@ -84,6 +84,7 @@ public:
         if (type == "has_active_profile") return DataNode(0);
         if (type == "get_active_profile") return DataNode(0);
         if (type == "get_disable_voice") return DataNode(1);
+        if (type == "get_disable_freestyle") return DataNode(0);
         if (type == "has_seen_tutorial") return DataNode(1);
         if (type == "get_num_valid_profiles") return DataNode(0);
         if (type == "get_active_profile_name") return DataNode("");
@@ -210,6 +211,14 @@ static void mainLoop() {
         MetaPanel::Init();
         printf("DC3 Web: GameInit()...\n");
         GameInit();
+
+        // DTA scripts reference "movemgr" — register a lightweight stub.
+        // Full MoveMgr::Init() is too heavy (creates SuperEasyRemixer, SongLayout,
+        // loads category.dta) and can hang if factories aren't ready yet.
+        {
+            Hmx::Object *moveMgrStub = Hmx::Object::NewObject("Object");
+            moveMgrStub->SetName("movemgr", ObjectDir::Main());
+        }
 
         // UI system — use the global TheHamUI (game-specific UIManager subclass)
         printf("DC3 Web: TheHamUI.Init()...\n");

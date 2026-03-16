@@ -132,7 +132,9 @@ void NgRnd::ResetStats() {
     TheNgStats->mCams++;
 }
 
-float EstimateDraw(int);
+float EstimateDraw(int idx) {
+    return ((float)gNgStats[idx].mMultiMeshInsts * 0.001f + ((float)gNgStats[idx].mMotionBlurs * 0.003f + ((float)gNgStats[idx].mFlares * 0.017f + ((float)gNgStats[idx].mBones * 0.00126f + ((float)gNgStats[idx].mLightsReal * 0.001f + ((float)gNgStats[idx].mCams * 0.0068f + ((float)gNgStats[idx].mMats * 0.0097f + ((float)gNgStats[idx].mPartSys * 0.005f + ((float)gNgStats[idx].mMutMeshes * 0.0112f + ((float)gNgStats[idx].mRegMeshes * 0.0028f + ((float)gNgStats[idx].mParts * 0.00023333334f + (float)gNgStats[idx].mLightsApprox * 0.01f)))))))))));
+}
 
 float NgRnd::UpdateOverlay(RndOverlay *overlay, float y) {
     if (overlay == mStatsOverlay) {

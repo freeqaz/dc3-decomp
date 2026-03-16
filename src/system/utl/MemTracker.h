@@ -70,9 +70,11 @@ private:
     int mFreeSysMem; // 0x18198
     int mFreePhysMem; // 0x1819c
     bool mSpew; // 0x181a0
-    String unk181a4;
-    String unk181ac;
-    String unk181b4;
+public:
+    String unk181a4; // current file name
+    String unk181ac; // previous file name (stack push/pop)
+    String unk181b4; // current object name
+private:
     char mAllocInfoName[64]; // 0x181bc
 };
 

@@ -1232,6 +1232,12 @@ DataNode HamDirector::OnFileLoaded(DataArray *a) {
                     dir ? dir->HashTableUsedSize() : -1,
                     mVenue ? (int)mVenue->SubDirs().size() : -1
                 );
+                // DTA scripts expect video_recorder.srec in the venue world
+                // (Kinect video recording). Register a no-op stub so find_obj succeeds.
+                if (mVenue && !mVenue->FindObject("video_recorder.srec", false, false)) {
+                    Hmx::Object *stub = Hmx::Object::NewObject("Object");
+                    stub->SetName("video_recorder.srec", mVenue);
+                }
 #endif
             } else if (sym == viz && dir) {
                 mVisualizer = dynamic_cast<HamVisDir *>(dir);

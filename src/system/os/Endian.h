@@ -30,13 +30,13 @@ inline unsigned short SwapBytes(unsigned short bytes) { return EndianSwap(bytes)
 // the asm for this is inlined, it's in BinStream::ReadEndian and WriteEndian
 // could also find the standalone function asm in RB3 retail
 inline unsigned long long EndianSwap(unsigned long long ull) {
-    unsigned long long b0 = (ull >> 56) & 0xFF;
-    unsigned long long b1 = (ull >> 48) & 0xFF;
-    unsigned long long b2 = (ull >> 40) & 0xFF;
-    unsigned long long b3 = (ull >> 32) & 0xFF;
-    unsigned long long b4 = (ull >> 24) & 0xFF;
-    unsigned long long b5 = (ull >> 16) & 0xFF;
-    unsigned long long b6 = (ull >> 8) & 0xFF;
-    unsigned long long b7 = ull & 0xFF;
-    return (b7 << 56) | (b6 << 48) | (b5 << 40) | (b4 << 32) | (b3 << 24) | (b2 << 16) | (b1 << 8) | b0;
+    unsigned long long r = ull & 0xFF;
+    r = (r << 8) | ((ull >> 8) & 0xFF);
+    r = (r << 8) | ((ull >> 16) & 0xFF);
+    r = (r << 8) | ((ull >> 24) & 0xFF);
+    r = (r << 8) | ((ull >> 32) & 0xFF);
+    r = (r << 8) | ((ull >> 40) & 0xFF);
+    r = (r << 8) | ((ull >> 48) & 0xFF);
+    r = (r << 8) | ((ull >> 56) & 0xFF);
+    return r;
 }

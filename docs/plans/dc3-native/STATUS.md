@@ -71,7 +71,7 @@ LP64-safe DataArray scripting, BinStream endian conversion.
 | ~~Skip Kinect tutorial screens~~ | DONE (auto-advance) | ~~YES~~ |
 | ~~`Flow::Enter()` / `Flow::Exit()`~~ | DONE (81.8% / 99.1%) | ~~YES~~ |
 | ~~MeshAnim proper stub~~ | DONE | ~~No~~ |
-| Fix localization tokens (Localize() returns raw tokens) | TODO | No — cosmetic |
+| ~~Fix localization tokens~~ | DONE (RegionInit + Locale loads 2091 tokens) | ~~No~~ |
 | Scripted input DTA handler crash | KNOWN | No — crashes in UIScreen::Handle joypad config lookup |
 
 **Status**: Engine successfully navigates attract → tutorials → main_screen → choose_mode_screen.
@@ -152,10 +152,43 @@ iterates drawables, while the engine uses `WorldDir::DrawShowing()` → `RndGrou
 | Save/load game progress | MEDIUM | Profile, unlocks |
 | DLC content loading | LOW | Extra songs |
 | macOS / Windows support | MEDIUM | WebGPU handles backends |
-| Web build (Emscripten) | LOW | Future |
+| Web build (Emscripten) | DONE | `scripts/build/web.sh` — WASM port running in browser |
 | Performance optimization | MEDIUM | Draw call batching, culling |
 
 **Session 69 — Post-processing + visual quality**: Enabled full post-processing pipeline in headless mode. Fixed bloom composite (screen blend instead of additive prevents blown-out whites). Matched Xbox's non-linear contrast formula from `RndColorXfm::AdjustContrast`. Fixed RndFlare visibility by bypassing GPU occlusion query. RndLine and RndParticleSys implementations already linked via strong symbols.
+
+### Milestone 6: Visual Completeness
+
+**Goal**: Fill remaining visual gaps — the high-visibility missing elements.
+
+#### Quick Wins
+| Task | Status | Notes |
+|------|--------|-------|
+| DC3 logo on main menu | TODO | Most visible gap. Likely TexRenderer/render-to-texture not triggered or subdir not traversed during scene load. |
+| Score display wiring | TODO | Connect scoring outputs to HUD labels during gameplay. Infrastructure exists. |
+
+#### Medium Effort
+| Task | Status | Notes |
+|------|--------|-------|
+| Move card UI content | TODO | HUD panels active but content invisible. TexMovie pipeline implemented — needs asset/data flow tracing for game_panel. |
+| WorldCrowd rendering | TODO | Crowd character instancing for venue backgrounds. |
+
+#### Cosmetic / Low Priority
+| Task | Status | Notes |
+|------|--------|-------|
+| Lip sync | TODO | CharFaceServo, CharLipSyncDriver |
+| Procedural blinking | TODO | CharFaceServo cosmetic |
+| CharEyes gaze direction | TODO | Cosmetic |
+| Projected light textures | TODO | Gobo/spotlight cookies |
+| Exotic post-processing | TODO | Gradient map, kaleidoscope, flicker, noise, video feedback |
+| Performance optimization | TODO | Draw call batching, culling, profiling |
+| Save/load game progress | TODO | Profile, unlocks |
+| macOS / Windows | TODO | WebGPU handles backends |
+
+#### Not Code-Fixable
+| Item | Reason |
+|------|--------|
+| Text `<alt>` markup tags | ParseMarkup fully implemented — missing alt font style entries in .milo asset files |
 
 ---
 

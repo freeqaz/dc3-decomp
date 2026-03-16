@@ -473,11 +473,7 @@ String UIFontImporter::GetASCIIPlusChars() {
 
 String UIFontImporter::GetASCIIMinusChars() {
     static String minusChars;
-    static int initialized = 0;
-    if (!initialized) {
-        minusChars = WideVectorToASCII(mMinus);
-        initialized = 1;
-    }
+    minusChars = WideVectorToASCII(mMinus);
     return minusChars;
 }
 

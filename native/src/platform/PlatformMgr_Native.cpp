@@ -27,7 +27,7 @@ PlatformMgr::~PlatformMgr() {
 // Platform-specific methods (Xbox stubs)
 void PlatformMgr::Init() {}
 void PlatformMgr::PreInit() {}
-void PlatformMgr::RegionInit() {}
+void PlatformMgr::RegionInit() { SetRegion(kRegionNA); }
 void PlatformMgr::Poll() {}
 bool PlatformMgr::IsSignedIntoLive(int) const { return false; }
 bool PlatformMgr::HasOnlinePrivilege(int) const { return false; }

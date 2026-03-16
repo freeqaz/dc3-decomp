@@ -118,6 +118,8 @@ public:
     RndFlare *GetFlare() const { return mFlare; }
     ObjPtrList<RndDrawable> GetAdditionalObjects() const { return mAdditionalObjects; }
     RndMat *LensMesh() const { return mLensMaterial; }
+    const Transform &LensXfm() const { return mLensXfm; }
+    static RndMesh *GetDiskMesh() { return sDiskMesh; }
     void SetFlareIsBillboard(bool);
     void SetIntensity(float);
     void SetColorIntensity(const Hmx::Color &c, float f);

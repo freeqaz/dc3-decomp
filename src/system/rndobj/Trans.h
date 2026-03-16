@@ -12,10 +12,13 @@
  */
 class RndText;
 
+class RndAmbientOcclusion;
+
 class RndTransformable : public virtual RndHighlightable {
     friend class RndText;
     friend class LightPreset;
     friend class CharForeTwist;
+    friend class RndAmbientOcclusion;
 public:
     enum Constraint {
         /** "no constraint" */

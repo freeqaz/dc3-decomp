@@ -94,6 +94,7 @@ struct MatPerfSettings {
 
 // size 0x1f8
 class BaseMaterial : public Hmx::Object {
+    friend class NgLight;
     friend class NgSpotlightDrawer;
 
 public:
