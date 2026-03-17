@@ -482,16 +482,17 @@ RndFontBase *UIFontImporter::GetGennedFont(Symbol s) const {
     if (s.Null()) {
         return *mGennedFonts.begin();
     } else {
-        int idx = GetMatVariationIdx(s);
-        if (idx == -1) {
+        int idx_raw = GetMatVariationIdx(s);
+        if (idx_raw == -1) {
             return nullptr;
         } else {
+            unsigned int idx = idx_raw;
             RndMat *mat;
             if (idx >= mMatVariations.size()) {
                 mat = nullptr;
             } else {
                 auto it = mMatVariations.begin();
-                for (int i = 0; i != idx; i++) {
+                for (unsigned int i = 0; i != idx; i++) {
                     ++it;
                 }
                 mat = *it;

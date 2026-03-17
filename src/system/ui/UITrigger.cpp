@@ -63,7 +63,7 @@ void UITrigger::Trigger() {
     FOREACH (it, mAnims) {
         Anim &curAnim = *it;
         if (curAnim.mAnim) {
-            float f4;
+            float f4 = 0;
             if (curAnim.mEnable) {
                 if (!(curAnim.mPeriod * 30.0f)) {
                     f4 = curAnim.mScale;
@@ -79,7 +79,7 @@ void UITrigger::Trigger() {
         }
     }
     if (mBlockTransition && mEndTime > 5.0f) {
-        MILO_NOTIFY(
+        MILO_WARN(
             "%s (%s) is blocking and really long! (%f seconds)",
             Name(),
             PathName(Dir()),

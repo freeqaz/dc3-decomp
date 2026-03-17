@@ -272,9 +272,8 @@ __forceinline BinStreamRev &operator>>(BinStreamRev &d, RndFontBase::KernInfo &i
     if (d.rev < 6) {
         char x;
         d >> x >> x;
-    } else {
-        d >> info.kerning;
     }
+    d >> info.kerning;
     return d;
 }
 

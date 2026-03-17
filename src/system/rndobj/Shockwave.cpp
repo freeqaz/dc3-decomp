@@ -81,10 +81,22 @@ void RndShockwave::Exit() {
 }
 
 void RndShockwave::PrepareShader(float amplitude_scale) {
-    const Vector3 &v = WorldXfm().v;
-    TheShaderMgr.SetVConstant(kVS_ShockwavePos, Vector4(v.x, v.y, v.z, 0));
-    const Vector3 &mz = WorldXfm().m.z;
-    TheShaderMgr.SetVConstant(kVS_ShockwaveNormal, Vector4(mz.x, mz.y, mz.z, 0));
+    const Vector3 &world_pos = WorldXfm().v;
+    Vector4 pos;
+    pos.x = world_pos.x;
+    pos.y = world_pos.y;
+    pos.z = world_pos.z;
+    pos.w = 0.0f;
+    TheShaderMgr.SetVConstant(kVS_ShockwavePos, pos);
+
+    const Vector3 &world_normal = WorldXfm().m.z;
+    Vector4 normal;
+    normal.x = world_normal.x;
+    normal.y = world_normal.y;
+    normal.z = world_normal.z;
+    normal.w = 0.0f;
+    TheShaderMgr.SetVConstant(kVS_ShockwaveNormal, normal);
+
     TheShaderMgr.SetVConstant(
         kVS_ShockwaveParams, Vector4(mRadius, mAmplitude * amplitude_scale, 1.0f / mWavelength, 0.0f)
     );
