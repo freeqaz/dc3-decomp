@@ -131,6 +131,8 @@ void SystemPreInit(int argc, char **argv, const char *config) {
     // InitMakeString before NativeDetectDataDir (which uses MakeString)
     InitMakeString();
     // Detect game data directory before engine init
+#ifndef __EMSCRIPTEN__
     NativeDetectDataDir();
+#endif
     SystemPreInit(cmdLine.c_str(), config);
 }

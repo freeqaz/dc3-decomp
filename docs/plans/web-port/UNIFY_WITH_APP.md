@@ -198,3 +198,28 @@ These are genuinely platform-different and should remain `#ifdef __EMSCRIPTEN__`
 - **Bundle completeness**: Sound bank .milo and any other assets loaded during `App::App()` must be present in the web asset bundle. MEMFS has no on-demand fetch — missing files fail immediately. Audit the bundle manifest against the init path's `LoadFile` calls.
 - **GLFW symbol resolution**: `extern GLFWwindow *gNativeWindow` inside `#ifdef HX_NATIVE` compiles on web (Emscripten GLFW shim) but resolves to null via `-sERROR_ON_UNDEFINED_SYMBOLS=0`. Works today but is fragile — should be guarded with `#if defined(HX_NATIVE) && !defined(__EMSCRIPTEN__)`.
 - **Rollback**: Consider a compile-time `#define USE_UNIFIED_INIT 1` during migration so either init path can be selected if issues surface late.
+
+## Completion Log
+
+### 2026-03-17 — Unification Complete
+
+All phases implemented in a single pass:
+
+| Phase | Status | Notes |
+|-------|--------|-------|
+| Phase 1: Extract `RunOneFrame()` | Done | Added to `App.cpp` inside `#ifdef HX_NATIVE`, declared in `App.h` |
+| Phase 2: Unify engine init | Done | `BOOT_ENGINE_INIT` → `new App(0, nullptr)`. GLFW guarded with `!defined(__EMSCRIPTEN__)`. `NativeDetectDataDir` guarded. `SetCacheMode(true)` added under `#ifdef __EMSCRIPTEN__` in constructor. |
+| Phase 3: Unify stub managers | Done | Deleted `WebSaveLoadMgr`, `WebProfileMgr`, `WebGenericStub` + registration block from `main_web.cpp`. Web inherits native stubs from `App.cpp`. |
+| Phase 4: Unify main loop | Done | `BOOT_RUNNING` → `sApp->RunOneFrame()` + EM_ASM frame counter |
+| Phase 5: Slim down `main_web.cpp` | Done | **131 lines** (down from ~348). Only boot state machine + App pointer remain. |
+| Phase 6: Audit `web_stubs.cpp` | Done | No dead code — stubs are platform-level (Bink, NUI, XDK), not init-path-dependent. |
+
+**Build validation**: PPC (ninja), native desktop (cmake), and web (scripts/build/web.sh) all pass.
+
+**Final `main_web.cpp` structure**:
+- Includes: `App.h`, `WebAssets.h`, `Rnd_Wgpu.h`, emscripten headers
+- Boot states: INIT → FETCHING → ENGINE_INIT (App ctor) → GPU_WAIT → GPU_READY → RUNNING (RunOneFrame)
+- `NativeSetDataDir("/data")` moved into BOOT_ENGINE_INIT (before App ctor)
+- No subsystem headers, no forward declarations, no stub classes
+
+**`RunWithoutDebugging` guard**: Changed from `#ifdef HX_NATIVE` to `#if defined(HX_NATIVE) && !defined(__EMSCRIPTEN__)` so the native desktop main loop (with GLFW, venue rendering, auto-nav) doesn't compile for web.

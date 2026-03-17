@@ -1,8 +1,10 @@
 #include "App.h"
 #ifdef HX_NATIVE
 #include <algorithm>
+#if !defined(__EMSCRIPTEN__)
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
+#endif
 #include "ui/UIPanel.h"
 #include "ui/PanelDir.h"
 #include "rndobj/Dir.h"
@@ -36,7 +38,12 @@
 #include "obj/DirLoader.h"
 #include "ui/UILabel.h"
 #include "platform/Rnd_Wgpu.h"
+#ifdef __EMSCRIPTEN__
+#include "audio/AudioDevice.h"
+#endif
+#if !defined(__EMSCRIPTEN__)
 extern GLFWwindow *gNativeWindow;
+#endif
 // gNativeHudDir removed — HUD loaded by GameModeMerger.fm via FileMerger pipeline.
 // DTA enter handler (hud_objects.dta:162) sets $hud_panel automatically.
 static bool gFaceAnimInitDone = false;
@@ -275,6 +282,10 @@ App::App(int argc, char **argv) {
     }
     gRealCallback = TheDebug.SetModalCallback(DebugModal);
     SystemInit("config/ham_keep.dta");
+
+#ifdef __EMSCRIPTEN__
+    DirLoader::SetCacheMode(true); // MEMFS uses pre-extracted gen/*_xbox paths
+#endif
 
     // Audio system (Fader/MoggClip factories need to be registered)
     SynthInit();
@@ -610,6 +621,32 @@ App::App(int argc, char **argv) {
     MemTrackEnable(true);
 #endif // !HX_NATIVE
 }
+
+#ifdef HX_NATIVE
+void App::RunOneFrame() {
+    SystemPoll(false);
+
+    if (TheUI)
+        TheUI->Poll();
+
+    TheTaskMgr.Poll();
+
+    if (TheFlowMgr)
+        TheFlowMgr->Poll();
+
+    if (TheSynth)
+        TheSynth->Poll();
+
+#ifdef __EMSCRIPTEN__
+    AudioDevice::GetInstance().PumpAudio();
+#endif
+
+    TheRnd.BeginDrawing();
+    if (TheUI)
+        TheUI->Draw();
+    TheRnd.EndDrawing();
+}
+#endif // HX_NATIVE
 
 void App::CaptureHiRes() {
     bool paused = AllPaused();
@@ -954,7 +991,7 @@ not_in_campaign_stinger:
 void App::Run() { RunWithoutDebugging(); }
 
 void App::RunWithoutDebugging() {
-#ifdef HX_NATIVE
+#if defined(HX_NATIVE) && !defined(__EMSCRIPTEN__)
     printf("DC3 Native: Entering main loop\n");
     int frameCount = 0;
     bool windowed = (gNativeWindow != nullptr);

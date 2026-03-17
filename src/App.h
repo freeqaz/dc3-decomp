@@ -16,4 +16,7 @@ public:
 
     void CDECL RunWithoutDebugging(void);
     void CDECL Run(void);
+#ifdef HX_NATIVE
+    void CDECL RunOneFrame(void);
+#endif
 };
