@@ -5,14 +5,14 @@
 
 class ChallengeScoreCmp : public NavListItemSortCmp {
 public:
-    ChallengeScoreCmp(int type, int score, Symbol songTitle)
+    ChallengeScoreCmp(int type, int score, const char *songTitle)
         : mType(type), mScore(score), mSongTitle(songTitle) {}
     int Compare(const NavListItemSortCmp *, NavListNodeType) const;
     virtual const ChallengeScoreCmp *GetChallengeScoreCmp() const { return this; }
 
     int mType; // 0x04
     int mScore; // 0x08
-    Symbol mSongTitle; // 0x0c
+    const char *mSongTitle; // 0x0c
 };
 
 class ChallengeSortByScore : public ChallengeSort {

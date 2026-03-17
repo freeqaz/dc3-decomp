@@ -79,13 +79,17 @@ bool ObjRefConcrete<T1, T2>::Load(BinStream &bs, bool print, ObjectDir *dir) {
         // On native, the merge pipeline is incomplete so objects may live in
         // a parent dir that isn't reachable with parentDirs=false.
         if (!mObject && buf[0] != '\0') {
-            ObjectDir *searchDir = dir->Dir();
-            while (!mObject && searchDir && searchDir != dir) {
-                SetObj(searchDir->FindObject(buf, false, true));
-                ObjectDir *next = searchDir->Dir();
-                if (next == searchDir) break;
-                dir = searchDir;
-                searchDir = next;
+            ObjectDir *searchDir = dir;
+            while (!mObject && searchDir) {
+                ObjectDir *nextDir = nullptr;
+                if (searchDir->Dir() && searchDir->Dir() != searchDir) {
+                    nextDir = searchDir->Dir();
+                } else if (searchDir->Loader() && searchDir->Loader()->ParentDir()) {
+                    nextDir = searchDir->Loader()->ParentDir();
+                }
+                if (!nextDir || nextDir == searchDir) break;
+                SetObj(nextDir->FindObject(buf, false, true));
+                searchDir = nextDir;
             }
             if (!mObject) {
                 SetObj(ObjectDir::Main()->FindObject(buf, false, true));
@@ -301,14 +305,17 @@ bool ObjPtrVec<T1, T2>::Load(BinStream &bs, bool print, ObjectDir *dir) {
             // On native, the merge pipeline is incomplete so objects may live in
             // a parent dir that isn't reachable with parentDirs=false.
             if (!casted && buf[0] != '\0') {
-                ObjectDir *searchDir = dir->Dir();
-                ObjectDir *prevDir = dir;
-                while (!casted && searchDir && searchDir != prevDir) {
-                    casted = dynamic_cast<T1 *>(searchDir->FindObject(buf, false, true));
-                    ObjectDir *next = searchDir->Dir();
-                    if (next == searchDir) break;
-                    prevDir = searchDir;
-                    searchDir = next;
+                ObjectDir *searchDir = dir;
+                while (!casted && searchDir) {
+                    ObjectDir *nextDir = nullptr;
+                    if (searchDir->Dir() && searchDir->Dir() != searchDir) {
+                        nextDir = searchDir->Dir();
+                    } else if (searchDir->Loader() && searchDir->Loader()->ParentDir()) {
+                        nextDir = searchDir->Loader()->ParentDir();
+                    }
+                    if (!nextDir || nextDir == searchDir) break;
+                    casted = dynamic_cast<T1 *>(nextDir->FindObject(buf, false, true));
+                    searchDir = nextDir;
                 }
                 if (!casted) {
                     casted = dynamic_cast<T1 *>(
@@ -493,14 +500,17 @@ bool ObjPtrList<T1, T2>::Load(BinStream &bs, bool print, ObjectDir *dir, bool b4
             T1 *casted = dynamic_cast<T1 *>(dir->FindObject(buf, false, b4));
 #ifdef HX_NATIVE
             if (!casted && buf[0] != '\0') {
-                ObjectDir *searchDir = dir->Dir();
-                ObjectDir *prevDir = dir;
-                while (!casted && searchDir && searchDir != prevDir) {
-                    casted = dynamic_cast<T1 *>(searchDir->FindObject(buf, false, b4));
-                    ObjectDir *next = searchDir->Dir();
-                    if (next == searchDir) break;
-                    prevDir = searchDir;
-                    searchDir = next;
+                ObjectDir *searchDir = dir;
+                while (!casted && searchDir) {
+                    ObjectDir *nextDir = nullptr;
+                    if (searchDir->Dir() && searchDir->Dir() != searchDir) {
+                        nextDir = searchDir->Dir();
+                    } else if (searchDir->Loader() && searchDir->Loader()->ParentDir()) {
+                        nextDir = searchDir->Loader()->ParentDir();
+                    }
+                    if (!nextDir || nextDir == searchDir) break;
+                    casted = dynamic_cast<T1 *>(nextDir->FindObject(buf, false, b4));
+                    searchDir = nextDir;
                 }
                 if (!casted) {
                     casted = dynamic_cast<T1 *>(
@@ -672,7 +682,7 @@ void ObjPtrList<T1, T2>::sort(SortFunc *) {}
 
 template <class T1, class T2>
 Hmx::Object *ObjPtrVec<T1, T2>::Node::RefOwner() const {
-    return static_cast<Hmx::Object*>(mOwner);
+    return static_cast<ObjPtrVec<T1, T2>*>(mOwner)->Owner();
 }
 
 template <class T1, class T2>

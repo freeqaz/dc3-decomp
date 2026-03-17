@@ -1,5 +1,6 @@
 #include "game/PartyModeMgr.h"
 #include "flow/PropertyEventProvider.h"
+#include "game/GameMode.h"
 #include "gesture/BaseSkeleton.h"
 #include "hamobj/Difficulty.h"
 #include "hamobj/HamGameData.h"
@@ -930,6 +931,41 @@ void PartyModeMgr::DetermineSubMode(Symbol *pMode, Symbol *pSubMode) {
         if (*pMode == dance_battle) {
             static Symbol ffa("ffa");
             *pSubMode = ffa;
+        }
+    }
+}
+
+void PartyModeMgr::DetermineSubModePlayers(
+    Symbol mode, int *pFlags, int *pNumPlayers, std::vector<int> *pPlayerIndices
+) {
+    static Symbol showdown("showdown");
+    if (mode == showdown) {
+        return;
+    }
+    int totalPlayers = (int)mPlayers.size();
+    int minPlayers = TheGameMode->MinPlayers(mode);
+    int maxPlayers = TheGameMode->MaxPlayers(mode);
+    int remaining = totalPlayers - minPlayers;
+    int extra = maxPlayers - minPlayers;
+    if (minPlayers != 0) {
+        for (int i = 0; i < minPlayers; i++) {
+            int player = PickNextPlayer();
+            *pFlags = *pFlags | (1 << player);
+            pPlayerIndices->push_back(player);
+            *pNumPlayers = *pNumPlayers + 1;
+        }
+    }
+    if (remaining > 0 && extra != 0) {
+        while (remaining != 0) {
+            int player = PickNextPlayer();
+            *pFlags = *pFlags | (1 << player);
+            pPlayerIndices->push_back(player);
+            extra--;
+            remaining--;
+            *pNumPlayers = *pNumPlayers + 1;
+            if (extra == 0) {
+                return;
+            }
         }
     }
 }

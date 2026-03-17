@@ -9,6 +9,7 @@
 #include "meta_ham/CharacterProvider.h"
 #include "meta_ham/CrewProvider.h"
 #include "meta_ham/DifficultyProvider.h"
+#include "meta_ham/HamSongMgr.h"
 #include "meta_ham/HamUI.h"
 #include "meta_ham/MetaPerformer.h"
 #include "meta_ham/OutfitProvider.h"
@@ -17,18 +18,22 @@
 #include "meta_ham/TexLoadPanel.h"
 #include "meta_ham/VenueProvider.h"
 #include "obj/Data.h"
+#include "obj/Dir.h"
 #include "obj/Msg.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
 #include "os/Joypad.h"
 #include "os/JoypadMsgs.h"
 #include "rndobj/Draw.h"
+#include "rndobj/Mat.h"
 #include "rndobj/Mesh.h"
+#include "rndobj/Tex.h"
 #include "ui/UI.h"
 #include "ui/UIPicture.h"
 #include "utl/FilePath.h"
 #include "utl/MakeString.h"
 #include "utl/Symbol.h"
+#include <cstring>
 
 MultiUserGesturePanel::MultiUserGesturePanel() {
     // Initialize UI components and providers for both players (left/right sides)
@@ -366,6 +371,159 @@ void MultiUserGesturePanel::UpdateCrewPic(
     }
     FilePath fp = FilePath("ui/image/crew/", str.c_str());
     i_pPic->SetTex(fp);
+}
+
+bool MultiUserGesturePanel::HasNavList() const {
+    for (int i = 0; i < 2; i++) {
+        if ((&mLeftNavList1)[i] != NULL) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void MultiUserGesturePanel::UpdateProviderPlayerIndices() {
+    for (int i = 0; i < 2; i++) {
+        int playerIdx = GetPlayerIndex(i);
+        mCharacterProviders[i].SetPlayer(playerIdx);
+        mCrewProviders[i].SetPlayer(playerIdx);
+        mDifficultyProviders[i].SetPlayer(playerIdx);
+        mOutfitProviders[i].SetPlayer(playerIdx);
+        mVenueProviders[i].SetPlayer(playerIdx);
+    }
+}
+
+void MultiUserGesturePanel::UpdateCharPic(
+    UIPicture *i_pPic, int i_iSide, int i_iPlayerIndex, Symbol charSym, Symbol outfitSym
+) {
+    MILO_ASSERT(i_pPic, 0x18e);
+    MILO_ASSERT_RANGE(i_iPlayerIndex, 0, 2, 0x18f);
+    MILO_ASSERT_RANGE(i_iSide, 0, 2, 0x190);
+
+    static Symbol character_default("character_default");
+
+    HamPlayerData *pPlayerData = TheGameData->Player(i_iPlayerIndex);
+
+    if (charSym == character_default) {
+        MetaPerformer *perf = MetaPerformer::Current();
+        Symbol primaryCrew(gNullStr);
+        Symbol primaryChar(gNullStr);
+        Symbol primaryOutfit(gNullStr);
+        Symbol secondaryCrew(gNullStr);
+        Symbol secondaryChar(gNullStr);
+        Symbol secondaryOutfit(gNullStr);
+
+        int songID = TheHamSongMgr.GetSongIDFromShortName(TheGameData->GetSong(), true);
+        const HamSongMetadata *pSongData = TheHamSongMgr.Data(songID);
+        MILO_ASSERT(pSongData, 0x19d);
+
+        bool isDanceBattle = TheGameMode->InMode("dance_battle", true);
+        if (!isDanceBattle) {
+            isDanceBattle = TheGameMode->InMode("strike_a_pose", true);
+        }
+
+        HamPlayerData *pPrimary;
+        HamPlayerData *pSecondary;
+        perf->CalcCharacters(
+            pSongData, isDanceBattle, (PlayerFlag)i_iPlayerIndex, pPrimary, primaryCrew,
+            primaryChar, primaryOutfit, pSecondary, secondaryCrew, secondaryChar, secondaryOutfit
+        );
+
+        if (pPlayerData == pPrimary) {
+            charSym = primaryChar;
+            outfitSym = primaryOutfit;
+        } else {
+            MILO_ASSERT(pPlayerData == pSecondary, 0x1a8);
+            charSym = secondaryChar;
+            outfitSym = secondaryOutfit;
+        }
+    } else if (charSym == Symbol("")) {
+        MILO_ASSERT(pPlayerData, 0x1af);
+        charSym = pPlayerData->Char();
+        outfitSym = pPlayerData->Outfit();
+    }
+
+    if (charSym == Symbol("")) {
+        return;
+    }
+
+    const CharacterProvider *pProvider = GetCharProvider(i_iSide);
+    MILO_ASSERT(pProvider, 0x1ba);
+
+    String str;
+    bool locked = !TheProfileMgr.IsContentUnlocked(charSym)
+        || !TheProfileMgr.IsContentUnlocked(outfitSym);
+
+    if (locked) {
+        static Symbol is_in_party_mode("is_in_party_mode");
+        int inPartyMode = TheHamProvider->Property(is_in_party_mode, true)->Int();
+        if (inPartyMode != 0) {
+            locked = strstr(outfitSym.Str(), "01") == NULL;
+        }
+    }
+
+    if (!locked || TheGameMode->InMode("campaign", true)) {
+        if (const_cast<CharacterProvider *>(pProvider)->IsCharacterAvailable(charSym)) {
+            str = MakeString("%s_keep.png", outfitSym.Str());
+        } else {
+            str = MakeString("%s_locked_keep.png", outfitSym.Str());
+        }
+    } else {
+        str = MakeString("%s_locked_keep.png", outfitSym.Str());
+    }
+
+    FilePath fp = FilePath("ui/image/char/", str.c_str());
+    i_pPic->SetTex(fp);
+    if (i_pPic->GetMesh()) {
+        i_pPic->GetMesh()->SetShowing(true);
+    }
+}
+
+void MultiUserGesturePanel::UpdateVenueMesh(
+    RndMesh *i_pMesh, int i_iSide, int i_iPlayerIndex, Symbol venueSym, Symbol crewSym
+) {
+    MILO_ASSERT(i_pMesh, 0x208);
+    MILO_ASSERT_RANGE(i_iPlayerIndex, 0, 2, 0x209);
+    MILO_ASSERT_RANGE(i_iSide, 0, 2, 0x20a);
+
+    const CrewProvider *pProvider = GetCrewProvider(i_iSide);
+    MILO_ASSERT(pProvider, 0x20d);
+
+    String texName;
+    String matName(MakeString("venue_p%i.mat", i_iSide + 1));
+    RndMat *pMat = DataDir()->Find<RndMat>(matName.c_str(), false);
+    MILO_ASSERT(pMat, 0x212);
+
+    if (TheProfileMgr.IsContentUnlocked(venueSym)) {
+        texName = MakeString("venue_%s.tex", crewSym.Str());
+    } else {
+        texName = MakeString("venue_%s_locked.tex", crewSym.Str());
+    }
+
+    RndTex *pTex = DataDir()->Find<RndTex>(texName.c_str(), false);
+    if (pTex != NULL) {
+        pMat->SetDiffuseTex(pTex);
+        i_pMesh->SetMat(pMat);
+    }
+}
+
+Symbol MultiUserGesturePanel::GetVoiceCommandOutfitTag(int playerIndex, Symbol screenName) {
+    HamPlayerData *pPlayerData = TheGameData->Player(playerIndex);
+    Symbol charSym = pPlayerData->Char();
+    Symbol result(gNullStr);
+
+    static Symbol screen_name("screen_name");
+
+    int numOutfits = GetNumCharacterOutfits(charSym, false);
+    for (int i = 0; i < numOutfits; i++) {
+        DataArray *outfitEntry = GetCharacterOutfitEntry(charSym, i, true);
+        DataArray *screenNameArr = outfitEntry->FindArray(screen_name, false);
+        if (screenNameArr != NULL && screenNameArr->Sym(1) == screenName) {
+            result = outfitEntry->Sym(0);
+            return result;
+        }
+    }
+    return result;
 }
 
 void MultiUserGesturePanel::UpdateNavLists(int player) {

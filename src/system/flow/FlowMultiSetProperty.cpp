@@ -40,7 +40,7 @@ BEGIN_LOADS(FlowMultiSetProperty)
     LOAD_REVS(bs)
     ASSERT_REVS(0, 0)
     LOAD_SUPERCLASS(FlowNode)
-    bs >> mTargets;
+    mTargets.Load(bs, true, Dir());
     bs >> mProperty >> mPropertyValue;
 END_LOADS
 
@@ -50,13 +50,13 @@ bool FlowMultiSetProperty::Activate() {
     if (!mTargets.empty()) {
         DrivenPropertyEntry *node = GetDrivenEntry("value");
         if (node != nullptr) {
-            mPropertyValue = mTargets.front()->Property(mProperty.Array(), true)->Evaluate();
+            mPropertyValue = mTargets[0]->Property(mProperty.Array(), true)->Evaluate();
         }
     }
     FlowNode::PushDrivenProperties();
     FOREACH (it, mTargets) {
         Hmx::Object *obj = it->Obj();
-        if (obj != nullptr) {
+        if (obj) {
             obj->SetProperty(mProperty.Array(), mPropertyValue);
         }
     }

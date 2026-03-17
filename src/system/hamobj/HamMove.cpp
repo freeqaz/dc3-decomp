@@ -671,7 +671,6 @@ float HamMove::EndFrame() {
 }
 
 bool HamMove::IsRest() const { return !mScored; }
-const char *HamMove::DisplayName() const { return mDisplayName ? mDisplayName : "NULL"; }
 bool HamMove::IsFinalPose() const { return mFinalPose; }
 bool HamMove::SuppressGuideGesture() const { return mSuppressGuide; }
 bool HamMove::SuppressPracticeOptions() const { return mSuppressPracticeOptions; }

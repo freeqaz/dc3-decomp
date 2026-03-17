@@ -25,6 +25,10 @@ BEGIN_HANDLERS(MQSongSortMgr)
     HANDLE_SUPERCLASS(NavListSortMgr)
 END_HANDLERS
 
+BEGIN_HANDLERS(FitnessCalorieSortMgr)
+    HANDLE_SUPERCLASS(NavListSortMgr)
+END_HANDLERS
+
 FitnessCalorieSortMgr::FitnessCalorieSortMgr(SongPreview &sp) : NavListSortMgr(sp) {
     SetName("calorie_provider", ObjectDir::Main());
     mSorts.push_back(new FitnessCalorieSortByCalorie());

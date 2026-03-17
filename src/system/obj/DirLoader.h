@@ -34,6 +34,11 @@ public:
     void SetDeleteSelf(bool set) { mDeleteSelf = set; }
     void SetForceFailCallback(bool b) { mForceFailCallback = b; }
 
+#ifdef HX_NATIVE
+    ObjectDir *ParentDir() const { return mParentDir; }
+    void SetParentDir(ObjectDir *d) { mParentDir = d; }
+#endif
+
     POOL_OVERLOAD(DirLoader, 0x2A);
 
     static bool sPrintTimes;

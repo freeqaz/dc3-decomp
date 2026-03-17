@@ -30,6 +30,7 @@ public:
 
     void SetTex(FilePath const &);
     void SetHookTex(bool);
+    RndMesh *GetMesh() const { return mMesh; }
 
 protected:
     // UITransitionHandler

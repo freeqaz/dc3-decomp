@@ -161,6 +161,8 @@ void DingoJob::SetDataPoint(const DataPoint &point) {
     MILO_ASSERT(mDataPoint, 0x29);
 }
 
+const char *DingoJob::GetResponseString() { return mResponseStr.c_str(); }
+
 void DingoJob::ParseResponse() {
     ParseResponse(&mJsonReader, &mJsonResponse, &mJsonResponseVersion);
 }

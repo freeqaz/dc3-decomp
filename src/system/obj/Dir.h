@@ -220,6 +220,10 @@ public:
         }
     }
 
+#ifdef HX_NATIVE
+    class DirLoader *GetLoader() const { return mLoader; }
+#endif
+
 protected:
     class DirLoader *mLoader; // 0x10
 };

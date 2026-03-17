@@ -775,6 +775,8 @@ void UILabel::Init() {
     UILabelDir::Init();
 }
 
+void UILabel::Terminate() {}
+
 void UILabel::SetTokenFmtImp(
     Symbol s, const DataArray *da1, const DataArray *da2, int i, bool b
 ) {

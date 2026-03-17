@@ -115,69 +115,7 @@ bool RndShaderProgram::Cache(
             (vsBuffer == nullptr || vsBuffer->Size() == 0) ||
             (psBuffer == nullptr || psBuffer->Size() == 0);
         if (needsCompile) {
-            if (TheShaderMgr.CacheShaders()) {
-                AutoSlowFrame slowFrame("RndShaderProgram::Cache", 5.0f);
-                char sourcePath[320];
-                char cachedVsPath[256];
-                char cachedPsPath[256];
-                strcpy(sourcePath, ShaderSourcePath(ShaderTypeName(shaderType)));
-                strcpy(cachedVsPath, ShaderCachedPath(sourcePath, opts.flags, false));
-                strcpy(cachedPsPath, ShaderCachedPath(sourcePath, opts.flags, true));
-                FileStat stat;
-                unsigned int vsModTime = 0;
-                if (FileGetStat(cachedVsPath, &stat) == 0) {
-                    vsModTime = stat.st_mtime;
-                }
-                unsigned int psModTime = vsModTime;
-                if (FileGetStat(cachedPsPath, &stat) == 0) {
-                    if (stat.st_mtime < vsModTime) {
-                        psModTime = stat.st_mtime;
-                    }
-                } else {
-                    psModTime = 0;
-                }
-                if (psModTime < gModTime) {
-                    static DataNode *sCompileVerbose;
-                    if (!sCompileVerbose) {
-                        sCompileVerbose = &DataVariable("shader_compile_print_opts");
-                    }
-                    if (sCompileVerbose->Int(nullptr) == 0) {
-                        MILO_LOG(
-                            "Compiling shader: %s_%llx (%s)\n",
-                            ShaderTypeName(shaderType),
-                            opts.flags,
-                            PlatformSymbol(ConsolePlatform())
-                        );
-                    } else {
-                        String optsStr;
-                        ShaderMakeOptionsString(shaderType, opts, optsStr);
-                        MILO_LOG(
-                            "Compiling shader: %s_%llx (%s) (compile options: %s)\n",
-                            ShaderTypeName(shaderType),
-                            opts.flags,
-                            PlatformSymbol(ConsolePlatform()),
-                            optsStr.c_str()
-                        );
-                    }
-                    if (!MainThread() || !Compile(shaderType, opts, vsBuffer, psBuffer)) {
-                        CopyErrorShader(shaderType, opts);
-                        return false;
-                    }
-                    SaveShaderBuffer(cachedVsPath, *vsBuffer);
-                    SaveShaderBuffer(cachedPsPath, *psBuffer);
-                } else {
-                    LoadShaderBuffer(cachedVsPath, vsBuffer);
-                    LoadShaderBuffer(cachedPsPath, psBuffer);
-                }
-                CreateVertexShader(*vsBuffer);
-                CreatePixelShader(*psBuffer, shaderType);
-                if (vsBuffer) {
-                    vsBuffer->~RndShaderBuffer();
-                }
-                if (psBuffer) {
-                    psBuffer->~RndShaderBuffer();
-                }
-            } else {
+            if (!TheShaderMgr.CacheShaders()) {
                 CopyErrorShader(shaderType, opts);
                 String optsStr;
                 ShaderMakeOptionsString(shaderType, opts, optsStr);
@@ -197,7 +135,7 @@ bool RndShaderProgram::Cache(
                 if (UsingCD()) {
                     const char *shaderTypeName = ShaderTypeName(shaderType);
                     DataArray *cfg = SystemConfig("rnd", "title");
-                    const char *dataRoot = cfg->Node(1).Str(nullptr);
+                    char *dataRoot = (char *)cfg->Node(1).Str(nullptr);
                     const char *envPath = PathName(
                         RndEnviron::Current()
                             ? static_cast<Hmx::Object *>(RndEnviron::Current())
@@ -219,6 +157,67 @@ bool RndShaderProgram::Cache(
                     );
                 }
                 return false;
+            }
+            AutoSlowFrame slowFrame("RndShaderProgram::Cache", 5.0f);
+            char sourcePath[320];
+            char cachedVsPath[256];
+            char cachedPsPath[256];
+            strcpy(sourcePath, ShaderSourcePath(ShaderTypeName(shaderType)));
+            strcpy(cachedVsPath, ShaderCachedPath(sourcePath, opts.flags, false));
+            strcpy(cachedPsPath, ShaderCachedPath(sourcePath, opts.flags, true));
+            FileStat stat;
+            unsigned int vsModTime = 0;
+            if (FileGetStat(cachedVsPath, &stat) == 0) {
+                vsModTime = stat.st_mtime;
+            }
+            unsigned int psModTime = vsModTime;
+            if (FileGetStat(cachedPsPath, &stat) == 0) {
+                if (stat.st_mtime < vsModTime) {
+                    psModTime = stat.st_mtime;
+                }
+            } else {
+                psModTime = 0;
+            }
+            if (psModTime < gModTime) {
+                static DataNode *sCompileVerbose;
+                if (!sCompileVerbose) {
+                    sCompileVerbose = &DataVariable("shader_compile_print_opts");
+                }
+                if (sCompileVerbose->Int(nullptr) == 0) {
+                    MILO_LOG(
+                        "Compiling shader: %s_%llx (%s)\n",
+                        ShaderTypeName(shaderType),
+                        (s64)opts.flags,
+                        PlatformSymbol(platform)
+                    );
+                } else {
+                    String optsStr;
+                    ShaderMakeOptionsString(shaderType, opts, optsStr);
+                    MILO_LOG(
+                        "Compiling shader: %s_%llx (%s) (compile options: %s)\n",
+                        ShaderTypeName(shaderType),
+                        (s64)opts.flags,
+                        PlatformSymbol(platform),
+                        optsStr.c_str()
+                    );
+                }
+                if (!MainThread() || !Compile(shaderType, opts, vsBuffer, psBuffer)) {
+                    CopyErrorShader(shaderType, opts);
+                    return false;
+                }
+                SaveShaderBuffer(cachedVsPath, *vsBuffer);
+                SaveShaderBuffer(cachedPsPath, *psBuffer);
+            } else {
+                LoadShaderBuffer(cachedVsPath, vsBuffer);
+                LoadShaderBuffer(cachedPsPath, psBuffer);
+            }
+            CreateVertexShader(*vsBuffer);
+            CreatePixelShader(*psBuffer, shaderType);
+            if (vsBuffer) {
+                vsBuffer->~RndShaderBuffer();
+            }
+            if (psBuffer) {
+                psBuffer->~RndShaderBuffer();
             }
         } else {
             CreateVertexShader(*vsBuffer);

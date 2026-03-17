@@ -336,9 +336,6 @@ extern "C" long _stub_fn_274() { return 0; }
 // MemTracker::ReportMemoryUsageOverview(char const*)
 extern "C" __attribute__((weak, used)) long _stub_fn_275() __asm__(ASM_SYM("_ZN10MemTracker25ReportMemoryUsageOverviewEPKc"));
 extern "C" long _stub_fn_275() { return 0; }
-// MQSongSort::BuildTree()
-extern "C" __attribute__((weak, used)) long _stub_fn_276() __asm__(ASM_SYM("_ZN10MQSongSort9BuildTreeEv"));
-extern "C" long _stub_fn_276() { return 0; }
 // ArcDetector::UpdateOverlay(RndOverlay*, float)
 extern "C" __attribute__((weak, used)) long _stub_fn_415() __asm__(ASM_SYM("_ZN11ArcDetector13UpdateOverlayEP10RndOverlayf"));
 extern "C" long _stub_fn_415() { return 0; }
@@ -356,9 +353,6 @@ extern "C" long _stub_fn_462() { return 0; }
 extern "C" __attribute__((weak, used)) long _stub_fn_474() __asm__(ASM_SYM("_ZN11PlatformMgr13OnSignInUsersEP9DataArray"));
 extern "C" long _stub_fn_474() { return 0; }
 // RndFontBase::Load(BinStream&) — now implemented in FontBase.cpp
-// SongSortMgr::SetupQuasiRandomSongs()
-extern "C" __attribute__((weak, used)) long _stub_fn_511() __asm__(ASM_SYM("_ZN11SongSortMgr21SetupQuasiRandomSongsEv"));
-extern "C" long _stub_fn_511() { return 0; }
 // XboxMapFile::ParseStack(char const*, StackData*, int, FixedString&)
 extern "C" __attribute__((weak, used)) long _stub_fn_519() __asm__(ASM_SYM("_ZN11XboxMapFile10ParseStackEPKcP9StackDataiR11FixedString"));
 extern "C" long _stub_fn_519() { return 0; }
@@ -413,9 +407,6 @@ extern "C" long _stub_fn_547() { return 0; }
 // (anonymous namespace)::HolmesFlushStreamBuffer()
 extern "C" __attribute__((weak, used)) long _stub_fn_548() __asm__(ASM_SYM("_ZN12_GLOBAL__N_123HolmesFlushStreamBufferEv"));
 extern "C" long _stub_fn_548() { return 0; }
-// PartyModeMgr::DetermineSubModePlayers(Symbol, int*, int*, std::vector<int, std::allocator<int> >*)
-extern "C" __attribute__((weak, used)) long _stub_fn_574() __asm__(ASM_SYM("_ZN12PartyModeMgr23DetermineSubModePlayersE6SymbolPiS1_PSt6vectorIiSaIiEE"));
-extern "C" long _stub_fn_574() { return 0; }
 // AutoSlowFrame::AutoSlowFrame(char const*, float)
 extern "C" __attribute__((weak, used)) long _stub_fn_589() __asm__(ASM_SYM("_ZN13AutoSlowFrameC1EPKcf"));
 extern "C" long _stub_fn_589() { return 0; }
@@ -458,9 +449,6 @@ extern "C" long _stub_fn_601() { return 0; }
 // BinkMovieImpl::Terminate()
 extern "C" __attribute__((weak, used)) long _stub_fn_602() __asm__(ASM_SYM("_ZN13BinkMovieImpl9TerminateEv"));
 extern "C" long _stub_fn_602() { return 0; }
-// ChallengeSort::BuildTree()
-extern "C" __attribute__((weak, used)) long _stub_fn_605() __asm__(ASM_SYM("_ZN13ChallengeSort9BuildTreeEv"));
-extern "C" long _stub_fn_605() { return 0; }
 // DepthBuffer3D::DrawShowing()
 extern "C" __attribute__((weak, used)) long _stub_fn_618() __asm__(ASM_SYM("_ZN13DepthBuffer3D11DrawShowingEv"));
 extern "C" long _stub_fn_618() { return 0; }
@@ -583,33 +571,16 @@ extern "C" long _stub_fn_896() { return 0; }
 // PhysMemTypeTracker::~PhysMemTypeTracker()
 extern "C" __attribute__((weak, used)) long _stub_fn_897() __asm__(ASM_SYM("_ZN18PhysMemTypeTrackerD1Ev"));
 extern "C" long _stub_fn_897() { return 0; }
-// FitnessCalorieSortMgr::Handle(DataArray*, bool)
-extern "C" __attribute__((weak, used)) long _stub_fn_923() __asm__(ASM_SYM("_ZN21FitnessCalorieSortMgr6HandleEP9DataArrayb"));
-extern "C" long _stub_fn_923() { return 0; }
 // KinectShareConnection::Poll()
 extern "C" __attribute__((weak, used)) long _stub_fn_930() __asm__(ASM_SYM("_ZN21KinectShareConnection4PollEv"));
 extern "C" long _stub_fn_930() { return 0; }
 // KinectShareConnection::~KinectShareConnection()
 extern "C" __attribute__((weak, used)) long _stub_fn_931() __asm__(ASM_SYM("_ZN21KinectShareConnectionD1Ev"));
 extern "C" long _stub_fn_931() { return 0; }
-// MultiUserGesturePanel::UpdateCharPic(UIPicture*, int, int, Symbol, Symbol)
-extern "C" __attribute__((weak, used)) long _stub_fn_932() __asm__(ASM_SYM("_ZN21MultiUserGesturePanel13UpdateCharPicEP9UIPictureii6SymbolS2_"));
-extern "C" long _stub_fn_932() { return 0; }
-// MultiUserGesturePanel::UpdateVenueMesh(RndMesh*, int, int, Symbol, Symbol)
-extern "C" __attribute__((weak, used)) long _stub_fn_933() __asm__(ASM_SYM("_ZN21MultiUserGesturePanel15UpdateVenueMeshEP7RndMeshii6SymbolS2_"));
-extern "C" long _stub_fn_933() { return 0; }
-// MultiUserGesturePanel::GetVoiceCommandOutfitTag(int, Symbol)
-extern "C" __attribute__((weak, used)) long _stub_fn_934() __asm__(ASM_SYM("_ZN21MultiUserGesturePanel24GetVoiceCommandOutfitTagEi6Symbol"));
-extern "C" long _stub_fn_934() { return 0; }
-// MultiUserGesturePanel::UpdateProviderPlayerIndices()
-extern "C" __attribute__((weak, used)) long _stub_fn_935() __asm__(ASM_SYM("_ZN21MultiUserGesturePanel27UpdateProviderPlayerIndicesEv"));
-extern "C" long _stub_fn_935() { return 0; }
 // HandInvokeGestureFilter::Update(Skeleton const&, int)
 extern "C" __attribute__((weak, used)) long _stub_fn_942() __asm__(ASM_SYM("_ZN23HandInvokeGestureFilter6UpdateERK8Skeletoni"));
 extern "C" long _stub_fn_942() { return 0; }
-// SingleUserCrewSelectPanel::UpdateCrewMesh(RndMesh*, int, Symbol)
-extern "C" __attribute__((weak, used)) long _stub_fn_947() __asm__(ASM_SYM("_ZN25SingleUserCrewSelectPanel14UpdateCrewMeshEP7RndMeshi6Symbol"));
-extern "C" long _stub_fn_947() { return 0; }
+// SingleUserCrewSelectPanel::UpdateCrewMesh(RndMesh*, int, Symbol) - now implemented in SingleUserCrewSelectPanel.cpp
 // Rand::Int(int, int) - now implemented in Rand.cpp
 // Rand::Int() - now implemented in Rand.cpp
 // DxTex::SetDeviceTex(D3DTexture*)
@@ -623,15 +594,6 @@ extern "C" long _stub_fn_996() { return 0; }
 // MoveDir::EnqueueDetectFrames(float, int, std::vector<DetectFrame, std::allocator<DetectFrame> >&, FilterVersion const*)
 extern "C" __attribute__((weak, used)) long _stub_fn_1006() __asm__(ASM_SYM("_ZN7MoveDir19EnqueueDetectFramesEfiRSt6vectorI11DetectFrameSaIS1_EEPK13FilterVersion"));
 extern "C" long _stub_fn_1006() { return 0; }
-// UILabel::Terminate()
-extern "C" __attribute__((weak, used)) long _stub_fn_1060() __asm__(ASM_SYM("_ZN7UILabel9TerminateEv"));
-extern "C" long _stub_fn_1060() { return 0; }
-// DingoJob::GetResponseString()
-extern "C" __attribute__((weak, used)) long _stub_fn_1093() __asm__(ASM_SYM("_ZN8DingoJob17GetResponseStringEv"));
-extern "C" long _stub_fn_1093() { return 0; }
-// Waypoint::Highlight()
-extern "C" __attribute__((weak, used)) long _stub_fn_1129() __asm__(ASM_SYM("_ZN8Waypoint9HighlightEv"));
-extern "C" long _stub_fn_1129() { return 0; }
 // RndBitmap::Load: provided by RndTex_Native.cpp
 // WebSvcMgr::Poll()
 extern "C" __attribute__((weak, used)) long _stub_fn_1202() __asm__(ASM_SYM("_ZN9WebSvcMgr4PollEv"));
@@ -670,9 +632,6 @@ extern "C" long _stub_fn_1323() { return 0; }
 // BinkMovieImpl::NumFrames() const
 extern "C" __attribute__((weak, used)) long _stub_fn_1324() __asm__(ASM_SYM("_ZNK13BinkMovieImpl9NumFramesEv"));
 extern "C" long _stub_fn_1324() { return 0; }
-// HamStorePanel::GetOfferIDsToEnumerate(std::vector<unsigned long long, std::allocator<unsigned long long> >&, bool) const
-extern "C" __attribute__((weak, used)) long _stub_fn_1328() __asm__(ASM_SYM("_ZNK13HamStorePanel22GetOfferIDsToEnumerateERSt6vectorIySaIyEEb"));
-extern "C" long _stub_fn_1328() { return 0; }
 // DancerSkeleton::CameraToPlayerXfm(SkeletonCoordSys, Transform&) const
 extern "C" __attribute__((weak, used)) long _stub_fn_1335() __asm__(ASM_SYM("_ZNK14DancerSkeleton17CameraToPlayerXfmE16SkeletonCoordSysR9Transform"));
 extern "C" long _stub_fn_1335() { return 0; }
@@ -688,12 +647,6 @@ extern "C" long _stub_fn_1341() { return 0; }
 // VoiceInputPanel::CreatePlaylistEditorGrammar() const
 extern "C" __attribute__((weak, used)) long _stub_fn_1342() __asm__(ASM_SYM("_ZNK15VoiceInputPanel27CreatePlaylistEditorGrammarEv"));
 extern "C" long _stub_fn_1342() { return 0; }
-// GameEndedDataPointJob::CompileMoveRatings(String&, int, bool) const
-extern "C" __attribute__((weak, used)) long _stub_fn_1370() __asm__(ASM_SYM("_ZNK21GameEndedDataPointJob18CompileMoveRatingsER6Stringib"));
-extern "C" long _stub_fn_1370() { return 0; }
-// MultiUserGesturePanel::HasNavList() const
-extern "C" __attribute__((weak, used)) long _stub_fn_1371() __asm__(ASM_SYM("_ZNK21MultiUserGesturePanel10HasNavListEv"));
-extern "C" long _stub_fn_1371() { return 0; }
 // DirectionGestureFilterDoubleUser::IsHandValid(Skeleton const&) const
 extern "C" __attribute__((weak, used)) long _stub_fn_1378() __asm__(ASM_SYM("_ZNK32DirectionGestureFilterDoubleUser11IsHandValidERK8Skeleton"));
 extern "C" long _stub_fn_1378() { return 0; }
@@ -710,9 +663,6 @@ extern "C" long _stub_fn_1381() { return 0; }
 extern "C" __attribute__((weak, used)) long _stub_fn_1397() __asm__(ASM_SYM("_ZNK9AllocInfo14PrintForReportER10TextStream"));
 extern "C" long _stub_fn_1397() { return 0; }
 // operator>>(BinStream&, FilePath&) — implemented in FilePath.cpp
-// non-virtual thunk to FitnessCalorieSortMgr::Handle(DataArray*, bool)
-extern "C" __attribute__((weak, used)) long _stub_fn_1494() __asm__(ASM_SYM("_ZThn8_N21FitnessCalorieSortMgr6HandleEP9DataArrayb"));
-extern "C" long _stub_fn_1494() { return 0; }
 // virtual thunk to LightPreset::Load stub removed — real impl in LightPreset.cpp
 
 // virtual thunk to LightPreset::Replace stub removed — real impl in LightPreset.cpp

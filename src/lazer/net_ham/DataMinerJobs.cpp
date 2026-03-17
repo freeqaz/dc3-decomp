@@ -222,14 +222,14 @@ bool GameEndedDataPointJob::CompileMoveRatings(
     String &outStr, int playerIndex, bool isPractice
 ) const {
     MILO_ASSERT(playerIndex >= 0 && playerIndex < MAX_NUM_PLAYERS, 0x120);
-    int idx = 0;
     bool hadNonRest = false;
+    unsigned int count = 0;
     MetaPerformer *perf = MetaPerformer::Current();
     const std::vector<HamMoveScore> &moveScores = perf->GetMoveScores(playerIndex);
-    int numScores = (int)(moveScores.end() - moveScores.begin()) >> 4 << 4;
+    int numScores = (int)((moveScores.end() - moveScores.begin()) >> 4 << 4);
     numScores = moveScores.size();
     if (numScores != 0) {
-        unsigned int count = 0;
+        count = 0;
         bool first = true;
         if ((unsigned int)numScores != 0) {
             do {
@@ -250,34 +250,33 @@ bool GameEndedDataPointJob::CompileMoveRatings(
                             "%s:%.2f%%20(%s)", moveName, moveScores[count].unk8, ratingStr
                         );
                     } else {
-                        int ratingIdx = moveScores[count].mRatingStateIndex;
-                        if (ratingIdx < 0) {
+                        if (moveScores[count].mRatingStateIndex < 0) {
                             const char *label;
-                            if (ratingIdx == -4) {
+                            if (moveScores[count].mRatingStateIndex == -4) {
                                 label = "fast";
                             } else {
                                 label = "pass";
-                                if (ratingIdx != -3) {
+                                if (moveScores[count].mRatingStateIndex != -3) {
                                     label = "fail";
                                 }
                             }
-                            int slowmo = (int)moveScores[count].unkc;
+                            int slowmo = moveScores[count].unkc != 0;
                             formatted = MakeString(
                                 "%s:%s%%20(slowmo:%d)", moveName, label, slowmo
                             );
                         } else {
                             const char *label;
-                            if (ratingIdx == 0) {
+                            if (moveScores[count].mRatingStateIndex == 0) {
                                 label = "perfect";
-                            } else if (ratingIdx == 1) {
+                            } else if (moveScores[count].mRatingStateIndex == 1) {
                                 label = "awesome";
                             } else {
                                 label = "ok";
-                                if (ratingIdx != 3) {
+                                if (moveScores[count].mRatingStateIndex != 3) {
                                     label = "bad";
                                 }
                             }
-                            int slowmo = (int)moveScores[count].unkc;
+                            int slowmo = moveScores[count].unkc != 0;
                             formatted = MakeString(
                                 "%s:%.2f%%20(%s)%%20(slowmo:%d)",
                                 moveName,
@@ -290,9 +289,8 @@ bool GameEndedDataPointJob::CompileMoveRatings(
                     outStr += formatted;
                     first = false;
                 }
-                idx += 0x10;
                 count++;
-            } while (count < (unsigned int)(moveScores.end() - moveScores.begin()) / sizeof(HamMoveScore));
+            } while (count < (unsigned int)(moveScores.end() - moveScores.begin()));
         }
     }
     return hadNonRest;

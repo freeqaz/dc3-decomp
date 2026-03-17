@@ -92,7 +92,7 @@ void ChallengeSort::BuildTree() {
         do {
             if (records[i].GetSongContentLockState() != 1) {
                 NavListItemNode *item = NewItemNode(&records[i]);
-                NavListItemNode **pos =
+                auto pos =
                     std::lower_bound(sortedItems.begin(), sortedItems.end(), item, CompareHeaders());
                 sortedItems.insert(pos, 1, item);
             }
@@ -122,10 +122,10 @@ void ChallengeSort::BuildTree() {
     mShortcutNodes.push_back(globalShortcut);
     mShortcutNodes.push_back(dlcShortcut);
 
-    for (NavListItemNode **it = sortedItems.begin(); it != sortedItems.end(); ++it) {
+    for (auto it = sortedItems.begin(); it != sortedItems.end(); ++it) {
         NavListShortcutNode *shortcut = NewShortcutNode(*it);
         Symbol token = shortcut->GetToken();
-        NavListShortcutNode **found =
+        auto found =
             std::find_if(mShortcutNodes.begin(), mShortcutNodes.end(), NodeFind(token));
         if (found == mShortcutNodes.end()) {
             mShortcutNodes.push_back(shortcut);
@@ -136,7 +136,7 @@ void ChallengeSort::BuildTree() {
         shortcut->Insert(*it, this);
     }
 
-    for (NavListShortcutNode **it = mShortcutNodes.begin(); it != mShortcutNodes.end(); ++it) {
+    for (auto it = mShortcutNodes.begin(); it != mShortcutNodes.end(); ++it) {
         (*it)->FinishSort(this);
     }
 }

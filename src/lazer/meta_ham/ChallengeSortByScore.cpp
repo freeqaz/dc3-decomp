@@ -19,7 +19,7 @@ int ChallengeScoreCmp::Compare(
         const ChallengeScoreCmp *otherCmp = other->GetChallengeScoreCmp();
         if (mType == otherCmp->mType) {
             return AlphaKeyStrCmp(
-                mSongTitle.Str(), otherCmp->mSongTitle.Str(), false
+                mSongTitle, otherCmp->mSongTitle, false
             );
         }
         if (otherCmp->mType <= mType) {
@@ -57,7 +57,7 @@ NavListItemNode *ChallengeSortByScore::NewItemNode(void *data) const {
         type = 1;
     }
 
-    ChallengeScoreCmp *cmp = new ChallengeScoreCmp(type, score, songTitle);
+    ChallengeScoreCmp *cmp = new ChallengeScoreCmp(type, score, songTitle.Str());
     return new ChallengeSortNode(cmp, record);
 }
 

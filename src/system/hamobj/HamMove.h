@@ -91,7 +91,7 @@ public:
     bool SuppressPracticeOptions() const;
     void RefreshBarks();
     float Confusability(const HamMove *) const;
-    const char *DisplayName() const;
+    const char *DisplayName() const { return mDisplayName ? mDisplayName : "NULL"; }
     float AdjustNormalizedPercentToConfusability(float, float);
     float ConfusabilityWithMoveDataArray(const DataArray *);
     std::vector<MoveFrame> &GetMoveFrames();

@@ -181,8 +181,10 @@ static void mainLoop() {
         // Register script functions (before Rnd, matching Xbox boot order)
         MagnuInit();
 
-        // Initialize renderer — starts async GPU init on web
+        // Initialize renderer — PreInit registers NG factories (NgEnviron, NgMat, etc.)
         // Must be before SynthInit (overlays are created here)
+        printf("DC3 Web: TheRnd.PreInit()...\n");
+        TheRnd.PreInit();
         printf("DC3 Web: TheRnd.Init()...\n");
         TheRnd.Init();
 

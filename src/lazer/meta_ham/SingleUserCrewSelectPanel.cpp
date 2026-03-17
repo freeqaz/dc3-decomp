@@ -11,6 +11,7 @@
 #include "meta_ham/CrewProvider.h"
 #include "meta_ham/MetaPerformer.h"
 #include "meta_ham/OutfitProvider.h"
+#include "meta_ham/ProfileMgr.h"
 #include "meta_ham/TexLoadPanel.h"
 #include "obj/Data.h"
 #include "obj/Msg.h"
@@ -177,6 +178,31 @@ void SingleUserCrewSelectPanel::SetRandomCrew(int idx) {
     MILO_ASSERT(pCharacterProvider, 0xf0);
     const_cast<CharacterProvider *>(pCharacterProvider)->UpdateList();
     SetRandomCharacter(idx);
+}
+
+void SingleUserCrewSelectPanel::UpdateCrewMesh(RndMesh *i_pMesh, int i_iSide, Symbol crewSym) {
+    MILO_ASSERT(i_pMesh, 0xba);
+    MILO_ASSERT_RANGE(i_iSide, 0, 2, 0xbb);
+
+    const CrewProvider *pProvider = GetCrewProvider(i_iSide);
+    MILO_ASSERT(pProvider, 0xbe);
+
+    String texName;
+    if (TheProfileMgr.IsContentUnlocked(crewSym)
+        && pProvider->IsCrewAvailable(crewSym)) {
+        texName = MakeString("%s.tex", crewSym.Str());
+    } else {
+        texName = MakeString("%s_locked.tex", crewSym.Str());
+    }
+
+    RndMat *pMat = LoadedDir()->Find<RndMat>("crew_p1.mat", false);
+    MILO_ASSERT(pMat, 0xd1);
+
+    RndTex *pTex = LoadedDir()->Find<RndTex>(texName.c_str(), false);
+    if (pTex != NULL) {
+        pMat->SetDiffuseTex(pTex);
+        i_pMesh->SetMat(pMat);
+    }
 }
 
 int SingleUserCrewSelectPanel::GetPlayerIndex(int i) const {

@@ -27,6 +27,7 @@
 #include "stl/_vector.h"
 #include "ui/UI.h"
 #include "utl/JobMgr.h"
+#include <algorithm>
 #include "utl/Loader.h"
 #include "utl/MakeString.h"
 #include "utl/NetCacheMgr.h"
@@ -197,6 +198,22 @@ StoreOffer *HamStorePanel::FindOffer(Symbol offerName) const {
             return offer;
     }
     return nullptr;
+}
+
+void HamStorePanel::GetOfferIDsToEnumerate(
+    std::vector<unsigned long long> &offerIDs, bool pending
+) const {
+    const std::vector<StoreOffer *> &offers = pending ? mPendingOffers : mOffers;
+    for (unsigned int i = 0; i < offers.size(); i++) {
+        StorePurchaseable *purchaseable = offers[i];
+        if (purchaseable->Exists()) {
+            offerIDs.push_back(purchaseable->SongID());
+        }
+    }
+    std::sort(offerIDs.begin(), offerIDs.end());
+    offerIDs.resize(
+        std::unique(offerIDs.begin(), offerIDs.end()) - offerIDs.begin()
+    );
 }
 
 void HamStorePanel::SetFilterToCart() {
