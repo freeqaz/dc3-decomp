@@ -1,5 +1,6 @@
 #pragma once
 #include "math/Vec.h"
+#include "obj/Data.h"
 #include "obj/Object.h"
 #include "rndobj/Anim.h"
 #include "rndobj/Cam.h"
@@ -9,6 +10,7 @@
 #include "rndobj/Tex.h"
 #include "utl/MemMgr.h"
 
+/** "TexRender renders a draw and cam into a texture." */
 class RndTexRenderer : public RndDrawable, public RndAnimatable, public RndPollable {
 public:
     // Hmx::Object
@@ -47,16 +49,44 @@ protected:
     RndTexRenderer();
     void InitTexture();
 
-    bool unk_0x58, mForce, mDrawPreClear, mDrawWorldOnly; // 0x58/59/5A/5B; -0x8C/8B/8A/89
-    bool mDrawResponsible, mNoPoll, unk_0x5E, unk_0x5F; // 0x5C/5D/5E/5F; -0x88/87/86/85
+    DataNode OnGetRenderTextures(DataArray *);
+
+    bool mDirty; // 0x58; -0x8C
+    /** "Force rendering every frame" */
+    bool mForce; // 0x59 / -0x8B
+    /** "Renders the texture before the rest of the scene is rendered.
+        Useful for rendering large textures" */
+    bool mDrawPreClear; // 0x5A / -0x8A
+    /** "Renders the texture only on 'world' frames,
+       while skipping rendering on post processing frames" */
+    bool mDrawWorldOnly; // 0x5B / -0x89
+    /** "If true, exclusively draws the draw,
+        if false the scene will draw it too, use with caution!" */
+    bool mDrawResponsible; // 0x5C / -0x88
+    /** "If [draw] will not get enter, exit, or poll automatically,
+        it will be up to script hooks to do any of that" */
+    bool mNoPoll; // 0x5D / -0x87
+    bool unk_0x5E, unk_0x5F; // 0x5E/5F; -0x86/85
+    /** "Height for imposter rendering with current camera" */
     float mImpostorHeight; // 0x60; -0x84
+    /** "Texture to write to" */
     ObjPtr<RndTex> mOutputTexture; // 0x64; -0x80
+    /** "Draw Object to render to texture" */
     ObjPtr<RndDrawable> mDrawable; // 0x78; -0x6C
+    /** "Camera to use, if you want specific one,
+        defaults to proxy cam, if none and draw is proxy" */
     ObjPtr<RndCam> mCamera; // 0x8C; -0x58
+    /** "Environment to set before rendering to texture" */
     ObjPtr<RndEnviron> mEnviron; // 0xA0; -0x44
+    /** "Check this if rendering multiple characters to a texture.
+        Will draw 2x if checked." */
     bool mPrimeDraw; // 0xB4; -0x30
-    bool unk_0xB5; // 0xB5; -0x2F
+    bool mFirstDraw; // 0xB5; -0x2F
+    /** "Generate mip maps for the texture." */
     bool mForceMips; // 0xB6; -0x2E
+    /** "We will mirror this cam about whatever mesh is associated
+        with our output texture to automatically position
+        the render-2-tex cam for mirroring" */
     ObjPtr<RndCam> mMirrorCam; // 0xB8; -0x2C
     bool mClearBuffer; // 0xCC; -0x18
     Hmx::Color mClearColor; // 0xD0; -0x14

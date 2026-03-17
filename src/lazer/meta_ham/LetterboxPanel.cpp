@@ -121,8 +121,8 @@ void LetterboxPanel::EnterBlacklightMode() {
     if (mBlacklightActive != true) // wont let me do !mBlacklightActive
         mBlacklightActive = true;
     RndText::SetBlacklightModeEnabled(true);
-    static Message enter_blacklight_mode("enter_blacklight_mode");
-    Handle(enter_blacklight_mode, false);
+    static Message cEnterBlacklightModeMsg("enter_blacklight_mode");
+    Handle(cEnterBlacklightModeMsg, false);
 }
 
 void LetterboxPanel::ExitBlacklightMode(bool b) {

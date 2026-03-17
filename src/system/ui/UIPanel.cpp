@@ -228,11 +228,10 @@ void UIPanel::Load() {
                        Name(), fp.c_str(), (int)pos);
             }
 #endif
-            MemPushHeap(heapNum);
+            MemHeapTracker t(heapNum);
             mLoader = new DirLoader(fp, pos, nullptr, nullptr, nullptr, false, nullptr);
             MILO_ASSERT(mLoader, 0xA9);
             mLoaded = false;
-            MemPopHeap();
         }
 #ifdef HX_NATIVE
         else if (DebugUIFlow()) {

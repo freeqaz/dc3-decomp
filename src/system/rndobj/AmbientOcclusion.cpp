@@ -220,30 +220,12 @@ BEGIN_COPYS(RndAmbientOcclusion)
     END_COPYING_MEMBERS
 END_COPYS
 
-void RndAmbientOcclusion::Load(BinStream &bs) {
-    int revs;
-    bs >> revs;
-    BinStreamRev d(bs, revs);
-    static const unsigned short gRevs[4] = { 4, 0, 0, 0 };
-    if (d.rev > 4) {
-        MILO_FAIL(
-            "%s can't load new %s version %d > %d",
-            PathName(this),
-            ClassName(),
-            d.rev,
-            gRevs[0]
-        );
-    }
-    if (d.altRev > 0) {
-        MILO_FAIL(
-            "%s can't load new %s alt version %d > %d",
-            PathName(this),
-            ClassName(),
-            d.altRev,
-            gRevs[2]
-        );
-    }
-    Hmx::Object::Load(d.stream);
+INIT_REVS(4, 0)
+
+BEGIN_LOADS(RndAmbientOcclusion)
+    LOAD_REVS(bs)
+    ASSERT_REVS(4, 0)
+    LOAD_SUPERCLASS(Hmx::Object)
     d >> mDontReceiveAO;
     d >> mDontCastAO;
     d >> mTessellate;
@@ -263,7 +245,7 @@ void RndAmbientOcclusion::Load(BinStream &bs) {
     if (d.rev > 2) {
         d >> (int &)mQuality;
     }
-}
+END_LOADS
 
 void RndAmbientOcclusion::BuildTrees(Quality quality) {
     MILO_ASSERT(quality < kQuality_Max, 0x1E3);

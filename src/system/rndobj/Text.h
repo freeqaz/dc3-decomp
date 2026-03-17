@@ -330,6 +330,7 @@ public:
     float ComputeHeight(int, float, float &);
     int NumStyles() const { return mStyles.size(); }
     ObjVector<Style> &Styles() { return mStyles; }
+    const String &RawText() const { return mText; }
     float Width() const { return mWidth; }
 #ifdef HX_NATIVE
     void SetWidth(float w) { mWidth = w; }

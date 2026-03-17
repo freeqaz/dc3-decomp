@@ -1,5 +1,6 @@
 #include "rndobj/Wind.h"
-
+#include "math/Rand.h"
+#include "math/Utl.h"
 #include "obj/Object.h"
 #include "utl/BinStream.h"
 #include "math/Rand.h"
@@ -7,12 +8,10 @@
 #include "math/Mtx.h"
 
 extern float gUnitsPerMeter;
-static Rand *sRand;
-float sWhiteField[0x400] = { 0 };
-float sWindField[0x401] = { 0 };
+static Rand *sRand = nullptr;
+static float sWhiteField[0x400] = { 0 };
+static float sWindField[0x401] = { 0 };
 Vector3 sOffset(0.0f, 0.3384f, 0.66843998f);
-int gRev = 0;
-int gAltRev = 0;
 
 void SetWind(int start, int end, float startVal, float endVal, float amplitude) {
     sWindField[start] = startVal;
@@ -30,18 +29,6 @@ void SetWind(int start, int end, float startVal, float endVal, float amplitude) 
             sWindField[mid] = midVal;
         } while (end - start >= 2);
     }
-}
-
-void RndWind::Init() {
-    REGISTER_OBJ_FACTORY(RndWind)
-    sRand = new Rand(0x7FEF8A);
-    SetWind(0, 0x400, 0.0f, 0.0f, 0.5f);
-    sWindField[0x400] = sWindField[0];
-    for (int i = 0; i < 0x400; i++) {
-        sWhiteField[i] = RandomFloat(0.0f, 1.0f);
-    }
-    delete sRand;
-    sRand = 0;
 }
 
 float RndWind::GetWind(float x) {
@@ -119,41 +106,22 @@ RndWind::RndWind()
 
 RndWind::~RndWind() {}
 
-void RndWind::Zero() {
-    mRandom.Set(0.0f, 0.0f, 0.0f);
-    mPrevailing.Set(0.0f, 0.0f, 0.0f);
+bool RndWind::Replace(ObjRef *from, Hmx::Object *to) {
+    if (&mWindOwner == from) {
+        if (mWindOwner != this) {
+            RndWind *wind = dynamic_cast<RndWind *>(to);
+            if (wind) {
+                mWindOwner = wind;
+            }
+        } else {
+            mWindOwner = this;
+        }
+        return true;
+    } else {
+        return Hmx::Object::Replace(from, to);
+    }
 }
 
-void RndWind::SetDefaults() {
-    mPrevailing.Set(0.0f, 0.0f, 0.0f);
-    mRandom.Set(17.0f, 17.0f, 0.0f);
-    mTimeLoop = 100.0f;
-    mSpaceLoop = gUnitsPerMeter * 10.0f;
-}
-
-BEGIN_LOADS(RndWind)
-    LOAD_REVS(bs)
-    ASSERT_REVS(4, 0)
-    LOAD_SUPERCLASS(Hmx::Object)
-
-    d.stream >> mPrevailing;
-    d.stream >> mRandom;
-    d.stream >> mTimeLoop;
-    d.stream >> mSpaceLoop;
-
-    if (d.rev >= 1) {
-        mWindOwner.Load(bs, false, Dir());
-    }
-    if (d.rev >= 2) {
-        mTrans.Load(bs, false, Dir());
-    }
-    if (d.rev >= 3) {
-        d.stream >> mMinSpeed;
-        d.stream >> mMaxSpeed;
-    }
-
-    SyncLoops();
-END_LOADS
 
 BEGIN_HANDLERS(RndWind)
     HANDLE_SUPERCLASS(Hmx::Object)
@@ -192,9 +160,9 @@ BEGIN_COPYS(RndWind)
     COPY_SUPERCLASS(Hmx::Object)
     CREATE_COPY(RndWind)
     BEGIN_COPYING_MEMBERS
-        if (ty == kCopyShallow)
+        if (ty == kCopyShallow) {
             mWindOwner = c->mWindOwner.Ptr();
-        else {
+        } else {
             mWindOwner = this;
             mWindOwner = c->mWindOwner.Ptr();
             COPY_MEMBER(mPrevailing)
@@ -210,6 +178,31 @@ BEGIN_COPYS(RndWind)
     END_COPYING_MEMBERS
 END_COPYS
 
+INIT_REVS(4, 0)
+
+BEGIN_LOADS(RndWind)
+    LOAD_REVS(bs)
+    ASSERT_REVS(4, 0)
+    LOAD_SUPERCLASS(RndHighlightable)
+    d >> mPrevailing;
+    d >> mRandom;
+    d >> mTimeLoop;
+    d >> mSpaceLoop;
+    if (d.rev > 1) {
+        d >> mWindOwner;
+        SetWindOwner(mWindOwner);
+    }
+    if (d.rev > 2) {
+        d >> mTrans;
+        d >> mAboutZ;
+    }
+    if (d.rev > 3) {
+        d >> mMinSpeed;
+        d >> mMaxSpeed;
+    }
+    SyncLoops();
+END_LOADS
+
 void RndWind::SyncLoops() {
     float f1;
     f1 = (mTimeLoop == 0.0f) ? 0.0f : (1.0f / mTimeLoop);
@@ -218,13 +211,28 @@ void RndWind::SyncLoops() {
     mSpaceRate.Set(f1, f1 * 0.773437f, f1 * 1.38484f);
 }
 
+void RndWind::Zero() {
+    mRandom.Set(0.0f, 0.0f, 0.0f);
+    mPrevailing.Set(0.0f, 0.0f, 0.0f);
+}
+
+void RndWind::SetDefaults() {
+    mPrevailing.Set(0.0f, 0.0f, 0.0f);
+    mRandom.Set(17.0f, 17.0f, 0.0f);
+    mTimeLoop = 100.0f;
+    mSpaceLoop = gUnitsPerMeter * 10;
+}
+
 void RndWind::SetWindOwner(RndWind *wind) { mWindOwner = wind ? wind : this; }
 
-bool RndWind::Replace(ObjRef *from, Hmx::Object *to) {
-    if (&mWindOwner == from) {
-        RndWind *wind = dynamic_cast<RndWind *>(to);
-        mWindOwner = wind ? wind : this;
-        return true;
+void RndWind::Init() {
+    REGISTER_OBJ_FACTORY(RndWind)
+    sRand = new Rand(0x7FEF8A);
+    SetWind(0, 0x400, 0.0f, 0.0f, 0.5f);
+    sWindField[0x400] = sWindField[0];
+    for (int i = 0; i < 0x400; i++) {
+        sWhiteField[i] = RandomFloat(0.0f, 1.0f);
     }
-    return Hmx::Object::Replace(from, to);
+    delete sRand;
+    sRand = 0;
 }

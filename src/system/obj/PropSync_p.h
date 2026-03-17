@@ -302,7 +302,8 @@ bool PropSync(
             break;
         }
         case kPropRemove: {
-            ptr.erase(it);
+            // this var isn't even used but it's needed to fix a stack mismatch
+            auto lmao = ptr.erase(it);
             return true;
         }
         case kPropInsert: {

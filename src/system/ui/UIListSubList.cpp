@@ -1,7 +1,9 @@
 #include "ui/UIListSubList.h"
 #include "obj/Object.h"
+#include "ui/UIComponent.h"
 #include "ui/UIList.h"
 #include "ui/UIListSlot.h"
+#include "ui/UIListWidget.h"
 #include "utl/Loader.h"
 
 #ifdef HX_NATIVE
@@ -11,8 +13,6 @@ int UIListSubList::sNextFillSelection;
 #pragma region UIListSubList
 
 UIListSubList::UIListSubList() : mList(this) {}
-
-RndTransformable *UIListSubList::RootTrans() { return mList; }
 
 BEGIN_HANDLERS(UIListSubList)
     HANDLE_SUPERCLASS(UIListSlot)
@@ -42,7 +42,7 @@ BEGIN_LOADS(UIListSubList)
     LOAD_REVS(bs)
     ASSERT_REVS(0, 0)
     LOAD_SUPERCLASS(UIListSlot)
-    bs >> mList;
+    d >> mList;
 END_LOADS
 
 UIList *UIListSubList::SubList(int index) {
@@ -64,14 +64,14 @@ void UIListSubList::Draw(
     DrawCommand cmd
 ) {
     if (RootTrans()) {
-        int size = drawstate.mElements.size();
-        for (int i = 0; i < size; i++) {
+        int numElements = drawstate.mElements.size();
+        for (int i = 0; i < numElements; i++) {
+            const UIListElementDrawState &cur = drawstate.mElements[i];
             UIList *uilist = SubList(i);
 #ifdef HX_NATIVE
             if (!uilist) continue;
 #endif
-            UIComponent::State state = (UIComponent::State)drawstate.mElements[i].mElementState;
-            switch (state) {
+            switch (cur.mComponentState) {
             case UIComponent::kNormal:
                 uilist->SetState(UIComponent::kNormal);
                 break;

@@ -507,8 +507,6 @@ void UILabel::PostLoad(BinStream &bs) {
     }
 }
 
-Symbol UILabel::TextToken() { return mTextToken; }
-
 void UILabel::Highlight() {
     RndTransformable::Highlight();
     Box box;

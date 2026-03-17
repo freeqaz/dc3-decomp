@@ -4,4 +4,4 @@
 
 int PageDirection(JoypadAction);
 bool IsNavAction(JoypadAction);
-int ScrollDirection(ButtonDownMsg const &, bool, bool, int);
+int ScrollDirection(const ButtonDownMsg &, bool, bool, int);

@@ -4,16 +4,16 @@
 #include "ui/UI.h"
 #include "utl/BinStream.h"
 
+UITransitionHandler::UITransitionHandler(Hmx::Object *obj)
+    : mInAnim(obj), mOutAnim(obj), mAnimationState(kUITransitionAnimationInvalid),
+      mChangePending(0), mOutAnimStarted(0) {}
+
 UITransitionHandler::~UITransitionHandler() {
     if (mInAnim)
         mInAnim->StopAnimation();
     if (mOutAnim)
         mOutAnim->StopAnimation();
 }
-
-UITransitionHandler::UITransitionHandler(Hmx::Object *obj)
-    : mInAnim(obj), mOutAnim(obj), mAnimationState(kUITransitionAnimationInvalid),
-      mChangePending(0), mOutAnimStarted(0) {}
 
 void UITransitionHandler::SetInAnim(RndAnimatable *anim) { mInAnim = anim; }
 
@@ -76,7 +76,7 @@ void UITransitionHandler::UpdateHandler() {
     }
     if (mAnimationState == 3) {
         MILO_ASSERT(mOutAnim, 0x41);
-        if (!mOutAnim.operator->()->IsAnimating())
+        if (!mOutAnim->IsAnimating())
             mAnimationState = kUITransitionAnimationIdle;
     }
 }
@@ -94,14 +94,15 @@ bool UITransitionHandler::HasTransitions() const {
 
 bool UITransitionHandler::IsReadyToChange() const {
     bool ret = false;
-    if (mAnimationState == kUITransitionAnimationIdle || mAnimationState == kUITransitionAnimationInvalid) {
+    if (mAnimationState == kUITransitionAnimationIdle
+        || mAnimationState == kUITransitionAnimationInvalid) {
         ret = true;
     } else if (mAnimationState == kUITransitionAnimationInAnimating) {
         MILO_ASSERT(mInAnim, 0x57);
-        ret = mInAnim->IsAnimating() == 0;
+        ret = !mInAnim->IsAnimating();
     } else if (mAnimationState == kUITransitionAnimationReverseOutAnimating) {
         MILO_ASSERT(mOutAnim, 0x5e);
-        ret = mOutAnim->IsAnimating() == 0;
+        ret = !mOutAnim->IsAnimating();
     } else {
         MILO_ASSERT(false, 0x66);
     }

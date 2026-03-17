@@ -28,7 +28,7 @@ float ComputeAngle(const Vector3 &center, const Vector3 &b, const Vector3 &c) {
 
 void RndTexRenderer::UpdatePreClearState() {
     TheRnd.PreClearDrawAddOrRemove(this, mDrawPreClear, 0);
-    unk_0x58 = 1;
+    mDirty = 1;
 }
 
 void RndTexRenderer::InitTexture(void) {
@@ -42,7 +42,7 @@ void RndTexRenderer::InitTexture(void) {
             nullptr
         );
     }
-    unk_0x58 = true;
+    mDirty = true;
 }
 
 float RndTexRenderer::StartFrame(void) {
@@ -65,7 +65,7 @@ void RndTexRenderer::SetFrame(float frame, float blend) {
     RndAnimatable *anim = dynamic_cast<RndAnimatable *>((RndDrawable *)mDrawable);
     if (anim != nullptr) {
         anim->SetFrame(frame, blend);
-        unk_0x58 = true;
+        mDirty = true;
     }
 }
 
@@ -121,13 +121,13 @@ BEGIN_COPYS(RndTexRenderer)
         COPY_MEMBER(mNoPoll)
         COPY_MEMBER(mEnviron)
         InitTexture();
-        unk_0x58 = true;
+        mDirty = true;
     END_COPYING_MEMBERS
 END_COPYS
 
 BEGIN_PROPSYNCS(RndTexRenderer)
-    SYNC_PROP_MODIFY(draw, mDrawable, unk_0x58 = true; unk_0xB5 = true)
-    SYNC_PROP_MODIFY(cam, mCamera, unk_0x58 = true)
+    SYNC_PROP_MODIFY(draw, mDrawable, mDirty = true; mFirstDraw = true)
+    SYNC_PROP_MODIFY(cam, mCamera, mDirty = true)
     SYNC_PROP_MODIFY(output_texture, mOutputTexture, InitTexture())
     SYNC_PROP(force, mForce)
     SYNC_PROP(imposter_height, mImpostorHeight)
@@ -229,7 +229,7 @@ BEGIN_LOADS(RndTexRenderer)
         d >> mClearBuffer;
         bs >> mClearColor;
     }
-    unk_0x58 = true;
+    mDirty = true;
 END_LOADS
 
 void RndTexRenderer::DrawToTexture() {
@@ -239,7 +239,7 @@ void RndTexRenderer::DrawToTexture() {
         return;
     if (mDrawWorldOnly && !(TheRnd.ProcCmds() & kProcessWorld))
         return;
-    if (unk_0x58 && mDrawable && mOutputTexture) {
+    if (mDirty && mDrawable && mOutputTexture) {
         if (!(mOutputTexture->GetType() & kProcessPost)) {
             MILO_NOTIFY_ONCE("%s not renderable", mOutputTexture->Name());
             return;
@@ -427,7 +427,7 @@ void RndTexRenderer::DrawToTexture() {
         cam->Select();
         if (mClearBuffer)
             TheRnd.Clear(1, mClearColor);
-        int cap = (unk_0xB5 && mPrimeDraw) ? 2 : 1;
+        int cap = (mFirstDraw && mPrimeDraw) ? 2 : 1;
         if (cap > 0) {
             int j = cap;
             do {
@@ -450,14 +450,14 @@ void RndTexRenderer::DrawToTexture() {
             }
         }
         current->Select();
-        unk_0xB5 = false;
+        mFirstDraw = false;
         if (!mForce) {
             static Message post_render_msg("post_render");
             HandleType(post_render_msg);
         }
     }
     if (!mForce)
-        unk_0x58 = false;
+        mDirty = false;
 }
 
 void RndTexRenderer::DrawShowing() {
@@ -466,7 +466,7 @@ void RndTexRenderer::DrawShowing() {
 }
 
 RndTexRenderer::RndTexRenderer()
-    : mImpostorHeight(0), unk_0x58(1), mForce(0), mDrawPreClear(1), mDrawWorldOnly(0),
+    : mImpostorHeight(0), mDirty(1), mForce(0), mDrawPreClear(1), mDrawWorldOnly(0),
       mDrawResponsible(1), mNoPoll(0), mOutputTexture(this), mDrawable(this),
-      mCamera(this), mEnviron(this), unk_0xB5(1), mPrimeDraw(0), mForceMips(0),
+      mCamera(this), mEnviron(this), mFirstDraw(1), mPrimeDraw(0), mForceMips(0),
       mMirrorCam(this), mClearBuffer(0), mClearColor(0, 0, 0) {}

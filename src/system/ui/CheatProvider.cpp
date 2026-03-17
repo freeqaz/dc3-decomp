@@ -1,4 +1,5 @@
 #include "ui/CheatProvider.h"
+#include "obj/Data.h"
 #include "obj/DataUtl.h"
 #include "os/Debug.h"
 #include "os/System.h"
@@ -7,7 +8,7 @@
 #include "utl/Std.h"
 #include "utl/Symbol.h"
 
-CheatProvider *CheatProvider::sInstance;
+CheatProvider *CheatProvider::sInstance = nullptr;
 
 #pragma region CheatProvider
 
@@ -28,14 +29,14 @@ CheatProvider::CheatProvider() : mFilterIdx(0) {
         mCheats.push_back(Cheat(strtext));
         for (int j = 1; j < arr->Size(); j++) {
             DataArray *arr2 = arr->Array(j);
-            DataType nType = arr2->Node(0).Type();
+            DataType nType = arr2->Type(0);
             String theKeyStr;
             if (nType == kDataString || nType == kDataSymbol) {
                 theKeyStr = arr2->Str(0);
             } else {
                 const char *cheatStrStart = cheatTypeSym == "keyboard" ? "KB_" : "kPad_";
-                Symbol tmpSymbol = DataGetMacroByInt(arr2->Int(0), cheatStrStart);
-                theKeyStr = tmpSymbol.Str() + strlen(cheatStrStart);
+                Symbol macro = DataGetMacroByInt(arr2->Int(0), cheatStrStart);
+                theKeyStr = macro.Str() + strlen(cheatStrStart);
             }
             String theConcattedStr;
             int theNodeIdx = 1;
@@ -58,35 +59,11 @@ CheatProvider::CheatProvider() : mFilterIdx(0) {
             }
         }
         if (i < cfg->Size() - 1) {
-            mCheats.push_back(gNullStr);
+            mCheats.push_back(Cheat(gNullStr));
         }
     }
     ApplyFilter();
 }
-
-void CheatProvider::Init() {
-    if (CheatsInitialized()) {
-        MILO_ASSERT(!sInstance, 0x60);
-        sInstance = new CheatProvider();
-    }
-}
-
-void CheatProvider::Terminate() {
-    MILO_ASSERT(sInstance, 0x66);
-    RELEASE(sInstance);
-}
-
-void CheatProvider::Invoke(int idx, LocalUser *user) {
-    DataArray *script = mFilterCheats[idx].mScript;
-    if (script)
-        CallQuickCheat(script, user);
-}
-
-void CheatProvider::InitData(RndDir *) { ApplyFilter(); }
-
-int CheatProvider::NumData() const { return mFilterCheats.size(); }
-
-bool CheatProvider::IsActive(int i) const { return !mFilterCheats[i].mKey.empty(); }
 
 void CheatProvider::Text(int i, int j, UIListLabel *listlabel, UILabel *label) const {
     const Cheat &cheat = mFilterCheats[j];
@@ -123,6 +100,41 @@ void CheatProvider::Text(int i, int j, UIListLabel *listlabel, UILabel *label) c
     }
 }
 
+int CheatProvider::NumData() const { return mFilterCheats.size(); }
+bool CheatProvider::IsActive(int i) const { return !mFilterCheats[i].mKey.empty(); }
+void CheatProvider::InitData(RndDir *) { ApplyFilter(); }
+
+BEGIN_HANDLERS(CheatProvider)
+    HANDLE_ACTION(invoke, Invoke(_msg->Int(2), _msg->Obj<LocalUser>(3)))
+    HANDLE_ACTION(next_filter, NextFilter())
+    HANDLE_EXPR(filter, CurFilter())
+    HANDLE_SUPERCLASS(Hmx::Object)
+END_HANDLERS
+
+void CheatProvider::Init() {
+    if (CheatsInitialized()) {
+        MILO_ASSERT(!sInstance, 0x60);
+        sInstance = new CheatProvider();
+    }
+}
+
+void CheatProvider::Terminate() {
+    MILO_ASSERT(sInstance, 0x66);
+    RELEASE(sInstance);
+}
+
+void CheatProvider::Invoke(int i, LocalUser *user) {
+    DataArray *arr = mFilterCheats[i].mScript;
+    if (arr) {
+        CallQuickCheat(arr, user);
+    }
+}
+
+void CheatProvider::NextFilter() {
+    mFilterIdx = (mFilterIdx + 1) % mFilters.size();
+    ApplyFilter();
+}
+
 void CheatProvider::ApplyFilter() {
     static Symbol all("all");
     static Symbol filters("filters");
@@ -147,7 +159,7 @@ void CheatProvider::ApplyFilter() {
                 if (filterArr && filterArr->Contains(curFilt)) {
                     if (curCheat) {
                         if (!mFilterCheats.empty()) {
-                            mFilterCheats.push_back(gNullStr);
+                            mFilterCheats.push_back(Cheat(gNullStr));
                         }
                         mFilterCheats.push_back(*curCheat);
                         curCheat = nullptr;
@@ -159,13 +171,6 @@ void CheatProvider::ApplyFilter() {
             mFilterCheats.push_back(*it);
     }
 }
-
-BEGIN_HANDLERS(CheatProvider)
-    HANDLE_ACTION(invoke, Invoke(_msg->Int(2), _msg->Obj<LocalUser>(3)))
-    HANDLE_ACTION(next_filter, (mFilterIdx = (mFilterIdx + 1) % mFilters.size(), ApplyFilter()))
-    HANDLE_EXPR(filter, mFilters[mFilterIdx])
-    HANDLE_SUPERCLASS(Hmx::Object)
-END_HANDLERS
 
 #pragma endregion CheatProvider
 #pragma region CheatProvider::Cheat

@@ -29,11 +29,6 @@ class ResourceDirPtr : public ObjDirPtr<T>, public ResourceDirBase {
 public:
     // i have no idea if this is right
     ResourceDirPtr(Hmx::Object *owner) : ResourceDirBase(owner) {}
-    ResourceDirPtr &operator=(const ResourceDirPtr &other) {
-        ObjDirPtr<T>::operator=((T *)other);
-        mOwner = other.mOwner;
-        return *this;
-    }
 
     const char *GetName() const { return FileGetBase(GetFile().c_str()); }
     void SetName(const char *name, bool b2) {

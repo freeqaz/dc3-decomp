@@ -25,16 +25,14 @@
 #include "world/CameraManager.h"
 #include "world/Spotlight.h"
 
-#ifdef HX_NATIVE
-RndMat *WorldDir::sGlowMat;
-#endif
+RndMat *WorldDir::sGlowMat = nullptr;
 
-WorldDir *TheWorld;
+WorldDir *TheWorld = nullptr;
 #ifdef HX_NATIVE
 ObjectDir *gNativeVenueDir;
 #endif
+ObjectDir *gOldTexDir = nullptr;
 std::vector<FilePath> gOldChars;
-ObjectDir *gOldTexDir;
 
 void SetTheWorld(WorldDir *w) {
     static DataNode &n = DataVariable("world");

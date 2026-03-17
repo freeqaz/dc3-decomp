@@ -5,17 +5,17 @@
 #include "rndobj/Utl.h"
 #include "utl/MemMgr.h"
 
-RndGraph *sOneFrame;
-std::list<RndGraph *> *sGraphs;
-std::list<FakeGraph> sFakes;
-ObjPtr<RndCam> sCam(nullptr);
+static RndGraph *sOneFrame = nullptr;
+static std::list<RndGraph *> *sGraphs = nullptr;
+static std::list<FakeGraph> sFakes;
+static ObjPtr<RndCam> sCam(nullptr);
 
 void *Drawable::operator new(size_t s) {
     return MemAlloc(s, __FILE__, 0xA9, "Drawable");
 }
 void Drawable::operator delete(void *v) { MemFree(v, __FILE__, 0xA9, "Drawable"); }
 void ScreenLine::Draw() { UtilDrawLine(mA, mB, mCol); }
-void ScreenLine::DrawFixedZ(float) { Draw(); }
+void ScreenLine::DrawFixedZ(float) { UtilDrawLine(mA, mB, mCol); }
 void RectFilled2D::Draw() {
     TheRnd.DrawRectScreen(mRect, mCol, nullptr, nullptr, nullptr);
 }

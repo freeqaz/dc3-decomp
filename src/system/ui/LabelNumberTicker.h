@@ -31,7 +31,7 @@ public:
     void CountUpFromCurrentValue();
     void SnapToValue(int i);
 
-    UILabel *Label() const { return mLabel; }
+    UILabel *Label() const { return mLabel.Ptr() ? mLabel.Ptr() : nullptr; }
     void SetLabel(UILabel *);
 
 protected:

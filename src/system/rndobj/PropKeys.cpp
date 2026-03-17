@@ -551,8 +551,7 @@ int ObjectKeys::SetKey(float frame) {
 
 void ObjectKeys::SetToCurrentVal(int i) {
     if (mPropExceptionID != kDirEvent) {
-        ObjectStage stage(mTarget->Property(mProp, true)->GetObj());
-        (*this)[i].value = stage;
+        (*this)[i].value = mTarget->Property(mProp)->GetObj();
     }
 }
 

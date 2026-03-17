@@ -13,16 +13,7 @@ namespace {
     bool IsMat(BaseMaterial *mat) { return mat && mat->ClassName() == "Mat"; }
 }
 
-void BaseMaterial::SetDefaultMat(BaseMaterial *mat) {
-    MILO_ASSERT(!gDefaultMat, 0x55);
-    gDefaultMat = mat;
-}
-
-const DataNode *BaseMaterial::GetDefaultPropVal(Symbol s) {
-    const DataNode *node = gDefaultMat->Property(s, true);
-    MILO_ASSERT(node, 0x129);
-    return node;
-}
+#pragma region MatPerfSettings
 
 void MatPerfSettings::Save(BinStream &bs) const {
     bs << mRecvProjLights;
@@ -43,84 +34,8 @@ void MatPerfSettings::Load(BinStream &bs) {
     bs >> mRecvPointCubeTex;
 }
 
-void BaseMaterial::Save(BinStream &bs) {
-    bs << 8;
-    SAVE_SUPERCLASS(Hmx::Object)
-    bs << mBlend;
-    bs << mColor << mUseEnviron << mPrelit;
-    bs << mZMode;
-    bs << mAlphaCut << mAlphaThreshold << mAlphaWrite;
-    bs << mTexGen;
-    bs << mTexWrap;
-    bs << mTexXfm;
-    bs << mDiffuseTex << mNextPass;
-    bs << mIntensify;
-    bs << mCull;
-    bs << mEmissiveMultiplier;
-    bs << mSpecularRGB << mNormalMap;
-    bs << mEmissiveMap << mSpecularMap;
-    bs << mEnvironMap << mEnvironMapFalloff << mEnvironMapSpecMask;
-    bs << mPerPixelLit;
-    bs << mStencilMode;
-    bs << mFur << mDeNormal << mAnisotropy;
-    bs << mNormDetailTiling << mNormDetailStrength << mNormDetailMap;
-    bs << mPointLights << mFog << mFadeout << mColorAdjust;
-    bs << mRimRGB << mRimMap << mRimLightUnder;
-    bs << mScreenAligned;
-    bs << mShaderVariation;
-    bs << mSpecular2RGB;
-    mPerfSettings.Save(bs);
-    bs << mRefractEnabled;
-    bs << mRefractStrength;
-    bs << mRefractNormalMap;
-    bs << mBloomMultiplier;
-    bs << mNeverFitToSpline;
-    bs << mAllowDistortionEffects;
-    bs << mShockwaveMult;
-    bs << mWorldProjectionTiling;
-    bs << mWorldProjectionStartBlend;
-    bs << mWorldProjectionEndBlend;
-    bs << mDiffuseTex2;
-    bs << mForceAlphaWrite;
-}
-
-bool BaseMaterial::PropValDifferent(Symbol s, BaseMaterial *base) {
-    if (!base)
-        base = gDefaultMat;
-    MILO_ASSERT(base, 0x133);
-    if (s == "tex_xfm") {
-        return base->mTexXfm != mTexXfm;
-    } else {
-        const DataNode *node = Property(s, true);
-        MILO_ASSERT(node, 0x13C);
-        DataNode var(*node);
-        DataNode othervar(*base->Property(s, true));
-        if (s == "shader_combos") {
-            return var > othervar;
-        } else {
-            return var != othervar;
-        }
-    }
-}
-
-DataNode BaseMaterial::OnIsDefaultPropVal(const DataArray *a) {
-    static Symbol tex_xfm("tex_xfm");
-    Symbol sym = a->Sym(2);
-    bool ret;
-    if (sym == tex_xfm) {
-        Transform tf;
-        tf.Reset();
-        ret = tf == mTexXfm;
-    } else {
-        const DataNode *val = GetDefaultPropVal(sym);
-        MILO_ASSERT(val, 0x1AA);
-        DataNode var(*val);
-        val = Property(sym, true);
-        MILO_ASSERT(val, 0x1AF);
-        ret = val->Equal(var, nullptr, true);
-    }
-    return ret;
-}
+#pragma endregion
+#pragma region BaseMaterial
 
 BaseMaterial::BaseMaterial()
     : mColor(1, 1, 1), mUseEnviron(true), mPrelit(false), mDiffuseTex(this),
@@ -141,6 +56,44 @@ BaseMaterial::BaseMaterial()
       mBloomMultiplier(1) {
     mTexXfm.Reset();
 }
+
+BEGIN_HANDLERS(BaseMaterial)
+    HANDLE(allowed_next_pass, OnAllowedNextPass)
+    HANDLE(allowed_normal_map, OnAllowedNormalMap)
+    HANDLE(is_default, OnIsDefaultPropVal)
+    HANDLE_SUPERCLASS(Hmx::Object)
+END_HANDLERS
+
+BEGIN_PROPSYNCS(BaseMaterial)
+    SYNC_SUPERCLASS(Hmx::Object)
+END_PROPSYNCS
+
+BEGIN_SAVES(BaseMaterial)
+    SAVE_REVS(8, 0)
+    SAVE_SUPERCLASS(Hmx::Object)
+    bs << mBlend << mColor << mUseEnviron << mPrelit;
+    bs << mZMode << mAlphaCut << mAlphaThreshold << mAlphaWrite;
+    bs << mTexGen << mTexWrap << mTexXfm << mDiffuseTex << mNextPass;
+    bs << mIntensify << mCull << mEmissiveMultiplier;
+    bs << mSpecularRGB << mNormalMap;
+    bs << mEmissiveMap << mSpecularMap;
+    bs << mEnvironMap << mEnvironMapFalloff << mEnvironMapSpecMask;
+    bs << mPerPixelLit << mStencilMode;
+    bs << mFur << mDeNormal << mAnisotropy;
+    bs << mNormDetailTiling << mNormDetailStrength << mNormDetailMap;
+    bs << mPointLights << mFog << mFadeout << mColorAdjust;
+    bs << mRimRGB << mRimMap << mRimLightUnder;
+    bs << mScreenAligned << mShaderVariation << mSpecular2RGB;
+    mPerfSettings.Save(bs);
+    bs << mRefractEnabled << mRefractStrength << mRefractNormalMap;
+    bs << mBloomMultiplier << mNeverFitToSpline;
+    bs << mAllowDistortionEffects << mShockwaveMult;
+    bs << mWorldProjectionTiling;
+    bs << mWorldProjectionStartBlend;
+    bs << mWorldProjectionEndBlend;
+    bs << mDiffuseTex2;
+    bs << mForceAlphaWrite;
+END_SAVES
 
 BEGIN_COPYS(BaseMaterial)
     COPY_SUPERCLASS(Hmx::Object)
@@ -212,11 +165,6 @@ BEGIN_COPYS(BaseMaterial)
     END_COPYING_MEMBERS
 END_COPYS
 
-__declspec(noinline) BaseMaterial::Blend
-CheckBlendMode(BaseMaterial::Blend b, BaseMaterial *) {
-    return b;
-}
-
 INIT_REVS(8, 0)
 
 BEGIN_LOADS(BaseMaterial)
@@ -225,11 +173,9 @@ BEGIN_LOADS(BaseMaterial)
     LOAD_SUPERCLASS(Hmx::Object)
     d >> (int &)mBlend;
     mBlend = CheckBlendMode(mBlend, this);
-    d >> mColor >> mUseEnviron >> mPrelit;
+    d.stream >> mColor >> mUseEnviron >> mPrelit;
     d >> (int &)mZMode;
-    d >> mAlphaCut;
-    d >> mAlphaThreshold;
-    d >> mAlphaWrite;
+    d >> mAlphaCut >> mAlphaThreshold >> mAlphaWrite;
     d >> (int &)mTexGen >> (int &)mTexWrap >> mTexXfm >> mDiffuseTex >> mNextPass;
     d >> mIntensify;
     if (d.rev < 3) {
@@ -240,25 +186,18 @@ BEGIN_LOADS(BaseMaterial)
         d >> (int &)mCull;
     }
     d >> mEmissiveMultiplier;
-    d >> mSpecularRGB >> mNormalMap;
-    d >> mEmissiveMap;
-    d >> mSpecularMap;
-    d >> mEnvironMap >> mEnvironMapFalloff >> mEnvironMapSpecMask;
+    d.stream >> mSpecularRGB >> mNormalMap;
+    d.stream >> mEmissiveMap >> mSpecularMap;
+    d.stream >> mEnvironMap >> mEnvironMapFalloff >> mEnvironMapSpecMask;
     d >> mPerPixelLit >> (int &)mStencilMode;
-    d >> mFur;
-    d >> mDeNormal;
-    d >> mAnisotropy;
-    d >> mNormDetailTiling;
-    d >> mNormDetailStrength;
-    d >> mNormDetailMap;
+    d.stream >> mFur >> mDeNormal >> mAnisotropy;
+    d >> mNormDetailTiling >> mNormDetailStrength >> mNormDetailMap;
     d >> mPointLights >> mFog >> mFadeout >> mColorAdjust;
-    d >> mRimRGB;
-    d >> mRimMap;
-    d >> mRimLightUnder;
+    d.stream >> mRimRGB >> mRimMap >> mRimLightUnder;
     d >> mScreenAligned;
     d >> (int &)mShaderVariation;
     d >> mSpecular2RGB;
-    mPerfSettings.Load(bs);
+    mPerfSettings.Load(d.stream);
     d >> mRefractEnabled;
     d >> mRefractStrength;
     d >> mRefractNormalMap;
@@ -272,7 +211,7 @@ BEGIN_LOADS(BaseMaterial)
             d >> b1;
             d >> b1;
         }
-        if (d.rev > 5) {
+        if (d.rev >= 6) {
             d >> mAllowDistortionEffects;
             d >> mShockwaveMult;
         }
@@ -288,10 +227,66 @@ BEGIN_LOADS(BaseMaterial)
     }
 END_LOADS
 
+void BaseMaterial::SetDefaultMat(BaseMaterial *mat) {
+    MILO_ASSERT(!gDefaultMat, 0x55);
+    gDefaultMat = mat;
+}
+
+const DataNode *BaseMaterial::GetDefaultPropVal(Symbol s) {
+    const DataNode *node = gDefaultMat->Property(s, true);
+    MILO_ASSERT(node, 0x129);
+    return node;
+}
+
+bool BaseMaterial::PropValDifferent(Symbol s, BaseMaterial *base) {
+    if (!base) {
+        base = gDefaultMat;
+    }
+    MILO_ASSERT(base, 0x133);
+    if (s == "tex_xfm") {
+        return base->mTexXfm != mTexXfm;
+    } else {
+        const DataNode *node = Property(s);
+        MILO_ASSERT(node, 0x13C);
+        DataNode var(*node);
+        DataNode othervar(*base->Property(s));
+        if (s == "shader_combos") {
+            return var > othervar;
+        } else {
+            return var != othervar;
+        }
+    }
+}
+
+DataNode BaseMaterial::OnIsDefaultPropVal(const DataArray *a) {
+    static Symbol tex_xfm("tex_xfm");
+    Symbol sym = a->Sym(2);
+    bool ret;
+    if (sym == tex_xfm) {
+        Transform tf;
+        tf.Reset();
+        ret = tf == mTexXfm;
+    } else {
+        const DataNode *val = GetDefaultPropVal(sym);
+        MILO_ASSERT(val, 0x1AA);
+        DataNode var(*val);
+        val = Property(sym, true);
+        MILO_ASSERT(val, 0x1AF);
+        ret = val->Equal(var, nullptr, true);
+    }
+    return ret;
+}
+
+__declspec(noinline) BaseMaterial::Blend
+CheckBlendMode(BaseMaterial::Blend b, BaseMaterial *) {
+    return b;
+}
+
 bool BaseMaterial::IsNextPass(BaseMaterial *m) {
     for (BaseMaterial *it = this; it != nullptr; it = it->NextPass()) {
-        if (it == m)
+        if (it == m) {
             return true;
+        }
     }
     return false;
 }
@@ -299,8 +294,9 @@ bool BaseMaterial::IsNextPass(BaseMaterial *m) {
 DataNode BaseMaterial::OnAllowedNextPass(const DataArray *a) {
     int matCount = 0;
     for (ObjDirItr<BaseMaterial> it(Dir(), true); it != nullptr; ++it) {
-        if (IsMat(it))
+        if (IsMat(it)) {
             matCount++;
+        }
     }
     matCount += 2;
     DataArrayPtr ptr(new DataArray(matCount));
@@ -312,10 +308,8 @@ DataNode BaseMaterial::OnAllowedNextPass(const DataArray *a) {
     }
 
     for (ObjDirItr<BaseMaterial> it(Dir(), true); it != nullptr; ++it) {
-        if (IsMat(it)) {
-            if (!IsNextPass(it)) {
-                ptr->Node(idx++) = &*it;
-            }
+        if (IsMat(it) && !IsNextPass(it)) {
+            ptr->Node(idx++) = &*it;
         }
     }
     ptr->Resize(idx);
@@ -326,13 +320,4 @@ DataNode BaseMaterial::OnAllowedNormalMap(const DataArray *a) {
     return GetNormalMapTextures(Dir());
 }
 
-BEGIN_HANDLERS(BaseMaterial)
-    HANDLE(allowed_next_pass, OnAllowedNextPass)
-    HANDLE(allowed_normal_map, OnAllowedNormalMap)
-    HANDLE(is_default, OnIsDefaultPropVal)
-    HANDLE_SUPERCLASS(Hmx::Object)
-END_HANDLERS
-
-BEGIN_PROPSYNCS(BaseMaterial)
-    SYNC_SUPERCLASS(Hmx::Object)
-END_PROPSYNCS
+#pragma endregion

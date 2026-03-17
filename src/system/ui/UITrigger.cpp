@@ -65,12 +65,12 @@ void UITrigger::Trigger() {
         if (curAnim.mAnim) {
             float f4;
             if (curAnim.mEnable) {
-                f4 = 0;
                 if (!(curAnim.mPeriod * 30.0f)) {
                     f4 = curAnim.mScale;
-                    if (!f4)
+                    if (!f4) {
                         f4 = 1.0f;
-                    f4 = fabsf(curAnim.mStart - curAnim.mEnd) / f4;
+                    }
+                    f4 = std::fabs(curAnim.mStart - curAnim.mEnd) / f4;
                 }
             } else {
                 f4 = std::fabs(curAnim.mAnim->StartFrame() - curAnim.mAnim->EndFrame());
@@ -79,7 +79,7 @@ void UITrigger::Trigger() {
         }
     }
     if (mBlockTransition && mEndTime > 5.0f) {
-        MILO_WARN(
+        MILO_NOTIFY(
             "%s (%s) is blocking and really long! (%f seconds)",
             Name(),
             PathName(Dir()),

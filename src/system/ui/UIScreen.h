@@ -72,9 +72,6 @@ protected:
     int mScreenId; // 0x40
 };
 
-void EnterGlitchCB(float, void *);
-void UnloadGlitchCB(float, void *);
-
 #include "obj/Msg.h"
 
 DECLARE_MESSAGE(UITransitionCompleteMsg, "transition_complete");

@@ -37,7 +37,7 @@ protected:
 
     bool mBlockTransition; // 0x11c
     ObjPtr<Hmx::Object> mCallbackObject; // 0x120
-    float mStartTime;
+    float mStartTime; // 0x134
     float mEndTime; // 0x138
     bool mDone; // 0x13c
 };

@@ -7,10 +7,6 @@
 #include "rndobj/Rnd.h"
 #include "utl/BinStream.h"
 
-bool Hmx::Rect::operator==(const Hmx::Rect &other) const {
-    return x == other.x && y == other.y && w == other.w && h == other.h;
-}
-
 void RndScreenMask::Save(BinStream &bs) {
     bs << 2;
     SAVE_SUPERCLASS(Hmx::Object)

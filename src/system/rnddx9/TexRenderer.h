@@ -8,7 +8,7 @@ public:
     // Hmx::Object
     OBJ_CLASSNAME(TexRenderer);
     OBJ_SET_TYPE(TexRenderer);
-    virtual void PostDeviceReset() { unk_0x58 = true; }
+    virtual void PostDeviceReset() { mDirty = true; }
 
     NEW_OBJ(DxTexRenderer)
 };

@@ -12,6 +12,11 @@ bool ScrollSelect::CanScroll() const { return !mSelectToScroll || mSelectedAux !
 
 ScrollSelect::ScrollSelect() : mSelectToScroll(0) { Reset(); }
 
+BEGIN_CUSTOM_HANDLERS(ScrollSelect)
+    HANDLE_EXPR(is_scroll_selected, IsScrollSelected())
+    HANDLE_ACTION(reset, Reset())
+END_CUSTOM_HANDLERS
+
 BEGIN_PROPSYNCS(ScrollSelect)
     SYNC_PROP(select_to_scroll, mSelectToScroll)
 END_PROPSYNCS
@@ -26,14 +31,15 @@ DataNode ScrollSelect::SendScrollSelected(UIComponent *comp, LocalUser *user) {
 
 UIComponent::State ScrollSelect::DrawState(UIComponent *comp) const {
     static Symbol selected("selected");
-    bool ret = false;
-    if (!mSelectToScroll || mSelectedAux == -1)
+    if (!mSelectToScroll || mSelectedAux == -1) {
         return comp->GetState();
-    return UIComponent::kSelected;
+    } else {
+        return UIComponent::kSelected;
+    }
 }
 
 bool ScrollSelect::CatchNavAction(JoypadAction act) const {
-    return (mSelectedAux != -1) && IsNavAction(act);
+    return mSelectedAux != -1 && IsNavAction(act);
 }
 
 bool ScrollSelect::SelectScrollSelect(UIComponent *comp, LocalUser *user) {
@@ -51,11 +57,9 @@ bool ScrollSelect::SelectScrollSelect(UIComponent *comp, LocalUser *user) {
 bool ScrollSelect::RevertScrollSelect(
     UIComponent *comp, LocalUser *user, Hmx::Object *obj
 ) {
-    int oldAux = mSelectedAux;
-    if (oldAux != -1) {
-        int selAux = SelectedAux();
-        bool auxChanged = oldAux != selAux;
-        SetSelectedAux(oldAux);
+    if (mSelectedAux != -1) {
+        bool auxChanged = mSelectedAux != SelectedAux();
+        SetSelectedAux(mSelectedAux);
         mSelectedAux = -1;
         DataNode node(kDataUnhandled, 0);
         if (auxChanged && obj) {
@@ -73,8 +77,3 @@ bool ScrollSelect::RevertScrollSelect(
     } else
         return false;
 }
-
-BEGIN_CUSTOM_HANDLERS(ScrollSelect)
-    HANDLE_EXPR(is_scroll_selected, IsScrollSelected())
-    HANDLE_ACTION(reset, Reset())
-END_CUSTOM_HANDLERS

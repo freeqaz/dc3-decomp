@@ -32,9 +32,10 @@ public:
     OBJ_MEM_OVERLOAD(0x11)
 
 protected:
+    UIListMesh();
+
     virtual UIListSlotElement *CreateElement(UIList *);
     virtual RndTransformable *RootTrans();
-    UIListMesh();
 
     /** "mesh to draw/transform" */
     ObjPtr<RndMesh> mMesh; // 0x78
@@ -51,6 +52,7 @@ public:
     }
     virtual void Draw(const Transform &, float, UIColor *, Box *);
 
-    UIListMesh *mListMesh;
-    RndMat *mMat;
+private:
+    UIListMesh *mListMesh; // 0x4
+    RndMat *mMat; // 0x8
 };

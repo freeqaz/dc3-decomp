@@ -72,10 +72,7 @@ BEGIN_PROPSYNCS(RndLine)
     gLine = this;
     SYNC_PROP_SET(mat, mMat.Ptr(), SetMat(_val.Obj<RndMat>()))
     SYNC_PROP(width, mWidth)
-    SYNC_PROP_SET(
-        fold_angle, mFoldAngle * RAD2DEG, mFoldAngle = _val.Float() * DEG2RAD;
-        mFoldCos = cos(mFoldAngle)
-    )
+    SYNC_PROP_SET(fold_angle, mFoldAngle * RAD2DEG, SetFoldAngle(_val.Float() * DEG2RAD))
     SYNC_PROP_MODIFY(has_caps, mHasCaps, SetNumPoints(NumPoints()))
     SYNC_PROP_MODIFY(line_pairs, mLinePairs, SetNumPoints(NumPoints()))
     SYNC_PROP_SET(num_points, NumPoints(), SetNumPoints(_val.Int()))
