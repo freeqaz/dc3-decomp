@@ -186,43 +186,71 @@ Guards around move graph/layout null derefs. The OriginalChoreoRemixer blanket r
 
 **Goal**: Make DTA scripts fire the same handlers on native as Xbox.
 
-1. **Fix `set_type "world"` firing** — Trace `world_panel`'s enter DTA flow. If the TypeDef handler fires on Xbox via `{$this set_type world}`, ensure it fires on native too. This removes HamDirector hack #1 and unblocks all venue DTA handlers.
+**A1. Fix `set_type "world"` firing** (HamDirector hack #1)
+- **Investigation**: Add `MILO_LOG` to `ObjectDir::SetType()`. Boot to gameplay. Three possible outcomes:
+  - (a) `SetType("world")` is never called → `world_panel` DTA enter handler doesn't fire. Trace UIPanel enter flow for the venue panel.
+  - (b) `SetType` is called but on the wrong object → `$this` resolves incorrectly in DTA scope.
+  - (c) `SetType` is called correctly → the hack's `!dir->TypeDef()` guard is already a no-op (TypeDef was set by DTA). Safe to remove.
+- **Removes**: 1 hack. **Unblocks**: all venue DTA handlers (`select_camera`, etc.)
 
-2. **Fix `transition_complete` messages** — UIScreen transitions need to send `TRANSITION_COMPLETE_MSG`. This removes 3 `IsAnimating()` bypasses in HamNavList.
+**A2. Fix `transition_complete` messages** (HamNavList hacks at 510, 1436, 1526)
+- **Investigation**: Check `UIScreen::FinishTransition()` — does it send `TRANSITION_COMPLETE_MSG`? If yes, trace why it doesn't reach HamNavList (missing sink registration, message routing). If no, add the send.
+- **Verification**: Navigate main_menu → song_select → gameplay → results → main_menu. All transitions must complete without hanging animations.
+- **Removes**: 3 `IsAnimating()` bypasses.
 
-3. **Fix player provider initialization** — Ensure `ham_init.dta` completely initializes player PropertyEventProviders before OnLoadSong. This removes the crew/outfit reconstruction hack.
+**A3. Fix player provider initialization** (HamDirector hack #2)
+- **Investigation**: Log `HamPlayerData::Provider()`, `hpd->Crew()`, `hpd->Outfit()` at the top of OnLoadSong. If providers are correctly populated, the native reconstruction block is dead code. If not, trace `ham_init.dta` provider setup to find what's missing.
+- **Risk**: HIGH — wrong outfits break gameplay visuals (as the GamePanel bug proved). Test with 2 different songs to catch outfit-specific issues.
+- **Removes**: 1 hack (38 lines of defensive reconstruction).
 
-4. **Fix HamProvider init ordering** — Ensure `TheHamProvider` is non-null before HamNavList polls. Either delay HamNavList polling or ensure `ham_init.dta` runs first. Removes 6 null guards.
+**A4. Fix HamProvider init ordering** (HamNavList null guards at 540, 750, 806, 1104, 1109, 1324)
+- **Investigation**: Add `MILO_ASSERT(TheHamProvider, __LINE__)` at each site. Boot to gameplay. If none fire → remove guards. If they fire → log timestamps to identify which poll runs before `ham_init.dta` completes, then fix ordering.
+- **Risk**: MEDIUM — if guards are load-bearing, removing them without fixing ordering crashes immediately. The assert-first approach catches this safely.
+- **Removes**: up to 6 null guards.
 
-### Phase B: Loading Pipeline Validation (removes ~10 hacks)
+### Phase B: Loading Pipeline Validation (removes ~14 hacks)
 
 **Goal**: Validate that FileMerger convergence fixed loading order, then remove defensive guards.
 
-1. **Move data loading** — Verify move mergers complete before MoveMgr/OriginalChoreoRemixer/SuperEasyRemixer access them. Remove null guards in MoveMgr (6), OriginalChoreoRemixer (2), SuperEasyRemixer (4).
+**B1. Move data loading** (MoveMgr 7, OriginalChoreoRemixer 2, SuperEasyRemixer 4)
+- **Verification method**: Replace each `#ifdef HX_NATIVE` null guard with `MILO_ASSERT(ptr != nullptr, ...)` on a test branch. Play 1 full song. If no asserts fire → guards are redundant. If they fire → the move merger hasn't completed by that point and the guard is still needed.
+- **Removes**: up to 13 hacks across 3 files.
 
-2. ~~**HamDirector::PlayNextShot**~~ — Already unified. No `#ifdef` exists at line 2548. ~~Removes hack #7.~~
+**B2. PlayNextShot — venue vs merger dir** (HamDirector hack #7)
+- **Investigation**: Add log: `MILO_LOG("PlayNextShot: mMerger=%p Dir=%p mVenue=%p", ...)`. If `mMerger->Dir() == mVenue`, switch native to the Xbox path.
+- **Removes**: 1 hack.
 
-3. **Camera dircut data** — Verify dircut entries are loaded before FindNextDircut runs. Remove early-return guard.
+**B3. Camera dircut data** (HamDirector hack #4)
+- **Verification**: Replace early return with `MILO_ASSERT(entry, ...)`. Play 1 song with camera transitions. If no asserts → remove guard.
+- **Removes**: 1 hack.
 
 ### Phase C: Init Sequence Alignment (removes ~10 hacks)
 
 **Goal**: Align native initialization order with Xbox so subsystems don't see uninitialized state.
 
+**Risk note**: Changing initialization order produces non-local effects. One subsystem's timing fix can break another's assumptions. This phase requires:
+1. **Boot-order trace first** — Log timestamps for: App::Init, ham_init.dta eval, TheHamProvider creation, venue Enter, HamDirector Enter, first HamNavList Poll, first MoveMgr Poll, first GamePanel Poll.
+2. **Dependency graph** — Map which subsystems depend on which init events.
+3. **Rollback criteria** — If any unrelated subsystem crashes after an ordering change, revert and investigate before proceeding.
+
+Items:
 1. **HamCharacter clip guards** — Verify character clips are loaded before Poll/Enter access them
 2. **HamAudio FileLoader guard** — Verify FileLoader is polled after Game::Restart
 3. **HamCamShot null guard** — Verify characters are loaded before camera shot evaluation
 
-### Phase D: Architectural Decisions (removes ~8 hacks)
+### Phase D: Architectural Decisions + Trivial Refactors
 
-**Goal**: Decide permanent architecture for areas where native genuinely differs.
+Split into D-trivial (do anytime) and D-architectural (need design decision).
 
-1. **SetShot song.anim vs routine builder** — Decide whether native should drive the routine builder like Xbox, or keep its current direct song.anim approach. If routine builder: implement it, remove hack #6. If direct: document and keep.
+**D-trivial** (do alongside any other work):
+- **UnloadMergers accessor** (hack #13) — Move `Mergers()` accessor outside `#ifdef HX_NATIVE` in `FileMerger.h`. 5-line change, zero risk. Removes 1 hack.
+- **SetPlayerSpotlightsEnabled** (hack #12) — Change `Find(..., false)` to `Find(..., true)`. If asserts fire, put it back. Removes 1 hack.
 
-2. **Intro timing** — Decide whether to fix `Game::Poll()` to drive `SetSecondsAndBeat()` during intro, or keep wall-clock fallback. If fix: removes Poll hack #13.
+**D-architectural** (need design decision before implementing):
+1. **SetShot song.anim vs routine builder** (hack #6) — Decide whether native should drive the routine builder like Xbox, or keep its current direct song.anim approach. If routine builder: implement it, remove hack. If direct: document and mark permanent.
+2. **Intro timing** (hack #3 at line 3093) — Decide whether to fix `Game::Poll()` to drive `SetSecondsAndBeat()` during intro, or keep wall-clock fallback. The wall-clock approach works but diverges from Xbox timing.
 
-3. **UnloadMergers accessor** — Make `Mergers()` accessor available on all platforms. Remove offset hack.
-
-### Not Removable (~67 hacks)
+### Not Removable (~55 hacks)
 
 These are permanent platform differences:
 - Kinect/hardware stubs (8)
@@ -230,40 +258,39 @@ These are permanent platform differences:
 - Xbox-only includes (9)
 - PPC compiler codegen variants (6)
 - Static field declarations (9)
-- STL implementation diffs (1)
+- STL implementation diffs (2 — STLport throw + iterator compat)
 - Debug logging (8) — keep for diagnostics
-- Remaining guards for genuinely missing features (16)
+- Remaining guards for genuinely missing features (3)
 
 ---
 
 ## Priority Order
 
-| Phase | Hacks Removed | Effort | Impact | Telemetry Gate Test |
-|-------|---------------|--------|--------|---------------------|
-| **A1**: `set_type "world"` | 1 | Small | Unblocks all venue DTA handlers | `VenueTypeDefSet` |
-| **A2**: `transition_complete` | 3 | Medium | HamNavList animation flow | `NavTransitionsComplete` |
-| **A4**: HamProvider init | 6 | Medium | Removes defensive null checks | `HamProviderInitialized` |
-| ~~**B2**: PlayNextShot unify~~ | ~~1~~ | ~~Done~~ | ~~Already unified — no #ifdef exists~~ | `MergerDirAvailable` |
-| **A3**: Player provider init | 1 | Medium | Correct wardrobe loading | `WardrobeLoadsCorrectly` |
-| **B1**: Move data guards | 12 | Medium | Removes defensive null checks | `MoveGraphLoaded` |
-| **D3**: Mergers accessor | 1 | Small | Code quality | — |
-| **C**: Init sequence | ~10 | Large | Requires careful ordering | `NoCrashDuringGameplay` |
-| **D1-D2**: Architectural | ~8 | Large | Design decisions needed | `BeatDrivenAnimation` |
+| Phase | Hacks | Investigate | Fix | Impact |
+|-------|-------|-------------|-----|--------|
+| **D-trivial**: Mergers accessor + SpotlightsEnabled | 2 | None | 10 min | Code quality, validates Phase 5 |
+| **A1**: `set_type "world"` | 1 | Add MILO_LOG to SetType | Small if (c) | Unblocks all venue DTA handlers |
+| **A4**: HamProvider init | 6 | Add MILO_ASSERT at each site | Small if none fire | Removes defensive null checks |
+| **B2**: PlayNextShot unify | 1 | Log mMerger->Dir() vs mVenue | Small | Validates FileMerger convergence |
+| **A2**: `transition_complete` | 3 | Trace UIScreen::FinishTransition | Medium | HamNavList animation flow |
+| **B1**: Move data guards | 13 | MILO_ASSERT at each guard | Small if none fire | Removes defensive null checks |
+| **A3**: Player provider init | 1 | Log provider state at OnLoadSong | Medium | Correct wardrobe loading |
+| **B3**: Camera dircut | 1 | MILO_ASSERT at guard | Small | Camera robustness |
+| **C**: Init sequence | ~10 | Boot-order trace + dep graph | Large | Requires careful ordering |
+| **D-arch**: song.anim + intro timing | 2 | Design review | Large | Architectural decisions |
 
-**Estimated total removable: ~43 hacks (35% of total), bringing hamobj from 122 → ~79 native guards.**
+**Estimated removable: ~40 hacks (39%), bringing hamobj from 102 → ~62 native guards.**
 
-### Telemetry test integration
+### Verification protocol
 
-Each phase has a **gate test** from the gameplay telemetry test suite
-(see `2026-03-17-gameplay-telemetry-tests.md`). The workflow:
+Every hack removal follows the same pattern:
 
-1. Remove the `#ifdef HX_NATIVE` guard
-2. Run `DC3_GAMEPLAY_TESTS=1 ctest --test-dir native/build -R GameplayTelemetry`
-3. If the gate test passes → hack stays removed, promote test to Tier 1
-4. If it fails → telemetry dump shows what's missing, debug from there
-5. If Tier 1 smoke tests fail (crash) → hack was load-bearing, put it back
+1. **Investigate**: Add `MILO_LOG` or `MILO_ASSERT` at the guard site. Boot to gameplay. Does it fire?
+2. **If no** → guard is dead code. Remove the `#ifdef` block. Run smoke test (boot → play 1 song → results).
+3. **If yes** → the guard is load-bearing. Log the call stack / timing to understand why. Fix the root cause, then remove.
+4. **Regression check**: After removal, play 1 full song. Verify: characters visible, cameras switch, HUD renders, no crashes.
 
-No hack is removed on faith — telemetry proves the natural DTA path works.
+No hack is removed on faith — investigation proves the DTA path works first.
 
 ---
 
