@@ -5,6 +5,7 @@
 #include "rndobj/Bitmap.h"
 #include "utl/MemMgr.h"
 
+/** "This class implements a cube map intended for environment mapping." */
 class RndCubeTex : public Hmx::Object {
 public:
     enum CubeFace {

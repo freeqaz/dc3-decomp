@@ -781,6 +781,8 @@ void UIList::OldResourcePreload(BinStream &bs) {
     mListDir.SetName(buf, true);
 }
 
+int UIList::NumDisplay() const { return mListState.NumDisplay(); }
+
 void UIList::SetNumDisplay(int i) {
     mListState.SetNumDisplay(i, gLoading == 0);
     Update();

@@ -47,6 +47,13 @@ enum ShaderType {
 
 struct ShaderMacro {
     ShaderMacro(const char *n = nullptr, const char *v = nullptr) : Name(n), Value(v) {}
+
+    ShaderMacro &operator=(const ShaderMacro &other) {
+        this->Name = other.Name;
+        this->Value = other.Value;
+        return *this;
+    }
+
     const char *Name; // 0x0
     const char *Value; // 0x4
 };

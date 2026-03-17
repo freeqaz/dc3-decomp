@@ -5,19 +5,16 @@
 #include "obj/Object.h"
 #include "os/Debug.h"
 
-// Prevents SaveWatches() from triggering during LoadWatches() to avoid recursive saves
-static bool sLoadingWatches;
+static bool sLoadingWatches = false;
 
 void Watcher::SaveWatches() {
     if (!sLoadingWatches) {
         DataArrayPtr ptr;
         ptr->Resize(mWatches.size());
         int i = 0;
-        for (std::vector<std::pair<DataArray *, DataNode> >::iterator it =
-                 mWatches.begin();
-             it != mWatches.end();
-             ++it, ++i) {
+        FOREACH (it, mWatches) {
             ptr->Node(i) = it->first;
+            i++;
         }
         DataWriteFile("watches.dta", ptr, 0);
     }
@@ -27,22 +24,15 @@ void Watcher::Update() {
     if (mWatches.size()) {
         // Reserve two lines per watch: one for the expression, one for the result
         mOverlay->SetLines(mWatches.size() * 2);
-        int i = 0;
-        for (std::vector<std::pair<DataArray *, DataNode> >::iterator it =
-                 mWatches.begin();
-             it != mWatches.end();
-             ++it, ++i) {
+        int idx = 0;
+        for (auto it = mWatches.begin(); it != mWatches.end(); ++it, ++idx) {
             DataArray *arr = it->first;
-            // Print watch index and expression
-            *mOverlay << i;
+            *mOverlay << idx;
             *mOverlay << ": ";
             arr->Print(*mOverlay, kDataArray, true, 0);
             *mOverlay << "\n";
-            // Execute the expression and cache the result
-            TheDebug.SetTry(true);
-            it->second = arr->Execute(false);
-            TheDebug.SetTry(false);
-            // Print the evaluation result
+            MILO_TRY { it->second = it->first->Execute(false); }
+            MILO_CATCH(msg) { it->second = msg; }
             it->second.Print(*mOverlay, false, 0);
             *mOverlay << "\n";
         }

@@ -1,5 +1,6 @@
 #include "rndobj/Tex.h"
 #include "Tex.h"
+#include "math/Utl.h"
 #include "obj/Data.h"
 #include "obj/Object.h"
 #include "os/File.h"
@@ -28,6 +29,8 @@ void CopyBottomMip(RndBitmap &dst, const RndBitmap &src) {
         srcPtr = srcPtr->nextMip();
     dst.Create(*srcPtr, srcPtr->Bpp(), srcPtr->Order(), nullptr);
 }
+
+#pragma region RndTex
 
 RndTex::RndTex()
     : mMipMapK(-8.0f), mType(kRegular), mWidth(0), mHeight(0), mBpp(32), mFilepath(),
@@ -81,8 +84,9 @@ BEGIN_COPYS(RndTex)
     BEGIN_COPYING_MEMBERS
         if (ty != kCopyFromMax) {
             COPY_MEMBER(mMipMapK)
-        } else if (mType != c->mType)
+        } else if (mType != c->mType) {
             return;
+        }
         PresyncBitmap();
         COPY_MEMBER(unk2c)
         COPY_MEMBER(mType)
@@ -97,6 +101,11 @@ BEGIN_COPYS(RndTex)
     END_COPYING_MEMBERS
 END_COPYS
 
+BEGIN_LOADS(RndTex)
+    PreLoad(bs);
+    PostLoad(bs);
+END_LOADS
+
 void RndTex::Print() {
     TheDebug << "   width: " << mWidth << "\n";
     TheDebug << "   height: " << mHeight << "\n";
@@ -104,6 +113,118 @@ void RndTex::Print() {
     TheDebug << "   mipMapK: " << mMipMapK << "\n";
     TheDebug << "   file: " << mFilepath << "\n";
     TheDebug << "   type: " << mType << "\n";
+}
+
+INIT_REVS(11, 0)
+
+void RndTex::PreLoad(BinStream &bs) {
+    LOAD_REVS(bs)
+    ASSERT_REVS(11, 0)
+    if (d.rev > 8) {
+        LOAD_SUPERCLASS(Hmx::Object)
+    }
+    if (d.rev == 1) {
+        short w, h;
+        d >> w;
+        d >> h;
+        mWidth = w;
+        mHeight = h;
+    } else {
+        d >> mWidth;
+        d >> mHeight;
+    }
+    d >> mBpp;
+    d >> mFilepath;
+    if (d.rev > 9) {
+        if (!bs.Cached()) {
+            mLoader = new FileLoader(
+                mFilepath,
+                CacheResource(mFilepath.c_str(), this),
+                kLoadFront,
+                0,
+                false,
+                true,
+                nullptr,
+                nullptr
+            );
+        }
+    }
+    d.PushRev(this);
+}
+
+void RndTex::PostLoad(BinStream &bs) {
+    BinStreamRev d(bs, bs.PopRev(this));
+    if (d.rev < 5) {
+        int cubemapmask;
+        bs >> cubemapmask;
+        if (cubemapmask != 0 && !mFilepath.empty()) {
+            if (cubemapmask & 1) {
+                MILO_NOTIFY("%s: kTransparentWhite no longer supported", Name());
+            } else if (cubemapmask & 2) {
+                mFilepath.insert(mFilepath.find('.'), "_tb");
+            } else if (cubemapmask & 0x10) {
+                mFilepath.insert(mFilepath.find('.'), "_ga");
+            } else if (cubemapmask & 0x20) {
+                mFilepath.insert(mFilepath.find('.'), "_gw");
+            } else if (cubemapmask & 0x40) {
+                MILO_NOTIFY("%s: kCubeMap no longer supported", Name());
+            }
+        }
+    }
+    if (d.rev > 0 && d.rev < 3) {
+        bool b;
+        d >> b;
+    }
+    if (d.rev > 7) {
+        d >> mMipMapK;
+    } else if (d.rev > 3) {
+        int i;
+        d >> i;
+        mMipMapK = i / 16.0f;
+    }
+    if (d.rev > 6) {
+        d >> (int &)mType;
+    } else if (d.rev > 5) {
+        Type types[5] = { kRegular, kRendered, kMovie, kBackBuffer, kFrontBuffer };
+        int i;
+        d >> i;
+        mType = types[i];
+    } else if (d.rev > 4) {
+        bool b;
+        d >> b;
+        mType = b ? kRendered : kRegular;
+    }
+    bool b7 = false;
+    if (d.rev > 7) {
+        d >> b7;
+    }
+    if (d.rev > 10) {
+        d >> mOptimizeForPS3;
+    }
+    if (bs.Cached()) {
+        PresyncBitmap();
+        if (UseBottomMip()) {
+            RndBitmap bmap;
+            d >> bmap;
+            CopyBottomMip(mBitmap, bmap);
+        } else {
+            d >> mBitmap;
+        }
+        if (!mBitmap.HasName() && mType == kRegular) {
+            MILO_LOG(
+                "Bitmap %s, does not have name set, it will not be cached!\n", Name()
+            );
+        }
+        mNumMips = mBitmap.NumMips();
+        SyncBitmap();
+    } else if (mFilepath.empty() || mType != kRegular) {
+        SetBitmap(mWidth, mHeight, mBpp, mType, b7, nullptr);
+    } else if (TheLoadMgr.GetPlatform() != kPlatformNone) {
+        SetBitmap(mLoader);
+        mLoader = nullptr;
+    } else {
+        RELEASE(mLoader);
+    }
 }
 
 void RndTex::LockBitmap(RndBitmap &bmap, int i) {
@@ -176,25 +297,17 @@ void RndTex::SaveBitmap(const char *bmp) {
 
 void RndTex::PlatformBppOrder(const char *path, int &bpp, int &order, bool hasAlpha) {
     bool bbb;
-
     switch (TheLoadMgr.GetPlatform()) {
-    case kPlatformWii:
-        order = 8;
-        if (hasAlpha) {
-            order = 0x148;
-            bpp = 8;
-        } else
-            bpp = 4;
-        order |= 0x40;
+    case kPlatformNone:
+        order = 0;
         break;
-
     case kPlatformXBox:
     case kPlatformPC:
     case kPlatformPS3:
         bbb = path && strstr(path, "_norm");
-
         if (bbb) {
-            if (TheLoadMgr.GetPlatform() == kPlatformXBox)
+            Platform plat = TheLoadMgr.GetPlatform();
+            if (plat == kPlatformXBox)
                 order = 0x20;
             else if (TheLoadMgr.GetPlatform() == kPlatformPS3)
                 order = 8;
@@ -212,54 +325,80 @@ void RndTex::PlatformBppOrder(const char *path, int &bpp, int &order, bool hasAl
         else if (bpp < 0x10)
             bpp = 0x10;
         break;
-
+    case kPlatformWii:
+        order = 8;
+        if (hasAlpha) {
+            order |= 0x140;
+            bpp = 8;
+        } else {
+            bpp = 4;
+        }
+        order |= 0x40;
+        break;
     case kPlatform3DS:
         order = 0x600;
         bpp = hasAlpha ? 8 : 4;
         break;
-
-    case kPlatformNone:
-        order = 0;
-        break;
-
     default:
         MILO_FAIL("bad input platform value!");
         break;
     }
 }
 
+bool RndTex::PowerOf2() { return ::PowerOf2(mWidth) && ::PowerOf2(mHeight); }
+
 const char *CheckDim(int dim, RndTex::Type ty, bool b) {
-    const char *ret = 0;
-    if (dim == 0)
-        return ret;
-    if (b) {
-        if (ty == RndTex::kMovie) {
-            if ((dim % 16) != 0) {
-                ret = "%s: dimensions not multiple of 16";
+    const char *err = nullptr;
+    if (dim == 0) {
+        return nullptr;
+    } else {
+        if (b) {
+            if (ty == RndTex::kMovie) {
+                if (dim % 16 != 0) {
+                    err = "%s: dimensions not multiple of 16";
+                }
+            } else if (dim % 8 != 0) {
+                err = "%s: dimensions not multiple of 8";
             }
-        } else if ((dim % 8) != 0) {
-            ret = "%s: dimensions not multiple of 8";
         }
+        if (GetGfxMode() == kOldGfx) {
+            if (b && dim > 0x400) {
+                err = "%s: dimensions greater than 1024";
+            } else if (dim > 0x1000) {
+                err = "%s: dimensions greater than 4096";
+            }
+        }
+        if (b && !::PowerOf2(dim)) {
+            err = "%s: dimensions are not power-of-2";
+        }
+        return err;
     }
-    if (GetGfxMode() == 0) {
-        if ((b != 0) && (dim > 0x400)) {
-            ret = "%s: dimensions greater than 1024";
-        } else if (dim > 0x1000) {
-            ret = "%s: dimensions greater than 4096";
+}
+
+const char *
+RndTex::CheckSize(int width, int height, int bpp, int numMips, Type ty, bool file) {
+    if (ty == kDepthVolumeMap || ty == kDensityMap || (ty & 0x1000) || (ty & 0x2000)) {
+        return 0;
+    } else {
+        const char *err = CheckDim(width, ty, file);
+        if (!err) {
+            err = CheckDim(height, ty, file);
+            if (!err && bpp != 4 && bpp != 8 && bpp != 16 && bpp != 24 && bpp != 32) {
+                err = "%s: invalid bpp";
+            }
         }
+        int sizeBytes = (width * height * bpp) >> 3;
+        if (GetGfxMode() == kOldGfx && !err) {
+            if (sizeBytes > 0x7FFF0) {
+                err = "%s: size over 524,272 bytes";
+            } else if (sizeBytes & 0xF) {
+                err = "%s: size not multiple of 16 bytes";
+            } else if (numMips > 6) {
+                err = "%s: more than 6 mip levels";
+            }
+        }
+        return err;
     }
-    if (b) {
-        bool isPowerOf2;
-        if (dim < 0) {
-            isPowerOf2 = false;
-        } else {
-            isPowerOf2 = (((dim - 1) & dim) == 0);
-        }
-        if (!isPowerOf2) {
-            ret = "%s: dimensions are not power-of-2";
-        }
-    }
-    return ret;
 }
 
 void RndTex::SetBitmap(FileLoader *fl) {
@@ -343,19 +482,19 @@ void RndTex::SetBitmap(int w, int h, int bpp, Type ty, bool useMips, const char 
             }
         }
     } else {
-        char *err = (char *)CheckSize(mWidth, mHeight, mBpp, mNumMips, mType, false);
-        if (err)
-            TheDebug.Notify(MakeString(err, Name()));
-        else {
-            if (!(mType & 0x204U)) {
-                int bppOut = mBpp;
-                int orderOut;
-                PlatformBppOrder(path, bppOut, orderOut, true);
-                mBitmap.Create(mWidth, mHeight, 0, bppOut, orderOut, 0, 0, 0);
-                if (useMips) {
-                    mBitmap.GenerateMips();
-                    mNumMips = mBitmap.NumMips();
-                }
+        const char *err = CheckSize(mWidth, mHeight, mBpp, mNumMips, mType, false);
+        if (err) {
+            MILO_NOTIFY(err, Name());
+        } else if (!(mType & 0x204)) {
+            int platformBpp = mBpp;
+            int platformOrder;
+            PlatformBppOrder(path, platformBpp, platformOrder, true);
+            mBitmap.Create(
+                mWidth, mHeight, 0, platformBpp, platformOrder, nullptr, nullptr, nullptr
+            );
+            if (useMips) {
+                mBitmap.GenerateMips();
+                mNumMips = mBitmap.NumMips();
             }
         }
     }
@@ -404,217 +543,33 @@ void RndTex::SetBitmap(const RndBitmap &bmap, const char *path, bool keepFormat,
         if (!keepFormat) {
             PlatformBppOrder(path, bppOut, orderOut, bmap.IsTranslucent());
         }
-        mBitmap.Create(bmap, bppOut, orderOut, 0);
+        mBitmap.Create(bmap, bppOut, orderOut, nullptr);
     }
     SyncBitmap();
 }
 
-#ifndef HX_NATIVE
-void RndTex::PresyncBitmap() {}
-
-void RndTex::SyncBitmap() {}
-#endif
-
-void RndTex::SetPowerOf2() {
-    // mIsPowerOf2 field was removed in DC3 - no-op
-}
-
-bool RndTex::PowerOf2() {
-    auto& width = mWidth;
-    bool hPow2 = mHeight <= 0 || (((mHeight - 1) & mHeight) == 0);
-    bool wPow2 = width <= 0.0 || (((width - 1) & width) == 0);
-    return wPow2 && hPow2;
-}
-
-#ifndef HX_NATIVE
-// Load is in CubeTex.cpp (cross-unit)
-
-void RndTex::PreLoad(BinStream &bs) {
-    int revData;
-    bs.ReadEndian(&revData, 4);
-    int rev = revData & 0xffff;
-    int altRev = (unsigned int)revData >> 0x10;
-    if (rev > 11) {
-        MILO_WARN(
-            "%s can't load new %s version %d > %d",
-            PathName(this),
-            ClassName(),
-            rev,
-            (unsigned short)11
-        );
-    }
-    if (altRev > 0) {
-        MILO_FAIL(
-            "%s can't load new %s alt version %d > %d",
-            PathName(this),
-            ClassName(),
-            altRev,
-            (unsigned short)0
-        );
-    }
-    if (rev > 8) {
-        Hmx::Object::Load(bs);
-    }
-    if (rev == 1) {
-        short w, h;
-        bs.ReadEndian(&w, 2);
-        bs.ReadEndian(&h, 2);
-        mWidth = w;
-        mHeight = h;
-    } else {
-        bs >> mWidth >> mHeight;
-    }
-    bs >> mBpp;
-    bs >> mFilepath;
-    if (rev > 9 && !bs.Cached()) {
-        mLoader = new FileLoader(
-            mFilepath,
-            CacheResource(mFilepath.c_str(), this),
-            kLoadFront,
-            0,
-            false,
-            true,
-            nullptr,
-            nullptr
-        );
-    }
-    bs.PushRev(packRevs(altRev, rev), this);
-}
-
-void RndTex::PostLoad(BinStream &bs) {
-    BinStreamRev d(bs, bs.PopRev(this));
-    int rev = d.rev;
-
-    // Old cubemap mask handling (pre-rev 5)
-    if (rev < 5) {
-        int cubemapMask;
-        d >> cubemapMask;
-        if (cubemapMask != 0 && !mFilepath.empty()) {
-            if (cubemapMask & 1)
-                MILO_WARN("%s: kTransparentWhite no longer supported", Name());
-            else if (cubemapMask & 2) {
-                mFilepath.insert(mFilepath.find('.'), "_tb");
-            } else if (cubemapMask & 0x10) {
-                mFilepath.insert(mFilepath.find('.'), "_ga");
-            } else if (cubemapMask & 0x20) {
-                mFilepath.insert(mFilepath.find('.'), "_gw");
-            } else if (cubemapMask & 0x40) {
-                MILO_WARN("%s: kCubeMap no longer supported", Name());
-            }
-        }
-    }
-    // Legacy bool (rev 1-2)
-    if (rev != 0 && rev < 3) {
-        bool b;
-        d >> b;
-    }
-    // MipMapK
-    if (rev > 7) {
-        d >> mMipMapK;
-    } else if (rev > 3) {
-        int mipK;
-        d >> mipK;
-        mMipMapK = mipK / 16.0f;
-    }
-    // Type
-    if (rev > 6) {
-        d >> (int &)mType;
-    } else if (rev > 5) {
-        Type types[5] = { kRegular, kRendered, kMovie, kBackBuffer, kFrontBuffer };
-        int idx;
-        d >> idx;
-        mType = types[idx];
-    } else if (rev > 4) {
-        bool wasRendered;
-        d >> wasRendered;
-        mType = wasRendered ? kRendered : kRegular;
-    }
-    // Skip extra bool (rev 7 era)
-    if (rev > 7) {
-        bool b;
-        d >> b;
-    }
-    // OptimizeForPS3 (rev 10+)
-    if (rev > 10) {
-        bool b;
-        d >> b;
-        mOptimizeForPS3 = b;
-    }
-
-    if (bs.Cached()) {
-        PresyncBitmap();
-        if (UseBottomMip()) {
-            RndBitmap tempBitmap;
-            tempBitmap.Load(bs);
-            CopyBottomMip(mBitmap, tempBitmap);
-        } else {
-            mBitmap.Load(bs);
-        }
-        if (mBitmap.Width() == 0 && mType == kRegular) {
-            MILO_LOG(
-                "Bitmap %s, does not have name set, it will not be cached!\n",
-                mFilepath.c_str()
-            );
-        }
-        mNumMips = mBitmap.NumMips();
-        SyncBitmap();
-    } else if (mFilepath.empty() || mType != kRegular) {
-        SetBitmap(mWidth, mHeight, mBpp, mType, false, nullptr);
-    } else if (TheLoadMgr.GetPlatform() != kPlatformNone) {
-        SetBitmap(mLoader);
-        mLoader = nullptr;
-    } else {
-        RELEASE(mLoader);
-    }
-}
-#endif // !HX_NATIVE
-
-const char *
-RndTex::CheckSize(int width, int height, int bpp, int numMips, Type ty, bool file) {
-    const char *ret = nullptr;
-    if (ty == kDepthVolumeMap || ty == kDensityMap || (ty & kDeviceTexture)
-        || (ty & kRegularLinear))
-        return nullptr;
-    ret = CheckDim(width, ty, file);
-    if (!ret)
-        ret = CheckDim(height, ty, file);
-    if (!ret && bpp != 4 && bpp != 8 && bpp != 16 && bpp != 24 && bpp != 32) {
-        ret = "%s: invalid bpp";
-    }
-    int sizeBytes = (width * height * bpp) >> 3;
-    if (GetGfxMode() == 0) {
-        if (!ret && sizeBytes > 0x7FFF0) {
-            ret = "%s: size over 524,272 bytes";
-        }
-        if (!ret && (sizeBytes & 0xf)) {
-            ret = "%s: size not multiple of 16 bytes";
-        }
-        if (!ret && numMips > 6) {
-            ret = "%s: more than 6 mip levels";
-        }
-    }
-    return ret;
-}
-
-DataNode RndTex::OnSetBitmap(const DataArray *arr) {
-    if (arr->Size() == 3) {
-        FilePath path(arr->Str(2));
-        SetBitmap(path);
-    } else {
-        SetBitmap(
-            arr->Int(2),
-            arr->Int(3),
-            arr->Int(4),
-            (Type)arr->Int(5),
-            arr->Int(6),
-            nullptr
-        );
-    }
-    return 0;
-}
 
 DataNode RndTex::OnSetRendered(const DataArray *a) {
     MILO_ASSERT(IsRenderTarget(), 0x3BB);
     SetBitmap(mWidth, mHeight, mBpp, mType, mNumMips > 0, nullptr);
     return 0;
 }
+
+DataNode RndTex::OnSetBitmap(const DataArray *da) {
+    if (da->Size() == 3) {
+        FilePath p(da->Str(2));
+        SetBitmap(p);
+    } else {
+        SetBitmap(
+            da->Int(2),
+            da->Int(3),
+            da->Int(4),
+            (RndTex::Type)da->Int(5),
+            da->Int(6),
+            nullptr
+        );
+    }
+    return 0;
+}
+
+#pragma endregion

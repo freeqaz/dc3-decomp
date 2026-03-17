@@ -6,6 +6,10 @@
 
 UIListHighlight::UIListHighlight() : mMesh(this) {}
 
+BEGIN_HANDLERS(UIListHighlight)
+    HANDLE_SUPERCLASS(UIListWidget)
+END_HANDLERS
+
 BEGIN_PROPSYNCS(UIListHighlight)
     SYNC_PROP(mesh, mMesh)
     SYNC_SUPERCLASS(UIListWidget)
@@ -30,7 +34,7 @@ BEGIN_LOADS(UIListHighlight)
     LOAD_REVS(bs)
     ASSERT_REVS(0, 0)
     LOAD_SUPERCLASS(UIListWidget)
-    bs >> mMesh;
+    d >> mMesh;
 END_LOADS
 
 void UIListHighlight::Draw(
@@ -41,19 +45,14 @@ void UIListHighlight::Draw(
     Box *box,
     DrawCommand cmd
 ) {
-    if (!mMesh || cmd == kDrawFirst)
-        return;
-
-    Transform xfm1 = mMesh->WorldXfm();
-    Transform xfm2 = xfm1;
-    if (ParentList()) {
-        ParentList()->AdjustTransSelected(xfm2);
+    if (mMesh && cmd != kDrawFirst) {
+        Transform tf70 = mMesh->WorldXfm();
+        Transform tfb0 = tf70;
+        if (ParentList()) {
+            ParentList()->AdjustTransSelected(tfb0);
+        }
+        CalcXfm(tf, drawstate.mHighlightPos, tfb0);
+        DrawMesh(mMesh, drawstate.mHighlightElementState, compstate, tfb0, box);
+        mMesh->SetWorldXfm(tf70);
     }
-    CalcXfm(tf, drawstate.mHighlightPos, xfm2);
-    DrawMesh(mMesh, (UIListWidgetState)drawstate.mHighlightElementState, compstate, xfm2, box);
-    mMesh->SetWorldXfm(xfm1);
 }
-
-BEGIN_HANDLERS(UIListHighlight)
-    HANDLE_SUPERCLASS(UIListWidget)
-END_HANDLERS

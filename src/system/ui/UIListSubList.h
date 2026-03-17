@@ -27,7 +27,7 @@ public:
     NEW_OBJ(UIListSubList)
     OBJ_MEM_OVERLOAD(0x11)
 
-    virtual RndTransformable *RootTrans();
+    virtual RndTransformable *RootTrans() { return mList; }
 
     static int sNextFillSelection;
 
@@ -51,6 +51,7 @@ public:
 
     MEM_OVERLOAD(UIListSlotElement, 0x1e)
 
+private:
     UIListSubList *mSlot;
     UIList *mList;
 };

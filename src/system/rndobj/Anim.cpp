@@ -60,9 +60,9 @@ BEGIN_LOADS(RndAnimatable)
     LOAD_REVS(bs)
     ASSERT_REVS(4, 0)
     if (d.rev > 1)
-        bs >> mFrame;
+        d >> mFrame;
     if (d.rev > 3) {
-        bs >> (int &)mRate;
+        d >> (int &)mRate;
     } else if (d.rev > 2) {
         bool rate;
         d >> rate;
@@ -70,7 +70,7 @@ BEGIN_LOADS(RndAnimatable)
     }
     if (d.rev < 1) {
         int count;
-        bs >> count;
+        d >> count;
         float theScale = 1.0f;
         float theOffset = 0.0f;
         float theMin = 0.0f;
@@ -79,23 +79,23 @@ BEGIN_LOADS(RndAnimatable)
         int read;
         int unused1, unused2, unused3, unused4, unused5, unused6, unused7;
         while (count-- != 0) {
-            bs >> read;
+            d >> read;
             switch (read) {
             case 0:
-                bs >> theScale >> theOffset;
+                d >> theScale >> theOffset;
                 break;
             case 1:
-                bs >> theMin >> theMax;
+                d >> theMin >> theMax;
                 d >> theLoop;
                 break;
             case 2:
-                bs >> unused1 >> unused2;
+                d >> unused1 >> unused2;
                 break;
             case 3:
-                bs >> unused3 >> unused4;
+                d >> unused3 >> unused4;
                 break;
             case 4:
-                bs >> unused5 >> unused6 >> unused7;
+                d >> unused5 >> unused6 >> unused7;
                 break;
             default:
                 break;
@@ -112,7 +112,7 @@ BEGIN_LOADS(RndAnimatable)
             filtObj->SetProperty("loop", theLoop);
         }
         ObjPtrList<RndAnimatable> animList(this);
-        bs >> animList;
+        d >> animList;
         RndGroup *theGroup = dynamic_cast<RndGroup *>(this);
         FOREACH (it, animList) {
             if (theGroup)
@@ -186,10 +186,8 @@ Task *RndAnimatable::Animate(
         this, StartFrame(), EndFrame(), FramesPerUnit(), Loop(), blend, o, e, f4, b5
     );
     ObjPtr<AnimTask> taskPtr(nullptr, task);
-    if (wait) {
-        if (taskPtr->BlendTask()) {
-            delay += taskPtr->BlendTask()->TimeUntilEnd();
-        }
+    if (wait && taskPtr->BlendTask()) {
+        delay += taskPtr->BlendTask()->TimeUntilEnd();
     }
     if (delay == 0) {
         SetFrame(StartFrame(), 1);
@@ -237,7 +235,7 @@ Task *RndAnimatable::Animate(
     Symbol type,
     Hmx::Object *listener,
     EaseType easeType,
-    float f9,
+    float easePower,
     bool b10
 ) {
     static Symbol dest("dest");
@@ -252,7 +250,7 @@ Task *RndAnimatable::Animate(
         fpu = scale * gRateFpu[rate];
 
     AnimTask *task = new AnimTask(
-        this, start, end, fpu, type == loop, blend, listener, easeType, f9, b10
+        this, start, end, fpu, type == loop, blend, listener, easeType, easePower, b10
     );
     ObjPtr<AnimTask> taskPtr(nullptr, task);
     if (wait) {
@@ -280,14 +278,14 @@ AnimTask::AnimTask(
     float blend,
     Hmx::Object *listener,
     EaseType easeType,
-    float f9,
-    bool b10
+    float easePower,
+    bool wait
 )
     : mAnim(this), mListener(this), mAnimTarget(this), mBlendTask(this),
-      mBlendPeriod(blend), mLoop(loop), mEasePower(f9) {
+      mBlendPeriod(blend), mLoop(loop), mEasePower(easePower) {
     mBlending = false;
     mBlendTime = 0;
-    mWait = b10;
+    mWait = wait;
     mActive = true;
     mEaseFunc = GetEaseFunction(easeType);
     mListener = listener;
@@ -310,8 +308,7 @@ AnimTask::AnimTask(
         FOREACH (it, target->Refs()) {
             Hmx::Object *owner = it->RefOwner();
             if (owner && owner->ClassName() == StaticClassName()) {
-                AnimTask *task = static_cast<AnimTask *>(owner);
-                mBlendTask = task;
+                mBlendTask = static_cast<AnimTask *>(owner);
                 MILO_ASSERT(mBlendTask != this, 0x231);
                 break;
             }
@@ -326,19 +323,19 @@ AnimTask::AnimTask(
 
 AnimTask::~AnimTask() { TheTaskMgr.QueueTaskDelete(mBlendTask); }
 
-bool AnimTask::Replace(ObjRef *ref, Hmx::Object *o) {
-    if (ref == &mAnim) {
+bool AnimTask::Replace(ObjRef *from, Hmx::Object *to) {
+    if (from == &mAnim) {
         RndAnimatable *myAnim = Anim();
-        if (!mAnim.SetObj(o)) {
+        if (!mAnim.SetObj(to)) {
             if (mBlendTask && mBlendTask->Anim() == myAnim) {
                 mBlendTask = nullptr;
             }
-            Hmx::Object::Replace(ref, o);
+            Hmx::Object::Replace(from, to);
             TheTaskMgr.QueueTaskDelete(this);
         }
         return true;
     } else
-        return Hmx::Object::Replace(ref, o);
+        return Hmx::Object::Replace(from, to);
 }
 
 float AnimTask::TimeUntilEnd() {
@@ -458,18 +455,28 @@ DataNode RndAnimatable::OnConvertFrames(DataArray *arr) {
 }
 
 DataNode RndAnimatable::OnAnimate(DataArray *arr) {
-    float local_blend = 0.0f;
+    float local_blend; // 0x88
+    float local_ease_power; // 0x84
+    EaseType local_ease; // 0x80
+    TaskUnits local_units; // 0x7c
+    const char *local_name; // 0x78
+    float local_delay; // 0x74
+    bool local_wait; // 0x72
+    bool local_wrap; // 0x71
+    bool animTaskLoop; // 0x70
+
+    local_blend = 0.0f;
     float animTaskStart = StartFrame();
     float animTaskEnd = EndFrame();
-    bool animTaskLoop = Loop();
+    animTaskLoop = Loop();
     float p = FramesPerUnit();
-    TaskUnits local_units = Units();
-    const char *local_name = nullptr;
-    float local_delay = 0.0f;
-    bool local_wrap = false;
-    bool local_wait = false;
-    float local_ease_power = 2;
-    EaseType local_ease = kEaseLinear;
+    local_units = Units();
+    local_delay = 0.0f;
+    local_name = nullptr;
+    local_wait = false;
+    local_wrap = false;
+    local_ease_power = 2;
+    local_ease = kEaseLinear;
     Hmx::Object *local_listener = nullptr;
 
     static Symbol blend("blend");
@@ -526,7 +533,8 @@ DataNode RndAnimatable::OnAnimate(DataArray *arr) {
     if (periodArr) {
         p = periodArr->Float(1);
         MILO_ASSERT(p, 0x1C5);
-        p = fabsf(animTaskEnd - animTaskStart) / p;
+        float fabs = std::fabs(animTaskEnd - animTaskStart);
+        p = fabs / p;
     }
     AnimTask *task = new AnimTask(
         this,
@@ -545,17 +553,14 @@ DataNode RndAnimatable::OnAnimate(DataArray *arr) {
         MILO_ASSERT(DataThis(), 0x1CD);
         taskPtr->SetName(local_name, DataThis()->DataDir());
     }
-    if (local_wait && taskPtr) {
-        if (taskPtr->BlendTask()) {
-            if (taskPtr->BlendTask()->Anim()->GetRate() != GetRate()) {
-                MILO_NOTIFY("%s: need same rate to wait", Name());
-            } else
-                local_delay = taskPtr->BlendTask()->TimeUntilEnd();
-        }
+    if (local_wait && taskPtr->BlendTask()) {
+        if (taskPtr->BlendTask()->Anim()->GetRate() != GetRate()) {
+            MILO_NOTIFY("%s: need same rate to wait", Name());
+        } else
+            local_delay = taskPtr->BlendTask()->TimeUntilEnd();
     }
     static Symbol trigger_anim_task("trigger_anim_task");
-    if (!Property(trigger_anim_task, false)
-        || Property(trigger_anim_task, true)->Int() != 0) {
+    if (!Property(trigger_anim_task, false) || Property(trigger_anim_task)->Int() != 0) {
         TheTaskMgr.Start(taskPtr, local_units, local_delay);
     }
 

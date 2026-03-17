@@ -29,7 +29,7 @@ DataNode OnTestDrawGroups(DataArray *);
 
 void ResetColors(std::vector<Hmx::Color> &colors, int newNumColors);
 void RndScaleObject(Hmx::Object *, float, float);
-
+bool AnimContains(const RndAnimatable *anim1, const RndAnimatable *anim2);
 float ConvertFov(float, float);
 void PreMultiplyAlpha(Hmx::Color &);
 

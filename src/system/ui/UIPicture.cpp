@@ -20,7 +20,7 @@ UIPicture::~UIPicture() {
 }
 
 BEGIN_PROPSYNCS(UIPicture)
-    SYNC_PROP_SET(tex_file, mTexFile, SetTex(FilePath(_val.Str())))
+    SYNC_PROP_SET(tex_file, mTexFile, SetTex(_val.Str()))
     SYNC_PROP_SET(in_anim, GetInAnim(), SetInAnim(_val.Obj<RndAnimatable>()))
     SYNC_PROP_SET(out_anim, GetOutAnim(), SetOutAnim(_val.Obj<RndAnimatable>()))
     SYNC_PROP_MODIFY(mesh, mMesh, HookupMesh())
@@ -52,13 +52,9 @@ void UIPicture::SetTypeDef(DataArray *da) {
     UIComponent::SetTypeDef(da);
     if (da) {
         DataArray *findtex = da->FindArray("tex_file", false);
-        if (findtex) {
-            auto _tmp2 = findtex->Str(1);
-            auto _tmp1 = strlen(_tmp2);
-            if (_tmp1) {
-                FilePath fp(FilePath(FileGetPath(findtex->File()), findtex->Str(1)));
-                SetTex(fp);
-            }
+        if (findtex && strlen(findtex->Str(1)) != 0) {
+            FilePath fp(FileGetPath(findtex->File()), findtex->Str(1));
+            SetTex(fp);
         }
     }
 }

@@ -42,6 +42,7 @@ public:
 
     MEM_OVERLOAD(UIListSlotElement, 0x1e);
 
-    class UIListCustom *mOwner;
+private:
+    UIListCustom *mOwner;
     Hmx::Object *mPtr;
 };

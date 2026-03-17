@@ -90,7 +90,7 @@ public:
     const std::vector<UIListWidget *> &GetWidgets() const;
     UIList *ChildList();
 
-    int NumDisplay() const { return mListState.NumDisplay(); }
+    int NumDisplay() const;
     int GridSpan() const { return mListState.GridSpan(); }
     bool Circular() const { return mListState.Circular(); }
     float Speed() const;

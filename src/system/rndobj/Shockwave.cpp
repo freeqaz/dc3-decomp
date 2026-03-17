@@ -5,7 +5,41 @@
 #include "rndobj/Trans.h"
 #include "utl/BinStream.h"
 
-RndShockwave *RndShockwave::sSelected;
+RndShockwave *RndShockwave::sSelected = nullptr;
+static const float sWavelength = 10;
+
+RndShockwave::RndShockwave()
+    : mAutoSelect(0), mRadius(0), mAmplitude(0), mWavelength(sWavelength) {}
+
+BEGIN_HANDLERS(RndShockwave)
+    HANDLE_SUPERCLASS(RndPollable)
+    HANDLE_SUPERCLASS(RndTransformable)
+    HANDLE_SUPERCLASS(Hmx::Object)
+END_HANDLERS
+
+BEGIN_PROPSYNCS(RndShockwave)
+    SYNC_PROP_SET(
+        selected, sSelected == this, sSelected = _val.Int() != 0 ? this : nullptr
+    )
+    SYNC_PROP(auto_select, mAutoSelect)
+    SYNC_PROP(radius, mRadius)
+    SYNC_PROP(amplitude, mAmplitude)
+    SYNC_PROP(wavelength, mWavelength)
+    SYNC_SUPERCLASS(RndPollable)
+    SYNC_SUPERCLASS(RndTransformable)
+    SYNC_SUPERCLASS(Hmx::Object)
+END_PROPSYNCS
+
+BEGIN_SAVES(RndShockwave)
+    SAVE_REVS(0, 0)
+    SAVE_SUPERCLASS(Hmx::Object)
+    SAVE_SUPERCLASS(RndTransformable)
+    SAVE_SUPERCLASS(RndPollable)
+    bs << mAutoSelect;
+    bs << mRadius;
+    bs << mAmplitude;
+    bs << mWavelength;
+END_SAVES
 
 BEGIN_COPYS(RndShockwave)
     if (this != o) {
@@ -22,6 +56,20 @@ BEGIN_COPYS(RndShockwave)
     }
 END_COPYS
 
+INIT_REVS(0, 0)
+
+BEGIN_LOADS(RndShockwave)
+    LOAD_REVS(bs)
+    ASSERT_REVS(0, 0)
+    LOAD_SUPERCLASS(Hmx::Object)
+    LOAD_SUPERCLASS(RndTransformable)
+    LOAD_SUPERCLASS(RndPollable)
+    d >> mAutoSelect;
+    d >> mRadius;
+    d >> mAmplitude;
+    d >> mWavelength;
+END_LOADS
+
 void RndShockwave::Enter() {
     if (mAutoSelect)
         sSelected = this;
@@ -32,92 +80,11 @@ void RndShockwave::Exit() {
         sSelected = nullptr;
 }
 
-RndShockwave::RndShockwave()
-    : mAutoSelect(0), mRadius(0), mAmplitude(0), mWavelength(10) {}
-
-void RndShockwave::Save(BinStream &bs) {
-    bs << 0;
-    SAVE_SUPERCLASS(Hmx::Object)
-    SAVE_SUPERCLASS(RndTransformable)
-    SAVE_SUPERCLASS(RndPollable)
-    bs << mAutoSelect;
-    bs << mRadius;
-    bs << mAmplitude;
-    bs << mWavelength;
-}
-
-
-void RndShockwave::Load(BinStream &bs) {
-    int revs;
-    bs >> revs;
-    BinStreamRev d(bs, revs);
-    static const unsigned short gRevs[4] = { 0, 0, 0, 0 };
-    if (d.rev > 0) {
-        MILO_FAIL(
-            "%s can't load new %s version %d > %d",
-            PathName(this),
-            ClassName(),
-            d.rev,
-            gRevs[0]
-        );
-    }
-    if (d.altRev > 0) {
-        MILO_FAIL(
-            "%s can't load new %s alt version %d > %d",
-            PathName(this),
-            ClassName(),
-            d.altRev,
-            gRevs[2]
-        );
-    }
-    Hmx::Object::Load(d.stream);
-    RndTransformable::Load(d.stream);
-    RndPollable::Load(d.stream);
-    d >> mAutoSelect;
-    d >> mRadius;
-    d >> mAmplitude;
-    d >> mWavelength;
-}
-
-BEGIN_PROPSYNCS(RndShockwave)
-    SYNC_PROP_SET(
-        selected, this == sSelected, sSelected = _val.Int() != 0 ? this : nullptr
-    )
-    SYNC_PROP(auto_select, mAutoSelect)
-    SYNC_PROP(radius, mRadius)
-    SYNC_PROP(amplitude, mAmplitude)
-    SYNC_PROP(wavelength, mWavelength)
-    SYNC_SUPERCLASS(RndPollable)
-    SYNC_SUPERCLASS(RndTransformable)
-    SYNC_SUPERCLASS(Hmx::Object)
-END_PROPSYNCS
-
-BEGIN_HANDLERS(RndShockwave)
-    HANDLE_SUPERCLASS(RndPollable)
-    HANDLE_SUPERCLASS(RndTransformable)
-    HANDLE_SUPERCLASS(Hmx::Object)
-END_HANDLERS
-
 void RndShockwave::PrepareShader(float amplitude_scale) {
-    // Set shader constant 0x1E: shockwave center position in world space
-    const Vector3 &world_pos = WorldXfm().v;
-    Vector4 pos;
-    pos.x = world_pos.x;
-    pos.y = world_pos.y;
-    pos.z = world_pos.z;
-    pos.w = 0.0f;
-    TheShaderMgr.SetVConstant(kVS_ShockwavePos, pos);
-
-    // Set shader constant 0x1F: shockwave normal (z-axis of transform)
-    const Vector3 &world_normal = WorldXfm().m.z;
-    Vector4 normal;
-    normal.x = world_normal.x;
-    normal.y = world_normal.y;
-    normal.z = world_normal.z;
-    normal.w = 0.0f;
-    TheShaderMgr.SetVConstant(kVS_ShockwaveNormal, normal);
-
-    // Set shader constant 0x20: shockwave parameters (radius, amplitude, frequency)
+    const Vector3 &v = WorldXfm().v;
+    TheShaderMgr.SetVConstant(kVS_ShockwavePos, Vector4(v.x, v.y, v.z, 0));
+    const Vector3 &mz = WorldXfm().m.z;
+    TheShaderMgr.SetVConstant(kVS_ShockwaveNormal, Vector4(mz.x, mz.y, mz.z, 0));
     TheShaderMgr.SetVConstant(
         kVS_ShockwaveParams, Vector4(mRadius, mAmplitude * amplitude_scale, 1.0f / mWavelength, 0.0f)
     );

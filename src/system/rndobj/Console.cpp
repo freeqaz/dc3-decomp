@@ -1,12 +1,13 @@
 #include "rndobj/Console.h"
+#include "obj/Data.h"
 #include "obj/DataFile.h"
 #include "obj/DataFunc.h"
 #include "obj/Msg.h"
+#include "os/Keyboard.h"
+#include "os/System.h"
 #ifndef HX_NATIVE
 #include "os/HolmesClient.h"
 #endif
-#include "os/Keyboard.h"
-#include "os/System.h"
 #include "rndobj/Rnd.h"
 #include "utl/Cheats.h"
 #include "utl/Std.h"
@@ -16,9 +17,168 @@
 static void HolmesClientSendMessage(const Message&) {}
 #endif
 
-DataNode DataBreak(DataArray *da);
+static RndConsole *gConsole = nullptr;
 
-RndConsole *gConsole;
+#pragma region DataOps
+
+DataNode DataContinue(DataArray *) {
+    gConsole->Continue();
+    return 0;
+}
+
+DataNode DataWhere(DataArray *) {
+    gConsole->Where();
+    return 0;
+}
+
+DataNode DataCppBreak(DataArray *) {
+    PlatformDebugBreak();
+    return 0;
+}
+
+DataNode DataHelp(DataArray *da) {
+    gConsole->Help(da->Size() > 1 ? da->Sym(1) : "");
+    return 0;
+}
+
+DataNode DataNop(DataArray *) { return 0; }
+
+DataNode DataBreakpoints(DataArray *) {
+    gConsole->Breakpoints();
+    return 0;
+}
+
+DataNode DataList(DataArray *) {
+    gConsole->List();
+    return 0;
+}
+
+DataNode DataBreak(DataArray *da) {
+    gConsole->Break(da);
+    return 0;
+}
+
+DataNode DataUp(DataArray *) {
+    gConsole->MoveLevel(-1);
+    return 0;
+}
+
+DataNode DataDown(DataArray *) {
+    gConsole->MoveLevel(1);
+    return 0;
+}
+
+DataNode DataStep(DataArray *) {
+    gConsole->Step(0);
+    return 0;
+}
+
+DataNode DataNext(DataArray *) {
+    gConsole->Step(-1);
+    return 0;
+}
+
+DataNode DataFinish(DataArray *) {
+    gConsole->Step(-2);
+    return 0;
+}
+
+DataNode DataSetBreak(DataArray *da) {
+    gConsole->SetBreak(da);
+    return 0;
+}
+
+DataNode DataClear(DataArray *da) {
+    int clearInt;
+    if (da->Size() < 2)
+        clearInt = 0;
+    else if (da->Type(1) == kDataSymbol && da->Sym(1) == "all")
+        clearInt = -1;
+    else
+        clearInt = da->Int(1);
+    gConsole->Clear(clearInt);
+    return 0;
+}
+
+#pragma endregion
+#pragma region RndConsole
+
+RndConsole::Breakpoint::~Breakpoint() {
+    if (parent) {
+        DataArray *cmd = parent->Command(index);
+        cmd->Node(0) = DataNop;
+    }
+}
+
+RndConsole::RndConsole()
+    : mShowing(0), mBuffer(), mTabLen(0), mCursor(0), mPumpMsgs(0), mDebugging(0),
+      mLevel(0) {
+    mBufPtr = mBuffer.begin();
+    gConsole = this;
+    mOutput = RndOverlay::Find("output", true);
+    mInput = RndOverlay::Find("input", true);
+    DataArray *rndCfg = SystemConfig("rnd");
+    rndCfg->FindData("console_buffer", mMaxBuffer, true);
+    DataRegisterFunc("break", DataBreak);
+    DataRegisterFunc("continue", DataContinue);
+    DataRegisterFunc("step", DataStep);
+    DataRegisterFunc("next", DataNext);
+    DataRegisterFunc("finish", DataFinish);
+    DataRegisterFunc("list", DataList);
+    DataRegisterFunc("where", DataWhere);
+    DataRegisterFunc("set_break", DataSetBreak);
+    DataRegisterFunc("clear", DataClear);
+    DataRegisterFunc("breakpoints", DataBreakpoints);
+    DataRegisterFunc("up", DataUp);
+    DataRegisterFunc("down", DataDown);
+    DataRegisterFunc("cppbreak", DataCppBreak);
+    DataRegisterFunc("help", DataHelp);
+}
+
+RndConsole::~RndConsole() { TheDebug.SetReflect(nullptr); }
+
+BEGIN_HANDLERS(RndConsole)
+    HANDLE_MESSAGE(KeyboardKeyMsg)
+END_HANDLERS
+
+void RndConsole::List() {
+    if (mDebugging) {
+        mOutput->Clear();
+        File *f = NewFile(mDebugging->File(), 2);
+        if (f) {
+            int i = 1;
+            int numlines = mOutput->NumLines() / 2;
+            int i4 = mDebugging->Line() - numlines;
+            int totalLines = numlines + mDebugging->Line();
+            do {
+                char buf;
+                int read = f->Read(&buf, 1);
+                if (i > i4) {
+                    *mOutput << buf;
+                }
+                if (buf == '\n' || read == 0) {
+                    i++;
+                    if (i > i4 && i < totalLines) {
+                        *mOutput << MakeString(
+                            "%3d%c", i, i == mDebugging->Line() ? '>' : ':'
+                        );
+                    }
+                }
+            } while (i < totalLines);
+            delete f;
+        }
+    } else
+        MILO_FAIL("Can't list unless debugging");
+}
+
+void RndConsole::Breakpoints() {
+    mOutput->Clear();
+    int idx = 1;
+    FOREACH (it, mBreakpoints) {
+        DataArray *cmd = it->parent->Command(it->index);
+        MILO_LOG("%d. %s:%d\n", idx++, cmd->File(), cmd->Line());
+    }
+}
 
 void RndConsole::Continue() {
     if (mDebugging)
@@ -100,33 +260,65 @@ void RndConsole::Where() {
         MILO_FAIL("Can't where unless debugging");
 }
 
-DataNode DataContinue(DataArray *) {
-    gConsole->Continue();
-    return 0;
-}
-
-DataNode DataWhere(DataArray *) {
-    gConsole->Where();
-    return 0;
-}
-
-DataNode DataCppBreak(DataArray *) {
-    PlatformDebugBreak();
-    return 0;
-}
-
-DataNode DataHelp(DataArray *da) {
-    gConsole->Help(da->Size() > 1 ? da->Sym(1) : "");
-    return 0;
-}
-
-DataNode DataNop(DataArray *) { return 0; }
-
-RndConsole::Breakpoint::~Breakpoint() {
-    if (parent) {
-        DataArray *cmd = parent->Command(index);
-        cmd->Node(0) = DataNop;
+void RndConsole::SetShowing(bool show) {
+    if (mShowing != show) {
+        if (show) {
+            mInput->Clear();
+            mKeyboardOverride = KeyboardOverride(this);
+            TheDebug.SetReflect(mOutput);
+        } else {
+            KeyboardOverride(mKeyboardOverride);
+            TheDebug.SetReflect(nullptr);
+            mDebugging = nullptr;
+        }
+        mShowing = show;
+        mOutput->SetShowing(show);
+        mInput->SetShowing(show);
+        Message msg("rnd_console_showing", show);
+        HolmesClientSendMessage(msg);
     }
+}
+
+void RndConsole::MoveLevel(int level) {
+    if (mDebugging) {
+        mLevel += level;
+        mLevel = Clamp(gCallStack - gCallStackPtr + 2, 0, mLevel);
+        mDebugging = gCallStackPtr[mLevel - 2];
+        List();
+    } else
+        MILO_FAIL("Can't move level unless debugging");
+}
+
+void RndConsole::Step(int i) {
+    if (mDebugging) {
+        mDebugging = nullptr;
+        gPreExecuteFunc = *DataBreak;
+        gPreExecuteLevel = gCallStackPtr - gCallStack + mLevel + i;
+    } else
+        MILO_FAIL("Can't step unless debugging");
+}
+
+void RndConsole::Clear(int iii) {
+    if (iii > 0) {
+        FOREACH (it, mBreakpoints) {
+            iii--;
+            if (iii == 0) {
+                mBreakpoints.erase(it);
+                return;
+            }
+        }
+    } else if (iii == 0) {
+        FOREACH (it, mBreakpoints) {
+            if (it->parent->UncheckedArray(it->index) == mDebugging) {
+                mBreakpoints.erase(it);
+                return;
+            }
+        }
+    } else {
+        mBreakpoints.clear();
+        return;
+    }
+    MILO_FAIL("Couldn't clear breakpoint");
 }
 
 void RndConsole::InsertBreak(DataArray *arr, int i) {
@@ -179,45 +371,6 @@ void RndConsole::SetBreak(DataArray *arr) {
     MILO_FAIL("Can't insert break");
 }
 
-void RndConsole::Breakpoints() {
-    mOutput->Clear();
-    int idx = 1;
-    for (std::list<Breakpoint>::iterator it = mBreakpoints.begin();
-         it != mBreakpoints.end();
-         ++it) {
-        DataArray *cmd = it->parent->Command(it->index);
-        MILO_LOG("%d. %s:%d\n", idx++, cmd->File(), cmd->Line());
-    }
-}
-
-DataNode DataBreakpoints(DataArray *) {
-    gConsole->Breakpoints();
-    return 0;
-}
-
-void RndConsole::Clear(int iii) {
-    if (iii > 0) {
-        FOREACH (it, mBreakpoints) {
-            iii--;
-            if (iii == 0) {
-                mBreakpoints.erase(it);
-                return;
-            }
-        }
-    } else if (iii == 0) {
-        FOREACH (it, mBreakpoints) {
-            if (it->parent->UncheckedArray(it->index) == mDebugging) {
-                mBreakpoints.erase(it);
-                return;
-            }
-        }
-    } else {
-        mBreakpoints.clear();
-        return;
-    }
-    MILO_FAIL("Couldn't clear breakpoint");
-}
-
 void RndConsole::Break(DataArray *arr) {
     if (mDebugging)
         MILO_FAIL("Can't break while debugging, did you mean set_break?");
@@ -256,78 +409,41 @@ void RndConsole::Break(DataArray *arr) {
     }
 }
 
-void RndConsole::SetShowing(bool show) {
-    if (mShowing != show) {
-        if (show) {
-            mInput->Clear();
-            mKeyboardOverride = KeyboardOverride(this);
-            TheDebug.SetReflect(mOutput);
-        } else {
-            KeyboardOverride(mKeyboardOverride);
-            TheDebug.SetReflect(nullptr);
-            mDebugging = nullptr;
+void RndConsole::ExecuteLine() {
+    String &line_txt = mInput->CurrentLine();
+    DataNode n40, n48;
+    if (!line_txt.empty()) {
+        mBuffer.push_front(line_txt);
+        if (line_txt[line_txt.length() - 1] == '/') {
+            line_txt.erase(line_txt.length() - 1, 1);
+            SetShowing(false);
         }
-        mShowing = show;
-        mOutput->SetShowing(show);
-        mInput->SetShowing(show);
-        Message msg("rnd_console_showing", show);
-        HolmesClientSendMessage(msg);
+        if (mBuffer.size() > mMaxBuffer) {
+            mBuffer.pop_back();
+        }
+        mBufPtr = mBuffer.end();
+        MILO_LOG("> %s\n", line_txt);
+        n40 = DataReadString(line_txt.c_str());
+        n40.Array()->Release();
+        mInput->CurrentLine().erase();
+        LogCheat(-1, 0, n40.Array());
+        MILO_TRY {
+            if (n40.Array()->Type(0) == kDataCommand && n40.Array()->Size() == 1) {
+                n48 = n40.Array()->Command(0)->Execute();
+            } else {
+                n48 = n40.Array()->Execute();
+            }
+        }
+        MILO_CATCH(msg) {
+            MILO_NOTIFY("Script error: %s", msg);
+            n48 = 0;
+        }
+        String output;
+        output << "Evaluates to " << n48 << "\n";
+        mInput->Print(output.c_str());
+        MILO_LOG("%s", output);
     }
 }
-
-void RndConsole::List() {
-    if (mDebugging) {
-        mOutput->Clear();
-        File *f = NewFile(mDebugging->File(), 2);
-        if (f) {
-            int i = 1;
-            int numlines = mOutput->NumLines() / 2;
-            int i4 = mDebugging->Line() - numlines;
-            int totalLines = numlines + mDebugging->Line();
-            do {
-                char buf;
-                int read = f->Read(&buf, 1);
-                if (i > i4) {
-                    *mOutput << buf;
-                }
-                if (buf == '\n' || read == 0) {
-                    i++;
-                    if (i > i4 && i < totalLines) {
-                        *mOutput << MakeString(
-                            "%3d%c", i, i == mDebugging->Line() ? '>' : ':'
-                        );
-                    }
-                }
-            } while (i < totalLines);
-            delete f;
-        }
-    } else
-        MILO_FAIL("Can't list unless debugging");
-}
-
-DataNode DataList(DataArray *) {
-    gConsole->List();
-    return 0;
-}
-
-DataNode DataBreak(DataArray *da) {
-    gConsole->Break(da);
-    return 0;
-}
-
-DataNode DataUp(DataArray *) {
-    gConsole->MoveLevel(-1);
-    return 0;
-}
-
-DataNode DataDown(DataArray *) {
-    gConsole->MoveLevel(1);
-    return 0;
-}
-
-BEGIN_HANDLERS(RndConsole)
-    HANDLE_MESSAGE(KeyboardKeyMsg)
-END_HANDLERS
 
 bool RndConsole::OnMsg(const KeyboardKeyMsg &msg) {
     if (!mShowing)
@@ -346,7 +462,7 @@ bool RndConsole::OnMsg(const KeyboardKeyMsg &msg) {
                 if (mBufPtr == mBuffer.end()) {
                     mBufPtr = mBuffer.begin();
                 }
-                if (strncmp(mInput->CurrentLine().c_str(), mBufPtr->c_str(), mTabLen)
+                if (strncmp(mInput->CurrentLine().c_str(), (*mBufPtr).c_str(), mTabLen)
                     == 0) {
                     mInput->CurrentLine() = *mBufPtr;
                     break;
@@ -367,11 +483,10 @@ bool RndConsole::OnMsg(const KeyboardKeyMsg &msg) {
         mCursor = mInput->CurrentLine().length();
     } else if (msg.GetKey() == 0x143) {
         if (!mBuffer.empty()) {
-            auto _tmp33 = mBuffer.begin();
             if (mBufPtr != mBuffer.end()) {
                 --mBufPtr;
             } else
-                mBufPtr = _tmp33;
+                mBufPtr = mBuffer.begin();
             if (mBufPtr == mBuffer.begin()) {
                 mBufPtr = PrevItr(mBuffer.begin(), 1);
             }
@@ -428,113 +543,4 @@ bool RndConsole::OnMsg(const KeyboardKeyMsg &msg) {
     return 0;
 }
 
-void RndConsole::Step(int level) {
-    if (mDebugging) {
-        mDebugging = nullptr;
-        gPreExecuteFunc = DataBreak;
-        gPreExecuteLevel = (gCallStackPtr - gCallStack) + mLevel + level;
-    } else
-        MILO_FAIL("Can't step unless debugging");
-}
-
-void RndConsole::MoveLevel(int delta) {
-    if (mDebugging) {
-        mLevel += delta;
-        int maxLevel = (gCallStack - gCallStackPtr) + 2;
-        if (mLevel >= 1) {
-            mLevel = 0;
-        } else mLevel = Max(mLevel, maxLevel);
-        mDebugging = gCallStackPtr[mLevel - 2];
-        List();
-    } else
-        MILO_FAIL("Can't move level unless debugging");
-}
-
-DataNode DataStep(DataArray *) {
-    gConsole->Step(0);
-    return 0;
-}
-
-DataNode DataNext(DataArray *) {
-    gConsole->Step(-1);
-    return 0;
-}
-
-DataNode DataFinish(DataArray *) {
-    gConsole->Step(-2);
-    return 0;
-}
-
-DataNode DataSetBreak(DataArray *da) {
-    gConsole->SetBreak(da);
-    return 0;
-}
-
-DataNode DataClear(DataArray *da) {
-    int clearInt;
-    if (da->Size() < 2)
-        clearInt = 0;
-    else if (da->Type(1) == kDataSymbol && da->Sym(1) == "all")
-        clearInt = -1;
-    else
-        clearInt = da->Int(1);
-    gConsole->Clear(clearInt);
-    return 0;
-}
-
-RndConsole::RndConsole()
-    : mShowing(0), mBuffer(), mTabLen(0), mCursor(0), mPumpMsgs(0), mDebugging(0),
-      mLevel(0) {
-    mBufPtr = mBuffer.begin();
-    gConsole = this;
-    mOutput = RndOverlay::Find("output", true);
-    mInput = RndOverlay::Find("input", true);
-    DataArray *rndCfg = SystemConfig("rnd");
-    rndCfg->FindData("console_buffer", mMaxBuffer, true);
-    DataRegisterFunc("break", DataBreak);
-    DataRegisterFunc("continue", DataContinue);
-    DataRegisterFunc("step", DataStep);
-    DataRegisterFunc("next", DataNext);
-    DataRegisterFunc("finish", DataFinish);
-    DataRegisterFunc("list", DataList);
-    DataRegisterFunc("where", DataWhere);
-    DataRegisterFunc("set_break", DataSetBreak);
-    DataRegisterFunc("clear", DataClear);
-    DataRegisterFunc("breakpoints", DataBreakpoints);
-    DataRegisterFunc("up", DataUp);
-    DataRegisterFunc("down", DataDown);
-    DataRegisterFunc("cppbreak", DataCppBreak);
-    DataRegisterFunc("help", DataHelp);
-}
-
-RndConsole::~RndConsole() { TheDebug.SetReflect(nullptr); }
-
-void RndConsole::ExecuteLine() {
-    String &line_txt = mInput->CurrentLine();
-    DataNode n40, n48;
-    if (line_txt.empty())
-        MILO_WARN("Empty command");
-    mBuffer.push_front(line_txt);
-    if (line_txt[line_txt.length() - 1] == '/') {
-        line_txt.erase(line_txt.length() - 1, 1);
-        SetShowing(false);
-    }
-    if (mBuffer.size() > mMaxBuffer) {
-        mBuffer.pop_back();
-    }
-    mBufPtr = mBuffer.begin();
-    MILO_LOG("> %s\n", line_txt);
-    n40 = DataNode(DataReadString(line_txt.c_str()), kDataArray);
-    n40.Array()->Release();
-    mInput->CurrentLine().erase();
-    LogCheat(-1, 0, n40.Array());
-    if (n40.Array()->Type(0) == kDataCommand && n40.Array()->Size() == 1) {
-        n48 = n40.Array()->Command(0)->Execute();
-    } else {
-        n48 = n40.Array()->Execute();
-    }
-    String output;
-    output << "Evaluates to " << n48 << "\n";
-    mInput->Print(output.c_str());
-    MILO_LOG("%s", output);
-}
+#pragma endregion

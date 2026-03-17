@@ -41,7 +41,7 @@ BEGIN_COPYS(LabelNumberTicker)
 END_COPYS
 
 BEGIN_PROPSYNCS(LabelNumberTicker)
-    SYNC_PROP_SET(label, mLabel.Ptr(), SetLabel(_val.Obj<UILabel>()))
+    SYNC_PROP_SET(label, Label(), SetLabel(_val.Obj<UILabel>()))
     SYNC_PROP_SET(desired_value, mDesiredValue, SetDesiredValue(_val.Int()))
     SYNC_PROP_MODIFY(wrapper_text, mWrapperText, UpdateDisplay())
     SYNC_PROP_MODIFY(anim_time, mAnimTime, UpdateDisplay())

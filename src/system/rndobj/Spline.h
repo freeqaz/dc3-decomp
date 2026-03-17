@@ -54,9 +54,13 @@ public:
     OBJ_MEM_OVERLOAD(0x18);
     NEW_OBJ(RndSpline)
     static void Init() { REGISTER_OBJ_FACTORY(RndSpline) }
+    static RndSpline *GlobalDefaultSpline() { return sGlobalDefaultSpline; }
 
     void SetStartCtrlPoint(int);
     void SetEndCtrlPoint(int);
+    int NumCtrlPts() const { return mCtrlPoints.size(); }
+    bool Manual() const { return mManual; }
+    bool PulseDrawing() const { return mPulseDrawing; }
 
     const CtrlPoint &GetDeformedCtrlPoint(int) const;
 

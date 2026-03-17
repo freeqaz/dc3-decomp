@@ -44,6 +44,8 @@ public:
     void SetKerning(const std::vector<KernInfo> &);
     void GetKerning(std::vector<KernInfo> &) const;
     bool IsMonospace() const { return mMonospace; }
+    const std::vector<unsigned short> &Chars() const { return mChars; }
+    float BaseKerning() const { return mBaseKerning; }
 
 protected:
     RndFontBase();
@@ -57,21 +59,3 @@ protected:
     float mBaseKerning; // 0x3c
     class KerningTable *mKerningTable; // 0x40
 };
-
-__forceinline BinStreamRev &operator>>(BinStreamRev &bs, RndFontBase::KernInfo &info) {
-    if (bs.rev < 0x11) {
-        char x;
-        bs >> x;
-        info.mFirstChar = x;
-        bs >> x;
-        info.mSecondChar = x;
-    } else {
-        bs >> info.mFirstChar >> info.mSecondChar;
-    }
-    if (bs.rev < 6) {
-        char x;
-        bs >> x >> x;
-    }
-    bs >> info.kerning;
-    return bs;
-}

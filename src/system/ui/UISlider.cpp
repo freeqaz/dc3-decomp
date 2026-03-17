@@ -3,26 +3,35 @@
 #include "math/Mtx.h"
 #include "obj/Data.h"
 #include "obj/Object.h"
-#include "os/Joypad.h"
+#include "os/Debug.h"
 #include "os/JoypadMsgs.h"
 #include "rndobj/Draw.h"
-#include "rndobj/Mesh.h"
-#include "rndobj/Mat.h"
-#include "ui/UIPanel.h"
 #include "ui/UI.h"
+#include "ui/UIPanel.h"
 #include "ui/Utl.h"
 #include "utl/BinStream.h"
 #include "utl/Symbol.h"
 
-extern UIComponent::State SymToUIComponentState(Symbol);
-
-void UISlider::OldResourcePreload(BinStream &bs) {
-    char buf[256];
-    bs.ReadString(buf, 256);
-    mSliderResource.SetName(buf, true);
-}
-
 UISlider::UISlider() : mSliderResource(this), mCurrent(0), mNumSteps(10), mVertical(0) {}
+
+BEGIN_HANDLERS(UISlider)
+    HANDLE_MESSAGE(ButtonDownMsg)
+    HANDLE_EXPR(current, mCurrent)
+    HANDLE_EXPR(num_steps, mNumSteps)
+    HANDLE_EXPR(frame, Frame())
+    HANDLE_ACTION(set_num_steps, SetNumSteps(_msg->Int(2)))
+    HANDLE_ACTION(set_current, SetCurrent(_msg->Int(2)))
+    HANDLE_ACTION(set_frame, SetFrame(_msg->Float(2)))
+    HANDLE_ACTION(store, Store())
+    HANDLE_ACTION(undo, RevertScrollSelect(this, _msg->Obj<LocalUser>(2), 0))
+    HANDLE_ACTION(
+        undo_handled_by,
+        RevertScrollSelect(this, _msg->Obj<LocalUser>(2), _msg->Obj<UIPanel>(3))
+    )
+    HANDLE_ACTION(confirm, Reset())
+    HANDLE_SUPERCLASS(ScrollSelect)
+    HANDLE_SUPERCLASS(UIComponent)
+END_HANDLERS
 
 BEGIN_PROPSYNCS(UISlider)
     SYNC_PROP_MODIFY(slider_resource, mSliderResource, Update())
@@ -54,8 +63,8 @@ BEGIN_LOADS(UISlider)
     PostLoad(bs);
 END_LOADS
 
-void UISlider::SetTypeDef(DataArray *da) {
-    UIComponent::SetTypeDef(da);
+void UISlider::SetTypeDef(DataArray *def) {
+    Hmx::Object::SetTypeDef(def);
     Update();
 }
 
@@ -64,16 +73,17 @@ INIT_REVS(3, 0)
 void UISlider::PreLoad(BinStream &bs) {
     LOAD_REVS(bs);
     ASSERT_REVS(3, 0);
-    UIComponent::PreLoad(bs);
-    if (d.rev >= 3)
-        bs >> mSliderResource;
-    bs.PushRev(packRevs(d.altRev, d.rev), this);
+    UIComponent::PreLoad(d.stream);
+    if (d.rev >= 3) {
+        d >> mSliderResource;
+    }
+    d.PushRev(this);
 }
 
 void UISlider::PostLoad(BinStream &bs) {
     BinStreamRev d(bs, bs.PopRev(this));
-    UIComponent::PostLoad(bs);
-    mSliderResource.PostLoad(0);
+    UIComponent::PostLoad(d.stream);
+    mSliderResource.PostLoad(nullptr);
     if (d.rev > 0) {
         d >> mSelectToScroll;
     }
@@ -85,17 +95,17 @@ void UISlider::PostLoad(BinStream &bs) {
 
 void UISlider::DrawShowing() {
     SyncSlider();
-    if (mSliderMesh) {
-        mSliderMesh->SetMat(mStateMats[(int)DrawState(this)]);
+    if (unk68) {
+        unk68->SetMat(unk6c[DrawState(this)]);
     }
     if (mSliderResource) {
         mSliderResource->DrawShowing();
     }
 }
 
-RndDrawable *UISlider::CollideShowing(const Segment &seg, float &f, Plane &pl) {
+RndDrawable *UISlider::CollideShowing(const Segment &s, float &fl, Plane &pl) {
     SyncSlider();
-    return mSliderResource->CollideShowing(seg, f, pl) ? this : nullptr;
+    return mSliderResource->CollideShowing(s, fl, pl) ? this : nullptr;
 }
 
 int UISlider::CollidePlane(const Plane &pl) {
@@ -119,33 +129,10 @@ int UISlider::SelectedAux() const { return Current(); }
 
 void UISlider::SetSelectedAux(int i) { SetCurrent(i); }
 
-DataNode UISlider::OnMsg(const ButtonDownMsg &msg) {
-    Symbol cnttype = JoypadControllerTypePadNum(msg.GetPadNum());
-    if (CanScroll()) {
-        int act = ScrollDirection(msg, JoypadTypeHasLeftyFlip(cnttype), mVertical, 1);
-        if (act != kAction_None) {
-            if (mVertical)
-                act = (JoypadAction)-act;
-            int step = mCurrent + act;
-            if (step >= 0 && step < mNumSteps) {
-                SetCurrent(step);
-                UIComponentScrollMsg scroll_msg(this, msg.GetUser());
-                TheUI->Handle(scroll_msg, false);
-            }
-            return DataNode(1);
-        }
-        if (CatchNavAction(msg.GetAction())) {
-            return DataNode(1);
-        }
-    }
-    JoypadAction thisAct = msg.GetAction();
-    LocalUser *user = msg.GetUser();
-    if (thisAct == kAction_Confirm && SelectScrollSelect(this, user)) {
-        return DataNode(1);
-    } else if (thisAct == kAction_Cancel && RevertScrollSelect(this, user, 0)) {
-        return DataNode(1);
-    }
-    return DataNode(kDataUnhandled, 0);
+void UISlider::OldResourcePreload(BinStream &bs) {
+    char buf[256];
+    bs.ReadString(buf, 256);
+    mSliderResource.SetName(buf, true);
 }
 
 void UISlider::SyncSlider() {
@@ -181,76 +168,51 @@ void UISlider::Init() { REGISTER_OBJ_FACTORY(UISlider) }
 void UISlider::Update() {
     static Symbol mesh("mesh");
     static Symbol mats("mats");
-
-    // Clear material pointers for all states
-    auto& _ref0 = mStateMats;
-    _ref0[0] = 0;
-    mSliderMesh = 0;
-    _ref0[1] = 0;
-    _ref0[2] = 0;
-    _ref0[3] = 0;
-    _ref0[4] = 0;
-
-    const DataArray *typeDef = TypeDef();
-    auto& _ref1 = mSliderResource;
-    if (!typeDef || !_ref1) {
-        return;
+    unk68 = nullptr;
+    for (int i = 0; i < UIComponent::kNumStates; i++) {
+        unk6c[i] = nullptr;
     }
-
-    // Load mesh resource if specified
-    DataArray *meshArray = typeDef->FindArray(mesh, false);
-    if (meshArray) {
-        DataNode &meshNode = meshArray->Node(1);
-        const char *meshStr = meshNode.Str(meshArray);
-        if (meshStr) {
-            mSliderMesh = _ref1->Find<RndMesh>(meshStr, true);
+    if (TypeDef() && mSliderResource) {
+        DataArray *meshArr = TypeDef()->FindArray(mesh, false);
+        if (meshArr) {
+            unk68 = mSliderResource->Find<RndMesh>(meshArr->Str(1));
         }
-    }
-
-    // Load materials for each UI state
-    DataArray *matsArray = typeDef->FindArray(mats, false);
-    if (!matsArray) {
-        return;
-    }
-
-    int matsArraySize = matsArray->Size();
-    if ((unsigned int)matsArraySize <= 1) {
-        return;
-    }
-
-    Symbol itemSym;
-    for (int i = 1; i < matsArraySize; i++) {
-        DataNode &arrayNode = matsArray->Node(i);
-        DataArray *matItemArray = arrayNode.Array(matsArray);
-        if (!matItemArray || matItemArray->Size() == 0) {
-            continue;
-        }
-
-                itemSym = matItemArray->Sym(0);
-        State itemState = SymToUIComponentState(itemSym);
-        DataNode &matNode = matItemArray->Node(1);
-        const char *matName = matNode.Str(matItemArray);
-        if (matName) {
-            _ref0[itemState] = _ref1->Find<RndMat>(matName, true);
+        DataArray *matArr = TypeDef()->FindArray(mats, false);
+        if (matArr) {
+            for (int i = 1; i < matArr->Size(); i++) {
+                DataArray *curArr = matArr->Array(i);
+                UIComponent::State state = SymToUIComponentState(curArr->Sym(0));
+                unk6c[state] = mSliderResource->Find<RndMat>(curArr->Str(1));
+            }
         }
     }
 }
 
-BEGIN_HANDLERS(UISlider)
-    HANDLE_MESSAGE(ButtonDownMsg)
-    HANDLE_EXPR(current, mCurrent)
-    HANDLE_EXPR(num_steps, mNumSteps)
-    HANDLE_EXPR(frame, Frame())
-    HANDLE_ACTION(set_num_steps, SetNumSteps(_msg->Int(2)))
-    HANDLE_ACTION(set_current, SetCurrent(_msg->Int(2)))
-    HANDLE_ACTION(set_frame, SetFrame(_msg->Float(2)))
-    HANDLE_ACTION(store, Store())
-    HANDLE_ACTION(undo, RevertScrollSelect(this, _msg->Obj<LocalUser>(2), 0))
-    HANDLE_ACTION(
-        undo_handled_by,
-        RevertScrollSelect(this, _msg->Obj<LocalUser>(2), _msg->Obj<UIPanel>(3))
-    )
-    HANDLE_ACTION(confirm, Reset())
-    HANDLE_SUPERCLASS(ScrollSelect)
-    HANDLE_SUPERCLASS(UIComponent)
-END_HANDLERS
+DataNode UISlider::OnMsg(const ButtonDownMsg &msg) {
+    Symbol cnttype = JoypadControllerTypePadNum(msg.GetPadNum());
+    if (CanScroll()) {
+        int act = ScrollDirection(msg, JoypadTypeHasLeftyFlip(cnttype), mVertical, 1);
+        if (act != kAction_None) {
+            if (mVertical) {
+                act = (JoypadAction)-act;
+            }
+            int step = mCurrent + act;
+            if (step >= 0 && step < mNumSteps) {
+                SetCurrent(step);
+                TheUI->Handle(UIComponentScrollMsg(this, msg.GetUser()), false);
+            }
+            return 1;
+        }
+        if (CatchNavAction(msg.GetAction())) {
+            return 1;
+        }
+    }
+    JoypadAction thisAct = msg.GetAction();
+    LocalUser *user = msg.GetUser();
+    if (thisAct == kAction_Confirm && SelectScrollSelect(this, user)) {
+        return 1;
+    } else if (thisAct == kAction_Cancel && RevertScrollSelect(this, user, 0)) {
+        return 1;
+    }
+    return DATA_UNHANDLED;
+}

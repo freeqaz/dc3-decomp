@@ -4,6 +4,7 @@
 #include "math/Color.h"
 #include "math/Geo.h"
 
+/** "Draws full screen quad with material and color." */
 class RndScreenMask : public RndDrawable {
 public:
     OBJ_CLASSNAME(ScreenMask);
@@ -22,8 +23,12 @@ public:
 protected:
     RndScreenMask();
 
+    /** "Material to draw on full screen quad" */
     ObjPtr<RndMat> mMat; // 0x40
+    /** "Color of full screen quad" */
     Hmx::Color mColor; // 0x54
+    /** "The area of the screen in normalized coordinates (0 to 1) to draw into." */
     Hmx::Rect mRect; // 0x64
+    /** "Use current camera screen_rect instead of the full screen" */
     bool mUseCamRect; // 0x74
 };

@@ -65,30 +65,38 @@ public:
     /** Kill any active tasks associated with this animatable. */
     void StopAnimation();
 
-    Task *Animate(float, bool, float, Hmx::Object *, EaseType, float, bool);
     Task *Animate(
-        float,
-        bool,
-        float,
-        Rate,
-        float,
-        float,
-        float,
-        float,
-        Symbol,
-        Hmx::Object *,
-        EaseType,
-        float,
-        bool
+        float blend,
+        bool wait,
+        float delay,
+        Hmx::Object *listener = nullptr,
+        EaseType easeType = kEaseLinear,
+        float = 0,
+        bool = false
     );
     Task *Animate(
-        float,
-        float,
-        TaskUnits,
+        float blend,
+        bool wait,
+        float delay,
+        Rate rate,
+        float start,
+        float end,
+        float period,
+        float scale,
+        Symbol type,
+        Hmx::Object *listener = nullptr,
+        EaseType easeType = kEaseLinear,
         float = 0,
-        float = 0,
-        Hmx::Object * = nullptr,
-        EaseType = kEaseLinear,
+        bool = false
+    );
+    Task *Animate(
+        float start,
+        float end,
+        TaskUnits units,
+        float period = 0,
+        float blend = 0,
+        Hmx::Object *listener = nullptr,
+        EaseType easeType = kEaseLinear,
         float = 0,
         bool = false
     );
@@ -142,8 +150,8 @@ public:
         float blend,
         Hmx::Object *listener,
         EaseType easeType,
-        float f9,
-        bool b10
+        float easePower,
+        bool wait
     );
     virtual ~AnimTask();
     virtual bool Replace(ObjRef *, Hmx::Object *);

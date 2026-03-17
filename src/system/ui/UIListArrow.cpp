@@ -3,6 +3,7 @@
 #include "obj/Object.h"
 #include "ui/UIList.h"
 #include "ui/UIListWidget.h"
+#include "ui/UIList.h"
 
 UIListArrow::UIListArrow()
     : mMesh(this), mScrollAnim(this), mPosition(kUIListArrowBack), mShowOnlyScroll(0),
@@ -43,56 +44,52 @@ INIT_REVS(1, 0)
 BEGIN_LOADS(UIListArrow)
     LOAD_REVS(bs)
     ASSERT_REVS(1, 0)
-    UIListWidget::Load(bs);
-    int dump;
-    bool tmp;
-    bs >> mMesh >> dump >> mShowOnlyScroll >> tmp;
-    mPosition = (UIListArrowPosition)dump;
-    mOnHighlight = tmp;
-    if (d.rev > 0)
+    LOAD_SUPERCLASS(UIListWidget)
+    int pos;
+    bs >> mMesh;
+    bs >> pos;
+    bs >> mShowOnlyScroll >> mOnHighlight;
+    mPosition = (UIListArrowPosition)pos;
+    if (d.rev > 0) {
         bs >> mScrollAnim;
+    }
 END_LOADS
 
 void UIListArrow::Draw(
-    const UIListWidgetDrawState &drawstate,
-    const UIListState &liststate,
+    const UIListWidgetDrawState &drawState,
+    const UIListState &listState,
     const Transform &tf,
-    UIComponent::State compstate,
+    UIComponent::State uiState,
     Box *box,
     DrawCommand cmd
 ) {
-    if (!mMesh || cmd == kDrawFirst)
-        return;
-    const Vector3 *vec = mOnHighlight
-        ? &drawstate.mHighlightPos
-        : (mPosition == kUIListArrowBack ? &drawstate.mFirstPos : &drawstate.mLastPos);
-    bool onhighlight = mOnHighlight;
+    if (mMesh && cmd != kDrawFirst) {
+        const Vector3 &vptr = mOnHighlight  ? drawState.mHighlightPos
+            : mPosition == kUIListArrowBack ? drawState.mFirstPos
+                                            : drawState.mLastPos;
+        if (
+            box || !mShowOnlyScroll
+            || ((mPosition != kUIListArrowBack || listState.CanScrollBack(mOnHighlight))
+                && (mPosition != kUIListArrowNext
+                    || listState.CanScrollNext(mOnHighlight)))
 
-    if (box || !mShowOnlyScroll
-        || ((mPosition != kUIListArrowBack || liststate.CanScrollBack(onhighlight))
-            && (mPosition != kUIListArrowNext || liststate.CanScrollNext(mOnHighlight)))) {
-        Transform xfm1 = mMesh->WorldXfm();
-        Transform xfm2 = xfm1;
-        if (ParentList()) {
-            ParentList()->AdjustTransSelected(xfm2);
+        ) {
+            Transform tf80 = mMesh->WorldXfm();
+            Transform tfc0 = tf80;
+            if (ParentList()) {
+                ParentList()->AdjustTransSelected(tfc0);
+            }
+            CalcXfm(tf, vptr, tfc0);
+            DrawMesh(mMesh, drawState.mHighlightElementState, uiState, tfc0, box);
+            mMesh->SetWorldXfm(tf80);
         }
-        CalcXfm(tf, *vec, xfm2);
-        DrawMesh(mMesh, drawstate.mHighlightElementState, compstate, xfm2, box);
-        mMesh->SetWorldXfm(xfm1);
     }
 }
 
 void UIListArrow::StartScroll(int i, bool) {
-    if (mScrollAnim == nullptr)
-        return;
-    if (i < 0) {
-        if (!mPosition)
-            goto a;
+    if (mScrollAnim
+        && ((i < 0 && mPosition == kUIListArrowBack)
+            || (i > 0 && mPosition == kUIListArrowNext))) {
+        mScrollAnim->Animate(0, false, 0, 0, kEaseLinear, 0, 0);
     }
-    if (0 >= i)
-        return;
-    if (mPosition != 1)
-        return;
-a:
-    mScrollAnim->Animate(0, false, 0, 0, kEaseLinear, 0, 0);
 }

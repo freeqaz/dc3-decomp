@@ -39,7 +39,7 @@ public:
     virtual void PreLoad(BinStream &);
     virtual void PostLoad(BinStream &);
     // RndText
-    virtual Symbol TextToken();
+    virtual Symbol TextToken() { return mTextToken; }
     virtual void SetCreditsText(DataArray *, class UIListSlot *) {
         MILO_ASSERT(false, 0x50);
     }

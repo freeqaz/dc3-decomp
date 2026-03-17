@@ -10,11 +10,10 @@
 class LocalePanel : public UIPanel, public UIListProvider {
 public:
     struct Entry {
-        Entry();
         String mHeading; // 0x0
         String mLabel; // 0x8
         Symbol mToken; // 0x10
-        String mString; // 0x14
+        String mText; // 0x14 - text?
     };
     // Hmx::Object
     OBJ_CLASSNAME(LocalePanel)

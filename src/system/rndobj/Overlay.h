@@ -28,10 +28,10 @@ public:
     }
     void SetCallback(Callback *cb) { mCallback = cb; }
     Callback *GetCallback() const { return mCallback; }
+    void SetCursorChar(int cursChar) { mCursorChar = cursChar; }
     Timer GetTimer() { return mTimer; }
     void SetShowingOnly(bool show) { mShowing = show; }
     Timer &TimerRef() { return mTimer; }
-    void SetCursorChar(int c) { mCursorChar = c; }
     void Clear();
     void SetLines(int);
     void SetTimeout(float);

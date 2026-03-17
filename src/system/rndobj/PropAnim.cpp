@@ -6,13 +6,14 @@
 #include "rndobj/Anim.h"
 #include "rndobj/EventTrigger.h"
 #include "rndobj/PropKeys.h"
+#include "utl/BinStream.h"
 #include "utl/Std.h"
 
-DataNode sKeyReplace;
-bool sRemoveFrame;
-bool sReplaceKey;
-bool sReplaceFrame;
-float sFrameReplace;
+static bool sRemoveFrame = false;
+static bool sReplaceKey = false;
+static bool sReplaceFrame = false;
+static float sFrameReplace = 0;
+static DataNode sKeyReplace;
 
 #pragma region Hmx::Object
 
@@ -123,8 +124,7 @@ BEGIN_SAVES(RndPropAnim)
     SAVE_SUPERCLASS(Hmx::Object)
     SAVE_SUPERCLASS(RndAnimatable)
     bs << mPropKeys.size();
-    for (std::list<PropKeys *>::iterator it = mPropKeys.begin(); it != mPropKeys.end();
-         ++it) {
+    FOREACH (it, mPropKeys) {
         bs << (*it)->KeysType();
         (*it)->Save(bs);
     }
@@ -140,14 +140,10 @@ BEGIN_COPYS(RndPropAnim)
     RemoveKeys();
     CREATE_COPY(RndPropAnim)
     BEGIN_COPYING_MEMBERS
-        for (std::list<PropKeys *>::const_iterator it = c->mPropKeys.begin();
-             it != c->mPropKeys.end();
-             ++it) {
+        FOREACH (it, c->mPropKeys) {
             PropKeys *cur = *it;
-            Hmx::Object *tgt = cur->Target();
-            PropKeys::AnimKeysType t = cur->KeysType();
-            DataArray *p = cur->Prop();
-            AddKeys(tgt, p, t)->Copy(*it);
+            Hmx::Object *target = cur->Target();
+            AddKeys(target, cur->Prop(), cur->KeysType())->Copy(*it);
         }
         COPY_MEMBER(mLoop)
         COPY_MEMBER(mFlowLabels)
@@ -264,8 +260,7 @@ void RndPropAnim::LoadPre7(BinStreamRev &bs) {
 
 void RndPropAnim::Print() {
     int idx = 0;
-    for (std::list<PropKeys *>::iterator it = mPropKeys.begin(); it != mPropKeys.end();
-         ++it) {
+    FOREACH (it, mPropKeys) {
         TheDebug << "   Keys " << idx << "\n";
         (*it)->Print();
         idx++;
@@ -276,8 +271,7 @@ void RndPropAnim::Print() {
 #pragma region RndAnimatable
 
 void RndPropAnim::StartAnim() {
-    for (std::list<PropKeys *>::iterator it = mPropKeys.begin(); it != mPropKeys.end();
-         ++it) {
+    FOREACH (it, mPropKeys) {
         (*it)->ResetLastKeyFrameIndex();
     }
 }
@@ -287,9 +281,7 @@ void RndPropAnim::SetFrame(float frame, float blend) {
         mInSetFrame = true;
         AdvanceFrame(frame);
         float myframe = GetFrame();
-        for (std::list<PropKeys *>::iterator it = mPropKeys.begin();
-             it != mPropKeys.end();
-             ++it) {
+        FOREACH (it, mPropKeys) {
             if ((*it)->GetExceptionID() == PropKeys::kDirEvent) {
                 ObjKeys *objkeys = (*it)->AsObjectKeys();
                 for (int i = 0; i < objkeys->size(); i++) {
@@ -314,25 +306,22 @@ void RndPropAnim::SetFrame(float frame, float blend) {
 
 float RndPropAnim::StartFrame() {
     float frame = 0.0f;
-    for (std::list<PropKeys *>::iterator it = mPropKeys.begin(); it != mPropKeys.end();
-         ++it) {
-        frame = Min(frame, (*it)->StartFrame());
+    FOREACH (it, mPropKeys) {
+        frame = Min((*it)->StartFrame(), frame);
     }
     return frame;
 }
 
 float RndPropAnim::EndFrame() {
     float frame = 0.0f;
-    for (std::list<PropKeys *>::iterator it = mPropKeys.begin(); it != mPropKeys.end();
-         ++it) {
+    FOREACH (it, mPropKeys) {
         frame = Max(frame, (*it)->EndFrame());
     }
     return frame;
 }
 
 void RndPropAnim::SetKey(float frame) {
-    for (std::list<PropKeys *>::iterator it = mPropKeys.begin(); it != mPropKeys.end();
-         ++it) {
+    FOREACH (it, mPropKeys) {
         (*it)->SetKey(frame);
     }
 }
@@ -389,43 +378,44 @@ RndPropAnim::AddKeys(Hmx::Object *obj, DataArray *prop, PropKeys::AnimKeysType t
     return theKeys;
 }
 
-std::list<PropKeys *>::iterator RndPropAnim::FindKeys(Hmx::Object *o, DataArray *da) {
-    for (std::list<PropKeys *>::iterator it = mPropKeys.begin(); it != mPropKeys.end();
-         ++it) {
+std::list<PropKeys *>::iterator RndPropAnim::FindKeys(Hmx::Object *obj, DataArray *prop) {
+    FOREACH (it, mPropKeys) {
         PropKeys *cur = *it;
-        if (!da && !cur->Prop())
+        if (!prop && !cur->Prop()) {
             return it;
-        if (cur->Target() == o && PathCompare(da, cur->Prop()))
+        }
+        if (cur->Target() == obj && PathCompare(prop, cur->Prop())) {
             return it;
+        }
     }
     return mPropKeys.end();
 }
 
 PropKeys *RndPropAnim::GetKeys(const Hmx::Object *obj, DataArray *prop) {
-    if (!prop || !obj)
-        return nullptr;
-    for (std::list<PropKeys *>::iterator it = mPropKeys.begin(); it != mPropKeys.end();
-         ++it) {
-        PropKeys *cur = *it;
-        if (cur->Target() == obj && PathCompare(prop, cur->Prop()))
-            return cur;
+    if (prop && obj) {
+        FOREACH (it, mPropKeys) {
+            PropKeys *cur = *it;
+            if (cur->Target() == obj && PathCompare(prop, cur->Prop()))
+                return cur;
+        }
     }
     return nullptr;
 }
 
-bool RndPropAnim::HasKeys(Hmx::Object *o, DataArray *da) {
-    return FindKeys(o, da) != mPropKeys.end();
+bool RndPropAnim::HasKeys(Hmx::Object *obj, DataArray *prop) {
+    return FindKeys(obj, prop) != mPropKeys.end();
 }
 
-void RndPropAnim::SetKey(Hmx::Object *o, DataArray *da, float f) {
-    std::list<PropKeys *>::iterator keys = FindKeys(o, da);
+void RndPropAnim::SetKey(Hmx::Object *obj, DataArray *prop, float frame) {
+    std::list<PropKeys *>::iterator keys = FindKeys(obj, prop);
     if (keys != mPropKeys.end()) {
-        (*keys)->SetKey(f);
+        PropKeys *cur = *keys;
+        cur->SetKey(frame);
     }
 }
 
-bool RndPropAnim::RemoveKeys(Hmx::Object *o, DataArray *da) {
-    std::list<PropKeys *>::iterator keys = FindKeys(o, da);
+bool RndPropAnim::RemoveKeys(Hmx::Object *obj, DataArray *prop) {
+    std::list<PropKeys *>::iterator keys = FindKeys(obj, prop);
     if (keys == mPropKeys.end())
         return false;
 
@@ -678,10 +668,9 @@ DataNode RndPropAnim::OnListFlowLabels(DataArray *arr) {
     if (mFlowLabels.size() != 0) {
         DataArray *flowArr = new DataArray(mFlowLabels.size());
         int i = 0;
-        for (std::list<String>::iterator it = mFlowLabels.begin();
-             it != mFlowLabels.end();
-             ++it, ++i) {
+        FOREACH (it, mFlowLabels) {
             flowArr->Node(i) = Symbol(it->c_str());
+            i++;
         }
         DataNode ret = flowArr;
         flowArr->Release();
@@ -703,13 +692,14 @@ DataNode RndPropAnim::ForeachFrame(const DataArray *da) {
     float f6 = da->Float(6);
     DataNode *var7 = da->Var(7);
     PropKeys *theKeys = GetKeys(obj2, arr3);
-    if (!theKeys)
+    if (!theKeys) {
         return 0;
-
-    for (float fIt = f4; fIt < f5; fIt += f6) {
-        ValueFromFrame(theKeys, fIt, var7);
-        for (int i = 8; i < da->Size(); i++) {
-            da->Command(i)->Execute(true);
+    } else {
+        for (float fIt = f4; fIt < f5; fIt += f6) {
+            ValueFromFrame(theKeys, fIt, var7);
+            for (int i = 8; i < da->Size(); i++) {
+                da->Command(i)->Execute();
+            }
         }
     }
     return 1;
@@ -821,8 +811,7 @@ struct ForAllKeyframesSorter {
 
 DataNode RndPropAnim::ForAllKeyframes(const DataArray *da) {
     std::vector<DataArrayPtr> ptrs;
-    for (std::list<PropKeys *>::iterator it = mPropKeys.begin(); it != mPropKeys.end();
-         ++it) {
+    FOREACH (it, mPropKeys) {
         PropKeys *cur = *it;
         if (cur->Target() && cur->Prop()) {
             for (int i = 0; i < cur->NumKeys(); i++) {
@@ -850,7 +839,7 @@ DataNode RndPropAnim::ForAllKeyframes(const DataArray *da) {
         *var4 = curPtr->Node(2);
         *var5 = curPtr->Node(3);
         for (int j = 6; j < da->Size(); j++) {
-            da->Command(j)->Execute(true);
+            da->Command(j)->Execute();
         }
     }
     return 0;

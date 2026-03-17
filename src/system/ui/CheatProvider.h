@@ -34,6 +34,8 @@ public:
      */
     void Invoke(int idx, LocalUser *user);
 
+    Symbol CurFilter() const { return mFilters[mFilterIdx]; }
+
     static void Init();
     static void Terminate();
     static CheatProvider *sInstance;
