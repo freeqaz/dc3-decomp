@@ -702,11 +702,13 @@ DataNode HamCharacter::OnSoundPlay(const DataArray *a) {
         Sound *sound = dynamic_cast<Sound *>(obj);
         if (sound) {
             if (mOutfit.Str()[0] == '\0') {
+#ifndef HX_NATIVE
                 MILO_NOTIFY(
                     "HamCharacter::OnSoundPlay: No outfit specified for character %s. "
                     "Not going to play lipsync\n",
                     (char *)Name()
                 );
+#endif
                 return DataNode(0);
             }
             Symbol outfitChar = GetOutfitCharacter(mOutfit, true);

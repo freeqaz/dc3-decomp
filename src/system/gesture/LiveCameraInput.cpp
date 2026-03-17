@@ -13,6 +13,7 @@
 #include "rndobj/Bitmap.h"
 #include "rndobj/Mat.h"
 #include "rndobj/Tex.h"
+#include "math/Utl.h"
 #include "utl/MemTrack.h"
 #include "utl/Std.h"
 #include "xdk/nui/nuiapi.h"
@@ -23,6 +24,7 @@
 #include "xdk/xapilibi/winerror.h"
 
 u8 *gDebugDepth = nullptr;
+float gTempPortraitOffset;
 
 namespace {
     // bool  GetExposureRegion(struct _NUI_CAMERA_AE_ROI &)
@@ -35,6 +37,26 @@ namespace {
 LiveCameraInput *LiveCameraInput::sInstance;
 int g_ColorPollCnt;
 int g_ColorNoFrameDataCnt;
+
+void CamTexClip::StoreTextureClip(RndTex *tex, float clipLeft, float clipTop, float, float) {
+    const float scaleX = 132.0f / 640.0f;
+    const float scaleY = 160.0f / 480.0f;
+    const float minX = 66.0f / 640.0f;
+    const float maxX = 574.0f / 640.0f;
+    const float minY = 80.0f / 480.0f;
+    const float maxY = 400.0f / 480.0f;
+
+    float adjustedTop = gTempPortraitOffset * scaleY + clipTop;
+    mTex = tex;
+    mXfm = Transform::IDXfm();
+    mXfm.m.x *= scaleX;
+    float clampedX = Clamp(minX, maxX, clipLeft);
+    float clampedY = Clamp(minY, maxY, adjustedTop);
+    mXfm.v.x = clampedX;
+    mXfm.v.y = clampedY;
+    mXfm.m.y *= scaleY;
+    mXfm.m.z.Set(mXfm.m.z.x, mXfm.m.z.y, mXfm.m.z.z);
+}
 
 #pragma region TextureStore
 

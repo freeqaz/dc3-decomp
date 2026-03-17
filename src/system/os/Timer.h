@@ -35,6 +35,8 @@ inline void __storeshortbytereverse(unsigned short val, int offset, void *base) 
 #endif
 
 class Timer {
+    friend class AutoSlowFrame;
+
 private:
     unsigned int mStart; // 0x00
     // padding, 0x04
@@ -181,8 +183,28 @@ class AutoSlowFrame {
 public:
     static int sDepth;
 
-    AutoSlowFrame(const char *reason, float);
-    ~AutoSlowFrame();
+    AutoSlowFrame(const char *reason, float waiver) {
+        mWaiver = waiver;
+        mReason = reason;
+        mStartMs = 0.0f;
+        if (MainThread()) {
+            sDepth++;
+            mStartMs = Timer::sSlowFrameTimer.Ms();
+            Timer::sSlowFrameWaiver += waiver;
+            Timer::sSlowFrameTimer.Start();
+        }
+    }
+
+    ~AutoSlowFrame() {
+        if (MainThread()) {
+            sDepth--;
+            Timer::sSlowFrameTimer.Stop();
+            float elapsed = Timer::sSlowFrameTimer.Ms() - mStartMs;
+            if (elapsed > mWaiver) {
+                Timer::sSlowFrameReason = mReason;
+            }
+        }
+    }
 
 private:
     float mStartMs;       // 0x0

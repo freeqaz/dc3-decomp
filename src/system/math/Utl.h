@@ -153,6 +153,8 @@ inline bool MaxEq(float &x, const float &y) {
     return tmp != x;
 }
 
+inline float Abs(float x) { return fabsf(x); }
+
 template <class T>
 inline const T Abs(T x) {
     if (x > 0)

@@ -208,7 +208,15 @@ void RndShader::SelectConfig(RndMat *mat, ShaderType shader_type, bool b3) {
     } else if (TheShaderMgr.InDepthVolume()) {
         shader_type = kDepthVolumeShader;
     }
+#ifdef HX_NATIVE
+    // Native/web: skip shader diagnostic path. On Xbox retail UsingCD()==true
+    // so this path is dead code. On native, UsingCD() may be false (no .ark),
+    // which would activate editor-mode shader validation that crashes on WASM
+    // (virtual calls into unimplemented NG shader subsystems).
+    if (!b3 && TheLoadMgr.EditMode()) {
+#else
     if (!b3 && (TheLoadMgr.EditMode() || !UsingCD())) {
+#endif
         if (!DisplayMatShaderFlagsError(mat, shader_type)) {
             bool doError = true;
             void *metaMat;
@@ -242,7 +250,12 @@ void RndShader::Cache(ShaderType s, ShaderOptions opts, RndMat *mat) {
     RndShaderProgram &program = TheShaderMgr.FindShader(s, opts);
     if (!program.Cached()) {
         if (!program.Cache(s, opts, nullptr, nullptr)
-            && (UsingCD() || !TheShaderMgr.CacheShaders())) {
+#ifdef HX_NATIVE
+            && !TheShaderMgr.CacheShaders()
+#else
+            && (UsingCD() || !TheShaderMgr.CacheShaders())
+#endif
+        ) {
             MatShaderFlagsOK(mat, s);
         }
     }
@@ -283,7 +296,7 @@ bool RndShaderParticles::CheckError(MatFlagErrorType type) {
 void SetColorWriteMask(const ShaderOptions &opts, RndMat *mat) {
     bool writeAlpha = mat->mAlphaWrite;
     if (!mat->mForceAlphaWrite
-        && ((opts.flags & 0x400000) != 0 || ((NgMat *)mat)->AllowHDR() || writeAlpha)) {
+        && ((opts.flags & 0x400000) != 0 || TheNgRnd.Offscreen() || writeAlpha)) {
         writeAlpha = true;
     }
     TheRenderState.SetColorWriteMask((-(unsigned int)writeAlpha & 8) + 7);
@@ -383,20 +396,30 @@ u64 RndShaderDepthVolume::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
 
 u64 RndShaderSimple::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
     u64 opts = 0;
-    if (s == kBlurShader) {
+    switch (s) {
+    case kBlurShader:
         opts = (u64)((TheShaderMgr.unk14 - 1) & 0xf) << 14;
-    } else if (s == kErrorShader) {
+        break;
+    case kErrorShader: {
         int boneCount = TheShaderMgr.BoneCount();
         bool displayError = TheShaderMgr.GetShaderErrorDisplay();
         opts = ((u64)displayError << 23 | (u64)(boneCount != 0)) << 12;
-    } else if (s == kMovieShader) {
-        opts = ((u64)(mat->NormalMap() != nullptr) << 4
-            | (u64)(mat->GetSpecularMap() == nullptr)) << 1;
-    } else if (s == kPostprocessErrorShader) {
+        break;
+    }
+    case kMovieShader:
+        opts = ((u64)(mat->GetSpecularMap() == nullptr)
+            | (u64)(mat->NormalMap() != nullptr) << 4) << 1;
+        break;
+    case kPostprocessErrorShader: {
         bool displayError = TheShaderMgr.GetShaderErrorDisplay();
         opts = (u64)displayError << 35;
-    } else if (s == kShadowmapShader) {
+        break;
+    }
+    case kShadowmapShader:
         opts = (u64)(TheShaderMgr.BoneCount() != 0) << 12;
+        break;
+    default:
+        break;
     }
     return -(u64)(TheRnd.GetDrawMode() != Rnd::kDrawOcclusion)
         & (((u64)(TheHiResScreen.IsActive() & 1) << 52) | opts);
@@ -1224,7 +1247,7 @@ void RndShaderStandard::Select(RndMat *mat, ShaderType shader_type, bool b) {
         CheckShadow();
         u64 optsVal = CalcShaderOpts((NgMat *)mat, shader_type, b);
         MILO_ASSERT((shader_type == kStandardShader || shader_type == kStandardBBShader || shader_type == kAllWhiteShader), 0x4BB);
-        if (shader_type != kStandardShader) {
+        if (shader_type == kStandardBBShader) {
             shader_type = kStandardShader;
         }
         SetColorWriteMask(ShaderOptions(optsVal), mat);
@@ -1361,7 +1384,7 @@ void RndShaderSyncTrack::Select(RndMat *mat, ShaderType shader_type, bool b) {
         CheckShadow();
         u64 optsVal = CalcShaderOpts((NgMat *)mat, shader_type, b);
         MILO_ASSERT((shader_type == kSyncTrackShader || shader_type == kSyncTrackChargeEffectShader), 0x749);
-        if (shader_type != kSyncTrackShader) {
+        if (shader_type == kSyncTrackChargeEffectShader) {
             shader_type = kSyncTrackShader;
         }
         SetColorWriteMask(ShaderOptions(optsVal), mat);

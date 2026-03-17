@@ -251,7 +251,7 @@ int XSetThreadProcessor(int, int) { return 0; }
 
 // Scoring / game utilities — stubs for web
 // SynthUtlTerm — now in synth/Utl.cpp
-void altCfg(DataNode, DataNode) {}
+// altCfg: removed — was most vexing parse in Locale.cpp (now fixed, no function exists)
 void CacheWav(const char *, CacheResourceResult &r) { r = kCacheUnnecessary; }
 // DateTimeCmp — now in DateTime.cpp
 

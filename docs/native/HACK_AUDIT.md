@@ -394,6 +394,8 @@ These are correct and should remain:
 | HamDirector debug logging (2) | **SIMPLIFIED** | DebugWorldLoad() removed; logging now unconditional in `#ifdef HX_NATIVE` |
 | HamDirector Enter/GetWorld (2) | **DONE** | Removed Phase 2 — FileMerger pipeline wires mMerger |
 | SetNativeVenueWorld | **DONE** | Removed Phase 4 — dead code, no callers |
+| gNativeHudDir hack | **DONE** | Removed Phase 5 — DirLoader parent chain + FindObject ProxyDir fallback. 461→7 warnings |
+| ObjPtrVec::Node::RefOwner bug | **DONE** | Fixed Phase 5 — `static_cast<Hmx::Object*>(mOwner)` → `Owner()` indirection |
 | Game::IsLoaded bypasses (2) | **DONE** | Removed Phase 3 — PollForLoading gates on conditions first |
 | GamePanel::StartIntro block | **DONE** | Removed Phase 3 — engine pipeline handles all setup |
 | Song::SyncState guard + stub | **DONE** | Unguarded Phase 3 — sync-wait loop has native guard |
@@ -408,3 +410,4 @@ These are correct and should remain:
 - Web infinite hang fixed (DataWhile loop on uninitialized `mTotalMeasures`)
 - 7 `HX_NATIVE` guards removed or restructured (2026-03-16)
 - 14 more guards removed in FileMerger convergence Phase 3+4 (2026-03-17): Game.cpp bypasses (2), GamePanel StartIntro block, Song::SyncState guard + stub, HamDirector SetNativeVenueWorld + DebugWorldLoad (2 files) + Enter/GetWorld (2)
+- Phase 5 (2026-03-17): gNativeHudDir removed (~330 lines loading+drawing), DirLoader parent chain + FindObject ProxyDir fallback added, ObjPtrVec::Node::RefOwner pre-existing bug fixed

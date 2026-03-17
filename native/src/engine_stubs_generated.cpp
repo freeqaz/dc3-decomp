@@ -312,9 +312,7 @@ extern "C" long _stub_fn_102() { return 0; }
 // NuiTransformSkeletonToDepthImage(__vector4, float*, float*)
 extern "C" __attribute__((weak, used)) long _stub_fn_111() __asm__(ASM_SYM("_Z32NuiTransformSkeletonToDepthImage9__vector4PfS0_"));
 extern "C" long _stub_fn_111() { return 0; }
-// altCfg(DataNode, DataNode)
-extern "C" __attribute__((weak, used)) long _stub_fn_115() __asm__(ASM_SYM("_Z6altCfg8DataNodeS_"));
-extern "C" long _stub_fn_115() { return 0; }
+// altCfg: removed — was most vexing parse in Locale.cpp (now fixed, no function exists)
 // CacheWav(char const*, CacheResourceResult&)
 extern "C" __attribute__((weak, used)) long _stub_fn_118() __asm__(ASM_SYM("_Z8CacheWavPKcR19CacheResourceResult"));
 extern "C" long _stub_fn_118() { return 0; }
@@ -374,9 +372,7 @@ extern "C" long _stub_fn_524() { return 0; }
 // CacheMgrXbox::CacheMgrXbox()
 extern "C" __attribute__((weak, used)) long _stub_fn_525() __asm__(ASM_SYM("_ZN12CacheMgrXboxC1Ev"));
 extern "C" long _stub_fn_525() { return 0; }
-// DrawString3D::DrawFixedZ(float)
-extern "C" __attribute__((weak, used)) long _stub_fn_531() __asm__(ASM_SYM("_ZN12DrawString3D10DrawFixedZEf"));
-extern "C" long _stub_fn_531() { return 0; }
+// DrawString3D::DrawFixedZ — now in Graph.cpp
 // (anonymous namespace)::CheckReads(bool)
 extern "C" __attribute__((weak, used)) long _stub_fn_537() __asm__(ASM_SYM("_ZN12_GLOBAL__N_110CheckReadsEb"));
 extern "C" long _stub_fn_537() { return 0; }

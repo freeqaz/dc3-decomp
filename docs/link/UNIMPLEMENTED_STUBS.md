@@ -1235,7 +1235,7 @@ May be from headers, SDK, or small utility classes not split by jeff.
 - [ ] `?WIN_HYPE_SOLO@?EB@??CamShotVOData@@YAXVSymbol@@AAV2@111@Z@4V2@A`
 - [ ] `?active@?1??CamShotVOData@@YAXVSymbol@@AAV2@111@Z@4V2@A`
 - [ ] `?all@?1??CamShotVOData@@YAXVSymbol@@AAV2@111@Z@4V2@A`
-- [ ] `?altCfg@@YA?AVDataArrayPtr@@VDataNode@@0@Z`
+- [x] `?altCfg@@YA?AVDataArrayPtr@@VDataNode@@0@Z` — was most vexing parse in Locale.cpp; fixed with extra parens, no function needed
 - [ ] `?battle_intro_crew@?1??CamShotVOData@@YAXVSymbol@@AAV2@111@Z@4V2@A`
 - [ ] `?battle_outro_crew@?1??CamShotVOData@@YAXVSymbol@@AAV2@111@Z@4V2@A`
 - [ ] `?camp_intro_crew@?1??CamShotVOData@@YAXVSymbol@@AAV2@111@Z@4V2@A`

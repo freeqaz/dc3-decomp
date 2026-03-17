@@ -571,8 +571,19 @@ PropKeys *HamDirector::GetPropKeys(Difficulty d, Symbol s) {
 }
 
 void HamDirector::VenueEnter(WorldDir *dir) {
-    if (dir)
+    if (dir) {
+#ifdef HX_NATIVE
+        // On Xbox, the venue WorldDir's type is set by DTA (set_type "world")
+        // during the world_panel flow. On native, the DTA flow doesn't fire
+        // set_type, so we set it explicitly. The "world" type is defined in
+        // world_objects.dta and provides handlers like select_camera (which
+        // forwards to $hamdirector to advance song.anim via OnSelectCamera).
+        if (!dir->TypeDef()) {
+            dir->SetType("world");
+        }
+#endif
         dir->Enter();
+    }
     mPlayer0Char = dir ? dir->Find<HamCharacter>("player0", true) : nullptr;
     mPlayer1Char = dir ? dir->Find<HamCharacter>("player1", true) : nullptr;
     mBackup0Char = dir ? dir->Find<HamCharacter>("backup0", true) : nullptr;
@@ -3077,17 +3088,25 @@ void HamDirector::Poll() {
     if (!mPollEnabled) return;
     HamCharacter *player0 = TheHamWardrobe ? TheHamWardrobe->GetCharacter(0) : nullptr;
     HamCharacter *player1 = TheHamWardrobe ? TheHamWardrobe->GetCharacter(1) : nullptr;
-#ifdef HX_NATIVE
-    // On native, use the difficulty-specific song.anim (not the routine builder).
-    // SongAnim(0) returns the routine builder when merge_moves=1, but OnSelectCamera
-    // advances the original song.anim. We must read from the same object.
-    HamPlayerData *hpd0 = TheGameData->Player(0);
-    RndPropAnim *songAnim = hpd0 ? SongAnimByDifficulty(LegacyDifficulty(hpd0->GetDifficulty())) : nullptr;
-    if (!songAnim) songAnim = SongAnim(0);
-#else
     RndPropAnim *songAnim = SongAnim(0);
-#endif
     if (songAnim) {
+#ifdef HX_NATIVE
+        // Fallback: during the intro phase, Game::Poll() doesn't call
+        // SetSecondsAndBeat(), so Beat() stays at 0 and OnSelectCamera
+        // computes frame=0 every tick. Use wall-clock time to keep song.anim
+        // advancing until the beat system starts. Once Beat() is non-zero,
+        // OnSelectCamera handles frame advancement via the normal DTA path.
+        if (TheTaskMgr.Beat() == 0.0f) {
+            float secs = TheTaskMgr.Seconds(TaskMgr::kRealTime);
+            if (secs >= 0.0f) {
+                float frame = secs * 30.0f;
+                float endFrame = songAnim->EndFrame();
+                if (endFrame > 0.0f && frame > endFrame)
+                    frame = endFrame;
+                songAnim->AdvanceFrame(frame);
+            }
+        }
+#endif
         if (player0 && player1) {
             int p0anim = player0->SongAnimation();
             int p1anim = player1->SongAnimation();

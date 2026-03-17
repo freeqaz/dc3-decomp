@@ -26,6 +26,7 @@ void DrawSphere::Draw() { UtilDrawSphere(mCenter, mRadius, mCol, nullptr); }
 void DrawString::Draw() { TheRnd.DrawString(mText.c_str(), mPos, mCol, true); }
 void DrawString::DrawFixedZ(float) { Draw(); }
 void DrawString3D::Draw() { UtilDrawString(mText.c_str(), mPos, mCol); }
+void DrawString3D::DrawFixedZ(float) { Draw(); }
 void Line::Draw() { TheRnd.DrawLine(mA, mB, mCol, mZBuf); }
 void Line::DrawFixedZ(float f) {
     TheRnd.DrawLine(Vector3(mA.x, mA.y, f), Vector3(mB.x, mB.y, f), mCol, mZBuf);

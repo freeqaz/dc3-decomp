@@ -387,9 +387,7 @@ extern "C" const char __link_glue_empty_str[] = "";
 // unit) Removed: OnMsg@HamUI — implemented in HamUI.cpp (matching unit) Removed:
 // RemoveFromLists@Spotlight — implemented in Spotlight.cpp (matching unit) Removed:
 // VertexToWorld — implemented in DepthBuffer3D.cpp (matching unit)
-#pragma comment(                                                                         \
-    linker, "/ALTERNATENAME:?altCfg@@YA?AVDataArrayPtr@@VDataNode@@0@Z=__link_glue_noop" \
-)
+// Removed: altCfg — was most vexing parse in Locale.cpp (now fixed, no function reference)
 #pragma comment(linker, "/ALTERNATENAME:?merged_82610090@@YAPBDPBDPCH@Z=__link_glue_noop")
 
 // -- BinStream operator<< template instantiations --

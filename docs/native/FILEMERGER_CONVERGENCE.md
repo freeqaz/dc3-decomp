@@ -1,7 +1,7 @@
 # FileMerger Convergence Plan (Revised)
 
 **Date**: 2026-03-17 (updated 2026-03-17)
-**Status**: Phase 1–4 complete (2026-03-17) — runtime verified on glitterati + dclive
+**Status**: Phase 1–5 complete (2026-03-17) — runtime verified on glitterati + dclive
 **Context**: [LOADING_ARCHITECTURE.md](LOADING_ARCHITECTURE.md) documents the divergence. This doc is the fix.
 **Review**: [2026-03-17-convergence-review.md](../sessions/2026-03-17-convergence-review.md)
 
@@ -292,6 +292,32 @@ is gated on `if (mGameModeMerger)`. Verify this doesn't cause issues.
 4. [x] Kept diagnostic logging (PollForLoading state 4, OnLoadSong, OnFileLoaded)
 5. [x] Kept Game.cpp null-guards (cheap safety for edge cases)
 6. [x] Kept all architectural necessities (App.cpp venue components, DC3_VENUE fallback, explicit drawing, GamePanel safety timeouts, HamDirector crew/camera/merger guards)
+
+### Phase 5: DirLoader parent chain + gNativeHudDir removal — DONE (2026-03-17)
+
+**Problem**: With gNativeHudDir removed, HUD flow animations couldn't find their target
+objects (461 "couldn't find" warnings) because flow subdirs had `Dir() == this`
+(self-referential during loading) and no way to reach the parent ObjectDir.
+
+**Discovery**: `mParentDir` in DirLoader was dead code — stored but never read. FlowPtr
+already used `Loader()->ProxyDir()` for parent resolution. We extended this pattern to
+`FindObject` for all object types.
+
+**Also fixed**: `ObjPtrVec::Node::RefOwner()` had a pre-existing bug —
+`static_cast<Hmx::Object*>(mOwner)` cast the ObjPtrVec (an ObjRefOwner, NOT Hmx::Object)
+to the wrong type. Fixed to `static_cast<ObjPtrVec<T1,T2>*>(mOwner)->Owner()`.
+
+1. [x] Add `ParentDir()` / `SetParentDir()` accessors to DirLoader.h
+2. [x] Add `GetLoader()` accessor to ObjDirPtr (Dir.h)
+3. [x] Propagate parent dir in LoadSubDir and PreLoad (Dir.cpp, 3 sites)
+4. [x] Add FindObject ProxyDir/ParentDir fallback when Dir()==this (Dir.cpp)
+5. [x] Update ObjPtr_p.h parent walk in 3 Load methods
+6. [x] Fix ObjPtrVec::Node::RefOwner() bug (ObjPtr_p.h)
+7. [x] Verify: 461 → 7 "couldn't find" warnings (7 = harmless campaign/venue sounds)
+8. [x] Verify: 0 crashes, clean GPU rendering, 2200 frames stable
+9. [x] Verify: PPC build unaffected (all changes in `#ifdef HX_NATIVE`)
+
+See [session doc](../sessions/2026-03-17-dirloader-parent-chain.md) for full details.
 
 ## What This Enables
 

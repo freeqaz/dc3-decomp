@@ -569,21 +569,11 @@ void GamePanel::CreateGame() {
 void GamePanel::StartGame() {
     AutoTimer::SetCollectStats(true, TheRnd.VerboseTimers());
 #ifdef HX_NATIVE
+    // On native, always start (no intro gating). Character outfits are loaded
+    // by HamDirector::OnFileLoaded('song') via the DTA flow — do NOT call
+    // LoadCharacters here, as it would trigger a redundant async FileMerger
+    // Clear→Merge cycle that destroys character meshes/animation mid-gameplay.
     mGame->Start();
-
-    // Step 3: Populate HamWardrobe main characters
-    if (TheHamWardrobe && TheHamWardrobe->Dir()) {
-        // The DTA load_characters flow doesn't run on native.
-        // Trigger it with default outfits for the song's characters.
-        Symbol venue = TheGameData->Venue();
-        TheHamWardrobe->LoadCharacters(
-            Symbol("mo01"), Symbol("emilia01"),
-            Symbol("crew01"), Symbol("crew02"),
-            kBackupDancersOutfit, Symbol(), venue, false
-        );
-        MILO_LOG("Native: LoadCharacters done, AllCharsLoaded=%d\n",
-            TheHamWardrobe->AllCharsLoaded());
-    }
 #else
     if (mGame->HasIntro()) {
         mGame->Start();
@@ -592,23 +582,9 @@ void GamePanel::StartGame() {
     ThePresenceMgr.SetInGame(TheHamSongMgr.GetSongIDFromShortName(TheGameData->GetSong()));
     mState = kGamePlaying;
 #ifdef HX_NATIVE
-    // HACK: On native, the DTA flow system doesn't process game_stage
-    // property changes to hide the intro overlay. Manually set the
-    // property and enumerate venue drawables to find the intro overlay.
+    // SongSequence::Play also sets game_stage to "playing", but on native
+    // the intro sequence may be skipped — set it explicitly as a fallback.
     TheHamProvider->SetProperty("game_stage", Symbol("playing"));
-
-    // Enumerate venue drawables to find/hide the intro overlay.
-    WorldDir *venue = TheHamDirector->GetVenueWorld();
-    if (venue) {
-        // Log all showing RndDir objects in venue to find intro overlay
-        fprintf(stderr, "DC3 Native: venue RndDir objects:\n");
-        for (ObjDirItr<RndDir> it(venue, true); it != nullptr; ++it) {
-            if (it != venue && it->Name() && it->Name()[0]) {
-                fprintf(stderr, "  RndDir '%s' showing=%d draws=%d\n",
-                        it->Name(), it->Showing(), it->NumDraws());
-            }
-        }
-    }
     fprintf(stderr, "DC3 Native: StartGame() — game_stage set to 'playing'\n");
 #endif
 }

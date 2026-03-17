@@ -1,7 +1,7 @@
 # Session: Remove gNativeHudDir Hack — Final FileMerger Convergence
 
 **Date**: 2026-03-17
-**Status**: Blocked — gNativeHudDir removal causes visual regression; needs flow target resolution fix first
+**Status**: FIXED — DirLoader parent chain + FindObject ProxyDir fallback resolves 461→7 warnings. See [2026-03-17-dirloader-parent-chain.md](2026-03-17-dirloader-parent-chain.md)
 **Prerequisite**: FileMerger convergence Phase 1-4 (commit b9719618e)
 
 ## Problem
@@ -255,9 +255,12 @@ The following changes from this session are STILL APPLIED and should be kept:
 | FileMerger parent dir for DirLoader | `FileMerger.cpp:411` | **KEEP** — correct fix, helps ObjPtr resolution |
 | RndBone mOffset identity init | `Mesh.h:28` | **KEEP** — fixes bone garbage root cause |
 | BoneSetup diagnostic logging | `BoneSetup.cpp:16` | **KEEP** — tracks remaining garbage bones |
-| skipUIDraw removal | `App.cpp:~1285` | **NEEDS REVERT** if gNativeHudDir is restored |
-| gNativeHudDir loading removal | `App.cpp:~1201` | **NEEDS REVERT** |
-| gNativeHudDir drawing removal | `App.cpp:~1288` | **NEEDS REVERT** |
+| skipUIDraw removal | `App.cpp:~1285` | **KEEP** — TheUI->Draw() runs on game_screen |
+| gNativeHudDir loading removal | `App.cpp:~1201` | **KEEP** — FileMerger pipeline loads HUD |
+| gNativeHudDir drawing removal | `App.cpp:~1288` | **KEEP** — TheUI->Draw() handles rendering |
+| DirLoader ParentDir propagation | `Dir.cpp`, `DirLoader.h`, `Dir.h` | **KEEP** — enables ObjPtr parent walk |
+| FindObject ProxyDir fallback | `Dir.cpp` | **KEEP** — mirrors FlowPtrGetLoadingDir for all object types |
+| ObjPtrVec::Node::RefOwner fix | `ObjPtr_p.h` | **KEEP** — fixed pre-existing bug (static_cast to wrong type) |
 
 ### How to revert gNativeHudDir removal
 
