@@ -8,6 +8,7 @@ class VoiceControlPanel;
 class SongSortMgr : public NavListSortMgr {
     friend class SongSort;
     friend class VoiceControlPanel;
+    friend class VoiceInputPanel;
 public:
     virtual DataNode Handle(DataArray *, bool);
     virtual bool HeadersSelectable(); // 0x6c

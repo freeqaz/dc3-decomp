@@ -1,6 +1,8 @@
 #include "meta/Achievements.h"
 #include "xdk/XAPILIB.h"
 
+void Achievements::PlatformInit() {}
+
 XUSER_ACHIEVEMENT Achievements::GetAchievementData(int i1, int i2) {
     XUSER_ACHIEVEMENT a;
     a.dwAchievementId = i2;

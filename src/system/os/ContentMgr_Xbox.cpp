@@ -427,4 +427,109 @@ bool XboxContentMgr::MountContent(Symbol name) {
     return alreadyMounted;
 }
 
-void XboxContentMgr::PollRefresh() {}
+void XboxContentMgr::PollRefresh() {
+    if (mState == kDiscoveryMounting) {
+        mState = kDiscoveryLoading;
+        unk938 = 0;
+        for (int i = 0; i < kNumberOfBuffers; i++) {
+            if (mOverlappeds[i]) {
+                DWORD numItems = 0;
+                DWORD res = XGetOverlappedResult(mOverlappeds[i], &numItems, false);
+                if (res == 0x3E4) {
+                    mState = kDiscoveryMounting;
+                    continue;
+                }
+                if (res == 0) {
+                    for (unsigned int j = 0; j < numItems; j++) {
+                        XCONTENT_CROSS_TITLE_DATA *xdata =
+                            (XCONTENT_CROSS_TITLE_DATA *)((char *)&mXDatas[i] + j * 0x138);
+                        char *filename = xdata->szFileName;
+
+                        // Check if this content is in the ignored list
+                        String *found = std::find(
+                            gIgnoredContent.begin(), gIgnoredContent.end(), filename
+                        );
+                        if (found != gIgnoredContent.end())
+                            continue;
+
+                        bool discovered = false;
+                        if (xdata->dwContentType == 0x7000) {
+                            FOREACH (it, mCallbacks) {
+                                Symbol sym(filename);
+                                if (!(*it)->ContentTitleDiscovered(
+                                        xdata->dwTitleId, sym
+                                    )
+                                    || discovered) {
+                                    discovered = true;
+                                } else {
+                                    discovered = false;
+                                }
+                            }
+                        } else {
+                            FOREACH (it, mCallbacks) {
+                                Symbol sym(filename);
+                                if (!(*it)->ContentDiscovered(sym) || discovered) {
+                                    discovered = true;
+                                } else {
+                                    discovered = false;
+                                }
+                            }
+                        }
+
+                        if (discovered) {
+                            unk938++;
+                        }
+
+                        Content *newContent = new XboxContent(*xdata, unk934, i, discovered);
+                        unk934++;
+                        std::list<Content *>::iterator end = mContents.end();
+                        mContents.insert(end, newContent);
+                    }
+                    memset(mOverlappeds[i], 0, 0x1c);
+                    DWORD enumRes = XEnumerateCrossTitle(
+                        mEnumHandles[i], &mXDatas[i], 0x138, 0, mOverlappeds[i]
+                    );
+                    if (enumRes == 0x3E5) {
+                        mState = kDiscoveryMounting;
+                    }
+                } else {
+                    unsigned short err = XGetOverlappedExtendedError(mOverlappeds[i]);
+                    if ((err & 0xFFFF) != 0x12) {
+                        MILO_NOTIFY("XEnumerateCrossTitle (%d) error: %d", i, err);
+                    }
+                }
+                operator delete(mOverlappeds[i]);
+                mOverlappeds[i] = nullptr;
+                CloseHandle(mEnumHandles[i]);
+            }
+        }
+        FOREACH (it, mCallbacks) {
+            (*it)->ContentMountBegun(unk938);
+        }
+    } else if (mState == kDiscoveryLoading) {
+        int mountedCount = 0;
+        FOREACH (it, mContents) {
+            if ((*it)->GetState() == Content::kMounted) {
+                mountedCount++;
+            }
+        }
+        if (mountedCount >= 6) {
+            mState = kDiscoveryCheckIfDone;
+        }
+    } else if (mState == kMounting) {
+        bool allDone = true;
+        FOREACH (it, mContents) {
+            Content::State state = (*it)->GetState();
+            if (state == Content::kMounted) {
+                (*it)->Unmount();
+                allDone = false;
+            } else {
+                allDone = (state != Content::kNeedsMounting) && allDone;
+            }
+        }
+        if (allDone) {
+            mState = kDiscoveryLoading;
+        }
+    }
+    ContentMgr::PollRefresh();
+}

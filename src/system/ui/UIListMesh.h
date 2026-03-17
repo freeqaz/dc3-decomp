@@ -52,7 +52,6 @@ public:
     }
     virtual void Draw(const Transform &, float, UIColor *, Box *);
 
-private:
     UIListMesh *mListMesh; // 0x4
     RndMat *mMat; // 0x8
 };

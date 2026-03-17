@@ -60,8 +60,8 @@ GameEndedDataPointJob::GameEndedDataPointJob(
     Symbol songSym = TheGameData->GetSong();
 
     if (TheMaster != nullptr && TheMaster->IsLoaded()) {
-        float dur = TheMaster->SongDurationMs();
-        float streamMs = TheMaster->StreamMs() / dur;
+        float streamMs = TheMaster->StreamMs();
+        streamMs = streamMs / TheMaster->SongDurationMs();
         song_pos = -streamMs >= 0.0f ? 0.0f : streamMs;
         song_pos = song_pos - 1.0f >= 0.0f ? 1.0f : song_pos;
     }
@@ -88,19 +88,19 @@ GameEndedDataPointJob::GameEndedDataPointJob(
             }
             MILO_ASSERT(sec, 0x64);
             int num_steps = sec->Steps().size();
-            int num_scores = perf->GetMoveScores().size();
+            unsigned long num_scores = perf->GetMoveScores().size();
             if (num_scores > num_steps) {
                 String str(MakeString("(%d/%d)", num_scores, num_steps));
                 dataP.AddPair(custom_session, DataNode(str));
             }
         }
     } else {
-        float num_stars_val = 0.0f;
+        int num_stars_int = 0;
         const DataNode *pNode = TheGamePanel->Property(num_stars, false);
         if (pNode != nullptr) {
-            num_stars_val = (float)(int)pNode->Float();
+            num_stars_int = (int)pNode->Float();
         }
-        dataP.AddPair(perf_current_stars, (int)num_stars_val);
+        dataP.AddPair(perf_current_stars, num_stars_int);
         dataP.AddPair(perf_no_flashcard, (int)MetaPerformer::Current()->CompletedSongWithNoFlashcards());
     }
 
@@ -208,8 +208,9 @@ GameEndedDataPointJob::GameEndedDataPointJob(
     }
 
     if (TheMaster != nullptr) {
+        int duration = (int)TheMaster->SongDurationMs();
         static Symbol song_duration_ms("song_duration_ms");
-        dataP.AddPair(song_duration_ms, (int)TheMaster->SongDurationMs());
+        dataP.AddPair(song_duration_ms, duration);
     }
 
     dataP.AddPair(photos_disabled, (int)TheProfileMgr.DisablePhotos());

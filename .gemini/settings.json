@@ -12,5 +12,8 @@
         "PYTHONPATH": "/home/free/code/milohax/dc3-decomp"
       }
     }
+  },
+  "experimental": {
+    "modelSteering": true
   }
 }

@@ -23,6 +23,7 @@
 #include "hamobj/HamSongData.h"
 #include "hamobj/MoveDir.h"
 #include "hamobj/MoveMgr.h"
+#include "hamobj/ScoreUtl.h"
 #include "hamobj/SuperEasyRemixer.h"
 #include "macros.h"
 #include "meta_ham/HamSongMetadata.h"
@@ -1090,14 +1091,17 @@ void GameInit() {
     REGISTER_OBJ_FACTORY(BustAMovePanel)
     TheDebug.AddExitCallback(GameTerminate);
     TheSongSequence.Init();
-    // RatingState depends on ScoreUtlInit having populated sRatingStates.
-    // On native, ScoreUtlInit may not have run yet at GameInit time, so
-    // we populate rating states lazily in OnToggleAutoplay/OnCycleAutoplay.
     sAutoplayStates.push_back("maximum");
+#ifdef HX_NATIVE
     sAutoplayStates.push_back("move_perfect");
     sAutoplayStates.push_back("move_awesome");
     sAutoplayStates.push_back("move_ok");
     sAutoplayStates.push_back("move_bad");
+#else
+    for (int i = 0; i < 4; i++) {
+        sAutoplayStates.push_back(RatingState(i));
+    }
+#endif
     DataRegisterFunc("toggle_move_overlay", OnToggleMoveOverlay);
     DataRegisterFunc("toggle_autoplay", OnToggleAutoplay);
     DataRegisterFunc("cycle_autoplay", OnCycleAutoplay);

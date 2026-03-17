@@ -1,6 +1,7 @@
 #include "gesture/DepthBuffer3D.h"
 #include "gesture/BaseSkeleton.h"
 #include "gesture/GestureMgr.h"
+#include "gesture/JointUtl.h"
 #include "hamobj/HamGameData.h"
 #include "hamobj/RhythmDetector.h"
 #include "math/Mtx.h"
@@ -15,8 +16,37 @@
 LargeQuadRenderData DepthBuffer3D::mQuad;
 
 namespace {
-    void JointToVertexData(Vector3 &, const Skeleton &, SkeletonJoint, const Vector4 &);
-    void VertexToWorld(Vector3 &, const Transform &, float, const Vector4 &);
+    void JointToVertexData(
+        Vector3 &out, const Skeleton &skeleton, SkeletonJoint joint, const Vector4 &bounds
+    ) {
+        Vector3 screenPos;
+        JointScreenPos(skeleton.TrackedJoints()[joint], screenPos);
+        out.y = screenPos.z;
+        out.x = ((screenPos.x - bounds.x) / (bounds.z - bounds.x) - 0.5f) * 318.0f - 1.0f;
+        out.z = (0.5f - (screenPos.y - bounds.y) / (bounds.w - bounds.y)) * 238.0f - 1.0f;
+    }
+
+    void VertexToWorld(
+        Vector3 &pos, const Transform &xfm, float stretchNearCamera, const Vector4 &depthRange
+    ) {
+        float depth = (pos.y - 256.0f) * (1.0f / 4096.0f);
+        pos.y = depth;
+        depth = 1.0f - (depth - depthRange.x) / (depthRange.y - depthRange.x);
+        pos.y = depth;
+        if (depth < 0.0f)
+            depth = 0.0f;
+        if (depth > 1.0f)
+            depth = 1.0f;
+        pos.y = depth;
+        float y = (float)pow((double)depth, (double)stretchNearCamera) * -200.0f;
+        pos.y = y;
+        float x = pos.x;
+        float z = pos.z;
+        pos.x = xfm.m.x.x * x + xfm.m.y.x * y + xfm.m.z.x * z;
+        pos.y = xfm.m.x.y * x + xfm.m.y.y * y + xfm.m.z.y * z;
+        pos.z = xfm.m.x.z * x + xfm.m.y.z * y + xfm.m.z.z * z;
+    }
+
     RndMat *SetUpWorkingMat();
 }
 
@@ -153,6 +183,10 @@ void DepthBuffer3D::ListDrawChildren(std::list<RndDrawable *> &out) {
 }
 
 #ifdef HX_NATIVE
+void DepthBuffer3D::DrawShowing() {
+    // Kinect depth rendering not available on native
+}
+
 // TODO: implement Save/Copy/Load — DepthBuffer3D has complex rendering state
 void DepthBuffer3D::Save(BinStream &) {}
 void DepthBuffer3D::Copy(const Hmx::Object *, Hmx::Object::CopyType) {}

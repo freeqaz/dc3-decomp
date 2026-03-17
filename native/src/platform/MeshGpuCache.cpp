@@ -48,6 +48,10 @@ int GetMeshFrameCounter() {
     return sFrameCounter;
 }
 
+int GetMeshDrawCallsThisFrame() {
+    return sDrawCallsThisFrame;
+}
+
 // ============================================================================
 // Side table helpers
 // ============================================================================

@@ -2173,4 +2173,10 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
 
 #ifdef HX_NATIVE
 void MoveDir::PostUpdateFilters() {}
+
+void MoveDir::EnqueueDetectFrames(
+    float, int, std::vector<DetectFrame> &, const FilterVersion *
+) {
+    // Kinect gesture detection not available on native
+}
 #endif

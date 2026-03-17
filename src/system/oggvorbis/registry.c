@@ -28,6 +28,7 @@ extern vorbis_func_residue   residue0_exportbundle;
 extern vorbis_func_residue   residue1_exportbundle;
 extern vorbis_func_residue   residue2_exportbundle;
 extern vorbis_func_mapping   mapping0_exportbundle;
+extern vorbis_func_mapping   mapping0_poll_exportbundle;
 
 vorbis_func_floor     *_floor_P[]={
   &floor0_exportbundle,
@@ -42,4 +43,8 @@ vorbis_func_residue   *_residue_P[]={
 
 vorbis_func_mapping   *_mapping_P[]={
   &mapping0_exportbundle,
+};
+
+vorbis_func_mapping   *_poll_mapping_P[]={
+  &mapping0_poll_exportbundle,
 };

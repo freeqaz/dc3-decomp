@@ -226,3 +226,9 @@ BEGIN_HANDLERS(PlatformMgr)
     HANDLE_ACTION(debug_fake_signin_change_msg, DebugFakeSigninChangeMsg(_msg->Int(2)))
     HANDLE_SUPERCLASS(Hmx::Object)
 END_HANDLERS
+
+#ifdef HX_NATIVE
+DataNode PlatformMgr::OnSignInUsers(DataArray *) {
+    return DataNode(0);
+}
+#endif

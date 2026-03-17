@@ -75,7 +75,64 @@ private:
                     }
                 }
             }
+
+            // DLC directory: DC3_DLC_DIR env var points to additional content
+            const char *dlcDir = getenv("DC3_DLC_DIR");
+            if (dlcDir && dlcDir[0]) {
+                mLocation = kLocationHDD;
+                QueueDlcDir(dlcDir, cb->ContentDir(), pattern);
+            }
         }
+    }
+
+    void QueueDlcDir(const char *dlcRoot, const char *contentSubdir, const char *pattern) {
+        // Scan DLC root for subdirectories (each is a DLC pack)
+        DIR *root = opendir(dlcRoot);
+        if (!root) return;
+
+        struct dirent *pack;
+        while ((pack = readdir(root)) != nullptr) {
+            if (pack->d_name[0] == '.') continue;
+
+            char packDir[512];
+            snprintf(packDir, sizeof(packDir), "%s/%s", dlcRoot, pack->d_name);
+
+            struct stat st;
+            if (stat(packDir, &st) != 0 || !S_ISDIR(st.st_mode)) continue;
+
+            // Look for content files matching the pattern inside each DLC pack
+            char contentPath[512];
+            if (contentSubdir && *contentSubdir && strcmp(contentSubdir, ".") != 0) {
+                snprintf(contentPath, sizeof(contentPath), "%s/%s", packDir, contentSubdir);
+            } else {
+                snprintf(contentPath, sizeof(contentPath), "%s", packDir);
+            }
+
+            DIR *dir = opendir(contentPath);
+            if (!dir) continue;
+
+            struct dirent *entry;
+            while ((entry = readdir(dir)) != nullptr) {
+                if (entry->d_name[0] == '.') continue;
+
+                char fullPath[512];
+                snprintf(fullPath, sizeof(fullPath), "%s/%s", contentPath, entry->d_name);
+
+                struct stat fst;
+                if (stat(fullPath, &fst) != 0 || S_ISDIR(fst.st_mode)) continue;
+
+                if (FileMatch(entry->d_name, pattern)) {
+                    mName = pack->d_name;
+                    AddCallbackFile(
+                        (contentSubdir && *contentSubdir && strcmp(contentSubdir, ".") != 0)
+                            ? contentSubdir : ".",
+                        entry->d_name
+                    );
+                }
+            }
+            closedir(dir);
+        }
+        closedir(root);
     }
 
     void QueueCallbackDir(const char *virtualDir, const char *pattern) {

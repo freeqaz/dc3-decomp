@@ -34,7 +34,13 @@ int HashKey(void *ptr, int size) {
     return (uint(ptr) / 8) % size;
 }
 
+#ifdef HX_NATIVE
+void DiffTblReport(const char *, BlockStatTable &, BlockStatTable &, TextStream &) {
+    // Stub — memory diff reporting not critical for native
+}
+#else
 void DiffTblReport(const char *, BlockStatTable &, BlockStatTable &, TextStream &);
+#endif
 
 // Explicit template instantiation for MakeString with 4 array reference arguments
 template const char *MakeString<const char(&)[9], const char(&)[3], const char(&)[9], const char(&)[8]>(
@@ -408,6 +414,115 @@ void MemTracker::DiffDump(TextStream &ts) {
     }
     mFreedInfos.delete_and_clear();
     mTimeSlice++;
+}
+
+#include "hamobj/HamGameData.h"
+#include "hamobj/HamPlayerData.h"
+
+void MemTracker::ReportMemoryAlloc(const char *name) {
+    Symbol venue = TheGameData->Venue();
+    const char *char0 = 0;
+    const char *char1 = 0;
+    Symbol song = TheGameData->GetSong();
+    const char *venueStr = venue.Str();
+    HamPlayerData *p0 = TheGameData->Player(0);
+    if (p0) {
+        char0 = p0->Char().Str();
+    }
+    HamPlayerData *p1 = TheGameData->Player(1);
+    if (p1) {
+        char1 = p1->Char().Str();
+    }
+    char buf[128];
+    Hx_snprintf(buf, 0x80, "%s_%s_%s_%s_%s_%s_alloc_info.csv",
+                mAllocInfoName, name, venueStr, char0, char1, song.Str());
+    TextFileStream stream(buf, false);
+    SpitAllocInfo(&stream);
+    stream.File().Flush();
+}
+
+static bool sReportHeaderWritten = false;
+
+void MemTracker::ReportMemoryUsage(const char *name) {
+    TextStream *ts = &TheDebug;
+    if (mReport) {
+        ts = mReport;
+    }
+    if (!sReportHeaderWritten) {
+        FormatString hdr("Category,heap,free,biggest,lfrags,requested,allocated,peak\n");
+        *ts << hdr.Str();
+        sReportHeaderWritten = true;
+    }
+    int numHeaps = MemNumHeaps();
+    for (int i = 0; i < numHeaps + 1; i++) {
+        {
+            FormatString nameStr(name);
+            *ts << nameStr.Str();
+        }
+        if (i == MemNumHeaps()) {
+            int freeMem = _GetFreePhysicalMemory();
+            int used = mFreePhysMem - PhysicalUsage();
+            if (used < freeMem) {
+                used = freeMem;
+            }
+            {
+                FormatString physHeap(",physicalHeap");
+                *ts << physHeap.Str();
+            }
+            *ts << MakeString(",%d", used);
+            *ts << MakeString(",%d", freeMem);
+            {
+                FormatString zero(",0");
+                *ts << zero.Str();
+            }
+        } else {
+            int lfrags, i2, free, i4, biggest;
+            MemFreeBlockStats(i, lfrags, i2, free, i4, biggest);
+            const char *heapName = MemHeapName(i);
+            *ts << MakeString(",%sHeap", heapName);
+            *ts << MakeString(",%d", free);
+            *ts << MakeString(",%d", biggest);
+            *ts << MakeString(",%d", lfrags);
+        }
+        HeapStats &stats = mHeapStats[i];
+        *ts << MakeString(",%d", stats.mTotalReqSize);
+        *ts << MakeString(",%d", stats.mTotalActSize);
+        *ts << MakeString(",%d\n", stats.mMaxActSize);
+    }
+}
+
+void MemTracker::ReportMemoryUsageOverview(const char *name) {
+    TextStream *ts = &TheDebug;
+    if (mReport) {
+        ts = mReport;
+    }
+    FormatString hdr(
+        "\nCategory,Mode,MainPeak,MainAlloc,MainLargest,CharPeak,CharAlloc,CharLargest,"
+        "PhysPeak,PhysAlloc,PhysLargest\n"
+    );
+    *ts << hdr.Str();
+    int numHeaps = MemNumHeaps();
+    *ts << "overview,";
+    *ts << name;
+    int loopMax = numHeaps + 1;
+    for (int i = 0; i < loopMax; i++) {
+        int biggest;
+        if (i == MemNumHeaps()) {
+            int freeMem = _GetFreePhysicalMemory();
+            int used = mFreePhysMem - PhysicalUsage();
+            if (used < freeMem) {
+                used = freeMem;
+            }
+            biggest = 0;
+        } else {
+            int lfrags, i2, free, i4;
+            MemFreeBlockStats(i, lfrags, i2, free, i4, biggest);
+        }
+        HeapStats &stats = mHeapStats[i];
+        *ts << MakeString(",%d", stats.mMaxActSize);
+        *ts << MakeString(",%d", stats.mTotalActSize);
+        *ts << MakeString(",%d", biggest);
+    }
 }
 
 #ifndef HX_NATIVE

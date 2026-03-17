@@ -431,8 +431,9 @@ int RunInteractive(InteractiveMode& /*m*/, ViewerScene& scene,
             charAnim.AdvanceBeat(seconds, beat, cfg.bpm);
         }
 
-        // Update procedural blink timer
-        if (charAnim.faceServo && !charAnim.eyes && dt > 0.0 && dt < 0.5) {
+        // Update procedural blink timer (always advance — used as ForceBlink
+        // trigger when CharEyes exists, or direct weight when it doesn't)
+        if (charAnim.faceServo && dt > 0.0 && dt < 0.5) {
             charAnim.blink.Advance((float)dt);
         }
 

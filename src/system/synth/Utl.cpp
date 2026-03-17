@@ -1,4 +1,9 @@
 #include "Utl.h"
+#include "os/File.h"
+#include "os/HolmesClient.h"
+#include "os/System.h"
+#include "utl/Loader.h"
+#include "utl/MakeString.h"
 
 // Time values in measures (as fractions of a whole note)
 // Corresponds to: sixteenth, eighth, dotted_eighth, quarter, dotted_quarter, half, whole
@@ -9,6 +14,43 @@ WavFileCacheHelper gWavFileCacheHelper;
 const char *WavFileCacheHelper::CacheFile(const char *file) {
     CacheResourceResult result;
     return CacheWav(file, result);
+}
+
+static char sCacheWavBuf[0x100];
+
+const char *CacheWav(const char *file, CacheResourceResult &result) {
+    result = (CacheResourceResult)0;
+    Platform platform = TheLoadMgr.GetPlatform();
+    if (!file || *file == '\0' || platform == kPlatformNone) {
+        return nullptr;
+    }
+    if (platform == kPlatformPC) {
+        return file;
+    }
+    const char *localized = FileLocalize(file, nullptr);
+    const char *ext = FileGetExt(localized);
+    const char *base = FileGetBase(localized);
+    const char *path = FileGetPath(localized);
+    char *genPath = (char *)MakeString("%s/gen/%s.%s_%s", path, base, ext, PlatformSymbol(platform));
+    // Copy into static buffer
+    char *dst = sCacheWavBuf;
+    int offset = sCacheWavBuf - genPath;
+    char c;
+    do {
+        c = *genPath;
+        genPath[offset] = c;
+        genPath++;
+    } while (c != '\0');
+    if (UsingCD()) {
+        return dst;
+    }
+    String qualifiedName;
+    FileQualifiedFilename(qualifiedName, localized);
+    CacheResourceResult cacheResult = HolmesClientCacheResource(qualifiedName.c_str(), sCacheWavBuf);
+    result = cacheResult;
+    if ((int)cacheResult > 0)
+        dst = nullptr;
+    return dst;
 }
 
 void SynthUtlInit() {

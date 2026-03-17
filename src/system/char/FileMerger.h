@@ -120,9 +120,7 @@ public:
 
     Merger *FindMerger(Symbol, bool);
     int FindMergerIndex(Symbol, bool);
-#ifdef HX_NATIVE
     ObjVector<Merger>& Mergers() { return mMergers; }
-#endif
     bool StartLoad(bool);
     void Clear();
     void ClearSelections();

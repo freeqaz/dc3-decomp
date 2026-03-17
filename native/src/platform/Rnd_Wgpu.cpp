@@ -37,6 +37,7 @@
 #endif
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <vector>
@@ -51,6 +52,11 @@
 
 static WgpuShaderMgr gWgpuShaderMgr;
 static WgpuRnd gWgpuRndInstance;
+
+static double PerfNow() {
+    using namespace std::chrono;
+    return duration<double>(steady_clock::now().time_since_epoch()).count();
+}
 
 Rnd& TheRnd = gWgpuRndInstance;
 NgRnd& TheNgRnd = gWgpuRndInstance;
@@ -290,6 +296,10 @@ void WgpuRnd::Init() {
         printf("DC3 Native: GPU init skipped (set MILO_RENDER=1 or unset MILO_NORENDER to enable)\n");
     }
 #endif
+    mPerfEnabled = (getenv("MILO_PERF") != nullptr);
+    if (mPerfEnabled) {
+        printf("DC3 Native: frame budget tracking enabled (MILO_PERF)\n");
+    }
 }
 
 void WgpuRnd::InitGpuResources() {
@@ -395,6 +405,7 @@ void WgpuRnd::Terminate() {
     mDefaultSampler = nullptr;
     mSceneRing.Release();
     mSceneBindGroup = nullptr;
+    mProjLightTexView = nullptr;
     mMsaaTex = nullptr;
     mMsaaView = nullptr;
 
@@ -931,6 +942,10 @@ void WgpuRnd::BeginDrawing() {
     // Native port: one-shot venue initialization (same as headless path above)
     NativeVenueInit();
 
+    if (mPerfEnabled) {
+        mFrameStartTime = PerfNow();
+    }
+
     FrameCapture::Get().BeginFrame(mFrameID);
 
     // F12 triggers capture for next frame
@@ -1080,6 +1095,31 @@ void WgpuRnd::EndDrawing() {
     mCurrentTargetWidth = 0;
     mCurrentTargetHeight = 0;
     mDrawing = false;
+
+    // Frame budget tracking (MILO_PERF)
+    if (mPerfEnabled && mFrameStartTime > 0.0) {
+        double now = PerfNow();
+        float frameMs = (float)((now - mFrameStartTime) * 1000.0);
+        if (frameMs > mPerfMaxFrameMs) mPerfMaxFrameMs = frameMs;
+        if (frameMs > 16.67f) mPerfBudgetViolations++;
+        mPerfAccumTime += (now - mFrameStartTime);
+        mPerfDrawCallAccum += GetMeshDrawCallsThisFrame();
+        mPerfFrameCount++;
+
+        // Log every 5 seconds
+        if (mPerfAccumTime >= 5.0) {
+            float avgMs = (float)(mPerfAccumTime / mPerfFrameCount * 1000.0);
+            float fps = (float)(mPerfFrameCount / mPerfAccumTime);
+            float avgDraws = (float)mPerfDrawCallAccum / mPerfFrameCount;
+            fprintf(stderr, "[PERF] %.1f fps | avg %.2fms | max %.2fms | %d violations (>16.67ms) | %.0f draws/frame\n",
+                    fps, avgMs, mPerfMaxFrameMs, mPerfBudgetViolations, avgDraws);
+            mPerfAccumTime = 0.0;
+            mPerfFrameCount = 0;
+            mPerfMaxFrameMs = 0.0f;
+            mPerfDrawCallAccum = 0;
+            mPerfBudgetViolations = 0;
+        }
+    }
 }
 
 void WgpuRnd::CreateDepthTexture(int w, int h) {
@@ -1496,6 +1536,47 @@ void WgpuRnd::WriteSceneUniforms() {
         // ObjDirItr — removed for same reason as directional lights above.
         scene.numPointLights = (float)pointIdx;
 
+        // Projected lights (kFakeSpot with gobo textures from LightsReal)
+        mProjLightTexView = nullptr;
+        for (ObjPtrList<RndLight>::iterator it = realLights.begin();
+             it != realLights.end(); ++it) {
+            RndLight* light = *it;
+            if (!light || !light->Showing()) continue;
+            if (light->GetType() != RndLight::kFakeSpot) continue;
+            if (!light->GetTexture()) continue;
+
+            // Use the first kFakeSpot with a texture as the projected light
+            const Transform& lxfm = light->WorldXfm();
+            // Direction: light points along -Y axis of its local frame
+            scene.projLightDir[0] = -lxfm.m.y.x;
+            scene.projLightDir[1] = -lxfm.m.y.y;
+            scene.projLightDir[2] = -lxfm.m.y.z;
+            scene.projLightDir[3] = 0.0f;
+
+            const Hmx::Color& lc = light->GetColor();
+            scene.projLightColor[0] = lc.red;
+            scene.projLightColor[1] = lc.green;
+            scene.projLightColor[2] = lc.blue;
+            scene.projLightColor[3] = 1.0f;
+
+            // Compute projection matrix and extract UV rows
+            Transform proj = light->Projection();
+            // Row 0 (u): column-major transform → row of transposed matrix
+            scene.projLightProjRow0[0] = proj.m.x.x;
+            scene.projLightProjRow0[1] = proj.m.y.x;
+            scene.projLightProjRow0[2] = proj.m.z.x;
+            scene.projLightProjRow0[3] = proj.v.x;
+            // Row 1 (v)
+            scene.projLightProjRow1[0] = proj.m.x.y;
+            scene.projLightProjRow1[1] = proj.m.y.y;
+            scene.projLightProjRow1[2] = proj.m.z.y;
+            scene.projLightProjRow1[3] = proj.v.y;
+
+            scene.numProjLights = 1.0f;
+            mProjLightTexView = GetGpuTexView(light->GetTexture());
+            break;  // only 1 projected light supported
+        }
+
     } else {
         // Default lighting — three-point light setup
         scene.ambientColor[0] = scene.ambientColor[1] = scene.ambientColor[2] = 0.4f;
@@ -1538,8 +1619,8 @@ void WgpuRnd::WriteSceneUniforms() {
     uint32_t sceneOffset = mSceneRing.Write(mGpu.Queue(), &scene, sizeof(scene));
     mLastSceneOffset = sceneOffset;
 
-    // Create scene bind group (group 0) — includes shadow map texture + sampler
-    wgpu::BindGroupEntry entries[3] = {};
+    // Create scene bind group (group 0) — shadow map + projected light texture
+    wgpu::BindGroupEntry entries[5] = {};
     entries[0].binding = 0;
     entries[0].buffer = mSceneRing.Buffer();
     entries[0].offset = sceneOffset;
@@ -1551,10 +1632,16 @@ void WgpuRnd::WriteSceneUniforms() {
     entries[2].binding = 2;
     entries[2].sampler = mShadowPass.Sampler();  // comparison sampler
 
+    entries[3].binding = 3;
+    entries[3].textureView = mProjLightTexView ? mProjLightTexView : mWhiteTexView;
+
+    entries[4].binding = 4;
+    entries[4].sampler = mDefaultSampler;
+
     wgpu::BindGroupDescriptor bgDesc{};
     bgDesc.label = "SceneBindGroup";
     bgDesc.layout = mPipelines.SceneLayout();
-    bgDesc.entryCount = 3;
+    bgDesc.entryCount = 5;
     bgDesc.entries = entries;
     mSceneBindGroup = mGpu.Device().CreateBindGroup(&bgDesc);
 }

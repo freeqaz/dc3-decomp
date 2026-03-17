@@ -33,7 +33,6 @@ static inline bool DebugUIFlow() {
 }
 #endif
 
-#ifndef HX_NATIVE
 void EnterGlitchCB(float ms, void *panel) {
     UIPanel *uiPanel = static_cast<UIPanel *>(panel);
     MILO_LOG("%s %s Enter took %.2f ms\n", uiPanel->ClassName(), uiPanel->Name(), ms);
@@ -45,7 +44,6 @@ void UnloadGlitchCB(float ms, void *panel) {
         "%s %s CheckUnload took %.2f ms\n", uiPanel->ClassName(), uiPanel->Name(), ms
     );
 }
-#endif
 
 UIScreen::UIScreen()
     : mFocusPanel(nullptr), mBack(nullptr), mClearVram(false), mShowing(true),
@@ -582,13 +580,4 @@ void UIScreen::ReloadStrings() {
     }
 }
 
-#ifdef HX_NATIVE
-void EnterGlitchCB(float fElapsed, void *data) {
-    // Glitch detection callbacks use hardcoded ILP32 struct offsets — stub on native
-    TheDebug << MakeString("Enter took %.2f ms\n", fElapsed);
-}
-
-void UnloadGlitchCB(float f, void *data) {
-    TheDebug << MakeString("CheckUnload took %.2f ms\n", f);
-}
-#endif
+// EnterGlitchCB/UnloadGlitchCB defined at top of file

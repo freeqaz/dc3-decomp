@@ -1,17 +1,26 @@
 #include "gesture/StreamRenderer.h"
+#include "gesture/BaseSkeleton.h"
 #include "gesture/GestureMgr.h"
+#include "gesture/LiveCameraInput.h"
+#include "gesture/Skeleton.h"
 #include "hamobj/HamGameData.h"
 #include "math/Color.h"
 #include "obj/Data.h"
 #include "obj/Dir.h"
 #include "obj/Object.h"
+#include "obj/Task.h"
 #include "os/Debug.h"
 #include "rndobj/Cam.h"
 #include "rndobj/Draw.h"
+#include "rndobj/Mat.h"
 #include "rndobj/Rnd.h"
+#include "rndobj/Rnd_NG.h"
+#include "rndobj/ShaderMgr.h"
 #include "rndobj/ShaderOptions.h"
 #include "rndobj/Tex.h"
 #include "rndobj/Utl.h"
+#include "rnddx9/RenderState.h"
+#include "rnddx9/Rnd.h"
 
 RndCam *StreamRenderer::mCam;
 RndTex *StreamRenderer::mBlurRT[2];
@@ -269,6 +278,380 @@ BEGIN_LOADS(StreamRenderer)
         mCrewPhotoVerticalColor = 0;
     }
 END_LOADS
+
+#ifdef HX_NATIVE
+void StreamRenderer::DrawToTexture() {}
+void StreamRenderer::SetCrewPhotoPlayerCenters() {}
+#else
+
+namespace {
+    int DisplayStreams[] = { 2, 1, 1, 1, 1, 2, 3, 3, 3 };
+
+    void GetPlayerIndexes(int indexes[6]);
+
+    bool CheckTexType(RndTex *tex) {
+        if (!(tex->GetType() & 2)) {
+            MILO_NOTIFY_ONCE("%s not renderable", tex->Name());
+            return false;
+        }
+        return true;
+    }
+
+    RndMat *SetUpWorkingMat() { return TheShaderMgr.GetWork(); }
+
+    RndTex *SetPaletteTexture(RndTex *tex, StreamDisplay display) {
+        if (display == kStreamPlayerDepthVis || display == kStreamPlayerDepthShell
+            || display == kStreamPlayerDepthShell2) {
+            return tex;
+        }
+        return nullptr;
+    }
+}
+
+void SetBloomBlurWeights(bool, float, float);
+
+void StreamRenderer::SetCrewPhotoPlayerCenters() {
+    for (int i = 0; i < 6; i++) {
+        Skeleton *skel =
+            TheGestureMgr->GetSkeletonByTrackingID(TheGestureMgr->GetSkeleton(i).TrackingID());
+        if (skel) {
+            float minX = 1.0f, maxX = -1.0f;
+            float minY = 1.0f, maxY = -1.0f;
+            float minZ = 1.0f, maxZ = -1.0f;
+            for (int j = 0; j < kNumJoints; j++) {
+                Vector2 screenPos;
+                skel->ScreenPos((SkeletonJoint)j, screenPos);
+                float depth = skel->TrackedJoints()[j].mSmoothedPos.z;
+                minZ = (minZ - depth >= 0) ? depth : minZ;
+                minX = (minX - screenPos.x >= 0) ? screenPos.x : minX;
+                maxX = (maxX - screenPos.x >= 0) ? maxX : screenPos.x;
+                minY = (minY - screenPos.y >= 0) ? screenPos.y : minY;
+                maxY = (maxY - screenPos.y >= 0) ? maxY : screenPos.y;
+                maxZ = (maxZ - depth >= 0) ? maxZ : depth;
+            }
+            Vector3 center(
+                (maxX + minX) * 0.5f, (maxY + minY) * 0.5f, (maxZ + minZ) * 0.5f
+            );
+            float dt = TheTaskMgr.DeltaUISeconds();
+            mSmoothers[i].Smooth(center, dt, false);
+            Vector3 val = mSmoothers[i].Value();
+            *(Vector4 *)&mCrewPhotoPlayerCenters[i] = *(Vector4 *)&val;
+        } else {
+            mCrewPhotoPlayerCenters[i].Set(0, 0, 0, 0);
+        }
+    }
+}
+
+void StreamRenderer::DrawToTexture() {
+    if (TheRnd.GetDrawMode() != 0)
+        return;
+    if (!Showing())
+        return;
+
+    if (mLagPrimaryTexture && !mLaggedPrimaryTexture[0]) {
+        MILO_ASSERT(mLaggedPrimaryTexture[1] == NULL, 0xF5);
+        mLaggedPrimaryTexture[0] = Hmx::Object::New<RndTex>();
+        mLaggedPrimaryTexture[0]->SetBitmap(320, 240, 16, (RndTex::Type)0x2000, false, nullptr);
+        mLaggedPrimaryTexture[1] = Hmx::Object::New<RndTex>();
+        mLaggedPrimaryTexture[1]->SetBitmap(320, 240, 16, (RndTex::Type)0x2000, false, nullptr);
+    }
+
+    if (!mOutputTex)
+        return;
+
+    TheDxRnd.SetShaderRegisterAlloc((DxRnd::RegisterAlloc)3);
+
+    LiveCameraInput *camInput = TheGestureMgr->GetLiveCameraInput();
+    int streamFlags = DisplayStreams[mDisplay];
+    unsigned int needsDepth = streamFlags & 1;
+    unsigned int needsColor = (streamFlags >> 1) & 1;
+
+    if (needsDepth && !*(bool *)((char *)camInput + 0x11ea)) {
+        camInput->PollNewStream(LiveCameraInput::kBufferDepth);
+    } else if (needsColor && !*(bool *)((char *)camInput + 0x11e9)) {
+        camInput->PollNewStream(LiveCameraInput::kBufferColor);
+    }
+
+    if (mForceDraw || (needsDepth && *(bool *)((char *)camInput + 0x11ec))
+        || (needsColor && *(bool *)((char *)camInput + 0x11eb))) {
+        int playerIndexes[6];
+        if (mStaticColorIndices) {
+            for (int i = 0; i < 6; i++) {
+                playerIndexes[i] = i;
+            }
+        } else {
+            GetPlayerIndexes(playerIndexes);
+        }
+
+        if (!CheckTexType(mOutputTex))
+            return;
+
+        RndMat *workMat = SetUpWorkingMat();
+        ShaderType shaderType = GetShaderType();
+        LiveCameraInput::BufferType bufType =
+            (LiveCameraInput::BufferType)(needsDepth != 0);
+
+        RndTex *primaryTex;
+        if (mLagPrimaryTexture) {
+            primaryTex = mLaggedPrimaryTexture[unk154];
+        } else {
+            primaryTex = camInput->GetStreamTex(bufType);
+        }
+
+        RndCam *currentCam = RndCam::Current();
+        RndTex *targetRT = mBlurRT[0];
+        if (mNumBlurs == 0) {
+            targetRT = mOutputTex;
+        }
+
+        if (currentCam->TargetTex()) {
+            MILO_NOTIFY_ONCE(
+                "%s: Cannot render to texture (%s) while already rendering to texture (%s).",
+                PathName(currentCam->TargetTex()),
+                PathName(this),
+                PathName(currentCam->TargetTex())
+            );
+        }
+
+        mCam->SetTargetTex(targetRT);
+        mCam->Select();
+
+        workMat->SetDiffuseTex(primaryTex);
+        workMat->MarkDirty(2);
+
+        int display = mDisplay;
+        if (display == kStreamPlayerGreenscreen || display == kStreamPlayerDepthGreenscreen
+            || display == kStreamCrewPhoto) {
+            RndTex *colorTex = camInput->GetStreamTex(LiveCameraInput::kBufferColor);
+            workMat->SetNormalMap(colorTex);
+            workMat->MarkDirty(2);
+        }
+
+        TheRenderState.SetTextureFilter(0, (RndRenderState::FilterMode)0, false);
+        TheRenderState.SetTextureClamp(0, (RndRenderState::ClampMode)2);
+
+        RndTex *palette1 = SetPaletteTexture(mPlayer1DepthPalette, mDisplay);
+        TheShaderMgr.SetPConstant((PShaderConstant)10, palette1);
+        TheRenderState.SetTextureFilter(10, (RndRenderState::FilterMode)1, false);
+        TheRenderState.SetTextureClamp(10, (RndRenderState::ClampMode)0);
+
+        RndTex *palette2 = SetPaletteTexture(mPlayer2DepthPalette, mDisplay);
+        TheShaderMgr.SetPConstant((PShaderConstant)12, palette2);
+        TheRenderState.SetTextureFilter(12, (RndRenderState::FilterMode)1, false);
+        TheRenderState.SetTextureClamp(12, (RndRenderState::ClampMode)0);
+
+        RndTex *paletteOther = SetPaletteTexture(mPlayerOtherDepthPalette, mDisplay);
+        TheShaderMgr.SetPConstant((PShaderConstant)13, paletteOther);
+        TheRenderState.SetTextureFilter(13, (RndRenderState::FilterMode)1, false);
+        TheRenderState.SetTextureClamp(13, (RndRenderState::ClampMode)0);
+
+        RndTex *paletteBg = SetPaletteTexture(mBackgroundDepthPalette, mDisplay);
+        TheShaderMgr.SetPConstant((PShaderConstant)11, paletteBg);
+        TheRenderState.SetTextureFilter(11, (RndRenderState::FilterMode)1, false);
+        TheRenderState.SetTextureClamp(11, (RndRenderState::ClampMode)0);
+
+        Vector4 nobodyColor(
+            mPlayerDepthNobody.red, mPlayerDepthNobody.green,
+            mPlayerDepthNobody.blue, mPlayerDepthNobody.alpha
+        );
+        TheShaderMgr.SetPConstant(kPS_TexProcFrequency, nobodyColor);
+
+        Vector4 p1Color(
+            mPlayer1DepthColor.red, mPlayer1DepthColor.green,
+            mPlayer1DepthColor.blue, mPlayer1DepthColor.alpha
+        );
+        TheShaderMgr.SetPConstant(kPS_TexProcAmplitude, p1Color);
+
+        Vector4 p2Color(
+            mPlayer2DepthColor.red, mPlayer2DepthColor.green,
+            mPlayer2DepthColor.blue, mPlayer2DepthColor.alpha
+        );
+        TheShaderMgr.SetPConstant(kPS_TexProcPhase, p2Color);
+
+        Vector4 p3Color(
+            mPlayer3DepthColor.red, mPlayer3DepthColor.green,
+            mPlayer3DepthColor.blue, mPlayer3DepthColor.alpha
+        );
+        TheShaderMgr.SetPConstant((PShaderConstant)0x43, p3Color);
+
+        Vector4 paletteOffsets(
+            mPlayer1DepthPaletteOffset, mPlayer2DepthPaletteOffset,
+            mPlayerOtherDepthPaletteOffset, mBackgroundDepthPaletteOffset
+        );
+        TheShaderMgr.SetPConstant((PShaderConstant)0x44, paletteOffsets);
+
+        Vector4 playerIdx(
+            (float)playerIndexes[0], (float)playerIndexes[1],
+            (float)playerIndexes[2], (float)playerIndexes[3]
+        );
+        TheShaderMgr.SetPConstant((PShaderConstant)0x45, playerIdx);
+
+        if (shaderType == kPlayerDepthShell2Shader) {
+            Vector4 p4Color(
+                mPlayer4DepthColor.red, mPlayer4DepthColor.green,
+                mPlayer4DepthColor.blue, mPlayer4DepthColor.alpha
+            );
+            TheShaderMgr.SetPConstant((PShaderConstant)0x46, p4Color);
+
+            Vector4 p5Color(
+                mPlayer5DepthColor.red, mPlayer5DepthColor.green,
+                mPlayer5DepthColor.blue, mPlayer5DepthColor.alpha
+            );
+            TheShaderMgr.SetPConstant((PShaderConstant)0x47, p5Color);
+
+            Vector4 p6Color(
+                mPlayer6DepthColor.red, mPlayer6DepthColor.green,
+                mPlayer6DepthColor.blue, mPlayer6DepthColor.alpha
+            );
+            TheShaderMgr.SetPConstant((PShaderConstant)0x48, p6Color);
+
+            Vector4 playerIdx2(
+                (float)playerIndexes[4], (float)playerIndexes[5], 0, 0
+            );
+            TheShaderMgr.SetPConstant((PShaderConstant)0x49, playerIdx2);
+        }
+
+        if (shaderType == kCrewPhotoShader) {
+            float beat = TheTaskMgr.Beat();
+            Vector4 edgeParams(
+                mCrewPhotoEdgeIterations, mCrewPhotoEdgeOffset, beat, 1.0f
+            );
+            TheShaderMgr.SetPConstant((PShaderConstant)0x46, edgeParams);
+
+            Vector4 horizColor(
+                mCrewPhotoHorizontalColor.red, mCrewPhotoHorizontalColor.green,
+                mCrewPhotoHorizontalColor.blue, mCrewPhotoHorizontalColor.alpha
+            );
+            TheShaderMgr.SetPConstant((PShaderConstant)0x47, horizColor);
+
+            Vector4 vertColor(
+                mCrewPhotoVerticalColor.red, mCrewPhotoVerticalColor.green,
+                mCrewPhotoVerticalColor.blue, mCrewPhotoVerticalColor.alpha
+            );
+            TheShaderMgr.SetPConstant((PShaderConstant)0x48, vertColor);
+
+            Vector4 blurParams(
+                mCrewPhotoBlurStart, mCrewPhotoBlurWidth, mCrewPhotoBlurIterations, 1.0f
+            );
+            TheShaderMgr.SetPConstant((PShaderConstant)0x49, blurParams);
+
+            Vector4 bgBrightness(
+                mCrewPhotoBackgroundBrightness, mCrewPhotoBackgroundBrightness,
+                mCrewPhotoBackgroundBrightness, mCrewPhotoBackgroundBrightness
+            );
+            TheShaderMgr.SetPConstant((PShaderConstant)0x4a, bgBrightness);
+
+            TheShaderMgr.SetPConstant(
+                (PShaderConstant)0x4b,
+                *(const Vector4 *)&mCrewPhotoPlayer0Detected
+            );
+
+            TheShaderMgr.SetPConstant(
+                (PShaderConstant)0x4c,
+                *(const Vector4 *)&mCrewPhotoPlayer4Detected
+            );
+
+            Vector4 center0(
+                mCrewPhotoPlayerCenters[0].x, mCrewPhotoPlayerCenters[0].y,
+                mCrewPhotoPlayerCenters[0].z, 1.0f
+            );
+            TheShaderMgr.SetPConstant((PShaderConstant)0x4d, center0);
+
+            Vector4 center1(
+                mCrewPhotoPlayerCenters[1].x, mCrewPhotoPlayerCenters[1].y,
+                mCrewPhotoPlayerCenters[1].z, 1.0f
+            );
+            TheShaderMgr.SetPConstant((PShaderConstant)0x4e, center1);
+
+            Vector4 center2(
+                mCrewPhotoPlayerCenters[2].x, mCrewPhotoPlayerCenters[2].y,
+                mCrewPhotoPlayerCenters[2].z, 1.0f
+            );
+            TheShaderMgr.SetPConstant((PShaderConstant)0x4f, center2);
+
+            Vector4 center3(
+                mCrewPhotoPlayerCenters[3].x, mCrewPhotoPlayerCenters[3].y,
+                mCrewPhotoPlayerCenters[3].z, 1.0f
+            );
+            TheShaderMgr.SetPConstant((PShaderConstant)0x50, center3);
+
+            Vector4 center4(
+                mCrewPhotoPlayerCenters[4].x, mCrewPhotoPlayerCenters[4].y,
+                mCrewPhotoPlayerCenters[4].z, 1.0f
+            );
+            TheShaderMgr.SetPConstant((PShaderConstant)0x51, center4);
+
+            Vector4 center5(
+                mCrewPhotoPlayerCenters[5].x, mCrewPhotoPlayerCenters[5].y,
+                mCrewPhotoPlayerCenters[5].z, 1.0f
+            );
+            TheShaderMgr.SetPConstant((PShaderConstant)0x52, center5);
+        }
+
+        Hmx::Rect drawRect(0, 0, (float)targetRT->Width(), (float)targetRT->Height());
+        TheNgRnd.DrawRect(drawRect, workMat, shaderType, Hmx::Color(), nullptr, nullptr);
+
+        mCam->SetTargetTex(nullptr);
+
+        RndMat *blurMat = TheShaderMgr.GetWork();
+        blurMat->SetDiffuseTex(nullptr);
+        blurMat->SetBlend(BaseMaterial::kBlendSrc);
+        blurMat->SetZMode(kZModeDisable);
+        blurMat->MarkDirty(2);
+
+        for (unsigned int blurIdx = 0; (int)blurIdx < mNumBlurs; blurIdx++) {
+            RndTex *srcTex = mBlurRT[1];
+            if ((blurIdx & 1) == 0) {
+                srcTex = mBlurRT[0];
+            }
+            RndTex *dstTex = mBlurRT[0];
+            if ((blurIdx & 1) == 0) {
+                dstTex = mBlurRT[1];
+            }
+            if ((unsigned int)(mNumBlurs - 1) == blurIdx) {
+                dstTex = mOutputTex;
+            }
+            dstTex->MakeDrawTarget();
+            blurMat->SetDiffuseTex(srcTex);
+            blurMat->MarkDirty(2);
+            Hmx::Rect blurRect(0, 0, (float)dstTex->Width(), (float)dstTex->Height());
+            if (primaryTex) {
+                SetBloomBlurWeights(
+                    (bool)(blurIdx & 1), (float)dstTex->Width(), (float)dstTex->Height()
+                );
+                TheNgRnd.DrawRect(
+                    blurRect, blurMat, kDrawRectShader, Hmx::Color(), nullptr, nullptr
+                );
+                TheShaderMgr.SetNumTaps(1);
+            }
+            dstTex->FinishDrawTarget();
+        }
+
+        if (mLagPrimaryTexture) {
+            RndTex *streamTex = camInput->GetStreamTex(bufType);
+            if (streamTex) {
+                void *streamData = camInput->StreamBufferData(bufType);
+                if (streamData) {
+                    void *lagData = nullptr;
+                    bool newIdx = unk154 == 0;
+                    unk154 = newIdx ? 1 : 0;
+                    mLaggedPrimaryTexture[unk154]->TexelsLock(lagData);
+                    void *srcData = nullptr;
+                    streamTex->TexelsLock(srcData);
+                    memcpy(lagData, srcData, 0x2D000);
+                    streamTex->TexelsUnlock();
+                    mLaggedPrimaryTexture[unk154]->TexelsUnlock();
+                }
+            }
+        }
+
+        currentCam->Select();
+    }
+
+    TheDxRnd.SetShaderRegisterAlloc((DxRnd::RegisterAlloc)1);
+}
+
+#endif
 
 void StreamRenderer::DrawShowing() {
     if (!mDrawPreClear) {

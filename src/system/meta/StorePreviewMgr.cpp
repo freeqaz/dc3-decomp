@@ -130,4 +130,38 @@ HANDLE_EXPR(is_playing, IsPlaying())
 HANDLE_SUPERCLASS(Hmx::Object)
 END_HANDLERS
 
-void StorePreviewMgr::Poll() {}
+void StorePreviewMgr::Poll() {
+    MILO_ASSERT(mStreamPlayer, 0x6f);
+    mStreamPlayer->Poll();
+    if (mNetCacheLoader) {
+        bool isCurrentFile = mCurrentPreviewFile == mNetCacheLoader->GetRemotePath();
+        if (mNetCacheLoader->IsLoaded()) {
+            TheNetCacheMgr->IsLocalFile(mNetCacheLoader->GetRemotePath());
+            TheNetCacheMgr->DeleteNetCacheLoader(mNetCacheLoader);
+            mNetCacheLoader = 0;
+            if (isCurrentFile) {
+                PlayCurrentPreview();
+            }
+            static PreviewDownloadCompleteMsg msg(true, false);
+            msg[1] = isCurrentFile;
+            Handle(msg, true);
+        } else if (mNetCacheLoader->HasFailed()) {
+            mHasFailure = true;
+            mLastFailType = mNetCacheLoader->GetFailType();
+            TheNetCacheMgr->DeleteNetCacheLoader(mNetCacheLoader);
+            mNetCacheLoader = 0;
+            static PreviewDownloadCompleteMsg msg(false, false);
+            msg[1] = isCurrentFile;
+            Handle(msg, true);
+        }
+    }
+    std::list<String>::iterator it = mDownloadQueue.begin();
+    while (it != mDownloadQueue.end() && TheNetCacheMgr->IsLocalFile(it->c_str())) {
+        it = mDownloadQueue.erase(it);
+    }
+    if (!mNetCacheLoader && mDownloadQueue.begin() != mDownloadQueue.end()) {
+        MILO_ASSERT(!TheNetCacheMgr->IsLocalFile(mDownloadQueue.front().c_str()), 0xa5);
+        mNetCacheLoader = TheNetCacheMgr->AddNetCacheLoader(mDownloadQueue.front().c_str(), (NetLoaderPos)1);
+        mDownloadQueue.erase(mDownloadQueue.begin());
+    }
+}

@@ -675,9 +675,6 @@ T1 *ObjPtrList<T1, T2>::back() const {
     return mNodes ? mNodes->prev->Obj() : 0;
 }
 
-template <class T1, class T2>
-void ObjPtrList<T1, T2>::sort(SortFunc *) {}
-
 // -- ObjPtrVec generic template implementations --
 
 template <class T1, class T2>

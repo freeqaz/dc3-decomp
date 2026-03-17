@@ -46,6 +46,20 @@ void VirtualKeyboard::Terminate() {}
 
 void VirtualKeyboard::ClearKeyboardCallback() { mPobjKeyboardCallback = nullptr; }
 
+#ifdef HX_NATIVE
+void VirtualKeyboard::PlatformPoll() {
+    // Xbox keyboard not available on native
+}
+
+const char *VirtualKeyboard::GetInputString() {
+    return "";
+}
+
+DataNode VirtualKeyboard::ShowKeyboardUI(int, int, String, String, String, int) {
+    return DataNode(0);
+}
+#endif
+
 BEGIN_HANDLERS(VirtualKeyboard)
     HANDLE(show_keyboard, OnShowKeyboardUI)
     HANDLE_ACTION(clear_callback, ClearKeyboardCallback())

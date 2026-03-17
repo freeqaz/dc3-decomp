@@ -111,6 +111,7 @@ typedef LONG HRESULT;
 
 #define INVALID_HANDLE_VALUE ((HANDLE)(LONG_PTR) - 1)
 #define SUCCEEDED(hr) (((HRESULT)(hr)) >= 0)
+#define FAILED(hr) (((HRESULT)(hr)) < 0)
 
 typedef DWORD FOURCC;
 

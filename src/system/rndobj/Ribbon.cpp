@@ -129,6 +129,7 @@ void RndRibbon::ExposeMesh() {
 }
 
 void RndRibbon::ConstructMesh() {
+#ifndef HX_NATIVE
     if (mNumSegments <= 0)
         return;
 
@@ -136,79 +137,57 @@ void RndRibbon::ConstructMesh() {
 
     unsigned int numFacePairs = (unsigned int)(mNumSegments * mNumSides);
     RndMesh::Face emptyFace;
-    // Cache face vector reference — target sets up &faces before the if/else
     std::vector<RndMesh::Face> &faces = mMesh->Faces();
     unsigned int targetFaceCount = numFacePairs * 2;
-    // Target uses signed (end-begin)/6 via divw, not .size()
-#ifdef HX_NATIVE
-    unsigned int curFaceCount = faces.size();
-#else
     int facesBegin = (int)faces.begin();
     unsigned int curFaceCount = (unsigned int)(((int)faces.end() - facesBegin) / 6);
-#endif
 
     if (targetFaceCount < curFaceCount) {
-auto _tmp0 = faces.end();
-#ifdef HX_NATIVE
-        faces.erase(faces.begin() + targetFaceCount, _tmp0);
-#else
         faces.erase(
             (RndMesh::Face *)(facesBegin + (int)targetFaceCount * 6),
-            faces.end()
+            (RndMesh::Face *)((int)faces.end())
         );
-#endif
     } else {
-#ifdef HX_NATIVE
-        faces.insert(faces.end(), targetFaceCount - curFaceCount, emptyFace);
-#else
-        // Target re-reads end and recomputes count inside insert branch
         faces.insert(
             faces.end(),
             targetFaceCount - (unsigned int)(((int)faces.end() - facesBegin) / 6),
             emptyFace
         );
-#endif
     }
 
     int seg = 0;
     if (mNumSegments > 0) {
         int numSides = mNumSides;
         do {
-            // Target uses 32-bit multiply (mullw), not 64-bit (mulld)
             int baseVert = numSides * seg;
             int baseVert2 = baseVert * 2;
             int side = 0;
             if (numSides > 0) {
-                // Target: mulli r9, r3, 6 (baseVert2 * 6 = baseVert * 12)
                 int faceOff = baseVert2 * 6;
                 int vertIdx = baseVert2;
+                int oneMinusBV2 = 1 - baseVert2;
                 do {
-                    unsigned int ns = (unsigned int)mNumSides;
-                    // Target: subfic r30, r3, 0x1 = 1 - baseVert*2, then add vertIdx
-                    int nextVertOff = 1 - baseVert2 + vertIdx;
-                    short v0 = (short)vertIdx;
-                    short sNumSides = (short)ns;
-                    short vNext = (short)((short)nextVertOff - (short)((int)nextVertOff / (int)ns) * sNumSides) + (unsigned short)baseVert2;
-                    short vNextWrap = sNumSides + vNext;
-#ifdef HX_NATIVE
-                    short *facePtr = (short *)((char *)mMesh->Faces().data() + faceOff);
-#else
+                    int ns = mNumSides;
+                    int nextVertOff = oneMinusBV2 + vertIdx;
+                    unsigned short v0 = (unsigned short)vertIdx;
+                    int rem = nextVertOff % ns;
+                    int vNextRaw = rem + baseVert2;
+                    int v0PlusNS = vertIdx + ns;
+                    int vNextWrapRaw = ns + vNextRaw;
                     short *facePtr = (short *)((int)mMesh->Faces().begin() + faceOff);
-#endif
+                    unsigned short vNextWrap = (unsigned short)vNextWrapRaw;
+                    unsigned short vNext = (unsigned short)vNextRaw;
+                    unsigned short v0PlusNSu = (unsigned short)v0PlusNS;
                     side++;
                     facePtr[0] = v0;
                     vertIdx = vertIdx + 1;
                     facePtr[1] = vNext;
                     facePtr[2] = vNextWrap;
-#ifdef HX_NATIVE
-                    short *faceBase = (short *)((char *)mMesh->Faces().data() + faceOff);
-#else
-                    int faceBase = (int)mMesh->Faces().begin() + faceOff;
-#endif
-                    *(short *)(faceBase + 6) = vNextWrap;
-                    *(short *)(faceBase + 8) = v0 + sNumSides;
+                    short *faceBase = (short *)((int)mMesh->Faces().begin() + faceOff);
+                    *(short *)((int)faceBase + 6) = vNextWrap;
+                    *(short *)((int)faceBase + 8) = v0PlusNSu;
                     faceOff = faceOff + 12;
-                    *(short *)(faceBase + 10) = v0;
+                    *(short *)((int)faceBase + 10) = v0;
                     numSides = mNumSides;
                 } while (side < numSides);
             }
@@ -217,85 +196,65 @@ auto _tmp0 = faces.end();
     }
 
     mMesh->Sync(0x3f);
+#endif // !HX_NATIVE
 }
 
 void RndRibbon::UpdateMesh() {
-    // mTransforms is Keys<Transform> (std::vector<Key<Transform>>) at this+0x74
-    // Raw pointer access needed: .empty()/.size()/[] generate different codegen than divw
-    Keys<Transform, Transform> *keys = &mTransforms;
-    int keysBegin = *(int *)((int)keys + 0);
-    int keysEnd = *(int *)((int)keys + 4);
-    if ((keysEnd - keysBegin) / 0x44 == 0)
+#ifndef HX_NATIVE
+    if (mTransforms.size() == 0)
         return;
 
     int numSides = mNumSides;
-    // mMesh->mGeomOwner.mObject (offset 0x148 in RndMesh)
-    int geomOwner = *(int *)((int)mMesh + 0x148);
+    RndMesh::VertVector &verts = mMesh->Verts();
     int seg = 0;
-    double angleStep = (double)(6.2831855f / (float)(long long)numSides);
+    float angleStep = 6.2831855f / (float)(long long)numSides;
     float halfWidth = mWidth * 0.5f;
-    float one = 1.0f;
-    float normX = 0.0f, normY = 0.0f, normZ = 0.0f;
+    float latestFrame = mTransforms.back().frame;
+    Vector3 norm(0.0f, 0.0f, 0.0f);
     if (mNumSegments > 0) {
-        // Latest keyframe time = last element's .frame (end - 4 bytes)
-        float latestFrame = *(float *)(*(int *)((int)keys + 4) - 4);
         do {
             int side = 0;
             int vertRowBase = mNumSides * seg * 2;
-            double vCoord = (double)(float)(one / (double)(long long)mNumSides);
+            float vCoord = 1.0f / (float)(long long)mNumSides;
             if (numSides > 0) {
                 do {
                     int row = 0;
-                    double angle = (double)(float)((double)(long long)side * angleStep);
-                    double uFrac = (double)(float)((double)(long long)side * vCoord);
+                    float angle = (float)side * angleStep;
+                    float uFrac = (float)side * vCoord;
                     do {
                         unsigned int rowSeg = (unsigned int)(row + seg);
-                        int begin = *(int *)((int)keys + 0);
-                        unsigned int lastIdx =
-                            (unsigned int)(*(int *)((int)keys + 4) - begin) / 0x44 - 1;
+                        int vertIdx = mNumSides * row + vertRowBase;
+                        unsigned int lastIdx = mTransforms.size() - 1;
                         if ((int)rowSeg <= (int)lastIdx) {
-                            lastIdx = ~((unsigned int)((int)rowSeg >> 0x1f)) & rowSeg;
+                            lastIdx = ((rowSeg >> 31) - 1) & rowSeg;
                         }
-                        // Key<Transform>: .value (Transform, 0x40 bytes) then .frame (float)
-                        float segFrame = *(float *)(begin + lastIdx * 0x44 + 0x40);
-                        float taperScale = one;
+                        float segFrame = mTransforms[lastIdx].frame;
+                        float taperScale;
                         if (mTaper) {
-                            taperScale = one - (latestFrame - segFrame) / mDecay;
+                            taperScale = 1.0f - (latestFrame - segFrame) / mDecay;
+                        } else {
+                            taperScale = 1.0f;
                         }
-                        double cosA = (double)(float)cos(angle);
-                        double sinA = sin(angle);
-                        float posY = 0.0f;
-                        Transform *xfm = (Transform *)(lastIdx * 0x44 + begin);
-                        float posZ =
-                            (float)((double)(float)(cosA * taperScale) * halfWidth);
-                        float posX =
-                            (float)((double)(float)((float)sinA * taperScale) * halfWidth);
-                        Vector3 pos(posX, posY, posZ);
+                        float cosA = (float)cos((double)angle);
+                        float sinA = (float)sin((double)angle);
+                        Transform *xfm = &mTransforms[lastIdx].value;
+                        float posZ = cosA * taperScale * halfWidth;
+                        float posX = sinA * taperScale * halfWidth;
+                        Vector3 pos(posX, 0.0f, posZ);
                         Multiply(pos, *xfm, pos);
-                        posX = pos.x;
-                        posY = pos.y;
-                        posZ = pos.z;
-                        // Vertex layout: pos(0x0), norm(0x10), tex(0x40), stride 0x60
-                        int vertIdx = (mNumSides * row + vertRowBase) * sizeof(RndMesh::Vert);
-                        int vertPtr = *(int *)(geomOwner + 0x100) + vertIdx;
-                        *(float *)(*(int *)(geomOwner + 0x100) + vertIdx) = posX;
-                        *(float *)(vertPtr + 4) = posY;
-                        *(float *)(vertPtr + 8) = posZ;
+                        RndMesh::Vert &vert = verts[vertIdx];
+                        vert.pos = pos;
                         if (row == 0) {
-                            normX = posX - xfm->v.x;
-                            normY = posY - xfm->v.y;
-                            normZ = posZ - xfm->v.z;
-                            Normalize((Vector3 &)normX, (Vector3 &)normX);
+                            norm.x = pos.x - xfm->v.x;
+                            norm.y = pos.y - xfm->v.y;
+                            norm.z = pos.z - xfm->v.z;
+                            Normalize(norm, norm);
                         }
                         row++;
-                        vertPtr = *(int *)(geomOwner + 0x100) + vertIdx;
-                        *(float *)(vertPtr + 0x18) = normZ;
-                        *(float *)(vertPtr + 0x10) = normX;
-                        *(float *)(vertPtr + 0x14) = normY;
-                        int uvPtr = *(int *)(geomOwner + 0x100) + vertIdx;
-                        *(float *)(uvPtr + 0x40) =
-                            (float)(one - (latestFrame - segFrame) / mDecay);
-                        *(float *)(uvPtr + 0x44) = (float)uFrac;
+                        vert.norm = norm;
+                        vert.tex.x =
+                            1.0f - (latestFrame - segFrame) / mDecay;
+                        vert.tex.y = uFrac;
                     } while (row < 2);
                     numSides = mNumSides;
                     side++;
@@ -306,18 +265,17 @@ void RndRibbon::UpdateMesh() {
         } while (seg < mNumSegments);
     }
     mMesh->Sync(0x1f);
+#endif // !HX_NATIVE
 }
 
 void RndRibbon::UpdateChase() {
+#ifndef HX_NATIVE
     if (!mFollowA)
         return;
 
-
     float currentTime = TheTaskMgr.Seconds(TaskMgr::kRealTime);
-    auto& _ref1 = mLastTime;
 
-    double dCurrentTime = (double)currentTime;
-    if (dCurrentTime < (double)_ref1) {
+    if (currentTime < mLastTime) {
         auto _tmp2 = mTransforms.end();
         auto _tmp1 = mTransforms.begin();
         if (_tmp1 != _tmp2) {
@@ -329,124 +287,115 @@ void RndRibbon::UpdateChase() {
     Vector3 followPos;
     if (mActive) {
         const Transform *xfmA = &mFollowA->WorldXfm();
-        float followA_v_y = xfmA->v.y;
-        float followA_v_z = xfmA->v.z;
-        followPos.x = xfmA->v.x;
-        followPos.y = followA_v_y;
-        followPos.z = followA_v_z;
+        followPos = xfmA->v;
         if (mFollowB) {
             const Transform *xfmB = &mFollowB->WorldXfm();
             Interp(followPos, (const Vector3 &)xfmB->v, mFollowWeight, followPos);
         }
 
-        unsigned int numTransforms = (unsigned int)((int)&*mTransforms.end() - (int)&*mTransforms.begin()) / 0x44;
+        int numTransforms = ((int)&*mTransforms.end() - (int)&*mTransforms.begin()) / 0x44;
         unsigned int removeCount = 0;
         if (numTransforms != 0) {
             unsigned int k = 0;
             do {
-                if ((float)(dCurrentTime - (double)mDecay) <= *(float *)(((int)&*mTransforms.begin() + (k + 0x40))))
+                if (currentTime - mDecay <= *(float *)(((int)&*mTransforms.begin() + (k + 0x40))))
                     break;
                 removeCount++;
                 k += 0x44;
-            } while (removeCount < numTransforms);
+            } while (removeCount < (unsigned int)numTransforms);
         }
 
-        if (removeCount < numTransforms) {
+        if (removeCount < (unsigned int)numTransforms) {
             unsigned int srcIdx = removeCount;
             unsigned int dstIdx = 0;
             do {
                 memcpy(&mTransforms[dstIdx], &mTransforms[srcIdx], 0x44);
                 srcIdx++;
                 dstIdx++;
-                numTransforms = (unsigned int)((int)&*mTransforms.end() - (int)&*mTransforms.begin()) / 0x44;
-            } while (srcIdx < numTransforms);
+                numTransforms = ((int)&*mTransforms.end() - (int)&*mTransforms.begin()) / 0x44;
+            } while (srcIdx < (unsigned int)numTransforms);
         }
 
         Key<Transform> newKey;
         newKey.frame = 0.0f;
         mTransforms.resize(numTransforms - (int)removeCount, newKey);
 
-        numTransforms = (unsigned int)((int)&*mTransforms.end() - (int)&*mTransforms.begin()) / 0x44;
+        memcpy(&newKey, &Transform::IDXfm(), 0x40);
+        newKey.frame = 0.0f;
+
+        numTransforms = ((int)&*mTransforms.end() - (int)&*mTransforms.begin()) / 0x44;
         if (numTransforms == 0) {
             newKey.frame = currentTime;
-            newKey.value.v.y = followA_v_y;
-            newKey.value.v.z = followA_v_z;
+            newKey.value.v = followPos;
             mTransforms.push_back(newKey);
         } else {
             long long numSegs = (long long)mNumSegments;
-            double minDistSq = (double)(mWidth * mWidth * 0.125f);
-            double segInterval = (double)(mDecay / (float)numSegs);
-            double nextTime = (double)mTransforms.back().frame + segInterval;
-            while ((double)(float)nextTime < dCurrentTime) {
+            float minDistSq = mWidth * mWidth * 0.125f;
+            float segInterval = mDecay / (float)numSegs;
+            float nextTime = mTransforms.back().frame + segInterval;
+            while (nextTime < currentTime) {
                 Transform *backXfm = &mTransforms.back().value;
-                newKey.frame = (float)((double)mTransforms.back().frame + segInterval);
+                newKey.frame = mTransforms.back().frame + segInterval;
                 Interp((const Vector3 &)backXfm->v, followPos,
-                       (float)(segInterval / (double)(float)(dCurrentTime - (double)mTransforms.back().frame)),
+                       segInterval / (currentTime - mTransforms.back().frame),
                        (Vector3 &)newKey.value.v);
-                float dx = backXfm->v.z - followA_v_z;
+                float dx = backXfm->v.z - newKey.value.v.z;
                 float dy = backXfm->v.x - newKey.value.v.x;
-                float dz = backXfm->v.y - followA_v_y;
-                if (minDistSq <= (double)((dz * dz + (dy * dy + dx * dx)))) {
+                float dz = backXfm->v.y - newKey.value.v.y;
+                if (minDistSq <= dz * dz + (dy * dy + dx * dx)) {
                     mTransforms.push_back(newKey);
                     newSegCount++;
                 } else {
                     mTransforms.back().frame = newKey.frame;
                 }
-                nextTime = (double)mTransforms.back().frame + segInterval;
+                nextTime = mTransforms.back().frame + segInterval;
             }
         }
     }
 
     // Orient each transform
-    unsigned int numTransforms = (unsigned int)((int)&*mTransforms.end() - (int)&*mTransforms.begin()) / 0x44;
-    unsigned int startIdx = (unsigned int)((int)numTransforms - newSegCount);
-    if (startIdx < numTransforms) {
-        double dSlerpFwdX = 0.0;
-        double dSlerpFwdY = 0.0;
-        double dSlerpFwdZ = 0.0;
-        double dPrevAngle = -1.0;
+    int numTransforms = ((int)&*mTransforms.end() - (int)&*mTransforms.begin()) / 0x44;
+    int startIdx = numTransforms - newSegCount;
+    if ((unsigned int)startIdx < (unsigned int)numTransforms) {
+        float slerpFwdX = 0.0f;
+        float slerpFwdY = 0.0f;
+        float slerpFwdZ = 0.0f;
+        float prevAngle = -1.0f;
 
         static int sUpVecFlag;
         static Vector3 sUpVec;
 
-        unsigned int curIdx = startIdx;
+        unsigned int curIdx = (unsigned int)startIdx;
         do {
-            double dCurAngle = dPrevAngle;
+            float curAngle = prevAngle;
             if (curIdx != 0) {
                 Transform &curXfm = mTransforms[curIdx].value;
                 Transform &prevXfm = mTransforms[curIdx - 1].value;
-                double cx = (double)curXfm.v.x;
-                double cy = (double)curXfm.v.y;
-                double cz = (double)curXfm.v.z;
-                double fdx = cx - (double)prevXfm.v.x;
-                double fdy = cy - (double)prevXfm.v.y;
-                double fdz = cz - (double)prevXfm.v.z;
                 Vector3 forward;
-                forward.x = (float)fdx;
-                forward.y = (float)fdy;
-                forward.z = (float)fdz;
+                forward.x = curXfm.v.x - prevXfm.v.x;
+                forward.y = curXfm.v.y - prevXfm.v.y;
+                forward.z = curXfm.v.z - prevXfm.v.z;
                 Normalize(forward, forward);
 
                 if ((int)curIdx >= 3) {
                     Transform &prevPrevXfm = mTransforms[curIdx - 2].value;
-                    double pdx = cx - (double)prevPrevXfm.v.x;
-                    double pdy = cy - (double)prevPrevXfm.v.y;
-                    double pdz = cz - (double)prevPrevXfm.v.z;
-                    double dot = pdy * (double)forward.y + pdx * (double)forward.x + pdz * (double)forward.z;
-                    double clampedDot = 0.0;
-                    if (-dot < 0.0)
+                    float pdx = curXfm.v.x - prevPrevXfm.v.x;
+                    float pdy = curXfm.v.y - prevPrevXfm.v.y;
+                    float pdz = curXfm.v.z - prevPrevXfm.v.z;
+                    float dot = pdy * forward.y + pdx * forward.x + pdz * forward.z;
+                    float clampedDot = 0.0f;
+                    if (-dot < 0.0f)
                         clampedDot = dot;
-                    double clampedDot2 = 1.0;
-                    if ((float)(clampedDot - 1.0) < 0.0f)
+                    float clampedDot2 = 1.0f;
+                    if (clampedDot - 1.0f < 0.0f)
                         clampedDot2 = clampedDot;
-                    double angle = (double)acos(clampedDot2);
-                    dCurAngle = (double)(float)angle;
+                    curAngle = std::acos(clampedDot2);
                     Vector3 newSlerpFwd;
                     Interp(forward, followPos, 0.5f, newSlerpFwd);
                     Normalize(newSlerpFwd, newSlerpFwd);
-                    dSlerpFwdX = (double)newSlerpFwd.x;
-                    dSlerpFwdY = (double)newSlerpFwd.y;
-                    dSlerpFwdZ = (double)newSlerpFwd.z;
+                    slerpFwdX = newSlerpFwd.x;
+                    slerpFwdY = newSlerpFwd.y;
+                    slerpFwdZ = newSlerpFwd.z;
                 }
 
                 if ((sUpVecFlag & 1) == 0) {
@@ -470,37 +419,33 @@ void RndRibbon::UpdateChase() {
                 float sv_y = curXfm.v.y;
                 float sv_z = curXfm.v.z;
 
-                if (dCurAngle != dPrevAngle) {
-                    // Reuse invPrev.m (dead after Multiply above) to hold inverted result.m
+                if (curAngle != prevAngle) {
                     Invert(result.m, invPrev.m);
-                    double sdotX = (double)(float)((double)invPrev.m.z.x * dSlerpFwdZ +
-                                   (double)(float)((double)invPrev.m.x.x * dSlerpFwdX +
-                                   (double)(float)((double)invPrev.m.y.x * dSlerpFwdY)));
-                    float sdotY_f = (float)((double)invPrev.m.z.y * dSlerpFwdZ +
-                                   (double)(float)((double)invPrev.m.x.y * dSlerpFwdX +
-                                   (double)(float)(dSlerpFwdY * (double)invPrev.m.y.y)));
-                    dSlerpFwdY = (double)sdotY_f;
-                    float sdotZ_f = (float)((double)invPrev.m.z.z * dSlerpFwdZ +
-                                   (double)(float)((double)invPrev.m.x.z * dSlerpFwdX +
-                                   (double)(float)((double)invPrev.m.y.z * dSlerpFwdY)));
-                    dSlerpFwdZ = (double)sdotZ_f;
+                    float sdotX = invPrev.m.z.x * slerpFwdZ +
+                                  (invPrev.m.x.x * slerpFwdX +
+                                   invPrev.m.y.x * slerpFwdY);
+                    slerpFwdY = invPrev.m.z.y * slerpFwdZ +
+                                (invPrev.m.x.y * slerpFwdX +
+                                 slerpFwdY * invPrev.m.y.y);
+                    slerpFwdZ = invPrev.m.z.z * slerpFwdZ +
+                                (invPrev.m.x.z * slerpFwdX +
+                                 invPrev.m.y.z * slerpFwdY);
 
-                    double newAcosIn = 0.0;
-                    if (-sdotX < 0.0)
+                    float newAcosIn = 0.0f;
+                    if (-sdotX < 0.0f)
                         newAcosIn = sdotX;
-                    double newAcosIn2 = 1.0;
-                    if ((float)(newAcosIn - 1.0) < 0.0f)
+                    float newAcosIn2 = 1.0f;
+                    if (newAcosIn - 1.0f < 0.0f)
                         newAcosIn2 = newAcosIn;
-                    double newSlerpAngle = (double)(float)(double)acos(newAcosIn2);
-                    double cosHalfCur = (double)(float)cos((double)(float)(dCurAngle * 0.5));
-                    double halfNew2 = (double)(float)(newSlerpAngle * 2.0);
-                    double invCosHalfCur = (double)(float)(1.0 / (double)(float)cosHalfCur);
-                    double cosHN2 = (double)(float)cos(halfNew2);
-                    double sinHN2 = (double)(float)sin(halfNew2);
-                    float mXX = (float)((double)((float)(cosHN2 + 1.0) * (float)(invCosHalfCur - 1.0)) * 0.5 + 1.0);
-                    float mXZ = (float)((double)((float)sinHN2 * (float)(1.0 - invCosHalfCur)) * 0.5);
-                    float mZZ = (float)((double)((float)(1.0 - cosHN2) * (float)(invCosHalfCur - 1.0)) * 0.5 + 1.0);
-                    // Reuse lookAt.m (dead after LookAt+Multiply above) for slerp matrix
+                    float newSlerpAngle = std::acos(newAcosIn2);
+                    float cosHalfCur = std::cos(curAngle * 0.5f);
+                    float halfNew2 = newSlerpAngle * 2.0f;
+                    float invCosHalfCur = 1.0f / cosHalfCur;
+                    float cosHN2 = std::cos(halfNew2);
+                    float sinHN2 = std::sin(halfNew2);
+                    float mXX = (cosHN2 + 1.0f) * (invCosHalfCur - 1.0f) * 0.5f + 1.0f;
+                    float mXZ = sinHN2 * (1.0f - invCosHalfCur) * 0.5f;
+                    float mZZ = (1.0f - cosHN2) * (invCosHalfCur - 1.0f) * 0.5f + 1.0f;
                     lookAt.m.x.x = mXX; lookAt.m.x.y = 0.0f; lookAt.m.x.z = mXZ;
                     lookAt.m.y.x = 0.0f; lookAt.m.y.y = 1.0f; lookAt.m.y.z = 0.0f;
                     lookAt.m.z.x = mXZ;  lookAt.m.z.y = 0.0f; lookAt.m.z.z = mZZ;
@@ -512,10 +457,11 @@ void RndRibbon::UpdateChase() {
                 curXfm.v.z = sv_z;
             }
             curIdx++;
-            dPrevAngle = dCurAngle;
-        } while (curIdx < (unsigned int)((int)&*mTransforms.end() - (int)&*mTransforms.begin()) / 0x44);
+            prevAngle = curAngle;
+        } while (curIdx < (unsigned int)(((int)&*mTransforms.end() - (int)&*mTransforms.begin()) / 0x44));
     }
 
     UpdateMesh();
-    _ref1 = currentTime;
+    mLastTime = currentTime;
+#endif // !HX_NATIVE
 }

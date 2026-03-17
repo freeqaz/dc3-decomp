@@ -130,6 +130,9 @@ BEGIN_HANDLERS(HamNavList)
     HANDLE_EXPR(data_symbol, mListState.Provider()->DataSymbol(_msg->Int(2)))
     HANDLE_EXPR(index_enabled, mListState.Provider()->IsActive(_msg->Int(2)))
     HANDLE_MESSAGE(ButtonDownMsg)
+#ifdef HX_NATIVE
+    HANDLE_MESSAGE(UITransitionCompleteMsg)
+#endif
     HANDLE_SUPERCLASS(UIComponent)
     HANDLE_SUPERCLASS(RndAnimatable)
     HANDLE_SUPERCLASS(Hmx::Object)
@@ -506,15 +509,7 @@ void HamNavList::Poll() {
 
     // Handle select mode completion
     if (mRibbonMode == HamListRibbon::kRibbonSelect) {
-        if (
-#ifdef HX_NATIVE
-            // Native: DTA transition_complete handlers that call StopAnimation()
-            // don't fire, so IsAnimating() stays true forever. Skip the check
-            // so nav_select_done fires and the select flow completes.
-            !TheUI->InTransition()
-#else
-            !RndAnimatable::IsAnimating() && !TheUI->InTransition()
-#endif
+        if (!RndAnimatable::IsAnimating() && !TheUI->InTransition()
             && !TheLoadMgr.EditMode()) {
             SetRibbonMode(HamListRibbon::kRibbonSwell);
 
@@ -537,9 +532,6 @@ void HamNavList::Poll() {
                 navSelectDoneMsg->Node(5) = DataNode(mSelectDoneSelecting);
 
                 TheUI->Handle(navSelectDoneMsg.Data(), false);
-#ifdef HX_NATIVE
-                if (TheHamProvider)
-#endif
                 TheHamProvider->Handle(navSelectDoneMsg.Data(), false);
 
                 mSelectDoneIndex = -1;
@@ -747,9 +739,6 @@ void HamNavList::SendHighlightSettledMsg(int i) {
         NavHighlightSettledMsg msg(dataSym, i, this, canSel);
         TheUI->Handle(msg, false);
         Handle(msg, true);
-#ifdef HX_NATIVE
-        if (TheHamProvider)
-#endif
         TheHamProvider->Handle(msg, false);
     }
 }
@@ -803,9 +792,6 @@ void HamNavList::SendHighlightMsg(int i) {
     NavHighlightMsg msg(dataSym, i, this, canSel);
     TheUI->Handle(msg, false);
     Handle(msg, true);
-#ifdef HX_NATIVE
-    if (TheHamProvider)
-#endif
     TheHamProvider->Handle(msg, false);
 }
 
@@ -1101,14 +1087,8 @@ void HamNavList::RealRefresh() {
             static Message eqShiftOddMsg(Symbol("eq_shift_odd"));
             int numShowing = mListState.NumShowing();
             if ((numShowing % 2 == 0) || mListState.ScrollPastMinDisplay()) {
-#ifdef HX_NATIVE
-                if (TheHamProvider)
-#endif
                 TheHamProvider->Handle(eqShiftEvenMsg, false);
             } else {
-#ifdef HX_NATIVE
-                if (TheHamProvider)
-#endif
                 TheHamProvider->Handle(eqShiftOddMsg, false);
             }
         }
@@ -1297,7 +1277,7 @@ void HamNavList::SetSelecting(bool selecting) {
 #ifdef HX_NATIVE
     static int sSelectDiag = 0;
     if (sSelectDiag++ < 32) {
-        printf(
+        MILO_LOG(
             "DC3 HamNavList: select name='%s' selected=%d sym='%s' focus=%d selecting=%d provider=%p\n",
             Name(),
             selected,
@@ -1321,9 +1301,6 @@ void HamNavList::SetSelecting(bool selecting) {
     mSelectDoneSymbol = sym;
     mSelectDoneIndex = selected;
     NavSelectMsg navSelectMsg(sym, selected, this, canSelect);
-#ifdef HX_NATIVE
-    if (TheHamProvider)
-#endif
     TheHamProvider->Handle(navSelectMsg, false);
     DataNode result = TheUI->Handle(navSelectMsg, false);
     Handle(navSelectMsg, true);
@@ -1433,11 +1410,9 @@ void HamNavList::UpdateGestures(const Skeleton *skeleton) {
         bool inVoiceMode = TheGestureMgr && TheGestureMgr->GesturingWithVoice();
         if (!inVoiceMode && mEnabled) {
             if (mRibbonMode == HamListRibbon::kRibbonSelect) {
-#ifndef HX_NATIVE
                 if (RndAnimatable::IsAnimating()) {
                     return;
                 }
-#endif
                 float curFrame = RndAnimatable::GetFrame();
                 float endFrame = EndFrame();
                 if (curFrame == endFrame) {
@@ -1523,13 +1498,7 @@ DataNode HamNavList::OnMsg(const ButtonDownMsg &msg) {
 
     bool inControllerMode = InControllerMode();
     if ((inControllerMode || TheLoadMgr.EditMode())
-#ifdef HX_NATIVE
-        // Native: DTA transition_complete handlers that call StopAnimation()
-        // don't fire, so IsAnimating() stays true forever. Skip the check.
-        && mEnabled) {
-#else
         && !RndAnimatable::IsAnimating() && mEnabled) {
-#endif
         bool gesturing = TheGestureMgr && TheGestureMgr->GesturingWithVoice();
         if (!gesturing && TheUI->FocusComponent() == this) {
             int dir = ScrollDirection(msg, false, true, 1);
@@ -1569,6 +1538,13 @@ DataNode HamNavList::OnMsg(const ButtonDownMsg &msg) {
     }
     return DataNode(kDataUnhandled, 0);
 }
+
+#ifdef HX_NATIVE
+DataNode HamNavList::OnMsg(const UITransitionCompleteMsg &) {
+    StopAnimation();
+    return DataNode(kDataUnhandled, 0);
+}
+#endif
 
 void HamNavList::DrawDebug() const {
 #ifdef HX_NATIVE

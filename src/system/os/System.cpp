@@ -684,3 +684,9 @@ void SystemTerminate() {
     TheSystemArgs.erase(TheSystemArgs.begin(), TheSystemArgs.end());
     TerminateMakeString();
 }
+
+#ifdef HX_NATIVE
+bool HongKongExceptionMet() {
+    return false;
+}
+#endif

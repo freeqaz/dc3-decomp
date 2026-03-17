@@ -183,6 +183,10 @@ void CharSignalApplier::Poll() {
     }
 }
 
+DataNode CharSignalApplier::Handle(DataArray *d, bool b) {
+    return Hmx::Object::Handle(d, b);
+}
+
 void CharSignalApplier::PollDeps(std::list<Hmx::Object *> &a, std::list<Hmx::Object *> &b) {
     BoneOp *cur = mBoneOps.begin();
     if (cur != mBoneOps.end()) {

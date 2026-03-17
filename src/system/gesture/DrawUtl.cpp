@@ -65,6 +65,11 @@ RndMat *CreateCameraBufferMat(int width, int height, RndTex::Type type) {
     return newMat;
 }
 
+void DrawBufferMat(RndMat *mat, Hmx::Rect &rect) {
+    Hmx::Color white(1.0f, 1.0f, 1.0f, 1.0f);
+    TheRnd.DrawRect(rect, white, mat, nullptr, nullptr);
+}
+
 void DrawSnapshot(const GestureMgr &gm, int index) {
     if (index >= 1) {
         MILO_ASSERT((unsigned int)index >= 0 && index < gm.GetLiveCameraInput()->NumSnapshots(), 0xfb);

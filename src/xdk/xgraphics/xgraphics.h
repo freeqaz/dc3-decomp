@@ -94,6 +94,13 @@ INT XGEstimateIdealShaderCost(
 void XGRegisterPixelShader(D3DPixelShader *pShader, void *pPhysicalPart);
 void XGRegisterVertexShader(D3DVertexShader *pShader, void *pPhysicalPart);
 
+UINT XGSetTextureHeader(
+    UINT Width, UINT Height, UINT Levels, UINT Usage,
+    D3DFORMAT Format, UINT ExpBias, UINT Flags, INT BaseOffset,
+    D3DTexture *pTexture
+);
+void XGOffsetResourceAddress(D3DBaseTexture *pResource, void *pBaseAddress);
+
 #ifdef __cplusplus
 }
 #endif

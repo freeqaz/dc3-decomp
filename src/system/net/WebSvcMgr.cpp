@@ -104,3 +104,18 @@ WebSvcMgr::ResolveHostname(const char *hostname, const char *domain, unsigned sh
     }
     return ret;
 }
+
+#ifdef HX_NATIVE
+void WebSvcMgr::Poll() {
+    std::list<WebSvcRequest *>::iterator it = mRequests.begin();
+    while (it != mRequests.end()) {
+        WebSvcRequest *req = *it;
+        if (req->IsDeleteReady()) {
+            it = mRequests.erase(it);
+            OnReqFinished(req);
+        } else {
+            ++it;
+        }
+    }
+}
+#endif

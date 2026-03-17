@@ -41,10 +41,13 @@ struct RunResult {
 };
 
 // Run dc3-native with environment variables, capture output
+struct EnvVar { std::string key, value; };
+
 static RunResult RunHeadless(
     int maxFrames,
     const char *inputScriptPath = nullptr,
-    int timeoutSeconds = 30
+    int timeoutSeconds = 30,
+    std::vector<EnvVar> extraEnv = {}
 ) {
     std::string binary = GetDc3NativePath();
 
@@ -53,6 +56,8 @@ static RunResult RunHeadless(
     cmd << "MILO_HEADLESS=1 MILO_FATAL_FAILS=0 MILO_MAX_FRAMES=" << maxFrames;
     if (inputScriptPath)
         cmd << " MILO_INPUT_SCRIPT=" << inputScriptPath;
+    for (auto &ev : extraEnv)
+        cmd << " " << ev.key << "=" << ev.value;
     cmd << " timeout " << timeoutSeconds << " " << binary << " 2>&1";
 
     FILE *pipe = popen(cmd.str().c_str(), "r");

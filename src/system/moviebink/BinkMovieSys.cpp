@@ -110,3 +110,18 @@ MovieImpl* BinkMovieSys::CreateMovieImpl() {
     return new BinkMovieImpl();
 #endif
 }
+
+// Native stub implementations (no Bink SDK on desktop native)
+#if defined(HX_NATIVE) && !defined(__EMSCRIPTEN__)
+
+struct BINKTRACK;
+
+void BinkMovieSys::PlatformInit() {}
+
+void BinkClose(BINK *) {}
+void BinkCloseTrack(BINKTRACK *) {}
+unsigned int BinkGetTrackData(BINKTRACK *, void *) { return 0; }
+void BinkNextFrame(BINK *) {}
+BINKTRACK *BinkOpenTrack(BINK *, unsigned char) { return nullptr; }
+
+#endif // HX_NATIVE && !__EMSCRIPTEN__

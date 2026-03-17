@@ -458,7 +458,7 @@ void MultiUserGesturePanel::UpdateCharPic(
         static Symbol is_in_party_mode("is_in_party_mode");
         int inPartyMode = TheHamProvider->Property(is_in_party_mode, true)->Int();
         if (inPartyMode != 0) {
-            locked = strstr(outfitSym.Str(), "01") == NULL;
+            locked = locked & (strstr(outfitSym.Str(), "01") == 0);
         }
     }
 

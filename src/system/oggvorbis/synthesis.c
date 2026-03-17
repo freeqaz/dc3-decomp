@@ -152,6 +152,77 @@ long vorbis_packet_blocksize(vorbis_info *vi,ogg_packet *op){
   return(ci->blocksizes[ci->mode_param[mode]->blockflag]);
 }
 
+/* Harmonix incremental synthesis - splits decode across multiple polls.
+   Returns -50 while still in progress, 0 on completion, or error. */
+int vorbis_synthesis_poll(vorbis_block *vb,ogg_packet *op){
+  vorbis_dsp_state     *vd=vb->vd;
+  oggpack_buffer       *opb=&vb->opb;
+  vorbis_info          *vi=vd->vi;
+  codec_setup_info     *ci=vi->codec_setup;
+  private_state        *b=vd->backend_state;
+  int                   ret=-50;
+
+  if(vb->synthesis_state!=vss_init){
+    /* continue decode via poll mapping */
+    int mapping=ci->mode_param[vb->mode]->mapping;
+    int type=ci->map_type[mapping];
+    ret=_poll_mapping_P[type]->inverse(vb,ci->map_param[mapping]);
+  }else{
+    int mode,i;
+
+    /* first things first.  Make sure decode is ready */
+    _vorbis_block_ripcord(vb);
+    oggpack_readinit(opb,op->packet,op->bytes);
+
+    /* Check the packet type */
+    if(oggpack_read(opb,1)!=0){
+      /* Oops.  This is not an audio data packet */
+      ret=OV_ENOTAUDIO;
+      goto done;
+    }
+
+    /* read our mode and pre/post windowsize */
+    mode=oggpack_read(opb,b->modebits);
+    if(mode==-1){
+      ret=OV_EBADPACKET;
+      goto done;
+    }
+
+    vb->mode=mode;
+    vb->W=ci->mode_param[mode]->blockflag;
+    if(vb->W){
+      vb->lW=oggpack_read(opb,1);
+      vb->nW=oggpack_read(opb,1);
+      if(vb->nW==-1){
+        ret=OV_EBADPACKET;
+        goto done;
+      }
+    }else{
+      vb->lW=0;
+      vb->nW=0;
+    }
+
+    /* more setup */
+    vb->granulepos=op->granulepos;
+    vb->sequence=op->packetno;
+    vb->eofflag=op->e_o_s;
+
+    /* alloc pcm passback storage */
+    vb->pcmend=ci->blocksizes[vb->W];
+    vb->pcm=_vorbis_block_alloc(vb,sizeof(*vb->pcm)*vi->channels);
+    for(i=0;i<vi->channels;i++)
+      vb->pcm[i]=_vorbis_block_alloc(vb,vb->pcmend*sizeof(*vb->pcm[i]));
+
+    vb->synthesis_state=vss_decode;
+  }
+
+  if(ret!=-50){
+done:
+    vb->synthesis_state=vss_init;
+  }
+  return(ret);
+}
+
 int vorbis_synthesis_halfrate(vorbis_info *vi,int flag){
   /* set / clear half-sample-rate mode */
   codec_setup_info     *ci=vi->codec_setup;

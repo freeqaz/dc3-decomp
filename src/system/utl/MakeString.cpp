@@ -35,6 +35,15 @@ void InitMakeString() {
     }
 }
 
+void TerminateMakeString() {}
+
+bool MakeStringInitted() { return gLock != nullptr; }
+
+#ifdef HX_NATIVE
+bool ValidateThreadId(DWORD) {
+    return true; // Thread validation not meaningful on native
+}
+#else
 bool ValidateThreadId(DWORD id) {
     HANDLE hThread = OpenThread(0x40, false, id);
     if (!hThread) {
@@ -46,6 +55,7 @@ bool ValidateThreadId(DWORD id) {
         return exitCode == 0x103;
     }
 }
+#endif
 
 char *NextBuf() {
     if (!gLock) {

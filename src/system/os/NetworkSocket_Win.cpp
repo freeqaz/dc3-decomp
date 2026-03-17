@@ -1,6 +1,7 @@
 #include "os/NetworkSocket.h"
 #include "os/Debug.h"
 #include "utl/MakeString.h"
+#include <cstring>
 
 struct XNDNS {
     int iStatus; // 0x0
@@ -12,6 +13,8 @@ extern "C" {
 int WSACreateEvent();
 int XNetDnsLookup(const char *, HANDLE, XNDNS **);
 int XNetDnsRelease(XNDNS *);
+unsigned int inet_addr(const char *);
+int XNetInAddrToString(unsigned int addr, char *buf, int len);
 }
 
 class WinSockSocket {
@@ -20,6 +23,20 @@ public:
 };
 
 NetworkSocket::~NetworkSocket() {}
+
+unsigned int NetworkSocket::IPStringToInt(const String &ip) {
+    WinSockSocket::Init();
+    return inet_addr(ip.c_str());
+}
+
+String NetworkSocket::IPIntToString(unsigned int ip) {
+    WinSockSocket::Init();
+    char buf[32];
+    buf[0] = '\0';
+    memset(buf + 1, 0, 0x1f);
+    XNetInAddrToString(ip, buf, 0x20);
+    return String(buf);
+}
 
 unsigned int NetworkSocket::ResolveHostName(String name) {
     WinSockSocket::Init();

@@ -137,7 +137,13 @@ void CharAnimState::PollFace() {
     if (lipDriver) {
         lipDriver->Poll();
     }
-    if (!eyes) {
+    if (eyes) {
+        // Bridge BlinkState -> CharEyes: trigger periodic blinks when no
+        // interest objects are driving natural gaze-shift blinks
+        if (blink.Weight() > 0.0f) {
+            eyes->ForceBlink();
+        }
+    } else {
         faceServo->SetProceduralBlinkWeight(blink.Weight());
     }
     faceServo->ApplyProceduralWeights();

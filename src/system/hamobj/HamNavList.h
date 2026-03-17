@@ -17,6 +17,7 @@
 #include "ui/UIListProvider.h"
 #include "ui/UIListState.h"
 #include "ui/UIListWidget.h"
+#include "ui/UIScreen.h"
 #include "utl/MemMgr.h"
 #include "utl/Symbol.h"
 
@@ -146,6 +147,9 @@ private:
     static float sSlideTrendAmount;
 
     DataNode OnMsg(const ButtonDownMsg &);
+#ifdef HX_NATIVE
+    DataNode OnMsg(const UITransitionCompleteMsg &);
+#endif
 
 protected:
     virtual void OldResourcePreload(BinStream &);

@@ -16,3 +16,8 @@ void PhysicalFreeTracked(void *address, const char *, int, const char *) {
 int PhysicalUsage() {
     return 0;
 }
+
+// PhysMemTypeTracker — used for Xbox physical memory tracking, no-op on native
+#include "Memory.h"
+PhysMemTypeTracker::PhysMemTypeTracker(Symbol) {}
+PhysMemTypeTracker::~PhysMemTypeTracker() {}

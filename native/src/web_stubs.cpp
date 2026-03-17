@@ -6,115 +6,28 @@
 
 #ifdef __EMSCRIPTEN__
 
-#include "math/Mtx.h"
-#include "math/Geo.h"
-#include "math/Vec.h"
-#include "math/kdTree.h"
-#include "utl/TextStream.h"
-#include "utl/BinStream.h"
-#include "utl/Cache.h"
-#include "obj/Dir.h"
-#include "obj/ObjPtr_p.h"
-#include "rndobj/Utl.h"
-#include "rndobj/Lit_NG.h"
-#include "rndobj/AmbientOcclusion.h"
-#include "rndobj/TexBlendController.h"
-#include "rndobj/Part.h"
-#include "rndobj/SoftParticleBuffer.h"
-#include "rndobj/Draw.h"
-#include "rndobj/Mesh.h"
-#include "rndobj/Font.h"
-#include "ui/UILabelDir.h"
-
-#include <list>
-#include <vector>
+#include <cstdlib>
 
 // ============================================================================
-// Math / Geometry stubs
-// ============================================================================
-
-// ScaleAddEq — now in Vec.cpp
-// MakeBSPTree, BSPFace::Set, Intersect overloads — now in Geo.cpp
-
-void BuildSphereStratified(unsigned int, std::vector<Vector3> &) {}
-
-BuildPoly::BuildPoly() : mPoly(), mTransform() {}
-
-// kdTree::FindSplit_SAH — now in Geo.cpp
-
-// ============================================================================
-// Rendering stubs
-// ============================================================================
-
-// NgLight::RenderShadows — now in Lit_NG.cpp
-
-// RndAmbientOcclusion::BurnTransform — now in AmbientOcclusion.cpp
-
-// TextStream::operator<<(double) now in TextStream.cpp
-
-// ============================================================================
-// ObjPtr / BinStream operator<< template instantiations
-// ============================================================================
-
-template <>
-BinStream &operator<<(BinStream &bs, const ObjDirPtr<UILabelDir> &) { return bs; }
-
-template <>
-BinStream &operator<<(BinStream &bs, const ObjOwnerPtr<RndFont3d> &) { return bs; }
-
-// ============================================================================
-// Object property listing
-// ============================================================================
-
-// ListProperties — now in Utl.cpp
-
-// ============================================================================
-// Holmes (debug network) stub
-// ============================================================================
-
-// HolmesClientCacheResource — now in HolmesClient.cpp
-
-void HolmesClientPrint(const char *) {}
-
-// ============================================================================
-// Engine init stubs — functions called during SystemInit that are either
-// unimplemented or Xbox-specific. Emscripten weak stubs don't resolve
-// at runtime, so we need strong definitions here.
-// ============================================================================
-
-// Spew (debug output system)
-void SpewInit() {}
-void SpewTerminate() {}
-
-// MemFindHeap, GetCurrentHeapNum — now in MemMgr.cpp
-
-// File system operations not available in MEMFS
-void FileRecursePattern(const char *, void (*)(const char *, const char *), bool) {}
-// MakeFileList — now in Utl.cpp
-
 // Bink video — not supported in browser
+// ============================================================================
+
 void BinkSetMemory(void *(*)(int), void (*)(void *)) {}
 int BinkStartAsyncThread(int, int) { return 1; }  // 1 = success
 void *RadAlloc(int size) { return malloc(size); }
 
-// EstimateDraw — now in Draw.cpp
-
-// Xbox/Kinect/network stubs
-#include "os/File.h"
+// Xbox Debug Monitor — not available on web
 #include "xdk/xbdm/xbdm.h"
 
 HRESULT DmMapDevkitDrive() { return 0; }
 
-// System — locale/region stubs
-bool HongKongExceptionMet() { return false; }
+extern "C" {
+HRESULT DmGetSystemInfo(DM_SYSTEM_INFO *) { return -1; }  // E_FAIL
+}
 
-// Memory profiling — no-ops
-#include "Memory.h"
-PhysMemTypeTracker::PhysMemTypeTracker(Symbol) {}
-PhysMemTypeTracker::~PhysMemTypeTracker() {}
+// Joypad actuator (force feedback) — no haptics on web
+#include "os/Joypad.h"
 void JoypadSetActuatorsImp(int, int, int) {}
-
-// RecursePatternInternal — now in File.cpp
 
 // NUI speech stubs (Kinect) — use exact XDK signatures
 #include "xdk/nui/nuispeech.h"
@@ -136,45 +49,11 @@ HRESULT NuiSpeechCommitGrammar(NUI_SPEECH_GRAMMAR *) { return 0; }
 HRESULT NuiWaveSetEnabled(BOOL) { return 0; }
 }
 
-// RndParticleSys::Replace — now in Part.cpp
-// RndSoftParticleBuffer::DoPost — now in SoftParticleBuffer.cpp
-
-// Debug::Modal — now in Debug.cpp
-
-// NormalizeSystemArgs — now in System.cpp
-
-// ============================================================================
-// Xbox Debug Monitor (xbdm) stubs
-// ============================================================================
-
-#include "xdk/xbdm/xbdm.h"
-
-extern "C" {
-HRESULT DmGetSystemInfo(DM_SYSTEM_INFO *) { return -1; }  // E_FAIL
-}
-
-// ============================================================================
-// Vtable anchor stubs — classes with virtual methods that lack implementations
-// ============================================================================
-
-// CharSignalApplier — only Handle() is missing (vtable anchor)
-#include "char/CharSignalApplier.h"
-
-DataNode CharSignalApplier::Handle(DataArray *d, bool b) { return Hmx::Object::Handle(d, b); }
-
-// ChallengeSortByScore / ChallengeScoreCmp — now in ChallengeSortByScore.cpp
-
-// ============================================================================
-// Bink video — not supported in browser
-// ============================================================================
-
+// Bink movie platform stubs — not supported in browser
 #include "moviebink/BinkMovieSys.h"
-
 void BinkMovieSys::PlatformInit() {}
 
-// BinkMovieImpl — all platform-specific methods (were in Xbox .cpp files)
 #include "moviebink/BinkMovieImpl.h"
-
 void BinkMovieImpl::SetWidthHeight(int, int) {}
 bool BinkMovieImpl::Ready() const { return true; }
 bool BinkMovieImpl::BeginFromFile(const char *, float, bool, bool, bool, bool, int, BinStream *, LoaderPos) { return false; }
@@ -195,50 +74,7 @@ void BinkMovieImpl::SetVolume(float) {}
 void BinkMovieImpl::Terminate() {}
 bool BinkMovieImpl::PlatformCacheFile(const char *) { return false; }
 
-// Xbox memory card — not available on web
-#include "os/Memcard_Xbox.h"
-void MemcardXbox::Poll() {}
-
-// WebSvcMgr — network web services, not available on web
-#include "net/WebSvcMgr.h"
-void WebSvcMgr::Poll() {}
-
-#include "os/VirtualKeyboard.h"
-void VirtualKeyboard::PlatformPoll() {}
-
-// Profiling/debug stubs (AutoGlitchReport::EndExternal now defined inline in Timer.h)
-
-// Kinect voice/speech — not available on web
-#include "meta_ham/VoiceInputPanel.h"
-void VoiceInputPanel::ActivateVoiceContext(Symbol) {}
-void VoiceInputPanel::CreatePlaylistEditorGrammar() const {}
-
-// Forward declare to avoid nuispeech.h conflicts
-class SpeechRecoMessage;
-DataNode VoiceInputPanel::OnMsg(const SpeechRecoMessage &) { return DataNode(); }
-
-
-// SpotlightDrawer stubs — now in SpotlightDrawer.cpp / SpotlightDrawer_NG.cpp
-// MemPrintOverview — now in MemMgr.cpp
-// CopyTypeProperties — now in Utl.cpp
-
-// BeginMemTrackFileName etc. — now in MemMgr.cpp
-void HolmesClientTerminate() {}
-void TerminateMakeString() {}
-// MakeFileListFullPath — now in Utl.cpp
-
-#include "rndobj/Mat.h"
-void SetColorWriteMask(const MatShaderOptions &, RndMat *) {}
-
-// Platform-specific inits — no-ops on web
-#include "meta/Achievements.h"
-void Achievements::PlatformInit() {}
-
-// PlaylistSortByType — now in PlaylistSortMgr.cpp
-
-// Network — not available on web
-#include "os/NetworkSocket.h"
-unsigned int NetworkSocket::IPStringToInt(const String &) { return 0; }
+// Network — NetworkSocket_Stub.cpp provides IPStringToInt
 
 // Win32/XDK stubs — APIs that don't exist on web
 int WSACreateEvent() { return 0; }
@@ -249,13 +85,9 @@ int XNetDnsLookup(int, int, void *) { return 0; }
 void XNetDnsRelease(void *) {}
 int XSetThreadProcessor(int, int) { return 0; }
 
-// Scoring / game utilities — stubs for web
-// SynthUtlTerm — now in synth/Utl.cpp
-// altCfg: removed — was most vexing parse in Locale.cpp (now fixed, no function exists)
-void CacheWav(const char *, CacheResourceResult &r) { r = kCacheUnnecessary; }
-// DateTimeCmp — now in DateTime.cpp
-
-// AudioDevice — now in AudioDevice_Web.cpp (AudioWorklet + SharedArrayBuffer)
+// Color write mask stub (rendering) — web uses different pipeline
+#include "rndobj/Mat.h"
+void SetColorWriteMask(const MatShaderOptions &, RndMat *) {}
 
 #endif // __EMSCRIPTEN__
 
@@ -264,13 +96,6 @@ void CacheWav(const char *, CacheResourceResult &r) { r = kCacheUnnecessary; }
 #if defined(HX_NATIVE) && !defined(__EMSCRIPTEN__)
 
 #include "gesture/LiveCameraInput.h"
-#include "math/Geo.h"
-#include "obj/Dir.h"
-#include "obj/ObjPtr_p.h"
-#include "rnddx9/RenderState.h"
-#include "rndobj/Font.h"
-#include "rndobj/Utl.h"
-#include "utl/BinStream.h"
 #include "utl/JobMgr.h"
 #include "utl/TextStream.h"
 #include "xdk/LIBCMT/ppcintrinsics.h"
@@ -283,22 +108,9 @@ void CacheWav(const char *, CacheResourceResult &r) { r = kCacheUnnecessary; }
 
 struct symmetric_CTR;
 
-// TextStream::operator<<(double) now in TextStream.cpp
-
-template <>
-BinStream &operator<<(BinStream &bs, const ObjOwnerPtr<RndFont3d> &) {
-    return bs;
-}
-
-BuildPoly::BuildPoly() : mPoly(), mTransform() {}
-
-void BuildSphereStratified(unsigned int, std::vector<Vector3> &) {}
-
 void LiveCameraInput::LockStream(const void *, LockedRect &) {}
 
 void LiveCameraInput::UnlockStream(const void *) {}
-
-void RndRenderState::SetColorWriteMask(uint) {}
 
 extern "C" {
 

@@ -1,9 +1,12 @@
 #include "meta_ham/VoiceInputPanel.h"
+#include "gesture/GestureMgr.h"
 #include "gesture/SpeechMgr.h"
 #include "meta_ham/HamPanel.h"
 #include "meta_ham/LetterboxPanel.h"
 #include "meta_ham/HamSongMgr.h"
 #include "meta_ham/HamUI.h"
+#include "meta_ham/MetaPerformer.h"
+#include "meta_ham/SongSortMgr.h"
 #include "obj/Data.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
@@ -12,6 +15,7 @@
 #include "ui/UIPanel.h"
 #include "utl/Locale.h"
 #include "utl/Symbol.h"
+#include <cstring>
 
 VoiceInputPanel *TheVoiceInputPanel;
 
@@ -219,5 +223,240 @@ void VoiceInputPanel::CreateSongSelectGrammar(Symbol s1) const {
         TheSpeechMgr->SetRecognizing(recognizing);
     }
 }
+
+#ifdef HX_NATIVE
+void VoiceInputPanel::ActivateVoiceContext(Symbol) {
+    // Kinect voice not available on native
+}
+
+DataNode VoiceInputPanel::OnMsg(const SpeechRecoMessage &) {
+    return DataNode(kDataUnhandled, true);
+}
+
+void VoiceInputPanel::CreatePlaylistEditorGrammar() const {
+    // Kinect voice not available on native
+}
+#else
+
+void VoiceInputPanel::ActivateVoiceContext(Symbol sym) {
+    VoiceContext **it;
+    if (!sym.Null()) {
+        it = mVoiceContexts.begin();
+        VoiceContext **end = mVoiceContexts.end();
+        if (it != end) {
+            do {
+                if ((*it)->mName == sym)
+                    break;
+                it++;
+            } while (it != end);
+            if (it != end)
+                goto found;
+        }
+        MILO_NOTIFY("Couldn't find voice context %s", sym);
+        return;
+    }
+found:
+    if (!TheSpeechMgr->Enabled()) {
+        MILO_NOTIFY(
+            "----- VoiceInputPanel::ActivateVoiceContext() - speechMgr not enabled"
+        );
+        return;
+    }
+    if (mActiveVoiceContext != NULL) {
+        TheDebug << MakeString(
+            "----- Deactivating voice context %s\n", mActiveVoiceContext->mName
+        );
+        if (TheSpeechMgr->Overlay()->Showing()) {
+            TheSpeechMgr->Overlay()->Print(
+                MakeString("Deactivating voice context %s\n", mActiveVoiceContext->mName)
+            );
+        }
+        int numGrammars =
+            mActiveVoiceContext->mActiveConfig->mGrammars.size();
+        for (int i = 0; i < numGrammars; i++) {
+            TheSpeechMgr->SetGrammarState(
+                mActiveVoiceContext->GetGrammarSym(i), false
+            );
+        }
+    }
+    if (sym.Null()) {
+        mActiveVoiceContext = NULL;
+        return;
+    }
+    mActiveVoiceContext = *it;
+    mActiveVoiceContext->SetActiveConfig(unk3c);
+    int numGrammars2 = mActiveVoiceContext->mActiveConfig->mGrammars.size();
+    for (int i = 0; i < numGrammars2; i++) {
+        TheSpeechMgr->SetGrammarState(
+            mActiveVoiceContext->GetGrammarSym(i), true
+        );
+    }
+    TheDebug << MakeString("----- Activating voice context %s\n", sym.Str());
+    if (TheSpeechMgr->Overlay()->Showing()) {
+        TheSpeechMgr->Overlay()->Print(MakeString(
+            "Activating voice context %s, confidence: %f\n",
+            sym.Str(),
+            mActiveVoiceContext->mConfThreshold
+        ));
+    }
+}
+
+void VoiceInputPanel::CreatePlaylistEditorGrammar() const {
+    if (!TheSpeechMgr->Enabled()) {
+        MILO_NOTIFY(
+            "----- VoiceInputPanel::CreatePlaylistEditorGrammar() - speechMgr not enabled\n"
+        );
+    } else {
+        if (TheSpeechMgr->HasGrammar("playlist_editor_grammar")) {
+            TheSpeechMgr->UnloadGrammar("playlist_editor_grammar");
+        }
+        TheSpeechMgr->CreateGrammar("playlist_editor_grammar");
+        void *state;
+        TheSpeechMgr->AddDynamicRule(
+            "playlist_editor_grammar", "select_playlist_song", &state
+        );
+        if (TheSongSortMgr->mSongRecordMap.size() == 0) {
+            TheSongSortMgr->OnEnter();
+        }
+        for (std::map<Symbol, SongRecord>::iterator it =
+                 TheSongSortMgr->mSongRecordMap.begin();
+             it != TheSongSortMgr->mSongRecordMap.end();
+             ++it) {
+            const std::vector<String> &prons =
+                it->second.Metadata()->Pronunciations();
+            for (unsigned int i = 0; i < prons.size(); i++) {
+                String pron(prons[i]);
+                TheSpeechMgr->AddDynamicRuleWord(
+                    "playlist_editor_grammar",
+                    pron.c_str(),
+                    it->second.ShortName().Str(),
+                    &state,
+                    NULL
+                );
+            }
+        }
+        TheSpeechMgr->CommitGrammar("playlist_editor_grammar");
+    }
+}
+
+DataNode VoiceInputPanel::OnMsg(const SpeechRecoMessage &msg) {
+    if (mActiveVoiceContext == NULL) {
+        return DataNode(kDataUnhandled, true);
+    }
+    DataArray *msgData = msg.mData;
+    DataArray *tags = msgData->Node(2).Array(msgData);
+    float confidence = msgData->Node(3).Float(msgData);
+    Symbol ruleName = msgData->Sym(4);
+    Symbol tagSym = tags->Sym(0);
+    bool recognized = confidence >= mActiveVoiceContext->mConfThreshold;
+    if (recognized) {
+        MetaPerformer::SendSpeechDatapoint(tags, confidence, ruleName);
+    }
+    const char *ruleStr = ruleName.Str();
+    const char *statusStr;
+    if (recognized) {
+        statusStr = "recognized";
+    } else {
+        statusStr = "not recognized";
+    }
+    TheDebug << MakeString(
+        "----- Voice Msg - tag: %s; confidence: %f (%s); rule: %s\n",
+        tagSym.Str(),
+        confidence,
+        statusStr,
+        ruleStr
+    );
+    if (recognized) {
+        TheSpeechMgr->Overlay()->Print("recognized\n");
+    } else {
+        TheSpeechMgr->Overlay()->Print("not recognized\n");
+    }
+    LetterboxPanel *letterbox = TheHamUI.GetLetterboxPanel();
+    if (letterbox != NULL) {
+        if (letterbox->InBlacklightTransition()) {
+            goto done;
+        }
+        letterbox->VoiceInput(TheSpeechMgr->VoiceDirection(), recognized);
+    }
+    if (!recognized)
+        goto done;
+    TheGestureMgr->SetInVoiceMode(true);
+    if (letterbox != NULL) {
+        letterbox->SetBlacklightMode(true);
+    }
+    if (ruleName == "select_artist") {
+        int songID =
+            TheHamSongMgr.GetSongIDFromShortName(tagSym, true);
+        if (songID == 0)
+            goto done;
+        static Symbol byArtist("by_artist");
+        TheSongSortMgr->SetSort(byArtist);
+        {
+            Message refreshMsg("refresh_sorting", DataNode(tagSym));
+            HandleType(refreshMsg);
+        }
+    } else if (ruleName == "select_song") {
+        Symbol songTag = tags->Sym(0);
+        int songID =
+            TheHamSongMgr.GetSongIDFromShortName(songTag, false);
+        if (songID == 0)
+            goto done;
+        {
+            Message songMsg("on_say_song_name", DataNode(songTag));
+            HandleType(songMsg);
+        }
+    } else if (ruleName == "select_playlist_song") {
+        Symbol songTag = tags->Sym(0);
+        int songID =
+            TheHamSongMgr.GetSongIDFromShortName(songTag, false);
+        if (songID == 0)
+            goto done;
+        {
+            Message playlistMsg(
+                "select_playlist_song", DataNode(songTag)
+            );
+            HandleType(playlistMsg);
+        }
+    } else {
+        bool isGlobal = false;
+        bool handleGlobal = false;
+        if (strstr(tagSym.Str(), "hidden_global")) {
+            isGlobal = true;
+            static Symbol handleGlobalCommands("handle_global_commands");
+            UIScreen *screen = TheHamUI.CurrentScreen();
+            const DataNode *prop =
+                screen->Property(handleGlobalCommands, false);
+            if (prop == NULL) {
+                UIPanel *focus = screen->FocusPanel();
+                if (focus != NULL) {
+                    prop = focus->Property(handleGlobalCommands, false);
+                }
+            }
+            if (prop != NULL && prop->Type() == kDataInt) {
+                handleGlobal = prop->Int(NULL) != 0;
+            }
+        }
+        if (isGlobal) {
+            if (handleGlobal) {
+                Message globalMsg(
+                    "on_global_voice_command", DataNode(tagSym)
+                );
+                HandleType(globalMsg);
+            } else {
+                static Symbol onGlobalVoiceCommand("on_global_voice_command");
+                static DataArrayPtr onGlobalVoiceCommandFunc(new DataArray(2));
+                onGlobalVoiceCommandFunc->Node(0) = DataNode(onGlobalVoiceCommand);
+                onGlobalVoiceCommandFunc->Node(1) = DataNode(tagSym);
+                onGlobalVoiceCommandFunc->Execute();
+            }
+        } else {
+            Message voiceMsg("on_voice_command", DataNode(tagSym));
+            HandleType(voiceMsg);
+        }
+    }
+done:
+    return DataNode(0);
+}
+#endif
 
 void LetterboxPanel::Exit() { UIPanel::Exit(); }

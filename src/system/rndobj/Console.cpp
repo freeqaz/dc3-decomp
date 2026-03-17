@@ -282,7 +282,7 @@ void RndConsole::SetShowing(bool show) {
 void RndConsole::MoveLevel(int level) {
     if (mDebugging) {
         mLevel += level;
-        mLevel = Clamp(gCallStack - gCallStackPtr + 2, 0, mLevel);
+        mLevel = Clamp((int)(gCallStack - gCallStackPtr + 2), 0, mLevel);
         mDebugging = gCallStackPtr[mLevel - 2];
         List();
     } else

@@ -92,12 +92,154 @@ namespace {
         }
     }
 
-    void HolmesFlushStreamBuffer();
-    void WaitForAnyResponse(Holmes::Protocol prot);
-    void WaitForResponse(Holmes::Protocol prot);
-    void WaitForReads();
-    bool CheckForResponse(Holmes::Protocol prot, bool b);
+    const Holmes::Protocol kAsyncOpcodes[5] = {
+        Holmes::kReadFile,
+        Holmes::kPollKeyboard,
+        Holmes::kPollJoypad,
+        Holmes::kPrint,
+        Holmes::kInvalidOpcode
+    };
+
+    void HolmesFlushStreamBuffer() {
+        if (gStreamBuffer->Size() > 0x2000d) {
+            gRealMaxBufferSize = gStreamBuffer->Size();
+        }
+        gHolmesStream->Write(gStreamBuffer->Buffer(), gStreamBuffer->Size());
+        gStreamBuffer->Seek(0, BinStream::kSeekEnd);
+        gStreamBuffer->Compact();
+    }
+
+    bool CheckForResponse(Holmes::Protocol prot, bool b) {
+        if (gPendingResponse == Holmes::kInvalidOpcode) {
+            bool eof;
+            if (b) {
+                gPollStreamEof = gHolmesStream->Eof();
+                eof = gPollStreamEof;
+            } else {
+                eof = gHolmesStream->Eof();
+            }
+            if (!eof) {
+                START_AUTO_TIMER_CALLBACK("holmes_readopc", 0, 0);
+                u8 res;
+                gHolmesStream->Read(&res, 1);
+                gPendingResponse = (Holmes::Protocol)res;
+                MILO_ASSERT(gPendingResponse != Holmes::kInvalidOpcode, 0xef);
+            }
+        }
+
+        bool compatible = (prot == gPendingResponse);
+        if (!compatible) {
+            for (int i = 0; i < 5; i++) {
+                if (kAsyncOpcodes[i] == gPendingResponse || kAsyncOpcodes[i] == prot) {
+                    compatible = true;
+                    break;
+                }
+            }
+        }
+
+        if (gHolmesStream->Fail()) {
+            MILO_FAIL("holmes closed");
+        } else if (!compatible) {
+            MILO_FAIL(
+                "this shouldn't be happening %s %s\n",
+                Holmes::ProtocolDebugString(prot),
+                Holmes::ProtocolDebugString(gPendingResponse)
+            );
+        }
+
+        return prot == gPendingResponse;
+    }
+
     bool CheckReads(bool b);
+    void CheckInput(bool b);
+
+    void WaitForAnyResponse(Holmes::Protocol prot) {
+        if (gPendingResponse == Holmes::kInvalidOpcode && gHolmesStream->Eof()) {
+            AutoSlowFrame frame("Holmes::WaitForAnyResponse", 2.0f);
+
+            HolmesProfileData *profile = &gProfile[prot];
+
+            int count = profile->count;
+            profile->count = count + 1;
+            if (count == 0) {
+                profile->wait.Start();
+            }
+
+            float elapsed = profile->wait.SplitMs();
+            float timeout = 2000.0f;
+
+            if (gHolmesStream->Eof()) {
+                float timeout_step = 1000.0f;
+                float timeout_factor = 0.001f;
+
+                do {
+                    Timer::Sleep(0);
+
+                    if (!gStackTraced && (profile->wait.SplitMs() - elapsed) > timeout) {
+                        const char *proto_str = Holmes::ProtocolDebugString(prot);
+                        float time_blocked = timeout * timeout_factor;
+                        printf(
+                            "Holmes: %s opcode blocked for %f\n",
+                            proto_str,
+                            time_blocked
+                        );
+                        timeout += timeout_step;
+                    }
+                } while (gHolmesStream->Eof());
+            }
+
+            profile->count--;
+            if (profile->count == 0) {
+                profile->wait.Stop();
+            }
+        }
+    }
+
+    void WaitForResponse(Holmes::Protocol prot) {
+        while (!CheckForResponse(prot, false)) {
+            WaitForAnyResponse(prot);
+            if (CheckReads(false) && prot == Holmes::kReadFile)
+                return;
+            CheckInput(false);
+        }
+    }
+
+    bool CheckReads(bool b) {
+        while (gRequests.begin() != gRequests.end()) {
+            if (!CheckForResponse(Holmes::kReadFile, b)) {
+                return false;
+            }
+            BeginCmd(Holmes::kReadFile, false);
+            ReadRequest *req = &*gRequests.begin();
+            int bytesRead = gHolmesStream->ReadAsync(req->mBuffer, req->mBytes);
+            req->mBuffer = (char *)req->mBuffer + bytesRead;
+            req->mBytes = req->mBytes - bytesRead;
+            EndCmd(Holmes::kReadFile);
+            if (bytesRead <= 0) {
+                return false;
+            }
+            if (req->mBytes == 0) {
+                std::list<ReadRequest>::iterator it = gRequests.begin();
+                gRequests.erase(it);
+                gPendingResponse = Holmes::kInvalidOpcode;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    void WaitForReads() {
+        CritSecTracker cst(&gCrit);
+        while (gRequests.begin() != gRequests.end()) {
+            while (!CheckForResponse(Holmes::kReadFile, false)) {
+                WaitForAnyResponse(Holmes::kReadFile);
+                if (CheckReads(false))
+                    break;
+                CheckInput(false);
+            }
+            CheckReads(false);
+        }
+    }
 
     void CheckInput(bool b) {
         if (CheckForResponse(Holmes::kPollKeyboard, b)) {
@@ -399,6 +541,32 @@ int HolmesClientDelete(const char *cc) {
 
 const char *HolmesFileShare() { return gShareName; }
 
+void HolmesSetFileShare(const char *machine, const char *share) {
+    strncpy(gMachineName, machine, NETBIOS_NAME_MAX);
+    strncpy(gShareName, share, NETBIOS_NAME_MAX);
+}
+
+void HolmesClientTerminate() {
+    CritSecTracker cst(&gCrit);
+    if (gHolmesStream) {
+        BeginCmd(Holmes::kTerminate, true);
+        DumpHolmesLog(nullptr);
+        if (gHolmesStream && !gHolmesStream->Fail()) {
+            u8 cmd = Holmes::kTerminate;
+            gStreamBuffer->Write(&cmd, 1);
+            HolmesFlushStreamBuffer();
+        }
+        if (gHolmesStream) {
+            delete gHolmesStream;
+        }
+        gHolmesStream = nullptr;
+        if (gStreamBuffer) {
+            delete gStreamBuffer;
+        }
+        gStreamBuffer = nullptr;
+    }
+}
+
 void HolmesClientTruncate(int a, int b) {
     CritSecTracker cst(&gCrit);
     MILO_ASSERT(gHolmesStream, 0x3f3);
@@ -616,48 +784,6 @@ void HolmesToLocal(char *p1, const char *p2) {
 
 char const *HolmesFileHostName() { return gMachineName; }
 
-void WaitForAnyResponse(Holmes::Protocol prot) {
-    if (gPendingResponse == Holmes::kInvalidOpcode && gHolmesStream->Eof()) {
-        AutoSlowFrame frame("Holmes::WaitForAnyResponse", 2.0f);
-
-        HolmesProfileData *profile = &gProfile[prot];
-
-        int count = profile->count;
-        profile->count = count + 1;
-        if (count == 0) {
-            profile->wait.Start();
-        }
-
-        float elapsed = profile->wait.SplitMs();
-        float timeout = 2000.0f;
-
-        if (gHolmesStream->Eof()) {
-            float timeout_step = 1000.0f;
-            float timeout_factor = 0.001f;
-
-            do {
-                Timer::Sleep(0);
-
-                if (!gStackTraced && (profile->wait.SplitMs() - elapsed) > timeout) {
-                    const char *proto_str = Holmes::ProtocolDebugString(prot);
-                    float time_blocked = timeout * timeout_factor;
-                    printf(
-                        "Holmes: %s opcode blocked for %f\n",
-                        proto_str,
-                        time_blocked
-                    );
-                    timeout += timeout_step;
-                }
-            } while (gHolmesStream->Eof());
-        }
-
-        profile->count--;
-        if (profile->count == 0) {
-            profile->wait.Stop();
-        }
-    }
-}
-
 void HolmesClientPoll() {
     CritSecTracker cst(&gCrit);
 
@@ -716,3 +842,9 @@ bool HolmesClientCacheFile(char *arg0, const char *arg1) {
     EndCmd(Holmes::kCacheFile);
     return result;
 }
+
+#ifdef HX_NATIVE
+void HolmesClientPrint(const char *) {
+    // Holmes remote debug not available on native
+}
+#endif

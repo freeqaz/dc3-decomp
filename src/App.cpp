@@ -1,6 +1,7 @@
 #include "App.h"
 #ifdef HX_NATIVE
 #include <algorithm>
+#include "telemetry/GameplayTelemetry.h"
 #if !defined(__EMSCRIPTEN__)
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -347,7 +348,7 @@ App::App(int argc, char **argv) {
                 // Many providers (Character/Crew/Outfit/Venue/Difficulty) gate their
                 // lists on player_present — if it's 0 for both, lists may swap or empty.
                 provider->SetProperty(player_present, i == 0 ? 1 : 0);
-                fprintf(stderr, "DC3 Native: Created player provider '%s' (side=%d)\n",
+                MILO_LOG("DC3 Native: Created player provider '%s' (side=%d)\n",
                         providerName, i == 0 ? 1 : 0);
             }
         }
@@ -380,9 +381,9 @@ App::App(int argc, char **argv) {
     // Trigger content refresh to load base game songs from ark.
     // This must happen after HamSongMgr.Init() (registers callback) and
     // MetaPanel::Init() (registers SongSortMgr etc.) so all callbacks fire.
-    fprintf(stderr, "DC3 Native: About to call ContentMgr::RefreshSynchronously\n");
+    MILO_LOG("DC3 Native: About to call ContentMgr::RefreshSynchronously\n");
     TheContentMgr.RefreshSynchronously();
-    fprintf(stderr, "DC3 Native: ContentMgr::RefreshSynchronously returned\n");
+    MILO_LOG("DC3 Native: ContentMgr::RefreshSynchronously returned\n");
 
     // UI system — use the global TheHamUI (game-specific UIManager subclass)
     // for proper two-pass draw pipeline (letterbox, blacklight, helpbar, shell input)
@@ -992,7 +993,7 @@ void App::Run() { RunWithoutDebugging(); }
 
 void App::RunWithoutDebugging() {
 #if defined(HX_NATIVE) && !defined(__EMSCRIPTEN__)
-    printf("DC3 Native: Entering main loop\n");
+    MILO_LOG("DC3 Native: Entering main loop\n");
     int frameCount = 0;
     bool windowed = (gNativeWindow != nullptr);
 
@@ -1001,10 +1002,12 @@ void App::RunWithoutDebugging() {
     if (maxFramesEnv) maxFrames = atoi(maxFramesEnv);
     if (maxFrames <= 0) maxFrames = 10000;
 
+    GameplayTelemetry::Init();
+
     if (windowed)
-        printf("DC3 Native: Windowed mode - close window or press ESC to exit\n");
+        MILO_LOG("DC3 Native: Windowed mode - close window or press ESC to exit\n");
     else
-        printf("DC3 Native: Headless mode — running %d frames\n", maxFrames);
+        MILO_LOG("DC3 Native: Headless mode — running %d frames\n", maxFrames);
 
     while (true) {
         SystemPoll(false);
@@ -1019,6 +1022,8 @@ void App::RunWithoutDebugging() {
 
         if (TheSynth)
             TheSynth->Poll();
+
+        GameplayTelemetry::Sample(frameCount);
 
         // Native port: poll the venue WorldDir for animation/lighting.
         // The venue renders through world_panel as part of TheUI->Draw() —
@@ -1069,7 +1074,7 @@ void App::RunWithoutDebugging() {
                                 }
                             }
                             if (totalMerged > 0) {
-                                printf("DC3 Native: loaded %d venue components for '%s'\n",
+                                MILO_LOG("DC3 Native: loaded %d venue components for '%s'\n",
                                        totalMerged, venueName);
                                 venueWorld->SyncObjects();
                             }
@@ -1094,7 +1099,7 @@ void App::RunWithoutDebugging() {
                                             inst++;
                                     }
                                 }
-                                printf("DC3 Native: WorldCrowd '%s' — %d instances, "
+                                MILO_LOG("DC3 Native: WorldCrowd '%s' — %d instances, "
                                        "%d chars (ref=%d, null=%d), placement=%p\n",
                                        cit->Name(), inst, charsWithRef + charsNull,
                                        charsWithRef, charsNull,
@@ -1102,10 +1107,10 @@ void App::RunWithoutDebugging() {
                                 totalInstances += inst;
                             }
                             if (crowdCount > 0)
-                                printf("DC3 Native: %d WorldCrowd objects, %d total instances\n",
+                                MILO_LOG("DC3 Native: %d WorldCrowd objects, %d total instances\n",
                                        crowdCount, totalInstances);
                             else
-                                printf("DC3 Native: no WorldCrowd objects found in venue\n");
+                                MILO_LOG("DC3 Native: no WorldCrowd objects found in venue\n");
                         }
 #endif
 
@@ -1155,7 +1160,7 @@ void App::RunWithoutDebugging() {
                             for (ObjDirItr<RndTexRenderer> trit(venueWorld, true); trit != nullptr; ++trit)
                                 trit->SetShowing(false);
                             if (hidden > 0)
-                                printf("DC3 Native: hidden %d camera/projection/RT meshes\n", hidden);
+                                MILO_LOG("DC3 Native: hidden %d camera/projection/RT meshes\n", hidden);
                         }
 
                         // DC3 doesn't use the LightPreset system — lighting is driven
@@ -1197,7 +1202,7 @@ void App::RunWithoutDebugging() {
                                         servo->SetClips(visemeDir);
                                         CharLipSyncDriver *lipDrv = it->Find<CharLipSyncDriver>("face.lipdrv", false);
                                         if (lipDrv) lipDrv->SetClips(visemeDir);
-                                        fprintf(stderr, "DC3 Native: Loaded visemes for '%s' from '%s' — base=%p\n",
+                                        MILO_LOG("DC3 Native: Loaded visemes for '%s' from '%s' — base=%p\n",
                                             it->Name(), visemePath, servo->BaseClip());
                                     }
                                 }
@@ -1211,7 +1216,7 @@ void App::RunWithoutDebugging() {
                         // Enable blinking if we have viseme clips now
                         if (servo && servo->BaseClip()) {
                             it->SetBlinking(true);
-                            fprintf(stderr, "DC3 Native: Enabled blinking for '%s'\n", it->Name());
+                            MILO_LOG("DC3 Native: Enabled blinking for '%s'\n", it->Name());
                         }
                         // Create interest objects so characters have something to look at.
                         // On Xbox these come from the character .milo files.
@@ -1227,7 +1232,7 @@ void App::RunWithoutDebugging() {
                                 interestXfm.v.Set(charPos.x, charPos.y + 120.0f, charPos.z + 24.0f);
                                 camInterest->SetLocalXfm(interestXfm);
                                 eyes->AddInterestObject(camInterest);
-                                fprintf(stderr, "DC3 Native: Added audience interest for '%s' at (%.1f,%.1f,%.1f)\n",
+                                MILO_LOG("DC3 Native: Added audience interest for '%s' at (%.1f,%.1f,%.1f)\n",
                                     it->Name(), interestXfm.v.x, interestXfm.v.y, interestXfm.v.z);
                             }
                         }
@@ -1328,14 +1333,14 @@ void App::RunWithoutDebugging() {
 
         frameCount++;
         if (frameCount % 1000 == 0) {
-            printf("DC3 Native: Frame %d\n", frameCount);
+            MILO_LOG("DC3 Native: Frame %d\n", frameCount);
         }
 
         // Periodic UI state dump
         if (frameCount % 500 == 0 && TheUI) {
             const char *curScreen = TheUI->CurrentScreen() ? TheUI->CurrentScreen()->Name() : "<none>";
             const char *transScreen = TheUI->TransitionScreen() ? TheUI->TransitionScreen()->Name() : "<none>";
-            printf("DC3 UI State [frame %d]: current='%s' transition='%s' inTransition=%d\n",
+            MILO_LOG("DC3 UI State [frame %d]: current='%s' transition='%s' inTransition=%d\n",
                    frameCount, curScreen, transScreen, (int)TheUI->InTransition());
         }
 
@@ -1356,14 +1361,14 @@ void App::RunWithoutDebugging() {
                     // Set up game data once when on main_screen and targeting game_screen
                     else if (strcmp(curName, "main_screen") == 0 && !sGameSetupDone) {
                         sGameSetupDone = true;
-                        fprintf(stderr, "DC3 Native: Auto-nav at main_screen — target='%s' GameData=%p GameMode=%p\n",
+                        MILO_LOG("DC3 Native: Auto-nav at main_screen — target='%s' GameData=%p GameMode=%p\n",
                             targetScreen, (void*)TheGameData, (void*)TheGameMode);
                         if (strcmp(targetScreen, "game_screen") == 0 && TheGameData && TheGameMode) {
                             const char *songName = getenv("DC3_SONG");
                             if (!songName || !songName[0]) songName = "boyfriend";
                             // Validate song exists in the song database (DLC songs aren't on disc)
                             if (!TheHamSongMgr.HasSong(Symbol(songName), false)) {
-                                fprintf(stderr, "DC3 Native: Song '%s' not found in song database — check DC3_SONG env var\n", songName);
+                                MILO_LOG("DC3 Native: Song '%s' not found in song database — check DC3_SONG env var\n", songName);
                                 songName = "boyfriend";
                             }
                             TheGameData->SetSong(Symbol(songName));
@@ -1394,21 +1399,30 @@ void App::RunWithoutDebugging() {
                             }
                             HamPlayerData *p0 = TheGameData->Player(0);
                             HamPlayerData *p1 = TheGameData->Player(1);
+                            // DC3_AUTOPLAY: "maximum", "move_perfect", "move_awesome",
+                            // "move_ok", "move_bad", or "off" (default: "maximum")
+                            const char *autoplayEnv = getenv("DC3_AUTOPLAY");
+                            Symbol autoplaySym;
+                            if (!autoplayEnv || strcmp(autoplayEnv, "off") != 0) {
+                                autoplaySym = Symbol(autoplayEnv ? autoplayEnv : "maximum");
+                            }
+                            const char *diffEnv = getenv("DC3_DIFFICULTY");
+                            Difficulty diff = diffEnv ? (Difficulty)atoi(diffEnv) : kDifficultyEasy;
                             if (p0) {
-                                p0->SetDifficulty(kDifficultyEasy);
-                                p0->SetAutoplay(Symbol("maximum"));
+                                p0->SetDifficulty(diff);
+                                if (!autoplaySym.Null()) p0->SetAutoplay(autoplaySym);
                             }
                             if (p1) {
-                                p1->SetDifficulty(kDifficultyEasy);
-                                p1->SetAutoplay(Symbol("maximum"));
+                                p1->SetDifficulty(diff);
+                                if (!autoplaySym.Null()) p1->SetAutoplay(autoplaySym);
                             }
-                            fprintf(stderr, "DC3 Native: Game setup — song='%s' venue='%s' mode=perform\n",
+                            MILO_LOG("DC3 Native: Game setup — song='%s' venue='%s' mode=perform\n",
                                    songName, venueName);
                         }
                         // Navigate to choose_mode_screen (next in chain)
                         UIScreen *next = ObjectDir::Main()->Find<UIScreen>("choose_mode_screen", false);
                         if (next) {
-                            fprintf(stderr, "DC3 Native: Auto-nav chain: main_screen → choose_mode_screen\n");
+                            MILO_LOG("DC3 Native: Auto-nav chain: main_screen → choose_mode_screen\n");
                             TheUI->GotoScreen(next, false, false);
                         }
                     }
@@ -1416,7 +1430,7 @@ void App::RunWithoutDebugging() {
                     else if (strcmp(curName, "choose_mode_screen") == 0) {
                         UIScreen *next = ObjectDir::Main()->Find<UIScreen>("song_select_screen", false);
                         if (next) {
-                            fprintf(stderr, "DC3 Native: Auto-nav chain: choose_mode → song_select\n");
+                            MILO_LOG("DC3 Native: Auto-nav chain: choose_mode → song_select\n");
                             TheUI->GotoScreen(next, false, false);
                         }
                     }
@@ -1424,7 +1438,7 @@ void App::RunWithoutDebugging() {
                     else if (strcmp(curName, "song_select_screen") == 0) {
                         UIScreen *next = ObjectDir::Main()->Find<UIScreen>("multiuser_screen", false);
                         if (next) {
-                            fprintf(stderr, "DC3 Native: Auto-nav chain: song_select → multiuser\n");
+                            MILO_LOG("DC3 Native: Auto-nav chain: song_select → multiuser\n");
                             TheUI->GotoScreen(next, false, false);
                         }
                     }
@@ -1432,7 +1446,7 @@ void App::RunWithoutDebugging() {
                     else if (strcmp(curName, "multiuser_screen") == 0) {
                         UIScreen *next = ObjectDir::Main()->Find<UIScreen>("loading_screen", false);
                         if (next) {
-                            fprintf(stderr, "DC3 Native: Auto-nav chain: multiuser → loading\n");
+                            MILO_LOG("DC3 Native: Auto-nav chain: multiuser → loading\n");
                             TheUI->GotoScreen(next, false, false);
                         }
                     }
@@ -1441,7 +1455,7 @@ void App::RunWithoutDebugging() {
                         sAutoNavDone = true;
                         UIScreen *target = ObjectDir::Main()->Find<UIScreen>(targetScreen, false);
                         if (target) {
-                            fprintf(stderr, "DC3 Native: Auto-navigating to '%s'\n", targetScreen);
+                            MILO_LOG("DC3 Native: Auto-navigating to '%s'\n", targetScreen);
                             TheUI->GotoScreen(target, false, false);
                         }
                     }
@@ -1454,7 +1468,7 @@ void App::RunWithoutDebugging() {
                 break;
         } else {
             if (frameCount >= maxFrames) {
-                printf("DC3 Native: %d frames completed, engine stable!\n", frameCount);
+                MILO_LOG("DC3 Native: %d frames completed, engine stable!\n", frameCount);
                 break;
             }
         }

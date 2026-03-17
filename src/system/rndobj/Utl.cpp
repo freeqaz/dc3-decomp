@@ -2346,3 +2346,40 @@ void BuildFromBSP(RndMesh *mesh) {
 template int Keys<Vector3, Vector3>::AtFrame(
     float, const Key<Vector3> *&, const Key<Vector3> *&, float &
 ) const;
+
+BuildPoly::BuildPoly() : mPoly(), mTransform() {}
+
+// Generate stratified sphere sampling directions using jittered stratification.
+// Divides the sphere into a grid of (N x N) strata where N = floor(sqrt(numSamples)+0.5).
+// Within each stratum, a random point is chosen, converted from cylindrical to
+// Cartesian coordinates, normalized, and pushed into the output vector.
+void BuildSphereStratified(unsigned int numSamples, std::vector<Vector3> &dirs) {
+    Rand rand(0x29a);
+    unsigned int N = (unsigned int)(std::sqrt((float)numSamples) + 0.5f);
+    dirs.erase(dirs.begin(), dirs.end());
+    dirs.reserve(N * N);
+
+    float zStep = (1.0f / (float)N) * 2.0f;
+    float phiStep = (1.0f / (float)N) * 6.2831855f;
+
+    float z = -1.0f;
+    float phi = 0.0f;
+    for (unsigned int i = N; i != 0; i--) {
+        unsigned int j = N;
+        do {
+            float zJittered = rand.Float() * zStep + z;
+            float phiJittered = rand.Float() * phiStep + phi;
+            float r = std::sqrt(-(zJittered * zJittered - 1.0f));
+            Vector3 v;
+            v.x = (float)cos(phiJittered) * r;
+            v.y = (float)sin(phiJittered) * r;
+            v.z = zJittered;
+            Vector3 normalized;
+            Normalize(v, normalized);
+            dirs.push_back(normalized);
+            j--;
+            phi += phiStep;
+        } while (j != 0);
+        z += zStep;
+    }
+}

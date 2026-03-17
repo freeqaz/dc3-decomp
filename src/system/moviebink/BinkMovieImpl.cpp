@@ -112,3 +112,32 @@ done:
     reinterpret_cast<std::map<void*, String>*>(&mTreeColor)->clear();
 #endif
 }
+
+// Native stub implementations (no Bink video on desktop native)
+#if defined(HX_NATIVE) && !defined(__EMSCRIPTEN__)
+
+void BinkMovieImpl::SetWidthHeight(int, int) {}
+bool BinkMovieImpl::Ready() const { return true; }
+bool BinkMovieImpl::BeginFromFile(
+    const char *, float, bool, bool, bool, bool, int, BinStream *, LoaderPos
+) {
+    return false;
+}
+void BinkMovieImpl::Draw() {}
+bool BinkMovieImpl::Poll() { return true; }
+void BinkMovieImpl::Save(BinStream *) {}
+void BinkMovieImpl::End() {}
+bool BinkMovieImpl::IsOpen() const { return false; }
+bool BinkMovieImpl::IsLoading() const { return false; }
+bool BinkMovieImpl::CheckOpen(bool) { return false; }
+bool BinkMovieImpl::SetPaused(bool) { return false; }
+void BinkMovieImpl::UnlockThread() {}
+void BinkMovieImpl::LockThread() {}
+int BinkMovieImpl::GetFrame() const { return 0; }
+float BinkMovieImpl::MsPerFrame() const { return 33.33f; }
+int BinkMovieImpl::NumFrames() const { return 0; }
+void BinkMovieImpl::SetVolume(float) {}
+void BinkMovieImpl::Terminate() {}
+bool BinkMovieImpl::PlatformCacheFile(const char *) { return false; }
+
+#endif // HX_NATIVE && !__EMSCRIPTEN__

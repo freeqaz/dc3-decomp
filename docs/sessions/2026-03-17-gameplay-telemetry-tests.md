@@ -202,28 +202,30 @@ the corresponding `#ifdef HX_NATIVE` hack.
 Each test documents **what engine work** would make it pass AND which hack audit
 phase it gates.
 
-**`VenueTypeDefSet`** — *hack audit: Phase A1 (`set_type "world"`)*
+**`VenueTypeDefSet`** — *hack audit: Phase A1 (`set_type "world"`) — RECLASSIFIED*
 - Telemetry key: `typeDef`
 - Property: at least one gameplay-phase sample has `typeDef=world`
-- Skip reason: `DTA set_type handler not firing on native`
-- **When this passes**: remove HamDirector hack #1 (line 575 force `SetType("world")`)
+- **Note**: Investigation showed this hack is PERMANENT — native doesn't evaluate DTA panel enter scripts (`PanelDir::Enter()` confirms at PanelDir.cpp:428-442). The C++ `SetType("world")` call in VenueEnter is a correct, minimal workaround. This test should be **Tier 1** (expected to pass with the hack in place) — it validates the hack works, not that DTA fires.
+- **When this passes**: confirms the existing hack is functioning correctly
 
-**`CameraSelection`** — *hack audit: Phase A1 + B2*
+**`CameraSelection`** — *hack audit: Phase B2*
 - Telemetry key: `cameraCount`
 - Property: `cameraCount > 0` in at least one gameplay-phase sample
-- Skip reason: `WorldDir TypeDef "world" not wired, camera path not unified`
-- **When this passes**: remove HamDirector hack #7 (PlayNextShot venue vs merger dir)
+- Skip reason: `Camera path divergence between mVenue and mMerger->Dir()`
+- **Note**: A1 dependency removed — `set_type "world"` hack is permanent and working. This test now gates B2 only (PlayNextShot camera unification). Investigation confirmed `mVenue != mMerger->Dir()` — they are merge source vs merge target. Unification requires CameraManager equivalence post-merge.
+- **When this passes**: unify PlayNextShot camera path (remove hack #7) if CameraManagers match
 
-**`HamProviderInitialized`** — *hack audit: Phase A4*
+**`HamProviderInitialized`** — *hack audit: Phase A4 — LIKELY PASSES TODAY*
 - Telemetry key: `hamProvider`
 - Property: `hamProvider=1` before first gameplay-phase sample
-- Skip reason: `ham_init.dta provider init ordering`
-- **When this passes**: remove 6 TheHamProvider null guards in HamNavList.cpp
+- **Note**: Investigation showed `HamInit()` runs at App.cpp:321 (early in constructor), creating TheHamProvider before any subsystem poll. `EnsureHamProvider()` (Ham.cpp:84-99) provides native fallback. Properties are pre-initialized in Ham.cpp:189-217. The 6 null guards are likely dead code. This test should be **Tier 1** (expected to pass today).
+- **When this passes**: remove 6 TheHamProvider null guards in HamNavList.cpp (replace with MILO_ASSERT first to confirm)
 
 **`NavTransitionsComplete`** — *hack audit: Phase A2*
 - Telemetry key: `navAnimating`
 - Property: `navAnimating` transitions from `1` to `0` at least once (animation completes)
-- Skip reason: `transition_complete messages not firing`
+- Skip reason: `HamNavList has no OnMsg(UITransitionCompleteMsg) handler`
+- **Root cause confirmed**: `UI::Poll()` (UI.cpp:726, 774) DOES send the message. HamNavList doesn't have a handler — on Xbox, DTA `add_sink` wires this up. Fix: add `OnMsg(const UITransitionCompleteMsg&)` to HamNavList (pattern in HamUI.cpp).
 - **When this passes**: remove 3 IsAnimating() bypasses in HamNavList.cpp
 
 **`WardrobeLoadsCorrectly`** — *hack audit: Phase A3*
@@ -280,12 +282,13 @@ EngineReachesGameScreen [T1]
   └─ SongAnimAdvances [T1]
        ├─ SongAnimMonotonicallyIncreases [T1]
        │
-       ├─ VenueTypeDefSet [T2] ←── Phase A1: DTA set_type
-       │    └─ CameraSelection [T2] ←── Phase A1 + B2: TypeDef + camera unify
-       │         └─ MergerDirAvailable [T2] ←── Phase B2: FileMerger Dir()
+       ├─ VenueTypeDefSet [T1*] ←── Reclassified: hack is permanent, test validates it works
        │
-       ├─ HamProviderInitialized [T2] ←── Phase A4: ham_init.dta ordering
-       │    └─ NavTransitionsComplete [T2] ←── Phase A2: transition_complete msgs
+       ├─ HamProviderInitialized [T1*] ←── Reclassified: likely passes today (init is early)
+       │    └─ NavTransitionsComplete [T2] ←── Phase A2: add OnMsg handler to HamNavList
+       │
+       ├─ CameraSelection [T2] ←── Phase B2: camera unify (mVenue vs mMerger->Dir())
+       │    └─ MergerDirAvailable [T2] ←── Phase B2: CameraManager equivalence post-merge
        │
        ├─ WardrobeLoadsCorrectly [T2] ←── Phase A3: player provider init
        │
@@ -296,6 +299,8 @@ EngineReachesGameScreen [T1]
        │    └─ BeatDrivenAnimation [T2] ←── Phase D2: beat-driven timing
        │
        └─ FullChoreography [T2] ←── All phases complete
+
+[T1*] = reclassified from T2 based on investigation (expected to pass today)
 ```
 
 ### Fixture design
@@ -379,11 +384,11 @@ convergence:
 
 | Milestone | Tier 1 count | Tier 2 remaining | Hacks removed |
 |-----------|-------------|-------------------|---------------|
-| Baseline | 4 | 11 | 0 |
-| Phase A1 done | 5-6 | 9-10 | 1 |
-| Phase A complete | 9-10 | 4-5 | 11 |
-| Phase B complete | 12-13 | 1-2 | 23 |
-| Phase D complete | 14-15 | 0 | ~43 |
+| Baseline | 4 + 2 reclassified = 6 | 9 | 0 |
+| Trivial cleanup (logging, sInstance) | 6 | 9 | 9 (trivial) |
+| Phase A4 (null guards) + A2 (transition handler) | 7-8 | 7-8 | 18 |
+| Phase B complete | 10-11 | 3-4 | 31 |
+| Phase C + D complete | 14-15 | 0 | ~55 |
 
 ## Implementation Order
 
@@ -416,16 +421,16 @@ convergence:
 
 ## Cross-reference: Hack Audit → Telemetry Test
 
-| Hack Audit Phase | Hacks | Gate Test | Telemetry Key |
-|------------------|-------|-----------|---------------|
-| A1: `set_type "world"` | 1 | `VenueTypeDefSet` | `typeDef` |
-| A2: `transition_complete` | 3 | `NavTransitionsComplete` | `navAnimating` |
-| A3: Player provider init | 1 | `WardrobeLoadsCorrectly` | `wardrobeSlot0` |
-| A4: HamProvider init | 6 | `HamProviderInitialized` | `hamProvider` |
-| B1: Move data guards | 12 | `MoveGraphLoaded` + `ClipTransitions` | `moveGraph`, `clip` |
-| B2: PlayNextShot unify | 1 | `MergerDirAvailable` + `CameraSelection` | `mergerDir`, `cameraCount` |
-| D2: Intro timing | 1 | `BeatDrivenAnimation` | `beat` |
-| All complete | ~43 | `FullChoreography` | all keys |
+| Hack Audit Phase | Hacks | Gate Test | Telemetry Key | Status |
+|------------------|-------|-----------|---------------|--------|
+| A1: `set_type "world"` | 1 | `VenueTypeDefSet` | `typeDef` | **Permanent** — hack is correct workaround, test validates it |
+| A2: `transition_complete` | 3 | `NavTransitionsComplete` | `navAnimating` | **Actionable** — add OnMsg handler to HamNavList |
+| A3: Player provider init | 1 | `WardrobeLoadsCorrectly` | `wardrobeSlot0` | Investigate |
+| A4: HamProvider init | 6 | `HamProviderInitialized` | `hamProvider` | **Likely passes today** — init is early |
+| B1: Move data guards | 12 | `MoveGraphLoaded` + `ClipTransitions` | `moveGraph`, `clip` | Assert-first validation |
+| B2: PlayNextShot unify | 1 | `MergerDirAvailable` + `CameraSelection` | `mergerDir`, `cameraCount` | **May be permanent** — CameraManager check needed |
+| D2: Intro timing | 1 | `BeatDrivenAnimation` | `beat` | Architectural decision |
+| All complete | ~43 | `FullChoreography` | all keys | End goal |
 
 ## What This Catches
 

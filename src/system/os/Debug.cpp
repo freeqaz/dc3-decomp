@@ -1,3 +1,19 @@
+template <class T, int InitVal, int DestroyVal>
+class ScopedState {
+public:
+    ScopedState(T *ptr) : mPtr(ptr) { *mPtr = (T)InitVal; }
+    ~ScopedState();
+    T *mPtr;
+};
+
+template <class T, int InitVal, int DestroyVal>
+ScopedState<T, InitVal, DestroyVal>::~ScopedState() {
+    *mPtr = (T)DestroyVal;
+}
+
+// Force instantiation of the destructor COMDAT
+template ScopedState<bool, 1, 0>::~ScopedState();
+
 #include "os/Debug.h"
 #include "HolmesClient.h"
 #include "obj/Data.h"

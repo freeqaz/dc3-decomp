@@ -33,6 +33,22 @@ void Achievements::Poll() {
     }
 }
 
+#ifdef HX_NATIVE
+void Achievements::PlatformInit() {
+    // Xbox achievements not available on native
+}
+
+XUSER_ACHIEVEMENT Achievements::GetAchievementData(int padNum, int achievementId) {
+    XUSER_ACHIEVEMENT data;
+    memset(&data, 0, sizeof(data));
+    return data;
+}
+
+int Achievements::SubmitAchievementsFunc() {
+    return 0;
+}
+#endif
+
 void Achievements::Submit(int i1, Symbol s2, int i3) {
     if (ThePlatformMgr.IsPadNumSignedIn(i1)) {
         MILO_LOG("Achievement awarded: %s (id:%d, pad:%i)\n", s2, i3, i1);

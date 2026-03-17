@@ -849,6 +849,46 @@ bool NgSpotlightDrawer::CheckFogTexture() {
     return mFogDensityMap;
 }
 
+#ifndef HX_NATIVE
+bool NgSpotlightDrawer::CheckRTs(NgSpotlightDrawer::SpotlightResources *sr) {
+    PhysMemTypeTracker tracker(Symbol("D3D(phys):NgSpotlightDrawer"));
+    DxTex::SetEDRamChecksEnabled(false);
+    int w = RTWidth();
+    int h = RTHeight();
+    if (!sr->unk8) {
+        RndTex *tex = Hmx::Object::New<RndTex>();
+        tex->SetBitmap(w, h, 32, RndTex::kDepthVolumeMap, false, nullptr);
+        sr->unk8 = tex;
+    }
+    DxTex::SetEDRamChecksEnabled(true);
+    if (!sr->unk4) {
+        D3DSURFACE_DESC desc;
+        ((DxTex *)sr->unk8)->GetDepthRT()->GetDesc(&desc);
+        D3DFORMAT fmt = desc.Format;
+        int createH = RTHeight();
+        int createW = RTWidth();
+        sr->unk4 = (D3DResource *)D3DDevice_CreateTexture(
+            createW, createH, 1, 1, 0, fmt, 0, D3DRTYPE_TEXTURE
+        );
+        DX_ASSERT(sr->unk4, 0x12C);
+    }
+    if (!sr->unk10) {
+        sr->unk10 = TheRnd.GetDefaultTex(Rnd::kDefaultTex_Black);
+    }
+    if (!sr->unk14) {
+        sr->unk14 = TheRnd.GetDefaultTex(Rnd::kDefaultTex_WhiteTransparent);
+    }
+    sr->unk18 = sr->unk10;
+    if (!sr->mDensityMap) {
+        sr->mDensityMap = Hmx::Object::New<RndTex>();
+        int dh = RTHeight() >> 1;
+        int dw = RTWidth() >> 1;
+        sr->mDensityMap->SetBitmap(dw, dh, 32, RndTex::kDensityMap, false, nullptr);
+    }
+    return true;
+}
+#endif
+
 bool NgSpotlightDrawer::CheckSharedResources() {
     if (sSharedResources) {
         if (sSharedResources->unk8 && sSharedResources->unk8->Width() != RTWidth()) {

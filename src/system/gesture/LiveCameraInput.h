@@ -25,7 +25,8 @@ public:
         kBufferNum = 4,
     };
     struct LockedRect {
-        // 0x0
+        unsigned int mPitch; // 0x0
+        void *mBits; // 0x4
     };
     // size 0x18
     struct Buffer {
@@ -109,8 +110,8 @@ protected:
     int mAudioInitialized; // 0x11d4
     HANDLE mAudioHandle; // 0x11d8
     int unk11dc;
-    int unk11e0;
-    int unk11e4;
+    float mBeamAngle; // 0x11e0
+    float mBeamConfidence; // 0x11e4
     bool mConnected; // 0x11e8
     bool mColorPolled; // 0x11e9
     bool mDepthPolled; // 0x11ea

@@ -47,6 +47,12 @@ void DancerSkeleton::CamJointPositions(Vector3 *pos) const {
     memcpy(pos, mCamJointPositions, sizeof(mCamJointPositions));
 }
 
+void DancerSkeleton::CameraToPlayerXfm(SkeletonCoordSys cs, Transform &xfm) const {
+    BaseSkeleton::MakeCameraToPlayerXfm(
+        cs, xfm, (const Vector3 *)mCamJointPositions, Vector3(0, 1, 0)
+    );
+}
+
 void DancerSkeleton::CamBoneLengths(float *lens) const {
     DancerSkeleton *me = const_cast<DancerSkeleton *>(this);
     for (int i = 0; i < kNumBones; i++) {

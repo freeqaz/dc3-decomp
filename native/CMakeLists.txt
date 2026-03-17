@@ -904,6 +904,7 @@ set(DC3_ENGINE_SOURCES
     ${CMAKE_SOURCE_DIR}/../src/system/utl/Pool.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/utl/PoolAlloc.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/utl/Profiler.cpp
+    ${CMAKE_SOURCE_DIR}/../src/system/utl/Spew.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/utl/Song.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/utl/SongInfoAudioType.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/utl/SongInfoCopy.cpp
@@ -953,6 +954,7 @@ set(DC3_ENGINE_SOURCES
 # Native platform sources (no entry point — shared by dc3-native and milo-viewer)
 set(DC3_NATIVE_CORE_SOURCES
     src/xdk_shims.cpp
+    src/telemetry/GameplayTelemetry.cpp
     src/platform/Memory_Native.cpp
     src/platform/PlatformMgr_Native.cpp
     src/platform/System_Native.cpp
@@ -998,6 +1000,7 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/NetworkSocket_Stub.cpp
     src/platform/SynthCommon_Stub.cpp
     src/platform/RndTex_Native.cpp
+    src/platform/RenderState_Native.cpp
     src/platform/DataParser_Native.cpp
     src/engine_stubs_generated.cpp
     src/native_link_glue.cpp
@@ -1108,6 +1111,7 @@ set(DC3_WEB_CORE_SOURCES
     src/platform/NetworkSocket_Stub.cpp
     src/platform/SynthCommon_Stub.cpp
     src/platform/RndTex_Native.cpp
+    src/platform/RenderState_Native.cpp
     src/engine_stubs_generated.cpp
     src/native_link_glue.cpp
     src/thunk_stubs.cpp
@@ -1469,6 +1473,8 @@ if(BUILD_TESTS)
 
     add_executable(milo-tests
         tests/test_helpers.cpp
+        tests/telemetry_parser.cpp
+        tests/test_gameplay_telemetry.cpp
         tests/test_binstream.cpp
         tests/test_charbones_serialization.cpp
         tests/test_chunkstream.cpp

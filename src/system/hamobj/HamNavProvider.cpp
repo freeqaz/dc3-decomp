@@ -10,12 +10,9 @@
 #include "ui/UIListSubList.h"
 #include "utl/BinStream.h"
 #include "utl/Symbol.h"
-#ifdef HX_NATIVE
 #include <cstdlib>
 #include <cstring>
-#endif
 
-#ifdef HX_NATIVE
 namespace {
 bool DebugChooseMode() {
     static int enabled = -1;
@@ -26,7 +23,6 @@ bool DebugChooseMode() {
     return enabled != 0;
 }
 }
-#endif
 
 HamNavProvider::HamNavProvider() : mNavList(0) {}
 
@@ -156,7 +152,7 @@ void HamNavProvider::AppendNavItem() {
     mNavItems.push_back(NavItem());
 #ifdef HX_NATIVE
     if (DebugChooseMode()) {
-        printf(
+        MILO_LOG(
             "DC3 CHOOSE HamNavProvider::AppendNavItem provider=%s size=%zu\n",
             PathName(this),
             mNavItems.size()
@@ -249,7 +245,7 @@ void HamNavProvider::SetLabel(int elementIndex, int i2, Symbol s) {
     }
 #ifdef HX_NATIVE
     if (DebugChooseMode()) {
-        printf(
+        MILO_LOG(
             "DC3 CHOOSE HamNavProvider::SetLabel provider=%s index=%d sub=%d label=%s size=%zu\n",
             PathName(this),
             elementIndex,
@@ -275,7 +271,7 @@ void HamNavProvider::SetLabels(int index, DataArray *a) {
     }
 #ifdef HX_NATIVE
     if (DebugChooseMode()) {
-        printf(
+        MILO_LOG(
             "DC3 CHOOSE HamNavProvider::SetLabels provider=%s index=%d labels=%d size=%zu\n",
             PathName(this),
             index,

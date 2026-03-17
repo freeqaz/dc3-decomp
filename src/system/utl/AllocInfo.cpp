@@ -2,9 +2,11 @@
 #include "utl/MemTracker.h"
 #include "utl/Pool.h"
 #include "os/Debug.h"
+#include "os/System.h"
 #include "trie.h"
 #include "utl/TextStream.h"
 #include "xdk/XBDM.h"
+#include <cstdio>
 
 extern MemTracker *gMemTracker;
 
@@ -96,6 +98,36 @@ void AllocInfo::Print(TextStream &ts) const {
         }
         ts << ") ";
     }
+}
+
+void AllocInfo::PrintForReport(TextStream &ts) const {
+    MILO_ASSERT(s_pTrie, 0xD1);
+    char buf1d[0x80];
+    char buf21[0x80];
+    s_pTrie->get(unk1d, buf1d, 0x80);
+    s_pTrie->get(unk21, buf21, 0x80);
+    char buf[0x140];
+    Hx_snprintf(
+        buf, 0x140,
+        "addr\t0x%lX\t%s\tbytes\t%d\tactual\t%d\theap\t%d\t%s\t%d\t%s\t%s\t%s\n",
+        (unsigned long)mMem, mType, mReqSize, mActSize, (int)mHeap,
+        mFile, mLine, buf21, buf1d, mPooled ? "pooled" : ""
+    );
+    ts << buf;
+}
+
+void AllocInfo::PrintForReport(struct _iobuf *f) const {
+    MILO_ASSERT(s_pTrie, 0xDE);
+    char buf1d[0x80];
+    char buf21[0x80];
+    s_pTrie->get(unk1d, buf1d, 0x80);
+    s_pTrie->get(unk21, buf21, 0x80);
+    fprintf(
+        (FILE *)f,
+        "addr\t0x%lX\t%s\tbytes\t%d\tactual\t%d\theap\t%d\t%s\t%d\t%s\t%s\t%s\n",
+        (unsigned long)mMem, mType, mReqSize, mActSize, (int)mHeap,
+        mFile, mLine, buf21, buf1d, mPooled ? "pooled" : ""
+    );
 }
 
 TextStream &operator<<(TextStream &ts, const AllocInfo &info) {

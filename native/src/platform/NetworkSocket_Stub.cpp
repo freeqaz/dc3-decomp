@@ -3,6 +3,7 @@
 
 #include "os/NetworkSocket.h"
 #include "utl/Str.h"
+#include <cstdio>
 
 NetworkSocket::~NetworkSocket() {}
 
@@ -30,6 +31,22 @@ public:
 
 NetworkSocket *NetworkSocket::Create(bool) {
     return new NativeNetworkSocket();
+}
+
+unsigned int NetworkSocket::IPStringToInt(const String &ip) {
+    unsigned int a, b, c, d;
+    if (sscanf(ip.c_str(), "%u.%u.%u.%u", &a, &b, &c, &d) == 4) {
+        return (a << 24) | (b << 16) | (c << 8) | d;
+    }
+    return 0;
+}
+
+String NetworkSocket::IPIntToString(unsigned int ip) {
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%u.%u.%u.%u",
+             (ip >> 24) & 0xFF, (ip >> 16) & 0xFF,
+             (ip >> 8) & 0xFF, ip & 0xFF);
+    return String(buf);
 }
 
 String NetworkSocket::GetHostName() {

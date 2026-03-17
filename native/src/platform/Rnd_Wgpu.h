@@ -48,8 +48,15 @@ struct SceneUniforms {
     float shadowBias;              // f32 — depth bias (0.002 typical)
     float shadowMapSize;           // f32 — texture dimension (1024)
     float shadowStrength;          // f32 — min brightness in shadow (0.3 typical)
+    // Projected light (up to 1 kFakeSpot with gobo texture)
+    float projLightDir[4];        // vec4f — world-space direction (.w=0)
+    float projLightColor[4];      // vec4f — RGB color (.a=1)
+    float projLightProjRow0[4];   // vec4f — projection row 0: u = dot(worldPos, xyz) + w
+    float projLightProjRow1[4];   // vec4f — projection row 1: v = dot(worldPos, xyz) + w
+    float numProjLights;          // f32 — 0.0 or 1.0
+    float _padProj[3];
 };
-static_assert(sizeof(SceneUniforms) == 576, "SceneUniforms must match WGSL layout");
+static_assert(sizeof(SceneUniforms) == 656, "SceneUniforms must match WGSL layout");
 
 struct MaterialUniforms {
     float color[4];             // vec4f
@@ -301,6 +308,7 @@ public:
 
     // Bind groups
     wgpu::BindGroup mSceneBindGroup;
+    wgpu::TextureView mProjLightTexView;  // gobo texture for projected light (or white fallback)
 
     // Depth texture
     wgpu::Texture mDepthTex;
@@ -350,6 +358,15 @@ public:
     std::string mScreenshotDir;
     std::vector<int> mCaptureFrames;
     int mCaptureIndex = 0;
+
+    // Frame budget tracking (MILO_PERF env var)
+    bool mPerfEnabled = false;
+    double mFrameStartTime = 0.0;
+    double mPerfAccumTime = 0.0;
+    int mPerfFrameCount = 0;
+    float mPerfMaxFrameMs = 0.0f;
+    int mPerfDrawCallAccum = 0;
+    int mPerfBudgetViolations = 0;
 
     // Video recording (MILO_VIDEO env var)
     VideoEncoder mVideoEncoder;

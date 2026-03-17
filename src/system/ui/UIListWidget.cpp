@@ -164,6 +164,10 @@ void UIListWidget::ResourceCopy(const UIListWidget *w) { Copy(w, kCopyShallow); 
 
 float UIListWidget::DrawOrder() const { return mDrawOrder; }
 
+float UIListWidget::DisabledAlphaScale() const { return mDisabledAlphaScale; }
+
+UIListWidgetDrawType UIListWidget::WidgetDrawType() const { return mWidgetDrawType; }
+
 void UIListWidget::CalcXfm(const Transform &tfin, const Vector3 &vin, Transform &out) {
     out.v.x += vin.x;
     out.v.y += vin.y;

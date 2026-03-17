@@ -663,6 +663,12 @@ File *NewFile(const char *iFilename, int iMode) {
     return result;
 }
 
+void FileRecursePattern(
+    const char *pattern, void (*cb)(const char *, const char *), bool recurse
+) {
+    RecursePatternInternal(pattern, cb, recurse, false);
+}
+
 #ifndef HX_NATIVE
 // PPC (Xbox 360) implementation — logic derived from Ghidra decompile
 void RecursePatternInternal(
@@ -676,15 +682,15 @@ void RecursePatternInternal(
 
     // Find split point: first '&', or end-of-string if absent
     unsigned int ampPos = pttn.find_first_of("&", 0);
-    int wildcardPos = pttn.find_first_of("?*", 0);
+    unsigned int wildcardPos = pttn.find_first_of("?*", 0);
 
     int splitPos;
-    if ((int)(int)(unsigned int)ampPos == (int)FixedString::npos) {
+    if (ampPos == FixedString::npos) {
         splitPos = (int)pttn.length() - 1;
     } else {
         splitPos = ampPos;
     }
-    if ((unsigned int)wildcardPos != (int)FixedString::npos && wildcardPos < splitPos) {
+    if (wildcardPos != FixedString::npos && wildcardPos < (unsigned int)splitPos) {
         splitPos = wildcardPos;
     }
 

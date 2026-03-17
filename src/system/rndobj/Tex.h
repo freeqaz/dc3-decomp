@@ -121,8 +121,15 @@ public:
 protected:
     RndTex();
 
+public:
+#ifdef HX_NATIVE
+    virtual void PresyncBitmap();
+    virtual void SyncBitmap();
+#else
     virtual void PresyncBitmap() {}
     virtual void SyncBitmap() {}
+#endif
+protected:
 
     /** Handler to set this texture's bitmap.
      * @param [in] arr The supplied DataArray.

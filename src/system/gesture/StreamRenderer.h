@@ -154,6 +154,6 @@ protected:
     float mCrewPhotoPlayer5Detected; // 0x1a4
     float mPinkPlayer; // 0x1a8
     float mBluePlayer; // 0x1ac
-    char filler2[0x60];
+    Vector4 mCrewPhotoPlayerCenters[6]; // 0x1b0
     Vector3DESmoother mSmoothers[6]; // 0x210
 };

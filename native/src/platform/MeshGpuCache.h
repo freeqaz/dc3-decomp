@@ -45,3 +45,4 @@ GpuMeshData* GetMeshGpuData(RndMesh* mesh);
 void RndMesh_ResetFrameStats();
 void IncrementMeshDrawCalls();
 int GetMeshFrameCounter();
+int GetMeshDrawCallsThisFrame();

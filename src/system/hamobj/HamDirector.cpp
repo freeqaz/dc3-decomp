@@ -1890,47 +1890,6 @@ void HamDirector::SetPhraseMetersFlipped(bool b1) {
 void HamDirector::SetPlayerSpotlightsEnabled(bool b1) {
     WorldDir *venue = TheHamDirector->GetVenueWorld();
     if (venue) {
-#ifdef HX_NATIVE
-        // Use non-fatal Find on native — shared HUD objects may be stubs
-        RndTransformable *players[2] = { venue->Find<RndTransformable>("player0", false),
-                                         venue->Find<RndTransformable>("player1", false) };
-        TransConstraint *constraints[2] = {
-            venue->Find<TransConstraint>("TransConstraint.tc", false),
-            venue->Find<TransConstraint>("TransConstraint1.tc", false)
-        };
-        HamPhraseMeter *phraseMeters[2] = {
-            venue->Find<HamPhraseMeter>("phrase_meter0", false),
-            venue->Find<HamPhraseMeter>("phrase_meter1", false)
-        };
-        RndDrawable *moveFeedbacks[2] = {
-            venue->Find<RndDrawable>("move_feedback0", false),
-            venue->Find<RndDrawable>("move_feedback1", false)
-        };
-        for (int i = 0; i < 2; i++) {
-            if (b1) {
-                if (constraints[i]) {
-                    constraints[i]->SetParent(players[i]);
-                    constraints[i]->SnapToParent();
-                    constraints[i]->mEnabled = true;
-                    constraints[i]->SnapToParent();
-                }
-                if (phraseMeters[i]) phraseMeters[i]->SetShowing(true);
-                if (moveFeedbacks[i]) moveFeedbacks[i]->SetShowing(true);
-            } else {
-                if (constraints[i]) {
-                    constraints[i]->SetParent(nullptr);
-                    constraints[i]->SnapToParent();
-                    constraints[i]->mEnabled = false;
-                }
-                if (phraseMeters[i]) {
-                    Vector3 v(-1000000.0f, -1000000.0f, 0);
-                    phraseMeters[i]->SetLocalPos(v);
-                    phraseMeters[i]->SetShowing(false);
-                }
-                if (moveFeedbacks[i]) moveFeedbacks[i]->SetShowing(false);
-            }
-        }
-#else
         RndTransformable *players[2] = { venue->Find<RndTransformable>("player0", true),
                                          venue->Find<RndTransformable>("player1", true) };
         TransConstraint *constraints[2] = {
@@ -1963,7 +1922,6 @@ void HamDirector::SetPlayerSpotlightsEnabled(bool b1) {
                 moveFeedbacks[i]->SetShowing(false);
             }
         }
-#endif
     }
 }
 
@@ -2470,14 +2428,8 @@ void HamDirector::UnloadMergers() {
     if (mMerger) {
         mMerger->Clear();
         mMoveMerger->Clear();
-#ifdef HX_NATIVE
         ObjVector<FileMerger::Merger>& mergers = mMoveMerger->Mergers();
         mergers.erase(mergers.begin(), mergers.end());
-#else
-        ObjVector<FileMerger::Merger> *mergers =
-            (ObjVector<FileMerger::Merger> *)((char *)mMoveMerger.Ptr() + 0x40);
-        mergers->erase(mergers->begin(), mergers->end());
-#endif
         HamWardrobe *wardrobe = TheHamWardrobe;
         if (wardrobe) {
             for (int i = 0; i < 2; i++) {
