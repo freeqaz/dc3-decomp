@@ -90,6 +90,10 @@
 
 SongDB *MetaPanel::sSongDB = nullptr;
 HamMaster *MetaPanel::sHamMaster = nullptr;
+#ifdef HX_NATIVE
+bool MetaPanel::sMotdCheat;
+bool MetaPanel::sUnlockAll;
+#endif
 
 MetaPanel::MetaPanel() : mLoopHistoryCursor(0), mSongPreview(TheHamSongMgr), mXMPPlaying(false) {
 #ifdef HX_NATIVE

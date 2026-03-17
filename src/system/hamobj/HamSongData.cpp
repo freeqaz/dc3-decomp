@@ -17,6 +17,7 @@
 #include "utl/TempoMap.h"
 #ifdef HX_NATIVE
 #include <cstdio>
+HamSongData *HamSongData::sInstance;
 #endif
 
 HamSongData::HamSongData()

@@ -10,7 +10,7 @@ public:
     virtual int Compare(const NavListItemSortCmp *, NavListNodeType) const;
     virtual const PlaylistTypeCmp *GetPlaylistTypeCmp() const { return this; }
 
-    int mType;         // 0x4
+    int mType; // 0x4
     const char *mName; // 0x8
 };
 
@@ -31,8 +31,7 @@ int PlaylistTypeCmp::Compare(
     return 0;
 }
 
-NavListShortcutNode *
-PlaylistSortByType::NewShortcutNode(NavListItemNode *item) const {
+NavListShortcutNode *PlaylistSortByType::NewShortcutNode(NavListItemNode *item) const {
     Playlist *playlist = static_cast<PlaylistSortNode *>(item)->GetPlaylist();
     int type;
     Symbol sym;
@@ -60,11 +59,10 @@ PlaylistSortByType::NewShortcutNode(NavListItemNode *item) const {
     return new NavListShortcutNode(cmp, sym, true);
 }
 
-NavListHeaderNode *
-PlaylistSortByType::NewHeaderNode(NavListItemNode *item) const {
+NavListHeaderNode *PlaylistSortByType::NewHeaderNode(NavListItemNode *item) const {
     Playlist *playlist = static_cast<PlaylistSortNode *>(item)->GetPlaylist();
-    int type;
     Symbol sym;
+    int type = 0;
     if (playlist->IsCustom()) {
         type = 1;
         static Symbol playlist_custom("playlist_custom");
@@ -87,6 +85,11 @@ PlaylistSortByType::NewHeaderNode(NavListItemNode *item) const {
     cmp->mType = type;
     cmp->mName = "";
     return new PlaylistHeaderNode(cmp, sym, true);
+}
+
+NavListHeaderNode *
+PlaylistSortByType::NewHeaderNode(NavListItemNode *n1, NavListItemNode *n2) const {
+    return NewHeaderNode(n1);
 }
 
 PlaylistSortNode::PlaylistSortNode(NavListItemSortCmp *cmp, Playlist *playlist)

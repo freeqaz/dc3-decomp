@@ -554,7 +554,6 @@ set(DC3_ENGINE_SOURCES
     ${CMAKE_SOURCE_DIR}/../src/system/math/StreamChecksum.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/math/Trig.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/math/mtx.cpp
-    ${CMAKE_SOURCE_DIR}/../src/system/math/Vec.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/math/vec.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/meta/Achievements.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/meta/ButtonHolder.cpp
@@ -1495,6 +1494,7 @@ if(BUILD_TESTS)
         tests/test_mesh_loading.cpp
         tests/test_rndcam_projection.cpp
         tests/test_dta_parser.cpp
+        tests/test_movegraph.cpp
         ${DC3_ENGINE_SOURCES}
         ${DC3_NATIVE_CORE_SOURCES}
         ${DC3_GFX_SOURCES}

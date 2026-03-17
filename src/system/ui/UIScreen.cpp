@@ -17,6 +17,9 @@
 #include "utl/TextStream.h"
 
 UIScreen *UIScreen::sUnloadingScreen = nullptr;
+#ifdef HX_NATIVE
+int UIScreen::sMaxScreenId;
+#endif
 
 #ifdef HX_NATIVE
 static inline bool DebugUIFlow() {

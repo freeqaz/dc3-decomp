@@ -116,17 +116,16 @@ void OriginalChoreoRemixer::SelectMove(int player, int measure) {
 }
 
 void OriginalChoreoRemixer::Init() {
-#ifdef HX_NATIVE
-    // On native, the move graph data from the DTA merger pipeline may be
-    // corrupt or incomplete (float values where pointers should be).
-    // Skip choreography remixer init — it's for dynamic difficulty which
-    // isn't wired on native.
-    return;
-#endif
     if (TheMoveMgr->MoveParents().size() == 0) {
         TheMoveMgr->InitSong();
         if (TheMoveMgr->MoveParents().size() == 0) {
             MILO_FAIL("Failed to load move graph for: %s\n", TheGameData->GetSong());
+#ifdef HX_NATIVE
+            // MILO_FAIL is non-fatal on native. Must not continue — Layout() would
+            // be null and SaveOriginalMoveParents would null-deref.
+            mTotalMeasures = 0;
+            return;
+#endif
         }
     }
     SaveOriginalMoveParents();

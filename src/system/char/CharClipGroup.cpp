@@ -68,9 +68,6 @@ BEGIN_COPYS(CharClipGroup)
         if (ty == kCopyFromMax) {
             for (int i = 0; i < c->mClips.size(); i++) {
                 CharClip *curClip = (CharClip *)c->mClips[i];
-#ifdef HX_NATIVE
-                if (!curClip) continue;
-#endif
                 if (!FindClip(curClip->Name())) {
                     mClips.push_back(ObjOwnerPtr<CharClip>(this, curClip));
                 }
@@ -104,22 +101,6 @@ CharClip *CharClipGroup::GetClip(int flags) {
     if (!mClips.size()) {
         return nullptr;
     }
-#ifdef HX_NATIVE
-    // Purge null clip pointers (unresolved references from subdirs not yet loaded).
-    // On Xbox, all subdirs are pre-loaded so references always resolve.
-    // On native, crowd char clips may not exist at CharClipGroup load time,
-    // resulting in null ObjPtr entries. FileMerger later adds valid clips via
-    // Copy(kCopyFromMax), but the original nulls persist. Purge them here so
-    // the LRU rotation/swap logic doesn't crash on null dereference.
-    for (int i = mClips.size() - 1; i >= 0; i--) {
-        if (!mClips[i]) {
-            mClips.erase(mClips.begin() + i);
-        }
-    }
-    if (!mClips.size()) {
-        return nullptr;
-    }
-#endif
 
     if (mClips.size() <= mWhich) {
         mWhich = mClips.size() - 1;
@@ -202,10 +183,6 @@ void CharClipGroup::DeleteRemaining(int x) {
 
 CharClip *CharClipGroup::FindClip(const char *name) const {
     for (int i = 0; i < mClips.size(); i++) {
-#ifdef HX_NATIVE
-        // Crowd char clips may be null (unresolved references from missing subdirs)
-        if (!mClips[i]) continue;
-#endif
         if (streq(name, ((CharClip *)mClips[i])->Name())) {
             return (CharClip *)mClips[i];
         }

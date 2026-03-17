@@ -20,6 +20,9 @@
 static_assert(sizeof(Frustum) == 0x60, "Frustum size mismatch");
 #endif
 
+#ifdef HX_NATIVE
+RndCam *RndCam::sCurrent;
+#endif
 float RndCam::sDefaultNearPlane = 1;
 float RndCam::sMaxFarNearPlaneRatio = 1000;
 // Y/Z flip: Milo (X=right, Y=forward, Z=up) → D3D/WebGPU (X=right, Y=up, Z=forward)

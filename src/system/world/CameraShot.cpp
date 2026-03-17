@@ -37,6 +37,10 @@
 #include <cstdlib>
 #include <cstring>
 
+#ifdef HX_NATIVE
+Hmx::Object *CamShot::sAnimTarget;
+#endif
+
 inline float ComputeFOVScale(float fov) {
     return 24.0f / (float(std::tan(fov / 2.0f)) * 2.0f);
 }

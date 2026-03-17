@@ -4,6 +4,10 @@
 #include "utl/MemMgr.h"
 #include <cctype>
 
+#ifdef HX_NATIVE
+const unsigned int FixedString::npos = (unsigned int)-1;
+#endif
+
 char gEmpty[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
 
 void RemoveSpaces(char *out, int len, const char *in) {

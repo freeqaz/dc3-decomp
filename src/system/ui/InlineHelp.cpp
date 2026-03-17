@@ -14,6 +14,15 @@
 #include "utl/Std.h"
 #include "utl/Symbol.h"
 
+#ifdef HX_NATIVE
+bool InlineHelp::sRotated;
+bool InlineHelp::sHasFlippedTextThisRotation;
+bool InlineHelp::sNeedsTextUpdate;
+float InlineHelp::sLabelRot;
+float InlineHelp::sLastUpdatedTime;
+float InlineHelp::sRotationTime;
+#endif
+
 #pragma region InlineHelp
 
 InlineHelp::InlineHelp()

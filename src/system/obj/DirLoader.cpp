@@ -19,6 +19,9 @@
 #include "utl/TextStream.h"
 #include <map>
 
+#ifdef HX_NATIVE
+bool (*DirLoader::sPathEval)(const char *);
+#endif
 bool DirLoader::sPrintTimes;
 bool DirLoader::sCacheMode;
 ObjectDir *DirLoader::sTopSaveDir;
@@ -137,10 +140,14 @@ Symbol DirLoader::GetDirClass(const char *cc) {
     if (cs.Fail()) {
         return Symbol("");
     } else {
+#ifdef HX_NATIVE
+        cs.WaitUntilReady();
+#else
         EofType t;
         while (t = cs.Eof(), t != NotEof) {
             MILO_ASSERT(t == TempEof, 0x199);
         }
+#endif
         int i;
         cs >> i;
         Symbol s;
@@ -339,10 +346,14 @@ void ReadEditorDirDead(BinStream &bs) {
     unsigned char buf;
     for (unsigned int i = 0; i < 20; i++) {
         while (true) {
+#ifdef HX_NATIVE
+            bs.WaitUntilReady();
+#else
             EofType t;
             while ((t = bs.Eof()) != NotEof) {
                 MILO_ASSERT(t == TempEof, 0x470);
             }
+#endif
             bs >> buf;
             if (((const unsigned char *)"%#@EndOfEditorDir@#%")[i] == buf)
                 break;

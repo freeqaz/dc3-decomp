@@ -67,6 +67,12 @@ public:
     void Seek(int, SeekType);
     bool AddSharedInlined(const class FilePath &);
 
+#ifdef HX_NATIVE
+    // Spin-wait until Eof() == NotEof, with platform-appropriate timeout.
+    // Returns true if data is ready, false if timed out.
+    bool WaitUntilReady(int sleepMs = 0);
+#endif
+
     void PushRev(int, Hmx::Object *);
     int PopRev(Hmx::Object *);
 

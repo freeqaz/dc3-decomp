@@ -61,7 +61,7 @@ LP64-safe DataArray scripting, BinStream endian conversion.
 
 ## Roadmap: Getting the Game Working
 
-### Milestone 1: Stable Boot to Main Menu (Current Focus)
+### Milestone 1: Stable Boot to Main Menu — COMPLETE
 
 **Goal**: Engine boots to main menu without crashes, UI is readable.
 
@@ -78,43 +78,21 @@ LP64-safe DataArray scripting, BinStream endian conversion.
 Stable at 3000+ frames on choose_mode_screen. Flow::Enter() enables menu navigation.
 Scripted button input crashes in DTA handler path (joypad button_meanings config lookup).
 
-### Milestone 2: Engine Rendering Parity with Viewer
+### Milestone 2: Engine Rendering Parity with Viewer — COMPLETE
 
 **Goal**: What the viewer renders beautifully, the engine should too.
 
-The standalone viewer and the engine share the same `Mesh_Wgpu.cpp` / `Rnd_Wgpu.cpp`
-rendering code, but the engine's scene traversal path differs — the viewer manually
-iterates drawables, while the engine uses `WorldDir::DrawShowing()` → `RndGroup` →
-`RndDrawable` tree.
+All items resolved — venue rendering, draw ordering, post-processing, and text rendering
+all working through `WorldDir::DrawShowing()` pipeline. `<alt>` tag rendering depends on
+missing font style entries in .milo assets (not code-fixable).
 
-| Task | Priority | Notes |
-|------|----------|-------|
-| Venue background rendering | HIGH | `turbo_shell` 3D scene behind UI is black. Camera positioned but venue meshes not reaching DrawShowing |
-| RndGroup draw ordering | HIGH | Hierarchical draw order for correct UI/3D layering |
-| UI sprite/icon rendering | MEDIUM | Player silhouettes, button prompts, autosave orb — likely RndTex quads |
-| Text markup processing | MEDIUM | `<alt>` tags render as literal text instead of styling |
-| Bloom/glow post-process | LOW | Neon aesthetic from Xbox UI |
-
-### Milestone 3: Gameplay Screen — WORKING (Session 63)
+### Milestone 3: Gameplay Screen — COMPLETE (Session 63+)
 
 **Goal**: Navigate to a song, start gameplay, see the dance stage.
 
-**Status**: FULLY WORKING. 272 draw calls/frame during gameplay. Characters animate via CharClip playback, camera cuts cycle through 34 shot keyframes (Area1_WIDE, Area1_NEAR, Area1_MOVEMENT, CLOSEUP), song audio plays at real-time via MOGG decode. HUD panels active but move card content not yet visible.
-
-| Task | Status | Notes |
-|------|--------|-------|
-| Song select screen navigation | DONE | Full menu flow via input script |
-| LightPreset stub removal | DONE | 12 stubs removed, real impl links |
-| DataNode::GetObj graceful failure | DONE | Missing objects warn instead of crash |
-| **Venue rendering through world_panel** | **DONE** | Fixed NaN camera in CalcFrame/SetFrame. Venue renders through TheUI->Draw() matching Xbox architecture |
-| **LightPreset forcing** | **DONE** | Auto-force first valid preset on venue change. Baked lights work for venues without presets |
-| **HamDirector venue selection** | **DONE** | GetVenueWorld() for gameplay venue, fallback to gNativeVenueDir for menu |
-| Song animation playback | **DONE** | song.anim PropAnim loads, SetFrame advances at 30fps song time, PlayAnims drives character clips |
-| Song audio playback during gameplay | **DONE** | VorbisReader decode loop fix + ring buffer flow control. Real-time MOGG decryption + Vorbis decode. |
-| **Camera cuts (dircut)** | **DONE** | 34 shot keys in song.anim. Categories: Area1_WIDE, Area1_NEAR, Area1_MOVEMENT, CLOSEUP. ForceCameraShot applied each cut. |
-| LightPreset animation | **N/A for YMCA** | glitterati venue has 0 LightPreset objects — static lighting is correct. Other venues with presets use ForcePreset. |
-| Move card UI rendering | **TODO** | HUD panels (game_panel, fitness_hud_panel) are active+showing during gameplay but move card content invisible — likely needs TexMovie data or asset wiring. |
-| Score display | **TODO** | Not yet wired |
+**Status**: COMPLETE. All core gameplay rendering working — venue, characters, camera
+cuts, audio, HUD. 272-1094 draw calls/frame depending on venue. 31 songs x 7 venues
+tested stable. Remaining items (move card content, scoring) are in Phase 8 polish.
 
 **Key fix (Session 63)**: `CameraManager::CalcFrame()` produced NaN from uninitialized task timers, poisoning camera transforms and making the entire scene invisible. Guards in CalcFrame and CamShot::SetFrame clamp NaN to 0 (first keyframe). Removed redundant explicit DrawShowing — venue correctly renders through world_panel as part of TheUI->Draw().
 
@@ -122,22 +100,12 @@ iterates drawables, while the engine uses `WorldDir::DrawShowing()` → `RndGrou
 
 **Session 68 — Camera cuts verified**: song.anim PropKeys with property "shot" drives HamDirector::SetShot() → FindNextShot() → CameraManager::ForceCameraShot(). 34 shot keyframes for YMCA cycle through Area1_WIDE, Area1_NEAR, Area1_MOVEMENT, CLOSEUP categories. Camera angle changes visible in screenshots. LightPreset animation N/A for YMCA's glitterati venue (0 LightPreset objects — static baked lighting correct). HUD panels (game_panel, world_panel, rhythm_detector_panel, fitness_hud_panel) all active+showing during gameplay.
 
-### Milestone 4: Playable Dance Gameplay
+### Milestone 4: Playable Dance Gameplay — MOSTLY COMPLETE
 
 **Goal**: Full dance gameplay loop — see moves, hear music, track body, score.
 
-| Task | Priority | Notes |
-|------|----------|-------|
-| Character animation in gameplay | **DONE** | CharClip playback synced to beat. SongAnimation() returns 0 (SongDriver has clips). ClipPlayer.PlayAnims drives skeleton from song.anim frame. |
-| TexMovie render-to-texture | DONE | Full pipeline: FFmpeg decode → UploadRGBAToRndTex → WebGPU. MakeDrawTarget/FinishDrawTarget implemented. Pink rectangles are asset/wiring issue. |
-| **Camera cuts via song.anim** | **DONE** | PropKeys "shot" property drives HamDirector::SetShot → FindNextShot → ForceCameraShot. 34 keys for YMCA. |
-| LightPreset loading + animation | **DONE** | ForcePreset active on venue load. YMCA's glitterati venue has no LightPreset objects — static lighting correct. Venues with presets animate via force_preset messages. |
-| Song.anim graceful DTA failure | DONE | DataNode::GetObj returns nullptr gracefully for missing objects (non-fatal MILO_FAIL_DTA) |
-| Lip sync (CharFaceServo, CharLipSyncDriver) | MEDIUM | See [LIP_SYNC.md](../custom-graphics-engine/LIP_SYNC.md) |
-| Procedural blinking (CharFaceServo) | LOW | Cosmetic |
-| CharEyes gaze direction | LOW | Cosmetic |
-| Motion capture integration (Phase 5) | HIGH | Kinect replacement via webcam + ML pose estimation |
-| Scoring system verification | HIGH | Gesture matching → score calculation |
+All core items done (character animation, camera cuts, audio, RTT, lighting).
+Remaining: lip sync (.lipsync file loading), motion capture (Phase 5), scoring (needs MoveGraph deserialization).
 
 ### Milestone 5: Polish
 
@@ -172,7 +140,7 @@ iterates drawables, while the engine uses `WorldDir::DrawShowing()` → `RndGrou
 | Task | Status | Notes |
 |------|--------|-------|
 | Move card UI content | PARTIAL | MoveMgr initialized on native (no more "not function or object" errors). Choreography pipeline guarded for missing Kinect data. Move graph data not loaded (no gesture detection). |
-| WorldCrowd rendering | **DONE** | 3D crowd characters visible on dclive venue. 5 crowd character types, 30+ instances placed via placement mesh. Key fix: SetFullness was capping m3DChars to empty instance list after Set3DCharAll transferred them. See [PHASE_C_WORLDCROWD.md](PHASE_C_WORLDCROWD.md) |
+| WorldCrowd rendering | **DONE** | 3D crowd characters visible on dclive venue. 5 crowd character types, 30+ instances placed via placement mesh. Key fix: SetFullness was capping m3DChars to empty instance list after Set3DCharAll transferred them. See [CROWD_ANIMATION.md](../../native/CROWD_ANIMATION.md) |
 
 **Session 71 — MetaMaterials + GCC 15 compat**: Removed `#ifdef HX_NATIVE` guard in `RndMat::Init()` that disabled `LoadMetaMaterials()` on native. `sMetaMaterials` now loads `metamaterials.milo` and all shared MatAnim objects (`shell_basic.mmat` etc.) resolve correctly. Fixed GCC 15 compat: `std::random_shuffle` and `std::mem_fun` restored in libstdc++ 15 — guarded compat shims with `_GLIBCXX_RELEASE < 15`.
 
@@ -206,11 +174,11 @@ iterates drawables, while the engine uses `WorldDir::DrawShowing()` → `RndGrou
 
 **Goal**: Fix upstream issues that `#ifdef HX_NATIVE` hacks currently cover. Remove hacks where possible.
 
-**Research**: [PLATFORM_HACKS_ANALYSIS.md](PLATFORM_HACKS_ANALYSIS.md) — full audit of 298 HX_NATIVE guards.
+**Research**: [HACK_AUDIT.md](../../native/HACK_AUDIT.md) — full audit of HX_NATIVE guards (2026-03-16).
 
 #### DTA Handler Pipeline — RESOLVED (2026-03-16)
 
-Root cause analysis in [DTA_HANDLER_ANALYSIS.md](DTA_HANDLER_ANALYSIS.md).
+Root cause analysis below (originally tracked in DTA_HANDLER_ANALYSIS).
 
 **Finding**: Animation completion issue is **NOT DTA-related**. `mTypeDef` is null for all animated objects, and `on_anim_event` has no DTA handler in any config. The `Anim.cpp` auto-null hack is the correct fix for native object lifecycle timing differences.
 
@@ -254,7 +222,7 @@ These hacks are correct and should remain:
 
 ### Testing Roadmap
 
-See [TEST_GAP_ANALYSIS.md](TEST_GAP_ANALYSIS.md) for detailed test gap analysis.
+Test gaps tracked in TODO.md Phase 8 and native/tests/.
 
 | Test | Priority | Validates |
 |------|----------|-----------|
@@ -373,9 +341,4 @@ LP64 issues, iterator compat, vtable crashes, stream desyncs, and rendering pipe
 - [VIEWER_STATUS.md](VIEWER_STATUS.md) — Track B: standalone milo viewer status & roadmap
 - [../custom-graphics-engine/PLAN.md](../custom-graphics-engine/PLAN.md) — master native port plan
 - [../../native/NATIVE_PORT_STATUS.md](../../native/NATIVE_PORT_STATUS.md) — detailed session log
-- [PLATFORM_HACKS_ANALYSIS.md](PLATFORM_HACKS_ANALYSIS.md) — full audit of HX_NATIVE guards (298 files)
-- [DTA_HANDLER_ANALYSIS.md](DTA_HANDLER_ANALYSIS.md) — root cause: why DTA script handlers don't fire
-- [TEST_GAP_ANALYSIS.md](TEST_GAP_ANALYSIS.md) — test coverage gaps and proposed tests
-- [PHASE_A_MOVE_CARDS.md](PHASE_A_MOVE_CARDS.md) — move card UI visibility research
-- [PHASE_B_SCORE_HUD.md](PHASE_B_SCORE_HUD.md) — score/HUD display research
-- [PHASE_C_WORLDCROWD.md](PHASE_C_WORLDCROWD.md) — WorldCrowd rendering (blocked by DTA + assets)
+- [HACK_AUDIT.md](../../native/HACK_AUDIT.md) — full audit of HX_NATIVE guards and crash-masking hacks (2026-03-16)

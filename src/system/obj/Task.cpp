@@ -480,23 +480,11 @@ float TaskMgr::DeltaTutorialSeconds() const {
 void TaskMgr::Poll() {
     START_AUTO_TIMER("anim");
     mTime.Split();
-#ifdef HX_NATIVE
-    // On native, always use wall-clock time for kTaskSeconds/kTaskBeats.
-    // Game::Poll() normally drives these from audio stream time, but on native
-    // audio loading may fail (merge crash-skipped), leaving seconds frozen at 0.
-    // Wall-clock timing lets venue/character animations (k30_fps rate) play.
-    {
-        float secs = mTime.Ms() / 1000.0f;
-        mTimelines[kTaskSeconds].SetTime(secs, false);
-        mTimelines[kTaskBeats].SetTime(secs * 2.0f, false);
-    }
-#else
     if (mAutoSecondsBeats) {
         float secs = mTime.Ms() / 1000.0f;
         mTimelines[kTaskSeconds].SetTime(secs, false);
         mTimelines[kTaskBeats].SetTime(secs * 2.0f, false);
     }
-#endif
     for (int i = 0; i < kTaskNumUnits; i++) {
         mTimelines[i].Poll();
     }

@@ -13,6 +13,10 @@
 #include "utl/BinStream.h"
 #include "utl/Symbol.h"
 
+#ifdef HX_NATIVE
+bool SongStatusMgr::sFakeLeaderboardUploadFailure;
+#endif
+
 #pragma region SongStatusData
 
 void SongStatusData::SaveToStream(BinStream &bs) const {

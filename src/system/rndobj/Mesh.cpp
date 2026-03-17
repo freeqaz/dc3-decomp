@@ -1717,8 +1717,12 @@ void RndMesh::LoadVertices(BinStreamRev &d) {
             d >> *it;
             i++;
             if (!(i & 0x1FF)) {
+#ifdef HX_NATIVE
+                d.stream.WaitUntilReady();
+#else
                 while (d.stream.Eof() == TempEof)
                     Timer::Sleep(0);
+#endif
             }
         }
     }
@@ -1779,8 +1783,12 @@ void RndMesh::LoadVertices(BinStreamRev &d) {
             d >> *it;
             i++;
             if (!(i & 0x1FF)) {
+#ifdef HX_NATIVE
+                d.stream.WaitUntilReady();
+#else
                 while (d.stream.Eof() != 0)
                     Timer::Sleep(0);
+#endif
             }
         }
     }

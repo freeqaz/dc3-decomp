@@ -72,19 +72,9 @@
 #include "world/Dir.h"
 #include <cctype>
 #ifdef HX_NATIVE
-#include <cstdlib>
 #include "platform/MeshGpuCache.h"
 #include "world/LightPreset.h"
 #include "world/LightPresetManager.h"
-
-static inline bool DebugWorldLoad() {
-    static bool checked = false, val = false;
-    if (!checked) {
-        val = std::getenv("MILO_DEBUG_WORLD_LOAD") != nullptr;
-        checked = true;
-    }
-    return val;
-}
 #endif
 
 HamDirector *TheHamDirector;
@@ -334,57 +324,6 @@ END_LOADS
 
 void HamDirector::Enter() {
     RndPollable::Enter();
-#ifdef HX_NATIVE
-    // On native, the DTA merger pipeline isn't used. Run the venue-related
-    // parts of Enter() directly — post-proc, crowd init, venue Enter().
-    // mMerger is set from venue data (SYNC_PROP) but the merger pipeline
-    // doesn't run on native. Always take this path when venue exists.
-    if (mVenue) {
-        mExcitement = 3;
-        mNumPlayersFailed = 0;
-        mLastShotTime = -kHugeFloat;
-        mLastCollisionTime = -kHugeFloat;
-        mShot = "";
-        mCurShot = nullptr;
-        mSyncScene = true;
-        mGameStartHold = false;
-        // Post-processing setup (GetWorld() falls back to mVenue on native)
-        mWorldPostProc = GetWorld()->Find<RndPostProc>("world.pp", true);
-        RndPostProc *start = GetWorld()->Find<RndPostProc>("world_start.pp", true);
-        if (start && mWorldPostProc) {
-            mWorldPostProc->Copy(start, kCopyDeep);
-        }
-        if (mWorldPostProc) mWorldPostProc->Select();
-        mPostProcInterpA = mWorldPostProc;
-        mPostProcInterpB = mWorldPostProc;
-        mPostProcInterpBlend = 0;
-        mCamPostProc = nullptr;
-        mForcePostProc = nullptr;
-        mForcePostProcBlend = 0;
-        mForcePostProcBlendRate = 1;
-        mSavedForcePostProc = nullptr;
-        mVisualizerPostProc = nullptr;
-        unk2e4 = -kHugeFloat;
-        mDisabled = false;
-        mVisualizerRunning = false;
-        if (TheHamWardrobe) {
-            TheHamWardrobe->ClearCrowd();
-        }
-        VenueEnter(mVenue);
-        // Skip Initialize/SetupAnims/SyncScene/PlayIntroShot — need merger
-        mDisablePicking = false;
-        mNextShot = nullptr;
-        mPlayerFreestyle = false;
-        unk1d4 = 0;
-        mPlayerFreestylePaused = false;
-        // PlayCrowdAnimation crashes on null CharClip refs in crowd
-        // instances. Skip for now — crowd animation is cosmetic.
-        // if (TheHamWardrobe) {
-        //     TheHamWardrobe->PlayCrowdAnimation("realtime_idle", 2, true);
-        // }
-        return;
-    }
-#endif
     if (mMerger) {
         mExcitement = 3;
         mNumPlayersFailed = 0;
@@ -588,10 +527,6 @@ void HamDirector::RemapSongAnimToTempoMap(TempoMap *newTempoMap) {
 }
 
 WorldDir *HamDirector::GetWorld() {
-#ifdef HX_NATIVE
-    // On native, the DTA merger pipeline isn't used. Fall back to venue world.
-    if (!mMerger) return mVenue;
-#endif
     return mMerger ? dynamic_cast<WorldDir *>(mMerger->Dir()) : nullptr;
 }
 
@@ -1043,13 +978,11 @@ DataNode HamDirector::OnToggleCamshotFlag() { return mCamshotFlag = !mCamshotFla
 
 DataNode HamDirector::OnLoadSong(DataArray *a) {
 #ifdef HX_NATIVE
-    if (DebugWorldLoad()) {
-        MILO_LOG(
-            "DC3 HamDirector::OnLoadSong merger=%p song='%s'\n",
-            (void *)mMerger.Ptr(),
-            a->Str(2)
-        );
-    }
+    MILO_LOG(
+        "DC3 HamDirector::OnLoadSong merger=%p song='%s'\n",
+        (void *)mMerger.Ptr(),
+        a->Str(2)
+    );
 #endif
     FilePathTracker tracker(FileRoot());
     MILO_ASSERT(TheGameData, 0xC1D);
@@ -1230,20 +1163,18 @@ void GetVenuePath(FilePath &path, const char *cc) {
 
 DataNode HamDirector::OnFileLoaded(DataArray *a) {
 #ifdef HX_NATIVE
-    if (DebugWorldLoad()) {
-        MILO_LOG(
-            "DC3 HamDirector::OnFileLoaded sym='%s' merger=%p\n",
-            a->Sym(2).Str(),
-            (void *)mMerger.Ptr()
-        );
-    }
+    MILO_LOG(
+        "DC3 HamDirector::OnFileLoaded sym='%s' merger=%p\n",
+        a->Sym(2).Str(),
+        (void *)mMerger.Ptr()
+    );
 #endif
     static Symbol song("song");
     static Symbol venue("venue");
     static Symbol viz("viz");
     static Symbol game_hud("game_hud");
     Symbol sym = a->Sym(2);
-    if (sym != game_hud || mMerger) {
+    if (mMerger) {
         mAsyncLoaded = mMerger->AsyncLoad();
         if (sym == song) {
             if (!TheGameData->Venue().Null()) {

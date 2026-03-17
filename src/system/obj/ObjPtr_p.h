@@ -194,7 +194,14 @@ void ObjPtrVec<T1, T2>::ReplaceNode(Node *n, Hmx::Object *obj) {
         Hmx::Object *oldObj = n->SetObj(obj);
         if (!oldObj && mListMode == kObjListNoNull) {
 #ifdef HX_NATIVE
-            if (!gSuppressRefErase) {
+            if (gSuppressRefErase) {
+                // Can't erase now (would shift vector elements and invalidate
+                // ring pointers). Register for deferred cleanup after the
+                // outermost ReplaceList completes.
+                gDeferredPurges.push_back({this, [](void *p) {
+                    static_cast<ObjPtrVec<T1, T2> *>(p)->PurgeNulls();
+                }});
+            } else {
                 erase(iterator(mNodes.begin() + (n - mNodes.data())));
             }
 #else
@@ -470,7 +477,13 @@ template <class S>
 void ObjPtrList<T1, T2>::sort(const S &cmp) {
     if (mNodes && mNodes->next) {
         Node *sentinel = mNodes;
+#ifdef HX_NATIVE
+        // Native Link() creates NULL-terminated forward links (last->next = nullptr).
+        // PPC Link() creates circular links (last->next = sentinel).
+        for (Node *outer = sentinel->next; outer != nullptr; outer = outer->next) {
+#else
         for (Node *outer = sentinel->next; outer != sentinel; outer = outer->next) {
+#endif
             for (Node *inner = outer; inner != sentinel; inner = inner->prev) {
                 Node *prev = inner->prev;
                 if (cmp(inner->Obj(), prev->Obj())) {

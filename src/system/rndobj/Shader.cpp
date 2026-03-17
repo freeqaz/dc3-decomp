@@ -22,6 +22,15 @@
 #include "utl/Str.h"
 #include <set>
 
+#ifdef HX_NATIVE
+bool RndShader::sCurrentUseAO;
+bool RndShader::sMatShadersOK;
+ModalCallbackFunc *RndShader::mModalCallback;
+ShaderType RndShader::sCurrentShader;
+bool RndShader::sCurrentSkinned;
+RndShader *RndShader::sShaders[kMaxShaderTypes];
+#endif
+
 std::set<unsigned int> sWarnings;
 RndShaderSimple gShaderSimple;
 RndShaderParticles gShaderParticles;

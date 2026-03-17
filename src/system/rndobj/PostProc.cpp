@@ -17,6 +17,12 @@
 #include "utl/BinStream.h"
 #include "synth_xbox/PitchCorrectedVoice.h"
 
+#ifdef HX_NATIVE
+RndPostProc *RndPostProc::sCurrent;
+float RndPostProc::sBloomLocFactor;
+DOFOverrideParams RndPostProc::sDOFOverride;
+#endif
+
 float TrueColor::ExposureRecipe::GetLux() { return mLux; }
 
 void RndPostProc::ResetDofProc() { TheDOFProc->UnSet(); }

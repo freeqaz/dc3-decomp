@@ -236,6 +236,35 @@ BinStream::~BinStream() {
     delete mRevStack;
 }
 
+#ifdef HX_NATIVE
+bool BinStream::WaitUntilReady(int sleepMs) {
+    for (int polls = 0; ; polls++) {
+        EofType eof = Eof();
+        if (eof == NotEof)
+            return true;
+        if (eof == RealEof) {
+            MILO_WARN("BinStream::WaitUntilReady: unexpected end of file "
+                       "(stream: %s)", Name());
+            return false;
+        }
+#ifdef __EMSCRIPTEN__
+        // Sleep is a no-op on web — don't spin. Data must arrive via
+        // the browser event loop, which we're blocking. Bail immediately.
+        MILO_WARN("BinStream::WaitUntilReady: data not ready, cannot block "
+                   "on web (stream: %s)", Name());
+        return false;
+#else
+        if (polls > 100000) {
+            MILO_WARN("BinStream::WaitUntilReady: timed out after 100k polls "
+                       "(stream: %s)", Name());
+            return false;
+        }
+        Timer::Sleep(sleepMs);
+#endif
+    }
+}
+#endif
+
 void BinStream::PushRev(int revs, Hmx::Object *obj) {
     if (!mRevStack) {
         mRevStack = new std::vector<ObjVersion>();

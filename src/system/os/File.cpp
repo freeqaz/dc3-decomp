@@ -340,7 +340,9 @@ DataNode OnToggleFakeFileErrors(DataArray *da) {
     gFakeFileErrors = !gFakeFileErrors;
     Hmx::Object *obj = ObjectDir::Main()->Find<Hmx::Object>("cheat_display", true);
     if (obj) {
-        static Message msg("cheat_display", DataNode("Fake File errors"), DataNode("show_bool"));
+        static Message msg(
+            "cheat_display", DataNode("Fake File errors"), DataNode("show_bool")
+        );
         msg[2] = gFakeFileErrors;
         obj->Handle(msg, true);
     }
@@ -352,12 +354,7 @@ DataNode OnEnumerateFrameRateResults(DataArray *da) {
     gFrameRateArray = ret.Array();
     char *suffix = (char *)FrameRateSuffix();
     const char *pattern = MakeString("ui/framerate/venue_test/*%s", suffix);
-    RecursePatternInternal(
-        pattern,
-        OnFrameRateRecurseCB,
-        false,
-        false
-    );
+    RecursePatternInternal(pattern, OnFrameRateRecurseCB, false, false);
     gFrameRateArray = 0;
     return ret;
 }
@@ -393,9 +390,7 @@ void FileInit() {
     TheDebug.AddExitCallback(FileTerminate);
 }
 
-const char *FileRelativePathBuf(
-    const char *iRoot, const char *iFilepath, char *oBuf
-) {
+const char *FileRelativePathBuf(const char *iRoot, const char *iFilepath, char *oBuf) {
     MILO_ASSERT(iRoot, 0x38d);
     MILO_ASSERT(iFilepath, 0x38e);
     MILO_ASSERT(oBuf, 0x38f);
@@ -427,7 +422,8 @@ const char *FileRelativePathBuf(
         if (!fpToks.empty() && !rootToks.empty()) {
             int cmp = strcmp(fpToks.front(), rootToks.front());
             if (cmp == 0) {
-                while (rootToks.size() > 0 && fpToks.size() > 0 && strcmp(fpToks.front(), rootToks.front()) == 0) {
+                while (rootToks.size() > 0 && fpToks.size() > 0
+                       && strcmp(fpToks.front(), rootToks.front()) == 0) {
                     rootToks.pop_front();
                     fpToks.pop_front();
                 }
@@ -457,7 +453,6 @@ const char *FileRelativePathBuf(
         } else {
             strcpy(oBuf, iFilepath);
         }
-
     }
     return oBuf;
 }
@@ -555,7 +550,8 @@ const char *FileLocalize(const char *iFilename, char *buffer) {
         Symbol lang2 = SystemLanguage();
         if (!lang2.Null()) {
             for (const char *p = iFilename; *p != '\0'; p++) {
-                if (*p == '/' && p[1] == 'e' && p[2] == 'n' && p[3] == 'g' && p[4] == '/') {
+                if (*p == '/' && p[1] == 'e' && p[2] == 'n' && p[3] == 'g'
+                    && p[4] == '/') {
                     static char mybuffer[256];
                     if (!buffer)
                         buffer = mybuffer;
@@ -630,8 +626,8 @@ File *NewFile(const char *iFilename, int iMode) {
         }
 
         int mode_check = mode & 0x2;
-        if ((mode_check == 0) || (mode & 0x20000) ||
-            ((result = FileCache::GetFileAll(filename)) == nullptr)) {
+        if ((mode_check == 0) || (mode & 0x20000)
+            || ((result = FileCache::GetFileAll(filename)) == nullptr)) {
             if ((UsingCD() != 0) && (mode_check != 0) && !(mode & 0x10000)) {
                 void *mem = _MemAllocTemp(sizeof(ArkFile), __FILE__, 0x19, "ArkFile", 0);
                 if (mem != nullptr) {
@@ -650,8 +646,7 @@ File *NewFile(const char *iFilename, int iMode) {
                     return nullptr;
                 }
 
-                if ((gOpenCaptureFile != nullptr) && (mode & 0x2) &&
-                    !(mode & 0x20000)) {
+                if ((gOpenCaptureFile != nullptr) && (mode & 0x2) && !(mode & 0x20000)) {
                     char path_buf[256];
                     sprintf(path_buf, "./%s", FileMakePath(".", filename));
                     const char *ptr = path_buf;
@@ -680,11 +675,11 @@ void RecursePatternInternal(
     String pttn(pattern);
 
     // Find split point: first '&', or end-of-string if absent
-    unsigned int ampPos = (int)pttn.find_first_of("&", 0);
-    int wildcardPos = (int)pttn.find_first_of("?*", 0);
+    unsigned int ampPos = pttn.find_first_of("&", 0);
+    int wildcardPos = pttn.find_first_of("?*", 0);
 
     int splitPos;
-    if ((unsigned int)ampPos == (int)FixedString::npos) {
+    if ((int)(int)(unsigned int)ampPos == (int)FixedString::npos) {
         splitPos = (int)pttn.length() - 1;
     } else {
         splitPos = ampPos;
@@ -698,11 +693,14 @@ void RecursePatternInternal(
         int pttnLen = (int)pttn.length() - 1;
         // Walk forward from splitPos looking for path separator
         int forwardPos = splitPos;
-        while (forwardPos < pttnLen &&
-               '/' != pttn[forwardPos] && pttn[forwardPos] != '\\') {
+        while (forwardPos < pttnLen && pttn[forwardPos] != '/'
+               && pttn[forwardPos] != '\\') {
             forwardPos++;
         }
-        if (forwardPos != pttnLen) {
+        if (forwardPos == pttnLen) {
+            // No path separator found — disable recurse for FileEnumerate
+            recurse = false;
+        } else {
             // Path separator found: we need to recurse into subdirectories
             String subPattern = pttn.substr((unsigned int)forwardPos);
             pttn = pttn.substr(0);
@@ -721,24 +719,23 @@ void RecursePatternInternal(
 
             unsigned int numDirs = dirs.size();
             for (unsigned int i = 0; i < numDirs; i++) {
-                const char *combined =
-                    MakeString("%s/%s%s", pttn.c_str(), dirs[i].c_str(), subPattern.c_str());
+                const char *combined = MakeString(
+                    "%s/%s%s", pttn.c_str(), dirs[i].c_str(), subPattern.c_str()
+                );
                 RecursePatternInternal(combined, cb, recurse, recurse_dirs);
             }
             return;
         }
-        // No path separator found — disable recurse for FileEnumerate
-        recurse = false;
     }
 
     // Walk backward from splitPos to find last path separator
     String dirStr;
-    if (splitPos >= 1) {
+    if (splitPos > 0) {
         int pos = splitPos;
         while (pos >= 0 && pttn[pos] != '/' && pttn[pos] != '\\') {
             pos--;
         }
-        if (pos >= 1) {
+        if (pos > 0) {
             dirStr = pttn.substr(0, (unsigned int)pos);
         } else {
             dirStr = ".";

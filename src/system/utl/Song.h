@@ -89,6 +89,19 @@ private:
     DataNode GetBookmarks();
     DataNode GetMidiParsers();
 
+#ifdef HX_NATIVE
+    void PollAsyncState();
+
+    enum AsyncState {
+        kAsyncNone,
+        kAsyncWaitPlay, // Play() deferred — waiting for IsReady()
+        kAsyncWaitSync, // SyncState() deferred — waiting for IsReady()
+    };
+    AsyncState mAsyncState = kAsyncNone;
+    bool mSavedWasPaused = false;
+    float mSavedVolume = 0.0f;
+#endif
+
 protected:
     Song();
 

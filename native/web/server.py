@@ -160,6 +160,14 @@ class DC3Handler(http.server.SimpleHTTPRequestHandler):
             return
 
         full_path = os.path.join(ASSETS_DIR, safe)
+
+        # Ark extraction stores ".." as "(..)" in directory names.
+        # Files under system/run/ live at (..)/(..)/system/run/ on disk.
+        if not os.path.isfile(full_path) and safe.startswith("system/"):
+            alt = os.path.join(ASSETS_DIR, "(..)", "(..)", safe)
+            if os.path.isfile(alt):
+                full_path = alt
+
         if not os.path.isfile(full_path):
             self._json_error(404, f"Not found: {relpath}")
             return

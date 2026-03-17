@@ -27,6 +27,11 @@ static inline bool DebugSharedPanelDirs() {
 }
 #endif
 
+#ifdef HX_NATIVE
+int UIPanel::sMaxPanelId;
+bool UIPanel::sIsFinalDrawPass;
+#endif
+
 ObjectDir *UIPanel::DataDir() {
     if (mDir) {
         return mDir->DataDir();

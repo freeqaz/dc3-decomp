@@ -5,6 +5,10 @@
 #include "obj/Data.h"
 #include "os/Debug.h"
 
+#ifdef HX_NATIVE
+int FilterVersion::sNumHam2Nodes;
+#endif
+
 FilterVersion::FilterVersion(FilterVersionType t, const DataArray *cfg)
     : mVersionSym(cfg->Sym(0)), mType(t) {
     static Symbol time_error("time_error");

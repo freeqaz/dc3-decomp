@@ -1,8 +1,17 @@
 # Stub Function Burndown
 
-Consolidated report of stub functions across the decomp, categorized by type and grouped by source file. Generated 2026-03-12, updated 2026-03-15.
+Consolidated report of stub functions across the decomp, categorized by type and grouped by source file. Generated 2026-03-12, updated 2026-03-17.
 
-**2026-03-15 status**: All core engine subsystems (rndobj, char, synth, math, flow, world, ui, obj, os) have zero workable stubs remaining. Every function is either COMPLETE or AT_LIMIT. Remaining workable functions are Kinect/gameplay-specific (FreestyleMoveRecorder, MoveDetector) or template instantiations. Audio DSP effects, SampleInst, Sound, WavReader, Sequence are all implemented.
+**2026-03-17 status**: All core engine subsystems (rndobj, char, synth, math, flow, world, ui, obj, os) have zero workable stubs remaining. Every function is either COMPLETE or AT_LIMIT. Remaining workable functions are Kinect/gameplay-specific (FreestyleMoveRecorder, MoveDetector) or template instantiations. Audio DSP effects, SampleInst, Sound, WavReader, Sequence are all implemented.
+
+**2026-03-17 linker stub cleanup**: Removed 1,063 dead weak stubs from `engine_stubs_generated.cpp` (4192 → 1058 lines). These were auto-generated safety nets from early native port development that were silently overridden by strong symbols as decomp source files were added.
+
+**2026-03-17 Phase 2 burndown**: Removed 141 more stubs (364 → 223):
+- **34 dead inline/template stubs** (Phase 1): `UIPanel::SetPaused`, `UIList::NumData`, `ObjDirPtr::IsLoaded`, 13x `NavListItemSortCmp::Get*Cmp`, 8x `PropSync<ObjPtrVec<T>>`, 3x `PseudoRandomPicker`, `ScaleAddEq`, `CachedRead` (2), `GatherObjectsFromGroup`, `AutoGlitchReport::EndExternal` — all had real implementations from headers compiled in other TUs.
+- **107 dead static variable stubs** (Phase 2): Added proper `static` member definitions to source .cpp files (guarded with `#ifdef HX_NATIVE`) and `native_link_glue.cpp`. Classes: HamScrollBehavior (15), RndShader (6), SpotlightDrawer (5), CharEyes (5), InlineHelp (6), MoveDir (4), MetaPanel (4), RndPostProc (3), RndDrawable (3), HamNavList (3), SkeletonUpdate (3), UIPanel (2), UILabel (2), and ~40 single-static classes.
+- **24 dead non-virtual thunk stubs** (Phase 3): Removed PPC-offset thunks that don't match x86_64 class layout. The native Clang compiler auto-generates correct thunks in each class's .cpp.o. Kept 1 thunk (FitnessCalorieSortMgr::Handle, offset 8) that is actually referenced.
+
+**199 linker stubs remain** — see [Linker Stub Inventory](#linker-stub-inventory-engine_stubs_generatedcpp) below.
 
 ---
 
@@ -666,7 +675,7 @@ Searched 22,397 Ghidra decompilations for `mReady`/`mLoaded` references and load
 - `int CheatsManager::OnMsg(const ButtonDownMsg&)` — private
 
 #### Song.cpp
-- `void Song::SyncState()` — public
+- ~~`void Song::SyncState()` — public~~ **REMOVED** (2026-03-17: unguarded in source, sync-wait loop guarded for native)
 
 #### OSCMessenger.cpp
 - `int OSCMessenger::MakeOSCAddress(String, char*)` — private
@@ -797,3 +806,79 @@ Searched 22,397 Ghidra decompilations for `mReady`/`mLoaded` references and load
 - `void* PhysicalAllocTracked(unsigned long, unsigned long, const char*, int, const char*)` — FREE
 - `void* PhysicalAlloc(int)` — FREE
 - `PhysMemTypeTracker::PhysMemTypeTracker(Symbol)` — public ctor
+
+---
+
+## Linker Stub Inventory (`engine_stubs_generated.cpp`)
+
+**199 weak linker stubs** remain after Phase 3 burndown (223 → 199). These are `__attribute__((weak))` symbols that provide zero-return fallbacks for functions not yet compiled into the native binary. When the real implementation is added to the build, the strong symbol automatically overrides the weak stub.
+
+### Priority A — Blocks Native Gameplay Features (~10 stubs)
+
+Functions that affect runtime behavior on native. Most Phase 1 inline/template stubs were removed. Remaining:
+
+| Category | Count | Examples | Impact |
+|----------|-------|---------|--------|
+| **Game logic** | 3 | `UILabel::Terminate`, `UILabel::LabelStyle::~LabelStyle`, `FlowPtr<Hmx::Object>::FlowPtr` | UI/flow correctness |
+| **Sorting/nav** | 3 | `NavListSort::ChangeHighlightHeader`, `NavListHeaderNode::SelectChildren`, `PlaylistSortByType::NewHeaderNode` | Song list sorting |
+| **Spotlight** | 1 | `Spotlight::RemoveFromLists` | Light cleanup |
+| **Waypoint** | 1 | `Waypoint::Highlight` | Debug viz |
+| **FitnessCalorieSortMgr** | 1 | `Handle` + thunk | Sort handler |
+| ~~**Removed**~~ | ~~-27~~ | ~~`UIPanel::SetPaused`, `UIList::NumData`, `ObjDirPtr::IsLoaded` (2), `NavListItemSortCmp::Get*Cmp` (13), `PropSync<ObjPtrVec>` (8), `PseudoRandomPicker` (3)~~ | Dead — real impls from headers/templates |
+
+### Priority B — Would Unblock Secondary Modes (28 stubs)
+
+Party mode, challenges, scoring, achievements — not needed for core perform-mode gameplay.
+
+| Category | Count | Examples |
+|----------|-------|---------|
+| **MultiUserGesturePanel** | 5 | `UpdateCharPic`, `UpdateVenueMesh`, `GetVoiceCommandOutfitTag`, `UpdateProviderPlayerIndices`, `HasNavList` |
+| **PartyModeMgr** | 1 | `DetermineSubModePlayers` |
+| **AccomplishmentProgress** | 3 | `GetNumCompleted`, `GetTotalSongsPlayed`, `GetTotalCampaignSongsPlayed` |
+| **Achievements** | 3 | `PlatformInit`, `GetAchievementData`, `SubmitAchievementsFunc` |
+| **GameEndedDataPointJob** | 1 | `CompileMoveRatings` |
+| **HamStorePanel** | 1 | `GetOfferIDsToEnumerate` |
+| **SingleUserCrewSelectPanel** | 1 | `UpdateCrewMesh` |
+| **Sort managers** | 4 | `MQSongSort::BuildTree`, `ChallengeSort::BuildTree`, `SongSortMgr::SetupQuasiRandomSongs`, `LocationCmp::LocationCmp` |
+| **MoveDir** | 1 | `EnqueueDetectFrames` |
+| **Game misc** | 8 | `BaseSkeleton::LimbNormPos/MakeCameraToPlayerXfm`, `CamTexClip::StoreTextureClip`, `altCfg`, `PseudoRandomPicker` (3), `HongKongExceptionMet` |
+
+### Priority C — Xbox Platform / Never Needed on Native (~195 stubs)
+
+These are Xbox 360 hardware APIs, Kinect, D3D9, Bink video, Xbox Live networking, and debug profiling. They will never have native implementations — the native port uses different subsystems (WebGPU, FFmpeg, miniaudio, etc.).
+
+| Category | Count | Notes |
+|----------|-------|-------|
+| **Static member variables** | 2 | `StandardStream::kStreamEndMs`, `CharSignalApplier` VTT — only 2 remain after Phase 2 burndown |
+| **Vtable/typeinfo** | 3 | Compiler-generated vtables/typeinfo for CharSignalApplier, DxTex |
+| **Xbox/Kinect** | 42 | LiveCameraInput (10), ArcDetector (6), DirectionGestureFilter (4), SetupHX* (4), VoiceInputPanel (3), VirtualKeyboard (3), etc. |
+| **Non-virtual thunks** | 1 | Compiler-generated MI thunk (FitnessCalorieSortMgr::Handle only — rest auto-generated by Clang) |
+| **Bink video** | 25 | BinkMovieImpl (14 methods), Bink C API (7), BinkMovieSys |
+| **D3D9 rendering** | 26 | RndRenderState (15 methods), DxTex, DxMesh, DepthBuffer3D, StreamRenderer, NgDOFProc, DrawBufferMat |
+| **Xbox OS** | 22 | CloseHandle, WaitForSingleObject, WSACreateEvent, AsyncFileWin, CacheMgrXbox, HolmesClient, MemcardXbox |
+| **Xbox networking** | 13 | NetworkSocket, NetLoaderXbox, NetCacheMgrXbox, WebSvcMgr, DingoJob, XNetDns |
+| **Debug/profiling** | 13 | MemTracker (3), AllocInfo, AutoSlowFrame, PhysMemTypeTracker, SpewInit/Terminate, DiffTblReport |
+| **Audio (Xbox)** | 7 | StandardStream::GetJumpBackTotalTime, DspAllocate, CompressThread, CacheWav, RadAlloc |
+| **JPEG** | 6 | jpeg_CreateCompress, jpeg_set_defaults, jpeg_start_compress, jpeg_finish_compress, jpeg_write_scanlines, jpeg_std_error |
+
+### Global Variable Stubs (21)
+
+Separate from function stubs — these provide zero-initialized storage for `The*` global pointers and other statics that haven't been properly initialized on native yet.
+
+```
+TheMaster, TheMC, TheRenderState, TheServer, TheSkeletonIdentifier, TheSkeletonViz,
+TheSongSortMgr, TheMQSongSortMgr, TheChallengeSortMgr, TheFitnessGoalMgr,
+TheHAQMgr, TheLeaderboards, TheDebugNotifyOncePrinter,
+MemHeapStack::sDefaultHeap, gCharHighlightY, gMemStackLock,
+lbl_82F14008, lbl_830A4104, lbl_8316EB70, lbl_8316EBA8, lbl_83172BB0
+```
+
+### How to Check for New Dead Stubs
+
+After adding new source files to the native build, run:
+```bash
+# Find stubs that now have strong symbol overrides
+nm native/build/dc3-native | grep ' T ' | awk '{print $3}' | sort > /tmp/strong.txt
+grep 'ASM_SYM' native/src/engine_stubs_generated.cpp | sed 's/.*ASM_SYM("//;s/").*//' | sort > /tmp/stubs.txt
+comm -12 /tmp/strong.txt /tmp/stubs.txt  # These are dead and can be removed
+```

@@ -265,6 +265,28 @@ END_HANDLERS
 
 Symbol NavListHeaderNode::Select() { return SelectChildren(mChildren, 0); }
 
+Symbol NavListHeaderNode::SelectChildren(std::list<NavListSortNode*>& lst, int limit) {
+    static Symbol fail_add_header_too_big_screen("fail_add_header_too_big_screen");
+    if (limit > 100) return fail_add_header_too_big_screen;
+
+    static Symbol fail_add_header_screen("fail_add_header_screen");
+    static Symbol incomplete_add_header_screen("incomplete_add_header_screen");
+
+    int count = 0;
+    for (std::list<NavListSortNode *>::iterator it = lst.begin(); it != lst.end(); ++it) {
+        Symbol sym = (*it)->Select();
+        if (sym == gNullStr) {
+            count += (*it)->GetItemCount();
+        } else if (sym == incomplete_add_header_screen) {
+            count++;
+        }
+    }
+
+    if (count == 0) return fail_add_header_screen;
+    if (limit != count) return incomplete_add_header_screen;
+    return gNullStr;
+}
+
 bool NavListHeaderNode::IsEnabled() const {
     FOREACH (it, mChildren) {
         if ((*it)->IsActive())

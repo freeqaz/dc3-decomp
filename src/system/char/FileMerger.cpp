@@ -18,6 +18,9 @@
 #include "utl/MemMgr.h"
 #include "utl/PoolAlloc.h"
 
+#ifdef HX_NATIVE
+bool FileMerger::sDisableAll;
+#endif
 FileMerger *FileMerger::sFmDeleting;
 
 class NullLoader : public Loader {
@@ -421,6 +424,9 @@ void FileMerger::Select(Symbol name, const FilePath &fp, bool b3) {
 bool FileMerger::StartLoadInternal(bool async, bool loading) {
     mAsyncLoad = async;
     mLoadingLoad = loading;
+#ifdef HX_NATIVE
+    async = true;  // Cooperative polling only — prevents sync-poll hang on web
+#endif
 #if !defined(MILO_VIEWER)
     // The game relies on change_files to translate high-level selections like
     // HamCharacter::mOutfit into concrete merger paths before loading.
@@ -452,32 +458,9 @@ bool FileMerger::StartLoadInternal(bool async, bool loading) {
             TheFileMergerOrganizer->AddFileMerger(this);
         } else {
             LaunchNextLoader();
-#ifdef HX_NATIVE
-            // Sync polling with timeout — prevents infinite hang if a loader
-            // fails (e.g., web XHR timeout, missing file). On Xbox, file loads
-            // always complete or assert. On native/web, network failures can
-            // leave loaders stuck, causing this loop to spin forever.
-            int iterations = 0;
-            while (!mFilesPending.empty()) {
-                TheLoadMgr.Poll();
-                if (++iterations > 100000) {
-                    MILO_WARN("FileMerger sync load timed out after 100k polls, "
-                              "%d files still pending", (int)mFilesPending.size());
-                    // Force-drain pending list to prevent hang
-                    while (!mFilesPending.empty()) {
-                        mFilesPending.pop_front();
-                    }
-                    if (mCurLoader) {
-                        DeleteCurLoader();
-                    }
-                    break;
-                }
-            }
-#else
             while (!mFilesPending.empty()) {
                 TheLoadMgr.Poll();
             }
-#endif
         }
         return true;
     }

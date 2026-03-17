@@ -109,8 +109,12 @@ BinStream &ReadChunks(BinStream &bs, void *data, int total_len, int max_chunk_si
         char *dataAsChars = (char *)data;
         bs.Read(&dataAsChars[curr_size], len_left);
         curr_size += len_left;
+#ifdef HX_NATIVE
+        bs.WaitUntilReady();
+#else
         while (bs.Eof() == TempEof)
             Timer::Sleep(0);
+#endif
     }
     return bs;
 }

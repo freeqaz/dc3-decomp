@@ -336,3 +336,8 @@ BINSTREAM_OP_OBJDIRPTR(UIListDir)
 // RndText::FitTextJust now defined in Text.cpp
 
 // FlowSetProperty — PropertyTask::Poll now defined in FlowSetProperty.cpp
+
+// ============================================================================
+// Static member definitions moved to their proper .cpp files (guarded by
+// #ifdef HX_NATIVE). See git log for the full list of relocated definitions.
+// ============================================================================

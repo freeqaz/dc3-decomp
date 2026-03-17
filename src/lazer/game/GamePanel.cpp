@@ -58,16 +58,7 @@
 #include "utl/TimeConversion.h"
 #include "world/Dir.h"
 #ifdef HX_NATIVE
-#include <cstdlib>
 #include <cstdio>
-static inline bool DebugWorldLoad() {
-    static bool checked = false, val = false;
-    if (!checked) {
-        val = std::getenv("MILO_DEBUG_WORLD_LOAD") != nullptr;
-        checked = true;
-    }
-    return val;
-}
 #endif
 GamePanel *TheGamePanel = nullptr;
 LoopVizCallback gLoopVizCallback;
@@ -384,15 +375,6 @@ void GamePanel::Exit() {
 
 void GamePanel::Poll() {
     START_AUTO_TIMER("game_poll");
-#ifdef HX_NATIVE
-    {
-        static int sPollTop = 0;
-        if (sPollTop++ < 3) {
-            fprintf(stderr, "DC3 GamePanel::Poll() TOP — loaded=%d pollLoadState=%d panelState=%d\n",
-                    IsLoaded(), mPollLoadState, (int)GetState());
-        }
-    }
-#endif
     SetSoundEventReceiver();
     if (!IsLoaded()) {
         return;
@@ -423,12 +405,12 @@ void GamePanel::Poll() {
             StartGame();
         }
 #ifdef HX_NATIVE
-        {
-            static int sPollDiag = 0;
-            if (sPollDiag++ < 5) {
-                fprintf(stderr, "DC3 GamePanel::Poll diag: state=%d taskMgrSec=%.3f gameStartHold=%d\n",
-                        mState, TheTaskMgr.Seconds(TaskMgr::kRealTime),
-                        TheHamDirector ? TheHamDirector->IsGameStartHold() : -1);
+        // Native: force transition past intro if stuck (audio/timing doesn't advance)
+        if (mState == kGameInIntro) {
+            static int sIntroFrames = 0;
+            if (sIntroFrames++ > 30) {
+                fprintf(stderr, "DC3 Native: force-advancing past kGameInIntro (stuck %d frames)\n", sIntroFrames);
+                StartGame();
             }
         }
 #endif
@@ -609,6 +591,26 @@ void GamePanel::StartGame() {
 #endif
     ThePresenceMgr.SetInGame(TheHamSongMgr.GetSongIDFromShortName(TheGameData->GetSong()));
     mState = kGamePlaying;
+#ifdef HX_NATIVE
+    // HACK: On native, the DTA flow system doesn't process game_stage
+    // property changes to hide the intro overlay. Manually set the
+    // property and enumerate venue drawables to find the intro overlay.
+    TheHamProvider->SetProperty("game_stage", Symbol("playing"));
+
+    // Enumerate venue drawables to find/hide the intro overlay.
+    WorldDir *venue = TheHamDirector->GetVenueWorld();
+    if (venue) {
+        // Log all showing RndDir objects in venue to find intro overlay
+        fprintf(stderr, "DC3 Native: venue RndDir objects:\n");
+        for (ObjDirItr<RndDir> it(venue, true); it != nullptr; ++it) {
+            if (it != venue && it->Name() && it->Name()[0]) {
+                fprintf(stderr, "  RndDir '%s' showing=%d draws=%d\n",
+                        it->Name(), it->Showing(), it->NumDraws());
+            }
+        }
+    }
+    fprintf(stderr, "DC3 Native: StartGame() — game_stage set to 'playing'\n");
+#endif
 }
 
 void GamePanel::CheatPause(bool b1) {
@@ -695,50 +697,6 @@ void GamePanel::UpdateLatency() {
 }
 
 void GamePanel::StartIntro() {
-#ifdef HX_NATIVE
-    // On native, the DTA SongSequence/LoadNewSong flow doesn't trigger.
-    // Load audio here so it's ready before HandleWait polls.
-    // Song data (moves.milo etc.) is already loaded in PollForLoading().
-    {
-        Symbol song = TheGameData->GetSong();
-        fprintf(stderr, "DC3 Native: StartIntro — loading song audio for '%s'\n", song.Str());
-        mGame->LoadNewSongAudio(song);
-    }
-
-    if (TheHamDirector && TheHamDirector->GetWorld()) {
-        TheHamDirector->SetupAnims();
-        TheHamDirector->SetPollEnabled(true);
-        TheHamDirector->Enter();
-        TheHamDirector->SetPlayerSpotlightsEnabled(true);
-
-        // Wire phrase meters to follow players.
-        // TransConstraint.mChild is null because phrase_meter didn't exist
-        // when the venue loaded. Parent phrase meters directly to players.
-        {
-            WorldDir *ven = TheHamDirector->GetVenueWorld();
-            if (ven) {
-                for (int i = 0; i < 2; i++) {
-                    HamPhraseMeter *pm = ven->Find<HamPhraseMeter>(
-                        MakeString("phrase_meter%d", i), false);
-                    RndTransformable *player = ven->Find<RndTransformable>(
-                        MakeString("player%d", i), false);
-                    if (pm && player) {
-                        pm->SetTransParent(player, false);
-                        // Offset slightly above the player
-                        Vector3 offset(0, 80.0f, 0);
-                        pm->SetLocalPos(offset);
-                        pm->SetShowing(true);
-                        fprintf(stderr, "DC3 phrase_meter%d: parented to player%d at (%.1f,%.1f,%.1f)\n",
-                                i, i, player->WorldXfm().v.x, player->WorldXfm().v.y,
-                                player->WorldXfm().v.z);
-                    }
-                }
-            }
-        }
-        MILO_LOG("Native: HamDirector::Enter complete, SongAnim(0)=%p\n",
-            TheHamDirector->SongAnim(0));
-    }
-#endif
     mState = kGameInIntro;
     static Message pick_intro("pick_intro");
     HandleType(pick_intro);
@@ -1008,106 +966,15 @@ void GamePanel::PollForLoading() {
                 return;
             }
             if (!TheHamDirector->IsWorldLoaded()) {
-#ifdef HX_NATIVE
-                // Async world loading — proceed without waiting
-#else
                 return;
-#endif
             }
         }
         mPollLoadState = 2;
         const DataNode *prop = TheGameMode->Property("load_chars");
         if (prop->Int() != 0 && !TheHamWardrobe->AllCharsLoaded()) {
-#ifdef HX_NATIVE
-            // Async character loading — proceed without waiting
-#else
             return;
-#endif
         }
         mPollLoadState = 3;
-#ifdef HX_NATIVE
-        // Load song data into the world BEFORE Game::IsReady/IsLoaded runs.
-        // This ensures the "moves" MoveDir is available when PostLoad() searches for it.
-        {
-            static bool sSongMerged = false;
-            if (!sSongMerged && TheHamDirector && TheHamDirector->GetWorld()) {
-                sSongMerged = true;
-                Symbol song = TheGameData->GetSong();
-                const char *miloPath = MakeString("%s.milo", TheHamSongMgr.SongPath(song, 0));
-                MILO_LOG("Native PollForLoading: loading song data '%s' into world.fm\n", miloPath);
-                FileMerger *worldFm = TheHamDirector->GetWorld()->Find<FileMerger>("world.fm", false);
-                if (worldFm) {
-                    static Symbol songSym("song");
-                    FileMerger::Merger *merger = worldFm->FindMerger(songSym, false);
-                    if (merger) {
-                        merger->Clear(true);
-                        merger->SetSelected(miloPath, true);
-                        worldFm->StartLoad(false);
-                        while (worldFm->HasPendingFiles()) {
-                            TheLoadMgr.Poll();
-                        }
-                        MILO_LOG("Native PollForLoading: world.fm song merger complete\n");
-                    }
-                }
-            }
-        }
-
-        // Load shared HUD components into venue world
-        {
-            static bool sHudMerged = false;
-            if (!sHudMerged && TheHamDirector) {
-                WorldDir *venue = TheHamDirector->GetVenueWorld();
-                if (venue) {
-                    sHudMerged = true;
-
-                    // phrase_meter.milo — phrase meter progress bars
-                    FilePath pmFp;
-                    pmFp.Set(FilePath::Root().c_str(), "world/shared/phrase_meter.milo");
-                    ObjectDir *pmDir = DirLoader::LoadObjects(pmFp, nullptr, nullptr);
-                    if (pmDir) {
-                        MergeFilter pmFilt(
-                            (MergeFilter::Action)0,
-                            MergeFilter::kMergeInlinedMoveSharedSubdirs);
-                        MergeDirs(pmDir, venue, pmFilt);
-                        MILO_LOG("Native PollForLoading: merged phrase_meter.milo into venue\n");
-                    }
-
-                    // Stub objects for move_feedback/text_feedback (move_feedback.milo
-                    // hangs due to flow scripts referencing missing animations)
-                    static const char *kStubNames[] = {
-                        "move_feedback0", "move_feedback1",
-                        "text_feedback0", "text_feedback1",
-                        nullptr
-                    };
-                    for (const char **name = kStubNames; *name; name++) {
-                        if (!venue->Find<RndDir>(*name, false)) {
-                            RndDir *stub = Hmx::Object::New<RndDir>();
-                            stub->SetName(*name, venue);
-                            stub->SetShowing(false);
-                        }
-                    }
-                    venue->SyncObjects();
-
-                    // After MergeDirs, phrase_meter0/1 are regular objects in
-                    // venue's hash table (not subdirs). Venue's SyncDrawables
-                    // adds them to venue->mDraws, but their OWN mDraws are
-                    // empty — meshes are in their own hash tables, never synced.
-                    // Call SyncObjects on each to populate their internal draw
-                    // lists so DrawShowing() renders their meshes.
-                    HamPhraseMeter *pm0 = venue->Find<HamPhraseMeter>("phrase_meter0", false);
-                    HamPhraseMeter *pm1 = venue->Find<HamPhraseMeter>("phrase_meter1", false);
-                    if (pm0) {
-                        pm0->SyncObjects();
-                        MILO_LOG("Native: pm0 synced, %d draws\n", pm0->NumDraws());
-                    }
-                    if (pm1) {
-                        pm1->SyncObjects();
-                        MILO_LOG("Native: pm1 synced, %d draws\n", pm1->NumDraws());
-                    }
-                }
-            }
-        }
-#endif
         if (mGame->IsReady()) {
             mPollLoadState = 4;
 #ifdef HX_NATIVE

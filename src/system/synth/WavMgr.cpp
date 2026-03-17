@@ -2,6 +2,11 @@
 #include "obj/Dir.h"
 #include "obj/Object.h"
 
+#ifdef HX_NATIVE
+WavMgrAllocFunc WavMgr::sAlloc;
+WavMgrFreeFunc WavMgr::sFree;
+#endif
+
 WavMgr gWavMgr;
 WavMgr *TheWavMgr = &gWavMgr;
 

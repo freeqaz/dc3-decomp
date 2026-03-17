@@ -106,11 +106,6 @@ void CharHair::SetName(const char *name, ObjectDir *dir) {
 }
 
 void CharHair::Poll() {
-#ifdef HX_NATIVE
-    // Hair physics crash during venue loading due to null CharCollide entries
-    // in ObjPtrList during sort. Skip hair simulation on native for now.
-    return;
-#endif
     Character *cur = Character::Current();
     if (cur) {
         if (cur->Synced()) {
@@ -137,12 +132,6 @@ void CharHair::Poll() {
 void CharHair::Enter() {
     mReset = 1;
     RndPollable::Enter();
-#ifdef HX_NATIVE
-    // Hookup crashes during venue Enter — CharCollide objects may not be
-    // fully initialized yet, causing null dereference in SortCollides.
-    // Hair physics are skipped on native anyway (Poll returns early).
-    return;
-#endif
     Hookup();
 }
 

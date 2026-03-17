@@ -259,9 +259,19 @@ void WebAssetsFetchBundle() {
 // ---------------------------------------------------------------------------
 
 bool WebAssetsFetchSync(const char *memfsPath) {
-    // Strip "/data/" prefix to get the server-relative path
+    // Normalize the MEMFS path to a server-relative path.
+    // Paths come in several forms:
+    //   /data/ui/gen/foo.milo_xbox          -> ui/gen/foo.milo_xbox
+    //   /system/run/ham/gen/skeleton.milo   -> system/run/ham/gen/skeleton.milo
+    //   /../system/run/config/gen/meta.milo -> system/run/config/gen/meta.milo
     const char *rel = memfsPath;
-    if (strncmp(rel, "/data/", 6) == 0) rel += 6;
+    if (strncmp(rel, "/data/", 6) == 0) {
+        rel += 6;
+    } else if (strncmp(rel, "/../", 4) == 0) {
+        rel += 4;  // strip "/../" -> "system/run/..."
+    } else if (rel[0] == '/') {
+        rel += 1;  // strip leading "/" -> "system/run/..."
+    }
 
     // Build server URL
     char url[512];

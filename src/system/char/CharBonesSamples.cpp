@@ -211,9 +211,13 @@ void CharBonesSamples::LoadData(BinStreamRev &d) {
             }
 
             if ((i & 0x7F) == 0x7F) {
+#ifdef HX_NATIVE
+                d.stream.WaitUntilReady();
+#else
                 while (d.stream.Eof() == TempEof) {
                     Timer::Sleep(0);
                 }
+#endif
             }
         }
     } else {

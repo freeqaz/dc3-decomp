@@ -25,6 +25,10 @@
 #include "world/CameraManager.h"
 #include "world/Spotlight.h"
 
+#ifdef HX_NATIVE
+RndMat *WorldDir::sGlowMat;
+#endif
+
 WorldDir *TheWorld;
 #ifdef HX_NATIVE
 ObjectDir *gNativeVenueDir;

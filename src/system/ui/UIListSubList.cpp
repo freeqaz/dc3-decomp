@@ -4,6 +4,10 @@
 #include "ui/UIListSlot.h"
 #include "utl/Loader.h"
 
+#ifdef HX_NATIVE
+int UIListSubList::sNextFillSelection;
+#endif
+
 #pragma region UIListSubList
 
 UIListSubList::UIListSubList() : mList(this) {}

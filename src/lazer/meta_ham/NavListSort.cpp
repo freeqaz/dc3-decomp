@@ -1,5 +1,6 @@
 #include "meta_ham/NavListSort.h"
 #include "meta_ham/NavListNode.h"
+#include "math/Utl.h"
 #include "obj/Data.h"
 #include "obj/Msg.h"
 #include "obj/Object.h"
@@ -158,4 +159,37 @@ int NavListSort::GetCurrentShortcut() {
         MILO_FAIL("Shortcut not found for this entry!\n");
         return -1;
     }
+}
+
+void NavListSort::ChangeHighlightHeader(int dir) {
+    if (dir != 1 && dir != -1) {
+        MILO_ASSERT(dir == 1 || dir == -1, 0xA0);
+    }
+    
+    int shortcutIdx = GetCurrentShortcut();
+    int nextIdx = shortcutIdx;
+    
+    NavListNodeType type = mHighlightNode->GetType();
+    
+    if (dir == 1) {
+        if (type != kNodeFunction) {
+            nextIdx = shortcutIdx + 1;
+        }
+    } else if (dir == -1) {
+        if (type == kNodeFunction || type == kNodeHeader || 
+            (type == kNodeItem && !GetHeaderSelectable() && mHighlightNode == mShortcutNodes[shortcutIdx]->GetFirstActive())) {
+            nextIdx = shortcutIdx - 1;
+        }
+    }
+    
+    nextIdx = Mod(nextIdx, mShortcutNodes.size());
+    
+    NavListShortcutNode *shortcutNode = mShortcutNodes[nextIdx];
+    while (!shortcutNode->IsActive()) {
+        nextIdx += dir;
+        nextIdx = Mod(nextIdx, mShortcutNodes.size());
+        shortcutNode = mShortcutNodes[nextIdx];
+    }
+    
+    OnSelectShortcut(nextIdx);
 }

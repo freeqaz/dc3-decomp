@@ -13,6 +13,10 @@
 #include "math/Rot.h"
 #include "utl/TextStream.h"
 
+#ifdef HX_NATIVE
+Plane RndTransformable::sShadowPlane;
+#endif
+
 RndTransformable::RndTransformable()
     : mParent(this), mTarget(this), mConstraint(kConstraintNone), mPreserveScale(false),
       mDirty(true) {

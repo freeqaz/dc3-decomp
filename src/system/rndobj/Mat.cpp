@@ -19,6 +19,10 @@
 #include "utl/Loader.h"
 #include "utl/Symbol.h"
 
+#ifdef HX_NATIVE
+ObjectDir *RndMat::sMetaMaterials;
+#endif
+
 const char *kAnonMetaMatPrefix = "{anon}";
 const char *kMiloMetaMatPrefix = "{milo}";
 

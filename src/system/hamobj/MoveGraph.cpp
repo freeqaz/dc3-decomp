@@ -28,18 +28,26 @@ END_COPYS
 INIT_REVS(0, 0)
 
 BEGIN_LOADS(MoveGraph)
+#ifdef HX_NATIVE
+    bs.WaitUntilReady(100);
+#else
     while (bs.Eof() != NotEof) {
         Timer::Sleep(100);
     }
+#endif
     LOAD_REVS(bs)
     ASSERT_REVS(0, 0)
     LOAD_SUPERCLASS(Hmx::Object)
     int numParents;
     d >> numParents;
     for (int i = 0; i < numParents; i++) {
+#ifdef HX_NATIVE
+        bs.WaitUntilReady(100);
+#else
         while (bs.Eof() != NotEof) {
             Timer::Sleep(100);
         }
+#endif
         MoveParent *parent = new MoveParent();
         parent->Load(d.stream, this);
         mMoveParents[parent->Name()] = parent;

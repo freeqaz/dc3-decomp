@@ -29,6 +29,9 @@
 inline double __fsel(double a, double b, double c) { return a >= 0.0 ? b : c; }
 #endif
 
+#ifdef HX_NATIVE
+RndMesh *Spotlight::sDiskMesh;
+#endif
 RndEnviron *Spotlight::sEnviron;
 
 #pragma region BeamDef

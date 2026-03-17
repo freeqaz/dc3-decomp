@@ -991,67 +991,6 @@ void App::RunWithoutDebugging() {
             if (TheHamDirector) {
                 venueWorld = TheHamDirector->GetVenueWorld();
             }
-#ifdef HX_NATIVE
-            // Native: The DTA merger pipeline doesn't load venues automatically.
-            // When entering game_screen with no venue world, load it explicitly.
-            if (!venueWorld && TheUI && TheUI->CurrentScreen()) {
-                static bool sVenueLoadAttempted = false;
-                const char *curScreenName = TheUI->CurrentScreen()->Name();
-                if (!sVenueLoadAttempted && strcmp(curScreenName, "game_screen") == 0) {
-                    sVenueLoadAttempted = true;
-                    const char *venueName = TheGameData ? TheGameData->Venue().Str() : nullptr;
-                    // GameData may have been cleared — fall back to env var
-                    if (!venueName || !*venueName) venueName = getenv("DC3_VENUE");
-                    if (!venueName || !*venueName) venueName = "glitterati";
-                    if (venueName && *venueName) {
-                        const char *miloPath = MakeString("world/%s/%s.milo", venueName, venueName);
-                        FilePath fp;
-                        fp.Set(FilePath::Root().c_str(), miloPath);
-                        printf("DC3 Native: Loading gameplay venue '%s' from '%s'\n", venueName, fp.c_str());
-                        ObjectDir *venueDir = DirLoader::LoadObjects(fp, nullptr, nullptr);
-                        if (venueDir) {
-                            printf("DC3 Native: DirLoader returned '%s' class=%s proxy=%d Dir='%s'\n",
-                                   venueDir->Name(), venueDir->ClassName(),
-                                   venueDir->IsProxy(),
-                                   venueDir->Dir() ? venueDir->Dir()->Name() : "null");
-                            // If the returned dir is a wrapper, find the actual WorldDir subdir
-                            WorldDir *wdir = dynamic_cast<WorldDir*>(venueDir);
-                            if (!wdir) {
-                                // Check subdirs for a WorldDir
-                                for (ObjDirItr<WorldDir> it(venueDir, true); it != nullptr; ++it) {
-                                    wdir = &*it;
-                                    break;
-                                }
-                            }
-                            if (wdir) {
-                                if (TheHamDirector) {
-                                    TheHamDirector->SetNativeVenueWorld(wdir);
-                                    // Call VenueEnter to trigger dir->Enter() on the venue,
-                                    // which fires DTA type handlers on WorldCrowd objects
-                                    // (set_fullness, add_crowd via HamWardrobe)
-                                    TheHamDirector->VenueEnter(wdir);
-                                    printf("DC3 Native: Venue '%s' set + entered on HamDirector\n", wdir->Name());
-                                } else {
-                                    // No HamDirector — register as fallback venue
-                                    gNativeVenueDir = wdir;
-                                    printf("DC3 Native: Venue '%s' set as fallback (no HamDirector)\n", wdir->Name());
-                                }
-                                venueWorld = wdir;
-                                // Register video_recorder.srec stub (DTA scripts expect it)
-                                if (!wdir->FindObject("video_recorder.srec", false, false)) {
-                                    Hmx::Object *stub = Hmx::Object::NewObject("Object");
-                                    stub->SetName("video_recorder.srec", wdir);
-                                }
-                            } else {
-                                printf("DC3 Native: Venue '%s' loaded but is NOT a WorldDir\n", venueName);
-                            }
-                        } else {
-                            printf("DC3 Native: Failed to load venue '%s' from '%s'\n", venueName, fp.c_str());
-                        }
-                    }
-                }
-            }
-#endif
             if (!venueWorld && gNativeVenueDir) {
                 venueWorld = dynamic_cast<WorldDir*>(gNativeVenueDir);
             }

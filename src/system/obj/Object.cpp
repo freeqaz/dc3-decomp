@@ -12,32 +12,45 @@
 #include "os/System.h"
 #include "utl/BinStream.h"
 #include "utl/Symbol.h"
+#ifdef HX_NATIVE
+#include <algorithm>
+#endif
 
 #ifdef HX_NATIVE
-// Suppress ObjPtrVec node erasure during ReplaceList walks to prevent
-// vector element shifting from invalidating ObjRef ring prev/next pointers.
+Hmx::Object *Hmx::Object::sDeleting;
 bool gSuppressRefErase = false;
+std::vector<DeferredPurge> gDeferredPurges;
 
 void ObjRef::ReplaceList(Hmx::Object *obj) {
-    bool oldSuppress = gSuppressRefErase;
-    gSuppressRefErase = true;
-
     // Snapshot all refs into a vector before replacing.
     // Replace handlers (e.g. RndGroup::Replace, RndMesh::Replace) can move
     // refs between rings as a side effect, corrupting the ring walk.
-    // By snapshotting first, we avoid following next-pointers that have been
-    // re-linked into a different object's ref ring.
     std::vector<ObjRef *> refs;
     for (ObjRef *cur = next; cur != this && cur != nullptr; cur = cur->next) {
         refs.push_back(cur);
     }
     Clear();
 
-    for (ObjRef *ref : refs) {
-        ref->Replace(obj);
+    {
+        SuppressEraseScope guard;
+        for (ObjRef *ref : refs) {
+            ref->Replace(obj);
+        }
     }
 
-    gSuppressRefErase = oldSuppress;
+    // At outermost ReplaceList (gSuppressRefErase restored to false),
+    // purge null entries from all ObjPtrVecs that deferred erases.
+    if (!gSuppressRefErase && !gDeferredPurges.empty()) {
+        // Deduplicate — same ObjPtrVec may have registered multiple times
+        std::sort(gDeferredPurges.begin(), gDeferredPurges.end(),
+            [](const DeferredPurge &a, const DeferredPurge &b) { return a.vec < b.vec; });
+        auto last = std::unique(gDeferredPurges.begin(), gDeferredPurges.end(),
+            [](const DeferredPurge &a, const DeferredPurge &b) { return a.vec == b.vec; });
+        for (auto it = gDeferredPurges.begin(); it != last; ++it) {
+            it->purge(it->vec);
+        }
+        gDeferredPurges.clear();
+    }
 }
 #endif
 
@@ -297,23 +310,6 @@ const char *Hmx::Object::FindPathName() {
 
 void Hmx::Object::ReplaceRefs(Hmx::Object *obj) {
     if (mRefs.begin() != mRefs.end()) {
-#ifdef HX_NATIVE
-        // Validate ref ring before walking — corrupt rings crash during merge
-        ObjRef *probe = mRefs.next;
-        int count = 0;
-        while (probe != &mRefs && probe != nullptr && count < 100000) {
-            if (!probe->next || !probe->prev) {
-                fprintf(stderr, "DC3 Native: ReplaceRefs skipping corrupt ring for '%s'\n", Name());
-                return;
-            }
-            probe = probe->next;
-            count++;
-        }
-        if (count >= 100000 || probe == nullptr) {
-            fprintf(stderr, "DC3 Native: ReplaceRefs skipping corrupt/infinite ring for '%s'\n", Name());
-            return;
-        }
-#endif
         ObjRef other(mRefs);
         other.prev->next = &other;
         other.next->prev = &other;
@@ -360,7 +356,11 @@ bool Hmx::Object::HasPropertySink(Hmx::Object *o, DataArray *a) {
 
 void Hmx::Object::RemoveSink(Hmx::Object *o, Symbol s) {
 #ifdef HX_NATIVE
-    if (!this) { MILO_WARN("RemoveSink called on null object"); return; }
+    // 18+ callers (BustAMovePanel, HollaBackMinigame, HamProviderPrinter, etc.)
+    // call AddSink/RemoveSink on null globals (TheMaster, TheHamProvider, etc.).
+    // Those callers are decomp-matched PPC source — can't add null guards there.
+    // This UB check is the only safe catch point until globals are stub-initialized.
+    if (!this) return;
 #endif
     if (mSinks)
         mSinks->RemoveSink(o, s);
@@ -368,7 +368,7 @@ void Hmx::Object::RemoveSink(Hmx::Object *o, Symbol s) {
 
 MsgSinks *Hmx::Object::GetOrAddSinks() {
 #ifdef HX_NATIVE
-    if (!this) { MILO_WARN("GetOrAddSinks called on null object"); return nullptr; }
+    if (!this) return nullptr;
 #endif
     if (!mSinks) {
         mSinks = new MsgSinks(this);
@@ -378,14 +378,14 @@ MsgSinks *Hmx::Object::GetOrAddSinks() {
 
 void Hmx::Object::AddSink(Hmx::Object *o, Symbol s1, Symbol s2, SinkMode sm, bool b) {
 #ifdef HX_NATIVE
-    if (!this) { MILO_WARN("AddSink called on null object"); return; }
+    if (!this) return;
 #endif
     GetOrAddSinks()->AddSink(o, s1, s2, sm, b);
 }
 
 void Hmx::Object::AddPropertySink(Hmx::Object *o, DataArray *a, Symbol s) {
 #ifdef HX_NATIVE
-    if (!this) { MILO_WARN("AddPropertySink called on null object"); return; }
+    if (!this) return;
 #endif
     GetOrAddSinks()->AddPropertySink(o, a, s);
 }

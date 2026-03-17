@@ -19,6 +19,10 @@
 #include "world/SpotlightDrawer.h"
 #include <math.h>
 
+#ifdef HX_NATIVE
+NgSpotlightDrawer::SpotlightResources *NgSpotlightDrawer::sSharedResources;
+#endif
+
 void GetLightPosition(Spotlight *s, Vector3 &v) {
     v = s->WorldXfm().v;
     Vector3 offset;

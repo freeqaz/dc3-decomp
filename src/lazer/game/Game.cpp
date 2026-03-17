@@ -360,6 +360,9 @@ void Game::Poll() {
 
     if (!HandleWait()) {
         if (!TheSongSequence.Done()) {
+#ifdef HX_NATIVE
+            if (!mGameInput) return;
+#endif
             float songMs = mGameInput->CurrentMs(mRealTime);
             TheTaskMgr.SetSeconds(songMs * 0.001f, false);
         }
@@ -383,7 +386,11 @@ void Game::Poll() {
             TheTaskMgr.ResetBeatTaskTime(beat);
         }
         sLastBeat = beat;
-        if (!unk68 && songMs >= 0 && !TheHamDirector->GetGameStartHold()) {
+        if (!unk68 && songMs >= 0
+#ifdef HX_NATIVE
+            && TheHamDirector
+#endif
+            && !TheHamDirector->GetGameStartHold()) {
             MILO_LOG("Game::Poll: intro timer expired\n");
             static Message intro_over("intro_over");
             TheGamePanel->Handle(intro_over, true);
@@ -770,11 +777,7 @@ bool Game::IsLoaded() {
                 return false;
             }
             if (mUseMoveGraph && !TheHamDirector->IsWorldLoaded()) {
-#ifdef HX_NATIVE
-                // Async file loading — proceed without waiting
-#else
                 return false;
-#endif
             }
             TheSongDB->PostLoad(mMaster->GetMidiParserMgr()->GetEventsList());
             PostLoad();
@@ -811,11 +814,7 @@ bool Game::IsLoaded() {
         }
         if (mLoadState == 1) {
             if (mUseMoveGraph && !TheHamDirector->IsMoveMergerFinished()) {
-#ifdef HX_NATIVE
-                // Async move merger — proceed without waiting
-#else
                 return false;
-#endif
             }
             MILO_LOG("Game::IsLoaded() - Done waiting for MoveGraph\n");
             mLoadState = 2;

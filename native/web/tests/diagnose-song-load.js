@@ -70,6 +70,7 @@ function waitForServer(url, timeoutMs = 15000) {
         'FileMerger': false,
         'song merger': false,
         'IsLoaded': false,
+        'DONE (state 4)': false,
         'StartIntro': false,
     };
 
@@ -108,7 +109,10 @@ function waitForServer(url, timeoutMs = 15000) {
             const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
             const entry = { elapsed, type: msg.type(), text };
             allLogs.push(entry);
-            lastLogTime = Date.now();
+            // Only count non-empty lines as "activity" for hang detection
+            if (text.trim().length > 0) {
+                lastLogTime = Date.now();
+            }
 
             if (VERBOSE || msg.type() === 'error') {
                 console.log(`  [${elapsed}s ${msg.type()}] ${text}`);
@@ -159,89 +163,149 @@ function waitForServer(url, timeoutMs = 15000) {
         // Bit positions: X/A=6, Circle/B=5, Start=11, DUp=12, DDown=14, DLeft=15, DRight=13
         // We must hold buttons for multiple frames (>100ms at 30fps) for the engine to see them.
 
-        async function holdButton(bitMask, holdMs = 200, label = '') {
-            if (label) log(`  Button: ${label} (0x${bitMask.toString(16)}) hold=${holdMs}ms`);
-            await page.evaluate((mask) => { window._dc3Keys |= mask; }, bitMask);
+        // Use real keyboard events (matching what the user does manually).
+        // Must click the canvas first to ensure it has focus for key events.
+        await page.click('canvas');
+
+        async function pressKey(key, holdMs = 150, label = '') {
+            if (label) log(`  Key: ${label} (${key})`);
+            await page.keyboard.down(key);
             await new Promise(r => setTimeout(r, holdMs));
-            await page.evaluate((mask) => { window._dc3Keys &= ~mask; }, bitMask);
-            await new Promise(r => setTimeout(r, 300)); // gap between presses
+            await page.keyboard.up(key);
+            await new Promise(r => setTimeout(r, 200));
         }
 
-        const BTN_A     = 1 << 6;   // kPad_X (confirm)
-        const BTN_START = 1 << 11;  // kPad_Start
-        const BTN_DOWN  = 1 << 14;  // kPad_DDown
-        const BTN_UP    = 1 << 12;  // kPad_DUp
+        // Wait for a specific screen to appear in the transition logs
+        async function waitForScreen(screenName, timeoutMs = 10000) {
+            log(`  Waiting for screen: ${screenName}...`);
+            const deadline = Date.now() + timeoutMs;
+            while (Date.now() < deadline) {
+                // Check for "will enter '<screenName>'" in logs
+                const found = allLogs.some(l =>
+                    l.text.includes(`will enter '${screenName}'`)
+                );
+                if (found) {
+                    log(`  Screen '${screenName}' entered`);
+                    await new Promise(r => setTimeout(r, 500)); // let it stabilize
+                    return true;
+                }
+                await new Promise(r => setTimeout(r, 200));
+            }
+            log(`  TIMEOUT waiting for screen '${screenName}'`);
+            return false;
+        }
 
-        // Step 1: Dismiss attract screen (Start or A)
-        await holdButton(BTN_START, 200, 'Start (dismiss attract)');
-        await new Promise(r => setTimeout(r, 1000)); // wait for transition
+        // Navigate: attract → title → main → choose_mode → song_select
+        await pressKey(' ', 150, 'Start (dismiss attract)');
+        await waitForScreen('title_screen');
 
-        // Step 2: Press Start again if needed (some screens need it)
-        await holdButton(BTN_START, 200, 'Start (skip title)');
-        await new Promise(r => setTimeout(r, 1500)); // wait for main menu
+        await pressKey(' ', 150, 'Start (skip title)');
+        await waitForScreen('main_screen');
 
-        // Step 3: Press A to confirm on main menu (selects first option = "Perform")
-        await holdButton(BTN_A, 200, 'A (main menu: Perform)');
+        await pressKey('Enter', 150, 'A (main menu → choose_mode)');
+        await waitForScreen('choose_mode_screen');
+
+        await pressKey('Enter', 150, 'A (choose mode → song_select)');
+        if (!await waitForScreen('song_select_screen')) {
+            log('FAIL: never reached song_select_screen');
+            exitCode = 1;
+            throw new Error('song_select_screen timeout');
+        }
+
+        // Extra stabilization for song select to populate
         await new Promise(r => setTimeout(r, 1500));
+        await page.screenshot({ path: '/tmp/claude-1000/song_select.png' });
+        log('Screenshot: song_select_screen');
 
-        // Step 4: Press A for mode selection (choose_mode_screen → first mode)
-        await holdButton(BTN_A, 200, 'A (choose mode)');
-        await new Promise(r => setTimeout(r, 2000));
+        // Navigate down past the tier header to a song
+        for (let i = 0; i < 3; i++) {
+            await pressKey('ArrowDown', 150, `Down (${i+1})`);
+            await new Promise(r => setTimeout(r, 300));
+        }
+        await page.screenshot({ path: '/tmp/claude-1000/after_down.png' });
+        log('Screenshot: after Down x3');
 
-        // Step 5: We're on song_select_screen. The list shows tier headers.
-        // Press A to expand the tier header.
-        await holdButton(BTN_A, 200, 'A (expand tier)');
-        await new Promise(r => setTimeout(r, 1500));
+        // Select the song — after this the game may hang, so we use
+        // page.evaluate for key injection (non-blocking) + setTimeout monitoring
+        await pressKey('Enter', 150, 'A (select song)');
+        log('Song selected, monitoring for loading/hang...');
 
-        // Step 6: Navigate down to a song within the expanded tier
-        await holdButton(BTN_DOWN, 200, 'Down (to song)');
-        await new Promise(r => setTimeout(r, 500));
-        await holdButton(BTN_DOWN, 200, 'Down (to song 2)');
-        await new Promise(r => setTimeout(r, 500));
+        // Non-blocking confirmation key presses via evaluate (won't block if page hangs)
+        // The game auto-transitions through multiuser→loading→game_screen on native,
+        // but press A/Start in case any confirmation dialogs appear.
+        const confirmKeys = async () => {
+            for (let i = 0; i < 5; i++) {
+                try {
+                    await Promise.race([
+                        pressKey('Enter', 150, `A (confirm ${i+1})`),
+                        new Promise(r => setTimeout(r, 3000)),
+                    ]);
+                    await new Promise(r => setTimeout(r, 500));
+                } catch { break; }
+            }
+            try {
+                await Promise.race([
+                    pressKey(' ', 150, 'Start (ready up)'),
+                    new Promise(r => setTimeout(r, 3000)),
+                ]);
+            } catch {}
+        };
 
-        // Step 7: Select the song
-        await holdButton(BTN_A, 200, 'A (select song)');
-        await new Promise(r => setTimeout(r, 2000));
-
-        // Step 8: Confirm any follow-up screens (difficulty, ready, etc.)
-        await holdButton(BTN_A, 200, 'A (confirm)');
-        await new Promise(r => setTimeout(r, 1000));
-        await holdButton(BTN_A, 200, 'A (confirm 2)');
-        await new Promise(r => setTimeout(r, 1000));
-        await holdButton(BTN_START, 200, 'Start (ready up)');
-        await new Promise(r => setTimeout(r, 500));
-
-        // -- Monitor for hang during song loading --
-        log(`Monitoring for ${TIMEOUT_S}s (hang threshold: ${HANG_TIMEOUT_S}s)...`);
-        const monitorDeadline = Date.now() + TIMEOUT_S * 1000;
+        // Run confirmation keys and monitoring concurrently
         let hangDetected = false;
+        const monitor = async () => {
+            let doneAt = null; // timestamp when DONE (state 4) was seen
+            for (let tick = 0; tick < TIMEOUT_S; tick++) {
+                await new Promise(r => setTimeout(r, 1000));
 
-        while (Date.now() < monitorDeadline) {
-            await new Promise(r => setTimeout(r, 1000));
+                const now = Date.now();
+                const silentMs = now - lastLogTime;
+                const elapsedTotal = ((now - startTime) / 1000).toFixed(0);
 
-            const silentMs = Date.now() - lastLogTime;
+                if (tick % 5 === 0) {
+                    const lastLog = allLogs[allLogs.length - 1];
+                    log(`  ${elapsedTotal}s: ${allLogs.length} logs, silent=${(silentMs/1000).toFixed(1)}s, last="${lastLog?.text?.substring(0, 60)}"`);
+                }
 
-            // Report progress every 10s
-            const elapsedTotal = ((Date.now() - startTime) / 1000).toFixed(0);
-            if (parseInt(elapsedTotal) % 10 === 0) {
-                const lastLog = allLogs[allLogs.length - 1];
-                log(`  ${elapsedTotal}s: ${allLogs.length} logs, silent=${(silentMs/1000).toFixed(1)}s, last="${lastLog?.text?.substring(0, 60)}"`);
+                if (allLogs.length > 20 && silentMs > HANG_TIMEOUT_S * 1000) {
+                    log(`HANG DETECTED at ${elapsedTotal}s — no output for ${(silentMs/1000).toFixed(1)}s`);
+                    hangDetected = true;
+                    exitCode = 2;
+                    // Take a screenshot of whatever state we're in
+                    try {
+                        await Promise.race([
+                            page.screenshot({ path: '/tmp/claude-1000/gameplay_hang.png' }),
+                            new Promise(r => setTimeout(r, 3000)),
+                        ]);
+                        log('Screenshot: gameplay_hang.png');
+                    } catch {}
+                    return;
+                }
+
+                // After loading completes, wait extra time for gameplay to render
+                if (milestones['DONE (state 4)'] && !doneAt) {
+                    doneAt = now;
+                    log('Song loading completed! Waiting for gameplay to render...');
+                }
+
+                // 10s after loading done, take gameplay screenshot
+                if (doneAt && now - doneAt > 10000) {
+                    try {
+                        await Promise.race([
+                            page.screenshot({ path: '/tmp/claude-1000/gameplay.png' }),
+                            new Promise(r => setTimeout(r, 3000)),
+                        ]);
+                        log('Screenshot: gameplay.png (10s after loading)');
+                    } catch {}
+                    return;
+                }
             }
+        };
 
-            // Hang detection
-            if (allLogs.length > 20 && silentMs > HANG_TIMEOUT_S * 1000) {
-                log(`HANG DETECTED at ${elapsedTotal}s — no output for ${(silentMs/1000).toFixed(1)}s`);
-                hangDetected = true;
-                exitCode = 2;
-                break;
-            }
-
-            // Success: game reached loading state 4
-            if (milestones['DONE (state 4)']) {
-                log('Song loading completed successfully!');
-                break;
-            }
-        }
+        await Promise.race([
+            Promise.all([confirmKeys(), monitor()]),
+            new Promise(r => setTimeout(r, (TIMEOUT_S + 5) * 1000)),
+        ]);
 
         // -- Results --
         log('');

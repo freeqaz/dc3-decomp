@@ -47,9 +47,11 @@ Env vars:
 ## Historical: UI Layout Fix (Session 41) — RESOLVED
 Transform::Multiply decomp bug (y/z coefficient swap in mtx.cpp) caused all transform compositions to produce wrong results. Fixed to 100% match. See `archive/screenshots/session41/` for before/after.
 
-## CRITICAL BLOCKER: DTA Loading Subsystem
+## DTA Loading Subsystem — RESOLVED (Session 62+)
 
-**The native port cannot fully function without a DTA content/scripting system.** DTA (Data Array) files are the game's primary configuration and scripting format. They drive:
+DTA content/scripting system works on native. 62 songs load from DTA configs, screen
+transitions driven by DTA handlers + native auto-advance timers. See
+[DTA_FLOW_V2_PLAN.md](DTA_FLOW_V2_PLAN.md) for full resolution. DTA files drive:
 
 ### What DTAs control
 1. **Screen transitions** — DTA scripts define `next_screen`, screen flow logic, and transition triggers
@@ -242,7 +244,7 @@ HamDirector (`src/system/hamobj/HamDirector.cpp:137-202`) exposes ~40+ DTA handl
 - See `docs/native/ANIMATION_PIPELINE.md` for full pipeline documentation
 
 ### 8.4 Remaining Polish Items
-- [ ] **Move graph loading** — `"Failed to load move graph for: <song>"` — DanceRemixer::Init requires TheMoveMgr->MoveParents() to be populated. Without this, autoplay/flashcards/phrase meters/scoring all dead. Root cause: `HamDirector::OnPopulateMoveMgr()` → `MoveMgr::InitSong()` → `LoadMoveData()` → `MoveGraph::Copy()` → `CacheLinks()` crashes — `MoveVariant::CacheLinks` interprets serialized Xbox string pointers as native pointers (SIGSEGV at 0x3f800000 = float 1.0f read as char*). Also `ImportMoveData("../meta/move_data.dta")` fails (file not found — ark-relative path). Fix: MoveGraph/MoveParent/MoveVariant deserialization needs endian-aware Load() for native, or move_data.dta needs to be extracted and path-resolved.
+- [x] **FileMerger convergence** — All 4 phases complete (2026-03-17). Phase 1+2: forced async loading, removed PollForLoading/App.cpp/HamDirector hacks, engine pipeline drives loading via world.fm. Phase 3: removed Game::IsLoaded async bypasses (IsWorldLoaded, IsMoveMergerFinished), removed GamePanel::StartIntro native block, unguarded Song::SyncState (sync-wait loop guarded for native), removed SyncState stub. Phase 4: removed dead code (SetNativeVenueWorld, DebugWorldLoad), simplified logging. Runtime verified on glitterati + dclive — PollForLoading reaches state 4, no crashes. See [FILEMERGER_CONVERGENCE.md](FILEMERGER_CONVERGENCE.md).
 - [ ] **RockCentral::ManageJob unstub** — Currently guarded with `#ifdef HX_NATIVE delete job; return;`. The actual TheServer needs null-safe ManageJob or the network layer needs proper stub initialization. Crashes on `SendDropInDatapoint` / `SendDropOutDatapoint` during game start.
 - [ ] **Flashcard rendering during game_screen** — `TheUI->Draw()` is skipped on game_screen (skipUIDraw) to prevent white rectangle artifacts. This also prevents flashcard_dock_panel from rendering. Need selective panel drawing or separate flashcard draw pass.
 - [ ] **Phrase meter objects** — Need to verify phrase_meter0/phrase_meter1 exist in venue worlds. These are HamPhraseMeter objects looked up by MoveDir from the venue WorldDir.
@@ -254,46 +256,25 @@ HamDirector (`src/system/hamobj/HamDirector.cpp:137-202`) exposes ~40+ DTA handl
 
 ---
 
-## Known Issues to Fix
-| Issue | File | Status |
-|-------|------|--------|
-| HamRibbon::UpdateChase resize-before-copy UB | HamRibbon.cpp | **FIXED** |
-| UIListWidget::DisplayColor assert on corrupted mElementState | UIListWidget.cpp | **FIXED** |
-| IsAnimating() blocks input forever | HamNavList.cpp + Anim.cpp | **FIXED** (AnimTask auto-null) |
-| mSink null — button dispatch broken | UI.cpp | **FIXED** (set on transition) |
-| Controller mode gate blocks input | GestureMgr.cpp | **FIXED** (force on) |
-| TheHamProvider null crash | HamNavList.cpp + App.cpp | **FIXED** (factory stub) |
-| GameMode::SetMode crash | GameMode.cpp | **FIXED** (skip eval on native) |
-| ScrollDirection vertical mode missing | Utl.cpp | **FIXED** (100% match) |
-| Transform::Multiply decomp bug (y/z swap) | mtx.cpp | **FIXED** (Session 41) |
-| UI elements mispositioned | Rendering pipeline | **FIXED** (Session 41) |
-| Text labels missing | Text/Font pipeline | **FIXED** (Session 47) |
-| Flow→PropAnim not animating | Animation pipeline | **FIXED** (Session 58) |
-| ObjRef ring crash during venue merge | Dir.h `ObjDirPtr(C*)`, Object.cpp, FileMerger.cpp | **ROOT CAUSE FIXED** (extra `AddRef` removed); legacy validation/recovery guards still present pending crowd/audio/song revalidation |
-| Character dark silhouette | Zero-color LightPreset lights | **FIXED** (Session 59 — fallback lighting) |
-| Null crashes on game_screen (3) | HamCharacter/HamCamShot/PoseFatalities null ptrs | **FIXED** (Session 59) |
-| HUD move cards white rectangles | Kinect pose_flash render targets | **FIXED** (Session 72 — filtered pose_flash meshes) |
-| Crowd/audio merges crash-skipped | Previously ObjRef ring corruption | **FIXED** (Session 67 — audio merge works, MOGG playback operational) |
-| MoviePanel::IsLoaded blocks forever | mMovie.Ready() stub returns false | **FIXED** (Session 62 — `#ifdef HX_NATIVE` bypass) |
-| Static scene (no animation) | Character anim + camera cuts + audio timing all working | **FIXED** (Sessions 63-68 — full gameplay animation pipeline) |
-| Empty lists (no content) | Content system | **FIXED** (Session 62 — 49 items in song_select) |
-| Blown-out bloom whites | Additive bloom composite | **FIXED** (Session 69 — screen blend prevents blowout) |
-| Zero-color lights filling slots | LightPreset placeholders in LightsApprox | **FIXED** (Session 69 — brightness-sorted selection) |
-| Post-proc not in screenshots | Headless check blocked post-proc | **FIXED** (Session 69 — removed `!mGpu.IsHeadless()` gate) |
-| RndFlare invisible on native | No GPU occlusion query readback | **FIXED** (Session 69 — occlusion bypass) |
-| All songs loading same venue | App.cpp hardcoded glitterati fallback | **FIXED** (Session 70 — venue metadata from HamSongMetadata) |
-| DCI venue stuck on loading | Audio loading circular dependency in Game::IsLoaded() | **FIXED** (Session 70 — initiate audio from load poll) |
-| Characters blown out/overexposed | All venue lights active simultaneously | **FIXED** (Session 70 — light energy cap) |
-| DTA script crashes on native | Debug::Fail calls abort() | **FIXED** (Session 70 — non-fatal by default) |
-| TheChallenges null crash on main menu | MetaPanel.cpp — Challenges::Init() suppressed | **FIXED** (Session 74 — enabled Init on native, reads DTA config only) |
-| FreestyleMoveRecorder PPC intrinsics | __fsel, STLport not available on native | **FIXED** (Session 74 — native stubs for Kinect gesture code) |
-| SpecialOfferEnumJob undefined vtable | HamStorePanel.cpp — missing dtor | **FIXED** (Session 73 — implemented dtor) |
+## Known Issues — All Historical Issues Resolved
 
-## Crashes Fixed (Session 59)
-1. ObjRef ring corruption producer bug in `ObjDirPtr(C*)` → fixed by removing the extra `AddRef`; direct lifetime regression test added
-2. RndShadowMap::PrepShadow undefined → runtime link error (implemented)
-3. RndFlare::CalcRect undefined → runtime link error (implemented)
-4. SpotlightDrawer::RemoveFromLists undefined → runtime link error (implemented)
-5. RndTexBlendController::GetBlendState undefined → runtime link error (implemented)
-6. Signal handler consumed after first recovery (SA_RESETHAND removed)
-7. All previous session crashes (see NATIVE_PORT_STATUS.md for full history)
+All 30+ tracked issues from Sessions 41-74 are FIXED. See `NATIVE_PORT_STATUS.md` for
+the session-by-session fix log. Key root cause fixes:
+- ObjRef ring corruption: `ObjDirPtr(C*)` double-AddRef removed (Session 59)
+- Transform decomp bug: y/z coefficient swap in mtx.cpp (Session 41)
+- Audio pipeline: VorbisReader decode loop + ring buffer flow control (Session 67)
+- Post-processing: bloom screen blend, light energy cap, brightness sort (Sessions 69-70)
+
+**Open item**: ObjRef ring validation guard in `Object.cpp:300-316` was kept as safety
+net after the root cause fix. Now that crowd+audio+77 sessions are stable, this guard
+should be tested for removal. See [HACK_AUDIT.md](HACK_AUDIT.md) for full analysis.
+
+## Hack Audit (2026-03-16)
+
+See [HACK_AUDIT.md](HACK_AUDIT.md) for a comprehensive audit of all `#ifdef HX_NATIVE`
+guards, categorized by severity (CRITICAL / HIGH / MEDIUM / LOW). Key findings:
+- **5 critical hacks** masking real bugs (ring corruption guard, null-this UB, CharHair
+  bypass, CharClipGroup null purge, erase suppression flag)
+- **4 high-severity hacks** masking incomplete implementations (GetObj/Property warn
+  downgrades, ObjDirPtr replace guard, NewObject post-assert return)
+- **~730 low/acceptable** platform differences (LP64, endianness, Kinect removal, STL)

@@ -12,6 +12,10 @@
 #include "utl/Str.h"
 #include "xdk/XAPILIB.h"
 
+#ifdef HX_NATIVE
+XCallbackFunc *PlatformMgr::sXShowCallback;
+#endif
+
 PlatformMgr ThePlatformMgr;
 
 bool PlatformMgr::IsAnyUserSignedIntoLive() const {

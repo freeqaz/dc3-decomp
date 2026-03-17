@@ -23,6 +23,10 @@
 extern void FlushTransparentDraws();
 #endif
 
+#ifdef HX_NATIVE
+bool PanelDir::sAlwaysNeedFocus;
+#endif
+
 bool gSendFocusMsg = true;
 
 #ifdef HX_NATIVE

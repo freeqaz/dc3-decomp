@@ -13,6 +13,10 @@
 #include "rndobj/Trans.h"
 #include "rndobj/Utl.h"
 
+#ifdef HX_NATIVE
+bool PhysicsVolume::sShowing;
+#endif
+
 namespace {
     Box gPhysicsVolumeBox;
 }

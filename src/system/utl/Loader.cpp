@@ -14,6 +14,10 @@
 #include "utl/Option.h"
 #include "utl/Std.h"
 
+#ifdef HX_NATIVE
+bool (*LoadMgr::sFileOpenCallback)(const char *);
+#endif
+
 LoadMgr TheLoadMgr;
 int gLoadCount;
 

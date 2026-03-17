@@ -19,6 +19,10 @@
 #include "ui/UIPanel.h"
 #include "utl/Symbol.h"
 
+#ifdef HX_NATIVE
+HelpBarPanel *HelpBarPanel::sInstance;
+#endif
+
 HelpBarPanel::HelpBarPanel()
     : mLeftHandNavList(0), mAll(0), mSaveDeactivationPending(false), mDisabled(false), mAllowController(true),
       mSaving(false), mWriteIconShowing(false), mWaveGestureEnabled(false), mSyncedPanel(0) {

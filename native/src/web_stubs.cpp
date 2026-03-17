@@ -169,10 +169,6 @@ DataNode CharSignalApplier::Handle(DataArray *d, bool b) { return Hmx::Object::H
 
 // ChallengeSortByScore / ChallengeScoreCmp — now in ChallengeSortByScore.cpp
 
-#include "char/Waypoint.h"
-
-std::list<Waypoint *> *Waypoint::sWaypoints = nullptr;
-
 // ============================================================================
 // Bink video — not supported in browser
 // ============================================================================

@@ -67,6 +67,12 @@
 #include "xdk/XAPILIB.h"
 
 std::vector<FilterVersion *> MoveDir::sFilterVersions;
+#ifdef HX_NATIVE
+bool MoveDir::sGameRecord;
+bool MoveDir::sGameRecord2Player;
+float MoveDir::sLatencySeconds;
+float MoveDir::sPLFMinTimeError;
+#endif
 
 namespace {
     static Hmx::Color sGray(0.5, 0.5, 0.5, 1);

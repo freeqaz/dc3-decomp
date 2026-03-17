@@ -14,6 +14,11 @@
 #include "utl/MemMgr.h"
 #include <list>
 
+#ifdef HX_NATIVE
+FileCacheHelper *FileCache::sWavCacheHelper;
+FileCacheHelper *FileCache::sResourceCacheHelper;
+#endif
+
 std::list<FileCache *> gCaches;
 
 #pragma region FileCacheEntry

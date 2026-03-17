@@ -45,6 +45,11 @@ END_MESSAGE
 
 const int HamNavList::sListStateMaxDisplay = HamListRibbon::sNumListSelectable + 6;
 bool HamNavList::sForceDisengage;
+#ifdef HX_NATIVE
+float HamNavList::sSlideTrendAmount;
+float HamNavList::sSlideSmoothAmount;
+bool HamNavList::sLastSelectInControllerMode;
+#endif
 
 NavSelectMsg::NavSelectMsg(Symbol sym, int index, HamNavList *list, bool selecting)
     : Message(Type(), sym, index, (Hmx::Object *)list, selecting) {}
