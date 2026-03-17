@@ -12,6 +12,8 @@ public:
     bool GetInvokeDetected() const { return mInvokeDetected; }
 
 private:
+    bool CalcInPose(const Skeleton &, float);
+    bool UpdateBodyPlane(const Skeleton &, float);
     float GetBend(const Vector3 &, const Vector3 &, const Vector3 &) const;
 
     Vector3DESmoother unk4; // 0x4

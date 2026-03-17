@@ -26,6 +26,7 @@ private:
     void TryToStartSwipe(const Vector3 &, const Skeleton &);
     float GetPathLength() const;
     float GetPathError() const;
+    bool IsPathAcceptable() const;
     void SwipeFailed(const Skeleton &);
     void CullPath();
     void DrawPath(const std::list<Vector3> &, class SkeletonViz &, class Hmx::Color, const Vector3 &) const;

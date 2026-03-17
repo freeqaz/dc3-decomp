@@ -86,6 +86,37 @@ void DirectionGestureFilterSingleUser::Draw(const Skeleton &skeleton, SkeletonVi
 
 static float sValidHandFloats[4] = { 0.2f, 2.0f, 0.3f, 0.3f };
 
+bool DirectionGestureFilterSingleUser::HandAtSide(
+    const Skeleton &skeleton, float radius, float xScale, float elbowBlend
+) const {
+    float heightDiff =
+        skeleton.TrackedJoints()[kJointHead].mJointPos[0].y
+        - skeleton.TrackedJoints()[kJointFootRight].mJointPos[0].y;
+
+    const TrackedJoint &hand = skeleton.HandJoint(mHandSide);
+    const TrackedJoint &hip = skeleton.HipJoint(mHandSide);
+    const TrackedJoint &knee = skeleton.KneeJoint(mHandSide);
+    const TrackedJoint &elbow = skeleton.ElbowJoint(mHandSide);
+
+    float sumY = knee.mJointPos[0].y + hip.mJointPos[0].y;
+    float sumZ = knee.mJointPos[0].z + hip.mJointPos[0].z;
+    float elbowX = elbow.mJointPos[0].x;
+    float handY = hand.mJointPos[0].y;
+    float elbowOffset = radius * elbowBlend + elbowX;
+    float handX = hand.mJointPos[0].x;
+    float handZ = hand.mJointPos[0].z;
+    float threshold = heightDiff * 0.591715931892395f;
+    sumY = sumY * 0.5f;
+    sumZ = sumZ * 0.5f;
+    float dx = handX - elbowOffset;
+    threshold = threshold * radius;
+    float dy = handY - sumY;
+    float dz = handZ - sumZ;
+    dx = dx * xScale;
+    float dist = sqrtf(dx * dx + dy * dy + dz * dz);
+    return dist <= threshold;
+}
+
 bool DirectionGestureFilterSingleUser::IsHandValid(const Skeleton &skeleton) const {
     return IsValidSwipePosition(skeleton)
         || (mArcDetector.NumJointsInPath() > 1U
@@ -314,4 +345,58 @@ void DirectionGestureFilterDoubleUser::SetAllowAboveShoulder(bool allow) {
 void DirectionGestureFilterDoubleUser::SetHighButtonMode(bool set) {
     mFilter1->SetHighButtonMode(set);
     mFilter2->SetHighButtonMode(set);
+}
+
+void DirectionGestureFilterDoubleUser::GetValidSkeletons(int &out1, int &out2) const {
+    int id1 = TheGestureMgr->GetPlayerSkeletonID(0);
+    int id2 = TheGestureMgr->GetPlayerSkeletonID(1);
+    int idx;
+    if (id1 != -1) {
+        idx = TheGestureMgr->GetSkeletonIndexByTrackingID(id1);
+    } else {
+        idx = -1;
+    }
+    out1 = idx;
+    if (id2 != -1) {
+        idx = TheGestureMgr->GetSkeletonIndexByTrackingID(id2);
+    } else {
+        idx = -1;
+    }
+    out2 = idx;
+    if (out1 != -1) {
+        if (!TheGestureMgr->IsSkeletonValid(out1)) {
+            out1 = -1;
+        }
+    }
+    if (out2 != -1) {
+        if (!TheGestureMgr->IsSkeletonValid(out2)) {
+            out2 = -1;
+        }
+    }
+}
+
+bool DirectionGestureFilterDoubleUser::IsHandValid(const Skeleton &skeleton) const {
+    int i1, i2;
+    GetValidSkeletons(i1, i2);
+    bool result = false;
+    if (i1 >= 0 && mFilter1->IsHandValid(TheGestureMgr->GetSkeleton(i1))
+        && mStillFilters[0]->StandingStill()) {
+        result = true;
+    } else if (i2 >= 0 && mFilter2->IsHandValid(TheGestureMgr->GetSkeleton(i2))
+               && mStillFilters[1]->StandingStill()) {
+        result = true;
+    }
+    return result;
+}
+
+bool DirectionGestureFilterDoubleUser::IsValidScrollPos(const Skeleton &skeleton) const {
+    int i1, i2;
+    GetValidSkeletons(i1, i2);
+    bool result = false;
+    if (i1 >= 0 && mFilter1->IsValidScrollPos(TheGestureMgr->GetSkeleton(i1))) {
+        result = true;
+    } else if (i2 >= 0 && mFilter2->IsValidScrollPos(TheGestureMgr->GetSkeleton(i2))) {
+        result = true;
+    }
+    return result;
 }

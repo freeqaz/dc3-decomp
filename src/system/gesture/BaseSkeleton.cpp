@@ -95,3 +95,122 @@ void BaseSkeleton::NormPos(SkeletonCoordSys cs, SkeletonJoint joint, Vector3 &v)
     JointPos(cs, joint, v40);
     LimbNormPos(cs, joint, true, v40, v);
 }
+
+void BaseSkeleton::LimbNormPos(
+    SkeletonCoordSys cs,
+    SkeletonJoint joint,
+    bool normalize,
+    const Vector3 &pos,
+    Vector3 &result
+) const {
+    SkeletonJoint rootJoint;
+    SkeletonJoint joint1;
+    SkeletonJoint joint2;
+    SkeletonJoint joint3;
+    SkeletonBone bone1;
+    SkeletonBone bone2;
+    SkeletonBone bone3;
+
+    if (cs == kCoordLeftArm || cs == kCoordRightArm) {
+        bool right = cs == kCoordRightArm;
+        rootJoint = right ? kJointShoulderRight : kJointShoulderLeft;
+        joint1 = right ? kJointElbowRight : kJointElbowLeft;
+        joint2 = right ? kJointWristRight : kJointWristLeft;
+        joint3 = right ? kJointHandRight : kJointHandLeft;
+        bone1 = right ? kBoneArmUpperRight : kBoneArmUpperLeft;
+        bone2 = right ? kBoneArmLowerRight : kBoneArmLowerLeft;
+        bone3 = right ? kBoneHandRight : kBoneHandLeft;
+    } else {
+        MILO_ASSERT(cs == kCoordLeftLeg || cs == kCoordRightLeg, 0x10E);
+        bool right = cs == kCoordRightLeg;
+        rootJoint = right ? kJointHipRight : kJointHipLeft;
+        joint1 = right ? kJointKneeRight : kJointKneeLeft;
+        joint2 = right ? kJointAnkleRight : kJointAnkleLeft;
+        joint3 = right ? kJointFootRight : kJointFootLeft;
+        bone1 = right ? kBoneLegUpperRight : kBoneLegUpperLeft;
+        bone2 = right ? kBoneLegLowerRight : kBoneLegLowerLeft;
+        bone3 = right ? kBoneFootRight : kBoneFootLeft;
+    }
+
+    result = pos;
+    if (joint != rootJoint) {
+        if (joint == joint1 || joint == joint2 || joint == joint3) {
+            float totalLength = BoneLength(bone1, kCoordCamera);
+            if (joint == joint2 || joint == joint3) {
+                totalLength += BoneLength(bone2, kCoordCamera);
+                if (joint == joint3) {
+                    totalLength += BoneLength(bone3, kCoordCamera);
+                }
+            }
+            if (normalize && totalLength > 0.0f) {
+                totalLength = 1.0f / totalLength;
+            }
+            result.x = result.x * totalLength;
+            result.y = result.y * totalLength;
+            result.z = result.z * totalLength;
+        } else {
+            MILO_FAIL("Unsupported joint %i", joint);
+        }
+    }
+}
+
+void BaseSkeleton::MakeCameraToPlayerXfm(
+    SkeletonCoordSys cs,
+    Transform &xfm,
+    const Vector3 *joints,
+    const Vector3 &floorNormal
+) {
+    MILO_ASSERT((kCoordLeftArm) <= (cs) && (cs) < (kNumCoordSys), 0x14F);
+
+    const PaddedJointPos *pj = (const PaddedJointPos *)joints;
+
+    Vector3 nearJoint;
+    Vector3 upDir = floorNormal;
+    Normalize(upDir, upDir);
+
+    Vector3 farJoint;
+    Vector3 limbDir;
+    Vector3 origin;
+
+    if (cs == kCoordLeftArm || cs == kCoordRightArm) {
+        int originIdx = (cs == kCoordLeftArm) ? kJointShoulderLeft : kJointShoulderRight;
+        nearJoint = pj[kJointShoulderLeft];
+        farJoint = pj[kJointShoulderRight];
+        origin = pj[originIdx];
+        bool isLeft = cs == kCoordLeftArm;
+        if (isLeft) farJoint.z = nearJoint.z;
+        limbDir.x = farJoint.x - nearJoint.x;
+        limbDir.y = farJoint.y - nearJoint.y;
+        limbDir.z = farJoint.z - nearJoint.z;
+    } else if (cs == kCoordLeftLeg || cs == kCoordRightLeg) {
+        int originIdx = (cs == kCoordLeftLeg) ? kJointHipLeft : kJointHipRight;
+        nearJoint = pj[kJointHipLeft];
+        farJoint = pj[kJointHipRight];
+        origin = pj[originIdx];
+        bool isLeft = cs == kCoordLeftLeg;
+        if (isLeft) farJoint.z = nearJoint.z;
+        limbDir.x = farJoint.x - nearJoint.x;
+        limbDir.y = farJoint.y - nearJoint.y;
+        limbDir.z = farJoint.z - nearJoint.z;
+    } else if (cs == kUnk5) {
+        nearJoint = pj[kJointHipLeft];
+        farJoint = pj[kJointHipRight];
+        origin = pj[kJointHipCenter];
+        limbDir.x = farJoint.x - nearJoint.x;
+        limbDir.y = farJoint.y - nearJoint.y;
+        limbDir.z = farJoint.z - nearJoint.z;
+    }
+
+    Normalize(limbDir, limbDir);
+
+    Vector3 crossDir;
+    Cross(upDir, limbDir, crossDir);
+    Normalize(crossDir, crossDir);
+
+    Hmx::Matrix3 mat;
+    mat.x = limbDir;
+    mat.y = upDir;
+    mat.z = crossDir;
+    xfm.m = mat;
+    xfm.v = origin;
+}

@@ -945,27 +945,26 @@ void PartyModeMgr::DetermineSubModePlayers(
     int totalPlayers = (int)mPlayers.size();
     int minPlayers = TheGameMode->MinPlayers(mode);
     int maxPlayers = TheGameMode->MaxPlayers(mode);
-    int remaining = totalPlayers - minPlayers;
-    int extra = maxPlayers - minPlayers;
     if (minPlayers != 0) {
-        for (int i = 0; i < minPlayers; i++) {
+        totalPlayers -= minPlayers;
+        maxPlayers -= minPlayers;
+        do {
             int player = PickNextPlayer();
             *pFlags = *pFlags | (1 << player);
             pPlayerIndices->push_back(player);
             *pNumPlayers = *pNumPlayers + 1;
-        }
+            minPlayers--;
+        } while (minPlayers != 0);
     }
-    if (remaining > 0 && extra != 0) {
-        while (remaining != 0) {
+    if (totalPlayers > 0) {
+        while (maxPlayers != 0) {
+            if (totalPlayers == 0) break;
             int player = PickNextPlayer();
             *pFlags = *pFlags | (1 << player);
             pPlayerIndices->push_back(player);
-            extra--;
-            remaining--;
+            maxPlayers--;
+            totalPlayers--;
             *pNumPlayers = *pNumPlayers + 1;
-            if (extra == 0) {
-                return;
-            }
         }
     }
 }

@@ -211,9 +211,9 @@ void HamStorePanel::GetOfferIDsToEnumerate(
         }
     }
     std::sort(offerIDs.begin(), offerIDs.end());
-    offerIDs.resize(
-        std::unique(offerIDs.begin(), offerIDs.end()) - offerIDs.begin()
-    );
+    std::vector<unsigned long long>::iterator it =
+        std::unique(offerIDs.begin(), offerIDs.end());
+    offerIDs.resize(it - offerIDs.begin());
 }
 
 void HamStorePanel::SetFilterToCart() {

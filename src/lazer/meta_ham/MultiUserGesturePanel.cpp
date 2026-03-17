@@ -386,10 +386,10 @@ void MultiUserGesturePanel::UpdateProviderPlayerIndices() {
     for (int i = 0; i < 2; i++) {
         int playerIdx = GetPlayerIndex(i);
         mCharacterProviders[i].SetPlayer(playerIdx);
-        mCrewProviders[i].SetPlayer(playerIdx);
-        mDifficultyProviders[i].SetPlayer(playerIdx);
-        mOutfitProviders[i].SetPlayer(playerIdx);
         mVenueProviders[i].SetPlayer(playerIdx);
+        mDifficultyProviders[i].SetPlayer(playerIdx);
+        mCrewProviders[i].SetPlayer(playerIdx);
+        mOutfitProviders[i].SetPlayer(playerIdx);
     }
 }
 
@@ -406,12 +406,12 @@ void MultiUserGesturePanel::UpdateCharPic(
 
     if (charSym == character_default) {
         MetaPerformer *perf = MetaPerformer::Current();
-        Symbol primaryCrew(gNullStr);
-        Symbol primaryChar(gNullStr);
-        Symbol primaryOutfit(gNullStr);
-        Symbol secondaryCrew(gNullStr);
-        Symbol secondaryChar(gNullStr);
-        Symbol secondaryOutfit(gNullStr);
+        Symbol primaryCrew;
+        Symbol primaryChar;
+        Symbol primaryOutfit;
+        Symbol secondaryCrew;
+        Symbol secondaryChar;
+        Symbol secondaryOutfit;
 
         int songID = TheHamSongMgr.GetSongIDFromShortName(TheGameData->GetSong(), true);
         const HamSongMetadata *pSongData = TheHamSongMgr.Data(songID);
@@ -437,13 +437,13 @@ void MultiUserGesturePanel::UpdateCharPic(
             charSym = secondaryChar;
             outfitSym = secondaryOutfit;
         }
-    } else if (charSym == Symbol("")) {
+    } else if (charSym == "") {
         MILO_ASSERT(pPlayerData, 0x1af);
         charSym = pPlayerData->Char();
         outfitSym = pPlayerData->Outfit();
     }
 
-    if (charSym == Symbol("")) {
+    if (charSym == "") {
         return;
     }
 
@@ -464,19 +464,17 @@ void MultiUserGesturePanel::UpdateCharPic(
 
     if (!locked || TheGameMode->InMode("campaign", true)) {
         if (const_cast<CharacterProvider *>(pProvider)->IsCharacterAvailable(charSym)) {
-            str = MakeString("%s_keep.png", outfitSym.Str());
+            str = MakeString("%s_keep.png", outfitSym);
         } else {
-            str = MakeString("%s_locked_keep.png", outfitSym.Str());
+            str = MakeString("%s_locked_keep.png", outfitSym);
         }
     } else {
-        str = MakeString("%s_locked_keep.png", outfitSym.Str());
+        str = MakeString("%s_locked_keep.png", outfitSym);
     }
 
     FilePath fp = FilePath("ui/image/char/", str.c_str());
     i_pPic->SetTex(fp);
-    if (i_pPic->GetMesh()) {
-        i_pPic->GetMesh()->SetShowing(true);
-    }
+    i_pPic->GetMesh()->SetShowing(true);
 }
 
 void MultiUserGesturePanel::UpdateVenueMesh(
@@ -491,16 +489,16 @@ void MultiUserGesturePanel::UpdateVenueMesh(
 
     String texName;
     String matName(MakeString("venue_p%i.mat", i_iSide + 1));
-    RndMat *pMat = DataDir()->Find<RndMat>(matName.c_str(), false);
+    RndMat *pMat = mDir->Find<RndMat>(matName.c_str(), false);
     MILO_ASSERT(pMat, 0x212);
 
-    if (TheProfileMgr.IsContentUnlocked(venueSym)) {
-        texName = MakeString("venue_%s.tex", crewSym.Str());
-    } else {
+    if (!TheProfileMgr.IsContentUnlocked(venueSym)) {
         texName = MakeString("venue_%s_locked.tex", crewSym.Str());
+    } else {
+        texName = MakeString("venue_%s.tex", crewSym.Str());
     }
 
-    RndTex *pTex = DataDir()->Find<RndTex>(texName.c_str(), false);
+    RndTex *pTex = mDir->Find<RndTex>(texName.c_str(), false);
     if (pTex != NULL) {
         pMat->SetDiffuseTex(pTex);
         i_pMesh->SetMat(pMat);
@@ -510,7 +508,7 @@ void MultiUserGesturePanel::UpdateVenueMesh(
 Symbol MultiUserGesturePanel::GetVoiceCommandOutfitTag(int playerIndex, Symbol screenName) {
     HamPlayerData *pPlayerData = TheGameData->Player(playerIndex);
     Symbol charSym = pPlayerData->Char();
-    Symbol result(gNullStr);
+    Symbol result;
 
     static Symbol screen_name("screen_name");
 
@@ -520,7 +518,7 @@ Symbol MultiUserGesturePanel::GetVoiceCommandOutfitTag(int playerIndex, Symbol s
         DataArray *screenNameArr = outfitEntry->FindArray(screen_name, false);
         if (screenNameArr != NULL && screenNameArr->Sym(1) == screenName) {
             result = outfitEntry->Sym(0);
-            return result;
+            break;
         }
     }
     return result;
