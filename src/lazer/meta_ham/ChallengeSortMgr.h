@@ -5,6 +5,7 @@
 #include "utl/Symbol.h"
 
 class ChallengeSortMgr : public NavListSortMgr {
+    friend class ChallengeSort;
 public:
     virtual DataNode Handle(DataArray *, bool);
     virtual bool SelectionIs(Symbol);

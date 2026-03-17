@@ -249,6 +249,33 @@ DataNode StreamRecorder::OnStartRecording(DataArray *) {
     return 1;
 }
 
+void StreamRecorder::DrawShowing() {
+    if (mRecordingPos >= 0.0f && mInputDir && mTexRenderer
+        && mTexRenderer->GetOutputTexture()) {
+        int compressIdx = (int)(mRecordingPos * 20.0f) - mStopDelay;
+        if (compressIdx >= 0 && compressIdx >= unkb4) {
+            if (compressIdx < mMaxFrames) {
+                MILO_ASSERT(compressIdx < mBuffers.size(), 0xBC);
+                RndTex *tex = mBuffers[compressIdx];
+                tex->SetBitmap(
+                    mOutputWidth, mOutputHeight, 16, RndTex::kRenderedNoZ, false, NULL
+                );
+                mTexRenderer->SetOutputTexture(tex);
+                mInputDir->DrawShowing();
+                mCompressQueue.push_back(compressIdx);
+                unkb4++;
+                if (mStopTimer <= 0)
+                    return;
+                mStopTimer--;
+                if (mStopTimer != 0)
+                    return;
+            }
+            StopRecordingImmediate();
+            StoppedRecordingScript();
+        }
+    }
+}
+
 #ifdef HX_NATIVE
 // TODO: texture compression and recording logic
 void StreamRecorder::Poll() {}

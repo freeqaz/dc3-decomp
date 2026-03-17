@@ -1,9 +1,12 @@
 #include "net_ham/DataMinerJobs.h"
 #include "hamobj/HamMaster.h"
+#include "hamobj/HamMove.h"
+#include "hamobj/ScoreUtl.h"
 #include "meta_ham/MetaPerformer.h"
 #include "net_ham/RCJobDingo.h"
 #include "obj/Object.h"
 #include "utl/DataPointMgr.h"
+#include "utl/Str.h"
 #include "utl/Symbol.h"
 #include "hamobj/HamGameData.h"
 #include "hamobj/PracticeSection.h"
@@ -213,6 +216,86 @@ GameEndedDataPointJob::GameEndedDataPointJob(
     dataP.AddPair(freestyle_disabled, (int)TheProfileMgr.DisableFreestyle());
 
     SetDataPoint(dataP);
+}
+
+bool GameEndedDataPointJob::CompileMoveRatings(
+    String &outStr, int playerIndex, bool isPractice
+) const {
+    MILO_ASSERT(playerIndex >= 0 && playerIndex < MAX_NUM_PLAYERS, 0x120);
+    int idx = 0;
+    bool hadNonRest = false;
+    MetaPerformer *perf = MetaPerformer::Current();
+    const std::vector<HamMoveScore> &moveScores = perf->GetMoveScores(playerIndex);
+    int numScores = (int)(moveScores.end() - moveScores.begin()) >> 4 << 4;
+    numScores = moveScores.size();
+    if (numScores != 0) {
+        unsigned int count = 0;
+        bool first = true;
+        if ((unsigned int)numScores != 0) {
+            do {
+                if (!moveScores[count].mMove->IsRest()) {
+                    hadNonRest = true;
+                    String moveName(moveScores[count].mMove->DisplayName());
+                    char replaced[200];
+                    if (SearchReplace(moveName.c_str(), "&", "%26", replaced)) {
+                        moveName = replaced;
+                    }
+                    if (!first) {
+                        outStr += "|";
+                    }
+                    const char *formatted;
+                    if (!isPractice) {
+                        const char *ratingStr = RatingState(moveScores[count].mRatingStateIndex).Str();
+                        formatted = MakeString(
+                            "%s:%.2f%%20(%s)", moveName, moveScores[count].unk8, ratingStr
+                        );
+                    } else {
+                        int ratingIdx = moveScores[count].mRatingStateIndex;
+                        if (ratingIdx < 0) {
+                            const char *label;
+                            if (ratingIdx == -4) {
+                                label = "fast";
+                            } else {
+                                label = "pass";
+                                if (ratingIdx != -3) {
+                                    label = "fail";
+                                }
+                            }
+                            int slowmo = (int)moveScores[count].unkc;
+                            formatted = MakeString(
+                                "%s:%s%%20(slowmo:%d)", moveName, label, slowmo
+                            );
+                        } else {
+                            const char *label;
+                            if (ratingIdx == 0) {
+                                label = "perfect";
+                            } else if (ratingIdx == 1) {
+                                label = "awesome";
+                            } else {
+                                label = "ok";
+                                if (ratingIdx != 3) {
+                                    label = "bad";
+                                }
+                            }
+                            int slowmo = (int)moveScores[count].unkc;
+                            formatted = MakeString(
+                                "%s:%.2f%%20(%s)%%20(slowmo:%d)",
+                                moveName,
+                                moveScores[count].unk8,
+                                label,
+                                slowmo
+                            );
+                        }
+                    }
+                    outStr += formatted;
+                    first = false;
+                }
+                idx += 0x10;
+                count++;
+            } while (count < (unsigned int)(moveScores.end() - moveScores.begin()) / sizeof(HamMoveScore));
+        }
+    }
+    return hadNonRest;
 }
 
 OmgScoresJob::OmgScoresJob(Hmx::Object *callback, int p1Score, int p2Score)

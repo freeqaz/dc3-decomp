@@ -73,6 +73,25 @@ bool ObjRefConcrete<T1, T2>::Load(BinStream &bs, bool print, ObjectDir *dir) {
     }
     if (refOwner && dir) {
         SetObj(dir->FindObject(buf, false, true));
+#ifdef HX_NATIVE
+        // Native fallback: walk up the parent dir chain when not found locally.
+        // On Xbox, FileMerger flattens all objects into the same scope.
+        // On native, the merge pipeline is incomplete so objects may live in
+        // a parent dir that isn't reachable with parentDirs=false.
+        if (!mObject && buf[0] != '\0') {
+            ObjectDir *searchDir = dir->Dir();
+            while (!mObject && searchDir && searchDir != dir) {
+                SetObj(searchDir->FindObject(buf, false, true));
+                ObjectDir *next = searchDir->Dir();
+                if (next == searchDir) break;
+                dir = searchDir;
+                searchDir = next;
+            }
+            if (!mObject) {
+                SetObj(ObjectDir::Main()->FindObject(buf, false, true));
+            }
+        }
+#endif
         if (!mObject && buf[0] != '\0') {
             if (print) {
                 MILO_NOTIFY(
@@ -276,6 +295,27 @@ bool ObjPtrVec<T1, T2>::Load(BinStream &bs, bool print, ObjectDir *dir) {
         bs.ReadString(buf, 0x80);
         if (dir) {
             T1 *casted = dynamic_cast<T1 *>(dir->FindObject(buf, false, true));
+#ifdef HX_NATIVE
+            // Native fallback: walk up the parent dir chain when not found locally.
+            // On Xbox, FileMerger flattens all objects into the same scope.
+            // On native, the merge pipeline is incomplete so objects may live in
+            // a parent dir that isn't reachable with parentDirs=false.
+            if (!casted && buf[0] != '\0') {
+                ObjectDir *searchDir = dir->Dir();
+                ObjectDir *prevDir = dir;
+                while (!casted && searchDir && searchDir != prevDir) {
+                    casted = dynamic_cast<T1 *>(searchDir->FindObject(buf, false, true));
+                    ObjectDir *next = searchDir->Dir();
+                    if (next == searchDir) break;
+                    prevDir = searchDir;
+                    searchDir = next;
+                }
+                if (!casted) {
+                    casted = dynamic_cast<T1 *>(
+                        ObjectDir::Main()->FindObject(buf, false, true));
+                }
+            }
+#endif
             if (!casted && buf[0] != '\0') {
                 if (print)
                     MILO_NOTIFY(
@@ -451,6 +491,23 @@ bool ObjPtrList<T1, T2>::Load(BinStream &bs, bool print, ObjectDir *dir, bool b4
         bs.ReadString(buf, 0x80);
         if (dir) {
             T1 *casted = dynamic_cast<T1 *>(dir->FindObject(buf, false, b4));
+#ifdef HX_NATIVE
+            if (!casted && buf[0] != '\0') {
+                ObjectDir *searchDir = dir->Dir();
+                ObjectDir *prevDir = dir;
+                while (!casted && searchDir && searchDir != prevDir) {
+                    casted = dynamic_cast<T1 *>(searchDir->FindObject(buf, false, b4));
+                    ObjectDir *next = searchDir->Dir();
+                    if (next == searchDir) break;
+                    prevDir = searchDir;
+                    searchDir = next;
+                }
+                if (!casted) {
+                    casted = dynamic_cast<T1 *>(
+                        ObjectDir::Main()->FindObject(buf, false, b4));
+                }
+            }
+#endif
             if (!casted && buf[0] != '\0') {
                 if (print)
                     MILO_NOTIFY(

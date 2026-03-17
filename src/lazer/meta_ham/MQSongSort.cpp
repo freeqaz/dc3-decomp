@@ -3,8 +3,44 @@
 #include "AppLabel.h"
 #include "ChallengeSort.h"
 #include "MQSongSortMgr.h"
+#include "MQSongSortNode.h"
 
 MQSongSort::MQSongSort() {}
+
+void MQSongSort::BuildTree() {
+    DeleteTree();
+    Init();
+
+    std::vector<NavListItemNode *> sortedNodes;
+
+    std::map<Symbol, std::vector<Symbol> > &charSongs = TheMQSongSortMgr->CharacterSongs();
+    for (auto it = charSongs.begin(); it != charSongs.end(); ++it) {
+        for (auto songIt = it->second.begin(); songIt != it->second.end(); ++songIt) {
+            NavListItemNode *node = NewItemNode(&*songIt);
+            static_cast<MQSongSortNode *>(node)->SetCharacter(it->first);
+            sortedNodes.push_back(node);
+        }
+    }
+
+    NavListItemNode **end = sortedNodes.end();
+    NavListItemNode **shortcutStart = sortedNodes.begin();
+    while (shortcutStart != end) {
+        NavListItemNode **rangeEnd = shortcutStart;
+        while (rangeEnd != end
+               && static_cast<MQSongSortNode *>(*rangeEnd)->GetCharacter()
+                      == static_cast<MQSongSortNode *>(*shortcutStart)->GetCharacter()) {
+            rangeEnd++;
+        }
+        NavListShortcutNode *shortcut = NewShortcutNode(*shortcutStart);
+        mShortcutNodes.push_back(shortcut);
+        shortcut->InsertHeaderRange(shortcutStart, rangeEnd, this);
+        shortcutStart = rangeEnd;
+    }
+
+    FOREACH (it, mShortcutNodes) {
+        (*it)->FinishSort(this);
+    }
+}
 
 
 void MQSongSort::DeleteItemList() {

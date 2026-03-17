@@ -50,11 +50,7 @@ BuildPoly::BuildPoly() : mPoly(), mTransform() {}
 
 // RndAmbientOcclusion::BurnTransform — now in AmbientOcclusion.cpp
 
-// ============================================================================
-// TextStream stub
-// ============================================================================
-
-TextStream &TextStream::operator<<(double) { return *this; }
+// TextStream::operator<<(double) now in TextStream.cpp
 
 // ============================================================================
 // ObjPtr / BinStream operator<< template instantiations
@@ -94,15 +90,14 @@ void SpewTerminate() {}
 
 // File system operations not available in MEMFS
 void FileRecursePattern(const char *, void (*)(const char *, const char *), bool) {}
-int MakeFileList(const char *, bool, bool (*)(char *)) { return 0; }
+// MakeFileList — now in Utl.cpp
 
 // Bink video — not supported in browser
 void BinkSetMemory(void *(*)(int), void (*)(void *)) {}
 int BinkStartAsyncThread(int, int) { return 1; }  // 1 = success
 void *RadAlloc(int size) { return malloc(size); }
 
-// Draw estimation — not needed for init
-int EstimateDraw(int) { return 0; }
+// EstimateDraw — now in Draw.cpp
 
 // Xbox/Kinect/network stubs
 #include "os/File.h"
@@ -230,7 +225,7 @@ DataNode VoiceInputPanel::OnMsg(const SpeechRecoMessage &) { return DataNode(); 
 // BeginMemTrackFileName etc. — now in MemMgr.cpp
 void HolmesClientTerminate() {}
 void TerminateMakeString() {}
-char *MakeFileListFullPath(const char *) { return nullptr; }
+// MakeFileListFullPath — now in Utl.cpp
 
 #include "rndobj/Mat.h"
 void SetColorWriteMask(const MatShaderOptions &, RndMat *) {}
@@ -288,7 +283,7 @@ void CacheWav(const char *, CacheResourceResult &r) { r = kCacheUnnecessary; }
 
 struct symmetric_CTR;
 
-TextStream &TextStream::operator<<(double) { return *this; }
+// TextStream::operator<<(double) now in TextStream.cpp
 
 template <>
 BinStream &operator<<(BinStream &bs, const ObjOwnerPtr<RndFont3d> &) {

@@ -13,6 +13,8 @@
 static wgpu::Buffer sDummyBoneBuffer;
 static wgpu::BindGroup sDummyBoneBindGroup;
 
+static int sBoneGarbageLogCount = 0;
+
 void FillBoneUniforms(RndMesh* mesh, BoneUniforms& out) {
     memset(&out, 0, sizeof(out));
 
@@ -31,6 +33,12 @@ void FillBoneUniforms(RndMesh* mesh, BoneUniforms& out) {
                 Multiply(mesh->BoneOffsetAt(i), wt, skinMatrix);
                 TransformToMat4(skinMatrix, out.bones[i]);
             } else {
+                if (sBoneGarbageLogCount < 20) {
+                    fprintf(stderr, "BoneSetup: garbage WorldXfm bone[%d] '%s' on mesh '%s' pos=(%.2e,%.2e,%.2e)\n",
+                            i, boneTrans->Name(), mesh->Name(),
+                            wt.v.x, wt.v.y, wt.v.z);
+                    sBoneGarbageLogCount++;
+                }
                 out.bones[i][0]  = 1.0f;
                 out.bones[i][5]  = 1.0f;
                 out.bones[i][10] = 1.0f;

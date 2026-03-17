@@ -144,6 +144,7 @@ protected:
 };
 
 class NavListShortcutNode : public NavListNode {
+    friend class ChallengeSort;
 public:
     NavListShortcutNode(NavListItemSortCmp *, Symbol, bool);
     virtual ~NavListShortcutNode();

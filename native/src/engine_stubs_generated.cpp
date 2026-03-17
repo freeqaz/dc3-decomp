@@ -204,8 +204,6 @@ int XTitleServerCreateEnumerator() { return 0; }
 // Function stubs only work with ELF linkers — wasm-ld generates wrong
 // signatures that insert 'unreachable' traps at call sites.
 
-// C++ global variables
-__attribute__((weak, used)) char _stub_var_40[256] __asm__(ASM_SYM("_ZN14StandardStream12kStreamEndMsE")) = {};
 __attribute__((weak, used)) char _stub_var_112[256] __asm__(ASM_SYM("_ZTT17CharSignalApplier")) = {};
 
 // C++ function stubs — skip on Emscripten (asm-label functions cause
@@ -226,9 +224,6 @@ extern "C" long _stub_fn_21() { return 0; }
 // BinkOpenTrack(BINK*, unsigned char)
 extern "C" __attribute__((weak, used)) long _stub_fn_22() __asm__(ASM_SYM("_Z13BinkOpenTrackP4BINKh"));
 extern "C" long _stub_fn_22() { return 0; }
-// BinkSetMemory(void* (*)(int), void (*)(void*))
-extern "C" __attribute__((weak, used)) long _stub_fn_23() __asm__(ASM_SYM("_Z13BinkSetMemoryPFPviEPFvS_E"));
-extern "C" long _stub_fn_23() { return 0; }
 // DiffTblReport(char const*, BlockStatTable&, BlockStatTable&, TextStream&)
 extern "C" __attribute__((weak, used)) long _stub_fn_25() __asm__(ASM_SYM("_Z13DiffTblReportPKcR14BlockStatTableS2_R10TextStream"));
 extern "C" long _stub_fn_25() { return 0; }
@@ -251,9 +246,6 @@ extern "C" long _stub_fn_33() { return 0; }
 // BinkCloseTrack(BINKTRACK*)
 extern "C" __attribute__((weak, used)) long _stub_fn_35() __asm__(ASM_SYM("_Z14BinkCloseTrackP9BINKTRACK"));
 extern "C" long _stub_fn_35() { return 0; }
-// CompressThread(void*)
-extern "C" __attribute__((weak, used)) long _stub_fn_36() __asm__(ASM_SYM("_Z14CompressThreadPv"));
-extern "C" long _stub_fn_36() { return 0; }
 // jpeg_std_error(jpeg_error_mgr*)
 extern "C" __attribute__((weak, used)) long _stub_fn_39() __asm__(ASM_SYM("_Z14jpeg_std_errorP14jpeg_error_mgr"));
 extern "C" long _stub_fn_39() { return 0; }
@@ -302,9 +294,6 @@ extern "C" long _stub_fn_82() { return 0; }
 // WaitForSingleObject(int, int)
 extern "C" __attribute__((weak, used)) long _stub_fn_83() __asm__(ASM_SYM("_Z19WaitForSingleObjectii"));
 extern "C" long _stub_fn_83() { return 0; }
-// BinkStartAsyncThread(int, int)
-extern "C" __attribute__((weak, used)) long _stub_fn_84() __asm__(ASM_SYM("_Z20BinkStartAsyncThreadii"));
-extern "C" long _stub_fn_84() { return 0; }
 // HongKongExceptionMet()
 extern "C" __attribute__((weak, used)) long _stub_fn_88() __asm__(ASM_SYM("_Z20HongKongExceptionMetv"));
 extern "C" long _stub_fn_88() { return 0; }
@@ -323,27 +312,18 @@ extern "C" long _stub_fn_102() { return 0; }
 // NuiTransformSkeletonToDepthImage(__vector4, float*, float*)
 extern "C" __attribute__((weak, used)) long _stub_fn_111() __asm__(ASM_SYM("_Z32NuiTransformSkeletonToDepthImage9__vector4PfS0_"));
 extern "C" long _stub_fn_111() { return 0; }
-// NuiTransformSkeletonToDepthImage(__vector4, long*, long*, unsigned short*)
-extern "C" __attribute__((weak, used)) long _stub_fn_112() __asm__(ASM_SYM("_Z32NuiTransformSkeletonToDepthImage9__vector4PlS0_Pt"));
-extern "C" long _stub_fn_112() { return 0; }
 // altCfg(DataNode, DataNode)
 extern "C" __attribute__((weak, used)) long _stub_fn_115() __asm__(ASM_SYM("_Z6altCfg8DataNodeS_"));
 extern "C" long _stub_fn_115() { return 0; }
 // CacheWav(char const*, CacheResourceResult&)
 extern "C" __attribute__((weak, used)) long _stub_fn_118() __asm__(ASM_SYM("_Z8CacheWavPKcR19CacheResourceResult"));
 extern "C" long _stub_fn_118() { return 0; }
-// RadAlloc(int)
-extern "C" __attribute__((weak, used)) long _stub_fn_138() __asm__(ASM_SYM("_Z8RadAlloci"));
-extern "C" long _stub_fn_138() { return 0; }
 // SpewInit()
 extern "C" __attribute__((weak, used)) long _stub_fn_139() __asm__(ASM_SYM("_Z8SpewInitv"));
 extern "C" long _stub_fn_139() { return 0; }
 // BinkClose(BINK*)
 extern "C" __attribute__((weak, used)) long _stub_fn_140() __asm__(ASM_SYM("_Z9BinkCloseP4BINK"));
 extern "C" long _stub_fn_140() { return 0; }
-// Intersect(Segment const&, Triangle const&, int, float&)
-extern "C" __attribute__((weak, used)) long _stub_fn_141() __asm__(ASM_SYM("_Z9IntersectRK7SegmentRK8TriangleiRf"));
-extern "C" long _stub_fn_141() { return 0; }
 // CamTexClip::StoreTextureClip(RndTex*, float, float, float, float)
 extern "C" __attribute__((weak, used)) long _stub_fn_208() __asm__(ASM_SYM("_ZN10CamTexClip16StoreTextureClipEP6RndTexffff"));
 extern "C" long _stub_fn_208() { return 0; }
@@ -359,9 +339,6 @@ extern "C" long _stub_fn_275() { return 0; }
 // MQSongSort::BuildTree()
 extern "C" __attribute__((weak, used)) long _stub_fn_276() __asm__(ASM_SYM("_ZN10MQSongSort9BuildTreeEv"));
 extern "C" long _stub_fn_276() { return 0; }
-// TextStream::operator<<(long)
-extern "C" __attribute__((weak, used)) long _stub_fn_402() __asm__(ASM_SYM("_ZN10TextStreamlsEl"));
-extern "C" long _stub_fn_402() { return 0; }
 // ArcDetector::UpdateOverlay(RndOverlay*, float)
 extern "C" __attribute__((weak, used)) long _stub_fn_415() __asm__(ASM_SYM("_ZN11ArcDetector13UpdateOverlayEP10RndOverlayf"));
 extern "C" long _stub_fn_415() { return 0; }
@@ -372,9 +349,6 @@ extern "C" long _stub_fn_416() { return 0; }
 extern "C" __attribute__((weak, used)) long _stub_fn_417() __asm__(ASM_SYM("_ZN11ArcDetector6UpdateERK8Skeletoni"));
 extern "C" long _stub_fn_417() { return 0; }
 // LightPreset stubs removed — real impl in LightPreset.cpp
-// LocationCmp::LocationCmp()
-extern "C" __attribute__((weak, used)) long _stub_fn_461() __asm__(ASM_SYM("_ZN11LocationCmpC1Ev"));
-extern "C" long _stub_fn_461() { return 0; }
 // MemcardXbox::Poll()
 extern "C" __attribute__((weak, used)) long _stub_fn_462() __asm__(ASM_SYM("_ZN11MemcardXbox4PollEv"));
 extern "C" long _stub_fn_462() { return 0; }
@@ -397,9 +371,6 @@ extern "C" long _stub_fn_520() { return 0; }
 // Achievements::SubmitAchievementsFunc()
 extern "C" __attribute__((weak, used)) long _stub_fn_521() __asm__(ASM_SYM("_ZN12Achievements22SubmitAchievementsFuncEv"));
 extern "C" long _stub_fn_521() { return 0; }
-// AsyncFileWin::AsyncFileWin(char const*, int)
-extern "C" __attribute__((weak, used)) long _stub_fn_522() __asm__(ASM_SYM("_ZN12AsyncFileWinC1EPKci"));
-extern "C" long _stub_fn_522() { return 0; }
 // BaseSkeleton::MakeCameraToPlayerXfm(SkeletonCoordSys, Transform&, Vector3 const*, Vector3 const&)
 extern "C" __attribute__((weak, used)) long _stub_fn_523() __asm__(ASM_SYM("_ZN12BaseSkeleton21MakeCameraToPlayerXfmE16SkeletonCoordSysR9TransformPK7Vector3RS4_"));
 extern "C" long _stub_fn_523() { return 0; }
@@ -427,18 +398,12 @@ extern "C" long _stub_fn_540() { return 0; }
 // (anonymous namespace)::CheckForResponse(Holmes::Protocol, bool)
 extern "C" __attribute__((weak, used)) long _stub_fn_541() __asm__(ASM_SYM("_ZN12_GLOBAL__N_116CheckForResponseEN6Holmes8ProtocolEb"));
 extern "C" long _stub_fn_541() { return 0; }
-// (anonymous namespace)::DecodeThreadEntry(void*)
-extern "C" __attribute__((weak, used)) long _stub_fn_542() __asm__(ASM_SYM("_ZN12_GLOBAL__N_117DecodeThreadEntryEPv"));
-extern "C" long _stub_fn_542() { return 0; }
 // (anonymous namespace)::JointToVertexData(Vector3&, Skeleton const&, SkeletonJoint, Vector4 const&)
 extern "C" __attribute__((weak, used)) long _stub_fn_543() __asm__(ASM_SYM("_ZN12_GLOBAL__N_117JointToVertexDataER7Vector3RK8Skeleton13SkeletonJointRK7Vector4"));
 extern "C" long _stub_fn_543() { return 0; }
 // (anonymous namespace)::WaitForAnyResponse(Holmes::Protocol)
 extern "C" __attribute__((weak, used)) long _stub_fn_544() __asm__(ASM_SYM("_ZN12_GLOBAL__N_118WaitForAnyResponseEN6Holmes8ProtocolE"));
 extern "C" long _stub_fn_544() { return 0; }
-// (anonymous namespace)::WriteMemoryCallback(void*, unsigned int, unsigned int, void*)
-extern "C" __attribute__((weak, used)) long _stub_fn_545() __asm__(ASM_SYM("_ZN12_GLOBAL__N_119WriteMemoryCallbackEPvjjS0_"));
-extern "C" long _stub_fn_545() { return 0; }
 // (anonymous namespace)::LoadDebugDepthBuffer(RndTex*&)
 extern "C" __attribute__((weak, used)) long _stub_fn_546() __asm__(ASM_SYM("_ZN12_GLOBAL__N_120LoadDebugDepthBufferERP6RndTex"));
 extern "C" long _stub_fn_546() { return 0; }
@@ -448,9 +413,6 @@ extern "C" long _stub_fn_547() { return 0; }
 // (anonymous namespace)::HolmesFlushStreamBuffer()
 extern "C" __attribute__((weak, used)) long _stub_fn_548() __asm__(ASM_SYM("_ZN12_GLOBAL__N_123HolmesFlushStreamBufferEv"));
 extern "C" long _stub_fn_548() { return 0; }
-// (anonymous namespace)::ClipStart(CharClip*, float, float&, float&)
-extern "C" __attribute__((weak, used)) long _stub_fn_549() __asm__(ASM_SYM("_ZN12_GLOBAL__N_19ClipStartEP8CharClipfRfS2_"));
-extern "C" long _stub_fn_549() { return 0; }
 // PartyModeMgr::DetermineSubModePlayers(Symbol, int*, int*, std::vector<int, std::allocator<int> >*)
 extern "C" __attribute__((weak, used)) long _stub_fn_574() __asm__(ASM_SYM("_ZN12PartyModeMgr23DetermineSubModePlayersE6SymbolPiS1_PSt6vectorIiSaIiEE"));
 extern "C" long _stub_fn_574() { return 0; }
@@ -564,12 +526,6 @@ extern "C" long _stub_fn_772() { return 0; }
 // RndRenderState::SetBlend(RndRenderState::Blend, RndRenderState::Blend, RndRenderState::Blend, RndRenderState::Blend)
 extern "C" __attribute__((weak, used)) long _stub_fn_773() __asm__(ASM_SYM("_ZN14RndRenderState8SetBlendENS_5BlendES0_S0_S0_"));
 extern "C" long _stub_fn_773() { return 0; }
-// StandardStream::GetJumpBackTotalTime(float)
-extern "C" __attribute__((weak, used)) long _stub_fn_782() __asm__(ASM_SYM("_ZN14StandardStream20GetJumpBackTotalTimeEf"));
-extern "C" long _stub_fn_782() { return 0; }
-// StreamRecorder::DrawShowing()
-extern "C" __attribute__((weak, used)) long _stub_fn_789() __asm__(ASM_SYM("_ZN14StreamRecorder11DrawShowingEv"));
-extern "C" long _stub_fn_789() { return 0; }
 // StreamRenderer::DrawToTexture()
 extern "C" __attribute__((weak, used)) long _stub_fn_791() __asm__(ASM_SYM("_ZN14StreamRenderer13DrawToTextureEv"));
 extern "C" long _stub_fn_791() { return 0; }
@@ -659,13 +615,7 @@ extern "C" long _stub_fn_947() { return 0; }
 // DxTex::SetDeviceTex(D3DTexture*)
 extern "C" __attribute__((weak, used)) long _stub_fn_967() __asm__(ASM_SYM("_ZN5DxTex12SetDeviceTexEP10D3DTexture"));
 extern "C" long _stub_fn_967() { return 0; }
-// DxMesh::GetMultimeshFaces()
-extern "C" __attribute__((weak, used)) long _stub_fn_976() __asm__(ASM_SYM("_ZN6DxMesh17GetMultimeshFacesEv"));
-extern "C" long _stub_fn_976() { return 0; }
 // RndTex::Load, PreLoad, PostLoad: provided by RndTex_Native.cpp
-// FlowPtr<Hmx::Object>::FlowPtr(FlowPtr<Hmx::Object> const&)
-extern "C" __attribute__((weak, used)) long _stub_fn_992() __asm__(ASM_SYM("_ZN7FlowPtrIN3Hmx6ObjectEEC1ERKS2_"));
-extern "C" long _stub_fn_992() { return 0; }
 // HDCache::Flush()
 extern "C" __attribute__((weak, used)) long _stub_fn_996() __asm__(ASM_SYM("_ZN7HDCache5FlushEv"));
 extern "C" long _stub_fn_996() { return 0; }
@@ -673,9 +623,6 @@ extern "C" long _stub_fn_996() { return 0; }
 // MoveDir::EnqueueDetectFrames(float, int, std::vector<DetectFrame, std::allocator<DetectFrame> >&, FilterVersion const*)
 extern "C" __attribute__((weak, used)) long _stub_fn_1006() __asm__(ASM_SYM("_ZN7MoveDir19EnqueueDetectFramesEfiRSt6vectorI11DetectFrameSaIS1_EEPK13FilterVersion"));
 extern "C" long _stub_fn_1006() { return 0; }
-// UILabel::LabelStyle::~LabelStyle()
-extern "C" __attribute__((weak, used)) long _stub_fn_1059() __asm__(ASM_SYM("_ZN7UILabel10LabelStyleD1Ev"));
-extern "C" long _stub_fn_1059() { return 0; }
 // UILabel::Terminate()
 extern "C" __attribute__((weak, used)) long _stub_fn_1060() __asm__(ASM_SYM("_ZN7UILabel9TerminateEv"));
 extern "C" long _stub_fn_1060() { return 0; }
@@ -685,16 +632,7 @@ extern "C" long _stub_fn_1093() { return 0; }
 // Waypoint::Highlight()
 extern "C" __attribute__((weak, used)) long _stub_fn_1129() __asm__(ASM_SYM("_ZN8Waypoint9HighlightEv"));
 extern "C" long _stub_fn_1129() { return 0; }
-// NgDOFProc::Set(RndCam*, float, float, float, float)
-extern "C" __attribute__((weak, used)) long _stub_fn_1154() __asm__(ASM_SYM("_ZN9NgDOFProc3SetEP6RndCamffff"));
-extern "C" long _stub_fn_1154() { return 0; }
-// ObjDirPtr<ObjectDir>::ObjDirPtr(ObjectDir*)
-extern "C" __attribute__((weak, used)) long _stub_fn_1156() __asm__(ASM_SYM("_ZN9ObjDirPtrI9ObjectDirEC1EPS0_"));
-extern "C" long _stub_fn_1156() { return 0; }
 // RndBitmap::Load: provided by RndTex_Native.cpp
-// Spotlight::RemoveFromLists(Spotlight*)
-extern "C" __attribute__((weak, used)) long _stub_fn_1193() __asm__(ASM_SYM("_ZN9Spotlight15RemoveFromListsEPS_"));
-extern "C" long _stub_fn_1193() { return 0; }
 // WebSvcMgr::Poll()
 extern "C" __attribute__((weak, used)) long _stub_fn_1202() __asm__(ASM_SYM("_ZN9WebSvcMgr4PollEv"));
 extern "C" long _stub_fn_1202() { return 0; }
@@ -750,24 +688,12 @@ extern "C" long _stub_fn_1341() { return 0; }
 // VoiceInputPanel::CreatePlaylistEditorGrammar() const
 extern "C" __attribute__((weak, used)) long _stub_fn_1342() __asm__(ASM_SYM("_ZNK15VoiceInputPanel27CreatePlaylistEditorGrammarEv"));
 extern "C" long _stub_fn_1342() { return 0; }
-// PlaylistSortByType::NewHeaderNode(NavListItemNode*, NavListItemNode*) const
-extern "C" __attribute__((weak, used)) long _stub_fn_1360() __asm__(ASM_SYM("_ZNK18PlaylistSortByType13NewHeaderNodeEP15NavListItemNodeS1_"));
-extern "C" long _stub_fn_1360() { return 0; }
 // GameEndedDataPointJob::CompileMoveRatings(String&, int, bool) const
 extern "C" __attribute__((weak, used)) long _stub_fn_1370() __asm__(ASM_SYM("_ZNK21GameEndedDataPointJob18CompileMoveRatingsER6Stringib"));
 extern "C" long _stub_fn_1370() { return 0; }
 // MultiUserGesturePanel::HasNavList() const
 extern "C" __attribute__((weak, used)) long _stub_fn_1371() __asm__(ASM_SYM("_ZNK21MultiUserGesturePanel10HasNavListEv"));
 extern "C" long _stub_fn_1371() { return 0; }
-// AccomplishmentProgress::GetNumCompleted() const
-extern "C" __attribute__((weak, used)) long _stub_fn_1372() __asm__(ASM_SYM("_ZNK22AccomplishmentProgress15GetNumCompletedEv"));
-extern "C" long _stub_fn_1372() { return 0; }
-// AccomplishmentProgress::GetTotalSongsPlayed() const
-extern "C" __attribute__((weak, used)) long _stub_fn_1373() __asm__(ASM_SYM("_ZNK22AccomplishmentProgress19GetTotalSongsPlayedEv"));
-extern "C" long _stub_fn_1373() { return 0; }
-// AccomplishmentProgress::GetTotalCampaignSongsPlayed() const
-extern "C" __attribute__((weak, used)) long _stub_fn_1375() __asm__(ASM_SYM("_ZNK22AccomplishmentProgress27GetTotalCampaignSongsPlayedEv"));
-extern "C" long _stub_fn_1375() { return 0; }
 // DirectionGestureFilterDoubleUser::IsHandValid(Skeleton const&) const
 extern "C" __attribute__((weak, used)) long _stub_fn_1378() __asm__(ASM_SYM("_ZNK32DirectionGestureFilterDoubleUser11IsHandValidERK8Skeleton"));
 extern "C" long _stub_fn_1378() { return 0; }
@@ -800,9 +726,5 @@ __attribute__((weak, used)) char _stub_vt_35[1024] __asm__(ASM_SYM("_ZTV17CharSi
 // =============================================================================
 // Asm-label stubs for remaining undefined symbols (ObjPtrVec/ObjPtrList related)
 // =============================================================================
-
-// merged_ObjPtrListPopBack (ICF merged stub)
-extern "C" __attribute__((weak, used)) long _stub_popback() __asm__(ASM_SYM("_Z24merged_ObjPtrListPopBackPv"));
-extern "C" long _stub_popback() { return 0; }
 
 #endif // !__EMSCRIPTEN__

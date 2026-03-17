@@ -119,6 +119,9 @@ void AccomplishmentProgress::LoadFixed(FixedSizeSaveableStream &fs, int i2) {
 
 int AccomplishmentProgress::GetFlawlessMoveCount() const { return mFlawlessMoveCount; }
 int AccomplishmentProgress::GetNiceMoveCount() const { return mNiceMoveCount; }
+int AccomplishmentProgress::GetNumCompleted() const { return mCompletedAchievements.size(); }
+int AccomplishmentProgress::GetTotalSongsPlayed() const { return mTotalSongsPlayed; }
+int AccomplishmentProgress::GetTotalCampaignSongsPlayed() const { return mTotalCampaignSongsPlayed; }
 void AccomplishmentProgress::IncrementDanceBattleCount() { mDanceBattleCount++; }
 void AccomplishmentProgress::ClearAllPerfectMoves() { mPerfectMovesCleared = true; }
 bool AccomplishmentProgress::HasNewAwards() const { return !mNewAwards.empty(); }

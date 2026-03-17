@@ -409,7 +409,15 @@ next:
         mCurLoader = new NullLoader(fp, (LoaderPos)pos, mOrganizer);
     } else {
         mCurLoader = new DirLoader(
-            fp, (LoaderPos)pos, mOrganizer, nullptr, nullptr, false, nullptr
+            fp, (LoaderPos)pos, mOrganizer, nullptr, nullptr, false,
+#ifdef HX_NATIVE
+            // Pass merger's Dir as parent so ObjPtr fallback can resolve
+            // objects in the world ObjectDir during deserialization.
+            // On Xbox, FileMerger flattens objects into the same scope.
+            Dir()
+#else
+            nullptr
+#endif
         );
     }
 }

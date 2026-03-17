@@ -298,6 +298,38 @@ void SongSortMgr::OnEnter() {
     current->UpdateHighlight();
 }
 
+void SongSortMgr::SetupQuasiRandomSongs() {
+    int dataCount = mSorts[mCurrentSortIdx]->GetDataCount();
+    unsigned int *tempIndices = new unsigned int[dataCount];
+    mQuasiRandomIndices.erase(mQuasiRandomIndices.begin(), mQuasiRandomIndices.end());
+    int i = 0;
+    if (dataCount > 0) {
+        unsigned int *ptr = tempIndices - 1;
+        int count = dataCount;
+        do {
+            ptr++;
+            *ptr = i;
+            i++;
+        } while (--count);
+        unsigned int *endPtr = tempIndices + dataCount;
+        do {
+            int randIdx = rand() % dataCount;
+            int value = tempIndices[randIdx];
+            SongSortNode *ssn =
+                dynamic_cast<SongSortNode *>(mSorts[mCurrentSortIdx]->GetListFromIdx(value));
+            if (ssn != nullptr && !ssn->IsMedley() && !ssn->IsFake()
+                && TheProfileMgr.IsContentUnlocked(ssn->Record()->ShortName())) {
+                mQuasiRandomIndices.push_back(value);
+            }
+            endPtr--;
+            dataCount--;
+            tempIndices[randIdx] = *endPtr;
+        } while (0 < dataCount);
+    }
+    delete[] tempIndices;
+    SetQuasiRandomSong();
+}
+
 void SongSortMgr::SetSetlistMode(bool b) {
     static Symbol song_select_story("song_select_story");
     MILO_ASSERT(TheGameMode->Property("song_select_mode")->Sym() != song_select_story, 0xa7);

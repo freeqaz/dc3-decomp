@@ -33,6 +33,9 @@ public:
     virtual void Text(UIListLabel *, UILabel *) const;
     virtual void Custom(UIListCustom *, Hmx::Object *) const;
 
+    void SetCharacter(Symbol c) { mCharacter = c; }
+    Symbol GetCharacter() const { return mCharacter; }
+
 protected:
     Symbol mShortName; // 0x48
     Symbol mCharacter; // 0x4C

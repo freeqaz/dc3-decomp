@@ -25,7 +25,11 @@ public:
 /** A bone to associate with a Mesh. */
 class RndBone {
 public:
-    RndBone(Hmx::Object *o) : mBone(o) {}
+    RndBone(Hmx::Object *o) : mBone(o) {
+#ifdef HX_NATIVE
+        mOffset.Reset();
+#endif
+    }
     void Load(BinStream &);
 
     /** "Trans of the bone" */

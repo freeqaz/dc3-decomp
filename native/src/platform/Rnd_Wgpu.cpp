@@ -1358,19 +1358,10 @@ void WgpuRnd::WriteSceneUniforms() {
             addLight(light, sceneCenter);
         }
 
-        // From venue WorldDir (may have lights not in environment)
-        {
-            WorldDir* venueDir = TheHamDirector ? TheHamDirector->GetVenueWorld() : nullptr;
-            if (!venueDir && gNativeVenueDir)
-                venueDir = dynamic_cast<WorldDir*>(gNativeVenueDir);
-            if (venueDir) {
-                for (ObjDirItr<RndLight> lit(venueDir, true); lit != nullptr; ++lit) {
-                    if (!lit->Showing()) continue;
-                    if (lit->GetType() != RndLight::kDirectional && lit->GetType() != RndLight::kPoint) continue;
-                    addLight(lit, sceneCenter);
-                }
-            }
-        }
+        // NOTE: Previously supplemented from venue WorldDir via ObjDirItr<RndLight>,
+        // but recursive dir iteration is too expensive in WASM (dynamic_cast on every
+        // object) and can hang on corrupted hash table chains. The environment's light
+        // lists + fallback defaults below are sufficient.
 
         // Smart light selection: prefer default/stage lights (base illumination)
         // over rim/peak/area accent lights which are designed for specific moments.
@@ -1501,32 +1492,8 @@ void WgpuRnd::WriteSceneUniforms() {
             scene.pointLightRanges[pointIdx] = light->Range();
             pointIdx++;
         }
-        // Supplement point lights from venue WorldDir
-        if (pointIdx < 4) {
-            WorldDir* venueDir = TheHamDirector ? TheHamDirector->GetVenueWorld() : nullptr;
-            if (!venueDir && gNativeVenueDir)
-                venueDir = dynamic_cast<WorldDir*>(gNativeVenueDir);
-            if (venueDir) {
-                for (ObjDirItr<RndLight> lit(venueDir, true);
-                     lit != nullptr && pointIdx < 4; ++lit) {
-                    if (!lit->Showing()) continue;
-                    if (lit->GetType() != RndLight::kPoint) continue;
-                    const Hmx::Color& lc = lit->GetColor();
-                    if (lc.red < 0.01f && lc.green < 0.01f && lc.blue < 0.01f) continue;
-                    const Transform& lxfm = lit->WorldXfm();
-                    scene.pointLightPos[pointIdx][0] = lxfm.v.x;
-                    scene.pointLightPos[pointIdx][1] = lxfm.v.y;
-                    scene.pointLightPos[pointIdx][2] = lxfm.v.z;
-                    scene.pointLightPos[pointIdx][3] = 0.0f;
-                    scene.pointLightColors[pointIdx][0] = lc.red;
-                    scene.pointLightColors[pointIdx][1] = lc.green;
-                    scene.pointLightColors[pointIdx][2] = lc.blue;
-                    scene.pointLightColors[pointIdx][3] = 1.0f;
-                    scene.pointLightRanges[pointIdx] = lit->Range();
-                    pointIdx++;
-                }
-            }
-        }
+        // NOTE: Previously supplemented point lights from venue WorldDir via
+        // ObjDirItr — removed for same reason as directional lights above.
         scene.numPointLights = (float)pointIdx;
 
     } else {

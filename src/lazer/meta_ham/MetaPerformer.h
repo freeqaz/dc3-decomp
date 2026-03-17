@@ -131,6 +131,7 @@ public:
     Symbol LastPlayedMode() const { return mLastPlayedMode; }
     bool CompletedSongWithNoFlashcards() const { return mCompletedSongWithNoFlashcards; }
     const std::vector<HamMoveScore>& GetMoveScores() const { return mMoveScores[0]; }
+    const std::vector<HamMoveScore>& GetMoveScores(int playerIdx) const { return mMoveScores[playerIdx]; }
 
     void SetSkipPracticeWelcome(bool b) { mSkipPracticeWelcome = b; }
 

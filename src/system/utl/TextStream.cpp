@@ -70,6 +70,34 @@ TextStream &TextStream::operator<<(Symbol s) {
     return *this;
 }
 
+TextStream &TextStream::operator<<(short i) {
+    char buf[1024];
+    MILO_ASSERT(SNPRINTF(buf, sizeof(buf), "%hd", i) >= 0, 0x57);
+    Print(buf);
+    return *this;
+}
+
+TextStream &TextStream::operator<<(long i) {
+    char buf[1024];
+    MILO_ASSERT(SNPRINTF(buf, sizeof(buf), "%ld", i) >= 0, 0x5C);
+    Print(buf);
+    return *this;
+}
+
+TextStream &TextStream::operator<<(double i) {
+    char buf[1024];
+    MILO_ASSERT(SNPRINTF(buf, sizeof(buf), "%.2f", i) >= 0, 0x61);
+    Print(buf);
+    return *this;
+}
+
+TextStream &TextStream::operator<<(unsigned short i) {
+    char buf[1024];
+    MILO_ASSERT(SNPRINTF(buf, sizeof(buf), "%hu", i) >= 0, 0x66);
+    Print(buf);
+    return *this;
+}
+
 TextStream &TextStream::operator<<(unsigned long long i) {
     char buf[1024];
     MILO_ASSERT(SNPRINTF(buf, sizeof(buf), "%llu", i) >= 0, 0x73);
