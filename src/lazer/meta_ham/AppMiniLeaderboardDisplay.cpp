@@ -57,7 +57,9 @@ void AppMiniLeaderboardDisplay::Poll() {
 
 void AppMiniLeaderboardDisplay::Enter() {
     UIComponent::Enter();
+#ifndef HX_NATIVE
     TheServer.AddSink(this);
+#endif
     if (mState != 0) {
         mState = 0;
         Flow *f = mResourceDir->Find<Flow>("pending.flow");
@@ -67,7 +69,9 @@ void AppMiniLeaderboardDisplay::Enter() {
 
 void AppMiniLeaderboardDisplay::Exit() {
     UIComponent::Exit();
+#ifndef HX_NATIVE
     TheServer.RemoveSink(this);
+#endif
     TheRockCentral.CancelOutstandingCalls(this);
     mSongID = 0;
     mLoadTime = 0;

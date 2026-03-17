@@ -312,5 +312,4 @@ __attribute__((weak, used)) char _stub_vt_15[1024] __asm__(ASM_SYM("_ZTI5DxTex")
 
 #endif // !__EMSCRIPTEN__
 
-// LabelShrinkWrapper::Poll — stub (no decomp source)
-extern "C" void _ZN18LabelShrinkWrapper4PollEv() {}
+// LabelShrinkWrapper::Poll — moved to LabelShrinkWrapper.cpp

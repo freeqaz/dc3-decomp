@@ -63,6 +63,9 @@ void HelpBarPanel::Enter() {
     MILO_LOG("%s %d\n", "HelpBarPanel::Enter", 0x48);
     mLeftHandNavList = DataDir()->Find<HamNavList>("left_hand.hnl", false);
     mAll = DataDir()->Find<RndGroup>("all.grp");
+#ifdef HX_NATIVE
+    if (TheSaveLoadMgr)
+#endif
     TheSaveLoadMgr->AddSink(this);
     if (TheHamUI.GetLetterboxPanel()) {
         TheHamUI.GetLetterboxPanel()->AddSink(this, "enter_blacklight_mode");
@@ -77,6 +80,9 @@ void HelpBarPanel::Enter() {
 
 void HelpBarPanel::Exit() {
     MILO_LOG("%s %d\n", "HelpBarPanel::Exit", 0x64);
+#ifdef HX_NATIVE
+    if (TheSaveLoadMgr)
+#endif
     TheSaveLoadMgr->RemoveSink(this);
     if (TheHamUI.GetLetterboxPanel()) {
         TheHamUI.GetLetterboxPanel()->RemoveSink(this, "enter_blacklight_mode");
@@ -108,15 +114,30 @@ void HelpBarPanel::Poll() {
 }
 
 void HelpBarPanel::Unload() {
+#ifdef HX_NATIVE
+    if (TheSaveLoadMgr)
+#endif
     TheSaveLoadMgr->RemoveSink(this);
     UIPanel::Unload();
 }
 
 void HelpBarPanel::FinishLoad() {
     UIPanel::FinishLoad();
+#ifdef HX_NATIVE
+    // TheSaveLoadMgr and TheWaveToTurnOnLight may not be initialized yet —
+    // HelpBarPanel can finish loading during UIManager::Init(), which runs
+    // before SaveLoadManager::Init() and GestureInit() in the App constructor.
+    if (TheSaveLoadMgr)
+#endif
     TheSaveLoadMgr->AddSink(this);
+#ifdef HX_NATIVE
+    if (TheWaveToTurnOnLight) {
+#endif
     TheWaveToTurnOnLight->AddSink(this, "wave_gesture_enabled");
     TheWaveToTurnOnLight->AddSink(this, "wave_gesture_disabled");
+#ifdef HX_NATIVE
+    }
+#endif
 }
 
 void HelpBarPanel::EnterControllerMode() {

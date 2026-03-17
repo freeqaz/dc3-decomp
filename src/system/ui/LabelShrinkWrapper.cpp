@@ -107,6 +107,8 @@ void LabelShrinkWrapper::DrawShowing() {
 
 void LabelShrinkWrapper::Enter() { UIComponent::Enter(); }
 
+void LabelShrinkWrapper::Poll() { UIComponent::Poll(); }
+
 void LabelShrinkWrapper::Update() {
     const DataArray *pTypeDef = TypeDef();
     if (pTypeDef && mResourceDir) {

@@ -693,9 +693,11 @@ fn fs_main(surfaceInput: VertexOutput) -> @location(0) vec4f {
         let projU = dot(surfaceInput.worldPos, scene.projLightProjRow0.xyz) + scene.projLightProjRow0.w;
         let projV = dot(surfaceInput.worldPos, scene.projLightProjRow1.xyz) + scene.projLightProjRow1.w;
         let projUV = vec2f(projU, projV);
+        // textureSample must be in uniform control flow (numProjLights is uniform),
+        // so sample unconditionally here and gate the contribution with the UV check.
+        let goboSample = textureSample(projLightTex, projLightSampler, projUV);
         // Only light surfaces within the projection cone (UV in [0,1])
         if (projU >= 0.0 && projU <= 1.0 && projV >= 0.0 && projV <= 1.0) {
-            let goboSample = textureSample(projLightTex, projLightSampler, projUV);
             let projContrib = scene.projLightColor.rgb * goboSample.rgb * projNdotL;
             totalLighting.diffuse += projContrib;
         }
