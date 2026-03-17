@@ -462,12 +462,10 @@ void MultiUserGesturePanel::UpdateCharPic(
         }
     }
 
-    if (!locked || TheGameMode->InMode("campaign", true)) {
-        if (const_cast<CharacterProvider *>(pProvider)->IsCharacterAvailable(charSym)) {
-            str = MakeString("%s_keep.png", outfitSym);
-        } else {
-            str = MakeString("%s_locked_keep.png", outfitSym);
-        }
+    if (locked && !TheGameMode->InMode("campaign", true)) {
+        str = MakeString("%s_locked_keep.png", outfitSym);
+    } else if (const_cast<CharacterProvider *>(pProvider)->IsCharacterAvailable(charSym)) {
+        str = MakeString("%s_keep.png", outfitSym);
     } else {
         str = MakeString("%s_locked_keep.png", outfitSym);
     }
