@@ -71,9 +71,12 @@ unsigned int HolmesInput::SendJoypadMessages() {
         JoypadData *jdata = JoypadGetPadData(0);
         if (!up) {
             mask |= 1 << btn;
-            JoypadPushThroughMsg(ButtonDownMsg(jdata->mUser, btn, action, 0));
-        } else
-            JoypadPushThroughMsg(ButtonUpMsg(jdata->mUser, btn, action, 0));
+            ButtonDownMsg bdMsg(jdata->mUser, btn, action, 0);
+            JoypadPushThroughMsg(bdMsg);
+        } else {
+            ButtonUpMsg buMsg(jdata->mUser, btn, action, 0);
+            JoypadPushThroughMsg(buMsg);
+        }
     }
     mJoypadBuffer->Compact();
     return mask;
