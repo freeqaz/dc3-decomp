@@ -72,8 +72,7 @@ void LockedContentPanel::FinishLoad() {
     int count = 8;
     int i = 1;
     do {
-        if (mDir)
-            ptr[-7] = (HamLabel *)mDir->Find<AppLabel>(MakeString("song_name0%d.lbl", i), true);
+        ptr[-7] = (HamLabel *)mDir->Find<AppLabel>(MakeString("song_name0%d.lbl", i), true);
         HamStarsDisplay *stars = mDir->Find<HamStarsDisplay>(MakeString("stars0%d.std", i), true);
         *++ptr = (HamLabel *)stars;
         count -= 1;

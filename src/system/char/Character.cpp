@@ -719,7 +719,7 @@ bool Character::SetFocusInterest(Symbol symbol, int i) {
         }
 
         if (!symbol.Null() && !interest) {
-            MILO_WARN("Couldn't find interest named %s to force on %s", symbol.Str(), Name());
+            MILO_NOTIFY("Couldn't find interest named %s to force on %s", symbol.Str(), Name());
         }
 
         return SetFocusInterest(interest, i);
