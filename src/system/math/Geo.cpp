@@ -975,7 +975,119 @@ void BSPFace::Update() {
     }
 }
 
+#ifndef HX_NATIVE
+bool MakeBSPTree(BSPNode *&node, std::list<BSPFace> &faces, int depth) {
+    if (faces.empty()) {
+        node = nullptr;
+        return true;
+    }
+    int nextDepth = depth + 1;
+    if (nextDepth > gBSPMaxDepth) {
+        TheDebug.Notify(MakeString("Bsp too deep"));
+        return false;
+    }
+    node = new BSPNode();
+    stlpmtx_std::_S_sort<BSPFace, stlpmtx_std::StlNodeAlloc<BSPFace>, stlpmtx_std::less<BSPFace>>(faces, stlpmtx_std::less<BSPFace>());
+
+    int totalFaces = 0;
+    for (std::list<BSPFace>::iterator it = faces.begin(); it != faces.end(); ++it)
+        totalFaces++;
+
+    float bestScore = -1.0f;
+    int candidateIdx = 0;
+    for (std::list<BSPFace>::iterator faceIt = faces.begin(); faceIt != faces.end(); ++faceIt) {
+        if (candidateIdx >= gBSPMaxCandidates) break;
+        BSPFace &candFace = *faceIt;
+        for (std::list<Plane>::iterator planeIt = candFace.planes.begin(); planeIt != candFace.planes.end(); ++planeIt) {
+            const Plane &candPlane = *planeIt;
+            if (totalFaces == 1) {
+                node->plane = candPlane;
+                bestScore = 0.0f;
+                break;
+            }
+            int frontCount = 0, backCount = 0, spanCount = 0;
+            float frontArea = 0.0f, backArea = 0.0f;
+            std::list<BSPFace>::iterator jt;
+            for (jt = faces.begin(); jt != faces.end(); ++jt) {
+                bool front = false, back = false;
+                jt->OnSide(candPlane, front, back);
+                if (!front && !back) {
+                    if (fabs(candPlane.a * jt->t.m.z.x + candPlane.b * jt->t.m.z.y + candPlane.c * jt->t.m.z.z) < gBSPDirTol)
+                        break;
+                } else {
+                    if (back) {
+                        backArea += jt->area;
+                        backCount++;
+                        if (!front) continue;
+                        spanCount++;
+                    }
+                    frontArea += jt->area;
+                    frontCount++;
+                }
+            }
+            if (jt != faces.end()) {
+                candidateIdx--;
+                continue;
+            }
+            if (frontCount < totalFaces && backCount < totalFaces) {
+                float score = (float)pow((double)(spanCount + frontCount), 0.6) * backArea
+                            + (float)pow((double)(spanCount + backCount), 0.6) * frontArea;
+                if (bestScore < 0.0f || score < bestScore) {
+                    node->plane = candPlane;
+                    bestScore = score;
+                }
+            }
+        }
+        candidateIdx++;
+    }
+
+    if (bestScore < 0.0f) {
+        TheDebug.Notify(MakeString("Couldn't find candidate plane"));
+        return false;
+    }
+
+    std::list<BSPFace> frontFaces, backFaces;
+    std::list<BSPFace>::iterator it = faces.begin();
+    while (it != faces.end()) {
+        std::list<BSPFace>::iterator cur = it++;
+        BSPFace &face = *cur;
+        bool front = false, back = false;
+        face.OnSide(node->plane, front, back);
+        if (!front && !back) {
+            faces.erase(cur);
+        } else if (!back) {
+            frontFaces.splice(frontFaces.begin(), faces, cur);
+        } else if (!front) {
+            backFaces.splice(backFaces.begin(), faces, cur);
+        } else {
+            Hmx::Ray ray;
+            Intersect(face.t, node->plane, ray);
+            BSPFace frontFace;
+            frontFace.t = face.t;
+            Clip(face.p, ray, frontFace.p);
+            if (frontFace.p.points.size() > 2) {
+                frontFace.Update();
+                frontFaces.insert(frontFaces.begin(), frontFace);
+            }
+            ray.dir.Set(-ray.dir.x, -ray.dir.y);
+            Clip(face.p, ray, face.p);
+            if (face.p.points.size() > 2) {
+                face.Update();
+                backFaces.splice(backFaces.begin(), faces, cur);
+            }
+        }
+    }
+
+    bool ok = MakeBSPTree(node->left, frontFaces, nextDepth);
+    if (ok)
+        ok = MakeBSPTree(node->right, backFaces, nextDepth);
+    frontFaces.clear();
+    backFaces.clear();
+    return ok;
+}
+#else
 bool MakeBSPTree(BSPNode *&, std::list<BSPFace> &, int) { return false; }
+#endif
 
 bool Intersect(const Transform &tf, const Hmx::Polygon &poly, const BSPNode *node) {
     if (!node)

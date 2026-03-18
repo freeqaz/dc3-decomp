@@ -12,51 +12,21 @@
 #include "os/System.h"
 #include "utl/BinStream.h"
 #include "utl/Symbol.h"
-#ifdef HX_NATIVE
-#include <algorithm>
-#endif
 
 #ifdef HX_NATIVE
 Hmx::Object *Hmx::Object::sDeleting;
-bool gSuppressRefErase = false;
-std::vector<DeferredPurge> gDeferredPurges;
 
 void ObjRef::ReplaceList(Hmx::Object *obj) {
     // Xbox-style live ring walk: each Replace() removes the ref from this
     // ring (via Release) and adds it to obj's ring (via AddRef), so `next`
     // naturally advances.
-    //
-    // The defensive vtable check handles refs whose memory was freed by
-    // external events (e.g. UIPanel::Unload cascading destructor chains)
-    // before this walk started. On Xbox, the allocator doesn't zero freed
-    // memory so the vtable remains valid; our allocator may zero it.
-    SuppressEraseScope guard;
     while (next != this) {
         ObjRef *cur = next;
-        // Detect freed refs: when an ObjRef's containing object is destroyed
-        // externally (e.g. UIPanel::Unload cascading destructor chains), the
-        // allocator may zero the freed memory. On Xbox, freed memory retains
-        // its vtable so this doesn't crash. On native, we must detect and
-        // unlink these stale entries to avoid dereferencing a null vtable.
-        if (!*(void **)cur) {
-            cur->prev->next = cur->next;
-            cur->next->prev = cur->prev;
-            continue;
+        next->Replace(obj);
+        if (cur == next) {
+            MILO_FAIL("ReplaceList stuck in infinite loop");
+            break;
         }
-        cur->Replace(obj);
-    }
-
-    // At outermost ReplaceList (gSuppressRefErase restored to false),
-    // purge null entries from all ObjPtrVecs that deferred erases.
-    if (!gSuppressRefErase && !gDeferredPurges.empty()) {
-        std::sort(gDeferredPurges.begin(), gDeferredPurges.end(),
-            [](const DeferredPurge &a, const DeferredPurge &b) { return a.vec < b.vec; });
-        auto last = std::unique(gDeferredPurges.begin(), gDeferredPurges.end(),
-            [](const DeferredPurge &a, const DeferredPurge &b) { return a.vec == b.vec; });
-        for (auto it = gDeferredPurges.begin(); it != last; ++it) {
-            it->purge(it->vec);
-        }
-        gDeferredPurges.clear();
     }
 }
 #endif

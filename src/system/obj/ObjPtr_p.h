@@ -39,7 +39,20 @@ ObjRefConcrete<T1, T2>::~ObjRefConcrete() {
 template <class T1, class T2>
 void ObjRefConcrete<T1, T2>::SetObjConcrete(T1 *obj) {
     if (mObject) {
+#ifdef HX_NATIVE
+        // During ~Object::ReplaceRefs(NULL), the dying object's ref ring may
+        // contain entries pointing to already-freed objects from prior destruction
+        // cascades. When mObject doesn't match the currently dying object, skip
+        // Release to avoid dereferencing freed memory.
+        if (Hmx::Object::IsDeleting() &&
+            static_cast<Hmx::Object *>(mObject) != Hmx::Object::GetDeleting()) {
+            mObject = nullptr;
+        } else {
+            mObject->Release(this);
+        }
+#else
         mObject->Release(this);
+#endif
     }
     mObject = obj;
     if (mObject) {
@@ -206,18 +219,6 @@ ObjPtrVec<T1, T2>::Node::Node(const Node &n)
 
 template <class T1, class T2>
 ObjPtrVec<T1, T2>::~ObjPtrVec() {
-#ifdef HX_NATIVE
-    // If this ObjPtrVec registered for deferred purge but is being destroyed
-    // before the outermost ReplaceList exits (e.g. cascading delete via
-    // ObjDirPtr::operator= during a Replace walk), remove its entries from
-    // gDeferredPurges to prevent calling PurgeNulls on freed memory.
-    if (gSuppressRefErase && !gDeferredPurges.empty()) {
-        gDeferredPurges.erase(
-            std::remove_if(gDeferredPurges.begin(), gDeferredPurges.end(),
-                [this](const DeferredPurge &p) { return p.vec == this; }),
-            gDeferredPurges.end());
-    }
-#endif
     mNodes.clear();
 }
 
@@ -229,14 +230,11 @@ void ObjPtrVec<T1, T2>::ReplaceNode(Node *n, Hmx::Object *obj) {
         Hmx::Object *oldObj = n->SetObj(obj);
         if (!oldObj && mListMode == kObjListNoNull) {
 #ifdef HX_NATIVE
-            if (gSuppressRefErase) {
-                // Can't erase now (would shift vector elements and invalidate
-                // ring pointers). Register for deferred cleanup after the
-                // outermost ReplaceList completes.
-                gDeferredPurges.push_back({this, [](void *p) {
-                    static_cast<ObjPtrVec<T1, T2> *>(p)->PurgeNulls();
-                }});
-            } else {
+            // During ~Object::ReplaceRefs (IsDeleting set), erasing from the
+            // vector shifts subsequent nodes, invalidating their ObjRef ring
+            // prev/next pointers. Suppress the erase; leaving a null entry is
+            // harmless — the vector will be destroyed shortly.
+            if (!Hmx::Object::IsDeleting()) {
                 erase(iterator(mNodes.begin() + (n - mNodes.data())));
             }
 #else

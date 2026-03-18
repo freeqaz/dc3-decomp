@@ -12,8 +12,7 @@
 #endif
 
 namespace {
-    class WidgetDrawSort {
-    public:
+    struct WidgetDrawSort {
         bool operator()(const UIListWidget *w1, const UIListWidget *w2) const {
             return w1->DrawOrder() < w2->DrawOrder();
         }
@@ -329,8 +328,8 @@ void UIListDir::FillElements(UIListState const &state, std::vector<UIListWidget 
 }
 
 void UIListDir::ListEntered() {
-    static Message start("start");
-    Handle(start, false);
+    static Message msg("start");
+    Handle(msg, false);
 }
 
 void UIListDir::BuildDrawState(

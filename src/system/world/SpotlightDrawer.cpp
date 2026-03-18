@@ -138,7 +138,7 @@ void SpotlightDrawer::DrawMeshVec(std::vector<SpotMeshEntry> &entries) {
         RndMultiMesh *multiMesh = canMesh->CreateMultiMesh();
         multiMesh->Instances().push_back(RndMultiMesh::Instance(it->mTransform));
         RndMesh *envMesh = it->mEnvMesh;
-        envMesh->Highlight();
+        reinterpret_cast<RndHighlightable *>(envMesh)->Highlight();
         std::vector<SpotMeshEntry>::iterator itEnd = entries.end();
         for (++it; it != itEnd; ++it) {
             bool envChanged = it->mEnvMesh != envMesh;
@@ -147,7 +147,7 @@ void SpotlightDrawer::DrawMeshVec(std::vector<SpotMeshEntry> &entries) {
                 multiMesh->DrawShowing();
                 if (envChanged && envMesh) {
                     envMesh = it->mEnvMesh;
-                    envMesh->Highlight();
+                    reinterpret_cast<RndHighlightable *>(envMesh)->Highlight();
                 }
                 if (canChanged) {
                     canMesh = it->mCanMesh;
@@ -624,3 +624,31 @@ void SpotlightDrawer::EndWorld() {
     }
     MILO_ASSERT(!sNeedDraw, 0x165);
 }
+
+#ifndef HX_NATIVE
+// Manual specialization for single-element erase to match target memcpy codegen
+// Target uses pointer comparison, then loop with dst in r3 and src = dst + 0x50
+namespace stlpmtx_std {
+typedef SpotlightDrawer::SpotMeshEntry SpotMeshEntry_;
+template <>
+SpotMeshEntry_* vector<SpotMeshEntry_, StlNodeAlloc<SpotMeshEntry_>>::_M_erase(
+    SpotMeshEntry_* __pos,
+    const __false_type&
+) {
+    SpotMeshEntry_* __next = __pos + 1;
+    if (__next != this->_M_finish) {
+        int __count = (this->_M_finish - __next) / 0x50;
+        SpotMeshEntry_* __dst = __pos;
+        do {
+            SpotMeshEntry_* __src = __dst + 1;
+            memcpy(__dst, __src, 0x50);
+            __count--;
+            __dst = __src;
+        } while (__count != 0);
+    }
+
+    this->_M_finish--;
+    return __pos;
+}
+}  // namespace stlpmtx_std
+#endif

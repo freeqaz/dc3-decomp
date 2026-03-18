@@ -7,6 +7,7 @@
 #include "obj/DataFunc.h"
 #include "obj/Dir.h"
 #include "gesture/SkeletonUpdate.h"
+#include <cstring>
 
 namespace {
     int kAnalyzeJoints[] = { 0,  1,  2,  3,  4,  5,  6,  7,  8,  9,
@@ -21,23 +22,206 @@ namespace {
                             "-++0--++0--++0--++0-",
                             "-0++--0++--0++--0++-" };
     int kConvCount = 4;
-    int kConvLen;
+    int kConvLen = strlen(kConv[0]);
+
+    float Mean(const std::vector<float> &, int, int);
+    float Variance(const std::vector<float> &, float, int, int);
+    const std::vector<float> &jointWeight();
 
     __declspec(noinline) void AnalyzeData(
         const std::vector<RhythmDetector::Frame> &frames,
-        float &f1,
-        float &f2,
-        float &f3,
-        float f4,
+        float &outScore,
+        float &outEnergy,
+        float &decay,
+        float toleranceFactor,
         bool b1,
         Symbol sym,
         bool b2,
         DebugGraph *dbg,
-        int i1,
+        int logIdx,
         TextStream *stream
     ) {
-        // stub - real implementation not yet decompiled
-        f1 = 0;
+        unsigned int numFrames = frames.size();
+        float totalWeightedScore = 0.0f;
+        float timeScale = (float)numFrames * 0.025f;
+
+        if (numFrames >= 10) {
+            float totalRaw = 0.0f;
+
+            for (int jointIdx = 0; jointIdx < 20; jointIdx++) {
+                const std::vector<float> &weights = jointWeight();
+                float w = weights[jointIdx];
+
+                if (w != 0.0f) {
+                    if (stream) {
+                        *stream << "<br>";
+                    }
+
+                    float rawFill = 0.0f;
+                    float normFill = 0.0f;
+
+                    for (int comp = 0; comp < 3; comp++) {
+                        float rawAbsSum = 0.0f;
+                        float bestConv = 0.0f;
+
+                        static std::vector<float> raw;
+                        static std::vector<float> normalized;
+
+                        // Resize raw to min(numFrames, 40)
+                        unsigned int count = frames.size();
+                        if (count >= 40) count = 40;
+
+                        unsigned int rawSize = raw.size();
+                        if (count < rawSize) {
+                            raw.erase(raw.begin() + count, raw.end());
+                        } else {
+                            raw.insert(raw.end(), count - rawSize, rawFill);
+                        }
+
+                        // Resize normalized to min(numFrames, 40)
+                        count = frames.size();
+                        if (count >= 40) count = 40;
+
+                        unsigned int normSize = normalized.size();
+                        if (count < normSize) {
+                            normalized.erase(normalized.begin() + count, normalized.end());
+                        } else {
+                            normalized.insert(normalized.end(), count - normSize, normFill);
+                        }
+
+                        // Fill raw with absolute joint velocities
+                        if (raw.size() != 0) {
+                            for (unsigned int f = 0; f < raw.size(); f++) {
+                                float val = frames[f].mJointVelocities[jointIdx][comp];
+                                float absVal = fabs(val);
+                                raw[f] = absVal;
+                                rawAbsSum += absVal;
+                            }
+                        }
+
+                        // Z-score first 6 entries using window [0, 10]
+                        float mean = Mean(raw, 0, 10);
+                        float var = Variance(raw, mean, 0, 10);
+                        for (int i = 0; i < 6; i++) {
+                            normalized[i] = (raw[i] - mean) * (1.0f / var);
+                        }
+
+                        // Compute midpoint
+                        int rawSz = raw.size();
+                        int midEnd = rawSz - 6;
+                        if ((unsigned)(rawSz - 6) < 7) midEnd = 6;
+
+                        // Z-score middle section with sliding window
+                        if (midEnd > 6) {
+                            int windowStart = 1;
+                            int rawOffset = 6;
+                            int remaining = midEnd - 6;
+                            do {
+                                mean = Mean(raw, windowStart, windowStart + 10);
+                                float diff = raw[rawOffset] - mean;
+                                var = Variance(raw, mean, windowStart, windowStart + 10);
+                                remaining--;
+                                windowStart++;
+                                normalized[rawOffset] = diff / var;
+                                rawOffset++;
+                            } while (remaining != 0);
+                        }
+
+                        // Z-score tail section
+                        int tailStart = midEnd - 5;
+                        mean = Mean(raw, tailStart, midEnd + 5);
+                        var = Variance(raw, mean, tailStart, midEnd + 5);
+
+                        if ((unsigned)midEnd < raw.size() - 1) {
+                            int idx = midEnd;
+                            do {
+                                normalized[idx] = (raw[idx] - mean) * (1.0f / var);
+                                idx++;
+                            } while ((unsigned)idx < raw.size() - 1);
+                        }
+
+                        // Sum of absolute normalized values
+                        float absNormSum = 0.0f;
+                        unsigned int normCount = normalized.size();
+                        if (normCount != 0) {
+                            for (unsigned int i = 0; i < normCount; i++) {
+                                absNormSum += fabs(normalized[i]);
+                            }
+                        }
+
+                        // Convolution with kConv patterns
+                        if (kConvCount > 0) {
+                            int c = kConvCount;
+                            const char **convPtr = kConv;
+                            do {
+                                for (int offset = 0; offset < kConvLen; offset++) {
+                                    float convSum = 0.0f;
+                                    if (normCount != 0) {
+                                        for (unsigned int i = 0; i < normCount; i++) {
+                                            float val = normalized[i];
+                                            int idx = (i + offset) % kConvLen;
+                                            if ((*convPtr)[idx] == '-') {
+                                                val = val * -1.0f;
+                                            } else if ((*convPtr)[idx] == '0') {
+                                                val = fabs(val);
+                                            }
+                                            convSum += val;
+                                        }
+                                    }
+                                    if (convSum > bestConv) {
+                                        bestConv = convSum;
+                                    }
+                                }
+                                convPtr++;
+                                c--;
+                            } while (c != 0);
+                        }
+
+                        // Compute rhythm ratio and score
+                        float rhythmRatio = bestConv / absNormSum;
+                        float score = rhythmRatio * rawAbsSum;
+
+                        // Debug output
+                        if (stream) {
+                            *stream << " ";
+                            *stream << MakeString("%0.2f", rhythmRatio);
+                            *stream << "&middot;";
+                            int iScore = (int)(rawAbsSum * w);
+                            *stream << iScore;
+                            const char *spacing = "&nbsp;&nbsp;";
+                            if (iScore >= 10) {
+                                if (iScore >= 100) goto skipSpacing;
+                                spacing = "&nbsp;";
+                            }
+                            *stream << spacing;
+                        }
+                    skipSpacing:
+
+                        totalRaw += rawAbsSum * w;
+                        totalWeightedScore += score * w;
+                    }
+                }
+            }
+
+            // Clamp totalRaw
+            float threshold = timeScale * 200.0f;
+            float diff = totalRaw - threshold;
+            float clampedRaw = diff >= 0.0f ? totalRaw : threshold;
+
+            outScore = (totalWeightedScore / clampedRaw) * timeScale;
+
+            outEnergy = totalRaw >= 200.0f ? totalRaw : 0.0f;
+
+            // Debug summary
+            if (stream) {
+                *stream << "<br>";
+                *stream << (int)totalWeightedScore;
+                *stream << "/";
+                *stream << (int)totalRaw;
+                *stream << "=";
+                *stream << outScore;
+            }
+        }
     }
 
     DataNode TightenDebugBone(DataArray *da) {
@@ -110,6 +294,24 @@ namespace {
             return sum / count;
         }
         return 0.0f;
+    }
+
+    const std::vector<float> &jointWeight() {
+        static std::vector<float> data;
+        static UIPanel *panel =
+            ObjectDir::Main()->Find<UIPanel>("rhythm_detector_panel", false);
+        DataArray *typeDef = panel->TypeDef();
+        if (data.empty()) {
+            static Symbol jointWeightSym("joint_weight");
+            DataArray *minJoints = typeDef->FindArray(jointWeightSym, true);
+            MILO_ASSERT(minJoints->Size() == kNumJoints + 1, 0x4b4);
+            for (int i = 1; i < minJoints->Size(); i++) {
+                float val = minJoints->Node(i).Float();
+                data.push_back(val);
+            }
+            MILO_ASSERT(data.size() == kNumJoints, 0x4bc);
+        }
+        return data;
     }
 
     const std::vector<float> &minJointSpeedVector() {

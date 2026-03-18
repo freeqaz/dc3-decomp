@@ -95,8 +95,6 @@ bool HDCache::WriteDone() {
     return mWriteBlock == -1;
 }
 
-void HDCache::Flush() {}
-
 void HDCache::Poll() {
     if (mWritingHeader) {
         if (mHdr[mHdrIdx]->WriteDone()) {

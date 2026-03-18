@@ -20,29 +20,6 @@ class ObjectDir;
 class MergeFilter;
 void MergeObjectsRecurse(ObjectDir *, ObjectDir *, MergeFilter &, bool);
 
-#ifdef HX_NATIVE
-// During ReplaceList, ObjPtrVec node erasure is suppressed to prevent vector
-// element shifting from invalidating ObjRef ring prev/next pointers. Instead,
-// affected ObjPtrVecs register themselves for deferred cleanup. At the outermost
-// ReplaceList exit, all registered vectors purge their null entries.
-extern bool gSuppressRefErase;
-
-struct DeferredPurge {
-    void *vec;
-    void (*purge)(void *);
-};
-extern std::vector<DeferredPurge> gDeferredPurges;
-
-class SuppressEraseScope {
-    bool mOldValue;
-    SuppressEraseScope(const SuppressEraseScope &) = delete;
-    SuppressEraseScope &operator=(const SuppressEraseScope &) = delete;
-public:
-    SuppressEraseScope() : mOldValue(gSuppressRefErase) { gSuppressRefErase = true; }
-    ~SuppressEraseScope() { gSuppressRefErase = mOldValue; }
-};
-#endif
-
 #pragma region ObjRef
 
 // Object Ref/Ptr declarations
@@ -400,15 +377,6 @@ public:
     void Set(iterator it, T1 *obj);
     void merge(const ObjPtrVec &);
     Hmx::Object *Owner() const { return mOwner; }
-#ifdef HX_NATIVE
-    void PurgeNulls() {
-        for (int i = (int)mNodes.size() - 1; i >= 0; i--) {
-            if (!mNodes[i].Obj())
-                mNodes.erase(mNodes.begin() + i);
-        }
-    }
-#endif
-
     // see Draw.cpp for this
     void operator=(const ObjPtrVec &other);
 
@@ -1156,6 +1124,11 @@ namespace Hmx {
 
         Object();
         virtual ~Object();
+#ifdef HX_NATIVE
+        /** True when inside ~Object() -> ReplaceRefs(NULL) chain. */
+        static bool IsDeleting() { return sDeleting != nullptr; }
+        static Object *GetDeleting() { return sDeleting; }
+#endif
         virtual Object *RefOwner() const { return const_cast<Object *>(this); }
         virtual bool Replace(ObjRef *from, Hmx::Object *to);
         /** This Object's class name. */

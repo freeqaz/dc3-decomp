@@ -64,9 +64,12 @@ public:
     virtual bool IsDirPtr() { return true; }
     virtual void Replace(Hmx::Object *o) {
 #ifdef HX_NATIVE
-        // During merges, Replace can be called on ObjDirPtrs whose target
-        // was already freed. Xbox crashes here (UB); native guards it.
-        if (!ObjRefConcrete<C>::mObject) return;
+        if (!ObjRefConcrete<C>::mObject) {
+            // mObject is already null — operator= won't call Release, so
+            // manually unlink from ring to prevent infinite ReplaceList loop.
+            ObjRef::Release(this);
+            return;
+        }
 #else
         MILO_ASSERT(ObjRefConcrete<C>::mObject, 0x70);
 #endif
@@ -451,6 +454,13 @@ public:
     FilePath GetSubDirPath(const FilePath &, const BinStream &);
     /** Delete all Objects in this ObjectDir. */
     void DeleteObjects();
+#ifdef HX_NATIVE
+    /** Nonzero when inside DeleteObjects() (may nest via cascading dtors). */
+    static bool InDeleteObjects() { return sDeleteObjectsDepth > 0; }
+private:
+    static int sDeleteObjectsDepth;
+public:
+#endif
     /** Delete all subdirs of this ObjectDir. */
     void DeleteSubDirs();
     ObjectDir *FindContainingDir(const char *);

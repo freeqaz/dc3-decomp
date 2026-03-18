@@ -71,49 +71,40 @@ public:
             float threshold
         ) const {
             unsigned int axis = (unsigned int)(unsigned char)idx;
-            if (box.mMax[axis] < (double)threshold || (double)threshold < box.mMin[axis]) {
+            if (threshold > box.mMax[axis] || threshold < box.mMin[axis]) {
                 return FLT_MAX;
             }
 
             // Split box at threshold on given axis
-            Box leftBox = box;
-            Box rightBox = box;
+            Box leftBox(box.mMin, box.mMax);
+            Box rightBox(box.mMin, box.mMax);
             leftBox.mMax[axis] = threshold;
             rightBox.mMin[axis] = threshold;
 
-            // SAH: cost = leftCount * leftArea/totalArea + rightCount * rightArea/totalArea + 0.3
             float totalArea = box.SurfaceArea();
             float invTotalArea = 1.0f / totalArea;
-            float leftAreaFrac = (float)((double)leftBox.SurfaceArea() * (double)invTotalArea);
-            float rightAreaFrac = (float)((double)rightBox.SurfaceArea() * (double)invTotalArea);
+            float leftAreaFrac = (float)(leftBox.SurfaceArea() * invTotalArea);
+            float rightAreaFrac = (float)(rightBox.SurfaceArea() * invTotalArea);
 
-            double leftCount = 0.0;
-            double rightCount = 0.0;
-            double half = 0.5;
-            double one = 1.0;
+            float leftCount = 0.0f;
+            float rightCount = 0.0f;
             for (auto it = triangles.begin(); it != triangles.end(); ++it) {
                 Triangle *tri = *it;
-                bool inLeft = leftBox.Contains(*tri);
-                bool inRight = rightBox.Contains(*tri);
-                if (inLeft) {
-                    leftCount = (double)(float)(leftCount + one);
-                } else if (inRight) {
-                    rightCount = (double)(float)(rightCount + one);
+                if (leftBox.Contains(*tri)) {
+                    leftCount = leftCount + 1.0f;
+                } else if (rightBox.Contains(*tri)) {
+                    rightCount = rightCount + 1.0f;
                 } else {
-                    bool leftIntersects = ::Intersect(*tri, leftBox);
-                    bool rightIntersects = ::Intersect(*tri, rightBox);
-                    if (leftIntersects) {
-                        leftCount = (double)(float)(leftCount + half);
+                    if (::Intersect(*tri, leftBox)) {
+                        leftCount = leftCount + 0.5f;
                     }
-                    if (rightIntersects) {
-                        rightCount = (double)(float)(rightCount + half);
+                    if (::Intersect(*tri, rightBox)) {
+                        rightCount = rightCount + 0.5f;
                     }
                 }
             }
 
-            return (float)(rightCount * (double)rightAreaFrac +
-                           (double)(float)(leftCount * (double)leftAreaFrac)) +
-                   0.3f;
+            return (float)(rightCount * rightAreaFrac) + leftCount * leftAreaFrac + 0.3f;
         }
 
         bool FindSplit_Mean(const Box &box, const std::list<Triangle *> &items) {

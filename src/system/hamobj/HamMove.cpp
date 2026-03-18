@@ -843,8 +843,10 @@ float HamMove::PSNRToDetectFrac(float psnr) const {
     }
     MoveRating upper = (MoveRating)(rating - 1);
     float upperThresh = PSNRThreshold(upper);
-    float lowerThresh = 0.0f;
-    if (rating != kNumMoveRatings) {
+    float lowerThresh;
+    if (rating == kNumMoveRatings) {
+        lowerThresh = 0.0f;
+    } else {
         lowerThresh = PSNRThreshold(rating);
     }
     if (upperThresh <= lowerThresh) {
@@ -856,8 +858,10 @@ float HamMove::PSNRToDetectFrac(float psnr) const {
     if (upper != (MoveRating)0) {
         upperDefault = sDefaultRatingThresholds[upper - 1];
     }
-    float lowerDefault = 0.0f;
-    if (rating != kNumMoveRatings) {
+    float lowerDefault;
+    if (rating == kNumMoveRatings) {
+        lowerDefault = 0.0f;
+    } else {
         lowerDefault = sDefaultRatingThresholds[rating - 1];
     }
     return (upperDefault - lowerDefault) * clamped + lowerDefault;

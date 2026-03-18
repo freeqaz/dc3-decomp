@@ -42,6 +42,23 @@
             border: 1px solid #333;
             font-family: 'JetBrains Mono', 'Fira Code', monospace;
         }
+        #toolbar {
+            margin-top: 8px;
+            display: flex;
+            gap: 8px;
+        }
+        #toolbar button {
+            background: #1a1a1a;
+            color: #ccc;
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 4px 14px;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        #toolbar button:hover { background: #2a2a2a; border-color: #555; }
+        #toolbar button.active { color: #f90; border-color: #f90; }
         #console {
             margin-top: 8px;
             max-width: 1280px;
@@ -69,6 +86,10 @@
         <span>Space</span> start &nbsp;
         <span>Tab</span> select &nbsp;
         <span>Q/E</span> LB/RB
+    </div>
+    <div id="toolbar">
+        <button id="btn-pause" title="Pause/resume engine loop (P)">Pause</button>
+        <button id="btn-step" title="Advance one frame while paused (.)">Step</button>
     </div>
     <div id="console"></div>
 
@@ -134,6 +155,45 @@
             };
             document.body.appendChild(script);
         }
+
+        // Pause / step controls
+        var paused = false;
+        var btnPause = document.getElementById('btn-pause');
+        var btnStep = document.getElementById('btn-step');
+
+        function togglePause() {
+            if (!Module || !Module._main) return;
+            paused = !paused;
+            if (paused) {
+                Module.pauseMainLoop();
+                btnPause.textContent = 'Resume';
+                btnPause.classList.add('active');
+                status.textContent = 'Paused (frame ' + (window.dc3FrameCount || '?') + ')';
+            } else {
+                Module.resumeMainLoop();
+                btnPause.textContent = 'Pause';
+                btnPause.classList.remove('active');
+                status.textContent = 'Rendering';
+                status.className = 'ok';
+            }
+        }
+
+        function stepFrame() {
+            if (!paused || !Module || !Module._main) return;
+            Module.resumeMainLoop();
+            setTimeout(function() {
+                Module.pauseMainLoop();
+                status.textContent = 'Paused (frame ' + (window.dc3FrameCount || '?') + ')';
+            }, 0);
+        }
+
+        btnPause.addEventListener('click', togglePause);
+        btnStep.addEventListener('click', stepFrame);
+        document.addEventListener('keydown', function(e) {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            if (e.key === 'p' || e.key === 'P') { e.preventDefault(); togglePause(); }
+            if (e.key === '.' && paused) { e.preventDefault(); stepFrame(); }
+        });
     </script>
 </body>
 </html>

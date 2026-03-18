@@ -71,6 +71,11 @@ void EnsureSymbolInit() {
     Symbol::PreInit(0x80000, 0x4000);
 }
 
+void EngineTeardown() {
+    SystemTerminate();
+    TheRnd.Terminate();
+}
+
 void EnsureEngineInit() {
     if (sEngineInitialized)
         return;
@@ -91,6 +96,8 @@ void EnsureEngineInit() {
     TheRnd.PreInit();
     SystemInit("config/ham_keep.dta");
     TheRnd.Init();
+
+    std::atexit(EngineTeardown);
 
     // Register subsystem types
     FlowInit();

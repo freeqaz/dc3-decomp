@@ -104,7 +104,7 @@ void sort_heap(_RandomAccessIterator __first, _RandomAccessIterator __last)
 
 template <class _RandomAccessIterator, class _Compare>
 _STLP_INLINE_LOOP
-void 
+void
 sort_heap(_RandomAccessIterator __first,
           _RandomAccessIterator __last, _Compare __comp)
 {

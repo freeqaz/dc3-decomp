@@ -46,6 +46,11 @@ ObjectDir::ObjectDir()
 }
 
 ObjectDir::~ObjectDir() {
+#ifdef HX_NATIVE
+    // Track destruction depth so FlowNode and other owner-delete patterns
+    // can skip child deletion during cascading directory teardown.
+    sDeleteObjectsDepth++;
+#endif
     mSubDirs.clear();
     delete mLoader;
     if (TheLoadMgr.AsyncUnload()) {
@@ -63,6 +68,9 @@ ObjectDir::~ObjectDir() {
     if (mAlwaysInlineHash != gNullStr) {
         MemOrPoolFree(strlen(mAlwaysInlineHash) + 1, (void *)mAlwaysInlineHash);
     }
+#ifdef HX_NATIVE
+    sDeleteObjectsDepth--;
+#endif
 }
 
 BEGIN_HANDLERS(ObjectDir)
@@ -673,33 +681,23 @@ void ObjectDir::RemovingSubDir(ObjDirPtr<ObjectDir> &subdir) {
     }
 }
 
+
+#ifdef HX_NATIVE
+int ObjectDir::sDeleteObjectsDepth = 0;
+#endif
+
 void ObjectDir::DeleteObjects() {
 #ifdef HX_NATIVE
-    static int sTraceDeleteObjects = -1;
-    if (sTraceDeleteObjects == -1) {
-        const char *env = std::getenv("MILO_TRACE_DELETE_OBJECTS");
-        sTraceDeleteObjects = (env && env[0] && strcmp(env, "0") != 0) ? 1 : 0;
-    }
-    int idx = 0;
+    sDeleteObjectsDepth++;
 #endif
     for (ObjDirItr<Hmx::Object> it(this, false); it != nullptr; ++it) {
         if (it != this) {
-#ifdef HX_NATIVE
-            if (sTraceDeleteObjects) {
-                printf("TRACE DeleteObjects[%s] #%d pre '%s' (%s)\n",
-                       Name(), idx, ((Hmx::Object *)it)->Name(),
-                       ((Hmx::Object *)it)->ClassName().Str());
-            }
-#endif
             delete it;
-#ifdef HX_NATIVE
-            if (sTraceDeleteObjects) {
-                printf("TRACE DeleteObjects[%s] #%d post\n", Name(), idx);
-            }
-            idx++;
-#endif
         }
     }
+#ifdef HX_NATIVE
+    sDeleteObjectsDepth--;
+#endif
 }
 
 void ObjectDir::RemoveSubDir(const ObjDirPtr<ObjectDir> &dPtr) {

@@ -890,7 +890,7 @@ void __insertion_sort(_RandomAccessIter __first,
 }
 
 template <class _RandomAccessIter, class _Tp, class _Compare>
-void __unguarded_insertion_sort_aux(_RandomAccessIter __first, 
+void __unguarded_insertion_sort_aux(_RandomAccessIter __first,
                                     _RandomAccessIter __last,
                                     _Tp*, _Compare __comp) {
   for (_RandomAccessIter __i = __first; __i != __last; ++__i)
@@ -898,14 +898,14 @@ void __unguarded_insertion_sort_aux(_RandomAccessIter __first,
 }
 
 template <class _RandomAccessIter, class _Compare>
-inline void __unguarded_insertion_sort(_RandomAccessIter __first, 
+inline void __unguarded_insertion_sort(_RandomAccessIter __first,
                                        _RandomAccessIter __last,
                                        _Compare __comp) {
   __unguarded_insertion_sort_aux(__first, __last, _STLP_VALUE_TYPE(__first, _RandomAccessIter), __comp);
 }
 
 template <class _RandomAccessIter, class _Compare>
-void __final_insertion_sort(_RandomAccessIter __first, 
+void __final_insertion_sort(_RandomAccessIter __first,
                             _RandomAccessIter __last, _Compare __comp) {
   if (__last - __first > __stl_threshold) {
     __insertion_sort(__first, __first + __stl_threshold, _STLP_VALUE_TYPE(__first,_RandomAccessIter), __comp);

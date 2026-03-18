@@ -987,30 +987,10 @@ Symbol ProfileMgr::GetAlternateOutfit(Symbol outfit) {
     outfitChar = GetCharacterOutfit(altChar, 0, true);
 
     char buf[96];
-    const char *altStr = outfitChar.Str();
-    altStr--;
-    char c;
-    do {
-        char *dst = buf - 1;
-        c = *++altStr;
-        *++dst = c;
-    } while (c);
+    strcpy(buf, outfitChar.Str());
 
-    const char *origEnd = outfit.Str();
-    unsigned char ch2;
-    do {
-        ch2 = *origEnd;
-        origEnd++;
-    } while (ch2);
-    int origLen = origEnd - outfit.Str() - 1;
-
-    const char *bufEnd = buf;
-    unsigned char ch3;
-    do {
-        ch3 = *bufEnd;
-        bufEnd++;
-    } while (ch3);
-    int bufLen = bufEnd - buf - 1;
+    int origLen = strlen(outfit.Str());
+    int bufLen = strlen(buf);
 
     buf[bufLen - 2] = outfit.Str()[origLen - 2];
     buf[bufLen - 1] = outfit.Str()[origLen - 1];

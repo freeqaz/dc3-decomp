@@ -379,6 +379,9 @@ void WgpuRnd::InitGpuResources() {
 }
 
 void WgpuRnd::Terminate() {
+    extern void BoneSetupTerminate();
+    extern void PartTerminate();
+
     // Finalize video recording before GPU teardown
     mVideoEncoder.Finish();
     if (mVideoPixels) {
@@ -422,9 +425,17 @@ void WgpuRnd::Terminate() {
     mPostProcPass.Terminate();
     mShadowPass.Terminate();
 
+    BoneSetupTerminate();
+    PartTerminate();
+
     // Intermediate texture
     mIntermediateTex = nullptr;
     mIntermediateView = nullptr;
+
+    // Per-frame state
+    mEncoder = nullptr;
+    mPass = nullptr;
+    mFrameView = nullptr;
 
     mGpu.Shutdown();
 }

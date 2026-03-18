@@ -171,7 +171,7 @@ TEST_F(ObjectLifetimeTest, DeleteOrderDoesNotRequireTopologicalSortForObjPtr) {
     delete dir;
 }
 
-TEST_F(ObjectLifetimeTest, DeletingFlowChildLeavesNullTombstoneUntilParentTeardown) {
+TEST_F(ObjectLifetimeTest, DeletingFlowChildRemovesFromParent) {
     ExposedFlow *flow = new ExposedFlow();
     FlowAnimate *child = Hmx::Object::New<FlowAnimate>();
 
@@ -181,8 +181,9 @@ TEST_F(ObjectLifetimeTest, DeletingFlowChildLeavesNullTombstoneUntilParentTeardo
 
     delete child;
 
-    EXPECT_EQ(flow->ChildCount(), 1);
-    EXPECT_EQ(flow->FrontChild(), nullptr);
+    // With immediate erasure (no deferred purge), the child is removed
+    // from the parent's ObjPtrVec as soon as ReplaceRefs(nullptr) runs.
+    EXPECT_EQ(flow->ChildCount(), 0);
 
     delete flow;
 }
@@ -531,31 +532,6 @@ TEST_F(ObjectLifetimeTest, DirPtrRefCountsConsistentAfterMerge) {
 
 // Verify that ObjPtrVec deferred purge entries are cleaned up when the
 // ObjPtrVec is destroyed during a ReplaceList walk.
-TEST_F(ObjectLifetimeTest, DeferredPurgeCleanedOnObjPtrVecDestruction) {
-    // This tests the fix in ~ObjPtrVec: removing stale gDeferredPurges entries
-    // when the vector is destroyed before the outermost ReplaceList exits.
-    ObjectDir *dir = Hmx::Object::New<ObjectDir>();
-
-    Hmx::Object *target = Hmx::Object::New<Hmx::Object>();
-    target->SetName("target.obj", dir);
-
-    Hmx::Object *replacement = Hmx::Object::New<Hmx::Object>();
-    replacement->SetName("replacement.obj", dir);
-
-    // Create a group (has ObjPtrVec with kObjListOwnerControl) that references target
-    ExposedRndGroup *group = new ExposedRndGroup();
-    group->SetName("group.grp", dir);
-    group->AddObject(target);
-    ASSERT_EQ(group->ObjectCount(), 1);
-
-    // ReplaceRefs should handle the group's internal ObjPtrVec correctly
-    target->ReplaceRefs(replacement);
-
-    // The group should still be valid (not crashed)
-    EXPECT_GE(group->ObjectCount(), 0);
-
-    delete dir;
-}
 
 // Verify that the ObjDirPtr delete-during-cascade doesn't cause double-free.
 // When ObjDirPtr::operator= deletes an ObjectDir, the destructor chain

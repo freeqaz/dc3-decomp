@@ -121,6 +121,8 @@ Tool-specific deep docs live in subdirectories:
 
 | Doc | Description |
 |-----|-------------|
+| [debugging/native.md](debugging/native.md) | **Native port debugging** — decision tree, build configs, ASan, crash diagnosis, GPU capture, headless testing, env vars |
+| [debugging/object-lifecycle.md](debugging/object-lifecycle.md) | **Object lifecycle & ring debugging** — ObjRef rings, destruction cascades, double-ownership, native-only infrastructure, case studies |
 | [debugging/web.md](debugging/web.md) | **Web build debugging** — WASM/Emscripten testing, CDP debugger, headless desktop, env vars, case studies |
 
 ## Runtime & Testing

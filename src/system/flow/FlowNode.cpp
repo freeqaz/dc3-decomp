@@ -24,17 +24,25 @@ FlowNode::~FlowNode() {
     if (!mRunningNodes.empty()) {
         Deactivate(true);
     }
+#ifdef HX_NATIVE
+    if (ObjectDir::InDeleteObjects()) {
+        // During ~ObjectDir teardown, children may have already been freed
+        // by nested dir destruction or will be freed later by DeleteObjects.
+        // Don't cascade-delete them. Null out all ObjPtrVec nodes so the
+        // vector destructor's ~ObjRefConcrete doesn't dereference freed ptrs.
+        // Children that are still alive will have their Release called here
+        // (removing this parent's ref from their ring). Children that were
+        // already freed had their ReplaceRefs null our nodes already.
+        for (ObjPtrVec<FlowNode>::iterator it = mChildNodes.begin();
+             it != mChildNodes.end(); ++it) {
+            if (*it)
+                it->SetObjConcrete(nullptr);
+        }
+        return;
+    }
+#endif
     while (!mChildNodes.empty()) {
         FlowNode *cur = mChildNodes.front();
-#ifdef HX_NATIVE
-        // Native ReplaceRefs() snapshots ObjRef rings and suppresses ObjPtrVec
-        // node erasure while child refs are being nulled. That can leave a
-        // tombstoned null entry in mChildNodes during destruction.
-        if (!cur) {
-            mChildNodes.erase(mChildNodes.begin());
-            continue;
-        }
-#endif
         delete cur;
     }
 }

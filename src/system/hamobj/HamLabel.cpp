@@ -70,9 +70,9 @@ void HamLabel::PostLoad(BinStream &bs) {
 void HamLabel::Count(int i1, int i2, float f3, Symbol s) {
     mCountKeys.clear();
     float f1 = TheTaskMgr.UISeconds() * 1000;
-    mCountKeys.push_back(Key<float>(f1, i1));
+    mCountKeys.push_back(Key<float>(i1, f1));
     float f2 = f1 + f3;
-    mCountKeys.push_back(Key<float>(f2, i2));
+    mCountKeys.push_back(Key<float>(i2, f2));
     mCountToken = s;
 }
 
@@ -99,9 +99,10 @@ void HamLabel::Poll() {
         float ui_ms = TheTaskMgr.UISeconds() * 1000;
         mCountKeys.AtFrame(ui_ms, f3);
         SetTokenFmt(mCountToken, LocalizeSeparatedInt((int)f3, TheLocale));
-        if (ui_ms > mCountKeys.back().frame) {
+        if (ui_ms > mCountKeys.LastFrame()) {
             mCountKeys.clear();
-            TheUI->Handle(HamLabelCountDoneMsg(this), false);
+            HamLabelCountDoneMsg msg(this);
+            TheUI->Handle(msg, false);
         }
     }
     UpdateHandler();

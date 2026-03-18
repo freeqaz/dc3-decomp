@@ -332,7 +332,9 @@ void RndAmbientOcclusion::Clean() {
 }
 
 void RndAmbientOcclusion::BuildSHCoeff(const Vector3 &inVector, float *fArr) const {
-    MILO_ASSERT(Abs(1.0f - Length(inVector)) <= kSmallFloat, 0x298);
+    float diff = 1.0f - Length(inVector);
+    if (diff <= 0) diff = -diff;
+    MILO_ASSERT(diff <= kSmallFloat, 0x298);
     fArr[0] = 0.2820948f;
     fArr[1] = inVector.y * 0.48860252f;
     fArr[2] = inVector.z * 0.48860252f;

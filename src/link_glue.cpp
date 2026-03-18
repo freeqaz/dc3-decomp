@@ -10,6 +10,7 @@
 
 #include "obj/Data.h"
 #include "os/Debug.h"
+#include "os/HDCache.h"
 #include "utl/MemMgr.h"
 #include "utl/PoolAlloc.h"
 #include "synth/Faders.h"
@@ -28,6 +29,11 @@
 
 void operator delete(void *v) { MemFree(v, "unknown", 0, "unknown"); }
 void operator delete[](void *v) { MemFree(v, "unknown", 0, "unknown"); }
+
+// HDCache::Flush was defined in a separate TU from HDCache.cpp in the original
+// build, so the compiler couldn't see the empty body and emitted bl calls.
+// Keeping it here preserves that behavior for matching codegen.
+void HDCache::Flush() {}
 
 // (DataArray::Node removed — obj/DataArray is Matching)
 
@@ -504,9 +510,6 @@ extern "C" const char __link_glue_empty_str[] = "";
 // Removed: ??__EgParentPolys — symbol exists in matching Utl.obj
 #pragma comment(                                                                         \
     linker, "/ALTERNATENAME:??__EgPhysicsVolumeBox@?A0x5ba00aca@@YAXXZ=__link_glue_noop" \
-)
-#pragma comment(                                                                         \
-    linker, "/ALTERNATENAME:??__EkConvLen@?A0x5c754947@@YAXXZ=__link_glue_noop"          \
 )
 #pragma comment(                                                                         \
     linker,                                                                              \

@@ -130,40 +130,51 @@ function log(msg) { console.log(`[cdp-break] ${msg}`); }
         await page.click('canvas');
 
         // -- Navigate to song select --
-        await pressKey(' ', 150, 'Start (dismiss attract)');
+        // Key presses need longer holds (300ms) and longer stabilization waits
+        // because the engine processes input per-frame and screens take time to
+        // fully initialize their panels before accepting input.
+        await pressKey(' ', 300, 'Start (dismiss attract)');
         await waitForLog("will enter 'title_screen'");
-        await new Promise(r => setTimeout(r, 500));
+        await new Promise(r => setTimeout(r, 2000));
 
-        await pressKey(' ', 150, 'Start (skip title)');
+        await pressKey(' ', 300, 'Start (skip title)');
         await waitForLog("will enter 'main_screen'");
-        await new Promise(r => setTimeout(r, 500));
+        await new Promise(r => setTimeout(r, 3000));
 
-        await pressKey('Enter', 150, 'A (main menu)');
-        await waitForLog("will enter 'choose_mode_screen'");
-        await new Promise(r => setTimeout(r, 500));
-
-        await pressKey('Enter', 150, 'A (choose mode)');
-        if (!await waitForLog("will enter 'song_select_screen'")) {
-            log('FAIL: never reached song select');
-            process.exit(1);
+        await pressKey('Enter', 300, 'A (main menu)');
+        if (!await waitForLog("will enter 'choose_mode_screen'")) {
+            log('Retrying: A (main menu)');
+            await pressKey('Enter', 300, 'A (main menu retry)');
+            await waitForLog("will enter 'choose_mode_screen'");
         }
-        await new Promise(r => setTimeout(r, 1500));
+        await new Promise(r => setTimeout(r, 2000));
+
+        await pressKey('Enter', 300, 'A (choose mode)');
+        if (!await waitForLog("will enter 'song_select_screen'")) {
+            log('Retrying: A (choose mode)');
+            await pressKey('Enter', 300, 'A (choose mode retry)');
+            if (!await waitForLog("will enter 'song_select_screen'")) {
+                log('FAIL: never reached song select');
+                process.exit(1);
+            }
+        }
+        await new Promise(r => setTimeout(r, 2000));
 
         // Scroll to a song and select it
         for (let i = 0; i < 3; i++) {
-            await pressKey('ArrowDown', 150, `Down ${i+1}`);
-            await new Promise(r => setTimeout(r, 300));
+            await pressKey('ArrowDown', 300, `Down ${i+1}`);
+            await new Promise(r => setTimeout(r, 500));
         }
-        await pressKey('Enter', 150, 'A (select song)');
+        await pressKey('Enter', 300, 'A (select song)');
         log('Song selected, waiting for game to load and hang...');
 
         // Press confirmations concurrently (non-blocking)
         const doConfirms = async () => {
-            for (let i = 0; i < 5; i++) {
-                await new Promise(r => setTimeout(r, 1000));
-                await pressKey('Enter', 150, `A (confirm ${i+1})`);
+            for (let i = 0; i < 8; i++) {
+                await new Promise(r => setTimeout(r, 2000));
+                await pressKey('Enter', 300, `A (confirm ${i+1})`);
             }
-            await pressKey(' ', 150, 'Start');
+            await pressKey(' ', 300, 'Start');
         };
         doConfirms(); // fire and forget
 
@@ -180,8 +191,8 @@ function log(msg) { console.log(`[cdp-break] ${msg}`); }
             }
 
             // Safety: don't wait forever
-            if (Date.now() - startTime > 90000) {
-                log('Safety timeout reached (90s)');
+            if (Date.now() - startTime > 180000) {
+                log('Safety timeout reached (180s)');
                 break;
             }
         }

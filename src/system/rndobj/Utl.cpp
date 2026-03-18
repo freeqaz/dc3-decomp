@@ -2355,7 +2355,7 @@ BuildPoly::BuildPoly() : mPoly(), mTransform() {}
 // Cartesian coordinates, normalized, and pushed into the output vector.
 void BuildSphereStratified(unsigned int numSamples, std::vector<Vector3> &dirs) {
     Rand rand(0x29a);
-    unsigned int N = (unsigned int)(std::sqrt((float)numSamples) + 0.5f);
+    unsigned int N = (unsigned int)(sqrtf((float)numSamples) + 0.5f);
     dirs.erase(dirs.begin(), dirs.end());
     dirs.reserve(N * N);
 
@@ -2364,12 +2364,14 @@ void BuildSphereStratified(unsigned int numSamples, std::vector<Vector3> &dirs) 
 
     float z = -1.0f;
     float phi = 0.0f;
-    for (unsigned int i = N; i != 0; i--) {
+    if (N == 0) return;
+    unsigned int i = N;
+    do {
         unsigned int j = N;
         do {
             float zJittered = rand.Float() * zStep + z;
             float phiJittered = rand.Float() * phiStep + phi;
-            float r = std::sqrt(-(zJittered * zJittered - 1.0f));
+            float r = sqrtf(-(zJittered * zJittered - 1.0f));
             Vector3 v;
             v.x = (float)cos(phiJittered) * r;
             v.y = (float)sin(phiJittered) * r;
@@ -2381,5 +2383,6 @@ void BuildSphereStratified(unsigned int numSamples, std::vector<Vector3> &dirs) 
             phi += phiStep;
         } while (j != 0);
         z += zStep;
-    }
+        i--;
+    } while (i != 0);
 }

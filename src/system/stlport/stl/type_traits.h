@@ -344,7 +344,7 @@ struct __type_traits : __type_traits_aux<_IsPtr<_Tp>::_Ret> {};
 template <class _Tp>  struct _IsPtr { enum { _Ret = 0 }; };
 
 template <class _Tp>
-struct __type_traits { 
+struct __type_traits {
    typedef __true_type     this_dummy_member_must_be_first;
                    /* Do not remove this member. It informs a compiler which
                       automatically specializes __type_traits that this
@@ -353,7 +353,7 @@ struct __type_traits {
                       called __type_traits for something unrelated. */
 
    /* The following restrictions should be observed for the sake of
-      compilers which automatically produce type specific specializations 
+      compilers which automatically produce type specific specializations
       of this class:
           - You may reorder the members below if you wish
           - You may remove any of the members below if you wish

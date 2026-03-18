@@ -371,9 +371,14 @@ void RndConsole::SetBreak(DataArray *arr) {
     MILO_FAIL("Can't insert break");
 }
 
+static __declspec(noinline) const char *_MakeString(const char *c) {
+    FormatString fs(c);
+    return fs.Str();
+}
+
 void RndConsole::Break(DataArray *arr) {
     if (mDebugging)
-        MILO_FAIL("Can't break while debugging, did you mean set_break?");
+        TheDebugFailer << _MakeString("Can't break while debugging, did you mean set_break?");
     if (arr->UncheckedFunc(0) != DataNop) {
         bool drawing = TheRnd.Drawing();
         bool showing = mShowing;

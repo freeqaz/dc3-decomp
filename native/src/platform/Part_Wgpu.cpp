@@ -317,3 +317,11 @@ void DrawParticlesBillboard(RndParticleSys* sys) {
                         numParticles * 6 * sizeof(uint16_t));
     pass.DrawIndexed(numParticles * 6);
 }
+
+void PartTerminate() {
+    sParticleVB = nullptr;
+    sParticleIB = nullptr;
+    sParticleShader = nullptr;
+    sParticleBGL = nullptr;
+    sParticlePipelineLayout = nullptr;
+}

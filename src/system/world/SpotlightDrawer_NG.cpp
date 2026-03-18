@@ -982,5 +982,20 @@ SpotMeshEntry* vector<SpotMeshEntry, StlNodeAlloc<SpotMeshEntry>>::_M_erase(
     this->_M_finish = __pos;
     return __first;
 }
+
+template <>
+SpotMeshEntry* vector<SpotMeshEntry, StlNodeAlloc<SpotMeshEntry>>::_M_erase(
+    SpotMeshEntry* __pos,
+    const __false_type&
+) {
+    SpotMeshEntry* __next = __pos + 1;
+    if (__next != this->_M_finish) {
+        int __bytes = (this->_M_finish - __next) * sizeof(SpotMeshEntry);
+        memcpy(__pos, __next, __bytes);
+    }
+    --this->_M_finish;
+    return __pos;
+}
+
 }  // namespace stlpmtx_std
 #endif // HX_NATIVE

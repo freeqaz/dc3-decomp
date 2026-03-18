@@ -54,17 +54,44 @@ DistEntry::DistEntry(const DistEntry &entry) : beat(entry.beat), bones(entry.bon
 }
 
 void ClipDistMap::GenerateDistEntry(
-    CharBonesMeshes &, DistEntry &entry, float beat, CharClip *,
+    CharBonesMeshes &meshes, DistEntry &entry, float beat, CharClip *clip,
     const std::vector<RndTransformable *> &transes
 ) {
+    if (!entry.bones.empty())
+        return;
+
     entry.beat = beat;
-    entry.bones.resize(transes.size());
-    for (int i = 0; i < (int)transes.size(); i++) {
-        RndTransformable *trans = transes[i];
-        entry.bones[i] = trans ? trans->WorldXfm().v : Vector3(0.0f, 0.0f, 0.0f);
-    }
+
+    float step = mBlendWidth * 0.25f;
+    float sampleBeat = step * 0.5f + beat;
+    void *channel = clip->GetChannel(Symbol("bone_facing.rotz"));
+
     for (int i = 0; i < 4; i++) {
         entry.facing[i] = 0.0f;
+        if (channel) {
+            clip->EvaluateChannel(&entry.facing[i], channel, sampleBeat);
+        }
+        entry.facing[i] = LimitAng(entry.facing[i]);
+        sampleBeat += step;
+    }
+
+    entry.bones.resize(transes.size() * mNumSamples);
+
+    int boneIdx = 0;
+    float beatStep = mBlendWidth / (float)mNumSamples;
+    sampleBeat = beatStep * 0.5f + entry.beat;
+    for (int s = 0; s < mNumSamples; s++) {
+        sampleBeat = (float)sampleBeat;
+        CharBoneDir *rsrc = clip->GetResource();
+        CharUtlResetTransform(rsrc);
+        meshes.Zero();
+        clip->ScaleAdd(meshes, 1.0f, sampleBeat, 0.0f);
+        meshes.PoseMeshes();
+        for (unsigned int t = 0; t < transes.size(); t++) {
+            entry.bones[boneIdx] = transes[t]->WorldXfm().v;
+            boneIdx++;
+        }
+        sampleBeat += beatStep;
     }
 }
 

@@ -98,3 +98,8 @@ void EnsureDummyBoneBindGroup() {
 wgpu::BindGroup GetDummyBoneBindGroup() {
     return sDummyBoneBindGroup;
 }
+
+void BoneSetupTerminate() {
+    sDummyBoneBuffer = nullptr;
+    sDummyBoneBindGroup = nullptr;
+}
