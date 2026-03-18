@@ -156,6 +156,8 @@ if(NOT EMSCRIPTEN)
             vorbisfile
             ogg
             z
+            c++
+            c++abi
             "-framework Cocoa"
             "-framework IOKit"
             "-framework Metal"
