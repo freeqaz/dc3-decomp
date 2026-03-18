@@ -13,4 +13,4 @@ if [ ! -f "$BINARY" ]; then
     cmake --build "$BUILD_DIR" --target dc3-native -j"$(sysctl -n hw.logicalcpu)"
 fi
 
-exec env DC3_DATA="$DATA_DIR" "$BINARY" "$@" 2>&1
+exec env DC3_DATA="$DATA_DIR" "$BINARY" "$@"
