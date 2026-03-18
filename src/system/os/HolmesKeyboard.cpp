@@ -53,7 +53,7 @@ void HolmesInput::SendKeyboardMessages() {
     mKeyboardBuffer->Compact();
 }
 
-int HolmesInput::SendJoypadMessages() {
+unsigned int HolmesInput::SendJoypadMessages() {
     static DataNode &fake_controllers = DataVariable("fake_controllers");
     int mask = 0;
     mJoypadBuffer->Seek(0, BinStream::kSeekBegin);

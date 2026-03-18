@@ -3,7 +3,7 @@
 #include "obj/Object.h"
 #include "utl/MemStream.h"
 
-struct CWnd {
+class CWnd {
     int hell_if_i_know_lmao;
 };
 
@@ -16,7 +16,7 @@ public:
     void LoadKeyboard(BinStream &);
     void LoadJoypad(BinStream &);
     void SendKeyboardMessages();
-    int SendJoypadMessages();
+    unsigned int SendJoypadMessages();
 
     bool mSubscribe;
     MemStream *mJoypadBuffer;

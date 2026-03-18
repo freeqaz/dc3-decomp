@@ -58,6 +58,10 @@ SKIP_UNIT_PREFIXES = [
 SKIP_UNITS_EXTRA = {
     "default/system/synth/filterdesign",  # C-style DSP filter design library
 }
+# Individual symbols that have been investigated and are out of scope
+SKIP_SYMBOLS = {
+    "?NormalizeScale@@YAXABVVector3@@MAAV1@@Z",  # CharEyes helper — not in scope
+}
 
 
 def _is_skippable_stub(symbol: str, unit: str) -> bool:
@@ -99,6 +103,9 @@ def _is_skippable_stub(symbol: str, unit: str) -> bool:
         return True
     # Third-party SDK symbols that land in various TUs via COMDAT
     if "NUISPEECH" in symbol:
+        return True
+    # Individually excluded symbols
+    if symbol in SKIP_SYMBOLS:
         return True
     return False
 
