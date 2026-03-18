@@ -5,6 +5,12 @@
 #include "os/File.h"
 #include "types.h"
 #include "utl/Cache.h"
+#include "utl/Str.h"
+
+struct RecurseInfo {
+    String mDir;
+    String mFile;
+};
 
 namespace Holmes {
     enum Protocol {

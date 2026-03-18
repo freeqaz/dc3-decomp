@@ -17,6 +17,7 @@
 #include "utl/TextFileStream.h"
 #include <cstdio>
 #include <list>
+#include <vector>
 
 #pragma region Statics
 
@@ -750,8 +751,42 @@ void HolmesClientClose(File *file, int handle) {
 }
 
 void HolmesClientEnumerate(
-    const char *, void (*)(const char *, const char *), bool, const char *, bool
-) {}
+    const char *path,
+    void (*callback)(const char *, const char *),
+    bool recurse,
+    const char *ext,
+    bool dirs
+) {
+    CritSecTracker cst(&gCrit);
+    BeginCmd(Holmes::kEnumerate, true);
+
+    *gStreamBuffer << u8(Holmes::kEnumerate);
+    BinStream &bs = *gStreamBuffer << path;
+    bs << u8(recurse);
+    BinStream &bs2 = bs << ext;
+    bs2 << u8(dirs);
+    HolmesFlushStreamBuffer();
+
+    std::vector<RecurseInfo> entries;
+    WaitForResponse(Holmes::kEnumerate);
+
+    while (true) {
+        bool more;
+        *gHolmesStream >> more;
+        if (!more)
+            break;
+        entries.push_back(RecurseInfo());
+        *gHolmesStream >> entries.back().mDir >> entries.back().mFile;
+    }
+
+    gPendingResponse = Holmes::kInvalidOpcode;
+
+    for (unsigned int i = 0; i < entries.size(); i++) {
+        callback(entries[i].mDir.c_str(), entries[i].mFile.c_str());
+    }
+
+    EndCmd(Holmes::kEnumerate);
+}
 
 bool CanUseHolmes(int p1) {
     if (!UsingCD())

@@ -1066,10 +1066,7 @@ float Rnd::DrawTimers(float f) {
     }
 
     if (lbl_830A4100) {
-        DataNode res = lbl_830A4100->ExecuteScript(1, nullptr, nullptr, 0);
-        if ((_outline_Int(&res) & 0x10) != 0) {
-            lbl_830A4100->Release();
-        }
+        lbl_830A4100->ExecuteScript(1, nullptr, nullptr, 1);
     }
 
     if (mVerboseTimers) {
@@ -1086,23 +1083,23 @@ float Rnd::DrawTimers(float f) {
         }
     }
 
-    float y = f;
-    float height = 0.025f;
-    float width = 0.045f;
-    float bgTop = 0.025f;
-    float bgLeft = 0.0f;
-    float totalHeight = numTimers * width;
+    float bgLeft = 0.025f;
+    float rowSpacing = 0.045f;
+    float totalHeight = numTimers * rowSpacing;
 
-    Hmx::Rect bgRect(bgLeft, y, 0.95f, totalHeight + bgTop);
+    Hmx::Rect rect(bgLeft, f, 0.95f, totalHeight);
     Hmx::Color bgColor(0.0f, 0.0f, 0.0f, 0.5f);
-    DrawRectScreen(bgRect, bgColor, mOverlayMat, nullptr, nullptr);
+    DrawRectScreen(rect, bgColor, mOverlayMat, nullptr, nullptr);
 
     Hmx::Color barColor(0.5f, 0.5f, 0.5f, 1.0f);
-    Hmx::Color ownColor(0.0f, 0.5f, 0.0f, 1.0f);
-    Hmx::Color inclColor(0.5f, 0.5f, 0.0f, 1.0f);
-    Hmx::Color warnColor(0.0f, 0.0f, 0.5f, 1.0f);
+    Hmx::Color budgetExcessColor(0.5f, 0.0f, 0.0f, 1.0f);
+    Hmx::Color worstExcessColor(0.0f, 0.5f, 0.5f, 1.0f);
 
-    float x = bgLeft;
+    float scale = 0.019f;
+    float barHeight = 0.0268f;
+    float y = f;
+
+    rect.h = barHeight;
 
     for (std::list<std::pair<Timer, TimerStats> >::iterator it = timers.begin();
          it != timers.end();
@@ -1112,48 +1109,48 @@ float Rnd::DrawTimers(float f) {
         }
 
         float lastMs = it->first.GetLastMs();
-        float worstMs = it->first.GetWorstMs();
         float budget = it->first.Budget();
 
-        if (lastMs > 0.0f || worstMs <= lastMs) {
-            float barHeight = lastMs * width;
-            Hmx::Rect barRect(x, y, barHeight, width);
-            DrawRectScreen(barRect, ownColor, nullptr, nullptr, nullptr);
-            y = bgTop += barHeight;
+        bool overBudget = budget != 0.0f && lastMs > budget;
 
-            float ownTime = lastMs - worstMs;
-            if (ownTime > 0.0f) {
-                float ownHeight = ownTime * width;
-                Hmx::Rect ownRect(x, y, ownHeight, width);
-                DrawRectScreen(ownRect, inclColor, nullptr, nullptr, nullptr);
-                y += ownHeight;
-            }
-        } else {
-            float barHeight = worstMs * width;
-            Hmx::Rect barRect(x, y, barHeight, width);
-            DrawRectScreen(barRect, inclColor, nullptr, nullptr, nullptr);
-            y += barHeight;
+        Hmx::Color *color = &barColor;
+        if (overBudget) {
+            rect.w = budget * scale;
+            DrawRectScreen(rect, *color, nullptr, nullptr, nullptr);
+            rect.x += rect.w;
+            lastMs = lastMs - budget;
+            color = &budgetExcessColor;
         }
 
-        if (budget > 0.0f && worstMs > budget) {
-            float warnHeight = (worstMs - budget) * width;
-            Hmx::Rect warnRect(x, y, warnHeight, width);
-            DrawRectScreen(warnRect, warnColor, nullptr, nullptr, nullptr);
-            y += warnHeight;
+        rect.w = lastMs * scale;
+        DrawRectScreen(rect, *color, nullptr, nullptr, nullptr);
+
+        if (it->first.GetWorstMs() > it->first.GetLastMs()) {
+            rect.x += rect.w;
+            rect.w = (it->first.GetWorstMs() - it->first.GetLastMs()) * scale;
+            DrawRectScreen(rect, worstExcessColor, nullptr, nullptr, nullptr);
         }
 
-        y += width * 0.5f;
+        rect.x = bgLeft;
+        y += rowSpacing;
+        rect.y = y;
     }
 
+    rect.y = f;
+    rect.h = totalHeight;
+    barColor.red = 0.25f;
+    barColor.green = 0.25f;
+    barColor.blue = 0.25f;
+    rect.w = 0.001f;
     for (int i = 0; i < 10; i++) {
-        Hmx::Rect tickRect(x, y = f + bgTop, 0.001f, width);
-        Hmx::Color tickColor(1.0f, 1.0f, 1.0f, 1.0f);
-        DrawRectScreen(tickRect, tickColor, nullptr, nullptr, nullptr);
-        y += width;
+        DrawRectScreen(rect, barColor, nullptr, nullptr, nullptr);
+        rect.x += 0.095f;
     }
 
-    y = f + bgTop + 0.00446f;
-    x = bgLeft + 0.05f;
+    barColor.red = 1.0f;
+    barColor.green = 1.0f;
+    barColor.blue = 1.0f;
+    Vector2 pos(bgLeft + 0.05f, f + 0.00446f);
 
     for (std::list<std::pair<Timer, TimerStats> >::iterator it = timers.begin();
          it != timers.end();
@@ -1163,23 +1160,24 @@ float Rnd::DrawTimers(float f) {
         }
 
         float lastMs = it->first.GetLastMs();
-        Symbol name = it->first.Name();
 
         const char *text;
-        if (lastMs < 0.05f) {
-            text = name.Str();
-        } else if (!mVerboseTimers || !AutoTimer::CollectingStats()) {
-            float worstMs = it->first.GetWorstMs();
-            text = MakeString("%s %.2f (%.2f)", name, lastMs, worstMs);
+        if (lastMs >= 0.05f) {
+            if (mVerboseTimers && AutoTimer::CollectingStats()) {
+                Symbol name = it->first.Name();
+                TimerStats &stats = it->second;
+                text = MakeString("%s %2.1f (%.2f, %.2f) %.2f", name, lastMs, stats.mAvgMs, stats.mStdDevMs, stats.mMaxMs);
+            } else {
+                Symbol name = it->first.Name();
+                float worstMs = it->first.GetWorstMs();
+                text = MakeString("%s %.2f (%.2f)", name, lastMs, worstMs);
+            }
         } else {
-            TimerStats &stats = it->second;
-            text = MakeString("%s %2.1f (%.2f, %.2f) %.2f", name, lastMs, stats.mAvgMs, stats.mStdDevMs, stats.mMaxMs);
+            text = it->first.Name().Str();
         }
 
-        Vector2 pos(x, y);
-        Hmx::Color textColor(1.0f, 1.0f, 1.0f, 1.0f);
-        DrawStringScreen(text, pos, textColor, true);
-        y += width;
+        DrawStringScreen(text, pos, barColor, true);
+        pos.y += rowSpacing;
     }
 
     return f;

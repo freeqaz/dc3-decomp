@@ -268,17 +268,17 @@ void Flow::PreLoad(BinStream &bs) {
 
 void Flow::PostLoad(BinStream &bs) {
     BinStreamRev d(bs, bs.PopRev(this));
-    ObjectDir::PostLoad(bs);
+    ObjectDir::PostLoad(d.stream);
     if (IsProxy()) {
         int numDynProps = 0;
-        bs.ReadEndian(&numDynProps, 4);
+        d.stream.ReadEndian(&numDynProps, 4);
         if (d.rev < 5) {
             for (int i = 0; i < numDynProps; i++) {
                 Symbol propName;
-                bs >> propName;
+                d.stream >> propName;
 
                 DataNode node;
-                node.Load(bs);
+                node.Load(d.stream);
 
                 const DataNode *existingProp = Property(propName, false);
                 if (!existingProp) {
@@ -286,18 +286,15 @@ void Flow::PostLoad(BinStream &bs) {
                         SetProperty(propName, node);
                     }
                 }
-                if (node.Type() == kDataArray) {
-                    node.Array()->Release();
-                }
             }
         } else {
             for (int i = 0; i < numDynProps; i++) {
                 Symbol propName;
-                bs >> propName;
+                d.stream >> propName;
 
                 DataNode node;
                 int nodeType = 0;
-                bs.ReadEndian(&nodeType, 4);
+                d.stream.ReadEndian(&nodeType, 4);
                 if (nodeType == kDataObject) {
                     ObjectDir *dir = Dir();
                     if (dir) {
@@ -307,14 +304,11 @@ void Flow::PostLoad(BinStream &bs) {
                             dir = dir->Dir();
                         }
                     }
-                    node = FlowNode::LoadObjectFromMainOrDir(bs, dir);
+                    node = FlowNode::LoadObjectFromMainOrDir(d.stream, dir);
                 } else {
                     DataNode tmpNode;
-                    tmpNode.Load(bs);
+                    tmpNode.Load(d.stream);
                     node = tmpNode;
-                    if (tmpNode.Type() == kDataArray) {
-                        tmpNode.Array()->Release();
-                    }
                 }
 
                 const DataNode *existingProp = Property(propName, false);
@@ -324,28 +318,25 @@ void Flow::PostLoad(BinStream &bs) {
                     }
                 }
                 if (node.Type() == kDataArray) {
-                    node.Array()->Release();
+                    node.UncheckedArray()->Release();
                 }
             }
         }
     } else {
-        if (d.rev >= 3) {
-            FlowQueueable::Load(bs);
-            d >> mHardStop;
-        } else {
+        if (d.rev < 3) {
             int oldRev = 0;
-            bs.ReadEndian(&oldRev, 4);
-            FlowQueueable::Load(bs);
+            d.stream.ReadEndian(&oldRev, 4);
+            FlowQueueable::Load(d.stream);
             if (oldRev < 1) {
                 bool loadEventProvider;
                 d >> loadEventProvider;
                 if (loadEventProvider) {
                     ObjPtr<Hmx::Object> eventProvider(this, 0);
-                    eventProvider = FlowNode::LoadObjectFromMainOrDir(bs, Dir());
+                    eventProvider = FlowNode::LoadObjectFromMainOrDir(d.stream, Dir());
                 }
             } else {
                 ObjPtr<Hmx::Object> eventProvider(this, 0);
-                eventProvider.Load(bs, true, 0);
+                eventProvider.Load(d.stream, true, 0);
             }
             std::list<Symbol> triggerEvents;
             std::list<Symbol> stopEvents;
@@ -363,11 +354,10 @@ void Flow::PostLoad(BinStream &bs) {
                 if (triggerProperties.size() > 0 || stopProperties.size() > 0) {
                     MILO_NOTIFY("Flow with trigger events found, removing: %s", PathName(this));
                 }
-                stopProperties.clear();
-                triggerProperties.clear();
             }
-            stopEvents.clear();
-            triggerEvents.clear();
+        } else {
+            FlowQueueable::Load(d.stream);
+            d >> mHardStop;
         }
         d >> mDynamicProperties;
         if (d.rev < 7) {
@@ -379,7 +369,7 @@ void Flow::PostLoad(BinStream &bs) {
                 mStartMode = 0;
             }
         } else {
-            bs.ReadEndian(&mStartMode, 4);
+            d.stream.ReadEndian(&mStartMode, 4);
         }
         if (d.rev > 0) {
             d >> mPrivate;

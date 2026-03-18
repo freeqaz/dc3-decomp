@@ -10,7 +10,9 @@
 #include "obj/DirLoader.h"
 #include "obj/Object.h"
 #include "obj/Task.h"
+#include "obj/Utl.h"
 #include "utl/MakeString.h"
+#include "utl/Str.h"
 #include <cstdlib>
 
 FlowSetProperty::~FlowSetProperty() { TheFlowMgr->CancelCommand(this); }
@@ -349,13 +351,15 @@ void FlowSetProperty::Execute(QueueState qs) {
     FLOW_LOG("Execute: state = %i\n", qs);
 
     if (IsRunning()) {
-        if ((unsigned int)qs == kIgnore) {
+        if (qs == kIgnore) {
             FLOW_LOG("RequestStop: Stopping\n");
-            if (unk_0xE8) {
+            if (mEventsRegistered) {
                 UnregisterEvents(this);
             }
             if (unk_0xCC != nullptr) {
+                auto *task = unk_0xCC.Ptr();
                 unk_0xCC = nullptr;
+                delete task;
             }
         }
         if (qs == kQueue) {
@@ -363,47 +367,61 @@ void FlowSetProperty::Execute(QueueState qs) {
 
             if (mChangePerUnit != 0.0f && !unk_0xE8) {
                 const DataNode *node = mTarget->Property(unk_0x98.Array(), true);
+                int propType = node->Type();
 
-                if (node != nullptr & node->Type() == kDataFloat) {
-                    float endVal = node->Float();
-                    durationTime = (mValue.Node().Float() - endVal) / mChangePerUnit;
+                if (propType == kDataFloat) {
+                    durationTime = (mValue.Node().Float() - node->Float()) / mChangePerUnit;
                     if (durationTime < 0.0f) {
                         durationTime = -durationTime;
                     }
-                } else if (node != nullptr && node->Type() == kDataInt) {
-                    int endVal = node->Int();
-                    durationTime = (float)(mValue.Node().Int() - endVal) / mChangePerUnit;
+                } else if (propType == kDataInt) {
+                    durationTime = (float)(mValue.Node().Int() - node->Int()) / mChangePerUnit;
                     if (durationTime < 0.0f) {
                         durationTime = -durationTime;
                     }
+                } else {
+                    StackString<32> ss;
+                    DataNode valueNode = mValue.Node();
+                    valueNode.Print(ss, false, 0);
+                    MILO_NOTIFY(
+                        "%s has bad property %s for %s",
+                        PathName(this),
+                        ss,
+                        PrintPropertyPath(unk_0x98.Array())
+                    );
+                    durationTime = 0.0f;
                 }
             }
 
             if (durationTime > 0.0f) {
                 Hmx::Object *target = mTarget;
-                DataNode dataNode = unk_0x98;
                 DataNode valueNode = mValue.Node();
+                FLOW_LOG("Spawning Ramp Task on %s\n", target->Name())
                 PropertyTask *task = new PropertyTask(
                     target,
-                    dataNode,
+                    unk_0x98,
                     valueNode,
                     (TaskUnits)mRate,
                     durationTime,
                     (EaseType)mEase,
                     mEasePower,
-                    false,
-                    nullptr
+                    unk_0xE8,
+                    this
                 );
                 unk_0xCC = task;
             } else {
+                FLOW_LOG("Setting Value on %s\n", mTarget->Name())
                 mTarget->SetProperty(unk_0x98.Array(), mValue.Node());
+                if (mEventsRegistered) {
+                    return;
+                }
+                FLOW_LOG("Releasing\n")
+                mFlowParent->ChildFinished(this);
             }
         }
     } else {
-        if (!mEventsRegistered) {
-            if (qs == kIgnore) {
-                mFlowParent->ChildFinished(this);
-            }
+        if (qs == kIgnore) {
+            mFlowParent->ChildFinished(this);
         }
     }
 }

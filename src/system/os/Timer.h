@@ -155,6 +155,7 @@ public:
 #define MAX_TOP_VALS 128
 
 class TimerStats {
+    friend class Rnd;
 private:
     int mCount; // 0x0
     float mAvgMs; // 0x4

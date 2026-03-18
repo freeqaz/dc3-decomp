@@ -11,17 +11,32 @@ DrivenPropertyEntry::DrivenPropertyEntry(Hmx::Object *owner) : mMathOps(owner) {
 DrivenPropertyEntry::~DrivenPropertyEntry() { mMathOps.clear(); }
 
 void DrivenPropertyEntry::Load(BinStream &bs, FlowNode *node) {
+    static const unsigned short gRevs[4] = { 0, 0, 0, 0 };
+    ObjectDir *dir = node->Dir();
+
     int rev;
     bs >> rev;
 
     int revLow = (int)(u16)rev;
-    int revHigh = (int)rev >> 16;
+    int revHigh = (unsigned int)rev >> 16;
 
     if (revLow > 0) {
-        TheDebug.Fail(MakeString("can't load new %s version %d", PathName(node->Dir()), revLow), 0);
+        MILO_FAIL(
+            "%s can't load new %s version %d > %d",
+            PathName(dir),
+            "DrivenPropertyEntry",
+            revLow,
+            gRevs[0]
+        );
     }
     if (revHigh > 0) {
-        TheDebug.Fail(MakeString("can't load new %s alt version", PathName(node->Dir())), 0);
+        MILO_FAIL(
+            "%s can't load new %s alt version %d > %d",
+            PathName(dir),
+            "DrivenPropertyEntry",
+            revHigh,
+            gRevs[2]
+        );
     }
 
     bs >> mNode;
@@ -29,10 +44,9 @@ void DrivenPropertyEntry::Load(BinStream &bs, FlowNode *node) {
     bs >> numOps;
 
     mMathOps.clear();
-    mMathOps.reserve(numOps);
     for (int i = 0; i < numOps; i++) {
         FlowMathOp op(node);
-        op.Load(bs, node->Dir());
+        op.Load(bs, dir);
         mMathOps.push_back(op);
     }
 }
