@@ -309,11 +309,14 @@ void CheckDistortionOpts(RndMat *mat, ShaderOptions &opts) {
             | (opts.flags & ~((u64)1 << 56))
             | ((u64)1 << 55);
     }
-    if (RndShockwave::sSelected
-        && Abs(RndShockwave::sSelected->mAmplitude) >= 0.0001f
-        && mat->mAllowDistortionEffects
-        && Abs(mat->mShockwaveMult) >= 0.0001f) {
-        opts.flags |= (u64)1 << 60;
+    if (RndShockwave::sSelected) {
+        bool ampBad = Abs(RndShockwave::sSelected->mAmplitude) < 0.0001f;
+        if (!ampBad && mat->mAllowDistortionEffects) {
+            bool multBad = Abs(mat->mShockwaveMult) < 0.0001f;
+            if (!multBad) {
+                opts.flags |= (u64)1 << 60;
+            }
+        }
     }
 }
 
@@ -324,11 +327,14 @@ void CheckDistortion(RndMat *mat) {
         && RndSpline::sGlobalDefaultSpline->mCtrlPoints.size() >= 2) {
         RndSpline::sGlobalDefaultSpline->PrepareShader();
     }
-    if (RndShockwave::sSelected
-        && Abs(RndShockwave::sSelected->mAmplitude) >= 0.0001f
-        && mat->mAllowDistortionEffects
-        && Abs(mat->mShockwaveMult) >= 0.0001f) {
-        RndShockwave::sSelected->PrepareShader(mat->mShockwaveMult);
+    if (RndShockwave::sSelected) {
+        bool ampBad = Abs(RndShockwave::sSelected->mAmplitude) < 0.0001f;
+        if (!ampBad && mat->mAllowDistortionEffects) {
+            bool multBad = Abs(mat->mShockwaveMult) < 0.0001f;
+            if (!multBad) {
+                RndShockwave::sSelected->PrepareShader(mat->mShockwaveMult);
+            }
+        }
     }
 }
 

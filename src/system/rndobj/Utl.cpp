@@ -32,8 +32,10 @@
 #include "utl/Cache.h"
 #include "utl/Std.h"
 #include "rndobj/Utl.h"
+#include "rndobj/ShaderMgr.h"
 #include <set>
 #include "math/Key.h"
+#include <math.h>
 #include "os/File.h"
 #include "obj/Data.h"
 #include "obj/Utl.h"
@@ -935,7 +937,7 @@ void UtilDrawCigar(
     float len0 = lengths[0];
     float scale = sqrtf(len2 * len2 + len0 * len0 + len1 * len1);
     float scaledLens[3];
-    Hmx::Matrix3 basis;
+    Transform basis;
 
     {
         int cnt = 3;
@@ -950,55 +952,54 @@ void UtilDrawCigar(
             cnt--;
         } while (cnt != 0);
     }
-    memcpy(&basis, lengths, 0x30);
-    Normalize(basis, basis);
+    memcpy(&basis, lengths, 0x40);
+    Normalize(basis.m, basis.m);
 
     float sLen0 = scaledLens[0];
     float sLen1 = scaledLens[1];
 
     Vector3 top;
     top.Set(0, sLen0 - radii[0], 0);
-    Multiply(top, (const Transform &)basis, top);
+    Multiply(top, basis, top);
 
     Vector3 bottom;
     bottom.Set(0, sLen1 + radii[1], 0);
-    Multiply(bottom, (const Transform &)basis, bottom);
+    Multiply(bottom, basis, bottom);
 
-    double angle2Pi = 1.0471975803375244;
-    double anglePiHalf = 1.5707963705062866;
-    double anglePi6 = 0.5235987901687622;
+    float angle2Pi = 1.0471975803375244f;
+    float anglePiHalf = 1.5707963705062866f;
+    float anglePi6 = 0.5235987901687622f;
 
     // Arrays use 16-byte stride per element (4 floats per Vector3)
-    float verts2e0[96 * 4];
-    float verts1c0[96 * 4];
-    float verts280[192 * 4];
-    float verts160[352 * 4];
+    // 18 entries each (3 rings × 6 vertices)
+    float verts2e0[18 * 4];
+    float verts1c0[18 * 4];
 
     int iIdx = 0;
     int iLatSum = 0;
     do {
-        double latVal = (double)(float)((double)iIdx * anglePi6);
-        float sinLatPi2 = FastSin((float)(latVal + anglePiHalf));
+        float latVal = (float)iIdx * anglePi6;
+        float sinLatPi2 = FastSin(latVal + anglePiHalf);
         double r0 = (double)(radii[0] * sinLatPi2);
-        float sinLat = FastSin((float)latVal);
-        double h0 = (double)(sinLat * radii[0]);
-        float sinLatPi2b = FastSin((float)((double)(float)(latVal + anglePiHalf)));
+        float sinLat = FastSin(latVal);
+        float h0 = sinLat * radii[0];
+        float sinLatPi2b = FastSin(latVal + anglePiHalf);
         double r1 = (double)(sinLatPi2b * radii[1]);
-        float sinLatb = FastSin((float)latVal);
-        double h0b = (double)(float)((double)sLen0 - h0);
+        float sinLatb = FastSin(latVal);
+        float h0b = sLen0 - h0;
         int iLon = 0;
-        double h1 = (double)(float)((double)(sinLatb * radii[1]) + (double)sLen1);
+        float h1 = sinLatb * radii[1] + sLen1;
         do {
-            double lonVal = (double)(float)((double)iLon * angle2Pi);
-            float sinLon = FastSin((float)((double)iLon * angle2Pi));
+            float lonVal = (float)iLon * angle2Pi;
+            float sinLon = FastSin((float)iLon * angle2Pi);
             double sinLonD = (double)sinLon;
-            float sinLonPi2 = FastSin((float)(lonVal + anglePiHalf));
+            float sinLonPi2 = FastSin(lonVal + anglePiHalf);
             double sinLonPi2D = (double)sinLonPi2;
             int idx = (iLatSum + iLon) * 4;
-            Vector3 v1((float)h0b, (float)(sinLonPi2D * r0), (float)(sinLonD * r0));
-            Multiply(v1, (const Transform &)basis, *(Vector3 *)&verts1c0[idx]);
-            Vector3 v2((float)h1, (float)(sinLonD * r1), (float)(sinLonPi2D * r1));
-            Multiply(v2, (const Transform &)basis, *(Vector3 *)&verts2e0[idx]);
+            Vector3 v1(h0b, (float)(sinLonPi2D * r0), (float)(sinLonD * r0));
+            Multiply(v1, basis, *(Vector3 *)&verts1c0[idx]);
+            Vector3 v2(h1, (float)(sinLonD * r1), (float)(sinLonPi2D * r1));
+            Multiply(v2, basis, *(Vector3 *)&verts2e0[idx]);
             iLon = iLon + 1;
         } while (iLon < 6);
         iLatSum = iLatSum + 6;
@@ -1025,7 +1026,7 @@ void UtilDrawCigar(
             if (iRing == 2) {
                 pTop = &top;
             } else {
-                pTop = (Vector3 *)&verts280[p1];
+                pTop = (Vector3 *)&verts2e0[p1 + 6 * 4];
             }
             TheRnd.DrawLine(*(Vector3 *)&verts2e0[p1], *pTop, col, false);
             TheRnd.DrawLine(*(Vector3 *)&verts1c0[p1], *(Vector3 *)&verts1c0[p2], col, false);
@@ -1033,7 +1034,7 @@ void UtilDrawCigar(
             if (iRing == 2) {
                 pBottom = &bottom;
             } else {
-                pBottom = (Vector3 *)&verts160[p1];
+                pBottom = (Vector3 *)&verts1c0[p1 + 6 * 4];
             }
             TheRnd.DrawLine(*(Vector3 *)&verts1c0[p1], *pBottom, col, false);
             iJ = iJcur + 1;
@@ -1709,9 +1710,123 @@ void ConvertBonesToTranses(ObjectDir *dir, bool b) {
     }
 }
 
-void SetBloomBlurWeights(bool, float, float) {}
+static const int kNumBloomTaps = 7;
 
-void SetBloomBlurWeightsStreak(bool, float, float, float, int, float) {}
+static float sBloomWeights[15] = {
+    0.0159283932f, 0.0270778369f, 0.0424231887f, 0.0612547919f, 0.0815124959f,
+    0.0999667868f, 0.1129886061f, 0.1176957935f, 0.1129886061f, 0.0999667868f,
+    0.0815124959f, 0.0612547919f, 0.0424231887f, 0.0270778369f, 0.0159283932f
+};
+
+static float sBloomOffsets[15] = {
+    -6.5f, -5.5f, -4.5f, -3.5f, -2.5f, -1.5f, -0.5f, 0.5f,
+    1.5f, 2.5f, 3.5f, 4.5f, 5.5f, 6.5f, 7.5f
+};
+
+void SetBloomBlurWeights(bool horizontal, float width, float height) {
+    int numTaps = 15;
+    int reg = 0x9a;
+    float one = 1.0f;
+    int i = 0;
+    float invWidth = 1.0f / width;
+    float invHeight = 1.0f / height;
+    TheShaderMgr.SetNumTaps(numTaps);
+    float zero = 0.0f;
+    do {
+        float x, y;
+        if (horizontal) {
+            x = sBloomOffsets[i] * invWidth;
+            y = zero;
+        } else {
+            y = sBloomOffsets[i] * invHeight;
+            x = zero;
+        }
+        Vector4 texOffset(x, y, one, one);
+        TheShaderMgr.SetPConstant((PShaderConstant)(reg - 0x10), texOffset);
+        float w = sBloomWeights[i];
+        Vector4 weight(w, w, w, w);
+        TheShaderMgr.SetPConstant((PShaderConstant)reg, weight);
+        numTaps--;
+        i++;
+        reg++;
+    } while (numTaps != 0);
+}
+
+void SetBloomBlurWeightsStreak(bool horizontal, float width, float height, float attenuation, int pass, float angle) {
+    MILO_ASSERT(pass >= 0 && pass < 3, 0x11aa);
+
+    float passF = (float)pass;
+    float scale = (float)pow(4.0, (double)passF);
+    float atten = (float)pow((double)attenuation, (double)scale);
+
+    float weights[kNumBloomTaps];
+    float offsets[kNumBloomTaps];
+    int middle = 3;
+    float initWeight = 0.333333f;
+    weights[middle] = initWeight;
+    float initOffset = 0.5f;
+    offsets[middle] = initOffset;
+
+    float curWeight = atten;
+    float stepSize = (float)pow(4.0, (double)passF);
+    float curOffset = stepSize;
+
+    int i = 1;
+    int iDown = 2;
+    int negIdx = 0;
+    int posIdx = 0;
+    do {
+        MILO_ASSERT((middle - i) >= 0 && (middle + i) < kNumBloomTaps, 0x11c5);
+        float w = curWeight * initWeight;
+        float offNeg = initOffset - curOffset;
+        float offPos = curOffset + initOffset;
+        curWeight = (float)(curWeight * atten);
+        curOffset = (float)(curOffset + stepSize);
+        i = i + 1;
+        *(float *)((int)weights + negIdx + 8) = w;
+        iDown = iDown - 1;
+        *(float *)((int)offsets + negIdx + 8) = offNeg;
+        negIdx = negIdx - 4;
+        *(float *)((int)weights + posIdx + 0x10) = w;
+        *(float *)((int)offsets + posIdx + 0x10) = offPos;
+        posIdx = posIdx + 4;
+    } while (negIdx >= -8);
+
+    int count = 7;
+    float angleRad = angle * 0.01745329238474369f;
+    float one = 1.0f;
+    TheShaderMgr.SetNumTaps(count);
+    float invWidth = 1.0f / width;
+    float invHeight = 1.0f / height;
+    float fHeight = (float)(int)TheRnd.Height();
+    float fWidth = (float)(int)TheRnd.Width();
+    float yRatio = fHeight / fWidth;
+    float sinA = (float)sin((double)angleRad);
+    float cosA = (float)cos((double)angleRad);
+    int reg = 0x9a;
+    int idx = 0;
+    do {
+        Vector4 texOffset;
+        if (horizontal) {
+            float off = offsets[idx] * invWidth;
+            texOffset.y = off * sinA;
+            texOffset.x = (float)((double)(off * cosA) * (double)yRatio);
+        } else {
+            float off = offsets[idx] * invHeight;
+            texOffset.y = off * cosA;
+            texOffset.x = -(float)((double)(off * sinA) * (double)yRatio);
+        }
+        texOffset.z = one;
+        texOffset.w = one;
+        TheShaderMgr.SetPConstant((PShaderConstant)(reg - 0x10), texOffset);
+        float w = weights[idx];
+        Vector4 weight(w, w, w, w);
+        TheShaderMgr.SetPConstant((PShaderConstant)reg, weight);
+        count--;
+        idx += 1;
+        reg++;
+    } while (count != 0);
+}
 
 const char *ResourceFileCacheHelper::CacheFile(const char *cc) {
     return CacheResource(cc, (const Hmx::Object *)0);
