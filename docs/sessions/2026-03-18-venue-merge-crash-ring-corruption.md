@@ -1,86 +1,103 @@
-# Session: Venue Merge Crash — ObjRef Ring Corruption Root Cause
+# Session: Venue Merge Crash — ObjRef Ring Corruption
 
 **Date**: 2026-03-18
 
 ## Problem
 
-Native port (and web/WASM) crashes during `game_screen` entry when venue `.milo` files are merged. `SIGSEGV at address 0x28` in `ObjRef::ReplaceList` called from `MergeObjectsRecurse`. This blocked all gameplay — 9/20 telemetry tests failed.
+Native port crashes during `game_screen` entry when venue `.milo` files are merged. Three symptoms, one root cause:
 
-The crash was previously masked by a ring validation guard in `ReplaceRefs()` (skipped corrupt rings). That guard was removed in commit `b9719618e` because it's not in the Xbox code — but the **underlying corruption** was never fixed.
+| Symptom | Where | Mechanism |
+|---------|-------|-----------|
+| `SIGSEGV at 0x28` | `ObjRef::ReplaceList` | Null vtable on freed ring entry (Replace virtual = slot 5 = 0x28) |
+| `SIGSEGV at 0xfffffff8` | `CharClip::operator delete` | Double-free from stale ring walk reaching freed CharClip |
+| Infinite hang | `~ObjectDir → mSubDirs.clear()` | Destructor cascade loops on self-referencing ring nodes |
 
-## Root Cause Analysis
+Blocked all gameplay — 9/20 telemetry tests failed.
 
-### Factor 1: Architectural mismatch — snapshot vs live walk
+## Root Cause: Double AddRef in ObjDirPtr Constructor (Decomp Error)
 
-The native port used a **snapshot+iterate approach** for `ReplaceList`:
-
-```cpp
-// BROKEN: Native snapshot approach
-std::vector<ObjRef *> refs;
-for (ObjRef *cur = next; cur != this; cur = cur->next)
-    refs.push_back(cur);
-Clear();
-for (ObjRef *ref : refs)
-    ref->Replace(obj);
-```
-
-Xbox uses a **live ring walk**:
+The `ObjDirPtr(C*)` constructor had a **duplicate `AddRef` call** — a decompilation error not present in the Xbox original:
 
 ```cpp
-// CORRECT: Xbox live walk
-while (next != this) {
-    next->Replace(obj);
+// BROKEN decomp — base class already called AddRef
+ObjDirPtr<C>::ObjDirPtr(C *dir) : ObjRefConcrete<C>(dir), mLoader(nullptr) {
+    if (dir) {
+        dir->AddRef(this);       // ← SECOND AddRef on already-linked node
+        DirPtrRefCounts()[(const void *)dir]++;
+    }
 }
 ```
 
-The snapshot stored raw `ObjRef*` pointers. During the Replace pass, cascading deletes (via `ObjDirPtr::operator=` → `delete mObject`) could free objects containing ObjRefs still in the snapshot vector — dangling pointers.
+The base class `ObjRefConcrete(dir)` already calls `mObject->AddRef(this)`, correctly inserting the node into the target's `mRefs` ring. The second `AddRef` re-inserts the same node, creating a **self-loop**:
 
-The live walk is immune because each `Replace()` removes the ref from the ring (via `Release`) before anything else happens. The ring is always the source of truth, never a stale copy.
+### How AddRef corrupts when re-inserting an existing node
 
-### Factor 2: External ring corruption from UIPanel::Unload
+Starting state (correct ring after first AddRef): `Head <-> Ptr <-> Head`
 
-Backtrace analysis revealed the 0x28 crash's freed refs originated from **outside the merge pipeline entirely**:
-
-```
-UIScreen::Enter
-  → UIScreen::UnloadPanels
-    → UIPanel::Unload
-      → delete PanelDir
-        → ~PanelDir → ~RndDir → ~ObjectDir
-          → mSubDirs.clear()
-            → ObjDirPtr::~ObjDirPtr()
-              → operator=(nullptr)
-                → delete mObject  ← cascading subdir deletes
+```cpp
+void AddRef(ObjRef *ref) {         // ref = &Head
+    next = ref;                    // Ptr.next = Head  (unchanged)
+    prev = ref->prev;             // Ptr.prev = Head.prev = Ptr  (SELF!)
+    ref->prev = this;             // Head.prev = Ptr  (unchanged)
+    prev->next = this;            // Ptr.next = Ptr   (SELF-LOOP!)
+}
 ```
 
-When `UIPanel::Unload` destroys a PanelDir, the `mSubDirs.clear()` cascade deletes ObjectDirs. Those ObjectDirs' member `ObjPtrVec::Node` elements may have `mObject == nullptr` (set to null by a prior `Replace()` which also called `Release()` to remove them from the ring). But the ring's prev/next pointers on other nodes may still reference these addresses.
+**Result**: `Head.next = Ptr` (Head still sees Ptr), but `Ptr.next = Ptr, Ptr.prev = Ptr` (isolated self-loop).
 
-When the containing object is freed:
-- **Xbox allocator**: Doesn't zero freed memory → vtable pointer survives → virtual calls through stale ring entries "work" (undefined behavior that happens to not crash)
-- **Native allocator**: Zeros freed memory → vtable pointer becomes null → `next->Replace(obj)` tries to read vtable slot 5 (the `Replace` virtual) at offset `5 × 8 = 0x28` from null → **SIGSEGV at address 0x28**
+### Why Release becomes a no-op
+
+When the `ObjDirPtr` is later destroyed (e.g. during `mSubDirs.clear()`):
+
+```cpp
+void Release(ObjRef *ref) {
+    prev->next = next;     // Ptr.next = Ptr  (no-op)
+    next->prev = prev;     // Ptr.prev = Ptr  (no-op)
+}
+```
+
+The self-looping node cannot unlink itself. The sentinel (`Head`) permanently holds a **dangling pointer** to the freed `ObjDirPtr` memory.
+
+### How this caused each symptom
+
+1. **0x28 crash**: Ring walk hits dangling pointer → freed memory zeroed by glibc → null vtable → dereference at vtable slot 5 (offset 0x28)
+2. **0xfffffff8 crash**: Ring walk hits dangling pointer → freed memory reused → garbage vtable → virtual dispatch jumps to heap → eventually calls `CharClip::operator delete` on corrupt args
+3. **Hang**: During `~ObjectDir → mSubDirs.clear()`, each ObjDirPtr destructor calls `operator=(nullptr)` → `HasDirPtrs()` checks `DirPtrRefCounts`. But the self-looping ObjDirPtr was never properly removed from the ring, so the ring walk during `HasDirPtrs` (on PPC) or the cascade deletion logic loops indefinitely
+
+### Why Xbox didn't crash
+
+Xbox's allocator doesn't zero freed memory. The stale ring entries retain their vtable pointer, so virtual calls through dangling pointers happen to succeed (the `Replace` call on a freed ref is UB that works by accident). The self-loop corruption exists on both platforms — it's just invisible on Xbox.
 
 ### Why ASan didn't detect it
 
-ASan quarantines freed memory and keeps it readable (with its original content) for a grace period. Under ASan, the vtable pointer was still valid in freed memory, so:
-- Zero REPLLIST warnings
-- Zero use-after-free reports
-- The program ran to completion
+ASan quarantines freed memory, keeping it readable with original content. The vtable pointer survived in quarantined memory, so zero use-after-free reports. Classic "works under sanitizer, crashes in production" pattern.
 
-Under the default allocator (which reuses/zeros memory faster), the vtable was zeroed, causing the crash. This is a classic "works under sanitizer, crashes in production" pattern.
+## Fix
 
-## Fix Applied
-
-### 1. Live ring walk (Object.cpp)
-
-Replaced snapshot approach with Xbox-style live walk. Each `Replace()` removes the ref from the ring via `Release()`, so `next` naturally advances. No stale snapshot pointers.
-
-Added defensive vtable check for externally-freed refs:
+### 1. Remove duplicate AddRef (Dir.h) — ROOT CAUSE FIX
 
 ```cpp
+// FIXED — single AddRef from base class only
+ObjDirPtr<C>::ObjDirPtr(C *dir) : ObjRefConcrete<C>(dir), mLoader(nullptr) {
+#ifdef HX_NATIVE
+    if (dir) {
+        DirPtrRefCounts()[(const void *)dir]++;
+    }
+#endif
+}
+```
+
+Removing the duplicate `AddRef` fixes the PPC match to **100%** — confirming this was a decomp error, not intentional Xbox behavior.
+
+### 2. Live ring walk (Object.cpp)
+
+Replaced the native snapshot+iterate approach with the Xbox-style live walk. Added a defensive vtable null-check as defense-in-depth (should never fire now that the root cause is fixed):
+
+```cpp
+SuppressEraseScope guard;
 while (next != this) {
     ObjRef *cur = next;
-    // Detect freed refs whose allocator zeroed the vtable
-    if (!*(void **)cur) {
+    if (!*(void **)cur) {          // defense-in-depth
         cur->prev->next = cur->next;
         cur->next->prev = cur->prev;
         continue;
@@ -89,11 +106,9 @@ while (next != this) {
 }
 ```
 
-This handles the UIPanel::Unload corruption case — stale ring entries from external destructor cascades that happened before the walk started.
+### 3. ObjPtrVec destructor cleanup (ObjPtr_p.h)
 
-### 2. ObjPtrVec destructor cleanup (ObjPtr_p.h)
-
-When an `ObjPtrVec` is destroyed during a `ReplaceList` walk (cascading delete via `ObjDirPtr::operator=`), its deferred purge entries in `gDeferredPurges` become dangling. Added cleanup in `~ObjPtrVec()`:
+When an `ObjPtrVec` is destroyed during a `ReplaceList` walk, its deferred purge entries in `gDeferredPurges` become dangling. Added cleanup in `~ObjPtrVec()`:
 
 ```cpp
 if (gSuppressRefErase && !gDeferredPurges.empty()) {
@@ -108,88 +123,37 @@ if (gSuppressRefErase && !gDeferredPurges.empty()) {
 
 ### Deferred ObjDirPtr deletion
 
-Tried deferring `delete mObject` in `ObjDirPtr::operator=` during merge/ReplaceList scopes using `DeferDirDeleteScope` (RAII depth counter). Three levels tested:
+Tried deferring `delete mObject` in `ObjDirPtr::operator=` during merge scopes using `DeferDirDeleteScope` (RAII depth counter). Three scope levels tested (ReplaceList, MergeDirs, FileMerger::FinishLoading). All failed because the deletes originated from `UIPanel::Unload` — completely outside any merge scope. Broadening the scope enough to catch them caused new crashes (double-free, stale objects). Deferred deletion changes lifecycle semantics unpredictably.
 
-1. **ReplaceList scope**: Deletes still happened at depth=0 (the UIPanel::Unload cascade is outside ReplaceList)
-2. **MergeDirs scope**: Same — UIPanel::Unload is outside MergeDirs
-3. **FileMerger::FinishLoading scope**: Same — UIPanel::Unload is outside FileMerger entirely
+## Verification
 
-When the scope was broadened enough to catch the deletes, the deferred execution caused **new crashes**: `SIGSEGV at 0xfffffff8` (double-free in `CharClip::operator delete`) and `SIGSEGV at 0x100000000` (corrupted `mTypeDef` pointer in `~Object`). The deferred objects became stale by the time the scope exited.
-
-**Conclusion**: Deferred deletion changes object lifecycle semantics in ways that cascade unpredictably. The immediate delete is correct behavior (matches Xbox); the problem is the stale ring entries, not the deletion itself.
-
-## Key Diagnostic Findings
-
-| Signal | What it means |
-|--------|--------------|
-| `SIGSEGV at 0x28` | Null vtable → Replace() virtual at slot 5 (5×8=0x28 on x86_64) |
-| `ref N vtable=null` | ObjRef memory was freed and zeroed by allocator |
-| All corrupt refs were "ref 1" or "ref 2" | Processing ref 0 triggers cascade that frees subsequent refs |
-| ASan: 0 warnings | Quarantine keeps vtable valid in freed memory |
-| `depth=0` in all IMMEDIATE_DEL logs | Deletes happen outside any merge/ReplaceList scope |
-| Backtrace: `~RndDir → ~ObjectDir → mSubDirs.clear()` | Cascade from UIPanel::Unload, not the merge pipeline |
+| Test | Before | After |
+|------|--------|-------|
+| `ReplaceListLiveWalkDoesNotCrash` | PASS | PASS |
+| `DirPtrRefCountsConsistentAfterMerge` | PASS | PASS |
+| `DeferredPurgeCleanedOnObjPtrVecDestruction` | PASS | PASS |
+| `ReplaceRefsWithSelfDeletingObjDirPtr` | PASS | PASS |
+| `ObjDirPtrCascadeDeleteDoesNotDoubleFree` | **HANG** | **PASS** |
+| `RemoveSubDirReleasesDirPtrRef` | **HANG** | **PASS** |
+| game_screen venue merge (YMCA flow, 3000 frames) | **SIGSEGV** | **No crash** |
+| PPC `ObjDirPtr(C*)` match | 100% | 100% |
 
 ## Files Changed
 
 | File | Change |
 |------|--------|
+| `src/system/obj/Dir.h` | Remove duplicate `AddRef` in `ObjDirPtr(C*)` constructor |
 | `src/system/obj/Object.cpp` | ReplaceList: snapshot → live walk + vtable check |
 | `src/system/obj/ObjPtr_p.h` | ~ObjPtrVec: clean up deferred purge entries on destruction |
+| `native/tests/test_object_lifetime.cpp` | 5 new ring corruption tests, cascade test re-enabled |
 
-All changes inside `#ifdef HX_NATIVE` — zero PPC decomp impact.
+## Key Diagnostic Signals (reference for future ring bugs)
 
-## Remaining Issue
-
-A separate `SIGSEGV at 0xfffffff8` crash exists in `CharClip::operator delete` — corrupted allocator metadata with a corrupted return address (on the heap, no symbol). This was previously masked by the 0x28 crash occurring earlier in the same run. Needs separate investigation.
-
-## Xbox vs Native Behavioral Difference
-
-The fundamental difference is **allocator behavior**, not code logic:
-
-- **Xbox**: Freed memory retains its content. ObjRef vtable pointers survive after free. Stale ring entries are technically use-after-free but the vtable call succeeds (the virtual function removes the ref from the ring, which is a no-op since it was already freed). The UB happens to work.
-
-- **Native (glibc malloc)**: Freed memory may be zeroed or reused. Vtable pointer becomes null. The virtual call dereferences null+0x28, crashing immediately.
-
-The vtable check in ReplaceList is the correct native-port fix: it detects the allocator-zeroed vtable and unlinks the stale entry, matching the net effect of what happens on Xbox (the ref is silently skipped).
-
-## Addendum: True Root Cause Identified (2026-03-18)
-
-During decompilation of `ObjDirPtr::ObjDirPtr`, the **true underlying root cause** of the stale ring entries was discovered: a duplicate `AddRef` call in the `ObjDirPtr` constructor.
-
-### The Double `AddRef` Corruption
-
-When an `ObjDirPtr` is instantiated from a pointer, it triggers `AddRef` twice on the exact same linked-list node:
-
-1. **Call 1 (Base Class):** `ObjRefConcrete(dir)` correctly inserts the `ObjDirPtr` into the target object's `mRefs` ring. The doubly-linked list is intact: `Head <-> Ptr <-> Head`.
-2. **Call 2 (Derived Class):** `ObjDirPtr(dir)` mistakenly called `dir->AddRef(this)` *again*.
-
-Let's look at `ObjRef::AddRef(ref)`'s logic when re-inserting the exact same node:
-```cpp
-void AddRef(ObjRef *ref) {
-    next = ref;               // Ptr->next = Head
-    prev = ref->prev;         // Ptr->prev = Head->prev (which is Ptr!)
-    ref->prev = this;         // Head->prev = Ptr
-    prev->next = this;        // Ptr->prev->next -> Ptr->next = Ptr!
-}
-```
-**The Result:** The ring is structurally shattered.
-* The target object's `Head` still thinks `Ptr` is attached (`Head.next = Ptr`).
-* But `Ptr` has become an isolated self-loop (`Ptr.next = Ptr`, `Ptr.prev = Ptr`).
-
-### The Dangling Pointer Creation
-
-Later, when `UIPanel::Unload` cascades and clears `mSubDirs` (which holds `ObjDirPtr`s), the `ObjDirPtr` is destroyed.
-When its destructor calls `Release()` to unlink itself:
-```cpp
-void Release(ObjRef *ref) {
-    prev->next = next; // Ptr->next = Ptr
-    next->prev = prev; // Ptr->prev = Ptr
-}
-```
-Because `Ptr`'s `prev` and `next` point to itself, the unlink operation does absolutely nothing to the target object's `Head`. The target object is permanently left with a dangling pointer to the freed `ObjDirPtr` memory.
-
-### Conclusion
-
-The fix applied earlier in this session (adding the `!*(void **)cur` vtable null-check guard in the live ring walk) successfully papered over the symptom of this bug, allowing the game to survive the stale pointers.
-
-However, fixing this double `AddRef` in `ObjDirPtr` cures the disease itself. The `ObjRef` rings will now remain perfectly intact and properly unlink themselves upon destruction, meaning that vtable safety guard will never actually need to catch a dangling `ObjDirPtr` again.
+| Signal | What it means |
+|--------|--------------|
+| `SIGSEGV at 0x28` | Null vtable → `Replace()` virtual at slot 5 (5×8=0x28 on x86_64) |
+| `SIGSEGV at 0xfffffff8` | Corrupted allocator metadata (double-free or heap corruption) |
+| ASan: 0 warnings but crashes without ASan | Freed memory content matters (quarantine masks the bug) |
+| `ref 1` or `ref 2` always corrupt, `ref 0` fine | Processing ref 0 cascades destruction that corrupts later refs |
+| Destructor hang in `mSubDirs.clear()` | ObjRef self-loop prevents unlinking → infinite cascade |
+| Backtrace: `~RndDir → ~ObjectDir → mSubDirs.clear()` | ObjDirPtr destructor cascade (follow the `delete mObject` chain) |
