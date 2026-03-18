@@ -109,7 +109,7 @@ namespace {
                         // Compute midpoint
                         int rawSz = raw.size();
                         int midEnd = rawSz - 6;
-                        if ((unsigned)(rawSz - 6) < 7) midEnd = 6;
+                        if ((unsigned)(rawSz - 6) <= 6) midEnd = 6;
 
                         // Z-score middle section with sliding window
                         if (midEnd > 6) {
@@ -144,9 +144,13 @@ namespace {
                         float absNormSum = 0.0f;
                         unsigned int normCount = normalized.size();
                         if (normCount != 0) {
-                            for (unsigned int i = 0; i < normCount; i++) {
-                                absNormSum += fabs(normalized[i]);
-                            }
+                            unsigned int i = 0;
+                            float *normIter = &normalized[0] - 1;
+                            do {
+                                float nv = *++normIter;
+                                absNormSum += fabs(nv);
+                                i++;
+                            } while (i < normCount);
                         }
 
                         // Convolution with kConv patterns
@@ -154,19 +158,24 @@ namespace {
                             int c = kConvCount;
                             const char **convPtr = kConv;
                             do {
+                                const char *conv = *convPtr;
                                 for (int offset = 0; offset < kConvLen; offset++) {
                                     float convSum = 0.0f;
                                     if (normCount != 0) {
-                                        for (unsigned int i = 0; i < normCount; i++) {
-                                            float val = normalized[i];
-                                            int idx = (i + offset) % kConvLen;
-                                            if ((*convPtr)[idx] == '-') {
+                                        float *normPtr = &normalized[0];
+                                        unsigned int i = 0;
+                                        do {
+                                            float val = *normPtr;
+                                            int idx = (int)(i + offset) % kConvLen;
+                                            if (conv[idx] == '-') {
                                                 val = val * -1.0f;
-                                            } else if ((*convPtr)[idx] == '0') {
+                                            } else if (conv[idx] == '0') {
                                                 val = fabs(val);
                                             }
                                             convSum += val;
-                                        }
+                                            normPtr++;
+                                            i++;
+                                        } while (i < normCount);
                                     }
                                     if (convSum > bestConv) {
                                         bestConv = convSum;
@@ -188,14 +197,12 @@ namespace {
                             *stream << "&middot;";
                             int iScore = (int)(rawAbsSum * w);
                             *stream << iScore;
-                            const char *spacing = "&nbsp;&nbsp;";
-                            if (iScore >= 10) {
-                                if (iScore >= 100) goto skipSpacing;
-                                spacing = "&nbsp;";
+                            if (iScore < 10) {
+                                *stream << "&nbsp;&nbsp;";
+                            } else if (iScore < 100) {
+                                *stream << "&nbsp;";
                             }
-                            *stream << spacing;
                         }
-                    skipSpacing:
 
                         totalRaw += rawAbsSum * w;
                         totalWeightedScore += score * w;
@@ -306,7 +313,7 @@ namespace {
             DataArray *minJoints = typeDef->FindArray(jointWeightSym, true);
             MILO_ASSERT(minJoints->Size() == kNumJoints + 1, 0x4b4);
             for (int i = 1; i < minJoints->Size(); i++) {
-                float val = minJoints->Node(i).Float();
+                float val = minJoints->Node(i).Float(minJoints);
                 data.push_back(val);
             }
             MILO_ASSERT(data.size() == kNumJoints, 0x4bc);
@@ -324,7 +331,7 @@ namespace {
             DataArray *minJoints = typeDef->FindArray(minJointSpeedSym, true);
             MILO_ASSERT(minJoints->Size() == kNumJoints + 1, 0x4c3);
             for (int i = 1; i < minJoints->Size(); i++) {
-                float val = minJoints->Node(i).Float();
+                float val = minJoints->Node(i).Float(minJoints);
                 data.push_back(val);
             }
             MILO_ASSERT(data.size() == kNumJoints, 0x4cb);
