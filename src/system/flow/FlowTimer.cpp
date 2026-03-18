@@ -5,6 +5,7 @@
 #include "flow/FlowValueCase.h"
 #include "obj/Object.h"
 #include "obj/Task.h"
+#include "obj/Utl.h"
 #include "os/Debug.h"
 #include "rndobj/Anim.h"
 
@@ -108,22 +109,22 @@ void FlowTimer::ChildFinished(FlowNode *node) {
     mRunningNodes.remove(node);
 
     if (mStopMode == 0 && mRunningNodes.empty()) {
-        MILO_ASSERT(mFlowParent->HasRunningNode(this), 0x10d);
+        if (!mFlowParent->HasRunningNode(this)) {
+            TheDebug.Fail(
+                MakeString(
+                    "%s::HasRunningNode(%s)\n", PathName(mFlowParent), PathName(this)
+                ),
+                0
+            );
+        }
         FLOW_LOG("Timed Release From Parent \n");
         Timer t;
         t.Reset();
-        static int depth = 0;
-        static unsigned int start = 0;
-        static unsigned long long cycles = 0;
-        depth++;
-        if (depth == 1) {
-            start = __mftb();
-        }
+        unsigned int start = __mftb();
         mFlowParent->ChildFinished(this);
-        depth--;
-        if (depth == 0) {
+        {
             unsigned int end = __mftb();
-            cycles += end - start;
+            unsigned long long cycles = end - start;
             float ms = Timer::CyclesToMs(cycles);
             TheFlowMgr->AddMs(ms);
         }

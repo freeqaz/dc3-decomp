@@ -486,10 +486,6 @@ public:
     static void PreInit(int hashSize, int stringSize);
     static void Init();
     static void Terminate();
-    // key: Symbol child, Symbol parent
-    // value: bool for whether child is a subclass of parent
-    static std::map<std::pair<Symbol, Symbol>, bool> sSuperClassMap;
-
     NEW_OBJ(ObjectDir);
     OBJ_MEM_OVERLOAD(0x111);
 

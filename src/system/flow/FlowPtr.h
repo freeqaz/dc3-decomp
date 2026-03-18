@@ -11,6 +11,9 @@ public:
     FlowPtrBase(Symbol name, FlowNode *node)
         : mObjName(name), mOwnerNode(node), mState(-3) {}
 
+    FlowPtrBase(const FlowPtrBase &other)
+        : mObjName(other.mObjName), mOwnerNode(other.mOwnerNode), mState(other.mState) {}
+
     int GetInitialState(Hmx::Object *);
 
     FlowPtrBase &operator=(const FlowPtrBase &other) {
@@ -53,10 +56,8 @@ public:
         : FlowPtrBase(ptr ? ptr->Name() : 0, dynamic_cast<FlowNode *>(owner)),
           mObjPtr(owner, ptr) {}
     FlowPtr(const FlowPtr &other)
-        : FlowPtrBase(other.mObjName, other.mOwnerNode),
-          mObjPtr(other.mObjPtr) {
-        mState = other.mState;
-    }
+        : FlowPtrBase(other),
+          mObjPtr(other.mObjPtr) {}
     ~FlowPtr() {}
 
     void operator=(T *obj) {

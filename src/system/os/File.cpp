@@ -464,16 +464,14 @@ const char *FileRelativePath(const char *root, const char *filepath) {
 }
 
 const char *FileMakePathBuf(const char *root, const char *file, char *buffer) {
-    MILO_ASSERT(root && file, 0x320);
-    if (!buffer) {
-        static char static_buffer[256];
-        buffer = static_buffer;
-    }
+    MILO_ASSERT(root, 0x300);
+    MILO_ASSERT(file, 0x301);
+    MILO_ASSERT(buffer, 0x302);
     char buf[256];
-    if (file >= buffer && file < buffer + 4) {
+    if (file >= buffer && file < buffer + File::MaxFileNameLen) {
         strcpy(buf, file);
         file = buf;
-    } else if (root >= buffer && root < buffer + 4) {
+    } else if (root >= buffer && root < buffer + File::MaxFileNameLen) {
         strcpy(buf, root);
         root = buf;
     }
@@ -504,10 +502,11 @@ const char *FileMakePathBuf(const char *root, const char *file, char *buffer) {
         }
     }
     FileNormalizePath(buffer);
-    char curC = *c;
+    bool curSlash = (*c == '/');
     char *dirs[32];
     const char **endDir = (const char **)&dirs[0];
-    for (char *p = strtok(c, "/"); p != nullptr; p = strtok(nullptr, "/")) {
+    char *p = strtok(c, "/");
+    while (p != nullptr) {
         if (*p != '.')
             *endDir++ = p;
         else if (p[1] == '.' && p[2] == '\0') {
@@ -516,16 +515,18 @@ const char *FileMakePathBuf(const char *root, const char *file, char *buffer) {
             else
                 *endDir++ = p;
         }
+        p = strtok(nullptr, "/");
     }
+    MILO_ASSERT(endDir - dirs <= 32, 0x35c);
     if (endDir == dirs) {
-        if (curC == '/') {
+        if (curSlash) {
             *c++ = '/';
         } else {
             *c++ = '.';
         }
     } else {
         for (const char **dir = (const char **)&dirs[0]; dir != endDir; dir++) {
-            if (dir != dirs || curC == '/') {
+            if (dir != dirs || curSlash) {
                 *c++ = '/';
             }
             for (char *p = (char *)*dir; *p != '\0'; p++) {
@@ -533,6 +534,7 @@ const char *FileMakePathBuf(const char *root, const char *file, char *buffer) {
             }
         }
     }
+    MILO_ASSERT(c - buffer < File::MaxFileNameLen, 0x372);
     *c = '\0';
     return buffer;
 }

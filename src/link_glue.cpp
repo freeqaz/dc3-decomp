@@ -442,9 +442,7 @@ extern "C" const char __link_glue_empty_str[] = "";
 #pragma comment(linker, "/ALTERNATENAME:??__Es_voiceGC@@YAXXZ=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:??__Es_voiceGCInProgress@@YAXXZ=__link_glue_noop")
 // sFlipYZ: removed stub — Cam.cpp now has unconditional static initializer
-#pragma comment(                                                                         \
-    linker, "/ALTERNATENAME:??__EsIdentityXfm@?A0x8e417309@@YAXXZ=__link_glue_noop"      \
-)
+// Removed: ??__EsIdentityXfm — Env_NG.cpp now has static initializer
 #pragma comment(                                                                                                                                   \
     linker,                                                                                                                                        \
     "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VBitCrushEffect@@UParams@1@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop" \
@@ -508,9 +506,7 @@ extern "C" const char __link_glue_empty_str[] = "";
 #pragma comment(linker, "/ALTERNATENAME:??__EgCrit@@YAXXZ=__link_glue_noop")
 // Removed: ??__EgChildPolys — symbol exists in matching Utl.obj
 // Removed: ??__EgParentPolys — symbol exists in matching Utl.obj
-#pragma comment(                                                                         \
-    linker, "/ALTERNATENAME:??__EgPhysicsVolumeBox@?A0x5ba00aca@@YAXXZ=__link_glue_noop" \
-)
+// Removed: ??__EgPhysicsVolumeBox — PhysicsVolume.cpp now has static initializer
 #pragma comment(                                                                         \
     linker,                                                                              \
     "/ALTERNATENAME:??__EmFriendEnumRequests@?A0x8a9ffbf2@@YAXXZ=__link_glue_noop"       \
@@ -519,10 +515,8 @@ extern "C" const char __link_glue_empty_str[] = "";
     linker, "/ALTERNATENAME:??__EmServiceIdMap@?A0x8a9ffbf2@@YAXXZ=__link_glue_noop"     \
 )
 #pragma comment(linker, "/ALTERNATENAME:??__EmTime@?A0x8a9ffbf2@@YAXXZ=__link_glue_noop")
-#pragma comment(                                                                         \
-    linker, "/ALTERNATENAME:??__EsOverlayWidth@?A0xe50ea9df@@YAXXZ=__link_glue_noop"     \
-)
-#pragma comment(linker, "/ALTERNATENAME:??__EsSuperClassMap@@YAXXZ=__link_glue_noop")
+// Removed: ??__EsOverlayWidth — MoveDir.cpp now has static initializer
+// Removed: ??__EsSuperClassMap — Dir.cpp now has static initializer
 
 // -- Audio SDK (11 symbols) --
 

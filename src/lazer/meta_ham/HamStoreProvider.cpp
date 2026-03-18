@@ -137,17 +137,14 @@ void HamStoreProvider::Text(int, int data, UIListLabel *slot, UILabel *label) co
         String temp;
         if (!ShowBrowserPurchased(offer) && !offer->InLibrary() && offer->IsAvailable()) {
             static_cast<AppLabel *>(label)->SetStoreOfferCost(offer);
+            return;
         }
-        return;
-    }
-    if (slot->Matches("new")) {
+    } else if (slot->Matches("new")) {
         if (offer->IsNewRelease()) {
             static Symbol new_content("new_content");
             label->SetTextToken(new_content);
-        } else {
-            label->SetTextToken(gNullStr);
+            return;
         }
-        return;
     }
     label->SetTextToken(gNullStr);
 }

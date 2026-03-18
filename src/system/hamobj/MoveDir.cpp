@@ -1667,8 +1667,9 @@ namespace {
         float rangeScale;
     };
 
-    extern const BeatLineData gBeatLineData = { 0.0f, 1.0f, 0.0f, 1.0f };
+    extern const BeatLineData gBeatLineData = { 0.05f, 0.95f, 0.25f, 0.25f };
     extern const float gFourPointZero = 4.0f;
+    static float sOverlayWidth = gBeatLineData.maxValue - gBeatLineData.minValue;
 
     void DrawBeatLine(float x, float y, float z, const Hmx::Color& color) {
         float sum = x + y;

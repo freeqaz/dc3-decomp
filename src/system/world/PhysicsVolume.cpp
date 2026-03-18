@@ -18,7 +18,9 @@ bool PhysicsVolume::sShowing;
 #endif
 
 namespace {
-    Box gPhysicsVolumeBox;
+    Box gPhysicsVolumeBox(
+        Vector3(-0.5f, -0.5f, -0.5f), Vector3(0.5f, 0.5f, 0.5f)
+    );
 }
 
 PhysicsVolume::PhysicsVolume()

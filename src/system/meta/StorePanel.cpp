@@ -264,9 +264,14 @@ void StorePanel::Unload() {
 void StorePanel::LoadArt(const char *cc, UIPanel *panel) {
     String str(cc);
     std::list<NetCacheLoader *>::iterator it = std::find(mNetCacheLoaders.begin(), mNetCacheLoaders.end(), str);
-    NetCacheLoader *loader = TheNetCacheMgr->AddNetCacheLoader(cc, (NetLoaderPos)0);
-    if (loader) {
-        mNetCacheLoaders.insert(it, loader);
+    if (it == mNetCacheLoaders.end()) {
+        NetCacheLoader *loader = TheNetCacheMgr->AddNetCacheLoader(cc, (NetLoaderPos)0);
+        mArtLoader = (int)loader;
+        if (loader) {
+            mNetCacheLoaders.insert(it, (NetCacheLoader *)mArtLoader);
+        }
+    } else {
+        mArtLoader = (int)*it;
     }
     mPendingArtCallback = panel;
 }
@@ -786,4 +791,9 @@ bool StoreEnumJob::IsFinished() {
     return mEnumeration->IsEnumerating() == false;
 }
 
-void StoreEnumJob::OnCompletion(Hmx::Object *) {}
+void StoreEnumJob::OnCompletion(Hmx::Object *) {
+    if (mStorePanel && mStorePanel->mEnumJobID == ID()) {
+        std::list<EnumProduct> &contentList = mEnumeration->mContentList;
+        mStorePanel->FinishEnum(contentList, mEnumeration->IsSuccess());
+    }
+}

@@ -368,16 +368,13 @@ bool CameraManager::SetCrowds(ObjVector<CamShotCrowd> &crowds) {
     bool ret = false;
     FOREACH (it, mCrowds) {
         WorldCrowd *curCrowd = *it;
-        CamShotCrowd *end = crowds.end();
-        CamShotCrowd *begin = crowds.begin();
-        CamShotCrowd *cit = begin;
-        // Manual pointer arithmetic required for codegen match (sizeof(CamShotCrowd) == 0x28)
-        for (; cit != end; cit = (CamShotCrowd *)((intptr_t)cit + 0x28)) {
+        CamShotCrowd *cit = crowds.begin();
+        for (; cit != crowds.end(); cit++) {
             if (curCrowd == cit->mCrowd) {
                 break;
             }
         }
-        if (curCrowd && cit != end) {
+        if (curCrowd && cit != crowds.end()) {
             curCrowd->mCrowdRotate = cit->mCrowdRotate;
             curCrowd->SetShowing(true);
             ret = true;

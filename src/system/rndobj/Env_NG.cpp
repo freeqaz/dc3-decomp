@@ -7,7 +7,14 @@
 #include "rnddx9/RenderState.h"
 
 namespace {
-    Transform sIdentityXfm;
+    Transform sIdentityXfm(
+        Hmx::Matrix3(
+            Vector3(1.0f, 0.0f, 0.0f),
+            Vector3(0.0f, 1.0f, 0.0f),
+            Vector3(0.0f, 0.0f, 1.0f)
+        ),
+        Vector3(0.0f, 0.0f, 0.0f)
+    );
 
     void ClearLightTransforms() {
         TheShaderMgr.SetVConstant4x3(
