@@ -20,7 +20,16 @@ extern bool gMemTrackerTracking;
 String gMemLogType;
 
 struct MemDiffEntry {
-    char data[72];
+    char mName[59]; // 0x00
+    char _pad;      // 0x3B
+    int mNumDiff;   // 0x3C
+    int mSizeDiff;  // 0x40
+    int mHeap; // 0x44
+    // total: 0x48 = 72 bytes
+
+    bool operator<(const MemDiffEntry &other) const {
+        return mHeap < other.mHeap;
+    }
 };
 
 extern MemTracker *gMemTracker;
@@ -34,13 +43,93 @@ int HashKey(void *ptr, int size) {
     return (uint(ptr) / 8) % size;
 }
 
-#ifdef HX_NATIVE
-void DiffTblReport(const char *, BlockStatTable &, BlockStatTable &, TextStream &) {
-    // Stub — memory diff reporting not critical for native
+void DiffTblReport(const char *name, BlockStatTable &curTable, BlockStatTable &prevTable, TextStream &ts) {
+    curTable.SortByName();
+    prevTable.SortByName();
+
+    std::vector<MemDiffEntry> diffs;
+    int curNum = curTable.GetNumStats();
+    int prevNum = prevTable.GetNumStats();
+    diffs.reserve(curNum + prevNum);
+
+    int curIdx = 0;
+    int prevIdx = 0;
+
+    while (curIdx < curNum) {
+        if (prevIdx >= prevNum)
+            break;
+
+        BlockStat &curStat = curTable.GetBlockStat(curIdx);
+        BlockStat &prevStat = prevTable.GetBlockStat(prevIdx);
+
+        int cmp = strcmp(curStat.mName, prevStat.mName);
+
+        int numAllocs1, numAllocs2;
+        int size1, size2;
+        unsigned char heap;
+        const char *entryName;
+
+        if (cmp < 0) {
+            numAllocs1 = curStat.mNumAllocs;
+            size1 = curStat.mSizeReq;
+            numAllocs2 = 0;
+            size2 = 0;
+            heap = curStat.mHeap;
+            curIdx++;
+            entryName = curStat.mName;
+        } else if (cmp > 0) {
+            numAllocs1 = 0;
+            size1 = 0;
+            numAllocs2 = prevStat.mNumAllocs;
+            size2 = prevStat.mSizeReq;
+            heap = prevStat.mHeap;
+            prevIdx++;
+            entryName = prevStat.mName;
+        } else {
+            numAllocs1 = curStat.mNumAllocs;
+            size1 = curStat.mSizeReq;
+            numAllocs2 = prevStat.mNumAllocs;
+            size2 = prevStat.mSizeReq;
+            heap = prevStat.mHeap;
+            curIdx++;
+            prevIdx++;
+            entryName = curStat.mName;
+        }
+
+        int numDiff = numAllocs1 - numAllocs2;
+        int sizeDiff = size1 - size2;
+
+        if (numDiff != 0 || sizeDiff != 0) {
+            MemDiffEntry entry;
+            strncpy(entry.mName, entryName, 0x3a);
+            entry.mName[0x3a] = '\0';
+            entry.mNumDiff = numDiff;
+            entry.mSizeDiff = sizeDiff;
+            entry.mHeap = heap;
+            diffs.push_back(entry);
+        }
+    }
+
+    int totalBytes = 0;
+    int totalNum = 0;
+
+    std::sort(diffs.begin(), diffs.end());
+
+    ts << MakeString("%-62s %8s %8s\n", name, "Num", "Bytes");
+
+    int lastHeap = -2;
+    for (std::vector<MemDiffEntry>::iterator it = diffs.begin(); it != diffs.end(); ++it) {
+        if (it->mHeap != lastHeap) {
+            ts << MakeString(" HEAP %d ------------------\n", it->mHeap);
+            lastHeap = it->mHeap;
+        }
+        totalBytes += it->mSizeDiff;
+        totalNum += it->mNumDiff;
+        ts << MakeString("  %-60s %8d %8d\n", it->mName, it->mNumDiff, it->mSizeDiff);
+    }
+
+    ts << MakeString(" %-61s %8d %8d\n\n", "TOTAL ------", totalNum, totalBytes);
 }
-#else
-void DiffTblReport(const char *, BlockStatTable &, BlockStatTable &, TextStream &);
-#endif
 
 // Explicit template instantiation for MakeString with 4 array reference arguments
 template const char *MakeString<const char(&)[9], const char(&)[3], const char(&)[9], const char(&)[8]>(
@@ -357,6 +446,26 @@ int MemTracker::SpitAllocInfo(TextStream *ts) {
         }
         FormatString end_fmt("----------------------------------------END MemTracker:::");
         *ts << end_fmt.Str() << "\n";
+        ret = 0;
+    }
+    return ret;
+}
+
+int MemTracker::SpitAllocInfo(struct _iobuf *file) {
+    int ret = 1;
+    if (gMemTracker != nullptr && gMemTracker->mHashTable != nullptr) {
+        {
+            FormatString fmt("----------------BEGIN MemTracker::SpitAllocInfo\n");
+            TheDebug << fmt.Str();
+        }
+        for (auto it = gMemTracker->mHashTable->Begin(); it != nullptr; it = gMemTracker->mHashTable->Next(it)) {
+            AllocInfo *info = *it;
+            info->PrintForReport(file);
+        }
+        {
+            FormatString fmt("----------------END MemTracker::SpitAllocInfo\n");
+            TheDebug << fmt.Str();
+        }
         ret = 0;
     }
     return ret;

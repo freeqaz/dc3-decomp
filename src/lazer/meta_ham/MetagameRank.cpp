@@ -31,6 +31,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <map>
 #include <vector>
 
 namespace {
@@ -349,12 +350,168 @@ DataNode MetagameRank::GetNextDeferredPoints(DataArray *a) {
 
 extern PropertyEventProvider *TheHamProvider;
 
-// TODO: implement real comparison — stub inlined into UpdateScore via sort
-#ifdef HX_NATIVE
-bool compare_deferred_points(DeferredPoints a, DeferredPoints b) { return false; }
-#else
-bool compare_deferred_points(DeferredPoints a, DeferredPoints b);
-#endif
+bool compare_deferred_points(DeferredPoints a, DeferredPoints b) {
+    static Symbol play_first_time_disp("play_first_time_disp");
+    static Symbol combined_xp_disp("combined_xp_disp");
+    static Symbol double_xp_weekend_disp("double_xp_weekend_disp");
+    static Symbol new_song_completed_on_beginner_disp("new_song_completed_on_beginner_disp");
+    static Symbol new_song_completed_on_easy_disp("new_song_completed_on_easy_disp");
+    static Symbol new_song_completed_on_medium_disp("new_song_completed_on_medium_disp");
+    static Symbol new_song_completed_on_hard_disp("new_song_completed_on_hard_disp");
+    static Symbol completed_song_with_1_star_disp("completed_song_with_1_star_disp");
+    static Symbol completed_song_with_2_stars_disp("completed_song_with_2_stars_disp");
+    static Symbol completed_song_with_3_stars_disp("completed_song_with_3_stars_disp");
+    static Symbol completed_song_with_4_stars_disp("completed_song_with_4_stars_disp");
+    static Symbol completed_song_with_5_stars_disp("completed_song_with_5_stars_disp");
+    static Symbol completed_song_on_easy_disp("completed_song_on_easy_disp");
+    static Symbol completed_song_on_medium_disp("completed_song_on_medium_disp");
+    static Symbol completed_song_on_hard_disp("completed_song_on_hard_disp");
+    static Symbol completed_song_warmup_disp("completed_song_warmup_disp");
+    static Symbol completed_song_simple_disp("completed_song_simple_disp");
+    static Symbol completed_song_moderate_disp("completed_song_moderate_disp");
+    static Symbol completed_song_tough_disp("completed_song_tough_disp");
+    static Symbol completed_song_legit_disp("completed_song_legit_disp");
+    static Symbol completed_song_hardcore_disp("completed_song_hardcore_disp");
+    static Symbol completed_song_off_the_hook_disp("completed_song_off_the_hook_disp");
+    static Symbol nail_fatality_disp("nail_fatality_disp");
+    static Symbol golden_performance_disp("golden_performance_disp");
+    static Symbol perfect_performance_no_misses_disp("perfect_performance_no_misses_disp");
+    static Symbol fitness_bonus_disp("fitness_bonus_disp");
+    static Symbol playlist_bonus_disp("playlist_bonus_disp");
+    static Symbol dlc_bonus_disp("dlc_bonus_disp");
+    static Symbol challenge_met_disp("challenge_met_disp");
+    static Symbol challenge_attempt_disp("challenge_attempt_disp");
+    static Symbol emilia_birthday_disp("emilia_birthday_disp");
+    static Symbol bodie_birthday_disp("bodie_birthday_disp");
+    static Symbol taye_birthday_disp("taye_birthday_disp");
+    static Symbol lilt_birthday_disp("lilt_birthday_disp");
+    static Symbol angel_birthday_disp("angel_birthday_disp");
+    static Symbol aubrey_birthday_disp("aubrey_birthday_disp");
+    static Symbol mo_birthday_disp("mo_birthday_disp");
+    static Symbol glitch_birthday_disp("glitch_birthday_disp");
+    static Symbol dare_birthday_disp("dare_birthday_disp");
+    static Symbol maccoy_birthday_disp("maccoy_birthday_disp");
+    static Symbol oblio_birthday_disp("oblio_birthday_disp");
+    static Symbol kerith_birthday_disp("kerith_birthday_disp");
+    static Symbol jaryn_birthday_disp("jaryn_birthday_disp");
+    static Symbol rasa_birthday_disp("rasa_birthday_disp");
+    static Symbol lima_birthday_disp("lima_birthday_disp");
+    static Symbol robota_birthday_disp("robota_birthday_disp");
+    static Symbol robotb_birthday_disp("robotb_birthday_disp");
+    static Symbol tan_birthday_disp("tan_birthday_disp");
+    static Symbol tanrobot_birthday_disp("tanrobot_birthday_disp");
+    static Symbol ninjaman_birthday_disp("ninjaman_birthday_disp");
+    static Symbol ninjawoman_birthday_disp("ninjawoman_birthday_disp");
+    static Symbol iconmanblue_birthday_disp("iconmanblue_birthday_disp");
+    static Symbol iconmanpink_birthday_disp("iconmanpink_birthday_disp");
+    static Symbol random_bonus_occurs_1pct_of_the_time_disp("random_bonus_occurs_1pct_of_the_time_disp");
+    static Symbol new_era_completed_campaign_70s_disp("new_era_completed_campaign_70s_disp");
+    static Symbol new_era_completed_campaign_80s_disp("new_era_completed_campaign_80s_disp");
+    static Symbol new_era_completed_campaign_90s_disp("new_era_completed_campaign_90s_disp");
+    static Symbol new_era_completed_campaign_00s_disp("new_era_completed_campaign_00s_disp");
+    static Symbol new_era_completed_campaign_10s_disp("new_era_completed_campaign_10s_disp");
+    static Symbol campaign_completed_on_easy_3_disp("campaign_completed_on_easy_3_disp");
+    static Symbol campaign_completed_on_medium_disp("campaign_completed_on_medium_disp");
+    static Symbol campaign_completed_on_hard_disp("campaign_completed_on_hard_disp");
+    static Symbol five_star_a_characters_songlist_disp("five_star_a_characters_songlist_disp");
+
+    static Symbol award_sort_indices[] = {
+        play_first_time_disp,
+        combined_xp_disp,
+        double_xp_weekend_disp,
+        new_song_completed_on_beginner_disp,
+        new_song_completed_on_easy_disp,
+        new_song_completed_on_medium_disp,
+        new_song_completed_on_hard_disp,
+        completed_song_with_1_star_disp,
+        completed_song_with_2_stars_disp,
+        completed_song_with_3_stars_disp,
+        completed_song_with_4_stars_disp,
+        completed_song_with_5_stars_disp,
+        completed_song_on_easy_disp,
+        completed_song_on_medium_disp,
+        completed_song_on_hard_disp,
+        completed_song_warmup_disp,
+        completed_song_simple_disp,
+        completed_song_moderate_disp,
+        completed_song_tough_disp,
+        completed_song_legit_disp,
+        completed_song_hardcore_disp,
+        completed_song_off_the_hook_disp,
+        nail_fatality_disp,
+        golden_performance_disp,
+        perfect_performance_no_misses_disp,
+        fitness_bonus_disp,
+        playlist_bonus_disp,
+        dlc_bonus_disp,
+        challenge_met_disp,
+        challenge_attempt_disp,
+        emilia_birthday_disp,
+        bodie_birthday_disp,
+        taye_birthday_disp,
+        lilt_birthday_disp,
+        angel_birthday_disp,
+        aubrey_birthday_disp,
+        mo_birthday_disp,
+        glitch_birthday_disp,
+        dare_birthday_disp,
+        maccoy_birthday_disp,
+        oblio_birthday_disp,
+        kerith_birthday_disp,
+        jaryn_birthday_disp,
+        rasa_birthday_disp,
+        lima_birthday_disp,
+        robota_birthday_disp,
+        robotb_birthday_disp,
+        tan_birthday_disp,
+        tanrobot_birthday_disp,
+        ninjaman_birthday_disp,
+        ninjawoman_birthday_disp,
+        iconmanblue_birthday_disp,
+        iconmanpink_birthday_disp,
+        random_bonus_occurs_1pct_of_the_time_disp,
+        new_era_completed_campaign_70s_disp,
+        new_era_completed_campaign_80s_disp,
+        new_era_completed_campaign_90s_disp,
+        new_era_completed_campaign_00s_disp,
+        new_era_completed_campaign_10s_disp,
+        campaign_completed_on_easy_3_disp,
+        campaign_completed_on_medium_disp,
+        campaign_completed_on_hard_disp,
+        five_star_a_characters_songlist_disp,
+    };
+
+    static bool initted = false;
+    static std::map<Symbol, int> award_sort_map;
+    if (!initted) {
+        for (unsigned int i = 0; i < 0x3f; i++) {
+            award_sort_map.insert(std::make_pair(award_sort_indices[i], (int)i));
+        }
+        initted = true;
+    }
+
+    std::map<Symbol, int>::iterator ait = award_sort_map.find(a.mSource);
+    std::map<Symbol, int>::iterator bit = award_sort_map.find(b.mSource);
+
+    int aIdx = 0x7fffffff;
+    int bIdx = 0x7fffffff;
+
+    if (ait != award_sort_map.end()) {
+        aIdx = ait->second;
+    } else {
+        Symbol aSym = a.mSource;
+        TheDebug << MakeString("WARNING: XP Task for %s not in sort order. It should be added.\n", aSym);
+    }
+
+    if (bit != award_sort_map.end()) {
+        bIdx = bit->second;
+    } else {
+        Symbol bSym = b.mSource;
+        TheDebug << MakeString("WARNING: XP Task for %s not in sort order. It should be added.\n", bSym);
+    }
+
+    return aIdx < bIdx;
+}
 
 void MetagameRank::UpdateScore(
     int songID,

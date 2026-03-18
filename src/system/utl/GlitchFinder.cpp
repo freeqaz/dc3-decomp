@@ -1,6 +1,8 @@
 #include "GlitchFinder.h"
 
 #include "obj/DataFunc.h"
+#include "os/Debug.h"
+#include "utl/MakeString.h"
 
 GlitchFinder TheGlitchFinder;
 std::vector<float> GlitchPoker::smNestedStartTimes;
@@ -317,6 +319,68 @@ DataNode GlitchFindScriptImpl(DataArray *arr, int iii) {
     }
 }
 
-#ifdef HX_NATIVE
-void GlitchFinder::CheckDump() {}
-#endif
+void GlitchFinder::CheckDump() {
+    if (mStop)
+        return;
+    if (!mStartPoker)
+        return;
+
+    mStop = true;
+    mStartPoker->mTimeEnd = mTime.SplitMs();
+
+    static unsigned int sStart;
+    if (sStart == 0) {
+        sStart = __mftb();
+    }
+
+    bool overBudget = mActive && mStartPoker->OverBudget();
+
+    mStartPoker->PollAveragesRecurse(overBudget);
+
+    if (overBudget) {
+        GlitchPoker::smDumpLeaves = mLeafThreshold > 0.0f;
+        GlitchPoker::smThreshold = mLeafThreshold;
+        GlitchPoker::smTotalLeafTime = 0;
+
+        String str(0x2000, '\0');
+        str << "-------- GLITCH #" << mGlitchCount << " -------- Frame " << mFrameCount
+            << " -----\n";
+
+        GlitchPoker::smLastDumpTime = mStartPoker->mTime;
+        mStartPoker->Dump(str, 0);
+
+        str << "Overhead: " << Timer::CyclesToMs(mOverheadCycles) << "\n";
+        str << "-------- GLITCH END --------\n";
+
+        int strLen = strlen(str.c_str());
+        if (strLen > 0x400) {
+            char buf[1024];
+            int i = 0;
+            for (; i + 0x400 < strLen; i += 0x400) {
+                strncpy(buf, str.c_str() + i, 0x400);
+                buf[0x400] = '\0';
+                FormatString fmt(buf);
+                TheDebug << fmt.Str();
+            }
+            strncpy(buf, str.c_str() + i, strLen - i);
+            buf[strLen - i] = '\0';
+            {
+                FormatString fmt(buf);
+                TheDebug << fmt.Str();
+            }
+        } else {
+            FormatString fmt(str.c_str());
+            TheDebug << fmt.Str();
+        }
+
+        mGlitchCount++;
+    }
+
+    if (mActive) {
+        mFrameCount++;
+    }
+
+    mStartPoker = 0;
+    mPokerIndex = 0;
+    mCurPoker = 0;
+}

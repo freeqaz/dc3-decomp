@@ -40,6 +40,8 @@
 #include "utl/Std.h"
 #include "utl/Symbol.h"
 #include "game/HamUser.h"
+#include "ui/UI.h"
+#include "ui/UIPanel.h"
 
 ProfileMgr TheProfileMgr;
 
@@ -1121,5 +1123,72 @@ void ProfileMgr::LoadGlobalOptions(FixedSizeSaveableStream &fs) {
 
 #ifdef HX_NATIVE
 void ProfileMgr::LoadGlobalOptions(FixedSizeSaveableStream &) {}
-DataNode ProfileMgr::OnMsg(const SigninChangedMsg &) { return DataNode(0); }
 #endif
+
+DataNode ProfileMgr::OnMsg(const SigninChangedMsg &msg) {
+    unsigned int mask = msg->Int(2);
+    int changedMask = msg->Int(3);
+
+    static Symbol kick_out_on_sign_out("kick_out_on_sign_out");
+
+    bool kickOutOnSignOut = false;
+
+    Hmx::Object *currentScreen = TheUI->CurrentScreen();
+    if (currentScreen != nullptr
+        && currentScreen->Property(kick_out_on_sign_out, false) != nullptr) {
+        kickOutOnSignOut =
+            TheUI->CurrentScreen()->Property(kick_out_on_sign_out, true)->Int() != 0;
+    }
+
+    UIPanel *focusPanel = TheUI->FocusPanel();
+    if (focusPanel != nullptr) {
+        UIPanel *fp = TheUI->FocusPanel();
+        if (fp->Property(kick_out_on_sign_out, false) != nullptr) {
+            kickOutOnSignOut =
+                TheUI->FocusPanel()->Property(kick_out_on_sign_out, true)->Int() != 0;
+        }
+    }
+
+    if (unkb0) {
+        unkb0 = false;
+        unkb8.Stop();
+    }
+
+    if (changedMask != 0) {
+        unsigned int padIdx = 0;
+        unsigned int remaining = changedMask;
+        do {
+            if ((remaining & 1) != 0) {
+                Profile *pProfile = GetProfileFromPad(padIdx);
+                MILO_ASSERT(pProfile, 0x5fb);
+                pProfile->SetSaveState(kMetaProfileDelete);
+
+                if ((1 << (padIdx & 0x3f) & mask) == 0) {
+                    bool isCritical = pProfile == mCriticalProfile;
+                    if (kickOutOnSignOut) {
+                        for (int i = 0; i < 2; i++) {
+                            HamPlayerData *pPlayer = TheGameData->Player(i);
+                            if (pPlayer->PadNum() == padIdx) {
+                                isCritical = true;
+                            }
+                        }
+                    }
+                    if (isCritical) {
+                        if (mask == 0) {
+                            unkb0 = true;
+                            unkb8.Restart();
+                        } else {
+                            TriggerSignoutEvent();
+                        }
+                    }
+                }
+            }
+            remaining = (remaining & 0xFFFFFFFF) >> 1;
+            padIdx = padIdx + 1;
+        } while (remaining != 0);
+    }
+
+    TheGameData->UpdateAssociatedPads();
+    UpdateUsingFitnessState();
+    return DataNode(kDataInt, 0);
+}

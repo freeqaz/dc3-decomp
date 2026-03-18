@@ -403,10 +403,135 @@ int CacheXbox::ThreadWrite() {
     return 8;
 }
 
-// int CacheXbox::ThreadRead() { return 1; }
+CacheDirEntry::CacheDirEntry(const CacheDirEntry &o) : mName(o.mName), mDateTime(o.mDateTime), mSize(o.mSize) {}
 
-// bool CacheXbox::DeleteParentDirs(String) { return 1; }
+int CacheXbox::ThreadRead() {
+    HANDLE hFile = CreateFileA(
+        mThreadStr.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL, nullptr
+    );
+    if (hFile == INVALID_HANDLE_VALUE) {
+        DWORD err = GetLastError();
+        if (err >= 2) {
+            if (err <= 3) {
+                return 8;
+            } else if (err != 0x15) {
+                if (IsDeviceConnected(mCacheID.DeviceID())) {
+                    MILO_NOTIFY(
+                        "CacheXbox::ReadAsync() - Unhandled error from CreateFile(): %d\n",
+                        err
+                    );
+                    return -1;
+                }
+            }
+        }
+        return 8;
+    }
 
-// int CacheXbox::ThreadDelete() { return 1; }
+    DWORD bytesRead = 0;
+    int result = ReadFile(hFile, mData, mSize, &bytesRead, nullptr);
+    bool success = result != 0;
+    CloseHandle(hFile);
 
-// int CacheXbox::ThreadGetDir(String, String) { return 1; }
+    if (!success) {
+        DWORD err = GetLastError();
+        if (!IsDeviceConnected(mCacheID.DeviceID())) {
+            return 8;
+        }
+        MILO_NOTIFY(
+            "CacheXbox::ReadAsync() - Unhandled error from ReadFile(): %d", err
+        );
+        return -1;
+    }
+    return 0;
+}
+
+bool CacheXbox::DeleteParentDirs(String path) {
+    path.ReplaceAll('/', '\\');
+    String basePath = mCacheID.GetCachePath("");
+    if (path.length() < basePath.length()) {
+        return true;
+    }
+    if (RemoveDirectoryA(path.c_str()) == 0) {
+        DWORD err = GetLastError();
+        if (err == 0x91) {
+            return true;
+        }
+        return false;
+    }
+    path.erase(path.find_last_of('\\'));
+    return DeleteParentDirs(String(path));
+}
+
+int CacheXbox::ThreadDelete() {
+    mThreadStr.ReplaceAll('/', '\\');
+    bool result = DeleteFileA(mThreadStr.c_str());
+    if (result) {
+        mThreadStr.erase(mThreadStr.find_last_of('\\'));
+        result = DeleteParentDirs(String(mThreadStr));
+    }
+    if (!result) {
+        DWORD err = GetLastError();
+        if (!IsDeviceConnected(mCacheID.DeviceID())) {
+            return 8;
+        }
+        MILO_NOTIFY(
+            "CacheXbox::DeleteAsync() - Unhandled error from DeleteFile(): %d\n", err
+        );
+        return -1;
+    }
+    return 0;
+}
+
+int CacheXbox::ThreadGetDir(String searchPath, String basePath) {
+    WIN32_FIND_DATAA findData;
+    memset(&findData, 0, sizeof(findData));
+    HANDLE hFind = FindFirstFileA(searchPath.c_str(), &findData);
+    CacheDirEntry entry;
+
+    if (hFind != INVALID_HANDLE_VALUE) {
+        while (true) {
+            if (findData.nFileSizeHigh == 0) {
+                if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+                    unsigned int len = searchPath.length();
+                    unsigned int lastSlash = searchPath.find_last_of('\\');
+                    String suffix = searchPath.substr(lastSlash, len - lastSlash);
+                    String prefix = searchPath.substr(0, lastSlash + 1);
+                    String newSearchPath = MakeString(
+                        "%s%s%s", prefix, findData.cFileName, suffix
+                    );
+                    String newBasePath = MakeString(
+                        "%s%s/", basePath, findData.cFileName
+                    );
+                    int ret = ThreadGetDir(String(newBasePath), String(newSearchPath));
+                    if (ret != 0) {
+                        CloseHandle(hFind);
+                        return ret;
+                    }
+                } else {
+                    entry.mSize = findData.nFileSizeLow;
+                    entry.mName = basePath + findData.cFileName;
+                    entry.mDateTime.FromFileTime(findData.ftLastWriteTime);
+                    mCacheDirList->push_back(entry);
+                }
+            }
+
+            if (FindNextFileA(hFind, &findData) == 0) {
+                break;
+            }
+        }
+    }
+
+    DWORD err = GetLastError();
+    if (hFind != INVALID_HANDLE_VALUE) {
+        CloseHandle(hFind);
+    }
+    if (err == 2 || err == 0x12) {
+        return 0;
+    }
+    if (err == 0x15 || err == 0x456 || err == 0x48f || err == 0x651
+        || !IsDeviceConnected(mCacheID.DeviceID())) {
+        return 8;
+    }
+    return -1;
+}

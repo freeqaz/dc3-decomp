@@ -105,17 +105,36 @@ WebSvcMgr::ResolveHostname(const char *hostname, const char *domain, unsigned sh
     return ret;
 }
 
-#ifdef HX_NATIVE
 void WebSvcMgr::Poll() {
+    bool mustFinish = false;
+    unsigned int runningCount = 0;
     std::list<WebSvcRequest *>::iterator it = mRequests.begin();
     while (it != mRequests.end()) {
         WebSvcRequest *req = *it;
-        if (req->IsDeleteReady()) {
+        if (!mustFinish) {
+            if (req->IsNotStarted()) {
+                if (runningCount >= 5) {
+                    return;
+                }
+                Start(req);
+            }
+            req->Poll();
+        }
+        if (req->IsDeleteReady() || req->GetState() == WebSvcRequest::kReadyForRemoval) {
             it = mRequests.erase(it);
-            OnReqFinished(req);
+            if (req->IsDeleteReady()) {
+                OnReqFinished(req);
+            } else if (req->GetState() == WebSvcRequest::kReadyForRemoval) {
+                req->Reset();
+            }
         } else {
+            if (req->IsRunning() || req->IsFinished()) {
+                runningCount++;
+            }
+            if (req->MustFinishBeforeNext()) {
+                mustFinish = true;
+            }
             ++it;
         }
     }
 }
-#endif

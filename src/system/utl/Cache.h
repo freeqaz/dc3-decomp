@@ -38,6 +38,8 @@ enum CacheResourceResult {
 
 class CacheDirEntry {
 public:
+    CacheDirEntry() : mSize(0) {}
+    CacheDirEntry(const CacheDirEntry &o);
     String mName;
     DateTime mDateTime;
     int mSize;

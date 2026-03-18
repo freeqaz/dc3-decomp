@@ -48,6 +48,7 @@ public:
 #endif
     static void operator delete(void *);
     static int SpitAllocInfo(TextStream *);
+    static int SpitAllocInfo(struct _iobuf *);
 
 private:
     void UpdateStats();

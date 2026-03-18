@@ -1973,6 +1973,84 @@ DataNode SaveLoadManager::OnMsg(const SigninChangedMsg &msg) {
     return DataNode(0);
 }
 
-#ifdef HX_NATIVE
-void SaveLoadManager::HandleEventResponse(HamProfile *, int) {}
-#endif
+void SaveLoadManager::HandleEventResponse(HamProfile *profile, int response) {
+    State savedState = mStateAtSelectStart;
+    mStateAtSelectStart = (State)0;
+
+    if (savedState != mState) {
+        MILO_NOTIFY(
+            MakeString(
+                "HandleEventResponse: expected state %d but am now in state %d\n",
+                savedState, mState
+            )
+        );
+        return;
+    }
+
+    if (response < 1 || response > 3) {
+        MILO_ASSERT(
+            false,
+            MakeString("HandleEventResponse: unexpected response %d\n", response)
+        );
+    }
+
+    if (profile == nullptr) {
+        mPadNum = -1;
+    } else {
+        mPadNum = profile->GetPadNum();
+    }
+
+    switch (mState) {
+    case kS_AutoloadNoSaveFound_Msg:
+        if (response == 1)
+            break;
+        goto set_state;
+    case kS_AutoloadMultipleSavesFound:
+    case kS_AutoloadDeviceMissing:
+    case kS_AutoloadCorrupt:
+    case kS_AutoloadNotOwner:
+    case kS_AutoloadObsolete:
+    case kS_AutoloadFuture:
+    case kS_SongCacheCreateNotFound_Msg:
+    case kS_SongCacheCreateMissing_Msg:
+    case kS_SongCacheCreateCorrupt:
+    case kS_GlobalCreateNotFound_Msg:
+    case kS_GlobalCreateMissing_Msg:
+    case kS_GlobalCreateCorrupt:
+    case kS_GlobalOptionsMissing_Msg:
+        break;
+    case kS_SaveLoadError:
+        if (mMode != kAutoLoad && mMode != kAutoSave && mMode > kDisableAutoSave) {
+            return;
+        }
+        break;
+    case kS_SaveConfirmOverwrite:
+    case kS_SaveNotEnoughSpace:
+    case kS_SaveNotEnoughSpacePS3:
+    case kS_SaveDeviceInvalid:
+    case kS_SaveFailed:
+    case kS_SaveDisabledByCheat:
+    case kS_LoadFailed:
+    case kS_ManualSaveNoDevice:
+    case kS_ManualLoadConfirmUnsaved:
+    case kS_ManualLoadConfirm:
+    case kS_ManualLoadNoDevice:
+    case kS_ManualLoadMissing:
+    case kS_ManualLoadNoFile:
+    case kS_ManualLoadCorrupt:
+    case kS_ManualLoadNotOwner:
+        break;
+    default:
+        MILO_ASSERT(
+            false,
+            MakeString(
+                "HandleEventResponse: unexpected state %d mode %d response %d\n",
+                (int)mState, (int)mMode, response
+            )
+        );
+        break;
+    }
+
+set_state:
+    SetState((State)response);
+}

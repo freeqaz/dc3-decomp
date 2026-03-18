@@ -8,6 +8,7 @@
 #include "hamobj/MoveDetector.h"
 #include "os/Debug.h"
 #include "stl/_pair.h"
+#include "utl/TimeConversion.h"
 
 MoveDetector::MoveDetector(
     const FilterVersion *fv, const HamMove *move, const DancerFrame *&dancer_frame
@@ -44,6 +45,64 @@ MoveDetector::MoveDetector(
 }
 
 MoveDetector::~MoveDetector() {}
+
+void MoveDetector::Poll(int moveIdx, int beat, MoveDir *dir) {
+    if (!mActive)
+        return;
+
+    // Beat changed - shift detect thresholds and record new value
+    if (beat != mDetectFrameOffset) {
+        if (mDetectFrameOffset != -1) {
+            for (int p = 0; p < 2; p++) {
+                float frac = ActiveDetectFrac(p, dir);
+                float oldVal = mDetectThresholds[p][3];
+                if (oldVal < frac) {
+                    frac = frac - oldVal;
+                }
+                // Shift thresholds: [1] -> [0], [2] -> [1], [3] -> [2]
+                for (int i = 0; i < 3; i++) {
+                    mDetectThresholds[p][i] = mDetectThresholds[p][i + 1];
+                }
+                // Store new frac at end
+                mDetectThresholds[p][3] = frac;
+            }
+        }
+        mDetectFrameOffset = beat;
+    }
+
+    // Move index changed - update detect frames
+    if (moveIdx != mLastDetectFrameIdx) {
+        if (mLastDetectFrameIdx != -1) {
+            for (int p = 0; p < 2; p++) {
+                mLastDetectFracs[p] = ActiveDetectFrac(p, dir);
+            }
+        }
+
+        mLastDetectFrameIdx = moveIdx;
+        float beatOffset = (float)(long long)moveIdx * 4.0f;
+
+        // Update all dancer frames' move index
+        std::vector<DancerFrame>::iterator it = mDancerFrames.begin();
+        std::vector<DancerFrame>::iterator end = mDancerFrames.end();
+        if (it != end) {
+            do {
+                it->mMoveIdx = (short)moveIdx;
+                ++it;
+            } while (it != end);
+        }
+
+        // Reset all detect frames with new timing
+        int numFrames = (int)mPlayerDetectFrames[0].size();
+        for (int i = 0; i < numFrames; i++) {
+            float secs = BeatToSeconds(
+                mPlayerDetectFrames[0][i].GetMoveFrame()->GetBeat() + beatOffset
+            );
+            for (int p = 0; p < 2; p++) {
+                mPlayerDetectFrames[p][i].SetSecondsAndReset(secs);
+            }
+        }
+    }
+}
 
 float MoveDetector::ActiveDetectFrac(int player, MoveDir *dir) {
     MILO_ASSERT(mActive, 0x42);
@@ -198,6 +257,36 @@ void MoveAsyncDetector::ClearLoopedRatingFrac(const HamMove *move) {
             }
         }
     }
+}
+
+float MoveAsyncDetector::MoveRatingFrac(int player, RatingBar bar, const HamMove *move) {
+    if (!move || !move->Scored()) {
+        return 0.0f;
+    }
+    MILO_ASSERT((0) <= (player) && (player) < (2), 0x144);
+    MoveDetector *detector = FindDetector(move);
+    const char *msg;
+    if (detector != 0) {
+        if (!detector->mActive) {
+            MILO_NOTIFY_ONCE("MoveRatingFrac for %s called, but it's disabled", move->Name());
+            return 0.0f;
+        }
+        MoveDir *dir = mDir;
+        int beat = dir->MoveBeat();
+        int idx = mDir->MoveIdx();
+        detector->Poll(idx, beat, dir);
+        if (bar == kRatingActive) {
+            return detector->ActiveDetectFrac(player, mDir);
+        }
+        if (bar == kRatingLast4Beats) {
+            return detector->Last4BeatsDetectFrac(player);
+        }
+        return detector->LastDetectFrac(player);
+    } else {
+        msg = MakeString("Could not find rating for %s", move->Name());
+    }
+    TheDebug.Notify(msg);
+    return 0.0f;
 }
 
 void MoveAsyncDetector::DisableDetector(HamMove *move) {

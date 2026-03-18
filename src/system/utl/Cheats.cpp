@@ -10,6 +10,8 @@
 #include "os/System.h"
 #include "obj/DataFunc.h"
 
+extern bool JoypadIsShiftButton(int, JoypadButton);
+
 static bool sKeyCheatsEnabled = true;
 CheatsManager *gCheatsManager = nullptr;
 bool gDisable = false;
@@ -273,10 +275,64 @@ void CheatsManager::RebuildKeyCheatsForMode() {
     }
 }
 
-// TODO: implement — referenced via HANDLE_MESSAGE
-#ifdef HX_NATIVE
-int CheatsManager::OnMsg(const ButtonDownMsg &) { return 0; }
-#endif
+int CheatsManager::OnMsg(const ButtonDownMsg &msg) {
+    User *user = msg.GetUser();
+    LocalUser *localUser = 0;
+    if (user) {
+        localUser = user->GetLocalUser();
+    }
+
+    int padNum = msg.GetPadNum();
+    JoypadData *padData = JoypadGetPadData(padNum);
+    unsigned int buttons = padData->mButtons;
+
+    bool leftShift = (buttons & (1 << kPad_L1)) && (buttons & (1 << kPad_L2));
+    bool rightShift = (buttons & (1 << kPad_R1)) && (buttons & (1 << kPad_R2));
+
+    JoypadButton button = msg.GetButton();
+
+    if (leftShift || rightShift) {
+        std::vector<QuickJoyCheat *> cheats(mJoyCheatPtrsMode[leftShift ? 0 : 1]);
+        for (QuickJoyCheat **it = cheats.begin(); it != cheats.end(); ++it) {
+            if (button == (*it)->mButton) {
+                CallCheatScript(true, (*it)->mScript, localUser, true);
+            }
+        }
+    }
+
+    mLastButtonTime.Stop();
+    if (mLastButtonTime.Ms() > 2000.0f) {
+        for (std::vector<LongJoyCheat>::iterator it = mLongJoyCheats.begin();
+             it != mLongJoyCheats.end(); ++it) {
+            it->ixProgress = 0;
+        }
+    }
+
+    mLastButtonTime.Restart();
+
+    padNum = msg.GetPadNum();
+    bool isShift = JoypadIsShiftButton(padNum, button);
+    if (!isShift) {
+        for (std::vector<LongJoyCheat>::iterator it = mLongJoyCheats.begin();
+             it != mLongJoyCheats.end(); ++it) {
+            if (button == it->mSequence[it->ixProgress]) {
+                it->ixProgress++;
+                if (it->ixProgress >= it->mSequence.size()) {
+                    CallCheatScript(false, it->mScript, localUser, true);
+                    for (std::vector<LongJoyCheat>::iterator jt = mLongJoyCheats.begin();
+                         jt != mLongJoyCheats.end(); ++jt) {
+                        jt->ixProgress = 0;
+                    }
+                    return 1;
+                }
+            } else {
+                it->ixProgress = 0;
+            }
+        }
+    }
+
+    return 1;
+}
 
 DataNode CheatsManager::OnMsg(const KeyboardKeyReleaseMsg &msg) {
     if (msg->Int(2) == 0x11 && mIsOverridingKeyboard) {
