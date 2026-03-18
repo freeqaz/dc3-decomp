@@ -28,6 +28,11 @@
 static FILE *sDumpFile = nullptr;
 static int sDumpMaxFrames = 0;       // total frames to capture
 static int sDumpFramesWritten = 0;   // frames captured so far
+
+// Master gain applied to all mixed audio output.
+// Default 2.0 compensates for quiet mix levels in the native port.
+// Override with DC3_AUDIO_GAIN=<float> environment variable.
+static float sMasterGain = 1.1f;
 static std::atomic<bool> sDumpFinalized{false};
 
 // Write a 44-byte RIFF/WAV header for 16-bit stereo PCM.
@@ -176,8 +181,12 @@ bool AudioDevice::Init(int sampleRate) {
     }
 
     mInitialized = true;
-    printf("AudioDevice: initialized — %d Hz, %d channels, period %d frames\n",
-           mSampleRate, 2, 512);
+
+    // Read master gain from environment
+    const char *gainEnv = getenv("DC3_AUDIO_GAIN");
+    if (gainEnv) sMasterGain = (float)atof(gainEnv);
+    printf("AudioDevice: initialized — %d Hz, %d channels, period %d frames, gain %.1f\n",
+           mSampleRate, 2, 512, sMasterGain);
 
     // --- WAV dump setup ---
     const char *dumpPath = getenv("DC3_DUMP_AUDIO");
@@ -288,8 +297,9 @@ void AudioDevice::MixSources(float *output, int frameCount) {
                 }
             }
 
-            // Clamp output to [-1, 1]
+            // Apply master gain and clamp to [-1, 1]
             for (int i = 0; i < totalSamples; i++) {
+                output[i] *= sMasterGain;
                 if (output[i] > 1.0f) output[i] = 1.0f;
                 else if (output[i] < -1.0f) output[i] = -1.0f;
             }

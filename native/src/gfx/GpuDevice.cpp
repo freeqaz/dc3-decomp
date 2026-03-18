@@ -199,7 +199,13 @@ bool GpuDevice::InitWindow(const GpuDeviceDesc& desc) {
 
     // Store this pointer for resize callback
     glfwSetWindowUserPointer(mWindow, this);
+    // On macOS, Dawn's Metal surface uses window points, not framebuffer pixels.
+    // Use window size callback to match. On Linux, framebuffer == window size.
+#ifdef __APPLE__
+    glfwSetWindowSizeCallback(mWindow, [](GLFWwindow* win, int w, int h) {
+#else
     glfwSetFramebufferSizeCallback(mWindow, [](GLFWwindow* win, int w, int h) {
+#endif
         auto* self = static_cast<GpuDevice*>(glfwGetWindowUserPointer(win));
         if (self && w > 0 && h > 0) {
             self->ResizeSurface(w, h);

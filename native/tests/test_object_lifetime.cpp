@@ -171,7 +171,7 @@ TEST_F(ObjectLifetimeTest, DeleteOrderDoesNotRequireTopologicalSortForObjPtr) {
     delete dir;
 }
 
-TEST_F(ObjectLifetimeTest, DeletingFlowChildRemovesFromParent) {
+TEST_F(ObjectLifetimeTest, DeletingFlowChildRemovesEntryFromParent) {
     ExposedFlow *flow = new ExposedFlow();
     FlowAnimate *child = Hmx::Object::New<FlowAnimate>();
 
@@ -181,9 +181,8 @@ TEST_F(ObjectLifetimeTest, DeletingFlowChildRemovesFromParent) {
 
     delete child;
 
-    // During ReplaceRefs, vector erase is suppressed (IsDeleting guard)
-    // to prevent CopyRef-during-shift ring corruption. The child pointer
-    // is nulled out but the entry may remain in the vector.
+    // mChildNodes uses kObjListNoNull mode, so null entries are erased
+    // (not tombstoned) after the deferred purge in ReplaceList completes.
     // The important invariant: no dangling pointer to the deleted child.
     EXPECT_TRUE(flow->ChildCount() == 0 || flow->FrontChild() == nullptr);
 

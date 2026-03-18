@@ -175,8 +175,13 @@ wgpu::BlendState PipelineManager::MapBlend(WgpuBlend blend) {
     auto& color = bs.color;
     auto& alpha = bs.alpha;
 
-    // Default alpha blend: same as color
+    // Initialize to valid defaults — Dawn rejects Undefined (0) as invalid.
+    color.operation = wgpu::BlendOperation::Add;
+    color.srcFactor = wgpu::BlendFactor::One;
+    color.dstFactor = wgpu::BlendFactor::Zero;
     alpha.operation = wgpu::BlendOperation::Add;
+    alpha.srcFactor = wgpu::BlendFactor::One;
+    alpha.dstFactor = wgpu::BlendFactor::Zero;
 
     switch (blend) {
     case WgpuBlend::Dest:
@@ -233,6 +238,9 @@ wgpu::BlendState PipelineManager::MapBlend(WgpuBlend blend) {
         color.srcFactor = wgpu::BlendFactor::One;
         color.dstFactor = wgpu::BlendFactor::One;
         color.operation = wgpu::BlendOperation::Min;
+        break;
+    default:
+        // Fallback: use Src blend (opaque)
         break;
     }
 
