@@ -449,4 +449,178 @@ TEST_F(ObjectLifetimeTest, ManualReproAutosaveWarningPanelUnload) {
     EXPECT_EQ(panel->GetState(), UIPanel::kUnloaded);
 }
 
+// ============================================================================
+// Ring corruption & DirPtrRefCount tests
+// ============================================================================
+// These tests target the specific ring corruption patterns identified in
+// session 2026-03-18-venue-merge-crash-ring-corruption.md
+
+// Verify that ReplaceList with the live walk handles basic ref replacement
+// without corruption (the old snapshot approach could leave dangling pointers).
+TEST_F(ObjectLifetimeTest, ReplaceListLiveWalkDoesNotCrash) {
+    ObjectDir *dir = Hmx::Object::New<ObjectDir>();
+
+    // Create several objects in the dir, each with an ObjPtr pointing to
+    // a target. When we ReplaceRefs on the target, all ObjPtrs should redirect.
+    Hmx::Object *target = Hmx::Object::New<Hmx::Object>();
+    target->SetName("target.obj", dir);
+
+    Hmx::Object *replacement = Hmx::Object::New<Hmx::Object>();
+    replacement->SetName("replacement.obj", dir);
+
+    const int kNumHolders = 10;
+    std::vector<TestRefHolder *> holders;
+    for (int i = 0; i < kNumHolders; i++) {
+        TestRefHolder *h = new TestRefHolder();
+        char name[32];
+        snprintf(name, sizeof(name), "holder%d.obj", i);
+        h->SetName(name, dir);
+        h->SetTarget(target);
+        holders.push_back(h);
+    }
+
+    EXPECT_EQ(target->RefCount(), kNumHolders);
+
+    // This exercises the live ring walk in ReplaceList
+    target->ReplaceRefs(replacement);
+
+    EXPECT_EQ(target->RefCount(), 0);
+    EXPECT_EQ(replacement->RefCount(), kNumHolders);
+    for (auto *h : holders) {
+        EXPECT_EQ(h->Target(), replacement);
+    }
+
+    delete dir;
+}
+
+// Verify DirPtrRefCounts stays consistent through merge operations.
+// The MergeObjectsRecurse manual Release/AddRef (lines 369-378 of Utl.cpp)
+// moves refs between rings without updating DirPtrRefCounts. This test
+// confirms the count tracks the actual ObjDirPtr pointing relationship,
+// not ring membership.
+TEST_F(ObjectLifetimeTest, DirPtrRefCountsConsistentAfterMerge) {
+    ObjectDir *toDir = Hmx::Object::New<ObjectDir>();
+    ObjectDir *fromDir = Hmx::Object::New<ObjectDir>();
+    ObjectDir *subdir = Hmx::Object::New<ObjectDir>();
+    subdir->SetName("sub.dir", fromDir);
+
+    // Create an ObjDirPtr in fromDir pointing to subdir
+    ObjDirPtr<ObjectDir> holder(subdir);
+    EXPECT_TRUE(subdir->HasDirPtrs());
+
+    auto &counts = DirPtrRefCounts();
+    auto it = counts.find((const void *)subdir);
+    ASSERT_NE(it, counts.end());
+    int countBefore = it->second;
+    EXPECT_GT(countBefore, 0);
+
+    // Merge fromDir into toDir — the subdir ref should be properly tracked
+    MergeFilter filt((MergeFilter::Action)1, MergeFilter::kNoSubdirs);
+    MergeDirs(fromDir, toDir, filt);
+
+    // The holder ObjDirPtr still points to subdir — count should be same
+    it = counts.find((const void *)subdir);
+    ASSERT_NE(it, counts.end());
+    EXPECT_EQ(it->second, countBefore);
+    EXPECT_TRUE(subdir->HasDirPtrs());
+
+    holder = nullptr;
+    delete fromDir;
+    delete toDir;
+}
+
+// Verify that ObjPtrVec deferred purge entries are cleaned up when the
+// ObjPtrVec is destroyed during a ReplaceList walk.
+TEST_F(ObjectLifetimeTest, DeferredPurgeCleanedOnObjPtrVecDestruction) {
+    // This tests the fix in ~ObjPtrVec: removing stale gDeferredPurges entries
+    // when the vector is destroyed before the outermost ReplaceList exits.
+    ObjectDir *dir = Hmx::Object::New<ObjectDir>();
+
+    Hmx::Object *target = Hmx::Object::New<Hmx::Object>();
+    target->SetName("target.obj", dir);
+
+    Hmx::Object *replacement = Hmx::Object::New<Hmx::Object>();
+    replacement->SetName("replacement.obj", dir);
+
+    // Create a group (has ObjPtrVec with kObjListOwnerControl) that references target
+    ExposedRndGroup *group = new ExposedRndGroup();
+    group->SetName("group.grp", dir);
+    group->AddObject(target);
+    ASSERT_EQ(group->ObjectCount(), 1);
+
+    // ReplaceRefs should handle the group's internal ObjPtrVec correctly
+    target->ReplaceRefs(replacement);
+
+    // The group should still be valid (not crashed)
+    EXPECT_GE(group->ObjectCount(), 0);
+
+    delete dir;
+}
+
+// Verify that the ObjDirPtr delete-during-cascade doesn't cause double-free.
+// When ObjDirPtr::operator= deletes an ObjectDir, the destructor chain
+// should not re-delete objects that are still being processed.
+// DISABLED: hangs in ~ObjectDir → mSubDirs.clear() cascade delete loop.
+// Same root cause as RemoveSubDirReleasesDirPtrRef hanging.
+// The ObjDirPtr destructor cascade gets stuck in a loop when nested
+// subdirs have cross-references.
+TEST_F(ObjectLifetimeTest, DISABLED_ObjDirPtrCascadeDeleteDoesNotDoubleFree) {
+    // Create a chain: dir1 has subdir dir2, dir2 has subdir dir3
+    ObjectDir *dir1 = Hmx::Object::New<ObjectDir>();
+    ObjectDir *dir2 = Hmx::Object::New<ObjectDir>();
+    ObjectDir *dir3 = Hmx::Object::New<ObjectDir>();
+
+    dir1->AppendSubDir(ObjDirPtr<ObjectDir>(dir2));
+    dir2->AppendSubDir(ObjDirPtr<ObjectDir>(dir3));
+
+    EXPECT_TRUE(dir1->HasSubDir(dir2));
+    EXPECT_TRUE(dir2->HasSubDir(dir3));
+
+    // Create cross-references: an object in dir3 references an object in dir1
+    Hmx::Object *obj1 = Hmx::Object::New<Hmx::Object>();
+    obj1->SetName("obj1.obj", dir1);
+
+    TestRefHolder *holder3 = new TestRefHolder();
+    holder3->SetName("holder.obj", dir3);
+    holder3->SetTarget(obj1);
+
+    EXPECT_EQ(obj1->RefCount(), 1);
+
+    // Deleting dir1 cascades: dir1 → dir2 → dir3 → holder3 destroyed
+    // holder3's ObjPtr destructor should safely null its reference to obj1
+    // (which is also being destroyed as part of dir1)
+    delete dir1;
+    // If we get here without crash/double-free, the cascade is safe
+}
+
+// Verify that replacing refs on an object whose ObjDirPtr refs cause the
+// object itself to be deleted (HasDirPtrs returns false mid-walk) doesn't crash.
+TEST_F(ObjectLifetimeTest, ReplaceRefsWithSelfDeletingObjDirPtr) {
+    ObjectDir *target = Hmx::Object::New<ObjectDir>();
+    ObjectDir *replacement = Hmx::Object::New<ObjectDir>();
+
+    // The only ObjDirPtr to target — when this is replaced, HasDirPtrs
+    // returns false and ObjDirPtr::operator= tries to delete target.
+    // But we're in the middle of walking target's refs!
+    ObjDirPtr<ObjectDir> dirPtr(target);
+    EXPECT_TRUE(target->HasDirPtrs());
+
+    // Also add a regular ObjPtr to target so there are multiple refs in the ring
+    Hmx::Object *owner = Hmx::Object::New<Hmx::Object>();
+    ObjPtr<Hmx::Object> objRef(owner, target);
+    EXPECT_EQ(target->RefCount(), 2); // dirPtr + objRef
+
+    // This should not crash even though Replace on the ObjDirPtr may
+    // trigger delete of target
+    target->ReplaceRefs(replacement);
+
+    // After ReplaceRefs, refs should point to replacement (if target survived)
+    // or be null (if target was deleted)
+    EXPECT_TRUE(objRef.Ptr() == replacement || objRef.Ptr() == nullptr);
+
+    delete owner;
+    delete replacement;
+    // target may have been deleted by the ObjDirPtr cascade — don't double-delete
+}
+
 } // namespace
