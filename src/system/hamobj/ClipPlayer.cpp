@@ -536,11 +536,23 @@ void ClipPlayer::PlayNormal(float f1, HamDriver::LayerArray *arr, const char *cc
         static Symbol merge_moves("merge_moves");
         int prop = TheHamProvider->Property(merge_moves, true)->Int();
         float beat = mBeat;
-        if (prop != 0) {
+        if (prop != 0
+#ifdef HX_NATIVE
+            && TheMoveMgr->HasRoutine()
+#endif
+        ) {
             PushRoutineBuilderClip(mClipKeys->KeyLessEq(BeatToFrame(beat)), newArr);
         } else if (mClipKeys == mMasterClipKeys) {
+#ifdef HX_NATIVE
+            { static int s=0; if(s++<3) MILO_LOG("DC3 PlayNormal: PushExpertClip idx=%d beat=%.2f frame=%.1f keySize=%d\n",
+                mClipKeys->KeyLessEq(BeatToFrame(beat)), beat, BeatToFrame(beat), (int)mClipKeys->size()); }
+#endif
             PushExpertClip(mClipKeys->KeyLessEq(BeatToFrame(beat)), newArr);
         } else {
+#ifdef HX_NATIVE
+            { static int s=0; if(s++<3) MILO_LOG("DC3 PlayNormal: PushClip idx=%d beat=%.2f frame=%.1f keySize=%d\n",
+                mClipKeys->KeyGreaterEq(BeatToFrame(beat)), beat, BeatToFrame(beat), (int)mClipKeys->size()); }
+#endif
             PushClip(mClipKeys->KeyGreaterEq(BeatToFrame(beat)), newArr);
         }
     }

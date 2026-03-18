@@ -412,6 +412,15 @@ void HamNavList::Poll() {
                 }
             }
         }
+#ifdef HX_NATIVE
+        // In controller mode without skeleton (headless/no Kinect), still need
+        // to drive scroll behavior so pending controller-initiated scrolls complete
+        if (TheGestureMgr->InControllerMode() && mListRibbonResource
+            && mListState.Provider()
+            && mListRibbonResource->IsScrollable(mListState.NumShowing())) {
+            mScrollBehavior.Update(mScrollBehavior.mScrollSpeed);
+        }
+#endif
     }
 
     // Update swipe direction debug overlay

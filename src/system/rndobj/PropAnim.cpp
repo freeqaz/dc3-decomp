@@ -8,6 +8,9 @@
 #include "rndobj/PropKeys.h"
 #include "utl/BinStream.h"
 #include "utl/Std.h"
+#ifdef HX_NATIVE
+#include <cstdlib>
+#endif
 
 static bool sRemoveFrame = false;
 static bool sReplaceKey = false;
@@ -140,6 +143,28 @@ BEGIN_COPYS(RndPropAnim)
     RemoveKeys();
     CREATE_COPY(RndPropAnim)
     BEGIN_COPYING_MEMBERS
+#ifdef HX_NATIVE
+        {
+            static int sMergeDebug = -1;
+            if (sMergeDebug < 0) {
+                const char *env = getenv("MILO_DEBUG_MERGE");
+                sMergeDebug = (env && atoi(env) != 0) ? 1 : 0;
+            }
+            if (sMergeDebug) {
+                int srcKeys = 0;
+                FOREACH (it2, c->mPropKeys) { srcKeys++; }
+                MILO_LOG("PROPANIM_COPY: %s <- %s (ty=%d) srcPropKeys=%d\n",
+                    PathName(this), PathName(o), ty, srcKeys);
+                FOREACH (it2, c->mPropKeys) {
+                    PropKeys *pk = *it2;
+                    MILO_LOG("  PropKeys: target=%s prop=%s type=%d numKeys=%d\n",
+                        pk->Target() ? PathName(pk->Target()) : "(null)",
+                        pk->Prop() ? pk->Prop()->Str(0) : "(null)",
+                        pk->KeysType(), pk->NumKeys());
+                }
+            }
+        }
+#endif
         FOREACH (it, c->mPropKeys) {
             PropKeys *cur = *it;
             Hmx::Object *target = cur->Target();
@@ -148,6 +173,20 @@ BEGIN_COPYS(RndPropAnim)
         COPY_MEMBER(mLoop)
         COPY_MEMBER(mFlowLabels)
         COPY_MEMBER(mIntensity)
+#ifdef HX_NATIVE
+        {
+            static int sMergeDebug = -1;
+            if (sMergeDebug < 0) {
+                const char *env = getenv("MILO_DEBUG_MERGE");
+                sMergeDebug = (env && atoi(env) != 0) ? 1 : 0;
+            }
+            if (sMergeDebug) {
+                int dstKeys = 0;
+                FOREACH (it2, mPropKeys) { dstKeys++; }
+                MILO_LOG("  -> dest now has %d PropKeys\n", dstKeys);
+            }
+        }
+#endif
     END_COPYING_MEMBERS
 END_COPYS
 

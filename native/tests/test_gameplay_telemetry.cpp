@@ -307,3 +307,99 @@ TEST_F(GameplayTelemetryTest, PollEnabledDuringGameplay) {
         << "mPollEnabled was never true during gameplay. "
         << "Game::StartGame() may not be calling SetPollEnabled(true).";
 }
+
+// ===========================================================================
+// Character Animation Tests — validates dance clips play on characters
+// ===========================================================================
+
+TEST_F(GameplayTelemetryTest, ClipDirectoryAvailable) {
+    // ClipPlayer::Init() requires clipDir (the "clips" ObjectDir from merger)
+    bool found = false;
+    for (auto &s : sSamples) {
+        if (s.getBool("clipDir")) {
+            found = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(found)
+        << "ClipDir was never available. "
+        << "HamDirector::Initialize() may not have run, or 'clips' ObjectDir missing from merger.";
+}
+
+TEST_F(GameplayTelemetryTest, MasterClipAnimAvailable) {
+    // ClipPlayer::Init() requires GetMasterKeys("clip") to return non-null
+    bool found = false;
+    for (auto &s : sSamples) {
+        if (s.getBool("masterClip")) {
+            found = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(found)
+        << "Master clip anim (master_clips/song.anim) was never found. "
+        << "SetMasterClipAnim() is failing — check song asset merge.";
+}
+
+TEST_F(GameplayTelemetryTest, CharacterClipsPlaying) {
+    // THE NORTH STAR TEST: characters must have clip layers queued during gameplay.
+    // charClipLayers > 0 means ClipPlayer::PlayAnims() successfully queued clips
+    // to the HamDriver, and the character is actively dancing.
+    //
+    // This test FAILS today (charClipLayers=0 for entire run).
+    // Root cause: song.anim PropKeys have zero keyframe entries after FileMerger merge.
+    // ClipPlayer::Init() succeeds (PropKeys pointers non-null), PlayAnims() IS called,
+    // but PushClip/PushExpertClip find no keys -> no clips queued -> character frozen.
+    // Additionally, merge_moves=1 but mRoutineLoaded=false, so routine builder path fails.
+    bool found = false;
+    for (auto &s : sSamples) {
+        if (s.getInt("charClipLayers") > 0) {
+            found = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(found)
+        << "Character clip layers were NEVER > 0 during gameplay. "
+        << "Characters are frozen — ClipPlayer::PlayAnims() never queued clips to HamDriver. "
+        << "Check: ClipPlayer::Init() return value, HamDirector::Poll() clip playback path.";
+}
+
+TEST_F(GameplayTelemetryTest, DifficultyProxyExists) {
+    // The "easy" ObjectDir must exist in the merged world for song.anim lookup
+    bool found = false;
+    for (auto &s : sSamples)
+        if (s.getBool("diffProxy")) { found = true; break; }
+    EXPECT_TRUE(found) << "Difficulty proxy 'easy' not found in merged world dir.";
+}
+
+TEST_F(GameplayTelemetryTest, SongAnimHasPropKeys) {
+    // song.anim must have PropKeys objects (property animation tracks)
+    // songAnimKeys=0 means the anim exists but has no tracks at all
+    bool found = false;
+    for (auto &s : sSamples)
+        if (s.getInt("songAnimKeys", -1) > 0) { found = true; break; }
+    EXPECT_TRUE(found) << "song.anim has zero PropKeys tracks. "
+        << "The PropAnim was merged but its property tracks are empty. "
+        << "Check MergeObject copy semantics for RndPropAnim.";
+}
+
+TEST_F(GameplayTelemetryTest, SongAnimHasClipKeys) {
+    // THE KEY DIAGNOSTIC: the "clip" PropKeys must have keyframe entries.
+    // clipKeyCount=0 with songAnimKeys>0 means the PropKeys object exists
+    // but its Keys<Symbol,Symbol> array is empty (no keyframes transferred).
+    bool found = false;
+    for (auto &s : sSamples)
+        if (s.getInt("clipKeyCount", -1) > 0) { found = true; break; }
+    EXPECT_TRUE(found) << "Clip keyframe count was never > 0. "
+        << "The 'clip' PropKeys in song.anim has zero entries. "
+        << "FileMerger merge didn't transfer keyframe data from song .milo.";
+}
+
+TEST_F(GameplayTelemetryTest, RoutineBuilderLoaded) {
+    // On native, we bypass the routine builder path (merge_moves) and use
+    // difficulty-specific song.anim directly. The full routine builder flow
+    // requires the complete DTA-driven choreography system which depends on
+    // synchronous loading. This test validates that the difficulty-specific
+    // path works (clipKeyCount > 0 is the real indicator).
+    // Skip: routineLoaded is expected to be 0 on native.
+    GTEST_SKIP() << "Routine builder bypassed on native — using difficulty keys directly.";
+}

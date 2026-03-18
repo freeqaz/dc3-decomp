@@ -44,6 +44,10 @@ public:
     // Fill a Skeleton object from person data
     void FillSkeleton(Skeleton &skel, int personIdx) const;
 
+    // Fill a skeleton with a neutral standing pose (hands at sides).
+    // Used as fallback when no pose server is connected.
+    static void FillDummySkeleton(Skeleton &skel);
+
 private:
     void ReaderThread();
     void MapCOCOToDC3(const float cocoKpts[][3], PersonData &out);

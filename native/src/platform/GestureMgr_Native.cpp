@@ -17,13 +17,17 @@ static NativeCameraInput *sNativeCameraInput = nullptr;
 // Native implementation of GestureMgr::Init — replaces the early return stub.
 // Called from game startup to initialize skeleton tracking via webcam + YOLO pose.
 void GestureMgr_NativeInit() {
+    // Always create the camera input stub — needed for PostUpdate pipeline.
+    if (!sNativeCameraInput)
+        sNativeCameraInput = new NativeCameraInput();
+
     // In headless mode (tests, CLI tools), skip the pose server entirely.
-    // The 5-second socket connection timeout dominates test startup time.
+    // The dummy skeleton in GestureMgr_NativePoll provides a neutral standing
+    // pose so skeleton-gated paths still work without a real camera.
     if (getenv("MILO_HEADLESS")) {
-        printf("Native: headless mode, skipping skeleton tracking\n");
+        printf("Native: headless mode, using dummy skeleton (no pose server)\n");
         if (TheGestureMgr) {
             TheGestureMgr->SetInControllerMode(true);
-            printf("Native: forced controller mode (bypasses Kinect gesture gates)\n");
         }
         return;
     }
@@ -46,13 +50,8 @@ void GestureMgr_NativeInit() {
         printf("Native skeleton tracking failed to start (gameplay will have no body input)\n");
     }
 
-    sNativeCameraInput = new NativeCameraInput();
-
-    // Force controller mode so gesture-gated screens (tutorial, skeleton chooser)
-    // don't block waiting for Kinect hand-raise gestures.
     if (TheGestureMgr) {
         TheGestureMgr->SetInControllerMode(true);
-        printf("Native: forced controller mode (bypasses Kinect gesture gates)\n");
     }
 }
 
@@ -67,27 +66,34 @@ void GestureMgr_NativeTerminate() {
 }
 
 // Called each frame by GestureMgr::Poll() to update skeleton slots
-// from the YOLO pose server, then run the filtering pipeline.
+// from the YOLO pose server (or a dummy skeleton), then run the
+// filtering pipeline.
 void GestureMgr_NativePoll(GestureMgr *mgr) {
-    if (!TheSkeletonProvider || !TheSkeletonProvider->IsRunning())
-        return;
+    bool hasPoseServer = TheSkeletonProvider && TheSkeletonProvider->IsRunning();
 
-    TheSkeletonProvider->Poll();
-
-    int numPersons = TheSkeletonProvider->NumPersons();
-
-    // Fill up to 6 skeleton slots (matching Kinect's 6-skeleton max)
-    for (int i = 0; i < NUM_SKELETONS; i++) {
-        Skeleton &skel = mgr->GetSkeleton(i);
-        if (i < numPersons) {
-            TheSkeletonProvider->FillSkeleton(skel, i);
+    if (hasPoseServer) {
+        TheSkeletonProvider->Poll();
+        int numPersons = TheSkeletonProvider->NumPersons();
+        for (int i = 0; i < NUM_SKELETONS; i++) {
+            if (i < numPersons) {
+                TheSkeletonProvider->FillSkeleton(mgr->GetSkeleton(i), i);
+            }
         }
+    } else {
+        // No pose server — provide a dummy skeleton so skeleton-gated
+        // code paths (scroll behavior, enter anims) still run.
+        NativeSkeletonProvider::FillDummySkeleton(mgr->GetSkeleton(0));
     }
 
-    // Build SkeletonUpdateData pointing to mgr's own skeleton slots
-    // so PostUpdate() runs the quality filters and identity tracking.
-    // On Xbox, SkeletonUpdate::PostUpdate builds this and calls callbacks.
-    // On native, we build it here since there's no SkeletonUpdate thread.
+    // Set active skeleton so GetActiveSkeletonTrackingID() returns a
+    // valid ID and HamNavList::Poll() finds our skeleton.
+    if (mgr->GetActiveSkeletonTrackingID() <= 0) {
+        mgr->SetActiveSkeletonTrackingID(1);
+    }
+
+    // Run the quality filter + identity tracking pipeline.
+    // On Xbox this is done by SkeletonUpdate's thread; on native we
+    // do it synchronously here.
     Skeleton *skelPtrs[NUM_SKELETONS];
     for (int i = 0; i < NUM_SKELETONS; i++) {
         skelPtrs[i] = &mgr->GetSkeleton(i);

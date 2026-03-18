@@ -1,20 +1,16 @@
 // DC3 Native Port - Joypad via GLFW gamepad + keyboard fallback
 // Replaces Joypad_Stub.cpp
 //
-// Headless input: set MILO_INPUT_SCRIPT to a text file with timed button presses.
-// Format: one "frame button" pair per line (# comments, blank lines OK).
-// Button names: start, confirm/a, cancel/b, up, down, left, right,
-//               option/back, l1/lb, r1/rb, l2/lt, r2/rt, x, y
-// Example:
-//   60 start        # press Start on frame 60 to skip attract
-//   120 down        # navigate down
-//   150 confirm     # select menu item
+// Headless input: set MILO_INPUT_SCRIPT to a text file with scripted actions.
+// Supports absolute frames, wait_screen directives, and relative offsets.
+// See scripts/dc3-input-flows/README.txt for full format docs.
 
 #include "os/Joypad.h"
 #include "os/JoypadMsgs.h"
 #include "os/Debug.h"
 #include "os/System.h"
 #include "rndobj/Rnd.h"
+#include "ui/UI.h"
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten/emscripten.h>
@@ -125,13 +121,27 @@ static const float kTriggerThreshold = 0.3f;
 // Headless scripted input
 // ============================================================================
 
-struct ScriptedInput {
-    int frame;
-    JoypadButton button;
+enum ScriptDirectiveType {
+    kDirectiveButton,
+    kDirectiveWaitScreen,
 };
 
-static std::vector<ScriptedInput> gInputScript;
+struct ScriptDirective {
+    ScriptDirectiveType type;
+    int frame;
+    JoypadButton button;
+    char screenName[64];
+    bool relative;
+};
+
+static std::vector<ScriptDirective> gScript;
 static bool gInputScriptLoaded = false;
+static size_t gScriptCursor = 0;
+static bool gWaiting = false;
+static const char *gWaitTarget = nullptr;
+static int gWaitSatisfiedFrame = -1;
+static int gWaitStartFrame = -1;
+static const int kWaitTimeoutFrames = 30 * 60; // 30 seconds at 60fps
 
 static JoypadButton ParseButtonName(const char *name) {
     // Confirm / A
@@ -179,18 +189,36 @@ static void LoadInputScript() {
     int lineNum = 0;
     while (fgets(line, sizeof(line), f)) {
         lineNum++;
-        // Strip comment
         char *hash = strchr(line, '#');
         if (hash) *hash = '\0';
 
-        // Parse "frame button"
+        // Try wait_screen directive
+        char screenBuf[64];
+        if (sscanf(line, " wait_screen %63s", screenBuf) == 1) {
+            ScriptDirective d = {};
+            d.type = kDirectiveWaitScreen;
+            strncpy(d.screenName, screenBuf, sizeof(d.screenName) - 1);
+            gScript.push_back(d);
+            continue;
+        }
+
+        // Parse button: "+N button" (relative) or "N button" (absolute)
+        const char *p = line;
+        while (*p == ' ' || *p == '\t') p++;
+        if (!*p || *p == '\n') continue;
+
+        bool isRelative = false;
+        if (*p == '+') {
+            isRelative = true;
+            p++;
+        }
+
         int frame;
         char btnName[64];
-        if (sscanf(line, "%d %63s", &frame, btnName) != 2) continue;
+        if (sscanf(p, "%d %63s", &frame, btnName) != 2) continue;
 
-        // Lowercase the button name
-        for (char *p = btnName; *p; p++) {
-            if (*p >= 'A' && *p <= 'Z') *p += 32;
+        for (char *c = btnName; *c; c++) {
+            if (*c >= 'A' && *c <= 'Z') *c += 32;
         }
 
         JoypadButton btn = ParseButtonName(btnName);
@@ -199,29 +227,84 @@ static void LoadInputScript() {
             continue;
         }
 
-        gInputScript.push_back({frame, btn});
+        ScriptDirective d = {};
+        d.type = kDirectiveButton;
+        d.frame = frame;
+        d.button = btn;
+        d.relative = isRelative;
+        gScript.push_back(d);
     }
     fclose(f);
 
-    // Sort by frame for efficient processing
-    std::sort(gInputScript.begin(), gInputScript.end(),
-              [](const ScriptedInput &a, const ScriptedInput &b) { return a.frame < b.frame; });
-
-    printf("DC3 Native: loaded %d input events from '%s'\n", (int)gInputScript.size(), path);
-    for (size_t i = 0; i < gInputScript.size(); i++) {
-        printf("  frame %d: button %d\n", gInputScript[i].frame, (int)gInputScript[i].button);
-    }
+    printf("DC3 Native: loaded %d script directives from '%s'\n", (int)gScript.size(), path);
 }
 
-// Returns button bitmask for the current frame from the input script.
-// Buttons are pressed for exactly 1 frame (press on N, release on N+1).
-static unsigned int GetScriptedButtons(int frame) {
+// Stateful script executor. Processes directives in order, blocking on
+// wait_screen until the target screen is current and not in transition.
+static unsigned int GetScriptedButtons(int currentFrame) {
+    if (gScript.empty()) return 0;
+
     unsigned int buttons = 0;
-    for (size_t i = 0; i < gInputScript.size(); i++) {
-        if (gInputScript[i].frame == frame) {
-            buttons |= (1 << gInputScript[i].button);
+
+    while (gScriptCursor < gScript.size()) {
+        ScriptDirective &d = gScript[gScriptCursor];
+
+        if (d.type == kDirectiveWaitScreen) {
+            if (!gWaiting) {
+                gWaiting = true;
+                gWaitTarget = d.screenName;
+                gWaitSatisfiedFrame = -1;
+                gWaitStartFrame = currentFrame;
+            }
+
+            bool satisfied = false;
+            if (TheUI && TheUI->CurrentScreen() && !TheUI->InTransition()) {
+                satisfied = (strcmp(TheUI->CurrentScreen()->Name(), gWaitTarget) == 0);
+            }
+
+            if (satisfied) {
+                gWaitSatisfiedFrame = currentFrame;
+                gWaiting = false;
+                printf("DC3 Input: wait_screen '%s' satisfied at frame %d\n",
+                    gWaitTarget, currentFrame);
+                gScriptCursor++;
+                continue;
+            }
+
+            if (currentFrame - gWaitStartFrame > kWaitTimeoutFrames) {
+                const char *actual = (TheUI && TheUI->CurrentScreen())
+                    ? TheUI->CurrentScreen()->Name() : "<none>";
+                printf("DC3 Input: TIMEOUT waiting for '%s' (current='%s', %d frames)\n",
+                    gWaitTarget, actual, currentFrame - gWaitStartFrame);
+                gWaiting = false;
+                gWaitSatisfiedFrame = currentFrame;
+                gScriptCursor++;
+                continue;
+            }
+
+            break; // Still waiting
         }
+
+        if (d.type == kDirectiveButton) {
+            int targetFrame = d.relative
+                ? (gWaitSatisfiedFrame >= 0 ? gWaitSatisfiedFrame + d.frame : d.frame)
+                : d.frame;
+
+            if (currentFrame == targetFrame) {
+                buttons |= (1 << d.button);
+                gScriptCursor++;
+                continue;
+            } else if (currentFrame > targetFrame) {
+                gScriptCursor++;
+                continue;
+            } else {
+                break; // Future event
+            }
+        }
+
+        gScriptCursor++;
     }
+
     return buttons;
 }
 
@@ -341,7 +424,7 @@ void JoypadPoll() {
         } else if (pad == 0) {
             // --- Headless mode: scripted input (pad 0 only) ---
             newButtons = GetScriptedButtons(currentFrame);
-            if (newButtons && !gInputScript.empty()) {
+            if (newButtons && !gScript.empty()) {
                 printf("DC3 Input: Frame %d — scripted buttons 0x%x\n", currentFrame, newButtons);
             }
         }

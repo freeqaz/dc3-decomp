@@ -431,6 +431,20 @@ bool UIList::SetSelected(Symbol sym, bool b, int i) {
 }
 
 void UIList::Refresh(bool b) {
+#ifdef HX_NATIVE
+    // Re-evaluate display count — async provider may have more data now than
+    // when SetProvider() originally called LimitCircularDisplay()
+    if (Circular() && mLimitCircularDisplayNumToDataNum) {
+        int numprov = NumProviderData();
+        int val = mUncappedNumDisplay;
+        if (numprov < val)
+            val = numprov;
+        if (val < 1)
+            val = 1;
+        if (val != mListState.NumDisplay())
+            SetNumDisplay(val);
+    }
+#endif
     mListDir->FillElements(mListState, mWidgets);
     if (b) {
         int nowrap = mListState.SelectedNoWrap();

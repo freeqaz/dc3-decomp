@@ -2,6 +2,7 @@
 #include "Difficulty.h"
 #include "MoveMgr.h"
 #include "PoseFatalities.h"
+#include "SuperEasyRemixer.h"
 #include "SongCollision.h"
 #include "SongUtl.h"
 #include "char/CharBone.h"
@@ -547,6 +548,22 @@ void HamDirector::Initialize() {
     }
     delete mPoseFatalities;
     mPoseFatalities = Hmx::Object::New<PoseFatalities>();
+#ifdef HX_NATIVE
+    // Post-merge choreography init.
+    //
+    // Game::IsLoaded() already loads the MoveGraph and calls LoadAllVariants()
+    // before we get here. But SaveOriginalMoveParents() (which populates
+    // per-difficulty move parent arrays from the layout) only runs inside
+    // OriginalChoreoRemixer::Init(). On Xbox this fires from the DTA reset
+    // handler; on native we call it here after the merger is complete.
+    //
+    // Note: clip playback works without this (SongAnim() bypasses the routine
+    // builder on native and uses difficulty anims directly). This init is for
+    // the move selection / choreography system.
+    if (TheMoveMgr && TheMoveMgr->mSuperEasyRemixer) {
+        TheMoveMgr->mSuperEasyRemixer->Init();
+    }
+#endif
 }
 
 RndPropAnim *HamDirector::SongAnim(int playerIndex) {
@@ -554,10 +571,19 @@ RndPropAnim *HamDirector::SongAnim(int playerIndex) {
         return nullptr;
     }
     MILO_ASSERT((0) <= (playerIndex) && (playerIndex) < (2), 0x620);
+#ifndef HX_NATIVE
+    // On Xbox, when merge_moves=1 the routine builder system dynamically
+    // populates a separate anim with clip/move keyframes based on the
+    // generated choreography. This requires the full DTA-driven remixer
+    // flow (populate_movemgr, FillRoutineFromParents, InsertMoveInSong).
     if (TheHamProvider->Property("merge_moves", true)->Int()) {
         return playerIndex == 0 ? mPlayer1RoutineBuilderAnim
                                 : mPlayer2RoutineBuilderAnim;
     }
+#endif
+    // On native (and Xbox with merge_moves=0), use the difficulty-specific
+    // song.anim directly. It has pre-authored clip/move keyframes from the
+    // song .milo files (e.g., easy.milo has 33 clip keys for YMCA).
     HamPlayerData *hpd = TheGameData->Player(playerIndex);
     return SongAnimByDifficulty(LegacyDifficulty(hpd->GetDifficulty()));
 }
@@ -3069,8 +3095,30 @@ void HamDirector::Poll() {
                 Key<Symbol> *practiceStart = nullptr;
                 if (p0anim != -1) {
                     bool clipInited = player0Clip.Init(0);
+#ifdef HX_NATIVE
+                    {
+                        static int sDiag = 0;
+                        if (sDiag++ < 3) {
+                            MILO_LOG("DC3 ClipPlayer: inited=%d frame=%.1f merge=%d routine=%d clipDirObjs=%d\n",
+                                clipInited, songAnim->GetFrame(),
+                                TheHamProvider->Property("merge_moves", true)->Int(),
+                                TheMoveMgr->HasRoutine(),
+                                mClipDir ? mClipDir->HashTableUsedSize() : -1);
+                        }
+                    }
+#endif
                     if (clipInited) {
                         player0Clip.PlayAnims(player0, songAnim->GetFrame(), unk2e4, mBlendDebug);
+#ifdef HX_NATIVE
+                        {
+                            static int sDiag2 = 0;
+                            if (sDiag2++ < 3) {
+                                HamDriver *drv = player0->SongDriver();
+                                MILO_LOG("DC3 ClipPlayer post: layers=%d\n",
+                                    drv ? (int)drv->Layers().mLayers.size() : -1);
+                            }
+                        }
+#endif
                     }
                 }
                 if (p1anim != -1) {

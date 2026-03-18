@@ -1,0 +1,27 @@
+# Boot to song_select then scroll down 8 times
+#
+# Route: boot → main_screen → choose_mode → song_select → scroll
+#
+# Usage:
+#   MILO_HEADLESS=1 MILO_MAX_FRAMES=3000 \
+#     MILO_INPUT_SCRIPT=scripts/dc3-input-flows/song-scroll-test.txt \
+#     timeout 120 native/build/dc3-native 2>&1 | grep "DC3"
+
+# main_screen: select "gameplay"
+wait_screen main_screen
++30 confirm
+
+# choose_mode_screen: select "perform"
+wait_screen choose_mode_screen
++30 confirm
+
+# song_select_screen: scroll down 8 times (should move past 5 visible items)
+wait_screen song_select_screen
++50 down
++100 down
++150 down
++200 down
++250 down
++300 down
++350 down
++400 down

@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cstdio>
 #ifdef HX_NATIVE
+#include <cstdlib>
 #include <setjmp.h>
 #include <signal.h>
 #endif
@@ -92,6 +93,20 @@ void MergeObject(
 ) {
     if (o1 == o2 || act == MergeFilter::kIgnore)
         return;
+#ifdef HX_NATIVE
+    static int sMergeDebug = -1;
+    if (sMergeDebug < 0) {
+        const char *env = getenv("MILO_DEBUG_MERGE");
+        sMergeDebug = (env && atoi(env) != 0) ? 1 : 0;
+    }
+    if (sMergeDebug) {
+        const char *actNames[] = {"kMerge", "kReplace", "kIgnore", "kKeep"};
+        const char *actName = (act >= 0 && act <= 3) ? actNames[act] : "?";
+        MILO_LOG("MERGE: %s [%s] -> %s action=%s dir=%s\n",
+            PathName(o1), o1->ClassName(), o2 ? PathName(o2) : "(new)", actName,
+            PathName(dir));
+    }
+#endif
     if (o2) {
         o1->ReplaceRefs(o2);
         if (act == MergeFilter::kMerge)

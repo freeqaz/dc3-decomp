@@ -3,13 +3,20 @@
 #include <cstdlib>
 
 #include "hamobj/HamDirector.h"
+#include "hamobj/HamWardrobe.h"
+#include "hamobj/HamCharacter.h"
+#include "hamobj/HamDriver.h"
+#include "hamobj/ClipPlayer.h"
+#include "hamobj/MoveMgr.h"
 #include "obj/Task.h"
 #include "rndobj/PropAnim.h"
+#include "rndobj/PropKeys.h"
 #include "world/Dir.h"
 #include "flow/PropertyEventProvider.h"
 
 // Forward declarations for globals we read
 extern HamDirector *TheHamDirector;
+extern HamWardrobe *TheHamWardrobe;
 extern WorldDir *TheWorld;
 extern PropertyEventProvider *TheHamProvider;
 
@@ -88,12 +95,81 @@ void GameplayTelemetry::Sample(int frame) {
         mergerDir = TheHamDirector->MergerDir() != nullptr;
     }
 
+    // Character animation pipeline diagnostics
+    bool clipDirOk = false;
+    bool masterClipOk = false;
+    int charClipLayers = -1; // -1 = no character, 0 = char exists but no clips
+    bool player0Ok = false, player1Ok = false;
+    bool clipPlayerInited = false;
+    int diffProxyExists = 0;
+    int songAnimKeyTotal = -1;  // -1 = no anim, 0+ = PropKeys track count
+    int clipKeyCount = -1;      // -1 = no "clip" PropKeys, 0+ = keyframe count
+    int routineLoaded = 0;
+    if (TheHamDirector) {
+        clipDirOk = TheHamDirector->ClipDir() != nullptr;
+        PropKeys *mk = TheHamDirector->GetMasterKeys("clip");
+        masterClipOk = mk != nullptr;
+
+        // Test if ClipPlayer::Init(0) would succeed
+        ClipPlayer testPlayer;
+        clipPlayerInited = testPlayer.Init(0);
+
+        // Difficulty proxy: does "easy" ObjectDir exist in the merged world?
+        // GetPropAnim is public and internally calls GetDifficultyProxy
+        RndPropAnim *easyAnim = TheHamDirector->GetPropAnim(kDifficultyEasy, "song.anim", false);
+        if (easyAnim) diffProxyExists = 1;
+
+        // PropKeys detail on the difficulty song.anim
+        if (easyAnim) {
+            // Count how many known PropKeys tracks exist
+            songAnimKeyTotal = 0;
+            const char *propNames[] = {"clip", "move", "practice"};
+            for (int pi = 0; pi < 3; pi++) {
+                PropKeys *pk = easyAnim->GetKeys(TheHamDirector, DataArrayPtr(Symbol(propNames[pi])));
+                if (pk) songAnimKeyTotal++;
+            }
+        }
+
+        // The key diagnostic: how many keyframes does the "clip" PropKeys have?
+        PropKeys *ck = TheHamDirector->GetPropKeys(kDifficultyEasy, Symbol("clip"));
+        if (ck) {
+            clipKeyCount = ck->NumKeys();
+        } else {
+            clipKeyCount = 0;
+        }
+
+        // Routine loaded: confirms MoveMgr::SongInit → LoadRoutineBuilderData completed
+        if (TheMoveMgr && TheHamProvider) {
+            routineLoaded = TheMoveMgr->HasRoutine() ? 1 : 0;
+        }
+
+        // Check if player 0's character has clips queued via HamDriver
+        if (TheHamWardrobe) {
+            HamCharacter *ch0 = TheHamWardrobe->GetCharacter(0);
+            HamCharacter *ch1 = TheHamWardrobe->GetCharacter(1);
+            player0Ok = ch0 != nullptr;
+            player1Ok = ch1 != nullptr;
+            if (ch0) {
+                charClipLayers = 0;
+                HamDriver *drv = ch0->SongDriver();
+                if (drv) {
+                    charClipLayers = (int)drv->Layers().mLayers.size();
+                }
+            }
+        }
+    }
+
     fprintf(stderr,
         "DC3_TEL: frame=%d state=%s beat=%.2f realSecs=%.2f "
         "songAnimFrame=%.1f pollEnabled=%d "
-        "typeDef=%s hamProvider=%d mergerDir=%d\n",
+        "typeDef=%s hamProvider=%d mergerDir=%d "
+        "clipDir=%d masterClip=%d clipPlayerInit=%d charClipLayers=%d p0=%d p1=%d "
+        "clipKeyCount=%d songAnimKeys=%d diffProxy=%d routineLoaded=%d\n",
         frame, state, beat, realSecs,
         songAnimFrame, pollEnabled ? 1 : 0,
-        typeDef, hamProvider ? 1 : 0, mergerDir ? 1 : 0
+        typeDef, hamProvider ? 1 : 0, mergerDir ? 1 : 0,
+        clipDirOk ? 1 : 0, masterClipOk ? 1 : 0, clipPlayerInited ? 1 : 0,
+        charClipLayers, player0Ok ? 1 : 0, player1Ok ? 1 : 0,
+        clipKeyCount, songAnimKeyTotal, diffProxyExists, routineLoaded
     );
 }

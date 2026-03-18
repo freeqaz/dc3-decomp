@@ -302,17 +302,36 @@ void UIListDir::StartScroll(
 ) {
     mDirection = i;
     MILO_ASSERT(mDirection, 499);
+#ifdef HX_NATIVE
+    if (DebugChooseModeList(state.Provider())) {
+        printf("DC3 SCROLL StartScroll dir=%d b=%d first=%d scroll=%d numDisp=%d numData=%d\n",
+            i, (int)b, state.FirstShowing(), state.CurrentScroll(),
+            state.NumDisplay(), state.Provider() ? state.Provider()->NumData() : -1);
+    }
+#endif
     FOREACH (it, widgets) {
         (*it)->StartScroll(mDirection, b);
     }
     if (b) {
-        FillElement(state, widgets, mDirection > 0 ? state.NumDisplay() : -1);
+        int fillIdx = mDirection > 0 ? state.NumDisplay() : -1;
+#ifdef HX_NATIVE
+        if (DebugChooseModeList(state.Provider())) {
+            printf("DC3 SCROLL FillEdge idx=%d data=%d\n", fillIdx, state.Display2Data(fillIdx));
+        }
+#endif
+        FillElement(state, widgets, fillIdx);
     }
 }
 
 void UIListDir::CompleteScroll(
     UIListState const &state, std::vector<UIListWidget *> &widgets
 ) {
+#ifdef HX_NATIVE
+    if (DebugChooseModeList(state.Provider())) {
+        printf("DC3 SCROLL CompleteScroll dir=%d first=%d sel=%d numDisp=%d\n",
+            mDirection, state.FirstShowing(), state.Selected(), state.NumDisplay());
+    }
+#endif
     FOREACH (it, widgets) {
         (*it)->CompleteScroll(state, mDirection);
     }

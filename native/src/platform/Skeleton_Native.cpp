@@ -359,3 +359,41 @@ void NativeSkeletonProvider::FillSkeleton(Skeleton &skel, int personIdx) const {
 }
 
 #endif // !__EMSCRIPTEN__
+
+void NativeSkeletonProvider::FillDummySkeleton(Skeleton &skel) {
+    // Neutral standing pose — hands at sides, below hip height.
+    // Passes quality filter (20 confident joints, not sitting/sideways)
+    // but gesture filters see disengaged player (hands below hips).
+    static const struct { SkeletonJoint joint; float x, y, z; } kPose[] = {
+        { kJointHipCenter,       0.00f, 0.90f, 2.0f },
+        { kJointSpine,           0.00f, 1.10f, 2.0f },
+        { kJointShoulderCenter,  0.00f, 1.40f, 2.0f },
+        { kJointHead,            0.00f, 1.60f, 2.0f },
+        { kJointShoulderLeft,   -0.20f, 1.40f, 2.0f },
+        { kJointElbowLeft,      -0.25f, 1.15f, 2.0f },
+        { kJointWristLeft,      -0.22f, 0.90f, 2.0f },
+        { kJointHandLeft,       -0.22f, 0.85f, 2.0f },
+        { kJointShoulderRight,   0.20f, 1.40f, 2.0f },
+        { kJointElbowRight,      0.25f, 1.15f, 2.0f },
+        { kJointWristRight,      0.22f, 0.90f, 2.0f },
+        { kJointHandRight,       0.22f, 0.85f, 2.0f },
+        { kJointHipLeft,        -0.12f, 0.85f, 2.0f },
+        { kJointKneeLeft,       -0.12f, 0.45f, 2.0f },
+        { kJointAnkleLeft,      -0.12f, 0.05f, 2.0f },
+        { kJointHipRight,        0.12f, 0.85f, 2.0f },
+        { kJointKneeRight,       0.12f, 0.45f, 2.0f },
+        { kJointAnkleRight,      0.12f, 0.05f, 2.0f },
+        { kJointFootLeft,       -0.12f, 0.00f, 2.0f },
+        { kJointFootRight,       0.12f, 0.00f, 2.0f },
+    };
+
+    for (const auto &j : kPose) {
+        Vector3 pos(j.x, j.y, j.z);
+        skel.mTrackedJoints[j.joint].mJointPos[kCoordCamera] = pos;
+        skel.mTrackedJoints[j.joint].mSmoothedPos = pos;
+        skel.mTrackedJoints[j.joint].mJointConf = kConfidenceTracked;
+    }
+
+    skel.mTracking = kSkeletonTracked;
+    skel.mTrackingID = 1;
+}
