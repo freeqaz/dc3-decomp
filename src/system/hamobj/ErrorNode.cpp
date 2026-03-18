@@ -429,15 +429,14 @@ float ScaleFullErrorDist(const ScaleOp &op) {
 }
 
 void XZErrorWeight(const Vector3 &v, float &xzWeight, float &yWeight) {
-    static Vector3 up(0, 0, 1);
     Vector3 flat;
     flat.z = v.z;
+    static Vector3 up(0, 0, 1);
     flat.y = 0;
-    float dot = flat.x * up.x + flat.y * up.y + flat.z * up.z;
     flat.x = v.x;
     Normalize(flat, flat);
-    float absDot = fabs(dot);
-    float angle = acosf(absDot);
+    float dot = fabs(up.x * flat.x + up.y * flat.y + up.z * flat.z);
+    float angle = acosf(dot);
     xzWeight = angle * (2.0f / PI);
     yWeight = 1.0f - xzWeight;
 }

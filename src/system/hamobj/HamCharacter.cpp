@@ -739,10 +739,11 @@ QuatXfm::QuatXfm(const Transform &t) : v(t.v) { q.Set(t.m); }
 #ifndef HX_NATIVE
 void HamCharacter::Poll() {
     int songAnim = SongAnimation();
+    auto& _ref0 = mDriver;
     if (songAnim == -1 || InClipTest()) {
-        if (mDriver) mDriver->SetWeight(1.0f);
+        if (_ref0) _ref0->SetWeight(1.0f);
     } else {
-        if (mDriver) mDriver->SetWeight(0.0f);
+        if (_ref0) _ref0->SetWeight(0.0f);
     }
 
     bool wasShowing = mShowing;
@@ -753,34 +754,32 @@ void HamCharacter::Poll() {
     SetShowing(wasShowing);
 
     RndTransformable *boneProp = Find<RndTransformable>("bone_prop0.mesh", false);
-    if (!boneProp) return;
-    RndTransformable *spotProp = Find<RndTransformable>("spot_prop0.mesh", false);
-    if (!spotProp) return;
+    if (boneProp) {
+        RndTransformable *spotProp = Find<RndTransformable>("spot_prop0.mesh", false);
+        if (spotProp) {
+            float blendWeight = 0.0f;
+            int songAnim2 = SongAnimation();
+            if (songAnim2 == -1) {
+                blendWeight = 1.0f;
+                if (_ref0->First()) {
+                    blendWeight = _ref0->EvaluateFlags(2);
+                }
+            }
 
-    float blendWeight;
-    int songAnim2 = SongAnimation();
-    if (songAnim2 == -1) {
-        if (mDriver && mDriver->First()) {
-            blendWeight = mDriver->EvaluateFlags(2);
-        } else {
-            blendWeight = 1.0f;
+            QuatXfm boneXfm(boneProp->WorldXfm());
+            QuatXfm spotXfm(spotProp->WorldXfm());
+
+            Vector3 interpPos;
+            Interp(spotXfm.v, boneXfm.v, blendWeight, interpPos);
+            Hmx::Quat interpRot;
+            Interp(spotXfm.q, boneXfm.q, blendWeight, interpRot);
+
+            Transform result;
+            result.v = interpPos;
+            MakeRotMatrix(interpRot, result.m);
+            boneProp->SetWorldXfm(result);
         }
-    } else {
-        blendWeight = 0.0f;
     }
-
-    QuatXfm boneXfm(boneProp->WorldXfm());
-    QuatXfm spotXfm(spotProp->WorldXfm());
-
-    Vector3 interpPos;
-    Interp(spotXfm.v, boneXfm.v, blendWeight, interpPos);
-    Hmx::Quat interpRot;
-    Interp(spotXfm.q, boneXfm.q, blendWeight, interpRot);
-
-    Transform result;
-    result.v = interpPos;
-    MakeRotMatrix(interpRot, result.m);
-    boneProp->SetWorldXfm(result);
 
     RndMat *mat = Find<RndMat>("robot_face.mat", false);
     if (!mat) return;

@@ -992,7 +992,13 @@ void DirLoader::OpenFile() {
             SetUsingCD(false);
             TheArchive = nullptr;
         }
+#ifdef __EMSCRIPTEN__
+        // Web (MEMFS): always use cached paths — extracted assets are stored
+        // as gen/foo.milo_xbox on disk, not as foo.milo.
+        const char *path = CachedPath(fileStr, true);
+#else
         const char *path = CachedPath(fileStr, false);
+#endif
         mStream =
             new ChunkStream(path, ChunkStream::kRead, 0x10000, true, kPlatformNone, false);
         mOwnStream = true;

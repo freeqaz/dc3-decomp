@@ -366,13 +366,13 @@ void HamRibbon::ConstructMesh() {
                 float u = side * uStep;
                 Vector3 norm;
 
-                float cosA = std::cos(angle);
-                float sinA = std::sin(angle);
-
                 for (int v = 0; v < 2; v++) {
                     int vertIdx = seg * mNumSides * 2 + v * mNumSides + side;
 
                     Transform xfm = Transform::IDXfm();
+
+                    float cosA = std::cos(angle);
+                    float sinA = std::sin(angle);
 
                     float scale = (v == 0) ? 1.0f : (0.5f - u);
                     Vector3 pos(sinA * radius * scale, 0.0f, cosA * radius * scale);

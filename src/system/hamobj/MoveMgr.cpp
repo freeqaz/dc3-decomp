@@ -34,14 +34,7 @@ MoveMgr::MoveMgr() : mCurrentSongLayout(0), mLoadingProgressCounter(0) {
     mRoutineLoaded = false;
     mCurrentSong = "";
     mSuperEasyRemixer = Hmx::Object::New<SuperEasyRemixer>();
-#ifndef HX_NATIVE
-    // Native: SetType("easeup_remixer") crashes because the objects config
-    // has (SuperEasyRemixer (types ...)) but OBJ_CLASSNAME is OriginalChoreoRemixer,
-    // so SystemConfig("objects", "OriginalChoreoRemixer", "types") fails.
-    // The easeup remixer config is only needed for dynamic difficulty which
-    // isn't wired on native anyway.
     mSuperEasyRemixer->SetType("easeup_remixer");
-#endif
     mMoveDataDir = nullptr;
     mDefaultSongLayout = dynamic_cast<SongLayout *>(Hmx::Object::NewObject("SongLayout"));
 }

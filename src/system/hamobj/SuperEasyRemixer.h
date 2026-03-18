@@ -6,8 +6,8 @@
 class SuperEasyRemixer : public OriginalChoreoRemixer {
 public:
     // Hmx::Object
-    OBJ_CLASSNAME(OriginalChoreoRemixer);
-    OBJ_SET_TYPE(OriginalChoreoRemixer);
+    OBJ_CLASSNAME(SuperEasyRemixer);
+    OBJ_SET_TYPE(SuperEasyRemixer);
     virtual DataNode Handle(DataArray *, bool);
     virtual bool SyncProperty(DataNode &, DataArray *, int, PropOp);
     virtual void Save(BinStream &);

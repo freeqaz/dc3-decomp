@@ -144,8 +144,8 @@ Symbol GetDanceBattleBackupOutfit(Symbol s1, Symbol s2) {
     String str88(s1);
     String str90(str88);
     str90 = str90.substr(0, str90.length() - 2);
+    int i = 1;
     if (charArr->Size() > 1) {
-        int i = 1;
         Symbol s;
         while (i < charArr->Size()) {
             s = charArr->Sym(i);
@@ -352,36 +352,6 @@ void HamWardrobe::SetDir(ObjectDir *dir) {
 
 void HamWardrobe::PlayCrowdAnimation(Symbol animName, int flags, bool override) {
     if (mCrowdMembers.size() == 0) return;
-#ifdef HX_NATIVE
-    // Crowd clip animation requires the FileMerger to have loaded and merged
-    // the animation .milo files into the crowd characters' clip dirs.
-    // On native, crowd clips may not be loaded yet when PlayCrowdAnimation
-    // is first called — trigger sync loading if needed.
-    {
-        FileMerger *fm = Dir() ? Dir()->Find<FileMerger>("crowd_clips.fm", false) : nullptr;
-        if (fm) {
-            if (fm->HasPendingFiles()) {
-                return; // Files still loading async
-            }
-            auto &mergers = fm->Mergers();
-            bool anyLoaded = false;
-            for (int i = 0; i < mergers.size(); i++) {
-                if (!mergers[i].mLoaded.empty()) { anyLoaded = true; break; }
-            }
-            if (!anyLoaded) {
-                Symbol venue = TheGameData ? TheGameData->Venue() : Symbol("");
-#ifdef __EMSCRIPTEN__
-                // Web: use async loading — sync XHR blocks main thread and can
-                // cause infinite hang if fetch fails or times out.
-                LoadCrowdClips("medium", venue, true); // async load
-                return; // Skip animation this frame, clips will load async
-#else
-                LoadCrowdClips("medium", venue, false); // sync load
-#endif
-            }
-        }
-    }
-#endif
 
     mPreviousCrowdAnimation = animName;
     mCrowdAnimationFlags = flags;
@@ -397,23 +367,13 @@ void HamWardrobe::PlayCrowdAnimation(Symbol animName, int flags, bool override) 
         for (ObjPtrList<Character>::iterator it = mCrowdMembers.begin();
              it != mCrowdMembers.end(); ++it) {
             Character *c = *it;
-#ifdef HX_NATIVE
-            if (!c || !c->Driver()) continue;
-#endif
             if (animName == (int)gNullStr) {
                 c->Exit();
             } else {
-                auto stanceSym = ("stance");
-                const DataNode *stanceProp = c->Property(stanceSym, true);
-#ifdef HX_NATIVE
-                if (!stanceProp) continue;
-#endif
-                Symbol stance = stanceProp->Sym(nullptr);
+                auto _val0 = ("stance");
+                Symbol stance = c->Property(_val0, true)->Sym(NULL);
                 if (stance == gNullStr) {
                     TheDebug << "    stance = NULL!\n";
-#ifdef HX_NATIVE
-                    continue;
-#endif
                 }
                 char buf[120];
                 _snprintf(buf, 0x78, "%s_%s", stance.Str(), animName.Str());
@@ -421,7 +381,7 @@ void HamWardrobe::PlayCrowdAnimation(Symbol animName, int flags, bool override) 
                 CharClipDriver *cd = c->Driver()->PlayGroup(
                     buf, flags | 0x30, -1.0f, 1e30f, 0.0f
                 );
-                if (nullptr == cd) {
+                if (NULL == cd) {
                     auto errMsg = MakeString("clip not found - groupName = %s\n", buf);
                     TheDebug << errMsg;
                     MILO_NOTIFY(
@@ -432,7 +392,7 @@ void HamWardrobe::PlayCrowdAnimation(Symbol animName, int flags, bool override) 
                     cd = c->Driver()->PlayGroup(
                         buf, flags | 0x30, -1.0f, 1e30f, 0.0
                     );
-                    if (cd == nullptr) {
+                    if (cd == NULL) {
                         auto errMsg2 = MakeString(
                             "  clip not found - groupName = %s\n", buf
                         );

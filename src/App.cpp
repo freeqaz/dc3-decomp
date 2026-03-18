@@ -24,6 +24,7 @@
 #include "rndobj/Cam.h"
 #include "hamobj/HamDirector.h"
 #include "rndobj/Lit.h"
+#include "meta_ham/AppLabel.h"
 #include "meta_ham/HamUI.h"
 #include "synth/StandardStream.h"
 #include "synth/VorbisReader.h"
@@ -282,11 +283,15 @@ App::App(int argc, char **argv) {
         notifyLevel = notifyLevelValue;
     }
     gRealCallback = TheDebug.SetModalCallback(DebugModal);
-    SystemInit("config/ham_keep.dta");
 
 #ifdef __EMSCRIPTEN__
-    DirLoader::SetCacheMode(true); // MEMFS uses pre-extracted gen/*_xbox paths
+    // Must set cache mode BEFORE SystemInit — metamaterials.milo loads during
+    // SystemInit → RndMat::LoadMetaMaterials(), and CachedPath needs sCacheMode
+    // to transform "metamaterials.milo" → "gen/metamaterials.milo_xbox".
+    DirLoader::SetCacheMode(true);
 #endif
+
+    SystemInit("config/ham_keep.dta");
 
     // Audio system (Fader/MoggClip factories need to be registered)
     SynthInit();
@@ -320,6 +325,12 @@ App::App(int argc, char **argv) {
 
     // Ham (game-specific) system
     HamInit();
+
+    // Override HamLabel factory → AppLabel (DC3-specific subclass).
+    // HamInit() registers HamLabel::NewObject for "HamLabel"; we replace it
+    // with AppLabel::NewObject so .milo deserialization creates AppLabel
+    // instances, which MainMenuProvider::Text dynamic_casts to.
+    REGISTER_OBJ_FACTORY(AppLabel)
 
     // Ensure player providers exist — ham_init.dta normally creates these via DTA,
     // but if the config chain fails on native, players have null mProvider which

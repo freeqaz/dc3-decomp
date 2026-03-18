@@ -8,6 +8,7 @@ class NgDOFProc : public DOFProc, public PostProcessor {
 public:
     NgDOFProc();
     virtual ~NgDOFProc();
+    // registers as DOFProc — transparent factory replacement
     OBJ_CLASSNAME(DOFProc);
     OBJ_SET_TYPE(DOFProc);
     virtual float FocalPlane() { return mFocalPlane; }

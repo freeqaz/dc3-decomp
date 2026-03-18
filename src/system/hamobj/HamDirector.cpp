@@ -549,6 +549,19 @@ void HamDirector::Initialize() {
     delete mPoseFatalities;
     mPoseFatalities = Hmx::Object::New<PoseFatalities>();
 #ifdef HX_NATIVE
+    {
+        // Log the state at Initialize() time for web console debugging.
+        RndPropAnim *sa = SongAnim(0);
+        int clipKeys = 0;
+        if (sa) {
+            PropKeys *ck = sa->GetKeys(this, DataArrayPtr(Symbol("clip")));
+            if (ck) clipKeys = ck->NumKeys();
+        }
+        MILO_LOG("[INIT] Initialize: clipDir=%d moveDir=%d sa=%d\n",
+            mClipDir.Ptr() ? 1 : 0, mMoveDir.Ptr() ? 1 : 0, sa ? 1 : 0);
+        MILO_LOG("[INIT]  clipKeys=%d moveParents=%d\n",
+            clipKeys, (int)TheMoveMgr->MoveParents().size());
+    }
     // Post-merge choreography init.
     //
     // Game::IsLoaded() already loads the MoveGraph and calls LoadAllVariants()
@@ -3063,25 +3076,64 @@ void HamDirector::Poll() {
     if (TheHamWardrobe) {
         TheHamWardrobe->UpdateOverlay();
     }
+#ifdef HX_NATIVE
+    {
+        // Periodic state dump — gated behind MILO_DEBUG_CLIPS env var.
+        static int sDebugClips = -1;
+        if (sDebugClips < 0) sDebugClips = getenv("MILO_DEBUG_CLIPS") ? 1 : 0;
+        if (sDebugClips) {
+            static int sPollCount = 0;
+            if (sPollCount++ % 150 == 0) {
+                HamCharacter *ch0 = TheHamWardrobe ? TheHamWardrobe->GetCharacter(0) : nullptr;
+                RndPropAnim *sa = SongAnim(0);
+                int layers = -1;
+                if (ch0) {
+                    HamDriver *drv = ch0->SongDriver();
+                    if (drv) layers = (int)drv->Layers().mLayers.size();
+                }
+                MILO_LOG("[CLIP_STATE] poll=%d en=%d ch0=%d sa=%d f=%.1f b=%.1f\n",
+                    sPollCount, mPollEnabled ? 1 : 0,
+                    ch0 ? 1 : 0, sa ? 1 : 0,
+                    sa ? sa->GetFrame() : -1.0f, TheTaskMgr.Beat());
+                MILO_LOG("[CLIP_STATE]  merger=%d clipDir=%d p0Anim=%d doSA=%d layers=%d\n",
+                    mMerger.Ptr() ? 1 : 0, mClipDir.Ptr() ? 1 : 0,
+                    ch0 ? ch0->SongAnimation() : -99,
+                    SongAnimation() ? 1 : 0, layers);
+            }
+        }
+    }
+#endif
     if (!mPollEnabled) return;
     HamCharacter *player0 = TheHamWardrobe ? TheHamWardrobe->GetCharacter(0) : nullptr;
     HamCharacter *player1 = TheHamWardrobe ? TheHamWardrobe->GetCharacter(1) : nullptr;
     RndPropAnim *songAnim = SongAnim(0);
     if (songAnim) {
 #ifdef HX_NATIVE
-        // Fallback: during the intro phase, Game::Poll() doesn't call
-        // SetSecondsAndBeat(), so Beat() stays at 0 and OnSelectCamera
-        // computes frame=0 every tick. Use wall-clock time to keep song.anim
-        // advancing until the beat system starts. Once Beat() is non-zero,
-        // OnSelectCamera handles frame advancement via the normal DTA path.
-        if (TheTaskMgr.Beat() == 0.0f) {
-            float secs = TheTaskMgr.Seconds(TaskMgr::kRealTime);
-            if (secs >= 0.0f) {
-                float frame = secs * 30.0f;
+        // On Xbox, song.anim frame advancement is driven by the DTA path:
+        //   WorldDir::Poll() → HandleType("select_camera") → OnSelectCamera()
+        //     → frame = BeatToSeconds(Beat()) * 30.0f → songAnim->SetFrame(frame)
+        //
+        // On native, this DTA path may not fire reliably (async loading, missing
+        // TypeDef, timing). As a fallback, use beat-to-frame conversion directly
+        // when the frame hasn't advanced past its initial value. Once
+        // OnSelectCamera takes over (frame goes positive), this stops firing.
+        if (songAnim->GetFrame() < 0.0f) {
+            float beat = TheTaskMgr.Beat();
+            float frame = 0.0f;
+            if (beat > 0.0f) {
+                // Beat system active — use beat-synchronized frame
+                frame = BeatToFrame(beat);
+            } else {
+                // Pre-beat phase — use wall-clock time so anim starts from 0
+                float secs = TheTaskMgr.Seconds(TaskMgr::kRealTime);
+                if (secs > 0.0f)
+                    frame = secs * 30.0f;
+            }
+            if (frame >= 0.0f) {
                 float endFrame = songAnim->EndFrame();
                 if (endFrame > 0.0f && frame > endFrame)
                     frame = endFrame;
-                songAnim->AdvanceFrame(frame);
+                songAnim->SetFrame(frame, 1.0f);
             }
         }
 #endif
@@ -3095,30 +3147,8 @@ void HamDirector::Poll() {
                 Key<Symbol> *practiceStart = nullptr;
                 if (p0anim != -1) {
                     bool clipInited = player0Clip.Init(0);
-#ifdef HX_NATIVE
-                    {
-                        static int sDiag = 0;
-                        if (sDiag++ < 3) {
-                            MILO_LOG("DC3 ClipPlayer: inited=%d frame=%.1f merge=%d routine=%d clipDirObjs=%d\n",
-                                clipInited, songAnim->GetFrame(),
-                                TheHamProvider->Property("merge_moves", true)->Int(),
-                                TheMoveMgr->HasRoutine(),
-                                mClipDir ? mClipDir->HashTableUsedSize() : -1);
-                        }
-                    }
-#endif
                     if (clipInited) {
                         player0Clip.PlayAnims(player0, songAnim->GetFrame(), unk2e4, mBlendDebug);
-#ifdef HX_NATIVE
-                        {
-                            static int sDiag2 = 0;
-                            if (sDiag2++ < 3) {
-                                HamDriver *drv = player0->SongDriver();
-                                MILO_LOG("DC3 ClipPlayer post: layers=%d\n",
-                                    drv ? (int)drv->Layers().mLayers.size() : -1);
-                            }
-                        }
-#endif
                     }
                 }
                 if (p1anim != -1) {

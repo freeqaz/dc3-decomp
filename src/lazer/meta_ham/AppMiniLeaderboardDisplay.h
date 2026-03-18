@@ -14,7 +14,7 @@ public:
     AppMiniLeaderboardDisplay();
     // Hmx::Object
     virtual ~AppMiniLeaderboardDisplay();
-    // not an oversight
+    // registers as MiniLeaderboardDisplay — transparent factory replacement
     OBJ_CLASSNAME(MiniLeaderboardDisplay);
     OBJ_SET_TYPE(MiniLeaderboardDisplay);
     virtual DataNode Handle(DataArray *, bool);

@@ -146,8 +146,9 @@ void LabelShrinkWrapper::UpdateAndDrawWrapper() {
     float maxX = mRightBorder + label->mBoundsRight + label->mBoundsLeft;
     float maxZ = mTopBorder + label->mBoundsBottom + label->mBoundsTop;
     SetWorldXfm(label->WorldXfm());
-    m_pTopLeftBone->SetLocalPos(Vector3(minX, 0.0f, maxZ));
+    auto _tmp0 = Vector3(minX, 0.0, maxZ);
     m_pTopRightBone->SetLocalPos(Vector3(maxX, 0.0f, maxZ));
     m_pBottomLeftBone->SetLocalPos(Vector3(minX, 0.0f, minZ));
     m_pBottomRightBone->SetLocalPos(Vector3(maxX, 0.0f, minZ));
+    m_pTopLeftBone->SetLocalPos(_tmp0);
 }

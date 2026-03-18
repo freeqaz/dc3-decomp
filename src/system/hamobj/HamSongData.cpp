@@ -15,9 +15,6 @@
 #include "utl/SongInfoCopy.h"
 #include "utl/SongPos.h"
 #include "utl/TempoMap.h"
-#ifdef HX_NATIVE
-#include <cstdio>
-#endif
 HamSongData *HamSongData::sInstance;
 
 HamSongData::HamSongData()

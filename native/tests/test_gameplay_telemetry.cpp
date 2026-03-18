@@ -403,3 +403,72 @@ TEST_F(GameplayTelemetryTest, RoutineBuilderLoaded) {
     // Skip: routineLoaded is expected to be 0 on native.
     GTEST_SKIP() << "Routine builder bypassed on native — using difficulty keys directly.";
 }
+
+// ===========================================================================
+// Song Animation Frame Advancement
+// ===========================================================================
+
+TEST_F(GameplayTelemetryTest, SongAnimFrameAdvancesPastInit) {
+    // The song anim frame must advance past the -kHugeFloat initial value.
+    // On Xbox, the DTA OnSelectCamera handler computes the frame from the beat.
+    // On native, HamDirector::Poll() has a fallback that uses wall-clock time.
+    // If this fails, the song.anim frame is stuck at its init value and no
+    // clip keyframe lookups can succeed (all keys are at positive frames).
+    auto playing = samplesInPhase("playing");
+    if (playing.empty()) {
+        GTEST_SKIP() << "No gameplay-phase samples";
+    }
+    bool advanced = false;
+    for (auto &s : playing) {
+        float f = s.getFloat("songAnimFrame");
+        if (f > 0.0f) { advanced = true; break; }
+    }
+    EXPECT_TRUE(advanced)
+        << "songAnimFrame never became positive during gameplay. "
+        << "Stuck at initial value (-kHugeFloat). "
+        << "The DTA OnSelectCamera path or the Poll() AdvanceFrame fallback isn't firing.";
+}
+
+TEST_F(GameplayTelemetryTest, SongAnimationGateOpen) {
+    // HamDirector::SongAnimation() must return true for the clip playback
+    // block to execute. It checks both characters' SongAnimation() return
+    // value — at least one must return > -1.
+    //
+    // SongAnimation() returns -1 when Driver()->FirstClip() is non-null
+    // (idle animation loaded). It returns 0 when neither Driver nor SongDriver
+    // has clips, or >= 0 when SongDriver has a clip with a skeleton index.
+    //
+    // If this gate stays false (doSongAnim=0), the entire clip playback block
+    // in HamDirector::Poll() is skipped and characters freeze.
+    auto playing = samplesInPhase("playing");
+    if (playing.empty()) {
+        GTEST_SKIP() << "No gameplay-phase samples";
+    }
+    bool gateOpen = false;
+    for (auto &s : playing) {
+        if (s.getInt("doSongAnim", -1) == 1) { gateOpen = true; break; }
+    }
+    EXPECT_TRUE(gateOpen)
+        << "doSongAnim was never 1 during gameplay. "
+        << "HamDirector::SongAnimation() returns false — clip playback block is entirely skipped. "
+        << "p0SongAnim=-1 means Driver()->FirstClip() is non-null (idle anim blocks song mode).";
+}
+
+TEST_F(GameplayTelemetryTest, Player0SongAnimationReady) {
+    // player0->SongAnimation() must return > -1 for clip playback.
+    // This is the per-character gate that determines if song clips can be queued.
+    // Returns -1 when Driver() has a clip (idle anim) or mUseCameraSkeleton is true.
+    // Returns 0 when SongDriver has a clip with skeleton index, or no clips at all.
+    auto playing = samplesInPhase("playing");
+    if (playing.empty()) {
+        GTEST_SKIP() << "No gameplay-phase samples";
+    }
+    bool ready = false;
+    for (auto &s : playing) {
+        if (s.getInt("p0SongAnim", -99) > -1) { ready = true; break; }
+    }
+    EXPECT_TRUE(ready)
+        << "p0SongAnim was never > -1 during gameplay. "
+        << "HamCharacter::SongAnimation() returns -1 (Driver has idle clip, blocking song mode). "
+        << "On Xbox, the Driver clip is cleared when entering song animation mode.";
+}

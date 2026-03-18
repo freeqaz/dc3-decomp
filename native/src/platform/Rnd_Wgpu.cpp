@@ -1084,6 +1084,14 @@ void WgpuRnd::EndDrawing() {
         if (!mGpu.IsHeadless()) {
             mGpu.PresentFrame();
         }
+
+#ifdef __EMSCRIPTEN__
+        static int sFrameDiag = 0;
+        if (sFrameDiag < 30 || sFrameDiag % 300 == 0) {
+            printf("DC3 Web EndDrawing frame=%d draws=%d\n", mFrameID, mDrawCount);
+        }
+        sFrameDiag++;
+#endif
     }
 
     mFrameView = nullptr;

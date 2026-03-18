@@ -1,7 +1,7 @@
 # Character Animation Freeze — Root Cause Analysis & Fix
 
-**Date**: 2026-03-17
-**Status**: FIXED — characters now dance during gameplay
+**Date**: 2026-03-17 (updated 2026-03-18)
+**Status**: FIXED on both native Linux and web — characters now dance during gameplay
 
 ## Problem
 

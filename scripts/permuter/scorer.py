@@ -112,10 +112,8 @@ class Scorer:
             self._backup_path.unlink()
 
         self._original_source = self.source_path.read_bytes()
-        self._tracked_file_originals: dict[Path, bytes | None] = {
-            self.source_path.resolve(): self._original_source,
-        }
-        self._applied_paths: set[Path] = {self.source_path.resolve()}
+        self._tracked_file_originals: dict[Path, bytes | None] = {}
+        self._applied_paths: set[Path] = set()
         self._original_source_md5 = self._variant_source_md5(
             Variant(
                 name="baseline",
@@ -125,6 +123,11 @@ class Scorer:
             )
         )
         shutil.copy2(self.source_path, self._backup_path)
+        # Create working directory for compilation — variants are written here
+        # instead of to the real source file, so concurrent ninja builds are
+        # never broken by permuter runs.
+        self._working_dir = Path(tempfile.mkdtemp(prefix="permuter_src_"))
+        self._working_source = self._working_dir / self.source_path.name
         # Acquire per-file lock (prevents concurrent permuter access)
         self._file_lock = SourceFileLock(self.source_path)
         self._file_lock.__enter__()
@@ -140,11 +143,14 @@ class Scorer:
                 print(f"  {stats}", file=sys.stderr)
             self._cache.close()
             self._cache = None
-        # Always restore original source
+        # Restore any auxiliary files that were modified (headers, etc.)
         if hasattr(self, "_tracked_file_originals"):
             restore_tracked_files(self._tracked_file_originals)
         if self._backup_path and self._backup_path.exists():
             self._backup_path.unlink()
+        # Clean up working directory
+        if hasattr(self, '_working_dir') and self._working_dir and self._working_dir.exists():
+            shutil.rmtree(self._working_dir, ignore_errors=True)
         # Release per-file lock
         if hasattr(self, '_file_lock') and self._file_lock is not None:
             self._file_lock.__exit__(exc_type, exc_val, exc_tb)
@@ -161,14 +167,34 @@ class Scorer:
         del updates  # normalized by variant_identity_bytes
         return md5_bytes(variant_identity_bytes(self.source_path, variant))
 
-    def _apply_variant_files(self, variant: Variant) -> None:
-        """Apply a variant's main and auxiliary file edits."""
+    def _apply_variant_files(self, variant: Variant, *, to_disk: bool = False) -> None:
+        """Apply a variant's file edits.
+
+        By default, the main source file is written to the working copy
+        (self._working_source) so the real source is never modified during
+        scoring.  Auxiliary files (headers) are always written in-place.
+
+        When to_disk=True, ALL files including the main source are written
+        to their real paths (needed for IL capture which extracts its own
+        compile commands from ninja).
+        """
         updates = self._variant_file_updates(variant)
-        self._applied_paths = apply_file_updates(
-            updates,
-            self._tracked_file_originals,
-            current_paths=self._applied_paths,
-        )
+
+        if not to_disk:
+            # Redirect main source to working copy
+            resolved_source = self.source_path.resolve()
+            if resolved_source in updates:
+                atomic_write_bytes(self._working_source, updates.pop(resolved_source))
+            elif self.source_path in updates:
+                atomic_write_bytes(self._working_source, updates.pop(self.source_path))
+
+        # Apply remaining (auxiliary) files — or all files if to_disk=True
+        if updates:
+            self._applied_paths = apply_file_updates(
+                updates,
+                self._tracked_file_originals,
+                current_paths=self._applied_paths,
+            )
 
     def _extract_compile_cmd(self) -> None:
         """Extract the cl.exe command from ninja for direct invocation."""
@@ -211,14 +237,14 @@ class Scorer:
             self._compile_fo_path = None
 
     def _build(self) -> tuple[bool, str | None]:
-        """Compile directly via cl.exe, bypassing ninja dep-checking."""
+        """Compile directly via cl.exe from the working directory."""
         if self._compile_shell_cmd is None:
             self._extract_compile_cmd()
 
         result = subprocess.run(
             self._compile_shell_cmd,
             shell=True,
-            cwd=self._compile_cwd,
+            cwd=str(self._working_dir),
             capture_output=True,
             text=True,
         )
@@ -244,13 +270,13 @@ class Scorer:
                 str(self._obj_path), str(obj_output)
             )
 
-        # Write source to the real source path (workers serialize on this)
-        atomic_write_bytes(self.source_path, source_bytes)
+        # Write source to the working copy (not the real source path)
+        atomic_write_bytes(self._working_source, source_bytes)
 
         result = subprocess.run(
             cmd,
             shell=True,
-            cwd=self._compile_cwd,
+            cwd=str(self._working_dir),
             capture_output=True,
             text=True,
         )
@@ -302,7 +328,9 @@ class Scorer:
         tmp_dir = Path(tempfile.mkdtemp(prefix="permuter_il_analysis_"))
         try:
             for idx, variant in enumerate(variants[:limit]):
-                self._apply_variant_files(variant)
+                # IL capture extracts its own compile commands from ninja,
+                # so it needs the source at the real path.
+                self._apply_variant_files(variant, to_disk=True)
                 try:
                     il_base = self._il_capture(
                         str(self.source_path),
@@ -626,8 +654,8 @@ class Scorer:
         """
         if self._original_source is None:
             raise RuntimeError("get_baseline() must be called within context manager")
-        # Ensure original source is written
-        atomic_write_bytes(self.source_path, self._original_source)
+        # Write original source to working copy for compilation
+        atomic_write_bytes(self._working_source, self._original_source)
         build_ok, _ = self._build()
         if not build_ok:
             self._baseline_pct = 0.0

@@ -17,7 +17,8 @@ def test_scorer_applies_and_restores_auxiliary_files(tmp_path: Path):
     seen_sources: list[tuple[bytes, bytes]] = []
 
     def fake_build(self):
-        seen_sources.append((source_path.read_bytes(), header_path.read_bytes()))
+        # Source is written to working copy, not the real source path
+        seen_sources.append((self._working_source.read_bytes(), header_path.read_bytes()))
         return True, None
 
     def fake_objdiff(self, include_instructions=False):

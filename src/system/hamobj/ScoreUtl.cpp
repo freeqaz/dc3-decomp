@@ -67,7 +67,7 @@ float DetectFracToRatingFrac(float detect_frac, const std::vector<float> *rating
                 result = 1.0f;
                 if (i != 0) {
                     result = ((detect_frac - thresh) / (prevThresh - thresh)
-                              + (float)(int)(size - 1 - i))
+                              + (float)(int)(size - 1) - (float)(int)i)
                         * (1.0f / (float)(int)(size - 1));
                 }
                 break;

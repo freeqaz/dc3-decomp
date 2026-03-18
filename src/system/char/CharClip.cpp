@@ -99,12 +99,8 @@ void CharClip::Transitions::AddNode(CharClip *clip, const CharGraphNode &node) {
             (intptr_t)end - (intptr_t)next
         );
     } else {
-        resized = Resize(BytesInMemory() + sizeof(NodeVector), mNodeEnd);
-#ifdef HX_NATIVE
-        new (&resized->clip) ObjOwnerPtr<CharClip>(this, (CharClip *)nullptr);
-#else
-        new (&resized->clip) ObjOwnerPtr<CharClip>(mOwner, (CharClip *)nullptr);
-#endif
+        resized = Resize(BytesInMemory() + 0x20, mNodeEnd);
+        new (&resized->clip) ObjOwnerPtr<CharClip>(mOwner, (CharClip *)NULL);
         resized->clip = clip;
         resized->size = 0;
     }
@@ -125,11 +121,10 @@ void CharClip::Transitions::AddNode(CharClip *clip, const CharGraphNode &node) {
     resized->size++;
     // Fix up ObjRef linked list pointers after potential reallocation
     for (NodeVector *it = mNodeStart; it < mNodeEnd; it = it->Next()) {
-        ObjRef *clipRef = (ObjRef *)&it->clip;
-        ObjRef **next = (ObjRef **)((char *)clipRef + sizeof(void *));
-        ObjRef **prev = (ObjRef **)((char *)clipRef + sizeof(void *) * 2);
-        *(ObjRef **)((char *)*next + sizeof(void *) * 2) = clipRef;
-        *(ObjRef **)((char *)*prev + sizeof(void *)) = clipRef;
+        ObjRef **prev = (ObjRef **)((char *)it + 4);
+        ObjRef **next = (ObjRef **)((char *)it + 8);
+        *(ObjRef **)((char *)*next + 4) = (ObjRef *)it;
+        *(ObjRef **)((char *)*prev + 8) = (ObjRef *)it;
     }
 }
 
@@ -178,7 +173,7 @@ void CharClip::Transitions::Save(BinStream &bs) {
 void CharClip::Transitions::Load(BinStreamRev &d, int oldRev) {
     Clear();
     static ObjectDir *sDir;
-    if ((int)(int)oldRev <= 7) {
+    if (oldRev < 8) {
         int num;
         d >> num;
         if (num > 0 && mOwner->Dir() != sDir) {
@@ -221,18 +216,11 @@ void CharClip::Transitions::Load(BinStreamRev &d, int oldRev) {
 #endif
         NodeVector *it = start;
 
-        for (int i = 0; numNodes > i; i++) {
+        for (int i = 0; i < numNodes; i++) {
             char buf[0x100];
             d.stream.ReadString(buf, 0x100);
             CharClip *clip = mOwner->Dir()->Find<CharClip>(buf, false);
             if (clip) {
-                new (&it->clip) ObjOwnerPtr<CharClip>(
-#ifdef HX_NATIVE
-                    this,
-#else
-                    mOwner,
-#endif
-                    (CharClip *)nullptr);
                 it->clip = clip;
                 d >> it->size;
                 for (int j = 0; j < it->size; j++) {
@@ -1085,12 +1073,21 @@ CharBoneDir *CharClip::GetResource() const {
 }
 
 float CharClip::SampleToBeat(int sample) const {
-    if (mFull.Frames().empty()) {
-        return FrameToBeat(sample);
+#ifdef HX_NATIVE
+    const float *end = mFull.Frames().data() + mFull.Frames().size();
+    const float *begin = mFull.Frames().data();
+#else
+    const float *end = *(const float **)((char *)this + 0xfc);
+    const float *begin = *(const float **)((char *)this + 0xf8);
+#endif
+
+    bool _bit0 = ((end - begin) && ~3) != 0;
+    if (!(_bit0)) {
+        return FrameToBeat((float)sample);
     } else {
-        const float *lower =
-            std::lower_bound(mFull.Frames().begin(), mFull.Frames().end(), (float)sample);
-        return FrameToBeat(lower - mFull.Frames().begin());
+        const float *lower = std::lower_bound(begin, end, (float)sample);
+        auto _tmp2 = FrameToBeat(lower - begin);
+        return _tmp2;
     }
 }
 

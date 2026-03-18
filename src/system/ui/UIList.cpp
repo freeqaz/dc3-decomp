@@ -164,27 +164,30 @@ void UIList::Copy(const Hmx::Object *obj, CopyType ty) {
         mListState.SetNumDisplay(c->mListState.NumDisplay(), true);
         mListState.SetGridSpan(c->mListState.GridSpan(), true);
         mListState.SetSpeed(c->mListState.Speed());
+        mPaginate = c->mPaginate;
+        mSelectToScroll = c->mSelectToScroll;
         mListState.SetMinDisplay(c->mListState.MinDisplay());
         mListState.SetScrollPastMinDisplay(c->mListState.ScrollPastMinDisplay());
         mListState.SetMaxDisplay(c->mListState.MaxDisplay());
         mListState.SetScrollPastMaxDisplay(c->mListState.ScrollPastMaxDisplay());
 
         mNumData = c->mNumData;
-        mPaginate = c->mPaginate;
         mAutoScrollPause = c->mAutoScrollPause;
         mAutoScrollSendMsgs = c->mAutoScrollSendMsgs;
-        mUncappedNumDisplay = c->mUncappedNumDisplay;
-        mLimitCircularDisplayNumToDataNum = c->mLimitCircularDisplayNumToDataNum;
-        mAllowHighlight = c->mAllowHighlight;
 
         mExtendedLabelEntries = c->mExtendedLabelEntries;
         mExtendedMeshEntries = c->mExtendedMeshEntries;
         mExtendedCustomEntries = c->mExtendedCustomEntries;
 
-        CopyHandlerData(c);
-
-        Update();
+        mLimitCircularDisplayNumToDataNum = c->mLimitCircularDisplayNumToDataNum;
+        mUncappedNumDisplay = c->mUncappedNumDisplay;
     }
+
+    const UIList *c2 = dynamic_cast<const UIList *>(obj);
+    if (c2) {
+        CopyHandlerData(c2);
+    }
+    Update();
 }
 
 UIListDir *UIList::GetUIListDir() const { return mListDir; }
@@ -209,31 +212,23 @@ float UIList::Speed() const { return mListState.Speed(); }
 
 void UIList::SetParent(UIList *uilist) { mParent = uilist; }
 
-// noinline: Prevents inlining of this stub implementation. Remove once fully implemented.
-// TODO: implement properly - 524 bytes in target
-// See RB3: box.Set(WorldXfm().v, WorldXfm().v);
-//          mListDir->DrawWidgets(mListState, mWidgets, WorldXfm(), DrawState(this), &box, ...);
-__declspec(noinline) void UIList::CalcBoundingBox(Box &box) {
-    Transform xfm = WorldXfm();
-    box.Set(xfm.v, xfm.v);
-
-    float elementSpacing = 0.0f;
-    int selectedDisplay = mListState.SelectedDisplay();
-
-    UIList *subList = mListDir->SubList(selectedDisplay, mWidgets);
-    if (subList) {
-        int subSelectedDisplay = mListState.SelectedDisplay();
-        float spacing = mListDir->ElementSpacing();
-        elementSpacing = spacing * (float)(double)subSelectedDisplay;
+void UIList::CalcBoundingBox(Box &box) {
+    box.Set(WorldXfm().v, WorldXfm().v);
+    float offset;
+    UIList *subList = mListDir->SubList(mListState.SelectedDisplay(), mWidgets);
+    if (subList != NULL) {
+        int subSelectedDisplay = subList->mListState.SelectedDisplay();
+        float spacing = subList->GetUIListDir()->ElementSpacing();
+        offset = spacing * (float)subSelectedDisplay;
+    } else {
+        offset = 0.0f;
     }
-
     UIListWidgetDrawState drawState;
-    UIComponent::State state = DrawState(this);
-    mListDir->BuildDrawState(drawState, mListState, state, elementSpacing, true);
-
-    Transform xfm2 = WorldXfm();
-    UIComponent::State state2 = DrawState(this);
-    mListDir->DrawWidgets(drawState, mListState, mWidgets, xfm2, state2, &box, (bool)mDrawManuallyControlledWidgets);
+    mListDir->BuildDrawState(drawState, mListState, DrawState(this), offset, true);
+    mListDir->DrawWidgets(
+        drawState, mListState, mWidgets, WorldXfm(), DrawState(this), &box,
+        mAllowHighlight
+    );
 }
 
 Symbol UIList::SelectedSym(bool fail) const {
@@ -985,7 +980,6 @@ RndDrawable *UIList::CollideShowing(const Segment &seg, float &fref, Plane &p) {
     std::vector<std::vector<Vector3> > vecOfVecs;
     BoundingBoxTriangles(vecOfVecs);
     Segment s(seg);
-    Vector3 vset;
     bool intersects = false;
     fref = 1;
     for (std::vector<std::vector<Vector3> >::iterator it = vecOfVecs.begin();
@@ -997,7 +991,10 @@ RndDrawable *UIList::CollideShowing(const Segment &seg, float &fref, Plane &p) {
         if (Intersect(s, tri, (int)0, loc_f)) {
             Interp(s.start, s.end, loc_f, s.end);
             fref *= loc_f;
-            p.Set(s.end, vset, vset);
+            p.a = tri.frame.z.x;
+            p.b = tri.frame.z.y;
+            p.c = tri.frame.z.z;
+            p.d = -(p.a * tri.origin.x + p.b * tri.origin.y + p.c * tri.origin.z);
             intersects = true;
         }
     }

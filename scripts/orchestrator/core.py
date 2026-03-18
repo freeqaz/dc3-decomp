@@ -61,7 +61,7 @@ except ImportError:
 
 
 # Default paths
-DEFAULT_POOL_DIR = Path("/tmp/claude/decomp-agents")
+DEFAULT_POOL_DIR = Path("/var/tmp/decomp-agents")
 DEFAULT_RB3_PATH = Path.home() / "code/milohax/rb3/src"
 DEFAULT_LOGS_DIR = Path("logs")
 

@@ -412,15 +412,6 @@ void HamNavList::Poll() {
                 }
             }
         }
-#ifdef HX_NATIVE
-        // In controller mode without skeleton (headless/no Kinect), still need
-        // to drive scroll behavior so pending controller-initiated scrolls complete
-        if (TheGestureMgr->InControllerMode() && mListRibbonResource
-            && mListState.Provider()
-            && mListRibbonResource->IsScrollable(mListState.NumShowing())) {
-            mScrollBehavior.Update(mScrollBehavior.mScrollSpeed);
-        }
-#endif
     }
 
     // Update swipe direction debug overlay
@@ -1766,6 +1757,16 @@ void HamNavList::DrawShowing() {
             elem->mAlpha = 0.0f;
         }
     }
+
+#ifdef __EMSCRIPTEN__
+    // Web fix: re-fill widget text content every frame.
+    // Xbox fills once on Enter() then uses StartScroll/CompleteScroll to rotate
+    // elements one-by-one during scroll animation. On web, the scroll callback
+    // path misses Fill updates — re-filling per-frame ensures text matches
+    // selection state. Benchmarked at ~0.08ms for 16 widgets × 10 display
+    // slots (<0.5% of 30fps budget).
+    mListDirResource->FillElements(mListState, mListWidgets);
+#endif
 
     mListDirResource->DrawWidgets(
         widgetState, mListState, mListWidgets, WorldXfm(),

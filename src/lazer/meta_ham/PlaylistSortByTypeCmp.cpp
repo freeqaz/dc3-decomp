@@ -61,8 +61,8 @@ NavListShortcutNode *PlaylistSortByType::NewShortcutNode(NavListItemNode *item) 
 
 NavListHeaderNode *PlaylistSortByType::NewHeaderNode(NavListItemNode *item) const {
     Playlist *playlist = static_cast<PlaylistSortNode *>(item)->GetPlaylist();
+    int type;
     Symbol sym;
-    int type = 0;
     if (playlist->IsCustom()) {
         type = 1;
         static Symbol playlist_custom("playlist_custom");

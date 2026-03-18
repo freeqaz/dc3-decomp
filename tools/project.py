@@ -1518,7 +1518,7 @@ def generate_build_ninja(
         )
         n.rule(
             name="report_raw",
-            command=f"{objdiff} report generate $objdiff_report_args -c functionRelocDiffs=name_address -o $out",
+            command=f"{objdiff} report generate $objdiff_report_args -c functionRelocDiffs=data_value -o $out",
             description="REPORT RAW",
         )
         n.build(

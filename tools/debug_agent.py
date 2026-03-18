@@ -12,7 +12,7 @@ Provides commands to:
 Usage:
     python3 tools/debug_agent.py show-context "?Symbol@@..."
     python3 tools/debug_agent.py list-tools
-    python3 tools/debug_agent.py check-worktree /tmp/claude/decomp-agents/agent-0
+    python3 tools/debug_agent.py check-worktree /var/tmp/decomp-agents/agent-0
     python3 tools/debug_agent.py show-logs {session_id}
 """
 

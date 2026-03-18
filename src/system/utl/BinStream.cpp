@@ -248,8 +248,11 @@ bool BinStream::WaitUntilReady(int sleepMs) {
             return false;
         }
 #ifdef __EMSCRIPTEN__
-        // Sleep is a no-op on web — don't spin. Data must arrive via
-        // the browser event loop, which we're blocking. Bail immediately.
+        // Safe to bail: WebAssetsFetchSync() guarantees all file data is in
+        // MEMFS before AsyncFile returns, so Eof() returns NotEof on first
+        // check (line 242). This early exit prevents deadlock — can't spin-wait
+        // on single-threaded browser event loop. All 11 call sites are also
+        // #ifdef HX_NATIVE, so this path is never reached on web builds.
         MILO_WARN("BinStream::WaitUntilReady: data not ready, cannot block "
                    "on web (stream: %s)", Name());
         return false;

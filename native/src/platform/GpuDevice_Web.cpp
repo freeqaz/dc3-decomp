@@ -157,7 +157,9 @@ wgpu::TextureView GpuDevice::AcquireNextFrame() {
 }
 
 void GpuDevice::PresentFrame() {
-    // Browser auto-presents at end of rAF
+    // Browser auto-presents at end of rAF — explicit Present() is unsupported
+    // by emdawnwebgpu. The surface texture returned by GetCurrentTexture() is
+    // composited to the canvas when the requestAnimationFrame callback returns.
     if (mInstance) mInstance.ProcessEvents();
 }
 

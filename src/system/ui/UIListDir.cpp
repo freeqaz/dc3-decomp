@@ -302,36 +302,17 @@ void UIListDir::StartScroll(
 ) {
     mDirection = i;
     MILO_ASSERT(mDirection, 499);
-#ifdef HX_NATIVE
-    if (DebugChooseModeList(state.Provider())) {
-        printf("DC3 SCROLL StartScroll dir=%d b=%d first=%d scroll=%d numDisp=%d numData=%d\n",
-            i, (int)b, state.FirstShowing(), state.CurrentScroll(),
-            state.NumDisplay(), state.Provider() ? state.Provider()->NumData() : -1);
-    }
-#endif
     FOREACH (it, widgets) {
         (*it)->StartScroll(mDirection, b);
     }
     if (b) {
-        int fillIdx = mDirection > 0 ? state.NumDisplay() : -1;
-#ifdef HX_NATIVE
-        if (DebugChooseModeList(state.Provider())) {
-            printf("DC3 SCROLL FillEdge idx=%d data=%d\n", fillIdx, state.Display2Data(fillIdx));
-        }
-#endif
-        FillElement(state, widgets, fillIdx);
+        FillElement(state, widgets, mDirection > 0 ? state.NumDisplay() : -1);
     }
 }
 
 void UIListDir::CompleteScroll(
     UIListState const &state, std::vector<UIListWidget *> &widgets
 ) {
-#ifdef HX_NATIVE
-    if (DebugChooseModeList(state.Provider())) {
-        printf("DC3 SCROLL CompleteScroll dir=%d first=%d sel=%d numDisp=%d\n",
-            mDirection, state.FirstShowing(), state.Selected(), state.NumDisplay());
-    }
-#endif
     FOREACH (it, widgets) {
         (*it)->CompleteScroll(state, mDirection);
     }
@@ -355,15 +336,16 @@ void UIListDir::ListEntered() {
 void UIListDir::BuildDrawState(
     UIListWidgetDrawState &drawState, UIListState const &state, UIComponent::State compState, float subListOffset, bool allowHighlight
 ) const {
+    auto& _ref0 = mFadeOffset;
     int numDisplay = state.NumDisplay();
     int numDisplayWithData = state.NumDisplayWithData();
 
     int fadeCountStart = numDisplay / 2;
-    if ((int)(unsigned long)(unsigned int)fadeCountStart >= mFadeOffset) {
-        fadeCountStart = mFadeOffset;
+    if ((int)(unsigned long)(unsigned int)fadeCountStart >= _ref0) {
+        fadeCountStart = _ref0;
     }
     int fadeCountEnd = fadeCountStart;
-    if (mFadeOffset != 0) {
+    if (_ref0 != 0) {
         int fadeEndCalc;
         if (state.Circular()) {
             int selectedDisp = state.SelectedDisplay();

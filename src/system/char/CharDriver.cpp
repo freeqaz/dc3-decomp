@@ -83,16 +83,12 @@ void CharDriver::Enter() {
     RndPollable::Enter();
     if (mDefaultClip)
         Play(DataNode(mDefaultClip), 1, -1.0f, kHugeFloat, 0.0f);
-#ifdef HX_NATIVE
-    // Native fallback: if no default clip and no clip playing, try to find any clip
-    if (!mFirst && mClips) {
-        for (ObjDirItr<CharClip> it(mClips, true); it != nullptr; ++it) {
-            // Prefer "idle" clips, but take anything
-            Play(DataNode(it.operator->()), 1, -1.0f, kHugeFloat, 0.0f);
-            break;
-        }
-    }
-#endif
+    // Previously had an HX_NATIVE fallback here that force-played the first clip
+    // found in mClips when no default clip existed. Removed because it interferes
+    // with HamCharacter::SongAnimation() — playing an idle clip makes
+    // Driver()->FirstClip() non-null, which causes SongAnimation() to return -1,
+    // permanently blocking the clip playback gate in HamDirector::Poll().
+    // On Xbox, characters with no default_clip_or_group simply have no idle clip.
 }
 
 void CharDriver::Exit() { RndPollable::Exit(); }

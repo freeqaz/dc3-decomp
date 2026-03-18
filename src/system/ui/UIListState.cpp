@@ -394,10 +394,10 @@ void UIListState::Scroll(int direction, bool skipActive) {
         if (!skipActive) {
             do {
                 curSel = state.mSelectedDisplay;
-                curFirst = state.mFirstShowing;
                 int sel = curSel;
                 if (mCircular)
                     sel = mMinDisplay;
+                curFirst = state.mFirstShowing;
                 if (mScrollPastMinDisplay)
                     sel -= mMinDisplay;
                 int data = Showing2Data(sel + curFirst);
@@ -432,10 +432,12 @@ void UIListState::Scroll(int direction, bool skipActive) {
                 int step = 1;
                 if (direction <= 0)
                     step = -1;
-                changed = BuildScroll(step, curFirst, curSel, state);
+                auto _tmp0 = BuildScroll(step, curFirst, curSel, state);
+                changed = _tmp0;
 
                 if (step == 1) {
-                    if (state.mFirstShowing == MaxFirstShowing()) {
+                    auto _tmp1 = MaxFirstShowing();
+                    if (state.mFirstShowing == _tmp1) {
                         hitBoundary = (state.mSelectedDisplay == ScrollMaxDisplay());
                         if (hitBoundary)
                             goto retry;

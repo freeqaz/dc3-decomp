@@ -117,6 +117,12 @@ Tool-specific deep docs live in subdirectories:
 | [plans/dc3-native/DTA_HANDLER_ANALYSIS.md](plans/dc3-native/DTA_HANDLER_ANALYSIS.md) | **DTA handler root cause** — why script handlers don't fire on native |
 | [plans/dc3-native/TEST_GAP_ANALYSIS.md](plans/dc3-native/TEST_GAP_ANALYSIS.md) | **Test gaps** — high-value missing tests for native port correctness |
 
+## Debugging
+
+| Doc | Description |
+|-----|-------------|
+| [debugging/web.md](debugging/web.md) | **Web build debugging** — WASM/Emscripten testing, CDP debugger, headless desktop, env vars, case studies |
+
 ## Runtime & Testing
 
 | Doc | Description |

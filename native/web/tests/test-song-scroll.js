@@ -103,7 +103,10 @@ function waitForServer(url, timeoutMs = 15000) {
             if (text.includes('DC3 UIListDir::StartScroll') ||
                 text.includes('DC3 UIListDir::CompleteScroll') ||
                 text.includes('DC3 UIListSlot') ||
-                text.includes('DC3 SCROLL')) {
+                text.includes('DC3 SCROLL') ||
+                text.includes('DC3 Web') ||
+                text.includes('nav_highlight') ||
+                text.includes('ribbon[')) {
                 scrollLogs.push({ elapsed, text });
             }
         });
@@ -145,7 +148,7 @@ function waitForServer(url, timeoutMs = 15000) {
             await new Promise(r => setTimeout(r, 200));
         }
 
-        async function waitForScreen(screenName, timeoutMs = 10000) {
+        async function waitForScreen(screenName, timeoutMs = 30000) {
             log(`  Waiting for screen: ${screenName}...`);
             const deadline = Date.now() + timeoutMs;
             while (Date.now() < deadline) {
@@ -154,7 +157,7 @@ function waitForServer(url, timeoutMs = 15000) {
                 );
                 if (found) {
                     log(`  Screen '${screenName}' entered`);
-                    await new Promise(r => setTimeout(r, 500));
+                    await new Promise(r => setTimeout(r, 1000));
                     return true;
                 }
                 await new Promise(r => setTimeout(r, 200));
@@ -164,23 +167,29 @@ function waitForServer(url, timeoutMs = 15000) {
         }
 
         // -- Navigate to song_select --
+        // Web transitions are slow (~10-15s each). Wait generously.
         await pressKey(' ', 150, 'Start (dismiss attract)');
+        // autosave_warning_screen may appear before title_screen
         await waitForScreen('title_screen');
 
         await pressKey(' ', 150, 'Start (skip title)');
+        // wait_main_after_saveload_screen appears before main_screen
         await waitForScreen('main_screen');
 
         await pressKey('Enter', 150, 'A (main menu → choose_mode)');
-        await waitForScreen('choose_mode_screen');
+        if (!await waitForScreen('choose_mode_screen', 30000)) {
+            log('FAIL: never reached choose_mode_screen');
+            process.exit(1);
+        }
 
         await pressKey('Enter', 150, 'A (choose mode → song_select)');
-        if (!await waitForScreen('song_select_screen', 15000)) {
+        if (!await waitForScreen('song_select_screen', 30000)) {
             log('FAIL: never reached song_select_screen');
             process.exit(1);
         }
 
-        // Extra time for song list to populate
-        await new Promise(r => setTimeout(r, 2000));
+        // Extra time for song list to populate (web is slow)
+        await new Promise(r => setTimeout(r, 3000));
         await page.screenshot({ path: `${OUT_DIR}/00_initial.png` });
         log('Screenshot: initial song list');
 
@@ -191,8 +200,8 @@ function waitForServer(url, timeoutMs = 15000) {
             const preScrollLogs = scrollLogs.length;
 
             await pressKey('ArrowDown', 150, `Down (scroll ${i + 1}/${SCROLL_COUNT})`);
-            // Wait for scroll animation to complete
-            await new Promise(r => setTimeout(r, 400));
+            // Wait for scroll animation to complete (web needs more time)
+            await new Promise(r => setTimeout(r, 1000));
 
             await page.screenshot({ path: `${OUT_DIR}/${String(i + 1).padStart(2, '0')}_after_down.png` });
 
@@ -210,6 +219,24 @@ function waitForServer(url, timeoutMs = 15000) {
         log('\n=== SCROLL TEST COMPLETE ===');
         log(`Total scroll logs captured: ${scrollLogs.length}`);
         log(`Screenshots saved to: ${OUT_DIR}/`);
+
+        // -- Verify visual changes --
+        // Compare initial screenshot to a later one — file sizes should differ
+        // significantly if the song list text is actually updating.
+        if (SCROLL_COUNT >= 5) {
+            const initialSize = fs.statSync(`${OUT_DIR}/00_initial.png`).size;
+            const scrolledSize = fs.statSync(`${OUT_DIR}/05_after_down.png`).size;
+            const sizeDiff = Math.abs(initialSize - scrolledSize);
+            const pctDiff = (sizeDiff / initialSize * 100).toFixed(1);
+            log(`\nVisual diff: initial=${initialSize}B scroll5=${scrolledSize}B diff=${pctDiff}%`);
+            // Nav_highlight messages confirm data-layer scroll worked
+            const navHighlightCount = scrollLogs.filter(l => l.text.includes('nav_highlight') && !l.text.includes('settled')).length;
+            log(`Nav highlight events: ${navHighlightCount} (expected: ${SCROLL_COUNT * 2} [XDK+native duplicate])`);
+            if (navHighlightCount < SCROLL_COUNT) {
+                log('FAIL: not enough nav_highlight events — scrolling may be broken');
+                exitCode = 1;
+            }
+        }
 
         // -- Summary --
         log('\n--- All scroll logs ---');

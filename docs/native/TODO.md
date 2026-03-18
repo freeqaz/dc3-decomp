@@ -252,7 +252,19 @@ HamDirector (`src/system/hamobj/HamDirector.cpp:137-202`) exposes ~40+ DTA handl
 - [ ] **Face servo explicit polling** — Verify CharFaceServo is in Character::mPolls. If not, add explicit poll in gameplay path.
 - [ ] **movemgr DTA error** — `movemgr not function or object` spam every frame during gameplay. TheMoveMgr is null on native; DTA scripts reference it. Low priority (cosmetic log noise).
 - [ ] **Letterboxing artifact** — Some camera angles show black bars on right side. May be aspect ratio mismatch in camera framing.
-- [ ] **Missing mmat references** — Shell/HUD materials can't find `shell_basic.mmat` in some .milo dirs. Cosmetic only (fallback material used).
+- [ ] **Missing metamaterials on web** — 1,636 material errors (`shell_basic.mmat`, `hud_basic.mmat`, etc.) because `config/metamaterials.milo` fails to load on web. Root cause identified and partially fixed (see below). Desktop loads it fine.
+
+### 8.5 Web Metamaterials Loading — FIXED (2026-03-18)
+
+**Root cause chain**: `DirLoader::CachedPath()` transforms `metamaterials.milo` → `gen/metamaterials.milo_xbox` only when `sCacheMode=true` OR `forceCache=true`. On web, `sCacheMode` was unstable during boot (set to true in App.cpp but reset to false by `Dir.cpp:261` during subdir loading). Without the transform, ChunkStream opened the file as `.milo` (PC platform, LE byte order) but the server fallback served `.milo_xbox` (Xbox platform, BE content) → read big-endian data without swapping → `String chars 100663297 > 512` crash.
+
+**Fix**: `DirLoader::OpenFile()` on `__EMSCRIPTEN__` calls `CachedPath(fileStr, true)` — the `true` flag bypasses `sCacheMode` and always transforms `.milo` → `gen/*.milo_xbox`. Correct because web MEMFS always has pre-extracted `gen/` format assets. Also moved `SetCacheMode(true)` before `SystemInit()` in App.cpp for consistency.
+
+**Result**: Zero `shell_basic.mmat` errors (was 1,636). Metamaterials load correctly. Desktop unaffected.
+
+### 8.6 AppLabel WASM vtable crash — OPEN
+
+`function signature mismatch` at `MainMenuProvider.cpp:48` (`app_label`) when entering `main_screen` with metamaterials loaded. WASM `call_indirect` type check failure — AppLabel virtual function signature doesn't match the vtable slot. Separate issue from metamaterials, likely needs `AppLabel` class layout or virtual function signature fix.
 
 ---
 

@@ -62,8 +62,8 @@ void HamDriver::PreLoad(BinStream &bs) {
 void HamDriver::PostLoad(BinStream &) {}
 
 void HamDriver::Poll() {
-    if (mBones && Weight() > 0.0f) {
-        mLayers.Eval(Weight());
+    if (mBones && mLayers.mWeight > 0.0f) {
+        mLayers.Eval(mLayers.mWeight);
         mBones->ScaleDown(*mBones, 1.0f - mLayers.mWeight);
         mLayers.Play(*mBones);
         mDisplayBeat = TheTaskMgr.Beat();
@@ -87,7 +87,7 @@ float HamDriver::DisplayRecurse(Layer *layer, int indent, float y) {
             display.DrawCursor();
             y += CharClipDisplay::LineSpacing();
             for (std::list<Layer *>::iterator it = arr->mLayers.begin(); it != arr->mLayers.end(); ++it) {
-                y = DisplayRecurse(*it, indent + 1, y);
+                y = bool(DisplayRecurse(*it, indent + 1, y));
             }
         }
     } else {

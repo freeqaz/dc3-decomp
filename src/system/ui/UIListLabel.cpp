@@ -108,50 +108,33 @@ UIListSlotElement *UIListLabel::CreateElement(UIList *uilist) {
 UIListLabelElement::~UIListLabelElement() { delete mLabel; }
 
 void UIListLabelElement::Draw(const Transform &tf, float f, UIColor *col, Box *box) {
-    mLabel->SetWorldXfm(tf);
+    auto& label = mLabel;
+    label->SetWorldXfm(tf);
     if (box) {
-        Vector3 minPt(mLabel->mBoundsLeft, 0.0f, mLabel->mBoundsTop);
+        Vector3 minPt(label->mBoundsLeft, 0.0f, label->mBoundsTop);
         Box localbox = *box;
-        Vector3 maxPt(mLabel->mBoundsLeft + mLabel->mBoundsRight, 0.0f, mLabel->mBoundsTop + mLabel->mBoundsBottom);
+        Vector3 maxPt(label->mBoundsLeft + label->mBoundsRight, 0.0f, label->mBoundsTop + label->mBoundsBottom);
         localbox.GrowToContain(minPt, false);
         localbox.GrowToContain(maxPt, false);
         box->GrowToContain(localbox.mMin, false);
         box->GrowToContain(localbox.mMax, false);
     } else {
-#ifdef HX_NATIVE
-        static int sChooseModeLabelDiag = 0;
-        if (DebugChooseModeLabel(mLabel) && sChooseModeLabelDiag < 80) {
-            printf(
-                "DC3 UIListLabelElement::Draw label=%s token=%s alpha=%.3f color=%s styles=%u bounds=(%.2f,%.2f,%.2f,%.2f)\n",
-                PathName(mLabel),
-                mLabel->TextToken().Str(),
-                f,
-                col ? PathName(col) : "<null>",
-                mLabel->NumStyles(),
-                mLabel->mBoundsLeft,
-                mLabel->mBoundsTop,
-                mLabel->mBoundsRight,
-                mLabel->mBoundsBottom
-            );
-            sChooseModeLabelDiag++;
+        float *savedAlphas = (float *)_alloca(label->NumStyles() * sizeof(float));
+        for (unsigned int i = 0; i < label->NumStyles(); i++) {
+            savedAlphas[i] = label->Style(i).GetAlpha();
         }
-#endif
-        float *savedAlphas = (float *)_alloca(mLabel->NumStyles() * sizeof(float));
-        for (unsigned int i = 0; i < mLabel->NumStyles(); i++) {
-            savedAlphas[i] = mLabel->Style(i).GetAlpha();
-        }
-        mLabel->LStyle(0).mColorOverride = col;
+        label->LStyle(0).mColorOverride = col;
         if (mListLabel->mHighlightAltStyles) {
-            for (unsigned int i = 1; i < mLabel->NumStyles(); i++) {
-                mLabel->LStyle(i).mColorOverride = col;
+            for (unsigned int i = 1; i < label->NumStyles(); i++) {
+                label->LStyle(i).mColorOverride = col;
             }
         }
-        for (unsigned int i = 0; i < mLabel->NumStyles(); i++) {
-            mLabel->Style(i).SetAlpha(f * savedAlphas[i]);
+        for (unsigned int i = 0; i < label->NumStyles(); i++) {
+            label->Style(i).SetAlpha(f * savedAlphas[i]);
         }
-        mLabel->DrawShowing();
-        for (unsigned int i = 0; i < mLabel->NumStyles(); i++) {
-            mLabel->Style(i).SetAlpha(savedAlphas[i]);
+        label->DrawShowing();
+        for (unsigned int i = 0; i < label->NumStyles(); i++) {
+            label->Style(i).SetAlpha(savedAlphas[i]);
         }
     }
 }

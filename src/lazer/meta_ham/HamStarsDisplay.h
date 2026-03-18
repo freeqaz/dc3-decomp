@@ -15,7 +15,8 @@ public:
         kStarDisplay_4
     };
 
-    OBJ_CLASSNAME(StarsDisplay) // bruh
+    // registers as StarsDisplay — transparent factory replacement
+    OBJ_CLASSNAME(StarsDisplay)
     OBJ_SET_TYPE(StarsDisplay)
     virtual DataNode Handle(DataArray *, bool);
 

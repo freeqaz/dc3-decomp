@@ -105,6 +105,8 @@ void GameplayTelemetry::Sample(int frame) {
     int songAnimKeyTotal = -1;  // -1 = no anim, 0+ = PropKeys track count
     int clipKeyCount = -1;      // -1 = no "clip" PropKeys, 0+ = keyframe count
     int routineLoaded = 0;
+    int p0SongAnim = -99;       // HamCharacter::SongAnimation() for player 0
+    int doSongAnim = -1;        // HamDirector::SongAnimation() equivalent
     if (TheHamDirector) {
         clipDirOk = TheHamDirector->ClipDir() != nullptr;
         PropKeys *mk = TheHamDirector->GetMasterKeys("clip");
@@ -155,6 +157,17 @@ void GameplayTelemetry::Sample(int frame) {
                 if (drv) {
                     charClipLayers = (int)drv->Layers().mLayers.size();
                 }
+                // SongAnimation gate: this must return > -1 for clip playback
+                p0SongAnim = ch0->SongAnimation();
+            }
+            // Replicate HamDirector::SongAnimation() (protected)
+            doSongAnim = 0;
+            for (int ci = 0; ci < 2; ci++) {
+                HamCharacter *hc = TheHamWardrobe->GetCharacter(ci);
+                if (hc && hc->SongAnimation() > -1) {
+                    doSongAnim = 1;
+                    break;
+                }
             }
         }
     }
@@ -164,12 +177,14 @@ void GameplayTelemetry::Sample(int frame) {
         "songAnimFrame=%.1f pollEnabled=%d "
         "typeDef=%s hamProvider=%d mergerDir=%d "
         "clipDir=%d masterClip=%d clipPlayerInit=%d charClipLayers=%d p0=%d p1=%d "
-        "clipKeyCount=%d songAnimKeys=%d diffProxy=%d routineLoaded=%d\n",
+        "clipKeyCount=%d songAnimKeys=%d diffProxy=%d routineLoaded=%d "
+        "p0SongAnim=%d doSongAnim=%d\n",
         frame, state, beat, realSecs,
         songAnimFrame, pollEnabled ? 1 : 0,
         typeDef, hamProvider ? 1 : 0, mergerDir ? 1 : 0,
         clipDirOk ? 1 : 0, masterClipOk ? 1 : 0, clipPlayerInited ? 1 : 0,
         charClipLayers, player0Ok ? 1 : 0, player1Ok ? 1 : 0,
-        clipKeyCount, songAnimKeyTotal, diffProxyExists, routineLoaded
+        clipKeyCount, songAnimKeyTotal, diffProxyExists, routineLoaded,
+        p0SongAnim, doSongAnim
     );
 }

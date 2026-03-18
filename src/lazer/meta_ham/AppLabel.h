@@ -18,8 +18,7 @@ class AppLabel : public HamLabel {
 public:
     // Hmx::Object
     virtual ~AppLabel();
-    // no, this is not an oversight
-    // the StaticClassName for AppLabel is in fact, HamLabel
+    // AppLabel registers as HamLabel — transparent factory replacement
     OBJ_CLASSNAME(HamLabel);
     OBJ_SET_TYPE(HamLabel);
     virtual DataNode Handle(DataArray *, bool);
