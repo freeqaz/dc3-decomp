@@ -21,10 +21,10 @@
  *   3 = infrastructure error (server won't start, browser won't launch)
  */
 
-const { chromium } = require('playwright');
 const { spawn } = require('child_process');
 const http = require('http');
 const path = require('path');
+const { launchBrowser } = require('./launch-helpers');
 
 // ---------------------------------------------------------------------------
 // CLI args
@@ -106,25 +106,8 @@ function waitForServer(url, timeoutMs = 15000) {
         }
 
         // -- Launch browser --------------------------------------------------
-        log('Launching Chrome with WebGPU...');
-        browser = await chromium.launch({
-            // headless: false + xvfb-run gives us a real GPU context.
-            // If no xvfb detected, fall back to headless with SwiftShader.
-            headless: !process.env.DISPLAY,
-            args: [
-                '--no-sandbox',
-                '--enable-unsafe-webgpu',
-                '--use-angle=vulkan',
-                '--enable-features=Vulkan,VulkanFromANGLE',
-                '--ozone-platform=x11',
-                // Disable unneeded features for faster startup
-                '--disable-extensions',
-                '--disable-background-networking',
-                '--disable-default-apps',
-                '--disable-sync',
-                '--mute-audio',
-            ],
-        });
+        log('Launching Chrome with WebGPU (headless=new + Vulkan)...');
+        browser = await launchBrowser();
 
         const context = await browser.newContext({
             viewport: { width: 1280, height: 720 },

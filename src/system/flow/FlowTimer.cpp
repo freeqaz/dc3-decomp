@@ -120,14 +120,10 @@ void FlowTimer::ChildFinished(FlowNode *node) {
         FLOW_LOG("Timed Release From Parent \n");
         Timer t;
         t.Reset();
-        unsigned int start = __mftb();
+        t.Start();
         mFlowParent->ChildFinished(this);
-        {
-            unsigned int end = __mftb();
-            unsigned long long cycles = end - start;
-            float ms = Timer::CyclesToMs(cycles);
-            TheFlowMgr->AddMs(ms);
-        }
+        t.Stop();
+        TheFlowMgr->AddMs(t.Ms());
     }
 }
 

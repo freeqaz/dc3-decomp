@@ -106,6 +106,11 @@ static void mainLoop() {
         sFrameCount++;
         sApp->RunOneFrame();
         EM_ASM({ window.dc3FrameCount = $0; }, sFrameCount);
+        // Signal readiness after a few frames so the compositor has
+        // presented real GPU content (not just a cleared buffer).
+        if (sFrameCount == 3) {
+            EM_ASM({ window.__webgpuReady = true; });
+        }
         if (sFrameCount == 1 || sFrameCount % 300 == 0) {
             printf("DC3 Web: frame %d\n", sFrameCount);
             fflush(stdout);

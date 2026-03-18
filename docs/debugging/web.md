@@ -5,11 +5,10 @@ Techniques for debugging the DC3 WASM/Emscripten web port — both interactively
 ## Prerequisites
 
 ```bash
-sudo pacman -S xorg-server-xvfb chromium
 npm install playwright
 ```
 
-WebGPU requires a real GPU context. Use `xvfb-run` to provide a virtual X11 display for headless execution.
+WebGPU requires a **secure context** (HTTPS or localhost). All tests must run against the dev server on `localhost`, not `data:` or `file:` URLs. No xvfb needed — `--headless=new` provides its own compositor.
 
 ## Architecture Overview
 
@@ -39,20 +38,17 @@ scripts/build/web.sh
 # Start dev server (must be running for all browser-based tools)
 python3 native/web/server.py --port 8420
 
+# Screenshot validation (quick sanity check — no xvfb needed)
+node native/web/tests/test-screenshot.js --no-server --verbose
+
 # Smoke test (auto-server, hang detection, WebGPU init check)
-xvfb-run -a --server-args="-screen 0 1920x1080x24" \
-  node native/web/tests/web-smoke.js --verbose
+node native/web/tests/web-smoke.js --verbose
 
 # Song scroll test (captures screenshots per scroll)
-xvfb-run -a --server-args="-screen 0 1920x1080x24" \
-  node native/web/tests/test-song-scroll.js --no-server --verbose
+node native/web/tests/test-song-scroll.js --no-server --verbose
 
 # CDP debugger break (pauses at hang point, dumps call stack)
-xvfb-run -a --server-args="-screen 0 1920x1080x24" \
-  node native/web/tests/cdp-debugger-break.js --no-server --verbose
-
-# Capture console logs for analysis
-scripts/web/capture-logs.sh --duration 120 --output /tmp/my-log.txt
+node native/web/tests/cdp-debugger-break.js --no-server --verbose
 
 # Rebuild WASM
 scripts/build/web.sh
@@ -146,15 +142,32 @@ MILO_HEADLESS=1 MILO_RENDER=1 \
 
 Use these when you need to test browser-specific behavior (WebGPU canvas rendering, keyboard input mapping, asset loading over HTTP).
 
+### Headless WebGPU Screenshots
+
+All test scripts use a shared launch config (`native/web/tests/launch-helpers.js`) that configures Chrome for headless WebGPU rendering. Key points:
+
+- **No xvfb needed.** `--headless=new` provides a real compositor with GPU support.
+- **Must use localhost.** WebGPU requires a secure context — `data:` and `file:` URLs won't have `navigator.gpu`.
+- **Readiness signal.** The engine sets `window.__webgpuReady = true` after 3 rendered frames. Use `waitForWebGPUReady(page)` before taking screenshots. Use `screenshotReady(page, path)` to wait for compositor presentation.
+- **Engine init is slow (~30-60s).** Asset download + synchronous DTA parsing take time. Set timeouts accordingly.
+
+Chrome flags (handled by `launch-helpers.js`):
+```
+--headless=new --use-angle=vulkan
+--enable-features=Vulkan,VulkanFromANGLE,DefaultANGLEVulkan
+--disable-vulkan-surface --enable-unsafe-webgpu --ignore-gpu-blocklist
+```
+
 ### Test Scripts
 
 | Script | Purpose | Key Flags |
 |--------|---------|-----------|
+| `test-screenshot.js` | Validate WebGPU screenshots capture real content | `--gpu-info`, `--frames N`, `--out dir` |
 | `web-smoke.js` | Boot check, hang/crash detection | `--timeout`, `--hang-timeout`, `--wait-for`, `--save-logs` |
 | `test-song-scroll.js` | Navigate to song_select, scroll, capture screenshots | `--scrolls N`, `--out dir` |
 | `cdp-debugger-break.js` | Pause at hang point via CDP, dump WASM call stack | `--silence N` |
 | `diagnose-song-load.js` | Full menu nav to gameplay, diagnose load issues | `--timeout`, `--hang-timeout` |
-| `run-web-tests.sh` | Wrapper: xvfb + server + smoke test | `--diagnose-hang`, `--no-xvfb` |
+| `run-web-tests.sh` | Wrapper: server + smoke test | `--diagnose-hang` |
 
 All scripts live in `native/web/tests/`. The dev server is at `native/web/server.py`.
 
@@ -164,9 +177,9 @@ All scripts live in `native/web/tests/`. The dev server is at `native/web/server
 # Start server in background
 python3 native/web/server.py --port 8420 &
 
-# Run any test with xvfb + WebGPU
-xvfb-run -a --server-args="-screen 0 1920x1080x24" \
-  node native/web/tests/test-song-scroll.js --no-server --verbose
+# Run any test directly (no xvfb wrapper needed)
+node native/web/tests/test-screenshot.js --no-server --verbose
+node native/web/tests/test-song-scroll.js --no-server --verbose
 
 # Or use the wrapper (auto-starts server)
 native/web/tests/run-web-tests.sh --verbose
@@ -174,7 +187,7 @@ native/web/tests/run-web-tests.sh --verbose
 
 ### Sandbox
 
-GPU access requires `dangerouslyDisableSandbox: true` for bash commands. The xvfb-run + Chromium + Vulkan stack needs unrestricted filesystem and device access.
+GPU access requires `dangerouslyDisableSandbox: true` for bash commands. Chrome needs access to `/dev/dri/renderD*` for Vulkan.
 
 ### Keyboard Input Mapping (Browser)
 

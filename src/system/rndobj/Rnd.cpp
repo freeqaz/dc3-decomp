@@ -1163,16 +1163,17 @@ float Rnd::DrawTimers(float f) {
         }
 
         float lastMs = it->first.GetLastMs();
-        const char *name = it->first.Name().Str();
+        Symbol name = it->first.Name();
 
         const char *text;
         if (lastMs < 0.05f) {
-            text = name;
+            text = name.Str();
         } else if (!mVerboseTimers || !AutoTimer::CollectingStats()) {
-            text = MakeString("%s %.2f", name, lastMs);
+            float worstMs = it->first.GetWorstMs();
+            text = MakeString("%s %.2f (%.2f)", name, lastMs, worstMs);
         } else {
             TimerStats &stats = it->second;
-            text = MakeString("%s %.1f", name, lastMs);
+            text = MakeString("%s %2.1f (%.2f, %.2f) %.2f", name, lastMs, stats.mAvgMs, stats.mStdDevMs, stats.mMaxMs);
         }
 
         Vector2 pos(x, y);

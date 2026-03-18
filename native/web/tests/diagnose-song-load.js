@@ -10,10 +10,10 @@
  *   xvfb-run -a node native/web/tests/diagnose-song-load.js --no-server --verbose
  */
 
-const { chromium } = require('playwright');
 const { spawn } = require('child_process');
 const http = require('http');
 const path = require('path');
+const { launchBrowser } = require('./launch-helpers');
 
 const args = process.argv.slice(2);
 const hasFlag = (name) => args.includes(`--${name}`);
@@ -88,19 +88,8 @@ function waitForServer(url, timeoutMs = 15000) {
         }
 
         // -- Browser --
-        log('Launching Chrome with WebGPU...');
-        browser = await chromium.launch({
-            headless: !process.env.DISPLAY,
-            args: [
-                '--no-sandbox',
-                '--enable-unsafe-webgpu',
-                '--use-angle=vulkan',
-                '--enable-features=Vulkan,VulkanFromANGLE',
-                '--ozone-platform=x11',
-                '--disable-extensions',
-                '--mute-audio',
-            ],
-        });
+        log('Launching Chrome with WebGPU (headless=new + Vulkan)...');
+        browser = await launchBrowser();
         const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
 
         // -- Console capture --

@@ -374,9 +374,9 @@ bool CameraManager::SetCrowds(ObjVector<CamShotCrowd> &crowds) {
                 break;
             }
         }
-        if (curCrowd && cit != crowds.end()) {
-            curCrowd->mCrowdRotate = cit->mCrowdRotate;
+        if (cit != crowds.end()) {
             curCrowd->SetShowing(true);
+            curCrowd->mCrowdRotate = cit->mCrowdRotate;
             ret = true;
         } else {
             curCrowd->SetShowing(false);

@@ -503,8 +503,8 @@ const char *FileMakePathBuf(const char *root, const char *file, char *buffer) {
     }
     FileNormalizePath(buffer);
     bool curSlash = (*c == '/');
-    char *dirs[32];
-    const char **endDir = (const char **)&dirs[0];
+    const char *dirs[32];
+    const char **endDir = &dirs[0];
     char *p = strtok(c, "/");
     while (p != nullptr) {
         if (*p != '.')

@@ -11,9 +11,9 @@
  *     node native/web/tests/cdp-debugger-break.js --no-server
  */
 
-const { chromium } = require('playwright');
 const http = require('http');
 const path = require('path');
+const { launchBrowser } = require('./launch-helpers');
 
 const args = process.argv.slice(2);
 const hasFlag = (name) => args.includes(`--${name}`);
@@ -42,18 +42,7 @@ function log(msg) { console.log(`[cdp-break] ${msg}`); }
     try {
         // -- Launch browser with remote debugging --
         log('Launching Chrome with WebGPU + remote debugging...');
-        browser = await chromium.launch({
-            headless: !process.env.DISPLAY,
-            args: [
-                '--no-sandbox',
-                '--enable-unsafe-webgpu',
-                '--use-angle=vulkan',
-                '--enable-features=Vulkan,VulkanFromANGLE',
-                '--ozone-platform=x11',
-                '--disable-extensions',
-                '--mute-audio',
-            ],
-        });
+        browser = await launchBrowser();
 
         const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
 

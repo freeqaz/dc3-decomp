@@ -245,6 +245,13 @@ bool EnsureMeshUploaded(RndMesh* mesh) {
     int vertCount = (numVerts > 0) ? numVerts : numCompressedVerts;
     bool isCompressed = (numCompressedVerts > 0 && geomOwner->CompressedVerts());
 
+    // Skip MikkTSpace tangent generation on re-uploads (mesh was previously uploaded
+    // but invalidated by Sync). Dynamic meshes like HamRibbon re-sync every frame;
+    // recomputing MikkTSpace tangents each time is O(n²) in MergeVertsFast and causes
+    // multi-second hangs. Tangents only matter for normal-mapped materials, which
+    // dynamic meshes don't use.
+    bool isReupload = (it != sMeshGpuData.end());
+
     // Build index buffer first (needed for MikkTSpace tangent generation)
     int numIndices = numFaces * 3;
     int allocIndices = (numIndices + 1) & ~1; // round up to even for 4-byte alignment
@@ -267,9 +274,9 @@ bool EnsureMeshUploaded(RndMesh* mesh) {
                 geomOwner->CompressedVerts(), numCompressedVerts, verts, vertCount);
         } else {
             unpacked = VertexFormats::UnpackSkinnedVertices(*geomOwner, verts, vertCount);
-            // Compute tangents via MikkTSpace for uncompressed meshes
+            // Compute tangents via MikkTSpace for uncompressed meshes on first upload only.
             // (compressed meshes already have tangent data from the original Xbox vertex stream)
-            if (unpacked > 0) {
+            if (unpacked > 0 && !isReupload) {
                 ComputeMikkTangents(verts, indices, numFaces, unpacked, true);
             }
         }
@@ -300,8 +307,8 @@ bool EnsureMeshUploaded(RndMesh* mesh) {
                 geomOwner->CompressedVerts(), numCompressedVerts, verts, vertCount);
         } else {
             unpacked = VertexFormats::UnpackStaticVertices(*geomOwner, verts, vertCount);
-            // Compute tangents via MikkTSpace for uncompressed meshes
-            if (unpacked > 0) {
+            // Compute tangents via MikkTSpace for uncompressed meshes on first upload only.
+            if (unpacked > 0 && !isReupload) {
                 ComputeMikkTangents(verts, indices, numFaces, unpacked, false);
             }
         }

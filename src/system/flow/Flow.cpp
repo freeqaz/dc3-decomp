@@ -160,18 +160,18 @@ BinStream &operator<<(BinStream &bs, const Flow::DynamicPropertyEntry &entry) {
 }
 
 BinStreamRev &operator>>(BinStreamRev &d, Flow::DynamicPropertyEntry &entry) {
+    d.stream >> entry.mName;
+    d.stream >> (int &)entry.mType;
     BinStream &bs = d.stream;
-    bs >> entry.mName;
-    bs >> (int &)entry.mType;
     entry.mDefaultVal.Load(bs);
     bs >> entry.mHelp;
     bs >> entry.mObjectClass;
     if (d.rev > 1) {
-        d >> entry.mExposed;
-        entry.mSymbolList.Load(bs);
+        BinStreamRev &d2 = (d >> entry.mExposed);
+        entry.mSymbolList.Load(d2.stream);
     }
     if (d.rev > 5) {
-        bs >> entry.mObjectType;
+        d.stream >> entry.mObjectType;
     }
     return d;
 }
@@ -340,52 +340,28 @@ void Flow::PostLoad(BinStream &bs) {
                 bool loadEventProvider;
                 d >> loadEventProvider;
                 if (loadEventProvider) {
-                    ObjectDir *dir = Dir();
-                    if (dir) {
-                        if (dir->Loader()) {
-                            dir = dir->Loader()->GetDir();
-                        } else {
-                            dir = dir->Dir();
-                        }
-                    }
                     ObjPtr<Hmx::Object> eventProvider(this, 0);
-                    eventProvider = FlowNode::LoadObjectFromMainOrDir(bs, dir);
+                    eventProvider = FlowNode::LoadObjectFromMainOrDir(bs, Dir());
                 }
             } else {
-                ObjectDir *dir = Dir();
-                if (dir) {
-                    if (dir->Loader()) {
-                        dir = dir->Loader()->GetDir();
-                    } else {
-                        dir = dir->Dir();
-                    }
-                }
                 ObjPtr<Hmx::Object> eventProvider(this, 0);
-                eventProvider.Load(bs, true, dir);
+                eventProvider.Load(bs, true, 0);
             }
             std::list<Symbol> triggerEvents;
             std::list<Symbol> stopEvents;
             d >> triggerEvents;
             d >> stopEvents;
             if (triggerEvents.size() > 0 || stopEvents.size() > 0) {
-                MILO_NOTIFY("Flow with trigger events found, %s", PathName(this));
+                MILO_NOTIFY("Flow with trigger events found, removing: %s", PathName(this));
             }
             d >> mHardStop;
             if (oldRev > 0) {
-                ObjectDir *dir = Dir();
-                if (dir) {
-                    if (dir->Loader()) {
-                        dir = dir->Loader()->GetDir();
-                    } else {
-                        dir = dir->Dir();
-                    }
-                }
                 ObjList<FlowTrigger::PropTriggerDefn> triggerProperties(this);
                 ObjList<FlowTrigger::PropTriggerDefn> stopProperties(this);
                 d >> triggerProperties;
                 d >> stopProperties;
                 if (triggerProperties.size() > 0 || stopProperties.size() > 0) {
-                    MILO_NOTIFY("Flow with trigger events found, %s", PathName(this));
+                    MILO_NOTIFY("Flow with trigger events found, removing: %s", PathName(this));
                 }
                 stopProperties.clear();
                 triggerProperties.clear();
