@@ -94,8 +94,6 @@ protected:
     void *mEnumBuffer;                      // 0x38
     HANDLE mEnumHandle;                     // 0x3c
     XOVERLAPPED mOverlapped;               // 0x40
-    Symbol mOfferSymbol;                    // 0x5c
-    int mPurchaserID;                       // 0x60
 };
 
 class MultipleItemsPostPurchaseEnumJob : public MultipleItemsEnumJob {
@@ -103,6 +101,10 @@ public:
     MultipleItemsPostPurchaseEnumJob(Hmx::Object *, int, std::vector<u64> &, Symbol, unsigned int);
     virtual ~MultipleItemsPostPurchaseEnumJob();
     virtual void OnCompletion(Hmx::Object *);
+
+protected:
+    Symbol mOfferSymbol;                    // 0x5c
+    int mPurchaserID;                       // 0x60
 };
 
 DECLARE_MESSAGE(SingleItemEnumCompleteMsg, "single_item_enum_complete")

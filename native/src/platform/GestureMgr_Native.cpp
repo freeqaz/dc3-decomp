@@ -119,17 +119,12 @@ void GestureMgr_NativePoll(GestureMgr *mgr) {
         int numPersons = 0;
         sInternalPose->FillPersonData(persons, NativeSkeletonProvider::kMaxPersons, numPersons);
 
+        // Use a temporary NativeSkeletonProvider to access FillSkeleton
+        // (which has friend access to Skeleton's protected members)
+        static NativeSkeletonProvider sFillHelper;
         for (int i = 0; i < NUM_SKELETONS; i++) {
-            Skeleton &skel = mgr->GetSkeleton(i);
             if (i < numPersons && persons[i].valid) {
-                // Fill skeleton from internal pipeline results
-                for (int j = 0; j < kNumJoints; j++) {
-                    skel.mTrackedJoints[j].mJointPos[kCoordCamera] = persons[i].joints[j];
-                    skel.mTrackedJoints[j].mSmoothedPos = persons[i].joints[j];
-                    skel.mTrackedJoints[j].mJointConf = persons[i].confidence[j];
-                }
-                skel.mTracking = kSkeletonTracked;
-                skel.mTrackingID = persons[i].trackId;
+                sFillHelper.FillSkeleton(mgr->GetSkeleton(i), persons[i]);
             }
         }
         hasInput = (numPersons > 0);

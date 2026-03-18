@@ -295,11 +295,11 @@ void Debug::Init() {
 }
 
 const char *GetExpCode(int code) {
-    if (code <= 0xC000008D) {
-        if (code != 0xC000008D) {
-            if (code <= 0xC0000006) {
-                if (code != 0xC0000006) {
-                    int temp = code - 0x80000001;
+    if (code <= (int)0xC000008D) {
+        if (code != (int)0xC000008D) {
+            if (code <= (int)0xC0000006) {
+                if (code != (int)0xC0000006) {
+                    int temp = code - (int)0x80000001;
                     if (temp != 0) {
                         switch ((unsigned int)temp) {
                         case 0x40000004:
@@ -320,7 +320,7 @@ const char *GetExpCode(int code) {
                     return "EXCEPTION_IN_PAGE_ERROR";
                 }
             } else {
-                int temp = code - 0xC0000008;
+                int temp = code - (int)0xC0000008;
                 if (temp == 0) {
                     return "EXCEPTION_INVALID_HANDLE";
                 } else {
@@ -343,25 +343,38 @@ const char *GetExpCode(int code) {
         }
     } else {
         switch (code) {
-        default: {
-            int temp = code + 0x3FFFFF72;
-            if ((unsigned int)temp <= 8U) {
-                if (temp == 0) {
-                    return "EXCEPTION_FLT_DIVIDE_BY_ZERO";
-                }
-                return "EXCEPTION_PRIV_INSTRUCTION";
-            }
-            extern const char *merged_82610090(const char *, volatile int *);
-            auto _tmp0 = merged_82610090("Unhandled Exception", &code);
-            return _tmp0;
-        }
         case (int)0xC00000FD:
             return "EXCEPTION_STACK_OVERFLOW";
         case (int)0xC000013A:
             return "CONTROL_C_EXIT";
+        default: {
+            int temp = code + 0x3FFFFF72;
+            if ((unsigned int)temp <= 8U) {
+                switch (temp) {
+                case 0:
+                    return "EXCEPTION_FLT_DIVIDE_BY_ZERO";
+                case 1:
+                    return "EXCEPTION_FLT_INEXACT_RESULT";
+                case 2:
+                    return "EXCEPTION_FLT_INVALID_OPERATION";
+                case 3:
+                    return "EXCEPTION_FLT_OVERFLOW";
+                case 4:
+                    return "EXCEPTION_FLT_STACK_CHECK";
+                case 5:
+                    return "EXCEPTION_FLT_UNDERFLOW";
+                case 6:
+                    return "EXCEPTION_INT_DIVIDE_BY_ZERO";
+                case 7:
+                    return "EXCEPTION_INT_OVERFLOW";
+                default:
+                    return "EXCEPTION_PRIV_INSTRUCTION";
+                }
+            }
+            return MakeString("Unhandled Exception %d", code);
+        }
         }
     }
-    return "Unhandled Exception";
 }
 
 void Debug::Modal(ModalType &type, const char *msg, void *addr) {

@@ -206,6 +206,18 @@ ObjPtrVec<T1, T2>::Node::Node(const Node &n)
 
 template <class T1, class T2>
 ObjPtrVec<T1, T2>::~ObjPtrVec() {
+#ifdef HX_NATIVE
+    // If this ObjPtrVec registered for deferred purge but is being destroyed
+    // before the outermost ReplaceList exits (e.g. cascading delete via
+    // ObjDirPtr::operator= during a Replace walk), remove its entries from
+    // gDeferredPurges to prevent calling PurgeNulls on freed memory.
+    if (gSuppressRefErase && !gDeferredPurges.empty()) {
+        gDeferredPurges.erase(
+            std::remove_if(gDeferredPurges.begin(), gDeferredPurges.end(),
+                [this](const DeferredPurge &p) { return p.vec == this; }),
+            gDeferredPurges.end());
+    }
+#endif
     mNodes.clear();
 }
 

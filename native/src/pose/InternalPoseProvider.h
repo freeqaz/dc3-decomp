@@ -13,7 +13,7 @@
 #include "pose/PoseEstimator.h"
 #include "pose/PoseTracker.h"
 #include "pose/CameraCapture.h"
-#include "Skeleton_Native.h"
+#include "platform/Skeleton_Native.h"
 #include <thread>
 #include <mutex>
 #include <string>

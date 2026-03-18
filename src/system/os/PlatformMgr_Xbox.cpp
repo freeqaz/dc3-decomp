@@ -560,7 +560,6 @@ MultipleItemsEnumJob::MultipleItemsEnumJob(Hmx::Object *obj, int userIndex, std:
     mEnumBuffer = 0;
     mEnumHandle = 0;
     memset(&mOverlapped, 0, sizeof(mOverlapped));
-    mPurchaserID = 0;
 }
 
 MultipleItemsEnumJob::~MultipleItemsEnumJob() {
@@ -690,9 +689,7 @@ void MultipleItemsEnumJob::OnCompletion(Hmx::Object *obj) {
 
 MultipleItemsPostPurchaseEnumJob::MultipleItemsPostPurchaseEnumJob(
     Hmx::Object *obj, int userIndex, std::vector<u64> &itemIDs, Symbol offerSym, unsigned int purchaserID)
-    : MultipleItemsEnumJob(obj, userIndex, itemIDs) {
-    mOfferSymbol = offerSym;
-    mPurchaserID = purchaserID;
+    : MultipleItemsEnumJob(obj, userIndex, itemIDs), mOfferSymbol(offerSym), mPurchaserID(purchaserID) {
 }
 
 MultipleItemsPostPurchaseEnumJob::~MultipleItemsPostPurchaseEnumJob() {}

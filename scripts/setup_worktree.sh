@@ -3,17 +3,27 @@
 # Sets up a git worktree with a fully working build system.
 #
 # Usage:
-#   scripts/setup_worktree.sh [path] [branch-name]
+#   scripts/setup_worktree.sh [path] [branch-name] [base-ref]
+#
+# Arguments:
+#   path       - Where to create the worktree (default: /tmp/claude/worktree-<timestamp>)
+#   branch     - Branch name for the worktree (default: wt-<dirname>)
+#   base-ref   - Git ref to branch from (default: current HEAD, i.e. whatever is checked out)
 #
 # Examples:
 #   scripts/setup_worktree.sh /tmp/claude/my-feature my-feature
-#   scripts/setup_worktree.sh                         # auto-generates path & branch
+#   scripts/setup_worktree.sh /tmp/claude/test test-branch dev
+#   scripts/setup_worktree.sh                         # auto-generates path & branch from HEAD
 #
 # What this does:
-#   1. Creates a git worktree from HEAD
+#   1. Creates a git worktree from the current HEAD (or specified ref)
 #   2. Symlinks clangd config, orig/, and bin/objdiff-cli
 #   3. Re-runs configure.py with absolute tool paths so build.ninja works
 #   4. Symlinks shared build artifacts (compilers, target objects, etc.)
+#
+# IMPORTANT: The worktree branches from the currently checked-out commit by
+# default, NOT from 'main'. This ensures worktrees have the latest code from
+# whatever branch you're working on.
 #
 # After setup, you can build normally from the worktree:
 #   cd /tmp/claude/my-feature && ninja build/373307D9/src/system/flow/FlowCommand.obj
@@ -26,6 +36,14 @@ set -euo pipefail
 MAIN_REPO="$(cd "$(dirname "$0")/.." && pwd)"
 WORKTREE_PATH="${1:-/tmp/claude/worktree-$(date +%s)}"
 BRANCH="${2:-wt-$(basename "$WORKTREE_PATH")}"
+BASE_REF="${3:-HEAD}"
+
+# Resolve the base ref to a concrete commit for clarity
+BASE_COMMIT="$(git -C "$MAIN_REPO" rev-parse --short "$BASE_REF" 2>/dev/null)" || {
+    echo "ERROR: Cannot resolve ref '$BASE_REF'" >&2
+    exit 1
+}
+BASE_BRANCH="$(git -C "$MAIN_REPO" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "detached")"
 
 # Resolve tool paths (relative to main repo's parent)
 TOOL_DIR="$(cd "$MAIN_REPO/.." && pwd)"
@@ -41,8 +59,10 @@ for tool in "$DTK_PATH" "$OBJDIFF_PATH" "$WIBO_PATH"; do
     fi
 done
 
-echo "==> Creating worktree at $WORKTREE_PATH (branch: $BRANCH)"
-git -C "$MAIN_REPO" worktree add "$WORKTREE_PATH" -b "$BRANCH" HEAD
+echo "==> Creating worktree at $WORKTREE_PATH"
+echo "    Branch: $BRANCH"
+echo "    Base:   $BASE_REF ($BASE_COMMIT, on $BASE_BRANCH)"
+git -C "$MAIN_REPO" worktree add "$WORKTREE_PATH" -b "$BRANCH" "$BASE_REF"
 
 echo "==> Symlinking clangd config"
 ln -sf "$MAIN_REPO/compile_commands.json" "$WORKTREE_PATH/"
@@ -104,7 +124,7 @@ echo "==> Running configure.py with absolute tool paths"
 
 echo ""
 echo "Worktree ready at: $WORKTREE_PATH"
-echo "Branch: $BRANCH"
+echo "Branch: $BRANCH (from $BASE_COMMIT on $BASE_BRANCH)"
 echo ""
 echo "Usage with MCP orchestrator:"
 echo "  run_objdiff(symbol, project_dir=\"$WORKTREE_PATH\")"

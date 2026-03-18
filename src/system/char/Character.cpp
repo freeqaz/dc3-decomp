@@ -19,6 +19,7 @@
 #include "rndobj/Anim.h"
 #include "rndobj/Cam.h"
 #include "rndobj/Rnd.h"
+#include "rndobj/Rnd_NG.h"
 #include "rndobj/ShadowMap.h"
 #include "rndobj/Dir.h"
 #include "rndobj/Draw.h"
@@ -347,13 +348,14 @@ void Character::UpdateSphere() {
 
 void Character::DrawShadow(const Transform &xfm, float planeD) {
     if (mShowing && !mShadow.empty()) {
+        Vector3 worldPos = WorldXfm().v;
 
-        Transform tf40;
-        Transpose(xfm, tf40);
+        Plane pl70;
+        pl70.Set(0, 0, 1, -(worldPos.z + planeD));
 
         MILO_ASSERT(GetGfxMode() == kOldGfx, 0x2E7);
-        Plane pl70;
-        pl70.Set(0, 0, 1, planeD);
+        Transform tf40;
+        Transpose(xfm, tf40);
         Plane plb0;
         Multiply(pl70, tf40, plb0);
 
@@ -779,11 +781,14 @@ DataNode Character::OnGetCurrentInterests(DataArray *da) {
 
 void Character::DrawShowing() {
     START_AUTO_TIMER("char_draw");
-    if (mTest)
-        mTest->Draw();
+    if (mDebugDrawInterestObjects) {
+        CharEyes *eyes = GetEyes();
+        if (eyes)
+            eyes->Highlight();
+    }
+    float screenSize = ComputeScreenSize(RndCam::Current());
     int lod;
     if (mForceLod < 0) {
-        float screenSize = ComputeScreenSize(RndCam::Current());
         for (lod = 0; (int)lod < (int)mLods.size() - 1; lod++) {
             float hysteresis;
             if (lod < mLastLod)
@@ -796,15 +801,15 @@ void Character::DrawShowing() {
     } else {
         lod = Clamp<int>(0, mLods.size() - 1, mForceLod);
     }
-    bool doSelfShadow = false;
-    if (mSelfShadow && TheRnd.GetDrawMode() == 0 && lod <= 1 && (mDrawMode & 1)) {
-        doSelfShadow = true;
+    bool doSelfShadow = mSelfShadow && TheRnd.GetDrawMode() == 0 && lod <= 1 && (mDrawMode & 1);
+    if (doSelfShadow) {
+        if (GetGfxMode() == kNewGfx) {
+            if (TheNgRnd.Offscreen())
+                doSelfShadow = false;
+        } else {
+            doSelfShadow = false;
+        }
     }
-    #ifdef HX_NATIVE
-    // Native shadow-map prep is not brought up yet. Keep gameplay rendering
-    // on the main path until RndShadowMap parity work is ready.
-    doSelfShadow = false;
-    #endif
     if (doSelfShadow) {
         int savedForceLod = mForceLod;
         mForceLod = (LODType)lod;
@@ -816,21 +821,27 @@ void Character::DrawShowing() {
         RndShadowMap::EndShadow();
 
     if (TheLoadMgr.EditMode() && TheRnd.GetDrawMode() == 0) {
-        if (mTest)
-            mTest->Draw();
+        mTest->Draw();
+    }
 
-        static DataNode* sShowName = nullptr;
-        if (!sShowName) {
-            sShowName = &DataVariable(Symbol("character.show_name"));
-        }
+    static DataNode *sShowName = &DataVariable(Symbol("character.show_name"));
 
-        if (sShowName && sShowName->Int()) {
-            static Symbol sCrowd("crowd");
-            if (Type() != sCrowd) {
-                RndTransformable* bone = CharUtlFindBoneTrans("bone_head", this);
-                if (bone) {
-                    // Debug drawing of character name above head
-                }
+    if (sShowName->Int()) {
+        static Symbol sCrowd("crowd");
+        if (Type() != sCrowd) {
+            RndTransformable *bone = CharUtlFindBoneTrans("bone_head", this);
+            if (bone) {
+                const Transform &xfm = bone->WorldXfm();
+                Vector3 worldPos = xfm.v;
+                worldPos.z += 24.0f;
+                Hmx::Color white(1.0f, 1.0f, 1.0f, 1.0f);
+                Vector2 screenPos;
+                RndCam::Current()->WorldToScreen(worldPos, screenPos);
+                screenPos.x *= TheRnd.Width();
+                screenPos.y *= TheRnd.Height();
+                const Vector2 &extent = TheRnd.DrawString(Name(), screenPos, white, false);
+                screenPos.x = screenPos.x - (extent.x - screenPos.x) * 0.5f;
+                TheRnd.DrawString(Name(), screenPos, white, true);
             }
         }
     }

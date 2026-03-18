@@ -475,9 +475,9 @@ void NgSpotlightDrawer::SetupFogDensityState() {
     TheShaderMgr.SetVConstant((VShaderConstant)4, viewProj);
 
     float fogDensity;
-    float nearPlane = mSpotCam->NearPlane();
-    if (nearPlane > 0.0f) {
-        fogDensity = 1.0f / nearPlane;
+    float farPlane = mSpotCam->FarPlane();
+    if (farPlane > 0.0f) {
+        fogDensity = 1.0f / farPlane;
     } else {
         fogDensity = 0.0f;
     }

@@ -76,6 +76,8 @@ private:
     static DataNode OnGlitchFindLeaves(DataArray *);
     static DataNode OnGlitchFindPoke(DataArray *);
 
+    friend DataNode GlitchFindScriptImpl(DataArray *, int);
+
 protected:
     int mFrameCount; // 0x0
     int mGlitchCount; // 0x4

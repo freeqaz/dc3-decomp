@@ -771,8 +771,8 @@ void WorldCrowd::Reset3DCrowd() {
 
 void WorldCrowd::SetFullness(float flatFullness, float charFullness) {
     START_AUTO_TIMER("crowd_set");
-    mFlatFullness = flatFullness;
     mCharFullness = charFullness;
+    mFlatFullness = flatFullness;
     Delete3DCrowdHandles();
     FOREACH (it, mCharacters) {
         RndMultiMesh *multiMesh = it->mMMesh;
@@ -782,7 +782,7 @@ void WorldCrowd::SetFullness(float flatFullness, float charFullness) {
             int instanceCount = (int)instances.size();
             int backupCount = (int)backup.size();
             int totalCount = instanceCount + backupCount;
-            int targetInstances = (int)((float)totalCount * charFullness);
+            int targetInstances = (int)((float)totalCount * mFlatFullness);
             if (instanceCount < targetInstances) {
                 // move from backup to instances
                 int toMove = targetInstances - instanceCount;
@@ -804,7 +804,7 @@ void WorldCrowd::SetFullness(float flatFullness, float charFullness) {
             }
             // handle m3DChars (visible 3D chars)
             int totalChars3D = (int)it->m3DChars.size() + (int)it->m3DCharsCreated.size();
-            int targetChars3D = (int)((float)totalChars3D * flatFullness);
+            int targetChars3D = (int)((float)totalChars3D * charFullness);
 #ifdef HX_NATIVE
             // When mForce3DCrowd is true, MultiMesh instances have been
             // transferred to m3DChars and the instance list is empty. Don't

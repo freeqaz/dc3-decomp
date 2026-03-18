@@ -355,6 +355,8 @@ HamMove::HamMove()
 
 HamMove::~HamMove() {}
 
+const char *HamMove::DisplayName() const { return mDisplayName ? mDisplayName : "NULL"; }
+
 BEGIN_HANDLERS(HamMove)
     HANDLE_EXPR(display_name, DisplayName())
     HANDLE_EXPR(is_rest, IsRest())

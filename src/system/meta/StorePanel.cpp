@@ -342,28 +342,32 @@ void StorePanel::HandleNetCacheMgrFailure() {
 }
 
 void StorePanel::HandleNetCacheLoaderFailure(int failType) {
+    MILO_ASSERT((0) <= (failType) && (failType) < (kNCMFT_Max), 0xe5);
 
-    MILO_ASSERT((0) <= (failType) && (failType) < (4), 0xe5);
-    StoreError err = kStoreErrorSuccess;
+    if (failType == kNCMFT_Unknown) {
+        failType = TheNetCacheMgr->GetFailType();
+    }
 
+    StoreError err;
     switch (failType) {
-    case 0:
-        break;
-    case 1: {
-        void (*func)(void *) = (void (*)(void *))*(void **)this;
-        func(this);
-        if (ThePlatformMgr.IsSignedIntoLive(0) == 0) {
-            err = kStoreErrorCacheNoSpace;
-        }
+    case kNCMFT_StoreServer: {
+        Profile *profile = StoreProfile();
+        bool signedIn = ThePlatformMgr.IsSignedIntoLive(profile->GetPadNum());
+        err = (StoreError)((!signedIn ^ 1) + kStoreErrorCacheNoSpace);
         break;
     }
-    case 2:
+    case kNCMFT_NoSpace:
+        return;
+    case kNCMFT_StorageDeviceMissing:
+        err = kStoreErrorNoMetadata;
         break;
-    case 3:
+    default:
+        MILO_NOTIFY("Unknown failure %d in a net cache loader!", failType);
+        err = kStoreErrorCacheRemoved;
         break;
     }
 
-    if (ThePlatformMgr.IsEthernetCableConnected() == 0) {
+    if (!ThePlatformMgr.IsEthernetCableConnected()) {
         err = kStoreErrorNoMetadata;
     }
 

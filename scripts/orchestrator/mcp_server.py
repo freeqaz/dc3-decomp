@@ -367,6 +367,11 @@ class DecompMCPServer:
                                 "type": "string",
                                 "description": "Unit name to disambiguate when a symbol exists in multiple units (e.g. 'default/link_glue').",
                             },
+                            "diff_mode": {
+                                "type": "string",
+                                "enum": ["normalized", "raw"],
+                                "description": "Diff scoring mode. 'normalized' (default) ignores relocation address differences (functionRelocDiffs=none). 'raw' includes relocation diffs so you can inspect which relocations differ.",
+                            },
                         },
                         "required": ["symbol", "mode", "project_dir"],
                     },
@@ -1674,6 +1679,7 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
         project_dir_arg = args.get("project_dir", None)
         baseline_json = args.get("baseline_json", None)
         unit = args.get("unit", None)
+        diff_mode = args.get("diff_mode", "normalized")  # "normalized" or "raw"
 
         if not symbol:
             return [TextContent(type="text", text="Error: No symbol provided.")]
@@ -1707,6 +1713,10 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
         # objdiff-cli is always in the main repo bin/
         objdiff_cli = self.project_root / "bin" / "objdiff-cli"
 
+        # In "normalized" mode (default), ignore relocation address noise.
+        # In "raw" mode, include relocation diffs so they can be inspected.
+        reloc_config = ["-c", "functionRelocDiffs=none"] if diff_mode != "raw" else []
+
         try:
             # ── save_baseline mode ──
             if mode == "save_baseline":
@@ -1719,7 +1729,7 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
                     "-p", str(project_dir),
                     symbol,
                     "--include-instructions", "--build", "--incremental",
-                    "-c", "functionRelocDiffs=none",
+                    *reloc_config,
                     "-f", "json",
                 ]
                 if unit:
@@ -1761,7 +1771,7 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
                     "-p", str(project_dir),
                     symbol,
                     "--include-instructions", "--build", "--incremental",
-                    "-c", "functionRelocDiffs=none",
+                    *reloc_config,
                     "-f", "json",
                 ]
                 if unit:
@@ -1814,7 +1824,7 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
                     "-p", str(project_dir),
                     symbol,
                     "--include-instructions", "--build", "--incremental",
-                    "-c", "functionRelocDiffs=none",
+                    *reloc_config,
                     "-f", "json",
                 ]
                 if unit:
@@ -1869,7 +1879,10 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
                 # Format as compact markdown table
                 from analysis.diff_inspect import fmt_instr as _fmt_instr, diff_annotation as _diff_annotation
 
-                header = f"## Mismatched Instructions ({len(mismatches)} of {total} total)\n"
+                raw_pct = data.get("raw_match_percent", data.get("fuzzy_match_percent", "?"))
+                header = f"## Mismatched Instructions ({len(mismatches)} of {total} total) — {raw_pct}% raw match\n"
+                if diff_mode == "raw":
+                    header += "*Raw mode: relocation diffs included*\n"
                 if truncated:
                     header += f"*Showing {MAX_MISMATCHES} of {len(mismatches)} mismatches*\n"
 
@@ -1885,6 +1898,18 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
                     t_str = _fmt_instr(t).strip()
                     b_str = _fmt_instr(b).strip()
                     note = _diff_annotation(ins).strip() if mt == "diff_arg" else ""
+                    # In raw mode, extract relocation symbol info for diff_arg
+                    if diff_mode == "raw" and mt == "diff_arg" and not note:
+                        t_syms = [a["value"] for a in (t or {}).get("typed_args", []) if a.get("type") == "Symbol"]
+                        b_syms = [a["value"] for a in (b or {}).get("typed_args", []) if a.get("type") == "Symbol"]
+                        if t_syms and b_syms:
+                            if t_syms == b_syms:
+                                # Same symbol, different address — pure addr_reloc
+                                note = f"addr_reloc: `{t_syms[0][:40]}`"
+                            else:
+                                note = f"sym_diff: `{t_syms[0][:30]}` vs `{b_syms[0][:30]}`"
+                        elif t_syms or b_syms:
+                            note = f"reloc: T={'`'+t_syms[0][:30]+'`' if t_syms else 'none'} B={'`'+b_syms[0][:30]+'`' if b_syms else 'none'}"
                     lines.append(f"| {idx} | {mt} | `{t_str}` | `{b_str}` | {note} |")
 
                 if truncated:

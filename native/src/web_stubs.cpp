@@ -203,8 +203,7 @@ void SingleItemEnumJob::OnCompletion(Hmx::Object *) {}
 MultipleItemsEnumJob::MultipleItemsEnumJob(
     Hmx::Object *obj, int userIndex, std::vector<u64> &itemIDs
 ) : Job(), mObject(obj), mUserIndex(userIndex), mItemIDs(itemIDs), mPurchased(), mStatus(0),
-    mSuccess(false), mEnumBuffer(nullptr), mEnumHandle(0), mOverlapped(), mOfferSymbol(),
-    mPurchaserID(0) {
+    mSuccess(false), mEnumBuffer(nullptr), mEnumHandle(0), mOverlapped() {
     std::memset(&mOverlapped, 0, sizeof(mOverlapped));
 }
 

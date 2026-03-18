@@ -41,8 +41,9 @@ public:
     // Find person by BOTSORT track ID, returns -1 if not found
     int FindByTrackId(int trackId) const;
 
-    // Fill a Skeleton object from person data
+    // Fill a Skeleton object from person data (by index or direct PersonData)
     void FillSkeleton(Skeleton &skel, int personIdx) const;
+    void FillSkeleton(Skeleton &skel, const PersonData &person) const;
 
     // Fill a skeleton with a neutral standing pose (hands at sides).
     // Used as fallback when no pose server is connected.

@@ -344,9 +344,10 @@ void NativeSkeletonProvider::MapCOCOToDC3(const float cocoKpts[][3], PersonData 
 void NativeSkeletonProvider::FillSkeleton(Skeleton &skel, int personIdx) const {
     if (personIdx < 0 || personIdx >= mNumPersons || !mPersons[personIdx].valid)
         return;
+    FillSkeleton(skel, mPersons[personIdx]);
+}
 
-    const PersonData &person = mPersons[personIdx];
-
+void NativeSkeletonProvider::FillSkeleton(Skeleton &skel, const PersonData &person) const {
     // Access protected members directly via friend declaration (LP64-safe)
     for (int j = 0; j < kNumJoints; j++) {
         skel.mTrackedJoints[j].mJointPos[kCoordCamera] = person.joints[j];

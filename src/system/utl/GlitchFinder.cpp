@@ -283,8 +283,40 @@ AutoGlitchPoker::~AutoGlitchPoker() {
     }
 }
 
-// TODO: implement
+DataNode GlitchFindScriptImpl(DataArray *arr, int iii) {
+    unsigned int cycles = __mftb();
+    DataNode result;
+    if (arr->Node(2).NotNull()) {
+        switch (iii) {
+        case 3:
+            TheGlitchFinder.PokeStart(arr->Str(1), cycles, -1.0f, 0.0f, 0);
+            break;
+        case 4:
+            TheGlitchFinder.PokeStart(arr->Str(1), cycles, arr->Float(3), 0.0f, 0);
+            break;
+        case 5:
+            TheGlitchFinder.PokeStart(arr->Str(1), cycles, arr->Float(3), arr->Float(4), 0);
+            break;
+        default:
+            MILO_FAIL("improper use of internal glitch finder code");
+            break;
+        }
+        for (int i = iii; i < arr->Size(); i++) {
+            result = arr->Command(i)->Execute();
+        }
+        unsigned int now_cycles = __mftb();
+        TheGlitchFinder.PokeEnd(now_cycles);
+        return DataNode(result);
+    } else {
+        unsigned int now_cycles = __mftb();
+        TheGlitchFinder.mOverheadCycles = TheGlitchFinder.mOverheadCycles - cycles + now_cycles;
+        for (int i = iii; i < arr->Size(); i++) {
+            result = arr->Command(i)->Execute();
+        }
+        return DataNode(result);
+    }
+}
+
 #ifdef HX_NATIVE
 void GlitchFinder::CheckDump() {}
-DataNode GlitchFindScriptImpl(DataArray *, int) { return DataNode(0); }
 #endif
