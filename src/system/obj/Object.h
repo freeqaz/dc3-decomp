@@ -208,7 +208,19 @@ public:
     ObjOwnerPtr(const ObjOwnerPtr &o);
     virtual ~ObjOwnerPtr();
     virtual Hmx::Object *RefOwner() const;
-    virtual void Replace(Hmx::Object *obj) { mOwner->Replace(this, obj); }
+    virtual void Replace(Hmx::Object *obj) {
+#ifdef HX_NATIVE
+        // If the owner doesn't handle the ref, force-update to prevent
+        // stale mObject after the target is destroyed. On Xbox, the owner
+        // always handles refs through sinks, but on native, cleanup during
+        // cascading destruction can miss these.
+        if (!mOwner->Replace(this, obj)) {
+            ObjRefConcrete<T>::SetObjConcrete(obj ? dynamic_cast<T *>(obj) : nullptr);
+        }
+#else
+        mOwner->Replace(this, obj);
+#endif
+    }
     void operator=(T *obj) { SetObjConcrete(obj); }
     T *Ptr() const { return mObject; }
 };

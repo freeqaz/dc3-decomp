@@ -279,7 +279,7 @@ void MemHeap::LRUFit(int size, int align, FreeBlockInfo &blockinfo) {
         intptr_t start = ((intptr_t)block >> 2) + 1;
         intptr_t pad = ((((uintptr_t)(1 << align) + start) - 1) >> align) << align;
         pad = pad - start;
-        if (pad + size <= (int)block->mSizeWords && ts < bestTime) {
+        if ((int)block->mSizeWords >= pad + size && ts < bestTime) {
             blockinfo.mSizeWords = block->mSizeWords;
             blockinfo.mPadWords = pad;
             blockinfo.mBlock = block;

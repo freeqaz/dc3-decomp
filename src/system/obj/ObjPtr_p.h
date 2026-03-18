@@ -32,18 +32,7 @@ __forceinline ObjRefConcrete<T1, T2>::ObjRefConcrete(const ObjRefConcrete &o)
 template <class T1, class T2>
 ObjRefConcrete<T1, T2>::~ObjRefConcrete() {
     if (mObject) {
-#ifdef HX_NATIVE
-        // During cascading ~ObjectDir teardown, mObject may point to an
-        // already-freed object (destroyed earlier in the DeleteObjects loop).
-        // Skip Release to avoid dereferencing freed memory.
-        if (ObjectDir::InDeleteObjects()) {
-            mObject = nullptr;
-        } else {
-            mObject->Release(this);
-        }
-#else
         mObject->Release(this);
-#endif
     }
 }
 

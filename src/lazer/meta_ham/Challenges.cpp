@@ -466,7 +466,7 @@ bool Challenges::GetBeatenChallengeXPs(
                 if (mPlayerChallenges[i].size() == 0)
                     return false;
                 for (int j = 0; j < mPlayerChallenges[i].size(); j++) {
-                    if (score > mPlayerChallenges[i][j].mScore) {
+                    if ((unsigned int)score > (unsigned int)mPlayerChallenges[i][j].mScore) {
                         int xp = CalculateChallengeXp(
                             mPlayerChallenges[i][j].mScore, mPlayerChallenges[i][j].mDiff
                         );
