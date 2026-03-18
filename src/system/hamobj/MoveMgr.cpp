@@ -521,12 +521,11 @@ void MoveMgr::UnRegisterSongLayout(SongLayout *sl) {
 
 const std::pair<const MoveVariant *, const MoveVariant *> *
 MoveMgr::GetRoutineMeasure(int x, int y) const {
-    const std::vector<std::pair<const MoveVariant *, const MoveVariant *> > &vec =
-        mRoutineMeasures[(int)mRoutineMeasures[x].size() - x];
-    if (vec.size() <= y) {
+    int idx = mRoutineMeasures[x].size() != 0 ? x : 0;
+    if (mRoutineMeasures[idx].size() <= y) {
         return 0;
     }
-    return &vec[y];
+    return &mRoutineMeasures[idx][y];
 }
 
 CategoryData MoveMgr::GetCategoryByName(Symbol name) {

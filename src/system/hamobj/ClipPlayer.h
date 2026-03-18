@@ -35,7 +35,11 @@ protected:
     CharClip *GetTransitionBefore(Key<Symbol> *);
     CharClip *GetPrevRoutineTransition(int);
     CharClip *GetRoutineTransition(const char *, Key<Symbol> *);
+#ifdef HX_NATIVE
+    bool GetRoutineCrossoverClips(float, const char *, CharClip **, CharClip **);
+#else
     void GetRoutineCrossoverClips(float, const char *, CharClip **, CharClip **);
+#endif
     bool PushRoutineBuilderClip(int, HamDriver::LayerArray *);
     bool GetClipRange(const char *, const char *, float, float &, float &, float &);
     void PushClip(int, HamDriver::LayerArray *);

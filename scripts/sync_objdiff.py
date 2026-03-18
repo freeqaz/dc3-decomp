@@ -50,13 +50,20 @@ SKIP_UNITS = {
 SKIP_UNIT_PREFIXES = [
     "default/lib/",
     "default/system/oggvorbis/",
+    "default/system/net/json-c/",
+    "default/system/synth_xbox/soundtouch/",
+    "default/system/zlib/",
+    "default/system/synth/tomcrypt/",
 ]
+SKIP_UNITS_EXTRA = {
+    "default/system/synth/filterdesign",  # C-style DSP filter design library
+}
 
 
 def _is_skippable_stub(symbol: str, unit: str) -> bool:
     """Return True if this base_size=0 function is expected boilerplate."""
     # Platform / third-party / glue units
-    if unit in SKIP_UNITS:
+    if unit in SKIP_UNITS or unit in SKIP_UNITS_EXTRA:
         return True
     for prefix in SKIP_UNIT_PREFIXES:
         if unit.startswith(prefix):
@@ -89,6 +96,9 @@ def _is_skippable_stub(symbol: str, unit: str) -> bool:
     if "exception@std@@" in symbol:
         return True
     if "?_Copy_str@" in symbol:
+        return True
+    # Third-party SDK symbols that land in various TUs via COMDAT
+    if "NUISPEECH" in symbol:
         return True
     return False
 
@@ -147,6 +157,7 @@ class FunctionResult:
     detected_patterns: list[str] | None = None
     primary_pattern: str | None = None
     verdict_classification: str | None = None
+    unit: str | None = None
     error: str | None = None
 
 
@@ -265,6 +276,7 @@ def _run_single_batch(functions: list[tuple[int, str]], project_dir: str) -> lis
         db_id, original_symbol = info
 
         result = FunctionResult(db_id=db_id, symbol=original_symbol)
+        result.unit = data.get("unit", "")
 
         if "error" in data:
             result.error = data["error"]
@@ -276,7 +288,7 @@ def _run_single_batch(functions: list[tuple[int, str]], project_dir: str) -> lis
         result.demangled = data.get("demangled")
 
         if data.get("base_size", 0) == 0:
-            if _is_skippable_stub(original_symbol, data.get("unit", "")):
+            if _is_skippable_stub(original_symbol, result.unit):
                 result.error = "skipped"
             else:
                 result.error = "unimplemented"
@@ -484,6 +496,16 @@ def main():
         "demoted_at_limit": 0,
         "patterns_set": 0,
     }
+    # Track unimplemented functions for breakdown table
+    unimplemented_by_unit: dict[str, list[str]] = {}  # unit -> [demangled or symbol]
+    # Track partial matches by percentage bucket for work-remaining table
+    # bucket -> unit -> [(pct, demangled or symbol)]
+    partial_by_bucket: dict[str, dict[str, list[tuple[float, str]]]] = {
+        "99-100": {},   # 99.0 <= pct < 100.0
+        "95-99": {},    # 95.0 <= pct < 99.0
+        "80-95": {},    # 80.0 <= pct < 95.0
+        "<80": {},      # 0 <= pct < 80.0
+    }
 
     # Unfixable patterns that prevent reaching 100%
     UNFIXABLE_PATTERNS = {
@@ -522,6 +544,9 @@ def main():
                 stats["comdat_elsewhere"] = stats.get("comdat_elsewhere", 0) + 1
             else:
                 stats["unimplemented"] += 1
+                unit_key = (r.unit or "unknown").removeprefix("default/")
+                name = r.demangled or r.symbol
+                unimplemented_by_unit.setdefault(unit_key, []).append(name)
             if not args.dry_run:
                 stub_updates.append(r.db_id)
             continue
@@ -530,6 +555,20 @@ def main():
             continue
 
         stats["matched"] += 1
+
+        # Collect partial matches into buckets
+        if r.match_percent is not None and r.match_percent < 100.0:
+            if r.match_percent >= 99.0:
+                bucket = "99-100"
+            elif r.match_percent >= 95.0:
+                bucket = "95-99"
+            elif r.match_percent >= 80.0:
+                bucket = "80-95"
+            else:
+                bucket = "<80"
+            unit_key = (r.unit or "unknown").removeprefix("default/")
+            name = r.demangled or r.symbol
+            partial_by_bucket[bucket].setdefault(unit_key, []).append((r.match_percent, name))
 
         # Clear stale is_stub flag if function now has base code
         meta = function_meta.get(r.db_id, {})
@@ -770,6 +809,81 @@ def main():
         count = stats.get(f"{key}_flagged", 0)
         if count > 0:
             print(f"  {label + ':':24s}{count}")
+
+    # Print unimplemented breakdown by unit
+    if unimplemented_by_unit:
+        _CATEGORY_MAP = [
+            ("system/os/",          "Platform"),
+            ("system/rnddx9/",      "Rendering"),
+            ("system/synth_xbox/",  "Audio"),
+            ("system/synth/",       "Audio"),
+            ("system/moviebink/",   "Video"),
+            ("system/gesture/",     "Gesture"),
+            ("system/net/",         "Network"),
+            ("system/hamobj/",      "Game"),
+            ("system/utl/",         "Utility"),
+            ("system/char/",        "Character"),
+            ("system/ui/",          "UI"),
+            ("system/meta/",        "Meta"),
+            ("lazer/",              "Game"),
+        ]
+
+        def _categorize(unit: str) -> str:
+            for prefix, cat in _CATEGORY_MAP:
+                if unit.startswith(prefix):
+                    return cat
+            return "Other"
+
+        total = sum(len(v) for v in unimplemented_by_unit.values())
+        sorted_units = sorted(unimplemented_by_unit.items(), key=lambda x: -len(x[1]))
+
+        # Aggregate by category
+        cat_counts: dict[str, int] = {}
+        for unit, funcs in sorted_units:
+            cat = _categorize(unit)
+            cat_counts[cat] = cat_counts.get(cat, 0) + len(funcs)
+
+        print(f"\n  --- Unimplemented by Unit ({total} total) ---")
+        for unit, funcs in sorted_units:
+            cat = _categorize(unit)
+            print(f"  {unit:50s} {len(funcs):4d}  [{cat}]")
+
+        print(f"\n  --- Unimplemented by Category ---")
+        for cat, count in sorted(cat_counts.items(), key=lambda x: -x[1]):
+            print(f"  {cat + ':':16s}{count}")
+
+    # Print partial match breakdown by percentage bucket
+    any_partial = any(partial_by_bucket[b] for b in partial_by_bucket)
+    if any_partial:
+        bucket_labels = [
+            ("99-100", "99%+"),
+            ("95-99",  "95-99%"),
+            ("80-95",  "80-95%"),
+            ("<80",    "<80%"),
+        ]
+
+        # Summary line
+        bucket_totals = {
+            b: sum(len(v) for v in partial_by_bucket[b].values())
+            for b, _ in bucket_labels
+        }
+        grand_total = sum(bucket_totals.values())
+        print(f"\n  --- Partial Matches ({grand_total} total) ---")
+        print(f"  {'Range':10s} {'Count':>6s}")
+        for b, label in bucket_labels:
+            if bucket_totals[b]:
+                print(f"  {label:10s} {bucket_totals[b]:6d}")
+
+        # Per-bucket unit breakdown
+        for bucket_key, label in bucket_labels:
+            bucket_data = partial_by_bucket[bucket_key]
+            if not bucket_data:
+                continue
+            total_b = sum(len(v) for v in bucket_data.values())
+            sorted_b = sorted(bucket_data.items(), key=lambda x: -len(x[1]))
+            print(f"\n  --- {label} by Unit ({total_b} functions) ---")
+            for unit, funcs in sorted_b:
+                print(f"  {unit:50s} {len(funcs):4d}")
 
 
 if __name__ == "__main__":

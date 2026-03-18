@@ -993,26 +993,26 @@ bool MakeBSPTree(BSPNode *&node, std::list<BSPFace> &faces, int depth) {
     for (std::list<BSPFace>::iterator it = faces.begin(); it != faces.end(); ++it)
         totalFaces++;
 
-    float bestScore = -1.0f;
     int candidateIdx = 0;
+    float bestScore = -1.0f;
+    float zero = 0.0f;
+    double powExp = (double)0.6f;
     for (std::list<BSPFace>::iterator faceIt = faces.begin(); faceIt != faces.end(); ++faceIt) {
         if (candidateIdx >= gBSPMaxCandidates) break;
-        BSPFace &candFace = *faceIt;
-        for (std::list<Plane>::iterator planeIt = candFace.planes.begin(); planeIt != candFace.planes.end(); ++planeIt) {
-            const Plane &candPlane = *planeIt;
+        for (std::list<Plane>::iterator planeIt = faceIt->planes.begin(); planeIt != faceIt->planes.end(); ++planeIt) {
             if (totalFaces == 1) {
-                node->plane = candPlane;
-                bestScore = 0.0f;
+                node->plane = *planeIt;
+                bestScore = zero;
                 break;
             }
             int frontCount = 0, backCount = 0, spanCount = 0;
-            float frontArea = 0.0f, backArea = 0.0f;
+            float frontArea = zero, backArea = zero;
             std::list<BSPFace>::iterator jt;
             for (jt = faces.begin(); jt != faces.end(); ++jt) {
-                bool front = false, back = false;
-                jt->OnSide(candPlane, front, back);
+                bool front, back;
+                jt->OnSide(*planeIt, front, back);
                 if (!front && !back) {
-                    if (fabs(candPlane.a * jt->t.m.z.x + candPlane.b * jt->t.m.z.y + candPlane.c * jt->t.m.z.z) < gBSPDirTol)
+                    if (fabs(planeIt->a * jt->t.m.z.x + planeIt->b * jt->t.m.z.y + planeIt->c * jt->t.m.z.z) < gBSPDirTol)
                         break;
                 } else {
                     if (back) {
@@ -1029,30 +1029,28 @@ bool MakeBSPTree(BSPNode *&node, std::list<BSPFace> &faces, int depth) {
                 candidateIdx--;
                 continue;
             }
-            if (frontCount < totalFaces && backCount < totalFaces) {
-                float score = (float)pow((double)(spanCount + frontCount), 0.6) * backArea
-                            + (float)pow((double)(spanCount + backCount), 0.6) * frontArea;
-                if (bestScore < 0.0f || score < bestScore) {
-                    node->plane = candPlane;
-                    bestScore = score;
-                }
+            float powBack = (float)pow((double)(spanCount + backCount), powExp);
+            float score = (float)pow((double)(spanCount + frontCount), powExp) * frontArea
+                        + powBack * backArea;
+            if (frontCount < totalFaces && backCount < totalFaces && (bestScore < zero || score < bestScore)) {
+                node->plane = *planeIt;
+                bestScore = score;
             }
         }
         candidateIdx++;
     }
 
-    if (bestScore < 0.0f) {
+    if (bestScore < zero) {
         TheDebug.Notify(MakeString("Couldn't find candidate plane"));
         return false;
     }
 
-    std::list<BSPFace> frontFaces, backFaces;
+    std::list<BSPFace> backFaces, frontFaces;
     std::list<BSPFace>::iterator it = faces.begin();
     while (it != faces.end()) {
         std::list<BSPFace>::iterator cur = it++;
-        BSPFace &face = *cur;
-        bool front = false, back = false;
-        face.OnSide(node->plane, front, back);
+        bool front, back;
+        cur->OnSide(node->plane, front, back);
         if (!front && !back) {
             faces.erase(cur);
         } else if (!back) {
@@ -1061,28 +1059,32 @@ bool MakeBSPTree(BSPNode *&node, std::list<BSPFace> &faces, int depth) {
             backFaces.splice(backFaces.begin(), faces, cur);
         } else {
             Hmx::Ray ray;
-            Intersect(face.t, node->plane, ray);
+            Intersect(cur->t, node->plane, ray);
             BSPFace frontFace;
-            frontFace.t = face.t;
-            Clip(face.p, ray, frontFace.p);
+            frontFace.t = cur->t;
+            Clip(cur->p, ray, frontFace.p);
             if (frontFace.p.points.size() > 2) {
                 frontFace.Update();
                 frontFaces.insert(frontFaces.begin(), frontFace);
             }
             ray.dir.Set(-ray.dir.x, -ray.dir.y);
-            Clip(face.p, ray, face.p);
-            if (face.p.points.size() > 2) {
-                face.Update();
+            Clip(cur->p, ray, cur->p);
+            if (cur->p.points.size() > 2) {
+                cur->Update();
                 backFaces.splice(backFaces.begin(), faces, cur);
             }
         }
     }
 
     bool ok = MakeBSPTree(node->left, frontFaces, nextDepth);
-    if (ok)
-        ok = MakeBSPTree(node->right, backFaces, nextDepth);
-    frontFaces.clear();
+    if (!ok) {
+        backFaces.clear();
+        frontFaces.clear();
+        return false;
+    }
+    ok = MakeBSPTree(node->right, backFaces, nextDepth);
     backFaces.clear();
+    frontFaces.clear();
     return ok;
 }
 #else

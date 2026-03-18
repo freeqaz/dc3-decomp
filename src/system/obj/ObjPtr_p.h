@@ -39,20 +39,7 @@ ObjRefConcrete<T1, T2>::~ObjRefConcrete() {
 template <class T1, class T2>
 void ObjRefConcrete<T1, T2>::SetObjConcrete(T1 *obj) {
     if (mObject) {
-#ifdef HX_NATIVE
-        // During ~Object::ReplaceRefs(NULL), the dying object's ref ring may
-        // contain entries pointing to already-freed objects from prior destruction
-        // cascades. When mObject doesn't match the currently dying object, skip
-        // Release to avoid dereferencing freed memory.
-        if (Hmx::Object::IsDeleting() &&
-            static_cast<Hmx::Object *>(mObject) != Hmx::Object::GetDeleting()) {
-            mObject = nullptr;
-        } else {
-            mObject->Release(this);
-        }
-#else
         mObject->Release(this);
-#endif
     }
     mObject = obj;
     if (mObject) {
@@ -230,12 +217,15 @@ void ObjPtrVec<T1, T2>::ReplaceNode(Node *n, Hmx::Object *obj) {
         Hmx::Object *oldObj = n->SetObj(obj);
         if (!oldObj && mListMode == kObjListNoNull) {
 #ifdef HX_NATIVE
-            // During ~Object::ReplaceRefs (IsDeleting set), erasing from the
-            // vector shifts subsequent nodes via CopyRef, invalidating ObjRef
-            // ring prev/next pointers. Suppress the erase; the null entry is
+            // During ReplaceList, erasing from the vector shifts subsequent
+            // nodes via CopyRef, which modifies ring prev/next pointers and
+            // corrupts the ring walk. Suppress the erase; the null entry is
             // cleaned up when the vector is destroyed or iterated.
-            if (!Hmx::Object::IsDeleting()) {
+            if (!gInReplaceList) {
                 erase(iterator(mNodes.begin() + (n - mNodes.data())));
+            } else {
+                MILO_WARN("ReplaceNode: suppressed erase during ReplaceList (owner=%s)",
+                    mOwner ? PathName(mOwner) : "<null>");
             }
 #else
             erase(n);

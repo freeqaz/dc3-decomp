@@ -14,27 +14,33 @@
 #include "utl/Symbol.h"
 
 #ifdef HX_NATIVE
+#include <vector>
 Hmx::Object *Hmx::Object::sDeleting;
+bool gInReplaceList = false;
 
 void ObjRef::ReplaceList(Hmx::Object *obj) {
-    // Xbox-style live ring walk: each Replace() removes the ref from this
-    // ring (via Release) and adds it to obj's ring (via AddRef), so `next`
-    // naturally advances.
+    // Suppress ObjPtrVec::erase during ring walk. CopyRef during vector
+    // shift modifies ring prev/next pointers, corrupting the walk.
+    bool wasInReplace = gInReplaceList;
+    gInReplaceList = true;
+
+    // Matches Xbox target: each Replace() calls SetObj → Release (unlinks
+    // from this ring) + AddRef (links into obj's ring), advancing `next`.
+    // Owner Replace implementations may delete the ObjRef (e.g., PropAnim
+    // deletes PropKeys) — the destructor's Release still unlinks correctly.
     while (next != this) {
         ObjRef *cur = next;
         cur->Replace(obj);
         if (cur == next) {
-            // Replace didn't unlink (e.g. ObjOwnerPtr where owner doesn't
-            // handle the ref). Force-unlink from this ring to prevent
-            // infinite loop.
+            // Replace didn't advance — force-unlink to prevent infinite loop.
             cur->prev->next = cur->next;
             cur->next->prev = cur->prev;
-            // Clear stale pointers to prevent accidental ring traversal
-            // through this orphaned ref.
             cur->prev = cur;
             cur->next = cur;
         }
     }
+
+    gInReplaceList = wasInReplace;
 }
 #endif
 
@@ -294,11 +300,33 @@ const char *Hmx::Object::FindPathName() {
 
 void Hmx::Object::ReplaceRefs(Hmx::Object *obj) {
     if (mRefs.begin() != mRefs.end()) {
+#ifdef HX_NATIVE
+        // Snapshot approach: copy ring entries to a vector, then iterate.
+        // This is immune to ring modifications during Replace callbacks
+        // (owners may delete the ObjRef being processed, modify other ring
+        // entries, or trigger cascading destructions). Each Replace call
+        // processes exactly one ObjRef, so subsequent entries are valid.
+        gInReplaceList = true;
+        std::vector<ObjRef *> snapshot;
+        for (ObjRef *it = mRefs.next; it != &mRefs; it = it->next)
+            snapshot.push_back(it);
+        mRefs.Clear();
+        for (ObjRef *ref : snapshot) {
+            // A previous Replace may have freed this entry's container
+            // (e.g., PropAnim deletes PropKeys, RndGroup erases ObjPtrList
+            // Node). The sentinel is cleared in ~ObjRef before the memory
+            // is freed, so a non-matching sentinel means the ref is dead.
+            if (ref->mAliveSentinel == ObjRef::kAliveSentinel)
+                ref->Replace(obj);
+        }
+        gInReplaceList = false;
+#else
         ObjRef other(mRefs);
         other.prev->next = &other;
         other.next->prev = &other;
         mRefs.Clear();
         other.ReplaceList(obj);
+#endif
     }
 }
 

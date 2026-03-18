@@ -215,6 +215,19 @@ void FileMerger::FinishLoading(Loader *ldr) {
             ObjectDir *mergerDir = merger->MergerDir();
             ReserveToFit(dl->GetDir(), mergerDir, 0);
             MergeDirs(dl->GetDir(), mergerDir, *this);
+#ifdef HX_NATIVE
+            // MergeDirs may leave objects in subdirs that got kMergeReplace'd
+            // (moved as children rather than flattened into target hash table).
+            // Walk nested objects and register any missing ones so that
+            // Find<T>(name, false) works at runtime — matching Xbox's flat scope.
+            for (ObjDirItr<Hmx::Object> it(mergerDir, true); it != nullptr; ++it) {
+                if (it->Dir() != mergerDir) {
+                    if (!mergerDir->FindObject(it->Name(), false, false)) {
+                        it->SetName(it->Name(), mergerDir);
+                    }
+                }
+            }
+#endif
         }
     }
     PostMerge(merger, dl, true);
@@ -432,8 +445,8 @@ void FileMerger::Select(Symbol name, const FilePath &fp, bool b3) {
 bool FileMerger::StartLoadInternal(bool async, bool loading) {
     mAsyncLoad = async;
     mLoadingLoad = loading;
-#ifdef HX_NATIVE
-    async = true;  // Cooperative polling only — prevents sync-poll hang on web
+#ifdef __EMSCRIPTEN__
+    async = true; // Browser event loop can't block in Poll() loop
 #endif
 #if !defined(MILO_VIEWER)
     // The game relies on change_files to translate high-level selections like

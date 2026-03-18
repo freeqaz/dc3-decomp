@@ -44,6 +44,9 @@ protected:
 class MoveAsyncDetector {
 public:
     enum RatingBar {
+        kRatingActive = 0,
+        kRatingLast = 1,
+        kRatingLast4Beats = 2,
     };
     MoveAsyncDetector(MoveDir *);
     ~MoveAsyncDetector();

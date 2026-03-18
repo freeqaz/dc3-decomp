@@ -217,7 +217,7 @@ void ClipPlayer::PlayClip(CharClip *clip, float f1, float f2, HamDriver::LayerAr
             layerClip->mClip = clip;
             layerClip->mClipBeat = f50 - mBeatOffset;
             layerClip->mBeat = f2 - mBeatOffset;
-            arr->mLayers.push_back(layerClip);
+            arr->mLayers.push_front(layerClip);
             if (TheLoadMgr.EditMode() && mTargetClip > 0) {
                 layerClip->mBeat = -kHugeFloat;
             }
@@ -261,26 +261,30 @@ __declspec(noinline) auto _outline_EditMode(_T* _obj) -> decltype(_obj->EditMode
 }
 
 CharClip *ClipPlayer::GetPrevRoutineTransition(int idx) {
-    if (idx > 0) {
-        int maxIdx = (int)mClipKeys->size() - 1;
-        if (maxIdx < idx) idx = maxIdx;
+    if (idx <= 0) return nullptr;
 
-        if (!_outline_EditMode(&TheLoadMgr) || !TheHamDirector->NoTransitions()) {
-            Key<Symbol> &curKey = mClipKeys->at(idx);
-            (void)mClipKeys->at(idx - 1);
-            Key<Symbol> *prevKey = &curKey - 1;
+    int maxIdx = (int)mClipKeys->size() - 1;
+    if (maxIdx < idx) idx = maxIdx;
 
-            float beat = FrameToBeat(prevKey->frame);
-            if (beat > 0.0f) {
-                beat += 1.0f;
-            }
+    if (!TheLoadMgr.EditMode() || !TheHamDirector->NoTransitions()) {
+        Key<Symbol> *curKey = &mClipKeys->at(idx);
+        Key<Symbol> *prevKey = &mClipKeys->at(idx - 1);
 
-            CharClip *c2 = nullptr;
-            CharClip *c1 = nullptr;
-            GetRoutineCrossoverClips(beat, prevKey->value.Str(), &c1, &c2);
-
-            return GetRoutineTransition(c1->Name(), &curKey);
+        float beat = FrameToBeat(prevKey->frame);
+        if (beat > 0.0f) {
+            beat += 1.0f;
         }
+
+        CharClip *c2 = nullptr;
+        CharClip *c1 = nullptr;
+#ifdef HX_NATIVE
+        if (!GetRoutineCrossoverClips(beat, prevKey->value.Str(), &c1, &c2))
+            return nullptr;
+#else
+        GetRoutineCrossoverClips(beat, prevKey->value.Str(), &c1, &c2);
+#endif
+
+        return GetRoutineTransition(c1->Name(), curKey);
     }
     return nullptr;
 }
@@ -299,10 +303,20 @@ CharClip *ClipPlayer::GetRoutineTransition(const char *cc, Key<Symbol> *key) {
     return nullptr;
 }
 
-void ClipPlayer::GetRoutineCrossoverClips(
+#ifdef HX_NATIVE
+bool
+#else
+void
+#endif
+ClipPlayer::GetRoutineCrossoverClips(
     float f1, const char *cc, CharClip **c1, CharClip **c2
 ) {
+#ifdef HX_NATIVE
+    if (!mClipDir) return false;
+    if (TheMoveMgr && TheMoveMgr->HasRoutine()) {
+#else
     if (TheMoveMgr->HasRoutine()) {
+#endif
         const std::pair<const MoveVariant *, const MoveVariant *> *moveVars =
             TheMoveMgr->GetRoutineMeasure(mPlayerIndex, Round(f1 / 4.0f));
         if (moveVars) {
@@ -318,7 +332,11 @@ void ClipPlayer::GetRoutineCrossoverClips(
         *c1 = *c2;
         if (!*c1) {
             *c1 = mClipDir->Find<CharClip>(cc, false);
+#ifdef HX_NATIVE
+            if (!*c1 && mMasterClipKeys && mMasterClipKeys->size() > 0) {
+#else
             if (!*c1) {
+#endif
                 *c1 = mClipDir->Find<CharClip>(mMasterClipKeys->at(0).value.Str(), false);
             }
         }
@@ -326,6 +344,9 @@ void ClipPlayer::GetRoutineCrossoverClips(
     if (!*c2) {
         *c2 = *c1;
     }
+#ifdef HX_NATIVE
+    return *c1 != nullptr;
+#endif
 }
 
 bool ClipPlayer::GetClipRange(
@@ -361,7 +382,7 @@ void ClipPlayer::PushClip(int idx, HamDriver::LayerArray *arr) {
     CharClip *transClip;
     float offset;
     float beat = FrameToBeat(key.frame);
-    if (beat + 1.0f > mBeat) {
+    if (mBeat < beat + 1.0f) {
         transClip = GetTransitionBefore(&key);
     } else {
         transClip = nullptr;
@@ -387,10 +408,8 @@ void ClipPlayer::PushClip(int idx, HamDriver::LayerArray *arr) {
         blendBeat = beat - 1.0f;
     }
 
-    if (blendBeat < mBeat) {
-        const Symbol& clipName = (key.value.Str());
-
-        Key<Symbol> *practiceKey = TheHamDirector->GetMasterPracticeFrame(clipName);
+    if (mBeat > blendBeat) {
+        Key<Symbol> *practiceKey = TheHamDirector->GetMasterPracticeFrame(Symbol(key.value.Str()));
         if (practiceKey) {
             Keys<Symbol, Symbol> *savedKeys = mClipKeys;
             mClipKeys = mMasterClipKeys;
@@ -403,7 +422,7 @@ void ClipPlayer::PushClip(int idx, HamDriver::LayerArray *arr) {
             mPracticeStart += beatDiff;
             mPracticeEnd += beatDiff;
 
-            PlayNormal(mBeatOffset + blendBeat, arr, clipName.Str());
+            PlayNormal(mBeatOffset + blendBeat, arr, key.value.Str());
 
             mBeat -= beatDiff;
             mPracticeStart -= beatDiff;
@@ -463,7 +482,12 @@ bool ClipPlayer::PushRoutineBuilderClip(int idx, HamDriver::LayerArray *arr) {
 
     CharClip *c2 = nullptr;
     CharClip *c1 = nullptr;
-    GetRoutineCrossoverClips(startBeat, curKey.value.Str(), &c1, &c2);
+#ifdef HX_NATIVE
+    if (!GetRoutineCrossoverClips(startBeat, curKey.value.Str(), &c2, &c1))
+        return pushed;
+#else
+    GetRoutineCrossoverClips(startBeat, curKey.value.Str(), &c2, &c1);
+#endif
 
     float nextBeat;
     if (idx != nextIdx) {
@@ -487,15 +511,16 @@ bool ClipPlayer::PushRoutineBuilderClip(int idx, HamDriver::LayerArray *arr) {
     }
 
     float hugeNeg = -kHugeFloat;
+    float crossoverBeatPlusOne = crossoverBeat + one;
     float blend;
 
-    if (c1 == c2) {
+    if (c2 == c1) {
         if (mBeat >= beat && (nextTrans == nullptr || mBeat <= nextBeat)) {
             blend = pushed ? blendStart : hugeNeg;
             goto playClipC1;
         }
     } else {
-        if (mBeat >= beat && mBeat <= crossoverBeat + one) {
+        if (mBeat >= beat && mBeat <= crossoverBeatPlusOne) {
             blend = pushed ? blendStart : hugeNeg;
             PlayClip(c2, beat, blend, arr);
             pushed = true;
@@ -538,7 +563,7 @@ void ClipPlayer::PlayNormal(float f1, HamDriver::LayerArray *arr, const char *cc
         float beat = mBeat;
         if (prop != 0
 #ifdef HX_NATIVE
-            && TheMoveMgr->HasRoutine()
+            && TheMoveMgr && TheMoveMgr->HasRoutine()
 #endif
         ) {
             PushRoutineBuilderClip(mClipKeys->KeyLessEq(BeatToFrame(beat)), newArr);

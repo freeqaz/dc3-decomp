@@ -20,6 +20,13 @@ class ObjectDir;
 class MergeFilter;
 void MergeObjectsRecurse(ObjectDir *, ObjectDir *, MergeFilter &, bool);
 
+#ifdef HX_NATIVE
+// Set during ReplaceList to prevent ObjPtrVec::erase from shifting vector
+// elements (CopyRef during shift corrupts ring prev/next pointers).
+// Checked in ObjPtrVec::ReplaceNode to suppress erase.
+extern bool gInReplaceList;
+#endif
+
 #pragma region ObjRef
 
 // Object Ref/Ptr declarations
@@ -44,6 +51,12 @@ protected:
     // seems to be a linked list of an Object's refs
     ObjRef *next; // 0x4
     ObjRef *prev; // 0x8
+#ifdef HX_NATIVE
+    // Sentinel to detect freed ObjRefs in snapshot-based ReplaceRefs.
+    // Set in constructor, cleared in destructor.
+    static constexpr uint32_t kAliveSentinel = 0xCAFEBABE;
+    uint32_t mAliveSentinel = kAliveSentinel;
+#endif
 
     // i *think* this is good?
     void AddRef(ObjRef *ref) {
@@ -60,7 +73,11 @@ protected:
 
 public:
     ObjRef() {}
-    virtual ~ObjRef() {}
+    virtual ~ObjRef() {
+#ifdef HX_NATIVE
+        mAliveSentinel = 0;
+#endif
+    }
     virtual Hmx::Object *RefOwner() const { return nullptr; }
     virtual bool IsDirPtr() { return false; }
     virtual Hmx::Object *GetObj() const {
@@ -208,19 +225,7 @@ public:
     ObjOwnerPtr(const ObjOwnerPtr &o);
     virtual ~ObjOwnerPtr();
     virtual Hmx::Object *RefOwner() const;
-    virtual void Replace(Hmx::Object *obj) {
-#ifdef HX_NATIVE
-        // If the owner doesn't handle the ref, force-update to prevent
-        // stale mObject after the target is destroyed. On Xbox, the owner
-        // always handles refs through sinks, but on native, cleanup during
-        // cascading destruction can miss these.
-        if (!mOwner->Replace(this, obj)) {
-            ObjRefConcrete<T>::SetObjConcrete(obj ? dynamic_cast<T *>(obj) : nullptr);
-        }
-#else
-        mOwner->Replace(this, obj);
-#endif
-    }
+    virtual void Replace(Hmx::Object *obj) { mOwner->Replace(this, obj); }
     void operator=(T *obj) { SetObjConcrete(obj); }
     T *Ptr() const { return mObject; }
 };
