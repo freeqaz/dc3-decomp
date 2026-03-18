@@ -32,7 +32,18 @@ __forceinline ObjRefConcrete<T1, T2>::ObjRefConcrete(const ObjRefConcrete &o)
 template <class T1, class T2>
 ObjRefConcrete<T1, T2>::~ObjRefConcrete() {
     if (mObject) {
+#ifdef HX_NATIVE
+        // During cascading ~ObjectDir teardown, mObject may point to an
+        // already-freed object (destroyed earlier in the DeleteObjects loop).
+        // Skip Release to avoid dereferencing freed memory.
+        if (ObjectDir::InDeleteObjects()) {
+            mObject = nullptr;
+        } else {
+            mObject->Release(this);
+        }
+#else
         mObject->Release(this);
+#endif
     }
 }
 
@@ -231,9 +242,9 @@ void ObjPtrVec<T1, T2>::ReplaceNode(Node *n, Hmx::Object *obj) {
         if (!oldObj && mListMode == kObjListNoNull) {
 #ifdef HX_NATIVE
             // During ~Object::ReplaceRefs (IsDeleting set), erasing from the
-            // vector shifts subsequent nodes, invalidating their ObjRef ring
-            // prev/next pointers. Suppress the erase; leaving a null entry is
-            // harmless — the vector will be destroyed shortly.
+            // vector shifts subsequent nodes via CopyRef, invalidating ObjRef
+            // ring prev/next pointers. Suppress the erase; the null entry is
+            // cleaned up when the vector is destroyed or iterated.
             if (!Hmx::Object::IsDeleting()) {
                 erase(iterator(mNodes.begin() + (n - mNodes.data())));
             }

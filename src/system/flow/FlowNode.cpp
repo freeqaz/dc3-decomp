@@ -43,6 +43,11 @@ FlowNode::~FlowNode() {
 #endif
     while (!mChildNodes.empty()) {
         FlowNode *cur = mChildNodes.front();
+        if (!cur) {
+            // Null entry left by suppressed erase — remove it directly.
+            mChildNodes.erase(mChildNodes.begin());
+            continue;
+        }
         delete cur;
     }
 }

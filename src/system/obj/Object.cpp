@@ -22,10 +22,17 @@ void ObjRef::ReplaceList(Hmx::Object *obj) {
     // naturally advances.
     while (next != this) {
         ObjRef *cur = next;
-        next->Replace(obj);
+        cur->Replace(obj);
         if (cur == next) {
-            MILO_FAIL("ReplaceList stuck in infinite loop");
-            break;
+            // Replace didn't unlink (e.g. ObjOwnerPtr where owner doesn't
+            // handle the ref). Force-unlink from this ring to prevent
+            // infinite loop.
+            cur->prev->next = cur->next;
+            cur->next->prev = cur->prev;
+            // Clear stale pointers to prevent accidental ring traversal
+            // through this orphaned ref.
+            cur->prev = cur;
+            cur->next = cur;
         }
     }
 }

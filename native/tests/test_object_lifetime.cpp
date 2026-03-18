@@ -181,9 +181,11 @@ TEST_F(ObjectLifetimeTest, DeletingFlowChildRemovesFromParent) {
 
     delete child;
 
-    // With immediate erasure (no deferred purge), the child is removed
-    // from the parent's ObjPtrVec as soon as ReplaceRefs(nullptr) runs.
-    EXPECT_EQ(flow->ChildCount(), 0);
+    // During ReplaceRefs, vector erase is suppressed (IsDeleting guard)
+    // to prevent CopyRef-during-shift ring corruption. The child pointer
+    // is nulled out but the entry may remain in the vector.
+    // The important invariant: no dangling pointer to the deleted child.
+    EXPECT_TRUE(flow->ChildCount() == 0 || flow->FrontChild() == nullptr);
 
     delete flow;
 }
