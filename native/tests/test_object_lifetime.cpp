@@ -560,11 +560,9 @@ TEST_F(ObjectLifetimeTest, DeferredPurgeCleanedOnObjPtrVecDestruction) {
 // Verify that the ObjDirPtr delete-during-cascade doesn't cause double-free.
 // When ObjDirPtr::operator= deletes an ObjectDir, the destructor chain
 // should not re-delete objects that are still being processed.
-// DISABLED: hangs in ~ObjectDir → mSubDirs.clear() cascade delete loop.
-// Same root cause as RemoveSubDirReleasesDirPtrRef hanging.
-// The ObjDirPtr destructor cascade gets stuck in a loop when nested
-// subdirs have cross-references.
-TEST_F(ObjectLifetimeTest, DISABLED_ObjDirPtrCascadeDeleteDoesNotDoubleFree) {
+// Nested subdir cascade: dir1 → dir2 → dir3 with cross-references.
+// Previously hung due to double-AddRef in ObjDirPtr(C*) creating self-loops.
+TEST_F(ObjectLifetimeTest, ObjDirPtrCascadeDeleteDoesNotDoubleFree) {
     // Create a chain: dir1 has subdir dir2, dir2 has subdir dir3
     ObjectDir *dir1 = Hmx::Object::New<ObjectDir>();
     ObjectDir *dir2 = Hmx::Object::New<ObjectDir>();

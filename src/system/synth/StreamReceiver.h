@@ -8,6 +8,7 @@ typedef StreamReceiver *StreamReceiverFactoryFunc(int, int, bool, int);
 #define kStreamRcvrBufSize 0x8000
 
 class StreamReceiver {
+    friend class StandardStream;
 public:
     enum State {
         kInit = 0,

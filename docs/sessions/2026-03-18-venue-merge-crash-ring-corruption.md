@@ -151,3 +151,45 @@ The fundamental difference is **allocator behavior**, not code logic:
 - **Native (glibc malloc)**: Freed memory may be zeroed or reused. Vtable pointer becomes null. The virtual call dereferences null+0x28, crashing immediately.
 
 The vtable check in ReplaceList is the correct native-port fix: it detects the allocator-zeroed vtable and unlinks the stale entry, matching the net effect of what happens on Xbox (the ref is silently skipped).
+
+## Addendum: True Root Cause Identified (2026-03-18)
+
+During decompilation of `ObjDirPtr::ObjDirPtr`, the **true underlying root cause** of the stale ring entries was discovered: a duplicate `AddRef` call in the `ObjDirPtr` constructor.
+
+### The Double `AddRef` Corruption
+
+When an `ObjDirPtr` is instantiated from a pointer, it triggers `AddRef` twice on the exact same linked-list node:
+
+1. **Call 1 (Base Class):** `ObjRefConcrete(dir)` correctly inserts the `ObjDirPtr` into the target object's `mRefs` ring. The doubly-linked list is intact: `Head <-> Ptr <-> Head`.
+2. **Call 2 (Derived Class):** `ObjDirPtr(dir)` mistakenly called `dir->AddRef(this)` *again*.
+
+Let's look at `ObjRef::AddRef(ref)`'s logic when re-inserting the exact same node:
+```cpp
+void AddRef(ObjRef *ref) {
+    next = ref;               // Ptr->next = Head
+    prev = ref->prev;         // Ptr->prev = Head->prev (which is Ptr!)
+    ref->prev = this;         // Head->prev = Ptr
+    prev->next = this;        // Ptr->prev->next -> Ptr->next = Ptr!
+}
+```
+**The Result:** The ring is structurally shattered.
+* The target object's `Head` still thinks `Ptr` is attached (`Head.next = Ptr`).
+* But `Ptr` has become an isolated self-loop (`Ptr.next = Ptr`, `Ptr.prev = Ptr`).
+
+### The Dangling Pointer Creation
+
+Later, when `UIPanel::Unload` cascades and clears `mSubDirs` (which holds `ObjDirPtr`s), the `ObjDirPtr` is destroyed.
+When its destructor calls `Release()` to unlink itself:
+```cpp
+void Release(ObjRef *ref) {
+    prev->next = next; // Ptr->next = Ptr
+    next->prev = prev; // Ptr->prev = Ptr
+}
+```
+Because `Ptr`'s `prev` and `next` point to itself, the unlink operation does absolutely nothing to the target object's `Head`. The target object is permanently left with a dangling pointer to the freed `ObjDirPtr` memory.
+
+### Conclusion
+
+The fix applied earlier in this session (adding the `!*(void **)cur` vtable null-check guard in the live ring walk) successfully papered over the symptom of this bug, allowing the game to survive the stale pointers.
+
+However, fixing this double `AddRef` in `ObjDirPtr` cures the disease itself. The `ObjRef` rings will now remain perfectly intact and properly unlink themselves upon destruction, meaning that vtable safety guard will never actually need to catch a dangling `ObjDirPtr` again.

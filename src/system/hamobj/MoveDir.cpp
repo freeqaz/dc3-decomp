@@ -1591,5 +1591,208 @@ namespace {
 #ifdef HX_NATIVE
 float MoveDir::UpdateOverlay(RndOverlay *, float) { return 0.0f; }
 float MoveDir::DetectFrac(int, int) { return 0.0f; }
-void MoveDir::PostUpdateFilters() {}
 #endif
+
+void MoveDir::PostUpdateFilters() {
+    if (!mFilterQueue)
+        return;
+
+    if (!mFilterQueue->HasJob()) {
+        // No job - check if we should enqueue one
+        unkf88.clear();
+
+        bool hasMove = false;
+        for (int i = 0; i < 2; i++) {
+            if (mMovePlayerData[i].mCurMove) {
+                hasMove = true;
+                break;
+            }
+        }
+
+        if (mFiltersEnabled && hasMove && TheMaster
+            && TheMaster->GetAudio() && TheMaster->GetAudio()->IsReady()) {
+            MILO_ASSERT(TheGameData, 0x3d9);
+            float songSecs = SongSeconds();
+            float adjustedSecs = songSecs - sLatencySeconds;
+            bool shouldEnqueue = adjustedSecs > mDebugLoopMarker;
+            if (shouldEnqueue || TheLoadMgr.EditMode()) {
+                if (shouldEnqueue) {
+                    mDebugLoopMarker = songSecs - sLatencySeconds;
+                }
+                MoveMode moveMode = CurrentMoveMode();
+                float songSpeed = SongSpeed();
+                mFilterQueue->EnqueueNewJob(adjustedSecs, songSpeed, moveMode);
+
+                for (int i = 0; i < 2; i++) {
+                    HamPlayerData *playerData = TheGameData->Player(i);
+                    if (playerData->IsPlaying() && !InGracePeriod(i)
+                        && mMovePlayerData[i].mCurMove
+                        && mMovePlayerData[i].mCurMove->Scored()) {
+                        HamMove *move = mMovePlayerData[i].mCurMove;
+                        EnqueueDetectFrames(
+                            adjustedSecs, i, mMovePlayerData[i].mDetectFrames,
+                            move->FilterVer()
+                        );
+                    }
+                    if (mAsyncDetector) {
+                        mAsyncDetector->EnqueueDetectFrames(
+                            TheTaskMgr.CurrentMeasure(),
+                            TheTaskMgr.CurrentBeat(), adjustedSecs, i
+                        );
+                    }
+                }
+                mFilterQueue->StartJob();
+            }
+        }
+        return;
+    }
+
+    if (!mFilterQueue->IsJobFinished())
+        return;
+
+    mLastPollMs = mFilterQueue->LastPollMs();
+    MoveMode moveMode = CurrentMoveMode();
+
+    float prevFracs[2];
+    for (int i = 0; i < 2; i++) {
+        float frac;
+        if (TheMoveMgr->HasRoutine()) {
+            frac = mAsyncDetector->MoveRatingFrac(
+                i, (MoveAsyncDetector::RatingBar)0, mMovePlayerData[i].mCurMove
+            );
+        } else {
+            frac = DetectFrac(i, -1);
+        }
+        prevFracs[i] = frac;
+    }
+
+    DetectFrame *resultFrames[2];
+    if (!mFilterQueue->GetResults(unk30c, resultFrames, sPLFMinTimeError))
+        return;
+
+    static Symbol flip_camshot_targets("flip_camshot_targets");
+    const DataNode *prop = TheHamProvider->Property(flip_camshot_targets, true);
+    bool flipped;
+    if (prop) {
+        flipped = prop->Int(NULL) != 0;
+    } else {
+        flipped = false;
+    }
+
+    for (int i = 0; i < 2; i++) {
+        CharFeedback *feedback;
+        if (flipped) {
+            feedback = mMovePlayerData[!i].mFeedback;
+        } else {
+            feedback = mMovePlayerData[i].mFeedback;
+        }
+
+        HamPlayerData *playerData = TheGameData->Player(i);
+        bool active;
+        if (!feedback || !playerData) {
+            active = false;
+        } else {
+            active = playerData->IsPlaying();
+        }
+
+        if (!active) {
+            feedback->ResetErrors();
+        } else {
+            HamMove *move = mMovePlayerData[i].mCurMove;
+            DetectFrame *detectFrame = resultFrames[i];
+            if (move && detectFrame) {
+                const FilterVersion *fv = move->FilterVer();
+                FilterVersionType version = move->Version();
+                if (version == kFilterVersionHam1) {
+                    ErrorNode *const *errorNodes = fv->mErrorNodes;
+                    float limbErrors[4] = {};
+                    for (int n = 0; n < 16; n++) {
+                        const Ham1NodeWeight &nodeWeight =
+                            detectFrame->GetMoveFrame()->NodeWeightHam1(
+                                n, moveMode, detectFrame->Mirror()
+                            );
+                        if (nodeWeight.mActive) {
+                            int feedbackLimbs = (*errorNodes)->GetFeedbackLimbs();
+                            const Vector3 &bestError =
+                                detectFrame->BestNodeError(n);
+                            float errVal = bestError.x;
+                            for (int limb = 0; limb < 4; limb++) {
+                                if ((1 << limb) & feedbackLimbs) {
+                                    limbErrors[limb] += errVal;
+                                }
+                            }
+                        }
+                        errorNodes++;
+                    }
+                    for (int limb = 0; limb < 4; limb++) {
+                        float clamped = Clamp(0.0f, 1.0f, 1.0f - limbErrors[limb]);
+                        const std::vector<float> *ratings =
+                            move->RatingOverride();
+                        int ratingIdx;
+                        DetectFracToRating(clamped, ratings, &ratingIdx);
+                        if (ratingIdx == 3) {
+                            feedback->UpdateLimb(limb, true);
+                        } else if (ratingIdx <= 1) {
+                            feedback->UpdateLimb(limb, false);
+                        }
+                    }
+                } else {
+                    MILO_ASSERT(fv->mType == kFilterVersionHam2, 0x460);
+                    const Ham2FrameWeight &frameWeight =
+                        detectFrame->GetMoveFrame()->FrameWeight(
+                            detectFrame->Mirror()
+                        );
+                    if (0.5f < frameWeight.mWeight) {
+                        for (int limb = 0; limb < 4; limb++) {
+                            float limbPSNR = detectFrame->LimbPSNR(
+                                fv, 1 << limb
+                            );
+                            float badThresh = frameWeight.unk4[limb];
+                            if (badThresh < frameWeight.unk14[limb]) {
+                                if (limbPSNR > frameWeight.unk14[limb]) {
+                                    feedback->UpdateLimb(limb, false);
+                                } else if (limbPSNR < badThresh) {
+                                    feedback->UpdateLimb(limb, true);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Update phrase meters
+    float measureBeats = (float)(TheTaskMgr.CurrentMeasure() * 4);
+    float beatInMeasure = TheTaskMgr.TotalBeat() - measureBeats;
+    for (int i = 0; i < 2; i++) {
+        MovePlayerData &mpd = mMovePlayerData[i];
+        HamMove *move = mpd.mCurMove;
+        HamPlayerData *playerData = TheGameData->Player(i);
+        if (playerData->IsPlaying() && !InGracePeriod(i) && move
+            && move->Scored()) {
+            float frac;
+            if (TheMoveMgr->HasRoutine()) {
+                frac = mAsyncDetector->MoveRatingFrac(
+                    i, (MoveAsyncDetector::RatingBar)0, move
+                );
+            } else {
+                frac = DetectFrac(i, -1);
+            }
+            HamPlayerData *player2 = TheGameData->Player(i);
+            if (frac > prevFracs[i] || player2->IsAutoplaying()) {
+                float ratingFrac = DetectFracToRatingFrac(
+                    frac, move->RatingOverride()
+                );
+                MILO_ASSERT(mpd.mPhraseMeter, 0x49a);
+                mpd.mPhraseMeter->SetRatingFrac(
+                    ratingFrac, 4.0f - beatInMeasure
+                );
+                static Symbol rating_frac("rating_frac");
+                DataNode ratingNode(ratingFrac);
+                HamPlayerData *player3 = TheGameData->Player(i);
+                player3->Provider()->SetProperty(rating_frac, ratingNode);
+            }
+        }
+    }
+}

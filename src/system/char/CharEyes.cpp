@@ -1398,9 +1398,10 @@ DataNode CharEyes::OnAddInterest(DataArray *arr) {
     return 0;
 }
 
-// NormalizeScale body guarded: its presence anywhere in this TU causes
-// EnforceMinimumTargetDistance to regress (91.3% -> 57.8%) due to
-// inter-function register allocation changes (different prologue style).
+// NormalizeScale body guarded: defining it here causes IPA — the compiler
+// sees NormalizeScale doesn't touch r4/r6, so EnforceMinimumTargetDistance
+// skips callee-saved GPR saves (r29-r31) that the target uses. Result:
+// structurally incompatible prologue (91.3% -> 57.8%). AT_LIMIT.
 #ifdef HX_NATIVE
 void NormalizeScale(const Vector3 &in, float scale, Vector3 &out) {
     float inv = 0;

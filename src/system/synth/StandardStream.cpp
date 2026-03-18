@@ -384,54 +384,54 @@ void StandardStream::SynthPoll() { PollStream(); }
 void StandardStream::PollStream() {
     mFrameTimer.Restart();
 
-    // Throttle the reader: poll with (throttle * bufSecs) seconds budget
-    float pollTime = mThrottle * mBufSecs;
-    if (mState == kBuffering) {
-        pollTime = 8.0f;
-    }
-    if (pollTime < 1.0f) pollTime = 1.0f;
-    if (mRdr) mRdr->Poll(pollTime);
+    float lastMs = mFrameTimer.GetLastMs();
+    float minPoll = mState == kBuffering ? 8.0f : 1.0f;
+    mRdr->Poll(Max(lastMs * mThrottle, minPoll));
 
-    // Poll all channels (advance hardware cursors)
-    for (int i = 0; i < mChannels.size(); i++) {
-        mChannels[i]->Poll();
-    }
+    std::for_each(
+        mChannels.begin(), mChannels.end(), std::mem_fun(&StreamReceiver::Poll)
+    );
 
-    // State machine
-    if (mState != kInit) {
-        if (mState == kBuffering) {
-            if (StuffChannels()) {
-                mState = kReady;
-            }
-        } else if (mState >= kReady && mState < kFinished) {
-            StuffChannels();
-            // Check if reader is done and all data consumed
-            if (mRdr && mRdr->Done() && mJumpFromSamples == 0) {
-                mState = kFinished;
-            }
-        } else if (mState != kFinished) {
-            MILO_FAIL(MakeString("Bad stream state: %d", mState));
+    switch (mState) {
+    case kInit:
+    case kReady:
+        break;
+    case kBuffering:
+        if (StuffChannels()) {
+            mState = kReady;
         }
+        break;
+    case kPlaying:
+    case kSuspended:
+    case kStopped:
+        StuffChannels();
+        if (mChannels[0]->mDoneBufferCounter > mChannels[0]->mNumBuffers + 2) {
+            mState = kFinished;
+        }
+        break;
+    case kFinished:
+        break;
+    default:
+        MILO_FAIL("bad state logic.");
+        break;
     }
 
-    // Jump handling
-    // kStreamEndSamples (-1) means "at end of stream" — check reader done, not signed compare
-    bool jumpReady = false;
-    if (mJumpFromSamples != 0) {
-        if (mJumpFromSamples == kStreamEndSamples) {
-            jumpReady = mRdr && mRdr->Done();
-        } else {
-            jumpReady = mCurrentSamp >= mJumpFromSamples;
+    if (mState != kInit && mJumpFromSamples != 0) {
+        if (mJumpFromSamples < 0) {
+            if (mRdr->Done()) {
+                DoJump();
+            }
+        } else if (mJumpFromSamples > 0) {
+            if (mJumpFromSamples < mJumpToSamples) {
+                if (mCurrentSamp >= mJumpFromSamples && mCurrentSamp < mJumpToSamples) {
+                    DoJump();
+                }
+            } else if (mJumpFromSamples > mJumpToSamples) {
+                if (mCurrentSamp >= mJumpFromSamples) {
+                    DoJump();
+                }
+            }
         }
-    }
-    if (jumpReady) {
-        JumpInstance ji;
-        ji.unk0 = 0;
-        ji.unk4 = 0;
-        ji.unk8 = GetTime();
-        ji.unkc = GetJumpBackTotalTime(ji.unk8);
-        mJumpInstances.push_back(ji);
-        DoJump();
     }
 
     UpdateVolumes();
