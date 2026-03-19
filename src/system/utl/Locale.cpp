@@ -11,9 +11,12 @@
 
 Locale TheLocale;
 
-#ifdef HX_NATIVE
-Locale::~Locale() {}
-#endif
+Locale::~Locale() {
+    if (mMagnuStrings) {
+        mMagnuStrings->Release();
+        mMagnuStrings = 0;
+    }
+}
 bool gShowTokensCheat = false;
 bool Locale::sVerboseNotify;
 const char *Locale::sIgnoreMissingText;
