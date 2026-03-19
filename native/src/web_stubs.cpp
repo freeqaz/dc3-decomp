@@ -89,6 +89,51 @@ int XSetThreadProcessor(int, int) { return 0; }
 #include "rndobj/Mat.h"
 void SetColorWriteMask(const MatShaderOptions &, RndMat *) {}
 
+// ============================================================================
+// C++ stubs for symbols undefined in the WASM binary
+// Without these, calls go through Emscripten JS "missing function" stubs that
+// return 0 or, for C++ mangled names, may silently corrupt state.
+// ============================================================================
+
+// DxRnd — Xbox D3D9 renderer, not used on web (WebGPU renderer used instead)
+#include "rnddx9/Rnd.h"
+void DxRnd::ReleaseAutoRelease() {}
+
+// LiveCameraInput — Kinect camera, not available on web
+#include "gesture/LiveCameraInput.h"
+void LiveCameraInput::LockStream(const void *, LockedRect &) {}
+void LiveCameraInput::UnlockStream(const void *) {}
+
+// VideoEncoder — uses popen/ffmpeg, not available in WASM
+#include "gfx/VideoEncoder.h"
+bool VideoEncoder::Start(const char *, int, int, int) { return false; }
+bool VideoEncoder::WriteFrame(const uint8_t *, size_t) { return false; }
+bool VideoEncoder::Finish() { return true; }
+
+// NetLoaderXbox — Xbox network loader, not available on web
+#include "utl/NetLoader_Xbox.h"
+NetLoaderXbox::NetLoaderXbox(const String &s) : NetLoader(s) {}
+NetLoaderXbox::~NetLoaderXbox() {}
+void NetLoaderXbox::PollLoading() {}
+bool NetLoaderXbox::HasFailed() { return false; }
+
+// ValidateThreadId — called from MakeString.cpp, single-threaded on WASM
+bool ValidateThreadId(unsigned long) { return true; }
+
+// RecursePatternInternal — filesystem enumeration, uses FindFirstFile/FindNextFile
+// On web, the MEMFS doesn't support directory enumeration in the same way.
+// Return without invoking callback = no files found.
+#include "os/File.h"
+void RecursePatternInternal(const char *, void (*)(const char *, const char *), bool, bool) {}
+
+// YUVtoRGB — used by Kinect camera frame conversion
+namespace { void YUVtoRGB(int, int, int) {} }
+
+// NuiTransformSkeletonToDepthImage — Kinect skeleton projection
+// Overload with float* params (different from the XMVECTOR version in web_stubs.cpp)
+#include "xdk/LIBCMT/vectorintrinsics.h"
+void NuiTransformSkeletonToDepthImage(XMVECTOR, float *, float *) {}
+
 #endif // __EMSCRIPTEN__
 
 // HX_NATIVE-only stubs — guarded against __EMSCRIPTEN__ for symbols

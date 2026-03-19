@@ -777,7 +777,7 @@ void DataNode::Load(BinStream &d) {
         break;
     default:
         MILO_FAIL("Unrecognized node type: %x", mType);
-#ifdef HX_NATIVE
+#if defined(HX_NATIVE) && !defined(HX_WEB)
         fprintf(stderr, "DataNode::Load ABORT: bad type 0x%x at stream pos=%d\n", mType, d.Tell());
         abort();
 #endif

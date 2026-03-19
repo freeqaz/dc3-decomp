@@ -1390,7 +1390,7 @@ template <class T>
 BinStream &operator>>(BinStreamRev &bs, ObjVector<T> &vec) {
     unsigned int length;
     bs >> length;
-#ifdef HX_NATIVE
+#if defined(HX_NATIVE) && !defined(HX_WEB)
     if (length > 0x10000) {
         fprintf(stderr, "ObjVector: CORRUPT length=%u (0x%x) at stream pos=%d\n", length, length, bs.stream.Tell());
         abort();

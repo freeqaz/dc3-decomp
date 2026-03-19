@@ -22,12 +22,15 @@ The web port compiles the same codebase as the desktop native port, with platfor
 | Audio | miniaudio | Emscripten audio worklet |
 | Video | FFmpeg | Stubs (no playback) |
 | Skeleton | Unix socket to pose_server.py, falls back to dummy | Dummy skeleton only |
-| File I/O | Disk reads | MEMFS (assets bundled at build) |
-| Main loop | `while (!shouldClose)` in `App::Run()` | `emscripten_set_main_loop(mainLoop, 0, true)` (rAF-synced) |
+| File I/O | Disk reads | MEMFS + on-demand HTTP fetch via JSPI async-yield |
+| Main loop | `while (!shouldClose)` in `App::Run()` | JS `requestAnimationFrame` → `dc3MainLoopTick()` (JSPI-wrapped export) |
+| Async I/O | N/A (synchronous POSIX) | JSPI (`-sJSPI`): `emscripten_sleep()` yields to browser during file fetches |
+| Exceptions | Native C++ | Wasm exceptions (`-fwasm-exceptions`) — native WASM instructions |
 | Threading | `std::thread` (reader thread for skeleton) | Single-threaded (stubs) |
 | Build | `cmake --build native/build` | `scripts/build/web.sh` (emcmake) |
 
 Both desktop and web define `HX_NATIVE`. Platform-specific code uses `#ifdef __EMSCRIPTEN__`.
+The web build also defines `HX_WEB=1` — use `#if defined(HX_NATIVE) && !defined(HX_WEB)` for desktop-only native code.
 
 ## Quick Reference
 
@@ -53,6 +56,65 @@ node native/web/tests/cdp-debugger-break.js --no-server --verbose
 # Rebuild WASM
 scripts/build/web.sh
 ```
+
+## Build Flags and Debug Targets
+
+### Always-on (Tier 1)
+
+These flags are enabled by default in the web build. Minimal cost (~2MB size increase).
+
+| Flag | Purpose |
+|------|---------|
+| `-g2` | Demangled C++ names in stack traces (superset of `--profiling-funcs`) |
+| `-sASSERTIONS=1` | Runtime checks for invalid function pointers, memory errors |
+| `-sSTACK_OVERFLOW_CHECK=2` | Detects stack overflow in deep call chains (milo loading) |
+| `-fwasm-exceptions` | Native WASM exception instructions (replaces JS-based `-sNO_DISABLE_EXCEPTION_CATCHING`) |
+| `-sJSPI` | Non-blocking file loading via browser-native stack switching (Chrome 137+) |
+
+### JSPI (JavaScript Promise Integration)
+
+The web build uses JSPI for non-blocking file I/O. When `AsyncFile::Init()` tries to open a file
+not yet in MEMFS, `WebAssetsFetchSync()` starts an `emscripten_fetch()` and calls
+`emscripten_sleep(16)` in a loop, yielding to the browser event loop. The loading screen renders
+during file downloads — zero code size overhead.
+
+**Key detail**: `emscripten_set_main_loop` calls its callback via the WASM function table
+(indirect call), which bypasses JSPI's `WebAssembly.promising` wrapper. The fix: the main loop
+tick is exported as `dc3MainLoopTick` and driven from JS via `requestAnimationFrame` with `await`.
+See `native/src/main_web.cpp`.
+
+The `DC3_WEB_ASYNCIFY` compile define gates the JSPI code path in `WebAssets.cpp` and `main_web.cpp`.
+Disable with `-DDC3_WEB_ASYNC=OFF` to fall back to blocking synchronous XHR.
+
+### Debug build targets (Tier 2, opt-in)
+
+Use separate build directories for debug variants to avoid recompiling the main build.
+
+```bash
+# Source emsdk first
+source ~/emsdk/emsdk_env.sh
+
+# DWARF debugging — full source-level stepping in Chrome DevTools
+# DWARF goes in a .debug.wasm side file so the main binary stays lean.
+# Install the C/C++ DevTools Support extension in Chrome.
+emcmake cmake -S native -B native/build-web-debug -DDC3_WEB_DEBUG=ON
+cmake --build native/build-web-debug -- -j$(nproc)
+
+# UBSan — catches undefined behavior (alignment, overflow, null deref)
+# Especially relevant: Xbox PPC quirks that "work" but are UB in Wasm.
+emcmake cmake -S native -B native/build-web-ubsan -DDC3_WEB_UBSAN=ON
+cmake --build native/build-web-ubsan -- -j$(nproc)
+
+# ASan — heavy memory corruption debugging (buffer overflow, use-after-free)
+# In Wasm, address 0 is valid memory — no segfaults. ASan catches null derefs.
+emcmake cmake -S native -B native/build-web-asan -DDC3_WEB_ASAN=ON
+cmake --build native/build-web-asan -- -j$(nproc)
+```
+
+These can be combined: `-DDC3_WEB_DEBUG=ON -DDC3_WEB_UBSAN=ON` etc.
+
+See [docs/native/WEB_DEBUGGING.md](../native/WEB_DEBUGGING.md) for the full Emscripten
+debugging features guide (DWARF setup, sanitizer details, profiling, WebAssembly proposals).
 
 ## Headless Desktop Testing (Preferred for Agents)
 
@@ -388,9 +450,11 @@ Build output: `native/build-web/dc3-web.js` + `dc3-web.wasm`, deployed to `nativ
 
 | Area | Desktop | Web | Impact |
 |------|---------|-----|--------|
-| Video playback | FFmpeg `.bik` decode | Stubs (no video) | No intro/preview videos |
+| Video playback | FFmpeg `.bik` decode | WebMovie (HTML5 video) | Limited format support |
 | Pose server | Unix socket to Python process | Not available | Dummy skeleton only |
 | Audio | miniaudio native backend | Emscripten audio worklet | May have latency |
-| File I/O | Direct disk reads | MEMFS (pre-bundled) | No dynamic file loads |
+| File I/O | Direct disk reads | MEMFS + on-demand HTTP fetch (JSPI async-yield) | Loading screen renders during downloads |
+| Exceptions | Native C++ | Wasm exceptions (`-fwasm-exceptions`) | Same semantics, different codegen |
 | Threading | `std::thread` for skeleton reader | Single-threaded stubs | N/A with dummy skeleton |
 | `UsingCD()` | Returns true | Returns false (MEMFS) | Must guard editor-mode paths |
+| `abort()` guards | Active (`#ifdef HX_NATIVE`) | Disabled (`!defined(HX_WEB)`) | Benign stream errors log instead of crash |

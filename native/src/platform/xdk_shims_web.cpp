@@ -7,6 +7,7 @@
 #include "xdk/XBOXKRNL.h"
 #include "xdk/XAPILIB.h"
 #include "xdk/XGRAPHICS.h"
+#include "xdk/d3d9i/d3d9.h"
 #include "os/Debug.h"
 
 #include <cstdlib>
@@ -220,6 +221,114 @@ DWORD XUserAwardAvatarAssets(DWORD, const XUSER_AVATARASSET *, XOVERLAPPED *) { 
 DWORD XUserGetXUID(DWORD, XUID *) { return 0; }
 DWORD XShowNuiGuideUI(DWORD) { return 0; }
 void GetLocalTime(LPSYSTEMTIME) {}
+VOID GlobalMemoryStatus(LPMEMORYSTATUS lpBuffer) {
+    if (lpBuffer) memset(lpBuffer, 0, sizeof(*lpBuffer));
+}
+DWORD XGetOverlappedExtendedError(XOVERLAPPED *) { return 0; }
+DWORD XGetOverlappedResult(XOVERLAPPED *, DWORD *pdwResult, BOOL) {
+    if (pdwResult) *pdwResult = 0;
+    return 0;
+}
+
+// ============================================================================
+// Physical memory — passthrough to WASM heap (same as VirtualAlloc)
+// ============================================================================
+
+LPVOID XPhysicalAlloc(SIZE_T dwSize, ULONG_PTR, ULONG_PTR ulAlignment, DWORD) {
+    void *ptr = nullptr;
+    if (ulAlignment > sizeof(void *)) {
+        posix_memalign(&ptr, ulAlignment, dwSize);
+    } else {
+        ptr = malloc(dwSize);
+    }
+    return ptr;
+}
+
+VOID XPhysicalFree(LPVOID lpAddress) { free(lpAddress); }
+DWORD XPhysicalSize(LPVOID) { return 0; }
+
+// ============================================================================
+// Time — GetSystemTime (UTC)
+// ============================================================================
+
+void GetSystemTime(LPSYSTEMTIME lpSystemTime) {
+    if (!lpSystemTime) return;
+    time_t now = time(nullptr);
+    struct tm *utc = gmtime(&now);
+    if (utc) {
+        lpSystemTime->wYear = utc->tm_year + 1900;
+        lpSystemTime->wMonth = utc->tm_mon + 1;
+        lpSystemTime->wDayOfWeek = utc->tm_wday;
+        lpSystemTime->wDay = utc->tm_mday;
+        lpSystemTime->wHour = utc->tm_hour;
+        lpSystemTime->wMinute = utc->tm_min;
+        lpSystemTime->wSecond = utc->tm_sec;
+        lpSystemTime->wMilliseconds = 0;
+    } else {
+        memset(lpSystemTime, 0, sizeof(*lpSystemTime));
+    }
+}
+
+// ============================================================================
+// Timezone
+// ============================================================================
+
+DWORD GetTimeZoneInformation(TIME_ZONE_INFORMATION *lpTimeZoneInformation) {
+    if (lpTimeZoneInformation) memset(lpTimeZoneInformation, 0, sizeof(*lpTimeZoneInformation));
+    return 0;
+}
+
+// ============================================================================
+// D3D resource stubs — no GPU resources to release on web (WebGPU handles its own)
+// ============================================================================
+
+ULONG D3DResource_Release(struct D3DResource *) { return 0; }
+VOID D3DCubeTexture_UnlockRect(struct D3DCubeTexture *, D3DCUBEMAP_FACES, UINT) {}
+HRESULT DmCaptureStackBackTrace(ULONG, VOID *) { return -1; }
+BOOL FileTimeToSystemTime(const FILETIME *, LPSYSTEMTIME) { return 0; }
+DWORD XBackgroundDownloadSetMode(XBACKGROUND_DOWNLOAD_MODE) { return 0; }
+VOID XLaunchNewImage(LPCSTR, DWORD) {}
+DWORD XEnumerate(HANDLE, void *, DWORD, DWORD *, XOVERLAPPED *) { return 0; }
+DWORD XShowMarketplaceDownloadItemsUI(DWORD, DWORD, ULONGLONG *, DWORD, DWORD *, XOVERLAPPED *) { return 0; }
+DWORD XShowNuiTroubleshooterUI() { return 0; }
+DWORD XShowTokenRedemptionUI(DWORD) { return 0; }
+DWORD XTitleServerCreateEnumerator(const char *, DWORD, DWORD *, HANDLE *) { return 0; }
+DWORD XMarketplaceCreateOfferEnumerator(DWORD, DWORD, ULONGLONG, DWORD, DWORD *, HANDLE *) { return 0; }
+DWORD XMarketplaceCreateOfferEnumeratorByOffering(DWORD, DWORD, ULONGLONG *, WORD, DWORD *, HANDLE *) { return 0; }
+INT XNetConnect(const void *) { return 0; }
+DWORD XNetGetConnectStatus(const void *) { return 0; }
+DWORD XNetGetTitleXnAddr(void *) { return 0; }
+INT XNetUnregisterInAddr(const void *) { return 0; }
+INT XNetXnAddrToMachineId(const void *, void *) { return 0; }
+HRESULT XNuiDelayUI(ULONG) { return 0; }
+HRESULT NuiCameraGetProperty(int, void *, DWORD) { return -1; }
+HRESULT NuiCameraGetPropertyF(int, float *, DWORD) { return -1; }
+HRESULT NuiCameraGetExposureRegionOfInterest(int, void *) { return -1; }
+HRESULT NuiCameraSetProperty(int, void *, DWORD) { return -1; }
+HRESULT NuiCameraSetExposureRegionOfInterest(int, const void *) { return -1; }
+HRESULT NuiFitnessStartTracking(DWORD, DWORD, void *) { return -1; }
+HRESULT NuiFitnessPauseTracking(DWORD) { return -1; }
+HRESULT NuiFitnessResumeTracking(DWORD, DWORD) { return -1; }
+HRESULT NuiFitnessStopTracking(DWORD) { return -1; }
+HRESULT NuiFitnessGetCurrentFitnessData(DWORD, void *) { return -1; }
+HRESULT NuiIdentityAbort() { return -1; }
+HRESULT NuiSkeletonSetTrackedSkeletons(DWORD *) { return -1; }
+HRESULT NuiSpeechCreateGrammar(ULONG, void *) { return -1; }
+
+// ============================================================================
+// String conversion
+// ============================================================================
+
+int WideCharToMultiByte(unsigned int cp, DWORD flags, const wchar_t *wideStr,
+                        int cchWideChar, char *multiByteStr, int cbMultiByte,
+                        const char *defaultChar, int *usedDefaultChar) {
+    if (!wideStr) return 0;
+    int len = (cchWideChar < 0) ? (int)wcslen(wideStr) + 1 : cchWideChar;
+    if (!multiByteStr || cbMultiByte == 0) return len;
+    for (int i = 0; i < len && i < cbMultiByte; i++)
+        multiByteStr[i] = (char)(unsigned char)wideStr[i];
+    return len;
+}
 
 } // extern "C"
 

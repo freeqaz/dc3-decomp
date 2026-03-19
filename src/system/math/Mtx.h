@@ -125,7 +125,12 @@ namespace Hmx {
             return Vector4(x[col], y[col], z[col], w[col]);
         }
 
-        Vector3 Col3(int col) const;
+        Vector3 Col3(int col) const
+#ifdef HX_NATIVE
+        { return Vector3(x[col], y[col], z[col]); }
+#else
+        ;
+#endif
 
         Vector4 x;
         Vector4 y;

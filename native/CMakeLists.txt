@@ -1200,13 +1200,27 @@ target_include_directories(dc3-web PRIVATE
     ${CMAKE_SOURCE_DIR}/../include
 )
 
+## Non-blocking file loading via JSPI (JavaScript Promise Integration).
+## WebAssetsFetchSync() yields to the browser via emscripten_sleep(),
+## so the loading screen can render while .milo_xbox files download.
+## JSPI uses the browser's native stack switching — zero code size overhead
+## vs old ASYNCIFY which instrumented every function (~50% bloat).
+## Requires Chrome 137+ / Firefox 139+.
+## Set DC3_WEB_ASYNC=OFF to fall back to blocking synchronous XHR.
+option(DC3_WEB_ASYNC "Use JSPI for non-blocking on-demand file fetches" ON)
+
+## Debug build options
+option(DC3_WEB_DEBUG "Enable DWARF debugging + assertions + stack overflow checks" OFF)
+option(DC3_WEB_UBSAN "Enable UndefinedBehaviorSanitizer" OFF)
+option(DC3_WEB_ASAN "Enable AddressSanitizer (heavy — memory corruption debugging)" OFF)
+
 target_link_options(dc3-web PRIVATE
     "SHELL:--use-port=emdawnwebgpu"
     -sALLOW_MEMORY_GROWTH=1
     -sMAXIMUM_MEMORY=512MB
-    -sSTACK_SIZE=1048576
+    -sSTACK_SIZE=4194304
     -sENVIRONMENT=web,node
-    -sEXPORTED_FUNCTIONS=["_main"]
+    -sEXPORTED_FUNCTIONS=["_main","_dc3MainLoopTick"]
     -sEXPORTED_RUNTIME_METHODS=["ccall","cwrap"]
     # Allow undefined symbols — engine stubs use asm-labels that wasm-ld can't resolve.
     -sERROR_ON_UNDEFINED_SYMBOLS=0
@@ -1218,13 +1232,53 @@ target_link_options(dc3-web PRIVATE
     -sUSE_OGG=1
     -sUSE_VORBIS=1
     -sFETCH=1
-    # Debug: keep function names for stack traces
-    --profiling-funcs
+    ## --- Always-on diagnostics (Tier 1, low cost) ---
+    # -g2 is a superset of --profiling-funcs: demangled C++ names in stack traces.
+    -g2
+    # Catches invalid function pointers, memory allocation failures, stack overflow.
+    -sASSERTIONS=1
+    # Deep deserialization call chains during milo loading can overflow the 1MB stack.
+    -sSTACK_OVERFLOW_CHECK=2
+    # Native Wasm exception instructions — smaller code and better perf than the old
+    # JS-based -sNO_DISABLE_EXCEPTION_CATCHING. Requires Chrome 137+ (same as JSPI).
+    -fwasm-exceptions
 )
 
 target_compile_options(dc3-web PRIVATE
     "SHELL:--use-port=emdawnwebgpu"
+    # Wasm exceptions must be set at compile time too.
+    -fwasm-exceptions
 )
+
+## JSPI — zero-overhead async yielding (replaces old ASYNCIFY experiment)
+if(DC3_WEB_ASYNC)
+    target_compile_definitions(dc3-web PRIVATE DC3_WEB_ASYNCIFY=1)
+    target_link_options(dc3-web PRIVATE
+        -sJSPI
+        -sJSPI_EXPORTS=["_main","_dc3MainLoopTick","dc3MainLoopTick"]
+    )
+endif()
+
+## Debug build: full DWARF in side file + extra assertions
+if(DC3_WEB_DEBUG)
+    target_compile_options(dc3-web PRIVATE -g3)
+    target_link_options(dc3-web PRIVATE
+        -gseparate-dwarf
+        -sASSERTIONS=2
+    )
+endif()
+
+## UBSan: catches undefined behavior that "works" on Xbox but crashes in Wasm
+if(DC3_WEB_UBSAN)
+    target_compile_options(dc3-web PRIVATE -fsanitize=undefined)
+    target_link_options(dc3-web PRIVATE -fsanitize=undefined)
+endif()
+
+## ASan: heavy memory corruption debugging (buffer overflow, use-after-free)
+if(DC3_WEB_ASAN)
+    target_compile_options(dc3-web PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+    target_link_options(dc3-web PRIVATE -fsanitize=address)
+endif()
 
 else() # NOT EMSCRIPTEN — native targets
 

@@ -172,6 +172,11 @@ BinStreamRev &operator>>(BinStreamRev &d, FileMerger::Merger &fm) {
         if (d.rev > 2) {
             d >> fm.mPreClear;
         }
+#ifdef HX_NATIVE
+    MILO_LOG("DC3 DIAG Merger::Load '%s' rev=%d proxy=%d subdirs=%d preClear=%d dir=%p selected='%s'\n",
+        fm.mName.Str(), (int)d.rev, (int)fm.mProxy, (int)fm.mSubdirs,
+        (int)fm.mPreClear, (void*)fm.mDir.Ptr(), fm.mSelected.c_str());
+#endif
     }
     return d;
 }
@@ -197,6 +202,12 @@ void FileMerger::PreLoad(BinStream &bs) {
 void FileMerger::FinishLoading(Loader *ldr) {
     DirLoader *dl = dynamic_cast<DirLoader *>(ldr);
     Merger *merger = NotifyFileLoaded(ldr, dl);
+#ifdef HX_NATIVE
+    MILO_LOG("DC3 DIAG FM::FinishLoading '%s' proxy=%d sDisableAll=%d dl=%p dlDir=%p dlDirName='%s'\n",
+        merger->mName.Str(), (int)merger->mProxy, (int)sDisableAll,
+        (void*)dl, dl ? (void*)dl->GetDir() : nullptr,
+        (dl && dl->GetDir()) ? dl->GetDir()->Name() : "<null>");
+#endif
     if (dl && !sDisableAll) {
         if (merger->mProxy) {
             MILO_ASSERT(dl->GetDir(), 0x236);
@@ -550,6 +561,14 @@ void FileMerger::PostMerge(FileMerger::Merger *merger, DirLoader *dl, bool b3) {
             msg[2] = merger->MergerDir();
             HandleType(msg);
         }
+#ifdef HX_NATIVE
+        MILO_LOG("DC3 DIAG FM::PostMerge '%s' proxy=%d dl=%p dlDir=%p — %s\n",
+            merger->mName.Str(), (int)merger->mProxy, (void*)dl,
+            dl ? (void*)dl->GetDir() : nullptr,
+            (!dl) ? "no loader" :
+            (!merger->mProxy) ? "DELETING loaded dir (non-proxy)" :
+            "deleting loader only (proxy — dir survives)");
+#endif
         if (dl) {
             if (!merger->mProxy) {
                 ObjectDir *dir = dl->GetDir();

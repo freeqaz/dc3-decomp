@@ -95,6 +95,8 @@ bool UIPanel::Entering() const {
 
 void UIPanel::Draw() {
     if (mFinalDrawPassFlag == sIsFinalDrawPass && mDir && !mLoaded) {
+#ifdef HX_NATIVE
+#endif
         mDir->DrawShowing();
     }
 }

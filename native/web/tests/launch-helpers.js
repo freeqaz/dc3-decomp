@@ -41,8 +41,12 @@ const WEBGPU_ARGS = [
  * Always headless (--headless=new handles GPU rendering).
  */
 async function launchBrowser(extraArgs = []) {
+    // Use system Chromium for JSPI (WebAssembly.promising) support.
+    // Playwright's bundled Chromium may not have JSPI enabled.
+    const systemChrome = process.env.CHROME_PATH || '/usr/bin/chromium';
     return chromium.launch({
         headless: true,
+        executablePath: systemChrome,
         args: [...WEBGPU_ARGS, ...extraArgs],
     });
 }

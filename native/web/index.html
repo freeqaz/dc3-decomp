@@ -114,6 +114,10 @@
 
             var Module = {
                 canvas: document.getElementById('dc3-canvas'),
+                onAbort: function(what) {
+                    console.error('WASM ABORT:', what);
+                    console.error('Stack:', new Error().stack);
+                },
                 onRuntimeInitialized: function() {
                     console.log('RUNTIME_INIT_OK');
                     status.textContent = 'Downloading assets...';

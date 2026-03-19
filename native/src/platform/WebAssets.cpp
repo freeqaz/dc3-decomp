@@ -2,11 +2,18 @@
 // Uses emscripten_fetch() to download files from the dev server's HTTP API
 // into Emscripten's in-memory filesystem (MEMFS).
 // All fetches are async — poll WebAssetsAllDone() from the main loop.
+//
+// DC3_WEB_ASYNCIFY experiment (opt-in via CMakeLists.txt):
+//   When enabled, WebAssetsFetchSync() yields to the browser event loop
+//   via emscripten_sleep() instead of blocking with synchronous XHR.
+//   This lets the loading screen render while files download.
+//   To revert: remove -sASYNCIFY and DC3_WEB_ASYNCIFY from CMakeLists.txt.
 
 #ifdef __EMSCRIPTEN__
 
 #include "platform/WebAssets.h"
 
+#include <emscripten/emscripten.h>
 #include <emscripten/fetch.h>
 #include <emscripten/em_asm.h>
 #include <cstdio>
@@ -255,31 +262,105 @@ void WebAssetsFetchBundle() {
 }
 
 // ---------------------------------------------------------------------------
-// Synchronous single-file fetch (blocks main thread via XHR)
+// Fetch by MEMFS path (async) — like WebAssetsFetch but takes a MEMFS path
 // ---------------------------------------------------------------------------
 
-bool WebAssetsFetchSync(const char *memfsPath) {
-    // Normalize the MEMFS path to a server-relative path.
-    // Paths come in several forms:
-    //   /data/ui/gen/foo.milo_xbox          -> ui/gen/foo.milo_xbox
-    //   /system/run/ham/gen/skeleton.milo   -> system/run/ham/gen/skeleton.milo
-    //   /../system/run/config/gen/meta.milo -> system/run/config/gen/meta.milo
+// Normalize a MEMFS path to a server-relative path.
+// Paths come in several forms:
+//   /data/ui/gen/foo.milo_xbox          -> ui/gen/foo.milo_xbox
+//   /system/run/ham/gen/skeleton.milo   -> system/run/ham/gen/skeleton.milo
+//   /../system/run/config/gen/meta.milo -> system/run/config/gen/meta.milo
+static const char *normalizeMemfsPath(const char *memfsPath) {
     const char *rel = memfsPath;
     if (strncmp(rel, "/data/", 6) == 0) {
         rel += 6;
     } else if (strncmp(rel, "/../", 4) == 0) {
-        rel += 4;  // strip "/../" -> "system/run/..."
+        rel += 4;
     } else if (rel[0] == '/') {
-        rel += 1;  // strip leading "/" -> "system/run/..."
+        rel += 1;
+    }
+    return rel;
+}
+
+int WebAssetsFetchByPath(const char *memfsPath) {
+    const char *rel = normalizeMemfsPath(memfsPath);
+
+    FetchRequest *req = new FetchRequest();
+    req->id = sNextFetchId++;
+    req->serverPath = rel;
+    req->memfsPath = memfsPath;  // use the original MEMFS path
+    req->done = false;
+    req->success = false;
+    sFetchRequests.push_back(req);
+
+    char url[512];
+    snprintf(url, sizeof(url), "/api/file/%s", rel);
+
+    emscripten_fetch_attr_t attr;
+    emscripten_fetch_attr_init(&attr);
+    strcpy(attr.requestMethod, "GET");
+    attr.attributes = EMSCRIPTEN_FETCH_LOAD_TO_MEMORY;
+    attr.onsuccess = onFetchSuccess;
+    attr.onerror = onFetchError;
+    attr.userData = req;
+
+    emscripten_fetch(&attr, url);
+    sPending++;
+
+    return req->id;
+}
+
+bool WebAssetsFetchSucceeded(int fetchId) {
+    for (const auto *req : sFetchRequests) {
+        if (req->id == fetchId) return req->success;
+    }
+    return false;
+}
+
+// ---------------------------------------------------------------------------
+// Synchronous single-file fetch
+// ---------------------------------------------------------------------------
+//
+// DC3_WEB_ASYNCIFY path: uses async emscripten_fetch + emscripten_sleep()
+// to yield to the browser event loop. Loading screen can render during fetch.
+//
+// Fallback path: uses blocking synchronous XHR. Simple but freezes the UI.
+
+#ifdef DC3_WEB_ASYNCIFY
+
+bool WebAssetsFetchSync(const char *memfsPath) {
+    const char *rel = normalizeMemfsPath(memfsPath);
+    printf("WebAssets: async-yield fetch %s\n", rel);
+
+    int fetchId = WebAssetsFetchByPath(memfsPath);
+
+    // Yield to the browser event loop while waiting for the fetch to complete.
+    // emscripten_sleep() requires -sASYNCIFY in the link flags.
+    // During sleep, the browser can process fetch callbacks and render frames.
+    while (!WebAssetsFetchDone(fetchId)) {
+        emscripten_sleep(16);  // ~60fps yield
     }
 
-    // Build server URL
+    bool ok = WebAssetsFetchSucceeded(fetchId);
+    if (ok) {
+        printf("WebAssets: fetched %s (%s)\n", rel, memfsPath);
+    } else {
+        printf("WebAssets: FAILED %s\n", rel);
+    }
+    return ok;
+}
+
+#else // !DC3_WEB_ASYNCIFY — original blocking XHR path
+
+bool WebAssetsFetchSync(const char *memfsPath) {
+    const char *rel = normalizeMemfsPath(memfsPath);
+
     char url[512];
     snprintf(url, sizeof(url), "/api/file/%s", rel);
 
     printf("WebAssets: on-demand fetch %s -> %s\n", url, memfsPath);
 
-    // Use synchronous XHR to fetch the file, then write to MEMFS via FS API.
+    // Synchronous XHR — blocks main thread until complete.
     // Note: synchronous XHR cannot set responseType="arraybuffer" in browsers,
     // so we use overrideMimeType to force binary and manually convert the response.
     int result = EM_ASM_INT({
@@ -295,14 +376,12 @@ bool WebAssetsFetchSync(const char *memfsPath) {
                 return 0;
             }
 
-            // Convert binary string to Uint8Array
             var text = xhr.responseText;
             var data = new Uint8Array(text.length);
             for (var i = 0; i < text.length; i++) {
                 data[i] = text.charCodeAt(i) & 0xFF;
             }
 
-            // Create parent directories
             var parts = memfsPath.split("/");
             var dir = "";
             for (var i = 0; i < parts.length - 1; i++) {
@@ -311,7 +390,6 @@ bool WebAssetsFetchSync(const char *memfsPath) {
                 try { FS.mkdir(dir); } catch(e) {}
             }
 
-            // Write file to MEMFS
             FS.writeFile(memfsPath, data);
             return 1;
         } catch(e) {
@@ -327,6 +405,8 @@ bool WebAssetsFetchSync(const char *memfsPath) {
     }
     return result != 0;
 }
+
+#endif // DC3_WEB_ASYNCIFY
 
 bool WebAssetsAllDone() { return sPending == 0; }
 int WebAssetsPendingCount() { return sPending; }

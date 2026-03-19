@@ -126,7 +126,7 @@ void BinStream::EnableWriteEncryption() {
 
 int BinStream::PopRev(Hmx::Object *o) {
     MILO_ASSERT(mRevStack, 0x34);
-#ifdef HX_NATIVE
+#if defined(HX_NATIVE) && !defined(HX_WEB)
     if (mRevStack->empty()) {
         fprintf(stderr, "PopRev ABORT: empty stack for %s '%s' (stream=%p)\n", o->ClassName(), o->Name(), (void*)this);
         abort();
@@ -213,7 +213,7 @@ BinStream &BinStream::operator>>(Symbol &sym) {
 BinStream &BinStream::operator>>(String &str) {
     int siz;
     *this >> siz;
-#ifdef HX_NATIVE
+#if defined(HX_NATIVE) && !defined(HX_WEB)
     if (siz > 10000 || siz < 0) {
         fprintf(stderr, "BinStream::operator>>(String) ABORT: bad size=%d at stream pos=%d\n", siz, Tell());
         abort();

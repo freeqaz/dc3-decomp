@@ -124,7 +124,7 @@ void FlowNode::Load(BinStream &bs) {
 
     int numEntries;
     d >> numEntries;
-#ifdef HX_NATIVE
+#if defined(HX_NATIVE) && !defined(HX_WEB)
     if (numEntries < 0 || numEntries > 256) {
         fprintf(stderr, "FlowNode::Load ABORT: bad numEntries=%d for %s '%s'\n", numEntries, ClassName(), Name());
         abort();

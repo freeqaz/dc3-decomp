@@ -277,8 +277,8 @@ void StreamRecorder::DrawShowing() {
     }
 }
 
-#ifndef HX_NATIVE
 void StreamRecorder::Poll() {
+#ifndef HX_NATIVE
     CompressTextures();
     if (mDebugFrame >= 0) {
         SetFrame(mDebugFrame);
@@ -303,5 +303,5 @@ void StreamRecorder::Poll() {
             }
         }
     }
-}
 #endif
+}
