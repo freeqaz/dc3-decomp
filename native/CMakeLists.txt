@@ -1307,6 +1307,24 @@ if(APPLE)
     )
 endif()
 
+# Files that conflict with the PCH:
+# - Jpeg.cpp: jpeglib.h redefines INT32 (long vs int from win_types.h)
+# - File_Native.cpp: FileStat members clash with <sys/stat.h> st_*time macros
+# - engine_stubs_generated.cpp: weak stubs intentionally conflict with real decls
+set_source_files_properties(
+    ${CMAKE_SOURCE_DIR}/../src/system/jpeg/Jpeg.cpp
+    ${CMAKE_SOURCE_DIR}/src/platform/File_Native.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine_stubs_generated.cpp
+    PROPERTIES SKIP_PRECOMPILE_HEADERS ON
+)
+
+# Precompiled header — reuse the same decomp_pch.h used by the MSVC decomp build.
+# Covers Object.h, Debug.h and their heavy transitive includes (Data.h, BinStream,
+# Symbol, STL containers). Applies to all engine targets.
+target_precompile_headers(dc3-native PRIVATE
+    "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h>"
+)
+
 # ============================================================================
 # Standalone WebGPU window test (does not link engine — just GLFW + Dawn)
 # ============================================================================
@@ -1377,6 +1395,9 @@ target_link_libraries(milo-viewer PRIVATE
     $<$<BOOL:${ENABLE_FFMPEG}>:${FFMPEG_LIBRARIES}>
     $<$<BOOL:${ENABLE_NCNN}>:ncnn>
 )
+target_precompile_headers(milo-viewer PRIVATE
+    "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h>"
+)
 
 # ============================================================================
 # Render Test — programmatic test scenes for renderer validation
@@ -1419,6 +1440,9 @@ target_link_options(render-test PRIVATE
 target_link_libraries(render-test PRIVATE
     ${DC3_PLATFORM_LIBS}
 )
+target_precompile_headers(render-test PRIVATE
+    "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h>"
+)
 
 # ============================================================================
 # Export CLI tools — headless .milo asset converters
@@ -1458,6 +1482,9 @@ target_compile_definitions(milo-tex-export PRIVATE HX_NATIVE=1 MILO_DEBUG=1 _DEB
 target_include_directories(milo-tex-export PRIVATE ${DC3_EXPORT_TOOL_INCLUDES})
 target_link_options(milo-tex-export PRIVATE ${DC3_PLATFORM_LINK_OPTIONS})
 target_link_libraries(milo-tex-export PRIVATE ${DC3_EXPORT_TOOL_LIBS})
+target_precompile_headers(milo-tex-export PRIVATE
+    "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h>"
+)
 
 # --- milo-mat-export ---
 add_executable(milo-mat-export
@@ -1473,6 +1500,9 @@ target_compile_definitions(milo-mat-export PRIVATE HX_NATIVE=1 MILO_DEBUG=1 _DEB
 target_include_directories(milo-mat-export PRIVATE ${DC3_EXPORT_TOOL_INCLUDES})
 target_link_options(milo-mat-export PRIVATE ${DC3_PLATFORM_LINK_OPTIONS})
 target_link_libraries(milo-mat-export PRIVATE ${DC3_EXPORT_TOOL_LIBS})
+target_precompile_headers(milo-mat-export PRIVATE
+    "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h>"
+)
 
 # --- milo2gltf ---
 add_executable(milo2gltf
@@ -1488,6 +1518,9 @@ target_compile_definitions(milo2gltf PRIVATE HX_NATIVE=1 MILO_DEBUG=1 _DEBUG=1)
 target_include_directories(milo2gltf PRIVATE ${DC3_EXPORT_TOOL_INCLUDES})
 target_link_options(milo2gltf PRIVATE ${DC3_PLATFORM_LINK_OPTIONS})
 target_link_libraries(milo2gltf PRIVATE ${DC3_EXPORT_TOOL_LIBS})
+target_precompile_headers(milo2gltf PRIVATE
+    "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h>"
+)
 
 # ============================================================================
 # Test suite — GTest-based tests for .milo loading pipeline
@@ -1523,6 +1556,7 @@ if(BUILD_TESTS)
         tests/test_object_lifetime.cpp
         tests/test_charclipgroup.cpp
         tests/test_asset_loading.cpp
+        tests/test_merge_scope_parity.cpp
         tests/test_archive_enumeration.cpp
         tests/test_mesh_loading.cpp
         tests/test_rndcam_projection.cpp
@@ -1562,6 +1596,9 @@ if(BUILD_TESTS)
         GTest::gtest GTest::gtest_main
         ${DC3_PLATFORM_LIBS}
         ${FFMPEG_LIBRARIES}
+    )
+    target_precompile_headers(milo-tests PRIVATE
+        "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h>"
     )
     include(GoogleTest)
     gtest_discover_tests(milo-tests)

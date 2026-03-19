@@ -28,10 +28,13 @@ SampleInstNative::SampleInstNative(SynthSample *sample, bool loop, int startSamp
 }
 
 SampleInstNative::~SampleInstNative() {
-    if (mPlaying) {
-        AudioDevice::GetInstance().RemoveSource(this);
-        mPlaying = false;
-    }
+    // Always remove from audio device — even if mPlaying is false.
+    // The audio thread may have set mPlaying=false in RenderAudio but
+    // not yet erased us from the source list (happens after RenderAudio
+    // returns). If we're deleted before the next audio callback, the
+    // callback would access freed memory.
+    AudioDevice::GetInstance().RemoveSource(this);
+    mPlaying = false;
 }
 
 void SampleInstNative::StartImpl() {

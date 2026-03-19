@@ -302,24 +302,39 @@ void Hmx::Object::ReplaceRefs(Hmx::Object *obj) {
     if (mRefs.begin() != mRefs.end()) {
 #ifdef HX_NATIVE
         // Snapshot approach: copy ring entries to a vector, then iterate.
-        // This is immune to ring modifications during Replace callbacks
-        // (owners may delete the ObjRef being processed, modify other ring
-        // entries, or trigger cascading destructions). Each Replace call
-        // processes exactly one ObjRef, so subsequent entries are valid.
+        // Immune to ring modifications during Replace callbacks (owners may
+        // delete ObjRefs, modify other ring entries, or trigger cascading
+        // destructions). The mAliveSentinel field (set in ObjRef constructor,
+        // cleared in ~ObjRef) detects freed entries in the snapshot.
+        bool wasInReplace = gInReplaceList;
         gInReplaceList = true;
         std::vector<ObjRef *> snapshot;
-        for (ObjRef *it = mRefs.next; it != &mRefs; it = it->next)
+        ObjRef *slow = mRefs.next;
+        ObjRef *fast = mRefs.next;
+        for (ObjRef *it = mRefs.next; it != &mRefs; it = it->next) {
+            if ((uintptr_t)it < 0x10000)
+                break;
             snapshot.push_back(it);
+            // Floyd's cycle detection: advance fast pointer twice per step.
+            // If fast catches slow, the ring has a cycle that doesn't include
+            // &mRefs — break to avoid infinite loop from ring corruption.
+            if (fast != &mRefs && (uintptr_t)fast >= 0x10000)
+                fast = fast->next;
+            if (fast != &mRefs && (uintptr_t)fast >= 0x10000)
+                fast = fast->next;
+            slow = slow->next;
+            if (slow == fast && it->next != &mRefs) {
+                MILO_WARN("ReplaceRefs: cycle detected in ObjRef ring for %s (%d refs snapshotted), breaking\n",
+                    PathName(this), (int)snapshot.size());
+                break;
+            }
+        }
         mRefs.Clear();
         for (ObjRef *ref : snapshot) {
-            // A previous Replace may have freed this entry's container
-            // (e.g., PropAnim deletes PropKeys, RndGroup erases ObjPtrList
-            // Node). The sentinel is cleared in ~ObjRef before the memory
-            // is freed, so a non-matching sentinel means the ref is dead.
             if (ref->mAliveSentinel == ObjRef::kAliveSentinel)
                 ref->Replace(obj);
         }
-        gInReplaceList = false;
+        gInReplaceList = wasInReplace;
 #else
         ObjRef other(mRefs);
         other.prev->next = &other;

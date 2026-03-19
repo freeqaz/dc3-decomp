@@ -32,6 +32,19 @@ __forceinline ObjRefConcrete<T1, T2>::ObjRefConcrete(const ObjRefConcrete &o)
 template <class T1, class T2>
 ObjRefConcrete<T1, T2>::~ObjRefConcrete() {
     if (mObject) {
+#ifdef HX_NATIVE
+        // Before calling Release (which writes through prev/next), validate
+        // that our ring neighbors are still alive. If a neighbor was freed
+        // (sentinel cleared), skip Release to avoid writing to freed memory.
+        // Self-link this ref so it can't form part of a corrupt cycle in the
+        // ring — without this, zombie refs with stale next/prev create
+        // sub-cycles that cause ReplaceRefs to loop forever.
+        if (!prev->IsAlive() || !next->IsAlive()) {
+            prev = this;
+            next = this;
+            mObject = nullptr;
+        } else
+#endif
         mObject->Release(this);
     }
 }
@@ -39,6 +52,13 @@ ObjRefConcrete<T1, T2>::~ObjRefConcrete() {
 template <class T1, class T2>
 void ObjRefConcrete<T1, T2>::SetObjConcrete(T1 *obj) {
     if (mObject) {
+#ifdef HX_NATIVE
+        if (!prev->IsAlive() || !next->IsAlive()) {
+            prev = this;
+            next = this;
+            mObject = nullptr;
+        } else
+#endif
         mObject->Release(this);
     }
     mObject = obj;

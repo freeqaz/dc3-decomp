@@ -1286,50 +1286,12 @@ void App::RunWithoutDebugging() {
                         }
                     }
                 }
-                if (!drawVenue->IsProxy()) {
-                    // Non-proxy venue: use normal WorldDir draw path
-                    drawVenue->DrawShowing();
-                } else {
-                    // Proxy venue (loaded by DTA flow): draw meshes directly.
-                    // WorldDir::DrawShowing on a proxy takes the subdir path which
-                    // only calls RndDir::DrawShowing on its stale draw list.
-                    // Instead, select the venue's environment and iterate all meshes.
-                    RndEnviron *savedEnv = RndEnviron::Current();
-
-                    // Find and select the venue's primary environment
-                    RndEnviron *venueEnv = drawVenue->GetEnv();
-                    if (!venueEnv) {
-                        for (ObjDirItr<RndEnviron> eit(drawVenue, true); eit != nullptr; ++eit) {
-                            venueEnv = &*eit;
-                            break;
-                        }
-                    }
-                    if (venueEnv)
-                        venueEnv->Select(nullptr);
-
-                    // Select venue camera. CameraManager::Poll() updates this
-                    // via CamShot animation (driven by HamDirector::OnSelectCamera
-                    // → PlayNextShot). GetViewProjectXfms computes view/proj from
-                    // the engine's internal camera matrices.
-                    RndCam *venueCam = drawVenue->Find<RndCam>("world.cam", true);
-                    if (venueCam) {
-                        venueCam->Select();
-                    }
-
-                    // Draw all venue drawables — meshes, crowds, particles, lines, flares.
-                    // Use RndDrawable iterator (not just RndMesh) to pick up WorldCrowd,
-                    // RndParticleSys, RndLine, RndFlare etc. Skip RndDir/PanelDir/WorldDir
-                    // to avoid recursive sub-draw (those manage their own draw lists).
-                    for (ObjDirItr<RndDrawable> it(drawVenue, true); it != nullptr; ++it) {
-                        // Skip directory types to avoid recursive draw loops
-                        if (dynamic_cast<RndDir*>(&*it)) continue;
-                        it->DrawShowing();
-                    }
-
-                    // Restore previous environment
-                    if (savedEnv)
-                        savedEnv->Select(nullptr);
-                }
+                // Use WorldDir::DrawShowing for all venues (proxy or not).
+                // When TheWorld is null (always true here — native draw loop runs
+                // outside the panel hierarchy), DrawShowing takes the full path:
+                // CameraManager selects the camera via CamShot animation,
+                // environment is set up, and RndDir::DrawShowing renders mDraws.
+                drawVenue->DrawShowing();
             }
         }
 #endif
