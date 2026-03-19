@@ -610,6 +610,21 @@ void HamCamShot::Target::UpdateTarget(Symbol s, HamCamShot *shot) {
     Store(shot);
 }
 
+std::list<HamCamShot::TargetCache>::iterator HamCamShot::GetTargetCache(Symbol s) {
+    for (std::list<TargetCache>::iterator it = sCache.begin(); it != sCache.end(); ++it) {
+        if (s == it->mTargetName)
+            return it;
+    }
+    if (!TheLoadMgr.EditMode()) {
+        MILO_NOTIFY(
+            "%s creating target cache for %s, targets changed while playing camera",
+            PathName(this),
+            s
+        );
+    }
+    return CreateTargetCache(s);
+}
+
 std::list<HamCamShot::TargetCache>::iterator HamCamShot::CreateTargetCache(Symbol s) {
     TargetCache cache;
     sCache.insert(sCache.begin(), cache);

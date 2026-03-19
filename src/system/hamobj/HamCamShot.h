@@ -137,6 +137,7 @@ protected:
     bool IterateNextShot();
     bool ListNextShots(std::list<HamCamShot *> &);
 
+    std::list<TargetCache>::iterator GetTargetCache(Symbol);
     std::list<TargetCache>::iterator CreateTargetCache(Symbol);
 
     static std::list<TargetCache> sCache;
