@@ -305,16 +305,16 @@ inline void Interp(const Vector3 &v1, const Vector3 &v2, float f, Vector3 &dst) 
         ((u32 *)&dst)[3] = ((u32 *)&v2)[3];
         return;
     }
-    // Cache z and x components to force specific load order for register allocation.
-    // Y is accessed inline in the expression to match target instruction scheduling.
+    // Cache z and y components to force specific load order for register allocation.
+    // X is accessed inline in the expression to match target instruction scheduling.
     float v1_z = v1.z;
     float v2_z = v2.z;
-    float v1_x = v1.x;
-    float v2_x = v2.x;
-    // Compute dst.y, dst.z, dst.x in this specific order to match target stores
-    dst.y = f * (v2.y - v1.y) + v1.y;
+    float v1_y = v1.y;
+    float v2_y = v2.y;
+    // Compute dst.x, dst.z, dst.y in this specific order to match target stores
+    dst.x = f * (v2.x - v1.x) + v1.x;
     dst.z = f * (v2_z - v1_z) + v1_z;
-    dst.x = f * (v2_x - v1_x) + v1_x;
+    dst.y = f * (v2_y - v1_y) + v1_y;
 }
 
 inline float Distance(const Vector3 &v1, const Vector3 &v2) {

@@ -109,12 +109,12 @@ bool PlatformMgr::HasCreatedContentPrivilege() const {
     bool allUsersRestricted = true;
     for (int userIndex = 0; userIndex < 4; ++userIndex) {
         int privilegeResult = 0;
-        bool createdContentBlocked = XUserCheckPrivilege(userIndex, XPRIVILEGE_USER_CREATED_CONTENT, &privilegeResult) != 0
-            || privilegeResult != 0;
-        bool friendsOnlyContentBlocked =
-            XUserCheckPrivilege(userIndex, XPRIVILEGE_USER_CREATED_CONTENT_FRIENDS_ONLY, &privilegeResult) != 0
-            || privilegeResult != 0;
-        bool userIsRestricted = !(createdContentBlocked && friendsOnlyContentBlocked);
+        bool createdContentOK = XUserCheckPrivilege(userIndex, XPRIVILEGE_USER_CREATED_CONTENT, &privilegeResult) == 0
+            && privilegeResult == 0;
+        bool friendsOnlyContentOK =
+            XUserCheckPrivilege(userIndex, XPRIVILEGE_USER_CREATED_CONTENT_FRIENDS_ONLY, &privilegeResult) == 0
+            && privilegeResult == 0;
+        bool userIsRestricted = !(createdContentOK && friendsOnlyContentOK);
         allUsersRestricted = allUsersRestricted & userIsRestricted;
     }
 

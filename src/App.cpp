@@ -12,8 +12,7 @@
 #include "rndobj/Text.h"
 #include "world/Dir.h"
 #include "char/Character.h"
-#include "char/CharFaceServo.h"
-#include "char/CharLipSyncDriver.h"
+#include "char/FileMerger.h"
 #include "char/CharEyes.h"
 #include "char/CharInterest.h"
 #include "hamobj/HamCharacter.h"
@@ -35,7 +34,6 @@
 #include "rndobj/BaseMaterial.h"
 #include "rndobj/Mat.h"
 #include "rndobj/TexRenderer.h"
-#include "world/Crowd.h"
 #include "hamobj/HamGameData.h"
 #include "obj/DirLoader.h"
 #include "ui/UILabel.h"
@@ -1055,15 +1053,17 @@ void App::RunWithoutDebugging() {
                     if (venueWorld != sLastPresetVenue) {
                         sLastPresetVenue = venueWorld;
 
-                        // Load venue component .milo files not handled by DTA flow
+                        // Load venue component .milo files (_buildings, _sky, _set,
+                        // _chairs, _table_glasses). DC3 venues don't have extras.fm
+                        // (unlike RB3) — component files are separate .milo archives
+                        // loaded manually. On Xbox, HamDirector::OnLoadSong triggers
+                        // extras.fm loading, but DC3's extras.fm code is dead (inherited
+                        // from BandDirector).
                         {
                             const char* venueName = TheGameData ? TheGameData->Venue().Str() : nullptr;
 #ifdef HX_NATIVE
-                            // GameData may have been cleared by HamDirector::~HamDirector
-                            // during screen transitions. Fall back to DC3_VENUE env var.
-                            if (!venueName || !*venueName) {
+                            if (!venueName || !*venueName)
                                 venueName = getenv("DC3_VENUE");
-                            }
 #endif
                             if (!venueName || !*venueName) venueName = "glitterati";
                             static const char* componentSuffixes[] = {
@@ -1090,40 +1090,6 @@ void App::RunWithoutDebugging() {
                                 venueWorld->SyncObjects();
                             }
                         }
-
-#ifdef HX_NATIVE
-                        // Diagnostic: check for WorldCrowd objects in venue
-                        {
-                            int crowdCount = 0, totalInstances = 0;
-                            for (ObjDirItr<WorldCrowd> cit(venueWorld, true); cit != nullptr; ++cit) {
-                                crowdCount++;
-                                int inst = 0;
-                                int charsWithRef = 0, charsNull = 0;
-                                for (auto &cd : cit->GetCharacters()) {
-                                    if (cd.mDef.mChar)
-                                        charsWithRef++;
-                                    else
-                                        charsNull++;
-                                    if (cd.mMMesh) {
-                                        for (auto jt = cd.mMMesh->Instances().begin();
-                                             jt != cd.mMMesh->Instances().end(); ++jt)
-                                            inst++;
-                                    }
-                                }
-                                MILO_LOG("DC3 Native: WorldCrowd '%s' — %d instances, "
-                                       "%d chars (ref=%d, null=%d), placement=%p\n",
-                                       cit->Name(), inst, charsWithRef + charsNull,
-                                       charsWithRef, charsNull,
-                                       (void*)cit->GetPlacementMesh());
-                                totalInstances += inst;
-                            }
-                            if (crowdCount > 0)
-                                MILO_LOG("DC3 Native: %d WorldCrowd objects, %d total instances\n",
-                                       crowdCount, totalInstances);
-                            else
-                                MILO_LOG("DC3 Native: no WorldCrowd objects found in venue\n");
-                        }
-#endif
 
                         // Hide Kinect-dependent venue meshes (no camera on native):
                         // TV screens show white placeholder, projectors show white rects
@@ -1180,12 +1146,16 @@ void App::RunWithoutDebugging() {
                     }
                 }
 
-                venueWorld->Poll();
+                // During gameplay, venue is polled via HamDirector::ListPollChildren.
+                // Only explicitly poll for menu venues (no HamDirector).
+                bool isMenuVenue = (venueWorld == dynamic_cast<WorldDir*>(gNativeVenueDir))
+                                && !(TheHamDirector && TheHamDirector->GetVenueWorld());
+                if (isMenuVenue) {
+                    venueWorld->Poll();
+                }
 
                 // Reset character root positions to prevent drift from root motion.
                 // Only for menu venues — gameplay venues need characters at stage positions.
-                bool isMenuVenue = (venueWorld == dynamic_cast<WorldDir*>(gNativeVenueDir))
-                                && !(TheHamDirector && TheHamDirector->GetVenueWorld());
                 if (isMenuVenue) {
                     for (ObjDirItr<Character> it(venueWorld, true); it != nullptr; ++it) {
                         Transform& xfm = it->DirtyLocalXfm();
@@ -1193,58 +1163,25 @@ void App::RunWithoutDebugging() {
                         xfm.m.Identity();
                     }
                 }
-                // One-time face animation init: load viseme clips, wire CharEyes,
-                // enable procedural blinking. On Xbox, FileMerger loads visemes
-                // via OnConfigureFileMerger. On native we load them directly.
+                // Viseme/blinking init is handled by the FileMerger pipeline:
+                // OnConfigureFileMerger → Select("viseme") → load → SyncObjects
+                // wires CharFaceServo, CharLipSyncDriver, and blinking automatically.
+                //
+                // Interest objects (eye gaze targets) may not be in the character
+                // .milo files. Create a fallback audience interest if none exist.
                 if (!gFaceAnimInitDone) {
                     gFaceAnimInitDone = true;
                     for (ObjDirItr<HamCharacter> it(venueWorld, true); it != nullptr; ++it) {
-                        CharFaceServo *servo = it->Find<CharFaceServo>("face.faceservo", false);
-                        // Load viseme clips if face servo exists but has no base clip
-                        if (servo && !servo->BaseClip() && !it->Outfit().Null()) {
-                            Symbol charSym = GetOutfitCharacter(it->Outfit(), false);
-                            if (!charSym.Null()) {
-                                const char *visemePath = GetCharacterViseme(charSym, false);
-                                if (visemePath && visemePath[0]) {
-                                    FilePath fp;
-                                    fp.Set(FilePath::Root().c_str(), visemePath);
-                                    ObjectDir *visemeDir = DirLoader::LoadObjects(fp, nullptr, nullptr);
-                                    if (visemeDir) {
-                                        servo->SetClips(visemeDir);
-                                        CharLipSyncDriver *lipDrv = it->Find<CharLipSyncDriver>("face.lipdrv", false);
-                                        if (lipDrv) lipDrv->SetClips(visemeDir);
-                                        MILO_LOG("DC3 Native: Loaded visemes for '%s' from '%s' — base=%p\n",
-                                            it->Name(), visemePath, servo->BaseClip());
-                                    }
-                                }
-                            }
-                        }
-                        // Ensure CharEyes has reference to face servo for procedural blinking
                         CharEyes *eyes = it->GetEyes();
-                        if (eyes && servo) {
-                            eyes->SetFaceServo(servo);
-                        }
-                        // Enable blinking if we have viseme clips now
-                        if (servo && servo->BaseClip()) {
-                            it->SetBlinking(true);
-                            MILO_LOG("DC3 Native: Enabled blinking for '%s'\n", it->Name());
-                        }
-                        // Create interest objects so characters have something to look at.
-                        // On Xbox these come from the character .milo files.
-                        // Create one "audience" interest at the front of the stage.
                         if (eyes && eyes->NumInterests() == 0) {
                             CharInterest *camInterest = Hmx::Object::New<CharInterest>();
                             if (camInterest) {
-                                // Position the interest 120 inches in front of the character
-                                // at roughly audience/camera height
                                 const Vector3 &charPos = it->WorldXfm().v;
                                 Transform interestXfm;
                                 interestXfm.m.Identity();
                                 interestXfm.v.Set(charPos.x, charPos.y + 120.0f, charPos.z + 24.0f);
                                 camInterest->SetLocalXfm(interestXfm);
                                 eyes->AddInterestObject(camInterest);
-                                MILO_LOG("DC3 Native: Added audience interest for '%s' at (%.1f,%.1f,%.1f)\n",
-                                    it->Name(), interestXfm.v.x, interestXfm.v.y, interestXfm.v.z);
                             }
                         }
                     }
@@ -1256,43 +1193,17 @@ void App::RunWithoutDebugging() {
         // DTA enter handler (hud_objects.dta) sets $hud_panel = $this.
         // TheUI->Draw() renders game_screen panels including the merged HUD.
 
-        // Draw: BeginDrawing → Venue 3D → UI overlay → HUD → EndDrawing.
-        // On Xbox, the venue renders via world_panel in the screen hierarchy.
-        // On native, the DTA panel system doesn't connect the venue to the
-        // draw chain, so we draw it explicitly.
+        // Draw: BeginDrawing → UI panels (venue + HUD + menus) → EndDrawing.
+        // During gameplay, the venue renders through world_panel → HamDirector.
+        // Pre-game/menu, we draw the venue directly via gNativeVenueDir.
         TheRnd.BeginDrawing();
 #ifdef HX_NATIVE
-        {
-            WorldDir *drawVenue = TheHamDirector ? TheHamDirector->GetVenueWorld() : nullptr;
-            if (!drawVenue && gNativeVenueDir)
-                drawVenue = dynamic_cast<WorldDir *>(gNativeVenueDir);
-            if (drawVenue && !getenv("DC3_HUD_ONLY")) {
-                // Per-venue one-shot: hide Kinect/render-target meshes
-                {
-                    static WorldDir *sLastVenue = nullptr;
-                    if (sLastVenue != drawVenue) {
-                        sLastVenue = drawVenue;
-                        for (ObjDirItr<RndTexRenderer> trit(drawVenue, true); trit != nullptr; ++trit)
-                            trit->SetShowing(false);
-                        for (ObjDirItr<RndMesh> mit(drawVenue, true); mit != nullptr; ++mit) {
-                            if (!mit->Showing()) continue;
-                            RndMat *m = mit->Mat();
-                            if (!m) continue;
-                            RndTex *dtex = m->GetDiffuseTex();
-                            bool hide = (dtex && dtex->File().empty())
-                                || m->GetBlend() == BaseMaterial::kBlendDest;
-                            if (hide)
-                                mit->SetShowing(false);
-                        }
-                    }
-                }
-                // Use WorldDir::DrawShowing for all venues (proxy or not).
-                // When TheWorld is null (always true here — native draw loop runs
-                // outside the panel hierarchy), DrawShowing takes the full path:
-                // CameraManager selects the camera via CamShot animation,
-                // environment is set up, and RndDir::DrawShowing renders mDraws.
-                drawVenue->DrawShowing();
-            }
+        // Pre-game venue: draw directly when no HamDirector (menu/attract).
+        // During gameplay, the venue renders through world_panel → HamDirector.
+        if (!TheHamDirector && gNativeVenueDir) {
+            WorldDir *menuVenue = dynamic_cast<WorldDir *>(gNativeVenueDir);
+            if (menuVenue && !getenv("DC3_HUD_ONLY"))
+                menuVenue->DrawShowing();
         }
 #endif
         // Draw UI panels (menus, transitions, flashcards, HUD overlays).
@@ -1305,17 +1216,6 @@ void App::RunWithoutDebugging() {
         TheRnd.EndDrawing();
 
         frameCount++;
-        if (frameCount % 1000 == 0) {
-            MILO_LOG("DC3 Native: Frame %d\n", frameCount);
-        }
-
-        // Periodic UI state dump
-        if (frameCount % 500 == 0 && TheUI) {
-            const char *curScreen = TheUI->CurrentScreen() ? TheUI->CurrentScreen()->Name() : "<none>";
-            const char *transScreen = TheUI->TransitionScreen() ? TheUI->TransitionScreen()->Name() : "<none>";
-            MILO_LOG("DC3 UI State [frame %d]: current='%s' transition='%s' inTransition=%d\n",
-                   frameCount, curScreen, transScreen, (int)TheUI->InTransition());
-        }
 
         // Auto-navigate: DC3_SCREEN=<target> to skip menus
         // For game_screen: navigate step-by-step through the screen chain

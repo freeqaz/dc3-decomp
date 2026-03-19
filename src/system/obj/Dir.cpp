@@ -50,6 +50,15 @@ ObjectDir::~ObjectDir() {
     // Track destruction depth so FlowNode and other owner-delete patterns
     // can skip child deletion during cascading directory teardown.
     sDeleteObjectsDepth++;
+    // Mark all objects in this subtree as dead before the cascade starts.
+    // During cascading destruction, ~CharClip runs before ~Object and accesses
+    // other clips via Transitions. If those clips were freed by sibling subdirs,
+    // IsDeadObject() lets ~ObjRefConcrete skip the stale Release. This is
+    // read-only iteration — no callbacks, no side effects.
+    if (sDeleteObjectsDepth == 1) {
+        for (ObjDirItr<Hmx::Object> it(this, true); it != nullptr; ++it)
+            MarkDeadObject(&*it);
+    }
 #endif
     mSubDirs.clear();
     delete mLoader;
@@ -70,6 +79,8 @@ ObjectDir::~ObjectDir() {
     }
 #ifdef HX_NATIVE
     sDeleteObjectsDepth--;
+    if (sDeleteObjectsDepth == 0)
+        ClearDeadObjects();
 #endif
 }
 
@@ -697,6 +708,8 @@ void ObjectDir::DeleteObjects() {
     }
 #ifdef HX_NATIVE
     sDeleteObjectsDepth--;
+    if (sDeleteObjectsDepth == 0)
+        ClearDeadObjects();
 #endif
 }
 

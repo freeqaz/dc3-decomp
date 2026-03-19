@@ -184,7 +184,10 @@ bool SongCollision::Equals(SongCollision *other) {
             float dz = a.mOffset.z - b.mOffset.z;
             float dx = a.mOffset.x - b.mOffset.x;
             float dy = a.mOffset.y - b.mOffset.y;
-            close = std::fabs(std::sqrt(dz * dz + dx * dx + dy * dy)) < 0.0001f;
+            float dist = dz * dz;
+            dist += dx * dx;
+            dist += dy * dy;
+            close = std::fabs(std::sqrt(dist)) < 0.0001f;
             if (!close)
                 return false;
         }

@@ -32,6 +32,14 @@ __forceinline ObjRefConcrete<T1, T2>::ObjRefConcrete(const ObjRefConcrete &o)
 template <class T1, class T2>
 ObjRefConcrete<T1, T2>::~ObjRefConcrete() {
     if (mObject) {
+#ifdef HX_NATIVE
+        // During cascading ObjectDir destruction, sibling subdirs may already
+        // be freed. Check the dead object set to avoid writing to freed memory.
+        if (IsDeadObject(mObject)) {
+            mObject = nullptr;
+            return;
+        }
+#endif
         mObject->Release(this);
     }
 }

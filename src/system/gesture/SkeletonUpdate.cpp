@@ -395,8 +395,7 @@ void SkeletonUpdateCallbackSlowdownCB(float msecs, void *cbObj) {
 
     const char *className;
     if (obj) {
-        Symbol objClass = obj->ClassName();
-        if (objClass.Null()) {
+        if (obj->ClassName().Null()) {
             className = "unknown class";
         } else {
             className = obj->ClassName().Str();

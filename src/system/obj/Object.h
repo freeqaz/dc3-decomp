@@ -23,9 +23,16 @@ void MergeObjectsRecurse(ObjectDir *, ObjectDir *, MergeFilter &, bool);
 #ifdef HX_NATIVE
 // Set during ReplaceList to prevent ObjPtrVec::erase from shifting vector
 // elements (CopyRef during shift corrupts ring prev/next pointers).
-// Checked in ObjPtrVec::ReplaceNode to suppress erase.
+// Checked in ObjPtrVec::ReplaceNode and Transitions::Replace to suppress
+// structural mutations during ring walks.
 extern bool gInReplaceList;
 
+// Dead object tracking for cascading ObjectDir destruction.
+// ~ObjectDir pre-marks all objects in subtree; ~ObjRefConcrete checks
+// before Release. Cleared when sDeleteObjectsDepth drops to 0.
+void MarkDeadObject(void *obj);
+bool IsDeadObject(void *obj);
+void ClearDeadObjects();
 #endif
 
 #pragma region ObjRef

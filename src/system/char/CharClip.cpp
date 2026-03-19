@@ -23,7 +23,15 @@ CharClip::FacingSet::FacingBones CharClip::FacingSet::sFacingRotAndPos;
 bool CharClip::Transitions::Replace(ObjRef *from, Hmx::Object *to) {
     NodeVector *vector = reinterpret_cast<NodeVector *>(from);
     if (!vector->clip.SetObj(to)) {
-        RemoveNodes(vector);
+#ifdef HX_NATIVE
+        // During ReplaceList, RemoveNodes' memmove shifts subsequent NodeVectors
+        // into the current position. The ReplaceList walker then sees the shifted
+        // NodeVector at the same address, triggers force-unlink (self-loop) without
+        // nulling mObject → use-after-free on teardown. Skip the removal; the null
+        // NodeVector is harmless and cleaned up by Clear().
+        if (!gInReplaceList)
+#endif
+            RemoveNodes(vector);
     }
     return true;
 }
@@ -119,12 +127,15 @@ void CharClip::Transitions::AddNode(CharClip *clip, const CharGraphNode &node) {
     }
     resized->nodes[i] = node;
     resized->size++;
-    // Fix up ObjRef linked list pointers after potential reallocation
+    // Fix up ObjRef ring pointers after potential reallocation.
+    // ObjRef layout: vtable (sizeof(void*)) | next (sizeof(void*)) | prev (sizeof(void*))
+    // Original code used hardcoded offsets 4/8 which are only correct on 32-bit PPC.
     for (NodeVector *it = mNodeStart; it < mNodeEnd; it = it->Next()) {
-        ObjRef **prev = (ObjRef **)((char *)it + 4);
-        ObjRef **next = (ObjRef **)((char *)it + 8);
-        *(ObjRef **)((char *)*next + 4) = (ObjRef *)it;
-        *(ObjRef **)((char *)*prev + 8) = (ObjRef *)it;
+        ObjRef *clipRef = (ObjRef *)&it->clip;
+        ObjRef *clipNext = *(ObjRef **)((char *)clipRef + sizeof(void *));
+        ObjRef *clipPrev = *(ObjRef **)((char *)clipRef + sizeof(void *) * 2);
+        *(ObjRef **)((char *)clipPrev + sizeof(void *)) = clipRef;
+        *(ObjRef **)((char *)clipNext + sizeof(void *) * 2) = clipRef;
     }
 }
 

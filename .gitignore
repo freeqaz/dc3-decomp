@@ -119,3 +119,7 @@ native/.claude/
 
 # Temp obj files
 Z:*
+
+# Native ML models and third-party installs
+native/models/
+native/third_party/

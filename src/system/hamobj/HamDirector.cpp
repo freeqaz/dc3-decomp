@@ -72,11 +72,6 @@
 #include "world/CameraManager.h"
 #include "world/Dir.h"
 #include <cctype>
-#ifdef HX_NATIVE
-#include "platform/MeshGpuCache.h"
-#include "world/LightPreset.h"
-#include "world/LightPresetManager.h"
-#endif
 
 HamDirector *TheHamDirector;
 OfflineCallback gOfflineCallback;
@@ -549,19 +544,6 @@ void HamDirector::Initialize() {
     delete mPoseFatalities;
     mPoseFatalities = Hmx::Object::New<PoseFatalities>();
 #ifdef HX_NATIVE
-    {
-        // Log the state at Initialize() time for web console debugging.
-        RndPropAnim *sa = SongAnim(0);
-        int clipKeys = 0;
-        if (sa) {
-            PropKeys *ck = sa->GetKeys(this, DataArrayPtr(Symbol("clip")));
-            if (ck) clipKeys = ck->NumKeys();
-        }
-        MILO_LOG("[INIT] Initialize: clipDir=%d moveDir=%d sa=%d\n",
-            mClipDir.Ptr() ? 1 : 0, mMoveDir.Ptr() ? 1 : 0, sa ? 1 : 0);
-        MILO_LOG("[INIT]  clipKeys=%d moveParents=%d\n",
-            clipKeys, (int)TheMoveMgr->MoveParents().size());
-    }
     // Post-merge choreography init.
     //
     // Game::IsLoaded() already loads the MoveGraph and calls LoadAllVariants()
@@ -611,16 +593,9 @@ PropKeys *HamDirector::GetPropKeys(Difficulty d, Symbol s) {
 
 void HamDirector::VenueEnter(WorldDir *dir) {
     if (dir) {
-#ifdef HX_NATIVE
-        // On Xbox, the venue WorldDir's type is set by DTA (set_type "world")
-        // during the world_panel flow. On native, the DTA flow doesn't fire
-        // set_type, so we set it explicitly. The "world" type is defined in
-        // world_objects.dta and provides handlers like select_camera (which
-        // forwards to $hamdirector to advance song.anim via OnSelectCamera).
-        if (!dir->TypeDef()) {
-            dir->SetType("world");
-        }
-#endif
+        // Xbox venue has no type after SetSubDir(true) clears TypeDef.
+        // select_camera fires on the world root (not venue), so venue type
+        // is irrelevant for camera management.
         dir->Enter();
     }
     mPlayer0Char = dir ? dir->Find<HamCharacter>("player0", true) : nullptr;
@@ -1027,13 +1002,6 @@ void HamDirector::SetCharSpot(Symbol charType, Symbol spotState) {
 DataNode HamDirector::OnToggleCamshotFlag() { return mCamshotFlag = !mCamshotFlag; }
 
 DataNode HamDirector::OnLoadSong(DataArray *a) {
-#ifdef HX_NATIVE
-    MILO_LOG(
-        "DC3 HamDirector::OnLoadSong merger=%p song='%s'\n",
-        (void *)mMerger.Ptr(),
-        a->Str(2)
-    );
-#endif
     FilePathTracker tracker(FileRoot());
     MILO_ASSERT(TheGameData, 0xC1D);
     for (int i = 0; i < 2; i++) {
@@ -1212,13 +1180,6 @@ void GetVenuePath(FilePath &path, const char *cc) {
 }
 
 DataNode HamDirector::OnFileLoaded(DataArray *a) {
-#ifdef HX_NATIVE
-    MILO_LOG(
-        "DC3 HamDirector::OnFileLoaded sym='%s' merger=%p\n",
-        a->Sym(2).Str(),
-        (void *)mMerger.Ptr()
-    );
-#endif
     static Symbol song("song");
     static Symbol venue("venue");
     static Symbol viz("viz");
@@ -1260,14 +1221,6 @@ DataNode HamDirector::OnFileLoaded(DataArray *a) {
             if (sym == venue && dir) {
                 mVenue = dynamic_cast<WorldDir *>(dir);
 #ifdef HX_NATIVE
-                MILO_LOG(
-                    "DC3 OnFileLoaded(venue) dir=%p venue=%p '%s' hash=%d subdirs=%d\n",
-                    (void *)dir,
-                    (void *)mVenue.Ptr(),
-                    dir ? dir->Name() : "<null>",
-                    dir ? dir->HashTableUsedSize() : -1,
-                    mVenue ? (int)mVenue->SubDirs().size() : -1
-                );
                 // DTA scripts expect video_recorder.srec in the venue world
                 // (Kinect video recording). Register a no-op stub so find_obj succeeds.
                 if (mVenue && !mVenue->FindObject("video_recorder.srec", false, false)) {
@@ -2532,15 +2485,9 @@ void HamDirector::PlayNextShot() {
     }
     mLastShotTime = lastShotTime;
     mCurShot = nextShot;
-    // Apply shot to the CameraManager that controls rendering.
-    // On original, mMerger->Dir() is the root world that runs camera management
-    // during DrawShowing(). On native, we explicitly select the venue's camera
-    // in App.cpp, so apply to the venue's CameraManager directly.
-#ifdef HX_NATIVE
-    WorldDir *world = mVenue;
-#else
+    // Apply shot to the world root's CameraManager — WorldDir::DrawShowing
+    // reads mCameraMgr from the world root when rendering through the panel system.
     WorldDir *world = dynamic_cast<WorldDir *>(mMerger ? mMerger->Dir() : nullptr);
-#endif
     if (world) {
         world->GetCameraManager()->ForceCameraShot(mCurShot, false);
     }
@@ -3076,67 +3023,15 @@ void HamDirector::Poll() {
     if (TheHamWardrobe) {
         TheHamWardrobe->UpdateOverlay();
     }
-#ifdef HX_NATIVE
-    {
-        // Periodic state dump — gated behind MILO_DEBUG_CLIPS env var.
-        static int sDebugClips = -1;
-        if (sDebugClips < 0) sDebugClips = getenv("MILO_DEBUG_CLIPS") ? 1 : 0;
-        if (sDebugClips) {
-            static int sPollCount = 0;
-            if (sPollCount++ % 150 == 0) {
-                HamCharacter *ch0 = TheHamWardrobe ? TheHamWardrobe->GetCharacter(0) : nullptr;
-                RndPropAnim *sa = SongAnim(0);
-                int layers = -1;
-                if (ch0) {
-                    HamDriver *drv = ch0->SongDriver();
-                    if (drv) layers = (int)drv->Layers().mLayers.size();
-                }
-                MILO_LOG("[CLIP_STATE] poll=%d en=%d ch0=%d sa=%d f=%.1f b=%.1f\n",
-                    sPollCount, mPollEnabled ? 1 : 0,
-                    ch0 ? 1 : 0, sa ? 1 : 0,
-                    sa ? sa->GetFrame() : -1.0f, TheTaskMgr.Beat());
-                MILO_LOG("[CLIP_STATE]  merger=%d clipDir=%d p0Anim=%d doSA=%d layers=%d\n",
-                    mMerger.Ptr() ? 1 : 0, mClipDir.Ptr() ? 1 : 0,
-                    ch0 ? ch0->SongAnimation() : -99,
-                    SongAnimation() ? 1 : 0, layers);
-            }
-        }
-    }
-#endif
     if (!mPollEnabled) return;
     HamCharacter *player0 = TheHamWardrobe ? TheHamWardrobe->GetCharacter(0) : nullptr;
     HamCharacter *player1 = TheHamWardrobe ? TheHamWardrobe->GetCharacter(1) : nullptr;
     RndPropAnim *songAnim = SongAnim(0);
     if (songAnim) {
-#ifdef HX_NATIVE
-        // On Xbox, song.anim frame advancement is driven by the DTA path:
+        // Song.anim frame advancement is driven by the world root's DTA path:
         //   WorldDir::Poll() → HandleType("select_camera") → OnSelectCamera()
         //     → frame = BeatToSeconds(Beat()) * 30.0f → songAnim->SetFrame(frame)
-        //
-        // On native, this DTA path may not fire reliably (async loading, missing
-        // TypeDef, timing). As a fallback, use beat-to-frame conversion directly
-        // when the frame hasn't advanced past its initial value. Once
-        // OnSelectCamera takes over (frame goes positive), this stops firing.
-        if (songAnim->GetFrame() < 0.0f) {
-            float beat = TheTaskMgr.Beat();
-            float frame = 0.0f;
-            if (beat > 0.0f) {
-                // Beat system active — use beat-synchronized frame
-                frame = BeatToFrame(beat);
-            } else {
-                // Pre-beat phase — use wall-clock time so anim starts from 0
-                float secs = TheTaskMgr.Seconds(TaskMgr::kRealTime);
-                if (secs > 0.0f)
-                    frame = secs * 30.0f;
-            }
-            if (frame >= 0.0f) {
-                float endFrame = songAnim->EndFrame();
-                if (endFrame > 0.0f && frame > endFrame)
-                    frame = endFrame;
-                songAnim->SetFrame(frame, 1.0f);
-            }
-        }
-#endif
+        // ProcCounter ensures select_camera fires every frame after Enter().
         if (player0 && player1) {
             int p0anim = player0->SongAnimation();
             int p1anim = player1->SongAnimation();

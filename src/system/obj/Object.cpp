@@ -14,9 +14,19 @@
 #include "utl/Symbol.h"
 
 #ifdef HX_NATIVE
+#include <unordered_set>
 #include <vector>
 Hmx::Object *Hmx::Object::sDeleting;
 bool gInReplaceList = false;
+
+// Track destroyed objects during cascading ObjectDir teardown.
+// ~Object inserts; ~ObjRefConcrete checks before Release.
+// Cleared when the outermost cascade completes (sDeleteObjectsDepth → 0).
+static std::unordered_set<void *> sDeadObjects;
+
+void MarkDeadObject(void *obj) { sDeadObjects.insert(obj); }
+bool IsDeadObject(void *obj) { return sDeadObjects.count(obj) != 0; }
+void ClearDeadObjects() { sDeadObjects.clear(); }
 
 void ObjRef::ReplaceList(Hmx::Object *obj) {
     // Suppress ObjPtrVec::erase during ring walk. CopyRef during vector
