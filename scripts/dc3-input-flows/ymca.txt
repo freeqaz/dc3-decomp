@@ -1,15 +1,15 @@
-# YMCA — Full flow from boot to game_screen
+# YMCA — Full flow from boot to game_screen (venue loading)
 #
 # Route: main_screen → choose_mode (gameplay) → song_select (perform)
 #        → scroll to YMCA → select → multiuser → loading → game_screen
 #
-# YMCA is at song list index 5 (3 downs from default position 2).
-# game_screen reached at ~frame 2000, stable through 3000+.
+# The venue loading happens during the loading → game_screen transition
+# via FileMerger::FinishLoading merging world assets.
 #
 # Usage:
-#   MILO_HEADLESS=1 MILO_MAX_FRAMES=3000 \
+#   MILO_HEADLESS=1 MILO_MAX_FRAMES=5000 \
 #     MILO_INPUT_SCRIPT=scripts/dc3-input-flows/ymca.txt \
-#     timeout 120 native/build/dc3-native
+#     DC3_DATA=orig-assets native/build/dc3-native
 
 # main_screen: select "gameplay" (first item)
 500 confirm
@@ -24,3 +24,7 @@
 
 # song_select_screen: select YMCA
 1500 confirm
+
+# multiuser_screen: confirm to proceed with defaults
+1800 confirm
+2000 confirm

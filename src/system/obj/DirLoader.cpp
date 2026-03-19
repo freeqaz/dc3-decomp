@@ -675,11 +675,8 @@ void DirLoader::LoadObjs() {
             if (obj) {
                 void **vptr = *(void ***)obj;
                 if (!vptr || !vptr[0]) {
-                    // Don't call virtual methods (ClassName()) on an object
-                    // with a null vtable — it would crash on WASM (call_indirect
-                    // trap) and SIGSEGV on native. Name() is safe (non-virtual).
-                    MILO_NOTIFY("DirLoader: STUB vtable '%s' in '%s'",
-                                obj->Name(), mFile.c_str());
+                    MILO_NOTIFY("DirLoader: STUB vtable '%s' class='%s' in '%s'",
+                                obj->Name(), obj->ClassName().Str(), mFile.c_str());
                     if (mRev > 1) ReadDead(*mStream);
                     mObjects.pop_front();
                     continue;

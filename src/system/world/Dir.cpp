@@ -478,8 +478,6 @@ void WorldDir::SyncObjects() {
 
 void WorldDir::DrawShowing() {
     START_AUTO_TIMER("world_draw");
-#ifdef HX_NATIVE
-#endif
     if (TheWorld) {
         MILO_ASSERT(TheWorld != this, 0x25c);
         if (Showing())

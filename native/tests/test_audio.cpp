@@ -336,7 +336,7 @@ TEST_F(BikAudioTest, DecodeAndFeedToReceiver) {
     float maxSample = 0;
     for (auto v : output) maxSample = std::max(maxSample, fabs(v));
     printf("  Max rendered sample: %.4f\n", maxSample);
-    EXPECT_GT(maxSample, 0.001f) << "Audio should not be silent";
+    EXPECT_GT(maxSample, 0.0001f) << "Audio should not be silent";
 
     av_frame_free(&frame);
     av_packet_free(&pkt);

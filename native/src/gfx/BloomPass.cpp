@@ -120,10 +120,10 @@ void BloomPass::EnsurePipelines(GpuDevice& gpu) {
     mBloomUniformBuffer = dev.CreateBuffer(&bufDesc);
 
     auto makePipeline = [&](const char* fsEntry, bool additiveBlend) -> wgpu::RenderPipeline {
+        wgpu::BlendState blend{};
         wgpu::ColorTargetState ct{};
         ct.format = gpu.SurfaceFormat();
         if (additiveBlend) {
-            wgpu::BlendState blend{};
             blend.color.operation = wgpu::BlendOperation::Add;
             blend.color.srcFactor = wgpu::BlendFactor::One;
             blend.color.dstFactor = wgpu::BlendFactor::One;

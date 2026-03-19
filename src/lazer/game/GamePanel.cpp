@@ -929,8 +929,7 @@ bool GamePanel::IsPastStreamJumpPointOfNoReturn() {
 void GamePanel::PollForLoading() {
 #ifdef HX_NATIVE
     static int sPollCount = 0;
-    sPollCount++;
-    if (sPollCount < 10) fprintf(stderr, "DC3 GamePanel::PollForLoading() — entry (poll #%d)\n", sPollCount);
+    if (sPollCount++ < 10) fprintf(stderr, "DC3 GamePanel::PollForLoading() — entry (poll #%d)\n", sPollCount);
 #endif
     mPollLoadState = 0;
     UIPanel::PollForLoading();
@@ -940,34 +939,15 @@ void GamePanel::PollForLoading() {
         if (TheUI->TransitionScreen()
             && TheUI->TransitionScreen()->HasPanel(worldPanel)) {
             if (!TheHamDirector) {
-#ifdef HX_WEB
-                if (sPollCount < 10 || sPollCount % 300 == 0)
-                    fprintf(stderr, "DC3 PollForLoading: stuck at state 1 — no TheHamDirector\n");
-#endif
                 return;
             }
             if (!TheHamDirector->IsWorldLoaded()) {
-#ifdef HX_WEB
-                if (sPollCount < 10 || sPollCount % 300 == 0) {
-                    fprintf(stderr, "DC3 PollForLoading: stuck at state 1 — IsWorldLoaded=false"
-                            " venue=%p merger=%p mergerPending=%d moveMerger=%p movePending=%d\n",
-                            (void *)TheHamDirector->GetVenueWorld(),
-                            (void *)TheHamDirector->GetWorld(),
-                            TheHamDirector->GetWorld() ? 0 : -1,
-                            (void *)nullptr, // can't easily access mMoveMerger
-                            -1);
-                }
-#endif
                 return;
             }
         }
         mPollLoadState = 2;
         const DataNode *prop = TheGameMode->Property("load_chars");
         if (prop->Int() != 0 && !TheHamWardrobe->AllCharsLoaded()) {
-#ifdef HX_WEB
-            if (sPollCount < 10 || sPollCount % 300 == 0)
-                fprintf(stderr, "DC3 PollForLoading: stuck at state 2 — AllCharsLoaded=false\n");
-#endif
             return;
         }
         mPollLoadState = 3;
@@ -978,19 +958,7 @@ void GamePanel::PollForLoading() {
             if (!sReported) { fprintf(stderr, "DC3 GamePanel::PollForLoading() — DONE (state 4)!\n"); sReported = true; }
 #endif
         }
-#ifdef HX_WEB
-        else {
-            if (sPollCount < 10 || sPollCount % 300 == 0)
-                fprintf(stderr, "DC3 PollForLoading: stuck at state 3 — Game::IsReady=false\n");
-        }
-#endif
     }
-#ifdef HX_WEB
-    else {
-        if (sPollCount < 10 || sPollCount % 300 == 0)
-            fprintf(stderr, "DC3 PollForLoading: stuck at state 0 — UIPanel::IsLoaded=false\n");
-    }
-#endif
 }
 
 void GamePanel::ClearDrawGlitch() {

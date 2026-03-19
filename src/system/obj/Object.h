@@ -25,6 +25,7 @@ void MergeObjectsRecurse(ObjectDir *, ObjectDir *, MergeFilter &, bool);
 // elements (CopyRef during shift corrupts ring prev/next pointers).
 // Checked in ObjPtrVec::ReplaceNode to suppress erase.
 extern bool gInReplaceList;
+
 #endif
 
 #pragma region ObjRef
@@ -52,8 +53,11 @@ protected:
     ObjRef *next; // 0x4
     ObjRef *prev; // 0x8
 #ifdef HX_NATIVE
-    // Sentinel to detect freed ObjRefs in snapshot-based ReplaceRefs.
-    // Set in constructor, cleared in destructor.
+    // Sentinel to detect freed ObjRefs during snapshot-based ReplaceRefs.
+    // Set to kAliveSentinel in constructor, cleared to 0 in destructor.
+    // Checked before calling Replace on snapshot entries — if the sentinel
+    // doesn't match, the ObjRef was freed by a cascading destruction during
+    // an earlier Replace callback. No ABI impact (native-only field).
     static constexpr uint32_t kAliveSentinel = 0xCAFEBABE;
     uint32_t mAliveSentinel = kAliveSentinel;
 #endif
@@ -78,6 +82,9 @@ public:
         mAliveSentinel = 0;
 #endif
     }
+#ifdef HX_NATIVE
+    bool IsAlive() const { return mAliveSentinel == kAliveSentinel; }
+#endif
     virtual Hmx::Object *RefOwner() const { return nullptr; }
     virtual bool IsDirPtr() { return false; }
     virtual Hmx::Object *GetObj() const {
@@ -1390,7 +1397,7 @@ template <class T>
 BinStream &operator>>(BinStreamRev &bs, ObjVector<T> &vec) {
     unsigned int length;
     bs >> length;
-#if defined(HX_NATIVE) && !defined(HX_WEB)
+#ifdef HX_NATIVE
     if (length > 0x10000) {
         fprintf(stderr, "ObjVector: CORRUPT length=%u (0x%x) at stream pos=%d\n", length, length, bs.stream.Tell());
         abort();

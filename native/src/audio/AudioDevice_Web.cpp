@@ -301,14 +301,6 @@ void AudioDevice::Terminate() {
     mSources.clear();
 }
 
-void AudioDevice::Suspend() {
-    mSuspended.store(true, std::memory_order_release);
-}
-
-void AudioDevice::Resume() {
-    mSuspended.store(false, std::memory_order_release);
-}
-
 void AudioDevice::AddSource(AudioSource *source) {
     std::lock_guard<std::mutex> lock(mSourceMutex);
     mSources.push_back(source);

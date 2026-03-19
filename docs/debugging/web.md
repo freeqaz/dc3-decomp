@@ -5,10 +5,11 @@ Techniques for debugging the DC3 WASM/Emscripten web port — both interactively
 ## Prerequisites
 
 ```bash
+sudo pacman -S xorg-server-xvfb chromium
 npm install playwright
 ```
 
-WebGPU requires a **secure context** (HTTPS or localhost). All tests must run against the dev server on `localhost`, not `data:` or `file:` URLs. No xvfb needed — `--headless=new` provides its own compositor.
+WebGPU requires a real GPU context. Use `xvfb-run` to provide a virtual X11 display for headless execution.
 
 ## Architecture Overview
 
@@ -22,15 +23,12 @@ The web port compiles the same codebase as the desktop native port, with platfor
 | Audio | miniaudio | Emscripten audio worklet |
 | Video | FFmpeg | Stubs (no playback) |
 | Skeleton | Unix socket to pose_server.py, falls back to dummy | Dummy skeleton only |
-| File I/O | Disk reads | MEMFS + on-demand HTTP fetch via JSPI async-yield |
-| Main loop | `while (!shouldClose)` in `App::Run()` | JS `requestAnimationFrame` → `dc3MainLoopTick()` (JSPI-wrapped export) |
-| Async I/O | N/A (synchronous POSIX) | JSPI (`-sJSPI`): `emscripten_sleep()` yields to browser during file fetches |
-| Exceptions | Native C++ | Wasm exceptions (`-fwasm-exceptions`) — native WASM instructions |
+| File I/O | Disk reads | MEMFS (assets bundled at build) |
+| Main loop | `while (!shouldClose)` in `App::Run()` | `emscripten_set_main_loop(mainLoop, 0, true)` (rAF-synced) |
 | Threading | `std::thread` (reader thread for skeleton) | Single-threaded (stubs) |
 | Build | `cmake --build native/build` | `scripts/build/web.sh` (emcmake) |
 
 Both desktop and web define `HX_NATIVE`. Platform-specific code uses `#ifdef __EMSCRIPTEN__`.
-The web build also defines `HX_WEB=1` — use `#if defined(HX_NATIVE) && !defined(HX_WEB)` for desktop-only native code.
 
 ## Quick Reference
 
@@ -41,80 +39,24 @@ scripts/build/web.sh
 # Start dev server (must be running for all browser-based tools)
 python3 native/web/server.py --port 8420
 
-# Screenshot validation (quick sanity check — no xvfb needed)
-node native/web/tests/test-screenshot.js --no-server --verbose
-
 # Smoke test (auto-server, hang detection, WebGPU init check)
-node native/web/tests/web-smoke.js --verbose
+xvfb-run -a --server-args="-screen 0 1920x1080x24" \
+  node native/web/tests/web-smoke.js --verbose
 
 # Song scroll test (captures screenshots per scroll)
-node native/web/tests/test-song-scroll.js --no-server --verbose
+xvfb-run -a --server-args="-screen 0 1920x1080x24" \
+  node native/web/tests/test-song-scroll.js --no-server --verbose
 
 # CDP debugger break (pauses at hang point, dumps call stack)
-node native/web/tests/cdp-debugger-break.js --no-server --verbose
+xvfb-run -a --server-args="-screen 0 1920x1080x24" \
+  node native/web/tests/cdp-debugger-break.js --no-server --verbose
+
+# Capture console logs for analysis
+scripts/web/capture-logs.sh --duration 120 --output /tmp/my-log.txt
 
 # Rebuild WASM
 scripts/build/web.sh
 ```
-
-## Build Flags and Debug Targets
-
-### Always-on (Tier 1)
-
-These flags are enabled by default in the web build. Minimal cost (~2MB size increase).
-
-| Flag | Purpose |
-|------|---------|
-| `-g2` | Demangled C++ names in stack traces (superset of `--profiling-funcs`) |
-| `-sASSERTIONS=1` | Runtime checks for invalid function pointers, memory errors |
-| `-sSTACK_OVERFLOW_CHECK=2` | Detects stack overflow in deep call chains (milo loading) |
-| `-fwasm-exceptions` | Native WASM exception instructions (replaces JS-based `-sNO_DISABLE_EXCEPTION_CATCHING`) |
-| `-sJSPI` | Non-blocking file loading via browser-native stack switching (Chrome 137+) |
-
-### JSPI (JavaScript Promise Integration)
-
-The web build uses JSPI for non-blocking file I/O. When `AsyncFile::Init()` tries to open a file
-not yet in MEMFS, `WebAssetsFetchSync()` starts an `emscripten_fetch()` and calls
-`emscripten_sleep(16)` in a loop, yielding to the browser event loop. The loading screen renders
-during file downloads — zero code size overhead.
-
-**Key detail**: `emscripten_set_main_loop` calls its callback via the WASM function table
-(indirect call), which bypasses JSPI's `WebAssembly.promising` wrapper. The fix: the main loop
-tick is exported as `dc3MainLoopTick` and driven from JS via `requestAnimationFrame` with `await`.
-See `native/src/main_web.cpp`.
-
-The `DC3_WEB_ASYNCIFY` compile define gates the JSPI code path in `WebAssets.cpp` and `main_web.cpp`.
-Disable with `-DDC3_WEB_ASYNC=OFF` to fall back to blocking synchronous XHR.
-
-### Debug build targets (Tier 2, opt-in)
-
-Use separate build directories for debug variants to avoid recompiling the main build.
-
-```bash
-# Source emsdk first
-source ~/emsdk/emsdk_env.sh
-
-# DWARF debugging — full source-level stepping in Chrome DevTools
-# DWARF goes in a .debug.wasm side file so the main binary stays lean.
-# Install the C/C++ DevTools Support extension in Chrome.
-emcmake cmake -S native -B native/build-web-debug -DDC3_WEB_DEBUG=ON
-cmake --build native/build-web-debug -- -j$(nproc)
-
-# UBSan — catches undefined behavior (alignment, overflow, null deref)
-# Especially relevant: Xbox PPC quirks that "work" but are UB in Wasm.
-emcmake cmake -S native -B native/build-web-ubsan -DDC3_WEB_UBSAN=ON
-cmake --build native/build-web-ubsan -- -j$(nproc)
-
-# ASan — heavy memory corruption debugging (buffer overflow, use-after-free)
-# In Wasm, address 0 is valid memory — no segfaults. ASan catches null derefs.
-emcmake cmake -S native -B native/build-web-asan -DDC3_WEB_ASAN=ON
-cmake --build native/build-web-asan -- -j$(nproc)
-```
-
-These can be combined: `-DDC3_WEB_DEBUG=ON -DDC3_WEB_UBSAN=ON` etc.
-
-See [docs/native/WEB_DEBUGGING.md](../native/WEB_DEBUGGING.md) for the full Emscripten
-debugging features guide (DWARF setup, sanitizer details, profiling, WebAssembly proposals).
 
 ## Headless Desktop Testing (Preferred for Agents)
 
@@ -204,32 +146,15 @@ MILO_HEADLESS=1 MILO_RENDER=1 \
 
 Use these when you need to test browser-specific behavior (WebGPU canvas rendering, keyboard input mapping, asset loading over HTTP).
 
-### Headless WebGPU Screenshots
-
-All test scripts use a shared launch config (`native/web/tests/launch-helpers.js`) that configures Chrome for headless WebGPU rendering. Key points:
-
-- **No xvfb needed.** `--headless=new` provides a real compositor with GPU support.
-- **Must use localhost.** WebGPU requires a secure context — `data:` and `file:` URLs won't have `navigator.gpu`.
-- **Readiness signal.** The engine sets `window.__webgpuReady = true` after 3 rendered frames. Use `waitForWebGPUReady(page)` before taking screenshots. Use `screenshotReady(page, path)` to wait for compositor presentation.
-- **Engine init is slow (~30-60s).** Asset download + synchronous DTA parsing take time. Set timeouts accordingly.
-
-Chrome flags (handled by `launch-helpers.js`):
-```
---headless=new --use-angle=vulkan
---enable-features=Vulkan,VulkanFromANGLE,DefaultANGLEVulkan
---disable-vulkan-surface --enable-unsafe-webgpu --ignore-gpu-blocklist
-```
-
 ### Test Scripts
 
 | Script | Purpose | Key Flags |
 |--------|---------|-----------|
-| `test-screenshot.js` | Validate WebGPU screenshots capture real content | `--gpu-info`, `--frames N`, `--out dir` |
 | `web-smoke.js` | Boot check, hang/crash detection | `--timeout`, `--hang-timeout`, `--wait-for`, `--save-logs` |
 | `test-song-scroll.js` | Navigate to song_select, scroll, capture screenshots | `--scrolls N`, `--out dir` |
 | `cdp-debugger-break.js` | Pause at hang point via CDP, dump WASM call stack | `--silence N` |
 | `diagnose-song-load.js` | Full menu nav to gameplay, diagnose load issues | `--timeout`, `--hang-timeout` |
-| `run-web-tests.sh` | Wrapper: server + smoke test | `--diagnose-hang` |
+| `run-web-tests.sh` | Wrapper: xvfb + server + smoke test | `--diagnose-hang`, `--no-xvfb` |
 
 All scripts live in `native/web/tests/`. The dev server is at `native/web/server.py`.
 
@@ -239,9 +164,9 @@ All scripts live in `native/web/tests/`. The dev server is at `native/web/server
 # Start server in background
 python3 native/web/server.py --port 8420 &
 
-# Run any test directly (no xvfb wrapper needed)
-node native/web/tests/test-screenshot.js --no-server --verbose
-node native/web/tests/test-song-scroll.js --no-server --verbose
+# Run any test with xvfb + WebGPU
+xvfb-run -a --server-args="-screen 0 1920x1080x24" \
+  node native/web/tests/test-song-scroll.js --no-server --verbose
 
 # Or use the wrapper (auto-starts server)
 native/web/tests/run-web-tests.sh --verbose
@@ -249,7 +174,7 @@ native/web/tests/run-web-tests.sh --verbose
 
 ### Sandbox
 
-GPU access requires `dangerouslyDisableSandbox: true` for bash commands. Chrome needs access to `/dev/dri/renderD*` for Vulkan.
+GPU access requires `dangerouslyDisableSandbox: true` for bash commands. The xvfb-run + Chromium + Vulkan stack needs unrestricted filesystem and device access.
 
 ### Keyboard Input Mapping (Browser)
 
@@ -450,11 +375,9 @@ Build output: `native/build-web/dc3-web.js` + `dc3-web.wasm`, deployed to `nativ
 
 | Area | Desktop | Web | Impact |
 |------|---------|-----|--------|
-| Video playback | FFmpeg `.bik` decode | WebMovie (HTML5 video) | Limited format support |
+| Video playback | FFmpeg `.bik` decode | Stubs (no video) | No intro/preview videos |
 | Pose server | Unix socket to Python process | Not available | Dummy skeleton only |
 | Audio | miniaudio native backend | Emscripten audio worklet | May have latency |
-| File I/O | Direct disk reads | MEMFS + on-demand HTTP fetch (JSPI async-yield) | Loading screen renders during downloads |
-| Exceptions | Native C++ | Wasm exceptions (`-fwasm-exceptions`) | Same semantics, different codegen |
+| File I/O | Direct disk reads | MEMFS (pre-bundled) | No dynamic file loads |
 | Threading | `std::thread` for skeleton reader | Single-threaded stubs | N/A with dummy skeleton |
 | `UsingCD()` | Returns true | Returns false (MEMFS) | Must guard editor-mode paths |
-| `abort()` guards | Active (`#ifdef HX_NATIVE`) | Disabled (`!defined(HX_WEB)`) | Benign stream errors log instead of crash |

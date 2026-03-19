@@ -1258,18 +1258,15 @@ DataNode HamDirector::OnFileLoaded(DataArray *a) {
         } else {
             ObjectDir *dir = a->Obj<ObjectDir>(3);
             if (sym == venue && dir) {
-#ifdef HX_NATIVE
-                // The loaded dir (from on_pre_merge) is a temporary — it gets
-                // merged into the merger's dir and then deleted in PostMerge.
-                // Set mVenue to the loaded dir. On native, PostMerge may delete
-                // it (clearing mVenue via ReplaceRefs), so IsWorldLoaded also
-                // tries GetWorld() as a fallback.
                 mVenue = dynamic_cast<WorldDir *>(dir);
+#ifdef HX_NATIVE
                 MILO_LOG(
-                    "DC3 OnFileLoaded(venue) dir=%p venue=%p '%s'\n",
+                    "DC3 OnFileLoaded(venue) dir=%p venue=%p '%s' hash=%d subdirs=%d\n",
                     (void *)dir,
                     (void *)mVenue.Ptr(),
-                    dir ? dir->Name() : "<null>"
+                    dir ? dir->Name() : "<null>",
+                    dir ? dir->HashTableUsedSize() : -1,
+                    mVenue ? (int)mVenue->SubDirs().size() : -1
                 );
                 // DTA scripts expect video_recorder.srec in the venue world
                 // (Kinect video recording). Register a no-op stub so find_obj succeeds.
@@ -1277,8 +1274,6 @@ DataNode HamDirector::OnFileLoaded(DataArray *a) {
                     Hmx::Object *stub = Hmx::Object::NewObject("Object");
                     stub->SetName("video_recorder.srec", mVenue);
                 }
-#else
-                mVenue = dynamic_cast<WorldDir *>(dir);
 #endif
             } else if (sym == viz && dir) {
                 mVisualizer = dynamic_cast<HamVisDir *>(dir);
@@ -1684,27 +1679,8 @@ Symbol HamDirector::ClosestMove() {
 }
 
 bool HamDirector::IsWorldLoaded() const {
-#ifdef HX_WEB
-    // On web, the venue loaded dir is deleted by PostMerge (clearing mVenue
-    // via ReplaceRefs). Fall back to the merger's persistent dir.
-    if (!mVenue && mMerger && mMerger->Dir()) {
-        WorldDir *w = dynamic_cast<WorldDir *>(mMerger->Dir());
-        if (w) const_cast<HamDirector *>(this)->mVenue = w;
-    }
-#endif
-    bool result = mVenue && mMerger && !mMerger->HasPendingFiles() && mMoveMerger
+    return mVenue && mMerger && !mMerger->HasPendingFiles() && mMoveMerger
         && !mMoveMerger->HasPendingFiles();
-#ifdef HX_WEB
-    static int sLogCount = 0;
-    if (!result && (sLogCount++ < 5 || sLogCount % 300 == 0)) {
-        fprintf(stderr, "DC3 IsWorldLoaded=false: venue=%d merger=%d mergerPending=%d moveMerger=%d movePending=%d\n",
-                (int)(bool)mVenue, (int)(bool)mMerger,
-                mMerger ? (int)mMerger->HasPendingFiles() : -1,
-                (int)(bool)mMoveMerger,
-                mMoveMerger ? (int)mMoveMerger->HasPendingFiles() : -1);
-    }
-#endif
-    return result;
 }
 
 void HamDirector::CheckBeginFatal(int i1, HamMove *move, int i3) {
@@ -2557,9 +2533,9 @@ void HamDirector::PlayNextShot() {
     mLastShotTime = lastShotTime;
     mCurShot = nextShot;
     // Apply shot to the CameraManager that controls rendering.
-    // mMerger->Dir() is the root world that runs camera management during
-    // DrawShowing(). On native, mVenue is also the merger's dir (set in
-    // OnFileLoaded), so both paths are equivalent.
+    // On original, mMerger->Dir() is the root world that runs camera management
+    // during DrawShowing(). On native, we explicitly select the venue's camera
+    // in App.cpp, so apply to the venue's CameraManager directly.
 #ifdef HX_NATIVE
     WorldDir *world = mVenue;
 #else

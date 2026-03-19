@@ -203,7 +203,9 @@ TEST_F(FFmpegIntegration, MovieImplLoop) {
 // Test: FFmpegMovieImpl with non-existent file
 // ============================================================================
 
-TEST(FFmpegMovieImplError, BadFile) {
+class FFmpegMovieImplError : public EngineTestFixture {};
+
+TEST_F(FFmpegMovieImplError, BadFile) {
     FFmpegMovieImpl movie;
 
     bool ok = movie.BeginFromFile(

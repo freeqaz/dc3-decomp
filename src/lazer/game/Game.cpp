@@ -771,11 +771,6 @@ bool Game::IsLoaded() {
         return true;
     } else {
         if ((int)mMaster && !mMaster->IsLoaded()) {
-#ifdef HX_WEB
-            static int sMasterWait = 0;
-            if (sMasterWait++ < 5 || sMasterWait % 300 == 0)
-                fprintf(stderr, "DC3 Game::IsLoaded — mMaster not loaded yet (wait #%d)\n", sMasterWait);
-#endif
             return false;
         }
         if (mLoadState == 0) {

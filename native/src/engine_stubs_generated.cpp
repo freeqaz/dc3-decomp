@@ -28,6 +28,7 @@ int BinkInit() { return 0; }
 int BinkOpen() { return 0; }
 int BinkSetSoundTrack() { return 0; }
 int BinkSetVideoOnOff() { return 0; }
+void BinkSetMemory(void*(*)(int), void(*)(void*)) {}
 // ctr_reinit and ctr_start now provided by tomcrypt/ctr.c
 int D3DResource_Release() { return 0; }
 __attribute__((weak)) int DataInput(void*, int) { return 0; }
@@ -37,7 +38,7 @@ int DmMapDevkitDrive() { return 0; }
 struct complex { double x, y; };
 void expand(complex*, int, complex*, ...) {}
 complex expj(double) { return {0, 0}; }
-int FileRecursePattern() { return 0; }
+__attribute__((weak)) int FileRecursePattern() { return 0; }
 int FileTimeToSystemTime() { return 0; }
 #endif // !__EMSCRIPTEN__
 void* gCharHighlightY = 0;
@@ -303,12 +304,194 @@ extern "C" long _stub_fn_967() { return 0; }
 
 // virtual thunk to LightPreset::Replace stub removed — real impl in LightPreset.cpp
 
+// RadAlloc(int)
+extern "C" __attribute__((weak, used)) void* _stub_radalloc() __asm__(ASM_SYM("_Z8RadAlloci"));
+extern "C" void* _stub_radalloc() { return 0; }
+// PhysicalAllocTracked(unsigned long, unsigned long, char const*, int, char const*)
+extern "C" __attribute__((weak, used)) void* _stub_physalloc() __asm__(ASM_SYM("_Z20PhysicalAllocTrackedmmPKciS0_"));
+extern "C" void* _stub_physalloc() { return 0; }
+// DxRnd::ReleaseAutoRelease()
+extern "C" __attribute__((weak, used)) long _stub_dxrnd_rar() __asm__(ASM_SYM("_ZN5DxRnd18ReleaseAutoReleaseEv"));
+extern "C" long _stub_dxrnd_rar() { return 0; }
+// D3DCubeTexture_UnlockRect
+extern "C" __attribute__((weak)) int D3DCubeTexture_UnlockRect() { return 0; }
+// NuiCameraSetExposureRegionOfInterest
+extern "C" __attribute__((weak)) int NuiCameraSetExposureRegionOfInterest() { return 0; }
+// NuiCameraSetProperty
+extern "C" __attribute__((weak)) int NuiCameraSetProperty() { return 0; }
+// NuiSkeletonSetTrackedSkeletons
+extern "C" __attribute__((weak)) int NuiSkeletonSetTrackedSkeletons() { return 0; }
+
+// BinkSetMemory(void*(*)(int), void(*)(void*)) — C++ mangled version
+extern "C" __attribute__((weak, used)) long _stub_binksetmem_cpp() __asm__(ASM_SYM("_Z13BinkSetMemoryPFPviEPFvS_E"));
+extern "C" long _stub_binksetmem_cpp() { return 0; }
+// BinkStartAsyncThread(int, int) — C++ mangled version
+extern "C" __attribute__((weak, used)) long _stub_binkstartasync() __asm__(ASM_SYM("_Z20BinkStartAsyncThreadii"));
+extern "C" long _stub_binkstartasync() { return 0; }
+// XGOffsetResourceAddress
+extern "C" __attribute__((weak)) int XGOffsetResourceAddress() { return 0; }
+// XGSetTextureHeader
+extern "C" __attribute__((weak)) int XGSetTextureHeader() { return 0; }
+// XNetServerToInAddr
+extern "C" __attribute__((weak)) int XNetServerToInAddr() { return 0; }
+
 // vtable and typeinfo stubs for classes without key functions.
 __attribute__((weak, used)) char _stub_vt_15[1024] __asm__(ASM_SYM("_ZTI5DxTex")) = {};
+// typeinfo for FFmpegMovieImpl
+__attribute__((weak, used)) char _stub_ti_ffmpeg[128] __asm__(ASM_SYM("_ZTI15FFmpegMovieImpl")) = {};
+// (anonymous namespace)::YUVtoRGB(int, int, int)
+extern "C" __attribute__((weak, used)) long _stub_yuvtorgb() __asm__(ASM_SYM("_ZN12_GLOBAL__N_18YUVtoRGBEiii"));
+extern "C" long _stub_yuvtorgb() { return 0; }
 
 // =============================================================================
 // Asm-label stubs for remaining undefined symbols (ObjPtrVec/ObjPtrList related)
 // =============================================================================
+
+// PropSync<ObjPtrVec<T>> stubs
+extern "C" __attribute__((weak, used)) long _stub_propsync_0() __asm__(ASM_SYM("_Z8PropSyncI8CharClipEbR9ObjPtrVecIT_9ObjectDirER8DataNodeP9DataArrayi6PropOp"));
+extern "C" long _stub_propsync_0() { return 0; }
+extern "C" __attribute__((weak, used)) long _stub_propsync_1() __asm__(ASM_SYM("_Z8PropSyncI4FlowEbR9ObjPtrVecIT_9ObjectDirER8DataNodeP9DataArrayi6PropOp"));
+extern "C" long _stub_propsync_1() { return 0; }
+extern "C" __attribute__((weak, used)) long _stub_propsync_2() __asm__(ASM_SYM("_Z8PropSyncIN3Hmx6ObjectEEbR9ObjPtrVecIT_9ObjectDirER8DataNodeP9DataArrayi6PropOp"));
+extern "C" long _stub_propsync_2() { return 0; }
+extern "C" __attribute__((weak, used)) long _stub_propsync_3() __asm__(ASM_SYM("_Z8PropSyncI14RhythmDetectorEbR9ObjPtrVecIT_9ObjectDirER8DataNodeP9DataArrayi6PropOp"));
+extern "C" long _stub_propsync_3() { return 0; }
+extern "C" __attribute__((weak, used)) long _stub_propsync_4() __asm__(ASM_SYM("_Z8PropSyncI11RndDrawableEbR9ObjPtrVecIT_9ObjectDirER8DataNodeP9DataArrayi6PropOp"));
+extern "C" long _stub_propsync_4() { return 0; }
+extern "C" __attribute__((weak, used)) long _stub_propsync_5() __asm__(ASM_SYM("_Z8PropSyncI6RndMatEbR9ObjPtrVecIT_9ObjectDirER8DataNodeP9DataArrayi6PropOp"));
+extern "C" long _stub_propsync_5() { return 0; }
+extern "C" __attribute__((weak, used)) long _stub_propsync_6() __asm__(ASM_SYM("_Z8PropSyncI16RndTransformableEbR9ObjPtrVecIT_9ObjectDirER8DataNodeP9DataArrayi6PropOp"));
+extern "C" long _stub_propsync_6() { return 0; }
+extern "C" __attribute__((weak, used)) long _stub_propsync_7() __asm__(ASM_SYM("_Z8PropSyncI8WaypointEbR9ObjPtrVecIT_9ObjectDirER8DataNodeP9DataArrayi6PropOp"));
+extern "C" long _stub_propsync_7() { return 0; }
+
+// CharHair::Hookup
+extern "C" __attribute__((weak, used)) long _stub_hookup() __asm__(ASM_SYM("_ZN8CharHair6HookupER10ObjPtrListI11CharCollide9ObjectDirE"));
+extern "C" long _stub_hookup() { return 0; }
+
+// merged_ObjPtrListPopBack (ICF merged stub)
+extern "C" __attribute__((weak, used)) long _stub_popback() __asm__(ASM_SYM("_Z24merged_ObjPtrListPopBackPv"));
+extern "C" long _stub_popback() { return 0; }
+
+// RndVelocityBuffer::Draw
+extern "C" __attribute__((weak, used)) long _stub_velbuf_draw() __asm__(ASM_SYM("_ZN17RndVelocityBuffer4DrawEP6RndCamR10ObjPtrListI11RndDrawable9ObjectDirE"));
+extern "C" long _stub_velbuf_draw() { return 0; }
+
+// EventTask::EventTask (C1 and C2 constructors)
+extern "C" __attribute__((weak, used)) long _stub_eventtask_c1() __asm__(ASM_SYM("_ZN9EventTaskC1EP9FlowTimerP9ObjPtrVecI8FlowNode9ObjectDirE9TaskUnitsf"));
+extern "C" long _stub_eventtask_c1() { return 0; }
+extern "C" __attribute__((weak, used)) long _stub_eventtask_c2() __asm__(ASM_SYM("_ZN9EventTaskC2EP9FlowTimerP9ObjPtrVecI8FlowNode9ObjectDirE9TaskUnitsf"));
+extern "C" long _stub_eventtask_c2() { return 0; }
+
+// ScanForOutPorts
+extern "C" __attribute__((weak, used)) long _stub_scanoutports() __asm__(ASM_SYM("_Z15ScanForOutPortsR9ObjPtrVecI11FlowOutPort9ObjectDirEP8FlowNodeP4Flow"));
+extern "C" long _stub_scanoutports() { return 0; }
+
+// =============================================================================
+// macOS libc++ ABI stubs
+//
+// On macOS, libc++ mangles std::list as std::__1::list (not std::__cxx11::list
+// from libstdc++). The asm-name stubs above use libstdc++ mangling, so they
+// don't resolve on macOS. These use __asm__ with correct libc++ mangled names.
+// Names obtained by compiling actual C++ signatures with Apple clang.
+// =============================================================================
+#ifdef __APPLE__
+
+// --- std::list parameter stubs (libc++ ABI) ---
+
+// ListProperties(std::list<Symbol>&, Symbol, Symbol, std::list<Symbol>*, bool)
+extern "C" __attribute__((weak, used)) long _stub_apple_listprops() __asm__("__Z14ListPropertiesRNSt3__14listI6SymbolNS_9allocatorIS1_EEEES1_S1_PS4_b");
+extern "C" long _stub_apple_listprops() { return 0; }
+
+// CharDriver::PollDeps(std::list<Hmx::Object*>&, std::list<Hmx::Object*>&)
+extern "C" __attribute__((weak, used)) long _stub_apple_chardriver_polldeps() __asm__("__ZN10CharDriver8PollDepsERNSt3__14listIPN3Hmx6ObjectENS0_9allocatorIS4_EEEES8_");
+extern "C" long _stub_apple_chardriver_polldeps() { return 0; }
+
+// CharServoBone::PollDeps(std::list<Hmx::Object*>&, std::list<Hmx::Object*>&)
+extern "C" __attribute__((weak, used)) long _stub_apple_charservo_polldeps() __asm__("__ZN13CharServoBone8PollDepsERNSt3__14listIPN3Hmx6ObjectENS0_9allocatorIS4_EEEES8_");
+extern "C" long _stub_apple_charservo_polldeps() { return 0; }
+
+// CharEyes::PollDeps(std::list<Hmx::Object*>&, std::list<Hmx::Object*>&)
+extern "C" __attribute__((weak, used)) long _stub_apple_chareyes_polldeps() __asm__("__ZN8CharEyes8PollDepsERNSt3__14listIPN3Hmx6ObjectENS0_9allocatorIS4_EEEES8_");
+extern "C" long _stub_apple_chareyes_polldeps() { return 0; }
+
+// CharEyes::ListPollChildren(std::list<RndPollable*>&) const
+extern "C" __attribute__((weak, used)) long _stub_apple_chareyes_listpoll() __asm__("__ZNK8CharEyes16ListPollChildrenERNSt3__14listIP11RndPollableNS0_9allocatorIS3_EEEE");
+extern "C" long _stub_apple_chareyes_listpoll() { return 0; }
+
+// CharBones::AddBones(const std::list<Bone>&)
+extern "C" __attribute__((weak, used)) long _stub_apple_charbones_addbones() __asm__("__ZN9CharBones8AddBonesERKNSt3__14listI4BoneNS0_9allocatorIS2_EEEE");
+extern "C" long _stub_apple_charbones_addbones() { return 0; }
+
+// DepthBuffer3D::ListDrawChildren(std::list<RndDrawable*>&)
+extern "C" __attribute__((weak, used)) long _stub_apple_depth3d_listdraw() __asm__("__ZN13DepthBuffer3D16ListDrawChildrenERNSt3__14listIP11RndDrawableNS0_9allocatorIS3_EEEE");
+extern "C" long _stub_apple_depth3d_listdraw() { return 0; }
+
+// HamStorePanel::UpdateOffers(std::list<EnumProduct> const&, bool)
+extern "C" __attribute__((weak, used)) long _stub_apple_hamstore_update() __asm__("__ZN13HamStorePanel12UpdateOffersERKNSt3__14listI11EnumProductNS0_9allocatorIS2_EEEEb");
+extern "C" long _stub_apple_hamstore_update() { return 0; }
+
+// NavListHeaderNode::SelectChildren(std::list<NavListSortNode*>&, int)
+extern "C" __attribute__((weak, used)) long _stub_apple_navlist_select() __asm__("__ZN17NavListHeaderNode14SelectChildrenERNSt3__14listIP15NavListSortNodeNS0_9allocatorIS3_EEEEi");
+extern "C" long _stub_apple_navlist_select() { return 0; }
+
+// RndParticleSys::Mats(std::list<RndMat*>&, bool)
+extern "C" __attribute__((weak, used)) long _stub_apple_partsys_mats() __asm__("__ZN14RndParticleSys4MatsERNSt3__14listIP6RndMatNS0_9allocatorIS3_EEEEb");
+extern "C" long _stub_apple_partsys_mats() { return 0; }
+
+// RndFlare::Mats(std::list<RndMat*>&, bool)
+extern "C" __attribute__((weak, used)) long _stub_apple_flare_mats() __asm__("__ZN8RndFlare4MatsERNSt3__14listIP6RndMatNS0_9allocatorIS3_EEEEb");
+extern "C" long _stub_apple_flare_mats() { return 0; }
+
+// Spotlight::Mats(std::list<RndMat*>&, bool)
+extern "C" __attribute__((weak, used)) long _stub_apple_spotlight_mats() __asm__("__ZN9Spotlight4MatsERNSt3__14listIP6RndMatNS0_9allocatorIS3_EEEEb");
+extern "C" long _stub_apple_spotlight_mats() { return 0; }
+
+// WorldCrowd::Mats(std::list<RndMat*>&, bool)
+extern "C" __attribute__((weak, used)) long _stub_apple_worldcrowd_mats() __asm__("__ZN10WorldCrowd4MatsERNSt3__14listIP6RndMatNS0_9allocatorIS3_EEEEb");
+extern "C" long _stub_apple_worldcrowd_mats() { return 0; }
+
+// RndAmbientOcclusion::BurnTransform(RndMesh*, std::list<RndMesh*>&) const
+extern "C" __attribute__((weak, used)) long _stub_apple_rndao_burn() __asm__("__ZNK19RndAmbientOcclusion13BurnTransformEP7RndMeshRNSt3__14listIS1_NS2_9allocatorIS1_EEEE");
+extern "C" long _stub_apple_rndao_burn() { return 0; }
+
+// kdTree<Triangle>::kdTreeNode::FindSplit_SAH(const Box&, const std::list<Triangle*>&)
+extern "C" __attribute__((weak, used)) long _stub_apple_kdtree_split() __asm__("__ZN6kdTreeI8TriangleE10kdTreeNode13FindSplit_SAHERK3BoxRKNSt3__14listIPS0_NS6_9allocatorIS8_EEEE");
+extern "C" long _stub_apple_kdtree_split() { return 0; }
+
+// --- std::vector parameter stubs (libc++ ABI) ---
+
+// PartyModeMgr::DetermineSubModePlayers(Symbol, int*, int*, std::vector<int>*)
+extern "C" __attribute__((weak, used)) long _stub_apple_partymode_submode() __asm__("__ZN12PartyModeMgr23DetermineSubModePlayersE6SymbolPiS1_PNSt3__16vectorIiNS2_9allocatorIiEEEE");
+extern "C" long _stub_apple_partymode_submode() { return 0; }
+
+// MoveDir::EnqueueDetectFrames(float, int, std::vector<DetectFrame>&, const FilterVersion*)
+extern "C" __attribute__((weak, used)) long _stub_apple_movedir_enqueue() __asm__("__ZN7MoveDir19EnqueueDetectFramesEfiRNSt3__16vectorI11DetectFrameNS0_9allocatorIS2_EEEEPK13FilterVersion");
+extern "C" long _stub_apple_movedir_enqueue() { return 0; }
+
+// HamStorePanel::GetOfferIDsToEnumerate(std::vector<unsigned long long>&, bool) const
+extern "C" __attribute__((weak, used)) long _stub_apple_hamstore_getoffers() __asm__("__ZNK13HamStorePanel22GetOfferIDsToEnumerateERNSt3__16vectorIyNS0_9allocatorIyEEEEb");
+extern "C" long _stub_apple_hamstore_getoffers() { return 0; }
+
+// --- Completely missing stubs (libc++ ABI) ---
+
+// Hmx::Matrix4::Col3(int) const
+extern "C" __attribute__((weak, used)) long _stub_apple_matrix4_col3() __asm__("__ZNK3Hmx7Matrix44Col3Ei");
+extern "C" long _stub_apple_matrix4_col3() { return 0; }
+
+// ScaleAddEq(Transform&, const Transform&, float)
+extern "C" __attribute__((weak, used)) long _stub_apple_scaleaddeq() __asm__("__Z10ScaleAddEqR9TransformRKS_f");
+extern "C" long _stub_apple_scaleaddeq() { return 0; }
+
+// RecursePatternInternal(const char*, void(*)(const char*, const char*), bool, bool)
+extern "C" __attribute__((weak, used)) long _stub_apple_recursepattern() __asm__("__Z22RecursePatternInternalPKcPFvS0_S0_Ebb");
+extern "C" long _stub_apple_recursepattern() { return 0; }
+
+// Waypoint::sWaypoints (static member, std::list<Waypoint*>)
+extern "C" __attribute__((weak, used)) long _stub_apple_waypoint_swaypoints __asm__("__ZN8Waypoint10sWaypointsE");
+long _stub_apple_waypoint_swaypoints = 0;
+
+#endif // __APPLE__
 
 #endif // !__EMSCRIPTEN__
 

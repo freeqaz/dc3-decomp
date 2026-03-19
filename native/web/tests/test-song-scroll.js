@@ -11,11 +11,11 @@
  *     node native/web/tests/test-song-scroll.js --no-server --verbose
  */
 
+const { chromium } = require('playwright');
 const { spawn } = require('child_process');
 const http = require('http');
 const path = require('path');
 const fs = require('fs');
-const { launchBrowser, waitForWebGPUReady, screenshotReady } = require('./launch-helpers');
 
 const args = process.argv.slice(2);
 const hasFlag = (name) => args.includes(`--${name}`);
@@ -76,10 +76,20 @@ function waitForServer(url, timeoutMs = 15000) {
         }
 
         // -- Browser --
-        log('Launching Chrome with WebGPU (headless=new + Vulkan)...');
-        browser = await launchBrowser();
-        const context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
-        const page = await context.newPage();
+        log('Launching Chrome with WebGPU...');
+        browser = await chromium.launch({
+            headless: !process.env.DISPLAY,
+            args: [
+                '--no-sandbox',
+                '--enable-unsafe-webgpu',
+                '--use-angle=vulkan',
+                '--enable-features=Vulkan,VulkanFromANGLE',
+                '--ozone-platform=x11',
+                '--disable-extensions',
+                '--mute-audio',
+            ],
+        });
+        const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
 
         // -- Console capture --
         page.on('console', (msg) => {
@@ -180,7 +190,7 @@ function waitForServer(url, timeoutMs = 15000) {
 
         // Extra time for song list to populate (web is slow)
         await new Promise(r => setTimeout(r, 3000));
-        await screenshotReady(page, `${OUT_DIR}/00_initial.png`);
+        await page.screenshot({ path: `${OUT_DIR}/00_initial.png` });
         log('Screenshot: initial song list');
 
         // -- Scroll test --
@@ -193,7 +203,7 @@ function waitForServer(url, timeoutMs = 15000) {
             // Wait for scroll animation to complete (web needs more time)
             await new Promise(r => setTimeout(r, 1000));
 
-            await screenshotReady(page, `${OUT_DIR}/${String(i + 1).padStart(2, '0')}_after_down.png`);
+            await page.screenshot({ path: `${OUT_DIR}/${String(i + 1).padStart(2, '0')}_after_down.png` });
 
             // Report any new scroll logs
             const newLogs = scrollLogs.slice(preScrollLogs);

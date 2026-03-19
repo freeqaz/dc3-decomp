@@ -13,23 +13,7 @@
 #include <cstdio>
 #define _snprintf snprintf
 #define _vsnprintf vsnprintf
-// sprintf_s: provide both the (buf, size, fmt, ...) form and the template<N>(buf, fmt, ...) form
-#include <cstdarg>
-inline int sprintf_s(char *_Dest, size_t _Size, const char *_Format, ...) {
-    va_list args;
-    va_start(args, _Format);
-    int ret = vsnprintf(_Dest, _Size, _Format, args);
-    va_end(args);
-    return ret;
-}
-template <size_t _Size>
-inline int sprintf_s(char (&_Dest)[_Size], const char *_Format, ...) {
-    va_list args;
-    va_start(args, _Format);
-    int ret = vsnprintf(_Dest, _Size, _Format, args);
-    va_end(args);
-    return ret;
-}
+#define sprintf_s snprintf
 // MSVC CRT functions
 #define _open open
 #define _close close

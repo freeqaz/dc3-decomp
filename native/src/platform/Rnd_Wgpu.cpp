@@ -323,6 +323,10 @@ void WgpuRnd::InitGpuResources() {
     mShadowPass.Init(mGpu);
     mPostProcPass.Init(mGpu);
 
+    // Native port: disable Xbox 360 safe area shrink (TVs need overscan
+    // compensation, but PC/Mac monitors don't).
+    SetShrinkToSafeArea(false);
+
     printf("WgpuRnd: GPU resources initialized (%dx%d, Rnd %dx%d, %s)\n",
            mGpu.WindowWidth(), mGpu.WindowHeight(), mWidth, mHeight,
            mGpu.HasBCCompression() ? "BC supported" : "software DXT");
@@ -979,6 +983,19 @@ void WgpuRnd::BeginDrawing() {
     mMaterialRing.Reset();
     mObjectRing.Reset();
     mBoneRing.Reset();
+
+    // Poll window size each frame and reconfigure surface if changed.
+    // This catches resize events that the callback may miss (e.g. macOS
+    // live resize where the callback fires but Dawn needs reconfiguration
+    // before the next AcquireNextFrame).
+    if (!mGpu.IsHeadless() && mGpu.Window()) {
+        int winW, winH;
+        glfwGetWindowSize(mGpu.Window(), &winW, &winH);
+        if (winW > 0 && winH > 0 &&
+            (winW != mGpu.WindowWidth() || winH != mGpu.WindowHeight())) {
+            mGpu.ResizeSurface(winW, winH);
+        }
+    }
 
     // Acquire next frame
     if (mGpu.IsHeadless()) {

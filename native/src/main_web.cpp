@@ -1,19 +1,13 @@
 // DC3 Web Port — Entry Point
 // Bootstraps the engine in the browser via Emscripten.
 //
-// Boot sequence (state machine, driven by requestAnimationFrame):
+// Boot sequence (state machine, driven by emscripten_set_main_loop):
 //   BOOT_INIT         → create MEMFS dirs, start bundle download
 //   BOOT_FETCHING     → poll until bundle download complete
 //   BOOT_ENGINE_INIT  → App constructor (shared with native desktop)
 //   BOOT_GPU_WAIT     → wait for async WebGPU adapter/device
 //   BOOT_GPU_READY    → initialize GPU resources (pipelines, buffers)
 //   BOOT_RUNNING      → per-frame via App::RunOneFrame()
-//
-// JSPI note: emscripten_set_main_loop calls the callback via the WASM
-// function table (indirect call), which bypasses JSPI's WebAssembly.promising
-// wrapping. Instead, we export the tick function and drive it from JS via
-// requestAnimationFrame. This lets emscripten_sleep() suspend correctly
-// during on-demand file fetches.
 
 #ifdef __EMSCRIPTEN__
 
@@ -112,11 +106,6 @@ static void mainLoop() {
         sFrameCount++;
         sApp->RunOneFrame();
         EM_ASM({ window.dc3FrameCount = $0; }, sFrameCount);
-        // Signal readiness after a few frames so the compositor has
-        // presented real GPU content (not just a cleared buffer).
-        if (sFrameCount == 3) {
-            EM_ASM({ window.__webgpuReady = true; });
-        }
         if (sFrameCount == 1 || sFrameCount % 300 == 0) {
             printf("DC3 Web: frame %d\n", sFrameCount);
             fflush(stdout);
@@ -130,49 +119,12 @@ static void mainLoop() {
 }
 
 // ============================================================================
-// Exported tick function — called from JS via requestAnimationFrame.
-// Must be a WASM export (not a function-table indirect call) so that
-// JSPI's WebAssembly.promising wrapper applies, allowing emscripten_sleep()
-// to suspend during on-demand file fetches.
-// ============================================================================
-
-extern "C" {
-EMSCRIPTEN_KEEPALIVE
-void dc3MainLoopTick() {
-    mainLoop();
-}
-}
-
-// ============================================================================
 // Entry point
 // ============================================================================
 
 int main(int argc, char **argv) {
     printf("DC3 Web Port — Initializing\n");
-
-#ifdef DC3_WEB_ASYNCIFY
-    // JSPI mode: drive the loop from JS using the exported (promising-wrapped)
-    // dc3MainLoopTick. requestAnimationFrame naturally paces at ~60fps.
-    // Each tick may suspend via emscripten_sleep() during file fetches;
-    // the Promise returned by the promising wrapper handles this correctly.
-    EM_ASM({
-        async function tick() {
-            try {
-                await Module._dc3MainLoopTick();
-            } catch (e) {
-                if (e !== 'unwind') console.error('dc3MainLoopTick error:', e);
-            }
-            requestAnimationFrame(tick);
-        }
-        requestAnimationFrame(tick);
-    });
-    // Keep the runtime alive — we never exit.
-    emscripten_exit_with_live_runtime();
-#else
-    // Non-JSPI: use Emscripten's standard main loop (blocking sync XHR).
     emscripten_set_main_loop(mainLoop, 0, true);
-#endif
-
     return EXIT_SUCCESS;
 }
 

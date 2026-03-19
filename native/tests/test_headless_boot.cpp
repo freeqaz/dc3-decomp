@@ -227,7 +227,9 @@ TEST_F(HeadlessBootTest, SurvivesMainLoop) {
 }
 
 TEST_F(HeadlessBootTest, BootReachesChooseModeOnDefaultUnloadPath) {
-    auto result = RunHeadless(1000, nullptr, 120);
+    // The auto-nav code in App.cpp only triggers when DC3_SCREEN is set.
+    // Without it, the engine idles on main_screen waiting for user input.
+    auto result = RunHeadless(1000, nullptr, 120, {{"DC3_SCREEN", "choose_mode_screen"}});
     PrintOutputTail(result.output);
 
     std::string summary = CrashSummary(result);
