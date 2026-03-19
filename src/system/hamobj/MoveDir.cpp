@@ -1678,8 +1678,8 @@ namespace {
         float t = numerator / denominator;
         float linePos = t * (gBeatLineData.maxValue - gBeatLineData.minValue) + gBeatLineData.minValue;
 
-        Vector2 startPos(x, linePos);
         Vector2 endPos(linePos, sum);
+        Vector2 startPos(linePos, x);
 
         UtilDrawLine(startPos, endPos, color);
     }
