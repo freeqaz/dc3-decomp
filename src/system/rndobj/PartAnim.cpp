@@ -5,6 +5,8 @@
 #include "rndobj/Part.h"
 
 template BinStream &operator>><Hmx::Color>(BinStream &, Key<Hmx::Color> &);
+template BinStream &
+operator>>(BinStream &, std::vector<Key<Hmx::Color> > &);
 
 #pragma region Hmx::Object
 
@@ -80,17 +82,19 @@ BEGIN_LOADS(RndParticleSysAnim)
     LOAD_SUPERCLASS(RndAnimatable)
     d >> mParticleSys >> mStartColorKeys >> mEndColorKeys;
     if (d.rev < 2) {
-        float scale = 1;
+        float scale = 1.0f;
         Keys<float, float> floatKeys;
         d >> floatKeys >> mKeysOwner;
         if (d.rev == 1) {
             d >> scale;
         }
         mEmitRateKeys.clear();
-        mEmitRateKeys.resize(floatKeys.size());
-        FOREACH (it, floatKeys) {
+        mEmitRateKeys.reserve(floatKeys.size());
+        for (Keys<float, float>::iterator it = floatKeys.begin(); it != floatKeys.end();
+             ++it) {
             Key<Vector2> vecKey;
             vecKey.value = Vector2(it->value, it->value * scale);
+            vecKey.frame = it->frame;
             mEmitRateKeys.push_back(vecKey);
         }
     } else {
