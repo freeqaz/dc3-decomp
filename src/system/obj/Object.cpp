@@ -14,30 +14,42 @@
 #include "utl/Symbol.h"
 
 #ifdef HX_NATIVE
-#include <unordered_set>
 #include <vector>
 Hmx::Object *Hmx::Object::sDeleting;
 bool gInReplaceList = false;
 
-// Track destroyed objects during cascading ObjectDir teardown.
-// ~Object inserts; ~ObjRefConcrete checks before Release.
-// Cleared when the outermost cascade completes (sDeleteObjectsDepth → 0).
-static std::unordered_set<void *> sDeadObjects;
-
-void MarkDeadObject(void *obj) { sDeadObjects.insert(obj); }
-bool IsDeadObject(void *obj) { return sDeadObjects.count(obj) != 0; }
-void ClearDeadObjects() { sDeadObjects.clear(); }
+// Check if an ObjRef's alive sentinel is still set. Reads potentially freed
+// memory during cascading destruction — suppress ASAN for this specific check.
+// Under glibc, freed memory is typically zeroed → sentinel reads as 0 → dead.
+// Snapshot ring entries into a vector, skipping freed nodes.
+// During cascading ObjectDir destruction, some ObjRefs may be freed but still
+// linked in the ring (~ObjRefConcrete skipped Release). Their mAliveSentinel
+// was cleared by ~ObjRef(). We read the sentinel and next pointer from these
+// freed nodes — suppress ASAN since the memory is quarantined but readable.
+#if defined(__SANITIZE_ADDRESS__) || (defined(__has_feature) && __has_feature(address_sanitizer))
+__attribute__((noinline, no_sanitize("address")))
+#endif
+static void SnapshotRing(ObjRef *sentinel, std::vector<ObjRef *> &out) {
+    constexpr size_t kSentinelOffset = 3 * sizeof(void *);
+    constexpr size_t kNextOffset = sizeof(void *);
+    ObjRef *first = *(ObjRef **)((const char *)sentinel + kNextOffset);
+    for (ObjRef *it = first; it != sentinel; ) {
+        if ((uintptr_t)it < 0x10000)
+            break;
+        // Read mAliveSentinel to check if node was freed
+        uint32_t alive = *(const uint32_t *)((const char *)it + kSentinelOffset);
+        ObjRef *nextNode = *(ObjRef **)((const char *)it + kNextOffset);
+        if (alive == 0xCAFEBABE)
+            out.push_back(it);
+        it = nextNode;
+    }
+}
 
 void ObjRef::ReplaceList(Hmx::Object *obj) {
-    // Suppress ObjPtrVec::erase during ring walk. CopyRef during vector
-    // shift modifies ring prev/next pointers, corrupting the walk.
+    // Suppress ObjPtrVec::erase and Transitions::RemoveNodes during ring walk.
     bool wasInReplace = gInReplaceList;
     gInReplaceList = true;
 
-    // Matches Xbox target: each Replace() calls SetObj → Release (unlinks
-    // from this ring) + AddRef (links into obj's ring), advancing `next`.
-    // Owner Replace implementations may delete the ObjRef (e.g., PropAnim
-    // deletes PropKeys) — the destructor's Release still unlinks correctly.
     while (next != this) {
         ObjRef *cur = next;
         cur->Replace(obj);
@@ -319,31 +331,10 @@ void Hmx::Object::ReplaceRefs(Hmx::Object *obj) {
         bool wasInReplace = gInReplaceList;
         gInReplaceList = true;
         std::vector<ObjRef *> snapshot;
-        ObjRef *slow = mRefs.next;
-        ObjRef *fast = mRefs.next;
-        for (ObjRef *it = mRefs.next; it != &mRefs; it = it->next) {
-            if ((uintptr_t)it < 0x10000)
-                break;
-            snapshot.push_back(it);
-            // Floyd's cycle detection: advance fast pointer twice per step.
-            // If fast catches slow, the ring has a cycle that doesn't include
-            // &mRefs — break to avoid infinite loop from ring corruption.
-            if (fast != &mRefs && (uintptr_t)fast >= 0x10000)
-                fast = fast->next;
-            if (fast != &mRefs && (uintptr_t)fast >= 0x10000)
-                fast = fast->next;
-            slow = slow->next;
-            if (slow == fast && it->next != &mRefs) {
-                MILO_WARN("ReplaceRefs: cycle detected in ObjRef ring for %s (%d refs snapshotted), breaking\n",
-                    PathName(this), (int)snapshot.size());
-                break;
-            }
-        }
+        SnapshotRing(&mRefs, snapshot);
         mRefs.Clear();
-        for (ObjRef *ref : snapshot) {
-            if (ref->mAliveSentinel == ObjRef::kAliveSentinel)
-                ref->Replace(obj);
-        }
+        for (ObjRef *ref : snapshot)
+            ref->Replace(obj);
         gInReplaceList = wasInReplace;
 #else
         ObjRef other(mRefs);

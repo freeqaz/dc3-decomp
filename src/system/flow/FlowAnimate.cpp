@@ -293,7 +293,7 @@ void FlowAnimate::OnAnimEvent(Symbol sym) {
 
     if (sym == sEnded) {
         if (mAnimTask) {
-            mAnimTask->mAnimTarget = NULL;
+            mAnimTask->mListener = NULL;
         }
         mAnimTask = nullptr;
         if (mRunningNodes.empty() && !mImmediateRelease) {
@@ -322,7 +322,7 @@ void FlowAnimate::OnAnimEvent(Symbol sym) {
             }
             if (mStopDeferred && mAnimTask) {
                 AnimTask *task = mAnimTask;
-                task->mAnimTarget = NULL;
+                task->mListener = NULL;
                 delete (AnimTask *)mAnimTask;
                 FLOW_LOG("Timed Release From Parent \n");
                 Timer timer;

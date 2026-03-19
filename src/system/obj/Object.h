@@ -27,12 +27,6 @@ void MergeObjectsRecurse(ObjectDir *, ObjectDir *, MergeFilter &, bool);
 // structural mutations during ring walks.
 extern bool gInReplaceList;
 
-// Dead object tracking for cascading ObjectDir destruction.
-// ~ObjectDir pre-marks all objects in subtree; ~ObjRefConcrete checks
-// before Release. Cleared when sDeleteObjectsDepth drops to 0.
-void MarkDeadObject(void *obj);
-bool IsDeadObject(void *obj);
-void ClearDeadObjects();
 #endif
 
 #pragma region ObjRef

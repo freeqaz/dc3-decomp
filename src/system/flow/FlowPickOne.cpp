@@ -44,47 +44,54 @@ bool FlowPickOne::Activate() {
     mStopRequested = false;
     PushDrivenProperties();
 
-    if (mChance != 1.0f) {
+    if (mChance != (int)1.0f) {
         unsigned int r = rand() % 100;
-        if (mChance * 100.0f < (float)(int)r) {
+        if ((float)(int)r > mChance * 100.0f) {
             return false;
         }
     }
 
-    int numChildren = (int)mChildNodes.size();
     if (mChildNodes.empty())
         return false;
 
     FlowNode *chosen = nullptr;
 
     switch (mChoiceType) {
-    case kChoiceOrdered:
-        if (mIndex < 0 || numChildren <= mIndex)
+    case kChoiceOrdered: {
+        int numChildren = (int)mChildNodes.size();
+        if (mIndex < 0 || mIndex >= numChildren)
             mIndex = 0;
-        chosen = (mChildNodes.begin() + mIndex)->Obj();
-        ActivateChild(chosen);
+        auto _tmp2 = (mChildNodes.begin() + mIndex)->Obj();
+        ActivateChild(_tmp2);
         mIndex++;
         return !mRunningNodes.empty();
-    case kChoiceRandom:
+    }
+    case kChoiceRandom: {
+        int numChildren = (int)mChildNodes.size();
         mIndex = RandomInt(0, numChildren);
         chosen = (mChildNodes.begin() + mIndex)->Obj();
         break;
-    case kChoiceRandomNoRepeat:
-        if (numChildren < 2) {
-            mIndex = 0;
-        } else {
+    }
+    case kChoiceRandomNoRepeat: {
+        int numChildren = (int)mChildNodes.size();
+        if (!(numChildren <= 1)) {
             int newIndex;
             do {
                 newIndex = RandomInt(0, numChildren);
             } while (newIndex == mIndex);
             mIndex = newIndex;
+        } else {
+            mIndex = 0;
         }
         chosen = (mChildNodes.begin() + mIndex)->Obj();
         break;
+    }
     case kChoiceRandomJukeBox: {
+        int numChildren = (int)mChildNodes.size();
         if (numChildren <= 1) {
+            auto _tmp1 = mChildNodes.begin()->Obj();
             if (numChildren == 1)
-                chosen = mChildNodes.begin()->Obj();
+                chosen = _tmp1;
             break;
         }
         int historySize = (int)mChoiceHistory.size();
@@ -99,27 +106,25 @@ bool FlowPickOne::Activate() {
                 items.push_back(it->Obj());
             }
             std::random_shuffle(items.begin(), items.end());
-            for (auto rit = items.end(); rit != items.begin();) {
-                --rit;
-                mChoiceHistory.push_back(*rit);
-            }
             mIndex = 0;
-            if (lastChosen && mChoiceHistory.begin()->Obj() == lastChosen) {
-                mIndex = 1;
+            for (auto rit = items.end(); rit != items.begin();)
+                mChoiceHistory.push_back(*--rit);
+            auto _tmp0 = mChoiceHistory.begin()->Obj();
+            if (lastChosen) {
+                if (_tmp0 == lastChosen) {
+                    mIndex = 1;
+                }
             }
-            historySize = (int)mChoiceHistory.size();
         }
-        if (mIndex < historySize) {
-            chosen = (mChoiceHistory.begin() + mIndex)->Obj();
-            mIndex++;
-        }
-        break;
+        ActivateChild((mChoiceHistory.begin() + mIndex)->Obj());
+        mIndex++;
+        return !mRunningNodes.empty();
     }
     case kChoiceUseIndex: {
+        int numChildren = (int)mChildNodes.size();
         int adjustedIndex = mIndex % numChildren;
         mIndex = adjustedIndex;
-        chosen = (mChildNodes.begin() + adjustedIndex)->Obj();
-        ActivateChild(chosen);
+        ActivateChild((mChildNodes.begin() + adjustedIndex)->Obj());
         mIndex++;
         return !mRunningNodes.empty();
     }
@@ -128,9 +133,7 @@ bool FlowPickOne::Activate() {
         break;
     }
 
-    if (chosen) {
-        ActivateChild(chosen);
-    }
+    ActivateChild(chosen);
     return !mRunningNodes.empty();
 }
 

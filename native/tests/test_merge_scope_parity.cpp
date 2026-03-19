@@ -586,4 +586,74 @@ TEST_F(MergeScopeParityTest, RepeatedVenueMergeAfterClear) {
     delete worldRoot;
 }
 
+// ============================================================================
+// Diagnostic: Verify inline subdirs load correctly from base venue .milo
+// ============================================================================
+
+TEST_F(MergeScopeParityTest, VenueInlineSubdirsLoadContent) {
+    std::string root = GetMiloLibRoot();
+    if (root.empty())
+        GTEST_SKIP() << "MILO_LIB not set";
+
+    std::string path = root + "/world/glitterati/gen/glitterati.milo_xbox";
+    ObjectDir *venueDir = TryLoadStandalone(path);
+    if (!venueDir)
+        GTEST_SKIP() << "glitterati.milo_xbox not found";
+
+    // Print subdir hierarchy
+    printf("  Venue '%s' class='%s'\n", venueDir->Name(), venueDir->ClassName().Str());
+    printf("  SubDirs: %d\n", (int)venueDir->SubDirs().size());
+    for (int i = 0; i < (int)venueDir->SubDirs().size(); i++) {
+        ObjectDir *sub = venueDir->SubDirs()[i];
+        if (!sub) {
+            printf("    [%d] nullptr\n", i);
+            continue;
+        }
+        int subFlat = 0, subRecursive = 0;
+        for (ObjDirItr<Hmx::Object> it(sub, false); it != nullptr; ++it)
+            subFlat++;
+        for (ObjDirItr<Hmx::Object> it(sub, true); it != nullptr; ++it)
+            subRecursive++;
+        printf("    [%d] '%s' class='%s' flat=%d recursive=%d subdirs=%d\n",
+               i, sub->Name(), sub->ClassName().Str(),
+               subFlat, subRecursive, (int)sub->SubDirs().size());
+    }
+
+    // Count total objects
+    int flatCount = 0, recursiveCount = 0;
+    for (ObjDirItr<Hmx::Object> it(venueDir, false); it != nullptr; ++it)
+        flatCount++;
+    for (ObjDirItr<Hmx::Object> it(venueDir, true); it != nullptr; ++it)
+        recursiveCount++;
+    printf("  Total: flat=%d recursive=%d\n", flatCount, recursiveCount);
+
+    // Check for specific building mesh names that component files contain
+    const char *buildingNames[] = {
+        "GLI_Building01.mesh", "GLI_Building02.mesh", "GLI_Building03.mesh",
+        "GLI_Building04.mesh", "GLI_Buildings1.mat", "GLI_Buildings2.mat",
+        nullptr
+    };
+    printf("  Checking for building objects from component files:\n");
+    int found = 0, missing = 0;
+    for (int i = 0; buildingNames[i]; i++) {
+        Hmx::Object *obj = venueDir->FindObject(buildingNames[i], false, true);
+        if (obj) {
+            printf("    FOUND: '%s' class='%s'\n", buildingNames[i], obj->ClassName().Str());
+            found++;
+        } else {
+            printf("    MISSING: '%s'\n", buildingNames[i]);
+            missing++;
+        }
+    }
+    printf("  Building objects: found=%d missing=%d\n", found, missing);
+
+    // The base venue should have substantial content from inline subdirs
+    EXPECT_GT(recursiveCount, 100)
+        << "Base venue has too few objects — inline subdirs may not be loading";
+
+    // Skip deletion — crashes due to cascade delete of massive shared subdir tree
+    // (same issue as other venue tests that don't delete). Leak is acceptable in tests.
+    // delete venueDir;
+}
+
 } // namespace

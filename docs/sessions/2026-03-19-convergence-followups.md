@@ -45,7 +45,8 @@ No action needed. Keep the explicit call.
 ## 2. Venue Component Loading on Xbox
 
 **File**: App.cpp:1058-1094
-**Status**: Resolved — architectural, keep as-is
+**Status**: REMOVE — manual component loading is redundant
+**Priority**: Medium (removing dead code that loads duplicate objects)
 
 ### Current State
 App.cpp manually loads 5 component .milo files per venue (native-only):
@@ -62,34 +63,43 @@ Component suffixes are hardcoded in App.cpp:1069 (native-only code).
 ### Investigation Findings
 - DC3 venues do NOT have `extras.fm` (unlike RB3). The extras.fm code in
   HamDirector::OnLoadSong (line 1073-1076) is dead — inherited from BandDirector.
-- No DTA handler triggers component loading.
 - The `mInlineSubDirType` system supports inlining (kInlineCached, kInlineCachedShared)
   but DC3 doesn't use it for venue components.
-
-### Resolution (2026-03-19 investigation)
-
-**Xbox ships pre-merged venues. Component loading is a permanent native requirement.**
-
-Evidence:
-- The base `<venue>.milo_xbox` already contains all geometry as internal subdirectories
-  (e.g., `glitterati_base.milo` and `glitterati_geom.milo` embedded as subdirs)
 - **Glitterati is the only venue with separate component files** — all 8 other venues
-  (bid, dci, dclive, default, houseparty, rollerrink, streetside, throneroom) ship
-  only a single base `.milo_xbox` with 0 entry-table objects (geometry in subdirs)
-- The game code **never references `_all.milo`** — confirmed by exhaustive search
-- Only 3 `_all` files exist in the entire ark (glitterati, pose_fatalities, voice_commander)
-  — all are build pipeline artifacts, never loaded at runtime
-- The `_all` variant (4.54 MB, 87 entries) is approximately the sum of the 5 components
-  (4.74 MB, 68 entries), confirming it's the pre-merged geometry with shared objects added
+  ship only a single base `.milo_xbox`.
+- The `_all` variant and component files are build pipeline artifacts, never loaded
+  at runtime on Xbox.
 
-**Why native needs manual loading**: The native port's DirLoader doesn't fully
-reconstruct the subdir hierarchy from the base WorldDir. The base file has 0
-entry-table objects (all content is in subdirs), so manual component merging
-compensates for the missing subdir reconstruction.
+### Resolution (2026-03-19 — loading test proves inline subdirs work)
 
-**Future optimization**: Instead of loading 5 component files, could load
-`glitterati_all.milo_xbox` directly (single load instead of 5). But this only
-helps glitterati — other venues work from their base file alone.
+**The manual component loading is REDUNDANT. The base venue `.milo_xbox` already
+loads all geometry correctly on native via inline subdirs.**
+
+Test evidence (`MergeScopeParityTest.VenueInlineSubdirsLoadContent`):
+```
+Venue 'glitterati' class='WorldDir'
+SubDirs: 1
+  [0] '' class='WorldDir' flat=17 recursive=4265 subdirs=2
+Total: flat=1 recursive=4266
+Building objects: found=6 missing=0
+```
+
+All 6 building meshes/materials from the component files (`GLI_Building01.mesh`,
+`GLI_Building02.mesh`, etc.) are **already present** in the base venue loaded via
+`DirLoader::LoadObjects`. The inline subdir loading path works correctly:
+- `ObjectDir::PreLoad` reads `inlinedSubDirs` from the binary stream
+- `PreLoadInlined()` creates child DirLoaders for embedded subdirs
+- `PostLoad` drives completion via cooperative polling
+- All 4,266 objects load from the single base file
+
+The previous conclusion ("native's DirLoader doesn't fully reconstruct subdirs")
+was **wrong**. The loader works fine.
+
+### Action
+Remove the manual component loading block from App.cpp:1058-1094:
+- The `componentSuffixes` array and loading loop
+- The `sLastPresetVenue` caching logic for component loads
+- Verify visually that glitterati renders correctly without component loading
 
 ---
 

@@ -221,9 +221,8 @@ void FlowSound::OnMarkerEvent(Symbol marker) {
 
     // Look for matching FlowLabel children and activate them
     FOREACH (it, mChildNodes) {
-        FlowNode *child = it->Obj();
-        if (child->ClassName() == FlowLabel::StaticClassName()) {
-            FlowLabel *label = static_cast<FlowLabel *>(child);
+        if (it->Obj()->ClassName() == FlowLabel::StaticClassName()) {
+            FlowLabel *label = static_cast<FlowLabel *>(it->Obj());
             if (label->Label() == marker) {
                 ActivateLabel(label);
                 break;

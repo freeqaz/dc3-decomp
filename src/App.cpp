@@ -1053,44 +1053,6 @@ void App::RunWithoutDebugging() {
                     if (venueWorld != sLastPresetVenue) {
                         sLastPresetVenue = venueWorld;
 
-                        // Load venue component .milo files (_buildings, _sky, _set,
-                        // _chairs, _table_glasses). DC3 venues don't have extras.fm
-                        // (unlike RB3) — component files are separate .milo archives
-                        // loaded manually. On Xbox, HamDirector::OnLoadSong triggers
-                        // extras.fm loading, but DC3's extras.fm code is dead (inherited
-                        // from BandDirector).
-                        {
-                            const char* venueName = TheGameData ? TheGameData->Venue().Str() : nullptr;
-#ifdef HX_NATIVE
-                            if (!venueName || !*venueName)
-                                venueName = getenv("DC3_VENUE");
-#endif
-                            if (!venueName || !*venueName) venueName = "glitterati";
-                            static const char* componentSuffixes[] = {
-                                "_buildings", "_sky", "_set", "_chairs", "_table_glasses", nullptr
-                            };
-                            int totalMerged = 0;
-                            for (const char** suffix = componentSuffixes; *suffix; suffix++) {
-                                const char* miloPath = MakeString(
-                                    "world/%s/%s%s.milo", venueName, venueName, *suffix);
-                                FilePath fp;
-                                fp.Set(FilePath::Root().c_str(), miloPath);
-                                ObjectDir* componentDir = DirLoader::LoadObjects(fp, nullptr, nullptr);
-                                if (componentDir) {
-                                    MergeFilter filt(
-                                        (MergeFilter::Action)0,
-                                        MergeFilter::kMergeInlinedMoveSharedSubdirs);
-                                    MergeDirs(componentDir, venueWorld, filt);
-                                    totalMerged++;
-                                }
-                            }
-                            if (totalMerged > 0) {
-                                MILO_LOG("DC3 Native: loaded %d venue components for '%s'\n",
-                                       totalMerged, venueName);
-                                venueWorld->SyncObjects();
-                            }
-                        }
-
                         // Hide Kinect-dependent venue meshes (no camera on native):
                         // TV screens show white placeholder, projectors show white rects
                         {

@@ -33,9 +33,10 @@ template <class T1, class T2>
 ObjRefConcrete<T1, T2>::~ObjRefConcrete() {
     if (mObject) {
 #ifdef HX_NATIVE
-        // During cascading ObjectDir destruction, sibling subdirs may already
-        // be freed. Check the dead object set to avoid writing to freed memory.
-        if (IsDeadObject(mObject)) {
+        // During cascading ObjectDir destruction, ring nodes are freed in
+        // unpredictable order. Calling Release writes to ring neighbors that
+        // may already be freed. Skip all ring operations during the cascade.
+        if (ObjectDir::InDeleteObjects()) {
             mObject = nullptr;
             return;
         }
@@ -47,12 +48,21 @@ ObjRefConcrete<T1, T2>::~ObjRefConcrete() {
 template <class T1, class T2>
 void ObjRefConcrete<T1, T2>::SetObjConcrete(T1 *obj) {
     if (mObject) {
+#ifdef HX_NATIVE
+        if (ObjectDir::InDeleteObjects())
+            goto skip_release;
+#endif
         mObject->Release(this);
     }
     mObject = obj;
     if (mObject) {
         mObject->AddRef(this);
     }
+    return;
+#ifdef HX_NATIVE
+skip_release:
+    mObject = obj;
+#endif
 }
 
 template <class T1, class T2>

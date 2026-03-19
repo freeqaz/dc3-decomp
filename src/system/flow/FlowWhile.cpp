@@ -207,8 +207,9 @@ void FlowWhile::ReActivate() {
         if (running->Op() != kTransition) {
             FlowSwitchCase *validCase = nullptr;
             FOREACH (it, mChildNodes) {
-                validCase = static_cast<FlowSwitchCase *>(it->Obj());
-                if (validCase->IsValidCase(this, &mValue, &mValue, true)) {
+                FlowSwitchCase *item = static_cast<FlowSwitchCase *>(it->Obj());
+                if (item->IsValidCase(this, &mValue, &mValue, true)) {
+                    validCase = item;
                     break;
                 }
             }
@@ -236,9 +237,7 @@ void FlowWhile::ReActivate() {
     }
 
     mEntryCount--;
-    if (mEntryCount == 0) {
-        timer.Stop();
-    }
+    timer.Stop();
     FlowNode *flow = GetTopFlow();
     while (flow->GetParent()) {
         flow = flow->GetParent()->GetTopFlow();
