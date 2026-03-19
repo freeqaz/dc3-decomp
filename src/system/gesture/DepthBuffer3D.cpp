@@ -33,10 +33,7 @@ namespace {
         pos.y = depth;
         depth = 1.0f - (depth - depthRange.x) / (depthRange.y - depthRange.x);
         pos.y = depth;
-        if (depth < 0.0f)
-            depth = 0.0f;
-        if (depth > 1.0f)
-            depth = 1.0f;
+        depth = Clamp(0.0f, 1.0f, depth);
         pos.y = depth;
         float y = (float)pow((double)depth, (double)stretchNearCamera) * -200.0f;
         pos.y = y;
@@ -186,9 +183,116 @@ void DepthBuffer3D::ListDrawChildren(std::list<RndDrawable *> &out) {
 void DepthBuffer3D::DrawShowing() {
     // Kinect depth rendering not available on native
 }
-
-// TODO: implement Save/Copy/Load — DepthBuffer3D has complex rendering state
 void DepthBuffer3D::Save(BinStream &) {}
 void DepthBuffer3D::Copy(const Hmx::Object *, Hmx::Object::CopyType) {}
 void DepthBuffer3D::Load(BinStream &) {}
+#else
+
+BEGIN_SAVES(DepthBuffer3D)
+    SAVE_REVS(11, 0)
+    SAVE_SUPERCLASS(Hmx::Object)
+    SAVE_SUPERCLASS(RndDrawable)
+    SAVE_SUPERCLASS(RndTransformable)
+    bs << mNobodyColor;
+    bs << mPlayerPalette;
+    bs << mPlayerPaletteOffset;
+    bs << mMinimalMat;
+    bs << mDrawSheet;
+    bs << mMesh;
+    bs << mPlayerPaletteScale;
+    bs << mStretchNearCamera;
+    bs << mOpacity;
+    bs << mDrawPlayer1;
+    bs << mDrawPlayer2;
+    bs << mDrawNonPlayers;
+    bs << mTile;
+    bs << mScaleVoxel;
+    bs << mScaleVoxelGap;
+    bs << mFishEyeX;
+    bs << mFishEyeY;
+    bs << mMaxZoom;
+    bs << mDebugLayout;
+    bs << mMaxDepthZoom;
+END_SAVES
+
+INIT_REVS(11, 0)
+
+BEGIN_LOADS(DepthBuffer3D)
+    LOAD_REVS(bs)
+    ASSERT_REVS(11, 0)
+    LOAD_SUPERCLASS(Hmx::Object)
+    LOAD_SUPERCLASS(RndDrawable)
+    LOAD_SUPERCLASS(RndTransformable)
+    if (d.rev > 1) {
+        d.stream >> mNobodyColor;
+        d >> mPlayerPalette;
+        d >> mPlayerPaletteOffset;
+        d >> mMinimalMat;
+        if (d.rev < 3) {
+            int dummy;
+            d >> dummy;
+        }
+    }
+    if (d.rev > 2) {
+        d >> mDrawSheet;
+        d >> mMesh;
+    }
+    if (d.rev > 3) {
+        d >> mPlayerPaletteScale;
+        d >> mStretchNearCamera;
+    }
+    if (d.rev > 4) {
+        d >> mOpacity;
+    }
+    if (d.rev > 5) {
+        d >> mDrawPlayer1;
+        d >> mDrawPlayer2;
+        d >> mDrawNonPlayers;
+    }
+    if (d.rev > 6) {
+        d.stream >> mTile;
+        d >> mScaleVoxel;
+        d >> mScaleVoxelGap;
+    }
+    if (d.rev > 7) {
+        d >> mFishEyeX;
+    }
+    if (d.rev > 8) {
+        d >> mFishEyeY;
+    }
+    if (d.rev > 9) {
+        d >> mMaxZoom;
+        d >> mDebugLayout;
+    }
+    if (d.rev > 10) {
+        d >> mMaxDepthZoom;
+    }
+END_LOADS
+
+BEGIN_COPYS(DepthBuffer3D)
+    COPY_SUPERCLASS(Hmx::Object)
+    COPY_SUPERCLASS(RndDrawable)
+    COPY_SUPERCLASS(RndTransformable)
+    CREATE_COPY(DepthBuffer3D)
+    BEGIN_COPYING_MEMBERS
+        COPY_MEMBER(mNobodyColor)
+        COPY_MEMBER(mPlayerPalette)
+        COPY_MEMBER(mPlayerPaletteOffset)
+        COPY_MEMBER(mPlayerPaletteScale)
+        COPY_MEMBER(mMinimalMat)
+        COPY_MEMBER(mDrawSheet)
+        COPY_MEMBER(mMesh)
+        COPY_MEMBER(mStretchNearCamera)
+        COPY_MEMBER(mOpacity)
+        COPY_MEMBER(mDrawPlayer1)
+        COPY_MEMBER(mDrawPlayer2)
+        COPY_MEMBER(mDrawNonPlayers)
+        COPY_MEMBER(mTile)
+        COPY_MEMBER(mScaleVoxel)
+        COPY_MEMBER(mScaleVoxelGap)
+        COPY_MEMBER(mFishEyeX)
+        COPY_MEMBER(mFishEyeY)
+    END_COPYING_MEMBERS
+END_COPYS
+
 #endif

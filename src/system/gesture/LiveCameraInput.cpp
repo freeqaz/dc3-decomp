@@ -24,6 +24,7 @@
 #include "xdk/xapilibi/handleapi.h"
 #include "xdk/xapilibi/winerror.h"
 #include "utl/FilePath.h"
+#include "utl/FileStream.h"
 #include "utl/Loader.h"
 #include "Memory.h"
 
@@ -1138,6 +1139,61 @@ bool GetExposureRegion(NUI_CAMERA_AE_ROI &region) {
 #ifdef HX_NATIVE
 DataNode OnCameraDumpUnique(DataArray *) { return DataNode(0); }
 DataNode OnCameraDebugDepth(DataArray *) { return DataNode(0); }
+#else
+
+void LiveCameraInput::LockStream(const void *buf, LockedRect &rect) {
+    D3DLOCKED_RECT d3dRect;
+    if (buf) {
+        D3DLineTexture_LockRect((D3DLineTexture *)buf, 0, &d3dRect, nullptr, 0x10);
+        rect.mBits = d3dRect.pBits;
+    } else {
+        d3dRect.Pitch = 0;
+        rect.mBits = nullptr;
+    }
+    rect.mPitch = d3dRect.Pitch;
+}
+
+void LiveCameraInput::UnlockStream(const void *buf) {
+    if (buf != nullptr) {
+        D3DCubeTexture_UnlockRect((D3DCubeTexture *)buf, (D3DCUBEMAP_FACES)0, 0);
+    }
+}
+
+DataNode OnCameraDebugDepth(DataArray *) {
+    *gDebugDepth = !*gDebugDepth;
+    return DataNode(0);
+}
+
+void CameraDump(const char *filename) {
+    LiveCameraInput *cam = LiveCameraInput::sInstance;
+    if (!cam->mDepthPolled) {
+        cam->PollNewStream(LiveCameraInput::kBufferDepth);
+    }
+    RndTex *tex = cam->GetStreamTex(LiveCameraInput::kBufferDepth);
+    int texSize = tex->Width() * tex->Height() * tex->Bpp() / 8;
+    void *buf = MemAlloc(texSize, "unknown", 0, "unknown", 0);
+    void *texels;
+    tex->TexelsLock(texels);
+    memcpy(buf, texels, texSize);
+    tex->TexelsUnlock();
+    FileStream fs(filename, FileStream::kWrite, true);
+    if (fs.Fail()) {
+        MILO_NOTIFY("Screenshot failed; could not open destination file (%s).", filename);
+    } else {
+        fs.Write(buf, texSize);
+    }
+}
+
+void CameraDumpUnique(const char *name) {
+    String uniqueName = UniqueFilename(name, "data");
+    CameraDump(uniqueName.c_str());
+}
+
+DataNode OnCameraDumpUnique(DataArray *) {
+    CameraDumpUnique("camera");
+    return DataNode(0);
+}
+
 #endif
 
 #pragma endregion

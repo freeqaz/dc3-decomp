@@ -13,6 +13,7 @@
 #include "rndobj/Rnd.h"
 #include "rndobj/Tex.h"
 #include "rndobj/TexRenderer.h"
+#include "obj/Task.h"
 #include "utl/Symbol.h"
 
 StreamRecorder::StreamRecorder()
@@ -276,7 +277,31 @@ void StreamRecorder::DrawShowing() {
     }
 }
 
-#ifdef HX_NATIVE
-// TODO: texture compression and recording logic
-void StreamRecorder::Poll() {}
+#ifndef HX_NATIVE
+void StreamRecorder::Poll() {
+    CompressTextures();
+    if (mDebugFrame >= 0) {
+        SetFrame(mDebugFrame);
+    } else {
+        if (mRecordingPos >= 0.0f) {
+            if (mInputDir) {
+                mInputDir->DrawShowing();
+                mRecordingPos += TheTaskMgr.DeltaSeconds();
+            }
+        }
+        if (mRecordingPos < 0.0f && mPlaybackPos >= 0.0f) {
+            int speed = mPlaybackSpeed - 3;
+            int frameIdx = (int)(mPlaybackPos * 20.0f);
+            if (speed < 0) {
+                frameIdx = frameIdx / (1 - speed);
+            } else if (speed > 0) {
+                frameIdx = (speed + 1) * frameIdx;
+            }
+            mPlaybackPos += TheTaskMgr.DeltaSeconds();
+            if (!SetFrame(frameIdx)) {
+                mPlaybackPos = -1.0f;
+            }
+        }
+    }
+}
 #endif

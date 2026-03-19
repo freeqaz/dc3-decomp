@@ -99,6 +99,8 @@ public:
     static LiveCameraInput *sInstance;
 
     friend class FreestyleMoveRecorder;
+    friend void CameraDump(const char *);
+    friend void CameraDumpUnique(const char *);
 
 protected:
     LiveCameraInput();
