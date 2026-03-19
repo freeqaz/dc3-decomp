@@ -55,6 +55,22 @@ float FreestyleMoveRecorder::GetScore(const BaseSkeleton *, int, float, bool) { 
 float FreestyleMoveRecorder::GetScore(int, int, float, bool) { return 0.0f; }
 #else // PPC
 
+namespace {
+    struct DebugGraph {
+        DebugGraph(const Hmx::Color &c) {
+            unk0.resize(200);
+            unk8 = 0;
+            unkc = c;
+        }
+
+        std::vector<float> unk0;
+        int unk8;
+        Hmx::Color unkc;
+    };
+
+    std::vector<DebugGraph> gDebugGraphs;
+}
+
 static const float kE = 2.71828182845905f;
 
 DancerSkeleton sLastComparedDancerSkel;

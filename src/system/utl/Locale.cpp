@@ -11,12 +11,7 @@
 
 Locale TheLocale;
 
-Locale::~Locale() {
-    if (mMagnuStrings) {
-        mMagnuStrings->Release();
-        mMagnuStrings = 0;
-    }
-}
+// ~Locale() is inline in Locale.h (compiler inlines it into atexit destructor)
 bool gShowTokensCheat = false;
 bool Locale::sVerboseNotify;
 const char *Locale::sIgnoreMissingText;

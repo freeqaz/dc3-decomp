@@ -50,7 +50,12 @@ public:
     // mInitialized is UB in original binary — never written, happens to be nonzero.
     Locale() {}
 #endif
-    ~Locale();
+    ~Locale() {
+        if (mMagnuStrings) {
+            mMagnuStrings->Release();
+            mMagnuStrings = 0;
+        }
+    }
 
     void Init();
     void Terminate();
