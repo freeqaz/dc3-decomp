@@ -1,6 +1,7 @@
 #include "meta_ham/LetterboxPanel.h"
 #include "LetterboxPanel.h"
 #include "flow/Flow.h"
+#include "meta_ham/LockedContentPanel.h"
 #include "flow/FlowNode.h"
 #include "math/Easing.h"
 #include "meta_ham/HamPanel.h"
