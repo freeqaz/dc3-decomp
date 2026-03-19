@@ -11,8 +11,8 @@
 
 SampleDataAllocFunc SampleData::sAlloc = nullptr;
 SampleDataFreeFunc SampleData::sFree = nullptr;
-static const int gSampleDataMaxRev = 0x10;
-static const int gSampleDataMaxAltRev = 0;
+static const unsigned short gSampleDataMaxRev = 0x10;
+static const unsigned short gSampleDataMaxAltRev = 0;
 
 SampleData::SampleData() : mData(0), mMarkers() { Reset(); }
 SampleData::~SampleData() { Dealloc(); }

@@ -221,7 +221,7 @@ void HamCamShot::UpdateTargetsFlipped() {
                     }
                     TheDebug << MakeString(
                         "   Target %d: character = '%s' clips = '%s' animGroup = '%s'\n",
-                        targetIdx, charName, clipsDirName, it->mAnimGroup.Str()
+                        targetIdx, charName, clipsDirName, it->mAnimGroup
                     );
                     targetIdx++;
                 }

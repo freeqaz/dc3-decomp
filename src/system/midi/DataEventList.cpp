@@ -171,7 +171,7 @@ void DataEventList::InsertEvent(float start, float end, const DataNode &node, in
             MILO_NOTIFY(
                 "Trying to add event %s but mCompType is %s, ignoring",
                 str,
-                mCompType == kDataInt ? "kDataInt" : "kDataSymbol"
+                (char *)(mCompType == kDataInt ? "kDataInt" : "kDataSymbol")
             );
             return;
         }
