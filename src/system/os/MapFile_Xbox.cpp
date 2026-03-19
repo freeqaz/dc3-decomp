@@ -260,6 +260,42 @@ void InsertSort(int *keys, T *data, int count) {
 
 template void InsertSort<StackData>(int *, StackData *, int);
 
+bool XboxMapFile::ParseStack(
+    const char *mapFileName, struct StackData *stack, int count, FixedString &str
+) {
+    XboxMapFile mapFile(mapFileName);
+    if (!mapFile.mFile) {
+        return false;
+    }
+    int keys[50];
+    char funcNames[50 * 0x80];
+    int i;
+    for (i = 0; i < count; i++) {
+        keys[i] = i;
+    }
+    InsertSort(keys, stack, i);
+    if (count > 0) {
+        int *pKey = keys;
+        int offset = (int)stack - (int)keys;
+        int remaining = count;
+        do {
+            int origIdx = *pKey;
+            int nameOff = origIdx * 0x80;
+            const char *name =
+                mapFile.GetFunction(*(unsigned int *)((int)pKey + offset), false);
+            strncpy(&funcNames[nameOff], name, 0x7f);
+            funcNames[nameOff + 0x7f] = '\0';
+            remaining--;
+            pKey++;
+        } while (remaining != 0);
+    }
+    for (int k = 0; k < count; k++) {
+        str += "\n   ";
+        str += &funcNames[k * 0x80];
+    }
+    return true;
+}
+
 const char *XboxMapFile::GetFunction(unsigned int ui, bool b2) {
     static char sBuffer[0x400];
     if (b2) {
