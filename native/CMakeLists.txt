@@ -1023,8 +1023,8 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/DataParser_Native.cpp
     src/engine_stubs_generated.cpp
     src/native_link_glue.cpp
+    src/native_job_stubs.cpp
     src/thunk_stubs.cpp
-    src/web_stubs.cpp
 )
 
 # Full native sources (core + entry point)
@@ -1085,7 +1085,6 @@ if(EMSCRIPTEN)
 
 # Web-specific platform sources (replace native platform files)
 set(DC3_WEB_CORE_SOURCES
-    src/platform/xdk_shims_web.cpp
     src/platform/Memory_Native.cpp
     src/platform/PlatformMgr_Native.cpp
     src/platform/System_Native.cpp
@@ -1137,8 +1136,8 @@ set(DC3_WEB_CORE_SOURCES
     src/platform/RenderState_Native.cpp
     src/engine_stubs_generated.cpp
     src/native_link_glue.cpp
+    src/native_job_stubs.cpp
     src/thunk_stubs.cpp
-    src/web_stubs.cpp
 )
 
 # Web GFX sources — use GpuDevice_Web.cpp instead of GpuDevice.cpp

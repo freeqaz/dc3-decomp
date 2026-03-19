@@ -13,7 +13,27 @@
 #include <cstdio>
 #define _snprintf snprintf
 #define _vsnprintf vsnprintf
-#define sprintf_s snprintf
+// sprintf_s: MSVC provides both sprintf_s(buf, size, fmt, ...) and
+// sprintf_s<N>(buf, fmt, ...) template form. Provide both for native.
+#include <cstdarg>
+template <size_t N>
+inline int sprintf_s(char (&buf)[N], const char *fmt, ...) __attribute__((format(printf, 2, 3)));
+template <size_t N>
+inline int sprintf_s(char (&buf)[N], const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    int r = vsnprintf(buf, N, fmt, ap);
+    va_end(ap);
+    return r;
+}
+inline int sprintf_s(char *buf, size_t size, const char *fmt, ...) __attribute__((format(printf, 3, 4)));
+inline int sprintf_s(char *buf, size_t size, const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    int r = vsnprintf(buf, size, fmt, ap);
+    va_end(ap);
+    return r;
+}
 // MSVC CRT functions
 #define _open open
 #define _close close
