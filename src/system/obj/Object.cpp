@@ -105,13 +105,18 @@ Hmx::Object::~Object() {
     Hmx::Object *old = sDeleting;
     sDeleting = this;
 #ifdef HX_NATIVE
-    // During cascading ~ObjectDir destruction, skip ReplaceRefs entirely.
-    // Replace callbacks are unsafe during cascade — they may write to freed
-    // ObjPtrVec buffers (e.g. CharBonesMeshes::Replace → Set → AddRef).
-    // Ownership lists (ObjPtrList/ObjPtrVec) are not updated, so classes
-    // with `while(!empty()) delete front;` loops must guard with
-    // InDeleteObjects() during cascade.
-    if (!ObjectDir::InDeleteObjects())
+    if (ObjectDir::InDeleteObjects()) {
+        // During cascade, Replace callbacks are unsafe (may write to freed
+        // ObjPtrVec buffers). Instead, do a lightweight pass that nullifies
+        // mObject on all surviving ObjPtrs/ObjPtrVec/ObjPtrList entries
+        // without triggering Replace callbacks or ring operations.
+        // This prevents stale-pointer crashes when surviving objects (e.g.
+        // TaskMgr, sMetaMaterials) later dereference their ObjPtrs.
+        std::vector<ObjRef *> snapshot;
+        SnapshotRing(&mRefs, snapshot);
+        for (ObjRef *ref : snapshot)
+            ref->NullifyObj();
+    } else
 #endif
     ReplaceRefs(nullptr);
     sDeleting = old;
