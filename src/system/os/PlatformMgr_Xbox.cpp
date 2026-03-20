@@ -563,7 +563,7 @@ MultipleItemsEnumJob::MultipleItemsEnumJob(Hmx::Object *obj, int userIndex, std:
 }
 
 MultipleItemsEnumJob::~MultipleItemsEnumJob() {
-    if (mStatus == 1 && mOverlapped.InternalLow != 0x3e5) {
+    if (mStatus == 1 && mOverlapped.InternalLow == 0x3e5) {
         DWORD result = XCancelOverlapped(&mOverlapped);
         if (result != 0) {
             TheDebug.Fail(MakeString("Error cancelling enum %d", result), 0);

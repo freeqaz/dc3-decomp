@@ -87,9 +87,9 @@ float JointDistPoseElement::Score(const Skeleton &skeleton) const {
 float CamDistancePoseElement::Score(const Skeleton &skeleton) const {
     Vector3 pos;
     skeleton.JointPos(kCoordCamera, kJointSpine, pos);
-    if (pos.z <= unk8)
-        return 0.0f;
-    return 1.0f;
+    if (pos.z > unk8)
+        return 1.0f;
+    return 0.0f;
 }
 
 float BoneAngleRangePoseElement::Score(const Skeleton &skeleton) const {
