@@ -105,18 +105,11 @@ Hmx::Object::~Object() {
     Hmx::Object *old = sDeleting;
     sDeleting = this;
 #ifdef HX_NATIVE
-    if (ObjectDir::InDeleteObjects()) {
-        // During cascade, Replace callbacks are unsafe (may write to freed
-        // ObjPtrVec buffers). Instead, do a lightweight pass that nullifies
-        // mObject on all surviving ObjPtrs/ObjPtrVec/ObjPtrList entries
-        // without triggering Replace callbacks or ring operations.
-        // This prevents stale-pointer crashes when surviving objects (e.g.
-        // TaskMgr, sMetaMaterials) later dereference their ObjPtrs.
-        std::vector<ObjRef *> snapshot;
-        SnapshotRing(&mRefs, snapshot);
-        for (ObjRef *ref : snapshot)
-            ref->NullifyObj();
-    } else
+    // During cascade, Phase 0 of DeleteObjects + ~ObjectDir::ReplaceRefs
+    // already nullified all refs while memory was valid. Skip here to avoid
+    // SnapshotRing walking through freed vector buffers (std::allocator
+    // frees immediately, not deferred).
+    if (!ObjectDir::InDeleteObjects())
 #endif
     ReplaceRefs(nullptr);
     sDeleting = old;

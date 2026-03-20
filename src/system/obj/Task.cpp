@@ -400,7 +400,18 @@ void TaskTimeline::Poll() {
 
 void TaskTimeline::AddTask(Task *task, float f) { AddTask(TaskInfo(task, mTime + f)); }
 
-void TaskMgr::Start(Task *t, TaskUnits u, float f) { mTimelines[u].AddTask(t, f); }
+void TaskMgr::Start(Task *t, TaskUnits u, float f) {
+#ifdef HX_NATIVE
+    // During cascade, destructors may execute scripts that create tasks.
+    // These tasks reference objects about to be freed — they'd become
+    // stale ObjPtrs in TaskTimeline, crashing in Poll. Skip them.
+    if (ObjectDir::InDeleteObjects()) {
+        delete t;
+        return;
+    }
+#endif
+    mTimelines[u].AddTask(t, f);
+}
 
 DataNode OnScriptTask(DataArray *arr) {
     static Symbol script("script");

@@ -116,15 +116,6 @@ public:
         MILO_FAIL("calling get obj on abstract ObjRef");
     }
     virtual ObjRefOwner *Parent() const { return nullptr; }
-#ifdef HX_NATIVE
-    /** Null the stored object pointer without triggering Replace callbacks
-     *  or ring operations. Used during cascade destruction to safely
-     *  invalidate surviving ObjPtrs that reference dying objects. */
-    virtual void NullifyObj() {
-        next = this;
-        prev = this;
-    }
-#endif
 
     class iterator {
     private:
@@ -206,12 +197,6 @@ public:
     virtual ~ObjRefConcrete();
     virtual Hmx::Object *GetObj() const { return mObject; }
     virtual void Replace(Hmx::Object *obj) { SetObj(obj); }
-#ifdef HX_NATIVE
-    void NullifyObj() override {
-        mObject = nullptr;
-        ObjRef::NullifyObj();
-    }
-#endif
 
     T1 *operator->() const { return mObject; }
     operator T1 *() const { return mObject; }
