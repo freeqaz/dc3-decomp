@@ -78,6 +78,14 @@ HamNavList::HamNavList()
 }
 
 HamNavList::~HamNavList() {
+#ifdef HX_NATIVE
+    if (ObjectDir::InDeleteObjects()) {
+        mListWidgets.clear();
+        delete mDirectionGestureFilter;
+        delete mHandHeightFilter;
+        return;
+    }
+#endif
     DeleteAll(mListWidgets);
     SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
     if (handle.HasCallback(this)) {

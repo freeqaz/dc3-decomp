@@ -13,7 +13,15 @@ void (*gForceDestroyRange)(LevelData *, LevelData *) = stlpmtx_std::_Destroy_Ran
 
 PracticeSection::PracticeSection() : mDifficulty(kDifficultyEasy), mTestStepSequence(0) {}
 
-PracticeSection::~PracticeSection() { DeleteAll(mSeqs); }
+PracticeSection::~PracticeSection() {
+#ifdef HX_NATIVE
+    if (ObjectDir::InDeleteObjects()) {
+        mSeqs.clear();
+        return;
+    }
+#endif
+    DeleteAll(mSeqs);
+}
 
 BEGIN_HANDLERS(PracticeSection)
     HANDLE_SUPERCLASS(RndAnimatable)

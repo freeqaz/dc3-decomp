@@ -17,7 +17,7 @@
 
 // libc++ (macOS) removes random_shuffle/mem_fun in C++17 mode.
 // libstdc++ keeps them as deprecated. Only define shims when missing.
-#if defined(_LIBCPP_VERSION)
+#if defined(_LIBCPP_VERSION) && !defined(_LIBCPP_ENABLE_CXX17_REMOVED_RANDOM_SHUFFLE)
 namespace std {
 template <class RandomIt>
 void random_shuffle(RandomIt first, RandomIt last) {

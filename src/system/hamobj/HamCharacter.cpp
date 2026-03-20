@@ -78,6 +78,9 @@ HamCharacter::~HamCharacter() {
     if (TheSynth) {
         TheSynth->RemovePlayHandler(this);
     }
+#ifdef HX_NATIVE
+    if (!ObjectDir::InDeleteObjects())
+#endif
     delete mWaypoint;
 }
 

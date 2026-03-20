@@ -9,6 +9,10 @@ UITransitionHandler::UITransitionHandler(Hmx::Object *obj)
       mChangePending(0), mOutAnimStarted(0) {}
 
 UITransitionHandler::~UITransitionHandler() {
+#ifdef HX_NATIVE
+    if (ObjectDir::InDeleteObjects())
+        return;
+#endif
     if (mInAnim)
         mInAnim->StopAnimation();
     if (mOutAnim)

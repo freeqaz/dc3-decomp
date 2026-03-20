@@ -227,6 +227,10 @@ MoveDir::MoveDir()
 MoveDir::~MoveDir() {
     RELEASE(mFilterQueue);
     RELEASE(mAsyncDetector);
+#ifdef HX_NATIVE
+    if (ObjectDir::InDeleteObjects())
+        return;
+#endif
     mMoveOverlay = RndOverlay::Find("ham_move", false);
     if (mMoveOverlay && mMoveOverlay->GetCallback() == this) {
         mMoveOverlay->SetCallback(nullptr);
