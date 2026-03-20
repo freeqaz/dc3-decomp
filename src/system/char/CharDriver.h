@@ -67,6 +67,8 @@ public:
     CharClip *FindClip(DataNode const &, bool notify = true);
     void SetBlendWidth(float w) { mBlendWidth = w; }
 
+    friend class HamCharacter;
+
 protected:
     CharDriver();
 

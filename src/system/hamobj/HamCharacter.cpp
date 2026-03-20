@@ -627,7 +627,67 @@ DataNode HamCharacter::OnCamTeleport(DataArray *a) {
     return 0;
 }
 
-ObjectDir *HamCharacter::GetNeutralSkeleton() { return mNeutralSkelDir; }
+ObjectDir *HamCharacter::GetNeutralSkeleton() {
+    int songAnim = SongAnimation();
+    if (songAnim != -1) {
+        HamDriver *hamDriver = Find<HamDriver>("song.hdrv", false);
+        if (hamDriver == nullptr || hamDriver->FirstClip() == nullptr) {
+            CharClip *clip = Driver()->FirstPlayingClip();
+            CharBones *bones = reinterpret_cast<CharBones *>((char *)mSkeletonBones + 0x10);
+            if (clip == nullptr) {
+                goto zero_and_scale;
+            }
+            bones->Zero();
+            Driver()->SetClipWeightMap();
+            std::map<CharClip *, float> clipMap(Driver()->mClipWeightMap);
+            float totalWeight = 0.0f;
+            for (std::map<CharClip *, float>::iterator it = clipMap.begin();
+                 it != clipMap.end(); ++it) {
+                CharClip *clipEntry = it->first;
+                float weight = it->second;
+                if (clipEntry != nullptr && weight > totalWeight) {
+                    int skelIdx = clipEntry->Property("clip_skeleton_index", false)->Int(nullptr);
+                    CharBones *skBones = mSkeletonBones ? static_cast<CharBones *>(mSkeletonBones) : nullptr;
+                    sSkeletonClips[skelIdx]->ScaleAdd(*skBones, weight, totalWeight, totalWeight);
+                }
+            }
+            mSkeletonBones->Poll();
+        } else {
+            hamDriver->SetClipWeightMap();
+            std::map<CharClip *, float> clipMap(hamDriver->mClipTimingMap);
+            if (clipMap.size() == 0) {
+                clipMap.clear();
+                return this;
+            }
+            CharBones *bones = static_cast<CharBones *>(mSkeletonBones);
+            bones->Zero();
+            for (std::map<CharClip *, float>::iterator it = clipMap.begin();
+                 it != clipMap.end(); ++it) {
+                if (it->first != nullptr) {
+                    ApplyBlendedSkeletons(hamDriver, it->first, it->second);
+                }
+            }
+            mSkeletonBones->Poll();
+        }
+    } else {
+        CharClip *clip = Driver()->FirstClip();
+        if (clip == nullptr) {
+            return this;
+        }
+        if (clip->Flags() & 1) {
+            return this;
+        }
+        CharBones *bones = reinterpret_cast<CharBones *>((char *)mSkeletonBones + 0x10);
+zero_and_scale:
+        bones->Zero();
+        {
+            CharBones *skBones = mSkeletonBones ? static_cast<CharBones *>(mSkeletonBones) : nullptr;
+            sSkeletonClips[mGender == kHamFemale ? 1 : 0]->ScaleAdd(*skBones, 1.0f, 0.0f, 0.0f);
+        }
+        mSkeletonBones->Poll();
+    }
+    return mNeutralSkelDir;
+}
 
 void HamCharacter::SetFaceOverrideClip(Symbol clipName, bool notify) {
     CharLipSyncDriver *driver = Find<CharLipSyncDriver>("face.lipdrv", false);
