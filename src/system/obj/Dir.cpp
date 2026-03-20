@@ -54,17 +54,14 @@ ObjectDir::~ObjectDir() {
     mSubDirs.clear();
     delete mLoader;
 #ifdef HX_NATIVE
-    // Always run Phase 0 (ReplaceRefs) on native — even when async unload
-    // is active. UIPanel::Unload calls StartAsyncUnload(), making
-    // AsyncUnload() > 0. Without Phase 0, ObjPtrs in persistent objects
-    // (TaskMgr, globals) are never nullified → stale pointer crashes in
-    // TaskTimeline::Poll. DirUnloader handles gradual deletion of the
-    // objects themselves, but doesn't nullify external references.
+    // Always run Phase 0 (NullifyAllRefs) on native — even when async
+    // unload is active. Without it, ObjPtrs in persistent objects
+    // (TaskMgr, globals) are never nullified → stale pointer crashes.
+    // NullifyObj avoids Replace callbacks (and delete-this in Tasks).
     if (TheLoadMgr.AsyncUnload()) {
-        // Run Phase 0 inline before handing off to DirUnloader
         for (ObjDirItr<Hmx::Object> it(this, false); it != nullptr; ++it) {
             if (it != this)
-                ((Hmx::Object *)it)->ReplaceRefs(nullptr);
+                ((Hmx::Object *)it)->NullifyAllRefs();
         }
         new DirUnloader(this);
     } else {
@@ -745,18 +742,26 @@ void ObjectDir::DeleteObjects() {
         if (it != this)
             todo.push_back({dynamic_cast<void *>((Hmx::Object *)it), it});
     }
-    // Phase 0: nullify all ref rings while memory is valid.
-    // ReplaceList's force-unlink guard handles the cascade path where
-    // SetObjConcrete skips Release (the ref stays in the ring until
-    // force-unlinked by the guard).
+    // Phase 0: nullify all ref rings via NullifyObj while memory is valid.
+    // NullifyObj is purely mechanical (no Replace callbacks) — avoids
+    // delete-this in MessageTask/ScriptTask/PropertyTask/DirLoader that
+    // would cause use-after-free when ReplaceRefs triggers Replace(nullptr).
+    // Safe at all cascade depths: each dir's Phase 0 runs before its Phase 1,
+    // and ~ObjRef properly unlinks Nodes from sibling dir rings before
+    // ObjPtrVec buffer deallocation.
     for (auto &[block, obj] : todo)
-        obj->ReplaceRefs(nullptr);
+        obj->NullifyAllRefs();
     // Phase 1: destroy all (memory stays valid for sibling destructors)
     for (auto &[block, obj] : todo)
         obj->~Object();
-    // Phase 2: defer frees until outermost ~ObjectDir completes
-    for (auto &[block, obj] : todo)
+    // Phase 2: defer frees until outermost ~ObjectDir completes.
+    // Also erase DirPtrRefCounts entries — NullifyObj skips the ref-count
+    // decrement (no operator= runs), so stale entries would persist and
+    // could affect new objects allocated at the same address.
+    for (auto &[block, obj] : todo) {
+        DirPtrRefCounts().erase((const void *)obj);
         DeferFree(block);
+    }
 #else
     for (ObjDirItr<Hmx::Object> it(this, false); it != nullptr; ++it) {
         if (it != this) {

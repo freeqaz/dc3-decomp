@@ -105,10 +105,10 @@ Hmx::Object::~Object() {
     Hmx::Object *old = sDeleting;
     sDeleting = this;
 #ifdef HX_NATIVE
-    // During cascade, Phase 0 of DeleteObjects + ~ObjectDir::ReplaceRefs
-    // already nullified all refs while memory was valid. Skip here to avoid
-    // SnapshotRing walking through freed vector buffers (std::allocator
-    // frees immediately, not deferred).
+    // During cascade, skip ReplaceRefs. Phase 0 (NullifyAllRefs) already
+    // nullified all refs while memory was valid. ReplaceRefs here would
+    // be unsafe: ring nodes from freed ObjPtrVec buffers have garbage
+    // next/prev, and Replace callbacks trigger delete-this in Tasks.
     if (!ObjectDir::InDeleteObjects())
 #endif
     ReplaceRefs(nullptr);
@@ -367,6 +367,20 @@ void Hmx::Object::ReplaceRefs(Hmx::Object *obj) {
 #endif
     }
 }
+
+#ifdef HX_NATIVE
+void Hmx::Object::NullifyAllRefs() {
+    ObjRef *sentinel = &mRefs;
+    ObjRef *cur = sentinel->next;
+    while (cur != sentinel) {
+        ObjRef *nxt = cur->next;
+        cur->NullifyObj();
+        cur = nxt;
+    }
+    sentinel->next = sentinel;
+    sentinel->prev = sentinel;
+}
+#endif
 
 void Hmx::Object::ReplaceRefsFrom(Hmx::Object *from, Hmx::Object *to) {
     MILO_ASSERT(from, 0xA6);

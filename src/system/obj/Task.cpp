@@ -476,6 +476,14 @@ void TaskMgr::Init() {
 
 void TaskMgr::QueueTaskDelete(Task *task) {
     if (task) {
+#ifdef HX_NATIVE
+        // During cascade, tasks are being destroyed by Phase 1 and their
+        // memory is deferred-freed. Don't queue them — the ObjPtr<Task>
+        // constructor calls AddRef which may write to freed ring neighbors,
+        // and the deferred memory will be freed before Poll can delete it.
+        if (ObjectDir::InDeleteObjects())
+            return;
+#endif
         for (int i = 0; i < unk84.size(); i++) {
             if (unk84[i] == task)
                 return;

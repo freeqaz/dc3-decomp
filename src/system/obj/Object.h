@@ -116,6 +116,12 @@ public:
         MILO_FAIL("calling get obj on abstract ObjRef");
     }
     virtual ObjRefOwner *Parent() const { return nullptr; }
+#ifdef HX_NATIVE
+    /** Null the ref's target pointer and self-loop ring pointers.
+     *  No Replace callback fires — purely mechanical. Used by
+     *  NullifyAllRefs during cascade Phase 0 to avoid delete-this. */
+    virtual void NullifyObj() { next = this; prev = this; }
+#endif
 
     class iterator {
     private:
@@ -197,6 +203,9 @@ public:
     virtual ~ObjRefConcrete();
     virtual Hmx::Object *GetObj() const { return mObject; }
     virtual void Replace(Hmx::Object *obj) { SetObj(obj); }
+#ifdef HX_NATIVE
+    void NullifyObj() override { mObject = nullptr; ObjRef::NullifyObj(); }
+#endif
 
     T1 *operator->() const { return mObject; }
     operator T1 *() const { return mObject; }
@@ -1291,6 +1300,12 @@ namespace Hmx {
 
         void ReplaceRefs(Hmx::Object *);
         void ReplaceRefsFrom(Hmx::Object *from, Hmx::Object *);
+#ifdef HX_NATIVE
+        /** Nullify all refs in this object's ring via NullifyObj.
+         *  No Replace callbacks fire — avoids delete-this in
+         *  MessageTask/ScriptTask/PropertyTask/DirLoader. */
+        void NullifyAllRefs();
+#endif
         /** How many other objects reference this Object? */
         int RefCount() const;
 
