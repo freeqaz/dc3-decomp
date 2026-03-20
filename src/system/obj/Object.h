@@ -1289,6 +1289,9 @@ namespace Hmx {
         bool IsRingPrevAlive() const {
             return mRefs.prev->mAliveSentinel == ObjRef::kAliveSentinel;
         }
+        /** Check if this object's mRefs sentinel is still alive.
+         *  False after ~Object (mRefs' ~ObjRef clears sentinel). */
+        bool IsRefAlive() const { return mRefs.IsAlive(); }
 #endif
         void Release(ObjRef *ref) {
 #ifdef HX_NATIVE

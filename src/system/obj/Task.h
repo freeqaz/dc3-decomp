@@ -19,10 +19,13 @@ enum TaskUnits {
  */
 class Task : public Hmx::Object {
 public:
-    Task() {}
-    // virtual ~Task() {}
+    Task();
+    virtual ~Task();
     virtual void Poll(float) = 0;
 
+#ifdef HX_NATIVE
+    static bool IsLive(Task *t);
+#endif
     MEM_OVERLOAD(Task, 0x1A);
 };
 

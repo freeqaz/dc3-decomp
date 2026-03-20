@@ -45,6 +45,11 @@ Flow::Flow()
 
 Flow::~Flow() {
     if (!mRunningNodes.empty()) {
+#ifdef HX_NATIVE
+        if (ObjectDir::InDeleteObjects())
+            mRunningNodes.clear();
+        else
+#endif
         if (mProxyFile.empty()) {
             FlowQueueable::Deactivate(true);
         }

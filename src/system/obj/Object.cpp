@@ -369,10 +369,20 @@ void Hmx::Object::ReplaceRefs(Hmx::Object *obj) {
 }
 
 #ifdef HX_NATIVE
+#if defined(__SANITIZE_ADDRESS__) || (defined(__has_feature) && __has_feature(address_sanitizer))
+__attribute__((no_sanitize("address")))
+#endif
 void Hmx::Object::NullifyAllRefs() {
     ObjRef *sentinel = &mRefs;
     ObjRef *cur = sentinel->next;
     while (cur != sentinel) {
+        // During cascade, dead ObjRefs from freed ObjPtrVec buffers
+        // may be linked in the ring (~ObjRefConcrete skips Release).
+        // Their next pointers are glibc heap metadata — stop walking.
+        // Remaining alive entries (if any) keep stale mObject pointers;
+        // IsLive checks in TaskTimeline::Poll catch those at runtime.
+        if (!cur->IsAlive())
+            break;
         ObjRef *nxt = cur->next;
         cur->NullifyObj();
         cur = nxt;

@@ -10,6 +10,30 @@
 #include "utl/BeatMap.h"
 #include "utl/TempoMap.h"
 
+#ifdef HX_NATIVE
+#include <unordered_set>
+static std::unordered_set<Task *> &LiveTasks() {
+    static std::unordered_set<Task *> s;
+    return s;
+}
+#endif
+
+Task::Task() {
+#ifdef HX_NATIVE
+    LiveTasks().insert(this);
+#endif
+}
+
+Task::~Task() {
+#ifdef HX_NATIVE
+    LiveTasks().erase(this);
+#endif
+}
+
+#ifdef HX_NATIVE
+bool Task::IsLive(Task *t) { return LiveTasks().count(t) > 0; }
+#endif
+
 TaskMgr TheTaskMgr;
 
 void TaskMgr::Terminate() { SetName(nullptr, nullptr); }
@@ -382,7 +406,11 @@ void TaskTimeline::Poll() {
         float f1 = it->mStartTime;
         float f2 = mTime;
         float diff = f2 - f1;
-        if ((*it).mTask) {
+        if ((*it).mTask
+#ifdef HX_NATIVE
+            && Task::IsLive((*it).mTask)
+#endif
+        ) {
             mPollingTask = (*it).mTask;
             (*it).mTask->Poll(diff);
             ++it;

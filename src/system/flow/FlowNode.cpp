@@ -22,6 +22,13 @@ FlowNode::FlowNode()
 
 FlowNode::~FlowNode() {
     if (!mRunningNodes.empty()) {
+#ifdef HX_NATIVE
+        // During cascade, NullifyAllRefs already nullified ObjPtrs in
+        // mRunningNodes. Deactivate would dereference nullptr nodes.
+        if (ObjectDir::InDeleteObjects())
+            mRunningNodes.clear();
+        else
+#endif
         Deactivate(true);
     }
     while (!mChildNodes.empty()) {

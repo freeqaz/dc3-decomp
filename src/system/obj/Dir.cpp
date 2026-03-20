@@ -60,7 +60,7 @@ ObjectDir::~ObjectDir() {
     // NullifyObj avoids Replace callbacks (and delete-this in Tasks).
     if (TheLoadMgr.AsyncUnload()) {
         for (ObjDirItr<Hmx::Object> it(this, false); it != nullptr; ++it) {
-            if (it != this)
+            if (it != this && ((Hmx::Object *)it)->IsRefAlive())
                 ((Hmx::Object *)it)->NullifyAllRefs();
         }
         new DirUnloader(this);
@@ -742,23 +742,30 @@ void ObjectDir::DeleteObjects() {
         if (it != this)
             todo.push_back({dynamic_cast<void *>((Hmx::Object *)it), it});
     }
-    // Phase 0: nullify all ref rings via NullifyObj while memory is valid.
+    // Phase 0: nullify ref rings via NullifyObj while memory is valid.
     // NullifyObj is purely mechanical (no Replace callbacks) — avoids
-    // delete-this in MessageTask/ScriptTask/PropertyTask/DirLoader that
-    // would cause use-after-free when ReplaceRefs triggers Replace(nullptr).
-    // Safe at all cascade depths: each dir's Phase 0 runs before its Phase 1,
-    // and ~ObjRef properly unlinks Nodes from sibling dir rings before
-    // ObjPtrVec buffer deallocation.
+    // delete-this in MessageTask/ScriptTask/PropertyTask/DirLoader.
+    // NullifyAllRefs uses SnapshotRing to safely handle dead ObjRefs
+    // left in rings by ~ObjRefConcrete's cascade skip (freed ObjPtrVec
+    // buffers from mSubDirs.clear() cascade).
+    // Objects destroyed by mSubDirs.clear() may be in the todo list
+    // (RemoveFromDir skipped when mDir == sDeleting). Their rings are
+    // self-looped from their own Phase 0, so NullifyAllRefs is a no-op.
     for (auto &[block, obj] : todo)
         obj->NullifyAllRefs();
-    // Phase 1: destroy all (memory stays valid for sibling destructors)
-    for (auto &[block, obj] : todo)
-        obj->~Object();
-    // Phase 2: defer frees until outermost ~ObjectDir completes.
-    // Also erase DirPtrRefCounts entries — NullifyObj skips the ref-count
-    // decrement (no operator= runs), so stale entries would persist and
-    // could affect new objects allocated at the same address.
+    // Phase 1: destroy all (memory stays valid for sibling destructors).
+    // Skip objects already destroyed by mSubDirs.clear() cascade.
     for (auto &[block, obj] : todo) {
+        if (obj->IsRefAlive())
+            obj->~Object();
+        else
+            obj = nullptr; // mark: already handled by nested cascade
+    }
+    // Phase 2: defer frees until outermost ~ObjectDir completes.
+    // Skip objects already deferred by nested cascade.
+    for (auto &[block, obj] : todo) {
+        if (!obj)
+            continue;
         DirPtrRefCounts().erase((const void *)obj);
         DeferFree(block);
     }
