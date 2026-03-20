@@ -153,6 +153,7 @@ void MoveMgr::InsertMoveInSong(const MoveVariant *var, int measure, int player) 
         float f4 = BeatToFrame(beat);
         float f6 = BeatToFrame(measure > 0 ? beat - 1 : 0);
         RndPropAnim *anim = TheHamDirector->SongAnim(player);
+        if (!anim) return;
         DataArrayPtr ptr90(clip);
         DataArrayPtr ptr88(move);
         anim->SetKeyVal(TheHamDirector, ptr90, f6, name, true);

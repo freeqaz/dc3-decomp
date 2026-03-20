@@ -27,8 +27,11 @@ FlowNode::~FlowNode() {
     while (!mChildNodes.empty()) {
         FlowNode *cur = mChildNodes.front();
 #ifdef HX_NATIVE
-        if (!cur) {
-            // Null entry left by suppressed erase during ring walk.
+        if (!cur || ObjectDir::InDeleteObjects()) {
+            // Null entry left by suppressed erase during ring walk, or
+            // we're inside cascading ObjectDir::DeleteObjects — children
+            // will be destroyed by the hash table iteration, so don't
+            // double-delete them here.
             mChildNodes.erase(mChildNodes.begin());
             continue;
         }

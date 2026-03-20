@@ -419,7 +419,16 @@ void MergeDirs(ObjectDir *fromDir, ObjectDir *toDir, MergeFilter &filt) {
     Hmx::Object *toObj = toDir;
     Hmx::Object *fromObj = fromDir;
     if (toObj != fromObj) {
+#ifdef HX_NATIVE
+        // Suppress COPY_MEMBER(mSubDirs) in ObjectDir::Copy during merge.
+        // MergeObjectsRecurse handles subdirs separately; copying them here
+        // triggers cascading deletion that corrupts live ref rings.
+        ObjectDir::SetInMergeDirs(true);
+#endif
         MergeObject(fromObj, toObj, toDir, filt.Filter(fromObj, toObj, toDir));
+#ifdef HX_NATIVE
+        ObjectDir::SetInMergeDirs(false);
+#endif
     }
     CopyTypeProperties(fromDir, toDir);
     MergeObjectsRecurse(fromDir, toDir, filt, true);

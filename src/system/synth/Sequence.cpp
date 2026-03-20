@@ -1,6 +1,7 @@
 #include "synth/Sequence.h"
 #include "Sequence_p.h"
 #include "math/Rand.h"
+#include "obj/Dir.h"
 #include "obj/Object.h"
 #include "obj/Task.h"
 
@@ -24,6 +25,12 @@ Sequence::Sequence()
 
 Sequence::~Sequence() {
     while (!mInsts.empty()) {
+#ifdef HX_NATIVE
+        if (!mInsts.front() || ObjectDir::InDeleteObjects()) {
+            mInsts.erase(mInsts.begin());
+            continue;
+        }
+#endif
         delete mInsts.front();
     }
 }

@@ -37,6 +37,10 @@ ObjRefConcrete<T1, T2>::~ObjRefConcrete() {
         // unpredictable order. Calling Release writes to ring neighbors that
         // may already be freed. Skip all ring operations during the cascade.
         if (ObjectDir::InDeleteObjects()) {
+            // Don't unlink from ring (Release) — neighbors may be freed.
+            // Don't self-loop — ring traversal in CleanStaleRingEntries
+            // needs valid next/prev to walk past dead entries.
+            // The sentinel (cleared by ~ObjRef) marks this as dead.
             mObject = nullptr;
             return;
         }
@@ -56,6 +60,13 @@ void ObjRefConcrete<T1, T2>::SetObjConcrete(T1 *obj) {
     }
     mObject = obj;
     if (mObject) {
+#ifdef HX_NATIVE
+        // Self-loop before insertion — stale ring pointers from a previous
+        // target (destroyed during cascade without notifying this ref via
+        // ReplaceRefs) must not leak into the new target's ring.
+        next = this;
+        prev = this;
+#endif
         mObject->AddRef(this);
     }
     return;

@@ -561,11 +561,7 @@ void ClipPlayer::PlayNormal(float f1, HamDriver::LayerArray *arr, const char *cc
         static Symbol merge_moves("merge_moves");
         int prop = TheHamProvider->Property(merge_moves, true)->Int();
         float beat = mBeat;
-        if (prop != 0
-#ifdef HX_NATIVE
-            && TheMoveMgr && TheMoveMgr->HasRoutine()
-#endif
-        ) {
+        if (prop != 0 && TheMoveMgr && TheMoveMgr->HasRoutine()) {
             PushRoutineBuilderClip(mClipKeys->KeyLessEq(BeatToFrame(beat)), newArr);
         } else if (mClipKeys == mMasterClipKeys) {
 #ifdef HX_NATIVE

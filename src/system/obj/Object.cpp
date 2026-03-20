@@ -32,10 +32,17 @@ __attribute__((noinline, no_sanitize("address")))
 static void SnapshotRing(ObjRef *sentinel, std::vector<ObjRef *> &out) {
     constexpr size_t kSentinelOffset = 3 * sizeof(void *);
     constexpr size_t kNextOffset = sizeof(void *);
+    constexpr size_t kMaxRingSize = 100000; // safety limit
     ObjRef *first = *(ObjRef **)((const char *)sentinel + kNextOffset);
+    size_t count = 0;
     for (ObjRef *it = first; it != sentinel; ) {
         if ((uintptr_t)it < 0x10000)
             break;
+        if (++count > kMaxRingSize) {
+            MILO_LOG("SnapshotRing: RING CORRUPTION — walked %zu nodes without returning to sentinel %p (first=%p, cur=%p)\n",
+                count, (void*)sentinel, (void*)first, (void*)it);
+            break;
+        }
         // Read mAliveSentinel to check if node was freed
         uint32_t alive = *(const uint32_t *)((const char *)it + kSentinelOffset);
         ObjRef *nextNode = *(ObjRef **)((const char *)it + kNextOffset);
@@ -96,6 +103,15 @@ Hmx::Object::~Object() {
     RELEASE(mSinks);
     Hmx::Object *old = sDeleting;
     sDeleting = this;
+#ifdef HX_NATIVE
+    // During cascading ~ObjectDir destruction, skip ReplaceRefs entirely.
+    // Replace callbacks are unsafe during cascade — they may write to freed
+    // ObjPtrVec buffers (e.g. CharBonesMeshes::Replace → Set → AddRef).
+    // Ownership lists (ObjPtrList/ObjPtrVec) are not updated, so classes
+    // with `while(!empty()) delete front;` loops must guard with
+    // InDeleteObjects() during cascade.
+    if (!ObjectDir::InDeleteObjects())
+#endif
     ReplaceRefs(nullptr);
     sDeleting = old;
     if (gDataThis == this) {
@@ -333,8 +349,15 @@ void Hmx::Object::ReplaceRefs(Hmx::Object *obj) {
         std::vector<ObjRef *> snapshot;
         SnapshotRing(&mRefs, snapshot);
         mRefs.Clear();
-        for (ObjRef *ref : snapshot)
+        for (ObjRef *ref : snapshot) {
+            // Self-loop each ref so that Release() inside SetObj() writes
+            // to itself (harmless) instead of to ring prev/next neighbors
+            // that may reside in already-freed objects. The ring has been
+            // cleared above, so maintaining ring structure is unnecessary.
+            ref->next = ref;
+            ref->prev = ref;
             ref->Replace(obj);
+        }
         gInReplaceList = wasInReplace;
 #else
         ObjRef other(mRefs);

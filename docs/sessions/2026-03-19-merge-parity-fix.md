@@ -1,7 +1,7 @@
 # MergeDirs Parity Fix — Session Log
 
 **Date**: 2026-03-19
-**Status**: Two root causes identified. Bug 1 fixed. Bug 2 fix chosen (dead object tracking set), implementation next.
+**Status**: Bug 1 fixed. Bug 2 analysis updated (dead object tracking insufficient — see below). Bug 3 fixed.
 **Builds on**: [2026-03-19-merge-parity-p0.md](2026-03-19-merge-parity-p0.md)
 
 ## What We Did
@@ -93,18 +93,56 @@ sibling subdirs can still leave refs pointing to freed clips.
 | Recursive pre-null in `~ObjectDir` | `ReplaceRefs(nullptr)` triggers `ObjDirPtr::Replace` callbacks that cascade-delete subdirs during iteration |
 | `mAliveSentinel` check in `~ObjRefConcrete` | Reads freed memory (UB), ABI divergence (ObjRef 4 bytes larger on native) |
 | Skip Release when `sDeleteObjectsDepth > 0` | Too aggressive — corrupts rings for live objects outside the subtree |
+| Dead object tracking set (2026-03-20) | Correctly allows Release for live targets but exposes glibc freed-neighbor-write problem (see below) |
 
-**Chosen approach: Dead object tracking set**
+**Dead object tracking — tested and found insufficient (2026-03-20)**
 
-Maintain a `static std::unordered_set<Hmx::Object*>` of destroyed objects.
-`~Object()` inserts `this` before `ReplaceRefs`. `~ObjRefConcrete` checks the
-set before calling Release. Clear the set when `sDeleteObjectsDepth` drops to 0.
+Implemented `static std::unordered_set<void*>` in `~Object()`, checked in
+`~ObjRefConcrete`. More precise than `InDeleteObjects()` — correctly allows
+`Release()` for live targets and skips it for dead targets. However, `Release()`
+writes `prev->next = next; next->prev = prev` — the prev/next neighbors may be
+ObjRefs in objects already freed by earlier `DeleteObjects` iterations. On glibc,
+writing to freed heap blocks corrupts free list metadata → "free(): chunks in
+smallbin corrupted". Xbox's heap allocator doesn't overwrite freed blocks
+immediately, so this is tolerated on Xbox but crashes on native.
 
-- No ABI change (no sentinel field on ObjRef)
-- No undefined behavior (no reading freed memory)
-- No false positives (explicit tracking, not heuristic)
-- Bounded lifetime (cleared after each cascade)
-- Small overhead (hash set insert/lookup per destruction, only during cascade)
+Also hit static destruction order bug: `sDeadObjects` destroyed at program exit
+before global `WebSvcMgrCurl`, whose `~Object()` then reads freed hash table
+memory. Fixable by guarding with `InDeleteObjects()`, but the freed-neighbor-write
+problem is fundamental to the intrusive ring design.
+
+**Recommended approach: Two-phase DeleteObjects**
+
+Split `delete obj` into destructor + deallocation:
+1. Phase 1: Call destructors on all objects (memory stays allocated)
+2. Phase 2: Free memory
+
+During Phase 1, all `~ObjRefConcrete` Release calls write to valid memory
+(objects destroyed but not yet freed). After Phase 1, all rings are clean.
+Phase 2 frees the memory safely.
+
+```cpp
+void ObjectDir::DeleteObjects() {
+    // Phase 1: collect + destroy (ring unlinks write to valid memory)
+    std::vector<void*> blocks;
+    for (ObjDirItr<Hmx::Object> it(this, false); it != nullptr; ++it) {
+        if (it != this) {
+            Hmx::Object *obj = it;
+            size_t sz = /* class-specific size */;
+            obj->~Object();  // virtual dtor — runs full chain
+            blocks.push_back(obj);
+        }
+    }
+    // Phase 2: free memory (all rings already clean)
+    for (void *p : blocks)
+        ::operator delete(p);
+}
+```
+
+Complications: `RemoveFromDir()` in `~Object()` modifies the hash table during
+Phase 1, but the iterator has already collected all objects. Custom `operator
+delete` overloads (OBJ_MEM_OVERLOAD) need the correct dealloc function saved
+before destruction. Not yet implemented.
 
 ### Bug 3: AddNode 32→64-bit porting bug (FIXED)
 
@@ -222,23 +260,12 @@ callbacks risks modifying the data structure being iterated.
 
 ## Next Steps
 
-### P0: Implement dead object tracking set for Bug 2
-```cpp
-// Object.cpp
-static std::unordered_set<void*> sDeadObjects;
-
-// In ~Object(), before ReplaceRefs:
-sDeadObjects.insert(this);
-
-// In ~ObjRefConcrete():
-if (mObject && sDeadObjects.count(mObject)) {
-    mObject = nullptr;
-    return;
-}
-
-// Clear when cascade completes (sDeleteObjectsDepth drops to 0)
-```
-No ABI change, no UB, no false positives.
+### P0: Implement two-phase DeleteObjects for Bug 2
+The dead object tracking approach was tested and found insufficient (see above).
+The recommended fix is two-phase DeleteObjects: run all destructors first
+(keeping memory valid for ring Release writes), then free memory. See the
+"Recommended approach" section under Bug 2 above for pseudocode and
+complications (RemoveFromDir, OBJ_MEM_OVERLOAD custom allocators).
 
 ### P1: Fix GPU teardown segfault
 "GpuDevice: device lost (reason 2): Device was destroyed" during test fixture

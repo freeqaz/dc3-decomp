@@ -91,10 +91,31 @@ public:
             if (mObject) {
 #ifdef HX_NATIVE
                     DirPtrRefCounts()[(const void *)mObject]--;
+                    // During cascading ~ObjectDir destruction, skip Release
+                    // (writes to ring neighbors that may be in freed objects).
+                    // ReplaceRefs is also skipped (~Object), so the ring is
+                    // never walked — stale entries are harmless.
+                    if (!ObjectDir::InDeleteObjects())
 #endif
                     mObject->Release(this);
                     if (!mObject->HasDirPtrs()) {
+#ifdef HX_NATIVE
+                            // Virtual inheritance makes Hmx::Object* point to
+                            // a subobject offset within the malloc'd block.
+                            // Using explicit destructor + free(dynamic_cast<void*>)
+                            // avoids ambiguous operator delete in multi-inheritance.
+                            void *block = dynamic_cast<void *>(
+                                static_cast<Hmx::Object *>(mObject));
+                            mObject->~C();
+                            // During cascade, defer the free — sibling destructors
+                            // may still read from this object's memory.
+                            if (ObjectDir::InDeleteObjects())
+                                ObjectDir::DeferFree(block);
+                            else
+                                free(block);
+#else
                             delete mObject;
+#endif
                     }
             }
             mObject = dir;
@@ -457,8 +478,24 @@ public:
 #ifdef HX_NATIVE
     /** Nonzero when inside DeleteObjects() (may nest via cascading dtors). */
     static bool InDeleteObjects() { return sDeleteObjectsDepth > 0; }
+    /** True during MergeDirs — ObjectDir::Copy should skip mSubDirs
+     *  because MergeObjectsRecurse handles subdirs separately. */
+    static bool InMergeDirs() { return sInMergeDirs; }
+    static void SetInMergeDirs(bool v) { sInMergeDirs = v; }
+    static void DeferFree(void *block) { sPendingFrees().push_back(block); }
+    static void FlushDeferredFrees() {
+        auto &v = sPendingFrees();
+        for (void *p : v)
+            free(p);
+        v.clear();
+    }
 private:
     static int sDeleteObjectsDepth;
+    static bool sInMergeDirs;
+    static std::vector<void *> &sPendingFrees() {
+        static std::vector<void *> v;
+        return v;
+    }
 public:
 #endif
     /** Delete all subdirs of this ObjectDir. */

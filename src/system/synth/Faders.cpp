@@ -2,6 +2,7 @@
 
 #ifdef HX_NATIVE
 inline double __fsel(double a, double b, double c) { return a >= 0.0 ? b : c; }
+#include "obj/Dir.h"
 #endif
 #include "math/Easing.h"
 #include "obj/Object.h"
@@ -242,6 +243,13 @@ void Fader::AddDuckedVolume(float vol) {
 FaderGroup::FaderGroup(Hmx::Object *owner) : mFaders(owner), mDirty(true) {}
 
 FaderGroup::~FaderGroup() {
+#ifdef HX_NATIVE
+    if (ObjectDir::InDeleteObjects()) {
+        // During cascade, Faders may already be destroyed. Just clear.
+        mFaders.clear();
+        return;
+    }
+#endif
     while (!mFaders.empty()) {
         Fader *frontObj = mFaders.front();
         mFaders.pop_front();

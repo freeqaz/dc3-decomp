@@ -47,8 +47,8 @@ ObjectDir::ObjectDir()
 
 ObjectDir::~ObjectDir() {
 #ifdef HX_NATIVE
-    // Track destruction depth so FlowNode and other owner-delete patterns
-    // can skip child deletion during cascading directory teardown.
+    // Track destruction depth so ~Object, ~ObjRefConcrete, ObjDirPtr, FlowNode,
+    // and Sequence can skip ring operations during cascading teardown.
     sDeleteObjectsDepth++;
 #endif
     mSubDirs.clear();
@@ -70,6 +70,8 @@ ObjectDir::~ObjectDir() {
     }
 #ifdef HX_NATIVE
     sDeleteObjectsDepth--;
+    if (sDeleteObjectsDepth == 0)
+        FlushDeferredFrees();
 #endif
 }
 
@@ -352,6 +354,13 @@ BEGIN_COPYS(ObjectDir)
             if (!IsProxy()) {
                 COPY_MEMBER(mViewports)
                 COPY_MEMBER(mCurViewportID)
+#ifdef HX_NATIVE
+                // During MergeDirs, skip mSubDirs — MergeObjectsRecurse handles
+                // subdirs separately. Copying here triggers cascading deletion of
+                // old subdirs whose objects have live ring refs in the parent dir,
+                // corrupting ref rings and causing OOM in SnapshotRing.
+                if (!InMergeDirs()) {
+#endif
                 for (int i = 0; i < mSubDirs.size(); i++) {
                     RemovingSubDir(mSubDirs[i]);
                 }
@@ -359,6 +368,9 @@ BEGIN_COPYS(ObjectDir)
                 for (int i = 0; i < mSubDirs.size(); i++) {
                     AddedSubDir(mSubDirs[i]);
                 }
+#ifdef HX_NATIVE
+                }
+#endif
             }
             COPY_MEMBER(mInlineProxyType)
             COPY_MEMBER(mInlineSubDirType)
@@ -684,19 +696,36 @@ void ObjectDir::RemovingSubDir(ObjDirPtr<ObjectDir> &subdir) {
 
 #ifdef HX_NATIVE
 int ObjectDir::sDeleteObjectsDepth = 0;
+bool ObjectDir::sInMergeDirs = false;
 #endif
 
 void ObjectDir::DeleteObjects() {
 #ifdef HX_NATIVE
-    sDeleteObjectsDepth++;
-#endif
+    // Snapshot all objects, then destroy all, then defer-free all.
+    // ~Object() skips ReplaceRefs during cascade, so ring operations are
+    // suppressed. Classes with ownership loops (e.g. FileMerger's
+    // `while(!empty()) delete front;`) must guard with InDeleteObjects().
+    //
+    // Can't use `delete obj` because virtual inheritance makes
+    // Hmx::Object* point to a subobject offset within the malloc'd block,
+    // and multiple base classes define operator delete (ambiguous).
+    std::vector<std::pair<void *, Hmx::Object *>> todo;
+    for (ObjDirItr<Hmx::Object> it(this, false); it != nullptr; ++it) {
+        if (it != this)
+            todo.push_back({dynamic_cast<void *>((Hmx::Object *)it), it});
+    }
+    // Phase 1: destroy all (memory stays valid for sibling destructors)
+    for (auto &[block, obj] : todo)
+        obj->~Object();
+    // Phase 2: defer frees until outermost ~ObjectDir completes
+    for (auto &[block, obj] : todo)
+        DeferFree(block);
+#else
     for (ObjDirItr<Hmx::Object> it(this, false); it != nullptr; ++it) {
         if (it != this) {
             delete it;
         }
     }
-#ifdef HX_NATIVE
-    sDeleteObjectsDepth--;
 #endif
 }
 

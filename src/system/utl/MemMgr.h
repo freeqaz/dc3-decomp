@@ -104,6 +104,7 @@ void *operator new[](size_t size);
 void operator delete(void *mem) noexcept;
 void operator delete[](void *mem) noexcept;
 
+
 #define OBJ_MEM_OVERLOAD(line_num)                                                       \
     static void *operator new(size_t s) {                                                \
         return MemAlloc(s, __FILE__, line_num, StaticClassName().Str(), 0);              \

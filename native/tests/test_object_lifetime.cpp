@@ -598,4 +598,430 @@ TEST_F(ObjectLifetimeTest, ReplaceRefsWithSelfDeletingObjDirPtr) {
     // target may have been deleted by the ObjDirPtr cascade — don't double-delete
 }
 
+// ============================================================================
+// FlowAnimate double-delete ring corruption
+// ============================================================================
+//
+// CRASH SITE (from production stack trace):
+//   #0  SnapshotRing(ObjRef*, std::vector<ObjRef*>&)   rbx=0 (null deref)
+//   #1  Hmx::Object::ReplaceRefs(Hmx::Object*)
+//   #2  Hmx::Object::~Object()
+//   #3  FlowAnimate::~FlowAnimate()
+//   #4  ObjectDir::DeleteObjects()
+//   #5  ObjectDir::~ObjectDir()
+//   #6  Flow::~Flow()             ← parent Flow being destroyed
+//
+// ROOT CAUSE — double ownership:
+//
+//   Hmx::Object::~Object() sets `sDeleting = this` and calls RemoveFromDir().
+//   RemoveFromDir() has a guard: `if (mDir && mDir != sDeleting)`.
+//   When a Flow is being deleted, sDeleting points to the Flow itself.
+//   A FlowAnimate child whose mDir == the Flow satisfies `mDir == sDeleting`,
+//   so RemoveFromDir() SKIPS nulling its hash table entry.
+//
+//   Meanwhile FlowNode::~FlowNode() (called as part of ~Flow) loops over
+//   mChildNodes and explicitly calls `delete child` for each child, including
+//   the FlowAnimate.  This is the FIRST deletion.
+//
+//   After all FlowNode children are deleted, ~ObjectDir fires DeleteObjects().
+//   DeleteObjects iterates the hash table — the FlowAnimate's entry was NOT
+//   nulled (because RemoveFromDir skipped it) — so DeleteObjects calls
+//   `delete it` on the already-freed FlowAnimate.  This is the SECOND deletion.
+//
+// MANIFESTATION:
+//   The second destructor run calls ReplaceRefs(&mRefs) on freed memory.
+//   Under glibc the freed memory is typically zeroed, so mRefs.next == 0.
+//   SnapshotRing reads `*(ObjRef**)((char*)sentinel + sizeof(void*))` where
+//   sentinel is (a pointer into) the freed block, producing rbx=0 → SIGSEGV.
+//   Under ASan the freed memory is quarantined; the crash may not happen but
+//   ASan reports heap-use-after-free at the `delete cur` site.
+//
+// WHY THE GUARD EXISTS:
+//   The `mDir != sDeleting` guard in RemoveFromDir() is intentional: when an
+//   object's own directory is being deleted, we don't want each child to
+//   individually search the (already-being-torn-down) hash table and null its
+//   entry — that is O(n) work and races with the hash table destruction.
+//   Instead, DeleteObjects is supposed to be the one canonical deletion sweep.
+//   The bug is that FlowNode::~FlowNode() performs its OWN deletion sweep of
+//   mChildNodes BEFORE DeleteObjects runs, creating two competing sweeps.
+//
+// FIX (out of scope here — only diagnose and test):
+//   FlowNode::~FlowNode() should NOT delete children when
+//   ObjectDir::InDeleteObjects() is already true, OR when the Flow's own
+//   ObjectDir is being torn down (mDir == sDeleting check at FlowNode level).
+//   One safe approach: guard the `delete cur` loop with
+//   `if (!ObjectDir::InDeleteObjects())`.
+
+// Instrumented FlowAnimate subclass to count destructor calls and raw deletes.
+// This lets the test catch a double-delete without relying on ASan or a crash.
+static int sFlowAnimateDestructorCount = 0;
+static int sFlowAnimateDeleteCount = 0;  // raw operator delete calls
+
+class TrackedFlowAnimate : public FlowAnimate {
+public:
+    TrackedFlowAnimate() : FlowAnimate() {}
+    virtual ~TrackedFlowAnimate() override {
+        sFlowAnimateDestructorCount++;
+        fprintf(stderr,
+            "[TrackedFlowAnimate] destructor call #%d (ptr=%p)\n",
+            sFlowAnimateDestructorCount, (void *)this);
+    }
+
+    // Override operator delete to count raw deallocations.
+    // This fires AFTER the destructor — counts actual memory frees.
+    static void operator delete(void *ptr) {
+        sFlowAnimateDeleteCount++;
+        fprintf(stderr,
+            "[TrackedFlowAnimate] operator delete #%d (ptr=%p)\n",
+            sFlowAnimateDeleteCount, ptr);
+        ::operator delete(ptr);
+    }
+};
+
+// Expose ExposedDir::ExposeFindEntry for our ExposedFlow too.
+// We need it to inspect the hash entry after simulating the first delete.
+class ExposedFlowDir : public Flow {
+public:
+    ExposedFlowDir() : Flow() {}
+    int ChildCount() const { return mChildNodes.size(); }
+    FlowNode *FrontChild() const {
+        return mChildNodes.empty() ? nullptr : mChildNodes.front();
+    }
+    ObjectDir::Entry *FindEntry(const char *name, bool add) {
+        return ObjectDir::FindEntry(name, add);
+    }
+};
+
+TEST_F(ObjectLifetimeTest, FlowAnimateDoubleDeleteRingCorruption) {
+    // === Part 1: Pre-condition assertion (structural, no crash risk) ===
+    //
+    // Prove that when a FlowAnimate child is destroyed while its parent Flow
+    // is being destroyed, RemoveFromDir() SKIPS nulling the hash entry.
+    // This is the necessary pre-condition for the double-delete bug.
+    //
+    // We simulate only the RemoveFromDir guard check (no actual deletion).
+
+    ExposedFlowDir *flow = new ExposedFlowDir();
+    FlowAnimate *child = new TrackedFlowAnimate();
+    child->SetName("fa_child.obj", flow);
+    child->SetParent(flow, true);
+
+    // Confirm the guard fires: child->Dir() == flow (as Hmx::Object*).
+    // This means RemoveFromDir() will SKIP nulling the hash entry.
+    Hmx::Object *childDirAsObj = static_cast<Hmx::Object*>(child->Dir());
+    Hmx::Object *flowAsObj = static_cast<Hmx::Object*>(flow);
+
+    fprintf(stderr,
+        "[FlowAnimateDoubleDeleteRingCorruption] "
+        "child->Dir()-as-Hmx::Object=%p, flow-as-Hmx::Object=%p, equal=%s\n",
+        (void *)childDirAsObj, (void *)flowAsObj,
+        (childDirAsObj == flowAsObj) ? "YES" : "NO");
+
+    // ASSERTION 1: The guard in RemoveFromDir fires for this child.
+    // If this fails, the structural pre-condition has changed.
+    EXPECT_EQ(childDirAsObj, flowAsObj)
+        << "Pre-condition: child->Dir() must equal the Flow as Hmx::Object* "
+        << "so that RemoveFromDir() skips nulling the hash entry during "
+        << "the parent flow's destruction (mDir == sDeleting guard).";
+
+    // === Part 2: Verify the hash entry is NOT nulled by direct delete of child ===
+    //
+    // When the child's ~Hmx::Object fires during the parent's ~FlowNode phase,
+    // RemoveFromDir skips nulling the hash entry (as proved in Part 1).
+    // We simulate this by setting sDeleting = flow, then deleting the child.
+    // After deletion, the hash entry MUST still be non-null.
+    //
+    // Note: We can't set sDeleting directly (it's private).  Instead we rely
+    // on the observed behavior from Part 1 and use the full `delete flow`
+    // path in Part 3 to catch the actual double-delete.
+
+    // === Part 3: Full reproduction — destructor count catches the double-delete ===
+    //
+    // Destruction path when `delete flow` fires:
+    //   ~Flow → ~FlowQueueable → ~FlowNode:
+    //     loops mChildNodes → `delete child` (destructor call #1 of TrackedFlowAnimate)
+    //     RemoveFromDir skips hash entry (mDir==sDeleting guard fires)
+    //   ~ObjectDir → DeleteObjects():
+    //     iterates hash table → entry->obj is STILL non-null (bug)
+    //     calls `delete it` on already-freed child (destructor call #2)
+    //
+    // Manifestation varies by allocator:
+    //   - glibc without ASan: `dynamic_cast<Hmx::Object*>(freed_ptr)` may
+    //     return null (tcache zeroes vtable) → DeleteObjects skips the entry
+    //     silently.  OR if vtable survives: SIGSEGV inside SnapshotRing.
+    //   - glibc with ASan: heap-use-after-free at the `delete cur` site inside
+    //     FlowNode::~FlowNode.
+    //   - On Xbox 360 (the target): no allocator protection → second destructor
+    //     runs on zeroed-out memory → ReplaceRefs → SnapshotRing → rbx=0 crash.
+    //
+    // Expected: destructor count == 1 (fixed) or == 2 (buggy).
+    // May also SIGSEGV directly on the second delete.
+
+    sFlowAnimateDestructorCount = 0;
+    sFlowAnimateDeleteCount = 0;
+
+    ASSERT_EQ(flow->ChildCount(), 1) << "child must be in mChildNodes";
+    ASSERT_NE(flow->FindObject("fa_child.obj", false, true), nullptr)
+        << "child must be in hash table";
+
+    fprintf(stderr,
+        "[FlowAnimateDoubleDeleteRingCorruption] "
+        "about to `delete flow` — watch for double destructor / delete call\n");
+
+    // Full delete.  May crash on some allocators/configurations.
+    delete flow;
+
+    fprintf(stderr,
+        "[FlowAnimateDoubleDeleteRingCorruption] "
+        "destructor was called %d time(s), operator delete called %d time(s) "
+        "(expected 1 of each)\n",
+        sFlowAnimateDestructorCount, sFlowAnimateDeleteCount);
+
+    // ASSERTION 2: The child destructor must run exactly once.
+    // Failure (count==2) confirms the double-delete via destructor path.
+    // A crash before this point also indicates the bug.
+    EXPECT_EQ(sFlowAnimateDestructorCount, 1)
+        << "BUG CONFIRMED: FlowAnimate destructor ran " << sFlowAnimateDestructorCount
+        << " times (expected 1). "
+        << "FlowNode::~FlowNode() deleted child via mChildNodes (call #1), "
+        << "then ObjectDir::DeleteObjects() deleted it again via the hash table "
+        << "(call #2). The hash entry was not nulled because Hmx::Object::"
+        << "RemoveFromDir() has the guard `mDir != sDeleting` — when the "
+        << "parent Flow is being destroyed, sDeleting points to the Flow's "
+        << "Hmx::Object virtual base, and child->mDir (the ObjectDir* of the "
+        << "same Flow) compares equal after implicit conversion, so the guard "
+        << "fires and the hash entry is skipped.";
+
+    // ASSERTION 3: operator delete must also fire exactly once.
+    // Under glibc without ASan, dynamic_cast on a freed pointer typically
+    // returns null (tcache corrupts vtable), so DeleteObjects skips the entry.
+    // This assertion catches cases where operator delete fires more than once,
+    // indicating the memory was freed twice (regardless of vtable state).
+    EXPECT_EQ(sFlowAnimateDeleteCount, 1)
+        << "BUG CONFIRMED: operator delete for FlowAnimate fired "
+        << sFlowAnimateDeleteCount << " times (expected 1). "
+        << "This is a double-free regardless of whether the destructor body ran.";
+}
+
+// ============================================================================
+// Merge ring corruption with overlapping objects + subdir cross-references
+// ============================================================================
+//
+// REPRODUCTION SCENARIO (from production crash):
+//   - toDir contains "bone" objects (e.g., bone_head, bone_spine3, etc.)
+//   - toDir has an unnamed subdir containing "mesh" objects whose ObjPtrs
+//     point to the bone objects in toDir (e.g., bone_head.mesh -> bone_head)
+//   - fromDir contains objects with the SAME names as the bones in toDir
+//   - MergeDirs processes each overlapping bone: ReplaceRefs(foundObj) redirects
+//     refs from fromBone to toBone, then Copy(kCopyDeep) overwrites toBone.
+//   - During this process, the mesh objects' ref rings in the subdir become
+//     corrupted — ring nodes grow to >1000 (should be 1-5).
+//
+// This test creates the minimal synthetic version of that scenario.
+
+// Helper: count ring nodes for an object. Returns -1 if ring appears corrupted
+// (more than maxNodes nodes).
+static int CountRingNodes(Hmx::Object *obj, int maxNodes = 100) {
+    int count = 0;
+    for (ObjRef::iterator it = obj->Refs().begin(); it != obj->Refs().end(); ++it) {
+        count++;
+        if (count > maxNodes)
+            return -1; // corrupted
+    }
+    return count;
+}
+
+// Subclass that holds multiple ObjPtrs — simulates a mesh/transformable that
+// references several bones in its parent dir.
+class MultiRefHolder : public Hmx::Object {
+public:
+    MultiRefHolder()
+        : mRef1(this, nullptr)
+        , mRef2(this, nullptr)
+        , mRef3(this, nullptr)
+    {}
+
+    void SetRefs(Hmx::Object *a, Hmx::Object *b, Hmx::Object *c) {
+        mRef1 = a;
+        mRef2 = b;
+        mRef3 = c;
+    }
+
+    Hmx::Object *Ref1() const { return mRef1.Ptr(); }
+    Hmx::Object *Ref2() const { return mRef2.Ptr(); }
+    Hmx::Object *Ref3() const { return mRef3.Ptr(); }
+
+    int TotalRefCount() const {
+        int c = 0;
+        if (mRef1.Ptr()) c++;
+        if (mRef2.Ptr()) c++;
+        if (mRef3.Ptr()) c++;
+        return c;
+    }
+
+private:
+    ObjPtr<Hmx::Object> mRef1;
+    ObjPtr<Hmx::Object> mRef2;
+    ObjPtr<Hmx::Object> mRef3;
+};
+
+TEST_F(ObjectLifetimeTest, MergeDirsRingIntegrityOnOverlappingBones) {
+    // === Setup: toDir with bones and a subdir containing meshes ===
+
+    ObjectDir *toDir = Hmx::Object::New<ObjectDir>();
+
+    // Create "bone" objects in toDir (the targets that will be found during merge)
+    Hmx::Object *toBone1 = Hmx::Object::New<Hmx::Object>();
+    toBone1->SetName("bone_head.cb", toDir);
+
+    Hmx::Object *toBone2 = Hmx::Object::New<Hmx::Object>();
+    toBone2->SetName("bone_spine3.cb", toDir);
+
+    Hmx::Object *toBone3 = Hmx::Object::New<Hmx::Object>();
+    toBone3->SetName("bone_neck.cb", toDir);
+
+    // Create a subdir of toDir (simulates the unnamed subdir containing meshes)
+    ObjectDir *subDir = Hmx::Object::New<ObjectDir>();
+    subDir->SetName("mesh_subdir", toDir);
+    toDir->AppendSubDir(ObjDirPtr<ObjectDir>(subDir));
+
+    // Create "mesh" objects in subDir that reference bones in toDir.
+    // This is the critical cross-reference pattern: objects in subdir hold
+    // ObjPtrs to objects in the parent dir.
+    MultiRefHolder *mesh1 = new MultiRefHolder();
+    mesh1->SetName("bone_head.mesh", subDir);
+    mesh1->SetRefs(toBone1, toBone2, toBone3);
+
+    MultiRefHolder *mesh2 = new MultiRefHolder();
+    mesh2->SetName("bone_spine3.mesh", subDir);
+    mesh2->SetRefs(toBone2, toBone1, toBone3);
+
+    MultiRefHolder *mesh3 = new MultiRefHolder();
+    mesh3->SetName("bone_L-clavicle.mesh", subDir);
+    mesh3->SetRefs(toBone1, toBone3, toBone2);
+
+    MultiRefHolder *mesh4 = new MultiRefHolder();
+    mesh4->SetName("bone_neck.mesh", subDir);
+    mesh4->SetRefs(toBone3, toBone2, toBone1);
+
+    // Sanity: each bone should have exactly 4 refs (one from each mesh's ObjPtr)
+    ASSERT_EQ(toBone1->RefCount(), 4) << "bone_head should have 4 refs from 4 meshes";
+    ASSERT_EQ(toBone2->RefCount(), 4) << "bone_spine3 should have 4 refs from 4 meshes";
+    ASSERT_EQ(toBone3->RefCount(), 4) << "bone_neck should have 4 refs from 4 meshes";
+
+    // Pre-merge ring integrity
+    ASSERT_NE(CountRingNodes(toBone1), -1) << "bone_head ring pre-corrupt";
+    ASSERT_NE(CountRingNodes(toBone2), -1) << "bone_spine3 ring pre-corrupt";
+    ASSERT_NE(CountRingNodes(toBone3), -1) << "bone_neck ring pre-corrupt";
+    ASSERT_NE(CountRingNodes(mesh1), -1) << "bone_head.mesh ring pre-corrupt";
+    ASSERT_NE(CountRingNodes(mesh2), -1) << "bone_spine3.mesh ring pre-corrupt";
+    ASSERT_NE(CountRingNodes(mesh3), -1) << "bone_L-clavicle.mesh ring pre-corrupt";
+    ASSERT_NE(CountRingNodes(mesh4), -1) << "bone_neck.mesh ring pre-corrupt";
+
+    // === Setup: fromDir with overlapping bone names ===
+
+    ObjectDir *fromDir = Hmx::Object::New<ObjectDir>();
+
+    Hmx::Object *fromBone1 = Hmx::Object::New<Hmx::Object>();
+    fromBone1->SetName("bone_head.cb", fromDir);
+
+    Hmx::Object *fromBone2 = Hmx::Object::New<Hmx::Object>();
+    fromBone2->SetName("bone_spine3.cb", fromDir);
+
+    Hmx::Object *fromBone3 = Hmx::Object::New<Hmx::Object>();
+    fromBone3->SetName("bone_neck.cb", fromDir);
+
+    // Add a few from-only objects too (these should just be added, not merged)
+    Hmx::Object *fromOnly1 = Hmx::Object::New<Hmx::Object>();
+    fromOnly1->SetName("bone_L-ankle.cb", fromDir);
+
+    Hmx::Object *fromOnly2 = Hmx::Object::New<Hmx::Object>();
+    fromOnly2->SetName("bone_L-foreArm.cb", fromDir);
+
+    // Also create a subdir in fromDir with its own mesh cross-references,
+    // since the real scenario has subdirs on both sides.
+    ObjectDir *fromSubDir = Hmx::Object::New<ObjectDir>();
+    fromSubDir->SetName("from_mesh_subdir", fromDir);
+    fromDir->AppendSubDir(ObjDirPtr<ObjectDir>(fromSubDir));
+
+    MultiRefHolder *fromMesh = new MultiRefHolder();
+    fromMesh->SetName("from_mesh.mesh", fromSubDir);
+    fromMesh->SetRefs(fromBone1, fromBone2, fromBone3);
+
+    fprintf(stderr,
+        "[MergeDirsRingIntegrity] pre-merge: toBone1 refs=%d, toBone2 refs=%d, "
+        "toBone3 refs=%d\n",
+        toBone1->RefCount(), toBone2->RefCount(), toBone3->RefCount());
+
+    // === Perform the merge (kReplace action, kAllSubdirs) ===
+    // kReplace triggers ReplaceRefs + Copy(kCopyDeep) on overlapping objects.
+    // kAllSubdirs means fromDir's subdirs are also merged recursively.
+    MergeFilter filt(MergeFilter::kReplace, MergeFilter::kAllSubdirs);
+    MergeDirs(fromDir, toDir, filt);
+
+    fprintf(stderr, "[MergeDirsRingIntegrity] merge complete, checking rings...\n");
+
+    // === Post-merge ring integrity checks ===
+
+    // Check ALL objects reachable from toDir (including subdirs)
+    int corruptCount = 0;
+    for (ObjDirItr<Hmx::Object> it(toDir, true); it != nullptr; ++it) {
+        Hmx::Object *obj = it;
+        int ringSize = CountRingNodes(obj);
+        if (ringSize == -1) {
+            if (corruptCount < 10) {
+                fprintf(stderr,
+                    "  CORRUPT: '%s' (%s) dir='%s' ring >100 nodes\n",
+                    obj->Name(), obj->ClassName().Str(),
+                    obj->Dir() ? obj->Dir()->Name() : "<null>");
+            }
+            corruptCount++;
+        }
+    }
+    EXPECT_EQ(corruptCount, 0)
+        << "Ring corruption detected in " << corruptCount << " objects after merge. "
+        << "This reproduces the bug where MergeObject's ReplaceRefs + Copy(kCopyDeep) "
+        << "on overlapping bones corrupts ref rings of mesh objects in subdirs.";
+
+    // Specific checks on the mesh objects that are known victims
+    // Their rings should be small (they own ObjPtrs, not the other way around)
+    EXPECT_NE(CountRingNodes(mesh1), -1)
+        << "bone_head.mesh ring corrupted (>100 nodes)";
+    EXPECT_NE(CountRingNodes(mesh2), -1)
+        << "bone_spine3.mesh ring corrupted (>100 nodes)";
+    EXPECT_NE(CountRingNodes(mesh3), -1)
+        << "bone_L-clavicle.mesh ring corrupted (>100 nodes)";
+    EXPECT_NE(CountRingNodes(mesh4), -1)
+        << "bone_neck.mesh ring corrupted (>100 nodes)";
+
+    // The bone objects in toDir should still have well-formed rings.
+    // After merge, some refs may have been redirected, but ring should be finite.
+    EXPECT_NE(CountRingNodes(toBone1), -1)
+        << "bone_head.cb ring corrupted after merge";
+    EXPECT_NE(CountRingNodes(toBone2), -1)
+        << "bone_spine3.cb ring corrupted after merge";
+    EXPECT_NE(CountRingNodes(toBone3), -1)
+        << "bone_neck.cb ring corrupted after merge";
+
+    // Verify the meshes still point to valid bones (not nulled or dangling)
+    EXPECT_NE(mesh1->Ref1(), nullptr) << "mesh1 lost ref to bone_head after merge";
+    EXPECT_NE(mesh1->Ref2(), nullptr) << "mesh1 lost ref to bone_spine3 after merge";
+    EXPECT_NE(mesh1->Ref3(), nullptr) << "mesh1 lost ref to bone_neck after merge";
+
+    // Iteration should complete without hanging (a corrupted ring loops forever)
+    int itrCount = 0;
+    for (ObjDirItr<Hmx::Object> it(toDir, true); it != nullptr; ++it) {
+        itrCount++;
+        ASSERT_LT(itrCount, 10000) << "Iterator appears stuck — possible ring corruption";
+    }
+    fprintf(stderr,
+        "[MergeDirsRingIntegrity] post-merge: %d objects reachable, %d corrupt rings\n",
+        itrCount, corruptCount);
+    EXPECT_GT(itrCount, 0);
+
+    // Cleanup
+    delete fromDir;
+    delete toDir;
+}
+
 } // namespace

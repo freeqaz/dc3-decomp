@@ -77,7 +77,14 @@ protected:
     }
 
 public:
-    ObjRef() {}
+    ObjRef() {
+#ifdef HX_NATIVE
+        // Self-loop so AddRef can safely read next/prev on first insertion.
+        // On PPC, MemAlloc zeros memory so this isn't needed.
+        next = this;
+        prev = this;
+#endif
+    }
     virtual ~ObjRef() {
 #ifdef HX_NATIVE
         mAliveSentinel = 0;
@@ -1237,7 +1244,22 @@ namespace Hmx {
         const char *Name() const { return mName; }
         const String &Note() const { return mNote; }
         const char *AllocHeapName() { return MemHeapName(MemFindAddrHeap(this)); }
-        void AddRef(ObjRef *ref) { ref->AddRef(&mRefs); }
+        void AddRef(ObjRef *ref) {
+#ifdef HX_NATIVE
+            // During cascade, ~ObjRefConcrete skips Release, leaving dead
+            // entries in the ring. If the last entry is dead (freed), the
+            // ring is corrupted — reset to self-loop before insertion.
+            if (mRefs.prev != &mRefs && !IsRingPrevAlive())
+                mRefs.Clear();
+#endif
+            ref->AddRef(&mRefs);
+        }
+#ifdef HX_NATIVE
+        __attribute__((no_sanitize("address")))
+        bool IsRingPrevAlive() const {
+            return mRefs.prev->mAliveSentinel == ObjRef::kAliveSentinel;
+        }
+#endif
         void Release(ObjRef *ref) {
 #ifdef HX_NATIVE
             if (!ref) return;

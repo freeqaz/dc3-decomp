@@ -283,6 +283,21 @@ void HamWardrobe::SyncInterestObjects(ObjectDir *dir) {
             interests.push_back(cit);
         }
     }
+#ifdef HX_NATIVE
+    {
+        int numInterests = 0;
+        for (ObjPtrList<CharInterest>::iterator it = interests.begin(); it != interests.end(); ++it)
+            numInterests++;
+        int numChars = 0;
+        for (int i = 0; i < 2; i++)
+            if (mMainCharacters[i]) numChars++;
+        HamCharacter *bc = GetBackup(0);
+        for (int bi = 1; bc != nullptr; bc = GetBackup(bi++))
+            numChars++;
+        MILO_LOG("SyncInterestObjects: %d interests for %d characters (dir=%s)\n",
+                 numInterests, numChars, dir ? dir->Name() : "<null>");
+    }
+#endif
     for (int i = 0; i < 2; i++) {
         HamCharacter *c = mMainCharacters[i];
         if (c) {

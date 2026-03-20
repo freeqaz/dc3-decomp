@@ -13,9 +13,6 @@
 #include "world/Dir.h"
 #include "char/Character.h"
 #include "char/FileMerger.h"
-#include "char/CharEyes.h"
-#include "char/CharInterest.h"
-#include "hamobj/HamCharacter.h"
 #include "world/LightPreset.h"
 #include "world/LightPresetManager.h"
 #include "world/CameraManager.h"
@@ -46,7 +43,6 @@ extern GLFWwindow *gNativeWindow;
 #endif
 // gNativeHudDir removed — HUD loaded by GameModeMerger.fm via FileMerger pipeline.
 // DTA enter handler (hud_objects.dta:162) sets $hud_panel automatically.
-static bool gFaceAnimInitDone = false;
 
 // ---------------------------------------------------------------------------
 // Native-only "smart stubs" for Xbox manager objects that DTA scripts reference.
@@ -1129,25 +1125,9 @@ void App::RunWithoutDebugging() {
                 // OnConfigureFileMerger → Select("viseme") → load → SyncObjects
                 // wires CharFaceServo, CharLipSyncDriver, and blinking automatically.
                 //
-                // Interest objects (eye gaze targets) may not be in the character
-                // .milo files. Create a fallback audience interest if none exist.
-                if (!gFaceAnimInitDone) {
-                    gFaceAnimInitDone = true;
-                    for (ObjDirItr<HamCharacter> it(venueWorld, true); it != nullptr; ++it) {
-                        CharEyes *eyes = it->GetEyes();
-                        if (eyes && eyes->NumInterests() == 0) {
-                            CharInterest *camInterest = Hmx::Object::New<CharInterest>();
-                            if (camInterest) {
-                                const Vector3 &charPos = it->WorldXfm().v;
-                                Transform interestXfm;
-                                interestXfm.m.Identity();
-                                interestXfm.v.Set(charPos.x, charPos.y + 120.0f, charPos.z + 24.0f);
-                                camInterest->SetLocalXfm(interestXfm);
-                                eyes->AddInterestObject(camInterest);
-                            }
-                        }
-                    }
-                }
+                // Interest objects (eye gaze targets) are wired by the Xbox code path:
+                // HamDirector::Enter() → SyncScene() → SetNewWorld() →
+                // TheHamWardrobe->SetDir(mVenue) → SyncInterestObjects(dir)
             }
         }
 
@@ -1228,7 +1208,7 @@ void App::RunWithoutDebugging() {
                             TheGameData->SetVenue(Symbol(venueName));
                             TheGameMode->SetMode(Symbol("perform"), Symbol("none"));
                             if (TheHamProvider) {
-                                TheHamProvider->SetProperty("merge_moves", 0);
+                                TheHamProvider->SetProperty("merge_moves", 1);
                                 TheHamProvider->SetProperty("use_movegraph", 1);
                                 TheGameMode->SetProperty("use_movegraph", 1);
                             }

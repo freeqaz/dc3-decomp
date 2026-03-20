@@ -51,25 +51,47 @@ protected:
 
 void FileMerger::Merger::Clear(bool shouldDraw) {
     mLoaded.Set(FilePath::Root().c_str(), "");
-    Hmx::Object *owner = mLoadedObjects.Owner();
-    if (owner != sFmDeleting) {
-        static Message msg("on_pre_clear", 0);
-        msg[0] = mName;
-        owner->HandleType(msg);
-    }
-    while (!mLoadedObjects.empty()) {
-        Hmx::Object *front = mLoadedObjects.front();
-        delete front;
-    }
-    ObjectDir *mergerDir = MergerDir();
-    if (mergerDir) {
-        while (!mLoadedSubdirs.empty()) {
-            ObjectDir *curSubdir = mLoadedSubdirs.front();
-            mLoadedSubdirs.pop_front();
-            mergerDir->RemoveSubDir(curSubdir);
+#ifdef HX_NATIVE
+    if (!ObjectDir::InDeleteObjects())
+#endif
+    {
+        Hmx::Object *owner = mLoadedObjects.Owner();
+        if (owner != sFmDeleting) {
+            static Message msg("on_pre_clear", 0);
+            msg[0] = mName;
+            owner->HandleType(msg);
         }
-    } else {
+    }
+#ifdef HX_NATIVE
+    if (ObjectDir::InDeleteObjects()) {
+        // During cascade, these objects are dir-owned and will be cleaned
+        // up by DeleteObjects. Just clear the list without deleting.
+        mLoadedObjects.clear();
+    } else
+#endif
+    {
+        while (!mLoadedObjects.empty()) {
+            Hmx::Object *front = mLoadedObjects.front();
+            delete front;
+        }
+    }
+#ifdef HX_NATIVE
+    if (ObjectDir::InDeleteObjects()) {
+        // During cascade, subdirs are handled by DeleteSubDirs.
         mLoadedSubdirs.clear();
+    } else
+#endif
+    {
+        ObjectDir *mergerDir = MergerDir();
+        if (mergerDir) {
+            while (!mLoadedSubdirs.empty()) {
+                ObjectDir *curSubdir = mLoadedSubdirs.front();
+                mLoadedSubdirs.pop_front();
+                mergerDir->RemoveSubDir(curSubdir);
+            }
+        } else {
+            mLoadedSubdirs.clear();
+        }
     }
     // Finish any pending drawing operations
     if (shouldDraw && !TheRnd.GetReleaseImmediate()) {

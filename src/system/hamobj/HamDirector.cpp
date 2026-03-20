@@ -544,19 +544,20 @@ void HamDirector::Initialize() {
     delete mPoseFatalities;
     mPoseFatalities = Hmx::Object::New<PoseFatalities>();
 #ifdef HX_NATIVE
-    // Post-merge choreography init.
+    // Post-merge choreography init. On Xbox this fires from the DTA reset
+    // handler; on native we call it explicitly after the merger is complete.
     //
-    // Game::IsLoaded() already loads the MoveGraph and calls LoadAllVariants()
-    // before we get here. But SaveOriginalMoveParents() (which populates
-    // per-difficulty move parent arrays from the layout) only runs inside
-    // OriginalChoreoRemixer::Init(). On Xbox this fires from the DTA reset
-    // handler; on native we call it here after the merger is complete.
-    //
-    // Note: clip playback works without this (SongAnim() bypasses the routine
-    // builder on native and uses difficulty anims directly). This init is for
-    // the move selection / choreography system.
+    // Init() populates per-difficulty move parent arrays from the layout.
+    // ResetRemixer() then calls SelectMove() for each player×measure, which
+    // runs AddRoutineMove() → InsertMoveInSong() to write clip/move keyvals
+    // into the routine builder anims. This mirrors the Xbox perform flow
+    // where SetGameplayMode(perform, true) → merge_moves=1 → routine builder
+    // anims are used in SongAnim() and ClipPlayer::PlayNormal().
     if (TheMoveMgr && TheMoveMgr->mSuperEasyRemixer) {
         TheMoveMgr->mSuperEasyRemixer->Init();
+        if (mPlayer1RoutineBuilderAnim && mPlayer2RoutineBuilderAnim) {
+            TheMoveMgr->ResetRemixer();
+        }
     }
 #endif
 }
@@ -566,19 +567,15 @@ RndPropAnim *HamDirector::SongAnim(int playerIndex) {
         return nullptr;
     }
     MILO_ASSERT((0) <= (playerIndex) && (playerIndex) < (2), 0x620);
-#ifndef HX_NATIVE
-    // On Xbox, when merge_moves=1 the routine builder system dynamically
-    // populates a separate anim with clip/move keyframes based on the
-    // generated choreography. This requires the full DTA-driven remixer
-    // flow (populate_movemgr, FillRoutineFromParents, InsertMoveInSong).
+    // When merge_moves=1 (perform mode), the routine builder system dynamically
+    // populates a separate anim with clip/move keyframes based on the generated
+    // choreography (SelectMove → AddRoutineMove → InsertMoveInSong).
     if (TheHamProvider->Property("merge_moves", true)->Int()) {
         return playerIndex == 0 ? mPlayer1RoutineBuilderAnim
                                 : mPlayer2RoutineBuilderAnim;
     }
-#endif
-    // On native (and Xbox with merge_moves=0), use the difficulty-specific
-    // song.anim directly. It has pre-authored clip/move keyframes from the
-    // song .milo files (e.g., easy.milo has 33 clip keys for YMCA).
+    // With merge_moves=0 (holla_back, campaign outro, practice), use the
+    // difficulty-specific song.anim directly.
     HamPlayerData *hpd = TheGameData->Player(playerIndex);
     return SongAnimByDifficulty(LegacyDifficulty(hpd->GetDifficulty()));
 }
@@ -2266,14 +2263,7 @@ void HamDirector::FindNextShot() {
 
 void HamDirector::SetShot(Symbol s) {
     if (TheTaskMgr.Seconds(TaskMgr::kRealTime) >= 0
-#ifdef HX_NATIVE
-        // On native we drive the original song.anim, not the routine builder.
-        // SongAnim(0) returns the routine builder whose frame is never set,
-        // so skip the frame<0 guard — rt>=0 already covers this.
-        ) {
-#else
         && !(SongAnim(0) && SongAnim(0)->GetFrame() < 0)) {
-#endif
         static Symbol review("review");
         static Symbol skills_mode("skills_mode");
         bool inReview = TheHamProvider->Property(skills_mode, true)->Sym() == review;
