@@ -1020,7 +1020,7 @@ void LiveCameraInput::StoreTextureAt(RndTex *tex, int idx) {
 }
 
 void LiveCameraInput::ApplyTextureClip(RndMat *mat, int idx) const {
-    if (idx < 0 || 7 < idx) {
+    if (idx < 0 || idx >= 8) {
         MILO_LOG(
             "LiveCameraInput::GetStoredTexture: index %d out of bounds [max=%d]\n", 7
         );

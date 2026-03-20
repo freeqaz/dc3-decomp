@@ -21,10 +21,11 @@ void NetCacheMgrXbox::Poll() {
                 mDoneLoading = true;
             }
             if (!mHasFailed && mConnection.GetState() == 4) {
-                // Convert ethernet cable connected bool to FailType (3 or 4)
-                u32 r3 = (u32)ThePlatformMgr.IsEthernetCableConnected();
-                u32 r11 = -(s32)r3;
-                SetFail((NetCacheMgrFailType)(3 + (r11 >> 31)));
+                if (!ThePlatformMgr.IsEthernetCableConnected()) {
+                    SetFail((NetCacheMgrFailType)3);
+                } else {
+                    SetFail((NetCacheMgrFailType)1);
+                }
             }
         }
     }

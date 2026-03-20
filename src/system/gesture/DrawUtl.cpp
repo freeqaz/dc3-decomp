@@ -71,8 +71,8 @@ void DrawBufferMat(RndMat *mat, Hmx::Rect &rect) {
 }
 
 void DrawSnapshot(const GestureMgr &gm, int index) {
-    if (index >= 1) {
-        MILO_ASSERT((unsigned int)index >= 0 && index < gm.GetLiveCameraInput()->NumSnapshots(), 0xfb);
+    if (index >= 0) {
+        MILO_ASSERT(index >= 0 && index < gm.GetLiveCameraInput()->NumSnapshots(), 0xfb);
     }
     auto cam = gm.GetLiveCameraInput();
     auto snap = cam->GetSnapshot(index);

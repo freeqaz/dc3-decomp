@@ -47,9 +47,7 @@ NavListSortNode *FitnessCalorieHeaderNode::GetFirstActive() {
     FOREACH (it, Children()) {
         NavListSortNode *node = (*it)->GetFirstActive();
         if (node) {
-            if (TheFitnessCalorieSortMgr->HeadersSelectable())
-                return this;
-            return node;
+            return TheFitnessCalorieSortMgr->HeadersSelectable() ? (NavListSortNode *)this : node;
         }
     }
     return nullptr;
