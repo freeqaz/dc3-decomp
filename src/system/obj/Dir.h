@@ -485,9 +485,12 @@ public:
     static void DeferFree(void *block) { sPendingFrees().push_back(block); }
     static void FlushDeferredFrees() {
         auto &v = sPendingFrees();
-        for (void *p : v)
-            free(p);
-        v.clear();
+        if (!v.empty()) {
+            for (void *p : v)
+                free(p);
+            v.clear();
+            Hmx::Object::sRingsDirty = true;
+        }
     }
 private:
     static int sDeleteObjectsDepth;

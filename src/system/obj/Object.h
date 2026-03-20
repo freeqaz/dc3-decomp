@@ -76,6 +76,19 @@ protected:
         next->prev = prev;
     }
 
+#ifdef HX_NATIVE
+    /** Unlink from ring, suppressing ASAN for writes to potentially-freed
+     *  neighbors. After cascade, ring neighbors may be in quarantined
+     *  (freed) memory — the writes are harmless but ASAN would flag them. */
+    __attribute__((no_sanitize("address")))
+    static void SafeReleaseFromRing(ObjRef *ref) {
+        ref->prev->next = ref->next;
+        ref->next->prev = ref->prev;
+        ref->next = ref;
+        ref->prev = ref;
+    }
+#endif
+
 public:
     ObjRef() {
 #ifdef HX_NATIVE
@@ -1120,6 +1133,12 @@ namespace Hmx {
     protected:
         /** An Object in the process of being deleted. */
         static Object *sDeleting;
+    public:
+#ifdef HX_NATIVE
+        /** True after FlushDeferredFrees — rings may have dead entries. */
+        static bool sRingsDirty;
+#endif
+    protected:
 
         MsgSinks *GetOrAddSinks();
         /** Handler to get the value of a given Object property.
@@ -1249,7 +1268,9 @@ namespace Hmx {
             // During cascade, ~ObjRefConcrete skips Release, leaving dead
             // entries in the ring. If the last entry is dead (freed), the
             // ring is corrupted — reset to self-loop before insertion.
-            if (mRefs.prev != &mRefs && !IsRingPrevAlive())
+            // Only check after a cascade has completed (flag avoids
+            // no_sanitize cache-miss reads during normal operation).
+            if (sRingsDirty && mRefs.prev != &mRefs && !IsRingPrevAlive())
                 mRefs.Clear();
 #endif
             ref->AddRef(&mRefs);

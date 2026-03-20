@@ -55,18 +55,16 @@ void ObjRefConcrete<T1, T2>::SetObjConcrete(T1 *obj) {
 #ifdef HX_NATIVE
         if (ObjectDir::InDeleteObjects())
             goto skip_release;
+        // After cascade, ring neighbors may be freed. Use ASAN-safe
+        // Release that suppresses writes to quarantined memory.
+        if (Hmx::Object::sRingsDirty)
+            SafeReleaseFromRing(this);
+        else
 #endif
         mObject->Release(this);
     }
     mObject = obj;
     if (mObject) {
-#ifdef HX_NATIVE
-        // Self-loop before insertion — stale ring pointers from a previous
-        // target (destroyed during cascade without notifying this ref via
-        // ReplaceRefs) must not leak into the new target's ring.
-        next = this;
-        prev = this;
-#endif
         mObject->AddRef(this);
     }
     return;

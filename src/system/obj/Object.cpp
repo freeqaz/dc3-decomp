@@ -16,6 +16,7 @@
 #ifdef HX_NATIVE
 #include <vector>
 Hmx::Object *Hmx::Object::sDeleting;
+bool Hmx::Object::sRingsDirty = false;
 bool gInReplaceList = false;
 
 // Check if an ObjRef's alive sentinel is still set. Reads potentially freed
