@@ -139,10 +139,6 @@ void FlowSound::RequestStop() {
     case FlowNode::kStopLastFrame:
         mStopRequested = true;
         break;
-    case FlowNode::kStopOnMarker:
-        mStopMarkerType = 2;
-        mStopRequested = true;
-        break;
     case FlowNode::kStopBetweenMarkers:
         if (mHasMarkerFired) {
             TheFlowMgr->QueueCommand(this, kIgnore);
@@ -150,6 +146,10 @@ void FlowSound::RequestStop() {
             mStopMarkerType = 3;
             mStopRequested = true;
         }
+        break;
+    case FlowNode::kStopOnMarker:
+        mStopMarkerType = 2;
+        mStopRequested = true;
         break;
     default:
         break;
