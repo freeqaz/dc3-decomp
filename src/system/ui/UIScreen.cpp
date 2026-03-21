@@ -134,6 +134,16 @@ void UIScreen::LoadPanels() {
 }
 
 void UIScreen::UnloadPanels() {
+#ifdef HX_NATIVE
+    // HACK: Skip panel unloading during screen transitions.
+    // The cascade destruction of PanelDir → ObjectDir → DeleteObjects causes
+    // use-after-free when objects with cross-references are destroyed in the
+    // wrong order (RndTransformable refs to freed RndMesh, ObjPtrList nodes
+    // freed before ring nullification). This is a systemic issue with the
+    // 64-bit native port's object lifecycle.
+    // TODO: Fix cascade destruction ordering or implement deferred unloading.
+    return;
+#endif
     FOREACH_REVERSE(it, mPanelList) {
         if (it->mLoaded) {
             AutoGlitchReport report(17.0f, UnloadGlitchCB, it->mPanel);

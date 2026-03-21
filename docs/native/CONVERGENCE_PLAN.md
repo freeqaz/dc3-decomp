@@ -194,6 +194,18 @@ Currently has HX_NATIVE hack to force-advance past kGameInIntro after 30 frames.
 - Async FileMerger pipeline WORKS on native (TheLoadMgr.Poll every frame)
 - Key blocker: song select input handling prevents gameplay navigation
 
+### 2026-03-21 — Milestone 1: Menu Flow Fixed
+- Fixed HamPanel::Exiting() — return false on HX_NATIVE (gesture animations block transitions)
+- Fixed GetNeutralSkeleton() — skip on native (PPC hardcoded offsets crash on x86_64)
+- Fixed HamIKSkeleton::Poll() + CharBones::Zero() — null guards for uninitialized skeletons
+- Flow now reaches: boot → attract → title → main → choose_mode → song_select → multiuser → loading_screen
+- Committed: `native: fix menu flow — song select through loading screen now works`
+- **Next blocker**: loading_screen → preloading_screen transition hits heap corruption
+  - `malloc(): mismatching next->prev_size (unsorted)` during loading_screen Enter
+  - Happens after Rnd::SetPostProcOverride cleanup (multiuser → loading transition)
+  - Likely a use-after-free or buffer overrun in the PostProc or panel unload path
+  - Need ASan build to diagnose
+
 ---
 
 ## Reference Docs
