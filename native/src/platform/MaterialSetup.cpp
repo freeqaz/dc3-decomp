@@ -96,17 +96,9 @@ MaterialParams BuildMaterialParams(RndMat* mat, bool isTextMesh) {
     matUni.intensify = mat->GetIntensify() ? 2.0f : 1.0f;
 
     // --- Shader variation (skin, hair, etc.) ---
-    // DC3 skin materials often have shader_variation=0 but use "_skin" in the name.
-    // Detect skin by either the explicit flag or name convention.
-    ShaderVariation variation = mat->GetShaderVariation();
-    if (variation == kShaderVariationNone) {
-        const char* matName = mat->Name();
-        if (strstr(matName, "_skin") || strstr(matName, "_head")) {
-            variation = kShaderVariationSkin;
-            heuristics |= kHeuristicSkinNameDetect;
-        }
-    }
-    matUni.shaderVariation = (float)variation;
+    // Verified: DC3 materials have correct shader_variation in binary data.
+    // No name-based heuristic needed.
+    matUni.shaderVariation = (float)mat->GetShaderVariation();
 
     // --- Second specular lobe (used by skin shader) ---
     const Hmx::Color& spec2 = mat->GetSpecular2RGB();
@@ -271,6 +263,7 @@ MaterialParams BuildPassMaterialParams(BaseMaterial* nextPass) {
     npMatUni.hasNormalMap = nextPass->NormalMap() ? 1.0f : 0.0f;
     npMatUni.prelit = nextPass->Prelit() ? 1.0f : 0.0f;
     npMatUni.texGenMode = (float)nextPass->GetTexGen();
+    npMatUni.shaderVariation = (float)nextPass->GetShaderVariation();
 
     // --- Resolve textures ---
     WgpuRnd::MaterialTexViews& npTexViews = result.texViews;

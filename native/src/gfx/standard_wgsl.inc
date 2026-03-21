@@ -9,6 +9,7 @@ R"WGSL(
 const kShaderVariationNone = 0.0;
 const kShaderVariationSkin = 1.0;
 const kShaderVariationHair = 2.0;
+const kShaderVariationWorldProjection = 3.0;
 
 const kBoolThreshold = 0.5;
 const kTexGenNone = 0.0;
@@ -643,6 +644,7 @@ fn fs_main(surfaceInput: VertexOutput) -> @location(0) vec4f {
     let specularSample = textureSample(specularMapTex, mapSampler, surfaceInput.uv);
     let isSkinMaterial = shaderVariationIs(material.shaderVariation, kShaderVariationSkin);
     let isHairMaterial = shaderVariationIs(material.shaderVariation, kShaderVariationHair);
+    let isWorldProjection = shaderVariationIs(material.shaderVariation, kShaderVariationWorldProjection);
     let shadowFactor = sampleShadowFactor(surfaceInput.worldPos);
 
     var totalLighting = emptyLightingTerms();

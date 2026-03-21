@@ -11,7 +11,7 @@ enum Heuristic : uint32_t {
     kHeuristicAlphaForce         = 1 << 1,
     kHeuristicSpecularClamp      = 1 << 2,
     kHeuristicEmissiveGuard      = 1 << 3,
-    kHeuristicSkinNameDetect     = 1 << 4,
+    kHeuristicSkinNameDetect     = 1 << 4, // removed — data-driven now, kept for index stability
     kHeuristicAutoPrelit         = 1 << 5,
     kHeuristicTextMeshDetect     = 1 << 6,
     kHeuristicEyeEmissiveBoost   = 1 << 7,
