@@ -28,7 +28,11 @@ void HamPanel::Enter() {
 }
 
 bool HamPanel::Exiting() const {
-#ifdef __EMSCRIPTEN__
+#ifdef HX_NATIVE
+    // On native, the gesture/ribbon animation system doesn't settle naturally
+    // (no Kinect input). The IsAnimating() check would block transitions forever.
+    // HamNavList::OnMsg(UITransitionCompleteMsg) calls StopAnimation() when
+    // transitions complete, so this is safe.
     return false;
 #else
     if (UIPanel::Exiting()) {

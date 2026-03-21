@@ -66,7 +66,12 @@ void ByteQuat::Set(const Hmx::Quat &quat) {
     w = (char)floor(Clamp(-127.0f, 127.0f, quat.w * 127.0f + 0.5f));
 }
 
-void CharBones::Zero() { memset(mStart, 0, mTotalSize); }
+void CharBones::Zero() {
+#ifdef HX_NATIVE
+    if (!mStart) return;
+#endif
+    memset(mStart, 0, mTotalSize);
+}
 
 int CharBones::TypeSize(int i) const {
     switch (i) {

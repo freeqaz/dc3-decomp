@@ -628,12 +628,25 @@ DataNode HamCharacter::OnCamTeleport(DataArray *a) {
 }
 
 ObjectDir *HamCharacter::GetNeutralSkeleton() {
+#ifdef HX_NATIVE
+    // HACK: Skip neutral skeleton computation on native.
+    // The PPC code uses hardcoded 0x10 offset casts (reinterpret_cast)
+    // that are invalid on x86_64 due to different multi-inheritance layouts.
+    // CharServoBone has RndHighlightable + CharPollable bases before CharBonesMeshes,
+    // so the CharBones base offset differs between 32-bit PPC and 64-bit x86.
+    // TODO: Fix the casts to use proper static_cast when skeleton system is needed.
+    return mNeutralSkelDir ? mNeutralSkelDir : this;
+#endif
     int songAnim = SongAnimation();
     if (songAnim != -1) {
         HamDriver *hamDriver = Find<HamDriver>("song.hdrv", false);
         if (hamDriver == nullptr || hamDriver->FirstClip() == nullptr) {
             CharClip *clip = Driver()->FirstPlayingClip();
+#ifdef HX_NATIVE
+            CharBones *bones = static_cast<CharBones *>(mSkeletonBones);
+#else
             CharBones *bones = reinterpret_cast<CharBones *>((char *)mSkeletonBones + 0x10);
+#endif
             if (clip == nullptr) {
                 goto zero_and_scale;
             }
@@ -677,7 +690,11 @@ ObjectDir *HamCharacter::GetNeutralSkeleton() {
         if (clip->Flags() & 1) {
             return this;
         }
+#ifdef HX_NATIVE
+        CharBones *bones = static_cast<CharBones *>(mSkeletonBones);
+#else
         CharBones *bones = reinterpret_cast<CharBones *>((char *)mSkeletonBones + 0x10);
+#endif
 zero_and_scale:
         bones->Zero();
         {
