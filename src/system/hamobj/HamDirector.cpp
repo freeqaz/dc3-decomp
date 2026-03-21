@@ -2557,6 +2557,13 @@ void HamDirector::PlayNextShot() {
 }
 
 DataNode HamDirector::OnSelectCamera(DataArray *a) {
+#ifdef HX_NATIVE
+    static int sSelectCamLog = 0;
+    if (sSelectCamLog++ < 5) {
+        fprintf(stderr, "DC3 HamDirector::OnSelectCamera — beat=%.2f disabled=%d songAnim=%p mCurShot=%p mPickNewShot=%d\n",
+                TheTaskMgr.Beat(), mDisabled, (void*)SongAnim(0), (void*)mCurShot.Ptr(), mPickNewShot);
+    }
+#endif
     // Full songAnim path — Debug::Fail is non-fatal on native, so DTA
     // handler FAILs (missing panels, stubs) are harmless warnings.
     RndPropAnim *songAnim = SongAnim(0);

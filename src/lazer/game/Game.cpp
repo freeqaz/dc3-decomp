@@ -373,6 +373,13 @@ void Game::Poll() {
     float songMs = 0;
     if (TheGamePanel->Unkf8()) {
         songMs = mGameInput->CurrentMs(mRealTime);
+#ifdef HX_NATIVE
+        static int sPollLog = 0;
+        if (sPollLog++ < 5 || (sPollLog % 500 == 0 && sPollLog < 5000)) {
+            fprintf(stderr, "DC3 Game::Poll — songMs=%.1f realTime=%d paused=%d beat=%.2f\n",
+                    songMs, mRealTime, mPaused, MsToBeat(songMs));
+        }
+#endif
         if (!mRealTime && mShuttle->IsActive()) {
             songMs = PollShuttle();
         }
@@ -930,6 +937,13 @@ bool Game::HandleWait() {
     }
     // Common audio readiness check for all non-zero states
     HamAudio *audio = mMaster->GetAudio();
+#ifdef HX_NATIVE
+    static int sWaitLog = 0;
+    if (sWaitLog++ < 10) {
+        fprintf(stderr, "DC3 Game::HandleWait — state=%d audioFail=%d audioReady=%d audio=%p\n",
+                mWaitState, audio->Fail(), audio->IsReady(), (void*)audio);
+    }
+#endif
     if (audio->Fail()) {
         return true;
     }
@@ -937,6 +951,9 @@ bool Game::HandleWait() {
         TheSynth->Poll();
         return false;
     }
+#ifdef HX_NATIVE
+    fprintf(stderr, "DC3 Game::HandleWait — audio ready! dispatching state=%d\n", mWaitState);
+#endif
     // Audio is ready, dispatch based on state
     switch (mWaitState) {
     case 0:

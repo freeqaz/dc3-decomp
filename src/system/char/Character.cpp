@@ -942,6 +942,7 @@ void Character::DrawLodOrShadow(int lod, DrawMode drawMode) {
     Lod *curLod = mLods.empty() ? nullptr : &mLods[mLastLod];
 
     if (drawMode & 1) {
+        RndEnvironTracker tracker(mEnv, &WorldXfm().v);
         RndDir::DrawShowing();
         if (curLod) {
             curLod->mOpaque.Draw();
