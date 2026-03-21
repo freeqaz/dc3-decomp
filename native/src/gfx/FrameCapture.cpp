@@ -3,17 +3,9 @@
 #include <cstring>
 
 static const char* sHeuristicNames[] = {
-    "MultiplySkip",
-    "AlphaForce",
-    "SpecularClamp",
     "EmissiveGuard",
-    "SkinNameDetect",
-    "AutoPrelit",
-    "TextMeshDetect",
-    "EyeEmissiveBoost",
-    "ZeroAlphaFix",
-    "MissingEnvironBoost",
     "FogBlendCheck",
+    "TextMeshDetect",
     "TextAlphaAsRGB",
 };
 
@@ -112,7 +104,7 @@ void FrameCapture::DumpToStderr() const {
 
         if (r.heuristicsApplied) {
             fprintf(stderr, "       heuristics: ");
-            for (int b = 0; b < 12; b++) {
+            for (int b = 0; b < (int)(sizeof(sHeuristicNames)/sizeof(sHeuristicNames[0])); b++) {
                 if (r.heuristicsApplied & (1u << b))
                     fprintf(stderr, "%s ", DrawCallRecord::HeuristicName(b));
             }

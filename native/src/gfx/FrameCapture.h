@@ -7,18 +7,11 @@ class RndMat;
 class RndTex;
 
 enum Heuristic : uint32_t {
-    kHeuristicMultiplySkip       = 1 << 0,
-    kHeuristicAlphaForce         = 1 << 1,
-    kHeuristicSpecularClamp      = 1 << 2,
-    kHeuristicEmissiveGuard      = 1 << 3,
-    kHeuristicSkinNameDetect     = 1 << 4, // removed — data-driven now, kept for index stability
-    kHeuristicAutoPrelit         = 1 << 5,
-    kHeuristicTextMeshDetect     = 1 << 6,
-    kHeuristicEyeEmissiveBoost   = 1 << 7,
-    kHeuristicZeroAlphaFix       = 1 << 8,
-    kHeuristicMissingEnvironBoost= 1 << 9,
-    kHeuristicFogBlendCheck      = 1 << 10,
-    kHeuristicTextAlphaAsRGB     = 1 << 11,
+    // Correct engine behavior (tracked for diagnostics)
+    kHeuristicEmissiveGuard      = 1 << 0, // Zeroed emissive multiplier (no emissive map present)
+    kHeuristicFogBlendCheck      = 1 << 1, // Fog disabled for additive/subtractive blend
+    kHeuristicTextMeshDetect     = 1 << 2, // Text mesh (no depth, no cull, prelit)
+    kHeuristicTextAlphaAsRGB     = 1 << 3, // Font atlas alpha-as-RGB mode
 };
 
 struct TexBindingInfo {

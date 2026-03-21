@@ -89,6 +89,10 @@ struct MaterialUniforms {
     normDetailStrength: f32, // blend strength (0 = disabled)
     hasNormDetailMap: f32,   // 1.0 when detail map bound
     useAlphaAsRGB: f32,      // 1.0 to use texture alpha as grayscale RGB (font textures)
+    hasSpecularMap: f32,     // 1.0 when specular map is bound
+    _padMat1: f32,
+    _padMat2: f32,
+    _padMat3: f32,
 };
 
 @group(1) @binding(0) var<uniform> material: MaterialUniforms;
@@ -355,13 +359,16 @@ fn computeStandardLight(
 
     if (material.specularPower > 0.0) {
         let halfVector = normalize(lightDir + viewDir);
-        let glossExponent = max(material.specularPower * specularSample.a, 1.0);
-        let specularStrength = pow(max(dot(surfaceNormal, halfVector), 0.0), glossExponent);
-        lighting.specular =
-            material.specularColor.rgb *
-            specularSample.rgb *
-            lightColor *
-            specularStrength;
+        if (isEnabled(material.hasSpecularMap)) {
+            // Has specular map: texture modulates power with min 0.1 floor
+            let glossExponent = max(material.specularPower * specularSample.a, 0.1);
+            let specularStrength = pow(max(dot(surfaceNormal, halfVector), 0.0), glossExponent);
+            lighting.specular = specularSample.rgb * lightColor * specularStrength;
+        } else {
+            // No specular map: material uniform directly
+            let specularStrength = pow(max(dot(surfaceNormal, halfVector), 0.0), material.specularPower);
+            lighting.specular = material.specularColor.rgb * lightColor * specularStrength;
+        }
     }
 
     return lighting;
@@ -388,13 +395,14 @@ fn computeSkinLight(
     let specularDot = max(dot(surfaceNormal, halfVector), 0.0);
 
     if (material.specularPower > 0.0) {
-        let primaryExponent = max(material.specularPower * specularSample.a, 1.0);
-        let primaryLobe = pow(specularDot, primaryExponent);
-        lighting.specular +=
-            material.specularColor.rgb *
-            specularSample.rgb *
-            lightColor *
-            primaryLobe;
+        if (isEnabled(material.hasSpecularMap)) {
+            let primaryExponent = max(material.specularPower * specularSample.a, 0.1);
+            let primaryLobe = pow(specularDot, primaryExponent);
+            lighting.specular += specularSample.rgb * lightColor * primaryLobe;
+        } else {
+            let primaryLobe = pow(specularDot, material.specularPower);
+            lighting.specular += material.specularColor.rgb * lightColor * primaryLobe;
+        }
     }
 
     let secondaryExponent = material.specular2Color.a;
@@ -424,11 +432,11 @@ fn computeHairLight(
     let sineTerm = sqrt(max(1.0 - tangentDotHalf * tangentDotHalf, 0.0));
     let anisotropicExponent = max(material.anisotropy, 1.0);
     let anisotropicSpecular = pow(sineTerm, anisotropicExponent);
-    lighting.specular =
-        material.specularColor.rgb *
-        specularSample.rgb *
-        lightColor *
-        anisotropicSpecular;
+    if (isEnabled(material.hasSpecularMap)) {
+        lighting.specular = specularSample.rgb * lightColor * anisotropicSpecular;
+    } else {
+        lighting.specular = material.specularColor.rgb * lightColor * anisotropicSpecular;
+    }
 
     return lighting;
 }
@@ -477,13 +485,14 @@ fn computePointLight(
 
     if (material.specularPower > 0.0) {
         let halfVector = normalize(lightDir + viewDir);
-        let glossExponent = max(material.specularPower * specularSample.a, 1.0);
-        let specularStrength = pow(max(dot(surfaceNormal, halfVector), 0.0), glossExponent);
-        lighting.specular =
-            material.specularColor.rgb *
-            specularSample.rgb *
-            lightColor *
-            specularStrength;
+        if (isEnabled(material.hasSpecularMap)) {
+            let glossExponent = max(material.specularPower * specularSample.a, 0.1);
+            let specularStrength = pow(max(dot(surfaceNormal, halfVector), 0.0), glossExponent);
+            lighting.specular = specularSample.rgb * lightColor * specularStrength;
+        } else {
+            let specularStrength = pow(max(dot(surfaceNormal, halfVector), 0.0), material.specularPower);
+            lighting.specular = material.specularColor.rgb * lightColor * specularStrength;
+        }
     }
 
     return lighting;
