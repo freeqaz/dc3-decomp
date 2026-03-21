@@ -629,22 +629,25 @@ DataNode HamCharacter::OnCamTeleport(DataArray *a) {
 
 ObjectDir *HamCharacter::GetNeutralSkeleton() {
 #ifdef HX_NATIVE
-    // HACK: Skip neutral skeleton computation on native.
-    // The PPC code uses hardcoded 0x10 offset casts (reinterpret_cast)
-    // that are invalid on x86_64 due to different multi-inheritance layouts.
-    // CharServoBone has RndHighlightable + CharPollable bases before CharBonesMeshes,
-    // so the CharBones base offset differs between 32-bit PPC and 64-bit x86.
-    // TODO: Fix the casts to use proper static_cast when skeleton system is needed.
-    return mNeutralSkelDir ? mNeutralSkelDir : this;
+    // Skeleton blending requires mSkeletonBones (set via skeleton_path config).
+    // If not configured, skip computation and return the dir/self fallback.
+    if (!mSkeletonBones) {
+        return mNeutralSkelDir ? mNeutralSkelDir : this;
+    }
 #endif
     int songAnim = SongAnimation();
+#ifdef HX_NATIVE
+    // On native, compute bones once up front. The goto zero_and_scale below
+    // jumps past the else-branch's local declaration, which is UB on Clang
+    // (bones is uninitialized). PPC/MSVC keeps the earlier local in the same
+    // register so it "works" there, but we must hoist the cast for native.
+    CharBones *bones = static_cast<CharBones *>(mSkeletonBones);
+#endif
     if (songAnim != -1) {
         HamDriver *hamDriver = Find<HamDriver>("song.hdrv", false);
         if (hamDriver == nullptr || hamDriver->FirstClip() == nullptr) {
             CharClip *clip = Driver()->FirstPlayingClip();
-#ifdef HX_NATIVE
-            CharBones *bones = static_cast<CharBones *>(mSkeletonBones);
-#else
+#ifndef HX_NATIVE
             CharBones *bones = reinterpret_cast<CharBones *>((char *)mSkeletonBones + 0x10);
 #endif
             if (clip == nullptr) {
@@ -672,7 +675,9 @@ ObjectDir *HamCharacter::GetNeutralSkeleton() {
                 clipMap.clear();
                 return this;
             }
+#ifndef HX_NATIVE
             CharBones *bones = static_cast<CharBones *>(mSkeletonBones);
+#endif
             bones->Zero();
             for (std::map<CharClip *, float>::iterator it = clipMap.begin();
                  it != clipMap.end(); ++it) {
@@ -690,9 +695,7 @@ ObjectDir *HamCharacter::GetNeutralSkeleton() {
         if (clip->Flags() & 1) {
             return this;
         }
-#ifdef HX_NATIVE
-        CharBones *bones = static_cast<CharBones *>(mSkeletonBones);
-#else
+#ifndef HX_NATIVE
         CharBones *bones = reinterpret_cast<CharBones *>((char *)mSkeletonBones + 0x10);
 #endif
 zero_and_scale:

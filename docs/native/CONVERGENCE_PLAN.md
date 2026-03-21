@@ -2,7 +2,7 @@
 
 **Goal**: Make the native port operate 1:1 with the Xbox version — same DTA flows, same panel hierarchy, same loading pipeline. Diverge only where necessary (graphics API, 64-bit platform, input abstraction).
 
-**Status**: Phase 0 complete (audit). Phase 1 starting.
+**Status**: Phase 1 complete. game_screen reached through full DTA flow. Phase 2-3 next.
 
 **Working docs**: `docs/sessions/convergence/` (audit reports 01-06)
 
@@ -12,8 +12,10 @@
 
 | # | Objective | Status | Acceptance Criteria |
 |---|-----------|--------|---------------------|
+| # | Objective | Status | Acceptance Criteria |
+|---|-----------|--------|---------------------|
 | 0 | Audit & scope all HX_NATIVE blocks | DONE | 5 audit docs written, synthesis complete |
-| 1 | Fix song select input + navigate to gameplay | TODO | YMCA input script reaches `game_screen` |
+| 1 | Fix song select input + navigate to gameplay | DONE | YMCA input script reaches `game_screen` (5000 frames stable) |
 | 2 | Venue + character loading through DTA flow | TODO | `HamDirector::Enter()` fires, venue renders |
 | 3 | Gameplay boot: song plays, characters dance | TODO | GamePanel reaches `kGamePlaying`, move cards visible |
 | 4 | Remove scaffolding hacks | TODO | `gNativeVenueDir`, `NativeVenueInit`, App.cpp blocks removed |
@@ -205,6 +207,11 @@ Currently has HX_NATIVE hack to force-advance past kGameInIntro after 30 frames.
   - Happens after Rnd::SetPostProcOverride cleanup (multiuser → loading transition)
   - Likely a use-after-free or buffer overrun in the PostProc or panel unload path
   - Need ASan build to diagnose
+
+### 2026-03-21 — Technical Debt Cleanup
+- **UIScreen::UnloadPanels()**: Removed `#ifdef HX_NATIVE return` skip. Cascade protection infrastructure (InDeleteObjects guards in ObjPtr/ObjPtrList/ObjRefConcrete destructors, DeferFree) now handles the use-after-free scenarios that originally motivated the skip. Panels will actually unload during screen transitions, fixing the memory leak.
+- **GetNeutralSkeleton()**: Removed early return skip. The PPC-specific `reinterpret_cast` with hardcoded 0x10 offset was already replaced by `static_cast<CharBones*>` in `#ifdef HX_NATIVE` branches at the two cast sites. The full skeleton blending pipeline now runs on native.
+- **Flow::~Flow() mRunningNodes**: Replaced no-op cascade skip with explicit `mRunningNodes.clear()`. During cascade, this safely destroys ObjPtrList nodes (their destructors skip ring unlinks via InDeleteObjects check) without triggering Deactivate's message-sending to potentially-destroyed listeners.
 
 ---
 
