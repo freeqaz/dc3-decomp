@@ -148,6 +148,8 @@ public:
     DataNode OnGetValueFromFrame(const DataArray *);
     DataNode OnGetNumKeys(const DataArray *);
 
+    friend class HamDirector; // native: PropKeys retargeting after Copy
+
 protected:
     RndPropAnim();
 

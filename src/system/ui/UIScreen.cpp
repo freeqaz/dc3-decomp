@@ -4,6 +4,7 @@
 #include "obj/Dir.h"
 #include "obj/Msg.h"
 #include "obj/Object.h"
+#include "obj/Task.h"
 #include "os/Archive.h"
 #include "os/Debug.h"
 #include "os/JoypadMsgs.h"
@@ -135,14 +136,11 @@ void UIScreen::LoadPanels() {
 
 void UIScreen::UnloadPanels() {
 #ifdef HX_NATIVE
-    // HACK: Skip panel unloading during screen transitions.
-    // The cascade destruction of PanelDir → ObjectDir → DeleteObjects causes
-    // use-after-free when objects with cross-references are destroyed in the
-    // wrong order (RndTransformable refs to freed RndMesh, ObjPtrList nodes
-    // freed before ring nullification). This is a systemic issue with the
-    // 64-bit native port's object lifecycle.
-    // TODO: Fix cascade destruction ordering or implement deferred unloading.
-    return;
+    // Clear animation tasks before panel destruction. On Xbox, ~Object's
+    // ReplaceRefs triggers AnimTask::Replace → QueueTaskDelete. On native,
+    // cascade destruction skips ReplaceRefs for safety, so tasks holding
+    // stale pointers to panel objects would crash in TaskMgr::Poll.
+    TheTaskMgr.ClearTasks();
 #endif
     FOREACH_REVERSE(it, mPanelList) {
         if (it->mLoaded) {

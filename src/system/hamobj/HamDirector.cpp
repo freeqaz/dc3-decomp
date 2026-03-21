@@ -784,6 +784,14 @@ void HamDirector::SetupRoutineBuilderAnims() {
         RndPropAnim *anim = mSongAnims[LegacyDifficulty(hpd->GetDifficulty())];
         if (anim) {
             routineBuilderAnim->Copy(anim, kCopyDeep);
+#ifdef HX_NATIVE
+            // TODO: Retarget PropKeys to this HamDirector.
+            // After Copy, keys' mTarget may point to a different HamDirector
+            // (DirLoader sharing failure for director.milo creates duplicates).
+            // The shot/clip/move keyframes fire on the wrong object, preventing
+            // camera shot cycling. Fix needs careful ObjRef ring handling.
+            // See docs/sessions/convergence/ for full analysis.
+#endif
             Symbol syms[3] = { "clip", "move", "practice" };
             for (int i = 0; i < 3; i++) {
                 DataArrayPtr ptr(syms[i]);
@@ -2559,9 +2567,37 @@ void HamDirector::PlayNextShot() {
 DataNode HamDirector::OnSelectCamera(DataArray *a) {
 #ifdef HX_NATIVE
     static int sSelectCamLog = 0;
-    if (sSelectCamLog++ < 5) {
+    if (sSelectCamLog++ < 10 || (sSelectCamLog % 1000 == 0)) {
         fprintf(stderr, "DC3 HamDirector::OnSelectCamera — beat=%.2f disabled=%d songAnim=%p mCurShot=%p mPickNewShot=%d\n",
                 TheTaskMgr.Beat(), mDisabled, (void*)SongAnim(0), (void*)mCurShot.Ptr(), mPickNewShot);
+    }
+    // One-time diagnostic: check if song.anim has 'shot' PropKeys targeting us
+    static bool sShotDiagDone = false;
+    if (!sShotDiagDone && SongAnim(0) && TheTaskMgr.Beat() > 0.0f) {
+        sShotDiagDone = true;
+        RndPropAnim *sa = SongAnim(0);
+        // Check known property tracks
+        const char *propNames[] = {"shot", "clip", "move", "practice", "world_event", "postproc"};
+        fprintf(stderr, "DC3 SHOT DIAG: SongAnim(0)=%p this=%p Name='%s'\n",
+                (void*)sa, (void*)this, Name());
+        for (int pi = 0; pi < 6; pi++) {
+            PropKeys *pk = sa->GetKeys(this, DataArrayPtr(Symbol(propNames[pi])));
+            if (pk) {
+                fprintf(stderr, "  '%s': target=%p numKeys=%d type=%d\n",
+                        propNames[pi], (void*)pk->Target(), pk->NumKeys(), pk->KeysType());
+            } else {
+                fprintf(stderr, "  '%s': NOT FOUND (GetKeys returned null)\n", propNames[pi]);
+            }
+        }
+        // Also check difficulty song.anim directly (not routineBuilderAnim)
+        for (int d = 0; d < 3; d++) {
+            RndPropAnim *diffAnim = GetPropAnim((Difficulty)d, "song.anim", false);
+            if (diffAnim) {
+                PropKeys *shotPk2 = diffAnim->GetKeys(this, DataArrayPtr(Symbol("shot")));
+                fprintf(stderr, "  difficulty[%d] song.anim=%p shot_keys=%p\n",
+                        d, (void*)diffAnim, (void*)shotPk2);
+            }
+        }
     }
 #endif
     // Full songAnim path — Debug::Fail is non-fatal on native, so DTA
