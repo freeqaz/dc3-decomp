@@ -704,6 +704,15 @@ void HamDirector::VenueEnter(WorldDir *dir) {
     for (int i = 0; i < 4; i++) {
         mCharsShowing[i] = false;
     }
+#ifdef HX_NATIVE
+    // On Xbox, DTA type handlers / song.anim PropAnim tracks set characters
+    // visible during gameplay. On native, those DTA paths may not fire.
+    // Force characters visible so they render during gameplay.
+    if (mPlayer0Char) mPlayer0Char->SetShowing(true);
+    if (mPlayer1Char) mPlayer1Char->SetShowing(true);
+    if (mBackup0Char) mBackup0Char->SetShowing(true);
+    if (mBackup1Char) mBackup1Char->SetShowing(true);
+#endif
 }
 
 void HamDirector::SetMasterClipAnim() {

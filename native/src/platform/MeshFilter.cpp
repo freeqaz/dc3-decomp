@@ -49,6 +49,11 @@ bool ShouldSkipMesh(const char* name, RndMat* mat) {
         !strncmp(name, "warning_", 8)) {
         return true;
     }
+    // Venue TV screens — render target textures driven by Kinect camera feed
+    // or gameplay camera. Without content, additive blend shows white rectangles.
+    if (!strncmp(name, "screen_image_", 13)) {
+        return true;
+    }
 
     return false;
 }
