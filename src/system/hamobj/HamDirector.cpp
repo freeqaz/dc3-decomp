@@ -54,8 +54,6 @@
 #include "os/Timer.h"
 #include "rndobj/Anim.h"
 #include "rndobj/Draw.h"
-#include "rndobj/Mat.h"
-#include "rndobj/Mesh.h"
 #include "rndobj/Overlay.h"
 #include "rndobj/Poll.h"
 #include "rndobj/PostProc.h"
@@ -611,52 +609,6 @@ void HamDirector::VenueEnter(WorldDir *dir) {
         // select_camera fires on the world root (not venue), so venue type
         // is irrelevant for camera management.
         dir->Enter();
-#ifdef HX_NATIVE
-        // Hide Kinect-dependent venue meshes (no camera on native):
-        // TV screens, projectors, reflections, render targets.
-        {
-            int hidden = 0;
-            for (ObjDirItr<RndMesh> mit(dir, true); mit != nullptr; ++mit) {
-                if (!mit->Showing()) continue;
-                const char *meshName = mit->Name();
-                RndMat *mat = mit->Mat();
-                const char *matName = mat ? mat->Name() : "";
-                RndTex *dtex = mat ? mat->GetDiffuseTex() : nullptr;
-                bool hide = strstr(matName, "TVScreen")
-                    || strstr(matName, "projection")
-                    || strstr(meshName, "TVScreen")
-                    || strstr(meshName, "Reflect")
-                    || strstr(meshName, "projection")
-                    || strstr(meshName, "refract")
-                    || (mat && mat->GetBlend() == BaseMaterial::kBlendDest);
-                if (!hide && mat && !dtex
-                    && mat->GetBlend() == BaseMaterial::kBlendSrc) {
-                    const Hmx::Color &c = mat->GetColor();
-                    if (c.red > 0.9f && c.green > 0.9f && c.blue > 0.9f
-                        && c.alpha > 0.5f)
-                        hide = true;
-                }
-                if (hide) {
-                    mit->SetShowing(false);
-                    hidden++;
-                }
-            }
-            for (ObjDirItr<RndMesh> mit2(dir, true); mit2 != nullptr; ++mit2) {
-                if (!mit2->Showing()) continue;
-                RndMat *m2 = mit2->Mat();
-                if (!m2) continue;
-                RndTex *dt = m2->GetDiffuseTex();
-                if (dt && dt->File().empty()) {
-                    mit2->SetShowing(false);
-                    hidden++;
-                }
-            }
-            for (ObjDirItr<RndTexRenderer> trit(dir, true); trit != nullptr; ++trit)
-                trit->SetShowing(false);
-            if (hidden > 0)
-                MILO_LOG("DC3 Native: hidden %d camera/projection/RT meshes\n", hidden);
-        }
-#endif
     }
     mPlayer0Char = dir ? dir->Find<HamCharacter>("player0", true) : nullptr;
     mPlayer1Char = dir ? dir->Find<HamCharacter>("player1", true) : nullptr;
@@ -704,15 +656,6 @@ void HamDirector::VenueEnter(WorldDir *dir) {
     for (int i = 0; i < 4; i++) {
         mCharsShowing[i] = false;
     }
-#ifdef HX_NATIVE
-    // On Xbox, DTA type handlers / song.anim PropAnim tracks set characters
-    // visible during gameplay. On native, those DTA paths may not fire.
-    // Force characters visible so they render during gameplay.
-    if (mPlayer0Char) mPlayer0Char->SetShowing(true);
-    if (mPlayer1Char) mPlayer1Char->SetShowing(true);
-    if (mBackup0Char) mBackup0Char->SetShowing(true);
-    if (mBackup1Char) mBackup1Char->SetShowing(true);
-#endif
 }
 
 void HamDirector::SetMasterClipAnim() {
