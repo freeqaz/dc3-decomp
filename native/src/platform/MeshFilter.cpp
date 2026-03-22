@@ -54,6 +54,14 @@ bool ShouldSkipMesh(const char* name, RndMat* mat) {
     if (!strncmp(name, "screen_image_", 13)) {
         return true;
     }
+    // Venue console/TV screen animations — these meshes use additive blend
+    // with render target textures populated by TexRenderers on Xbox.
+    // On native, no TexRenderer content is available, so the diffuse texture
+    // is missing and additive blend on the white material color produces
+    // a white rectangle in the bottom-right corner of the frame.
+    if (strstr(name, "consoleScreens")) {
+        return true;
+    }
 
     return false;
 }
