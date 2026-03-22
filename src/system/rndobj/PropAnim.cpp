@@ -424,15 +424,7 @@ RndPropAnim::AddKeys(Hmx::Object *obj, DataArray *prop, PropKeys::AnimKeysType t
 static inline bool SameObject(const Hmx::Object *a, const Hmx::Object *b) {
     if (a == b) return true;
     if (!a || !b) return false;
-    const void *da = dynamic_cast<const void *>(a);
-    const void *db = dynamic_cast<const void *>(b);
-    static int sLog = 0;
-    if (da != db && sLog < 3) {
-        sLog++;
-        fprintf(stderr, "DC3 SameObject: a=%p da=%p b=%p db=%p class_a='%s' class_b='%s'\n",
-                (const void*)a, da, (const void*)b, db, a->ClassName(), b->ClassName());
-    }
-    return da == db;
+    return dynamic_cast<const void *>(a) == dynamic_cast<const void *>(b);
 }
 
 std::list<PropKeys *>::iterator RndPropAnim::FindKeys(Hmx::Object *obj, DataArray *prop) {
