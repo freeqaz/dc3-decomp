@@ -808,63 +808,6 @@ void WgpuRnd::MakeDrawTarget() {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Native-port venue initialization
-// On Xbox, HamDirector::Enter() calls VenueEnter(mVenue) which enters the
-// WorldDir hierarchy (including chars_base and all Characters). HamDirector
-// lives in the meta_game panel, which is only active during gameplay screens.
-// At main_screen/attract, the venue is visible but HamDirector is never
-// entered. We detect this and manually trigger the venue enter sequence.
-// ---------------------------------------------------------------------------
-void WgpuRnd::NativeVenueInit() {
-    // Re-run init if gNativeVenueDir changed (new venue loaded for gameplay)
-    // Also re-run if the venue's content was reloaded by the game (detected
-    // by hash table growth — the early skeleton has ~1 entry, the full venue
-    // has hundreds).
-    if (mVenueInited && gNativeVenueDir == mLastVenueDir) {
-        int curHash = gNativeVenueDir ? gNativeVenueDir->HashTableUsedSize() : 0;
-        if (curHash <= mLastVenueHashSize)
-            return;
-        // Venue content grew — the game loaded the full .milo
-        printf("DC3 Native: venue content changed (%d → %d objects), re-initializing\n",
-               mLastVenueHashSize, curHash);
-        mVenueInited = false;
-    }
-
-    // gNativeVenueDir is set by ObjectDir::AddedSubDir when chars_base is added
-    // to a venue dir. This is the venue (e.g., glitterati) that contains all
-    // character and scene objects.
-    if (!gNativeVenueDir)
-        return;
-
-    WorldDir* venue = dynamic_cast<WorldDir*>(gNativeVenueDir);
-    if (!venue)
-        return;
-
-    mVenueInited = true;
-    mLastVenueDir = gNativeVenueDir;
-    mLastVenueHashSize = gNativeVenueDir->HashTableUsedSize();
-    printf("DC3 Native: venue init — '%s' dir=%p hash=%d subdirs=%d\n",
-           venue->Name(), (void*)gNativeVenueDir, mLastVenueHashSize, (int)venue->SubDirs().size());
-
-    // Enter the venue hierarchy — this cascades to all objects including
-    // Characters, RndDrawables, etc.
-    // On Xbox, HamDirector::Enter() calls VenueEnter() from the meta_game
-    // panel. At main_screen, the venue is visible but HamDirector isn't
-    // entered yet — the DTA flow handles venue Enter() via panel transitions.
-    // We call Enter() here as a fallback for the native port since we don't
-    // have full panel DTA flow coverage yet.
-    if (TheHamDirector) {
-        TheHamDirector->VenueEnter(venue);
-    } else {
-        venue->Enter();
-    }
-
-    // Character outfits and animations are handled by the DTA wardrobe flow
-    // (HamWardrobe::LoadCharacters → StartLoad(true) → async FileMerger).
-    // No manual outfit/clip setup needed here.
-}
-
 void WgpuRnd::BeginDrawing() {
     RndMesh_ResetFrameStats();
     mPostProcFlushed = false;
@@ -875,13 +818,6 @@ void WgpuRnd::BeginDrawing() {
         mWorldEnded = false;
         mDrawCount++;
         mFrameID++;
-
-        // Native port: one-shot venue initialization
-        // On Xbox, HamDirector::Enter() calls VenueEnter() which enters the
-        // WorldDir hierarchy and all Characters. But HamDirector is only entered
-        // from the meta_game panel (gameplay screens). At main_screen, the venue
-        // is visible but HamDirector is never entered. We do it manually here.
-        NativeVenueInit();
 
         return;
     }
@@ -903,9 +839,6 @@ void WgpuRnd::BeginDrawing() {
     mWorldEnded = false;
     mDrawCount++;
     mFrameID++;
-
-    // Native port: one-shot venue initialization (same as headless path above)
-    NativeVenueInit();
 
     if (mPerfEnabled) {
         mFrameStartTime = PerfNow();

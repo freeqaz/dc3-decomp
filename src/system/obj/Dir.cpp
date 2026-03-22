@@ -705,14 +705,6 @@ void ObjectDir::Terminate() {
 
 void ObjectDir::AddedSubDir(ObjDirPtr<ObjectDir> &subdir) {
     ObjectDir *dir = subdir;
-#ifdef HX_NATIVE
-    // Detect venue dir: when chars_base is added as a subdir, store the parent
-    // globally so the native renderer can find and enter it.
-    if (dir && dir->Name() && strcmp(dir->Name(), "chars_base") == 0) {
-        extern ObjectDir *gNativeVenueDir;
-        gNativeVenueDir = this;
-    }
-#endif
     if (dir) {
         dir->InlineSubDirType();
         dir->SetSubDir(true);

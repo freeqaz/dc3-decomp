@@ -34,6 +34,10 @@ public:
             return Null();
     }
 #ifdef HX_NATIVE
+    // LP64 WARNING: This truncates an 8-byte pointer to 4 bytes!
+    // Do NOT use for comparison — use Symbol::operator== or Symbol::Str() instead.
+    // Kept for PPC compatibility paths only.
+    [[deprecated("Symbol→int truncates on LP64; use Symbol::operator== or Str()")]]
     operator int() { return (int)(intptr_t)mStr; }
 #else
     operator int() { return (int)mStr; }

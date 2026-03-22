@@ -28,9 +28,6 @@
 RndMat *WorldDir::sGlowMat = nullptr;
 
 WorldDir *TheWorld = nullptr;
-#ifdef HX_NATIVE
-ObjectDir *gNativeVenueDir;
-#endif
 ObjectDir *gOldTexDir = nullptr;
 std::vector<FilePath> gOldChars;
 

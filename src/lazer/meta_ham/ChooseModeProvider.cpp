@@ -144,7 +144,7 @@ RndMat *ChooseModeProvider::Mat(int, int i_iData, UIListMesh *mesh) const {
     } else {
         bool isOnePlusIcon = mesh->Matches("icon_1p_plus");
         if (isOnePlusIcon) {
-            if ((int)dataSym == custom_party) {
+            if (dataSym == custom_party) {
                 result = nullptr;
             } else {
                 result = mesh->DefaultMat();

@@ -109,6 +109,17 @@ void UIScreen::SetTypeDef(DataArray *data) {
         SetFocusPanel(focusArr->Obj<UIPanel>(1));
     }
     if (!mFocusPanel && !mPanelList.empty()) {
+#ifdef HX_NATIVE
+        if (focusArr) {
+            // Focus panel specified in DTA but Obj<UIPanel> lookup failed
+            const char *focusName = (focusArr->Size() > 1 && focusArr->Type(1) == kDataSymbol)
+                ? focusArr->Str(1) : "?";
+            MILO_WARN(
+                "UIScreen '%s': focus panel '%s' not found, falling back to '%s'\n",
+                Name(), focusName, mPanelList.front().mPanel->Name()
+            );
+        }
+#endif
         SetFocusPanel(mPanelList.front().mPanel);
     }
 

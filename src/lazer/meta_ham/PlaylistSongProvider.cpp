@@ -60,7 +60,7 @@ void PlaylistSongProvider::Text(
         }
     } else if (slot->Matches("song_length")) {
         static Symbol playlist_addsong("playlist_addsong");
-        if ((int)dataSym != playlist_addsong) {
+        if (dataSym != playlist_addsong) {
             if ((NumData() <= 0x14 || data < 19)) {
                 AppLabel *pAppLabel = dynamic_cast<AppLabel *>(label);
                 MILO_ASSERT(pAppLabel, 0x4d);

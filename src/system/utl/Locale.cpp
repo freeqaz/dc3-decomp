@@ -97,9 +97,17 @@ bool Locale::FindDataIndex(Symbol s, int &idx, bool fail) const {
     int high = mSize - 1;
     while (high - low >= 0) {
         int mid = (low + high) >> 1;
+#ifdef HX_NATIVE
+        // On LP64, (int)Symbol truncates 8-byte pointer to 4 bytes.
+        // Compare interned string pointers directly (sorted by address).
+        if (s.Str() > mSymTable[mid].Str()) {
+            low = mid + 1;
+        } else if (s.Str() < mSymTable[mid].Str()) {
+#else
         if ((int)s > (int)mSymTable[mid]) {
             low = mid + 1;
         } else if ((int)s < (int)mSymTable[mid]) {
+#endif
             high = mid - 1;
         } else {
             idx = mid;

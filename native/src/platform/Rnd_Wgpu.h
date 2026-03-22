@@ -277,8 +277,6 @@ public:
     void WriteSceneUniforms();
     void MaybeCaptureFrame();
     void MaybeEncodeVideoFrame();
-    void NativeVenueInit();
-
     GpuDevice mGpu;
     PipelineManager mPipelines;
 
@@ -348,11 +346,6 @@ public:
     float mLastCamPosX = 0.0f; // detect same-pointer position changes
     float mLastCamPosY = 0.0f;
     float mLastCamPosZ = 0.0f;
-
-    // Native venue initialization — re-runs when gNativeVenueDir changes
-    bool mVenueInited = false;
-    ObjectDir* mLastVenueDir = nullptr;  // detect venue dir changes
-    int mLastVenueHashSize = 0;  // detect venue content reload
 
     // Auto-screenshot capture (env-var controlled)
     std::string mScreenshotDir;
