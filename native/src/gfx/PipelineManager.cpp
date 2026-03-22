@@ -4,11 +4,16 @@
 
 #include <cstdlib>
 #include <cstdio>
+#include <string>
 
 // Embedded shader source — standard.wgsl is compiled into the binary
-static const char* kStandardShaderSource =
+static const char* kBuiltinShaderSource =
 #include "gfx/standard_wgsl.inc"
 ;
+
+// Runtime-overridable shader source (set by ReloadShaders)
+static std::string sLiveShaderSource;
+static const char* kStandardShaderSource = kBuiltinShaderSource;
 
 void PipelineManager::Init(GpuDevice* device) {
     mDevice = device;
@@ -168,6 +173,107 @@ wgpu::ShaderModule PipelineManager::GetOrCreateShader(uint32_t shaderType) {
 
     mShaderCache[shaderType] = module;
     return module;
+}
+
+bool PipelineManager::ReloadShaders() {
+    // Try to find the shader source file relative to the build directory.
+    // Build dir is native/build/, source is native/src/gfx/standard_wgsl.inc
+    const char* paths[] = {
+        "../src/gfx/standard_wgsl.inc",          // from native/build/
+        "native/src/gfx/standard_wgsl.inc",      // from repo root
+        "src/gfx/standard_wgsl.inc",             // from native/
+    };
+
+    FILE* fp = nullptr;
+    const char* usedPath = nullptr;
+    for (auto* path : paths) {
+        fp = fopen(path, "rb");
+        if (fp) { usedPath = path; break; }
+    }
+    if (!fp) {
+        printf("ReloadShaders: could not find standard_wgsl.inc\n");
+        return false;
+    }
+
+    fseek(fp, 0, SEEK_END);
+    long size = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
+
+    // The .inc file is a C string literal (starts with R"(...) and ends with )").
+    // Read it raw, then strip the R"( prefix and )" suffix to get pure WGSL.
+    std::string raw(size, '\0');
+    fread(&raw[0], 1, size, fp);
+    fclose(fp);
+
+    // Strip C raw-string delimiters: R"DELIM( ... )DELIM"
+    // Find the opening R"...( and closing )..."
+    size_t rQuote = raw.find("R\"");
+    if (rQuote == std::string::npos) {
+        printf("ReloadShaders: no R\" found in %s\n", usedPath);
+        return false;
+    }
+    size_t openParen = raw.find('(', rQuote + 2);
+    if (openParen == std::string::npos) {
+        printf("ReloadShaders: no opening ( found in %s\n", usedPath);
+        return false;
+    }
+    // The delimiter is the text between R" and (
+    std::string delim = raw.substr(rQuote + 2, openParen - (rQuote + 2));
+    // Closing is )DELIM"
+    std::string closeTag = ")" + delim + "\"";
+    size_t end = raw.rfind(closeTag);
+    if (end == std::string::npos || end <= openParen) {
+        printf("ReloadShaders: no closing %s found in %s\n", closeTag.c_str(), usedPath);
+        return false;
+    }
+    sLiveShaderSource = raw.substr(openParen + 1, end - (openParen + 1));
+
+    // Test-compile the shader before committing.
+    // Dawn always returns a non-null module even on error, so we must use
+    // GetCompilationInfo to detect failures before flushing caches.
+    wgpu::ShaderSourceWGSL wgslSource;
+    wgslSource.code = sLiveShaderSource.c_str();
+    wgpu::ShaderModuleDescriptor desc{};
+    desc.label = "ReloadTest";
+    desc.nextInChain = &wgslSource;
+    wgpu::ShaderModule testModule = mDevice->Device().CreateShaderModule(&desc);
+
+    bool hasError = false;
+    wgpu::Future future = testModule.GetCompilationInfo(
+        wgpu::CallbackMode::WaitAnyOnly,
+        [&hasError](wgpu::CompilationInfoRequestStatus status,
+                    wgpu::CompilationInfo const* info) {
+            if (!info) return;
+            for (size_t i = 0; i < info->messageCount; i++) {
+                auto& msg = info->messages[i];
+                const char* severity = "info";
+                if (msg.type == wgpu::CompilationMessageType::Error) {
+                    severity = "ERROR";
+                    hasError = true;
+                } else if (msg.type == wgpu::CompilationMessageType::Warning) {
+                    severity = "warning";
+                }
+                printf("ReloadShaders: %s (line %llu): %.*s\n",
+                       severity, (unsigned long long)msg.lineNum,
+                       (int)msg.message.length, msg.message.data);
+            }
+        });
+    mDevice->Instance().WaitAny(future, UINT64_MAX);
+
+    if (hasError) {
+        printf("ReloadShaders: compilation failed, keeping old shaders\n");
+        sLiveShaderSource.clear();
+        return false;
+    }
+
+    // Success — swap the active source and flush caches
+    kStandardShaderSource = sLiveShaderSource.c_str();
+    mShaderCache.clear();
+    mPipelineCache.clear();
+
+    printf("ReloadShaders: reloaded from %s (%zu bytes), caches cleared\n",
+           usedPath, sLiveShaderSource.size());
+    return true;
 }
 
 wgpu::BlendState PipelineManager::MapBlend(WgpuBlend blend) {

@@ -85,8 +85,10 @@ struct MaterialUniforms {
     float normDetailStrength;   // f32 — blend strength (0 = disabled)
     float hasNormDetailMap;     // f32 — 1.0 when detail map bound
     float useAlphaAsRGB;        // f32 — 1.0 to use texture alpha as grayscale RGB (font textures)
+    float hasSpecularMap;       // f32 — 1.0 when specular map bound
+    float _padMat[3];           // pad to 16-byte boundary
 };
-static_assert(sizeof(MaterialUniforms) == 176, "MaterialUniforms must match WGSL layout");
+static_assert(sizeof(MaterialUniforms) == 192, "MaterialUniforms must match WGSL layout");
 
 struct ObjectUniforms {
     float world[16];            // mat4x4f
@@ -275,8 +277,12 @@ public:
     void CreateDepthTexture(int w, int h);
     void CreateDefaultTextures();
     void WriteSceneUniforms();
+    // Invalidate cached scene uniforms — forces re-upload next frame.
+    // Call when light properties are modified externally (e.g. debug UI).
+    void InvalidateSceneUniforms() { mLastSceneEnv = nullptr; }
     void MaybeCaptureFrame();
     void MaybeEncodeVideoFrame();
+    void RenderImGuiOverlay();
     GpuDevice mGpu;
     PipelineManager mPipelines;
 

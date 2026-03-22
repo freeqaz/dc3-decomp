@@ -287,6 +287,8 @@ bool EnsureMeshUploaded(RndMesh* mesh) {
             return false;
         }
 
+        // (vertex color fix follows)
+
         // Fix zero vertex colors — many meshes don't use vertex color and have all-zero
         // RGBA, which would multiply baseColor to black in the shader. FixZeroAlpha is
         // conservative: only modifies if ALL sampled vertices have zero alpha.

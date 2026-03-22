@@ -90,6 +90,10 @@ public:
 
     int CachedPipelineCount() const { return (int)mPipelineCache.size(); }
 
+    // Reload shader source from disk and recreate all pipelines.
+    // Returns true on success, false if file read or compilation failed.
+    bool ReloadShaders();
+
     // Release all GPU objects (call before device shutdown)
     void Terminate() {
         mPipelineCache.clear();

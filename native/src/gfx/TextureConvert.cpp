@@ -374,7 +374,11 @@ wgpu::TextureFormat MapBitmapFormat(const RndBitmap& bmp, bool hasBCSupport) {
         case kDXT1: return wgpu::TextureFormat::BC1RGBAUnorm;
         case kDXT3: return wgpu::TextureFormat::BC2RGBAUnorm;
         case kDXT5: return wgpu::TextureFormat::BC3RGBAUnorm;
-        case kDXN:  return wgpu::TextureFormat::BC5RGUnorm;
+        // DXN (BC5) always CPU-decompressed to RGBA8. BC5RGUnorm returns
+        // (R, G, 0, 1) which breaks the shader's DXT5nm/RGB normal decode
+        // heuristic — the zero B channel produces Z = -1 (flipped normal).
+        // CPU decompress sets B=255, A=255, giving correct Z = +1.
+        case kDXN:  return wgpu::TextureFormat::RGBA8Unorm;
         default:    break; // fall through to RGBA8
         }
     }
@@ -450,8 +454,10 @@ wgpu::Texture CreateFromBitmap(GpuDevice& gpu, const RndBitmap& bmp, int numMips
         size_t uploadSize = pixelBytes;
         std::vector<uint8_t> decompBuf;
 
-        if (dxt && !hasBCSupport) {
-            // CPU decompress DXT -> RGBA8
+        bool needsCpuDecomp = dxt && (fmt == wgpu::TextureFormat::RGBA8Unorm);
+        if (needsCpuDecomp) {
+            // CPU decompress DXT -> RGBA8 (used when BC not supported, or
+            // for DXN which always decompresses to RGBA8 for correct shader decode)
             decompBuf.resize(mw * mh * 4);
             switch (dxt) {
             case kDXT1: DecompressDXT1(workData, decompBuf.data(), mw, mh); break;
@@ -512,14 +518,14 @@ wgpu::Texture CreateFromBitmap(GpuDevice& gpu, const RndBitmap& bmp, int numMips
         dstInfo.mipLevel = mipLevel;
 
         wgpu::TexelCopyBufferLayout srcLayout{};
-        if (dxt && hasBCSupport) {
+        if (dxt && !needsCpuDecomp) {
+            // BC-compressed: block pitch
             int blockW = (mw + 3) / 4;
             int blockBytes = (dxt == kDXT1) ? 8 : 16;
             srcLayout.bytesPerRow = blockW * blockBytes;
         } else {
             srcLayout.bytesPerRow = mw * 4;
         }
-        // rowsPerImage = 0 (unused) for single-slice 2D uploads
 
         wgpu::Extent3D extent = {(uint32_t)mw, (uint32_t)mh, 1};
         gpu.Queue().WriteTexture(&dstInfo, uploadData, uploadSize, &srcLayout, &extent);

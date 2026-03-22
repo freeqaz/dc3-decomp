@@ -4,6 +4,7 @@
 #include "viewer/ViewerCamera.h"
 #include "viewer/ViewerAnimation.h"
 #include "viewer/ViewerPoseDump.h"
+#include "viewer/ViewerDebugUI.h"
 
 #include "char/CharTwistSolver.h"
 #include "char/Character.h"
@@ -15,10 +16,12 @@
 #include "rndobj/Trans.h"
 #include "rndobj/Rnd.h"
 #include "platform/Rnd_Wgpu.h"
+#include "gfx/ImGuiBackend.h"
 #include "gfx/Screenshot.h"
 #include "gfx/VideoEncoder.h"
 #include "math/Vec.h"
 
+#include <imgui.h>
 #include <GLFW/glfw3.h>
 #include <cstdio>
 #include <cstdlib>
@@ -399,7 +402,8 @@ int RunVideo(VideoMode& m, ViewerScene& scene,
 
 int RunInteractive(InteractiveMode& /*m*/, ViewerScene& scene,
                    AnimState& anim, CharAnimState& charAnim,
-                   RndCam* cam, const ViewerConfig& cfg) {
+                   RndCam* cam, const ViewerConfig& cfg,
+                   ViewerDebugUI* debugUI) {
     if (anim.hasAnimation) {
         printf("Milo Viewer: entering render loop — animation [%.0f..%.0f] at %.1fx "
                "(Space=pause, ./,=step, Up/Down=speed, Home=reset, ESC=quit)\n",
@@ -479,6 +483,15 @@ int RunInteractive(InteractiveMode& /*m*/, ViewerScene& scene,
         TheRnd.BeginDrawing();
         scene.DrawAllMeshes(cfg);
         scene.DrawMovieOverlay();
+
+        // ImGui debug UI — NewFrame + build widgets + Render (draw data consumed in EndDrawing)
+        if (debugUI) {
+            ImGuiBackend::NewFrame();
+            debugUI->Draw();
+            debugUI->DrawLightGizmos(cam);
+            ImGui::Render();
+        }
+
         TheRnd.EndDrawing();
 
         frameCount++;

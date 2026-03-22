@@ -120,6 +120,9 @@ native/.claude/
 # Temp obj files
 Z:*
 
+# ImGui state file
+imgui.ini
+
 # Native ML models and third-party installs
 native/models/
 native/third_party/

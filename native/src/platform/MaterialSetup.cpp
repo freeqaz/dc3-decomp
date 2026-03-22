@@ -8,9 +8,7 @@
 #include "gfx/FrameCapture.h"
 #include "rndobj/Mat.h"
 #include "rndobj/BaseMaterial.h"
-#include "rndobj/Env.h"
 #include "rndobj/CubeTex.h"
-#include "rndobj/Lit.h"
 #include "math/Mtx.h"
 
 #include <cstring>
@@ -62,20 +60,12 @@ MaterialParams BuildMaterialParams(RndMat* mat, bool isTextMesh) {
     // --- Specular ---
     const Hmx::Color& spec = mat->GetSpecularRGB();
     float specPower = spec.alpha > 0.0f ? spec.alpha : 0.0f;
-    float specScale = 1.0f;
-    // Per-pixel-lit materials without normal map: the Xbox shader uses normal map
-    // alpha as specular mask. Without it, attenuate specular and raise min power
-    // to avoid unrealistically broad sheen across entire surfaces.
-    if (specPower > 0.0f && specPower < 32.0f) {
-        specPower = 32.0f;  // tighten the specular lobe
-        specScale = 0.4f;   // reduce intensity
-        heuristics |= kHeuristicSpecularClamp;
-    }
-    matUni.specularColor[0] = spec.red * specScale;
-    matUni.specularColor[1] = spec.green * specScale;
-    matUni.specularColor[2] = spec.blue * specScale;
+    matUni.specularColor[0] = spec.red;
+    matUni.specularColor[1] = spec.green;
+    matUni.specularColor[2] = spec.blue;
     matUni.specularColor[3] = 1.0f;
     matUni.specularPower = specPower;
+    matUni.hasSpecularMap = mat->GetSpecularMap() ? 1.0f : 0.0f;
 
     // --- Emissive ---
     // Only applies when an emissive map texture exists.
@@ -96,17 +86,9 @@ MaterialParams BuildMaterialParams(RndMat* mat, bool isTextMesh) {
     matUni.intensify = mat->GetIntensify() ? 2.0f : 1.0f;
 
     // --- Shader variation (skin, hair, etc.) ---
-    // DC3 skin materials often have shader_variation=0 but use "_skin" in the name.
-    // Detect skin by either the explicit flag or name convention.
-    ShaderVariation variation = mat->GetShaderVariation();
-    if (variation == kShaderVariationNone) {
-        const char* matName = mat->Name();
-        if (strstr(matName, "_skin") || strstr(matName, "_head")) {
-            variation = kShaderVariationSkin;
-            heuristics |= kHeuristicSkinNameDetect;
-        }
-    }
-    matUni.shaderVariation = (float)variation;
+    // Verified: DC3 materials have correct shader_variation in binary data.
+    // No name-based heuristic needed.
+    matUni.shaderVariation = (float)mat->GetShaderVariation();
 
     // --- Second specular lobe (used by skin shader) ---
     const Hmx::Color& spec2 = mat->GetSpecular2RGB();
@@ -143,32 +125,7 @@ MaterialParams BuildMaterialParams(RndMat* mat, bool isTextMesh) {
     matUni.materialFogEnabled = allowFog ? 1.0f : 0.0f;
     if (!allowFog && mat->GetFog()) heuristics |= kHeuristicFogBlendCheck;
 
-    // HACK DISABLED: Auto-detect fullbright UI
-    // Was: scan environment lights, force fullbright for UI panels with zero ambient
-    // and 0-1 directional lights. Testing showed UI renders correctly without this
-    // heuristic — materials are already marked prelit where needed.
-    // Once menus are finished and working, we can remove this code.
     bool forcePrelit = IsSimpleRender();
-#if 0
-    if (!forcePrelit && !mat->Prelit() && !isTextMesh) {
-        RndEnviron* env = RndEnviron::Current();
-        if (env) {
-            const Hmx::Color& amb = env->AmbientColor();
-            if (amb.red < 0.01f && amb.green < 0.01f && amb.blue < 0.01f) {
-                int numDirLights = 0;
-                ObjPtrList<RndLight>& approx = env->LightsApprox();
-                for (auto it = approx.begin(); it != approx.end(); ++it) {
-                    if (*it && (*it)->Showing() && (*it)->GetType() == RndLight::kDirectional)
-                        numDirLights++;
-                }
-                if (numDirLights <= 1) {
-                    forcePrelit = true;
-                    heuristics |= kHeuristicAutoPrelit;
-                }
-            }
-        }
-    }
-#endif
     if (isTextMesh) heuristics |= kHeuristicTextMeshDetect;
     matUni.prelit = (mat->Prelit() || isTextMesh || forcePrelit) ? 1.0f : 0.0f;
     matUni.useAlphaAsRGB = isTextMesh ? 1.0f : 0.0f;
@@ -263,6 +220,7 @@ MaterialParams BuildPassMaterialParams(BaseMaterial* nextPass) {
     npMatUni.specularPower = npSpecPower;
     npMatUni.specularColor[0] = nps.red; npMatUni.specularColor[1] = nps.green;
     npMatUni.specularColor[2] = nps.blue; npMatUni.specularColor[3] = 1.0f;
+    npMatUni.hasSpecularMap = nextPass->GetSpecularMap() ? 1.0f : 0.0f;
 
     // --- Other properties ---
     npMatUni.emissiveMultiplier = nextPass->GetEmissiveMap() ? nextPass->GetEmissiveMultiplier() : 0.0f;
@@ -271,6 +229,7 @@ MaterialParams BuildPassMaterialParams(BaseMaterial* nextPass) {
     npMatUni.hasNormalMap = nextPass->NormalMap() ? 1.0f : 0.0f;
     npMatUni.prelit = nextPass->Prelit() ? 1.0f : 0.0f;
     npMatUni.texGenMode = (float)nextPass->GetTexGen();
+    npMatUni.shaderVariation = (float)nextPass->GetShaderVariation();
 
     // --- Resolve textures ---
     WgpuRnd::MaterialTexViews& npTexViews = result.texViews;

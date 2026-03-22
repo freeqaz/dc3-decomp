@@ -38,6 +38,8 @@
 #include "viewer/ViewerScene.h"
 #include "viewer/ViewerAnimation.h"
 #include "viewer/ViewerCapture.h"
+#include "viewer/ViewerDebugUI.h"
+#include "gfx/ImGuiBackend.h"
 
 #include <GLFW/glfw3.h>
 #include <cstdio>
@@ -213,6 +215,11 @@ int main(int argc, char** argv) {
     InstallCameraCallbacks(window);
     if (window) {
         glfwSetKeyCallback(window, KeyCallback);
+    }
+
+    // Initialize ImGui (after camera callbacks so it chains to them)
+    if (window) {
+        ImGuiBackend::Init(window, gWgpuRnd->Gpu().Device(), gWgpuRnd->Gpu().SurfaceFormat());
     }
 
     RndCam* cam = Hmx::Object::New<RndCam>();
@@ -462,15 +469,20 @@ int main(int argc, char** argv) {
     scene.AutoFrameCamera(gOrbitCam, cam, cfg);
     scene.SetupSyntheticLights(cfg);
 
+    // ---- Debug UI ----
+    ViewerDebugUI debugUI;
+    debugUI.Init(&scene);
+
     // ---- Dispatch to mode runner ----
     ViewerMode mode = SelectMode(cfg);
     int rc = std::visit(overloaded{
         [&](ScreenshotMode& m)  { return RunScreenshot(m, scene, gAnim, charAnim, cam, cfg, absPath); },
         [&](VideoMode& m)       { return RunVideo(m, scene, gAnim, charAnim, cam, cfg); },
-        [&](InteractiveMode& m) { return RunInteractive(m, scene, gAnim, charAnim, cam, cfg); },
+        [&](InteractiveMode& m) { return RunInteractive(m, scene, gAnim, charAnim, cam, cfg, &debugUI); },
     }, mode);
 
     printf("Milo Viewer: shutting down\n");
+    ImGuiBackend::Shutdown();
     scene.ReleaseResources();
     _exit(rc);
     return rc;

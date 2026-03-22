@@ -220,26 +220,6 @@ void DrawMeshImmediate(RndMesh* mesh) {
     MaterialParams matParams = BuildMaterialParams(mat, isTextMesh);
     heuristics |= matParams.heuristics;
 
-    // HACK DISABLED: Zero-alpha floor
-    // Was: force alpha=0.20 on srcAlpha meshes with alpha < 0.01 to compensate
-    // for Flow/DTA scripts not animating material alphas. This made invisible
-    // meshes ghostly-visible, masking real animation bugs. Disabled so we can
-    // see the true state of UI animation progress.
-    // Once menus are finished and working, we can remove this code.
-#if 0
-    if (!isTextMesh && matBlend == BaseMaterial::kBlendSrcAlpha
-        && matParams.uniforms.color[3] < 0.01f) {
-        const char* n = mesh->Name();
-        bool isEffect = (strstr(n, "flash") || strstr(n, "debloom")
-            || strstr(n, "shield_") || strstr(n, "ribbon_blocker")
-            || strstr(n, "char_pl_") || strstr(n, "final_impact"));
-        if (!isEffect) {
-            matParams.uniforms.color[3] = 0.20f;
-            heuristics |= kHeuristicZeroAlphaFix;
-        }
-    }
-#endif
-
     uint32_t matOffset = gWgpuRnd->MaterialRing().Write(
         gWgpuRnd->Gpu().Queue(), &matParams.uniforms, sizeof(matParams.uniforms));
 

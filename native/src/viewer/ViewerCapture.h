@@ -9,6 +9,7 @@ struct AnimState;
 struct CharAnimState;
 struct ViewerConfig;
 class RndCam;
+class ViewerDebugUI;
 
 // ============================================================================
 // Mode structs — derived state only
@@ -45,4 +46,5 @@ int RunVideo(VideoMode& m, ViewerScene& scene,
 
 int RunInteractive(InteractiveMode& m, ViewerScene& scene,
                    AnimState& anim, CharAnimState& charAnim,
-                   RndCam* cam, const ViewerConfig& cfg);
+                   RndCam* cam, const ViewerConfig& cfg,
+                   ViewerDebugUI* debugUI = nullptr);

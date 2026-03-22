@@ -32,6 +32,11 @@
 #include "char/Character.h"
 #include "math/Utl.h"
 
+#ifdef MILO_VIEWER
+#include <imgui.h>
+#include <imgui_impl_wgpu.h>
+#endif
+
 #ifndef __EMSCRIPTEN__
 #include <GLFW/glfw3.h>
 #endif
@@ -987,6 +992,9 @@ void WgpuRnd::EndDrawing() {
                               mDepthView, mFrameView, mBlackTexView, mGpu);
         }
 
+        // ImGui overlay pass — rendered after post-processing, on top of everything
+        RenderImGuiOverlay();
+
         wgpu::CommandBuffer cmd = mEncoder.Finish();
         mGpu.Queue().Submit(1, &cmd);
 
@@ -1371,35 +1379,34 @@ void WgpuRnd::WriteSceneUniforms() {
             lightIdx++;
         }
 
+        // Supplement / fallback lights — only when NOT in MILO_VIEWER mode.
+        // The viewer's debug UI creates proper RndLight objects via
+        // EnsureEnvironment() so every light is visible and editable.
+#ifndef MILO_VIEWER
         // Supplement with fill lights if env has few directional lights
         if (lightIdx > 0 && lightIdx < 3) {
-            // Add a front-fill light to ensure faces are visible
-            // Hemisphere fill — from below-front to fill eye sockets and faces
             scene.lightDirs[lightIdx][0] = 0.0f;
             scene.lightDirs[lightIdx][1] = 0.0f;
-            scene.lightDirs[lightIdx][2] = 1.0f;  // light shines upward
+            scene.lightDirs[lightIdx][2] = 1.0f;
             scene.lightDirs[lightIdx][3] = 0.0f;
             scene.lightColors[lightIdx][0] = scene.lightColors[lightIdx][1] = scene.lightColors[lightIdx][2] = 0.35f;
             scene.lightColors[lightIdx][3] = 1.0f;
             lightIdx++;
         }
-        // Fallback: if no lights found (or all zero-color), use key + fill + rim lights
+        // Fallback: if no lights found, use key + fill + rim lights
         if (lightIdx == 0) {
-            // Key light — strong three-quarter light from front-left
             scene.lightDirs[0][0] = -0.4f;
             scene.lightDirs[0][1] = -0.7f;
             scene.lightDirs[0][2] = 0.5f;
             scene.lightDirs[0][3] = 0.0f;
             scene.lightColors[0][0] = scene.lightColors[0][1] = scene.lightColors[0][2] = 0.9f;
             scene.lightColors[0][3] = 1.0f;
-            // Fill light — softer from front-right
             scene.lightDirs[1][0] = 0.5f;
             scene.lightDirs[1][1] = -0.5f;
             scene.lightDirs[1][2] = 0.3f;
             scene.lightDirs[1][3] = 0.0f;
             scene.lightColors[1][0] = scene.lightColors[1][1] = scene.lightColors[1][2] = 0.4f;
             scene.lightColors[1][3] = 1.0f;
-            // Rim light — from behind for edge definition
             scene.lightDirs[2][0] = 0.0f;
             scene.lightDirs[2][1] = 0.8f;
             scene.lightDirs[2][2] = 0.4f;
@@ -1408,6 +1415,7 @@ void WgpuRnd::WriteSceneUniforms() {
             scene.lightColors[2][3] = 1.0f;
             lightIdx = 3;
         }
+#endif
         // Cap total directional light energy to prevent overexposure.
         // DC3 venues have 30-69 lights all active simultaneously. On Xbox,
         // PropAnims in song.anim control which lights are on during gameplay.
@@ -1645,6 +1653,30 @@ wgpu::BindGroup WgpuRnd::CreateBoneBindGroup(uint32_t bufferOffset, uint32_t buf
     desc.entries = &entry;
 
     return mGpu.Device().CreateBindGroup(&desc);
+}
+
+void WgpuRnd::RenderImGuiOverlay() {
+#ifdef MILO_VIEWER
+    // Only render if ImGui has draw data ready (NewFrame + Render already called)
+    if (!ImGui::GetCurrentContext()) return;
+    ImDrawData* drawData = ImGui::GetDrawData();
+    if (!drawData || drawData->TotalVtxCount == 0) return;
+
+    // Start a simple pass directly to the framebuffer (no MSAA for ImGui — simpler)
+    wgpu::RenderPassColorAttachment colorAtt{};
+    colorAtt.view = mFrameView;
+    colorAtt.loadOp = wgpu::LoadOp::Load; // preserve everything rendered so far
+    colorAtt.storeOp = wgpu::StoreOp::Store;
+
+    wgpu::RenderPassDescriptor rpDesc{};
+    rpDesc.label = "ImGuiOverlayPass";
+    rpDesc.colorAttachmentCount = 1;
+    rpDesc.colorAttachments = &colorAtt;
+
+    wgpu::RenderPassEncoder imguiPass = mEncoder.BeginRenderPass(&rpDesc);
+    ImGui_ImplWGPU_RenderDrawData(drawData, imguiPass.Get());
+    imguiPass.End();
+#endif
 }
 
 void WgpuRnd::MaybeCaptureFrame() {

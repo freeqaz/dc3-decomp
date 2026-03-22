@@ -2,6 +2,7 @@
 
 #include "rndobj/Cam.h"
 #include "math/Vec.h"
+#include "gfx/ImGuiBackend.h"
 #include <GLFW/glfw3.h>
 #include <cmath>
 #include <cstring>
@@ -116,6 +117,8 @@ static void CursorPosCallback(GLFWwindow* window, double xpos, double ypos) {
     gOrbitCam.lastX = xpos;
     gOrbitCam.lastY = ypos;
 
+    if (ImGuiBackend::WantCaptureMouse()) return;
+
     if (gOrbitCam.leftDrag) {
         gOrbitCam.azimuth -= (float)dx * 0.005f;
         gOrbitCam.elevation += (float)dy * 0.005f;
@@ -134,6 +137,8 @@ static void CursorPosCallback(GLFWwindow* window, double xpos, double ypos) {
 }
 
 static void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
+    if (ImGuiBackend::WantCaptureMouse()) return;
+
     if (button == GLFW_MOUSE_BUTTON_LEFT) {
         gOrbitCam.leftDrag = (action == GLFW_PRESS);
         if (action == GLFW_PRESS) {
@@ -149,6 +154,7 @@ static void MouseButtonCallback(GLFWwindow* window, int button, int action, int 
 }
 
 static void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset) {
+    if (ImGuiBackend::WantCaptureMouse()) return;
     gOrbitCam.distance *= (1.0f - (float)yoffset * 0.1f);
     if (gOrbitCam.distance < 0.1f) gOrbitCam.distance = 0.1f;
 }

@@ -110,6 +110,32 @@ else()
     find_package(glfw3 REQUIRED)
 endif()
 
+# Dear ImGui — debug UI overlay for milo-viewer
+include(FetchContent)
+FetchContent_Declare(imgui
+    GIT_REPOSITORY https://github.com/ocornut/imgui.git
+    GIT_TAG        8314fc3e5a10f7c6b670225065fce1dc8cfd396b  # post-v1.91.8, supports Dawn WebGPU API renames
+)
+FetchContent_MakeAvailable(imgui)
+add_library(imgui STATIC
+    ${imgui_SOURCE_DIR}/imgui.cpp
+    ${imgui_SOURCE_DIR}/imgui_draw.cpp
+    ${imgui_SOURCE_DIR}/imgui_tables.cpp
+    ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_wgpu.cpp
+)
+target_include_directories(imgui PUBLIC
+    ${imgui_SOURCE_DIR}
+    ${imgui_SOURCE_DIR}/backends
+)
+if(EMSCRIPTEN)
+    target_compile_definitions(imgui PUBLIC IMGUI_IMPL_WEBGPU_BACKEND_EMSCRIPTEN)
+else()
+    target_link_libraries(imgui PUBLIC glfw dawn::webgpu_dawn)
+    target_compile_definitions(imgui PUBLIC IMGUI_IMPL_WEBGPU_BACKEND_DAWN)
+endif()
+
 # FFmpeg — used for Bink video/audio decoding (replaces RAD Bink SDK)
 option(ENABLE_FFMPEG "Enable FFmpeg for Bink video/audio decoding" ON)
 if(ENABLE_FFMPEG AND NOT EMSCRIPTEN)
@@ -1347,11 +1373,13 @@ add_executable(milo-viewer
     src/viewer/milo_viewer.cpp
     src/viewer/ViewerArgs.cpp
     src/viewer/ViewerCamera.cpp
+    src/viewer/ViewerDebugUI.cpp
     src/char/CharTwistSolver.cpp
     src/viewer/ViewerPoseDump.cpp
     src/viewer/ViewerScene.cpp
     src/viewer/ViewerAnimation.cpp
     src/viewer/ViewerCapture.cpp
+    src/gfx/ImGuiBackend.cpp
     src/gfx/VideoEncoder.cpp
     ${DC3_ENGINE_SOURCES}
     ${DC3_NATIVE_CORE_SOURCES}
@@ -1393,6 +1421,7 @@ target_link_options(milo-viewer PRIVATE
 
 target_link_libraries(milo-viewer PRIVATE
     ${DC3_PLATFORM_LIBS}
+    imgui
     $<$<BOOL:${ENABLE_FFMPEG}>:${FFMPEG_LIBRARIES}>
     $<$<BOOL:${ENABLE_NCNN}>:ncnn>
 )
