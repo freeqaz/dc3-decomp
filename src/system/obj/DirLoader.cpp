@@ -403,12 +403,35 @@ static bool PathsEqualNormalized(const FilePath &a, const FilePath &b) {
     tmpB[sizeof(tmpB) - 1] = '\0';
     FileMakePathBuf(".", tmpA, bufA);
     FileMakePathBuf(".", tmpB, bufB);
-    return strcmp(bufA, bufB) == 0;
+    bool eq = strcmp(bufA, bufB) == 0;
+    // Log matches for director sharing debugging
+    static int sLogCount = 0;
+    if (sLogCount < 5 && (strstr(tmpA, "director") || strstr(tmpB, "director"))) {
+        if (eq) {
+            sLogCount++;
+            fprintf(stderr, "DC3 DirLoader MATCH #%d: '%s' == '%s'\n", sLogCount, tmpA, tmpB);
+        }
+    }
+    return eq;
 }
 #endif
 
 DirLoader *DirLoader::Find(const FilePath &fp) {
     if (!fp.empty()) {
+#ifdef HX_NATIVE
+        static int sFindLog = 0;
+        bool isDirector = strstr(fp.c_str(), "director") != nullptr;
+        if (isDirector && sFindLog < 3) {
+            sFindLog++;
+            const std::list<Loader *> &ldrs2 = TheLoadMgr.Loaders();
+            fprintf(stderr, "DC3 DirLoader::Find('%s') — %d active loaders:\n",
+                    fp.c_str(), (int)ldrs2.size());
+            int i = 0;
+            for (auto it = ldrs2.begin(); it != ldrs2.end() && i < 10; ++it, ++i) {
+                fprintf(stderr, "  [%d] '%s'\n", i, (*it)->LoaderFile().c_str());
+            }
+        }
+#endif
         const std::list<Loader *> &ldrs = TheLoadMgr.Loaders();
         for (std::list<Loader *>::const_iterator it = ldrs.begin(); it != ldrs.end();
              ++it) {
@@ -422,6 +445,11 @@ DirLoader *DirLoader::Find(const FilePath &fp) {
                     return dl;
             }
         }
+#ifdef HX_NATIVE
+        if (isDirector && sFindLog <= 3) {
+            fprintf(stderr, "DC3 DirLoader::Find('%s') — NOT FOUND\n", fp.c_str());
+        }
+#endif
     }
     return nullptr;
 }

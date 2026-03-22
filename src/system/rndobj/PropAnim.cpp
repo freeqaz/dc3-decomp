@@ -417,13 +417,31 @@ RndPropAnim::AddKeys(Hmx::Object *obj, DataArray *prop, PropKeys::AnimKeysType t
     return theKeys;
 }
 
+// Compare two Hmx::Object pointers for identity.
+// On Itanium ABI (native), virtual base pointers for the same object can differ
+// (e.g. HamDirector via Hmx::Object base vs RndPollable base = +0x780).
+// dynamic_cast<void*> returns the most-derived object address on both ABIs.
+static inline bool SameObject(const Hmx::Object *a, const Hmx::Object *b) {
+    if (a == b) return true;
+    if (!a || !b) return false;
+    const void *da = dynamic_cast<const void *>(a);
+    const void *db = dynamic_cast<const void *>(b);
+    static int sLog = 0;
+    if (da != db && sLog < 3) {
+        sLog++;
+        fprintf(stderr, "DC3 SameObject: a=%p da=%p b=%p db=%p class_a='%s' class_b='%s'\n",
+                (const void*)a, da, (const void*)b, db, a->ClassName(), b->ClassName());
+    }
+    return da == db;
+}
+
 std::list<PropKeys *>::iterator RndPropAnim::FindKeys(Hmx::Object *obj, DataArray *prop) {
     FOREACH (it, mPropKeys) {
         PropKeys *cur = *it;
         if (!prop && !cur->Prop()) {
             return it;
         }
-        if (cur->Target() == obj && PathCompare(prop, cur->Prop())) {
+        if (SameObject(cur->Target(), obj) && PathCompare(prop, cur->Prop())) {
             return it;
         }
     }
@@ -434,7 +452,7 @@ PropKeys *RndPropAnim::GetKeys(const Hmx::Object *obj, DataArray *prop) {
     if (prop && obj) {
         FOREACH (it, mPropKeys) {
             PropKeys *cur = *it;
-            if (cur->Target() == obj && PathCompare(prop, cur->Prop()))
+            if (SameObject(cur->Target(), obj) && PathCompare(prop, cur->Prop()))
                 return cur;
         }
     }
@@ -523,7 +541,7 @@ int RndPropAnim::GetNumKeys(Hmx::Object *obj, Symbol sym) {
     for (std::list<PropKeys *>::iterator it = mPropKeys.begin(); it != mPropKeys.end();
          ++it) {
         PropKeys *cur = *it;
-        if (cur->Target() == obj && cur->Prop()->Node(0).Sym(nullptr) == sym) {
+        if (SameObject(cur->Target(), obj) && cur->Prop()->Node(0).Sym(nullptr) == sym) {
             return cur->NumKeys();
         }
     }

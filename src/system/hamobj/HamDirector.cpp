@@ -54,6 +54,8 @@
 #include "os/Timer.h"
 #include "rndobj/Anim.h"
 #include "rndobj/Draw.h"
+#include "rndobj/Mat.h"
+#include "rndobj/Mesh.h"
 #include "rndobj/Overlay.h"
 #include "rndobj/Poll.h"
 #include "rndobj/PostProc.h"
@@ -106,6 +108,12 @@ HamDirector::HamDirector()
     n = this;
     TheHamDirector = this;
     mDirCutKeys.reserve(100);
+#ifdef HX_NATIVE
+    static int sCtorCount = 0;
+    sCtorCount++;
+    fprintf(stderr, "DC3 HamDirector::ctor #%d this=%p TheHamDirector=%p\n",
+            sCtorCount, (void*)this, (void*)TheHamDirector);
+#endif
 }
 
 HamDirector::~HamDirector() {
@@ -566,23 +574,6 @@ void HamDirector::Initialize() {
     }
     delete mPoseFatalities;
     mPoseFatalities = Hmx::Object::New<PoseFatalities>();
-#ifdef HX_NATIVE
-    // Post-merge choreography init. On Xbox this fires from the DTA reset
-    // handler; on native we call it explicitly after the merger is complete.
-    //
-    // Init() populates per-difficulty move parent arrays from the layout.
-    // ResetRemixer() then calls SelectMove() for each player×measure, which
-    // runs AddRoutineMove() → InsertMoveInSong() to write clip/move keyvals
-    // into the routine builder anims. This mirrors the Xbox perform flow
-    // where SetGameplayMode(perform, true) → merge_moves=1 → routine builder
-    // anims are used in SongAnim() and ClipPlayer::PlayNormal().
-    if (TheMoveMgr && TheMoveMgr->mSuperEasyRemixer) {
-        TheMoveMgr->mSuperEasyRemixer->Init();
-        if (mPlayer1RoutineBuilderAnim && mPlayer2RoutineBuilderAnim) {
-            TheMoveMgr->ResetRemixer();
-        }
-    }
-#endif
 }
 
 RndPropAnim *HamDirector::SongAnim(int playerIndex) {
@@ -620,6 +611,52 @@ void HamDirector::VenueEnter(WorldDir *dir) {
         // select_camera fires on the world root (not venue), so venue type
         // is irrelevant for camera management.
         dir->Enter();
+#ifdef HX_NATIVE
+        // Hide Kinect-dependent venue meshes (no camera on native):
+        // TV screens, projectors, reflections, render targets.
+        {
+            int hidden = 0;
+            for (ObjDirItr<RndMesh> mit(dir, true); mit != nullptr; ++mit) {
+                if (!mit->Showing()) continue;
+                const char *meshName = mit->Name();
+                RndMat *mat = mit->Mat();
+                const char *matName = mat ? mat->Name() : "";
+                RndTex *dtex = mat ? mat->GetDiffuseTex() : nullptr;
+                bool hide = strstr(matName, "TVScreen")
+                    || strstr(matName, "projection")
+                    || strstr(meshName, "TVScreen")
+                    || strstr(meshName, "Reflect")
+                    || strstr(meshName, "projection")
+                    || strstr(meshName, "refract")
+                    || (mat && mat->GetBlend() == BaseMaterial::kBlendDest);
+                if (!hide && mat && !dtex
+                    && mat->GetBlend() == BaseMaterial::kBlendSrc) {
+                    const Hmx::Color &c = mat->GetColor();
+                    if (c.red > 0.9f && c.green > 0.9f && c.blue > 0.9f
+                        && c.alpha > 0.5f)
+                        hide = true;
+                }
+                if (hide) {
+                    mit->SetShowing(false);
+                    hidden++;
+                }
+            }
+            for (ObjDirItr<RndMesh> mit2(dir, true); mit2 != nullptr; ++mit2) {
+                if (!mit2->Showing()) continue;
+                RndMat *m2 = mit2->Mat();
+                if (!m2) continue;
+                RndTex *dt = m2->GetDiffuseTex();
+                if (dt && dt->File().empty()) {
+                    mit2->SetShowing(false);
+                    hidden++;
+                }
+            }
+            for (ObjDirItr<RndTexRenderer> trit(dir, true); trit != nullptr; ++trit)
+                trit->SetShowing(false);
+            if (hidden > 0)
+                MILO_LOG("DC3 Native: hidden %d camera/projection/RT meshes\n", hidden);
+        }
+#endif
     }
     mPlayer0Char = dir ? dir->Find<HamCharacter>("player0", true) : nullptr;
     mPlayer1Char = dir ? dir->Find<HamCharacter>("player1", true) : nullptr;
@@ -1067,9 +1104,6 @@ DataNode HamDirector::OnLoadSong(DataArray *a) {
             playerPresent = playerPresent || !outfit.Null();
         }
 
-        fprintf(stderr, "DC3 HamDirector::OnLoadSong() — player[%d]: present=%d crew='%s' outfit='%s' char='%s' provider=%p\n",
-                i, playerPresent, mCrews[i].Str(), outfit.Str(), character.Str(), (void*)hpd->Provider());
-
         // Clear slots for absent players so wardrobe doesn't load stale data.
         if (!playerPresent) {
             mCrews[i] = gNullStr;
@@ -1092,8 +1126,6 @@ DataNode HamDirector::OnLoadSong(DataArray *a) {
         } else {
             mCharacterOutfits[i] = outfit.Null() ? hpd->CharacterOutfit(mCrews[i]) : outfit;
         }
-        fprintf(stderr, "DC3 HamDirector::OnLoadSong() — player[%d] resolved: crew='%s' outfit='%s'\n",
-                i, mCrews[i].Str(), mCharacterOutfits[i].Str());
 #else
         mCharacterOutfits[i] = hpd->CharacterOutfit(mCrews[i]);
 #endif
@@ -2583,8 +2615,13 @@ DataNode HamDirector::OnSelectCamera(DataArray *a) {
         for (int pi = 0; pi < 6; pi++) {
             PropKeys *pk = sa->GetKeys(this, DataArrayPtr(Symbol(propNames[pi])));
             if (pk) {
-                fprintf(stderr, "  '%s': target=%p numKeys=%d type=%d\n",
-                        propNames[pi], (void*)pk->Target(), pk->NumKeys(), pk->KeysType());
+                Hmx::Object *tgt = pk->Target();
+                fprintf(stderr, "  '%s': target=%p class='%s' name='%s' numKeys=%d (this_offset=%ld)\n",
+                        propNames[pi], (void*)tgt,
+                        tgt ? tgt->ClassName() : "null",
+                        tgt ? tgt->Name() : "null",
+                        pk->NumKeys(),
+                        tgt ? ((char*)tgt - (char*)this) : 0);
             } else {
                 fprintf(stderr, "  '%s': NOT FOUND (GetKeys returned null)\n", propNames[pi]);
             }
