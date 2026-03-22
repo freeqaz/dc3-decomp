@@ -5,6 +5,9 @@
 #include "utl/BinStream.h"
 #include "utl/ChunkStream.h"
 #include "utl/WaveFile.h"
+#ifdef HX_NATIVE
+#include <cstdlib>
+#endif
 #ifdef HX_FFMPEG
 #include "platform/XmaSampleDecoder.h"
 #endif
@@ -28,6 +31,7 @@ void SampleData::Dealloc() {
     crc.mCRC = mCRC.mCRC;
 #ifdef HX_NATIVE
     if (!sFree) {
+        free(mData);
         mData = 0;
         mCRC.mCRC = 0;
         return;
@@ -174,7 +178,14 @@ void SampleData::Load(BinStream &bs, const FilePath &fp) {
         if (mCRC.mCRC != 0) {
             TheWavMgr->CreateSample(mCRC, mData, mSizeBytes);
         } else {
+#ifdef HX_NATIVE
+            if (sAlloc)
+                mData = sAlloc(mSizeBytes, __FILE__, 0x6f, "SampleData", 0);
+            else
+                mData = malloc(mSizeBytes);
+#else
             mData = sAlloc(mSizeBytes, __FILE__, 0x6f, "SampleData", 0);
+#endif
         }
         ReadChunks(bs, mData, mSizeBytes, 0x8000);
     }
@@ -194,7 +205,10 @@ void SampleData::Load(BinStream &bs, const FilePath &fp) {
             // Free original XMA data via proper path (handles WavMgr vs sAlloc)
             Dealloc();
             // Allocate decoded PCM with engine allocator (CRC=0 so sFree used on destruction)
-            mData = sAlloc(pcmSize, "SampleData.cpp", 0x6f, "SampleData", 0);
+            if (sAlloc)
+                mData = sAlloc(pcmSize, "SampleData.cpp", 0x6f, "SampleData", 0);
+            else
+                mData = malloc(pcmSize);
             memcpy(mData, pcm, pcmSize);
             free(pcm);
             mSizeBytes = pcmSize;

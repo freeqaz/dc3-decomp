@@ -774,12 +774,16 @@ void HamDirector::SetupRoutineBuilderAnims() {
         if (anim) {
             routineBuilderAnim->Copy(anim, kCopyDeep);
 #ifdef HX_NATIVE
-            // TODO: Retarget PropKeys to this HamDirector.
-            // After Copy, keys' mTarget may point to a different HamDirector
-            // (DirLoader sharing failure for director.milo creates duplicates).
-            // The shot/clip/move keyframes fire on the wrong object, preventing
-            // camera shot cycling. Fix needs careful ObjRef ring handling.
-            // See docs/sessions/convergence/ for full analysis.
+            // After Copy, PropKeys still target the source HamDirector.
+            // Retarget any pointing to a different HamDirector so camera
+            // shots and visibility commands fire on this director.
+            for (auto it = routineBuilderAnim->mPropKeys.begin();
+                 it != routineBuilderAnim->mPropKeys.end(); ++it) {
+                Hmx::Object *t = (*it)->Target();
+                if (t && t != this && dynamic_cast<HamDirector *>(t)) {
+                    (*it)->SetTarget(this);
+                }
+            }
 #endif
             Symbol syms[3] = { "clip", "move", "practice" };
             for (int i = 0; i < 3; i++) {

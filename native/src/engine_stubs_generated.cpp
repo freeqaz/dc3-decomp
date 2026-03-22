@@ -170,7 +170,7 @@ void* TheMQSongSortMgr = 0;
 // TheNgRnd: removed - provided by Rnd_Stub.cpp
 // TheRenderState: removed - provided by RenderState_Native.cpp
 // TheRnd: removed - provided by Rnd_Stub.cpp
-void* TheServer = 0;
+// TheServer: removed - provided by DingoSvr_Native.cpp
 // TheShaderMgr: removed - provided by Rnd_Stub.cpp
 void* TheSkeletonIdentifier = 0;
 void* TheSkeletonViz = 0;

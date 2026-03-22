@@ -996,6 +996,7 @@ set(DC3_NATIVE_CORE_SOURCES
     src/telemetry/GameplayTelemetry.cpp
     src/platform/Memory_Native.cpp
     src/platform/PlatformMgr_Native.cpp
+    src/platform/DingoSvr_Native.cpp
     src/platform/System_Native.cpp
     src/platform/File_Native.cpp
     src/platform/AsyncFile_Native.cpp
@@ -1112,6 +1113,7 @@ set(DC3_WEB_CORE_SOURCES
     src/xdk_shims.cpp
     src/platform/Memory_Native.cpp
     src/platform/PlatformMgr_Native.cpp
+    src/platform/DingoSvr_Native.cpp
     src/platform/System_Native.cpp
     src/platform/File_Web.cpp
     src/platform/AsyncFile_Native.cpp

@@ -44,6 +44,36 @@ static unsigned int GetWebKeyButtons() {
     return (unsigned int)EM_ASM_INT({ return window._dc3Keys || 0; });
 }
 
+// Poll the Gamepad API — returns bitmask matching JoypadButton enum.
+// navigator.getGamepads() returns a snapshot; we read pad 0.
+static unsigned int GetWebGamepadButtons() {
+    return (unsigned int)EM_ASM_INT({
+        var gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+        var gp = gamepads[0];
+        if (!gp || !gp.connected) return 0;
+        var b = 0;
+        var btn = gp.buttons;
+        // Standard gamepad mapping (same as GLFW layout)
+        if (btn[0] && btn[0].pressed)  b |= (1 << 6);  // A -> kPad_X
+        if (btn[1] && btn[1].pressed)  b |= (1 << 5);  // B -> kPad_Circle
+        if (btn[2] && btn[2].pressed)  b |= (1 << 7);  // X -> kPad_Square
+        if (btn[3] && btn[3].pressed)  b |= (1 << 4);  // Y -> kPad_Tri
+        if (btn[4] && btn[4].pressed)  b |= (1 << 2);  // LB -> kPad_L1
+        if (btn[5] && btn[5].pressed)  b |= (1 << 3);  // RB -> kPad_R1
+        if (btn[6] && btn[6].value > 0.3)  b |= (1 << 0);  // LT -> kPad_L2
+        if (btn[7] && btn[7].value > 0.3)  b |= (1 << 1);  // RT -> kPad_R2
+        if (btn[8] && btn[8].pressed)  b |= (1 << 8);  // Back -> kPad_Select
+        if (btn[9] && btn[9].pressed)  b |= (1 << 11); // Start -> kPad_Start
+        if (btn[10] && btn[10].pressed) b |= (1 << 9);  // L3 -> kPad_L3
+        if (btn[11] && btn[11].pressed) b |= (1 << 10); // R3 -> kPad_R3
+        if (btn[12] && btn[12].pressed) b |= (1 << 12); // DUp -> kPad_DUp
+        if (btn[13] && btn[13].pressed) b |= (1 << 14); // DDown -> kPad_DDown
+        if (btn[14] && btn[14].pressed) b |= (1 << 15); // DLeft -> kPad_DLeft
+        if (btn[15] && btn[15].pressed) b |= (1 << 13); // DRight -> kPad_DRight
+        return b;
+    });
+}
+
 static void InitWebInput() {
     if (sWebInputInitialized) return;
     sWebInputInitialized = true;
@@ -359,8 +389,8 @@ void JoypadPoll() {
 
 #ifdef __EMSCRIPTEN__
         if (pad == 0) {
-            // --- Web: keyboard mapped to joypad buttons via JS state ---
-            newButtons = GetWebKeyButtons();
+            // --- Web: keyboard + gamepad buttons (OR'd together) ---
+            newButtons = GetWebKeyButtons() | GetWebGamepadButtons();
         }
 #else
         if (gNativeWindow) {
