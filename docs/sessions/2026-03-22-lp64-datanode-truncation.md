@@ -178,52 +178,38 @@ Note: The ChooseModeProvider/PlaylistSongProvider changes are unconditional (no 
 ```
 Any future code that uses `(int)someSymbol` in native builds gets a compile-time deprecation warning. Current native build has zero warnings — all truncation sites are eliminated.
 
-## Song List Expansion Investigation
+## Song List Expansion — RESOLVED
 
-### Status: DTA flow executes correctly, list rebuild doesn't take effect
+### Status: Working correctly. No bug — test script was confirming without navigating.
 
-Full trace confirmed the entire message chain works on native:
+Full investigation traced the entire path and confirmed everything works:
 
-1. **nav_select fires** → reaches `song_select_panel` via UIManager → mSink (screen) → FocusPanel() chain
-2. **DTA handler executes** → `{print}` fires, `{switch $component (right_hand.hnl ...)}` matches, `{song_offer_provider is_data_header $index}` and `{$this handle_select_header $index}` run
-3. **nav_select_done fires** → HamNavList::Poll detects kRibbonSelect mode settled, sends nav_select_done to TheUI and TheHamProvider
-4. **uncollapse_headers executes** → calls `{song_offer_provider on_select_done $index}` which triggers `SongHeaderNode::OnSelectDone()` → `BuildItemList()`
+1. **nav_select** → DTA handler on `song_select_panel` executes (dispatched via UIManager → mSink → HamScreen → UIScreen → FocusPanel)
+2. **Header mode toggling** → `SongHeaderNode::OnSelect()` correctly toggles `IsInHeaderMode()`, `EnteringHeaderMode()`, `ExitingHeaderMode()`
+3. **nav_select_done** → fires after animation settles, triggers `uncollapse_headers` DTA function
+4. **BuildItemList()** → correctly rebuilds: 55 items (normal) ↔ 9 items (header mode)
+5. **RealRefresh()** → fires on HamNavList, `numShowing` updates to match new item count
 
-Despite the full DTA flow executing, the list doesn't visually update. The issue is downstream of DTA — either:
-- `SongHeaderNode` mode flags aren't toggling correctly (C++ logic)
-- `BuildItemList()` rebuilds but the HamNavList doesn't refresh its display
-- The `{right_hand.hnl refresh}` DTA call after uncollapse_headers doesn't trigger a visual update
+The original symptom ("list doesn't expand") was because the test script confirmed on the same item repeatedly without navigating. Confirming on a tier header COLLAPSES to header-only view (correct behavior). Navigating DOWN after collapse moves between headers. Confirming on a header again EXPANDS. To reach a song, navigate to a song entry after expanding, then confirm.
 
-### Key debugging finding: DTA `{print}` doesn't go to stderr
+### Key debugging findings
 
-DTA `{print}` outputs via `TheDebug` (`Debug::Print`), which writes to `mLog` (file) and `HolmesClient` (network), NOT stderr. To see DTA print output on native, temporarily add `fputs(msg, stderr)` to `Debug::Print`.
+- **DTA `{print}` doesn't go to stderr**: outputs via `Debug::Print` → `mLog` (file) + `HolmesClient` (network). Temporarily add `fputs(msg, stderr)` to see DTA print output.
+- **UIManager mSink routing**: On native, `mSink` is set to the current screen on every transition (line 672 of UI.cpp). Messages route through mSink first, which IS the screen, so the full UIScreen → FocusPanel → panel chain executes.
+- **NavListSort::NumData() vs GetDataCount()**: `NumData()` returns `mShortcutNodes.size()` (shortcut/header count, constant). `GetDataCount()` returns `mList.size()` (actual flat list items, varies with header mode). Use `GetDataCount()` for the real item count.
 
-### Message dispatch path (confirmed via tracing)
-
-```
-HamNavList::Select()
-  → TheUI->Handle(navSelectMsg)
-    → UIManager: HANDLE_MEMBER_PTR(mSink)  [mSink = current screen on native]
-      → HamScreen::Handle → OnEventMsgCommon (overlay=null, passes through)
-        → UIScreen::Handle
-          → HANDLE_SUPERCLASS(Hmx::Object)  [screen typeDef: no nav_select]
-          → HANDLE_MEMBER_PTR(FocusPanel())  [focus = song_select_panel ✓]
-            → SongSelectPanel → HamPanel → UIPanel
-              → Hmx::Object::Handle
-                → HANDLE_ARRAY(mTypeDef)  [finds nav_select handler ✓]
-                  → ExecuteScript runs DTA handler ✓
-```
-
-### Next steps for song list expansion
-- Add logging to `SongHeaderNode::OnSelect()` / `OnSelectDone()` to verify mode flag transitions
-- Check if `BuildItemList()` produces a different item count after header mode change
-- Verify `{right_hand.hnl refresh}` triggers `HamNavList::RealRefresh()` and the list widget rebuilds
-
-## Test Command
+## Test Commands
 
 ```bash
+# Boot to song_select
 MILO_HEADLESS=1 MILO_NORENDER=1 MILO_FATAL_FAILS=0 MILO_MAX_FRAMES=3000 \
   MILO_INPUT_SCRIPT=scripts/dc3-input-flows/to-song-select.txt \
   DC3_DATA=orig-assets timeout 120 native/build/dc3-native 2>&1 | \
   grep -E "DC3 (UI|Input|HamNavList)|unhandled msg"
+
+# Scroll test (navigates through song list)
+MILO_HEADLESS=1 MILO_NORENDER=1 MILO_FATAL_FAILS=0 MILO_MAX_FRAMES=3000 \
+  MILO_INPUT_SCRIPT=scripts/dc3-input-flows/song-scroll-test.txt \
+  DC3_DATA=orig-assets timeout 120 native/build/dc3-native 2>&1 | \
+  grep -E "DC3 (UI|Input|HamNavList)"
 ```

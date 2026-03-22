@@ -1013,9 +1013,9 @@ void MetaPerformer::SetupCharacters() {
     Symbol s38;
     Symbol s40;
     Symbol s3c;
-    Symbol s2c;
     Symbol s34;
     Symbol s30;
+    Symbol s2c;
     int songID = TheHamSongMgr.GetSongIDFromShortName(song);
     const HamSongMetadata *pSongData = TheHamSongMgr.Data(songID);
     MILO_ASSERT(pSongData, 0x68B);
@@ -1026,9 +1026,9 @@ void MetaPerformer::SetupCharacters() {
     p1->SetCharacter(s40);
     p1->SetOutfit(s3c);
     p1->SetCrew(s38);
-    p2->SetCharacter(s2c);
-    p2->SetOutfit(s34);
-    p2->SetCrew(s30);
+    p2->SetCharacter(s34);
+    p2->SetOutfit(s30);
+    p2->SetCrew(s2c);
 }
 
 void MetaPerformer::OnGameInit() {

@@ -1085,50 +1085,7 @@ DataNode HamDirector::OnLoadSong(DataArray *a) {
         HamPlayerData *hpd = TheGameData->Player(i);
         MILO_ASSERT(hpd, 0xC21);
         mCrews[i] = hpd->Crew();
-#ifdef HX_NATIVE
-        static Symbol player_present("player_present");
-        Symbol outfit = hpd->Outfit();
-        Symbol character = hpd->Char();
-        bool playerPresent = false;
-        if (hpd->Provider()) {
-            const DataNode *present = hpd->Provider()->Property(player_present, true);
-            playerPresent = present && present->Int() != 0;
-        }
-
-        // On native, player_present is never set (Xbox uses Kinect body detection).
-        // Player 0 is always the active performer. Player 1 is only present if
-        // they have a real outfit (not stale crew data in the char slot).
-        if (i == 0) {
-            playerPresent = true;
-        } else {
-            playerPresent = playerPresent || !outfit.Null();
-        }
-
-        // Clear slots for absent players so wardrobe doesn't load stale data.
-        if (!playerPresent) {
-            mCrews[i] = gNullStr;
-            mCharacterOutfits[i] = gNullStr;
-            continue;
-        }
-
-        // Native single-player bring-up can skip parts of the multiuser DTA flow,
-        // leaving only the character token populated. Reconstruct the derived
-        // crew/outfit pair here so wardrobe loading still sees the main dancer.
-        if (mCrews[i].Null() && !character.Null()) {
-            mCrews[i] = GetCrewForCharacter(character, false);
-        }
-        if (outfit.Null() && !character.Null()) {
-            outfit = GetCharacterOutfit(character, 0, false);
-        }
-
-        if (mCrews[i].Null() && outfit.Null()) {
-            mCharacterOutfits[i] = gNullStr;
-        } else {
-            mCharacterOutfits[i] = outfit.Null() ? hpd->CharacterOutfit(mCrews[i]) : outfit;
-        }
-#else
         mCharacterOutfits[i] = hpd->CharacterOutfit(mCrews[i]);
-#endif
     }
     int i3 = a->Int(3);
     bool i4 = a->Int(4);

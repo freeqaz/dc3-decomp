@@ -402,7 +402,19 @@ void Hmx::Object::ReplaceRefsFrom(Hmx::Object *from, Hmx::Object *to) {
     ObjRef other;
     other.Clear();
     FOREACH (it, mRefs) {
+#ifdef HX_NATIVE
+        // Virtual base offsets can make RefOwner() != from even for the same
+        // object (Itanium ABI vbase adjustment). Use dynamic_cast<void*> to
+        // compare most-derived addresses.
+        bool match = (it->RefOwner() == from);
+        if (!match && it->RefOwner() && from) {
+            match = dynamic_cast<const void *>(it->RefOwner())
+                 == dynamic_cast<const void *>(from);
+        }
+        if (match) {
+#else
         if (it->RefOwner() == from) {
+#endif
             it->Release(&other);
             other.AddRef(it);
         }

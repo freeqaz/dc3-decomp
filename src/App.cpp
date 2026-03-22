@@ -190,6 +190,7 @@ public:
 #include "meta_ham/ContextChecker.h"
 #include "meta_ham/HamSongMgr.h"
 #include "meta_ham/MetaPanel.h"
+#include "meta_ham/ProfileMgr.h"
 #include "meta_ham/UIEventMgr.h"
 #include "meta_ham/MetagameRank.h"
 #include "meta_ham/Leaderboards.h"
@@ -1107,6 +1108,21 @@ void App::RunWithoutDebugging() {
                             if (p) {
                                 p->SetDifficulty(diff);
                                 if (!autoplaySym.Null()) p->SetAutoplay(autoplaySym);
+                            }
+                        }
+                        // Populate default characters from song metadata.
+                        // On Xbox, the multiuser panel's character selection
+                        // DTA handlers call SetCharacter/SetCrew/SetOutfit.
+                        // We skip multiuser, so derive characters directly
+                        // from the song's default outfits.
+                        {
+                            const HamSongMetadata *meta2 = TheHamSongMgr.Data(
+                                TheHamSongMgr.GetSongIDFromShortName(Symbol(songName)));
+                            if (meta2) {
+                                Symbol primaryOutfit = meta2->Outfit();
+                                Symbol altOutfit = TheProfileMgr.GetAlternateOutfit(primaryOutfit);
+                                TheGameData->Player(0)->SetCharacterOutfit(primaryOutfit);
+                                TheGameData->Player(1)->SetCharacterOutfit(altOutfit);
                             }
                         }
                         MILO_LOG("DC3 Native: game data initialized — song='%s' venue='%s'\n", songName, venueName);

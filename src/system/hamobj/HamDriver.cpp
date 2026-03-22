@@ -62,6 +62,21 @@ void HamDriver::PreLoad(BinStream &bs) {
 void HamDriver::PostLoad(BinStream &) {}
 
 void HamDriver::Poll() {
+#ifdef HX_NATIVE
+    // Bootstrap: Layer::mWeight is uninitialized in the constructor.
+    // On Xbox, whatever garbage value sits in memory serves as a non-zero
+    // bootstrap that lets the first Eval() compute the real mWeight.
+    // On native, zero-initialized heap memory keeps mWeight at 0, and the
+    // guard below prevents Eval() from ever running.  Force one evaluation
+    // when layers exist but mWeight hasn't been bootstrapped yet.
+    if (mBones && mLayers.mWeight <= 0.0f && !mLayers.mLayers.empty()) {
+        static int sBootCount = 0;
+        if (sBootCount++ < 4)
+            MILO_LOG("HamDriver::Poll bootstrap — %s: %zu layers, beat=%.2f\n",
+                     PathName(this), mLayers.mLayers.size(), TheTaskMgr.Beat());
+        mLayers.Eval(1.0f);
+    }
+#endif
     if (mBones && mLayers.mWeight > 0.0f) {
         mLayers.Eval(mLayers.mWeight);
         mBones->ScaleDown(*mBones, 1.0f - mLayers.mWeight);

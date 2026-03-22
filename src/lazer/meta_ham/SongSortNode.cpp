@@ -109,6 +109,9 @@ Symbol SongHeaderNode::OnSelectDone() {
     }
     TheSongSortMgr->OnEnter();
     auto curSort = TheSongSortMgr->GetCurrentSort();
+#ifdef HX_NATIVE
+    int oldSize = curSort->NumData();
+#endif
     curSort->BuildItemList();
     return gNullStr;
 }
