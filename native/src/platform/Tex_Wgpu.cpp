@@ -44,7 +44,13 @@ static wgpu::TextureFormat ChooseRenderTargetFormat(RndTex* tex) {
 
 static GpuTexData* EnsureRenderTargetData(RndTex* tex) {
     if (!tex || !gWgpuRnd || !gWgpuRnd->Gpu().IsReady()) return nullptr;
-    if (!tex->IsRenderTarget() || tex->Width() <= 0 || tex->Height() <= 0) return nullptr;
+    if (!tex->IsRenderTarget()) return nullptr;
+
+    // Render target textures may have 0 dimensions in .milo files when their
+    // actual size is set at runtime via DTA scripts (set_bitmap/set_rendered).
+    // On native, those scripts may not run, so use a reasonable default.
+    int texW = tex->Width() > 0 ? tex->Width() : 256;
+    int texH = tex->Height() > 0 ? tex->Height() : 256;
 
     GpuTexData& data = sTexGpuData[tex];
     // If the existing texture was uploaded as BC compressed (from PresyncBitmap),
@@ -53,13 +59,13 @@ static GpuTexData* EnsureRenderTargetData(RndTex* tex) {
     bool needDepth = NeedsDepthTarget(tex) && (!data.depthTexture || !data.depthView);
     if (needColor) {
         data.texture = TextureConvert::CreateRenderTarget(
-            gWgpuRnd->Gpu(), tex->Width(), tex->Height(), ChooseRenderTargetFormat(tex)
+            gWgpuRnd->Gpu(), texW, texH, ChooseRenderTargetFormat(tex)
         );
         data.view = data.texture.CreateView();
 
         // Clear to black — WebGPU spec allows undefined initial contents,
         // which browsers often display as purple/magenta.
-        int w = tex->Width(), h = tex->Height();
+        int w = texW, h = texH;
         size_t sz = (size_t)w * h * 4;
         std::vector<uint8_t> black(sz, 0);
         wgpu::TexelCopyTextureInfo dest{};
@@ -71,7 +77,7 @@ static GpuTexData* EnsureRenderTargetData(RndTex* tex) {
     }
     if (needDepth) {
         data.depthTexture = TextureConvert::CreateDepthTarget(
-            gWgpuRnd->Gpu(), tex->Width(), tex->Height()
+            gWgpuRnd->Gpu(), texW, texH
         );
         data.depthView = data.depthTexture.CreateView();
     } else if (!NeedsDepthTarget(tex)) {
