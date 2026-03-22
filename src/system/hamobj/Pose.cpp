@@ -100,9 +100,9 @@ float BoneAngleRangePoseElement::Score(const Skeleton &skeleton) const {
     MILO_ASSERT(1.0f - 0.001f <= Length(angle) && Length(angle) <= 1.0f + 0.001f, 0x21);
     float dot = boneDir.x * angle.x + boneDir.y * angle.y + boneDir.z * angle.z;
     float acosAngle = acosf(dot);
-    if (acosAngle > unk1c)
-        return 0.0f;
-    return 1.0f;
+    if (acosAngle <= unk1c)
+        return 1.0f;
+    return 0.0f;
 }
 
 BoneAngleRangePoseElement::BoneAngleRangePoseElement(
