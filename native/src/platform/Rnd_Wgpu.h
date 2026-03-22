@@ -277,8 +277,12 @@ public:
     void CreateDepthTexture(int w, int h);
     void CreateDefaultTextures();
     void WriteSceneUniforms();
+    // Invalidate cached scene uniforms — forces re-upload next frame.
+    // Call when light properties are modified externally (e.g. debug UI).
+    void InvalidateSceneUniforms() { mLastSceneEnv = nullptr; }
     void MaybeCaptureFrame();
     void MaybeEncodeVideoFrame();
+    void RenderImGuiOverlay();
     void NativeVenueInit();
 
     GpuDevice mGpu;

@@ -369,7 +369,7 @@ fn computeStandardLight(
     let lambert = max(dot(surfaceNormal, lightDir), 0.0);
     lighting.diffuse = lightColor * lambert;
 
-    if (material.specularPower > 0.0) {
+    if (material.specularPower > 0.0 && lambert > 0.0) {
         let halfVector = normalize(lightDir + viewDir);
         if (isEnabled(material.hasSpecularMap)) {
             // Has specular map: texture modulates power with min 0.1 floor
@@ -382,6 +382,11 @@ fn computeStandardLight(
             lighting.specular = material.specularColor.rgb * lightColor * specularStrength;
         }
     }
+    else
+    {
+        lighting.specular = vec3f(0,0,0);
+    }
+
 
     return lighting;
 }
