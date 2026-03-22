@@ -1,5 +1,6 @@
 #include "char/ClipGraphGen.h"
 #include "char/CharClip.h"
+#include "math/Utl.h"
 #include "obj/Data.h"
 #include "obj/Object.h"
 
@@ -55,12 +56,11 @@ DataNode ClipGraphGenerator::OnGenerateTransitions(DataArray *da) {
     da->FindData("end_dist", end_dist, false);
     DataArray *restrictArr = da->FindArray("restrict", false);
 
-    int aflag = mClipA->PlayFlags() >> 12 & 15;
     int bflag = mClipB->PlayFlags() >> 12 & 15;
-    if (aflag <= bflag)
+    int aflag = mClipA->PlayFlags() >> 12 & 15;
+    if (bflag >= aflag)
         aflag = bflag;
-    if (beat_align < (float)aflag)
-        beat_align = aflag;
+    beat_align = Max(beat_align, (float)aflag);
 
     DataArray *boneweightarr = mTypeData->FindArray("transition_bone_weights", false);
     mDmap = new ClipDistMap(mClipA, mClipB, beat_align, blend_width, 3, boneweightarr);
