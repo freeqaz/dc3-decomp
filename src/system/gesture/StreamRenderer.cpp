@@ -300,11 +300,14 @@ namespace {
     RndMat *SetUpWorkingMat() { return TheShaderMgr.GetWork(); }
 
     RndTex *SetPaletteTexture(RndTex *tex, StreamDisplay display) {
-        if (display == kStreamPlayerDepthVis || display == kStreamPlayerDepthShell
-            || display == kStreamPlayerDepthShell2) {
+        if (tex != nullptr) {
             return tex;
         }
-        return nullptr;
+        if (display != kStreamPlayerDepthShell && display != kStreamPlayerDepthShell2
+            && display != kStreamPlayerGreenscreen && display != kStreamPlayerDepthGreenscreen) {
+            return TheRnd.GetDefaultTex(Rnd::kDefaultTex_White);
+        }
+        return TheRnd.GetDefaultTex(Rnd::kDefaultTex_WhiteTransparent);
     }
 }
 

@@ -191,7 +191,7 @@ void CharIKHead::UpdatePoints(bool b) {
         mUpdatePoints = false;
         mPoints.clear();
         int gencnt = GenerationCount(mSpine, mHead);
-        if (gencnt > 0) {
+        if (gencnt != 0) {
             mPoints.resize(gencnt + 1);
             float f1 = 0.0f;
             int i;

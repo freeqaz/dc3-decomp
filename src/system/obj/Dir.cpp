@@ -53,12 +53,29 @@ ObjectDir::~ObjectDir() {
 #endif
     mSubDirs.clear();
     delete mLoader;
+#ifdef HX_NATIVE
+    // Always run Phase 0 (NullifyAllRefs) on native — even when async
+    // unload is active. Without it, ObjPtrs in persistent objects
+    // (TaskMgr, globals) are never nullified → stale pointer crashes.
+    // NullifyObj avoids Replace callbacks (and delete-this in Tasks).
+    if (TheLoadMgr.AsyncUnload()) {
+        for (ObjDirItr<Hmx::Object> it(this, false); it != nullptr; ++it) {
+            if (it != this && ((Hmx::Object *)it)->IsRefAlive())
+                ((Hmx::Object *)it)->NullifyAllRefs();
+        }
+        new DirUnloader(this);
+    } else {
+        DeleteObjects();
+        DeleteSubDirs();
+    }
+#else
     if (TheLoadMgr.AsyncUnload()) {
         new DirUnloader(this);
     } else {
         DeleteObjects();
         DeleteSubDirs();
     }
+#endif
     if (!IsProxy()) {
         SetName(nullptr, nullptr);
     }
@@ -701,10 +718,21 @@ bool ObjectDir::sInMergeDirs = false;
 
 void ObjectDir::DeleteObjects() {
 #ifdef HX_NATIVE
-    // Snapshot all objects, then destroy all, then defer-free all.
-    // ~Object() skips ReplaceRefs during cascade, so ring operations are
-    // suppressed. Classes with ownership loops (e.g. FileMerger's
+    // Three-phase deletion: nullify refs, destroy, defer-free.
+    //
+    // Phase 0 (nullify) runs ReplaceRefs(nullptr) on every object BEFORE any
+    // destructors fire. At this point all memory is still valid, so ring
+    // traversal is safe. This prevents surviving ObjPtrs (TaskMgr, globals)
+    // from holding stale pointers after the cascade completes.
+    //
+    // Phase 1 (destroy) calls virtual destructors. ~Object() skips
+    // ReplaceRefs during cascade (refs already nullified in Phase 0).
+    // Classes with ownership loops (e.g. FileMerger's
     // `while(!empty()) delete front;`) must guard with InDeleteObjects().
+    //
+    // Phase 2 (defer-free) keeps memory valid until the outermost
+    // ~ObjectDir completes, so sibling destructors can safely read
+    // neighbor memory during Phase 1.
     //
     // Can't use `delete obj` because virtual inheritance makes
     // Hmx::Object* point to a subobject offset within the malloc'd block,
@@ -714,12 +742,33 @@ void ObjectDir::DeleteObjects() {
         if (it != this)
             todo.push_back({dynamic_cast<void *>((Hmx::Object *)it), it});
     }
-    // Phase 1: destroy all (memory stays valid for sibling destructors)
+    // Phase 0: nullify ref rings via NullifyObj while memory is valid.
+    // NullifyObj is purely mechanical (no Replace callbacks) — avoids
+    // delete-this in MessageTask/ScriptTask/PropertyTask/DirLoader.
+    // NullifyAllRefs uses SnapshotRing to safely handle dead ObjRefs
+    // left in rings by ~ObjRefConcrete's cascade skip (freed ObjPtrVec
+    // buffers from mSubDirs.clear() cascade).
+    // Objects destroyed by mSubDirs.clear() may be in the todo list
+    // (RemoveFromDir skipped when mDir == sDeleting). Their rings are
+    // self-looped from their own Phase 0, so NullifyAllRefs is a no-op.
     for (auto &[block, obj] : todo)
-        obj->~Object();
-    // Phase 2: defer frees until outermost ~ObjectDir completes
-    for (auto &[block, obj] : todo)
+        obj->NullifyAllRefs();
+    // Phase 1: destroy all (memory stays valid for sibling destructors).
+    // Skip objects already destroyed by mSubDirs.clear() cascade.
+    for (auto &[block, obj] : todo) {
+        if (obj->IsRefAlive())
+            obj->~Object();
+        else
+            obj = nullptr; // mark: already handled by nested cascade
+    }
+    // Phase 2: defer frees until outermost ~ObjectDir completes.
+    // Skip objects already deferred by nested cascade.
+    for (auto &[block, obj] : todo) {
+        if (!obj)
+            continue;
+        DirPtrRefCounts().erase((const void *)obj);
         DeferFree(block);
+    }
 #else
     for (ObjDirItr<Hmx::Object> it(this, false); it != nullptr; ++it) {
         if (it != this) {

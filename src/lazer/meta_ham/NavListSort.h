@@ -56,8 +56,7 @@ protected:
 
 struct CompareHeaders {
     bool operator()(NavListSortNode *left, NavListSortNode *right) const {
-        return left->GetType() != right->GetType(); // probably not right but whatever for
-                                                    // now
+        return left->Compare(right, kNodeHeader) < 0;
     }
 };
 

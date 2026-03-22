@@ -98,7 +98,7 @@ public:
                     if (!ObjectDir::InDeleteObjects())
 #endif
                     mObject->Release(this);
-                    if (!mObject->HasDirPtrs()) {
+                    if (mObject && !mObject->HasDirPtrs()) {
 #ifdef HX_NATIVE
                             // Virtual inheritance makes Hmx::Object* point to
                             // a subobject offset within the malloc'd block.

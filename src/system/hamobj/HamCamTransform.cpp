@@ -25,7 +25,7 @@ HamCamTransform::~HamCamTransform() {
 void HamCamTransform::Enter() { Setup(false); }
 
 void HamCamTransform::ClearOldCrowds() {
-    for (int i = 0; i < mAreas.size(); i++) {
+    for (int i = 0; i != mAreas.size(); i++) {
         TransformArea &area = mAreas[i];
         if (area.mArea) {
             for (ObjPtrList<HamCamShot>::iterator sit = area.mCamshots.begin();

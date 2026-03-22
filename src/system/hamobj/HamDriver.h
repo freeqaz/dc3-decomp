@@ -86,6 +86,8 @@ public:
     LayerArray &Layers() { return mLayers; }
     void SetClipWeightMap();
 
+    friend class HamCharacter;
+
 protected:
     HamDriver();
 

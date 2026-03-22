@@ -627,7 +627,87 @@ DataNode HamCharacter::OnCamTeleport(DataArray *a) {
     return 0;
 }
 
-ObjectDir *HamCharacter::GetNeutralSkeleton() { return mNeutralSkelDir; }
+ObjectDir *HamCharacter::GetNeutralSkeleton() {
+#ifdef HX_NATIVE
+    // Skeleton blending requires mSkeletonBones (set via skeleton_path config).
+    // If not configured, skip computation and return the dir/self fallback.
+    if (!mSkeletonBones) {
+        return mNeutralSkelDir ? mNeutralSkelDir : this;
+    }
+#endif
+    int songAnim = SongAnimation();
+#ifdef HX_NATIVE
+    // On native, compute bones once up front. The goto zero_and_scale below
+    // jumps past the else-branch's local declaration, which is UB on Clang
+    // (bones is uninitialized). PPC/MSVC keeps the earlier local in the same
+    // register so it "works" there, but we must hoist the cast for native.
+    CharBones *bones = static_cast<CharBones *>(mSkeletonBones);
+#endif
+    if (songAnim != -1) {
+        HamDriver *hamDriver = Find<HamDriver>("song.hdrv", false);
+        if (hamDriver == nullptr || hamDriver->FirstClip() == nullptr) {
+            CharClip *clip = Driver()->FirstPlayingClip();
+#ifndef HX_NATIVE
+            CharBones *bones = reinterpret_cast<CharBones *>((char *)mSkeletonBones + 0x10);
+#endif
+            if (clip == nullptr) {
+                goto zero_and_scale;
+            }
+            bones->Zero();
+            Driver()->SetClipWeightMap();
+            std::map<CharClip *, float> clipMap(Driver()->mClipWeightMap);
+            float totalWeight = 0.0f;
+            for (std::map<CharClip *, float>::iterator it = clipMap.begin();
+                 it != clipMap.end(); ++it) {
+                CharClip *clipEntry = it->first;
+                float weight = it->second;
+                if (clipEntry != nullptr && weight > totalWeight) {
+                    int skelIdx = clipEntry->Property("clip_skeleton_index", false)->Int(nullptr);
+                    CharBones *skBones = mSkeletonBones ? static_cast<CharBones *>(mSkeletonBones) : nullptr;
+                    sSkeletonClips[skelIdx]->ScaleAdd(*skBones, weight, totalWeight, totalWeight);
+                }
+            }
+            mSkeletonBones->Poll();
+        } else {
+            hamDriver->SetClipWeightMap();
+            std::map<CharClip *, float> clipMap(hamDriver->mClipTimingMap);
+            if (clipMap.size() == 0) {
+                clipMap.clear();
+                return this;
+            }
+#ifndef HX_NATIVE
+            CharBones *bones = static_cast<CharBones *>(mSkeletonBones);
+#endif
+            bones->Zero();
+            for (std::map<CharClip *, float>::iterator it = clipMap.begin();
+                 it != clipMap.end(); ++it) {
+                if (it->first != nullptr) {
+                    ApplyBlendedSkeletons(hamDriver, it->first, it->second);
+                }
+            }
+            mSkeletonBones->Poll();
+        }
+    } else {
+        CharClip *clip = Driver()->FirstClip();
+        if (clip == nullptr) {
+            return this;
+        }
+        if (clip->Flags() & 1) {
+            return this;
+        }
+#ifndef HX_NATIVE
+        CharBones *bones = reinterpret_cast<CharBones *>((char *)mSkeletonBones + 0x10);
+#endif
+zero_and_scale:
+        bones->Zero();
+        {
+            CharBones *skBones = mSkeletonBones ? static_cast<CharBones *>(mSkeletonBones) : nullptr;
+            sSkeletonClips[mGender == kHamFemale ? 1 : 0]->ScaleAdd(*skBones, 1.0f, 0.0f, 0.0f);
+        }
+        mSkeletonBones->Poll();
+    }
+    return mNeutralSkelDir;
+}
 
 void HamCharacter::SetFaceOverrideClip(Symbol clipName, bool notify) {
     CharLipSyncDriver *driver = Find<CharLipSyncDriver>("face.lipdrv", false);

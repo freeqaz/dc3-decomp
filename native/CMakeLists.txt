@@ -1111,6 +1111,7 @@ if(EMSCRIPTEN)
 
 # Web-specific platform sources (replace native platform files)
 set(DC3_WEB_CORE_SOURCES
+    src/xdk_shims.cpp
     src/platform/Memory_Native.cpp
     src/platform/PlatformMgr_Native.cpp
     src/platform/System_Native.cpp
@@ -1197,6 +1198,7 @@ list(REMOVE_ITEM DC3_WEB_ENGINE_SOURCES
 
 add_executable(dc3-web
     src/main_web.cpp
+    src/platform/WebSvcMgr_Stub.cpp
     ${DC3_WEB_ENGINE_SOURCES}
     ${DC3_WEB_CORE_SOURCES}
     ${DC3_WEB_GFX_SOURCES}

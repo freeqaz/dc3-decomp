@@ -105,12 +105,10 @@ Hmx::Object::~Object() {
     Hmx::Object *old = sDeleting;
     sDeleting = this;
 #ifdef HX_NATIVE
-    // During cascading ~ObjectDir destruction, skip ReplaceRefs entirely.
-    // Replace callbacks are unsafe during cascade — they may write to freed
-    // ObjPtrVec buffers (e.g. CharBonesMeshes::Replace → Set → AddRef).
-    // Ownership lists (ObjPtrList/ObjPtrVec) are not updated, so classes
-    // with `while(!empty()) delete front;` loops must guard with
-    // InDeleteObjects() during cascade.
+    // During cascade, skip ReplaceRefs. Phase 0 (NullifyAllRefs) already
+    // nullified all refs while memory was valid. ReplaceRefs here would
+    // be unsafe: ring nodes from freed ObjPtrVec buffers have garbage
+    // next/prev, and Replace callbacks trigger delete-this in Tasks.
     if (!ObjectDir::InDeleteObjects())
 #endif
     ReplaceRefs(nullptr);
@@ -369,6 +367,30 @@ void Hmx::Object::ReplaceRefs(Hmx::Object *obj) {
 #endif
     }
 }
+
+#ifdef HX_NATIVE
+#if defined(__SANITIZE_ADDRESS__) || (defined(__has_feature) && __has_feature(address_sanitizer))
+__attribute__((no_sanitize("address")))
+#endif
+void Hmx::Object::NullifyAllRefs() {
+    ObjRef *sentinel = &mRefs;
+    ObjRef *cur = sentinel->next;
+    while (cur != sentinel) {
+        // During cascade, dead ObjRefs from freed ObjPtrVec buffers
+        // may be linked in the ring (~ObjRefConcrete skips Release).
+        // Their next pointers are glibc heap metadata — stop walking.
+        // Remaining alive entries (if any) keep stale mObject pointers;
+        // IsLive checks in TaskTimeline::Poll catch those at runtime.
+        if (!cur->IsAlive())
+            break;
+        ObjRef *nxt = cur->next;
+        cur->NullifyObj();
+        cur = nxt;
+    }
+    sentinel->next = sentinel;
+    sentinel->prev = sentinel;
+}
+#endif
 
 void Hmx::Object::ReplaceRefsFrom(Hmx::Object *from, Hmx::Object *to) {
     MILO_ASSERT(from, 0xA6);

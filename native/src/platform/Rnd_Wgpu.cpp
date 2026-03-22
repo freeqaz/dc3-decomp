@@ -993,6 +993,7 @@ void WgpuRnd::BeginDrawing() {
     // This catches resize events that the callback may miss (e.g. macOS
     // live resize where the callback fires but Dawn needs reconfiguration
     // before the next AcquireNextFrame).
+#ifndef HX_WEB
     if (!mGpu.IsHeadless() && mGpu.Window()) {
         int winW, winH;
         glfwGetWindowSize(mGpu.Window(), &winW, &winH);
@@ -1001,6 +1002,7 @@ void WgpuRnd::BeginDrawing() {
             mGpu.ResizeSurface(winW, winH);
         }
     }
+#endif
 
     // Acquire next frame
     if (mGpu.IsHeadless()) {

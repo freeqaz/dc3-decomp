@@ -792,15 +792,15 @@ TEST_F(ObjectLifetimeTest, FlowAnimateDoubleDeleteRingCorruption) {
         << "same Flow) compares equal after implicit conversion, so the guard "
         << "fires and the hash entry is skipped.";
 
-    // ASSERTION 3: operator delete must also fire exactly once.
-    // Under glibc without ASan, dynamic_cast on a freed pointer typically
-    // returns null (tcache corrupts vtable), so DeleteObjects skips the entry.
-    // This assertion catches cases where operator delete fires more than once,
-    // indicating the memory was freed twice (regardless of vtable state).
-    EXPECT_EQ(sFlowAnimateDeleteCount, 1)
-        << "BUG CONFIRMED: operator delete for FlowAnimate fired "
-        << sFlowAnimateDeleteCount << " times (expected 1). "
-        << "This is a double-free regardless of whether the destructor body ran.";
+    // ASSERTION 3: operator delete count.
+    // The three-phase cascade (Phase 1: obj->~Object(), Phase 2: DeferFree)
+    // bypasses operator delete entirely — memory is freed via free(block)
+    // in FlushDeferredFrees, not through the class's operator delete.
+    // A count of 0 is correct under the three-phase approach.
+    // A count of 2+ would indicate a double-free.
+    EXPECT_LE(sFlowAnimateDeleteCount, 1)
+        << "BUG: operator delete for FlowAnimate fired "
+        << sFlowAnimateDeleteCount << " times (expected 0 or 1).";
 }
 
 // ============================================================================

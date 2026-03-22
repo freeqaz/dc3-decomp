@@ -36,12 +36,29 @@ END_LOADS
 
 void HamIKSkeleton::Poll() {
     if (mChar) {
+#ifdef HX_NATIVE
+        // Guard: character skeleton may not be ready (no outfit loaded yet).
+        // GetNeutralSkeleton does raw pointer casts that are unsafe when
+        // skeleton data isn't fully initialized.
+        if (!mChar->Find<RndTransformable>("bone_pelvis.mesh", false))
+            return;
+        mNeutralSkelDir = mChar->GetNeutralSkeleton();
+        if (!mNeutralSkelDir)
+            return;
+        RndTransformable *charTrans =
+            mChar->Find<RndTransformable>("bone_pelvis.mesh", false);
+        RndTransformable *neutralSkelTrans =
+            mNeutralSkelDir->Find<RndTransformable>("bone_pelvis.mesh", false);
+        if (charTrans && neutralSkelTrans)
+            neutralSkelTrans->SetWorldXfm(charTrans->WorldXfm());
+#else
         mNeutralSkelDir = mChar->GetNeutralSkeleton();
         RndTransformable *charTrans =
             mChar->Find<RndTransformable>("bone_pelvis.mesh", true);
         RndTransformable *neutralSkelTrans =
             mNeutralSkelDir->Find<RndTransformable>("bone_pelvis.mesh", true);
         neutralSkelTrans->SetWorldXfm(charTrans->WorldXfm());
+#endif
     }
 }
 

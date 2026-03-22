@@ -10,6 +10,30 @@
 #include "utl/BeatMap.h"
 #include "utl/TempoMap.h"
 
+#ifdef HX_NATIVE
+#include <unordered_set>
+static std::unordered_set<Task *> &LiveTasks() {
+    static std::unordered_set<Task *> s;
+    return s;
+}
+#endif
+
+Task::Task() {
+#ifdef HX_NATIVE
+    LiveTasks().insert(this);
+#endif
+}
+
+Task::~Task() {
+#ifdef HX_NATIVE
+    LiveTasks().erase(this);
+#endif
+}
+
+#ifdef HX_NATIVE
+bool Task::IsLive(Task *t) { return LiveTasks().count(t) > 0; }
+#endif
+
 TaskMgr TheTaskMgr;
 
 void TaskMgr::Terminate() { SetName(nullptr, nullptr); }
@@ -382,7 +406,11 @@ void TaskTimeline::Poll() {
         float f1 = it->mStartTime;
         float f2 = mTime;
         float diff = f2 - f1;
-        if ((*it).mTask) {
+        if ((*it).mTask
+#ifdef HX_NATIVE
+            && Task::IsLive((*it).mTask)
+#endif
+        ) {
             mPollingTask = (*it).mTask;
             (*it).mTask->Poll(diff);
             ++it;
@@ -400,7 +428,18 @@ void TaskTimeline::Poll() {
 
 void TaskTimeline::AddTask(Task *task, float f) { AddTask(TaskInfo(task, mTime + f)); }
 
-void TaskMgr::Start(Task *t, TaskUnits u, float f) { mTimelines[u].AddTask(t, f); }
+void TaskMgr::Start(Task *t, TaskUnits u, float f) {
+#ifdef HX_NATIVE
+    // During cascade, destructors may execute scripts that create tasks.
+    // These tasks reference objects about to be freed — they'd become
+    // stale ObjPtrs in TaskTimeline, crashing in Poll. Skip them.
+    if (ObjectDir::InDeleteObjects()) {
+        delete t;
+        return;
+    }
+#endif
+    mTimelines[u].AddTask(t, f);
+}
 
 DataNode OnScriptTask(DataArray *arr) {
     static Symbol script("script");
@@ -465,6 +504,14 @@ void TaskMgr::Init() {
 
 void TaskMgr::QueueTaskDelete(Task *task) {
     if (task) {
+#ifdef HX_NATIVE
+        // During cascade, tasks are being destroyed by Phase 1 and their
+        // memory is deferred-freed. Don't queue them — the ObjPtr<Task>
+        // constructor calls AddRef which may write to freed ring neighbors,
+        // and the deferred memory will be freed before Poll can delete it.
+        if (ObjectDir::InDeleteObjects())
+            return;
+#endif
         for (int i = 0; i < unk84.size(); i++) {
             if (unk84[i] == task)
                 return;

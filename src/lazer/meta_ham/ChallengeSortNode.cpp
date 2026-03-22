@@ -76,9 +76,7 @@ NavListSortNode *ChallengeHeaderNode::GetFirstActive() {
     FOREACH (it, Children()) {
         NavListSortNode *node = (*it)->GetFirstActive();
         if (node) {
-            if (TheChallengeSortMgr->HeadersSelectable())
-                return this;
-            return node;
+            return TheChallengeSortMgr->HeadersSelectable() ? (NavListSortNode *)this : node;
         }
     }
     return nullptr;
@@ -172,13 +170,12 @@ Symbol ChallengeHeaderNode::OnSelectDone() {
 
 int ChallengeHeaderNode::GetSongID() {
     auto _tmp1 = mChildren.size();
-    int _result = 0;
-    if (_tmp1 != 0) {
-        ChallengeSortNode *node = static_cast<ChallengeSortNode *>(mChildren.front());
-        MILO_ASSERT(node, 0x136);
-                _result = node->GetChallengeRecord()->GetChallengeRow().mSongID;
+    if (_tmp1 == 0) {
+        return 0;
     }
-    return _result;
+    ChallengeSortNode *node = static_cast<ChallengeSortNode *>(mChildren.front());
+    MILO_ASSERT(node, 0x136);
+    return node->GetChallengeRecord()->GetChallengeRow().mSongID;
 }
 
 String ChallengeHeaderNode::GetSongShortTitle() {
