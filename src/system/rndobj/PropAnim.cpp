@@ -417,15 +417,18 @@ RndPropAnim::AddKeys(Hmx::Object *obj, DataArray *prop, PropKeys::AnimKeysType t
     return theKeys;
 }
 
-// Compare two Hmx::Object pointers for identity.
-// On Itanium ABI (native), virtual base pointers for the same object can differ
+#ifdef HX_NATIVE
+// On Itanium ABI, virtual base pointers for the same object can differ
 // (e.g. HamDirector via Hmx::Object base vs RndPollable base = +0x780).
-// dynamic_cast<void*> returns the most-derived object address on both ABIs.
+// dynamic_cast<void*> returns the most-derived object address.
 static inline bool SameObject(const Hmx::Object *a, const Hmx::Object *b) {
     if (a == b) return true;
     if (!a || !b) return false;
     return dynamic_cast<const void *>(a) == dynamic_cast<const void *>(b);
 }
+#else
+#define SameObject(a, b) ((a) == (b))
+#endif
 
 std::list<PropKeys *>::iterator RndPropAnim::FindKeys(Hmx::Object *obj, DataArray *prop) {
     FOREACH (it, mPropKeys) {
