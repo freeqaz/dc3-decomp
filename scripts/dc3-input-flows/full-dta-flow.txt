@@ -1,0 +1,42 @@
+# Full DTA Flow — Boot to gameplay through all DTA screens
+#
+# Tests the complete Xbox DTA flow without DC3_SCREEN bypass:
+#   boot → attract → title → main → choose_mode → song_select
+#   → multiuser → loading → preloading → real_loading → game_screen
+#
+# Usage:
+#   MILO_HEADLESS=1 MILO_FATAL_FAILS=0 MILO_MAX_FRAMES=10000 \
+#     MILO_INPUT_SCRIPT=scripts/dc3-input-flows/full-dta-flow.txt \
+#     DC3_DATA=orig-assets native/build/dc3-native
+
+# Skip attract movie
+wait_screen attract_screen
++1 confirm
+
+# Title screen — confirm to start
+wait_screen title_screen
++30 confirm
+
+# Main screen — select "gameplay" (first item)
+wait_screen main_screen
++60 confirm
+
+# Choose mode — select "perform" (first item)
+wait_screen choose_mode_screen
++30 confirm
+
+# Song select — scroll down a few times then confirm
+wait_screen song_select_screen
++30 down
++20 down
++20 down
++20 confirm
+
+# Multiuser — confirm to proceed (uses defaults)
+wait_screen multiuser_screen
++30 confirm
++30 confirm
+
+# Loading screens auto-advance via DTA handlers:
+#   loading → preloading → real_loading → game_screen
+# Just wait for game_screen to enter

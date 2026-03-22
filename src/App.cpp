@@ -1093,9 +1093,18 @@ void App::RunWithoutDebugging() {
                         TheGameData->SetVenue(Symbol(venueName));
                         TheGameMode->SetMode(Symbol("perform"), Symbol("none"));
                         if (TheHamProvider) {
-                            TheHamProvider->SetProperty("merge_moves", 1);
-                            TheHamProvider->SetProperty("use_movegraph", 1);
-                            TheGameMode->SetProperty("use_movegraph", 1);
+                            // merge_moves=0: use pre-authored song.anim directly.
+                            // merge_moves=1 uses the routine builder anim, which is
+                            // populated by the DanceRemixer (Kinect choreography).
+                            // Without Kinect, the routine builder stays empty and
+                            // ClipPlayer finds no clip keys → no song animation.
+                            //
+                            // use_movegraph stays TRUE (perform mode default) so
+                            // Game::IsLoaded() loads the MoveGraph from move_data.
+                            // This lets OriginalChoreoRemixer::Init() populate the
+                            // routine measures for all difficulties and enables
+                            // move scoring/HUD display.
+                            TheHamProvider->SetProperty("merge_moves", 0);
                         }
                         const char *autoplayEnv = getenv("DC3_AUTOPLAY");
                         Symbol autoplaySym;
