@@ -55,11 +55,22 @@ struct SceneUniforms {
     shadowBias: f32,
     shadowMapSize: f32,
     shadowStrength: f32,
+    // Projected light (1 kFakeSpot with gobo texture)
+    projLightDir: vec4f,
+    projLightColor: vec4f,
+    projLightProjRow0: vec4f,   // u = dot(worldPos, xyz) + w
+    projLightProjRow1: vec4f,   // v = dot(worldPos, xyz) + w
+    numProjLights: f32,
+    _padProj1: f32,
+    _padProj2: f32,
+    _padProj3: f32,
 };
 
 @group(0) @binding(0) var<uniform> scene: SceneUniforms;
 @group(0) @binding(1) var shadowMap: texture_depth_2d;
 @group(0) @binding(2) var shadowSampler: sampler_comparison;
+@group(0) @binding(3) var projLightTex: texture_2d<f32>;
+@group(0) @binding(4) var projLightSampler: sampler;
 
 // === Bind Group 1: Per-material ===
 struct MaterialUniforms {
@@ -357,7 +368,7 @@ fn computeStandardLight(
     let lambert = max(dot(surfaceNormal, lightDir), 0.0);
     lighting.diffuse = lightColor * lambert;
 
-    if (material.specularPower > 0.0) {
+    if (material.specularPower > 0.0 && lambert > 0.0) {
         let halfVector = normalize(lightDir + viewDir);
         if (isEnabled(material.hasSpecularMap)) {
             // Has specular map: texture modulates power with min 0.1 floor
@@ -483,7 +494,7 @@ fn computePointLight(
     let lambert = max(dot(surfaceNormal, lightDir), 0.0);
     lighting.diffuse = lightColor * lambert;
 
-    if (material.specularPower > 0.0) {
+    if (material.specularPower > 0.0 && lambert > 0.0) {
         let halfVector = normalize(lightDir + viewDir);
         if (isEnabled(material.hasSpecularMap)) {
             let glossExponent = max(material.specularPower * specularSample.a, 0.1);
@@ -682,6 +693,24 @@ fn fs_main(surfaceInput: VertexOutput) -> @location(0) vec4f {
         );
         totalLighting.diffuse += lightContribution.diffuse;
         totalLighting.specular += lightContribution.specular;
+    }
+
+    // Projected light (kFakeSpot with gobo texture)
+    if (scene.numProjLights > 0.5) {
+        let projLightDir = normalize(-scene.projLightDir.xyz);
+        let projNdotL = max(dot(surfaceNormal, projLightDir), 0.0);
+        // Project world position to gobo UV
+        let projU = dot(surfaceInput.worldPos, scene.projLightProjRow0.xyz) + scene.projLightProjRow0.w;
+        let projV = dot(surfaceInput.worldPos, scene.projLightProjRow1.xyz) + scene.projLightProjRow1.w;
+        let projUV = vec2f(projU, projV);
+        // textureSample must be in uniform control flow (numProjLights is uniform),
+        // so sample unconditionally here and gate the contribution with the UV check.
+        let goboSample = textureSample(projLightTex, projLightSampler, projUV);
+        // Only light surfaces within the projection cone (UV in [0,1])
+        if (projU >= 0.0 && projU <= 1.0 && projV >= 0.0 && projV <= 1.0) {
+            let projContrib = scene.projLightColor.rgb * goboSample.rgb * projNdotL;
+            totalLighting.diffuse += projContrib;
+        }
     }
 
     let ambientLight = scene.ambientColor.rgb;
