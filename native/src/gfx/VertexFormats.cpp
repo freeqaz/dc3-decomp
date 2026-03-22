@@ -245,6 +245,13 @@ static void UnpackFloat16x2_BE(int packed, float out[2]) {
     out[1] = HalfToFloat(halfV);
 }
 
+// Extract the 2-bit w from DEC4N as a bitangent sign (±1.0)
+static float UnpackDEC4N_Sign_BE(int packed) {
+    unsigned int val = __builtin_bswap32((unsigned int)packed);
+    int iw = (int)(val) >> 30;  // sign-extend 2-bit w
+    return (iw >= 0) ? 1.0f : -1.0f;
+}
+
 int UnpackCompressedVertices(const unsigned char* compressedData, int numVerts,
                              GpuVertex* out, int maxVerts) {
     int count = std::min(numVerts, maxVerts);
@@ -269,12 +276,13 @@ int UnpackCompressedVertices(const unsigned char* compressedData, int numVerts,
         UnpackDEC4N_BE(cv.mTangent, gv.norm);
 
         // Tangent: DEC4N stored in mBinormal field (D3D TANGENT at offset 24)
+        // The 2-bit w component encodes the bitangent sign (handedness)
         float tangent3[3];
         UnpackDEC4N_BE(cv.mBinormal, tangent3);
         gv.tangent[0] = tangent3[0];
         gv.tangent[1] = tangent3[1];
         gv.tangent[2] = tangent3[2];
-        gv.tangent[3] = 1.0f; // bitangent sign — will be refined by MikkTSpace if needed
+        gv.tangent[3] = UnpackDEC4N_Sign_BE(cv.mBinormal);
     }
     return count;
 }
@@ -352,7 +360,7 @@ int UnpackCompressedSkinnedVertices(const unsigned char* compressedData, int num
         gv.tangent[0] = tangent3[0];
         gv.tangent[1] = tangent3[1];
         gv.tangent[2] = tangent3[2];
-        gv.tangent[3] = 1.0f;
+        gv.tangent[3] = UnpackDEC4N_Sign_BE(cv.mBinormal);
     }
     return count;
 }
