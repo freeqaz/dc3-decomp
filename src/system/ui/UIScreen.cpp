@@ -136,11 +136,21 @@ void UIScreen::LoadPanels() {
 
 void UIScreen::UnloadPanels() {
 #ifdef HX_NATIVE
-    // Clear animation tasks before panel destruction. On Xbox, ~Object's
-    // ReplaceRefs triggers AnimTask::Replace → QueueTaskDelete. On native,
-    // cascade destruction skips ReplaceRefs for safety, so tasks holding
-    // stale pointers to panel objects would crash in TaskMgr::Poll.
-    TheTaskMgr.ClearTasks();
+    // Clear UI animation tasks before panel destruction. On Xbox, ~Object's
+    // ReplaceRefs triggers AnimTask::Replace → QueueTaskDelete for each dying
+    // object. On native, cascade skips ReplaceRefs (ring corruption), so tasks
+    // holding refs to panel objects survive with stale pointers → use-after-free.
+    //
+    // Only clear seconds/UI timelines — preserve beat-synced and tutorial tasks
+    // which may be driven by audio/music systems independent of panels.
+    // Safe because this runs BEFORE the new screen's Enter() creates tasks.
+    TheTaskMgr.ClearTimelineTasks(kTaskSeconds);
+    TheTaskMgr.ClearTimelineTasks(kTaskUISeconds);
+    // Suppress FlushDeferredFrees between panel cascades. Without this,
+    // panel A's cascade frees memory, then panel B's NullifyAllRefs walks
+    // ring nodes in that freed memory → heap corruption. Deferring the
+    // flush keeps all memory valid until every panel is destroyed.
+    ObjectDir::BeginBatchDelete();
 #endif
     FOREACH_REVERSE(it, mPanelList) {
         if (it->mLoaded) {
@@ -148,6 +158,9 @@ void UIScreen::UnloadPanels() {
             it->mPanel->CheckUnload();
         }
     }
+#ifdef HX_NATIVE
+    ObjectDir::EndBatchDelete();
+#endif
 }
 
 bool UIScreen::CheckIsLoaded() {
@@ -309,40 +322,6 @@ void UIScreen::Enter(UIScreen *scr) {
                 }
             }
             printf("\n");
-        }
-    }
-    // Auto-skip screens that wait for movie playback or Kinect input.
-    // Without these subsystems, the screen would be stuck forever.
-    {
-        DataArray *td = TypeDef();
-        if (td) {
-            // We're called during the current transition, so save and check for NEW transitions
-            bool wasInTransition = TheUI->InTransition();
-            bool didNavigate = false;
-
-            // Try skip_selected first (attract screen uses this)
-            if (!didNavigate) {
-                DataArray *skipHandler = td->FindArray("skip_selected", false);
-                if (skipHandler) {
-                    static Message skipMsg("skip_selected");
-                    HandleType(skipMsg);
-                    didNavigate = TheUI->TransitionScreen() != this;
-                    printf("DC3 Native: Auto-skip '%s' via skip_selected (navigated=%d)\n",
-                           Name(), didNavigate);
-                }
-            }
-
-            // If screen has next_screen property, use it directly (more reliable than exit_screen)
-            if (!didNavigate) {
-                DataArray *nextArr = td->FindArray("next_screen", false);
-                if (nextArr && nextArr->Size() > 1) {
-                    Symbol nextName = nextArr->ForceSym(1);
-                    printf("DC3 Native: Auto-skip '%s' -> '%s' via next_screen\n",
-                           Name(), nextName.Str());
-                    TheUI->GotoScreen(nextName.Str(), false, false);
-                    didNavigate = true;
-                }
-            }
         }
     }
 #endif
@@ -539,6 +518,20 @@ bool UIScreen::SharesPanels(UIScreen *screen) {
 }
 
 DataNode UIScreen::OnMsg(ButtonDownMsg const &msg) {
+#ifdef HX_NATIVE
+    // On Xbox, movie/overlay panels convert button presses to skip_selected
+    // messages during fullscreen movies (attract, credits). On native, those
+    // panels aren't functional (no BINK), so route the message directly.
+    // The same DTA skip_selected handler fires, producing the same transition.
+    {
+        DataArray *td = TypeDef();
+        if (td && td->FindArray("skip_selected", false)) {
+            static Message skipMsg("skip_selected");
+            HandleType(skipMsg);
+            return DataNode(0);
+        }
+    }
+#endif
     if (mBack != nullptr && msg.GetAction() == kAction_Cancel) {
         DataNode n = mBack->Evaluate(1);
         if (n.Type() != kDataUnhandled) {

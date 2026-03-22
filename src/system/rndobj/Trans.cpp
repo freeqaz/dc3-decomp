@@ -28,6 +28,19 @@ RndTransformable::~RndTransformable() {
     if (mParent) {
         mParent->mChildren.remove(this);
     }
+#ifdef HX_NATIVE
+    if (ObjectDir::InDeleteObjects()) {
+        // During ObjectDir cascading destruction, NullifyAllRefs (Phase 0)
+        // may have cleared children's mParent ObjOwnerPtr to null.  When
+        // sub-object destructors subsequently `delete` those children, the
+        // children's ~RndTransformable() sees mParent==null and SKIPS
+        // mParent->mChildren.remove(this), leaving dangling pointers in
+        // our mChildren list.  Iterating mChildren here would access freed
+        // memory.  Since we are being destroyed, simply clear the list.
+        mChildren.clear();
+        return;
+    }
+#endif
     FOREACH (it, mChildren) {
         (*it)->mParent = nullptr;
         (*it)->SetDirty();

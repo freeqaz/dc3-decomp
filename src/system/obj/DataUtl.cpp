@@ -72,7 +72,13 @@ void DataMergeTags(DataArray *dest, DataArray *src) {
             if (node.Type() == kDataArray) {
                 DataArray *arr = node.UncheckedArray();
                 if (arr->Size() != 0) {
+#ifdef HX_NATIVE
+                    DataArray *found = (arr->Node(0).Type() == kDataSymbol)
+                        ? dest->FindArray(arr->Node(0).LiteralSym(), false)
+                        : dest->FindArray(arr->UncheckedInt(0), false);
+#else
                     DataArray *found = dest->FindArray(arr->UncheckedInt(0), false);
+#endif
                     if (!found) {
                         dest->Resize(dest->Size() + 1);
                         const DataNode &destNode = arr;
@@ -92,7 +98,13 @@ void DataReplaceTags(DataArray *dest, DataArray *src) {
             if (node.Type() == kDataArray) {
                 DataArray *arr = node.UncheckedArray();
                 if (arr->Size() != 0) {
+#ifdef HX_NATIVE
+                    DataArray *found = (arr->Node(0).Type() == kDataSymbol)
+                        ? src->FindArray(arr->Node(0).LiteralSym(), false)
+                        : src->FindArray(arr->UncheckedInt(0), false);
+#else
                     DataArray *found = src->FindArray(arr->UncheckedInt(0), false);
+#endif
                     if (found != 0) {
                         DataReplaceTags(arr, found);
                         int inner_cnt = arr->Size();

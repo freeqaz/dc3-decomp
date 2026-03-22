@@ -517,8 +517,14 @@ void HamNavList::Poll() {
 
     // Handle select mode completion
     if (mRibbonMode == HamListRibbon::kRibbonSelect) {
+#ifdef HX_NATIVE
+        // On native, ribbon animations never settle without Kinect input.
+        // Skip the IsAnimating() check to avoid soft-lock after selection.
+        if (!TheUI->InTransition() && !TheLoadMgr.EditMode()) {
+#else
         if (!RndAnimatable::IsAnimating() && !TheUI->InTransition()
             && !TheLoadMgr.EditMode()) {
+#endif
             SetRibbonMode(HamListRibbon::kRibbonSwell);
 
             // Reset all draw state smoothers
@@ -1506,7 +1512,11 @@ DataNode HamNavList::OnMsg(const ButtonDownMsg &msg) {
 
     bool inControllerMode = InControllerMode();
     if ((inControllerMode || TheLoadMgr.EditMode())
+#ifdef HX_NATIVE
+        && mEnabled) {
+#else
         && !RndAnimatable::IsAnimating() && mEnabled) {
+#endif
         bool gesturing = TheGestureMgr && TheGestureMgr->GesturingWithVoice();
         if (!gesturing && TheUI->FocusComponent() == this) {
             int dir = ScrollDirection(msg, false, true, 1);

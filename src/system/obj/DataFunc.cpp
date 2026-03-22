@@ -1092,7 +1092,13 @@ DEF_DATA_FUNC(DataExit) {
 DEF_DATA_FUNC(DataContains) {
     DataArray *w = array->Array(1);
     const DataNode &n = array->Evaluate(2);
+#ifdef HX_NATIVE
+    // On LP64, passing UncheckedInt() truncates pointer-typed nodes.
+    // Pass the DataNode directly so Contains can do full-width comparison.
+    bool b = !w->Contains(n);
+#else
     bool b = !w->Contains(n.UncheckedInt());
+#endif
     if (b)
         return DATA_UNHANDLED;
     else
@@ -1104,7 +1110,17 @@ DataNode DataFindExists(DataArray *array, bool fail) {
     for (int i = 2; i < array->Size(); i++) {
         const DataNode &n = array->Evaluate(i);
         if (n.Type() == kDataInt || n.Type() == kDataSymbol) {
+#ifdef HX_NATIVE
+            // On LP64, UncheckedInt() truncates 8-byte symbol pointers to 4 bytes.
+            // Route kDataSymbol through the Symbol overload for full pointer comparison.
+            if (n.Type() == kDataSymbol) {
+                arr = arr->FindArray(n.LiteralSym(), false);
+            } else {
+                arr = arr->FindArray(n.UncheckedInt(), false);
+            }
+#else
             arr = arr->FindArray(n.UncheckedInt(), false);
+#endif
             if (!arr) {
                 if (fail) {
                     String str;

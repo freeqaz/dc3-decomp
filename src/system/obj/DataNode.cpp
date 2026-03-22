@@ -659,6 +659,12 @@ bool DataNode::Equal(const DataNode &n, DataArray *a, bool warn) const {
         bool res;
         if (firstType == kDataString) {
             res = streq(first.UncheckedStr(), second.UncheckedStr());
+#ifdef HX_NATIVE
+        } else if (firstType == kDataSymbol) {
+            // On 64-bit, UncheckedInt() truncates the 8-byte symbol pointer to 4 bytes.
+            // Compare the full pointers instead.
+            res = first.UncheckedStr() == second.UncheckedStr();
+#endif
         } else {
             res = second.UncheckedInt() == first.UncheckedInt();
         }
@@ -777,10 +783,6 @@ void DataNode::Load(BinStream &d) {
         break;
     default:
         MILO_FAIL("Unrecognized node type: %x", mType);
-#ifdef HX_NATIVE
-        fprintf(stderr, "DataNode::Load ABORT: bad type 0x%x at stream pos=%d\n", mType, d.Tell());
-        abort();
-#endif
         break;
     }
 }

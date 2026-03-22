@@ -33,14 +33,12 @@ template <class T1, class T2>
 ObjRefConcrete<T1, T2>::~ObjRefConcrete() {
     if (mObject) {
 #ifdef HX_NATIVE
-        // During cascading ObjectDir destruction, ring nodes are freed in
-        // unpredictable order. Calling Release writes to ring neighbors that
-        // may already be freed. Skip all ring operations during the cascade.
-        if (ObjectDir::InDeleteObjects()) {
-            // Don't unlink from ring (Release) — neighbors may be freed.
-            // Don't self-loop — ring traversal in CleanStaleRingEntries
-            // needs valid next/prev to walk past dead entries.
-            // The sentinel (cleared by ~ObjRef) marks this as dead.
+        // During cascading ObjectDir destruction, ring neighbors may already
+        // be freed. Use ASAN-suppressed unlink so we properly remove this
+        // node from the ring (preventing dangling ring entries that cause
+        // use-after-free when OTHER objects later walk the same ring).
+        if (ObjectDir::InDeleteObjects() || Hmx::Object::sRingsDirty) {
+            SafeReleaseFromRing(this);
             mObject = nullptr;
             return;
         }
@@ -53,13 +51,13 @@ template <class T1, class T2>
 void ObjRefConcrete<T1, T2>::SetObjConcrete(T1 *obj) {
     if (mObject) {
 #ifdef HX_NATIVE
-        if (ObjectDir::InDeleteObjects())
-            goto skip_release;
-        // After cascade, ring neighbors may be freed. Use ASAN-safe
-        // Release that suppresses writes to quarantined memory.
-        if (Hmx::Object::sRingsDirty)
+        // During cascading ObjectDir destruction or after cascade (sRingsDirty),
+        // ring neighbors may be freed. Use ASAN-suppressed unlink to properly
+        // remove from ring without triggering sanitizer on freed neighbors.
+        if (ObjectDir::InDeleteObjects() || Hmx::Object::sRingsDirty) {
             SafeReleaseFromRing(this);
-        else
+            goto skip_ring_ops;
+        }
 #endif
         mObject->Release(this);
     }
@@ -69,8 +67,11 @@ void ObjRefConcrete<T1, T2>::SetObjConcrete(T1 *obj) {
     }
     return;
 #ifdef HX_NATIVE
-skip_release:
+skip_ring_ops:
     mObject = obj;
+    if (mObject) {
+        mObject->AddRef(this);
+    }
 #endif
 }
 
@@ -258,6 +259,24 @@ void ObjPtrVec<T1, T2>::ReplaceNode(Node *n, Hmx::Object *obj) {
             erase(n);
 #endif
         }
+#ifdef HX_NATIVE
+        else if (obj && mListMode == kObjListNoNull) {
+            // MergeObject redirects refs from o1→o2. If vec had refs to both,
+            // both Nodes now point to o2 (duplicate). Erase the duplicate to
+            // prevent stale-pointer dereference during later destruction.
+            T1 *typed = dynamic_cast<T1 *>(obj);
+            if (typed) {
+                for (size_t i = 0; i < mNodes.size(); i++) {
+                    if (&mNodes[i] != n && mNodes[i].Obj() == typed) {
+                        n->SetObj(nullptr);
+                        if (!gInReplaceList)
+                            erase(iterator(mNodes.begin() + (n - mNodes.data())));
+                        break;
+                    }
+                }
+            }
+        }
+#endif
     }
 }
 
@@ -462,6 +481,12 @@ template <class T1, class T2>
 typename ObjPtrList<T1, T2>::iterator
 ObjPtrList<T1, T2>::insert(typename ObjPtrList<T1, T2>::iterator it, T1 *obj) {
     if (mListMode == kObjListNoNull) {
+#ifdef HX_NATIVE
+        // NullifyAllRefs can nullify ObjPtrList entries during async unload
+        // or cascade Phase 0. Skip inserting null into no-null lists.
+        if (!obj)
+            return end();
+#endif
         MILO_ASSERT(obj, 0x177);
     }
     Node *node = new Node();

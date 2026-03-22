@@ -118,6 +118,10 @@ public:
         if (sym == "needs_upload") return DataNode(0);
         if (sym == "global_options_needs_save") return DataNode(0);
         if (sym == "is_any_profile_signed_into_live") return DataNode(0);
+        // Player count/outfit/crew — DTA multiuser handlers may query these
+        if (sym == "get_num_players") return DataNode(2);
+        if (sym == "get_player_outfit") return DataNode(Symbol(""));
+        if (sym == "get_player_crew") return DataNode(Symbol(""));
         return Hmx::Object::Handle(msg, rev);
     }
 };
@@ -135,6 +139,9 @@ public:
         if (sym == "enable_xmp") return DataNode(0);
         if (sym == "disable_xmp") return DataNode(0);
         if (sym == "guide_showing") return DataNode(0);
+        // Kinect hardware — not present on native
+        if (sym == "has_kinect") return DataNode(0);
+        if (sym == "is_kinect_connected") return DataNode(0);
         return Hmx::Object::Handle(msg, rev);
     }
 };
@@ -149,6 +156,8 @@ public:
         if (sym == "begin_recognition") return DataNode(0);
         if (sym == "set_recognizing") return DataNode(0);
         if (sym == "end_recognition") return DataNode(0);
+        if (sym == "is_recognizing") return DataNode(0);
+        if (sym == "get_result") return DataNode(Symbol(""));
         return Hmx::Object::Handle(msg, rev);
     }
 };
@@ -1159,120 +1168,71 @@ void App::RunWithoutDebugging() {
 
         frameCount++;
 
-        // Auto-navigate: DC3_SCREEN=<target> to skip menus
-        // For game_screen: navigate step-by-step through the screen chain
+        // DC3_SCREEN=game_screen: headless game data initializer.
+        // Sets song/venue/mode/difficulty from env vars, then calls
+        // enter_gameplay (same DTA function Xbox's multiuser invokes).
+        // Does NOT navigate — the input script drives menu transitions
+        // via button presses that trigger DTA handlers in Xbox order.
+        // This runs once when main_screen is reached, before the user
+        // navigates to song_select/multiuser.
         {
-            static bool sAutoNavDone = false;
             static bool sGameSetupDone = false;
-            if (!sAutoNavDone && TheUI && TheUI->CurrentScreen() && !TheUI->InTransition()) {
+            if (!sGameSetupDone && TheUI && TheUI->CurrentScreen() && !TheUI->InTransition()) {
                 const char *targetScreen = getenv("DC3_SCREEN");
-                if (targetScreen && targetScreen[0]) {
+                if (targetScreen && strcmp(targetScreen, "game_screen") == 0) {
                     const char *curName = TheUI->CurrentScreen()->Name();
-
-                    // If we've reached the target, stop navigating
-                    if (strcmp(curName, targetScreen) == 0) {
-                        sAutoNavDone = true;
-                    }
-                    // Set up game data once when on main_screen and targeting game_screen
-                    else if (strcmp(curName, "main_screen") == 0 && !sGameSetupDone) {
+                    if (strcmp(curName, "main_screen") == 0 && TheGameData && TheGameMode) {
                         sGameSetupDone = true;
-                        MILO_LOG("DC3 Native: Auto-nav at main_screen — target='%s' GameData=%p GameMode=%p\n",
-                            targetScreen, (void*)TheGameData, (void*)TheGameMode);
-                        if (strcmp(targetScreen, "game_screen") == 0 && TheGameData && TheGameMode) {
-                            const char *songName = getenv("DC3_SONG");
-                            if (!songName || !songName[0]) songName = "boyfriend";
-                            // Validate song exists in the song database (DLC songs aren't on disc)
-                            if (!TheHamSongMgr.HasSong(Symbol(songName), false)) {
-                                MILO_LOG("DC3 Native: Song '%s' not found in song database — check DC3_SONG env var\n", songName);
-                                songName = "boyfriend";
-                            }
-                            TheGameData->SetSong(Symbol(songName));
+                        const char *songName = getenv("DC3_SONG");
+                        if (!songName || !songName[0]) songName = "boyfriend";
+                        if (!TheHamSongMgr.HasSong(Symbol(songName), false)) {
+                            MILO_LOG("DC3 Native: Song '%s' not found — falling back to 'boyfriend'\n", songName);
+                            songName = "boyfriend";
+                        }
+                        TheGameData->SetSong(Symbol(songName));
 
-                            // Venue: DC3_VENUE override > song metadata > fallback
-                            const char *venueEnv = getenv("DC3_VENUE");
-                            const char *venueName = nullptr;
-                            if (venueEnv && venueEnv[0]) {
-                                venueName = venueEnv;
-                            } else {
-                                int songID = TheHamSongMgr.GetSongIDFromShortName(Symbol(songName), false);
-                                if (songID >= 0) {
-                                    const HamSongMetadata *meta = TheHamSongMgr.Data(songID);
-                                    if (meta) {
-                                        Symbol v = meta->Venue();
-                                        if (v != Symbol() && v.Str()[0])
-                                            venueName = v.Str();
-                                    }
-                                }
+                        const char *venueEnv = getenv("DC3_VENUE");
+                        const char *venueName = nullptr;
+                        if (venueEnv && venueEnv[0]) {
+                            venueName = venueEnv;
+                        } else {
+                            int songID = TheHamSongMgr.GetSongIDFromShortName(Symbol(songName), false);
+                            if (songID >= 0) {
+                                const HamSongMetadata *meta = TheHamSongMgr.Data(songID);
+                                if (meta && meta->Venue() != Symbol() && meta->Venue().Str()[0])
+                                    venueName = meta->Venue().Str();
                             }
-                            if (!venueName || !venueName[0]) venueName = "glitterati";
-                            TheGameData->SetVenue(Symbol(venueName));
-                            TheGameMode->SetMode(Symbol("perform"), Symbol("none"));
-                            if (TheHamProvider) {
-                                TheHamProvider->SetProperty("merge_moves", 1);
-                                TheHamProvider->SetProperty("use_movegraph", 1);
-                                TheGameMode->SetProperty("use_movegraph", 1);
+                        }
+                        if (!venueName || !venueName[0]) venueName = "glitterati";
+                        TheGameData->SetVenue(Symbol(venueName));
+                        TheGameMode->SetMode(Symbol("perform"), Symbol("none"));
+                        if (TheHamProvider) {
+                            TheHamProvider->SetProperty("merge_moves", 1);
+                            TheHamProvider->SetProperty("use_movegraph", 1);
+                            TheGameMode->SetProperty("use_movegraph", 1);
+                        }
+                        const char *autoplayEnv = getenv("DC3_AUTOPLAY");
+                        Symbol autoplaySym;
+                        if (!autoplayEnv || strcmp(autoplayEnv, "off") != 0)
+                            autoplaySym = Symbol(autoplayEnv ? autoplayEnv : "maximum");
+                        const char *diffEnv = getenv("DC3_DIFFICULTY");
+                        Difficulty diff = diffEnv ? (Difficulty)atoi(diffEnv) : kDifficultyEasy;
+                        for (int i = 0; i < 2; i++) {
+                            HamPlayerData *p = TheGameData->Player(i);
+                            if (p) {
+                                p->SetDifficulty(diff);
+                                if (!autoplaySym.Null()) p->SetAutoplay(autoplaySym);
                             }
-                            HamPlayerData *p0 = TheGameData->Player(0);
-                            HamPlayerData *p1 = TheGameData->Player(1);
-                            // DC3_AUTOPLAY: "maximum", "move_perfect", "move_awesome",
-                            // "move_ok", "move_bad", or "off" (default: "maximum")
-                            const char *autoplayEnv = getenv("DC3_AUTOPLAY");
-                            Symbol autoplaySym;
-                            if (!autoplayEnv || strcmp(autoplayEnv, "off") != 0) {
-                                autoplaySym = Symbol(autoplayEnv ? autoplayEnv : "maximum");
-                            }
-                            const char *diffEnv = getenv("DC3_DIFFICULTY");
-                            Difficulty diff = diffEnv ? (Difficulty)atoi(diffEnv) : kDifficultyEasy;
-                            if (p0) {
-                                p0->SetDifficulty(diff);
-                                if (!autoplaySym.Null()) p0->SetAutoplay(autoplaySym);
-                            }
-                            if (p1) {
-                                p1->SetDifficulty(diff);
-                                if (!autoplaySym.Null()) p1->SetAutoplay(autoplaySym);
-                            }
-                            MILO_LOG("DC3 Native: Game setup — song='%s' venue='%s' mode=perform\n",
-                                   songName, venueName);
                         }
-                        // Navigate to choose_mode_screen (next in chain)
-                        UIScreen *next = ObjectDir::Main()->Find<UIScreen>("choose_mode_screen", false);
-                        if (next) {
-                            MILO_LOG("DC3 Native: Auto-nav chain: main_screen → choose_mode_screen\n");
-                            TheUI->GotoScreen(next, false, false);
-                        }
-                    }
-                    // Chain: choose_mode → song_select
-                    else if (strcmp(curName, "choose_mode_screen") == 0) {
-                        UIScreen *next = ObjectDir::Main()->Find<UIScreen>("song_select_screen", false);
-                        if (next) {
-                            MILO_LOG("DC3 Native: Auto-nav chain: choose_mode → song_select\n");
-                            TheUI->GotoScreen(next, false, false);
-                        }
-                    }
-                    // Chain: song_select → multiuser_screen
-                    else if (strcmp(curName, "song_select_screen") == 0) {
-                        UIScreen *next = ObjectDir::Main()->Find<UIScreen>("multiuser_screen", false);
-                        if (next) {
-                            MILO_LOG("DC3 Native: Auto-nav chain: song_select → multiuser\n");
-                            TheUI->GotoScreen(next, false, false);
-                        }
-                    }
-                    // Chain: multiuser → loading_screen
-                    else if (strcmp(curName, "multiuser_screen") == 0) {
-                        UIScreen *next = ObjectDir::Main()->Find<UIScreen>("loading_screen", false);
-                        if (next) {
-                            MILO_LOG("DC3 Native: Auto-nav chain: multiuser → loading\n");
-                            TheUI->GotoScreen(next, false, false);
-                        }
-                    }
-                    // Non-game targets: direct jump from main_screen
-                    else if (strcmp(curName, "main_screen") == 0) {
-                        sAutoNavDone = true;
-                        UIScreen *target = ObjectDir::Main()->Find<UIScreen>(targetScreen, false);
-                        if (target) {
-                            MILO_LOG("DC3 Native: Auto-navigating to '%s'\n", targetScreen);
-                            TheUI->GotoScreen(target, false, false);
-                        }
+                        MILO_LOG("DC3 Native: game data initialized — song='%s' venue='%s'\n", songName, venueName);
+                        // Call enter_gameplay to trigger the loading chain.
+                        // On Xbox, multiuser_screen calls this. On native,
+                        // the multiuser panel unload crashes (heap corruption
+                        // during cascade destruction). Until that's fixed,
+                        // trigger enter_gameplay from here and let the input
+                        // script skip song_select/multiuser.
+                        static DataArrayPtr enterGameplay(Symbol("enter_gameplay"));
+                        enterGameplay->Execute();
                     }
                 }
             }

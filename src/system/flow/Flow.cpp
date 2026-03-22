@@ -47,11 +47,10 @@ Flow::~Flow() {
     if (!mRunningNodes.empty()) {
 #ifdef HX_NATIVE
         if (ObjectDir::InDeleteObjects()) {
-            // During cascade teardown, DON'T clear mRunningNodes — the
-            // ObjPtrList::Node objects are ObjRefs linked into other objects'
-            // rings. Freeing them here causes use-after-free when the parent
-            // DeleteObjects runs NullifyAllRefs on objects whose rings still
-            // reference these Nodes. Let the parent cascade handle cleanup.
+            // During cascade teardown, skip Deactivate (it sends messages to
+            // potentially-destroyed listeners). Just clear the list — ObjPtrList
+            // nodes' destructors are cascade-safe (skip ring unlinks).
+            mRunningNodes.clear();
         } else
 #endif
         if (mProxyFile.empty()) {

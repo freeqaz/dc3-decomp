@@ -125,11 +125,17 @@ public:
     }
 
     DataNode(float f) {
+#ifdef HX_NATIVE
+        mValue.object = nullptr; // zero all 8 bytes on LP64
+#endif
         mValue.real = f;
         mType = kDataFloat;
     }
 
     DataNode(double d) {
+#ifdef HX_NATIVE
+        mValue.object = nullptr;
+#endif
         mValue.real = d;
         mType = kDataFloat;
     }

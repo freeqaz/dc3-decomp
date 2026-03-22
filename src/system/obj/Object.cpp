@@ -374,17 +374,22 @@ __attribute__((no_sanitize("address")))
 #endif
 void Hmx::Object::NullifyAllRefs() {
     ObjRef *sentinel = &mRefs;
+    constexpr size_t kNextOffset = sizeof(void *); // ObjRef layout: vtable, next, prev, sentinel
+    constexpr size_t kSentinelOffset = 3 * sizeof(void *);
+    constexpr size_t kMaxRingSize = 100000;
     ObjRef *cur = sentinel->next;
+    size_t count = 0;
     while (cur != sentinel) {
-        // During cascade, dead ObjRefs from freed ObjPtrVec buffers
-        // may be linked in the ring (~ObjRefConcrete skips Release).
-        // Their next pointers are glibc heap metadata — stop walking.
-        // Remaining alive entries (if any) keep stale mObject pointers;
-        // IsLive checks in TaskTimeline::Poll catch those at runtime.
-        if (!cur->IsAlive())
+        if ((uintptr_t)cur < 0x10000 || ++count > kMaxRingSize)
             break;
-        ObjRef *nxt = cur->next;
-        cur->NullifyObj();
+        // Read next pointer before potentially dead memory is reused.
+        // Dead ObjRefs (from freed ObjPtrVec buffers during cascade) are
+        // still linked in the ring — skip them, but keep walking via their
+        // next pointer (same technique as SnapshotRing).
+        ObjRef *nxt = *(ObjRef **)((const char *)cur + kNextOffset);
+        uint32_t alive = *(const uint32_t *)((const char *)cur + kSentinelOffset);
+        if (alive == ObjRef::kAliveSentinel)
+            cur->NullifyObj();
         cur = nxt;
     }
     sentinel->next = sentinel;

@@ -244,19 +244,36 @@ void HamWardrobe::LoadCrowdClips(Symbol s1, Symbol s2, bool b3) {
 bool HamWardrobe::AllCharsLoaded() {
     for (int i = 0; i < 2; i++) {
         HamCharacter *c = mMainCharacters[i];
-        if (c && c->IsLoading())
+        if (c && c->IsLoading()) {
+#ifdef HX_NATIVE
+            static int sCharLog = 0;
+            if (sCharLog++ < 10)
+                fprintf(stderr, "DC3 HamWardrobe::AllCharsLoaded() — player%d '%s' still loading\n", i, c->Name());
+#endif
             return false;
+        }
     }
     HamCharacter *c = GetBackup(0);
     int i = 1;
     for (; c != nullptr; c = GetBackup(i++)) {
-        if (c->IsLoading())
+        if (c->IsLoading()) {
+#ifdef HX_NATIVE
+            static int sBackupLog = 0;
+            if (sBackupLog++ < 10)
+                fprintf(stderr, "DC3 HamWardrobe::AllCharsLoaded() — backup%d '%s' still loading\n", i-1, c->Name());
+#endif
             return false;
+        }
     }
     FileMerger *fm = Dir()->Find<FileMerger>("crowd_clips.fm", false);
-    if (fm && fm->HasPendingFiles())
+    if (fm && fm->HasPendingFiles()) {
+#ifdef HX_NATIVE
+        static int sCrowdLog = 0;
+        if (sCrowdLog++ < 10)
+            fprintf(stderr, "DC3 HamWardrobe::AllCharsLoaded() — crowd_clips.fm still pending\n");
+#endif
         return false;
-    else
+    } else
         return true;
 }
 
@@ -441,6 +458,10 @@ void HamWardrobe::LoadCharacters(
     Symbol venue,
     bool asyncLoad
 ) {
+#ifdef HX_NATIVE
+    fprintf(stderr, "DC3 HamWardrobe::LoadCharacters() — outfit1='%s' outfit2='%s' crew1='%s' crew2='%s' venue='%s' async=%d\n",
+            outfit1.Str(), outfit2.Str(), crew1.Str(), crew2.Str(), venue.Str(), asyncLoad);
+#endif
     outfit2 = HandleRobot(outfit2);
     outfit1 = HandleRobot(outfit1);
 

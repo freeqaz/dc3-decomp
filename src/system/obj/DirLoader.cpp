@@ -161,7 +161,11 @@ int DirLoader::ClassAndNameSort::ClassIndex(Hmx::Object *obj) {
     Symbol name = obj->ClassName();
     for (int i = cfg->Size() - 1; i != 0; i--) {
         DataNode &n = cfg->Node(i);
+#ifdef HX_NATIVE
+        if (n.Type() == kDataSymbol && n.LiteralSym() == name) {
+#else
         if ((unsigned int)n.UncheckedInt() == name) {
+#endif
             return i;
         }
     }
@@ -383,12 +387,36 @@ void SyncObjectsGlitchCB(float ms, void *v) {
     MILO_LOG("%s %s SyncObjects took %.2f ms\n", dir->ClassName(), path, ms);
 }
 
+#ifdef HX_NATIVE
+// Normalize a file path by resolving ".." and "." segments, lowercasing,
+// and converting backslashes. Used so DirLoader sharing works even when
+// the same milo file is referenced via different relative paths
+// (e.g. "world/shared/gen/director.milo_xbox" vs
+//  "world/glitterati/gen/../../shared/gen/director.milo_xbox").
+static bool PathsEqualNormalized(const FilePath &a, const FilePath &b) {
+    if (a == b)
+        return true;
+    char bufA[256], bufB[256], tmpA[256], tmpB[256];
+    strncpy(tmpA, a.c_str(), sizeof(tmpA) - 1);
+    tmpA[sizeof(tmpA) - 1] = '\0';
+    strncpy(tmpB, b.c_str(), sizeof(tmpB) - 1);
+    tmpB[sizeof(tmpB) - 1] = '\0';
+    FileMakePathBuf(".", tmpA, bufA);
+    FileMakePathBuf(".", tmpB, bufB);
+    return strcmp(bufA, bufB) == 0;
+}
+#endif
+
 DirLoader *DirLoader::Find(const FilePath &fp) {
     if (!fp.empty()) {
         const std::list<Loader *> &ldrs = TheLoadMgr.Loaders();
         for (std::list<Loader *>::const_iterator it = ldrs.begin(); it != ldrs.end();
              ++it) {
+#ifdef HX_NATIVE
+            if (PathsEqualNormalized((*it)->LoaderFile(), fp)) {
+#else
             if ((*it)->LoaderFile() == fp) {
+#endif
                 DirLoader *dl = dynamic_cast<DirLoader *>(*it);
                 if (dl)
                     return dl;
@@ -420,7 +448,11 @@ DirLoader *DirLoader::FindLast(const FilePath &fp) {
         for (std::list<Loader *>::const_reverse_iterator it = ldrs.rbegin();
              it != ldrs.rend();
              ++it) {
+#ifdef HX_NATIVE
+            if (PathsEqualNormalized((*it)->LoaderFile(), fp)) {
+#else
             if ((*it)->LoaderFile() == fp) {
+#endif
                 DirLoader *dl = dynamic_cast<DirLoader *>(*it);
                 if (dl)
                     return dl;

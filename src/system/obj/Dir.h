@@ -91,11 +91,13 @@ public:
             if (mObject) {
 #ifdef HX_NATIVE
                     DirPtrRefCounts()[(const void *)mObject]--;
-                    // During cascading ~ObjectDir destruction, skip Release
-                    // (writes to ring neighbors that may be in freed objects).
-                    // ReplaceRefs is also skipped (~Object), so the ring is
-                    // never walked — stale entries are harmless.
-                    if (!ObjectDir::InDeleteObjects())
+                    // During cascading ~ObjectDir destruction, ring neighbors
+                    // may be freed. Use ASAN-suppressed unlink to properly
+                    // remove this node from the ring (prevents dangling entries
+                    // that corrupt when OTHER objects later walk the ring).
+                    if (ObjectDir::InDeleteObjects())
+                        SafeReleaseFromRing(this);
+                    else
 #endif
                     mObject->Release(this);
                     if (mObject && !mObject->HasDirPtrs()) {
@@ -492,9 +494,20 @@ public:
             Hmx::Object::sRingsDirty = true;
         }
     }
+    /** Suppress FlushDeferredFrees until EndBatchDelete. Use when multiple
+     *  independent cascades run in sequence (e.g. UnloadPanels) so that
+     *  memory freed by cascade A isn't reclaimed before cascade B's
+     *  NullifyAllRefs can walk rings that reference cascade A's objects. */
+    static void BeginBatchDelete() { sSuppressFlush = true; }
+    static void EndBatchDelete() {
+        sSuppressFlush = false;
+        if (sDeleteObjectsDepth == 0)
+            FlushDeferredFrees();
+    }
 private:
     static int sDeleteObjectsDepth;
     static bool sInMergeDirs;
+    static bool sSuppressFlush;
     static std::vector<void *> &sPendingFrees() {
         static std::vector<void *> v;
         return v;

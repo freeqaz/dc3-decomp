@@ -1,15 +1,19 @@
-# Boot to main_screen — no input needed
+# Boot to main_screen
 #
-# The boot screens auto-advance via timers in UI.cpp:
-#   attract → autosave_warning (90 frames) → title (60 frames)
-#   → wait_main_after_saveload (DTA-driven) → main_screen
+# Boot screens auto-advance via the boot flow table in UI.cpp:
+#   attract (skip_selected on any button) → autosave_warning (90 frames)
+#   → title (60 frames) → wait_main_after_saveload (120 frames) → main_screen
 #
-# main_screen is stable at ~frame 380. No button presses needed.
-# Use this as a baseline to verify the boot flow works.
+# attract_screen needs one button press to trigger skip_selected (DTA handler).
+# The rest auto-advance because their subsystems (save, Kinect) aren't available.
 #
 # Usage:
 #   MILO_HEADLESS=1 MILO_MAX_FRAMES=500 \
 #     MILO_INPUT_SCRIPT=scripts/dc3-input-flows/boot-to-main.txt \
 #     timeout 60 native/build/dc3-native
 
-# No inputs — boot flow is automatic
+# Skip attract movie via button press → DTA skip_selected handler
+wait_screen attract_screen
++1 confirm
+
+# Boot screens auto-advance from here. No input needed.

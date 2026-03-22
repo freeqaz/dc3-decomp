@@ -407,6 +407,9 @@ void FlowNode::PushDrivenProperties() {
 }
 
 void FlowNode::ActivateChild(FlowNode *child) {
+#ifdef HX_NATIVE
+    if (!child) return;
+#endif
     mRunningNodes.push_back(child);
     if (!child->Activate()) {
         FLOW_LOG(

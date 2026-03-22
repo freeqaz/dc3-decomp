@@ -1,10 +1,16 @@
 #include "flow/FlowQueueable.h"
 #include "flow/FlowNode.h"
+#include "obj/Dir.h"
 #include "obj/Msg.h"
 #include "obj/Object.h"
 #include <list>
 
-FlowQueueable::FlowQueueable() : mInterrupt(kImmediate) {}
+FlowQueueable::FlowQueueable()
+    : mInterrupt(kImmediate)
+#ifdef HX_NATIVE
+      , mListeners(this)
+#endif
+{}
 FlowQueueable::~FlowQueueable() {}
 
 BEGIN_HANDLERS(FlowQueueable)
@@ -46,12 +52,30 @@ void FlowQueueable::ReleaseListener(Hmx::Object *obj) {
 }
 
 void FlowQueueable::Deactivate(bool b) {
+#ifdef HX_NATIVE
+    if (ObjectDir::InDeleteObjects()) {
+        mListeners.clear();
+        FlowNode::Deactivate(b);
+        return;
+    }
+    // ObjPtrList: pop before release to avoid ring-modified iteration.
+    // If ReleaseListener triggers destruction of another listener still
+    // in temp, the ring auto-removes it (kObjListNoNull).
+    ObjPtrList<Hmx::Object> temp(mListeners);
+    mListeners.clear();
+    while (temp.size() > 0) {
+        Hmx::Object *obj = temp.back();
+        temp.pop_back();
+        ReleaseListener(obj);
+    }
+#else
     std::list<Hmx::Object *> temp(mListeners);
     mListeners.clear();
     while (temp.size() > 0) {
         ReleaseListener(temp.back());
         temp.erase(--temp.end());
     }
+#endif
     FlowNode::Deactivate(b);
 }
 
@@ -66,12 +90,26 @@ void FlowQueueable::ChildFinished(FlowNode *node) {
         return;
 
     if (mStopRequested) {
+#ifdef HX_NATIVE
+        if (ObjectDir::InDeleteObjects()) {
+            mListeners.clear();
+            return;
+        }
+        ObjPtrList<Hmx::Object> temp(mListeners);
+        mListeners.clear();
+        while (temp.size() > 0) {
+            Hmx::Object *obj = temp.back();
+            temp.pop_back();
+            ReleaseListener(obj);
+        }
+#else
         std::list<Hmx::Object *> temp(mListeners);
         mListeners.clear();
         while (temp.size() > 0) {
             ReleaseListener(temp.back());
             temp.erase(--temp.end());
         }
+#endif
         if (mFlowParent && mRunningNodes.empty()
             && mFlowParent->HasRunningNode(this)) {
             FLOW_LOG("Stopped\n");
@@ -81,7 +119,11 @@ void FlowQueueable::ChildFinished(FlowNode *node) {
         if (mListeners.size() > 1) {
             Hmx::Object *front = mListeners.front();
             bool found = false;
+#ifdef HX_NATIVE
+            auto it = mListeners.begin();
+#else
             std::list<Hmx::Object *>::iterator it = mListeners.begin();
+#endif
             ++it;
             for (; it != mListeners.end(); ++it) {
                 if (*it == front) {
@@ -106,7 +148,11 @@ bool FlowQueueable::Activate(Hmx::Object *listener) {
     mStopRequested = false;
     if (mRunningNodes.empty()) {
         // Not running - start immediately
+#ifdef HX_NATIVE
+        mListeners.insert(mListeners.begin(), listener);
+#else
         mListeners.push_front(listener);
+#endif
         bool active = ActivateTrigger();
         if (!active) {
             mListeners.clear();

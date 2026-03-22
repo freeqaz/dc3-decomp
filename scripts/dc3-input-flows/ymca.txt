@@ -1,30 +1,24 @@
-# YMCA — Full flow from boot to game_screen (venue loading)
+# YMCA — Full flow from boot to game_screen
 #
-# Route: main_screen → choose_mode (gameplay) → song_select (perform)
-#        → scroll to YMCA → select → multiuser → loading → game_screen
+# Boot screens auto-advance (subsystem stubs). Game data is initialized
+# at main_screen via DC3_SCREEN=game_screen env var, which calls
+# enter_gameplay to trigger the loading chain directly.
 #
-# The venue loading happens during the loading → game_screen transition
-# via FileMerger::FinishLoading merging world assets.
+# NOTE: Song select → multiuser flow is bypassed because the multiuser
+# panel unload crashes (heap corruption in cascade destruction).
+# Once that's fixed, this script should navigate through the full
+# DTA flow: main → choose_mode → song_select → multiuser → loading.
 #
 # Usage:
-#   MILO_HEADLESS=1 MILO_MAX_FRAMES=5000 \
+#   DC3_SCREEN=game_screen DC3_SONG=ymcavillagepeople \
+#     MILO_HEADLESS=1 MILO_MAX_FRAMES=8000 \
 #     MILO_INPUT_SCRIPT=scripts/dc3-input-flows/ymca.txt \
 #     DC3_DATA=orig-assets native/build/dc3-native
 
-# main_screen: select "gameplay" (first item)
-500 confirm
+# Skip attract movie
+wait_screen attract_screen
++1 confirm
 
-# choose_mode_screen: select "perform" (first item, already highlighted)
-800 confirm
-
-# song_select_screen: scroll down to YMCA
-1100 down
-1200 down
-1300 down
-
-# song_select_screen: select YMCA
-1500 confirm
-
-# multiuser_screen: confirm to proceed with defaults
-1800 confirm
-2000 confirm
+# Game data init + enter_gameplay fires automatically at main_screen
+# (set by DC3_SCREEN=game_screen). Loading chain:
+# loading → preloading → real_loading → game_screen

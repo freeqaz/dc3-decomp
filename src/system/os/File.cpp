@@ -135,7 +135,8 @@ const char *FileGetDrive(const char *file) {
 const char *FileGetPathBuf(const char *file, char *path) {
     MILO_ASSERT(path, 0x3F6);
     if (file != 0) {
-        strcpy(path, file);
+        if (file != path)
+            strcpy(path, file);
         char *p2 = path + strlen(path) - 1;
         while (p2 >= path && *p2 != '/' && *p2 != '\\') {
             p2--;

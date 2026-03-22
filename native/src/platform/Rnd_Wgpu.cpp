@@ -849,70 +849,20 @@ void WgpuRnd::NativeVenueInit() {
 
     // Enter the venue hierarchy — this cascades to all objects including
     // Characters, RndDrawables, etc.
-    // Note: WorldDir::Enter() sets TheWorld temporarily then clears it.
-    // VenueEnter also calls Enter() and finds Characters by name.
+    // On Xbox, HamDirector::Enter() calls VenueEnter() from the meta_game
+    // panel. At main_screen, the venue is visible but HamDirector isn't
+    // entered yet — the DTA flow handles venue Enter() via panel transitions.
+    // We call Enter() here as a fallback for the native port since we don't
+    // have full panel DTA flow coverage yet.
     if (TheHamDirector) {
         TheHamDirector->VenueEnter(venue);
     } else {
         venue->Enter();
     }
 
-    // DC3 doesn't use the LightPreset system. Venue lighting is driven by
-    // PropAnims that directly animate RndLight properties (color, showing).
-    // Lights retain their artist-authored initial states from the .milo file.
-
-    // Note: Venue component .milo files are loaded from the App main loop
-    // (App.cpp) when the game venue is detected — not here, since this runs
-    // before the game fully loads the venue content.
-
-    // Load default outfits for characters so they have visible meshes.
-    // On Xbox, HamWardrobe::LoadCharacters does this via DTA message flow.
-    // We trigger it directly: SetOutfit → configure_file_merger → StartLoad.
-    static const char* sDefaultOutfits[] = { "emilia01", "bodie01" };
-    int charIdx = 0;
-    for (ObjDirItr<HamCharacter> it(venue, true); it != nullptr; ++it) {
-        const char* name = it->Name();
-        // Only load outfits for player characters
-        if (strstr(name, "player") && charIdx < 2) {
-            Symbol outfit(sDefaultOutfits[charIdx]);
-            it->SetOutfit(outfit);
-            it->SetOutfitDir(Symbol("char/main/dancer"));
-            printf("  Loading outfit '%s' for '%s'\n", sDefaultOutfits[charIdx], name);
-            it->StartLoad(false);  // synchronous
-            charIdx++;
-        }
-    }
-
-    // Re-enter character drivers now that outfits (and their clips) are loaded.
-    // CharDriver::Enter() ran during venue->Enter() but the clip directories
-    // were empty at that point. Re-entering picks up the merged clips.
-    for (ObjDirItr<Character> it(venue, true); it != nullptr; ++it) {
-        CharDriver* drv = it->Driver();
-        if (!drv) continue;
-        ObjectDir* clipDir = drv->ClipDir();
-        if (!clipDir) continue;
-
-        // Find a good clip to play — prefer dynamic animations over static talk clips
-        CharClip* bestClip = nullptr;
-        for (ObjDirItr<CharClip> clipIt(clipDir, true); clipIt != nullptr; ++clipIt) {
-            const char* clipName = clipIt->Name();
-            if (!bestClip) bestClip = clipIt;
-            // Prefer victory move clips for more visible animation
-            if (strstr(clipName, "win_move_great")) {
-                bestClip = clipIt;
-                break;  // best choice
-            }
-            if (strstr(clipName, "win_move_good")) {
-                bestClip = clipIt;
-            }
-        }
-
-        if (bestClip) {
-            // Play with loop flags (flag 0x44 = loop, like default play starved)
-            drv->Play(DataNode(bestClip), 0x44, -1.0f, kHugeFloat, 0.0f);
-            printf("  Character '%s': playing '%s'\n", it->Name(), bestClip->Name());
-        }
-    }
+    // Character outfits and animations are handled by the DTA wardrobe flow
+    // (HamWardrobe::LoadCharacters → StartLoad(true) → async FileMerger).
+    // No manual outfit/clip setup needed here.
 }
 
 void WgpuRnd::BeginDrawing() {

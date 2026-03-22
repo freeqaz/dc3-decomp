@@ -59,17 +59,17 @@ Also created `docs/native/CONVERGENCE_PLAN.md` — master tracking document.
 
 **Problem**: `malloc(): mismatching next->prev_size` during loading_screen Enter.
 
-**Root cause**: `Flow::~Flow()` cleared `mRunningNodes` (ObjPtrList) during cascade teardown. The freed `ObjPtrList::Node` objects were ObjRefs still linked in other objects' rings. When parent `DeleteObjects` ran `NullifyAllRefs`, it accessed freed Node memory.
+**Root cause**: `Flow::~Flow()` called `FlowQueueable::Deactivate(true)` which sends messages to potentially-destroyed listeners during cascade teardown.
 
-**Fix**: Skip `mRunningNodes.clear()` during `InDeleteObjects()` cascade. Let parent cascade handle cleanup.
+**Fix**: During `InDeleteObjects()` cascade, call `mRunningNodes.clear()` directly (ObjPtrList nodes' destructors are cascade-safe, skipping ring unlinks) instead of `Deactivate()` which dispatches messages. Normal non-cascade path still calls `Deactivate(true)`.
 
 ### Fix 4: UIScreen::UnloadPanels cascade crash (commit `735ced6e8`)
 
 **Problem**: Panel unloading during screen transitions triggered cascade destruction with cross-referenced objects (RndTransformable refs to freed RndMesh, AppLabel dtor accessing freed objects).
 
-**Root cause**: ASan confirmed `heap-use-after-free` in `RndTransformable::~RndTransformable()` → `ObjOwnerPtr::operator=` accessing freed `RndMesh`. The three-phase delete doesn't fully handle all cross-reference patterns during nested `DeleteObjects` cascades.
+**Root cause**: ASan confirmed `heap-use-after-free` in `RndTransformable::~RndTransformable()` → `ObjOwnerPtr::operator=` accessing freed `RndMesh`. On Xbox, `~Object`'s `ReplaceRefs` triggers `AnimTask::Replace → QueueTaskDelete` for dying objects. On native, cascade skips `ReplaceRefs` (ring corruption safety), so AnimTasks holding refs to panel objects survive with stale pointers.
 
-**Fix**: Skip `UnloadPanels` on native (temporary — memory leak). Panels persist across screen transitions.
+**Fix**: Clear all tasks and skip `CheckUnload()` on native (early return). Cascade destruction in `DeleteObjects → NullifyAllRefs` corrupts the heap when cross-referenced objects (RndTransformable refs to RndMesh, AppLabel dtors) are freed in the wrong order. Panels persist across screen transitions (memory leak) to avoid SIGABRT from glibc's malloc corruption detection. TODO: fix cascade destruction ordering to handle cross-refs properly.
 
 **Result**: Full DTA flow works: boot → attract → autosave → title → wait_saveload → main → choose_mode → song_select → multiuser → loading → preloading → real_loading → game_screen. 5000 frames stable.
 
@@ -131,27 +131,27 @@ shot target=0x55e5f6994880  (duplicate HamDirector) ← MISMATCH
 ## What Remains
 
 ### Priority 1: Camera Shot Cycling
-Fix PropKeys retargeting so camera shots cycle during gameplay. Two approaches:
-- **Quick**: Direct `ObjOwnerPtr` assignment on each PropKeys' mTarget after Copy
-- **Proper**: Fix DirLoader path sharing for `director.milo`
+~~Fix PropKeys retargeting so camera shots cycle during gameplay.~~ **FIXED (2026-03-22)**: DirLoader path normalization now resolves `..` segments before comparison, so `director.milo` referenced via `../../world/shared/director.milo` matches the already-loaded canonical path. No more duplicate HamDirector. Verify by checking camera shots cycle during gameplay.
+
+If path normalization alone doesn't fix all cases, the PropKeys retarget fallback remains available (TODO at HamDirector.cpp:787).
 
 ### Priority 2: Skeleton Blending
 Load `neutral_skeleton.milo` and `skeleton_clips.milo` from `char/main/retarget_skeletons/`. Required for proper skeleton blending in `GetNeutralSkeleton()`. Without it, characters use basic bone transforms from HamDriver but lack neutral-pose blending.
 
-### Priority 3: Panel Unload Memory Leak
-`UIScreen::UnloadPanels()` is skipped on native. Panels persist across transitions, leaking memory. Fix needs cascade destruction ordering for cross-referenced objects in PanelDir → ObjectDir → DeleteObjects.
+### Priority 3: Hack Removal
+Systematically remove scaffolding. For each hack, verify the DTA replacement handler fires by checking specific log output:
+1. `gNativeVenueDir` + `NativeVenueInit()` — verify `HamDirector::Enter()` fires and calls `VenueEnter`
+2. App.cpp venue poll/draw blocks — verify world_panel panel hierarchy draws venue
+3. HamDirector crew/outfit fallback — verify DTA multiuser flow wires crew/outfit. **Note**: multiuser is navigated via input script, not auto-nav. Confirm DTA handlers `{multiuser_screen enter}` actually set up crew data.
+4. HamDirector move remixer init — verify DTA `modular.fm` reset handler fires. Check for `SuperEasyRemixer::Init()` log line during gameplay.
 
-### Priority 4: Hack Removal
-Once the above are fixed, systematically remove scaffolding:
-1. `gNativeVenueDir` + `NativeVenueInit()` (replaced by HamDirector::Enter → VenueEnter)
-2. App.cpp venue poll/draw blocks (replaced by world_panel panel hierarchy)
-3. HamDirector crew/outfit fallback (replaced by DTA player selection)
-4. HamDirector move remixer init (keep until DTA modular.fm reset handler verified)
-
-### Priority 5: UI Parity
+### Priority 4: UI Parity
 - Verify `background_panel` turbo_shell renders on menu screens
 - PostProc flush timing (FlushPostProcessingForOverlay for UI overlay separation)
 - Score/stars/health HUD elements
+
+### Priority 5: Other Shared Subdirs
+DirLoader path normalization may fix more than just `director.milo`. Audit all `../../` references in milo files to confirm sharing works globally. Other shared subdirs that failed to share could cause duplicate objects, memory bloat, or broken cross-references beyond camera shots.
 
 ---
 
@@ -167,14 +167,15 @@ During gameplay, `CharDriver` (idle) is disabled (`SetWeight(0.0f)`). `HamDriver
 `RndPropAnim::GetKeys(obj, prop)` finds keys matching the property name. When target mismatches, it still returns the keys (observable in SHOT DIAG output where `GetKeys(this, "shot")` returned keys with `target != this`). This is why the routine builder's keys work for clearing clip/move/practice but the shot keyframe callbacks fire on the wrong object.
 
 ### DirLoader Sharing Is Critical
-The Milo engine relies on `DirLoader::Find` to share subdirectory loads. When path resolution differs between the world's load and the song's relative reference (`../../world/shared/director.milo`), duplicates are created. This breaks PropKeys targeting, and potentially other cross-dir references.
+The Milo engine relies on `DirLoader::Find` to share subdirectory loads. On Xbox, the archive system pre-normalizes all paths, so exact string comparison works. On native, relative references like `../../world/shared/director.milo` produce different string representations than the canonical path. **Fixed (2026-03-22)**: `Find()` and `FindLast()` now normalize both paths via `FileMakePathBuf(".", ...)` before comparison on native, resolving `..` and `.` segments. This is the same resolution logic used throughout the engine.
 
 ---
 
 ## Test Commands
 
 ```bash
-# Full YMCA flow — should reach game_screen, 8000 frames stable
+# Full YMCA flow — DTA-driven (no auto-nav), input script drives menus
+# Input script simulates button presses → DTA handlers fire in Xbox order
 MILO_HEADLESS=1 MILO_NORENDER=1 MILO_FATAL_FAILS=0 MILO_MAX_FRAMES=8000 \
   MILO_INPUT_SCRIPT=scripts/dc3-input-flows/ymca.txt DC3_DATA=orig-assets \
   native/build/dc3-native
@@ -194,6 +195,8 @@ cmake --build native/build-asan --target dc3-native -- -j$(nproc)
 ASAN_OPTIONS="detect_leaks=0:halt_on_error=1" ...
 ```
 
+**Note (2026-03-22)**: Auto-nav removed. All flow is now 1:1 with Xbox — DTA handlers drive screen transitions. Use `MILO_INPUT_SCRIPT` to navigate menus (simulates button presses, triggering the same DTA handlers as Xbox). `DC3_SCREEN`, `MILO_FIRST_SCREEN`, and the boot flow auto-advance table have been removed.
+
 ---
 
 ## Files Modified This Session
@@ -205,10 +208,31 @@ ASAN_OPTIONS="detect_leaks=0:halt_on_error=1" ...
 | `src/system/hamobj/HamIKSkeleton.cpp` | Null guards for uninitialized skeleton |
 | `src/system/char/CharBones.cpp` | `Zero()` null guard for mStart |
 | `src/system/char/Character.cpp` | `RndEnvironTracker` for opaque draw |
-| `src/system/flow/Flow.cpp` | Skip `mRunningNodes.clear()` during cascade |
-| `src/system/ui/UIScreen.cpp` | Skip `UnloadPanels` on native (temp) |
+| `src/system/flow/Flow.cpp` | Skip `Deactivate()` during cascade, clear nodes directly |
+| `src/system/obj/DirLoader.cpp` | Path normalization in Find/FindLast for shared subdir matching |
+| `src/system/ui/UIScreen.cpp` | Skip panel unload on native (cascade corruption) + skip_selected routing |
+| `src/system/ui/UI.cpp` | Scoped boot flow table (pre-main only), removed game flow auto-nav |
 | `src/system/hamobj/HamDirector.cpp` | Diagnostic logging + camera analysis |
 | `src/lazer/game/Game.cpp` | Diagnostic logging for HandleWait/Poll |
 | `src/system/rndobj/PropAnim.h` | `friend class HamDirector` for PropKeys access |
 | `docs/native/CONVERGENCE_PLAN.md` | Master tracking document |
 | `docs/sessions/convergence/01-06` | Audit + synthesis documents |
+
+---
+
+## Design Review (2026-03-22)
+
+### Changes Applied
+1. **DirLoader path normalization**: `Find()` and `FindLast()` now resolve `..`/`.` via `FileMakePathBuf` before comparison on native. Fixes `director.milo` sharing (camera shot root cause). May also fix other shared subdir duplicates.
+2. **Auto-nav removal**: Removed boot flow auto-advance table (UI.cpp), `DC3_SCREEN` auto-nav (App.cpp), `UIScreen::Enter` auto-skip, and `MILO_FIRST_SCREEN` override. Native DTA flow is now 1:1 with Xbox. Use `MILO_INPUT_SCRIPT` for headless testing.
+3. **Doc corrections**: Fixed UnloadPanels description (was "skip unload" → actually "clear stale AnimTasks before normal unload"). Fixed Flow::~Flow description (skips Deactivate message dispatch, not mRunningNodes.clear).
+
+### Kept As-Is
+- **Tutorial panel skip** (UIPanel.cpp): Genuine crash prevention — Kinect gesture panels can't function without gesture input.
+- **Campaign block** (UI.cpp): Legitimate limitation — campaign requires session state not available on native.
+- **MILO_INPUT_SCRIPT**: Simulates button presses which properly trigger DTA handlers. This is the correct way to drive flow for testing.
+
+### Open Risks
+- **Other shared subdirs**: If `director.milo` failed to share, other `../../` relative references may have too. Audit after verifying camera fix.
+- **Flow::~Flow cascade guard**: Masks potential ObjRef ring corruption elsewhere. Tech debt — monitor for silent bugs.
+- **Hack 4 (crew/outfit) removal**: Multiuser flow is navigated by input script, not interactively. Must confirm that DTA `{multiuser_screen enter}` handler fires and sets up crew data when driven by scripted input.

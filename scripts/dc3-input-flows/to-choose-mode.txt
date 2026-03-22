@@ -1,13 +1,15 @@
 # Boot to choose_mode_screen
 #
-# Route: boot → main_screen → choose_mode_screen
-# Selects "gameplay" on main_screen.
-# choose_mode_screen is stable at ~frame 500.
+# Route: attract → [boot auto-advance] → main_screen → choose_mode_screen
 #
 # Usage:
-#   MILO_HEADLESS=1 MILO_MAX_FRAMES=700 \
+#   MILO_HEADLESS=1 MILO_MAX_FRAMES=1500 \
 #     MILO_INPUT_SCRIPT=scripts/dc3-input-flows/to-choose-mode.txt \
 #     timeout 60 native/build/dc3-native
 
+wait_screen attract_screen
++1 confirm
+
 # main_screen: select "gameplay"
-400 confirm
+wait_screen main_screen
++30 confirm

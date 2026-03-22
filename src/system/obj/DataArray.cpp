@@ -257,6 +257,20 @@ void DataArray::Remove(int index) {
 }
 
 void DataArray::Remove(const DataNode &dn) {
+#ifdef HX_NATIVE
+    // On LP64, UncheckedInt() truncates 8-byte pointers to 4 bytes.
+    // Use full pointer comparison for pointer-typed nodes.
+    bool isPtr = (dn.Type() == kDataSymbol || dn.Type() == kDataObject
+                  || dn.Type() >= kDataArray);
+    for (int i = mSize - 1; i >= 0; i--) {
+        bool match = isPtr ? (mNodes[i].UncheckedStr() == dn.UncheckedStr())
+                           : (mNodes[i].UncheckedInt() == dn.UncheckedInt());
+        if (match) {
+            Remove(i);
+            return;
+        }
+    }
+#else
     int searchType = dn.UncheckedInt();
     for (int lol = mSize - 1; lol >= 0; lol--) {
         if (mNodes[lol].UncheckedInt() == searchType) {
@@ -264,9 +278,21 @@ void DataArray::Remove(const DataNode &dn) {
             return;
         }
     }
+#endif
 }
 
 bool DataArray::Contains(const DataNode &dn) const {
+#ifdef HX_NATIVE
+    bool isPtr = (dn.Type() == kDataSymbol || dn.Type() == kDataObject
+                  || dn.Type() >= kDataArray);
+    for (int i = mSize - 1; i >= 0; i--) {
+        bool match = isPtr ? (mNodes[i].UncheckedStr() == dn.UncheckedStr())
+                           : (mNodes[i].UncheckedInt() == dn.UncheckedInt());
+        if (match)
+            return true;
+    }
+    return false;
+#else
     int searchType = dn.UncheckedInt();
     for (int lol = mSize - 1; lol >= 0; lol--) {
         if (mNodes[lol].UncheckedInt() == searchType) {
@@ -274,6 +300,7 @@ bool DataArray::Contains(const DataNode &dn) const {
         }
     }
     return false;
+#endif
 }
 
 DataArray::DataArray(int size)
@@ -569,12 +596,31 @@ DataArray *DataArray::FindArray(int tag, bool fail) const {
 }
 
 DataArray *DataArray::FindArray(Symbol tag, bool fail) const {
+#ifdef HX_NATIVE
+    // On 64-bit, Symbol→int truncates the 8-byte interned pointer to 4 bytes,
+    // causing false matches in FindArray(int). Compare Symbols directly.
+    for (DataNode *dn = mNodes; dn < &mNodes[mSize]; dn++) {
+        if (dn->Type() == kDataArray) {
+            const DataArray *arr = dn->UncheckedArray();
+            if (arr->Size() > 0 && arr->Node(0).Type() == kDataSymbol
+                && arr->Node(0).LiteralSym() == tag) {
+                return (DataArray *)arr;
+            }
+        }
+    }
+    if (fail)
+        MILO_FAIL(
+            "Couldn't find '%s' in array (file %s, line %d)", tag.Str(), File(), mLine
+        );
+    return nullptr;
+#else
     DataArray *found = FindArray((int)tag, false);
     if (!found && fail)
         MILO_FAIL(
             "Couldn't find '%s' in array (file %s, line %d)", tag.Str(), File(), mLine
         );
     return found;
+#endif
 }
 
 DataArray *DataArray::FindArray(Symbol s1, Symbol s2) const {

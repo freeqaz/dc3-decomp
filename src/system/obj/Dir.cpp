@@ -50,6 +50,28 @@ ObjectDir::~ObjectDir() {
     // Track destruction depth so ~Object, ~ObjRefConcrete, ObjDirPtr, FlowNode,
     // and Sequence can skip ring operations during cascading teardown.
     sDeleteObjectsDepth++;
+    // At the outermost level, nullify ALL object refs recursively (including
+    // sub-dir children) BEFORE mSubDirs.clear() destroys sub-dir ObjPtrs.
+    // This ensures external refs (TaskMgr, globals) are nullified while
+    // ObjPtrVec buffers are still allocated. Inner DeleteObjects skips Phase 0.
+    // At the outermost level, nullify refs recursively before destruction.
+    // mSubDirs may not include all inline sub-ObjectDirs, so discover them
+    // via dynamic_cast during hash table traversal.
+    if (sDeleteObjectsDepth == 1 && !TheLoadMgr.AsyncUnload()) {
+        std::vector<ObjectDir *> allDirs;
+        allDirs.push_back(this);
+        for (size_t i = 0; i < allDirs.size(); i++) {
+            for (ObjDirItr<Hmx::Object> it(allDirs[i], false); it != nullptr; ++it) {
+                Hmx::Object *obj = it;
+                if (obj == this) continue;
+                if (obj->IsRefAlive())
+                    obj->NullifyAllRefs();
+                ObjectDir *asDir = dynamic_cast<ObjectDir *>(obj);
+                if (asDir && std::find(allDirs.begin(), allDirs.end(), asDir) == allDirs.end())
+                    allDirs.push_back(asDir);
+            }
+        }
+    }
 #endif
     mSubDirs.clear();
     delete mLoader;
@@ -87,7 +109,7 @@ ObjectDir::~ObjectDir() {
     }
 #ifdef HX_NATIVE
     sDeleteObjectsDepth--;
-    if (sDeleteObjectsDepth == 0)
+    if (sDeleteObjectsDepth == 0 && !sSuppressFlush)
         FlushDeferredFrees();
 #endif
 }
@@ -714,6 +736,7 @@ void ObjectDir::RemovingSubDir(ObjDirPtr<ObjectDir> &subdir) {
 #ifdef HX_NATIVE
 int ObjectDir::sDeleteObjectsDepth = 0;
 bool ObjectDir::sInMergeDirs = false;
+bool ObjectDir::sSuppressFlush = false;
 #endif
 
 void ObjectDir::DeleteObjects() {
@@ -743,26 +766,30 @@ void ObjectDir::DeleteObjects() {
             todo.push_back({dynamic_cast<void *>((Hmx::Object *)it), it});
     }
     // Phase 0: nullify ref rings via NullifyObj while memory is valid.
-    // NullifyObj is purely mechanical (no Replace callbacks) — avoids
-    // delete-this in MessageTask/ScriptTask/PropertyTask/DirLoader.
-    // NullifyAllRefs uses SnapshotRing to safely handle dead ObjRefs
-    // left in rings by ~ObjRefConcrete's cascade skip (freed ObjPtrVec
-    // buffers from mSubDirs.clear() cascade).
-    // Objects destroyed by mSubDirs.clear() may be in the todo list
-    // (RemoveFromDir skipped when mDir == sDeleting). Their rings are
-    // self-looped from their own Phase 0, so NullifyAllRefs is a no-op.
-    for (auto &[block, obj] : todo)
-        obj->NullifyAllRefs();
+    // At the outermost level, also recurse into sub-ObjectDirs so their
+    // objects' rings are nullified while ObjPtrVec buffers are still alive.
+    // Inner DeleteObjects (sDeleteObjectsDepth > 1) skips Phase 0:
+    // rings were already handled by the outer Phase 0.
+    if (sDeleteObjectsDepth <= 1) {
+        // Recursively nullify ALL objects including sub-dir children.
+        // ObjDirItr(this, false) only covers direct objects. We need
+        // sub-dir objects too because their rings may reference external
+        // objects (TaskMgr, globals) that need nullification.
+        for (ObjDirItr<Hmx::Object> it(this, true); it != nullptr; ++it) {
+            if (it != this && ((Hmx::Object *)it)->IsRefAlive())
+                ((Hmx::Object *)it)->NullifyAllRefs();
+        }
+    }
     // Phase 1: destroy all (memory stays valid for sibling destructors).
-    // Skip objects already destroyed by mSubDirs.clear() cascade.
-    for (auto &[block, obj] : todo) {
-        if (obj->IsRefAlive())
-            obj->~Object();
-        else
-            obj = nullptr; // mark: already handled by nested cascade
+    for (size_t i = 0; i < todo.size(); i++) {
+        auto &[block, obj] = todo[i];
+        if (!block || !obj || !obj->IsRefAlive()) {
+            obj = nullptr;
+            continue;
+        }
+        obj->~Object();
     }
     // Phase 2: defer frees until outermost ~ObjectDir completes.
-    // Skip objects already deferred by nested cascade.
     for (auto &[block, obj] : todo) {
         if (!obj)
             continue;

@@ -467,9 +467,6 @@ void FileMerger::Select(Symbol name, const FilePath &fp, bool b3) {
 bool FileMerger::StartLoadInternal(bool async, bool loading) {
     mAsyncLoad = async;
     mLoadingLoad = loading;
-#ifdef __EMSCRIPTEN__
-    async = true; // Browser event loop can't block in Poll() loop
-#endif
 #if !defined(MILO_VIEWER)
     // The game relies on change_files to translate high-level selections like
     // HamCharacter::mOutfit into concrete merger paths before loading.
