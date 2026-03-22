@@ -817,6 +817,20 @@ void WgpuRnd::BeginDrawing() {
     RndMesh_ResetFrameStats();
     mPostProcFlushed = false;
 
+    // Frame capture: set target frame via MILO_CAPTURE_FRAME env var
+    {
+        static int sCaptureFrame = -1;
+        static bool sChecked = false;
+        if (!sChecked) {
+            sChecked = true;
+            const char *env = getenv("MILO_CAPTURE_FRAME");
+            if (env) sCaptureFrame = atoi(env);
+        }
+        FrameCapture::Get().BeginFrame(mFrameID);
+        if (sCaptureFrame >= 0 && mFrameID == sCaptureFrame)
+            FrameCapture::Get().SetCaptureFrame(sCaptureFrame);
+    }
+
     // Skip if GPU not initialized (Phase 1A headless mode)
     if (!mGpu.Device()) {
         mDrawing = true;
@@ -976,6 +990,7 @@ void WgpuRnd::EnsureSceneUniformsCurrent() {
 }
 
 void WgpuRnd::EndDrawing() {
+    FrameCapture::Get().EndFrame();
     if (!mGpu.Device()) {
         mDrawing = false;
         return;
