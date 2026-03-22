@@ -1,17 +1,11 @@
-# YMCA — Full flow from boot to game_screen
+# YMCA — Full DTA flow from boot to gameplay
 #
-# Boot screens auto-advance (subsystem stubs). Game data is initialized
-# at main_screen via DC3_SCREEN=game_screen env var, which calls
-# enter_gameplay to trigger the loading chain directly.
-#
-# NOTE: Song select → multiuser flow is bypassed because the multiuser
-# panel unload crashes (heap corruption in cascade destruction).
-# Once that's fixed, this script should navigate through the full
-# DTA flow: main → choose_mode → song_select → multiuser → loading.
+# Navigates through the complete Xbox DTA screen chain:
+#   boot → attract → title → main → choose_mode → song_select
+#   → multiuser → loading → preloading → real_loading → game_screen
 #
 # Usage:
-#   DC3_SCREEN=game_screen DC3_SONG=ymcavillagepeople \
-#     MILO_HEADLESS=1 MILO_MAX_FRAMES=8000 \
+#   MILO_HEADLESS=1 MILO_MAX_FRAMES=10000 \
 #     MILO_INPUT_SCRIPT=scripts/dc3-input-flows/ymca.txt \
 #     DC3_DATA=orig-assets native/build/dc3-native
 
@@ -19,6 +13,29 @@
 wait_screen attract_screen
 +1 confirm
 
-# Game data init + enter_gameplay fires automatically at main_screen
-# (set by DC3_SCREEN=game_screen). Loading chain:
-# loading → preloading → real_loading → game_screen
+# Title screen — confirm to start
+wait_screen title_screen
++30 confirm
+
+# Main screen — select "gameplay" (first item)
+wait_screen main_screen
++60 confirm
+
+# Choose mode — select "perform" (first item)
+wait_screen choose_mode_screen
++30 confirm
+
+# Song select — scroll down to find a song, then confirm
+wait_screen song_select_screen
++30 down
++20 down
++20 down
++20 confirm
+
+# Multiuser — confirm to proceed with defaults
+wait_screen multiuser_screen
++30 confirm
++30 confirm
+
+# Loading screens auto-advance via DTA handlers:
+#   loading → preloading → real_loading → game_screen
