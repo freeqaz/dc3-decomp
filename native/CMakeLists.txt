@@ -110,28 +110,26 @@ else()
     find_package(glfw3 REQUIRED)
 endif()
 
-# Dear ImGui — debug UI overlay for milo-viewer
-include(FetchContent)
-FetchContent_Declare(imgui
-    GIT_REPOSITORY https://github.com/ocornut/imgui.git
-    GIT_TAG        8314fc3e5a10f7c6b670225065fce1dc8cfd396b  # post-v1.91.8, supports Dawn WebGPU API renames
-)
-FetchContent_MakeAvailable(imgui)
-add_library(imgui STATIC
-    ${imgui_SOURCE_DIR}/imgui.cpp
-    ${imgui_SOURCE_DIR}/imgui_draw.cpp
-    ${imgui_SOURCE_DIR}/imgui_tables.cpp
-    ${imgui_SOURCE_DIR}/imgui_widgets.cpp
-    ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
-    ${imgui_SOURCE_DIR}/backends/imgui_impl_wgpu.cpp
-)
-target_include_directories(imgui PUBLIC
-    ${imgui_SOURCE_DIR}
-    ${imgui_SOURCE_DIR}/backends
-)
-if(EMSCRIPTEN)
-    target_compile_definitions(imgui PUBLIC IMGUI_IMPL_WEBGPU_BACKEND_EMSCRIPTEN)
-else()
+# Dear ImGui — debug UI overlay for milo-viewer (not used in web build)
+if(NOT EMSCRIPTEN)
+    include(FetchContent)
+    FetchContent_Declare(imgui
+        GIT_REPOSITORY https://github.com/ocornut/imgui.git
+        GIT_TAG        8314fc3e5a10f7c6b670225065fce1dc8cfd396b  # post-v1.91.8, supports Dawn WebGPU API renames
+    )
+    FetchContent_MakeAvailable(imgui)
+    add_library(imgui STATIC
+        ${imgui_SOURCE_DIR}/imgui.cpp
+        ${imgui_SOURCE_DIR}/imgui_draw.cpp
+        ${imgui_SOURCE_DIR}/imgui_tables.cpp
+        ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+        ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
+        ${imgui_SOURCE_DIR}/backends/imgui_impl_wgpu.cpp
+    )
+    target_include_directories(imgui PUBLIC
+        ${imgui_SOURCE_DIR}
+        ${imgui_SOURCE_DIR}/backends
+    )
     target_link_libraries(imgui PUBLIC glfw dawn::webgpu_dawn)
     target_compile_definitions(imgui PUBLIC IMGUI_IMPL_WEBGPU_BACKEND_DAWN)
 endif()
