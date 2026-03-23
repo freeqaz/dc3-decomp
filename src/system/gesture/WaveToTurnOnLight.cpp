@@ -72,6 +72,14 @@ void WaveToTurnOnLight::SetPaused(bool paused) {
 
 void WaveToTurnOnLight::EnableWaveState() {
     if (!mWaveStateEnabled) {
+#ifdef HX_NATIVE
+        // No Kinect on native/web — skip the wave gesture flow entirely.
+        // On web, NuiWaveSetEnabled is an auto-generated Emscripten stub that
+        // returns 0 (ERROR_SUCCESS), which would arm multi-intro mode and
+        // permanently block StartGame() via mGameStartHold.
+        mPaused = false;
+        return;
+#endif
         HRESULT res = NuiWaveSetEnabled(true);
         if (res == ERROR_SUCCESS) {
             mWaveStateEnabled = true;
