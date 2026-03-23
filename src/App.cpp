@@ -6,6 +6,9 @@
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 #endif
+#ifdef __EMSCRIPTEN__
+#include <emscripten/emscripten.h>
+#endif
 #include "ui/UIPanel.h"
 #include "ui/PanelDir.h"
 #include "rndobj/Dir.h"
@@ -278,7 +281,7 @@ App::App(int argc, char **argv) {
     }
 
 #ifdef HX_NATIVE
-    // Native boot: init renderer, subsystems, but skip Kinect/splash/threading
+    // Native boot: init renderer, subsystems, skip Kinect/threading
     TheRnd.PreInit();
 
     static DataNode &notifyLevel = DataVariable("notify_level");
@@ -306,11 +309,49 @@ App::App(int argc, char **argv) {
     // Initialize renderer
     TheRnd.Init();
 
+#ifdef __EMSCRIPTEN__
+    // Yield to browser so WebGPU adapter/device async callbacks fire.
+    // After resume, mDevice is valid and we can create GPU resources.
+    emscripten_sleep(0);
+    {
+        extern WgpuRnd *gWgpuRnd;
+        if (gWgpuRnd && gWgpuRnd->Gpu().IsReady()) {
+            gWgpuRnd->InitGpuResources();
+        }
+    }
+#endif
+
+    // Splash screens (ESRB + Harmonix logos) — same as Xbox boot.
+    // Disable with DC3_SHOW_SPLASH=0.
+    const char *splashEnv = getenv("DC3_SHOW_SPLASH");
+    bool showSplash = !splashEnv || strcmp(splashEnv, "0") != 0;
+    Splash splash;
+    if (showSplash) {
+        splash.AddScreen("ui/splash/eng/esrb_keep.milo", 0x12C0);
+        splash.AddScreen("ui/splash/harmonix_keep.milo", 3000);
+        splash.PrepareRemaining();
+        splash.BeginSplasher();
+    }
+#ifdef __EMSCRIPTEN__
+    // Yield immediately after splash Draw() so the browser can present the
+    // surface texture. emdawnwebgpu auto-presents at rAF boundary — if we
+    // don't yield here, the splash frame expires before the browser sees it.
+    if (showSplash) emscripten_sleep(0);
+#endif
+
     // Register script functions
     MagnuInit();
+    if (showSplash && TheSplasher) TheSplasher->Poll();
+#ifdef __EMSCRIPTEN__
+    if (showSplash) emscripten_sleep(0);
+#endif
 
     // Flow system - manages game state machine
     FlowInit();
+    if (showSplash && TheSplasher) TheSplasher->Poll();
+#ifdef __EMSCRIPTEN__
+    if (showSplash) emscripten_sleep(0);
+#endif
 
     // Load common sound bank (Faders, FxSend, Sound objects used by gameplay)
     {
@@ -323,12 +364,24 @@ App::App(int argc, char **argv) {
 
     // Character system
     CharInit();
+    if (showSplash && TheSplasher) TheSplasher->Poll();
+#ifdef __EMSCRIPTEN__
+    if (showSplash) emscripten_sleep(0);
+#endif
 
     // World system
     WorldInit();
+    if (showSplash && TheSplasher) TheSplasher->Poll();
+#ifdef __EMSCRIPTEN__
+    if (showSplash) emscripten_sleep(0);
+#endif
 
     // Ham (game-specific) system
     HamInit();
+    if (showSplash && TheSplasher) TheSplasher->Poll();
+#ifdef __EMSCRIPTEN__
+    if (showSplash) emscripten_sleep(0);
+#endif
 
     // Override HamLabel factory → AppLabel (DC3-specific subclass).
     // HamInit() registers HamLabel::NewObject for "HamLabel"; we replace it
@@ -376,10 +429,28 @@ App::App(int argc, char **argv) {
 
     // Song manager
     TheHamSongMgr.Init();
+    if (showSplash && TheSplasher) TheSplasher->Poll();
+#ifdef __EMSCRIPTEN__
+    if (showSplash) emscripten_sleep(0);
+#endif
 
     // Game subsystem inits (from original init sequence)
     MetaPanel::Init();
     GameInit();
+    if (showSplash && TheSplasher) TheSplasher->Poll();
+#ifdef __EMSCRIPTEN__
+    if (showSplash) emscripten_sleep(0);
+#endif
+
+    // Subsystem inits that other code dereferences without null checks.
+    // Order matches Xbox init sequence (FixedSizeSaveable/HamUserMgr early,
+    // AccomplishmentManager before MetagameRank since Init() uses TheAccomplishmentMgr).
+    FixedSizeSaveable::Init(0x5C, 0x1662);
+    HamUserMgrInit(false);
+    AccomplishmentManager::Init(SystemConfig("accomplishment_info"));
+    MetagameRank::Preinit(); // sets gRanksArray, needed by MetagameRank methods
+    MetagameRank::Init();
+    PartyModeMgr::Init();
 
     // Register MidiParser factory so .milo files can deserialize MidiParser objects.
     // Missing this caused silent null returns from NewObject("MidiParser").
@@ -424,6 +495,13 @@ App::App(int argc, char **argv) {
         registerStub("challenges", new Hmx::Object());
         registerStub("speech_mgr", new NativeSpeechMgrStub());
     }
+
+    if (showSplash) {
+        splash.EndSplasher();
+    }
+#ifdef __EMSCRIPTEN__
+    if (showSplash) emscripten_sleep(0);
+#endif
 
     // Go to first screen (title screen)
     TheUI->GotoFirstScreen();
