@@ -893,6 +893,7 @@ void WgpuRnd::BeginDrawing() {
     mObjectRing.Reset();
     mBoneRing.Reset();
 
+#ifndef __EMSCRIPTEN__
     // Poll window size each frame and reconfigure surface if changed.
     // This catches resize events that the callback may miss (e.g. macOS
     // live resize where the callback fires but Dawn needs reconfiguration
@@ -905,6 +906,7 @@ void WgpuRnd::BeginDrawing() {
             mGpu.ResizeSurface(winW, winH);
         }
     }
+#endif
 
     // Acquire next frame
     if (mGpu.IsHeadless()) {

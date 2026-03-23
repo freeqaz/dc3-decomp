@@ -277,7 +277,11 @@ def parse_dta(text, source_file=None, base_dir=None, include_depth=0):
             pos[0] += 1
             process_include(tok[1], root)
         else:
+            # Bare atoms at root level (e.g., from #include of value-only files
+            # like ham_version.dta which contains just: "Build: 120916")
+            # Collect them so process_include can transfer to parent node.
             pos[0] += 1
+            root.children.append(tok)
 
     return root
 

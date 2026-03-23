@@ -203,8 +203,8 @@ void MoveMgr::GenerateMoveChoice(
     MILO_LOG(
         "invalid=%d, wrong genre=%d right genre=%d\n", invalidNum, vec2.size(), vec1.size()
     );
-    std::random_shuffle(vec1.begin(), vec1.end());
-    std::random_shuffle(vec2.begin(), vec2.end());
+    RandomShuffle(vec1.begin(), vec1.end());
+    RandomShuffle(vec2.begin(), vec2.end());
 }
 
 void MoveMgr::PickRandomMoveSet(Symbol s1, int count, DataArray *a3, DataArray *a4) {
@@ -224,8 +224,8 @@ void MoveMgr::PickRandomMoveSet(Symbol s1, int count, DataArray *a3, DataArray *
             }
         }
     }
-    std::random_shuffle(rightMoves.begin(), rightMoves.end());
-    std::random_shuffle(wrongMoves.begin(), wrongMoves.end());
+    RandomShuffle(rightMoves.begin(), rightMoves.end());
+    RandomShuffle(wrongMoves.begin(), wrongMoves.end());
     MILO_ASSERT(rightMoves.size() > 0, 0x4D9);
     MILO_ASSERT(wrongMoves.size() > count - 1, 0x4DA);
     const MoveVariant *firstRightMove = rightMoves[0];

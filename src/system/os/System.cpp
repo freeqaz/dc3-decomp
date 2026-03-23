@@ -603,6 +603,7 @@ void SystemPreInit(const char *config) {
     TheDebug.Init();
     DataInit();
     DataArray_InitDtaTrace();
+    DataArray_InitDtaValidate();
     PreInitSystem(config);
     LanguageInit();
     gSystemLocale = GetSystemLocale("usa");

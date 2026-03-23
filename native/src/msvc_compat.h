@@ -15,8 +15,10 @@
 #include <algorithm>
 #include <cstdlib>
 
-// These shims are needed on both libc++ (macOS) and libstdc++ 15+ (Linux),
-// since both enforce the C++17 removal of these APIs.
+// Shim for std::random_shuffle, removed in C++17.
+// Only needed when the standard library actually removed it (libc++, older libstdc++).
+// GCC 15's libstdc++ re-added it, so skip to avoid redefinition.
+#if defined(_LIBCPP_VERSION) || (defined(__GLIBCXX__) && __GLIBCXX__ < 20250101)
 namespace std {
 template <class RandomIt>
 void random_shuffle(RandomIt first, RandomIt last) {
@@ -26,8 +28,11 @@ void random_shuffle(RandomIt first, RandomIt last) {
     }
 }
 } // namespace std
+#endif
 
+// Shim for std::mem_fun, removed in C++17. Same situation as random_shuffle.
 #include <functional>
+#if defined(_LIBCPP_VERSION) || (defined(__GLIBCXX__) && __GLIBCXX__ < 20250101)
 namespace std {
 template <class Ret, class T>
 auto mem_fun(Ret (T::*f)()) { return std::mem_fn(f); }
@@ -36,5 +41,6 @@ auto mem_fun(Ret (T::*f)() const) { return std::mem_fn(f); }
 template <class Ret, class T, class Arg>
 auto mem_fun(Ret (T::*f)(Arg)) { return std::mem_fn(f); }
 } // namespace std
+#endif
 
 #endif // HX_NATIVE

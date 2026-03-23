@@ -30,3 +30,20 @@ int RandomInt();
 int RandomInt(int, int);
 float RandomFloat();
 float RandomFloat(float, float);
+
+// std::random_shuffle was removed in C++17 (Emscripten/Clang).
+// This wrapper uses std::shuffle on native, std::random_shuffle on PPC.
+#ifdef HX_NATIVE
+#include <random>
+#include <algorithm>
+template <typename Iter>
+inline void RandomShuffle(Iter first, Iter last) {
+    std::shuffle(first, last, std::default_random_engine(RandomInt()));
+}
+#else
+#include <algorithm>
+template <typename Iter>
+inline void RandomShuffle(Iter first, Iter last) {
+    std::random_shuffle(first, last);
+}
+#endif

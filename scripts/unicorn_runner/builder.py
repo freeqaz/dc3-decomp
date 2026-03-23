@@ -11,7 +11,7 @@ from dataclasses import dataclass
 
 from .coloader import adjust_relocs_to_layout, partition_relocs
 from .memory_map import CODE_BASE
-from .patcher import assign_addresses, patch_function, rewrite_ppc64_insns, prepare_switch_tables
+from .patcher import assign_addresses, patch_function, rewrite_ppc64_insns, prepare_switch_tables, prepare_data_sections
 
 
 @dataclass
@@ -41,6 +41,10 @@ def prepare_side(code_bytes, relocs, coff, symbol, side_class):
             coff, symbol, relocs, CODE_BASE)
         if rdata_bytes is None:
             rdata_override = {}
+
+    # Collect initialized data sections (.data*, .rdata*) referenced by relocs
+    rdata_bytes, rdata_override = prepare_data_sections(
+        coff, relocs, rdata_bytes, rdata_override)
 
     trampolines, globals_map = assign_addresses(relocs)
     globals_map.update(rdata_override)
@@ -98,6 +102,10 @@ def prepare_coloaded_side(root_bytes, root_relocs, coff, symbol, side_class,
             coff, symbol, root_relocs, CODE_BASE)
         if rdata_bytes is None:
             rdata_override = {}
+
+    # Collect initialized data sections (.data*, .rdata*) referenced by all relocs
+    rdata_bytes, rdata_override = prepare_data_sections(
+        coff, all_relocs, rdata_bytes, rdata_override)
 
     ext_globals.update(rdata_override)
 

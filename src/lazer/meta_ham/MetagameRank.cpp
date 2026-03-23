@@ -74,7 +74,7 @@ namespace {
                 }
             }
         }
-        std::random_shuffle(out.begin(), out.end());
+        RandomShuffle(out.begin(), out.end());
     }
 }
 

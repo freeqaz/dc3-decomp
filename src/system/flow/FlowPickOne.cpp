@@ -105,7 +105,7 @@ bool FlowPickOne::Activate() {
             FOREACH (it, mChildNodes) {
                 items.push_back(it->Obj());
             }
-            std::random_shuffle(items.begin(), items.end());
+            RandomShuffle(items.begin(), items.end());
             mIndex = 0;
             for (auto rit = items.end(); rit != items.begin();)
                 mChoiceHistory.push_back(*--rit);

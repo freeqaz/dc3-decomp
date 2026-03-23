@@ -14,6 +14,10 @@
 #include "utl/Symbol.h"
 #include <cmath>
 #include <functional>
+#ifdef HX_NATIVE
+// std::mem_fun removed in C++17; use std::mem_fn (no underscore)
+#define mem_fun mem_fn
+#endif
 #include "math/Decibels.h"
 #include "math/Utl.h"
 

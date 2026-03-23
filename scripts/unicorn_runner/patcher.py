@@ -162,6 +162,72 @@ def patch_function(code_bytearray, relocs, trampolines, globals_map, code_base):
             raise ValueError(f"Unknown relocation type: {rtype}")
 
 
+def prepare_data_sections(coff, relocs, existing_rdata_bytes=None, existing_override=None):
+    """Load initialized data sections (.data*, .rdata*) referenced by REFHI/REFLO relocs.
+
+    Scans relocations for REFHI/REFLO targets whose sections are initialized data
+    (names starting with '.data' or '.rdata'). Loads those section bytes and maps
+    referenced symbols to RDATA_BASE + offset.
+
+    If existing_rdata_bytes / existing_override are provided (e.g. from
+    prepare_switch_tables), the new data is appended after the existing data
+    and offsets are adjusted accordingly.
+
+    Returns:
+        (rdata_bytes, globals_override) — bytes to map at RDATA_BASE,
+        dict of symbol_name -> RDATA_BASE+offset.  Returns (None, {}) if
+        no data sections are referenced.
+    """
+    # Find data sections referenced by REFHI/REFLO relocs
+    data_sections = {}  # sec_idx -> set of symbol names
+    for reloc in relocs:
+        if reloc["type_name"] in ("REFHI", "REFLO"):
+            sym = coff.symbol_map.get(reloc["symbol_name"])
+            if sym and sym['section'] > 0:
+                sec_idx = sym['section'] - 1
+                sec = coff.sections[sec_idx]
+                if sec['name'].startswith('.data') or sec['name'].startswith('.rdata'):
+                    if sec_idx not in data_sections:
+                        data_sections[sec_idx] = set()
+                    data_sections[sec_idx].add(reloc["symbol_name"])
+
+    if not data_sections:
+        return existing_rdata_bytes, existing_override or {}
+
+    # Start after any existing rdata content
+    base_rdata = bytearray()
+    if existing_rdata_bytes:
+        base_rdata.extend(existing_rdata_bytes)
+
+    globals_override = dict(existing_override) if existing_override else {}
+
+    # Check which sections are already covered by existing overrides
+    already_mapped = set()
+    for sym_name in globals_override:
+        sym = coff.symbol_map.get(sym_name)
+        if sym and sym['section'] > 0:
+            already_mapped.add(sym['section'] - 1)
+
+    for sec_idx in sorted(data_sections.keys()):
+        if sec_idx in already_mapped:
+            continue
+
+        sec_data = coff.get_section_data(sec_idx)
+        sec_offset = len(base_rdata)
+
+        # Map referenced symbols to their RDATA_BASE addresses
+        for sym_name in data_sections[sec_idx]:
+            sym = coff.symbol_map[sym_name]
+            globals_override[sym_name] = RDATA_BASE + sec_offset + sym['value']
+
+        base_rdata.extend(sec_data)
+
+    if len(base_rdata) == 0:
+        return None, globals_override
+
+    return bytes(base_rdata), globals_override
+
+
 def prepare_switch_tables(coff, func_symbol, relocs, code_base):
     """Load and rebase .rdata switch table data for a bctr_switch function.
 

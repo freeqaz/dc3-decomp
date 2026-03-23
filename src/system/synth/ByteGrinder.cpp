@@ -944,14 +944,24 @@ void ByteGrinder::GrindArray(
     u32 *hashMap = (encMethod != 0) ? hashMap6 : hashMap5;
     u32 maxCase = (encMethod != 0) ? 64u : 32u;
 
-    // Grind: for each key byte, apply the permuted ops driven by hash of each array element
+    // Grind: for each key byte, run the DTA while/switch loop.
+    // The DTA script is: {while (size($bar) > $ix) {switch hash (N {++ $ix}{set $foo ...})...} {++ $ix}}
+    // When a switch case matches: ix increments TWICE (once in case body BEFORE op, once trailing).
+    // The op reads bar[ix] AFTER the first increment, so it uses bar[ix+1] relative to the hash byte.
+    // When no case matches: ix increments ONCE (trailing only).
     for (int i = 0; i < arrayLen; i++) {
         u32 foo = arrayToGrind[i];
-        for (int ix = 0; ix < 0x10; ix++) {
+        int ix = 0;
+        while (ix < 0x10) {
             u32 barVal = arrayToGrind[ix];
             u32 hash = hashMap[barVal & 0xFF];
-            if (hash < maxCase && caseToOp[hash])
-                foo = caseToOp[hash](barVal, foo);
+            if (hash < maxCase && caseToOp[hash]) {
+                // Case matched: {++ $ix} then {set $foo {Op {elem $bar $ix} $foo}}
+                ix++;  // first increment (inside case body, before op)
+                if (ix < 0x10)
+                    foo = caseToOp[hash](arrayToGrind[ix], foo);
+            }
+            ix++;  // trailing increment (always, end of while body)
         }
         arrayToGrind[i] = (unsigned char)(foo & 0xFF);
     }

@@ -420,14 +420,6 @@ void HamDirector::ListPollChildren(std::list<RndPollable *> &polls) const {
     if (mVenue) {
         polls.push_back(mVenue);
     }
-#ifdef HX_NATIVE
-    // Poll the HUD dir so its Flows can tick (advance keyframes that
-    // control material alpha/color). Without polling, activated flows
-    // never execute and HUD elements stay at default (transparent) state.
-    if (mHudDir) {
-        polls.push_back(mHudDir);
-    }
-#endif
 }
 
 void HamDirector::DrawShowing() {
@@ -436,14 +428,6 @@ void HamDirector::DrawShowing() {
     if (mVenue && !hide) {
         mVenue->DrawShowing();
     }
-#ifdef HX_NATIVE
-    // Draw the HUD overlay after the venue. The HUD PanelDir (from the
-    // game_mode merger) handles camera switching via CamOverride() and
-    // draws its content (score, flashcards, phrase meters) on top.
-    if (mHudDir) {
-        mHudDir->DrawShowing();
-    }
-#endif
 }
 
 void HamDirector::ListDrawChildren(std::list<RndDrawable *> &draws) {
@@ -472,11 +456,15 @@ DataNode HamDirector::OnFileMerged(DataArray *a) {
         FileMerger::Merger *gm = mGameModeMerger->FindMerger("game_hud", false);
         PanelDir *hudDir = gm ? dynamic_cast<PanelDir *>(gm->MergerDir()) : nullptr;
         if (hudDir) {
-            mHudDir = hudDir;
             hudDir->Enter();
+            hudDir->SetShowing(true);
             DataVariable("hud_panel") = (Hmx::Object *)hudDir;
-            fprintf(stderr, "DC3 HamDirector: HUD PanelDir '%s' (class=%s) entered, $hud_panel set\n",
-                    hudDir->Name(), hudDir->ClassName());
+            // Check HUD state: type, draw list size, showing
+            fprintf(stderr, "DC3 HUD: PanelDir '%s' — type='%s' mDraws=%d showing=%d\n",
+                    hudDir->Name(),
+                    hudDir->TypeDef() ? hudDir->TypeDef()->Sym(0).Str() : "none",
+                    hudDir->NumDraws(),
+                    hudDir->Showing());
         } else {
             fprintf(stderr, "DC3 HamDirector: WARNING — game_hud MergerDir is not a PanelDir\n");
         }

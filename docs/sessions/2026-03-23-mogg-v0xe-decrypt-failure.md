@@ -150,8 +150,33 @@ The subagent decrypted the retail XEX (AES-128-CBC with Xbox 360 retail key) and
 ### The mystery
 Everything is verified correct yet v0xE decryption fails. The only untested link is: **does the PPC binary itself successfully decrypt these mogg files?** If the decomp build also fails on Xbox/Xenia, the mogg files might use a scheme we haven't fully reverse-engineered.
 
-### Path Forward
-1. **Test on Xenia/Xbox**: Run the decomp build and check if mogg v0xE playback works. If it also fails, the issue is in the keygen decomp, not the native port.
-2. **Unicorn PPC emulation**: Execute the debug binary's `setupCypher` function against boyfriend.mogg's header data and compare the derived key bytes against what our C++ produces.
-3. **Community tools**: Try Onyx Music Game Toolkit or Nautilus to decrypt the mogg and compare.
-4. **Deeper Ghidra RE**: Re-examine the `setupCypher` decompilation for subtle differences vs our source.
+### Unicorn PPC emulation results
+- `getMasher`: EQUIVALENT between orig and decomp PPC, masher bytes match native
+- `setupCypher`: EQUIVALENT between orig and decomp PPC (12,455 calls matched)
+- `getKey`: returned zeros in runner (hiddenKeys data section not mapped by runner)
+
+This confirms our decomp source EXACTLY matches the original PPC binary for all keygen functions. The bug is NOT in the decomp — it's in the native port's execution environment.
+
+### Remaining hypothesis
+Since every function individually matches PPC behavior, the issue is likely in the **DTA script evaluation** of `GrindArray` on x86_64. The 71 `O##` DTA functions use `unsigned long` parameters which are 8 bytes on x86_64 vs 4 on PPC. While individual op results truncated to u8 should match, the DTA interpreter's intermediate DataNode handling may differ on 64-bit.
+
+The native GrindArray C++ rewrite uses `u32` everywhere and was verified against Python — both match. But the verification assumed correct op semantics. The actual PPC GrindArray runs through DTA which might evaluate the obfuscated script differently.
+
+### DTA Control Flow Confirmed (O64-O70)
+Found at `DataFunc.cpp:1748-1766`:
+```
+O64=while, O65=size, O66=switch, O67=elem, O68=do, O69=set, O70=++
+```
+
+The while loop body has TWO statements: `{switch ...}` and `{++ $ix}`. When a switch case matches, ix increments TWICE (once in case body, once trailing). When no match, ix increments once.
+
+### C++ GrindArray matches DTA on native
+Temporarily switching to the DTA GrindArray path on native (with ByteGrinder::Init registered) produces **identical output** to the C++ double-increment rewrite: `post-grind = 07 2f 0d 3f 15 05 37 47 cd f5 8f a7 45 5f af 97`. Both produce the same key but it doesn't decrypt.
+
+This means the C++ rewrite is correct for native x86_64. The problem is that **native x86_64 and PPC produce different GrindArray output** for the same inputs.
+
+### What's needed
+The PPC GrindArray produces a different 16-byte key than native x86_64. We need those 16 bytes. Xenia agent dispatched to run the debug XEX and capture them. Once we have the PPC bytes, we can:
+1. Diff against native output to find which byte(s) diverge
+2. Trace back to which op call produced the divergence
+3. Fix that specific op's native implementation

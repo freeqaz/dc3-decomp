@@ -28,6 +28,8 @@ static const char *InternContextPath(const char *path) {
 }
 
 static bool sDtaTraceEnabled = false;
+static bool sDtaValidateEnabled = false;
+static bool sInValidation = false;
 
 void DataArray_InitDtaTrace() {
     sDtaTraceEnabled = (std::getenv("DTA_TRACE") != nullptr);
@@ -36,12 +38,90 @@ void DataArray_InitDtaTrace() {
     }
 }
 
+void DataArray_InitDtaValidate() {
+    sDtaValidateEnabled = (std::getenv("DTA_VALIDATE") != nullptr);
+    if (sDtaValidateEnabled) {
+        fprintf(stderr, "DTA_VALIDATE: runtime validation enabled\n");
+    }
+}
+
+// Resolve a dotted context path to the actual DataArray node in gSystemConfig.
+// Returns nullptr if the path cannot be resolved.
+static DataArray *ResolveContextPath(const char *path) {
+    extern DataArray *gSystemConfig;
+    if (!gSystemConfig || !path || !*path) return nullptr;
+
+    // Parse dotted path: "rank.tasks.one_time" ->
+    //   FindArray("rank")->FindArray("tasks")->FindArray("one_time")
+    DataArray *node = gSystemConfig;
+
+    // Copy path to mutable buffer for tokenization
+    char buf[256];
+    strncpy(buf, path, 255);
+    buf[255] = '\0';
+
+    char *token = strtok(buf, ".");
+    while (token && node) {
+        // Use FindArray with fail=false to avoid crashing on missing keys
+        node = node->FindArray(token, false);
+        token = strtok(nullptr, ".");
+    }
+
+    return node;
+}
+
+// Validate a positional access (Int, Float, Sym, Str) against the actual DTA hierarchy.
+// Logs a warning on bounds violation or type mismatch. Never crashes.
+static void DataArray_ValidateAccess(const DataArray *arr, const char *method, int index) {
+    if (!sDtaValidateEnabled || sInValidation || !arr || !arr->ContextPath()) return;
+
+    sInValidation = true;
+
+    DataArray *resolved = ResolveContextPath(arr->ContextPath());
+    if (resolved) {
+        // Bounds check
+        if (index >= resolved->Size()) {
+            fprintf(stderr,
+                "DTA_VALIDATE: WARNING: %s(%d) out of bounds on [%s] "
+                "(size=%d, file %s, line %d)\n",
+                method, index, arr->ContextPath(), resolved->Size(),
+                arr->File() ? arr->File() : "?", arr->Line());
+        }
+    }
+
+    sInValidation = false;
+}
+
+// Validate a FindArray access: check that the key exists at this level
+// in the resolved DTA hierarchy.
+static void DataArray_ValidateFindArray(const DataArray *parent, const char *key) {
+    if (!sDtaValidateEnabled || sInValidation || !parent || !parent->ContextPath() || !key)
+        return;
+
+    sInValidation = true;
+
+    DataArray *resolved = ResolveContextPath(parent->ContextPath());
+    if (resolved) {
+        DataArray *child = resolved->FindArray(key, false);
+        if (!child) {
+            fprintf(stderr,
+                "DTA_VALIDATE: WARNING: FindArray(\"%s\") not found under [%s] "
+                "(file %s, line %d)\n",
+                key, parent->ContextPath(),
+                parent->File() ? parent->File() : "?", parent->Line());
+        }
+    }
+
+    sInValidation = false;
+}
+
 void DataArray_LogAccess(const DataArray *arr, const char *method, int index) {
     if (sDtaTraceEnabled && arr->ContextPath()) {
         fprintf(stderr, "DTA_TRACE: %s[%d] via %s (file %s, line %d)\n",
                 arr->ContextPath(), index, method,
                 arr->File() ? arr->File() : "?", arr->Line());
     }
+    DataArray_ValidateAccess(arr, method, index);
 }
 #endif
 
@@ -644,12 +724,16 @@ DataArray *DataArray::FindArray(Symbol tag, bool fail) const {
                 && arr->Node(0).LiteralSym() == tag) {
                 DataArray *result = (DataArray *)arr;
                 // Propagate context path through FindArray chains
-                if (mContextPath) {
-                    char buf[256];
-                    snprintf(buf, sizeof(buf), "%s.%s", mContextPath, tag.Str());
-                    result->SetContextPath(InternContextPath(buf));
-                } else {
-                    result->SetContextPath(tag.Str());
+                // Skip propagation during validation to avoid infinite recursion
+                if (!sInValidation) {
+                    DataArray_ValidateFindArray(this, tag.Str());
+                    if (mContextPath) {
+                        char buf[256];
+                        snprintf(buf, sizeof(buf), "%s.%s", mContextPath, tag.Str());
+                        result->SetContextPath(InternContextPath(buf));
+                    } else {
+                        result->SetContextPath(tag.Str());
+                    }
                 }
                 return result;
             }

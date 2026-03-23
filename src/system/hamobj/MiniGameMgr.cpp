@@ -93,7 +93,7 @@ void MiniGameMgr::UpdateCascadeMovePool(
             allMoves.push_back(mv);
         }
     }
-    std::random_shuffle(allMoves.begin(), allMoves.end());
+    RandomShuffle(allMoves.begin(), allMoves.end());
     for (int i = 0; i < 1; i++) {
         auto it = allMoves.begin();
         while (it != allMoves.end()

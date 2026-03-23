@@ -762,4 +762,6 @@ extern int gPreExecuteLevel;
 // DTA context path tracing (enabled by DTA_TRACE env var)
 void DataArray_InitDtaTrace();
 void DataArray_LogAccess(const DataArray *arr, const char *method, int index);
+// DTA runtime validation (enabled by DTA_VALIDATE env var)
+void DataArray_InitDtaValidate();
 #endif

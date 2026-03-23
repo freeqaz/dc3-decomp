@@ -128,13 +128,14 @@ def list_functions(decomp_path, orig_path, decomp_coff=None, orig_coff=None):
 def _run_comparison_core(symbol, decomp_coff, orig_coff, timeout=5_000_000,
                          coload=True, coload_depth=None,
                          fill_pattern=None, engine=None, object_memory=None,
-                         arg_registers=None):
+                         arg_registers=None, max_insns=None):
     """Core comparison logic returning raw structured data.
 
     Returns (exit_code, ComparisonBundle_or_None, verbose_lines, error_message).
     On success, bundle contains the ComparisonResult and ExecutionResults.
     On skip/error, bundle is None and error_message explains why.
     arg_registers: optional dict mapping register IDs to values for both executions.
+    max_insns: override instruction count limit (default: engine default of 50_000).
     """
     # 1. Extract function bytes and relocations
     decomp_bytes, decomp_relocs = extract_from_decomp(decomp_coff, symbol)
@@ -213,17 +214,20 @@ def _run_comparison_core(symbol, decomp_coff, orig_coff, timeout=5_000_000,
 
     # 5. Execute both sides
     _exec = engine.execute if engine else execute_function
+    exec_kwargs = {}
+    if max_insns is not None:
+        exec_kwargs['max_insns'] = max_insns
     try:
         decomp_result = _exec(
             decomp_side.code, decomp_side.trampolines, decomp_side.func_size,
             timeout=timeout, verbose=False, rdata_bytes=decomp_side.rdata_bytes,
             fill_pattern=fill_pattern, object_memory=object_memory,
-            arg_registers=arg_registers)
+            arg_registers=arg_registers, **exec_kwargs)
         orig_result = _exec(
             orig_side.code, orig_side.trampolines, orig_side.func_size,
             timeout=timeout, verbose=False, rdata_bytes=orig_side.rdata_bytes,
             fill_pattern=fill_pattern, object_memory=object_memory,
-            arg_registers=arg_registers)
+            arg_registers=arg_registers, **exec_kwargs)
     except Exception as e:
         return EXIT_ERROR, None, [], f"ERROR: Execution failed: {e}"
 

@@ -330,9 +330,6 @@ protected:
     bool mPhraseMetersFlipped; // 0x369
     Song *mOfflineSong; // 0x36c
     std::set<Hmx::Object *> mRoutineBuilderObjects; // 0x370
-#ifdef HX_NATIVE
-    PanelDir *mHudDir = nullptr;
-#endif
 };
 
 extern HamDirector *TheHamDirector;
