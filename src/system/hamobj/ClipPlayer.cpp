@@ -208,6 +208,10 @@ namespace {
 }
 
 void ClipPlayer::PlayClip(CharClip *clip, float f1, float f2, HamDriver::LayerArray *arr) {
+#ifdef HX_NATIVE
+    { static int s=0; if(s++<10) MILO_LOG("CLIP-DIAG PlayClip: clip=%p (%s) f1=%.2f f2=%.2f\n",
+                                           (void*)clip, clip ? clip->Name() : "NULL", f1, f2); }
+#endif
     if (clip) {
         float f50, f4c;
         ClipStart(clip, f1, f50, f4c);
@@ -236,7 +240,17 @@ bool ClipPlayer::PushExpertClip(int i1, HamDriver::LayerArray *arr) {
             b2 = PushExpertClip(i1 - 1, arr);
         }
         float f6 = b2 ? beat : -kHugeFloat;
+#ifdef HX_NATIVE
+        {
+            CharClip *found = mClipDir->Find<CharClip>(curKey.value.Str(), false);
+            static int s=0; if(s++<10)
+                MILO_LOG("CLIP-DIAG PushExpertClip: name='%s' found=%p clipDir='%s'\n",
+                         curKey.value.Str(), (void*)found, mClipDir->Name());
+            PlayClip(found, beat, f6, arr);
+        }
+#else
         PlayClip(mClipDir->Find<CharClip>(curKey.value.Str(), false), beat, f6, arr);
+#endif
         return true;
     }
 }

@@ -245,8 +245,19 @@ FaderGroup::FaderGroup(Hmx::Object *owner) : mFaders(owner), mDirty(true) {}
 FaderGroup::~FaderGroup() {
 #ifdef HX_NATIVE
     if (ObjectDir::InDeleteObjects()) {
-        // During cascade, Faders may already be destroyed. Just clear.
-        mFaders.clear();
+        // During cascade, local Faders (owned by this group) may already be
+        // destroyed — skip delete. But non-local Faders (e.g. TheSynth's
+        // master fader) survive the cascade and still hold this FaderGroup
+        // in their mClients set. We MUST call RemoveClient on surviving
+        // faders, otherwise Fader::UpdateValue() iterates mClients and
+        // calls SetDirty() on freed memory (heap-use-after-free).
+        while (!mFaders.empty()) {
+            Fader *f = mFaders.front();
+            mFaders.pop_front();
+            if (f && f->IsRefAlive()) {
+                f->RemoveClient(this);
+            }
+        }
         return;
     }
 #endif

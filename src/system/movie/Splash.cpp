@@ -11,18 +11,29 @@
 #include "rndobj/Movie.h"
 #include "rndobj/Rnd_NG.h"
 #include "rndobj/Utl.h"
+#ifdef HX_NATIVE
+#include "rndobj/Cam.h"
+#endif
 #include "xdk/xapilibi/processthreadsapi.h"
 
 bool gSplashing = false;
 Splash *TheSplasher;
 
-const char *kSplashMovie = "s_splash.tmov";
-const char *kSplashCam = "s_splash.cam";
+const char *kSplashMovie = "splash.tmov";
+const char *kSplashCam = "splash.cam";
 
 Splash::Splash()
     : mSplashDurationMs(SystemConfig("ui")->FindArray("splash_time")->Float(1) * 1000),
       mWaitForSplash(SystemConfig("ui")->FindArray("wait_for_splash")->Int(1)), mCurrentDir(0), mCurrentCam(0),
-      mCurrentMovie(0), mCurrentTrigger(0), unk58(-1), mSuspendCount(0), mThreaded(1), mThreadId(-1), mState(0) {}
+      mCurrentMovie(0), mCurrentTrigger(0), unk58(-1), mSuspendCount(0), mThreaded(1), mThreadId(-1), mState(0) {
+#ifdef HX_NATIVE
+    // No worker thread on native — use non-threaded splash path.
+    // Without this, EndSplasher() calls WaitForState(kTerminated) which
+    // blocks forever since no thread transitions the state, and Poll()
+    // becomes a no-op so splash screens never advance.
+    mThreaded = false;
+#endif
+}
 
 Splash::~Splash() { MILO_ASSERT(!gSplashing, 0x57); }
 
@@ -161,6 +172,16 @@ void Splash::EndSplasher() {
 #else
         *(bool *)((char *)&TheRnd + 0x1b4) = false;
 #endif
+#ifdef HX_NATIVE
+        // Clear the Rnd's selected camera before deleting splash dirs.
+        // Splash::Draw() calls mCurrentCam->Select() which sets RndCam::sCurrent.
+        // If we delete the splash dir (which owns splash.cam) without clearing
+        // sCurrent, the next BeginDrawing() → DrawPreClear() dereferences a
+        // dangling camera pointer.
+        if (RndCam::Current()) {
+            RndCam::ClearCurrent();
+        }
+#endif
         // Clean up archived screen directories
         auto _tmp3 = mOldDirs.end();
         for (std::list<RndDir *>::iterator it = mOldDirs.begin(); it != _tmp3; ++it) {
@@ -194,12 +215,7 @@ void Splash::BeginSplasher() {
         MILO_ASSERT(!mPreparedScreens.empty(), 0x6D);
 
         MILO_ASSERT(SetMutableState(kResuming), 0x6F);
-#ifdef HX_NATIVE
-        // Skip threaded splash on native — just run directly
-        SetMutableState(kResumed);
-        Show();
-        Draw();
-#else
+#ifndef HX_NATIVE
         HANDLE thread = CreateThread(0, 0, ThreadStart, this, 4, 0);
         XSetThreadProcessor(thread, 5);
         SetThreadPriority(thread, 1);
@@ -236,7 +252,7 @@ void Splash::Draw() {
                     mSplashDurationMs = 0;
                     return;
                 }
-            } else {
+            } else if (mCurrentCam) {
                 int i = 0;
                 do {
                     TheRnd.BeginDrawing();
@@ -396,8 +412,12 @@ bool Splash::Show() {
     }
     mCurrentDir = params.dir;
     mCurrentDir->Enter();
-    mCurrentCam = mCurrentDir->Find<RndCam>(kSplashCam, true);
+    mCurrentCam = mCurrentDir->Find<RndCam>(kSplashCam, false);
     mCurrentMovie = mCurrentDir->Find<TexMovie>(kSplashMovie, false);
+    if (!mCurrentCam && !mCurrentMovie) {
+        // .milo lacks both camera and movie — skip this splash screen
+        return ShowNext();
+    }
     auto& _ref3 = mSplashDurationMs;
     if (mCurrentMovie) {
         if (mThreaded) {

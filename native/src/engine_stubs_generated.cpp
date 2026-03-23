@@ -191,13 +191,17 @@ int XInputGetCapabilities() { return 0; }
 int XNetConnect() { return 0; }
 int XNetGetConnectStatus() { return 0; }
 int XNetGetTitleXnAddr() { return 0; }
-int XNetRandom() { return 0; }
 int XNetUnregisterInAddr() { return 0; }
 int XNetXnAddrToMachineId() { return 0; }
 int XShowMarketplaceDownloadItemsUI() { return 0; }
 int XShowNuiTroubleshooterUI() { return 0; }
 int XTitleServerCreateEnumerator() { return 0; }
 #endif
+extern "C" int XNetRandom(unsigned char *pb, unsigned int cb) {
+    for (unsigned int i = 0; i < cb; i++)
+        pb[i] = (unsigned char)rand();
+    return 0;
+}
 } // extern "C"
 
 // asm-label stubs: provide mangled C++ symbols via __asm__ name redirection.

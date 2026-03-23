@@ -41,8 +41,12 @@ struct VOut {
 @fragment fn fs_bloom_threshold(in: VOut) -> @location(0) vec4f {
     let color = textureSample(srcTex, srcSampler, in.uv).rgb;
     let luma = dot(color, vec3f(0.2126, 0.7152, 0.0722));
-    let contribution = max(luma - bloom.threshold, 0.0) / max(luma, 0.001);
-    return vec4f(color * contribution, 1.0);
+    // Soft knee: smooth transition around threshold instead of hard cutoff
+    let knee = bloom.threshold * 0.5;
+    let soft = luma - bloom.threshold + knee;
+    let contribution = clamp(soft / (2.0 * knee + 0.0001), 0.0, 1.0);
+    let weight = contribution * contribution; // quadratic falloff for softer look
+    return vec4f(color * weight, 1.0);
 }
 
 @fragment fn fs_bloom_blur_h(in: VOut) -> @location(0) vec4f {
@@ -66,13 +70,20 @@ struct VOut {
 }
 
 @fragment fn fs_bloom_upsample(in: VOut) -> @location(0) vec4f {
-    let tx = bloom.texelSizeX * 0.5;
-    let ty = bloom.texelSizeY * 0.5;
-    var color = textureSample(srcTex, srcSampler, in.uv + vec2f(-tx, -ty)).rgb;
-    color += textureSample(srcTex, srcSampler, in.uv + vec2f( tx, -ty)).rgb;
-    color += textureSample(srcTex, srcSampler, in.uv + vec2f(-tx,  ty)).rgb;
-    color += textureSample(srcTex, srcSampler, in.uv + vec2f( tx,  ty)).rgb;
-    return vec4f(color * 0.25, 1.0);
+    // 3x3 tent filter for smoother upsampling (less boxy artifacts)
+    let tx = bloom.texelSizeX;
+    let ty = bloom.texelSizeY;
+    var color = textureSample(srcTex, srcSampler, in.uv).rgb * 4.0;
+    color += textureSample(srcTex, srcSampler, in.uv + vec2f( tx,  0.0)).rgb * 2.0;
+    color += textureSample(srcTex, srcSampler, in.uv + vec2f(-tx,  0.0)).rgb * 2.0;
+    color += textureSample(srcTex, srcSampler, in.uv + vec2f( 0.0,  ty)).rgb * 2.0;
+    color += textureSample(srcTex, srcSampler, in.uv + vec2f( 0.0, -ty)).rgb * 2.0;
+    color += textureSample(srcTex, srcSampler, in.uv + vec2f( tx,   ty)).rgb;
+    color += textureSample(srcTex, srcSampler, in.uv + vec2f(-tx,   ty)).rgb;
+    color += textureSample(srcTex, srcSampler, in.uv + vec2f( tx,  -ty)).rgb;
+    color += textureSample(srcTex, srcSampler, in.uv + vec2f(-tx,  -ty)).rgb;
+    // Divide by 16 for tent weights, then attenuate to prevent mip accumulation
+    return vec4f(color * (1.0 / 16.0) * bloom.intensity, 1.0);
 }
 )WGSL";
 
@@ -232,12 +243,13 @@ void BloomPass::Run(wgpu::CommandEncoder& encoder, wgpu::TextureView& intermedia
     };
 
     auto upsamplePass = [&](wgpu::TextureView& srcView, wgpu::TextureView& dstView,
-                            int targetW, int targetH, int srcW, int srcH) {
+                            int targetW, int targetH, int srcW, int srcH,
+                            float blendWeight) {
         BloomUniforms uni{};
         uni.threshold = 0;
         uni.texelSizeX = 1.0f / srcW;
         uni.texelSizeY = 1.0f / srcH;
-        uni.intensity = intensity;
+        uni.intensity = blendWeight;
         queue.WriteBuffer(mBloomUniformBuffer, 0, &uni, sizeof(uni));
 
         wgpu::BindGroupEntry bgEntries[3] = {};
@@ -321,11 +333,13 @@ void BloomPass::Run(wgpu::CommandEncoder& encoder, wgpu::TextureView& intermedia
         }
     }
 
-    // 3. Upsample chain
+    // 3. Upsample chain — each coarser mip contributes less
+    static constexpr float kMipWeights[kBloomMips] = {0.8f, 0.5f, 0.3f, 0.2f};
     for (int i = kBloomMips - 2; i >= 0; i--) {
         upsamplePass(mBloomView[i + 1], mBloomView[i],
                       mBloomWidth[i], mBloomHeight[i],
-                      mBloomWidth[i + 1], mBloomHeight[i + 1]);
+                      mBloomWidth[i + 1], mBloomHeight[i + 1],
+                      kMipWeights[i + 1]);
     }
 }
 

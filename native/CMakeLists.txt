@@ -1231,31 +1231,54 @@ target_include_directories(dc3-web PRIVATE
     ${CMAKE_SOURCE_DIR}/../include
 )
 
+## Non-blocking file loading via JSPI (JavaScript Promise Integration).
+## WebAssetsFetchSync() yields to the browser via emscripten_sleep(),
+## so the loading screen can render while .milo_xbox files download.
+## JSPI uses the browser's native stack switching — zero code size overhead
+## vs old ASYNCIFY which instrumented every function (~50% bloat).
+## Requires Chrome 137+ / Firefox 139+.
+## Set DC3_WEB_ASYNC=OFF to fall back to blocking synchronous XHR.
+option(DC3_WEB_ASYNC "Use JSPI for non-blocking on-demand file fetches" ON)
+
 target_link_options(dc3-web PRIVATE
     "SHELL:--use-port=emdawnwebgpu"
     -sALLOW_MEMORY_GROWTH=1
     -sMAXIMUM_MEMORY=512MB
-    -sSTACK_SIZE=1048576
+    -sSTACK_SIZE=4194304
     -sENVIRONMENT=web,node
-    -sEXPORTED_FUNCTIONS=["_main"]
+    -sEXPORTED_FUNCTIONS=["_main","_dc3MainLoopTick"]
     -sEXPORTED_RUNTIME_METHODS=["ccall","cwrap"]
     # Allow undefined symbols — engine stubs use asm-labels that wasm-ld can't resolve.
     -sERROR_ON_UNDEFINED_SYMBOLS=0
-    # Note: EMULATE_FUNCTION_POINTER_CASTS was previously tried here but is not needed.
-    # The real fix is null-checking mNextElement in UIListSlot::StartScroll.
     # Make missing function calls log instead of abort (many Xbox-specific funcs not needed)
     --pre-js ${CMAKE_CURRENT_SOURCE_DIR}/web/missing_stubs.js
     -sUSE_ZLIB=1
     -sUSE_OGG=1
     -sUSE_VORBIS=1
     -sFETCH=1
-    # Debug: keep function names for stack traces
-    --profiling-funcs
+    # Demangled C++ names in stack traces
+    -g2
+    # Catches invalid function pointers, memory allocation failures, stack overflow
+    -sASSERTIONS=1
+    # Deep deserialization call chains during milo loading can overflow the stack
+    -sSTACK_OVERFLOW_CHECK=2
+    # Native Wasm exception instructions — smaller and faster than JS-based exceptions
+    -fwasm-exceptions
 )
 
 target_compile_options(dc3-web PRIVATE
     "SHELL:--use-port=emdawnwebgpu"
+    -fwasm-exceptions
 )
+
+## JSPI — zero-overhead async yielding
+if(DC3_WEB_ASYNC)
+    target_compile_definitions(dc3-web PRIVATE DC3_WEB_ASYNCIFY=1)
+    target_link_options(dc3-web PRIVATE
+        -sJSPI
+        -sJSPI_EXPORTS=["_main","_dc3MainLoopTick","dc3MainLoopTick"]
+    )
+endif()
 
 else() # NOT EMSCRIPTEN — native targets
 
@@ -1579,6 +1602,7 @@ if(BUILD_TESTS)
         tests/test_input.cpp
         tests/test_audio.cpp
         tests/test_mogg_decode.cpp
+        tests/test_mogg_v0xe.cpp
         tests/test_ham_provider.cpp
         tests/test_subsystems.cpp
         tests/test_bone_ground_truth.cpp

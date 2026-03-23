@@ -58,7 +58,7 @@ struct TelRunResult {
 static TelRunResult RunWithTelemetry(int maxFrames, const char *script, int timeout = 120) {
     std::string binary = GetDc3NativePath();
     std::ostringstream cmd;
-    cmd << "MILO_HEADLESS=1 MILO_FATAL_FAILS=0 DC3_TEL=1"
+    cmd << "MILO_HEADLESS=1 MILO_FATAL_FAILS=0 DC3_SHOW_SPLASH=0 DC3_TEL=1"
         << " MILO_MAX_FRAMES=" << maxFrames;
     if (script)
         cmd << " MILO_INPUT_SCRIPT=" << script;

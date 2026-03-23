@@ -319,6 +319,11 @@ RndMat *GetMat(RndDrawable *draw) {
 }
 
 bool SortDraws(RndDrawable *draw1, RndDrawable *draw2) {
+#ifdef HX_NATIVE
+    // NullifyAllRefs() can null ObjPtrList entries during cascade destruction.
+    // Sort nulls to the end so they can be cleaned up after.
+    if (!draw1 || !draw2) return draw1 > draw2;
+#endif
     if (draw1->GetOrder() != draw2->GetOrder())
         return draw1->GetOrder() < draw2->GetOrder();
     else {

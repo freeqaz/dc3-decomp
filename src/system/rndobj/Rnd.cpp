@@ -1263,6 +1263,12 @@ void Rnd::DrawPreClear() {
         for (ObjPtrList<RndDrawable>::iterator it = drawList->begin();
              it != drawList->end();
              ++it) {
+#ifdef HX_NATIVE
+            // NullifyAllRefs (cascade Phase 0) nullifies ObjPtrList nodes
+            // without erasing them, leaving null entries in the list.
+            // Guard against dereferencing null after splash dir teardown.
+            if (!*it) continue;
+#endif
             (*it)->DrawPreClear();
         }
         if ((prevCam != nullptr) && (prevCam != RndCam::Current())) {

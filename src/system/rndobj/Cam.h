@@ -68,6 +68,9 @@ public:
     OBJ_MEM_OVERLOAD(0x1B);
     static void Init();
     static RndCam *Current() { return sCurrent; }
+#ifdef HX_NATIVE
+    static void ClearCurrent() { sCurrent = nullptr; }
+#endif
     static float DefaultNearPlane() { return sDefaultNearPlane; }
     static float MaxFarNearPlaneRatio() { return sMaxFarNearPlaneRatio; }
     const Hmx::Matrix4 &GetViewProjMatrix() const { return mViewProjMatrix; }

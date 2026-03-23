@@ -52,7 +52,7 @@ static DtaRunResult RunDtaFlow(int maxFrames, int timeout = 120) {
     std::string binary = GetDc3NativePath();
     std::string script = GetScriptDir() + "/boot-to-main.txt";
     std::ostringstream cmd;
-    cmd << "MILO_HEADLESS=1 MILO_FATAL_FAILS=0"
+    cmd << "MILO_HEADLESS=1 MILO_FATAL_FAILS=0 DC3_SHOW_SPLASH=0"
         << " DC3_SCREEN=game_screen"
         << " DC3_SONG=boyfriend"
         << " MILO_INPUT_SCRIPT=" << script

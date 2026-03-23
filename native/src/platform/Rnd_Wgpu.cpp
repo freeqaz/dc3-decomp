@@ -308,6 +308,9 @@ void WgpuRnd::Init() {
 }
 
 void WgpuRnd::InitGpuResources() {
+    if (mGpuResourcesReady) return; // idempotent — already initialized
+    mGpuResourcesReady = true;
+
     // Initialize pipeline manager
     mPipelines.Init(&mGpu);
     // Create per-draw ring buffers (64KB each — enough for ~250 draws/frame at 256-byte alignment)

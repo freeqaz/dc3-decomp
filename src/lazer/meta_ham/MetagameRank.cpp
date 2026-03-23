@@ -261,7 +261,7 @@ void MetagameRank::Init() {
         }
     }
     DataArray *taskArr = rankCfg->FindArray("tasks");
-    gOneTimeTasks = rankCfg->FindArray("one_time");
+    gOneTimeTasks = taskArr->FindArray("one_time");
     gRepeatableTasks = taskArr->FindArray("repeatable");
 }
 

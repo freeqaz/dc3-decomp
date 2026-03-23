@@ -4,10 +4,20 @@
 #   boot → attract → title → main → choose_mode → song_select
 #   → multiuser → loading → preloading → real_loading → game_screen
 #
+# Status (2026-03-23):
+#   Flow reaches game_screen successfully. HamDirector::Enter() fires.
+#   Crashes during VenueEnter → HamCamTransform::Setup (null trans parent).
+#   Animation fixes (HamDriver bootstrap, SongAnim fallback) are in place
+#   but untestable headless until the VenueEnter crash is resolved.
+#
 # Usage:
-#   MILO_HEADLESS=1 MILO_MAX_FRAMES=10000 \
+#   MILO_HEADLESS=1 MILO_NORENDER=1 MILO_FATAL_FAILS=0 \
+#     MILO_MAX_FRAMES=15000 \
 #     MILO_INPUT_SCRIPT=scripts/dc3-input-flows/ymca.txt \
-#     DC3_DATA=orig-assets native/build/dc3-native
+#     native/build/dc3-native
+
+# Skip intro splash (ESRB/Harmonix logos)
++1 confirm
 
 # Skip attract movie
 wait_screen attract_screen

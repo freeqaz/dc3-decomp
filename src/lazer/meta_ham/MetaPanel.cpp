@@ -360,9 +360,10 @@ bool MetaPanel::Exiting() const {
         return UIPanel::Exiting();
     }
     bool ret = mSongPreview.IsWaitingToDelete() || mSongPreview.IsFadingOut() ||
-#ifdef HX_NATIVE
-        (TheMetaMusic && TheMetaMusic->IsActive()) ||
-#else
+#ifndef HX_NATIVE
+        // On native, audio fadeout timing is unreliable — IsActive() stays
+        // true indefinitely and blocks screen transitions. Skip this check
+        // (same pattern as HamPanel::Exiting() returning false on native).
         TheMetaMusic->IsActive() ||
 #endif
         UIPanel::Exiting();

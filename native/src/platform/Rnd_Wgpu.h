@@ -177,7 +177,9 @@ public:
     // Deferred GPU resource setup — called after mGpu.IsReady() on web,
     // or inline from Init() on native.  Sets up pipelines, ring buffers,
     // depth texture, default textures, shadow/post-proc passes.
+    // Idempotent — safe to call multiple times (no-op after first).
     void InitGpuResources();
+    bool GpuResourcesReady() const { return mGpuResourcesReady; }
     void Terminate() override;
     void Clear(unsigned int, const Hmx::Color&) override;
     void BeginDrawing() override;
@@ -290,6 +292,9 @@ public:
     ShadowPass mShadowPass;
     PostProcPass mPostProcPass;
     DrawRect2D mDrawRect2D;
+
+    // GPU resource initialization tracking
+    bool mGpuResourcesReady = false;
 
     // Per-frame state
     wgpu::CommandEncoder mEncoder;

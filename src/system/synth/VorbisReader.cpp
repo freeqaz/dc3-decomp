@@ -173,8 +173,16 @@ bool VorbisReader::TryReadHeader() {
     if (!mOggStream) {
         ogg_page page;
         int pageOut = ogg_sync_pageout(mOggSync, &page);
-        if (pageOut < 0)
+        if (pageOut < 0) {
             VORBIS_FAIL("StreamInit", pageOut);
+#ifdef HX_NATIVE
+            // Persistent page sync failure means data is corrupt (likely bad
+            // mogg decryption). Mark the reader as failed so HandleWait can
+            // break out instead of blocking forever.
+            mFail = true;
+            return false;
+#endif
+        }
         if (pageOut > 0) {
             mOggStream = new ogg_stream_state;
             ogg_stream_init(mOggStream, ogg_page_serialno(&page));

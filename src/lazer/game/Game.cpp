@@ -348,6 +348,22 @@ void Game::PostWaitStart() {
         MetaPerformer::Current()->StartGameplayTimer();
         mRealTime = false;
     }
+#ifdef HX_NATIVE
+    else {
+        // Audio failed (mogg not found or decode error). Unpause and start
+        // gameplay anyway so the beat advances from wall-clock time and
+        // character animation can play even without music.
+        // mRealTime=true makes CurrentMs() use the wall-clock timer
+        // instead of mAudio.GetTime() (which returns 0 on a dead stream).
+        fprintf(stderr, "DC3 Game::PostWaitStart — audio failed, proceeding with wall-clock timing\n");
+        mPaused = false;
+        MetaPerformer::Current()->StartGameplayTimer();
+        mRealTime = true;
+        if (mGameInput) {
+            mGameInput->SetTimeOffset();
+        }
+    }
+#endif
 }
 
 void Game::SetMusicVolume(float vol) {
@@ -936,14 +952,21 @@ bool Game::HandleWait() {
     }
 #endif
     if (audio->Fail()) {
+#ifdef HX_NATIVE
+        fprintf(stderr, "DC3 Game::HandleWait — audio FAILED, dispatching state=%d anyway\n", mWaitState);
+        // Fall through to dispatch — PostWaitStart handles Fail() gracefully
+        // by skipping Play(). Without this, mPaused stays true and the beat
+        // never advances, freezing character animation.
+#else
         return true;
-    }
-    if (!audio->IsReady()) {
+#endif
+    } else if (!audio->IsReady()) {
         TheSynth->Poll();
         return false;
     }
 #ifdef HX_NATIVE
-    fprintf(stderr, "DC3 Game::HandleWait — audio ready! dispatching state=%d\n", mWaitState);
+    if (!audio->Fail())
+        fprintf(stderr, "DC3 Game::HandleWait — audio ready! dispatching state=%d\n", mWaitState);
 #endif
     // Audio is ready, dispatch based on state
     switch (mWaitState) {

@@ -329,6 +329,11 @@ void HamDirector::Enter() {
 #ifdef HX_NATIVE
     fprintf(stderr, "DC3 HamDirector::Enter() — mMerger=%p mVenue=%p\n",
             (void*)mMerger.Ptr(), (void*)mVenue.Ptr());
+    // No Kinect on native — force merge_moves=0 so SongAnim() returns the
+    // pre-authored difficulty song.anim instead of the empty routine builder.
+    if (TheHamProvider) {
+        TheHamProvider->SetProperty("merge_moves", 0);
+    }
 #endif
     if (mMerger) {
         mExcitement = 3;
@@ -415,21 +420,30 @@ void HamDirector::ListPollChildren(std::list<RndPollable *> &polls) const {
     if (mVenue) {
         polls.push_back(mVenue);
     }
+#ifdef HX_NATIVE
+    // Poll the HUD dir so its Flows can tick (advance keyframes that
+    // control material alpha/color). Without polling, activated flows
+    // never execute and HUD elements stay at default (transparent) state.
+    if (mHudDir) {
+        polls.push_back(mHudDir);
+    }
+#endif
 }
 
 void HamDirector::DrawShowing() {
     static Symbol hide_venue("hide_venue");
     bool hide = TheHamProvider->Property(hide_venue, true)->Int();
-#ifdef HX_NATIVE
-    static int sDrawLog = 0;
-    if (sDrawLog++ < 5) {
-        fprintf(stderr, "DC3 HamDirector::DrawShowing() — mVenue=%p hide=%d\n",
-                (void*)mVenue.Ptr(), hide);
-    }
-#endif
     if (mVenue && !hide) {
         mVenue->DrawShowing();
     }
+#ifdef HX_NATIVE
+    // Draw the HUD overlay after the venue so it renders on top.
+    // The HUD PanelDir (kept intact via proxy mode) switches to its own
+    // camera (Cam.cam), draws score/flashcards/phrase meters, then restores.
+    if (mHudDir) {
+        mHudDir->DrawShowing();
+    }
+#endif
 }
 
 void HamDirector::ListDrawChildren(std::list<RndDrawable *> &draws) {
@@ -447,7 +461,56 @@ void HamDirector::CollideList(const Segment &s, std::list<Collision> &colls) {
 
 DataNode HamDirector::OnSaveSong(DataArray *) { return 0; }
 DataNode HamDirector::OnSaveFaceAnims(DataArray *) { return 0; }
-DataNode HamDirector::OnFileMerged(DataArray *) { return 0; }
+DataNode HamDirector::OnFileMerged(DataArray *a) {
+#ifdef HX_NATIVE
+    Symbol cat = a->Sym(2);
+    if (cat == Symbol("game_hud") && mGameModeMerger) {
+        // _default_hud.milo loads as RndDir 'game_mode_hud' (top-level container)
+        // with PanelDir 'hud' inside (from hud_shared.milo — has DTA type handlers).
+        // With proxy mode, the loaded dir stays intact as a subdir.
+        FileMerger::Merger *gm = mGameModeMerger->FindMerger("game_hud", false);
+        RndDir *hudContainer = nullptr;
+        if (gm && !gm->mLoadedObjects.empty()) {
+            hudContainer = dynamic_cast<RndDir *>(gm->mLoadedObjects.front());
+        }
+        if (hudContainer) {
+            // Draw the entire container (game_mode_hud) after venue
+            mHudDir = hudContainer;
+            // Find the PanelDir 'hud' inside — it has the DTA type handlers
+            // from hud_objects.dta that set $hud_panel and init animation flows
+            // Search subdirs for the HUD PanelDir
+            PanelDir *hudPanel = nullptr;
+            for (ObjDirItr<PanelDir> it(hudContainer, true); it != nullptr; ++it) {
+                // hud_objects.dta defines type 'hud' on the PanelDir
+                if (!strcmp(it->Name(), "hud") || !strcmp(it->Name(), "hud1")) {
+                    hudPanel = &*it;
+                    break;
+                }
+            }
+            if (hudPanel) {
+                hudPanel->Enter();
+                DataVariable("hud_panel") = (Hmx::Object *)hudPanel;
+                fprintf(stderr, "DC3 HamDirector: HUD container '%s' + PanelDir '%s' entered\n",
+                        hudContainer->Name(), hudPanel->Name());
+            } else {
+                // The 'hud' PanelDir was merged into the container during
+                // _default_hud.milo internal loading. Use the container itself
+                // as $hud_panel — it has all the objects DTA references.
+                hudContainer->Enter();
+                DataVariable("hud_panel") = (Hmx::Object *)hudContainer;
+                // Activate initialization flows
+                Flow *resetFlow = hudContainer->Find<Flow>("reset_common.flow", false);
+                if (resetFlow) resetFlow->Activate();
+                fprintf(stderr, "DC3 HamDirector: HUD container '%s' entered, $hud_panel set, reset_common activated\n",
+                        hudContainer->Name());
+            }
+        } else {
+            fprintf(stderr, "DC3 HamDirector: WARNING — no HUD dir found in game_hud merger\n");
+        }
+    }
+#endif
+    return 0;
+}
 
 void HamDirector::ForceScene(Symbol s) {
     mForcedScene = s;
@@ -583,11 +646,35 @@ RndPropAnim *HamDirector::SongAnim(int playerIndex) {
     // populates a separate anim with clip/move keyframes based on the generated
     // choreography (SelectMove → AddRoutineMove → InsertMoveInSong).
     if (TheHamProvider->Property("merge_moves", true)->Int()) {
-        return playerIndex == 0 ? mPlayer1RoutineBuilderAnim
-                                : mPlayer2RoutineBuilderAnim;
+        RndPropAnim *routineAnim = playerIndex == 0 ? mPlayer1RoutineBuilderAnim
+                                                     : mPlayer2RoutineBuilderAnim;
+#ifdef HX_NATIVE
+        // Fallback: the routine builder anim's clip keys are cleared by
+        // SetupRoutineBuilderAnims() and repopulated by the DanceRemixer
+        // (OriginalChoreoRemixer::Reset → SelectMove → InsertMoveInSong).
+        // If the remixer never ran (DTA handlers didn't fire), the routine
+        // builder has zero clip keys. Fall back to the pre-authored song.anim
+        // which has all clip keyframes baked in for the difficulty.
+        if (routineAnim) {
+            static Symbol sClip("clip");
+            PropKeys *clipKeys = routineAnim->GetKeys(this, DataArrayPtr(sClip));
+            if (!clipKeys || clipKeys->NumKeys() == 0) {
+                static int sLog = 0;
+                if (sLog++ < 3)
+                    MILO_LOG("SongAnim(%d): routine builder empty, falling back to expert anim\n", playerIndex);
+                // Use the expert/master anim so mClipKeys == mMasterClipKeys
+                // in ClipPlayer, which routes to PushExpertClip (direct clip
+                // lookup). The PushClip path requires practice-frame mapping
+                // that fails without the full remixer pipeline.
+                return SongAnimByDifficulty(kDifficultyExpert);
+            }
+        }
+#endif
+        return routineAnim;
     }
     // With merge_moves=0 (holla_back, campaign outro, practice), use the
     // difficulty-specific song.anim directly.
+use_preauthored:
     HamPlayerData *hpd = TheGameData->Player(playerIndex);
     return SongAnimByDifficulty(LegacyDifficulty(hpd->GetDifficulty()));
 }
@@ -1219,6 +1306,16 @@ DataNode HamDirector::OnFileLoaded(DataArray *a) {
                 if (mGameModeMerger) {
                     static Message load_game_hud("load_game_hud", 0, 0, 0, 0);
                     mGameModeMerger->HandleType(load_game_hud);
+#ifdef HX_NATIVE
+                    // Force proxy mode on game_hud merger so the loaded HUD PanelDir
+                    // stays intact as a subdir (preserving DTA type handlers for
+                    // $hud_panel initialization, animation flows, and score display).
+                    // Without proxy, MergeDirs flattens objects and loses type info.
+                    FileMerger::Merger *hudMerger = mGameModeMerger->FindMerger("game_hud", false);
+                    if (hudMerger) {
+                        hudMerger->mProxy = true;
+                    }
+#endif
                     mGameModeMerger->StartLoad(mAsyncLoaded);
                 }
             }
@@ -3083,6 +3180,34 @@ void HamDirector::Poll() {
     HamCharacter *player0 = TheHamWardrobe ? TheHamWardrobe->GetCharacter(0) : nullptr;
     HamCharacter *player1 = TheHamWardrobe ? TheHamWardrobe->GetCharacter(1) : nullptr;
     RndPropAnim *songAnim = SongAnim(0);
+#ifdef HX_NATIVE
+    {
+        static int sDbg = 0;
+        if (sDbg++ < 10 || (sDbg % 300 == 0)) {
+            static Symbol mm("merge_moves");
+            int mmVal = TheHamProvider ? TheHamProvider->Property(mm, true)->Int() : -1;
+            MILO_LOG("ANIM-DIAG Poll: pollEnabled=%d p0=%p p1=%p songAnim=%p merge_moves=%d beat=%.2f\n",
+                     mPollEnabled, (void*)player0, (void*)player1, (void*)songAnim, mmVal, TheTaskMgr.Beat());
+            if (songAnim)
+                MILO_LOG("ANIM-DIAG Poll: songAnim->GetFrame()=%.2f\n", songAnim->GetFrame());
+            if (player0) {
+                CharClip *fc = player0->Driver() ? player0->Driver()->FirstClip() : nullptr;
+                MILO_LOG("ANIM-DIAG Poll: p0.SongAnimation()=%d p0.SongDriver()=%p p0.Driver()=%p firstClip=%p (%s, type=%s)\n",
+                         player0->SongAnimation(), (void*)player0->SongDriver(),
+                         (void*)player0->Driver(), (void*)fc,
+                         fc ? fc->Name() : "null", fc ? fc->Type().Str() : "null");
+                // Log default clip via Handle
+                if (player0->Driver()) {
+                    static Message dcMsg("default_clip");
+                    DataNode dcVal = player0->Driver()->Handle(dcMsg, true);
+                    Hmx::Object *dc = dcVal.GetObj(nullptr);
+                    MILO_LOG("ANIM-DIAG Poll: p0.Driver().defaultClip=%p (%s)\n",
+                             (void*)dc, dc ? dc->Name() : "null");
+                }
+            }
+        }
+    }
+#endif
     if (songAnim) {
         // Song.anim frame advancement is driven by the world root's DTA path:
         //   WorldDir::Poll() → HandleType("select_camera") → OnSelectCamera()
@@ -3098,6 +3223,9 @@ void HamDirector::Poll() {
                 Key<Symbol> *practiceStart = nullptr;
                 if (p0anim != -1) {
                     bool clipInited = player0Clip.Init(0);
+#ifdef HX_NATIVE
+                    { static int s=0; if(s++<5) MILO_LOG("ANIM-DIAG ClipPlayer::Init(0)=%d frame=%.2f\n", clipInited, songAnim->GetFrame()); }
+#endif
                     if (clipInited) {
                         player0Clip.PlayAnims(player0, songAnim->GetFrame(), unk2e4, mBlendDebug);
                     }

@@ -79,6 +79,13 @@ static void mainLoop() {
     }
 
     case BOOT_GPU_WAIT: {
+        // GPU may already be initialized if JSPI yielding during App constructor
+        // allowed async callbacks to fire and InitGpuResources was called.
+        if (gWgpuRnd && gWgpuRnd->GpuResourcesReady()) {
+            printf("DC3 Web: GPU already initialized during App constructor (JSPI)\n");
+            sBootState = BOOT_RUNNING;
+            break;
+        }
         sGpuWaitFrames++;
         if (gWgpuRnd) {
             gWgpuRnd->Gpu().PollEvents();
@@ -131,6 +138,11 @@ void dc3_resize_canvas(int w, int h) {
     }
 }
 
+EMSCRIPTEN_KEEPALIVE
+void dc3MainLoopTick() {
+    mainLoop();
+}
+
 } // extern "C"
 
 // ============================================================================
@@ -139,7 +151,23 @@ void dc3_resize_canvas(int w, int h) {
 
 int main(int argc, char **argv) {
     printf("DC3 Web Port — Initializing\n");
+#ifdef DC3_WEB_ASYNCIFY
+    // JSPI mode: JS drives the frame loop via requestAnimationFrame + await.
+    // Each tick calls dc3MainLoopTick() which can yield to the browser
+    // (via emscripten_sleep) during synchronous file loads, letting the
+    // loading screen render while .milo_xbox files download.
+    EM_ASM({
+        async function tick() {
+            await Module._dc3MainLoopTick();
+            requestAnimationFrame(tick);
+        }
+        requestAnimationFrame(tick);
+    });
+    emscripten_exit_with_live_runtime();
+#else
+    // Fallback: cooperative main loop (no async yielding — file loads block).
     emscripten_set_main_loop(mainLoop, 0, true);
+#endif
     return EXIT_SUCCESS;
 }
 

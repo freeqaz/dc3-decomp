@@ -53,7 +53,7 @@ static RunResult RunHeadless(
 
     // Build command with env vars piped through
     std::ostringstream cmd;
-    cmd << "MILO_HEADLESS=1 MILO_FATAL_FAILS=0 MILO_MAX_FRAMES=" << maxFrames;
+    cmd << "MILO_HEADLESS=1 MILO_FATAL_FAILS=0 DC3_SHOW_SPLASH=0 MILO_MAX_FRAMES=" << maxFrames;
     if (inputScriptPath)
         cmd << " MILO_INPUT_SCRIPT=" << inputScriptPath;
     for (auto &ev : extraEnv)

@@ -532,6 +532,15 @@ void HamCamShot::StartAnim() {
         if (!it->mTarget.Null()) {
             std::list<TargetCache>::iterator cache = CreateTargetCache(it->mTarget);
             Character *theChar = dynamic_cast<Character *>(cache->mTrans);
+#ifdef HX_NATIVE
+            {
+                static int sLog = 0;
+                if (sLog++ < 20)
+                    MILO_LOG("SHOT-DIAG StartAnim '%s': target='%s' trans=%p char=%p animGroup='%s'\n",
+                             Name(), it->mTarget.Str(), (void*)cache->mTrans,
+                             (void*)theChar, it->mAnimGroup.Str());
+            }
+#endif
             if (theChar) {
                 theChar->SetSelfShadow(it->mSelfShadow);
                 theChar->SetLodType((LODType)it->mForceLOD);
@@ -541,6 +550,15 @@ void HamCamShot::StartAnim() {
                 msg[2] = it->mFastForward / FramesPerUnit();
                 msg[3] = Units();
                 msg[4] = it->mForwardEvent;
+#ifdef HX_NATIVE
+                {
+                    static int sLog2 = 0;
+                    if (sLog2++ < 10)
+                        MILO_LOG("SHOT-DIAG play_group: char='%s' group='%s' ff=%.2f units=%.2f\n",
+                                 theChar->Name(), it->mAnimGroup.Str(),
+                                 it->mFastForward / FramesPerUnit(), Units());
+                }
+#endif
                 HandleType(msg);
                 if (it->mEnvOverride) {
                     theChar->SetEnv(it->mEnvOverride);

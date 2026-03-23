@@ -575,6 +575,7 @@ void UIManager::Poll() {
                 int delay;
             };
             static const BootAdvance sBoot[] = {
+                {"attract_screen", "autosave_warning_screen", 30},
                 {"autosave_warning_screen", "title_screen", 90},
                 {"title_screen", "wait_main_after_saveload_screen", 60},
                 {"wait_main_after_saveload_screen", "main_screen", 120},
