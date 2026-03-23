@@ -191,16 +191,15 @@ void DrawMeshImmediate(RndMesh* mesh) {
     key.shaderType = 18; // kStandardShader
 
     BaseMaterial::Blend matBlend = mat->GetBlend();
-    // Multiply blend: D3D9 DESTCOLOR × SRCCOLOR.
-    // On Xbox, multiply meshes (debloom, overlay_colortexture) modulate the
-    // existing framebuffer by their texture/color. With a dark background
-    // the result is near-black (dst≈0 → src*dst≈0), which is correct —
-    // debloom is meant to darken bloom regions back toward the base image.
-    // Previously skipped to avoid "white rectangles", but the real issue
-    // was shader misconfiguration (now fixed). Let multiply through.
+
+    // Overlay pass (no depth buffer) = HUD/2D elements. Disable face culling
+    // because Xbox D3D9 uses CW front face while WebGPU uses CCW. HUD quads
+    // authored for CW winding are back-facing in CCW and would be culled.
+    bool isOverlayPass = !gWgpuRnd->CurrentPassHasDepth();
+
     key.blend = (WgpuBlend)matBlend;
     key.zMode = isTextMesh ? (WgpuZMode)0 : (WgpuZMode)mat->GetZMode(); // No depth for text
-    key.cull = isTextMesh ? (WgpuCull)0 : (WgpuCull)mat->GetCull(); // No cull for text
+    key.cull = (isTextMesh || isOverlayPass) ? WgpuCull::None : (WgpuCull)mat->GetCull();
     key.stencil = (WgpuStencil)mat->GetStencil();
     key.layout = skinned ? VertexLayoutType::Skinned : VertexLayoutType::Static;
     key.targetFormat = gWgpuRnd->CurrentTargetFormat();

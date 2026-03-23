@@ -105,25 +105,25 @@ MetaPanel::MetaPanel() : mLoopHistoryCursor(0), mSongPreview(TheHamSongMgr), mXM
     mCampaign = new Campaign(SystemConfig("campaign"));
     mHAQManager = new HAQManager();
 #endif
-    auto& songPreview = mSongPreview;
-    songPreview.SetName("song_preview", ObjectDir::Main());
+    mSongPreview.SetName("song_preview", ObjectDir::Main());
     // These provider managers back shell/song-selection UI. Native originally
     // skipped them along with deeper metagame systems, which left DTA-visible
     // names like `song_offer_provider` unresolved and later backfilled by
     // generic stubs. That masked the real gap until song_select started using
     // the typed UIListProvider path.
-    SongSortMgr::Init(songPreview);
-    ChallengeSortMgr::Init(songPreview);
-    PlaylistSortMgr::Init(songPreview);
-    MQSongSortMgr::Init(songPreview);
-    FitnessCalorieSortMgr::Init(songPreview);
+    SongSortMgr::Init(mSongPreview);
+    ChallengeSortMgr::Init(mSongPreview);
+    PlaylistSortMgr::Init(mSongPreview);
+    MQSongSortMgr::Init(mSongPreview);
+    FitnessCalorieSortMgr::Init(mSongPreview);
     mLoopHistory.reserve(3);
     for (int i = 3; i != 0; i--) {
         mLoopHistory.push_back(-1);
     }
     ThePlatformMgr.AddSink(this, "xmp_state_changed");
-    sSongDB = new SongDB();
-    sHamMaster = new HamMaster(sSongDB->SongData(), nullptr);
+    SongDB *songDB = new SongDB();
+    sSongDB = songDB;
+    sHamMaster = new HamMaster(songDB->SongData(), nullptr);
 }
 
 MetaPanel::~MetaPanel() {
@@ -425,8 +425,7 @@ void MetaPanel::CycleVenuePreference() {
         MILO_ASSERT(pVenueEntryArray, 0x76);
         venuePref = pVenueEntryArray->Sym(0);
     } else {
-        auto venueCount = pVenueArray->Size();
-        for (int i = 1; i < venueCount; i++) {
+        for (int i = 1; i < pVenueArray->Size(); i++) {
             DataArray *pVenueEntryArray = pVenueArray->Array(i);
             MILO_ASSERT(pVenueEntryArray, 0x80);
             Symbol entrySym = pVenueEntryArray->Sym(0);

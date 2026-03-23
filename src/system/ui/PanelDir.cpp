@@ -391,28 +391,6 @@ void PanelDir::DrawShowing() {
     }
     RndCam *curCam = RndCam::Current();
     RndCam *camOverride = CamOverride();
-#ifdef HX_NATIVE
-    if (getenv("MILO_DEBUG_PANEL_CAM") && mCam && strcmp(Name(), "song_info") == 0) {
-        static int sDumped = 0;
-        if (sDumped < 1) {
-            sDumped++;
-            printf("DC3 song_info mat/tex:\n");
-            const char* names[] = {"preview.mesh", "album_frame1.mesh", "album_frame.mesh", "debloom_frame.mesh"};
-            for (int i = 0; i < 4; i++) {
-                RndMesh* m = Find<RndMesh>(names[i], false);
-                if (!m) { printf("  '%s' NOT FOUND\n", names[i]); continue; }
-                RndMat* mat = m->Mat();
-                printf("  '%s' showing=%d mat='%s'", names[i], m->Showing(), mat ? mat->Name() : "(null)");
-                if (mat) {
-                    RndTex* tex = mat->GetDiffuseTex();
-                    printf(" diffTex='%s'", tex ? tex->Name() : "(null)");
-                    if (tex) printf(" %dx%d", tex->Width(), tex->Height());
-                }
-                printf("\n");
-            }
-        }
-    }
-#endif
     if (camOverride && camOverride != RndCam::Current()) {
 #ifdef HX_NATIVE
         FlushTransparentDraws();

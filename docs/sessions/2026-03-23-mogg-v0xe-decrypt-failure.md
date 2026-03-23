@@ -175,8 +175,47 @@ Temporarily switching to the DTA GrindArray path on native (with ByteGrinder::In
 
 This means the C++ rewrite is correct for native x86_64. The problem is that **native x86_64 and PPC produce different GrindArray output** for the same inputs.
 
-### What's needed
-The PPC GrindArray produces a different 16-byte key than native x86_64. We need those 16 bytes. Xenia agent dispatched to run the debug XEX and capture them. Once we have the PPC bytes, we can:
-1. Diff against native output to find which byte(s) diverge
-2. Trace back to which op call produced the divergence
-3. Fix that specific op's native implementation
+### Exhaustive verification: PPC and x86_64 SHOULD produce identical output
+- All 64 ops exhaustively tested with 256x256 input pairs — only op5 diverges (never called for this mogg)
+- All permutations and hash mappings identical on 32/64 bit
+- Decomp match: all 14 called ops at 100%, op6 at 99.6% (cosmetic XOR operand swap)
+- libtomcrypt uses ENDIAN_NEUTRAL on both platforms (same code path)
+
+### Status: BLOCKED
+The computed key `d249755c0a5dc4b3c41349a489d314f2` does not produce HMXA when decrypting boyfriend.mogg. Every component is verified correct individually and in composition. Possible explanations:
+1. The ark data was encrypted with a binary that has different DTA evaluation behavior (different DTA engine version, different script optimizer, etc.)
+2. There's a bug in the original VorbisReader setupCypher that our decomp faithfully reproduces but that produces wrong keys
+3. The mogg files need a different decryption approach entirely for this game version
+
+### Xenia path
+A pre-built `xenia-headless` exists at `/home/free/code/milohax/xenia/build/bin/Linux/Checked/xenia-headless`. It starts the XEX but crashes early (XObject assertion). Needs game data path setup. PPC debug printfs added to setupCypher (unconditional MILO_LOG) but haven't been captured yet.
+
+### Key fact from user
+**The game assets (ark files) are from the RETAIL disc.** The debug.xex is from a devkit. If the retail binary has a different DTA engine behavior (e.g., different masterKey obfuscation path at line 157: `sprintf(script, "{%c %d %c}", ...)` uses `(int)masterKey` which is a 32-bit pointer on PPC but the retail binary might XOR with a different value), the derived key would differ. However, the decomp's `#ifdef HX_NATIVE` bypasses this DTA path entirely using `getMasher()` directly — and we verified getMasher produces correct output.
+
+### Final Unicorn verification
+All 14 ops that fire during GrindArray verified EQUIVALENT between orig and decomp PPC across zero-fill, 0xCD-fill, and 16-run probes (3,100-4,500 external calls per run). No behavioral divergence.
+
+### Conclusion: retail vs devkit binary mismatch
+Our decomp source faithfully matches the devkit binary. But the retail mogg files were encrypted by the RETAIL binary, which may derive different keys due to:
+1. **Different `masterKey` obfuscation**: `setupCypher` line 157 uses `(int)masterKey ^ iEval` — the pointer address of a stack variable, which differs between builds
+2. **Different DTA engine behavior**: The retail binary's DTA script optimizer or evaluator may produce different intermediate values
+3. **Different `hiddenKeys` obfuscation path**: The retail binary's `getKey` uses DTA scripting (`{A (int)masterKey A}`) to fill masterKey, whereas our native port calls `getMasher()` directly
+
+## RESOLVED — Onyx reference implementation found the bug
+
+### Root cause
+The GrindArray loop had TWO bugs vs Onyx's proven implementation:
+1. **Conditional vs unconditional stride**: Our code did stride 2 on hash match, stride 1 on miss. Onyx always uses stride 2 (process bar[ix] for hash, bar[ix+1] for op, advance by 2)
+2. **Wrong hash→op indirection**: We mapped `hash → op` directly. Correct path is `hash → switchCases[hash] → O-table slot → op function`
+
+### The fix
+The GrindArray loop is simply: `for ix in range(0, 16, 2): foo = O[switchCases[hashMap[bar[ix]]]](bar[ix+1], foo)`
+
+No conditional branching. The hash of bar[ix] selects the op. bar[ix+1] is the operand. Always stride 2.
+
+### Verification
+Post-grind key changed from `...af 97` to `...af 81` (last byte fixed). First decrypted bytes: **`48 4d 58 41` = HMXA** — correct!
+
+### Key constants
+All key constants (hiddenKeys, gRB1Key, gHvKeyGreen, LCG masher) are IDENTICAL between DC3 decomp, Onyx, and Nautilus. The retail vs devkit theory was wrong — the keys match. Only the GrindArray algorithm was buggy.

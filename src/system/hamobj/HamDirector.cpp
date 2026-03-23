@@ -106,12 +106,6 @@ HamDirector::HamDirector()
     n = this;
     TheHamDirector = this;
     mDirCutKeys.reserve(100);
-#ifdef HX_NATIVE
-    static int sCtorCount = 0;
-    sCtorCount++;
-    fprintf(stderr, "DC3 HamDirector::ctor #%d this=%p TheHamDirector=%p\n",
-            sCtorCount, (void*)this, (void*)TheHamDirector);
-#endif
 }
 
 HamDirector::~HamDirector() {
@@ -327,8 +321,6 @@ END_LOADS
 void HamDirector::Enter() {
     RndPollable::Enter();
 #ifdef HX_NATIVE
-    fprintf(stderr, "DC3 HamDirector::Enter() — mMerger=%p mVenue=%p\n",
-            (void*)mMerger.Ptr(), (void*)mVenue.Ptr());
     // No Kinect on native — force merge_moves=0 so SongAnim() returns the
     // pre-authored difficulty song.anim instead of the empty routine builder.
     if (TheHamProvider) {
@@ -373,18 +365,6 @@ void HamDirector::Enter() {
         }
         Initialize();
         RndPropAnim *anim = SongAnim(0);
-#ifdef HX_NATIVE
-        fprintf(stderr, "DC3 HamDirector::Enter() — SongAnim(0)=%p mClipDir=%p mMoveDir=%p\n",
-                (void*)anim, (void*)mClipDir.Ptr(), mMoveDir ? (void*)mMoveDir.Ptr() : nullptr);
-        fprintf(stderr, "DC3 HamDirector::Enter() — mSongAnims: easy=%p med=%p expert=%p\n",
-                (void*)mSongAnims[kDifficultyEasy].Ptr(),
-                (void*)mSongAnims[kDifficultyMedium].Ptr(),
-                (void*)mSongAnims[kDifficultyExpert].Ptr());
-        fprintf(stderr, "DC3 HamDirector::Enter() — routineBuilder: p1=%p p2=%p merge_moves=%d\n",
-                (void*)mPlayer1RoutineBuilderAnim.Ptr(),
-                (void*)mPlayer2RoutineBuilderAnim.Ptr(),
-                TheHamProvider->Property("merge_moves", true)->Int());
-#endif
         if (anim) {
             anim->StartAnim();
             anim->SetFrame(-kHugeFloat, 1);
@@ -458,15 +438,15 @@ DataNode HamDirector::OnFileMerged(DataArray *a) {
         if (hudDir) {
             hudDir->Enter();
             hudDir->SetShowing(true);
+            // TODO(native): The HUD PanelDir has postprocs_before_draw=false
+            // (mCanEndWorld=0) from the .milo data. On Xbox this works because
+            // the HUD draws inline in the 3D pass. On native, without ending
+            // the world and flushing post-processing, HUD meshes render to the
+            // intermediate buffer and get depth-occluded or overwritten by
+            // post-proc. Force it true so PanelDir::DrawShowing() calls
+            // FlushPostProcessingForOverlay() — rendering the HUD on top.
+            hudDir->SetProperty("postprocs_before_draw", true);
             DataVariable("hud_panel") = (Hmx::Object *)hudDir;
-            // Check HUD state: type, draw list size, showing
-            fprintf(stderr, "DC3 HUD: PanelDir '%s' — type='%s' mDraws=%d showing=%d\n",
-                    hudDir->Name(),
-                    hudDir->TypeDef() ? hudDir->TypeDef()->Sym(0).Str() : "none",
-                    hudDir->NumDraws(),
-                    hudDir->Showing());
-        } else {
-            fprintf(stderr, "DC3 HamDirector: WARNING — game_hud MergerDir is not a PanelDir\n");
         }
     }
 #endif
@@ -649,9 +629,6 @@ PropKeys *HamDirector::GetPropKeys(Difficulty d, Symbol s) {
 }
 
 void HamDirector::VenueEnter(WorldDir *dir) {
-#ifdef HX_NATIVE
-    fprintf(stderr, "DC3 HamDirector::VenueEnter(%p)\n", (void*)dir);
-#endif
     if (dir) {
         // Xbox venue has no type after SetSubDir(true) clears TypeDef.
         // select_camera fires on the world root (not venue), so venue type
@@ -662,11 +639,6 @@ void HamDirector::VenueEnter(WorldDir *dir) {
     mPlayer1Char = dir ? dir->Find<HamCharacter>("player1", true) : nullptr;
     mBackup0Char = dir ? dir->Find<HamCharacter>("backup0", true) : nullptr;
     mBackup1Char = dir ? dir->Find<HamCharacter>("backup1", true) : nullptr;
-#ifdef HX_NATIVE
-    fprintf(stderr, "DC3 HamDirector::VenueEnter — player0=%p player1=%p backup0=%p backup1=%p\n",
-            (void*)mPlayer0Char.Ptr(), (void*)mPlayer1Char.Ptr(),
-            (void*)mBackup0Char.Ptr(), (void*)mBackup1Char.Ptr());
-#endif
 
     RndTransformable *p0 =
         dir ? dir->Find<RndTransformable>("player0.trans", true) : nullptr;
@@ -1081,10 +1053,6 @@ DataNode HamDirector::OnToggleCamshotFlag() { return mCamshotFlag = !mCamshotFla
 DataNode HamDirector::OnLoadSong(DataArray *a) {
     FilePathTracker tracker(FileRoot());
     MILO_ASSERT(TheGameData, 0xC1D);
-#ifdef HX_NATIVE
-    fprintf(stderr, "DC3 HamDirector::OnLoadSong() — song='%s' venue='%s' mMerger=%p\n",
-            a->Str(2), TheGameData->Venue().Str(), (void*)mMerger.Ptr());
-#endif
     for (int i = 0; i < 2; i++) {
         HamPlayerData *hpd = TheGameData->Player(i);
         MILO_ASSERT(hpd, 0xC21);
@@ -1229,20 +1197,9 @@ DataNode HamDirector::OnFileLoaded(DataArray *a) {
     static Symbol viz("viz");
     static Symbol game_hud("game_hud");
     Symbol sym = a->Sym(2);
-#ifdef HX_NATIVE
-    fprintf(stderr, "DC3 HamDirector::OnFileLoaded('%s') — mMerger=%p mVenue=%p\n",
-            sym.Str(), (void*)mMerger.Ptr(), (void*)mVenue.Ptr());
-#endif
     if (mMerger) {
         mAsyncLoaded = mMerger->AsyncLoad();
         if (sym == song) {
-#ifdef HX_NATIVE
-            fprintf(stderr, "DC3 HamDirector::OnFileLoaded('song') — venue='%s' (null=%d) wardrobe=%p outfits=['%s','%s'] crews=['%s','%s']\n",
-                    TheGameData->Venue().Str(), TheGameData->Venue().Null(),
-                    (void*)TheHamWardrobe,
-                    mCharacterOutfits[0].Str(), mCharacterOutfits[1].Str(),
-                    mCrews[0].Str(), mCrews[1].Str());
-#endif
             if (!TheGameData->Venue().Null()) {
                 if (TheHamWardrobe) {
                     TheHamWardrobe->LoadCharacters(
@@ -1285,8 +1242,6 @@ DataNode HamDirector::OnFileLoaded(DataArray *a) {
             if (sym == venue && dir) {
                 mVenue = dynamic_cast<WorldDir *>(dir);
 #ifdef HX_NATIVE
-                fprintf(stderr, "DC3 HamDirector::OnFileLoaded('venue') — dir=%p mVenue=%p (cast %s)\n",
-                        (void*)dir, (void*)mVenue.Ptr(), mVenue ? "OK" : "FAILED");
                 // DTA scripts expect video_recorder.srec in the venue world
                 // (Kinect video recording). Register a no-op stub so find_obj succeeds.
                 if (mVenue && !mVenue->FindObject("video_recorder.srec", false, false)) {
@@ -1296,9 +1251,6 @@ DataNode HamDirector::OnFileLoaded(DataArray *a) {
 #endif
             } else if (sym == viz && dir) {
                 mVisualizer = dynamic_cast<HamVisDir *>(dir);
-#ifdef HX_NATIVE
-                fprintf(stderr, "DC3 HamDirector::OnFileLoaded('viz') — mVisualizer=%p\n", (void*)mVisualizer.Ptr());
-#endif
             }
         }
     }
@@ -1703,16 +1655,6 @@ Symbol HamDirector::ClosestMove() {
 bool HamDirector::IsWorldLoaded() const {
     bool loaded = mVenue && mMerger && !mMerger->HasPendingFiles() && mMoveMerger
         && !mMoveMerger->HasPendingFiles();
-#ifdef HX_NATIVE
-    static int sLoadLog = 0;
-    if (!loaded && sLoadLog++ < 20) {
-        fprintf(stderr, "DC3 HamDirector::IsWorldLoaded() = false — mVenue=%p mMerger=%p(pending=%d) mMoveMerger=%p(pending=%d)\n",
-                (void*)mVenue.Ptr(), (void*)mMerger.Ptr(),
-                mMerger ? mMerger->HasPendingFiles() : -1,
-                (void*)mMoveMerger.Ptr(),
-                mMoveMerger ? mMoveMerger->HasPendingFiles() : -1);
-    }
-#endif
     return loaded;
 }
 
@@ -2567,46 +2509,6 @@ void HamDirector::PlayNextShot() {
 }
 
 DataNode HamDirector::OnSelectCamera(DataArray *a) {
-#ifdef HX_NATIVE
-    static int sSelectCamLog = 0;
-    if (sSelectCamLog++ < 10 || (sSelectCamLog % 1000 == 0)) {
-        fprintf(stderr, "DC3 HamDirector::OnSelectCamera — beat=%.2f disabled=%d songAnim=%p mCurShot=%p mPickNewShot=%d\n",
-                TheTaskMgr.Beat(), mDisabled, (void*)SongAnim(0), (void*)mCurShot.Ptr(), mPickNewShot);
-    }
-    // One-time diagnostic: check if song.anim has 'shot' PropKeys targeting us
-    static bool sShotDiagDone = false;
-    if (!sShotDiagDone && SongAnim(0) && TheTaskMgr.Beat() > 0.0f) {
-        sShotDiagDone = true;
-        RndPropAnim *sa = SongAnim(0);
-        // Check known property tracks
-        const char *propNames[] = {"shot", "clip", "move", "practice", "world_event", "postproc"};
-        fprintf(stderr, "DC3 SHOT DIAG: SongAnim(0)=%p this=%p Name='%s'\n",
-                (void*)sa, (void*)this, Name());
-        for (int pi = 0; pi < 6; pi++) {
-            PropKeys *pk = sa->GetKeys(this, DataArrayPtr(Symbol(propNames[pi])));
-            if (pk) {
-                Hmx::Object *tgt = pk->Target();
-                fprintf(stderr, "  '%s': target=%p class='%s' name='%s' numKeys=%d (this_offset=%ld)\n",
-                        propNames[pi], (void*)tgt,
-                        tgt ? tgt->ClassName() : "null",
-                        tgt ? tgt->Name() : "null",
-                        pk->NumKeys(),
-                        tgt ? ((char*)tgt - (char*)this) : 0);
-            } else {
-                fprintf(stderr, "  '%s': NOT FOUND (GetKeys returned null)\n", propNames[pi]);
-            }
-        }
-        // Also check difficulty song.anim directly (not routineBuilderAnim)
-        for (int d = 0; d < 3; d++) {
-            RndPropAnim *diffAnim = GetPropAnim((Difficulty)d, "song.anim", false);
-            if (diffAnim) {
-                PropKeys *shotPk2 = diffAnim->GetKeys(this, DataArrayPtr(Symbol("shot")));
-                fprintf(stderr, "  difficulty[%d] song.anim=%p shot_keys=%p\n",
-                        d, (void*)diffAnim, (void*)shotPk2);
-            }
-        }
-    }
-#endif
     // Full songAnim path — Debug::Fail is non-fatal on native, so DTA
     // handler FAILs (missing panels, stubs) are harmless warnings.
     RndPropAnim *songAnim = SongAnim(0);
@@ -3140,34 +3042,6 @@ void HamDirector::Poll() {
     HamCharacter *player0 = TheHamWardrobe ? TheHamWardrobe->GetCharacter(0) : nullptr;
     HamCharacter *player1 = TheHamWardrobe ? TheHamWardrobe->GetCharacter(1) : nullptr;
     RndPropAnim *songAnim = SongAnim(0);
-#ifdef HX_NATIVE
-    {
-        static int sDbg = 0;
-        if (sDbg++ < 10 || (sDbg % 300 == 0)) {
-            static Symbol mm("merge_moves");
-            int mmVal = TheHamProvider ? TheHamProvider->Property(mm, true)->Int() : -1;
-            MILO_LOG("ANIM-DIAG Poll: pollEnabled=%d p0=%p p1=%p songAnim=%p merge_moves=%d beat=%.2f\n",
-                     mPollEnabled, (void*)player0, (void*)player1, (void*)songAnim, mmVal, TheTaskMgr.Beat());
-            if (songAnim)
-                MILO_LOG("ANIM-DIAG Poll: songAnim->GetFrame()=%.2f\n", songAnim->GetFrame());
-            if (player0) {
-                CharClip *fc = player0->Driver() ? player0->Driver()->FirstClip() : nullptr;
-                MILO_LOG("ANIM-DIAG Poll: p0.SongAnimation()=%d p0.SongDriver()=%p p0.Driver()=%p firstClip=%p (%s, type=%s)\n",
-                         player0->SongAnimation(), (void*)player0->SongDriver(),
-                         (void*)player0->Driver(), (void*)fc,
-                         fc ? fc->Name() : "null", fc ? fc->Type().Str() : "null");
-                // Log default clip via Handle
-                if (player0->Driver()) {
-                    static Message dcMsg("default_clip");
-                    DataNode dcVal = player0->Driver()->Handle(dcMsg, true);
-                    Hmx::Object *dc = dcVal.GetObj(nullptr);
-                    MILO_LOG("ANIM-DIAG Poll: p0.Driver().defaultClip=%p (%s)\n",
-                             (void*)dc, dc ? dc->Name() : "null");
-                }
-            }
-        }
-    }
-#endif
     if (songAnim) {
         // Song.anim frame advancement is driven by the world root's DTA path:
         //   WorldDir::Poll() → HandleType("select_camera") → OnSelectCamera()
@@ -3183,9 +3057,6 @@ void HamDirector::Poll() {
                 Key<Symbol> *practiceStart = nullptr;
                 if (p0anim != -1) {
                     bool clipInited = player0Clip.Init(0);
-#ifdef HX_NATIVE
-                    { static int s=0; if(s++<5) MILO_LOG("ANIM-DIAG ClipPlayer::Init(0)=%d frame=%.2f\n", clipInited, songAnim->GetFrame()); }
-#endif
                     if (clipInited) {
                         player0Clip.PlayAnims(player0, songAnim->GetFrame(), unk2e4, mBlendDebug);
                     }

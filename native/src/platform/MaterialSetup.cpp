@@ -125,7 +125,12 @@ MaterialParams BuildMaterialParams(RndMat* mat, bool isTextMesh) {
     matUni.materialFogEnabled = allowFog ? 1.0f : 0.0f;
     if (!allowFog && mat->GetFog()) heuristics |= kHeuristicFogBlendCheck;
 
-    bool forcePrelit = IsSimpleRender();
+    // Force prelit for HUD overlay meshes: the overlay pass has no guaranteed
+    // environment/lighting, so skip 3D lighting calculations entirely.
+    // On Xbox, HUD meshes render inline with the 3D scene using their own env,
+    // but on native the overlay pass is a separate 1x (no MSAA) pass.
+    bool isOverlayPass = gWgpuRnd && !gWgpuRnd->CurrentPassHasDepth();
+    bool forcePrelit = IsSimpleRender() || isOverlayPass;
     if (isTextMesh) heuristics |= kHeuristicTextMeshDetect;
     matUni.prelit = (mat->Prelit() || isTextMesh || forcePrelit) ? 1.0f : 0.0f;
     matUni.useAlphaAsRGB = isTextMesh ? 1.0f : 0.0f;

@@ -160,6 +160,13 @@ void VorbisReader::setupCypher(int moggVersion) {
     buf118Arr->Release();
 #endif
     KeyChain::getKey(mKeyIndex, gKey, masterKey);
+    // PPC + native diagnostic: dump key bytes at each stage
+    {
+        char dbg[256]; int p = 0;
+        p += sprintf(dbg+p, "DC3 setupCypher: pre-grind gKey = ");
+        for (int i = 0; i < 16; i++) p += sprintf(dbg+p, "%02x ", gKey[i]);
+        MILO_LOG("%s\n", dbg);
+    }
 #ifdef HX_NATIVE
     fprintf(stderr, "DC3 setupCypher: pre-grind gKey = ");
     for (int i = 0; i < 16; i++) fprintf(stderr, "%02x ", gKey[i]);
@@ -171,6 +178,12 @@ void VorbisReader::setupCypher(int moggVersion) {
     fprintf(stderr, "\n");
 #endif
     TheSynth->Grinder().GrindArray(mMagicA, mMagicB, gKey, 0x10, moggVersion);
+    {
+        char dbg[256]; int p = 0;
+        p += sprintf(dbg+p, "DC3 setupCypher: post-grind gKey = ");
+        for (int i = 0; i < 16; i++) p += sprintf(dbg+p, "%02x ", gKey[i]);
+        MILO_LOG("%s\n", dbg);
+    }
 #ifdef HX_NATIVE
     fprintf(stderr, "DC3 setupCypher: post-grind gKey = ");
     for (int i = 0; i < 16; i++) fprintf(stderr, "%02x ", gKey[i]);
@@ -178,6 +191,12 @@ void VorbisReader::setupCypher(int moggVersion) {
 #endif
     for (int i = 0; i < 16; i++) {
         gKey[i] ^= mKeyMask[i];
+    }
+    {
+        char dbg[256]; int p = 0;
+        p += sprintf(dbg+p, "DC3 setupCypher: final gKey = ");
+        for (int i = 0; i < 16; i++) p += sprintf(dbg+p, "%02x ", gKey[i]);
+        MILO_LOG("%s\n", dbg);
     }
 #ifdef HX_NATIVE
     fprintf(stderr, "DC3 setupCypher: final gKey (after XOR) = ");
@@ -452,6 +471,17 @@ static void Decrypt(VorbisReader *reader, unsigned char *data, int bytes,
     ctr_decrypt(data, tmp, bytes, ctrState);
     memcpy(data, tmp, bytes);
     delete[] tmp;
+
+    // Diagnostic: dump first decrypted bytes
+    {
+        static int sDecryptLog = 0;
+        if (sDecryptLog++ < 2) {
+            fprintf(stderr, "DC3 Decrypt: first 16 decrypted bytes: ");
+            for (int i = 0; i < 16 && i < bytes; i++)
+                fprintf(stderr, "%02x ", data[i]);
+            fprintf(stderr, "(expect HMXA=484d5841 or OggS=4f676753)\n");
+        }
+    }
 
     // Step 2: Scan for all HMXA page headers and apply anti-tamper reversal.
     // v0xE encryption replaces OggS with HMXA and XORs bytes 12-15 and 20-23

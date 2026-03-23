@@ -54,9 +54,6 @@ BEGIN_LOADS(OriginalChoreoRemixer)
 END_LOADS
 
 void OriginalChoreoRemixer::Reset() {
-#ifdef HX_NATIVE
-    MILO_LOG("REMIXER-DIAG: OriginalChoreoRemixer::Reset() called, mTotalMeasures=%d\n", mTotalMeasures);
-#endif
     DanceRemixer::Reset();
     for (int i = 0; i < 2; i++) {
         HamPlayerData *hpd = TheGameData->Player(i);
@@ -119,10 +116,6 @@ void OriginalChoreoRemixer::SelectMove(int player, int measure) {
 }
 
 void OriginalChoreoRemixer::Init() {
-#ifdef HX_NATIVE
-    MILO_LOG("REMIXER-DIAG: OriginalChoreoRemixer::Init() called, MoveParents=%d\n",
-             (int)TheMoveMgr->MoveParents().size());
-#endif
     if (TheMoveMgr->MoveParents().size() == 0) {
         TheMoveMgr->InitSong();
         if (TheMoveMgr->MoveParents().size() == 0) {

@@ -526,8 +526,10 @@ void WgpuRnd::FlushPostProcessingForOverlay() {
     // End the current pass (venue + any existing draws)
     EndActivePass();
 
-    // Run post-processing now (reads intermediate, writes to framebuffer)
-    if (mIntermediateView && RndPostProc::Current()) {
+    // Run post-processing now (reads intermediate, writes to framebuffer).
+    // Only run once per frame — subsequent calls just start a new overlay pass
+    // without re-running post-proc (which would overwrite previous HUD draws).
+    if (mIntermediateView && RndPostProc::Current() && !mPostProcFlushed) {
         mPostProcPass.Run(mEncoder, mIntermediateView, mIntermediateTex,
                           mIntermediateWidth, mIntermediateHeight,
                           mDepthView, mFrameView, mBlackTexView, mGpu);
@@ -536,42 +538,27 @@ void WgpuRnd::FlushPostProcessingForOverlay() {
     int curW = mGpu.WindowWidth();
     int curH = mGpu.WindowHeight();
 
-    // Start a new pass that draws directly to the framebuffer (no MSAA, no post-proc).
-    // This is for HUD overlay that should not be bloom/DOF-affected.
+    // Start a new pass that draws directly to the framebuffer (no post-proc).
+    // The HUD overlay draws at 1x (no MSAA) directly to the swapchain surface,
+    // with no depth buffer. This avoids MSAA sample-count mismatches and
+    // preserves the post-processed venue that's already in the framebuffer.
     wgpu::RenderPassColorAttachment colorAtt{};
-    if (kMSAASamples > 1) {
-        // With MSAA: draw to MSAA texture, resolve directly to framebuffer
-        // (not to intermediate — bypass post-proc)
-        colorAtt.view = mMsaaView;
-        colorAtt.resolveTarget = mFrameView;
-        colorAtt.storeOp = wgpu::StoreOp::Store;
-    } else {
-        colorAtt.view = mFrameView;
-        colorAtt.storeOp = wgpu::StoreOp::Store;
-    }
+    colorAtt.view = mFrameView;
+    colorAtt.storeOp = wgpu::StoreOp::Store;
     colorAtt.loadOp = wgpu::LoadOp::Load; // preserve post-processed venue
-
-    wgpu::RenderPassDepthStencilAttachment depthAtt{};
-    depthAtt.view = mDepthView;
-    depthAtt.depthLoadOp = wgpu::LoadOp::Clear;
-    depthAtt.depthStoreOp = wgpu::StoreOp::Store;
-    depthAtt.depthClearValue = 1.0f;
-    depthAtt.stencilLoadOp = wgpu::LoadOp::Clear;
-    depthAtt.stencilStoreOp = wgpu::StoreOp::Store;
-    depthAtt.stencilClearValue = 0;
 
     wgpu::RenderPassDescriptor rpDesc{};
     rpDesc.label = "HudOverlayPass";
     rpDesc.colorAttachmentCount = 1;
     rpDesc.colorAttachments = &colorAtt;
-    rpDesc.depthStencilAttachment = &depthAtt;
+    rpDesc.depthStencilAttachment = nullptr; // no depth for 2D HUD
 
     mPass = mEncoder.BeginRenderPass(&rpDesc);
     mInPass = true;
     mActiveTargetTex = nullptr;
     mCurrentTargetFormat = mGpu.SurfaceFormat();
-    mCurrentSampleCount = kMSAASamples;
-    mCurrentPassHasDepth = true;
+    mCurrentSampleCount = 1;  // 1x for HUD overlay
+    mCurrentPassHasDepth = false;
     mCurrentTargetWidth = (uint32_t)curW;
     mCurrentTargetHeight = (uint32_t)curH;
     ApplyViewport();
@@ -1261,6 +1248,22 @@ void WgpuRnd::WriteSceneUniforms() {
                 }
             }
             memcpy(scene.view, view, sizeof(view));
+
+            // HUD overlay FOV correction: DC3's HUD uses a cylindrical layout
+            // with meshes placed at ~750 units from center on the X axis, viewed
+            // from a camera at Y=-768 (distance ~668). The stored yFov (0.602 rad
+            // = 34.5 deg) with 16:9 aspect gives hFOV ~58 deg, only covering
+            // ±365 X — too narrow for the ±750 HUD layout. On Xbox the D3D9
+            // viewport/projection chain likely handles this differently.
+            // TODO(native): The gameplay HUD uses a cylindrical layout with meshes
+            // at ±750 units X, viewed from Cam.cam at Y=-768. The stored yFov
+            // (0.602 rad) covers only ±365 X — too narrow. On Xbox, the D3D9
+            // viewport/projection chain handles this differently. For now, widen
+            // the horizontal FOV only for the specific gameplay HUD camera.
+            if (!mCurrentPassHasDepth && cam && !strcmp(cam->Name(), "Cam.cam")
+                && cam->YFov() > 0.5f && cam->YFov() < 0.7f) {
+                scene.viewProj[0] *= 0.49f;
+            }
         }
 
         // Camera position (in world space, before axis flip)

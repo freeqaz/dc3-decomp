@@ -1,20 +1,18 @@
 # Native Port TODO — Phase 6 Polish & Remaining Work
 
-## Current State (Session 74)
-- **Full gameplay pipeline operational** — Engine boots through menu → song select → game_screen with audio, rendering, animation, camera cuts, post-processing
+## Current State (Session 75 — 2026-03-23)
+- **Song audio decryption FIXED** — v0xE mogg decrypt pipeline fully working (AES-CTR via pure C++ GrindArray, HMXA→OggS conversion). See `docs/sessions/2026-03-23-mogg-v0xe-decrypt-failure.md`
+- **Audio-driven beat timing** — HandleWait succeeds with audioReady=1, songMs advances, beats track song position. Wall-clock fallback available when audio fails
+- **Full gameplay pipeline operational** — Engine boots through menu → song select → game_screen with audio, rendering, camera cuts, post-processing
 - **6 venues tested** — dci, dclive, rollerrink, houseparty, streetside, throneroom — all render correctly
 - **Per-song venue resolution** — Songs load their correct venue from metadata (HamSongMetadata::Venue())
 - **~350-518 draw calls/frame** — varies by venue (houseparty=350, rollerrink=518)
-- **Audio playback** — Real-time MOGG decoding (FFmpeg/Vorbis) → ring buffer → miniaudio output, drives songMs timing
-- **Audio loading fix** — Game::IsLoaded() state 2 initiates audio from within load poll (fixes circular dependency)
 - **Camera cuts** — song.anim PropKeys → HamDirector::SetShot() → CameraManager with 34+ keyframes/song
 - **Post-processing** — Bloom (screen blend), Xbox-matched contrast/brightness, saturation, levels, vignette, chromatic aberration, posterization
-- **Smart light selection** — DC3 doesn't use LightPresets; base illumination is point lights. Priority-weighted selection: default/stage > main > generic > backup > peak > rim. Point lights approximated as directional toward scene center.
+- **Character animation gap** — Characters render but don't dance (ClipPlayer clips not loading). See Priority 1 below
 - **Non-fatal Debug::Fail** — Matches Xbox "Continue" dialog (MILO_FATAL_FAILS=1 to restore abort)
-- **Render-to-texture** — RndTexRenderer::DrawToTexture pipeline working (venue decorations)
 - **Content system** — 62 songs load from DTA, 49 UI items in song_select_screen
-- **RndFlare occlusion bypass** — SetVisible(true) + SetOcclusionResult(1.0) for in-view flares on native (no GPU occlusion query)
-- **Stable 2500+ frames per song** — all tested songs run through gameplay without crash
+- **Stable 5000+ frames per song** — boyfriend.mogg plays through 14+ seconds of gameplay without crash
 
 ## Headless GPU Rendering
 
@@ -210,11 +208,14 @@ HamDirector (`src/system/hamobj/HamDirector.cpp:137-202`) exposes ~40+ DTA handl
 | `load_song` | Triggers song asset loading | Works |
 | `remap_song_anim_to_tempo_map` | Maps song.anim to tempo | **STUB** (Tier 1) |
 
-## Phase 6: Audio — COMPLETE (Sessions 67, 73)
+## Phase 6: Audio — COMPLETE (Sessions 67, 73, 75)
 - [x] Real-time MOGG decoding via FFmpeg/Vorbis/miniaudio
 - [x] Ring buffer flow control (native ConsumeData with BytesWriteable check)
 - [x] Song audio drives animation timing via songMs
 - [x] UI/SFX audio — **DONE** (Session 73: XMA→PCM decoder via FFmpeg, 92 samples decoded from common_bank.milo, sample rate conversion 32kHz→44.1kHz)
+- [x] **Mogg v0xE decryption** — **DONE** (Session 75): Pure C++ GrindArray replaces DTA scripting. 64 byte-transform ops, unconditional stride-2 loop, hash→switchCase→O-table indirection. Verified against Onyx Music Game Toolkit reference implementation. `magicNumberGeneratorNative` replaces DTA `{ha}` calls.
+- [x] **Beat-freeze fix** — **DONE** (Session 75): `PostWaitStart` audio-fail path sets `mRealTime=true` + `SetTimeOffset()` so beats advance from wall clock when mogg decode fails
+- [x] **Unit test** — `native/tests/test_mogg_v0xe.cpp`: verifies v0xB (shellmusic) and v0xE (boyfriend) both decode to READY state
 
 ## Phase 7: Post-Processing — COMPLETE (Sessions 69, 73)
 - [x] Bloom (screen blend, Xbox-matched)
@@ -235,13 +236,10 @@ HamDirector (`src/system/hamobj/HamDirector.cpp:137-202`) exposes ~40+ DTA handl
 - [x] PostProc_NG.cpp Bloom_Blur — Xbox shader code (`SetBloomBlurWeights`, `unk14`) guarded
 - [x] SpecialOfferEnumJob virtual dtor — implemented (Session 73)
 
-### 8.3 Character Animation Verification — CONFIRMED (Session 74)
-- [x] Characters animate in gameplay (NOT T-pose) — confirmed via 1920x1080 screenshots
-- [x] Multiple dance poses visible across frames 800-1800 (YMCA)
-- [x] Camera cuts working (different angles between frames)
-- [x] Face rendering functional (head shapes with features visible)
-- [x] Bone garbage mitigation in place (FillBoneUniforms sanity check)
-- See `docs/native/ANIMATION_PIPELINE.md` for full pipeline documentation
+### 8.3 Character Animation — FIXED (Session 75, 2026-03-23)
+- [x] **LP64 bug in LayerArray::Eval** — `*(float*)((char*)(*it) + 8)` reads `mBeat` on 64-bit instead of `mWeight` (vtable is 8 bytes, not 4). Fixed to `(*it)->mWeight`. PPC match: 100% preserved.
+- [x] **HamDriver::Poll bootstrap** — Layer::mWeight uninitialized in ctor; Xbox gets non-zero garbage from pool allocator, native gets 0. Bootstrap forces one `Eval(1.0f)` when layers exist but mWeight <= 0.
+- [x] **Diagnostic logging cleanup** — Removed all `ANIM-DIAG`, `CLIP-DIAG`, `SHOT-DIAG`, `REMIXER-DIAG` temporary printfs from HamDirector, ClipPlayer, HamCamShot, OriginalChoreoRemixer.
 
 ### 8.4 Remaining Polish Items
 - [x] **FileMerger convergence** — All 5 phases complete (2026-03-17). Phase 1+2: forced async loading, removed PollForLoading/App.cpp/HamDirector hacks, engine pipeline drives loading via world.fm. Phase 3: removed Game::IsLoaded async bypasses (IsWorldLoaded, IsMoveMergerFinished), removed GamePanel::StartIntro native block, unguarded Song::SyncState (sync-wait loop guarded for native), removed SyncState stub. Phase 4: removed dead code (SetNativeVenueWorld, DebugWorldLoad), simplified logging. Phase 5: DirLoader parent chain + FindObject ProxyDir fallback fixes HUD flow target resolution (461→7 warnings), gNativeHudDir hack removed, ObjPtrVec::Node::RefOwner bug fixed. See [FILEMERGER_CONVERGENCE.md](FILEMERGER_CONVERGENCE.md).

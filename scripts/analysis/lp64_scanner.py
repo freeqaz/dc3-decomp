@@ -634,9 +634,149 @@ def _is_hardcoded_offset(node: Node) -> tuple[bool, str]:
     return True, txt
 
 
+def _is_byte_ptr_cast(node: Node) -> bool:
+    """Check if node is a cast to byte-level pointer (char*, u8*, void*, etc.)."""
+    if node.type == "cast_expression":
+        cast_type = _get_cast_type(node)
+        cleaned = cast_type.strip()
+        return any(cleaned.endswith(kw) for kw in
+                   ("char *", "char*", "void *", "void*",
+                    "u8 *", "u8*", "unsigned char *", "unsigned char*"))
+    return False
+
+
+def _find_byte_arith_offset(node: Node) -> tuple[bool, str, int]:
+    """Check if a node is byte-pointer arithmetic: (char*)expr + N.
+
+    Unwraps parenthesized expressions. Returns (found, offset_text, offset_value).
+    """
+    # Unwrap parens
+    inner = node
+    while inner.type == "parenthesized_expression" and inner.named_children:
+        inner = inner.named_children[0]
+
+    if inner.type != "binary_expression":
+        return False, "", 0
+
+    op = inner.child_by_field_name("operator")
+    if not op or node_text(op) not in ("+", "-"):
+        return False, "", 0
+
+    left = inner.child_by_field_name("left")
+    right = inner.child_by_field_name("right")
+    if not left or not right:
+        return False, "", 0
+
+    # Identify which side is the byte-pointer cast and which is the offset
+    byte_side = None
+    num_side = None
+    if _is_byte_ptr_cast(left) or _expr_is_pointer(left):
+        byte_side, num_side = left, right
+    elif _is_byte_ptr_cast(right) or _expr_is_pointer(right):
+        byte_side, num_side = right, left
+
+    if not byte_side or not num_side:
+        return False, "", 0
+
+    # Verify byte_side involves char*/u8*/void* cast (not typed pointer arithmetic)
+    byte_txt = node_text(byte_side)
+    if not any(kw in byte_txt for kw in
+               ("char *", "char*", "void *", "void*",
+                "u8 *", "u8*", "unsigned char *", "unsigned char*")):
+        return False, "", 0
+
+    # num_side must be a number literal (possibly via macro expansion)
+    is_offset, offset_txt = _is_hardcoded_offset(num_side)
+    if not is_offset:
+        return False, "", 0
+
+    try:
+        if offset_txt.startswith(("0x", "0X")):
+            val = int(offset_txt, 16)
+        elif offset_txt.startswith("0") and len(offset_txt) > 1 and offset_txt[1:].isdigit():
+            val = int(offset_txt, 8)
+        else:
+            val = int(offset_txt)
+    except ValueError:
+        return False, "", 0
+
+    return True, offset_txt, val
+
+
 def check_structio(node: Node, source: bytes) -> list[tuple]:
     """Check for struct sizeof in binary I/O and hardcoded struct offsets."""
     results: list[tuple] = []
+
+    # Track lines already flagged by Rule 3 to avoid duplicate Rule 2 reports
+    rule3_lines: set[int] = set()
+
+    # ── Rule 3 pre-pass: *(Type*)((char*)expr + N) — full dereference pattern ──
+    #
+    # Higher confidence than Rule 2 because the outer dereference + cast
+    # proves struct member access intent. Flags ANY offset (including small
+    # decimal values like 4, 8) since offset 8 was the exact bug in
+    # HamDriver::LayerArray::Eval (PPC offset 8 = mWeight, LP64 offset 8 = mBeat).
+    for n in walk(node):
+        if n.type != "pointer_expression":
+            continue
+        # Must be a dereference (*), not address-of (&)
+        op_node = n.child_by_field_name("operator")
+        if not op_node or node_text(op_node) != "*":
+            continue
+
+        argument = n.child_by_field_name("argument")
+        if argument is None:
+            continue
+
+        # Unwrap parens around the cast
+        inner = argument
+        while inner.type == "parenthesized_expression" and inner.named_children:
+            inner = inner.named_children[0]
+
+        # Must be a cast to a non-void pointer type
+        if inner.type != "cast_expression":
+            continue
+        outer_cast_type = _get_cast_type(inner)
+        if not _is_pointer_type(outer_cast_type):
+            continue
+        # Skip casts to void* (not actually accessing a member)
+        if outer_cast_type.strip() in ("void *", "void*"):
+            continue
+
+        # The cast's value must contain byte-pointer arithmetic
+        cast_value = inner.child_by_field_name("value")
+        if cast_value is None:
+            continue
+
+        found, offset_txt, offset_val = _find_byte_arith_offset(cast_value)
+        if not found:
+            continue
+
+        # Skip offset 0 (no shift possible)
+        if offset_val == 0:
+            continue
+
+        # Determine severity based on offset range:
+        # - 4-64: high — typical struct member offsets affected by vtable/ptr growth
+        # - >= 0x1000: low — likely buffer partition, not struct offset
+        # - others: medium
+        if offset_val >= 0x1000:
+            sev = "low"
+        elif 4 <= offset_val <= 256:
+            sev = "high"
+        else:
+            sev = "medium"
+
+        line_num = n.start_point[0] + 1
+        rule3_lines.add(line_num)
+
+        results.append((
+            n, "raw_byte_member_access", sev,
+            f"Raw byte-offset member access at offset {offset_txt} — "
+            f"*(…*)((char*)expr + {offset_txt}) reads the wrong field on LP64 "
+            f"because vtable pointers grow from 4→8 bytes, shifting all member "
+            f"offsets. Use direct member access (obj->member) instead."
+        ))
 
     for n in walk(node):
         # ── Rule 1: sizeof(UserType) in I/O call ─────────────────────────
@@ -669,7 +809,11 @@ def check_structio(node: Node, source: bytes) -> list[tuple]:
         #
         # Pattern: (char*)ptr + 0xNN  or  (Type*)((intptr_t)ptr + 0xNN)
         # Only flag hex offsets >= 0x10 to avoid ObjRef chain noise.
+        # Skip lines already caught by Rule 3 (higher-confidence dereference pattern).
         if n.type == "binary_expression":
+            line_num = n.start_point[0] + 1
+            if line_num in rule3_lines:
+                continue
             op = n.child_by_field_name("operator")
             if op and node_text(op) in ("+", "-"):
                 left = n.child_by_field_name("left")

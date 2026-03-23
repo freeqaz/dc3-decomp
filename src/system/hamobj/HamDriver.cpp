@@ -63,17 +63,12 @@ void HamDriver::PostLoad(BinStream &) {}
 
 void HamDriver::Poll() {
 #ifdef HX_NATIVE
-    // Bootstrap: Layer::mWeight is uninitialized in the constructor.
-    // On Xbox, whatever garbage value sits in memory serves as a non-zero
-    // bootstrap that lets the first Eval() compute the real mWeight.
-    // On native, zero-initialized heap memory keeps mWeight at 0, and the
-    // guard below prevents Eval() from ever running.  Force one evaluation
-    // when layers exist but mWeight hasn't been bootstrapped yet.
+    // Bootstrap: Layer::mWeight is uninitialized (no initializer in ctor).
+    // On Xbox, garbage heap memory provides a non-zero initial value.
+    // On native, zero-initialized heap keeps mWeight at 0, so the guard
+    // below (mWeight > 0) prevents Eval() from ever running.  Force one
+    // evaluation when layers exist but mWeight hasn't been bootstrapped.
     if (mBones && mLayers.mWeight <= 0.0f && !mLayers.mLayers.empty()) {
-        static int sBootCount = 0;
-        if (sBootCount++ < 4)
-            MILO_LOG("HamDriver::Poll bootstrap — %s: %zu layers, beat=%.2f\n",
-                     PathName(this), mLayers.mLayers.size(), TheTaskMgr.Beat());
         mLayers.Eval(1.0f);
     }
 #endif
@@ -279,7 +274,7 @@ void HamDriver::LayerArray::Eval(float weight) {
             float blend = EaseSigmoid(t, 0, 0) * weight;
             for (std::list<Layer *>::iterator it = mLayers.begin(); it != mLayers.end(); ++it) {
                 (*it)->Eval(blend);
-                float layerWeight = *(float *)((char *)(*it) + 8);
+                float layerWeight = (*it)->mWeight;
                 float consumed = (layerWeight - blend < 0.0f) ? layerWeight : blend;
                 mWeight += consumed;
                 blend -= consumed;
