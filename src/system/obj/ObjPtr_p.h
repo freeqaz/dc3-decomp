@@ -99,7 +99,14 @@ bool ObjRefConcrete<T1, T2>::Load(BinStream &bs, bool print, ObjectDir *dir) {
     if (!dir && refOwner) {
         dir = refOwner->Dir();
     }
+#ifdef HX_NATIVE
+    // On native, allow dir-only lookup (no refOwner needed) so ObjPtrs
+    // with null owners (e.g. Font3d CharInfo::mMesh) can resolve when
+    // the caller passes an explicit dir.
+    if (dir) {
+#else
     if (refOwner && dir) {
+#endif
         SetObj(dir->FindObject(buf, false, true));
 #ifdef HX_NATIVE
         // Native fallback: walk up the parent dir chain when not found locally.
