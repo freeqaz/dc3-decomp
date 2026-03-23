@@ -15,9 +15,8 @@
 #include <algorithm>
 #include <cstdlib>
 
-// libc++ (macOS) removes random_shuffle/mem_fun in C++17 mode.
-// libstdc++ keeps them as deprecated. Only define shims when missing.
-#if defined(_LIBCPP_VERSION) && !defined(_LIBCPP_ENABLE_CXX17_REMOVED_RANDOM_SHUFFLE)
+// These shims are needed on both libc++ (macOS) and libstdc++ 15+ (Linux),
+// since both enforce the C++17 removal of these APIs.
 namespace std {
 template <class RandomIt>
 void random_shuffle(RandomIt first, RandomIt last) {
@@ -37,6 +36,5 @@ auto mem_fun(Ret (T::*f)() const) { return std::mem_fn(f); }
 template <class Ret, class T, class Arg>
 auto mem_fun(Ret (T::*f)(Arg)) { return std::mem_fn(f); }
 } // namespace std
-#endif
 
 #endif // HX_NATIVE
