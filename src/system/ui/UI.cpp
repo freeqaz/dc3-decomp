@@ -638,28 +638,8 @@ void UIManager::Poll() {
             sTransCount++;
         }
 #endif
-#ifdef HX_NATIVE
-        // Wait for exit animations with timeout — lets authored animations play
-        // but prevents hangs from incomplete lifecycle paths
-        static int sExitWaitFrames = 0;
-        bool screenExited = !mCurrentScreen || !mCurrentScreen->Exiting();
-        if (!screenExited) {
-            if (++sExitWaitFrames > 90) { // ~3s safety net for stuck exit animations
-                printf("DC3 UI WARNING: Exit animation timeout for '%s' — force-completing\n",
-                       mCurrentScreen ? mCurrentScreen->Name() : "<null>");
-                screenExited = true;
-                sExitWaitFrames = 0;
-            }
-        } else {
-            sExitWaitFrames = 0;
-        }
-#endif
         if ((!mTransitionScreen || mTransitionScreen->CheckIsLoaded())
-#ifdef HX_NATIVE
-            && screenExited
-#else
             && (!mCurrentScreen || !mCurrentScreen->Exiting())
-#endif
             && !IsBlockingTransition()) {
             UIScreen *trans = mTransitionScreen;
             UIScreen *oldCur = mCurrentScreen;

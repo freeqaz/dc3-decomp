@@ -404,16 +404,6 @@ void GamePanel::Poll() {
             && !TheHamDirector->IsGameStartHold()) {
             StartGame();
         }
-#ifdef HX_NATIVE
-        // Native: force transition past intro if stuck (audio/timing doesn't advance)
-        if (mState == kGameInIntro) {
-            static int sIntroFrames = 0;
-            if (sIntroFrames++ > 30) {
-                fprintf(stderr, "DC3 Native: force-advancing past kGameInIntro (stuck %d frames)\n", sIntroFrames);
-                StartGame();
-            }
-        }
-#endif
         for (int i = 0; i < 2; i++) {
             FitnessFilter *filt = GetFitnessFilter(i);
             if (filt) {

@@ -58,7 +58,6 @@
 Game *TheGame;
 static bool sMoveOverlayToggle;
 #if defined(HX_NATIVE) || defined(__EMSCRIPTEN__)
-static bool sNativeAudioInitiated = false;
 static int sNativeAudioPollCount = 0;
 #endif
 std::vector<Symbol> sAutoplayStates;
@@ -827,7 +826,6 @@ bool Game::IsLoaded() {
             MILO_LOG("Game::IsLoaded() - Done waiting for MoveGraph\n");
             mLoadState = 2;
 #if defined(HX_NATIVE) || defined(__EMSCRIPTEN__)
-            sNativeAudioInitiated = false;
             sNativeAudioPollCount = 0;
 #endif
         }
@@ -836,26 +834,19 @@ bool Game::IsLoaded() {
                 return true;
             }
             if (!mMaster->GetAudio()->IsReady()) {
+                TheSynth->Poll();
 #if defined(HX_NATIVE) || defined(__EMSCRIPTEN__)
-                // On native/web, the DTA SongSequence/load_new_song flow may not
-                // trigger before PollForLoading reaches this point. Start audio
-                // loading here, then give it time to buffer. Bypass after timeout
-                // so gameplay loads even if audio is slow (it continues in bg).
-                if (!sNativeAudioInitiated) {
-                    sNativeAudioInitiated = true;
-                    Symbol song = TheGameData->GetSong();
-                    fprintf(stderr, "Game::IsLoaded() — initiating audio load for '%s'\n", song.Str());
-                    LoadNewSongAudio(song);
-                }
-                if (sNativeAudioPollCount++ < 120) {
-                    TheSynth->Poll();
+                // On native/web, audio uses StandardStream (real decoding) rather
+                // than StreamNull, so IsReady() requires stream buffering via
+                // PollStream(). TheSynth->Poll() drives this each frame. Timeout
+                // after ~2 seconds as a safety net for broken/missing mogg files.
+                if (sNativeAudioPollCount++ >= 120) {
+                    fprintf(stderr, "Game::IsLoaded() — audio not ready after %d polls, proceeding\n", sNativeAudioPollCount);
+                } else
+#endif
+                {
                     return false;
                 }
-                fprintf(stderr, "Game::IsLoaded() — audio timeout, proceeding without audio ready\n");
-#else
-                TheSynth->Poll();
-                return false;
-#endif
             }
             mLoadState = 3;
             TheProfileMgr.PushAllOptions();

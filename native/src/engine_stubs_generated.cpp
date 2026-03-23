@@ -120,7 +120,7 @@ int NuiSpeechStartRecognition() { return 0; }
 int NuiSpeechStopRecognition() { return 0; }
 int NuiSpeechUnloadGrammar() { return 0; }
 int NuiWaveGetGestureOwnerProgress() { return 0; }
-int NuiWaveSetEnabled() { return 0; }
+int NuiWaveSetEnabled() { return -1; } // non-zero = failure (no Kinect on native)
 int OutputDebugStringA() { return 0; }
 int printbuf_free() { return 0; }
 int printbuf_memappend() { return 0; }
@@ -166,7 +166,7 @@ void* TheMaster = 0;
 // TheMC: now defined in Memcard_Stub.cpp
 // TheMoveMgr: now defined in MoveMgr.cpp
 // TheMovieSys: removed - provided by MovieSys.cpp
-void* TheMQSongSortMgr = 0;
+// TheMQSongSortMgr: removed - provided by SongSortMgr_Native.cpp
 // TheNgRnd: removed - provided by Rnd_Stub.cpp
 // TheRenderState: removed - provided by RenderState_Native.cpp
 // TheRnd: removed - provided by Rnd_Stub.cpp
@@ -174,7 +174,7 @@ void* TheMQSongSortMgr = 0;
 // TheShaderMgr: removed - provided by Rnd_Stub.cpp
 void* TheSkeletonIdentifier = 0;
 void* TheSkeletonViz = 0;
-void* TheSongSortMgr = 0;
+// TheSongSortMgr: removed - provided by SongSortMgr_Native.cpp
 // TheUI: removed - provided as proper UIManager* in Rnd_Stub.cpp
 
 // vorbis_synthesis_poll was Harmonix's incremental decoder for Xbox.

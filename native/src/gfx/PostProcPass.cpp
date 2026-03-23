@@ -155,9 +155,11 @@ struct VOut {
 
     if (pp.bloomIntensity > 0.0) {
         let bloom = textureSample(bloomTex, sceneSampler, in.uv).rgb;
-        let bloomContrib = bloom * pp.bloomIntensity * pp.bloomColor.rgb;
+        // Clamp intensity to prevent overpowering bloom from aggressive game data
+        let clampedIntensity = min(pp.bloomIntensity, 1.0);
+        let bloomContrib = bloom * clampedIntensity * pp.bloomColor.rgb;
         // Screen blend instead of additive — prevents blown-out whites
-        color = 1.0 - (1.0 - color) * (1.0 - bloomContrib * 0.5);
+        color = 1.0 - (1.0 - color) * (1.0 - bloomContrib * 0.25);
     }
 
     return vec4f(clamp(color, vec3f(0.0), vec3f(1.0)), 1.0);
@@ -246,11 +248,12 @@ void PostProcPass::Run(wgpu::CommandEncoder& encoder, wgpu::TextureView& interme
     mDof.Run(encoder, intermediateView, intermediateTex, depthView,
              intermediateW, intermediateH, gpu);
 
-    // Run bloom if active
-    float bloomIntensity = pp->GetBloomIntensity();
+    // Run bloom if active — clamp intensity and raise threshold floor
+    float bloomIntensity = std::min(pp->GetBloomIntensity(), 1.0f);
+    float bloomThreshold = std::max(pp->GetBloomThreshold(), 0.7f);
     if (bloomIntensity > 0.0f) {
         mBloom.Run(encoder, intermediateView, intermediateW, intermediateH,
-                   bloomIntensity, pp->GetBloomThreshold(), pp->GetBloomColor(), gpu);
+                   bloomIntensity, bloomThreshold, pp->GetBloomColor(), gpu);
     }
 
     // Fill uniforms

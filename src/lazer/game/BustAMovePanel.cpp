@@ -143,7 +143,10 @@ void BustAMovePanel::Enter() {
 
 void BustAMovePanel::Exit() {
     UIPanel::Exit();
-    TheMaster->RemoveSink(this);
+#ifdef HX_NATIVE
+    if (TheMaster)
+#endif
+        TheMaster->RemoveSink(this);
     if (mRecorder) {
         mRecorder->Free();
     }

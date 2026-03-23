@@ -997,6 +997,7 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/Memory_Native.cpp
     src/platform/PlatformMgr_Native.cpp
     src/platform/DingoSvr_Native.cpp
+    src/platform/SongSortMgr_Native.cpp
     src/platform/System_Native.cpp
     src/platform/File_Native.cpp
     src/platform/AsyncFile_Native.cpp
@@ -1114,6 +1115,7 @@ set(DC3_WEB_CORE_SOURCES
     src/platform/Memory_Native.cpp
     src/platform/PlatformMgr_Native.cpp
     src/platform/DingoSvr_Native.cpp
+    src/platform/SongSortMgr_Native.cpp
     src/platform/System_Native.cpp
     src/platform/File_Web.cpp
     src/platform/AsyncFile_Native.cpp

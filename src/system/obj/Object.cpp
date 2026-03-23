@@ -446,21 +446,11 @@ bool Hmx::Object::HasPropertySink(Hmx::Object *o, DataArray *a) {
 }
 
 void Hmx::Object::RemoveSink(Hmx::Object *o, Symbol s) {
-#ifdef HX_NATIVE
-    // 18+ callers (BustAMovePanel, HollaBackMinigame, HamProviderPrinter, etc.)
-    // call AddSink/RemoveSink on null globals (TheMaster, TheHamProvider, etc.).
-    // Those callers are decomp-matched PPC source — can't add null guards there.
-    // This UB check is the only safe catch point until globals are stub-initialized.
-    if (!this) return;
-#endif
     if (mSinks)
         mSinks->RemoveSink(o, s);
 }
 
 MsgSinks *Hmx::Object::GetOrAddSinks() {
-#ifdef HX_NATIVE
-    if (!this) return nullptr;
-#endif
     if (!mSinks) {
         mSinks = new MsgSinks(this);
     }
@@ -468,16 +458,10 @@ MsgSinks *Hmx::Object::GetOrAddSinks() {
 }
 
 void Hmx::Object::AddSink(Hmx::Object *o, Symbol s1, Symbol s2, SinkMode sm, bool b) {
-#ifdef HX_NATIVE
-    if (!this) return;
-#endif
     GetOrAddSinks()->AddSink(o, s1, s2, sm, b);
 }
 
 void Hmx::Object::AddPropertySink(Hmx::Object *o, DataArray *a, Symbol s) {
-#ifdef HX_NATIVE
-    if (!this) return;
-#endif
     GetOrAddSinks()->AddPropertySink(o, a, s);
 }
 
@@ -557,12 +541,7 @@ const DataNode *Hmx::Object::Property(DataArray *prop, bool fail) const {
         }
     }
     if (fail) {
-#ifdef HX_NATIVE
-        // Property not found is expected on debug builds — Xbox 360 shows dialog + Continue
-        MILO_WARN("%s: property %s not found", PathName(this), PrintPropertyPath(prop));
-#else
-        MILO_FAIL("%s: property %s not found", PathName(this), PrintPropertyPath(prop));
-#endif
+        MILO_FAIL_DTA("%s: property %s not found", PathName(this), PrintPropertyPath(prop));
     }
     return nullptr;
 }
@@ -579,15 +558,9 @@ DataNode Hmx::Object::HandleProperty(DataArray *prop, DataArray *a2, bool fail) 
         return n;
     }
     if (fail) {
-#ifdef HX_NATIVE
-        MILO_WARN(
+        MILO_FAIL_DTA(
             "%s: property %s not found", PathName(this), prop ? prop->Sym(0) : "<none>"
         );
-#else
-        MILO_FAIL(
-            "%s: property %s not found", PathName(this), prop ? prop->Sym(0) : "<none>"
-        );
-#endif
     }
     return 0;
 }
@@ -623,11 +596,9 @@ int Hmx::Object::PropertySize(DataArray *prop) {
         if (mTypeDef) {
             a = &mTypeDef->FindArray(name)->Evaluate(1);
         } else {
+            MILO_FAIL_DTA("%s: property %s not found", PathName(this), name);
 #ifdef HX_NATIVE
-            MILO_WARN("%s: property %s not found", PathName(this), name);
-            return 0;
-#else
-            MILO_FAIL("%s: property %s not found", PathName(this), name);
+            return 0; // MILO_FAIL_DTA warns on native, so we must bail before null deref
 #endif
         }
     }

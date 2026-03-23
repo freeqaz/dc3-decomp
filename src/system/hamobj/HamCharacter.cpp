@@ -908,11 +908,12 @@ void HamCharacter::Poll() {
         if (mDriver) mDriver->SetWeight(0.0f);
     }
 
-    // On native, always force Showing(true) during poll so RndDir::Poll()
-    // runs child pollables (CharDriver, etc.) and animations advance.
-    // On Xbox, DTA scripts manage visibility; on native we skip that flow.
+    // DTA WORLD_SETUP_CHARACTERS (worldbase.dta) sets characters visible via
+    // set_showing TRUE on player0/player1/backup0/backup1 during Enter().
+    // The mPollWhenHidden gate matches Xbox behavior: only force-show during
+    // poll when the property is explicitly set (e.g., for iconman rendering).
     bool wasShowing = mShowing;
-    if (!wasShowing) {
+    if (!wasShowing && mPollWhenHidden) {
         SetShowing(true);
     }
     Character::Poll();
