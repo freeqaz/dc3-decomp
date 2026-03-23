@@ -143,9 +143,11 @@ static int sPresyncCreateFail = 0;
 static int sPresyncOk = 0;
 
 void RndTex_PrintPresyncStats() {
+#ifdef DEBUG_LOGS
     printf("DC3 TexPresync: calls=%d noGpu=%d noBitmap=%d noPixels=%d done=%d fail=%d ok=%d total_uploaded=%d\n",
            sPresyncCalls, sPresyncNoGpu, sPresyncNoBitmap, sPresyncNoPixels,
            sPresyncAlreadyDone, sPresyncCreateFail, sPresyncOk, (int)sTexGpuData.size());
+#endif
 }
 
 void RndTex::PresyncBitmap() {

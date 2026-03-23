@@ -2451,7 +2451,7 @@ void RndText::ReFitTextScroll(String str) {
     }
     SetText(str.c_str());
     FitTextScroll();
-    *(float *)&mScrollPos = 0.0f;
+    mScrollPos = 0.0f;
     mScrollOffset = 0.0f;
     float width = maxWidth;
     while (width >= *mLineWidths.begin()) {

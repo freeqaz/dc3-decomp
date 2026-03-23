@@ -92,9 +92,12 @@ MILO_HEADLESS=1 MILO_FATAL_FAILS=0 MILO_MAX_FRAMES=10000 \
   MILO_INPUT_SCRIPT=scripts/dc3-input-flows/ymca.txt \
   DC3_DATA=orig-assets native/build/dc3-native
 
-# With screenshots during gameplay
-MILO_SCREENSHOT_DIR=/tmp/screenshots MILO_SCREENSHOT_FRAMES=8000,8500 \
-  # add to above
+# Post-intro animation verification
+mkdir -p /tmp/screenshots
+DC3_TEL=1 DC3_TEL_INTERVAL=25 \
+MILO_SCREENSHOT_DIR=/tmp/screenshots \
+MILO_SCREENSHOT_FRAMES=7750,8000,8450,8975 \
+  # add to the command above
 
 # Frame capture (dumps all draw calls for a specific frame)
 MILO_CAPTURE_FRAME=8000 \

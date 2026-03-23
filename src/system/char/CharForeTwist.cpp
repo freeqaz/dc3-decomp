@@ -1,6 +1,7 @@
 #include "char/CharForeTwist.h"
 #include "math/Rot.h"
 #include "math/Trig.h"
+#include "math/Utl.h"
 #include "obj/Object.h"
 #include <cmath>
 
@@ -73,7 +74,7 @@ void CharForeTwist::Poll() {
     float tan2res = std::atan2(clamp2, clamped);
     float angle = LimitAng(mOffset * DEG2RAD + tan2res + newbias);
     float finalfloat = angle - newbias;
-    if (finalfloat != finalfloat)
+    if (IsNaN(finalfloat))
         return;
     Hmx::Matrix3 m58;
     MakeRotMatrixX(finalfloat * 0.33333f, m58);

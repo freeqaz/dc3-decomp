@@ -1013,9 +1013,9 @@ void MetaPerformer::SetupCharacters() {
     Symbol s38;
     Symbol s40;
     Symbol s3c;
+    Symbol s2c;
     Symbol s34;
     Symbol s30;
-    Symbol s2c;
     int songID = TheHamSongMgr.GetSongIDFromShortName(song);
     const HamSongMetadata *pSongData = TheHamSongMgr.Data(songID);
     MILO_ASSERT(pSongData, 0x68B);

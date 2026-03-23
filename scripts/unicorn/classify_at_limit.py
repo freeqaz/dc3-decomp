@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
 """Bulk AT_LIMIT classification using unicorn + objdiff signals.
 
-Rules:
+Rules (promotions — NULL -> AT_LIMIT):
   1. Unicorn EQUIVALENT + objdiff < 100% — behavior matches but assembly differs
      (register swaps, scheduling). Current percent IS the theoretical max.
   2. unicorn_class = 'build_env' — differences from __FILE__ strings or merged
      symbols. Unfixable from source.
+  2b. unicorn_class in (merged_call, merged_arg, fpr_precision) — unfixable.
   3. reachable_100 = 0 AND has_linker_merged = 1 — already flagged by
      detect_patterns but not yet marked AT_LIMIT.
+
+Rules (demotions — AT_LIMIT -> NULL):
+  4. AT_LIMIT + DIVERGENT unicorn + fixable class — real behavioral bugs
+     that were incorrectly classified as AT_LIMIT by agents. Fixable classes:
+     call_count, call_arg, return_value, logic, error, object_memory.
 
 Also cleans up corrupted verdict values (hallucinated strings from agents).
 
@@ -78,6 +84,29 @@ def find_rule2b_candidates(conn):
            FROM functions
            WHERE unicorn_class IN ('merged_call', 'merged_arg', 'fpr_precision')
              AND (verdict IS NULL OR verdict NOT IN ('COMPLETE', 'AT_LIMIT'))"""
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+FIXABLE_UNICORN_CLASSES = {
+    "call_count", "call_arg", "return_value", "logic", "error", "object_memory",
+}
+
+
+def find_rule4_demotions(conn):
+    """Rule 4: AT_LIMIT + DIVERGENT unicorn + fixable class.
+
+    These functions have real behavioral differences (wrong call counts, wrong
+    return values, execution errors, etc.) that were incorrectly marked AT_LIMIT
+    by agents. Demote back to workable so they can be re-attempted.
+    """
+    placeholders = ", ".join(f"'{c}'" for c in FIXABLE_UNICORN_CLASSES)
+    rows = conn.execute(
+        f"""SELECT id, symbol, demangled, current_percent, unicorn_class
+            FROM functions
+            WHERE verdict = 'AT_LIMIT'
+              AND unicorn_verdict = 'DIVERGENT'
+              AND unicorn_class IN ({placeholders})"""
     ).fetchall()
     return [dict(r) for r in rows]
 
@@ -222,10 +251,37 @@ def main():
         conn.commit()
         print(f"  -> Marked {len(rule3)} as AT_LIMIT")
 
+    # Rule 4: Demote AT_LIMIT with fixable unicorn divergence
+    rule4 = find_rule4_demotions(conn)
+    print(f"\nRule 4 (AT_LIMIT + DIVERGENT + fixable class -> demote): {len(rule4)} candidates")
+    if rule4 and args.verbose:
+        from collections import Counter
+        class_counts = Counter(f["unicorn_class"] for f in rule4)
+        for cls, cnt in class_counts.most_common():
+            print(f"  {cls}: {cnt}")
+        print()
+        for f in rule4[:20]:
+            print(f"  {f['current_percent'] or '?':>6}%  [{f['unicorn_class']}]  {f['demangled'] or f['symbol']}")
+        if len(rule4) > 20:
+            print(f"  ... ({len(rule4) - 20} more)")
+    if rule4 and not dry_run:
+        for f in rule4:
+            conn.execute(
+                """UPDATE functions SET
+                    verdict = NULL,
+                    verdict_reason = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?""",
+                (f"demoted: AT_LIMIT had fixable unicorn divergence ({f['unicorn_class']})", f["id"]),
+            )
+        conn.commit()
+        print(f"  -> Demoted {len(rule4)} from AT_LIMIT to workable")
+
     # Summary
-    total_candidates = len(rule1) + len(rule2) + len(rule2b) + len(rule3)
+    total_promotions = len(rule1) + len(rule2) + len(rule2b) + len(rule3)
     print(f"\n{'=' * 40}")
-    print(f"Total candidates: {total_candidates}")
+    print(f"Total promotions: {total_promotions}")
+    print(f"Total demotions: {len(rule4)}")
     print(f"Corrupted verdicts: {len(corrupted)}")
 
     if dry_run:

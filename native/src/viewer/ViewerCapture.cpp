@@ -485,7 +485,7 @@ int RunInteractive(InteractiveMode& /*m*/, ViewerScene& scene,
         scene.DrawMovieOverlay();
 
         // ImGui debug UI — NewFrame + build widgets + Render (draw data consumed in EndDrawing)
-        if (debugUI) {
+        if (debugUI && ImGui::GetCurrentContext()) {
             ImGuiBackend::NewFrame();
             debugUI->Draw();
             debugUI->DrawLightGizmos(cam);

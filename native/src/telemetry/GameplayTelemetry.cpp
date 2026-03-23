@@ -105,6 +105,7 @@ void GameplayTelemetry::Sample(int frame) {
     int songAnimKeyTotal = -1;  // -1 = no anim, 0+ = PropKeys track count
     int clipKeyCount = -1;      // -1 = no "clip" PropKeys, 0+ = keyframe count
     int routineLoaded = 0;
+    int mergeMoves = -1;
     int p0SongAnim = -99;       // HamCharacter::SongAnimation() for player 0
     int doSongAnim = -1;        // HamDirector::SongAnimation() equivalent
     if (TheHamDirector) {
@@ -143,6 +144,7 @@ void GameplayTelemetry::Sample(int frame) {
         // Routine loaded: confirms MoveMgr::SongInit → LoadRoutineBuilderData completed
         if (TheMoveMgr && TheHamProvider) {
             routineLoaded = TheMoveMgr->HasRoutine() ? 1 : 0;
+            mergeMoves = TheHamProvider->Property("merge_moves", true)->Int();
         }
 
         // Check if player 0's character has clips queued via HamDriver
@@ -177,14 +179,14 @@ void GameplayTelemetry::Sample(int frame) {
         "songAnimFrame=%.1f pollEnabled=%d "
         "typeDef=%s hamProvider=%d mergerDir=%d "
         "clipDir=%d masterClip=%d clipPlayerInit=%d charClipLayers=%d p0=%d p1=%d "
-        "clipKeyCount=%d songAnimKeys=%d diffProxy=%d routineLoaded=%d "
+        "clipKeyCount=%d songAnimKeys=%d diffProxy=%d routineLoaded=%d mergeMoves=%d "
         "p0SongAnim=%d doSongAnim=%d\n",
         frame, state, beat, realSecs,
         songAnimFrame, pollEnabled ? 1 : 0,
         typeDef, hamProvider ? 1 : 0, mergerDir ? 1 : 0,
         clipDirOk ? 1 : 0, masterClipOk ? 1 : 0, clipPlayerInited ? 1 : 0,
         charClipLayers, player0Ok ? 1 : 0, player1Ok ? 1 : 0,
-        clipKeyCount, songAnimKeyTotal, diffProxyExists, routineLoaded,
+        clipKeyCount, songAnimKeyTotal, diffProxyExists, routineLoaded, mergeMoves,
         p0SongAnim, doSongAnim
     );
 }

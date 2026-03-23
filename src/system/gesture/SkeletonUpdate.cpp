@@ -225,7 +225,7 @@ void SkeletonUpdate::UpdateFakeArmPos() {
     float fVar11 = fVar4;
     fVar11 *= lbl_82F0BE80;
     float fVar12 = -(fVar11 * fVar1 - unk5398);
-    *(volatile float *)&unk5398 = fVar12;
+    unk5398 = fVar12;
 
     float fVar0 = -0.25f;
     fVar0 = (-0.25f - fVar12 >= 0.0f) ? -0.25f : fVar12;

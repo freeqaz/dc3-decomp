@@ -213,8 +213,8 @@ activate:
         // skip
     } else {
         detector->mDetectFrameOffset = -1;
-        *(int *)&detector->mLastDetectFracs[0] = 0;
-        *(int *)&detector->mLastDetectFracs[1] = 0;
+        detector->mLastDetectFracs[0] = 0.0f;
+        detector->mLastDetectFracs[1] = 0.0f;
         detector->mLastDetectFrameIdx = -1;
         detector->mActive = true;
     }

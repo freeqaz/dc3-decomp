@@ -171,7 +171,9 @@ void UniformRingBuffer::Init(wgpu::Device& device, uint32_t capacity, const char
 
 void UniformRingBuffer::Grow(wgpu::Device& device) {
     uint32_t newCapacity = mCapacity * 2;
+#ifdef DEBUG_LOGS
     fprintf(stderr, "UniformRingBuffer: growing %s %u -> %u bytes\n", mLabel, mCapacity, newCapacity);
+#endif
 
     wgpu::BufferDescriptor desc{};
     desc.label = mLabel;
@@ -902,12 +904,14 @@ void WgpuRnd::BeginDrawing() {
         mFrameView = mGpu.AcquireNextFrame();
     }
     if (!mFrameView) {
+#ifdef DEBUG_LOGS
         static int sFailCount = 0;
         if (sFailCount < 10) {
             printf("DC3 Native: BeginDrawing — frame acquisition failed (headless=%d, frame=%d)\n",
                    mGpu.IsHeadless(), mFrameID);
             sFailCount++;
         }
+#endif
         return;
     }
 
@@ -1015,13 +1019,6 @@ void WgpuRnd::EndDrawing() {
             mGpu.PresentFrame();
         }
 
-#ifdef __EMSCRIPTEN__
-        static int sFrameDiag = 0;
-        if (sFrameDiag < 30 || sFrameDiag % 300 == 0) {
-            printf("DC3 Web EndDrawing frame=%d draws=%d\n", mFrameID, mDrawCount);
-        }
-        sFrameDiag++;
-#endif
     }
 
     mFrameView = nullptr;
@@ -1237,7 +1234,11 @@ void WgpuRnd::WriteSceneUniforms() {
                 projMtx.w.x, projMtx.w.y, projMtx.w.z, projMtx.w.w,
             };
 
-            // ViewProj = View * Proj (row-major multiply)
+            // ViewProj = View * Proj (row-major multiply).
+            // WGSL reads this row-major data as column-major mat4x4f, effectively
+            // seeing the transpose. The shader computes VP_wgsl * pos, which equals
+            // (VP_rowmajor)^T * pos = pos^T * VP_rowmajor in row-vector form — the
+            // same result as D3D's mul(pos, VP).
             for (int i = 0; i < 4; i++) {
                 for (int j = 0; j < 4; j++) {
                     float sum = 0;
@@ -1249,18 +1250,13 @@ void WgpuRnd::WriteSceneUniforms() {
             }
             memcpy(scene.view, view, sizeof(view));
 
-            // HUD overlay FOV correction: DC3's HUD uses a cylindrical layout
-            // with meshes placed at ~750 units from center on the X axis, viewed
-            // from a camera at Y=-768 (distance ~668). The stored yFov (0.602 rad
-            // = 34.5 deg) with 16:9 aspect gives hFOV ~58 deg, only covering
-            // ±365 X — too narrow for the ±750 HUD layout. On Xbox the D3D9
-            // viewport/projection chain likely handles this differently.
-            // TODO(native): The gameplay HUD uses a cylindrical layout with meshes
-            // at ±750 units X, viewed from Cam.cam at Y=-768. The stored yFov
-            // (0.602 rad) covers only ±365 X — too narrow. On Xbox, the D3D9
-            // viewport/projection chain handles this differently. For now, widen
-            // the horizontal FOV only for the specific gameplay HUD camera.
-            if (!mCurrentPassHasDepth && cam && !strcmp(cam->Name(), "Cam.cam")
+            // TODO(native): The gameplay HUD uses a cylindrical layout at ±750 X
+            // viewed from Cam.cam at Y=-768. The stored yFov (0.602 rad) gives an
+            // xFov that only covers ±365 X. On Xbox, the D3D9 viewport/projection
+            // chain maps this differently. Widen the horizontal projection for the
+            // specific gameplay HUD camera only (identified by name + yFov range).
+            if (!mCurrentPassHasDepth && cam
+                && !strcmp(cam->Name(), "Cam.cam")
                 && cam->YFov() > 0.5f && cam->YFov() < 0.7f) {
                 scene.viewProj[0] *= 0.49f;
             }
@@ -1706,12 +1702,6 @@ void WgpuRnd::RenderImGuiOverlay() {
 
 void WgpuRnd::MaybeCaptureFrame() {
     if (mCaptureIndex >= (int)mCaptureFrames.size()) return;
-    static int sLogCount = 0;
-    if (sLogCount < 5) {
-        printf("DC3 Native: MaybeCaptureFrame mFrameID=%d, next target=%d\n",
-               mFrameID, mCaptureFrames[mCaptureIndex]);
-        sLogCount++;
-    }
     if (mFrameID != mCaptureFrames[mCaptureIndex]) return;
 
     int w = mGpu.WindowWidth();
@@ -1720,16 +1710,7 @@ void WgpuRnd::MaybeCaptureFrame() {
     uint8_t* pixels = (uint8_t*)malloc(pixelSize);
     if (!pixels) return;
 
-    fprintf(stderr, "DC3_CAPTURE F%d: headless=%d tex=%p w=%d h=%d\n",
-            mFrameID, mGpu.IsHeadless(), (void*)&mGpu, w, h);
     if (mGpu.ReadbackHeadlessFrame(pixels, pixelSize)) {
-        // Debug: count non-black pixels (check RGB, not alpha)
-        int nonBlack = 0;
-        for (int i = 0; i < w * h; i++) {
-            if (pixels[i*4] || pixels[i*4+1] || pixels[i*4+2]) nonBlack++;
-        }
-        printf("DC3 Native: frame %d readback — %d/%d non-black pixels, alpha[0]=%d\n",
-               mFrameID, nonBlack, w*h, pixels[3]);
         char path[512];
         snprintf(path, sizeof(path), "%s/frame_%05d.png", mScreenshotDir.c_str(), mFrameID);
         if (WriteScreenshot(path, pixels, w, h)) {

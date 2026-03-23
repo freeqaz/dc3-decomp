@@ -129,6 +129,11 @@ public:
     Merger *InMerger(Hmx::Object *);
     bool AsyncLoad() const { return mAsyncLoad; }
     bool HasPendingFiles() const { return !mFilesPending.empty(); }
+#ifdef HX_NATIVE
+    // Force-release from the organizer so sync StartLoad works in tests.
+    // The game normally drains the organizer via TheLoadMgr polling.
+    void ForceReleaseOrganizer();
+#endif
 
 protected:
     FileMerger();

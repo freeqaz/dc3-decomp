@@ -113,7 +113,7 @@ void OSCMessenger::SendOSCFloat(String str, float value) {
         buf[i++] = 'f';
         buf[i++] = '\0';
         buf[i++] = '\0';
-        *(int *)&buf[i] = *(int *)&value;
+        memcpy(&buf[i], &value, sizeof(float));
         mSocket2->Send(buf, i + 4);
     }
 }

@@ -40,17 +40,34 @@ public:
         };
 
         kdTreeNode() {
-            mData.triList = 0;
+            SetTriList(0);
             mFlags = 0x8000;
             mData.real = 0;
             mData.index = 0;
         }
         ~kdTreeNode() {
-            if (mFlags & 0x8000 && mData.triList) {
-                delete[] mData.triList;
-                mData.triList = nullptr;
+            if (mFlags & 0x8000 && GetTriList()) {
+                delete[] GetTriList();
+                SetTriList(nullptr);
             }
         }
+
+        // On PPC (ILP32), pointer/float/bitfield all fit in 4 bytes and share
+        // a single union — the float's bottom 2 mantissa bits are repurposed as
+        // the axis index. On LP64, the pointer is 8 bytes so it must be stored
+        // separately from the 4-byte float+bitfield pack.
+#ifdef HX_NATIVE
+        kdTriList *mTriList; // LP64: separate 8-byte pointer
+        union {
+            float real;
+            struct {
+                unsigned int unused : 30;
+                unsigned int index : 2;
+            };
+        } mData;
+        kdTriList *GetTriList() const { return mTriList; }
+        void SetTriList(kdTriList *p) { mTriList = p; }
+#else
         union {
             kdTriList *triList;
             float real;
@@ -60,6 +77,9 @@ public:
                 unsigned int index : 2;
             };
         } mData; // 0x0
+        kdTriList *GetTriList() const { return mData.triList; }
+        void SetTriList(kdTriList *p) { mData.triList = p; }
+#endif
         short mFlags;
 
         bool GetIsLeaf() const { return mFlags & 0x8000; }
@@ -276,11 +296,11 @@ void kdTree<T>::kdTreeNode::Pack(
 
     MILO_ASSERT(GetIsLeaf(), 0x19F);
     if (items.empty()) {
-        mData.triList = nullptr;
+        SetTriList(nullptr);
     } else {
         unsigned int uCount = items.size();
-        mData.triList = kdTriList::Allocate(uCount);
-        kdTriList *pCurr = mData.triList;
+        SetTriList(kdTriList::Allocate(uCount));
+        kdTriList *pCurr = GetTriList();
         while (!items.empty()) {
             MILO_ASSERT(pCurr->mIndex != -1, 0x1AE);
             pCurr->mIndex = reinterpret_cast<int>(items.front());

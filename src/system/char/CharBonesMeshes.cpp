@@ -93,6 +93,23 @@ void CharBonesMeshes::AcquirePose() {
 void CharBonesMeshes::PoseMeshes() {
     ObjPtrVec<RndTransformable>::iterator curMesh = mMeshes.begin();
 
+#ifdef HX_NATIVE
+    { static int sPoseMeshLog = 0;
+      if (sPoseMeshLog < 3 && mMeshes.size() > 20) {
+        sPoseMeshLog++;
+        fprintf(stderr, "POSEMESHES dir='%s' servo='%s' meshCount=%d boneCount=%d\n",
+                Dir() ? Dir()->Name() : "null", Name(), (int)mMeshes.size(), (int)mBones.size());
+        // Dump first 5 bone mesh pointers
+        for (int k = 0; k < 5 && k < (int)mMeshes.size(); k++) {
+            RndTransformable* bt = mMeshes[k];
+            fprintf(stderr, "  servo_mesh[%d] '%s' ptr=%p bone='%s'\n",
+                    k, bt ? bt->Name() : "NULL", (void*)bt,
+                    k < (int)mBones.size() ? mBones[k].name.Str() : "?");
+        }
+      }
+    }
+#endif
+
     // Set positions
     auto& start = mStart;
     Vector3 *pos = (Vector3 *)start;

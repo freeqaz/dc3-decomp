@@ -8,19 +8,28 @@
 #include "utl/Std.h"
 
 namespace {
+    // userp points to &mBuffer in HttpReqCurl, with mBufferLength immediately after.
+    // On PPC32 (ILP32), mBufferLength is at byte offset 4 (sizeof(void*) == 4).
+    // On LP64, mBufferLength is at byte offset 8 (sizeof(void*) == 8).
+    // Using sizeof(void*) for the offset works on both platforms.
+    inline void *&_CurlBuf(void *userp) { return *(void **)userp; }
+    inline unsigned int &_CurlBufLen(void *userp) {
+        return *(unsigned int *)((char *)userp + sizeof(void *));
+    }
+
     unsigned int WriteMemoryCallback(void *contents, unsigned int size, unsigned int nmemb, void *userp) {
         unsigned int totalSize = nmemb * size;
-        if (*(void **)userp != nullptr) {
-            void *newBuf = MemRealloc(*(void **)userp, *((unsigned int *)userp + 1) + totalSize, __FILE__, 0x1b, "HttpReqCurl", 0);
-            *(void **)userp = newBuf;
+        if (_CurlBuf(userp) != nullptr) {
+            void *newBuf = MemRealloc(_CurlBuf(userp), _CurlBufLen(userp) + totalSize, __FILE__, 0x1b, "HttpReqCurl", 0);
+            _CurlBuf(userp) = newBuf;
             MILO_ASSERT(newBuf, 0x1c);
         } else {
             void *newBuf = MemAlloc(totalSize, __FILE__, 0x21, "HttpReqCurl", 0);
-            *(void **)userp = newBuf;
+            _CurlBuf(userp) = newBuf;
             MILO_ASSERT(newBuf, 0x22);
         }
-        memcpy(*(char **)userp + *((unsigned int *)userp + 1), contents, totalSize);
-        *((unsigned int *)userp + 1) += totalSize;
+        memcpy((char *)_CurlBuf(userp) + _CurlBufLen(userp), contents, totalSize);
+        _CurlBufLen(userp) += totalSize;
         return totalSize;
     }
 }

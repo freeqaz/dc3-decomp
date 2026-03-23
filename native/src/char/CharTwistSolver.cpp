@@ -109,51 +109,71 @@ bool CharTwistSolver::IsTwistPollable(const CharPollable* p) {
 void CharTwistSolver::SolveAll(ObjectDir* dir) {
     if (!dir) return;
 
-    // Prefer authoritative in-scene pollables when present.
-    bool polledTwistObjects = false;
+    // Prefer authoritative in-scene pollables when present, but only on a
+    // per-twist-type basis. Standalone character assets often contain the two
+    // authored CharForeTwist objects while relying on fallback math for upper
+    // arm and neck twist handling.
+    bool sawForeTwist = false;
+    bool sawUpperTwist = false;
+    bool sawNeckTwist = false;
     for (ObjDirItr<CharPollable> it(dir, true); it != nullptr; ++it) {
-        if (IsTwistPollable(it)) {
+        const char* cn = it->ClassName().Str();
+        if (strcmp(cn, "CharForeTwist") == 0) {
             it->Poll();
-            polledTwistObjects = true;
-        }
-    }
-    if (polledTwistObjects) return;
-
-    // Fallback: emulate expected twist behavior for outfit-only scenes
-    // that do not include the shared Char*Twist pollables from main setup dirs.
-    const char* sides[] = {"L", "R"};
-    for (auto side : sides) {
-        char upperArmName[64], upperTwist1Name[64], upperTwist2Name[64];
-        snprintf(upperArmName, sizeof(upperArmName), "bone_%s-upperArm.mesh", side);
-        snprintf(upperTwist1Name, sizeof(upperTwist1Name), "bone_%s-upperTwist1.mesh", side);
-        snprintf(upperTwist2Name, sizeof(upperTwist2Name), "bone_%s-upperTwist2.mesh", side);
-
-        RndTransformable* upperArm = dir->Find<RndTransformable>(upperArmName, false);
-        RndTransformable* upperTwist1 = dir->Find<RndTransformable>(upperTwist1Name, false);
-        RndTransformable* upperTwist2 = dir->Find<RndTransformable>(upperTwist2Name, false);
-
-        if (upperTwist2 && upperTwist1 && upperArm) {
-            SolveUpperTwistPoll(upperTwist2, upperTwist1, upperArm);
+            sawForeTwist = true;
+        } else if (strcmp(cn, "CharUpperTwist") == 0) {
+            it->Poll();
+            sawUpperTwist = true;
+        } else if (strcmp(cn, "CharNeckTwist") == 0) {
+            it->Poll();
+            sawNeckTwist = true;
+        } else if (strcmp(cn, "CharBoneTwist") == 0) {
+            it->Poll();
         }
     }
 
-    // CharacterTest::AddDefaults() offsets for missing CharForeTwist setup.
-    struct ForeTwistSetup {
-        const char* hand; const char* twist2; float offset; float bias;
-    };
-    ForeTwistSetup foreSetups[] = {
-        {"bone_L-hand.mesh", "bone_L-foreTwist2.mesh", 90.0f, 0.0f},
-        {"bone_R-hand.mesh", "bone_R-foreTwist2.mesh", -90.0f, 0.0f},
-    };
-    for (auto& s : foreSetups) {
-        SolveForeTwist(
-            dir->Find<RndTransformable>(s.hand, false),
-            dir->Find<RndTransformable>(s.twist2, false),
-            s.offset, s.bias);
+    if (!sawUpperTwist) {
+        const char* sides[] = {"L", "R"};
+        for (auto side : sides) {
+            char upperArmName[64], upperTwist1Name[64], upperTwist2Name[64];
+            snprintf(upperArmName, sizeof(upperArmName), "bone_%s-upperArm.mesh", side);
+            snprintf(upperTwist1Name, sizeof(upperTwist1Name), "bone_%s-upperTwist1.mesh", side);
+            snprintf(upperTwist2Name, sizeof(upperTwist2Name), "bone_%s-upperTwist2.mesh", side);
+
+            RndTransformable* upperArm = dir->Find<RndTransformable>(upperArmName, false);
+            RndTransformable* upperTwist1 = dir->Find<RndTransformable>(upperTwist1Name, false);
+            RndTransformable* upperTwist2 = dir->Find<RndTransformable>(upperTwist2Name, false);
+
+            if (upperTwist2 && upperTwist1 && upperArm) {
+                SolveUpperTwistPoll(upperTwist2, upperTwist1, upperArm);
+            }
+        }
     }
 
-    // Neck twist — CharNeckTwist::Poll() applies half of head yaw
-    RndTransformable* neckTwist = dir->Find<RndTransformable>("bone_neckTwist.mesh", false);
-    RndTransformable* headBone = dir->Find<RndTransformable>("bone_head.mesh", false);
-    SolveNeckTwist(neckTwist, headBone);
+    if (!sawForeTwist) {
+        // Use the same authored forearm-twist defaults observed in live gameplay:
+        // left offset=0, right offset=180, bias=0 on the loaded CharForeTwist objects.
+        // CharacterTest::AddDefaults() still uses older +/-90 fallback values, but those
+        // do not match the runtime setup that gameplay is actually using.
+        struct ForeTwistSetup {
+            const char* hand; const char* twist2; float offset; float bias;
+        };
+        ForeTwistSetup foreSetups[] = {
+            {"bone_L-hand.mesh", "bone_L-foreTwist2.mesh", 0.0f, 0.0f},
+            {"bone_R-hand.mesh", "bone_R-foreTwist2.mesh", 180.0f, 0.0f},
+        };
+        for (auto& s : foreSetups) {
+            SolveForeTwist(
+                dir->Find<RndTransformable>(s.hand, false),
+                dir->Find<RndTransformable>(s.twist2, false),
+                s.offset, s.bias);
+        }
+    }
+
+    if (!sawNeckTwist) {
+        // Neck twist — CharNeckTwist::Poll() applies half of head yaw
+        RndTransformable* neckTwist = dir->Find<RndTransformable>("bone_neckTwist.mesh", false);
+        RndTransformable* headBone = dir->Find<RndTransformable>("bone_head.mesh", false);
+        SolveNeckTwist(neckTwist, headBone);
+    }
 }

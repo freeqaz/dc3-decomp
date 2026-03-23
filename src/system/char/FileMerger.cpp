@@ -315,6 +315,19 @@ void FileMerger::Clear() {
 
 bool FileMerger::StartLoad(bool b) { return StartLoadInternal(b, false); }
 
+#ifdef HX_NATIVE
+void FileMerger::ForceReleaseOrganizer() {
+    // Cancel any pending async loads and release from the organizer.
+    // Used by tests where the game loop isn't running to drain TheLoadMgr.
+    if (mCurLoader) {
+        DeleteCurLoader();
+        mCurLoader = nullptr;
+    }
+    mFilesPending.clear();
+    mOrganizer = this;
+}
+#endif
+
 FileMerger::Merger *FileMerger::FindMerger(Symbol name, bool warn) {
     int idx = FindMergerIndex(name, warn);
     if (idx != -1) {
@@ -491,9 +504,9 @@ bool FileMerger::StartLoadInternal(bool async, bool loading) {
     mFilesPending.sort(FileMergerSort());
     if (mCurLoader)
         mFilesPending.push_front(tmp);
-    if (mFilesPending.empty() || mCurLoader || mOrganizer != this)
+    if (mFilesPending.empty() || mCurLoader || mOrganizer != this) {
         return false;
-    else {
+    } else {
         if (async) {
             TheFileMergerOrganizer->AddFileMerger(this);
         } else {

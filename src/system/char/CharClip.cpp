@@ -148,9 +148,9 @@ void CharClip::Transitions::RemoveClip(CharClip *clip) {
 void CharClip::Transitions::RemoveNodes(NodeVector *n) {
     MILO_ASSERT(n, 0xEC);
     NodeVector *next = n->Next();
+    n->~NodeVector();
     memmove(n, next, (intptr_t)mNodeEnd - (intptr_t)next);
-    auto _tmp0 = BytesInMemory();
-    Resize(_tmp0 - ((intptr_t)next - (intptr_t)n), nullptr);
+    Resize(BytesInMemory() - ((intptr_t)next - (intptr_t)n), nullptr);
     for (NodeVector *it = mNodeStart; it < mNodeEnd; it = it->Next()) {
         // Fix up linked list pointers after memmove
         // ObjRef layout: vtable(sizeof(void*)) + next(sizeof(void*)) + prev(sizeof(void*))

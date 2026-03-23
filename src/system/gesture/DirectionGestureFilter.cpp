@@ -153,29 +153,28 @@ float DirectionGestureFilterSingleUser::UpdateOverlay(RndOverlay *overlay, float
 }
 
 bool DirectionGestureFilterSingleUser::IsValidSwipePosition(const Skeleton &skeleton) const {
-    // Load shoulders in exact target order
-    float shoulderRightY = *((float*)(&skeleton) + 0xEA);  // 0x3A8 / 4
-    float shoulderLeftY = *((float*)(&skeleton) + 0x76);   // 0x1D8 / 4
+    const TrackedJoint *joints = skeleton.TrackedJoints();
 
-    float shoulderRightZ = *((float*)(&skeleton) + 0xEB);  // 0x3AC / 4
-    float shoulderLeftZ = *((float*)(&skeleton) + 0x77);   // 0x1DC / 4
+    float shoulderRightY = joints[kJointShoulderRight].mJointPos[0].y;
+    float shoulderLeftY = joints[kJointShoulderLeft].mJointPos[0].y;
 
-    // Load hip.x and shoulder.x, compute deltaX
-    float hipX = *((float*)(&skeleton) + 1);      // 0x4 / 4 = +1
-    float shoulderX = *((float*)(&skeleton) + 0x3B);  // 0xEC / 4
+    float shoulderRightZ = joints[kJointShoulderRight].mJointPos[0].z;
+    float shoulderLeftZ = joints[kJointShoulderLeft].mJointPos[0].z;
+
+    float hipX = joints[kJointHipCenter].mJointPos[0].x;
+    float shoulderX = joints[kJointShoulderCenter].mJointPos[0].x;
     float deltaX = hipX - shoulderX;
 
-    float hipY = *((float*)(&skeleton) + 2);      // 0x8 / 4 = +2
-    float shoulderY = *((float*)(&skeleton) + 0x3C);  // 0xF0 / 4
+    float hipY = joints[kJointHipCenter].mJointPos[0].y;
+    float shoulderY = joints[kJointShoulderCenter].mJointPos[0].y;
     float deltaY = hipY - shoulderY;
 
-    float hipZ = *((float*)(&skeleton) + 3);      // 0xC / 4 = +3
-    float shoulderZ = *((float*)(&skeleton) + 0x3D);  // 0xF4 / 4
+    float hipZ = joints[kJointHipCenter].mJointPos[0].z;
+    float shoulderZ = joints[kJointShoulderCenter].mJointPos[0].z;
     float deltaZ = hipZ - shoulderZ;
 
-    // Load shoulder X and compute shoulder distance components
-    float shoulderLeftX = *((float*)(&skeleton) + 0x75);   // 0x1D4 / 4
-    float shoulderRightX = *((float*)(&skeleton) + 0xE9);  // 0x3A4 / 4
+    float shoulderLeftX = joints[kJointShoulderLeft].mJointPos[0].x;
+    float shoulderRightX = joints[kJointShoulderRight].mJointPos[0].x;
     float dx = shoulderLeftX - shoulderRightX;
     float dy = shoulderLeftY - shoulderRightY;
     float dz = shoulderLeftZ - shoulderRightZ;
@@ -206,13 +205,12 @@ bool DirectionGestureFilterSingleUser::IsValidSwipePosition(const Skeleton &skel
     float closestDeltaX = closest.x - handJoint2.mJointPos[0].x;
     float closestDeltaZ = closest.z - handJoint2.mJointPos[0].z;
 
-    // HipRight - HipLeft
-    float hipLeftX = *((float*)(&skeleton) + 0x15D);
-    float hipRightX = *((float*)(&skeleton) + 0x1B4);
-    float hipLeftY = *((float*)(&skeleton) + 0x15E);
-    float hipRightY = *((float*)(&skeleton) + 0x1B5);
-    float hipLeftZ = *((float*)(&skeleton) + 0x15F);
-    float hipRightZ = *((float*)(&skeleton) + 0x1B6);
+    float hipLeftX = joints[kJointHipLeft].mJointPos[0].x;
+    float hipRightX = joints[kJointHipRight].mJointPos[0].x;
+    float hipLeftY = joints[kJointHipLeft].mJointPos[0].y;
+    float hipRightY = joints[kJointHipRight].mJointPos[0].y;
+    float hipLeftZ = joints[kJointHipLeft].mJointPos[0].z;
+    float hipRightZ = joints[kJointHipRight].mJointPos[0].z;
 
     Vector3 direction;
     direction.x = hipRightX - hipLeftX;
@@ -248,8 +246,7 @@ bool DirectionGestureFilterSingleUser::IsValidSwipePosition(const Skeleton &skel
     if (!mAllowAboveShoulder || mHighButtonMode) {
         // Call HandJoint AGAIN for Y-test
         const TrackedJoint &handJoint3 = skeleton.HandJoint(mHandSide);
-        // Reload shoulderY fresh from skeleton (target does this at idx 128)
-        float shoulderYFresh = *((float*)(&skeleton) + 0x3C);  // 0xF0 / 4
+        float shoulderYFresh = joints[kJointShoulderCenter].mJointPos[0].y;
         float yTest = handJoint3.mJointPos[0].y - shoulderYFresh;
         if (mHighButtonMode) {
             if (yTest < 0.0f) {

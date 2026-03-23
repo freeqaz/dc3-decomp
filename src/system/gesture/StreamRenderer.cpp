@@ -36,8 +36,7 @@ StreamRenderer::StreamRenderer()
       mPlayer2DepthPaletteOffset(0), mPlayerOtherDepthPaletteOffset(0),
       mBackgroundDepthPaletteOffset(0), mDrawPreClear(0), mForceDraw(0),
       mStaticColorIndices(0), mPCTestTex(this), mLagPrimaryTexture(0), unk154(0),
-      mCrewPhotoPlayer0Detected(0), mCrewPhotoPlayer1Detected(0), mCrewPhotoPlayer2Detected(0), mCrewPhotoPlayer3Detected(0), mCrewPhotoPlayer4Detected(0), mCrewPhotoPlayer5Detected(0), mPinkPlayer(0),
-      mBluePlayer(0) {
+      mCrewPhotoPlayerDetected1(0, 0, 0, 0), mCrewPhotoPlayerDetected2(0, 0, 0, 0) {
     for (int i = 0; i < 6; i++) {
         mSmoothers[i].SetSmoothParameters(6, 0);
     }
@@ -546,12 +545,12 @@ void StreamRenderer::DrawToTexture() {
 
             TheShaderMgr.SetPConstant(
                 (PShaderConstant)0x4b,
-                *(const Vector4 *)&mCrewPhotoPlayer0Detected
+                *(const Vector4 *)&mCrewPhotoPlayerDetected1
             );
 
             TheShaderMgr.SetPConstant(
                 (PShaderConstant)0x4c,
-                *(const Vector4 *)&mCrewPhotoPlayer4Detected
+                *(const Vector4 *)&mCrewPhotoPlayerDetected2
             );
 
             Vector4 center0(
@@ -686,8 +685,8 @@ void StreamRenderer::Terminate() {
     RELEASE(mCam);
 }
 
-void StreamRenderer::SetPinkPlayer(int player) { mPinkPlayer = player; }
-void StreamRenderer::SetBluePlayer(int player) { mBluePlayer = player; }
+void StreamRenderer::SetPinkPlayer(int player) { mCrewPhotoPlayerDetected2.blue = player; }
+void StreamRenderer::SetBluePlayer(int player) { mCrewPhotoPlayerDetected2.alpha = player; }
 
 DataNode StreamRenderer::OnGetRenderTextures(DataArray *) {
     return GetRenderTextures(Dir());
@@ -751,22 +750,22 @@ void StreamRenderer::SetCrewPhotoPlayerDetected(int player, bool b2) {
     float set = b2 ? 1.0f : 0.0f;
     switch (player) {
     case 0:
-        mCrewPhotoPlayer0Detected = set;
+        mCrewPhotoPlayerDetected1.red = set;
         break;
     case 1:
-        mCrewPhotoPlayer1Detected = set;
+        mCrewPhotoPlayerDetected1.green = set;
         break;
     case 2:
-        mCrewPhotoPlayer2Detected = set;
+        mCrewPhotoPlayerDetected1.blue = set;
         break;
     case 3:
-        mCrewPhotoPlayer3Detected = set;
+        mCrewPhotoPlayerDetected1.alpha = set;
         break;
     case 4:
-        mCrewPhotoPlayer4Detected = set;
+        mCrewPhotoPlayerDetected2.red = set;
         break;
     case 5:
-        mCrewPhotoPlayer5Detected = set;
+        mCrewPhotoPlayerDetected2.green = set;
         break;
     default:
         break;

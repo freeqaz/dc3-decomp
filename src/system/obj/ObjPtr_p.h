@@ -447,7 +447,22 @@ void ObjPtrList<T1, T2>::ReplaceNode(struct ObjPtrList::Node *node, Hmx::Object 
     } else {
         Hmx::Object *old = static_cast<ObjRefConcrete<T1, T2> *>(node)->SetObj(obj);
         if (!old && mListMode == kObjListNoNull) {
+#ifdef HX_NATIVE
+            // During ReplaceList, erasing frees the node while other ObjRefs in
+            // the ring still hold prev/next pointers to it. Subsequent ring
+            // operations write through dangling pointers and corrupt glibc's
+            // heap metadata ("corrupted double-linked list"). Suppress the erase;
+            // the null entry persists until the list is destroyed or cleaned up.
+            // Matches the guard in ObjPtrVec::ReplaceNode.
+            if (!gInReplaceList) {
+                erase(node);
+            } else {
+                MILO_WARN("ObjPtrList::ReplaceNode: suppressed erase during ReplaceList (owner=%s)",
+                    mOwner ? PathName(dynamic_cast<Hmx::Object*>(mOwner)) : "<null>");
+            }
+#else
             erase(node);
+#endif
         }
     }
 }

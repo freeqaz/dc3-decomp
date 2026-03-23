@@ -1,51 +1,71 @@
 # YMCA — Full DTA flow from boot to gameplay
 #
-# Navigates through the complete Xbox DTA screen chain:
-#   boot → attract → title → main → choose_mode → song_select
-#   → multiuser → loading → preloading → real_loading → game_screen
+# Navigates through the complete screen chain:
+#   attract -> (auto) autosave_warning -> (auto) title
+#   -> (auto) wait_main_after_saveload -> main -> choose_mode
+#   -> song_select -> multiuser -> loading -> preloading
+#   -> real_loading -> game_screen
 #
-# Status (2026-03-23):
-#   Flow reaches game_screen successfully. HamDirector::Enter() fires.
-#   Crashes during VenueEnter → HamCamTransform::Setup (null trans parent).
-#   Animation fixes (HamDriver bootstrap, SongAnim fallback) are in place
-#   but untestable headless until the VenueEnter crash is resolved.
+# Splash screens (ESRB/Harmonix logos) happen during App init before the
+# UI screen system starts, so no input is needed to dismiss them.
+# autosave_warning_screen and wait_main_after_saveload_screen auto-advance.
+#
+# IMPORTANT: +N offsets are all relative to the LAST wait_screen satisfaction
+# frame, NOT to the previous directive. They must be monotonically increasing.
 #
 # Usage:
-#   MILO_HEADLESS=1 MILO_NORENDER=1 MILO_FATAL_FAILS=0 \
-#     MILO_MAX_FRAMES=15000 \
+#   MILO_HEADLESS=1 MILO_FATAL_FAILS=0 \
+#     MILO_MAX_FRAMES=5000 \
 #     MILO_INPUT_SCRIPT=scripts/dc3-input-flows/ymca.txt \
 #     native/build/dc3-native
 
-# Skip intro splash (ESRB/Harmonix logos)
-+1 confirm
-
-# Skip attract movie
+# attract_screen is the first UI screen. Press confirm to dismiss.
 wait_screen attract_screen
 +1 confirm
 
-# Title screen — confirm to start
+# autosave_warning_screen auto-transitions to title_screen.
+# Title screen -- press confirm to proceed.
 wait_screen title_screen
 +30 confirm
 
-# Main screen — select "gameplay" (first item)
+# wait_main_after_saveload_screen auto-transitions to main_screen.
+# Main screen -- select "gameplay" (first item).
 wait_screen main_screen
-+60 confirm
++30 confirm
 
-# Choose mode — select "perform" (first item)
+# Choose mode -- select "perform" (first item).
 wait_screen choose_mode_screen
 +30 confirm
 
-# Song select — scroll down to find a song, then confirm
+# Song select -- the list shows tier folders (song_tier_0, etc.) with songs
+# between them. Scroll down past the tiers to reach an actual song entry,
+# then confirm to select it. 20 downs reaches song position ~11.
 wait_screen song_select_screen
 +30 down
-+20 down
-+20 down
-+20 confirm
++45 down
++60 down
++75 down
++90 down
++105 down
++120 down
++135 down
++150 down
++165 down
++180 down
++195 down
++210 down
++225 down
++240 down
++255 down
++270 down
++285 down
++300 down
++315 down
++330 confirm
 
-# Multiuser — confirm to proceed with defaults
+# Multiuser -- confirm to proceed with default player setup.
 wait_screen multiuser_screen
-+30 confirm
 +30 confirm
 
 # Loading screens auto-advance via DTA handlers:
-#   loading → preloading → real_loading → game_screen
+#   loading -> preloading -> real_loading -> game_screen

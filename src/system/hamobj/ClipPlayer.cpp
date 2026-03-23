@@ -75,7 +75,10 @@ bool ClipPlayer::Init(Difficulty d) {
     return Init(TheHamDirector->GetPropAnim(d, "song.anim", false));
 }
 
-bool ClipPlayer::Init(int x) { return Init(TheHamDirector->SongAnim(x)); }
+bool ClipPlayer::Init(int x) {
+    mPlayerIndex = x;
+    return Init(TheHamDirector->SongAnim(x));
+}
 
 bool ClipPlayer::CanUseRestStep() {
     // In non-edit mode (or when transitions are enabled), check if the out clip

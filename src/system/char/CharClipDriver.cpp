@@ -251,7 +251,7 @@ CharClipDriver *CharClipDriver::PreEvaluate(float beat, float deltaBeat, float d
         mAdvanceBeat = 0.0f;
     } else {
         float oldBeat = mBeat;
-        if (flags & 0x80) { // reset flag, cleared after first eval
+        if (flags & 0x80) {
             mDBeat = 0.0f;
             mPlayFlags = flags & ~0x80;
         } else {
@@ -263,7 +263,7 @@ CharClipDriver *CharClipDriver::PreEvaluate(float beat, float deltaBeat, float d
             }
         }
         mBeat = mDBeat + mBeat;
-        float align = AlignToBeat(oldBeat);
+        float align = AlignToBeat(beat);
         mBeat += align;
         mAdvanceBeat = mDBeat + align;
         PlayEvents(oldBeat);
@@ -287,7 +287,7 @@ CharClipDriver *CharClipDriver::PreEvaluate(float beat, float deltaBeat, float d
             } else {
                 mBlendFrac = 1.0f;
             }
-                        float clamped;
+            float clamped;
             if ((mBlendFrac - 1.0f >= 0.0f)) {
                 clamped = 1.0f;
             } else {
@@ -300,8 +300,8 @@ CharClipDriver *CharClipDriver::PreEvaluate(float beat, float deltaBeat, float d
     if (!mPlayMultipleClips) {
         if (mNext) {
             if (mBlendFrac == 1.0f) {
-            mNext = mNext->Exit(true);
-        }
+                mNext = mNext->Exit(true);
+            }
         }
     } else {
         if (mBeat > mClip->EndBeat()) {

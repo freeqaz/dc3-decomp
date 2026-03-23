@@ -320,13 +320,6 @@ END_LOADS
 
 void HamDirector::Enter() {
     RndPollable::Enter();
-#ifdef HX_NATIVE
-    // No Kinect on native — force merge_moves=0 so SongAnim() returns the
-    // pre-authored difficulty song.anim instead of the empty routine builder.
-    if (TheHamProvider) {
-        TheHamProvider->SetProperty("merge_moves", 0);
-    }
-#endif
     if (mMerger) {
         mExcitement = 3;
         mNumPlayersFailed = 0;
@@ -2115,7 +2108,7 @@ void HamDirector::LoadRoutineBuilderData(
             int clipsDirHash = clipsDir->HashTableSize() + moveMgrDir->HashTableSize();
             int clipsDirStr = clipsDir->StrTableSize() + moveMgrDir->StrTableSize();
             clipsDir->Reserve(clipsDirHash, clipsDirStr);
-            for (ObjDirItr<CharClip> it(clipsDir, false); it != nullptr; ++it) {
+            for (ObjDirItr<CharClip> it(moveMgrDir, false); it != nullptr; ++it) {
                 objects.push_back(it);
             }
             FOREACH (it, objects) {

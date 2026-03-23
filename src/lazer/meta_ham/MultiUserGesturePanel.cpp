@@ -535,6 +535,35 @@ void MultiUserGesturePanel::UpdateNavLists(int player) {
     int trackingID = pPlayerData->GetSkeletonTrackingID();
     SkeletonSide playerSide = skeletonChooser->GetPlayerSide(player);
 
+#ifdef HX_NATIVE
+    // Native port: use proper member access instead of hardcoded byte offsets
+    HamNavList *navList1 = (&mLeftNavList1)[playerSide];
+
+    if (navList1) {
+        navList1->SetSkeletonTrackingID(trackingID);
+        if (((trackingID <= 0) && !TheGestureMgr->InControllerMode()) ||
+            TheHamUI.GetOverlayPanel() != nullptr) {
+            navList1->SetSkeletonTrackingID(0);
+            navList1->Disengage();
+        }
+    }
+
+    HamNavList *navList2 = (&mLeftNavList2)[playerSide];
+
+    if (navList2) {
+        navList2->SetShowing(true);
+
+        navList2->SetSkeletonTrackingID(trackingID);
+        if (((trackingID <= 0) && !TheGestureMgr->InControllerMode()) ||
+            TheHamUI.GetOverlayPanel() != nullptr) {
+            navList2->SetSkeletonTrackingID(0);
+            navList2->Disengage();
+            if (TheHamUI.GetOverlayPanel() != nullptr) {
+                navList2->SetShowing(false);
+            }
+        }
+    }
+#else
     int sideIdx = playerSide - 1;
 
     // Get nav lists for this player's side using array indexing
@@ -580,6 +609,7 @@ void MultiUserGesturePanel::UpdateNavLists(int player) {
             }
         }
     }
+#endif
 }
 
 DataNode MultiUserGesturePanel::OnMsg(const ButtonDownMsg &msg) {

@@ -6,6 +6,7 @@ Techniques for debugging the DC3 native Linux port — memory errors, object lif
 
 ```bash
 # Standard headless run (logic only, fastest)
+# Good for boot/flow smoke tests. This is NOT long enough to verify post-intro gameplay animation.
 MILO_HEADLESS=1 MILO_NORENDER=1 MILO_FATAL_FAILS=0 \
   MILO_MAX_FRAMES=3000 MILO_INPUT_SCRIPT=scripts/dc3-input-flows/ymca.txt \
   native/build/dc3-native
@@ -32,6 +33,32 @@ native/build/milo-tests --gtest_filter='ObjectLifetimeTest.*'
 # Single test (useful when others hang)
 timeout 15 native/build/milo-tests --gtest_filter='ObjectLifetimeTest.SomeTest'
 ```
+
+## Song Verification Loop
+
+For character animation bugs, use a rendered headless run and capture screenshots after the intro. A logic-only `MILO_NORENDER=1` run is still useful for fast flow checks, but it is not enough to prove dancers are visually animating correctly.
+
+```bash
+mkdir -p /tmp/dc3_song_probe/shots
+
+env DC3_DATA=orig-assets MILO_RENDER=1 MILO_HEADLESS=1 MILO_FATAL_FAILS=0 \
+  DC3_SHOW_SPLASH=0 DC3_TEL=1 DC3_TEL_INTERVAL=25 \
+  MILO_MAX_FRAMES=9050 MILO_INPUT_SCRIPT=scripts/dc3-input-flows/ymca.txt \
+  MILO_SCREENSHOT_DIR=/tmp/dc3_song_probe/shots \
+  MILO_SCREENSHOT_FRAMES=7750,8000,8450,8975 \
+  timeout 180 native/build/dc3-native 2>&1 | tee /tmp/dc3_song_probe/run.log
+```
+
+Verification checklist:
+- Create `MILO_SCREENSHOT_DIR` before launch. Screenshot capture can fail silently except for a stderr write error if the directory does not exist.
+- Capture frames after the intro. On the current YMCA flow, `3000` frames is too short; `9050` reaches stable post-intro gameplay.
+- Compare multiple screenshots, not just one. Camera motion can continue while dancers are frozen.
+- Watch telemetry in `run.log`:
+  - `mergeMoves=1`
+  - `charClipLayers > 0`
+  - `p0SongAnim > 0`
+- `songAnimFrame` advancing by itself is not enough. We reproduced a real freeze where beats and camera advanced while clip layers dropped out.
+- The native renderer also prints `=== BONE DIAG ===` blocks to stderr for the first few skinned meshes. Use those dumps to check local/world transforms, bind-pose offsets, and final skin matrices while the song is running.
 
 ## AddressSanitizer (ASan)
 

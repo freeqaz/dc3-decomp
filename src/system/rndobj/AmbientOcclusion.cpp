@@ -763,7 +763,7 @@ bool kdTree<Triangle>::Intersect(
                         node = children[!isAbove];
                     }
                 } else {
-                    kdTriList *triList = node->mData.triList;
+                    kdTriList *triList = node->GetTriList();
                     if (triList) {
                         do {
                             float dist = FLT_MAX;

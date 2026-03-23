@@ -113,10 +113,6 @@ static void mainLoop() {
         sFrameCount++;
         sApp->RunOneFrame();
         EM_ASM({ window.dc3FrameCount = $0; }, sFrameCount);
-        if (sFrameCount == 1 || sFrameCount % 300 == 0) {
-            printf("DC3 Web: frame %d\n", sFrameCount);
-            fflush(stdout);
-        }
         break;
     }
 

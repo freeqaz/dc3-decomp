@@ -22,7 +22,7 @@ struct CmdGetPlaylistFromRC : public QueueableCommand {
     CmdGetPlaylistFromRC(int i) { mData.i = i; }
 
     union {
-        int i;
+        intptr_t i;
         HamProfile *profile;
         Playlist *playlist;
         CustomPlaylist *customPlaylist;
@@ -40,7 +40,7 @@ struct CmdAddPlaylistToRC : public QueueableCommand {
     CmdAddPlaylistToRC(Playlist *pl) { mData.playlist = pl; }
 
     union {
-        int i;
+        intptr_t i;
         HamProfile *profile;
         Playlist *playlist;
         CustomPlaylist *customPlaylist;
@@ -53,7 +53,7 @@ struct CmdDeletePlaylistFromRC : public QueueableCommand {
     CmdDeletePlaylistFromRC(int i) { mData.i = i; }
 
     union {
-        int i;
+        intptr_t i;
         HamProfile *profile;
         Playlist *playlist;
         CustomPlaylist *customPlaylist;
@@ -66,7 +66,7 @@ struct CmdEditPlaylist : public QueueableCommand {
     CmdEditPlaylist(Playlist *pl) { mData.playlist = pl; }
 
     union {
-        int i;
+        intptr_t i;
         HamProfile *profile;
         Playlist *playlist;
         CustomPlaylist *customPlaylist;

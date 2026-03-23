@@ -29,7 +29,7 @@ public:
     CmdSendFitnessGoalToRC(HamProfile *p) { mData.profile = p; }
 
     union {
-        int i;
+        intptr_t i;
         HamProfile *profile;
         Playlist *playlist;
         CustomPlaylist *customPlaylist;
@@ -43,7 +43,7 @@ public:
     CmdUpdateFitnessGoalToRC(HamProfile *p) { mData.profile = p; }
 
     union {
-        int i;
+        intptr_t i;
         HamProfile *profile;
         Playlist *playlist;
         CustomPlaylist *customPlaylist;
@@ -57,7 +57,7 @@ public:
     CmdDeleteFitnessGoalFromRC(HamProfile *p) { mData.profile = p; }
 
     union {
-        int i;
+        intptr_t i;
         HamProfile *profile;
         Playlist *playlist;
         CustomPlaylist *customPlaylist;

@@ -1,7 +1,11 @@
 #include "test_helpers.h"
+#include "char/CharForeTwist.h"
+#include "char/CharTwistSolver.h"
 #include "obj/Dir.h"
+#include "obj/Object.h"
 #include "obj/DirLoader.h"
 #include "char/CharClip.h"
+#include "math/Rot.h"
 #include "rndobj/Trans.h"
 #include "utl/ChunkStream.h"
 #include "utl/FilePath.h"
@@ -212,6 +216,20 @@ static bool WriteExpectedPoseJson(
     return true;
 }
 
+static float MaxMatrixDiff(const Hmx::Matrix3& a, const Hmx::Matrix3& b) {
+    float d = 0.0f;
+    d = std::max(d, std::fabs(a.x.x - b.x.x));
+    d = std::max(d, std::fabs(a.x.y - b.x.y));
+    d = std::max(d, std::fabs(a.x.z - b.x.z));
+    d = std::max(d, std::fabs(a.y.x - b.y.x));
+    d = std::max(d, std::fabs(a.y.y - b.y.y));
+    d = std::max(d, std::fabs(a.y.z - b.y.z));
+    d = std::max(d, std::fabs(a.z.x - b.z.x));
+    d = std::max(d, std::fabs(a.z.y - b.z.y));
+    d = std::max(d, std::fabs(a.z.z - b.z.z));
+    return d;
+}
+
 TEST(MiloViewerScreenshot, ScreenshotModeExitsCleanlyAndWritesPng) {
     const std::string viewer = GetViewerPath();
     if (!FileExists(viewer))
@@ -412,6 +430,83 @@ TEST(MiloViewerScreenshot, PoseDumpCanMatchGoldenWithTolerance) {
 }
 
 class MiloViewerPosePipeline : public EngineTestFixture {};
+
+TEST_F(MiloViewerPosePipeline, TwistSolverFallsBackPerTwistType) {
+    ObjectDir* dir = Hmx::Object::New<ObjectDir>();
+
+    auto makeBone = [&](const char* name, RndTransformable* parent) {
+        RndTransformable* bone = Hmx::Object::New<RndTransformable>();
+        bone->SetName(name, dir);
+        if (parent) {
+            bone->SetTransParent(parent, false);
+        }
+        Transform tf;
+        tf.Reset();
+        bone->SetLocalXfm(tf);
+        return bone;
+    };
+
+    RndTransformable* root = makeBone("root.mesh", nullptr);
+    RndTransformable* lClavicle = makeBone("bone_L-clavicle.mesh", root);
+    RndTransformable* lUpperArm = makeBone("bone_L-upperArm.mesh", lClavicle);
+    RndTransformable* lUpperTwist1 = makeBone("bone_L-upperTwist1.mesh", lClavicle);
+    RndTransformable* lUpperTwist2 = makeBone("bone_L-upperTwist2.mesh", lClavicle);
+    RndTransformable* lForeArm = makeBone("bone_L-foreArm.mesh", lUpperArm);
+    RndTransformable* lHand = makeBone("bone_L-hand.mesh", lForeArm);
+    RndTransformable* lForeTwist1 = makeBone("bone_L-foreTwist1.mesh", lForeArm);
+    RndTransformable* lForeTwist2 = makeBone("bone_L-foreTwist2.mesh", lForeTwist1);
+    RndTransformable* neck = makeBone("bone_neck.mesh", root);
+    RndTransformable* neckTwist = makeBone("bone_neckTwist.mesh", neck);
+    RndTransformable* head = makeBone("bone_head.mesh", neck);
+
+    Transform tf;
+    tf.Reset();
+    tf.v.Set(0.0f, 0.0f, 0.0f);
+    lUpperArm->SetLocalXfm(tf);
+    tf.v.Set(0.0f, 3.0f, 0.0f);
+    lUpperTwist1->SetLocalXfm(tf);
+    tf.v.Set(0.0f, 6.0f, 0.0f);
+    MakeRotMatrixX(1.0f, tf.m);
+    lUpperTwist2->SetLocalXfm(tf);
+
+    tf.Reset();
+    tf.v.Set(0.0f, 4.0f, 0.0f);
+    lForeArm->SetLocalXfm(tf);
+    tf.v.Set(3.0f, 6.0f, 0.0f);
+    MakeRotMatrixX(0.7f, tf.m);
+    lHand->SetLocalXfm(tf);
+    tf.Reset();
+    tf.v.Set(1.0f, 2.0f, 0.0f);
+    lForeTwist1->SetLocalXfm(tf);
+    tf.v.Set(2.0f, 4.0f, 0.0f);
+    lForeTwist2->SetLocalXfm(tf);
+
+    tf.Reset();
+    tf.v.Set(0.0f, 1.0f, 0.0f);
+    neckTwist->SetLocalXfm(tf);
+    tf.v.Set(0.0f, 2.0f, 0.0f);
+    MakeRotMatrixZ(0.8f, tf.m);
+    head->SetLocalXfm(tf);
+
+    CharForeTwist* fore = Hmx::Object::New<CharForeTwist>();
+    fore->SetName("foreTwist_L.ik", dir);
+    fore->SetProperty(Symbol("hand"), DataNode(lHand));
+    fore->SetProperty(Symbol("twist2"), DataNode(lForeTwist2));
+    fore->SetProperty(Symbol("offset"), DataNode(0.0f));
+    fore->SetProperty(Symbol("bias"), DataNode(0.0f));
+
+    const Hmx::Matrix3 upperBefore = lUpperArm->WorldXfm().m;
+    const Hmx::Matrix3 neckBefore = neckTwist->LocalXfm().m;
+
+    CharTwistSolver::SolveAll(dir);
+
+    EXPECT_GT(MaxMatrixDiff(upperBefore, lUpperArm->WorldXfm().m), 0.01f)
+        << "Upper-arm fallback should still run when authored fore twists exist";
+    EXPECT_GT(MaxMatrixDiff(neckBefore, neckTwist->LocalXfm().m), 0.01f)
+        << "Neck fallback should still run when authored fore twists exist";
+
+    delete dir;
+}
 
 TEST_F(MiloViewerPosePipeline, ViewerPoseDumpMatchesInProcessPoseMeshes) {
     const std::string viewer = GetViewerPath();

@@ -1613,7 +1613,8 @@ void PackVector(
 }
 
 static inline unsigned short FloatToHalf(float value) {
-    unsigned int raw = *(unsigned int *)&value;
+    unsigned int raw;
+    memcpy(&raw, &value, sizeof(float));
     unsigned int iValue = raw & 0x7FFFFFFF;
     unsigned int sign = (raw >> 16) & 0x8000;
     if (iValue > 0x47FFEFFF) {

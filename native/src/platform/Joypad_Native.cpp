@@ -295,8 +295,10 @@ static unsigned int GetScriptedButtons(int currentFrame) {
             if (satisfied) {
                 gWaitSatisfiedFrame = currentFrame;
                 gWaiting = false;
+#ifdef DEBUG_LOGS
                 printf("DC3 Input: wait_screen '%s' satisfied at frame %d\n",
                     gWaitTarget, currentFrame);
+#endif
                 gScriptCursor++;
                 continue;
             }
@@ -454,9 +456,6 @@ void JoypadPoll() {
         } else if (pad == 0) {
             // --- Headless mode: scripted input (pad 0 only) ---
             newButtons = GetScriptedButtons(currentFrame);
-            if (newButtons && !gScript.empty()) {
-                printf("DC3 Input: Frame %d — scripted buttons 0x%x\n", currentFrame, newButtons);
-            }
         }
 #endif // __EMSCRIPTEN__
 

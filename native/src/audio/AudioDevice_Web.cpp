@@ -304,7 +304,6 @@ void AudioDevice::Terminate() {
 void AudioDevice::AddSource(AudioSource *source) {
     std::lock_guard<std::mutex> lock(mSourceMutex);
     mSources.push_back(source);
-    printf("AudioDevice::AddSource — now %d sources\n", (int)mSources.size());
 }
 
 void AudioDevice::RemoveSource(AudioSource *source) {
@@ -316,9 +315,6 @@ void AudioDevice::RemoveSource(AudioSource *source) {
 }
 
 void AudioDevice::MixSources(float *output, int frameCount) {
-    static int sMixDbg = 0;
-    sMixDbg++;
-
     int totalSamples = frameCount * 2;
     memset(output, 0, totalSamples * sizeof(float));
 
@@ -332,24 +328,11 @@ void AudioDevice::MixSources(float *output, int frameCount) {
         mMixBuffer.resize(totalSamples);
     }
 
-    int srcIdx = 0;
     for (auto it = mSources.begin(); it != mSources.end(); ) {
         AudioSource *src = *it;
         memset(mMixBuffer.data(), 0, totalSamples * sizeof(float));
 
         int framesWritten = src->RenderAudio(mMixBuffer.data(), frameCount);
-
-        // Per-source diagnostic: detect zero-output sources
-        if (sMixDbg <= 30 || (sMixDbg % 500 == 0)) {
-            float srcMax = 0;
-            for (int i = 0; i < framesWritten * 2; i++) {
-                float v = mMixBuffer[i];
-                if (v < 0) v = -v;
-                if (v > srcMax) srcMax = v;
-            }
-            fprintf(stderr, "DC3 MixSrc[%d] src %d/%d ptr=%p frames=%d maxSample=%.6f\n",
-                sMixDbg, srcIdx, (int)mSources.size(), (void*)src, framesWritten, srcMax);
-        }
 
         // Additive mix
         int samplesToMix = framesWritten * 2;
@@ -362,7 +345,6 @@ void AudioDevice::MixSources(float *output, int frameCount) {
         } else {
             ++it;
         }
-        srcIdx++;
     }
 
     // Clamp to [-1, 1]
@@ -388,23 +370,12 @@ void AudioDevice::PumpAudio() {
         return;
 
     sPumpCount++;
-    int totalMixed = 0;
-    float maxSample = 0.0f;
-    int nonZeroCount = 0;
 
     // Mix and push in chunks
     while (freeFrames > 0) {
         int chunk = std::min(freeFrames, MIX_BUF_FRAMES);
 
         MixSources(sMixBuffer, chunk);
-
-        // Diagnostic: sample the mixed output
-        for (int i = 0; i < chunk * 2; i++) {
-            float v = sMixBuffer[i];
-            if (v < 0) v = -v;
-            if (v > maxSample) maxSample = v;
-            if (v > 0.0001f) nonZeroCount++;
-        }
 
         // Audio capture: record MixSources output pre-SAB
         if (sCapturing && sCaptureBuffer && sCapturePos < CAPTURE_FRAMES) {
@@ -420,18 +391,7 @@ void AudioDevice::PumpAudio() {
 
         js_audio_ring_write(sMixBuffer, chunk);
 
-        totalMixed += chunk;
         freeFrames -= chunk;
-    }
-
-    if (sPumpCount <= 10 || (sPumpCount % 100 == 0)) {
-        int numSources;
-        {
-            std::lock_guard<std::mutex> lock(mSourceMutex);
-            numSources = (int)mSources.size();
-        }
-        printf("AudioDevice::PumpAudio #%d — sources=%d, mixed=%d frames, maxSample=%.6f, nonZero=%d\n",
-               sPumpCount, numSources, totalMixed, maxSample, nonZeroCount);
     }
 }
 

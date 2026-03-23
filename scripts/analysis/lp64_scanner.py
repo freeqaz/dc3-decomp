@@ -12,10 +12,11 @@ Categories:
   STRUCTIO - sizeof(UserType) in binary I/O or hardcoded struct offsets
   PTRCMP   - Pointer compared with integer via relational operator
   INTASPTR - int field used as pointer (cast from int member to pointer type)
+  UNION    - Union with mixed pointer/non-pointer members (size mismatch on LP64)
 
 Usage:
-  python3 scripts/analysis/lp64_scanner.py [--dir src/] [--severity high|medium|low|all]
-      [--category WCHAR,PTRCAST,PTRDIFF,STRUCTIO,PTRCMP] [--exclude-guarded] [--json]
+  python3 scripts/analysis/lp64_scanner.py [--dir src/] [--dir include/] [--severity high|medium|low|all]
+      [--category WCHAR,PTRCAST,PTRDIFF,STRUCTIO,PTRCMP,UNION] [--exclude-guarded] [--json]
 """
 
 from __future__ import annotations
@@ -54,6 +55,7 @@ class Finding:
 SKIP_DIRS = {
     "stlport", "xdk", "curl", ".git", "build", "orig", "tools", "powerpc",
     "__pycache__", "node_modules", ".gemini", "jpeg", "oggvorbis", "zlib",
+    "json-c",      # Third-party JSON library — not modified for native
     "native",      # Native port code is LP64-aware by design
     "rnddx9",      # Xbox 360 DX9 renderer — never compiled for native
     "synth_xbox",   # Xbox 360 synth/DSP — never compiled for native
@@ -933,6 +935,169 @@ def check_structio(node: Node, source: bytes) -> list[tuple]:
             f"Use direct member access (obj->member) or offsetof()."
         ))
 
+    # ── Rule 5: *(float*)(&obj + N) — typed pointer arithmetic into structs ──
+    #
+    # Pattern: *((float*)(&expr) + N) or *((int*)(&expr) + N)
+    # Uses typed pointer arithmetic (float* stride = 4 bytes) to compute struct
+    # member offsets. The byte offset is N * sizeof(type), which is hardcoded.
+    # Breaks on LP64 if the struct has ANY pointer members (shifts offsets).
+    #
+    # Also catches: *((float*)(expr) + N) where expr is a pointer variable.
+    _TYPED_PTR_TYPES = {
+        "float *", "float*",
+        "int *", "int*",
+        "unsigned int *", "unsigned int*",
+        "u32 *", "u32*", "s32 *", "s32*",
+    }
+
+    for n in walk(node):
+        if n.type != "pointer_expression":
+            continue
+        # Must be a dereference (*), not address-of (&)
+        op_node = n.child_by_field_name("operator")
+        if not op_node or node_text(op_node) != "*":
+            continue
+
+        argument = n.child_by_field_name("argument")
+        if argument is None:
+            continue
+
+        # Unwrap parens
+        inner = argument
+        while inner.type == "parenthesized_expression" and inner.named_children:
+            inner = inner.named_children[0]
+
+        # Must be a binary expression with +
+        if inner.type != "binary_expression":
+            continue
+        op = inner.child_by_field_name("operator")
+        if not op or node_text(op) != "+":
+            continue
+
+        left = inner.child_by_field_name("left")
+        right = inner.child_by_field_name("right")
+        if not left or not right:
+            continue
+
+        # Identify which side is the typed pointer cast and which is the offset
+        cast_side = None
+        num_side = None
+        for a, b in [(left, right), (right, left)]:
+            # Unwrap parens on the potential cast side
+            unwrapped = a
+            while unwrapped.type == "parenthesized_expression" and unwrapped.named_children:
+                unwrapped = unwrapped.named_children[0]
+            if unwrapped.type == "cast_expression":
+                cast_type = _get_cast_type(unwrapped)
+                if cast_type.strip() in _TYPED_PTR_TYPES:
+                    cast_side = unwrapped
+                    num_side = b
+                    break
+
+        if cast_side is None or num_side is None:
+            continue
+
+        # num_side must be a number literal
+        if num_side.type != "number_literal":
+            continue
+
+        # The cast's value must involve an address-of (&) or be a pointer/reference
+        cast_value = cast_side.child_by_field_name("value")
+        if cast_value is None:
+            continue
+
+        cast_val_txt = node_text(cast_value)
+        # Check for &expr pattern
+        has_addr_of = False
+        inner_val = cast_value
+        while inner_val.type == "parenthesized_expression" and inner_val.named_children:
+            inner_val = inner_val.named_children[0]
+        if inner_val.type == "pointer_expression":
+            addr_op = inner_val.child_by_field_name("operator")
+            if addr_op and node_text(addr_op) == "&":
+                has_addr_of = True
+
+        # Also accept if the cast value is just an identifier/field (pointer variable)
+        is_ptr_var = inner_val.type in ("identifier", "field_expression",
+                                         "call_expression", "this")
+
+        if not has_addr_of and not is_ptr_var:
+            continue
+
+        # Skip lines already flagged by Rule 3
+        line_num = n.start_point[0] + 1
+        if line_num in rule3_lines:
+            continue
+
+        offset_txt = node_text(num_side)
+        cast_type = _get_cast_type(cast_side)
+
+        results.append((
+            n, "typed_ptr_member_access", "high",
+            f"Typed pointer arithmetic *(({cast_type})expr + {offset_txt}) — "
+            f"computes struct member offset as {offset_txt} * sizeof({cast_type.rstrip(' *')}) "
+            f"= {offset_txt} * 4 bytes. Breaks on LP64 if the struct contains "
+            f"pointer members (offsets shift due to 4→8 byte pointer growth). "
+            f"Use direct member access (obj.member) instead."
+        ))
+
+    # ── Rule 6: *reinterpret_cast<Type*>(reinterpret_cast<u8*>(obj) + N) ──
+    #
+    # C++ style casts doing the same thing as C-style *(Type*)((char*)obj + N).
+    # Detects reinterpret_cast with pointer type AND arithmetic offset.
+    for n in walk(node):
+        # Look for text containing reinterpret_cast
+        if n.type != "pointer_expression":
+            continue
+        op_node = n.child_by_field_name("operator")
+        if not op_node or node_text(op_node) != "*":
+            continue
+
+        full_txt = node_text(n)
+        if "reinterpret_cast" not in full_txt:
+            continue
+
+        # Skip lines already flagged by other rules
+        line_num = n.start_point[0] + 1
+        if line_num in rule3_lines:
+            continue
+
+        # Check if the expression contains arithmetic (+/-) with a hex/decimal offset
+        # Pattern: *reinterpret_cast<T*>(reinterpret_cast<u8*>(x) + 0xNN)
+        # or: *reinterpret_cast<T*>(ptr + 0xNN)
+        offset_match = re.search(r'[+\-]\s*(0x[0-9a-fA-F]+|\d+)\s*\)', full_txt)
+        if not offset_match:
+            continue
+
+        offset_str = offset_match.group(1)
+        try:
+            if offset_str.startswith(("0x", "0X")):
+                offset_val = int(offset_str, 16)
+            else:
+                offset_val = int(offset_str)
+        except ValueError:
+            continue
+
+        # Skip offset 0
+        if offset_val == 0:
+            continue
+
+        # Determine severity
+        if offset_val >= 0x1000:
+            sev = "low"
+        elif 4 <= offset_val <= 256:
+            sev = "high"
+        else:
+            sev = "medium"
+
+        results.append((
+            n, "reinterpret_cast_offset", sev,
+            f"reinterpret_cast with byte offset {offset_str} — "
+            f"struct member offsets change on LP64 due to pointer size "
+            f"(8 vs 4) and alignment padding. "
+            f"Use direct member access (obj->member) or offsetof()."
+        ))
+
     for n in walk(node):
         # ── Rule 1: sizeof(UserType) in I/O call ─────────────────────────
         if n.type == "sizeof_expression":
@@ -1370,9 +1535,204 @@ def check_intasptr(node: Node, source: bytes,
     return results
 
 
+# ── UNION checks ─────────────────────────────────────────────────────────────
+#
+# Detects unions containing BOTH pointer members AND non-pointer members
+# (int, float, bitfield structs). On LP64, pointers grow from 4 to 8 bytes,
+# so the union size changes and non-pointer members alias incorrectly.
+#
+# Known-safe suppressions:
+# - DataNode::mValue in Data.h — already has LP64 guards throughout
+# - STLport, json-c, curl internal unions — third-party, never compiled for native
+# - Unions where ALL members are pointer-sized (safe) or ALL are same size
+
+# Files containing unions known to have LP64 guards or be third-party
+_UNION_SKIP_FILES = {
+    "Data.h",          # DataNode::mValue — already has LP64 guards
+}
+
+# Field names of unions known to be safe (already guarded or third-party)
+_UNION_SKIP_FIELDS = {
+    "mValue",          # DataNode::mValue — LP64 guards in Data.h
+}
+
+# Types that are pointer-sized on both platforms (safe in unions with other pointers)
+_POINTER_TYPES_IN_UNION = {"*"}
+
+# Non-pointer scalar types that are 4 bytes on ILP32 but NOT 8 bytes on LP64
+_NON_PTR_UNION_TYPES = {
+    "int", "unsigned int", "unsigned", "signed int",
+    "float", "double",
+    "short", "unsigned short",
+    "char", "unsigned char", "signed char",
+    "bool",
+    "u8", "u16", "u32", "s8", "s16", "s32",
+    "uint", "uint8_t", "uint16_t", "uint32_t",
+    "int8_t", "int16_t", "int32_t",
+}
+
+
+def _union_field_is_pointer(field_node: Node) -> bool:
+    """Check if a field_declaration inside a union declares a pointer member."""
+    # Check for pointer_declarator child (Type *name;)
+    for child in walk(field_node):
+        if child.type == "pointer_declarator":
+            return True
+    # Also check the type specifier text for explicit pointer types
+    type_node = field_node.child_by_field_name("type")
+    if type_node:
+        type_txt = node_text(type_node).strip()
+        if type_txt.endswith("*"):
+            return True
+    return False
+
+
+def _union_field_is_non_pointer(field_node: Node) -> bool:
+    """Check if a field_declaration inside a union declares a non-pointer member.
+
+    Returns True for int, float, bitfield structs, etc.
+    Returns False if the field is a pointer (char *, const MoveVariant *, etc.)
+    even if the base type is in _NON_PTR_UNION_TYPES.
+    """
+    # If it's a pointer declaration, it's NOT a non-pointer member
+    if _union_field_is_pointer(field_node):
+        return False
+
+    type_node = field_node.child_by_field_name("type")
+    if type_node:
+        type_txt = node_text(type_node).strip()
+        if type_txt in _NON_PTR_UNION_TYPES:
+            return True
+
+    # Check for bitfield struct (anonymous struct with bitfield declarations)
+    # e.g., struct { unsigned int unused : 30; unsigned int index : 2; };
+    for child in walk(field_node):
+        if child.type == "struct_specifier":
+            # Check if any field inside has a bitfield width
+            for inner in walk(child):
+                if inner.type == "bitfield_clause":
+                    return True
+
+    return False
+
+
+def _get_union_field_name(union_parent: Node) -> str | None:
+    """Get the field name of a union (the declarator after the union body).
+
+    For: union { ... } mData;
+    Returns "mData".
+    """
+    parent = union_parent
+    if parent is None:
+        return None
+
+    # Walk the parent looking for the union's field name
+    # The union_specifier is typically inside a field_declaration or declaration
+    # that has a declarator child with the field name
+    p = parent
+    while p:
+        if p.type in ("field_declaration", "declaration"):
+            # Look for field_identifier or identifier declarator
+            for child in p.named_children:
+                if child.type == "field_identifier":
+                    return node_text(child).strip()
+                if child.type == "identifier":
+                    return node_text(child).strip()
+                if child.type == "init_declarator":
+                    decl = child.child_by_field_name("declarator")
+                    if decl:
+                        return node_text(decl).strip()
+            break
+        p = p.parent
+    return None
+
+
+def check_union(node: Node, source: bytes) -> list[tuple]:
+    """Check for unions with mixed pointer/non-pointer members.
+
+    On LP64, pointers are 8 bytes but int/float are 4 bytes. A union containing
+    both will have size mismatches — pointer members won't fit if the union is
+    sized for int, or non-pointer members will alias the wrong bytes of a pointer.
+    """
+    results: list[tuple] = []
+
+    # Get the filename for skip checks
+    # (source bytes are available; we extract filename from the Finding later)
+
+    for n in walk(node):
+        if n.type != "union_specifier":
+            continue
+
+        # Get the union body (field_declaration_list)
+        body = None
+        for child in n.named_children:
+            if child.type == "field_declaration_list":
+                body = child
+                break
+        if body is None:
+            continue
+
+        # Check the field name for suppression
+        field_name = _get_union_field_name(n.parent)
+        if field_name and field_name in _UNION_SKIP_FIELDS:
+            continue
+
+        # Collect pointer and non-pointer field declarations
+        has_pointer = False
+        has_non_pointer = False
+        pointer_fields: list[str] = []
+        non_pointer_fields: list[str] = []
+
+        for child in body.named_children:
+            if child.type != "field_declaration":
+                # Check for anonymous struct/union members (bitfield structs)
+                if child.type == "struct_specifier":
+                    # Anonymous struct with bitfields inside union
+                    for inner in walk(child):
+                        if inner.type == "bitfield_clause":
+                            has_non_pointer = True
+                            non_pointer_fields.append("(bitfield struct)")
+                            break
+                continue
+
+            if _union_field_is_pointer(child):
+                has_pointer = True
+                # Extract field name
+                for fc in child.named_children:
+                    if fc.type == "pointer_declarator":
+                        for pdc in fc.named_children:
+                            if pdc.type == "field_identifier":
+                                pointer_fields.append(node_text(pdc).strip())
+                    elif fc.type == "field_identifier":
+                        pointer_fields.append(node_text(fc).strip())
+
+            if _union_field_is_non_pointer(child):
+                has_non_pointer = True
+                for fc in child.named_children:
+                    if fc.type == "field_identifier":
+                        non_pointer_fields.append(node_text(fc).strip())
+
+        if has_pointer and has_non_pointer:
+            ptr_str = ", ".join(pointer_fields[:3]) or "(pointer members)"
+            non_ptr_str = ", ".join(non_pointer_fields[:3]) or "(non-pointer members)"
+            union_name = field_name or "(anonymous)"
+
+            results.append((
+                n, "mixed_ptr_nonptr_union", "high",
+                f"Union '{union_name}' has both pointer members ({ptr_str}) and "
+                f"non-pointer members ({non_ptr_str}) — on LP64, pointers grow "
+                f"from 4 to 8 bytes, causing the union's size to change and "
+                f"non-pointer members to alias incorrectly. "
+                f"Use a tagged variant with separate pointer/non-pointer storage, "
+                f"or add #ifdef HX_NATIVE guards."
+            ))
+
+    return results
+
+
 # ── Main scanner ─────────────────────────────────────────────────────────────
 
-ALL_CATEGORIES = {"WCHAR", "PTRCAST", "PTRDIFF", "STRUCTIO", "PTRCMP", "INTASPTR"}
+ALL_CATEGORIES = {"WCHAR", "PTRCAST", "PTRDIFF", "STRUCTIO", "PTRCMP", "INTASPTR", "UNION"}
 
 CHECKERS = {
     "WCHAR": check_wchar,
@@ -1381,6 +1741,7 @@ CHECKERS = {
     "STRUCTIO": check_structio,
     "PTRCMP": check_ptrcmp,
     "INTASPTR": check_intasptr,
+    "UNION": check_union,
 }
 
 
@@ -2004,8 +2365,8 @@ def clang_scan_directory(
 def main():
     parser = argparse.ArgumentParser(
         description="LP64 Portability Scanner (tree-sitter + optional libclang)")
-    parser.add_argument("--dir", default="src/",
-                        help="Directory to scan (default: src/)")
+    parser.add_argument("--dir", action="append", dest="dirs",
+                        help="Directory to scan (repeatable; default: src/)")
     parser.add_argument("--severity", default="all",
                         help="Filter: high, medium, low, or all (default: all)")
     parser.add_argument("--category", default="all",
@@ -2026,10 +2387,15 @@ def main():
 
     args = parser.parse_args()
 
-    root = Path(args.dir)
-    if not root.is_dir():
-        print(f"Error: {root} is not a directory", file=sys.stderr)
-        sys.exit(1)
+    # Support multiple --dir arguments; default to ["src/"] if none given
+    dirs = args.dirs if args.dirs else ["src/"]
+    roots = []
+    for d in dirs:
+        root = Path(d)
+        if not root.is_dir():
+            print(f"Error: {root} is not a directory", file=sys.stderr)
+            sys.exit(1)
+        roots.append(root)
 
     all_severities = {"high", "medium", "low"}
     severity_filter = (all_severities if args.severity == "all"
@@ -2051,28 +2417,32 @@ def main():
 
         all_findings: list[Finding] = []
 
-        # Run libclang for supported categories
-        if clang_cats:
-            clang_findings = clang_scan_directory(
-                args.compdb, str(root.resolve()),
-                clang_cats, severity_filter, exclude_guarded,
-                jobs=args.jobs,
-            )
-            all_findings.extend(clang_findings)
+        for root in roots:
+            # Run libclang for supported categories
+            if clang_cats:
+                clang_findings = clang_scan_directory(
+                    args.compdb, str(root.resolve()),
+                    clang_cats, severity_filter, exclude_guarded,
+                    jobs=args.jobs,
+                )
+                all_findings.extend(clang_findings)
 
-        # Fall back to tree-sitter for unsupported categories (WCHAR, STRUCTIO)
-        if ts_cats:
-            ts_findings = scan_directory(root, ts_cats, severity_filter, exclude_guarded)
-            all_findings.extend(ts_findings)
+            # Fall back to tree-sitter for unsupported categories (WCHAR, STRUCTIO)
+            if ts_cats:
+                ts_findings = scan_directory(root, ts_cats, severity_filter, exclude_guarded)
+                all_findings.extend(ts_findings)
 
         print_findings(all_findings, as_json=args.json)
         unguarded_high = sum(1 for f in all_findings if not f.guarded and f.severity == "high")
         sys.exit(1 if unguarded_high > 0 else 0)
     else:
-        findings = scan_directory(root, categories, severity_filter, exclude_guarded)
-        print_findings(findings, as_json=args.json)
+        all_findings: list[Finding] = []
+        for root in roots:
+            findings = scan_directory(root, categories, severity_filter, exclude_guarded)
+            all_findings.extend(findings)
+        print_findings(all_findings, as_json=args.json)
 
-        unguarded_high = sum(1 for f in findings if not f.guarded and f.severity == "high")
+        unguarded_high = sum(1 for f in all_findings if not f.guarded and f.severity == "high")
         sys.exit(1 if unguarded_high > 0 else 0)
 
 

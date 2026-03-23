@@ -33,7 +33,6 @@ protected:
         if (mMode & 0x100) fmode = "w+b";
 
         // mFilename is already qualified by AsyncFile::Init()
-        printf("DC3 Native: AsyncFile opening '%s' mode='%s'\n", mFilename.c_str(), fmode);
         mFp = fopen(mFilename.c_str(), fmode);
 #ifdef __EMSCRIPTEN__
         // On-demand fetch: if file isn't in MEMFS, try fetching from server
@@ -44,7 +43,7 @@ protected:
         }
 #endif
         if (!mFp) {
-            printf("DC3 Native: AsyncFile FAILED to open '%s'\n", mFilename.c_str());
+            MILO_LOG("AsyncFile: failed to open '%s'\n", mFilename.c_str());
             mFail = true;
             return;
         }

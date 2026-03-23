@@ -10,6 +10,7 @@
 
 #include "test_helpers.h"
 #include "char/FileMerger.h"
+#include "char/CharUtl.h"
 #include "gesture/SkeletonViz.h"
 #include "hamobj/HamCharacter.h"
 #include "obj/Dir.h"
@@ -43,6 +44,43 @@ static std::string GetMiloLibRoot() {
 static bool FileExists(const std::string &path) {
     struct stat st;
     return stat(path.c_str(), &st) == 0;
+}
+
+static ObjectDir *LoadMainCharacterFromLibrary() {
+    std::string root = GetMiloLibRoot();
+    if (root.empty())
+        return nullptr;
+
+    std::string path = root + "/char/main/gen/main.milo_xbox";
+    if (!FileExists(path))
+        return nullptr;
+
+    return DirLoader::LoadObjects(FilePath(path.c_str()), nullptr, nullptr);
+}
+
+static HamCharacter *FindMainCharacter(ObjectDir *dir) {
+    if (!dir)
+        return nullptr;
+
+    HamCharacter *character = dynamic_cast<HamCharacter *>(dir);
+    if (character)
+        return character;
+
+    ObjDirItr<HamCharacter> it(dir, true);
+    return it ? it : nullptr;
+}
+
+static FileMerger *FindCharacterFileMerger(HamCharacter *character) {
+    return character ? character->Find<FileMerger>("char.fm", false) : nullptr;
+}
+
+static int CountSkinnedMeshes(ObjectDir *dir) {
+    int count = 0;
+    for (ObjDirItr<RndMesh> it(dir, true); it != nullptr; ++it) {
+        if (it->NumBones() > 0)
+            count++;
+    }
+    return count;
 }
 
 // Try to load an archive-backed milo path. Returns dir or nullptr.
@@ -461,15 +499,9 @@ TEST_F(AssetLoadingTest, LoadSharedWorldSubdirs) {
 
 // Character loading — main character has complex bone hierarchy + animations
 TEST_F(AssetLoadingTest, LoadMainCharacter) {
-    std::string root = GetMiloLibRoot();
-    if (root.empty())
-        GTEST_SKIP() << "MILO_LIB not set";
-
-    std::string path = root + "/char/main/gen/main.milo_xbox";
-    if (!FileExists(path))
+    ObjectDir *dir = LoadMainCharacterFromLibrary();
+    if (!dir)
         GTEST_SKIP() << "char/main not found";
-
-    ObjectDir *dir = TryLoadStandalone(path);
     ASSERT_NE(dir, nullptr) << "Failed to load main character";
 
     int count = 0;
@@ -481,26 +513,15 @@ TEST_F(AssetLoadingTest, LoadMainCharacter) {
 }
 
 TEST_F(AssetLoadingTest, MainCharacterFileMergerConfiguresOutfitAndVisemeByDefault) {
-    std::string root = GetMiloLibRoot();
-    if (root.empty())
-        GTEST_SKIP() << "MILO_LIB not set";
-
-    std::string path = root + "/char/main/gen/main.milo_xbox";
-    if (!FileExists(path))
+    ObjectDir *dir = LoadMainCharacterFromLibrary();
+    if (!dir)
         GTEST_SKIP() << "char/main not found";
-
-    ObjectDir *dir = TryLoadStandalone(path);
     ASSERT_NE(dir, nullptr) << "Failed to load main character";
 
-    HamCharacter *character = dynamic_cast<HamCharacter *>(dir);
-    if (!character) {
-        ObjDirItr<HamCharacter> it(dir, true);
-        if (it)
-            character = it;
-    }
+    HamCharacter *character = FindMainCharacter(dir);
     ASSERT_NE(character, nullptr) << "No HamCharacter found in main.milo_xbox";
 
-    FileMerger *fm = character->Find<FileMerger>("char.fm", false);
+    FileMerger *fm = FindCharacterFileMerger(character);
     ASSERT_NE(fm, nullptr) << "main.milo_xbox missing char.fm";
 
     character->SetOutfit("mo01");
@@ -522,6 +543,107 @@ TEST_F(AssetLoadingTest, MainCharacterFileMergerConfiguresOutfitAndVisemeByDefau
     EXPECT_FALSE(outfitMerger->mSelected.empty());
     EXPECT_FALSE(visemeMerger->mSelected.empty());
     EXPECT_NE(character->Find<ObjectDir>("viseme", false), nullptr);
+}
+
+TEST_F(AssetLoadingTest, BackupOutfitBonePointersMatchServoDirectory) {
+    ObjectDir *dir = LoadMainCharacterFromLibrary();
+    if (!dir)
+        GTEST_SKIP() << "char/main not found";
+    ASSERT_NE(dir, nullptr) << "Failed to load main character";
+
+    HamCharacter *character = FindMainCharacter(dir);
+    ASSERT_NE(character, nullptr) << "No HamCharacter found in main.milo_xbox";
+
+    FileMerger *fm = FindCharacterFileMerger(character);
+    ASSERT_NE(fm, nullptr) << "main.milo_xbox missing char.fm";
+
+    // HamCharacter::PostLoad starts async outfit loading via the organizer.
+    // In the game, TheLoadMgr is polled every frame to drain these. In tests,
+    // we force-release the FileMerger from the organizer so sync StartLoad works.
+    fm->ForceReleaseOrganizer();
+
+    // North-star regression: backup outfits should collapse mesh bone pointers
+    // onto the same animated transforms that bone.servo resolves in its own dir.
+    character->SetOutfit("lush01_bd01");
+    character->SetOutfitDir("char/main/backup");
+    character->StartLoad(false);
+
+    CharServoBone *servo = character->Find<CharServoBone>("bone.servo", true);
+    ASSERT_NE(servo, nullptr) << "main character missing bone.servo after outfit merge";
+    ASSERT_NE(servo->Dir(), nullptr) << "bone.servo should resolve against a character dir";
+
+    int skinnedMeshes = CountSkinnedMeshes(character);
+    ASSERT_GT(skinnedMeshes, 0) << "Expected skinned meshes after backup outfit merge";
+
+    int checkedBones = 0;
+    int unresolvedBones = 0;
+    int mismatches = 0;
+    int logged = 0;
+
+    for (ObjDirItr<RndMesh> it(character, true); it != nullptr; ++it) {
+        RndMesh *mesh = it;
+        if (mesh->NumBones() <= 0)
+            continue;
+
+        for (int i = 0; i < mesh->NumBones(); i++) {
+            RndTransformable *meshBone = mesh->BoneTransAt(i);
+            if (!meshBone)
+                continue;
+
+            RndTransformable *servoBone =
+                CharUtlFindBoneTrans(meshBone->Name(), servo->Dir());
+            if (!servoBone) {
+                unresolvedBones++;
+                if (logged < 8) {
+                    printf(
+                        "  UNRESOLVED mesh='%s' bone[%d]='%s' meshDir='%s' servoDir='%s'\n",
+                        mesh->Name(),
+                        i,
+                        meshBone->Name(),
+                        meshBone->Dir() ? meshBone->Dir()->Name() : "(null)",
+                        servo->Dir() ? servo->Dir()->Name() : "(null)"
+                    );
+                    logged++;
+                }
+                continue;
+            }
+
+            checkedBones++;
+            if (servoBone != meshBone) {
+                mismatches++;
+                if (logged < 8) {
+                    printf(
+                        "  MISMATCH mesh='%s' bone[%d]='%s' meshPtr=%p servoPtr=%p "
+                        "meshDir='%s' servoDir='%s'\n",
+                        mesh->Name(),
+                        i,
+                        meshBone->Name(),
+                        (void *)meshBone,
+                        (void *)servoBone,
+                        meshBone->Dir() ? meshBone->Dir()->Name() : "(null)",
+                        servoBone->Dir() ? servoBone->Dir()->Name() : "(null)"
+                    );
+                    logged++;
+                }
+            }
+        }
+    }
+
+    printf(
+        "  backup outfit pointer audit: skinnedMeshes=%d checkedBones=%d unresolved=%d "
+        "mismatches=%d\n",
+        skinnedMeshes,
+        checkedBones,
+        unresolvedBones,
+        mismatches
+    );
+
+    ASSERT_GT(checkedBones, 20)
+        << "Need enough mesh bones resolved to make the parity check meaningful";
+    EXPECT_EQ(unresolvedBones, 0)
+        << "Every skinned mesh bone should resolve from the servo directory";
+    EXPECT_EQ(mismatches, 0)
+        << "Skinned mesh bones should point at the same RndTransformables as bone.servo";
 }
 
 // ============================================================================

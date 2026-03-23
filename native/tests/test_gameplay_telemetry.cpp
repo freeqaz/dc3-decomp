@@ -101,7 +101,7 @@ protected:
             return;
         }
         std::string script = GetScriptDir() + "/ymca.txt";
-        sResult = RunWithTelemetry(3000, script.c_str(), 180);
+        sResult = RunWithTelemetry(9050, script.c_str(), 180);
         sSamples = ParseTelemetry(sResult.output);
         sRanEngine = true;
     }
@@ -471,4 +471,43 @@ TEST_F(GameplayTelemetryTest, Player0SongAnimationReady) {
         << "p0SongAnim was never > -1 during gameplay. "
         << "HamCharacter::SongAnimation() returns -1 (Driver has idle clip, blocking song mode). "
         << "On Xbox, the Driver clip is cleared when entering song animation mode.";
+}
+
+TEST_F(GameplayTelemetryTest, MergeMovesEnabledDuringGameplay) {
+    bool sawGameplay = false;
+    for (auto &s : sSamples) {
+        if (s.getString("state") != "playing") continue;
+        if (s.getFloat("beat") <= 0.0f) continue;
+        if (s.getInt("clipDir", 0) != 1) continue;
+        sawGameplay = true;
+        EXPECT_EQ(s.getInt("mergeMoves", 0), 1)
+            << "merge_moves dropped out of routine-builder mode at frame " << s.frame;
+    }
+    if (!sawGameplay) {
+        GTEST_SKIP() << "No post-intro gameplay samples with clip data available";
+    }
+}
+
+TEST_F(GameplayTelemetryTest, SongDriverLayersStayLiveAfterIntro) {
+    const TelemetrySample *firstBad = nullptr;
+    bool sawGameplay = false;
+    for (auto &s : sSamples) {
+        if (s.getString("state") != "playing") continue;
+        if (s.getFloat("beat") <= 0.0f) continue;
+        if (s.getInt("clipDir", 0) != 1) continue;
+        if (s.getInt("p0", 0) != 1) continue;
+        sawGameplay = true;
+        if (s.getInt("charClipLayers") <= 0 || s.getInt("p0SongAnim") <= 0) {
+            firstBad = &s;
+            break;
+        }
+    }
+    if (!sawGameplay) {
+        GTEST_SKIP() << "No post-intro gameplay samples with player 0 clip data available";
+    }
+    ASSERT_EQ(firstBad, nullptr)
+        << "Player 0 song layers disappeared after intro at frame " << firstBad->frame
+        << " beat=" << firstBad->getFloat("beat")
+        << " charClipLayers=" << firstBad->getInt("charClipLayers")
+        << " p0SongAnim=" << firstBad->getInt("p0SongAnim");
 }

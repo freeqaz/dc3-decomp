@@ -1619,6 +1619,7 @@ if(BUILD_TESTS)
         tests/test_dta_parser.cpp
         tests/test_movegraph.cpp
         tests/test_dta_flow.cpp
+        src/char/CharTwistSolver.cpp
         ${DC3_ENGINE_SOURCES}
         ${DC3_NATIVE_CORE_SOURCES}
         ${DC3_GFX_SOURCES}

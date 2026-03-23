@@ -277,7 +277,9 @@ bool WebAssetsFetchSync(const char *memfsPath) {
     char url[512];
     snprintf(url, sizeof(url), "/api/file/%s", rel);
 
+#ifdef DEBUG_LOGS
     printf("WebAssets: on-demand fetch %s -> %s\n", url, memfsPath);
+#endif
 
     // Use synchronous XHR to fetch the file, then write to MEMFS via FS API.
     // Note: synchronous XHR cannot set responseType="arraybuffer" in browsers,
@@ -320,10 +322,8 @@ bool WebAssetsFetchSync(const char *memfsPath) {
         }
     }, url, memfsPath);
 
-    if (result) {
-        printf("WebAssets: fetched on-demand %s (%s)\n", rel, memfsPath);
-    } else {
-        printf("WebAssets: FAILED on-demand fetch %s\n", rel);
+    if (!result) {
+        fprintf(stderr, "WebAssets: FAILED on-demand fetch %s\n", rel);
     }
     return result != 0;
 }

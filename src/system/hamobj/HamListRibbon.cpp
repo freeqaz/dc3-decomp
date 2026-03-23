@@ -447,7 +447,7 @@ void HamListRibbon::DrawRibbon(
             *(Vector3 *)&elem->mPosX = pos;
 
             float alpha = GetLabelTotalAlpha();
-            *(float *)&elem->mData = alpha;
+            memcpy(&elem->mData, &alpha, sizeof(float));
 
             Hmx::Color *color = &sBigColor;
             if (state.mBigScale == 0.0f) {

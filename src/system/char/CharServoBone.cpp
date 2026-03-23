@@ -63,6 +63,13 @@ BEGIN_LOADS(CharServoBone)
 END_LOADS
 
 void CharServoBone::Poll() {
+#ifdef HX_NATIVE
+    { static int sServoPollLog = 0;
+      if (sServoPollLog++ < 5)
+        fprintf(stderr, "CharServoBone::Poll '%s' meshes=%d bones=%d start=%p totalSize=%d\n",
+                Name(), (int)mMeshes.size(), (int)mBones.size(), (void*)mStart, mTotalSize);
+    }
+#endif
     if (!mMeshes.empty()) {
         PoseMeshes();
         Character *me = Character::Current();

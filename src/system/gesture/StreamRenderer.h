@@ -146,14 +146,8 @@ protected:
     float mCrewPhotoBlurWidth; // 0x184
     float mCrewPhotoBlurIterations; // 0x188
     float mCrewPhotoBackgroundBrightness; // 0x18c
-    float mCrewPhotoPlayer0Detected; // 0x190
-    float mCrewPhotoPlayer1Detected; // 0x194
-    float mCrewPhotoPlayer2Detected; // 0x198
-    float mCrewPhotoPlayer3Detected; // 0x19c
-    float mCrewPhotoPlayer4Detected; // 0x1a0
-    float mCrewPhotoPlayer5Detected; // 0x1a4
-    float mPinkPlayer; // 0x1a8
-    float mBluePlayer; // 0x1ac
+    Hmx::Color mCrewPhotoPlayerDetected1; // 0x190
+    Hmx::Color mCrewPhotoPlayerDetected2; // 0x1a0
     Vector4 mCrewPhotoPlayerCenters[6]; // 0x1b0
     Vector3DESmoother mSmoothers[6]; // 0x210
 };
