@@ -289,12 +289,12 @@ namespace {
     void SmartGlassInit();
 
     void DtaToJsonHelper(HJSONWRITER__ *writer, const DataArray *arr) {
-        short count = *(short*)((char*)arr + 8);
+        short count = arr->Size();
         if (count != 0 && count > 0) {
             for (int i = 0; i < count; i++) {
                 DataNode& nodeRef = arr->Node(i);
                 DataNode* node = &nodeRef;
-                unsigned int type = *(unsigned int*)((char*)node + 4);
+                unsigned int type = (unsigned int)node->Type();
 
                 if (type >= 1) {
                     switch (type) {

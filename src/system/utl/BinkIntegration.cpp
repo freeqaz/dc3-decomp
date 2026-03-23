@@ -161,8 +161,20 @@ unsigned int BinkFileGetBufferSize(BINKIO *, unsigned int size) {
 }
 
 void BinkFileSetInfo(BINKIO *file, void *buf, unsigned int size, unsigned int, unsigned int fileFlags) {
-    char *p = (char *)file;
     unsigned int aligned = size & 0xFFFF8000;
+#ifdef HX_NATIVE
+    // Use struct members directly — raw PPC offsets are wrong on LP64
+    // (pointers are 8 bytes, so field offsets differ from the 32-bit layout)
+    file->pBuffer = (unsigned char *)buf;
+    file->pBufEnd = (unsigned char *)buf + aligned;
+    file->pBufPos = (unsigned char *)buf;
+    file->pBufBack = (unsigned char *)buf;
+    file->iBufEmpty = aligned;
+    file->BufSize = aligned;
+    file->bytesAvail = 0;
+    file->fileFlags = fileFlags;
+#else
+    char *p = (char *)file;
     *(void **)(p + 0x88) = buf;
     *(unsigned int *)(p + 0x8c) = (int)buf + aligned;
     *(void **)(p + 0x90) = buf;
@@ -171,6 +183,7 @@ void BinkFileSetInfo(BINKIO *file, void *buf, unsigned int size, unsigned int, u
     *(unsigned int *)(p + 0x60) = aligned;
     *(unsigned int *)(p + 0x6c) = 0;
     *(unsigned int *)(p + 0xa0) = fileFlags;
+#endif
 }
 
 void BinkFileClose(BINKIO *bink) {

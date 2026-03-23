@@ -397,6 +397,44 @@ def check_ptrcast(node: Node, source: bytes) -> list[tuple[str, str, str, str]]:
                 f"Pointer expression cast to {cast_type} — truncates from 8 to 4 bytes on LP64. "
                 "Use (intptr_t) or (uintptr_t)."
             ))
+            continue
+
+        # ── Rule: ptr_int_arithmetic ──────────────────────────────────
+        # Detect (int)expr or (unsigned int)expr where expr is pointer-like
+        # AND the cast result is used in arithmetic (+/-).
+        # Pattern: ((int)ptr_expr + offset) — always wrong on LP64.
+        # The _expr_is_pointer check above catches direct pointer exprs,
+        # but misses cases where the value is a pointer-ish identifier
+        # (e.g., `buf`, `iter`) that _expr_is_pointer doesn't recognize.
+        # Here we use a broader check: if the cast-to-int is inside a
+        # binary +/- expression, AND the value looks pointer-like via
+        # _expr_could_be_pointer or involves address-of (&), flag it.
+        parent = n.parent
+        # Unwrap parenthesized expressions around the cast
+        while parent and parent.type == "parenthesized_expression":
+            parent = parent.parent
+        if parent and parent.type == "binary_expression":
+            op = parent.child_by_field_name("operator")
+            if op and node_text(op) in ("+", "-"):
+                # The value inside the cast must be pointer-like
+                # Use the broader _expr_could_be_pointer which catches
+                # identifiers like `buf`, `iter`, and Get*/Find* calls
+                val_txt = node_text(value)
+                # Also detect &expr (address-of wrapped in parens)
+                inner_val = value
+                while inner_val.type == "parenthesized_expression" and inner_val.named_children:
+                    inner_val = inner_val.named_children[0]
+                is_addr_of = (inner_val.type == "pointer_expression"
+                              and inner_val.child_by_field_name("operator")
+                              and node_text(inner_val.child_by_field_name("operator")) == "&")
+
+                if is_addr_of or _expr_could_be_pointer(value):
+                    results.append((
+                        n, "ptr_int_arithmetic", "high",
+                        f"Pointer cast to {cast_type} before arithmetic — "
+                        "truncates 8-byte address to 4 bytes on LP64. "
+                        "Use (intptr_t) or (uintptr_t)."
+                    ))
 
     return results
 
@@ -776,6 +814,123 @@ def check_structio(node: Node, source: bytes) -> list[tuple]:
             f"*(…*)((char*)expr + {offset_txt}) reads the wrong field on LP64 "
             f"because vtable pointers grow from 4→8 bytes, shifting all member "
             f"offsets. Use direct member access (obj->member) instead."
+        ))
+
+    # ── Rule 4: *(Type*)((char*)expr + variable) — variable byte-offset deref ──
+    #
+    # Same outer structure as Rule 3 (pointer_expression -> cast -> paren ->
+    # binary with char* side), but instead of a number_literal offset, the
+    # offset is a variable/expression. This catches computed struct access
+    # patterns that break when member offsets change on LP64.
+    #
+    # False-positive reduction:
+    # - Skip if variable name contains "size", "len", "sizeof", "stride"
+    #   (likely safe computed offsets, not struct member offsets)
+    # - Skip if inside an HX_NATIVE guard (already handled by caller)
+    # - Only flag when the variable name looks like an offset (contains
+    #   "ofs", "off", "offset", "idx") OR is a simple identifier
+    _SAFE_OFFSET_NAMES = {"size", "len", "sizeof", "stride", "count", "num",
+                          "length", "capacity", "pitch", "rowpitch", "bytes"}
+
+    for n in walk(node):
+        if n.type != "pointer_expression":
+            continue
+        op_node = n.child_by_field_name("operator")
+        if not op_node or node_text(op_node) != "*":
+            continue
+
+        argument = n.child_by_field_name("argument")
+        if argument is None:
+            continue
+
+        # Unwrap parens around the cast
+        inner = argument
+        while inner.type == "parenthesized_expression" and inner.named_children:
+            inner = inner.named_children[0]
+
+        # Must be a cast to a non-void pointer type
+        if inner.type != "cast_expression":
+            continue
+        outer_cast_type = _get_cast_type(inner)
+        if not _is_pointer_type(outer_cast_type):
+            continue
+        if outer_cast_type.strip() in ("void *", "void*"):
+            continue
+
+        # The cast's value must contain byte-pointer arithmetic with variable offset
+        cast_value = inner.child_by_field_name("value")
+        if cast_value is None:
+            continue
+
+        # Unwrap parens
+        arith_inner = cast_value
+        while arith_inner.type == "parenthesized_expression" and arith_inner.named_children:
+            arith_inner = arith_inner.named_children[0]
+
+        if arith_inner.type != "binary_expression":
+            continue
+
+        op = arith_inner.child_by_field_name("operator")
+        if not op or node_text(op) not in ("+", "-"):
+            continue
+
+        left = arith_inner.child_by_field_name("left")
+        right = arith_inner.child_by_field_name("right")
+        if not left or not right:
+            continue
+
+        # Identify byte-pointer side and offset side
+        byte_side = None
+        offset_side = None
+        if _is_byte_ptr_cast(left) or _expr_is_pointer(left):
+            byte_side, offset_side = left, right
+        elif _is_byte_ptr_cast(right) or _expr_is_pointer(right):
+            byte_side, offset_side = right, left
+
+        if not byte_side or not offset_side:
+            continue
+
+        # Verify byte_side involves char*/u8*/void* cast
+        byte_txt = node_text(byte_side)
+        if not any(kw in byte_txt for kw in
+                   ("char *", "char*", "void *", "void*",
+                    "u8 *", "u8*", "unsigned char *", "unsigned char*")):
+            continue
+
+        # Offset side must NOT be a number literal (that's Rule 3 territory)
+        if offset_side.type == "number_literal":
+            continue
+
+        # Skip lines already caught by Rule 3
+        line_num = n.start_point[0] + 1
+        if line_num in rule3_lines:
+            continue
+
+        # Get offset variable name for false-positive filtering
+        offset_txt = node_text(offset_side).strip()
+        offset_lower = offset_txt.lower()
+
+        # Skip safe-looking offset names (buffer size/length computations)
+        if any(safe in offset_lower for safe in _SAFE_OFFSET_NAMES):
+            continue
+
+        # Only flag if the offset looks like an offset variable or is simple
+        _OFFSET_KEYWORDS = {"ofs", "off", "offset", "idx"}
+        is_offset_like = any(kw in offset_lower for kw in _OFFSET_KEYWORDS)
+        is_simple_ident = offset_side.type == "identifier"
+        # Also accept field_expression (obj.offset, this->mOff)
+        is_field_access = offset_side.type == "field_expression"
+
+        if not (is_offset_like or is_simple_ident or is_field_access):
+            continue
+
+        results.append((
+            n, "variable_byte_offset_deref", "medium",
+            f"Variable byte-offset dereference via '{offset_txt}' — "
+            f"*(…*)((char*)expr + {offset_txt}) uses a computed offset that "
+            f"may assume ILP32 struct layout. On LP64, member offsets change "
+            f"due to pointer size (8 vs 4) and alignment padding. "
+            f"Use direct member access (obj->member) or offsetof()."
         ))
 
     for n in walk(node):

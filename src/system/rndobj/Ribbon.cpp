@@ -293,12 +293,12 @@ void RndRibbon::UpdateChase() {
             Interp(followPos, (const Vector3 &)xfmB->v, mFollowWeight, followPos);
         }
 
-        int numTransforms = ((int)&*mTransforms.end() - (int)&*mTransforms.begin()) / 0x44;
+        int numTransforms = ((intptr_t)&*mTransforms.end() - (intptr_t)&*mTransforms.begin()) / 0x44;
         unsigned int removeCount = 0;
         if (numTransforms != 0) {
             unsigned int k = 0;
             do {
-                if (currentTime - mDecay <= *(float *)(((int)&*mTransforms.begin() + (k + 0x40))))
+                if (currentTime - mDecay <= *(float *)(((intptr_t)&*mTransforms.begin() + (k + 0x40))))
                     break;
                 removeCount++;
                 k += 0x44;
@@ -312,7 +312,7 @@ void RndRibbon::UpdateChase() {
                 memcpy(&mTransforms[dstIdx], &mTransforms[srcIdx], 0x44);
                 srcIdx++;
                 dstIdx++;
-                numTransforms = ((int)&*mTransforms.end() - (int)&*mTransforms.begin()) / 0x44;
+                numTransforms = ((intptr_t)&*mTransforms.end() - (intptr_t)&*mTransforms.begin()) / 0x44;
             } while (srcIdx < (unsigned int)numTransforms);
         }
 
@@ -323,7 +323,7 @@ void RndRibbon::UpdateChase() {
         memcpy(&newKey, &Transform::IDXfm(), 0x40);
         newKey.frame = 0.0f;
 
-        numTransforms = ((int)&*mTransforms.end() - (int)&*mTransforms.begin()) / 0x44;
+        numTransforms = ((intptr_t)&*mTransforms.end() - (intptr_t)&*mTransforms.begin()) / 0x44;
         if (numTransforms == 0) {
             newKey.frame = currentTime;
             newKey.value.v = followPos;
@@ -354,7 +354,7 @@ void RndRibbon::UpdateChase() {
     }
 
     // Orient each transform
-    int numTransforms = ((int)&*mTransforms.end() - (int)&*mTransforms.begin()) / 0x44;
+    int numTransforms = ((intptr_t)&*mTransforms.end() - (intptr_t)&*mTransforms.begin()) / 0x44;
     int startIdx = numTransforms - newSegCount;
     if ((unsigned int)startIdx < (unsigned int)numTransforms) {
         float slerpFwdX = 0.0f;
@@ -458,7 +458,7 @@ void RndRibbon::UpdateChase() {
             }
             curIdx++;
             prevAngle = curAngle;
-        } while (curIdx < (unsigned int)(((int)&*mTransforms.end() - (int)&*mTransforms.begin()) / 0x44));
+        } while (curIdx < (unsigned int)(((intptr_t)&*mTransforms.end() - (intptr_t)&*mTransforms.begin()) / 0x44));
     }
 
     UpdateMesh();

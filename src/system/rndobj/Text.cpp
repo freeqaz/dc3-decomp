@@ -1627,10 +1627,49 @@ static const unsigned short *u16chr(const unsigned short *s, unsigned short ch) 
     }
     return nullptr;
 }
+
+// Tag name constants for ParseMarkup (2 bytes per char, matching unsigned short buffers)
+static const unsigned short kTag_sup[] = {'s', 'u', 'p', 0};
+static const unsigned short kTag_gtr[] = {'g', 't', 'r', 0};
+static const unsigned short kTag_it[] = {'i', 't', 0};
+static const unsigned short kTag_color[] = {'c', 'o', 'l', 'o', 'r', 0};
+static const unsigned short kTag_hash[] = {'#', 0};
+static const unsigned short kTag_nobreak[] = {'n', 'o', 'b', 'r', 'e', 'a', 'k', 0};
+static const unsigned short kTag_alt[] = {'a', 'l', 't', 0};
+
+// Parse up to 'max_vals' space-separated decimal integers from a u16 string buffer.
+// Returns the number of values successfully parsed.
+static int u16_scan_ints(const unsigned short *s, int *vals, int max_vals) {
+    int count = 0;
+    while (count < max_vals) {
+        // skip spaces
+        while (*s == ' ' || *s == '\t')
+            s++;
+        if (*s == 0 || *s == '>')
+            break;
+        // parse optional sign + digits
+        bool neg = false;
+        if (*s == '-') {
+            neg = true;
+            s++;
+        }
+        if (*s < '0' || *s > '9')
+            break;
+        int v = 0;
+        while (*s >= '0' && *s <= '9') {
+            v = v * 10 + (*s - '0');
+            s++;
+        }
+        vals[count++] = neg ? -v : v;
+    }
+    return count;
+}
 #endif
 
+#ifndef HX_NATIVE
 static const wchar_t kEllipsisStr[] = L"...";
 static const wchar_t kBreakChars[] = L" \t\n";
+#endif
 
 void RndText::FitTextJust() {
     BuildFontMaps(true);
@@ -2014,7 +2053,11 @@ RndText::ParseMarkup(const unsigned short *str, StyleState &state, unsigned shor
 
     float fVar12;
     auto& _ref0 = mStyles;
+#ifdef HX_NATIVE
+    if (WStrniCmp(cur, kTag_sup, 3) == 0) {
+#else
     if (WStrniCmp(cur, (const unsigned short *)L"sup", 3) == 0) {
+#endif
         cur += 3;
         if (isClosing) {
             fVar12 = state.mStyle->mSize;
@@ -2023,7 +2066,11 @@ RndText::ParseMarkup(const unsigned short *str, StyleState &state, unsigned shor
         }
         goto set_size;
     }
+#ifdef HX_NATIVE
+    else if (WStrniCmp(cur, kTag_gtr, 3) == 0) {
+#else
     else if (WStrniCmp(cur, (const unsigned short *)L"gtr", 3) == 0) {
+#endif
         cur += 3;
         Style *style = state.mStyle;
         float scale;
@@ -2039,7 +2086,11 @@ RndText::ParseMarkup(const unsigned short *str, StyleState &state, unsigned shor
         }
         state.mZOffset = zOff;
     }
+#ifdef HX_NATIVE
+    else if (WStrniCmp(cur, kTag_it, 2) == 0) {
+#else
     else if (WStrniCmp(cur, (const unsigned short *)L"it", 2) == 0) {
+#endif
         cur += 2;
         if (isClosing) {
             state.mItalics = state.mStyle->mItalics;
@@ -2047,7 +2098,11 @@ RndText::ParseMarkup(const unsigned short *str, StyleState &state, unsigned shor
             state.mItalics = state.mStyle->mItalics + 0.1f;
         }
     }
+#ifdef HX_NATIVE
+    else if (WStrniCmp(cur, kTag_color, 5) == 0) {
+#else
     else if (WStrniCmp(cur, (const unsigned short *)L"color", 5) == 0) {
+#endif
         cur += 5;
         if (isClosing) {
                         state.mTextColor = state.mStyle->mTextColor;
@@ -2055,20 +2110,38 @@ RndText::ParseMarkup(const unsigned short *str, StyleState &state, unsigned shor
             int r = 0, g = 0, b = 0;
             int a = (int)(state.mTextColor.alpha * 255.999f);
             cur++;
+#ifdef HX_NATIVE
+            int rgba[4] = {0, 0, 0, a};
+            u16_scan_ints(cur, rgba, 4);
+            r = rgba[0]; g = rgba[1]; b = rgba[2]; a = rgba[3];
+#else
             swscanf((const wchar_t *)cur, L"%d %d %d %d", &r, &g, &b, &a);
+#endif
             state.mTextColor.blue = (float)b * (1.0f / 255.0f);
             state.mTextColor.green = (float)g * (1.0f / 255.0f);
             state.mTextColor.red = (float)r * (1.0f / 255.0f);
             state.mTextColor.alpha = (float)a * (1.0f / 255.0f);
         }
     }
+#ifdef HX_NATIVE
+    else if (WStrniCmp(cur, kTag_hash, 2) == 0) {
+#else
     else if (WStrniCmp(cur, (const unsigned short *)L"#", 2) == 0) {
+#endif
         cur += 2;
         int code = 0x3f;
+#ifdef HX_NATIVE
+        u16_scan_ints(cur, &code, 1);
+#else
         swscanf((const wchar_t *)cur, L"%d", &code);
+#endif
         ch = (unsigned short)code;
     }
+#ifdef HX_NATIVE
+    else if (WStrniCmp(cur, kTag_nobreak, 7) == 0) {
+#else
     else if (WStrniCmp(cur, (const unsigned short *)L"nobreak", 7) == 0) {
+#endif
         cur += 7;
         if (isClosing) {
             state.brk = true;
@@ -2076,7 +2149,11 @@ RndText::ParseMarkup(const unsigned short *str, StyleState &state, unsigned shor
             state.brk = false;
         }
     }
+#ifdef HX_NATIVE
+    else if (WStrniCmp(cur, kTag_alt, 3) == 0) {
+#else
     else if (WStrniCmp(cur, (const unsigned short *)L"alt", 3) == 0) {
+#endif
         cur += 3;
         bool bBlacklight = false;
         unsigned int styleIdx = 1;
@@ -2409,7 +2486,7 @@ float RndText::ComputeCharWidthsForText(String str) {
 
 void RndText::FontMap3d::IncrementDisplayableChars(unsigned short us) {
     RndFont3d::CharInfo *info = mFont->GetCharInfo(us);
-    if (info != nullptr && *(int *)((char *)info + 0x30) != 0) {
+    if (info != nullptr && info->mMesh != nullptr) {
         mDisplayableChars++;
     }
 }

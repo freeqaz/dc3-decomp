@@ -165,6 +165,8 @@ void AllocInfoInit() {
         if (dst) {
             memset(dst, 0, 0x220008);
             trie = (Trie *)dst;
+            // LP64-safe: 0x220000 = 0x20000 nodes * 0x11 bytes/node (byte-level
+            // memory pool layout, not a struct member offset — no pointer fields)
             *(int *)((char *)dst + 0x220000) = 1;
         } else {
             trie = nullptr;

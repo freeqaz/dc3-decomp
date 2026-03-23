@@ -858,10 +858,7 @@ void LiveCameraInput::NuiAudioErrorCallback(HRESULT hr) {
     }
 }
 
-// Access SpeechMgr::mVoiceDirection at offset 0x44 (private member)
-static inline int &SpeechMgrVoiceDirection(SpeechMgr *mgr) {
-    return *(int *)((char *)mgr + 0x44);
-}
+// SpeechMgr::mVoiceDirection — use public getter/setter instead of raw byte offset
 
 void LiveCameraInput::NuiAudioDataCallback(NUIAUDIO_RESULTS *results) {
     if (!sInstance)
@@ -885,7 +882,7 @@ void LiveCameraInput::NuiAudioDataCallback(NUIAUDIO_RESULTS *results) {
         } else {
             goto checkSide;
         }
-        SpeechMgrVoiceDirection(sInstance->mSpeechMgr) = 0;
+        sInstance->mSpeechMgr->SetVoiceDirection(0);
         return;
     } else {
         if (side != 0) {
@@ -894,11 +891,11 @@ void LiveCameraInput::NuiAudioDataCallback(NUIAUDIO_RESULTS *results) {
         }
     checkSide:
         if (side == 10) {
-            SpeechMgrVoiceDirection(sInstance->mSpeechMgr) = 0;
+            sInstance->mSpeechMgr->SetVoiceDirection(0);
             return;
         }
         if (side == -10) {
-            SpeechMgrVoiceDirection(sInstance->mSpeechMgr) = 1;
+            sInstance->mSpeechMgr->SetVoiceDirection(1);
         }
     }
 }

@@ -2694,10 +2694,9 @@ void HamDirector::OnPopulateMoves() {
 
     gMoveMergeMap.clear();
 
-    ObjVector<FileMerger::Merger> *mergers =
-        (ObjVector<FileMerger::Merger> *)((char *)mMoveMerger.Ptr() + 0x40);
-    if (mergers->begin() != mergers->end()) {
-        mergers->erase(mergers->begin(), mergers->end());
+    ObjVector<FileMerger::Merger> &mergers = mMoveMerger->Mergers();
+    if (mergers.begin() != mergers.end()) {
+        mergers.erase(mergers.begin(), mergers.end());
     }
 
     int numKeys = moveInstSymKeys->size();
@@ -2768,7 +2767,7 @@ void HamDirector::OnPopulateMoves() {
                     merger.mPreClear = true;
                     merger.mSelected = fp;
                     merger.mForceReload = true;
-                    mergers->push_back(merger);
+                    mergers.push_back(merger);
                     gMoveMergeMap[transName]++;
                 }
             }
@@ -2785,7 +2784,7 @@ void HamDirector::OnPopulateMoves() {
                 merger.mPreClear = true;
                 merger.mSelected = fp;
                 merger.mForceReload = true;
-                mergers->push_back(merger);
+                mergers.push_back(merger);
                 gMoveMergeMap[clipName]++;
             }
 
@@ -2803,7 +2802,7 @@ void HamDirector::OnPopulateMoves() {
                 merger.mPreClear = true;
                 merger.mSelected = fp;
                 merger.mForceReload = true;
-                mergers->push_back(merger);
+                mergers.push_back(merger);
                 gMoveMergeMap[hamMiloName]++;
             }
     }

@@ -37,6 +37,7 @@ public:
     RndOverlay *Overlay() const { return mOverlay; }
     bool Enabled() const { return mEnabled; }
     int VoiceDirection() const { return mVoiceDirection; }
+    void SetVoiceDirection(int dir) { mVoiceDirection = dir; }
 
 private:
     struct Grammar {

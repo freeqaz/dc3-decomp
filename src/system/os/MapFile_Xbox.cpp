@@ -243,7 +243,7 @@ void XboxMapFile::ReadLine(char *line, int size) {
 template <typename T>
 void InsertSort(int *keys, T *data, int count) {
     unsigned int *arr = (unsigned int *)data;
-    int offset = keys - (int *)arr;
+    ptrdiff_t offset = keys - (int *)arr;
     for (int i = 1; i < count; i++) {
         unsigned int savedVal = arr[i];
         int savedKey = keys[i];

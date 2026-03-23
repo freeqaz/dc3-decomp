@@ -151,6 +151,7 @@ public:
     int StartLoopMargin() const { return mStartLoopMargin; }
     int EndLoopMargin() const { return mEndLoopMargin; }
     PoseFatalities *GetPoseFatalities() const { return mPoseFatalities; }
+    RndPostProc *GetActivePostProc() const { return unk18c; }
 
     DataNode OnGetDancerVisemes(DataArray *);
 

@@ -555,12 +555,10 @@ int BustAMovePanel::RepsToNextPhrase() {
     int repsInPhrase;
 
     if (size != 0) {
-        int byteOfs = 0;
 loop_top:
-        beat -= *(int *)((char *)data + byteOfs) * 4;
+        beat -= data[count] * 4;
         if (beat >= 0) {
             count++;
-            byteOfs += 4;
             if (count < (unsigned int)size)
                 goto loop_top;
             goto default_reps;
@@ -1497,10 +1495,10 @@ void BustAMovePanel::SetUpSongStructure(Symbol s) {
     unsigned int size = mSongStructure.size();
     float totalBeats = 0.0f;
     if (size >= 2) {
-        int byteOfs = 4;
+        unsigned int idx = 1;
         do {
-            int val = *(int *)((char *)data + byteOfs);
-            byteOfs += 4;
+            int val = data[idx];
+            idx++;
             totalBeats += (float)val;
             size--;
         } while (1 < size);
@@ -1725,12 +1723,10 @@ void BustAMovePanel::Poll() {
         int songSize = (int)(mSongStructure.end() - mSongStructure.begin());
         int remainingBeat = beatInt;
         if (songSize != 0) {
-            int ofs = 0;
             do {
-                remainingBeat -= *(int *)((char *)data + ofs) * 4;
+                remainingBeat -= data[currentPhrase] * 4;
                 if (remainingBeat >= 0) {
                     currentPhrase++;
-                    ofs += 4;
                     if (currentPhrase < (unsigned int)songSize)
                         continue;
                 }
@@ -1738,7 +1734,6 @@ void BustAMovePanel::Poll() {
             } while (true);
         }
         if ((unsigned int)songSize != 0) {
-            int byteOfs = 0;
             for (int i = 0; i < songSize; i++) {
                 Hmx::Color color;
                 if ((int)currentPhrase == i) {
@@ -1751,9 +1746,8 @@ void BustAMovePanel::Poll() {
                 }
                 Vector2 elemPos((float)i * 0.02f + 0.1f, 0.08f);
                 graph->AddScreenString(
-                    MakeString("%d", *(int *)((char *)data + byteOfs)), elemPos, color
+                    MakeString("%d", data[i]), elemPos, color
                 );
-                byteOfs += 4;
             }
         }
     }

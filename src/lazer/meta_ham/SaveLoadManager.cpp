@@ -29,7 +29,7 @@ SaveLoadManager *TheSaveLoadMgr;
 
 SaveLoadManager::SaveLoadManager()
     : mActivated(0), mInitialLoadPending(1), mState(), mStateAtSelectStart(), mPadNum(-1), mActiveProfile(0), mCacheFileSize(0),
-      unk50(0), mCacheID(0), mCache(0), mData(0), mSongCacheWriteDisabled(0), mWaiting(0),
+      mSigninMask(0), mCacheID(0), mCache(0), mData(0), mSongCacheWriteDisabled(0), mWaiting(0),
       unk64(0), unk68(), mNeedsSave(0), mNeedsLoad(0), mLastChosenDeviceID(0),
       mDeviceIDState(0), mAction(0) {
     SetName("saveload_mgr", ObjectDir::Main());
@@ -1950,15 +1950,14 @@ set_state:
 DataNode SaveLoadManager::OnMsg(const SigninChangedMsg &msg) {
     static Symbol saveload_dialog_event("saveload_dialog_event");
 
-    // TODO: replace raw offset with proper member name once identified
-    *(int*)((char*)this + 0x50) = 0;
+    mSigninMask = 0;
 
     if (static_cast<int>(mState) <= 0x67) {
         return DataNode(0);
     }
 
     if (msg.GetMask() != 0 && ThePlatformMgr.HasPadNumsSigninChanged(msg.GetMask())) {
-        *(int*)((char*)this + 0x50) = msg.GetMask();
+        mSigninMask = msg.GetMask();
         TheDebug.Notify("SIGNOUT on pad not expected");
         SetState(kS_Abort);
     }

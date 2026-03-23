@@ -240,9 +240,9 @@ void XboxContentMgr::StartRefresh() {
                 int param = i == 4 || i == 5 ? 0xff : i;
                 void* dataPtr = &mXDatas[i];
 
-                if (i == 4) dataPtr = (void*)((char*)this + 0x84);
-                else if (i == 5) dataPtr = (void*)((char*)this + 0x88);
-                else if (i == 6) dataPtr = (void*)((char*)this + 0x8c);
+                if (i == 4) dataPtr = &mEnumHandles[4];
+                else if (i == 5) dataPtr = &mEnumHandles[5];
+                else if (i == 6) dataPtr = &mEnumHandles[6];
 
                 void* enumHandle = operator new(0x1c);
                 memset(enumHandle, 0, 0x1c);

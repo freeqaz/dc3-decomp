@@ -247,7 +247,7 @@ void RndSpline::SyncDeformedDummyCtrlPoints(int startIdx, int endIdx) const {
         if (unk145 && endIdx >= numPts - 2) {
             int lastOff = (numPts - 1) * 0x58;
             unk145 = false;
-            float *pLast = (float *)(lastOff + (int)&mDeformedCtrlPoints[0]);
+            float *pLast = (float *)(lastOff + (intptr_t)&mDeformedCtrlPoints[0]);
             float lastX = pLast[0];
             float prevX = pLast[-0x16];
             float lastZ = pLast[2];
@@ -262,8 +262,8 @@ void RndSpline::SyncDeformedDummyCtrlPoints(int startIdx, int endIdx) const {
             mDummyAfterEnd.mPos.x = mDummyAfter.mPos.x + (mDummyAfter.mPos.x - lastX2);
             mDummyAfterEnd.mPos.z = mDummyAfter.mPos.z + (mDummyAfter.mPos.z - lastZ2);
             mDummyAfterEnd.mRoll = mDummyAfter.mRoll;
-            *(bool *)(lastOff + (int)&mDeformedCtrlPoints[0] - 0x43) = true;
-            *(bool *)(lastOff + (int)&mDeformedCtrlPoints[0] + 0x15) = true;
+            *(bool *)(lastOff + (intptr_t)&mDeformedCtrlPoints[0] - 0x43) = true;
+            *(bool *)(lastOff + (intptr_t)&mDeformedCtrlPoints[0] + 0x15) = true;
         }
     }
 }

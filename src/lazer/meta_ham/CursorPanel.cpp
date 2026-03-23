@@ -47,8 +47,7 @@ void CursorPanel::Poll() {
 
         crownMat->SetDiffuseTex(miscArt);
 
-        Transform localXfm;
-        memcpy(&localXfm, ((char *)crownMat) + 0x74, 0x40);
+        Transform localXfm = crownMat->TexXfm();
 
         int skeletonId = TheGestureMgr->GetPlayerSkeletonID(playerIdx);
 
@@ -103,8 +102,7 @@ void CursorPanel::Poll() {
             localXfm.v.y = 2.0f;
         }
 
-        memcpy(((char *)crownMat) + 0x74, &localXfm, 0x40);
-        crownMat->MarkDirty(2);
+        crownMat->SetTexXfm(localXfm);
     }
 }
 

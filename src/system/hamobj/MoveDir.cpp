@@ -120,7 +120,7 @@ namespace {
 
     void DrawBeatLine(float, float, float, const Hmx::Color &);
 
-    float DrawPlayClip(float y, SkeletonClip *portClip, int clipAsInt) {
+    float DrawPlayClip(float y, SkeletonClip *portClip, intptr_t clipAsInt) {
         SkeletonClip *clip = (SkeletonClip *)clipAsInt;
         MILO_ASSERT(clip, 0x762);
         String str(clip->Name());
@@ -1746,7 +1746,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     // Draw play clip overlay if present
     SkeletonClip *playClip = mPlayClip;
     if (playClip) {
-        y = DrawPlayClip(y, playClip, (int)(SkeletonClip *)mPlayClip);
+        y = DrawPlayClip(y, playClip, (intptr_t)(SkeletonClip *)mPlayClip);
     }
 
     // Draw filter version name

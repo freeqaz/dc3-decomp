@@ -188,7 +188,7 @@ protected:
     HamProfile *mActiveProfile; // 0x40
     String mCacheName;
     int mCacheFileSize;
-    bool unk50;
+    int mSigninMask;
     CacheID *mCacheID; // 0x54
     Cache *mCache; // 0x58
     void *mData; // 0x5c

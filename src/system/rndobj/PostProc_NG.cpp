@@ -140,7 +140,7 @@ void NgPostProc::DoBloom() {
             RndOverlay *prevOverlay = sPostProcOverlay;
             if (overlay->Showing()) {
                 sPostProcOverlay = overlay;
-                const char *worldName = PathName(*(Hmx::Object**)(((char*)TheHamDirector)+0x198));
+                const char *worldName = PathName(TheHamDirector->GetActivePostProc());
                 float intensity = BloomIntensity();
                 int r = (int)(mBloomColor.red * 256.0f);
                 int g = (int)(mBloomColor.green * 256.0f);

@@ -2,6 +2,7 @@
 #include "Common_Xbox.h"
 #include "math/Rot.h"
 #include "os/Debug.h"
+#include "types.h"
 #include "xdk/xaudio2/xaudio2.h"
 
 FlangerEffect::FlangerEffect(IXAudioBatchAllocator *ix)
@@ -83,13 +84,13 @@ void FlangerEffect::Process(float *buf, int numSamples, int numChans) {
                 do {
                     float temp_f0_3 = sinf(phaseOffset[var_r28] + var_f26);
                     int temp_r11 = var_r22 + var_r28;
-                    int temp_r9 = (int)*var_r29;
+                    intptr_t temp_r9 = (intptr_t)*var_r29;
                     var_r28++;
                     int temp_r11_2 = temp_r11 * 4;
                     int temp_r8 = mWritePos;
-                    int temp_r7 = (int)var_r29[2];
+                    intptr_t temp_r7 = (intptr_t)var_r29[2];
                     var_r29++;
-                    float temp_f13_2 = *(float *)((int)buf + temp_r11_2);
+                    float temp_f13_2 = *(float *)((intptr_t)buf + temp_r11_2);
                     *(float *)(temp_r9 + temp_r25) = temp_f13_2;
                     float temp_f0_4 = (temp_f0_3 * (temp_f13 * var_f30 * temp_f29)) + (-((var_f30 * temp_f29) - temp_f31) * temp_f13);
                     float temp_f0_5;
@@ -111,18 +112,18 @@ void FlangerEffect::Process(float *buf, int numSamples, int numChans) {
                     float temp_f0_7 = temp_f0_6 - (float)temp_r10;
                     float temp_f11 = temp_f10 - (float)temp_r3;
                     int temp_r10_3 = (temp_r8 - temp_r3) + var_r22;
-                    *(float *)((int)buf + temp_r11_2) =
-                        *(float *)((((temp_r10_2 + 0x2580) % 9600) * 4) + temp_r9) * (temp_f31 - temp_f0_7) + *(float *)((int)buf + temp_r11_2);
+                    *(float *)((intptr_t)buf + temp_r11_2) =
+                        *(float *)((((temp_r10_2 + 0x2580) % 9600) * 4) + temp_r9) * (temp_f31 - temp_f0_7) + *(float *)((intptr_t)buf + temp_r11_2);
                     float temp_f0_8 =
-                        (*(float *)((((temp_r10_2 + 0x257F) % 9600) * 4) + temp_r9) * temp_f0_7 + *(float *)((int)buf + temp_r11_2)) * temp_f29;
-                    *(float *)((int)buf + temp_r11_2) = temp_f0_8;
-                    *(float *)((int)buf + temp_r11_2) =
+                        (*(float *)((((temp_r10_2 + 0x257F) % 9600) * 4) + temp_r9) * temp_f0_7 + *(float *)((intptr_t)buf + temp_r11_2)) * temp_f29;
+                    *(float *)((intptr_t)buf + temp_r11_2) = temp_f0_8;
+                    *(float *)((intptr_t)buf + temp_r11_2) =
                         *(float *)((((temp_r10_3 + 0x2580) % 9600) * 4) + temp_r7) * (temp_f31 - temp_f11) * mFeedbackFrac + temp_f0_8;
                     float temp_f0_9 =
-                        *(float *)((((temp_r10_3 + 0x257F) % 9600) * 4) + temp_r7) * temp_f11 * mFeedbackFrac + *(float *)((int)buf + temp_r11_2);
-                    *(float *)((int)buf + temp_r11_2) = temp_f0_9;
+                        *(float *)((((temp_r10_3 + 0x257F) % 9600) * 4) + temp_r7) * temp_f11 * mFeedbackFrac + *(float *)((intptr_t)buf + temp_r11_2);
+                    *(float *)((intptr_t)buf + temp_r11_2) = temp_f0_9;
                     *(float *)(temp_r7 + temp_r25) = temp_f0_9;
-                    *(float *)((int)buf + temp_r11_2) = *(float *)((int)buf + temp_r11_2) * temp_f23 - temp_f13_2;
+                    *(float *)((intptr_t)buf + temp_r11_2) = *(float *)((intptr_t)buf + temp_r11_2) * temp_f23 - temp_f13_2;
                 } while (var_r28 < numChans);
             }
             var_r22++;

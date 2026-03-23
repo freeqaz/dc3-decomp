@@ -27,8 +27,8 @@ bool RndXfmCache::GetXfms(
     const float *floats;
     unsigned int endIndex = startIndex + numBones;
     if ((endIndex > unk1b580)
-        || (((const RndMesh **)unk0)[startIndex] != mesh)
-        || (((const RndMesh **)unk0)[endIndex - 1] != mesh)) {
+        || (mMeshPtrs[startIndex] != mesh)
+        || (mMeshPtrs[endIndex - 1] != mesh)) {
         floats = nullptr;
         valid = false;
     } else {
@@ -66,7 +66,7 @@ bool RndXfmCache::CacheXfms(
         // Store mesh pointers (one per bone slot) and per-bone indices
         {
             int *indices = &unk19640[startIndex];
-            const RndMesh **meshPtrs = (const RndMesh **)(&unk0[startIndex]);
+            const RndMesh **meshPtrs = &mMeshPtrs[startIndex];
             if (numBones != 0) {
                 --indices;
                 unsigned int m = numBones;

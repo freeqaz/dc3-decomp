@@ -25,7 +25,7 @@ namespace {
         if (gReadHD) {
             return TheHDCache.ReadFail();
         }
-        return (int)(void*)0x1;
+        return 1;
     }
 }
 
