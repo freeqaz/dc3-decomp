@@ -302,6 +302,12 @@ public:
 
 #define DATA_UNHANDLED DataNode(kDataUnhandled, 0)
 
+#ifdef HX_NATIVE
+// Forward declaration for DTA context path tracing (defined in DataArray.cpp)
+class DataArray;
+void DataArray_LogAccess(const DataArray *arr, const char *method, int index);
+#endif
+
 /** An array of DataNodes. */
 class DataArray {
 private:
@@ -318,6 +324,10 @@ private:
     /** unused, supposedly node number in dtb, for debugging */
     short mDeprecated; // 0xE
 
+#ifdef HX_NATIVE
+    const char *mContextPath; // DTA context tracking for runtime validation
+#endif
+
     ~DataArray();
 
 public:
@@ -329,6 +339,14 @@ public:
     int Size() const { return mSize; }
     int Line() const { return mLine; }
     int RefCount() const { return mRefs; }
+
+#ifdef HX_NATIVE
+    void SetContextPath(const char *path) { mContextPath = path; }
+    const char *ContextPath() const { return mContextPath; }
+#else
+    void SetContextPath(const char *) {}
+    const char *ContextPath() const { return nullptr; }
+#endif
 
     int UncheckedInt(int i) const { return Node(i).UncheckedInt(); }
     Hmx::Object *UncheckedObj(int i) const { return Node(i).UncheckedObj(); }
@@ -354,14 +372,29 @@ public:
      * @param [in] i The node index.
      * @returns The resulting int.
      */
-    int Int(int i) const { return Node(i).Int(this); }
-    int Int(int i) { return Node(i).Int(this); }
+    int Int(int i) const {
+#ifdef HX_NATIVE
+        DataArray_LogAccess(this, "Int", i);
+#endif
+        return Node(i).Int(this);
+    }
+    int Int(int i) {
+#ifdef HX_NATIVE
+        DataArray_LogAccess(this, "Int", i);
+#endif
+        return Node(i).Int(this);
+    }
 
     /** Get the Symbol at the given node index.
      * @param [in] i The node index.
      * @returns The resulting Symbol.
      */
-    Symbol Sym(int i) const { return Node(i).Sym(this); }
+    Symbol Sym(int i) const {
+#ifdef HX_NATIVE
+        DataArray_LogAccess(this, "Sym", i);
+#endif
+        return Node(i).Sym(this);
+    }
 
     /** Get the literal Symbol at the given node index.
      * @param [in] i The node index.
@@ -374,8 +407,18 @@ public:
      * @param [in] i The node index.
      * @returns The resulting string.
      */
-    const char *Str(int i) const { return Node(i).Str(this); }
-    const char *Str(int i) { return Node(i).Str(this); }
+    const char *Str(int i) const {
+#ifdef HX_NATIVE
+        DataArray_LogAccess(this, "Str", i);
+#endif
+        return Node(i).Str(this);
+    }
+    const char *Str(int i) {
+#ifdef HX_NATIVE
+        DataArray_LogAccess(this, "Str", i);
+#endif
+        return Node(i).Str(this);
+    }
 
     /** Get the literal string at the given node index.
      * @param [in] i The node index.
@@ -388,8 +431,18 @@ public:
      * @param [in] i The node index.
      * @returns The resulting float.
      */
-    float Float(int i) const { return Node(i).Float(this); }
-    float Float(int i) { return Node(i).Float(this); }
+    float Float(int i) const {
+#ifdef HX_NATIVE
+        DataArray_LogAccess(this, "Float", i);
+#endif
+        return Node(i).Float(this);
+    }
+    float Float(int i) {
+#ifdef HX_NATIVE
+        DataArray_LogAccess(this, "Float", i);
+#endif
+        return Node(i).Float(this);
+    }
 
     /** Get the Hmx::Object at the given node index.
      * @param [in] i The node index.
@@ -704,3 +757,9 @@ extern DataArray *gCallStack[HANDLE_STACK_SIZE];
 extern DataArray **gCallStackPtr;
 extern DataFunc *gPreExecuteFunc;
 extern int gPreExecuteLevel;
+
+#ifdef HX_NATIVE
+// DTA context path tracing (enabled by DTA_TRACE env var)
+void DataArray_InitDtaTrace();
+void DataArray_LogAccess(const DataArray *arr, const char *method, int index);
+#endif

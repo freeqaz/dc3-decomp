@@ -331,7 +331,7 @@ protected:
     Song *mOfflineSong; // 0x36c
     std::set<Hmx::Object *> mRoutineBuilderObjects; // 0x370
 #ifdef HX_NATIVE
-    RndDir *mHudDir = nullptr;
+    PanelDir *mHudDir = nullptr;
 #endif
 };
 

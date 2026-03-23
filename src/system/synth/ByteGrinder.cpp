@@ -777,6 +777,194 @@ DataNode magicNumberGenerator(DataArray *da) {
     return DataNode(kDataInt, v);
 }
 
+#ifdef HX_NATIVE
+// ============================================================================
+// Native (non-DTA) implementation of GrindArray
+// Bypasses DTA scripting — directly implements the hash+op pipeline in C++.
+// The DTA version fails on x86_64 due to integer width/evaluation differences.
+// ============================================================================
+
+namespace {
+
+static const u32 kLcgMul = 0x19660D;
+static const u32 kLcgInc = 0x3C6EF35F;
+
+// --- Native op functions (u32 operand = bar[ix], u32 w = foo accumulator) ---
+
+static u8 nop0(u32 op, u32 w) { return u8(w ^ op); }
+static u8 nop1(u32 op, u32 w) { return u8(u8(w) + u8(op)); }
+static u8 nop2(u32 op, u32 w) { u32 bw=u8(w); u32 r=bw|(bw<<8); r>>=u8(op&7); return u8(r); }
+static u8 nop3(u32 op, u32 w) { u32 b=(op==0); u32 bw=u8(w); u32 r=bw|(bw<<8); r>>=b; return u8(r); }
+static u8 nop4(u32 op, u32 w) { u32 b=(op==0); u32 a=(u8(w)==0); u32 r=(a<<8)|a; r>>=b; return u8(r); }
+static u8 nop5(u32 op, u32 w) { u32 r=u8(~(w|w)); u32 s=(op<<29)>>29; r|=r<<8; r>>=s; return u8(r); }
+static u8 nop6(u32 op, u32 w) { return u8(!w ^ op); }
+static u8 nop7(u32 op, u32 w) { return u8((!w + op) & 0xFF); }
+static u8 nop8(u32 op, u32 w) { return u8(u8(w) + u8(op)) ^ u8(op); }
+static u8 nop9(u32 op, u32 w) { return u8(((u8(w) ^ op) + op) & 0xFF); }
+static u8 nop10(u32 op, u32 w) { u32 bw=u8(w); u32 r=bw|(bw<<8); r>>=!op; r^=op; return u8(r&0xFF); }
+static u8 nop11(u32 op, u32 w) { u32 bw=u8(w); u32 r=bw|(bw<<8); r>>=u8(op&7); r^=op; return u8(r&0xFF); }
+static u8 nop12(u32 op, u32 w) { u32 bw=u8(w); u32 r=bw|(bw<<8); r>>=u8(op&7); return u8(r+op); }
+static u8 nop13(u32 op, u32 w) { u32 bw=u8(w); u32 r=bw|(bw<<8); r>>=!op; return u8(r+op); }
+static u8 nop14(u32 op, u32 w) { u32 bw=u8(w); return u8(((bw>>1)|(bw<<7))+op); }
+static u8 nop15(u32 op, u32 w) { u32 bw=u8(w); return u8(((bw>>2)|(bw<<6))+op); }
+static u8 nop16(u32 op, u32 w) { u32 bw=u8(w); return u8(((bw>>3)|(bw<<5))+op); }
+static u8 nop17(u32 op, u32 w) { u32 bw=u8(w); return u8(((bw>>4)|(bw<<4))+op); }
+static u8 nop18(u32 op, u32 w) { u32 bw=u8(w); return u8(((bw>>5)|(bw<<3))+op); }
+static u8 nop19(u32 op, u32 w) { u32 bw=u8(w); return u8(((bw>>6)|(bw<<2))+op); }
+static u8 nop20(u32 op, u32 w) { u32 bw=u8(w); return u8(((bw>>7)|(bw<<1))+op); }
+static u8 nop21(u32 op, u32 w) { u32 b=u8(w); return u8((((b>>1)|(b<<7))^op)&0xFF); }
+static u8 nop22(u32 op, u32 w) { u32 b=u8(w); return u8((((b>>2)|(b<<6))^op)&0xFF); }
+static u8 nop23(u32 op, u32 w) { u32 b=u8(w); return u8((((b>>3)|(b<<5))^op)&0xFF); }
+static u8 nop24(u32 op, u32 w) { u32 b=u8(w); return u8((((b>>4)|(b<<4))^op)&0xFF); }
+static u8 nop25(u32 op, u32 w) { u32 b=u8(w); return u8((((b>>5)|(b<<3))^op)&0xFF); }
+static u8 nop26(u32 op, u32 w) { u32 b=u8(w); return u8((((b>>6)|(b<<2))^op)&0xFF); }
+static u8 nop27(u32 op, u32 w) { u32 b=u8(w); return u8((((b>>7)|(b<<1))^op)&0xFF); }
+static u8 nop28(u32 op, u32 w) { u32 b=u8(w); u32 r=(b>>5)|(b<<3); return u8(((r+op)^op)&0xFF); }
+static u8 nop29(u32 op, u32 w) { u32 b=u8(w); u32 r=(b>>3)|(b<<5); return u8(((r+op)^op)&0xFF); }
+static u8 nop30(u32 op, u32 w) { u32 b=u8(w); u32 r=(b>>3)|(b<<5); return u8(((r^op)+op)&0xFF); }
+static u8 nop31(u32 op, u32 w) { u32 b=u8(w); u32 r=(b>>5)|(b<<3); return u8(((r^op)+op)&0xFF); }
+static u8 nop32(u32 op, u32 w) { u32 v=u8(w); return u8(((v>>3)^0x1F|((v&7)<<5))^op); }
+static u8 nop33(u32 op, u32 w) { u32 v=u8(w)&0xFF; return u8(((v>>5)^7|((v&0x1F)<<3))^op); }
+static u8 nop34(u32 op, u32 w) { u32 v=u8(w); return u8(((v>>2)^0x3F|((v&3)<<6))^op); }
+static u8 nop35(u32 op, u32 w) { u32 v=u8(w); return u8(((v>>6)^3|((v&0x3F)<<2))^op); }
+static u8 nop36(u32 op, u32 w) { u32 b=u8(w); return u8((((b>>2)|((~b)<<6))^op)&0xFF); }
+static u8 nop37(u32 op, u32 w) { u32 b=u8(w); return u8((((b>>5)|((~b)<<3))^op)&0xFF); }
+static u8 nop38(u32 op, u32 w) { u32 b=u8(w); return u8((((b>>6)|((~b)<<2))^op)&0xFF); }
+static u8 nop39(u32 op, u32 w) { u32 b=u8(w); return u8((((b>>3)|((~b)<<5))^op)&0xFF); }
+static u8 nop40(u32 op, u32 w) { u32 v=u8(w); return u8((((v<<8)|(v^0x5Cu))>>6)^op); }
+static u8 nop41(u32 op, u32 w) { u32 v=u8(w); return u8(((u8(v>>2)^0x17)|((v<<6)&0xC0))^op); }
+static u8 nop42(u32 op, u32 w) { u32 v=u8(w); return u8((((v>>3)^0xB)|((v<<5)&0xE0))^op)&0xFF; }
+static u8 nop43(u32 op, u32 w) { u32 v=u8(w); return u8((((v>>5)^2)|((v&0x1F)<<3))^op)&0xFF; }
+static u8 nop44(u32 op, u32 w) { u32 v=u8(w); return u8((((v>>2)^0xD)|((v<<6)&0xC0))^op)&0xFF; }
+static u8 nop45(u32 op, u32 w) { u32 v=u8(w); return u8((u8((v>>3)^6)|u8((v&7)<<5))^op); }
+static u8 nop46(u32 op, u32 w) { u32 v=u8(w); return u8((u8((v>>4)^3)|u8((v<<4)&0xF0))^op); }
+static u8 nop47(u32 op, u32 w) { u32 v=u8(w); return u8((u8((v>>1)^0x1B)|u8((v&1)<<7))^op); }
+static u8 nop48(u32 op, u32 w) { u32 a=u8(w); return u8((((a>>4)^0x6u)|(((a<<4)&0xF0u)^0x5u))^op); }
+static u8 nop49(u32 op, u32 w) { u32 v=u8(w); return u8(((((v^0x63u)|((v<<8)^0x5Cu))>>3))^op); }
+static u8 nop50(u32 op, u32 w) { u32 v=u8(w); return u8((u8(((v<<3)&0xF8)^2)|u8((v>>5)^3))^op); }
+static u8 nop51(u32 op, u32 w) { u32 v=u8(w); return u8(((((v^0x63)|((v<<8)^0x5C))>>6))^op); }
+static u8 nop52(u32 op, u32 w) { u32 v=u8(w); return u8((u8((v>>1)^0x2e)|u8((v<<7)^0x1b))^op); }
+static u8 nop53(u32 op, u32 w) { u32 v=u8(w); return u8(((((v^0x5Cu)|((v<<8)^0x36u))>>7)^op)&0xFF); }
+static u8 nop54(u32 op, u32 w) { u32 v=u8(w); u32 p2=(v<<5)&0xE0; p2^=0x6; u32 p1=(v>>3)&0xFF; p1^=0xB; return u8((p1|p2)^op); }
+static u8 nop55(u32 op, u32 w) { u32 v=u8(w); return u8((u8(((v&0x1f)<<3)^1)|u8((v>>5)^2))^op); }
+static u8 nop56(u32 op, u32 w) { u32 v=u8(w); return u8((u8(((v&0xF)<<4)^6)|u8((v>>4)^3))^op); }
+static u8 nop57(u32 op, u32 w) { u32 v=u8(w); return u8(((((v^0x3Cu)|((v<<8)^0x65u))>>5))^op); }
+static u8 nop58(u32 op, u32 w) { u32 v=u8(w); return u8(((((v^0x65u)|((v<<8)^0x3Cu))>>6))^op); }
+static u8 nop59(u32 op, u32 w) { u32 v=u8(w); return u8(((((v^0x65u)|((v<<8)^0x3Cu))>>2))^op); }
+static u8 nop60(u32 op, u32 w) { u32 v=u8(w); return u8(((((v^0xFFu)|((v<<8)^0xAAu))>>4))^op); }
+// op61: DTA version swaps args (operand=Int(2), w=Int(1)). Our caller passes (bar[ix], foo).
+static u8 nop61(u32 op, u32 w) { u8 rw=(u8)op; u32 ro=w; u32 a=(rw>>3)^0x15; u32 b=((rw&7)<<5)^0x1f; return u8((a|b)^ro); }
+static u8 nop62(u32 op, u32 w) { u32 v=u8(w); return u8((u8((v>>5)^5)|u8(((v<<3)&0xF8)^7))^op); }
+static u8 nop63(u32 op, u32 w) { u32 v=u8(w); return u8(((((v^0xFFu)|((v<<8)^0xAFu))>>6))^op); }
+
+typedef u8 (*NativeOp)(u32, u32);
+static const NativeOp kAllOps[64] = {
+    nop0,  nop1,  nop2,  nop3,  nop4,  nop5,  nop6,  nop7,
+    nop8,  nop9,  nop10, nop11, nop12, nop13, nop14, nop15,
+    nop16, nop17, nop18, nop19, nop20, nop21, nop22, nop23,
+    nop24, nop25, nop26, nop27, nop28, nop29, nop30, nop31,
+    nop32, nop33, nop34, nop35, nop36, nop37, nop38, nop39,
+    nop40, nop41, nop42, nop43, nop44, nop45, nop46, nop47,
+    nop48, nop49, nop50, nop51, nop52, nop53, nop54, nop55,
+    nop56, nop57, nop58, nop59, nop60, nop61, nop62, nop63,
+};
+
+static void GeneratePermutation32(u32 seed, u32 outPerm[32]) {
+    bool usedUp[32];
+    memset(usedUp, 0, sizeof(usedUp));
+    for (int i = 0; i < 32; i++) {
+        u32 idx;
+        for (;;) {
+            seed = seed * kLcgMul + kLcgInc;
+            idx = (seed >> 2) & 0x1F;
+            if (!usedUp[idx]) { usedUp[idx] = true; break; }
+        }
+        outPerm[i] = idx;
+    }
+}
+
+static void BuildHashMapping5(u32 seed, u32 mapping[256]) {
+    for (int i = 0; i < 256; i++) {
+        mapping[i] = (seed >> 3) & 0x1F;
+        seed = seed * kLcgMul + kLcgInc;
+    }
+}
+
+static void BuildHashMapping6(u32 seed, u32 mapping[256]) {
+    for (int i = 0; i < 256; i++) {
+        mapping[i] = (seed >> 2) & 0x3F;
+        seed = seed * kLcgMul + kLcgInc;
+    }
+}
+
+} // anonymous namespace
+
+void ByteGrinder::GrindArray(
+    long seedA, long seedB, unsigned char *arrayToGrind, int arrayLen, int moggVersion
+) {
+    int encMethod = GetEncMethod(moggVersion);
+
+    // Build hash mapping tables (ma seeded with seedA, za seeded with seedB)
+    u32 hashMap5[256], hashMap6[256];
+    BuildHashMapping5((u32)seedA, hashMap5);
+    BuildHashMapping6((u32)seedB, hashMap6);
+
+    // Reproduce Init's fixed permutation: O-number → op function index
+    // Init uses getRandomSequence32A seeded 0xD5 (ops 0-31) and 0x23E (ops 32-63)
+    u32 initPerm0[32], initPerm1[32];
+    GeneratePermutation32(0xD5, initPerm0);
+    GeneratePermutation32(0x23E, initPerm1);
+
+    int oNumberToOpIdx[64];
+    memset(oNumberToOpIdx, -1, sizeof(oNumberToOpIdx));
+    for (int i = 0; i < 32; i++) {
+        oNumberToOpIdx[initPerm0[i]] = i;
+        oNumberToOpIdx[initPerm1[i] + 32] = 32 + i;
+    }
+
+    // Generate GrindArray's per-call op permutation (ya seeded with seedB, then seedA)
+    u32 grindPerm[32];
+    NativeOp caseToOp[64];
+    memset(caseToOp, 0, sizeof(caseToOp));
+
+    GeneratePermutation32((u32)seedB, grindPerm);
+    for (int i = 0; i < 32; i++) {
+        int opIdx = oNumberToOpIdx[grindPerm[i]];
+        if (opIdx >= 0) caseToOp[i] = kAllOps[opIdx];
+    }
+
+    if (encMethod != 0) {
+        GeneratePermutation32((u32)seedA, grindPerm);
+        for (int i = 0; i < 32; i++) {
+            int opIdx = oNumberToOpIdx[grindPerm[i] + 32];
+            if (opIdx >= 0) caseToOp[32 + i] = kAllOps[opIdx];
+        }
+    }
+
+    u32 *hashMap = (encMethod != 0) ? hashMap6 : hashMap5;
+    u32 maxCase = (encMethod != 0) ? 64u : 32u;
+
+    // Grind: for each key byte, apply the permuted ops driven by hash of each array element
+    for (int i = 0; i < arrayLen; i++) {
+        u32 foo = arrayToGrind[i];
+        for (int ix = 0; ix < 0x10; ix++) {
+            u32 barVal = arrayToGrind[ix];
+            u32 hash = hashMap[barVal & 0xFF];
+            if (hash < maxCase && caseToOp[hash])
+                foo = caseToOp[hash](barVal, foo);
+        }
+        arrayToGrind[i] = (unsigned char)(foo & 0xFF);
+    }
+}
+
+int magicNumberGeneratorNative(int idx, int mode) {
+    int magic = (mode == 2) ? 0x36363636 : 0x5c5c5c5c;
+    int v = (idx ^ magic) * 0x19660d + 0x3c6ef35f;
+    if (mode == 1) v = v * 0x19660d + 0x3c6ef35f;
+    return v;
+}
+
+#else // !HX_NATIVE
 void ByteGrinder::GrindArray(
     long seedA, long seedB, unsigned char *arrayToGrind, int arrayLen, int moggVersion
 ) {
@@ -841,6 +1029,7 @@ void ByteGrinder::GrindArray(
     }
     mainScriptArray->Release();
 }
+#endif // HX_NATIVE
 
 void ByteGrinder::Init() {
     char functionName[0x100];

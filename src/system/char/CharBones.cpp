@@ -924,10 +924,20 @@ rotate_quat:
                 src++;
                 float dz = dquat->z;
                 float dy = dquat->y;
+#ifdef HX_NATIVE
+                // Native fix: PPC decomp has w-component sign negated (decompiler
+                // register mis-mapping). Use standard quaternion multiply: dst = src * dst
+                float nw = sq.w*dw - sq.x*dx - sq.y*dy - sq.z*dz;
+                float nx = sq.w*dx + sq.x*dw + sq.y*dz - sq.z*dy;
+                float ny = sq.w*dy - sq.x*dz + sq.y*dw + sq.z*dx;
+                float nz = sq.w*dz + sq.x*dy - sq.y*dx + sq.z*dw;
+                dquat->x = nx; dquat->y = ny; dquat->z = nz; dquat->w = nw;
+#else
                 dquat->w = -(-(dy * sq.y - (dw * sq.w - dx * sq.x)) - dz * sq.z);
                 dquat->z = -(dx * sq.y - ((dy * sq.x + (dz * sq.w + dw * sq.z))));
                 dquat->y = -(dz * sq.x - (dw * sq.y + dy * sq.w + dx * sq.z));
                 dquat->x = -(dy * sq.z - (dw * sq.x + dz * sq.y + dx * sq.w));
+#endif
                 if (src >= src_end) goto rotate_rot;
                 db++;
                 if (db >= db_end) goto complain;
@@ -949,10 +959,19 @@ rotate_quat:
                 src++;
                 float dz = dquat->z;
                 float dy = dquat->y;
+#ifdef HX_NATIVE
+                // Native fix: same w-sign decompiler artifact as ByteQuat path
+                float nw = sq.w*dw - sq.x*dx - sq.y*dy - sq.z*dz;
+                float nx = sq.w*dx + sq.x*dw + sq.y*dz - sq.z*dy;
+                float ny = sq.w*dy - sq.x*dz + sq.y*dw + sq.z*dx;
+                float nz = sq.w*dz + sq.x*dy - sq.y*dx + sq.z*dw;
+                dquat->x = nx; dquat->y = ny; dquat->z = nz; dquat->w = nw;
+#else
                 dquat->w = -(-(dy * sq.y - (dw * sq.w - dx * sq.x)) - dz * sq.z);
                 dquat->z = -(dx * sq.y - (dy * sq.x + dz * sq.w + dw * sq.z));
                 dquat->y = -(dz * sq.x - (dw * sq.y + dy * sq.w + dx * sq.z));
                 dquat->x = -(dy * sq.z - (dw * sq.x + dz * sq.y + dx * sq.w));
+#endif
                 if (src >= src_end) goto rotate_rot;
                 db++;
                 if (db >= db_end) goto complain;
@@ -1117,10 +1136,22 @@ rotateto_quat:
                 float dz = dquat->z;
                 float dw = dquat->w;
                 float dy = dquat->y;
+#ifdef HX_NATIVE
+                // Native fix: PPC decomp has multiple decompiler register mis-mappings
+                // in compressed paths. Use standard quaternion multiply: dst = src * dst
+                // where src = (sx, sy, sq.z, sq.w) after scaling/interpolation
+                { float sw_ = sq.w, sx_ = sx, sy_ = sy, sz_ = sq.z;
+                float nw = sw_*dw - sx_*dx - sy_*dy - sz_*dz;
+                float nx = sw_*dx + sx_*dw + sy_*dz - sz_*dy;
+                float ny = sw_*dy - sx_*dz + sy_*dw + sz_*dx;
+                float nz = sw_*dz + sx_*dy - sy_*dx + sz_*dw;
+                dquat->x = nx; dquat->y = ny; dquat->z = nz; dquat->w = nw; }
+#else
                 dquat->w = -(dz * sq.z - -(dy * sy - (dw * sq.w - dx * sq.x)));
                 dquat->z = -(dy * sx - (dw * sq.z + dz * sq.w + dx * sy));
                 dquat->y = -(dx * sq.z - ((dz * sx + (dy * sq.w + dw * sy))));
                 dquat->x = -(dz * sy - (dw * sx + dy * sq.z + dx * sq.w));
+#endif
                 if (src >= src_end) goto rotateto_rot;
                 db++;
                 if (db >= db_end) goto complain;
@@ -1150,10 +1181,20 @@ rotateto_quat:
                 float dz = dquat->z;
                 float dw = dquat->w;
                 float dy = dquat->y;
+#ifdef HX_NATIVE
+                // Native fix: same decompiler register mis-mappings as ByteQuat path
+                { float sw_ = sq.w, sx_ = sx, sy_ = sy, sz_ = sq.z;
+                float nw = sw_*dw - sx_*dx - sy_*dy - sz_*dz;
+                float nx = sw_*dx + sx_*dw + sy_*dz - sz_*dy;
+                float ny = sw_*dy - sx_*dz + sy_*dw + sz_*dx;
+                float nz = sw_*dz + sx_*dy - sy_*dx + sz_*dw;
+                dquat->x = nx; dquat->y = ny; dquat->z = nz; dquat->w = nw; }
+#else
                 dquat->w = -(dz * sq.z - -(dy * sy - (dx * sq.x - sq.w * dw)));
                 dquat->z = -(dy * sx - (sq.z * dw + dz * sq.w + dx * sy));
                 dquat->y = -(dx * sq.z - (sy * dw + dy * sq.w + dz * sx));
                 dquat->x = -(dz * sy - (dw * sx + dy * sq.z + dx * sq.w));
+#endif
                 if (src >= src_end) goto rotateto_rot;
                 db++;
                 if (db >= db_end) goto complain;

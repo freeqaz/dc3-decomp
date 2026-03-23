@@ -137,6 +137,16 @@ void VorbisReader::setupCypher(int moggVersion) {
     // to copy masher data into masterKey as an anti-tamper measure.
     // On 64-bit this truncates the pointer. Just call getMasher directly.
     KeyChain::getMasher(masterKey);
+    fprintf(stderr, "DC3 setupCypher: masher = ");
+    for (int i = 0; i < 32; i++) fprintf(stderr, "%02x ", masterKey[i]);
+    fprintf(stderr, "\n");
+    KeyChain::getKey(mKeyIndex, gKey, masterKey);
+    fprintf(stderr, "DC3 setupCypher: gKey after getKey(%d) = ", mKeyIndex);
+    for (int i = 0; i < 16; i++) fprintf(stderr, "%02x ", gKey[i]);
+    fprintf(stderr, "\n");
+    fprintf(stderr, "DC3 setupCypher: nonce = ");
+    for (int i = 0; i < 16; i++) fprintf(stderr, "%02x ", mNonce[i]);
+    fprintf(stderr, "\n");
 #else
     DataArray *arr = DataReadString("{Na 42 'O32'}");
     unsigned int iEval = arr->Evaluate(0).Int();
@@ -150,14 +160,39 @@ void VorbisReader::setupCypher(int moggVersion) {
     buf118Arr->Release();
 #endif
     KeyChain::getKey(mKeyIndex, gKey, masterKey);
+#ifdef HX_NATIVE
+    fprintf(stderr, "DC3 setupCypher: pre-grind gKey = ");
+    for (int i = 0; i < 16; i++) fprintf(stderr, "%02x ", gKey[i]);
+    fprintf(stderr, "\n");
+    fprintf(stderr, "DC3 setupCypher: mMagicA=%d mMagicB=%d mKeyIndex=%d version=%d\n",
+            mMagicA, mMagicB, mKeyIndex, moggVersion);
+    fprintf(stderr, "DC3 setupCypher: mKeyMask = ");
+    for (int i = 0; i < 16; i++) fprintf(stderr, "%02x ", mKeyMask[i]);
+    fprintf(stderr, "\n");
+#endif
     TheSynth->Grinder().GrindArray(mMagicA, mMagicB, gKey, 0x10, moggVersion);
+#ifdef HX_NATIVE
+    fprintf(stderr, "DC3 setupCypher: post-grind gKey = ");
+    for (int i = 0; i < 16; i++) fprintf(stderr, "%02x ", gKey[i]);
+    fprintf(stderr, "\n");
+#endif
     for (int i = 0; i < 16; i++) {
         gKey[i] ^= mKeyMask[i];
     }
+#ifdef HX_NATIVE
+    fprintf(stderr, "DC3 setupCypher: final gKey (after XOR) = ");
+    for (int i = 0; i < 16; i++) fprintf(stderr, "%02x ", gKey[i]);
+    fprintf(stderr, "\n");
+#endif
     int ret = ctr_start(gCipher, mNonce, gKey, gKeySize, 0, mCtrState);
     memset(gKey, 0, gKeySize);
     MILO_ASSERT(ret == 0, 0xB0);
 
+#ifdef HX_NATIVE
+    extern int magicNumberGeneratorNative(int idx, int mode);
+    mMagicHashA = magicNumberGeneratorNative(mMagicA, 1);
+    mMagicHashB = magicNumberGeneratorNative(mMagicB, 2);
+#else
     sprintf(script, "{ha %d 1}", mMagicA);
     DataArray *magicGenA = DataReadString(script);
     mMagicHashA = magicGenA->Evaluate(0).Int();
@@ -167,6 +202,7 @@ void VorbisReader::setupCypher(int moggVersion) {
     DataArray *magicGenB = DataReadString(script);
     mMagicHashB = magicGenB->Evaluate(0).Int();
     magicGenB->Release();
+#endif
 }
 
 bool VorbisReader::TryReadHeader() {

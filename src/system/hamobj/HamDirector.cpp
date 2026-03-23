@@ -437,9 +437,9 @@ void HamDirector::DrawShowing() {
         mVenue->DrawShowing();
     }
 #ifdef HX_NATIVE
-    // Draw the HUD overlay after the venue so it renders on top.
-    // The HUD PanelDir (kept intact via proxy mode) switches to its own
-    // camera (Cam.cam), draws score/flashcards/phrase meters, then restores.
+    // Draw the HUD overlay after the venue. The HUD PanelDir (from the
+    // game_mode merger) handles camera switching via CamOverride() and
+    // draws its content (score, flashcards, phrase meters) on top.
     if (mHudDir) {
         mHudDir->DrawShowing();
     }
@@ -465,47 +465,20 @@ DataNode HamDirector::OnFileMerged(DataArray *a) {
 #ifdef HX_NATIVE
     Symbol cat = a->Sym(2);
     if (cat == Symbol("game_hud") && mGameModeMerger) {
-        // _default_hud.milo loads as RndDir 'game_mode_hud' (top-level container)
-        // with PanelDir 'hud' inside (from hud_shared.milo — has DTA type handlers).
-        // With proxy mode, the loaded dir stays intact as a subdir.
+        // The game_hud merger's MergerDir is a PanelDir (from director.milo).
+        // HUD content from _default_hud.milo merges flat into it (proxy=0).
+        // After merge, this PanelDir has the draw list, Cam.cam, flows, and
+        // all HUD objects — exactly like Xbox. We just need to draw + poll it.
         FileMerger::Merger *gm = mGameModeMerger->FindMerger("game_hud", false);
-        RndDir *hudContainer = nullptr;
-        if (gm && !gm->mLoadedObjects.empty()) {
-            hudContainer = dynamic_cast<RndDir *>(gm->mLoadedObjects.front());
-        }
-        if (hudContainer) {
-            // Draw the entire container (game_mode_hud) after venue
-            mHudDir = hudContainer;
-            // Find the PanelDir 'hud' inside — it has the DTA type handlers
-            // from hud_objects.dta that set $hud_panel and init animation flows
-            // Search subdirs for the HUD PanelDir
-            PanelDir *hudPanel = nullptr;
-            for (ObjDirItr<PanelDir> it(hudContainer, true); it != nullptr; ++it) {
-                // hud_objects.dta defines type 'hud' on the PanelDir
-                if (!strcmp(it->Name(), "hud") || !strcmp(it->Name(), "hud1")) {
-                    hudPanel = &*it;
-                    break;
-                }
-            }
-            if (hudPanel) {
-                hudPanel->Enter();
-                DataVariable("hud_panel") = (Hmx::Object *)hudPanel;
-                fprintf(stderr, "DC3 HamDirector: HUD container '%s' + PanelDir '%s' entered\n",
-                        hudContainer->Name(), hudPanel->Name());
-            } else {
-                // The 'hud' PanelDir was merged into the container during
-                // _default_hud.milo internal loading. Use the container itself
-                // as $hud_panel — it has all the objects DTA references.
-                hudContainer->Enter();
-                DataVariable("hud_panel") = (Hmx::Object *)hudContainer;
-                // Activate initialization flows
-                Flow *resetFlow = hudContainer->Find<Flow>("reset_common.flow", false);
-                if (resetFlow) resetFlow->Activate();
-                fprintf(stderr, "DC3 HamDirector: HUD container '%s' entered, $hud_panel set, reset_common activated\n",
-                        hudContainer->Name());
-            }
+        PanelDir *hudDir = gm ? dynamic_cast<PanelDir *>(gm->MergerDir()) : nullptr;
+        if (hudDir) {
+            mHudDir = hudDir;
+            hudDir->Enter();
+            DataVariable("hud_panel") = (Hmx::Object *)hudDir;
+            fprintf(stderr, "DC3 HamDirector: HUD PanelDir '%s' (class=%s) entered, $hud_panel set\n",
+                    hudDir->Name(), hudDir->ClassName());
         } else {
-            fprintf(stderr, "DC3 HamDirector: WARNING — no HUD dir found in game_hud merger\n");
+            fprintf(stderr, "DC3 HamDirector: WARNING — game_hud MergerDir is not a PanelDir\n");
         }
     }
 #endif
@@ -1311,10 +1284,9 @@ DataNode HamDirector::OnFileLoaded(DataArray *a) {
                     // stays intact as a subdir (preserving DTA type handlers for
                     // $hud_panel initialization, animation flows, and score display).
                     // Without proxy, MergeDirs flattens objects and loses type info.
-                    FileMerger::Merger *hudMerger = mGameModeMerger->FindMerger("game_hud", false);
-                    if (hudMerger) {
-                        hudMerger->mProxy = true;
-                    }
+                    // No proxy override needed — the game_hud merger's MergerDir
+                    // is already a PanelDir (from director.milo). HUD content merges
+                    // flat into it, giving us a PanelDir with draw list + camera + flows.
 #endif
                     mGameModeMerger->StartLoad(mAsyncLoaded);
                 }

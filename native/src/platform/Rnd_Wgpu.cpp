@@ -582,6 +582,10 @@ void WgpuRnd::FlushPostProcessingForOverlay() {
     mPostProcFlushed = true;
 }
 
+void FlushPostProcessingForOverlay() {
+    gWgpuRndInstance.FlushPostProcessingForOverlay();
+}
+
 void WgpuRnd::SetViewport(const Viewport& v) {
     NgRnd::SetViewport(v);
     ApplyViewport();

@@ -25,7 +25,9 @@ EM_JS(int, web_movie_create, (const char* url, int loop), {
 
     var id = Module._webMovieNextId++;
     var video = document.createElement('video');
-    video.crossOrigin = 'anonymous';
+    // Don't set crossOrigin — videos are same-origin (/api/file/...) and
+    // setting 'anonymous' forces CORS mode, which taints the canvas for
+    // getImageData() pixel readback unless the server sends ACAO headers.
     video.playsInline = true;
     video.muted = false;  // Will be set by SetVolume
     video.loop = !!loop;

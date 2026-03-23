@@ -112,9 +112,46 @@ When audio fails, `Game::PostWaitStart()` must set `mRealTime = true` (wall-cloc
 ### Root Cause Confirmed
 The `GrindArray()` DTA script evaluation produces a different AES key on native x86_64 than on Xbox PPC. The DTA functions execute, but intermediate integer arithmetic (LCG seeds, hash mappings, XOR chains) diverge somewhere in the 71 `O##` obfuscation operations.
 
-## Next Steps
+## Deep Investigation Results
 
-1. Add printf to `setupCypher` to dump the 16 derived key bytes (`gKey` after GrindArray + XOR)
-2. Use Unicorn runner to execute PPC `setupCypher` with same inputs → get reference key bytes
-3. Compare byte-by-byte to find where native diverges
-4. Most likely fix: rewrite `GrindArray` in pure C++ (bypass DTA scripting entirely), like `setupCypher` already does for the masterKey path
+### GrindArray is NOT the problem
+- Rewrote GrindArray in pure C++ (64 ops, two-level permutation, hash dispatch)
+- Python verification: post-grind bytes match C++ byte-for-byte
+- Even with GrindArray as NO-OP, decryption still fails → problem is upstream
+
+### Key derivation is internally consistent but produces wrong output
+Every step verified correct in Python:
+- `getMasher()` → correct (masher bytes match)
+- `getKey(7)` → correct (supershuffle+mash produces expected hex string)
+- `HvDecrypt` → correct (AES-ECB with gHvKeyGreen matches Python)
+- `GrindArray` → correct (C++ matches Python)
+- `magicNumberGenerator` → correct
+- Nonce, mMagicA, mMagicB, mKeyIndex all parse correctly from header
+
+### The actual root cause: `hiddenKeys` mismatch
+- `keygen_xbox.cpp` has keys from `debug.xex` (verified at file offset 0x3be0)
+- `default.xex` (retail) has XEX2 encryption → can't read keys directly
+- The game data (ark files with mogg) may be from a DIFFERENT build than the debug XEX
+- **v0xB shellmusic works** because it uses hardcoded `gRB1Key` (doesn't depend on hiddenKeys)
+- **v0xE songs fail** because they use `hiddenKeys[keyIndex]` which differs between builds
+
+### hiddenKeys are CORRECT (confirmed by subagent)
+The subagent decrypted the retail XEX (AES-128-CBC with Xbox 360 retail key) and verified:
+- debug.xex, default.xex (retail), and keygen_xbox.cpp all have **identical hiddenKeys**
+- The keys are NOT the issue
+
+### What IS verified working
+- v0xB shellmusic decrypts correctly in BOTH the engine AND Python (produces `OggS`)
+- getMasher, getKey, HvDecrypt, GrindArray, magicNumberGenerator all produce identical output between C++, Python, and across both u32 and unsigned long
+- Full GrindArray rewritten in pure C++ with all 64 ops — matches DTA version byte-for-byte
+- CTR nonce, key_mask, key_index all parse correctly from mogg header
+- All 12 key indices tested — none produce HMXA with or without GrindArray
+
+### The mystery
+Everything is verified correct yet v0xE decryption fails. The only untested link is: **does the PPC binary itself successfully decrypt these mogg files?** If the decomp build also fails on Xbox/Xenia, the mogg files might use a scheme we haven't fully reverse-engineered.
+
+### Path Forward
+1. **Test on Xenia/Xbox**: Run the decomp build and check if mogg v0xE playback works. If it also fails, the issue is in the keygen decomp, not the native port.
+2. **Unicorn PPC emulation**: Execute the debug binary's `setupCypher` function against boyfriend.mogg's header data and compare the derived key bytes against what our C++ produces.
+3. **Community tools**: Try Onyx Music Game Toolkit or Nautilus to decrypt the mogg and compare.
+4. **Deeper Ghidra RE**: Re-examine the `setupCypher` decompilation for subtle differences vs our source.

@@ -293,6 +293,19 @@ void MakeRotQuatUnitX(const Vector3 &vec, Hmx::Quat &q) {
 }
 
 void Multiply(const Vector3 &vin, const Hmx::Quat &q, Vector3 &vout) {
+#ifdef HX_NATIVE
+    // Native fix: the PPC decomp below has decompiler register mis-mappings
+    // in vout.x — the vinz coefficient uses (zw + xy) instead of (yw + xz).
+    // PPC assembly is correct but the C++ formula produces wrong x86 results.
+    // Use the standard quaternion rotation formula: v' = v * R(q)
+    float qx = q.x, qy = q.y, qz = q.z, qw = q.w;
+    float xx = qx * qx, yy = qy * qy, zz = qz * qz;
+    float xy = qx * qy, xz = qx * qz, xw = qx * qw;
+    float yz = qy * qz, yw = qy * qw, zw = qz * qw;
+    vout.x = vin.x * (1 - 2*(yy+zz)) + vin.y * 2*(xy-zw)     + vin.z * 2*(yw+xz);
+    vout.y = vin.x * 2*(xy+zw)        + vin.y * (1 - 2*(xx+zz)) + vin.z * 2*(yz-xw);
+    vout.z = vin.x * 2*(xz-yw)        + vin.y * 2*(yz+xw)     + vin.z * (1 - 2*(xx+yy));
+#else
     // Load quaternion components
     float qx = q.x;
     float qy = q.y;
@@ -319,6 +332,7 @@ void Multiply(const Vector3 &vin, const Hmx::Quat &q, Vector3 &vout) {
     vout.z = ((neg_qyqy + neg_qxqx) * vinz + (qxqz - qyqw) * vinx + (qyqz + qxqw) * viny) * 2.0f + vinz;
     vout.x = ((qzqw + qxqy) * vinz + (neg_qzqz + neg_qyqy) * vinx + (qxqy - qzqw) * viny) * 2.0f + vinx;
     vout.y = ((qyqz - qxqw) * vinz + (qxqy + qzqw) * vinx + (neg_qzqz + neg_qxqx) * viny) * 2.0f + viny;
+#endif
 }
 
 void FastInterp(const Hmx::Quat &q1, const Hmx::Quat &q2, float f, Hmx::Quat &qout) {

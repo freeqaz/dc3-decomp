@@ -380,3 +380,7 @@ public:
 
 // Global accessor — set during Init
 extern WgpuRnd* gWgpuRnd;
+
+// Free function wrapper — callable from engine code via extern declaration.
+// Flushes PostProc to framebuffer, then starts a new pass for HUD overlay.
+void FlushPostProcessingForOverlay();

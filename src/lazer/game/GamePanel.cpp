@@ -333,6 +333,22 @@ void GamePanel::SetTypeDef(DataArray *def) {
     static Message exit("exit_mode");
     Handle(exit, false);
     UIPanel::SetTypeDef(def);
+#ifdef HX_NATIVE
+    // On native, the HUD loads asynchronously via FileMerger and $hud_panel
+    // is set before the game_panel type changes to "perform". The DTA init
+    // handler fires here but common_reset hasn't run with $hud_panel set.
+    // Re-trigger common_reset now that the type definition (with the handler)
+    // is active and $hud_panel points to the HUD.
+    if (def) {
+        DataNode &hp = DataVariable("hud_panel");
+        if (hp.Type() == kDataObject && hp.GetObj()) {
+            static Message resetMsg("common_reset");
+            DataNode result = Handle(resetMsg, false);
+            fprintf(stderr, "DC3 GamePanel::SetTypeDef('%s') — re-triggered common_reset (result type=%d)\n",
+                    def->Sym(0).Str(), result.Type());
+        }
+    }
+#endif
 }
 
 void GamePanel::Load() {

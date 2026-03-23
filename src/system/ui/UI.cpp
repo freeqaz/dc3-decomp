@@ -575,7 +575,11 @@ void UIManager::Poll() {
                 int delay;
             };
             static const BootAdvance sBoot[] = {
+#ifndef __EMSCRIPTEN__
+                // Desktop native: BinkMovieImpl is a stub, movie never plays.
+                // Skip attract so the user isn't stuck on a black video screen.
                 {"attract_screen", "autosave_warning_screen", 30},
+#endif
                 {"autosave_warning_screen", "title_screen", 90},
                 {"title_screen", "wait_main_after_saveload_screen", 60},
                 {"wait_main_after_saveload_screen", "main_screen", 120},

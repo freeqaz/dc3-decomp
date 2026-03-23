@@ -64,7 +64,7 @@ class DTAContext:
         return DTAContext(self.config_section, self.key_path + (key,))
 
     def __str__(self):
-        parts = [self.config_section] + list(self.key_path)
+        parts = [self.config_section] + [('[child]' if k == '*' else k) for k in self.key_path]
         return ' → '.join(parts)
 
 
@@ -390,6 +390,20 @@ def _resolve_expr_context(expr: Node, var_context: dict,
         if func_part and func_part.type == 'field_expression':
             field_node = func_part.child_by_field_name('field')
             arg_node = func_part.child_by_field_name('argument')
+
+            # Array(N) — dynamic child access; use '*' wildcard
+            if field_node and node_text(field_node) == 'Array':
+                parent_ctx = None
+                if arg_node:
+                    parent_var = node_text(arg_node).strip()
+                    parent_ctx = var_context.get(parent_var)
+                    if parent_ctx is None:
+                        parent_ctx = _resolve_expr_context(
+                            arg_node, var_context, func_info, filepath
+                        )
+                if parent_ctx:
+                    return DTAContext(parent_ctx.config_section,
+                                     parent_ctx.key_path + ('*',))
 
             if field_node and node_text(field_node) == 'FindArray':
                 # Get the key argument
@@ -1058,11 +1072,23 @@ def _resolve_context_to_node(ctx: DTAContext, main_roots: dict) -> Optional[DTAN
             node = root
             success = True
             for key in ctx.key_path:
-                child = node.find_array(key)
-                if child is None:
-                    success = False
-                    break
-                node = child
+                if key == '*':
+                    # Wildcard: pick first child DTANode as representative
+                    first_child = None
+                    for c in node.children:
+                        if isinstance(c, DTANode) and c.tag:
+                            first_child = c
+                            break
+                    if first_child is None:
+                        success = False
+                        break
+                    node = first_child
+                else:
+                    child = node.find_array(key)
+                    if child is None:
+                        success = False
+                        break
+                    node = child
             if success:
                 return node
         return None
@@ -1074,11 +1100,23 @@ def _resolve_context_to_node(ctx: DTAContext, main_roots: dict) -> Optional[DTAN
         node = section
         success = True
         for key in ctx.key_path:
-            child = node.find_array(key)
-            if child is None:
-                success = False
-                break
-            node = child
+            if key == '*':
+                # Wildcard: pick first child DTANode as representative
+                first_child = None
+                for c in node.children:
+                    if isinstance(c, DTANode) and c.tag:
+                        first_child = c
+                        break
+                if first_child is None:
+                    success = False
+                    break
+                node = first_child
+            else:
+                child = node.find_array(key)
+                if child is None:
+                    success = False
+                    break
+                node = child
         if success:
             return node
     return None
@@ -1095,11 +1133,22 @@ def _find_key_in_any_root(ctx: DTAContext, key: str, main_roots: dict) -> Option
         for root in main_roots.values():
             node = root
             for path_key in ctx.key_path:
-                child = node.find_array(path_key)
-                if child is None:
-                    node = None
-                    break
-                node = child
+                if path_key == '*':
+                    first_child = None
+                    for c in node.children:
+                        if isinstance(c, DTANode) and c.tag:
+                            first_child = c
+                            break
+                    if first_child is None:
+                        node = None
+                        break
+                    node = first_child
+                else:
+                    child = node.find_array(path_key)
+                    if child is None:
+                        node = None
+                        break
+                    node = child
             if node is not None:
                 child = node.find_array(key)
                 if child is not None:
@@ -1112,11 +1161,22 @@ def _find_key_in_any_root(ctx: DTAContext, key: str, main_roots: dict) -> Option
             continue
         node = section
         for path_key in ctx.key_path:
-            child = node.find_array(path_key)
-            if child is None:
-                node = None
-                break
-            node = child
+            if path_key == '*':
+                first_child = None
+                for c in node.children:
+                    if isinstance(c, DTANode) and c.tag:
+                        first_child = c
+                        break
+                if first_child is None:
+                    node = None
+                    break
+                node = first_child
+            else:
+                child = node.find_array(path_key)
+                if child is None:
+                    node = None
+                    break
+                node = child
         if node is not None:
             child = node.find_array(key)
             if child is not None:

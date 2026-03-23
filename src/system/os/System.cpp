@@ -116,10 +116,16 @@ void SetUsingCD(bool b) { gUsingCD = b; }
 
 DataArray *SystemConfig() { return gSystemConfig; }
 
-DataArray *SystemConfig(Symbol s) { return gSystemConfig->FindArray(s); }
+DataArray *SystemConfig(Symbol s) {
+    DataArray *result = gSystemConfig->FindArray(s);
+    result->SetContextPath(s.Str());
+    return result;
+}
 
 DataArray *SystemConfig(Symbol s1, Symbol s2) {
-    return gSystemConfig->FindArray(s1)->FindArray(s2);
+    // FindArray chain auto-propagates context since FindArray sets it
+    DataArray *result = gSystemConfig->FindArray(s1)->FindArray(s2);
+    return result;
 }
 DataArray *SystemConfig(Symbol s1, Symbol s2, Symbol s3) {
     return gSystemConfig->FindArray(s1)->FindArray(s2)->FindArray(s3);
@@ -596,6 +602,7 @@ void SystemPreInit(const char *config) {
     }
     TheDebug.Init();
     DataInit();
+    DataArray_InitDtaTrace();
     PreInitSystem(config);
     LanguageInit();
     gSystemLocale = GetSystemLocale("usa");

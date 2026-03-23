@@ -34,6 +34,9 @@ class DC3Handler(http.server.SimpleHTTPRequestHandler):
         # Required for SharedArrayBuffer (future pthreads support)
         self.send_header("Cross-Origin-Opener-Policy", "same-origin")
         self.send_header("Cross-Origin-Embedder-Policy", "require-corp")
+        # Allow CORS for video pixel readback (getImageData on <video> frames)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Cross-Origin-Resource-Policy", "cross-origin")
         # Cache busting during development
         self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
         super().end_headers()
@@ -58,6 +61,14 @@ class DC3Handler(http.server.SimpleHTTPRequestHandler):
             self.path = "/index.html"
         super().do_GET()
 
+    def do_HEAD(self):
+        if self.path.startswith("/api/"):
+            self._handle_api()
+            return
+        if self.path == "/":
+            self.path = "/index.html"
+        super().do_HEAD()
+
     def _handle_api(self):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
@@ -80,7 +91,8 @@ class DC3Handler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(body)
+        if self.command != "HEAD":
+            self.wfile.write(body)
 
     def _serve_manifest(self):
         if not ASSETS_DIR:
@@ -101,7 +113,8 @@ class DC3Handler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(body)
+        if self.command != "HEAD":
+            self.wfile.write(body)
 
     def _serve_bundle(self):
         """Serve all assets as a single binary bundle for efficient bulk loading.
@@ -146,7 +159,8 @@ class DC3Handler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Content-Type", "application/octet-stream")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(body)
+        if self.command != "HEAD":
+            self.wfile.write(body)
 
     def _serve_asset_file(self, relpath):
         if not ASSETS_DIR:
@@ -173,27 +187,30 @@ class DC3Handler(http.server.SimpleHTTPRequestHandler):
             return
 
         size = os.path.getsize(full_path)
+        content_type = self.guess_type(full_path)
+        head_only = self.command == "HEAD"
 
         # Handle Range requests (partial content)
         range_hdr = self.headers.get("Range")
-        if range_hdr:
-            self._serve_range(full_path, size, range_hdr)
+        if range_hdr and not head_only:
+            self._serve_range(full_path, size, range_hdr, content_type)
             return
 
         self.send_response(200)
-        self.send_header("Content-Type", "application/octet-stream")
+        self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(size))
         self.send_header("Accept-Ranges", "bytes")
         self.end_headers()
-        with open(full_path, "rb") as f:
-            # Stream in 64KB chunks to avoid loading huge files into memory
-            while True:
-                chunk = f.read(65536)
-                if not chunk:
-                    break
-                self.wfile.write(chunk)
+        if not head_only:
+            with open(full_path, "rb") as f:
+                # Stream in 64KB chunks to avoid loading huge files into memory
+                while True:
+                    chunk = f.read(65536)
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
 
-    def _serve_range(self, full_path, total_size, range_hdr):
+    def _serve_range(self, full_path, total_size, range_hdr, content_type="application/octet-stream"):
         try:
             ranges = range_hdr.replace("bytes=", "")
             start_str, end_str = ranges.split("-")
@@ -211,7 +228,7 @@ class DC3Handler(http.server.SimpleHTTPRequestHandler):
         length = end - start + 1
 
         self.send_response(206)
-        self.send_header("Content-Type", "application/octet-stream")
+        self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(length))
         self.send_header("Content-Range", f"bytes {start}-{end}/{total_size}")
         self.send_header("Accept-Ranges", "bytes")

@@ -32,6 +32,7 @@ private:
     wgpu::RenderPipeline mBloomThresholdPipeline;
     wgpu::RenderPipeline mBloomBlurHPipeline;
     wgpu::RenderPipeline mBloomBlurVPipeline;
+    wgpu::RenderPipeline mBloomDownsamplePipeline;
     wgpu::RenderPipeline mBloomUpsamplePipeline;
     wgpu::Buffer mBloomUniformBuffer;
     wgpu::Sampler mDefaultSampler;

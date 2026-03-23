@@ -13,6 +13,38 @@
 #include "utl/MemMgr.h"
 #include "utl/Str.h"
 
+#ifdef HX_NATIVE
+#include <cstdlib>
+#include <cstdio>
+#include <cstring>
+#include <string>
+#include <unordered_set>
+
+// Intern context path strings for stable pointers and deduplication
+static const char *InternContextPath(const char *path) {
+    static std::unordered_set<std::string> sContextPaths;
+    auto [it, _] = sContextPaths.insert(path);
+    return it->c_str();
+}
+
+static bool sDtaTraceEnabled = false;
+
+void DataArray_InitDtaTrace() {
+    sDtaTraceEnabled = (std::getenv("DTA_TRACE") != nullptr);
+    if (sDtaTraceEnabled) {
+        fprintf(stderr, "DTA_TRACE: context path tracing enabled\n");
+    }
+}
+
+void DataArray_LogAccess(const DataArray *arr, const char *method, int index) {
+    if (sDtaTraceEnabled && arr->ContextPath()) {
+        fprintf(stderr, "DTA_TRACE: %s[%d] via %s (file %s, line %d)\n",
+                arr->ContextPath(), index, method,
+                arr->File() ? arr->File() : "?", arr->Line());
+    }
+}
+#endif
+
 DataArray *gCallStack[HANDLE_STACK_SIZE];
 DataArray **gCallStackPtr = gCallStack;
 int gPreExecuteLevel;
@@ -305,6 +337,9 @@ bool DataArray::Contains(const DataNode &dn) const {
 
 DataArray::DataArray(int size)
     : mFile(), mSize(size), mRefs(1), mLine(0), mDeprecated(0) {
+#ifdef HX_NATIVE
+    mContextPath = nullptr;
+#endif
     mNodes = NodesAlloc(size * sizeof(DataNode));
     for (int n = 0; n < size; n++) {
         new (&mNodes[n]) DataNode();
@@ -313,6 +348,9 @@ DataArray::DataArray(int size)
 
 DataArray::DataArray(const void *glob, int size)
     : mFile(), mSize(-size), mRefs(1), mLine(0), mDeprecated(0) {
+#ifdef HX_NATIVE
+    mContextPath = nullptr;
+#endif
     mNodes = NodesAlloc(size);
     memcpy(mNodes, glob, size);
 }
@@ -604,7 +642,16 @@ DataArray *DataArray::FindArray(Symbol tag, bool fail) const {
             const DataArray *arr = dn->UncheckedArray();
             if (arr->Size() > 0 && arr->Node(0).Type() == kDataSymbol
                 && arr->Node(0).LiteralSym() == tag) {
-                return (DataArray *)arr;
+                DataArray *result = (DataArray *)arr;
+                // Propagate context path through FindArray chains
+                if (mContextPath) {
+                    char buf[256];
+                    snprintf(buf, sizeof(buf), "%s.%s", mContextPath, tag.Str());
+                    result->SetContextPath(InternContextPath(buf));
+                } else {
+                    result->SetContextPath(tag.Str());
+                }
+                return result;
             }
         }
     }

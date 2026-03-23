@@ -85,6 +85,22 @@ struct VOut {
     // Divide by 16 for tent weights, then attenuate to prevent mip accumulation
     return vec4f(color * (1.0 / 16.0) * bloom.intensity, 1.0);
 }
+
+@fragment fn fs_bloom_downsample(in: VOut) -> @location(0) vec4f {
+    // 2x2 bilinear downsample with proper texel offsets from *source* resolution
+    let tx = bloom.texelSizeX;  // source texel size
+    let ty = bloom.texelSizeY;
+    var color = textureSample(srcTex, srcSampler, in.uv).rgb * 4.0;
+    color += textureSample(srcTex, srcSampler, in.uv + vec2f( tx,  0.0)).rgb * 2.0;
+    color += textureSample(srcTex, srcSampler, in.uv + vec2f(-tx,  0.0)).rgb * 2.0;
+    color += textureSample(srcTex, srcSampler, in.uv + vec2f( 0.0,  ty)).rgb * 2.0;
+    color += textureSample(srcTex, srcSampler, in.uv + vec2f( 0.0, -ty)).rgb * 2.0;
+    color += textureSample(srcTex, srcSampler, in.uv + vec2f( tx,   ty)).rgb;
+    color += textureSample(srcTex, srcSampler, in.uv + vec2f(-tx,   ty)).rgb;
+    color += textureSample(srcTex, srcSampler, in.uv + vec2f( tx,  -ty)).rgb;
+    color += textureSample(srcTex, srcSampler, in.uv + vec2f(-tx,  -ty)).rgb;
+    return vec4f(color * (1.0 / 16.0), 1.0);
+}
 )WGSL";
 
 void BloomPass::Init(GpuDevice& gpu) {
@@ -163,6 +179,7 @@ void BloomPass::EnsurePipelines(GpuDevice& gpu) {
     mBloomThresholdPipeline = makePipeline("fs_bloom_threshold", false);
     mBloomBlurHPipeline = makePipeline("fs_bloom_blur_h", false);
     mBloomBlurVPipeline = makePipeline("fs_bloom_blur_v", false);
+    mBloomDownsamplePipeline = makePipeline("fs_bloom_downsample", false);
     mBloomUpsamplePipeline = makePipeline("fs_bloom_upsample", true);
 
     mBloomReady = true;
@@ -294,10 +311,12 @@ void BloomPass::Run(wgpu::CommandEncoder& encoder, wgpu::TextureView& intermedia
         bloomPass(mBloomTempView[i], mBloomView[i], mBloomBlurVPipeline,
                   mBloomWidth[i], mBloomHeight[i]);
         if (i + 1 < kBloomMips) {
+            // Downsample with source texel sizes for correct filter coverage
             BloomUniforms uni{};
             uni.threshold = 0;
-            uni.texelSizeX = 1.0f / mBloomWidth[i + 1];
-            uni.texelSizeY = 1.0f / mBloomHeight[i + 1];
+            uni.texelSizeX = 1.0f / mBloomWidth[i];   // source texel size
+            uni.texelSizeY = 1.0f / mBloomHeight[i];
+            uni.intensity = 0;
             queue.WriteBuffer(mBloomUniformBuffer, 0, &uni, sizeof(uni));
 
             wgpu::BindGroupEntry bgEntries[3] = {};
@@ -326,7 +345,7 @@ void BloomPass::Run(wgpu::CommandEncoder& encoder, wgpu::TextureView& intermedia
             rpDesc.colorAttachments = &colorAtt;
 
             auto pass = encoder.BeginRenderPass(&rpDesc);
-            pass.SetPipeline(mBloomBlurVPipeline);
+            pass.SetPipeline(mBloomDownsamplePipeline);
             pass.SetBindGroup(0, bg);
             pass.Draw(3);
             pass.End();
@@ -356,6 +375,7 @@ void BloomPass::Terminate() {
     mBloomThresholdPipeline = nullptr;
     mBloomBlurHPipeline = nullptr;
     mBloomBlurVPipeline = nullptr;
+    mBloomDownsamplePipeline = nullptr;
     mBloomUpsamplePipeline = nullptr;
     mBloomUniformBuffer = nullptr;
     mBloomReady = false;

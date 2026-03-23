@@ -21,6 +21,7 @@
 #include <string>
 #include "flow/Flow.h"
 extern void FlushTransparentDraws();
+extern void FlushPostProcessingForOverlay();
 #endif
 
 #ifdef HX_NATIVE
@@ -384,6 +385,9 @@ RndCam *PanelDir::CamOverride() {
 void PanelDir::DrawShowing() {
     if (mCanEndWorld) {
         TheRnd.EndWorld();
+#ifdef HX_NATIVE
+        FlushPostProcessingForOverlay();
+#endif
     }
     RndCam *curCam = RndCam::Current();
     RndCam *camOverride = CamOverride();
