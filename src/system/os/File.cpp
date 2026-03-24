@@ -29,10 +29,10 @@
 #undef st_mtime
 #endif
 
-static char gSystemRoot[256]; // 0x0
-static char gExecRoot[256]; // 0x100
+static File *gOpenCaptureFile; // 0x300
 static char gRoot[256]; // 0x200
-File *gOpenCaptureFile; // 0x300
+static char gExecRoot[256]; // 0x100
+static char gSystemRoot[256]; // 0x0
 
 bool gFakeFileErrors;
 bool gNullFiles;

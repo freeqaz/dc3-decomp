@@ -92,8 +92,7 @@ void StorePanel::Enter() {
 
 void StorePanel::Exit() {
     XBackgroundDownloadSetMode(XBACKGROUND_DOWNLOAD_MODE_AUTO);
-    Symbol sym = gNullStr;
-    ThePlatformMgr.RemoveSink(this, sym);
+    ThePlatformMgr.RemoveSink(this);
     if (0 <= mEnumJobID) {
         ThePlatformMgr.CancelEnumJob(mEnumJobID);
     }

@@ -224,9 +224,9 @@ GlitchPoker *GlitchFinder::NewPoker() {
     if (2048 <= mPokerIndex) {
         MILO_FAIL("too many glitch pokers : %d\n", mPokerIndex);
     }
-    mPokerIndex += 1;
-    mPokerPool[mPokerIndex].ClearData();
-    return 0;
+    GlitchPoker *thePoker = &mPokerPool[mPokerIndex++];
+    thePoker->ClearData();
+    return thePoker;
 }
 
 void GlitchFinder::PokeStart(

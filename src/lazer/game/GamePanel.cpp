@@ -1,5 +1,6 @@
 #include "game/GamePanel.h"
 #include "char/FileMerger.h"
+#include "rndobj/Dir.h"
 #include "utl/Loader.h"
 #include "flow/PropertyEventProvider.h"
 #include "math/Utl.h"
@@ -59,6 +60,7 @@
 #include "utl/TimeConversion.h"
 #include "world/Dir.h"
 #ifdef HX_NATIVE
+#include "ui/UILabel.h"
 #include <cstdio>
 #endif
 GamePanel *TheGamePanel = nullptr;
@@ -452,13 +454,28 @@ void GamePanel::Poll() {
                         pd->Provider()->SetProperty(scoreSym, DataNode(sNativeScore));
                     }
                 }
-                // Send set_score to hud_panel (mirrors perform.dta move_passed flow)
+                // Update score labels directly on HUD panel subdirs
+                // The DTA set_score handler is an empty stub in the ark DTB,
+                // so we set score1.lbl inside score_left/score_right from C++.
                 DataNode &hp = DataVariable("hud_panel");
                 if (hp.Type() == kDataObject && hp.GetObj()) {
-                    static Message setScoreMsg("set_score", 0, 0, 0, 1);
-                    setScoreMsg[0] = DataNode(sNativeScore);
-                    setScoreMsg[1] = DataNode(sNativeScore - points);
-                    hp.GetObj()->Handle(setScoreMsg, false);
+                    ObjectDir *hudDir = dynamic_cast<ObjectDir *>(hp.GetObj());
+                    if (hudDir) {
+                        for (const char *side :
+                             {"score_left", "score_right"}) {
+                            RndDir *scoreDir =
+                                hudDir->Find<RndDir>(side, false);
+                            if (scoreDir) {
+                                UILabel *lbl =
+                                    scoreDir->Find<UILabel>("score1.lbl", false);
+                                if (lbl) {
+                                    lbl->SetInt(sNativeScore, true);
+                                    lbl->SetShowing(true);
+                                }
+                                scoreDir->SetShowing(true);
+                            }
+                        }
+                    }
                 }
             }
         }

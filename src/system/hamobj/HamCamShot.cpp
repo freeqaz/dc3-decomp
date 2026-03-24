@@ -162,10 +162,7 @@ void HamCamShot::UpdateTargetsFlipped() {
         TheHamDirector->SetPhraseMetersFlipped(flipped);
     }
 
-    WorldDir *venueWorld = NULL;
-    if (TheHamDirector) {
-        venueWorld = TheHamDirector->GetVenueWorld();
-    }
+    WorldDir *venueWorld = TheHamDirector ? TheHamDirector->GetVenueWorld() : NULL;
 
     if (venueWorld != NULL) {
         static Symbol game_stage("game_stage");
@@ -177,7 +174,7 @@ void HamCamShot::UpdateTargetsFlipped() {
         if (isDanceBattle && flipped) {
             Symbol stage = TheHamProvider->Property(game_stage, true)->Sym(NULL);
             if (stage == intro) {
-                TheDebug << MakeString("Camshot %s\n", PathName(this));
+                TheDebug << MakeString("Camshot %s\n", (char *)Name());
                 int targetIdx = 0;
                 for (ObjList<Target>::iterator it = mTargets.begin();
                      it != mTargets.end(); ++it) {
@@ -193,18 +190,19 @@ void HamCamShot::UpdateTargetsFlipped() {
                         if (clipsDir != NULL) {
                             Hmx::Object *found =
                                 clipsDir->Find<Hmx::Object>("crewbattle_intro", false);
-                            Symbol animGroupName = crewbattle_intro;
-                            if (found == NULL) {
+                            if (found != NULL) {
+                                it->mAnimGroup = crewbattle_intro;
+                            } else {
                                 found = clipsDir->Find<Hmx::Object>("BattleIntro", false);
-                                animGroupName = BattleIntro;
-                                if (found == NULL) {
+                                if (found != NULL) {
+                                    it->mAnimGroup = BattleIntro;
+                                } else {
                                     found =
                                         clipsDir->Find<Hmx::Object>("crew_battle_intro", false);
-                                    animGroupName = crew_battle_intro;
+                                    if (found != NULL) {
+                                        it->mAnimGroup = crew_battle_intro;
+                                    }
                                 }
-                            }
-                            if (found != NULL) {
-                                it->mAnimGroup = animGroupName;
                             }
                         }
                     }
@@ -217,7 +215,7 @@ void HamCamShot::UpdateTargetsFlipped() {
                     }
                     const char *charName;
                     if (character != NULL) {
-                        charName = PathName(character);
+                        charName = character->Name();
                     } else {
                         charName = "NULL";
                     }
@@ -235,42 +233,40 @@ void HamCamShot::UpdateTargetsFlipped() {
         mFlipActive = flipped;
         CreateFlippedShowHideList();
 
-        WorldDir *venueWorld2 = NULL;
-        if (TheHamDirector) {
-            venueWorld2 = TheHamDirector->GetVenueWorld();
-        }
+        WorldDir *venueWorld2 = TheHamDirector ? TheHamDirector->GetVenueWorld() : NULL;
 
         if (venueWorld2 != NULL) {
-            for (int k = 0; k < mKeyframes.size(); k++) {
-                CamShotFrame &frame = mKeyframes[k];
+            for (ObjVector<CamShotFrame>::iterator kit = mKeyframes.begin();
+                 kit != mKeyframes.end(); ++kit) {
+                CamShotFrame &frame = *kit;
                 std::vector<RndTransformable *> newTargets;
                 for (ObjPtrList<RndTransformable>::iterator tit = frame.mTargets.begin();
                      tit != frame.mTargets.end(); ++tit) {
                     RndTransformable *target = *tit;
                     const char *name = target->Name();
-                    char buf[7];
+                    char buf[240];
                     char *dst = buf;
                     const char *src = name;
+                    char c;
                     do {
-                        *dst = *src;
-                        dst++;
-                        src++;
-                    } while (src[-1] != '\0');
+                        c = *src++;
+                        *dst++ = c;
+                    } while (c != '\0');
 
                     RndTransformable *newTarget = target;
-                    if (!flipped) {
-                        if (strstr(name, "_p0") && mPlayerFlag == kHamPlayer1) {
+                    if (flipped) {
+                        if (strstr(name, "player0") && mPlayerFlag == kHamPlayer0) {
                             buf[5] = '1';
                             newTarget = venueWorld2->Find<RndTransformable>(buf, true);
-                        } else if (strstr(name, "_p1") && mPlayerFlag == kHamPlayer0) {
+                        } else if (strstr(name, "player1") && mPlayerFlag == kHamPlayer1) {
                             buf[5] = '0';
                             newTarget = venueWorld2->Find<RndTransformable>(buf, true);
                         }
                     } else {
-                        if (strstr(name, "_p0") && mPlayerFlag == kHamPlayer0) {
+                        if (strstr(name, "player0") && mPlayerFlag == kHamPlayer1) {
                             buf[5] = '1';
                             newTarget = venueWorld2->Find<RndTransformable>(buf, true);
-                        } else if (strstr(name, "_p1") && mPlayerFlag == kHamPlayer1) {
+                        } else if (strstr(name, "player1") && mPlayerFlag == kHamPlayer0) {
                             buf[5] = '0';
                             newTarget = venueWorld2->Find<RndTransformable>(buf, true);
                         }
@@ -280,22 +276,23 @@ void HamCamShot::UpdateTargetsFlipped() {
                 while (!frame.mTargets.empty()) {
                     frame.mTargets.pop_back();
                 }
-                for (int j = 0; j < (int)newTargets.size(); j++) {
-                    frame.mTargets.push_back(newTargets[j]);
+                for (std::vector<RndTransformable *>::iterator jit = newTargets.begin();
+                     jit != newTargets.end(); ++jit) {
+                    frame.mTargets.push_back(*jit);
                 }
             }
         }
 
-        if (!flipped) {
-            mShowList = mFlipShowList;
-            mHideList = mFlipHideList;
-            mGenHideList = mFlipGenHideList;
-            mGenHideVector = mFlipGenHideVector;
-        } else {
+        if (flipped) {
             mShowList = mFlipPostProcOverrides;
             mHideList = mFlipDrawOverrides;
             mGenHideList = mFlipEndHideList;
             mGenHideVector = mFlipEndShowVector;
+        } else {
+            mShowList = mFlipShowList;
+            mHideList = mFlipHideList;
+            mGenHideList = mFlipGenHideList;
+            mGenHideVector = mFlipGenHideVector;
         }
     }
 }

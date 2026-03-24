@@ -8,15 +8,11 @@
 #include "xdk/xapilibi/xbox.h"
 
 OptionsPanel::OptionsPanel() {
-    int dummy = 0;
     mOfferID = 0;
     mPurchaseProfile = nullptr;
     mXboxPurchaser = nullptr;
     mRedeemTokenJob = nullptr;
     mGetWebLinkCodeJob = nullptr;
-    if (dummy) {
-        dummy++;
-    }
 }
 
 OptionsPanel::~OptionsPanel() {}
@@ -111,11 +107,7 @@ DataNode OptionsPanel::OnMsg(RCJobCompleteMsg const &msg) {
                 } else if (code == 6) {
                     error = token_redemption_too_early;
                 } else {
-                    if (!TheRockCentral.IsOnline()) {
-                        error = leaderboard_no_net;
-                    } else {
-                        error = token_redemption_error;
-                    }
+                    goto check_online;
                 }
                 success = false;
             }
@@ -129,6 +121,7 @@ DataNode OptionsPanel::OnMsg(RCJobCompleteMsg const &msg) {
             } else if (code == 2) {
                 success = true;
             } else {
+                check_online:
                 if (!TheRockCentral.IsOnline()) {
                     error = leaderboard_no_net;
                 } else {

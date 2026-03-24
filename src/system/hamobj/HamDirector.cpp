@@ -1635,23 +1635,25 @@ Symbol HamDirector::ClosestMove() {
                                 do {
                                     if (buf[p - candidate] == '\0')
                                         break;
-                                    int pLower = tolower(*p);
-                                    if (pLower != tolower(buf[p - candidate]))
+                                    int bufLower = tolower(buf[p - candidate]);
+                                    if (bufLower != tolower(*p))
                                         break;
                                     p++;
                                     matchCount++;
                                 } while (*p != '\0');
                             }
 
-                            const char *q = &buf[matchCount];
+                            const char *q0 = &buf[matchCount];
+                            const char *q = q0;
                             do {
                             } while (*q++ != '\0');
-                            int bufRem = q - &buf[matchCount] - 1;
+                            int bufRem = q - q0 - 1;
 
-                            const char *r = &candidate[matchCount];
+                            const char *r0 = &candidate[matchCount];
+                            const char *r = r0;
                             do {
                             } while (*r++ != '\0');
-                            int candRem = r - &candidate[matchCount] - 1;
+                            int candRem = r - r0 - 1;
 
                             int penalty = candRem;
                             if (penalty < bufRem)
@@ -1765,17 +1767,20 @@ void HamDirector::LoadCrew(Symbol s1, Symbol s2) {
     Symbol symbols[2] = { s1, s2 };
     Symbol mind_control("mind_control");
     Symbol gameplaySym = TheHamProvider->Property("gameplay_mode", true)->Sym();
+    char *penult = buffer - 2;
+    char *ult = buffer - 1;
+    bool isMindControl = gameplaySym == mind_control;
     for (int i = 0; i < 2; i++) {
         HamPlayerData *hpd = TheGameData->Player(i);
         MILO_ASSERT(hpd, 0x98B);
         mCrews[i] = symbols[i];
         strcpy(buffer, hpd->CharacterOutfit(mCrews[i]).Str());
         if (strstr(buffer, "lima") || strstr(buffer, "rasa")) {
-            buffer[strlen(buffer)] = '0';
-            buffer[strlen(buffer)] = gameplaySym == mind_control ? '6' : '5';
+            penult[strlen(buffer)] = '0';
+            ult[strlen(buffer)] = isMindControl ? '6' : '5';
         } else {
-            buffer[strlen(buffer)] = '0';
-            buffer[strlen(buffer)] = '4';
+            penult[strlen(buffer)] = '0';
+            ult[strlen(buffer)] = '4';
         }
         mCharacterOutfits[i] = buffer;
     }
@@ -2500,11 +2505,11 @@ void HamDirector::PlayNextShot() {
         mSuppressNextShot--;
         return;
     }
-    HamCamShot *nextShot = mNextShot;
     mPickNewShot = false;
-    if ((int)nextShot == 0) {
+    if ((int)(HamCamShot *)mNextShot == 0) {
         return;
     }
+    HamCamShot *nextShot = mNextShot;
     mNextShot = nullptr;
     float lastShotTime;
     if (nextShot && strstr(nextShot->Category().Str(), "dc")) {
@@ -2520,10 +2525,13 @@ void HamDirector::PlayNextShot() {
     }
     mLastShotTime = lastShotTime;
     mCurShot = nextShot;
-    // Apply shot to the world root's CameraManager — WorldDir::DrawShowing
-    // reads mCameraMgr from the world root when rendering through the panel system.
     HamCamShot *curShot = mCurShot;
-    WorldDir *world = dynamic_cast<WorldDir *>(mMerger ? mMerger->Dir() : nullptr);
+    WorldDir *world;
+    if (mMerger) {
+        world = dynamic_cast<WorldDir *>(mMerger->Dir());
+    } else {
+        world = nullptr;
+    }
     world->GetCameraManager()->ForceCameraShot(curShot, false);
 }
 
@@ -2535,7 +2543,8 @@ DataNode HamDirector::OnSelectCamera(DataArray *a) {
         float beat = TheTaskMgr.Beat();
         float seconds = BeatToSeconds(beat);
         float val = seconds * 30.0f;
-        float frame = val < 0.0f ? 0.0f : val;
+        float nval = -val;
+        float frame = nval >= 0.0f ? 0.0f : val;
 
         float realTime = TheTaskMgr.Seconds(TaskMgr::kRealTime);
         if (realTime >= 0.0f || TheLoadMgr.EditMode()) {
@@ -2713,11 +2722,10 @@ void HamDirector::OnPopulateMoves() {
 
     gMoveMergeMap.clear();
 
-    {
-        std::vector<FileMerger::Merger> &mergers = mMoveMerger->Mergers();
-        if (mergers.begin() != mergers.end()) {
-            mergers.erase(mergers.begin(), mergers.end());
-        }
+    std::vector<FileMerger::Merger> *mergers =
+        (std::vector<FileMerger::Merger> *)((char *)mMoveMerger.Ptr() + 0x40);
+    if (mergers->begin() != mergers->end()) {
+        mergers->erase(mergers->begin(), mergers->end());
     }
 
     int numKeys = moveInstSymKeys->size();
@@ -2781,14 +2789,14 @@ void HamDirector::OnPopulateMoves() {
                         "modular_song_data/transition_charclips/%s.milo",
                         transName
                     ));
-                    FileMerger::Merger transMerger(mMoveMerger.Ptr());
-                    transMerger.mName = transition_charclips;
-                    transMerger.mDir = clipsDir;
-                    transMerger.mSubdirs = MergeFilter::kAllSubdirs;
-                    transMerger.mPreClear = true;
-                    transMerger.mSelected = fp;
-                    transMerger.mForceReload = true;
-                    static_cast<std::vector<FileMerger::Merger>&>(mMoveMerger->Mergers()).push_back(transMerger);
+                    FileMerger::Merger merger(mMoveMerger.Ptr());
+                    merger.mName = transition_charclips;
+                    merger.mDir = clipsDir;
+                    merger.mSubdirs = MergeFilter::kAllSubdirs;
+                    merger.mPreClear = true;
+                    merger.mSelected = fp;
+                    merger.mForceReload = true;
+                    mergers->push_back(merger);
                     gMoveMergeMap[transName]++;
                 }
             }
@@ -2798,14 +2806,14 @@ void HamDirector::OnPopulateMoves() {
                 FilePath fp(
                     MakeString("modular_song_data/charclips/%s.milo", clipName)
                 );
-                FileMerger::Merger clipMerger(mMoveMerger.Ptr());
-                clipMerger.mName = charclips;
-                clipMerger.mDir = clipsDir;
-                clipMerger.mSubdirs = MergeFilter::kAllSubdirs;
-                clipMerger.mPreClear = true;
-                clipMerger.mSelected = fp;
-                clipMerger.mForceReload = true;
-                static_cast<std::vector<FileMerger::Merger>&>(mMoveMerger->Mergers()).push_back(clipMerger);
+                FileMerger::Merger merger(mMoveMerger.Ptr());
+                merger.mName = charclips;
+                merger.mDir = clipsDir;
+                merger.mSubdirs = MergeFilter::kAllSubdirs;
+                merger.mPreClear = true;
+                merger.mSelected = fp;
+                merger.mForceReload = true;
+                mergers->push_back(merger);
                 gMoveMergeMap[clipName]++;
             }
 
@@ -2816,14 +2824,14 @@ void HamDirector::OnPopulateMoves() {
                 FilePath fp(
                     MakeString("modular_song_data/hammoves/%s.milo", hamMiloName)
                 );
-                FileMerger::Merger hamMerger(mMoveMerger.Ptr());
-                hamMerger.mName = hammoves;
-                hamMerger.mDir = movesDir;
-                hamMerger.mSubdirs = MergeFilter::kAllSubdirs;
-                hamMerger.mPreClear = true;
-                hamMerger.mSelected = fp;
-                hamMerger.mForceReload = true;
-                static_cast<std::vector<FileMerger::Merger>&>(mMoveMerger->Mergers()).push_back(hamMerger);
+                FileMerger::Merger merger(mMoveMerger.Ptr());
+                merger.mName = hammoves;
+                merger.mDir = movesDir;
+                merger.mSubdirs = MergeFilter::kAllSubdirs;
+                merger.mPreClear = true;
+                merger.mSelected = fp;
+                merger.mForceReload = true;
+                mergers->push_back(merger);
                 gMoveMergeMap[hamMiloName]++;
             }
     }

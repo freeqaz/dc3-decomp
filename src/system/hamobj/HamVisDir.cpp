@@ -50,7 +50,7 @@ HamVisDir::HamVisDir()
         mSquatPoses[i].pose->AddElement(
             new JointDistPoseElement(kJointHead, kJointKneeLeft, 0, 0.9)
         );
-        mSquatPoses[i].pose->AddElement(new CamDistancePoseElement(1, 2));
+        mSquatPoses[i].pose->AddElement(new CamDistancePoseElement(2, 1));
 
         mSquatPoses[i].holder = new Pose(10, (Pose::ScoreMode)0);
         mSquatPoses[i].holder->AddElement(
@@ -59,7 +59,7 @@ HamVisDir::HamVisDir()
         mSquatPoses[i].holder->AddElement(
             new JointDistPoseElement(kJointHead, kJointKneeLeft, 0, 0.94)
         );
-        mSquatPoses[i].holder->AddElement(new CamDistancePoseElement(1, 1.6));
+        mSquatPoses[i].holder->AddElement(new CamDistancePoseElement(1.6, 1));
 
         mYPoses[i].name = MakeString("pose_y_%i", i);
         mYPoses[i].pose = new Pose(10, (Pose::ScoreMode)1);
@@ -90,28 +90,28 @@ HamVisDir::HamVisDir()
 
         mYPoses[i].holder = new Pose(10, (Pose::ScoreMode)0);
         mYPoses[i].holder->AddElement(new BoneAngleRangePoseElement(
-            kBoneArmLowerRight, Vector3(1, 1, 0), 1.047197580337524, 0
+            kBoneArmLowerRight, Vector3(1, 1, 0), 1.047197580337524, 1
         ));
         mYPoses[i].holder->AddElement(new BoneAngleRangePoseElement(
-            kBoneArmLowerLeft, Vector3(-1, 1, 0), 1.047197580337524, 0
+            kBoneArmLowerLeft, Vector3(-1, 1, 0), 1.047197580337524, 1
         ));
         mYPoses[i].holder->AddElement(new BoneAngleRangePoseElement(
-            kBoneArmUpperRight, Vector3(1, 1, 0), 1.047197580337524, 0
+            kBoneArmUpperRight, Vector3(1, 1, 0), 1.047197580337524, 1
         ));
         mYPoses[i].holder->AddElement(new BoneAngleRangePoseElement(
-            kBoneArmUpperLeft, Vector3(-1, 1, 0), 1.047197580337524, 0
+            kBoneArmUpperLeft, Vector3(-1, 1, 0), 1.047197580337524, 1
         ));
         mYPoses[i].holder->AddElement(new BoneAngleRangePoseElement(
-            kBoneLegLowerRight, Vector3(1, -1, 0), 1.047197580337524, 0
+            kBoneLegLowerRight, Vector3(1, -1, 0), 1.047197580337524, 1
         ));
         mYPoses[i].holder->AddElement(new BoneAngleRangePoseElement(
-            kBoneLegLowerLeft, Vector3(-1, -1, 0), 1.047197580337524, 0
+            kBoneLegLowerLeft, Vector3(-1, -1, 0), 1.047197580337524, 1
         ));
         mYPoses[i].holder->AddElement(new BoneAngleRangePoseElement(
-            kBoneLegUpperRight, Vector3(1, -1, 0), 1.047197580337524, 0
+            kBoneLegUpperRight, Vector3(1, -1, 0), 1.047197580337524, 1
         ));
         mYPoses[i].holder->AddElement(new BoneAngleRangePoseElement(
-            kBoneLegUpperLeft, Vector3(-1, -1, 0), 1.047197580337524, 0
+            kBoneLegUpperLeft, Vector3(-1, -1, 0), 1.047197580337524, 1
         ));
     }
 }
@@ -350,7 +350,7 @@ void HamVisDir::CalcArmLengths(std::vector<float> &armLengths, const Skeleton &s
 }
 
 void HamVisDir::SetGrooviness(float groove) {
-    mGrooviness = (groove - 0.5f) * (2.0 / 3.0f);
+    mGrooviness = (groove - 0.5f) * (2.0f / 3.0f);
     mGrooviness = Clamp<float>(0.0f, 1.0f, mGrooviness);
     for (ObjDirItr<DepthBuffer3D> it(this, true); it != nullptr; ++it) {
         it->SetGrooviness(groove);

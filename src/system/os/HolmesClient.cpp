@@ -657,19 +657,24 @@ void HolmesClientWrite(int file, int offset, int length, const void *data) {
 }
 
 void HolmesClientRead(int arg0, int arg1, int arg2, void *arg3, File *arg4) {
-    if (arg3 != NULL) {
+    if (arg2 != 0) {
         CritSecTracker cst(&gCrit);
         if (gHolmesStream == 0) {
             MILO_ASSERT(gHolmesStream, 0x3c7);
         }
         BeginCmd((Holmes::Protocol)5, true);
-        *gStreamBuffer << u8(5);
-        *gStreamBuffer << arg0;
-        *gStreamBuffer << arg1;
-        *gStreamBuffer << arg3;
+        BinStream *buf = gStreamBuffer;
+        *buf << u8(5);
+        int fd = arg0;
+        *buf << fd;
+        int offset = arg1;
+        *buf << offset;
+        int bytes = arg2;
+        *buf << bytes;
         HolmesFlushStreamBuffer();
 
         ReadRequest req;
+        req.mRequestor = arg4;
         req.mBuffer = arg3;
         req.mBytes = arg2;
         gRequests.insert(gRequests.end(), req);

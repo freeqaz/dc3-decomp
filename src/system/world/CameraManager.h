@@ -45,6 +45,7 @@ public:
 
     CamShot *NextShot() const { return mNextShot; }
     CamShot *CurrentShot() const { return mCurrentShot; }
+    void SetBlendTime(float t) { mBlendTime = t; }
     bool HasFreeCam() const { return mFreeCam; }
     void ForceCamShot(CamShot *);
     FreeCamera *GetFreeCam(int);

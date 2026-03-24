@@ -21,8 +21,8 @@ public:
     const HamMove *Move() const { return mMove; }
     void Reset() {
         if (mActive) {
-            mLastDetectFracs[0] = 0.0f;
-            mLastDetectFracs[1] = 0.0f;
+            *(int *)&mLastDetectFracs[0] = 0;
+            *(int *)&mLastDetectFracs[1] = 0;
             mLastDetectFrameIdx = -1;
             mDetectFrameOffset = -1;
             mActive = false;

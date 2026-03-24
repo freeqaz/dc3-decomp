@@ -296,7 +296,7 @@ void MoveAsyncDetector::DisableDetector(HamMove *move) {
             detector->Reset();
             mActiveDetectors.erase(detector);
         } else {
-            auto _tmp0 = MakeString("Could not disable detector for %s", PathName(move));
+            auto _tmp0 = MakeString("Could not disable detector for %s", move->Name());
             TheDebug.Notify(_tmp0);
         }
     }

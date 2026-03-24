@@ -1271,20 +1271,20 @@ void MetaPerformer::CalcCharacters(
     Symbol &secondaryChar,
     Symbol &secondaryOutfit
 ) {
-    HamPlayerData *pPlayer2Data = TheGameData->Player(1);
     HamPlayerData *pPlayer1Data = TheGameData->Player(0);
+    HamPlayerData *pPlayer2Data = TheGameData->Player(1);
     Symbol player1Char = pPlayer1Data->MiniGameCharacter();
     Symbol player2Char = pPlayer2Data->MiniGameCharacter();
 
     // Clear character preferences based on PlayerFlag
-    if (1 == flags || flags == 2) {
-        player2Char = gNullStr;
-    }
     if (0 == flags || flags == 2) {
         player1Char = gNullStr;
     }
+    if (1 == flags || flags == 2) {
+        player2Char = gNullStr;
+    }
 
-    bool hasPlayer1Char = player1Char != (int)(int)gNullStr;
+    bool hasPlayer1Char = player1Char != gNullStr;
     bool hasPlayer2Char = player2Char != gNullStr;
 
     // Fast path: Both players have valid, non-conflicting characters
@@ -1293,10 +1293,10 @@ void MetaPerformer::CalcCharacters(
         secondaryPlayer = pPlayer2Data;
         primaryCrew = GetCrewForCharacter(player1Char);
         primaryChar = player1Char;
-        primaryOutfit = GetUnlockedOutfit(primaryPlayer->GetPreferredOutfit());
+        primaryOutfit = GetUnlockedOutfit(pPlayer1Data->GetPreferredOutfit());
         secondaryCrew = GetCrewForCharacter(player2Char);
         secondaryChar = player2Char;
-        secondaryOutfit = GetUnlockedOutfit(secondaryPlayer->GetPreferredOutfit());
+        secondaryOutfit = GetUnlockedOutfit(pPlayer2Data->GetPreferredOutfit());
     } else {
         // Need to resolve character conflict or missing preferences
         int skeleton1 = pPlayer1Data->GetSkeletonTrackingID();
@@ -1330,18 +1330,18 @@ void MetaPerformer::CalcCharacters(
             secondaryPlayer = pPlayer1Data;
             primaryPlayerChar = player2Char;
             secondaryPlayerChar = player1Char;
-        } else if (pPlayer1Data->TrackingAgeSeconds() < pPlayer2Data->TrackingAgeSeconds()) {
-            // Use tracking age: newer player (P2) gets priority
-            primaryPlayer = pPlayer2Data;
-            secondaryPlayer = pPlayer1Data;
-            primaryPlayerChar = player2Char;
-            secondaryPlayerChar = player1Char;
-        } else {
+        } else if (pPlayer1Data->TrackingAgeSeconds() >= pPlayer2Data->TrackingAgeSeconds()) {
             // Default: P1 is primary
             primaryPlayer = pPlayer1Data;
             secondaryPlayer = pPlayer2Data;
             primaryPlayerChar = player1Char;
             secondaryPlayerChar = player2Char;
+        } else {
+            // Use tracking age: newer player (P2) gets priority
+            primaryPlayer = pPlayer2Data;
+            secondaryPlayer = pPlayer1Data;
+            primaryPlayerChar = player2Char;
+            secondaryPlayerChar = player1Char;
         }
 
         // Get song's default primary character from metadata

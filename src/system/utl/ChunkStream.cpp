@@ -446,7 +446,8 @@ void ChunkStream::DecompressChunkAsync() {
     }
 
     if (mBuffersState[idx] == kReading) {
-        bool maskexists = (mCurChunk[bufIdx] >> 24) & 1;
+        unsigned int chunkBits = (unsigned int)mCurChunk[bufIdx];
+        bool maskexists = (chunkBits >> 24) & 1;
         if (mChunkInfo.mID != 0xCABEDEAF && !maskexists) {
             mBuffersState[idx] = kDecompressing;
             DecompressTask dtask;
@@ -460,9 +461,10 @@ void ChunkStream::DecompressChunkAsync() {
             // Decompress synchronously on native — no background thread needed
             DecompressChunk(dtask);
 #else
-            gDecompressionCritSec.Enter();
-            gDecompressionQueue.push_back(dtask);
-            gDecompressionCritSec.Exit();
+            {
+                CritSecTracker tracker(&gDecompressionCritSec);
+                gDecompressionQueue.push_back(dtask);
+            }
             StartDecompressionThread();
 #endif
         } else {
