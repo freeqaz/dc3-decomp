@@ -992,23 +992,62 @@ void WorldCrowd::Set3DCharList(
 void WorldCrowd::Mats(std::list<RndMat *> &mats, bool additive) {
     if (additive) {
         MatShaderOptions opts;
-        auto _tmp2 = mCharacters.end();
-        opts.pack = 0x12;
+        int shaderTypes[2] = {0xd, 0x13};
 
-        if (gImpostorMat) {
-            auto _tmp0 = mats.end();
-            RndMat *newMat = (RndMat *)RndMat::NewObject();
-            gImpostorMat->Copy(newMat, Hmx::Object::kCopyDeep);
-            newMat->SetShaderOpts(opts);
-            mats.insert(_tmp0, newMat);
-        }
+        // Set i5 flag on opts
+        opts.pack |= 0x20;
 
-        for (std::list<CharData>::iterator charIt = mCharacters.begin(); charIt != _tmp2; ++charIt) {
-            if (charIt->mDef.mChar && charIt->mMMesh) {
-                for (std::vector<CharData::Char3D>::const_iterator it = charIt->m3DChars.begin(); it != charIt->m3DChars.end(); ++it) {
-                    RndMat *mat = (RndMat *)RndMat::NewObject();
+        // Create impostor mats for all shader type / useEnviron / hasAO combinations
+        for (int p = 0; p < 2; p++) {
+            opts.SetLast5(shaderTypes[p]);
+            for (int envIdx = 0; envIdx < 2; envIdx++) {
+                bool useEnv = (envIdx != 0);
+                for (int aoIdx = 0; aoIdx < 2; aoIdx++) {
+                    RndMat *mat = Hmx::Object::New<RndMat>();
+                    mat->Copy(gImpostorMat, kCopyDeep);
+                    mat->SetUseEnv(useEnv);
+                    opts.mTempMat = true;
+                    opts.shader_struct.mHasAOCalc = 0;
+                    opts.shader_struct.mHasAOCalc = aoIdx;
                     mat->SetShaderOpts(opts);
                     mats.insert(mats.end(), mat);
+                }
+            }
+        }
+
+        // Initialize white color vector for color mod
+        std::vector<Hmx::Color> colors;
+        Hmx::Color white(1.0f, 1.0f, 1.0f, 1.0f);
+        for (int i = 0; i < 3; i++) {
+            colors.push_back(white);
+        }
+
+        // Iterate over color mod flags, skipping kColorModAlphaUnpackModulate
+        for (int colorIdx = 0; colorIdx <= 3; colorIdx++) {
+            if (colorIdx == 2) continue;
+
+            for (std::list<CharData>::iterator charIt = mCharacters.begin();
+                 charIt != mCharacters.end(); ++charIt) {
+                if (charIt->mDef.mUseRandomColor) {
+                    SetMatColorFlags(charIt->mDef.mMats, (BaseMaterial::ColorModFlags)colorIdx, &colors);
+                }
+
+                for (ObjPtrList<RndMat>::iterator matIt = charIt->mDef.mMats.begin();
+                     matIt != charIt->mDef.mMats.end(); ++matIt) {
+                    std::list<unsigned int> flags;
+                    GetMeshShaderFlags(*matIt, flags);
+                    for (std::list<unsigned int>::iterator flagIt = flags.begin();
+                         flagIt != flags.end(); ++flagIt) {
+                        unsigned int flag = *flagIt;
+                        opts.pack = 0x12;
+                        opts.SetHasBones(flag & 1);
+                        opts.SetHasAOCalc((flag >> 1) & 1);
+                        RndMat *newMat = Hmx::Object::New<RndMat>();
+                        newMat->Copy(*matIt, kCopyDeep);
+                        opts.mTempMat = true;
+                        newMat->SetShaderOpts(opts);
+                        mats.insert(mats.end(), newMat);
+                    }
                 }
             }
         }

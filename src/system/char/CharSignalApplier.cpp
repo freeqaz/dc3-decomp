@@ -136,7 +136,7 @@ void CharSignalApplier::Poll() {
     mSmoothedSignal *= Weight();
     if (cur != mBoneOps.end()) {
         do {
-            BoneOp op(this);
+            BoneOp op(0);
             op = *cur;
             RndTransformable *bone = op.mBone;
             if (bone) {
@@ -150,7 +150,7 @@ void CharSignalApplier::Poll() {
                 float angle
                     = ((op.mMaxAngle - op.mMinAngle) * t + op.mMinAngle) * DEG2RAD;
                 Hmx::Matrix3 rotMatX, rotMatY, rotMatZ;
-                Hmx::Matrix3 *rotMat;
+                Hmx::Matrix3 *rotMat = &rotMatZ;
                 switch ((unsigned int)op.mOp) {
                 case 0:
                     MakeRotMatrixX(angle, rotMatX);
@@ -160,7 +160,7 @@ void CharSignalApplier::Poll() {
                     MakeRotMatrixY(angle, rotMatY);
                     rotMat = &rotMatY;
                     break;
-                default:
+                case 2:
                     MakeRotMatrixZ(angle, rotMatZ);
                     rotMat = &rotMatZ;
                     break;

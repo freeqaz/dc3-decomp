@@ -381,23 +381,14 @@ void HamNavList::Poll() {
         // Update scroll speed indicator if present
         if (mScrollSpeedIndicatorResource) {
             if (mRibbonMode != HamListRibbon::kRibbonDisengaged) {
-                // Check if scrolling past min display
-                if (!mListState.ScrollPastMinDisplay()) {
-                    // Check if ribbon resource test entering
-                    if (mScrollSpeedIndicatorResource) {
-                        if (!mScrollSpeedIndicatorResource->IsShowing()) {
-                            mScrollSpeedIndicatorResource->Show(false);
-                        }
-                    }
-                } else if (mRibbonMode == HamListRibbon::kRibbonSwell) {
-                    if (mScrollSpeedIndicatorResource) {
-                        if (!mScrollSpeedIndicatorResource->IsShowing()) {
-                            mScrollSpeedIndicatorResource->Show(false);
-                        }
-                    }
+                if (!mListState.ScrollPastMinDisplay() && mScrollSpeedIndicatorResource->IsShowing()) {
+                    mScrollSpeedIndicatorResource->Show(false);
+                } else if (mRibbonMode == HamListRibbon::kRibbonSwell
+                           && !mScrollSpeedIndicatorResource->IsShowing()
+                           && mListState.ScrollPastMinDisplay()) {
+                    mScrollSpeedIndicatorResource->Show(true);
                 } else {
-                    // Update scroll speed indicator with scroll behavior data
-                    float scrollSpeed = mScrollBehavior.mScrollSpeed;
+                    float scrollSpeed = mHandHeightFilter->mHandHeight;
                     float scrollDownCap = HamScrollBehavior::mScrollDownCap;
                     float scrollUpCap = HamScrollBehavior::mScrollUpCap;
                     mScrollSpeedIndicatorResource->Update(scrollSpeed, scrollUpCap, scrollDownCap);
@@ -406,11 +397,7 @@ void HamNavList::Poll() {
         }
     } else {
         // No valid skeleton - check if we should disengage
-        bool shouldDisengage = true;
-        if (TheGestureMgr->InVoiceMode()) {
-                shouldDisengage = false;
-            };
-        if (shouldDisengage) {
+        if (!TheGestureMgr || !TheGestureMgr->InVoiceMode()) {
             Disengage();
 
             // Hide scroll speed indicator if present
@@ -482,7 +469,7 @@ void HamNavList::Poll() {
     // Update scroll behavior if scrollable
     if (mListRibbonResource && mListState.Provider()
         && mListRibbonResource->IsScrollable(mListState.NumShowing()) && !sForceDisengage) {
-        mScrollBehavior.Update(mScrollBehavior.mScrollSpeed);
+        mScrollBehavior.Update(mHandHeightFilter->mHandHeight);
     }
 
     // Update slide sound anim based on mode
@@ -565,12 +552,12 @@ void HamNavList::Poll() {
     if (mListRibbonResource) {
         if (mTestEnteringOverride) {
             mListRibbonResource->SetTestEntering(true);
-            RndAnimatable::SetFrame(0.0f, 1.0f);
+            SetFrame(0.0f, 1.0f);
         } else {
             if (mListRibbonResource->TestEntering()) {
                 if (!RndAnimatable::IsAnimating()) {
                     mListRibbonResource->SetTestEntering(false);
-                    RndAnimatable::SetFrame(0.0f, 1.0f);
+                    SetFrame(0.0f, 1.0f);
                 }
             }
         }
@@ -580,12 +567,12 @@ void HamNavList::Poll() {
     if (mHeaderRibbonResource) {
         if (mTestEnteringOverride) {
             mHeaderRibbonResource->SetTestEntering(true);
-            RndAnimatable::SetFrame(0.0f, 1.0f);
+            SetFrame(0.0f, 1.0f);
         } else {
             if (mHeaderRibbonResource->TestEntering()) {
                 if (!RndAnimatable::IsAnimating()) {
                     mHeaderRibbonResource->SetTestEntering(false);
-                    RndAnimatable::SetFrame(0.0f, 1.0f);
+                    SetFrame(0.0f, 1.0f);
                 }
             }
         }

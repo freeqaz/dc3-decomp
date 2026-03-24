@@ -8,9 +8,12 @@
 class FxSend360;
 
 struct PoolVoice {
-    int eg;
-    int egParams;
-    char padding[0x1c];
+    int sourceVoice;        // 0x00 - IXAudio2SourceVoice*
+    int eg;                 // 0x04 - XAPO envelope generator
+    int egParams;           // 0x08 - envelope effect parameters
+    tWAVEFORMATEX wfx;     // 0x0c - cached wave format (0x12 bytes)
+    short pad1e;            // 0x1e - padding
+    int disposeTick;        // 0x20 - GetTickCount() timestamp for GC
 };
 
 class Voice {
@@ -70,6 +73,9 @@ public:
     int mSourceVoice; // 0x58 - IXAudio2SourceVoice* (as int for vtable dispatch)
     int mEnvelopeEffect; // 0x5c - XAPO envelope generator (PoolVoice.eg)
     void *mEnvelopeParams; // 0x60 - envelope effect parameters (PoolVoice.egParams)
+    tWAVEFORMATEX mWaveFormat; // 0x64 - cached wave format (0x12 bytes, copied in createOrReuse)
+    short mPadding76; // 0x76 - alignment padding
+    int mDisposeTick; // 0x78 - GetTickCount() timestamp for voice GC
 
 private:
     void UpdateMix();

@@ -577,16 +577,16 @@ unsigned long StartVoiceThreadEntry(void *) {
             for (std::deque<PoolVoice>::iterator it = s_voiceGCInProgress.begin();
                  it != s_voiceGCInProgress.end(); ++it) {
                 PoolVoice &pv = *it;
+                if (pv.sourceVoice) {
+                    int *pSv = (int *)pv.sourceVoice;
+                    ((void (*)(int *, int))(*(int *)(*(int *)pSv + 0x48)))(pSv, 0);
+                }
                 if (pv.eg) {
                     int *pEg = (int *)pv.eg;
-                    ((void (*)(int *, int))(*(int *)(*(int *)pEg + 0x48)))(pEg, 0);
-                }
-                if (pv.egParams) {
-                    int *pParams = (int *)pv.egParams;
-                    ((void (*)(int *, int))(*(int *)(*(int *)pParams + 0x38)))(pParams, 1);
+                    ((void (*)(int *, int))(*(int *)(*(int *)pEg + 0x38)))(pEg, 1);
+                    pv.eg = 0;
+                    PoolFree(0x10, (void *)pv.egParams, __FILE__, 0x1e, "EnvelopeGeneratorParams");
                     pv.egParams = 0;
-                    PoolFree(0x10, *(void **)&pv.padding[0], __FILE__, 0x1e, "EnvelopeGeneratorParams");
-                    *(int *)&pv.padding[0] = 0;
                 }
             }
             cs->Exit();

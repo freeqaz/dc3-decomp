@@ -44,6 +44,18 @@ bool SynthSample360::IsXMA() const {
     return mSampleData.GetFormat() == SampleData::kXMA;
 }
 
+int SynthSample360::GetNumSamples() const {
+    return mSampleData.GetNumSamples();
+}
+
+int SynthSample360::GetNumBytes() const {
+    return mSampleData.GetSizeBytes();
+}
+
+unsigned int SynthSample360::GetDataAddr() const {
+    return mSampleData.DataAddr();
+}
+
 float SynthSample360::LengthMs() const {
     if (mSampleData.HasData()) {
         int numSamples = mSampleData.GetNumSamples();

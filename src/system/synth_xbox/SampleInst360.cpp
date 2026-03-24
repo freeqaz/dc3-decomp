@@ -1,8 +1,15 @@
 #include "synth_xbox/SampleInst360.h"
 #include "synth_xbox/Voice.h"
 
-SampleInst360::SampleInst360(SynthSample360 *sample, bool b, int i1, int i2)
-    : SampleInst(sample), mVoice(0), unk_ac(0) {}
+SampleInst360::SampleInst360(SynthSample360 *sample, bool loop, int startSample, int endSample)
+    : SampleInst(sample) {
+    mVoice = new Voice(sample->IsXMA(), sample->GetNumChannels(), false);
+    mVoice->SetSampleRate(sample->GetSampleRate());
+    mVoice->SetData((const void *)sample->GetDataAddr(), sample->GetNumBytes(), sample->GetNumSamples());
+    if (loop) {
+        mVoice->SetLoopRegion(startSample, endSample);
+    }
+}
 
 SampleInst360::~SampleInst360() {
     Voice *voice = mVoice;

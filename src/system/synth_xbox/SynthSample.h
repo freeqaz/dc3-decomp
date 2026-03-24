@@ -13,6 +13,9 @@ public:
     virtual float LengthMs() const;
 
     bool IsXMA() const;
+    int GetNumSamples() const;
+    int GetNumBytes() const;
+    unsigned int GetDataAddr() const;
 
     NEW_OBJ(SynthSample360)
     static void Register() { REGISTER_OBJ_FACTORY(SynthSample360) }

@@ -58,6 +58,7 @@ public:
     int GetSampleRate() const { return mSampleRate; }
     int GetNumSamples() const { return mNumSamples; }
     Format GetFormat() const { return mFormat; }
+    int GetSizeBytes() const { return mSizeBytes; }
     bool HasData() const { return mData != nullptr; }
     unsigned int DataAddr() const { return (unsigned int)(uintptr_t)mData; }
 #ifdef HX_NATIVE

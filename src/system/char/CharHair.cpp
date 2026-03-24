@@ -436,24 +436,28 @@ void CharHair::Hookup(ObjPtrList<CharCollide> &collides) {
 
             col->SyncWorldState();
 
-            const Transform &colXfm = col->WorldXfm();
-            Vector3 colPos(colXfm.v);
+            Vector3 colPos(col->WorldXfm().v);
             float colAdjust = 0.0f;
 
-            CharCollide::Shape shape = col->GetShape();
-            if (colFlags != 0 && (int)shape > 0) {
-                if ((int)shape < 3) {
-                    colAdjust = col->GetCurRadius();
-                } else if ((int)shape < 5) {
-                    float len0 = col->GetCurLength0();
-                    float rad0 = col->GetCurRadius();
-                    float rad1 = col->GetCurRadius1();
-                    float len1 = col->GetCurLength1();
-                    Vector3 p1, p2;
-                    ScaleAdd(colXfm.v, colXfm.m.x, len0 - rad0, p1);
-                    ScaleAdd(colXfm.v, colXfm.m.x, rad1 + len1, p2);
-                    Interp(p1, p2, 0.5f, colPos);
-                    colAdjust = Distance(p1, p2) * 0.5f;
+            if (colFlags != 0) {
+                int shape = (int)col->GetShape();
+                if (shape > 0) {
+                    if (shape > 2) {
+                        if (shape <= 4) {
+                            float len0 = col->GetCurLength0();
+                            float rad0 = col->GetCurRadius();
+                            Vector3 p1;
+                            ScaleAdd(col->WorldXfm().v, col->WorldXfm().m.x, len0 - rad0, p1);
+                            float len1 = col->GetCurLength1();
+                            float rad1 = col->GetCurRadius1();
+                            Vector3 p2;
+                            ScaleAdd(col->WorldXfm().v, col->WorldXfm().m.x, rad1 + len1, p2);
+                            Interp(p1, p2, 0.5f, colPos);
+                            colAdjust = Distance(p1, p2) * 0.5f;
+                        }
+                    } else {
+                        colAdjust = col->GetCurRadius();
+                    }
                 }
             }
 
@@ -463,16 +467,11 @@ void CharHair::Hookup(ObjPtrList<CharCollide> &collides) {
             for (int j = 0; j < pts.size(); j++) {
                 Point &pt = pts[j];
                 dist -= pt.length;
-                float maxRad = pt.outerRadius < pt.radius ? pt.radius : pt.outerRadius;
-                if (dist < maxRad) {
+                float maxRad = Max(pt.radius, pt.outerRadius);
+                if (maxRad > dist) {
                     pt.collides.push_back(col);
 
-                    ObjPtrList<CharCollide>::iterator found = mCollides.begin();
-                    for (; found != mCollides.end(); ++found) {
-                        if (*found == col)
-                            break;
-                    }
-                    if (found == mCollides.end()) {
+                    if (mCollides.find(col) == mCollides.end()) {
                         mCollides.push_back(col);
                     }
                 }
