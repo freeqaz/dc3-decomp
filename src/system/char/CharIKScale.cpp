@@ -74,41 +74,37 @@ END_LOADS
 
 void CharIKScale::Poll() {
     float weight = Weight();
-    if (mDest && weight > 0) {
+    if (mDest && weight != 0) {
         if (mAutoWeight) {
             float localZ = mDest->LocalXfm().v.z;
             if (localZ < mBottomHeight)
-                weight = 0.0f;
+                weight = 0;
             else if (localZ > mTopHeight)
-                weight = 1.0f;
+                weight = 1;
             else
                 weight = (localZ - mBottomHeight) / (mTopHeight - mBottomHeight);
         }
-        if (weight > 0) {
+        if (weight != 0) {
             Transform destXfm(mDest->WorldXfm());
-            destXfm.v = mDest->LocalXfm().v;
-            destXfm.v.z *= Interp(1.0f, mScale, weight);
-            Vector3 scaledWorldPos;
+            Vector3 localPos = mDest->LocalXfm().v;
+            localPos.z *= Interp(1.0f, mScale, weight);
             if (mDest->TransParent()) {
-                Multiply(destXfm.v, mDest->TransParent()->WorldXfm(), scaledWorldPos);
-            } else {
-                scaledWorldPos = destXfm.v;
+                Multiply(localPos, mDest->TransParent()->WorldXfm(), destXfm.v);
             }
             mDest->SetWorldXfm(destXfm);
             if (mSecondaryTargets.size() > 0) {
-                Vector3 fullScaledPos = mDest->LocalXfm().v;
-                fullScaledPos.z *= mScale;
+                localPos.z = mDest->LocalXfm().v.z * mScale;
                 Vector3 fullScaledWorldPos;
-                Multiply(fullScaledPos, mDest->TransParent()->WorldXfm(), fullScaledWorldPos);
-                Vector3 offset = scaledWorldPos;
+                Multiply(localPos, mDest->TransParent()->WorldXfm(), fullScaledWorldPos);
+                Vector3 offset = destXfm.v;
                 offset -= fullScaledWorldPos;
                 for (ObjPtrList<RndTransformable>::iterator it = mSecondaryTargets.begin();
                      it != mSecondaryTargets.end();
                      ++it) {
-                    RndTransformable *target = *it;
-                    Transform targetXfm(target->WorldXfm());
+                    RndTransformable *cur = *it;
+                    Transform targetXfm(cur->WorldXfm());
                     targetXfm.v -= offset;
-                    target->SetWorldXfm(targetXfm);
+                    cur->SetWorldXfm(targetXfm);
                 }
             }
         }

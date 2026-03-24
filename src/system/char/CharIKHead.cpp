@@ -1,4 +1,5 @@
 #include "char/CharIKHead.h"
+#include "char/Character.h"
 #include "char/CharWeightable.h"
 #include "math/Vec.h"
 #include "math/Rot.h"
@@ -7,6 +8,8 @@
 #include "rndobj/Rnd.h"
 #include "rndobj/Trans.h"
 #include "rndobj/Utl.h"
+
+void NormalizeScale(const Vector3 &, float, Vector3 &);
 
 #pragma region CharIKHead
 
@@ -21,22 +24,25 @@ void CharIKHead::Poll() {
     if (!mHead || !mTarget || !mSpine)
         return;
     UpdatePoints(false);
-    if (TheTaskMgr.DeltaSeconds() > 0 && mHead) {
+    Character *me = Character::Current();
+    if (me && me->Teleported()) {
+        mHeadFilter = mHead->WorldXfm().v;
+    } else if (TheTaskMgr.DeltaSeconds() > 0) {
         Interp(mHeadFilter, mHead->WorldXfm().v, 0.5f, mHeadFilter);
     }
     float weight = Weight();
-    if (weight > 0) {
-        Vector3 headOffset;
+    if (weight != 0) {
         Hmx::Matrix3 origHeadMat(mHead->WorldXfm().m);
+        Vector3 headOffset;
         Subtract(mHead->WorldXfm().v, mHeadFilter, headOffset);
         Vector3 targetPos = mTarget->WorldXfm().v;
         float headOffsetLen = Length(headOffset);
         if (headOffsetLen > 0) {
             float blendDist = Min(headOffsetLen, mTargetRadius * weight);
-            ScaleAdd(targetPos, headOffset, blendDist / headOffsetLen, targetPos);
+            ScaleAddEq(targetPos, headOffset, blendDist / headOffsetLen);
         }
-        auto& _sub0 = mPoints[0];
-        Interp(_sub0.mBone->WorldXfm().v, targetPos, weight, targetPos);
+        mDebugTarget = targetPos;
+        Interp(mPoints[0].mBone->WorldXfm().v, targetPos, weight, targetPos);
         Vector3 spineToTarget;
         Subtract(targetPos, mSpine->TransParent()->WorldXfm().v, spineToTarget);
         float distSq = LengthSquared(spineToTarget);
@@ -48,10 +54,11 @@ void CharIKHead::Poll() {
                 targetPos
             );
         }
-        Subtract(targetPos, _sub0.mBone->WorldXfm().v, spineToTarget);
+        Subtract(targetPos, mPoints[0].mBone->WorldXfm().v, spineToTarget);
         for (int i = 0; i < mPoints.size(); i++) {
             Point &pt = mPoints[i];
             ScaleAdd(pt.mBone->WorldXfm().v, spineToTarget, pt.mLenRatio, pt.mPos);
+            pt.mWorldPos = pt.mPos;
         }
         Vector3 correction(0, 0, 0);
         for (int i = 1; i < mPoints.size(); i++) {
@@ -59,14 +66,12 @@ void CharIKHead::Poll() {
             Vector3 diff;
             Subtract(mPoints[i].mPos, mPoints[i - 1].mPos, diff);
             correction -= diff;
-            float diffLen = Length(diff);
-            if (diffLen > 0)
-                Scale(diff, mPoints[i - 1].mLen / diffLen, diff);
+            NormalizeScale(diff, mPoints[i - 1].mLen, diff);
             correction += diff;
             Add(mPoints[i - 1].mPos, diff, mPoints[i].mPos);
         }
         for (int i = 1; i < mPoints.size(); i++) {
-            ScaleAdd(mPoints[i].mPos, correction, mPoints[i].mLenRatio - 1.0f, mPoints[i].mPos);
+            ScaleAddEq(mPoints[i].mPos, correction, mPoints[i].mLenRatio - 1.0f);
         }
         for (int i = mPoints.size() - 1; i >= 0; i--) {
             Transform boneXfm(mPoints[i].mBone->WorldXfm().m, mPoints[i].mPos);
@@ -83,7 +88,6 @@ void CharIKHead::Poll() {
             } else {
                 Interp(boneXfm.m, origHeadMat, mHeadMat, boneXfm.m);
             }
-            mPoints[i].mWorldPos = mPoints[i].mPos;
             mPoints[i].mBone->SetWorldXfm(boneXfm);
         }
         if (mOffset) {
@@ -92,7 +96,6 @@ void CharIKHead::Poll() {
             offsetXfm.v += spineToTarget;
             mOffset->SetWorldXfm(offsetXfm);
         }
-        mDebugTarget = targetPos;
     }
 }
 

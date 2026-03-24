@@ -567,22 +567,13 @@ void CharBonesSamples::EvaluateChannel(void *dest, int byteOffset, int sample, f
         int comp = mCompression;
         if (byteOffset >= mOffsets[TYPE_QUAT]) {
             float *out = (float *)dest;
+            Hmx::Quat q0, q1;
             if (comp >= kCompressQuats) {
-                Hmx::Quat q0, q1;
                 ((const ByteQuat *)src)->ToQuat(q0);
                 ((const ByteQuat *)srcNext)->ToQuat(q1);
-                out[0] = q0.x + (q1.x - q0.x) * frac;
-                out[1] = q0.y + (q1.y - q0.y) * frac;
-                out[2] = q0.z + (q1.z - q0.z) * frac;
-                out[3] = q0.w + (q1.w - q0.w) * frac;
             } else if (comp != kCompressNone) {
-                Hmx::Quat q0, q1;
                 ((const ShortQuat *)src)->ToQuat(q0);
                 ((const ShortQuat *)srcNext)->ToQuat(q1);
-                out[0] = q0.x + (q1.x - q0.x) * frac;
-                out[1] = q0.y + (q1.y - q0.y) * frac;
-                out[2] = q0.z + (q1.z - q0.z) * frac;
-                out[3] = q0.w + (q1.w - q0.w) * frac;
             } else {
                 float *s0 = (float *)src;
                 float *s1 = (float *)srcNext;
@@ -590,7 +581,13 @@ void CharBonesSamples::EvaluateChannel(void *dest, int byteOffset, int sample, f
                 out[1] = s0[1] + (s1[1] - s0[1]) * frac;
                 out[2] = s0[2] + (s1[2] - s0[2]) * frac;
                 out[3] = s0[3] + (s1[3] - s0[3]) * frac;
+                goto quat_done;
             }
+            out[0] = q0.x + (q1.x - q0.x) * frac;
+            out[1] = q0.y + (q1.y - q0.y) * frac;
+            out[2] = q0.z + (q1.z - q0.z) * frac;
+            out[3] = q0.w + (q1.w - q0.w) * frac;
+            quat_done:;
         } else {
             if (comp >= kCompressVects) {
                 float scale = 1300.0f / 32767.0f;

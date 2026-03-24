@@ -10,6 +10,20 @@
 #include "utl/BinStream.h"
 #include "rndobj/Utl.h"
 
+#ifdef HX_NATIVE
+#include <cstdio>
+#include <cstdlib>
+
+static bool DebugArmPollablesEnabled() {
+    static int sEnabled = -1;
+    if (sEnabled == -1) {
+        const char *env = getenv("MILO_DEBUG_ARM_POLLABLES");
+        sEnabled = (env && env[0] && env[0] != '0') ? 1 : 0;
+    }
+    return sEnabled != 0;
+}
+#endif
+
 #pragma region CharIKHand
 
 CharIKHand::CharIKHand()
@@ -339,15 +353,14 @@ void CharIKHand::Poll() {
         mHand->SetWorldXfm(handXfm);
     }
 
-    if (mConstraintWrist && charWeight > 0.0f) {
-        if (shoulderParent) {
+    if (mConstraintWrist && charWeight > 0.0f && shoulderParent) {
         Vector3 fingerSavedPos(mFinger->WorldXfm().v);
         Hmx::Matrix3 elbowMat(shoulderParent->WorldXfm().m);
         Hmx::Matrix3 handMat(mHand->WorldXfm().m);
         Vector3 handX(handMat.x);
         Vector3 handY(handMat.y);
         Vector3 handZ(handMat.z);
-        float acosDot = acosf(Dot(elbowMat.x, handZ)) - 1.570796370506287f;
+        float acosDot = (float)std::acos(Dot(elbowMat.x, handZ)) - 1.570796370506287f;
         float absAcosDot;
         if (acosDot > 0.0f)
             absAcosDot = acosDot;
@@ -378,7 +391,6 @@ void CharIKHand::Poll() {
             mHand->SetWorldXfm(wristXfm);
         }
     }
-    }
 }
 
 void CharIKHand::IKElbow(RndTransformable *elbow, RndTransformable *shoulder) {
@@ -394,6 +406,28 @@ void CharIKHand::IKElbow(RndTransformable *elbow, RndTransformable *shoulder) {
     float cosAngle = mInv2ab * (LengthSquared(shoulderToWrist) - mAABB);
     ClampEq(cosAngle, -1.0f, 1.0f);
     float sinAngle = -std::sqrt(-(cosAngle * cosAngle - 1.0f));
+#ifdef HX_NATIVE
+    static int sDebugElbowCount = 0;
+    if (DebugArmPollablesEnabled() && sDebugElbowCount < 24) {
+        fprintf(
+            stderr,
+            "ARM-ELBOW name='%s' elbow='%s' shoulder='%s' hand='%s' "
+            "cos=%.4f sin=%.4f inv2ab=%.4f aabb=%.4f dst=(%.3f,%.3f,%.3f)\n",
+            Name(),
+            elbow->Name(),
+            shoulder->Name(),
+            mHand ? mHand->Name() : "(null)",
+            cosAngle,
+            sinAngle,
+            mInv2ab,
+            mAABB,
+            mWorldDst.x,
+            mWorldDst.y,
+            mWorldDst.z
+        );
+        sDebugElbowCount++;
+    }
+#endif
     elbow->DirtyLocalXfm().m.Set(cosAngle, sinAngle, 0, -sinAngle, cosAngle, 0, 0, 0, 1);
     Vector3 handPos, targetPos;
     MultiplyTranspose(mHand->WorldXfm().v, shoulder->WorldXfm(), handPos);
@@ -423,7 +457,7 @@ void CharIKHand::IKElbow(RndTransformable *elbow, RndTransformable *shoulder) {
         shoulderXfm2.v += shoulderAdj;
         shoulder->SetWorldXfm(shoulderXfm2);
         if (mElbowCollide->GetShape() != CharCollide::kCollideSphere)
-            MILO_WARN("%s: elbow collision object not sphere.\n", Name());
+            MILO_NOTIFY("%s: elbow collision object not sphere.", Name());
         else {
             Vector3 sphereCenter(mElbowCollide->WorldXfm().v);
             float sphereRadius = mElbowCollide->GetCurRadius();
@@ -437,7 +471,7 @@ void CharIKHand::IKElbow(RndTransformable *elbow, RndTransformable *shoulder) {
                 Vector3 axisProj;
                 Scale(unitAxis, Dot(elbowToTarget, unitAxis), axisProj);
                 Add(axisProj, mWorldDst, axisProj);
-                Vector3 elbowDir(shoulder->WorldXfm().v);
+                Vector3 elbowDir(elbow->WorldXfm().v);
                 elbowDir -= axisProj;
                 float elbowLen = Length(elbowDir);
                 Vector3 axisDir(shoulder->WorldXfm().v);
@@ -449,14 +483,13 @@ void CharIKHand::IKElbow(RndTransformable *elbow, RndTransformable *shoulder) {
                 Subtract(axisProj, sphereCenter, sphereToMid);
                 Scale(axisDir, Dot(axisDir, sphereToMid), sphereToMid);
                 Add(sphereCenter, sphereToMid, sphereToMid);
-                float sDistToAxis = Distance(sphereToMid, sphereCenter);
-                MILO_ASSERT(sDistToAxis <= sphereRadius, 0x1A1);
-                float sPerpDist = std::sqrt(sphereRadius * sphereRadius - sDistToAxis * sDistToAxis);
+                float a = Distance(sphereToMid, sphereCenter);
+                MILO_ASSERT(a <= sphereRadius, 0x1A2);
+                float sPerpDist = std::sqrt(sphereRadius * sphereRadius - a * a);
                 sphereCenter.Set(sphereToMid.x, sphereToMid.y, sphereToMid.z);
                 float sphereToAxisDist = Distance(sphereCenter, axisProj);
-                float d = sphereToAxisDist * sphereToAxisDist + -(sDistToAxis * sDistToAxis - sPerpDist * sPerpDist) + sphereToAxisDist * 2.0f;
-                float sqrtTerm = std::sqrt((d * d - sPerpDist * sPerpDist));
-                sqrtTerm = -sqrtTerm;
+                float d = (sphereToAxisDist * sphereToAxisDist + -(a * a - sPerpDist * sPerpDist)) / (sphereToAxisDist * 2.0f);
+                float sqrtTerm = std::sqrt(-(d * d - sPerpDist * sPerpDist));
                 float tiltAngle = std::asin(sqrtTerm / elbowLen);
                 if (IsNaN(tiltAngle))
                     return;

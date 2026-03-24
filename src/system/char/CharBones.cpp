@@ -687,12 +687,12 @@ void CharBones::ScaleAdd(CharBones &dst, float f) const {
                     if (db >= db_end) goto complain;
                     ddata++;
                 }
-                ddata->x += (float)(long long)sdata[0] * 0.039674062f * f;
-                ddata->z += (float)(long long)sz * 0.039674062f * f;
-                ddata->y += (float)(long long)sy * 0.039674062f * f;
+                ddata->x += (float)sdata[0] * 0.039674062f * f;
+                ddata->z += (float)sz * 0.039674062f * f;
+                ddata->y += (float)sy * 0.039674062f * f;
                 db->weight += src->weight * f;
                 src++;
-                if (src >= src_end) goto add_quat;
+                if (src == src_end) goto add_quat;
                 db++;
                 if (db >= db_end) goto complain;
                 ddata++;
@@ -711,7 +711,7 @@ void CharBones::ScaleAdd(CharBones &dst, float f) const {
                 ddata->z += sdata->z * f;
                 db->weight += src->weight * f;
                 src++;
-                if (src >= src_end) goto add_quat;
+                if (src == src_end) goto add_quat;
                 db++;
                 if (db >= db_end) goto complain;
                 ddata++;
@@ -722,7 +722,7 @@ void CharBones::ScaleAdd(CharBones &dst, float f) const {
 add_quat:
     if (mCounts[TYPE_ROTX] > mCounts[TYPE_QUAT]) {
         Bone *db_end = dst.mBones.begin() + dst.mCounts[TYPE_ROTX];
-        const Bone *src_end = mBones.data() + mCounts[TYPE_ROTX];
+        const Bone *src_end = mBones.begin() + mCounts[TYPE_ROTX];
         Bone *db = dst.mBones.begin() + dst.mCounts[TYPE_QUAT];
         Hmx::Quat *dquat = (Hmx::Quat *)(dst.mStart + dst.mOffsets[TYPE_QUAT]);
         float abs_f = fabs(f);
@@ -756,7 +756,7 @@ add_quat:
                 }
                 db->weight += src->weight * f;
                 src++;
-                if (src >= src_end) goto add_rot;
+                if (src == src_end) goto add_rot;
                 db++;
                 if (db >= db_end) goto complain;
                 dquat++;
@@ -792,7 +792,7 @@ add_quat:
                 }
                 db->weight += src->weight * f;
                 src++;
-                if (src >= src_end) goto add_rot;
+                if (src == src_end) goto add_rot;
                 db++;
                 if (db >= db_end) goto complain;
                 dquat++;
@@ -827,7 +827,7 @@ add_quat:
                 }
                 db->weight += src->weight * f;
                 src++;
-                if (src >= src_end) goto add_rot;
+                if (src == src_end) goto add_rot;
                 db++;
                 if (db >= db_end) goto complain;
                 dquat++;
@@ -840,7 +840,7 @@ add_rot:
         Bone *db_end = dst.mBones.begin() + dst.mCounts[TYPE_END];
         float *dfdata = (float *)(dst.mStart + dst.mOffsets[TYPE_ROTX]);
         Bone *db = dst.mBones.begin() + dst.mCounts[TYPE_ROTX];
-        const Bone *src_end = mBones.data() + mCounts[TYPE_END];
+        const Bone *src_end = mBones.begin() + mCounts[TYPE_END];
         float *sfdata = (float *)(mStart + mOffsets[TYPE_ROTX]);
         if (mCompression != kCompressNone) {
             while (true) {
@@ -849,10 +849,10 @@ add_rot:
                     if (db >= db_end) goto complain;
                     dfdata++;
                 }
-                *dfdata += (float)(long long)*(short *)sfdata * (f * 0.0006103515625f);
+                *dfdata += (float)*(short *)sfdata * (f * 0.0006103515625f);
                 db->weight += src->weight * f;
                 src++;
-                if (src >= src_end) return;
+                if (src == src_end) return;
                 db++;
                 if (db >= db_end) goto complain;
                 dfdata++;
@@ -868,7 +868,7 @@ add_rot:
                 *dfdata += *sfdata * f;
                 db->weight += src->weight * f;
                 src++;
-                if (src >= src_end) return;
+                if (src == src_end) return;
                 db++;
                 if (db >= db_end) goto complain;
                 dfdata++;
@@ -926,7 +926,7 @@ void CharBones::RotateBy(CharBones &dst) const {
                 ddata->x += sdata->x;
                 ddata->y += sdata->y;
                 ddata->z += sdata->z;
-                if (src >= src_end) goto rotate_quat;
+                if (src == src_end) goto rotate_quat;
                 db++;
                 if (db >= db_end) goto complain;
                 ddata++;
@@ -940,7 +940,7 @@ rotate_quat:
         Bone *db = dst.mBones.begin() + dst.mCounts[TYPE_QUAT];
         Hmx::Quat *dquat = (Hmx::Quat *)(dst.mStart + dst.mOffsets[TYPE_QUAT]);
         int src_quat_off = mOffsets[TYPE_QUAT];
-        const Bone *src_end = mBones.data() + _ref1[TYPE_ROTX];
+        const Bone *src_end = mBones.begin() + _ref1[TYPE_ROTX];
         if (mCompression >= kCompressQuats) {
             char *sqdata = (char *)(src_quat_off + mStart);
             while (true) {
@@ -957,8 +957,6 @@ rotate_quat:
                 float dz = dquat->z;
                 float dy = dquat->y;
 #ifdef HX_NATIVE
-                // Native fix: PPC decomp has w-component sign negated (decompiler
-                // register mis-mapping). Use standard quaternion multiply: dst = src * dst
                 float nw = sq.w*dw - sq.x*dx - sq.y*dy - sq.z*dz;
                 float nx = sq.w*dx + sq.x*dw + sq.y*dz - sq.z*dy;
                 float ny = sq.w*dy - sq.x*dz + sq.y*dw + sq.z*dx;
@@ -970,7 +968,7 @@ rotate_quat:
                 dquat->y = -(dz * sq.x - (dw * sq.y + dy * sq.w + dx * sq.z));
                 dquat->x = -(dy * sq.z - (dw * sq.x + dz * sq.y + dx * sq.w));
 #endif
-                if (src >= src_end) goto rotate_rot;
+                if (src == src_end) goto rotate_rot;
                 db++;
                 if (db >= db_end) goto complain;
                 dquat++;
@@ -992,7 +990,6 @@ rotate_quat:
                 float dz = dquat->z;
                 float dy = dquat->y;
 #ifdef HX_NATIVE
-                // Native fix: same w-sign decompiler artifact as ByteQuat path
                 float nw = sq.w*dw - sq.x*dx - sq.y*dy - sq.z*dz;
                 float nx = sq.w*dx + sq.x*dw + sq.y*dz - sq.z*dy;
                 float ny = sq.w*dy - sq.x*dz + sq.y*dw + sq.z*dx;
@@ -1004,7 +1001,7 @@ rotate_quat:
                 dquat->y = -(dz * sq.x - (dw * sq.y + dy * sq.w + dx * sq.z));
                 dquat->x = -(dy * sq.z - (dw * sq.x + dz * sq.y + dx * sq.w));
 #endif
-                if (src >= src_end) goto rotate_rot;
+                if (src == src_end) goto rotate_rot;
                 db++;
                 if (db >= db_end) goto complain;
                 dquat++;
@@ -1033,7 +1030,7 @@ rotate_quat:
                 dquat->z = -dquat->z;
                 dquat->w = -(dz * sz - -(dy * sy - (dw * sw - sx * dx)));
                 dquat->x = -(dy * sz - (sy * dz + sx * dw + dx * sw));
-                if (src >= src_end) goto rotate_rot;
+                if (src == src_end) goto rotate_rot;
                 db++;
                 if (db >= db_end) goto complain;
                 dquat++;
@@ -1044,7 +1041,7 @@ rotate_quat:
 rotate_rot:
     if (_ref1[TYPE_END] > _ref1[TYPE_ROTX]) {
         Bone *db_end = dst.mBones.begin() + dst.mCounts[TYPE_END];
-        const Bone *src_end = mBones.data() + _ref1[TYPE_END];
+        const Bone *src_end = mBones.begin() + _ref1[TYPE_END];
         Bone *db = dst.mBones.begin() + dst.mCounts[TYPE_ROTX];
         float *dfdata = (float *)(dst.mStart + dst.mOffsets[TYPE_ROTX]);
         float *sfdata = (float *)(mStart + mOffsets[TYPE_ROTX]);
@@ -1057,7 +1054,7 @@ rotate_rot:
                 }
                 src++;
                 *dfdata += (float)(long long)*(short *)sfdata * 0.00061035156f;
-                if (src >= src_end) return;
+                if (src == src_end) return;
                 db++;
                 if (db >= db_end) goto complain;
                 dfdata++;
@@ -1072,7 +1069,7 @@ rotate_rot:
                 }
                 src++;
                 *dfdata += *sfdata;
-                if (src >= src_end) return;
+                if (src == src_end) return;
                 db++;
                 if (db >= db_end) goto complain;
                 dfdata++;
@@ -1089,7 +1086,7 @@ complain:
 // MARK: RotateTo
 void CharBones::RotateTo(CharBones &dst, float f) const {
     const Bone *src = mBones.begin();
-    if (src >= mBones.end()) return;
+    if (src == mBones.end()) return;
 
     // Position section
     if (mCounts[TYPE_QUAT] > mCounts[TYPE_POS]) {
@@ -1111,7 +1108,7 @@ void CharBones::RotateTo(CharBones &dst, float f) const {
                 ddata->x += (float)(long long)sdata[0] * 0.039674062f * f;
                 ddata->y += (float)(long long)sy * 0.039674062f * f;
                 ddata->z += (float)sz * 0.039674062f * f;
-                if (src >= src_end) goto rotateto_quat;
+                if (src == src_end) goto rotateto_quat;
                 db++;
                 if (db >= db_end) goto complain;
                 ddata++;
@@ -1129,7 +1126,7 @@ void CharBones::RotateTo(CharBones &dst, float f) const {
                 ddata->x += sdata->x * f;
                 ddata->y += sdata->y * f;
                 ddata->z += sdata->z * f;
-                if (src >= src_end) goto rotateto_quat;
+                if (src == src_end) goto rotateto_quat;
                 db++;
                 if (db >= db_end) goto complain;
                 ddata++;
@@ -1144,7 +1141,7 @@ rotateto_quat:
         Bone *db = dst.mBones.begin() + dst.mCounts[TYPE_QUAT];
         Hmx::Quat *dquat = (Hmx::Quat *)(dst.mStart + dst.mOffsets[TYPE_QUAT]);
         int src_quat_off = mOffsets[TYPE_QUAT];
-        const Bone *src_end = mBones.data() + mCounts[TYPE_ROTX];
+        const Bone *src_end = mBones.begin() + mCounts[TYPE_ROTX];
         if (mCompression >= kCompressQuats) {
             char *sqdata = (char *)(src_quat_off + mStart);
             while (true) {
@@ -1169,9 +1166,6 @@ rotateto_quat:
                 float dw = dquat->w;
                 float dy = dquat->y;
 #ifdef HX_NATIVE
-                // Native fix: PPC decomp has multiple decompiler register mis-mappings
-                // in compressed paths. Use standard quaternion multiply: dst = src * dst
-                // where src = (sx, sy, sq.z, sq.w) after scaling/interpolation
                 { float sw_ = sq.w, sx_ = sx, sy_ = sy, sz_ = sq.z;
                 float nw = sw_*dw - sx_*dx - sy_*dy - sz_*dz;
                 float nx = sw_*dx + sx_*dw + sy_*dz - sz_*dy;
@@ -1184,7 +1178,7 @@ rotateto_quat:
                 dquat->y = -(dx * sq.z - ((dz * sx + (dy * sq.w + dw * sy))));
                 dquat->x = -(dz * sy - (dw * sx + dy * sq.z + dx * sq.w));
 #endif
-                if (src >= src_end) goto rotateto_rot;
+                if (src == src_end) goto rotateto_rot;
                 db++;
                 if (db >= db_end) goto complain;
                 dquat++;
@@ -1214,7 +1208,6 @@ rotateto_quat:
                 float dw = dquat->w;
                 float dy = dquat->y;
 #ifdef HX_NATIVE
-                // Native fix: same decompiler register mis-mappings as ByteQuat path
                 { float sw_ = sq.w, sx_ = sx, sy_ = sy, sz_ = sq.z;
                 float nw = sw_*dw - sx_*dx - sy_*dy - sz_*dz;
                 float nx = sw_*dx + sx_*dw + sy_*dz - sz_*dy;
@@ -1227,7 +1220,7 @@ rotateto_quat:
                 dquat->y = -(dx * sq.z - (sy * dw + dy * sq.w + dz * sx));
                 dquat->x = -(dz * sy - (dw * sx + dy * sq.z + dx * sq.w));
 #endif
-                if (src >= src_end) goto rotateto_rot;
+                if (src == src_end) goto rotateto_rot;
                 db++;
                 if (db >= db_end) goto complain;
                 dquat++;
@@ -1259,7 +1252,7 @@ rotateto_quat:
                 dquat->w = -(sz * dz - -(sy * dy - (sw * dw - sx * dx)));
                 dquat->y = -(sz * dx - (sw * dy + sx * dz + sy * dw));
                 dquat->x = -(sy * dz - (sw * dx + sz * dy + sx * dw));
-                if (src >= src_end) goto rotateto_rot;
+                if (src == src_end) goto rotateto_rot;
                 db++;
                 if (db >= db_end) goto complain;
                 dquat++;
@@ -1270,7 +1263,7 @@ rotateto_quat:
 rotateto_rot:
     if (mCounts[TYPE_END] > mCounts[TYPE_ROTX]) {
         Bone *db_end = dst.mBones.begin() + dst.mCounts[TYPE_END];
-        const Bone *src_end = mBones.data() + mCounts[TYPE_END];
+        const Bone *src_end = mBones.begin() + mCounts[TYPE_END];
         Bone *db = dst.mBones.begin() + dst.mCounts[TYPE_ROTX];
         float *dfdata = (float *)(dst.mStart + dst.mOffsets[TYPE_ROTX]);
         float *sfdata = (float *)(mStart + mOffsets[TYPE_ROTX]);
@@ -1282,8 +1275,8 @@ rotateto_rot:
                     dfdata++;
                 }
                 src++;
-                *dfdata += (float)(long long)*(short *)sfdata * (f * 0.00061035156f);
-                if (src >= src_end) return;
+                *dfdata += (float)*(short *)sfdata * (f * 0.00061035156f);
+                if (src == src_end) return;
                 db++;
                 if (db >= db_end) goto complain;
                 dfdata++;
@@ -1298,7 +1291,7 @@ rotateto_rot:
                 }
                 src++;
                 *dfdata += *sfdata * f;
-                if (src >= src_end) return;
+                if (src == src_end) return;
                 db++;
                 if (db >= db_end) goto complain;
                 dfdata++;
