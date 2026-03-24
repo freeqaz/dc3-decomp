@@ -206,6 +206,7 @@ public:
     bool CurrentPassHasDepth() const { return mCurrentPassHasDepth; }
     uint32_t CurrentTargetWidth() const { return mCurrentTargetWidth; }
     uint32_t CurrentTargetHeight() const { return mCurrentTargetHeight; }
+    int FrameID() const { return mFrameID; }
 
     // Scene bind group (group 0) — updated when camera changes
     wgpu::BindGroup& SceneBindGroup() { return mSceneBindGroup; }

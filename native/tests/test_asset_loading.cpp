@@ -23,6 +23,7 @@
 #include <dirent.h>
 #include <cstdlib>
 #include <algorithm>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -87,6 +88,48 @@ static int CountSkinnedMeshes(ObjectDir *dir) {
 static ObjectDir *TryLoadArchive(const char *path) {
     FilePath fp(path);
     return DirLoader::LoadObjects(fp, nullptr, nullptr);
+}
+
+struct ArmPollableInventory {
+    std::map<std::string, std::vector<std::string> > byClass;
+};
+
+static bool IsArmPollableClass(const char *className) {
+    static const char *kClasses[] = {
+        "CharForeTwist",
+        "CharUpperTwist",
+        "CharIKHand",
+        "CharIKFingers",
+        "CharBlendBone",
+        "CharBoneTwist",
+        "CharBoneOffset",
+        "CharPosConstraint",
+        "CharSleeve",
+        nullptr
+    };
+
+    for (int i = 0; kClasses[i]; i++) {
+        if (strcmp(className, kClasses[i]) == 0)
+            return true;
+    }
+    return false;
+}
+
+static ArmPollableInventory CollectArmPollableInventory(ObjectDir *dir) {
+    ArmPollableInventory inv;
+    for (ObjDirItr<Hmx::Object> it(dir, true); it != nullptr; ++it) {
+        const char *className = it->ClassName().Str();
+        if (!className || !IsArmPollableClass(className))
+            continue;
+        inv.byClass[className].push_back(it->Name());
+    }
+
+    for (std::map<std::string, std::vector<std::string> >::iterator it = inv.byClass.begin();
+         it != inv.byClass.end();
+         ++it) {
+        std::sort(it->second.begin(), it->second.end());
+    }
+    return inv;
 }
 
 // ============================================================================
@@ -644,6 +687,46 @@ TEST_F(AssetLoadingTest, BackupOutfitBonePointersMatchServoDirectory) {
         << "Every skinned mesh bone should resolve from the servo directory";
     EXPECT_EQ(mismatches, 0)
         << "Skinned mesh bones should point at the same RndTransformables as bone.servo";
+}
+
+TEST_F(AssetLoadingTest, BackupOutfitPreservesArmPollableInventory) {
+    ObjectDir *dir = LoadMainCharacterFromLibrary();
+    if (!dir)
+        GTEST_SKIP() << "char/main not found";
+    ASSERT_NE(dir, nullptr) << "Failed to load main character";
+
+    HamCharacter *character = FindMainCharacter(dir);
+    ASSERT_NE(character, nullptr) << "No HamCharacter found in main.milo_xbox";
+
+    FileMerger *fm = FindCharacterFileMerger(character);
+    ASSERT_NE(fm, nullptr) << "main.milo_xbox missing char.fm";
+
+    ArmPollableInventory before = CollectArmPollableInventory(character);
+
+    fm->ForceReleaseOrganizer();
+    character->SetOutfit("lush01_bd01");
+    character->SetOutfitDir("char/main/backup");
+    character->StartLoad(false);
+
+    ArmPollableInventory after = CollectArmPollableInventory(character);
+
+    ASSERT_FALSE(before.byClass.empty())
+        << "Expected at least one authored arm pollable in main.milo_xbox";
+
+    for (std::map<std::string, std::vector<std::string> >::const_iterator it =
+             before.byClass.begin();
+         it != before.byClass.end();
+         ++it) {
+        size_t afterCount = 0;
+        std::map<std::string, std::vector<std::string> >::const_iterator found =
+            after.byClass.find(it->first);
+        if (found != after.byClass.end())
+            afterCount = found->second.size();
+
+        EXPECT_GE(afterCount, it->second.size())
+            << "Backup outfit merge should not drop preexisting arm pollables for class "
+            << it->first;
+    }
 }
 
 // ============================================================================

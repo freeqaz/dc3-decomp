@@ -1250,13 +1250,16 @@ void WgpuRnd::WriteSceneUniforms() {
             }
             memcpy(scene.view, view, sizeof(view));
 
-            // TODO(native): The gameplay HUD uses a cylindrical layout at ±750 X
-            // viewed from Cam.cam at Y=-768. The stored yFov (0.602 rad) gives an
-            // xFov that only covers ±365 X. On Xbox, the D3D9 viewport/projection
-            // chain maps this differently. Widen the horizontal projection for the
-            // specific gameplay HUD camera only (identified by name + yFov range).
+            // The gameplay HUD uses a cylindrical 3D layout with flashcard meshes
+            // at ±750 X, score docks at ±700 X, viewed from Cam.cam at Y=-768.
+            // The standard 16:9 xFov (58°) covers ±424 X — the panels extend
+            // beyond the viewport. On Xbox, the D3D9 viewport + 432p render
+            // resolution produces a wider effective FOV that shows these panels.
+            // The viewProj element [0] controls horizontal clip-space scale.
+            // Scale by 0.49 to widen the horizontal FOV enough to show panels
+            // at ±700 X within the visible area, matching Xbox's layout.
             if (!mCurrentPassHasDepth && cam
-                && !strcmp(cam->Name(), "Cam.cam")
+                && strstr(cam->Name(), "Cam.cam")
                 && cam->YFov() > 0.5f && cam->YFov() < 0.7f) {
                 scene.viewProj[0] *= 0.49f;
             }

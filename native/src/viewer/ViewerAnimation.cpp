@@ -150,6 +150,21 @@ void CharAnimState::PollFace() {
     faceServo->Poll();
 }
 
+void CharAnimState::ResetPlaybackClock() {
+    startBeat = clip ? clip->StartBeat() : 0.0f;
+    lastBeat = startBeat;
+    lastSeconds = 0.0f;
+    TheTaskMgr.SetSecondsAndBeat(lastSeconds, lastBeat, true);
+}
+
+float CharAnimState::BeatForSeconds(float seconds, float bpm) const {
+    return startBeat + seconds * (bpm / 60.0f);
+}
+
+float CharAnimState::SecondsForBeat(float beat, float bpm) const {
+    return (beat - startBeat) * 60.0f / bpm;
+}
+
 void CharAnimState::AdvanceBeat(float targetSeconds, float targetBeat, float bpm) {
     if (!active || !character || !character->Driver()) return;
 

@@ -138,7 +138,9 @@ int RunScreenshot(ScreenshotMode& m, ViewerScene& scene,
         } else {
             beat = 4.0f;
         }
-        printf("Milo Viewer: advancing animation to beat %.1f (seconds=%.2f)\n", beat, beat * 60.0f / cfg.bpm);
+        float targetSeconds = charAnim.SecondsForBeat(beat, cfg.bpm);
+        printf("Milo Viewer: advancing animation to beat %.1f (clip-relative seconds=%.2f)\n",
+               beat, targetSeconds);
         poseDumpBeatResolved = beat;
         poseDumpBeatSet = true;
 
@@ -146,7 +148,7 @@ int RunScreenshot(ScreenshotMode& m, ViewerScene& scene,
             printf("Milo Viewer: using CharClip::PoseMeshes(dir, %.1f)\n", beat);
             charAnim.DirectPose(beat, cfg.bpm);
         } else {
-            charAnim.AdvanceBeat(beat * 60.0f / cfg.bpm, beat, cfg.bpm);
+            charAnim.AdvanceBeat(targetSeconds, beat, cfg.bpm);
         }
 
         // Dump raw bone buffer values
@@ -430,8 +432,8 @@ int RunInteractive(InteractiveMode& /*m*/, ViewerScene& scene,
 
         // Advance character animation (beat-based)
         if (charAnim.active && !anim.paused && dt > 0.0 && dt < 0.5) {
-            float seconds = (float)now;
-            float beat    = seconds * (cfg.bpm / 60.0f) * anim.speed;
+            float seconds = charAnim.lastSeconds + (float)dt * anim.speed;
+            float beat    = charAnim.BeatForSeconds(seconds, cfg.bpm);
             charAnim.AdvanceBeat(seconds, beat, cfg.bpm);
         }
 

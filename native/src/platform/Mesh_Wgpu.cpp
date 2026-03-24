@@ -158,6 +158,25 @@ void RndMesh::DrawShowing() {
 void DrawMeshImmediate(RndMesh* mesh) {
     if (!gWgpuRnd || !gWgpuRnd->IsInPass()) return;
 
+    // Diagnostic: log overlay mesh details on specific frame
+    {
+        static int overlayLogCount = 0;
+        if (!gWgpuRnd->CurrentPassHasDepth() && gWgpuRnd->FrameID() == 5000 && overlayLogCount < 200) {
+            RndMat* dmat = mesh->Mat();
+            const char* meshName = mesh->Name();
+            const char* matName = dmat ? dmat->Name() : "(null)";
+            Hmx::Color mc = dmat ? dmat->GetColor() : Hmx::Color(0,0,0,0);
+            int blend = dmat ? (int)dmat->GetBlend() : -1;
+            bool showing = mesh->Showing();
+            const Vector3& wp = mesh->WorldXfm().v;
+            fprintf(stderr, "[OVERLAY-DETAIL] '%s' mat='%s' color=(%.2f,%.2f,%.2f,%.2f) "
+                    "blend=%d showing=%d pos=(%.1f,%.1f,%.1f)\n",
+                    meshName, matName, mc.red, mc.green, mc.blue, mc.alpha,
+                    blend, showing ? 1 : 0, wp.x, wp.y, wp.z);
+            overlayLogCount++;
+        }
+    }
+
     bool capturing = FrameCapture::Get().IsCapturing();
     uint32_t heuristics = 0;
 

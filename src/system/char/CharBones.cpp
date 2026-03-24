@@ -1248,10 +1248,21 @@ rotateto_quat:
                 float dz = dquat->z;
                 float dw = dquat->w;
                 float dy = dquat->y;
+#ifdef HX_NATIVE
+                // Native fix: PPC decomp has cross-product terms negated in x/y/z
+                // (same decompiler register swap class as compressed paths above).
+                // Correct quaternion multiply: result = (sw,sx,sy,sz) * (dw,dx,dy,dz)
+                { float nw = sw*dw - sx*dx - sy*dy - sz*dz;
+                float nx = sw*dx + sx*dw + sy*dz - sz*dy;
+                float ny = sw*dy - sx*dz + sy*dw + sz*dx;
+                float nz = sw*dz + sx*dy - sy*dx + sz*dw;
+                dquat->x = nx; dquat->y = ny; dquat->z = nz; dquat->w = nw; }
+#else
                 dquat->z = -(sx * dy - (sw * dz + sy * dx + sz * dw));
                 dquat->w = -(sz * dz - -(sy * dy - (sw * dw - sx * dx)));
                 dquat->y = -(sz * dx - (sw * dy + sx * dz + sy * dw));
                 dquat->x = -(sy * dz - (sw * dx + sz * dy + sx * dw));
+#endif
                 if (src == src_end) goto rotateto_rot;
                 db++;
                 if (db >= db_end) goto complain;

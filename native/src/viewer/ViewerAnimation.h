@@ -56,11 +56,15 @@ struct CharAnimState {
     CharEyes*      eyes = nullptr;
     CharLipSyncDriver* lipDriver = nullptr;
     BlinkState     blink;
+    float          startBeat = 0.0f;
     float          lastBeat = 0.0f;
     float          lastSeconds = 0.0f;
     std::vector<CharPollable*> pollables;
 
     void CollectPollables();
+    void ResetPlaybackClock();
+    float BeatForSeconds(float seconds, float bpm) const;
+    float SecondsForBeat(float beat, float bpm) const;
     void AdvanceBeat(float targetSeconds, float targetBeat, float bpm);
     void DirectPose(float beat, float bpm);
     void PollFace();

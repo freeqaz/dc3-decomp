@@ -294,10 +294,7 @@ void MakeRotQuatUnitX(const Vector3 &vec, Hmx::Quat &q) {
 
 void Multiply(const Vector3 &vin, const Hmx::Quat &q, Vector3 &vout) {
 #ifdef HX_NATIVE
-    // Native fix: the PPC decomp below has decompiler register mis-mappings
-    // in vout.x — the vinz coefficient uses (zw + xy) instead of (yw + xz).
-    // PPC assembly is correct but the C++ formula produces wrong x86 results.
-    // Use the standard quaternion rotation formula: v' = v * R(q)
+    // Standard quaternion rotation formula: v' = v * R(q)
     float qx = q.x, qy = q.y, qz = q.z, qw = q.w;
     float xx = qx * qx, yy = qy * qy, zz = qz * qz;
     float xy = qx * qy, xz = qx * qz, xw = qx * qw;
@@ -308,8 +305,8 @@ void Multiply(const Vector3 &vin, const Hmx::Quat &q, Vector3 &vout) {
 #else
     // Load quaternion components
     float qx = q.x;
-    float qy = q.y;
     float qz = q.z;
+    float qy = q.y;
     float qw = q.w;
 
     // Compute quaternion products interleaved with vector loads
@@ -317,9 +314,9 @@ void Multiply(const Vector3 &vin, const Hmx::Quat &q, Vector3 &vout) {
     float qzqw = qz * qw;
     float viny = vin.y;
     float qyqz = qz * qy;
-    float vinz = vin.z;
-    float qxqw = qx * qw;
     float vinx = vin.x;
+    float qxqw = qx * qw;
+    float vinz = vin.z;
     float qxqz = qz * qx;
     float qyqw = qy * qw;
 
@@ -330,7 +327,7 @@ void Multiply(const Vector3 &vin, const Hmx::Quat &q, Vector3 &vout) {
 
     // Quaternion rotation formula
     vout.z = ((neg_qyqy + neg_qxqx) * vinz + (qxqz - qyqw) * vinx + (qyqz + qxqw) * viny) * 2.0f + vinz;
-    vout.x = ((qzqw + qxqy) * vinz + (neg_qzqz + neg_qyqy) * vinx + (qxqy - qzqw) * viny) * 2.0f + vinx;
+    vout.x = ((qxqz + qyqw) * vinz + (neg_qzqz + neg_qyqy) * vinx + (qxqy - qzqw) * viny) * 2.0f + vinx;
     vout.y = ((qyqz - qxqw) * vinz + (qxqy + qzqw) * vinx + (neg_qzqz + neg_qxqx) * viny) * 2.0f + viny;
 #endif
 }

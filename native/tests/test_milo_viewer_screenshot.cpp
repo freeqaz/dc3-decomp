@@ -614,3 +614,52 @@ TEST_F(MiloViewerPosePipeline, ViewerPoseDumpMatchesInProcessPoseMeshes) {
     unlink(expectedPose.str().c_str());
     unlink(capturePng.str().c_str());
 }
+
+TEST_F(MiloViewerPosePipeline, DriverStartBeatUsesClipRelativeSeconds) {
+    const std::string viewer = GetViewerPath();
+    if (!FileExists(viewer))
+        GTEST_SKIP() << "milo-viewer binary not found at " << viewer;
+
+    const std::string miloLib = GetMiloLibRoot();
+    if (miloLib.empty())
+        GTEST_SKIP() << "MILO_LIB not set and HOME not available";
+
+    const std::string charPath = miloLib + "/char/main/dancer/gen/aubrey01.milo_xbox";
+    const std::string clipsPath = miloLib + "/char/crowd/anim/gen/female_base.milo_xbox";
+    if (!FileExists(charPath) || !FileExists(clipsPath))
+        GTEST_SKIP() << "Required DC3 assets not found under " << miloLib;
+
+    std::ostringstream posePath;
+    posePath << "/tmp/milo_viewer_start_driver_" << getpid() << ".pose.json";
+    std::ostringstream pngPath;
+    pngPath << "/tmp/milo_viewer_start_driver_" << getpid() << ".png";
+
+    std::ostringstream runDriver;
+    runDriver
+        << "ASAN_OPTIONS='alloc_dealloc_mismatch=0:halt_on_error=0:detect_odr_violation=0' "
+        << "timeout 120 "
+        << "\"" << viewer << "\" "
+        << "\"" << charPath << "\" "
+        << "--screenshot \"" << pngPath.str() << "\" "
+        << "--clips \"" << clipsPath << "\" "
+        << "--clip stand_bad_01 "
+        << "--pose-dump \"" << posePath.str() << "\" "
+        << "--pose-dump-beat START "
+        << "--width 640 --height 360 2>&1";
+
+    RunResult run = RunCommand(runDriver.str());
+    if (OutputHasGpuFailure(run.output) || OutputHasNullBackend(run.output)) {
+        unlink(posePath.str().c_str());
+        unlink(pngPath.str().c_str());
+        GTEST_SKIP() << "GPU unavailable; cannot run viewer start-beat timing test";
+    }
+    ASSERT_TRUE(FileExists(posePath.str()));
+    EXPECT_TRUE(FileExists(pngPath.str()));
+    EXPECT_NE(run.output.find("pose-dump beat selector 'START' -> -1.00"), std::string::npos);
+    EXPECT_NE(run.output.find("advancing animation to beat 1.9 (clip-relative seconds=0.00)"),
+              std::string::npos)
+        << "viewer output was:\n" << run.output;
+
+    unlink(posePath.str().c_str());
+    unlink(pngPath.str().c_str());
+}

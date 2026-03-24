@@ -341,6 +341,7 @@ int main(int argc, char** argv) {
                         driver->Play(clipToPlay, flags, -1.0f, 1e30f, 0.0f);
                         charAnim.clip   = clipToPlay;
                         charAnim.active = true;
+                        charAnim.ResetPlaybackClock();
                         printf("Milo Viewer: character animation active (cfg.bpm=%.0f)\n", cfg.bpm);
                     }
                 } else {

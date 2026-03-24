@@ -137,16 +137,7 @@ void VorbisReader::setupCypher(int moggVersion) {
     // to copy masher data into masterKey as an anti-tamper measure.
     // On 64-bit this truncates the pointer. Just call getMasher directly.
     KeyChain::getMasher(masterKey);
-    fprintf(stderr, "DC3 setupCypher: masher = ");
-    for (int i = 0; i < 32; i++) fprintf(stderr, "%02x ", masterKey[i]);
-    fprintf(stderr, "\n");
     KeyChain::getKey(mKeyIndex, gKey, masterKey);
-    fprintf(stderr, "DC3 setupCypher: gKey after getKey(%d) = ", mKeyIndex);
-    for (int i = 0; i < 16; i++) fprintf(stderr, "%02x ", gKey[i]);
-    fprintf(stderr, "\n");
-    fprintf(stderr, "DC3 setupCypher: nonce = ");
-    for (int i = 0; i < 16; i++) fprintf(stderr, "%02x ", mNonce[i]);
-    fprintf(stderr, "\n");
 #else
     DataArray *arr = DataReadString("{Na 42 'O32'}");
     unsigned int iEval = arr->Evaluate(0).Int();
@@ -160,49 +151,10 @@ void VorbisReader::setupCypher(int moggVersion) {
     buf118Arr->Release();
 #endif
     KeyChain::getKey(mKeyIndex, gKey, masterKey);
-    // PPC + native diagnostic: dump key bytes at each stage
-    {
-        char dbg[256]; int p = 0;
-        p += sprintf(dbg+p, "DC3 setupCypher: pre-grind gKey = ");
-        for (int i = 0; i < 16; i++) p += sprintf(dbg+p, "%02x ", gKey[i]);
-        MILO_LOG("%s\n", dbg);
-    }
-#ifdef HX_NATIVE
-    fprintf(stderr, "DC3 setupCypher: pre-grind gKey = ");
-    for (int i = 0; i < 16; i++) fprintf(stderr, "%02x ", gKey[i]);
-    fprintf(stderr, "\n");
-    fprintf(stderr, "DC3 setupCypher: mMagicA=%d mMagicB=%d mKeyIndex=%d version=%d\n",
-            mMagicA, mMagicB, mKeyIndex, moggVersion);
-    fprintf(stderr, "DC3 setupCypher: mKeyMask = ");
-    for (int i = 0; i < 16; i++) fprintf(stderr, "%02x ", mKeyMask[i]);
-    fprintf(stderr, "\n");
-#endif
     TheSynth->Grinder().GrindArray(mMagicA, mMagicB, gKey, 0x10, moggVersion);
-    {
-        char dbg[256]; int p = 0;
-        p += sprintf(dbg+p, "DC3 setupCypher: post-grind gKey = ");
-        for (int i = 0; i < 16; i++) p += sprintf(dbg+p, "%02x ", gKey[i]);
-        MILO_LOG("%s\n", dbg);
-    }
-#ifdef HX_NATIVE
-    fprintf(stderr, "DC3 setupCypher: post-grind gKey = ");
-    for (int i = 0; i < 16; i++) fprintf(stderr, "%02x ", gKey[i]);
-    fprintf(stderr, "\n");
-#endif
     for (int i = 0; i < 16; i++) {
         gKey[i] ^= mKeyMask[i];
     }
-    {
-        char dbg[256]; int p = 0;
-        p += sprintf(dbg+p, "DC3 setupCypher: final gKey = ");
-        for (int i = 0; i < 16; i++) p += sprintf(dbg+p, "%02x ", gKey[i]);
-        MILO_LOG("%s\n", dbg);
-    }
-#ifdef HX_NATIVE
-    fprintf(stderr, "DC3 setupCypher: final gKey (after XOR) = ");
-    for (int i = 0; i < 16; i++) fprintf(stderr, "%02x ", gKey[i]);
-    fprintf(stderr, "\n");
-#endif
     int ret = ctr_start(gCipher, mNonce, gKey, gKeySize, 0, mCtrState);
     memset(gKey, 0, gKeySize);
     MILO_ASSERT(ret == 0, 0xB0);
@@ -471,17 +423,6 @@ static void Decrypt(VorbisReader *reader, unsigned char *data, int bytes,
     ctr_decrypt(data, tmp, bytes, ctrState);
     memcpy(data, tmp, bytes);
     delete[] tmp;
-
-    // Diagnostic: dump first decrypted bytes
-    {
-        static int sDecryptLog = 0;
-        if (sDecryptLog++ < 2) {
-            fprintf(stderr, "DC3 Decrypt: first 16 decrypted bytes: ");
-            for (int i = 0; i < 16 && i < bytes; i++)
-                fprintf(stderr, "%02x ", data[i]);
-            fprintf(stderr, "(expect HMXA=484d5841 or OggS=4f676753)\n");
-        }
-    }
 
     // Step 2: Scan for all HMXA page headers and apply anti-tamper reversal.
     // v0xE encryption replaces OggS with HMXA and XORs bytes 12-15 and 20-23
