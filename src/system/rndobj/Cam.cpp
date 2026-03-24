@@ -243,9 +243,7 @@ void RndCam::GetCamFrustum(Vector3 &origin, Vector3 (&dirs)[4]) {
     };
     for (int i = 0; (unsigned int)i < 4; i++) {
         ScreenToWorld(sCorners[i], mFarPlane, dirs[i]);
-        dirs[i].x -= origin.x;
-        dirs[i].y -= origin.y;
-        dirs[i].z -= origin.z;
+        Subtract(dirs[i], origin, dirs[i]);
     }
 }
 

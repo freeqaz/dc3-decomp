@@ -18,10 +18,10 @@
         }
         #canvas-container {
             position: relative;
-            width: 100%;
+            /* Height-first: fill 80% of viewport height, derive width from 16:9 */
+            height: 80vh;
+            width: min(100vw, calc(80vh * 16 / 9));
             max-width: 100vw;
-            aspect-ratio: 16 / 9;
-            max-height: 80vh;
         }
         #dc3-canvas {
             border: 1px solid #333;
@@ -89,7 +89,8 @@
         <canvas id="dc3-canvas" width="1280" height="720" tabindex="0"></canvas>
         <video id="splash-video" playsinline muted preload="auto"
                style="position:absolute;top:0;left:0;width:100%;height:100%;
-                      object-fit:contain;z-index:10;background:#000;pointer-events:none;"></video>
+                      object-fit:contain;z-index:2147483647;background:#000;
+                      pointer-events:none;transform:translateZ(0);"></video>
     </div>
     <div id="status">Initializing...</div>
     <div id="controls">
@@ -126,9 +127,11 @@
             status.textContent = 'Loading WASM...';
             status.className = 'loading';
 
+            var wasmReady = false;
             var Module = {
                 canvas: document.getElementById('dc3-canvas'),
                 onRuntimeInitialized: function() {
+                    wasmReady = true;
                     console.log('RUNTIME_INIT_OK');
                     status.textContent = 'Downloading assets...';
                     status.className = 'loading';
@@ -172,11 +175,18 @@
                 }, 500);
             }
             splashVid.addEventListener('ended', dismissSplash);
-            // Also dismiss on any key/click (skip)
-            function splashSkip() {
+            // Unmute on first interaction (autoplay requires muted)
+            function splashUnmute() {
+                if (splashVid) splashVid.muted = false;
+                document.removeEventListener('keydown', splashUnmute);
+                document.removeEventListener('click', splashUnmute);
+            }
+            document.addEventListener('keydown', splashUnmute);
+            document.addEventListener('click', splashUnmute);
+            // Skip on Space/Enter/Escape
+            function splashSkip(e) {
+                if (e.type === 'keydown' && e.key !== ' ' && e.key !== 'Enter' && e.key !== 'Escape') return;
                 dismissSplash();
-                document.removeEventListener('keydown', splashSkip);
-                document.removeEventListener('click', splashSkip);
             }
             document.addEventListener('keydown', splashSkip);
             document.addEventListener('click', splashSkip);
@@ -241,14 +251,16 @@
             var pending = false;
             function resizeCanvas() {
                 var rect = canvas.getBoundingClientRect();
-                var dpr = window.devicePixelRatio || 1;
-                var w = Math.round(rect.width * dpr);
-                var h = Math.round(rect.height * dpr);
+                // Use CSS pixels, not device pixels — the engine's Rnd
+                // dimensions stay at 1280x720 so scaling by DPR creates
+                // a surface larger than the viewport (black bars).
+                var w = Math.round(rect.width);
+                var h = Math.round(rect.height);
                 if (w <= 0 || h <= 0) return;
                 if (canvas.width === w && canvas.height === h) return;
                 canvas.width = w;
                 canvas.height = h;
-                if (typeof Module !== 'undefined' && Module._dc3_resize_canvas) {
+                if (wasmReady && Module._dc3_resize_canvas) {
                     Module._dc3_resize_canvas(w, h);
                 }
             }

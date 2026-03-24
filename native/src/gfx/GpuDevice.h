@@ -67,6 +67,7 @@ public:
     // Frame lifecycle
     wgpu::TextureView AcquireNextFrame();
     void PresentFrame();
+    wgpu::Texture& SurfaceTexture() { return mSurfaceTex; }
 
     // Feature queries
     bool HasBCCompression() const { return mHasBCCompression; }
@@ -111,6 +112,9 @@ private:
     int mHeight = 0;
     bool mHeadless = false;
     bool mHasBCCompression = false;
+
+    // Surface texture (stored for CopyTextureToTexture in web frame resolve)
+    wgpu::Texture mSurfaceTex;
 
     // Headless offscreen target
     wgpu::Texture mHeadlessTex;

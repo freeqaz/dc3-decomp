@@ -21,6 +21,9 @@
 #include "utl/MakeString.h"
 #include "utl/Symbol.h"
 #include <cstdio>
+#ifdef __EMSCRIPTEN__
+#include "platform/WebMovieImpl.h"
+#endif
 
 bool MoviePanel::sUseSubtitles;
 
@@ -115,6 +118,10 @@ void MoviePanel::Enter() { UIPanel::Enter(); }
 
 void MoviePanel::Exit() {
     UIPanel::Exit();
+#ifdef __EMSCRIPTEN__
+    WebMovieImpl *webImpl = dynamic_cast<WebMovieImpl *>(mMovie.GetImpl());
+    if (webImpl) webImpl->SetOverlay(false);
+#endif
     if (!mPreload) {
         mMovie.End();
     }
@@ -275,6 +282,14 @@ void MoviePanel::PlayMovie() {
         0,
         kLoadFront
     );
+#ifdef __EMSCRIPTEN__
+    // Show the <video> element as a fullscreen overlay on the canvas.
+    // WebMovieImpl::Draw() doesn't render to the GPU — it's designed for
+    // TexMovie pixel extraction. For MoviePanel (fullscreen intro/attract),
+    // we overlay the browser's native <video> element instead.
+    WebMovieImpl *webImpl = dynamic_cast<WebMovieImpl *>(mMovie.GetImpl());
+    if (webImpl) webImpl->SetOverlay(true);
+#endif
 }
 
 void MoviePanel::ChooseMovie() {

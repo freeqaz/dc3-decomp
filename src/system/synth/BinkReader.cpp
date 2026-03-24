@@ -12,16 +12,16 @@ void BinkSetSoundTrack(int, int);
 BINK *BinkOpen(File *, unsigned int);
 void BinkSetVideoOnOff(BINK *, int);
 const char *BinkGetError(void);
+void BinkNextFrame(BINK *);
+unsigned int BinkGetTrackData(BINKTRACK *, void *);
+BINKTRACK *BinkOpenTrack(BINK *, unsigned char);
+void BinkCloseTrack(BINKTRACK *);
+void BinkClose(BINK *);
+void BinkGoto(void *bink, unsigned int frame, int mode);
 }
 
-extern void BinkNextFrame(BINK *);
-extern unsigned int BinkGetTrackData(BINKTRACK *, void *);
-extern BINKTRACK *BinkOpenTrack(BINK *, unsigned char);
-extern void BinkCloseTrack(BINKTRACK *);
-extern void BinkClose(BINK *);
 extern void *MemAlloc(int, const char *, int, const char *, int);
 extern void MemFree(void *, const char *, int, const char *);
-extern "C" void BinkGoto(void *bink, unsigned int frame, int mode);
 
 int BinkReader::sHeap = 0;
 
@@ -55,8 +55,8 @@ BinkReader::~BinkReader() {
                 MemFree(mPCMBuffers[i], "unknown", 0, "unknown");
             }
         }
-        BinkClose(mBink);
     }
+    BinkClose(mBink);
 }
 
 void BinkReader::Poll(float) {

@@ -252,7 +252,7 @@ BinStreamRev &operator>>(BinStreamRev &d, LightPreset::SpotlightDrawerEntry &e) 
 
 LightPreset::Keyframe::Keyframe(Hmx::Object *owner)
     : mSpotlightEntries(owner), mTriggers(owner), mDuration(0), mFadeOutTime(0),
-      unka8(-1) {
+      mFrame(-1) {
     LightPreset *preset = dynamic_cast<LightPreset *>(owner);
     MILO_ASSERT(preset, 0x56F);
 
@@ -820,7 +820,7 @@ void LightPreset::CacheFrames() {
     float f = 0;
     for (uint i = 0; i != mKeyframes.size(); i++) {
         Keyframe &kf = mKeyframes[i];
-        kf.unka8 = f;
+        kf.mFrame = f;
         f += kf.mDuration + kf.mFadeOutTime;
         kf.mSpotlightChanges.clear();
         kf.mSpotlightChanges.resize(kf.mSpotlightEntries.size());
@@ -859,7 +859,7 @@ void LightPreset::CacheFrames() {
 
 void LightPreset::GetKey(float frame, int &prevIdx, int &curIdx, float &blend) const {
     float theframe = frame;
-    if (!(!(theframe <= 0.0f || mEndFrame <= 0.0f))) {
+    if (theframe <= 0.0f || mEndFrame <= 0.0f) {
         prevIdx = -1;
         curIdx = 0;
         blend = 1.0f;
@@ -867,16 +867,16 @@ void LightPreset::GetKey(float frame, int &prevIdx, int &curIdx, float &blend) c
     } else {
         if (mLooping) {
             theframe = std::fmod(frame, mEndFrame);
-            if (frame >= mKeyframes.back().unka8) {
+            if (theframe >= mKeyframes.back().mFrame) {
                 if (mKeyframes.back().mFadeOutTime <= 0.0f) {
                     prevIdx = -1;
                     curIdx = mKeyframes.size() - 1;
                     blend = 1.0f;
                     return;
                 }
-                float framedur = mKeyframes.back().unka8 + mKeyframes.back().mDuration;
-                if (framedur < theframe) {
-                    MILO_ASSERT(mKeyframes.back().mFadeOutTime > 0, 0x358);
+                float framedur = mKeyframes.back().mFrame + mKeyframes.back().mDuration;
+                if (theframe > framedur) {
+                    MILO_ASSERT(mKeyframes.back().mFadeOutTime > 0, 0x2e8);
                     prevIdx = mKeyframes.size() - 1;
                     curIdx = 0;
                     blend = (theframe - framedur) / mKeyframes.back().mFadeOutTime;
@@ -887,40 +887,40 @@ void LightPreset::GetKey(float frame, int &prevIdx, int &curIdx, float &blend) c
                 blend = 1.0f;
                 return;
             }
-        } else if (frame >= mKeyframes.back().unka8) {
+        } else if (theframe >= mKeyframes.back().mFrame) {
             prevIdx = -1;
             curIdx = mKeyframes.size() - 1;
             blend = 1.0f;
             return;
         }
 
-        int cap = mKeyframes.size() - 1;
-        int i;
-        for (i = 0; cap > i + 1;) {
-            int mid = (i + cap) >> 1;
-            if (theframe == mKeyframes[mid].unka8) {
+        int after = mKeyframes.size() - 1;
+        int before;
+        for (before = 0; after > before + 1;) {
+            int mid = (before + after) >> 1;
+            if (theframe == mKeyframes[mid].mFrame) {
                 prevIdx = -1;
                 curIdx = mid;
                 blend = 1.0f;
                 return;
             }
-            if (!(theframe <= mKeyframes[mid].unka8)) {
-                i = mid;
+            if (!(theframe <= mKeyframes[mid].mFrame)) {
+                before = mid;
             } else {
-                cap = mid;
+                after = mid;
             }
         }
 
-        MILO_ASSERT(theframe >= mKeyframes[i].unka8 && theframe < mKeyframes[cap].unka8, 0x317);
-        float dur = mKeyframes[i].unka8 + mKeyframes[i].mDuration;
+        MILO_ASSERT(theframe >= mKeyframes[before].mFrame && theframe < mKeyframes[after].mFrame, 0x317);
+        float dur = mKeyframes[before].mFrame + mKeyframes[before].mDuration;
         if (theframe > dur) {
-            MILO_ASSERT(mKeyframes[i].mFadeOutTime > 0, 0x31c);
-            prevIdx = i;
-            curIdx = cap;
-            blend = (theframe - dur) / mKeyframes[i].mFadeOutTime;
+            MILO_ASSERT(mKeyframes[before].mFadeOutTime > 0, 0x31c);
+            prevIdx = before;
+            curIdx = after;
+            blend = (theframe - dur) / mKeyframes[before].mFadeOutTime;
         } else {
             prevIdx = -1;
-            curIdx = i;
+            curIdx = before;
             blend = 1.0f;
         }
     }

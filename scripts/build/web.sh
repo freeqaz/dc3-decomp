@@ -10,4 +10,5 @@ if [ ! -d "$BUILD_DIR" ]; then
 fi
 cmake --build "$BUILD_DIR" -- -j"$(nproc)"
 cp "$BUILD_DIR/dc3-web.js" "$BUILD_DIR/dc3-web.wasm" "$DEPLOY_DIR/"
+cp "$NATIVE_DIR/web/index.html" "$DEPLOY_DIR/"
 echo "Deployed to $DEPLOY_DIR"

@@ -31,7 +31,7 @@ void Watcher::Update() {
             *mOverlay << ": ";
             arr->Print(*mOverlay, kDataArray, true, 0);
             *mOverlay << "\n";
-            MILO_TRY { it->second = it->first->Execute(false); }
+            MILO_TRY { it->second = arr->Execute(false); }
             MILO_CATCH(msg) { it->second = msg; }
             it->second.Print(*mOverlay, false, 0);
             *mOverlay << "\n";

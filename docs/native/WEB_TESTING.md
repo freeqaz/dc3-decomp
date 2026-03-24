@@ -1,119 +1,135 @@
 # Web Port Testing Infrastructure
 
-Automated testing for the DC3 web port using Playwright + Xvfb.
+Automated testing for the DC3 web port using Playwright + system Chromium.
 
 ## Prerequisites
 
 ```bash
 # System packages
-sudo pacman -S xorg-server-xvfb chromium
+sudo pacman -S chromium
 
 # Node dependencies (from repo root)
 npm install playwright
 ```
 
-WebGPU requires a real GPU context — headless Chrome can't initialize WebGPU without X11/Vulkan. We use `xvfb-run` to provide a virtual X11 display that ANGLE/Vulkan can use.
+WebGPU requires a real GPU context. The test scripts launch system Chromium in **headed** mode against the existing display — no Xvfb needed on a desktop with X11/Wayland.
+
+> **CI / headless servers only**: Install `xorg-server-xvfb` and prefix commands with `xvfb-run -a --server-args="-screen 0 1920x1080x24"`.
 
 ## Quick Start
 
 ```bash
 # Start the dev server in one terminal
-python native/web/server.py --port 8420
+python3 native/web/server.py --port 8420
 
-# Run smoke test (auto xvfb, auto server detection)
-native/web/tests/run-web-tests.sh
+# Take a screenshot (default agent command)
+node scripts/web/screenshot.mjs --verbose
 
-# Or manually with more control
-xvfb-run -a --server-args="-screen 0 1920x1080x24" \
-  node native/web/tests/web-smoke.js --no-server --timeout 45 --verbose
+# Scroll through song list with per-scroll screenshots
+node scripts/web/scroll.mjs --scrolls 5 --verbose
+
+# Full gameplay diagnosis
+node scripts/web/gameplay.mjs --verbose
 ```
 
-## Test Scripts
+## Test Commands
 
-### `web-smoke.js` — General Smoke Test
+All commands live in `scripts/web/` and share a core module (`scripts/web/lib/core.mjs`). Server must be running on the target port (default 8420).
 
-Launches Chrome, navigates to the web port, captures all WASM console output, detects crashes and hangs.
+### `screenshot.mjs` — Quick Screenshot
+
+Navigate to song_select, save one PNG. The default command for agents.
 
 ```bash
-# Basic: auto-start server, 60s timeout
-node native/web/tests/web-smoke.js
-
-# With existing server
-node native/web/tests/web-smoke.js --no-server
-
-# Wait for a specific log line (exit 0 on match, 2 if not seen)
-node native/web/tests/web-smoke.js --no-server --wait-for "main_screen entered"
-
-# Full verbose output with custom timeouts
-node native/web/tests/web-smoke.js --no-server --timeout 120 --hang-timeout 15 --verbose
-
-# Save full log capture to JSON
-node native/web/tests/web-smoke.js --no-server --save-logs /tmp/smoke.json
+node scripts/web/screenshot.mjs                        # defaults
+node scripts/web/screenshot.mjs --out /tmp/shots --verbose
 ```
 
-**Flags:**
+### `scroll.mjs` — Song List Scroll Test
+
+Navigate to song_select, take initial + per-scroll screenshots.
+
+```bash
+node scripts/web/scroll.mjs --scrolls 10 --verbose
+node scripts/web/scroll.mjs --scrolls 3 --out /tmp/scroll-shots
+```
+
+### `gameplay.mjs` — Song Loading Diagnosis
+
+Navigate to gameplay, track loading milestones, detect hangs.
+
+```bash
+node scripts/web/gameplay.mjs --verbose --timeout 60
+node scripts/web/gameplay.mjs --song-index 5 --hang-timeout 20
+```
+
+**Extra flags:**
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--song-index N` | 3 | Scrolls down N times before selecting (skips tier header) |
+| `--timeout N` | 90 | Overall timeout (seconds) |
+| `--hang-timeout N` | 15 | Console silence = hang (seconds) |
+
+**Exit codes:** 0=success, 2=hang detected
+
+### `cdp-break.mjs` — CDP Debugger Break
+
+Pause at hang point via Chrome DevTools Protocol, dump WASM call stack.
+
+```bash
+node scripts/web/cdp-break.mjs --verbose
+node scripts/web/cdp-break.mjs --song-index 3 --silence 10
+```
+
+**Extra flags:**
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--song-index N` | 3 | Scrolls before selecting |
+| `--silence N` | 5 | Seconds of silence before triggering break |
+
+### Common Flags (all commands)
+
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--port N` | 8420 | Server port |
-| `--timeout N` | 60 | Overall timeout (seconds) |
-| `--hang-timeout N` | 10 | Console silence = hang (seconds) |
-| `--wait-for "text"` | none | Success when this log line appears |
-| `--no-server` | false | Don't auto-start server |
-| `--verbose` | false | Print all console output |
-| `--save-logs path` | none | Save full logs as JSON |
+| `--out DIR` | `/tmp/dc3-web/<cmd>-<timestamp>/` | Output directory |
+| `--verbose` | off | Print all console output (errors always print) |
 
-**Exit codes:** 0=success, 1=crash/WebGPU failure, 2=hang detected, 3=infra error
-
-### `run-web-tests.sh` — Wrapper Script
-
-Handles xvfb-run, asset directory detection, timestamped log files.
+### npm Shortcuts
 
 ```bash
-# Standard run
-native/web/tests/run-web-tests.sh
-
-# Verbose
-native/web/tests/run-web-tests.sh --verbose
-
-# Hang diagnosis mode (120s timeout, verbose, 15s hang threshold)
-native/web/tests/run-web-tests.sh --diagnose-hang
-
-# Skip xvfb (if you have a display)
-native/web/tests/run-web-tests.sh --no-xvfb
+npm run web:screenshot
+npm run web:scroll -- --scrolls 5
+npm run web:gameplay -- --verbose
+npm run web:cdp-break -- --silence 10
 ```
-
-Logs are saved to `native/web/build/test-results/smoke_YYYYMMDD_HHMMSS.json`.
-
-### `diagnose-song-load.js` — Song Loading Diagnosis
-
-Specialized test that navigates past the main menu to trigger song loading, tracking milestones through the loading pipeline.
-
-```bash
-xvfb-run -a --server-args="-screen 0 1920x1080x24" \
-  node native/web/tests/diagnose-song-load.js --no-server --verbose
-```
-
-Tracks milestones: `main_screen entered` → `game_screen transition` → `PollForLoading entry` → `song data loading` → `song merger complete` → `IsLoaded state` → `DONE (state 4)` → `StartIntro`.
 
 ## How It Works
 
-1. **Xvfb** provides a virtual X11 display (`:99` or auto-assigned)
-2. **Chromium** launches with `--enable-unsafe-webgpu --use-angle=vulkan` for GPU access
-3. **Playwright** controls the browser, captures `console.log` output
-4. Emscripten routes all WASM `printf`/`TheDebug` output through JavaScript `console.log`
-5. Tests poll for specific log patterns, detect hangs (no output for N seconds), and report results
+1. **Chromium** launches in headed mode with `--enable-unsafe-webgpu --use-angle=vulkan` for GPU access
+2. **Playwright** controls the browser, captures `console.log` output
+3. Emscripten routes all WASM `printf`/`TheDebug` output through JavaScript `console.log`
+4. Tests poll for specific log patterns, detect hangs (no output for N seconds), and report results
+
+The scripts check `process.env.DISPLAY` — if a display exists (desktop), Chrome launches headed. If not (CI), it falls back to headless (may need Xvfb for WebGPU).
 
 ## Architecture
 
 ```
-xvfb-run
-  └── node web-smoke.js
-        └── Playwright → Chromium (WebGPU + ANGLE/Vulkan)
-              └── localhost:8420
-                    ├── index.html (canvas + loader)
-                    ├── dc3-web.js (Emscripten glue)
-                    ├── dc3-web.wasm (game binary)
-                    └── server.py (Python, serves assets + /api/health)
+scripts/web/
+  lib/core.mjs         ← shared module (browser, capture, navigation, I/O)
+  screenshot.mjs        ← quick screenshot (default for agents)
+  scroll.mjs            ← song list scroll + per-scroll screenshots
+  gameplay.mjs          ← full song loading diagnosis
+  cdp-break.mjs         ← CDP debugger pause + WASM call stack
+
+node scripts/web/screenshot.mjs
+  └── core.mjs → Playwright → Chromium (headed, WebGPU + ANGLE/Vulkan)
+        └── localhost:8420
+              ├── index.html (canvas + loader)
+              ├── dc3-web.js (Emscripten glue)
+              ├── dc3-web.wasm (game binary)
+              └── server.py (Python, serves assets + /api/health)
 ```
 
 ## Console Output Pipeline
@@ -125,11 +141,27 @@ The WASM binary uses `printf` and `TheDebug` for logging. Emscripten captures th
 
 Playwright captures all console messages via `page.on('console')`, giving us the full engine log stream programmatically.
 
+## Keyboard Input Mapping (Browser)
+
+| Key | Gamepad | Use |
+|-----|---------|-----|
+| `Space` | Start (kPad_Start) | Dismiss screens, skip intro |
+| `Enter` | A/Confirm (kPad_X) | Select menu items |
+| `ArrowDown` | D-pad Down | Navigate lists |
+| `ArrowUp` | D-pad Up | Navigate lists |
+| `Escape` | B/Back (kPad_Circle) | Go back |
+
+Navigation sequence: `attract → [Space] → title → [Space] → main → [Enter] → choose_mode → [Enter] → song_select → [Down] → scroll`
+
+## Sandbox (Claude Code agents)
+
+GPU access requires `dangerouslyDisableSandbox: true` for bash commands. Chromium + Vulkan needs unrestricted filesystem and device access.
+
 ## Troubleshooting
 
 **WebGPU init fails:**
 - Ensure Vulkan drivers are installed (`vulkaninfo` should work)
-- Check that xvfb-run is providing a display: `xvfb-run -a echo $DISPLAY`
+- Verify `DISPLAY` is set (or use Xvfb on headless servers)
 - Try `--use-angle=swiftshader` as fallback (slower, software rendering)
 
 **Server won't start:**
@@ -138,7 +170,7 @@ Playwright captures all console messages via `page.on('console')`, giving us the
 
 **No console output captured:**
 - The WASM must be built with `printf` support (not optimized out)
-- Check `native/web/build/dc3-web.js` exists (run `native/web/build.sh` first)
+- Check `native/web/build/dc3-web.js` exists (run `scripts/build/web.sh` first)
 
 **Hang detected but game is actually running:**
 - Increase `--hang-timeout` (game may have long loading periods with no log output)

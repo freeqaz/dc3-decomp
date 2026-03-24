@@ -26,6 +26,7 @@
 #include "meta_ham/MetaPerformer.h"
 #include "meta_ham/ProfileMgr.h"
 #include "meta_ham/UIEventMgr.h"
+#include "synth/MetaMusic.h"
 #include "movie/TexMovie.h"
 #include "obj/Data.h"
 #include "obj/DataFile.h"
@@ -361,6 +362,14 @@ void GamePanel::Load() {
 void GamePanel::Enter() {
     TheTaskMgr.ClearTimelineTasks(kTaskSeconds);
     TheTaskMgr.ClearTimelineTasks(kTaskBeats);
+#ifdef HX_NATIVE
+    // On Xbox, DTA scripts fire {metamusic stop} during screen transitions.
+    // MetaPanel is shared between menu and game_screen, so its Exit() is
+    // never called by the panel lifecycle — stop shell music explicitly.
+    if (TheMetaMusic) {
+        TheMetaMusic->Stop();
+    }
+#endif
     UIPanel::Enter();
     mPerformanceProfiler.Stop();
     Reset();

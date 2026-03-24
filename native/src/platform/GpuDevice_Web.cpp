@@ -131,7 +131,7 @@ void GpuDevice::ConfigureSurface() {
     config.format = mSurfaceFormat;
     config.width = mWidth;
     config.height = mHeight;
-    config.usage = wgpu::TextureUsage::RenderAttachment;
+    config.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopyDst;
     config.presentMode = wgpu::PresentMode::Fifo;
     config.alphaMode = wgpu::CompositeAlphaMode::Opaque;
     mSurface.Configure(&config);
@@ -153,7 +153,8 @@ wgpu::TextureView GpuDevice::AcquireNextFrame() {
         surfTex.status != wgpu::SurfaceGetCurrentTextureStatus::SuccessSuboptimal) {
         return nullptr;
     }
-    return surfTex.texture.CreateView();
+    mSurfaceTex = surfTex.texture;
+    return mSurfaceTex.CreateView();
 }
 
 void GpuDevice::PresentFrame() {

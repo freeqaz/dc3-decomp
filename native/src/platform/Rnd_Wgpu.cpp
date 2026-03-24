@@ -446,6 +446,11 @@ void WgpuRnd::Terminate() {
     mIntermediateTex = nullptr;
     mIntermediateView = nullptr;
 
+#ifdef __EMSCRIPTEN__
+    mFrameResolvedTex = nullptr;
+    mFrameResolvedView = nullptr;
+#endif
+
     // Per-frame state
     mEncoder = nullptr;
     mPass = nullptr;
@@ -484,10 +489,10 @@ void WgpuRnd::ClearDepthForOverlay() {
     wgpu::RenderPassColorAttachment colorAtt{};
     if (kMSAASamples > 1) {
         colorAtt.view = mMsaaView;
-        colorAtt.resolveTarget = hasPostProc ? mIntermediateView : mFrameView;
+        colorAtt.resolveTarget = hasPostProc ? mIntermediateView : FrameTarget();
         colorAtt.storeOp = wgpu::StoreOp::Store;
     } else {
-        colorAtt.view = hasPostProc ? mIntermediateView : mFrameView;
+        colorAtt.view = hasPostProc ? mIntermediateView : FrameTarget();
         colorAtt.storeOp = wgpu::StoreOp::Store;
     }
     colorAtt.loadOp = wgpu::LoadOp::Load; // preserve color from venue
@@ -523,7 +528,9 @@ void WgpuRnd::ClearDepthForOverlay() {
 }
 
 void WgpuRnd::FlushPostProcessingForOverlay() {
-    if (!mInPass || !mFrameView) return;
+    if (!mInPass || !mFrameView) {
+        return;
+    }
 
     // End the current pass (venue + any existing draws)
     EndActivePass();
@@ -534,18 +541,20 @@ void WgpuRnd::FlushPostProcessingForOverlay() {
     if (mIntermediateView && RndPostProc::Current() && !mPostProcFlushed) {
         mPostProcPass.Run(mEncoder, mIntermediateView, mIntermediateTex,
                           mIntermediateWidth, mIntermediateHeight,
-                          mDepthView, mFrameView, mBlackTexView, mGpu);
+                          mDepthView, FrameTarget(), mBlackTexView, mGpu);
     }
 
     int curW = mGpu.WindowWidth();
     int curH = mGpu.WindowHeight();
 
     // Start a new pass that draws directly to the framebuffer (no post-proc).
-    // The HUD overlay draws at 1x (no MSAA) directly to the swapchain surface,
+    // The HUD overlay draws at 1x (no MSAA) directly to the frame target,
     // with no depth buffer. This avoids MSAA sample-count mismatches and
     // preserves the post-processed venue that's already in the framebuffer.
+    // On web, FrameTarget() is an owned texture (not the swapchain surface)
+    // so LoadOp::Load reliably preserves the post-proc output.
     wgpu::RenderPassColorAttachment colorAtt{};
-    colorAtt.view = mFrameView;
+    colorAtt.view = FrameTarget();
     colorAtt.storeOp = wgpu::StoreOp::Store;
     colorAtt.loadOp = wgpu::LoadOp::Load; // preserve post-processed venue
 
@@ -617,7 +626,7 @@ void WgpuRnd::BeginFramePass(bool clear) {
             }
             colorAtt.resolveTarget = mIntermediateView;
         } else {
-            colorAtt.resolveTarget = mFrameView;
+            colorAtt.resolveTarget = FrameTarget();
         }
         // The frame pass can be interrupted by offscreen render-to-texture work.
         // Preserve MSAA contents so we can resume the main frame afterward.
@@ -638,7 +647,7 @@ void WgpuRnd::BeginFramePass(bool clear) {
             }
             colorAtt.view = mIntermediateView;
         } else {
-            colorAtt.view = mFrameView;
+            colorAtt.view = FrameTarget();
         }
         colorAtt.storeOp = wgpu::StoreOp::Store;
     }
@@ -939,6 +948,24 @@ void WgpuRnd::BeginDrawing() {
         mMsaaHeight = curH;
     }
 
+#ifdef __EMSCRIPTEN__
+    // On web, render to an owned texture instead of the swapchain surface.
+    // Swapchain surfaces may not preserve content for LoadOp::Load between
+    // render passes (browser-dependent). Copy to swapchain at end-of-frame.
+    if (mFrameResolvedWidth != curW || mFrameResolvedHeight != curH || !mFrameResolvedTex) {
+        wgpu::TextureDescriptor desc{};
+        desc.label = "FrameResolved";
+        desc.size = {(uint32_t)curW, (uint32_t)curH, 1};
+        desc.format = mGpu.SurfaceFormat();
+        desc.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopySrc;
+        desc.mipLevelCount = 1;
+        mFrameResolvedTex = mGpu.Device().CreateTexture(&desc);
+        mFrameResolvedView = mFrameResolvedTex.CreateView();
+        mFrameResolvedWidth = curW;
+        mFrameResolvedHeight = curH;
+    }
+#endif
+
     // Write scene uniforms from current camera and environment
     WriteSceneUniforms();
     mLastSceneCam = RndCam::Current();
@@ -997,16 +1024,31 @@ void WgpuRnd::EndDrawing() {
     if (mInPass) {
         EndActivePass();
 
-        // Post-processing: if active, read from intermediate and draw to swapchain
+        // Post-processing: if active, read from intermediate and draw to frame target
         // Skip if already flushed (e.g., FlushPostProcessingForOverlay was called)
         if (mIntermediateView && RndPostProc::Current() && !mPostProcFlushed) {
             mPostProcPass.Run(mEncoder, mIntermediateView, mIntermediateTex,
                               mIntermediateWidth, mIntermediateHeight,
-                              mDepthView, mFrameView, mBlackTexView, mGpu);
+                              mDepthView, FrameTarget(), mBlackTexView, mGpu);
         }
 
         // ImGui overlay pass — rendered after post-processing, on top of everything
         RenderImGuiOverlay();
+
+#ifdef __EMSCRIPTEN__
+        // Copy resolved framebuffer to swapchain surface.
+        // All rendering went to mFrameResolvedTex (owned) to avoid LoadOp::Load
+        // on the swapchain surface, which is unreliable on some web implementations.
+        if (mFrameResolvedTex && mGpu.SurfaceTexture()) {
+            wgpu::TexelCopyTextureInfo src{};
+            src.texture = mFrameResolvedTex;
+            wgpu::TexelCopyTextureInfo dst{};
+            dst.texture = mGpu.SurfaceTexture();
+            wgpu::Extent3D size = {(uint32_t)mGpu.WindowWidth(),
+                                   (uint32_t)mGpu.WindowHeight(), 1};
+            mEncoder.CopyTextureToTexture(&src, &dst, &size);
+        }
+#endif
 
         wgpu::CommandBuffer cmd = mEncoder.Finish();
         mGpu.Queue().Submit(1, &cmd);
@@ -1686,9 +1728,9 @@ void WgpuRnd::RenderImGuiOverlay() {
     ImDrawData* drawData = ImGui::GetDrawData();
     if (!drawData || drawData->TotalVtxCount == 0) return;
 
-    // Start a simple pass directly to the framebuffer (no MSAA for ImGui — simpler)
+    // Start a simple pass directly to the frame target (no MSAA for ImGui — simpler)
     wgpu::RenderPassColorAttachment colorAtt{};
-    colorAtt.view = mFrameView;
+    colorAtt.view = FrameTarget();
     colorAtt.loadOp = wgpu::LoadOp::Load; // preserve everything rendered so far
     colorAtt.storeOp = wgpu::StoreOp::Store;
 

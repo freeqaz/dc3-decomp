@@ -191,6 +191,21 @@ EM_JS(float, web_movie_duration, (int id), {
     return (m && m.video.duration && isFinite(m.video.duration)) ? m.video.duration : 0;
 });
 
+// Show/hide the video element as a fullscreen overlay on the canvas.
+// Used by MoviePanel for intro/attract videos that render directly.
+EM_JS(void, web_movie_set_overlay, (int id, int show), {
+    var m = Module._webMovies && Module._webMovies[id];
+    if (!m) return;
+    var container = document.getElementById('canvas-container');
+    if (show) {
+        m.video.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;' +
+            'object-fit:contain;z-index:2147483647;background:#000;transform:translateZ(0);';
+        if (!m.video.parentNode) container.appendChild(m.video);
+    } else {
+        if (m.video.parentNode) m.video.parentNode.removeChild(m.video);
+    }
+});
+
 // Destroy the video element and free resources
 EM_JS(void, web_movie_destroy, (int id), {
     var m = Module._webMovies && Module._webMovies[id];
@@ -317,8 +332,15 @@ void WebMovieImpl::Draw() {
     mFrameDecoded = false;
 }
 
+void WebMovieImpl::SetOverlay(bool show) {
+    if (mVideoHandle > 0) {
+        web_movie_set_overlay(mVideoHandle, show ? 1 : 0);
+    }
+}
+
 void WebMovieImpl::End() {
     if (mVideoHandle > 0) {
+        web_movie_set_overlay(mVideoHandle, 0); // hide overlay before destroy
         web_movie_destroy(mVideoHandle);
         mVideoHandle = 0;
     }

@@ -8,7 +8,11 @@
     "test": "tests"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "web:screenshot": "node scripts/web/screenshot.mjs",
+    "web:scroll": "node scripts/web/scroll.mjs",
+    "web:gameplay": "node scripts/web/gameplay.mjs",
+    "web:cdp-break": "node scripts/web/cdp-break.mjs"
   },
   "repository": {
     "type": "git",

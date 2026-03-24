@@ -196,6 +196,17 @@ public:
         DrawRect(r, m, kStandardShader, c, tr, bl);
     }
 
+    // On web, returns an owned offscreen texture; on desktop, the swapchain surface.
+    // All rendering (post-proc output, overlay passes) targets this view.
+    // Avoids LoadOp::Load on web swapchain surfaces (unreliable content preservation).
+    wgpu::TextureView& FrameTarget() {
+#ifdef __EMSCRIPTEN__
+        return mFrameResolvedView;
+#else
+        return mFrameView;
+#endif
+    }
+
     // Accessors for Mesh_Wgpu.cpp / Tex_Wgpu.cpp
     GpuDevice& Gpu() { return mGpu; }
     PipelineManager& Pipelines() { return mPipelines; }
@@ -339,6 +350,16 @@ public:
     int mIntermediateWidth = 0;
     int mIntermediateHeight = 0;
     bool mFramePassValid = false;
+
+#ifdef __EMSCRIPTEN__
+    // On web, the swapchain surface texture may not reliably support
+    // LoadOp::Load between render passes. We render to this owned texture
+    // instead of mFrameView, then copy to the swapchain at end-of-frame.
+    wgpu::Texture mFrameResolvedTex;
+    wgpu::TextureView mFrameResolvedView;
+    int mFrameResolvedWidth = 0;
+    int mFrameResolvedHeight = 0;
+#endif
 
     // Default textures
     wgpu::Texture mWhiteTex;

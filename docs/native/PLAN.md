@@ -25,7 +25,7 @@ The native port operates 1:1 with the Xbox version's DTA-driven pipeline. No byp
 | Input scripting | Working | MILO_INPUT_SCRIPT drives menus via button presses |
 | Menu backgrounds | Rendering | turbo_shell scene visible, camera orientation needs alignment |
 | Menu text | Rendering | All items legible, positions offset ~15% from Xbox |
-| Gameplay HUD | Partial | Score, song name visible; star meters, multiplier need work |
+| Gameplay HUD | Working | Flashcard panels, score, ribbons visible on desktop + web |
 
 ### What Was Removed
 
@@ -74,13 +74,16 @@ Menu text positions are offset ~15% vertically from Xbox.
 
 **Files**: `src/system/ui/UI.cpp` (Draw, camera selection), `native/src/platform/Rnd_Wgpu.cpp` (viewport)
 
-### Priority 4: PostProc Flush Timing
-PostProc runs at end-of-frame, affecting UI text. Xbox flushes before UI overlay.
+### Priority 4: PostProc Flush Timing — DONE (2026-03-24)
+PostProc flushed before UI overlay via `FlushPostProcessingForOverlay()` in `PanelDir::DrawShowing`.
+On web (Emscripten), the swapchain surface doesn't reliably support `LoadOp::Load` between render passes.
+Fixed by rendering to an owned "frame resolved" texture on web, then copying to swapchain at end-of-frame.
+Desktop and web HUD overlay now both functional.
 
-**Files**: `src/system/ui/PanelDir.cpp` (DrawShowing, mCanEndWorld), `native/src/platform/Rnd_Wgpu.cpp`
+**Files**: `native/src/platform/Rnd_Wgpu.cpp`, `native/src/platform/Rnd_Wgpu.h`, `native/src/platform/GpuDevice_Web.cpp`
 
-### Priority 5: Cleanup diagnostic printfs — DONE (2026-03-23)
-All `ANIM-DIAG`, `CLIP-DIAG`, `SHOT-DIAG`, `REMIXER-DIAG`, and `HamDirector::Enter` debug printfs removed from HamDirector.cpp, ClipPlayer.cpp, HamCamShot.cpp, OriginalChoreoRemixer.cpp.
+### Priority 5: Cleanup diagnostic printfs — DONE (2026-03-24)
+All `ANIM-DIAG`, `CLIP-DIAG`, `SHOT-DIAG`, `REMIXER-DIAG`, `HamDirector::Enter`, `HUD-DIAG`, `HUD-MESH` debug printfs removed.
 
 ---
 

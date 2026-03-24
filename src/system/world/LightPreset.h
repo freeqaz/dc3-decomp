@@ -128,7 +128,7 @@ public:
         float mDuration; // 0xa0
         /** "Fade-out time of the keyframe" */
         float mFadeOutTime; // 0xa4
-        float unka8; // 0xa8
+        float mFrame; // 0xa8
     };
 
     enum KeyframeCmd {

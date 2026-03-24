@@ -301,7 +301,8 @@ wgpu::TextureView GpuDevice::AcquireNextFrame() {
         surfTex.status != wgpu::SurfaceGetCurrentTextureStatus::SuccessSuboptimal) {
         return nullptr;
     }
-    return surfTex.texture.CreateView();
+    mSurfaceTex = surfTex.texture;
+    return mSurfaceTex.CreateView();
 }
 
 void GpuDevice::PresentFrame() {

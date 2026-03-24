@@ -5,11 +5,13 @@ Techniques for debugging the DC3 WASM/Emscripten web port — both interactively
 ## Prerequisites
 
 ```bash
-sudo pacman -S xorg-server-xvfb chromium
+sudo pacman -S chromium
 npm install playwright
 ```
 
-WebGPU requires a real GPU context. Use `xvfb-run` to provide a virtual X11 display for headless execution.
+WebGPU requires a real GPU context. The test scripts use Playwright to launch system Chromium (not Playwright's bundled browser) in **headed** mode against the existing display (`DISPLAY` env var). No Xvfb is needed on a desktop with X11/Wayland.
+
+> **CI / headless servers only**: If there's no display, install `xorg-server-xvfb` and prefix commands with `xvfb-run -a --server-args="-screen 0 1920x1080x24"`.
 
 ## Architecture Overview
 
@@ -30,32 +32,73 @@ The web port compiles the same codebase as the desktop native port, with platfor
 
 Both desktop and web define `HX_NATIVE`. Platform-specific code uses `#ifdef __EMSCRIPTEN__`.
 
-## Quick Reference
+## Web Test Commands
+
+All test scripts live in `scripts/web/` and share a common core module (`scripts/web/lib/core.mjs`). The dev server must be running on the target port (default 8420).
 
 ```bash
-# Build web port
-scripts/build/web.sh
+# Start server first
+python3 native/web/server.py --port 8420 &
+```
 
-# Start dev server (must be running for all browser-based tools)
-python3 native/web/server.py --port 8420
+### Taking a Screenshot
 
-# Smoke test (auto-server, hang detection, WebGPU init check)
-xvfb-run -a --server-args="-screen 0 1920x1080x24" \
-  node native/web/tests/web-smoke.js --verbose
+The most common agent workflow. Navigate to song select, take one screenshot, exit.
 
-# Song scroll test (captures screenshots per scroll)
-xvfb-run -a --server-args="-screen 0 1920x1080x24" \
-  node native/web/tests/test-song-scroll.js --no-server --verbose
+```bash
+node scripts/web/screenshot.mjs --verbose
+node scripts/web/screenshot.mjs --out /tmp/my-shots --port 8420
+```
 
-# CDP debugger break (pauses at hang point, dumps call stack)
-xvfb-run -a --server-args="-screen 0 1920x1080x24" \
-  node native/web/tests/cdp-debugger-break.js --no-server --verbose
+Output: `screenshot.png` + `console.jsonl` in the output directory.
 
-# Capture console logs for analysis
-scripts/web/capture-logs.sh --duration 120 --output /tmp/my-log.txt
+> **Claude Code agents**: Add `dangerouslyDisableSandbox: true` — Chromium needs GPU/device access.
 
-# Rebuild WASM
-scripts/build/web.sh
+### Song List Scroll Test
+
+Navigate to song_select, take initial screenshot, scroll N times with a screenshot after each.
+
+```bash
+node scripts/web/scroll.mjs --scrolls 5 --verbose
+node scripts/web/scroll.mjs --scrolls 3 --out /tmp/scroll-shots
+```
+
+### Gameplay / Song Loading Diagnosis
+
+Navigate to gameplay, monitor loading milestones, detect hangs.
+
+```bash
+node scripts/web/gameplay.mjs --verbose --timeout 60
+node scripts/web/gameplay.mjs --song-index 5 --hang-timeout 20
+```
+
+Tracks milestones: `attract_screen` → `main_screen` → `game_screen` → `PollForLoading` → `IsLoaded` → `DONE (state 4)` → `StartIntro`.
+
+### CDP Debugger Break
+
+The most powerful tool for diagnosing WASM hangs. Pauses execution at hang point and dumps the call stack.
+
+```bash
+node scripts/web/cdp-break.mjs --verbose
+node scripts/web/cdp-break.mjs --song-index 3 --silence 10
+```
+
+### Common Flags
+
+All commands accept:
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--port N` | 8420 | Server port |
+| `--out DIR` | `/tmp/dc3-web/<cmd>-<timestamp>/` | Output directory |
+| `--verbose` | off | Print all console output (errors always print) |
+
+### npm Shortcuts
+
+```bash
+npm run web:screenshot
+npm run web:scroll -- --scrolls 5
+npm run web:gameplay -- --verbose
+npm run web:cdp-break -- --silence 10
 ```
 
 ## Headless Desktop Testing (Preferred for Agents)
@@ -113,17 +156,6 @@ MILO_HEADLESS=1 MILO_MAX_FRAMES=2000 \
   native/build/dc3-native 2>&1 | grep -E 'scroll|nav_highlight|skeleton|frame'
 ```
 
-Expected output:
-```
-Native: headless mode, using dummy skeleton (no pose server)
-DC3 Input: wait_screen 'song_select_screen' satisfied at frame 538
-DC3 Input: Frame 588 — scripted buttons 0x4000
-right_hand.hnl ... unhandled msg: nav_highlight
-right_hand.hnl ... unhandled msg: nav_highlight_settled
-```
-
-Each `nav_highlight` + `nav_highlight_settled` pair confirms the list scrolled. Different song preview loads (`.bik` errors with song names) confirm the selection changed.
-
 ### Example: Headless Screenshot Comparison
 
 ```bash
@@ -141,52 +173,6 @@ MILO_HEADLESS=1 MILO_RENDER=1 \
 |--------|-------|---------|
 | `scripts/dc3-input-flows/song-scroll-test.txt` | boot → main → choose_mode → song_select → 8x down | Verify list scrolling |
 | `scripts/dc3-input-flows/ymca.txt` | boot → gameplay | Full song load test |
-
-## Web-Specific Testing (Browser via Playwright)
-
-Use these when you need to test browser-specific behavior (WebGPU canvas rendering, keyboard input mapping, asset loading over HTTP).
-
-### Test Scripts
-
-| Script | Purpose | Key Flags |
-|--------|---------|-----------|
-| `web-smoke.js` | Boot check, hang/crash detection | `--timeout`, `--hang-timeout`, `--wait-for`, `--save-logs` |
-| `test-song-scroll.js` | Navigate to song_select, scroll, capture screenshots | `--scrolls N`, `--out dir` |
-| `cdp-debugger-break.js` | Pause at hang point via CDP, dump WASM call stack | `--silence N` |
-| `diagnose-song-load.js` | Full menu nav to gameplay, diagnose load issues | `--timeout`, `--hang-timeout` |
-| `run-web-tests.sh` | Wrapper: xvfb + server + smoke test | `--diagnose-hang`, `--no-xvfb` |
-
-All scripts live in `native/web/tests/`. The dev server is at `native/web/server.py`.
-
-### Running Tests
-
-```bash
-# Start server in background
-python3 native/web/server.py --port 8420 &
-
-# Run any test with xvfb + WebGPU
-xvfb-run -a --server-args="-screen 0 1920x1080x24" \
-  node native/web/tests/test-song-scroll.js --no-server --verbose
-
-# Or use the wrapper (auto-starts server)
-native/web/tests/run-web-tests.sh --verbose
-```
-
-### Sandbox
-
-GPU access requires `dangerouslyDisableSandbox: true` for bash commands. The xvfb-run + Chromium + Vulkan stack needs unrestricted filesystem and device access.
-
-### Keyboard Input Mapping (Browser)
-
-| Key | Gamepad | Use |
-|-----|---------|-----|
-| `Space` | Start (kPad_Start) | Dismiss screens, skip intro |
-| `Enter` | A/Confirm (kPad_X) | Select menu items |
-| `ArrowDown` | D-pad Down | Navigate lists |
-| `ArrowUp` | D-pad Up | Navigate lists |
-| `Escape` | B/Back (kPad_Circle) | Go back |
-
-Navigation sequence: `attract → [Space] → title → [Space] → main → [Enter] → choose_mode → [Enter] → song_select → [Down] → scroll`
 
 ## CDP Debugger Break
 

@@ -39,6 +39,10 @@ public:
 
     void Terminate();
 
+    // Show/hide the <video> element as a fullscreen overlay on the canvas.
+    // Used by MoviePanel for intro/attract videos.
+    void SetOverlay(bool show);
+
     // Accessors for texture upload
     const uint8_t* GetRGBABuffer() const { return mRGBABuffer.data(); }
     int GetDecodedWidth() const { return mVideoWidth; }

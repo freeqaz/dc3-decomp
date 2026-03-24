@@ -543,6 +543,7 @@ void HamCamShot::StartAnim() {
                 msg[4] = it->mForwardEvent;
                 HandleType(msg);
                 if (it->mEnvOverride) {
+                    cache->mOldEnv = theChar->GetEnv();
                     theChar->SetEnv(it->mEnvOverride);
                 }
             }

@@ -66,12 +66,12 @@ public:
 
     // size 0x4c
     struct TargetCache {
-        TargetCache() : unk0(0), mTrans(0) { mTransform.Reset(); }
+        TargetCache() : mTrans(0), mOldEnv(0) { mTransform.Reset(); }
 
-        int unk0; // 0x0
+        Symbol mTargetName; // 0x0
         RndTransformable *mTrans; // 0x4
-        Symbol mTargetName; // 0x8
-        Transform mTransform; // 0x10
+        RndEnviron *mOldEnv; // 0x8
+        Transform mTransform; // 0xc
     };
 
     // Hmx::Object
