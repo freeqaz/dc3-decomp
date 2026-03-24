@@ -2687,13 +2687,15 @@ void HamDirector::OnPopulateMoves() {
 
     gMoveMergeMap.clear();
 
-    ObjVector<FileMerger::Merger> &mergers = mMoveMerger->Mergers();
-    if (mergers.begin() != mergers.end()) {
-        mergers.erase(mergers.begin(), mergers.end());
+    {
+        std::vector<FileMerger::Merger> &mergers = mMoveMerger->Mergers();
+        if (mergers.begin() != mergers.end()) {
+            mergers.erase(mergers.begin(), mergers.end());
+        }
     }
 
     int numKeys = moveInstSymKeys->size();
-    for (int i = 0; i != numKeys; i++) {
+    for (int i = 0; i < numKeys; i++) {
             if ((*moveInstSymKeys)[i].value == "") continue;
 
             float keyFrame = (*moveInstSymKeys)[i].frame;
@@ -2753,14 +2755,14 @@ void HamDirector::OnPopulateMoves() {
                         "modular_song_data/transition_charclips/%s.milo",
                         transName
                     ));
-                    FileMerger::Merger merger(mMoveMerger.Ptr());
-                    merger.mName = transition_charclips;
-                    merger.mDir = clipsDir;
-                    merger.mSubdirs = MergeFilter::kAllSubdirs;
-                    merger.mPreClear = true;
-                    merger.mSelected = fp;
-                    merger.mForceReload = true;
-                    mergers.push_back(merger);
+                    FileMerger::Merger transMerger(mMoveMerger.Ptr());
+                    transMerger.mName = transition_charclips;
+                    transMerger.mDir = clipsDir;
+                    transMerger.mSubdirs = MergeFilter::kAllSubdirs;
+                    transMerger.mPreClear = true;
+                    transMerger.mSelected = fp;
+                    transMerger.mForceReload = true;
+                    static_cast<std::vector<FileMerger::Merger>&>(mMoveMerger->Mergers()).push_back(transMerger);
                     gMoveMergeMap[transName]++;
                 }
             }
@@ -2770,14 +2772,14 @@ void HamDirector::OnPopulateMoves() {
                 FilePath fp(
                     MakeString("modular_song_data/charclips/%s.milo", clipName)
                 );
-                FileMerger::Merger merger(mMoveMerger.Ptr());
-                merger.mName = charclips;
-                merger.mDir = clipsDir;
-                merger.mSubdirs = MergeFilter::kAllSubdirs;
-                merger.mPreClear = true;
-                merger.mSelected = fp;
-                merger.mForceReload = true;
-                mergers.push_back(merger);
+                FileMerger::Merger clipMerger(mMoveMerger.Ptr());
+                clipMerger.mName = charclips;
+                clipMerger.mDir = clipsDir;
+                clipMerger.mSubdirs = MergeFilter::kAllSubdirs;
+                clipMerger.mPreClear = true;
+                clipMerger.mSelected = fp;
+                clipMerger.mForceReload = true;
+                static_cast<std::vector<FileMerger::Merger>&>(mMoveMerger->Mergers()).push_back(clipMerger);
                 gMoveMergeMap[clipName]++;
             }
 
@@ -2788,14 +2790,14 @@ void HamDirector::OnPopulateMoves() {
                 FilePath fp(
                     MakeString("modular_song_data/hammoves/%s.milo", hamMiloName)
                 );
-                FileMerger::Merger merger(mMoveMerger.Ptr());
-                merger.mName = hammoves;
-                merger.mDir = movesDir;
-                merger.mSubdirs = MergeFilter::kAllSubdirs;
-                merger.mPreClear = true;
-                merger.mSelected = fp;
-                merger.mForceReload = true;
-                mergers.push_back(merger);
+                FileMerger::Merger hamMerger(mMoveMerger.Ptr());
+                hamMerger.mName = hammoves;
+                hamMerger.mDir = movesDir;
+                hamMerger.mSubdirs = MergeFilter::kAllSubdirs;
+                hamMerger.mPreClear = true;
+                hamMerger.mSelected = fp;
+                hamMerger.mForceReload = true;
+                static_cast<std::vector<FileMerger::Merger>&>(mMoveMerger->Mergers()).push_back(hamMerger);
                 gMoveMergeMap[hamMiloName]++;
             }
     }

@@ -419,10 +419,10 @@ App::App(int argc, char **argv) {
                 static Symbol side("side");
                 static Symbol player_present("player_present");
                 provider->SetProperty(side, i == 0 ? 1 : 0); // kSkeletonRight=1, kSkeletonLeft=0
-                // Mark player 0 as present (controller-based play).
-                // Many providers (Character/Crew/Outfit/Venue/Difficulty) gate their
-                // lists on player_present — if it's 0 for both, lists may swap or empty.
-                provider->SetProperty(player_present, i == 0 ? 1 : 0);
+                // Mark both players as present so the full HUD renders
+                // (hud_left for player 1, hud_right for player 0).
+                // On Xbox, both sides show in crew/party mode.
+                provider->SetProperty(player_present, 1);
                 MILO_LOG("DC3 Native: Created player provider '%s' (side=%d)\n",
                         providerName, i == 0 ? 1 : 0);
             }

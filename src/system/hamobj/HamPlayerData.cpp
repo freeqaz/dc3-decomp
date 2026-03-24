@@ -183,9 +183,9 @@ float HamPlayerData::TrackingAgeSeconds() const {
 
 bool HamPlayerData::IsPlaying() const {
 #ifdef HX_NATIVE
-    // TODO(native): No Kinect skeleton tracking, so mSkeletonTrackingID is always 0.
-    // Force player 0 to "playing" so flashcards, scoring, and HUD elements function.
-    return mPlayerIndex == 0;
+    // No Kinect skeleton tracking — both players are always "playing"
+    // so both hud_left and hud_right display flashcards/scores.
+    return true;
 #else
     if (!TheLoadMgr.EditMode() && mAutoplay.Null() && TheGestureMgr->GetPauseOnSkeletonLossMode() != 1) {
         return mSkeletonTrackingID > 0;

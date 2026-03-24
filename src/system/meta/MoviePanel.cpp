@@ -23,6 +23,9 @@
 #include <cstdio>
 #ifdef __EMSCRIPTEN__
 #include "platform/WebMovieImpl.h"
+#include "platform/TexGpu.h"
+#include "rndobj/Mat.h"
+#include "rndobj/Tex.h"
 #endif
 
 bool MoviePanel::sUseSubtitles;
@@ -109,8 +112,28 @@ void MoviePanel::Load() {
 }
 
 void MoviePanel::Draw() {
-    if (GetState() != kUnloaded && mFinalDrawPassFlag == GetFinalDrawPass())
+    if (GetState() != kUnloaded && mFinalDrawPassFlag == GetFinalDrawPass()) {
+#ifdef __EMSCRIPTEN__
+        // Render video frames through the engine instead of DOM overlay.
+        // WebMovieImpl decodes to RGBA; we upload to a GPU texture and
+        // draw a fullscreen rect, matching Xbox's BinkDraw-to-backbuffer behavior.
+        WebMovieImpl* impl = dynamic_cast<WebMovieImpl*>(mMovie.GetImpl());
+        if (impl && impl->HasDecodedFrame()) {
+            if (!mVideoTex) {
+                mVideoTex = Hmx::Object::New<RndTex>();
+                mVideoMat = Hmx::Object::New<RndMat>();
+                mVideoMat->SetDiffuseTex(mVideoTex);
+            }
+            UploadRGBAToRndTex(mVideoTex, impl->GetRGBABuffer(),
+                               impl->GetDecodedWidth(), impl->GetDecodedHeight());
+            Hmx::Rect r(0, 0, 1, 1);
+            TheRnd.DrawRectScreen(r, Hmx::Color(1, 1, 1, 1), mVideoMat, nullptr, nullptr);
+        }
+        mMovie.Draw(); // mark frame consumed
+#else
         mMovie.Draw();
+#endif
+    }
     UIPanel::Draw();
 }
 
@@ -118,14 +141,14 @@ void MoviePanel::Enter() { UIPanel::Enter(); }
 
 void MoviePanel::Exit() {
     UIPanel::Exit();
-#ifdef __EMSCRIPTEN__
-    WebMovieImpl *webImpl = dynamic_cast<WebMovieImpl *>(mMovie.GetImpl());
-    if (webImpl) webImpl->SetOverlay(false);
-#endif
     if (!mPreload) {
         mMovie.End();
     }
     mShowMenu = false;
+#ifdef __EMSCRIPTEN__
+    if (mVideoMat) { delete mVideoMat; mVideoMat = nullptr; }
+    if (mVideoTex) { delete mVideoTex; mVideoTex = nullptr; }
+#endif
 }
 
 void MoviePanel::Poll() {
@@ -282,14 +305,6 @@ void MoviePanel::PlayMovie() {
         0,
         kLoadFront
     );
-#ifdef __EMSCRIPTEN__
-    // Show the <video> element as a fullscreen overlay on the canvas.
-    // WebMovieImpl::Draw() doesn't render to the GPU — it's designed for
-    // TexMovie pixel extraction. For MoviePanel (fullscreen intro/attract),
-    // we overlay the browser's native <video> element instead.
-    WebMovieImpl *webImpl = dynamic_cast<WebMovieImpl *>(mMovie.GetImpl());
-    if (webImpl) webImpl->SetOverlay(true);
-#endif
 }
 
 void MoviePanel::ChooseMovie() {
