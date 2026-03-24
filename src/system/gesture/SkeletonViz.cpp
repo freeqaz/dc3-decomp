@@ -26,7 +26,8 @@
 SkeletonViz::SkeletonViz()
     : mUsePhysicalCam(0), mPhysicalCamRotation(0), mCurrentCamRotation(0),
       mAxesCoordSys(kCoordCamera), mUtlLine(0), mSkeletonEnv(0), mCamMesh(0),
-      mJointMesh(0), mJointMat(0), mPhysicalCam(0), mLineWidthScale(0), unk218(true) {
+      mJointMesh(0), mJointMat(0), mPhysicalCam(0), mSphereMesh(0), mLineWidthScale(0),
+      unk218(true) {
     unk194.Reset();
     Multiply(Hmx::Matrix3(1, 0, 0, 0, 0, 1, 0, 1, 0), unk194.m, unk194.m);
     unk1d4 = unk194;

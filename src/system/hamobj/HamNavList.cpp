@@ -1347,62 +1347,62 @@ bool HamNavList::InControllerMode() const {
 }
 
 void HamNavList::DetermineHighlightedItem() {
-    bool gathering = mListState.ScrollPastMinDisplay();
     MILO_ASSERT(!InControllerMode(), 0x2b7);
     MILO_ASSERT(!TheLoadMgr.EditMode(), 0x2b8);
 
     int numItems = NumItems();
-    int maxItem = 1 - numItems;
+    int maxItem = numItems - 1;
     double maxItemD = (double)maxItem;
+    float maxItemF = (float)maxItemD;
+    float numItemsF = (float)(double)numItems;
 
-    float threshold = -(float)(maxItemD * (double)0.15 - 1.0) / (float)numItems;
+    float threshold = (1.0f - maxItemF * 0.15f) / numItemsF;
 
-    auto& _ref1 = mScrollBehavior;
-    bool atTop = _ref1.AtTop();
     int highlightItem = GetHighlightItem();
-    if (gathering && !atTop) {
-        if (0 != highlightItem || _ref1.mScrollDir != 1) {
-            if (highlightItem == HamListRibbon::sNumListSelectable - 2
-                && _ref1.mScrollDir == 2) {
-                highlightItem = HamListRibbon::sNumListSelectable;
-            } else {
-                highlightItem = highlightItem + 1;
+    bool gathering = mListState.ScrollPastMinDisplay();
+    if (gathering) {
+        if (!mScrollBehavior.AtTop()) {
+            if (0 != highlightItem || mScrollBehavior.mScrollDir != 1) {
+                if (highlightItem == HamListRibbon::sNumListSelectable - 1
+                    && mScrollBehavior.mScrollDir == 2) {
+                    highlightItem = HamListRibbon::sNumListSelectable + 1;
+                } else {
+                    highlightItem = highlightItem + 1;
+                }
             }
         }
     }
 
-    unsigned int posU = (unsigned int)(maxItemD * (double)mHandHeight + 0.5);
+    unsigned int posU = (int)(maxItemD * (double)mHandHeight + 0.5);
     if (maxItem < (int)posU) {
         posU &= (posU >> 31) - 1;
     }
 
     unsigned int adjustedPos = posU;
-    if (gathering) {
-        if (!atTop) {
+    if (mListState.ScrollPastMinDisplay()) {
+        if (!mScrollBehavior.AtTop()) {
             adjustedPos = posU - 1;
         }
         int iPos = (int)adjustedPos;
-        if (iPos < HamListRibbon::sNumListSelectable - 1) {
-            adjustedPos &= (unsigned int)(-(long long)((long long)(adjustedPos << 32) >> 63));
-        } else {
-            adjustedPos = HamListRibbon::sNumListSelectable - 2;
-        }
         if (iPos == -1) {
-            _ref1.mScrollDir = 1;
-        } else if (iPos == HamListRibbon::sNumListSelectable - 1) {
-            _ref1.mScrollDir = 2;
+            mScrollBehavior.mScrollDir = 1;
+        } else if (iPos == HamListRibbon::sNumListSelectable) {
+            mScrollBehavior.mScrollDir = 2;
         } else {
-            _ref1.mScrollDir = 0;
+            mScrollBehavior.mScrollDir = 0;
         }
+        if (iPos > HamListRibbon::sNumListSelectable - 1) {
+            adjustedPos = HamListRibbon::sNumListSelectable - 1;
+        }
+        adjustedPos &= (unsigned int)(-(long long)((long long)(adjustedPos << 32) >> 63));
     }
 
     float targetPos = (float)((double)highlightItem / maxItemD);
     float handDiff = fabsf(mHandHeight - targetPos);
     float halfThreshold = threshold * 0.5f + 0.15f;
     if (!(handDiff >= halfThreshold)) {
-        auto atBottom = _ref1.AtBottom();
-        if (atBottom) {
-            _ref1.mScrollDir = 0;
+        if (mScrollBehavior.AtBottom()) {
+            mScrollBehavior.mScrollDir = 0;
         }
     } else {
         int firstShowing = mListState.FirstShowing();

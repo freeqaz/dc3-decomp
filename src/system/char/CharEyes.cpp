@@ -737,37 +737,44 @@ Vector3 CharEyes::GenerateDartOffset() {
 }
 
 bool CharEyes::Replace(ObjRef *ref, Hmx::Object *obj) {
-    int eyeSize = sizeof(EyeDesc);
-    int eyeCount = mEyes.size();
-#ifdef HX_NATIVE
-    int eyeOffset = (char *)ref - (char *)mEyes.data();
-#else
-    int eyeOffset = (char *)ref - (char *)mEyes.begin();
-#endif
-    if ((int)(unsigned)eyeOffset < (unsigned)(eyeSize * eyeCount)) {
-        int eyeIdx = eyeOffset / eyeSize;
-        if (eyeOffset == (unsigned int)eyeIdx * eyeSize) {
-            EyeDesc &desc = mEyes[eyeIdx];
-            if (!desc.mEye.SetObj(obj))
-                mEyes.erase(mEyes.begin() + eyeIdx);
-            return true;
+    EyeDesc *eyeEnd = mEyes.end();
+    EyeDesc *eyeBegin = mEyes.begin();
+    int eyeCount = (int)((char *)eyeEnd - (char *)eyeBegin) / (int)sizeof(EyeDesc);
+    if (eyeCount != 0) {
+        int eyeOff = (int)((char *)ref - (char *)eyeBegin);
+        if (eyeOff >= 0) {
+            int eyeTotal = eyeCount * (int)sizeof(EyeDesc);
+            if ((unsigned)eyeOff < (unsigned)eyeTotal) {
+                int eyeIdx = eyeOff / (int)sizeof(EyeDesc);
+                if (eyeOff == eyeIdx * (int)sizeof(EyeDesc)) {
+                    EyeDesc *desc = eyeBegin + eyeIdx;
+                    if (desc != mEyes.end()) {
+                        if (!desc->mEye.SetObj(obj))
+                            mEyes.erase(mEyes.begin() + eyeIdx);
+                        return true;
+                    }
+                }
+            }
         }
     }
-    int stateSize = sizeof(CharInterestState);
-    auto& interests = mInterests;
-    int stateCount = interests.size();
-#ifdef HX_NATIVE
-    int stateOffset = (char *)ref - (char *)interests.data();
-#else
-    int stateOffset = (char *)ref - (char *)interests.begin();
-#endif
-    if ((unsigned)stateOffset < (unsigned)(stateSize * stateCount)) {
-        int stateIdx = stateOffset / stateSize;
-        if (stateOffset == stateIdx * stateSize) {
-            CharInterestState &state = interests[stateIdx];
-            if (!state.mInterest.SetObj(obj))
-                interests.erase(interests.begin() + stateIdx);
-            return true;
+    CharInterestState *stateEnd = mInterests.end();
+    CharInterestState *stateBegin = mInterests.begin();
+    int stateCount = (int)((char *)stateEnd - (char *)stateBegin) / (int)sizeof(CharInterestState);
+    if (stateCount != 0) {
+        int stateOff = (int)((char *)ref - (char *)stateBegin);
+        if (stateOff >= 0) {
+            int stateTotal = stateCount * (int)sizeof(CharInterestState);
+            if ((unsigned)stateOff < (unsigned)stateTotal) {
+                int stateIdx = stateOff / (int)sizeof(CharInterestState);
+                if (stateOff == stateIdx * (int)sizeof(CharInterestState)) {
+                    CharInterestState *state = stateBegin + stateIdx;
+                    if (state != mInterests.end()) {
+                        if (!state->mInterest.SetObj(obj))
+                            mInterests.erase(mInterests.begin() + stateIdx);
+                        return true;
+                    }
+                }
+            }
         }
     }
     return CharWeightable::Replace(ref, obj);

@@ -61,20 +61,19 @@ bool FlowPickOne::Activate() {
         int numChildren = (int)mChildNodes.size();
         if (mIndex < 0 || mIndex >= numChildren)
             mIndex = 0;
-        auto _tmp2 = (mChildNodes.begin() + mIndex)->Obj();
-        ActivateChild(_tmp2);
+        ActivateChild(mChildNodes[mIndex]);
         mIndex++;
         return !mRunningNodes.empty();
     }
     case kChoiceRandom: {
         int numChildren = (int)mChildNodes.size();
         mIndex = RandomInt(0, numChildren);
-        chosen = (mChildNodes.begin() + mIndex)->Obj();
+        chosen = mChildNodes[mIndex];
         break;
     }
     case kChoiceRandomNoRepeat: {
         int numChildren = (int)mChildNodes.size();
-        if (!(numChildren <= 1)) {
+        if (numChildren > 1) {
             int newIndex;
             do {
                 newIndex = RandomInt(0, numChildren);
@@ -83,40 +82,48 @@ bool FlowPickOne::Activate() {
         } else {
             mIndex = 0;
         }
-        chosen = (mChildNodes.begin() + mIndex)->Obj();
+        chosen = mChildNodes[mIndex];
         break;
     }
     case kChoiceRandomJukeBox: {
         int numChildren = (int)mChildNodes.size();
         if (numChildren <= 1) {
-            auto _tmp1 = mChildNodes.begin()->Obj();
             if (numChildren == 1)
-                chosen = _tmp1;
+                chosen = mChildNodes[0];
             break;
         }
-        int historySize = (int)mChoiceHistory.size();
-        if (mIndex < 0 || historySize <= mIndex) {
-            FlowNode *lastChosen = nullptr;
-            if (!mChoiceHistory.empty()) {
-                lastChosen = (mChoiceHistory.begin() + (historySize - 1))->Obj();
-            }
-            mChoiceHistory.clear();
-            std::vector<FlowNode *> items;
-            FOREACH (it, mChildNodes) {
-                items.push_back(it->Obj());
-            }
-            RandomShuffle(items.begin(), items.end());
-            mIndex = 0;
-            for (auto rit = items.end(); rit != items.begin();)
-                mChoiceHistory.push_back(*--rit);
-            auto _tmp0 = mChoiceHistory.begin()->Obj();
-            if (lastChosen) {
-                if (_tmp0 == lastChosen) {
-                    mIndex = 1;
+        if (mIndex < 0) {
+            goto jukebox_shuffle;
+        }
+        {
+            int historySize = (int)mChoiceHistory.size();
+            if (historySize <= mIndex) {
+                jukebox_shuffle:
+                FlowNode *lastChosen = nullptr;
+                if (!mChoiceHistory.empty()) {
+                    lastChosen = mChoiceHistory[(int)mChoiceHistory.size() - 1];
+                }
+                mChoiceHistory.clear();
+                std::vector<FlowNode *> items;
+                FOREACH (it, mChildNodes) {
+                    items.push_back(it->Obj());
+                }
+                RandomShuffle(items.begin(), items.end());
+                mIndex = 0;
+                int count = (int)(items.end() - items.begin());
+                if (count != 0) {
+                    do {
+                        mChoiceHistory.push_back(items[--count]);
+                    } while (count != 0);
+                }
+                if (lastChosen) {
+                    if (mChoiceHistory[0] == lastChosen) {
+                        mIndex = 1;
+                    }
                 }
             }
         }
-        ActivateChild((mChoiceHistory.begin() + mIndex)->Obj());
+        ActivateChild(mChoiceHistory[mIndex]);
         mIndex++;
         return !mRunningNodes.empty();
     }
@@ -124,12 +131,12 @@ bool FlowPickOne::Activate() {
         int numChildren = (int)mChildNodes.size();
         int adjustedIndex = mIndex % numChildren;
         mIndex = adjustedIndex;
-        ActivateChild((mChildNodes.begin() + adjustedIndex)->Obj());
+        ActivateChild(mChildNodes[adjustedIndex]);
         mIndex++;
         return !mRunningNodes.empty();
     }
     default:
-        MILO_NOTIFY_ONCE("Bad ChoiceType in FlowPickOne!");
+        MILO_NOTIFY_ONCE("FlowPickOne: bad picking type");
         break;
     }
 

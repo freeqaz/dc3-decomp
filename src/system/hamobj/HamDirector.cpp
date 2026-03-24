@@ -441,68 +441,35 @@ DataNode HamDirector::OnFileMerged(DataArray *a) {
             hudDir->SetProperty("postprocs_before_draw", true);
             DataVariable("hud_panel") = (Hmx::Object *)hudDir;
 
-            // Diagnostic: dump draw list and score subdirs
-            fprintf(stderr, "[HUD] Draw list (%d items):\n", hudDir->NumDraws());
-            bool hasScoreInDrawList = false;
-            for (int i = 0; i < hudDir->NumDraws(); i++) {
-                RndDrawable *d = hudDir->GetDraw(i);
-                Hmx::Object *obj = dynamic_cast<Hmx::Object *>(d);
-                const char *n = obj ? obj->Name() : "(null)";
-                const char *cn = obj ? obj->ClassName().Str() : "?";
-                if (strstr(n, "score") || strstr(n, "hud"))
-                    hasScoreInDrawList = true;
-                fprintf(stderr, "  draw[%d] = '%s' (%s)\n", i, n, cn);
-            }
-            fprintf(stderr, "[HUD] score in draw list: %s\n",
-                    hasScoreInDrawList ? "YES" : "NO");
-            for (const char *name :
-                 {"score_left", "score_right"}) {
-                RndDir *sub = hudDir->Find<RndDir>(name, false);
-                if (sub) {
-                    fprintf(
-                        stderr,
-                        "[HUD] '%s' showing=%d draws=%d\n",
-                        name,
-                        sub->Showing(),
-                        sub->NumDraws()
-                    );
-                    for (int i = 0; i < sub->NumDraws(); i++) {
-                        RndDrawable *sd = sub->GetDraw(i);
-                        Hmx::Object *so = dynamic_cast<Hmx::Object *>(sd);
-                        fprintf(
-                            stderr,
-                            "  sub draw[%d] = '%s' (%s) showing=%d\n",
-                            i,
-                            so ? so->Name() : "?",
-                            so ? so->ClassName().Str() : "?",
-                            sd->Showing()
-                        );
-                    }
-                    // Check if score1.lbl is in score.grp's object list
-                    RndGroup *grp2 = sub->Find<RndGroup>("score.grp", false);
-                    UILabel *lbl = sub->Find<UILabel>("score1.lbl", false);
-                    if (grp2 && lbl) {
-                        bool inGrp = grp2->HasObject(lbl);
-                        fprintf(
-                            stderr,
-                            "[HUD] %s: score1.lbl in score.grp=%d, "
-                            "grp objects=%d\n",
-                            name,
-                            inGrp,
-                            (int)grp2->Objects().size()
-                        );
-                        // List all objects in score.grp
-                        for (auto it = grp2->Objects().begin();
-                             it != grp2->Objects().end(); ++it) {
-                            fprintf(
-                                stderr,
-                                "  grp obj: '%s' (%s)\n",
-                                (*it)->Name(),
-                                (*it)->ClassName().Str()
-                            );
-                        }
-                    }
+            // Reposition score transforms into camera frustum.
+            // The HUD camera (FOV=0.6 rad at Y=-768 looking +Y) can see
+            // X≈±300 at the score depth. Original positions (X=±500) are
+            // outside, so move to X=±150 (world X≈±300 with child offset).
+            {
+                RndTransformable *lt =
+                    hudDir->Find<RndTransformable>("left_score.trans", false);
+                RndTransformable *rt =
+                    hudDir->Find<RndTransformable>("right_score.trans", false);
+                if (lt) {
+                    Transform xfm = lt->LocalXfm();
+                    xfm.v.x = -150.0f;
+                    xfm.v.z = 140.0f;
+                    lt->SetLocalXfm(xfm);
                 }
+                if (rt) {
+                    Transform xfm = rt->LocalXfm();
+                    xfm.v.x = 150.0f;
+                    xfm.v.z = 140.0f;
+                    rt->SetLocalXfm(xfm);
+                }
+            }
+            // Trigger show-score animations (slide scores into view)
+            for (const char *aname :
+                 {"show_left_score.anim", "show_right_score.anim"}) {
+                RndAnimatable *anim =
+                    hudDir->Find<RndAnimatable>(aname, false);
+                if (anim)
+                    anim->SetFrame(anim->EndFrame(), 0);
             }
         }
     }
@@ -2565,6 +2532,18 @@ void HamDirector::PlayNextShot() {
     } else {
         world = nullptr;
     }
+#ifdef HX_NATIVE
+    // Venue Flow graphs with pick_shot FlowCommands (the DTA blend_time path)
+    // don't exist in any DC3 venue — the venues only use C++ shot selection.
+    // Set blend_time here so CameraManager::Poll() interpolates transitions.
+    if (world && world->GetCameraManager()) {
+        CamShot *prev = world->GetCameraManager()->CurrentShot();
+        bool sameCategory = prev && curShot && prev->Category() == curShot->Category();
+        // Same-category cuts are tighter (10 frames ≈ 0.33s), cross-category
+        // transitions get a wider blend (15 frames ≈ 0.5s) for smoother pans.
+        world->GetCameraManager()->SetBlendTime(sameCategory ? 10.0f : 15.0f);
+    }
+#endif
     world->GetCameraManager()->ForceCameraShot(curShot, false);
 }
 

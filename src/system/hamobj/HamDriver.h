@@ -45,7 +45,6 @@ public:
 
     struct LayerClip : public Layer {
         LayerClip(Hmx::Object *);
-        virtual ~LayerClip();
         virtual void Eval(float);
         virtual void Play(CharBones &);
         virtual bool Replace(ObjRef *, Hmx::Object *);

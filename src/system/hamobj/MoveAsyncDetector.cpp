@@ -139,19 +139,35 @@ MoveAsyncDetector::MoveAsyncDetector(MoveDir *md) : mDir(md) {
             TheHamDirector->MoveKeys(kDifficultyExpert, md, keys);
             for (ObjDirItr<HamMove> it(md, true); nullptr != it; ++it) {
                 if (it->Scored()) {
+                    int foundIdx = -1;
                     for (int i = 0; i < keys.size(); i++) {
                         if (keys[i].move == it) {
-                            // ...
+                            foundIdx = i;
+                            break;
                         }
                     }
-                }
-                DancerSequence *seq = it->GetDancerSequence();
-                if (!(seq)) {
-                    MILO_NOTIFY("Could not find %s in expert keys", PathName(it));
-                } else {
-                    const FilterVersion *curFv = it->FilterVer();
-                    const DancerFrame *curFrame = seq->GetDancerFrames().begin();
-                    mDetectors.push_back(new MoveDetector(curFv, it, curFrame));
+                    if (foundIdx == -1) {
+                        DancerSequence *seq = it->GetDancerSequence();
+                        if (seq) {
+                            const DancerFrame *curFrame = seq->GetDancerFrames().begin();
+                            const FilterVersion *curFv = it->FilterVer();
+                            mDetectors.push_back(new MoveDetector(curFv, it, curFrame));
+                        } else {
+                            MILO_NOTIFY("Could not find %s in expert keys", PathName(it));
+                        }
+                    } else {
+                        const DancerFrame *endFrame = frames.end();
+                        const DancerFrame *curFrame = frames.begin();
+                        while (curFrame != endFrame) {
+                            if (curFrame->mMoveIdx == foundIdx)
+                                break;
+                            curFrame++;
+                        }
+                        if (curFrame != endFrame) {
+                            const FilterVersion *curFv = it->FilterVer();
+                            mDetectors.push_back(new MoveDetector(curFv, it, curFrame));
+                        }
+                    }
                 }
             }
             std::sort(mDetectors.begin(), mDetectors.end(), MoveDetectorCmp());

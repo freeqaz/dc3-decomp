@@ -268,38 +268,29 @@ done:
 }
 
 // Static buffers and index
-struct LocaleFloatBuffer {
+struct LocaleFloatState {
     char buffers[4][0x32];
+    int idx;
 };
-static LocaleFloatBuffer gLocalizeFloatBuf;
-static bool gLocalizeFloatInitialized = false;
-static int gLocalizeFloatIdx = 0;
-static Symbol gLocalizeFloatSeparator;
+static LocaleFloatState gLocalizeFloat = {};
+#define gLocalizeFloatBuf gLocalizeFloat
+#define gLocalizeFloatIdx gLocalizeFloat.idx
 
 const char *LocalizeFloat(const char *fmt, float num) {
-    const char *str;
-    const char *decimalStr;
-    char *buf;
-    char *p;
+    const char *str = MakeString(fmt, num);
 
-    str = MakeString(fmt, num);
+    static Symbol sDecimalSep("locale_decimal_separator");
 
-    // Lazy initialization of the decimal separator symbol
-    if (!gLocalizeFloatInitialized) {
-        gLocalizeFloatInitialized = true;
-        gLocalizeFloatSeparator = Symbol("locale_decimal_separator");
-    }
-
-    decimalStr = TheLocale.Localize(gLocalizeFloatSeparator, false);
+    const char *decimalStr = TheLocale.Localize(sDecimalSep, false);
 
     // If the localized decimal separator is not '.', we need to replace it
     if (decimalStr != 0 && *decimalStr != '.') {
-        buf = gLocalizeFloatBuf.buffers[gLocalizeFloatIdx];
+        char *buf = gLocalizeFloatBuf.buffers[gLocalizeFloatIdx];
         strncpy(buf, str, 0x32);
         buf[0x31] = '\0';
 
         // Find and replace '.' with localized separator
-        p = buf;
+        char *p = buf;
         for (;;) {
             if (*p == 0) break;
             if (*p == '.') {

@@ -84,30 +84,32 @@ float HamDriver::DisplayRecurse(Layer *layer, int indent, float y) {
     LayerArray *arr = dynamic_cast<LayerArray *>(layer);
     if (arr) {
         if (arr->mWeight != 0.0f) {
-            float padding = (float)(int)indent * CharClipDisplay::LineSpacing();
+            float padding = (float)(int)indent * CharClipDisplay::GetSEm();
             CharClipDisplay display;
             display.unk1c = mDisplayBeat;
             display.mDrawPosY = y;
             display.mPadding = padding;
             display.SetText(MakeString("(%s)", arr->mName));
-            display.SetStartEnd(mDisplayBeat - 4.0f, mDisplayBeat + 4.0f, false);
-            display.unk8 = arr->mWeight;
+            display.SetStartEnd(mDisplayBeat - 4.0f, mDisplayBeat + 4.0f, true);
+            display.unk20 = arr->mWeight;
             display.DrawTrack();
             display.DrawBlend(arr->mBeat, 1.0f);
             display.DrawCursor();
             y += CharClipDisplay::LineSpacing();
+            int innerIndent = indent + 1;
             for (std::list<Layer *>::iterator it = arr->mLayers.begin(); it != arr->mLayers.end(); ++it) {
-                y = bool(DisplayRecurse(*it, indent + 1, y));
+                y = DisplayRecurse(*it, innerIndent, y);
             }
         }
     } else {
         LayerClip *clip = dynamic_cast<LayerClip *>(layer);
-        if (clip->mWeight != 0.0f) {
-            float padding = (float)(int)indent * CharClipDisplay::LineSpacing();
+        if (clip && clip->mWeight != 0.0f) {
+            float padding = (float)(int)indent * CharClipDisplay::GetSEm();
             CharClipDisplay display;
+            float beat = (mDisplayBeat - clip->mClipBeat) + clip->mClip->StartBeat();
             display.mPadding = padding;
-            display.unk4 = (mDisplayBeat - clip->mClipBeat) + clip->mClip->StartBeat();
-            display.unk8 = clip->mWeight;
+            display.unk1c = beat;
+            display.unk20 = clip->mWeight;
             display.SetClip(clip->mClip, true);
             display.mDrawPosY = y;
             display.DrawTrack();
@@ -224,9 +226,6 @@ void HamDriver::Layer::OffsetSec(float f1) {
 HamDriver::LayerClip::LayerClip(Hmx::Object *obj) : mClip(obj)
 {
 }
-
-HamDriver::LayerClip::~LayerClip() {}
-
 
 void HamDriver::LayerClip::OffsetSec(float f1) {
     Layer::OffsetSec(f1);
