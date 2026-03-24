@@ -252,6 +252,19 @@ void Splash::Draw() {
                     mSplashDurationMs = 0;
                     return;
                 }
+#ifdef HX_NATIVE
+                // Non-threaded: render the movie frame through the normal draw pass.
+                // TexMovie::DrawPreClear() calls DrawToTexture() which uploads video
+                // pixels to the GPU texture. The camera renders the scene (which
+                // includes the TexMovie's render target mesh).
+                if (!mThreaded && mCurrentCam) {
+                    TheRnd.BeginDrawing();
+                    mCurrentCam->Select();
+                    mCurrentMovie->DrawPreClear();
+                    mCurrentDir->DrawShowing();
+                    TheRnd.EndDrawing();
+                }
+#endif
             } else if (mCurrentCam) {
                 int i = 0;
                 do {
@@ -420,14 +433,17 @@ bool Splash::Show() {
     }
     auto& _ref3 = mSplashDurationMs;
     if (mCurrentMovie) {
+        Movie &movie = mCurrentMovie->GetMovie();
+        mCurrentMovie->SetShowing(true);
+        movie.SetPaused(false);
         if (mThreaded) {
-            Movie &movie = mCurrentMovie->GetMovie();
-            mCurrentMovie->SetShowing(true);
-            movie.SetPaused(false);
             float duration = movie.MsPerFrame() * (float)movie.NumFrames();
             _ref3 = (int)ceilf(duration);
         } else {
-            return ShowNext();
+            // Non-threaded (native/web): set a generous splash duration.
+            // Poll() drives UpdateThreadLoop() which calls Draw(), and Draw()
+            // polls the movie and renders via BeginDrawing/EndDrawing.
+            _ref3 = 15000; // 15s max — movie will end earlier via Poll()
         }
     } else {
         _ref3 = params.durationMs;
