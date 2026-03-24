@@ -110,10 +110,10 @@ namespace {
         static Symbol robotb01("robotb01");
         static Symbol robotb02("robotb02");
         if (s == robota02) {
-            s = robota01;
+            return robota01;
         }
         if (s == robotb02) {
-            s = robotb01;
+            return robotb01;
         }
         return s;
     }

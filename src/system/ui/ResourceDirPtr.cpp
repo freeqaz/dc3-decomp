@@ -11,13 +11,13 @@ const char *ResourceDirBase::GetResourcesPath(Symbol s1, Symbol s2) {
     superClasses.push_back(s1);
     ListSuperClasses(s1, superClasses);
     static Symbol objects("objects");
-    int offset = 0;
     static Symbol resources_path("resources_path");
     static DataArray *cfg = SystemConfig(objects);
     DataArray *pathArr = nullptr;
     const char *path = nullptr;
     unsigned int i = 0;
-    do {
+    int offset = 0;
+    while (path == nullptr) {
         if (i >= superClasses.size())
             break;
         DataArray *curClassCfg = cfg->FindArray(superClasses[i], true);
@@ -39,7 +39,7 @@ const char *ResourceDirBase::GetResourcesPath(Symbol s1, Symbol s2) {
         }
         i++;
         offset += 4;
-    } while (path == nullptr);
+    }
     if (!path || !*path)
         return nullptr;
     return FileMakePath(FileGetPath(pathArr->File()), path);

@@ -50,7 +50,7 @@ HamVisDir::HamVisDir()
         mSquatPoses[i].pose->AddElement(
             new JointDistPoseElement(kJointHead, kJointKneeLeft, 0, 0.9)
         );
-        mSquatPoses[i].pose->AddElement(new CamDistancePoseElement(2, 1));
+        mSquatPoses[i].pose->AddElement(new CamDistancePoseElement(1, 2));
 
         mSquatPoses[i].holder = new Pose(10, (Pose::ScoreMode)0);
         mSquatPoses[i].holder->AddElement(
@@ -59,7 +59,7 @@ HamVisDir::HamVisDir()
         mSquatPoses[i].holder->AddElement(
             new JointDistPoseElement(kJointHead, kJointKneeLeft, 0, 0.94)
         );
-        mSquatPoses[i].holder->AddElement(new CamDistancePoseElement(1.6, 1));
+        mSquatPoses[i].holder->AddElement(new CamDistancePoseElement(1, 1.6));
 
         mYPoses[i].name = MakeString("pose_y_%i", i);
         mYPoses[i].pose = new Pose(10, (Pose::ScoreMode)1);

@@ -421,8 +421,7 @@ const char *FileRelativePathBuf(const char *iRoot, const char *iFilepath, char *
         }
 
         if (!fpToks.empty() && !rootToks.empty()) {
-            int cmp = strcmp(fpToks.front(), rootToks.front());
-            if (cmp == 0) {
+            if (strcmp(fpToks.front(), rootToks.front()) == 0) {
                 while (rootToks.size() > 0 && fpToks.size() > 0
                        && strcmp(fpToks.front(), rootToks.front()) == 0) {
                     rootToks.pop_front();
@@ -443,19 +442,16 @@ const char *FileRelativePathBuf(const char *iRoot, const char *iFilepath, char *
                     for (const char *pp = fpToks.front(); *pp != '\0'; pp++)
                         *p++ = *pp;
                     fpToks.pop_front();
-                    MILO_ASSERT(p - oBuf < File::MaxFileNameLen, 0x3d9);
                 }
+                MILO_ASSERT(p - oBuf < File::MaxFileNameLen, 0x3d9);
                 if (p == oBuf)
                     *p++ = '.';
                 *p = '\0';
-            } else {
-                strcpy(oBuf, iFilepath);
+                return oBuf;
             }
-        } else {
-            strcpy(oBuf, iFilepath);
         }
     }
-    return oBuf;
+    return iFilepath;
 }
 
 const char *FileRelativePath(const char *root, const char *filepath) {

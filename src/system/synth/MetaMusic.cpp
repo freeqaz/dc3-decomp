@@ -152,6 +152,21 @@ void MetaMusic::Stop() {
     }
 }
 
+#ifdef HX_NATIVE
+void MetaMusic::Kill() {
+    Stream *stream = GetStream();
+    if (stream) {
+        mFader->SetVolume(kDbSilence);
+        if (stream->IsPlaying()) {
+            stream->Stop();
+        }
+        UnloadStreamFx();
+    }
+    mPlaying = false;
+    mStarted = false;
+}
+#endif
+
 int MetaMusic::NumChans() const {
     const auto *pStream = GetStream();
     MILO_ASSERT(pStream, 268);

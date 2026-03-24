@@ -99,7 +99,7 @@ unsigned int Trie::get_free_node() {
     }
 
     // Allocate new node - increment node count
-    MILO_ASSERT(NodeCount(this) < 0x20000, 0x82);
+    MILO_ASSERT((int)NodeCount(this) < 0x20000, 0x82);
     unsigned int newIdx = NodeCount(this) + 1;
     NodeCount(this) = newIdx;
     return newIdx;

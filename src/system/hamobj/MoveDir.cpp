@@ -1354,15 +1354,12 @@ void MoveDir::SetCurrentMove(int player, HamMove *move) {
     HamPhraseMeter *hpm = mpd.mPhraseMeter;
     if (hpm) {
         hpm->SetRatingFrac(0, -1);
-        if (move && move->Scored() && TheGameData->Player(player)->IsPlaying()
-            && !InGracePeriod(player)) {
-            hpm->SetShowing(true);
-        } else {
-            hpm->SetShowing(false);
-        }
+        bool showing = move && move->Scored() && TheGameData->Player(player)->IsPlaying()
+            && !InGracePeriod(player);
+        hpm->SetShowing(showing);
     }
     if (mpd.mTextFeedback) {
-        mpd.mTextFeedback->SetShowing(0 == mpd.mFeedbackMode);
+        mpd.mTextFeedback->SetShowing(mpd.mFeedbackMode == 0);
     }
     mpd.mCurMove = move;
     if (move) {

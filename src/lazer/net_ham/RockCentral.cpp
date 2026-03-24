@@ -20,7 +20,7 @@
 #include "utl/Symbol.h"
 #include "xdk/XNET.h"
 
-char *g_szMachineIdString;
+char g_szMachineIdString[24];
 const String RockCentral::kServerVer = "1";
 RockCentral TheRockCentral;
 

@@ -376,17 +376,18 @@ void UTF8toWideVector(std::vector<unsigned short> &vec, const char *cc) {
 }
 
 const unsigned short *CharToWideChar(const char *str) {
-    if (str) {
-        int len = strlen(str);
-        static std::vector<unsigned short> wstring;
-        wstring.clear();
-        const char *p = str;
-        while (len > 0) {
-            wstring.push_back(*p++);
-            len--;
-        }
-        wstring.push_back(0);
-        return &wstring[0];
-    } else
-        return nullptr;
+    if (!str)
+        return 0;
+    int len = strlen(str);
+    static std::vector<unsigned short> wstring;
+    wstring.clear();
+    const char *p = str;
+    if (len > 0) {
+        do {
+            unsigned short us = (unsigned char)*p++;
+            wstring.push_back(us);
+        } while (--len);
+    }
+    wstring.push_back(0);
+    return &wstring[0];
 }

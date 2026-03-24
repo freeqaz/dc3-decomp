@@ -101,7 +101,10 @@ void FlowRun::ResolveTarget() {
     ObjectDir *targetDir = mTargetDir;
     if (!targetDir) {
         Flow *ownerFlow = GetOwnerFlow();
-        if (ownerFlow) {
+        DirLoader *loader = ownerFlow->Loader();
+        if (loader) {
+            targetDir = loader->ProxyDir();
+        } else {
             targetDir = ownerFlow->Dir();
         }
         MILO_ASSERT(targetDir, 0x72);

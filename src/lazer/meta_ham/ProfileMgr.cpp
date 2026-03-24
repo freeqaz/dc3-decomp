@@ -763,7 +763,7 @@ bool ProfileMgr::HasActiveProfileWithInvalidSaveData() const {
         MILO_ASSERT(pActivePlayer, 0x5c2);
         HamProfile *pProfileFromPad =
             TheProfileMgr.GetProfileFromPad(pActivePlayer->PadNum());
-        if (pProfileFromPad && !pProfile->HasValidSaveData())
+        if (pProfileFromPad && !pProfileFromPad->HasValidSaveData())
             return true;
     }
     return false;

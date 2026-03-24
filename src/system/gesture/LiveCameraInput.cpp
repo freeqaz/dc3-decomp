@@ -34,10 +34,10 @@ public:
 };
 extern DxRnd TheDxRnd;
 
-u8 *gDebugDepth = nullptr;
 float gTempPortraitOffset;
 
 namespace {
+    bool gDebugDepth;
     bool GetExposureRegion(NUI_CAMERA_AE_ROI &);
     long GetColorCameraProperty(NUI_CAMERA_PROPERTY);
     unsigned short YUVtoRGB(int y, int cr, int cb);
@@ -1092,7 +1092,7 @@ RndTex *LiveCameraInput::GetStreamTex(BufferType type) const {
     tex->SetDeviceTex((D3DTexture *)bufferData);
     RndTex *result = tex;
     if (type == kBufferDepth) {
-        if (mDebugDepthTex != nullptr && (bufferData == nullptr || *gDebugDepth != 0)) {
+        if (mDebugDepthTex != nullptr && (bufferData == nullptr || gDebugDepth != 0)) {
             result = mDebugDepthTex;
         }
     }
@@ -1157,7 +1157,7 @@ void LiveCameraInput::UnlockStream(const void *buf) {
 }
 
 DataNode OnCameraDebugDepth(DataArray *) {
-    *gDebugDepth = !*gDebugDepth;
+    gDebugDepth = !gDebugDepth;
     return DataNode(0);
 }
 

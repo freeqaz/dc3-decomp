@@ -395,13 +395,16 @@ int SongStatusMgr::GetBestStars(int songID, bool &bref, Difficulty d) const {
     bref = false;
     if (HasSongStatus(songID)) {
         const SongStatus &status = GetSongStatus(songID);
-        auto nextDifficulty = DifficultyOneHarder(d);
-        for (; d != kNumDifficulties; d = nextDifficulty) {
-            int curStars = status.mStatusData[d].mStars;
-            if (curStars >= bestStars) {
-                bref = status.mStatusData[d].mFiveStarNoFlashcards;
-                bestStars = curStars;
-            }
+        Difficulty loopDiff = d;
+        if (d != kNumDifficulties) {
+            do {
+                int curStars = status.mStatusData[loopDiff].mStars;
+                if (curStars >= bestStars) {
+                    bref = status.mStatusData[loopDiff].mFiveStarNoFlashcards;
+                    bestStars = curStars;
+                }
+                loopDiff = DifficultyOneHarder(loopDiff);
+            } while (loopDiff != kNumDifficulties);
         }
     }
     return bestStars;

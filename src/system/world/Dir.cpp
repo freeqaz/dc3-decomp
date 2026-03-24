@@ -492,8 +492,10 @@ void WorldDir::DrawShowing() {
             shot = shot->CurrentShot();
 
         RndCam *camOverride = CamOverride();
-        RndCam *savedCam = RndCam::Current();
-        if (camOverride) {
+        RndCam *savedCam;
+        if (!camOverride) {
+            savedCam = RndCam::Current();
+        } else {
             savedCam = camOverride;
             camOverride->Select();
         }
@@ -501,8 +503,7 @@ void WorldDir::DrawShowing() {
         RndEnviron *env = GetEnv();
         if (!env)
             env = TheUI->GetEnv();
-        if (env)
-            env->Select(nullptr);
+        env->Select(nullptr);
 
         if (TheRnd.ProcCmds() & kProcessWorld) {
             if (!shot || shot->mDrawOverrides.empty()) {
@@ -515,7 +516,7 @@ void WorldDir::DrawShowing() {
 
             if (shot) {
                 Spotlight *spot = shot->mGlowSpot;
-                if (spot && spot->Showing() && spot->Intensity() > 0) {
+                if (spot && sGlowMat && spot->Showing() && spot->Intensity() > 0) {
                     Hmx::Rect rect(0, 0, TheRnd.Width(), TheRnd.Height());
                     Hmx::Color color(spot->Color());
                     color.alpha = 0.25f;
@@ -524,15 +525,14 @@ void WorldDir::DrawShowing() {
             }
         }
 
-        TheRnd.CopyWorldCam(Cam());
+        TheRnd.CopyWorldCam(TheWorld->Cam());
         if (mExplicitPostProc) {
             TheRnd.EndWorld();
         }
 
         if (shot) {
             savedCam->Select();
-            if (env)
-                env->Select(nullptr);
+            env->Select(nullptr);
             FOREACH (it, shot->mPostProcOverrides) {
                 (*it)->DrawShowing();
             }

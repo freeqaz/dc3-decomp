@@ -27,6 +27,9 @@ public:
     void AddFader(Fader *);
     void Load(float, bool, bool);
     void Poll();
+#ifdef HX_NATIVE
+    void Kill(); // Immediate stop — no fade, no Poll() needed
+#endif
     bool IsActive() const;
     void SetQuietVolume(float);
     bool IsStarted() const;

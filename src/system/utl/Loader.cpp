@@ -31,11 +31,11 @@ struct LoaderGlitchContext {
 void FrontLoaderGlitchCB(float elapsed, void *v) {
     LoaderGlitchContext *ctx = (LoaderGlitchContext *)v;
     TheDebug << MakeString("Loader %s %s took %f (%s to %s)\n",
-                           ctx->name,
+                           LoadMgr::LoaderPosString(ctx->toPos, true),
                            ctx->file,
                            elapsed,
-                           ctx->fromState,
-                           LoadMgr::LoaderPosString(ctx->toPos, true));
+                           ctx->name,
+                           ctx->fromState);
 }
 
 const char *WhiteSpace(int count) {

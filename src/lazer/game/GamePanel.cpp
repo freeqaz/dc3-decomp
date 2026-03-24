@@ -365,9 +365,11 @@ void GamePanel::Enter() {
 #ifdef HX_NATIVE
     // On Xbox, DTA scripts fire {metamusic stop} during screen transitions.
     // MetaPanel is shared between menu and game_screen, so its Exit() is
-    // never called by the panel lifecycle — stop shell music explicitly.
+    // never called by the panel lifecycle. Kill() immediately stops the
+    // stream — Stop() only fades, and MetaMusic::Poll() (which finalizes
+    // the stop) is suppressed during game_screen.
     if (TheMetaMusic) {
-        TheMetaMusic->Stop();
+        TheMetaMusic->Kill();
     }
 #endif
     UIPanel::Enter();

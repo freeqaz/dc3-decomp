@@ -1677,15 +1677,14 @@ void ResetNormals(RndMesh *m) {
 
 void ConvertBonesToTranses(ObjectDir *dir, bool b) {
     std::list<RndMesh *> meshes;
-    for (ObjDirItr<RndMesh> it(dir, true); it != 0; ++it) {
+    for (ObjDirItr<RndMesh> it(dir, false); it != 0; ++it) {
         RndTransformable *itTrans = it;
         if (ShouldStrip(itTrans)) {
             meshes.push_back(it);
         } else {
             if (b) {
                 bool foundBoneRef = false;
-                auto refs = it->Refs();
-                FOREACH (rit, refs) {
+                for (ObjRef::iterator rit = it->Refs().begin(); !foundBoneRef && rit != it->Refs().end(); ++rit) {
                     RndMesh *curRefOwner = dynamic_cast<RndMesh *>(rit->RefOwner());
                     if (curRefOwner) {
                         for (int i = 0; i < curRefOwner->NumBones(); i++) {
@@ -1696,8 +1695,6 @@ void ConvertBonesToTranses(ObjectDir *dir, bool b) {
                             }
                         }
                     }
-                    if (foundBoneRef)
-                        break;
                 }
             }
         }
