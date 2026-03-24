@@ -133,10 +133,8 @@ void CharForeTwist::Poll() {
     Multiply(m58, parentxfm.m, tf88.m);
     twistparent->SetWorldXfm(tf88);
 #ifdef HX_NATIVE
-    // Fix: also update local transform so it survives dirty cascades.
-    // If a later pollable (e.g. CharUpperTwist) calls SetWorldXfm on upperArm,
-    // it dirties foreTwist1/2. WorldXfm_Force() then recomputes from mLocalXfm,
-    // which must reflect the twist we just wrote, not the stale clip-posed local.
+    // Back-compute mLocalXfm so it survives dirty cascades from later pollables.
+    // CharUpperTwist may call SetWorldXfm on upperArm after us, dirtying our bones.
     {
         Transform invParent;
         Invert(twistparent->TransParent()->WorldXfm(), invParent);

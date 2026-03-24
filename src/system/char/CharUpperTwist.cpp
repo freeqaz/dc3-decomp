@@ -67,10 +67,7 @@ void CharUpperTwist::Poll() {
     NormalizeAboutX(tf48.m);
     mUpperArm->SetWorldXfm(tf48);
 #ifdef HX_NATIVE
-    // Fix: also update local transform so it survives dirty cascades from later
-    // pollables that write to ancestor bones (same pattern as CharForeTwist fix).
-    // Must write mLocalXfm directly — SetLocalXfm() calls SetDirty() which would
-    // re-dirty the bone we just cleaned via SetWorldXfm().
+    // Back-compute mLocalXfm so it survives dirty cascades (same as CharForeTwist fix).
     if (mUpperArm->TransParent()) {
         Transform invParent;
         Invert(mUpperArm->TransParent()->WorldXfm(), invParent);
