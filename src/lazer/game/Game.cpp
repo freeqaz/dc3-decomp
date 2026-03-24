@@ -461,6 +461,12 @@ void Game::SetHamMove(int i1, HamMove *move, bool b3) {
             HamPlayerData *player_data = TheGameData->Player(i1);
             MILO_ASSERT(player_data, 0x2CA);
             if (player_data->IsPlaying()) {
+#ifdef HX_NATIVE
+                // TODO(native): Skip move_passed scoring — no gesture detection system.
+                // DetectFrac returns 0 (no skeleton data), and the move_passed DTA handler
+                // accesses scoring pipeline objects that crash without Kinect input.
+                // Flashcard display still works because set_cur_move fires separately.
+#else
                 float frac = mMoveDir->DetectFrac(i1, i5);
                 static Message move_passed("move_passed", -1, 0, 0, 0);
                 move_passed[0] = i1;
@@ -468,6 +474,7 @@ void Game::SetHamMove(int i1, HamMove *move, bool b3) {
                 move_passed[2] = frac;
                 move_passed[3] = b3;
                 TheGamePanel->Handle(move_passed, false);
+#endif
             }
         }
         mMoveDir->SetCurrentMove(i1, move);

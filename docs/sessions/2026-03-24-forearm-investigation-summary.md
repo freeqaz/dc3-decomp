@@ -376,3 +376,390 @@ The viewer's direct-pose path works correctly. If the gameplay forearm issue per
 it is likely in the CharDriver/CharClipDriver pipeline or backup-dancer-specific setup,
 not in the math functions or rendering pipeline. The `RotateTo` uncompressed fix is a
 correctness fix regardless (affects any clip using `kApplyRotateTo` with `kCompressNone`).
+
+## Latest Narrowing (2026-03-24 later)
+
+The investigation moved past the “missing elbow bone” theory.
+
+### What is now ruled out
+
+1. `bone.servo` is not dropping the elbow channels
+   - New regression:
+     - `AssetLoadingTest.BoneServoCarriesAndAppliesForeArmRotZChannels`
+   - Result:
+     - `bone_L/R-foreArm.rotz` are present on `bone.servo`
+     - clip evaluation writes non-zero elbow angles into the servo buffer
+     - `servo->PoseMeshes()` applies those angles correctly to `bone_L/R-foreArm.mesh`
+
+2. Live render-time arm transforms are not straight
+   - The env-gated render probe at:
+     - `MILO_DEBUG_ARM_CHAIN_FRAME=8000`
+     - `MILO_DEBUG_ARM_CHAIN_DIR=player0`
+   - shows that live gameplay has a bent:
+     - `upperArm -> foreArm -> hand`
+   - chain in render-time world space.
+
+3. Live render-time foretwist bones are not stuck at the upper arm
+   - I extended the same render-time probe to dump:
+     - `foreTwist1`
+     - `foreTwist2`
+   - At the inspected live gameplay frame, both left and right foretwist bones had distinct
+     world positions between upper arm and hand. So the authored `CharForeTwist` path is
+     producing meaningful placement by the time the renderer reads bone transforms.
+
+### What was newly confirmed
+
+1. The visible outfit meshes are heavily weighted to foretwist bones
+   - New regression:
+     - `AssetLoadingTest.SkinnedMeshesCarryNontrivialForeTwistWeights`
+   - On merged backup-outfit meshes such as:
+     - `lush_bd_outfit.1.mesh`
+     - `lush_bd_outfit_lod1*.mesh`
+   - the compressed skinned vertex data shows large nontrivial weight totals on:
+     - `bone_L/R-foreTwist1.mesh`
+     - `bone_L/R-foreTwist2.mesh`
+   - This proves the foretwist bones materially affect the rendered forearm volume.
+
+2. These meshes are compressed-only in native
+   - The same audit showed:
+     - `raw=0`
+     - `compressed>0`
+   - for the relevant outfit body meshes.
+   - That means the bad deformation path is specifically going through the compressed skinned
+     vertex pipeline at runtime.
+
+3. Generic matrix conventions still do not look like the root cause
+   - New synthetic tests in `native/tests/test_mesh_loading.cpp` show:
+     - uncompressed skinned GPU-style matrix application matches CPU skinning
+     - compressed synthetic skinning also matches closely after proper big-endian serialization,
+       with only small expected quantization error
+   - So there is no broad “all GPU skinning is transposed” bug.
+
+### Current best boundary
+
+The live bad forearm shape happens **after**:
+
+- clip decode
+- `bone.servo`
+- elbow (`foreArm.rotz`) application
+- authored `CharForeTwist`
+- render-time world-transform propagation
+
+and **before / during** the final deformation of compressed outfit meshes.
+
+### Best remaining suspects
+
+1. Asset-specific assumptions in compressed skinned vertex decode
+   - `native/src/gfx/VertexFormats.cpp`
+   - especially how real DC3 outfit meshes use:
+     - `UDEC4N` bone weights
+     - `UBYTE4` bone indices
+   - even though the generic synthetic decode path is basically correct.
+
+2. Real-asset weight/index interpretation on forearm vertices
+   - The next step should inspect representative vertices from:
+     - `lush_bd_outfit.1.mesh`
+   - and determine which slots / weights are driving vertices around the elbow and wrist.
+
+3. Actual live mesh/bone-palette use versus the diagnostic body mesh
+   - Confirm that the visually broken forearm is coming from the same skinned mesh instances
+     whose bone palettes and weights were audited.
+
+### New commands / probes that were useful
+
+Render-time arm chain dump on a post-intro gameplay frame:
+
+```sh
+env DC3_DATA=orig-assets MILO_RENDER=1 MILO_HEADLESS=1 MILO_FATAL_FAILS=0 \
+  DC3_SHOW_SPLASH=0 MILO_DEBUG_ARM_CHAIN_FRAME=8000 MILO_DEBUG_ARM_CHAIN_DIR=player0 \
+  MILO_MAX_FRAMES=8050 MILO_INPUT_SCRIPT=scripts/dc3-input-flows/ymca.txt \
+  timeout 180 native/build/dc3-native >/tmp/arm_chain_8000_twist.log 2>&1
+```
+
+Foretwist runtime probe:
+
+```sh
+env DC3_DATA=orig-assets MILO_RENDER=1 MILO_HEADLESS=1 MILO_FATAL_FAILS=0 \
+  DC3_SHOW_SPLASH=0 MILO_DEBUG_ARM_POLLABLES=1 \
+  MILO_MAX_FRAMES=9050 MILO_INPUT_SCRIPT=scripts/dc3-input-flows/ymca.txt \
+  timeout 180 native/build/dc3-native >/tmp/foretwist_runtime.log 2>&1
+rg 'FORETWIST' /tmp/foretwist_runtime.log
+```
+
+## Continued Investigation (2026-03-24 later session)
+
+### Viewer architecture fix: use engine poll path
+
+The milo-viewer was using a custom `CharTwistSolver::SolveAll()` with manual `ObjDirItr<CharPollable>`
+iteration that bypassed the engine's `CharPollGroup` dependency sorting. This was replaced with
+direct `Character::Poll()` calls, matching the game engine's exact rendering path:
+
+- `Character::Poll()` → `RndDir::Poll()` → iterates `mPolls[]` (contains `CharPollGroup`)
+- `CharPollGroup::Poll()` iterates its `mPolls` list sorted by `CharPollableSorter::Sort()`
+  (topological sort via `PollDeps()` declarations)
+- Ordering: CharDriver → CharServoBone → CharIKHand → CharUpperTwist → CharForeTwist → etc.
+
+The old viewer path had a pollable ordering bug: `CharForeTwist` could run before
+`CharUpperTwist`. When `CharUpperTwist` later calls `upperArm->SetWorldXfm()`, `SetDirty()`
+cascades through foreArm → foreTwist1 → foreTwist2 → hand, destroying the twist bone world
+transforms that `CharForeTwist` just computed. Those bones then recompute from clip-derived
+locals instead of twist-solver values.
+
+However, **this viewer fix is not the root cause of the gameplay arm issue**, since `dc3-native`
+already uses the engine's native `Character::Poll()` path and still exhibits the bug.
+
+### Files changed
+
+- `native/src/viewer/ViewerAnimation.cpp`
+  - `AdvanceBeat()`: replaced manual pollable loop + `CharTwistSolver::SolveAll()` with
+    `character->Poll()`
+  - `DirectPose()`: replaced manual pollable loop + `CharTwistSolver::SolveAll()` with
+    `PoseMeshesWithFacing()` + `character->Poll()`
+  - Removed `#include "char/CharTwistSolver.h"`
+
+- `native/src/viewer/ViewerCapture.cpp`
+  - Replaced two `CharTwistSolver::SolveAll()` calls with `charAnim.character->Poll()`
+  - Removed `#include "char/CharTwistSolver.h"`
+
+- `native/src/char/CharTwistSolver.cpp`
+  - Fixed pollable ordering: split single iteration into two passes (CharUpperTwist first,
+    then CharForeTwist) — still used by CharTwistSolver itself but no longer called from viewer
+  - Enhanced one-time hierarchy dump: includes constraint type, full local rotation matrix,
+    upper twist bones
+  - Added periodic post-solve arm geometry check (bendSin, foreArmRotIdentity, constraint)
+
+### Compressed vertex decode verified correct
+
+Exhaustive review of the compressed skinned vertex pipeline confirmed every step is
+mathematically correct:
+
+1. **Field name swap**: `VertexFormats.cpp` correctly accounts for the misleading field names
+   in `CompressedVertex_Xbox`. `mBoneIndices` (offset 28) = bone WEIGHTS (UDEC4N),
+   `mBoneWeights` (offset 32) = bone INDICES (UBYTE4). Unpack functions read from correct fields.
+
+2. **Big-endian byte swap**: `bswap32` correctly converts from big-endian file format.
+   Round-trip `FillCompressedVertex` → `SaveCompressedVertex` (WriteEndian) → `ReadChunks`
+   (raw read) → `UnpackCompressedSkinnedVertices` (bswap32 + extract) is correct.
+
+3. **UDEC4N bit extraction**: Bits [0:9]=weight.x, [10:19]=weight.y, [20:29]=weight.z,
+   [30:31]=weight.w. Matches `PackVector` packing exactly.
+
+4. **UBYTE4 byte extraction**: After bswap, byte 0=idx0, byte 1=idx1, byte 2=idx2, byte 3=idx3.
+   Matches packing `(idx3<<24)|(idx2<<16)|(idx1<<8)|idx0`.
+
+5. **Weight-index pairing**: GPU shader correctly pairs `boneWeights[i]` with `boneIndices[i]`.
+
+6. **Struct layout**: `CompressedVertex_Xbox` is 36 bytes (9 × 4-byte int), same on both
+   platforms. `GpuVertexSkinned` has correct attribute offsets matching WGSL shader layout.
+
+7. **Matrix conventions**: `TransformToMat4` row-major + WGSL column-major = correct row-vector
+   transformation.
+
+### Updated suspect ranking
+
+#### 1. `RemoveInvalidBones()` stale bone index — HIGH priority
+
+`Mesh.cpp:1083` erases null bone entries from `mBones`, shifting all subsequent indices.
+But compressed vertex data still has the **old** indices baked in. If any bones fail to resolve
+during outfit merge, forearm vertices would skin to wrong bone matrix slots.
+
+This would explain why:
+- Synthetic tests pass (no null bones to remove)
+- Real outfit merges show wrong deformation (bones removed → index shift → wrong skinning)
+
+**Next step**: Add a diagnostic log in `RemoveInvalidBones()` to see if any bones are being
+removed from outfit meshes at runtime.
+
+#### 2. `CharForeTwist` offset convention — MEDIUM priority
+
+Authored values `0/180` produce tiny twist angles (±0.29 rad) vs legacy `90/-90` which produces
+larger angles (+1.87/+1.28 rad). Prior session confirmed `0/180` matches what the original game
+loads, so this may be correct behavior. But it remains worth investigating whether the native
+port's rotation math produces the same output as the Xbox 360 for these inputs.
+
+#### 3. Compressed vertex decode — RULED OUT
+
+No bug found in the byte-level data flow. Every step from pack to unpack to GPU upload is
+mathematically correct.
+
+### Deep-dive analysis (2026-03-24 continued)
+
+#### What was verified correct
+
+1. **CharForeTwist::Poll() math**: Verified against Ghidra decompilation and RB3 reference.
+   Identical algorithm — no semantic bug. The offset values `0/180` are what the game data
+   loads; the math handles them correctly.
+
+2. **All PPC decompiler register-swap bugs already have native fixes**:
+   - `Multiply(Vector3, Quat, Vector3)` in Rot.cpp
+   - `Multiply(Transform, Transform, Transform)` in mtx.cpp
+   - `CharBones::RotateBy` compressed paths (ByteQuat, ShortQuat)
+   - `CharBones::RotateTo` compressed paths (ByteQuat, ShortQuat)
+   - `CharBones::RotateBy` uncompressed — verified correct (no fix needed)
+
+3. **Arm bone hierarchy mapped**: The forearm uses two parallel chains from `upperArm`:
+   ```
+   upperArm ─┬─ foreArm ─── hand          (elbow bend chain, foreArm.rotz)
+              └─ foreTwist1 ─ foreTwist2   (twist distribution, procedural)
+   ```
+   The `bone_*-foreArm.mesh` bone IS the elbow joint, stored as `TYPE_ROTZ` in clips.
+   The hand is parented to foreArm (NOT to foreTwist2). CharForeTwist reads the foreArm's
+   world transform as `parentxfm` and distributes twist from there to the foreTwist bones.
+
+4. **Real compressed vertex data inspected** (test: `InspectForearmVertexBoneAssignments`):
+   - `lush_bd_outfit.1.mesh` has 35 bones in its palette
+   - Forearm vertices correctly reference `bone_L-foreTwist2.mesh` (idx 15, ~60-90% weight)
+     and `bone_L-hand.mesh` (idx 24, ~10-34% weight)
+   - All bone indices are in range, weight sums ≈ 1.0
+   - Bone offsets have reasonable bind-pose values
+
+5. **CPU skinning test verified correct** (test: `CpuSkinForearmVertexFromCompressedMesh`):
+   With proper clip pose + twist solve, the skin matrices for foreTwist2 and hand are
+   **correctly different** (not identical), and CPU-skinned vertex positions are geometrically
+   reasonable. ARM-CHECK shows `bendSin=0.7640 bent`. The data and math are both correct in
+   a controlled test environment.
+
+6. **GPU pipeline verified correct**:
+   - `TransformToMat4` row-major + WGSL column-major = correct row-vector transformation
+   - `object.world` correctly uses identity for skinned meshes (no double-transform)
+   - Bone matrices uploaded via `FillBoneUniforms` match CPU-side computation
+
+#### New bug found and fixed
+
+**`CharBones::RotateTo` uncompressed path** (lines 1251-1254): Missing `#ifdef HX_NATIVE` fix.
+The PPC decompiled code has cross-product terms negated in the quaternion multiplication's
+x/y/z components (w is correct). Same class of decompiler register-swap error as the compressed
+paths. Added correct quaternion multiply formula. Affects any clip using `kApplyRotateTo` with
+`kCompressNone` data. PPC match unchanged at 74.0%.
+
+#### Key insight: test environment vs live gameplay
+
+The CPU skinning test proves the data pipeline is correct in isolation. But the live gameplay
+bug persists. This means the issue is in **execution context** — something about how the live
+game's rendering pipeline interacts with bone transforms at draw time, not in the data or math
+themselves.
+
+### Refined suspect ranking
+
+#### 1. `RemoveInvalidBones()` stale bone index — HIGHEST priority
+
+`Mesh.cpp:1083` erases null bone entries from `mBones`, shifting all subsequent indices.
+Compressed vertex data still has the **old** indices baked in. If any bones fail to resolve
+during outfit merge, forearm vertices would skin to wrong bone matrix slots.
+
+This would explain:
+- Synthetic/unit tests pass (no null bones to remove in controlled setup)
+- Real outfit merges show wrong deformation (bones removed → index shift → wrong skinning)
+- The "straight forearm" look: if forearm vertices get mapped to a wrong bone (e.g., the
+  parent bone), all vertices deform as if attached to a single bone → rigid straight segment
+
+**Concrete next steps**:
+1. Add diagnostic log in `RemoveInvalidBones()` to count removed bones and print their names
+2. Run the full gameplay flow and check if outfit mesh bones are being removed
+3. If confirmed: either skip removal for compressed meshes or rebuild the index mapping
+
+#### 2. Render-time bone transform staleness — MEDIUM priority
+
+The rendering pipeline reads `WorldXfm()` during `FillBoneUniforms`. If bones are marked
+dirty (by a late poll or SetWorldXfm) but not yet recomputed when `FillBoneUniforms` runs,
+the shader would get stale transforms. This would make foreTwist bones appear at their
+pre-twist positions (identity local rotation → straight arm).
+
+**Concrete next steps**:
+1. Add a `Dirty()` check in `FillBoneUniforms` for arm bones
+2. If any arm bone is dirty at draw time, log it — this would prove the bone wasn't finalized
+
+#### 3. `CharForeTwist` offset convention — LOW priority
+
+Authored `0/180` produces smaller twist angles than legacy `90/-90`, but the investigation
+confirmed this matches the original game data. The visual impact is likely correct behavior,
+not a bug. Deprioritized.
+
+#### 4. Compressed vertex decode — RULED OUT
+
+Exhaustive byte-level and end-to-end verification. No bug found.
+
+### Screenshots
+
+Reference screenshots in `archive/screenshots/arm-bend-test/`:
+- `frame_02000.png` through `frame_05000.png` — gameplay frames showing the arm rigidity issue
+- Characters are animating (different poses per frame) but forearms follow upper arm direction
+  too closely, lacking natural elbow crook
+
+## ROOT CAUSE FOUND AND FIXED (2026-03-24 final session)
+
+### Root cause: pollable ordering + SetWorldXfm dirty cascade
+
+The forearm rigidity was caused by **CharUpperTwist::Poll() running AFTER CharForeTwist::Poll()**
+in the CharPollGroup topological sort. The two pollables have no direct dependency edge between
+them, so their relative ordering is arbitrary and platform-dependent.
+
+The execution sequence was:
+
+1. **CharForeTwist::Poll()** runs, calls `SetWorldXfm()` on foreTwist1 and foreTwist2 with
+   correct twist rotations. `SetWorldXfm()` writes `mWorldXfm` and clears `mDirty`, but does
+   NOT update `mLocalXfm`.
+
+2. **CharUpperTwist::Poll()** runs, calls `SetWorldXfm()` on `mUpperArm` (the upper arm bone).
+   This cascades `SetDirty()` to all children of upperArm, including foreTwist1 and foreTwist2.
+
+3. At **render time**, `FillBoneUniforms()` calls `WorldXfm()` on each bone. For foreTwist1/2,
+   `mDirty=true`, so `WorldXfm_Force()` recomputes the world transform from the **stale**
+   `mLocalXfm` (the clip-derived bind-pose local, NOT the twist-solver output). The correct
+   world transforms that CharForeTwist wrote are discarded.
+
+4. The result: foreTwist1/2 skin matrices are **identical** to the upper arm's skin matrix.
+   Forearm vertices deform as if attached to the upper arm — straight/rigid forearms.
+
+### Diagnostic evidence
+
+Tracing confirmed the exact sequence:
+```
+FORETWIST-WRITE foreTwist_L.ik (backup0)     # CharForeTwist writes twist bones
+FORETWIST-WRITE foreTwist_R.ik (backup0)
+UPPERARM-SETWORLDXFM bone_L-upperArm (backup0) # CharUpperTwist writes upperArm → dirties children
+FORETWIST-DIRTY bone_L-foreTwist1 wasDirty=0    # foreTwist1 was clean, now dirty
+FORETWIST-DIRTY bone_L-foreTwist2 wasDirty=0    # cascade to child
+```
+
+Before fix, skin matrices at draw time (6 decimal places):
+- upperArm skin[0..3]:  `0.942566 0.089409 0.321832`
+- foreTwist1 skin[0..3]: `0.942566 0.089409 0.321832` (IDENTICAL)
+- foreTwist2 skin[0..3]: `0.942566 0.089409 0.321832` (IDENTICAL)
+
+After fix:
+- upperArm skin[0..3]:  `0.948758 0.081575 0.305294`
+- foreTwist1 skin[0..3]: `0.470068 -0.396509 0.788472` (DIFFERENT — twist applied)
+- foreTwist2 skin[0..3]: `0.456815 -0.496763 0.737782` (DIFFERENT — more twist)
+
+### Fix
+
+After `SetWorldXfm()` in CharForeTwist::Poll() and CharUpperTwist::Poll(), also compute and
+store the corresponding `mLocalXfm` so that dirty-cascade recomputation produces the correct
+world transform. Guarded by `#ifdef HX_NATIVE` — PPC decomp code is unchanged.
+
+The local is computed as: `mLocalXfm = childWorld * Inverse(parentWorld)`.
+
+This is robust regardless of poll ordering: even if a later pollable dirties the bone,
+`WorldXfm_Force()` will recompute the correct world from the updated local.
+
+### Files changed
+
+- `src/system/char/CharForeTwist.cpp`
+  - After each `SetWorldXfm()` call, compute and store `mLocalXfm` (HX_NATIVE only)
+
+- `src/system/char/CharUpperTwist.cpp`
+  - Same fix: after `SetWorldXfm()` on mUpperArm and mTwist1, update `mLocalXfm`
+
+- `src/system/rndobj/Trans.h`
+  - Added `friend class CharUpperTwist` (CharForeTwist was already a friend)
+
+### What was ruled out
+
+1. **RemoveInvalidBones stale bone index** — no bones removed during gameplay
+2. **Render-time bone transform staleness (dirty=1)** — all bones were dirty=0 at draw time
+   (misleading: dirty was cleared by WorldXfm_Force recomputing from stale local)
+3. **Compressed vertex decode** — exhaustive byte-level verification, all correct
+4. **CharForeTwist math** — verified identical to Ghidra decompilation and RB3 reference
+5. **CharBones decompiler bugs** — all had `#ifdef HX_NATIVE` fixes already
+6. **GPU skinning pipeline** — matrix conventions verified correct

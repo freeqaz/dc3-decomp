@@ -6,7 +6,6 @@
 #include "viewer/ViewerPoseDump.h"
 #include "viewer/ViewerDebugUI.h"
 
-#include "char/CharTwistSolver.h"
 #include "char/Character.h"
 #include "char/CharClip.h"
 #include "char/CharServoBone.h"
@@ -321,7 +320,7 @@ int RunVideo(VideoMode& m, ViewerScene& scene,
     // Pre-advance for initial camera setup
     if (charAnim.active && charAnim.clip) {
         PoseMeshesWithFacing(charAnim.clip, charAnim.character, 20.0f);
-        CharTwistSolver::SolveAll(charAnim.character);
+        charAnim.character->Poll();
         if (pelvisBone && !cfg.hasEye) {
             const Transform& bxfm = pelvisBone->WorldXfm();
             gOrbitCam.targetX = bxfm.v.x;
@@ -349,7 +348,7 @@ int RunVideo(VideoMode& m, ViewerScene& scene,
             float clipBeat  = clipStart + fmodf(beat, clipLen);
             if (clipBeat < clipStart) clipBeat += clipLen;
             PoseMeshesWithFacing(charAnim.clip, charAnim.character, clipBeat);
-            CharTwistSolver::SolveAll(charAnim.character);
+            charAnim.character->Poll();
         }
 
         if (anim.hasAnimation) {

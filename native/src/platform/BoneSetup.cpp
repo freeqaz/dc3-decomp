@@ -4,16 +4,147 @@
 
 #include "platform/BoneSetup.h"
 #include "platform/TransformUtils.h"
+#include "rndobj/Rnd.h"
 #include "rndobj/Mesh.h"
 #include "rndobj/Trans.h"
 #include "math/Mtx.h"
+#include "math/Vec.h"
 #include <cstring>
+#include <cstdlib>
 
 // Dummy bone bind group for static meshes (pipeline layout requires group 3)
 static wgpu::Buffer sDummyBoneBuffer;
 static wgpu::BindGroup sDummyBoneBindGroup;
 
 static int sBoneGarbageLogCount = 0;
+
+static int DebugArmChainFrame() {
+    static bool sInit = false;
+    static int sFrame = -1;
+    if (!sInit) {
+        sInit = true;
+        const char* env = getenv("MILO_DEBUG_ARM_CHAIN_FRAME");
+        if (env && env[0]) sFrame = atoi(env);
+    }
+    return sFrame;
+}
+
+static const char* DebugArmChainDir() {
+    static bool sInit = false;
+    static const char* sDir = nullptr;
+    if (!sInit) {
+        sInit = true;
+        sDir = getenv("MILO_DEBUG_ARM_CHAIN_DIR");
+        if (!sDir || !sDir[0]) sDir = "player0";
+    }
+    return sDir;
+}
+
+static void MaybeDumpArmChain(int frameID, RndTransformable* boneTrans) {
+    static bool sDumpedForFrame = false;
+    static int sLastFrame = -1;
+    if (frameID != sLastFrame) {
+        sLastFrame = frameID;
+        sDumpedForFrame = false;
+    }
+    if (sDumpedForFrame || frameID != DebugArmChainFrame() || !boneTrans) return;
+    const char* boneName = boneTrans->Name();
+    if (strcmp(boneName, "bone_L-hand.mesh") != 0 && strcmp(boneName, "bone_R-hand.mesh") != 0)
+        return;
+    ObjectDir* dir = boneTrans->Dir();
+    if (!dir || strcmp(dir->Name(), DebugArmChainDir()) != 0)
+        return;
+
+    auto dumpSide = [&](const char* handName) {
+        RndTransformable* hand = dir->Find<RndTransformable>(handName, false);
+        if (!hand) return;
+        RndTransformable* foreArm = hand->TransParent();
+        RndTransformable* upperArm = foreArm ? foreArm->TransParent() : nullptr;
+        const char* leftPrefix = strcmp(handName, "bone_L-hand.mesh") == 0 ? "bone_L-" : "bone_R-";
+        char twist1Name[64];
+        char twist2Name[64];
+        snprintf(twist1Name, sizeof(twist1Name), "%sforeTwist1.mesh", leftPrefix);
+        snprintf(twist2Name, sizeof(twist2Name), "%sforeTwist2.mesh", leftPrefix);
+        RndTransformable* twist1 = dir->Find<RndTransformable>(twist1Name, false);
+        RndTransformable* twist2 = dir->Find<RndTransformable>(twist2Name, false);
+        if (!foreArm || !upperArm) {
+            fprintf(stderr,
+                    "ARM-CHAIN frame=%d dir='%s' hand='%s' missing parents foreArm=%p upperArm=%p\n",
+                    frameID, dir->Name(), handName, (void*)foreArm, (void*)upperArm);
+            return;
+        }
+
+        Vector3 upperToFore, foreToHand, bendCross;
+        Subtract(foreArm->WorldXfm().v, upperArm->WorldXfm().v, upperToFore);
+        Subtract(hand->WorldXfm().v, foreArm->WorldXfm().v, foreToHand);
+        Cross(upperToFore, foreToHand, bendCross);
+        float upperLen = Length(upperToFore);
+        float foreLen = Length(foreToHand);
+        float crossLen = Length(bendCross);
+        float bendSin = 0.0f;
+        if (upperLen > 1e-5f && foreLen > 1e-5f) {
+            bendSin = crossLen / (upperLen * foreLen);
+        }
+
+        fprintf(stderr,
+                "\n=== ARM CHAIN frame=%d dir='%s' hand='%s' ===\n",
+                frameID, dir->Name(), handName);
+        auto dumpBone = [](const char* label, RndTransformable* t) {
+            const Transform& local = t->LocalXfm();
+            const Transform& world = t->WorldXfm();
+            fprintf(stderr,
+                    "  %s name='%s' parent='%s'\n"
+                    "    localPos=(%.3f, %.3f, %.3f)\n"
+                    "    localRot=[%.3f %.3f %.3f / %.3f %.3f %.3f / %.3f %.3f %.3f]\n"
+                    "    worldPos=(%.3f, %.3f, %.3f)\n"
+                    "    worldRot=[%.3f %.3f %.3f / %.3f %.3f %.3f / %.3f %.3f %.3f]\n",
+                    label,
+                    t->Name(),
+                    t->TransParent() ? t->TransParent()->Name() : "(none)",
+                    local.v.x, local.v.y, local.v.z,
+                    local.m.x.x, local.m.x.y, local.m.x.z,
+                    local.m.y.x, local.m.y.y, local.m.y.z,
+                    local.m.z.x, local.m.z.y, local.m.z.z,
+                    world.v.x, world.v.y, world.v.z,
+                    world.m.x.x, world.m.x.y, world.m.x.z,
+                    world.m.y.x, world.m.y.y, world.m.y.z,
+                    world.m.z.x, world.m.z.y, world.m.z.z);
+        };
+        dumpBone("upperArm", upperArm);
+        dumpBone("foreArm", foreArm);
+        dumpBone("hand", hand);
+        if (twist1) dumpBone("foreTwist1", twist1);
+        if (twist2) dumpBone("foreTwist2", twist2);
+        fprintf(stderr,
+                "  chain upper->fore=(%.3f, %.3f, %.3f) len=%.3f\n"
+                "  chain fore->hand=(%.3f, %.3f, %.3f) len=%.3f\n"
+                "  bendCross=(%.3f, %.3f, %.3f) |cross|=%.5f bendSin=%.5f\n",
+                upperToFore.x, upperToFore.y, upperToFore.z, upperLen,
+                foreToHand.x, foreToHand.y, foreToHand.z, foreLen,
+                bendCross.x, bendCross.y, bendCross.z, crossLen, bendSin);
+        if (twist1) {
+            Vector3 upperToTwist1;
+            Subtract(twist1->WorldXfm().v, upperArm->WorldXfm().v, upperToTwist1);
+            fprintf(stderr,
+                    "  chain upper->foreTwist1=(%.3f, %.3f, %.3f) len=%.3f\n",
+                    upperToTwist1.x, upperToTwist1.y, upperToTwist1.z, Length(upperToTwist1));
+        }
+        if (twist2) {
+            Vector3 upperToTwist2, twist2ToHand;
+            Subtract(twist2->WorldXfm().v, upperArm->WorldXfm().v, upperToTwist2);
+            Subtract(hand->WorldXfm().v, twist2->WorldXfm().v, twist2ToHand);
+            fprintf(stderr,
+                    "  chain upper->foreTwist2=(%.3f, %.3f, %.3f) len=%.3f\n"
+                    "  chain foreTwist2->hand=(%.3f, %.3f, %.3f) len=%.3f\n",
+                    upperToTwist2.x, upperToTwist2.y, upperToTwist2.z, Length(upperToTwist2),
+                    twist2ToHand.x, twist2ToHand.y, twist2ToHand.z, Length(twist2ToHand));
+        }
+    };
+
+    dumpSide("bone_L-hand.mesh");
+    dumpSide("bone_R-hand.mesh");
+    sDumpedForFrame = true;
+}
 
 void FillBoneUniforms(RndMesh* mesh, BoneUniforms& out) {
     memset(&out, 0, sizeof(out));
@@ -46,6 +177,7 @@ void FillBoneUniforms(RndMesh* mesh, BoneUniforms& out) {
         RndTransformable* boneTrans = mesh->BoneTransAt(i);
         if (boneTrans) {
             const Transform& wt = boneTrans->WorldXfm();
+            MaybeDumpArmChain((int)TheRnd.GetFrameID(), boneTrans);
 
             // Log arm-related bones + first 3 for context
             bool isArm = (strstr(boneTrans->Name(), "Arm") || strstr(boneTrans->Name(), "arm")

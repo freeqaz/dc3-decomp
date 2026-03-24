@@ -1250,19 +1250,19 @@ void WgpuRnd::WriteSceneUniforms() {
             }
             memcpy(scene.view, view, sizeof(view));
 
-            // The gameplay HUD uses a cylindrical 3D layout with flashcard meshes
-            // at ±750 X, score docks at ±700 X, viewed from Cam.cam at Y=-768.
-            // The standard 16:9 xFov (58°) covers ±424 X — the panels extend
-            // beyond the viewport. On Xbox, the D3D9 viewport + 432p render
-            // resolution produces a wider effective FOV that shows these panels.
-            // The viewProj element [0] controls horizontal clip-space scale.
-            // Scale by 0.49 to widen the horizontal FOV enough to show panels
-            // at ±700 X within the visible area, matching Xbox's layout.
-            if (!mCurrentPassHasDepth && cam
-                && strstr(cam->Name(), "Cam.cam")
-                && cam->YFov() > 0.5f && cam->YFov() < 0.7f) {
-                scene.viewProj[0] *= 0.49f;
-            }
+            // HUD projection: no scaling needed. The gameplay HUD uses a
+            // cylindrical 3D layout with meshes at world X=±700 (view
+            // distance ~670), giving NDC_x = ±1.88 — beyond the clip
+            // volume [-1,1]. On Xbox 360, the Xenos GPU guard-band
+            // rasterizes these triangles without clipping; the viewport
+            // scissor clips pixels outside the render target, so panels
+            // appear partially off-screen at the edges.
+            //
+            // On native (WebGPU/Vulkan/Metal), desktop GPUs have a
+            // similarly large guard band (typically ±4096+ in viewport
+            // coords). Triangles with vertices beyond NDC ±1 are
+            // rasterized and viewport-clipped, matching Xbox behavior
+            // exactly — no projection hack required.
         }
 
         // Camera position (in world space, before axis flip)

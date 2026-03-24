@@ -1,6 +1,5 @@
 #include "viewer/ViewerAnimation.h"
 #include "viewer/ViewerArgs.h"
-#include "char/CharTwistSolver.h"
 
 #include "obj/Dir.h"
 #include "rndobj/TransAnim.h"
@@ -168,41 +167,34 @@ float CharAnimState::SecondsForBeat(float beat, float bpm) const {
 void CharAnimState::AdvanceBeat(float targetSeconds, float targetBeat, float bpm) {
     if (!active || !character || !character->Driver()) return;
 
-    CollectPollables();
-
+    // Use the engine's native poll path: Character::Poll() -> RndDir::Poll()
+    // -> CharPollGroup::Poll() which iterates all CharPollable objects in
+    // dependency-sorted order (via CharPollableSorter / PollDeps).
+    // This matches the game engine's exact rendering path for bones:
+    //   CharDriver -> CharServoBone -> CharIKHand -> CharUpperTwist -> CharForeTwist -> etc.
     float stepBeats = 0.1f;
     float stepSeconds = stepBeats * 60.0f / bpm;
     while (lastBeat + stepBeats < targetBeat) {
         lastBeat += stepBeats;
         lastSeconds += stepSeconds;
         TheTaskMgr.SetSecondsAndBeat(lastSeconds, lastBeat, false);
-        for (auto* p : pollables) {
-            if (!CharTwistSolver::IsTwistPollable(p)) p->Poll();
-        }
+        character->Poll();
     }
     lastBeat = targetBeat;
     lastSeconds = targetSeconds;
     TheTaskMgr.SetSecondsAndBeat(targetSeconds, targetBeat, false);
-    for (auto* p : pollables) {
-        if (!CharTwistSolver::IsTwistPollable(p)) p->Poll();
-    }
+    character->Poll();
     PollFace();
-    CharTwistSolver::SolveAll(character);
 }
 
 void CharAnimState::DirectPose(float beat, float bpm) {
     if (!active || !clip || !character) return;
 
-    CollectPollables();
-
+    // Apply clip at exact beat with facing/root motion correction,
+    // then run all pollables via engine's dependency-sorted order.
     PoseMeshesWithFacing(clip, character, beat);
-    for (auto* p : pollables) {
-        if (CharTwistSolver::IsDriverPollable(p) || CharTwistSolver::IsTwistPollable(p)) continue;
-        if (strcmp(p->ClassName().Str(), "CharHair") == 0) continue;
-        p->Poll();
-    }
+    character->Poll();
     PollFace();
-    CharTwistSolver::SolveAll(character);
 }
 
 // ============================================================================

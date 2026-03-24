@@ -18,6 +18,7 @@ class RndTransformable : public virtual RndHighlightable {
     friend class RndText;
     friend class LightPreset;
     friend class CharForeTwist;
+    friend class CharUpperTwist;
     friend class RndAmbientOcclusion;
 public:
     enum Constraint {

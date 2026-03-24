@@ -109,26 +109,71 @@ bool CharTwistSolver::IsTwistPollable(const CharPollable* p) {
 void CharTwistSolver::SolveAll(ObjectDir* dir) {
     if (!dir) return;
 
+    // One-time dump of arm bone parent chain for debugging
+    static int sHierarchyDump = 0;
+    if (sHierarchyDump < 1) {
+        sHierarchyDump++;
+        const char* armBones[] = {
+            "bone_L-clavicle.mesh", "bone_L-upperArm.mesh",
+            "bone_L-upperTwist1.mesh", "bone_L-upperTwist2.mesh",
+            "bone_L-foreArm.mesh",
+            "bone_L-foreTwist1.mesh", "bone_L-foreTwist2.mesh",
+            "bone_L-hand.mesh",
+        };
+        fprintf(stderr, "=== ARM BONE HIERARCHY DUMP ===\n");
+        for (const char* name : armBones) {
+            RndTransformable* b = dir->Find<RndTransformable>(name, false);
+            if (b) {
+                RndTransformable* p = b->TransParent();
+                const Vector3& lp = b->LocalXfm().v;
+                const Hmx::Matrix3& lr = b->LocalXfm().m;
+                fprintf(stderr, "  '%s' parent='%s' constraint=%d\n"
+                        "    localPos=(%.3f, %.3f, %.3f)\n"
+                        "    localRot=[%.3f %.3f %.3f / %.3f %.3f %.3f / %.3f %.3f %.3f]\n",
+                        name, p ? p->Name() : "(null)", (int)b->TransConstraint(),
+                        lp.x, lp.y, lp.z,
+                        lr.x.x, lr.x.y, lr.x.z,
+                        lr.y.x, lr.y.y, lr.y.z,
+                        lr.z.x, lr.z.y, lr.z.z);
+            } else {
+                fprintf(stderr, "  '%s' NOT FOUND\n", name);
+            }
+        }
+        fprintf(stderr, "=== END ARM BONE HIERARCHY ===\n");
+    }
+
     // Prefer authoritative in-scene pollables when present, but only on a
     // per-twist-type basis. Standalone character assets often contain the two
     // authored CharForeTwist objects while relying on fallback math for upper
     // arm and neck twist handling.
+    //
+    // IMPORTANT: CharUpperTwist must run BEFORE CharForeTwist because
+    // CharUpperTwist modifies upperArm->SetWorldXfm() which dirties all
+    // descendants (including foreTwist bones). If CharForeTwist runs first,
+    // its SetWorldXfm results get dirtied away and revert to clip transforms.
     bool sawForeTwist = false;
     bool sawUpperTwist = false;
     bool sawNeckTwist = false;
+
+    // First pass: poll CharUpperTwist and CharBoneTwist (upstream of fore twist)
+    for (ObjDirItr<CharPollable> it(dir, true); it != nullptr; ++it) {
+        const char* cn = it->ClassName().Str();
+        if (strcmp(cn, "CharUpperTwist") == 0) {
+            it->Poll();
+            sawUpperTwist = true;
+        } else if (strcmp(cn, "CharBoneTwist") == 0) {
+            it->Poll();
+        }
+    }
+    // Second pass: poll CharForeTwist and CharNeckTwist (downstream)
     for (ObjDirItr<CharPollable> it(dir, true); it != nullptr; ++it) {
         const char* cn = it->ClassName().Str();
         if (strcmp(cn, "CharForeTwist") == 0) {
             it->Poll();
             sawForeTwist = true;
-        } else if (strcmp(cn, "CharUpperTwist") == 0) {
-            it->Poll();
-            sawUpperTwist = true;
         } else if (strcmp(cn, "CharNeckTwist") == 0) {
             it->Poll();
             sawNeckTwist = true;
-        } else if (strcmp(cn, "CharBoneTwist") == 0) {
-            it->Poll();
         }
     }
 
@@ -175,5 +220,40 @@ void CharTwistSolver::SolveAll(ObjectDir* dir) {
         RndTransformable* neckTwist = dir->Find<RndTransformable>("bone_neckTwist.mesh", false);
         RndTransformable* headBone = dir->Find<RndTransformable>("bone_head.mesh", false);
         SolveNeckTwist(neckTwist, headBone);
+    }
+
+    // Periodic post-solve arm geometry check: is the arm actually collinear?
+    static int sArmCheck = 0;
+    if (sArmCheck < 10 || (sArmCheck % 300 == 0 && sArmCheck < 3000)) {
+        sArmCheck++;
+        RndTransformable* upperArm = dir->Find<RndTransformable>("bone_L-upperArm.mesh", false);
+        RndTransformable* foreArm = dir->Find<RndTransformable>("bone_L-foreArm.mesh", false);
+        RndTransformable* hand = dir->Find<RndTransformable>("bone_L-hand.mesh", false);
+        if (upperArm && foreArm && hand) {
+            Vector3 upper2fore, fore2hand, bendCross;
+            Subtract(foreArm->WorldXfm().v, upperArm->WorldXfm().v, upper2fore);
+            Subtract(hand->WorldXfm().v, foreArm->WorldXfm().v, fore2hand);
+            Cross(upper2fore, fore2hand, bendCross);
+            float upperLen = Length(upper2fore);
+            float foreLen = Length(fore2hand);
+            float crossLen = Length(bendCross);
+            float bendSin = (upperLen > 1e-5f && foreLen > 1e-5f)
+                ? crossLen / (upperLen * foreLen) : 0.0f;
+            const Hmx::Matrix3& foreRot = foreArm->LocalXfm().m;
+            bool rotIsIdentity = (std::fabs(foreRot.x.x - 1.0f) < 0.01f
+                               && std::fabs(foreRot.y.y - 1.0f) < 0.01f
+                               && std::fabs(foreRot.z.z - 1.0f) < 0.01f
+                               && std::fabs(foreRot.x.y) < 0.01f
+                               && std::fabs(foreRot.x.z) < 0.01f);
+            fprintf(stderr, "ARM-CHECK[%d] bendSin=%.4f %s foreArmRotIdentity=%s "
+                    "constraint=%d saw(upper=%d fore=%d)\n",
+                    sArmCheck, bendSin,
+                    bendSin < 0.05f ? "*** COLLINEAR ***" : "bent",
+                    rotIsIdentity ? "YES" : "no",
+                    (int)foreArm->TransConstraint(),
+                    sawUpperTwist, sawForeTwist);
+        }
+    } else {
+        sArmCheck++;
     }
 }

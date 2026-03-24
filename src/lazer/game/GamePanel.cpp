@@ -420,6 +420,38 @@ void GamePanel::Poll() {
             && !TheHamDirector->IsGameStartHold()) {
             StartGame();
         }
+#ifdef HX_NATIVE
+        // TODO(native): autoplay scoring — remove when real move detection is implemented
+        // Without Kinect, no move_passed events fire, so score stays 0.
+        // Simulate scoring by awarding points on each beat during gameplay.
+        if (mState == kGamePlaying) {
+            static int sLastBeat = -1;
+            static int sNativeScore = 0;
+            int curBeat = (int)TheTaskMgr.Beat();
+            if (curBeat != sLastBeat && curBeat >= 0) {
+                sLastBeat = curBeat;
+                // Award 100-500 points per beat depending on beat position
+                int points = 100 + (curBeat % 5) * 100;
+                sNativeScore += points;
+                // Update player provider score (this is what the DTA flow reads)
+                for (int p = 0; p < 2; p++) {
+                    HamPlayerData *pd = TheGameData->Player(p);
+                    if (pd && pd->IsPlaying() && pd->Provider()) {
+                        static Symbol scoreSym("score");
+                        pd->Provider()->SetProperty(scoreSym, DataNode(sNativeScore));
+                    }
+                }
+                // Send set_score to hud_panel (mirrors perform.dta move_passed flow)
+                DataNode &hp = DataVariable("hud_panel");
+                if (hp.Type() == kDataObject && hp.GetObj()) {
+                    static Message setScoreMsg("set_score", 0, 0, 0, 1);
+                    setScoreMsg[0] = DataNode(sNativeScore);
+                    setScoreMsg[1] = DataNode(sNativeScore - points);
+                    hp.GetObj()->Handle(setScoreMsg, false);
+                }
+            }
+        }
+#endif
         for (int i = 0; i < 2; i++) {
             FitnessFilter *filt = GetFitnessFilter(i);
             if (filt) {

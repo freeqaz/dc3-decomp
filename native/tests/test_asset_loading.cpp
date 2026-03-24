@@ -9,10 +9,16 @@
 //   MILO_BULK_CATEGORY=ui ctest -R BulkLoad --output-on-failure
 
 #include "test_helpers.h"
+#include "char/CharClip.h"
+#include "char/CharServoBone.h"
 #include "char/FileMerger.h"
 #include "char/CharUtl.h"
+#include "gfx/VertexFormats.h"
+#include "platform/TransformUtils.h"
+#include "char/CharTwistSolver.h"
 #include "gesture/SkeletonViz.h"
 #include "hamobj/HamCharacter.h"
+#include "math/Rot.h"
 #include "obj/Dir.h"
 #include "obj/DirLoader.h"
 #include "obj/Object.h"
@@ -73,6 +79,28 @@ static HamCharacter *FindMainCharacter(ObjectDir *dir) {
 
 static FileMerger *FindCharacterFileMerger(HamCharacter *character) {
     return character ? character->Find<FileMerger>("char.fm", false) : nullptr;
+}
+
+static ObjectDir *LoadCrowdClipLibrary() {
+    std::string root = GetMiloLibRoot();
+    if (root.empty())
+        return nullptr;
+
+    std::string path = root + "/char/crowd/anim/gen/female_base.milo_xbox";
+    if (!FileExists(path))
+        return nullptr;
+
+    return DirLoader::LoadObjects(FilePath(path.c_str()), nullptr, nullptr);
+}
+
+static CharClip *FindClipByName(ObjectDir *dir, const char *name) {
+    if (!dir || !name)
+        return nullptr;
+    for (ObjDirItr<CharClip> it(dir, true); it != nullptr; ++it) {
+        if (strcmp(it->Name(), name) == 0)
+            return it;
+    }
+    return nullptr;
 }
 
 static int CountSkinnedMeshes(ObjectDir *dir) {
@@ -726,6 +754,461 @@ TEST_F(AssetLoadingTest, BackupOutfitPreservesArmPollableInventory) {
         EXPECT_GE(afterCount, it->second.size())
             << "Backup outfit merge should not drop preexisting arm pollables for class "
             << it->first;
+    }
+}
+
+TEST_F(AssetLoadingTest, BoneServoCarriesAndAppliesForeArmRotZChannels) {
+    ObjectDir *charDir = LoadMainCharacterFromLibrary();
+    if (!charDir)
+        GTEST_SKIP() << "char/main not found";
+    ASSERT_NE(charDir, nullptr) << "Failed to load main character";
+
+    ObjectDir *clipDir = LoadCrowdClipLibrary();
+    if (!clipDir)
+        GTEST_SKIP() << "char/crowd/anim not found";
+    ASSERT_NE(clipDir, nullptr) << "Failed to load crowd clip library";
+
+    HamCharacter *character = FindMainCharacter(charDir);
+    ASSERT_NE(character, nullptr) << "No HamCharacter found in main.milo_xbox";
+
+    CharServoBone *servo = character->Find<CharServoBone>("bone.servo", true);
+    ASSERT_NE(servo, nullptr) << "main character missing bone.servo";
+    ASSERT_NE(servo->Dir(), nullptr) << "bone.servo should resolve against a character dir";
+
+    CharClip *clip = FindClipByName(clipDir, "crouching_great_01");
+    ASSERT_NE(clip, nullptr) << "Failed to find crouching_great_01";
+
+    bool hasLForeArm = false;
+    bool hasRForeArm = false;
+    std::vector<CharBones::Bone> bones = servo->GetBones();
+    for (size_t i = 0; i < bones.size(); i++) {
+        if (bones[i].name == Symbol("bone_L-foreArm.rotz"))
+            hasLForeArm = true;
+        if (bones[i].name == Symbol("bone_R-foreArm.rotz"))
+            hasRForeArm = true;
+    }
+
+    ASSERT_TRUE(hasLForeArm) << "bone.servo dropped bone_L-foreArm.rotz";
+    ASSERT_TRUE(hasRForeArm) << "bone.servo dropped bone_R-foreArm.rotz";
+
+    float beat = clip->StartBeat() + clip->LengthBeats() * 0.5f;
+    void *lChan = clip->GetChannel(Symbol("bone_L-foreArm.rotz"));
+    void *rChan = clip->GetChannel(Symbol("bone_R-foreArm.rotz"));
+    ASSERT_NE(lChan, nullptr);
+    ASSERT_NE(rChan, nullptr);
+
+    float evalL = 0.0f;
+    float evalR = 0.0f;
+    clip->EvaluateChannel(&evalL, lChan, beat);
+    clip->EvaluateChannel(&evalR, rChan, beat);
+
+    servo->AcquirePose();
+    clip->ScaleDown(*servo, 0.0f);
+    clip->ScaleAdd(*servo, 1.0f, beat, 0.0f);
+
+    float *servoL = (float *)servo->FindPtr(Symbol("bone_L-foreArm.rotz"));
+    float *servoR = (float *)servo->FindPtr(Symbol("bone_R-foreArm.rotz"));
+    ASSERT_NE(servoL, nullptr);
+    ASSERT_NE(servoR, nullptr);
+
+    EXPECT_NEAR(*servoL, evalL, 1e-4f);
+    EXPECT_NEAR(*servoR, evalR, 1e-4f);
+    EXPECT_GT(std::fabs(*servoL), 0.05f);
+    EXPECT_GT(std::fabs(*servoR), 0.05f);
+
+    servo->PoseMeshes();
+
+    RndTransformable *lForeArmMesh =
+        CharUtlFindBoneTrans("bone_L-foreArm.mesh", servo->Dir());
+    RndTransformable *rForeArmMesh =
+        CharUtlFindBoneTrans("bone_R-foreArm.mesh", servo->Dir());
+    ASSERT_NE(lForeArmMesh, nullptr);
+    ASSERT_NE(rForeArmMesh, nullptr);
+
+    float localL = GetZAngle(lForeArmMesh->LocalXfm().m);
+    float localR = GetZAngle(rForeArmMesh->LocalXfm().m);
+
+    printf(
+        "  servo forearm audit: evalL=%0.4f evalR=%0.4f servoL=%0.4f servoR=%0.4f "
+        "localL=%0.4f localR=%0.4f\n",
+        evalL,
+        evalR,
+        *servoL,
+        *servoR,
+        localL,
+        localR
+    );
+
+    EXPECT_NEAR(localL, evalL, 1e-3f);
+    EXPECT_NEAR(localR, evalR, 1e-3f);
+}
+
+TEST_F(AssetLoadingTest, SkinnedMeshesCarryNontrivialForeTwistWeights) {
+    ObjectDir *charDir = LoadMainCharacterFromLibrary();
+    if (!charDir)
+        GTEST_SKIP() << "char/main not found";
+    ASSERT_NE(charDir, nullptr) << "Failed to load main character";
+
+    HamCharacter *character = FindMainCharacter(charDir);
+    ASSERT_NE(character, nullptr) << "No HamCharacter found in main.milo_xbox";
+
+    FileMerger *fm = FindCharacterFileMerger(character);
+    ASSERT_NE(fm, nullptr) << "main.milo_xbox missing char.fm";
+    fm->ForceReleaseOrganizer();
+    character->SetOutfit("lush01_bd01");
+    character->SetOutfitDir("char/main/backup");
+    character->StartLoad(false);
+
+    int checkedMeshes = 0;
+    int meshesUsingTwist = 0;
+
+    for (ObjDirItr<RndMesh> it(character, true); it != nullptr; ++it) {
+        RndMesh *mesh = it;
+        if (!mesh->IsSkinned() || mesh->NumBones() <= 0)
+            continue;
+
+        int lUpper = -1, lFore = -1, lHand = -1, lTwist1 = -1, lTwist2 = -1;
+        int rUpper = -1, rFore = -1, rHand = -1, rTwist1 = -1, rTwist2 = -1;
+        for (int b = 0; b < mesh->NumBones(); b++) {
+            RndTransformable *bone = mesh->BoneTransAt(b);
+            const char *name = bone ? bone->Name() : "";
+            if (strcmp(name, "bone_L-upperArm.mesh") == 0) lUpper = b;
+            else if (strcmp(name, "bone_L-foreArm.mesh") == 0) lFore = b;
+            else if (strcmp(name, "bone_L-hand.mesh") == 0) lHand = b;
+            else if (strcmp(name, "bone_L-foreTwist1.mesh") == 0) lTwist1 = b;
+            else if (strcmp(name, "bone_L-foreTwist2.mesh") == 0) lTwist2 = b;
+            else if (strcmp(name, "bone_R-upperArm.mesh") == 0) rUpper = b;
+            else if (strcmp(name, "bone_R-foreArm.mesh") == 0) rFore = b;
+            else if (strcmp(name, "bone_R-hand.mesh") == 0) rHand = b;
+            else if (strcmp(name, "bone_R-foreTwist1.mesh") == 0) rTwist1 = b;
+            else if (strcmp(name, "bone_R-foreTwist2.mesh") == 0) rTwist2 = b;
+        }
+
+        const bool hasLeftChain =
+            lUpper >= 0 && lFore >= 0 && lHand >= 0 && lTwist1 >= 0 && lTwist2 >= 0;
+        const bool hasRightChain =
+            rUpper >= 0 && rFore >= 0 && rHand >= 0 && rTwist1 >= 0 && rTwist2 >= 0;
+        if (!hasLeftChain && !hasRightChain)
+            continue;
+
+        checkedMeshes++;
+
+        int numVerts = mesh->NumVerts();
+        int numCompressedVerts = mesh->NumCompressedVerts();
+        int vertCount = numCompressedVerts > 0 ? numCompressedVerts : numVerts;
+        ASSERT_GT(vertCount, 0) << "skinned mesh has no vertex data: " << mesh->Name();
+
+        std::vector<GpuVertexSkinned> verts(vertCount);
+        int unpacked = 0;
+        if (numCompressedVerts > 0 && mesh->CompressedVerts()) {
+            unpacked = VertexFormats::UnpackCompressedSkinnedVertices(
+                mesh->CompressedVerts(), numCompressedVerts, verts.data(), vertCount
+            );
+        } else {
+            unpacked = VertexFormats::UnpackSkinnedVertices(*mesh, verts.data(), vertCount);
+        }
+        ASSERT_GT(unpacked, 0) << "failed to unpack skinned vertices for " << mesh->Name();
+
+        std::vector<float> totalWeight(mesh->NumBones(), 0.0f);
+        std::vector<int> nonzeroVerts(mesh->NumBones(), 0);
+        for (int v = 0; v < unpacked; v++) {
+            const GpuVertexSkinned &gv = verts[v];
+            for (int j = 0; j < 4; j++) {
+                int boneIdx = gv.boneIndices[j];
+                float w = gv.boneWeights[j];
+                if (boneIdx < 0 || boneIdx >= mesh->NumBones() || w <= 0.0f)
+                    continue;
+                totalWeight[boneIdx] += w;
+                nonzeroVerts[boneIdx]++;
+            }
+        }
+
+        auto logSide = [&](const char *side,
+                           int upper,
+                           int fore,
+                           int hand,
+                           int twist1,
+                           int twist2) {
+            if (upper < 0)
+                return;
+            printf(
+                "  mesh '%s' %s verts(raw=%d compressed=%d) "
+                "weights: upper(sum=%.1f verts=%d) fore(sum=%.1f verts=%d) "
+                "hand(sum=%.1f verts=%d) twist1(sum=%.1f verts=%d) twist2(sum=%.1f verts=%d)\n",
+                mesh->Name(),
+                side,
+                numVerts,
+                numCompressedVerts,
+                totalWeight[upper], nonzeroVerts[upper],
+                totalWeight[fore], nonzeroVerts[fore],
+                totalWeight[hand], nonzeroVerts[hand],
+                totalWeight[twist1], nonzeroVerts[twist1],
+                totalWeight[twist2], nonzeroVerts[twist2]
+            );
+        };
+
+        if (hasLeftChain) {
+            logSide("left", lUpper, lFore, lHand, lTwist1, lTwist2);
+            if (totalWeight[lTwist1] > 1.0f || totalWeight[lTwist2] > 1.0f)
+                meshesUsingTwist++;
+        }
+        if (hasRightChain) {
+            logSide("right", rUpper, rFore, rHand, rTwist1, rTwist2);
+            if (totalWeight[rTwist1] > 1.0f || totalWeight[rTwist2] > 1.0f)
+                meshesUsingTwist++;
+        }
+    }
+
+    EXPECT_GT(checkedMeshes, 0)
+        << "Expected at least one skinned mesh with a forearm + foreTwist palette";
+    EXPECT_GT(meshesUsingTwist, 0)
+        << "At least one skinned forearm mesh should actually weight vertices to foreTwist bones";
+}
+
+// ============================================================================
+// Inspect forearm vertex bone assignments from real compressed outfit mesh
+// ============================================================================
+
+TEST_F(AssetLoadingTest, InspectForearmVertexBoneAssignments) {
+    ObjectDir *charDir = LoadMainCharacterFromLibrary();
+    if (!charDir)
+        GTEST_SKIP() << "char/main not found";
+
+    HamCharacter *character = FindMainCharacter(charDir);
+    ASSERT_NE(character, nullptr);
+
+    FileMerger *fm = FindCharacterFileMerger(character);
+    ASSERT_NE(fm, nullptr);
+    fm->ForceReleaseOrganizer();
+    character->SetOutfit("lush01_bd01");
+    character->SetOutfitDir("char/main/backup");
+    character->StartLoad(false);
+
+    // Find an outfit mesh with compressed verts and forearm bones
+    for (ObjDirItr<RndMesh> it(character, true); it != nullptr; ++it) {
+        RndMesh *mesh = it;
+        if (!mesh->IsSkinned() || mesh->NumBones() <= 0 ||
+            mesh->NumCompressedVerts() <= 0)
+            continue;
+
+        // Build bone name map for this mesh's palette
+        int numBones = mesh->NumBones();
+        std::vector<std::string> boneNames(numBones);
+        int forearmBoneIdx = -1;
+        int twist1Idx = -1, twist2Idx = -1;
+        for (int b = 0; b < numBones; b++) {
+            RndTransformable *bone = mesh->BoneTransAt(b);
+            boneNames[b] = bone ? bone->Name() : "(null)";
+            if (boneNames[b] == "bone_L-foreArm.mesh") forearmBoneIdx = b;
+            if (boneNames[b] == "bone_L-foreTwist1.mesh") twist1Idx = b;
+            if (boneNames[b] == "bone_L-foreTwist2.mesh") twist2Idx = b;
+        }
+
+        if (forearmBoneIdx < 0 && twist1Idx < 0)
+            continue;
+
+        printf("\n=== FOREARM VERTEX INSPECTION: '%s' ===\n", mesh->Name());
+        printf("  Bone palette (%d bones):\n", numBones);
+        for (int b = 0; b < numBones; b++) {
+            RndTransformable *bone = mesh->BoneTransAt(b);
+            const Transform& off = mesh->BoneOffsetAt(b);
+            printf("    [%2d] '%s' offset.v=(%.2f,%.2f,%.2f) offset.m.x.x=%.3f\n",
+                   b, boneNames[b].c_str(),
+                   off.v.x, off.v.y, off.v.z, off.m.x.x);
+        }
+
+        // Unpack compressed vertices
+        int numVerts = mesh->NumCompressedVerts();
+        std::vector<GpuVertexSkinned> verts(numVerts);
+        int unpacked = VertexFormats::UnpackCompressedSkinnedVertices(
+            mesh->CompressedVerts(), numVerts, verts.data(), numVerts);
+
+        // Find vertices weighted to forearm-area bones and dump details
+        printf("  Forearm-area vertices (first 10 with significant forearm/twist weight):\n");
+        int found = 0;
+        for (int v = 0; v < unpacked && found < 10; v++) {
+            const GpuVertexSkinned &gv = verts[v];
+            // Check if any bone influence is a forearm-area bone
+            bool hasForearm = false;
+            for (int j = 0; j < 4; j++) {
+                int bi = gv.boneIndices[j];
+                float w = gv.boneWeights[j];
+                if (w > 0.01f && bi < numBones &&
+                    (bi == forearmBoneIdx || bi == twist1Idx || bi == twist2Idx)) {
+                    hasForearm = true;
+                    break;
+                }
+            }
+            if (!hasForearm) continue;
+            found++;
+
+            float wSum = gv.boneWeights[0] + gv.boneWeights[1] +
+                         gv.boneWeights[2] + gv.boneWeights[3];
+            printf("    v[%d] pos=(%.2f,%.2f,%.2f) wSum=%.3f\n",
+                   v, gv.pos[0], gv.pos[1], gv.pos[2], wSum);
+            for (int j = 0; j < 4; j++) {
+                int bi = gv.boneIndices[j];
+                float w = gv.boneWeights[j];
+                if (w > 0.001f) {
+                    const char *bn = (bi >= 0 && bi < numBones)
+                        ? boneNames[bi].c_str() : "OUT_OF_RANGE";
+                    printf("      influence[%d]: bone[%d]='%s' weight=%.4f\n",
+                           j, bi, bn, w);
+                }
+            }
+        }
+        printf("  Total forearm-area vertices found: %d / %d unpacked\n", found, unpacked);
+
+        // Only inspect first matching mesh
+        break;
+    }
+}
+
+// ============================================================================
+// CPU-side skinning of real forearm vertex — check if result makes sense
+// ============================================================================
+
+TEST_F(AssetLoadingTest, CpuSkinForearmVertexFromCompressedMesh) {
+    ObjectDir *charDir = LoadMainCharacterFromLibrary();
+    if (!charDir)
+        GTEST_SKIP() << "char/main not found";
+
+    HamCharacter *character = FindMainCharacter(charDir);
+    ASSERT_NE(character, nullptr);
+
+    // Merge backup outfit FIRST
+    FileMerger *fm = FindCharacterFileMerger(character);
+    ASSERT_NE(fm, nullptr);
+    fm->ForceReleaseOrganizer();
+    character->SetOutfit("lush01_bd01");
+    character->SetOutfitDir("char/main/backup");
+    character->StartLoad(false);
+
+    // Load clips and pose AFTER merge
+    ObjectDir *clipDir = LoadCrowdClipLibrary();
+    if (!clipDir)
+        GTEST_SKIP() << "clips not found";
+
+    CharClip *clip = FindClipByName(clipDir, "crouching_great_01");
+    ASSERT_NE(clip, nullptr);
+
+    // Apply the clip at a specific beat (direct pose) + solve twists
+    clip->PoseMeshes(character, 37.9f);
+    CharTwistSolver::SolveAll(character);
+
+    // Find compressed outfit mesh with forearm bones
+    for (ObjDirItr<RndMesh> it(character, true); it != nullptr; ++it) {
+        RndMesh *mesh = it;
+        if (!mesh->IsSkinned() || mesh->NumBones() <= 0 ||
+            mesh->NumCompressedVerts() <= 0)
+            continue;
+
+        int twist2Idx = -1, handIdx = -1;
+        for (int b = 0; b < mesh->NumBones(); b++) {
+            RndTransformable *bone = mesh->BoneTransAt(b);
+            if (!bone) continue;
+            if (strcmp(bone->Name(), "bone_L-foreTwist2.mesh") == 0) twist2Idx = b;
+            if (strcmp(bone->Name(), "bone_L-hand.mesh") == 0) handIdx = b;
+        }
+        if (twist2Idx < 0) continue;
+
+        printf("\n=== CPU SKINNING TEST: '%s' ===\n", mesh->Name());
+
+        // Compute skin matrices (same as FillBoneUniforms)
+        int numBones = mesh->NumBones();
+        std::vector<std::array<float, 16>> skinMats(numBones);
+        for (int b = 0; b < numBones; b++) {
+            RndTransformable *bone = mesh->BoneTransAt(b);
+            if (bone) {
+                Transform skinMatrix;
+                Multiply(mesh->BoneOffsetAt(b), bone->WorldXfm(), skinMatrix);
+                TransformToMat4(skinMatrix, skinMats[b].data());
+            } else {
+                memset(skinMats[b].data(), 0, 64);
+                skinMats[b][0] = skinMats[b][5] = skinMats[b][10] = skinMats[b][15] = 1.0f;
+            }
+        }
+
+        // Print the skin matrices for forearm bones
+        auto printMat = [](const char *name, int idx, const float m[16]) {
+            printf("  skinMat[%d] '%s':\n", idx, name);
+            printf("    row0: [%8.4f %8.4f %8.4f %8.4f]\n", m[0], m[1], m[2], m[3]);
+            printf("    row1: [%8.4f %8.4f %8.4f %8.4f]\n", m[4], m[5], m[6], m[7]);
+            printf("    row2: [%8.4f %8.4f %8.4f %8.4f]\n", m[8], m[9], m[10], m[11]);
+            printf("    row3: [%8.4f %8.4f %8.4f %8.4f]\n", m[12], m[13], m[14], m[15]);
+        };
+        if (twist2Idx >= 0) {
+            RndTransformable *t2 = mesh->BoneTransAt(twist2Idx);
+            printMat(t2 ? t2->Name() : "?", twist2Idx, skinMats[twist2Idx].data());
+        }
+        if (handIdx >= 0) {
+            RndTransformable *t = mesh->BoneTransAt(handIdx);
+            printMat(t ? t->Name() : "?", handIdx, skinMats[handIdx].data());
+        }
+
+        // Unpack compressed verts and skin a forearm vertex on CPU
+        int numVerts = mesh->NumCompressedVerts();
+        std::vector<GpuVertexSkinned> verts(numVerts);
+        int unpacked = VertexFormats::UnpackCompressedSkinnedVertices(
+            mesh->CompressedVerts(), numVerts, verts.data(), numVerts);
+
+        printf("  CPU skinning first 5 forearm vertices:\n");
+        int found = 0;
+        for (int v = 0; v < unpacked && found < 5; v++) {
+            const GpuVertexSkinned &gv = verts[v];
+            bool hasTwist = false;
+            for (int j = 0; j < 4; j++) {
+                if (gv.boneWeights[j] > 0.01f && gv.boneIndices[j] == twist2Idx)
+                    hasTwist = true;
+            }
+            if (!hasTwist) continue;
+            found++;
+
+            // Normalize weights
+            float wSum = gv.boneWeights[0] + gv.boneWeights[1] +
+                         gv.boneWeights[2] + gv.boneWeights[3];
+            float nw[4] = {0};
+            if (wSum > 0) {
+                for (int j = 0; j < 4; j++) nw[j] = gv.boneWeights[j] / wSum;
+            }
+
+            // CPU skin: blendedPos = sum(weight * (boneMatrix * pos))
+            float blendedPos[3] = {0, 0, 0};
+            for (int j = 0; j < 4; j++) {
+                if (nw[j] <= 0) continue;
+                int bi = gv.boneIndices[j];
+                if (bi >= numBones) continue;
+                const float *m = skinMats[bi].data();
+                // M * v (column-vector, matching WGSL):
+                // result = col0*px + col1*py + col2*pz + col3*1
+                // But TransformToMat4 stores row-major, WGSL reads as column-major
+                // So M_wgsl * v = v * M_original (row-vector)
+                float px = gv.pos[0], py = gv.pos[1], pz = gv.pos[2];
+                float rx = px*m[0] + py*m[4] + pz*m[8]  + m[12];
+                float ry = px*m[1] + py*m[5] + pz*m[9]  + m[13];
+                float rz = px*m[2] + py*m[6] + pz*m[10] + m[14];
+                blendedPos[0] += nw[j] * rx;
+                blendedPos[1] += nw[j] * ry;
+                blendedPos[2] += nw[j] * rz;
+            }
+
+            printf("    v[%d] bindPos=(%.2f,%.2f,%.2f) → skinned=(%.2f,%.2f,%.2f)\n",
+                   v, gv.pos[0], gv.pos[1], gv.pos[2],
+                   blendedPos[0], blendedPos[1], blendedPos[2]);
+        }
+
+        // Also print actual bone world positions for reference
+        printf("  Bone world positions:\n");
+        for (int b : {twist2Idx, handIdx}) {
+            if (b < 0) continue;
+            RndTransformable *bone = mesh->BoneTransAt(b);
+            if (!bone) continue;
+            const Vector3 &wp = bone->WorldXfm().v;
+            printf("    [%d] '%s' worldPos=(%.2f,%.2f,%.2f)\n",
+                   b, bone->Name(), wp.x, wp.y, wp.z);
+        }
+
+        break;  // only first matching mesh
     }
 }
 

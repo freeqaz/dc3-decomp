@@ -359,6 +359,50 @@ TEST_F(ClipPoseFixture, ClipExists) {
     EXPECT_GT(clipCount, 0);
 }
 
+TEST_F(ClipPoseFixture, CrouchingGreatClipContainsForeArmAndHandChannels) {
+    CharClip* target = nullptr;
+    for (ObjDirItr<CharClip> it(sClipDir, true); it; ++it) {
+        if (strcmp(it->Name(), "crouching_great_01") == 0) {
+            target = it;
+            break;
+        }
+    }
+    if (!target)
+        GTEST_SKIP() << "Clip crouching_great_01 not found in loaded clip dir";
+
+    std::list<CharBones::Bone> bones;
+    target->ListBones(bones);
+    printf("  crouching_great_01 bone channels: %zu\n", bones.size());
+    int idx = 0;
+    bool hasLForeArm = false;
+    bool hasRForeArm = false;
+    bool hasLHand = false;
+    bool hasRHand = false;
+    for (const auto& b : bones) {
+        if (idx < 30) {
+            printf("    [%02d] '%s' weight=%.2f type=%d\n",
+                   idx, b.name.Str(), b.weight, (int)CharBones::TypeOf(b.name));
+        }
+        const char* name = b.name.Str();
+        if (strstr(name, "bone_L-foreArm") != nullptr) hasLForeArm = true;
+        if (strstr(name, "bone_R-foreArm") != nullptr) hasRForeArm = true;
+        if (strstr(name, "bone_L-hand") != nullptr) hasLHand = true;
+        if (strstr(name, "bone_R-hand") != nullptr) hasRHand = true;
+        idx++;
+    }
+    if (idx > 30) {
+        printf("    ... and %d more\n", idx - 30);
+    }
+
+    printf("  forearm/hand presence: L-foreArm=%d R-foreArm=%d L-hand=%d R-hand=%d\n",
+           hasLForeArm, hasRForeArm, hasLHand, hasRHand);
+
+    EXPECT_TRUE(hasLForeArm);
+    EXPECT_TRUE(hasRForeArm);
+    EXPECT_TRUE(hasLHand);
+    EXPECT_TRUE(hasRHand);
+}
+
 TEST_F(ClipPoseFixture, PoseMeshesDoesNotCrash) {
     float beat = sClip->StartBeat();
     sClip->PoseMeshes(sDir, beat);

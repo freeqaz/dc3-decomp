@@ -99,11 +99,11 @@ void CharBonesMeshes::PoseMeshes() {
         sPoseMeshLog++;
         fprintf(stderr, "POSEMESHES dir='%s' servo='%s' meshCount=%d boneCount=%d\n",
                 Dir() ? Dir()->Name() : "null", Name(), (int)mMeshes.size(), (int)mBones.size());
-        // Dump first 5 bone mesh pointers
-        for (int k = 0; k < 5 && k < (int)mMeshes.size(); k++) {
+        // Dump ALL bone mesh mappings
+        for (int k = 0; k < (int)mMeshes.size(); k++) {
             RndTransformable* bt = mMeshes[k];
-            fprintf(stderr, "  servo_mesh[%d] '%s' ptr=%p bone='%s'\n",
-                    k, bt ? bt->Name() : "NULL", (void*)bt,
+            fprintf(stderr, "  servo_mesh[%2d] '%s' bone='%s'\n",
+                    k, bt ? bt->Name() : "NULL",
                     k < (int)mBones.size() ? mBones[k].name.Str() : "?");
         }
       }
@@ -147,6 +147,19 @@ void CharBonesMeshes::PoseMeshes() {
 
         // Apply Z rotations
         float *endOff = (float *)(start + mOffsets[TYPE_END]);
+#ifdef HX_NATIVE
+        { static int sRotzLog = 0;
+          if (sRotzLog < 3) {
+            sRotzLog++;
+            float *rp = rotIt;
+            int idx = mCounts[TYPE_ROTZ];
+            for (; rp < endOff; rp++, idx++) {
+                fprintf(stderr, "  ROTZ[%d] '%s' value=%.4f\n",
+                        idx, idx < (int)mBones.size() ? mBones[idx].name.Str() : "?", *rp);
+            }
+          }
+        }
+#endif
         for (; rotIt < endOff; rotIt++, ++curMesh) {
             MakeRotMatrixZ(*rotIt, (*curMesh)->DirtyLocalXfm().m);
         }
