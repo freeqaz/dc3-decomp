@@ -532,16 +532,11 @@ DataArray *DataReadFile(const char *file, bool warn) {
 
 DataArray *DataReadStream(BinStream *bs) {
     gDataReadCrit.Enter(); // TODO: may cause IAT thunk issues at runtime
-#ifdef HX_NATIVE
-    // These initializations are handled by the undecompiled original on PPC.
-    // For native/web builds, ParseArray (in DataParser_Native.cpp) needs them.
-    gBinStream = bs;
-    gDataLine = (DataType)1;
-    extern int gOpenArray;
-    gOpenArray = 0;
-#endif
     Symbol stream(bs->Name());
+    gBinStream = bs;
     gNode = 0;
+    gOpenArray = 0;
+    gDataLine = (DataType)1;
     unsigned int conds1 = 0;
     gFile = stream;
     FOREACH(it, gConditional) {

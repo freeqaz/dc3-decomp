@@ -114,10 +114,13 @@ void FileMergerOrganizer::FinishLoading(Loader *l) {
 
 void FileMergerOrganizer::FailedLoading(Loader *l) {
     OrganizedFileMerger *org = nullptr;
-    FOREACH (it, mOrganizedFileMergers) {
-        org = &*it;
-        if (org->merger->mCurLoader && org->merger->mCurLoader == l)
+    for (std::list<OrganizedFileMerger>::iterator it = mOrganizedFileMergers.begin();
+         it != mOrganizedFileMergers.end();
+         ++it) {
+        if (it->merger->mCurLoader && it->merger->mCurLoader == l) {
+            org = &*it;
             break;
+        }
     }
     MILO_ASSERT(org, 0x173);
     MILO_ASSERT(org->merger->mFilesPending.front()->loading == l->LoaderFile(), 0x176);
