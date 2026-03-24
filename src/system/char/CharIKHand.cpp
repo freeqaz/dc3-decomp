@@ -348,8 +348,13 @@ void CharIKHand::Poll() {
         Vector3 handY(handMat.y);
         Vector3 handZ(handMat.z);
         float acosDot = acosf(Dot(elbowMat.x, handZ)) - 1.570796370506287f;
+        float absAcosDot;
+        if (acosDot > 0.0f)
+            absAcosDot = acosDot;
+        else
+            absAcosDot = -acosDot;
         float maxRads = mWristRadians;
-        if (Abs(acosDot) > maxRads) {
+        if (absAcosDot > maxRads) {
             if (acosDot > 0.0f)
                 acosDot -= maxRads;
             else
@@ -393,7 +398,7 @@ void CharIKHand::IKElbow(RndTransformable *elbow, RndTransformable *shoulder) {
     Vector3 handPos, targetPos;
     MultiplyTranspose(mHand->WorldXfm().v, shoulder->WorldXfm(), handPos);
     MultiplyTranspose(mWorldDst, shoulder->WorldXfm(), targetPos);
-    if (mElbowSwing >= (unsigned int)1) {
+    if (0.0f < mElbowSwing) {
         Vector2 handYZ(handPos.y, handPos.z);
         Vector2 targetYZ(targetPos.y, targetPos.z);
         float handYZSq = handYZ.x * handYZ.x + handYZ.y * handYZ.y;
@@ -500,7 +505,6 @@ void CharIKHand::IKElbow(RndTransformable *elbow, RndTransformable *shoulder) {
 
 void CharIKHand::Highlight() {
     float charWeight = Weight();
-    float leftover = 0;
     float localWeights[16];
 
     auto& hand = mHand;
@@ -508,6 +512,7 @@ void CharIKHand::Highlight() {
         return;
     else {
         if (mTargets.size() != 1) {
+            float leftover = 0;
             float *fp = &localWeights[0];
             for (ObjVector<IKTarget>::iterator it = mTargets.begin();
                  it != mTargets.end();

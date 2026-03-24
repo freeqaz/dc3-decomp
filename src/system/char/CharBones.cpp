@@ -392,7 +392,10 @@ void CharBones::ScaleDown(CharBones &dst, float f) const {
             while (true) {
                 while (db->name != src->name) {
                     db++;
-                    if (db >= db_end) goto complain;
+                    if (db >= db_end) {
+                        TestDstComplain(src->name);
+                        return;
+                    }
                     data++;
                 }
                 src++;
@@ -400,9 +403,12 @@ void CharBones::ScaleDown(CharBones &dst, float f) const {
                 data->y = 0.0f;
                 data->x = 0.0f;
                 db->weight = 0.0f;
-                if (src >= src_end) goto zero_quat;
+                if (src == src_end) goto zero_quat;
                 db++;
-                if (db >= db_end) goto complain;
+                if (db >= db_end) {
+                    TestDstComplain(src->name);
+                    return;
+                }
                 data++;
             }
         }
@@ -412,11 +418,14 @@ void CharBones::ScaleDown(CharBones &dst, float f) const {
             Hmx::Quat *qdata = (Hmx::Quat *)(dst.mStart + dst.mOffsets[TYPE_QUAT]);
             Bone *db = db_begin + dst.mCounts[TYPE_QUAT];
             Bone *db_end = db_begin + dst.mCounts[TYPE_ROTX];
-            const Bone *src_end = mBones.data() + mCounts[TYPE_ROTX];
+            const Bone *src_end = mBones.begin() + mCounts[TYPE_ROTX];
             while (true) {
                 while (db->name != src->name) {
                     db++;
-                    if (db >= db_end) goto complain;
+                    if (db >= db_end) {
+                        TestDstComplain(src->name);
+                        return;
+                    }
                     qdata++;
                 }
                 src++;
@@ -425,9 +434,12 @@ void CharBones::ScaleDown(CharBones &dst, float f) const {
                 qdata->z = 0.0f;
                 qdata->w = 0.0f;
                 db->weight = 0.0f;
-                if (src >= src_end) goto zero_rot;
+                if (src == src_end) goto zero_rot;
                 db++;
-                if (db >= db_end) goto complain;
+                if (db >= db_end) {
+                    TestDstComplain(src->name);
+                    return;
+                }
                 qdata++;
             }
         }
@@ -437,19 +449,25 @@ void CharBones::ScaleDown(CharBones &dst, float f) const {
             float *fdata = (float *)(dst.mStart + dst.mOffsets[TYPE_ROTX]);
             Bone *db = db_begin + dst.mCounts[TYPE_ROTX];
             Bone *db_end = db_begin + dst.mCounts[TYPE_END];
-            const Bone *src_end = mBones.data() + mCounts[TYPE_END];
+            const Bone *src_end = mBones.begin() + mCounts[TYPE_END];
             while (true) {
                 while (db->name != src->name) {
                     db++;
-                    if (db >= db_end) goto complain;
+                    if (db >= db_end) {
+                        TestDstComplain(src->name);
+                        return;
+                    }
                     fdata++;
                 }
                 src++;
                 *fdata = 0.0f;
                 db->weight = 0.0f;
-                if (src >= src_end) return;
+                if (src == src_end) return;
                 db++;
-                if (db >= db_end) goto complain;
+                if (db >= db_end) {
+                    TestDstComplain(src->name);
+                    return;
+                }
                 fdata++;
             }
         }
@@ -463,16 +481,22 @@ void CharBones::ScaleDown(CharBones &dst, float f) const {
             while (true) {
                 while (db->name != src->name) {
                     db++;
-                    if (db >= db_end) goto complain;
+                    if (db >= db_end) {
+                        TestDstComplain(src->name);
+                        return;
+                    }
                     data++;
                 }
                 src++;
                 data->x *= f;
                 data->y *= f;
                 data->z *= f;
-                if (src >= src_end) goto scale_quat;
+                if (src == src_end) goto scale_quat;
                 db++;
-                if (db >= db_end) goto complain;
+                if (db >= db_end) {
+                    TestDstComplain(src->name);
+                    return;
+                }
                 data++;
             }
         }
@@ -482,11 +506,14 @@ void CharBones::ScaleDown(CharBones &dst, float f) const {
             Hmx::Quat *qdata = (Hmx::Quat *)(dst.mStart + dst.mOffsets[TYPE_QUAT]);
             Bone *db = db_begin + dst.mCounts[TYPE_QUAT];
             Bone *db_end = db_begin + dst.mCounts[TYPE_ROTX];
-            const Bone *src_end = mBones.data() + mCounts[TYPE_ROTX];
+            const Bone *src_end = mBones.begin() + mCounts[TYPE_ROTX];
             while (true) {
                 while (db->name != src->name) {
                     db++;
-                    if (db >= db_end) goto complain;
+                    if (db >= db_end) {
+                        TestDstComplain(src->name);
+                        return;
+                    }
                     qdata++;
                 }
                 src++;
@@ -494,9 +521,12 @@ void CharBones::ScaleDown(CharBones &dst, float f) const {
                 qdata->y *= f;
                 qdata->z *= f;
                 qdata->w *= f;
-                if (src >= src_end) goto scale_rot;
+                if (src == src_end) goto scale_rot;
                 db++;
-                if (db >= db_end) goto complain;
+                if (db >= db_end) {
+                    TestDstComplain(src->name);
+                    return;
+                }
                 qdata++;
             }
         }
@@ -506,26 +536,28 @@ void CharBones::ScaleDown(CharBones &dst, float f) const {
             float *fdata = (float *)(dst.mStart + dst.mOffsets[TYPE_ROTX]);
             Bone *db = db_begin + dst.mCounts[TYPE_ROTX];
             Bone *db_end = db_begin + dst.mCounts[TYPE_END];
-            const Bone *src_end = mBones.data() + mCounts[TYPE_END];
+            const Bone *src_end = mBones.begin() + mCounts[TYPE_END];
             while (true) {
                 while (db->name != src->name) {
                     db++;
-                    if (db >= db_end) goto complain;
+                    if (db >= db_end) {
+                        TestDstComplain(src->name);
+                        return;
+                    }
                     fdata++;
                 }
                 src++;
                 *fdata *= f;
-                if (src >= src_end) return;
+                if (src == src_end) return;
                 db++;
-                if (db >= db_end) goto complain;
+                if (db >= db_end) {
+                    TestDstComplain(src->name);
+                    return;
+                }
                 fdata++;
             }
         }
     }
-    return;
-
-complain:
-    TestDstComplain(src->name);
 }
 
 // MARK: Blend

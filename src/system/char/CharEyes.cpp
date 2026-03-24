@@ -609,8 +609,8 @@ void CharEyes::DartUpdate() {
     if (sDisableEyeDart || dartCheat.Int(NULL) != 0)
         return;
     mDartInterval -= TheTaskMgr.DeltaSeconds();
-    if (mDartInterval < 0) {
-        if (mDartEnabled) {
+    if (mDartEnabled) {
+        if (mDartInterval < 0) {
             mEyeClampCount--;
             if (mEyeClampCount < 0) {
                 mDartEnabled = false;
@@ -618,19 +618,21 @@ void CharEyes::DartUpdate() {
                     mData.mMinSecsBetweenSequences,
                     mData.mMaxSecsBetweenSequences
                 );
-                return;
+            } else {
+                mDartInterval = RandomFloat(
+                    mData.mMinSecsBetweenDarts,
+                    mData.mMaxSecsBetweenDarts
+                );
+                *(Vector3 *)&mCurrentDartOffsetX = GenerateDartOffset();
             }
-        } else {
-            if (!EyesOnTarget(mData.mOnTargetAngleThresh))
-                return;
-            if (mBlinkEnabled)
-                return;
-            mDartEnabled = true;
-            mEyeClampCount = RandomInt(
-                mData.mMinDartsPerSequence,
-                mData.mMaxDartsPerSequence
-            );
         }
+    } else if (mDartInterval < 0 && EyesOnTarget(mData.mOnTargetAngleThresh)
+               && !mBlinkEnabled) {
+        mDartEnabled = true;
+        mEyeClampCount = RandomInt(
+            mData.mMinDartsPerSequence,
+            mData.mMaxDartsPerSequence
+        );
         mDartInterval = RandomFloat(
             mData.mMinSecsBetweenDarts,
             mData.mMaxSecsBetweenDarts
@@ -794,9 +796,10 @@ void CharEyes::NextLook() {
             mData.ClearToDefaults();
         }
     } else {
-        float dz = (facingDir.z - mLastFacing.z) * 45.0f;
-        float dx = (facingDir.x - mLastFacing.x) * 45.0f;
-        float dy = (facingDir.y - mLastFacing.y) * 45.0f;
+        const Vector3 &lastFacing = mLastFacing;
+        float dz = (facingDir.z - lastFacing.z) * 45.0f;
+        float dx = (facingDir.x - lastFacing.x) * 45.0f;
+        float dy = (facingDir.y - lastFacing.y) * 45.0f;
 
         float extrapMag = std::sqrt((dx * dx + (dz * dz + dy * dy)));
         float maxExtrap = std::tan(mMaxExtrapolation * 0.017453292f);

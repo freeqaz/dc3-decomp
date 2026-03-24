@@ -146,12 +146,11 @@ void CharClipDriver::ExecuteEvent(Symbol sym) {
         return;
     static Symbol clip_event("clip_event");
     Hmx::Object *owner = mClip.RefOwner();
-    if (!owner)
-        return;
-    static Message msg(clip_event, DataNode(sym), DataNode(mClip.Ptr()), DataNode(0));
+    Hmx::Object *exportTarget = owner->Dir();
+    static Message msg(clip_event, DataNode(0), DataNode(0), DataNode(0));
     msg[0] = DataNode(sym);
     msg[1] = DataNode(mClip.Ptr());
-    owner->Export(msg, false);
+    exportTarget->Export(msg, true);
 }
 
 void CharClipDriver::SetBeatOffset(float offset, TaskUnits units, Symbol sym) {
@@ -233,7 +232,12 @@ CharClipDriver *CharClipDriver::PreEvaluate(float beat, float deltaBeat, float d
     bool useUserTime = flags & CharClip::kPlayUserTime;
 
     float advance;
-    if (!mPlayMultipleClips && mNext) {
+    if (mPlayMultipleClips) {
+        advance = deltaBeat;
+        if (useRealTime) {
+            advance = deltaSeconds;
+        }
+    } else if (mNext) {
         advance = mNext->mAdvanceBeat;
     } else {
         advance = deltaBeat;
@@ -251,13 +255,13 @@ CharClipDriver *CharClipDriver::PreEvaluate(float beat, float deltaBeat, float d
         mAdvanceBeat = 0.0f;
     } else {
         float oldBeat = mBeat;
-        if (flags & 0x80) {
-            mDBeat = 0.0f;
-            mPlayFlags = flags & ~0x80;
-        } else {
-            if (!useUserTime) {
+        if (!useUserTime) {
+            if (flags & 0x80) {
+                mDBeat = 0.0f;
+                mPlayFlags = flags & ~0x80;
+            } else {
                 if (useRealTime) {
-                    deltaBeat = mClip->DeltaSecondsToDeltaBeat(deltaSeconds, oldBeat);
+                    deltaBeat = mClip->DeltaSecondsToDeltaBeat(deltaSeconds, mBeat);
                 }
                 mDBeat = mTimeScale * deltaBeat;
             }

@@ -18,17 +18,13 @@ CharBonesSamples::~CharBonesSamples() { MemFree(mRawData); }
 INIT_REVS(0x10, 0)
 
 void CharBonesSamples::Load(BinStream &bs) {
-    int revs;
-    bs >> revs;
-    int rev = getHmxRev(revs);
-    int altRev = getAltRev(revs);
-    BinStreamRev d(bs, revs);
-    if (0x10 < rev) {
+    LOAD_REVS(bs)
+    if (0x10 < d.rev) {
         MILO_FAIL(
             "%s can\'t load new %s version %d > %d", "", "CharBonesSample", d.rev, gRev
         );
     }
-    if (altRev > 0) {
+    if (d.altRev > 0) {
         MILO_FAIL(
             "%s can\'t load new %s alt version %d > %d",
             "",
@@ -37,7 +33,7 @@ void CharBonesSamples::Load(BinStream &bs) {
             gAltRev
         );
     }
-    if (!(rev > 12)) {
+    if (!(d.rev > 12)) {
         TheDebugFailer << MakeString(kAssertStr, __FILE__, 0x29d, "d.rev > 12");
     }
     LoadHeader(d);

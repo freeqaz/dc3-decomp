@@ -173,7 +173,7 @@ void CharIKMidi::Highlight() {
         TheRnd.DrawString(MakeString("%s:", (char *)PathName(this)), v2, white, true);
         v2.y += 16.0f;
         TheRnd.DrawString(
-            MakeString("frac %.3f new:%s", mFrac, mCurSpot ? mCurSpot->Name() : "NULL"),
+            MakeString("frac %.3f new:%s", +mFrac, mCurSpot ? mCurSpot->Name() : "NULL"),
             v2,
             white,
             true

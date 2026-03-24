@@ -13,6 +13,7 @@
 #include "os/System.h"
 #include "utl/BinStream.h"
 #include "utl/MemMgr.h"
+#include "world/CameraShot.h"
 
 const float CharClip::kBeatAccuracy = 0.02;
 CharClip::FacingSet::FacingBones CharClip::FacingSet::sFacingPos;
@@ -855,7 +856,10 @@ CharClip::FindNode(CharClip *clip, float f1, int iii, float f2) const {
                 if (blendMode == kPlayLast) {
                     n = FindLastNode(clip, f1);
                 } else if (blendMode != kPlayDirty) {
-                    MILO_NOTIFY("Unknown mode flags %x, default to kPlayNow", iii);
+                    MILO_NOTIFY(
+                        "Unknown mode flags %x, default to kPlayNow",
+                        (CamShotFrame::BlendEaseMode)iii
+                    );
                 }
             } else {
                 n = FindFirstNode(clip, f1);
@@ -866,15 +870,16 @@ CharClip::FindNode(CharClip *clip, float f1, int iii, float f2) const {
     if (!n) {
         static CharGraphNode node;
         static int sFlag;
+        float halfBlend = f2 * 0.5f;
         if (!(sFlag & 1)) {
             sFlag |= 1;
         }
         node.curBeat = f1;
         if ((int)blendMode == 4) {
-            MaxEq(node.curBeat, EndBeat() - f2 * 0.5f);
+            MaxEq(node.curBeat, EndBeat() - halfBlend);
         }
         n = &node;
-        node.nextBeat = StartBeat();
+        node.nextBeat = clip->StartBeat();
     }
     return n;
 }

@@ -324,19 +324,22 @@ void CharClipSet::SortGroups() {
 
 void CharClipSet::LoadCharacter() {
     MILO_ASSERT(TheLoadMgr.EditMode(), 0x14b);
-    delete mPreviewChar;
-    ObjectDir *dummy = dynamic_cast<RndDir *>(DirLoader::LoadObjects(mCharFilePath, 0, 0));
-    mPreviewChar = dynamic_cast<RndDir *>(dummy);
-    Character *theChar = dynamic_cast<Character *>(dummy);
-    if (mPreviewChar && !theChar) {
-        for (ObjDirItr<Character> it(mPreviewChar, true); it != nullptr; ++it) {
-            mPreviewChar = it;
-            break;
+    if (Dir() == this) {
+        delete mPreviewChar;
+        ObjectDir *dummy =
+            dynamic_cast<RndDir *>(DirLoader::LoadObjects(mCharFilePath, 0, 0));
+        mPreviewChar = dynamic_cast<RndDir *>(dummy);
+        Character *theChar = dynamic_cast<Character *>(dummy);
+        if (mPreviewChar && !theChar) {
+            for (ObjDirItr<Character> it(mPreviewChar, true); it != nullptr; ++it) {
+                mPreviewChar = it;
+                break;
+            }
         }
-    }
-    if (mPreviewChar) {
-        mPreviewChar->Enter();
-        mPreviewChar->SetName("preview_character", this);
+        if (mPreviewChar) {
+            mPreviewChar->Enter();
+            mPreviewChar->SetName("preview_character", this);
+        }
     } else
         MILO_NOTIFY(
             "Preview character can only be loaded if the CharClipSet is the top-level directory."
