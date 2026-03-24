@@ -495,7 +495,7 @@ void HamCharacter::SetCampaignVo(const char *cc) {
     mCampaignVO = cc;
     auto& _ref1 = mCampaignVOBank;
     RELEASE(_ref1);
-    bool hasVO = !mCampaignVO.empty();
+    int hasVO = !mCampaignVO.empty();
     if (hasVO) {
         String milo = GetCampaignVoMilo();
         mCampaignVODir = DirLoader::LoadObjects(milo.c_str(), 0, 0);

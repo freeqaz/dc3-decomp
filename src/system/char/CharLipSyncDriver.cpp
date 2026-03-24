@@ -432,11 +432,9 @@ void CharLipSyncDriver::Poll() {
                 float duration = mMainPlayback->mLipSync->Duration();
                 float songTime = TheTaskMgr.Seconds(TaskMgr::kRealTime) + mSongOffset;
                 if (songTime >= duration) {
-                    char *lsName;
-                    if (mMainPlayback->mLipSync)
-                        lsName = (char *)mMainPlayback->mLipSync->Name();
-                    else
-                        lsName = (char *)"";
+                    char *lsName = mMainPlayback->mLipSync
+                        ? (char *)mMainPlayback->mLipSync->Name()
+                        : (char *)"";
                     MILO_LOG(
                         "CharLipSyncDriver::Poll() - Triggering VO Lip Sync FadeOut - Name:%s\n",
                         lsName
@@ -449,11 +447,9 @@ void CharLipSyncDriver::Poll() {
 
     if (mIsOverrideActive) {
         if (mMainBlendAlpha < 0.001f) {
-            char *lsName2;
-            if (mMainPlayback->mLipSync)
-                lsName2 = (char *)mMainPlayback->mLipSync->Name();
-            else
-                lsName2 = (char *)"";
+            char *lsName2 = mMainPlayback->mLipSync
+                ? (char *)mMainPlayback->mLipSync->Name()
+                : (char *)"";
             MILO_LOG(
                 "CharLipSyncDriver::Poll() - Deleting VO Lip Sync track because it finished and faded out - Name:%s\n",
                 lsName2
@@ -483,9 +479,10 @@ void CharLipSyncDriver::Poll() {
         skipOverride = 0;
     } else {
         const char *name = cam->Name();
-        skipOverride = 0;
         if (name && strncmp(name, "battle_", 7) == 0) {
             skipOverride = 1;
+        } else {
+            skipOverride = 0;
         }
     }
     if (!skipOverride) {

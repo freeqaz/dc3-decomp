@@ -376,7 +376,7 @@ bool PropSync(ObjVector<T> &objVec, DataNode &node, DataArray *prop, int i, Prop
             return true;
         } else if (op == kPropInsert) {
             T item(objVec.Owner());
-            if (PropSync(item, node, prop, i, op)) {
+            if (PropSync(item, node, prop, i, kPropInsert)) {
                 objVec.insert(it, item);
                 return true;
             }

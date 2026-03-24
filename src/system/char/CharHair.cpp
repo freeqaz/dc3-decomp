@@ -671,35 +671,31 @@ CharHair::Strand::Strand(const Strand &rhs)
 }
 
 void CharHair::Strand::SetRoot(RndTransformable *trans) {
-    auto& _ref0 = mRoot;
-    _ref0 = trans;
-    if (!_ref0) {
+    mRoot = trans;
+    if (!mRoot) {
         mPoints.resize(0);
     } else {
         float savedLength = mPoints.size() != 0 ? mPoints.back().length : 0.0f;
-        mBaseMat = _ref0->LocalXfm().m;
+        mBaseMat = mRoot->LocalXfm().m;
         SetAngle(mAngle);
 
         int depth = 0;
-        for (RndTransformable *it = _ref0; ; it = it->Children().front()) {
+        for (RndTransformable *it = mRoot; ; it = it->Children().front()) {
             depth++;
             if (it->Children().empty())
                 break;
         }
 
         mPoints.resize(depth);
-        mPoints[0].bone = _ref0;
-        if (!_ref0->Children().empty()) {
-            int idx = 0;
-            for (RndTransformable *it = _ref0; !it->Children().empty(); ) {
-                idx++;
-                it = it->Children().front();
-                mPoints[idx].bone = it;
-            }
+        depth = 0;
+        for (RndTransformable *it = mRoot; ; it = it->Children().front(), depth++) {
+            mPoints[depth].bone = it;
+            if (it->Children().empty())
+                break;
         }
 
         Point *prevPt = nullptr;
-        for (int i = 1; (unsigned int)i < (int)mPoints.size(); i++) {
+        for (int i = 1; i < mPoints.size(); i++) {
             Point &prevPoint = mPoints[i - 1];
             prevPt = &prevPoint;
             RndTransformable *nextBone = mPoints[i].bone;
@@ -708,13 +704,15 @@ void CharHair::Strand::SetRoot(RndTransformable *trans) {
         }
 
         Point &lastPt = mPoints.back();
+        float len;
         if (savedLength != 0.0f) {
-            lastPt.length = savedLength;
+            len = savedLength;
         } else if (prevPt) {
-            lastPt.length = prevPt->length;
+            len = prevPt->length;
         } else {
-            lastPt.length = gUnitsPerMeter * 0.127f;
+            len = gUnitsPerMeter * 0.127f;
         }
+        lastPt.length = len;
         ScaleAdd(lastPt.bone->WorldXfm().v, lastPt.bone->WorldXfm().m.y, lastPt.length, lastPt.pos);
     }
 }

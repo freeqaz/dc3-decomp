@@ -702,12 +702,9 @@ void CharEyes::EnforceMinimumTargetDistance(
     Vector3 diff;
     Subtract(v2, v1, diff);
     float vlen = Length(diff);
-    bool overrideMin = false;
     mBlinkActive = false;
-    if (mCurrentInterest && mCurrentInterest->mOverridesMinTargetDist)
-        overrideMin = true;
     float minDist;
-    if (overrideMin)
+    if (mCurrentInterest && mCurrentInterest->mOverridesMinTargetDist)
         minDist = mCurrentInterest->mMinTargetDistOverride;
     else
         minDist = mMinTargetDist;

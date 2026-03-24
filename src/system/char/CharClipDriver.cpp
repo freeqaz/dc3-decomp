@@ -232,17 +232,21 @@ CharClipDriver *CharClipDriver::PreEvaluate(float beat, float deltaBeat, float d
     bool useUserTime = flags & CharClip::kPlayUserTime;
 
     float advance;
-    if (mPlayMultipleClips) {
-        advance = deltaBeat;
-        if (useRealTime) {
-            advance = deltaSeconds;
-        }
-    } else if (mNext) {
+    if (!mPlayMultipleClips) {
+        if (mNext) {
         advance = mNext->mAdvanceBeat;
     } else {
-        advance = deltaBeat;
         if (useRealTime) {
             advance = deltaSeconds;
+        } else {
+            advance = deltaBeat;
+        }
+    }
+    } else {
+        if (useRealTime) {
+            advance = deltaSeconds;
+        } else {
+            advance = deltaBeat;
         }
     }
 
@@ -255,13 +259,13 @@ CharClipDriver *CharClipDriver::PreEvaluate(float beat, float deltaBeat, float d
         mAdvanceBeat = 0.0f;
     } else {
         float oldBeat = mBeat;
-        if (!useUserTime) {
-            if (flags & 0x80) {
-                mDBeat = 0.0f;
-                mPlayFlags = flags & ~0x80;
-            } else {
+        if (flags & 0x80) {
+            mDBeat = 0.0f;
+            mPlayFlags = flags & ~0x80;
+        } else {
+            if (!useUserTime) {
                 if (useRealTime) {
-                    deltaBeat = mClip->DeltaSecondsToDeltaBeat(deltaSeconds, mBeat);
+                    deltaBeat = mClip->DeltaSecondsToDeltaBeat(deltaSeconds, oldBeat);
                 }
                 mDBeat = mTimeScale * deltaBeat;
             }
