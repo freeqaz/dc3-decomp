@@ -323,8 +323,15 @@ App::App(int argc, char **argv) {
 
     // Splash screens (ESRB + Harmonix logos) — same as Xbox boot.
     // Disable with DC3_SHOW_SPLASH=0.
+    // On web, the HTML overlay plays the splash video while WASM boots —
+    // the engine's synchronous Splash system can't render on Emscripten
+    // (no rAF yield), so skip it to avoid wasting boot time.
     const char *splashEnv = getenv("DC3_SHOW_SPLASH");
+#ifdef __EMSCRIPTEN__
+    bool showSplash = false;
+#else
     bool showSplash = !splashEnv || strcmp(splashEnv, "0") != 0;
+#endif
     Splash splash;
     if (showSplash) {
         splash.AddScreen("ui/splash/eng/esrb_keep.milo", 0x12C0);
