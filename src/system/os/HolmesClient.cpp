@@ -726,26 +726,16 @@ void HolmesClientSendMessage(const Message &msg) {
 }
 
 void HolmesClientClose(File *file, int handle) {
-    bool found = false;
     CritSecTracker cst(&gCrit);
 
     BeginCmd(Holmes::kCloseFile, true);
     MILO_ASSERT(gHolmesStream, 1012);
 
-    // Check if file handle is in pending requests
-    FOREACH (it, gRequests) {
-        if (it->mBuffer == file) {
-            found = true;
-            break;
-        }
-    }
-
-    if (found) {
+    if (PendingRead(file)) {
         WaitForReads();
     }
 
-    *gStreamBuffer << u8(Holmes::kCloseFile);
-    *gStreamBuffer << handle;
+    *gStreamBuffer << u8(Holmes::kCloseFile) << handle;
     HolmesFlushStreamBuffer();
     EndCmd(Holmes::kCloseFile);
 }

@@ -382,14 +382,15 @@ void MemInit() {
             MILO_ASSERT(gNumHeaps < MAX_HEAPS, 0x295);
         }
         Symbol size("size");
-        for (int i = 1; i < heapArr->Size(); i++) {
+        for (int i = heapArr->Size() - 1; i > 0; i--) {
             DataArray *heapDef = heapArr->Array(i);
             int bytes = 0;
             heapDef->FindData(size, bytes, false);
             AddHeap(i - 1, bytes, heapDef);
         }
+        free(mem);
     }
-    disableMgr = false;
+    MemHeapStack::sDefaultHeap = 0;
     if (enableTracking) {
         MemTrackInit(trackHeap, trackedAllocs, heapOnly);
         MemTrackEnable(!noTrackImmediate);

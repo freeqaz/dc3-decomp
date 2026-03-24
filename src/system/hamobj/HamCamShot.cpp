@@ -47,27 +47,28 @@ BEGIN_LOADS(HamCamShot)
 END_LOADS
 
 void HamCamShot::EndAnim() {
-    if (mNextShotIt == (ObjPtrList<HamCamShot>::iterator)0 ||
-        mNextShotIt == mNextShots.end()) {
+    if (!mCurrentShot || mCurrentShot == this) {
         for (ObjList<Target>::iterator it = mTargets.begin(); it != mTargets.end(); ++it) {
             Target &target = *it;
             if (!target.mTarget.Null()) {
-                std::list<TargetCache>::iterator cacheIt = CreateTargetCache(target.mTarget);
-                if (target.unk68p3 && target.unk68p4 && cacheIt->mTrans) {
+                std::list<TargetCache>::iterator cacheIt = GetTargetCache(target.mTarget);
+                if (target.mTeleport && target.mReturn && cacheIt->mTrans) {
                     TeleportTarget(cacheIt->mTrans, cacheIt->mTransform, true);
                 }
                 Character *theChar = dynamic_cast<Character *>(cacheIt->mTrans);
-#ifdef HX_NATIVE
-                if (theChar)
-#endif
-                theChar->SetEnv(nullptr);
+                if (theChar) {
+                    theChar->SetLodType(kLODPerFrame);
+                    if (target.mEnvOverride) {
+                        theChar->SetEnv(cacheIt->mOldEnv);
+                    }
+                }
                 sCache.erase(cacheIt);
             }
         }
         EndAnims(mMasterAnims);
         CamShot::EndAnim();
     } else {
-        (*mNextShotIt)->EndAnim();
+        mCurrentShot->EndAnim();
         ResetNextShot();
     }
 }
@@ -115,24 +116,25 @@ void HamCamShot::SetPreFrame(float frame, float blend) {
 
 DataNode HamCamShot::OnAllowableNextShots(const DataArray *a) {
     DataArrayPtr result;
-    ObjDirItr<HamCamShot> dirIt(Dir(), true);
-    while (dirIt) {
-        if (this != dirIt) {
-            bool notInNextShots = !mNextShots.find(dirIt);
-            if (notInNextShots) {
-                std::list<HamCamShot *> nextList;
-                dirIt->ListNextShots(nextList);
-                std::list<HamCamShot *>::iterator lit = nextList.begin();
-                while (lit != nextList.end()) {
-                    if (*lit == this) break;
-                    ++lit;
-                }
-                if (lit == nextList.end()) {
-                    result->Insert(result->Size(), DataNode(dirIt));
+    {
+        ObjDirItr<HamCamShot> dirIt(Dir(), true);
+        while (dirIt) {
+            if (this != dirIt) {
+                if (!mNextShots.find(dirIt)) {
+                    std::list<HamCamShot *> nextList;
+                    dirIt->ListNextShots(nextList);
+                    std::list<HamCamShot *>::iterator lit = nextList.begin();
+                    while (lit != nextList.end()) {
+                        if (*lit == this) break;
+                        ++lit;
+                    }
+                    if (lit == nextList.end()) {
+                        result->Insert(result->Size(), DataNode(dirIt));
+                    }
                 }
             }
+            ++dirIt;
         }
-        ++dirIt;
     }
     static DataNode &miloPropVar = DataVariable(Symbol("milo_prop_path"));
     if (miloPropVar.Type() == kDataArray && miloPropVar.Array(nullptr)->Size() == 2) {
@@ -821,16 +823,18 @@ Symbol HamCamShot::GetFlipTarget(Symbol s) const {
 HamCamShot::Target *HamCamShot::GetFlipTarget(Target *target) {
     Symbol origTarget = target->mTarget;
     Symbol flipped = GetFlipTarget(origTarget);
-    Target *result = target;
+    Target *result;
     if (origTarget != flipped) {
-        for (ObjList<Target>::iterator it = mTargets.begin(); it != mTargets.end(); ++it) {
-            result = target;
+        ObjList<Target>::iterator it = mTargets.begin();
+        for (; it != mTargets.end(); ++it) {
+            result = &*it;
             if (it->mTarget == flipped) {
-                result = &*it;
-                break;
+                goto done;
             }
         }
     }
+    result = target;
+done:
     return result;
 }
 

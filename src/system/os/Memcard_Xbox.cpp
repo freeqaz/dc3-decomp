@@ -170,7 +170,7 @@ MCContainerXbox::MCContainerXbox(const ContainerId &c) : MCContainer(c) {}
 
 MCResult MCContainerXbox::Mount(CreateType ct) {
     MILO_ASSERT(!IsMounted(), 0x144);
-    MILO_ASSERT(Cid().mDeviceId != XCONTENTDEVICE_ANY, 0x145);
+    MILO_ASSERT((DWORD)Cid().mDeviceId != XCONTENTDEVICE_ANY, 0x145);
     mDriveName = TheMC.GenerateDriveName(Cid().mDeviceId, Cid().mUserIndex);
     XCONTENT_DATA data;
     data.DeviceID = Cid().mDeviceId;

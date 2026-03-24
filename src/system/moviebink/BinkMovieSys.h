@@ -17,7 +17,7 @@ public:
     virtual void Terminate();
     virtual MovieImpl *CreateMovieImpl();
 
-    virtual void PlatformInit();
+    void PlatformInit();
     void PlatformStoreCache(void *, unsigned int);
 
     static DataNode OnMovieSetTrack(DataArray *);

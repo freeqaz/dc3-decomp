@@ -964,10 +964,12 @@ void MetaPerformer::CheckForFitnessAccomplishments() {
 
 void MetaPerformer::SetDefaultSongCharacter(int playerFlag) {
     Symbol primaryOutfit;
-    Symbol primaryCrew;
     Symbol primaryChar;
+    Symbol primaryCrew;
+    Symbol secondaryCrew;
+    Symbol secondaryChar;
+    Symbol secondaryOutfit;
     auto song = TheGameData->GetSong();
-    Symbol nullSym;
     int songID = TheHamSongMgr.GetSongIDFromShortName(song, true);
     const HamSongMetadata *pSongData = TheHamSongMgr.Data(songID);
     MILO_ASSERT(pSongData, 0x592);
@@ -975,9 +977,6 @@ void MetaPerformer::SetDefaultSongCharacter(int playerFlag) {
         || TheGameMode->InMode("strike_a_pose", true);
     HamPlayerData *pPrimary;
     HamPlayerData *pSecondary;
-    Symbol secondaryCrew;
-    Symbol secondaryChar;
-    Symbol secondaryOutfit;
     CalcCharacters(
         pSongData, b2, (PlayerFlag)playerFlag, pPrimary, primaryCrew, primaryChar,
         primaryOutfit, pSecondary, secondaryCrew, secondaryChar, secondaryOutfit
@@ -987,18 +986,17 @@ void MetaPerformer::SetDefaultSongCharacter(int playerFlag) {
         pPrimary->SetCharacter(primaryChar);
         pPrimary->SetOutfit(primaryOutfit);
         pPrimary->SetCrew(primaryCrew);
-        auto secondaryChar = pSecondary->Char();
-        if (pPrimary->Char() != secondaryChar) {
+        if (pPrimary->Char() != pSecondary->Char()) {
             return;
         }
-        pSecondary->SetCharacter(nullSym);
-        pSecondary->SetOutfit(nullSym);
-        pSecondary->SetCrew(nullSym);
+        pSecondary->SetCharacter(secondaryChar);
+        pSecondary->SetOutfit(secondaryOutfit);
+        pSecondary->SetCrew(secondaryCrew);
     } else {
         MILO_ASSERT(pPlayerData == pSecondary, 0x5A8);
-        pSecondary->SetCharacter(nullSym);
-        pSecondary->SetOutfit(nullSym);
-        pSecondary->SetCrew(nullSym);
+        pSecondary->SetCharacter(secondaryChar);
+        pSecondary->SetOutfit(secondaryOutfit);
+        pSecondary->SetCrew(secondaryCrew);
         if (pPrimary->Char() != pSecondary->Char()) {
             return;
         }

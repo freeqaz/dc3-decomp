@@ -440,6 +440,35 @@ DataNode HamDirector::OnFileMerged(DataArray *a) {
             // FlushPostProcessingForOverlay() — rendering the HUD on top.
             hudDir->SetProperty("postprocs_before_draw", true);
             DataVariable("hud_panel") = (Hmx::Object *)hudDir;
+
+            // Diagnostic: dump score-related objects in the HUD panel
+            for (const char *name :
+                 {"score_left", "score_right", "hud_left", "hud_right"}) {
+                ObjectDir *sub = hudDir->Find<ObjectDir>(name, false);
+                if (sub) {
+                    fprintf(
+                        stderr,
+                        "[HUD] Found subdir '%s' (%s)\n",
+                        name,
+                        sub->ClassName()
+                    );
+                    for (ObjDirItr<Hmx::Object> it(sub, false); it != nullptr;
+                         ++it) {
+                        if (strstr(it->ClassName().Str(), "Label")
+                            || strstr(it->Name(), "score")) {
+                            fprintf(
+                                stderr,
+                                "  %s -> '%s' (%s)\n",
+                                name,
+                                it->Name(),
+                                it->ClassName()
+                            );
+                        }
+                    }
+                } else {
+                    fprintf(stderr, "[HUD] Missing subdir '%s'\n", name);
+                }
+            }
         }
     }
 #endif
@@ -742,11 +771,9 @@ Key<Symbol> *HamDirector::GetMasterPracticeFrame(Symbol s) {
 HamCamShot *HamDirector::FindNextDircut() {
     float secs = TheTaskMgr.Seconds(TaskMgr::kRealTime);
     const DircutEntry *entry = mDirCutKeys.Cross(secs, secs - TheTaskMgr.DeltaSeconds());
-    HamCamShot *shot = nullptr;
-#ifdef HX_NATIVE
     if (!entry)
-        return shot;
-#endif
+        return nullptr;
+    HamCamShot *shot = nullptr;
     if (mNumPlayersFailed || (entry->mForced && mExcitement >= 3)) {
             shot = entry->mShot;
             if (shot) {
@@ -902,9 +929,9 @@ bool HamDirector::AreCharactersColliding() {
             return false;
         SongCollision::GatherUsefulBones(bones[i], chars[i]);
     }
-    return AreDancersColliding1D(
-        bones[0], bones[1], chars[0]->WorldXfm().v, chars[1]->WorldXfm().v
-    );
+    const Vector3 &v0 = chars[0]->WorldXfm().v;
+    const Vector3 &v1 = chars[1]->WorldXfm().v;
+    return AreDancersColliding1D(bones[0], bones[1], v0, v1);
 }
 
 bool HamDirector::ShouldDoCollisionPrevention() const {
@@ -1854,8 +1881,8 @@ bool HamDirector::GetPracticeFrames(Key<Symbol> *&k1, Key<Symbol> *&k2) {
             endIdx = -1;
         end:
             if (startIdx < endIdx && startIdx != -1 && endIdx != -1) {
-                k2 = &(*keys)[endIdx];
                 k1 = &(*keys)[startIdx];
+                k2 = &(*keys)[endIdx];
                 return true;
             }
         }
@@ -2495,10 +2522,9 @@ void HamDirector::PlayNextShot() {
     mCurShot = nextShot;
     // Apply shot to the world root's CameraManager — WorldDir::DrawShowing
     // reads mCameraMgr from the world root when rendering through the panel system.
+    HamCamShot *curShot = mCurShot;
     WorldDir *world = dynamic_cast<WorldDir *>(mMerger ? mMerger->Dir() : nullptr);
-    if (world) {
-        world->GetCameraManager()->ForceCameraShot(mCurShot, false);
-    }
+    world->GetCameraManager()->ForceCameraShot(curShot, false);
 }
 
 DataNode HamDirector::OnSelectCamera(DataArray *a) {
@@ -2521,7 +2547,7 @@ DataNode HamDirector::OnSelectCamera(DataArray *a) {
             }
 
             for (Difficulty d = (Difficulty)0; (int)d < kNumDifficultiesDC2; d = (Difficulty)((int)d + 1)) {
-                if (mDancerFaceAnims[d].Ptr() &&
+                if ((int)mDancerFaceAnims[d].Ptr() &&
                     (!TheLoadMgr.EditMode() || frame != mDancerFaceAnims[d]->GetFrame())) {
                     mDancerFaceAnims[d]->SetFrame(frame, blend);
                 }
@@ -2537,13 +2563,13 @@ DataNode HamDirector::OnSelectCamera(DataArray *a) {
             mLastCollisionTime = -kHugeFloat;
         }
 
-        if (!mNextShot.Ptr() &&
+        if ((int)mNextShot.Ptr() == 0 &&
             TheTaskMgr.Seconds(TaskMgr::kRealTime) >= mLastShotTime &&
             !ShotsDisabled()) {
             HamCamShot *dircut = FindNextDircut();
             mNextShot = dircut;
 
-            if (!mNextShot.Ptr() && !mPickNewShot &&
+            if ((int)mNextShot.Ptr() == 0 && !mPickNewShot &&
                 ShouldDoCollisionPrevention() &&
                 AreCharactersColliding() &&
                 TheTaskMgr.Seconds(TaskMgr::kRealTime) >= mLastCollisionTime) {

@@ -211,32 +211,33 @@ NetCacheLoader *NetCacheMgr::AddNetCacheLoader(const char *cc, NetLoaderPos pos)
 void NetCacheMgr::SetState(NetCacheMgrState state) {
     if (mState != state) {
         while (true) {
-            if (mState == 2) {
+            if (mState == kNCMS_UnloadWaitForWrite) {
                 mHasFailed = false;
             }
-            if (mState == -1 && state == 2) {
-                MILO_FAIL(
-                    "NetCacheMgr attempted to move straight from kNCMS_Nil to kNCMS_Unload!\n"
+            if (mState == kNCMS_Nil && state == kNCMS_UnloadWaitForWrite) {
+                TheDebug.Fail(
+                    MakeString("NetCacheMgr attempted to move straight from kNCMS_Nil to kNCMS_Unload!\n"),
+                    0
                 );
             }
             mState = state;
-            if (state != -1)
+            if (state != kNCMS_Nil)
                 break;
             MILO_ASSERT(mNetLoaderRefs.empty(), 0x28B);
             if (mLoadCount <= 0)
                 return;
-            state = (NetCacheMgrState)0;
-            if (mState == 0)
+            state = kNCMS_Load;
+            if (mState == kNCMS_Load)
                 return;
         }
         switch (state) {
-        case 0:
+        case kNCMS_Load:
             EnterLoadState();
             break;
-        case 1:
+        case kNCMS_Ready:
             ReadyInit();
             break;
-        case 2:
+        case kNCMS_UnloadWaitForWrite:
             EnterUnloadState();
             break;
         default:

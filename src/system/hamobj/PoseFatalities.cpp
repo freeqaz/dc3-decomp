@@ -97,11 +97,11 @@ Symbol PoseFatalities::GetFatalityFace() {
 
 bool PoseFatalities::InFatality(int player) const {
     int max = mCurrentBeat;
-    auto& _ref0 = mFatalStartBeats;
+    const int *starts = mFatalStartBeats;
     if (player == -1) {
         bool b1 = false;
         for (int i = 0; i < 2; i++) {
-            if (max >= _ref0[i]) {
+            if (max >= starts[i]) {
                 b1 = true;
             }
         }
@@ -110,7 +110,7 @@ bool PoseFatalities::InFatality(int player) const {
         }
     } else {
         MILO_ASSERT_RANGE(player, 0, 2, 0x391);
-        if (max >= _ref0[player]) {
+        if (max >= starts[player]) {
             return mInFatality[player];
         }
     }
@@ -282,7 +282,11 @@ void PoseFatalities::BeginFatal(int player) {
 }
 
 bool PoseFatalities::CheckMatchingPose(int player) {
-    return InFatality(player) && mFatalityProgress[player] >= mHoldDuration;
+    if (InFatality(player)) {
+        if (mFatalityProgress[player] >= mHoldDuration)
+            return true;
+    }
+    return false;
 }
 
 void PoseFatalities::LoadFatalityClips() {

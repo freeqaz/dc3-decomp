@@ -851,7 +851,7 @@ bool ProfileMgr::IsContentUnlocked(Symbol s) const {
 #endif
     if (MetaPanel::sUnlockAll) {
         return true;
-    } else {
+    } else if (TheAccomplishmentMgr->IsUnlockableAsset(s)) {
         FOREACH (it, mProfiles) {
             HamProfile *profile = *it;
             MILO_ASSERT(profile, 0x680);

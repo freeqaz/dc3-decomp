@@ -56,7 +56,7 @@ void Trie::inc_count(unsigned int index) {
     check_index(index);
     char *node = NodePtr(this, index);
     unsigned int *cf = &CountField(node);
-    unsigned char count = SiblingCount(node);
+    unsigned int count = SiblingCount(node);
     check_index(index);
     *cf = (*cf & 0xFFFFFF00) | (count + 1);
 }
@@ -64,8 +64,8 @@ void Trie::inc_count(unsigned int index) {
 void Trie::dec_count(unsigned int index) {
     check_index(index);
     char *node = NodePtr(this, index);
-    unsigned char count = SiblingCount(node);
     unsigned int *cf = &CountField(node);
+    unsigned int count = SiblingCount(node);
     check_index(index);
     *cf = (*cf & 0xFFFFFF00) | (count - 1);
 }

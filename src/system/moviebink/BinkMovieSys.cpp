@@ -18,9 +18,9 @@
 
 BinkMovieSys gBinkMovieSys;
 
-extern void BinkSetMemory(void *(*)(int), void (*)(void *));
-extern int BinkStartAsyncThread(int, int);
-extern void *RadAlloc(int);
+extern "C" void BinkSetMemory(void *(*)(int), void (*)(void *));
+extern "C" int BinkStartAsyncThread(int, int);
+extern "C" void *RadAlloc(int);
 
 BinkMovieSys::BinkMovieSys()
     : MovieSys(), mCriticalSection(0),
@@ -43,7 +43,7 @@ void BinkMovieSys::Init() {
 
     MovieSys::Init();
 
-    MILO_ASSERT(isInitalized, 0x67);
+    MILO_ASSERT(IsInitialized(), 0x67);
 
     if (mCriticalSection == nullptr) {
         void *ptr = MemAlloc(sizeof(CriticalSection), __FILE__, __LINE__, "CriticalSection", 0);
