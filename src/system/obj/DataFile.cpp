@@ -602,46 +602,38 @@ void DataFail(const char *msg) {
 }
 
 DataArray *ReadEmbeddedFile(const char *file, bool b) {
-    gDataReadCrit.Enter(); // TODO: may cause IAT thunk issues at runtime
-    const char *filepath = FileGetPath(gFile.Str());
-    const char *madePath = FileMakePath(filepath, file);
+    CritSecTracker cst(&gDataReadCrit);
+    const char *madePath = FileMakePath(FileGetPath(gFile.Str()), file);
     Symbol localfile = gFile;
-    DataType dataline = gDataLine;
-#ifdef HX_NATIVE
-    // Save parser state — undecompiled in DC3 but essential for #include
-    extern DataArray *gArray;
-    extern int gOpenArray;
-    int savedNode = gNode;
+
+    BinStream *bs = gBinStream;
+    DataType savedDataLine = gDataLine;
     DataArray *savedArray = gArray;
     int savedOpenArray = gOpenArray;
-    // Save the lexer's lookahead byte — after matching the #include filename,
-    // the lexer has already read one byte past it (e.g. ')' or '\n'). If we
-    // don't save it, the included file's parsing overwrites yy_hold_char
-    // and that byte is lost (the stream has already advanced past it).
+#ifdef HX_NATIVE
+    int savedNode = gNode;
     char savedHoldChar = yyGetHoldChar();
 #endif
-    auto bs = gBinStream;
+
     yyrestart(nullptr);
-    DataArray *da = DataReadFile(madePath, b);
-    if (b && !da) {
-        MILO_FAIL("Couldn\'t open embedded file: %s (file %s, line %d)", madePath, da->File(), da->Line());
+    DataArray *ret = DataReadFile(madePath, b);
+    if (b && !ret) {
+        MILO_FAIL("Couldn\'t open embedded file: %s (file %s, line %d)", madePath, savedArray->File(), savedArray->Line());
     }
     gBinStream = bs;
-#ifdef HX_NATIVE
-    gNode = savedNode;
+    gDataLine = savedDataLine;
+    gFile = localfile;
     gArray = savedArray;
     gOpenArray = savedOpenArray;
+#ifdef HX_NATIVE
+    gNode = savedNode;
 #endif
-    gDataLine = dataline;
-    gFile = localfile;
+
     yyrestart(nullptr);
 #ifdef HX_NATIVE
-    // Restore holdChar AFTER yyrestart — yy_load_buffer_state() overwrites
-    // yy_hold_char from the (flushed) buffer, so we must set it last.
     yySetHoldChar(savedHoldChar);
 #endif
-    gDataReadCrit.Exit(); // TODO: may cause IAT thunk issues at runtime
-    return da;
+    return ret;
 }
 
 DataLoader::DataLoader(const FilePath &fp, LoaderPos pos, bool b3)

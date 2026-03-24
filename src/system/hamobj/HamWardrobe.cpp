@@ -391,40 +391,50 @@ void HamWardrobe::PlayCrowdAnimation(Symbol animName, int flags, bool override) 
     if ((override || !mCrowdOverrideActive) && mForcedCrowdAnimation == gNullStr) {
         mCrowdOverrideActive = override;
 
-        float maxRandomBeat = 0.0f;
-        if ((flags & 0xf0) != 0x10) {
+        float maxRandomBeat;
+        if ((flags & 0xf0) == 0x10) {
+            maxRandomBeat = 0.0f;
+        } else {
             maxRandomBeat = 4.0f;
         }
 
         for (ObjPtrList<Character>::iterator it = mCrowdMembers.begin();
              it != mCrowdMembers.end(); ++it) {
             Character *c = *it;
-            if (animName == (int)gNullStr) {
+            if (animName.Null()) {
                 c->Exit();
             } else {
                 auto _val0 = ("stance");
                 Symbol stance = c->Property(_val0, true)->Sym(NULL);
                 if (stance == gNullStr) {
-                    TheDebug << "    stance = NULL!\n";
+                    TheDebug << MakeString("    stance = NULL!\n");
                 }
-                char buf[120];
+                char buf[49];
                 _snprintf(buf, 0x78, "%s_%s", stance.Str(), animName.Str());
                 c->Driver()->SetBlendWidth(3.0f);
                 CharClipDriver *cd = c->Driver()->PlayGroup(
                     buf, flags | 0x30, -1.0f, 1e30f, 0.0f
                 );
-                if (NULL == cd) {
+                if (cd != NULL) {
+                    if ((int)cd->mNext) {
+                        cd->mRampIn = RandomFloat(0.0f, maxRandomBeat);
+                    }
+                } else {
                     auto errMsg = MakeString("clip not found - groupName = %s\n", buf);
                     TheDebug << errMsg;
                     MILO_NOTIFY(
                         "%s could not find clip from group %s", PathName(c), buf
                     );
-                    _snprintf(buf, 0x78, "%s", stance.Str());
+                    _snprintf(buf, 0x78, "%s_ok", stance.Str());
                     c->Driver()->SetBlendWidth(3.0f);
                     cd = c->Driver()->PlayGroup(
                         buf, flags | 0x30, -1.0f, 1e30f, 0.0
                     );
-                    if (cd == NULL) {
+                    if (cd != NULL) {
+                        if ((int)cd->mNext) {
+                            cd->mRampIn = RandomFloat(0.0f, maxRandomBeat);
+                        }
+                    } else {
                         auto errMsg2 = MakeString(
                             "  clip not found - groupName = %s\n", buf
                         );
@@ -432,11 +442,7 @@ void HamWardrobe::PlayCrowdAnimation(Symbol animName, int flags, bool override) 
                         MILO_NOTIFY(
                             "  %s could not find clip from group %s", PathName(c), buf
                         );
-                    } else if (cd->mNext) {
-                        cd->mRampIn = RandomFloat(0.0f, maxRandomBeat);
                     }
-                } else if (cd->mNext) {
-                    cd->mRampIn = RandomFloat(0.0f, maxRandomBeat);
                 }
             }
         }
@@ -577,19 +583,19 @@ DataNode HamWardrobe::OnLoadCharacters(DataArray *a) {
     Symbol crew1 = 4 < size ? a->Sym(4) : Symbol(gNullStr);
     Symbol crew2 = size > 5 ? a->Sym(5) : Symbol(gNullStr);
     int backupType;
-    bool asyncLoad = false;
-    Symbol speed;
+    int asyncLoad;
     if (size > 6) {
-        backupType = bool(a->Int(6));
-        speed = a->Sym(7);
+        backupType = a->Int(6);
     } else {
         backupType = 0;
-        speed = gNullStr;
     }
+    Symbol speed = size > 6 ? a->Sym(7) : Symbol("medium");
     if (size > 7) {
-        asyncLoad = bool(a->Int(8));
+        asyncLoad = a->Int(8);
+    } else {
+        asyncLoad = 1;
     }
-    Symbol venue = TheGameData->Venue();
+    Symbol venue(TheGameData->Venue().Str());
     LoadCharacters(a->Sym(2), a->Sym(3), crew1, crew2, (HamBackupDancers)backupType, speed, venue, asyncLoad);
     return 0;
 }

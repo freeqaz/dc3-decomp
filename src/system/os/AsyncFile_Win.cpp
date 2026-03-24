@@ -33,9 +33,6 @@ bool AsyncFileWin::Truncate(int distanceToMove) {
 }
 
 void AsyncFileWin::_OpenAsync() {
-    unsigned int mode;
-    int modeCheck;
-    unsigned int openError;
     int fd;
     DWORD dwDesiredAccess;
     DWORD dwCreationDisposition;
@@ -44,32 +41,31 @@ void AsyncFileWin::_OpenAsync() {
     mSize = 0;
     if (gFakeFileErrors) {
         SetLastError(0x20000002);
+        ReadError(mFilename.c_str());
         mFail = true;
         return;
     }
     mSectorBytes = 0x800;
-        modeCheck = (mode & 0x7fffe) & (mode = mMode & 0x40002);
-    if (modeCheck == 0) {
-        fd = _open(mFilename.c_str(), (mode & 0xfffffffd) | 0x8000, 0x180);
+    if (!(mMode & 0x40002)) {
+        fd = _open(mFilename.c_str(), (mMode & ~2) | 0x8000, 0x180);
         mFd = fd;
-        openError = ((unsigned int)fd) >> 31;
-        mFail = openError;
-        if (openError != 0)
+        mFail = ((unsigned int)fd) >> 31;
+        if (mFail)
             return;
         mSize = _lseeki64(fd, 0, 2);
-        if (!(mode & 8)) {
+        if (!(mMode & 8)) {
             _lseek((int)mFd, 0, 0);
         }
         return;
     }
-    if (mode & 2) {
+    if (mMode & 2) {
         dwDesiredAccess = 0x80000000;
         dwCreationDisposition = 3;
-    } else if (mode & 0x200) {
+    } else if (mMode & 0x200) {
         dwDesiredAccess = 0x40000000;
         dwCreationDisposition = 2;
     } else {
-        dwCreationDisposition = 3 + (((mode & 0x100) == 0) ? 1 : 0);
+        dwCreationDisposition = 3 + ((mMode & 0x100) != 0);
         dwDesiredAccess = 0x40000000;
     }
     mFile = CreateFileA(
@@ -83,7 +79,7 @@ void AsyncFileWin::_OpenAsync() {
     );
     if (mFile == (HANDLE)-1) {
         err = GetLastError();
-        if ((err != 2) && (err != 3)) {
+        if ((err != 2) && (err != 3) && (err != 0x15)) {
             ReadError(mFilename.c_str());
         }
         mFail = true;

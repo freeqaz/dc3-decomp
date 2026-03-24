@@ -300,6 +300,27 @@ void HamIKEffector::Poll() {
     if (t == kEffectorTypeForearm)
         return;
 
+#ifdef HX_NATIVE
+    {
+        static int sIKPollLog = 0;
+        if (sIKPollLog < 20) {
+            sIKPollLog++;
+            RndTransformable *ground = mCharacter != nullptr
+                ? (RndTransformable *)mCharacter.Ptr() : nullptr;
+            float gh = GetGroundHeight(ground ? ground : mEffector.Ptr());
+            const Transform& ew = mEffector->WorldXfm();
+            fprintf(stderr, "FOOT-DIAG IK poll effector='%s' type=%d weight=%.2f "
+                    "effWorldPos=(%.3f, %.3f, %.3f) groundH=%.3f "
+                    "mGround=%p mChar=%p skel=%p dir='%s'\n",
+                    mEffector->Name(), (int)t, WeightOwner()->Weight(),
+                    ew.v.x, ew.v.y, ew.v.z, gh,
+                    (void*)mGround.Ptr(), (void*)mCharacter.Ptr(),
+                    (void*)mSkeleton.Ptr(),
+                    Dir() ? Dir()->Name() : "(null)");
+        }
+    }
+#endif
+
     float weight = WeightOwner()->Weight();
     if (!mSkeleton)
         return;
@@ -364,31 +385,49 @@ void HamIKEffector::Poll() {
                         float kneeLen = localPos.x;
                         float lowerBound = kneeLen * 0.3f + ankleLen;
                         float blend =
-                            (effQ.v.y - groundHeight - lowerBound)
+                            (effQ.v.z - groundHeight - lowerBound)
                             / (kneeLen * 0.8f + ankleLen - lowerBound);
                         blend = Max(blend, 0.0f);
                         blend = Min(blend, 1.0f);
                         float ratio =
                             (ankle->WorldXfm().v.z + knee->WorldXfm().v.z)
                             / (kneeLen + ankleLen);
-                        effQ.v.y =
+                        effQ.v.z =
                             ((ratio - 1.0f) * blend + 1.0f)
-                            * (effQ.v.y - groundHeight)
+                            * (effQ.v.z - groundHeight)
                             + groundHeight;
                     }
                 } else if (t == kEffectorTypeAnkle) {
                     // Save effector position for later restore
                     Vector3 savedPos = effQ.v;
                     float clampFactor =
-                        (neutralQ.v.y - groundHeight - 5.0f) * 0.09090909f;
+                        (neutralQ.v.z - groundHeight - 5.0f) * 0.09090909f;
                     clampFactor = Max(clampFactor, 0.0f);
                     clampFactor = Min(clampFactor, 1.0f);
                     Interp(neutralQ.v, effQ.v, clampFactor, q.v);
                     Interp(neutralQ.q, effQ.q, clampFactor, q.q);
-                    if (effQ.v.y < groundHeight) {
-                        effQ.v.y = groundHeight;
+                    if (effQ.v.z < groundHeight) {
+                        effQ.v.z = groundHeight;
                     }
-                    effQ.v.x = savedPos.x;
+                    effQ.v.y = savedPos.y;
+#ifdef HX_NATIVE
+                    {
+                        static int sAnkleClampLog = 0;
+                        if (sAnkleClampLog < 10) {
+                            sAnkleClampLog++;
+                            fprintf(stderr, "FOOT-DIAG ankle-clamp effector='%s' "
+                                    "savedPos=(%.3f,%.3f,%.3f) effQ.v=(%.3f,%.3f,%.3f) "
+                                    "neutralQ.v=(%.3f,%.3f,%.3f) groundH=%.3f clampFactor=%.3f "
+                                    "clampFired=%d\n",
+                                    mEffector->Name(),
+                                    savedPos.x, savedPos.y, savedPos.z,
+                                    effQ.v.x, effQ.v.y, effQ.v.z,
+                                    neutralQ.v.x, neutralQ.v.y, neutralQ.v.z,
+                                    groundHeight, clampFactor,
+                                    (savedPos.z < groundHeight) ? 1 : 0);
+                        }
+                    }
+#endif
                 }
             }
 

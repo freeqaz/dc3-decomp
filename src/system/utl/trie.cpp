@@ -142,8 +142,10 @@ int Trie::store(const char *str) {
 
     // Walk string to compute length
     const char *p = str;
-    while (*p != 0) {
+    while (true) {
+        unsigned char c = *p;
         p++;
+        if (c == 0) break;
     }
     int strLen = (int)(p - str) - 1;
     int i = 0;
@@ -177,7 +179,7 @@ int Trie::store(const char *str) {
         {
             unsigned int newIdx = get_free_node();
             if (sibCount == 0) {
-                if ((int)parentIdx >= 1) {
+                if ((int)parentIdx > 0) {
                     check_index(parentIdx);
                     FirstChild(NodePtr(this, parentIdx)) = newIdx;
                 }
@@ -191,7 +193,7 @@ int Trie::store(const char *str) {
             check_index(newIdx);
             *(unsigned int *)(newNode + 0x08) = parentIdx;
             unsigned int firstChildIdx;
-            if ((int)parentIdx < 1) {
+            if ((int)parentIdx <= 0) {
                 firstChildIdx = 1;
             } else {
                 check_index(parentIdx);

@@ -294,15 +294,17 @@ BinStream &operator>>(BinStream &bs, std::map<char, MatChar> &m) {
     return bs;
 }
 
-INIT_REVS(0x11, 0)
+INIT_REVS(0x11, 2)
 
 BEGIN_LOADS(RndFont)
     LOAD_REVS(bs)
     ASSERT_REVS(0x11, 2)
-    if (d.altRev >= 2) {
+    if (d.altRev < 2) {
+        if (d.rev > 7) {
+            Hmx::Object::Load(d.stream);
+        }
+    } else {
         RndFontBase::Load(d.stream);
-    } else if (d.rev > 7) {
-        Hmx::Object::Load(d.stream);
     }
     if (d.rev < 3) {
         String str;
@@ -313,7 +315,6 @@ BEGIN_LOADS(RndFont)
     if (d.rev < 1) {
         std::map<char, MatChar> charMap;
         bs >> charMap;
-        charMap.clear();
     } else {
         if (d.altRev < 1) {
             ObjPtr<RndMat> mat(this, NULL);
@@ -325,7 +326,7 @@ BEGIN_LOADS(RndFont)
                     mat = LookupOrCreateMat(buf, Dir());
                 }
             }
-            if (mMats.begin() != mMats.end()) {
+            if (!mMats.empty()) {
                 mMats.clear();
             }
             mMats.push_back(mat);
@@ -344,12 +345,10 @@ BEGIN_LOADS(RndFont)
             RndTex *validTex = ValidTexture(0);
             if (validTex) {
                 RndBitmap bmap;
-                bmap.Reset();
                 validTex->LockBitmap(bmap, 3);
                 mCellSize.x = std::floor((float)bmap.Width() / mCellSize.x + 0.5f);
                 mCellSize.y = std::floor((float)bmap.Height() / mCellSize.y + 0.5f);
                 validTex->UnlockBitmap();
-                bmap.Reset();
             }
         } else {
             bs >> mCellSize;

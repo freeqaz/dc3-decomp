@@ -65,9 +65,26 @@ END_LOADS
 void CharServoBone::Poll() {
 #ifdef HX_NATIVE
     { static int sServoPollLog = 0;
-      if (sServoPollLog++ < 5)
+      if (sServoPollLog++ < 5) {
         fprintf(stderr, "CharServoBone::Poll '%s' meshes=%d bones=%d start=%p totalSize=%d\n",
                 Name(), (int)mMeshes.size(), (int)mBones.size(), (void*)mStart, mTotalSize);
+        fprintf(stderr, "  facingPos=%p facingPosDelta=%p facingRot=%p pelvis=%p\n",
+                (void*)mFacingPos, (void*)mFacingPosDelta, (void*)mFacingRot,
+                (void*)mPelvis);
+        if (mFacingPos)
+            fprintf(stderr, "  facingPos=(%.3f, %.3f, %.3f)\n",
+                    mFacingPos->x, mFacingPos->y, mFacingPos->z);
+        if (mPelvis)
+            fprintf(stderr, "  pelvis localPos=(%.3f, %.3f, %.3f) worldPos=(%.3f, %.3f, %.3f)\n",
+                    mPelvis->LocalXfm().v.x, mPelvis->LocalXfm().v.y, mPelvis->LocalXfm().v.z,
+                    mPelvis->WorldXfm().v.x, mPelvis->WorldXfm().v.y, mPelvis->WorldXfm().v.z);
+        Character *ch = Character::Current();
+        if (ch)
+            fprintf(stderr, "  character='%s' localPos=(%.3f, %.3f, %.3f) worldPos=(%.3f, %.3f, %.3f)\n",
+                    ch->Name(),
+                    ch->LocalXfm().v.x, ch->LocalXfm().v.y, ch->LocalXfm().v.z,
+                    ch->WorldXfm().v.x, ch->WorldXfm().v.y, ch->WorldXfm().v.z);
+      }
     }
 #endif
     if (!mMeshes.empty()) {

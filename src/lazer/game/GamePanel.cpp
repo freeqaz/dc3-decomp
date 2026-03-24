@@ -60,6 +60,7 @@
 #include "utl/TimeConversion.h"
 #include "world/Dir.h"
 #ifdef HX_NATIVE
+#include "rndobj/Text.h"
 #include "ui/UILabel.h"
 #include <cstdio>
 #endif
@@ -461,6 +462,7 @@ void GamePanel::Poll() {
                 if (hp.Type() == kDataObject && hp.GetObj()) {
                     ObjectDir *hudDir = dynamic_cast<ObjectDir *>(hp.GetObj());
                     if (hudDir) {
+                        static bool sScoreLogged = false;
                         for (const char *side :
                              {"score_left", "score_right"}) {
                             RndDir *scoreDir =
@@ -469,12 +471,48 @@ void GamePanel::Poll() {
                                 UILabel *lbl =
                                     scoreDir->Find<UILabel>("score1.lbl", false);
                                 if (lbl) {
-                                    lbl->SetInt(sNativeScore, true);
+                                    // Bypass HamLabel transition — set text directly
+                                    char buf[32];
+                                    snprintf(buf, sizeof(buf), "%d", sNativeScore);
+                                    lbl->RndText::SetText(buf);
                                     lbl->SetShowing(true);
+                                    if (!sScoreLogged) {
+                                        float alpha = lbl->Styles()[0].GetAlpha();
+                                        Transform worldXfm = lbl->WorldXfm();
+                                        fprintf(
+                                            stderr,
+                                            "[SCORE] %s/score1.lbl showing=%d "
+                                            "text='%s' alpha=%.2f "
+                                            "world=(%.1f,%.1f,%.1f)\n",
+                                            side,
+                                            lbl->Showing(),
+                                            lbl->GetText().c_str(),
+                                            alpha,
+                                            worldXfm.v.x,
+                                            worldXfm.v.y,
+                                            worldXfm.v.z
+                                        );
+                                    }
                                 }
+                                RndDrawable *grp =
+                                    scoreDir->Find<RndDrawable>(
+                                        "score.grp", false
+                                    );
+                                if (grp)
+                                    grp->SetShowing(true);
                                 scoreDir->SetShowing(true);
+                                if (!sScoreLogged) {
+                                    fprintf(
+                                        stderr,
+                                        "[SCORE] %s showing=%d grp=%p\n",
+                                        side,
+                                        scoreDir->Showing(),
+                                        (void *)grp
+                                    );
+                                }
                             }
                         }
+                        sScoreLogged = true;
                     }
                 }
             }

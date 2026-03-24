@@ -464,7 +464,7 @@ String MemcardXbox::GenerateDriveName(DWORD deviceId, int i) {
 MCResult MemcardXbox::FindValidUnit(ContainerId *pCid) {
     MILO_ASSERT(pCid, 0xBE);
     bool i5;
-    if (pCid->mDeviceId == 0) {
+    if ((DWORD)pCid->mDeviceId == 0) {
         i5 = true;
     } else {
         XDEVICE_DATA data;
@@ -478,32 +478,28 @@ MCResult MemcardXbox::FindValidUnit(ContainerId *pCid) {
         DWORD enumRes = XContentCreateEnumerator(
             pCid->mUserIndex, pCid->mDeviceId, 1, 0x1000, 1, nullptr, &h1c0
         );
-        switch (XContentCreateEnumerator(
-            pCid->mUserIndex, pCid->mDeviceId, 1, 0x1000, 1, nullptr, &h1c0
-        )) {
-        case 0: {
-            int num = 0;
-            DWORD dw1bc = 0;
-            char buffer[64];
-            while (XEnumerate(h1c0, &buffer, 0x134, &dw1bc, nullptr) == 0) {
-                if (strncmp(buffer, TheMC.FileName(), 0x2A) == 0) {
-                    num++;
-                    pCid->mDeviceId = (XCONTENTDEVICEID)buffer[0];
-                }
-            }
-            CloseHandle(h1c0);
-            if (num == 0) {
-                return kMCMultipleFilesFound;
-            } else if (num == 1) {
-                return kMCFileExists;
-            } else {
+        if (enumRes != 0) {
+            if (enumRes == 0x12) {
                 return kMCFileNotFound;
             }
-        }
-        case 0x12:
-            return kMCFileNotFound;
-        default:
             return kMCGeneralError;
+        }
+        int num = 0;
+        DWORD dw1bc = 0;
+        XCONTENT_DATA buffer;
+        while (XEnumerate(h1c0, &buffer, 0x134, &dw1bc, nullptr) == 0) {
+            if (strncmp(buffer.szFileName, TheMC.FileName(), 0x2A) == 0) {
+                num++;
+                pCid->mDeviceId = (XCONTENTDEVICEID)buffer.DeviceID;
+            }
+        }
+        CloseHandle(h1c0);
+        if (num == 0) {
+            return kMCFileNotFound;
+        } else if (num == 1) {
+            return kMCFileExists;
+        } else {
+            return kMCMultipleFilesFound;
         }
     }
 }

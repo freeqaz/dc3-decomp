@@ -441,32 +441,67 @@ DataNode HamDirector::OnFileMerged(DataArray *a) {
             hudDir->SetProperty("postprocs_before_draw", true);
             DataVariable("hud_panel") = (Hmx::Object *)hudDir;
 
-            // Diagnostic: dump score-related objects in the HUD panel
+            // Diagnostic: dump draw list and score subdirs
+            fprintf(stderr, "[HUD] Draw list (%d items):\n", hudDir->NumDraws());
+            bool hasScoreInDrawList = false;
+            for (int i = 0; i < hudDir->NumDraws(); i++) {
+                RndDrawable *d = hudDir->GetDraw(i);
+                Hmx::Object *obj = dynamic_cast<Hmx::Object *>(d);
+                const char *n = obj ? obj->Name() : "(null)";
+                const char *cn = obj ? obj->ClassName().Str() : "?";
+                if (strstr(n, "score") || strstr(n, "hud"))
+                    hasScoreInDrawList = true;
+                fprintf(stderr, "  draw[%d] = '%s' (%s)\n", i, n, cn);
+            }
+            fprintf(stderr, "[HUD] score in draw list: %s\n",
+                    hasScoreInDrawList ? "YES" : "NO");
             for (const char *name :
-                 {"score_left", "score_right", "hud_left", "hud_right"}) {
-                ObjectDir *sub = hudDir->Find<ObjectDir>(name, false);
+                 {"score_left", "score_right"}) {
+                RndDir *sub = hudDir->Find<RndDir>(name, false);
                 if (sub) {
                     fprintf(
                         stderr,
-                        "[HUD] Found subdir '%s' (%s)\n",
+                        "[HUD] '%s' showing=%d draws=%d\n",
                         name,
-                        sub->ClassName()
+                        sub->Showing(),
+                        sub->NumDraws()
                     );
-                    for (ObjDirItr<Hmx::Object> it(sub, false); it != nullptr;
-                         ++it) {
-                        if (strstr(it->ClassName().Str(), "Label")
-                            || strstr(it->Name(), "score")) {
+                    for (int i = 0; i < sub->NumDraws(); i++) {
+                        RndDrawable *sd = sub->GetDraw(i);
+                        Hmx::Object *so = dynamic_cast<Hmx::Object *>(sd);
+                        fprintf(
+                            stderr,
+                            "  sub draw[%d] = '%s' (%s) showing=%d\n",
+                            i,
+                            so ? so->Name() : "?",
+                            so ? so->ClassName().Str() : "?",
+                            sd->Showing()
+                        );
+                    }
+                    // Check if score1.lbl is in score.grp's object list
+                    RndGroup *grp2 = sub->Find<RndGroup>("score.grp", false);
+                    UILabel *lbl = sub->Find<UILabel>("score1.lbl", false);
+                    if (grp2 && lbl) {
+                        bool inGrp = grp2->HasObject(lbl);
+                        fprintf(
+                            stderr,
+                            "[HUD] %s: score1.lbl in score.grp=%d, "
+                            "grp objects=%d\n",
+                            name,
+                            inGrp,
+                            (int)grp2->Objects().size()
+                        );
+                        // List all objects in score.grp
+                        for (auto it = grp2->Objects().begin();
+                             it != grp2->Objects().end(); ++it) {
                             fprintf(
                                 stderr,
-                                "  %s -> '%s' (%s)\n",
-                                name,
-                                it->Name(),
-                                it->ClassName()
+                                "  grp obj: '%s' (%s)\n",
+                                (*it)->Name(),
+                                (*it)->ClassName().Str()
                             );
                         }
                     }
-                } else {
-                    fprintf(stderr, "[HUD] Missing subdir '%s'\n", name);
                 }
             }
         }
@@ -1767,8 +1802,6 @@ void HamDirector::LoadCrew(Symbol s1, Symbol s2) {
     Symbol symbols[2] = { s1, s2 };
     Symbol mind_control("mind_control");
     Symbol gameplaySym = TheHamProvider->Property("gameplay_mode", true)->Sym();
-    char *penult = buffer - 2;
-    char *ult = buffer - 1;
     bool isMindControl = gameplaySym == mind_control;
     for (int i = 0; i < 2; i++) {
         HamPlayerData *hpd = TheGameData->Player(i);
@@ -1776,11 +1809,11 @@ void HamDirector::LoadCrew(Symbol s1, Symbol s2) {
         mCrews[i] = symbols[i];
         strcpy(buffer, hpd->CharacterOutfit(mCrews[i]).Str());
         if (strstr(buffer, "lima") || strstr(buffer, "rasa")) {
-            penult[strlen(buffer)] = '0';
-            ult[strlen(buffer)] = isMindControl ? '6' : '5';
+            buffer[strlen(buffer) - 2] = '0';
+            buffer[strlen(buffer) - 1] = isMindControl ? '6' : '5';
         } else {
-            penult[strlen(buffer)] = '0';
-            ult[strlen(buffer)] = '4';
+            buffer[strlen(buffer) - 2] = '0';
+            buffer[strlen(buffer) - 1] = '4';
         }
         mCharacterOutfits[i] = buffer;
     }
@@ -2729,7 +2762,7 @@ void HamDirector::OnPopulateMoves() {
     }
 
     int numKeys = moveInstSymKeys->size();
-    for (int i = 0; (unsigned int)i < numKeys; i++) {
+    for (int i = 0; i != numKeys; i++) {
             if ((*moveInstSymKeys)[i].value == "") continue;
 
             float keyFrame = (*moveInstSymKeys)[i].frame;

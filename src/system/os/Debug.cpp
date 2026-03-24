@@ -321,33 +321,28 @@ const char *GetExpCode(int code) {
                 }
             } else {
                 int temp = code - (int)0xC0000008;
-                if (temp == 0) {
-                    return "EXCEPTION_INVALID_HANDLE";
-                } else {
+                if (temp != 0) {
                     switch ((unsigned int)temp) {
-                    case 0x84:
-                        return "EXCEPTION_ARRAY_BOUNDS_EXCEEDED";
-                    case 0x1E:
-                        return "EXCEPTION_INVALID_DISPOSITION";
-                    case 0x1D:
-                        return "EXCEPTION_NONCONTINUABLE_EXCEPTION";
                     case 0x15:
                         return "EXCEPTION_ILLEGAL_INSTRUCTION";
+                    case 0x1D:
+                        return "EXCEPTION_NONCONTINUABLE_EXCEPTION";
+                    case 0x1E:
+                        return "EXCEPTION_INVALID_DISPOSITION";
+                    case 0x84:
+                        return "EXCEPTION_ARRAY_BOUNDS_EXCEEDED";
                     default:
                         break;
                     }
+                } else {
+                    return "EXCEPTION_INVALID_HANDLE";
                 }
             }
         } else {
             return "EXCEPTION_FLT_DENORMAL_OPERAND";
         }
     } else {
-        switch (code) {
-        case (int)0xC00000FD:
-            return "EXCEPTION_STACK_OVERFLOW";
-        case (int)0xC000013A:
-            return "CONTROL_C_EXIT";
-        default: {
+        if (code != (int)0xC00000FD) {
             int temp = code + 0x3FFFFF72;
             if ((unsigned int)temp <= 8U) {
                 switch (temp) {
@@ -367,13 +362,16 @@ const char *GetExpCode(int code) {
                     return "EXCEPTION_INT_DIVIDE_BY_ZERO";
                 case 7:
                     return "EXCEPTION_INT_OVERFLOW";
-                default:
+                case 8:
                     return "EXCEPTION_PRIV_INSTRUCTION";
                 }
             }
-            return MakeString("Unhandled Exception %d", code);
+            if (code != (int)0xC000013A) {
+                return MakeString("Unhandled Exception %d", code);
+            }
+            return "CONTROL_C_EXIT";
         }
-        }
+        return "EXCEPTION_STACK_OVERFLOW";
     }
 }
 

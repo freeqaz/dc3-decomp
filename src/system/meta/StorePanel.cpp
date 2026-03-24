@@ -429,22 +429,23 @@ void StorePanel::PopulateOffers(DataArray *arr, bool b) {
 
         if (arr != NULL) {
             arr->AddRef();
-            s16 count = arr->Size();
-            s32 i = 1;
+            int i = 1;
 
-            if (count > 1) {
+            if (arr->Size() > 1) {
                 do {
                     DataArray *child_arr = arr->Array(i);
                     StoreOffer *offer = MakeNewOffer(child_arr);
 
-                    if (((mShowTestOffers == 0) && offer->IsTest()) || !offer->ValidTitle()) {
+                    if ((mShowTestOffers == 0) && offer->IsTest()) {
+                        delete offer;
+                    } else if (!offer->ValidTitle()) {
                         delete offer;
                     } else {
                         offerVec->push_back(offer);
                     }
 
                     i++;
-                } while (i < count);
+                } while (i < arr->Size());
             }
 
             ValidateOffers(*offerVec);

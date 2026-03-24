@@ -384,7 +384,7 @@ void SyncReloadLocale() {
 }
 
 const char *Localize(Symbol token, bool *success, Locale &locale) {
-    if (gShowTokensCheat && !token.Null()) {
+    if (gShowTokensCheat) {
         if (success)
             *success = true;
         return token.Str();
@@ -392,11 +392,11 @@ const char *Localize(Symbol token, bool *success, Locale &locale) {
     const char *textStr = locale.Localize(token, false);
     bool localized = textStr != 0;
     if (!localized) {
+        textStr = token.Str();
         Locale::sIgnoreMissingText = textStr;
         if (Locale::sVerboseNotify) {
             MILO_NOTIFY("\"%s\" needs localization", token);
         }
-        textStr = token.Str();
     }
     if (success) {
         *success = localized;
