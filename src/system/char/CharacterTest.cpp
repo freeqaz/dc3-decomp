@@ -417,7 +417,7 @@ void CharacterTest::Sync() {
     if (!mDriver || (mClip1 && mClip1->Dir() != Clips())) {
         mClip1 = nullptr;
     }
-    if (!mDriver || (mClip2 && mClip2->Dir() != Clips())) {
+    if (mClip1 && (!mDriver || (mClip2 && mClip2->Dir() != Clips()))) {
         mClip2 = nullptr;
     }
     if (!mDriver || (mFilterGroup && mFilterGroup->Dir() != Clips())) {
@@ -447,14 +447,12 @@ void CharacterTest::Sync() {
             CharClip::NodeVector *nodes = mClip1->GetTransitions().FindNodes(mClip2);
             if (nodes) {
                 int maxVal = nodes->size - 1;
-                if (mTransition > maxVal) {
-                    mTransition = maxVal;
-                } else {
-                    // Branchless clamp to 0 if negative
+                if (mTransition <= maxVal) {
                     unsigned int uval = mTransition;
                     int mask = (uval >> 31) - 1;
-                    mTransition = mTransition & mask;
+                    maxVal = mTransition & mask;
                 }
+                mTransition = maxVal;
             } else {
                 mTransition = 0;
             }
