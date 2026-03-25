@@ -37,9 +37,18 @@ static bool NeedsDepthTarget(RndTex* tex) {
 }
 
 static wgpu::TextureFormat ChooseRenderTargetFormat(RndTex* tex) {
-    return tex && tex->GetType() == RndTex::kDepthVolumeMap
-        ? wgpu::TextureFormat::RGBA8Unorm
-        : wgpu::TextureFormat::RGBA8UnormSrgb;
+    if (tex && tex->GetType() == RndTex::kDepthVolumeMap)
+        return wgpu::TextureFormat::RGBA8Unorm;
+    // Match the surface format's sRGB-ness. If the surface is non-sRGB
+    // (e.g., RGBA8Unorm on web), render targets must also be non-sRGB,
+    // otherwise sRGB→linear→non-sRGB causes darkening.
+    if (gWgpuRnd) {
+        wgpu::TextureFormat sf = gWgpuRnd->Gpu().SurfaceFormat();
+        if (sf == wgpu::TextureFormat::RGBA8Unorm ||
+            sf == wgpu::TextureFormat::BGRA8Unorm)
+            return wgpu::TextureFormat::RGBA8Unorm;
+    }
+    return wgpu::TextureFormat::RGBA8UnormSrgb;
 }
 
 static GpuTexData* EnsureRenderTargetData(RndTex* tex) {

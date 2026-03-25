@@ -123,11 +123,13 @@ class Scorer:
             )
         )
         shutil.copy2(self.source_path, self._backup_path)
-        # Create working directory for compilation — variants are written here
+        # Create working copy next to real source — variants are written here
         # instead of to the real source file, so concurrent ninja builds are
-        # never broken by permuter runs.
-        self._working_dir = Path(tempfile.mkdtemp(prefix="permuter_src_"))
-        self._working_source = self._working_dir / self.source_path.name
+        # never broken by permuter runs.  The file lives in the same directory
+        # so that relative include paths and wibo path mapping still work
+        # (cl.exe treats /tmp/... as a compiler switch).
+        self._working_dir = self.source_path.parent
+        self._working_source = self._working_dir / f".permuter_work_{self.source_path.name}"
         # Acquire per-file lock (prevents concurrent permuter access)
         self._file_lock = SourceFileLock(self.source_path)
         self._file_lock.__enter__()
@@ -148,9 +150,9 @@ class Scorer:
             restore_tracked_files(self._tracked_file_originals)
         if self._backup_path and self._backup_path.exists():
             self._backup_path.unlink()
-        # Clean up working directory
-        if hasattr(self, '_working_dir') and self._working_dir and self._working_dir.exists():
-            shutil.rmtree(self._working_dir, ignore_errors=True)
+        # Clean up working source file
+        if hasattr(self, '_working_source') and self._working_source and self._working_source.exists():
+            self._working_source.unlink(missing_ok=True)
         # Release per-file lock
         if hasattr(self, '_file_lock') and self._file_lock is not None:
             self._file_lock.__exit__(exc_type, exc_val, exc_tb)
@@ -237,14 +239,23 @@ class Scorer:
             self._compile_fo_path = None
 
     def _build(self) -> tuple[bool, str | None]:
-        """Compile directly via cl.exe from the working directory."""
+        """Compile directly via cl.exe, redirecting source to the working copy."""
         if self._compile_shell_cmd is None:
             self._extract_compile_cmd()
 
+        # Swap the trailing source filename to point at the working copy
+        # (same directory, different name — avoids touching the real source).
+        src_name = self.source_path.name
+        work_name = self._working_source.name
+        if self._compile_shell_cmd.endswith(src_name):
+            cmd = self._compile_shell_cmd[:-len(src_name)] + work_name
+        else:
+            cmd = self._compile_shell_cmd.replace(src_name, work_name)
+
         result = subprocess.run(
-            self._compile_shell_cmd,
+            cmd,
             shell=True,
-            cwd=str(self._working_dir),
+            cwd=self._compile_cwd,
             capture_output=True,
             text=True,
         )
@@ -270,13 +281,21 @@ class Scorer:
                 str(self._obj_path), str(obj_output)
             )
 
+        # Redirect source filename to the working copy
+        src_name = self.source_path.name
+        work_name = self._working_source.name
+        if cmd.endswith(src_name):
+            cmd = cmd[:-len(src_name)] + work_name
+        else:
+            cmd = cmd.replace(src_name, work_name)
+
         # Write source to the working copy (not the real source path)
         atomic_write_bytes(self._working_source, source_bytes)
 
         result = subprocess.run(
             cmd,
             shell=True,
-            cwd=str(self._working_dir),
+            cwd=self._compile_cwd,
             capture_output=True,
             text=True,
         )

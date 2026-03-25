@@ -115,6 +115,12 @@ python3 msvc-src/tools/il_diff.py variant_a.cpp variant_b.cpp -f FunctionName
 | Regswap Classify | Classify callee-saved register swaps by variable type | `python scripts/analysis/regswap_classify.py --verbose` |
 | Reclassify AT_LIMIT | Scan AT_LIMIT functions, diagnose fixable vs unfixable, reopen fixable ones | `python -m scripts.analysis.reclassify_at_limit --apply --unit 'system/char/*'` |
 
+## Native Port Tools
+
+| Tool | Description | Doc |
+|------|-------------|-----|
+| [HTTP Debug Server](HTTP_DEBUG_SERVER.md) | Embedded HTTP server for live engine interaction — DTA eval, screenshots, telemetry, settings | [HTTP_DEBUG_SERVER.md](HTTP_DEBUG_SERVER.md) |
+
 ## Code Transformation Tools
 
 | Tool | Description | Doc |

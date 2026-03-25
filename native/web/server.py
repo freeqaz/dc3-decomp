@@ -175,6 +175,14 @@ class DC3Handler(http.server.SimpleHTTPRequestHandler):
 
         full_path = os.path.join(ASSETS_DIR, safe)
 
+        # Prefer AI-upscaled _high variant for video files when available.
+        # e.g., videos/intro.webm -> videos/intro_high.webm
+        name, ext = os.path.splitext(full_path)
+        if ext.lower() in (".webm", ".mp4") and not name.endswith("_high"):
+            high_path = name + "_high" + ext
+            if os.path.isfile(high_path):
+                full_path = high_path
+
         # Ark extraction stores ".." as "(..)" in directory names.
         # Files under system/run/ live at (..)/(..)/system/run/ on disk.
         if not os.path.isfile(full_path) and safe.startswith("system/"):

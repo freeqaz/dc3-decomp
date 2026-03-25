@@ -395,6 +395,18 @@ void AudioDevice::PumpAudio() {
     }
 }
 
+#ifdef HX_WEB
+void AudioDevice::DebugDumpSources() {
+    std::lock_guard<std::mutex> lock(mSourceMutex);
+    std::printf("AudioDevice: active source count=%zu\n", mSources.size());
+    for (size_t i = 0; i < mSources.size(); i++) {
+        char desc[256];
+        mSources[i]->DebugDescribe(desc, sizeof(desc));
+        std::printf("  [%zu] %s\n", i, desc);
+    }
+}
+#endif
+
 // ---- Exported C functions for JS console commands ----
 
 extern "C" {
@@ -428,6 +440,9 @@ EMSCRIPTEN_KEEPALIVE void dc3_audio_stats() {
            dev.IsInitialized(), dev.GetSampleRate(), sPumpCount);
     printf("  capture: active=%d, ready=%d, pos=%d/%d\n",
            sCapturing, sCaptureReady, sCapturePos, CAPTURE_FRAMES);
+#ifdef HX_WEB
+    dev.DebugDumpSources();
+#endif
 }
 
 } // extern "C"

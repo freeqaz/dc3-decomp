@@ -11,7 +11,10 @@ ninja                              # Build and regenerate report.json
 scripts/measure_progress.sh --functions --detailed HEAD  # Progress vs commit
 scripts/measure_progress.sh --current-dir /path/to/worktree HEAD  # Worktree vs commit
 scripts/clean_stale_objects.sh     # Fix stale .obj files (older than PCH)
+scripts/dc3-agent-test.sh          # Launch native port with HTTP debug server + fast boot + telemetry
 ```
+
+To interact with a running native engine instance, use `scripts/dc3-agent-test.sh` (sets `DC3_HTTP=1 DC3_FAST_BOOT=1 DC3_TEL=1`). Then `curl localhost:9090/api/health`, `/api/dta/eval`, `/api/screenshot`, etc. See `docs/tools/HTTP_DEBUG_SERVER.md`.
 
 Check `./docs/tools/INDEX.md` for agent tool selection and `./docs/INDEX.md` for the full docs sitemap.
 

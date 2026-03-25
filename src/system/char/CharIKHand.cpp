@@ -10,20 +10,6 @@
 #include "utl/BinStream.h"
 #include "rndobj/Utl.h"
 
-#ifdef HX_NATIVE
-#include <cstdio>
-#include <cstdlib>
-
-static bool DebugArmPollablesEnabled() {
-    static int sEnabled = -1;
-    if (sEnabled == -1) {
-        const char *env = getenv("MILO_DEBUG_ARM_POLLABLES");
-        sEnabled = (env && env[0] && env[0] != '0') ? 1 : 0;
-    }
-    return sEnabled != 0;
-}
-#endif
-
 #pragma region CharIKHand
 
 CharIKHand::CharIKHand()
@@ -251,6 +237,10 @@ void CharIKHand::PollDeps(
 
 void CharIKHand::Poll() {
     float charWeight = Weight();
+    static const float kHalfPi = 1.570796370506287f;
+    static const float kMinWeight = 0.001f;
+
+    static const float kMaxWeight = 144.0f;
     RndTransformable *hand = mHand;
     if (!hand || mTargets.empty())
         return;
@@ -274,19 +264,20 @@ void CharIKHand::Poll() {
         float totalWeight = 0.0f;
         float localWeights[16];
         float *weightPtr = localWeights;
-        for (ObjVector<IKTarget>::iterator it = mTargets.begin(); it != mTargets.end();
+        auto endIt = mTargets.end();
+        for (ObjVector<IKTarget>::iterator it = mTargets.begin(); it != endIt;
              ++it) {
             RndTransformable *targetTrans = it->mTarget;
             float extent = it->mExtent;
             if (targetTrans) {
-                Vector3 targetVec(targetTrans->LocalXfm().v);
+                Vector3 targetVec(targetTrans->WorldXfm().v);
                 if (extent <= 0.0f) {
-                    *weightPtr = 144.0f / Max(0.001f, LengthSquared(targetVec));
+                    *weightPtr = kMaxWeight / Max(kMinWeight, LengthSquared(targetVec));
                 } else if (extent < -targetVec.z) {
-                    *weightPtr = 0.001f;
+                    *weightPtr = kMinWeight;
                 } else {
                     targetVec.z = 0.0f;
-                    *weightPtr = 144.0f / Max(0.001f, LengthSquared(targetVec));
+                    *weightPtr = kMaxWeight / Max(kMinWeight, LengthSquared(targetVec));
                 }
                 totalWeight += *weightPtr++;
             }
@@ -301,7 +292,7 @@ void CharIKHand::Poll() {
             if (targetTrans) {
                 float curWeight = *weightPtr;
                 const Transform &worldXfm = targetTrans->WorldXfm();
-                ScaleAddEq(destPos, worldXfm.v, curWeight / totalWeight);
+                ScaleAdd(destPos, worldXfm.v, curWeight / totalWeight, destPos);
                 if (mOrientation) {
                     Hmx::Matrix3 normMat;
                     Normalize(worldXfm.m, normMat);
@@ -360,11 +351,9 @@ void CharIKHand::Poll() {
         Vector3 handX(handMat.x);
         Vector3 handY(handMat.y);
         Vector3 handZ(handMat.z);
-        float acosDot = (float)std::acos(Dot(elbowMat.x, handZ)) - 1.570796370506287f;
-        float absAcosDot;
-        if (acosDot > 0.0f)
-            absAcosDot = acosDot;
-        else
+        float acosDot = acosf(Dot(elbowMat.x, handZ)) - kHalfPi;
+        float absAcosDot = acosDot;
+        if (acosDot <= 0.0f)
             absAcosDot = -acosDot;
         float maxRads = mWristRadians;
         if (absAcosDot > maxRads) {
@@ -406,33 +395,11 @@ void CharIKHand::IKElbow(RndTransformable *elbow, RndTransformable *shoulder) {
     float cosAngle = mInv2ab * (LengthSquared(shoulderToWrist) - mAABB);
     ClampEq(cosAngle, -1.0f, 1.0f);
     float sinAngle = -std::sqrt(-(cosAngle * cosAngle - 1.0f));
-#ifdef HX_NATIVE
-    static int sDebugElbowCount = 0;
-    if (DebugArmPollablesEnabled() && sDebugElbowCount < 24) {
-        fprintf(
-            stderr,
-            "ARM-ELBOW name='%s' elbow='%s' shoulder='%s' hand='%s' "
-            "cos=%.4f sin=%.4f inv2ab=%.4f aabb=%.4f dst=(%.3f,%.3f,%.3f)\n",
-            Name(),
-            elbow->Name(),
-            shoulder->Name(),
-            mHand ? mHand->Name() : "(null)",
-            cosAngle,
-            sinAngle,
-            mInv2ab,
-            mAABB,
-            mWorldDst.x,
-            mWorldDst.y,
-            mWorldDst.z
-        );
-        sDebugElbowCount++;
-    }
-#endif
     elbow->DirtyLocalXfm().m.Set(cosAngle, sinAngle, 0, -sinAngle, cosAngle, 0, 0, 0, 1);
     Vector3 handPos, targetPos;
     MultiplyTranspose(mHand->WorldXfm().v, shoulder->WorldXfm(), handPos);
     MultiplyTranspose(mWorldDst, shoulder->WorldXfm(), targetPos);
-    if (0.0f < mElbowSwing) {
+    if (mElbowSwing > 0) {
         Vector2 handYZ(handPos.y, handPos.z);
         Vector2 targetYZ(targetPos.y, targetPos.z);
         float handYZSq = handYZ.x * handYZ.x + handYZ.y * handYZ.y;
@@ -457,7 +424,7 @@ void CharIKHand::IKElbow(RndTransformable *elbow, RndTransformable *shoulder) {
         shoulderXfm2.v += shoulderAdj;
         shoulder->SetWorldXfm(shoulderXfm2);
         if (mElbowCollide->GetShape() != CharCollide::kCollideSphere)
-            MILO_NOTIFY("%s: elbow collision object not sphere.", Name());
+            MILO_NOTIFY("%s: elbow collision object not sphere.\n", Name());
         else {
             Vector3 sphereCenter(mElbowCollide->WorldXfm().v);
             float sphereRadius = mElbowCollide->GetCurRadius();
@@ -469,7 +436,8 @@ void CharIKHand::IKElbow(RndTransformable *elbow, RndTransformable *shoulder) {
                 Vector3 elbowToTarget;
                 Subtract(elbow->WorldXfm().v, mWorldDst, elbowToTarget);
                 Vector3 axisProj;
-                Scale(unitAxis, Dot(elbowToTarget, unitAxis), axisProj);
+                float elbowAxisDot = Dot(elbowToTarget, unitAxis);
+                Scale(unitAxis, elbowAxisDot, axisProj);
                 Add(axisProj, mWorldDst, axisProj);
                 Vector3 elbowDir(elbow->WorldXfm().v);
                 elbowDir -= axisProj;
@@ -481,14 +449,15 @@ void CharIKHand::IKElbow(RndTransformable *elbow, RndTransformable *shoulder) {
                 Add(axisProj, axisDir, midPt);
                 Vector3 sphereToMid;
                 Subtract(axisProj, sphereCenter, sphereToMid);
-                Scale(axisDir, Dot(axisDir, sphereToMid), sphereToMid);
+                float midAxisDot = Dot(axisDir, sphereToMid);
+                Scale(axisDir, midAxisDot, sphereToMid);
                 Add(sphereCenter, sphereToMid, sphereToMid);
-                float a = Distance(sphereToMid, sphereCenter);
-                MILO_ASSERT(a <= sphereRadius, 0x1A2);
-                float sPerpDist = std::sqrt(sphereRadius * sphereRadius - a * a);
+                float sDistToAxis = Distance(sphereToMid, sphereCenter);
+                MILO_ASSERT(sDistToAxis <= sphereRadius, 0x1A1);
+                float sPerpDist = std::sqrt(sphereRadius * sphereRadius - sDistToAxis * sDistToAxis);
                 sphereCenter.Set(sphereToMid.x, sphereToMid.y, sphereToMid.z);
                 float sphereToAxisDist = Distance(sphereCenter, axisProj);
-                float d = (sphereToAxisDist * sphereToAxisDist + -(a * a - sPerpDist * sPerpDist)) / (sphereToAxisDist * 2.0f);
+                float d = (sphereToAxisDist * sphereToAxisDist + -(sDistToAxis * sDistToAxis - sPerpDist * sPerpDist)) / (sphereToAxisDist * 2.0f);
                 float sqrtTerm = std::sqrt(-(d * d - sPerpDist * sPerpDist));
                 float tiltAngle = std::asin(sqrtTerm / elbowLen);
                 if (IsNaN(tiltAngle))
@@ -538,6 +507,7 @@ void CharIKHand::IKElbow(RndTransformable *elbow, RndTransformable *shoulder) {
 
 void CharIKHand::Highlight() {
     float charWeight = Weight();
+    float leftover = 0;
     float localWeights[16];
 
     auto& hand = mHand;
@@ -545,7 +515,6 @@ void CharIKHand::Highlight() {
         return;
     else {
         if (mTargets.size() != 1) {
-            float leftover = 0;
             float *fp = &localWeights[0];
             for (ObjVector<IKTarget>::iterator it = mTargets.begin();
                  it != mTargets.end();

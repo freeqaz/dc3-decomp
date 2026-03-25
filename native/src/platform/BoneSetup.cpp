@@ -216,7 +216,12 @@ void FillBoneUniforms(RndMesh* mesh, BoneUniforms& out) {
                           fabsf(wt.v.z) < 100000.0f);
             if (valid) {
                 Transform skinMatrix;
-                Multiply(mesh->BoneOffsetAt(i), wt, skinMatrix);
+                // DEBUG: test Z offset for foot-in-ground investigation
+                // Shift character up by 3 units to see if feet leave the floor
+                Transform wtAdjusted = wt;
+                static const char* sFootOffset = getenv("DC3_FOOT_OFFSET");
+                if (sFootOffset) wtAdjusted.v.z += atof(sFootOffset);
+                Multiply(mesh->BoneOffsetAt(i), wtAdjusted, skinMatrix);
                 TransformToMat4(skinMatrix, out.bones[i]);
                 if (doDiag && (i < 3 || isArm)) {
                     fprintf(stderr, "    skin:     [%.3f %.3f %.3f %.1f / %.3f %.3f %.3f %.1f / %.3f %.3f %.3f %.1f / %.3f %.3f %.3f %.1f]\n",

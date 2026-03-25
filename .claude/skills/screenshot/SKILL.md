@@ -78,9 +78,9 @@ dc3-native screenshots use headless GPU rendering: draw to offscreen texture →
 | GPU readback | `native/src/gfx/GpuDevice.cpp:308-361` | `ReadbackHeadlessFrame()` — copies mHeadlessTex → staging buffer → CPU |
 | PNG write | `native/src/gfx/Screenshot.cpp:10-31` | `stbi_write_png()` via `WritePNG()` |
 
-### Why Xvfb Breaks Screenshots
+### Headless Mode Is Required
 
-`ReadbackHeadlessFrame()` reads from `mHeadlessTex` — an offscreen texture created only in headless mode (`GpuDevice.cpp:294-306`). With Xvfb, Dawn creates a swapchain instead, and `mHeadlessTex` is never allocated. The readback returns `false` silently.
+`ReadbackHeadlessFrame()` reads from `mHeadlessTex` — an offscreen texture created only in headless mode (`GpuDevice.cpp:294-306`). If a window is present (e.g. via a display server), Dawn creates a swapchain instead, and `mHeadlessTex` is never allocated. The readback returns `false` silently. Do NOT use a virtual display — screenshots require true headless mode (`MILO_HEADLESS=1`).
 
 ### Key Data Structures
 

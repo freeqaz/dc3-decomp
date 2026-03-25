@@ -52,7 +52,7 @@ void PlatformMgr::SetScreenSaver(bool b) { mScreenSaver = b; }
 void PlatformMgr::CheckMailbox() {}
 void PlatformMgr::RunNetStartUtility() {}
 void PlatformMgr::SetNotifyUILocation(NotifyLocation) {}
-bool PlatformMgr::PollXSocialCapabilities() { return false; }
+bool PlatformMgr::PollXSocialCapabilities() { return true; }
 bool PlatformMgr::QueryXSocialCapabilities() { return false; }
 void PlatformMgr::SmartGlassSend(unsigned long, const DataArray *) {}
 bool PlatformMgr::IsSmartGlassConnected() { return false; }

@@ -81,6 +81,7 @@ void CharIKFoot::Poll() {
 }
 
 void CharIKFoot::DoFSM(Character *mMe, Transform &tf) {
+    mFootTransform = mFinger->WorldXfm();
     if (mMe && mMe->Teleported())
         mFootFsmState = 0;
     float deltasecs = TheTaskMgr.DeltaSeconds();
@@ -109,7 +110,9 @@ void CharIKFoot::DoFSM(Character *mMe, Transform &tf) {
         }
     }
     if (mFootFsmState == 0) {
-        tf.v = mFinger->WorldXfm().v;
+        const Transform &wt = mFinger->WorldXfm();
+        tf.v.x = wt.v.x;
+        tf.v.y = wt.v.y;
         if (b2) {
             mFootPosition = tf.v;
             mFootFsmState = 1;
@@ -130,15 +133,15 @@ void CharIKFoot::DoFSM(Character *mMe, Transform &tf) {
         }
     }
     if (mFootFsmState == 2) {
-        Vector3 v48;
-        Subtract(mFinger->WorldXfm().v, tf.v, v48);
-        float len = Length(v48);
+        Vector3 delta;
+        Subtract(mFinger->WorldXfm().v, mFootPosition, delta);
+        float len = Length(delta);
         mFootBlendTime = Min(-(deltasecs * 25.0f - mFootBlendTime), len);
         if (mFootBlendTime <= 0.0f)
             mFootFsmState = 0;
         else
-            v48 *= (len - mFootBlendTime) / len;
-        tf.v += v48;
+            delta *= (len - mFootBlendTime) / len;
+        Add(mFootPosition, delta, tf.v);
         if (b2) {
             mFootPosition = tf.v;
             mFootFsmState = 1;

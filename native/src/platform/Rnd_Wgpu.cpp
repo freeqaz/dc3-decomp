@@ -33,14 +33,14 @@
 #include "char/Character.h"
 #include "math/Utl.h"
 
-#if defined(MILO_VIEWER) || !defined(__EMSCRIPTEN__)
 #include <imgui.h>
 #include <imgui_impl_wgpu.h>
 #include "platform/DebugPanel.h"
-#endif
 
 #ifndef __EMSCRIPTEN__
 #include <GLFW/glfw3.h>
+#else
+#include <emscripten/html5.h>
 #endif
 
 #include <algorithm>
@@ -757,9 +757,7 @@ void WgpuRnd::BeginTexturePass(RndTex* tex) {
     mPass = mEncoder.BeginRenderPass(&rpDesc);
     mInPass = true;
     mActiveTargetTex = tex;
-    mCurrentTargetFormat = tex->GetType() == RndTex::kDepthVolumeMap
-        ? wgpu::TextureFormat::RGBA8Unorm
-        : wgpu::TextureFormat::RGBA8UnormSrgb;
+    mCurrentTargetFormat = ChooseRenderTargetFormat(tex);
     mCurrentSampleCount = 1;
     mCurrentPassHasDepth = depthView != nullptr;
     mCurrentTargetWidth = (uint32_t)tex->Width();
@@ -918,6 +916,18 @@ void WgpuRnd::BeginDrawing() {
         if (winW > 0 && winH > 0 &&
             (winW != mGpu.WindowWidth() || winH != mGpu.WindowHeight())) {
             mGpu.ResizeSurface(winW, winH);
+        }
+    }
+#else
+    // Web: poll canvas buffer size and sync GPU surface.
+    // The JS ResizeObserver may fire before WASM is ready, leaving the
+    // surface at its initial 1280x720 while the canvas is CSS-sized.
+    {
+        int canvasW, canvasH;
+        emscripten_get_canvas_element_size("#dc3-canvas", &canvasW, &canvasH);
+        if (canvasW > 0 && canvasH > 0 &&
+            (canvasW != mGpu.WindowWidth() || canvasH != mGpu.WindowHeight())) {
+            mGpu.ResizeSurface(canvasW, canvasH);
         }
     }
 #endif
@@ -1144,7 +1154,7 @@ void WgpuRnd::CreateDefaultTextures() {
         wgpu::TextureDescriptor desc{};
         desc.label = "DefaultWhite";
         desc.size = {1, 1, 1};
-        desc.format = wgpu::TextureFormat::RGBA8UnormSrgb;
+        desc.format = ChooseRenderTargetFormat(nullptr);
         desc.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
         desc.mipLevelCount = 1;
         mWhiteTex = mGpu.Device().CreateTexture(&desc);
@@ -1751,7 +1761,6 @@ wgpu::BindGroup WgpuRnd::CreateBoneBindGroup(uint32_t bufferOffset, uint32_t buf
 }
 
 void WgpuRnd::RenderImGuiOverlay() {
-#if defined(MILO_VIEWER) || !defined(__EMSCRIPTEN__)
     // Only render if ImGui has draw data ready (NewFrame + Render already called)
     if (!ImGui::GetCurrentContext()) return;
     ImDrawData* drawData = ImGui::GetDrawData();
@@ -1771,7 +1780,6 @@ void WgpuRnd::RenderImGuiOverlay() {
     wgpu::RenderPassEncoder imguiPass = mEncoder.BeginRenderPass(&rpDesc);
     ImGui_ImplWGPU_RenderDrawData(drawData, imguiPass.Get());
     imguiPass.End();
-#endif
 }
 
 void WgpuRnd::MaybeCaptureFrame() {

@@ -6,6 +6,7 @@
 #include <GLFW/glfw3.h>
 
 static bool sInitialized = false;
+static bool sHasWindow = false;
 
 void ImGuiBackend::Init(GLFWwindow* window, wgpu::Device device, wgpu::TextureFormat surfaceFmt) {
     if (sInitialized) return;
@@ -24,7 +25,11 @@ void ImGuiBackend::Init(GLFWwindow* window, wgpu::Device device, wgpu::TextureFo
     io.FontGlobalScale = 1.2f;
 
     // GLFW backend — install_callbacks=true chains to existing callbacks
-    ImGui_ImplGlfw_InitForOther(window, true);
+    // Skip in headless mode (window == nullptr) to avoid GLFW null-window asserts
+    sHasWindow = (window != nullptr);
+    if (sHasWindow) {
+        ImGui_ImplGlfw_InitForOther(window, true);
+    }
 
     // WebGPU backend
     ImGui_ImplWGPU_InitInfo wgpuInfo{};
@@ -40,7 +45,9 @@ void ImGuiBackend::Init(GLFWwindow* window, wgpu::Device device, wgpu::TextureFo
 void ImGuiBackend::NewFrame() {
     if (!sInitialized) return;
     ImGui_ImplWGPU_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
+    if (sHasWindow) {
+        ImGui_ImplGlfw_NewFrame();
+    }
     ImGui::NewFrame();
 }
 
@@ -52,7 +59,9 @@ void ImGuiBackend::Render(wgpu::RenderPassEncoder& pass) {
 void ImGuiBackend::Shutdown() {
     if (!sInitialized) return;
     ImGui_ImplWGPU_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
+    if (sHasWindow) {
+        ImGui_ImplGlfw_Shutdown();
+    }
     ImGui::DestroyContext();
     sInitialized = false;
 }

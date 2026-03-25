@@ -5,11 +5,11 @@ Techniques for debugging the DC3 WASM/Emscripten web port running in Chromium.
 ## Prerequisites
 
 ```bash
-sudo pacman -S xorg-server-xvfb chromium
+sudo pacman -S chromium
 npm install playwright
 ```
 
-WebGPU requires a real GPU context — headless Chrome can't initialize WebGPU without X11/Vulkan. Use `xvfb-run` to provide a virtual X11 display.
+WebGPU requires a real GPU context. The test scripts launch Chromium in headed mode against the existing display (`$DISPLAY`).
 
 ## Quick Reference
 
@@ -17,16 +17,14 @@ WebGPU requires a real GPU context — headless Chrome can't initialize WebGPU w
 # Start dev server
 python native/web/server.py --port 8420
 
-# Smoke test (auto xvfb, basic pass/fail)
+# Smoke test (basic pass/fail)
 native/web/tests/run-web-tests.sh
 
 # Song loading diagnosis (navigates through full menu flow)
-xvfb-run -a --server-args="-screen 0 1920x1080x24" \
-  node native/web/tests/diagnose-song-load.js --no-server --verbose
+node native/web/tests/diagnose-song-load.js --no-server --verbose
 
 # CDP debugger break (pauses at hang point, dumps call stack)
-xvfb-run -a --server-args="-screen 0 1920x1080x24" \
-  node native/web/tests/cdp-debugger-break.js --no-server
+node native/web/tests/cdp-debugger-break.js --no-server
 
 # Rebuild WASM
 native/web/build.sh
@@ -139,7 +137,7 @@ If the WASM is hung, wrap in `Promise.race` with a timeout — a failed screensh
 Extract and categorize errors from a full test run:
 ```bash
 # Run with verbose output to file
-xvfb-run -a ... --verbose > /tmp/claude-1000/full-log.txt 2>&1
+node scripts/web/gameplay.mjs --verbose > /tmp/claude-1000/full-log.txt 2>&1
 
 # Extract unique errors
 grep 'error\]' full-log.txt | sed 's/^\s*\[[0-9.]*s error\] //' | \
@@ -177,7 +175,7 @@ The server maps `system/run/` requests to `(..)/(..)/system/run/` on disk. If ne
 
 ### Sandbox
 
-GPU access requires `dangerouslyDisableSandbox: true` for bash commands. The xvfb-run + Chromium + Vulkan stack needs unrestricted filesystem and device access.
+GPU access requires `dangerouslyDisableSandbox: true` for bash commands. Chromium + Vulkan needs unrestricted filesystem and device access.
 
 ### Server Must Match Build
 
@@ -190,7 +188,7 @@ After rebuilding WASM (`native/web/build.sh`), restart the dev server to serve t
 | `web-smoke.js` | Basic smoke test, detect crashes | `--wait-for`, `--timeout`, `--hang-timeout` |
 | `diagnose-song-load.js` | Full menu navigation + song loading | `--timeout`, `--hang-timeout`, `--verbose` |
 | `cdp-debugger-break.js` | Pause at hang, dump call stack | `--silence`, `--verbose` |
-| `run-web-tests.sh` | Wrapper with xvfb + log capture | `--verbose`, `--diagnose-hang`, `--no-xvfb` |
+| `run-web-tests.sh` | Wrapper with log capture | `--verbose`, `--diagnose-hang` |
 
 ## Case Study: The StartIntro Hang (2026-03-17)
 

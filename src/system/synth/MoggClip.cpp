@@ -10,6 +10,7 @@
 #include "synth/Synth.h"
 #include "utl/BinStream.h"
 #include "utl/Loader.h"
+#include "utl/MakeString.h"
 #include "utl/MemMgr.h"
 #include "utl/Symbol.h"
 
@@ -165,6 +166,9 @@ void MoggClip::Play(float f1) {
         if (!mStream) {
             delete stream;
         } else {
+#ifdef HX_WEB
+            mStream->SetDebugTag(MakeString("MoggClip[%s]", mMoggFile.c_str()));
+#endif
             mFader->SetVolume(0);
             SetVolume(f1);
             MoggClip::SetVolume(mVolume);

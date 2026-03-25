@@ -99,6 +99,9 @@ public:
     int ConsumeData(void **, int, int);
     void SetBufSecs(float secs) { mBufSecs = secs; }
     int NumInfoChannels() const { return mInfoChannels; }
+#ifdef HX_WEB
+    void SetDebugTag(const char *);
+#endif
 
 #ifdef HX_NATIVE
     static float sAudioOffsetMs;
@@ -118,6 +121,9 @@ private:
     int MsToSamp(float) const;
     float SampToMs(int) const;
     bool StuffChannels();
+#ifdef HX_WEB
+    void UpdateWebDebugLabels();
+#endif
 
     static bool sReportLargeTimerErrors;
 
@@ -163,5 +169,8 @@ protected:
     bool mUseTimerFallback = false; // true when audio output is too slow (headless mode)
     Timer mWallClock; // independent wall-clock timer for detecting audio lag
     bool mWallClockStarted = false;
+#endif
+#ifdef HX_WEB
+    String mDebugTag;
 #endif
 };

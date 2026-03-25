@@ -6,6 +6,7 @@
 #pragma once
 
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <mutex>
 #include <vector>
@@ -22,6 +23,13 @@ public:
     // If fewer than frameCount, the source is considered finished.
     virtual int RenderAudio(float *output, int frameCount) = 0;
     virtual bool IsFinished() const = 0;
+#ifdef HX_WEB
+    virtual void DebugDescribe(char *buf, size_t bufSize) const {
+        if (bufSize > 0) {
+            buf[0] = '\0';
+        }
+    }
+#endif
 };
 
 class AudioDevice {
@@ -52,6 +60,9 @@ public:
     // Web only: called each frame from main loop to push mixed audio
     // into the SharedArrayBuffer ring buffer for the AudioWorklet
     void PumpAudio();
+#ifdef HX_WEB
+    void DebugDumpSources();
+#endif
 #endif
 
 private:

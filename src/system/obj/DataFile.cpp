@@ -34,6 +34,11 @@ std::map<String, DataNode> gReadFiles; // 0x60
 bool gCachingFile;
 bool gReadingFile;
 
+#ifdef HX_NATIVE
+static int gParseDepth = 0;
+static const int kMaxParseDepth = 512;
+#endif
+
 bool Defined() {
     for (std::list<bool>::iterator it = gConditional.begin();
          it != gConditional.end();
@@ -408,6 +413,15 @@ bool ParseNode() {
 }
 
 DataArray *ParseArray() {
+#ifdef HX_NATIVE
+    if (++gParseDepth > kMaxParseDepth) {
+        gParseDepth--;
+        MILO_FAIL("DTA parse depth exceeded %d (file %s, line %d)", kMaxParseDepth, gFile, gDataLine);
+        DataArray *empty = new DataArray(0);
+        empty->SetFileLine(gFile, gDataLine);
+        return empty;
+    }
+#endif
     DataArray *sav = gArray;
     int nod = gNode;
     DataArray *da = new DataArray(16);
@@ -421,6 +435,9 @@ DataArray *ParseArray() {
     da = gArray;
     gArray = sav;
     gNode = nod;
+#ifdef HX_NATIVE
+    gParseDepth--;
+#endif
     return da;
 }
 

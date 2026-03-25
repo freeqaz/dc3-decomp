@@ -7,7 +7,9 @@
 #include "synth/Faders.h"
 #include "synth/FxSend.h"
 #include "synth/Synth.h"
+#include "synth/StandardStream.h"
 #include "utl/Loader.h"
+#include "utl/MakeString.h"
 #include "utl/MemMgr.h"
 #include "utl/SongInfoAudioType.h"
 #include "utl/SongInfoCopy.h"
@@ -346,6 +348,17 @@ void HamAudio::FinishLoad() {
         stream0 = TheSynth->NewBufStream(mRawBuffer, mRawBufferSize, mogg, 0.25f, true);
         mStreams[1] = TheSynth->NewBufStream(mRawBuffer, mRawBufferSize, mogg, 0.25f, false);
         mSongStream = stream0;
+#ifdef HX_WEB
+        const char *baseName = mSongInfo ? mSongInfo->GetBaseFileName() : "<no-song>";
+        StandardStream *primary = dynamic_cast<StandardStream *>(stream0);
+        if (primary) {
+            primary->SetDebugTag(MakeString("HamAudio[%s] primary", baseName));
+        }
+        StandardStream *crossfade = dynamic_cast<StandardStream *>(mStreams[1]);
+        if (crossfade) {
+            crossfade->SetDebugTag(MakeString("HamAudio[%s] crossfade", baseName));
+        }
+#endif
     }
     unsigned int counter = 2;
     Stream **pStream = &stream0;

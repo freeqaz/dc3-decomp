@@ -5,6 +5,9 @@ Techniques for debugging the DC3 native Linux port — memory errors, object lif
 ## Quick Reference
 
 ```bash
+# Agent testing — HTTP server + fast boot + telemetry (see docs/tools/HTTP_DEBUG_SERVER.md)
+scripts/dc3-agent-test.sh --headless
+
 # Standard headless run (logic only, fastest)
 # Good for boot/flow smoke tests. This is NOT long enough to verify post-intro gameplay animation.
 MILO_HEADLESS=1 MILO_NORENDER=1 MILO_FATAL_FAILS=0 \
@@ -227,6 +230,22 @@ The delete triggers a full destructor cascade. If the deleted ObjectDir has memb
 | `MILO_CAPTURE_FRAME=N` | GFXReconstruct capture at frame N |
 | `MILO_TRACE_DELETE_OBJECTS=1` | Log each object deletion in `DeleteObjects()` |
 | `MILO_DEBUG_MERGE=1` | Log merge operations (MergeObject source/target/action) |
+| `DC3_FAST_TIME=1` | Advance song time at frame rate instead of wall-clock (see below) |
+
+## Fast Time Mode
+
+By default, song time advances on the wall clock — a 3:30 song takes 3:30 of real time even in `MILO_NORENDER=1` mode where frames process at thousands of FPS. `DC3_FAST_TIME=1` overrides this so song time advances by ~8.33ms per frame (120fps equivalent), letting a full song complete in seconds.
+
+```bash
+# Full song playthrough in ~35 seconds instead of ~5 minutes
+DC3_FAST_TIME=1 MILO_HEADLESS=1 MILO_NORENDER=1 MILO_FATAL_FAILS=0 \
+  MILO_MAX_FRAMES=60000 MILO_INPUT_SCRIPT=scripts/dc3-input-flows/ymca.txt \
+  native/build/dc3-native
+```
+
+`scripts/dc3-agent-test.sh --headless` enables this by default. Override with `DC3_FAST_TIME=0` if you need real-time progression in headless mode.
+
+**Implementation**: `LiveInput::CurrentMs()` increments a synthetic counter per call instead of reading `mTimer.Ms()` or `mAudio.GetTime()`. Source: `src/lazer/game/LiveInput.cpp`.
 
 ## Scripted Input System
 

@@ -19,9 +19,11 @@
 #     MILO_INPUT_SCRIPT=scripts/dc3-input-flows/ymca.txt \
 #     native/build/dc3-native
 
-# attract_screen is the first UI screen. Press confirm to dismiss.
+# attract_screen plays the intro movie (flimflam.bik).
+# The movie_overlay_panel handles NAV_SELECT_MSG → skip.
+# Give ~1 second for the panel to enter and gain focus before pressing confirm.
 wait_screen attract_screen
-+1 confirm
++30 confirm
 
 # autosave_warning_screen auto-transitions to title_screen.
 # Title screen -- press confirm to proceed.

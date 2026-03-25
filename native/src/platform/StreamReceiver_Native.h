@@ -29,6 +29,10 @@ public:
     // AudioSource interface (called from audio thread)
     virtual int RenderAudio(float *output, int frameCount) override;
     virtual bool IsFinished() const override { return mEndData && mPlayCursor >= mWriteCursor; }
+#ifdef HX_WEB
+    virtual void DebugDescribe(char *buf, size_t bufSize) const override;
+    void SetDebugLabel(const char *label);
+#endif
 
     // Factory function — register with StreamReceiver::sFactory
     static StreamReceiver *Create(int numBuffers, int sampleRate, bool slip, int channel);
@@ -56,4 +60,12 @@ private:
     bool mPaused;
     int mSampleRate;
     u64 mTotalBytesPlayed;
+#ifdef HX_WEB
+    int mDebugId;
+    bool mInMixer;
+    char mDebugLabel[96];
+    unsigned int mSilentRenderCount;
+    unsigned int mActiveRenderCount;
+    float mLastPeak;
+#endif
 };

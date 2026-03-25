@@ -72,11 +72,11 @@ Requires `renderdoc.so` built against the same Python version. Set `RENDERDOC_PY
 | Option | Description | Default |
 |--------|-------------|---------|
 | `-o <path>` | Output .gfxr file | `/tmp/gpu_captures/capture.gfxr` |
-| `-f <frames>` | Frame range (needs Xvfb or display) | all |
+| `-f <frames>` | Frame range (needs display) | all |
 | `-s <submits>` | Queue submit range (works headless) | all |
 | `-q` | Quit after captured frames (requires `-f`) | off |
 | `-t <seconds>` | Kill app after N seconds | none |
-| `-x` | Use Xvfb virtual display | off |
+| `-x` | Use virtual display (for frame counting without `$DISPLAY`) | off |
 | `-c <type>` | Compression: LZ4, ZSTD, ZLIB, NONE | ZSTD |
 | `-l <level>` | Log level: debug, info, warning, error | warning |
 
@@ -94,18 +94,18 @@ dc3-native runs forever — use `-t` (timeout) or `-f ... -q` (frame range + qui
 # 60 seconds headless (~500MB with ZSTD)
 MILO_RENDER=1 scripts/gpu/capture.sh -t 60 native/build/dc3-native
 
-# Frame-accurate with Xvfb virtual display (auto-quit after frame 200)
+# Frame-accurate with virtual display (auto-quit after frame 200)
 MILO_RENDER=1 scripts/gpu/capture.sh -x -f 100-200 -q native/build/dc3-native
 
 # Queue submit trimming headless (no display needed)
 MILO_RENDER=1 scripts/gpu/capture.sh -s 50-150 -t 30 native/build/dc3-native
 ```
 
-### Xvfb Virtual Display
+### Virtual Display for Frame Counting
 
 Use `-x` to create a virtual X11 display via `xvfb-run`. This gives the app a real window so Dawn creates a swapchain, enabling frame counting (`-f`) and auto-quit (`-q`). Auto-enabled when `-f` is used without `$DISPLAY`.
 
-Requires `xorg-server-xvfb` (`pacman -S xorg-server-xvfb`).
+> **Note**: This is only for GPU capture frame trimming. For screenshots, use `scripts/gpu/screenshot.sh` which works headless — no display needed.
 
 ### Capture Size Estimates
 

@@ -6,6 +6,7 @@
 
 #include "gfx/Screenshot.h"
 #include <cstdio>
+#include <vector>
 
 bool WritePNG(const char* path, const uint8_t* rgba, int w, int h) {
     int stride = w * 4;
@@ -24,6 +25,19 @@ bool WritePPM(const char* path, const uint8_t* rgba, int w, int h) {
     }
     fclose(f);
     return true;
+}
+
+static void PngWriteToVector(void* context, void* data, int size) {
+    auto* vec = static_cast<std::vector<uint8_t>*>(context);
+    auto* bytes = static_cast<const uint8_t*>(data);
+    vec->insert(vec->end(), bytes, bytes + size);
+}
+
+bool WritePNGToMemory(std::vector<uint8_t>& out, const uint8_t* rgba, int w, int h) {
+    out.clear();
+    int stride = w * 4;
+    int ok = stbi_write_png_to_func(PngWriteToVector, &out, w, h, 4, rgba, stride);
+    return ok != 0;
 }
 
 bool WriteScreenshot(const char* path, const uint8_t* rgba, int w, int h) {

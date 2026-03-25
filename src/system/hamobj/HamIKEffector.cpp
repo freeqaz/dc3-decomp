@@ -283,204 +283,150 @@ float HamIKEffector::ApplyPosConstraints(
 }
 
 float HamIKEffector::GetGroundHeight(RndTransformable *t) {
-    for (HamIKEffector *it = this; it != nullptr; it = it->mMore) {
+    HamIKEffector *it = this;
+    do {
         if (it->mGround) {
-            t = it->mGround;
-            break;
+            return it->mGround->WorldXfm().v.z;
         }
-    }
+        it = it->mMore;
+    } while (it != nullptr);
     return t->WorldXfm().v.z;
 }
 
 void HamIKEffector::Poll() {
-    if (!mEffector)
-        return;
+    if (mEffector) {
+        EffectorType t = GetType();
+        if (t != kEffectorTypeForearm && mSkeleton) {
+            float weight = Weight();
+            if (weight != 0.0f) {
+                RndTransformable *finger = mFinger.Ptr();
+                if (finger == nullptr) {
+                    finger = mEffector.Ptr();
+                }
 
-    EffectorType t = GetType();
-    if (t == kEffectorTypeForearm)
-        return;
+                Transform neutral;
+                mSkeleton->NeutralWorldXfm(finger, neutral);
+                Normalize(neutral.m, neutral.m);
+                Transform finalXfm;
+                QuatXfm neutralQ(neutral);
+                QuatXfm q;
+                q.v.x = 0.0f;
+                q.v.y = 0.0f;
+                q.v.z = 0.0f;
+                q.q.x = 0.0f;
+                q.q.y = 0.0f;
+                q.q.z = 0.0f;
+                q.q.w = 0.0f;
+                float totalWeight = ApplyConstraints(q, neutral, this);
 
-#ifdef HX_NATIVE
-    {
-        static int sIKPollLog = 0;
-        if (sIKPollLog < 20) {
-            sIKPollLog++;
-            RndTransformable *ground = mCharacter != nullptr
-                ? (RndTransformable *)mCharacter.Ptr() : nullptr;
-            float gh = GetGroundHeight(ground ? ground : mEffector.Ptr());
-            const Transform& ew = mEffector->WorldXfm();
-            fprintf(stderr, "FOOT-DIAG IK poll effector='%s' type=%d weight=%.2f "
-                    "effWorldPos=(%.3f, %.3f, %.3f) groundH=%.3f "
-                    "mGround=%p mChar=%p skel=%p dir='%s'\n",
-                    mEffector->Name(), (int)t, WeightOwner()->Weight(),
-                    ew.v.x, ew.v.y, ew.v.z, gh,
-                    (void*)mGround.Ptr(), (void*)mCharacter.Ptr(),
-                    (void*)mSkeleton.Ptr(),
-                    Dir() ? Dir()->Name() : "(null)");
-        }
-    }
-#endif
-
-    float weight = WeightOwner()->Weight();
-    if (!mSkeleton)
-        return;
-    if (weight == 0.0f)
-        return;
-
-    // Determine which transformable to use for IK: mFinger if set, otherwise mEffector
-    RndTransformable *finger = mFinger ? mFinger.Ptr() : mEffector.Ptr();
-
-    // Get neutral world transform for the finger/effector
-    Transform neutral;
-    mSkeleton->NeutralWorldXfm(finger, neutral);
-    Normalize(neutral.m, neutral.m);
-
-    // Convert neutral to QuatXfm (saves position + orientation)
-    QuatXfm neutralQ(neutral);
-
-    // Initialize constraint accumulator to zero
-    QuatXfm q;
-    q.v.x = 0.0f;
-    q.v.y = 0.0f;
-    q.v.z = 0.0f;
-    q.q.x = 0.0f;
-    q.q.y = 0.0f;
-    q.q.z = 0.0f;
-    q.q.w = 0.0f;
-
-    // Apply constraints
-    float totalWeight = ApplyConstraints(q, neutral, this);
-
-    // Hand with elbow: call DoFancyElbow and return
-    if (!(!(!(t == kEffectorTypeHand && mElbow != nullptr)))) {
-        // Assert weight == 1
-        if (weight != 1.0f) {
-            MILO_ASSERT(weight == 1, 0x135);
-        }
-
-        if (totalWeight < 1.0f) {
-            if (totalWeight == 0.0f && t == kEffectorTypeNone)
-                goto done;
-
-            // Get current world transform of finger/effector as QuatXfm
-            QuatXfm effQ(finger->WorldXfm());
-
-            if (t == kEffectorTypeAnkle || t == kEffectorTypePelvis) {
-                RndTransformable *ground = mCharacter != nullptr
-                    ? (RndTransformable *)mCharacter.Ptr()
-                    : (RndTransformable *)nullptr;
-                float groundHeight = GetGroundHeight(ground);
-
-                if (t == kEffectorTypePelvis) {
-                    // Find knee and ankle bones for pelvis interpolation
-                    RndTransformable *knee =
-                        CharUtlFindBoneTrans("bone_L-knee", Dir());
-                    RndTransformable *ankle =
-                        CharUtlFindBoneTrans("bone_L-ankle", Dir());
-                    if (knee != nullptr && ankle != nullptr) {
-                        Vector3 localPos;
-                        mSkeleton->NeutralLocalPos(ankle, localPos);
-                        float ankleLen = localPos.x;
-                        mSkeleton->NeutralLocalPos(knee, localPos);
-                        float kneeLen = localPos.x;
-                        float lowerBound = kneeLen * 0.3f + ankleLen;
-                        float blend =
-                            (effQ.v.z - groundHeight - lowerBound)
-                            / (kneeLen * 0.8f + ankleLen - lowerBound);
-                        blend = Max(blend, 0.0f);
-                        blend = Min(blend, 1.0f);
-                        float ratio =
-                            (ankle->WorldXfm().v.z + knee->WorldXfm().v.z)
-                            / (kneeLen + ankleLen);
-                        effQ.v.z =
-                            ((ratio - 1.0f) * blend + 1.0f)
-                            * (effQ.v.z - groundHeight)
-                            + groundHeight;
+                if (t == kEffectorTypeHand && mElbow != nullptr) {
+                    DoFancyElbow(q, totalWeight);
+                } else {
+                    if (weight != 1.0f) {
+                        MILO_ASSERT(weight == 1, 0x135);
                     }
-                } else if (t == kEffectorTypeAnkle) {
-                    // Save effector position for later restore
-                    Vector3 savedPos = effQ.v;
-                    float clampFactor =
-                        (neutralQ.v.z - groundHeight - 5.0f) * 0.09090909f;
-                    clampFactor = Max(clampFactor, 0.0f);
-                    clampFactor = Min(clampFactor, 1.0f);
-                    Interp(neutralQ.v, effQ.v, clampFactor, q.v);
-                    Interp(neutralQ.q, effQ.q, clampFactor, q.q);
-                    if (effQ.v.z < groundHeight) {
-                        effQ.v.z = groundHeight;
-                    }
-                    effQ.v.y = savedPos.y;
-#ifdef HX_NATIVE
-                    {
-                        static int sAnkleClampLog = 0;
-                        if (sAnkleClampLog < 10) {
-                            sAnkleClampLog++;
-                            fprintf(stderr, "FOOT-DIAG ankle-clamp effector='%s' "
-                                    "savedPos=(%.3f,%.3f,%.3f) effQ.v=(%.3f,%.3f,%.3f) "
-                                    "neutralQ.v=(%.3f,%.3f,%.3f) groundH=%.3f clampFactor=%.3f "
-                                    "clampFired=%d\n",
-                                    mEffector->Name(),
-                                    savedPos.x, savedPos.y, savedPos.z,
-                                    effQ.v.x, effQ.v.y, effQ.v.z,
-                                    neutralQ.v.x, neutralQ.v.y, neutralQ.v.z,
-                                    groundHeight, clampFactor,
-                                    (savedPos.z < groundHeight) ? 1 : 0);
+
+                    if (totalWeight < 1.0f) {
+                        if (totalWeight == 0.0f && t == kEffectorTypeNone)
+                            goto done;
+
+                        QuatXfm effQ(finger->WorldXfm());
+                        if (t == kEffectorTypeAnkle || t == kEffectorTypePelvis) {
+                            Character *character = mCharacter.Ptr();
+                            RndTransformable *ground =
+                                character ? (RndTransformable *)character : nullptr;
+                            float groundHeight = GetGroundHeight(ground);
+
+                            if (t == kEffectorTypePelvis) {
+                                RndTransformable *knee =
+                                    CharUtlFindBoneTrans("bone_L-knee", Dir());
+                                RndTransformable *ankle =
+                                    CharUtlFindBoneTrans("bone_L-ankle", Dir());
+                                if (knee != nullptr && ankle != nullptr) {
+                                    Vector3 localPos;
+                                    mSkeleton->NeutralLocalPos(ankle, localPos);
+                                    float ankleLen = localPos.x;
+                                    mSkeleton->NeutralLocalPos(knee, localPos);
+                                    float kneeLen = localPos.x;
+                                    float lowerBound = kneeLen * 0.3f + ankleLen;
+                                    float upperBound = kneeLen * 0.8f + ankleLen;
+                                    float blend =
+                                        (effQ.v.z - groundHeight - lowerBound)
+                                        / (upperBound - lowerBound);
+                                    blend = Max(blend, 0.0f);
+                                    blend = Min(blend, 1.0f);
+                                    const Transform &ankleWorld = ankle->WorldXfm();
+                                    const Transform &kneeWorld = knee->WorldXfm();
+                                    float totalLen = kneeLen;
+                                    totalLen += ankleLen;
+                                    float worldHeight = ankleWorld.v.z;
+                                    worldHeight += kneeWorld.v.z;
+                                    float ratio = worldHeight / totalLen;
+                                    effQ.v.z =
+                                        (((ratio - 1.0f) * blend) + 1.0f)
+                                        * (effQ.v.z - groundHeight)
+                                        + groundHeight;
+                                }
+                            } else {
+                                Vector3 savedPos = effQ.v;
+                                float clampFactor =
+                                    (neutralQ.v.z - groundHeight - 5.0f) * 0.09090909f;
+                                clampFactor = Max(clampFactor, 0.0f);
+                                clampFactor = Min(clampFactor, 1.0f);
+                                Interp(neutralQ.v, effQ.v, clampFactor, q.v);
+                                Interp(neutralQ.q, effQ.q, clampFactor, q.q);
+                                if (effQ.v.z < groundHeight) {
+                                    effQ.v.z = groundHeight;
+                                }
+                                effQ.v.x = savedPos.x;
+                                effQ.v.y = savedPos.y;
+                            }
                         }
+
+                        float remaining = 1.0f - totalWeight;
+                        q.v.x += remaining * effQ.v.x;
+                        q.v.y += remaining * effQ.v.y;
+                        q.v.z += remaining * effQ.v.z;
+                        ScaleAddEq(q.q, effQ.q, remaining);
+                        totalWeight += remaining;
                     }
-#endif
+
+                    float invWeight = 1.0f / totalWeight;
+                    q.v.x *= invWeight;
+                    q.v.y *= invWeight;
+                    q.v.z *= invWeight;
+                    Normalize(q.q, q.q);
+
+                    finalXfm.v.x = q.v.x;
+                    finalXfm.v.y = q.v.y;
+                    finalXfm.v.z = q.v.z;
+                    MakeRotMatrix(q.q, finalXfm.m);
+
+                    if (finger != mEffector.Ptr()) {
+                        Transform inv;
+                        if (finger->TransParent() == mEffector.Ptr()) {
+                            FastInvert(finger->LocalXfm(), inv);
+                        } else {
+                            FastInvert(finger->WorldXfm(), inv);
+                            Multiply(mEffector->WorldXfm(), inv, inv);
+                        }
+                        Multiply(inv, finalXfm, finalXfm);
+                    }
+
+                    if (mOther) {
+                        mEffector->SetWorldXfm(finalXfm);
+                        mOther->Poll();
+                        finalXfm = mEffector->WorldXfm();
+                    }
+
+                    if (t == kEffectorTypeAnkle || t == kEffectorTypeHand) {
+                        IKElbow(finalXfm.v);
+                    }
+
+                    mEffector->SetWorldXfm(finalXfm);
                 }
             }
-
-            // Blend with remaining weight
-            float remaining = 1.0f - totalWeight;
-            q.v.x += effQ.v.x * remaining;
-            q.v.y += effQ.v.y * remaining;
-            ScaleAddEq(q.q, effQ.q, 1.0f - totalWeight);
-            totalWeight += remaining;
         }
-
-        // Normalize the accumulated result
-        q.v.x *= 1.0f / totalWeight;
-        q.v.y *= 1.0f / totalWeight;
-        Normalize(q.q, q.q);
-
-        // Build final transform
-        Transform finalXfm;
-        finalXfm.v.x = q.v.x;
-        finalXfm.v.y = q.v.y;
-        finalXfm.v.z = q.v.z;
-        MakeRotMatrix(q.q, finalXfm.m);
-
-        // Handle finger != effector case
-        if (finger != mEffector) {
-            Transform inv;
-            if (finger->TransParent() == mEffector.Ptr()) {
-                // Finger's parent is the effector: use local xfm
-                FastInvert(finger->LocalXfm(), inv);
-            } else {
-                // General case: compute relative transform
-                FastInvert(finger->WorldXfm(), inv);
-                Multiply(mEffector->WorldXfm(), inv, inv);
-            }
-            Multiply(inv, finalXfm, finalXfm);
-        }
-
-        // If mOther exists, set world xfm, poll other, then re-read
-        if (mOther) {
-            mEffector->SetWorldXfm(finalXfm);
-            mOther->Poll();
-            finalXfm = mEffector->WorldXfm();
-        }
-
-        // Apply IK elbow for ankles/hands
-        if (t == kEffectorTypeAnkle || t == kEffectorTypeHand) {
-            IKElbow(finalXfm.v);
-        }
-
-        // Set effector world transform
-        mEffector->SetWorldXfm(finalXfm);
-    } else {
-        DoFancyElbow(q, totalWeight);
     }
 done:;
 }
@@ -490,7 +436,7 @@ void HamIKEffector::ComputeHandPullAndQuat(
 ) {
     auto& effectorRef = mEffector;
     RndTransformable *effector = effectorRef;
-    float dz = parentXfm.v.z - targetPos.z;
+    float dz = targetPos.z - parentXfm.v.z;
     float dx = targetPos.x - parentXfm.v.x;
     RndTransformable *parent = effector->TransParent();
     float dy = targetPos.y - parentXfm.v.y;

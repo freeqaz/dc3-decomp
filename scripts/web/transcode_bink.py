@@ -102,7 +102,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--crf",
         type=int,
-        default=30,
+        default=18,
         help="libvpx-vp9 constant quality factor. Lower is higher quality.",
     )
     parser.add_argument(

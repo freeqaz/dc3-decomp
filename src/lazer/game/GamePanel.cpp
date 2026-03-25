@@ -70,6 +70,66 @@ LatencyCallback gGamePanelCallback;
 static float sFloat1 = 0;
 static float sFloat2 = 0;
 
+#ifdef HX_NATIVE
+// HACK(native): explicitly refresh HUD flashcards from C++ until the scripted
+// flashcard update path advances reliably again.
+static RndPropAnim *GetNativeRoutineBuilderAnim(int playerIndex) {
+    if (!TheHamDirector) {
+        return nullptr;
+    }
+
+    WorldDir *world = TheHamDirector->GetWorld();
+    if (!world) {
+        return nullptr;
+    }
+
+    return world->Find<RndPropAnim>(
+        playerIndex == 0 ? "player_1_routine_builder.anim"
+                         : "player_2_routine_builder.anim",
+        true
+    );
+}
+
+static bool NativeHudFlashcardHackRequired() {
+    static Symbol merge_moves("merge_moves");
+    static Symbol move("move");
+
+    if (!TheHamDirector || !TheHamProvider
+        || !TheHamProvider->Property(merge_moves, true)->Int()) {
+        return false;
+    }
+
+    RndPropAnim *anim = GetNativeRoutineBuilderAnim(0);
+    if (!anim) {
+        return true;
+    }
+
+    PropKeys *moveKeys = anim->GetKeys(TheHamDirector, DataArrayPtr(move));
+    return !moveKeys || moveKeys->NumKeys() == 0;
+}
+
+static void RefreshNativeHudFlashcards(float beat, bool clearCards) {
+    DataNode &hp = DataVariable("hud_panel");
+    if (hp.Type() != kDataObject || !hp.GetObj()) {
+        return;
+    }
+
+    Hmx::Object *hud = hp.GetObj();
+    static Message clearLeft("clear_flash_cards", 0);
+    static Message clearRight("clear_flash_cards", 1);
+    static Message update("update_flashcards", 0.0f, 1);
+    static Message updateCampaign("update_all_flashcard_campaign_status");
+
+    if (clearCards) {
+        hud->Handle(clearLeft, true);
+        hud->Handle(clearRight, true);
+    }
+    update[0] = beat;
+    hud->Handle(update, true);
+    hud->Handle(updateCampaign, true);
+}
+#endif
+
 float LatencyCallback::UpdateOverlay(RndOverlay *o, float f2) {
     Hmx::Color color = unk4 ? Hmx::Color(1, 1, 1) : Hmx::Color(0, 0, 0);
     TheRnd.DrawRectScreen(
@@ -285,7 +345,11 @@ GamePanel::GamePanel()
       mLatencyOverlay(RndOverlay::Find("latency")),
       mFitnessOverlay(RndOverlay::Find("fitness")),
       mLoopVizOverlay(RndOverlay::Find("loop_viz")), mStartPaused(false), mState(), mEndGameResult(0),
-      mPerformanceProfiler("game_panel_load", 1), mIsReplay(false), mJitterSampleCount(0), mJitterBufferIndex(-2), mCurrentJitterValue(0), unkf8(true),
+      mPerformanceProfiler("game_panel_load", 1), mIsReplay(false)
+#ifdef HX_NATIVE
+      , mLastHudFlashcardBeat(-1)
+#endif
+      , mJitterSampleCount(0), mJitterBufferIndex(-2), mCurrentJitterValue(0), unkf8(true),
       mPauseCountInTimer(new Timer()), mNormalPauseEnabled(true), mCheatPaused(false), mPollLoadState(0), mSoundEventReceiverSet(false) {
     mFitnessFilters[0].SetPlayerIndex(0);
     mFitnessFilters[1].SetPlayerIndex(1);
@@ -350,6 +414,9 @@ void GamePanel::SetTypeDef(DataArray *def) {
             DataNode result = Handle(resetMsg, false);
             fprintf(stderr, "DC3 GamePanel::SetTypeDef('%s') — re-triggered common_reset (result type=%d)\n",
                     def->Sym(0).Str(), result.Type());
+            if (NativeHudFlashcardHackRequired()) {
+                RefreshNativeHudFlashcards(TheTaskMgr.Beat(), true);
+            }
         }
     }
 #endif
@@ -378,6 +445,9 @@ void GamePanel::Enter() {
     UIPanel::Enter();
     mPerformanceProfiler.Stop();
     Reset();
+#ifdef HX_NATIVE
+    mLastHudFlashcardBeat = -1;
+#endif
     SetPaused(false);
     ThePresenceMgr.SetInGame(TheHamSongMgr.GetSongIDFromShortName(TheGameData->GetSong()));
     sFloat1 = TheMaster->StreamMs();
@@ -390,6 +460,9 @@ void GamePanel::Exit() {
     ThePresenceMgr.SetNotInGame();
     UIPanel::Exit();
     mIsReplay = true;
+#ifdef HX_NATIVE
+    mLastHudFlashcardBeat = -1;
+#endif
     for (int i = 0; i < 2; i++) {
         FitnessFilter *filter = GetFitnessFilter(i);
         if (filter) {
@@ -435,6 +508,17 @@ void GamePanel::Poll() {
             StartGame();
         }
 #ifdef HX_NATIVE
+        // HACK(native): refresh once per beat from C++ so flashcards keep
+        // advancing even when the scripted interp/update path stalls.
+        if (mState == kGamePlaying && NativeHudFlashcardHackRequired()) {
+            int curBeat = Max(-1, (int)TheTaskMgr.Beat());
+            if (curBeat != mLastHudFlashcardBeat) {
+                RefreshNativeHudFlashcards(TheTaskMgr.Beat(), false);
+                mLastHudFlashcardBeat = curBeat;
+            }
+        } else if (mState == kGamePlaying) {
+            mLastHudFlashcardBeat = -1;
+        }
         // TODO(native): autoplay scoring — remove when real move detection is implemented
         // Without Kinect, no move_passed events fire, so score stays 0.
         // Simulate scoring by awarding points on each beat during gameplay.
@@ -682,6 +766,10 @@ void GamePanel::StartGame() {
     // SongSequence::Play also sets game_stage to "playing", but on native
     // the intro sequence may be skipped — set it explicitly as a fallback.
     TheHamProvider->SetProperty("game_stage", Symbol("playing"));
+    if (NativeHudFlashcardHackRequired()) {
+        RefreshNativeHudFlashcards(TheTaskMgr.Beat(), true);
+    }
+    mLastHudFlashcardBeat = -1;
     fprintf(stderr, "DC3 Native: StartGame() — game_stage set to 'playing'\n");
 #endif
 }

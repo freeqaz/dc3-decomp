@@ -12,9 +12,7 @@ sudo pacman -S chromium
 npm install playwright
 ```
 
-WebGPU requires a real GPU context. The test scripts launch system Chromium in **headed** mode against the existing display — no Xvfb needed on a desktop with X11/Wayland.
-
-> **CI / headless servers only**: Install `xorg-server-xvfb` and prefix commands with `xvfb-run -a --server-args="-screen 0 1920x1080x24"`.
+WebGPU requires a real GPU context. The test scripts launch system Chromium in **headed** mode against the existing display.
 
 ## Quick Start
 
@@ -111,7 +109,7 @@ npm run web:cdp-break -- --silence 10
 3. Emscripten routes all WASM `printf`/`TheDebug` output through JavaScript `console.log`
 4. Tests poll for specific log patterns, detect hangs (no output for N seconds), and report results
 
-The scripts check `process.env.DISPLAY` — if a display exists (desktop), Chrome launches headed. If not (CI), it falls back to headless (may need Xvfb for WebGPU).
+The scripts check `process.env.DISPLAY` — if a display exists (desktop), Chrome launches headed.
 
 ## Architecture
 
@@ -161,7 +159,7 @@ GPU access requires `dangerouslyDisableSandbox: true` for bash commands. Chromiu
 
 **WebGPU init fails:**
 - Ensure Vulkan drivers are installed (`vulkaninfo` should work)
-- Verify `DISPLAY` is set (or use Xvfb on headless servers)
+- Verify `DISPLAY` is set
 - Try `--use-angle=swiftshader` as fallback (slower, software rendering)
 
 **Server won't start:**

@@ -40,16 +40,19 @@
 #include "platform/Rnd_Wgpu.h"
 #include "platform/NativeSettings.h"
 #include "utl/Locale.h"
-#if !defined(__EMSCRIPTEN__)
 #include "gfx/ImGuiBackend.h"
 #include "platform/DebugPanel.h"
 #include <imgui.h>
-#endif
 #ifdef __EMSCRIPTEN__
 #include "audio/AudioDevice.h"
 #endif
 #if !defined(__EMSCRIPTEN__)
 extern GLFWwindow *gNativeWindow;
+#endif
+#ifdef DC3_HTTP_SERVER
+#include "platform/HttpServer.h"
+extern void HttpServerInit();
+extern void HttpServerShutdown();
 #endif
 // gNativeHudDir removed — HUD loaded by GameModeMerger.fm via FileMerger pipeline.
 // DTA enter handler (hud_objects.dta:162) sets $hud_panel automatically.
@@ -129,13 +132,11 @@ public:
             NativeSettings::Get().cameraBlend = !NativeSettings::Get().cameraBlend;
             return DataNode(0);
         }
-#if !defined(__EMSCRIPTEN__)
         if (sym == "get_debug_panel") return DataNode(DebugPanel::IsVisible() ? 1 : 0);
         if (sym == "toggle_debug_panel") {
             DebugPanel::Toggle();
             return DataNode(0);
         }
-#endif
         if (sym == "has_finished_campaign") return DataNode(0);
         if (sym == "get_all_unlocked") return DataNode(0);
         if (sym == "needs_upload") return DataNode(0);
@@ -180,6 +181,7 @@ public:
         if (sym == "set_recognizing") return DataNode(0);
         if (sym == "end_recognition") return DataNode(0);
         if (sym == "is_recognizing") return DataNode(0);
+        if (sym == "is_speech_supportable") return DataNode(0);
         if (sym == "get_result") return DataNode(Symbol(""));
         return Hmx::Object::Handle(msg, rev);
     }
@@ -555,15 +557,20 @@ App::App(int argc, char **argv) {
         TheLocale.SetMagnuStrings(nativeLocale);
     }
 
-    // Initialize ImGui debug overlay (desktop only — web build excluded)
+    // Initialize ImGui debug overlay
+    {
 #if !defined(__EMSCRIPTEN__)
-    if (gNativeWindow) {
-        auto &gpu = static_cast<WgpuRnd&>(TheRnd).Gpu();
-        ImGuiBackend::Init(gNativeWindow, gpu.Device(), gpu.SurfaceFormat());
-        DebugPanel::Init();
-        MILO_LOG("DC3 Native: ImGui debug panel initialized (~ to toggle)\n");
-    }
+        GLFWwindow *win = gNativeWindow;
+#else
+        GLFWwindow *win = nullptr; // Web backend ignores window param
 #endif
+        auto &gpu = static_cast<WgpuRnd&>(TheRnd).Gpu();
+        if (gpu.Device()) {
+            ImGuiBackend::Init(win, gpu.Device(), gpu.SurfaceFormat());
+            DebugPanel::Init();
+            MILO_LOG("DC3 Native: ImGui debug panel initialized (~ to toggle)\n");
+        }
+    }
 
     if (showSplash) {
         splash.EndSplasher();
@@ -807,6 +814,26 @@ void App::RunOneFrame() {
     TheRnd.BeginDrawing();
     if (TheUI)
         TheUI->Draw();
+
+    // ImGui debug overlay — deferred init on web (GPU device is async)
+    {
+        static bool sImGuiReady = false;
+        if (!sImGuiReady) {
+            auto &gpu = static_cast<WgpuRnd&>(TheRnd).Gpu();
+            if (gpu.Device()) {
+                ImGuiBackend::Init(nullptr, gpu.Device(), gpu.SurfaceFormat());
+                DebugPanel::Init();
+                sImGuiReady = true;
+            }
+        }
+        if (sImGuiReady && ImGui::GetCurrentContext()) {
+            ImGuiBackend::NewFrame();
+            if (DebugPanel::IsVisible())
+                DebugPanel::Draw();
+            ImGui::Render();
+        }
+    }
+
     TheRnd.EndDrawing();
 }
 #endif // HX_NATIVE
@@ -1165,6 +1192,9 @@ void App::RunWithoutDebugging() {
     if (maxFrames <= 0) maxFrames = 10000;
 
     GameplayTelemetry::Init();
+#ifdef DC3_HTTP_SERVER
+    HttpServerInit();
+#endif
 
     if (windowed)
         MILO_LOG("DC3 Native: Windowed mode - close window or press ESC to exit\n");
@@ -1186,6 +1216,14 @@ void App::RunWithoutDebugging() {
             TheSynth->Poll();
 
         GameplayTelemetry::Sample(frameCount);
+#ifdef DC3_HTTP_SERVER
+        if (TheHttpServer) {
+            TheHttpServer->ProcessCommands();
+            const char* screenName = (TheUI && TheUI->CurrentScreen())
+                ? TheUI->CurrentScreen()->Name() : "";
+            TheHttpServer->NotifyFrame(screenName, frameCount);
+        }
+#endif
 
         // Draw: BeginDrawing → UI panels (venue + HUD + menus) → EndDrawing.
         // During gameplay, the venue renders through world_panel → HamDirector.
@@ -1200,16 +1238,17 @@ void App::RunWithoutDebugging() {
 
         // ImGui debug overlay — rendered after game UI, before EndDrawing
         // EndDrawing() calls RenderImGuiOverlay() which consumes the draw data
-#if !defined(__EMSCRIPTEN__)
         if (ImGui::GetCurrentContext()) {
             ImGuiBackend::NewFrame();
             if (DebugPanel::IsVisible())
                 DebugPanel::Draw();
             ImGui::Render();
         }
-#endif
 
         TheRnd.EndDrawing();
+#ifdef DC3_HTTP_SERVER
+        if (TheHttpServer) TheHttpServer->ProcessScreenshots();
+#endif
 
         frameCount++;
 
@@ -1223,6 +1262,9 @@ void App::RunWithoutDebugging() {
             }
         }
     }
+#ifdef DC3_HTTP_SERVER
+    HttpServerShutdown();
+#endif
     return;
 #endif
     while (true) {

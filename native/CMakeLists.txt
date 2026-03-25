@@ -110,14 +110,15 @@ else()
     find_package(glfw3 REQUIRED)
 endif()
 
-# Dear ImGui — debug UI overlay for milo-viewer (not used in web build)
+# Dear ImGui — debug UI overlay for native + web builds
+include(FetchContent)
+FetchContent_Declare(imgui
+    GIT_REPOSITORY https://github.com/ocornut/imgui.git
+    GIT_TAG        8314fc3e5a10f7c6b670225065fce1dc8cfd396b  # post-v1.91.8, supports Dawn WebGPU API renames
+)
+FetchContent_MakeAvailable(imgui)
 if(NOT EMSCRIPTEN)
-    include(FetchContent)
-    FetchContent_Declare(imgui
-        GIT_REPOSITORY https://github.com/ocornut/imgui.git
-        GIT_TAG        8314fc3e5a10f7c6b670225065fce1dc8cfd396b  # post-v1.91.8, supports Dawn WebGPU API renames
-    )
-    FetchContent_MakeAvailable(imgui)
+    # Desktop: GLFW + Dawn backends
     add_library(imgui STATIC
         ${imgui_SOURCE_DIR}/imgui.cpp
         ${imgui_SOURCE_DIR}/imgui_draw.cpp
@@ -131,6 +132,21 @@ if(NOT EMSCRIPTEN)
         ${imgui_SOURCE_DIR}/backends
     )
     target_link_libraries(imgui PUBLIC glfw dawn::webgpu_dawn)
+    target_compile_definitions(imgui PUBLIC IMGUI_IMPL_WEBGPU_BACKEND_DAWN)
+else()
+    # Web: WebGPU backend only (input handled by ImGuiBackend_Web.cpp via Emscripten HTML5 API)
+    add_library(imgui STATIC
+        ${imgui_SOURCE_DIR}/imgui.cpp
+        ${imgui_SOURCE_DIR}/imgui_draw.cpp
+        ${imgui_SOURCE_DIR}/imgui_tables.cpp
+        ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+        ${imgui_SOURCE_DIR}/backends/imgui_impl_wgpu.cpp
+    )
+    target_include_directories(imgui PUBLIC
+        ${imgui_SOURCE_DIR}
+        ${imgui_SOURCE_DIR}/backends
+    )
+    target_compile_options(imgui PUBLIC "SHELL:--use-port=emdawnwebgpu")
     target_compile_definitions(imgui PUBLIC IMGUI_IMPL_WEBGPU_BACKEND_DAWN)
 endif()
 
@@ -1047,6 +1063,7 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/RndTex_Native.cpp
     src/platform/RenderState_Native.cpp
     src/platform/DataParser_Native.cpp
+    $<$<NOT:$<BOOL:${EMSCRIPTEN}>>:src/platform/HttpServer.cpp>
     src/engine_stubs_generated.cpp
     src/native_link_glue.cpp
     src/native_job_stubs.cpp
@@ -1201,6 +1218,8 @@ list(REMOVE_ITEM DC3_WEB_ENGINE_SOURCES
 add_executable(dc3-web
     src/main_web.cpp
     src/platform/WebSvcMgr_Stub.cpp
+    src/gfx/ImGuiBackend_Web.cpp
+    src/platform/DebugPanel.cpp
     ${DC3_WEB_ENGINE_SOURCES}
     ${DC3_WEB_CORE_SOURCES}
     ${DC3_WEB_GFX_SOURCES}
@@ -1271,6 +1290,8 @@ target_compile_options(dc3-web PRIVATE
     -fwasm-exceptions
 )
 
+target_link_libraries(dc3-web PRIVATE imgui)
+
 ## JSPI — zero-overhead async yielding
 if(DC3_WEB_ASYNC)
     target_compile_definitions(dc3-web PRIVATE DC3_WEB_ASYNCIFY=1)
@@ -1301,6 +1322,7 @@ target_compile_definitions(dc3-native PRIVATE
     HX_NATIVE=1
     MILO_DEBUG=1
     _DEBUG=1
+    DC3_HTTP_SERVER=1
     $<$<BOOL:${ENABLE_FFMPEG}>:HX_FFMPEG=1>
     $<$<BOOL:${ENABLE_NCNN}>:ENABLE_NCNN=1>
 )
@@ -1370,6 +1392,7 @@ set_source_files_properties(
     ${CMAKE_SOURCE_DIR}/../src/system/jpeg/Jpeg.cpp
     ${CMAKE_SOURCE_DIR}/src/platform/File_Native.cpp
     ${CMAKE_SOURCE_DIR}/src/engine_stubs_generated.cpp
+    ${CMAKE_SOURCE_DIR}/src/platform/HttpServer.cpp
     PROPERTIES SKIP_PRECOMPILE_HEADERS ON
 )
 

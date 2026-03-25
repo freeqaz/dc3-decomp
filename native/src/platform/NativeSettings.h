@@ -13,7 +13,7 @@ struct NativeSettings {
     // --- Camera Blend ---
     // Xbox always does instant hard cuts (mBlendTime=0) because the DTA
     // pick_shot flow_command path is dead. This injects blend times.
-    bool cameraBlend = true;
+    bool cameraBlend = false;
     float blendFramesSame = 10.0f;   // blend frames for same-category cuts
     float blendFramesCross = 15.0f;  // blend frames for cross-category cuts
 
@@ -48,13 +48,7 @@ struct NativeSettings {
 
     void Init() {
         // Parse all camera env vars
-        if (const char *v = getenv("MILO_CAM_BLEND"))
-            cameraBlend = atoi(v) != 0;
-        if (const char *v = getenv("MILO_CAM_BLEND_SAME"))
-            blendFramesSame = (float)atof(v);
-        if (const char *v = getenv("MILO_CAM_BLEND_CROSS"))
-            blendFramesCross = (float)atof(v);
-        if (const char *v = getenv("MILO_CAM_FOV_SCALE"))
+if (const char *v = getenv("MILO_CAM_FOV_SCALE"))
             fovScale = (float)atof(v);
         if (const char *v = getenv("MILO_CAM_NEAR"))
             nearPlaneOverride = (float)atof(v);
@@ -82,11 +76,8 @@ struct NativeSettings {
             fprintf(stderr, "[NativeSettings] Aspect override: %.3f\n", aspectOverride);
         if (cameraDebug)
             fprintf(stderr, "[NativeSettings] Camera debug overlay: ON\n");
-        if (!cameraBlend)
-            fprintf(stderr, "[NativeSettings] Camera blend: OFF\n");
-        if (blendFramesSame != 10.0f || blendFramesCross != 15.0f)
-            fprintf(stderr, "[NativeSettings] Blend frames: same=%.1f cross=%.1f\n",
-                    blendFramesSame, blendFramesCross);
+        if (cameraBlend)
+            fprintf(stderr, "[NativeSettings] Camera blend: ON\n");
         if (camForwardOffset != 0 || camHeightOffset != 0 || camLateralOffset != 0)
             fprintf(stderr, "[NativeSettings] Camera offset: forward=%.1f height=%.1f lateral=%.1f\n",
                     camForwardOffset, camHeightOffset, camLateralOffset);

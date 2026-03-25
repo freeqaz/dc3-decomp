@@ -18,4 +18,7 @@ protected:
     float mTimeOffset; // 0x8
     Timer mTimer; // 0x10
     int unk44; // 0x44
+#ifdef HX_NATIVE
+    mutable float mFastTimeMs; // synthetic time counter for DC3_FAST_TIME
+#endif
 };

@@ -11,6 +11,9 @@
 #include "os/System.h"
 #include "rndobj/Rnd.h"
 #include "ui/UI.h"
+#ifdef DC3_HTTP_SERVER
+#include "platform/HttpServer.h"
+#endif
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten/emscripten.h>
@@ -458,6 +461,12 @@ void JoypadPoll() {
             newButtons = GetScriptedButtons(currentFrame);
         }
 #endif // __EMSCRIPTEN__
+
+        // Phase 4: HTTP input injection (pad 0 only, works in both modes)
+#ifdef DC3_HTTP_SERVER
+        if (pad == 0 && TheHttpServer)
+            newButtons |= TheHttpServer->ConsumeHttpButtons();
+#endif
 
         // Translate analog sticks to digital buttons
         if (data->mTranslateSticks) {

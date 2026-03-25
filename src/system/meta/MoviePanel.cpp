@@ -26,6 +26,7 @@
 #include "platform/TexGpu.h"
 #include "rndobj/Mat.h"
 #include "rndobj/Tex.h"
+extern void FlushPostProcessingForOverlay();
 #endif
 
 bool MoviePanel::sUseSubtitles;
@@ -114,22 +115,37 @@ void MoviePanel::Load() {
 void MoviePanel::Draw() {
     if (GetState() != kUnloaded && mFinalDrawPassFlag == GetFinalDrawPass()) {
 #ifdef __EMSCRIPTEN__
-        // Render video frames through the engine instead of DOM overlay.
-        // WebMovieImpl decodes to RGBA; we upload to a GPU texture and
-        // draw a fullscreen rect, matching Xbox's BinkDraw-to-backbuffer behavior.
+        // Web: upload decoded video frame to GPU texture, then draw fullscreen.
+        // On Xbox, BinkDraw renders directly to the backbuffer; we replicate
+        // that by drawing a fullscreen rect over everything.
         WebMovieImpl* impl = dynamic_cast<WebMovieImpl*>(mMovie.GetImpl());
         if (impl && impl->HasDecodedFrame()) {
+            int vw = impl->GetDecodedWidth();
+            int vh = impl->GetDecodedHeight();
             if (!mVideoTex) {
                 mVideoTex = Hmx::Object::New<RndTex>();
+                mVideoTex->SetBitmap(vw, vh, 32, RndTex::kRendered, false, nullptr);
                 mVideoMat = Hmx::Object::New<RndMat>();
                 mVideoMat->SetDiffuseTex(mVideoTex);
             }
-            UploadRGBAToRndTex(mVideoTex, impl->GetRGBABuffer(),
-                               impl->GetDecodedWidth(), impl->GetDecodedHeight());
-            Hmx::Rect r(0, 0, 1, 1);
-            TheRnd.DrawRectScreen(r, Hmx::Color(1, 1, 1, 1), mVideoMat, nullptr, nullptr);
+            UploadRGBAToRndTex(mVideoTex, impl->GetRGBABuffer(), vw, vh);
         }
         mMovie.Draw(); // mark frame consumed
+        // Flush post-processing (bloom etc.) before drawing the video rect.
+        // The video should appear clean, not bloomed — same as Xbox where
+        // BinkDraw writes directly to the backbuffer after post-proc.
+        FlushPostProcessingForOverlay();
+        // Always draw: video frame if available, black fallback otherwise.
+        Hmx::Rect r(0, 0, 1, 1);
+        if (mVideoTex) {
+            TheRnd.DrawRectScreen(r, Hmx::Color(1, 1, 1, 1), mVideoMat, nullptr, nullptr);
+        } else {
+            TheRnd.DrawRectScreen(r, Hmx::Color(0, 0, 0, 1), nullptr, nullptr, nullptr);
+        }
+        // Skip UIPanel::Draw() — its meshes are untextured white rectangles
+        // that would render on top of the video. The movie_overlay_panel
+        // handles any needed overlay UI separately.
+        return;
 #else
         mMovie.Draw();
 #endif

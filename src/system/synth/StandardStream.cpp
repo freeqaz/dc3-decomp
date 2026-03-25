@@ -60,6 +60,32 @@ StandardStream::~StandardStream() {
     }
 }
 
+#ifdef HX_WEB
+void StandardStream::UpdateWebDebugLabels() {
+    String baseLabel = mDebugTag;
+    if (baseLabel.empty()) {
+        String fileNameStr = mFile ? mFile->Filename() : String("--no-file--");
+        baseLabel = FileGetName(fileNameStr.c_str());
+    }
+    for (int i = 0; i < mChannels.size(); i++) {
+        StreamReceiverNative *webRcvr = dynamic_cast<StreamReceiverNative *>(mChannels[i]);
+        if (webRcvr) {
+            String label = MakeString("%s ch%d", baseLabel.c_str(), i);
+            webRcvr->SetDebugLabel(label.c_str());
+        }
+    }
+}
+
+void StandardStream::SetDebugTag(const char *tag) {
+    if (tag) {
+        mDebugTag = tag;
+    } else {
+        mDebugTag = "";
+    }
+    UpdateWebDebugLabels();
+}
+#endif
+
 bool StandardStream::Fail() { return mRdr && mRdr->Fail(); }
 bool StandardStream::IsReady() const {
     return mState == kReady || mState == kPlaying || mState == kStopped;
@@ -593,6 +619,9 @@ void StandardStream::InitInfo(int i1, int sampleRate, bool floatSamples, int i4)
                     );
                 }
             }
+#ifdef HX_WEB
+            UpdateWebDebugLabels();
+#endif
             for (int i = 0; i < mVirtualChans; i++) {
                 void *buf = MemAlloc(
                     mFloatSamples ? 0x1000 : 0x800, __FILE__, 0x159, "stream mVirtBufs"

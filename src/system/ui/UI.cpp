@@ -574,7 +574,18 @@ void UIManager::Poll() {
                 const char *to;
                 int delay;
             };
+            // DC3_FAST_BOOT=1: skip boot screens in 10 frames instead of ~360
+            static int sFastBoot = -1;
+            if (sFastBoot < 0) {
+                const char *fb = getenv("DC3_FAST_BOOT");
+                sFastBoot = (fb && atoi(fb) != 0) ? 1 : 0;
+                if (sFastBoot)
+                    printf("DC3 UI: Fast boot enabled (10-frame transitions)\n");
+            }
+            int fast = sFastBoot ? 10 : 0;
+
             static const BootAdvance sBoot[] = {
+                {"attract_screen", "autosave_warning_screen", 90},
                 {"autosave_warning_screen", "title_screen", 90},
                 {"title_screen", "wait_main_after_saveload_screen", 60},
                 {"wait_main_after_saveload_screen", "main_screen", 120},
@@ -588,12 +599,13 @@ void UIManager::Poll() {
             };
 
             for (int i = 0; sBoot[i].from; i++) {
-                if (!strcmp(curName, sBoot[i].from) && sStuckFrames == sBoot[i].delay) {
+                int delay = (fast && sBoot[i].delay > 10) ? 10 : sBoot[i].delay;
+                if (!strcmp(curName, sBoot[i].from) && sStuckFrames == delay) {
                     UIScreen *next = ObjectDir::Main()->Find<UIScreen>(sBoot[i].to, false);
                     if (next) {
-                        if (DebugUIFlow())
-                            printf("DC3 UI: Boot advance '%s' -> '%s' (after %d frames)\n",
-                                   curName, sBoot[i].to, sBoot[i].delay);
+                        if (DebugUIFlow() || fast)
+                            fprintf(stderr, "DC3 UI: Boot advance '%s' -> '%s' (after %d frames)\n",
+                                   curName, sBoot[i].to, delay);
                         sStuckScreen = nullptr;
                         sStuckFrames = 0;
                         GotoScreen(next, false, false);

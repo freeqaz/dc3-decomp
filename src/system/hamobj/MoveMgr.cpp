@@ -152,7 +152,28 @@ void MoveMgr::InsertMoveInSong(const MoveVariant *var, int measure, int player) 
         float beat = measure * 4;
         float f4 = BeatToFrame(beat);
         float f6 = BeatToFrame(measure > 0 ? beat - 1 : 0);
-        RndPropAnim *anim = TheHamDirector->SongAnim(player);
+        RndPropAnim *anim = nullptr;
+#ifdef HX_NATIVE
+        static Symbol merge_moves("merge_moves");
+        if (TheHamDirector && TheHamProvider
+            && TheHamProvider->Property(merge_moves, true)->Int()) {
+            // HACK(native): populate the routine-builder anim directly. The
+            // SongAnim() fallback for native/web clip playback can otherwise
+            // redirect these initial remixer writes into the authored song.anim,
+            // leaving player_song_anim() with no move timeline for HUD sync.
+            WorldDir *world = TheHamDirector->GetWorld();
+            if (world) {
+                anim = world->Find<RndPropAnim>(
+                    player == 0 ? "player_1_routine_builder.anim"
+                                : "player_2_routine_builder.anim",
+                    true
+                );
+            }
+        }
+#endif
+        if (!anim) {
+            anim = TheHamDirector->SongAnim(player);
+        }
         if (!anim) return;
         DataArrayPtr ptr90(clip);
         DataArrayPtr ptr88(move);

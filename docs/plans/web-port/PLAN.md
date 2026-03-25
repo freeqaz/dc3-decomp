@@ -185,7 +185,7 @@ GET /api/file/<path>          -> Individual asset file (with Range request suppo
 - **WebGPU surface format fix** — RGBA8Unorm → BGRA8Unorm (Chrome's preferred canvas format)
 - **MSAA disabled for web** — browser WebGPU path uses sampleCount=1 (native keeps 4x)
 - **WebGPU rendering confirmed** — GPU submit pipeline operational, clear color renders to canvas
-- **xvfb-run required** — headless Chromium has no `navigator.gpu`; `xvfb-run -a` provides virtual display for WebGPU
+- **WebGPU needs display** — headless Chromium has no `navigator.gpu`; test scripts use headed mode against the existing `$DISPLAY`
 
 Multiple `.milo` files fail to load as PanelDir (expected — not all UI assets are bundled):
 - `ui/background/background.milo`, `ui/title/title.milo`, `ui/tutorial/tutorial_nav.milo`
@@ -204,18 +204,18 @@ Multiple `.milo` files fail to load as PanelDir (expected — not all UI assets 
 **Implemented**: `scripts/web/test.mjs` — single ~200-line Node.js script that orchestrates the full cycle:
 
 ```bash
-xvfb-run -a node scripts/web/test.mjs                # full: build + server + headed chrome + screenshot
-xvfb-run -a node scripts/web/test.mjs --no-build     # skip build
-xvfb-run -a node scripts/web/test.mjs --frames 10    # wait for 10 frames (default: 5)
-xvfb-run -a node scripts/web/test.mjs --timeout 60   # 60s timeout (default: 30)
-node scripts/web/test.mjs --headless                  # headless (no GPU — white canvas)
-xvfb-run -a node scripts/web/test.mjs --keep          # leave server running after test
+node scripts/web/test.mjs                # full: build + server + headed chrome + screenshot
+node scripts/web/test.mjs --no-build     # skip build
+node scripts/web/test.mjs --frames 10    # wait for 10 frames (default: 5)
+node scripts/web/test.mjs --timeout 60   # 60s timeout (default: 30)
+node scripts/web/test.mjs --headless     # headless (no GPU — white canvas)
+node scripts/web/test.mjs --keep         # leave server running after test
 ```
 
 **Features**:
 - Starts `server.py`, polls `/api/health` for readiness (new endpoint)
 - Launches **headed** Chromium by default (WebGPU requires real display) with flags (`--enable-features=Vulkan,UseSkiaRenderer`, `--enable-unsafe-webgpu`, etc.)
-- Use `xvfb-run -a` on headless servers to provide a virtual display
+- Requires a display (`$DISPLAY`) for WebGPU — runs headed
 - Captures ALL console output (log + error) with timestamps
 - Detects failure modes: WASM trap, hang (no output for 5s), crash, timeout, partial progress
 - Takes canvas screenshot via Playwright's compositor capture (`element.screenshot()`) — works with GPU-rendered WebGPU content

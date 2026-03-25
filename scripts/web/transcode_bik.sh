@@ -60,10 +60,10 @@ find "$INPUT_DIR" -iname "*.bik" -print0 | while IFS= read -r -d '' bik_file; do
     echo "  TRANSCODE: $rel_path → ${rel_path%.bik}.webm"
 
     # Transcode with VP9 video + Opus audio
-    # -crf 30: reasonable quality for game FMVs
+    # -crf 18: high quality for game FMVs (source is already lossy Bink)
     # -b:v 0: VBR mode (quality-based)
     if ffmpeg -y -i "$bik_file" \
-        -c:v libvpx-vp9 -crf 30 -b:v 0 \
+        -c:v libvpx-vp9 -crf 18 -b:v 0 \
         -c:a libopus -b:a 128k \
         -deadline good \
         "$webm_path" 2>/dev/null; then

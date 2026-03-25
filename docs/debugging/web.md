@@ -9,9 +9,7 @@ sudo pacman -S chromium
 npm install playwright
 ```
 
-WebGPU requires a real GPU context. The test scripts use Playwright to launch system Chromium (not Playwright's bundled browser) in **headed** mode against the existing display (`DISPLAY` env var). No Xvfb is needed on a desktop with X11/Wayland.
-
-> **CI / headless servers only**: If there's no display, install `xorg-server-xvfb` and prefix commands with `xvfb-run -a --server-args="-screen 0 1920x1080x24"`.
+WebGPU requires a real GPU context. The test scripts use Playwright to launch system Chromium (not Playwright's bundled browser) in **headed** mode against the existing display (`DISPLAY` env var).
 
 ## Architecture Overview
 
@@ -31,6 +29,8 @@ The web port compiles the same codebase as the desktop native port, with platfor
 | Build | `cmake --build native/build` | `scripts/build/web.sh` (emcmake) |
 
 Both desktop and web define `HX_NATIVE`. Platform-specific code uses `#ifdef __EMSCRIPTEN__`.
+
+> **Note**: The HTTP debug server (`DC3_HTTP=1`) is desktop-only — Emscripten is single-threaded with no socket server. For desktop interactive debugging, see [../tools/HTTP_DEBUG_SERVER.md](../tools/HTTP_DEBUG_SERVER.md).
 
 ## Web Test Commands
 

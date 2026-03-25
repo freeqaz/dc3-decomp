@@ -33,6 +33,7 @@ orig-assets/
 *.map
 *.MAP
 *.permuter_bak
+.permuter_work_*
 
 # Build files
 build/*

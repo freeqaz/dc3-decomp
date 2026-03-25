@@ -2,18 +2,18 @@
 # GFXReconstruct Vulkan capture wrapper for DC3 native port.
 #
 # Captures Vulkan API calls from a native port binary using the
-# GFXReconstruct layer. Works headless and with Xvfb virtual display.
+# GFXReconstruct layer. Works headless. Frame trimming (-f) needs a display.
 #
 # Usage:
 #   scripts/gpu/capture.sh [options] <binary> [binary-args...]
 #
 # Options:
 #   -o <path>       Output capture file (default: /tmp/gpu_capture.gfxr)
-#   -f <frames>     Frame range to capture (e.g. "100-200"). Requires Xvfb or display.
+#   -f <frames>     Frame range to capture (e.g. "100-200"). Requires display.
 #   -s <submits>    Queue submit range (e.g. "100-200"). Works headless.
-#   -q              Quit after captured frames (requires -f, uses Xvfb)
+#   -q              Quit after captured frames (requires -f)
 #   -t <seconds>    Kill the app after N seconds (for long-running apps like dc3-native)
-#   -x              Use Xvfb virtual display (enables frame counting + swapchain)
+#   -x              Use virtual display for frame counting (auto with -f when no $DISPLAY)
 #   -c <type>       Compression: LZ4, ZSTD (default), ZLIB, NONE
 #   -l <level>      Log level: debug, info, warning (default), error
 #   -h              Show this help
@@ -25,10 +25,10 @@
 #   # Capture 60 seconds of dc3-native (headless, queue submit trimming)
 #   scripts/gpu/capture.sh -t 60 native/build/dc3-native
 #
-#   # Capture dc3-native frames 100-200 with Xvfb (frame-accurate, auto-quit)
+#   # Capture dc3-native frames 100-200 (frame-accurate, auto-quit)
 #   scripts/gpu/capture.sh -x -f 100-200 -q native/build/dc3-native
 #
-#   # Capture dc3-native for 60s with Xvfb (windowed mode, frame counting)
+#   # Capture dc3-native for 60s with display (windowed mode, frame counting)
 #   scripts/gpu/capture.sh -x -t 60 native/build/dc3-native
 #
 #   # Capture queue submits 50-150 headless (no display needed)
@@ -83,13 +83,13 @@ if [[ $# -eq 0 ]]; then
     usage
 fi
 
-# Auto-enable Xvfb when using frame ranges (needs swapchain for frame counting)
+# Auto-enable virtual display when using frame ranges (needs swapchain for frame counting)
 if [[ -n "$FRAMES" && -z "$USE_XVFB" && -z "$DISPLAY" ]]; then
     if command -v xvfb-run &>/dev/null; then
-        echo "Note: auto-enabling Xvfb for frame-based capture (no \$DISPLAY)" >&2
+        echo "Note: auto-enabling virtual display for frame-based capture (no \$DISPLAY)" >&2
         USE_XVFB="true"
     else
-        echo "Warning: -f (frame range) requires a display or Xvfb. Install xorg-server-xvfb." >&2
+        echo "Warning: -f (frame range) requires a display. Install xorg-server-xvfb or set \$DISPLAY." >&2
     fi
 fi
 
@@ -153,7 +153,7 @@ echo "Output:  $OUTPUT" >&2
 [[ -n "$FRAMES" ]] && echo "Frames:  $FRAMES" >&2
 [[ -n "$SUBMITS" ]] && echo "Submits: $SUBMITS" >&2
 [[ -n "$TIMEOUT" ]] && echo "Timeout: ${TIMEOUT}s" >&2
-[[ -n "$USE_XVFB" ]] && echo "Display: Xvfb (virtual)" >&2
+[[ -n "$USE_XVFB" ]] && echo "Display: virtual (xvfb-run)" >&2
 echo "Compress: $COMPRESSION" >&2
 
 # Warn about capture size for long runs
@@ -167,7 +167,7 @@ if [[ -n "$TIMEOUT" && -z "$FRAMES" && -z "$SUBMITS" ]]; then
 fi
 echo "" >&2
 
-# Build command with optional timeout and Xvfb wrappers
+# Build command with optional timeout and virtual display wrappers
 CMD=("$@")
 if [[ -n "$TIMEOUT" ]]; then
     CMD=(timeout "$TIMEOUT" "${CMD[@]}")

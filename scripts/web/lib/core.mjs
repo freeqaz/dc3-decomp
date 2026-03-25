@@ -86,6 +86,7 @@ export async function launchBrowser(port) {
             '--disable-default-apps',
             '--disable-sync',
             '--mute-audio',
+            '--autoplay-policy=no-user-gesture-required',
         ],
     });
 

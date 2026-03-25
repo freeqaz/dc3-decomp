@@ -11,7 +11,7 @@ allowed-tools: Bash, Read, Glob, Grep
 
 ## Usage
 
-The `scripts/gpu/capture.sh` wrapper handles everything (layer setup, MILO_RENDER, Xvfb, timeouts).
+The `scripts/gpu/capture.sh` wrapper handles everything (layer setup, MILO_RENDER, timeouts).
 
 ```bash
 # render-test (headless, exits on its own)
@@ -20,7 +20,7 @@ bash scripts/gpu/capture.sh native/build/render-test --output /tmp/out.png --tes
 # dc3-native: 30-second headless capture
 bash scripts/gpu/capture.sh -t 30 native/build/dc3-native
 
-# dc3-native: frames 100-200 (auto-uses Xvfb for frame counting)
+# dc3-native: frames 100-200 (needs display for frame counting)
 bash scripts/gpu/capture.sh -f 100-200 -q native/build/dc3-native
 
 # milo-viewer: venue scene with screenshot
@@ -34,11 +34,11 @@ bash scripts/gpu/capture.sh native/build/milo-viewer \
 | Option | Description | Default |
 |--------|-------------|---------|
 | `-o <path>` | Output .gfxr file | `/tmp/gpu_captures/capture.gfxr` |
-| `-f <range>` | Frame range (e.g. `100-200`) — auto-uses Xvfb | all |
+| `-f <range>` | Frame range (e.g. `100-200`) — needs display | all |
 | `-s <range>` | Queue submit range (works headless) | all |
 | `-q` | Quit after captured frames | off |
 | `-t <sec>` | Kill app after N seconds | none |
-| `-x` | Force Xvfb virtual display | auto with `-f` |
+| `-x` | Force virtual display (for frame counting without `$DISPLAY`) | auto with `-f` |
 | `-c <type>` | Compression: LZ4, ZSTD, ZLIB, NONE | ZSTD |
 
 ### dc3-native Strategies
@@ -114,7 +114,7 @@ GFXReconstruct intercepts Vulkan calls at the layer level (`VK_LAYER_LUNARG_gfxr
 
 ### Frame Counting vs Queue Submits
 
-Frame trimming (`-f`) counts `vkQueuePresentKHR` calls — requires a swapchain (window). Queue submit trimming (`-s`) counts `vkQueueSubmit` calls — works headless. This is why `-f` auto-enables Xvfb: Dawn headless mode doesn't present to a surface.
+Frame trimming (`-f`) counts `vkQueuePresentKHR` calls — requires a swapchain (window/display). Queue submit trimming (`-s`) counts `vkQueueSubmit` calls — works headless. Dawn headless mode doesn't present to a surface, so `-f` requires a display. For screenshots, use `scripts/gpu/screenshot.sh` instead (headless GPU readback, no display needed).
 
 ### Debug Labels in Captures
 
@@ -136,7 +136,7 @@ Text meshes have empty `Name()` — their buffers show as `Dawn_Buffer_` (no suf
 
 | File | What |
 |------|------|
-| `scripts/gpu/capture.sh` | Capture wrapper (env vars, Xvfb, GPU check) |
+| `scripts/gpu/capture.sh` | Capture wrapper (env vars, GPU check) |
 | `scripts/gpu/inspect.sh` | Inspection wrapper (info, summary, convert, extract, calls, shaders) |
 | `native/src/gfx/GpuDevice.cpp` | Dawn device creation, debug toggle, headless texture, GPU readback |
 | `native/src/platform/Rnd_Wgpu.cpp` | WebGPU renderer — draw calls, uniform uploads, render passes |

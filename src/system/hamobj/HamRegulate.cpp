@@ -96,12 +96,11 @@ void HamRegulate::Regulate(Vector3 &posDelta, float &rotDelta) {
     radius = Max(radius, 0.01f);
     float invRadius = 1.0f / radius;
 
-    float dt = TheTaskMgr.DeltaBeat();
+    float absDt = Max(0.0f, TheTaskMgr.DeltaBeat());
     Character *character = mCharacter;
-    float absDt = Max(0.0f, dt);
 
+    auto& waypoint = mWaypoint;
     if (mRegulateMode == 1) {
-        Waypoint *waypoint = mWaypoint;
         float dy, dz;
         if (character->Teleported()) {
             const Transform &wpXfm = waypoint->WorldXfm();
@@ -131,15 +130,14 @@ void HamRegulate::Regulate(Vector3 &posDelta, float &rotDelta) {
         FastInvert(facing, facing);
         Multiply(facing, character->LocalXfm(), facing);
 
-        rotDelta = -(mWaypoint->LocalXfm().m.x.x * facing.m.x.y
-                    - mWaypoint->LocalXfm().m.x.y * facing.m.x.x);
+        rotDelta = -(waypoint->LocalXfm().m.x.x * facing.m.x.y
+                    - waypoint->LocalXfm().m.x.y * facing.m.x.x);
 
-        Waypoint *wp = mWaypoint;
-        float posFactor = Min(Max(0.0f, absDt * invRadius), 1.0f);
+        float posFactor = Min(1.0f, Max(0.0f, absDt * invRadius));
 
-        posDelta.x = wp->LocalXfm().v.x - facing.v.x;
-        posDelta.z = wp->LocalXfm().v.z - facing.v.z;
-        posDelta.y = wp->LocalXfm().v.y - facing.v.y;
+        posDelta.x = waypoint->LocalXfm().v.x - facing.v.x;
+        posDelta.z = waypoint->LocalXfm().v.z - facing.v.z;
+        posDelta.y = waypoint->LocalXfm().v.y - facing.v.y;
 
         rotDelta *= posFactor;
         posDelta.x *= posFactor;
@@ -153,17 +151,18 @@ void HamRegulate::Poll() {
     CharServoBone *servo = mCharacter->BoneServo();
     if (!servo) return;
 
-    float rotDelta = 0.0f;
     Vector3 posDelta(0, 0, 0);
+    float rotDelta = 0.0f;
     Regulate(posDelta, rotDelta);
 
     float dt = TheTaskMgr.DeltaSeconds();
     int footState = 0;
     float absDt = Max(0.0f, dt);
+    Character *character = mCharacter;
 
     if (!mCharacter->Teleported()) {
         float maxMove = mMaxSpeed * absDt;
-        float posMag = sqrtf(posDelta.y * posDelta.y + posDelta.x * posDelta.x);
+        float posMag = sqrtf(posDelta.x * posDelta.x + posDelta.y * posDelta.y);
         float fRotDelta = rotDelta;
         if (posMag > 0.0f && posMag > maxMove) {
             float scale = maxMove / posMag;
@@ -201,7 +200,6 @@ void HamRegulate::Poll() {
         }
     }
 
-    Character *character = mCharacter;
     mFootState = footState;
 
     Transform &xfm = character->DirtyLocalXfm();
