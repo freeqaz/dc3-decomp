@@ -38,6 +38,13 @@
 #include "obj/DirLoader.h"
 #include "ui/UILabel.h"
 #include "platform/Rnd_Wgpu.h"
+#include "platform/NativeSettings.h"
+#include "utl/Locale.h"
+#if !defined(__EMSCRIPTEN__)
+#include "gfx/ImGuiBackend.h"
+#include "platform/DebugPanel.h"
+#include <imgui.h>
+#endif
 #ifdef __EMSCRIPTEN__
 #include "audio/AudioDevice.h"
 #endif
@@ -116,6 +123,19 @@ public:
         if (sym == "get_disable_photos") return DataNode(0);
         if (sym == "get_disable_freestyle") return DataNode(0);
         if (sym == "get_no_flashcards") return DataNode(0);
+        // Native-only settings
+        if (sym == "get_camera_blend") return DataNode(NativeSettings::Get().cameraBlend ? 1 : 0);
+        if (sym == "toggle_camera_blend") {
+            NativeSettings::Get().cameraBlend = !NativeSettings::Get().cameraBlend;
+            return DataNode(0);
+        }
+#if !defined(__EMSCRIPTEN__)
+        if (sym == "get_debug_panel") return DataNode(DebugPanel::IsVisible() ? 1 : 0);
+        if (sym == "toggle_debug_panel") {
+            DebugPanel::Toggle();
+            return DataNode(0);
+        }
+#endif
         if (sym == "has_finished_campaign") return DataNode(0);
         if (sym == "get_all_unlocked") return DataNode(0);
         if (sym == "needs_upload") return DataNode(0);
@@ -502,6 +522,48 @@ App::App(int argc, char **argv) {
         registerStub("challenges", new Hmx::Object());
         registerStub("speech_mgr", new NativeSpeechMgrStub());
     }
+
+    // Inject native-only locale strings via MagnuStrings (checked first by
+    // Locale::Localize, English-only, normally unused on native).
+    {
+        DataArray *nativeLocale = new DataArray(4);
+
+        DataArray *label = new DataArray(2);
+        label->Node(0) = DataNode(Symbol("option_camera_blend"));
+        label->Node(1) = DataNode("<altb>Camera Blend</alt> Enabled");
+        nativeLocale->Node(0) = DataNode(label, kDataArray);
+        label->Release();
+
+        DataArray *desc = new DataArray(2);
+        desc->Node(0) = DataNode(Symbol("option_camera_blend_desc"));
+        desc->Node(1) = DataNode("Smooth camera blending between shots. Turn off for Xbox-faithful instant cuts.");
+        nativeLocale->Node(1) = DataNode(desc, kDataArray);
+        desc->Release();
+
+        DataArray *dbgLabel = new DataArray(2);
+        dbgLabel->Node(0) = DataNode(Symbol("option_debug_panel"));
+        dbgLabel->Node(1) = DataNode("<altb>Debug Overlay</alt>");
+        nativeLocale->Node(2) = DataNode(dbgLabel, kDataArray);
+        dbgLabel->Release();
+
+        DataArray *dbgDesc = new DataArray(2);
+        dbgDesc->Node(0) = DataNode(Symbol("option_debug_panel_desc"));
+        dbgDesc->Node(1) = DataNode("Show camera debug overlay with real-time sliders. Toggle with ~ key.");
+        nativeLocale->Node(3) = DataNode(dbgDesc, kDataArray);
+        dbgDesc->Release();
+
+        TheLocale.SetMagnuStrings(nativeLocale);
+    }
+
+    // Initialize ImGui debug overlay (desktop only — web build excluded)
+#if !defined(__EMSCRIPTEN__)
+    if (gNativeWindow) {
+        auto &gpu = static_cast<WgpuRnd&>(TheRnd).Gpu();
+        ImGuiBackend::Init(gNativeWindow, gpu.Device(), gpu.SurfaceFormat());
+        DebugPanel::Init();
+        MILO_LOG("DC3 Native: ImGui debug panel initialized (~ to toggle)\n");
+    }
+#endif
 
     if (showSplash) {
         splash.EndSplasher();
@@ -1135,6 +1197,18 @@ void App::RunWithoutDebugging() {
             TheUI->Draw();
         // HUD drawn by TheUI->Draw() via game_screen panel hierarchy.
         // FileMerger-loaded HUD flows control visibility/alpha/positioning.
+
+        // ImGui debug overlay — rendered after game UI, before EndDrawing
+        // EndDrawing() calls RenderImGuiOverlay() which consumes the draw data
+#if !defined(__EMSCRIPTEN__)
+        if (ImGui::GetCurrentContext()) {
+            ImGuiBackend::NewFrame();
+            if (DebugPanel::IsVisible())
+                DebugPanel::Draw();
+            ImGui::Render();
+        }
+#endif
+
         TheRnd.EndDrawing();
 
         frameCount++;

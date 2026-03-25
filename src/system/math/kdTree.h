@@ -4,6 +4,7 @@
 #include "os/Debug.h"
 #include "utl/MemMgr.h"
 #include "utl/Std.h"
+#include <stdint.h>
 #include <float.h>
 #include <list>
 
@@ -20,15 +21,27 @@ public:
     public:
         MEM_ARRAY_OVERLOAD(kdTriList, 0xC6);
 
+#ifdef HX_NATIVE
+        typedef intptr_t IndexType;
+#else
+        typedef int IndexType;
+#endif
+
         kdTriList() : mIndex(0) {}
+
+        static IndexType EndMarker() { return (IndexType)-1; }
 
         static kdTriList *Allocate(unsigned int num) {
             kdTriList *list = new kdTriList[num + 1];
-            list[num].mIndex = -1;
+            list[num].mIndex = EndMarker();
             return list;
         }
 
-        int mIndex; // Triangle*?
+        void SetItem(T *item) { mIndex = (IndexType)item; }
+        T *GetItem() const { return (T *)mIndex; }
+        bool IsEnd() const { return mIndex == EndMarker(); }
+
+        IndexType mIndex; // Triangle* or sentinel
     };
 
     class kdTreeNode {
@@ -82,7 +95,7 @@ public:
 #endif
         short mFlags;
 
-        bool GetIsLeaf() const { return mFlags & 0x8000; }
+        unsigned short GetIsLeaf() const { return mFlags & 0x8000; }
 
         float EvaluateSplit(
             const Box &box,
@@ -224,87 +237,107 @@ void kdTree<T>::kdTreeNode::Pack(
     unsigned char uc
 ) {
     if (uc < 0xF) {
-        if (!items.empty()) {
-            if (items.size() >= 10) {
-                bool bFound = false;
-                if (s == 0) {
-                    bFound = FindSplit_Mean(inDimensions, items);
-                } else if (s == 1) {
-                    bFound = FindSplit_SAH(inDimensions, items);
-                } else if (s == 2) {
-                    bFound = FindSplit_Mean(inDimensions, items);
+        typename std::list<Triangle *>::iterator it = items.begin();
+        if (it != items.end()) {
+            unsigned int uCount = 0;
+            do {
+                ++it;
+                uCount++;
+            } while (it != items.end());
+
+            if (uCount >= 10) {
+            bool bFound = false;
+            if (s == 0) {
+                bFound = FindSplit_Mean(inDimensions, items);
+            } else if (s == 1) {
+                bFound = FindSplit_Mean(inDimensions, items);
+            } else if (s == 2) {
+                bFound = FindSplit_SAH(inDimensions, items);
+            } else {
+                MILO_FAIL("Invalid split plane type");
+            }
+
+            if (bFound) {
+                unsigned int iAxis = mData.index & 3;
+                float fSplit = mData.real;
+                if (fSplit < inDimensions.mMin[iAxis]) {
+                } else if (fSplit > inDimensions.mMax[iAxis]) {
                 } else {
-                    MILO_FAIL("Invalid split plane type");
-                }
+                    Box minBox(inDimensions.mMin, inDimensions.mMax);
+                    Box maxBox(inDimensions.mMin, inDimensions.mMax);
+                    minBox.mMax[iAxis] = fSplit;
+                    maxBox.mMin[iAxis] = fSplit;
 
-                if (bFound) {
-                    float fSplit = mData.real;
-                    unsigned int iAxis = mData.index & 3;
-                    float fMin = inDimensions.mMin[iAxis];
-                    float fMax = inDimensions.mMax[iAxis];
+                    std::list<Triangle *> leftList;
+                    std::list<Triangle *> rightList;
+                    bool bContinue = true;
+                    for (it = items.begin(); it != items.end();) {
+                        Triangle *pTri = *it;
+                        ++it;
 
-                    if (fMin <= fSplit && fSplit <= fMax) {
-                        Box minBox = inDimensions;
-                        Box maxBox = inDimensions;
-                        minBox.mMax[iAxis] = fSplit;
-                        maxBox.mMin[iAxis] = fSplit;
-
-                        std::list<Triangle *> leftList, rightList;
-                        bool bContinue = true;
-                        for (auto it = items.begin(); it != items.end(); ++it) {
-                            Triangle *pTri = *it;
-                            MILO_ASSERT(::Intersect(*pTri, inDimensions), 0x166);
-                            bool bLeftIntersect = ::Intersect(*pTri, minBox);
-                            bool bRightIntersect = ::Intersect(*pTri, maxBox);
-
-                            if ((!bLeftIntersect) && (!bRightIntersect)) {
-                                bContinue = false;
-                                break;
-                            }
-
-                            if (bLeftIntersect) {
-                                leftList.push_back(pTri);
-                            }
-                            if (bRightIntersect) {
-                                rightList.push_back(pTri);
-                            }
+                        MILO_ASSERT(::Intersect(*pTri, inDimensions), 0x166);
+                        bool bLeftIntersect = ::Intersect(*pTri, minBox);
+                        bool bRightIntersect = ::Intersect(*pTri, maxBox);
+                        if (!bLeftIntersect && !bRightIntersect) {
+                            bContinue = false;
+                            break;
                         }
-
-                        if (bContinue && !leftList.empty() && !rightList.empty() && (unsigned short)(mFlags & 0x7fff) <= 0x3ffe) {
-                            items.clear();
-                            unsigned char ucNext = uc + 1;
-                            unsigned short uNodeIdx = mFlags & 0x7fff;
-                            mFlags = (mFlags & 0x8000) | uNodeIdx;
-
-                            kdTreeNode *pNode0 = pBase + uNodeIdx * 0x10 + 8;
-                            kdTreeNode *pNode1 = pBase + (uNodeIdx + 1) * 0x10;
-
-                            pNode0->Pack(s, minBox, leftList, pBase, ucNext);
-                            pNode1->Pack(s, maxBox, rightList, pBase, ucNext);
-
-                            leftList.clear();
-                            rightList.clear();
-                            return;
+                        if (bLeftIntersect) {
+                            leftList.push_back(pTri);
                         }
-                        leftList.clear();
-                        rightList.clear();
+                        if (bRightIntersect) {
+                            rightList.push_back(pTri);
+                        }
+                    }
+
+                    if (bContinue
+                        && (unsigned short)(mFlags & 0x7fff) <= 0x3ffe) {
+                        items.clear();
+                        unsigned char ucNext = uc + 1;
+                        mFlags &= 0x7fff;
+#ifdef HX_NATIVE
+                        kdTreeNode *pNode0 = pBase + ((unsigned short)mFlags * 2 + 1);
+                        kdTreeNode *pNode1 = pNode0 + 1;
+#else
+                        kdTreeNode *pNode1 = reinterpret_cast<kdTreeNode *>(
+                            reinterpret_cast<char *>(pBase)
+                            + (((unsigned short)mFlags + 1) << 4)
+                        );
+                        reinterpret_cast<kdTreeNode *>(
+                            reinterpret_cast<char *>(pBase)
+                            + (((unsigned short)mFlags) << 4) + 8
+                        )
+                            ->Pack(s, minBox, leftList, pBase, ucNext);
+#endif
+#ifdef HX_NATIVE
+                        pNode0->Pack(s, minBox, leftList, pBase, ucNext);
+#endif
+                        pNode1->Pack(s, maxBox, rightList, pBase, ucNext);
+                        return;
                     }
                 }
             }
         }
+        }
     }
 
     MILO_ASSERT(GetIsLeaf(), 0x19F);
-    if (items.empty()) {
+    typename std::list<Triangle *>::iterator it = items.begin();
+    if (it == items.end()) {
         SetTriList(nullptr);
     } else {
-        unsigned int uCount = items.size();
+        unsigned int uCount = 0;
+        do {
+            ++it;
+            uCount++;
+        } while (it != items.end());
+
         SetTriList(kdTriList::Allocate(uCount));
         kdTriList *pCurr = GetTriList();
-        while (!items.empty()) {
-            MILO_ASSERT(pCurr->mIndex != -1, 0x1AE);
-            pCurr->mIndex = reinterpret_cast<int>(items.front());
-            items.pop_front();
+        for (it = items.begin(); it != items.end();) {
+            MILO_ASSERT(!pCurr->IsEnd(), 0x1AE);
+            pCurr->SetItem(*it);
+            it = items.erase(it);
             ++pCurr;
         }
     }

@@ -333,20 +333,26 @@ int RndBitmap::PixelOffset(int x, int y, bool &nibble) const {
             if ((int)lookupOffset > 0x1F) {
                 lookupOffset = (lookupOffset + doubleRowStride) - 0x20;
             }
-            return lookupOffset + ((((y >> 1) & 0xFFFFFFFE) * doubleRowStride) + (((x >> 1) * 4) & 0xFFFFFFE0));
+            return lookupOffset
+                + ((((y >> 1) & 0xFFFFFFFE) * doubleRowStride)
+                   + (((x >> 1) * 4) & 0xFFFFFFE0));
         }
         int yQuadMod = (y >> 2) % 4;
         int tiledOffsetX, tiledOffsetY, tiledStride;
         if ((mWidth > 0x80U)) {
             if ((mHeight > 0x80U)) {
-            tiledOffsetX = (((int)(y - ((y / 128) << 7)) >> 1) & 0xFFFFFFF8) + ((x >> 1) & 0xFFFFFFC0);
-            tiledOffsetY = (((int)(x - ((x / 128) << 7)) >> 2) & 0xFFFFFFF8) + ((y >> 2) & 0xFFFFFFE0) + (yQuadMod * 2);
-            tiledStride = (((mHeight - (((int)mHeight / 128) << 7)) & 0xFFFFFFF0) + (mWidth & 0xFFFFFF80)) * 2;
-        } else {
-            tiledOffsetX = (y >> 1) & 0xFFFFFFF8;
-            tiledOffsetY = ((x >> 2) & 0xFFFFFFF8) + (yQuadMod * 2);
-            tiledStride = (int)mHeight * 2;
-        }
+                tiledOffsetX = (((int)(y - ((y / 128) << 7)) >> 1) & 0xFFFFFFF8)
+                    + ((x >> 1) & 0xFFFFFFC0);
+                tiledOffsetY = (((int)(x - ((x / 128) << 7)) >> 2) & 0xFFFFFFF8)
+                    + ((y >> 2) & 0xFFFFFFE0) + (yQuadMod * 2);
+                tiledStride = (((mHeight - (((int)mHeight / 128) << 7)) & 0xFFFFFFF0)
+                               + (mWidth & 0xFFFFFF80))
+                    * 2;
+            } else {
+                tiledOffsetX = (y >> 1) & 0xFFFFFFF8;
+                tiledOffsetY = ((x >> 2) & 0xFFFFFFF8) + (yQuadMod * 2);
+                tiledStride = (int)mHeight * 2;
+            }
         } else {
             tiledOffsetX = (y >> 1) & 0xFFFFFFF8;
             tiledOffsetY = ((x >> 2) & 0xFFFFFFF8) + (yQuadMod * 2);
@@ -373,10 +379,16 @@ int RndBitmap::PixelOffset(int x, int y, bool &nibble) const {
         int blockWidth = (((bppOffset - bppOffset) - !(bppOffset >> 31)) & 4) + 4;
         int pixelScale = (((bpp - 0x20) == 0) & 1) + 1;
         int xModBlockWidth = x % blockWidth;
-        int tiledBaseOffset = ((((((int)width / blockWidth) * (y / blockSize)) + (x / blockWidth)) * pixelScale * blockSize) + (y % blockSize)) * blockWidth;
+        int tiledBaseOffset =
+            ((((((int)width / blockWidth) * (y / blockSize)) + (x / blockWidth))
+              * pixelScale * blockSize)
+             + (y % blockSize))
+            * blockWidth;
         unsigned int scaledWidth = width * pixelScale;
-        int offsetMod = (int)(mBpp * ((tiledBaseOffset + xModBlockWidth) % scaledWidth)) >> (pixelScale + 2);
-        int rowOffset = mRowBytes * ((unsigned int)(tiledBaseOffset + xModBlockWidth) / scaledWidth);
+        int offsetMod = (int)(mBpp * ((tiledBaseOffset + xModBlockWidth) % scaledWidth))
+            >> (pixelScale + 2);
+        int rowOffset =
+            mRowBytes * ((unsigned int)(tiledBaseOffset + xModBlockWidth) / scaledWidth);
         return offsetMod + rowOffset;
     }
     nibble = x & 1;
@@ -575,10 +587,20 @@ void RndBitmap::GenerateMips() {
     RndBitmap *cur = this;
     while (true) {
         unsigned short dim = Min(cur->mWidth, cur->mHeight);
-        if (dim <= 16) break;
+        if (dim <= 16)
+            break;
         RELEASE(cur->mMip);
         cur->mMip = new RndBitmap();
-        cur->mMip->Create(cur->mWidth >> 1, cur->mHeight >> 1, 0, cur->mBpp, cur->mOrder, cur->mPalette, 0, 0);
+        cur->mMip->Create(
+            cur->mWidth >> 1,
+            cur->mHeight >> 1,
+            0,
+            cur->mBpp,
+            cur->mOrder,
+            cur->mPalette,
+            0,
+            0
+        );
         for (int i = 0; i < cur->mMip->mHeight; i++) {
             for (int j = 0; j < cur->mMip->mWidth; j++) {
                 unsigned char r, g, b, a;
@@ -602,7 +624,14 @@ void RndBitmap::GenerateMips() {
                 gsum += g;
                 bsum += b;
                 asum += a;
-                cur->mMip->SetPixelColor(j, i, (unsigned char)(rsum >> 2), (unsigned char)(gsum >> 2), (unsigned char)(bsum >> 2), (unsigned char)(asum >> 2));
+                cur->mMip->SetPixelColor(
+                    j,
+                    i,
+                    (unsigned char)(rsum >> 2),
+                    (unsigned char)(gsum >> 2),
+                    (unsigned char)(bsum >> 2),
+                    (unsigned char)(asum >> 2)
+                );
             }
         }
         cur = cur->mMip;
@@ -829,7 +858,16 @@ void RndBitmap::Save(BinStream &bs) const {
 //   pixelX, pixelY: coordinates within 4x4 block (0-3)
 //   hasDxt1Alpha: enable DXT1 1-bit alpha mode (color0 <= color1 → idx 3 = transparent)
 //   r, g, b, a: output color components (0-255)
-void DecodeDxtColor(unsigned char *blockData, int pixelX, int pixelY, bool hasDxt1Alpha, unsigned char &r, unsigned char &g, unsigned char &b, unsigned char &a) {
+void DecodeDxtColor(
+    unsigned char *blockData,
+    int pixelX,
+    int pixelY,
+    bool hasDxt1Alpha,
+    unsigned char &r,
+    unsigned char &g,
+    unsigned char &b,
+    unsigned char &a
+) {
     unsigned char *rowPtr;
     unsigned short color0 = *(unsigned short *)blockData;
     unsigned short color1 = *((unsigned short *)blockData + 1);
@@ -867,9 +905,9 @@ void DecodeDxtColor(unsigned char *blockData, int pixelX, int pixelY, bool hasDx
     if ((color0 > color1) || !hasDxt1Alpha) {
         int w0 = 4 - colorIdx;
         int w1 = colorIdx - 1;
-        r = (unsigned int) ((r1 * w1) + (r0 * w0)) / 3U;
-        g = (unsigned int) ((g1 * w1) + (g0 * w0)) / 3U;
-        b = (unsigned int) ((b1 * w1) + (b0 * w0)) / 3U;
+        r = (unsigned int)((r1 * w1) + (r0 * w0)) / 3U;
+        g = (unsigned int)((g1 * w1) + (g0 * w0)) / 3U;
+        b = (unsigned int)((b1 * w1) + (b0 * w0)) / 3U;
     } else {
         r = ((int)r0 + (int)r1) / 2;
         g = ((int)g0 + (int)g1) / 2;
@@ -935,11 +973,7 @@ void DecodeDxt5Alpha(unsigned char *uc, int i, int j, unsigned char &alpha) {
 
     // Calculate adjusted offset
     unsigned int adjustedOff;
-    if (!(!(!((int)(byteOff & 1) == 0)))) {
-        adjustedOff = byteOff + 0xFF;
-    } else {
-        adjustedOff = byteOff + 1;
-    }
+                                adjustedOff = (!(!((int)(byteOff & 1) == 0))) == 0 ? byteOff + 0xFF : byteOff + 1;
 
     unsigned int index;
     if (bitPos < 6) {
@@ -947,10 +981,10 @@ void DecodeDxt5Alpha(unsigned char *uc, int i, int j, unsigned char &alpha) {
     } else {
         unsigned int off2 = byteOff + 1;
         unsigned int adjustedOff2;
-        if ((off2 & 1) == 0) {
-            adjustedOff2 = off2 + 2;
-        } else {
+        if (!((off2 & 1) == 0)) {
             adjustedOff2 = off2 + 1;
+        } else {
+            adjustedOff2 = off2 + 2;
         }
         if (bitPos == 6) {
             index = ((uc[adjustedOff2 + 2] & 1) << 2) | (uc[adjustedOff + 2] >> 6);
@@ -963,17 +997,26 @@ void DecodeDxt5Alpha(unsigned char *uc, int i, int j, unsigned char &alpha) {
         alpha = alpha1;
     } else if (index == 1) {
         alpha = alpha0;
-    } else {
-        if (alpha1 > alpha0) {
-            if ((int)index == 6) {
-                alpha = 0;
-            } else if (index == 7) {
-                alpha = 0xFF;
-            } else {
-                alpha = ((6 - index) * (unsigned int)alpha1 + (index - 1) * (unsigned int)alpha0 + 2) / 5;
-            }
+    } else if (!(alpha1 > alpha0)) {
+        if ((int)index == 6) {
+            alpha = 0;
+            return;
+        } else if (index == 7) {
+            alpha = 0xFF;
         } else {
-            alpha = ((8 - index) * (unsigned int)alpha1 + (index - 1) * (unsigned int)alpha0 + 3) / 7;
+            alpha = ((6 - index) * (unsigned int)alpha1
+                     + (index - 1) * (unsigned int)alpha0 + 2)
+                / 5;
+        }
+    } else {
+        if ((int)index == 6) {
+            alpha = 0;
+        } else if (index == 7) {
+            alpha = 0xFF;
+        } else {
+            alpha = ((8 - index) * (unsigned int)alpha1
+                     + (index - 1) * (unsigned int)alpha0 + 3)
+                / 7;
         }
     }
 }
@@ -998,7 +1041,8 @@ void RndBitmap::DxtColor(
         DecodeDxtColor(blockData + 8, xRemainder, yRemainder, false, r, g, b, unused);
         if (dxt == 0x10) {
             unsigned short *alphaData = (unsigned short *)blockData;
-            unsigned char alphaBits = (unsigned char)(alphaData[yRemainder] >> (xRemainder << 2));
+            unsigned char alphaBits =
+                (unsigned char)(alphaData[yRemainder] >> (xRemainder << 2));
             a = alphaBits | (alphaBits << 4);
         } else {
             DecodeDxt5Alpha(blockData, xRemainder, yRemainder, a);
@@ -1195,7 +1239,9 @@ bool RndBitmap::LoadDIB(BinStream *bs, unsigned int offbits) {
         return false;
     }
     if (infoheader.biCompression != 0) {
-        MILO_NOTIFY("%s: Unsupported compression %d", bs->Name(), (long)infoheader.biCompression);
+        MILO_NOTIFY(
+            "%s: Unsupported compression %d", bs->Name(), (long)infoheader.biCompression
+        );
         return false;
     }
     int paletteBytes = 0;
@@ -1214,7 +1260,8 @@ bool RndBitmap::LoadDIB(BinStream *bs, unsigned int offbits) {
     void *palette = nullptr;
     if (paletteBytes != 0) {
         int readSize = paletteBytes;
-        if (infoheader.biClrUsed != 0 && infoheader.biClrUsed < (unsigned int)(1 << infoheader.biBitCount)) {
+        if (infoheader.biClrUsed != 0
+            && infoheader.biClrUsed < (unsigned int)(1 << infoheader.biBitCount)) {
             memset(buf, 0, paletteBytes);
             readSize = infoheader.biClrUsed * 4;
         }
@@ -1247,7 +1294,16 @@ bool RndBitmap::LoadDIB(BinStream *bs, unsigned int offbits) {
             }
         }
     }
-    Create(infoheader.biWidth, infoheader.biHeight, rowBytes, infoheader.biBitCount, 0, palette, pixels, buf);
+    Create(
+        infoheader.biWidth,
+        infoheader.biHeight,
+        rowBytes,
+        infoheader.biBitCount,
+        0,
+        palette,
+        pixels,
+        buf
+    );
     return true;
 }
 

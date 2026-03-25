@@ -25,11 +25,41 @@
 - Added diagnostic logging: `mTypeDef` is null for ALL animated objects
 - `on_anim_event` is NOT defined in any DTA config file (objects.dta, ham_objects.dta)
 - The `on_anim_event` message returns `kDataUnhandled` for every listener
-- See [DTA_HANDLER_ANALYSIS.md](DTA_HANDLER_ANALYSIS.md) for full analysis
 
 **The auto-null hack is the correct fix** — it compensates for native object lifecycle timing differences. No DTA fix would help.
 
 **User Impact**: Menu selections hang in kRibbonSelect animation forever without the fix.
+
+#### Root Cause: mAnimTarget Lifecycle
+
+The `AnimTask::Poll()` dispatch block (Anim.cpp:435-446) only executes when `mAnimTarget` is null:
+
+```cpp
+if (!mAnimTarget) {  // Only runs when mAnimTarget is null
+    if (!mLoop && !mBlending && !mBlendPeriod) {
+        if (time > mFrameSpan || mScale == 0.0f) {
+            if (mListener) {
+                mListener->Handle(msg, false);  // on_anim_event
+            }
+            mListener = nullptr;
+            TheTaskMgr.QueueTaskDelete(this);  // Task removes itself
+        }
+    }
+}
+```
+
+On **Xbox**: `mAnimTarget` becomes null through object lifecycle timing (target destruction, parent cleanup, or a message handler). This allows the dispatch block to run and the task to self-delete.
+
+On **native**: `mAnimTarget` stays non-null (the ObjPtr reference persists because object destruction timing differs). The dispatch block never runs, so `IsAnimating()` stays true forever.
+
+#### mTypeDef Status
+
+`mTypeDef` is null for animated objects loaded from .milo files. Possible reasons:
+1. Objects are loaded with a null type Symbol (empty type name -> `SetType(Symbol(""))` -> `SetTypeDef(nullptr)`)
+2. Type names exist but the corresponding config entries are missing from objects.dta
+3. Object types are not configured in the system config hierarchy
+
+This is a lower-priority issue — most game functionality works without DTA type definitions. The main impact is: no DTA-defined message handlers on objects, no custom property type behaviors, no script-driven object configuration overrides.
 
 ---
 
@@ -227,10 +257,42 @@ Various `fprintf(stderr, ...)` under `HX_NATIVE` for debugging. No gameplay impa
 
 ---
 
+## Reference: Xbox DTA Screen Flow
+
+How DTA scripts drive the boot-to-gameplay screen flow on Xbox (annotated with native stub behavior):
+
+```
+attract_screen
+  └─ (skip_selected) → autosave_warning_screen
+       └─ (enter) → acknowledge → title_screen
+            └─ title_panel.enter:
+                  {platform_mgr add_sink $this (ui_changed)}      ← STUB (accepts, never dispatches)
+                  {speech_mgr begin_recognition TRUE}               ← STUB (silently fails)
+               (NAV_SELECT_MSG) → wait_main_after_saveload_screen
+                    └─ (enter):
+                          {saveload_mgr activate}                   ← SMART STUB: is_idle=1
+                       (saveload_complete):                          ← DTA-DRIVEN
+                          {content_mgr start_refresh}
+                          {profile_mgr has_seen_tutorial ...}       ← SMART STUB: returns 1
+                          {ui goto_screen $post_load_dest_screen}   → main_screen (fallback)
+                              └─ main_panel.enter:
+                                    {platform_mgr add_sink ...}     ← STUB (accepts)
+                                    {profile_mgr add_sink ...}      ← STUB (accepts)
+                                    {profile_mgr clear_critical_profile}  ← SMART STUB: no-op
+                                    {content_mgr start_refresh}
+                                 (NAV_SELECT_MSG) → choose_mode_screen
+                                     └─ (NAV_SELECT_MSG perform):
+                                           {gamemode set_mode perform}
+                                           {ui goto_screen song_select_screen}
+                                              └─ ... → multiuser_gesture_screen
+```
+
+---
+
 ## Priority Action Items for Future Agents
 
 1. **Add `ContextCheckerInit()` to native init path** — may fix DTA handler execution (unlocks hack 1.1 removal)
 2. **Add `MidiParser::Init()` to native init path** — enables MidiParser object deserialization
 3. **Upstream audio thread safety** (hack 1.3) — real bug, not platform difference
 4. **Upstream load state reset** (hack 1.4) — decomp gap in stream lifecycle
-5. **Test DTA handler execution** after adding Init calls — if `mTypeDef` populates correctly and handlers fire, remove hacks 1.1 and 1.2
+5. **Test DTA handler execution** after adding Init calls — if `mTypeDef` populates correctly and handlers fire, hacks 1.1 and 1.2 may become removable

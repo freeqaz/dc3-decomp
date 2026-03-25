@@ -250,121 +250,121 @@ public:
         }
     }
 
-    void KeysLessEq(float f, int &iref1, int &iref2) const {
-        iref2 = -1;
-        iref1 = -1;
-        if (empty() || f < front().frame)
+    void KeysLessEq(float frame, int &firstIdx, int &lastIdx) const {
+        lastIdx = -1;
+        firstIdx = -1;
+        if (empty() || frame < front().frame)
             return;
-        int i1 = 0;
-        int i2 = size();
-        while (i2 > i1 + 1) {
-            int i5 = (i1 + i2) >> 1;
-            const Key<T1> &cur = (*this)[i5];
-            if (f < cur.frame)
-                i2 = i5;
+        int low = 0;
+        int high = size();
+        while (high > low + 1) {
+            int mid = (low + high) >> 1;
+            const Key<T1> &cur = (*this)[mid];
+            if (frame < cur.frame)
+                high = mid;
             else
-                i1 = i5;
+                low = mid;
         }
-        iref2 = i1;
-        iref1 = i1;
-        while (i1 - 1 >= 0 && (*this)[i1 - 1].frame == (*this)[i1].frame) {
-            i1--;
-            iref1 = i1;
+        lastIdx = low;
+        firstIdx = low;
+        while (low - 1 >= 0 && (*this)[low - 1].frame == (*this)[low].frame) {
+            low--;
+            firstIdx = low;
         }
-        while (i1 + 1 < size() && (*this)[i1 + 1].frame == (*this)[i1].frame) {
-            i1++;
-            iref2 = i1;
+        while (low + 1 < size() && (*this)[low + 1].frame == (*this)[low].frame) {
+            low++;
+            lastIdx = low;
         }
     }
 
-    Key<T1> *KeyNearest(float f1) {
-        int i4 = -1;
+    Key<T1> *KeyNearest(float frame) {
+        int nearestIdx = -1;
         float diff = kHugeFloat;
-        int idx = KeyLessEq(f1);
+        int idx = KeyLessEq(frame);
         if (idx >= 0 && idx < size()) {
-            if (MinEq(diff, f1 - (*this)[idx].frame)) {
-                i4 = idx;
+            if (MinEq(diff, frame - (*this)[idx].frame)) {
+                nearestIdx = idx;
             }
         }
         int next = idx + 1;
         if (next >= 0 && next < size()) {
-            if (MinEq(diff, (*this)[next].frame - f1)) {
-                i4 = next;
+            if (MinEq(diff, (*this)[next].frame - frame)) {
+                nearestIdx = next;
             }
         }
-        if (i4 == -1) {
+        if (nearestIdx == -1) {
             return nullptr;
         } else {
-            return &(*this)[i4];
+            return &(*this)[nearestIdx];
         }
     }
 
-    bool Linear(float f1, float &fref) const {
+    bool Linear(float frame, float &result) const {
         if (size() == 0)
             return false;
         else {
             if (size() == 1)
-                fref = front().value;
+                result = front().value;
             else {
-                int idx = Clamp<int>(0, size() - 2, KeyLessEq(f1));
+                int idx = Clamp<int>(0, size() - 2, KeyLessEq(frame));
                 const Key<T1> &keyNow = (*this)[idx];
                 const Key<T1> &keyNext = (*this)[idx + 1];
                 Interp(
                     keyNow.value,
                     keyNext.value,
-                    (f1 - keyNow.frame) / (keyNext.frame - keyNow.frame),
-                    fref
+                    (frame - keyNow.frame) / (keyNext.frame - keyNow.frame),
+                    result
                 );
             }
             return true;
         }
     }
 
-    bool ReverseLinear(const float &fconst, float &fref) const {
+    bool ReverseLinear(const float &value, float &result) const {
         if (size() == 0)
             return false;
         else if (size() == 1) {
-            fref = front().frame;
+            result = front().frame;
             return true;
         } else {
-            int idx = Clamp<int>(0, size() - 2, ReverseKeyLessEq(fconst));
+            int idx = Clamp<int>(0, size() - 2, ReverseKeyLessEq(value));
             const Key<T1> &keyNow = (*this)[idx];
             const Key<T1> &keyNext = (*this)[idx + 1];
             Interp(
                 keyNow.frame,
                 keyNext.frame,
-                (fconst - keyNow.value) / (keyNext.value - keyNow.value),
-                fref
+                (value - keyNow.value) / (keyNext.value - keyNow.value),
+                result
             );
             return true;
         }
     }
 
-    int ReverseKeyLessEq(const T1 &fref) const {
-        if (empty() || fref < front().value) {
+    int ReverseKeyLessEq(const T1 &value) const {
+        if (empty() || value < front().value) {
             return -1;
         } else {
-            int i1 = 0;
-            int i2 = size();
-            while (i2 > i1 + 1) {
-                int newCnt = (i1 + i2) >> 1;
-                if (fref < (*this)[newCnt].value)
-                    i2 = newCnt;
+            int low = 0;
+            int high = size();
+            while (high > low + 1) {
+                int mid = (low + high) >> 1;
+                if (value < (*this)[mid].value)
+                    high = mid;
                 else
-                    i1 = newCnt;
+                    low = mid;
             }
-            while (i1 + 1 < size() && (*this)[i1 + 1].value == (*this)[i1].value)
-                i1++;
-            return i1;
+            while (low + 1 < size() && (*this)[low + 1].value == (*this)[low].value)
+                low++;
+            return low;
         }
     }
 
-    const T1 *Cross(float f1, float f2) const {
-        int idx = KeyLessEq(f1);
+    const T1 *Cross(float currentFrame, float prevFrame) const {
+        int idx = KeyLessEq(currentFrame);
         if (idx == -1)
             return 0;
         else {
-            if (f2 >= (*this)[idx].frame)
+            if (prevFrame >= (*this)[idx].frame)
                 return 0;
             else
                 return &(*this)[idx].value;

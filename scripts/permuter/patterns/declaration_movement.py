@@ -64,7 +64,7 @@ class DeclarationMovementPattern(Pattern):
             decl_name = _get_declared_name(decl) or "decl"
             first_use = _find_first_use(stmts, decl_idx)
 
-            moves = _compute_moves(decl_idx, first_use, len(stmts))
+            moves = _compute_moves(decl_idx, first_use, len(stmts), stmts)
             for new_idx in moves:
                 if not _is_safe_move(stmts, decl_idx, new_idx, analyzer):
                     continue
@@ -174,11 +174,17 @@ def _find_first_use(stmts: list[Node], decl_idx: int) -> int:
     return len(stmts)
 
 
-def _compute_moves(decl_idx: int, first_use: int, num_stmts: int) -> list[int]:
+def _compute_moves(decl_idx: int, first_use: int, num_stmts: int,
+                    stmts: list[Node] | None = None) -> list[int]:
     """Compute target positions for moving a declaration.
 
     Generates positions moving down (toward first use) and up (away from it).
     Never moves past first_use (would break code).
+
+    When stmts are provided, also tries placing the declaration right after
+    control flow blocks (if/for/while/switch) between the declaration and
+    first use — these are high-value positions because the compiler
+    materializes values at the declaration point.
     """
     moves = []
 
@@ -195,6 +201,24 @@ def _compute_moves(decl_idx: int, first_use: int, num_stmts: int) -> list[int]:
         target = decl_idx - offset
         if target >= 0:
             moves.append(target)
+
+    # Extended: try placing right after control flow blocks
+    # This specifically targets the "move past if-block" pattern
+    if stmts is not None:
+        _CONTROL_FLOW_TYPES = {
+            "if_statement", "for_statement", "while_statement",
+            "do_statement", "switch_statement",
+        }
+        for j in range(decl_idx + 1, min(first_use, num_stmts)):
+            if stmts[j].type in _CONTROL_FLOW_TYPES:
+                # Place right after the control flow block
+                target = j + 1
+                if target <= max_down and target not in moves:
+                    moves.append(target)
+                # Also try right before the control flow block
+                target = j
+                if target > decl_idx and target <= max_down and target not in moves:
+                    moves.append(target)
 
     return moves[:_MAX_MOVES]
 

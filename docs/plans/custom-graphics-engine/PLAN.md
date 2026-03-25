@@ -66,204 +66,25 @@ its build system is too painful, sokol is the fallback.
 
 ## Phased Roadmap
 
-### Phase 0: Compile on x86_64 (Foundation) — COMPLETE
+### Phase 0: Foundation — COMPLETE
 
-**Goal**: Get the entire codebase compiling with Clang/GCC on x86_64-linux. No
-runtime functionality needed — just a linking binary.
+x86_64 cross-compilation with Clang/GCC, Win32 shim headers, LP64 type fixes, Dawn WebGPU proven. See [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md).
 
-**Milestone**: WebGPU rendering proven — headless triangle rendered via Dawn on
-RTX 3090 (Vulkan backend). See `native/` directory and [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md).
+### Phase 1: Headless Engine + Standalone Viewer — COMPLETE
 
-**Status**: All items complete. Binary compiles, links, and boots. Completed
-across Sessions 1-2 (Feb 2026).
+**Track A (Headless Engine)**: Full boot through all subsystems, main loop, UI screen navigation, 5000+ frames stable, GTest integration tests, ASan-clean. See [STREAM_DESYNC.md](STREAM_DESYNC.md) for stream desync guards.
 
-**Work items**:
-- [x] Dawn builds and installs (`../dawn/install/Release/`)
-- [x] `native/CMakeLists.txt` finds Dawn, builds `dc3-native`
-- [x] Headless offscreen rendering to PNG (800x600 green triangle)
-- [x] Create `CMakeLists.txt` build system for x86_64 — `native/CMakeLists.txt`
-  compiles all ~874 .cpp files from `src/` with Clang, `HX_NATIVE` define
-- [x] Write Win32 compatibility shim headers:
-  - [x] `DWORD`, `HANDLE`, etc. — already in `xdk/win_types.h`
-  - [x] `RTL_CRITICAL_SECTION` → pthread_mutex_t wrapper in `xdk/XBOXKRNL.h`
-  - [x] `CreateThread` — guarded with `#ifdef HX_NATIVE` (skip threading, run sync)
-  - [x] `CreateEventA` / `SetEvent` / `WaitForSingleObject` — POSIX impls in stubs
-  - [x] `VirtualAlloc` / `VirtualFree` → mmap/munmap in `native/src/platform/`
-  - [x] Timer → `std::chrono` in `native/src/platform/`
-- [x] Create stub implementations for all `*_Xbox.cpp` files:
-  - [x] `Rnd_Stub.cpp` (no-op renderer)
-  - [x] `Synth_Stub.cpp` (no-op audio)
-  - [x] `Joypad_Stub.cpp` (no-op input)
-  - [x] `PlatformMgr_Stub.cpp`
-  - [x] `Memcard_Stub.cpp`, `ContentMgr_Stub.cpp`
-  - [x] `GestureMgr_Stub.cpp` (no-op Kinect)
-- [x] Handle MSVC-specific C++ extensions:
-  - [x] `__declspec(selectany)` → `__attribute__((weak))` in `macros.h`
-  - [x] `__forceinline` → `__attribute__((always_inline))` in `macros.h`
-  - [x] SEH — already mapped to try/catch in `macros.h`
-  - [x] MSVC pragmas → GCC/Clang equivalents in `macros.h`
-- [x] Handle endianness: Already abstracted in `Endian.h` — byte swaps
-  happen on load, works as-is for LE x86_64
-- [x] Fix LP64 type model issues (see [PORTING_ANALYSIS.md](PORTING_ANALYSIS.md#lp64-issues))
-- [x] Non-virtual thunk stubs for Itanium ABI (`native/src/thunk_stubs.cpp`)
+**Track B (Standalone Viewer)**: Full material pipeline (specular, emissive, rim, intensify), skinned meshes, headless screenshots, batch gallery rendering. See `archive/screenshots/`.
 
-**Deliverable**: `cd native/build && cmake --build . -j$(nproc)` produces a
-binary that boots through archive loading, config parsing, and .milo object loading.
+### Phase 1.5: Asset Pipeline — COMPLETE (runtime path)
 
-### Phase 1: Headless Engine + Standalone Viewer (Parallel Tracks)
+Runtime Milo loading is the primary path (no offline converter needed). `.milo_xbox` files load directly via `DirLoader` with Xbox 360 texture deswizzling, endian conversion, and compressed vertex unpacking. Offline conversion (milo2gltf) remains a future option.
 
-Two workstreams run simultaneously:
-
-#### Track A: Headless Engine (MVP) — COMPLETE
-
-**Goal**: Engine main loop runs, loads game data from `.ark` archives, processes
-DataArray scripts, instantiates game objects.
-
-**Status**: Engine boots through ALL subsystems, enters main loop, navigates UI
-screens automatically via DTA scripts, and runs 5000+ frames stably. Screen
-navigation reaches `tutorial_party_mode_screen_1` (stuck on Kinect gesture).
-ASan-clean with known suppressions. GTest integration tests verify boot stability.
-
-See [STREAM_DESYNC.md](STREAM_DESYNC.md) for the nested dir detection hack and
-defensive guards. See `docs/plans/dc3-native/STATUS.md` for detailed native port
-status including error handling strategy and environment variables.
-
-**Work items**:
-- [x] Implement native `File` / `AsyncFile` using POSIX I/O
-- [x] Implement native `CritSec` / `ThreadCall` / `SynchronizationEvent`
-- [x] Implement native `Timer` using `std::chrono`
-- [x] Implement native `MemMgr` (redirects to malloc/free)
-- [x] Load `.ark` archives and decompress files — 6,377 files, 10 ark files load
-- [x] Boot `SystemPreInit()` — archive loading, DTA config parsing
-- [x] Boot `SystemInit()` — subsystem initialization
-- [x] Fix ChunkStream infinite loop (RndTex::PreLoad/PostLoad consuming stream data)
-- [x] Fix Font loading (real RndFontBase::Load implementation)
-- [x] Fix iterator/pointer compat (patched `__normal_iterator` in shadow stl_iterator.h)
-- [x] Fix ObjOwnerPtr null deref (RefOwner null check)
-- [x] Implement CachedRead for RndMesh face/vertex loading
-- [x] Boot through subsystem inits (FlowInit, CharInit, WorldInit, HamInit)
-- [x] Detect nested ObjectDir DirLoader-format data (peek-and-unreread hack)
-- [x] Implement `DrivenPropertyEntry::Load` and `FlowMathOp::Load` (from symmetric Save)
-- [x] Add defensive guards for stream desync (rev caps, string size caps, count caps)
-- [x] Boot through to main loop (5000+ frames stable)
-- [x] Add test harness with scripted input (`MILO_INPUT_SCRIPT`)
-- [x] GTest headless boot tests (`native/tests/test_headless_boot.cpp`)
-- [x] ASan integration (`cmake -DENABLE_ASAN=ON`)
-- [x] MILO_FAIL_DTA macro for non-fatal DTA errors
-- [x] NewObject vtable verification via sigsetjmp guard
-- [ ] Get past tutorial screens (skip Kinect gesture or DTA override)
-- [ ] UI text rendering in headless screenshots
-
-**Deliverable**: Engine boots, game state machine advances through screens.
-GTest integration tests verify stability.
-
-#### Track B: Standalone Milo Viewer — COMPLETE
-
-**Goal**: A lightweight standalone app that loads `.milo` scene files and renders
-them — without the full game runtime. Faster iteration on the rendering pipeline.
-
-**Status**: Fully operational with full material pipeline. Loads `.milo_xbox` files
-from CLI, renders meshes with specular, emissive, rim lighting, intensify, and
-multi-directional lighting from environment data. Supports headless screenshot mode
-and `--verbose` debug output. Batch script generates gallery of 17 props. Window
-title shows loaded filename. See `archive/screenshots/` for rendered output.
-
-**Work items**:
-- [x] Load `.milo` archive, parse `ObjectDir` hierarchy
-- [x] Extract and render `RndMesh` (vertex/index data → GPU)
-- [x] Xbox 360 compressed vertex unpacking (BE floats, 10-10-10-2 normals, packed RGBA)
-- [x] Apply `RndMat` materials (diffuse color, blend modes, cull, z-mode)
-- [x] Auto-frame camera from mesh bounding box
-- [x] Headless screenshot mode (`--screenshot output.ppm`)
-- [x] Batch screenshot script (`native/scripts/render_screenshots.sh`)
-- [x] Extract and display `RndTex` (textures — GPU upload + UV coords working for all vertex formats)
-- [ ] Display `RndTransformable` hierarchy (bone/transform tree)
-- [ ] Scrub animations (`RndTransAnim`, `RndMeshAnim`)
-- [ ] Inspect materials and shader properties
-
-**Deliverable**: Open a `.milo` file, see the 3D scene rendered with material
-colors and directional lighting. Batch-render galleries of props.
-
-**Why a viewer first**: Building the renderer against a simple viewer (load file →
-render) is dramatically faster to iterate on than booting the full game engine. It
-isolates rendering bugs from game logic bugs. Once the viewer renders scenes
-correctly, the same rendering code plugs into the full engine.
-
-### Phase 1.5: Asset Pipeline — PARTIALLY COMPLETE
-
-**Goal**: Offline conversion of Milo assets to standard formats, plus runtime loading
-of native Milo formats. Both paths supported.
-
-**Decision update**: Runtime Milo loading proved viable first — the decomp's own
-loaders work on x86_64 with LP64 fixes. No offline converter needed for MVP.
-
-#### Offline Conversion (Development / Prototyping)
-
-- [ ] Build `milo2gltf` converter: `.milo` → glTF 2.0 (meshes, skeleton, animations)
-- [ ] Build texture converter: Xbox 360 tiled textures → PNG or KTX2
-- [ ] Build material metadata exporter: `RndMat` properties → JSON
-- [ ] Integrate with viewer: load converted assets for fast iteration
-- [ ] Reference: MiloLib (C#) documents the .milo format; our decomp has original loaders
-
-**Benefits**: Standard formats are loadable by any renderer, debuggable in Blender/
-RenderDoc, and don't require Xbox 360-specific deswizzling at runtime.
-
-#### Runtime Milo Loading (Full Fidelity) — WORKING
-
-- [x] Port the existing Milo loaders from the decomp (they're in the C++ source)
-- [x] Add Xbox 360 texture deswizzling (`TextureConvert.cpp` — byte-swap, untile, DXT decompress)
-- [x] Handle endianness in binary Milo data (BE → LE conversion on load via BinStream)
-- [x] Load `.ark` archives natively (6,377 files, 10 ark files)
-- [x] Implement `CachedRead` for bulk binary loading with byte-swap
-- [x] Xbox 360 compressed vertex unpacking (36-byte packed format → GPU vertices)
-
-**Benefits**: Full fidelity, no asset conversion step, no lossy format changes.
-
-**Status**: Runtime loading is the primary path. `.milo_xbox` files load directly
-via the engine's `DirLoader` → `ObjDirPtr<ObjectDir>::LoadFile()`. Meshes, materials,
-textures, and transforms all load correctly. Verified with 17+ prop files.
-
-### Phase 2: Rendering (Pixels on Screen) — IN PROGRESS (~85%)
+### Phase 2: Rendering — IN PROGRESS (~85%)
 
 **Goal**: Visual output. Characters, stages, UI visible and animating.
 
-**Architecture decision**: Implement `WgpuRnd` directly against the existing `Rnd`
-virtual interface using Dawn (`../dawn`). No extra abstraction layers for MVP.
-Structure the implementation so a command recording layer could be inserted later
-(keep draw calls going through a small number of methods that could become recording
-points).
-
-**Status**: Full rendering pipeline operational in the **standalone viewer** including
-skinned meshes, post-processing, and 2D UI rendering. The **engine rendering path**
-has the same GPU code but the scene traversal differs — venue backgrounds don't render
-(turbo_shell behind UI is black), UI sprites/icons are missing, text markup tags render
-as literals. The gap is in the engine's DrawShowing tree traversal, not the GPU code.
-
-**Work items**:
-- [x] Implement `WgpuRnd` subclass using `webgpu.h` / `webgpu_cpp.h`
-- [x] Window creation and surface (GLFW, windowed + headless modes)
-- [x] Mesh rendering (`RndMesh` → GPU vertex/index buffers, compressed vertex unpack)
-- [x] Material system (`RndMat` → shader uniforms, blend states, pipeline cache)
-- [x] Camera (`RndCam` → view/projection matrices, orbit camera in viewer)
-- [x] Multi-light support (up to 4 directional + 4 point lights with range attenuation)
-- [x] Write standard.wgsl shader (half-Lambert diffuse + Blinn-Phong specular + emissive + rim + intensify + fog + alpha test + skin/hair variants)
-- [x] Texture loading (`RndTex` → GPU textures, DXT1/3/5 byte-swap + untile + decompress)
-- [x] Specular highlights (Blinn-Phong from `BaseMaterial::GetSpecularRGB()`)
-- [x] Emissive support (`BaseMaterial::GetEmissiveMultiplier()`)
-- [x] Rim lighting (`BaseMaterial::GetRimRGB()`)
-- [x] Intensify flag (`BaseMaterial::GetIntensify()` → 2x texture brightness)
-- [x] Ring buffer overflow protection (auto-grow)
-- [x] GPU resource cleanup (destructor hooks in RndMesh/RndTex)
-- [x] Pipeline cache bounds warning (512 entries)
-- [x] Skinned mesh rendering (40-bone blending, compressed verts, multi-pass)
-- [x] Secondary texture maps (normal, specular, emissive, rim, env cube, detail-normal)
-- [x] Post-processing (contrast, chromatic aberration, posterization, vignette, color levels)
-- [x] 2D quad rendering (`DrawRect` with texture + gradient colors)
-- [x] Text glyph mesh generation (`DrawShowing` → `FontMapBase` → glyph meshes)
-- [x] Skin/hair shader variants (half-Lambert + warm shadows, Kajiya-Kay anisotropic)
-- [ ] Particle systems (`RndParticleSys`) — cosmetic, not blocking
-- [ ] Lines/Flares (`RndLine`, `RndFlare`) — cosmetic, not blocking
-- [ ] `RndGroup` draw ordering — may need work for correct layering
+`WgpuRnd` implements the `Rnd` virtual interface using Dawn WebGPU. Full pipeline operational in viewer and engine: meshes, materials, textures, cameras, multi-light, skinned animation, post-processing, 2D quads, text glyphs, skin/hair shader variants.
 
 **Remaining work**:
 - Venue background rendering in engine (turbo_shell scene behind UI)
@@ -272,74 +93,20 @@ as literals. The gap is in the engine's DrawShowing tree traversal, not the GPU 
 - Text markup processing (`<alt>` tags)
 - Particles, lines, flares (cosmetic)
 
-**Deliverable**: Game renders a venue with characters. Visual fidelity may be rough
-but geometry, textures, and animation are correct.
-
 ### Phase 2.5: Character Animation Fidelity — IN PROGRESS (~60%)
 
-**Goal**: Characters animate with full fidelity — root motion, twist bones, lip sync,
-blinking. Covers the gap between "bones move" and "characters look alive."
-
-**Status**: Root motion (facing bones), twist bone solvers (upper/fore/neck), and full
-CharClip dance animation implemented in the standalone viewer. Lip sync, procedural
-blinking, and eye gaze not yet started.
-
-**Work items**:
-- [x] Twist bone solvers (CharUpperTwist, CharForeTwist fallbacks in viewer)
-- [x] Root motion / facing bones (`bone_facing.pos`, `bone_facing.rotz` applied to character transform)
-- [x] Neck twist fallback (CharNeckTwist half-yaw algorithm)
-- [ ] Lip sync — viseme clip loading, CharFaceServo, CharLipSyncDriver playback.
-  See [LIP_SYNC.md](LIP_SYNC.md) for full plan.
+Root motion, twist bone solvers, and CharClip dance animation implemented. Remaining:
+- [ ] Lip sync — viseme clip loading, CharFaceServo, CharLipSyncDriver. See [LIP_SYNC.md](LIP_SYNC.md).
 - [ ] Procedural blinking (CharFaceServo blink weight timer)
 - [ ] CharEyes gaze direction (eye bone targeting)
 
-**Deliverable**: Characters dance with natural root motion, properly twisted limbs,
-blinking eyes, and lip-synced mouths during songs.
-
 ### Phase 3: Audio — COMPLETE
 
-**Goal**: Music playback synchronized with gameplay. SFX and voice.
-
-**Status**: COMPLETE. Full audio pipeline: FFmpegAudioReader for .bik, VorbisReader for
-.ogg/.mogg, miniaudio output device, StreamReceiverNative ring buffer, SampleInstNative
-for SFX, DSP effects chain (EQ, compressor, delay, distortion, flanger, chorus, bitcrush,
-wah, reverb), configurable audio-visual sync offset. See [AUDIO_SYSTEM.md](AUDIO_SYSTEM.md).
-
-**Work items**:
-- [x] Choose audio library → **miniaudio** (header-only, callback-based, cross-platform)
-- [x] Bink audio decode → **FFmpegAudioReader** replaces BinkReader (see [VIDEO_PLAYBACK.md](VIDEO_PLAYBACK.md))
-- [x] Wire `NativeSynth::NewStreamDecoder()` → FFmpegAudioReader for "bink" type
-- [x] Implement `AudioDevice` wrapper around miniaudio (sub-phase 3.1)
-- [x] Implement `StreamReceiverNative` — ring buffer → PCM output (sub-phase 3.2)
-- [x] Wire `StreamReceiver::sFactory` in Synth init (sub-phase 3.3)
-- [x] `SampleInstNative` implemented and wired to `SynthSample::NewInst()` (sub-phase 3.4)
-- [x] Audio mixing + volume/pan in AudioDevice callback (sub-phase 3.6)
-- [x] OGG/Vorbis streaming wired — `NativeSynth::NewStreamDecoder` creates `VorbisReader` (sub-phase 3.5)
-- [x] `NativeSynth::NewStreamFile` opens real files + detects codec from extension
-- [x] `NativeSynth::NewStream` creates real `StandardStream` instead of `StreamNull`
-- [x] DSP effects chain — `FxSendNative` processes EQ, compressor, delay, distortion, flanger, chorus, bitcrush, wah, reverb via portable DSP classes
-- [x] Audio-visual sync — `sAudioOffsetMs` configurable via `synth { audio_offset_ms }`, applied in `StandardStream::GetTime()`
-
-**Deliverable**: Songs play in sync with gameplay. Hit/miss feedback sounds work.
+Full pipeline: FFmpegAudioReader (.bik), VorbisReader (.ogg/.mogg), miniaudio output, StreamReceiverNative ring buffer, SampleInstNative SFX, DSP effects chain, configurable A/V sync offset. See [AUDIO_SYSTEM.md](AUDIO_SYSTEM.md).
 
 ### Phase 4: Input — COMPLETE
 
-**Goal**: Playable with a game controller.
-
-**Status**: Implemented via GLFW (already linked for windowing). Gamepad polling via
-`glfwGetGamepadState` + keyboard-as-joypad fallback for testing without a controller.
-Keyboard events via GLFW key callback → ring buffer → `KeyboardSendMsg`.
-
-**Work items**:
-- [x] Implement `Joypad` backend using GLFW GameController API (`Joypad_Native.cpp`)
-- [x] Map GLFW gamepad buttons to Milo's joypad enum (`kPad_X`, `kPad_Circle`, etc.)
-- [x] Keyboard-as-joypad fallback (arrows→D-pad, Enter→A, Esc→B, Space→Start, etc.)
-- [x] Keyboard input via GLFW callbacks (`Keyboard_Native.cpp`)
-- [x] `gNativeWindow` global for input subsystem access to GLFW window
-- [x] 19 unit tests covering button mapping, delta logic, stick translation, triggers
-- [ ] USB MIDI support for Rock Band instruments (future)
-
-**Deliverable**: Navigate menus and play controller-compatible game modes.
+GLFW gamepad polling + keyboard-as-joypad fallback + GLFW key callbacks. 19 unit tests. USB MIDI support for Rock Band instruments is future work.
 
 ### Phase 5: Motion Capture (Kinect Replacement)
 

@@ -37,6 +37,10 @@ public:
     class SpotMeshEntry { // from RB3 decomp
     public:
         SpotMeshEntry() : mCanMesh(0), mEnvMesh(0), mSpotlight(0) {}
+        SpotMeshEntry &operator=(const SpotMeshEntry &o) {
+            memcpy(this, &o, sizeof(*this));
+            return *this;
+        }
         RndMesh *mCanMesh;
         RndMesh *mEnvMesh;
         Spotlight *mSpotlight;

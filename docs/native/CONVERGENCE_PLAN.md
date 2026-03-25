@@ -226,6 +226,5 @@ Currently has HX_NATIVE hack to force-advance past kGameInIntro after 30 frames.
 | `docs/sessions/convergence/05-filemerger-async-pipeline.md` | Async loading pipeline analysis |
 | `docs/sessions/convergence/06-synthesis-final.md` | Synthesis document (implementation guide) |
 | `docs/sessions/2026-03-20-dta-venue-flow-convergence.md` | Original analysis |
-| `docs/debugging/native.md` | Debugging techniques |
-| `docs/debugging/object-lifecycle.md` | ObjRef ring debugging |
+| `docs/debugging/native.md` | Debugging techniques (includes ObjRef ring debugging) |
 | `archive/screenshots/references/` | Xbox target screenshots |

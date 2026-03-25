@@ -51,8 +51,8 @@ Hmx::Object *CharClipDisplay::FindSource(Hmx::Object *obj) {
 
 __declspec(noinline) void
 CharClipDisplay::SetStartEnd(float start, float end, bool resetZoom) {
-    unk4 = start;
-    unk8 = end;
+    mViewStartBeat = start;
+    mViewEndBeat = end;
     mStartBeat = start;
     mEndBeat = end;
     float zoomRange = 16.0f / sZoom;
@@ -61,13 +61,13 @@ CharClipDisplay::SetStartEnd(float start, float end, bool resetZoom) {
         float screenWidth = (float)(long long)TheRnd.Width();
         float textOffset = mPadding + mTextWidth + margin;
         mStartBeat =
-            unk1c - ((screenWidth * 0.5f - textOffset) * zoomRange) / screenWidth;
+            mCursorBeat - ((screenWidth * 0.5f - textOffset) * zoomRange) / screenWidth;
         mEndBeat = (((screenWidth - margin) - textOffset) * zoomRange)
                 / (float)(long long)TheRnd.Width()
             + mStartBeat;
     } else {
         if (end - start > zoomRange) {
-            float cursor = unk1c;
+            float cursor = mCursorBeat;
             float halfZoom = zoomRange * 0.5f;
             if (cursor < halfZoom + start) {
                 mEndBeat = zoomRange + start;
@@ -127,9 +127,9 @@ void CharClipDisplay::DrawTrack() {
     Hmx::Color green(0.0f, 1.0f, 0.0f, 1.0f);
     Hmx::Color black(0.0f, 0.0f, 0.0f, 1.0f);
 
-    // Compute displayed start/end beats (use the min of unk4/mStartBeat and unk8/mEndBeat)
-    float startBeat = (mStartBeat - unk4 >= 0.0f) ? mStartBeat : unk4;
-    float endBeat = (mEndBeat - unk8 >= 0.0f) ? unk8 : mEndBeat;
+    // Compute displayed start/end beats (use the min of mViewStartBeat/mStartBeat and mViewEndBeat/mEndBeat)
+    float startBeat = (mStartBeat - mViewStartBeat >= 0.0f) ? mStartBeat : mViewStartBeat;
+    float endBeat = (mEndBeat - mViewEndBeat >= 0.0f) ? mViewEndBeat : mEndBeat;
 
     float drawY = mDrawPosY;
     float halfEm = sEm * 0.5f;
@@ -174,9 +174,9 @@ void CharClipDisplay::DrawTrack() {
                 TheRnd.DrawRect(eventRect, eventColor, nullptr, nullptr, nullptr);
 
                 if (firstEvent
-                    && (ev.beat > unk1c
+                    && (ev.beat > mCursorBeat
                         || (idx == 0
-                            && unk1c > mClip->BeatEvents().back().beat))) {
+                            && mCursorBeat > mClip->BeatEvents().back().beat))) {
                     Hmx::Color eventLabelColor(eventAlpha, eventAlpha, 1.0f, 1.0f);
                     firstEvent = false;
                     float labelY = drawY - (halfEmVal + eventLabelOffset);
@@ -224,9 +224,9 @@ void CharClipDisplay::DrawTrack() {
                     = CharBones::ChannelName(data->Name(), CharBones::TYPE_POS);
                 void *channel = mClip->GetChannel(channelName);
                 float channelData[48];
-                mClip->EvaluateChannel(channelData, channel, unk1c);
+                mClip->EvaluateChannel(channelData, channel, mCursorBeat);
                 Hmx::Color ikColor(1.0f, 1.0f, 0.0f, 1.0f);
-                float cursorX = GetX(unk1c);
+                float cursorX = GetX(mCursorBeat);
                 float posY = mDrawPosY;
                 if (leftIk != nullptr) {
                     const char *leftText
@@ -259,7 +259,7 @@ void CharClipDisplay::DrawTrack() {
         {
             float labelX = -((sEm * 2.0f) - (sEm * 3.0f + mPadding + mTextWidth));
             Vector2 startPos(labelX, nameY);
-            TheRnd.DrawString(MakeString("%.1f", unk4), startPos, white, true);
+            TheRnd.DrawString(MakeString("%.1f", mViewStartBeat), startPos, white, true);
         }
 
         // Draw end beat label
@@ -267,7 +267,7 @@ void CharClipDisplay::DrawTrack() {
             float screenWidth = (float)TheRnd.Width();
             float labelX = -(sEm * 3.0f - screenWidth);
             Vector2 endPos(labelX, nameY);
-            TheRnd.DrawString(MakeString("%.1f", unk8), endPos, white, true);
+            TheRnd.DrawString(MakeString("%.1f", mViewEndBeat), endPos, white, true);
         }
     }
 
@@ -282,14 +282,14 @@ drawName:
 
 void CharClipDisplay::DrawCursor() {
     Hmx::Color yellow(1.0f, 1.0f, 0.0f, 1.0f);
-    float x = GetX(unk1c);
+    float x = GetX(mCursorBeat);
     Hmx::Rect rect(x, mDrawPosY - 3.0f, 1.0f, 9.0f);
     TheRnd.DrawRect(rect, yellow, nullptr, nullptr, nullptr);
     const char *text;
-    if (!(unk20 >= 1.0f)) {
-        text = MakeString("%.1f", unk1c);
+    if (!(mBlendWeight >= 1.0f)) {
+        text = MakeString("%.1f", mCursorBeat);
     } else {
-        text = MakeString("%.1f (%.2f)", unk1c, unk20);
+        text = MakeString("%.1f (%.2f)", mCursorBeat, mBlendWeight);
     }
-    DrawBeatString(text, unk1c, yellow);
+    DrawBeatString(text, mCursorBeat, yellow);
 }

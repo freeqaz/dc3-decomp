@@ -57,11 +57,11 @@ Tests FAIL (not skip) on crashes, with `CrashSummary()` extracting signal, asser
 ### AddressSanitizer (ASan)
 
 ```bash
-cmake .. -DENABLE_ASAN=ON
-cmake --build .
+cmake -S native -B native/build-asan -G Ninja -DENABLE_ASAN=ON -DCMAKE_BUILD_TYPE=Debug
+cmake --build native/build-asan -- -j$(nproc)
 ```
 
-ASan catches heap corruption, use-after-free, buffer overflows. Essential for finding real bugs hidden by memory corruption cascades. The engine runs cleanly under ASan with `ASAN_OPTIONS="alloc_dealloc_mismatch=0:detect_odr_violation=0"`.
+ASan catches heap corruption, use-after-free, buffer overflows. Essential for finding real bugs hidden by memory corruption cascades. See [debugging/native.md](../debugging/native.md#addresssanitizer-asan) for the full ASan guide: suppressions, allocator behavior differences, and reading ASan output.
 
 ### Non-Fatal Assert Mode
 

@@ -482,13 +482,12 @@ void CameraTilt::UpdateTiltingDown() {
 }
 
 void CameraTilt::Poll() {
-    auto& scanActive = mScanActive;
-    if (!scanActive)
+    if (!mScanActive)
         return;
-    unsigned int state = mState;
-    switch (state) {
+
+    switch (mState) {
     case 0:
-        scanActive = false;
+        mScanActive = false;
         mCycles = 0;
         mElapsedMs = 0;
         mTimer.Stop();
@@ -544,7 +543,7 @@ void CameraTilt::Poll() {
         break;
     case 12:
         if (mElapsedMs > mDelayBetweenStates) {
-            mState = 12;
+            mState = 13;
             mElapsedMs = 0;
         }
         break;
@@ -553,7 +552,7 @@ void CameraTilt::Poll() {
         break;
     case 14:
         if (mElapsedMs > mDelayBetweenRetry) {
-            mState = 12;
+            mState = 13;
             mElapsedMs = 0;
         }
         break;
@@ -572,8 +571,7 @@ void CameraTilt::Poll() {
         }
         break;
     }
-    mTimer.Stop();
-    mElapsedMs += mTimer.Ms();
+    mElapsedMs += Timer::CyclesToMs(mTimer.Stop());
     mTimer.Start();
 }
 

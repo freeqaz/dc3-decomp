@@ -46,11 +46,13 @@ Tracking forks and local changes that should be pushed upstream.
 
 ---
 
-## 2. pyghidra-mcp (XEX support)
+## 2. pyghidra-mcp (XEX support; RTTI follow-on)
 
 **Upstream:** `clearbluejar/pyghidra-mcp`
 
-**Local copy:** `tools/pyghidra-mcp-fork/` — vendored inside dc3-decomp (not a separate git repo).
+**Active checkout:** `../pyghidra-mcp/`
+
+**Historical local copy:** `tools/pyghidra-mcp-fork/` — vendored inside dc3-decomp. Keep only until references are cleaned up and the vendored copy is removed.
 
 **Our changes:** XEX (Xbox 360 executable) detection and automatic language selection:
 
@@ -63,6 +65,8 @@ Tracking forks and local changes that should be pushed upstream.
 
 **Branch:** `feature/xex-support` — 1 commit (`9f5dc13`): XEX2 detection + PowerPC:BE:64:Xenon language auto-selection
 
+**Important scope note:** the current upstreaming work is about XEX import, map-backed symbol lookup, and related decomp workflow improvements. Automated RTTI/class-hierarchy recovery is a separate follow-on effort, tracked in `docs/plans/PYGHIDRA_MCP_RTTI_RECOVERY.md`.
+
 ### Steps
 
 - [x] Fork `clearbluejar/pyghidra-mcp` under `freeqaz`
@@ -70,6 +74,7 @@ Tracking forks and local changes that should be pushed upstream.
 - [x] Commit XEX support as clean patches — applied to upstream code structure (not vendored copy)
 - [ ] Open PR to `clearbluejar/pyghidra-mcp`
 - [ ] Once merged upstream, remove `tools/pyghidra-mcp-fork/` from dc3-decomp and switch to the upstream package
+- [ ] After vendored-copy removal, open a separate RTTI/class-recovery workstream against `../pyghidra-mcp`
 
 ---
 

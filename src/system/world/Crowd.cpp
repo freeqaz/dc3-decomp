@@ -649,9 +649,7 @@ RndMesh *WorldCrowd::BuildBillboard(Character *c, float height) {
     return mesh;
 }
 
-#ifndef HX_NATIVE
-void SetMatColorFlags(ObjPtrList<RndMat, ObjectDir> &, BaseMaterial::ColorModFlags, stlpmtx_std::vector<Hmx::Color> *);
-#endif
+void SetMatColorFlags(ObjPtrList<RndMat, ObjectDir> &, BaseMaterial::ColorModFlags, std::vector<Hmx::Color> *);
 
 void WorldCrowd::Draw3DChars() {
     if (!Crowd3DExists()) return;
@@ -1475,9 +1473,8 @@ void WorldCrowd::DrawShowing() {
     }
 }
 
-#ifndef HX_NATIVE
 void SetMatColorFlags(ObjPtrList<RndMat, ObjectDir> &matList, BaseMaterial::ColorModFlags flags,
-                      stlpmtx_std::vector<Hmx::Color> *modulate) {
+                      std::vector<Hmx::Color> *modulate) {
     FOREACH (it, matList) {
         (*it)->SetColorModFlags(flags);
         if (modulate) {
@@ -1488,5 +1485,4 @@ void SetMatColorFlags(ObjPtrList<RndMat, ObjectDir> &matList, BaseMaterial::Colo
         }
     }
 }
-#endif // HX_NATIVE
 

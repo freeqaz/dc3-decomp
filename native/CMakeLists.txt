@@ -1286,6 +1286,8 @@ add_executable(dc3-native
     ${DC3_ENGINE_SOURCES}
     ${DC3_NATIVE_SOURCES}
     ${DC3_GFX_SOURCES}
+    src/gfx/ImGuiBackend.cpp
+    src/platform/DebugPanel.cpp
 )
 
 target_compile_options(dc3-native PRIVATE
@@ -1324,6 +1326,7 @@ target_link_options(dc3-native PRIVATE
 target_link_libraries(dc3-native PRIVATE
     ${DC3_PLATFORM_LIBS}
     ${FFMPEG_LIBRARIES}
+    imgui
     $<$<BOOL:${ENABLE_NCNN}>:ncnn>
 )
 

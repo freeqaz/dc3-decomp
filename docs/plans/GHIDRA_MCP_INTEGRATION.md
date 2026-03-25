@@ -4,6 +4,8 @@
 
 The pyghidra-mcp server provides AI-accessible Ghidra analysis capabilities via the Model Context Protocol. This document analyzes how to leverage these tools to accelerate the DC3 decompilation effort.
 
+Current scope is strong on function discovery and signature seeding, but it still stops short of automated RTTI/class-hierarchy recovery. That follow-on work is tracked in [PYGHIDRA_MCP_RTTI_RECOVERY.md](PYGHIDRA_MCP_RTTI_RECOVERY.md).
+
 **Server Status:** Running at `http://127.0.0.1:8000/mcp/v1` (FastMCP/Uvicorn transport)
 **Binary:** `/default.xex` (Dance Central 3 Xbox 360)
 **Indexed:** 38,338 decompiled functions + 21,175 strings (59,513 total embeddings)
@@ -20,10 +22,10 @@ The integration consists of four key components:
 - **Provides**: PowerPC:BE:64:Xenon language specification for Xbox 360 executables
 - **Detection**: Automatically identifies XEX files by magic number (XEX2)
 
-### 2. pyghidra-mcp Fork
-- **Location**: `tools/pyghidra-mcp-fork/`
-- **Version**: 0.1.6+ with FastMCP and Uvicorn
-- **Installation**: Editable mode via pip (`pip install -e tools/pyghidra-mcp-fork/`)
+### 2. pyghidra-mcp Checkout
+- **Location**: `../pyghidra-mcp/`
+- **Version**: External working copy used by `pyghidra-service.sh`
+- **Installation**: Editable mode via pip (`pip install -e ../pyghidra-mcp/`)
 - **Enhancements**:
   - XEX2 magic number detection in `_is_binary_file()`
   - Automatic language specification for XEX binaries
@@ -80,10 +82,10 @@ export GHIDRA_USER_HOME="/tmp/claude/ghidra_user"
 
 ### XEX2 Magic Number Detection
 
-The pyghidra-mcp fork includes automatic detection of Xbox 360 executables:
+The pyghidra-mcp checkout includes automatic detection of Xbox 360 executables:
 
 ```python
-# From tools/pyghidra-mcp-fork/pyghidra_mcp/context.py
+# From ../pyghidra-mcp/src/pyghidra_mcp/context.py
 @staticmethod
 def _is_binary_file(path: Path) -> bool:
     """Quick header-based check for common binary formats."""
@@ -105,7 +107,7 @@ When an XEX file is detected, the system automatically:
 XEX binaries are automatically assigned the correct language during import:
 
 ```python
-# From tools/pyghidra-mcp-fork/pyghidra_mcp/server.py
+# From ../pyghidra-mcp/src/pyghidra_mcp/server.py
 def _detect_binary_language(binary_path: Path) -> tuple[str | None, str | None]:
     """Detect binary format and return language/compiler IDs if needed."""
     with binary_path.open("rb") as f:
@@ -222,6 +224,32 @@ These environment variables are critical for proper XEX support and must be conf
 |------|-------------|----------|
 | `read_bytes` | Read raw memory at address | Inspect data structures, vtables |
 | `list_project_binary_metadata` | Get arch, compiler, format info | Verify binary properties |
+
+---
+
+## Current Type Coverage And RTTI Gap
+
+Today the integration can:
+
+- find stripped functions by address or mangled name via the map file
+- bulk-create missing `Function` objects
+- apply demangled MSVC signatures
+- seed DTM structures from `struct_db`
+
+Today it does **not** yet:
+
+- parse `??_R0`..`??_R4` RTTI nodes into an explicit recovered class graph
+- associate recovered class graphs with `??_7*` vtables automatically
+- apply RTTI metadata back into Ghidra as typed structures, labels, and hierarchy summaries
+
+That gap matters for:
+
+- multiple inheritance
+- base offset recovery
+- vtable ownership
+- differentiating "we know the field layout" from "we know the runtime class graph"
+
+Implementation detail for this missing piece lives in [PYGHIDRA_MCP_RTTI_RECOVERY.md](PYGHIDRA_MCP_RTTI_RECOVERY.md).
 
 ---
 
@@ -485,9 +513,10 @@ list_project_binary_metadata(binary_name: str) -> BinaryMetadata
 
 1. **Create helper scripts** for common MCP queries (decompile, xref, callgraph)
 2. **Integrate with objdiff workflow** - auto-fetch Ghidra decompile when analyzing
-3. **Build function similarity tool** - compare our C++ against Ghidra pseudo-C
-4. **String map generation** - automated feature discovery via string search
-5. **vtable dumper** - extract and annotate class vtables
+3. **Implement RTTI recovery pipeline** - inventory `??_R*` / `??_7*`, parse class graphs, and apply them back into Ghidra
+4. **Build function similarity tool** - compare our C++ against Ghidra pseudo-C
+5. **String map generation** - automated feature discovery via string search
+6. **vtable dumper** - extract and annotate class vtables
 
 ---
 

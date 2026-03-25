@@ -170,68 +170,11 @@ Remaining: lip sync (.lipsync file loading), motion capture (Phase 5), scoring (
 |------|--------|
 | Text `<alt>` markup tags | ParseMarkup fully implemented — missing alt font style entries in .milo asset files |
 
-### Milestone 7: Platform Correctness (DTA / Init / Hack Removal)
+### Milestone 7: Platform Correctness (DTA / Init / Hack Removal) — RESOLVED
 
-**Goal**: Fix upstream issues that `#ifdef HX_NATIVE` hacks currently cover. Remove hacks where possible.
+DTA handler pipeline investigated and resolved. Animation completion issue is NOT DTA-related — `mTypeDef` is null for all animated objects, and the `Anim.cpp` auto-null hack is the correct fix. Key init calls (`ContextCheckerInit`, `MidiParser::Init`, `DirLoader::SetPathEvalCallback`) added. Upstream bug fixes (audio suspend/resume, load state reset) in place.
 
-**Research**: [HACK_AUDIT.md](../../native/HACK_AUDIT.md) — full audit of HX_NATIVE guards (2026-03-16).
-
-#### DTA Handler Pipeline — RESOLVED (2026-03-16)
-
-Root cause analysis below (originally tracked in DTA_HANDLER_ANALYSIS).
-
-**Finding**: Animation completion issue is **NOT DTA-related**. `mTypeDef` is null for all animated objects, and `on_anim_event` has no DTA handler in any config. The `Anim.cpp` auto-null hack is the correct fix for native object lifecycle timing differences.
-
-| Task | Status | Notes |
-|------|--------|-------|
-| Add `ContextCheckerInit()` to native init | **DONE** | Registers 5 DTA script functions. Builds clean, 500-frame smoke test passes. |
-| Add `MidiParser::Init()` to native init | **DONE** | Enables MidiParser object deserialization from .milo files. |
-| Add `DirLoader::SetPathEvalCallback(IsUselessLoad)` | **DONE** | Filters unnecessary asset loads by game mode. |
-| Verify mTypeDef population | **DONE** | mTypeDef is null for all animated objects — confirmed via diagnostics. |
-| Test `on_anim_event` dispatch | **DONE** | Returns kDataUnhandled — no DTA handler exists anywhere. |
-| Anim.cpp auto-null hack (426-434) | **KEEP** | Correct fix for native timing, not a DTA issue. |
-| HamNavList IsAnimating skip (505-509) | **KEEP** | Depends on animation completion, which is correctly handled by auto-null. |
-
-#### Upstream Bug Fixes — Already Correct
-
-| Task | Status | Notes |
-|------|--------|-------|
-| Audio suspend/resume (Game.cpp:297-310) | **IN PLACE** | Real threading bug. `#ifdef HX_NATIVE` is appropriate — only native has threaded audio. |
-| Load state reset (Game.cpp:315-321) | **IN PLACE** | Correctly resets mLoadState after sync stream destruction. |
-
-#### Missing Init Calls — ADDED (2026-03-16)
-
-| Init Call | Status | What It Unblocks |
-|-----------|--------|-----------------|
-| `ContextCheckerInit()` | **DONE** | DTA script functions (random_context, etc.) |
-| `MidiParser::Init()` | **DONE** | MidiParser factory registration |
-| `DirLoader::SetPathEvalCallback()` | MEDIUM | Content path resolution |
-| `AccomplishmentManager::Init()` | LOW | Achievement system |
-| `MetagameRank::Init()` | LOW | XP/level system |
-| `SaveLoadManager::Init()` | LOW | Save/load (needs NativeSaveLoadStub upgrade) |
-
-#### Acceptable Platform Differences (Keep)
-
-These hacks are correct and should remain:
-- MoveDir null safety (6 instances) — MoveGraph is Kinect-specific
-- MoveGraph loading skip — no gesture detection on native
-- Audio timeout bypass — async loading architectural difference
-- LP64 pointer fixes (26+ instances) — required for 64-bit
-- STL container differences — libstdc++ vs STLport
-- `__fsel` replacement — PPC intrinsic
-
-### Testing Roadmap
-
-Test gaps tracked in TODO.md Phase 8 and native/tests/.
-
-| Test | Priority | Validates |
-|------|----------|-----------|
-| DTA handler dispatch | HIGH | mTypeDef population, ExecuteScript(), handler chain |
-| System init completeness | HIGH | Factory registration, DTA function availability |
-| AnimTask completion flow | HIGH | End-to-end animation lifecycle |
-| Audio thread safety | MEDIUM | Suspend/resume race condition fix |
-| Visual regression automation | MEDIUM | Rendering correctness across changes |
-| Flow state machine traversal | MEDIUM | UIPanel lifecycle, transitions |
+See [PLATFORM_HACKS_ANALYSIS.md](PLATFORM_HACKS_ANALYSIS.md) for full details: root cause analysis, hack categorization, init call status, and acceptable platform differences.
 
 ---
 

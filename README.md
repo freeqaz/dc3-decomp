@@ -89,6 +89,36 @@ Select an object from the left sidebar to begin diffing. Changes to the project 
 
 ![](assets/objdiff.png)
 
+Native Port
+===========
+
+A native x86_64 Linux port lives in `native/`. It renders the game using WebGPU (Dawn) instead of Xbox 360 DX9, with real audio playback, DTA script execution, and the full UI flow.
+
+### Building
+
+```sh
+cmake -S native -B native/build -G Ninja
+cmake --build native/build --target dc3-native -- -j$(nproc)
+```
+
+Requires extracted game assets in `orig-assets/` (see [native port status](docs/plans/dc3-native/STATUS.md)).
+
+### Debug Overlay
+
+Press **`~`** (tilde/backtick) at any time to toggle the ImGui debug overlay. This works during gameplay without pausing and provides real-time sliders for:
+
+- **Camera Blend** -- enable/disable smooth camera transitions, adjust blend frame counts
+- **FOV Scale** -- scale all camera field-of-view values (0.5x to 2.0x)
+- **Clip Planes** -- override near/far plane distances
+- **Aspect Ratio** -- force a specific aspect ratio
+- **Camera Offset** -- shift the camera forward/back, up/down, left/right in view space
+
+The debug overlay is also accessible from **Settings > Gameplay Settings > Debug Overlay** in the game menus.
+
+### DTA Overlay System
+
+Native-only features (like the Camera Blend toggle in Gameplay Settings) are injected via file overlays in `native/dta/`. These files shadow the `.ark` archive transparently -- no asset patching required. See [DTA Overlay docs](docs/native/dta/USAGE_GUIDE.md).
+
 Questions?
 ==========
 Please see [the FAQ](docs/FAQ.md).

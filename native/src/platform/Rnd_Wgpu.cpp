@@ -3,6 +3,7 @@
 
 #include "platform/Rnd_Wgpu.h"
 #include "platform/MeshGpuCache.h"
+#include "platform/NativeSettings.h"
 #include "platform/TexGpu.h"
 #include "platform/TransparentQueue.h"
 
@@ -32,9 +33,10 @@
 #include "char/Character.h"
 #include "math/Utl.h"
 
-#ifdef MILO_VIEWER
+#if defined(MILO_VIEWER) || !defined(__EMSCRIPTEN__)
 #include <imgui.h>
 #include <imgui_impl_wgpu.h>
+#include "platform/DebugPanel.h"
 #endif
 
 #ifndef __EMSCRIPTEN__
@@ -266,6 +268,9 @@ void WgpuRnd::Init() {
     } else {
         mClearColor = Hmx::Color(0.06f, 0.09f, 0.12f);
     }
+
+    // Initialize camera/rendering tuning from env vars
+    NativeSettings::Get().Init();
 
     // Create GPU device and window
     GpuDeviceDesc desc{};
@@ -878,6 +883,17 @@ void WgpuRnd::BeginDrawing() {
     }
 #endif
 
+    // Backtick (~) toggles ImGui debug panel
+#if !defined(MILO_VIEWER) && !defined(__EMSCRIPTEN__)
+    if (gNativeWindow && !mGpu.IsHeadless()) {
+        static bool tildeWasPressed = false;
+        bool tildePressed = glfwGetKey(gNativeWindow, GLFW_KEY_GRAVE_ACCENT) == GLFW_PRESS;
+        if (tildePressed && !tildeWasPressed)
+            DebugPanel::Toggle();
+        tildeWasPressed = tildePressed;
+    }
+#endif
+
     // Select default camera and environment (base Rnd::BeginDrawing does this)
     // Only if no camera is already current (viewer sets its own orbit camera)
     if (mDefaultCam && !RndCam::Current())
@@ -1313,6 +1329,19 @@ void WgpuRnd::WriteSceneUniforms() {
         scene.cameraPos[1] = worldXfm.v.y;
         scene.cameraPos[2] = worldXfm.v.z;
 
+        // Camera debug log (every 60 frames ≈ 1/sec)
+        if (NativeSettings::Get().cameraDebug && (mFrameID % 60) == 0) {
+            fprintf(stderr, "[CAM] frame=%d fov=%.3f(%.1fdeg) near=%.2f far=%.1f "
+                    "pos=(%.1f,%.1f,%.1f) aspect=%.3f zRange=(%.3f,%.3f) fovScale=%.3f\n",
+                    mFrameID,
+                    cam->YFov(), cam->YFov() * 57.2957795f,
+                    cam->NearPlane(), cam->FarPlane(),
+                    worldXfm.v.x, worldXfm.v.y, worldXfm.v.z,
+                    (float)TheRnd.GetAspect(),
+                    cam->ZRange().x, cam->ZRange().y,
+                    NativeSettings::Get().fovScale);
+        }
+
     } else {
         // Identity viewProj if no camera
         scene.viewProj[0] = scene.viewProj[5] = scene.viewProj[10] = scene.viewProj[15] = 1;
@@ -1722,7 +1751,7 @@ wgpu::BindGroup WgpuRnd::CreateBoneBindGroup(uint32_t bufferOffset, uint32_t buf
 }
 
 void WgpuRnd::RenderImGuiOverlay() {
-#ifdef MILO_VIEWER
+#if defined(MILO_VIEWER) || !defined(__EMSCRIPTEN__)
     // Only render if ImGui has draw data ready (NewFrame + Render already called)
     if (!ImGui::GetCurrentContext()) return;
     ImDrawData* drawData = ImGui::GetDrawData();

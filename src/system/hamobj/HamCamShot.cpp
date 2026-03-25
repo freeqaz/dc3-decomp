@@ -48,7 +48,8 @@ END_LOADS
 
 void HamCamShot::EndAnim() {
     if (!mCurrentShot || mCurrentShot == this) {
-        for (ObjList<Target>::iterator it = mTargets.begin(); it != mTargets.end(); ++it) {
+        for (ObjList<Target>::iterator it = mTargets.begin(); it != mTargets.end();
+             ++it) {
             Target &target = *it;
             if (!target.mTarget.Null()) {
                 std::list<TargetCache>::iterator cacheIt = GetTargetCache(target.mTarget);
@@ -125,7 +126,8 @@ DataNode HamCamShot::OnAllowableNextShots(const DataArray *a) {
                     dirIt->ListNextShots(nextList);
                     std::list<HamCamShot *>::iterator lit = nextList.begin();
                     while (lit != nextList.end()) {
-                        if (*lit == this) break;
+                        if (*lit == this)
+                            break;
                         ++lit;
                     }
                     if (lit == nextList.end()) {
@@ -177,16 +179,17 @@ void HamCamShot::UpdateTargetsFlipped() {
                 TheDebug << MakeString("Camshot %s\n", (char *)Name());
                 int targetIdx = 0;
                 for (ObjList<Target>::iterator it = mTargets.begin();
-                     it != mTargets.end(); ++it) {
+                     it != mTargets.end();
+                     ++it) {
                     HamCharacter *character = CharacterNameToCharacter(it->mTarget);
                     ObjectDir *clipsDir = NULL;
                     if (character != NULL) {
                         clipsDir = character->Find<ObjectDir>("clips", true);
                     }
 
-                    if (((mPlayerFlag == kHamPlayer1 && targetIdx % 2 == 0) ||
-                         (mPlayerFlag == kHamPlayer0 && targetIdx % 2 == 1)) &&
-                        character != NULL) {
+                    if (((mPlayerFlag == kHamPlayer1 && targetIdx % 2 == 0)
+                         || (mPlayerFlag == kHamPlayer0 && targetIdx % 2 == 1))
+                        && character != NULL) {
                         if (clipsDir != NULL) {
                             Hmx::Object *found =
                                 clipsDir->Find<Hmx::Object>("crewbattle_intro", false);
@@ -197,8 +200,9 @@ void HamCamShot::UpdateTargetsFlipped() {
                                 if (found != NULL) {
                                     it->mAnimGroup = BattleIntro;
                                 } else {
-                                    found =
-                                        clipsDir->Find<Hmx::Object>("crew_battle_intro", false);
+                                    found = clipsDir->Find<Hmx::Object>(
+                                        "crew_battle_intro", false
+                                    );
                                     if (found != NULL) {
                                         it->mAnimGroup = crew_battle_intro;
                                     }
@@ -221,7 +225,10 @@ void HamCamShot::UpdateTargetsFlipped() {
                     }
                     TheDebug << MakeString(
                         "   Target %d: character = '%s' clips = '%s' animGroup = '%s'\n",
-                        targetIdx, charName, clipsDirName, it->mAnimGroup
+                        targetIdx,
+                        charName,
+                        clipsDirName,
+                        it->mAnimGroup
                     );
                     targetIdx++;
                 }
@@ -237,37 +244,39 @@ void HamCamShot::UpdateTargetsFlipped() {
 
         if (venueWorld2 != NULL) {
             for (ObjVector<CamShotFrame>::iterator kit = mKeyframes.begin();
-                 kit != mKeyframes.end(); ++kit) {
+                 kit != mKeyframes.end();
+                 ++kit) {
                 CamShotFrame &frame = *kit;
                 std::vector<RndTransformable *> newTargets;
                 for (ObjPtrList<RndTransformable>::iterator tit = frame.mTargets.begin();
-                     tit != frame.mTargets.end(); ++tit) {
+                     tit != frame.mTargets.end();
+                     ++tit) {
                     RndTransformable *target = *tit;
                     const char *name = target->Name();
                     char buf[240];
-                    char *dst = buf;
-                    const char *src = name;
+                    const char *p = name;
                     char c;
                     do {
-                        c = *src++;
-                        *dst++ = c;
+                        c = *p;
+                        buf[p - name] = c;
+                        p++;
                     } while (c != '\0');
 
                     RndTransformable *newTarget = target;
-                    if (flipped) {
+                    if (!flipped) {
                         if (strstr(name, "player0") && mPlayerFlag == kHamPlayer0) {
-                            buf[5] = '1';
+                            buf[6] = '1';
                             newTarget = venueWorld2->Find<RndTransformable>(buf, true);
                         } else if (strstr(name, "player1") && mPlayerFlag == kHamPlayer1) {
-                            buf[5] = '0';
+                            buf[6] = '0';
                             newTarget = venueWorld2->Find<RndTransformable>(buf, true);
                         }
                     } else {
                         if (strstr(name, "player0") && mPlayerFlag == kHamPlayer1) {
-                            buf[5] = '1';
+                            buf[6] = '1';
                             newTarget = venueWorld2->Find<RndTransformable>(buf, true);
                         } else if (strstr(name, "player1") && mPlayerFlag == kHamPlayer0) {
-                            buf[5] = '0';
+                            buf[6] = '0';
                             newTarget = venueWorld2->Find<RndTransformable>(buf, true);
                         }
                     }
@@ -277,7 +286,8 @@ void HamCamShot::UpdateTargetsFlipped() {
                     frame.mTargets.pop_back();
                 }
                 for (std::vector<RndTransformable *>::iterator jit = newTargets.begin();
-                     jit != newTargets.end(); ++jit) {
+                     jit != newTargets.end();
+                     ++jit) {
                     frame.mTargets.push_back(*jit);
                 }
             }
@@ -305,9 +315,12 @@ void HamCamShot::Reteleport(const Vector3 &offset, bool teleport, Symbol sym) {
             flipTarget = GetFlipTarget(&target);
         }
 
-        if (target.mTarget.Null()) continue;
-        if (teleport && !target.mTeleport) continue;
-        if (!sym.Null() & sym != target.mTarget) continue;
+        if (target.mTarget.Null())
+            continue;
+        if (teleport && !target.mTeleport)
+            continue;
+        if (!sym.Null() & sym != target.mTarget)
+            continue;
 
         std::list<TargetCache>::iterator cacheIt = CreateTargetCache(target.mTarget);
         if (cacheIt->mTrans) {
@@ -322,11 +335,10 @@ void HamCamShot::Reteleport(const Vector3 &offset, bool teleport, Symbol sym) {
             static Symbol INTRO_QUICK("INTRO_QUICK");
             static Symbol INTRO_PLAYLIST("INTRO_PLAYLIST");
 
-            if (TheGameData->SidesSwapped() &&
-                (mPlayerFlag == kHamPlayerBoth || mPlayerFlag == kHamPlayerOff) &&
-                (target.mTarget == player0 || target.mTarget == player1 ||
-                 target.mTarget == backup0 || target.mTarget == backup1)) {
-
+            if (TheGameData->SidesSwapped()
+                && (mPlayerFlag == kHamPlayerBoth || mPlayerFlag == kHamPlayerOff)
+                && (target.mTarget == player0 || target.mTarget == player1
+                    || target.mTarget == backup0 || target.mTarget == backup1)) {
                 static Symbol AUTHORED_CAM_CATS("AUTHORED_CAM_CATS");
                 DataArray *cats = DataGetMacro(AUTHORED_CAM_CATS);
 
@@ -338,9 +350,8 @@ void HamCamShot::Reteleport(const Vector3 &offset, bool teleport, Symbol sym) {
                     }
                 }
                 if (!doSwap) {
-                    if (mCategory == DC_PLAYER_FREESTYLE ||
-                        mCategory == INTRO_QUICK ||
-                        mCategory == INTRO_PLAYLIST) {
+                    if (mCategory == DC_PLAYER_FREESTYLE || mCategory == INTRO_QUICK
+                        || mCategory == INTRO_PLAYLIST) {
                         doSwap = true;
                     }
                 }
@@ -348,7 +359,8 @@ void HamCamShot::Reteleport(const Vector3 &offset, bool teleport, Symbol sym) {
                 if (doSwap) {
                     Symbol otherName = GetFlipTarget(flipTarget->mTarget);
                     for (ObjList<Target>::iterator it2 = mTargets.begin();
-                         it2 != mTargets.end(); ++it2) {
+                         it2 != mTargets.end();
+                         ++it2) {
                         if (it2->mTarget == otherName) {
                             xfm = it2->mTo;
                             break;
@@ -368,9 +380,11 @@ void HamCamShot::Reteleport(const Vector3 &offset, bool teleport, Symbol sym) {
 
 HamCamShot::HamCamShot()
     : mTargets(this), mMinTime(0), mMaxTime(0), mZeroTime(0), mPlayerFlag(kHamPlayerOff),
-      mNextShots(this), mCurrentShot(this), mNextShotOffset(0), mNextShotDuration(0), mInSetFrame(0), mTotalDuration(0),
-      mListingShots(0), mTargetsFlipped(0), mMasterAnims(this), mOriginalSizeNextShots(0), mFlipHideList(this), mFlipShowList(this),
-      mFlipGenHideList(this), mFlipDrawOverrides(this), mFlipPostProcOverrides(this), mFlipEndHideList(this), mFlipActive(false) {
+      mNextShots(this), mCurrentShot(this), mNextShotOffset(0), mNextShotDuration(0),
+      mInSetFrame(0), mTotalDuration(0), mListingShots(0), mTargetsFlipped(0),
+      mMasterAnims(this), mOriginalSizeNextShots(0), mFlipHideList(this),
+      mFlipShowList(this), mFlipGenHideList(this), mFlipDrawOverrides(this),
+      mFlipPostProcOverrides(this), mFlipEndHideList(this), mFlipActive(false) {
     mNearPlane = 10;
     mFarPlane = 10000;
     mNextShotIt = 0;
@@ -774,7 +788,8 @@ void HamCamShot::SetFrame(float frame, float blend) {
     if (this == mCurrentShot) {
         CamShot::SetFrame(frame, blend);
     } else {
-        for (ObjPtrList<RndAnimatable>::iterator it = mAnims.begin(); it != mAnims.end(); ++it) {
+        for (ObjPtrList<RndAnimatable>::iterator it = mAnims.begin(); it != mAnims.end();
+             ++it) {
             (*it)->SetFrame(frame, 1.0f);
         }
         mCurrentShot->SetFrameEx(frame, blend);
@@ -842,7 +857,8 @@ RndDrawable *HamCamShot::GetFlipCharacter(RndDrawable *draw) {
     static Symbol backup1("backup1");
     auto endIt = draw->Name();
     Symbol name(endIt);
-    if (!TheHamDirector) return draw;
+    if (!TheHamDirector)
+        return draw;
     HamCharacter *c;
     if (name == player0) {
         c = TheHamDirector->GetCharacter(1);
@@ -881,12 +897,14 @@ void HamCamShot::FlipTargetAnimGroups() {
 
     ObjList<Target>::iterator p0;
     for (p0 = mTargets.begin(); p0 != mTargets.end(); ++p0) {
-        if (p0->mTarget == player0) break;
+        if (p0->mTarget == player0)
+            break;
     }
 
     ObjList<Target>::iterator p1;
     for (p1 = mTargets.begin(); p1 != mTargets.end(); ++p1) {
-        if (p1->mTarget == player1) break;
+        if (p1->mTarget == player1)
+            break;
     }
 
     if (p0 != mTargets.end()) {
@@ -899,29 +917,31 @@ void HamCamShot::FlipTargetAnimGroups() {
 
 void HamCamShot::CreateFlippedShowHideList() {
     // Only build if all flip lists are currently empty
-    if (mFlipHideList.size() > 0 || mFlipShowList.size() > 0 || mFlipGenHideList.size() > 0
-        || mFlipGenHideVector.size() > 0
-        || mFlipDrawOverrides.size() > 0
-        || mFlipPostProcOverrides.size() > 0 || mFlipEndHideList.size() > 0
-        || mFlipEndShowVector.size() > 0)
+    if (mFlipHideList.size() > 0 || mFlipShowList.size() > 0
+        || mFlipGenHideList.size() > 0 || mFlipGenHideVector.size() > 0
+        || mFlipDrawOverrides.size() > 0 || mFlipPostProcOverrides.size() > 0
+        || mFlipEndHideList.size() > 0 || mFlipEndShowVector.size() > 0)
         return;
 
     // Copy mHideList → mFlipHideList (original), mFlipDrawOverrides (flipped)
-    for (ObjPtrList<RndDrawable>::iterator it = mHideList.begin(); it != mHideList.end(); ++it) {
+    for (ObjPtrList<RndDrawable>::iterator it = mHideList.begin(); it != mHideList.end();
+         ++it) {
         RndDrawable *draw = *it;
         mFlipHideList.push_back(draw);
         mFlipDrawOverrides.push_back(GetFlipCharacter(draw));
     }
 
     // Copy mShowList → mFlipShowList (original), mFlipPostProcOverrides (flipped)
-    for (ObjPtrList<RndDrawable>::iterator it = mShowList.begin(); it != mShowList.end(); ++it) {
+    for (ObjPtrList<RndDrawable>::iterator it = mShowList.begin(); it != mShowList.end();
+         ++it) {
         RndDrawable *draw = *it;
         mFlipShowList.push_back(draw);
         mFlipPostProcOverrides.push_back(GetFlipCharacter(draw));
     }
 
     // Copy mGenHideList → mFlipGenHideList (original), mFlipEndHideList (flipped)
-    for (ObjPtrList<RndDrawable>::iterator it = mGenHideList.begin(); it != mGenHideList.end();
+    for (ObjPtrList<RndDrawable>::iterator it = mGenHideList.begin();
+         it != mGenHideList.end();
          ++it) {
         RndDrawable *draw = *it;
         mFlipGenHideList.push_back(draw);
@@ -930,7 +950,8 @@ void HamCamShot::CreateFlippedShowHideList() {
 
     // Copy mGenHideVector → mFlipGenHideVector (original), mFlipEndShowVector (flipped)
     for (std::vector<RndDrawable *>::iterator it = mGenHideVector.begin();
-         it != mGenHideVector.end(); ++it) {
+         it != mGenHideVector.end();
+         ++it) {
         RndDrawable *draw = *it;
         mFlipGenHideVector.push_back(draw);
         mFlipEndShowVector.push_back(GetFlipCharacter(draw));

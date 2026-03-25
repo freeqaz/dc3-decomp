@@ -548,7 +548,7 @@ These are correct adaptations for a non-Kinect platform:
 - **ExitControllerMode no-op** — no gesture input to re-enter from
 - **8 stub managers** — Xbox Live, challenges, speech — not applicable on native
 
-### Full plan: [DTA_FLOW_V2_PLAN.md](DTA_FLOW_V2_PLAN.md)
+### Full plan: [PLATFORM_HACKS_ANALYSIS.md](../plans/dc3-native/PLATFORM_HACKS_ANALYSIS.md)
 
 ## Scripted Input (MILO_INPUT_SCRIPT)
 

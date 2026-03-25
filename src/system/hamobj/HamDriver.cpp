@@ -86,12 +86,12 @@ float HamDriver::DisplayRecurse(Layer *layer, int indent, float y) {
         if (arr->mWeight != 0.0f) {
             float padding = (float)(int)indent * CharClipDisplay::GetSEm();
             CharClipDisplay display;
-            display.unk1c = mDisplayBeat;
+            display.mCursorBeat = mDisplayBeat;
             display.mDrawPosY = y;
             display.mPadding = padding;
             display.SetText(MakeString("(%s)", arr->mName));
             display.SetStartEnd(mDisplayBeat - 4.0f, mDisplayBeat + 4.0f, true);
-            display.unk20 = arr->mWeight;
+            display.mBlendWeight = arr->mWeight;
             display.DrawTrack();
             display.DrawBlend(arr->mBeat, 1.0f);
             display.DrawCursor();
@@ -108,8 +108,8 @@ float HamDriver::DisplayRecurse(Layer *layer, int indent, float y) {
             CharClipDisplay display;
             float beat = (mDisplayBeat - clip->mClipBeat) + clip->mClip->StartBeat();
             display.mPadding = padding;
-            display.unk1c = beat;
-            display.unk20 = clip->mWeight;
+            display.mCursorBeat = beat;
+            display.mBlendWeight = clip->mWeight;
             display.SetClip(clip->mClip, true);
             display.mDrawPosY = y;
             display.DrawTrack();
@@ -144,9 +144,9 @@ bool HamDriver::Replace(ObjRef *ref, Hmx::Object *obj) {
     return replaced;
 }
 
-float HamDriver::Display(float f1) {
+float HamDriver::Display(float normalizedY) {
     // Scale screen position by normalized height
-    float scaledHeight = TheRnd.Height() * f1;
+    float scaledHeight = TheRnd.Height() * normalizedY;
     const char *pathName = PathName(this);
 
     // Draw debug info: object name and beat position
@@ -210,13 +210,13 @@ void HamDriver::SetClipWeightMap() {
 
 void HamDriver::Clear() { mLayers.Clear(); }
 HamDriver::LayerClip *HamDriver::NewLayerClip() { return new LayerClip(this); }
-void HamDriver::OffsetSec(float f) { return mLayers.OffsetSec(f); }
+void HamDriver::OffsetSec(float seconds) { return mLayers.OffsetSec(seconds); }
 CharClip *HamDriver::FirstClip() { return mLayers.FirstClip(); }
 
 #pragma region HamDriver::Layer
 
-void HamDriver::Layer::OffsetSec(float f1) {
-    mBeat = SecondsToBeat(BeatToSeconds(mBeat) + f1);
+void HamDriver::Layer::OffsetSec(float seconds) {
+    mBeat = SecondsToBeat(BeatToSeconds(mBeat) + seconds);
 }
 
 #pragma endregion
@@ -227,15 +227,15 @@ HamDriver::LayerClip::LayerClip(Hmx::Object *obj) : mClip(obj)
 {
 }
 
-void HamDriver::LayerClip::OffsetSec(float f1) {
-    Layer::OffsetSec(f1);
-    mClipBeat = SecondsToBeat(BeatToSeconds(mClipBeat) + f1);
+void HamDriver::LayerClip::OffsetSec(float seconds) {
+    Layer::OffsetSec(seconds);
+    mClipBeat = SecondsToBeat(BeatToSeconds(mClipBeat) + seconds);
 }
 
-void HamDriver::LayerClip::Eval(float f1) {
+void HamDriver::LayerClip::Eval(float parentWeight) {
     float beat = TheTaskMgr.Beat();
     auto clamped = Clamp(0.0f, 1.0f, beat - mBeat);
-    mWeight = EaseSigmoid(clamped, 0.0, 0.0) * f1;
+    mWeight = EaseSigmoid(clamped, 0.0, 0.0) * parentWeight;
 }
 
 void HamDriver::LayerClip::Play(CharBones &bones) {
@@ -321,10 +321,10 @@ CharClip *HamDriver::LayerArray::FirstClip() {
     return nullptr;
 }
 
-void HamDriver::LayerArray::OffsetSec(float f1) {
-    Layer::OffsetSec(f1);
+void HamDriver::LayerArray::OffsetSec(float seconds) {
+    Layer::OffsetSec(seconds);
     FOREACH (it, mLayers) {
-        (*it)->OffsetSec(f1);
+        (*it)->OffsetSec(seconds);
     }
 }
 

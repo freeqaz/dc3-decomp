@@ -12,11 +12,7 @@ MILO_HEADLESS=1 MILO_NORENDER=1 MILO_FATAL_FAILS=0 \
   native/build/dc3-native
 
 # ASan build (catches use-after-free, double-free, buffer overflow)
-cmake -S native -B native/build-asan -G Ninja \
-  -DCMAKE_CXX_FLAGS="-fsanitize=address -fno-omit-frame-pointer -g -O1" \
-  -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address" \
-  -DCMAKE_BUILD_TYPE=Debug \
-  -DDawn_DIR=/home/free/code/milohax/dc3-decomp-deps/dawn/lib/cmake/Dawn
+cmake -S native -B native/build-asan -G Ninja -DENABLE_ASAN=ON -DCMAKE_BUILD_TYPE=Debug
 cmake --build native/build-asan --target dc3-native -- -j$(nproc)
 
 # Run with ASan (suppress the benign strcpy overlap in FileGetPath)
@@ -153,6 +149,11 @@ for (ObjRef *it = mRefs.next; it != &mRefs; it = it->next) {
 }
 ```
 
+Use GDB hardware watchpoints to catch the moment a ring pointer is corrupted:
+```
+(gdb) watch -l obj->mRefs.next
+```
+
 ### Native-Only Ring Infrastructure
 
 The native port adds infrastructure around the Xbox ring to handle behavioral differences:
@@ -207,17 +208,84 @@ The delete triggers a full destructor cascade. If the deleted ObjectDir has memb
 
 ## Environment Variables
 
-See `docs/debugging/web.md` for the full list. Key ones for native debugging:
-
 | Variable | Description |
 |----------|-------------|
-| `MILO_HEADLESS=1` | No window, GPU renders offscreen |
-| `MILO_NORENDER=1` | Skip GPU entirely (fastest, logic-only) |
+| `MILO_HEADLESS=1` | No GLFW window, GPU renders to offscreen target |
+| `MILO_RENDER=1` | Force GPU init (headless still renders, just no window) |
+| `MILO_NORENDER=1` | Skip GPU entirely (logic-only, fastest) |
 | `MILO_FATAL_FAILS=0` | Don't abort on non-critical failures |
 | `MILO_MAX_FRAMES=N` | Exit after N frames |
-| `MILO_INPUT_SCRIPT=path` | Scripted button presses |
+| `MILO_INPUT_SCRIPT=path` | Scripted button presses (see below) |
+| `MILO_SCREENSHOT_DIR=dir` | Directory for auto-captured PNGs |
+| `MILO_SCREENSHOT_FRAMES=f1,f2,...` | Which frames to capture (default: `100,600,900,1500`) |
+| `MILO_CLEAR_COLOR=R,G,B,A` | Override clear color (debugging) |
+| `MILO_SIMPLE_RENDER` | Simplified material rendering |
+| `MILO_DEBUG_PIPELINES` | Log pipeline creation |
+| `MILO_NO_TRANSPARENT_DEFER` | Disable transparent draw queue |
+| `MILO_PERF` | Enable frame timing |
+| `MILO_VIDEO=path.mp4` | Record frames to video |
+| `MILO_CAPTURE_FRAME=N` | GFXReconstruct capture at frame N |
 | `MILO_TRACE_DELETE_OBJECTS=1` | Log each object deletion in `DeleteObjects()` |
 | `MILO_DEBUG_MERGE=1` | Log merge operations (MergeObject source/target/action) |
+
+## Scripted Input System
+
+Input scripts drive the engine through menu screens. Two formats are supported:
+
+**Absolute frame** (simple, but fragile if load times change):
+```
+60 start          # press Start at frame 60
+200 confirm       # press A at frame 200
+```
+
+**Wait-for-screen** (robust, adapts to variable load times):
+```
+wait_screen main_screen
++30 confirm                # 30 frames after main_screen appears
+wait_screen choose_mode_screen
++30 confirm
+wait_screen song_select_screen
++50 down                   # scroll through songs
++100 down
+```
+
+### Button Names
+
+| Name(s) | Milo Button | Xbox Equivalent |
+|----------|-------------|-----------------|
+| `start` | `kPad_Start` | Start |
+| `confirm`, `a` | `kPad_X` | A |
+| `cancel`, `b` | `kPad_Circle` | B |
+| `x` | `kPad_Square` | X |
+| `y` | `kPad_Tri` | Y |
+| `up` | `kPad_DUp` | D-pad Up |
+| `down` | `kPad_DDown` | D-pad Down |
+| `left` | `kPad_DLeft` | D-pad Left |
+| `right` | `kPad_DRight` | D-pad Right |
+| `option`, `back`, `select` | `kPad_Select` | Back |
+| `l1`, `lb` | `kPad_L1` | LB |
+| `r1`, `rb` | `kPad_R1` | RB |
+| `l2`, `lt` | `kPad_L2` | LT |
+| `r2`, `rt` | `kPad_R2` | RT |
+| `l3`, `ls` | `kPad_L3` | LS (left stick click) |
+| `r3`, `rs` | `kPad_R3` | RS (right stick click) |
+
+Note: Milo uses PlayStation-style internal names (`kPad_X` = confirm, `kPad_Circle` = cancel) but the Xbox 360 layout maps A to confirm and B to cancel. Buttons are pressed for exactly 1 frame (press on N, auto-release on N+1). Events don't need to be in order — the file is sorted by frame at load time.
+
+### How It Works
+
+In headless mode (`gNativeWindow == NULL`), `JoypadPoll()` reads from the script instead of GLFW. On first poll, `LoadInputScript()` reads and parses the `MILO_INPUT_SCRIPT` file. Each frame, `GetScriptedButtons()` returns a bitmask of buttons active on that frame. The existing delta computation (`mNewPressed`, `mNewReleased`) handles press/release edges. Windowed mode is unaffected — GLFW gamepad + keyboard fallback works as before.
+
+Source: `native/src/platform/Joypad_Native.cpp`. Screenshot capture: `native/src/platform/Rnd_Wgpu.cpp`.
+
+**Troubleshooting**: Create `MILO_SCREENSHOT_DIR` before launch (capture fails silently if missing). If scripted input doesn't work, verify frame numbers align with where the game actually is — the attract screen runs for a while before accepting input. In windowed mode, scripted input is disabled; use keyboard instead: arrow keys, Enter (confirm), Escape (cancel), Space (start), Tab (back).
+
+### Available Input Flow Scripts
+
+| Script | Route | Purpose |
+|--------|-------|---------|
+| `scripts/dc3-input-flows/song-scroll-test.txt` | boot -> main -> choose_mode -> song_select -> 8x down | Verify list scrolling |
+| `scripts/dc3-input-flows/ymca.txt` | boot -> gameplay | Full song load test |
 
 ## Unit Tests
 
@@ -251,6 +319,14 @@ timeout 15 native/build/milo-tests --gtest_filter='ObjectLifetimeTest.SomeTest'
 **Key lesson**: When ASan doesn't catch a crash that happens without ASan, the bug depends on allocator zeroing behavior. Check for stale pointers where the allocator zeroes the vtable.
 
 Full writeup: `docs/sessions/2026-03-18-venue-merge-crash-ring-corruption.md`
+
+### ObjDirItr Infinite Loop (2026-03-17)
+
+**Symptom**: Game hung after ~1500 frames during song gameplay.
+
+**Diagnosis**: CDP debugger break showed `ObjDirItr<RndLight>::Advance()` called from `WgpuRnd::WriteSceneUniforms()` — recursive dir iterator on venue WorldDir every frame.
+
+**Fix**: Removed `ObjDirItr<RndLight>(venueDir, true)` scans from `WriteSceneUniforms()`. Environment light lists + fallback defaults are sufficient.
 
 ### FlowNode Double-Free (2026-03-18)
 

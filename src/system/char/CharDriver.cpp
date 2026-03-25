@@ -447,9 +447,9 @@ float CharDriver::Display(float f) {
     std::vector<CharClipDisplay> displays;
     for (CharClipDriver *it = mFirst; it != nullptr; it = it->Next()) {
         displays.push_back(CharClipDisplay());
-        displays.back().unk1c = it->mBeat;
+        displays.back().mCursorBeat = it->mBeat;
         displays.back().SetClip(it->mClip, false);
-        displays.back().unk20 = it->mBlendFrac;
+        displays.back().mBlendWeight = it->mBlendFrac;
     }
     unsigned int displayCount = displays.size();
     float y = f * (float)TheRnd.Height() + (float)displayCount * lineSpacing;

@@ -49,7 +49,7 @@ Transform::Multiply decomp bug (y/z coefficient swap in mtx.cpp) caused all tran
 
 DTA content/scripting system works on native. 62 songs load from DTA configs, screen
 transitions driven by DTA handlers + native auto-advance timers. See
-[DTA_FLOW_V2_PLAN.md](DTA_FLOW_V2_PLAN.md) for full resolution. DTA files drive:
+[PLATFORM_HACKS_ANALYSIS.md](../plans/dc3-native/PLATFORM_HACKS_ANALYSIS.md) for full resolution. DTA files drive:
 
 ### What DTAs control
 1. **Screen transitions** — DTA scripts define `next_screen`, screen flow logic, and transition triggers
@@ -142,7 +142,7 @@ Ghidra DB analysis (22,397 decompiled functions) confirms all loading state sett
 ## Phase 5: DTA/Content System
 Goal: Remove C++ workarounds and let real DTA screen-flow scripts drive the native port.
 
-**Full plan**: [DTA_FLOW_V2_PLAN.md](DTA_FLOW_V2_PLAN.md)
+**Full plan**: [PLATFORM_HACKS_ANALYSIS.md](../plans/dc3-native/PLATFORM_HACKS_ANALYSIS.md)
 
 - [x] **Smart stubs** (Phase 1): SaveLoadManager, ProfileMgr, PlatformMgr return sensible defaults
 - [x] **Boot screen timers** (Phase 2): Intentional UX delays (permanent — no async Xbox events)

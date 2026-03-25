@@ -93,6 +93,8 @@ Configured in `.mcp.json`. The MCP server runs on **port 8000** (default) using 
 | `create_structures` | Create struct types in DTM from struct_db definitions |
 | `apply_this_types` | (Legacy) Set `this*` parameter only on member functions |
 
+**Current limitation:** this pipeline improves function signatures and field layouts, but it does **not** yet recover or apply MSVC RTTI (`??_R0`..`??_R4`) into explicit class hierarchies. That work is planned in [PYGHIDRA_MCP_RTTI_RECOVERY.md](../plans/PYGHIDRA_MCP_RTTI_RECOVERY.md).
+
 ### Binary Inspection
 
 | Tool | Description |
@@ -206,6 +208,15 @@ python3 tools/ghidra/batch_export_types.py --seed --extract
 | Calling conventions set | 0 | ~53,000 |
 | Parameter types | `this*` only | All parameters |
 
+### What The Pipeline Does Not Yet Do
+
+- Parse RTTI descriptors (`??_R0`..`??_R4`) from program memory
+- Reconstruct base-class graphs from RTTI
+- Associate recovered classes with `??_7*` vtables automatically
+- Apply RTTI structs/comments back into the Ghidra project
+
+For that missing work, use the implementation plan in [PYGHIDRA_MCP_RTTI_RECOVERY.md](../plans/PYGHIDRA_MCP_RTTI_RECOVERY.md).
+
 ### When to Re-seed
 
 Re-run `--seed` after:
@@ -214,6 +225,37 @@ Re-run `--seed` after:
 - Updating struct_db with new header-sourced types
 
 The `--extract` step (batch decompilation) benefits from seeding — with full signatures, the decompiler produces much higher-quality inferred types.
+
+## Service Management
+
+The pyghidra-mcp service is managed via `tools/ghidra/pyghidra-service.sh`:
+
+```bash
+# Start (auto-cleans stale port, starts logging)
+./tools/ghidra/pyghidra-service.sh start
+
+# Stop (kills process, removes PID file, clears stale Ghidra locks)
+./tools/ghidra/pyghidra-service.sh stop
+
+# Check if running
+./tools/ghidra/pyghidra-service.sh status
+
+# Restart (clean stop + start, cleans stale port)
+./tools/ghidra/pyghidra-service.sh restart
+
+# Live tail of logs
+./tools/ghidra/pyghidra-service.sh logs
+
+# Run diagnostics (checks Ghidra install, Java, port, permissions)
+./tools/ghidra/pyghidra-service.sh diagnose
+```
+
+### Hardening Features
+
+- **Port cleanup**: On startup, kills stale processes occupying port 8000 (via `lsof`). Waits up to 5 seconds.
+- **Health check**: `get_service_health` MCP tool returns status, uptime, version, and Ghidra readiness. Called automatically by `analyze-function` before analysis.
+- **Logging**: Rotating file handler at `/tmp/claude/pyghidra-service.log` (10 MB max, 10 backup files). Logs startup, shutdown, port cleanup, decompilation requests, errors.
+- **Diagnostics**: `--diagnose` flag checks Ghidra installation, Java, port status, temp directories, and recent log entries.
 
 ## Troubleshooting
 

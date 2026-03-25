@@ -150,6 +150,108 @@ def _demangle_itanium_to_qualified(symbol: str) -> str | None:
     return f"{class_name}::{method}"
 
 
+# Regex to extract candidate lines from objdiff "Multiple matches" output
+# Each line looks like: "  public: void __cdecl Class::Method(args) (unit/path)"
+_MULTI_MATCH_LINE = re.compile(
+    r'^\s+(?:public|protected|private):\s+.*?(\S+::\S+\(.*?\))\s+\(',
+    re.MULTILINE,
+)
+
+
+def _extract_param_hint(symbol: str) -> tuple[str, str | None]:
+    """Extract parameter type hint from a symbol string.
+
+    Given 'Class::Method(TypeHint)', returns ('Class::Method', 'TypeHint').
+    Given 'Class::Method', returns ('Class::Method', None).
+    Handles nested templates/parens in the hint.
+    """
+    # Find the first '(' that's part of a user-provided hint (not MSVC mangling)
+    if symbol.startswith("?") or "(" not in symbol:
+        return symbol, None
+
+    # Find matching parens
+    paren_start = symbol.index("(")
+    depth = 1
+    pos = paren_start + 1
+    while pos < len(symbol) and depth > 0:
+        if symbol[pos] == "(":
+            depth += 1
+        elif symbol[pos] == ")":
+            depth -= 1
+        pos += 1
+
+    if depth == 0:
+        base = symbol[:paren_start].rstrip()
+        hint = symbol[paren_start + 1 : pos - 1].strip()
+        return base, hint if hint else None
+
+    return symbol, None
+
+
+def _resolve_ambiguous_symbol(output: str, hint: str | None) -> str | None:
+    """Try to resolve an ambiguous symbol from objdiff's 'Multiple matches' output.
+
+    Args:
+        output: The full stdout from objdiff-cli containing the candidate list
+        hint: Optional parameter type hint from user (e.g., 'BaseSkeleton*')
+
+    Returns:
+        The resolved "Class::Method(args)" string suitable for objdiff, or None.
+    """
+    if "Multiple matches" not in output:
+        return None
+
+    # Extract candidate demangled names from the output
+    # Lines look like: "  public: void __cdecl Class::Method(args) (unit/path)"
+    candidates = []
+    for line in output.strip().splitlines():
+        line = line.strip()
+        if not line or line.startswith("Multiple matches") or line.startswith("Failed"):
+            continue
+        # Find the last " (" which starts the unit path
+        last_paren = line.rfind(" (")
+        if last_paren > 0:
+            full_demangled = line[:last_paren].strip()
+            # Extract "Class::Method(args)" from "access: rettype __cdecl Class::Method(args)"
+            short = full_demangled
+            for prefix in ("public: ", "protected: ", "private: "):
+                if short.startswith(prefix):
+                    short = short[len(prefix):]
+            # Strip return type + calling convention
+            cdecl_idx = short.find("__cdecl ")
+            if cdecl_idx >= 0:
+                short = short[cdecl_idx + 8:]
+            elif "__thiscall " in short:
+                short = short[short.find("__thiscall ") + 11:]
+            candidates.append(short)
+
+    if not candidates:
+        return None
+
+    if hint:
+        # Filter candidates that contain the hint string (case-insensitive)
+        hint_lower = hint.lower().rstrip("*& ").lstrip("const ").strip()
+        matching = []
+        for c in candidates:
+            paren_idx = c.find("(", c.find("::") if "::" in c else 0)
+            if paren_idx >= 0:
+                params = c[paren_idx:]
+                if hint_lower in params.lower():
+                    matching.append(c)
+
+        if len(matching) == 1:
+            return matching[0]
+        if matching:
+            # Prefer shorter method name
+            matching.sort(key=lambda c: len(c.split("(")[0]))
+            return matching[0]
+
+    # No hint: prefer the candidate whose method name (before "(") is shortest.
+    # "Class::Set(" should rank before "Class::SetQuatBoneValue("
+    candidates.sort(key=lambda c: len(c.split("(")[0]))
+    return candidates[0]
+
+
 class DecompMCPServer:
     """MCP Server providing decomp orchestration tools."""
 
@@ -1331,6 +1433,9 @@ class DecompMCPServer:
         if demangled is not None:
             symbol = demangled
 
+        # Extract parameter type hint for disambiguation (e.g., "Set(BaseSkeleton*)" → "Set", hint="BaseSkeleton*")
+        symbol, param_hint = _extract_param_hint(symbol)
+
         # Determine which project directory to use
         # Priority: explicit project_dir arg > REPO_ROOT env var > main repo fallback
         # REPO_ROOT is set by agent_runner.py to the agent's worktree, ensuring
@@ -1406,6 +1511,48 @@ class DecompMCPServer:
                 "Failed" in json_output and not has_json
             )
             stderr_has_error = "Failed" in (json_result.stderr or "")
+
+            if stdout_has_error or (stderr_has_error and not has_json):
+                # Try to resolve ambiguous symbol before giving up
+                combined_output = json_output + "\n" + (json_result.stderr or "")
+                if "Ambiguous symbol" in combined_output or "Multiple matches" in combined_output:
+                    resolved = _resolve_ambiguous_symbol(combined_output, param_hint)
+                    if resolved:
+                        # Update base_args with the resolved symbol
+                        base_args = [
+                            str(objdiff_cli),
+                            "diff",
+                            "-p", str(project_dir),
+                            resolved,
+                            "--verdict",
+                            "-c", "functionRelocDiffs=none",
+                        ]
+                        if unit:
+                            base_args.extend(["-u", unit])
+
+                        # Retry JSON run
+                        json_cmd = base_args + json_extra + build_flag + ["-f", "json"]
+                        json_result = subprocess.run(
+                            json_cmd,
+                            capture_output=True,
+                            text=True,
+                            timeout=300,
+                            cwd=str(project_dir),
+                        )
+                        json_output = json_result.stdout
+                        stderr_text = _filter_build_output(json_result.stderr)
+                        has_json = "{" in json_output
+                        # Update symbol for downstream use
+                        symbol = resolved
+
+                        # If retry still fails, fall through to error handling below
+                        stdout_has_error = "Symbol not found" in json_output or (
+                            "Failed" in json_output and not has_json
+                        )
+                        stderr_has_error = "Failed" in (json_result.stderr or "")
+                        if not (stdout_has_error or (stderr_has_error and not has_json)):
+                            # Success! Continue with normal flow
+                            stdout_has_error = False
 
             if stdout_has_error or (stderr_has_error and not has_json):
                 suggestions = self._suggest_similar_symbols(symbol)
@@ -1574,6 +1721,9 @@ class DecompMCPServer:
         if demangled is not None:
             symbol = demangled
 
+        # Extract parameter type hint for disambiguation
+        symbol, _param_hint = _extract_param_hint(symbol)
+
         # Determine which project directory to use
         # Priority: explicit project_dir arg > REPO_ROOT env var > main repo fallback
         # REPO_ROOT is set by agent_runner.py to the agent's worktree, ensuring
@@ -1694,6 +1844,9 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
         demangled = _demangle_itanium_to_qualified(symbol)
         if demangled is not None:
             symbol = demangled
+
+        # Extract parameter type hint for disambiguation
+        symbol, _param_hint = _extract_param_hint(symbol)
 
         # Require project_dir — no silent fallback to main repo
         if not project_dir_arg:
@@ -2161,7 +2314,13 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
             return [TextContent(type="text", text=f"RB3 search error: {e}")]
 
     async def _lookup_struct_offset(self, args: dict) -> list[TextContent]:
-        """Handle lookup_struct_offset tool call."""
+        """Handle lookup_struct_offset tool call.
+
+        Enhanced with:
+        - Range-based lookup: finds member containing the offset (not just exact match)
+        - ObjPtr/ObjOwnerPtr/ObjPtrVec sub-offset reporting
+        - RB2 DWARF fallback when struct_db doesn't have the class
+        """
         class_name = args.get("class_name", "")
         offset_str = args.get("offset", "")
 
@@ -2189,19 +2348,181 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
             with StructDB(str(struct_db_path)) as db:
                 result = db.lookup(class_name, offset)
 
-            if result:
-                cls_name, member_name, type_str = result
-                return [TextContent(
-                    type="text",
-                    text=f"**{cls_name}::{member_name}** (`{type_str}`) at offset 0x{offset:x}"
-                )]
-            else:
-                return [TextContent(
-                    type="text",
-                    text=f"No field found at offset 0x{offset:x} in {class_name} or its parent classes."
-                )]
+                if result:
+                    cls_name, member_name, type_str = result
+                    text = f"**{cls_name}::{member_name}** (`{type_str}`) at offset 0x{offset:x}"
+                    # Add wrapper sub-offset info
+                    sub_info = self._describe_wrapper_suboffset(type_str, 0)
+                    if sub_info:
+                        text += f"\n{sub_info}"
+                    return [TextContent(type="text", text=text)]
+
+                # Exact match failed — try range-based lookup
+                range_result = self._lookup_offset_in_range(db, class_name, offset)
+                if range_result:
+                    return [TextContent(type="text", text=range_result)]
+
+            # Fall back to RB2 DWARF data
+            rb2_result = self._lookup_rb2_offset(class_name, offset)
+            if rb2_result:
+                return [TextContent(type="text", text=rb2_result)]
+
+            return [TextContent(
+                type="text",
+                text=f"No field found at offset 0x{offset:x} in {class_name} or its parent classes."
+            )]
         except Exception as e:
             return [TextContent(type="text", text=f"Error looking up offset: {e}")]
+
+    def _lookup_offset_in_range(self, db: "StructDB", class_name: str, offset: int) -> str | None:
+        """Find which member contains the given offset using type size knowledge."""
+        from tools.struct_db import TYPE_SIZES, TEMPLATE_SIZES
+
+        cursor = db.conn.cursor()
+        classes_to_check = [class_name] + db.resolve_inheritance_chain(class_name)
+
+        for check_class in classes_to_check:
+            # Get all members for this class, ordered by offset descending
+            cursor.execute("""
+                SELECT c.name, m.name, m.type_str, m.offset
+                FROM members m
+                JOIN classes c ON m.class_id = c.id
+                WHERE c.name = ? AND m.offset <= ?
+                ORDER BY m.offset DESC
+                LIMIT 1
+            """, (check_class, offset))
+
+            row = cursor.fetchone()
+            if not row:
+                continue
+
+            cls_name, member_name, type_str, member_offset = row[0], row[1], row[2], row[3]
+            sub_offset = offset - member_offset
+
+            # Estimate member size from type
+            member_size = self._estimate_type_size(type_str)
+
+            if member_size and sub_offset < member_size:
+                text = f"**{cls_name}::{member_name}** (`{type_str}`) at base offset 0x{member_offset:x}"
+                text += f"\n  Queried offset 0x{offset:x} is at +0x{sub_offset:x} within this member"
+                # Describe wrapper sub-offset if applicable
+                sub_info = self._describe_wrapper_suboffset(type_str, sub_offset)
+                if sub_info:
+                    text += f"\n  {sub_info}"
+                return text
+
+        return None
+
+    @staticmethod
+    def _estimate_type_size(type_str: str) -> int | None:
+        """Estimate type size from type string using known sizes."""
+        from tools.struct_db import TYPE_SIZES, TEMPLATE_SIZES
+
+        # Direct lookup
+        if type_str in TYPE_SIZES:
+            return TYPE_SIZES[type_str]
+
+        # Template types: "ObjPtr<RndMat>" → ObjPtr
+        template_match = re.match(r'(\w+)<', type_str)
+        if template_match:
+            template_name = template_match.group(1)
+            if template_name in TEMPLATE_SIZES:
+                return TEMPLATE_SIZES[template_name]
+
+        # Pointer types
+        if type_str.endswith('*'):
+            return 4  # 32-bit pointers on PPC
+
+        return None
+
+    @staticmethod
+    def _describe_wrapper_suboffset(type_str: str, sub_offset: int) -> str | None:
+        """Describe sub-offsets within ObjPtr/ObjOwnerPtr/ObjPtrVec wrapper types."""
+        # ObjPtr<T> / ObjOwnerPtr<T> layout (0x14 bytes):
+        #   0x00: vtable (from ObjRef)
+        #   0x04: mRef (Hmx::Object*, from ObjRef)
+        #   0x08: mOwner (from ObjRefConcrete)  -- or mObject? depends on version
+        #   0x0C: mObject (the T* raw pointer)
+        #   0x10: mOwner (Hmx::Object* or ObjRefOwner*)
+        objptr_fields = {
+            0x00: "vtable (ObjRef base)",
+            0x04: "mRef (ObjRef::mRef)",
+            0x08: "mOwner (ObjRefConcrete field)",
+            0x0C: "mObject (the raw T* pointer — this is what Ghidra dereferences)",
+            0x10: "mOwner (owner pointer)",
+        }
+
+        # ObjPtrVec<T1, T2> layout (0x1C bytes, inherits ObjRefOwner):
+        #   0x00: vtable
+        #   0x04: ObjRefOwner fields
+        #   0x0C: mNodes (vector<Node>) — begin pointer
+        #   0x10: mNodes — end pointer
+        #   0x14: mNodes — capacity pointer
+        #   0x18: mOwner
+        objptrvec_fields = {
+            0x00: "vtable (ObjRefOwner base)",
+            0x04: "ObjRefOwner field",
+            0x08: "ObjRefOwner field",
+            0x0C: "mNodes.begin (vector data ptr)",
+            0x10: "mNodes.end (vector size ptr)",
+            0x14: "mNodes.capacity",
+            0x18: "mOwner",
+        }
+
+        template_match = re.match(r'(\w+)<', type_str)
+        if not template_match:
+            return None
+
+        template_name = template_match.group(1)
+
+        if template_name in ('ObjPtr', 'ObjOwnerPtr'):
+            desc = objptr_fields.get(sub_offset)
+            if desc:
+                return f"→ ObjPtr sub-offset +0x{sub_offset:x}: {desc}"
+            return f"→ ObjPtr sub-offset +0x{sub_offset:x} (within {template_name}, size 0x14)"
+
+        if template_name == 'ObjPtrVec':
+            desc = objptrvec_fields.get(sub_offset)
+            if desc:
+                return f"→ ObjPtrVec sub-offset +0x{sub_offset:x}: {desc}"
+            return f"→ ObjPtrVec sub-offset +0x{sub_offset:x} (within ObjPtrVec, size 0x1C)"
+
+        if template_name == 'ObjDirPtr':
+            fields = {0x00: "vtable", 0x04: "mRef", 0x08: "mLoader", 0x0C: "mDir (the raw ObjectDir* pointer)"}
+            desc = fields.get(sub_offset)
+            if desc:
+                return f"→ ObjDirPtr sub-offset +0x{sub_offset:x}: {desc}"
+
+        if template_name in ('ObjPtrList', 'ObjList'):
+            fields = {0x00: "vtable", 0x04: "list head/size", 0x08: "list node ptr"}
+            desc = fields.get(sub_offset)
+            if desc:
+                return f"→ {template_name} sub-offset +0x{sub_offset:x}: {desc}"
+
+        return None
+
+    def _lookup_rb2_offset(self, class_name: str, offset: int) -> str | None:
+        """Fall back to RB2 DWARF data for offset lookup."""
+        try:
+            from orchestrator.rb2_dwarf import RB2DwarfParser
+            parser = RB2DwarfParser()
+            result = parser.get_member_at_offset(class_name, offset)
+            if result:
+                cls = result.get('class', class_name)
+                member = result['member']
+                type_str = result['type']
+                member_offset = result['offset']
+                text = f"**(RB2 DWARF)** {cls}::{member} (`{type_str}`) at offset 0x{member_offset:x}"
+                sub_off = result.get('sub_offset')
+                if sub_off is not None and sub_off > 0:
+                    text += f"\n  Queried offset 0x{offset:x} is at +0x{sub_off:x} within this member"
+                    sub_info = self._describe_wrapper_suboffset(type_str, sub_off)
+                    if sub_info:
+                        text += f"\n  {sub_info}"
+                return text
+        except Exception:
+            pass
+        return None
 
     async def _lookup_merged_symbol(self, args: dict) -> list[TextContent]:
         """Handle lookup_merged_symbol tool call."""

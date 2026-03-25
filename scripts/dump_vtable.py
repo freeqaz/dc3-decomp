@@ -16,6 +16,7 @@ If --obj is not given, searches build/373307D9/obj/ for a matching .obj file.
 import argparse
 import glob
 import os
+import re
 import struct
 import subprocess
 import sys
@@ -269,7 +270,237 @@ def lookup_vtable_offset(class_name, offset, obj_path=None, project_root=None):
     return None
 
 
+def enumerate_all_vtables(data, symbols, sections):
+    """Find all vtable symbols (??_7) and their RTTI sub-object offsets.
+
+    Returns list of dicts:
+    [{'symbol': name, 'base_name': str, 'sub_object_offset': int|None,
+      'section_idx': int, 'entries': [...]}]
+    """
+    # Build symbol index lookup
+    sym_by_idx = {}
+    for sym in symbols:
+        sym_by_idx[sym['index']] = sym
+
+    vtables = []
+    for sym in symbols:
+        name = sym['name']
+        if not name.startswith('??_7') or '6B' not in name:
+            continue
+
+        # Extract base class name from mangled vtable symbol
+        # ??_7Class@@6BBase@@@ -> Base
+        # ??_7Class@@6B@ -> (primary, no base name)
+        base_name = ""
+        m = re.match(r'\?\?_7\w+@@6B(.+?)@@@?$', name)
+        if m:
+            # Handle nested names like Object@Hmx
+            base_name = m.group(1).replace('@', '::')
+
+        sec_idx = sym['section'] - 1
+        if sec_idx < 0 or sec_idx >= len(sections):
+            continue
+
+        section = sections[sec_idx]
+
+        # Read relocations for this section
+        entries = []
+        for r in range(section['num_relocs']):
+            rel_off = section['reloc_offset'] + r * 10
+            rva, sym_idx, rel_type = struct.unpack_from('<IIH', data, rel_off)
+            target_sym = sym_by_idx.get(sym_idx, {'name': f'<unknown_{sym_idx}>'})
+            entries.append({
+                'offset': rva,
+                'type': rel_type,
+                'symbol': target_sym['name'],
+            })
+
+        # Try to find ??_R4 (RTTI Complete Object Locator) at end of vtable
+        # It's the last relocation entry pointing to a ??_R4 symbol
+        sub_object_offset = None
+        for entry in entries:
+            if entry['symbol'].startswith('??_R4'):
+                # Found RTTI COL — read the sub-object offset from section data
+                # The ??_R4 symbol itself is in another section; we need to find it
+                r4_sym = None
+                for s in symbols:
+                    if s['name'] == entry['symbol']:
+                        r4_sym = s
+                        break
+                if r4_sym and r4_sym['section'] > 0:
+                    r4_sec_idx = r4_sym['section'] - 1
+                    if r4_sec_idx < len(sections):
+                        r4_section = sections[r4_sec_idx]
+                        r4_data_off = r4_section['raw_offset'] + r4_sym['value']
+                        # COL layout: signature(4), offset(4), cdOffset(4), ...
+                        # offset at +4 is the sub-object offset (big-endian PPC)
+                        if r4_data_off + 8 <= len(data):
+                            sub_object_offset = struct.unpack_from('>I', data, r4_data_off + 4)[0]
+
+        vtables.append({
+            'symbol': name,
+            'base_name': base_name,
+            'sub_object_offset': sub_object_offset,
+            'section_idx': sec_idx,
+            'entries': entries,
+        })
+
+    return vtables
+
+
+def resolve_vcall(class_name, sub_object_offset, vtable_slot, obj_path=None, project_root=None):
+    """Resolve a virtual function call through a sub-object vtable.
+
+    Args:
+        class_name: Most-derived class name
+        sub_object_offset: Byte offset from this-ptr to vtable load
+        vtable_slot: Slot index (if < 100) or byte offset (if >= 100)
+        obj_path: Path to .obj file (auto-detected if None)
+        project_root: Project root for auto-detection
+
+    Returns:
+        Dict with resolution info, or error dict.
+    """
+    if project_root:
+        old_cwd = os.getcwd()
+        os.chdir(project_root)
+
+    try:
+        if not obj_path:
+            obj_path = find_obj_file(class_name)
+            if not obj_path:
+                return {'error': f'Could not find .obj file for {class_name}'}
+
+        with open(obj_path, 'rb') as f:
+            data = f.read()
+
+        symbols, sections = read_coff_symbols(data)
+        vtables = enumerate_all_vtables(data, symbols, sections)
+
+        if not vtables:
+            return {'error': f'No vtable symbols found for {class_name} in {obj_path}'}
+
+        # Auto-detect byte offset vs slot index
+        if vtable_slot >= 100:
+            vtable_slot = vtable_slot // 4
+
+        # Find vtable matching the sub-object offset
+        matched = None
+        for vt in vtables:
+            if vt['sub_object_offset'] == sub_object_offset:
+                matched = vt
+                break
+
+        if matched is None:
+            # List available offsets for diagnostics
+            available = []
+            for vt in vtables:
+                available.append({
+                    'symbol': vt['symbol'],
+                    'base_name': vt['base_name'],
+                    'sub_object_offset': vt['sub_object_offset'],
+                })
+            return {
+                'error': f'No vtable at sub-object offset {sub_object_offset} for {class_name}',
+                'available_vtables': available,
+            }
+
+        entries = matched['entries']
+
+        # Check slot bounds (exclude ??_R4 at end)
+        func_entries = [e for e in entries if not e['symbol'].startswith('??_R4')]
+        if vtable_slot >= len(func_entries):
+            return {
+                'error': f'Slot {vtable_slot} out of range (vtable has {len(func_entries)} function slots)',
+                'vtable_symbol': matched['symbol'],
+                'base_name': matched['base_name'],
+            }
+
+        target_entry = func_entries[vtable_slot]
+        target_sym = target_entry['symbol']
+        demangled = demangle_symbol(target_sym)
+
+        # Build all slots for context
+        all_slots = []
+        for i, e in enumerate(func_entries):
+            slot_info = {
+                'slot': i,
+                'offset': f"0x{i * 4:02x}",
+                'symbol': e['symbol'],
+                'demangled': demangle_symbol(e['symbol']),
+            }
+            icf = classify_icf(e['symbol'], e['offset'], entries)
+            if icf:
+                slot_info['note'] = f'ICF: {icf}'
+            all_slots.append(slot_info)
+
+        # Determine confidence
+        confidence = 'high'
+        icf = classify_icf(target_sym, target_entry['offset'], entries)
+        if icf:
+            confidence = 'medium'
+
+        result = {
+            'resolved_function': demangled,
+            'raw_symbol': target_sym,
+            'vtable_symbol': matched['symbol'],
+            'base_name': matched['base_name'],
+            'sub_object_offset': sub_object_offset,
+            'slot': vtable_slot,
+            'slot_offset_hex': f"0x{vtable_slot * 4:02x}",
+            'confidence': confidence,
+            'all_slots': all_slots,
+            'obj_file': obj_path,
+        }
+        if icf:
+            result['icf_note'] = icf
+
+        return result
+
+    finally:
+        if project_root:
+            os.chdir(old_cwd)
+
+
+def _run_resolve(argv):
+    """Handle 'resolve' subcommand."""
+    parser = argparse.ArgumentParser(prog='dump_vtable.py resolve',
+                                     description='Resolve a virtual call')
+    parser.add_argument('resolve_class', help='Most-derived class name')
+    parser.add_argument('offset', type=lambda x: int(x, 0), help='Sub-object offset')
+    parser.add_argument('slot', type=int, help='Vtable slot index')
+    parser.add_argument('--obj', dest='resolve_obj', help='Path to .obj file')
+    args = parser.parse_args(argv)
+
+    result = resolve_vcall(args.resolve_class, args.offset, args.slot, obj_path=args.resolve_obj)
+    if 'error' in result:
+        print(f"Error: {result['error']}")
+        if 'available_vtables' in result:
+            print("\nAvailable vtables:")
+            for vt in result['available_vtables']:
+                print(f"  offset={vt['sub_object_offset']}  base={vt['base_name']:<30s}  {vt['symbol']}")
+        sys.exit(1)
+
+    print(f"Resolved: {result['resolved_function']}")
+    print(f"Vtable:   {result['vtable_symbol']}")
+    print(f"Base:     {result['base_name']}")
+    print(f"Slot:     [{result['slot']}] at {result['slot_offset_hex']}")
+    print(f"Confidence: {result['confidence']}")
+    if 'icf_note' in result:
+        print(f"ICF Note: {result['icf_note']}")
+    print(f"\nAll slots in this vtable:")
+    for s in result['all_slots']:
+        marker = " <<" if s['slot'] == result['slot'] else ""
+        note = f"  ({s['note']})" if 'note' in s else ""
+        print(f"  [{s['slot']:3d}] {s['offset']}  {s['demangled']}{note}{marker}")
+
+
 def main():
+    # Handle subcommand routing before argparse
+    if len(sys.argv) > 1 and sys.argv[1] == 'resolve':
+        _run_resolve(sys.argv[2:])
+        return
+
     parser = argparse.ArgumentParser(description='Dump vtable layout from original COFF .obj files')
     parser.add_argument('class_name', help='Class name (e.g., RndFontBase, RndFont3d)')
     parser.add_argument('--obj', help='Path to .obj file (auto-detected if not given)')

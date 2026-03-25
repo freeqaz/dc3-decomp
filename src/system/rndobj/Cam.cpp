@@ -13,6 +13,9 @@
 #include "rndobj/HiResScreen.h"
 #include "rndobj/Rnd_NG.h"
 #include "rndobj/Trans.h"
+#ifdef HX_NATIVE
+#include "platform/NativeSettings.h"
+#endif
 
 // Transpose is inline in math/Mtx.h
 
@@ -145,6 +148,12 @@ void RndCam::UpdateLocal() {
     if (mTargetTex) {
         ratio *= (float)mTargetTex->Height() / (float)mTargetTex->Width();
     } else {
+#ifdef HX_NATIVE
+        float aspectOvr = NativeSettings::Get().aspectOverride;
+        if (aspectOvr > 0)
+            ratio *= 1.0f / aspectOvr;  // override the display aspect
+        else
+#endif
         ratio *= TheRnd.YRatio();
     }
     mLocalFrustum.Set(mNearPlane, mFarPlane, mYFov, ratio);
@@ -393,9 +402,39 @@ void RndCam::ScreenToWorld(const Vector2 &v2, float f, Vector3 &vout) const {
 
 void RndCam::GetViewProjectXfms(Transform &viewXfm, Hmx::Matrix4 &projMtx) const {
     Multiply(mInvWorldXfm, sFlipYZ, viewXfm);
+
+#ifdef HX_NATIVE
+    // Apply camera position offsets in view space.
+    // After the Y/Z flip: X=right, Y=up, Z=forward (into the scene).
+    // Forward offset: positive Z = closer to subject (camera advances).
+    // Height offset: positive Y = camera moves up.
+    // Lateral offset: positive X = camera moves right.
+    {
+        auto &s = NativeSettings::Get();
+        if (s.camForwardOffset != 0)
+            viewXfm.v.z += s.camForwardOffset;
+        if (s.camHeightOffset != 0)
+            viewXfm.v.y -= s.camHeightOffset;  // negate: view Y is inverted
+        if (s.camLateralOffset != 0)
+            viewXfm.v.x += s.camLateralOffset;
+    }
+#endif
+
     projMtx.Zero();
     float nearPlane = mNearPlane;
     float farPlane = mFarPlane;
+
+#ifdef HX_NATIVE
+    // Apply runtime near/far overrides for tuning
+    {
+        auto &s = NativeSettings::Get();
+        if (s.nearPlaneOverride > 0)
+            nearPlane = s.nearPlaneOverride;
+        if (s.farPlaneOverride > 0)
+            farPlane = s.farPlaneOverride;
+    }
+#endif
+
     float farRatio;
     if (mYFov == 0) {
         projMtx.w.w = 1.0f;
@@ -429,7 +468,20 @@ void RndCam::GetViewProjectXfms(Transform &viewXfm, Hmx::Matrix4 &projMtx) const
     projMtx.y.y = (-(mScreenRect.h * mLocalProjectXfm.v.x) * 2.0f) / height;
     projMtx.z.y = (t + b) / height;
     projMtx.z.x = -((r + l) / width);
-    projMtx.w.z = -(mNearPlane * farRatio);
+    projMtx.w.z = -(nearPlane * farRatio);
+
+#ifdef HX_NATIVE
+    // Apply FOV scale — scales the projection matrix elements that encode FOV.
+    // x.x controls horizontal FOV, y.y controls vertical FOV.
+    // A scale > 1 narrows the FOV (zooms in), < 1 widens it (zooms out).
+    {
+        float fovScale = NativeSettings::Get().fovScale;
+        if (fovScale != 1.0f) {
+            projMtx.x.x *= fovScale;
+            projMtx.y.y *= fovScale;
+        }
+    }
+#endif
 }
 
 void RndCam::GetDepthRangeValues(Vector4 &v) const {

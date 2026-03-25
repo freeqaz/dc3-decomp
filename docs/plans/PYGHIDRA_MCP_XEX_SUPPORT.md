@@ -12,10 +12,10 @@ This document describes the integration of XEX (Xbox 360 executable) support int
    - Location: `ghidra_12.0_DEV/Extensions/XEXLoaderWV/`
    - Provides PowerPC:BE:64:Xenon language specification
 
-2. **pyghidra-mcp Fork**: Local fork with XEX support enhancements
-   - Location: `tools/pyghidra-mcp-fork/`
-   - Installed in editable mode via pip
-   - Automatically loaded for custom modifications
+2. **pyghidra-mcp**: Sibling checkout with XEX support enhancements
+   - Location: `../pyghidra-mcp/`
+   - Service script launches this checkout directly
+   - This is the implementation target for new modifications
 
 3. **Ghidra User Home**: Writable directory for Ghidra caches and project data
    - Location: `/tmp/claude/ghidra_user/`
@@ -39,17 +39,17 @@ Verification:
 ls -la ghidra_12.0_DEV/Extensions/XEXLoaderWV/lib/XEXLoaderWV.jar
 ```
 
-### Step 2: Local pyghidra-mcp Fork
+### Step 2: pyghidra-mcp Checkout
 
-The fork is located at:
+The implementation repo is located at:
 ```
-tools/pyghidra-mcp-fork/
+../pyghidra-mcp/
 ```
 
-Already installed in editable mode. To reinstall:
+To reinstall it in the project virtualenv:
 ```bash
 source venv/bin/activate
-pip install -e tools/pyghidra-mcp-fork/
+pip install -e ../pyghidra-mcp/
 ```
 
 ### Step 3: Environment Configuration
@@ -64,7 +64,7 @@ export GHIDRA_USER_HOME="/tmp/claude/ghidra_user"
 
 ### 1. XEX2 Magic Number Detection
 
-**File**: `tools/pyghidra-mcp-fork/pyghidra_mcp/context.py`
+**File**: `../pyghidra-mcp/src/pyghidra_mcp/context.py`
 
 Added `_is_binary_file()` static method that recognizes XEX format:
 
@@ -88,7 +88,7 @@ def _is_binary_file(path: Path) -> bool:
 
 ### 2. Language Specification Support
 
-**File**: `tools/pyghidra-mcp-fork/pyghidra_mcp/context.py`
+**File**: `../pyghidra-mcp/src/pyghidra_mcp/context.py`
 
 Extended `import_binary()` with optional language parameters:
 
@@ -122,7 +122,7 @@ def import_binary(
 
 ### 3. Automatic XEX Detection
 
-**File**: `tools/pyghidra-mcp-fork/pyghidra_mcp/server.py`
+**File**: `../pyghidra-mcp/src/pyghidra_mcp/server.py`
 
 Added automatic language detection in `init_pyghidra_context()`:
 

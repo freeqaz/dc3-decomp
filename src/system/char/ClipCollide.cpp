@@ -5,6 +5,7 @@
 #include "char/CharUtl.h"
 #include "obj/Data.h"
 #include "obj/Object.h"
+#include "rndobj/Mesh.h"
 #include "utl/Symbol.h"
 
 ClipCollide::ClipCollide()
@@ -211,65 +212,92 @@ void ClipCollide::TestClips() {
 ObjectDir *ClipCollide::Clips() { return !mChar ? nullptr : mChar->Driver()->ClipDir(); }
 
 void ClipCollide::Collide() {
-    auto& _ref0 = mChar;
-    if (!_ref0 || !mClip || !mWaypoint) {
-        return;
-    }
+    bool b1 = mChar && mWaypoint && mClip;
+    if (b1) {
+        mChar->SetShowing(false);
 
-    // Get bones
-    RndTransformable *bones[3];
-    const char *boneNames[3] = { "bone_L-ankle", "bone_R-ankle", "bone_pos_guitar" };
+        RndDrawable *w = dynamic_cast<RndDrawable *>(Dir());
 
-    for (int i = 0; i < 3; i++) {
-        bones[i] = CharUtlFindBoneTrans(boneNames[i], _ref0->Dir());
-    }
+        const char *names[3] = { "bone_L-ankle", "bone_R-ankle", "bone_pos_guitar" };
+        RndTransformable *meshes[3];
+        int i = 0;
+        do {
+            meshes[i] = CharUtlFindBoneTrans(names[i], mChar);
+            i++;
+        } while (i < 3);
 
-    SyncWaypoint();
+        SyncWaypoint();
 
-    // Get bone servo
-    CharServoBone *servo = _ref0->BoneServo();
-    if (!servo) {
-        return;
-    }
+        CharServoBone *b = mChar->BoneServo();
+        CharClip *clip = mClip;
 
-    // Get clip
-    CharClip *clip = mClip.Ptr();
-    if (!clip) {
-        return;
-    }
+        float blend = 0.0f;
+        float f = clip->StartBeat();
 
-    // Initialize loop variables
-    float t = 0.0f;
-    float tMax = 100.0f;
-    float step = 1.0f;
+        if (f <= clip->EndBeat()) {
+            float delta = 1.0f;
+            Vector3 points[3];
+            do {
+                clip->ScaleDown(*b, 0.0f);
+                mClip->ScaleAdd(*b, delta, f, blend);
+                b->Poll();
 
-    // Main loop
-    if (t <= tMax) {
-        float f1 = 1.0f;
-        float f2 = 0.0f;
+                for (i = 0; i < 3; i++) {
+                    const Transform &xfm = meshes[i]->WorldXfm();
+                    Vector3 p = xfm.v;
 
-        while (t <= tMax) {
-            // Scale animations
-            clip->ScaleDown(*servo, t);
-            clip->ScaleAdd(*servo, f1, tMax, f2);
+                    if (i == 2) {
+                        const Transform &gxfm = meshes[2]->WorldXfm();
+                        p.x += gxfm.m.z.x * 2.5f;
+                        p.y += gxfm.m.z.y * 2.5f;
+                        p.z += gxfm.m.z.z * 2.5f;
+                    }
 
-            // Loop through bones
-            for (int bi = 0; bi < 3; bi++) {
-                RndTransformable *bone = bones[bi];
+                    if (blend > 0.0f) {
+                        if (mWorldLines && mGraph) {
+                            Hmx::Color c(delta, 0.0f, 0.0f, delta);
+                            mGraph->AddLine(points[i], p, c, false);
+                        }
 
-                // Perform collision test if bone exists
-                if (bone) {
-                    // Get position and test
-                    Vector3 p;
-                    Segment seg;
-                    float d = 0;
-                    Plane plane;
+                        Segment s;
+                        s.start = points[i];
+                        s.end = p;
+                        float dist;
+                        Plane plane;
+                        RndDrawable *d = w->Collide(s, dist, plane);
+                        if (d) {
+                            Vector3 pos;
+                            Interp(s.start, s.end, dist, pos);
+
+                            bool punt = pos.z < mChar->WorldXfm().v.z + delta;
+
+                            if (!punt) {
+                                RndMesh *mesh = dynamic_cast<RndMesh *>(d);
+                                if (mesh) {
+                                    RndMat *mat = mesh->Mat();
+                                    if (mat && !mat->GetDiffuseTex()
+                                        && mat->Alpha() <= 0.0f) {
+                                        punt = true;
+                                    }
+                                }
+                            }
+
+                            if (!punt) {
+                                AddReport(pos);
+                            }
+                        }
+                    }
+
+                    points[i] = p;
                 }
-            }
 
-            // Increment time
-            t += step;
+                clip = mClip;
+                f += delta;
+                blend = delta;
+            } while (f <= clip->EndBeat());
         }
+
+        mChar->SetShowing(true);
     }
 }
 

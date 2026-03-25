@@ -151,7 +151,7 @@ public:
     int StartLoopMargin() const { return mStartLoopMargin; }
     int EndLoopMargin() const { return mEndLoopMargin; }
     PoseFatalities *GetPoseFatalities() const { return mPoseFatalities; }
-    RndPostProc *GetActivePostProc() const { return unk18c; }
+    RndPostProc *GetActivePostProc() const { return mActivePostProc; }
 
     DataNode OnGetDancerVisemes(DataArray *);
 
@@ -260,13 +260,13 @@ protected:
     /** "camera postproc override.  If set, does no postproc blends" */
     ObjPtr<RndPostProc> mCamPostProc; // 0x164
     ObjPtr<RndPostProc> mForcePostProc; // 0x178
-    ObjPtr<RndPostProc> unk18c; // 0x18c
+    ObjPtr<RndPostProc> mActivePostProc; // 0x18c
     float mForcePostProcBlend; // 0x1a0
     float mForcePostProcBlendRate; // 0x1a4
     ObjPtr<RndPostProc> mPostProcInterpA; // 0x1a8
     ObjPtr<RndPostProc> mPostProcInterpB; // 0x1bc
     float mPostProcInterpBlend; // 0x1d0
-    float unk1d4; // 0x1d4
+    float mFreestyleTimer; // 0x1d4
     ObjPtr<RndPostProc> mSavedForcePostProc; // 0x1d8
     ObjPtr<RndPostProc> mVisualizerPostProc; // 0x1ec
     /** "TRUE if freestyle is allowed" */
@@ -306,7 +306,7 @@ protected:
     /** "In practice mode, measures after practice_end until loop".
         Ranges from 1 to 100. */
     int mEndLoopMargin; // 0x2e0
-    float unk2e4; // 0x2e4
+    float mPrevSongFrame; // 0x2e4
     /** "If > 0, is which clip to show by itself rather than doing full blending" */
     int mBlendDebug; // 0x2e8
     int unk2ec; // 0x2ec

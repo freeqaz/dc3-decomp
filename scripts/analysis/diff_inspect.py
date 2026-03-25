@@ -577,8 +577,79 @@ def cmd_diagnose(instrs):
 
 # ── Clusters mode ───────────────────────────────────────────────────────────
 
+def _suggest_cluster_pattern(opcodes: Counter, cluster: list, instrs: list) -> str | None:
+    """Heuristic pattern suggestions based on opcode composition of a cluster.
+
+    Returns a suggestion string or None.
+    """
+    ops = set(opcodes.keys())
+    top_ops = [op for op, _ in opcodes.most_common(5)]
+
+    # Pointer arithmetic / index computation
+    # srawi + addi + slwi/lwzx → "pointer subtraction not strength-reduced"
+    if ops & {"srawi", "slwi"} and ops & {"addi", "add", "subf"}:
+        return "Likely pointer arithmetic / index computation — try hardcoded byte offset or `(int)` cast"
+
+    # Struct copy / block move
+    # Batched lwz/stw with callee-saved GPRs
+    lwz_stw = opcodes.get("lwz", 0) + opcodes.get("stw", 0) + opcodes.get("stfs", 0) + opcodes.get("lfs", 0)
+    if lwz_stw >= 4 and lwz_stw >= sum(opcodes.values()) * 0.5:
+        return "Likely struct copy or field initialization — check member order, try aggregate vs field-by-field"
+
+    # Boolean materialization
+    # li + cmpwi/cmplwi + bne/beq + li → bool cond pattern
+    if ops & {"li"} and ops & {"cmpwi", "cmplwi", "cmpw", "cmplw"} and ops & {"bne", "beq", "ble", "bge", "blt", "bgt"}:
+        return "Likely boolean materialization — try `bool b = (expr); if (b)` or signed/unsigned cast"
+
+    # Floating-point multiply-add / cross product
+    if opcodes.get("fmsubs", 0) + opcodes.get("fmadds", 0) + opcodes.get("fnmsubs", 0) >= 3:
+        return "Likely cross product or matrix computation — verify all components, check operand order"
+
+    # Floating-point subtract chain (distance/delta computation)
+    if opcodes.get("fsubs", 0) >= 3:
+        return "Likely vector subtraction — check Vector3 component order, try `v1 - v2` vs manual subtraction"
+
+    # Prologue/epilogue (save/restore helper calls)
+    if ops & {"mflr", "stw", "stwu"} or ops & {"lwz", "mtlr", "addi", "blr"}:
+        if any(op.startswith("__save") or op.startswith("__rest") for op in ops):
+            return "Prologue/epilogue mismatch — different callee-saved register count (declaration order issue)"
+
+    # Callee-saved register save block
+    if opcodes.get("stw", 0) >= 3 and all(
+        _is_callee_saved_reg(ins) for _, ins in cluster[:4]
+    ):
+        return "Callee-saved register save block — declaration order or variable count mismatch"
+
+    # addi-heavy (address computation)
+    if opcodes.get("addi", 0) >= 3 and opcodes.get("addi", 0) >= sum(opcodes.values()) * 0.4:
+        return "Heavy address computation — try inlining member access or caching differently"
+
+    # Branch-heavy (control flow difference)
+    branch_ops = sum(opcodes.get(op, 0) for op in ("b", "beq", "bne", "blt", "bge", "ble", "bgt", "bdnz"))
+    if branch_ops >= 2 and branch_ops >= sum(opcodes.values()) * 0.3:
+        return "Control flow difference — try if/else inversion, loop form change, or guard rewrite"
+
+    # mr chain (register shuffle)
+    if opcodes.get("mr", 0) >= 2:
+        return "Register shuffle — try variable declaration reorder or caching pattern change"
+
+    return None
+
+
+def _is_callee_saved_reg(ins: dict) -> bool:
+    """Check if an instruction operates on callee-saved GPRs (r14-r31)."""
+    for side in ("target", "base"):
+        s = ins.get(side)
+        if s:
+            args = s.get("args", "")
+            for r in range(14, 32):
+                if f"r{r}" in args:
+                    return True
+    return False
+
+
 def cmd_clusters(instrs, context=2):
-    """Show insert/delete clusters with context."""
+    """Show insert/delete clusters with context and pattern suggestions."""
     clusters = find_clusters(instrs, ("insert", "delete"))
     if not clusters:
         print("No insert/delete instructions found.")
@@ -611,6 +682,12 @@ def cmd_clusters(instrs, context=2):
         print(f"{'=' * 60}")
         print(f"Cluster {i+1}: idx {lo_idx}-{hi_idx} | "
               f"{size} instrs ({ins_count}I/{del_count}D) | ops: {top_ops}")
+
+        # Pattern suggestion
+        suggestion = _suggest_cluster_pattern(opcodes, cluster, instrs)
+        if suggestion:
+            print(f"  >> {suggestion}")
+
         print(f"{'=' * 60}")
 
         # Show with surrounding context
@@ -1014,10 +1091,614 @@ def cmd_attributed(instrs, symbol, project_dir=None):
                 print(f"      ... and {len(mlist) - 4} more")
 
 
+# ── Stack layout diff ────────────────────────────────────────────────────────
+
+OPCODE_SIZE = {
+    'stb': 1, 'lbz': 1, 'lbzu': 1, 'stbu': 1,
+    'sth': 2, 'lhz': 2, 'lha': 2, 'lhau': 2, 'sthu': 2,
+    'stw': 4, 'lwz': 4, 'stfs': 4, 'lfs': 4,
+    'stwu': 4, 'lwzu': 4, 'lfsu': 4, 'stfsu': 4,
+    'stfd': 8, 'lfd': 8, 'lfdu': 8, 'stfdu': 8,
+}
+
+# Match both formats: "offset(r1)" and "offset, r1" (objdiff comma-separated)
+_STACK_RE = re.compile(r'(-?0x[0-9a-fA-F]+|-?\d+)(?:\(r1\)|,\s*r1\b)')
+_STWU_RE = re.compile(r'stwu\s+r1,\s*(-?0x[0-9a-fA-F]+|-?\d+)(?:\(r1\)|,\s*r1\b)')
+
+
+def _extract_frame_size_from_instrs(instrs, side='target'):
+    """Find stwu r1, -N(r1) in prologue and return N (positive)."""
+    for ins in instrs[:20]:
+        s = ins.get(side)
+        if not s:
+            continue
+        op = s.get('opcode', '')
+        args = s.get('args', '')
+        if op == 'stwu':
+            m = _STWU_RE.search(f"{op} {args}")
+            if m:
+                val = int(m.group(1), 0)
+                return abs(val)
+    return None
+
+
+def _collect_stack_accesses(instrs, side='target'):
+    """Extract all r1-relative memory accesses from one side of the diff."""
+    accesses = []
+    for ins in instrs:
+        s = ins.get(side)
+        if not s:
+            continue
+        op = s.get('opcode', '')
+        args = s.get('args', '')
+        size = OPCODE_SIZE.get(op)
+        if size is None:
+            continue
+
+        full = f"{op} {args}"
+        m = _STACK_RE.search(full)
+        if not m:
+            continue
+        offset = int(m.group(1), 0)
+        if offset <= 0:
+            continue  # Skip back chain and negative offsets (callee saves)
+
+        # Extract register from args
+        reg = args.split(',')[0].strip()
+
+        accesses.append({
+            'offset': offset,
+            'size': size,
+            'opcode': op,
+            'register': reg,
+            'index': ins.get('index', -1),
+        })
+    return accesses
+
+
+def _cluster_into_slots(accesses):
+    """Group stack accesses into logical slots by offset proximity."""
+    if not accesses:
+        return []
+
+    # Sort by offset
+    by_offset = sorted(accesses, key=lambda a: a['offset'])
+
+    slots = []
+    current_base = by_offset[0]['offset']
+    current_accesses = [by_offset[0]]
+
+    for acc in by_offset[1:]:
+        # Merge if within 12 bytes of current base (covers Vector3 = 3x4)
+        if acc['offset'] < current_base + 16 and acc['offset'] - current_accesses[-1]['offset'] <= 4:
+            current_accesses.append(acc)
+        else:
+            # Emit slot
+            slot_size = max(a['offset'] + a['size'] for a in current_accesses) - current_base
+            ops = Counter(a['opcode'] for a in current_accesses)
+            slots.append({
+                'offset': current_base,
+                'size': slot_size,
+                'access_count': len(current_accesses),
+                'ops_summary': ', '.join(f"{op} x{n}" for op, n in ops.most_common()),
+                'first_index': min(a['index'] for a in current_accesses),
+                'type_hint': _infer_type(current_accesses, slot_size),
+            })
+            current_base = acc['offset']
+            current_accesses = [acc]
+
+    # Final slot
+    if current_accesses:
+        slot_size = max(a['offset'] + a['size'] for a in current_accesses) - current_base
+        ops = Counter(a['opcode'] for a in current_accesses)
+        slots.append({
+            'offset': current_base,
+            'size': slot_size,
+            'access_count': len(current_accesses),
+            'ops_summary': ', '.join(f"{op} x{n}" for op, n in ops.most_common()),
+            'first_index': min(a['index'] for a in current_accesses),
+            'type_hint': _infer_type(current_accesses, slot_size),
+        })
+
+    return slots
+
+
+def _infer_type(accesses, size):
+    """Infer type from access pattern and size."""
+    ops = set(a['opcode'] for a in accesses)
+    has_float = bool(ops & {'stfs', 'lfs', 'lfsu', 'stfsu'})
+    has_double = bool(ops & {'stfd', 'lfd'})
+
+    if has_double and size == 8:
+        return 'double'
+    if has_float:
+        if size == 4:
+            return 'float'
+        if size in (12, 16):
+            return 'Vector3'
+        if size == 64:
+            return 'Transform'
+    if size == 4:
+        return 'int/ptr'
+    if size == 2:
+        return 'short'
+    if size == 1:
+        return 'byte'
+    return f'{size}B struct'
+
+
+def _diff_layouts(target_slots, source_slots):
+    """Compare stack layouts, identify matches, swaps, and frame shift."""
+    if not target_slots and not source_slots:
+        return {'status': 'empty', 'rows': []}
+
+    # Build offset maps
+    tgt_by_off = {s['offset']: s for s in target_slots}
+    src_by_off = {s['offset']: s for s in source_slots}
+
+    all_offsets = sorted(set(tgt_by_off.keys()) | set(src_by_off.keys()))
+
+    rows = []
+    for off in all_offsets:
+        tgt = tgt_by_off.get(off)
+        src = src_by_off.get(off)
+        if tgt and src:
+            status = 'MATCH'
+        elif tgt and not src:
+            status = 'TGT_ONLY'
+        elif src and not tgt:
+            status = 'SRC_ONLY'
+        else:
+            status = 'UNKNOWN'
+        rows.append({
+            'offset': off,
+            'target': tgt,
+            'source': src,
+            'status': status,
+        })
+
+    # Try to detect swaps: find TGT_ONLY/SRC_ONLY pairs with matching size
+    tgt_only = [r for r in rows if r['status'] == 'TGT_ONLY']
+    src_only = [r for r in rows if r['status'] == 'SRC_ONLY']
+
+    for t_row in tgt_only:
+        for s_row in src_only:
+            if (t_row['target']['size'] == s_row['source']['size']
+                    and t_row['status'] == 'TGT_ONLY'
+                    and s_row['status'] == 'SRC_ONLY'):
+                t_row['status'] = 'SWAPPED'
+                s_row['status'] = 'SWAPPED'
+                t_row['swap_partner'] = s_row['offset']
+                s_row['swap_partner'] = t_row['offset']
+                break
+
+    return {'rows': rows}
+
+
+def cmd_stack_layout(instrs, symbol=None, project_dir=None):
+    """Stack frame layout comparison between target and base."""
+    # Frame sizes
+    tgt_frame = _extract_frame_size_from_instrs(instrs, 'target')
+    src_frame = _extract_frame_size_from_instrs(instrs, 'base')
+
+    # Collect accesses
+    tgt_accesses = _collect_stack_accesses(instrs, 'target')
+    src_accesses = _collect_stack_accesses(instrs, 'base')
+
+    # Cluster into slots
+    tgt_slots = _cluster_into_slots(tgt_accesses)
+    src_slots = _cluster_into_slots(src_accesses)
+
+    # Print frame summary
+    print("=" * 70)
+    print("STACK LAYOUT DIFF")
+    if symbol:
+        print(f"Function: {symbol}")
+    print("=" * 70)
+    print()
+
+    tgt_str = f"0x{tgt_frame:x} ({tgt_frame} bytes)" if tgt_frame else "unknown"
+    src_str = f"0x{src_frame:x} ({src_frame} bytes)" if src_frame else "unknown"
+    print(f"  Target frame: {tgt_str}")
+    print(f"  Source frame: {src_str}")
+    if tgt_frame and src_frame:
+        delta = src_frame - tgt_frame
+        if delta != 0:
+            bigger = "source" if delta > 0 else "target"
+            print(f"  Frame delta:  {delta:+d} bytes ({bigger} larger)")
+        else:
+            print(f"  Frame delta:  0 (frames match)")
+    print()
+
+    # Diff the layouts
+    diff = _diff_layouts(tgt_slots, src_slots)
+    rows = diff['rows']
+
+    if not rows:
+        print("  No stack accesses found.")
+        return
+
+    # Print side-by-side table
+    print(f"{'Offset':>8s}  {'Size':>4s}  {'Target Ops':^24s}  {'Source Ops':^24s}  {'Type':^12s}  Status")
+    print("-" * 100)
+
+    for row in rows:
+        off_str = f"0x{row['offset']:04x}"
+        tgt = row.get('target')
+        src = row.get('source')
+        tgt_ops = tgt['ops_summary'][:24] if tgt else "---"
+        src_ops = src['ops_summary'][:24] if src else "---"
+        size = tgt['size'] if tgt else (src['size'] if src else 0)
+        size_str = str(size)
+        type_hint = tgt['type_hint'] if tgt else (src['type_hint'] if src else "")
+        status = row['status']
+        swap_info = ""
+        if 'swap_partner' in row:
+            swap_info = f" <-> 0x{row['swap_partner']:04x}"
+
+        print(f"  {off_str}  {size_str:>4s}  {tgt_ops:<24s}  {src_ops:<24s}  {type_hint:<12s}  {status}{swap_info}")
+
+    # Diagnosis
+    print()
+    print("-" * 70)
+    print("DIAGNOSIS")
+    print("-" * 70)
+
+    swapped = [r for r in rows if r['status'] == 'SWAPPED']
+    tgt_only = [r for r in rows if r['status'] == 'TGT_ONLY']
+    src_only = [r for r in rows if r['status'] == 'SRC_ONLY']
+    matched = [r for r in rows if r['status'] == 'MATCH']
+
+    if not swapped and not tgt_only and not src_only:
+        print("  All stack slots match. No layout mismatches.")
+        if tgt_frame and src_frame and tgt_frame != src_frame:
+            print(f"  Frame size difference ({src_frame - tgt_frame:+d}) is likely from "
+                  f"callee-saved register count difference (AT_LIMIT).")
+    elif swapped:
+        print(f"  {len(swapped) // 2} variable swap(s) detected:")
+        seen = set()
+        for r in swapped:
+            if r['offset'] in seen:
+                continue
+            partner = r.get('swap_partner')
+            if partner is not None:
+                seen.add(r['offset'])
+                seen.add(partner)
+                t = r['target'] or r['source']
+                print(f"    0x{r['offset']:04x} <-> 0x{partner:04x} "
+                      f"({t['type_hint']}, {t['size']}B)")
+        print()
+        print("  Fix: Try reordering variable declarations in source.")
+    elif tgt_only or src_only:
+        print(f"  {len(tgt_only)} target-only slot(s), {len(src_only)} source-only slot(s)")
+        if tgt_frame and src_frame and tgt_frame != src_frame:
+            print(f"  Frame size differs by {abs(src_frame - tgt_frame)} bytes — "
+                  "may be callee-saved register count mismatch (AT_LIMIT)")
+
+
+# ── Compare ASM ──────────────────────────────────────────────────────────────
+
+_TARGET_FN_RE = re.compile(r'^\.fn\s+"([^"]+)"')
+_TARGET_ENDFN_RE = re.compile(r'^\.endfn\s+"([^"]+)"')
+_TARGET_INSTR_RE = re.compile(
+    r'/\*\s*[0-9A-Fa-f]+\s+[0-9A-Fa-f]+\s+(?:[0-9A-Fa-f]{2}\s*)+\*/\s*(.*)'
+)
+_LABEL_TARGET_RE = re.compile(r'\.L_[0-9A-Fa-f]+')
+_LABEL_BASE_RE = re.compile(r'\$LN\d+@\w+')
+_SYM_RTTI_RE = re.compile(r'"?\?\?_R0\?AV(\w+)@?(\w*)@*8"?')
+_SYM_FUNC_RE = re.compile(r'"?\?(\w+)@(\w+)@@[^"]*"?')
+_SYM_STR_RE = re.compile(r'"?\?\?_C@[^"]*"?')
+
+
+def _find_target_asm_file(symbol, project_dir=None):
+    """Find the target .s file and extract function lines."""
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    repo_root = os.path.dirname(os.path.dirname(script_dir))
+    effective_dir = project_dir or repo_root
+    asm_dir = os.path.join(effective_dir, "build", "373307D9", "asm")
+
+    # Find the .s file by searching for the symbol
+    report_path = os.path.join(effective_dir, "build", "373307D9", "report.json")
+    if not os.path.exists(report_path):
+        return None
+
+    with open(report_path) as f:
+        report = json.load(f)
+
+    # Find unit name for this symbol
+    unit_name = None
+    for unit in report.get("units", []):
+        for fn in unit.get("functions", []):
+            if fn.get("name") == symbol:
+                unit_name = unit.get("name", "")
+                break
+        if unit_name:
+            break
+
+    if not unit_name:
+        return None
+
+    # Map unit to .s file path
+    name = unit_name
+    if name.startswith("default/"):
+        name = name[len("default/"):]
+
+    # Try different category directories
+    for cat in ["", "system/", "lazer/", "lib/"]:
+        asm_path = os.path.join(asm_dir, cat + name + ".s")
+        if os.path.exists(asm_path):
+            return _extract_fn_from_asm(asm_path, symbol)
+
+    # Also try just the basename
+    basename = name.rsplit("/", 1)[-1] if "/" in name else name
+    for cat in ["", "system/", "lazer/", "lib/"]:
+        asm_path = os.path.join(asm_dir, cat + basename + ".s")
+        if os.path.exists(asm_path):
+            return _extract_fn_from_asm(asm_path, symbol)
+
+    # Brute force: search all .s files
+    import glob as globmod
+    for asm_path in globmod.glob(os.path.join(asm_dir, "**/*.s"), recursive=True):
+        result = _extract_fn_from_asm(asm_path, symbol)
+        if result is not None:
+            return result
+
+    return None
+
+
+def _extract_fn_from_asm(asm_path, symbol):
+    """Extract function lines between .fn/.endfn markers."""
+    try:
+        with open(asm_path, 'r') as f:
+            lines = f.readlines()
+    except OSError:
+        return None
+
+    in_fn = False
+    result = []
+    for line in lines:
+        if not in_fn:
+            m = _TARGET_FN_RE.match(line)
+            if m and m.group(1) == symbol:
+                in_fn = True
+                continue
+        else:
+            m = _TARGET_ENDFN_RE.match(line)
+            if m:
+                return result
+            result.append(line.rstrip())
+
+    return None if not result else result
+
+
+def _normalize_symbol(text):
+    """Shorten mangled MSVC symbol references."""
+    # RTTI: ??_R0?AVObject@Hmx@@@8 -> Object::Hmx
+    text = _SYM_RTTI_RE.sub(lambda m: f"RTTI:{m.group(1)}" + (f"::{m.group(2)}" if m.group(2) else ""), text)
+    # String constants
+    text = _SYM_STR_RE.sub("<str>", text)
+    # Function symbols: ?Method@Class@@... -> Class::Method
+    text = _SYM_FUNC_RE.sub(lambda m: f"{m.group(2)}::{m.group(1)}", text)
+    # Strip remaining quotes
+    text = text.replace('"', '')
+    return text
+
+
+def _normalize_target_line(line):
+    """Normalize a raw target .s line to just opcode + operands."""
+    m = _TARGET_INSTR_RE.match(line)
+    if m:
+        return m.group(1).strip()
+    # It might be a label or directive
+    stripped = line.strip()
+    if stripped.startswith('.') or stripped.endswith(':'):
+        return None  # Skip labels and directives
+    return stripped if stripped else None
+
+
+def cmd_compare_asm(instrs, symbol=None, project_dir=None):
+    """Side-by-side target vs base assembly with annotations."""
+    total = len(instrs)
+    equal_count = sum(1 for i in instrs if i.get("match_type") == "equal")
+    match_pct = 100.0 * equal_count / total if total else 0
+
+    # Try to load target asm
+    target_lines = None
+    if symbol:
+        target_lines = _find_target_asm_file(symbol, project_dir)
+
+    # Renumber labels
+    tgt_labels = {}
+    src_labels = {}
+    tgt_label_counter = 0
+    src_label_counter = 0
+
+    # Find cluster boundaries
+    clusters = find_clusters(instrs, match_types=("insert", "delete"))
+    cluster_ranges = {}
+    for ci, cluster in enumerate(clusters):
+        for _, ins in cluster:
+            cluster_ranges[ins["index"]] = ci
+
+    # Parse target lines into indexed map
+    tgt_norm = {}
+    if target_lines:
+        tgt_idx = 0
+        for line in target_lines:
+            norm = _normalize_target_line(line)
+            if norm is not None:
+                tgt_norm[tgt_idx] = _normalize_symbol(norm)
+                tgt_idx += 1
+
+    # Header
+    print(f"## Compare ASM: {symbol or '(unknown)'}")
+    print(f"**Match**: {match_pct:.1f}% ({equal_count}/{total} instructions)")
+    print()
+
+    # Build output rows
+    prev_cluster = None
+    consecutive_equal = 0
+    equal_buffer = []
+
+    def flush_equal_buffer():
+        nonlocal equal_buffer
+        if not equal_buffer:
+            return
+        if len(equal_buffer) <= 6:
+            for row in equal_buffer:
+                print(row)
+        else:
+            # Show first 2, collapse, show last 2
+            for row in equal_buffer[:2]:
+                print(row)
+            print(f"       ... ({len(equal_buffer) - 4} equal instructions) ...")
+            for row in equal_buffer[-2:]:
+                print(row)
+        equal_buffer = []
+
+    row_count = 0
+    for ins in instrs:
+        idx = ins.get("index", 0)
+        mt = ins.get("match_type", "equal")
+        t = ins.get("target") or {}
+        b = ins.get("base") or {}
+
+        # Cluster boundary
+        ci = cluster_ranges.get(idx)
+        if ci is not None and ci != prev_cluster:
+            flush_equal_buffer()
+            cluster = clusters[ci]
+            insert_count = sum(1 for _, i in cluster if i.get("match_type") == "insert")
+            delete_count = sum(1 for _, i in cluster if i.get("match_type") == "delete")
+            print(f"  ; --- CLUSTER {ci + 1} ({insert_count}I/{delete_count}D) ---")
+            prev_cluster = ci
+        elif ci is None and prev_cluster is not None:
+            flush_equal_buffer()
+            print(f"  ; --- END CLUSTER {prev_cluster + 1} ---")
+            prev_cluster = None
+
+        # Format instruction
+        match_marker = {
+            'equal': '=', 'diff_arg': '~', 'diff_op': '!',
+            'insert': '+', 'delete': '-', 'replace': 'X',
+        }.get(mt, '?')
+
+        t_str = f"{t.get('opcode', ''):8s} {_normalize_symbol(t.get('args', ''))}" if t else "---"
+        b_str = f"{b.get('opcode', ''):8s} {_normalize_symbol(b.get('args', ''))}" if b else "---"
+
+        # Annotation for diff_arg
+        ann = diff_annotation(ins) if mt == "diff_arg" else ""
+
+        # Cap at 150 rows for large functions
+        row_count += 1
+        if row_count > 150 and mt == "equal":
+            continue
+
+        row = f"  {match_marker}  | {idx:4d} | {t_str:<38s} | {b_str:<38s} |{ann}"
+
+        if mt == "equal":
+            equal_buffer.append(row)
+        else:
+            flush_equal_buffer()
+            print(row)
+
+    flush_equal_buffer()
+
+    if row_count > 150:
+        print(f"\n  ... (output truncated, {row_count} total instructions)")
+
+    # Compact diagnosis
+    print()
+    _, offset_diffs, _, _ = parse_breakdowns(instrs)
+    reg_swaps_raw, _, _, _ = parse_breakdowns(instrs)
+    reg_pairs = compute_reg_swap_pairs(reg_swaps_raw)
+
+    counts = Counter(ins["match_type"] for ins in instrs)
+    non_equal = total - equal_count
+    if non_equal > 0:
+        print("### Diagnosis Summary")
+        types = [(mt, c) for mt, c in counts.items() if mt != "equal"]
+        types.sort(key=lambda x: -x[1])
+        for mt, c in types:
+            print(f"  {mt}: {c}")
+        if reg_pairs:
+            print(f"  Register swap pairs: {len(reg_pairs)}")
+            for pair, data in sorted(reg_pairs.items(), key=lambda x: -x[1]['count'])[:5]:
+                print(f"    {pair[0]} <-> {pair[1]}: {data['count']}x")
+        if offset_diffs:
+            hist = compute_offset_histogram(offset_diffs)
+            dom_delta, dom_count = hist.most_common(1)[0]
+            print(f"  Dominant offset delta: {dom_delta:+d} ({dom_count}x)")
+
+
 # ── Symbol invocation ───────────────────────────────────────────────────────
+
+def _resolve_ambiguous_objdiff(output: str, symbol: str) -> str | None:
+    """Try to resolve ambiguous symbol from objdiff 'Multiple matches' output.
+
+    Extracts candidate list, picks the shortest method name match
+    (most likely the exact overload the user wanted).
+    Returns the resolved demangled name, or None.
+    """
+    if "Multiple matches" not in output:
+        return None
+
+    candidates = []
+    for line in output.strip().splitlines():
+        line = line.strip()
+        if not line or line.startswith("Multiple matches") or line.startswith("Failed"):
+            continue
+        # "access: rettype __cdecl Class::Method(args) (unit/path)"
+        last_paren = line.rfind(" (")
+        if last_paren > 0:
+            demangled = line[:last_paren].strip()
+            # Extract "Class::Method(args)" from full demangled
+            for prefix in ("public: ", "protected: ", "private: "):
+                if demangled.startswith(prefix):
+                    demangled = demangled[len(prefix):]
+            cdecl_idx = demangled.find("__cdecl ")
+            if cdecl_idx >= 0:
+                demangled = demangled[cdecl_idx + 8:]
+            elif "__thiscall " in demangled:
+                demangled = demangled[demangled.find("__thiscall ") + 11:]
+            candidates.append(demangled)
+
+    if not candidates:
+        return None
+
+    # Extract param hint if user provided one: "Class::Method(hint)"
+    param_hint = None
+    if "(" in symbol and not symbol.startswith("?"):
+        paren_idx = symbol.index("(")
+        param_hint = symbol[paren_idx + 1:].rstrip(")")
+        symbol_base = symbol[:paren_idx]
+    else:
+        symbol_base = symbol
+
+    if param_hint:
+        hint_lower = param_hint.lower().strip()
+        matching = [c for c in candidates
+                    if hint_lower in c[c.find("(", c.find("::")) :].lower()]
+        if len(matching) == 1:
+            return matching[0]
+        if matching:
+            matching.sort(key=len)
+            return matching[0]
+
+    # No hint: prefer shortest (most exact method name match)
+    candidates.sort(key=len)
+    return candidates[0]
+
 
 def run_objdiff_for_symbol(symbol, project_dir=None, unit=None):
     """Run objdiff-cli diff and return path to JSON output."""
+    # Extract param hint for disambiguation: "Class::Method(Hint)" → base + hint
+    param_hint = None
+    if "(" in symbol and not symbol.startswith("?"):
+        paren_idx = symbol.index("(")
+        param_hint = symbol[paren_idx + 1:].rstrip(")")
+        symbol = symbol[:paren_idx]
+
     # Deterministic filename from symbol
     h = hashlib.md5(symbol.encode()).hexdigest()[:12]
     # Also create a readable slug
@@ -1055,6 +1736,22 @@ def run_objdiff_for_symbol(symbol, project_dir=None, unit=None):
     result = subprocess.run(cmd, cwd=str(effective_project_dir),
                             capture_output=True, text=True)
     if result.returncode != 0:
+        # Try to resolve ambiguous symbol
+        combined = (result.stdout or "") + "\n" + (result.stderr or "")
+        if "Ambiguous symbol" in combined or "Multiple matches" in combined:
+            # Reconstruct symbol with hint for disambiguation
+            hint_symbol = f"{symbol}({param_hint})" if param_hint else symbol
+            resolved = _resolve_ambiguous_objdiff(combined, hint_symbol)
+            if resolved:
+                print(f"Resolved ambiguous symbol to: {resolved}", file=sys.stderr)
+                cmd[cmd.index(symbol)] = resolved
+                result = subprocess.run(cmd, cwd=str(effective_project_dir),
+                                        capture_output=True, text=True)
+                if result.returncode == 0:
+                    if result.stderr:
+                        print(result.stderr, file=sys.stderr, end="")
+                    return json_path
+
         print(f"objdiff-cli failed (exit {result.returncode}):", file=sys.stderr)
         print(result.stderr, file=sys.stderr)
         if result.stdout:
@@ -1076,13 +1773,15 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Analysis modes (pick one):
-  --diagnose    Root cause analysis: why doesn't this match?
-  --attributed  Source-attributed mismatch regions (requires --symbol)
-  --clusters    Group insert/delete into contiguous clusters
-  --regswaps    Register swap pair analysis
-  --offsets     Offset/immediate shift analysis
-  --replaces    Categorize replaces (symbol-reloc noise vs real)
-  --compare     Compare baseline and candidate JSONs (delta table)
+  --diagnose      Root cause analysis: why doesn't this match?
+  --attributed    Source-attributed mismatch regions (requires --symbol)
+  --clusters      Group insert/delete into contiguous clusters
+  --regswaps      Register swap pair analysis
+  --offsets       Offset/immediate shift analysis
+  --replaces      Categorize replaces (symbol-reloc noise vs real)
+  --stack-layout  Stack frame layout comparison (target vs base)
+  --compare-asm   Side-by-side assembly with annotations
+  --compare       Compare baseline and candidate JSONs (delta table)
 
 Filter modes:
   diff_op       Only opcode mismatches
@@ -1125,6 +1824,12 @@ Filter modes:
     parser.add_argument(
         "--attributed", action="store_true",
         help="Source-attributed mismatch regions (compile with /FAs, join with objdiff)")
+    parser.add_argument(
+        "--stack-layout", action="store_true",
+        help="Stack frame layout comparison (target vs base)")
+    parser.add_argument(
+        "--compare-asm", action="store_true",
+        help="Side-by-side target vs base assembly with cluster markers and annotations")
     parser.add_argument(
         "--symbol", type=str, default=None,
         help="Run objdiff-cli diff internally for this symbol")
@@ -1188,6 +1893,12 @@ Filter modes:
         return
     if args.replaces:
         cmd_replaces(instrs)
+        return
+    if args.stack_layout:
+        cmd_stack_layout(instrs, symbol=args.symbol, project_dir=args.project_dir)
+        return
+    if args.compare_asm:
+        cmd_compare_asm(instrs, symbol=args.symbol, project_dir=args.project_dir)
         return
 
     # ── Summary mode ──

@@ -357,19 +357,19 @@ void HamVisDir::SetGrooviness(float groove) {
     }
 }
 
-void HamVisDir::CheckPose(int i1, PoseOwner &po) {
-    bool flag = false;
+void HamVisDir::CheckPose(int playerIdx, PoseOwner &po) {
+    bool stateChanged = false;
     if (po.in_pose || po.pose->CurrentScore() <= 9.0f / 10.0f) {
         if (po.in_pose && po.holder->CurrentScore() <= 9.0f / 10.0f) {
-            flag = true;
+            stateChanged = true;
             po.in_pose = false;
         }
     } else {
-        flag = true;
+        stateChanged = true;
         po.in_pose = true;
-        TheGameData->HandlePoseFound(i1);
+        TheGameData->HandlePoseFound(playerIdx);
     }
-    if (flag) {
+    if (stateChanged) {
         static Message msg("whatever");
         msg.SetType(MakeString("%s_state_changed", po.name));
         Export(msg, true);

@@ -58,6 +58,8 @@ void AppendThreadStackTrace(FixedString &, struct StackData *) {}
 // Defined in File_Native.cpp
 void NativeSetDataDir(const char *dir);
 const char *NativeGetDataDir();
+void NativeSetOverlayDir(const char *dir);
+const char *NativeGetOverlayDir();
 
 static bool FileExistsRaw(const char *path) {
     struct stat st;
@@ -93,6 +95,28 @@ void NativeDetectDataDir() {
     }
     printf("DC3 Native: WARNING - could not find game data (gen/main_xbox.hdr)\n");
     printf("  Set DC3_DATA env var or run from the repo root.\n");
+}
+
+// Find the DTA overlay directory (native/dta/ relative to repo root).
+// Overlay files shadow the archive — used for native-only DTA patches.
+void NativeDetectOverlayDir() {
+    const char *dataDir = NativeGetDataDir();
+    // dataDir is typically "orig-assets" relative to repo root.
+    // Overlay dir is "native/dta/" relative to repo root = "<dataDir>/../native/dta/"
+    char buf[512];
+    snprintf(buf, sizeof(buf), "%s/../native/dta", dataDir);
+    if (FileExistsRaw(buf)) {
+        NativeSetOverlayDir(buf);
+        printf("DC3 Native: overlay dir=%s\n", buf);
+        return;
+    }
+    // Also check "native/dta" directly (running from repo root with dataDir=".")
+    if (FileExistsRaw("native/dta")) {
+        NativeSetOverlayDir("native/dta");
+        printf("DC3 Native: overlay dir=native/dta\n");
+        return;
+    }
+    printf("DC3 Native: no overlay dir found (optional)\n");
 }
 
 // Native archive initialization - simplified from ArchiveInit()
@@ -133,6 +157,7 @@ void SystemPreInit(int argc, char **argv, const char *config) {
     // Detect game data directory before engine init
 #ifndef __EMSCRIPTEN__
     NativeDetectDataDir();
+    NativeDetectOverlayDir();
 #endif
     SystemPreInit(cmdLine.c_str(), config);
 }

@@ -424,19 +424,16 @@ void HamSkeletonConverter::SetLeg(
 }
 
 void HamSkeletonConverter::Set(const BaseSkeleton *skel) {
-    auto& character = mCharacter;
     if (skel && skel->IsTracked()) {
         if (!unk751) {
             unk751 = true;
         }
-        if (character) {
-            // Initialize unk40 to identity
-            unk40.m = Hmx::Matrix3::GetIdentity();
+        if (mCharacter) {
+            unk40.m.x.Set(1.0f, 0.0f, 0.0f);
+            unk40.m.y.Set(0.0f, 1.0f, 0.0f);
+            unk40.m.z.Set(0.0f, 0.0f, 1.0f);
             unk40.v.Zero();
 
-            // Build camera-to-game coordinate transform
-            // Camera: Z forward, Y up, X right
-            // Game: X forward, Y up, Z right (with negation)
             Transform flipX;
             flipX.m.x.Set(1.0f, 0.0f, 0.0f);
             flipX.m.y.Set(0.0f, 0.0f, -1.0f);
@@ -444,28 +441,26 @@ void HamSkeletonConverter::Set(const BaseSkeleton *skel) {
             flipX.v.Zero();
 
             Transform flipZ;
-            flipZ.m.z.Set(1.0f, 0.0f, 0.0f);
             flipZ.m.x.Set(0.0f, -1.0f, 0.0f);
             flipZ.m.y.Set(0.0f, 0.0f, 1.0f);
+            flipZ.m.z.Set(1.0f, 0.0f, 0.0f);
             flipZ.v.Zero();
 
-            Multiply(flipX, unk40, unk40);
-            Multiply(flipZ, unk40, unk40);
+            Multiply(flipX.m, unk40.m, unk40.m);
+            Multiply(flipZ.m, unk40.m, unk40.m);
 
-            // Set pelvis position
             Vector3 pelvisOffset;
             pelvisOffset.x = 0.0f;
-            pelvisOffset.y = -2.0f * 39.37008f;
+            pelvisOffset.y = -2.0f;
             pelvisOffset.z = 0.0f;
             Multiply(pelvisOffset, unk40, pelvisOffset);
 
             unk40.v.z = mPelvisInitialZ;
             unk40.v.x = pelvisOffset.x;
-            unk40.v.y = pelvisOffset.y;
+            unk40.v.y = pelvisOffset.y * 39.37008f;
 
-            Multiply(unk40, character->WorldXfm(), unk40);
+            Multiply(unk40, mCharacter->WorldXfm(), unk40);
 
-            // Get camera-space joint positions and transform to world
             PaddedJointPos worldJoints[kNumJoints];
             for (int i = 0; i < kNumJoints; i++) {
                 Vector3 camPos;
@@ -474,20 +469,17 @@ void HamSkeletonConverter::Set(const BaseSkeleton *skel) {
                 Multiply(camPos, unk40, mJointPositions[i]);
             }
 
-            // Compute pelvis center (midpoint of left and right hips)
-            mPelvisTransform.v.x = worldJoints[kJointHipLeft].x + worldJoints[kJointHipRight].x + 0.5f;
+            mPelvisTransform.v.x = (worldJoints[kJointHipLeft].x + worldJoints[kJointHipRight].x) * 0.5f;
             mPelvisTransform.v.y = (worldJoints[kJointHipLeft].y + worldJoints[kJointHipRight].y) * 0.5f;
             mPelvisTransform.v.z = (worldJoints[kJointHipLeft].z + worldJoints[kJointHipRight].z) * 0.5f;
 
             Transform invCharXfm;
-            Invert(character->WorldXfm(), invCharXfm);
+            Invert(mCharacter->WorldXfm(), invCharXfm);
 
-            // Set pelvis position bone value in local space
             Vector3 pelvisLocal;
             Multiply(mPelvisTransform.v, invCharXfm, pelvisLocal);
             SetPosBoneValue(String("bone_pelvis.mesh"), pelvisLocal);
 
-            // Scale joint positions based on mesh bone distances
             float pelvisX = worldJoints[kJointHipCenter].x;
             float pelvisY = worldJoints[kJointHipCenter].y;
             float pelvisZ = worldJoints[kJointHipCenter].z;
@@ -495,62 +487,56 @@ void HamSkeletonConverter::Set(const BaseSkeleton *skel) {
             for (int j = 0; j < kNumJoints; j++, curJoint++) {
                 int parentJoint = JointParent((SkeletonJoint)j);
                 if (parentJoint == -1) {
-                    // Root joint - scale from pelvis center
+                    float pvx = mPelvisTransform.v.x;
+                    float pvy = mPelvisTransform.v.y;
+                    float pvz = mPelvisTransform.v.z;
+                    float diffX = pelvisX - pvx;
+                    float diffY = pelvisY - pvy;
+                    float diffZ = pelvisZ - pvz;
                     float dist = Distance(mPelvisTransform.v, worldJoints[kJointHipCenter]);
                     RndTransformable *mesh0 = mBoneMeshes[0];
                     RndTransformable *pelvisMesh = mPelvisMesh;
                     float meshDist = Distance(mesh0->WorldXfm().v, pelvisMesh->WorldXfm().v);
                     float scale = meshDist / dist;
-                    curJoint->x = mPelvisTransform.v.x + (pelvisX - mPelvisTransform.v.x) * scale;
-                    curJoint->y = mPelvisTransform.v.y + (pelvisY - mPelvisTransform.v.y) * scale;
-                    curJoint->z = mPelvisTransform.v.z + (pelvisZ - mPelvisTransform.v.z) * scale;
+                    curJoint->x = pvx + diffX * scale;
+                    curJoint->y = pvy + diffY * scale;
+                    curJoint->z = pvz + diffZ * scale;
                 } else {
                     ScaleBone((SkeletonJoint)parentJoint, (SkeletonJoint)j, kUnk5, worldJoints[parentJoint], worldJoints[j], mJointPositions[parentJoint], *curJoint);
                 }
             }
 
-            // Build pelvis transform orientation
-            // spine direction = hipCenter to spine
-            Vector3 spineDir;
-            Subtract(mJointPositions[kJointSpine], mJointPositions[kJointHipCenter], spineDir);
+            Vector3 hipAxis;
+            Subtract(mJointPositions[kJointHipRight], mJointPositions[kJointHipLeft], hipAxis);
 
-            // pelvis lateral = hipCenter to pelvis mesh pos
             Vector3 pelvisLateral;
             Subtract(mJointPositions[kJointHipCenter], mPelvisTransform.v, pelvisLateral);
 
-            Normalize(spineDir, spineDir);
+            Normalize(hipAxis, hipAxis);
             Normalize(pelvisLateral, pelvisLateral);
 
-            // Cross product for pelvis forward
             Vector3 pelvisFwd;
-            pelvisFwd.x = pelvisLateral.y * spineDir.x - spineDir.y * pelvisLateral.x;
-            pelvisFwd.y = spineDir.z * pelvisLateral.x - pelvisLateral.z * spineDir.x;
-            pelvisFwd.z = 0;
+            Cross(hipAxis, pelvisLateral, pelvisFwd);
             Normalize(pelvisFwd, pelvisFwd);
 
-            // Store pelvis transform matrix
             mPelvisTransform.m.x = pelvisLateral;
-            mPelvisTransform.m.y = spineDir;
-            mPelvisTransform.m.z = pelvisFwd;
+            mPelvisTransform.m.y = pelvisFwd;
+            mPelvisTransform.m.z = hipAxis;
             Normalize(mPelvisTransform.m, mPelvisTransform.m);
 
-            // Set pelvis quaternion
             Transform pelvisLocalXfm;
             Multiply(mPelvisTransform, invCharXfm, pelvisLocalXfm);
             Hmx::Quat pelvisQ;
             pelvisQ.Set(pelvisLocalXfm.m);
             SetQuatBoneValue(String("bone_pelvis.mesh"), pelvisQ);
 
-            // Process spine chain
             CalcQuatBone(kJointHipCenter, kJointHipCenter, kJointSpine);
             CalcQuatBone(kJointHipCenter, kJointSpine, kJointShoulderCenter);
             CalcQuatBone(kJointSpine, kJointShoulderCenter, kJointHead);
 
-            // Process legs
             SetLeg(kJointHipCenter, kJointHipLeft, kJointKneeLeft, kJointAnkleLeft, kJointFootLeft, skel, 0);
             SetLeg(kJointHipCenter, kJointHipRight, kJointKneeRight, kJointAnkleRight, kJointFootRight, skel, 1);
 
-            // Process arms
             SetArm(kJointSpine, kJointShoulderLeft, kJointElbowLeft, kJointWristLeft);
             SetArm(kJointSpine, kJointShoulderRight, kJointElbowRight, kJointWristRight);
         }

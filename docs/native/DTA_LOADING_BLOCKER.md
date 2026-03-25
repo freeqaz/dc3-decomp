@@ -1,6 +1,6 @@
 # DTA Execution — Native Port Status
 
-> **See also**: [DTA_FLOW_V2_PLAN.md](DTA_FLOW_V2_PLAN.md) — the plan to remove C++ workarounds and run real DTA flow end-to-end.
+> **See also**: [PLATFORM_HACKS_ANALYSIS.md](../plans/dc3-native/PLATFORM_HACKS_ANALYSIS.md) — hacks audit, DTA handler root cause, and screen flow reference.
 
 ## Update (Session 39, late): DTA IS Working!
 

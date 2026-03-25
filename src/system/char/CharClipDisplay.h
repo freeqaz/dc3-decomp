@@ -6,8 +6,8 @@
 
 struct CharClipDisplay {
     CharClipDisplay()
-        : mClip(0), unk4(0), unk8(0), mStartBeat(0), mEndBeat(0), mTextWidth(0), mDrawPosY(0), unk1c(0),
-          unk20(0), mPadding(0) {
+        : mClip(0), mViewStartBeat(0), mViewEndBeat(0), mStartBeat(0), mEndBeat(0), mTextWidth(0), mDrawPosY(0), mCursorBeat(0),
+          mBlendWeight(0), mPadding(0) {
         mClipNameBuffer[0] = '\0';
     }
 
@@ -26,14 +26,14 @@ struct CharClipDisplay {
     static float GetSEm() { return sEm; }
 
     CharClip *mClip;
-    float unk4;
-    float unk8;
+    float mViewStartBeat;
+    float mViewEndBeat;
     float mStartBeat;
     float mEndBeat;
     float mTextWidth;
     float mDrawPosY;
-    float unk1c;
-    float unk20;
+    float mCursorBeat;
+    float mBlendWeight;
     char mClipNameBuffer[64];
     float mPadding;
 

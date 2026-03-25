@@ -78,14 +78,13 @@ public:
     bool AOEnabled() const { return mAOEnabled; }
     float AOStrength() const { return mAOStrength; }
     bool UseToneMapping() const { return mUseToneMapping; }
-#ifdef HX_NATIVE
+
     float FogStart() const { return mAmbientFogOwner->mFogStart; }
     float FogEnd() const { return mAmbientFogOwner->mFogEnd; }
     void SetFogRange(float start, float end) {
         mAmbientFogOwner->mFogStart = start;
         mAmbientFogOwner->mFogEnd = end;
     }
-#endif
 
 protected:
     RndEnviron();

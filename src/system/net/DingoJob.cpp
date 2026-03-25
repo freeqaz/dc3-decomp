@@ -37,7 +37,7 @@ void DingoJob::Start() {
 }
 
 template <class _T>
-__declspec(noinline) auto _outline_c_str(_T* _obj) -> decltype(_obj->c_str()) {
+__declspec(noinline) auto _outline_c_str(_T *_obj) -> decltype(_obj->c_str()) {
     return _obj->c_str();
 }
 
@@ -59,17 +59,26 @@ void DingoJob::SendCallback(bool success, bool cancelled) {
         msg[1] = success;
         mCallback->Handle(msg, true);
 
-        // Log failure details if this failed and wasn't user-cancelled
-        if (!success && !cancelled) {
-            DataPoint pt("dingo_job_failed");
-            pt.AddPair("location", "DingoJob::SendCallback");
-            pt.AddPair("mResult", mResult);
-            pt.AddPair("mJsonResponse", mJsonResponse ? "non-NULL" : "NULL");
-            pt.AddPair("mBaseUrl", _outline_c_str(&mBaseUrl));
-            pt.AddPair("mResponseStatusCode", (int)GetResponseStatusCode());
-            pt.AddPair("mResponseStr", _outline_c_str(&mResponseStr));
-            TheDataPointMgr.RecordDataPoint(pt);
-            TheWebSvcMgr.CancelOutstandingCalls();
+        // Additional check: if success is 0, do extra handling
+        if (success == 0) {
+            // Call IsAuthenticated before checking condition
+            bool isAuth = TheServer.IsAuthenticated();
+
+            if (isAuth && !cancelled) {
+                DataPoint pt("dingo_job_failed");
+                pt.AddPair("location", "DingoJob::SendCallback");
+                pt.AddPair("mResult", mResult);
+                pt.AddPair("mJsonResponse", mJsonResponse ? "non-NULL" : "NULL");
+                pt.AddPair("mBaseUrl", _outline_c_str(&mBaseUrl));
+                pt.AddPair("mResponseStatusCode", (int)GetResponseStatusCode());
+                pt.AddPair("mResponseStr", _outline_c_str(&mResponseStr));
+                pt.AddPair("mOnlineId", TheServer.mOnlineId.ToString());
+                pt.AddPair("severity", "warn");
+                pt.AddPair("sync", "sync");
+                TheDataPointMgr.RecordDebugDataPoint(pt);
+                TheWebSvcMgr.CancelOutstandingCalls();
+                TheServer.Poll();
+            }
         }
     }
 }

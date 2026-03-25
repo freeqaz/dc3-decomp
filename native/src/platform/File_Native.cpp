@@ -15,6 +15,10 @@
 // Configurable data directory for native port (where gen/, config/ etc. live)
 static char gNativeDataDir[512] = ".";
 
+// Optional overlay directory — files here shadow the archive/data dir.
+// Used for native-only DTA patches (e.g. adding settings UI toggles).
+static char gNativeOverlayDir[512] = "";
+
 void NativeSetDataDir(const char *dir) {
     strncpy(gNativeDataDir, dir, sizeof(gNativeDataDir) - 1);
     gNativeDataDir[sizeof(gNativeDataDir) - 1] = '\0';
@@ -22,13 +26,33 @@ void NativeSetDataDir(const char *dir) {
 
 const char *NativeGetDataDir() { return gNativeDataDir; }
 
+void NativeSetOverlayDir(const char *dir) {
+    strncpy(gNativeOverlayDir, dir, sizeof(gNativeOverlayDir) - 1);
+    gNativeOverlayDir[sizeof(gNativeOverlayDir) - 1] = '\0';
+}
+
+const char *NativeGetOverlayDir() { return gNativeOverlayDir; }
+
+// Check if a file exists in the overlay directory
+static bool NativeOverlayExists(const char *file) {
+    if (!gNativeOverlayDir[0] || !file || !*file) return false;
+    char buf[512];
+    snprintf(buf, sizeof(buf), "%s/%s", gNativeOverlayDir, file);
+    struct stat st;
+    return stat(buf, &st) == 0;
+}
+
 // On Xbox, FileIsLocal checks for drive letters (d: = disc = not local).
 // On native, files without absolute paths are "not local" when UsingCD,
 // so they get routed through the archive system (ArkFile).
+// Files that exist in the overlay directory are treated as local so they
+// bypass the archive and load from disk.
 bool FileIsLocal(const char *file) {
     if (!file || !*file) return true;
     // Absolute paths are always local
     if (file[0] == '/') return true;
+    // Files in overlay directory are local (bypass archive)
+    if (NativeOverlayExists(file)) return true;
     // When using CD (archive), relative paths are archive files, not local
     return false;
 }
@@ -67,10 +91,12 @@ int FileMkDir(const char *iDirname) {
 void FileQualifiedFilename(char *out, int, const char *in) {
     MILO_ASSERT(in && out, 0x121);
     // On native, prepend the data directory (like Xbox prepends "d:")
+    // If the file exists in the overlay directory, use that instead.
     String str(in);
     const char *inStr = str.c_str();
     char buf[256];
-    const char *path = FileMakePathBuf(gNativeDataDir, inStr, buf);
+    const char *baseDir = NativeOverlayExists(inStr) ? gNativeOverlayDir : gNativeDataDir;
+    const char *path = FileMakePathBuf(baseDir, inStr, buf);
     strcpy(out, path);
 }
 

@@ -767,9 +767,8 @@ bool kdTree<Triangle>::Intersect(
                     if (triList) {
                         do {
                             float dist = FLT_MAX;
-                            bool triHit = ::Intersect(
-                                origin, direction, *(Triangle *)triList->mIndex, dist
-                            );
+                            bool triHit
+                                = ::Intersect(origin, direction, *triList->GetItem(), dist);
                             if (triHit) {
                                 found = true;
                                 if (hitDist - dist < 0.0f)
@@ -777,7 +776,7 @@ bool kdTree<Triangle>::Intersect(
                                 hitDist = dist;
                             }
                             triList++;
-                        } while (triList->mIndex != -1);
+                        } while (!triList->IsEnd());
                     }
                     if (stackDepth == 0)
                         break;
@@ -1682,4 +1681,3 @@ Triangle* vector<Triangle, StlNodeAlloc<Triangle>>::_M_erase(
 
 }  // namespace stlpmtx_std
 #endif
-

@@ -455,64 +455,57 @@ void GamePanel::Poll() {
                         pd->Provider()->SetProperty(scoreSym, DataNode(sNativeScore));
                     }
                 }
-                // Update score labels directly on HUD panel subdirs
+                // Update score labels directly on HUD panel subdirs.
                 // The DTA set_score handler is an empty stub in the ark DTB,
                 // so we set score1.lbl inside score_left/score_right from C++.
-                DataNode &hp = DataVariable("hud_panel");
-                if (hp.Type() == kDataObject && hp.GetObj()) {
-                    ObjectDir *hudDir = dynamic_cast<ObjectDir *>(hp.GetObj());
-                    if (hudDir) {
-                        static bool sScoreLogged = false;
-                        for (const char *side :
-                             {"score_left", "score_right"}) {
-                            RndDir *scoreDir =
-                                hudDir->Find<RndDir>(side, false);
-                            if (scoreDir) {
-                                UILabel *lbl =
-                                    scoreDir->Find<UILabel>("score1.lbl", false);
-                                if (lbl) {
-                                    // Bypass HamLabel transition — set text directly
-                                    char buf[32];
-                                    snprintf(buf, sizeof(buf), "%d", sNativeScore);
-                                    lbl->RndText::SetText(buf);
-                                    lbl->SetShowing(true);
-                                    if (!sScoreLogged) {
-                                        float alpha = lbl->Styles()[0].GetAlpha();
-                                        Transform worldXfm = lbl->WorldXfm();
-                                        fprintf(
-                                            stderr,
-                                            "[SCORE] %s/score1.lbl showing=%d "
-                                            "text='%s' alpha=%.2f "
-                                            "world=(%.1f,%.1f,%.1f)\n",
-                                            side,
-                                            lbl->Showing(),
-                                            lbl->GetText().c_str(),
-                                            alpha,
-                                            worldXfm.v.x,
-                                            worldXfm.v.y,
-                                            worldXfm.v.z
-                                        );
-                                    }
-                                }
-                                RndDrawable *grp =
-                                    scoreDir->Find<RndDrawable>(
-                                        "score.grp", false
-                                    );
-                                if (grp)
-                                    grp->SetShowing(true);
-                                scoreDir->SetShowing(true);
-                                if (!sScoreLogged) {
-                                    fprintf(
-                                        stderr,
-                                        "[SCORE] %s showing=%d grp=%p\n",
-                                        side,
-                                        scoreDir->Showing(),
-                                        (void *)grp
-                                    );
+                static UILabel *sScoreLabels[2] = {nullptr, nullptr};
+                static UILabel *sShadowLabels[2] = {nullptr, nullptr};
+                if (!sScoreLabels[0]) {
+                    DataNode &hp = DataVariable("hud_panel");
+                    if (hp.Type() == kDataObject && hp.GetObj()) {
+                        ObjectDir *hd = dynamic_cast<ObjectDir *>(hp.GetObj());
+                        if (hd) {
+                            const char *sides[] = {"score_left", "score_right"};
+                            for (int s = 0; s < 2; s++) {
+                                RndDir *sd = hd->Find<RndDir>(sides[s], false);
+                                if (sd) {
+                                    sScoreLabels[s] =
+                                        sd->Find<UILabel>("score1.lbl", false);
+                                    sShadowLabels[s] =
+                                        sd->Find<UILabel>("score2.lbl", false);
+                                    sd->SetShowing(true);
                                 }
                             }
                         }
-                        sScoreLogged = true;
+                    }
+                }
+                if (sScoreLabels[0] || sScoreLabels[1]) {
+                    // Format score with comma separators
+                    char buf[32];
+                    if (sNativeScore >= 1000000)
+                        snprintf(buf, sizeof(buf), "%d,%03d,%03d",
+                                 sNativeScore / 1000000,
+                                 (sNativeScore / 1000) % 1000,
+                                 sNativeScore % 1000);
+                    else if (sNativeScore >= 1000)
+                        snprintf(buf, sizeof(buf), "%d,%03d",
+                                 sNativeScore / 1000,
+                                 sNativeScore % 1000);
+                    else
+                        snprintf(buf, sizeof(buf), "%d", sNativeScore);
+                    for (int s = 0; s < 2; s++) {
+                        if (sScoreLabels[s]) {
+                            sScoreLabels[s]->RndText::SetText(buf);
+                            sScoreLabels[s]->UpdateText();
+                            sScoreLabels[s]->SetShowing(true);
+                            // Negate X scale to counter parent mirror flip
+                            Transform lx = sScoreLabels[s]->LocalXfm();
+                            lx.m.x.x = -std::abs(lx.m.x.x);
+                            sScoreLabels[s]->SetLocalXfm(lx);
+                        }
+                        // Hide score2.lbl (shadow) to prevent overlap
+                        if (sShadowLabels[s])
+                            sShadowLabels[s]->SetShowing(false);
                     }
                 }
             }

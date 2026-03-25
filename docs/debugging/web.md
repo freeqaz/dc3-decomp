@@ -101,78 +101,11 @@ npm run web:gameplay -- --verbose
 npm run web:cdp-break -- --silence 10
 ```
 
-## Headless Desktop Testing (Preferred for Agents)
+## Headless Desktop Testing
 
 The desktop native build is the fastest way to test game logic without a browser. Most bugs that affect web also affect desktop headless, and the feedback loop is instant.
 
-### Environment Variables
-
-| Variable | Description |
-|----------|-------------|
-| `MILO_HEADLESS=1` | No GLFW window, GPU renders to offscreen target |
-| `MILO_RENDER=1` | Force GPU init (headless still renders, just no window) |
-| `MILO_NORENDER` | Skip GPU entirely (logic-only, fastest) |
-| `MILO_INPUT_SCRIPT=path` | Scripted button presses (see below) |
-| `MILO_MAX_FRAMES=N` | Exit after N frames |
-| `MILO_SCREENSHOT_DIR=dir` | Auto-capture PNGs |
-| `MILO_SCREENSHOT_FRAMES=f1,f2,...` | Which frames to capture (default: 100,600,900,1500) |
-| `MILO_CLEAR_COLOR=R,G,B,A` | Override clear color (debugging) |
-| `MILO_SIMPLE_RENDER` | Simplified material rendering |
-| `MILO_DEBUG_PIPELINES` | Log pipeline creation |
-| `MILO_NO_TRANSPARENT_DEFER` | Disable transparent draw queue |
-| `MILO_PERF` | Enable frame timing |
-| `MILO_VIDEO=path.mp4` | Record frames to video |
-| `MILO_CAPTURE_FRAME=N` | GFXReconstruct capture at frame N |
-| `MILO_FATAL_FAILS=0` | Don't abort on non-critical failures |
-
-### Scripted Input System
-
-Input scripts drive the engine through menu screens. Two formats:
-
-**Absolute frame** (simple, but fragile if load times change):
-```
-60 start          # press Start at frame 60
-200 confirm       # press A at frame 200
-```
-
-**Wait-for-screen** (robust, adapts to variable load times):
-```
-wait_screen main_screen
-+30 confirm                # 30 frames after main_screen appears
-wait_screen choose_mode_screen
-+30 confirm
-wait_screen song_select_screen
-+50 down                   # scroll through songs
-+100 down
-```
-
-Button names: `confirm`/`a`, `cancel`/`b`, `start`, `up`, `down`, `left`, `right`, `x`, `y`, `lb`/`l1`, `rb`/`r1`, `lt`/`l2`, `rt`/`r2`, `ls`/`l3`, `rs`/`r3`, `option`/`back`/`select`.
-
-### Example: Test Song Scrolling
-
-```bash
-MILO_HEADLESS=1 MILO_MAX_FRAMES=2000 \
-  MILO_INPUT_SCRIPT=scripts/dc3-input-flows/song-scroll-test.txt \
-  native/build/dc3-native 2>&1 | grep -E 'scroll|nav_highlight|skeleton|frame'
-```
-
-### Example: Headless Screenshot Comparison
-
-```bash
-MILO_HEADLESS=1 MILO_RENDER=1 \
-  MILO_INPUT_SCRIPT=scripts/dc3-input-flows/song-scroll-test.txt \
-  MILO_SCREENSHOT_DIR=/tmp/scroll-shots \
-  MILO_SCREENSHOT_FRAMES=550,600,650,700 \
-  MILO_MAX_FRAMES=800 \
-  native/build/dc3-native
-```
-
-### Available Input Flow Scripts
-
-| Script | Route | Purpose |
-|--------|-------|---------|
-| `scripts/dc3-input-flows/song-scroll-test.txt` | boot → main → choose_mode → song_select → 8x down | Verify list scrolling |
-| `scripts/dc3-input-flows/ymca.txt` | boot → gameplay | Full song load test |
+See [debugging/native.md](native.md) for the complete headless testing reference: environment variables, scripted input format, button names, screenshot capture, and input flow scripts.
 
 ## CDP Debugger Break
 

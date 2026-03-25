@@ -337,24 +337,32 @@ DataNode HamAudio::OnSetCrossfadeJump(DataArray *a) {
 
 void HamAudio::FinishLoad() {
     auto& stream0 = mStreams[0];
-    unsigned int counter = 2;
 
     if (mFileLoader) {
         mRawBuffer = mFileLoader->GetBuffer(&mRawBufferSize);
         delete mFileLoader;
         mFileLoader = NULL;
-        static Symbol main("main");
-        stream0 = TheSynth->NewBufStream(mRawBuffer, mRawBufferSize, main, 0.25f, true);
-        mStreams[1] = TheSynth->NewBufStream(mRawBuffer, mRawBufferSize, main, 0.25f, false);
+        const char *mogg = "mogg";
+        stream0 = TheSynth->NewBufStream(mRawBuffer, mRawBufferSize, mogg, 0.25f, true);
+        mStreams[1] = TheSynth->NewBufStream(mRawBuffer, mRawBufferSize, mogg, 0.25f, false);
         mSongStream = stream0;
     }
+    unsigned int counter = 2;
     Stream **pStream = &stream0;
     do {
         if (*pStream) {
             (*pStream)->Faders()->Add(mMasterFader);
-            Fader *crossFader = (&mCrossFaders[0])[pStream - &stream0];
+#ifdef HX_NATIVE
+            Fader *crossFader = mCrossFaders[pStream - mStreams];
             (*pStream)->Faders()->Add(crossFader);
             crossFader->SetVolume(0.0f);
+#else
+            // PPC compiler strength-reduces this to lwz r4, 0x38, rPStream
+            // but only with hardcoded byte offset — pointer subtraction generates
+            // srawi/addi/slwi (5 extra instructions) that the compiler won't fold
+            (*pStream)->Faders()->Add(*(Fader**)((char*)pStream + 0x38));
+            (*(Fader**)((char*)pStream + 0x38))->SetVolume(0.0f);
+#endif
 
             const std::vector<float> &vols = mSongInfo->GetVols();
             const std::vector<float> &pans = mSongInfo->GetPans();
@@ -407,7 +415,7 @@ void HamAudio::FinishLoad() {
                         }
                     }
 
-                    FxSend *reverbSend = TheSynth->Find<FxSend>("reverb_send", false);
+                    FxSend *reverbSend = TheSynth->Find<FxSend>("song.send", false);
                     if (reverbSend) {
                         for (int ch = 0; ch < numChannels; ch++) {
                             (*pStream)->SetFXSend(ch, reverbSend);
@@ -425,7 +433,7 @@ void HamAudio::FinishLoad() {
         if (mStreams[1]->IsReady()) {
             mStreams[1]->Resync(10000.0f);
         } else {
-            MILO_NOTIFY("HamAudio::FinishLoad - stream 1 not ready for resync");
+            MILO_NOTIFY("HamAudio::FinishLoad() - almost tried to resync stream before it was ready");
         }
     }
 }

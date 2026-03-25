@@ -111,7 +111,9 @@ void *jpeg_get_large(jpeg_common_struct *, unsigned int sz) { return malloc(sz);
 void jpeg_free_small(jpeg_common_struct *, void *ptr, unsigned int) { free(ptr); }
 void jpeg_free_large(jpeg_common_struct *, void *ptr, unsigned int) { free(ptr); }
 long jpeg_mem_init(jpeg_common_struct *) { return 0; }
-long jpeg_mem_available(jpeg_common_struct *, long, long max_bytes, long) { return max_bytes; }
+long jpeg_mem_available(jpeg_common_struct *, long, long max_bytes, long) {
+    return max_bytes;
+}
 
 // ============================================================================
 // Xbox SDK stubs (C++ mangled)
@@ -359,6 +361,23 @@ extern "C" const char __link_glue_empty_str[] = "";
 #pragma comment(linker, "/ALTERNATENAME:?lbl_82F1AB9C@@3IA=__link_glue_zero")
 #pragma comment(linker, "/ALTERNATENAME:?lbl_82F1ABA0@@3IA=__link_glue_zero")
 #pragma comment(linker, "/ALTERNATENAME:?lbl_82F5E180@@3JC=__link_glue_zero")
+#pragma comment(linker, "/ALTERNATENAME:?DAT_82f63aec@@3HA=__link_glue_zero")
+#pragma comment(                                                                                 \
+    linker,                                                                                      \
+    "/ALTERNATENAME:?DAT_82f63ae4@@3V?DingoJobCompleteMsg@?1???R@Hamac@@QAE@XZ=__link_glue_zero" \
+)
+#pragma comment(                                                                                 \
+    linker,                                                                                      \
+    "/ALTERNATENAME:?DAT_82f63ae8@@3V?DingoJobCompleteMsg@?1???R@Hamac@@QAE@XZ=__link_glue_zero" \
+)
+#pragma comment(                                                                                 \
+    linker,                                                                                      \
+    "/ALTERNATENAME:?DAT_82f63adc@@3V?DingoJobCompleteMsg@?1???R@Hamac@@QAE@XZ=__link_glue_zero" \
+)
+#pragma comment(                                                                                 \
+    linker,                                                                                      \
+    "/ALTERNATENAME:?DAT_82f63ae0@@3V?DingoJobCompleteMsg@?1???R@Hamac@@QAE@XZ=__link_glue_zero" \
+)
 // Removed: sLoadingMaster@LoadingPanel — defined in LoadingPanel.cpp (matching unit)
 // Removed: sSongDB@LoadingPanel — defined in LoadingPanel.cpp (matching unit)
 #pragma comment(                                                                         \
@@ -393,7 +412,8 @@ extern "C" const char __link_glue_empty_str[] = "";
 // unit) Removed: OnMsg@HamUI — implemented in HamUI.cpp (matching unit) Removed:
 // RemoveFromLists@Spotlight — implemented in Spotlight.cpp (matching unit) Removed:
 // VertexToWorld — implemented in DepthBuffer3D.cpp (matching unit)
-// Removed: altCfg — was most vexing parse in Locale.cpp (now fixed, no function reference)
+// Removed: altCfg — was most vexing parse in Locale.cpp (now fixed, no function
+// reference)
 #pragma comment(linker, "/ALTERNATENAME:?merged_82610090@@YAPBDPBDPCH@Z=__link_glue_noop")
 
 // -- BinStream operator<< template instantiations --
@@ -777,4 +797,3 @@ extern "C" const char __link_glue_empty_str[] = "";
 
 template <class T>
 unsigned int GatherObjectsFromGroup(RndGroup *, std::vector<T *> &);
-

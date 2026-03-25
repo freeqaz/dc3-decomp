@@ -118,6 +118,17 @@ case "$BINARY_NAME" in
         export MILO_WIDTH="$WIDTH"
         export MILO_HEIGHT="$HEIGHT"
 
+        # Auto-set MILO_MAX_FRAMES to last screenshot frame + 500,
+        # unless the user already set it via -- MILO_MAX_FRAMES=N
+        if [[ -z "${MILO_MAX_FRAMES:-}" ]]; then
+            _max_frame=0
+            IFS=',' read -ra _frame_arr <<< "$FRAMES"
+            for _f in "${_frame_arr[@]}"; do
+                (( _f > _max_frame )) && _max_frame=$_f
+            done
+            export MILO_MAX_FRAMES=$(( _max_frame + 500 ))
+        fi
+
         timeout "$TIMEOUT" "$BINARY" "$@" 2>&1 || true
 
         echo ""
