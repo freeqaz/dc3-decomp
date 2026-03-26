@@ -66,8 +66,7 @@ void RecordedFrame::MakeSkeletonFrame(SkeletonFrame &frame, int skel_idx) const 
     memcpy(data.mJointTrackingState, mJointTrackingState, sizeof(mJointTrackingState));
     data.mQualityFlags = mQualityFlags;
     data.mTrackingID = mTrackingID;
-    data.mClippedFlags = mJointTrackingState[0];
-    data.mHipCenter = mJointPositions[0];
+    data.mHipCenter = data.mJointPositions[0];
 }
 
 void SkeletonClip::LoadFrame(BinStream &bs, RecordedFrame &frame, int version) {

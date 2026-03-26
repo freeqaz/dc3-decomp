@@ -371,9 +371,9 @@ void DanceRemixer::AddRoutineMove(
     TheMoveMgr->FillInRoutineAt(player, measure);
     TheMoveMgr->InsertMoveInSong(TheMoveMgr->mRoutineMeasures[player][measure].first, measure, player);
 
-    // Propagate the same move to all jump targets from this measure
+    // Propagate the same move along the jump chain from this measure
     std::map<int, int>::iterator it = mJumpMap.find(measure);
-    for (; it != mJumpMap.end(); ++it) {
+    while (it != mJumpMap.end()) {
         int jumpTarget = it->second;
         if (jumpTarget >= mTotalMeasures) {
             MILO_NOTIFY(
@@ -384,9 +384,11 @@ void DanceRemixer::AddRoutineMove(
             return;
         }
         // Apply the same move at the jump target measure
-        TheMoveMgr->mPreferredVariants[player][jumpTarget] = moveVariant;
+        measure = jumpTarget;
         TheMoveMgr->mMoveParents[player][jumpTarget] = moveParent;
+        TheMoveMgr->mPreferredVariants[player][jumpTarget] = moveVariant;
         TheMoveMgr->FillInRoutineAt(player, jumpTarget);
         TheMoveMgr->InsertMoveInSong(TheMoveMgr->mRoutineMeasures[player][jumpTarget].first, jumpTarget, player);
+        it = mJumpMap.find(measure);
     }
 }

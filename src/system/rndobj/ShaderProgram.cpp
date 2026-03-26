@@ -87,12 +87,16 @@ void RndShaderProgram::CopyErrorShader(ShaderType shader, const ShaderOptions &o
     RndShaderProgram &program = TheShaderMgr.FindShader(errorType, newOpts);
     if (!program.Cached()) {
         if (!TheShaderMgr.CacheShaders()) {
-            MILO_LOG(
-                "FAILURE: Error shader cannot be cached. Unable to handle missing shaders!\n"
-            );
-            MILO_FAIL(
-                "FAILURE: Error shader cannot be cached. Unable to handle missing shaders!\n"
-            );
+            const char *msg =
+                "FAILURE: Error shader cannot be cached. Unable to handle missing shaders!\n";
+            {
+                FormatString fs(msg);
+                TheDebug << fs.Str();
+            }
+            {
+                FormatString fs(msg);
+                TheDebug.Fail(fs.Str(), nullptr);
+            }
         }
         Cache(errorType, newOpts, nullptr, nullptr);
     }

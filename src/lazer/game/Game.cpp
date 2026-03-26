@@ -934,12 +934,14 @@ DataNode OnToggleMoveOverlay(DataArray *a) {
 DataNode OnToggleAutoplay(DataArray *a) {
     HamPlayerData *player_data = TheGameData->Player(a->Int(1));
     MILO_ASSERT(player_data, 0x6F);
-    if (!player_data->IsAutoplaying()) {
-        player_data->SetAutoplay(sAutoplayStates[0]);
+    Symbol s;
+    if (player_data->Autoplay().Null()) {
+        s = sAutoplayStates[0];
     } else {
-        player_data->SetAutoplay(gNullStr);
+        s = Symbol(gNullStr);
     }
-    return player_data->IsAutoplaying();
+    player_data->SetAutoplay(s);
+    return !s.Null();
 }
 
 bool Game::HandleWait() {
