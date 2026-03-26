@@ -815,14 +815,9 @@ void UIList::LimitCircularDisplay(bool b) {
         mLimitCircularDisplayNumToDataNum = b;
         if (b) {
             int numprov = NumProviderData();
-            int val = mUncappedNumDisplay;
-            if (numprov < val) {
-                val = numprov;
-            }
-            if (val < 1) {
-                val = 1;
-            }
-            SetNumDisplay(val);
+            int uncapped = mUncappedNumDisplay;
+            int val = numprov < uncapped ? numprov : uncapped;
+            SetNumDisplay(val < 1 ? 1 : val);
         } else {
             SetNumDisplay(mUncappedNumDisplay);
         }
