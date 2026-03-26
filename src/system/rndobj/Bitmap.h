@@ -63,7 +63,8 @@ public:
     // mOrder being 0 also seems to be RGBA?
     // mOrder & 0x40 or mOrder & 0x80 would mean white (R=G=B=255)
     enum Order {
-        kDXT1 = 8
+        kDXT1 = 8,
+        kDXT_MASK = 0x38
     };
 
     RndBitmap() : mBuffer(0), mMip(0) { Reset(); }

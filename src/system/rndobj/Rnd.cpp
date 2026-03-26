@@ -1108,22 +1108,20 @@ float Rnd::DrawTimers(float f) {
             continue;
         }
 
-        float lastMs = it->first.GetLastMs();
         float budget = it->first.Budget();
 
-        bool overBudget = budget != 0.0f && lastMs > budget;
+        bool overBudget = budget != 0.0f && it->first.GetLastMs() > budget;
 
-        Hmx::Color *color = &barColor;
         if (overBudget) {
             rect.w = budget * scale;
-            DrawRectScreen(rect, *color, nullptr, nullptr, nullptr);
+            DrawRectScreen(rect, barColor, nullptr, nullptr, nullptr);
             rect.x += rect.w;
-            lastMs = lastMs - budget;
-            color = &budgetExcessColor;
+            rect.w = (it->first.GetLastMs() - it->first.Budget()) * scale;
+            DrawRectScreen(rect, budgetExcessColor, nullptr, nullptr, nullptr);
+        } else {
+            rect.w = it->first.GetLastMs() * scale;
+            DrawRectScreen(rect, barColor, nullptr, nullptr, nullptr);
         }
-
-        rect.w = lastMs * scale;
-        DrawRectScreen(rect, *color, nullptr, nullptr, nullptr);
 
         if (it->first.GetWorstMs() > it->first.GetLastMs()) {
             rect.x += rect.w;
@@ -1150,7 +1148,7 @@ float Rnd::DrawTimers(float f) {
     barColor.red = 1.0f;
     barColor.green = 1.0f;
     barColor.blue = 1.0f;
-    Vector2 pos(bgLeft + 0.05f, f + 0.00446f);
+    Vector2 pos(bgLeft + 0.00391f, f + 0.00446f);
 
     for (std::list<std::pair<Timer, TimerStats> >::iterator it = timers.begin();
          it != timers.end();
@@ -1180,7 +1178,7 @@ float Rnd::DrawTimers(float f) {
         pos.y += rowSpacing;
     }
 
-    return f;
+    return pos.y;
 }
 
 void Rnd::DrawPreClear() {

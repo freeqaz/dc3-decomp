@@ -39,8 +39,9 @@ complex cexp(complex cplx) {
     struct complex result;
     complex phase = expj(cplx.y);
     double magnitude = exp(cplx.x);
-    result.x = magnitude * phase.x;
-    result.y = magnitude * phase.y;
+    phase.x = magnitude * phase.x;
+    phase.y = magnitude * phase.y;
+    result = phase;
     return result;
 }
 

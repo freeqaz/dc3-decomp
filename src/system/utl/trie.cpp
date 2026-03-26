@@ -132,10 +132,8 @@ void Trie::delete_node(unsigned int index) {
 }
 
 int Trie::store(const char *str) {
-    if (str == 0)
-        return 0;
-    if (*str == 0)
-        return 0;
+    if (str == 0 || *str == 0)
+        goto return_zero;
 
     unsigned int curIdx = 1;
     unsigned int parentIdx = 0;
@@ -154,14 +152,15 @@ int Trie::store(const char *str) {
         unsigned int nodeIdx = curIdx;
         char ch = str[i];
         check_index(nodeIdx);
+        int j = 0;
         int sibCount = (signed char)(int)(*(unsigned int *)((char *)this + nodeIdx * NODE_SIZE + 0x0C));
         curIdx = nodeIdx;
         if ('\0' < sibCount) {
-            int j = 0;
             do {
                 check_index(nodeIdx);
                 char *node = NodePtr(this, nodeIdx);
                 if (node[0x10] == ch) {
+                    parentIdx = curIdx;
                     check_index(nodeIdx);
                     curIdx = FirstChild(node);
                     goto found;
@@ -177,36 +176,36 @@ int Trie::store(const char *str) {
 
         // Not found - insert new node
         {
-            unsigned int newIdx = get_free_node();
+            nodeIdx = get_free_node();
             if (sibCount == 0) {
                 if ((int)parentIdx > 0) {
                     check_index(parentIdx);
-                    FirstChild(NodePtr(this, parentIdx)) = newIdx;
+                    FirstChild(NodePtr(this, parentIdx)) = nodeIdx;
                 }
             } else {
                 check_index(curIdx);
-                NextSibling(NodePtr(this, curIdx)) = newIdx;
+                NextSibling(NodePtr(this, curIdx)) = nodeIdx;
             }
-            check_index(newIdx);
-            char *newNode = NodePtr(this, newIdx);
+            check_index(nodeIdx);
+            char *newNode = NodePtr(this, nodeIdx);
             newNode[0x10] = ch;
-            check_index(newIdx);
+            check_index(nodeIdx);
             *(unsigned int *)(newNode + 0x08) = parentIdx;
             unsigned int firstChildIdx;
-            if ((int)parentIdx <= 0) {
-                firstChildIdx = 1;
-            } else {
+            if ((int)parentIdx > 0) {
                 check_index(parentIdx);
                 firstChildIdx = FirstChild(NodePtr(this, parentIdx));
+            } else {
+                firstChildIdx = 1;
             }
             inc_count(firstChildIdx);
-            curIdx = newIdx;
+            parentIdx = nodeIdx;
+            curIdx = nodeIdx;
             if (str[i] != '\0') goto fast_path;
         }
 
     found:
         i++;
-        parentIdx = curIdx;
     } while (i <= strLen);
 
     goto done;
@@ -228,11 +227,13 @@ fast_path:
     } while (i < strLen);
 
 done:
-    unsigned int result = curIdx;
+    int result = curIdx;
     if (result == 0)
-        result = curIdx;
+        result = parentIdx;
     inc_dup_count(result);
     return result;
+return_zero:
+    return 0;
 }
 
 void Trie::remove(unsigned int index) {

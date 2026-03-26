@@ -717,13 +717,13 @@ bool RndBitmap::SamePixelFormat(const RndBitmap &bm) const {
 void RndBitmap::Blt(
     const RndBitmap &bm, int dX, int dY, int sX, int sY, int width, int height
 ) {
-    MILO_ASSERT((int)(int)mWidth >= dX + width, 1728);
-    MILO_ASSERT(dY + height <= mHeight, 1729);
-    MILO_ASSERT(sX + width <= bm.Width(), 1730);
-    MILO_ASSERT(sY + height <= bm.Height(), 1731);
+    MILO_ASSERT(dX + width <= mWidth, 0x5a2);
+    MILO_ASSERT(dY + height <= mHeight, 0x5a3);
+    MILO_ASSERT(sX + width <= bm.Width(), 0x5a4);
+    MILO_ASSERT(sY + height <= bm.Height(), 0x5a5);
     if (SamePixelFormat(bm)) {
         if (mOrder & 0x38) {
-            MILO_ASSERT(!((dX | dY | sX | sY | width | height) & 0x3), 0x6CC);
+            MILO_ASSERT(!((dX | dY | sX | sY | width | height) & 0x3), 0x5ae);
         }
         int count = width * mBpp >> 3;
         for (; height > 0; height--, dY++, sY++) {
@@ -733,31 +733,27 @@ void RndBitmap::Blt(
         }
     } else {
         if (mOrder & 0x38) {
-            MILO_NOTIFY(
-                "RndBitmap::Blt: Can't blt to DXT formatted textures, changing to rgba."
-            );
-            Create(mWidth, mHeight, 0, 0x20, 0, 0, 0, 0);
+            MILO_ASSERT(!(mOrder & kDXT_MASK), 0x5c3);
         }
         if (mPalette && bm.Palette()) {
             unsigned char colorBuffer[256];
             int i = bm.NumPaletteColors() - 1;
-            unsigned char *idx = colorBuffer + i;
-            for (; i >= 0; i--, idx--) {
+            for (; i >= 0; i--) {
                 unsigned char r, g, b, a;
                 bm.PaletteColor(i, r, g, b, a);
-                *idx = NearestColor(r, g, b, a);
+                colorBuffer[i] = NearestColor(r, g, b, a);
             }
-            for (int h = height, dy = dY, sy = sY; h >= 1; h--, dy++, sy++) {
-                for (int w = width, sx = sX, dx = dX; w > 0; w--, sx++, dx++) {
-                    SetPixelIndex(dx, dy, colorBuffer[bm.PixelIndex(sx, sy)]);
+            for (; height > 0; height--, dY++, sY++) {
+                for (int w = width, sx = sX; w > 0; w--, sx++) {
+                    SetPixelIndex(dX - sX + sx, dY, colorBuffer[bm.PixelIndex(sx, sY)]);
                 }
             }
         } else {
-            for (int h = height, dy = dY, sy = sY; h >= 1; h--, dy++, sy++) {
-                for (int w = width, sx = sX, dx = dX; w > 0; w--, sx++, dx++) {
+            for (; height > 0; height--, dY++, sY++) {
+                for (int w = width, sx = sX; w > 0; w--, sx++) {
                     unsigned char r, g, b, a;
-                    bm.PixelColor(sx, sy, r, g, b, a);
-                    SetPixelColor(dx, dy, r, g, b, a);
+                    bm.PixelColor(sx, sY, r, g, b, a);
+                    SetPixelColor(dX - sX + sx, dY, r, g, b, a);
                 }
             }
         }
