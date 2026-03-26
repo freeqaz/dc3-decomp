@@ -62,26 +62,25 @@ void BoxMapLighting::ApplyQueuedLights(Hmx::Color * __restrict color, const Vect
         float c0r = color[0].red;
         float c0g = color[0].green;
         float c0b = color[0].blue;
-        float c20r = color[0x50].red;
-        float c20g = color[0x54].red;
-        float c20b = color[0x58].green;
-        float c4r = color[0x10].red;
-        float c4g = color[0x10].green;
-        float c4b = color[0x10].blue;
-        float c8r = color[0x20].red;
-        float c8g = color[0x20].green;
-        float c8b = color[0x20].blue;
-        float c12r = color[0x30].red;
-        float c12g = color[0x30].green;
-        float c12b = color[0x30].blue;
-        float c16r = color[0x40].red;
-        float c16g = color[0x40].green;
-        float c16b = color[0x40].blue;
+        float c4r = color[1].red;
+        float c4g = color[1].green;
+        float c4b = color[1].blue;
+        float c8r = color[2].red;
+        float c8g = color[2].green;
+        float c8b = color[2].blue;
+        float c12r = color[3].red;
+        float c12g = color[3].green;
+        float c12b = color[3].blue;
+        float c16r = color[4].red;
+        float c16g = color[4].green;
+        float c16b = color[4].blue;
+        float c20r = color[5].red;
+        float c20g = color[5].green;
+        float c20b = color[5].blue;
 
         float *lightBuf1 = (float *)&gLightIndex;
         float *lightBuf2 = (float *)gLightBuffer2 - 2;
-        unsigned int counter = idx;
-        do {
+        for (unsigned int counter = idx; counter != 0; counter--) {
             float x1 = lightBuf1[2];
             float y1 = lightBuf1[3];
             lightBuf1 += 4;
@@ -124,28 +123,26 @@ void BoxMapLighting::ApplyQueuedLights(Hmx::Color * __restrict color, const Vect
             c12g += sq5 * y2;
             c20r = sq6 * x2 + c20r;
             c16g = sq1 * y2 + c16g;
-
-            counter--;
-        } while (counter != 0);
+        }
 
         color[0].red = c0r;
         color[0].green = c0g;
         color[0].blue = c0b;
-        color[0x10].red = c4r;
-        color[0x10].green = c4g;
-        color[0x10].blue = c4b;
-        color[0x20].red = c8r;
-        color[0x20].green = c8g;
-        color[0x20].blue = c8b;
-        color[0x30].red = c12r;
-        color[0x30].green = c12g;
-        color[0x30].blue = c12b;
-        color[0x40].red = c16r;
-        color[0x40].green = c16g;
-        color[0x40].blue = c16b;
-        color[0x50].red = c20r;
-        color[0x54].red = c20g;
-        color[0x58].green = c20b;
+        color[1].red = c4r;
+        color[1].green = c4g;
+        color[1].blue = c4b;
+        color[2].red = c8r;
+        color[2].green = c8g;
+        color[2].blue = c8b;
+        color[3].red = c12r;
+        color[3].green = c12g;
+        color[3].blue = c12b;
+        color[4].red = c16r;
+        color[4].green = c16g;
+        color[4].blue = c16b;
+        color[5].red = c20r;
+        color[5].green = c20g;
+        color[5].blue = c20b;
     }
 }
 

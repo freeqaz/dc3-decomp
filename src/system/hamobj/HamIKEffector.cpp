@@ -206,11 +206,9 @@ void HamIKEffector::IKElbow(const Vector3 &v) {
 #ifdef HX_NATIVE
             // Back-compute mLocalXfm so it survives dirty cascades from later pollables.
             // Same pattern as CharForeTwist/CharUpperTwist fix for forearm bones.
-            // Uses FastInvert (transpose+scale) rather than Invert (cofactor) to avoid
-            // zero-determinant singularity on WASM's strict float32.
             if (grandparent->TransParent()) {
                 Transform invParent;
-                FastInvert(grandparent->TransParent()->WorldXfm(), invParent);
+                Invert(grandparent->TransParent()->WorldXfm(), invParent);
                 Multiply(xfm, invParent, grandparent->mLocalXfm);
             }
 #endif
@@ -220,7 +218,7 @@ void HamIKEffector::IKElbow(const Vector3 &v) {
 #ifdef HX_NATIVE
             {
                 Transform invParent;
-                FastInvert(xfm, invParent);
+                Invert(xfm, invParent);
                 Multiply(tf70, invParent, parent->mLocalXfm);
             }
 #endif
@@ -462,9 +460,13 @@ void HamIKEffector::Poll() {
 
                     mEffector->SetWorldXfm(finalXfm);
 #ifdef HX_NATIVE
-                    if (mEffector->TransParent()) {
+                    // Only back-compute mLocalXfm for ankle/hand effectors that went
+                    // through IKElbow. NEVER write pelvis mLocalXfm — it's the skeleton
+                    // root and would corrupt every child bone on dirty cascade.
+                    if ((t == kEffectorTypeAnkle || t == kEffectorTypeHand)
+                        && mEffector->TransParent()) {
                         Transform invParent;
-                        FastInvert(mEffector->TransParent()->WorldXfm(), invParent);
+                        Invert(mEffector->TransParent()->WorldXfm(), invParent);
                         Multiply(finalXfm, invParent, mEffector->mLocalXfm);
                     }
 #endif

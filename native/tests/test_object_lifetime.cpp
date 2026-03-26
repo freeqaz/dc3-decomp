@@ -12,8 +12,39 @@
 #include "utl/FilePath.h"
 #include <cstdlib>
 #include <ctime>
+#include <sys/stat.h>
 
 namespace {
+
+static bool PathExists(const std::string &p) {
+    struct stat st;
+    return stat(p.c_str(), &st) == 0;
+}
+
+static std::string GetRepoRoot() {
+    // __FILE__ is "<repo>/native/tests/test_object_lifetime.cpp"
+    std::string f(__FILE__);
+    size_t pos = f.rfind("/native/tests/");
+    return pos != std::string::npos ? f.substr(0, pos) : ".";
+}
+
+static std::string GetMiloLibRoot() {
+    const char *env = getenv("MILO_LIB");
+    if (env && env[0])
+        return env;
+    // Fall back to repo-local extracted assets
+    std::string local = GetRepoRoot() + "/orig-assets/extracted";
+    if (PathExists(local))
+        return local;
+    const char *home = getenv("HOME");
+    if (home && home[0]) {
+        std::string ext = std::string(home)
+            + "/code/milohax/milo-engine-libs/harmonix-repos/milo-rnd-library/dc3";
+        if (PathExists(ext))
+            return ext;
+    }
+    return "";
+}
 
 class ObjectLifetimeTest : public EngineTestFixture {};
 class ObjectLifetimeUnitTest : public SymbolTestFixture {};
@@ -344,13 +375,12 @@ TEST_F(ObjectLifetimeTest, RepeatedFixtureMergesKeepIteratorSafe) {
 }
 
 TEST_F(ObjectLifetimeTest, MergeKeepCharClipSetRootDoesNotCorruptRefs) {
-    const char *root = getenv("MILO_LIB");
-    if (!root || !root[0]) {
-        GTEST_SKIP() << "MILO_LIB not set";
-    }
+    std::string root = GetMiloLibRoot();
+    if (root.empty())
+        GTEST_SKIP() << "MILO_LIB not set and orig-assets/extracted not found";
 
-    std::string toFull = std::string(root) + "/char/crowd/anim/female_base.milo";
-    std::string fromFull = std::string(root) + "/char/crowd/anim/female_medium.milo";
+    std::string toFull = root + "/char/crowd/anim/gen/female_base.milo_xbox";
+    std::string fromFull = root + "/char/crowd/anim/gen/female_medium.milo_xbox";
 
     ObjectDir *toDir = DirLoader::LoadObjects(FilePath(toFull.c_str()), nullptr, nullptr);
     ObjectDir *fromDir = DirLoader::LoadObjects(FilePath(fromFull.c_str()), nullptr, nullptr);
@@ -395,12 +425,11 @@ TEST_F(ObjectLifetimeTest, MergeDirsMoveAllSubdirsTransfersOwnership) {
 }
 
 TEST_F(ObjectLifetimeTest, DeleteAutosaveWarningRawDir) {
-    const char *root = getenv("MILO_LIB");
-    if (!root || !root[0]) {
-        GTEST_SKIP() << "MILO_LIB not set";
-    }
+    std::string root = GetMiloLibRoot();
+    if (root.empty())
+        GTEST_SKIP() << "MILO_LIB not set and orig-assets/extracted not found";
 
-    std::string full = std::string(root) + "/ui/title/gen/autosave_warning.milo_xbox";
+    std::string full = root + "/ui/title/gen/autosave_warning.milo_xbox";
     std::clock_t loadStart = std::clock();
     printf("DeleteAutosaveWarningRawDir: loading %s\n", full.c_str());
     ObjectDir *dir = DirLoader::LoadObjects(FilePath(full.c_str()), nullptr, nullptr);
@@ -424,12 +453,11 @@ TEST_F(ObjectLifetimeTest, DeleteAutosaveWarningRawDir) {
 }
 
 TEST_F(ObjectLifetimeTest, DeleteAutosavingIconSubdirOnly) {
-    const char *root = getenv("MILO_LIB");
-    if (!root || !root[0]) {
-        GTEST_SKIP() << "MILO_LIB not set";
-    }
+    std::string root = GetMiloLibRoot();
+    if (root.empty())
+        GTEST_SKIP() << "MILO_LIB not set and orig-assets/extracted not found";
 
-    std::string full = std::string(root) + "/ui/title/gen/autosave_warning.milo_xbox";
+    std::string full = root + "/ui/title/gen/autosave_warning.milo_xbox";
     ObjectDir *dir = DirLoader::LoadObjects(FilePath(full.c_str()), nullptr, nullptr);
     ASSERT_NE(dir, nullptr) << full;
 
@@ -1061,6 +1089,110 @@ TEST_F(ObjectLifetimeTest, MergeDirsRingIntegrityOnOverlappingBones) {
     // Cleanup
     delete fromDir;
     delete toDir;
+}
+
+// ============================================================================
+// NullifyAllRefs + ObjPtrList invariant tests
+//
+// When NullifyAllRefs nullifies an ObjPtrList::Node, the node must be removed
+// from a kObjListNoNull list. Otherwise the list contains a null entry that
+// crashes callers (e.g. FaderGroup::GetVolume iterating mFaders).
+// ============================================================================
+
+// Verify that NullifyAllRefs removes the dying object's entry from a
+// kObjListNoNull ObjPtrList, rather than leaving a null node behind.
+TEST_F(ObjectLifetimeTest, NullifyAllRefsRemovesFromObjPtrListNoNull) {
+    // Owner for the list (stays alive throughout)
+    Hmx::Object *listOwner = Hmx::Object::New<Hmx::Object>();
+
+    // Object that will be nullified
+    Hmx::Object *target = Hmx::Object::New<Hmx::Object>();
+
+    // Another object that should remain in the list
+    Hmx::Object *survivor = Hmx::Object::New<Hmx::Object>();
+
+    ObjPtrList<Hmx::Object> list(listOwner, kObjListNoNull);
+    list.push_back(target);
+    list.push_back(survivor);
+    ASSERT_EQ(list.size(), 2);
+
+    // Simulate cascade Phase 0: nullify all refs to target
+    target->NullifyAllRefs();
+
+    // The list must not contain a null entry.
+    // Before the fix, NullifyObj only nulled mObject but left the node
+    // in the list, violating kObjListNoNull and crashing iterators.
+    EXPECT_EQ(list.size(), 1)
+        << "NullifyAllRefs must remove the nullified entry from kObjListNoNull lists";
+
+    // The surviving entry must still be valid
+    bool foundSurvivor = false;
+    for (ObjPtrList<Hmx::Object>::iterator it = list.begin(); it != list.end(); ++it) {
+        EXPECT_NE(*it, nullptr) << "kObjListNoNull list must never contain null entries";
+        if (*it == survivor)
+            foundSurvivor = true;
+    }
+    EXPECT_TRUE(foundSurvivor);
+
+    delete target;
+    delete survivor;
+    delete listOwner;
+}
+
+// Verify that multiple list entries pointing to the same dying object
+// are all removed by NullifyAllRefs.
+TEST_F(ObjectLifetimeTest, NullifyAllRefsRemovesMultipleRefsFromList) {
+    Hmx::Object *listOwner = Hmx::Object::New<Hmx::Object>();
+    Hmx::Object *target = Hmx::Object::New<Hmx::Object>();
+
+    ObjPtrList<Hmx::Object> list(listOwner, kObjListNoNull);
+    list.push_back(target);
+    list.push_back(target); // same object twice
+    ASSERT_EQ(list.size(), 2);
+
+    target->NullifyAllRefs();
+
+    EXPECT_EQ(list.size(), 0)
+        << "Both entries pointing to the nullified object must be removed";
+
+    delete target;
+    delete listOwner;
+}
+
+// Verify that NullifyAllRefs during DeleteObjects (cascade) also cleans up
+// ObjPtrList entries on objects outside the cascade scope.
+TEST_F(ObjectLifetimeTest, CascadeDeleteCleansUpExternalObjPtrList) {
+    // External owner, not part of the cascade dir
+    Hmx::Object *externalOwner = Hmx::Object::New<Hmx::Object>();
+    ObjPtrList<Hmx::Object> externalList(externalOwner, kObjListNoNull);
+
+    // Dir with objects that the external list references
+    ObjectDir *dir = Hmx::Object::New<ObjectDir>();
+    Hmx::Object *objA = Hmx::Object::New<Hmx::Object>();
+    objA->SetName("a.obj", dir);
+    Hmx::Object *objB = Hmx::Object::New<Hmx::Object>();
+    objB->SetName("b.obj", dir);
+
+    externalList.push_back(objA);
+    externalList.push_back(objB);
+    ASSERT_EQ(externalList.size(), 2);
+
+    // Cascade delete the dir — Phase 0 nullifies all refs
+    dir->DeleteObjects();
+
+    // External list must have had both entries removed
+    EXPECT_EQ(externalList.size(), 0)
+        << "Cascade DeleteObjects must clean up external ObjPtrList references";
+
+    // Verify no null entries leaked
+    for (ObjPtrList<Hmx::Object>::iterator it = externalList.begin();
+         it != externalList.end();
+         ++it) {
+        EXPECT_NE(*it, nullptr);
+    }
+
+    delete dir;
+    delete externalOwner;
 }
 
 } // namespace

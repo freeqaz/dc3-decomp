@@ -207,6 +207,71 @@ mPollEnabled=1), but `select_camera` / song-anim evaluation was not firing becau
 the `world_panel` is a PanelDir not a WorldDir. The `SetFrame` in `HamDirector::Poll()`
 is the correct architectural fix.
 
+## `update_all_flashcard_campaign_status` Cascade Bug (2026-03-26)
+
+### Discovery
+
+Crash log analysis (`tmp/web-crash-endofsong1.txt`) revealed the flashcard hack was
+causing massive per-frame log spam via two unhandled messages:
+
+1. **`set_campaign` (8x/frame)** — from `hud_objects.dta:1062`
+2. **`get_mastery_moves` (1x/frame)** — from `campaign_vo.dta:240`
+
+Both stem from **one root cause**: the hack was sending `update_all_flashcard_campaign_status`
+to the HUD every beat. On Xbox this message only fires during campaign mode when a move is
+mastered (from `perform.dta:217`, gated by `metamode == campaign_perform` AND
+`meta_performer was_last_move_mastered`). The hack was blasting it unconditionally in quickplay.
+
+### The DTA cascade
+
+```
+RefreshNativeHudFlashcards (C++ hack, every beat)
+  → sends update_all_flashcard_campaign_status to $hud_panel
+    → hud_objects.dta:1062 handler checks metamode
+      → non-campaign path (quickplay always takes this):
+        foreach flashcard: {$this set_campaign FALSE FALSE FALSE}
+        ^^^^^^^^ BUG: $this = HUD PanelDir, not $flash_card
+        → "unhandled msg: set_campaign" x8 (one per flashcard)
+      → line 1112: unconditionally calls {trigger_camp_vo_power_move_executed}
+        → campaign_vo.dta:240: {meta_performer get_mastery_moves {meta_performer get_era}}
+          → QuickplayPerformer has no handler
+          → "unhandled msg: get_mastery_moves"
+```
+
+### Note on the DTA bug
+
+The `{$this set_campaign FALSE FALSE FALSE}` at `hud_objects.dta:1111` is a bug in the
+**original Xbox DTA** — should be `{$flash_card set_campaign ...}`. The same bug exists
+in `set_all_flashcards_mastered` at line 1061. On Xbox it's harmless because the
+non-campaign branch is near-unreachable (the message is only sent during campaign mode,
+so the campaign branch always runs). The native hack exposed it by calling the handler
+outside campaign mode.
+
+### Resolution
+
+The `update_all_flashcard_campaign_status` send was removed from the hack (documented at
+`GamePanel.cpp:124-131`). Both `set_campaign` and `get_mastery_moves` spam are fixed.
+
+With the `SetFrame` architectural fix in `HamDirector::Poll()` (see above), the entire
+flashcard hack is no longer needed and should be removed, which also eliminates any risk
+of this cascade recurring.
+
+### `get_mastery_moves` is not a missing subsystem
+
+Mastery moves are a fully implemented campaign feature in `CampaignPerformer::GetMasteryMoves()`
+(`CampaignPerformer.cpp:657`). The handler is only on `CampaignPerformer`, not the base
+`MetaPerformer`, by design — it should never be called outside campaign mode. The DTA
+callers in `flashcard_dock.dta:80-83` already handle `kDataUnhandled` gracefully.
+
+## Related: Stream-Finished Hang (separate P0)
+
+The same crash log revealed a **separate P0 issue**: the song never ends. After audio
+streams are destroyed, `songMs` freezes because `StreamReceiverNative::mPlayCursor` stops
+advancing when the AudioDevice removes the finished source. The "end" MIDI event beat is
+never reached, so the DTA script that sends `{$game_panel win}` never fires.
+
+Full diagnosis in `docs/sessions/2026-03-25-native-stream-finished-bug.md`.
+
 ## Remaining Work
 
 - Remove the `GamePanel.cpp` flashcard hack (no longer needed with `SetFrame` driving interp handlers)

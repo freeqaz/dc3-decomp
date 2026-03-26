@@ -181,10 +181,11 @@ void MemHeap::Init(
     if (1 <= mDebugLevel) {
         FreeBlock *blockStart = mFreeBlockChain;
         int *blockStartInt = (int *)blockStart;
+        int *start3 = blockStartInt + 3;
         int *blockEnd = blockStartInt + blockStart->mSizeWords;
-        if (blockStartInt + 3 < blockEnd) {
-            int *ptr = blockStartInt + 2;
-            for (int count = (((blockEnd - (blockStartInt + 3)) - 1) >> 2) + 1; count != 0; count--) {
+        if (start3 < blockEnd) {
+            int *ptr = start3 - 1;
+            for (unsigned int count = (((unsigned int)blockEnd - (unsigned int)start3) - 1) / 4 + 1; count != 0; count--) {
                 ptr++;
                 *ptr = 0xDEADDEAD;
             }

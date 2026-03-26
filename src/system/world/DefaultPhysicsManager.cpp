@@ -125,20 +125,19 @@ void DefaultPhysicsManager::CastRays(RayCast *, int) {
 }
 
 void DefaultPhysicsManager::CastRays(
-    const Segment *s, RayCastListener *rcl, int i3, unsigned int ui4
+    const Segment *segments, RayCastListener *rcl, int count, unsigned int ui4
 ) {
     int i = 0;
-    while (i < i3) {
-        Segment localSegment = s[i];
+    while (i < count) {
+        Segment localSegment = segments[i];
         float collideFloat = 1.0f;
         FOREACH (it, mActiveCollidables) {
             Plane curPlane;
-            RndDrawable *d = (*it)->Collide(localSegment, collideFloat, curPlane);
-            if (d) {
-                Vector3 hitPoint;
-                Interp(localSegment.start, localSegment.end, collideFloat, hitPoint);
-                ObjectDir *dir = mCollidableDirs[*it];
-                collideFloat = collideFloat * collideFloat;
+            RndDrawable *drawable = (*it)->Collide(localSegment, collideFloat, curPlane);
+            if (drawable) {
+                Hmx::Object *obj = static_cast<Hmx::Object *>(drawable);
+                float t = rcl->OnRayHit(obj, mCollidableDirs[obj], curPlane, collideFloat);
+                Interp(localSegment.start, localSegment.end, t, localSegment.end);
             }
         }
         i = i + 1;

@@ -476,6 +476,18 @@ private:
             list->ReplaceNode(this, obj);
         }
         virtual ObjRefOwner *Parent() const { return mOwner; }
+#ifdef HX_NATIVE
+        void NullifyObj() override {
+            ObjRefConcrete<T1, T2>::NullifyObj();
+            // Do NOT Unlink+delete here. During NullifyAllRefs, multiple
+            // nodes from the same ObjPtrList may reference the dying object.
+            // Unlinking node A frees it, then when node B's NullifyObj calls
+            // Unlink, it writes to B's list-prev/next which may be freed
+            // node A — corrupting glibc heap metadata.
+            // Leave the null entry in the list; it's cleaned up when the
+            // list is destroyed during cascade Phase 1.
+        }
+#endif
 
 #ifdef HX_NATIVE
         static void *operator new(size_t);

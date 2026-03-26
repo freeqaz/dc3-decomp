@@ -429,12 +429,12 @@ Hmx::Rect HiResScreen::ScreenRect() const {
 Hmx::Rect HiResScreen::InvScreenRect() const {
     Hmx::Rect r = ScreenRect();
     Hmx::Rect ret;
+    float invH = 1.0f / r.h;
+    float negInvH = -1.0f / r.h;
+    ret.h = invH;
     float invW = 1.0f / r.w;
     ret.w = invW;
-    float negInvW = invW * -1.0f;
-    ret.h = negInvW;
-    float tempX = r.x * invW;
-    ret.x = -tempX;
-    ret.y = negInvW * r.y;
+    ret.y = negInvH * r.y;
+    ret.x = -(invW * r.x);
     return ret;
 }

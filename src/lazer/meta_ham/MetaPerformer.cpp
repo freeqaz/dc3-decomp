@@ -1188,12 +1188,16 @@ const std::vector<PracticeStep> &MetaPerformer::GetPracticeSteps() const {
 
 void MetaPerformer::OnRecallMovePassed(int playerIndex, HamMove *move) {
     MILO_ASSERT_RANGE(playerIndex, 0, 2, 0x443);
-    FOREACH (it, mMoveScores[playerIndex]) {
+    std::vector<HamMoveScore> &scores = mMoveScores[playerIndex];
+    std::vector<HamMoveScore>::iterator found = scores.end();
+    FOREACH (it, scores) {
         if (it->mMove == move) {
-            break;
+            found = it;
         }
     }
-    mMoveScores[playerIndex].clear();
+    if (found != scores.end()) {
+        scores.erase(found);
+    }
 }
 
 void MetaPerformer::UpdateSongFromPlaylist() {

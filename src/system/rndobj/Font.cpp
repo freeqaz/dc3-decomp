@@ -310,37 +310,35 @@ BEGIN_LOADS(RndFont)
         String str;
         int a, b, c, e;
         bool dd;
-        bs >> a >> b >> c >> dd >> e >> str;
+        d >> a >> b >> c >> dd >> e >> str;
     }
     if (d.rev < 1) {
         std::map<char, MatChar> charMap;
-        bs >> charMap;
+        d.stream >> charMap;
     } else {
         if (d.altRev < 1) {
             ObjPtr<RndMat> mat(this, NULL);
-            mat.Load(bs, true, NULL);
+            mat.Load(d.stream, true, NULL);
             if (d.rev > 9 && d.rev < 0xc) {
                 char buf[0x80];
-                bs.ReadString(buf, 0x80);
+                d.stream.ReadString(buf, 0x80);
                 if (!mat && buf[0] != '\0') {
                     mat = LookupOrCreateMat(buf, Dir());
                 }
             }
-            if (!mMats.empty()) {
-                mMats.clear();
-            }
+            mMats.clear();
             mMats.push_back(mat);
         } else {
-            mMats.Load(bs, true, NULL);
+            mMats.Load(d.stream, true, NULL);
         }
         if (d.rev < 4) {
             if (d.rev < 2) {
                 int w, h;
-                bs >> w >> h;
+                d.stream >> w >> h;
                 mCellSize.x = h;
                 mCellSize.y = w;
             } else {
-                bs >> mCellSize.y >> mCellSize.x;
+                d.stream >> mCellSize.y >> mCellSize.x;
             }
             RndTex *validTex = ValidTexture(0);
             if (validTex) {
@@ -351,11 +349,11 @@ BEGIN_LOADS(RndFont)
                 validTex->UnlockBitmap();
             }
         } else {
-            bs >> mCellSize;
+            d.stream >> mCellSize;
         }
-        bs >> mDeprecatedSize;
+        d.stream >> mDeprecatedSize;
         if (d.altRev < 2) {
-            bs >> mBaseKerning;
+            d.stream >> mBaseKerning;
         }
         if (d.rev < 4) {
             mBaseKerning /= mDeprecatedSize;
@@ -364,14 +362,20 @@ BEGIN_LOADS(RndFont)
     if (d.rev > 1) {
         if (d.rev < 0x11) {
             String str;
-            bs >> str;
+            d.stream >> str;
             ASCIItoWideVector(mChars, str.c_str());
         } else if (d.altRev < 2) {
             d >> mChars;
         }
     } else {
-        for (const char *ptr = theChars; *ptr != '\0'; ptr++) {
-            mChars.push_back(*ptr);
+        char charBuf[96];
+        memcpy(charBuf, theChars, sizeof(theChars));
+        const char *ptr = charBuf;
+        if (*ptr != '\0') {
+            do {
+                mChars.push_back(*ptr);
+                ptr++;
+            } while (*ptr != '\0');
         }
     }
     if (d.rev > 4 && d.altRev < 2) {
@@ -383,7 +387,7 @@ BEGIN_LOADS(RndFont)
         }
     }
     if (d.rev > 8) {
-        mTextureOwner.Load(bs, true, NULL);
+        mTextureOwner.Load(d.stream, true, NULL);
     }
     if (!mTextureOwner) {
         mTextureOwner = this;
@@ -396,7 +400,7 @@ BEGIN_LOADS(RndFont)
     }
     if (d.rev > 0xc) {
         int bw, bh;
-        bs >> bw >> bh;
+        d.stream >> bw >> bh;
         RndTex *validTex = ValidTexture(0);
         if (validTex) {
             if (bw && validTex->Width()) {
@@ -410,7 +414,7 @@ BEGIN_LOADS(RndFont)
     mMaterialOffsets.resize(mMats.size());
     if (d.rev > 0xd) {
         if (d.altRev < 1) {
-            bs >> mMaterialOffsets[0];
+            d.stream >> mMaterialOffsets[0];
         } else {
             d >> mMaterialOffsets;
         }
@@ -418,14 +422,14 @@ BEGIN_LOADS(RndFont)
             for (int i = 0; i < 0x100; i++) {
                 CharInfo &info = mCharInfoMap[i];
                 info.mPage = 0;
-                bs >> info.mU;
-                bs >> info.mV;
-                bs >> info.mCharWidth;
+                d.stream >> info.mU;
+                d.stream >> info.mV;
+                d.stream >> info.mCharWidth;
                 if (info.mCharWidth < 0) {
                     info.mCharWidth = 0;
                 }
                 if (d.rev > 0xe) {
-                    bs >> info.mAdvance;
+                    d.stream >> info.mAdvance;
                 } else {
                     info.mAdvance = info.mCharWidth;
                 }
@@ -435,20 +439,20 @@ BEGIN_LOADS(RndFont)
             }
         } else {
             unsigned int count;
-            bs >> count;
+            d.stream >> count;
             for (unsigned int i = 0; i < count; i++) {
                 unsigned short keyChar;
-                bs >> keyChar;
+                d.stream >> keyChar;
                 CharInfo &info = mCharInfoMap[keyChar];
                 if (d.altRev > 0) {
-                    bs >> info.mPage;
+                    d.stream >> info.mPage;
                 } else {
                     info.mPage = 0;
                 }
-                bs >> info.mU;
-                bs >> info.mV;
-                bs >> info.mCharWidth;
-                bs >> info.mAdvance;
+                d.stream >> info.mU;
+                d.stream >> info.mV;
+                d.stream >> info.mCharWidth;
+                d.stream >> info.mAdvance;
             }
         }
     } else {
@@ -466,7 +470,7 @@ BEGIN_LOADS(RndFont)
     }
     if (d.rev > 0x10 && d.altRev < 1) {
         ObjPtr<RndFont> nextFont(this, NULL);
-        nextFont.Load(bs, true, NULL);
+        nextFont.Load(d.stream, true, NULL);
     }
 END_LOADS
 

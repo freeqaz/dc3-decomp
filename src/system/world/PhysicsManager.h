@@ -10,8 +10,14 @@
 #include "world/PhysicsVolume.h"
 
 struct RayCast;
-class RayCastListener;
 class DetectionVolumeListener;
+
+class RayCastListener {
+public:
+    virtual ~RayCastListener() {}
+    virtual void SetFilter(int) {}
+    virtual float OnRayHit(Hmx::Object *obj, ObjectDir *dir, const Plane &plane, float distance) = 0;
+};
 class ContactStateListener;
 
 class RayCastContainer {
