@@ -13,7 +13,6 @@
 #include "obj/Dir.h"
 #include "obj/Data.h"
 #include "obj/Task.h"
-#include "obj/Msg.h"
 #include "rndobj/PropAnim.h"
 #include "rndobj/PropKeys.h"
 #include "ui/UI.h"
@@ -54,21 +53,18 @@ bool GameplayTelemetry::IsEnabled() {
     return sEnabled;
 }
 
-// GamePanel state detection using public API
+// GamePanel state detection — use C++ accessors directly.
+// The previous code used HandleType() which only checks DTA type-def
+// handlers. The is_playing/in_intro/is_game_over handlers are C++ HANDLE_EXPR
+// macros in GamePanel::Handle(), unreachable via HandleType(). Using the
+// public accessors (IsPlayingState, InIntroState, IsGameOver) is both correct
+// and avoids the DTA dispatch overhead.
 static const char *GetGameState() {
     if (!TheGamePanel) return "boot";
-    static Message isGameOverMsg("is_game_over");
-    static Message isPlayingMsg("is_playing");
-    static Message inIntroMsg("in_intro");
 
-    DataNode isGameOver = TheGamePanel->HandleType(isGameOverMsg);
-    if (isGameOver.Type() == kDataInt && isGameOver.Int()) return "gameover";
-
-    DataNode isPlaying = TheGamePanel->HandleType(isPlayingMsg);
-    if (isPlaying.Type() == kDataInt && isPlaying.Int()) return "playing";
-
-    DataNode inIntro = TheGamePanel->HandleType(inIntroMsg);
-    if (inIntro.Type() == kDataInt && inIntro.Int()) return "intro";
+    if (TheGamePanel->IsGameOver()) return "gameover";
+    if (TheGamePanel->IsPlayingState()) return "playing";
+    if (TheGamePanel->InIntroState()) return "intro";
 
     return "loading";
 }
