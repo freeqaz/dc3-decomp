@@ -48,6 +48,7 @@
 #ifdef HX_NATIVE
 #include <cstdlib>
 #include <cstring>
+static float sHeadlessFakeUISeconds = 0.0f;
 static bool sDebugUIFlow = false;
 static bool sDebugUIFlowChecked = false;
 static inline bool DebugUIFlow() {
@@ -546,6 +547,15 @@ void UIManager::Poll() {
     START_AUTO_TIMER("ui_poll_raw");
     if (mAutomator)
         mAutomator->Poll();
+#ifdef HX_NATIVE
+    // Headless mode: advance UI seconds by fixed 1/30s per frame (see TaskMgr::Poll).
+    // Uses a file-scope variable so the screen-transition reset can zero it.
+    static bool sHeadless = !!getenv("MILO_HEADLESS");
+    if (sHeadless) {
+        sHeadlessFakeUISeconds += 1.0f / 30.0f;
+        TheTaskMgr.SetUISeconds(sHeadlessFakeUISeconds, false);
+    } else
+#endif
     TheTaskMgr.SetUISeconds(mTimer.SplitMs() * 0.001f, false);
     for (std::vector<UIScreen *>::iterator it = mPushedScreens.begin();
          it != mPushedScreens.end();
@@ -685,6 +695,11 @@ void UIManager::Poll() {
                     && IsTimelineResetAllowed()) {
                     mTimer.Restart();
                     TheTaskMgr.SetUISeconds(0, true);
+#ifdef HX_NATIVE
+                    // Reset the headless fake UI seconds accumulator in sync
+                    // with the real timer restart (see UIManager::Poll).
+                    sHeadlessFakeUISeconds = 0.0f;
+#endif
                 }
 
                 mCurrentScreen->Enter(mTransitionScreen);

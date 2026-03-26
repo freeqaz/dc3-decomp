@@ -9,7 +9,9 @@
 #include "hamobj/HamDriver.h"
 #include "hamobj/ClipPlayer.h"
 #include "hamobj/MoveMgr.h"
+#include "char/FileMerger.h"
 #include "obj/Dir.h"
+#include "obj/Data.h"
 #include "obj/Task.h"
 #include "obj/Msg.h"
 #include "rndobj/PropAnim.h"
@@ -232,6 +234,31 @@ GameplayTelemetry::Snapshot GameplayTelemetry::CaptureSnapshot(int frame) {
         sPrevSongAnimFrame = s.songAnimFrame;
     }
 
+    // HUD merge convergence (T1-T4 invariants)
+    if (TheHamDirector && TheHamDirector->GetGameModeMerger()) {
+        FileMerger *fm = TheHamDirector->GetGameModeMerger();
+        FileMerger::Merger *gm = fm->FindMerger("game_hud", false);
+        if (gm) {
+            s.hudMDirResolved = gm->mDir.Ptr() != nullptr;
+            ObjectDir *mergeTarget = gm->MergerDir();
+            WorldDir *world = TheHamDirector->GetWorld();
+            if (world && world->GetHUD() && mergeTarget) {
+                s.hudMergeTargetIsHUD = (mergeTarget == world->GetHUD());
+                // T3: check if hud_left/hud_right are children of the merge target
+                s.hudHasLeft = mergeTarget->Find<Hmx::Object>("hud_left", false) != nullptr;
+                s.hudHasRight = mergeTarget->Find<Hmx::Object>("hud_right", false) != nullptr;
+
+            }
+            // T2: check $hud_panel identity
+            if (world && world->GetHUD()) {
+                DataNode &hpVar = DataVariable("hud_panel");
+                if (hpVar.Type() == kDataObject) {
+                    s.hudPanelIsHUD = (hpVar.GetObj() == world->GetHUD());
+                }
+            }
+        }
+    }
+
     return s;
 }
 
@@ -257,7 +284,8 @@ void GameplayTelemetry::Sample(int frame) {
         "clipDir=%d masterClip=%d clipPlayerInit=%d charClipLayers=%d p0=%d p1=%d "
         "clipKeyCount=%d songAnimKeys=%d diffProxy=%d routineLoaded=%d mergeMoves=%d "
         "p0SongAnim=%d doSongAnim=%d nativeSetFrameCount=%d "
-        "moveInterpActive=%d moveKeyCount=%d songAnimFrameRate=%.1f activeMoveCount=%d\n",
+        "moveInterpActive=%d moveKeyCount=%d songAnimFrameRate=%.1f activeMoveCount=%d "
+        "hudMergeTargetIsHUD=%d hudPanelIsHUD=%d hudHasLeft=%d hudHasRight=%d hudMDirResolved=%d\n",
         s.frame, s.state, s.screen, s.transitionScreen, s.uiInTransition ? 1 : 0,
         s.gameScreenActive ? 1 : 0, s.currentHasWorldPanel ? 1 : 0,
         s.transitionHasWorldPanel ? 1 : 0, s.worldPanelLoaded ? 1 : 0,
@@ -272,6 +300,8 @@ void GameplayTelemetry::Sample(int frame) {
         s.clipKeyCount, s.songAnimKeys, s.diffProxy, s.routineLoaded, s.mergeMoves,
         s.p0SongAnim, s.doSongAnim, s.nativeSetFrameCount,
         s.moveInterpActive ? 1 : 0, s.moveKeyCount, s.songAnimFrameRate,
-        s.activeMoveCount
+        s.activeMoveCount,
+        s.hudMergeTargetIsHUD ? 1 : 0, s.hudPanelIsHUD ? 1 : 0,
+        s.hudHasLeft ? 1 : 0, s.hudHasRight ? 1 : 0, s.hudMDirResolved ? 1 : 0
     );
 }

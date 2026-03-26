@@ -50,6 +50,32 @@ namespace {
         }
     }
 }
+// Check whether an ObjectDir has DirPtrs from OUTSIDE the cascade tree.
+// Internal DirPtrs (from parent dir's mSubDirs within the cascade) don't
+// count — those will be destroyed. Only external DirPtrs (from dirs not
+// in the cascade) indicate the object should survive.
+static bool HasExternalDirPtrs(ObjectDir *candidate, const std::vector<ObjectDir *> &cascade) {
+    auto &counts = DirPtrRefCounts();
+    auto it = counts.find((const void *)candidate);
+    if (it == counts.end() || it->second <= 0)
+        return false;
+    int totalDirPtrs = it->second;
+    // Count internal DirPtrs: appearances in cascade dirs' SubDirs lists
+    int internalDirPtrs = 0;
+    for (size_t ci = 0; ci < cascade.size(); ci++) {
+        for (int si = 0; si < (int)cascade[ci]->SubDirs().size(); si++) {
+            if ((ObjectDir *)cascade[ci]->SubDirs()[si] == candidate)
+                internalDirPtrs++;
+        }
+    }
+    return totalDirPtrs > internalDirPtrs;
+}
+
+// Check whether an object should be excluded from the cascade.
+static bool ShouldSkipCascadeNullify(Hmx::Object *obj, const std::vector<ObjectDir *> &cascade) {
+    ObjectDir *asDir = dynamic_cast<ObjectDir *>(obj);
+    return asDir && HasExternalDirPtrs(asDir, cascade);
+}
 #endif
 
 #pragma region Virtual Methods
@@ -76,12 +102,24 @@ ObjectDir::~ObjectDir() {
         std::vector<ObjectDir *> allDirs;
         CollectCascadeDirs(this, allDirs);
         for (size_t i = 0; i < allDirs.size(); i++) {
+            // Skip dirs that have EXTERNAL DirPtrs — they were reparented
+            // and will survive. Nullifying their refs would break external code.
+            if (allDirs[i] != this && ShouldSkipCascadeNullify(allDirs[i], allDirs))
+                continue;
             if (allDirs[i]->IsRefAlive())
                 allDirs[i]->NullifyAllRefs();
             for (ObjDirItr<Hmx::Object> it(allDirs[i], false); it != nullptr; ++it) {
                 Hmx::Object *obj = it;
                 if (obj == allDirs[i])
                     continue;
+                // Skip objects that have EXTERNAL DirPtrs. They will
+                // survive this dir's destruction and need their refs intact.
+                // Detach them from this dir so ~Object::RemoveFromDir()
+                // won't access freed memory when they are eventually deleted.
+                if (ShouldSkipCascadeNullify(obj, allDirs)) {
+                    obj->DetachFromDir();
+                    continue;
+                }
                 if (obj->IsRefAlive())
                     obj->NullifyAllRefs();
             }
@@ -1204,6 +1242,7 @@ void ObjectDir::PreLoad(BinStream &bs) {
         }
 
         int i20 = 0;
+
         if (SaveSubdirs() || inlinedSubDirs.size() != 0 || notInlinedSubDirs.size() != 0) {
             for (int i = 0; i < mSubDirs.size(); i++) {
                 RemovingSubDir(mSubDirs[i]);

@@ -238,32 +238,10 @@ void FileMerger::FinishLoading(Loader *ldr) {
             ReserveToFit(dl->GetDir(), mergerDir, 0);
             MergeDirs(dl->GetDir(), mergerDir, *this);
 #ifdef HX_NATIVE
-            // Post-merge fixup: MergeDirs reparents objects from kMergeMerge
-            // subdirs into mergerDir via SetName, but may miss some if the
-            // recursive MergeObjectsRecurse path didn't visit them.
-            // Walk nested objects and register any missing ones — but SKIP
-            // objects in direct subdirs (kMergeReplace'd), which Xbox
-            // intentionally keeps in their own subdir scope.
-            for (ObjDirItr<Hmx::Object> it(mergerDir, true); it != nullptr; ++it) {
-                if (it->Dir() != mergerDir) {
-                    // Skip objects anywhere under retained kMergeReplace
-                    // subdirs. Once that subtree stays scoped, descendants
-                    // should not be hoisted into mergerDir either.
-                    bool inRetainedSubdirTree = false;
-                    for (int s = 0; s < mergerDir->SubDirs().size(); s++) {
-                        ObjectDir *retained = mergerDir->SubDirs()[s];
-                        if (retained && retained->HasSubDir(it->Dir())) {
-                            inRetainedSubdirTree = true;
-                            break;
-                        }
-                    }
-                    if (inRetainedSubdirTree)
-                        continue;
-                    if (!mergerDir->FindObject(it->Name(), false, false)) {
-                        it->SetName(it->Name(), mergerDir);
-                    }
-                }
-            }
+            // Post-merge fixup 1: Reparent kMergeReplace subdirs.
+            // MergeObjectsRecurse moves subdirs from source to target via
+            // AppendSubDir, but doesn't call SetName to update the hash table
+            // registration. The subdir's Dir() still points to the source.
 #endif
         }
     }

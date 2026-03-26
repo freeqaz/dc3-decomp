@@ -1644,6 +1644,7 @@ if(BUILD_TESTS)
         tests/test_charclipgroup.cpp
         tests/test_asset_loading.cpp
         tests/test_merge_scope_parity.cpp
+        tests/test_merge_lifecycle.cpp
         tests/test_archive_enumeration.cpp
         tests/test_mesh_loading.cpp
         tests/test_rndcam_projection.cpp

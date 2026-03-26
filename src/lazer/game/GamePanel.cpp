@@ -339,18 +339,22 @@ void GamePanel::SetTypeDef(DataArray *def) {
     Handle(exit, false);
     UIPanel::SetTypeDef(def);
 #ifdef HX_NATIVE
-    // On native, the HUD loads asynchronously via FileMerger and $hud_panel
-    // is set before the game_panel type changes to "perform". The DTA init
-    // handler fires here but common_reset hasn't run with $hud_panel set.
-    // Re-trigger common_reset now that the type definition (with the handler)
-    // is active and $hud_panel points to the HUD.
-    if (def) {
-        DataNode &hp = DataVariable("hud_panel");
-        if (hp.Type() == kDataObject && hp.GetObj()) {
-            static Message resetMsg("common_reset");
-            DataNode result = Handle(resetMsg, false);
-            fprintf(stderr, "DC3 GamePanel::SetTypeDef('%s') — re-triggered common_reset (result type=%d)\n",
-                    def->Sym(0).Str(), result.Type());
+    // On native, the WorldDir's inline mHUD PanelDir (which also has the "hud"
+    // type) enters after the FileMerger populates the game_hud merger directory.
+    // The mHUD's DTA enter handler overwrites $hud_panel with itself, but that
+    // panel lacks the merged content (hud_left, hud_right, flash_cards, etc.).
+    // Restore $hud_panel to the correct merger directory before triggering
+    // common_reset, so all DTA handlers reference the fully-merged HUD.
+    if (def && TheHamDirector) {
+        FileMerger *fm = TheHamDirector->GetGameModeMerger();
+        if (fm) {
+            FileMerger::Merger *gm = fm->FindMerger("game_hud", false);
+            PanelDir *mergerHud = gm ? dynamic_cast<PanelDir *>(gm->MergerDir()) : nullptr;
+            if (mergerHud) {
+                DataVariable("hud_panel") = (Hmx::Object *)mergerHud;
+                static Message resetMsg("common_reset");
+                Handle(resetMsg, false);
+            }
         }
     }
 #endif

@@ -1364,7 +1364,7 @@ void WgpuRnd::WriteSceneUniforms() {
 
     // Environment (fog, ambient, lights)
     RndEnviron* env = RndEnviron::Current();
-    if (env) {
+    if (env && env->AmbientFogOwner()) {
         // Ambient color (with minimum floor for visibility)
         const Hmx::Color& amb = env->AmbientColor();
         float minAmbient = 0.08f;

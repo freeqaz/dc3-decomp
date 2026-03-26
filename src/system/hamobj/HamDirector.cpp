@@ -86,6 +86,7 @@ std::map<Symbol, int> gMoveMergeMap;
 // evaluation chain (move_interp, clip interp) is being driven.
 int sNativeSetFrameCount = 0;
 int HamDirector_NativeSetFrameCount() { return sNativeSetFrameCount; }
+
 #endif
 
 float FrameToBeat(float frame) { return SecondsToBeat(frame * 0.033333335f); }
@@ -440,8 +441,26 @@ DataNode HamDirector::OnFileMerged(DataArray *a) {
         FileMerger::Merger *gm = mGameModeMerger->FindMerger("game_hud", false);
         PanelDir *hudDir = gm ? dynamic_cast<PanelDir *>(gm->MergerDir()) : nullptr;
         if (hudDir) {
+            // Replace the WorldDir's inline mHUD with the merger's fully-loaded
+            // hudDir. On Xbox, the FileMerger merges content into the WorldDir's
+            // mHUD PanelDir, so DTA handlers (hud_objects.dta) fire on the right
+            // object with all merged children (hud_left, hud_right, flash_cards).
+            // On native, the merger creates a separate PanelDir. The WorldDir's
+            // inline mHUD would get Enter'd later (by UIScreen transition) and its
+            // DTA 'enter' handler would overwrite $hud_panel with itself — an empty
+            // PanelDir without the merged children. By replacing mHUD here, the
+            // WorldDir draws/polls the correct PanelDir.
+            WorldDir *world = GetWorld();
+            if (world) {
+                world->SetHUD(hudDir);
+            }
             hudDir->Enter();
+            {
+                static Message enterMsg("enter");
+                hudDir->HandleType(enterMsg);
+            }
             hudDir->SetShowing(true);
+            MILO_LOG("DC3 OnFileMerged(game_hud): replaced WorldDir mHUD with merger hudDir\n");
             // TODO(native): The HUD PanelDir has postprocs_before_draw=false
             // (mCanEndWorld=0) from the .milo data. On Xbox this works because
             // the HUD draws inline in the 3D pass. On native, without ending

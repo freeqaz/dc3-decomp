@@ -49,6 +49,13 @@ struct Snapshot {
     int moveKeyCount = 0;           // number of keys in the move prop key track
     float songAnimFrameRate = 0;    // delta of songAnimFrame between telemetry samples
     int activeMoveCount = 0;        // players with a non-null, non-Rest current move
+
+    // HUD merge convergence (T1-T4 invariants)
+    bool hudMergeTargetIsHUD = false; // T1: game_hud MergerDir() == world->GetHUD()
+    bool hudPanelIsHUD = false;       // T2: DataVariable("hud_panel") == world->GetHUD()
+    bool hudHasLeft = false;          // T3a: hud_left findable in merge target
+    bool hudHasRight = false;         // T3b: hud_right findable in merge target
+    bool hudMDirResolved = false;     // whether game_hud merger's mDir is non-null (vs fallback)
 };
 
 void Init();            // Check DC3_TEL env var

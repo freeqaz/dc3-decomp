@@ -526,12 +526,29 @@ float TaskMgr::DeltaTutorialSeconds() const {
 
 void TaskMgr::Poll() {
     START_AUTO_TIMER("anim");
+#ifdef HX_NATIVE
+    // Headless mode: advance time by a fixed 1/30s delta per frame instead
+    // of reading the wall clock. DTA scripts use {taskmgr seconds} for
+    // timeouts and expect real-time pacing. Without this, headless mode runs
+    // at thousands of fps and DTA timeouts (e.g. autosave_warning 4s) never
+    // trigger within the frame budget.
+    static bool sHeadless = !!getenv("MILO_HEADLESS");
+    static float sFakeSeconds = 0.0f;
+    if (sHeadless && mAutoSecondsBeats) {
+        sFakeSeconds += 1.0f / 30.0f;
+        mTimelines[kTaskSeconds].SetTime(sFakeSeconds, false);
+        mTimelines[kTaskBeats].SetTime(sFakeSeconds * 2.0f, false);
+    } else {
+#endif
     mTime.Split();
     if (mAutoSecondsBeats) {
         float secs = mTime.Ms() / 1000.0f;
         mTimelines[kTaskSeconds].SetTime(secs, false);
         mTimelines[kTaskBeats].SetTime(secs * 2.0f, false);
     }
+#ifdef HX_NATIVE
+    }
+#endif
     for (int i = 0; i < kTaskNumUnits; i++) {
         mTimelines[i].Poll();
     }

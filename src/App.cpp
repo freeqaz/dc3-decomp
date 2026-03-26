@@ -2,6 +2,7 @@
 #ifdef HX_NATIVE
 #include <algorithm>
 #include <csetjmp>
+#include <unistd.h>
 #include "telemetry/GameplayTelemetry.h"
 #if !defined(__EMSCRIPTEN__)
 #define GLFW_INCLUDE_NONE

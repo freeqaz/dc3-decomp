@@ -640,6 +640,12 @@ DEF_DATA_FUNC(DataForEachInt) {
 DEF_DATA_FUNC(DataGetElem) {
     int i = array->Int(2);
     DataArray *a = array->Array(1);
+#ifdef HX_NATIVE
+    if (!a) {
+        MILO_WARN("elem: null array");
+        return DataNode(0);
+    }
+#endif
     return a->Node(i);
 }
 

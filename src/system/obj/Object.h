@@ -1331,6 +1331,12 @@ namespace Hmx {
          *  No Replace callbacks fire — avoids delete-this in
          *  MessageTask/ScriptTask/PropertyTask/DirLoader. */
         void NullifyAllRefs();
+        /** Detach from parent dir without modifying the dir's hash table.
+         *  Used during ~ObjectDir cascade to prevent surviving objects from
+         *  holding a stale mDir pointer to the dying dir. Unlike
+         *  SetName(nullptr, nullptr), this does NOT call RemovingObject
+         *  or touch the hash table — the dir is about to be freed anyway. */
+        void DetachFromDir() { mDir = nullptr; mName = gNullStr; }
 #endif
         /** How many other objects reference this Object? */
         int RefCount() const;

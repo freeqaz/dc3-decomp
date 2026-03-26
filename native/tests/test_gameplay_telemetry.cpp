@@ -58,7 +58,7 @@ struct TelRunResult {
 static TelRunResult RunWithTelemetry(int maxFrames, const char *script, int timeout = 120) {
     std::string binary = GetDc3NativePath();
     std::ostringstream cmd;
-    cmd << "MILO_HEADLESS=1 MILO_FATAL_FAILS=0 DC3_SHOW_SPLASH=0 DC3_TEL=1"
+    cmd << "MILO_HEADLESS=1 MILO_FATAL_FAILS=0 DC3_SHOW_SPLASH=0 DC3_TEL=1 DC3_FAST_BOOT=1"
         << " MILO_MAX_FRAMES=" << maxFrames;
     if (script)
         cmd << " MILO_INPUT_SCRIPT=" << script;
@@ -593,5 +593,131 @@ TEST_F(GameplayTelemetryTest, ActiveMovesAppearDuringGameplay) {
         << "This means the move_interp → set_cur_move chain is not producing "
         << "dance moves that reach MoveDir::CurrentMove(). "
         << "Max activeMoveCount observed: " << maxMoves << ". "
+        << progressSummary();
+}
+
+// ---------------------------------------------------------------------------
+// Tier 5: HUD merge convergence — verify the merge target invariants
+//
+// These tests verify that the FileMerger game_hud merge goes to the correct
+// target (WorldDir::mHUD), and that downstream DTA state is correct.
+// See: docs/sessions/2026-03-26-hud-merge-target-divergence.md
+//
+// T1: MergerDir() == world->GetHUD()
+// T2: DataVariable("hud_panel") == world->GetHUD()
+// T3: hud_left/hud_right findable as children of the merge target
+//
+// Note: These use game_screen + gameStage=playing as the gameplay indicator
+// rather than the `state` field, because GetGameState() can return "loading"
+// even when the game is actively playing (DTA message handler issue).
+// ---------------------------------------------------------------------------
+
+TEST_F(GameplayTelemetryTest, HudMergeTargetMatchesWorldHUD) {
+    // T1: The game_hud merger's MergerDir() should be the same object as
+    // WorldDir::mHUD. On Xbox this is always true. On native, our workaround
+    // forces it via SetHUD. The convergence goal is to make this true without
+    // the SetHUD hack.
+    auto gs = samplesOnScreen("game_screen");
+    ASSERT_FALSE(gs.empty())
+        << "Never reached game_screen. " << progressSummary();
+
+    bool found = false;
+    for (auto &s : gs) {
+        if (s.getBool("hudMergeTargetIsHUD")) {
+            found = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(found)
+        << "hudMergeTargetIsHUD was never true on game_screen. "
+        << "The game_hud merger's MergerDir() is not the same object as "
+        << "WorldDir::mHUD. This means the HUD merge goes to the wrong target "
+        << "and DTA handlers on mHUD won't find merged children. "
+        << progressSummary();
+}
+
+TEST_F(GameplayTelemetryTest, HudPanelVariableMatchesWorldHUD) {
+    // T2: The DTA variable $hud_panel should point to the WorldDir's mHUD.
+    // This is set by the DTA enter handler on the HUD PanelDir.
+    auto gs = samplesOnScreen("game_screen");
+    ASSERT_FALSE(gs.empty())
+        << "Never reached game_screen. " << progressSummary();
+
+    bool found = false;
+    for (auto &s : gs) {
+        if (s.getBool("hudPanelIsHUD")) {
+            found = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(found)
+        << "hudPanelIsHUD was never true on game_screen. "
+        << "DataVariable(\"hud_panel\") does not point to WorldDir::mHUD. "
+        << "This means the DTA enter handler fired on the wrong PanelDir "
+        << "or $hud_panel was overwritten. "
+        << progressSummary();
+}
+
+TEST_F(GameplayTelemetryTest, HudChildrenFoundAfterMerge) {
+    // T3: After the game_hud merge, hud_left and hud_right must be findable
+    // as children of the merge target. These are loaded from _default_hud.milo
+    // and DTA handlers use {$this find "hud_left" FALSE} to populate player_huds.
+    auto gs = samplesOnScreen("game_screen");
+    ASSERT_FALSE(gs.empty())
+        << "Never reached game_screen. " << progressSummary();
+
+    bool hasLeft = false, hasRight = false;
+    for (auto &s : gs) {
+        if (s.getBool("hudHasLeft")) hasLeft = true;
+        if (s.getBool("hudHasRight")) hasRight = true;
+        if (hasLeft && hasRight) break;
+    }
+    EXPECT_TRUE(hasLeft)
+        << "hudHasLeft was never true on game_screen. "
+        << "hud_left was not found as a child of the merge target. "
+        << progressSummary();
+    EXPECT_TRUE(hasRight)
+        << "hudHasRight was never true on game_screen. "
+        << "hud_right was not found as a child of the merge target. "
+        << progressSummary();
+}
+
+TEST_F(GameplayTelemetryTest, HudMDirResolvedDuringGameplay) {
+    // Diagnostic: Check whether the game_hud merger's mDir ObjPtr resolved
+    // to a non-null object during deserialization. If false, the merger uses
+    // the fallback path (mDir.Owner()->Dir()). Understanding this is key to
+    // the root cause investigation (Q1/Q2).
+    auto gs = samplesOnScreen("game_screen");
+    ASSERT_FALSE(gs.empty())
+        << "Never reached game_screen. " << progressSummary();
+
+    bool resolved = false;
+    for (auto &s : gs) {
+        if (s.getBool("hudMDirResolved")) {
+            resolved = true;
+            break;
+        }
+    }
+    // This is diagnostic — we log either way to inform the root cause investigation.
+    // On Xbox, mDir is expected to point to the "hud" PanelDir.
+    if (!resolved) {
+        ADD_FAILURE()
+            << "hudMDirResolved was never true on game_screen. "
+            << "The game_hud merger's mDir ObjPtr is null — the merger uses the "
+            << "fallback path (mDir.Owner()->Dir()) to determine the merge target. "
+            << "Root cause is likely in ObjPtr deserialization or object hierarchy. "
+            << progressSummary();
+    }
+}
+
+TEST_F(GameplayTelemetryTest, NoHudDtaErrors) {
+    // T5 partial: Check that the engine output does not contain "$hud not
+    // function or object" errors, which indicate that get_player_hud returned
+    // null because player_huds was not populated.
+    size_t pos = sResult.output.find("$hud not function or object");
+    EXPECT_EQ(pos, std::string::npos)
+        << "Found '$hud not function or object' in engine output. "
+        << "This means get_player_hud returned null during gameplay, "
+        << "indicating $hud_panel was empty or pointed to the wrong PanelDir. "
         << progressSummary();
 }

@@ -238,14 +238,21 @@ RefreshNativeHudFlashcards (C++ hack, every beat)
           → "unhandled msg: get_mastery_moves"
 ```
 
-### Note on the DTA bug
+### Note on the DTA typo
 
-The `{$this set_campaign FALSE FALSE FALSE}` at `hud_objects.dta:1111` is a bug in the
-**original Xbox DTA** — should be `{$flash_card set_campaign ...}`. The same bug exists
-in `set_all_flashcards_mastered` at line 1061. On Xbox it's harmless because the
-non-campaign branch is near-unreachable (the message is only sent during campaign mode,
-so the campaign branch always runs). The native hack exposed it by calling the handler
-outside campaign mode.
+The `{$this set_campaign FALSE FALSE FALSE}` at `hud_objects.dta:1111` is a **harmless
+dead-code typo** in the original shipped Xbox DTA (confirmed authentic — auto-generated
+from binary DTB extracted from the ARK archive, never hand-edited). `$this` stays bound
+to the HUD PanelDir throughout the handler; the PanelDir has no `set_campaign` handler,
+so `END_HANDLERS` silently returns `DATA_UNHANDLED`. The same typo exists in
+`set_all_flashcards_mastered` at line 1061. Correct code exists nearby for contrast
+(`clear_all_flashcard_campaign_status` at line 1113 correctly uses `$flash_card`).
+
+On Xbox this was a no-op because `update_all_flashcard_campaign_status` only fires during
+campaign mode, where the `if_else` always takes the campaign branch (which also has the
+typo but is equally harmless). The native hack exposed it by calling the handler in
+quickplay mode. **The DTA is authentic and should not be modified** — the fix belongs
+entirely in our C++ code.
 
 ### Resolution
 
