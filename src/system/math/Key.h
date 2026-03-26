@@ -1,5 +1,6 @@
 #pragma once
 #include "math/Utl.h"
+#include "math/Vec.h"
 #include "os/Debug.h"
 #include "utl/BinStream.h"
 #include "utl/TextStream.h"
@@ -11,10 +12,8 @@ struct Weight {
     float derivOut;
 };
 
-// NOTE: BinStreamRev overloads are REQUIRED - do not remove.
-// BinStreamRev reads fields in reverse member order for versioned loading.
-inline BinStreamRev &operator>>(BinStreamRev &bs, Weight &w) {
-    bs >> w.weight >> w.derivIn >> w.derivOut;
+inline BinStream &operator>>(BinStream &bs, Weight &w) {
+    bs >> (Vector3 &)w;
     return bs;
 }
 

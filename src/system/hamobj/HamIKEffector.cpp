@@ -683,8 +683,13 @@ void HamIKEffector::ComputeElbowPullAndQuat(
     MultiplyTranspose(v, xfm, v40);
     const Vector3 &effectorV = mEffector->TransParent()->LocalXfm().v;
     MakeRotQuat(effectorV, v40, q.q);
-    Vector3 vdiff;
-    Subtract(v, xfm.v, vdiff);
-    q.v.x = vdiff.x;
-    Scale(q.v, 1.0f - effectorV.x / Length(vdiff), q.v);
+    float dy = v.y - xfm.v.y;
+    float dx = v.x - xfm.v.x;
+    float dz = v.z - xfm.v.z;
+    q.v.x = dx;
+    float len = sqrtf(dy * dy + q.v.x * q.v.x + dz * dz);
+    float factor = 1.0f - effectorV.x / len;
+    q.v.x = q.v.x * factor;
+    q.v.y = dy * factor;
+    q.v.z = dz * factor;
 }

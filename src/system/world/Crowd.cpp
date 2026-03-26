@@ -621,11 +621,11 @@ void WorldCrowd::Force3DCrowd(bool force) {
 }
 
 RndMesh *WorldCrowd::BuildBillboard(Character *c, float height) {
-    float halfHeight = height * 0.5f;
-    c->GetSphere().GetRadius();
     RndMesh *mesh = Hmx::Object::New<RndMesh>();
+    mesh->SetMutable(0x1f);
     RndMesh::VertVector &verts = mesh->Verts();
     std::vector<RndMesh::Face> &faces = mesh->Faces();
+    float halfHeight = height * 0.5f;
     float halfWidth = halfHeight * 0.5f;
     verts.resize(4);
     float negHalfWidth = -halfWidth;
