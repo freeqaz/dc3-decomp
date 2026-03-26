@@ -42,6 +42,13 @@ struct Snapshot {
     int mergeMoves = -1;
     int p0SongAnim = -99;
     int doSongAnim = -1;
+    int nativeSetFrameCount = 0;
+
+    // Move/flashcard validation fields
+    bool moveInterpActive = false;  // move prop key track exists and has keys
+    int moveKeyCount = 0;           // number of keys in the move prop key track
+    float songAnimFrameRate = 0;    // delta of songAnimFrame between telemetry samples
+    int activeMoveCount = 0;        // players with a non-null, non-Rest current move
 };
 
 void Init();            // Check DC3_TEL env var

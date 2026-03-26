@@ -271,65 +271,73 @@ void HiResScreen::Finish() {
 void HiResScreen::Merge(
     const RndBitmap &bm, int srcX, int srcY, int srcW, int srcH, int dstX, int dstY, int padX, int padY
 ) {
-    if ((unsigned int)srcH >= srcW) {
+    int blendThreshX = dstX - padX;
+    int blendThreshY = dstY - padY;
+    if (srcH >= dstY) {
         return;
     }
-    int xStart = dstX;
-    int xEnd = srcH;
-    int xRange = xEnd - srcX;
-    for (; xStart < mAccumHeight && xStart >= 0; xStart++, xRange++) {
-        mCache->LoadCache(xStart);
-        if (xStart + xRange >= srcH) {
-            break;
+    int xConst = srcH - srcY;
+    int xBlend = srcH - blendThreshY;
+    int yIter = srcY;
+    do {
+        if ((unsigned int)yIter >= mAccumHeight) break;
+        if (yIter >= 0) {
+            mCache->LoadCache(yIter);
+            if (srcW < dstX) {
+                int xIter = srcX;
+                int yBlend = srcW - blendThreshX;
+                int yConst = srcW - srcX;
+                do {
+                    if ((unsigned int)xIter >= mAccumWidth) break;
+                    if (xIter >= 0) {
+                        int bmY = xConst + yIter;
+                        int bmX = yConst + xIter;
+                        unsigned char r, g, b, a;
+                        bm.PixelColor(bmX, bmY, r, g, b, a);
+                        unsigned char cr, cg, cb, ca;
+                        mCache->GetPixelColor(xIter, yIter, cr, cg, cb, ca);
+                        float blendX = 0.0f;
+                        float blendY = 0.0f;
+                        if (bmX > blendThreshX) {
+                            blendX = (float)yBlend / (float)padX;
+                        }
+                        if (bmY > blendThreshY) {
+                            blendY = (float)xBlend / (float)padY;
+                        }
+                        float blend;
+                        if (blendX > 0.0f || blendY > 0.0f) {
+                            blend = sqrtf(blendX * blendX + blendY * blendY);
+                            blend = blend - 0.5f;
+                            blend = blend + blend;
+                            blend = Max(blend, 0.0f);
+                            blend = Min(blend, 1.0f);
+                        } else {
+                            blend = 0.0f;
+                        }
+                        float invBlend = (1.0f - blend) * 255.0f;
+                        a = (unsigned char)invBlend;
+                        if (ca != 0) {
+                            float t = ca / 255.0f;
+                            int dr = cr - r;
+                            int dg = cg - g;
+                            int db = cb - b;
+                            r += (unsigned char)(dr * t + 0.5f);
+                            g += (unsigned char)(dg * t + 0.5f);
+                            b += (unsigned char)(db * t + 0.5f);
+                            if (a < ca) {
+                                a = ca;
+                            }
+                        }
+                        mCache->SetPixelColor(xIter, yIter, r, g, b, a);
+                    }
+                    xIter++;
+                    yBlend++;
+                } while (yConst + xIter < dstX);
+            }
         }
-        int yStart = srcY;
-        int yOff = srcX - padX;
-        int yRange = srcY - padY;
-        for (; yStart < mAccumWidth && yStart >= 0; yStart++, yOff++, yRange++) {
-            if (yStart + yRange >= srcW) {
-                break;
-            }
-            int bmY = yRange + yStart;
-            int bmX = xRange + xStart;
-            unsigned char r, g, b, a;
-            bm.PixelColor(bmY, bmX, r, g, b, a);
-            unsigned char cr, cg, cb, ca;
-            mCache->GetPixelColor(yStart, xStart, cr, cg, cb, ca);
-            float blendX = 0.0f;
-            if (bmY > padX) {
-                blendX = (float)yOff / (float)padX;
-            }
-            float blendY = 0.0f;
-            if (bmX > srcX) {
-                blendY = (float)xRange / (float)srcX;
-            }
-            float blend;
-            if (blendX > 0.0f || blendY > 0.0f) {
-                blend = sqrtf(blendX * blendX + blendY * blendY);
-                blend = blend - 0.5f;
-                blend = blend + blend;
-                blend = Min(blend, 1.0f);
-                if (blend < 0.0f) blend = 0.0f;
-            } else {
-                blend = 0.0f;
-            }
-            float invBlend = (1.0f - blend) * 255.0f;
-            unsigned char newA = (unsigned char)invBlend;
-            if (ca != 0) {
-                float t = ca / 255.0f;
-                int dr = cr - r;
-                int dg = cg - g;
-                int db = cb - b;
-                r += (unsigned char)(dr * t + 0.5f);
-                g += (unsigned char)(dg * t + 0.5f);
-                b += (unsigned char)(db * t + 0.5f);
-                if (newA < ca) {
-                    newA = ca;
-                }
-            }
-            mCache->SetPixelColor(yStart, xStart, r, g, b, newA);
-        }
-    }
+        yIter++;
+        xBlend++;
+    } while (xConst + yIter < dstY);
 }
 
 void HiResScreen::DownSample(RndBitmap &outBm) {

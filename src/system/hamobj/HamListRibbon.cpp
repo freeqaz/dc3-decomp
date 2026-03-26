@@ -322,14 +322,26 @@ DataNode HamListRibbon::OnExitBlacklightMode(const DataArray *a) {
 void HamListRibbon::PlayHighlightSound(int idx) {
     int numSounds = mHighlightSounds.size();
     if (numSounds != 0) {
+#ifdef HX_NATIVE
+        Flow *snd = mHighlightSounds[Min(idx, numSounds - 1)];
+        if (snd)
+            snd->Activate();
+#else
         mHighlightSounds[Min(idx, numSounds - 1)]->Activate();
+#endif
     }
 }
 
 void HamListRibbon::PlaySelectSound(int idx) {
     int numSounds = mSelectSounds.size();
     if (numSounds != 0 && idx >= 0) {
+#ifdef HX_NATIVE
+        Flow *snd = mSelectSounds[Min(idx, numSounds - 1)];
+        if (snd)
+            snd->Activate();
+#else
         mSelectSounds[Min(idx, numSounds - 1)]->Activate();
+#endif
     }
 }
 

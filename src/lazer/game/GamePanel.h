@@ -87,11 +87,6 @@ protected:
     int mEndGameResult;
     Profiler mPerformanceProfiler;
     bool mIsReplay; // 0xd8
-#ifdef HX_NATIVE
-    // HACK(native): temporary beat tracker for the explicit HUD flashcard refresh
-    // path. Remove this once the scripted flashcard update cadence is fixed.
-    int mLastHudFlashcardBeat;
-#endif
     std::vector<float> mFrameTimeSamples;
     int mJitterSampleCount;
     int mJitterBufferIndex;

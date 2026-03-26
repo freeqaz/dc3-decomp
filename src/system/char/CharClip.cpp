@@ -251,9 +251,19 @@ void CharClip::Transitions::Load(BinStreamRev &d, int oldRev) {
             }
         }
 #ifdef HX_NATIVE
-        // On native, ObjOwnerPtr registers as ObjRef in the clip's ref chain.
-        // memcpy creates bitwise copies with stale prev/next pointers.
-        // Fix: after memcpy, swap temp ObjRefs out and permanent ObjRefs in.
+        // On native, ObjOwnerPtr is a full ObjRef with vtable, ring pointers,
+        // and mAliveSentinel. The temp buffer was memset(0) so memcpy'd
+        // ObjOwnerPtrs have null vtables and zero sentinels. NullifyAllRefs
+        // uses mAliveSentinel to skip freed nodes — zero sentinel causes it
+        // to skip these, leaving mObject non-null during cascade Phase 1.
+        // When CharClip A's Transitions buffer is freed, then CharClip B's
+        // SafeReleaseFromRing writes through ring prev/next that point into
+        // A's freed buffer, corrupting glibc heap metadata.
+        //
+        // Fix: after memcpy, reconstruct each ObjOwnerPtr via placement new
+        // so vtable, mAliveSentinel, and mOwner are all properly initialized.
+        // Then deregister the temp copy and register the permanent copy in
+        // the clip's ref ring.
         {
             int dataSize = (intptr_t)it - (intptr_t)start;
             Resize(dataSize, nullptr);
@@ -263,9 +273,17 @@ void CharClip::Transitions::Load(BinStreamRev &d, int oldRev) {
             for (NodeVector *tempIt = start; tempIt < tempEnd;
                  tempIt = tempIt->Next(), permIt = permIt->Next()) {
                 CharClip *clip = (CharClip *)tempIt->clip;
+                // Deregister the temp ObjRef from the clip's ring first
                 if (clip) {
-                    clip->Release(&tempIt->clip); // deregister temp from chain
-                    clip->AddRef(&permIt->clip);  // register permanent in chain
+                    clip->Release(&tempIt->clip);
+                }
+                // Reconstruct the permanent ObjOwnerPtr in-place. The memcpy
+                // already copied size and nodes[] data; only the ObjOwnerPtr
+                // at offset 0 needs reconstruction.
+                new (&permIt->clip) ObjOwnerPtr<CharClip>(this, (CharClip *)nullptr);
+                // Now assign the clip, which properly does AddRef into the ring
+                if (clip) {
+                    permIt->clip = clip;
                 }
             }
         }

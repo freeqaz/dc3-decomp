@@ -205,6 +205,12 @@ void FlowAnimate::Execute(QueueState state) {
         if (state == kQueue) {
             mStopDeferred = false;
             mDeferredStopMode = 0;
+#ifdef HX_NATIVE
+            if (!mAnim) {
+                mFlowParent->ChildFinished(this);
+                return;
+            }
+#endif
             Task *task;
             if (mEnable) {
                 float period = mPeriod;

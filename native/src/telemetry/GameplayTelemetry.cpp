@@ -1,6 +1,7 @@
 #include "telemetry/GameplayTelemetry.h"
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 
 #include "hamobj/HamDirector.h"
 #include "hamobj/HamWardrobe.h"
@@ -24,6 +25,9 @@ extern HamDirector *TheHamDirector;
 extern HamWardrobe *TheHamWardrobe;
 extern WorldDir *TheWorld;
 extern PropertyEventProvider *TheHamProvider;
+
+// Telemetry counters from engine code
+extern int HamDirector_NativeSetFrameCount();
 
 // GamePanel — use IsGameOver() and public accessors to avoid protected access
 #include "lazer/game/GamePanel.h"
@@ -192,6 +196,42 @@ GameplayTelemetry::Snapshot GameplayTelemetry::CaptureSnapshot(int frame) {
         }
     }
 
+    // SetFrame path counter
+    s.nativeSetFrameCount = HamDirector_NativeSetFrameCount();
+
+    // Move/flashcard validation: check if move prop key track exists and has keys
+    if (TheHamDirector) {
+        PropKeys *moveKeys = TheHamDirector->GetPropKeys(kDifficultyEasy, Symbol("move"));
+        if (moveKeys && moveKeys->NumKeys() > 0) {
+            s.moveInterpActive = true;
+            s.moveKeyCount = moveKeys->NumKeys();
+        }
+    }
+
+    // Active move count: how many players have a real (non-null, non-Rest) current move
+    if (TheGamePanel) {
+        Game *game = TheGamePanel->CurrentGame();
+        if (game) {
+            MoveDir *moveDir = game->GetMoveDir();
+            if (moveDir) {
+                static Symbol restMove("Rest.move");
+                for (int pi = 0; pi < 2; pi++) {
+                    HamMove *curMove = moveDir->CurrentMove(pi);
+                    if (curMove && strcmp(curMove->Name(), restMove.Str()) != 0) {
+                        s.activeMoveCount++;
+                    }
+                }
+            }
+        }
+    }
+
+    // Song anim frame rate: delta from previous capture
+    {
+        static float sPrevSongAnimFrame = 0.0f;
+        s.songAnimFrameRate = s.songAnimFrame - sPrevSongAnimFrame;
+        sPrevSongAnimFrame = s.songAnimFrame;
+    }
+
     return s;
 }
 
@@ -216,7 +256,8 @@ void GameplayTelemetry::Sample(int frame) {
         "hamProvider=%d mergerDir=%d "
         "clipDir=%d masterClip=%d clipPlayerInit=%d charClipLayers=%d p0=%d p1=%d "
         "clipKeyCount=%d songAnimKeys=%d diffProxy=%d routineLoaded=%d mergeMoves=%d "
-        "p0SongAnim=%d doSongAnim=%d\n",
+        "p0SongAnim=%d doSongAnim=%d nativeSetFrameCount=%d "
+        "moveInterpActive=%d moveKeyCount=%d songAnimFrameRate=%.1f activeMoveCount=%d\n",
         s.frame, s.state, s.screen, s.transitionScreen, s.uiInTransition ? 1 : 0,
         s.gameScreenActive ? 1 : 0, s.currentHasWorldPanel ? 1 : 0,
         s.transitionHasWorldPanel ? 1 : 0, s.worldPanelLoaded ? 1 : 0,
@@ -229,6 +270,8 @@ void GameplayTelemetry::Sample(int frame) {
         s.clipDir ? 1 : 0, s.masterClip ? 1 : 0, s.clipPlayerInit ? 1 : 0,
         s.charClipLayers, s.player0 ? 1 : 0, s.player1 ? 1 : 0,
         s.clipKeyCount, s.songAnimKeys, s.diffProxy, s.routineLoaded, s.mergeMoves,
-        s.p0SongAnim, s.doSongAnim
+        s.p0SongAnim, s.doSongAnim, s.nativeSetFrameCount,
+        s.moveInterpActive ? 1 : 0, s.moveKeyCount, s.songAnimFrameRate,
+        s.activeMoveCount
     );
 }

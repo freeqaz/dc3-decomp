@@ -80,6 +80,14 @@ HamDirector *TheHamDirector;
 OfflineCallback gOfflineCallback;
 std::map<Symbol, int> gMoveMergeMap;
 
+#ifdef HX_NATIVE
+// Counter for telemetry: tracks how many times the native SetFrame path fires
+// in HamDirector::Poll(). Should be >0 during gameplay, proving the prop key
+// evaluation chain (move_interp, clip interp) is being driven.
+int sNativeSetFrameCount = 0;
+int HamDirector_NativeSetFrameCount() { return sNativeSetFrameCount; }
+#endif
+
 float FrameToBeat(float frame) { return SecondsToBeat(frame * 0.033333335f); }
 float BeatToFrame(float beat) { return BeatToSeconds(beat) * 30.0f; }
 
@@ -3226,6 +3234,8 @@ void HamDirector::Poll() {
                 float frame = seconds * 30.0f;
                 if (frame > 0.0f) {
                     songAnim->SetFrame(frame, 1.0f);
+                    extern int sNativeSetFrameCount;
+                    sNativeSetFrameCount++;
                 }
             }
 #endif

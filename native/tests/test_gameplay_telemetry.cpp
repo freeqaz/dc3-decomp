@@ -470,3 +470,128 @@ TEST_F(GameplayTelemetryTest, SongDriverLayersStayLiveAfterIntro) {
         << "Player 0 never showed live song-driver layers during actual gameplay. "
         << progressSummary();
 }
+
+// ---------------------------------------------------------------------------
+// Tier 3: SetFrame path — verify HamDirector::Poll() drives animation
+//
+// The SetFrame path in HamDirector::Poll() drives song anim prop key evaluation
+// on native/web (replacing the Xbox select_camera → OnSelectCamera → SetFrame
+// chain). These tests verify the engine works correctly via the SetFrame path.
+// ---------------------------------------------------------------------------
+
+TEST_F(GameplayTelemetryTest, NativeSetFrameDrivesAnimation) {
+    // The SetFrame call in HamDirector::Poll() should fire repeatedly during
+    // gameplay, driving prop key evaluation (move_interp, clip interp, etc.).
+    auto playing = gameplaySamples();
+    ASSERT_FALSE(playing.empty())
+        << "Never observed real gameplay on game_screen. " << progressSummary();
+
+    int finalCount = playing.back().getInt("nativeSetFrameCount", 0);
+    EXPECT_GT(finalCount, 0)
+        << "Native SetFrame path never fired during gameplay. "
+        << "This means prop key evaluation (move_interp, clip interp) "
+        << "is not being driven by HamDirector::Poll(). "
+        << progressSummary();
+}
+
+TEST_F(GameplayTelemetryTest, SongAnimReachesMeaningfulFrame) {
+    // Beyond just advancing, the song anim frame should reach a meaningful value
+    // during gameplay (at least 1 second = 30 frames at 30fps), proving sustained
+    // animation advancement rather than a one-time tick.
+    auto playing = gameplaySamples();
+    ASSERT_FALSE(playing.empty())
+        << "Never observed real gameplay on game_screen. " << progressSummary();
+
+    float maxFrame = 0.0f;
+    for (auto &s : playing) {
+        float f = s.getFloat("songAnimFrame");
+        if (f > maxFrame) maxFrame = f;
+    }
+    EXPECT_GT(maxFrame, 30.0f)
+        << "songAnimFrame never reached 30.0 (1 second at 30fps) during gameplay. "
+        << "Max frame was " << maxFrame << ". " << progressSummary();
+}
+
+// ---------------------------------------------------------------------------
+// Tier 4: Move/flashcard data validation
+//
+// Verify that the SetFrame → move_interp → flashcard update chain actually
+// produces correct dance move data during gameplay. The earlier tiers prove
+// that songAnim advances and prop keys exist; these tests prove the
+// downstream effect — real move names reaching the game objects.
+// ---------------------------------------------------------------------------
+
+TEST_F(GameplayTelemetryTest, MoveInterpActiveDuringGameplay) {
+    // The "move" prop key track on the Easy difficulty song.anim should exist
+    // and have keys during gameplay. This proves the interp handler chain
+    // (move_interp) CAN fire when SetFrame evaluates prop keys.
+    auto playing = gameplaySamples();
+    ASSERT_FALSE(playing.empty())
+        << "Never observed real gameplay on game_screen. " << progressSummary();
+
+    bool found = false;
+    int maxKeyCount = 0;
+    for (auto &s : playing) {
+        int keys = s.getInt("moveKeyCount", 0);
+        if (keys > maxKeyCount) maxKeyCount = keys;
+        if (s.getBool("moveInterpActive")) {
+            found = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(found)
+        << "moveInterpActive was never true during gameplay. "
+        << "The move prop key track either does not exist or has zero keys. "
+        << "Max moveKeyCount observed: " << maxKeyCount << ". "
+        << progressSummary();
+}
+
+TEST_F(GameplayTelemetryTest, SongAnimFrameAdvancesSteadily) {
+    // During gameplay, songAnimFrameRate (delta between samples) should be
+    // positive in at least 50% of samples. This proves sustained animation
+    // advancement, not just a one-time tick or stall.
+    auto playing = gameplaySamples();
+    ASSERT_FALSE(playing.empty())
+        << "Never observed real gameplay on game_screen. " << progressSummary();
+
+    int advancingCount = 0;
+    for (auto &s : playing) {
+        float rate = s.getFloat("songAnimFrameRate", 0.0f);
+        if (rate > 0.0f) advancingCount++;
+    }
+    float ratio = (float)advancingCount / (float)playing.size();
+    EXPECT_GE(ratio, 0.5f)
+        << "songAnimFrameRate was positive in only " << advancingCount
+        << " of " << playing.size() << " gameplay samples ("
+        << (ratio * 100.0f) << "%). "
+        << "Expected at least 50% to show forward progress. "
+        << progressSummary();
+}
+
+TEST_F(GameplayTelemetryTest, ActiveMovesAppearDuringGameplay) {
+    // During gameplay, at least one player should have a non-null, non-Rest
+    // current move in at least one sample. This is end-to-end proof that
+    // SetFrame → move_interp → set_cur_move produces real dance moves
+    // that reach the MoveDir, which the HUD flashcard system reads from.
+    auto playing = gameplaySamples();
+    ASSERT_FALSE(playing.empty())
+        << "Never observed real gameplay on game_screen. " << progressSummary();
+
+    bool found = false;
+    int maxMoves = 0;
+    for (auto &s : playing) {
+        int moves = s.getInt("activeMoveCount", 0);
+        if (moves > maxMoves) maxMoves = moves;
+        if (moves > 0) {
+            found = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(found)
+        << "activeMoveCount was never > 0 during gameplay. "
+        << "No player had a real (non-Rest) current move assigned. "
+        << "This means the move_interp → set_cur_move chain is not producing "
+        << "dance moves that reach MoveDir::CurrentMove(). "
+        << "Max activeMoveCount observed: " << maxMoves << ". "
+        << progressSummary();
+}

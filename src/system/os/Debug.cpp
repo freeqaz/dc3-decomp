@@ -32,6 +32,7 @@ template ScopedState<bool, 1, 0>::~ScopedState();
 #include "utl/Option.h"
 #include "utl/TextFileStream.h"
 #include "utl/MakeString.h"
+#include "world/CameraShot.h"
 #include <vector>
 #include "xdk/XAPILIB.h"
 #include "xdk/xbdm/xbdm.h"
@@ -342,36 +343,39 @@ const char *GetExpCode(int code) {
             return "EXCEPTION_FLT_DENORMAL_OPERAND";
         }
     } else {
-        if (code != (int)0xC00000FD) {
-            int temp = code + 0x3FFFFF72;
-            if ((unsigned int)temp <= 8U) {
-                switch (temp) {
-                case 0:
-                    return "EXCEPTION_FLT_DIVIDE_BY_ZERO";
-                case 1:
-                    return "EXCEPTION_FLT_INEXACT_RESULT";
-                case 2:
-                    return "EXCEPTION_FLT_INVALID_OPERATION";
-                case 3:
-                    return "EXCEPTION_FLT_OVERFLOW";
-                case 4:
-                    return "EXCEPTION_FLT_STACK_CHECK";
-                case 5:
-                    return "EXCEPTION_FLT_UNDERFLOW";
-                case 6:
-                    return "EXCEPTION_INT_DIVIDE_BY_ZERO";
-                case 7:
-                    return "EXCEPTION_INT_OVERFLOW";
-                case 8:
-                    return "EXCEPTION_PRIV_INSTRUCTION";
+        if (code <= (int)0xC00000FD) {
+            if (code != (int)0xC00000FD) {
+                int temp = code + 0x3FFFFF72;
+                if ((unsigned int)temp <= 8U) {
+                    switch (temp) {
+                    case 0:
+                        return "EXCEPTION_FLT_DIVIDE_BY_ZERO";
+                    case 1:
+                        return "EXCEPTION_FLT_INEXACT_RESULT";
+                    case 2:
+                        return "EXCEPTION_FLT_INVALID_OPERATION";
+                    case 3:
+                        return "EXCEPTION_FLT_OVERFLOW";
+                    case 4:
+                        return "EXCEPTION_FLT_STACK_CHECK";
+                    case 5:
+                        return "EXCEPTION_FLT_UNDERFLOW";
+                    case 6:
+                        return "EXCEPTION_INT_DIVIDE_BY_ZERO";
+                    case 7:
+                        return "EXCEPTION_INT_OVERFLOW";
+                    case 8:
+                        return "EXCEPTION_PRIV_INSTRUCTION";
+                    }
                 }
+            } else {
+                return "EXCEPTION_STACK_OVERFLOW";
             }
-            if (code != (int)0xC000013A) {
-                return MakeString("Unhandled Exception %d", code);
-            }
-            return "CONTROL_C_EXIT";
         }
-        return "EXCEPTION_STACK_OVERFLOW";
+        if (code != (int)0xC000013A) {
+            return MakeString("Unhandled Exception %d", (const CamShotFrame::BlendEaseMode &)code);
+        }
+        return "CONTROL_C_EXIT";
     }
 }
 

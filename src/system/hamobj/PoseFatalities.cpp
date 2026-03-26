@@ -325,6 +325,14 @@ void PoseFatalities::Enter() {
         if (InStrikeAPose()) {
             mFatalEndBeat = idx * 4;
         }
+#ifdef HX_NATIVE
+        ObjectDir *hudLeft = mHudPanel->Find<ObjectDir>("hud_left", false);
+        ObjectDir *hudRight = mHudPanel->Find<ObjectDir>("hud_right", false);
+        mPoseComboLabels[kSkeletonLeft] = hudLeft ? hudLeft->Find<HamLabel>("pose_combo.lbl", true) : nullptr;
+        mPoseComboLabels[kSkeletonRight] = hudRight ? hudRight->Find<HamLabel>("pose_combo.lbl", true) : nullptr;
+        mPoseBeatAnims[kSkeletonLeft] = hudLeft ? hudLeft->Find<RndAnimatable>("pose_beat.anim", true) : nullptr;
+        mPoseBeatAnims[kSkeletonRight] = hudRight ? hudRight->Find<RndAnimatable>("pose_beat.anim", true) : nullptr;
+#else
         mPoseComboLabels[kSkeletonLeft] = mHudPanel->Find<ObjectDir>("hud_left", true)
                                               ->Find<HamLabel>("pose_combo.lbl", true);
         mPoseComboLabels[kSkeletonRight] = mHudPanel->Find<ObjectDir>("hud_right", true)
@@ -334,6 +342,7 @@ void PoseFatalities::Enter() {
         mPoseBeatAnims[kSkeletonRight] =
             mHudPanel->Find<ObjectDir>("hud_right", true)
                 ->Find<RndAnimatable>("pose_beat.anim", true);
+#endif
         mValidPose = InStrikeAPose();
         FxSendDelay *delay = TheSynth->Find<FxSendDelay>("BeatRepeat.send", true);
         if (delay) {

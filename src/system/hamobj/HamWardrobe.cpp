@@ -595,7 +595,6 @@ DataNode HamWardrobe::OnLoadCharacters(DataArray *a) {
     } else {
         asyncLoad = 1;
     }
-    Symbol venue(TheGameData->Venue().Str());
-    LoadCharacters(a->Sym(2), a->Sym(3), crew1, crew2, (HamBackupDancers)backupType, speed, venue, asyncLoad);
+    LoadCharacters(a->Sym(2), a->Sym(3), crew1, crew2, (HamBackupDancers)backupType, speed, (TheGameData->Venue().Str()), asyncLoad);
     return 0;
 }

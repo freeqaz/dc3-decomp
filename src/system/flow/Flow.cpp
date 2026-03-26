@@ -519,7 +519,12 @@ Flow *Flow::GetOwnerFlow() {
 bool Flow::ActivateTrigger() {
     mStopRequested = false;
     FOREACH (it, mChildNodes) {
+#ifdef HX_NATIVE
+        Hmx::Object *obj = it->Obj();
+        if (obj && obj->ClassName() != FlowLabel::StaticClassName()) {
+#else
         if (it->Obj()->ClassName() != FlowLabel::StaticClassName()) {
+#endif
             ActivateChild(*it);
         }
         if (mStopRequested)

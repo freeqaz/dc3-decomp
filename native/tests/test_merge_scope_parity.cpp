@@ -881,12 +881,22 @@ TEST_F(MergeScopeParityTest, RealVenueWorldCamInterestSurvivesProxyMerge) {
     if (!venueDir)
         GTEST_SKIP() << "glitterati.milo_xbox not available";
 
+    const char *venueName = venueDir->Name();
     ObjectDir *worldRoot = Hmx::Object::New<ObjectDir>();
     MergeProxy(venueDir, worldRoot);
 
-    std::vector<std::string> names = CollectInterestNames(worldRoot);
+    // Proxy merge with no existing dir adds the venue to worldRoot's hash
+    // table (not SubDirs). The real game finds interests by iterating from
+    // the venue dir directly (HamWardrobe::SyncInterestObjects(mVenue)),
+    // not from the world root. Verify that flow works.
+    ObjectDir *foundVenue = worldRoot->Find<ObjectDir>(venueName, false);
+    ASSERT_NE(foundVenue, nullptr)
+        << "Venue dir must be findable from world root after proxy merge";
+
+    std::vector<std::string> names = CollectInterestNames(foundVenue);
     EXPECT_TRUE(HasInterestNamed(names, "WorldCamInterest.intr"))
-        << "Proxy merge should leave WorldCamInterest discoverable from world root";
+        << "WorldCamInterest.intr must be discoverable from the venue dir "
+           "(the SyncInterestObjects starting point) after proxy merge";
 
     // Leak real-asset dirs to avoid unrelated cascade cleanup crashes.
     (void)worldRoot;

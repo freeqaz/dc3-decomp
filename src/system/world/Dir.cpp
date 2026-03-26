@@ -491,18 +491,14 @@ void WorldDir::DrawShowing() {
         if (shot)
             shot = shot->CurrentShot();
 
-        RndCam *camOverride = CamOverride();
-        RndCam *savedCam;
-        if (!camOverride) {
+        RndCam *savedCam = CamOverride();
+        if (!savedCam) {
             savedCam = RndCam::Current();
         } else {
-            savedCam = camOverride;
-            camOverride->Select();
+            savedCam->Select();
         }
 
-        RndEnviron *env = GetEnv();
-        if (!env)
-            env = TheUI->GetEnv();
+        RndEnviron *env = GetEnv() ? GetEnv() : TheUI->GetEnv();
         env->Select(nullptr);
 
         if (TheRnd.ProcCmds() & kProcessWorld) {
