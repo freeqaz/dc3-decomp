@@ -1360,8 +1360,9 @@ void HamNavList::DetermineHighlightedItem() {
         }
     }
 
-    unsigned int posU = (int)(maxItemD * (double)mHandHeight + 0.5);
-    if (maxItem < (int)posU) {
+    unsigned int posU = (int)(maxItemF * mHandHeight + 0.5f);
+    float targetPos = (float)highlightItem / maxItemF;
+    if ((int)posU <= maxItem) {
         posU &= (posU >> 31) - 1;
     }
 
@@ -1378,13 +1379,14 @@ void HamNavList::DetermineHighlightedItem() {
         } else {
             mScrollBehavior.mScrollDir = 0;
         }
-        if (iPos > HamListRibbon::sNumListSelectable - 1) {
-            adjustedPos = HamListRibbon::sNumListSelectable - 1;
+        int maxSelectable = HamListRibbon::sNumListSelectable - 1;
+        if (iPos > maxSelectable) {
+            adjustedPos = maxSelectable;
+        } else {
+            adjustedPos &= (adjustedPos >> 31) - 1;
         }
-        adjustedPos &= (unsigned int)(-(long long)((long long)(adjustedPos << 32) >> 63));
     }
 
-    float targetPos = (float)((double)highlightItem / maxItemD);
     float handDiff = fabsf(mHandHeight - targetPos);
     float halfThreshold = threshold * 0.5f + 0.15f;
     if (!(handDiff >= halfThreshold)) {

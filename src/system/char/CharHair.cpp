@@ -428,10 +428,8 @@ void CharHair::Hookup(ObjPtrList<CharCollide> &collides) {
              it != collides.end();
              ++it) {
             CharCollide *col = *it;
-            int colFlags = col->GetFlags();
-            int hookupFlags = strand.HookupFlags();
-            bool passAll = (colFlags == 0 && hookupFlags == 0);
-            if ((hookupFlags & colFlags) == 0 && !passAll)
+            bool passAll = (col->GetFlags() == 0 && strand.HookupFlags() == 0);
+            if ((strand.HookupFlags() & col->GetFlags()) == 0 && !passAll)
                 continue;
 
             col->SyncWorldState();
@@ -439,7 +437,7 @@ void CharHair::Hookup(ObjPtrList<CharCollide> &collides) {
             Vector3 colPos(col->WorldXfm().v);
             float colAdjust = 0.0f;
 
-            if (colFlags != 0) {
+            if (col->GetFlags() != 0) {
                 int shape = (int)col->GetShape();
                 if (shape > 0) {
                     if (shape > 2) {

@@ -19,6 +19,15 @@ class RndXfmCache {
     unsigned int unk1b580; // 0x1b580
 };
 
+// size 0x40 - wrapper around Vector4[4] to force __ehvec_ctor generation
+// NO user-defined constructor — implicit default ctor constructs the Vector4 array
+struct ViewProjXfm {
+    Vector4 rows[4];
+    operator const Hmx::Matrix4 &() const {
+        return *(const Hmx::Matrix4 *)this;
+    }
+};
+
 // size 0x36c84
 class RndVelocityBuffer {
 public:
@@ -49,7 +58,7 @@ private:
     RndXfmCache mXfmCaches[2]; // 0xac
     Timer mTimer; // 0x36bb8
     float unk36be8; // 0x36be8
-    Hmx::Matrix4 unk36bec[2]; // 0x36bec
+    ViewProjXfm unk36bec[2]; // 0x36bec
     int mActiveXfmCacheIndex; // 0x36c6c - which xfmcache
     int mFrame; // 0x36c70 - frame
     RndTex *mVelocityTex; // 0x36c74

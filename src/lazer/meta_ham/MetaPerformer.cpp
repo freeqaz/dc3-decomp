@@ -1290,9 +1290,10 @@ void MetaPerformer::CalcCharacters(
 
     bool hasPlayer1Char = player1Char != gNullStr;
     bool hasPlayer2Char = player2Char != gNullStr;
+    bool conflict = CharConflict(player1Char, player2Char);
 
     // Fast path: Both players have valid, non-conflicting characters
-    if (hasPlayer1Char && hasPlayer2Char && !CharConflict(player2Char, player1Char)) {
+    if (hasPlayer1Char && hasPlayer2Char && !conflict) {
         primaryPlayer = pPlayer1Data;
         secondaryPlayer = pPlayer2Data;
         primaryCrew = GetCrewForCharacter(player1Char);
@@ -1306,42 +1307,39 @@ void MetaPerformer::CalcCharacters(
         int skeleton1 = pPlayer1Data->GetSkeletonTrackingID();
         int skeleton2 = pPlayer2Data->GetSkeletonTrackingID();
 
-        Symbol primaryPlayerChar;   // Character preference for primary slot
-        Symbol secondaryPlayerChar; // Character preference for secondary slot
+        Symbol primaryPlayerChar;
+        Symbol secondaryPlayerChar;
+
+        bool skel1Active = skeleton1 > 0;
+        bool skel2Active = skeleton2 > 0;
 
         // Determine player priority based on skeleton tracking state
-        if (skeleton1 > 0 && skeleton2 == 0) {
-            // Only P1 is actively tracked
+        if (skel1Active && !skel2Active) {
             primaryPlayer = pPlayer1Data;
             secondaryPlayer = pPlayer2Data;
             primaryPlayerChar = player1Char;
             secondaryPlayerChar = player2Char;
-        } else if (skeleton2 > 0 && skeleton1 == 0) {
-            // Only P2 is actively tracked
+        } else if (skel2Active && !skel1Active) {
             primaryPlayer = pPlayer2Data;
             secondaryPlayer = pPlayer1Data;
             primaryPlayerChar = player2Char;
             secondaryPlayerChar = player1Char;
         } else if (hasPlayer1Char && !hasPlayer2Char) {
-            // P1 has character preference, P2 doesn't
             primaryPlayer = pPlayer1Data;
             secondaryPlayer = pPlayer2Data;
             primaryPlayerChar = player1Char;
             secondaryPlayerChar = player2Char;
         } else if (hasPlayer2Char && !hasPlayer1Char) {
-            // P2 has character preference, P1 doesn't
             primaryPlayer = pPlayer2Data;
             secondaryPlayer = pPlayer1Data;
             primaryPlayerChar = player2Char;
             secondaryPlayerChar = player1Char;
         } else if (pPlayer1Data->TrackingAgeSeconds() >= pPlayer2Data->TrackingAgeSeconds()) {
-            // Default: P1 is primary
             primaryPlayer = pPlayer1Data;
             secondaryPlayer = pPlayer2Data;
             primaryPlayerChar = player1Char;
             secondaryPlayerChar = player2Char;
         } else {
-            // Use tracking age: newer player (P2) gets priority
             primaryPlayer = pPlayer2Data;
             secondaryPlayer = pPlayer1Data;
             primaryPlayerChar = player2Char;
@@ -1436,12 +1434,16 @@ void MetaPerformer::SaveAndUploadScores(Symbol s, int i1, int i2) {
     }
 
     if (0 < count) {
-        static Symbol p2("p2");
+        if (count <= 1) i1 = 0;
+
         static Symbol p1("p1");
+        static Symbol p2("p2");
         static Symbol alert_highscore_solo("alert_highscore_solo");
         static Symbol alert_highscore_coop("alert_highscore_coop");
 
+        HamProfile *criticalProfile = TheProfileMgr.CriticalProfile();
         Difficulty highestDiff = EasiestDifficulty();
+        int songID = mSongMgr.GetSongIDFromShortName(s, true);
 
         for (int i = 0; i < 2; i++) {
             HamPlayerData *pPlayerData = TheGameData->Player(i);
@@ -1451,38 +1453,45 @@ void MetaPerformer::SaveAndUploadScores(Symbol s, int i1, int i2) {
 
             Symbol playerName = (i == 0) ? p1 : p2;
             Difficulty difficulty = (Difficulty)pPlayerData->GetDifficulty();
-            int padNum = pPlayerData->PadNum();
 
             bool isHarder = IsHarderDifficulty(difficulty, highestDiff);
             if (isHarder) {
                 highestDiff = difficulty;
             }
 
+            int padNum = pPlayerData->PadNum();
             HamProfile *pProfile = TheProfileMgr.GetProfileFromPad(padNum);
             if (pProfile && !TheAccomplishmentMgr->IsSigninChanged(padNum)) {
-                SongStatusMgr *pSongStatusMgr = pProfile->GetSongStatusMgr();
-                MILO_ASSERT(pSongStatusMgr, 0x1c1);
+                if (criticalProfile == pProfile) {
+                    criticalProfile = NULL;
+                }
+
+                SongStatusMgr *songStatusMgr = pProfile->GetSongStatusMgr();
+                MILO_ASSERT(songStatusMgr, 0x1c1);
 
                 static Symbol scoreSymbol("score");
                 const DataNode *pScoreNode = pPlayerProvider->Property(scoreSymbol);
-                int playerScore = pScoreNode ? pScoreNode->Int() : 0;
+                int playerScore = pScoreNode->Int();
 
-                if (playerScore > 0 || i1 > 0) {
+                if (playerScore != 0 || i1 != 0) {
+                    int oldCoopScore = songStatusMgr->GetCoopScore(songID);
                     bool baseScoreLocked = false;
-                    int baseScore = pSongStatusMgr->GetScore(i1, baseScoreLocked);
-                    int oldCoopScore = pSongStatusMgr->GetCoopScore(i1);
+                    int baseScore = songStatusMgr->GetScore(songID, baseScoreLocked);
 
-                    if (baseScore < playerScore) {
+                    if (playerScore > baseScore) {
                         ThePassiveMessenger->TriggerGenericMsg(
-                            alert_highscore_solo, playerName, kPassiveMessageGeneral, Symbol(), -1
+                            alert_highscore_solo, playerName, kPassiveMessageGeneral, Symbol(gNullStr), -1
                         );
                     }
 
-                    if (oldCoopScore < i1) {
+                    if (i1 > oldCoopScore) {
                         ThePassiveMessenger->TriggerGenericMsg(
-                            alert_highscore_coop, playerName, kPassiveMessageGeneral, Symbol(), -1
+                            alert_highscore_coop, playerName, kPassiveMessageGeneral, Symbol(gNullStr), -1
                         );
                     }
+
+                    static Symbol expertSymbol("expert");
+                    bool wasExpertUnlocked = pProfile->IsDifficultyUnlockedForProfile(s, expertSymbol);
 
                     static Symbol moveAwesomeSymbol("move_awesome");
                     int awesomeCount = GetMovesPassedByType(i, moveAwesomeSymbol);
@@ -1493,15 +1502,26 @@ void MetaPerformer::SaveAndUploadScores(Symbol s, int i1, int i2) {
                     int totalMovesPassed = GetMovesPassed(i);
 
                     pProfile->UpdateScore(
-                        i1, pPlayerData, difficulty, playerScore, i1, i2, awesomeCount, perfectCount,
-                        totalMovesPassed, 0, false, false
+                        songID, pPlayerData, difficulty, playerScore, i1, i2, awesomeCount, perfectCount,
+                        totalMovesPassed, 0, false, mCompletedSongWithNoFlashcards
                     );
+
+                    if (!wasExpertUnlocked && pProfile->IsDifficultyUnlockedForProfile(s, expertSymbol)) {
+                        static Symbol alert_unlockedhard("alert_unlockedhard");
+                        ThePassiveMessenger->TriggerGenericMsg(
+                            alert_unlockedhard, playerName, kPassiveMessageUnlock, Symbol(gNullStr), -1
+                        );
+                    }
                 }
             }
         }
 
         if (TheGameMode->InMode("campaign", true)) {
-            // Additional campaign-specific logic
+            if (criticalProfile) {
+                criticalProfile->UpdateScore(
+                    songID, NULL, highestDiff, 0, i1, i2, 0, 0, 0, 0, false, mCompletedSongWithNoFlashcards
+                );
+            }
         }
     }
 }
