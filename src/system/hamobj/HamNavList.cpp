@@ -397,7 +397,8 @@ void HamNavList::Poll() {
         }
     } else {
         // No valid skeleton - check if we should disengage
-        if (!TheGestureMgr || !TheGestureMgr->InVoiceMode()) {
+        bool inVoiceMode = TheGestureMgr ? TheGestureMgr->InVoiceMode() : false;
+        if (!inVoiceMode) {
             Disengage();
 
             // Hide scroll speed indicator if present
@@ -423,15 +424,9 @@ void HamNavList::Poll() {
 
     // Determine highlighted item based on mode
     if (mRibbonMode == HamListRibbon::kRibbonSwell) {
-        bool inControllerMode = false;
-        if (TheGestureMgr) {
-            inControllerMode = TheGestureMgr->InControllerMode();
-        }
+        bool inControllerMode = TheGestureMgr ? TheGestureMgr->InControllerMode() : false;
         if (!inControllerMode) {
-            bool inVoiceMode = false;
-            if (TheGestureMgr) {
-                inVoiceMode = TheGestureMgr->InVoiceMode();
-            }
+            bool inVoiceMode = TheGestureMgr ? TheGestureMgr->InVoiceMode() : false;
             if (!inVoiceMode && !TheLoadMgr.EditMode()) {
                 DetermineHighlightedItem();
             }
@@ -440,15 +435,9 @@ void HamNavList::Poll() {
 
     // Check if we should clear scroll tracking
     if (mRibbonMode == HamListRibbon::kRibbonDisengaged) {
-        bool inControllerMode = false;
-        if (TheGestureMgr) {
-            inControllerMode = TheGestureMgr->InControllerMode();
-        }
+        bool inControllerMode = TheGestureMgr ? TheGestureMgr->InControllerMode() : false;
         if (!inControllerMode) {
-            bool inVoiceMode = false;
-            if (TheGestureMgr) {
-                inVoiceMode = TheGestureMgr->InVoiceMode();
-            }
+            bool inVoiceMode = TheGestureMgr ? TheGestureMgr->InVoiceMode() : false;
             if (inVoiceMode) {
                 mScrollBehavior.mScrollDir = 0;
             }
@@ -457,10 +446,7 @@ void HamNavList::Poll() {
 
     // If disengaged and in controller mode, switch to swell
     if (mRibbonMode == HamListRibbon::kRibbonDisengaged) {
-        bool inControllerMode = false;
-        if (TheGestureMgr) {
-            inControllerMode = TheGestureMgr->InControllerMode();
-        }
+        bool inControllerMode = TheGestureMgr ? TheGestureMgr->InControllerMode() : false;
         if (inControllerMode) {
             SetRibbonMode(HamListRibbon::kRibbonSwell);
         }
@@ -476,9 +462,10 @@ void HamNavList::Poll() {
     if (mListRibbonResource) {
         if (mRibbonMode == HamListRibbon::kRibbonSlide
             && !mListRibbonResource->TestEntering()) {
+            float level = mSlideSmoother.Level();
             RndAnimatable *slideSoundAnim = mListRibbonResource->SlideSoundAnim();
             if (slideSoundAnim) {
-                slideSoundAnim->SetFrame(mSlideSmoother.Level(), 1.0f);
+                slideSoundAnim->SetFrame(level, 1.0f);
             }
         } else {
             RndAnimatable *slideSoundAnim = mListRibbonResource->SlideSoundAnim();

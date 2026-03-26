@@ -6,8 +6,8 @@
 #if !defined(__EMSCRIPTEN__)
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
-extern sigjmp_buf gDrawJmpBuf;
-extern bool gDrawJmpBufSet;
+sigjmp_buf gDrawJmpBuf;
+bool gDrawJmpBufSet = false;
 #endif
 #ifdef __EMSCRIPTEN__
 #include <emscripten/emscripten.h>

@@ -895,6 +895,17 @@ void HamDirector::SetupRoutineBuilderAnims() {
                 DataArrayPtr ptr(syms[j2]);
                 routineBuilderAnim->GetKeys(this, ptr)->AsSymbolKeys()->clear();
             }
+#ifdef HX_NATIVE
+            // The deep copy inherits mLoop=true from song.anim. After clearing
+            // clip/move/practice keys, EndFrame() shrinks to near-zero (only
+            // camera/visibility keys remain). AdvanceFrame() then ModRange-wraps
+            // all frame values back to ~0, preventing prop key evaluation from
+            // advancing through the song. On Xbox the DanceRemixer repopulates
+            // keys to span the full song, restoring EndFrame. On native, disable
+            // loop so SetFrame() in HamDirector::Poll() can drive the frame
+            // monotonically through the song.
+            routineBuilderAnim->mLoop = false;
+#endif
         }
     }
 }

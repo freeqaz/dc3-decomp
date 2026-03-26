@@ -20,9 +20,9 @@ public:
         mBeta = beta;
     }
     void SetParams(float prevLevel, float level, float trend) {
-        mPrevLevel = prevLevel;
         mLevel = level;
         mTrend = trend;
+        mPrevLevel = prevLevel;
     }
     float Level() const { return mLevel; }
 
