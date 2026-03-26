@@ -1515,6 +1515,7 @@ YY_DECL_LAST_ARG
 #endif
 {
     YY_BUFFER_STATE b;
+    int alloc_size;
 
     b = (YY_BUFFER_STATE)yy_flex_alloc(sizeof(struct yy_buffer_state) YY_CALL_LAST_ARG);
     if (!b)
