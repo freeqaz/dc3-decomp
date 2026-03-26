@@ -614,9 +614,9 @@ TEST_F(GameplayTelemetryTest, ActiveMovesAppearDuringGameplay) {
 
 TEST_F(GameplayTelemetryTest, HudMergeTargetMatchesWorldHUD) {
     // T1: The game_hud merger's MergerDir() should be the same object as
-    // WorldDir::mHUD. On Xbox this is always true. On native, our workaround
-    // forces it via SetHUD. The convergence goal is to make this true without
-    // the SetHUD hack.
+    // WorldDir::mHUD. On Xbox this is always true. On native, the merger's
+    // mDir ObjPtr resolves to the "hud" PanelDir (= WorldDir::mHUD) during
+    // deserialization, so MergerDir() == mHUD naturally.
     auto gs = samplesOnScreen("game_screen");
     ASSERT_FALSE(gs.empty())
         << "Never reached game_screen. " << progressSummary();

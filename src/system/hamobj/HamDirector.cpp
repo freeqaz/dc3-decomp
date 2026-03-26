@@ -434,47 +434,28 @@ DataNode HamDirector::OnFileMerged(DataArray *a) {
 #ifdef HX_NATIVE
     Symbol cat = a->Sym(2);
     if (cat == Symbol("game_hud") && mGameModeMerger) {
-        // The game_hud merger's MergerDir is a PanelDir (from director.milo).
-        // HUD content from _default_hud.milo merges flat into it (proxy=0).
-        // After merge, this PanelDir has the draw list, Cam.cam, flows, and
-        // all HUD objects — exactly like Xbox. We just need to draw + poll it.
+        // The game_hud merger's MergerDir() points to the WorldDir's mHUD
+        // PanelDir (mDir resolves via ObjPtr deserialization). After the merge,
+        // this PanelDir has all HUD objects (hud_left, hud_right, flash_cards,
+        // scores, etc.) — exactly like Xbox. The normal panel lifecycle Enter()
+        // path handles DTA enter handlers ($hud_panel = $this) and SetShowing.
+        //
+        // The rendering hacks below are native-only camera frustum adjustments
+        // and are unrelated to the merge target identity.
         FileMerger::Merger *gm = mGameModeMerger->FindMerger("game_hud", false);
         PanelDir *hudDir = gm ? dynamic_cast<PanelDir *>(gm->MergerDir()) : nullptr;
         if (hudDir) {
-            // Replace the WorldDir's inline mHUD with the merger's fully-loaded
-            // hudDir. On Xbox, the FileMerger merges content into the WorldDir's
-            // mHUD PanelDir, so DTA handlers (hud_objects.dta) fire on the right
-            // object with all merged children (hud_left, hud_right, flash_cards).
-            // On native, the merger creates a separate PanelDir. The WorldDir's
-            // inline mHUD would get Enter'd later (by UIScreen transition) and its
-            // DTA 'enter' handler would overwrite $hud_panel with itself — an empty
-            // PanelDir without the merged children. By replacing mHUD here, the
-            // WorldDir draws/polls the correct PanelDir.
-            WorldDir *world = GetWorld();
-            if (world) {
-                world->SetHUD(hudDir);
-            }
-            hudDir->Enter();
-            {
-                static Message enterMsg("enter");
-                hudDir->HandleType(enterMsg);
-            }
-            hudDir->SetShowing(true);
-            MILO_LOG("DC3 OnFileMerged(game_hud): replaced WorldDir mHUD with merger hudDir\n");
-            // TODO(native): The HUD PanelDir has postprocs_before_draw=false
-            // (mCanEndWorld=0) from the .milo data. On Xbox this works because
-            // the HUD draws inline in the 3D pass. On native, without ending
-            // the world and flushing post-processing, HUD meshes render to the
-            // intermediate buffer and get depth-occluded or overwritten by
-            // post-proc. Force it true so PanelDir::DrawShowing() calls
-            // FlushPostProcessingForOverlay() — rendering the HUD on top.
+            // The HUD PanelDir has postprocs_before_draw=false from .milo data.
+            // On Xbox the HUD draws inline in the 3D pass. On native, without
+            // ending the world and flushing post-processing, HUD meshes render
+            // to the intermediate buffer and get depth-occluded. Force it true
+            // so PanelDir::DrawShowing() calls FlushPostProcessingForOverlay().
             hudDir->SetProperty("postprocs_before_draw", true);
-            DataVariable("hud_panel") = (Hmx::Object *)hudDir;
 
             // Reposition score transforms into camera frustum.
             // The HUD camera (FOV=0.6 rad at Y=-768 looking +Y) can see
-            // X≈±300 at the score depth. Original positions (X=±500) are
-            // outside, so move to X=±150 (world X≈±300 with child offset).
+            // X~+/-300 at the score depth. Original positions (X=+/-500) are
+            // outside, so move to X=+/-150 (world X~+/-300 with child offset).
             {
                 RndTransformable *lt =
                     hudDir->Find<RndTransformable>("left_score.trans", false);
@@ -502,11 +483,11 @@ DataNode HamDirector::OnFileMerged(DataArray *a) {
                     anim->SetFrame(anim->EndFrame(), 0);
             }
 
-            // HACK(native): Reposition flashcard scrolling containers into
-            // camera frustum. On Xbox the HUD camera covers a wider area;
-            // the native camera (FOV=0.6 rad, Y=-768) has a narrow view.
-            // Original local X ≈ ±210 puts hud_left/right at world X ≈ ±700,
-            // well outside ±200 visible range. Bring them inside the frustum.
+            // Reposition flashcard scrolling containers into camera frustum.
+            // On Xbox the HUD camera covers a wider area; the native camera
+            // (FOV=0.6 rad, Y=-768) has a narrow view. Original local
+            // X ~ +/-210 puts hud_left/right at world X ~ +/-700, well
+            // outside +/-200 visible range. Bring them inside the frustum.
             {
                 RndDir *hl = hudDir->Find<RndDir>("hud_left", false);
                 RndDir *hr = hudDir->Find<RndDir>("hud_right", false);

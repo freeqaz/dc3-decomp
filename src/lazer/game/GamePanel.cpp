@@ -338,26 +338,6 @@ void GamePanel::SetTypeDef(DataArray *def) {
     static Message exit("exit_mode");
     Handle(exit, false);
     UIPanel::SetTypeDef(def);
-#ifdef HX_NATIVE
-    // On native, the WorldDir's inline mHUD PanelDir (which also has the "hud"
-    // type) enters after the FileMerger populates the game_hud merger directory.
-    // The mHUD's DTA enter handler overwrites $hud_panel with itself, but that
-    // panel lacks the merged content (hud_left, hud_right, flash_cards, etc.).
-    // Restore $hud_panel to the correct merger directory before triggering
-    // common_reset, so all DTA handlers reference the fully-merged HUD.
-    if (def && TheHamDirector) {
-        FileMerger *fm = TheHamDirector->GetGameModeMerger();
-        if (fm) {
-            FileMerger::Merger *gm = fm->FindMerger("game_hud", false);
-            PanelDir *mergerHud = gm ? dynamic_cast<PanelDir *>(gm->MergerDir()) : nullptr;
-            if (mergerHud) {
-                DataVariable("hud_panel") = (Hmx::Object *)mergerHud;
-                static Message resetMsg("common_reset");
-                Handle(resetMsg, false);
-            }
-        }
-    }
-#endif
 }
 
 void GamePanel::Load() {
