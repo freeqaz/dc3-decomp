@@ -231,7 +231,10 @@ bool BaseDisplacementNode::Displacements(
     DisplacementData &dispData,
     Ham1DisplacementData &ham1Data
 ) const {
-    ham1Data.unk4.Zero();
+    Vector3 &proj = ham1Data.unk4;
+    proj.x = 0.0f;
+    proj.z = 0.0f;
+    proj.y = 0.0f;
     ham1Data.unk14 = false;
     ham1Data.unk18 = 0.0f;
     ham1Data.unk0 = 0.0f;
@@ -240,30 +243,38 @@ bool BaseDisplacementNode::Displacements(
     if (ok) {
         float jdLen = Length(dispData.mJointDisplacement);
         ham1Data.unk1c = jdLen;
-        float nx = 0.0f, ny = 0.0f, nz = 0.0f;
+        float nx, ny, nz;
         if (0.0f < jdLen) {
             float inv = 1.0f / jdLen;
-            nz = dispData.mJointDisplacement.z * inv;
-            ny = inv * dispData.mJointDisplacement.y;
             nx = dispData.mJointDisplacement.x * inv;
+            ny = inv * dispData.mJointDisplacement.y;
+            nz = dispData.mJointDisplacement.z * inv;
+        } else {
+            nx = 0.0f;
+            ny = 0.0f;
+            nz = 0.0f;
         }
         float dot = nx * dispData.mBaseJointDisplacement.x
             + ny * dispData.mBaseJointDisplacement.y
             + nz * dispData.mBaseJointDisplacement.z;
-        ham1Data.unk4.x = nx * dot;
-        ham1Data.unk4.y = ny * dot;
-        ham1Data.unk4.z = nz * dot;
-        ham1Data.unk14 = (0.0f < dot);
+        proj.x = nx * dot;
+        proj.y = ny * dot;
+        proj.z = nz * dot;
+        ham1Data.unk14 = (dot > 0.0f);
         float bjdLen = Length(dispData.mBaseJointDisplacement);
         ham1Data.unk0 = bjdLen;
-        float bnx = 0.0f, bny = 0.0f, bnz = 0.0f;
+        float bnx, bny, bnz;
         if (0.0f < bjdLen) {
             float inv = 1.0f / bjdLen;
-            bnz = inv * dispData.mBaseJointDisplacement.z;
-            bny = dispData.mBaseJointDisplacement.y * inv;
             bnx = dispData.mBaseJointDisplacement.x * inv;
+            bny = dispData.mBaseJointDisplacement.y * inv;
+            bnz = inv * dispData.mBaseJointDisplacement.z;
+        } else {
+            bnx = 0.0f;
+            bny = 0.0f;
+            bnz = 0.0f;
         }
-        float cosAngle = bnx * nx + bny * ny + bnz * nz;
+        float cosAngle = bnz * nz + bny * ny + bnx * nx;
         float clamped = -1.0f - cosAngle < 0.0f ? cosAngle : -1.0f;
         clamped = clamped - 1.0f < 0.0f ? clamped : 1.0f;
         ham1Data.unk18 = fabsf(acosf(clamped));

@@ -336,16 +336,18 @@ void HamSkeletonConverter::SetLeg(
     const BaseSkeleton *skel,
     int side
 ) {
+    auto& _sub0 = mJointPositions[hip];
     Vector3 dir;
     auto& kneePos = mJointPositions[knee];
-    Subtract(kneePos, mJointPositions[hip], dir);
+    Subtract(kneePos, _sub0, dir);
     Vector3 dir2;
     Normalize(dir, dir);
 
     Subtract(mJointPositions[ankle], kneePos, dir2);
     Normalize(dir2, dir2);
 
-    float angle = acos(Dot(dir, dir2));
+    auto _tmp0 = Dot(dir, dir2);
+    float angle = acos(_tmp0);
     angle = -angle;
     int isNaN = (angle != angle) ? 1 : 0;
     if ((isNaN & 0xFF) == 0) {
@@ -354,17 +356,18 @@ void HamSkeletonConverter::SetLeg(
         GetParentWorldXfm(mesh, parentXfm, parent);
 
         Plane plane;
-        plane.Set(mJointPositions[hip], kneePos, mJointPositions[ankle]);
+        plane.Set(_sub0, kneePos, mJointPositions[ankle]);
 
         PaddedJointPos *hipZAxisInit = &mLeftHipZAxisInit + side;
 
-        if (-angle < 0.2) {
+        int usePelvis = (angle < 0.2) ? 1 : 0;
+        if (abs(usePelvis) != 0) {
             plane.a = mPelvisTransform.m.z.x;
             plane.b = mPelvisTransform.m.z.y;
             plane.c = mPelvisTransform.m.z.z;
-            plane.d = -(plane.a * (mJointPositions[hip].x - kneePos.x)
-                + plane.b * (mJointPositions[hip].y - kneePos.y)
-                + plane.c * (mJointPositions[hip].z - kneePos.z));
+            plane.d = -(plane.a * (_sub0.x - kneePos.x)
+                + plane.b * (_sub0.y - kneePos.y)
+                + plane.c * (_sub0.z - kneePos.z));
         }
         hipZAxisInit->x = plane.a * -1.0f;
         hipZAxisInit->y = plane.b * -1.0f;
@@ -373,7 +376,7 @@ void HamSkeletonConverter::SetLeg(
         Vector3 worldPos;
         Multiply(mesh->LocalXfm().v, parentXfm, worldPos);
 
-        Subtract(kneePos, mJointPositions[hip], dir);
+        Subtract(kneePos, _sub0, dir);
         Normalize(dir, dir);
 
         PaddedJointPos *hipZAxis = &mLeftHipZAxis + side;
@@ -396,8 +399,9 @@ void HamSkeletonConverter::SetLeg(
         memcpy(&xfm.m, &mat, sizeof(Hmx::Matrix3));
         xfm.v = worldPos;
 
-        memcpy(&mBoneTransforms[hip].m, &mat, sizeof(Hmx::Matrix3));
-        mBoneTransforms[hip].v = worldPos;
+        auto& _sub1 = mBoneTransforms[hip];
+        memcpy(&_sub1.m, &mat, sizeof(Hmx::Matrix3));
+        _sub1.v = worldPos;
 
         Transform invParent;
         Invert(parentXfm, invParent);
@@ -417,7 +421,7 @@ void HamSkeletonConverter::SetLeg(
         memcpy(&kneeXfm.m, &kneeMat, sizeof(Hmx::Matrix3));
         kneeXfm.v = kneeMesh->LocalXfm().v;
 
-        Multiply(kneeXfm, mBoneTransforms[hip], mBoneTransforms[knee]);
+        Multiply(kneeXfm, _sub1, mBoneTransforms[knee]);
 
         SetRotzBoneValue(String(MirrorBoneName(knee)), angle);
     }

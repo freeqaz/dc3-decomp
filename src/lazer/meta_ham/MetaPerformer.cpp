@@ -963,9 +963,9 @@ void MetaPerformer::CheckForFitnessAccomplishments() {
 }
 
 void MetaPerformer::SetDefaultSongCharacter(int playerFlag) {
-    Symbol primaryOutfit;
-    Symbol primaryChar;
     Symbol primaryCrew;
+    Symbol primaryChar;
+    Symbol primaryOutfit;
     Symbol secondaryCrew;
     Symbol secondaryChar;
     Symbol secondaryOutfit;
