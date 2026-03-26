@@ -230,28 +230,23 @@ void VoiceControlPanel::CreatePlaySongGrammar() const {
     for (std::map<Symbol, SongRecord>::iterator it = TheSongSortMgr->mSongRecordMap.begin();
          it != songRecordMapEnd; ++it) {
         SongRecord &record = it->second;
-        const HamSongMetadata *data = record.Metadata();
-        std::vector<String> prons = data->Pronunciations();
-        const std::vector<PronunciationsLoc> &locs = data->PronunciationsLocalized();
-        unsigned int numLocalizations = locs.size();
+        std::vector<String> prons = record.Metadata()->Pronunciations();
+        const std::vector<PronunciationsLoc> &locs = record.Metadata()->PronunciationsLocalized();
 
-        if (numLocalizations > 0) {
-            std::vector<PronunciationsLoc>::const_iterator pronLocIter = locs.begin();
-            unsigned int locIdx = 0;
+        unsigned int locIdx = 0;
+        if (locs.size() > 0) {
             do {
-                if (pronLocIter->mLanguage == GetSongTitlePronunciationLanguage()) {
-                    prons = pronLocIter->mPronunciations;
+                if (locs[locIdx].mLanguage == GetSongTitlePronunciationLanguage()) {
+                    prons = locs[locIdx].mPronunciations;
                 }
-                ++pronLocIter;
                 ++locIdx;
-            } while (locIdx < numLocalizations);
+            } while (locIdx < locs.size());
         }
 
-        const char *shortname = record.ShortName().Str();
         for (size_t i = 0; i < prons.size(); i++) {
             String pron = prons[i];
             TheSpeechMgr->AddDynamicRuleWord(
-                "play_song_grammar", pron.c_str(), shortname, &wordState, nullptr
+                "play_song_grammar", pron.c_str(), record.ShortName().Str(), &wordState, nullptr
             );
         }
     }

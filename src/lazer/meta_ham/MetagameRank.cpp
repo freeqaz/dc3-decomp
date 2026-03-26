@@ -39,15 +39,6 @@ namespace {
     DataArray *gRepeatableTasks;
     DataArray *gOneTimeTasks;
 
-    // size 0x14
-    struct DeferredAward {
-        DeferredAward() {}
-        String unk0;
-        Symbol unk8;
-        Symbol unkc;
-        Symbol unk10;
-    };
-
     // size 0x20
     struct Unlockable {
         int unk0;
@@ -56,6 +47,13 @@ namespace {
         Symbol unkc;
         Symbol unk10;
         std::vector<Symbol> unk14;
+    };
+
+    // size 0xC
+    struct DeferredAward {
+        DeferredAward() : unk8(0) {}
+        String unk0;
+        const Unlockable *unk8;
     };
     std::vector<Unlockable> gUnlockables;
     std::vector<std::vector<Unlockable *>> gTiers;
@@ -189,8 +187,11 @@ DataNode HandleDeferredAward(DataArray *) {
         return 0;
     } else {
         DeferredAward award = gDeferredAwardQueue.front();
+        const Unlockable *unlock = award.unk8;
         gDeferredAwardQueue.pop_front();
-        DataArrayPtr ptr(Symbol(award.unk0.c_str()), award.unk8, award.unkc, award.unk10);
+        DataArrayPtr ptr(
+            Symbol(award.unk0.c_str()), unlock->unk8, unlock->unkc, unlock->unk10
+        );
         return ptr;
     }
 }
@@ -1193,9 +1194,7 @@ void MetagameRank::AwardForRankUp(int numRanks) {
         }
 
         unk79[unlock->unk0] = 1;
-        award.unk8 = unlock->unk4;
-        award.unkc = unlock->unk8;
-        award.unk10 = unlock->unk10;
+        award.unk8 = unlock;
 
         char noUnlock[11];
         memcpy(noUnlock, "no_unlock_", 11);

@@ -337,17 +337,13 @@ void HamStoreProvider::Refresh() {
     for (std::map<Symbol, std::vector<StoreOffer *> *>::iterator it = unk38.begin();
          it != unk38.end();
          ++it) {
-        if (it->second) {
-            delete it->second;
-        }
-        it->second = 0;
+        RELEASE(it->second);
     }
     unk38.clear();
     mFilteredOffers = 0;
 
     // Iterate all offers, categorize by filter symbols
-    std::vector<StoreOffer *> *allOffers = mAllOffers;
-    for (StoreOffer **it = allOffers->begin(); it != allOffers->end(); ++it) {
+    for (StoreOffer **it = mAllOffers->begin(); it != mAllOffers->end(); ++it) {
         StoreOffer *offer = *it;
         if (offer->isAvailable || TheNetCacheMgr->IsDebug()) {
             DataArray *filters =
@@ -375,16 +371,15 @@ void HamStoreProvider::Refresh() {
     static Symbol store_filter_shopping_cart("store_filter_shopping_cart");
     static Symbol store_filter_song_import_offers("store_filter_song_import_offers");
 
-    std::vector<HamStoreFilter *> *filters = mFilters;
-    std::vector<HamStoreFilter *>::iterator filterIt = filters->begin();
-    while (filterIt != filters->end()) {
+    std::vector<HamStoreFilter *>::iterator filterIt = mFilters->begin();
+    while (filterIt != mFilters->end()) {
         HamStoreFilter *filter = *filterIt;
         std::map<Symbol, std::vector<StoreOffer *> *>::iterator mapIt =
             unk38.find(filter->mFilterSym);
         if ((mapIt == unk38.end() || mapIt->second->size() == 0)
             && filter->mFilterSym != store_filter_shopping_cart
             && filter->mFilterSym != store_filter_song_import_offers) {
-            filterIt = filters->erase(filterIt);
+            filterIt = mFilters->erase(filterIt);
         } else {
             ++filterIt;
         }

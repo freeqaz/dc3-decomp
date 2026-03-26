@@ -299,7 +299,7 @@ void SongSequence::OnSongLoaded() {
         MILO_LOG("Time to advance song sequence = %.3f\n", TheTaskMgr.UISeconds() - mCurrentPlaybackPosition);
         const Entry &curEntry = mEntries[mCurrentIndex];
         UIPanel *gamePanel = ObjectDir::Main()->Find<UIPanel>("game_panel");
-        unsigned char hasIntro = (unsigned char)(TheGame->HasIntro());
+        int hasIntro = (unsigned char)(TheGame->HasIntro());
         Symbol gameMode = TheGameMode->Property(gameplay_mode)->Sym();
         bool inHollaback = gameMode == holla_back;
         bool inMindControl = gameMode == mind_control;
@@ -327,13 +327,15 @@ void SongSequence::OnSongLoaded() {
         }
         TheHamDirector->SetProperty(freestyle_enabled, false);
         if (curEntry.mIntroLoopMeasure >= 0 && curEntry.mOutroLoopMeasure >= 0) {
-            TheMaster->GetAudio()->SetLoop(
-                BeatToMs(curEntry.mIntroLoopMeasure * 4.0f), BeatToMs(curEntry.mOutroLoopMeasure * 4.0f)
-            );
+            float introBeat = curEntry.mIntroLoopMeasure * 4.0f;
+            float outroBeat = curEntry.mOutroLoopMeasure * 4.0f;
+            float introMs = BeatToMs(introBeat);
+            float outroMs = BeatToMs(outroBeat);
+            TheMaster->GetAudio()->SetLoop(introMs, outroMs);
         }
         if (0 <= curEntry.mEventStartMeasure && curEntry.mEventEndMeasure >= 1) {
             TheMaster->GetAudio()->SetLoop(curEntry.mEventStartMeasure * 4.0f, curEntry.mEventEndMeasure * 4.0f);
-            TheGame->Jump(curEntry.mEventStartMeasure * 4.0f, true);
+            TheGame->Jump(BeatToMs(curEntry.mEventStartMeasure * 4.0f), true);
         }
         if (curEntry.mIsIntro) {
             ObjectDir *hudPanel = DataVariable("hud_panel").Obj<ObjectDir>();
@@ -348,11 +350,11 @@ void SongSequence::OnSongLoaded() {
                 Symbol s0 = mEntries[mCurrentIndex + 1].mSongShortName;
                 int s0len = strlen(s0.Str());
                 strcpy(buffer, TheHamSongMgr.SongPath(s0, 0));
-                buffer[strlen(buffer) + s0len] = 0;
+                buffer[strlen(buffer) - s0len] = 0;
                 const char *milo = MakeString("%s%s.milo", buffer, s0.Str());
                 const char *moves = MakeString("%s%s.milo", buffer, "moves");
                 const char *clips = MakeString("%s%s.milo", buffer, "clips");
-                const char *mogg = MakeString("%s%s.milo", buffer, s0);
+                const char *mogg = MakeString("%s%s.mogg", buffer, s0.Str());
                 mFileCache->Add(milo, 1, milo);
                 mFileCache->Add(moves, 1, moves);
                 mFileCache->Add(clips, 1, clips);
@@ -387,6 +389,7 @@ void SongSequence::OnSongLoaded() {
         if (!inHollaback) {
             if (inMindControl)
                 goto next;
+            TheHamDirector->PlayIntroShot();
             static Message songseq_intro("songseq_intro");
             TheHamProvider->Export(songseq_intro, true);
         }

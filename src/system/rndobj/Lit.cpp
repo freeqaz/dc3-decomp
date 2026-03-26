@@ -213,7 +213,16 @@ BEGIN_LOADS(RndLight)
         bs >> mFalloffStart;
     }
     if (d.rev > 4) {
-        bs >> mAnimateColorFromPreset >> mAnimatePositionFromPreset;
+        if (d.rev < 5) {
+            bool tmp;
+            d >> tmp;
+            mAnimateColorFromPreset = tmp;
+            mAnimatePositionFromPreset = tmp;
+        }
+    }
+    if (d.rev > 5) {
+        d >> mAnimateColorFromPreset;
+        d >> mAnimatePositionFromPreset;
     }
     if (d.rev > 6) {
         bs >> mTopRadius >> mBotRadius;
@@ -247,7 +256,7 @@ BEGIN_LOADS(RndLight)
         bs >> mProjectedBlend;
     }
     if (d.rev > 0xF)
-        bs >> mAnimateRangeFromPreset;
+        d >> mAnimateRangeFromPreset;
     else
         mAnimateRangeFromPreset = mAnimateColorFromPreset;
 END_LOADS
