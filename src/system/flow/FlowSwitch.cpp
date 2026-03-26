@@ -112,8 +112,7 @@ void FlowSwitch::VerifyTypes() {
     Hmx::Object *drivenObj = firstOp.DrivenObj();
 
     if (drivenObj) {
-        DataArray *rhsArray = firstOp.Rhs().Array(NULL);
-        const DataNode *drivenVal = drivenObj->Property(rhsArray, false);
+        const DataNode *drivenVal = drivenObj->Property(firstOp.Rhs().Array(NULL), false);
         if (drivenVal) {
             targetValue = *drivenVal;
         } else {

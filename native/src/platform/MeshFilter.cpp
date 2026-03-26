@@ -49,5 +49,17 @@ bool ShouldSkipMesh(const char* name, RndMat* mat) {
         !strncmp(name, "warning_", 8)) {
         return true;
     }
+    // Light-catcher overlay meshes: multiply-blend surfaces (no diffuse texture,
+    // white material color) that capture scene lighting and project it onto the
+    // venue floor/stage as a multiply overlay. On Xbox, DTA scripts and the
+    // full lighting pipeline produce realistic light projections. On native,
+    // without the complete lighting setup, these render as bright white blocks
+    // (lighting exceeds 1.0, multiply blend amplifies instead of modulating).
+    if (mat && strstr(mat->Name(), "lightCatch")) return true;
+    // Venue TV screen surfaces (food court monitors, upper floor walls).
+    // Screen.tex is a placeholder white texture; on Xbox, video_recorder.srec
+    // or TexRenderer fills these with Kinect camera/video content. Without
+    // the video feed, they render as solid bright white rectangles.
+    if (mat && !strcmp(mat->Name(), "Screen.mat")) return true;
     return false;
 }

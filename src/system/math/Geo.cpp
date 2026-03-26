@@ -713,38 +713,40 @@ void Frustum::Set(float near, float far, float fovY, float ratio) {
 }
 
 bool operator>(const Sphere &s, const Frustum &f) {
-    if (s < f.front || s < f.back || s < f.left || s < f.right || s < f.top || s < f.bottom)
-        return false;
-    return true;
+    return s < f.front || s < f.back || s < f.left || s < f.right || s < f.top || s < f.bottom;
 }
 
 bool Intersect(const Segment &seg, const Sphere &sphere) {
     float dir_z = seg.end.z - seg.start.z;
     float dir_x = seg.end.x - seg.start.x;
-    float dir_y = seg.end.y - seg.start.y;
     float center_z = sphere.center.z;
+    float dir_y = seg.end.y - seg.start.y;
+    float diff_z = center_z - seg.start.z;
     float center_x = sphere.center.x;
+    float diff_x = center_x - seg.start.x;
     float center_y = sphere.center.y;
+    float diff_y = center_y - seg.start.y;
+    Vector3 closest;
+    closest.x = dir_x;
+    closest.y = dir_y;
+    closest.z = dir_z;
     float a = dir_z * dir_z + dir_x * dir_x + dir_y * dir_y;
     if (a == 0.0f)
         return false;
-    float t = ((center_y - seg.start.y) * dir_y
-        + (center_x - seg.start.x) * dir_x
-        + (center_z - seg.start.z) * dir_z) / a;
+    float t = (diff_z * dir_z + diff_x * dir_x + diff_y * dir_y) / a;
     float zero = 0.0f;
     float neg_t = -t;
     t = (neg_t >= 0.0f) ? zero : t;
     float one = 1.0f;
     float t_minus_one = t - one;
     t = (t_minus_one >= 0.0f) ? one : t;
-    Vector3 closest;
     Interp(seg.start, seg.end, t, closest);
-    float dy = closest.y - center_y;
-    float dx = closest.x - center_x;
     float dz = closest.z - center_z;
+    float dx = closest.x - center_x;
+    float dy = closest.y - center_y;
     float r = sphere.radius;
     float r2 = r * r;
-    float dist2 = dy * dy + dx * dx + dz * dz;
+    float dist2 = dz * dz + dx * dx + dy * dy;
     if (dist2 > r2)
         return false;
     return true;

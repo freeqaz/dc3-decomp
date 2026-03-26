@@ -162,58 +162,65 @@ void FlowSlider::UpdateActivations() {
 
     auto cur = mChildNodes.begin();
     auto prev = mChildNodes.begin();
-    auto next = cur;
-    if (cur != mChildNodes.end()) ++next;
+    auto next = mChildNodes.begin();
+
+    float one = 1.0f;
+    float zero = 0.0f;
 
     while (cur != mChildNodes.end()) {
+        ++next;
+        FlowValueCase *prevCase = static_cast<FlowValueCase *>(prev->Obj());
         FlowValueCase *curCase = static_cast<FlowValueCase *>(cur->Obj());
-        float curPos = curCase->Value();
-        float t = false;
+        FlowValueCase *nextCase = static_cast<FlowValueCase *>(next->Obj());
+        prev = cur;
+
+        float t;
         float intensity;
 
         if (next != mChildNodes.end()) {
-            FlowValueCase *nextCase = static_cast<FlowValueCase *>(next->Obj());
-            float nextPos = nextCase->Value();
+            float curPos = curCase->Value();
             if (mValue >= curPos) {
+                float nextPos = nextCase->Value();
                 if (mValue <= nextPos) {
                     if (curPos != nextPos) {
                         t = (mValue - curPos) / (nextPos - curPos);
+                    } else {
+                        t = zero;
                     }
-                    t = 1.0f - t;
+                    t = one - t;
                     goto ease;
                 }
             }
         }
 
         {
-            FlowValueCase *prevCase = static_cast<FlowValueCase *>(prev->Obj());
-            float prevPos = prevCase->Value();
-            if (mValue <= curPos && mValue >= prevPos) {
+            if (mValue <= curCase->Value() && mValue >= prevCase->Value()) {
+                float curPos = curCase->Value();
+                float prevPos = prevCase->Value();
                 if (curPos != prevPos) {
                     t = (mValue - prevPos) / (curPos - prevPos);
+                } else {
+                    t = zero;
                 }
                 goto ease;
             }
         }
 
-        if (next == mChildNodes.end()) {
-            if (mValue >= curPos) {
-                intensity = 1.0f;
-            } else if (cur == mChildNodes.begin() && mValue <= curPos) {
-                intensity = 1.0f;
+        {
+            float curPos = curCase->Value();
+            if (next == mChildNodes.end() && mValue > curPos) {
+                intensity = one;
+            } else if (cur == mChildNodes.begin() && mValue < curPos) {
+                intensity = one;
             } else {
-                intensity = 0.0f;
+                intensity = zero;
             }
-        } else if (cur == mChildNodes.begin() && mValue <= curPos) {
-            intensity = 1.0f;
-        } else {
-            intensity = 0.0f;
         }
         goto apply;
 
     ease:
         FlowNode::sIntensity = t;
-        intensity = (float)mEaseFunc((double)t, (double)mEasePower, (double)1.0f);
+        intensity = (float)mEaseFunc((double)t, (double)mEasePower, (double)one);
 
     apply:
         FlowNode::sIntensity = intensity * savedIntensity;
@@ -225,14 +232,12 @@ void FlowSlider::UpdateActivations() {
                 curCase->Deactivate(false);
             }
         } else {
-            if (mAlwaysRun > 0 || FlowNode::sIntensity > 0.0f) {
+            if (mAlwaysRun > 0 || FlowNode::sIntensity != 0.0f) {
                 ActivateChild(curCase);
             }
         }
 
-        prev = cur;
-        cur = next;
-        if (next != mChildNodes.end()) ++next;
+        ++cur;
     }
 
     FlowNode::sIntensity = savedIntensity;

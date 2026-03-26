@@ -76,7 +76,7 @@ bool FlowPickOne::Activate() {
         if (numChildren > 1) {
             int newIndex;
             do {
-                newIndex = RandomInt(0, numChildren);
+                newIndex = RandomInt(0, (int)mChildNodes.size());
             } while (newIndex == mIndex);
             mIndex = newIndex;
         } else {
@@ -97,7 +97,7 @@ bool FlowPickOne::Activate() {
         }
         {
             int historySize = (int)mChoiceHistory.size();
-            if (historySize <= mIndex) {
+            if (mIndex >= historySize) {
                 jukebox_shuffle:
                 FlowNode *lastChosen = nullptr;
                 if (!mChoiceHistory.empty()) {
@@ -110,11 +110,11 @@ bool FlowPickOne::Activate() {
                 }
                 RandomShuffle(items.begin(), items.end());
                 mIndex = 0;
-                int count = (int)(items.end() - items.begin());
-                if (count != 0) {
+                FlowNode **p = items.end();
+                if (p - items.begin() != 0) {
                     do {
-                        mChoiceHistory.push_back(items[--count]);
-                    } while (count != 0);
+                        mChoiceHistory.push_back(*--p);
+                    } while (p - items.begin() != 0);
                 }
                 if (lastChosen) {
                     if (mChoiceHistory[0] == lastChosen) {
@@ -137,7 +137,7 @@ bool FlowPickOne::Activate() {
     }
     default:
         MILO_NOTIFY_ONCE("FlowPickOne: bad picking type");
-        break;
+        return !mRunningNodes.empty();
     }
 
     ActivateChild(chosen);
