@@ -1640,6 +1640,7 @@ if(BUILD_TESTS)
         tests/test_loading_panel.cpp
         tests/test_milo_viewer_screenshot.cpp
         tests/test_object_lifetime.cpp
+        tests/test_manual_repro.cpp
         tests/test_charclipgroup.cpp
         tests/test_asset_loading.cpp
         tests/test_merge_scope_parity.cpp

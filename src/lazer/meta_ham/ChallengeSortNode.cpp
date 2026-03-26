@@ -332,11 +332,11 @@ void ChallengeSortNode::Text(UIListLabel *listlabel, UILabel *label) const {
         );
         if (ownerChallengeScore >= mChallengeRecord->GetChallengeRow().mScore) {
             if (mChallengeRecord->GetChallengerGamertag() != mChallengeRecord->GetMissionInfo()) {
-                unsigned int ownerChallengeTimestamp = TheChallengeSortMgr->GetOwnerChallengeTimeStamp(
+                int ownerChallengeTimestamp = TheChallengeSortMgr->GetOwnerChallengeTimeStamp(
                     mChallengeRecord->GetChallengeRow().mSongID
                 );
-                if (mChallengeRecord->GetChallengeRow().mTimeStamp
-                    < ownerChallengeTimestamp) {
+                if (ownerChallengeTimestamp
+                    <= (int)mChallengeRecord->GetChallengeRow().mTimeStamp) {
                     app_label->SetChallengerName(mChallengeRecord->GetChallengerGamertag().Str());
                 }
             } else {
@@ -347,10 +347,10 @@ void ChallengeSortNode::Text(UIListLabel *listlabel, UILabel *label) const {
         int ownerChallengeScore = TheChallengeSortMgr->GetOwnerChallengeScore(
             mChallengeRecord->GetChallengeRow().mSongID
         );
-        if (mChallengeRecord->GetChallengeRow().mScore <= ownerChallengeScore
+        if (ownerChallengeScore > mChallengeRecord->GetChallengeRow().mScore
             && TheChallengeSortMgr->GetOwnerChallengeTimeStamp(
                    mChallengeRecord->GetChallengeRow().mSongID
-               ) > mChallengeRecord->GetChallengeRow().mTimeStamp) {
+               ) > (int)mChallengeRecord->GetChallengeRow().mTimeStamp) {
             app_label->SetChallengerName(mChallengeRecord->GetChallengerGamertag().Str());
         }
     } else if (listlabel->Matches("right_gamertag")) {
@@ -367,13 +367,13 @@ void ChallengeSortNode::Text(UIListLabel *listlabel, UILabel *label) const {
         int ownerChallengeScore = TheChallengeSortMgr->GetOwnerChallengeScore(
             mChallengeRecord->GetChallengeRow().mSongID
         );
-        if (mChallengeRecord->GetChallengeRow().mScore < ownerChallengeScore) {
+        if (ownerChallengeScore > mChallengeRecord->GetChallengeRow().mScore) {
             if (mChallengeRecord->GetChallengerGamertag() == mChallengeRecord->GetMissionInfo()) {
                 int ownerChallengeTimestamp = TheChallengeSortMgr->GetOwnerChallengeTimeStamp(
                     mChallengeRecord->GetChallengeRow().mSongID
                 );
                 if (ownerChallengeTimestamp
-                    <= mChallengeRecord->GetChallengeRow().mTimeStamp) {
+                    <= (int)mChallengeRecord->GetChallengeRow().mTimeStamp) {
                     app_label->SetChallengeScoreLabel(
                         mChallengeRecord->GetChallengeRow().mScore
                     );
@@ -388,10 +388,10 @@ void ChallengeSortNode::Text(UIListLabel *listlabel, UILabel *label) const {
         int ownerChallengeScore = TheChallengeSortMgr->GetOwnerChallengeScore(
             mChallengeRecord->GetChallengeRow().mSongID
         );
-        if (mChallengeRecord->GetChallengeRow().mScore < ownerChallengeScore
+        if (ownerChallengeScore > mChallengeRecord->GetChallengeRow().mScore
             && TheChallengeSortMgr->GetOwnerChallengeTimeStamp(
                    mChallengeRecord->GetChallengeRow().mSongID
-               ) > mChallengeRecord->GetChallengeRow().mTimeStamp) {
+               ) > (int)mChallengeRecord->GetChallengeRow().mTimeStamp) {
             app_label->SetChallengeScoreLabel(mChallengeRecord->GetChallengeRow().mScore);
         }
     } else if (listlabel->Matches("right_score")) {
@@ -406,10 +406,14 @@ void ChallengeSortNode::Text(UIListLabel *listlabel, UILabel *label) const {
         }
     } else if (listlabel->Matches("medal")) {
         SetMedalIcon(label);
+        return;
     } else if (listlabel->Matches("new")) {
         SetNewIcon(label);
+        return;
     } else if (listlabel->Matches("buy")) {
         SetBuyIcon(label);
+        return;
+    } else if (listlabel->Matches("header_collapse")) {
     }
     Symbol blank(gNullStr);
     label->SetTextToken(blank);

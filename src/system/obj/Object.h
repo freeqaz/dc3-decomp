@@ -301,6 +301,17 @@ private:
             vec->ReplaceNode(this, obj);
         }
         virtual ObjRefOwner *Parent() const { return mOwner; }
+#ifdef HX_NATIVE
+        void NullifyObj() override {
+            ObjRefConcrete<T1, T2>::NullifyObj();
+            ObjPtrVec<T1, T2> *vec = static_cast<ObjPtrVec<T1, T2> *>(mOwner);
+            if (vec && vec->Mode() == kObjListNoNull && !gInReplaceList) {
+                vec->erase(typename ObjPtrVec<T1, T2>::iterator(
+                    vec->mNodes.begin() + (this - vec->mNodes.data())
+                ));
+            }
+        }
+#endif
 
         T1 *Obj() const { return mObject; }
 
@@ -431,6 +442,7 @@ public:
     void Set(iterator it, T1 *obj);
     void merge(const ObjPtrVec &);
     Hmx::Object *Owner() const { return mOwner; }
+    ObjListMode Mode() const { return mListMode; }
     // see Draw.cpp for this
     void operator=(const ObjPtrVec &other);
 
@@ -481,7 +493,7 @@ private:
             ObjRefConcrete<T1, T2>::NullifyObj();
             ObjPtrList<T1, T2> *list =
                 static_cast<ObjPtrList<T1, T2> *>(mOwner);
-            if (list && list->Mode() == kObjListNoNull) {
+            if (list && list->Mode() == kObjListNoNull && !gInReplaceList) {
                 list->Unlink(this);
                 delete this;
             }

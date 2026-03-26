@@ -17,6 +17,14 @@ OvershellSlot::OvershellSlot(HamPlayerData &data)
 void OvershellSlot::SetPlaying(bool playing) {
     static Message quitMsg("player_quit", 0);
     static Message joinMsg("player_join", 0);
+#ifdef HX_NATIVE
+    // Guard: the HUD DTA code (hud_objects.dta) that handles player_join/quit
+    // requires a fully initialized provider with side-to-HUD mapping. In the
+    // native port, player providers may not be fully wired up, causing $hud to
+    // be empty and crashing on property access. Skip until we have the full
+    // game-data / provider initialization path working.
+    return;
+#endif
     if (playing) {
         joinMsg[0] = mPlayerNum;
         TheHamProvider->Export(joinMsg, true);

@@ -1047,6 +1047,10 @@ void RndParticleSys::SetSubSamples(int num) {
 }
 
 void RndParticleSys::UpdateRelativeXfm() {
+#ifdef HX_NATIVE
+    if (!mMotionParent)
+        return;
+#endif
     if (mRelativeMotion == 1) {
         mRelativeXfm = mMotionParent->WorldXfm();
     } else if (mRelativeMotion) {

@@ -598,6 +598,10 @@ DEF_DATA_FUNC(DataNew) {
 
 DEF_DATA_FUNC(DataForEach) {
     DataArray *arr = array->Array(2);
+#ifdef HX_NATIVE
+    if (!arr)
+        return 0;
+#endif
     arr->AddRef();
     DataNode *var = array->Var(1);
 
@@ -852,7 +856,12 @@ DEF_DATA_FUNC(DataSize) {
         MILO_ASSERT(gDataThis, 0x54D);
         return gDataThis->PropertySize(array->UncheckedArray(1));
     }
-    return array->Array(1)->Size();
+    DataArray *a = array->Array(1);
+#ifdef HX_NATIVE
+    if (!a)
+        return 0;
+#endif
+    return a->Size();
 }
 
 DEF_DATA_FUNC(DataRemoveElem) {

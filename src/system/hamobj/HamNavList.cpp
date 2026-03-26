@@ -1422,14 +1422,17 @@ void HamNavList::UpdateGestures(const Skeleton *skeleton) {
                     return;
                 }
             }
-            if (TheGestureMgr && TheGestureMgr->InVoiceMode()) {
+            bool inVoiceMode = TheGestureMgr && TheGestureMgr->InVoiceMode();
+            if (inVoiceMode) {
                 TheGestureMgr->SetInVoiceMode(false);
             }
 
             if (mRibbonMode == HamListRibbon::kRibbonDisengaged) {
                 mDirectionGestureFilter->Clear();
+                mDirectionGestureFilter->SetEngaged(false);
+            } else {
+                mDirectionGestureFilter->SetEngaged(true);
             }
-            mDirectionGestureFilter->SetEngaged(mRibbonMode != HamListRibbon::kRibbonDisengaged);
 
             if (mScrollBehavior.IsScrolling()) {
                 mDirectionGestureFilter->Clear();
@@ -1439,21 +1442,24 @@ void HamNavList::UpdateGestures(const Skeleton *skeleton) {
             int numItems = NumItems();
             if (numItems == 1) {
                 mDirectionGestureFilter->ClearSwipe();
+                mDirectionGestureFilter->SetAllowAboveShoulder(false);
+            } else {
+                mDirectionGestureFilter->SetAllowAboveShoulder(true);
             }
-            mDirectionGestureFilter->SetAllowAboveShoulder(numItems != 1);
 
             int firstShowing = mListState.FirstShowing();
-            bool gathering = mListState.ScrollPastMinDisplay();
+            unsigned char gathering = mListState.ScrollPastMinDisplay();
             int selected = mListState.Selected();
-            if (NumItems() - 1 == selected + ((int)gathering - firstShowing)) {
+            int scrollOffset = selected + (!!gathering - firstShowing);
+            if (scrollOffset == NumItems() - 1) {
                 mDirectionGestureFilter->ClearSwipe();
             }
 
             bool handValid = skeleton && skeleton->IsValid()
                 && mDirectionGestureFilter->IsHandValid(*skeleton);
-            bool posValid = gathering && mDirectionGestureFilter->IsValidScrollPos(*skeleton);
+            bool posValid = mListState.ScrollPastMinDisplay() && mDirectionGestureFilter->IsValidScrollPos(*skeleton);
 
-            if ((!handValid && !posValid) && mOnlyUseWhenFocused && !TheLoadMgr.EditMode()) {
+            if ((!handValid && !posValid) && unkc8 && !TheLoadMgr.EditMode()) {
                 Disengage();
             }
 
@@ -1461,8 +1467,7 @@ void HamNavList::UpdateGestures(const Skeleton *skeleton) {
                 SetSwelling();
             }
 
-            bool testEntering = mListRibbonResource->TestEntering();
-            if (mListRibbonResource && testEntering) {
+            if (mListRibbonResource->TestEntering()) {
                 return;
             }
 
@@ -1476,18 +1481,20 @@ void HamNavList::UpdateGestures(const Skeleton *skeleton) {
                 return;
             }
 
-            if (mDirectionGestureFilter->IsLockedIn()) {
-                if (!mDirectionGestureFilter->HasDirection()
-                    && mScrollBehavior.mScrollDir == 0) {
-                    SetSwelling();
+            if (handValid) {
+                if (mDirectionGestureFilter->IsLockedIn()) {
+                    if (!mDirectionGestureFilter->HasDirection()
+                        && mScrollBehavior.mScrollDir == 0) {
+                        SetSwelling();
+                        return;
+                    }
+                    if (!mSelectionEnabled) {
+                        return;
+                    }
+                    float pct = mDirectionGestureFilter->GetPercentPulled();
+                    SetSliding(pct);
                     return;
                 }
-                if (!mSelectionEnabled) {
-                    return;
-                }
-                float pct = mDirectionGestureFilter->GetPercentPulled();
-                SetSliding(pct);
-                return;
             }
         }
     }

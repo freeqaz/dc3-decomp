@@ -6,10 +6,24 @@
 #include <cstdio>
 #include <cstdlib>
 #include <csignal>
+#include <csetjmp>
 #include <execinfo.h>
 #include <unistd.h>
 
+// Recovery jump buffer for crash-resilient draw calls.
+// When gDrawJmpBufSet is true and a SIGSEGV occurs, we longjmp back
+// to the draw call site instead of terminating. This lets the engine
+// survive renderer crashes during partially-loaded scenes.
+sigjmp_buf gDrawJmpBuf;
+bool gDrawJmpBufSet = false;
+
 static void SignalHandler(int sig, siginfo_t *info, void *) {
+    // If we're inside a draw call, recover instead of crashing
+    if (sig == SIGSEGV && gDrawJmpBufSet) {
+        gDrawJmpBufSet = false;
+        siglongjmp(gDrawJmpBuf, 1);
+    }
+
     // Use write() and backtrace_symbols_fd — async-signal-safe
     const char *signame = (sig == SIGSEGV) ? "SIGSEGV" :
                           (sig == SIGABRT) ? "SIGABRT" :

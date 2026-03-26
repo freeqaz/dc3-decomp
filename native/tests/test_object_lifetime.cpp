@@ -483,27 +483,6 @@ TEST_F(ObjectLifetimeTest, DeleteAutosavingIconSubdirOnly) {
     delete dir;
 }
 
-TEST_F(ObjectLifetimeTest, ManualReproAutosaveWarningPanelUnload) {
-    if (!getenv("MILO_REPRO_UNLOAD")) {
-        GTEST_SKIP() << "Set MILO_REPRO_UNLOAD=1 to enable manual panel unload repro";
-    }
-
-    UIPanel *panel = ObjectDir::Main()->Find<UIPanel>("autosave_warning_panel", false);
-    if (!panel) {
-        GTEST_SKIP() << "autosave_warning_panel not found; EngineTestFixture does not build the full UI object graph";
-    }
-
-    panel->CheckLoad();
-    ASSERT_TRUE(panel->CheckIsLoaded()) << "panel failed to load";
-
-    std::clock_t start = std::clock();
-    panel->CheckUnload();
-    double seconds = double(std::clock() - start) / CLOCKS_PER_SEC;
-    printf("ManualReproAutosaveWarningPanelUnload: %.3fs state=%d loadRefs=%d\n",
-           seconds, (int)panel->GetState(), panel->IsReferenced());
-
-    EXPECT_EQ(panel->GetState(), UIPanel::kUnloaded);
-}
 
 // ============================================================================
 // Ring corruption & DirPtrRefCount tests
@@ -1137,6 +1116,38 @@ TEST_F(ObjectLifetimeTest, NullifyAllRefsRemovesFromObjPtrListNoNull) {
     delete target;
     delete survivor;
     delete listOwner;
+}
+
+// Verify that NullifyAllRefs removes the dying object's entry from a
+// kObjListNoNull ObjPtrVec, rather than leaving a null node behind.
+TEST_F(ObjectLifetimeTest, NullifyAllRefsRemovesFromObjPtrVecNoNull) {
+    Hmx::Object *vecOwner = Hmx::Object::New<Hmx::Object>();
+    Hmx::Object *target = Hmx::Object::New<Hmx::Object>();
+    Hmx::Object *survivor = Hmx::Object::New<Hmx::Object>();
+
+    ObjPtrVec<Hmx::Object> vec(vecOwner, (EraseMode)0, kObjListNoNull);
+    vec.push_back(target);
+    vec.push_back(survivor);
+    ASSERT_EQ(vec.size(), 2);
+
+    target->NullifyAllRefs();
+
+    // The vector must not contain a null entry.
+    EXPECT_EQ(vec.size(), 1)
+        << "NullifyAllRefs must remove the nullified entry from kObjListNoNull vectors";
+
+    // The surviving entry must still be valid
+    bool foundSurvivor = false;
+    for (size_t i = 0; i < vec.size(); i++) {
+        EXPECT_NE(vec[i], nullptr) << "kObjListNoNull vector must never contain null entries";
+        if (vec[i] == survivor)
+            foundSurvivor = true;
+    }
+    EXPECT_TRUE(foundSurvivor);
+
+    delete target;
+    delete survivor;
+    delete vecOwner;
 }
 
 // Verify that multiple list entries pointing to the same dying object

@@ -1,10 +1,13 @@
 #include "App.h"
 #ifdef HX_NATIVE
 #include <algorithm>
+#include <csetjmp>
 #include "telemetry/GameplayTelemetry.h"
 #if !defined(__EMSCRIPTEN__)
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
+extern sigjmp_buf gDrawJmpBuf;
+extern bool gDrawJmpBufSet;
 #endif
 #ifdef __EMSCRIPTEN__
 #include <emscripten/emscripten.h>
@@ -1239,8 +1242,18 @@ void App::RunWithoutDebugging() {
         // Draw UI panels (menus, transitions, flashcards, HUD overlays).
         // With FileMerger convergence, game_screen panels are loaded via
         // the engine pipeline and DTA flow controls visibility.
-        if (TheUI && !getenv("DC3_HUD_ONLY") && !getenv("DC3_NO_UI"))
-            TheUI->Draw();
+        if (TheUI && !getenv("DC3_HUD_ONLY") && !getenv("DC3_NO_UI")) {
+            if (sigsetjmp(gDrawJmpBuf, 1) == 0) {
+                gDrawJmpBufSet = true;
+                TheUI->Draw();
+                gDrawJmpBufSet = false;
+            } else {
+                gDrawJmpBufSet = false;
+                static int sDrawCrashCount = 0;
+                if (++sDrawCrashCount <= 3)
+                    fprintf(stderr, "DC3 Native: caught SIGSEGV in Draw(), skipping frame %d (crash #%d)\n", frameCount, sDrawCrashCount);
+            }
+        }
         // HUD drawn by TheUI->Draw() via game_screen panel hierarchy.
         // FileMerger-loaded HUD flows control visibility/alpha/positioning.
 
