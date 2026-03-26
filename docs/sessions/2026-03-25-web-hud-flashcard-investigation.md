@@ -1,6 +1,6 @@
 # Session: Web HUD Flashcard Investigation
 
-**Date**: 2026-03-25  
+**Date**: 2026-03-25
 **Focus**: Dance move card sync and render failures on the web build
 
 ## Summary
@@ -12,7 +12,83 @@ Two distinct issues were under investigation:
 
 The sync bug is now understood and fixed in shared `HX_NATIVE` code. Native Better Off Alone now advances flashcards from the proper routine-builder anim and renders the full three-card stack again.
 
-The remaining browser problem appears to be a web-only flashcard render/display issue, not the original remixer timing bug.
+The remaining browser problem was diagnosed as a **move name resolution failure**: the DanceRemixer populates the routine builder anim with all-rest move keys because the move graph doesn't resolve actual dance variants during `SaveOriginalMoveParents`. A fallback was added to `MoveNameFromBeat` that checks the authored difficulty song.anim when the routine builder returns rest moves.
+
+## Root Cause Analysis (Web Flashcard Failure)
+
+### Diagnostic Results
+
+Using targeted C++ diagnostics in the web (Emscripten) build, we confirmed:
+
+1. **HUD objects exist and are valid**: `$hud_panel` is set, `hud_left`/`hud_right` exist, 4 flash_card children found, all showing=1
+2. **Song anim pipeline works**: `player_1_routine_builder.anim` has 92 move keys with `interp_handler='move_interp'`, frame advances correctly
+3. **All move keys are `Rest.move`**: Every one of the 92 keys in the routine builder has value `Rest.move`
+4. **`InsertMoveInSong` writes rest variants**: Confirmed `clip='rest_betteroffalone_v1000'`, `move='Rest.move'` for all measures
+5. **The C++ flashcard hack is not needed**: `NativeHudFlashcardHackRequired()` returns false (routine builder has keys)
+
+### The Failure Chain
+
+```
+DanceRemixer::Reset()
+  → OriginalChoreoRemixer::SelectMove(player, measure)
+    → GetMoveParentsByDifficulty(difficulty)[measure]
+      → Returns rest parents for ALL measures (not just intro/outro)
+    → AddRoutineMove(player, measure, restParent, restVariant)
+      → FillInRoutineAt → finds rest variant
+      → InsertMoveInSong → writes "Rest.move" key to routine builder
+```
+
+The `GetMoveParentsByDifficulty` returns rest parents because `SaveOriginalMoveParents` failed to find actual dance variants in the move graph via `FindMoveByVariantName`. The layout has variant names per difficulty, but the move graph's `mMoveVariants` map doesn't contain the matching entries — likely because the DTA-driven initialization flow that populates the graph is incomplete on native/web.
+
+### Why `hidden=true` on All Flashcards
+
+In `update_flashcards` DTA handler:
+```dta
+{$flash_card set hidden {'||' {! $my_move} {$my_move is_rest}}}
+```
+When `move_from_beat` → `MoveNameFromBeat` returns "Rest.move" → `get_move` finds the Rest HamMove → `is_rest` is true → `hidden = true` → `{all.grp set_showing FALSE}`.
+
+So the flashcard `RndDir` objects are showing=1 (the outer container), but their `all.grp` internal group is hidden because every card has a rest move assigned.
+
+## Fix Applied
+
+### `HamDirector::MoveNameFromBeat` fallback (HamDirector.cpp)
+
+When the routine builder's move keys return "Rest.move" during gameplay (beat >= 0), fall back to the authored difficulty song.anim which has the original move choreography baked in:
+
+```cpp
+#ifdef HX_NATIVE
+// HACK(native): the DanceRemixer may populate the routine builder with
+// all-rest move keys when the move graph or layout doesn't resolve
+// properly on native/web. Fall back to the authored difficulty song.anim
+// which has the original move choreography.
+static Symbol sRest("Rest.move");
+if (ret == sRest && beat >= 0.0f) {
+    HamPlayerData *hpd = TheGameData ? TheGameData->Player(player) : nullptr;
+    if (hpd) {
+        RndPropAnim *authoredAnim =
+            SongAnimByDifficulty(LegacyDifficulty(hpd->GetDifficulty()));
+        if (authoredAnim && authoredAnim != anim) {
+            PropKeys *authoredKeys =
+                authoredAnim->GetKeys(this, DataArrayPtr(Symbol("move")));
+            if (authoredKeys) {
+                Symbol authoredRet;
+                authoredKeys->AsSymbolKeys()->AtFrame(frame, authoredRet);
+                if (authoredRet != sRest && !authoredRet.Null()) {
+                    ret = authoredRet;
+                }
+            }
+        }
+    }
+}
+#endif
+```
+
+**Limitation**: This fix assumes the authored song.anim has actual dance move names in its `move` prop keys (not rest placeholders). If perform mode songs have all-rest `move` keys in the authored anim too (since the remixer is supposed to generate them), this fallback won't help. In that case, the fix needs to go deeper — either fixing the move graph loading or bypassing the remixer entirely.
+
+### Diagnostic added to `OriginalChoreoRemixer::SaveOriginalMoveParents`
+
+Logs the count of null/rest/dance variants found, plus `mIntroMoveIndex` and `mFinalPoseMoveIndex`. This will help diagnose whether the move graph has the right data when the game next reaches gameplay.
 
 ## What We Confirmed
 
@@ -25,147 +101,39 @@ This path is correct:
 - `world_objects.dta` forwards `HamDirector.move_interp` to `$hud_panel move_interp`
 - `hud_objects.dta` derives current/next flashcards from `{$hamdirector player_song_anim 0}`
 
-So the HUD should be driven by DTA callbacks from the active `player_song_anim`, not by ad hoc C++ timing.
-
 ### 2. The real sync bug was the wrong anim being populated
 
-In perform mode, `merge_moves=1` means the game should populate the routine-builder anims:
+(Same as before — see `MoveMgr::InsertMoveInSong` native hack)
 
-- `player_1_routine_builder.anim`
-- `player_2_routine_builder.anim`
+### 3. The `move_interp` interp handler fires correctly on web
 
-However, native/web `HamDirector::SongAnim()` had a fallback that returned the authored difficulty `song.anim` when the routine-builder anim had no clip keys yet. That fallback was useful for clip playback, but it also caused `MoveMgr::InsertMoveInSong()` to write the initial remixer keys into the authored `song.anim` instead of the routine-builder anim.
+The routine builder anim has `interpHandler='move_interp'` on its `move` prop key (inherited from the expert song.anim copy). `OnSelectCamera` fires every frame, calling `songAnim->SetFrame()` which evaluates prop keys and fires the interp handler. This forwards to the HUD's `move_interp` → `update_flashcards`.
 
-Result:
+### 4. The flashcard objects are correctly wired on web
 
-- `player_song_anim` stayed effectively empty for `move`
-- HUD `move_interp` never got the intended routine timeline
-- flashcard transitions drifted or stalled
+- `$hud_panel` is valid
+- `hud_left`/`hud_right` exist with 4 flash_card children each
+- `[player_huds]` is populated (HUD enter handler fires)
+- The DTA `update_flashcards` → `set_move` → `update_flashcard_move` path runs
 
-### 3. Native fix applied
+### 5. `WorldDir::Poll()` fires `select_camera` every frame on web
 
-In `src/system/hamobj/MoveMgr.cpp`, under `#ifdef HX_NATIVE`, `InsertMoveInSong()` now writes directly to the routine-builder anim when `merge_moves=1`, instead of going through `SongAnim()`.
+Confirmed via `OnSelectCamera` log output.
 
-This is guarded and documented as a temporary native/web hack:
+## Relevant Files
 
-- `src/system/hamobj/MoveMgr.cpp`
+- `src/system/hamobj/HamDirector.cpp` — `MoveNameFromBeat` fallback
+- `src/system/hamobj/MoveMgr.cpp` — `InsertMoveInSong` native hack
+- `src/system/hamobj/OriginalChoreoRemixer.cpp` — `SaveOriginalMoveParents` diagnostic
+- `src/system/hamobj/DanceRemixer.cpp` — `AddRoutineMove` (calls InsertMoveInSong)
+- `src/lazer/game/GamePanel.cpp` — C++ flashcard refresh hack
 
-The existing C++ HUD refresh workaround in `src/lazer/game/GamePanel.cpp` was also tightened so it only runs when the routine-builder `move` keys are actually missing. Once the real timeline exists, the hack backs off automatically.
+## Recommended Next Steps
 
-Relevant files:
+1. **Verify the authored song.anim has real moves**: Check if the expert difficulty song.anim's `move` prop keys have actual dance move names or all-rest placeholders. If they're all rest, the `MoveNameFromBeat` fallback won't help.
 
-- `src/system/hamobj/MoveMgr.cpp`
-- `src/lazer/game/GamePanel.cpp`
-- `src/system/hamobj/HamDirector.cpp`
-- `src/lazer/game/GamePanel.h`
+2. **Fix the move graph loading**: The deeper fix is to ensure the move graph's `mMoveVariants` map contains all dance variants from the song's `move_data` dir. Trace `MoveGraph::Copy(dirGraph, kCopyDeep)` to verify the deep copy populates `mMoveVariants` correctly.
 
-All hacks added during this investigation were kept under `#ifdef HX_NATIVE` with cleanup comments.
+3. **Alternative: bypass the remixer entirely**: For native/web, instead of relying on the DTA-driven remixer, populate the routine builder's move keys directly from the layout data during `SetupRoutineBuilderAnims` or `Init`.
 
-## Native Verification
-
-Native Better Off Alone now behaves correctly enough to establish a good reference:
-
-- full three-card flashcard stack is visible again
-- top card is present
-- routine-builder anim is populated
-- HUD transitions are driven from the routine timeline instead of the authored fallback
-
-HTTP debug checks on native showed:
-
-- `{{$hamdirector player_song_anim 0} num_keys $hamdirector (move)}` => populated
-- `{{$hamdirector player_song_anim 0} num_keys $hamdirector (clip)}` => populated
-
-A native screenshot captured after the fix shows the expected left/right flashcard stacks and top cards.
-
-## Web Verification
-
-Web repro steps used:
-
-- existing server on port `8420`
-- `node scripts/web/gameplay.mjs --port 8420 --song-index 3 --timeout 90 --hang-timeout 20 --out /tmp/dc3-web-gameplay-boa`
-
-Current song index `3` maps to Better Off Alone on this checkout.
-
-The browser run reached gameplay successfully and produced:
-
-- screenshot: `/tmp/dc3-web-gameplay-boa/gameplay.png`
-- logs: `/tmp/dc3-web-gameplay-boa/console.jsonl`
-
-### What the web screenshot shows
-
-- score numbers render
-- world render is fine
-- character FX render
-- flashcards do not render
-
-So the web bug is not "HUD missing entirely". It is narrower: the score HUD draws, but the flashcard dock/cards do not.
-
-### Important log observations
-
-At `world_panel` entry, web still logs:
-
-- `SongAnim(0): routine builder empty, falling back to expert anim`
-- repeated `cur_move` script errors from `ui/hud/hud_objects.dta`
-
-However, native shows the same early messages and still recovers to the correct on-screen flashcards later. That means these initial logs are not sufficient to explain the remaining browser-only failure by themselves.
-
-## Current Interpretation
-
-The original timing bug and the remaining browser render failure are related, but not identical.
-
-What is now most likely:
-
-1. The remixer/routine-builder sync issue was real and is fixed for the shared native/web path.
-2. Native now proves that the flashcard logic can recover and render correctly after the early fallback noise.
-3. Web still fails to display the flashcards even though the rest of the HUD is drawing.
-
-That strongly suggests the remaining issue is in the flashcard-specific display/render path on web, not in the top-level HUD merge or score HUD path.
-
-## Narrowed Remaining Hypotheses
-
-### Hypothesis A: flashcard objects are present but not visually drawing on web
-
-Evidence:
-
-- score HUD renders
-- browser screenshot shows gameplay HUD is active
-- only flashcards are absent
-
-Possible causes:
-
-- flashcard dock child objects are hidden or animated to a bad state on web
-- flashcard materials/textures are not resolving or not presenting
-- a flashcard-specific render state differs between native desktop and Emscripten/WebGPU
-
-### Hypothesis B: flashcard cards exist logically, but their move object binding stays invalid longer on web
-
-Evidence:
-
-- DTA `update_flashcard_move` requires `[cur_move]` to be a real move object
-- web still logs repeated `cur_move` failures
-
-Counterpoint:
-
-- native logs the same early errors and still eventually shows the cards
-
-So if this is still part of the problem, it is likely an ordering difference after panel entry, not the initial fallback itself.
-
-## Useful References
-
-- `docs/debugging/web.md`
-- `docs/tools/HTTP_DEBUG_SERVER.md`
-- `src/system/hamobj/MoveMgr.cpp`
-- `src/system/hamobj/HamDirector.cpp`
-- `src/lazer/game/GamePanel.cpp`
-- `orig-assets/extracted/world/world_objects.dta`
-- `orig-assets/extracted/ui/hud/hud_objects.dta`
-
-## Recommended Next Step
-
-The next pass should focus only on the browser-specific flashcard display path:
-
-1. instrument flashcard dock/card visibility and current move assignment on web
-2. confirm whether the flashcard objects are being updated but not drawn, or never updated into a visible state
-3. compare flashcard-specific object state between native-good and web-bad runs
-
-At this point, the remaining problem is narrow enough that more work on generic DTA trigger timing is unlikely to pay off first.
+4. **Fix the web navigation test**: The Playwright-based gameplay.mjs test is flaky — works for some builds but fails to navigate past song select on others. May be a timing/focus issue.

@@ -68,6 +68,10 @@ public:
     HamMaster *GetMaster() const { return mMaster; }
     bool Paused() const { return mPaused; }
     bool TimePaused() const { return mTimePaused; }
+    int LoadState() const { return mLoadState; }
+    int WaitState() const { return mWaitState; }
+    bool UsesMoveGraph() const { return mUseMoveGraph; }
+    bool RealTime() const { return mRealTime; }
 
 private:
     void PostWaitStart();

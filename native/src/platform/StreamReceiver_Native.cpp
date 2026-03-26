@@ -182,6 +182,16 @@ int StreamReceiverNative::RenderAudio(float *output, int frameCount) {
         mSilentRenderCount++;
         mLastPeak = 0.0f;
 #endif
+        // When source data is exhausted, keep advancing the play cursor
+        // through silence so GetBytesPlayed() / GetRawTime() keeps moving.
+        // Xbox hardware ring buffers do this automatically (zero-fill after
+        // EndData). Without this, songMs freezes and end-of-song events
+        // never fire, hanging gameplay.
+        if (mEndData) {
+            int silentBytes = frameCount * 2;
+            mPlayCursor += silentBytes;
+            mTotalBytesPlayed += silentBytes;
+        }
         return frameCount;
     }
 

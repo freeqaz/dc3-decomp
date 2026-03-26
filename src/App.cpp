@@ -40,9 +40,11 @@
 #include "platform/Rnd_Wgpu.h"
 #include "platform/NativeSettings.h"
 #include "utl/Locale.h"
+#ifdef HX_IMGUI
 #include "gfx/ImGuiBackend.h"
 #include "platform/DebugPanel.h"
 #include <imgui.h>
+#endif
 #ifdef __EMSCRIPTEN__
 #include "audio/AudioDevice.h"
 #endif
@@ -132,11 +134,13 @@ public:
             NativeSettings::Get().cameraBlend = !NativeSettings::Get().cameraBlend;
             return DataNode(0);
         }
+#ifdef HX_IMGUI
         if (sym == "get_debug_panel") return DataNode(DebugPanel::IsVisible() ? 1 : 0);
         if (sym == "toggle_debug_panel") {
             DebugPanel::Toggle();
             return DataNode(0);
         }
+#endif
         if (sym == "has_finished_campaign") return DataNode(0);
         if (sym == "get_all_unlocked") return DataNode(0);
         if (sym == "needs_upload") return DataNode(0);
@@ -557,6 +561,7 @@ App::App(int argc, char **argv) {
         TheLocale.SetMagnuStrings(nativeLocale);
     }
 
+#ifdef HX_IMGUI
     // Initialize ImGui debug overlay
     {
 #if !defined(__EMSCRIPTEN__)
@@ -571,6 +576,7 @@ App::App(int argc, char **argv) {
             MILO_LOG("DC3 Native: ImGui debug panel initialized (~ to toggle)\n");
         }
     }
+#endif
 
     if (showSplash) {
         splash.EndSplasher();
@@ -815,6 +821,7 @@ void App::RunOneFrame() {
     if (TheUI)
         TheUI->Draw();
 
+#ifdef HX_IMGUI
     // ImGui debug overlay — deferred init on web (GPU device is async)
     {
         static bool sImGuiReady = false;
@@ -833,6 +840,7 @@ void App::RunOneFrame() {
             ImGui::Render();
         }
     }
+#endif
 
     TheRnd.EndDrawing();
 }
@@ -1236,6 +1244,7 @@ void App::RunWithoutDebugging() {
         // HUD drawn by TheUI->Draw() via game_screen panel hierarchy.
         // FileMerger-loaded HUD flows control visibility/alpha/positioning.
 
+#ifdef HX_IMGUI
         // ImGui debug overlay — rendered after game UI, before EndDrawing
         // EndDrawing() calls RenderImGuiOverlay() which consumes the draw data
         if (ImGui::GetCurrentContext()) {
@@ -1244,6 +1253,7 @@ void App::RunWithoutDebugging() {
                 DebugPanel::Draw();
             ImGui::Render();
         }
+#endif
 
         TheRnd.EndDrawing();
 #ifdef DC3_HTTP_SERVER

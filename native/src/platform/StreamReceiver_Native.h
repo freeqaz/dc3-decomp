@@ -13,6 +13,7 @@ public:
     virtual ~StreamReceiverNative();
 
     // StreamReceiver interface
+    virtual bool IsOutputDrained() const override { return mPlayCursor >= mWriteCursor; }
     virtual void SetVolume(float vol) override { mVolume = vol; }
     virtual void SetPan(float pan) override { mPan = pan; }
     virtual void SetSpeed(float speed) override { mSpeed = speed; }
@@ -28,7 +29,14 @@ public:
 
     // AudioSource interface (called from audio thread)
     virtual int RenderAudio(float *output, int frameCount) override;
-    virtual bool IsFinished() const override { return mEndData && mPlayCursor >= mWriteCursor; }
+    // Delay reporting finished until mDoneBufferCounter exceeds the same
+    // threshold StandardStream uses for kFinished. This keeps the source in
+    // the mixer so RenderAudio() continues advancing mPlayCursor through
+    // silence, which keeps GetRawTime()/songMs moving toward end-of-song.
+    virtual bool IsFinished() const override {
+        return mEndData && mPlayCursor >= mWriteCursor
+            && mDoneBufferCounter > mNumBuffers + 2;
+    }
 #ifdef HX_WEB
     virtual void DebugDescribe(char *buf, size_t bufSize) const override;
     void SetDebugLabel(const char *label);

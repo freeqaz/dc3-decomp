@@ -296,7 +296,9 @@ public:
     void InvalidateSceneUniforms() { mLastSceneEnv = nullptr; }
     void MaybeCaptureFrame();
     void MaybeEncodeVideoFrame();
+#ifdef HX_IMGUI
     void RenderImGuiOverlay();
+#endif
     GpuDevice mGpu;
     PipelineManager mPipelines;
 

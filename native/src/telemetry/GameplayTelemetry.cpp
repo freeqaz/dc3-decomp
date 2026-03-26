@@ -8,9 +8,14 @@
 #include "hamobj/HamDriver.h"
 #include "hamobj/ClipPlayer.h"
 #include "hamobj/MoveMgr.h"
+#include "obj/Dir.h"
 #include "obj/Task.h"
+#include "obj/Msg.h"
 #include "rndobj/PropAnim.h"
 #include "rndobj/PropKeys.h"
+#include "ui/UI.h"
+#include "ui/UIScreen.h"
+#include "ui/UIPanel.h"
 #include "world/Dir.h"
 #include "flow/PropertyEventProvider.h"
 
@@ -46,9 +51,20 @@ bool GameplayTelemetry::IsEnabled() {
 // GamePanel state detection using public API
 static const char *GetGameState() {
     if (!TheGamePanel) return "boot";
-    if (TheGamePanel->IsGameOver()) return "gameover";
-    if (TheGamePanel->Unkf8()) return "playing";
-    return "intro";
+    static Message isGameOverMsg("is_game_over");
+    static Message isPlayingMsg("is_playing");
+    static Message inIntroMsg("in_intro");
+
+    DataNode isGameOver = TheGamePanel->HandleType(isGameOverMsg);
+    if (isGameOver.Type() == kDataInt && isGameOver.Int()) return "gameover";
+
+    DataNode isPlaying = TheGamePanel->HandleType(isPlayingMsg);
+    if (isPlaying.Type() == kDataInt && isPlaying.Int()) return "playing";
+
+    DataNode inIntro = TheGamePanel->HandleType(inIntroMsg);
+    if (inIntro.Type() == kDataInt && inIntro.Int()) return "intro";
+
+    return "loading";
 }
 
 GameplayTelemetry::Snapshot GameplayTelemetry::CaptureSnapshot(int frame) {
@@ -56,19 +72,50 @@ GameplayTelemetry::Snapshot GameplayTelemetry::CaptureSnapshot(int frame) {
     s.frame = frame;
     s.state = GetGameState();
 
+    if (TheUI) {
+        UIScreen *current = TheUI->CurrentScreen();
+        UIScreen *transition = TheUI->TransitionScreen();
+        s.screen = current ? current->Name() : "";
+        s.transitionScreen = transition ? transition->Name() : "";
+        s.uiInTransition = TheUI->InTransition();
+        s.gameScreenActive = TheUI->IsGameScreenActive();
+
+        UIPanel *worldPanel = ObjectDir::Main()->Find<UIPanel>("world_panel");
+        if (worldPanel) {
+            s.currentHasWorldPanel = current && current->HasPanel(worldPanel);
+            s.transitionHasWorldPanel = transition && transition->HasPanel(worldPanel);
+            s.worldPanelLoaded = worldPanel->IsLoaded();
+        }
+    }
+
+    if (TheGamePanel) {
+        s.gamePanelLoadState = TheGamePanel->PollLoadState();
+        Game *game = TheGamePanel->CurrentGame();
+        if (game) {
+            s.gameWaitState = game->WaitState();
+            s.gameLoadState = game->LoadState();
+            s.gameUsesMoveGraph = game->UsesMoveGraph();
+            s.gamePaused = game->Paused();
+            s.gameRealTime = game->RealTime();
+        }
+    }
+
     // Beat and timing
     s.beat = TheTaskMgr.Beat();
     s.realSecs = TheTaskMgr.Seconds(TaskMgr::kRealTime);
 
     // Song anim frame
     if (TheHamDirector) {
+        s.pollEnabled = TheHamDirector->PollEnabled();
+        s.worldLoaded = TheHamDirector->IsWorldLoaded();
+        s.worldPresent = TheHamDirector->GetWorld() != nullptr;
+        s.venuePresent = TheHamDirector->GetVenueWorld() != nullptr;
         RndPropAnim *anim = TheHamDirector->SongAnim(0);
         if (anim) {
             s.songAnimFrame = anim->GetFrame();
             if (s.songAnimFrame < -1e6f || s.songAnimFrame > 1e6f)
                 s.songAnimFrame = 0.0f;
         }
-        s.pollEnabled = (s.songAnimFrame > 0.0f);
     }
 
     // Venue TypeDef
@@ -79,6 +126,9 @@ GameplayTelemetry::Snapshot GameplayTelemetry::CaptureSnapshot(int frame) {
 
     // HamProvider
     s.hamProvider = TheHamProvider != nullptr;
+    if (TheHamProvider) {
+        s.gameStage = TheHamProvider->Property("game_stage", true)->Sym().Str();
+    }
 
     // MergerDir
     if (TheHamDirector && TheHamDirector->GetMerger()) {
@@ -157,15 +207,25 @@ void GameplayTelemetry::Sample(int frame) {
     sLastSnapshot = s;
 
     fprintf(stderr,
-        "DC3_TEL: frame=%d state=%s beat=%.2f realSecs=%.2f "
-        "songAnimFrame=%.1f pollEnabled=%d "
-        "typeDef=%s hamProvider=%d mergerDir=%d "
+        "DC3_TEL: frame=%d state=%s screen=%s transition=%s uiInTransition=%d "
+        "gameScreenActive=%d currentHasWorldPanel=%d transitionHasWorldPanel=%d "
+        "worldPanelLoaded=%d gamePanelLoadState=%d gameWaitState=%d gameLoadState=%d "
+        "gameUsesMoveGraph=%d gamePaused=%d gameRealTime=%d "
+        "beat=%.2f realSecs=%.2f songAnimFrame=%.1f pollEnabled=%d "
+        "worldLoaded=%d worldPresent=%d venuePresent=%d typeDef=%s gameStage=%s "
+        "hamProvider=%d mergerDir=%d "
         "clipDir=%d masterClip=%d clipPlayerInit=%d charClipLayers=%d p0=%d p1=%d "
         "clipKeyCount=%d songAnimKeys=%d diffProxy=%d routineLoaded=%d mergeMoves=%d "
         "p0SongAnim=%d doSongAnim=%d\n",
-        s.frame, s.state, s.beat, s.realSecs,
-        s.songAnimFrame, s.pollEnabled ? 1 : 0,
-        s.typeDef, s.hamProvider ? 1 : 0, s.mergerDir ? 1 : 0,
+        s.frame, s.state, s.screen, s.transitionScreen, s.uiInTransition ? 1 : 0,
+        s.gameScreenActive ? 1 : 0, s.currentHasWorldPanel ? 1 : 0,
+        s.transitionHasWorldPanel ? 1 : 0, s.worldPanelLoaded ? 1 : 0,
+        s.gamePanelLoadState, s.gameWaitState, s.gameLoadState,
+        s.gameUsesMoveGraph ? 1 : 0, s.gamePaused ? 1 : 0, s.gameRealTime ? 1 : 0,
+        s.beat, s.realSecs, s.songAnimFrame, s.pollEnabled ? 1 : 0,
+        s.worldLoaded ? 1 : 0, s.worldPresent ? 1 : 0, s.venuePresent ? 1 : 0,
+        s.typeDef, s.gameStage,
+        s.hamProvider ? 1 : 0, s.mergerDir ? 1 : 0,
         s.clipDir ? 1 : 0, s.masterClip ? 1 : 0, s.clipPlayerInit ? 1 : 0,
         s.charClipLayers, s.player0 ? 1 : 0, s.player1 ? 1 : 0,
         s.clipKeyCount, s.songAnimKeys, s.diffProxy, s.routineLoaded, s.mergeMoves,

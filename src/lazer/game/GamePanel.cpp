@@ -91,21 +91,17 @@ static RndPropAnim *GetNativeRoutineBuilderAnim(int playerIndex) {
 }
 
 static bool NativeHudFlashcardHackRequired() {
-    static Symbol merge_moves("merge_moves");
-    static Symbol move("move");
-
-    if (!TheHamDirector || !TheHamProvider
-        || !TheHamProvider->Property(merge_moves, true)->Int()) {
+    // HACK(native): On Xbox, WorldDir::Poll() fires select_camera every frame,
+    // which calls OnSelectCamera → songAnim->SetFrame() → move_interp fires
+    // via the SymbolKeys interp handler. On native/web, select_camera doesn't
+    // fire during gameplay (TheWorld is null at the wrong time, or the world
+    // panel poll path differs). So this C++ hack must keep refreshing flashcards
+    // from Poll() for the entire duration of gameplay.
+    if (!TheHamDirector || !TheHamProvider) {
         return false;
     }
-
-    RndPropAnim *anim = GetNativeRoutineBuilderAnim(0);
-    if (!anim) {
-        return true;
-    }
-
-    PropKeys *moveKeys = anim->GetKeys(TheHamDirector, DataArrayPtr(move));
-    return !moveKeys || moveKeys->NumKeys() == 0;
+    static Symbol merge_moves("merge_moves");
+    return TheHamProvider->Property(merge_moves, true)->Int() != 0;
 }
 
 static void RefreshNativeHudFlashcards(float beat, bool clearCards) {
@@ -118,7 +114,6 @@ static void RefreshNativeHudFlashcards(float beat, bool clearCards) {
     static Message clearLeft("clear_flash_cards", 0);
     static Message clearRight("clear_flash_cards", 1);
     static Message update("update_flashcards", 0.0f, 1);
-    static Message updateCampaign("update_all_flashcard_campaign_status");
 
     if (clearCards) {
         hud->Handle(clearLeft, true);
@@ -126,7 +121,14 @@ static void RefreshNativeHudFlashcards(float beat, bool clearCards) {
     }
     update[0] = beat;
     hud->Handle(update, true);
-    hud->Handle(updateCampaign, true);
+    // NOTE: Not sending update_all_flashcard_campaign_status here.
+    // The DTA handler (hud_objects.dta) has a bug in the non-campaign path:
+    // it calls {$this set_campaign FALSE FALSE FALSE} where $this is the HUD
+    // PanelDir, but set_campaign is a handler on individual flashcard objects
+    // (move_display type on RndDir). Should be {$flash_card set_campaign ...}.
+    // Since native always runs in quickplay (not campaign_perform), this just
+    // spams "unhandled msg: set_campaign" every beat. Campaign status updates
+    // are correctly triggered from perform.dta only when metamode==campaign_perform.
 }
 #endif
 
@@ -432,6 +434,12 @@ void GamePanel::Load() {
 void GamePanel::Enter() {
     TheTaskMgr.ClearTimelineTasks(kTaskSeconds);
     TheTaskMgr.ClearTimelineTasks(kTaskBeats);
+#ifdef __EMSCRIPTEN__
+    // Clear stale keyboard state from menu navigation so held Start
+    // (Space key) doesn't immediately trigger pause_game on enter.
+    extern void JoypadWebClearKeys();
+    JoypadWebClearKeys();
+#endif
 #ifdef HX_NATIVE
     // On Xbox, DTA scripts fire {metamusic stop} during screen transitions.
     // MetaPanel is shared between menu and game_screen, so its Exit() is
@@ -440,6 +448,15 @@ void GamePanel::Enter() {
     // the stop) is suppressed during game_screen.
     if (TheMetaMusic) {
         TheMetaMusic->Kill();
+    }
+    // Title ambience (shell_dciambience) is a looping MoggClip started by
+    // titlescreen_amb.flow in common_bank via fire-and-forget FlowSound
+    // (mImmediateRelease=true). The sound escapes Flow lifecycle because
+    // it's never tracked in mRunningNodes, and it loops so it never reaches
+    // EOF. On Xbox it's masked by the transition. Stop it explicitly.
+    Sound *ambience = TheSynth->Find<Sound>("shell_dciambience.snd", false);
+    if (ambience && ambience->IsPlaying()) {
+        ambience->Stop(nullptr, false);
     }
 #endif
     UIPanel::Enter();

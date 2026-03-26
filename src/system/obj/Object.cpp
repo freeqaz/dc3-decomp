@@ -105,10 +105,10 @@ Hmx::Object::~Object() {
     Hmx::Object *old = sDeleting;
     sDeleting = this;
 #ifdef HX_NATIVE
-    // During cascade, skip ReplaceRefs. Phase 0 (NullifyAllRefs) already
-    // nullified all refs while memory was valid. ReplaceRefs here would
-    // be unsafe: ring nodes from freed ObjPtrVec buffers have garbage
-    // next/prev, and Replace callbacks trigger delete-this in Tasks.
+    // During cascading ObjectDir::DeleteObjects, ReplaceRefs is called
+    // in a separate pre-pass while all memory is still valid. Calling it
+    // here would be unsafe: derived member destructors have already freed
+    // ObjPtrVec buffers, leaving stale ring entries that crash SnapshotRing.
     if (!ObjectDir::InDeleteObjects())
 #endif
     ReplaceRefs(nullptr);

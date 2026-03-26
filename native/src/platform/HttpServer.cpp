@@ -750,19 +750,40 @@ void HttpServer::RegisterEndpoints() {
     svr->Get("/api/telemetry", [](const httplib::Request&, httplib::Response& res) {
         // Read the last snapshot — this is safe from any thread since it's a value copy
         auto s = GameplayTelemetry::LastSnapshot();
-        char buf[1024];
+        char buf[4096];
         snprintf(buf, sizeof(buf),
-            "{\"frame\":%d,\"state\":\"%s\",\"beat\":%.2f,\"realSecs\":%.2f,"
+            "{\"frame\":%d,\"state\":\"%s\",\"screen\":\"%s\","
+            "\"transitionScreen\":\"%s\",\"uiInTransition\":%s,"
+            "\"gameScreenActive\":%s,\"currentHasWorldPanel\":%s,"
+            "\"transitionHasWorldPanel\":%s,\"worldPanelLoaded\":%s,"
+            "\"gamePanelLoadState\":%d,\"gameWaitState\":%d,\"gameLoadState\":%d,"
+            "\"gameUsesMoveGraph\":%s,\"gamePaused\":%s,\"gameRealTime\":%s,"
+            "\"beat\":%.2f,\"realSecs\":%.2f,"
             "\"songAnimFrame\":%.1f,\"pollEnabled\":%s,"
-            "\"typeDef\":\"%s\",\"hamProvider\":%s,\"mergerDir\":%s,"
+            "\"worldLoaded\":%s,\"worldPresent\":%s,\"venuePresent\":%s,"
+            "\"typeDef\":\"%s\",\"gameStage\":\"%s\",\"hamProvider\":%s,\"mergerDir\":%s,"
             "\"clipDir\":%s,\"masterClip\":%s,\"clipPlayerInit\":%s,"
             "\"charClipLayers\":%d,\"player0\":%s,\"player1\":%s,"
             "\"clipKeyCount\":%d,\"songAnimKeys\":%d,\"diffProxy\":%d,"
             "\"routineLoaded\":%d,\"mergeMoves\":%d,"
             "\"p0SongAnim\":%d,\"doSongAnim\":%d}",
-            s.frame, s.state, s.beat, s.realSecs,
+            s.frame, s.state, s.screen, s.transitionScreen,
+            s.uiInTransition ? "true" : "false",
+            s.gameScreenActive ? "true" : "false",
+            s.currentHasWorldPanel ? "true" : "false",
+            s.transitionHasWorldPanel ? "true" : "false",
+            s.worldPanelLoaded ? "true" : "false",
+            s.gamePanelLoadState, s.gameWaitState, s.gameLoadState,
+            s.gameUsesMoveGraph ? "true" : "false",
+            s.gamePaused ? "true" : "false",
+            s.gameRealTime ? "true" : "false",
+            s.beat, s.realSecs,
             s.songAnimFrame, s.pollEnabled ? "true" : "false",
-            s.typeDef, s.hamProvider ? "true" : "false", s.mergerDir ? "true" : "false",
+            s.worldLoaded ? "true" : "false",
+            s.worldPresent ? "true" : "false",
+            s.venuePresent ? "true" : "false",
+            s.typeDef, s.gameStage, s.hamProvider ? "true" : "false",
+            s.mergerDir ? "true" : "false",
             s.clipDir ? "true" : "false", s.masterClip ? "true" : "false",
             s.clipPlayerInit ? "true" : "false",
             s.charClipLayers, s.player0 ? "true" : "false", s.player1 ? "true" : "false",

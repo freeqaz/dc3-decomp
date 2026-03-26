@@ -12,8 +12,8 @@ wait_screen attract_screen
 
 # main_screen: select "gameplay"
 wait_screen main_screen
-+30 confirm
++10 confirm
 
 # choose_mode_screen: select "perform"
 wait_screen choose_mode_screen
-+30 confirm
++10 confirm

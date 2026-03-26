@@ -33,9 +33,11 @@
 #include "char/Character.h"
 #include "math/Utl.h"
 
+#ifdef HX_IMGUI
 #include <imgui.h>
 #include <imgui_impl_wgpu.h>
 #include "platform/DebugPanel.h"
+#endif
 
 #ifndef __EMSCRIPTEN__
 #include <GLFW/glfw3.h>
@@ -881,8 +883,8 @@ void WgpuRnd::BeginDrawing() {
     }
 #endif
 
+#if defined(HX_IMGUI) && !defined(MILO_VIEWER) && !defined(__EMSCRIPTEN__)
     // Backtick (~) toggles ImGui debug panel
-#if !defined(MILO_VIEWER) && !defined(__EMSCRIPTEN__)
     if (gNativeWindow && !mGpu.IsHeadless()) {
         static bool tildeWasPressed = false;
         bool tildePressed = glfwGetKey(gNativeWindow, GLFW_KEY_GRAVE_ACCENT) == GLFW_PRESS;
@@ -1058,8 +1060,10 @@ void WgpuRnd::EndDrawing() {
                               mDepthView, FrameTarget(), mBlackTexView, mGpu);
         }
 
+#ifdef HX_IMGUI
         // ImGui overlay pass — rendered after post-processing, on top of everything
         RenderImGuiOverlay();
+#endif
 
 #ifdef __EMSCRIPTEN__
         // Copy resolved framebuffer to swapchain surface.
@@ -1760,6 +1764,7 @@ wgpu::BindGroup WgpuRnd::CreateBoneBindGroup(uint32_t bufferOffset, uint32_t buf
     return mGpu.Device().CreateBindGroup(&desc);
 }
 
+#ifdef HX_IMGUI
 void WgpuRnd::RenderImGuiOverlay() {
     // Only render if ImGui has draw data ready (NewFrame + Render already called)
     if (!ImGui::GetCurrentContext()) return;
@@ -1781,6 +1786,7 @@ void WgpuRnd::RenderImGuiOverlay() {
     ImGui_ImplWGPU_RenderDrawData(drawData, imguiPass.Get());
     imguiPass.End();
 }
+#endif
 
 void WgpuRnd::MaybeCaptureFrame() {
     if (mCaptureIndex >= (int)mCaptureFrames.size()) return;

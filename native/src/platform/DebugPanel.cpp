@@ -12,7 +12,7 @@ void DebugPanel::Draw() {
     NativeSettings &s = NativeSettings::Get();
 
     ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(340, 0), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(440, 0), ImGuiCond_FirstUseEver);
 
     if (!ImGui::Begin("Camera Debug (~)", &sVisible)) {
         ImGui::End();

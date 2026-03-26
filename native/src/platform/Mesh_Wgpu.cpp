@@ -239,17 +239,6 @@ void DrawMeshImmediate(RndMesh* mesh) {
         FillObjectUniforms(identity, objUni);
     } else {
         FillObjectUniforms(mesh->WorldXfm(), objUni);
-        // DEBUG: log floor mesh world positions
-        static int sFloorLog = 0;
-        if (sFloorLog < 10) {
-            const char* n = mesh->Name();
-            if (n && (strstr(n, "floor") || strstr(n, "Floor"))) {
-                const Transform& w = mesh->WorldXfm();
-                fprintf(stderr, "FLOOR-MESH '%s' worldPos=(%.2f, %.2f, %.2f)\n",
-                        n, w.v.x, w.v.y, w.v.z);
-                sFloorLog++;
-            }
-        }
     }
 
     uint32_t objOffset = gWgpuRnd->ObjectRing().Write(

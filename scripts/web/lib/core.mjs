@@ -95,7 +95,7 @@ export async function launchBrowser(port) {
     });
     const page = await context.newPage();
 
-    await page.goto(`http://127.0.0.1:${port}`, {
+    await page.goto(`http://127.0.0.1:${port}?fast_boot=1`, {
         waitUntil: 'domcontentloaded',
         timeout: 30000,
     });
@@ -189,14 +189,18 @@ export async function waitForScreen(capture, name, ms = 30000) {
 /**
  * Full navigation: attract → title → main → choose_mode → song_select.
  * `target` is the final screen to reach (default: song_select_screen).
- * Clicks the canvas first for keyboard focus.
+ *
+ * With ?fast_boot=1 (set by launchBrowser), the engine auto-advances boot
+ * screens in ~10 frames each.  Key presses are backup for non-fast-boot runs.
+ * All menu screens use HamNavList which responds to kAction_Confirm (Enter),
+ * NOT kAction_Start (Space).
  */
 export async function navigateTo(page, capture, target = 'song_select_screen') {
     const screens = [
         // [waitFor, key, label]
         ['attract_screen',      null,    'engine boot'],
-        ['title_screen',        ' ',     'dismiss attract'],
-        ['main_screen',         ' ',     'skip title'],
+        ['title_screen',        'Enter', 'dismiss attract'],
+        ['main_screen',         'Enter', 'skip title'],
         ['choose_mode_screen',  'Enter', 'main → choose_mode'],
         ['song_select_screen',  'Enter', 'choose_mode → song_select'],
     ];
@@ -204,19 +208,30 @@ export async function navigateTo(page, capture, target = 'song_select_screen') {
     // Wait for engine to boot
     const booted = await capture.waitForLog('attract_screen', 45000);
     if (!booted) throw new Error('Engine never booted (no attract_screen)');
-    await new Promise(r => setTimeout(r, 3000));
-    // Focus canvas via JS — page.click('canvas') fails when video overlays block it
-    await page.evaluate(() => document.getElementById('dc3-canvas').focus());
+    await new Promise(r => setTimeout(r, 1000));
 
     for (const [screen, key, label] of screens) {
         if (screen === 'attract_screen') continue; // already waited
 
+        // Re-focus canvas before every key press — web overlays can steal focus
+        await page.evaluate(() => document.getElementById('dc3-canvas').focus());
+
+        // With fast boot the engine auto-advances; check if already there
+        if (await waitForScreen(capture, screen, 2000)) {
+            console.log(`[nav] ${label} — already reached`);
+            await new Promise(r => setTimeout(r, 500));
+            if (screen === target) return;
+            continue;
+        }
+
+        // Not there yet — press key to advance
         console.log(`[nav] ${label}`);
         await pressKey(page, key);
 
         if (!await waitForScreen(capture, screen, 30000)) {
             // Retry once — screens can be slow on first load
             console.log(`[nav] retrying: ${label}`);
+            await page.evaluate(() => document.getElementById('dc3-canvas').focus());
             await pressKey(page, key);
             if (!await waitForScreen(capture, screen, 30000)) {
                 throw new Error(`Never reached ${screen}`);

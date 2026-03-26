@@ -89,6 +89,13 @@ void StreamReceiver::Poll() {
         mSending = false;
         mBuffersSent++;
     }
+    // On Xbox, mDoneBufferCounter increments via the ring buffer send cycle
+    // when mEndData is true. Native skips ring buffer management — data goes
+    // directly to the platform audio thread. Increment here once the audio
+    // output has drained, so StandardStream can transition to kFinished.
+    if (mEndData && IsOutputDrained()) {
+        mDoneBufferCounter++;
+    }
 #else
     if (kInit != (unsigned int)mState) {
         if (mState == kReady) {

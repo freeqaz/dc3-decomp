@@ -71,19 +71,21 @@ void HamMaster::Poll(float f1) {
             static Message msg("stream_jump");
             Export(msg, true);
         }
-#ifdef HX_NATIVE
-        // TODO(native): The original decomp is missing this call. RB3's
-        // BeatMaster::Poll() has mMidiParserMgr->Poll() here, which
-        // dispatches MIDI events (including the "end" event that triggers
-        // SetGameOver). Needs verification against the DC3 target binary.
-        if (mMidiParserMgr) {
-            mMidiParserMgr->Poll();
-        }
-#endif
         CheckBeat();
         CheckLevels();
         mAudio->Poll();
     }
+#ifdef HX_NATIVE
+    // TODO(native): The original decomp is missing this call. RB3's
+    // BeatMaster::Poll() has mMidiParserMgr->Poll() here, which
+    // dispatches MIDI events (including the "end" event that triggers
+    // SetGameOver). Needs verification against the DC3 target binary.
+    // Placed outside the GetSongStream() guard so it runs even when
+    // audio is unavailable (e.g. web/Emscripten with no mogg files).
+    if (IsLoaded() && mMidiParserMgr) {
+        mMidiParserMgr->Poll();
+    }
+#endif
 }
 
 void HamMaster::Jump(float f1) {

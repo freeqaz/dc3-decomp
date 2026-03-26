@@ -9,11 +9,11 @@
 
 # main_screen: select "gameplay"
 wait_screen main_screen
-+30 confirm
++10 confirm
 
 # choose_mode_screen: select "perform"
 wait_screen choose_mode_screen
-+30 confirm
++10 confirm
 
 # song_select_screen: scroll down 8 times (should move past 5 visible items)
 wait_screen song_select_screen

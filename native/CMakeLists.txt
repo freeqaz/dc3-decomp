@@ -1233,6 +1233,7 @@ target_compile_options(dc3-web PRIVATE
 target_compile_definitions(dc3-web PRIVATE
     HX_NATIVE=1
     HX_WEB=1
+    HX_IMGUI=1
     MILO_DEBUG=1
     _DEBUG=1
     # libc++ removed deprecated C++ features in C++17 mode; re-enable them
@@ -1322,6 +1323,7 @@ target_compile_definitions(dc3-native PRIVATE
     HX_NATIVE=1
     MILO_DEBUG=1
     _DEBUG=1
+    HX_IMGUI=1
     DC3_HTTP_SERVER=1
     $<$<BOOL:${ENABLE_FFMPEG}>:HX_FFMPEG=1>
     $<$<BOOL:${ENABLE_NCNN}>:ENABLE_NCNN=1>
@@ -1431,6 +1433,7 @@ add_executable(milo-viewer
     src/viewer/ViewerAnimation.cpp
     src/viewer/ViewerCapture.cpp
     src/gfx/ImGuiBackend.cpp
+    src/platform/DebugPanel.cpp
     src/gfx/VideoEncoder.cpp
     ${DC3_ENGINE_SOURCES}
     ${DC3_NATIVE_CORE_SOURCES}
@@ -1448,6 +1451,7 @@ target_compile_options(milo-viewer PRIVATE
 target_compile_definitions(milo-viewer PRIVATE
     HX_NATIVE=1
     MILO_VIEWER=1
+    HX_IMGUI=1
     MILO_DEBUG=1
     _DEBUG=1
     $<$<BOOL:${ENABLE_FFMPEG}>:HX_FFMPEG=1>

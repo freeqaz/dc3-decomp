@@ -5,6 +5,8 @@
 #include <imgui_impl_wgpu.h>
 #include <GLFW/glfw3.h>
 
+#include <cmath>
+
 static bool sInitialized = false;
 static bool sHasWindow = false;
 
@@ -18,11 +20,31 @@ void ImGuiBackend::Init(GLFWwindow* window, wgpu::Device device, wgpu::TextureFo
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io.IniFilename = nullptr; // don't save imgui.ini
 
+    // Query DPI scale from GLFW (Wayland/X11 content scale)
+    float dpiScale = 1.0f;
+    if (window) {
+        float xscale = 1.0f, yscale = 1.0f;
+        glfwGetWindowContentScale(window, &xscale, &yscale);
+        dpiScale = yscale > 0.0f ? yscale : 1.0f;
+    }
+
     ImGui::StyleColorsDark();
 
-    // Scale UI for readability
-    ImGui::GetStyle().ScaleAllSizes(1.2f);
-    io.FontGlobalScale = 1.2f;
+    // Scale widget sizes for readability (1.2x base * DPI)
+    float uiScale = 1.2f * dpiScale;
+    ImGui::GetStyle().ScaleAllSizes(uiScale);
+
+    // Rasterize font at native pixel size to avoid blurry runtime scaling.
+    // Default font is 13px; load at 13 * uiScale so the atlas has enough
+    // texels for crisp rendering, then set FontGlobalScale = 1/dpiScale so
+    // ImGui geometry stays in screen-coordinate space.
+    float fontPx = std::round(13.0f * uiScale);
+    ImFontConfig fontCfg;
+    fontCfg.SizePixels = fontPx;
+    fontCfg.OversampleH = 1; // no need for oversampling at native res
+    fontCfg.OversampleV = 1;
+    io.Fonts->AddFontDefault(&fontCfg);
+    io.FontGlobalScale = 1.0f / dpiScale;
 
     // GLFW backend — install_callbacks=true chains to existing callbacks
     // Skip in headless mode (window == nullptr) to avoid GLFW null-window asserts

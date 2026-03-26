@@ -1,5 +1,8 @@
 #include "ui/UI.h"
 #include "UIComponent.h"
+#ifdef __EMSCRIPTEN__
+#include <emscripten/em_asm.h>
+#endif
 #include "obj/Data.h"
 #include "obj/DataFile.h"
 #include "obj/DataUtl.h"
@@ -574,11 +577,20 @@ void UIManager::Poll() {
                 const char *to;
                 int delay;
             };
-            // DC3_FAST_BOOT=1: skip boot screens in 10 frames instead of ~360
+            // DC3_FAST_BOOT=1 (env var) or ?fast_boot=1 (URL param on web):
+            // skip boot screens in 10 frames instead of ~360
             static int sFastBoot = -1;
             if (sFastBoot < 0) {
                 const char *fb = getenv("DC3_FAST_BOOT");
                 sFastBoot = (fb && atoi(fb) != 0) ? 1 : 0;
+#ifdef __EMSCRIPTEN__
+                if (!sFastBoot) {
+                    sFastBoot = EM_ASM_INT({
+                        var s = location.search || "";
+                        return (s.indexOf("fast_boot=1") >= 0) ? 1 : 0;
+                    });
+                }
+#endif
                 if (sFastBoot)
                     printf("DC3 UI: Fast boot enabled (10-frame transitions)\n");
             }
@@ -598,8 +610,8 @@ void UIManager::Poll() {
                 {nullptr, nullptr, 0}
             };
 
-            for (int i = 0; sBoot[i].from; i++) {
-                int delay = (fast && sBoot[i].delay > 10) ? 10 : sBoot[i].delay;
+            for (int i = 0; fast && sBoot[i].from; i++) {
+                int delay = (sBoot[i].delay > 10) ? 10 : sBoot[i].delay;
                 if (!strcmp(curName, sBoot[i].from) && sStuckFrames == delay) {
                     UIScreen *next = ObjectDir::Main()->Find<UIScreen>(sBoot[i].to, false);
                     if (next) {

@@ -203,9 +203,27 @@ void HamIKEffector::IKElbow(const Vector3 &v) {
             Multiply(me0, xfm.m, xfm.m);
             xfm.v += q100.v;
             grandparent->SetWorldXfm(xfm);
+#ifdef HX_NATIVE
+            // Back-compute mLocalXfm so it survives dirty cascades from later pollables.
+            // Same pattern as CharForeTwist/CharUpperTwist fix for forearm bones.
+            // Uses FastInvert (transpose+scale) rather than Invert (cofactor) to avoid
+            // zero-determinant singularity on WASM's strict float32.
+            if (grandparent->TransParent()) {
+                Transform invParent;
+                FastInvert(grandparent->TransParent()->WorldXfm(), invParent);
+                Multiply(xfm, invParent, grandparent->mLocalXfm);
+            }
+#endif
             Transform tf70;
             Multiply(tfb0, xfm, tf70);
             parent->SetWorldXfm(tf70);
+#ifdef HX_NATIVE
+            {
+                Transform invParent;
+                FastInvert(xfm, invParent);
+                Multiply(tf70, invParent, parent->mLocalXfm);
+            }
+#endif
         }
     }
 }
@@ -375,9 +393,28 @@ void HamIKEffector::Poll() {
                                 clampFactor = Min(clampFactor, 1.0f);
                                 Interp(neutralQ.v, effQ.v, clampFactor, q.v);
                                 Interp(neutralQ.q, effQ.q, clampFactor, q.q);
+                                // TODO HACK: Native foot-sole clamp. The PPC decomp clamps
+                                // the ankle bone to ground height, but the foot mesh extends
+                                // ~3-4 units below the ankle joint, causing visible floor
+                                // clipping. On Xbox this is less noticeable due to camera work.
+                                // Here we offset the clamp by a fraction of the neutral ankle
+                                // height so the foot sole stays at ground level. The real fix
+                                // would be to understand why Xbox doesn't exhibit this — there
+                                // may be a system we haven't decomped that adjusts the ground
+                                // reference, or the original game simply has this clipping.
+#ifdef HX_NATIVE
+                                {
+                                    float footClearance = (neutralQ.v.z - groundHeight) * 0.7f;
+                                    float soleGround = groundHeight + footClearance;
+                                    if (effQ.v.z < soleGround) {
+                                        effQ.v.z = soleGround;
+                                    }
+                                }
+#else
                                 if (effQ.v.z < groundHeight) {
                                     effQ.v.z = groundHeight;
                                 }
+#endif
                                 effQ.v.x = savedPos.x;
                                 effQ.v.y = savedPos.y;
                             }
@@ -424,6 +461,13 @@ void HamIKEffector::Poll() {
                     }
 
                     mEffector->SetWorldXfm(finalXfm);
+#ifdef HX_NATIVE
+                    if (mEffector->TransParent()) {
+                        Transform invParent;
+                        FastInvert(mEffector->TransParent()->WorldXfm(), invParent);
+                        Multiply(finalXfm, invParent, mEffector->mLocalXfm);
+                    }
+#endif
                 }
             }
         }

@@ -33,10 +33,6 @@ template <class T1, class T2>
 ObjRefConcrete<T1, T2>::~ObjRefConcrete() {
     if (mObject) {
 #ifdef HX_NATIVE
-        // During cascading ObjectDir destruction, ring neighbors may already
-        // be freed. Use ASAN-suppressed unlink so we properly remove this
-        // node from the ring (preventing dangling ring entries that cause
-        // use-after-free when OTHER objects later walk the same ring).
         if (ObjectDir::InDeleteObjects() || Hmx::Object::sRingsDirty) {
             SafeReleaseFromRing(this);
             mObject = nullptr;
@@ -51,9 +47,6 @@ template <class T1, class T2>
 void ObjRefConcrete<T1, T2>::SetObjConcrete(T1 *obj) {
     if (mObject) {
 #ifdef HX_NATIVE
-        // During cascading ObjectDir destruction or after cascade (sRingsDirty),
-        // ring neighbors may be freed. Use ASAN-suppressed unlink to properly
-        // remove from ring without triggering sanitizer on freed neighbors.
         if (ObjectDir::InDeleteObjects() || Hmx::Object::sRingsDirty) {
             SafeReleaseFromRing(this);
             goto skip_ring_ops;
@@ -197,15 +190,7 @@ ObjOwnerPtr<T>::~ObjOwnerPtr() {}
 
 template <class T>
 Hmx::Object *ObjOwnerPtr<T>::RefOwner() const {
-#ifdef HX_NATIVE
-    // RB3 reference: return mOwner directly. The original DC3 code
-    // (mObject->RefOwner()) fails during Load() because mObject is null
-    // before the target name is resolved, so the dir lookup can't find
-    // the target object. Using mOwner->RefOwner() gives the owner's dir.
     return mOwner->RefOwner();
-#else
-    return mObject ? mObject->RefOwner() : nullptr;
-#endif
 }
 
 // template <class T1>

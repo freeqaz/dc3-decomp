@@ -12,4 +12,4 @@ wait_screen attract_screen
 
 # main_screen: select "gameplay"
 wait_screen main_screen
-+30 confirm
++10 confirm

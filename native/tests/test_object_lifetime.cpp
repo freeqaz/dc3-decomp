@@ -10,11 +10,13 @@
 #include "ui/UIPanel.h"
 #include "obj/Utl.h"
 #include "utl/FilePath.h"
+#include <cstdlib>
 #include <ctime>
 
 namespace {
 
 class ObjectLifetimeTest : public EngineTestFixture {};
+class ObjectLifetimeUnitTest : public SymbolTestFixture {};
 
 class TestRefHolder : public Hmx::Object {
 public:
@@ -48,6 +50,30 @@ public:
     ExposedDir() : ObjectDir() {}
     Entry *ExposeFindEntry(const char *name, bool add) { return FindEntry(name, add); }
 };
+
+static void RunCascadeDeleteNamedSubdirRingRepro() {
+    ObjectDir *parent = new ExposedDir();
+    ObjectDir *childA = new ExposedDir();
+    ObjectDir *childB = new ExposedDir();
+
+    childA->SetName("child_a", parent);
+    childB->SetName("child_b", parent);
+    parent->AppendSubDir(ObjDirPtr<ObjectDir>(childA));
+    parent->AppendSubDir(ObjDirPtr<ObjectDir>(childB));
+
+    // Extra live ObjDirPtr keeps childA's ring non-trivial so parent teardown
+    // must null it before the mSubDirs vector storage disappears.
+    ObjDirPtr<ObjectDir> externalHold(childA);
+
+    if (childA->RefCount() < 2)
+        std::exit(3);
+
+    delete parent;
+
+    if ((ObjectDir *)externalHold != nullptr)
+        std::exit(2);
+    std::exit(0);
+}
 
 // Parity-oracle: this captures expected collision-merge ref behavior.
 // Keep strict even if currently failing; this is our parity north star.
@@ -566,6 +592,19 @@ TEST_F(ObjectLifetimeTest, ObjDirPtrCascadeDeleteDoesNotDoubleFree) {
     // (which is also being destroyed as part of dir1)
     delete dir1;
     // If we get here without crash/double-free, the cascade is safe
+}
+
+// Regression for the ObjectDir cascade SIGSEGV:
+// parent ~ObjectDir destroys mSubDirs, which frees the backing ObjDirPtr
+// vector storage. If those ObjDirPtrs are not unlinked first, the later
+// ReplaceRefs/Nullify walk over named child ObjectDirs can follow dangling
+// ring entries into freed vector memory and crash.
+TEST_F(ObjectLifetimeUnitTest, CascadeDeleteNamedSubdirsNullsExternalDirPtrsWithoutCrash) {
+    ASSERT_EXIT(
+        RunCascadeDeleteNamedSubdirRingRepro(),
+        ::testing::ExitedWithCode(0),
+        ""
+    );
 }
 
 // Verify that replacing refs on an object whose ObjDirPtr refs cause the

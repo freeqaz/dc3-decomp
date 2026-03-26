@@ -3,15 +3,19 @@
 # Navigates through the complete screen chain:
 #   attract -> (auto) autosave_warning -> (auto) title
 #   -> (auto) wait_main_after_saveload -> main -> choose_mode
-#   -> song_select -> multiuser -> loading -> preloading
+#   -> song_select -> (auto) multiuser -> loading -> preloading
 #   -> real_loading -> game_screen
 #
 # Splash screens (ESRB/Harmonix logos) happen during App init before the
 # UI screen system starts, so no input is needed to dismiss them.
-# autosave_warning_screen and wait_main_after_saveload_screen auto-advance.
+# autosave_warning_screen, wait_main_after_saveload_screen, and
+# multiuser_screen all auto-advance without input.
 #
 # IMPORTANT: +N offsets are all relative to the LAST wait_screen satisfaction
 # frame, NOT to the previous directive. They must be monotonically increasing.
+#
+# NOTE: With DC3_FAST_BOOT=1, transitions complete in ~10 frames. Use short
+# confirm delays (+10) so the button fires on the current screen, not the next.
 #
 # Usage:
 #   MILO_HEADLESS=1 MILO_FATAL_FAILS=0 \
@@ -21,53 +25,34 @@
 
 # attract_screen plays the intro movie (flimflam.bik).
 # The movie_overlay_panel handles NAV_SELECT_MSG → skip.
-# Give ~1 second for the panel to enter and gain focus before pressing confirm.
 wait_screen attract_screen
-+30 confirm
++10 confirm
 
 # autosave_warning_screen auto-transitions to title_screen.
 # Title screen -- press confirm to proceed.
 wait_screen title_screen
-+30 confirm
++10 confirm
 
 # wait_main_after_saveload_screen auto-transitions to main_screen.
 # Main screen -- select "gameplay" (first item).
 wait_screen main_screen
-+30 confirm
++10 confirm
 
 # Choose mode -- select "perform" (first item).
 wait_screen choose_mode_screen
-+30 confirm
++10 confirm
 
-# Song select -- the list shows tier folders (song_tier_0, etc.) with songs
-# between them. Scroll down past the tiers to reach an actual song entry,
-# then confirm to select it. 20 downs reaches song position ~11.
+# Song select -- YMCA is at index 4 (after finish_setlist, playlists,
+# song_tier_0 header, thehustle). 4 downs + confirm selects it.
+# Headers are skipped during d-pad navigation, so 3 downs from index 0
+# reaches index 4 (ymca). Use 4 downs for margin.
 wait_screen song_select_screen
 +30 down
 +45 down
 +60 down
 +75 down
-+90 down
-+105 down
-+120 down
-+135 down
-+150 down
-+165 down
-+180 down
-+195 down
-+210 down
-+225 down
-+240 down
-+255 down
-+270 down
-+285 down
-+300 down
-+315 down
-+330 confirm
++90 confirm
 
-# Multiuser -- confirm to proceed with default player setup.
-wait_screen multiuser_screen
-+30 confirm
-
+# multiuser_screen auto-advances (no input needed).
 # Loading screens auto-advance via DTA handlers:
 #   loading -> preloading -> real_loading -> game_screen

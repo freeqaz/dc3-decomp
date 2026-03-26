@@ -1,0 +1,28 @@
+# Better Off Alone — Full DTA flow from boot to gameplay
+#
+# Same flow as ymca.txt but scrolls to "Better Off Alone" in the song list.
+# Better Off Alone is near the top alphabetically (~3-5 downs from start).
+
+wait_screen attract_screen
++10 confirm
+
+wait_screen title_screen
++10 confirm
+
+wait_screen main_screen
++10 confirm
+
+wait_screen choose_mode_screen
++10 confirm
+
+# Song select — scroll down to Better Off Alone (near top of list)
+wait_screen song_select_screen
++30 down
++45 down
++60 down
++75 down
++90 down
++105 confirm
+
+# multiuser_screen auto-advances (no input needed).
+# Loading screens auto-advance via DTA handlers.

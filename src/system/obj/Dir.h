@@ -93,8 +93,8 @@ public:
                     DirPtrRefCounts()[(const void *)mObject]--;
                     // During cascading ~ObjectDir destruction, ring neighbors
                     // may be freed. Use ASAN-suppressed unlink to properly
-                    // remove this node from the ring (prevents dangling entries
-                    // that corrupt when OTHER objects later walk the ring).
+                    // remove this node from the ring before mSubDirs storage
+                    // disappears.
                     if (ObjectDir::InDeleteObjects())
                         SafeReleaseFromRing(this);
                     else

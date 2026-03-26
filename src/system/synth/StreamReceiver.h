@@ -34,6 +34,11 @@ public:
     virtual void PlayImpl() = 0;
     virtual void StartSendImpl(unsigned char *, int, int) = 0;
     virtual bool SendDoneImpl() = 0;
+#ifdef HX_NATIVE
+    /** True when the audio output has consumed all buffered data.
+     *  Used by Poll() to pace mDoneBufferCounter after mEndData. */
+    virtual bool IsOutputDrained() const { return true; }
+#endif
 
     MEM_OVERLOAD(StreamReceiver, 0x23);
 

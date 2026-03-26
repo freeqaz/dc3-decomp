@@ -4,12 +4,29 @@ namespace GameplayTelemetry {
 
 struct Snapshot {
     int frame = 0;
-    const char* state = "boot";      // boot, intro, playing, gameover
+    const char* state = "boot";      // boot, loading, intro, playing, gameover
+    const char* screen = "";
+    const char* transitionScreen = "";
+    bool uiInTransition = false;
+    bool gameScreenActive = false;
+    bool currentHasWorldPanel = false;
+    bool transitionHasWorldPanel = false;
+    bool worldPanelLoaded = false;
+    int gamePanelLoadState = -1;
+    int gameWaitState = -1;
+    int gameLoadState = -1;
+    bool gameUsesMoveGraph = false;
+    bool gamePaused = false;
+    bool gameRealTime = false;
     float beat = 0;
     float realSecs = 0;
     float songAnimFrame = 0;
     bool pollEnabled = false;
+    bool worldLoaded = false;
+    bool worldPresent = false;
+    bool venuePresent = false;
     const char* typeDef = "";
+    const char* gameStage = "";
     bool hamProvider = false;
     bool mergerDir = false;
     bool clipDir = false;

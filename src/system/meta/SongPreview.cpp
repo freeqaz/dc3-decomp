@@ -237,6 +237,15 @@ void SongPreview::PrepareSong(Symbol song) {
     const char *filename = songInfo.GetBaseFileName();
     if (mTexMovie) {
         String str(mSongMgr.SongFilePath(song, "_prev.bik", 10));
+#ifdef __EMSCRIPTEN__
+        // Web: .bik files aren't in MEMFS (only DTA/DTB are bundled).
+        // Skip FileExists check — WebMovieImpl fetches from the asset
+        // server via /api/file/ and handles 404s gracefully.
+        mTexMovie->SetFile(str.c_str());
+        mTexMovie->SetVolume(-mAttenuation);
+        mTexMovie->AddFader(mFader);
+        mTexMovie->AddFader(mMusicFader);
+#else
         if (FileExists(str.c_str(), 0, nullptr)) {
             mTexMovie->SetFile(str.c_str());
             mTexMovie->SetVolume(-mAttenuation);
@@ -245,6 +254,7 @@ void SongPreview::PrepareSong(Symbol song) {
             return;
         }
         mTexMovie->SetFile(gNullStr);
+#endif
     }
     mStream = TheSynth->NewStream(filename, mStartMs, 0, mSecurePreview);
     const std::vector<float> &pans = songInfo.GetPans();

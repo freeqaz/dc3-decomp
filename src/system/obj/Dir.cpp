@@ -34,6 +34,24 @@ ObjectDir *ObjectDir::sMainDir;
 ObjectDir *gDir;
 static std::map<std::pair<Symbol, Symbol>, bool> sSuperClassMap;
 
+#ifdef HX_NATIVE
+namespace {
+    void CollectCascadeDirs(ObjectDir *dir, std::vector<ObjectDir *> &out) {
+        if (!dir || std::find(out.begin(), out.end(), dir) != out.end())
+            return;
+        out.push_back(dir);
+        for (int i = 0; i < dir->SubDirs().size(); i++) {
+            CollectCascadeDirs(dir->SubDirs()[i], out);
+        }
+        for (ObjDirItr<Hmx::Object> it(dir, false); it != nullptr; ++it) {
+            ObjectDir *asDir = dynamic_cast<ObjectDir *>(&*it);
+            if (asDir && asDir != dir)
+                CollectCascadeDirs(asDir, out);
+        }
+    }
+}
+#endif
+
 #pragma region Virtual Methods
 
 ObjectDir::ObjectDir()
@@ -50,54 +68,43 @@ ObjectDir::~ObjectDir() {
     // Track destruction depth so ~Object, ~ObjRefConcrete, ObjDirPtr, FlowNode,
     // and Sequence can skip ring operations during cascading teardown.
     sDeleteObjectsDepth++;
-    // At the outermost level, nullify ALL object refs recursively (including
-    // sub-dir children) BEFORE mSubDirs.clear() destroys sub-dir ObjPtrs.
-    // This ensures external refs (TaskMgr, globals) are nullified while
-    // ObjPtrVec buffers are still allocated. Inner DeleteObjects skips Phase 0.
-    // At the outermost level, nullify refs recursively before destruction.
-    // mSubDirs may not include all inline sub-ObjectDirs, so discover them
-    // via dynamic_cast during hash table traversal.
+    // At the outermost level, nullify ALL dir/object refs recursively before
+    // mSubDirs.clear() destroys sub-dir ObjPtr storage. This keeps external
+    // ObjDirPtrs and object refs consistent while the subdir vector buffers
+    // are still valid.
     if (sDeleteObjectsDepth == 1 && !TheLoadMgr.AsyncUnload()) {
         std::vector<ObjectDir *> allDirs;
-        allDirs.push_back(this);
+        CollectCascadeDirs(this, allDirs);
         for (size_t i = 0; i < allDirs.size(); i++) {
+            if (allDirs[i]->IsRefAlive())
+                allDirs[i]->NullifyAllRefs();
             for (ObjDirItr<Hmx::Object> it(allDirs[i], false); it != nullptr; ++it) {
                 Hmx::Object *obj = it;
-                if (obj == this) continue;
+                if (obj == allDirs[i])
+                    continue;
                 if (obj->IsRefAlive())
                     obj->NullifyAllRefs();
-                ObjectDir *asDir = dynamic_cast<ObjectDir *>(obj);
-                if (asDir && std::find(allDirs.begin(), allDirs.end(), asDir) == allDirs.end())
-                    allDirs.push_back(asDir);
             }
         }
     }
 #endif
     mSubDirs.clear();
     delete mLoader;
-#ifdef HX_NATIVE
-    // Always run Phase 0 (NullifyAllRefs) on native — even when async
-    // unload is active. Without it, ObjPtrs in persistent objects
-    // (TaskMgr, globals) are never nullified → stale pointer crashes.
-    // NullifyObj avoids Replace callbacks (and delete-this in Tasks).
     if (TheLoadMgr.AsyncUnload()) {
+#ifdef HX_NATIVE
+        // Async unload still needs to nullify refs on objects that will be
+        // destroyed later, so persistent ObjPtrs (TaskMgr, globals) don't
+        // hold stale pointers. DirUnloader handles the actual destruction.
         for (ObjDirItr<Hmx::Object> it(this, false); it != nullptr; ++it) {
             if (it != this && ((Hmx::Object *)it)->IsRefAlive())
                 ((Hmx::Object *)it)->NullifyAllRefs();
         }
-        new DirUnloader(this);
-    } else {
-        DeleteObjects();
-        DeleteSubDirs();
-    }
-#else
-    if (TheLoadMgr.AsyncUnload()) {
-        new DirUnloader(this);
-    } else {
-        DeleteObjects();
-        DeleteSubDirs();
-    }
 #endif
+        new DirUnloader(this);
+    } else {
+        DeleteObjects();
+        DeleteSubDirs();
+    }
     if (!IsProxy()) {
         SetName(nullptr, nullptr);
     }
@@ -735,20 +742,6 @@ void ObjectDir::DeleteObjects() {
 #ifdef HX_NATIVE
     // Three-phase deletion: nullify refs, destroy, defer-free.
     //
-    // Phase 0 (nullify) runs ReplaceRefs(nullptr) on every object BEFORE any
-    // destructors fire. At this point all memory is still valid, so ring
-    // traversal is safe. This prevents surviving ObjPtrs (TaskMgr, globals)
-    // from holding stale pointers after the cascade completes.
-    //
-    // Phase 1 (destroy) calls virtual destructors. ~Object() skips
-    // ReplaceRefs during cascade (refs already nullified in Phase 0).
-    // Classes with ownership loops (e.g. FileMerger's
-    // `while(!empty()) delete front;`) must guard with InDeleteObjects().
-    //
-    // Phase 2 (defer-free) keeps memory valid until the outermost
-    // ~ObjectDir completes, so sibling destructors can safely read
-    // neighbor memory during Phase 1.
-    //
     // Can't use `delete obj` because virtual inheritance makes
     // Hmx::Object* point to a subobject offset within the malloc'd block,
     // and multiple base classes define operator delete (ambiguous).
@@ -758,15 +751,9 @@ void ObjectDir::DeleteObjects() {
             todo.push_back({dynamic_cast<void *>((Hmx::Object *)it), it});
     }
     // Phase 0: nullify ref rings via NullifyObj while memory is valid.
-    // At the outermost level, also recurse into sub-ObjectDirs so their
-    // objects' rings are nullified while ObjPtrVec buffers are still alive.
-    // Inner DeleteObjects (sDeleteObjectsDepth > 1) skips Phase 0:
-    // rings were already handled by the outer Phase 0.
+    // Inner DeleteObjects skips this because the outermost destructor already
+    // walked all reachable ObjectDirs before any mSubDirs buffers were freed.
     if (sDeleteObjectsDepth <= 1) {
-        // Recursively nullify ALL objects including sub-dir children.
-        // ObjDirItr(this, false) only covers direct objects. We need
-        // sub-dir objects too because their rings may reference external
-        // objects (TaskMgr, globals) that need nullification.
         for (ObjDirItr<Hmx::Object> it(this, true); it != nullptr; ++it) {
             if (it != this && ((Hmx::Object *)it)->IsRefAlive())
                 ((Hmx::Object *)it)->NullifyAllRefs();

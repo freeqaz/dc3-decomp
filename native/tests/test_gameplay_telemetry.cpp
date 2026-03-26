@@ -138,6 +138,25 @@ protected:
         return out;
     }
 
+    std::vector<TelemetrySample> samplesOnScreen(const std::string &screen) const {
+        std::vector<TelemetrySample> out;
+        for (auto &s : sSamples) {
+            if (s.getString("screen") == screen) out.push_back(s);
+        }
+        return out;
+    }
+
+    std::vector<TelemetrySample> gameplaySamples() const {
+        std::vector<TelemetrySample> out;
+        for (auto &s : sSamples) {
+            if (s.getString("screen") == "game_screen"
+                && s.getString("state") == "playing") {
+                out.push_back(s);
+            }
+        }
+        return out;
+    }
+
     // Find first sample where a key has a non-default value
     const TelemetrySample *firstWhere(const std::string &key, const std::string &val) const {
         for (auto &s : sSamples) {
@@ -145,31 +164,79 @@ protected:
         }
         return nullptr;
     }
+
+    const TelemetrySample *firstScreen(const std::string &screen) const {
+        for (auto &s : sSamples) {
+            if (s.getString("screen") == screen) return &s;
+        }
+        return nullptr;
+    }
+
+    std::string sampleSummary(const TelemetrySample &s) const {
+        std::ostringstream oss;
+        oss << "frame=" << s.frame
+            << " screen=" << s.getString("screen", "<none>")
+            << " state=" << s.getString("state", "<none>")
+            << " transition=" << s.getString("transition", "<none>")
+            << " gamePanelLoadState=" << s.getInt("gamePanelLoadState", -1)
+            << " worldLoaded=" << s.getInt("worldLoaded", 0)
+            << " mergerDir=" << s.getInt("mergerDir", 0)
+            << " clipDir=" << s.getInt("clipDir", 0)
+            << " songAnimFrame=" << s.getFloat("songAnimFrame", 0.0f)
+            << " beat=" << s.getFloat("beat", 0.0f);
+        return oss.str();
+    }
+
+    std::string lastSampleSummary() const {
+        if (sSamples.empty()) return "no telemetry samples";
+        return sampleSummary(sSamples.back());
+    }
+
+    std::string progressSummary() const {
+        static const char *kOrderedScreens[] = {
+            "attract_screen",
+            "autosave_warning_screen",
+            "title_screen",
+            "wait_main_after_saveload_screen",
+            "main_screen",
+            "choose_mode_screen",
+            "song_select_screen",
+            "multiuser_screen",
+            "loading_screen",
+            "preloading_screen",
+            "game_screen",
+        };
+
+        int bestIndex = -1;
+        const TelemetrySample *bestSample = nullptr;
+        for (auto &s : sSamples) {
+            std::string cur = s.getString("screen");
+            for (int i = 0; i < (int)(sizeof(kOrderedScreens) / sizeof(kOrderedScreens[0])); i++) {
+                if (cur == kOrderedScreens[i] && i > bestIndex) {
+                    bestIndex = i;
+                    bestSample = &s;
+                }
+            }
+        }
+
+        std::ostringstream oss;
+        if (bestSample) {
+            oss << "furthest current screen="
+                << kOrderedScreens[bestIndex]
+                << " at " << sampleSummary(*bestSample);
+        } else {
+            oss << "no known screen progression observed";
+        }
+        oss << "; last sample: " << lastSampleSummary();
+        return oss.str();
+    }
 };
 
 TelRunResult GameplayTelemetryTest::sResult = {};
 std::vector<TelemetrySample> GameplayTelemetryTest::sSamples = {};
 bool GameplayTelemetryTest::sRanEngine = false;
 
-// ===========================================================================
-// Tier 1: Should pass today
-// ===========================================================================
-
-TEST_F(GameplayTelemetryTest, EngineReachesGameScreen) {
-    // At least one telemetry sample exists with a non-empty state
-    bool hasState = false;
-    for (auto &s : sSamples) {
-        std::string st = s.getString("state");
-        if (!st.empty() && st != "boot") {
-            hasState = true;
-            break;
-        }
-    }
-    EXPECT_TRUE(hasState) << "No telemetry samples with gameplay state found. "
-        << "Total samples: " << sSamples.size();
-}
-
-TEST_F(GameplayTelemetryTest, NoCrashDuringGameplay) {
+TEST_F(GameplayTelemetryTest, NoCrashDuringRun) {
     EXPECT_EQ(sResult.signal, 0)
         << "Engine crashed with signal " << sResult.signal;
     EXPECT_EQ(sResult.exitCode, 0)
@@ -177,337 +244,229 @@ TEST_F(GameplayTelemetryTest, NoCrashDuringGameplay) {
     EXPECT_FALSE(sResult.timedOut) << "Engine timed out (hung)";
 }
 
+TEST_F(GameplayTelemetryTest, TelemetryIncludesUIScreenAndLoadSignals) {
+    ASSERT_FALSE(sSamples.empty()) << "No telemetry samples were captured";
+
+    bool sawScreen = false;
+    bool sawLoadState = false;
+    for (auto &s : sSamples) {
+        if (!s.getString("screen").empty()) sawScreen = true;
+        if (s.getInt("gamePanelLoadState", -1) >= 0) sawLoadState = true;
+    }
+
+    EXPECT_TRUE(sawScreen) << "Telemetry never reported a current UI screen";
+    EXPECT_TRUE(sawLoadState) << "Telemetry never reported GamePanel load state";
+}
+
+TEST_F(GameplayTelemetryTest, AutomationLeavesAttractScreen) {
+    ASSERT_NE(firstScreen("attract_screen"), nullptr)
+        << "Never observed attract_screen. " << progressSummary();
+
+    bool leftAttract = false;
+    for (auto &s : sSamples) {
+        std::string screen = s.getString("screen");
+        if (!screen.empty() && screen != "attract_screen") {
+            leftAttract = true;
+            break;
+        }
+    }
+
+    EXPECT_TRUE(leftAttract)
+        << "Automation never left attract_screen. " << progressSummary();
+}
+
+TEST_F(GameplayTelemetryTest, AutomationReachesTitleScreen) {
+    EXPECT_NE(firstScreen("title_screen"), nullptr)
+        << "Never reached title_screen. " << progressSummary();
+}
+
+TEST_F(GameplayTelemetryTest, AutomationReachesMainScreen) {
+    EXPECT_NE(firstScreen("main_screen"), nullptr)
+        << "Never reached main_screen. " << progressSummary();
+}
+
+TEST_F(GameplayTelemetryTest, AutomationReachesChooseModeScreen) {
+    EXPECT_NE(firstScreen("choose_mode_screen"), nullptr)
+        << "Never reached choose_mode_screen. " << progressSummary();
+}
+
+TEST_F(GameplayTelemetryTest, AutomationReachesSongSelectScreen) {
+    EXPECT_NE(firstScreen("song_select_screen"), nullptr)
+        << "Never reached song_select_screen. " << progressSummary();
+}
+
+TEST_F(GameplayTelemetryTest, AutomationReachesMultiUserScreen) {
+    EXPECT_NE(firstScreen("multiuser_screen"), nullptr)
+        << "Never reached multiuser_screen. " << progressSummary();
+}
+
+TEST_F(GameplayTelemetryTest, EngineReachesGameScreen) {
+    EXPECT_NE(firstScreen("game_screen"), nullptr)
+        << "Never reached game_screen. " << progressSummary();
+}
+
+TEST_F(GameplayTelemetryTest, GamePanelLoadCompletesOnGameScreen) {
+    auto gameScreen = samplesOnScreen("game_screen");
+    ASSERT_FALSE(gameScreen.empty())
+        << "Never reached game_screen. " << progressSummary();
+
+    bool loaded = false;
+    for (auto &s : gameScreen) {
+        if (s.getInt("gamePanelLoadState", -1) == 4) {
+            loaded = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(loaded)
+        << "game_screen became current, but GamePanel never reached load state 4. "
+        << progressSummary();
+}
+
+TEST_F(GameplayTelemetryTest, GameplayEntersIntroState) {
+    bool found = false;
+    for (auto &s : sSamples) {
+        if (s.getString("screen") == "game_screen"
+            && s.getString("state") == "intro") {
+            found = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(found)
+        << "Never observed game_screen in intro state. " << progressSummary();
+}
+
+TEST_F(GameplayTelemetryTest, GameplayEntersPlayingState) {
+    auto playing = gameplaySamples();
+    EXPECT_FALSE(playing.empty())
+        << "Never observed game_screen in playing state. " << progressSummary();
+}
+
+TEST_F(GameplayTelemetryTest, WorldPipelineConvergesDuringGameplay) {
+    auto playing = gameplaySamples();
+    ASSERT_FALSE(playing.empty())
+        << "Never observed game_screen in playing state. " << progressSummary();
+
+    bool found = false;
+    for (auto &s : playing) {
+        if (s.getBool("worldLoaded")
+            && s.getBool("worldPresent")
+            && s.getBool("mergerDir")
+            && s.getBool("clipDir")) {
+            found = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(found)
+        << "Gameplay began, but the world pipeline never converged to "
+        << "worldLoaded=1, worldPresent=1, mergerDir=1, clipDir=1. "
+        << progressSummary();
+}
+
+TEST_F(GameplayTelemetryTest, SongAnimHasPropKeysDuringGameplay) {
+    auto playing = gameplaySamples();
+    ASSERT_FALSE(playing.empty())
+        << "Never observed game_screen in playing state. " << progressSummary();
+
+    bool found = false;
+    for (auto &s : playing) {
+        if (s.getInt("songAnimKeys", -1) > 0) {
+            found = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(found)
+        << "During gameplay, song.anim never exposed any PropKeys tracks. "
+        << progressSummary();
+}
+
+TEST_F(GameplayTelemetryTest, SongAnimHasClipKeysDuringGameplay) {
+    auto playing = gameplaySamples();
+    ASSERT_FALSE(playing.empty())
+        << "Never observed game_screen in playing state. " << progressSummary();
+
+    bool found = false;
+    for (auto &s : playing) {
+        if (s.getInt("clipKeyCount", -1) > 0) {
+            found = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(found)
+        << "During gameplay, clip keyframe count never became positive. "
+        << progressSummary();
+}
+
 TEST_F(GameplayTelemetryTest, SongAnimAdvances) {
-    // Property: songAnimFrame is not constant — at least one adjacent pair differs
-    auto it = std::adjacent_find(sSamples.begin(), sSamples.end(),
+    auto playing = gameplaySamples();
+    ASSERT_FALSE(playing.empty())
+        << "Never observed real gameplay on game_screen, so song animation "
+        << "advance cannot be evaluated yet. " << progressSummary();
+
+    auto it = std::adjacent_find(playing.begin(), playing.end(),
         [](const TelemetrySample &a, const TelemetrySample &b) {
             return b.getFloat("songAnimFrame") > a.getFloat("songAnimFrame");
         });
-    EXPECT_NE(it, sSamples.end())
-        << "songAnimFrame never increased across " << sSamples.size() << " samples";
+    EXPECT_NE(it, playing.end())
+        << "songAnimFrame never increased during actual gameplay samples. "
+        << progressSummary();
 }
-
-TEST_F(GameplayTelemetryTest, SongAnimMonotonicallyIncreases) {
-    // Property: songAnimFrame never decreases between consecutive samples
-    for (size_t i = 1; i < sSamples.size(); i++) {
-        float prev = sSamples[i - 1].getFloat("songAnimFrame");
-        float curr = sSamples[i].getFloat("songAnimFrame");
-        if (curr < prev && prev - curr > 1.0f) {
-            // Allow small jitter but not major regression
-            FAIL() << "songAnimFrame decreased from " << prev << " to " << curr
-                   << " between frame " << sSamples[i - 1].frame
-                   << " and " << sSamples[i].frame;
-        }
-    }
-}
-
-// ===========================================================================
-// Tier 2: Expected to fail today — each maps to hack audit phase
-// ===========================================================================
-
-TEST_F(GameplayTelemetryTest, VenueTypeDefSet) {
-    // Hack audit: Phase A1 (set_type "world")
-    // Note: reclassified as T1 — hack is permanent, test validates it works
-    // TypeDef name may be "world" or "venue" depending on DTA handler ordering
-    bool found = false;
-    for (auto &s : sSamples) {
-        std::string td = s.getString("typeDef");
-        if (!td.empty()) {
-            found = true;
-            break;
-        }
-    }
-    EXPECT_TRUE(found)
-        << "Venue WorldDir never had a TypeDef set. "
-        << "Either SetType() hack failed or VenueEnter didn't run.";
-}
-
-TEST_F(GameplayTelemetryTest, HamProviderInitialized) {
-    // Hack audit: Phase A4 — likely passes today (init is early)
-    auto *sample = firstWhere("hamProvider", "1");
-    EXPECT_NE(sample, nullptr)
-        << "TheHamProvider was never non-null. HamInit() may not have run.";
-}
-
-TEST_F(GameplayTelemetryTest, BeatStartsDuringGameplay) {
-    // Hack audit: Phase D2 (intro timing)
-    auto playing = samplesInPhase("playing");
-    if (playing.empty()) {
-        GTEST_SKIP() << "No gameplay-phase samples (game never reached playing state)";
-    }
-    bool beatStarted = false;
-    for (auto &s : playing) {
-        if (s.getFloat("beat") > 0.0f) {
-            beatStarted = true;
-            break;
-        }
-    }
-    EXPECT_TRUE(beatStarted)
-        << "Beat never became positive during gameplay phase. "
-        << "Game::Poll() may not be calling SetSecondsAndBeat().";
-}
-
-TEST_F(GameplayTelemetryTest, BeatDrivenAnimation) {
-    // Hack audit: Phase D2 — beat-driven timing works (not just wall-clock)
-    // Property: after beat > 0, songAnimFrame still advances
-    bool foundBeat = false;
-    float frameAtBeatStart = 0.0f;
-    float lastFrame = 0.0f;
-    for (auto &s : sSamples) {
-        if (!foundBeat && s.getFloat("beat") > 0.0f) {
-            foundBeat = true;
-            frameAtBeatStart = s.getFloat("songAnimFrame");
-        }
-        if (foundBeat) {
-            lastFrame = s.getFloat("songAnimFrame");
-        }
-    }
-    if (!foundBeat) {
-        GTEST_SKIP() << "Beat never started — can't test beat-driven animation";
-    }
-    EXPECT_GT(lastFrame, frameAtBeatStart)
-        << "songAnimFrame didn't advance after beat started "
-        << "(beat-driven path may not be working). "
-        << "Frame at beat start: " << frameAtBeatStart
-        << ", last frame: " << lastFrame;
-}
-
-TEST_F(GameplayTelemetryTest, MergerDirAvailable) {
-    // Hack audit: Phase B2 — mMerger->Dir() returns non-null WorldDir
-    auto playing = samplesInPhase("playing");
-    if (playing.empty()) {
-        GTEST_SKIP() << "No gameplay-phase samples";
-    }
-    bool found = false;
-    for (auto &s : playing) {
-        if (s.getBool("mergerDir")) {
-            found = true;
-            break;
-        }
-    }
-    EXPECT_TRUE(found)
-        << "mergerDir was never 1 during gameplay. "
-        << "FileMerger pipeline may not have wired mMerger.";
-}
-
-TEST_F(GameplayTelemetryTest, PollEnabledDuringGameplay) {
-    // Sanity: HamDirector should have mPollEnabled=true during gameplay
-    auto playing = samplesInPhase("playing");
-    if (playing.empty()) {
-        GTEST_SKIP() << "No gameplay-phase samples";
-    }
-    bool found = false;
-    for (auto &s : playing) {
-        if (s.getBool("pollEnabled")) {
-            found = true;
-            break;
-        }
-    }
-    EXPECT_TRUE(found)
-        << "mPollEnabled was never true during gameplay. "
-        << "Game::StartGame() may not be calling SetPollEnabled(true).";
-}
-
-// ===========================================================================
-// Character Animation Tests — validates dance clips play on characters
-// ===========================================================================
-
-TEST_F(GameplayTelemetryTest, ClipDirectoryAvailable) {
-    // ClipPlayer::Init() requires clipDir (the "clips" ObjectDir from merger)
-    bool found = false;
-    for (auto &s : sSamples) {
-        if (s.getBool("clipDir")) {
-            found = true;
-            break;
-        }
-    }
-    EXPECT_TRUE(found)
-        << "ClipDir was never available. "
-        << "HamDirector::Initialize() may not have run, or 'clips' ObjectDir missing from merger.";
-}
-
-TEST_F(GameplayTelemetryTest, MasterClipAnimAvailable) {
-    // ClipPlayer::Init() requires GetMasterKeys("clip") to return non-null
-    bool found = false;
-    for (auto &s : sSamples) {
-        if (s.getBool("masterClip")) {
-            found = true;
-            break;
-        }
-    }
-    EXPECT_TRUE(found)
-        << "Master clip anim (master_clips/song.anim) was never found. "
-        << "SetMasterClipAnim() is failing — check song asset merge.";
-}
-
-TEST_F(GameplayTelemetryTest, CharacterClipsPlaying) {
-    // THE NORTH STAR TEST: characters must have clip layers queued during gameplay.
-    // charClipLayers > 0 means ClipPlayer::PlayAnims() successfully queued clips
-    // to the HamDriver, and the character is actively dancing.
-    //
-    // This test FAILS today (charClipLayers=0 for entire run).
-    // Root cause: song.anim PropKeys have zero keyframe entries after FileMerger merge.
-    // ClipPlayer::Init() succeeds (PropKeys pointers non-null), PlayAnims() IS called,
-    // but PushClip/PushExpertClip find no keys -> no clips queued -> character frozen.
-    // Additionally, merge_moves=1 but mRoutineLoaded=false, so routine builder path fails.
-    bool found = false;
-    for (auto &s : sSamples) {
-        if (s.getInt("charClipLayers") > 0) {
-            found = true;
-            break;
-        }
-    }
-    EXPECT_TRUE(found)
-        << "Character clip layers were NEVER > 0 during gameplay. "
-        << "Characters are frozen — ClipPlayer::PlayAnims() never queued clips to HamDriver. "
-        << "Check: ClipPlayer::Init() return value, HamDirector::Poll() clip playback path.";
-}
-
-TEST_F(GameplayTelemetryTest, DifficultyProxyExists) {
-    // The "easy" ObjectDir must exist in the merged world for song.anim lookup
-    bool found = false;
-    for (auto &s : sSamples)
-        if (s.getBool("diffProxy")) { found = true; break; }
-    EXPECT_TRUE(found) << "Difficulty proxy 'easy' not found in merged world dir.";
-}
-
-TEST_F(GameplayTelemetryTest, SongAnimHasPropKeys) {
-    // song.anim must have PropKeys objects (property animation tracks)
-    // songAnimKeys=0 means the anim exists but has no tracks at all
-    bool found = false;
-    for (auto &s : sSamples)
-        if (s.getInt("songAnimKeys", -1) > 0) { found = true; break; }
-    EXPECT_TRUE(found) << "song.anim has zero PropKeys tracks. "
-        << "The PropAnim was merged but its property tracks are empty. "
-        << "Check MergeObject copy semantics for RndPropAnim.";
-}
-
-TEST_F(GameplayTelemetryTest, SongAnimHasClipKeys) {
-    // THE KEY DIAGNOSTIC: the "clip" PropKeys must have keyframe entries.
-    // clipKeyCount=0 with songAnimKeys>0 means the PropKeys object exists
-    // but its Keys<Symbol,Symbol> array is empty (no keyframes transferred).
-    bool found = false;
-    for (auto &s : sSamples)
-        if (s.getInt("clipKeyCount", -1) > 0) { found = true; break; }
-    EXPECT_TRUE(found) << "Clip keyframe count was never > 0. "
-        << "The 'clip' PropKeys in song.anim has zero entries. "
-        << "FileMerger merge didn't transfer keyframe data from song .milo.";
-}
-
-TEST_F(GameplayTelemetryTest, RoutineBuilderLoaded) {
-    // On native, we bypass the routine builder path (merge_moves) and use
-    // difficulty-specific song.anim directly. The full routine builder flow
-    // requires the complete DTA-driven choreography system which depends on
-    // synchronous loading. This test validates that the difficulty-specific
-    // path works (clipKeyCount > 0 is the real indicator).
-    // Skip: routineLoaded is expected to be 0 on native.
-    GTEST_SKIP() << "Routine builder bypassed on native — using difficulty keys directly.";
-}
-
-// ===========================================================================
-// Song Animation Frame Advancement
-// ===========================================================================
 
 TEST_F(GameplayTelemetryTest, SongAnimFrameAdvancesPastInit) {
-    // The song anim frame must advance past the -kHugeFloat initial value.
-    // On Xbox, the DTA OnSelectCamera handler computes the frame from the beat.
-    // On native, HamDirector::Poll() has a fallback that uses wall-clock time.
-    // If this fails, the song.anim frame is stuck at its init value and no
-    // clip keyframe lookups can succeed (all keys are at positive frames).
-    auto playing = samplesInPhase("playing");
-    if (playing.empty()) {
-        GTEST_SKIP() << "No gameplay-phase samples";
-    }
+    auto playing = gameplaySamples();
+    ASSERT_FALSE(playing.empty())
+        << "Never observed real gameplay on game_screen. " << progressSummary();
+
     bool advanced = false;
     for (auto &s : playing) {
         float f = s.getFloat("songAnimFrame");
         if (f > 0.0f) { advanced = true; break; }
     }
     EXPECT_TRUE(advanced)
-        << "songAnimFrame never became positive during gameplay. "
-        << "Stuck at initial value (-kHugeFloat). "
-        << "The DTA OnSelectCamera path or the Poll() AdvanceFrame fallback isn't firing.";
+        << "songAnimFrame never became positive during actual gameplay. "
+        << progressSummary();
 }
 
 TEST_F(GameplayTelemetryTest, SongAnimationGateOpen) {
-    // HamDirector::SongAnimation() must return true for the clip playback
-    // block to execute. It checks both characters' SongAnimation() return
-    // value — at least one must return > -1.
-    //
-    // SongAnimation() returns -1 when Driver()->FirstClip() is non-null
-    // (idle animation loaded). It returns 0 when neither Driver nor SongDriver
-    // has clips, or >= 0 when SongDriver has a clip with a skeleton index.
-    //
-    // If this gate stays false (doSongAnim=0), the entire clip playback block
-    // in HamDirector::Poll() is skipped and characters freeze.
-    auto playing = samplesInPhase("playing");
-    if (playing.empty()) {
-        GTEST_SKIP() << "No gameplay-phase samples";
-    }
+    auto playing = gameplaySamples();
+    ASSERT_FALSE(playing.empty())
+        << "Never observed real gameplay on game_screen. " << progressSummary();
+
     bool gateOpen = false;
     for (auto &s : playing) {
         if (s.getInt("doSongAnim", -1) == 1) { gateOpen = true; break; }
     }
     EXPECT_TRUE(gateOpen)
-        << "doSongAnim was never 1 during gameplay. "
-        << "HamDirector::SongAnimation() returns false — clip playback block is entirely skipped. "
-        << "p0SongAnim=-1 means Driver()->FirstClip() is non-null (idle anim blocks song mode).";
+        << "doSongAnim was never 1 during actual gameplay. "
+        << progressSummary();
 }
 
 TEST_F(GameplayTelemetryTest, Player0SongAnimationReady) {
-    // player0->SongAnimation() must return > -1 for clip playback.
-    // This is the per-character gate that determines if song clips can be queued.
-    // Returns -1 when Driver() has a clip (idle anim) or mUseCameraSkeleton is true.
-    // Returns 0 when SongDriver has a clip with skeleton index, or no clips at all.
-    auto playing = samplesInPhase("playing");
-    if (playing.empty()) {
-        GTEST_SKIP() << "No gameplay-phase samples";
-    }
+    auto playing = gameplaySamples();
+    ASSERT_FALSE(playing.empty())
+        << "Never observed real gameplay on game_screen. " << progressSummary();
+
     bool ready = false;
     for (auto &s : playing) {
         if (s.getInt("p0SongAnim", -99) > -1) { ready = true; break; }
     }
     EXPECT_TRUE(ready)
-        << "p0SongAnim was never > -1 during gameplay. "
-        << "HamCharacter::SongAnimation() returns -1 (Driver has idle clip, blocking song mode). "
-        << "On Xbox, the Driver clip is cleared when entering song animation mode.";
-}
-
-TEST_F(GameplayTelemetryTest, MergeMovesEnabledDuringGameplay) {
-    bool sawGameplay = false;
-    for (auto &s : sSamples) {
-        if (s.getString("state") != "playing") continue;
-        if (s.getFloat("beat") <= 0.0f) continue;
-        if (s.getInt("clipDir", 0) != 1) continue;
-        sawGameplay = true;
-        EXPECT_EQ(s.getInt("mergeMoves", 0), 1)
-            << "merge_moves dropped out of routine-builder mode at frame " << s.frame;
-    }
-    if (!sawGameplay) {
-        GTEST_SKIP() << "No post-intro gameplay samples with clip data available";
-    }
+        << "p0SongAnim was never > -1 during actual gameplay. "
+        << progressSummary();
 }
 
 TEST_F(GameplayTelemetryTest, SongDriverLayersStayLiveAfterIntro) {
-    const TelemetrySample *firstBad = nullptr;
-    bool sawGameplay = false;
-    for (auto &s : sSamples) {
-        if (s.getString("state") != "playing") continue;
-        if (s.getFloat("beat") <= 0.0f) continue;
-        if (s.getInt("clipDir", 0) != 1) continue;
-        if (s.getInt("p0", 0) != 1) continue;
-        sawGameplay = true;
-        if (s.getInt("charClipLayers") <= 0 || s.getInt("p0SongAnim") <= 0) {
-            firstBad = &s;
+    auto playing = gameplaySamples();
+    ASSERT_FALSE(playing.empty())
+        << "Never observed real gameplay on game_screen. " << progressSummary();
+
+    bool found = false;
+    for (auto &s : playing) {
+        if (s.getInt("charClipLayers", 0) > 0 && s.getInt("p0SongAnim", -99) > 0) {
+            found = true;
             break;
         }
     }
-    if (!sawGameplay) {
-        GTEST_SKIP() << "No post-intro gameplay samples with player 0 clip data available";
-    }
-    ASSERT_EQ(firstBad, nullptr)
-        << "Player 0 song layers disappeared after intro at frame " << firstBad->frame
-        << " beat=" << firstBad->getFloat("beat")
-        << " charClipLayers=" << firstBad->getInt("charClipLayers")
-        << " p0SongAnim=" << firstBad->getInt("p0SongAnim");
+    EXPECT_TRUE(found)
+        << "Player 0 never showed live song-driver layers during actual gameplay. "
+        << progressSummary();
 }

@@ -164,13 +164,7 @@ void TexMovie::Enter() {
     if (b) {
         mTex->MakeDrawTarget();
         Hmx::Rect r(0, 0, 1, 1);
-#ifdef __EMSCRIPTEN__
-        // Web: clear to transparent black so movie overlay doesn't block UI
-        // when no video is playing (videos need pre-transcoding to .webm)
-        Hmx::Color c(0, 0, 0, 0);
-#else
         Hmx::Color c(0, 0, 0, 1);
-#endif
         TheRnd.DrawRectScreen(r, c, nullptr, nullptr, nullptr);
         mTex->FinishDrawTarget();
         TheRnd.MakeDrawTarget();

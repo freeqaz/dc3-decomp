@@ -72,11 +72,14 @@ static GpuTexData* EnsureRenderTargetData(RndTex* tex) {
         );
         data.view = data.texture.CreateView();
 
-        // Clear to black — WebGPU spec allows undefined initial contents,
-        // which browsers often display as purple/magenta.
+        // Clear to opaque black — WebGPU spec allows undefined initial contents,
+        // which browsers often display as purple/magenta. Alpha must be 255
+        // so meshes using SrcAlpha blending don't become transparent (showing
+        // white canvas background on web).
         int w = texW, h = texH;
         size_t sz = (size_t)w * h * 4;
         std::vector<uint8_t> black(sz, 0);
+        for (size_t i = 3; i < sz; i += 4) black[i] = 255; // set alpha to opaque
         wgpu::TexelCopyTextureInfo dest{};
         dest.texture = data.texture;
         wgpu::TexelCopyBufferLayout layout{};

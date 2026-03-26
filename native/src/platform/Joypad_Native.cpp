@@ -47,6 +47,13 @@ static unsigned int GetWebKeyButtons() {
     return (unsigned int)EM_ASM_INT({ return window._dc3Keys || 0; });
 }
 
+// Clear stale key state — call during screen transitions so held keys
+// from menu navigation don't bleed into gameplay (e.g., Space/Start
+// triggering an immediate pause on game_screen).
+void JoypadWebClearKeys() {
+    EM_ASM({ window._dc3Keys = 0; });
+}
+
 // Poll the Gamepad API — returns bitmask matching JoypadButton enum.
 // navigator.getGamepads() returns a snapshot; we read pad 0.
 static unsigned int GetWebGamepadButtons() {
@@ -298,10 +305,8 @@ static unsigned int GetScriptedButtons(int currentFrame) {
             if (satisfied) {
                 gWaitSatisfiedFrame = currentFrame;
                 gWaiting = false;
-#ifdef DEBUG_LOGS
                 printf("DC3 Input: wait_screen '%s' satisfied at frame %d\n",
                     gWaitTarget, currentFrame);
-#endif
                 gScriptCursor++;
                 continue;
             }
@@ -383,7 +388,11 @@ void JoypadPoll() {
     // Lazy-load input script on first poll
     if (!gInputScriptLoaded) LoadInputScript();
 
-    int currentFrame = (int)TheRnd.GetFrameID();
+    // Use our own monotonic frame counter for input scripting.
+    // TheRnd.GetFrameID() can stall or jump (it's incremented in
+    // BeginDrawing, but JoypadPoll runs before BeginDrawing).
+    static int sInputFrame = 0;
+    int currentFrame = sInputFrame++;
 
     for (int pad = 0; pad < kNumJoypads; pad++) {
         JoypadData *data = JoypadGetPadData(pad);

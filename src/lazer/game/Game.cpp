@@ -704,6 +704,12 @@ void Game::SetGamePaused(bool b1, bool b2, bool b3) {
 }
 
 void Game::CheckForSkeletonLoss(const Skeleton *const (&skeletons)[6]) {
+#ifdef __EMSCRIPTEN__
+    // Web uses a dummy skeleton with no real Kinect tracking.
+    // Skeleton loss pause makes no sense and freezes the beat,
+    // preventing the song from ending.
+    return;
+#endif
     int numPlaying = 0;
     for (int i = 0; i < 2; i++) {
         if (TheGameData->Player(i)->IsPlaying()) {

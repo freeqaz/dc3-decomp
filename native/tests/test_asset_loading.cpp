@@ -17,12 +17,16 @@
 #include "platform/TransformUtils.h"
 #include "char/CharTwistSolver.h"
 #include "gesture/SkeletonViz.h"
+#include "hamobj/Difficulty.h"
 #include "hamobj/HamCharacter.h"
+#include "hamobj/MoveGraph.h"
 #include "math/Rot.h"
 #include "obj/Dir.h"
 #include "obj/DirLoader.h"
 #include "obj/Object.h"
 #include "os/File.h"
+#include "rndobj/PropAnim.h"
+#include "rndobj/PropKeys.h"
 #include "utl/FilePath.h"
 
 #include <sys/stat.h>
@@ -406,6 +410,141 @@ static ObjectDir *TryLoadStandalone(const std::string &path) {
     return DirLoader::LoadObjects(fp, nullptr, nullptr);
 }
 
+static ObjectDir *FindDirectObjectDirByType(ObjectDir *dir, const char *type) {
+    if (!dir || !type)
+        return nullptr;
+
+    for (ObjDirItr<Hmx::Object> it(dir, false); it != nullptr; ++it) {
+        Hmx::Object *obj = it;
+        ObjectDir *objDir = dynamic_cast<ObjectDir *>(obj);
+        if (objDir && obj->Type() == type)
+            return objDir;
+    }
+    return nullptr;
+}
+
+static int CountMoveGraphVariants(const MoveGraph *graph) {
+    if (!graph)
+        return 0;
+
+    int count = 0;
+    FOREACH (it, graph->MoveParents()) {
+        count += (int)it->second->Variants().size();
+    }
+    return count;
+}
+
+struct LayoutResolutionStats {
+    int total = 0;
+    int found = 0;
+    int missing = 0;
+    int rest = 0;
+    int dance = 0;
+};
+
+static LayoutResolutionStats AnalyzeMoveGraphLayout(const MoveGraph *graph) {
+    LayoutResolutionStats stats;
+    if (!graph || !graph->Layout())
+        return stats;
+
+    DataArray *layout = graph->Layout();
+    for (int i = 0; i < kNumDifficultiesDC2; i++) {
+        DataArray *diff = layout->FindArray(DifficultyToSym((Difficulty)i), false);
+        if (!diff || diff->Size() < 2)
+            continue;
+
+        DataArray *moves = diff->Array(1);
+        if (!moves)
+            continue;
+
+        for (int j = 0; j < moves->Size(); j++) {
+            Symbol variantName = moves->Sym(j);
+            const MoveVariant *variant = graph->FindMoveByVariantName(variantName);
+            stats.total++;
+            if (!variant) {
+                stats.missing++;
+                continue;
+            }
+
+            stats.found++;
+            if (variant->IsRest())
+                stats.rest++;
+            else
+                stats.dance++;
+        }
+    }
+
+    return stats;
+}
+
+static void PrintMoveGraphLayoutSample(const MoveGraph *graph, const char *tag, int count) {
+    if (!graph || !graph->Layout())
+        return;
+
+    DataArray *layout = graph->Layout();
+    DataArray *easy = layout->FindArray("easy", false);
+    if (!easy || easy->Size() < 2)
+        return;
+
+    DataArray *moves = easy->Array(1);
+    if (!moves)
+        return;
+
+    int limit = Min(count, moves->Size());
+    for (int i = 0; i < limit; i++) {
+        Symbol variantName = moves->Sym(i);
+        const MoveVariant *variant = graph->FindMoveByVariantName(variantName);
+        printf(
+            "  %s easy[%d] = '%s' -> %s (%s)\n",
+            tag,
+            i,
+            variantName.Str(),
+            variant ? "FOUND" : "NULL",
+            variant ? variant->HamMoveName().Str() : "missing"
+        );
+    }
+}
+
+struct MoveTrackStats {
+    int total;
+    int nulls;
+    int rests;
+    int nonRests;
+};
+
+static MoveTrackStats AnalyzeMoveTrack(ObjectDir *dir, RndPropAnim *anim) {
+    MoveTrackStats stats = {0, 0, 0, 0};
+    if (!dir || !anim)
+        return stats;
+
+    static Symbol sMove("move");
+    PropKeys *keys = nullptr;
+    for (ObjDirItr<Hmx::Object> it(dir, true); it != nullptr; ++it) {
+        keys = anim->GetKeys(it, DataArrayPtr(sMove));
+        if (keys)
+            break;
+    }
+    if (!keys)
+        return stats;
+
+    Keys<Symbol, Symbol> *symKeys = keys->AsSymbolKeys();
+    if (!symKeys)
+        return stats;
+
+    for (int i = 0; i < (int)symKeys->size(); i++) {
+        Symbol value = (*symKeys)[i].value;
+        stats.total++;
+        if (value.Null()) {
+            stats.nulls++;
+        } else if (strncmp(value.Str(), "Rest.move", 9) == 0) {
+            stats.rests++;
+        } else {
+            stats.nonRests++;
+        }
+    }
+    return stats;
+}
+
 // Complex venues — these exercise deep subdir chains with many object types.
 // The full loading chain goes:
 //   DirLoader::LoadDir -> WorldDir::PreLoad -> PanelDir::PreLoad ->
@@ -566,6 +705,222 @@ TEST_F(AssetLoadingTest, LoadSharedWorldSubdirs) {
         GTEST_SKIP() << "No shared world subdirs found";
     printf("SharedWorldSubdirs: loaded=%d failed=%d skipped=%d\n",
            loaded, failed, skipped);
+}
+
+TEST_F(AssetLoadingTest, CharacterVoiceBanksResolveRuntimeSoundScope) {
+    std::string root = GetMiloLibRoot();
+    if (root.empty())
+        GTEST_SKIP() << "MILO_LIB not set";
+
+    std::string camshotPath =
+        root + "/world/shared/camshots/gen/mini_blue.milo_xbox";
+    std::string voiceBankPath =
+        root + "/sfx/loc/eng/gen/vo_bank_iconmanblue.milo_xbox";
+    if (!FileExists(camshotPath) || !FileExists(voiceBankPath)) {
+        GTEST_SKIP() << "mini_blue or vo_bank_iconmanblue asset not found";
+    }
+
+    ObjectDir *camshotDir = TryLoadStandalone(camshotPath);
+    ASSERT_NE(camshotDir, nullptr) << "mini_blue.milo_xbox failed to load";
+
+    Hmx::Object *camshotSound =
+        camshotDir->FindObject("win_blue_P2_low_mov.snd", false, true);
+    ASSERT_NE(camshotSound, nullptr)
+        << "mini_blue root should resolve referenced VO sounds recursively";
+
+    ObjectDir *voiceBankRoot = TryLoadStandalone(voiceBankPath);
+    ASSERT_NE(voiceBankRoot, nullptr) << "vo_bank_iconmanblue.milo_xbox failed to load";
+
+    ObjectDir *characterVo = nullptr;
+    if (voiceBankRoot->Type() == "character_vo")
+        characterVo = voiceBankRoot;
+    else
+        characterVo = FindDirectObjectDirByType(voiceBankRoot, "character_vo");
+    ASSERT_NE(characterVo, nullptr)
+        << "voice bank should expose a character_vo runtime object";
+
+    Hmx::Object *voiceBankFlow = characterVo->FindObject("vo.flow", false, true);
+    Hmx::Object *voiceBankSound =
+        characterVo->FindObject("win_blue_low_01.snd", false, true);
+
+    printf(
+        "  character_vo scope: root='%s' bank='%s' flow=%p sound=%p soundDir='%s'\n",
+        voiceBankRoot->Name(),
+        characterVo->Name(),
+        (void *)voiceBankFlow,
+        (void *)voiceBankSound,
+        voiceBankSound && voiceBankSound->Dir() ? voiceBankSound->Dir()->Name() : "(null)"
+    );
+
+    EXPECT_NE(voiceBankFlow, nullptr)
+        << "character_vo should resolve vo.flow for runtime play_vo";
+    EXPECT_NE(voiceBankSound, nullptr)
+        << "character_vo should resolve runtime foley sounds recursively";
+    EXPECT_EQ(voiceBankSound ? voiceBankSound->Dir() : nullptr, characterVo)
+        << "vo_bank_iconmanblue runtime foley should resolve in character_vo scope";
+}
+
+TEST_F(AssetLoadingTest, BetterOffAloneMoveGraphCopyPreservesLayoutResolution) {
+    std::string root = GetMiloLibRoot();
+    if (root.empty())
+        GTEST_SKIP() << "MILO_LIB not set";
+
+    std::string path = root + "/songs/betteroffalone/gen/move_data.milo_xbox";
+    std::string songPath = root + "/songs/betteroffalone/gen/betteroffalone.milo_xbox";
+    std::string movesPath = root + "/songs/betteroffalone/gen/moves.milo_xbox";
+    if (!FileExists(path))
+        GTEST_SKIP() << "betteroffalone move_data.milo_xbox not found";
+
+    ObjectDir *dir = TryLoadStandalone(path);
+    ASSERT_NE(dir, nullptr) << "betteroffalone move_data.milo_xbox failed to load";
+
+    MoveGraph *source = dir->Find<MoveGraph>("move_graph", true);
+    ASSERT_NE(source, nullptr) << "move_data missing move_graph";
+
+    LayoutResolutionStats sourceStats = AnalyzeMoveGraphLayout(source);
+    int sourceVariants = CountMoveGraphVariants(source);
+    PrintMoveGraphLayoutSample(source, "source", 8);
+    printf(
+        "  source move_graph: parents=%zu variants=%d layout total=%d found=%d missing=%d rest=%d dance=%d\n",
+        source->MoveParents().size(),
+        sourceVariants,
+        sourceStats.total,
+        sourceStats.found,
+        sourceStats.missing,
+        sourceStats.rest,
+        sourceStats.dance
+    );
+
+    MoveGraph *copied = Hmx::Object::New<MoveGraph>();
+    copied->Copy(source, Hmx::Object::kCopyDeep);
+
+    LayoutResolutionStats copiedStats = AnalyzeMoveGraphLayout(copied);
+    int copiedVariants = CountMoveGraphVariants(copied);
+    PrintMoveGraphLayoutSample(copied, "copied", 8);
+    printf(
+        "  copied move_graph: parents=%zu variants=%d layout total=%d found=%d missing=%d rest=%d dance=%d\n",
+        copied->MoveParents().size(),
+        copiedVariants,
+        copiedStats.total,
+        copiedStats.found,
+        copiedStats.missing,
+        copiedStats.rest,
+        copiedStats.dance
+    );
+
+    EXPECT_GT(sourceVariants, 0);
+    EXPECT_GT(sourceStats.dance, 0)
+        << "standalone move_graph should resolve at least some dance variants";
+    EXPECT_EQ(copiedVariants, sourceVariants)
+        << "MoveGraph deep copy should preserve variant count";
+    EXPECT_EQ(copiedStats.found, sourceStats.found)
+        << "MoveGraph deep copy should preserve layout resolution";
+    EXPECT_EQ(copiedStats.dance, sourceStats.dance)
+        << "MoveGraph deep copy should preserve dance-variant availability";
+
+    if (FileExists(songPath)) {
+        ObjectDir *songDir = TryLoadStandalone(songPath);
+        ASSERT_NE(songDir, nullptr) << "betteroffalone.milo_xbox failed to load";
+
+        ObjectDir *songMoves = songDir->Find<ObjectDir>("moves", true);
+        ObjectDir *embeddedMoveData = songDir->Find<ObjectDir>("move_data", true);
+        printf(
+            "  song world lookup: moves=%p move_data=%p\n",
+            (void *)songMoves,
+            (void *)embeddedMoveData
+        );
+        if (songMoves) {
+            printf("  song moves subdirs:");
+            for (int i = 0; i < (int)songMoves->SubDirs().size(); i++) {
+                ObjectDir *sub = songMoves->SubDirs()[i];
+                printf(" [%d]='%s'", i, sub ? sub->Name() : "(null)");
+            }
+            printf("\n");
+        }
+    }
+
+    if (FileExists(movesPath)) {
+        ObjectDir *movesDir = TryLoadStandalone(movesPath);
+        ASSERT_NE(movesDir, nullptr) << "moves.milo_xbox failed to load";
+
+        ObjectDir *embeddedMoveData = movesDir->Find<ObjectDir>("move_data", true);
+        ASSERT_NE(embeddedMoveData, nullptr)
+            << "moves.milo_xbox missing embedded move_data directory";
+        printf("  standalone moves subdirs:");
+        for (int i = 0; i < (int)movesDir->SubDirs().size(); i++) {
+            ObjectDir *sub = movesDir->SubDirs()[i];
+            printf(" [%d]='%s'", i, sub ? sub->Name() : "(null)");
+        }
+        printf("\n");
+
+        MoveGraph *embeddedGraph = embeddedMoveData->Find<MoveGraph>("move_graph", true);
+        ASSERT_NE(embeddedGraph, nullptr)
+            << "embedded move_data missing move_graph";
+
+        LayoutResolutionStats embeddedStats = AnalyzeMoveGraphLayout(embeddedGraph);
+        int embeddedVariants = CountMoveGraphVariants(embeddedGraph);
+        PrintMoveGraphLayoutSample(embeddedGraph, "embedded", 8);
+        printf(
+            "  embedded move_graph: parents=%zu variants=%d layout total=%d found=%d missing=%d rest=%d dance=%d\n",
+            embeddedGraph->MoveParents().size(),
+            embeddedVariants,
+            embeddedStats.total,
+            embeddedStats.found,
+            embeddedStats.missing,
+            embeddedStats.rest,
+            embeddedStats.dance
+        );
+
+        EXPECT_EQ(embeddedVariants, sourceVariants)
+            << "song milo embedded move_graph should match standalone move_data";
+        EXPECT_EQ(embeddedStats.found, sourceStats.found)
+            << "song milo embedded move_graph should preserve layout resolution";
+        EXPECT_EQ(embeddedStats.dance, sourceStats.dance)
+            << "song milo embedded move_graph should preserve dance-variant availability";
+    }
+}
+
+TEST_F(AssetLoadingTest, BetterOffAloneAuthoredSongAnimsContainDanceMoves) {
+    std::string root = GetMiloLibRoot();
+    if (root.empty())
+        GTEST_SKIP() << "MILO_LIB not set";
+
+    const char *paths[] = {
+        "/songs/betteroffalone/gen/easy.milo_xbox",
+        "/songs/betteroffalone/gen/medium.milo_xbox",
+        "/songs/betteroffalone/gen/expert.milo_xbox",
+        nullptr
+    };
+    const char *labels[] = { "easy", "medium", "expert" };
+
+    for (int i = 0; paths[i]; i++) {
+        std::string path = root + paths[i];
+        if (!FileExists(path))
+            GTEST_SKIP() << "betteroffalone authored anim asset missing: " << path;
+
+        ObjectDir *dir = TryLoadStandalone(path);
+        ASSERT_NE(dir, nullptr) << labels[i] << ".milo_xbox failed to load";
+
+        RndPropAnim *songAnim = dir->Find<RndPropAnim>("song.anim", true);
+        ASSERT_NE(songAnim, nullptr) << labels[i] << ".milo_xbox missing song.anim";
+
+        MoveTrackStats stats = AnalyzeMoveTrack(dir, songAnim);
+        printf(
+            "  %s song.anim move keys: total=%d null=%d rest=%d nonRest=%d\n",
+            labels[i],
+            stats.total,
+            stats.nulls,
+            stats.rests,
+            stats.nonRests
+        );
+
+        EXPECT_EQ(stats.total, 92)
+            << labels[i] << " song.anim should preserve the authored 92-key move timeline";
+        EXPECT_GT(stats.nonRests, 0)
+            << labels[i] << " song.anim should contain real dance moves";
+        EXPECT_GT(stats.rests, 0)
+            << labels[i] << " song.anim should retain intro/outro rest markers";
+    }
 }
 
 // Character loading — main character has complex bone hierarchy + animations

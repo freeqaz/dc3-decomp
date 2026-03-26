@@ -15,28 +15,23 @@ wait_screen attract_screen
 
 # Title screen — confirm to start
 wait_screen title_screen
-+30 confirm
++10 confirm
 
 # Main screen — select "gameplay" (first item)
 wait_screen main_screen
-+60 confirm
++10 confirm
 
 # Choose mode — select "perform" (first item)
 wait_screen choose_mode_screen
-+30 confirm
++10 confirm
 
 # Song select — scroll down a few times then confirm
 wait_screen song_select_screen
 +30 down
-+20 down
-+20 down
-+20 confirm
++45 down
++60 down
++75 confirm
 
-# Multiuser — confirm to proceed (uses defaults)
-wait_screen multiuser_screen
-+30 confirm
-+30 confirm
-
+# multiuser_screen auto-advances (no input needed).
 # Loading screens auto-advance via DTA handlers:
 #   loading → preloading → real_loading → game_screen
-# Just wait for game_screen to enter

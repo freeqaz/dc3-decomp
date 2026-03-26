@@ -44,6 +44,11 @@ public:
     DataNode OnGetFitnessData(const DataArray *);
     bool IsGameOver() const { return mState == kGameOver; }
     bool Unkf8() const { return unkf8; }
+    bool InIntroState() const { return mState == kGameInIntro; }
+    bool IsPlayingState() const { return mState == kGamePlaying; }
+    State CurrentGameState() const { return mState; }
+    int PollLoadState() const { return mPollLoadState; }
+    Game *CurrentGame() const { return mGame; }
 
 private:
     void CreateGame();
