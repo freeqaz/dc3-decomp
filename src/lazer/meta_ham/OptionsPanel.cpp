@@ -97,7 +97,7 @@ DataNode OptionsPanel::OnMsg(RCJobCompleteMsg const &msg) {
             if (response == 0xA0002) {
                 success = true;
             } else {
-                unsigned int code = response - 0x800A0003;
+                unsigned int code = response - 0xA0003;
                 if (code == 0) {
                     error = token_redemption_not_found;
                 } else if (code == 2) {
