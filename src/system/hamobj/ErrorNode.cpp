@@ -166,8 +166,8 @@ void Ham1EuclideanNode::CalcError(
     Subtract(dancerVec, baseVec, diff);
     Vector3 vToProcess;
     for (int i = 0; i < 3; i++) {
-        float set = Max(mComponentWeightRanges[0][i], node_input.mNodeComponentWeight[i]);
-        vToProcess[i] = Min(set, mComponentWeightRanges[1][i]);
+        float set = Max(mComponentWeightRanges[i][0], node_input.mNodeComponentWeight[i]);
+        vToProcess[i] = Min(set, mComponentWeightRanges[i][1]);
     }
     ScaleOp op;
     op.mPerfectDist = node_input.mNodeWeight->mPerfectDist;
