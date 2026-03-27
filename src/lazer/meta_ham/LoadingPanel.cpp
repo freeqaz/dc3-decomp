@@ -85,8 +85,11 @@ bool LoadingPanel::IsLoaded() const {
 
 #ifdef HX_NATIVE
     bool audioReady = !pAudio || pAudio->Fail() || pAudio->IsReady();
-    if (!audioReady && sSkipLoadingMusicReadyGate) {
-        audioReady = true;
+    if (sSkipLoadingMusicReadyGate) {
+        // Loading music is unavailable (MIDI not found); skip both the audio
+        // readiness gate and the ContentMgr refresh gate since no content
+        // discovery runs in the native/test harness when music is absent.
+        return UIPanel::IsLoaded();
     }
     return TheContentMgr.RefreshDone() && UIPanel::IsLoaded() && audioReady;
 #else

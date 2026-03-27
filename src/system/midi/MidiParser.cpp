@@ -199,26 +199,6 @@ void MidiParser::Poll() {
         *mpEnd = mEvent->end;
         *mpLength = Max(0.0f, mEvent->end - beat);
         DataArray *eventMsg = mEvent->Msg();
-        {
-            static int dc3_midi_ev_count = 0;
-            // Log all non-midi_player events (lighting, world events), and first 5 midi_player
-            bool isMidiPlayer = (strcmp(Name(), "midi_player") == 0);
-            if ((!isMidiPlayer && dc3_midi_ev_count < 200) || (isMidiPlayer && dc3_midi_ev_count < 5)) {
-                printf("DC3_LIGHT_DIAG: MidiParser::Poll '%s' beat=%.2f firing: ", Name(), beat);
-                for (int i = 0; i < eventMsg->Size(); i++) {
-                    if (eventMsg->Node(i).Type() == kDataSymbol)
-                        printf("%s ", eventMsg->Node(i).Sym().Str());
-                    else if (eventMsg->Node(i).Type() == kDataInt)
-                        printf("%d ", eventMsg->Node(i).Int());
-                    else if (eventMsg->Node(i).Type() == kDataFloat)
-                        printf("%.2f ", eventMsg->Node(i).Float());
-                    else
-                        printf("<%d> ", eventMsg->Node(i).Type());
-                }
-                printf("(msgSelf=%d)\n", mMessageSelf);
-                dc3_midi_ev_count++;
-            }
-        }
         if (mAppendLength) {
             eventMsg->Node(eventMsg->Size() - 1) = mpLength->Float();
         }

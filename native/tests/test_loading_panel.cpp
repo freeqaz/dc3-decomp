@@ -2,7 +2,6 @@
 
 #include "meta_ham/LoadingPanel.h"
 #include "obj/Data.h"
-#include "os/ContentMgr.h"
 
 namespace {
 
@@ -16,10 +15,6 @@ public:
 class LoadingPanelTest : public EngineTestFixture {};
 
 TEST_F(LoadingPanelTest, MissingLoadingMusicDoesNotBlockNativeReadyState) {
-    if (!TheContentMgr.RefreshDone()) {
-        GTEST_SKIP() << "ContentMgr still refreshing; readiness gate is not stable yet";
-    }
-
     TestLoadingPanel panel;
     ASSERT_NE(LoadingPanel::sSongDB, nullptr);
 

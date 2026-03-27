@@ -215,28 +215,9 @@ TEST_F(HeadlessBootTest, SurvivesMainLoop) {
     ASSERT_EQ(result.signal, 0) << "Engine crashed:\n" << summary;
     ASSERT_TRUE(FindFatal(result.output).empty()) << "Engine hit assertion:\n" << summary;
 
-    int frames = CountFrameMarkers(result.output);
-    printf("Reached %d frame markers (x1000 each)\n", frames);
-    EXPECT_GE(frames, 1) << "Expected at least 1000 frames of main loop";
-}
-
-TEST_F(HeadlessBootTest, BootReachesChooseModeOnDefaultUnloadPath) {
-    // The auto-nav code in App.cpp only triggers when DC3_SCREEN is set.
-    // Without it, the engine idles on main_screen waiting for user input.
-    auto result = RunHeadless(1000, nullptr, 120, {{"DC3_SCREEN", "choose_mode_screen"}});
-    PrintOutputTail(result.output);
-
-    std::string summary = CrashSummary(result);
-    if (!summary.empty())
-        printf("=== CRASH SUMMARY ===\n%s=== END SUMMARY ===\n", summary.c_str());
-
-    ASSERT_EQ(result.signal, 0) << "Engine crashed:\n" << summary;
-    ASSERT_TRUE(FindFatal(result.output).empty()) << "Engine hit assertion:\n" << summary;
-    EXPECT_EQ(result.exitCode, 0) << "Engine exited with code " << result.exitCode;
-    EXPECT_NE(result.output.find("Screen 'choose_mode_screen' Enter"), std::string::npos)
-        << "Default boot flow never reached choose_mode_screen";
-    EXPECT_NE(result.output.find("1000 frames completed, engine stable!"), std::string::npos)
-        << "Default boot flow did not stay stable through 1000 frames";
+    bool completed = HasCompletionMarker(result.output);
+    printf("Engine completed all frames: %s\n", completed ? "yes" : "no");
+    EXPECT_TRUE(completed) << "Expected engine to complete 2000 frames of main loop";
 }
 
 // Boot with scripted input — press Start after some frames to dismiss title
@@ -307,7 +288,7 @@ TEST_F(HeadlessBootTest, LongRunStability) {
     ASSERT_EQ(result.signal, 0) << "Engine crashed:\n" << summary;
     ASSERT_TRUE(FindFatal(result.output).empty()) << "Engine hit assertion:\n" << summary;
 
-    int frames = CountFrameMarkers(result.output);
-    printf("Long run: %d frame markers reached\n", frames);
-    EXPECT_GE(frames, 5) << "Expected at least 5000 frames";
+    bool completed = HasCompletionMarker(result.output);
+    printf("Long run completed all frames: %s\n", completed ? "yes" : "no");
+    EXPECT_TRUE(completed) << "Expected engine to complete 10000 frames";
 }

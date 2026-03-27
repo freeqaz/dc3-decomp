@@ -253,14 +253,9 @@ void Hmx::Object::LoadRest(BinStream &bs) {
     }
 }
 
-bool dc3_diag_export_trace = false;
 void Hmx::Object::Export(DataArray *a, bool b) {
     if (b)
         HandleType(a);
-    if (dc3_diag_export_trace) {
-        printf("DC3_LIGHT_DIAG: Export on '%s' msg='%s' hasSinks=%d\n", Name(), a->Sym(1).Str(), mSinks != nullptr);
-        dc3_diag_export_trace = false;
-    }
     if (mSinks)
         mSinks->Export(a);
 }
