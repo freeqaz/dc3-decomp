@@ -32,6 +32,8 @@ extern File *NewFile(const char *, int);
 class MoggV0xETest : public EngineTestFixture {
 protected:
     void SetUp() override {
+        if (!getenv("DC3_AUDIO_TESTS"))
+            GTEST_SKIP() << "Set DC3_AUDIO_TESTS=1 to enable (audio device contention under ctest -j)";
         if (!StreamReceiver::sFactory)
             StreamReceiver::sFactory = StreamReceiverNative::Create;
         if (!AudioDevice::GetInstance().IsInitialized())

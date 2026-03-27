@@ -467,6 +467,20 @@ void ObjPtrList<T1, T2>::operator=(const ObjPtrList &other) {
     }
 }
 
+#ifndef HX_NATIVE
+template <class T1, class T2>
+T1 *ObjPtrList<T1, T2>::front() const {
+    MILO_ASSERT(mNodes != NULL, 0x189);
+    return mNodes->Obj();
+}
+
+template <class T1, class T2>
+T1 *ObjPtrList<T1, T2>::back() const {
+    MILO_ASSERT(mNodes != NULL, 0x18A);
+    return mNodes->prev->Obj();
+}
+#endif
+
 template <class T1, class T2>
 void ObjPtrList<T1, T2>::pop_back() {
     MILO_ASSERT(mNodes != NULL, 0x18B);
@@ -623,6 +637,147 @@ void ObjPtrList<T1, T2>::sort(const S &cmp) {
         }
     }
 }
+
+#ifndef HX_NATIVE
+// Xbox template implementations.
+// These were originally explicit specializations in link_glue.cpp for each type.
+// Providing generic template versions so the compiler can instantiate them.
+
+template <class T1, class T2>
+void ObjPtrList<T1, T2>::Link(iterator it, Node *node) {
+    node->mOwner = this;
+    node->next = it.mNode;
+    if (it.mNode == mNodes) {
+        if (mNodes) {
+            node->prev = mNodes->prev;
+            mNodes->prev = node;
+        } else {
+            node->prev = node;
+        }
+        mNodes = node;
+    } else if (it.mNode == nullptr) {
+        // Insert at end
+        node->prev = mNodes->prev;
+        mNodes->prev->next = node;
+        mNodes->prev = node;
+    } else {
+        // Insert before a middle node
+        node->prev = it.mNode->prev;
+        it.mNode->prev->next = node;
+        it.mNode->prev = node;
+    }
+    mSize++;
+}
+
+template <class T1, class T2>
+typename ObjPtrList<T1, T2>::Node *ObjPtrList<T1, T2>::Unlink(Node *node) {
+    MILO_ASSERT(node != NULL && mNodes != NULL, 0x26B);
+    if (node == mNodes) {
+        if (mNodes->next != nullptr) {
+            mNodes->next->prev = mNodes->prev;
+            mNodes = mNodes->next;
+        } else {
+            mNodes = nullptr;
+            mSize--;
+            return nullptr;
+        }
+    } else if (node == mNodes->prev) {
+        // Removing tail
+        mNodes->prev = node->prev;
+        mNodes->prev->next = nullptr;
+        mSize--;
+        return mNodes->prev;
+    } else {
+        // Middle node
+        node->prev->next = node->next;
+        node->next->prev = node->prev;
+        mSize--;
+        return node->next;
+    }
+    mSize--;
+    return mNodes;
+}
+
+template <class T1, class T2>
+typename ObjPtrList<T1, T2>::iterator ObjPtrList<T1, T2>::erase(iterator it) {
+    Node *node = it.mNode;
+    Node *next = Unlink(node);
+    delete node;
+    return iterator(next);
+}
+
+template <class T1, class T2>
+Hmx::Object *ObjPtrList<T1, T2>::RefOwner() const {
+    return mOwner ? mOwner->RefOwner() : 0;
+}
+
+template <class T1, class T2>
+bool ObjPtrList<T1, T2>::Replace(ObjRef *ref, Hmx::Object *obj) {
+    for (iterator it = begin(); it != end(); ++it) {
+        if (it.mNode == ref) {
+            ReplaceNode(it.mNode, obj);
+            return true;
+        }
+    }
+    return false;
+}
+
+template <class T1, class T2>
+Hmx::Object *ObjPtrList<T1, T2>::Node::RefOwner() const {
+    ObjPtrList<T1, T2> *list = static_cast<ObjPtrList<T1, T2> *>(mOwner);
+    return list->Owner();
+}
+
+// -- ObjPtrVec Xbox template implementations --
+
+template <class T1, class T2>
+Hmx::Object *ObjPtrVec<T1, T2>::Node::RefOwner() const {
+    return static_cast<ObjPtrVec<T1, T2>*>(mOwner)->Owner();
+}
+
+template <class T1, class T2>
+typename ObjPtrVec<T1, T2>::iterator
+ObjPtrVec<T1, T2>::erase(typename ObjPtrVec<T1, T2>::iterator it) {
+    return mNodes.erase(it.it);
+}
+
+template <class T1, class T2>
+typename ObjPtrVec<T1, T2>::iterator ObjPtrVec<T1, T2>::FindRef(ObjRef *ref) {
+    for (iterator it = begin(); it != end(); ++it) {
+        if (&(*it) == ref) return it;
+    }
+    return end();
+}
+
+// -- BinStream operator<< for ObjPtrList (Xbox) --
+
+template <class T1>
+BinStream &operator<<(BinStream &bs, const ObjPtrList<T1, ObjectDir> &c) {
+    bs << c.size();
+    MILO_ASSERT(c.Owner(), 0x4E1);
+    for (typename ObjPtrList<T1, ObjectDir>::iterator it = c.begin(); it != c.end(); ++it) {
+        Hmx::Object *obj = *it;
+        const char *objName = obj ? obj->Name() : "";
+        bs << objName;
+    }
+    return bs;
+}
+
+// -- BinStream operator<< for ObjPtrVec (Xbox) --
+
+template <class T1>
+BinStream &operator<<(BinStream &bs, const ObjPtrVec<T1, ObjectDir> &c) {
+    bs << (int)c.size();
+    MILO_ASSERT(c.Owner(), 0x525);
+    for (int i = 0; i < (int)c.size(); i++) {
+        const Hmx::Object *obj = c[i];
+        const char *objName = obj ? obj->Name() : "";
+        bs << objName;
+    }
+    return bs;
+}
+
+#endif // !HX_NATIVE
 
 #ifdef HX_NATIVE
 // Generic template implementations for native port.

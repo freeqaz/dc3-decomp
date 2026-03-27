@@ -77,37 +77,67 @@ Marked with `TODO HACK`. **This fix is insufficient** — feet still clip throug
 - 5 parallel subagents (3 Opus, 2 Sonnet) for batch decomp work across isolated worktrees
 - Permuter (`--beam` mode) for automated source-level optimization
 
-## Status: FIXED — feet correctly oriented on native
+## Status: FIXED (2026-03-27) — confirmed on native, web pending
 
 ### Phase 4: Root Cause — Missing mLocalXfm Back-Computation
 
-The actual symptom was **inverted feet** (ankle on ground, foot mesh flipped 180° upward through shin), not floor clipping. This was the same bug pattern as the forearm twist fix (see `docs/sessions/2026-03-24-forearm-twist-fix.md`).
+The actual symptom was **disfigured characters with merged limbs** — bones collapsing to shared points, stretched mesh triangles, feet centered at origin. This was the same bug pattern as the forearm twist fix (see `docs/sessions/2026-03-24-forearm-twist-fix.md`).
 
-**Root cause**: `HamIKEffector::Poll()` calls `SetWorldXfm()` on ankle, shin, and thigh bones to apply IK corrections. `SetWorldXfm()` sets `mDirty = false` on the bone itself but cascades `SetDirty()` to children. If a **later pollable** (e.g., another HamIKEffector, CharUpperTwist) dirties a parent bone in the IK chain, `WorldXfm_Force()` recomputes the bone's world transform from the stale `mLocalXfm` (the raw animation pose), discarding the IK correction. The animation-pose local rotation composed with the IK-modified parent chain produces an inverted foot.
+**Root cause**: `HamIKEffector::Poll()` calls `SetWorldXfm()` on bones to apply IK corrections. `SetWorldXfm()` sets `mDirty = false` on the bone itself but cascades `SetDirty()` to children. If a later pollable dirties a parent bone, `WorldXfm_Force()` recomputes from the stale `mLocalXfm`, discarding the IK correction.
 
-**Fix**: Back-compute `mLocalXfm` after every `SetWorldXfm()` call in the IK chain:
+**Fix**: Back-compute `mLocalXfm` after `SetWorldXfm()` on ankle/hand effectors only:
 ```cpp
-bone->SetWorldXfm(xfm);
+mEffector->SetWorldXfm(finalXfm);
 #ifdef HX_NATIVE
-if (bone->TransParent()) {
+if ((t == kEffectorTypeAnkle || t == kEffectorTypeHand)
+    && mEffector->TransParent()) {
     Transform invParent;
-    Invert(bone->TransParent()->WorldXfm(), invParent);
-    Multiply(xfm, invParent, bone->mLocalXfm);
+    Invert(mEffector->TransParent()->WorldXfm(), invParent);
+    Multiply(finalXfm, invParent, mEffector->mLocalXfm);
 }
 #endif
 ```
 
-Applied to three locations:
-1. `IKElbow()` — grandparent (thigh) after `SetWorldXfm`
-2. `IKElbow()` — parent (shin) after `SetWorldXfm`
-3. `Poll()` — effector (ankle) after final `SetWorldXfm`
+### Phase 5: Regression — Pelvis + IKElbow Back-Computation Corruption
 
-Also added `friend class HamIKEffector;` to `RndTransformable` for direct `mLocalXfm` access (same pattern as `CharForeTwist`/`CharUpperTwist`).
+The initial fix (Phase 4) applied mLocalXfm back-computation to **all** effector types and to IKElbow's thigh/shin bones. This caused a severe regression:
 
-Confirmed via headless screenshots: feet correctly oriented across multiple dance frames on the throneroom venue.
+1. **Pelvis corruption**: Writing `mLocalXfm` on the pelvis (skeleton root) corrupted every child bone on dirty cascades, causing characters to appear disfigured with limbs merged at a central point.
+
+2. **IKElbow thigh/shin corruption**: Writing `mLocalXfm` on structural bones (thigh, shin) via `Invert()` of their parent's WorldXfm produced garbage values (3.71e+05) when the parent transform was stale or near-singular. `FillBoneUniforms` detected these as garbage (>100000) and fell back to identity matrices, collapsing vertices to the mesh origin.
+
+**Resolution**:
+- **Removed** IKElbow back-computation entirely (thigh/shin `mLocalXfm` writes)
+- **Gated** Poll back-computation to `kEffectorTypeAnkle || kEffectorTypeHand` only
+- **Changed** `FastInvert()` to `Invert()` for correctness with non-orthogonal matrices
+
+### Phase 6: Regression Tests
+
+Added runtime assertions and telemetry-based gameplay tests to prevent future regressions:
+
+**Runtime assertions** (`HamIKEffector::Poll()`):
+- `FOOT INVERTED` — fires if toe Z > ankle Z + 2 (foot flipped through shin)
+- `FOOT FLIPPED` — fires if ankle Z-axis points strongly upward (rotation 180°)
+
+**Gameplay telemetry tests** (`test_gameplay_telemetry.cpp`, require `DC3_GAMEPLAY_TESTS=1`):
+- `FootBonesFoundDuringGameplay` — ankle/toe bones discoverable during gameplay
+- `NoInvertedFeetDuringGameplay` — toe never above ankle across all samples
+- `FootZAxisNotFlippedDuringGameplay` — ankle rotation never flipped
+- `NoFootInversionWarningsInOutput` — no runtime warnings in stderr
+- `AnklesNotCollapsedDuringGameplay` — L/R ankles separated (>3 units) — catches merged characters
+- `LegsNotCollapsedDuringGameplay` — pelvis-to-ankle distance >10 — catches collapsed legs
+- `NoBoneGarbageDuringGameplay` — no ankle coordinate >10000 or NaN
+
+**Static bone tests** (`test_foot_bone_invariants.cpp`):
+- 10 tests validating rest-pose skeleton: bilateral separation, toes below ankles, no garbage, no collapsed legs, distinct bone positions, correct rotation orientation
+
+All 7 gameplay tests and 10 static tests pass. Run with:
+```bash
+DC3_GAMEPLAY_TESTS=1 ctest -R "Foot|Ankle|Leg|Bone|Inverted" --output-on-failure
+```
 
 ### Note on foot-sole clamp hack
-The `TODO HACK` foot-sole clamp in the ankle case is still present. It was originally added to address perceived floor clipping, but the real issue was the inverted feet. With the mLocalXfm fix, the original IK ground clamp should work correctly. The hack may now be unnecessary — consider removing it in a future pass.
+The `TODO HACK` foot-sole clamp in the ankle case is still present. It was originally added to address perceived floor clipping. With the mLocalXfm fix, the original IK ground clamp should work correctly. The hack may now be unnecessary — consider removing it in a future pass.
 
 ## Next Steps
 - Test on web build to confirm the fix applies there too (HX_NATIVE guards are shared)
@@ -115,13 +145,15 @@ The `TODO HACK` foot-sole clamp in the ankle case is still present. It was origi
 - Compare with Xbox footage to verify feet match original game behavior
 
 ## Files Modified
-- `src/system/hamobj/HamIKEffector.cpp` — GetGroundHeight, ComputeHandPullAndQuat, foot-sole clamp, **mLocalXfm back-computation** (root fix)
+- `src/system/hamobj/HamIKEffector.cpp` — mLocalXfm back-computation (gated to ankle/hand), foot inversion runtime assertions, removed IKElbow back-computation
 - `src/system/rndobj/Trans.h` — added `friend class HamIKEffector`
+- `native/src/telemetry/GameplayTelemetry.h` — foot bone telemetry fields (ankle/toe Z, separation, inversion flags)
+- `native/src/telemetry/GameplayTelemetry.cpp` — bone position sampling during gameplay
+- `native/tests/test_gameplay_telemetry.cpp` — 7 foot/bone gameplay regression tests
+- `native/tests/test_foot_bone_invariants.cpp` — 10 static bone invariant tests
 - `src/system/hamobj/HamRegulate.cpp` — Regulate, Poll improvements
 - `src/system/char/CharIKHand.cpp` — Poll, IKElbow bug fixes
 - `src/system/char/CharIKFoot.cpp` — DoFSM bug fixes
 - `src/system/char/CharServoBone.cpp` — diagnostic cleanup
 - `native/src/gfx/ImGuiBackend.cpp` — headless null window guard
-- `native/src/platform/BoneSetup.cpp` — diagnostic cleanup
-- `native/src/platform/Mesh_Wgpu.cpp` — diagnostic cleanup
-- `native/src/platform/MeshGpuCache.cpp` — diagnostic cleanup
+- `native/src/platform/BoneSetup.cpp` — garbage WorldXfm detection + identity fallback

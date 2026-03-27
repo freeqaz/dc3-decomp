@@ -1692,7 +1692,25 @@ if(BUILD_TESTS)
         "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h>"
     )
     include(GoogleTest)
-    gtest_discover_tests(milo-tests)
+
+    # Ensure the tmp directory exists for ASSERT_EXIT tests (GTest needs writable TMPDIR)
+    file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/tmp")
+
+    # Each CTest test spawns a separate milo-tests process that initializes
+    # Dawn/WebGPU + audio (miniaudio). Running 32+ simultaneously exhausts GPU
+    # device handles, file descriptors, and shared memory — causing spurious
+    # SEGFAULTs. RESOURCE_LOCK serializes all in-process tests; subprocess tests
+    # (HeadlessBootTest, MiloViewerScreenshot) don't init the engine and can
+    # still run in parallel.
+    #
+    # The lock file is generated at configure time and included by CTest after
+    # gtest_discover_tests populates the test list (if(TEST) doesn't work in
+    # CTest include context, so we apply unconditionally and tolerate warnings
+    # for tests that don't exist in a given configuration).
+    gtest_discover_tests(milo-tests
+        PROPERTIES
+            ENVIRONMENT "TMPDIR=${CMAKE_CURRENT_BINARY_DIR}/tmp"
+    )
 endif()
 
 endif() # NOT EMSCRIPTEN

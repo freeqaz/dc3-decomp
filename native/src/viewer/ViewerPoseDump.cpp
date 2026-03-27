@@ -74,6 +74,14 @@ bool WritePoseDumpJson(const char* path,
         return strcmp(a->Name(), b->Name()) < 0;
     });
 
+    // Force all bones to recompute world transforms from their parent chain.
+    // After rendering warmup, some non-animated bones (hair, jiggle, breast)
+    // may have stale/garbage WorldXfm values cached from before PoseMeshes ran.
+    // Re-dirtying and resolving ensures the dump reflects the current pose.
+    for (RndTransformable* b : bones) {
+        b->SetLocalXfm(b->LocalXfm());
+    }
+
     FILE* f = fopen(path, "wb");
     if (!f) {
         fprintf(stderr, "Error: cannot write pose dump '%s'\n", path);

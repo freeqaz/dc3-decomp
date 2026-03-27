@@ -613,6 +613,15 @@ TEST_F(ObjectLifetimeTest, ObjDirPtrCascadeDeleteDoesNotDoubleFree) {
 // ReplaceRefs/Nullify walk over named child ObjectDirs can follow dangling
 // ring entries into freed vector memory and crash.
 TEST_F(ObjectLifetimeUnitTest, CascadeDeleteNamedSubdirsNullsExternalDirPtrsWithoutCrash) {
+    // ASSERT_EXIT forks a subprocess and GTest hardcodes /tmp for its output
+    // capture file. If /tmp isn't writable (sandbox), skip gracefully.
+    {
+        FILE *f = fopen("/tmp/.gtest_write_check", "w");
+        if (!f)
+            GTEST_SKIP() << "/tmp not writable (sandbox) — ASSERT_EXIT needs /tmp access";
+        fclose(f);
+        remove("/tmp/.gtest_write_check");
+    }
     ASSERT_EXIT(
         RunCascadeDeleteNamedSubdirRingRepro(),
         ::testing::ExitedWithCode(0),

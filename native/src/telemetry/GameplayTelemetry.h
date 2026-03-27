@@ -67,6 +67,13 @@ struct Snapshot {
     float rFootZAxisZ = 0.0f;        // R-ankle WorldXfm.m.z.z (>0 = pointing up = bad)
     bool lFootInverted = false;       // L toe above ankle
     bool rFootInverted = false;       // R toe above ankle
+    // Bone collapse detection — "merged characters" bug
+    float lAnkleX = 0.0f;            // L-ankle world X
+    float lAnkleY = 0.0f;            // L-ankle world Y
+    float rAnkleX = 0.0f;            // R-ankle world X
+    float rAnkleY = 0.0f;            // R-ankle world Y
+    float ankleSeparation = 0.0f;    // distance between L and R ankles
+    float pelvisToLAnkle = 0.0f;     // pelvis-to-L-ankle distance
 };
 
 void Init();            // Check DC3_TEL env var

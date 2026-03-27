@@ -1,10 +1,9 @@
-// Gameplay telemetry integration tests
+// Gameplay telemetry integration tests.
 //
-// Launches dc3-native with YMCA input script + DC3_TEL=1, parses structured
-// telemetry output, and asserts gameplay state machine invariants.
-//
-// Tier 1: should pass today (guards working behavior)
-// Tier 2: expected to fail today (each maps to engine work + hack audit phase)
+// Launches dc3-native with the scripted boot->menu->gameplay path, parses the
+// structured DC3_TEL output, and asserts real gameplay invariants against the
+// current UI screen plus GamePanel/HamDirector state. This suite is intended to
+// be the north-star gameplay check for native/web parity work.
 //
 // See: docs/sessions/2026-03-17-gameplay-telemetry-tests.md
 
@@ -129,7 +128,8 @@ protected:
         }
     }
 
-    // Phase helpers — detect from data, not hardcoded frame numbers
+    // Phase helpers — derive milestones from telemetry rather than hardcoded
+    // frame windows so the suite tracks real game state.
     std::vector<TelemetrySample> samplesInPhase(const std::string &state) const {
         std::vector<TelemetrySample> out;
         for (auto &s : sSamples) {
@@ -855,5 +855,177 @@ TEST_F(GameplayTelemetryTest, NoFootInversionWarningsInOutput) {
     EXPECT_EQ(pos2, std::string::npos)
         << "HamIKEffector::Poll() detected a flipped ankle rotation during gameplay. "
         << "The ankle Z-axis was pointing upward after IK. "
+        << progressSummary();
+}
+
+TEST_F(GameplayTelemetryTest, AnklesNotCollapsedDuringGameplay) {
+    // Core invariant for "merged characters" bug: L and R ankles should be
+    // separated in space. If they collapse to the same point, the pelvis
+    // mLocalXfm was corrupted, pulling all bones to the skeleton root.
+    auto playing = gameplaySamples();
+    ASSERT_FALSE(playing.empty())
+        << "Never observed real gameplay on game_screen. " << progressSummary();
+
+    int footSamples = 0;
+    int collapsedCount = 0;
+    float worstSeparation = 999.0f;
+
+    for (auto &s : playing) {
+        if (!s.getBool("footDataValid")) continue;
+        footSamples++;
+
+        float sep = s.getFloat("ankleSeparation");
+        if (sep < worstSeparation) worstSeparation = sep;
+        // Ankles closer than 3 units = collapsed
+        if (sep < 3.0f) collapsedCount++;
+    }
+
+    if (footSamples == 0) {
+        GTEST_SKIP() << "No foot data samples during gameplay";
+    }
+
+    EXPECT_EQ(collapsedCount, 0)
+        << "L/R ankles were collapsed (< 3 units apart) in " << collapsedCount
+        << "/" << footSamples << " gameplay samples. Worst separation: "
+        << worstSeparation << " units. This is the 'merged characters' bug — "
+        << "the pelvis mLocalXfm back-computation corrupted the skeleton root. "
+        << progressSummary();
+}
+
+TEST_F(GameplayTelemetryTest, LegsNotCollapsedDuringGameplay) {
+    // Pelvis-to-ankle distance should stay reasonable during gameplay.
+    // If it drops near zero, the leg bones have collapsed.
+    auto playing = gameplaySamples();
+    ASSERT_FALSE(playing.empty())
+        << "Never observed real gameplay on game_screen. " << progressSummary();
+
+    int footSamples = 0;
+    int collapsedCount = 0;
+    float worstDist = 999.0f;
+
+    for (auto &s : playing) {
+        if (!s.getBool("footDataValid")) continue;
+        footSamples++;
+
+        float dist = s.getFloat("pelvisToLAnkle");
+        if (dist < worstDist) worstDist = dist;
+        if (dist < 10.0f) collapsedCount++;
+    }
+
+    if (footSamples == 0) {
+        GTEST_SKIP() << "No foot data samples during gameplay";
+    }
+
+    EXPECT_EQ(collapsedCount, 0)
+        << "Pelvis-to-ankle distance was < 10 units in " << collapsedCount
+        << "/" << footSamples << " gameplay samples. Worst: " << worstDist
+        << " units. Legs have collapsed — the IK mLocalXfm back-computation "
+        << "is corrupting structural skeleton bones. "
+        << progressSummary();
+}
+
+TEST_F(GameplayTelemetryTest, NoBoneGarbageDuringGameplay) {
+    // No ankle position should have garbage values (>10000 in any axis).
+    auto playing = gameplaySamples();
+    ASSERT_FALSE(playing.empty())
+        << "Never observed real gameplay on game_screen. " << progressSummary();
+
+    int footSamples = 0;
+    int garbageCount = 0;
+
+    for (auto &s : playing) {
+        if (!s.getBool("footDataValid")) continue;
+        footSamples++;
+
+        float vals[] = {
+            s.getFloat("lAnkleX"), s.getFloat("lAnkleY"), s.getFloat("lAnkleZ"),
+            s.getFloat("rAnkleX"), s.getFloat("rAnkleY"), s.getFloat("rAnkleZ")
+        };
+        for (float v : vals) {
+            if (std::fabs(v) > 10000.0f || std::isnan(v)) {
+                garbageCount++;
+                break;
+            }
+        }
+    }
+
+    if (footSamples == 0) {
+        GTEST_SKIP() << "No foot data samples during gameplay";
+    }
+
+    EXPECT_EQ(garbageCount, 0)
+        << "Ankle bone positions had garbage values (>10000 or NaN) in "
+        << garbageCount << "/" << footSamples << " gameplay samples. "
+        << "The Invert() in mLocalXfm back-computation likely hit a "
+        << "degenerate matrix. " << progressSummary();
+}
+
+TEST_F(GameplayTelemetryTest, FeetNotBelowFloorDuringGameplay) {
+    // The toe bone Z position should stay at or above ground level (Z >= 0).
+    // The foot mesh extends ~4 units below the ankle joint, so if the ankle
+    // is clamped to Z=0 (ground), the toe at Z≈-4 means feet clip through
+    // the floor. The IK foot-sole clamp should keep toes at Z >= -1.
+    //
+    // Ground height is 0.0 for standard venues. We allow a small margin
+    // (-1.0) for slight clipping during transitions, but anything below
+    // -2.0 is a visible floor penetration bug.
+    auto playing = gameplaySamples();
+    ASSERT_FALSE(playing.empty())
+        << "Never observed real gameplay on game_screen. " << progressSummary();
+
+    int footSamples = 0;
+    int lBelowCount = 0;
+    int rBelowCount = 0;
+    float worstLToeZ = 999.0f;
+    float worstRToeZ = 999.0f;
+    float worstLAnkleZ = 999.0f;
+    float worstRAnkleZ = 999.0f;
+
+    const float kFloorZ = 0.0f;
+    // Toes should not go more than 2 units below the floor
+    const float kMaxPenetration = -2.0f;
+
+    for (auto &s : playing) {
+        if (!s.getBool("footDataValid")) continue;
+        footSamples++;
+
+        float lToe = s.getFloat("lToeZ");
+        float rToe = s.getFloat("rToeZ");
+        float lAnkle = s.getFloat("lAnkleZ");
+        float rAnkle = s.getFloat("rAnkleZ");
+
+        if (lToe < worstLToeZ) { worstLToeZ = lToe; worstLAnkleZ = lAnkle; }
+        if (rToe < worstRToeZ) { worstRToeZ = rToe; worstRAnkleZ = rAnkle; }
+
+        if (lToe < kFloorZ + kMaxPenetration) lBelowCount++;
+        if (rToe < kFloorZ + kMaxPenetration) rBelowCount++;
+    }
+
+    if (footSamples == 0) {
+        GTEST_SKIP() << "No foot data samples during gameplay";
+    }
+
+    printf("  Foot floor penetration check (%d samples):\n", footSamples);
+    printf("    L-toe worst Z: %.2f (ankle Z: %.2f)\n", worstLToeZ, worstLAnkleZ);
+    printf("    R-toe worst Z: %.2f (ankle Z: %.2f)\n", worstRToeZ, worstRAnkleZ);
+    printf("    L below floor: %d/%d samples\n", lBelowCount, footSamples);
+    printf("    R below floor: %d/%d samples\n", rBelowCount, footSamples);
+
+    EXPECT_EQ(lBelowCount, 0)
+        << "Left toe went below floor (Z < " << (kFloorZ + kMaxPenetration)
+        << ") in " << lBelowCount << "/" << footSamples
+        << " gameplay samples. Worst toe Z: " << worstLToeZ
+        << " (ankle Z: " << worstLAnkleZ << "). "
+        << "The IK foot-sole clamp in HamIKEffector::Poll() is not "
+        << "raising the ankle enough to keep the foot mesh above ground. "
+        << progressSummary();
+
+    EXPECT_EQ(rBelowCount, 0)
+        << "Right toe went below floor (Z < " << (kFloorZ + kMaxPenetration)
+        << ") in " << rBelowCount << "/" << footSamples
+        << " gameplay samples. Worst toe Z: " << worstRToeZ
+        << " (ankle Z: " << worstRAnkleZ << "). "
+        << "The IK foot-sole clamp in HamIKEffector::Poll() is not "
+        << "raising the ankle enough to keep the foot mesh above ground. "
         << progressSummary();
 }

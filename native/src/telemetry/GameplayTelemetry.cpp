@@ -277,6 +277,23 @@ GameplayTelemetry::Snapshot GameplayTelemetry::CaptureSnapshot(int frame) {
                 // Toe above ankle by >2 units = inverted
                 s.lFootInverted = (s.lToeZ > s.lAnkleZ + 2.0f);
                 s.rFootInverted = (s.rToeZ > s.rAnkleZ + 2.0f);
+                // Bone collapse detection
+                s.lAnkleX = lAnkle->WorldXfm().v.x;
+                s.lAnkleY = lAnkle->WorldXfm().v.y;
+                s.rAnkleX = rAnkle->WorldXfm().v.x;
+                s.rAnkleY = rAnkle->WorldXfm().v.y;
+                float dx = s.lAnkleX - s.rAnkleX;
+                float dy = s.lAnkleY - s.rAnkleY;
+                float dz = s.lAnkleZ - s.rAnkleZ;
+                s.ankleSeparation = std::sqrt(dx*dx + dy*dy + dz*dz);
+                // Pelvis-to-ankle distance
+                RndTransformable *pelvis = charDir->Find<RndTransformable>("bone_pelvis.mesh", true);
+                if (pelvis) {
+                    float px = pelvis->WorldXfm().v.x - s.lAnkleX;
+                    float py = pelvis->WorldXfm().v.y - s.lAnkleY;
+                    float pz = pelvis->WorldXfm().v.z - s.lAnkleZ;
+                    s.pelvisToLAnkle = std::sqrt(px*px + py*py + pz*pz);
+                }
             }
         }
     }
@@ -309,7 +326,9 @@ void GameplayTelemetry::Sample(int frame) {
         "moveInterpActive=%d moveKeyCount=%d songAnimFrameRate=%.1f activeMoveCount=%d "
         "hudMergeTargetIsHUD=%d hudPanelIsHUD=%d hudHasLeft=%d hudHasRight=%d hudMDirResolved=%d "
         "footDataValid=%d lAnkleZ=%.1f lToeZ=%.1f rAnkleZ=%.1f rToeZ=%.1f "
-        "lFootZAxisZ=%.2f rFootZAxisZ=%.2f lFootInverted=%d rFootInverted=%d\n",
+        "lFootZAxisZ=%.2f rFootZAxisZ=%.2f lFootInverted=%d rFootInverted=%d "
+        "ankleSeparation=%.1f pelvisToLAnkle=%.1f "
+        "lAnkleX=%.1f lAnkleY=%.1f rAnkleX=%.1f rAnkleY=%.1f\n",
         s.frame, s.state, s.screen, s.transitionScreen, s.uiInTransition ? 1 : 0,
         s.gameScreenActive ? 1 : 0, s.currentHasWorldPanel ? 1 : 0,
         s.transitionHasWorldPanel ? 1 : 0, s.worldPanelLoaded ? 1 : 0,
@@ -328,6 +347,8 @@ void GameplayTelemetry::Sample(int frame) {
         s.hudMergeTargetIsHUD ? 1 : 0, s.hudPanelIsHUD ? 1 : 0,
         s.hudHasLeft ? 1 : 0, s.hudHasRight ? 1 : 0, s.hudMDirResolved ? 1 : 0,
         s.footDataValid ? 1 : 0, s.lAnkleZ, s.lToeZ, s.rAnkleZ, s.rToeZ,
-        s.lFootZAxisZ, s.rFootZAxisZ, s.lFootInverted ? 1 : 0, s.rFootInverted ? 1 : 0
+        s.lFootZAxisZ, s.rFootZAxisZ, s.lFootInverted ? 1 : 0, s.rFootInverted ? 1 : 0,
+        s.ankleSeparation, s.pelvisToLAnkle,
+        s.lAnkleX, s.lAnkleY, s.rAnkleX, s.rAnkleY
     );
 }

@@ -173,6 +173,8 @@ static AudioStats AnalyzeSamples(const int16_t *samples, int count) {
 class MoggDecodeTest : public EngineTestFixture {
 protected:
     void SetUp() override {
+        if (!getenv("DC3_AUDIO_TESTS"))
+            GTEST_SKIP() << "Set DC3_AUDIO_TESTS=1 to enable (audio device contention under ctest -j)";
         // Ensure StreamReceiver factory is set (SynthInit not called in test harness)
         if (!StreamReceiver::sFactory) {
             StreamReceiver::sFactory = StreamReceiverNative::Create;

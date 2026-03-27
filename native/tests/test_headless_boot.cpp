@@ -187,22 +187,6 @@ protected:
     }
 };
 
-// Basic boot — just try to run a few frames with no input
-TEST_F(HeadlessBootTest, BootAndRun100Frames) {
-    auto result = RunHeadless(100, nullptr, 60);
-    PrintOutputTail(result.output);
-
-    std::string summary = CrashSummary(result);
-    if (!summary.empty())
-        printf("=== CRASH SUMMARY ===\n%s=== END SUMMARY ===\n", summary.c_str());
-
-    EXPECT_FALSE(result.timedOut) << "Engine timed out (hung)";
-    ASSERT_EQ(result.signal, 0) << "Engine crashed:\n" << summary;
-    ASSERT_TRUE(FindFatal(result.output).empty()) << "Engine hit assertion:\n" << summary;
-    EXPECT_EQ(result.exitCode, 0) << "Engine exited with code " << result.exitCode;
-    EXPECT_NE(result.output.find("Starting"), std::string::npos);
-}
-
 // Boot and run enough frames to see the frame counter tick
 TEST_F(HeadlessBootTest, SurvivesMainLoop) {
     auto result = RunHeadless(2000, nullptr, 120);

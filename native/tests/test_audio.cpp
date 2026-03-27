@@ -26,6 +26,8 @@ TEST(AudioDevice, Singleton) {
 }
 
 TEST(AudioDevice, InitAndTerminate) {
+    if (!getenv("DC3_AUDIO_TESTS"))
+        GTEST_SKIP() << "Set DC3_AUDIO_TESTS=1 to enable (audio device contention under ctest -j)";
     AudioDevice &dev = AudioDevice::GetInstance();
     if (dev.IsInitialized()) {
         dev.Terminate();
@@ -108,6 +110,8 @@ TEST(AudioDevice, SineSourceFinishes) {
 }
 
 TEST(AudioDevice, MixerAddRemove) {
+    if (!getenv("DC3_AUDIO_TESTS"))
+        GTEST_SKIP() << "Set DC3_AUDIO_TESTS=1 to enable (audio device contention under ctest -j)";
     AudioDevice &dev = AudioDevice::GetInstance();
     if (!dev.IsInitialized()) {
         bool ok = dev.Init(44100);
@@ -349,6 +353,8 @@ TEST_F(BikAudioTest, DecodeAndFeedToReceiver) {
 // ============================================================================
 
 TEST_F(BikAudioTest, PlayBikAudioThroughDevice) {
+    if (!getenv("DC3_AUDIO_TESTS"))
+        GTEST_SKIP() << "Set DC3_AUDIO_TESTS=1 to enable (audio device contention under ctest -j)";
     AudioDevice &dev = AudioDevice::GetInstance();
     if (!dev.IsInitialized()) {
         if (!dev.Init()) {

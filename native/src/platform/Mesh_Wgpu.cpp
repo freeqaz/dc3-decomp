@@ -16,6 +16,7 @@
 #include "rndobj/Mat.h"
 #include "rndobj/BaseMaterial.h"
 #include "rndobj/Cam.h"
+#include "rndobj/Rnd.h"
 #include "math/Mtx.h"
 #include <cstdio>
 #include <cstring>
@@ -199,7 +200,13 @@ void DrawMeshImmediate(RndMesh* mesh) {
 
     key.blend = (WgpuBlend)matBlend;
     key.zMode = isTextMesh ? (WgpuZMode)0 : (WgpuZMode)mat->GetZMode(); // No depth for text
-    key.cull = (isTextMesh || isOverlayPass) ? WgpuCull::None : (WgpuCull)mat->GetCull();
+    WgpuCull matCull = (isTextMesh || isOverlayPass) ? WgpuCull::None : (WgpuCull)mat->GetCull();
+    // Reflection mode (DrawMode 8) flips the camera, reversing winding order.
+    // Flip cull mode so front faces aren't discarded.
+    if (TheRnd.GetDrawMode() == 8 && matCull != WgpuCull::None) {
+        matCull = (matCull == WgpuCull::Regular) ? WgpuCull::Backwards : WgpuCull::Regular;
+    }
+    key.cull = matCull;
     key.stencil = (WgpuStencil)mat->GetStencil();
     key.layout = skinned ? VertexLayoutType::Skinned : VertexLayoutType::Static;
     key.targetFormat = gWgpuRnd->CurrentTargetFormat();
@@ -286,7 +293,11 @@ void DrawMeshImmediate(RndMesh* mesh) {
         PipelineKey npKey = key;
         npKey.blend = (WgpuBlend)nextPass->GetBlend();
         npKey.zMode = (WgpuZMode)nextPass->GetZMode();
-        npKey.cull = (WgpuCull)nextPass->GetCull();
+        WgpuCull npCull = (WgpuCull)nextPass->GetCull();
+        if (TheRnd.GetDrawMode() == 8 && npCull != WgpuCull::None) {
+            npCull = (npCull == WgpuCull::Regular) ? WgpuCull::Backwards : WgpuCull::Regular;
+        }
+        npKey.cull = npCull;
         npKey.stencil = (WgpuStencil)nextPass->GetStencil();
         npKey.alphaCut = nextPass->GetAlphaCut();
         npKey.alphaWrite = nextPass->GetAlphaWrite();

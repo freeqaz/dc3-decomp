@@ -285,3 +285,38 @@ Full diagnosis in `docs/sessions/2026-03-25-native-stream-finished-bug.md`.
 - Fine-tune flashcard X/Z positions for proper visual layout
 - Clean up diagnostic fprintf blocks
 - Fix `scripts/web/lib/core.mjs` — the nav fix agent changed Space to Enter for title/attract screens (already landed)
+
+## Telemetry Validation Update (2026-03-27)
+
+The gameplay telemetry suite is now validated again on the current tree and is
+no longer the broken part of the investigation.
+
+### What was re-verified
+
+- `native/tests/test_gameplay_telemetry.cpp` now launches with
+  `DC3_FAST_BOOT=1`, so the newer splash / intro / autosave startup path is
+  accounted for.
+- The suite uses real screen and gameplay state from `CurrentScreen()`,
+  `GamePanel`, `Game`, and `HamDirector`, not the earlier proxy fields that led
+  to overconfident conclusions.
+- Running `DC3_GAMEPLAY_TESTS=1 ./milo-tests --gtest_filter='GameplayTelemetryTest.*'`
+  now passes all 34 telemetry tests on the current tree.
+
+### Current interpretation
+
+That means the telemetry tests are currently a valid north-star check for the
+menu-driven gameplay path: they really do reach `game_screen`, observe intro and
+playing state, and verify the world / merger / song-anim / HUD / move-interp
+pipeline inside a real gameplay session.
+
+### Important separate caveat
+
+The older direct DTA-flow shortcut path is still broken:
+
+- `native/tests/test_dta_flow.cpp` uses `DC3_SCREEN=game_screen`
+- on the current tree, `enter_gameplay` never fires there
+- `loading_screen` / `game_screen` are never entered from that shortcut
+
+So `test_dta_flow.cpp` should **not** be treated as the gameplay source of truth
+for this bug right now. The telemetry suite is the authoritative harness; the
+direct `DC3_SCREEN=game_screen` path is a separate broken entry path.
