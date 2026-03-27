@@ -382,11 +382,26 @@ void MemInit() {
             MILO_ASSERT(gNumHeaps < MAX_HEAPS, 0x295);
         }
         Symbol size("size");
-        for (int i = heapArr->Size() - 1; i > 0; i--) {
-            DataArray *heapDef = heapArr->Array(i);
-            int bytes = 0;
-            heapDef->FindData(size, bytes, false);
-            AddHeap(i - 1, bytes, heapDef);
+        int totalBytes = 0;
+        AddHeap(heapArr->Size() - 1, 0x2500000, "tiny", false, 0, (MemHeap::Strategy)0, 0, false);
+        gInitted = true;
+        int i = heapArr->Size() - 1;
+        if (i > 0) {
+            do {
+                DataArray *heap = heapArr->Array(i);
+                MILO_ASSERT(heap, 0x2b2);
+                int bytes = 0;
+                heap->FindData(size, bytes, true);
+                if (gSingleHeap != 0) {
+                    totalBytes += bytes;
+                    if (i != 1) {
+                        continue;
+                    }
+                    AddHeap(0, totalBytes, heap);
+                } else {
+                    AddHeap(i - 1, bytes, heap);
+                }
+            } while (--i > 0);
         }
         free(mem);
     }
@@ -483,10 +498,16 @@ MemRealloc(void *mem, int size, const char *file, int line, const char *name, in
 MemHeapStack &ThreadMemStack(bool);
 
 void MemPushHeap(int iHeap) {
-    if (gInitted && (unsigned int)gNumHeaps > 0) {
+    bool proceed = false;
+    if (gInitted) {
+        if (gNumHeaps > 0) {
+            proceed = true;
+        }
+    }
+    if (proceed) {
         MemHeapStack &s = ThreadMemStack(true);
         MILO_ASSERT_FMT(
-            (unsigned int)iHeap > kNoHeap && iHeap < gNumHeaps,
+            iHeap > kNoHeap && iHeap < gNumHeaps,
             "iHeap = %d, gNumHeaps=%d",
             iHeap,
             gNumHeaps

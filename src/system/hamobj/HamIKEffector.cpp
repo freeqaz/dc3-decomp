@@ -203,25 +203,9 @@ void HamIKEffector::IKElbow(const Vector3 &v) {
             Multiply(me0, xfm.m, xfm.m);
             xfm.v += q100.v;
             grandparent->SetWorldXfm(xfm);
-#ifdef HX_NATIVE
-            // Back-compute mLocalXfm so it survives dirty cascades from later pollables.
-            // Same pattern as CharForeTwist/CharUpperTwist fix for forearm bones.
-            if (grandparent->TransParent()) {
-                Transform invParent;
-                Invert(grandparent->TransParent()->WorldXfm(), invParent);
-                Multiply(xfm, invParent, grandparent->mLocalXfm);
-            }
-#endif
             Transform tf70;
             Multiply(tfb0, xfm, tf70);
             parent->SetWorldXfm(tf70);
-#ifdef HX_NATIVE
-            {
-                Transform invParent;
-                Invert(xfm, invParent);
-                Multiply(tf70, invParent, parent->mLocalXfm);
-            }
-#endif
         }
     }
 }

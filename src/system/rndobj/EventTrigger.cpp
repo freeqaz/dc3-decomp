@@ -428,6 +428,7 @@ void EventTrigger::SetFrame(float frame, float blend) {
 }
 
 void EventTrigger::TriggerSelf() {
+    printf("DC3_LIGHT_DIAG: EventTrigger::TriggerSelf '%s' anims=%d proxyCalls=%d dir='%s'\n", Name(), mAnims.size(), mProxyCalls.size(), Dir() ? Dir()->Name() : "null");
     FOREACH (it, mResetTriggers) {
         (*it)->BasicReset();
     }
@@ -575,6 +576,7 @@ void EventTrigger::RegisterEvents() {
     if (src) {
         static Symbol trigger("trigger");
         FOREACH (it, mTriggerEvents) {
+            printf("DC3_LIGHT_DIAG: EventTrigger '%s' registering for event '%s' on dir '%s'\n", Name(), (*it).Str(), src->Name());
             src->AddSink(this, *it, trigger);
         }
         static Symbol enable("enable");
@@ -622,6 +624,7 @@ void EventTrigger::CleanupEventCase(std::list<Symbol> &syms) {
 }
 
 DataNode EventTrigger::OnTrigger(DataArray *) {
+    printf("DC3_LIGHT_DIAG: EventTrigger::OnTrigger '%s' enabled=%d waitFor=%d dir='%s'\n", Name(), mEnabled, !mWaitForEvents.empty(), Dir() ? Dir()->Name() : "null");
     if (mEnabled) {
         if (!mWaitForEvents.empty()) {
             mWaiting = true;

@@ -55,6 +55,7 @@
 #include "synth/AudioDucker.h"
 #include "synth/Synth.h"
 #include "utl/Symbol.h"
+#include "utl/MakeString.h"
 
 // Forward declarations from engine
 extern Rnd &TheRnd;
@@ -69,11 +70,29 @@ void EnsureSymbolInit() {
         return;
     sSymbolInitialized = true;
     Symbol::PreInit(0x80000, 0x4000);
+    InitMakeString();
 }
 
 void EngineTeardown() {
-    SystemTerminate();
+    // Rnd::Terminate must run BEFORE SystemTerminate because it uses Symbols,
+    // DataArrays, and the object system (e.g. SetName, RELEASE of ObjectDirs).
+    // SystemTerminate destroys those subsystems (Symbol::Terminate, DataTerminate),
+    // so calling TheRnd.Terminate() after would operate on freed memory.
     TheRnd.Terminate();
+    SystemTerminate();
+
+    // Use _exit() to skip C++ static destructors. The WgpuRnd global contains
+    // a GpuDevice member with Dawn/WebGPU handles. During static destruction,
+    // the order between our WgpuRnd destructor and Dawn's internal singletons
+    // is undefined across translation units. Under parallel ctest runs (~50
+    // processes), this causes intermittent "double free or corruption" ~4% of
+    // the time as heap metadata gets corrupted by the misordered teardown.
+    //
+    // Since all meaningful cleanup is already done above, and test results
+    // have already been reported to stdout, _exit() is safe here. We query
+    // GTest for the correct exit code to preserve pass/fail signaling.
+    int exitCode = testing::UnitTest::GetInstance()->Failed() ? 1 : 0;
+    _exit(exitCode);
 }
 
 void EnsureEngineInit() {

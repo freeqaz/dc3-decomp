@@ -85,15 +85,9 @@ static RunResult RunHeadless(
     return result;
 }
 
-// Count how many "DC3 Native: Frame NNNN" lines appear in output
-static int CountFrameMarkers(const std::string &output) {
-    int count = 0;
-    size_t pos = 0;
-    while ((pos = output.find("DC3 Native: Frame ", pos)) != std::string::npos) {
-        count++;
-        pos += 18;
-    }
-    return count;
+// Check if the engine printed its "frames completed, engine stable!" success message
+static bool HasCompletionMarker(const std::string &output) {
+    return output.find("frames completed, engine stable!") != std::string::npos;
 }
 
 // Extract the first FAIL:/FATAL: line from output, or empty string

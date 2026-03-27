@@ -1651,6 +1651,7 @@ if(BUILD_TESTS)
         tests/test_dta_parser.cpp
         tests/test_movegraph.cpp
         tests/test_dta_flow.cpp
+        tests/test_foot_bone_invariants.cpp
         src/char/CharTwistSolver.cpp
         ${DC3_ENGINE_SOURCES}
         ${DC3_NATIVE_CORE_SOURCES}

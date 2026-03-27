@@ -320,6 +320,7 @@ void RndPropAnim::SetFrame(float frame, float blend) {
         mInSetFrame = true;
         AdvanceFrame(frame);
         float myframe = GetFrame();
+        // diagnostic placeholder
         FOREACH (it, mPropKeys) {
             if ((*it)->GetExceptionID() == PropKeys::kDirEvent) {
                 ObjKeys *objkeys = (*it)->AsObjectKeys();

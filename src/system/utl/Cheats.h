@@ -90,8 +90,6 @@ protected:
     // float mMessageTimer; // 0xdc
 };
 
-extern CheatsManager *gCheatsManager;
-
 void EnableKeyCheats(bool);
 bool GetEnabledKeyCheats();
 bool CheatsInitialized();

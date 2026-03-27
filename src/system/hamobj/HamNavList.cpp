@@ -1556,24 +1556,24 @@ void HamNavList::DrawDebug() const {
         return;
 
     float h = mHandHeightFilter->mHandHeight;
-    Vector2 p0(0.0f, h);
     Vector2 p1(1.0f, h);
+    Vector2 p0(0.0f, h);
     UtilDrawLine(p0, p1, Hmx::Color(0.0f, 1.0f, 0.0f, 1.0f));
 
     static Hmx::Color sRectColor(0.2f, 0.2f, 0.2f, 0.7f);
     static Hmx::Color sTextColor(1.0f, 1.0f, 1.0f, 1.0f);
 
     static float sRectX = 0.0f;
-    static float sRectY = 0.05f;
-    static float sRectW = 1.0f;
+    static float sRectY = 0.1f;
+    static float sRectW = 0.95f;
     static float sRectH = 0.95f;
-    Hmx::Rect rect(sRectX, sRectY, sRectW - 0.05f, sRectH + 0.05f);
+    Hmx::Rect rect(sRectX, sRectY - 0.05f, sRectW, sRectH + 0.05f);
     TheRnd.DrawRectScreen(rect, sRectColor, nullptr, nullptr, nullptr);
 
     char buf[50];
     float lineStep = 0.05f;
     float startX = 0.0f;
-    float startY = 0.05f;
+    float startY = sRectY;
     unsigned int i = 0;
     do {
         sprintf_s(buf, "");

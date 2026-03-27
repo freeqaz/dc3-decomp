@@ -589,6 +589,12 @@ void HamDirector::SetupAnims() {
         Difficulty d = (Difficulty)i;
         mSongAnims[d] = GetPropAnim(d, "song.anim", true);
         mDancerFaceAnims[d] = GetPropAnim(d, "dancer_face.anim", false);
+        RndPropAnim *sa = mSongAnims[d];
+        if (sa) {
+            printf("DC3_LIGHT_DIAG: SetupAnims diff=%d song.anim='%s' dir='%s'\n", i, sa->Name(), sa->Dir() ? sa->Dir()->Name() : "null");
+        } else {
+            printf("DC3_LIGHT_DIAG: SetupAnims diff=%d song.anim=null\n", i);
+        }
     }
     SetupRoutineBuilderAnims();
     mClipDir = mMerger->Dir()->Find<ObjectDir>("clips", false);
@@ -2632,6 +2638,13 @@ DataNode HamDirector::OnSelectCamera(DataArray *a) {
     // Full songAnim path — Debug::Fail is non-fatal on native, so DTA
     // handler FAILs (missing panels, stubs) are harmless warnings.
     RndPropAnim *songAnim = SongAnim(0);
+    {
+        static int dc3_cam_count = 0;
+        if (dc3_cam_count < 5) {
+            printf("DC3_LIGHT_DIAG: OnSelectCamera called, songAnim=%p disabled=%d\n", (void*)songAnim, mDisabled);
+            dc3_cam_count++;
+        }
+    }
     if (!mDisabled) {
         float beat = TheTaskMgr.Beat();
         float seconds = BeatToSeconds(beat);

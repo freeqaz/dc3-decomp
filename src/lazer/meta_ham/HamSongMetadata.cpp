@@ -252,8 +252,16 @@ BinStream &operator>>(BinStream &bs, PronunciationsLoc &pron) {
 Symbol HamSongMetadata::DrumEvent(int index) {
     auto s = mMidiEvents.find(index);
     if (s == mMidiEvents.end()) {
+        static int dc3_miss_count = 0;
+        if (dc3_miss_count < 5)
+            printf("DC3_LIGHT_DIAG: DrumEvent(%d) -> NOT FOUND (mapSize=%d)\n", index, (int)mMidiEvents.size());
+        dc3_miss_count++;
         return Symbol();
     } else {
+        static int dc3_hit_count = 0;
+        if (dc3_hit_count < 20)
+            printf("DC3_LIGHT_DIAG: DrumEvent(%d) -> '%s'\n", index, s->second.Str());
+        dc3_hit_count++;
         return s->second;
     }
 }

@@ -86,29 +86,33 @@ TEST_F(MoggV0xETest, DecodeBoyfriendMogg) {
     file->Read(buffer.data(), fileSize);
     delete file;
 
-    // Create BufFile + VorbisReader directly (bypass StandardStream threading)
-    // Pass stream=nullptr — we just want to test decryption, not audio output
+    // Use StandardStream which owns the VorbisReader internally.
+    // Previously this test created a VorbisReader with stream=nullptr, but
+    // once decryption succeeds, VorbisReader::Init() dereferences mStream
+    // to set up audio output — causing a null-pointer crash.
     BufFile *bufFile = new BufFile(buffer.data(), fileSize);
-    VorbisReader reader(bufFile, true, nullptr, true);
+    StandardStream stream(bufFile, 0.0f, 0.0f, "mogg", false, true, false);
 
-    // Poll drives: CheckHmxHeader → DoFileRead → TryReadHeader
-    // With stream=nullptr, VorbisReader::Poll does header parse + decrypt only.
-    printf("  Polling VorbisReader (header parse + decrypt)...\n");
+    printf("  Polling StandardStream (header parse + decrypt)...\n");
     int polls = 0;
-    const int maxPolls = 100;
-    while (polls < maxPolls && !reader.Fail()) {
-        reader.Poll(10.0f);
+    const int maxPolls = 500;
+    bool ready = false;
+    while (polls < maxPolls) {
+        stream.PollStream();
         polls++;
-        // Once headers are parsed, mNumChannels/mSampleRate are set (private).
-        // We can't access them directly. Just check that Fail() stays false
-        // after enough polls for the header + first data chunk.
-        if (polls >= 10 && !reader.Fail()) {
+        if (stream.IsReady()) {
+            ready = true;
             printf("  *** DECRYPTION SUCCEEDED after %d polls! ***\n", polls);
+            printf("  channels=%d, sampleRate=%d\n",
+                   stream.GetNumChannels(), (int)stream.GetSampleRate());
+            break;
+        }
+        if (stream.Fail()) {
             break;
         }
     }
 
-    if (reader.Fail()) {
+    if (stream.Fail()) {
         printf("  *** DECRYPTION FAILED after %d polls ***\n", polls);
         printf("  This confirms GrindArray DTA key derivation produces wrong key on x86_64.\n");
         printf("\n  Diagnostic: first 16 bytes of encrypted audio data:\n    ");
@@ -118,7 +122,7 @@ TEST_F(MoggV0xETest, DecodeBoyfriendMogg) {
         printf("\n");
     }
 
-    EXPECT_FALSE(reader.Fail()) << "v0xE mogg decryption failed";
+    EXPECT_FALSE(stream.Fail()) << "v0xE mogg decryption failed";
 }
 
 // ============================================================================

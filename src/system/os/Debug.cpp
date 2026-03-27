@@ -76,7 +76,7 @@ ModalCallbackFunc *Debug::SetModalCallback(ModalCallbackFunc *func) {
         return nullptr;
     ModalCallbackFunc *oldFunc = mModalCallback;
     mModalCallback = func;
-    if (!gNotifies.empty()) {
+    if (gNotifies.size() > 0) {
         for (int i = 0; i < gNotifies.size(); i++) {
             MILO_LOG("%s\n", gNotifies[i].c_str());
         }

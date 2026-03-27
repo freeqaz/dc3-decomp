@@ -378,5 +378,6 @@ void BloomPass::Terminate() {
     mBloomDownsamplePipeline = nullptr;
     mBloomUpsamplePipeline = nullptr;
     mBloomUniformBuffer = nullptr;
+    mDefaultSampler = nullptr;
     mBloomReady = false;
 }

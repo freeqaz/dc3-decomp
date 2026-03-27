@@ -373,5 +373,6 @@ void PostProcPass::Terminate() {
     mPostProcPipelineLayout = nullptr;
     mPostProcPipeline = nullptr;
     mPostProcUniformBuffer = nullptr;
+    mDefaultSampler = nullptr;
     mPostProcReady = false;
 }

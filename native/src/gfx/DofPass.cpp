@@ -355,5 +355,6 @@ void DofPass::Terminate() {
     mDepthResolveBGL = nullptr;
     mDepthResolvePipelineLayout = nullptr;
     mDofUniformBuffer = nullptr;
+    mDefaultSampler = nullptr;
     mDofReady = false;
 }

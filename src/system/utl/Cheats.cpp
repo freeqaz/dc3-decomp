@@ -12,9 +12,9 @@
 
 extern bool JoypadIsShiftButton(int, JoypadButton);
 
+static CheatsManager *gCheatsManager = nullptr;
+static bool gDisable = false;
 static bool sKeyCheatsEnabled = true;
-CheatsManager *gCheatsManager = nullptr;
-bool gDisable = false;
 
 void InitQuickJoyCheats(const DataArray *cheats, CheatsManager::ShiftMode mode) {
     for (int i = 1; i < cheats->Size(); i++) {
@@ -370,7 +370,7 @@ DataNode CheatsManager::OnMsg(const KeyboardKeyMsg &msg) {
 #pragma endregion
 
 void CheatsInit() {
-    SystemConfig()->FindData("disable_cheats", gDisable);
+    SystemConfig()->FindData("disable_cheats", gDisable, true);
     if (!gDisable) {
         MILO_ASSERT(gCheatsManager == null, 0x2d8);
         gCheatsManager = new CheatsManager();

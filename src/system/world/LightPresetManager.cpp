@@ -80,6 +80,7 @@ void LightPresetManager::UpdateOverlay() {
 
 void LightPresetManager::StartPreset(LightPreset *preset, bool b) {
     MILO_ASSERT(preset, 0xAF);
+    printf("DC3_LIGHT_DIAG: LightPresetManager::StartPreset '%s' isNew=%d\n", preset->Name(), b);
     LightPreset **toSet = b ? &mPresetNew : &mPresetPrev;
     *toSet = preset;
     preset->StartAnim();
@@ -93,6 +94,7 @@ void LightPresetManager::StartPreset(LightPreset *preset, bool b) {
 }
 
 void LightPresetManager::ForcePreset(LightPreset *p, float f) {
+    printf("DC3_LIGHT_DIAG: LightPresetManager::ForcePreset '%s' duration=%f\n", p ? p->Name() : "null", f);
     if (p) {
         if (mPresetOverride != p || mOverrideMode == 1) {
             mPresetOverride = p;

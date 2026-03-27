@@ -10,6 +10,8 @@ BinStreamRev &operator>>(BinStreamRev &, RndMesh::Vert &);
 
 namespace {
 
+class MeshVertexLoading : public SymbolTestFixture {};
+
 class TestMesh : public RndMesh {
 public:
     TestMesh() : RndMesh() {}
@@ -65,7 +67,7 @@ static Vector3 ApplyGpuMatrix(const float *m, const Vector3 &p) {
 
 } // namespace
 
-TEST(MeshVertexLoading, NativeCompressedLoadPreservesRawBlob) {
+TEST_F(MeshVertexLoading, NativeCompressedLoadPreservesRawBlob) {
     TestMesh mesh;
 
     const uint32_t packedWeights = 1023u;
@@ -89,7 +91,7 @@ TEST(MeshVertexLoading, NativeCompressedLoadPreservesRawBlob) {
     EXPECT_EQ(memcmp(mesh.CompressedVerts(), record.data(), sizeof(CompressedVertex_Xbox)), 0);
 }
 
-TEST(MeshVertexLoading, CompressedSkinnedDecodePreservesBoneWeightsAndIndices) {
+TEST_F(MeshVertexLoading, CompressedSkinnedDecodePreservesBoneWeightsAndIndices) {
     const uint32_t packedWeights = 1023u;
     const uint32_t packedIndices = 2u | (3u << 8) | (4u << 16) | (5u << 24);
     std::vector<uint8_t> record = MakeCompressedVertexRecord(packedWeights, packedIndices);
@@ -115,7 +117,7 @@ TEST(MeshVertexLoading, CompressedSkinnedDecodePreservesBoneWeightsAndIndices) {
     EXPECT_EQ(out.boneIndices[3], 5);
 }
 
-TEST(MeshVertexLoading, UncompressedVertRev26ReadsWeightsAndIndices) {
+TEST_F(MeshVertexLoading, UncompressedVertRev26ReadsWeightsAndIndices) {
     std::vector<uint8_t> buf;
     PutBEFloat(buf, 1.0f);
     PutBEFloat(buf, 2.0f);
@@ -157,7 +159,7 @@ TEST(MeshVertexLoading, UncompressedVertRev26ReadsWeightsAndIndices) {
     EXPECT_EQ(vert.boneIndices[3], 4);
 }
 
-TEST(MeshVertexLoading, CompressedSkinningMatchesCpuSkinningForSyntheticBones) {
+TEST_F(MeshVertexLoading, CompressedSkinningMatchesCpuSkinningForSyntheticBones) {
     TestMesh mesh;
     mesh.SetNumBones(2);
 
@@ -220,7 +222,7 @@ TEST(MeshVertexLoading, CompressedSkinningMatchesCpuSkinningForSyntheticBones) {
     EXPECT_NEAR(cpuSkinned.z, gpuSkinned.z, 0.02f);
 }
 
-TEST(MeshVertexLoading, UncompressedSkinningMatchesCpuSkinningForSyntheticBones) {
+TEST_F(MeshVertexLoading, UncompressedSkinningMatchesCpuSkinningForSyntheticBones) {
     TestMesh mesh;
     mesh.SetNumBones(2);
     mesh.SetNumVerts(1);

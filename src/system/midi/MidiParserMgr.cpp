@@ -50,6 +50,7 @@ void MidiParserMgr::OnNewTrack(int) {
 
 void MidiParserMgr::OnEndOfTrack() {
     if (!mTrackName.Null()) {
+        printf("DC3_LIGHT_DIAG: OnEndOfTrack '%s' noteOns=%d textEvents=%d\n", mTrackName.Str(), (int)mNoteOns.size(), (int)mText.size());
         if (mText.size() > 2000) {
             MILO_NOTIFY(
                 "%s track %s has %d text events which is over the limit of %d, if that is correct contact James to increase kMaxTextSize",
@@ -242,6 +243,41 @@ void MidiParserMgr::Reset() {
 }
 
 void MidiParserMgr::Poll() {
+    {
+        static int dc3_poll_count = 0;
+        if (dc3_poll_count < 5) {
+            std::list<MidiParser *> &parsers = MidiParser::Parsers();
+            int count = 0;
+            for (auto it = parsers.begin(); it != parsers.end(); ++it) count++;
+            printf("DC3_LIGHT_DIAG: MidiParserMgr::Poll playbackEnabled=%d numParsers=%d\n", mPlaybackEnabled, count);
+            if (dc3_poll_count == 0) {
+                for (auto it = parsers.begin(); it != parsers.end(); ++it) {
+                    printf("DC3_LIGHT_DIAG:   parser '%s' track='%s' numEvents=%d\n", (*it)->Name(), (*it)->TrackName().Str(), (*it)->Events()->Size());
+                    // dump events_parser and active_events_parser contents
+                    if ((strcmp((*it)->Name(), "events_parser") == 0 || strcmp((*it)->Name(), "active_events_parser") == 0) && (*it)->Events()->Size() > 0) {
+                        DataEventList *evList = (*it)->Events();
+                        for (int i = 0; i < evList->Size() && i < 20; i++) {
+                            const DataEvent &ev = evList->Event(i);
+                            printf("DC3_LIGHT_DIAG:     event[%d] start=%.2f end=%.2f msg='", i, ev.Start(), ev.End());
+                            DataArray *msg = ev.Msg();
+                            if (msg) {
+                                for (int j = 0; j < msg->Size(); j++) {
+                                    if (msg->Node(j).Type() == kDataSymbol)
+                                        printf("%s ", msg->Node(j).Sym().Str());
+                                    else if (msg->Node(j).Type() == kDataInt)
+                                        printf("%d ", msg->Node(j).Int());
+                                    else
+                                        printf("<%d> ", msg->Node(j).Type());
+                                }
+                            }
+                            printf("'\n");
+                        }
+                    }
+                }
+            }
+            dc3_poll_count++;
+        }
+    }
     if (mPlaybackEnabled) {
         std::list<MidiParser *> &parsers = MidiParser::Parsers();
         for (std::list<MidiParser *>::iterator it = parsers.begin(); it != parsers.end();
@@ -273,6 +309,7 @@ void MidiParserMgr::FreeAllData() {
 }
 
 void MidiParserMgr::OnTrackName(Symbol s) {
+    printf("DC3_LIGHT_DIAG: MidiParserMgr::OnTrackName '%s'\n", s.Str());
     if (std::find(mTrackNames.begin(), mTrackNames.end(), s) != mTrackNames.end()) {
         std::list<MidiParser *> &parsers = MidiParser::Parsers();
         for (std::list<MidiParser *>::iterator it = parsers.begin(); it != parsers.end();
