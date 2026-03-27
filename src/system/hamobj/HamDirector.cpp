@@ -534,36 +534,6 @@ void HamDirector::ArmMultiIntroMode() {
 void HamDirector::HudEntered() {
     if (mPoseFatalities)
         mPoseFatalities->Enter();
-
-#ifdef HX_NATIVE
-    // HACK(native): copied song anim prop keys can still point at the source
-    // HUD PanelDir instead of the live $hud_panel. Retarget them here so this
-    // workaround stays native-only and can be removed after the real fix lands.
-    DataNode &hudNode = DataVariable("hud_panel");
-    if (hudNode.Type() != kDataObject || !hudNode.GetObj()) {
-        return;
-    }
-
-    Hmx::Object *hud = hudNode.GetObj();
-    auto retargetHudKeys = [hud](RndPropAnim *anim) {
-        if (!anim) {
-            return;
-        }
-        for (auto it = anim->mPropKeys.begin(); it != anim->mPropKeys.end(); ++it) {
-            Hmx::Object *target = (*it)->Target();
-            PanelDir *panel = dynamic_cast<PanelDir *>(target);
-            if (panel && target != hud && panel->Name() && !std::strcmp(panel->Name(), "hud")) {
-                (*it)->SetTarget(hud);
-            }
-        }
-    };
-
-    for (int i = 0; i < kNumDifficultiesDC2; ++i) {
-        retargetHudKeys(mSongAnims[(Difficulty)i]);
-    }
-    retargetHudKeys(mPlayer1RoutineBuilderAnim);
-    retargetHudKeys(mPlayer2RoutineBuilderAnim);
-#endif
 }
 
 void HamDirector::PlayIntroShot() {
