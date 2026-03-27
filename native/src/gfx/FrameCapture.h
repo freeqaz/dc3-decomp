@@ -12,6 +12,7 @@ enum Heuristic : uint32_t {
     kHeuristicFogBlendCheck      = 1 << 1, // Fog disabled for additive/subtractive blend
     kHeuristicTextMeshDetect     = 1 << 2, // Text mesh (no depth, no cull, prelit)
     kHeuristicTextAlphaAsRGB     = 1 << 3, // Font atlas alpha-as-RGB mode
+    kHeuristicMultiplyPrelit     = 1 << 4, // Multiply blend forced prelit (light-catcher fix)
 };
 
 struct TexBindingInfo {

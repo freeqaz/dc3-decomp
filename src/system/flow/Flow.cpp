@@ -399,13 +399,21 @@ void Flow::PostLoad(BinStream &bs) {
 void Flow::SyncObjects() {
     ObjectDir::SyncObjects();
 
-    FlowNode *topLevelFlow;
-    for (topLevelFlow = GetTopFlow(); topLevelFlow->GetParent() != nullptr;
-         topLevelFlow = topLevelFlow->GetParent()->GetTopFlow()) {
+    FlowNode *node = this;
+    Flow *topLevelFlow;
+    for (topLevelFlow = node->GetTopFlow(); topLevelFlow != nullptr;) {
+        if (topLevelFlow->GetParent() == nullptr) break;
+        node = topLevelFlow->GetParent();
+        topLevelFlow = node->GetTopFlow();
     }
-    Flow *flow = dynamic_cast<Flow *>(topLevelFlow->Dir());
-    if (flow) {
-        // something here
+    ObjectDir *flow = topLevelFlow->Dir();
+    if (dynamic_cast<Flow *>(flow)) {
+        DirLoader *loader = topLevelFlow->Loader();
+        if (loader) {
+            flow = loader->ProxyDir();
+        } else {
+            flow = topLevelFlow->Dir();
+        }
     }
     if (flow && flow != this) {
         FOREACH (it, mDynamicProperties) {

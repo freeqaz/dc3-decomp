@@ -307,15 +307,16 @@ void Intersect(const Transform &trans, const Plane &plane, Hmx::Ray &ray) {
     Vector3 on = plane.On();
     Vector3 point;
     MultiplyTranspose(on, trans, point);
-    float dotX = trans.m.x.x * plane.a + trans.m.x.y * plane.b + trans.m.x.z * plane.c;
-    float dotY = trans.m.y.x * plane.a + trans.m.y.y * plane.b + trans.m.y.z * plane.c;
-    float dotZ = trans.m.z.x * plane.a + trans.m.z.y * plane.b + trans.m.z.z * plane.c;
+    const Vector3 &normal = (const Vector3 &)plane.a;
+    float dotX = Dot(trans.m.x, normal);
+    float dotY = Dot(trans.m.y, normal);
+    float dotZ = Dot(trans.m.z, normal);
     ray.dir.Set(dotX, dotY);
-    if (fabsf(dotX) > fabsf(dotY)) {
-        ray.base.Set(point.y, point.x + (dotZ / dotX) * point.z);
+    if (fabsf(dotY) > fabsf(dotX)) {
+        ray.base.Set(point.x, point.y + (dotZ / dotY) * point.z);
     }
     else {
-        ray.base.Set(point.y + (dotZ / dotY) * point.z, point.x);
+        ray.base.Set(point.x + (dotZ / dotX) * point.z, point.y);
     }
 }
 

@@ -16,6 +16,18 @@
 #include <algorithm>
 #include <cstdio>
 
+// Detect venue TV/arcade screen materials that expect a dynamically-assigned
+// Kinect camera texture (video_recorder.srec). On Xbox, the ScreenRecorder fills
+// Screen.tex with the Kinect feed; on native there is no Kinect. Materials whose
+// name ends with "Screen.mat" and lack a diffuse texture should render as opaque
+// black (TV is off) rather than the white material base color.
+static bool IsScreenMaterial(const char* name) {
+    if (!name) return false;
+    const char* dot = strstr(name, "Screen.mat");
+    // Match names like "Screen.mat", "Arcade_A_Screen.mat", "pinball_Screen.mat"
+    return dot && dot[10] == '\0';
+}
+
 // Simple render mode (MILO_SIMPLE_RENDER=1): skip multiply override, force prelit,
 // minimal material processing. For isolating shader/blend regressions.
 static bool sSimpleRender = false;
@@ -107,6 +119,19 @@ MaterialParams BuildMaterialParams(RndMat* mat, bool isTextMesh) {
 
     if (diffuseTexView) {
         matUni.useTexture = 1.0f;
+    } else if (diffTex) {
+        // Texture object exists but GPU upload failed (e.g., unsupported format,
+        // render target without content). Show opaque black rather than letting the
+        // material's potentially-white base color shine through.
+        matUni.useTexture = 1.0f;
+        diffuseTexView = gWgpuRnd->BlackTexView();
+    } else if (IsScreenMaterial(mat->Name())) {
+        // Venue TV/arcade screen materials whose diffuse texture is normally assigned
+        // at runtime by the Kinect ScreenRecorder (video_recorder.srec). On native
+        // there is no Kinect, so show opaque black (TV is off) instead of the
+        // material's white base color.
+        matUni.useTexture = 1.0f;
+        diffuseTexView = gWgpuRnd->BlackTexView();
     } else {
         matUni.useTexture = 0.0f;
         diffuseTexView = gWgpuRnd->WhiteTexView();
@@ -130,7 +155,17 @@ MaterialParams BuildMaterialParams(RndMat* mat, bool isTextMesh) {
     // On Xbox, HUD meshes render inline with the 3D scene using their own env,
     // but on native the overlay pass is a separate 1x (no MSAA) pass.
     bool isOverlayPass = gWgpuRnd && !gWgpuRnd->CurrentPassHasDepth();
-    bool forcePrelit = IsSimpleRender() || isOverlayPass;
+    // Force prelit for multiply-blend materials (e.g., light-catcher overlays).
+    // On Xbox, DTA scripts and the full lighting pipeline set the material color
+    // to represent the desired light modulation factor. On native, without those
+    // scripts, the material color stays white and the lighting system adds bright
+    // illumination — causing multiply blend to brighten instead of modulate.
+    // Forcing prelit makes the shader output baseColor directly: white material
+    // color = multiply identity (no visible change), which is correct behavior
+    // when the lighting scripts aren't driving the color.
+    bool isMultiplyBlend = (matBlend == BaseMaterial::kBlendMultiply);
+    bool forcePrelit = IsSimpleRender() || isOverlayPass || isMultiplyBlend;
+    if (isMultiplyBlend) heuristics |= kHeuristicMultiplyPrelit;
     if (isTextMesh) heuristics |= kHeuristicTextMeshDetect;
     matUni.prelit = (mat->Prelit() || isTextMesh || forcePrelit) ? 1.0f : 0.0f;
     matUni.useAlphaAsRGB = isTextMesh ? 1.0f : 0.0f;
@@ -232,7 +267,9 @@ MaterialParams BuildPassMaterialParams(BaseMaterial* nextPass) {
     npMatUni.intensify = nextPass->GetIntensify() ? 2.0f : 1.0f;
     npMatUni.deNormal = nextPass->GetDeNormal();
     npMatUni.hasNormalMap = nextPass->NormalMap() ? 1.0f : 0.0f;
-    npMatUni.prelit = nextPass->Prelit() ? 1.0f : 0.0f;
+    // Force prelit for multiply-blend passes (same rationale as primary material)
+    bool npMultiply = (nextPass->GetBlend() == BaseMaterial::kBlendMultiply);
+    npMatUni.prelit = (nextPass->Prelit() || npMultiply) ? 1.0f : 0.0f;
     npMatUni.texGenMode = (float)nextPass->GetTexGen();
     npMatUni.shaderVariation = (float)nextPass->GetShaderVariation();
 
@@ -245,6 +282,10 @@ MaterialParams BuildPassMaterialParams(BaseMaterial* nextPass) {
     if (npDiffuse) {
         npMatUni.useTexture = 1.0f;
         npTexViews.diffuse = npDiffuse;
+    } else if (npDiffTex) {
+        // Texture exists but upload failed — show black
+        npMatUni.useTexture = 1.0f;
+        npTexViews.diffuse = gWgpuRnd->BlackTexView();
     } else {
         npMatUni.useTexture = 0.0f;
         npTexViews.diffuse = gWgpuRnd->WhiteTexView();

@@ -56,6 +56,17 @@ struct Snapshot {
     bool hudHasLeft = false;          // T3a: hud_left findable in merge target
     bool hudHasRight = false;         // T3b: hud_right findable in merge target
     bool hudMDirResolved = false;     // whether game_hud merger's mDir is non-null (vs fallback)
+
+    // Foot orientation validation — detects inverted feet
+    bool footDataValid = false;       // true if we found ankle+toe bones
+    float lAnkleZ = 0.0f;            // L-ankle world Z position
+    float lToeZ = 0.0f;              // L-toe world Z position
+    float rAnkleZ = 0.0f;            // R-ankle world Z position
+    float rToeZ = 0.0f;              // R-toe world Z position
+    float lFootZAxisZ = 0.0f;        // L-ankle WorldXfm.m.z.z (>0 = pointing up = bad)
+    float rFootZAxisZ = 0.0f;        // R-ankle WorldXfm.m.z.z (>0 = pointing up = bad)
+    bool lFootInverted = false;       // L toe above ankle
+    bool rFootInverted = false;       // R toe above ankle
 };
 
 void Init();            // Check DC3_TEL env var

@@ -2,6 +2,7 @@
 
 // Node access helpers - uses pointer arithmetic due to unusual 17-byte node size
 #define NODE_SIZE 0x11
+#define MAX_NODES 0x20000
 
 // Get pointer to node at given index
 static inline char *NodePtr(Trie *trie, unsigned int idx) {
@@ -99,9 +100,10 @@ unsigned int Trie::get_free_node() {
     }
 
     // Allocate new node - increment node count
-    MILO_ASSERT((int)NodeCount(this) < 0x20000, 0x82);
-    unsigned int newIdx = NodeCount(this) + 1;
-    NodeCount(this) = newIdx;
+    int &_nodeCount = *(int *)((char *)this + HEADER_OFFSET);
+    MILO_ASSERT(_nodeCount < MAX_NODES, 0x82);
+    unsigned int newIdx = _nodeCount + 1;
+    _nodeCount = newIdx;
     return newIdx;
 }
 

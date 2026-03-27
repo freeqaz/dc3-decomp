@@ -237,12 +237,6 @@ void FileMerger::FinishLoading(Loader *ldr) {
             ObjectDir *mergerDir = merger->MergerDir();
             ReserveToFit(dl->GetDir(), mergerDir, 0);
             MergeDirs(dl->GetDir(), mergerDir, *this);
-#ifdef HX_NATIVE
-            // Post-merge fixup 1: Reparent kMergeReplace subdirs.
-            // MergeObjectsRecurse moves subdirs from source to target via
-            // AppendSubDir, but doesn't call SetName to update the hash table
-            // registration. The subdir's Dir() still points to the source.
-#endif
         }
     }
     PostMerge(merger, dl, true);

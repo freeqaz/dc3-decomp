@@ -49,20 +49,14 @@ bool ShouldSkipMesh(const char* name, RndMat* mat) {
         !strncmp(name, "warning_", 8)) {
         return true;
     }
-    // Light-catcher overlay meshes: multiply-blend surfaces (no diffuse texture,
-    // white material color) that capture scene lighting and project it onto the
-    // venue floor/stage as a multiply overlay. On Xbox, DTA scripts and the
-    // full lighting pipeline produce realistic light projections. On native,
-    // without the complete lighting setup, these render as bright white blocks
-    // (lighting exceeds 1.0, multiply blend amplifies instead of modulating).
-    if (mat && strstr(mat->Name(), "lightCatch")) return true;
-    // Venue TV screen surfaces (food court monitors, upper floor walls).
-    // Screen.tex is a placeholder bright/white texture; on Xbox, video_recorder.srec
-    // or TexRenderer fills these with Kinect camera/video content. Without
-    // the video feed, they render as solid bright white rectangles.
-    if (mat && !strcmp(mat->Name(), "Screen.mat")) return true;
-    // Arcade A screen with missing diffuse texture — on Xbox, Screen.tex is
-    // dynamically assigned via DTA script. On native, null diffuse = white.
-    if (mat && !strcmp(mat->Name(), "Arcade_A_Screen.mat")) return true;
+    // Light-catcher overlay meshes (e.g., Rink_lightCatcher.mat) now render correctly:
+    // MaterialSetup forces multiply-blend materials to prelit mode, so their base
+    // color passes through as the multiply factor. White = identity = invisible.
+    //
+    // Venue TV/arcade screens: previously skipped because Screen.tex wasn't
+    // uploading and screen materials without a diffuse texture rendered as white.
+    // Fixed in MaterialSetup.cpp: failed texture uploads fall back to opaque black,
+    // and screen materials without a diffuse texture (IsScreenMaterial) also render
+    // black ("TV is off") instead of the material's white base color.
     return false;
 }

@@ -794,6 +794,179 @@ TEST_F(ClipPoseFixture, KeyBoneWorldDeltasAreFiniteAcrossBeats) {
 }
 
 // ============================================================================
+// Gate 4: Foot Orientation Invariants
+//
+// Validates that the ankle-to-toe bone relationship is geometrically correct
+// in rest pose and after clip application. These are the invariants that
+// break when feet become inverted due to IK mLocalXfm dirty cascade bugs.
+//
+// Invariants for CORRECT feet:
+//   1. Toe Z < Ankle Z (toe is below ankle, closer to ground)
+//   2. Ankle-to-toe vector points generally downward (negative Z component)
+//   3. Ankle Z-axis does not point strongly upward (m.z.z < 0.7)
+//   4. Shin (knee-to-ankle) and foot (ankle-to-toe) vectors are not colinear
+//      pointing in the same direction (foot should bend forward/down from shin)
+//
+// See: docs/sessions/2026-03-25-feet-in-ground-fix.md
+// ============================================================================
+
+TEST_F(BoneGroundTruth, FootBonesExist) {
+    const char *footBones[] = {
+        "bone_L-ankle.mesh", "bone_R-ankle.mesh",
+        "bone_L-toe.mesh", "bone_R-toe.mesh",
+        nullptr
+    };
+    for (int i = 0; footBones[i]; i++) {
+        RndTransformable *bone = FindBone(footBones[i]);
+        if (bone) {
+            printf("  Found: %s at (%.2f, %.2f, %.2f)\n",
+                   footBones[i],
+                   bone->WorldXfm().v.x,
+                   bone->WorldXfm().v.y,
+                   bone->WorldXfm().v.z);
+        } else {
+            printf("  NOT FOUND: %s\n", footBones[i]);
+        }
+        // Soft check — some skeleton resources may lack toe bones
+        EXPECT_NE(bone, nullptr) << "Missing foot bone: " << footBones[i];
+    }
+}
+
+TEST_F(BoneGroundTruth, RestPoseToesBelowAnkles) {
+    // In rest pose, toe bones should be below ankle bones (closer to ground).
+    // Milo uses Z-up coordinate system.
+    struct Side { const char *ankle; const char *toe; const char *label; };
+    Side sides[] = {
+        {"bone_L-ankle.mesh", "bone_L-toe.mesh", "Left"},
+        {"bone_R-ankle.mesh", "bone_R-toe.mesh", "Right"},
+    };
+
+    for (auto &s : sides) {
+        RndTransformable *ankle = FindBone(s.ankle);
+        RndTransformable *toe = FindBone(s.toe);
+        if (!ankle || !toe) {
+            printf("  SKIP %s: ankle=%p toe=%p\n", s.label, (void*)ankle, (void*)toe);
+            continue;
+        }
+
+        float ankleZ = ankle->WorldXfm().v.z;
+        float toeZ = toe->WorldXfm().v.z;
+        printf("  %s foot: ankle Z=%.3f, toe Z=%.3f (delta=%.3f)\n",
+               s.label, ankleZ, toeZ, toeZ - ankleZ);
+
+        EXPECT_LT(toeZ, ankleZ + 2.0f)
+            << s.label << " toe is above ankle in rest pose — foot is inverted. "
+            << "toe Z=" << toeZ << ", ankle Z=" << ankleZ;
+    }
+}
+
+TEST_F(BoneGroundTruth, RestPoseAnkleZAxisNotFlipped) {
+    // The ankle bone's WorldXfm rotation matrix Z column (m.z) should not
+    // point strongly upward. In rest pose, it should point roughly downward
+    // or laterally. A Z-axis z-component > 0.7 means the foot is rotated
+    // nearly 180 degrees from its intended orientation.
+    const char *ankles[] = {"bone_L-ankle.mesh", "bone_R-ankle.mesh", nullptr};
+    for (int i = 0; ankles[i]; i++) {
+        RndTransformable *ankle = FindBone(ankles[i]);
+        if (!ankle) continue;
+
+        float zAxisZ = ankle->WorldXfm().m.z.z;
+        printf("  %s Z-axis z-component: %.3f\n", ankles[i], zAxisZ);
+
+        EXPECT_LT(zAxisZ, 0.7f)
+            << ankles[i] << " Z-axis points upward (z.z=" << zAxisZ
+            << "), indicating the ankle rotation is flipped. "
+            << "Expected < 0.7 (roughly downward or lateral).";
+    }
+}
+
+TEST_F(BoneGroundTruth, RestPoseAnkleToToeVectorPointsDown) {
+    // The vector from ankle to toe should have a negative or small Z component
+    // (pointing toward the ground). If positive and large, the foot is inverted.
+    struct Side { const char *ankle; const char *toe; const char *label; };
+    Side sides[] = {
+        {"bone_L-ankle.mesh", "bone_L-toe.mesh", "Left"},
+        {"bone_R-ankle.mesh", "bone_R-toe.mesh", "Right"},
+    };
+
+    for (auto &s : sides) {
+        RndTransformable *ankle = FindBone(s.ankle);
+        RndTransformable *toe = FindBone(s.toe);
+        if (!ankle || !toe) continue;
+
+        float dx = toe->WorldXfm().v.x - ankle->WorldXfm().v.x;
+        float dy = toe->WorldXfm().v.y - ankle->WorldXfm().v.y;
+        float dz = toe->WorldXfm().v.z - ankle->WorldXfm().v.z;
+        float len = std::sqrt(dx * dx + dy * dy + dz * dz);
+
+        printf("  %s ankle-to-toe: (%.2f, %.2f, %.2f) len=%.2f\n",
+               s.label, dx, dy, dz, len);
+
+        if (len > 0.01f) {
+            // Normalized Z component of ankle-to-toe direction
+            float normZ = dz / len;
+            printf("  %s ankle-to-toe normalized Z: %.3f\n", s.label, normZ);
+
+            // Should not be strongly positive (pointing up through shin)
+            EXPECT_LT(normZ, 0.5f)
+                << s.label << " ankle-to-toe vector points upward (normZ="
+                << normZ << "). The foot is inverted — toe is above ankle.";
+        }
+    }
+}
+
+TEST_F(ClipPoseFixture, FootOrientationCorrectAfterClip) {
+    // After applying a dance clip, verify the foot invariants still hold.
+    // This catches bugs where clip pose data corrupts the ankle rotation.
+    float beats[] = {
+        sClip->StartBeat(),
+        sClip->StartBeat() + sClip->LengthBeats() * 0.25f,
+        sClip->StartBeat() + sClip->LengthBeats() * 0.5f,
+        sClip->StartBeat() + sClip->LengthBeats() * 0.75f,
+    };
+
+    struct Side { const char *ankle; const char *toe; const char *label; };
+    Side sides[] = {
+        {"bone_L-ankle.mesh", "bone_L-toe.mesh", "Left"},
+        {"bone_R-ankle.mesh", "bone_R-toe.mesh", "Right"},
+    };
+
+    int checked = 0;
+    int invertedCount = 0;
+
+    for (float beat : beats) {
+        sClip->PoseMeshes(sDir, beat);
+
+        for (auto &s : sides) {
+            RndTransformable *ankle = FindBone(s.ankle);
+            RndTransformable *toe = FindBone(s.toe);
+            if (!ankle || !toe) continue;
+            checked++;
+
+            float ankleZ = ankle->WorldXfm().v.z;
+            float toeZ = toe->WorldXfm().v.z;
+
+            if (toeZ > ankleZ + 2.0f) {
+                invertedCount++;
+                printf("  INVERTED at beat %.2f: %s toe Z=%.2f > ankle Z=%.2f\n",
+                       beat, s.label, toeZ, ankleZ);
+            }
+        }
+    }
+
+    if (checked == 0) {
+        printf("  SKIP: no ankle/toe bones found in asset\n");
+    } else {
+        printf("  Checked %d ankle/toe pairs across %d beats, %d inverted\n",
+               checked, (int)(sizeof(beats) / sizeof(beats[0])), invertedCount);
+
+        EXPECT_EQ(invertedCount, 0)
+            << "Foot was inverted after applying clip '" << sClip->Name()
+            << "'. The toe bone is above the ankle bone in world Z.";
+    }
+}
+
+// ============================================================================
 // main.milo_xbox loading (was DISABLED_ — crash fixed in RndMesh::OnSync)
 // ============================================================================
 

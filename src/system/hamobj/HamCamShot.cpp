@@ -542,22 +542,23 @@ void HamCamShot::StartAnim() {
     CamShot::StartAnim();
     StartAnims(mMasterAnims);
     for (ObjList<Target>::iterator it = mTargets.begin(); it != mTargets.end(); ++it) {
-        if (!it->mTarget.Null()) {
-            std::list<TargetCache>::iterator cache = CreateTargetCache(it->mTarget);
+        Target &cur = *it;
+        if (!cur.mTarget.Null()) {
+            std::list<TargetCache>::iterator cache = CreateTargetCache(cur.mTarget);
             Character *theChar = dynamic_cast<Character *>(cache->mTrans);
             if (theChar) {
-                theChar->SetSelfShadow(it->mSelfShadow);
-                theChar->SetLodType((LODType)it->mForceLOD);
+                theChar->SetSelfShadow(cur.mSelfShadow);
+                theChar->SetLodType((LODType)cur.mForceLOD);
                 static Message msg("play_group", 0, 0, 0, 0, 0);
                 msg[0] = theChar;
-                msg[1] = it->mAnimGroup;
-                msg[2] = it->mFastForward / FramesPerUnit();
+                msg[1] = cur.mAnimGroup;
+                msg[2] = cur.mFastForward / FramesPerUnit();
                 msg[3] = Units();
-                msg[4] = it->mForwardEvent;
+                msg[4] = cur.mForwardEvent;
                 HandleType(msg);
-                if (it->mEnvOverride) {
+                if (cur.mEnvOverride) {
                     cache->mOldEnv = theChar->GetEnv();
-                    theChar->SetEnv(it->mEnvOverride);
+                    theChar->SetEnv(cur.mEnvOverride);
                 }
             }
         }

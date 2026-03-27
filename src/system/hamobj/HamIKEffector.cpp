@@ -469,6 +469,41 @@ void HamIKEffector::Poll() {
                         Invert(mEffector->TransParent()->WorldXfm(), invParent);
                         Multiply(finalXfm, invParent, mEffector->mLocalXfm);
                     }
+
+                    // Foot inversion guard: after IK, verify the ankle-to-toe
+                    // vector points generally downward (toward ground), not upward
+                    // through the shin. The toe bone (mFinger) should be BELOW
+                    // the ankle bone (mEffector) in world Z. If inverted, the
+                    // mLocalXfm back-computation or dirty cascade has gone wrong.
+                    if (t == kEffectorTypeAnkle && mFinger.Ptr()
+                        && mFinger.Ptr() != mEffector.Ptr()) {
+                        RndTransformable *toe = mFinger.Ptr();
+                        RndTransformable *ankle = mEffector.Ptr();
+                        float ankleZ = ankle->WorldXfm().v.z;
+                        float toeZ = toe->WorldXfm().v.z;
+                        // Also check the ankle's local Z-axis direction.
+                        // In a correct pose, the rotation matrix's Z column
+                        // (m.z) should point roughly downward (z component < 0)
+                        // or at least not strongly upward.
+                        float zAxisUp = ankle->WorldXfm().m.z.z;
+                        // Toe above ankle by more than 2 units = inverted foot
+                        if (toeZ > ankleZ + 2.0f) {
+                            MILO_NOTIFY_ONCE(
+                                "FOOT INVERTED: %s toe Z=%.1f > ankle Z=%.1f "
+                                "(delta=%.1f, zAxisUp=%.2f)",
+                                PathName(this), toeZ, ankleZ,
+                                toeZ - ankleZ, zAxisUp
+                            );
+                        }
+                        // Z-axis pointing strongly upward = rotation is flipped
+                        if (zAxisUp > 0.7f) {
+                            MILO_NOTIFY_ONCE(
+                                "FOOT FLIPPED: %s ankle Z-axis points up "
+                                "(z.z=%.2f), expected downward",
+                                PathName(this), zAxisUp
+                            );
+                        }
+                    }
 #endif
                 }
             }

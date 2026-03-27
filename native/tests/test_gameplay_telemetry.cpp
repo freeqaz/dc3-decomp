@@ -721,3 +721,139 @@ TEST_F(GameplayTelemetryTest, NoHudDtaErrors) {
         << "indicating $hud_panel was empty or pointed to the wrong PanelDir. "
         << progressSummary();
 }
+
+// ---------------------------------------------------------------------------
+// Tier 6: Foot orientation validation
+//
+// Detects inverted/flipped feet during gameplay by checking ankle and toe bone
+// world positions. The invariant: toe Z should be BELOW ankle Z (toe is closer
+// to the ground). If inverted, the IK mLocalXfm back-computation or dirty
+// cascade has gone wrong and the foot mesh flips 180 degrees upward through
+// the shin.
+//
+// See: docs/sessions/2026-03-25-feet-in-ground-fix.md (Phase 4: Root Cause)
+// ---------------------------------------------------------------------------
+
+TEST_F(GameplayTelemetryTest, FootBonesFoundDuringGameplay) {
+    auto playing = gameplaySamples();
+    ASSERT_FALSE(playing.empty())
+        << "Never observed real gameplay on game_screen. " << progressSummary();
+
+    bool found = false;
+    for (auto &s : playing) {
+        if (s.getBool("footDataValid")) {
+            found = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(found)
+        << "footDataValid was never true during gameplay. "
+        << "Could not find ankle/toe bones on player 0's character. "
+        << progressSummary();
+}
+
+TEST_F(GameplayTelemetryTest, NoInvertedFeetDuringGameplay) {
+    // Core invariant: toe bone Z should be BELOW ankle bone Z.
+    // If the toe is ABOVE the ankle by >2 units, the foot is inverted
+    // (flipped 180 degrees through the shin). This was the root cause
+    // of the "feet in ground" visual bug — actually inverted feet.
+    auto playing = gameplaySamples();
+    ASSERT_FALSE(playing.empty())
+        << "Never observed real gameplay on game_screen. " << progressSummary();
+
+    int footSamples = 0;
+    int lInvertedCount = 0;
+    int rInvertedCount = 0;
+    float worstLDelta = 0.0f;
+    float worstRDelta = 0.0f;
+
+    for (auto &s : playing) {
+        if (!s.getBool("footDataValid")) continue;
+        footSamples++;
+
+        if (s.getBool("lFootInverted")) {
+            lInvertedCount++;
+            float delta = s.getFloat("lToeZ") - s.getFloat("lAnkleZ");
+            if (delta > worstLDelta) worstLDelta = delta;
+        }
+        if (s.getBool("rFootInverted")) {
+            rInvertedCount++;
+            float delta = s.getFloat("rToeZ") - s.getFloat("rAnkleZ");
+            if (delta > worstRDelta) worstRDelta = delta;
+        }
+    }
+
+    if (footSamples == 0) {
+        GTEST_SKIP() << "No foot data samples during gameplay";
+    }
+
+    EXPECT_EQ(lInvertedCount, 0)
+        << "Left foot was inverted in " << lInvertedCount << "/" << footSamples
+        << " gameplay samples. Worst toe-above-ankle delta: " << worstLDelta
+        << " units. This indicates the IK mLocalXfm back-computation is broken "
+        << "or a dirty cascade is clobbering the ankle transform. "
+        << progressSummary();
+
+    EXPECT_EQ(rInvertedCount, 0)
+        << "Right foot was inverted in " << rInvertedCount << "/" << footSamples
+        << " gameplay samples. Worst toe-above-ankle delta: " << worstRDelta
+        << " units. This indicates the IK mLocalXfm back-computation is broken "
+        << "or a dirty cascade is clobbering the ankle transform. "
+        << progressSummary();
+}
+
+TEST_F(GameplayTelemetryTest, FootZAxisNotFlippedDuringGameplay) {
+    // Secondary invariant: the ankle bone's local Z-axis (WorldXfm.m.z.z)
+    // should not point strongly upward (positive Z). In a correct foot pose,
+    // the Z-axis of the ankle rotation matrix should be roughly downward
+    // or lateral. A value > 0.7 means the foot is rotated nearly 180 degrees
+    // from its intended orientation.
+    auto playing = gameplaySamples();
+    ASSERT_FALSE(playing.empty())
+        << "Never observed real gameplay on game_screen. " << progressSummary();
+
+    int footSamples = 0;
+    int lFlippedCount = 0;
+    int rFlippedCount = 0;
+
+    for (auto &s : playing) {
+        if (!s.getBool("footDataValid")) continue;
+        footSamples++;
+
+        if (s.getFloat("lFootZAxisZ") > 0.7f) lFlippedCount++;
+        if (s.getFloat("rFootZAxisZ") > 0.7f) rFlippedCount++;
+    }
+
+    if (footSamples == 0) {
+        GTEST_SKIP() << "No foot data samples during gameplay";
+    }
+
+    EXPECT_EQ(lFlippedCount, 0)
+        << "Left ankle Z-axis pointed upward in " << lFlippedCount << "/"
+        << footSamples << " gameplay samples. "
+        << "This means the ankle rotation is flipped ~180 degrees. "
+        << progressSummary();
+
+    EXPECT_EQ(rFlippedCount, 0)
+        << "Right ankle Z-axis pointed upward in " << rFlippedCount << "/"
+        << footSamples << " gameplay samples. "
+        << "This means the ankle rotation is flipped ~180 degrees. "
+        << progressSummary();
+}
+
+TEST_F(GameplayTelemetryTest, NoFootInversionWarningsInOutput) {
+    // Check that the runtime MILO_NOTIFY_ONCE guard in HamIKEffector::Poll()
+    // did not fire. This catches the inversion at the source, even for frames
+    // that fall between telemetry sample intervals.
+    size_t pos1 = sResult.output.find("FOOT INVERTED:");
+    EXPECT_EQ(pos1, std::string::npos)
+        << "HamIKEffector::Poll() detected an inverted foot during gameplay. "
+        << "The toe bone was above the ankle bone after IK. "
+        << progressSummary();
+
+    size_t pos2 = sResult.output.find("FOOT FLIPPED:");
+    EXPECT_EQ(pos2, std::string::npos)
+        << "HamIKEffector::Poll() detected a flipped ankle rotation during gameplay. "
+        << "The ankle Z-axis was pointing upward after IK. "
+        << progressSummary();
+}

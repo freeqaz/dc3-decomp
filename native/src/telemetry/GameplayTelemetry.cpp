@@ -10,9 +10,11 @@
 #include "hamobj/ClipPlayer.h"
 #include "hamobj/MoveMgr.h"
 #include "char/FileMerger.h"
+#include "char/CharUtl.h"
 #include "obj/Dir.h"
 #include "obj/Data.h"
 #include "obj/Task.h"
+#include "rndobj/Trans.h"
 #include "rndobj/PropAnim.h"
 #include "rndobj/PropKeys.h"
 #include "ui/UI.h"
@@ -255,6 +257,30 @@ GameplayTelemetry::Snapshot GameplayTelemetry::CaptureSnapshot(int frame) {
         }
     }
 
+    // Foot orientation: find ankle and toe bones on player 0's character
+    if (TheHamWardrobe) {
+        HamCharacter *ch = TheHamWardrobe->GetCharacter(0);
+        ObjectDir *charDir = ch ? (ObjectDir *)ch : nullptr;
+        if (charDir) {
+            RndTransformable *lAnkle = charDir->Find<RndTransformable>("bone_L-ankle.mesh", true);
+            RndTransformable *rAnkle = charDir->Find<RndTransformable>("bone_R-ankle.mesh", true);
+            RndTransformable *lToe = charDir->Find<RndTransformable>("bone_L-toe.mesh", true);
+            RndTransformable *rToe = charDir->Find<RndTransformable>("bone_R-toe.mesh", true);
+            if (lAnkle && rAnkle && lToe && rToe) {
+                s.footDataValid = true;
+                s.lAnkleZ = lAnkle->WorldXfm().v.z;
+                s.lToeZ = lToe->WorldXfm().v.z;
+                s.rAnkleZ = rAnkle->WorldXfm().v.z;
+                s.rToeZ = rToe->WorldXfm().v.z;
+                s.lFootZAxisZ = lAnkle->WorldXfm().m.z.z;
+                s.rFootZAxisZ = rAnkle->WorldXfm().m.z.z;
+                // Toe above ankle by >2 units = inverted
+                s.lFootInverted = (s.lToeZ > s.lAnkleZ + 2.0f);
+                s.rFootInverted = (s.rToeZ > s.rAnkleZ + 2.0f);
+            }
+        }
+    }
+
     return s;
 }
 
@@ -281,7 +307,9 @@ void GameplayTelemetry::Sample(int frame) {
         "clipKeyCount=%d songAnimKeys=%d diffProxy=%d routineLoaded=%d mergeMoves=%d "
         "p0SongAnim=%d doSongAnim=%d nativeSetFrameCount=%d "
         "moveInterpActive=%d moveKeyCount=%d songAnimFrameRate=%.1f activeMoveCount=%d "
-        "hudMergeTargetIsHUD=%d hudPanelIsHUD=%d hudHasLeft=%d hudHasRight=%d hudMDirResolved=%d\n",
+        "hudMergeTargetIsHUD=%d hudPanelIsHUD=%d hudHasLeft=%d hudHasRight=%d hudMDirResolved=%d "
+        "footDataValid=%d lAnkleZ=%.1f lToeZ=%.1f rAnkleZ=%.1f rToeZ=%.1f "
+        "lFootZAxisZ=%.2f rFootZAxisZ=%.2f lFootInverted=%d rFootInverted=%d\n",
         s.frame, s.state, s.screen, s.transitionScreen, s.uiInTransition ? 1 : 0,
         s.gameScreenActive ? 1 : 0, s.currentHasWorldPanel ? 1 : 0,
         s.transitionHasWorldPanel ? 1 : 0, s.worldPanelLoaded ? 1 : 0,
@@ -298,6 +326,8 @@ void GameplayTelemetry::Sample(int frame) {
         s.moveInterpActive ? 1 : 0, s.moveKeyCount, s.songAnimFrameRate,
         s.activeMoveCount,
         s.hudMergeTargetIsHUD ? 1 : 0, s.hudPanelIsHUD ? 1 : 0,
-        s.hudHasLeft ? 1 : 0, s.hudHasRight ? 1 : 0, s.hudMDirResolved ? 1 : 0
+        s.hudHasLeft ? 1 : 0, s.hudHasRight ? 1 : 0, s.hudMDirResolved ? 1 : 0,
+        s.footDataValid ? 1 : 0, s.lAnkleZ, s.lToeZ, s.rAnkleZ, s.rToeZ,
+        s.lFootZAxisZ, s.rFootZAxisZ, s.lFootInverted ? 1 : 0, s.rFootInverted ? 1 : 0
     );
 }
