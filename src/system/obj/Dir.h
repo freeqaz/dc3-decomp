@@ -238,8 +238,7 @@ public:
         } else {
             pos = kLoadFront;
         }
-        void *mem = PoolAlloc(sizeof(DirLoader), sizeof(DirLoader), "e:\\lazer_build_gmc1\\system\\src\\obj\\Dir.h", 42, "DirLoader");
-        mLoader = mem ? new(mem) DirLoader(fp, pos, nullptr, &bs, nullptr, false, nullptr) : nullptr;
+        mLoader = new DirLoader(fp, pos, nullptr, &bs, nullptr, false, nullptr);
     }
 
 #ifdef HX_NATIVE

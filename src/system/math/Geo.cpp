@@ -513,41 +513,59 @@ bool Intersect(const Triangle &tri, const Box &box) {
 }
 
 bool Intersect(const Segment &seg, const Triangle &tri, bool b, float &out) {
-    float segDirX = seg.end.x - seg.start.x;
     float segDirY = seg.end.y - seg.start.y;
+    float segDirX = seg.end.x - seg.start.x;
     float segDirZ = seg.end.z - seg.start.z;
 
     const Vector3 &triFrameZ = tri.frame.z;
-    float segDirDot = triFrameZ.x * segDirX + triFrameZ.y * segDirY + triFrameZ.z * segDirZ;
+    float segDirDot = triFrameZ.y * segDirY + triFrameZ.x * segDirX + triFrameZ.z * segDirZ;
 
     if (fabs(segDirDot) < 0.0001f || (b && segDirDot > 0.0f)) {
         return false;
     }
 
+    float vec3AZ = seg.start.z - tri.origin.z;
     float vec3AX = seg.start.x - tri.origin.x;
     float vec3AY = seg.start.y - tri.origin.y;
-    float vec3AZ = seg.start.z - tri.origin.z;
 
-    float tempDot = triFrameZ.x * vec3AX + triFrameZ.y * vec3AY + triFrameZ.z * vec3AZ;
-    float t = -(tempDot / segDirDot);
+    float tempDot = -((vec3AZ * triFrameZ.z + vec3AX * triFrameZ.x) + vec3AY * triFrameZ.y);
+    float t = tempDot / segDirDot;
     out = t;
 
     if (t < 0.0f || t > 1.0f) {
         return false;
     }
 
-    float vec3BX = (seg.start.x + segDirX * t) - tri.origin.x;
-    float vec3BY = (seg.start.y + segDirY * t) - tri.origin.y;
-    float vec3BZ = (seg.start.z + segDirZ * t) - tri.origin.z;
+    Vector3 segDir(segDirX, segDirY, segDirZ);
+    Vector3 hitPoint;
+    Scale(segDir, t, hitPoint);
 
     const Vector3 &triFrameX = tri.frame.x;
     const Vector3 &triFrameY = tri.frame.y;
 
-    float dotXX = triFrameX.x * triFrameX.x + triFrameX.y * triFrameX.y + triFrameX.z * triFrameX.z;
-    float dotYY = triFrameY.x * triFrameY.x + triFrameY.y * triFrameY.y + triFrameY.z * triFrameY.z;
-    float dotXY = triFrameX.x * triFrameY.x + triFrameX.y * triFrameY.y + triFrameX.z * triFrameY.z;
-    float dotX3B = triFrameX.x * vec3BX + triFrameX.y * vec3BY + triFrameX.z * vec3BZ;
-    float dotY3B = triFrameY.x * vec3BX + triFrameY.y * vec3BY + triFrameY.z * vec3BZ;
+    float dotXX = triFrameX.z * triFrameX.z;
+    float dotYY = triFrameY.z * triFrameY.z;
+
+    float dotXY = triFrameY.z * triFrameX.z;
+
+    hitPoint.x = seg.start.x + hitPoint.x;
+    hitPoint.y = hitPoint.y + seg.start.y;
+
+    dotXX += triFrameX.y * triFrameX.y;
+    dotYY += triFrameY.y * triFrameY.y;
+    hitPoint.z = seg.start.z + hitPoint.z;
+    dotXY += triFrameY.y * triFrameX.y;
+
+    hitPoint.x = hitPoint.x - tri.origin.x;
+    hitPoint.y = hitPoint.y - tri.origin.y;
+
+    dotXX += triFrameX.x * triFrameX.x;
+    dotYY += triFrameY.x * triFrameY.x;
+    hitPoint.z = hitPoint.z - tri.origin.z;
+
+    dotXY += triFrameY.x * triFrameX.x;
+    float dotX3B = Dot(triFrameX, hitPoint);
+    float dotY3B = Dot(triFrameY, hitPoint);
 
     float inv = 1.0f / (dotXY * dotXY - dotYY * dotXX);
     float k = (dotY3B * dotXY - dotX3B * dotYY) * inv;
@@ -853,34 +871,35 @@ bool Intersect(const Segment &seg, const BSPNode *n, float &t, Plane &p) {
 bool Intersect(
     const Vector3 &v1, const Vector3 &v2, const Triangle &tri, float &out
 ) {
-    float fy_z = tri.frame.y.z;
+    // Moller-Trumbore using shifted views into the frame matrix:
+    // e1 = {fx.y, fx.z, fy.x} (elements 1-3) and e2 = {fy.z, fz.x, fz.y} (elements 5-7)
+    const Vector3 &e2 = *(const Vector3 *)((const char *)&tri + 0x20);
+    const Vector3 &e1 = *(const Vector3 *)((const char *)&tri + 0x10);
+
+    float e2_x = e2.x;
     float v2_x = v2.x;
-    float h_x = v2.y * tri.frame.y.z - v2.z * tri.frame.y.y;
+    float h_z = v2_x * e2.y - e2_x * v2.y;
     float s_z = v1.z - tri.origin.z;
     float s_x = v1.x - tri.origin.x;
-    float h_z = v2_x * tri.frame.y.y - tri.frame.y.x * v2.y;
+    float h_x = v2.y * e2.z - v2.z * e2.y;
     float s_y = v1.y - tri.origin.y;
-    float h_y = tri.frame.y.x * v2.z - v2_x * fy_z;
+    float h_y = e2_x * v2.z - v2_x * e2.z;
 
-    float fx_x = tri.frame.x.x;
-    float fx_y = tri.frame.x.y;
-    float fx_z = tri.frame.x.z;
-
-    float u_num = s_x * h_x + s_z * h_z;
-    float a = fx_x * h_x + fx_z * h_z;
+    float u_num = s_z * h_z + s_x * h_x;
+    float a = e1.z * h_z + e1.x * h_x;
     u_num = s_y * h_y + u_num;
-    a = fx_y * h_y + a;
+    a = e1.y * h_y + a;
 
     if (0.0f <= u_num && u_num <= a) {
-        float q_z = fx_y * s_x - fx_x * s_y;
-        float q_y = fx_x * s_z - fx_z * s_x;
-        float q_x = fx_z * s_y - fx_y * s_z;
+        float q_z = e1.y * s_x - e1.x * s_y;
+        float q_y = e1.x * s_z - e1.z * s_x;
+        float q_x = e1.z * s_y - e1.y * s_z;
 
         float v_num = v2.y * q_y + v2.z * q_z + v2_x * q_x;
 
         if (0.0f <= v_num &&
             v_num + u_num <= a) {
-            float t = (tri.frame.y.y * q_y + tri.frame.y.z * q_z + tri.frame.y.x * q_x) / a;
+            float t = (e2.y * q_y + e2.z * q_z + e2.x * q_x) / a;
             out = t;
             if (1.1920929e-07f <= t)
                 return true;

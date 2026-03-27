@@ -57,9 +57,12 @@ bool ShouldSkipMesh(const char* name, RndMat* mat) {
     // (lighting exceeds 1.0, multiply blend amplifies instead of modulating).
     if (mat && strstr(mat->Name(), "lightCatch")) return true;
     // Venue TV screen surfaces (food court monitors, upper floor walls).
-    // Screen.tex is a placeholder white texture; on Xbox, video_recorder.srec
+    // Screen.tex is a placeholder bright/white texture; on Xbox, video_recorder.srec
     // or TexRenderer fills these with Kinect camera/video content. Without
     // the video feed, they render as solid bright white rectangles.
     if (mat && !strcmp(mat->Name(), "Screen.mat")) return true;
+    // Arcade A screen with missing diffuse texture — on Xbox, Screen.tex is
+    // dynamically assigned via DTA script. On native, null diffuse = white.
+    if (mat && !strcmp(mat->Name(), "Arcade_A_Screen.mat")) return true;
     return false;
 }

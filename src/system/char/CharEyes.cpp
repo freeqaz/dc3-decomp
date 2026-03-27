@@ -805,14 +805,14 @@ void CharEyes::NextLook() {
         float dx = (facingDir.x - lastFacing.x) * 45.0f;
         float dy = (facingDir.y - lastFacing.y) * 45.0f;
 
-        float extrapMag = std::sqrt((dx * dx + (dz * dz + dy * dy)));
+        float extrapMag = std::sqrt(dy * dy + (dx * dx + dz * dz));
         float maxExtrap = std::tan(mMaxExtrapolation * 0.017453292f);
 
         if (extrapMag > maxExtrap) {
             float scale = maxExtrap / extrapMag;
             dx = scale * dx;
-            dy *= scale;
-            dz *= scale;
+            dy = dy * scale;
+            dz = dz * scale;
         }
 
         float newFacingX = facingDir.x + dx;
@@ -834,7 +834,7 @@ void CharEyes::NextLook() {
         RndTransformable *dirTrans = dynamic_cast<RndTransformable *>(_tmp0);
         if (dirTrans) {
             const Vector3 &dirPos = dirTrans->WorldXfm().v;
-            if (dirPos.z > _ref0.z) {
+            if (_ref0.z < dirPos.z) {
                 float scale = (dirPos.z - headXfm.v.z) / (_ref0.z - headXfm.v.z);
                 float sx = projX * scale;
                 float sy = projY * scale;
