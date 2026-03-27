@@ -1,5 +1,8 @@
 #include "hamobj/HamIKEffector.h"
 #include "HamIKEffector.h"
+#ifdef HX_NATIVE
+#include <cmath>
+#endif
 #include "char/CharPollable.h"
 #include "char/CharUtl.h"
 #include "char/CharWeightable.h"
@@ -375,28 +378,9 @@ void HamIKEffector::Poll() {
                                 clampFactor = Min(clampFactor, 1.0f);
                                 Interp(neutralQ.v, effQ.v, clampFactor, q.v);
                                 Interp(neutralQ.q, effQ.q, clampFactor, q.q);
-                                // TODO HACK: Native foot-sole clamp. The PPC decomp clamps
-                                // the ankle bone to ground height, but the foot mesh extends
-                                // ~3-4 units below the ankle joint, causing visible floor
-                                // clipping. On Xbox this is less noticeable due to camera work.
-                                // Here we offset the clamp by a fraction of the neutral ankle
-                                // height so the foot sole stays at ground level. The real fix
-                                // would be to understand why Xbox doesn't exhibit this — there
-                                // may be a system we haven't decomped that adjusts the ground
-                                // reference, or the original game simply has this clipping.
-#ifdef HX_NATIVE
-                                {
-                                    float footClearance = (neutralQ.v.z - groundHeight) * 0.7f;
-                                    float soleGround = groundHeight + footClearance;
-                                    if (effQ.v.z < soleGround) {
-                                        effQ.v.z = soleGround;
-                                    }
-                                }
-#else
                                 if (effQ.v.z < groundHeight) {
                                     effQ.v.z = groundHeight;
                                 }
-#endif
                                 effQ.v.x = savedPos.x;
                                 effQ.v.y = savedPos.y;
                             }
@@ -421,6 +405,7 @@ void HamIKEffector::Poll() {
                     finalXfm.v.z = q.v.z;
                     MakeRotMatrix(q.q, finalXfm.m);
 
+
                     if (finger != mEffector.Ptr()) {
                         Transform inv;
                         if (finger->TransParent() == mEffector.Ptr()) {
@@ -441,6 +426,37 @@ void HamIKEffector::Poll() {
                     if (t == kEffectorTypeAnkle || t == kEffectorTypeHand) {
                         IKElbow(finalXfm.v);
                     }
+
+#ifdef HX_NATIVE
+                    // Ground clamp for ankle effectors. At this point
+                    // finalXfm.v is the ANKLE world position, after all
+                    // constraint processing, finger→ankle conversion,
+                    // mOther poll, and IKElbow. Raise the ankle enough
+                    // to keep the toe bone above ground.
+                    if (t == kEffectorTypeAnkle) {
+                        Character *character = mCharacter.Ptr();
+                        RndTransformable *ground =
+                            character ? (RndTransformable *)character : nullptr;
+                        float groundHeight = GetGroundHeight(ground);
+
+                        // Compute neutral foot depth (ankle-to-toe in Z)
+                        float footDepth = 0.0f;
+                        if (mFinger.Ptr() && mFinger.Ptr() != mEffector.Ptr()
+                            && mSkeleton) {
+                            Transform neutralToe, neutralAnkle;
+                            mSkeleton->NeutralWorldXfm(mFinger, neutralToe);
+                            mSkeleton->NeutralWorldXfm(mEffector, neutralAnkle);
+                            footDepth = neutralAnkle.v.z - neutralToe.v.z;
+                            if (footDepth < 0) footDepth = 0;
+                        }
+
+                        float minAnkleZ = groundHeight + footDepth;
+                        if (finalXfm.v.z < minAnkleZ
+                            && std::isfinite(minAnkleZ)) {
+                            finalXfm.v.z = minAnkleZ;
+                        }
+                    }
+#endif
 
                     mEffector->SetWorldXfm(finalXfm);
 #ifdef HX_NATIVE
