@@ -15,7 +15,7 @@ CharBonesMeshes::~CharBonesMeshes() { mMeshes.clear(); }
 bool CharBonesMeshes::Replace(ObjRef *ref, Hmx::Object *obj) {
     ObjPtrVec<RndTransformable>::iterator it = mMeshes.FindRef(ref);
     if (it != mMeshes.end()) {
-        RndTransformable *trans = dynamic_cast<RndTransformable *>(obj);
+        RndTransformable *trans = obj ? dynamic_cast<RndTransformable *>(obj) : 0;
         mMeshes.Set(it, trans);
         if (!*it) {
             mMeshes.Set(it, sDummyMesh);
