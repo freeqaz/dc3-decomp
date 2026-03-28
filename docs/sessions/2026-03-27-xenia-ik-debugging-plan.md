@@ -32,6 +32,7 @@ Determine why character feet clip through the floor on the native port but NOT o
 | ComputeHandPullAndQuat | `0x824C0A80` | — | 86.4% |
 | GetType | `0x824C0820` | 0x25C | 100% |
 | IKElbow | `0x824C16D8` | 0xF0 | 100% |
+| DoFancyElbow | `0x824C17C8` | 0x3FC | — |
 
 ## Approach: PPC Bytepatch Instrumentation
 
@@ -74,10 +75,12 @@ detour through a 3-instruction cave that stores f1 before returning.
 | +52 | 12B | return | GetType: `stw r3` (EffectorType enum) |
 | +64 | 12B | return | ApplyPosConstraints: `stfs f1` (posWeight) |
 | +76 | 16B | entry | Poll: `stw r3` (this ptr) + displaced insn + b back |
+| +92 | 20B | entry | IKElbow: `lfs f0,8(r4)` (v.z) + displaced insn + b back |
+| +112 | 16B | entry | DoFancyElbow: `stfs f1` (handWeight) + displaced insn + b back |
 
-Total: 92 bytes of 304 available.
+Total: 128 bytes of 304 available.
 
-**Guest memory telemetry slots** (allocated via SystemHeapAlloc, 32 bytes):
+**Guest memory telemetry slots** (allocated via SystemHeapAlloc, 40 bytes):
 
 | Offset | Type | Field | Source |
 |--------|------|-------|--------|
@@ -86,7 +89,9 @@ Total: 92 bytes of 304 available.
 | +8 | uint32 | effectorType | GetType r3 return (0=none,1=pelvis,2=ankle,3=hand) |
 | +12 | float | posWeight | ApplyPosConstraints f1 return |
 | +16 | uint32 | pollThisPtr | Poll r3 at entry (HamIKEffector*) |
-| +20..+31 | — | reserved | — |
+| +20 | float | ikElbowZ | IKElbow entry v.z (ankle Z before elbow modifies parents) |
+| +24 | float | fancyWeight | DoFancyElbow entry f1 (hand effector totalWeight) |
+| +28..+39 | — | reserved | — |
 
 **Host-side derived data** (read through `pollThisPtr`):
 
@@ -128,6 +133,11 @@ Poll(this)                          ← entry cave captures this* (r3)
   ├─ [if pelvis]:
   │   └─ ApplyPosConstraints(...)   ← return cave captures posWeight (f1)
   │
+  ├─ IKElbow(v)                     ← entry cave captures v.z (ankle Z pre-elbow)
+  │
+  ├─ [if hand effector]:
+  │   └─ DoFancyElbow(handQ, f1)    ← entry cave captures f1 (handWeight)
+  │
   └─ host reader derives:
       ├─ mEffector ptr  (bone identity)
       ├─ mGround ptr    (ground plane ref)
@@ -167,8 +177,8 @@ build/bin/Linux/Checked/xenia-headless \
 
 Navigate to gameplay (start a song). The log will contain lines like:
 ```
-DC3:IK [frame 360] type=ankle totalWeight=0.8523 groundHeight=0.0000 posWeight=0.0000 this=83A12340 effector=83B45670 ground=00000000 more=00000000 constraints=2
-DC3:IK [frame 420] type=ankle totalWeight=1.0214 groundHeight=0.0000 posWeight=0.0000 this=83A12340 effector=83B45670 ground=00000000 more=83A12500 constraints=2
+DC3:IK [frame 360] type=ankle totalWeight=0.8523 groundHeight=0.0000 posWeight=0.0000 ikElbowZ=3.2100 fancyWeight=0.0000 this=83A12340 effector=83B45670 ground=00000000 more=00000000 constraints=2
+DC3:IK [frame 420] type=ankle totalWeight=1.0214 groundHeight=0.0000 posWeight=0.0000 ikElbowZ=3.1890 fancyWeight=0.0000 this=83A12340 effector=83B45670 ground=00000000 more=83A12500 constraints=2
 ```
 
 ### Reading the output
@@ -186,6 +196,8 @@ Field reference:
 | totalWeight | ApplyConstraints f1 | Sum of constraint weights; if >= 1.0 the ground clamp is skipped |
 | groundHeight | GetGroundHeight f1 | Ground plane Z reference; 0 = default floor |
 | posWeight | ApplyPosConstraints f1 | Position-only constraint weight (pelvis path) |
+| ikElbowZ | IKElbow r4+8 | Ankle Z value passed to IKElbow (before parent bone modification) |
+| fancyWeight | DoFancyElbow f1 | Hand effector totalWeight passed to DoFancyElbow |
 | this | Poll r3 | Guest address of HamIKEffector instance |
 | effector | this+0x44 | The bone being IK'd (mEffector ObjPtr) |
 | ground | this+0x6C | Ground plane transform (mGround ObjPtr), 0 = none |
@@ -301,8 +313,8 @@ the instrumentation as described below.
 
 ### Extending the instrumentation
 
-The `protocol_debug_string` region has ~212 bytes of free space starting at
-offset +92. Each additional return cave costs 12 bytes (3 PPC instructions).
+The `protocol_debug_string` region has ~176 bytes of free space starting at
+offset +128. Each additional return cave costs 12 bytes (3 PPC instructions).
 
 To instrument a new function:
 1. Add its address to `Dc3Addresses` in `dc3_hack_pack.cc`

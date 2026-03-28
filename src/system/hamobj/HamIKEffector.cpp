@@ -287,25 +287,27 @@ float HamIKEffector::ApplyPosConstraints(
 
 float HamIKEffector::GetGroundHeight(RndTransformable *t) {
     HamIKEffector *it = this;
-    do {
-        if (it->mGround) {
-            return it->mGround->WorldXfm().v.z;
+    while (true) {
+        RndTransformable *ground = it->mGround;
+        if ((int)ground != 0) {
+            return ground->WorldXfm().v.z;
         }
         it = it->mMore;
-    } while (it != nullptr);
+        if ((int)it == 0)
+            break;
+    }
     return t->WorldXfm().v.z;
 }
 
 void HamIKEffector::Poll() {
-    if (mEffector) {
+    if (mSkeleton) {
         EffectorType t = GetType();
-        if (t != kEffectorTypeForearm && mSkeleton) {
+        if (t != kEffectorTypeForearm) {
             float weight = Weight();
-            if (weight != 0.0f) {
-                RndTransformable *finger = mFinger.Ptr();
-                if (finger == nullptr) {
-                    finger = mEffector.Ptr();
-                }
+            if (mEffector && weight != 0.0f) {
+                ObjPtr<RndTransformable> &fingerRef =
+                    (int)mFinger.Ptr() != 0 ? mFinger : mEffector;
+                RndTransformable *finger = fingerRef.Ptr();
 
                 Transform neutral;
                 mSkeleton->NeutralWorldXfm(finger, neutral);
@@ -351,30 +353,27 @@ void HamIKEffector::Poll() {
                                     float ankleLen = localPos.x;
                                     mSkeleton->NeutralLocalPos(knee, localPos);
                                     float kneeLen = localPos.x;
+                                    float totalLen = kneeLen + ankleLen;
+                                    float worldHeight =
+                                        ankle->mLocalXfm.v.x + knee->mLocalXfm.v.x;
+                                    float ratio = worldHeight / totalLen;
                                     float lowerBound = kneeLen * 0.3f + ankleLen;
                                     float upperBound = kneeLen * 0.8f + ankleLen;
                                     float blend =
                                         (effQ.v.z - groundHeight - lowerBound)
                                         / (upperBound - lowerBound);
-                                    blend = Max(blend, 0.0f);
+                                    blend = Max(0.0f, blend);
                                     blend = Min(blend, 1.0f);
-                                    const Transform &ankleWorld = ankle->WorldXfm();
-                                    const Transform &kneeWorld = knee->WorldXfm();
-                                    float totalLen = kneeLen;
-                                    totalLen += ankleLen;
-                                    float worldHeight = ankleWorld.v.z;
-                                    worldHeight += kneeWorld.v.z;
-                                    float ratio = worldHeight / totalLen;
                                     effQ.v.z =
                                         (((ratio - 1.0f) * blend) + 1.0f)
                                         * (effQ.v.z - groundHeight)
                                         + groundHeight;
                                 }
-                            } else {
+                            } else if (t == kEffectorTypeAnkle) {
                                 Vector3 savedPos = effQ.v;
                                 float clampFactor =
                                     (neutralQ.v.z - groundHeight - 5.0f) * 0.09090909f;
-                                clampFactor = Max(clampFactor, 0.0f);
+                                clampFactor = Max(0.0f, clampFactor);
                                 clampFactor = Min(clampFactor, 1.0f);
                                 Interp(neutralQ.v, effQ.v, clampFactor, q.v);
                                 Interp(neutralQ.q, effQ.q, clampFactor, q.q);
@@ -400,11 +399,8 @@ void HamIKEffector::Poll() {
                     q.v.z *= invWeight;
                     Normalize(q.q, q.q);
 
-                    finalXfm.v.x = q.v.x;
-                    finalXfm.v.y = q.v.y;
-                    finalXfm.v.z = q.v.z;
+                    finalXfm.v = q.v;
                     MakeRotMatrix(q.q, finalXfm.m);
-
 
                     if (finger != mEffector.Ptr()) {
                         Transform inv;
@@ -460,14 +456,26 @@ void HamIKEffector::Poll() {
 
                     mEffector->SetWorldXfm(finalXfm);
 #ifdef HX_NATIVE
-                    // Only back-compute mLocalXfm for ankle/hand effectors that went
-                    // through IKElbow. NEVER write pelvis mLocalXfm — it's the skeleton
-                    // root and would corrupt every child bone on dirty cascade.
+                    // Back-compute mLocalXfm for ankle/hand effectors so the
+                    // dirty cascade preserves our IK result.
                     if ((t == kEffectorTypeAnkle || t == kEffectorTypeHand)
                         && mEffector->TransParent()) {
                         Transform invParent;
                         Invert(mEffector->TransParent()->WorldXfm(), invParent);
-                        Multiply(finalXfm, invParent, mEffector->mLocalXfm);
+                        Transform candidateLocal;
+                        Multiply(finalXfm, invParent, candidateLocal);
+                        // Sanity check: IKElbow displaces parent bones,
+                        // making the back-computed local transform relative
+                        // to a displaced parent. On the next frame when
+                        // PoseMeshes restores the un-displaced parent, the
+                        // dirty cascade would produce garbage positions.
+                        // Only write back if the local position is sane.
+                        if (std::isfinite(candidateLocal.v.z)
+                            && std::fabs(candidateLocal.v.x) < 50.0f
+                            && std::fabs(candidateLocal.v.y) < 50.0f
+                            && std::fabs(candidateLocal.v.z) < 50.0f) {
+                            mEffector->mLocalXfm = candidateLocal;
+                        }
                     }
 
                     // Foot inversion guard: after IK, verify the ankle-to-toe
@@ -515,9 +523,8 @@ done:;
 void HamIKEffector::ComputeHandPullAndQuat(
     QuatXfm &quatOut, Transform &xfmOut, const Transform &parentXfm, const Vector3 &targetPos
 ) {
-    auto& effectorRef = mEffector;
-    RndTransformable *effector = effectorRef;
     float dz = targetPos.z - parentXfm.v.z;
+    RndTransformable *effector = mEffector;
     float dx = targetPos.x - parentXfm.v.x;
     RndTransformable *parent = effector->TransParent();
     float dy = targetPos.y - parentXfm.v.y;
@@ -529,7 +536,7 @@ void HamIKEffector::ComputeHandPullAndQuat(
     float parentLen = parent->LocalXfm().v.x;
     float maxReach = (parentLen + effectorLen) * 0.99f;
     float maxReachSq = maxReach * maxReach;
-    float distSq = dx * dx + dy * dy + dz * dz;
+    float distSq = dz * dz + dy * dy + dx * dx;
 
     if (distSq <= maxReachSq
         || (GetType() != kEffectorTypeHand && GetType() != kEffectorTypeAnkle)) {
@@ -544,12 +551,11 @@ void HamIKEffector::ComputeHandPullAndQuat(
         distSq = maxReachSq;
     }
 
-    RndTransformable *effParent = effectorRef->TransParent();
+    RndTransformable *effParent = mEffector->TransParent();
     xfmOut.v = effParent->LocalXfm().v;
 
-    float cosAngle =
-        (distSq - parentLen * parentLen - effectorLen * effectorLen)
-        / (parentLen * effectorLen * 2.0f);
+    float sumSq = effectorLen * effectorLen + parentLen * parentLen;
+    float cosAngle = (distSq - sumSq) / (parentLen * effectorLen * 2.0f);
 
     xfmOut.m.x.z = 0.0f;
 
@@ -559,6 +565,7 @@ void HamIKEffector::ComputeHandPullAndQuat(
     xfmOut.m.x.x = clampedCos;
     float sinAngle = -sqrtf(-(clampedCos * clampedCos - 1.0f));
     xfmOut.m.x.y = sinAngle;
+    const Vector3 &effLocalV = mEffector->LocalXfm().v;
     xfmOut.m.y.y = clampedCos;
     xfmOut.m.y.z = 0.0f;
     xfmOut.m.y.x = -sinAngle;
@@ -567,7 +574,7 @@ void HamIKEffector::ComputeHandPullAndQuat(
     xfmOut.m.z.z = 1.0f;
 
     Vector3 localDir;
-    Multiply(effectorRef->TransParent()->LocalXfm().v, xfmOut, localDir);
+    Multiply(effLocalV, xfmOut, localDir);
     Vector3 localTarget;
     MultiplyTranspose(targetPos, parentXfm, localTarget);
     MakeRotQuat(localDir, localTarget, quatOut.q);
@@ -584,9 +591,9 @@ void HamIKEffector::DoFancyElbow(QuatXfm &handQ, float handWeight) {
 
             // Apply elbow position constraints
             Vector3 posAccum;
-            posAccum.x = 0.0f;
-            posAccum.y = 0.0f;
             posAccum.z = 0.0f;
+            posAccum.y = 0.0f;
+            posAccum.x = 0.0f;
             float elbowWeight = mElbow->ApplyPosConstraints(posAccum, neutralParent.v, this);
 
             float totalWeight = elbowWeight + handWeight;
@@ -594,23 +601,23 @@ void HamIKEffector::DoFancyElbow(QuatXfm &handQ, float handWeight) {
                 return;
 
             // Initialize pull and quaternion accumulators
-            Vector3 pullAccum;
-            pullAccum.x = 0.0f;
-            pullAccum.y = 0.0f;
-            pullAccum.z = 0.0f;
-            Hmx::Quat quatAccum;
-            quatAccum.x = 0.0f;
-            quatAccum.y = 0.0f;
-            quatAccum.z = 0.0f;
-            quatAccum.w = 0.0f;
-
+            QuatXfm accum;
+            accum.v.x = 0.0f;
+            accum.v.y = 0.0f;
+            accum.v.z = 0.0f;
+            accum.q.x = 0.0f;
+            accum.q.y = 0.0f;
+            accum.q.z = 0.0f;
+            accum.q.w = 0.0f;
             float remaining = 0.0f;
+
             if (totalWeight < 1.0f) {
                 remaining = 1.0f - totalWeight;
                 totalWeight += remaining;
             }
 
             // Copy grandparent world transform
+            Transform elbowXfm;
             Transform gpXfm = grandparent->WorldXfm();
 
             // Apply elbow contribution
@@ -623,14 +630,13 @@ void HamIKEffector::DoFancyElbow(QuatXfm &handQ, float handWeight) {
                 QuatXfm elbowQ;
                 ComputeElbowPullAndQuat(elbowQ, gpXfm, posAccum);
 
-                pullAccum.x += elbowQ.v.x * elbowWeight;
-                pullAccum.y += elbowQ.v.y * elbowWeight;
-                pullAccum.z += elbowQ.v.z * elbowWeight;
-                ScaleAddEq(quatAccum, elbowQ.q, elbowWeight);
+                accum.v.x += elbowQ.v.x * elbowWeight;
+                accum.v.y += elbowQ.v.y * elbowWeight;
+                accum.v.z += elbowQ.v.z * elbowWeight;
+                ScaleAddEq(accum.q, elbowQ.q, elbowWeight);
             }
 
             // Apply hand contribution
-            Transform elbowXfm;
             if (handWeight > 0.0f) {
                 float invHand = 1.0f / handWeight;
                 Vector3 handPos;
@@ -641,29 +647,27 @@ void HamIKEffector::DoFancyElbow(QuatXfm &handQ, float handWeight) {
                 QuatXfm handPullQ;
                 ComputeHandPullAndQuat(handPullQ, elbowXfm, gpXfm, handPos);
 
-                pullAccum.x += handPullQ.v.x * handWeight;
-                pullAccum.y += handPullQ.v.y * handWeight;
-                pullAccum.z += handPullQ.v.z * handWeight;
-                ScaleAddEq(quatAccum, handPullQ.q, handWeight);
+                accum.v.x += handPullQ.v.x * handWeight;
+                accum.v.y += handPullQ.v.y * handWeight;
+                accum.v.z += handPullQ.v.z * handWeight;
+                ScaleAddEq(accum.q, handPullQ.q, handWeight);
             }
 
             // Normalize quaternion and compute final rotation
-            Normalize(quatAccum, quatAccum);
+            Normalize(accum.q, accum.q);
             float invTotal = 1.0f / totalWeight;
-
-            // Scale pull accumulator
-            pullAccum.x *= invTotal;
-            pullAccum.y *= invTotal;
-            pullAccum.z *= invTotal;
+            accum.v.x *= invTotal;
+            accum.v.y *= invTotal;
+            accum.v.z *= invTotal;
 
             Hmx::Matrix3 rotMat;
-            MakeRotMatrix(quatAccum, rotMat);
+            MakeRotMatrix(accum.q, rotMat);
             Multiply(rotMat, gpXfm.m, gpXfm.m);
 
             // Apply scaled pull to grandparent position
-            gpXfm.v.x += pullAccum.x;
-            gpXfm.v.y += pullAccum.y;
-            gpXfm.v.z += pullAccum.z;
+            gpXfm.v.x += accum.v.x;
+            gpXfm.v.y += accum.v.y;
+            gpXfm.v.z += accum.v.z;
 
             grandparent->SetWorldXfm(gpXfm);
 
@@ -684,14 +688,13 @@ void HamIKEffector::DoFancyElbow(QuatXfm &handQ, float handWeight) {
                 ScaleAddEq(parentQ, elbowXfmQ, handWeight);
                 Normalize(parentQ, parentQ);
 
-                Hmx::Matrix3 parentRotMat;
-                MakeRotMatrix(parentQ, parentRotMat);
+                MakeRotMatrix(parentQ, rotMat);
 
                 // Build new parent world transform: blended rotation + current position
                 Transform parentNewXfm;
                 const Transform &parentWorld = parent->WorldXfm();
                 parentNewXfm.v = parentWorld.v;
-                Multiply(parentRotMat, gpXfm.m, parentNewXfm.m);
+                Multiply(rotMat, gpXfm.m, parentNewXfm.m);
                 parent->SetWorldXfm(parentNewXfm);
 
                 // Blend effector rotation
