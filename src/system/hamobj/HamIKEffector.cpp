@@ -206,30 +206,9 @@ void HamIKEffector::IKElbow(const Vector3 &v) {
             Multiply(me0, xfm.m, xfm.m);
             xfm.v += q100.v;
             grandparent->SetWorldXfm(xfm);
-#ifdef HX_NATIVE
-            // Back-compute mLocalXfm for grandparent so the dirty cascade
-            // preserves our IK correction instead of snapping back.
-            // Without this, SetWorldXfm leaves mLocalXfm stale; the next
-            // dirty cascade recomputes WorldXfm from the stale local and
-            // discards the IK correction, causing ankle teleportation.
-            if (grandparent->TransParent()) {
-                Transform candidateLocal;
-                MultiplyInverse(xfm, grandparent->TransParent()->WorldXfm(), candidateLocal);
-                grandparent->mLocalXfm = candidateLocal;
-            }
-#endif
             Transform tf70;
             Multiply(tfb0, xfm, tf70);
             parent->SetWorldXfm(tf70);
-#ifdef HX_NATIVE
-            // Back-compute mLocalXfm for parent relative to the UPDATED
-            // grandparent WorldXfm (which we just set above).
-            if (parent->TransParent()) {
-                Transform candidateLocal;
-                MultiplyInverse(tf70, parent->TransParent()->WorldXfm(), candidateLocal);
-                parent->mLocalXfm = candidateLocal;
-            }
-#endif
         }
     }
 }
@@ -477,24 +456,6 @@ void HamIKEffector::Poll() {
 
                     mEffector->SetWorldXfm(finalXfm);
 #ifdef HX_NATIVE
-                    // Back-compute mLocalXfm for ankle/hand effectors so the
-                    // dirty cascade preserves our IK result.
-                    if ((t == kEffectorTypeAnkle || t == kEffectorTypeHand)
-                        && mEffector->TransParent()) {
-                        Transform invParent;
-                        Invert(mEffector->TransParent()->WorldXfm(), invParent);
-                        Transform candidateLocal;
-                        Multiply(finalXfm, invParent, candidateLocal);
-                        // Sanity check: reject degenerate back-computations
-                        // from near-singular parent transforms.
-                        if (std::isfinite(candidateLocal.v.z)
-                            && std::fabs(candidateLocal.v.x) < 50.0f
-                            && std::fabs(candidateLocal.v.y) < 50.0f
-                            && std::fabs(candidateLocal.v.z) < 50.0f) {
-                            mEffector->mLocalXfm = candidateLocal;
-                        }
-                    }
-
                     // Foot inversion guard: after IK, verify the ankle-to-toe
                     // vector points generally downward (toward ground), not upward
                     // through the shin. The toe bone (mFinger) should be BELOW
@@ -687,15 +648,6 @@ void HamIKEffector::DoFancyElbow(QuatXfm &handQ, float handWeight) {
             gpXfm.v.z += accum.v.z;
 
             grandparent->SetWorldXfm(gpXfm);
-#ifdef HX_NATIVE
-            // Back-compute mLocalXfm for grandparent so dirty cascade
-            // preserves the IK correction.
-            if (grandparent->TransParent()) {
-                Transform candidateLocal;
-                MultiplyInverse(gpXfm, grandparent->TransParent()->WorldXfm(), candidateLocal);
-                grandparent->mLocalXfm = candidateLocal;
-            }
-#endif
 
             // If hand contributes, blend parent (forearm) and effector (hand) rotations
             if (handWeight > 0.0f) {
@@ -722,14 +674,6 @@ void HamIKEffector::DoFancyElbow(QuatXfm &handQ, float handWeight) {
                 parentNewXfm.v = parentWorld.v;
                 Multiply(rotMat, gpXfm.m, parentNewXfm.m);
                 parent->SetWorldXfm(parentNewXfm);
-#ifdef HX_NATIVE
-                // Back-compute mLocalXfm for parent relative to UPDATED grandparent.
-                if (parent->TransParent()) {
-                    Transform candidateLocal;
-                    MultiplyInverse(parentNewXfm, parent->TransParent()->WorldXfm(), candidateLocal);
-                    parent->mLocalXfm = candidateLocal;
-                }
-#endif
 
                 // Blend effector rotation
                 const Transform &effWorld = mEffector->WorldXfm();
@@ -743,14 +687,6 @@ void HamIKEffector::DoFancyElbow(QuatXfm &handQ, float handWeight) {
 
                 MakeRotMatrix(handQ.q, effXfm.m);
                 mEffector->SetWorldXfm(effXfm);
-#ifdef HX_NATIVE
-                // Back-compute mLocalXfm for effector relative to UPDATED parent.
-                if (mEffector->TransParent()) {
-                    Transform candidateLocal;
-                    MultiplyInverse(effXfm, mEffector->TransParent()->WorldXfm(), candidateLocal);
-                    mEffector->mLocalXfm = candidateLocal;
-                }
-#endif
             }
         }
     }

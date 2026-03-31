@@ -77,9 +77,36 @@ Marked with `TODO HACK`. **This fix is insufficient** — feet still clip throug
 - 5 parallel subagents (3 Opus, 2 Sonnet) for batch decomp work across isolated worktrees
 - Permuter (`--beam` mode) for automated source-level optimization
 
-## Status: PARTIALLY FIXED (2026-03-27) — workarounds in place, root cause still under investigation
+## Status: INVESTIGATING (2026-03-31) — back-computation approach was wrong
 
-**Update 2026-03-30**: Visual inspection confirms feet still clip through floor. The HX_NATIVE hacks (mLocalXfm back-computation, foot-sole clamp) are workarounds, not root-cause fixes. Xbox ground truth comparison via Xenia IK telemetry is needed to determine if the decomp IK math diverges from the original or if the issue is upstream (animation data, character transforms, etc.).
+### Phase 7: Back-computation was the bug, not the fix (2026-03-31)
+
+Deep investigation revealed the `#ifdef HX_NATIVE` mLocalXfm back-computation hacks in IKElbow/DoFancyElbow/Poll were themselves causing "flying feet" teleportation:
+
+1. IKElbow displaces parent bone (shin) via `SetWorldXfm(parent, correctedXfm)`
+2. Back-computation writes `mLocalXfm = MultiplyInverse(effector, displaced_parent)`
+3. Next frame: animation restores the UN-displaced parent mLocalXfm from clips
+4. But the effector's mLocalXfm was computed relative to the DISPLACED parent
+5. Dirty cascade: `ankle.mWorldXfm = stale_backcomputed_local * un-displaced_parent` → **WRONG POSITION → teleportation**
+
+The original Xbox code NEVER writes mLocalXfm after IK — it corrects mWorldXfm each frame via `SetWorldXfm()`, and nothing re-dirties the bone between IK Poll and Draw.
+
+**Investigation confirmed**:
+- Poll order is correct (same `CharPollableSorter` on both platforms)
+- No render thread race (native port is single-threaded)
+- `SetWorldXfm()` clears dirty flag — IK-corrected bones stay clean until next frame's animation
+- The back-computation hack itself introduced the frame-delayed cross-reference between displaced/un-displaced parent states
+
+**Current approach**: Strip ALL back-computation hacks and test whether the original `SetWorldXfm()` semantics work correctly. If something on the native port re-dirties IK-corrected bones between Poll and Draw, find and fix THAT specific source.
+
+**Telemetry tests added** (10 new "Tier 7: Flying Feet detection"):
+- `NoAnkleSuddenJumpsDuringGameplay` — catches ankle teleportation > 20 units
+- `NoAnkleNaN/LocalXfmNaN` — catches NaN in ankle transforms
+- `NoHandNaN`, `HandBonesNotFlying`, `KneeLocalXfmNotCorrupt` — catches arm/knee issues
+- `AnkleRotationMatrixValid`, `AnkleSeparationNotExploding`, `AnklePositionSmoothness`
+- Full suite: `DC3_GAMEPLAY_TESTS=1 ctest -R "Foot|Ankle|Leg|Bone|Inverted|Hand|Knee|Flying|Smooth|Explod|Rotation|Garbage|Collapsed"` (61 tests)
+
+**Update 2026-03-30**: Visual inspection confirms feet still fly around. The HX_NATIVE hacks (mLocalXfm back-computation, foot-sole clamp) are workarounds that cause their own problems.
 
 ### Phase 4: Root Cause — Missing mLocalXfm Back-Computation
 
