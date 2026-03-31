@@ -80,6 +80,7 @@ Binary lands at `build/bin/Linux/Checked/xenia-headless` (~200 MB).
 | `--headless_timeout_ms=N` | `0` | Exit after N ms (0 = run forever) |
 | `--headless_report_boot` | `true` | Log boot milestones |
 | `--scripted_input="..."` | (empty) | Timed button presses, e.g. `5s:A,7s:START` |
+| `--scripted_input_file=<path>` | (empty) | Screen-aware input script (see "Entering Gameplay") |
 
 ### DC3 Layout Detection
 
@@ -201,11 +202,82 @@ For the original XEX, addresses are resolved via the symbol map (`config/373307D
 | `tools/dc3_runtime_telemetry_diff.py` | Diff telemetry between two runs |
 | `tools/dc3_crash_signature_triage.py` | Triage crash signatures |
 
-## Current Boot Status (as of 2026-02-27)
+## Entering Gameplay
 
-**Original debug XEX**: Boots fully, renders splash screen, runs main loop stably.
+Navigate the original debug XEX from boot to a playable song using the screen-aware input system:
 
-**Decomp XEX**: Main loop at ~175 fps, stable 40+ seconds. Three stubbed blockers prevent progression:
+```bash
+$XENIA_BIN \
+  --target=./orig-assets/debug.xex \
+  --gpu=vulkan \
+  --dc3_nui_patch_layout=original \
+  --dc3_crt_skip_nui=true \
+  --fake_kinect_data=true \
+  --scripted_input_file=scripts/dc3-input-flows/xenia-ymca.txt \
+  --dump_frames_path=/tmp/xenia-gameplay \
+  --headless_capture_interval=300 \
+  --headless_timeout_ms=180000
+```
+
+**Required flags**:
+- `--fake_kinect_data=true` — enables calibration bypass patches (skeleton data + player assignment)
+- `--scripted_input_file=` — screen-aware input script that waits for each screen before pressing buttons
+- `--dump_frames_path=` — required for headless frame capture to activate
+
+The input script (`scripts/dc3-input-flows/xenia-ymca.txt`) navigates:
+attract → title → main (Dance) → choose_mode (Perform) → song_select (YMCA) → difficulty → multiuser (auto-bypass) → loading → **game_screen**
+
+### Calibration Bypass Patches
+
+When `--fake_kinect_data=true`, emulator.cc applies 7 patches to bypass the Kinect calibration flow:
+
+| # | What | Address | Purpose |
+|---|------|---------|---------|
+| 1 | NOP `bne` | `0x8290834C` | Remove `IsTrackingAllSkeletons()` guard in `SetPlayerPresent` |
+| 2 | Tracking ID force | via NuiSkeleton handler | Write IDs 1/2 to both players continuously |
+| 3 | Stub `ChoosePlayerSides` | `0x82909968` | Skip skeleton pointer validation |
+| 4 | Stub `SetPlayerSkeletonWarningData` | `0x82907880` | Skip skeleton pointer validation |
+| 4b | Replace `SetPlayerSkeletonNavData` | `0x82909340` | Always call `SetPlayerPresent(0/1, true)` |
+| 5 | Stub `ShouldWaitForRecovery` | `0x82904CD0` | Prevent recovery wait blocking updates |
+| 6 | PPC code cave | `0x825EF4D8` | `MultiUserGesturePanel::Poll` → `GotoScreen("loading_screen")` after 400 frames |
+
+### Screen-Aware Input Scripts
+
+The `--scripted_input_file` flag loads a script from the native port's format:
+
+```
+# Wait for a screen, then send buttons with frame-relative timing
+wait_screen attract_screen
++10 confirm
+
+wait_screen title_screen
++30 confirm
+
+wait_screen main_screen
++10 confirm          # selects "Dance" (first item after skeleton fix)
+```
+
+The NopInputDriver reads `TheUI->mCurrentScreen->mName` from guest memory (`0x82F1A8E0` → offset `0x48` → offset `0x20`) to detect screen transitions.
+
+### EDRAM Rendering Fix
+
+Headless frame capture clears EDRAM and destroys host render targets before each `FlushDeferredDraws()` call to prevent ghosting from stale render target content. Key functions:
+- `ClearCache()` — destroys cached VkFramebuffer/VkRenderPass objects
+- `ResetState()` → `DestroyAllRenderTargets(false)` — destroys host VkImage/VkImageView objects
+- `BeginFrame()` — clears accumulated render target tracking
+- `vkCmdFillBuffer` on EDRAM buffer — zeros EDRAM content
+
+### Known Rendering Limitations
+
+- Venue lighting is dark/limited during gameplay (shader translation gaps)
+- Debug text overlays visible (debug build feature, not a bug)
+- XMA audio not functional (SIGSEGV in `XMAHALAllocateContexts` — non-fatal)
+
+## Current Boot Status (as of 2026-03-30)
+
+**Original debug XEX**: Full gameplay reached — boots through splash, menus, song select, loading, and into `game_screen` with 3D venue rendering. Requires `--fake_kinect_data=true` for calibration bypass.
+
+**Decomp XEX**: Main loop stable. Three stubbed blockers prevent progression:
 1. **FlowManager::Poll** — corrupt FlowNode vtable (#1 blocker for screen transitions)
 2. **HamSongMgr::Init** — config parsing crash (#2 for song selection)
 3. **Synth::InitSecurity** — DRM yylex infinite loop (likely permanent stub)

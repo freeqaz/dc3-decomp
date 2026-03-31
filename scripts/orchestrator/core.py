@@ -187,7 +187,9 @@ class DecompOrchestrator:
         prompt_template_path: Path | None = None,
         logs_dir: Path = DEFAULT_LOGS_DIR,
         auto_apply: bool = False,
+        skip_quota_check: bool = False,
     ):
+        self.skip_quota_check = skip_quota_check
         self.db_path = str(db_path)
         self.pool_dir = pool_dir
         self.pool_size = pool_size
@@ -268,6 +270,9 @@ class DecompOrchestrator:
         Raises RuntimeError if quota is exhausted.
         """
         log = logger or self.logger
+        if self.skip_quota_check:
+            log.info("Quota preflight check skipped (--skip-quota-check)")
+            return
         # For non-Anthropic backends, the CLI model is always "sonnet" because:
         # - OpenRouter-only models (e.g. deepseek) route through ANTHROPIC_DEFAULT_SONNET_MODEL
         # - When USE_OPENROUTER=true with standard models, ANTHROPIC_BASE_URL/KEY are set
@@ -356,8 +361,12 @@ class DecompOrchestrator:
             except ProcessLookupError:
                 pass
             await process.wait()
-            log.warning("Quota preflight timed out after 30s. Proceeding anyway.")
-            return
+            raise RuntimeError(
+                "Quota preflight timed out after 30s. "
+                "This usually means the Claude CLI subprocess cannot reach the API "
+                "(e.g. sandbox network restrictions, proxy misconfiguration, or auth issues). "
+                "Try running outside the sandbox or check ANTHROPIC_API_KEY."
+            )
 
         output_lower = output.lower()
         rate_limit_phrases = [

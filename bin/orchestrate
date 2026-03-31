@@ -277,6 +277,7 @@ def cmd_single(args):
         pool_dir=Path(args.pool_dir),
         main_repo=_project_root,
         auto_apply=not args.no_auto_apply,
+        skip_quota_check=args.skip_quota_check,
     )
 
     # Force unlock if requested
@@ -471,6 +472,7 @@ def cmd_batch(args):
         pool_size=max(args.max_agents, 3),  # Ensure enough worktrees
         main_repo=_project_root,
         auto_apply=not args.no_auto_apply,
+        skip_quota_check=args.skip_quota_check,
     )
 
     # Ensure pool exists
@@ -1531,6 +1533,11 @@ def main():
         "--pool-dir",
         default=str(DEFAULT_POOL_DIR),
         help="Worktree pool directory",
+    )
+    parser.add_argument(
+        "--skip-quota-check",
+        action="store_true",
+        help="Skip the Claude API quota preflight check",
     )
 
     subparsers = parser.add_subparsers(dest="command", required=True)

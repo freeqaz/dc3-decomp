@@ -77,11 +77,11 @@ Marked with `TODO HACK`. **This fix is insufficient** — feet still clip throug
 - 5 parallel subagents (3 Opus, 2 Sonnet) for batch decomp work across isolated worktrees
 - Permuter (`--beam` mode) for automated source-level optimization
 
-## Status: FIXED (2026-03-31) — dirty cascade root cause found and fixed
+## Status: IN PROGRESS (2026-03-31) — dirty cascade root cause confirmed, fix needs Xbox ground truth
 
-### Phase 9: Dirty cascade root cause and IK save/restore fix (2026-03-31)
+### Phase 9: Dirty cascade root cause confirmed (2026-03-31)
 
-Telemetry instrumentation revealed the **actual root cause**: IK correctly sets ankle WorldXfm (Z=5.84) during Poll, but by the time the renderer reads it, ankle is at Z=-2.5. The ankle bone gets **re-dirtied by a dirty cascade from the pelvis IK effector**.
+Telemetry instrumentation revealed the **mechanism**: IK correctly sets ankle WorldXfm (Z=5.84) during Poll, but by the time the renderer reads it, ankle is at Z=-2.5. The ankle bone gets **re-dirtied by a dirty cascade from the pelvis IK effector**.
 
 **Root cause chain**:
 1. Ankle IK effector runs → `SetWorldXfm(ankle, Z=5.84)` → `mDirty=false` ✓
@@ -90,20 +90,29 @@ Telemetry instrumentation revealed the **actual root cause**: IK correctly sets 
 4. Renderer calls `ankle->WorldXfm()` → `WorldXfm_Force()` → recomputes from stale `mLocalXfm` → Z=-2.5
 5. IK correction permanently lost for this frame
 
-**Confirmed by dirty-flag telemetry**: at sample time, `lAnkleDirty=1 rAnkleDirty=1 lKneeDirty=1 rKneeDirty=1 pelvisDirty=0` — the pelvis is clean (its own SetWorldXfm cleared it) but its cascade dirtied the entire leg chain.
+**Confirmed by dirty-flag telemetry** (checking Dirty() BEFORE WorldXfm()): `lAnkleDirty=1 rAnkleDirty=1 lKneeDirty=1 rKneeDirty=1 pelvisDirty=0` — pelvis is clean (its own SetWorldXfm cleared it) but cascade dirtied the entire leg chain. Thigh also dirty=1.
 
-**Why PollDeps doesn't prevent this**: The pelvis effector declares `change = {pelvis_bone}`. The ankle effector declares `changedBy = {shin, thigh}`. The sorter only checks direct object matches, not transitive bone parent chains. It doesn't know that changing the pelvis cascades dirty to thigh→shin→ankle.
+**Render-time confirmation**: Added diagnostic to FillBoneUniforms showing bones are dirty (wasDirty=1) and ankle Z is negative at actual GPU upload time. The IK corrections do NOT survive to rendering.
 
-**Fix — IK save/restore** (`HamIKEffector.cpp`, `Character.cpp`):
-1. During `Poll()`, `IKElbow()`, and `DoFancyElbow()`, save each IK-corrected world transform to a static vector (in top-down skeleton order: grandparent → parent → effector)
-2. After all CharPollables finish polling (`Character::Poll()`, after `RndDir::Poll()`), call `HamIKEffector::ReapplyIKCorrections()` which re-applies all saved transforms via `SetWorldXfm()`
-3. Re-application in top-down order means each bone's dirty cascade to children is immediately corrected by the next entry
+**Why PollDeps doesn't prevent this**: The pelvis effector declares `change = {pelvis_bone}`. The ankle effector declares `changedBy = {shin, thigh}`. The sorter only checks direct object matches, not transitive bone parent chains.
 
-**Result**: 13 bone transforms saved/restored per character poll cycle. Visual verification via gameplay screenshots confirms feet are ON the floor, not clipping through. Before: ankleZ=-2.5, toeZ=-6.7. After: feet sitting correctly on dance floor.
+**Attempted native-only fixes** (all reverted — bandaging without understanding Xbox behavior):
+1. **Save/restore via SetWorldXfm** — worked during Poll but pelvis entry (saved last, restored last) re-cascaded dirty to all descendants
+2. **Depth-sorted restore** — NaN propagation across frames from stale parent transforms
+3. **Direct mWorldXfm write** — broke WorldXfm_Force on subsequent frames (parent stays clean with stale data)
+4. **Render-time override via LookupIKOverride** — frame clearing logic caused entries to be erased before Draw could use them
+
+**Critical open question**: This same code runs on Xbox. The same dirty cascade SHOULD happen there too. Either:
+- The Xbox bone upload path works differently (reads during Poll, not Draw)
+- The Xbox has different timing for when bones are read
+- The Xbox game also has feet below floor (less visible at 720p)
+- Something else we're missing
+
+**Blocked on**: Xenia IK telemetry — need Xbox bone positions at render time to compare. Xenia reaches game_screen but `__mftb()` (PPC timebase register) is frozen, freezing all game timers and preventing animation/IK from running.
 
 ### Phase 8: Feet-in-floor during gameplay (2026-03-31) [SUPERSEDED by Phase 9]
 
-Phase 8's analysis was correct that the ground clamp's `footDepth` was unreliable, but this was a SYMPTOM of the dirty cascade, not the root cause. The "wild pre-clamp ankle Z values (-471 to +214)" were actually from different character instances cycling through the throttled diagnostic counter. The real issue was the dirty cascade overwriting IK corrections.
+Phase 8's analysis was correct that the ground clamp's `footDepth` was unreliable, but this was a SYMPTOM of the dirty cascade, not the root cause. The "wild pre-clamp ankle Z values (-471 to +214)" were actually from different character instances cycling through the throttled diagnostic counter.
 
 ### Phase 7: Back-computation was the bug, not the fix (2026-03-31)
 

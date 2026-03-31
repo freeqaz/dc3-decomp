@@ -197,6 +197,15 @@ ADDRESS_CATALOG = {
     # File cache / decompression globals
     "g_caches":                  "?gCaches@@3V?$list@PAVFileCache@@V?$StlNodeAlloc@PAVFileCache@@@stlpmtx_std@@@stlpmtx_std@@A",
     "g_decompression_queue":     "?gDecompressionQueue@?A0x7ea4e606@@3V?$list@UDecompressTask@@V?$StlNodeAlloc@UDecompressTask@@@stlpmtx_std@@@stlpmtx_std@@A",
+    # HamIKEffector (IK telemetry instrumentation)
+    "ham_ik_poll":               "?Poll@HamIKEffector@@UAAXXZ",
+    "ham_ik_apply_constraints":  "?ApplyConstraints@HamIKEffector@@IAAMAAVQuatXfm@@ABVTransform@@PAV1@@Z",
+    "ham_ik_get_ground_height":  "?GetGroundHeight@HamIKEffector@@IAAMPAVRndTransformable@@@Z",
+    "ham_ik_get_type":           "?GetType@HamIKEffector@@IAA?AW4EffectorType@1@XZ",
+    "ham_ik_apply_pos_constraints": "?ApplyPosConstraints@HamIKEffector@@IAAMAAVVector3@@ABV2@PAV1@@Z",
+    "ham_ik_elbow":              "?IKElbow@HamIKEffector@@IAAXABVVector3@@@Z",
+    "ham_ik_do_fancy_elbow":     "?DoFancyElbow@HamIKEffector@@IAAXAAVQuatXfm@@M@Z",
+    "holmes_client_poll":        "?HolmesClientPoll@@YAXXZ",
 }
 
 # Hack-pack stub targets: display_name -> MSVC mangled MAP symbol name
