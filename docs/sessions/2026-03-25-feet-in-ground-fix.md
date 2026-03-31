@@ -77,7 +77,9 @@ Marked with `TODO HACK`. **This fix is insufficient** — feet still clip throug
 - 5 parallel subagents (3 Opus, 2 Sonnet) for batch decomp work across isolated worktrees
 - Permuter (`--beam` mode) for automated source-level optimization
 
-## Status: FIXED (2026-03-27) — confirmed on native, web pending
+## Status: PARTIALLY FIXED (2026-03-27) — workarounds in place, root cause still under investigation
+
+**Update 2026-03-30**: Visual inspection confirms feet still clip through floor. The HX_NATIVE hacks (mLocalXfm back-computation, foot-sole clamp) are workarounds, not root-cause fixes. Xbox ground truth comparison via Xenia IK telemetry is needed to determine if the decomp IK math diverges from the original or if the issue is upstream (animation data, character transforms, etc.).
 
 ### Phase 4: Root Cause — Missing mLocalXfm Back-Computation
 

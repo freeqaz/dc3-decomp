@@ -1029,3 +1029,456 @@ TEST_F(GameplayTelemetryTest, FeetNotBelowFloorDuringGameplay) {
         << "raising the ankle enough to keep the foot mesh above ground. "
         << progressSummary();
 }
+
+// ---------------------------------------------------------------------------
+// Tier 7: "Flying Feet" detection
+//
+// Catches the bug where character feet visually "fly around" during gameplay.
+// The existing foot inversion tests (Tier 6) check structural invariants
+// (toe-above-ankle, Z-axis flip) but miss the more common failure mode:
+// sudden large position jumps, NaN/Inf propagation through the bone chain,
+// and stale mLocalXfm from IKElbow's missing back-computation.
+//
+// Root cause hypothesis: IKElbow() at HamIKEffector.cpp:195-214 calls
+// SetWorldXfm() on grandparent and parent bones WITHOUT back-computing
+// mLocalXfm. When the dirty cascade later recomputes from stale mLocalXfm,
+// the IK correction is discarded and bones snap to wrong positions.
+// This is the same pattern as the ankle mLocalXfm fix (Phase 4), but
+// IKElbow does it for the knee/upper-leg (ankle path) and forearm/upper-arm
+// (hand path) without any guard.
+//
+// See: docs/sessions/2026-03-25-feet-in-ground-fix.md (Phase 4)
+// ---------------------------------------------------------------------------
+
+TEST_F(GameplayTelemetryTest, NoAnkleNaNDuringGameplay) {
+    // No NaN or Inf should appear in ANY component of the ankle WorldXfm.
+    // The existing NoBoneGarbageDuringGameplay test only checks position
+    // magnitude. This checks the full 12-component rotation + translation
+    // matrix, which catches NaN in rotation entries that produce visually
+    // correct positions but wildly wrong orientations.
+    auto playing = gameplaySamples();
+    ASSERT_FALSE(playing.empty())
+        << "Never observed real gameplay on game_screen. " << progressSummary();
+
+    int footSamples = 0;
+    int nanCount = 0;
+    for (auto &s : playing) {
+        if (!s.getBool("footDataValid")) continue;
+        footSamples++;
+        if (s.getBool("ankleHasNaN")) nanCount++;
+    }
+
+    if (footSamples == 0) {
+        GTEST_SKIP() << "No foot data samples during gameplay";
+    }
+
+    EXPECT_EQ(nanCount, 0)
+        << "Ankle WorldXfm contained NaN/Inf in " << nanCount << "/"
+        << footSamples << " gameplay samples. "
+        << "NaN in the rotation matrix produces visually wild bone orientations. "
+        << "Likely source: Invert() of a near-singular parent WorldXfm in the "
+        << "mLocalXfm back-computation, or NeutralWorldXfm() returning "
+        << "uninitialized data. " << progressSummary();
+}
+
+TEST_F(GameplayTelemetryTest, NoAnkleLocalXfmNaNDuringGameplay) {
+    // The mLocalXfm back-computation guard at HamIKEffector.cpp:473 uses
+    // fabs(x) < 50 which correctly rejects NaN (fabs(NaN) < 50 is false).
+    // But NaN could enter mLocalXfm through OTHER paths:
+    // - Direct assignment from animation data
+    // - IKElbow setting parent WorldXfm without back-computing local
+    // - Dirty cascade recomputing from stale/corrupt parent chain
+    auto playing = gameplaySamples();
+    ASSERT_FALSE(playing.empty())
+        << "Never observed real gameplay on game_screen. " << progressSummary();
+
+    int footSamples = 0;
+    int nanCount = 0;
+    for (auto &s : playing) {
+        if (!s.getBool("footDataValid")) continue;
+        footSamples++;
+        if (s.getBool("ankleLocalHasNaN")) nanCount++;
+    }
+
+    if (footSamples == 0) {
+        GTEST_SKIP() << "No foot data samples during gameplay";
+    }
+
+    EXPECT_EQ(nanCount, 0)
+        << "Ankle mLocalXfm contained NaN/Inf in " << nanCount << "/"
+        << footSamples << " gameplay samples. "
+        << "This means corrupt values entered the local transform through a "
+        << "path that bypasses the sanity guard in HamIKEffector::Poll(). "
+        << progressSummary();
+}
+
+TEST_F(GameplayTelemetryTest, NoAnkleSuddenJumpsDuringGameplay) {
+    // "Flying feet" manifests as sudden large jumps in ankle world position
+    // between frames. Normal dance choreography produces ankle deltas of
+    // ~0.5-5 units per telemetry sample (10 frames at 30fps). A delta > 20
+    // units between samples indicates the ankle teleported — the IK system
+    // produced a wildly different result frame-to-frame.
+    //
+    // Common causes:
+    // - IKElbow modifying parent bones without mLocalXfm back-computation,
+    //   so the next frame's dirty cascade discards the IK correction
+    // - Constraint target changing suddenly (animation transition)
+    // - NeutralWorldXfm returning garbage for one frame
+    auto playing = gameplaySamples();
+    ASSERT_FALSE(playing.empty())
+        << "Never observed real gameplay on game_screen. " << progressSummary();
+
+    const float kMaxDelta = 20.0f;
+    int footSamples = 0;
+    int lJumpCount = 0;
+    int rJumpCount = 0;
+    float worstLDelta = 0.0f;
+    float worstRDelta = 0.0f;
+    int worstLFrame = 0;
+    int worstRFrame = 0;
+
+    for (auto &s : playing) {
+        if (!s.getBool("footDataValid")) continue;
+        footSamples++;
+
+        float ld = s.getFloat("lAnkleWorldDelta");
+        float rd = s.getFloat("rAnkleWorldDelta");
+
+        if (ld > kMaxDelta) {
+            lJumpCount++;
+            if (ld > worstLDelta) { worstLDelta = ld; worstLFrame = s.frame; }
+        }
+        if (rd > kMaxDelta) {
+            rJumpCount++;
+            if (rd > worstRDelta) { worstRDelta = rd; worstRFrame = s.frame; }
+        }
+    }
+
+    if (footSamples == 0) {
+        GTEST_SKIP() << "No foot data samples during gameplay";
+    }
+
+    // Log statistics regardless of pass/fail
+    printf("  Ankle jump detection (%d samples, threshold=%.0f units):\n", footSamples, kMaxDelta);
+    printf("    L-ankle jumps: %d, worst delta: %.1f at frame %d\n", lJumpCount, worstLDelta, worstLFrame);
+    printf("    R-ankle jumps: %d, worst delta: %.1f at frame %d\n", rJumpCount, worstRDelta, worstRFrame);
+
+    EXPECT_EQ(lJumpCount, 0)
+        << "Left ankle teleported (delta > " << kMaxDelta << " units) in "
+        << lJumpCount << "/" << footSamples << " gameplay samples. "
+        << "Worst jump: " << worstLDelta << " units at frame " << worstLFrame
+        << ". This is the 'flying feet' bug — IKElbow or dirty cascade is "
+        << "producing wildly different ankle positions frame-to-frame. "
+        << progressSummary();
+
+    EXPECT_EQ(rJumpCount, 0)
+        << "Right ankle teleported (delta > " << kMaxDelta << " units) in "
+        << rJumpCount << "/" << footSamples << " gameplay samples. "
+        << "Worst jump: " << worstRDelta << " units at frame " << worstRFrame
+        << ". This is the 'flying feet' bug — IKElbow or dirty cascade is "
+        << "producing wildly different ankle positions frame-to-frame. "
+        << progressSummary();
+}
+
+TEST_F(GameplayTelemetryTest, AnkleLocalXfmStaysSane) {
+    // The mLocalXfm back-computation guard rejects values > 50 in any axis.
+    // But the ORIGINAL mLocalXfm from animation should also be sane — ankle
+    // local transforms represent the offset from the knee joint, which should
+    // be roughly the shin length (~15-25 units in X, small in Y/Z).
+    // Values > 100 in mLocalXfm indicate the back-computation wrote a bad
+    // value that passed the guard, or animation data is corrupt.
+    auto playing = gameplaySamples();
+    ASSERT_FALSE(playing.empty())
+        << "Never observed real gameplay on game_screen. " << progressSummary();
+
+    const float kMaxLocal = 100.0f;
+    int footSamples = 0;
+    int insaneCount = 0;
+    float worstVal = 0.0f;
+
+    for (auto &s : playing) {
+        if (!s.getBool("footDataValid")) continue;
+        footSamples++;
+
+        float vals[] = {
+            s.getFloat("lAnkleLocalX"), s.getFloat("lAnkleLocalY"),
+            s.getFloat("lAnkleLocalZ"),
+            s.getFloat("rAnkleLocalX"), s.getFloat("rAnkleLocalY"),
+            s.getFloat("rAnkleLocalZ")
+        };
+        for (float v : vals) {
+            float av = std::fabs(v);
+            if (av > kMaxLocal) {
+                insaneCount++;
+                if (av > worstVal) worstVal = av;
+                break;
+            }
+        }
+    }
+
+    if (footSamples == 0) {
+        GTEST_SKIP() << "No foot data samples during gameplay";
+    }
+
+    EXPECT_EQ(insaneCount, 0)
+        << "Ankle mLocalXfm had values > " << kMaxLocal << " in "
+        << insaneCount << "/" << footSamples << " gameplay samples. "
+        << "Worst value: " << worstVal << ". "
+        << "The IK back-computation is writing oversized local transforms. "
+        << "The sanity guard (< 50) should catch this — but the guard only "
+        << "runs on ankle/hand effectors, not on parent bones modified by IKElbow. "
+        << progressSummary();
+}
+
+TEST_F(GameplayTelemetryTest, NoHandNaNDuringGameplay) {
+    // IKElbow is also called for hand effectors (type == kEffectorTypeHand).
+    // The same missing mLocalXfm back-computation bug applies to hands:
+    // IKElbow::SetWorldXfm on forearm+upper-arm without updating mLocalXfm.
+    auto playing = gameplaySamples();
+    ASSERT_FALSE(playing.empty())
+        << "Never observed real gameplay on game_screen. " << progressSummary();
+
+    int footSamples = 0;
+    int nanCount = 0;
+    for (auto &s : playing) {
+        if (!s.getBool("footDataValid")) continue;
+        footSamples++;
+        if (s.getBool("handHasNaN")) nanCount++;
+    }
+
+    if (footSamples == 0) {
+        GTEST_SKIP() << "No foot data samples during gameplay";
+    }
+
+    EXPECT_EQ(nanCount, 0)
+        << "Hand bone WorldXfm contained NaN/Inf in " << nanCount << "/"
+        << footSamples << " gameplay samples. "
+        << "IKElbow modifies the forearm and upper-arm parent bones without "
+        << "back-computing mLocalXfm, which can propagate NaN through the "
+        << "dirty cascade. " << progressSummary();
+}
+
+TEST_F(GameplayTelemetryTest, HandBonesNotFlyingDuringGameplay) {
+    // Hand bones are also affected by IKElbow. Check that hand positions
+    // stay within a reasonable bounding box around the character.
+    // Character is at world origin, hands should be within ~100 units.
+    auto playing = gameplaySamples();
+    ASSERT_FALSE(playing.empty())
+        << "Never observed real gameplay on game_screen. " << progressSummary();
+
+    const float kMaxPos = 200.0f;
+    int footSamples = 0;
+    int flyingCount = 0;
+    float worstVal = 0.0f;
+
+    for (auto &s : playing) {
+        if (!s.getBool("footDataValid")) continue;
+        footSamples++;
+
+        float vals[] = {
+            s.getFloat("lHandX"), s.getFloat("lHandY"), s.getFloat("lHandZ"),
+            s.getFloat("rHandX"), s.getFloat("rHandY"), s.getFloat("rHandZ")
+        };
+        for (float v : vals) {
+            float av = std::fabs(v);
+            if (av > kMaxPos || std::isnan(v)) {
+                flyingCount++;
+                if (av > worstVal) worstVal = av;
+                break;
+            }
+        }
+    }
+
+    if (footSamples == 0) {
+        GTEST_SKIP() << "No foot data samples during gameplay";
+    }
+
+    EXPECT_EQ(flyingCount, 0)
+        << "Hand bones had positions > " << kMaxPos << " units from origin in "
+        << flyingCount << "/" << footSamples << " gameplay samples. "
+        << "Worst value: " << worstVal << ". "
+        << "This is the 'flying hands' variant of the IKElbow bug. "
+        << progressSummary();
+}
+
+TEST_F(GameplayTelemetryTest, KneeLocalXfmNotCorruptDuringGameplay) {
+    // The knee bone is the parent of the ankle. IKElbow() calls
+    // SetWorldXfm() on the knee (parent) WITHOUT back-computing its
+    // mLocalXfm. When another pollable triggers SetDirty() on the knee's
+    // parent (upper-leg), the dirty cascade recomputes the knee's WorldXfm
+    // from its STALE mLocalXfm, discarding the IK correction.
+    //
+    // This test checks that the knee's mLocalXfm.v.x (bone length along
+    // the limb axis) stays reasonable. In a correct skeleton, the knee
+    // local X should be roughly constant (shin length ~15-25 units).
+    // If IKElbow's missing back-computation causes frame-to-frame
+    // instability, the knee local X will oscillate or take extreme values.
+    auto playing = gameplaySamples();
+    ASSERT_FALSE(playing.empty())
+        << "Never observed real gameplay on game_screen. " << progressSummary();
+
+    int footSamples = 0;
+    int nanCount = 0;
+
+    for (auto &s : playing) {
+        if (!s.getBool("footDataValid")) continue;
+        footSamples++;
+        if (s.getBool("kneeLocalHasNaN")) nanCount++;
+    }
+
+    if (footSamples == 0) {
+        GTEST_SKIP() << "No foot data samples during gameplay";
+    }
+
+    EXPECT_EQ(nanCount, 0)
+        << "Knee mLocalXfm contained NaN/Inf in " << nanCount << "/"
+        << footSamples << " gameplay samples. "
+        << "The knee is the ankle's parent — IKElbow modifies it via "
+        << "SetWorldXfm without back-computing mLocalXfm. This is the "
+        << "root cause of the 'flying feet' bug. " << progressSummary();
+}
+
+TEST_F(GameplayTelemetryTest, AnkleRotationMatrixValidDuringGameplay) {
+    // The ankle rotation matrix should have a determinant close to 1.0
+    // (orthonormal rotation). Degenerate rotations (det near 0 or negative)
+    // indicate the Invert() or MakeRotMatrix() produced a non-rotation
+    // matrix, which causes the mesh to scale/shear/flip visually.
+    auto playing = gameplaySamples();
+    ASSERT_FALSE(playing.empty())
+        << "Never observed real gameplay on game_screen. " << progressSummary();
+
+    int footSamples = 0;
+    int badRotCount = 0;
+    float worstDet = 1.0f;
+
+    for (auto &s : playing) {
+        if (!s.getBool("footDataValid")) continue;
+        footSamples++;
+
+        float det = s.getFloat("ankleRotDeterminant");
+        if (std::isnan(det) || std::fabs(det - 1.0f) > 0.1f) {
+            badRotCount++;
+            if (std::fabs(det - 1.0f) > std::fabs(worstDet - 1.0f)) {
+                worstDet = det;
+            }
+        }
+    }
+
+    if (footSamples == 0) {
+        GTEST_SKIP() << "No foot data samples during gameplay";
+    }
+
+    EXPECT_EQ(badRotCount, 0)
+        << "Ankle rotation matrix had non-unit determinant in " << badRotCount
+        << "/" << footSamples << " gameplay samples. Worst determinant: "
+        << worstDet << " (should be ~1.0). "
+        << "A degenerate rotation causes mesh shearing/flipping. "
+        << "Likely source: Invert() of a near-singular parent WorldXfm or "
+        << "MakeRotMatrix() from a non-normalized quaternion. "
+        << progressSummary();
+}
+
+TEST_F(GameplayTelemetryTest, AnklePositionSmoothnessDuringGameplay) {
+    // Beyond detecting single-frame teleports (> 20 units), this test
+    // measures the overall smoothness of ankle motion. In correct dance
+    // choreography, the MEDIAN frame-to-frame delta should be small
+    // (< 5 units per 10-frame sample). If the median is high, feet are
+    // jittering even if no single frame exceeds the teleport threshold.
+    auto playing = gameplaySamples();
+    ASSERT_FALSE(playing.empty())
+        << "Never observed real gameplay on game_screen. " << progressSummary();
+
+    std::vector<float> lDeltas, rDeltas;
+    for (auto &s : playing) {
+        if (!s.getBool("footDataValid")) continue;
+        float ld = s.getFloat("lAnkleWorldDelta");
+        float rd = s.getFloat("rAnkleWorldDelta");
+        // Skip the first sample (delta = 0 from initialization)
+        if (ld > 0.0f || rd > 0.0f) {
+            lDeltas.push_back(ld);
+            rDeltas.push_back(rd);
+        }
+    }
+
+    if (lDeltas.size() < 5) {
+        GTEST_SKIP() << "Not enough ankle delta samples for smoothness check";
+    }
+
+    // Compute median
+    std::sort(lDeltas.begin(), lDeltas.end());
+    std::sort(rDeltas.begin(), rDeltas.end());
+    float lMedian = lDeltas[lDeltas.size() / 2];
+    float rMedian = rDeltas[rDeltas.size() / 2];
+
+    // Compute 90th percentile
+    float lP90 = lDeltas[(size_t)(lDeltas.size() * 0.9)];
+    float rP90 = rDeltas[(size_t)(rDeltas.size() * 0.9)];
+
+    printf("  Ankle smoothness (%zu samples):\n", lDeltas.size());
+    printf("    L-ankle median delta: %.2f, P90: %.2f\n", lMedian, lP90);
+    printf("    R-ankle median delta: %.2f, P90: %.2f\n", rMedian, rP90);
+
+    // Median delta should be < 5 units (normal choreography)
+    const float kMaxMedian = 5.0f;
+    // 90th percentile should be < 15 units (allows occasional fast moves)
+    const float kMaxP90 = 15.0f;
+
+    EXPECT_LT(lMedian, kMaxMedian)
+        << "Left ankle median frame-to-frame delta was " << lMedian
+        << " units (threshold: " << kMaxMedian << "). "
+        << "The ankle is jittering — feet are visually unstable even without "
+        << "single-frame teleports. This suggests the IK system is oscillating "
+        << "due to stale mLocalXfm from IKElbow's missing back-computation. "
+        << progressSummary();
+
+    EXPECT_LT(rMedian, kMaxMedian)
+        << "Right ankle median frame-to-frame delta was " << rMedian
+        << " units (threshold: " << kMaxMedian << "). " << progressSummary();
+
+    EXPECT_LT(lP90, kMaxP90)
+        << "Left ankle 90th percentile delta was " << lP90
+        << " units (threshold: " << kMaxP90 << "). "
+        << "Frequent large ankle jumps indicate systemic IK instability. "
+        << progressSummary();
+
+    EXPECT_LT(rP90, kMaxP90)
+        << "Right ankle 90th percentile delta was " << rP90
+        << " units (threshold: " << kMaxP90 << "). " << progressSummary();
+}
+
+TEST_F(GameplayTelemetryTest, AnkleSeparationNotExplodingDuringGameplay) {
+    // Complement to AnklesNotCollapsedDuringGameplay: ankles should also
+    // not be impossibly far apart. L/R ankles > 100 units apart means one
+    // or both ankles have flown to a garbage position (the character's
+    // stance can be at most ~30 units wide during extreme dance moves).
+    auto playing = gameplaySamples();
+    ASSERT_FALSE(playing.empty())
+        << "Never observed real gameplay on game_screen. " << progressSummary();
+
+    const float kMaxSeparation = 100.0f;
+    int footSamples = 0;
+    int explodedCount = 0;
+    float worstSep = 0.0f;
+
+    for (auto &s : playing) {
+        if (!s.getBool("footDataValid")) continue;
+        footSamples++;
+
+        float sep = s.getFloat("ankleSeparation");
+        if (sep > kMaxSeparation) {
+            explodedCount++;
+            if (sep > worstSep) worstSep = sep;
+        }
+    }
+
+    if (footSamples == 0) {
+        GTEST_SKIP() << "No foot data samples during gameplay";
+    }
+
+    EXPECT_EQ(explodedCount, 0)
+        << "L/R ankles were > " << kMaxSeparation << " units apart in "
+        << explodedCount << "/" << footSamples << " gameplay samples. "
+        << "Worst separation: " << worstSep << " units. "
+        << "One or both ankles have flown to a garbage position. "
+        << progressSummary();
+}

@@ -1,4 +1,5 @@
 #include "telemetry/GameplayTelemetry.h"
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -294,6 +295,93 @@ GameplayTelemetry::Snapshot GameplayTelemetry::CaptureSnapshot(int frame) {
                     float pz = pelvis->WorldXfm().v.z - s.lAnkleZ;
                     s.pelvisToLAnkle = std::sqrt(px*px + py*py + pz*pz);
                 }
+
+                // --- "Flying feet" detection ---
+
+                // Helper: check if any component of a Transform has NaN/Inf
+                auto xfmHasNaN = [](const Transform &xfm) -> bool {
+                    const float *f = &xfm.m.x.x;
+                    for (int i = 0; i < 12; i++) {
+                        if (!std::isfinite(f[i])) return true;
+                    }
+                    return false;
+                };
+
+                // NaN/Inf in ankle WorldXfm (full 12-component check)
+                s.ankleHasNaN = xfmHasNaN(lAnkle->WorldXfm())
+                             || xfmHasNaN(rAnkle->WorldXfm());
+
+                // Ankle mLocalXfm values (the IK back-computed local transform)
+                s.lAnkleLocalX = lAnkle->LocalXfm().v.x;
+                s.lAnkleLocalY = lAnkle->LocalXfm().v.y;
+                s.lAnkleLocalZ = lAnkle->LocalXfm().v.z;
+                s.rAnkleLocalX = rAnkle->LocalXfm().v.x;
+                s.rAnkleLocalY = rAnkle->LocalXfm().v.y;
+                s.rAnkleLocalZ = rAnkle->LocalXfm().v.z;
+
+                // NaN/Inf in ankle mLocalXfm
+                s.ankleLocalHasNaN = !std::isfinite(s.lAnkleLocalX)
+                    || !std::isfinite(s.lAnkleLocalY) || !std::isfinite(s.lAnkleLocalZ)
+                    || !std::isfinite(s.rAnkleLocalX)
+                    || !std::isfinite(s.rAnkleLocalY) || !std::isfinite(s.rAnkleLocalZ);
+
+                // Frame-to-frame ankle world position delta (detect sudden jumps)
+                {
+                    static float sPrevLAnkleX = 0, sPrevLAnkleY = 0, sPrevLAnkleZ = 0;
+                    static float sPrevRAnkleX = 0, sPrevRAnkleY = 0, sPrevRAnkleZ = 0;
+                    static bool sPrevValid = false;
+                    if (sPrevValid) {
+                        float ldx = s.lAnkleX - sPrevLAnkleX;
+                        float ldy = s.lAnkleY - sPrevLAnkleY;
+                        float ldz = s.lAnkleZ - sPrevLAnkleZ;
+                        s.lAnkleWorldDelta = std::sqrt(ldx*ldx + ldy*ldy + ldz*ldz);
+                        float rdx = s.rAnkleX - sPrevRAnkleX;
+                        float rdy = s.rAnkleY - sPrevRAnkleY;
+                        float rdz = s.rAnkleZ - sPrevRAnkleZ;
+                        s.rAnkleWorldDelta = std::sqrt(rdx*rdx + rdy*rdy + rdz*rdz);
+                    }
+                    sPrevLAnkleX = s.lAnkleX; sPrevLAnkleY = s.lAnkleY; sPrevLAnkleZ = s.lAnkleZ;
+                    sPrevRAnkleX = s.rAnkleX; sPrevRAnkleY = s.rAnkleY; sPrevRAnkleZ = s.rAnkleZ;
+                    sPrevValid = true;
+                }
+
+                // Knee (ankle parent) mLocalXfm — IKElbow modifies parent without
+                // back-computing mLocalXfm, which can cause the dirty cascade to
+                // produce garbage when the knee WorldXfm is recomputed from stale local.
+                RndTransformable *lKnee = lAnkle->TransParent();
+                RndTransformable *rKnee = rAnkle->TransParent();
+                if (lKnee) s.lKneeLocalX = lKnee->LocalXfm().v.x;
+                if (rKnee) s.rKneeLocalX = rKnee->LocalXfm().v.x;
+                s.kneeLocalHasNaN = (lKnee && !std::isfinite(lKnee->LocalXfm().v.x))
+                                 || (rKnee && !std::isfinite(rKnee->LocalXfm().v.x));
+
+                // Ankle rotation matrix determinant — should be ~1.0 for a proper
+                // rotation matrix. Values far from 1.0 indicate a degenerate or
+                // corrupted rotation from bad IK back-computation.
+                {
+                    const Hmx::Matrix3 &m = lAnkle->WorldXfm().m;
+                    s.ankleRotDeterminant = m.x.x * (m.y.y * m.z.z - m.y.z * m.z.y)
+                                          - m.x.y * (m.y.x * m.z.z - m.y.z * m.z.x)
+                                          + m.x.z * (m.y.x * m.z.y - m.y.y * m.z.x);
+                }
+            }
+
+            // Hand bone positions — IKElbow modifies hand parent chain too
+            RndTransformable *lHand = charDir->Find<RndTransformable>("bone_L-hand.mesh", true);
+            RndTransformable *rHand = charDir->Find<RndTransformable>("bone_R-hand.mesh", true);
+            if (lHand) {
+                s.lHandX = lHand->WorldXfm().v.x;
+                s.lHandY = lHand->WorldXfm().v.y;
+                s.lHandZ = lHand->WorldXfm().v.z;
+                s.handHasNaN = !std::isfinite(s.lHandX)
+                    || !std::isfinite(s.lHandY) || !std::isfinite(s.lHandZ);
+            }
+            if (rHand) {
+                s.rHandX = rHand->WorldXfm().v.x;
+                s.rHandY = rHand->WorldXfm().v.y;
+                s.rHandZ = rHand->WorldXfm().v.z;
+                s.handHasNaN = s.handHasNaN || !std::isfinite(s.rHandX)
+                    || !std::isfinite(s.rHandY) || !std::isfinite(s.rHandZ);
             }
         }
     }
@@ -328,7 +416,15 @@ void GameplayTelemetry::Sample(int frame) {
         "footDataValid=%d lAnkleZ=%.1f lToeZ=%.1f rAnkleZ=%.1f rToeZ=%.1f "
         "lFootZAxisZ=%.2f rFootZAxisZ=%.2f lFootInverted=%d rFootInverted=%d "
         "ankleSeparation=%.1f pelvisToLAnkle=%.1f "
-        "lAnkleX=%.1f lAnkleY=%.1f rAnkleX=%.1f rAnkleY=%.1f\n",
+        "lAnkleX=%.1f lAnkleY=%.1f rAnkleX=%.1f rAnkleY=%.1f "
+        "ankleHasNaN=%d handHasNaN=%d "
+        "lAnkleLocalX=%.2f lAnkleLocalY=%.2f lAnkleLocalZ=%.2f "
+        "rAnkleLocalX=%.2f rAnkleLocalY=%.2f rAnkleLocalZ=%.2f "
+        "ankleLocalHasNaN=%d "
+        "lAnkleWorldDelta=%.2f rAnkleWorldDelta=%.2f "
+        "lHandX=%.1f lHandY=%.1f lHandZ=%.1f rHandX=%.1f rHandY=%.1f rHandZ=%.1f "
+        "lKneeLocalX=%.2f rKneeLocalX=%.2f kneeLocalHasNaN=%d "
+        "ankleRotDeterminant=%.4f\n",
         s.frame, s.state, s.screen, s.transitionScreen, s.uiInTransition ? 1 : 0,
         s.gameScreenActive ? 1 : 0, s.currentHasWorldPanel ? 1 : 0,
         s.transitionHasWorldPanel ? 1 : 0, s.worldPanelLoaded ? 1 : 0,
@@ -349,6 +445,14 @@ void GameplayTelemetry::Sample(int frame) {
         s.footDataValid ? 1 : 0, s.lAnkleZ, s.lToeZ, s.rAnkleZ, s.rToeZ,
         s.lFootZAxisZ, s.rFootZAxisZ, s.lFootInverted ? 1 : 0, s.rFootInverted ? 1 : 0,
         s.ankleSeparation, s.pelvisToLAnkle,
-        s.lAnkleX, s.lAnkleY, s.rAnkleX, s.rAnkleY
+        s.lAnkleX, s.lAnkleY, s.rAnkleX, s.rAnkleY,
+        s.ankleHasNaN ? 1 : 0, s.handHasNaN ? 1 : 0,
+        s.lAnkleLocalX, s.lAnkleLocalY, s.lAnkleLocalZ,
+        s.rAnkleLocalX, s.rAnkleLocalY, s.rAnkleLocalZ,
+        s.ankleLocalHasNaN ? 1 : 0,
+        s.lAnkleWorldDelta, s.rAnkleWorldDelta,
+        s.lHandX, s.lHandY, s.lHandZ, s.rHandX, s.rHandY, s.rHandZ,
+        s.lKneeLocalX, s.rKneeLocalX, s.kneeLocalHasNaN ? 1 : 0,
+        s.ankleRotDeterminant
     );
 }

@@ -74,6 +74,29 @@ struct Snapshot {
     float rAnkleY = 0.0f;            // R-ankle world Y
     float ankleSeparation = 0.0f;    // distance between L and R ankles
     float pelvisToLAnkle = 0.0f;     // pelvis-to-L-ankle distance
+
+    // "Flying feet" detection — NaN/Inf, sudden jumps, mLocalXfm anomalies
+    bool ankleHasNaN = false;        // any NaN/Inf in ankle WorldXfm components
+    bool handHasNaN = false;         // any NaN/Inf in hand WorldXfm components
+    float lAnkleLocalX = 0.0f;      // L-ankle mLocalXfm.v.x
+    float lAnkleLocalY = 0.0f;      // L-ankle mLocalXfm.v.y
+    float lAnkleLocalZ = 0.0f;      // L-ankle mLocalXfm.v.z
+    float rAnkleLocalX = 0.0f;      // R-ankle mLocalXfm.v.x
+    float rAnkleLocalY = 0.0f;      // R-ankle mLocalXfm.v.y
+    float rAnkleLocalZ = 0.0f;      // R-ankle mLocalXfm.v.z
+    bool ankleLocalHasNaN = false;   // any NaN/Inf in ankle mLocalXfm
+    float lAnkleWorldDelta = 0.0f;  // L-ankle frame-to-frame world position delta
+    float rAnkleWorldDelta = 0.0f;  // R-ankle frame-to-frame world position delta
+    float lHandX = 0.0f;            // L-hand world X
+    float lHandY = 0.0f;            // L-hand world Y
+    float lHandZ = 0.0f;            // L-hand world Z
+    float rHandX = 0.0f;            // R-hand world X
+    float rHandY = 0.0f;            // R-hand world Y
+    float rHandZ = 0.0f;            // R-hand world Z
+    float lKneeLocalX = 0.0f;       // L-knee (ankle parent) mLocalXfm.v.x
+    float rKneeLocalX = 0.0f;       // R-knee (ankle parent) mLocalXfm.v.x
+    bool kneeLocalHasNaN = false;    // any NaN/Inf in knee mLocalXfm
+    float ankleRotDeterminant = 0.0f; // determinant of L-ankle WorldXfm.m (should be ~1.0)
 };
 
 void Init();            // Check DC3_TEL env var
