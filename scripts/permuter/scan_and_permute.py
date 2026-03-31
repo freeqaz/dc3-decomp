@@ -55,7 +55,10 @@ from .patterns import get_pattern, list_patterns, get_all_patterns
 from .repo_paths import get_cache_db_path, get_decomp_db_path
 from .types import extract_qualified_name
 
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+from .project import get_project_config as _get_project_config
+
+_project = _get_project_config()
+REPO_ROOT = _project.repo_root
 DECOMP_DB = get_decomp_db_path()
 
 

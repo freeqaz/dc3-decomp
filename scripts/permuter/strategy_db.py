@@ -32,10 +32,13 @@ from typing import Optional
 
 from .repo_paths import get_cache_db_path
 
+from .project import get_project_config as _get_project_config
+
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 DB_PATH = REPO_ROOT / "strategy.db"
 CACHE_DB_PATH = get_cache_db_path()
-BASELINES_DIR = REPO_ROOT / "build" / "373307D9" / "baselines"
+_project = _get_project_config()
+BASELINES_DIR = _project.baselines_dir()
 
 
 # ---------------------------------------------------------------------------

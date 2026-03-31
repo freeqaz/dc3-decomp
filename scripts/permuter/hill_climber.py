@@ -114,23 +114,32 @@ def _accumulate_il_pattern_metrics(
             entry["unique_buckets"] += 1
 
 
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent  # Fallback; prefer _get_project().repo_root
 
 _BANNER_START = b"/* ===== PERMUTER LOCK"
 _BANNER_END = b"===== */\n"
 
+# Lazy project config — initialized on first use (avoids import-time detection
+# when hill_climber is imported but not invoked, e.g. in test suites).
+_project_config = None
+
+
+def _get_project():
+    global _project_config
+    if _project_config is None:
+        from .project import get_project_config
+        _project_config = get_project_config()
+    return _project_config
+
 
 def _verify_build(source_path: Path) -> tuple[bool, str | None]:
     """Verify source compiles via ninja. Returns (success, error_output)."""
-    try:
-        rel = source_path.relative_to(REPO_ROOT)
-    except ValueError:
-        rel = source_path
-    obj_target = f"build/373307D9/{rel.with_suffix('.obj')}"
+    project = _get_project()
+    obj_target = project.obj_target_for_source(source_path)
     result = subprocess.run(
         ["ninja", obj_target],
         capture_output=True, text=True,
-        cwd=str(REPO_ROOT),
+        cwd=str(project.repo_root),
     )
     if result.returncode != 0:
         return False, (result.stderr or result.stdout).strip()
@@ -139,12 +148,13 @@ def _verify_build(source_path: Path) -> tuple[bool, str | None]:
 
 def _verify_match(symbol: str) -> float:
     """Run objdiff and return match%. Used for regression checking."""
+    project = _get_project()
     cmd = [
-        "bin/objdiff-cli", "diff", "-p", ".", symbol,
+        project.objdiff_cli, "diff", "-p", ".", symbol,
         "-c", "functionRelocDiffs=none", "-f", "json",
     ]
     result = subprocess.run(
-        cmd, capture_output=True, text=True, cwd=str(REPO_ROOT),
+        cmd, capture_output=True, text=True, cwd=str(project.repo_root),
     )
     try:
         data = json.loads(result.stdout)

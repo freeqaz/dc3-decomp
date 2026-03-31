@@ -56,7 +56,8 @@ from .patterns.base import Pattern
 from .repo_paths import get_decomp_db_path
 from .types import FunctionContext, Variant
 
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+from .project import get_project_config as _get_project_config
+REPO_ROOT = _get_project_config().repo_root
 DECOMP_DB = get_decomp_db_path()
 OBJDIFF_JSON = REPO_ROOT / "objdiff.json"
 

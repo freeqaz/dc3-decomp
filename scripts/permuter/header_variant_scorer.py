@@ -14,8 +14,11 @@ from .repo_paths import get_decomp_db_path
 from .score_cache import md5_file
 from .types import Variant, variant_file_updates
 
+from .project import get_project_config as _get_project_config
+
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-OBJDIFF_CLI = REPO_ROOT / "bin" / "objdiff-cli"
+_project = _get_project_config()
+OBJDIFF_CLI = _project.repo_root / _project.objdiff_cli
 
 
 @dataclass(frozen=True)
@@ -214,12 +217,8 @@ class HeaderVariantScorer:
 
     def _obj_target_for_source(self, source_path: Path) -> Path:
         """Map a source file to its build output object file."""
-        resolved = source_path.resolve()
-        try:
-            relative = resolved.relative_to(self.project_root)
-        except ValueError:
-            relative = resolved
-        return self.project_root / "build" / "373307D9" / relative.with_suffix(".obj")
+        obj_target = _project.obj_target_for_source(source_path)
+        return _project.repo_root / obj_target
 
     def _snapshot_object_hashes(self, targets: tuple[Path, ...]) -> dict[Path, str | None]:
         """Hash existing object files so unchanged units can be skipped."""

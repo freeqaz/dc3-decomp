@@ -24,8 +24,9 @@ from pathlib import Path
 
 from .types import HillClimbResult
 
-# Repo root (script lives in scripts/permuter/)
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+# Repo root — uses project detection for multi-project support
+from .project import get_project_config as _get_project_config
+REPO_ROOT = _get_project_config().repo_root
 
 
 def parse_args() -> argparse.Namespace:

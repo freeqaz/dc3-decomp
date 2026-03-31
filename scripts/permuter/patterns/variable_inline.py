@@ -45,8 +45,8 @@ class VariableInlinePattern(Pattern):
         # Prologue mismatch where we have too many callee-saved regs
         if diagnosis.has_prologue_mismatch and diagnosis.gpr_save_delta < 0:
             return True
-        # Offset swaps (caching address vs value changes offsets)
-        if diagnosis.offset_swap_count > 0:
+        # Offset deltas (caching address vs value changes offsets)
+        if len(diagnosis.offset_deltas) > 0:
             return True
         return False
 

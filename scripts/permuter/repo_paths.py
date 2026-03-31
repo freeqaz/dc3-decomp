@@ -13,8 +13,25 @@ from functools import lru_cache
 from pathlib import Path
 
 
-_FALLBACK_ROOT = Path(__file__).resolve().parents[2]
+_FILE_ROOT = Path(__file__).resolve().parents[2]
 _ENV_DB_ROOT = "PERMUTER_DB_ROOT"
+
+
+def _detect_repo_root() -> Path:
+    """Detect repo root from cwd, falling back to __file__ location.
+
+    Same logic as project._resolve_repo_root() but without importing project
+    to avoid circular imports (project.py may import repo_paths).
+    """
+    cwd = Path.cwd().resolve()
+    for candidate in [cwd] + list(cwd.parents):
+        if (candidate / "config" / "SZBE69_B8").is_dir():
+            return candidate
+        if (candidate / "build" / "373307D9").is_dir():
+            return candidate
+        if (candidate / "objdiff.json").is_file():
+            return candidate
+    return _FILE_ROOT
 
 
 def _resolve_env_path(name: str) -> Path | None:
@@ -50,12 +67,26 @@ def _git_common_dir(repo_root: Path) -> Path | None:
 
 @lru_cache(maxsize=1)
 def get_db_root() -> Path:
-    """Return the shared root used for persistent permuter databases."""
+    """Return the shared root used for persistent permuter databases.
+
+    The env var PERMUTER_DB_ROOT is only honoured when the detected repo root
+    (from CWD) is the *same* project as the env var points to.  This prevents
+    a stale DC3 env var from being used when the user is running from an RB3
+    checkout (or vice-versa).
+    """
+    repo_root = _detect_repo_root()
+
     env_root = _resolve_env_path(_ENV_DB_ROOT)
     if env_root is not None:
-        return env_root
+        # Only use the env var when the repo root is *inside* (or equal to)
+        # the env-specified path, i.e. we are actually in that project.
+        try:
+            repo_root.relative_to(env_root)
+            return env_root
+        except ValueError:
+            pass  # repo_root is not under env_root — ignore the env var
 
-    common_dir = _git_common_dir(_FALLBACK_ROOT)
+    common_dir = _git_common_dir(repo_root)
     if common_dir is not None:
         if common_dir.name == ".git":
             return common_dir.parent.resolve()
@@ -63,7 +94,7 @@ def get_db_root() -> Path:
             return common_dir.parent.parent.resolve()
         return common_dir.resolve()
 
-    return _FALLBACK_ROOT
+    return repo_root
 
 
 def get_decomp_db_path() -> Path:

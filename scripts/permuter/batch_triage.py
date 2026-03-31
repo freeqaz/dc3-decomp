@@ -23,9 +23,11 @@ from .repo_paths import get_decomp_db_path
 from .types import Diagnosis, TriageResult
 
 # Repo root (script lives in scripts/permuter/)
+from .project import get_project_config as _get_project_config
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 OBJDIFF_JSON = REPO_ROOT / "objdiff.json"
 DECOMP_DB = get_decomp_db_path()
+_project = _get_project_config()
 
 from .types import extract_qualified_name
 
@@ -160,12 +162,12 @@ def classify(diagnosis: Diagnosis) -> str:
 
 def build_object(source_path: str) -> bool:
     """Build the object file for a source path."""
-    obj_target = f"build/373307D9/{Path(source_path).with_suffix('.obj')}"
+    obj_target = _project.obj_target_for_source(Path(source_path))
     result = subprocess.run(
         ["ninja", obj_target],
         capture_output=True,
         text=True,
-        cwd=str(REPO_ROOT),
+        cwd=str(_project.repo_root),
     )
     return result.returncode == 0
 
@@ -173,12 +175,12 @@ def build_object(source_path: str) -> bool:
 def run_objdiff(symbol: str) -> tuple[float, dict | None]:
     """Run objdiff-cli with --include-instructions and return (match%, json)."""
     cmd = [
-        "./bin/objdiff-cli", "diff", "-p", ".", symbol,
+        _project.objdiff_cli, "diff", "-p", ".", symbol,
         "-c", "functionRelocDiffs=none",
         "-f", "json", "--include-instructions",
     ]
     result = subprocess.run(
-        cmd, capture_output=True, text=True, cwd=str(REPO_ROOT),
+        cmd, capture_output=True, text=True, cwd=str(_project.repo_root),
     )
     try:
         data = json.loads(result.stdout)

@@ -7,6 +7,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from .project import get_project_config
+
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 M2C_PATH = Path.home() / "code" / "milohax" / "m2c" / "m2c.py"
 OBJDIFF_TO_M2C_PATH = REPO_ROOT / "tools" / "objdiff_to_m2c.py"
@@ -33,16 +35,20 @@ def get_or_run_m2c(symbol: str, unit: str | None = None) -> str | None:
 
 def _run_m2c(symbol: str, unit: str | None) -> str | None:
     """Run objdiff JSON -> objdiff_to_m2c -> m2c pipeline."""
-    if not M2C_PATH.exists() or not OBJDIFF_TO_M2C_PATH.exists():
+    project = get_project_config()
+    repo_root = project.repo_root
+    objdiff_to_m2c = repo_root / "tools" / "objdiff_to_m2c.py"
+
+    if not M2C_PATH.exists() or not objdiff_to_m2c.exists():
         return None
 
     try:
         objdiff_result = subprocess.run(
             [
-                "bin/objdiff-cli",
+                project.objdiff_cli,
                 "diff",
                 "-p",
-                str(REPO_ROOT),
+                str(repo_root),
                 "-f",
                 "json",
                 "--include-instructions",
@@ -51,7 +57,7 @@ def _run_m2c(symbol: str, unit: str | None) -> str | None:
             capture_output=True,
             text=True,
             timeout=60,
-            cwd=str(REPO_ROOT),
+            cwd=str(repo_root),
         )
         if objdiff_result.returncode != 0 or not objdiff_result.stdout.strip():
             return None
@@ -67,7 +73,7 @@ def _run_m2c(symbol: str, unit: str | None) -> str | None:
         if not json_line:
             return None
 
-        convert_cmd = ["python3", str(OBJDIFF_TO_M2C_PATH), "--project-dir", str(REPO_ROOT)]
+        convert_cmd = ["python3", str(objdiff_to_m2c), "--project-dir", str(repo_root)]
         obj_path = _obj_path_for_unit(unit)
         if obj_path is not None and obj_path.exists():
             convert_cmd.extend(["--obj", str(obj_path)])
@@ -78,18 +84,18 @@ def _run_m2c(symbol: str, unit: str | None) -> str | None:
             capture_output=True,
             text=True,
             timeout=30,
-            cwd=str(REPO_ROOT),
+            cwd=str(repo_root),
         )
         if convert_result.returncode != 0 or not convert_result.stdout.strip():
             return None
 
         m2c_result = subprocess.run(
-            ["python3", str(M2C_PATH), "-t", "ppc", "--valid-syntax", "-"],
+            ["python3", str(M2C_PATH), "-t", project.m2c_target, "--valid-syntax", "-"],
             input=convert_result.stdout,
             capture_output=True,
             text=True,
             timeout=60,
-            cwd=str(REPO_ROOT),
+            cwd=str(repo_root),
         )
         if m2c_result.returncode != 0:
             return None
@@ -107,8 +113,8 @@ def _obj_path_for_unit(unit: str | None) -> Path | None:
     """Best-effort map from DB unit to built object path."""
     if not unit:
         return None
-    normalized = unit[len("default/"):] if unit.startswith("default/") else unit
-    return REPO_ROOT / "build" / "373307D9" / "obj" / f"{normalized}.obj"
+    project = get_project_config()
+    return project.obj_path_for_unit(unit)
 
 
 def extract_last_call_name(code: str) -> str | None:

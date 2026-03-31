@@ -22,8 +22,10 @@ from pathlib import Path
 
 from .repo_paths import get_decomp_db_path
 
-# Repo root (script lives in scripts/permuter/)
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+# Repo root — uses project detection for multi-project support
+from .project import get_project_config as _get_project_config
+_project = _get_project_config()
+REPO_ROOT = _project.repo_root
 OBJDIFF_JSON = REPO_ROOT / "objdiff.json"
 DECOMP_DB = get_decomp_db_path()
 

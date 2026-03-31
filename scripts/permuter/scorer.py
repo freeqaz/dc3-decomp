@@ -28,6 +28,7 @@ from .file_util import (
     restore_tracked_files,
     SourceFileLock,
 )
+from .project import get_project_config, get_project_for_path, ProjectConfig, ProjectType
 from .score_cache import ScoreCache, md5_bytes, md5_file
 from .types import (
     Diagnosis,
@@ -37,7 +38,7 @@ from .types import (
     variant_identity_bytes,
 )
 
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent  # Fallback; actual root from project config
 
 
 class Scorer:
@@ -53,7 +54,8 @@ class Scorer:
             results = scorer.score_batch(variants, workers=8)
     """
 
-    def __init__(self, source_path: Path, symbol: str, unit: Optional[str] = None):
+    def __init__(self, source_path: Path, symbol: str, unit: Optional[str] = None,
+                 project: Optional[ProjectConfig] = None):
         self.source_path = source_path
         self.symbol = symbol
         self._backup_path: Optional[Path] = None
@@ -70,21 +72,17 @@ class Scorer:
         self.m2c_code: Optional[str] = None
         self.unit = unit
 
-        # Derive targeted object path from source path.
-        # Accept either relative or absolute source paths.
-        # src/system/rndobj/Foo.cpp -> build/373307D9/src/system/rndobj/Foo.obj
-        source_obj_path = source_path.with_suffix(".obj")
-        try:
-            if source_obj_path.is_absolute():
-                source_obj_path = source_obj_path.relative_to(REPO_ROOT)
-        except ValueError:
-            # Leave path unchanged if it's outside repo root.
-            pass
+        # Detect project configuration (DC3 vs RB3)
+        self._project = project or get_project_for_path(source_path)
 
-        self._obj_target = f"build/373307D9/{source_obj_path}"
+        # Derive targeted object path from source path using project config.
+        # DC3: src/system/rndobj/Foo.cpp -> build/373307D9/src/system/rndobj/Foo.obj
+        # RB3: src/system/rndobj/Foo.cpp -> build/SZBE69_B8/src/system/rndobj/Foo.o
+        self._obj_target = self._project.obj_target_for_source(source_path)
         self._obj_path = Path(self._obj_target)
         self._compile_cwd: Optional[str] = None
         self._compile_shell_cmd: Optional[str] = None
+        self._compile_fo_path: Optional[str] = None
         self._il_tools_loaded = False
         self._il_capture = None
         self._ILFile = None
@@ -199,63 +197,58 @@ class Scorer:
             )
 
     def _extract_compile_cmd(self) -> None:
-        """Extract the cl.exe command from ninja for direct invocation."""
+        """Extract the compile command from ninja for direct invocation.
+
+        Handles both DC3 (MSVC cl.exe, "cd dir && ... /Fo...") and
+        RB3 (MetroWerks mwcceppc, "wibo mwcceppc ... -c src -o dir").
+        """
         result = subprocess.run(
             ["ninja", "-t", "commands", self._obj_target],
             capture_output=True, text=True,
+            cwd=str(self._project.repo_root),
         )
-        # ninja -t commands outputs multiple lines (download_tool, PCH, actual compile).
-        # We need the LAST "cd " line — that's the actual .obj compile command.
-        cmd_line = None
-        for line in result.stdout.strip().splitlines():
-            if line.startswith("cd "):
-                cmd_line = line  # keep overwriting — last one wins
 
-        if cmd_line is None:
-            lines = result.stdout.strip().splitlines()
-            if not lines:
-                err = result.stderr.strip()
-                details = f"; stderr: {err}" if err else ""
-                raise RuntimeError(
-                    f"Could not derive compile command for target '{self._obj_target}'"
-                    f" from 'ninja -t commands'{details}"
-                )
-            # Fallback: use last line
-            cmd_line = lines[-1]
+        if not result.stdout.strip():
+            err = result.stderr.strip()
+            details = f"; stderr: {err}" if err else ""
+            raise RuntimeError(
+                f"Could not derive compile command for target '{self._obj_target}'"
+                f" from 'ninja -t commands'{details}"
+            )
 
-        if cmd_line.startswith("cd "):
-            parts = cmd_line.split(" && ", 1)
-            self._compile_cwd = parts[0][3:]  # strip "cd "
-            self._compile_shell_cmd = parts[1]
-        else:
-            self._compile_cwd = None
-            self._compile_shell_cmd = cmd_line
+        # Use project-specific command parsing
+        self._compile_cwd, self._compile_shell_cmd = self._project.parse_ninja_command(
+            result.stdout
+        )
 
-        # Extract the absolute /Fo path from the command for reliable replacement
-        fo_match = re.search(r'/Fo(\S+)', self._compile_shell_cmd)
-        if fo_match:
-            self._compile_fo_path = fo_match.group(1)
-        else:
-            self._compile_fo_path = None
+        if not self._compile_shell_cmd:
+            raise RuntimeError(
+                f"Could not derive compile command for target '{self._obj_target}'"
+                f" from 'ninja -t commands'"
+            )
+
+        # Extract the output path from the command for reliable replacement
+        self._compile_fo_path = self._project.extract_compile_output_path(
+            self._compile_shell_cmd
+        )
 
     def _build(self) -> tuple[bool, str | None]:
-        """Compile directly via cl.exe, redirecting source to the working copy."""
+        """Compile directly, redirecting source to the working copy."""
         if self._compile_shell_cmd is None:
             self._extract_compile_cmd()
 
-        # Swap the trailing source filename to point at the working copy
+        # Swap the source filename to point at the working copy
         # (same directory, different name — avoids touching the real source).
         src_name = self.source_path.name
         work_name = self._working_source.name
-        if self._compile_shell_cmd.endswith(src_name):
-            cmd = self._compile_shell_cmd[:-len(src_name)] + work_name
-        else:
-            cmd = self._compile_shell_cmd.replace(src_name, work_name)
+        cmd = self._project.redirect_source_in_cmd(
+            self._compile_shell_cmd, src_name, work_name
+        )
 
         result = subprocess.run(
             cmd,
             shell=True,
-            cwd=self._compile_cwd,
+            cwd=self._compile_cwd or str(self._project.repo_root),
             capture_output=True,
             text=True,
         )
@@ -266,28 +259,22 @@ class Scorer:
         return True, None
 
     def _build_to_path(self, source_bytes: bytes, obj_output: Path) -> tuple[bool, str | None]:
-        """Compile variant source to a specific .obj path (for parallel builds)."""
+        """Compile variant source to a specific object path (for parallel builds)."""
         if self._compile_shell_cmd is None:
             self._extract_compile_cmd()
 
-        # Replace /FoOriginal with /FoTemp in the compile command
-        if self._compile_fo_path:
-            cmd = self._compile_shell_cmd.replace(
-                f"/Fo{self._compile_fo_path}", f"/Fo{obj_output}"
-            )
-        else:
-            # Fallback: try relative path replacement
-            cmd = self._compile_shell_cmd.replace(
-                str(self._obj_path), str(obj_output)
-            )
+        # Redirect output to the temp object path
+        cmd = self._project.redirect_output_for_parallel(
+            self._compile_shell_cmd,
+            self._compile_fo_path,
+            self._obj_path,
+            obj_output,
+        )
 
         # Redirect source filename to the working copy
         src_name = self.source_path.name
         work_name = self._working_source.name
-        if cmd.endswith(src_name):
-            cmd = cmd[:-len(src_name)] + work_name
-        else:
-            cmd = cmd.replace(src_name, work_name)
+        cmd = self._project.redirect_source_in_cmd(cmd, src_name, work_name)
 
         # Write source to the working copy (not the real source path)
         atomic_write_bytes(self._working_source, source_bytes)
@@ -295,7 +282,7 @@ class Scorer:
         result = subprocess.run(
             cmd,
             shell=True,
-            cwd=self._compile_cwd,
+            cwd=self._compile_cwd or str(self._project.repo_root),
             capture_output=True,
             text=True,
         )
@@ -306,7 +293,7 @@ class Scorer:
         return True, None
 
     def _load_il_tools(self) -> bool:
-        """Load IL capture + canonical hash helpers on demand."""
+        """Load IL capture + canonical hash helpers on demand (DC3 only)."""
         if self._il_tools_loaded:
             return (
                 self._il_capture is not None
@@ -315,7 +302,10 @@ class Scorer:
             )
 
         self._il_tools_loaded = True
-        tools_dir = REPO_ROOT / "msvc-src" / "tools"
+        # IL tools are DC3-specific (MSVC compiler trace)
+        if not self._project.has_il_tools:
+            return False
+        tools_dir = self._project.repo_root / "msvc-src" / "tools"
         if str(tools_dir) not in sys.path:
             sys.path.insert(0, str(tools_dir))
         try:
@@ -377,11 +367,15 @@ class Scorer:
         When include_instructions is True, passes --include-instructions for
         diagnosis. The JSON dict is only returned when include_instructions=True.
         """
-        cmd = ["bin/objdiff-cli", "diff", "-p", ".", self.symbol,
+        objdiff = self._project.objdiff_cli
+        cmd = [objdiff, "diff", "-p", ".", self.symbol,
                "-c", "functionRelocDiffs=none", "-f", "json"]
         if include_instructions:
             cmd.append("--include-instructions")
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(
+            cmd, capture_output=True, text=True,
+            cwd=str(self._project.repo_root),
+        )
         try:
             data = json.loads(result.stdout)
             match_pct = data.get("fuzzy_match_percent", 0.0)
@@ -592,7 +586,7 @@ class Scorer:
             futures = {}
             with ThreadPoolExecutor(max_workers=workers) as pool:
                 for idx, variant, source_md5 in to_build:
-                    obj_out = tmp_dir / f"variant_{idx}.obj"
+                    obj_out = tmp_dir / f"variant_{idx}{self._project.obj_extension}"
                     future = pool.submit(
                         _locked_compile, idx, variant, source_md5, obj_out,
                     )

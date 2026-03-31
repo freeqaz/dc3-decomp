@@ -13,7 +13,8 @@ import hashlib
 import sqlite3
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+from .project import get_project_config as _get_project_config
+REPO_ROOT = _get_project_config().repo_root
 CACHE_DB = REPO_ROOT / ".scan_cache.db"
 
 

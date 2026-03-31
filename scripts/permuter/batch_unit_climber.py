@@ -27,9 +27,13 @@ from scripts.permuter.repo_paths import get_decomp_db_path
 from scripts.permuter.scorer import md5_file
 from scripts.permuter.extractor import extract_function
 
+from scripts.permuter.project import get_project_config
+
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 DB_PATH = get_decomp_db_path()
-OBJDIFF_CLI = REPO_ROOT / "bin" / "objdiff-cli"
+
+_project = get_project_config()
+OBJDIFF_CLI = _project.repo_root / _project.objdiff_cli
 
 @dataclass
 class _Edit:
@@ -106,34 +110,41 @@ class UnitClimber:
         self.functions: list[TargetFunction] = []
         self._compile_cmd: Optional[str] = None
         self._compile_cwd: Optional[str] = None
-        self._obj_target = f"build/373307D9/{source_path.with_suffix('.obj')}"
+        self._project = _project
+        self._obj_target = self._project.obj_target_for_source(source_path)
         self._obj_path = Path(self._obj_target)
-        
+
     def _extract_compile_cmd(self):
-        import re
-        result = subprocess.run(["ninja", "-t", "commands", self._obj_target], capture_output=True, text=True)
-        for line in result.stdout.strip().splitlines():
-            if line.startswith("cd "):
-                parts = line.split(" && ", 1)
-                self._compile_cwd = parts[0][3:]
-                self._compile_cmd = parts[1]
-                
-                fo_match = re.search(r'/Fo(\S+)', self._compile_cmd)
-                self._compile_fo_path = fo_match.group(1) if fo_match else None
-                return
-                
+        result = subprocess.run(
+            ["ninja", "-t", "commands", self._obj_target],
+            capture_output=True, text=True,
+            cwd=str(self._project.repo_root),
+        )
+        self._compile_cwd, self._compile_cmd = self._project.parse_ninja_command(
+            result.stdout
+        )
+        self._compile_fo_path = self._project.extract_compile_output_path(
+            self._compile_cmd
+        ) if self._compile_cmd else None
+
     def build_to_path(self, source: bytes, obj_out: Path) -> tuple[bool, str]:
         if not self._compile_cmd:
             self._extract_compile_cmd()
-        
-        # We must overwrite the real file for cl.exe to read it, but we can output to obj_out
+
+        # We must overwrite the real file for the compiler to read it, but we can output to obj_out
         atomic_write_bytes(self.source_path, source)
-        if self._compile_fo_path:
-            cmd = self._compile_cmd.replace(f"/Fo{self._compile_fo_path}", f"/Fo{obj_out}")
-        else:
-            cmd = self._compile_cmd.replace(str(self._obj_path), str(obj_out))
-        
-        result = subprocess.run(cmd, shell=True, cwd=self._compile_cwd, capture_output=True, text=True)
+        cmd = self._project.redirect_output_for_parallel(
+            self._compile_cmd,
+            self._compile_fo_path,
+            self._obj_path,
+            obj_out,
+        )
+
+        result = subprocess.run(
+            cmd, shell=True,
+            cwd=self._compile_cwd or str(self._project.repo_root),
+            capture_output=True, text=True,
+        )
         if result.returncode != 0:
             return False, result.stdout + result.stderr
         return True, ""
@@ -145,7 +156,7 @@ class UnitClimber:
         tid = threading.get_ident()
         
         if self._obj_path.exists():
-            backup_obj = self._obj_path.with_suffix(f".bak_{tid}.obj")
+            backup_obj = self._obj_path.with_suffix(f".bak_{tid}{self._project.obj_extension}")
             shutil.copy2(self._obj_path, backup_obj)
         else:
             backup_obj = None
@@ -154,7 +165,7 @@ class UnitClimber:
         
         stdin_data = "\\n".join(symbols) + "\\n"
         proc = subprocess.run(
-            [str(OBJDIFF_CLI), "diff", "-p", str(REPO_ROOT), "-c", "functionRelocDiffs=none", "--batch"],
+            [str(OBJDIFF_CLI), "diff", "-p", str(self._project.repo_root), "-c", "functionRelocDiffs=none", "--batch"],
             input=stdin_data, capture_output=True, text=True
         )
         
@@ -261,7 +272,7 @@ class UnitClimber:
                 if not edits: return
                 
                 new_source = apply_edits(self.original_source, edits)
-                obj_out = tmp_dir / f"batch_{i}.obj"
+                obj_out = tmp_dir / f"batch_{i}{self._project.obj_extension}"
                 
                 with lock:
                     ok, err = self.build_to_path(new_source, obj_out)
