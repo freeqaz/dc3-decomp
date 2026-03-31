@@ -18,6 +18,16 @@
 #include "utl/BinStream.h"
 #include "utl/Str.h"
 
+
+#ifdef HX_NATIVE
+// Saved IK-corrected world transforms. Each entry is a (bone, transform) pair
+// saved during Poll/IKElbow/DoFancyElbow. Re-applied by ReapplyIKCorrections()
+// after all CharPollables finish, to survive dirty cascades from later effectors.
+// Stored in top-down skeleton order (grandparent before parent before effector)
+// so re-application cascades correctly.
+static std::vector<std::pair<RndTransformable*, Transform>> sIKSavedXfms;
+#endif
+
 HamIKEffector::HamIKEffector()
     : mSkeleton(this), mEffector(this), mFinger(this), mGround(this), mMore(this),
       mOther(this), mElbow(this), mConstraints(this), mCharacter(this) {}
@@ -209,6 +219,11 @@ void HamIKEffector::IKElbow(const Vector3 &v) {
             Transform tf70;
             Multiply(tfb0, xfm, tf70);
             parent->SetWorldXfm(tf70);
+#ifdef HX_NATIVE
+            // Save IK-corrected parent chain transforms (top-down order)
+            sIKSavedXfms.push_back({grandparent, xfm});
+            sIKSavedXfms.push_back({parent, tf70});
+#endif
         }
     }
 }
@@ -424,26 +439,25 @@ void HamIKEffector::Poll() {
                     }
 
 #ifdef HX_NATIVE
-                    // Ground clamp for ankle effectors. At this point
-                    // finalXfm.v is the ANKLE world position, after all
-                    // constraint processing, finger→ankle conversion,
-                    // mOther poll, and IKElbow. Raise the ankle enough
-                    // to keep the toe bone above ground.
+                    // Ground clamp for ankle effectors. Raise the ankle enough
+                    // to keep the toe bone above ground. Uses the finger (toe)
+                    // bone's local rest-pose length as foot depth — this is
+                    // orientation-invariant unlike NeutralWorldXfm().
                     if (t == kEffectorTypeAnkle) {
                         Character *character = mCharacter.Ptr();
                         RndTransformable *ground =
                             character ? (RndTransformable *)character : nullptr;
                         float groundHeight = GetGroundHeight(ground);
 
-                        // Compute neutral foot depth (ankle-to-toe in Z)
+                        // Use the toe bone's rest-pose local offset length as
+                        // foot depth. LocalXfm().v.x is the bone length along
+                        // the skeleton chain — orientation-invariant.
                         float footDepth = 0.0f;
-                        if (mFinger.Ptr() && mFinger.Ptr() != mEffector.Ptr()
-                            && mSkeleton) {
-                            Transform neutralToe, neutralAnkle;
-                            mSkeleton->NeutralWorldXfm(mFinger, neutralToe);
-                            mSkeleton->NeutralWorldXfm(mEffector, neutralAnkle);
-                            footDepth = neutralAnkle.v.z - neutralToe.v.z;
-                            if (footDepth < 0) footDepth = 0;
+                        if (mFinger.Ptr() && mFinger.Ptr() != mEffector.Ptr()) {
+                            footDepth = std::abs(mFinger->LocalXfm().v.x);
+                            // Fallback: if finger has no length, use a
+                            // conservative estimate from empirical testing
+                            if (footDepth < 1.0f) footDepth = 3.5f;
                         }
 
                         float minAnkleZ = groundHeight + footDepth;
@@ -456,6 +470,9 @@ void HamIKEffector::Poll() {
 
                     mEffector->SetWorldXfm(finalXfm);
 #ifdef HX_NATIVE
+                    // Save IK-corrected effector transform for post-poll re-application
+                    sIKSavedXfms.push_back({mEffector.Ptr(), finalXfm});
+
                     // Foot inversion guard: after IK, verify the ankle-to-toe
                     // vector points generally downward (toward ground), not upward
                     // through the shin. The toe bone (mFinger) should be BELOW
@@ -648,6 +665,9 @@ void HamIKEffector::DoFancyElbow(QuatXfm &handQ, float handWeight) {
             gpXfm.v.z += accum.v.z;
 
             grandparent->SetWorldXfm(gpXfm);
+#ifdef HX_NATIVE
+            sIKSavedXfms.push_back({grandparent, gpXfm});
+#endif
 
             // If hand contributes, blend parent (forearm) and effector (hand) rotations
             if (handWeight > 0.0f) {
@@ -674,6 +694,9 @@ void HamIKEffector::DoFancyElbow(QuatXfm &handQ, float handWeight) {
                 parentNewXfm.v = parentWorld.v;
                 Multiply(rotMat, gpXfm.m, parentNewXfm.m);
                 parent->SetWorldXfm(parentNewXfm);
+#ifdef HX_NATIVE
+                sIKSavedXfms.push_back({parent, parentNewXfm});
+#endif
 
                 // Blend effector rotation
                 const Transform &effWorld = mEffector->WorldXfm();
@@ -687,6 +710,9 @@ void HamIKEffector::DoFancyElbow(QuatXfm &handQ, float handWeight) {
 
                 MakeRotMatrix(handQ.q, effXfm.m);
                 mEffector->SetWorldXfm(effXfm);
+#ifdef HX_NATIVE
+                sIKSavedXfms.push_back({mEffector.Ptr(), effXfm});
+#endif
             }
         }
     }
@@ -709,3 +735,30 @@ void HamIKEffector::ComputeElbowPullAndQuat(
     q.v.y = dy * factor;
     q.v.z = dz * factor;
 }
+
+#ifdef HX_NATIVE
+void HamIKEffector::ReapplyIKCorrections() {
+    if (sIKSavedXfms.empty()) return;
+
+    // Re-apply saved transforms. They're already in top-down order
+    // (grandparent → parent → effector) from how they were saved,
+    // so each SetWorldXfm's dirty cascade to children is immediately
+    // corrected by the next entry.
+    for (auto& entry : sIKSavedXfms) {
+        // Skip entries with NaN/Inf — don't propagate garbage
+        const Vector3& v = entry.second.v;
+        if (!std::isfinite(v.x) || !std::isfinite(v.y) || !std::isfinite(v.z))
+            continue;
+        entry.first->SetWorldXfm(entry.second);
+    }
+
+    static int sFixupLogCount = 0;
+    if (sFixupLogCount < 5 || sFixupLogCount % 5000 == 0) {
+        fprintf(stderr, "DC3_IK_DIAG ReapplyIK: restored %d bone transforms\n",
+                (int)sIKSavedXfms.size());
+    }
+    sFixupLogCount++;
+
+    sIKSavedXfms.clear();
+}
+#endif

@@ -269,6 +269,41 @@ GameplayTelemetry::Snapshot GameplayTelemetry::CaptureSnapshot(int frame) {
             RndTransformable *rToe = charDir->Find<RndTransformable>("bone_R-toe.mesh", true);
             if (lAnkle && rAnkle && lToe && rToe) {
                 s.footDataValid = true;
+                // IMPORTANT: Check Dirty() BEFORE WorldXfm()! WorldXfm() triggers
+                // WorldXfm_Force() if dirty, which recomputes and clears the flag.
+                // We need to capture the dirty state BEFORE that happens.
+                s.lAnkleDirty = lAnkle->Dirty();
+                s.rAnkleDirty = rAnkle->Dirty();
+                {
+                    RndTransformable *lShin = lAnkle->TransParent();  // shin
+                    RndTransformable *rShin = rAnkle->TransParent();
+                    if (lShin) s.lKneeDirty = lShin->Dirty();
+                    if (rShin) s.rKneeDirty = rShin->Dirty();
+                    RndTransformable *pelvisD = charDir->Find<RndTransformable>("bone_pelvis.mesh", true);
+                    if (pelvisD) s.pelvisDirty = pelvisD->Dirty();
+
+                    // Also check thigh (shin's parent) to narrow down cascade source
+                    RndTransformable *lThigh = lShin ? lShin->TransParent() : nullptr;
+                    RndTransformable *rThigh = rShin ? rShin->TransParent() : nullptr;
+                    bool lThighDirty = lThigh && lThigh->Dirty();
+                    bool rThighDirty = rThigh && rThigh->Dirty();
+                    // Log the full chain once to identify what's dirty
+                    static int sDirtyChainLog = 0;
+                    if (s.lAnkleDirty && sDirtyChainLog < 5) {
+                        sDirtyChainLog++;
+                        fprintf(stderr,
+                            "DC3_IK_DIAG DirtyChain: ankle=%d shin=%d(%s) thigh=%d(%s) pelvis=%d "
+                            "shinChildCount=%d thighChildCount=%d\n",
+                            s.lAnkleDirty ? 1 : 0,
+                            s.lKneeDirty ? 1 : 0,
+                            lShin ? lShin->Name() : "null",
+                            lThighDirty ? 1 : 0,
+                            lThigh ? lThigh->Name() : "null",
+                            s.pelvisDirty ? 1 : 0,
+                            lShin ? (int)lShin->Children().size() : -1,
+                            lThigh ? (int)lThigh->Children().size() : -1);
+                    }
+                }
                 s.lAnkleZ = lAnkle->WorldXfm().v.z;
                 s.lToeZ = lToe->WorldXfm().v.z;
                 s.rAnkleZ = rAnkle->WorldXfm().v.z;
@@ -364,6 +399,8 @@ GameplayTelemetry::Snapshot GameplayTelemetry::CaptureSnapshot(int frame) {
                                           - m.x.y * (m.y.x * m.z.z - m.y.z * m.z.x)
                                           + m.x.z * (m.y.x * m.z.y - m.y.y * m.z.x);
                 }
+
+                // (dirty flag capture moved above, before WorldXfm() calls)
             }
 
             // Hand bone positions — IKElbow modifies hand parent chain too
@@ -424,7 +461,8 @@ void GameplayTelemetry::Sample(int frame) {
         "lAnkleWorldDelta=%.2f rAnkleWorldDelta=%.2f "
         "lHandX=%.1f lHandY=%.1f lHandZ=%.1f rHandX=%.1f rHandY=%.1f rHandZ=%.1f "
         "lKneeLocalX=%.2f rKneeLocalX=%.2f kneeLocalHasNaN=%d "
-        "ankleRotDeterminant=%.4f\n",
+        "ankleRotDeterminant=%.4f "
+        "lAnkleDirty=%d rAnkleDirty=%d lKneeDirty=%d rKneeDirty=%d pelvisDirty=%d\n",
         s.frame, s.state, s.screen, s.transitionScreen, s.uiInTransition ? 1 : 0,
         s.gameScreenActive ? 1 : 0, s.currentHasWorldPanel ? 1 : 0,
         s.transitionHasWorldPanel ? 1 : 0, s.worldPanelLoaded ? 1 : 0,
@@ -453,6 +491,9 @@ void GameplayTelemetry::Sample(int frame) {
         s.lAnkleWorldDelta, s.rAnkleWorldDelta,
         s.lHandX, s.lHandY, s.lHandZ, s.rHandX, s.rHandY, s.rHandZ,
         s.lKneeLocalX, s.rKneeLocalX, s.kneeLocalHasNaN ? 1 : 0,
-        s.ankleRotDeterminant
+        s.ankleRotDeterminant,
+        s.lAnkleDirty ? 1 : 0, s.rAnkleDirty ? 1 : 0,
+        s.lKneeDirty ? 1 : 0, s.rKneeDirty ? 1 : 0,
+        s.pelvisDirty ? 1 : 0
     );
 }

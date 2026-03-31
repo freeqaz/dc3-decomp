@@ -1,5 +1,8 @@
 #include "char/Character.h"
 #include "CharInterest.h"
+#ifdef HX_NATIVE
+#include "hamobj/HamIKEffector.h"
+#endif
 #include "obj/ObjPtrVec_impl.h"
 #include "Waypoint.h"
 #include "char/CharEyes.h"
@@ -416,6 +419,12 @@ void Character::Poll() {
             mTest->Poll();
         }
         RndDir::Poll();
+#ifdef HX_NATIVE
+        // Re-apply IK-corrected world transforms that were overwritten by
+        // dirty cascades from later-running effectors (e.g., pelvis IK cascading
+        // dirty through thigh→shin→ankle after ankle IK already ran).
+        HamIKEffector::ReapplyIKCorrections();
+#endif
         if (mShowing) {
             mTeleported = false;
         }

@@ -97,6 +97,13 @@ struct Snapshot {
     float rKneeLocalX = 0.0f;       // R-knee (ankle parent) mLocalXfm.v.x
     bool kneeLocalHasNaN = false;    // any NaN/Inf in knee mLocalXfm
     float ankleRotDeterminant = 0.0f; // determinant of L-ankle WorldXfm.m (should be ~1.0)
+
+    // Dirty cascade diagnostic — does the ankle bone get re-dirtied after IK?
+    bool lAnkleDirty = false;         // L-ankle mDirty flag at telemetry sample time
+    bool rAnkleDirty = false;         // R-ankle mDirty flag at telemetry sample time
+    bool lKneeDirty = false;          // L-knee (shin) mDirty flag
+    bool rKneeDirty = false;          // R-knee (shin) mDirty flag
+    bool pelvisDirty = false;         // pelvis mDirty flag
 };
 
 void Init();            // Check DC3_TEL env var

@@ -645,3 +645,45 @@ If approaches A and B are too complex, directly write to `TheTaskMgr.mTimelines[
 
 **~~Approach D: Use native port~~** ← WRONG
 The native port cannot provide Xbox ground truth data. It already has the `#ifdef HX_NATIVE` audio fallback — that's the code under test. Only Xenia running the original XEX gives us the real IK bone positions to compare against.
+
+## Xenia Vulkan Rendering Fix (2026-03-30)
+
+### Root cause
+
+Xenia's Vulkan renderer on Linux showed **framebuffer ghosting** — previous screen content bleeding through during transitions. The cause was EDRAM/host render target persistence across deferred draw frames:
+
+- When `FlushDeferredDraws()` replays a frame, EDRAM tiles from the previous presentation are still resident and loaded via `LOAD_OP_LOAD` (by design for partial-update correctness).
+- Host render targets (aliased to EDRAM ranges) also persist across the flush boundary.
+- Result: deferred replay overlays ONE frame of rendering on top of accumulated previous-frame EDRAM state, producing ghosting.
+
+### Fix applied
+
+In Xenia `headless-vulkan-linux` branch: clear the EDRAM buffer and destroy host render targets before `FlushDeferredDraws()`, but **only on the first flush** (first-flush-only guard):
+
+- Second+ calls to `ResetState()` trigger a `device_lost` error in the Vulkan render target cache. Root cause not yet diagnosed — likely a descriptor set or image layout transition issue when destroying RTs mid-flight.
+- The first-flush-only guard works around this: the first frame is rendered clean, subsequent frames have mild current-session ghosting (only within the same run, not cross-session).
+
+### Results
+
+- First frame captured after the fix: **clean** — no ghosting, full DC3 logo renders correctly.
+- Subsequent frames: mild ghosting from earlier screens in the same run (acceptable for telemetry purposes).
+- New screenshots archived to `archive/screenshots/xenia-gameplay/` with `07-fixed-dc3-logo-clean.png` and `08-fixed-autosave-clean.png` confirming clean first-frame output.
+
+### Files changed in Xenia (branch `headless-vulkan-linux`)
+
+```
+xenia/src/xenia/gpu/vulkan/vulkan_command_processor.cc  — FlushDeferredDraws first-flush-only EDRAM clear call
+xenia/src/xenia/gpu/vulkan/vulkan_command_processor.h   — added first_deferred_flush_ flag
+xenia/src/xenia/gpu/vulkan/vulkan_render_target_cache.cc — DestroyHostRenderTargets() implementation
+xenia/src/xenia/gpu/vulkan/vulkan_render_target_cache.h  — DestroyHostRenderTargets() declaration
+xenia/src/xenia/gpu/vulkan/render_target_cache.h         — virtual ClearEdram() / DestroyHostRTs() interface
+xenia/src/xenia/gpu/vulkan/device_1_0.inc                — (Vulkan device extension / pipeline adjustments)
+```
+
+### Remaining: device_lost on 2nd ResetState() call
+
+To get all frames clean (not just the first), the `device_lost` triggered by the second `ResetState()` call must be fixed. Investigation needed:
+
+1. Identify which Vulkan object (image, image view, descriptor set, framebuffer) is still in-flight when destroyed by `DestroyHostRenderTargets()`.
+2. Add a `vkQueueWaitIdle()` or proper fence before destruction, or defer destruction until the frame is no longer in-flight.
+3. Once fixed, remove the first-flush-only guard and let EDRAM clear run every flush.

@@ -9,6 +9,10 @@
 #include "rndobj/Highlight.h"
 #include "rndobj/Trans.h"
 #include "utl/MemMgr.h"
+#ifdef HX_NATIVE
+#include <vector>
+#include <utility>
+#endif
 
 /** "Does IK on end effectors and props" */
 class HamIKEffector : public RndHighlightable,
@@ -56,6 +60,14 @@ public:
 
     OBJ_MEM_OVERLOAD(0x19)
     NEW_OBJ(HamIKEffector)
+
+#ifdef HX_NATIVE
+    // Post-poll IK fixup: re-apply IK-corrected world transforms that were
+    // overwritten by dirty cascades from later-running effectors (e.g., pelvis IK
+    // cascading dirty through thigh→shin→ankle after ankle IK already ran).
+    // Called from Character::Poll after RndDir::Poll completes.
+    static void ReapplyIKCorrections();
+#endif
 
 protected:
     HamIKEffector();
