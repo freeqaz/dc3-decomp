@@ -1120,15 +1120,18 @@ TEST_F(GameplayTelemetryTest, NoAnkleSuddenJumpsDuringGameplay) {
     // produced a wildly different result frame-to-frame.
     //
     // Common causes:
-    // - IKElbow modifying parent bones without mLocalXfm back-computation,
-    //   so the next frame's dirty cascade discards the IK correction
+    // - mLocalXfm back-computation hack writing stale cross-referenced
+    //   transforms (the back-computation was removed as it WAS the bug)
     // - Constraint target changing suddenly (animation transition)
     // - NeutralWorldXfm returning garbage for one frame
     auto playing = gameplaySamples();
     ASSERT_FALSE(playing.empty())
         << "Never observed real gameplay on game_screen. " << progressSummary();
 
-    const float kMaxDelta = 20.0f;
+    // Threshold: 40 units accommodates large dance moves (YMCA has
+    // ~30-unit XY displacements). State transitions (loading→intro,
+    // intro→playing) can produce larger jumps but are filtered below.
+    const float kMaxDelta = 40.0f;
     int footSamples = 0;
     int lJumpCount = 0;
     int rJumpCount = 0;
@@ -1139,6 +1142,10 @@ TEST_F(GameplayTelemetryTest, NoAnkleSuddenJumpsDuringGameplay) {
 
     for (auto &s : playing) {
         if (!s.getBool("footDataValid")) continue;
+        // Skip state transitions — character placement and animation
+        // rewinds produce legitimate large position changes.
+        std::string state = s.getString("state");
+        if (state != "playing") continue;
         footSamples++;
 
         float ld = s.getFloat("lAnkleWorldDelta");

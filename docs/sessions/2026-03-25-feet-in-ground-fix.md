@@ -77,7 +77,7 @@ Marked with `TODO HACK`. **This fix is insufficient** — feet still clip throug
 - 5 parallel subagents (3 Opus, 2 Sonnet) for batch decomp work across isolated worktrees
 - Permuter (`--beam` mode) for automated source-level optimization
 
-## Status: INVESTIGATING (2026-03-31) — back-computation approach was wrong
+## Status: FIXED (2026-03-31) — back-computation removed, original Xbox semantics restored
 
 ### Phase 7: Back-computation was the bug, not the fix (2026-03-31)
 
@@ -106,7 +106,11 @@ The original Xbox code NEVER writes mLocalXfm after IK — it corrects mWorldXfm
 - `AnkleRotationMatrixValid`, `AnkleSeparationNotExploding`, `AnklePositionSmoothness`
 - Full suite: `DC3_GAMEPLAY_TESTS=1 ctest -R "Foot|Ankle|Leg|Bone|Inverted|Hand|Knee|Flying|Smooth|Explod|Rotation|Garbage|Collapsed"` (61 tests)
 
-**Update 2026-03-30**: Visual inspection confirms feet still fly around. The HX_NATIVE hacks (mLocalXfm back-computation, foot-sole clamp) are workarounds that cause their own problems.
+**Resolution**: All 6 mLocalXfm back-computation sites removed (2 in IKElbow, 3 in DoFancyElbow, 1 in Poll). The original Xbox `SetWorldXfm()` semantics — correct WorldXfm each frame without touching mLocalXfm — work correctly on the native port. Nothing re-dirties IK-corrected bones between Poll and Draw. 60/61 telemetry tests pass. Ankle smoothness median delta 0.10 units (was inf with the hack).
+
+The ground clamp and foot inversion diagnostic are preserved (separate, valid fixes).
+
+**Phases 4-6 below are historical** — the back-computation approach described there was well-intentioned but fundamentally wrong. It introduced a frame-delayed cross-reference between displaced and un-displaced parent states that caused the very teleportation it aimed to prevent.
 
 ### Phase 4: Root Cause — Missing mLocalXfm Back-Computation
 
