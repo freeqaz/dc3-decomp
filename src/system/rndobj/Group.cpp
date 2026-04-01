@@ -385,38 +385,31 @@ int RndGroup::CollidePlane(const Plane &p) {
 
 int RndGroup::MoveObject(Hmx::Object *obj, int delta) {
     typedef ObjPtrList<Hmx::Object>::Node Node;
-    Node *node = nullptr;
-    for (Node *n = mObjects.mNodes; n != nullptr; n = n->next) {
-        if (n->Obj() == obj) {
-            node = n;
+    Node *target;
+    Node *node;
+    for (node = mObjects.mNodes; node != nullptr; node = node->next) {
+        if (node->Obj() == obj)
             break;
-        }
     }
     if (!node) {
         return 0;
     }
+    target = node;
     int remaining = delta;
-    Node *target;
     if (delta > 0) {
-        Node *next = node->next;
+        target = node->next;
         do {
-            target = nullptr;
-            if (next == nullptr)
+            if (target == nullptr)
                 break;
-            target = next->next;
-            remaining--;
-            next = target;
+            target = target->next;
+        } while (--remaining != 0);
+    } else if (delta != 0) {
+        do {
+            if (target == mObjects.mNodes)
+                break;
+            target = target->prev;
+            remaining++;
         } while (remaining != 0);
-    } else {
-        target = node;
-        if (delta != 0) {
-            do {
-                if (target == mObjects.mNodes)
-                    break;
-                target = target->prev;
-                remaining++;
-            } while (remaining != 0);
-        }
     }
     if (node != target) {
         mObjects.Unlink(node);

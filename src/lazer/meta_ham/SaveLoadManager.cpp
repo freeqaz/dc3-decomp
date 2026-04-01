@@ -1973,7 +1973,7 @@ DataNode SaveLoadManager::OnMsg(const SigninChangedMsg &msg) {
             MakeString(
                 "SIGNOUT on pad %d not expected during state %d",
                 mActiveProfile->GetPadNum(),
-                (int)mState
+                mState
             )
         );
         // fall through
@@ -2014,6 +2014,8 @@ DataNode SaveLoadManager::OnMsg(const SigninChangedMsg &msg) {
     case kS_ManualLoadNoFile:
     case kS_ManualLoadCorrupt:
     case kS_ManualLoadNotOwner: {
+        HamProfile *critProfile = TheProfileMgr.CriticalProfile();
+
         bool activeSignedOut = false;
         if (mActiveProfile != NULL) {
             if (ThePlatformMgr.HasPadNumsSigninChanged(mActiveProfile->GetPadNum())) {
@@ -2022,7 +2024,6 @@ DataNode SaveLoadManager::OnMsg(const SigninChangedMsg &msg) {
         }
 
         bool otherSignedOut = false;
-        HamProfile *critProfile = TheProfileMgr.CriticalProfile();
         if (critProfile != NULL) {
             if (ThePlatformMgr.HasPadNumsSigninChanged(critProfile->GetPadNum())) {
                 otherSignedOut = true;
@@ -2038,7 +2039,7 @@ DataNode SaveLoadManager::OnMsg(const SigninChangedMsg &msg) {
                     MakeString(
                         "Expected active dialog event during signin change on pad %d while in state %d.",
                         mActiveProfile->GetPadNum(),
-                        (int)mState
+                        mState
                     )
                 );
             }

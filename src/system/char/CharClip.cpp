@@ -867,28 +867,28 @@ CharClip::FindNode(CharClip *clip, float f1, int iii, float f2) const {
     const CharGraphNode *n = nullptr;
 
     if (blendMode >= kPlayNoBlend) {
-        if (!(blendMode != kPlayNoBlend)) {
+        if (blendMode == kPlayNoBlend) {
             n = nullptr;
-        } else {
-            if (blendMode >= kPlayLast) {
-                if (blendMode == kPlayLast) {
-                    n = FindLastNode(clip, f1);
-                } else if (blendMode != kPlayDirty) {
+        } else if (blendMode >= kPlayLast) {
+            if (blendMode != kPlayLast) {
+                if (blendMode != kPlayDirty) {
                     MILO_NOTIFY(
                         "Unknown mode flags %x, default to kPlayNow",
                         (CamShotFrame::BlendEaseMode)iii
                     );
                 }
             } else {
-                n = FindFirstNode(clip, f1);
+                n = FindLastNode(clip, f1);
             }
+        } else {
+            n = FindFirstNode(clip, f1);
         }
     }
 
     if (!n) {
+        float halfBlend = f2 * 0.5f;
         static CharGraphNode node;
         static int sFlag;
-        float halfBlend = f2 * 0.5f;
         if (!(sFlag & 1)) {
             sFlag |= 1;
         }

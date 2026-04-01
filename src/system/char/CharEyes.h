@@ -16,6 +16,7 @@
 
 /** "Moves a bunch of lookats around" */
 class CharEyes : public RndHighlightable, public CharWeightable, public CharPollable {
+    friend class Character;
 public:
     struct EyeDesc {
         EyeDesc(Hmx::Object *owner)

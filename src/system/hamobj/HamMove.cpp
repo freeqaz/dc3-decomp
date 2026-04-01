@@ -150,14 +150,14 @@ void MoveFrame::Load(BinStreamRev &d) {
     } else {
         mTypeMask = -1;
     }
-    int num_ham1_nodes = kNumHam1Nodes;
     int num_ham2_nodes = FilterVersion::NumHam2Nodes();
+    int num_ham1_nodes = kNumHam1Nodes;
     if (d.rev > 0x27) {
         d >> num_ham1_nodes;
         MILO_ASSERT(num_ham1_nodes == kNumHam1Nodes, 0x122);
         for (int i = 0; i < kNumMoveModes; i++) {
             for (int j = 0; j < kNumMoveMirrored; j++) {
-                for (int k = 0; k < kNumHam1Nodes; k++) {
+                for (int k = 0; k < num_ham1_nodes; k++) {
                     d >> mHam1NodeWeights[i][j][k];
                 }
             }
@@ -243,28 +243,50 @@ void MoveFrame::Load(BinStreamRev &d) {
                 }
             }
         } else {
-            for (int i = 0; i < 2; i++) {
-                for (int j = 0; j < 2; j++) {
-                    for (int k = 0; k < 2; k++) {
-                        d >> oldNodeWeights[i + k];
+            for (int i = 0; i < kNumMoveModes; i++) {
+                for (int j = 0; j < kNumMoveMirrored; j++) {
+                    for (int k = 0; k < kNumMoveMirrored; k++) {
+                        d >> oldNodeWeights[i * 4 + j * 2 + k];
                     }
                 }
             }
         }
-        // Copy oldNodeWeights into mNodeWeights arrays
+        // Copy oldNodeWeights into mHam1NodeWeights arrays
         int node_idx = 0;
-        for (int mirror = 0; mirror < kNumMoveMirrored; mirror++) {
-            int size = oldNodeWeights[mirror].size();
-            for (int i = 0; i < size; i++) {
-                auto& _sub4 = oldNodeWeights[mirror][i];
-                mNodeWeights[mirror][node_idx][0] = _sub4.unk0;
-                mNodeWeights[mirror][node_idx][1] = _sub4.unk0;
-                mNodeWeights[mirror][node_idx][2] = _sub4.unk0;
+        for (int mode = 0; mode < kNumMoveModes; mode++) {
+            for (int mirror = 0; mirror < kNumMoveMirrored; mirror++) {
+                int size = oldNodeWeights[node_idx].size();
+                for (int i = 0; i < size; i++) {
+                    OldNodeWeight &old = oldNodeWeights[node_idx][i];
+                    mHam1NodeWeights[mode][mirror][i].mActive = (old.unk0 != 0.0f);
+                    mHam1NodeWeights[mode][mirror][i].mPerfectDist2 = old.unkc;
+                    mHam1NodeWeights[mode][mirror][i].mRate2 = old.unk10;
+                    mHam1NodeWeights[mode][mirror][i].mPerfectDist = old.unk4;
+                    mHam1NodeWeights[mode][mirror][i].mRate = old.unk8;
+                }
                 node_idx++;
             }
         }
+        // Copy remaining OldNodeWeights into mNodeWeights
+        for (int mirror = 0; mirror < kNumMoveMirrored; mirror++) {
+            int size = oldNodeWeights[node_idx].size();
+            for (int i = 0; i < num_ham2_nodes; i++) {
+                if (i < size) {
+                    mNodeWeights[mirror][i].Set(
+                        oldNodeWeights[node_idx][i].unk0,
+                        oldNodeWeights[node_idx][i].unk0,
+                        oldNodeWeights[node_idx][i].unk0
+                    );
+                }
+            }
+            node_idx++;
+        }
         // Process ham2 frame weights
-        if (d.rev > 0x1C) {
+        if (d.rev >= 0x1E) {
+            for (int mirror = 0; mirror < kNumMoveMirrored; mirror++) {
+                d >> mFrameWeights[mirror];
+            }
+        } else if (d.rev > 0x1C) {
             for (int mirror = 0; mirror < kNumMoveMirrored; mirror++) {
                 d >> mFrameWeights[mirror];
             }
@@ -272,8 +294,7 @@ void MoveFrame::Load(BinStreamRev &d) {
         // Fill remaining nodes with default scale
         for (int node = node_idx; node < num_ham2_nodes; node++) {
             for (int mirror = 0; mirror < kNumMoveMirrored; mirror++) {
-                auto _tmp1 = Vector3(1, 1, 1);
-                SetNodeScale(node, (MoveMirrored)mirror, _tmp1);
+                SetNodeScale(node, (MoveMirrored)mirror, Vector3(1, 1, 1));
             }
         }
     }

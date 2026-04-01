@@ -708,20 +708,22 @@ bool Character::SetFocusInterest(Symbol symbol, int i) {
     CharEyes *eyes = GetEyes();
     if (eyes) {
         CharInterest *interest = nullptr;
-        int count = eyes->NumInterests();
-
+        int count = eyes->mInterests.size();
         for (int idx = 0; idx < count; idx++) {
-            CharInterest *current_interest = eyes->GetInterest(idx);
-            if (symbol == current_interest->Name()) {
-                interest = current_interest;
+            CharInterest *ci =
+                (unsigned int)idx >= eyes->mInterests.size()
+                    ? 0
+                    : (CharInterest *)eyes->mInterests[idx].mInterest;
+            if (symbol == ci->Name()) {
+                interest = (unsigned int)idx >= eyes->mInterests.size()
+                    ? 0
+                    : (CharInterest *)eyes->mInterests[idx].mInterest;
                 break;
             }
         }
-
         if (!symbol.Null() && !interest) {
             MILO_NOTIFY("Couldn't find interest named %s to force on %s", symbol.Str(), Name());
         }
-
         return SetFocusInterest(interest, i);
     }
     return false;
@@ -760,21 +762,18 @@ DataNode Character::OnPlayClip(DataArray *msg) {
         return 0;
 }
 
-template <class _T>
-__declspec(noinline) auto _outline_NumInterests(_T* _obj) -> decltype(_obj->NumInterests()) {
-    return _obj->NumInterests();
-}
-
 DataNode Character::OnGetCurrentInterests(DataArray *da) {
     int size = 0;
     CharEyes *eyes = GetEyes();
     if (eyes)
-        size = bool(_outline_NumInterests(eyes));
+        size = eyes->mInterests.size();
     DataArrayPtr ptr;
     ptr->Resize(size + 1);
     ptr->Node(0) = Symbol();
     for (int i = 0; i < size; i++) {
-        ptr->Node(i + 1) = Symbol(eyes->GetInterest(i)->Name());
+        ptr->Node(i + 1) = Symbol(((unsigned int)i >= eyes->mInterests.size()
+            ? (CharInterest *)0
+            : (CharInterest *)eyes->mInterests[i].mInterest)->Name());
     }
     return ptr;
 }
