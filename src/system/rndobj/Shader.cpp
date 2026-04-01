@@ -305,12 +305,13 @@ void SetColorWriteMask(const ShaderOptions &opts, RndMat *mat) {
 void CheckDistortionOpts(RndMat *mat, ShaderOptions &opts) {
     RndSpline *spline = RndSpline::sGlobalDefaultSpline;
     if (spline && !mat->mNeverFitToSpline && spline->mCtrlPoints.size() >= 2) {
+        opts.flags |= (u64)1 << 55;
         opts.flags = ((u64)(spline->mPulseDrawing & 1) << 56)
-            | (opts.flags & ~((u64)1 << 56))
-            | ((u64)1 << 55);
+            | (opts.flags & ~((u64)1 << 56));
     }
-    if (RndShockwave::sSelected) {
-        bool ampBad = Abs(RndShockwave::sSelected->mAmplitude) < 0.0001f;
+    RndShockwave *shockwave = RndShockwave::sSelected;
+    if (shockwave) {
+        bool ampBad = Abs(shockwave->mAmplitude) < 0.0001f;
         if (!ampBad && mat->mAllowDistortionEffects) {
             bool multBad = Abs(mat->mShockwaveMult) < 0.0001f;
             if (!multBad) {

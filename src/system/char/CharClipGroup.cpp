@@ -188,10 +188,9 @@ CharClip *CharClipGroup::FindClip(const char *name) const {
 }
 
 void CharClipGroup::SetClipFlags(int flags) {
-    for (int i = 0; i < (int)mClips.size(); i++) {
-        CharClip *clip = (CharClip *)mClips[i];
-        if (clip)
-            clip->SetFlags(flags);
+    for (int i = 0; i < mClips.size(); i++) {
+        CharClip *clip = mClips[i];
+        clip->SetFlags(flags | clip->Flags());
     }
 }
 

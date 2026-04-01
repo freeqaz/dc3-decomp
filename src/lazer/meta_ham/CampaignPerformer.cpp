@@ -170,12 +170,13 @@ void CampaignPerformer::OnLoadSong() {
     mStarsEarnedSoFar = 0;
     if (TheGameMode->InMode("campaign_outro", true)) {
         int idx = GetPlaylistIndex();
-        static Symbol song_shortening_enabled("song_shortening_enabled");
         static Symbol perform("perform");
+        static Symbol song_shortening_enabled("song_shortening_enabled");
         static Symbol deinit("deinit");
         Symbol mode = TheCampaign->GetOutroSongGameplayMode(idx);
+        bool isPerform = mode == perform;
         if (TheGameMode->GameplayMode() != mode) {
-            TheGameMode->SetGameplayMode(mode, mode == perform);
+            TheGameMode->SetGameplayMode(mode, isPerform);
             TheHamProvider->SetProperty(
                 song_shortening_enabled,
                 TheCampaign->GetOutroSongShortened(GetPlaylistIndex())
