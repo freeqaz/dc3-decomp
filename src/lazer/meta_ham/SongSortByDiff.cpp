@@ -51,10 +51,10 @@ SongSortByDiff::~SongSortByDiff() {}
 
 NavListItemNode *SongSortByDiff::NewItemNode(void *v) const {
     SongRecord *record = static_cast<SongRecord *>(v);
-    const HamSongMetadata *metadata = record->Metadata();
-    DifficultyCmp *cmp = new DifficultyCmp(
-        TheHamSongMgr.RankTier(metadata->Rank()), metadata->Rank(), metadata->Title()
-    );
+    int tier = record->RankTier();
+    float rank = record->Metadata()->Rank();
+    const char *title = record->Metadata()->Title();
+    DifficultyCmp *cmp = new DifficultyCmp(tier, rank, title);
     return new SongSortNode(cmp, record);
 }
 

@@ -1123,40 +1123,44 @@ int MetagameRank::ComputeRankNumber(bool forceAward) {
     }
 
     if (mAtMaxRank) {
+        mRankNumber = gRanksArray->Size() - 1;
         mPctToNextRank = 0.0f;
         mAtMaxRank = true;
-        mRankNumber = gRanksArray->Size() - 1;
         return mRankNumber;
     }
 
     int currentRank = 1;
     int prevScore = 0;
     float pct;
+    int scoreReq = 0;
+    int found = 0;
 
     if (1 < gRanksArray->Size()) {
         do {
+            prevScore = scoreReq;
             DataArray *rankEntry = gRanksArray->Array(currentRank);
-            int scoreReq = rankEntry->Int(0);
+            scoreReq = rankEntry->Int(0);
 
             if (scoreReq > mScore) {
                 currentRank--;
                 if (currentRank != -1) {
-                    pct = (float)(mScore - prevScore) / (float)(scoreReq - prevScore);
-                    goto update;
+                    found = 1;
                 }
                 break;
             }
 
             currentRank++;
-            prevScore = scoreReq;
         } while (currentRank < gRanksArray->Size());
     }
 
-    pct = 0.0f;
-    mAtMaxRank = true;
-    currentRank = gRanksArray->Size() - 1;
+    if (found == 0) {
+        pct = 0.0f;
+        currentRank = gRanksArray->Size() - 1;
+        mAtMaxRank = true;
+    } else {
+        pct = (float)(mScore - prevScore) / (float)(scoreReq - prevScore);
+    }
 
-update:
     mPctToNextRank = pct;
     if (mRankNumber != currentRank) {
         if (mAtMaxRank) {

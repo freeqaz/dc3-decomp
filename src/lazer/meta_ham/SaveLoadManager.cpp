@@ -1957,21 +1957,98 @@ DataNode SaveLoadManager::OnMsg(const SigninChangedMsg &msg) {
 
     mSigninMask = 0;
 
-    if (static_cast<int>(mState) <= 0x67) {
-        return DataNode(0);
-    }
+    switch (mState) {
+    case kS_Idle:
+    case kS_Abort:
+    case kS_Done:
+    case kS_Finish:
+        break;
 
-    if (msg.GetMask() != 0 && ThePlatformMgr.HasPadNumsSigninChanged(msg.GetMask())) {
-        mSigninMask = msg.GetMask();
-        TheDebug.Notify("SIGNOUT on pad not expected");
+    default:
+        if (mActiveProfile == NULL)
+            break;
+        if (!ThePlatformMgr.HasPadNumsSigninChanged(mActiveProfile->GetPadNum()))
+            break;
+        TheDebug.Notify(
+            MakeString(
+                "SIGNOUT on pad %d not expected during state %d",
+                mActiveProfile->GetPadNum(),
+                (int)mState
+            )
+        );
+        // fall through
+    case kS_AutoloadStartLoad:
+    case kS_SaveOverwrite:
+    case kS_SaveNoOverwrite:
+    case kS_ManualLoadStartLoad:
         SetState(kS_Abort);
-    }
+        break;
 
-    if (TheUIEventMgr->HasActiveDialogEvent()) {
-        Symbol currentEvent = TheUIEventMgr->CurrentEvent();
-        if (currentEvent != gNullStr && currentEvent == saveload_dialog_event) {
-            TheUIEventMgr->DismissEvent(currentEvent);
+    case kS_AutoloadNoSaveFound_Msg:
+    case kS_AutoloadMultipleSavesFound:
+    case kS_AutoloadDeviceMissing:
+    case kS_AutoloadCorrupt:
+    case kS_AutoloadNotOwner:
+    case kS_AutoloadObsolete:
+    case kS_AutoloadFuture:
+    case kS_SongCacheCreateNotFound_Msg:
+    case kS_SongCacheCreateMissing_Msg:
+    case kS_SongCacheCreateCorrupt:
+    case kS_GlobalCreateNotFound_Msg:
+    case kS_GlobalCreateMissing_Msg:
+    case kS_GlobalCreateCorrupt:
+    case kS_GlobalOptionsMissing_Msg:
+    case kS_SaveLoadError:
+    case kS_SaveConfirmOverwrite:
+    case kS_SaveNotEnoughSpace:
+    case kS_SaveNotEnoughSpacePS3:
+    case kS_SaveDeviceInvalid:
+    case kS_SaveFailed:
+    case kS_SaveDisabledByCheat:
+    case kS_LoadFailed:
+    case kS_ManualSaveNoDevice:
+    case kS_ManualLoadConfirmUnsaved:
+    case kS_ManualLoadConfirm:
+    case kS_ManualLoadNoDevice:
+    case kS_ManualLoadMissing:
+    case kS_ManualLoadNoFile:
+    case kS_ManualLoadCorrupt:
+    case kS_ManualLoadNotOwner: {
+        bool activeSignedOut = false;
+        if (mActiveProfile != NULL) {
+            if (ThePlatformMgr.HasPadNumsSigninChanged(mActiveProfile->GetPadNum())) {
+                activeSignedOut = true;
+            }
         }
+
+        bool otherSignedOut = false;
+        HamProfile *critProfile = TheProfileMgr.CriticalProfile();
+        if (critProfile != NULL) {
+            if (ThePlatformMgr.HasPadNumsSigninChanged(critProfile->GetPadNum())) {
+                otherSignedOut = true;
+            }
+        }
+
+        if (activeSignedOut) {
+            if (TheUIEventMgr->HasActiveDialogEvent()
+                && TheUIEventMgr->CurrentEvent() == saveload_dialog_event) {
+                TheUIEventMgr->DismissEvent(gNullStr);
+            } else {
+                TheDebug.Notify(
+                    MakeString(
+                        "Expected active dialog event during signin change on pad %d while in state %d.",
+                        mActiveProfile->GetPadNum(),
+                        (int)mState
+                    )
+                );
+            }
+        } else if (!otherSignedOut) {
+            break;
+        }
+
+        SetState(kS_Done);
+        break;
+    }
     }
 
     return DataNode(0);

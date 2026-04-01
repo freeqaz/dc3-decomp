@@ -35,9 +35,7 @@ namespace {
         if (!light.Showing())
             return false;
         Hmx::Color color = light.GetColor();
-        return (((int)(color.blue * 255.0f) & 0xff)
-            | ((int)(color.green * 255.0f) & 0xff)
-            | ((int)(color.red * 255.0f) & 0xff)) != 0;
+        return color.Pack() != 0;
     }
 
     bool CheckProjLight(NgLight &light) {
@@ -52,13 +50,10 @@ namespace {
                 return false;
         }
         Hmx::Color color = light.GetColor();
-        if ((((int)(color.red * 255.0f) & 0xff)
-            | ((int)(color.green * 255.0f) & 0xff)
-            | ((int)(color.blue * 255.0f) & 0xff)) != 0) {
-            light.CheckShadowMap();
-            return true;
-        }
-        return false;
+        if (color.Pack() == 0)
+            return false;
+        light.CheckShadowMap();
+        return true;
     }
 
     bool SetPointLightRegisters(int lightIdx, RndLight &light, bool &hasPointCubeTex) {
@@ -66,9 +61,9 @@ namespace {
         if (!light.Showing())
             return false;
         Hmx::Color color = light.GetColor();
-        if ((((int)(color.red * 255.0f) & 0xff)
-            | ((int)(color.green * 255.0f) & 0xff)
-            | ((int)(color.blue * 255.0f) & 0xff)) != 0) {
+        if (color.Pack() == 0)
+            return false;
+        {
             const Transform &xfm = light.WorldXfm();
             float posX = xfm.v.x;
             float posY = xfm.v.y;
@@ -105,7 +100,6 @@ namespace {
             }
             return true;
         }
-        return false;
     }
 
     bool SetProjLightRegisters(int lightIdx, int projIdx, NgLight &light) {
@@ -114,9 +108,7 @@ namespace {
         if (light.GetTexture() == nullptr && light.GetProjectedBlend() == 0)
             return false;
         Hmx::Color color = light.GetColor();
-        if ((((int)(color.red * 255.0f) & 0xff)
-            | ((int)(color.green * 255.0f) & 0xff)
-            | ((int)(color.blue * 255.0f) & 0xff)) == 0)
+        if (color.Pack() == 0)
             return false;
         const Transform &xfm = light.WorldXfm();
         float dirX = -xfm.m.y.x;

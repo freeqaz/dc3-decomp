@@ -18,16 +18,17 @@ int PlaylistTypeCmp::Compare(
     const NavListItemSortCmp *other, NavListNodeType nodeType
 ) const {
     if (nodeType == kNodeShortcut) {
-        return 0;
-    } else if (nodeType == kNodeHeader) {
+    } else if (nodeType != kNodeHeader) {
+        if (nodeType != kNodeItem) {
+        } else {
+            other->GetPlaylistTypeCmp();
+            return -1;
+        }
+    } else {
         const PlaylistTypeCmp *otherCmp = other->GetPlaylistTypeCmp();
         return mType - otherCmp->mType;
-    } else if (!(nodeType == kNodeItem)) {
-        TheDebug.Fail(FormatString("invalid type of node comparison.").Str(), 0);
-    } else {
-        other->GetPlaylistTypeCmp();
-        return -1;
     }
+    MILO_FAIL("invalid type of node comparison.");
     return 0;
 }
 
