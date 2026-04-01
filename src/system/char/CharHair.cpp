@@ -648,6 +648,20 @@ CharHair::Point::Point(Hmx::Object *owner)
     unk78.Zero();
 }
 
+CharHair::Point::Point(const Point &p) : bone(p.bone), collides(p.collides) {
+    pos = p.pos;
+    bone = p.bone;
+    length = p.length;
+    collides = p.collides;
+    radius = p.radius;
+    outerRadius = p.outerRadius;
+    force = p.force;
+    lastFriction = p.lastFriction;
+    lastZ = p.lastZ;
+    sideLength = p.sideLength;
+    unk78 = p.unk78;
+}
+
 #pragma endregion CharHair::Point
 #pragma region CharHair::Strand
 

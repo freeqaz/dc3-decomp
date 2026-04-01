@@ -1787,11 +1787,13 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     float xScale = 0.99f - xMin;
 
     // Draw detected bar
-    float detectFrac = 0.0f;
-    if (!move->IsRest()) {
+    float detectFrac;
+    if (move->IsRest()) {
+        detectFrac = 0.0f;
+    } else {
         detectFrac = DetectFrac(0, -1);
     }
-    const char *mirroredStr = mirrored ? " (M)" : "";
+    const char *mirroredStr = mirrored ? "(mirror)" : gNullStr;
     int measureBeat = TheTaskMgr.CurrentMeasure();
     float totalBeat = TheTaskMgr.TotalBeat();
     const char *barLabel = MakeString(
@@ -1954,7 +1956,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     static Symbol merge_moves("merge_moves");
     const DataNode *mergeNode =
         TheHamProvider->Property(merge_moves, true);
-    int mergeVal = mergeNode ? mergeNode->Int(NULL) : 0;
+    int mergeVal = mergeNode->Int(NULL);
 
     BaseSkeleton *vizSkeleton = nullptr;
     mShowErrorFrames = nullptr;
@@ -1982,7 +1984,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
                     lineColor.Set(1, 1, 1, 1);
                     if (it->GetMoveFrame() == closest) {
                         mShowErrorFrames = it;
-                        vizSkeleton = (BaseSkeleton *)(it->GetDancerFrame() + 1);
+                        vizSkeleton = (BaseSkeleton *)&it->GetDancerFrame()->mSkeleton;
                     }
                 }
                 const Ham2FrameWeight &fw =
@@ -2006,10 +2008,9 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
                 }
 
                 // Draw error node index if applicable
-                int errorIdx = it->GetDancerFrame()
-                    ? ((int (*)(void *))(*(int **)it->GetDancerFrame())[7])(
-                          (void *)it->GetDancerFrame()
-                      )
+                const DancerFrame *dancerFrame = it->GetDancerFrame();
+                int errorIdx = dancerFrame
+                    ? dancerFrame->mSkeleton.ElapsedMs()
                     : -1;
                 if (errorIdx != -1) {
                     int nodeIdx = errorIdx;
@@ -2033,15 +2034,16 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
         DancerSequence *seq = move->GetDancerSequence();
         if (seq) {
             const std::vector<DancerFrame> &dancerFrames = seq->GetDancerFrames();
-            int frameIdx =
-                (int)((float)(dancerFrames.size() - 1) * beatOffset * 0.25f);
-            if (frameIdx <= 0) {
-                frameIdx = frameIdx - 1;
+            float frameF =
+                (float)(dancerFrames.size() - 1) * beatOffset * 0.25f;
+            int frameIdx;
+            if (frameF <= 0.0f) {
+                frameIdx = (int)(frameF - 0.5f);
             } else {
-                frameIdx = frameIdx + 1;
+                frameIdx = (int)(frameF + 0.5f);
             }
             vizSkeleton =
-                (BaseSkeleton *)(&dancerFrames[frameIdx] + 1);
+                (BaseSkeleton *)&dancerFrames[frameIdx].mSkeleton;
         }
     }
 
@@ -2124,7 +2126,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
                     }
                     const DancerFrame *dancerFrame = df->GetDancerFrame();
                     BaseSkeleton *skel =
-                        (BaseSkeleton *)((char *)dancerFrame + 4);
+                        (BaseSkeleton *)&dancerFrame->mSkeleton;
                     unk414 = (DancerSkeleton *)skel;
                     mSkeletonViz->Visualize(
                         camInput, *skel, &callbacks, false

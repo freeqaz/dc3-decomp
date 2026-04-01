@@ -985,12 +985,10 @@ void ProfileMgr::Poll() {
 }
 
 Symbol ProfileMgr::GetAlternateOutfit(Symbol outfit) {
-    Symbol outfitChar = GetOutfitCharacter(outfit, true);
-    Symbol altChar = GetAlternateCharacter(outfitChar);
-    outfitChar = GetCharacterOutfit(altChar, 0, true);
+    Symbol altChar = GetAlternateCharacter(GetOutfitCharacter(outfit, true));
 
     char buf[96];
-    strcpy(buf, outfitChar.Str());
+    strcpy(buf, GetCharacterOutfit(altChar, 0, true).Str());
 
     int origLen = strlen(outfit.Str());
     int bufLen = strlen(buf);
@@ -1002,8 +1000,7 @@ Symbol ProfileMgr::GetAlternateOutfit(Symbol outfit) {
 
     int i = 0;
     while (!IsContentUnlocked(result)) {
-        Symbol nextOutfit = GetCharacterOutfit(altChar, i, true);
-        result = GetOutfitRemap(nextOutfit, true);
+        result = GetOutfitRemap(GetCharacterOutfit(altChar, i, true), true);
         i++;
     }
 

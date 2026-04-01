@@ -703,7 +703,6 @@ float FreestyleMoveRecorder::CompareSkeletonJointDisplacement(
             {
                 SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
                 const SkeletonHistory *history = handle.History();
-                handle.~SkeletonUpdateHandle();
                 Vector3 liveDisp;
                 int liveCount = 0;
                 bool hasDisp = liveSkel->Displacement(history, kCoordCamera, joint, beatDiff, liveDisp, liveCount);

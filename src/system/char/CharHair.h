@@ -14,6 +14,7 @@ class CharHair : public RndHighlightable, public CharPollable {
 public:
     struct Point {
         Point(Hmx::Object *);
+        Point(const Point &);
 
         Vector3 pos; // 0x0
         Vector3 force; // 0x10
