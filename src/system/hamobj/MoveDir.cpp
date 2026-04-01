@@ -1717,7 +1717,8 @@ ret_zero:
 float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     if (!mFiltersEnabled)
         return y;
-    HamMove *move = mMovePlayerData[0].mCurMove;
+    auto& _ref0 = mMovePlayerData;
+    HamMove *move = _ref0[0].mCurMove;
     if (!move)
         return y;
 
@@ -1788,11 +1789,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
 
     // Draw detected bar
     float detectFrac;
-    if (move->IsRest()) {
-        detectFrac = 0.0f;
-    } else {
-        detectFrac = DetectFrac(0, -1);
-    }
+                                detectFrac = move->IsRest() ? 0.0f : DetectFrac(0, -1);
     const char *mirroredStr = mirrored ? "(mirror)" : gNullStr;
     int measureBeat = TheTaskMgr.CurrentMeasure();
     float totalBeat = TheTaskMgr.TotalBeat();
@@ -1923,7 +1920,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
 
     // Draw detect frames in range
     std::pair<DetectFrame *, DetectFrame *> detectRange(nullptr, nullptr);
-    DetectRange(mMovePlayerData[0].mDetectFrames, detectRange, measureBeat, measureBeat);
+    DetectRange(_ref0[0].mDetectFrames, detectRange, measureBeat, measureBeat);
 
     if (fv->mType == kFilterVersionHam1 && detectRange.first != detectRange.second) {
         float colWidth = sCharWidth;
@@ -1961,14 +1958,30 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     BaseSkeleton *vizSkeleton = nullptr;
     mShowErrorFrames = nullptr;
 
-    if (mergeVal == 0) {
+    if (!(mergeVal == 0)) {
+        // Merged: use DancerSequence frames
+        DancerSequence *seq = move->GetDancerSequence();
+        if (seq) {
+            const std::vector<DancerFrame> &dancerFrames = seq->GetDancerFrames();
+            float frameF =
+                (float)(dancerFrames.size() - 1) * beatOffset * 0.25f;
+            int frameIdx;
+            if (frameF <= 0.0f) {
+                frameIdx = (int)(frameF - 0.5f);
+            } else {
+                frameIdx = (int)(frameF + 0.5f);
+            }
+            vizSkeleton =
+                (BaseSkeleton *)&dancerFrames[frameIdx].mSkeleton;
+        }
+    } else {
         // Non-merged: iterate detect frames by seconds
         float startSeconds = BeatToSeconds(beatOffset - gBeatLineData.rangeOffset);
         float endSeconds =
             BeatToSeconds((float)(measureStart + 4) + gBeatLineData.rangeScale);
-        DetectFrame *endFrame = &mMovePlayerData[0].mDetectFrames.back() + 1;
+        DetectFrame *endFrame = &_ref0[0].mDetectFrames.back() + 1;
         DetectFrame *it = std::lower_bound(
-            &mMovePlayerData[0].mDetectFrames.front(), endFrame, startSeconds,
+            &_ref0[0].mDetectFrames.front(), endFrame, startSeconds,
             DetectFrameSecondsCmp()
         );
         float vizY = height + yBase;
@@ -2029,22 +2042,6 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
                 it++;
             }
         }
-    } else {
-        // Merged: use DancerSequence frames
-        DancerSequence *seq = move->GetDancerSequence();
-        if (seq) {
-            const std::vector<DancerFrame> &dancerFrames = seq->GetDancerFrames();
-            float frameF =
-                (float)(dancerFrames.size() - 1) * beatOffset * 0.25f;
-            int frameIdx;
-            if (frameF <= 0.0f) {
-                frameIdx = (int)(frameF - 0.5f);
-            } else {
-                frameIdx = (int)(frameF + 0.5f);
-            }
-            vizSkeleton =
-                (BaseSkeleton *)&dancerFrames[frameIdx].mSkeleton;
-        }
     }
 
     // Draw current beat line
@@ -2092,7 +2089,26 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     Hmx::Rect vizRect(gBeatLineData.minValue, y, vizWidth, vizHeight);
     TheRnd.DrawRectScreen(vizRect, sLightGray, nullptr, nullptr, nullptr);
 
-    if (!closest) {
+    if (!(!closest)) {
+        // Draw closest frame beat
+        TheRnd.DrawStringScreen(
+            MakeString("%.2f", closest->GetBeat()),
+            Vector2(gBeatLineData.minValue, y), sLightGray, true
+        );
+        mSkeletonViz->SetUsePhysicalCam(true);
+        mSkeletonViz->SetPhysicalCamScreenRect(vizRect);
+        if (vizSkeleton) {
+            StubCameraInput camInput;
+            camInput.PollTracking();
+            std::vector<SkeletonCallback *> callbacks;
+            if (this) {
+                callbacks.push_back(this);
+            }
+            unk414 = (DancerSkeleton *)vizSkeleton;
+            mSkeletonViz->Visualize(camInput, *vizSkeleton, &callbacks, false);
+            unk414 = nullptr;
+        }
+    } else {
         // No closest frame - draw async detector count
         int asyncCount = mAsyncDetector ? 1 : 0;
         TheRnd.DrawStringScreen(
@@ -2134,25 +2150,6 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
                     idx++;
                 }
             }
-        }
-    } else {
-        // Draw closest frame beat
-        TheRnd.DrawStringScreen(
-            MakeString("%.2f", closest->GetBeat()),
-            Vector2(gBeatLineData.minValue, y), sLightGray, true
-        );
-        mSkeletonViz->SetUsePhysicalCam(true);
-        mSkeletonViz->SetPhysicalCamScreenRect(vizRect);
-        if (vizSkeleton) {
-            StubCameraInput camInput;
-            camInput.PollTracking();
-            std::vector<SkeletonCallback *> callbacks;
-            if (this) {
-                callbacks.push_back(this);
-            }
-            unk414 = (DancerSkeleton *)vizSkeleton;
-            mSkeletonViz->Visualize(camInput, *vizSkeleton, &callbacks, false);
-            unk414 = nullptr;
         }
     }
 

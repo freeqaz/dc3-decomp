@@ -464,7 +464,7 @@ void HamAudio::PollCrossfade() {
                 mStreams[1]->Resync(jumpPoint);
                 SetLoop(mCrossfadeStartTime, mCrossfadeEndTime, mStreams[1]);
             } else {
-                MILO_NOTIFY("HamAudio::PollCrossFade() - almost ready for crossfade");
+                MILO_NOTIFY("HamAudio::PollCrossFade() - almost tried to resync stream before it was ready");
             }
         }
         bool shouldActivate
@@ -474,7 +474,7 @@ void HamAudio::PollCrossfade() {
             shouldActivate = shouldActivate && currentTime < mCrossfadeEndTime;
         }
         if (shouldActivate) {
-            unk6c = mCrossfadeStartTime;
+            mActiveCrossfadeEnd = mCrossfadeStartTime;
             mActiveCrossfadeStart = mCrossfadeEndTime;
             mActiveCrossfadeDuration = mCrossfadeDuration;
             mCrossfadeState = mCrossfadePending;
@@ -482,7 +482,7 @@ void HamAudio::PollCrossfade() {
     }
 
     unsigned int state = mCrossfadeState;
-    if (state == 0) {
+    if (state < 1) {
         goto done;
     }
     if (state == 1) {
@@ -494,10 +494,10 @@ void HamAudio::PollCrossfade() {
             goto done;
         }
         float halfFade = mActiveCrossfadeDuration * 0.5f;
-        bool ready = (mActiveCrossfadeStart + halfFade) < currentTime;
-        if (mActiveCrossfadeStart <= unk6c) {
+        bool ready = currentTime > (mActiveCrossfadeStart + halfFade);
+        if (mActiveCrossfadeEnd >= mActiveCrossfadeStart) {
             ready = ready
-                && currentTime < (unk6c - halfFade) - kEpsilon;
+                && currentTime < (mActiveCrossfadeEnd - halfFade) - kEpsilon;
         }
         if (!ready) {
             goto done;
@@ -507,11 +507,11 @@ void HamAudio::PollCrossfade() {
         mStreams[1]->ClearJump();
         state = 0;
     } else {
-        bool ready = mActiveCrossfadeStart <= currentTime;
-        if (mActiveCrossfadeStart <= unk6c) {
+        bool ready = currentTime >= mActiveCrossfadeStart;
+        if (mActiveCrossfadeEnd >= mActiveCrossfadeStart) {
             ready = ready
                 && currentTime
-                    < (unk6c - mActiveCrossfadeDuration * 0.5f) - kEpsilon;
+                    < (mActiveCrossfadeEnd - mActiveCrossfadeDuration * 0.5f) - kEpsilon;
         }
         if (!ready) {
             goto done;
@@ -519,26 +519,31 @@ void HamAudio::PollCrossfade() {
         state = 3;
     }
     done:
-    if ((mCrossfadeState = state) > 1) {
+    mCrossfadeState = state;
+    if (mCrossfadeState > 1) {
         float fadePos;
         if (mCrossfadeState == 2) {
-            float start = unk6c;
-            float fadeStart = -(mActiveCrossfadeDuration * 0.5f - start);
-            float ratio = 1.0f;
+            float start = mActiveCrossfadeEnd;
+            float fadeStart = -(mActiveCrossfadeDuration * halfFade - start);
+            float ratio;
             if (start != fadeStart) {
                 ratio = (currentTime - fadeStart) / (start - fadeStart);
+            } else {
+                ratio = 1.0f;
             }
             float clamped = Clamp(0.0f, 1.0f, ratio);
             fadePos = clamped * -0.5f + 1.0f;
         } else {
-            float end = mActiveCrossfadeDuration * 0.5f + mActiveCrossfadeStart;
+            float end = mActiveCrossfadeDuration * halfFade + mActiveCrossfadeStart;
             float start2 = mActiveCrossfadeStart;
-            float ratio = 1.0f;
+            float ratio;
             if (end != start2) {
                 ratio = (currentTime - start2) / (end - start2);
+            } else {
+                ratio = 1.0f;
             }
             float clamped = Clamp(0.0f, 1.0f, ratio);
-            fadePos = clamped * 0.5f + 0.5f;
+            fadePos = clamped * halfFade + halfFade;
         }
         float vol = (float)fadePos;
         float db0 = (float)log10((double)vol) * 10.0f;

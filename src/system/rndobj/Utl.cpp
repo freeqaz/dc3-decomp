@@ -752,15 +752,13 @@ void EndianSwapBitmap(RndBitmap &bmap) {
     if (bmap.Height() != 0) {
         do {
             col = 0;
-            if (bmap.Width() > 0) {
-                u32 *pixel = (u32 *)(bmap.Pixels() + bmap.RowBytes() * row - 4);
-                do {
-                    u32 val = pixel[1];
-                    col++;
-                    pixel[1] = (val >> 16 | val & 0xFFFF0000) >> 8 & 0xFFFF
-                        | ((val << 16 | val & 0xFFFF) & 0xFFFF00) << 8;
-                    pixel++;
-                } while (col < bmap.Width());
+            u32 *pixel = (u32 *)(bmap.Pixels() + bmap.RowBytes() * row);
+            while (col < bmap.Width()) {
+                u32 val = *pixel;
+                col++;
+                u32 hi = (val >> 16 | val & 0xFFFF0000) >> 8 & 0xFFFF;
+                *pixel = hi | ((val << 16 | val & 0xFFFF) & 0xFFFF00) << 8;
+                pixel++;
             }
             row++;
         } while (row < bmap.Height());

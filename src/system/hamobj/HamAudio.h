@@ -69,7 +69,7 @@ private:
     float mCrossfadeEndTime; // 0x60
     float mCrossfadeDuration; // 0x64
     int mCrossfadePending; // 0x68
-    float unk6c;
+    float mActiveCrossfadeEnd;
     float mActiveCrossfadeStart; // 0x70
     float mActiveCrossfadeDuration; // 0x74
     int mCrossfadeState; // 0x78

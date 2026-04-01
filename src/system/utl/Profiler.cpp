@@ -12,12 +12,13 @@ void Profiler::Start() { mTimer.Start(); }
 void Profiler::Stop() {
     mTimer.Stop();
     float ms = mTimer.Ms();
-    if (mMin > (int)ms) {
+    if (mMin > ms) {
         mMin = ms;
     }
     if (ms > mMax) {
         mMax = ms;
     }
+    mSum += ms;
     mCount++;
     if (mCount == mCountMax) {
         if (mCountMax == 1U) {
@@ -34,7 +35,7 @@ void Profiler::Stop() {
         mCount = 0;
         mMin = 3.4028235e+38;
         mMax = 0;
-        mSum = ms = 0;
+        mSum = 0;
     }
     mTimer.Reset();
 }
