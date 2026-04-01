@@ -414,9 +414,8 @@ void ClipDistMap::FindDists(float maxFacing, DataArray *arr) {
     DataNode &dataVarDelta = DataVariable("delta");
     float varDelta = dataVarDelta.Float();
 
-    DistEntry defEntry;
     std::vector<DistEntry> distEntries;
-    distEntries.resize(mDists.mHeight, defEntry);
+    distEntries.resize(mDists.mHeight);
     std::vector<float> floatVec;
     float interpA = Interp(mClipA->StartBeat(), mClipA->EndBeat(), 0.5f);
     float interpB = Interp(mClipB->StartBeat(), mClipB->EndBeat(), 0.5f);
