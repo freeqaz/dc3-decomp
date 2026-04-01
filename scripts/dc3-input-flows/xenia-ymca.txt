@@ -59,6 +59,8 @@ wait_screen song_select_screen
 +110 A
 +135 A
 
-# game_screen — we're done navigating.
-# IK telemetry will start logging once the beat timeline advances.
+# game_screen — stop navigating, but keep the run alive long enough for
+# gameplay/bootstrap probes to fire without injecting more buttons.
+# `NONE` is a no-op hold handled by Xenia's screen-aware script parser.
 wait_screen game_screen
++2400 NONE
