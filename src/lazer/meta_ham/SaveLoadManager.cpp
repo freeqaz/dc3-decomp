@@ -1851,20 +1851,20 @@ DataNode SaveLoadManager::OnMsg(const MCResultMsg &msg) {
     int result = msg->Int(2);
     State nextState;
 
-    if (mState < kS_SaveConfirmOverwrite) {
-        if (mState > kS_SaveLookForFile || mState == kS_AutoloadSearchDevice) {
+    if (mState <= kS_SaveNoOverwrite) {
+        if (mState >= kS_SaveOverwrite || mState == kS_AutoloadSearchDevice) {
             unk64 = result;
             return DataNode(0);
         }
         if (mState == kS_AutoloadStartLoad) {
-            if (result < 9) {
+            if (result <= 8) {
                 if (result == 8) {
                     nextState = kS_SaveLookForFile;
                 } else {
                     if (result == 0) {
-                        unk64 = 0;
-                        nextState = kS_SaveLoadError2;
-                    } else if (result == 1) {
+                        goto result_zero;
+                    }
+                    if (result == 1) {
                         nextState = kS_AutoloadDeviceMissing;
                     } else if (result != 5) {
                         if (result != 6) {
@@ -1910,20 +1910,22 @@ DataNode SaveLoadManager::OnMsg(const MCResultMsg &msg) {
             }
             nextState = kS_SaveConfirmOverwrite;
         } else {
-            MILO_FAIL("Unhandled MCResultMsg in state %d and mode %d", mState, mMode);
-            return DataNode(0);
+            goto fail;
         }
     } else if (mState == kS_SaveDeleteSaves) {
         nextState = kS_SaveNoOverwrite;
     } else {
         if (mState != kS_ManualLoadStartLoad) {
-            if (mState > kS_ManualLoadDone && mState <= kS_Finish) {
+            if (mState <= kS_ManualLoadDone) {
+                goto fail;
+            }
+            if (mState <= kS_Finish) {
                 return DataNode(0);
             }
-            MILO_FAIL("Unhandled MCResultMsg in state %d and mode %d", mState, mMode);
-            return DataNode(0);
+            goto fail;
         }
         if (result == 0) {
+        result_zero:
             unk64 = 0;
             nextState = kS_SaveLoadError2;
         } else if (result == 1) {
@@ -1944,6 +1946,11 @@ DataNode SaveLoadManager::OnMsg(const MCResultMsg &msg) {
     }
 set_state:
     SetState(nextState);
+    return DataNode(0);
+fail:
+    MILO_FAIL(
+        "Unhandled MCResultMsg in state %d and mode %d", (int)mState, (State)mMode
+    );
     return DataNode(0);
 }
 

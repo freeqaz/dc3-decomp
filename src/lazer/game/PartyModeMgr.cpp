@@ -1028,18 +1028,26 @@ void PartyModeMgr::AddPlayerToTeam(int team) {
 
 void PartyModeMgr::ClearTeam(int team) {
     switch (team) {
-    case 1:
-        for (int i = 0; i != mTeam1Players.size(); i++) {
-            delete mTeam1Players[i];
+    case 1: {
+        int n = (int)mTeam1Players.size();
+        while (n != 0) {
+            n--;
+            RELEASE(mPlayers.back());
+            mPlayers.pop_back();
         }
         mTeam1Players.clear();
         break;
-    case 2:
-        for (int i = 0; i != mTeam2Players.size(); i++) {
-            delete mTeam2Players[i];
+    }
+    case 2: {
+        int n = (int)mTeam2Players.size();
+        while (n != 0) {
+            n--;
+            RELEASE(mPlayers.back());
+            mPlayers.pop_back();
         }
         mTeam2Players.clear();
         break;
+    }
     default:
         MILO_ASSERT(team == 1 || team == 2, 0x20F);
         break;
