@@ -298,6 +298,22 @@ float HamIKEffector::GetGroundHeight(RndTransformable *t) {
 }
 
 void HamIKEffector::Poll() {
+#ifdef HX_NATIVE
+    // Log the poll ORDER to determine if pelvis runs before or after ankle.
+    // This is the key question: if pelvis runs AFTER ankle, its SetWorldXfm
+    // cascades dirty through the leg chain, overwriting ankle IK corrections.
+    {
+        static int sPollOrderCount = 0;
+        if (sPollOrderCount < 30) {
+            sPollOrderCount++;
+            EffectorType tDbg = mEffector ? GetType() : kEffectorTypeNone;
+            const char* typeNames[] = {"none","pelvis","ankle","hand","forearm","head"};
+            fprintf(stderr, "DC3_IK_DIAG PollOrder[%d]: %s type=%s\n",
+                    sPollOrderCount, PathName(this),
+                    (tDbg >= 0 && tDbg <= 5) ? typeNames[tDbg] : "?");
+        }
+    }
+#endif
     if (mSkeleton) {
         EffectorType t = GetType();
         if (t != kEffectorTypeForearm) {

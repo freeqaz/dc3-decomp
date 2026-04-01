@@ -446,17 +446,12 @@ void HamWardrobe::PlayCrowdAnimation(Symbol animName, int flags, bool override) 
     }
 }
 
-template <class _T>
-__declspec(noinline) auto _outline_Null(_T* _obj) -> decltype(_obj->Null()) {
-    return _obj->Null();
-}
-
 void HamWardrobe::LoadCharacters(
     Symbol outfit1,
     Symbol outfit2,
     Symbol crew1,
     Symbol crew2,
-    HamBackupDancers backupType,
+    HamBackupDancers dancers,
     Symbol speed,
     Symbol venue,
     bool asyncLoad
@@ -465,8 +460,11 @@ void HamWardrobe::LoadCharacters(
     fprintf(stderr, "DC3 HamWardrobe::LoadCharacters() — outfit1='%s' outfit2='%s' crew1='%s' crew2='%s' venue='%s' async=%d\n",
             outfit1.Str(), outfit2.Str(), crew1.Str(), crew2.Str(), venue.Str(), asyncLoad);
 #endif
-    outfit2 = HandleRobot(outfit2);
+    if (!mForcedCharacter.Null()) {
+        outfit1 = mForcedCharacter;
+    }
     outfit1 = HandleRobot(outfit1);
+    outfit2 = HandleRobot(outfit2);
 
     mMainCharacters.clear();
     for (int i = 0; i < 2; i++) {
@@ -476,35 +474,36 @@ void HamWardrobe::LoadCharacters(
 
     unk34 = speed;
 
-    if (!_outline_Null(&outfit1)) {
+    if (!(outfit1 == "")) {
         LoadMainCharacter(0, outfit1, asyncLoad);
     }
-    if (!_outline_Null(&outfit2)) {
+    if (!(outfit2 == "")) {
         LoadMainCharacter(1, outfit2, asyncLoad);
     }
 
     for (int i = 0; i < 2; i++) {
-        Symbol *outfit = (i == 0) ? &outfit1 : &outfit2;
+        Symbol outfit = (i == 0) ? outfit1 : outfit2;
+        Symbol crew = (i == 0) ? crew1 : crew2;
         Symbol backupOutfit(gNullStr);
-        Symbol *crew = (i == 0) ? &crew1 : &crew2;
 
-        if (backupType == kBackupDancersOutfit) {
-            if (*outfit != gNullStr) {
-                Symbol dancer = GetOutfitBackupDancer(*outfit);
-                auto backupSym = Symbol(MakeString("%s_bd0%d", dancer.Str(), i + 1));
+        if (dancers == kBackupDancersOutfit) {
+            if (!outfit.Null()) {
+                Symbol dancer = GetOutfitBackupDancer(outfit);
+                auto backupSym = Symbol(MakeString("%s_bd0%d", dancer, i + 1));
                 backupOutfit = backupSym;
             }
-        } else if (backupType == kBackupDancersTan) {
+        } else if (dancers == kBackupDancersTan) {
             if (i == 0) {
                 static Symbol tan01("tan01");
                 backupOutfit = tan01;
             }
         } else {
-            if (backupType == kBackupDancersOverride) {
-                backupOutfit = GetBackupOutfitOverride(i);
+            if (dancers == kBackupDancersOverride) {
+                auto overrideOutfit = GetBackupOutfitOverride(i);
+                backupOutfit = overrideOutfit;
             } else {
-                MILO_ASSERT(backupType == kBackupDancersDanceBattle, 0x1ac);
-                auto battleBackup = GetDanceBattleBackupOutfit(*outfit, *crew);
+                MILO_ASSERT(dancers == kBackupDancersDanceBattle, 0x1ac);
+                auto battleBackup = GetDanceBattleBackupOutfit(outfit, crew);
                 backupOutfit = battleBackup;
             }
         }
@@ -512,7 +511,7 @@ void HamWardrobe::LoadCharacters(
         HamCharacter *backup = GetBackup(i);
         backup->SetOutfit(backupOutfit);
         const char *outfitDir = "char/main/backup";
-        if (backupType != kBackupDancersOutfit) {
+        if (dancers != kBackupDancersOutfit) {
             outfitDir = "char/main/dancer";
         }
         backup->SetOutfitDir(Symbol(outfitDir));

@@ -491,18 +491,23 @@ void MoveMgr::NextMovesToShow(DataArray *a, int measure) {
     if (mChoiceSets.size() < measure + 1) {
         mChoiceSets.resize(measure + 1);
     }
-    if (!mChoiceSets[measure].mChoices[0]) {
+    const MoveParent **choices = mChoiceSets[measure].mChoices;
+    if (!choices[0]) {
         MILO_LOG("MoveMgr: oh no they are not ready yet!\n");
         PrepareNextChoiceSet(measure - 1);
     }
-    for (int i = 0; i < 4; i++) {
-        auto choiceName = mChoiceSets[measure].mChoices[i]->Name();
+    int numChoices = 0;
+    int i = 0;
+    for (i = 0; i < 4; i++) {
+        if (!choices[i])
+            break;
+        char *choiceName = (char *)choices[i]->Name().Str();
         MILO_LOG("\t%s\n", choiceName);
+        numChoices++;
     }
     a->Resize(4);
-    for (int i = 0; i < 4; i++) {
-        auto choiceName = mChoiceSets[measure].mChoices[i]->Name();
-        a->Node(i) = choiceName;
+    for (i = 0; i < 4; i++) {
+        a->Node(i) = choices[i % numChoices]->Name();
     }
 }
 

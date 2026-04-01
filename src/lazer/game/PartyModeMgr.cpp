@@ -1654,24 +1654,25 @@ void PartyModeMgr::PruneHistory() {
 
 DataNode PartyModeMgr::OnSetSongAndDefaults(DataArray *_msg) {
     int sz = _msg->Size();
-    bool force = false;
+    Symbol mode;
+    Symbol song;
     if (sz == 3) {
-        Symbol mode(gNullStr);
-        Symbol song = _msg->Sym(2);
-        SetSongAndDefaults(song, mode, force);
+        mode = Symbol(gNullStr);
+        song = _msg->Sym(2);
+        SetSongAndDefaults(song, mode, false);
     } else if (sz == 4) {
-        Symbol mode = _msg->Sym(3);
-        Symbol song = _msg->Sym(2);
-        SetSongAndDefaults(song, mode, force);
+        mode = _msg->Sym(3);
+        song = _msg->Sym(2);
+        SetSongAndDefaults(song, mode, false);
     } else if (sz == 5) {
         int rawForce = _msg->Node(4).Int(_msg);
-        Symbol mode = _msg->Sym(3);
-        Symbol song = _msg->Sym(2);
+        mode = _msg->Sym(3);
+        song = _msg->Sym(2);
         SetSongAndDefaults(song, mode, rawForce != 0);
     } else {
-        Symbol mode(gNullStr);
-        Symbol song(gNullStr);
-        SetSongAndDefaults(song, mode, force);
+        mode = Symbol(gNullStr);
+        song = Symbol(gNullStr);
+        SetSongAndDefaults(song, mode, false);
     }
     return DataNode(0);
 }

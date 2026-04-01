@@ -455,7 +455,7 @@ void HamAudio::PollCrossfade() {
     float kEpsilon = 1.0f / 120.0f;
     float halfFade = 0.5f;
 
-    if ((unsigned int)mCrossfadePending == 1 && mCrossfadeState <= 1) {
+    if (mCrossfadePending == 1 && mCrossfadeState <= 1) {
         MILO_ASSERT_FMT(mStreams[1], "Crossfade requires 2 song streams");
         float jumpPoint = mCrossfadeEndTime
             - (mCrossfadeStartTime - (-(mCrossfadeDuration * halfFade - mCrossfadeStartTime)));
@@ -519,7 +519,7 @@ void HamAudio::PollCrossfade() {
         state = 3;
     }
     done:
-    if (mCrossfadeState = state > 1) {
+    if ((mCrossfadeState = state) > 1) {
         float fadePos;
         if (mCrossfadeState == 2) {
             float start = unk6c;

@@ -152,15 +152,14 @@ float HamDriver::Display(float normalizedY) {
     // Draw debug info: object name and beat position
     Hmx::Color color(1.0f, 1.0f, 1.0f, 1.0f);
     Vector2 screenPos(CharClipDisplay::GetSEm(), scaledHeight);
-    const char *stringDisplay = MakeString("%s beat: %.2f", pathName, mDisplayBeat);
-    TheRnd.DrawString(stringDisplay, screenPos, color, true);
+    TheRnd.DrawString(MakeString("%s beat: %.2f", pathName, mDisplayBeat), screenPos, color, true);
 
     // Initialize character clip display and advance line spacing
     CharClipDisplay::Init(Dir());
     float lineSpacing = CharClipDisplay::LineSpacing() + scaledHeight;
 
-    // Recursively display layers if list is non-empty and weight is active
-    if (mLayers.mLayers.end() != mLayers.mLayers.begin() && !(mLayers.mWeight == 0.0f)) {
+    // Recursively display layers if bones exist and weight is active
+    if (mBones && Weight() != 0.0f) {
         FOREACH (it, mLayers.mLayers) {
             lineSpacing = DisplayRecurse(*it, 0, lineSpacing);
         }
