@@ -213,17 +213,26 @@ int NavListSortMgr::GetHeaderIndexFromChildListIndex(int idx) {
     auto& _ref0 = mHeadersB;
     int size = (int)_ref0.size();
     if (size <= 0) return -1;
+    int *base;
     do {
         int headerVal = _ref0[i];
         if (headerVal == idx) return idx;
         if (headerVal > idx) {
             if (i == 0) return _ref0.front();
-            return _ref0[i - 1];
+            base = &_ref0[i];
+            goto found;
         }
-        if (i == size - 1) return _ref0[size - 1];
+        if (headerVal < idx) {
+            if (i == size - 1) {
+                base = &_ref0[size];
+                goto found;
+            }
+        }
         i++;
     } while (i < size);
     return -1;
+found:
+    return *(base - 1);
 }
 
 void NavListSortMgr::OnExit() {

@@ -216,7 +216,7 @@ void SongHeaderNode::Text(UIListLabel *list_label, UILabel *ui_label) const {
     if (unk44) {
         if (list_label->Matches("famousby")) {
             static Symbol store_famous_by("store_famous_by");
-            bool highlighted = (TheSongSortMgr->GetHighlightItem() == this);
+            ui_label->SetTextToken(store_famous_by);
             return;
         }
         if (list_label->Matches("famousby_group")) {
@@ -236,12 +236,16 @@ void SongHeaderNode::Text(UIListLabel *list_label, UILabel *ui_label) const {
     }
 
     if (list_label->Matches("song_count")) {
-        TheSongSortMgr->GetHighlightItem();
+        SetItemCountString(ui_label);
         return;
     }
 
     if (list_label->Matches("header_collapse")) {
-        bool highlighted = (TheSongSortMgr->GetHighlightItem() == this);
+        if (TheSongSortMgr->GetHighlightItem() == this) {
+            SetCollapseStateIcon(true);
+        } else {
+            SetCollapseStateIcon(false);
+        }
         return;
     }
 

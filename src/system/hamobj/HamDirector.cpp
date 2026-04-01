@@ -459,8 +459,6 @@ DataNode HamDirector::OnFileMerged(DataArray *a) {
                 hudDir->HandleType(enterMsg);
             }
             hudDir->SetShowing(true);
-            fprintf(stderr, "[HUD-FIX] OnFileMerged(game_hud): SetHUD + Enter + SetShowing done, hudDir=%p world=%p\n",
-                    (void*)hudDir, (void*)GetWorld());
 
             // The HUD PanelDir has postprocs_before_draw=false from .milo data.
             // On Xbox the HUD draws inline in the 3D pass. On native, without

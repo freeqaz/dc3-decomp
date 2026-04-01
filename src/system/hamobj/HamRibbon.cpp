@@ -184,7 +184,7 @@ void HamRibbon::UpdateChase() {
 #else
         if (removeCount < numKeys) {
             for (unsigned int i = removeCount; i < mChaseKeys.size(); i++) {
-                mChaseKeys[i - removeCount] = mChaseKeys[i];
+                memcpy(&mChaseKeys[i - removeCount], &mChaseKeys[i], sizeof(Key<Transform>));
             }
         }
         mChaseKeys.resize(numKeys - removeCount, key);
@@ -208,12 +208,12 @@ void HamRibbon::UpdateChase() {
                     key.value.v
                 );
                 Vector3 delta;
-                Subtract(key.value.v, mChaseKeys.back().value.v, delta);
-                if (minDistSq < LengthSquared(delta)) {
+                Subtract(mChaseKeys.back().value.v, key.value.v, delta);
+                if (LengthSquared(delta) < minDistSq) {
+                    mChaseKeys.back().frame = key.frame;
+                } else {
                     mChaseKeys.push_back(key);
                     added++;
-                } else {
-                    mChaseKeys.back().frame = key.frame;
                 }
                 nextTime = mChaseKeys.back().frame + step;
             }
@@ -229,7 +229,7 @@ void HamRibbon::UpdateChase() {
                 Subtract(mChaseKeys[i].value.v, mChaseKeys[i - 1].value.v, dir);
                 Normalize(dir, dir);
 
-                Vector3 smoothDir = dir;
+                Vector3 smoothDir;
                 float angle = -1.0f;
                 if (2 < i) {
                     Vector3 prevDir;
@@ -250,13 +250,14 @@ void HamRibbon::UpdateChase() {
                 Multiply(mChaseKeys[i].value.v, invPrev, localPos);
                 Transform tf = Transform::IDXfm();
                 tf.LookAt(localPos, up);
-                Multiply(tf, mChaseKeys[i - 1].value.m, tf);
-                Normalize(tf.m, tf.m);
-                tf.v = mChaseKeys[i].value.v;
+                Transform result;
+                Multiply(tf, mChaseKeys[i - 1].value.m, result);
+                Normalize(result.m, result.m);
+                result.v = mChaseKeys[i].value.v;
 
                 if (angle != -1.0f) {
                     Hmx::Matrix3 inv;
-                    Invert(tf.m, inv);
+                    Invert(result.m, inv);
                     Vector3 localSmooth;
                     Multiply(smoothDir, inv, localSmooth);
                     float clamped = Clamp(0.0f, 1.0f, localSmooth.x);
@@ -276,10 +277,10 @@ void HamRibbon::UpdateChase() {
                         0.0f,
                         1.0f
                     );
-                    Multiply(bend, tf.m, tf.m);
+                    Multiply(bend, result.m, result.m);
                 }
 
-                mChaseKeys[i].value = tf;
+                mChaseKeys[i].value.m = result.m;
                 prevAngle = angle;
             }
         }
