@@ -2507,11 +2507,10 @@ void RndText::FontMap3d::AllocateMeshes(RndText *text, int fixedLength) {
         do {
             RndMesh *mesh = mMeshes[i];
             if (mesh != NULL) {
-                mesh->SetShowing(true);
+                delete mesh;
             }
             i++;
-            oldSize = (unsigned int)mMeshes.size();
-        } while (i < oldSize);
+        } while (i < (unsigned int)mMeshes.size());
     }
 
     RndMesh *nullMesh = NULL;

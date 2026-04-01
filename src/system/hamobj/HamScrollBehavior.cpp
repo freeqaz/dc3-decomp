@@ -168,13 +168,15 @@ void HamScrollBehavior::Update(float input) {
     // Direction handling
     if (!(scrollDir == 0)) {
         mLastScrollDir = scrollDir;
-        float delay = mNeutralToSlowDownDelay;
+        float delay;
         if (scrollDir == 1) {
             delay = mNeutralToSlowUpDelay;
+        } else {
+            delay = mNeutralToSlowDownDelay;
         }
         float dt = TheTaskMgr.DeltaUISeconds();
         mScrollTimeAccum += dt;
-        if ((!mAutoScrollActive && mScrollTimeAccum >= delay) || (mAutoScrollActive && mTickDelay <= mScrollTimeAccum)) {
+        if ((!mAutoScrollActive && mScrollTimeAccum >= delay) || (mAutoScrollActive && mScrollTimeAccum >= mTickDelay)) {
             if (!mAutoScrollActive) {
                 mFirstTick = true;
             } else {
@@ -215,48 +217,61 @@ void HamScrollBehavior::Update(float input) {
         speed = mNormalScrollSpeed;
         mSpeedState = 2;
         mTickDelay = 0.0f;
-    } else if (mScrollTimeAccum > 0.001f) {
-        int state = mSpeedState;
-        if (state == 0) {
+    } else if (!(mScrollTimeAccum > 0.001f)) {
+        if (absIntensity < mSlowFastThreshold || mSpeedState == 2) {
+            speed = mSlowScrollSpeed;
+            if (mFirstTick) {
+                float delay;
+                if (scrollDir == 1) {
+                    delay = mSlowUpFirstTickDelay;
+                } else {
+                    delay = mSlowDownFirstTickDelay;
+                }
+                mTickDelay = delay;
+            } else {
+                float delay;
+                if (scrollDir == 1) {
+                    delay = mSlowUpTickDelay;
+                } else {
+                    delay = mSlowDownTickDelay;
+                }
+                mTickDelay = delay;
+            }
+            int state = 1;
+            if (scrollDir != 1) {
+                state = 3;
+            }
+            mSpeedState = state;
+        } else {
+            speed = mFastScrollSpeedScalar * absIntensity + mFastScrollSpeedBase;
+            float delay;
+            if (scrollDir == 1) {
+                delay = mFastUpTickDelay;
+            } else {
+                delay = mFastDownTickDelay;
+            }
+            mTickDelay = delay;
+            float threshold = mSlowFastThreshold;
+            mSpeedState = (scrollDir == 1) ? 0 : 4;
+            soundLevel = (absIntensity - threshold) / (1.0f - threshold);
+        }
+    } else {
+        switch (mSpeedState) {
+        case 0:
         fast_scroll:
             speed = mFastScrollSpeedScalar * absIntensity + mFastScrollSpeedBase;
             soundLevel = (absIntensity - mSlowFastThreshold) / (1.0f - mSlowFastThreshold);
-        } else if (state == 1 || state == 3) {
+            break;
+        case 1:
+        case 3:
             speed = mSlowScrollSpeed;
-        } else {
+            break;
+        case 4:
+            goto fast_scroll;
+        default:
             speed = 0.0f;
-            if (state == 4) goto fast_scroll;
+            break;
         }
-    } else if (absIntensity < mSlowFastThreshold || mSpeedState == 2) {
-        speed = mSlowScrollSpeed;
-        if (!mFirstTick) {
-            float delay = mSlowDownTickDelay;
-            if (scrollDir == 1) {
-                delay = mSlowUpTickDelay;
-            }
-            mTickDelay = delay;
-        } else {
-            float delay = mSlowDownFirstTickDelay;
-            if (scrollDir == 1) {
-                delay = mSlowUpFirstTickDelay;
-            }
-            mTickDelay = delay;
-        }
-        int state = 1;
-        if (scrollDir != 1) {
-            state = 3;
-        }
-        mSpeedState = state;
-    } else {
-        float delay = mFastDownTickDelay;
-        if (scrollDir == 1) {
-            delay = mFastUpTickDelay;
-        }
-        mTickDelay = delay;
-        float threshold = mSlowFastThreshold;
-        mSpeedState = -(unsigned int)(scrollDir != 1) & 4;
-        speed = mFastScrollSpeedScalar * absIntensity + mFastScrollSpeedBase;
-        soundLevel = (absIntensity - threshold) / (1.0f - threshold);
     }
 
     // Sound smoother
@@ -275,16 +290,16 @@ void HamScrollBehavior::Update(float input) {
             shift = -1.0f;
             break;
         case 2:
-            if (input <= 0.5f) {
-                shift = 0.0f;
-                auto _tmp4 = mListState->FirstShowing();
-                if (_tmp4 != 0) {
-                    shift = -mNavList->CalculateSwell(0);
-                }
-            } else {
+            if (input > 0.5f) {
                 shift = 0.0f;
                 if (!AtBottom() && mNavList->mRibbonMode != HamListRibbon::kRibbonDisengaged) {
                     shift = mNavList->CalculateSwell(5);
+                }
+            } else {
+                if (mListState->FirstShowing() != 0) {
+                    shift = -mNavList->CalculateSwell(0);
+                } else {
+                    shift = 0.0f;
                 }
             }
             break;
@@ -327,13 +342,14 @@ skip_anim:
                 }
             }
 
-            if (!scrolled) {
+            if (scrolled) {
+                dir = mPendingScrollDir;
+                progress = mScrollCooldown;
+            } else {
                 mScrollCooldown = 0.0f;
                 mPendingScrollDir = 0;
                 goto done;
             }
-            dir = mPendingScrollDir;
-            progress = mScrollCooldown;
         }
 
         if (dir == 1) {

@@ -3,6 +3,7 @@
 #include "flow/PropertyEventProvider.h"
 #include "hamobj/HamSongData.h"
 #include "math/Decibels.h"
+#include "math/Utl.h"
 #include "math/Vec.h"
 #include "midi/DataEventList.h"
 #include "midi/MidiParserMgr.h"
@@ -277,37 +278,24 @@ void HamMaster::CheckLevels() {
         return;
 
     std::vector<LevelData> &levelData = TheSynth->GetLevelData();
-    int count = (int)levelData.size();
-    if (count == 0)
+    if (levelData.size() == 0)
         return;
 
-    float rightRMS = levelData[count - 1].mRMS;
-    float leftRMS = rightRMS;
-    if (count > 2) {
-        leftRMS = levelData[count - 2].mRMS;
+    float rightRMS = levelData[levelData.size() - 1].mRMS;
+    float leftRMS;
+    if (levelData.size() > 2) {
+        leftRMS = levelData[levelData.size() - 2].mRMS;
+    } else {
+        leftRMS = rightRMS;
     }
 
-    auto _tmp3 = RatioToDb(rightRMS);
+    float rightLevel = (RatioToDb(rightRMS) + 96.0f) / 96.0f;
     float leftLevel = (RatioToDb(leftRMS) + 96.0f) / 96.0f;
-    float rightLevel = (_tmp3 + 96.0f) / 96.0f;
 
-    // Clamp right to [0, 1]
-    float r = 0.0f;
-    if (-rightLevel < 0.0f)
-        r = rightLevel;
-    float rClamped = 1.0f;
-    if (r - 1.0f < 0.0f)
-        rClamped = r;
+    float rClamped = Clamp(0.0f, 1.0f, rightLevel);
+    float lClamped = Clamp(0.0f, 1.0f, leftLevel);
 
-    // Clamp left to [0, 1]
-    float l = 0.0f;
-    if (-leftLevel < 0.0f)
-        l = leftLevel;
-    float lClamped = 1.0f;
-    if (l - 1.0f < 0.0f)
-        lClamped = l;
-
-    Vector2 v(lClamped, rClamped);
+    Vector2 v(rClamped, lClamped);
     mLevelHistory.push_back(v);
 
     // Average all entries
@@ -319,7 +307,7 @@ void HamMaster::CheckLevels() {
         sumY += it->y;
     }
 
-    int histCount = 0;
+    unsigned int histCount = 0;
     for (std::list<Vector2>::iterator it = mLevelHistory.begin();
          it != mLevelHistory.end(); ++it) {
         histCount++;
@@ -328,9 +316,9 @@ void HamMaster::CheckLevels() {
     float avgX = (1.0f / (float)histCount) * sumX;
     float avgY = (1.0f / (float)histCount) * sumY;
 
-    // Trim to < 4 entries
+    // Trim to <= 3 entries
     while (true) {
-        if (mLevelHistory.size() < 4)
+        if (mLevelHistory.size() <= 3)
             break;
         auto _tmp0 = mLevelHistory.begin();
         mLevelHistory.erase(_tmp0);

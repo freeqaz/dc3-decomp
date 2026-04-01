@@ -183,44 +183,28 @@ bool ClipDistMap::FindBestNode(float maxError, float startBeat, float endBeat, C
 
     node.err = maxError;
 
-    float clipAStart = mAStart;
     int startCol = (int)((startBeat - mAStart) * mSamplesPerBeat);
-
-    // Clamp startCol to non-negative (unsigned masking pattern for codegen)
-    startCol = 0xffffffffU - ((int)startCol >> 0x1f) & startCol;
-    int maxCol = mDists.mWidth;
     int endCol = (int)((endBeat - mAStart) * mSamplesPerBeat);
-
-    if (mDists.mWidth >= endCol) {
-        maxCol = endCol;
+    startCol = startCol & ~(startCol >> 31);
+    int maxCol = endCol;
+    if (mDists.mWidth < endCol) {
+        maxCol = mDists.mWidth;
     }
-
-    // Search columns in beat range
-    while ((int)startCol < maxCol) {
-        int samplesPerBeat = mAStart;
+    while (startCol < maxCol) {
+        float curBeat = mAStart + (float)startCol / (float)mSamplesPerBeat;
         int rowIdx = mDists.mHeight - 1;
-
-        // Search all rows in this column (top to bottom)
         if (rowIdx >= 0) {
             int rowCount = rowIdx + 1;
             do {
                 float currentError = node.err;
-                u8 foundBetter = 1;
-                // Access distance map: mData[(row * width) + col]
-                float cellError = *(float *)((mDists.mWidth * rowIdx + startCol) * 4 + mDists.mData);
+                float cellError = mDists(startCol, rowIdx);
                 float newError = (currentError - cellError >= 0.0f) ? cellError : currentError;
-
                 node.err = newError;
-                if (newError == currentError) {
-                    foundBetter = 0;
+                bool foundBetter = newError != currentError;
+                if (foundBetter) {
+                    node.curBeat = curBeat;
+                    node.nextBeat = mBStart + (float)rowIdx / (float)mSamplesPerBeat;
                 }
-
-                // Update node position if we found a better match
-                if (foundBetter != 0) {
-                    node.curBeat = (float)startCol / (float)samplesPerBeat + clipAStart;
-                    node.nextBeat = (float)rowIdx / (float)mAStart + mBStart;
-                }
-
                 rowIdx--;
                 rowCount--;
             } while (rowCount != 0);

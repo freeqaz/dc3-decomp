@@ -86,6 +86,7 @@ public:
     PhysicsManager *GetPhysicsManager() const { return mPhysicsMgr; }
     LightPresetManager &GetLightPresetMgr() { return mLightPresetMgr; }
     RndDir *GetHUD() const { return mHUD; }
+    void SetHUD(RndDir *hud) { mHUD = hud; }
 
     DataNode OnGetPhysicsManager(const DataArray *);
 

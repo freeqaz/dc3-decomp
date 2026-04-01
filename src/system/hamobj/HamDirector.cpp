@@ -445,12 +445,30 @@ DataNode HamDirector::OnFileMerged(DataArray *a) {
         FileMerger::Merger *gm = mGameModeMerger->FindMerger("game_hud", false);
         PanelDir *hudDir = gm ? dynamic_cast<PanelDir *>(gm->MergerDir()) : nullptr;
         if (hudDir) {
+            // Replace the WorldDir's inline mHUD with the merger's fully-loaded
+            // hudDir. The merger creates a separate PanelDir with all merged
+            // children (hud_left, hud_right, flash_cards, scores). Without this,
+            // WorldDir draws its original empty mHUD PanelDir.
+            WorldDir *world = GetWorld();
+            if (world) {
+                world->SetHUD(hudDir);
+            }
+            hudDir->Enter();
+            {
+                static Message enterMsg("enter");
+                hudDir->HandleType(enterMsg);
+            }
+            hudDir->SetShowing(true);
+            fprintf(stderr, "[HUD-FIX] OnFileMerged(game_hud): SetHUD + Enter + SetShowing done, hudDir=%p world=%p\n",
+                    (void*)hudDir, (void*)GetWorld());
+
             // The HUD PanelDir has postprocs_before_draw=false from .milo data.
             // On Xbox the HUD draws inline in the 3D pass. On native, without
             // ending the world and flushing post-processing, HUD meshes render
             // to the intermediate buffer and get depth-occluded. Force it true
             // so PanelDir::DrawShowing() calls FlushPostProcessingForOverlay().
             hudDir->SetProperty("postprocs_before_draw", true);
+            DataVariable("hud_panel") = (Hmx::Object *)hudDir;
 
             // Reposition score transforms into camera frustum.
             // The HUD camera (FOV=0.6 rad at Y=-768 looking +Y) can see

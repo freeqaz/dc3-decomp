@@ -248,6 +248,8 @@ void DrawMeshImmediate(RndMesh* mesh) {
         FillObjectUniforms(mesh->WorldXfm(), objUni);
     }
 
+
+
     uint32_t objOffset = gWgpuRnd->ObjectRing().Write(
         gWgpuRnd->Gpu().Queue(), &objUni, sizeof(objUni));
 

@@ -141,7 +141,7 @@ Symbol GetOutfitBackupDancer(Symbol outfit) {
 Symbol GetDanceBattleBackupOutfit(Symbol s1, Symbol s2) {
     DataArray *charArr = DataGetMacro("CREWS")->FindArray(s2, "characters");
     Symbol out(gNullStr);
-    String str88(s1);
+    String str88(s1.Str());
     String str90(str88);
     str90 = str90.substr(0, str90.length() - 2);
     int i = 1;
@@ -153,23 +153,20 @@ Symbol GetDanceBattleBackupOutfit(Symbol s1, Symbol s2) {
                 const char *cStr = s.Str();
                 const char *p = cStr;
                 while (*p) p++;
-                unsigned int len = (unsigned int)(p - cStr);
-                if ((int)len < 0x1E) {
-                    char buf[30];
-                    const char *src = cStr;
-                    char *dst = buf;
+                unsigned int crewCharLen = (unsigned int)(p - cStr);
+                MILO_ASSERT(crewCharLen < 30, 0x13c);
+                char buf[30];
+                {
+                    const char *p2 = cStr;
                     do {
-                        *dst = *src;
-                        dst++;
-                        src++;
-                    } while (*src);
-                    const char *baseStr = str90.c_str();
-                    unsigned int baseLen = str90.length();
-                    buf[len - 2] = baseStr[baseLen - 2];
-                    buf[len - 1] = baseStr[baseLen - 1];
-                    *dst = 0;
-                    out = GetOutfitRemap(Symbol(buf), false);
+                        buf[p2 - cStr] = *p2;
+                        p2++;
+                    } while (*p2);
                 }
+                buf[crewCharLen - 2] = str88[crewCharLen - 2];
+                buf[crewCharLen - 1] = str88[crewCharLen - 1];
+                buf[crewCharLen] = 0;
+                out = GetOutfitRemap(Symbol(buf), false);
             }
             i++;
         }
