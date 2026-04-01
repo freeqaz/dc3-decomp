@@ -1259,16 +1259,16 @@ void RndShaderStandard::Select(RndMat *mat, ShaderType shader_type, bool b) {
         TheNgStats->mMats++;
         ((NgMat *)mat)->SetupShader(TheShaderMgr.AllowPerPixel(), true);
         CheckShadow();
-        u64 optsVal = CalcShaderOpts((NgMat *)mat, shader_type, b);
+        ShaderOptions opts(CalcShaderOpts((NgMat *)mat, shader_type, b));
         MILO_ASSERT((shader_type == kStandardShader || shader_type == kStandardBBShader || shader_type == kAllWhiteShader), 0x4BB);
         if (shader_type == kStandardBBShader) {
             shader_type = kStandardShader;
         }
-        SetColorWriteMask(ShaderOptions(optsVal), mat);
+        SetColorWriteMask(opts, mat);
         CheckExtrude();
         CheckForceCull(shader_type);
         CheckDistortion(mat);
-        Cache(shader_type, ShaderOptions(optsVal), mat);
+        Cache(shader_type, opts, mat);
     }
 }
 

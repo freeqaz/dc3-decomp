@@ -1792,7 +1792,6 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     detectFrac = move->IsRest() ? 0.0f : DetectFrac(0, -1);
     const char *mirroredStr = mirrored ? "(mirror)" : gNullStr;
     int measureBeat = TheTaskMgr.CurrentMeasure();
-    float totalBeat = TheTaskMgr.TotalBeat();
     const char *barLabel = MakeString(
         "%i %s %s", measureBeat,
         move->Name() + (move->Name()[0] == '/' ? 1 : 0), mirroredStr
@@ -2003,36 +2002,59 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
                 const Ham2FrameWeight &fw =
                     it->GetMoveFrame()->FrameWeight(mirroredEnum);
                 if (fw.mWeight != 0.0f) {
-                    // Draw error line for this detect frame
-                    float frameBeat = SecondsToBeat(it->Seconds());
-                    float frameBeatX = range
-                        * (((frameBeat - (float)measureStart)
-                               + gBeatLineData.rangeOffset)
-                            / denominator)
-                        + gBeatLineData.minValue;
+                    // Draw error curve for this detect frame
                     float step = 1.0f / 30.0f;
-                    float prevY2 = vizY;
-                    Vector2 startPt(gBeatLineData.minValue, vizY);
-                    // simplified: just draw a marker at the frame position
-                    UtilDrawLine(
-                        Vector2(frameBeatX, yBase),
-                        Vector2(frameBeatX, yBase + height), lineColor
+                    Vector2 prevPt(
+                        range * (0.0f / denominator) + gBeatLineData.minValue,
+                        vizY
                     );
+                    if (startSeconds < endSeconds) {
+                        float currentTime = startSeconds;
+                        do {
+                            float error = ScaleDistToError(
+                                fv->mScaleOp,
+                                fabsf(currentTime - it->Seconds())
+                            );
+                            float beat = SecondsToBeat(currentTime);
+                            float beatX = range
+                                * ((beat - (float)measureStart
+                                       + gBeatLineData.rangeOffset)
+                                    / denominator)
+                                + gBeatLineData.minValue;
+                            if (error >= 1.0f) {
+                                if (prevPt.y < vizY) {
+                                    UtilDrawLine(
+                                        prevPt, Vector2(beatX, vizY),
+                                        lineColor
+                                    );
+                                    prevPt.y = vizY;
+                                }
+                            } else {
+                                float errorY = error * height + yBase;
+                                UtilDrawLine(
+                                    prevPt, Vector2(beatX, errorY),
+                                    lineColor
+                                );
+                                prevPt.y = errorY;
+                            }
+                            currentTime += step;
+                            prevPt.x = beatX;
+                        } while (currentTime < endSeconds);
+                    }
                 }
 
-                // Draw error node index if applicable
-                const DancerFrame *dancerFrame = it->GetDancerFrame();
-                int errorIdx = dancerFrame
-                    ? dancerFrame->mSkeleton.ElapsedMs()
-                    : -1;
+                // Draw error node index
+                float frameBeat2 = SecondsToBeat(it->Seconds());
+                const BaseSkeleton *skel =
+                    &it->GetDancerFrame()->mSkeleton;
+                float fbx2 = range
+                    * (((frameBeat2 - (float)measureStart)
+                           + gBeatLineData.rangeOffset)
+                        / denominator)
+                    + gBeatLineData.minValue;
+                int errorIdx = skel->ElapsedMs();
                 if (errorIdx != -1) {
-                    int nodeIdx = errorIdx;
-                    float frameBeat2 = SecondsToBeat(it->Seconds());
-                    float fbx2 = range
-                        * (((frameBeat2 - (float)measureStart)
-                               + gBeatLineData.rangeOffset)
-                            / denominator)
-                        + gBeatLineData.minValue;
+                    int nodeIdx = skel->ElapsedMs();
                     TheRnd.DrawStringScreen(
                         MakeString("%i", nodeIdx), Vector2(fbx2, vizY),
                         sLightGray, true
@@ -2110,7 +2132,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
         }
     } else {
         // No closest frame - draw async detector count
-        int asyncCount = mAsyncDetector ? 1 : 0;
+        int asyncCount = (int)unkf88.size();
         TheRnd.DrawStringScreen(
             MakeString("asyc: %d", asyncCount),
             Vector2(gBeatLineData.minValue, y), sLightGray, true
@@ -2118,7 +2140,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
         if (asyncCount != 0) {
             mSkeletonViz->SetUsePhysicalCam(true);
             // Grid visualization of multiple skeletons from unkf88
-            int setSize = (int)unkf88.size();
+            int setSize = asyncCount;
             if (setSize > 0) {
                 int gridSize = (int)std::ceil(std::sqrt((float)setSize));
                 float cellW = vizHeight / (float)gridSize;

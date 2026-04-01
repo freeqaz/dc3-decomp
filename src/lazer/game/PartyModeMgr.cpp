@@ -1366,9 +1366,9 @@ DataNode PartyModeMgr::OnMsg(const SmartGlassMsg &msg) {
 
 void PartyModeMgr::FinalizePlaytestParty() {
     int numEvents = mPartyModePlaytestEvents->Size() - 1;
-    std::vector<Symbol> modeVec(numEvents, gNullStr);
-    std::vector<Symbol> songVec(numEvents, gNullStr);
-    std::vector<Symbol> subModeVec(numEvents, gNullStr);
+    std::vector<Symbol> modeVec(numEvents, Symbol());
+    std::vector<Symbol> subModeVec(numEvents, Symbol());
+    std::vector<Symbol> songVec(numEvents, Symbol());
     std::vector<int> team1Players;
     std::vector<int> team2Players;
 
@@ -1380,7 +1380,7 @@ void PartyModeMgr::FinalizePlaytestParty() {
         if (eventArr->Size() > 4) {
             int team = eventArr->Int(3);
             auto playerOffset = eventArr->Int(4);
-            int playerIdx = playerOffset + mPlayers.size();
+            int playerIdx = playerOffset + mTeam1Players.size();
             team1Players.push_back(team);
             team2Players.push_back(playerIdx);
         }
@@ -1389,15 +1389,18 @@ void PartyModeMgr::FinalizePlaytestParty() {
         songVec[i - 1] = song;
     }
 
-    mModePicker.Clear();
+    mModePicker.SetMode(0);
     mSubModeSongPicker.Clear();
     mModePicker.AddItems(modeVec);
-    mSubModePicker.Clear();
+    mSubModePicker.SetMode(0);
     mSubModePicker.AddItems(subModeVec);
+    mSubModeSongPicker.SetMode(0);
     mSubModeSongPicker.Clear();
     mSubModeSongPicker.AddItems(songVec);
+    mTeam1PlayerPicker.SetMode(0);
     mTeam1PlayerPicker.Clear();
     mTeam1PlayerPicker.AddItems(team1Players);
+    mTeam2PlayerPicker.SetMode(0);
     mTeam2PlayerPicker.Clear();
     mTeam2PlayerPicker.AddItems(team2Players);
 
