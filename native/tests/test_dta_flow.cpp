@@ -1,8 +1,8 @@
 // DTA flow integration tests
 //
-// Verifies the DTA-driven panel flow works end-to-end: enter_gameplay fires,
-// loading_screen transitions, game_screen enters, GamePanel gates pass,
-// HamDirector enters, and OnFileLoaded callbacks fire for song/venue.
+// Verifies the full DTA-driven panel flow works end-to-end using the ymca.txt
+// input script: boot → attract → title → main → choose_mode → song_select
+// → multiuser → loading → preloading → real_loading → game_screen.
 //
 // Gated by DC3_DTA_FLOW_TESTS=1 (requires game assets).
 // Pattern: subprocess-based, single engine run shared via SetUpTestSuite.
@@ -50,11 +50,9 @@ struct DtaRunResult {
 
 static DtaRunResult RunDtaFlow(int maxFrames, int timeout = 120) {
     std::string binary = GetDc3NativePath();
-    std::string script = GetScriptDir() + "/boot-to-main.txt";
+    std::string script = GetScriptDir() + "/ymca.txt";
     std::ostringstream cmd;
     cmd << "MILO_HEADLESS=1 MILO_FATAL_FAILS=0 DC3_SHOW_SPLASH=0 DC3_FAST_BOOT=1"
-        << " DC3_SCREEN=game_screen"
-        << " DC3_SONG=boyfriend"
         << " MILO_INPUT_SCRIPT=" << script
         << " MILO_MAX_FRAMES=" << maxFrames
         << " timeout " << timeout << " " << binary << " 2>&1";
@@ -133,18 +131,22 @@ bool DtaFlowTest::sRanEngine = false;
 // ===========================================================================
 
 TEST_F(DtaFlowTest, EnterGameplayFired) {
-    // App.cpp fires enter_gameplay after setting up game data.
-    // The "game data initialized" log proves we reached the call site.
-    EXPECT_TRUE(outputContains("game data initialized"))
-        << "enter_gameplay was never called — DC3_SCREEN=game_screen "
-        << "code path in App.cpp didn't fire";
+    // The DTA flow navigates through multiuser_screen which fires
+    // enter_gameplay. This transitions to loading_screen, proving
+    // the DTA function executed.
+    EXPECT_TRUE(outputContains("Screen 'multiuser_screen' Exit (to 'loading_screen')"))
+        << "multiuser_screen never transitioned to loading_screen — "
+        << "enter_gameplay DTA function didn't fire from the menu flow";
 }
 
 TEST_F(DtaFlowTest, LoadingChainTransitions) {
-    // enter_gameplay triggers a transition to loading_screen
+    // enter_gameplay triggers loading → preloading → real_loading chain
     EXPECT_TRUE(outputContains("Screen 'loading_screen' Enter"))
-        << "loading_screen was never entered — enter_gameplay DTA function "
-        << "didn't trigger the expected screen transition";
+        << "loading_screen was never entered";
+    EXPECT_TRUE(outputContains("Screen 'preloading_screen' Enter"))
+        << "preloading_screen was never entered";
+    EXPECT_TRUE(outputContains("Screen 'real_loading_screen' Enter"))
+        << "real_loading_screen was never entered";
 }
 
 TEST_F(DtaFlowTest, ScreenChainReachesGameScreen) {
@@ -161,21 +163,18 @@ TEST_F(DtaFlowTest, GamePanelGatesPass) {
         << "didn't pass (song/venue/hud async loads may have stalled)";
 }
 
-TEST_F(DtaFlowTest, HamDirectorEnterFires) {
-    // HamDirector::Enter() fires from the meta_game panel cascade
-    EXPECT_TRUE(outputContains("HamDirector::Enter()"))
-        << "HamDirector::Enter() never fired — meta_game panel cascade "
-        << "didn't reach HamDirector (world_panel may not have entered)";
+TEST_F(DtaFlowTest, HamDirectorActivates) {
+    // HamDirector becomes active during gameplay (sets dircut categories)
+    EXPECT_TRUE(outputContains("HamDirector::SetDircut"))
+        << "HamDirector never set a dircut — world_panel may not have "
+        << "entered or HamDirector didn't activate";
 }
 
-TEST_F(DtaFlowTest, OnFileLoadedCallbacks) {
-    // HamDirector::OnFileLoaded fires for both song and venue
-    EXPECT_TRUE(outputContains("OnFileLoaded('song')"))
-        << "OnFileLoaded('song') never fired — FileMerger didn't complete "
-        << "song loading or callback wasn't dispatched";
-    EXPECT_TRUE(outputContains("OnFileLoaded('venue')"))
-        << "OnFileLoaded('venue') never fired — venue .milo didn't load "
-        << "or callback wasn't dispatched";
+TEST_F(DtaFlowTest, GameplayReachesPlayingState) {
+    // StartGame() sets game_stage to 'playing' after all loading completes
+    EXPECT_TRUE(outputContains("game_stage set to 'playing'"))
+        << "game_stage never reached 'playing' — StartGame() didn't fire "
+        << "or loading stalled before gameplay could begin";
 }
 
 TEST_F(DtaFlowTest, NoCrashCleanExit) {

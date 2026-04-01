@@ -795,40 +795,40 @@ int MoveMgr::ComputeRandomChoiceSet(int measure) {
     if (mChoiceSets.size() < (unsigned int)(measure + 1)) {
         mChoiceSets.resize(measure + 1);
     }
+    MoveChoiceSet *choiceSet = &mChoiceSets[measure];
     std::set<const MoveParent *> potentialMoves;
     ComputePotentialMoves(potentialMoves, measure);
+    int numPotential = potentialMoves.size();
+    if (numPotential == 0) {
+        return 0;
+    }
+    int indices[4];
+    int numToPlace = 4;
+    if (numPotential <= 4) {
+        numToPlace = numPotential;
+        for (int i = 0; i < numPotential; i++) {
+            indices[i] = i;
+        }
+    } else {
+        for (int i = 0; i < 4; i++) {
+            indices[i] = RandomInt(0, numPotential);
+        }
+        std::sort(indices, indices + 4);
+    }
     int numPlaced = 0;
-    unsigned int numPotential = potentialMoves.size();
-    if (numPotential != 0) {
-        int indices[4];
-        unsigned int numToPlace;
-        if ((int)numPotential < 5) {
-            numToPlace = numPotential;
-            for (int i = 0; i < (int)numPotential; i++) {
-                indices[i] = i;
-            }
-        } else {
-            numToPlace = 4;
-            for (int i = 0; i < 4; i++) {
-                indices[i] = RandomInt(0, numPotential);
-            }
-            std::sort(indices, indices + 4);
+    int idx = 0;
+    std::set<const MoveParent *>::iterator it = potentialMoves.begin();
+    while (it != potentialMoves.end()) {
+        if (numPlaced >= numToPlace) {
+            break;
         }
-        int idx = 0;
-        MoveChoiceSet *choiceSet = &mChoiceSets[measure];
-        std::set<const MoveParent *>::iterator it = potentialMoves.begin();
-        while (it != potentialMoves.end()) {
-            if (numPlaced >= (int)numToPlace) {
-                break;
-            }
-            if (idx >= indices[numPlaced]) {
-                MILO_LOG("\t%s\n", (*it)->Name().Str());
-                choiceSet->mChoices[numPlaced] = *it;
-                numPlaced++;
-            }
-            ++it;
-            idx++;
+        if (idx >= indices[numPlaced]) {
+            MILO_LOG("\t%s\n", (*it)->Name().Str());
+            choiceSet->mChoices[numPlaced] = *it;
+            numPlaced++;
         }
+        ++it;
+        idx++;
     }
     return numPlaced;
 }

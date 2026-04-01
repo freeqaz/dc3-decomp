@@ -31,9 +31,14 @@ inline double __fsel(double a, double b, double c) { return a >= 0.0 ? b : c; }
 #include "xdk/LIBCMT/ppcintrinsics.h"
 #endif
 
-RndTex *gImpostorTex[kNumLods];
-RndCam *gImpostorCamera;
-RndMat *gImpostorMat;
+struct {
+    RndTex *tex[kNumLods];
+    RndCam *camera;
+    RndMat *mat;
+} gImpostor;
+#define gImpostorTex gImpostor.tex
+#define gImpostorCamera gImpostor.camera
+#define gImpostorMat gImpostor.mat
 int gNumCrowd;
 WorldCrowd *gParent;
 #ifdef HX_NATIVE

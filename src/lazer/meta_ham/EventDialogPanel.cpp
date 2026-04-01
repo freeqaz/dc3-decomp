@@ -44,11 +44,9 @@ DataNode EventDialogPanel::OnMsg(UIComponentSelectDoneMsg const &msg) {
     if (!component) {
         return DATA_UNHANDLED;
     }
-    UIComponent *found = DataDir()->Find<UIComponent>(component->FindPathName(), false);
-    if (component != found) {
+    if (component != DataDir()->Find<UIComponent>(component->Name(), false)) {
         return 1;
     }
-    // C4715: no return when component == found - adding one regresses match (82% -> 66%)
 }
 
 BEGIN_HANDLERS(EventDialogPanel)

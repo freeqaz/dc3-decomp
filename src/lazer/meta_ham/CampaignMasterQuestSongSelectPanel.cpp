@@ -193,17 +193,19 @@ void CampaignMasterQuestSongSelectPanel::Refresh() {
 void CampaignMasterQuestSongSelectPanel::OnHighlightHeader() {
     Symbol selectedSong = GetSelectedSong();
     bool b;
-    int maxStars = 0;
     int totalStars = 0;
+    int maxStars = 0;
     mImpl->mContextualTitleLabel->SetTextToken(selectedSong);
-    mImpl->mContextualInstructionsLabel->SetPrelocalizedString(String(gNullStr));
+    mImpl->mContextualInstructionsLabel->SetTextToken(gNullStr);
+    std::vector<Symbol> &songs = m_pCampaignSongProvider->CharacterSongs()[selectedSong];
     static DataNode &mq_difficulty = DataVariable("mq_difficulty");
     Difficulty mqDiff = (Difficulty)mq_difficulty.Int();
-    FOREACH (it, m_pCampaignSongProvider->GetVecAt(selectedSong)) {
+    FOREACH (it, songs) {
+        Symbol song = *it;
         HamProfile *activeProfile = TheProfileMgr.GetActiveProfile(true);
         SongStatusMgr *mgr = activeProfile->GetSongStatusMgr();
         int stars = mgr->GetStarsForDifficulty(
-            TheHamSongMgr.GetSongIDFromShortName(selectedSong),
+            TheHamSongMgr.GetSongIDFromShortName(song),
             mqDiff,
             b
         );
