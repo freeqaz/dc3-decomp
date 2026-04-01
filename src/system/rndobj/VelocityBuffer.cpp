@@ -207,7 +207,7 @@ bool RndVelocityBuffer::Draw(RndCam *cam, ObjPtrList<RndDrawable> &drawList) {
     float scale = 41.666668f / (splitMs + 1.0f);
         unk36be8 = scale = Min(2.0f, scale);
 
-    if (cam != nullptr && cam == mCam) {
+    if (cam != nullptr & cam == mCam) {
         mMat->SetBlend(BaseMaterial::kBlendSrc);
         mMat->SetZMode(kZModeDisable);
 

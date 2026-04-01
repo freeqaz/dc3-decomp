@@ -1,0 +1,64 @@
+# YMCA — Xenia screen-aware input script
+#
+# Uses wait_screen directives to synchronize input with the actual
+# game state, instead of relying on fragile time-based offsets.
+#
+# Prerequisites (all applied in emulator.cc):
+#   - Attract screen bypass: NUI handler detects attract_screen and
+#     force-transitions to title_screen after 60 NUI frames (~1s)
+#   - Controller mode enforcement: GestureMgr.mInControllerMode=true
+#     forced on every NUI frame so HamNavList processes button input
+#   - ExitControllerMode stubbed to blr (Patch 7)
+#   - Calibration bypass patches (fake_kinect_data)
+#   - MultiUserGesturePanel code cave (Patch 6)
+#
+# Screen flow:
+#   attract_screen → (auto-bypassed) → title_screen
+#   title_screen → A → main_screen
+#   main_screen → A → choose_mode_screen
+#   choose_mode_screen → A → song_select_screen
+#   song_select_screen → DOWN×3 + A → multiuser_screen
+#   multiuser_screen → (auto-advance) → loading_screen → game_screen
+#
+# +N values are frame counts that get converted to milliseconds
+# (N * 50ms) by Xenia's script loader, with 350ms hold + 150ms gap.
+# So +20 = 1000ms delay, +40 = 2000ms, etc.
+#
+# Usage:
+#   xenia-headless --target=orig-assets/debug.xex --gpu=vulkan \
+#     --dc3_nui_patch_layout=original --dc3_crt_skip_nui=true \
+#     --fake_kinect_data=true --dc3_ik_telemetry=true \
+#     --headless_timeout_ms=300000 \
+#     --scripted_input_file=scripts/dc3-input-flows/xenia-ymca.txt
+
+# attract_screen is auto-bypassed by the NUI handler.
+# Wait for title_screen to appear after the forced transition.
+wait_screen title_screen
++40 A
++60 A
+
+# main_screen — select "gameplay" (first item)
+wait_screen main_screen
++40 A
++60 A
+
+# choose_mode_screen — select "perform it" (first item)
+wait_screen choose_mode_screen
++40 A
++60 A
+
+# song_select_screen — navigate DOWN to a song, then select.
+# YMCA is a few items down the list. Multiple DOWN presses
+# ensure we land on a playable song (not a header/separator).
+# Extra A presses handle any confirmation dialogs.
+wait_screen song_select_screen
++40 DOWN
++55 DOWN
++70 DOWN
++85 A
++110 A
++135 A
+
+# game_screen — we're done navigating.
+# IK telemetry will start logging once the beat timeline advances.
+wait_screen game_screen

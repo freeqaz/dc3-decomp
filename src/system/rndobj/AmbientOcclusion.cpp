@@ -395,8 +395,9 @@ void RndAmbientOcclusion::BuildObjectLists() {
     FOREACH (it, mTessellate) {
         GatherObject(*it, tessellateMeshes);
     }
-    // These unique_copy calls are dead code - the actual filtering
-    // happens via std::find in the FOREACH loop below
+    std::unique_copy(dontCastMeshes.begin(), dontCastMeshes.end(), meshes.end());
+    std::unique_copy(dontReceiveMeshes.begin(), dontReceiveMeshes.end(), meshes.end());
+    std::unique_copy(tessellateMeshes.begin(), tessellateMeshes.end(), meshes.end());
     FOREACH (it, meshes) {
         RndMesh *cur = *it;
         if (IsValid_AOCast(cur)
