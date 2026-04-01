@@ -378,7 +378,11 @@ void ObjectDir::Save(BinStream &bs) {
         }
         }
         if (id.dir) {
+            if (id.shared && !bs.AddSharedInlined(id.file)) {
+                boolVec[i] = true;
+            }
         } else {
+            boolVec[i] = true;
         }
         bs << boolVec[i];
     }
@@ -388,41 +392,44 @@ void ObjectDir::Save(BinStream &bs) {
     for (int i = mInlinedDirs.size() - 1; i >= 0; i--) {
         InlinedDir &id = mInlinedDirs[i];
         if (!boolVec[i]) {
-            if (id.dir->IsSubDir()) {
+            bool isSubDir = id.dir->IsSubDir();
+            if (isSubDir) {
                 RemovingSubDir(id.dir);
             }
-            String dirName = id.dir->Name();
-            ObjectDir *dirDir = id.dir->Dir();
-            if (!id.shared) {
-                ObjectDir *dirToSet = id.dir;
-                if (dirToSet->Dir()) {
-                    int uniqIdx = 0;
-                    const char *uniqStr;
-                    while (true) {
-                        uniqStr = MakeString("uniq%x", uniqIdx);
-                        if (!dirToSet->FindContainingDir(uniqStr)
-                            && !FindContainingDir(uniqStr))
-                            break;
-                        uniqIdx++;
+            {
+                String dirName = id.dir->Name();
+                ObjectDir *dirDir = id.dir->Dir();
+                if (!id.shared) {
+                    ObjectDir *dirToSet = id.dir;
+                    if (dirToSet->Dir()) {
+                        int uniqIdx = 0;
+                        const char *uniqStr;
+                        while (true) {
+                            uniqStr = MakeString("uniq%x", uniqIdx);
+                            if (!dirToSet->FindContainingDir(uniqStr)
+                                && !FindContainingDir(uniqStr))
+                                break;
+                            uniqIdx++;
+                        }
+                        dirToSet->SetName(uniqStr, dirToSet);
                     }
-                    dirToSet->SetName(uniqStr, dirToSet);
+                }
+                FilePathTracker tracker(FileGetPath(id.file.c_str()));
+                DirLoader::SaveObjects(bs, id.dir);
+                if (!id.shared) {
+                    id.dir->SetName(dirName.c_str(), dirDir);
                 }
             }
-            FilePathTracker tracker(FileGetPath(id.file.c_str()));
-            DirLoader::SaveObjects(bs, id.dir);
-            if (!id.shared) {
-                id.dir->SetName(dirName.c_str(), dirDir);
-            }
-            if (id.dir->IsSubDir()) {
+            if (isSubDir) {
                 AddedSubDir(id.dir);
             }
         }
     }
     std::vector<InlinedDir> unused;
     mInlinedDirs.swap(unused);
+    gLoadingProxyFromDisk = oldProxy;
     mCurViewportID = (ViewportId)0;
     const char *nextname = unk8c ? unk8c->Name() : "";
-    gLoadingProxyFromDisk = oldProxy;
     bs << nextname;
     const char *camName = mCurCam ? mCurCam->Name() : "";
     bs << camName;

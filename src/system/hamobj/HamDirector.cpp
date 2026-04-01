@@ -2958,17 +2958,13 @@ void HamDirector::DrawIconMan(Symbol moveName, Symbol nextClip, Symbol prevClip,
     static Symbol practice("practice");
     static Symbol clip_sym("clip");
 
-    auto practiceArr = DataArrayPtr(practice);
-    PropKeys *practiceKeys = mMasterClipAnim->GetKeys(this, practiceArr);
+    PropKeys *practiceKeys = mMasterClipAnim->GetKeys(this, DataArrayPtr(practice));
     Keys<Symbol, Symbol> *keys = practiceKeys->AsSymbolKeys();
 
     unsigned int foundIdx = 0;
     unsigned int numKeys = (unsigned int)keys->size();
-    if (numKeys != 0) {
-        for (unsigned int i = 0; i < numKeys; i++) {
-            if ((*keys)[i].value == moveName) goto found;
-            foundIdx++;
-        }
+    for (; foundIdx < numKeys; foundIdx++) {
+        if ((*keys)[foundIdx].value == moveName) goto found;
     }
     foundIdx = -1;
 found:
@@ -2983,35 +2979,32 @@ found:
 
         foundIdx = 0;
         numKeys = (unsigned int)keys->size();
-        if (numKeys != 0) {
-            for (unsigned int i = 0; i < numKeys; i++) {
-                if ((*keys)[i].value == moveSym) goto found2;
-                foundIdx++;
-            }
+        for (; foundIdx < numKeys; foundIdx++) {
+            if ((*keys)[foundIdx].value == moveSym) goto found2;
         }
         foundIdx = -1;
     found2:;
     }
 
-    float keyFrame = (*keys)[foundIdx].frame;
-    float keyBeat = SecondsToBeat(keyFrame / 30.0f);
+    Key<Symbol> &foundKey = (*keys)[foundIdx];
+    float keyBeat = SecondsToBeat(foundKey.frame / 30.0f);
     if (keyBeat + beatOffset < 0.0f) {
         beatOffset = 0.0f;
     }
 
-    float beat = SecondsToBeat(keyFrame / 30.0f) + beatExtra + beatOffset;
+    float beat = SecondsToBeat(foundKey.frame / 30.0f) + beatExtra + beatOffset;
     float frame = BeatToSeconds(beat) * 30.0f;
-    SecondsToBeat(keyFrame / 30.0f);
+    SecondsToBeat(foundKey.frame / 30.0f);
 
     PropKeys *clipKeys = mMasterClipAnim->GetKeys(this, DataArrayPtr(clip_sym));
     Keys<Symbol, Symbol> *clipKeysData = clipKeys->AsSymbolKeys();
 
     int clipIdx = clipKeysData->KeyLessEq(frame);
-    Key<Symbol> &clipKey = (*clipKeysData)[clipIdx];
+    Key<Symbol> &clipKey = clipKeysData->at(clipIdx);
 
     CharClip *clip = mClipDir->Find<CharClip>(clipKey.value.Str(), false);
     if (!clip) {
-        TheDebug << MakeString("Could not draw IconMan for %s", (char *)moveName.Str());
+        MILO_NOTIFY("Could not draw IconMan for %s", (char *)moveName.Str());
         return;
     }
 
@@ -3023,7 +3016,7 @@ found:
     }
     float poseBeat = beat - (clipBeat - alignOff) + clip->StartBeat();
 
-    PoseIconMan(clip, poseBeat, NULL, (bool)tex, NULL, 0.0f, 0.0f);
+    PoseIconMan(clip, poseBeat, tex, (bool)tex, NULL, 0.0f, 0.0f);
 }
 
 void HamDirector::DrawIconMan(Difficulty diff, float beat, float startBeat, float duration, float beatExtra, RndTex *tex) {

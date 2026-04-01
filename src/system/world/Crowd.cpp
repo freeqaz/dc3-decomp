@@ -775,23 +775,19 @@ void WorldCrowd::SetFullness(float flatFullness, float charFullness) {
     FOREACH (it, mCharacters) {
         RndMultiMesh *multiMesh = it->mMMesh;
         if (multiMesh) {
-            InstanceList &instances = multiMesh->Instances();
-            InstanceList &backup = it->mBackup;
+            InstanceList &instances = multiMesh->mInstances;
             int instanceCount = (int)instances.size();
+            InstanceList &backup = it->mBackup;
             int backupCount = (int)backup.size();
-            int totalCount = instanceCount + backupCount;
-            int targetInstances = (int)((float)totalCount * mFlatFullness);
+            int targetInstances = (int)((float)(instanceCount + backupCount) * mFlatFullness);
             if (instanceCount < targetInstances) {
-                // move from backup to instances
                 int toMove = targetInstances - instanceCount;
                 InstanceList::iterator backIt = backup.begin();
                 for (int i = 0; i < toMove; i++) {
                     ++backIt;
                 }
                 instances.splice(instances.end(), backup, backup.begin(), backIt);
-                // invalidate proxies handled below
             } else if (targetInstances < instanceCount) {
-                // move from instances to backup
                 int toRemove = instanceCount - targetInstances;
                 InstanceList::iterator instIt = instances.begin();
                 for (int i = 0; i < toRemove; i++) {
@@ -800,34 +796,16 @@ void WorldCrowd::SetFullness(float flatFullness, float charFullness) {
                 backup.splice(backup.end(), instances, instances.begin(), instIt);
                 multiMesh->InvalidateProxies();
             }
-            // handle m3DChars (visible 3D chars)
-            int totalChars3D = (int)it->m3DChars.size() + (int)it->m3DCharsCreated.size();
+            unsigned int totalChars3D = it->m3DCharsCreated.size();
             int targetChars3D = (int)((float)totalChars3D * charFullness);
-#ifdef HX_NATIVE
-            // When mForce3DCrowd is true, MultiMesh instances have been
-            // transferred to m3DChars and the instance list is empty. Don't
-            // cap 3DChars to instances.size() (0) — that would erase them all.
-            // Also guard against empty m3DCharsCreated (can happen during
-            // Reset3DCrowd → SetFullness call before Sort3DCharList runs).
-            if (!mForce3DCrowd)
-#endif
-            targetChars3D = Min(targetChars3D, (int)instances.size());
+            if (targetChars3D >= (int)totalChars3D) {
+                targetChars3D = (int)totalChars3D;
+            }
             int currentChars3D = (int)it->m3DChars.size();
             if (currentChars3D < targetChars3D) {
                 int toAdd = targetChars3D - currentChars3D;
-                int startIdx = currentChars3D;
-#ifdef HX_NATIVE
-                // Guard: m3DCharsCreated may not be populated yet
-                if (startIdx + toAdd > (int)it->m3DCharsCreated.size()) {
-                    toAdd = Max(0, (int)it->m3DCharsCreated.size() - startIdx);
-                }
-#endif
-                InstanceList::iterator instIt = instances.begin();
-                // advance to startIdx in m3DCharsCreated
-                for (int i = 0; i < startIdx; i++) ++instIt;
                 for (int i = 0; i < toAdd; i++) {
-                    it->m3DChars.push_back(it->m3DCharsCreated[startIdx + i]);
-                    ++instIt;
+                    it->m3DChars.push_back(it->m3DCharsCreated[(int)it->m3DChars.size()]);
                 }
             } else if (targetChars3D < currentChars3D) {
                 int toRemove = currentChars3D - targetChars3D;

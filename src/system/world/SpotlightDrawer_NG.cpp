@@ -560,11 +560,8 @@ void NgSpotlightDrawer::RenderScene() {
 
     sActiveFrame = false;
 
-    if (sLights.size() == 0) {
-        ClearPostDraw();
-    } else if (!Showing() || !CheckSharedResources() || !CheckFogTexture()) {
-        ClearPostDraw();
-    } else {
+    int numLights = sLights.end() - sLights.begin();
+    if (numLights != 0 && Showing() && CheckSharedResources() && CheckFogTexture()) {
         MILO_ASSERT(sEnviron->GetUseApprox() == false, 0x595);
 
         sEnviron->Select(0);
@@ -574,8 +571,8 @@ void NgSpotlightDrawer::RenderScene() {
         TheRenderState.SetTextureFilter(9, (RndRenderState::FilterMode)0, false);
         TheRenderState.SetTextureClamp(9, (RndRenderState::ClampMode)2);
 
-        float nearPlane = mSpotCam->mNearPlane;
         float farPlane = mSpotCam->mFarPlane;
+        float nearPlane = mSpotCam->mNearPlane;
 
         int h = RTHeight();
         float invH = 1.0f / (float)h;
@@ -594,8 +591,7 @@ void NgSpotlightDrawer::RenderScene() {
 
         RenderFogProxy();
 
-        SpotlightResources &sr = SR();
-        mSpotCam->SetTargetTex(sr.unk8);
+        mSpotCam->SetTargetTex(SR().unk8);
         mSpotCam->Select();
 
         RenderBeams(RndCam::sCurrent->mViewProjMatrix);
@@ -606,6 +602,8 @@ void NgSpotlightDrawer::RenderScene() {
         RestoreCam();
         TheHiResScreen.mCurrTile = 0;
         SetupForPostProcess();
+    } else {
+        ClearPostDraw();
     }
 }
 

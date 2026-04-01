@@ -145,6 +145,8 @@ public:
     void RemoveInstance(int idx) { mInstances.erase(NextItr(mInstances.begin(), idx)); }
     void InvalidateProxies();
 
+    friend class WorldCrowd;
+
 protected:
     RndMultiMesh();
 

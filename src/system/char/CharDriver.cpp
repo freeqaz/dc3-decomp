@@ -15,6 +15,7 @@
 #include "utl/MakeString.h"
 #include "utl/Symbol.h"
 #include "obj/Utl.h"
+#include "world/CameraShot.h"
 
 CharDriver::CharDriver()
     : mBones(this), mClips(this), mFirst(), mTestClip(this), mDefaultClip(this), mClipGroup(this),
@@ -465,7 +466,7 @@ float CharDriver::Display(float f) {
     Hmx::Object *source = CharClipDisplay::FindSource(this);
     int headerLines = 1 + (source != nullptr);
     float origF = f;
-        Hmx::Rect rect(0, origF, 1.0f, f = (y + (float)headerLines * lineSpacing) / (float)TheRnd.Height() - origF);
+    Hmx::Rect rect(0, origF, 1.0f, f = (y + (float)headerLines * lineSpacing) / (float)TheRnd.Height() - origF);
     Hmx::Color bgColor(0, 0, 0, 0.5f);
     TheRnd.DrawRectScreen(rect, bgColor, nullptr, nullptr, nullptr);
 
@@ -512,7 +513,7 @@ float CharDriver::Display(float f) {
                 }
                 Hmx::Color redColor(1, 0, 0);
                 TheRnd.DrawString(
-                    MakeString("%d", i),
+                    MakeString("%d", (const CamShotFrame::BlendEaseMode &)i),
                     Vector2(xCur, nextDisplay->mDrawPosY + (float)curOfs + 1.0f),
                     redColor,
                     true
@@ -527,7 +528,7 @@ float CharDriver::Display(float f) {
                 }
                 Hmx::Color greenColor(0, 1, 0);
                 TheRnd.DrawString(
-                    MakeString("%d", i),
+                    MakeString("%d", (const CamShotFrame::BlendEaseMode &)i),
                     Vector2(xNext, prevDisplay->mDrawPosY - 14.0f - (float)nextOfs),
                     greenColor,
                     true

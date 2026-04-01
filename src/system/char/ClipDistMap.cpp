@@ -422,13 +422,13 @@ void ClipDistMap::FindDists(float maxFacing, DataArray *arr) {
     mWorstErr = 0;
 
     for (int i = 0; i < mDists.mWidth; i++) {
+        float beatA = (float)i / (float)mSamplesPerBeat + mAStart;
         DistEntry newDistEntry;
         for (int j = 0; j < mDists.mHeight; j++) {
             mDists(i, j) = kHugeFloat;
             float beatB = (float)j / (float)mSamplesPerBeat + mBStart;
             if (mBeatAlign == 0.0f || BeatAligned(i, j)) {
                 if (arr) {
-                    float beatA = (float)i / (float)mSamplesPerBeat + mAStart;
                     dataVarABeat = beatA;
                     dataVarBBeat = beatB;
                     dataVarAStart = beatA - mClipA->StartBeat();
@@ -473,11 +473,12 @@ void ClipDistMap::FindDists(float maxFacing, DataArray *arr) {
                 }
                 float dist = 0;
                 for (unsigned int k = 0; k < newDistEntry.bones.size(); k++) {
+                    float curFloat = floatVec[k % floatVec.size()];
                     const Vector3 &curBone = curDistEntry.bones[k];
                     float dx = newDistEntry.bones[k].x - curBone.x;
                     float dy = newDistEntry.bones[k].y - curBone.y;
                     float dz = newDistEntry.bones[k].z - curBone.z;
-                    dist += ((dz * dz + (dy * dy + dx * dx))) * floatVec[k];
+                    dist += ((dz * dz + (dy * dy + dx * dx))) * curFloat;
                 }
                 float err = std::sqrt(dist / (float)newDistEntry.bones.size());
                 MaxEq(mWorstErr, err);
@@ -586,8 +587,8 @@ void ClipDistMap::Draw(float x, float y, CharDriver *driver) {
     }
 
     // Draw transition nodes
-    Hmx::Color nodeColor(1.0f, 0.0f, 0.0f, 1.0f);
     for (unsigned int i = 0; i < mNodes.size(); i++) {
+        Hmx::Color nodeColor(1.0f, 0.0f, 0.0f, 1.0f);
         DrawDot(x + 1.0f, y - 1.0f, mNodes[i].curBeat, mNodes[i].nextBeat, nodeColor);
     }
 
