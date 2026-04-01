@@ -9,7 +9,7 @@
 
 struct DistEntry {
 public:
-    DistEntry() : beat(0) {}
+    DistEntry() {}
     DistEntry(const DistEntry &);
     ~DistEntry();
 

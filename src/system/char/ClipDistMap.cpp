@@ -414,8 +414,9 @@ void ClipDistMap::FindDists(float maxFacing, DataArray *arr) {
     DataNode &dataVarDelta = DataVariable("delta");
     float varDelta = dataVarDelta.Float();
 
+    DistEntry defEntry;
     std::vector<DistEntry> distEntries;
-    distEntries.resize(mDists.mHeight);
+    distEntries.resize(mDists.mHeight, defEntry);
     std::vector<float> floatVec;
     float interpA = Interp(mClipA->StartBeat(), mClipA->EndBeat(), 0.5f);
     float interpB = Interp(mClipB->StartBeat(), mClipB->EndBeat(), 0.5f);
@@ -472,13 +473,13 @@ void ClipDistMap::FindDists(float maxFacing, DataArray *arr) {
                     FindWeights(transes, floatVec, mWeightData);
                 }
                 float dist = 0;
-                for (unsigned int k = 0; k < newDistEntry.bones.size(); k++) {
+                for (int k = 0; k < newDistEntry.bones.size(); k++) {
                     float curFloat = floatVec[k % floatVec.size()];
                     const Vector3 &curBone = curDistEntry.bones[k];
-                    float dx = newDistEntry.bones[k].x - curBone.x;
-                    float dy = newDistEntry.bones[k].y - curBone.y;
                     float dz = newDistEntry.bones[k].z - curBone.z;
-                    dist += ((dz * dz + (dy * dy + dx * dx))) * curFloat;
+                    float dy = newDistEntry.bones[k].y - curBone.y;
+                    float dx = newDistEntry.bones[k].x - curBone.x;
+                    dist += (dx * dx + dy * dy + dz * dz) * curFloat;
                 }
                 float err = std::sqrt(dist / (float)newDistEntry.bones.size());
                 MaxEq(mWorstErr, err);

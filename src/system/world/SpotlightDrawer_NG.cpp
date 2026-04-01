@@ -566,7 +566,7 @@ void NgSpotlightDrawer::RenderScene() {
 
         sEnviron->Select(0);
         TheShaderMgr.unk25 = 1;
-        TheHiResScreen.mCurrTile = 1;
+        TheHiResScreen.mOverride = true;
 
         TheRenderState.SetTextureFilter(9, (RndRenderState::FilterMode)0, false);
         TheRenderState.SetTextureClamp(9, (RndRenderState::ClampMode)2);
@@ -600,7 +600,7 @@ void NgSpotlightDrawer::RenderScene() {
         TheRenderState.SetTextureClamp(9, (RndRenderState::ClampMode)2);
 
         RestoreCam();
-        TheHiResScreen.mCurrTile = 0;
+        TheHiResScreen.mOverride = false;
         SetupForPostProcess();
     } else {
         ClearPostDraw();
