@@ -385,7 +385,6 @@ int RndGroup::CollidePlane(const Plane &p) {
 
 int RndGroup::MoveObject(Hmx::Object *obj, int delta) {
     typedef ObjPtrList<Hmx::Object>::Node Node;
-    Node *target;
     Node *node;
     for (node = mObjects.mNodes; node != nullptr; node = node->next) {
         if (node->Obj() == obj)
@@ -394,7 +393,7 @@ int RndGroup::MoveObject(Hmx::Object *obj, int delta) {
     if (!node) {
         return 0;
     }
-    target = node;
+    Node *target = node;
     int remaining = delta;
     if (delta > 0) {
         target = node->next;

@@ -267,26 +267,22 @@ void MoveFrame::Load(BinStreamRev &d) {
                 node_idx++;
             }
         }
-        // Copy remaining OldNodeWeights into mNodeWeights
+        // Copy oldNodeWeights[4+mirror] into mNodeWeights, offset by kNumHam1Nodes
         for (int mirror = 0; mirror < kNumMoveMirrored; mirror++) {
             int size = oldNodeWeights[node_idx].size();
             for (int i = 0; i < num_ham2_nodes; i++) {
-                if (i < size) {
+                if (i + kNumHam1Nodes < size) {
                     mNodeWeights[mirror][i].Set(
-                        oldNodeWeights[node_idx][i].unk0,
-                        oldNodeWeights[node_idx][i].unk0,
-                        oldNodeWeights[node_idx][i].unk0
+                        oldNodeWeights[node_idx][i + kNumHam1Nodes].unk0,
+                        oldNodeWeights[node_idx][i + kNumHam1Nodes].unk0,
+                        oldNodeWeights[node_idx][i + kNumHam1Nodes].unk0
                     );
                 }
             }
             node_idx++;
         }
         // Process ham2 frame weights
-        if (d.rev >= 0x1E) {
-            for (int mirror = 0; mirror < kNumMoveMirrored; mirror++) {
-                d >> mFrameWeights[mirror];
-            }
-        } else if (d.rev > 0x1C) {
+        if (d.rev > 0x1C) {
             for (int mirror = 0; mirror < kNumMoveMirrored; mirror++) {
                 d >> mFrameWeights[mirror];
             }
@@ -294,7 +290,8 @@ void MoveFrame::Load(BinStreamRev &d) {
         // Fill remaining nodes with default scale
         for (int node = node_idx; node < num_ham2_nodes; node++) {
             for (int mirror = 0; mirror < kNumMoveMirrored; mirror++) {
-                SetNodeScale(node, (MoveMirrored)mirror, Vector3(1, 1, 1));
+                auto _tmp1 = Vector3(1, 1, 1);
+                SetNodeScale(node, (MoveMirrored)mirror, _tmp1);
             }
         }
     }
