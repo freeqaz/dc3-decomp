@@ -756,8 +756,8 @@ void EndianSwapBitmap(RndBitmap &bmap) {
             while (col < bmap.Width()) {
                 u32 val = *pixel;
                 col++;
-                u32 hi = (val >> 16 | val & 0xFFFF0000) >> 8 & 0xFFFF;
-                *pixel = hi | ((val << 16 | val & 0xFFFF) & 0xFFFF00) << 8;
+                *pixel = ((val & 0xFF000000) >> 24) | ((val & 0xFF0000) >> 8)
+                    | ((val & 0xFF00) << 8) | ((val & 0xFF) << 24);
                 pixel++;
             }
             row++;
