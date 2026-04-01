@@ -1723,7 +1723,6 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
         return y;
 
     const FilterVersion *fv = move->FilterVer();
-    SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
     int numNodes = fv->NumNodes();
 
     MILO_ASSERT(TheGestureMgr, 0x795);
@@ -1767,8 +1766,9 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
         float xPos = range * (gBeatLineData.rangeOffset / denominator)
             + gBeatLineData.minValue;
         float threshPos = (0.99f - xPos) * thresh + xPos;
+        Hmx::Color threshColor(0.3, 0.3, 0.3, 0.8);
         UtilDrawLine(
-            Vector2(threshPos, y), Vector2(threshPos, xRight), Hmx::Color(0.3, 0.3, 0.3, 0.8)
+            Vector2(threshPos, y), Vector2(threshPos, xRight), threshColor
         );
         const char *colon = strstr(ratingName.Str(), ":");
         if (colon) {
@@ -1789,7 +1789,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
 
     // Draw detected bar
     float detectFrac;
-                                detectFrac = move->IsRest() ? 0.0f : DetectFrac(0, -1);
+    detectFrac = move->IsRest() ? 0.0f : DetectFrac(0, -1);
     const char *mirroredStr = mirrored ? "(mirror)" : gNullStr;
     int measureBeat = TheTaskMgr.CurrentMeasure();
     float totalBeat = TheTaskMgr.TotalBeat();
@@ -1991,14 +1991,14 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
                     break;
                 bool inRange = (it >= detectRange.first && it < detectRange.second);
                 Hmx::Color lineColor;
-                if (!inRange) {
-                    lineColor.Set(0.6, 0.6, 0.6, 1);
-                } else {
+                if (!(!inRange)) {
                     lineColor.Set(1, 1, 1, 1);
                     if (it->GetMoveFrame() == closest) {
                         mShowErrorFrames = it;
                         vizSkeleton = (BaseSkeleton *)&it->GetDancerFrame()->mSkeleton;
                     }
+                } else {
+                    lineColor.Set(0.6, 0.6, 0.6, 1);
                 }
                 const Ham2FrameWeight &fw =
                     it->GetMoveFrame()->FrameWeight(mirroredEnum);
@@ -2155,6 +2155,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
 
     // Draw debug skeleton in remaining area
     {
+        SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
         std::vector<SkeletonCallback *> callbacks;
         if (this) {
             callbacks.push_back(this);
