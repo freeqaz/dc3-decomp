@@ -1856,18 +1856,42 @@ DataNode SaveLoadManager::OnMsg(const MCResultMsg &msg) {
             unk64 = result;
             return DataNode(0);
         }
-        if (mState == kS_AutoloadStartLoad) {
+        if (mState != kS_AutoloadStartLoad) {
+            if (mState != kS_SaveLookForFile) {
+                goto fail;
+            }
+            if ((unsigned)result < 1) {
+                nextState = kS_SaveConfirmOverwrite;
+            } else if ((unsigned)result == 1) {
+                nextState = kS_SaveDeviceInvalid;
+            } else if ((unsigned)result != 5) {
+                if ((unsigned)result == 6) {
+                    nextState = kS_SaveOverwrite;
+                } else if ((unsigned)result != 7) {
+                    if ((unsigned)result == 8) {
+                        nextState = kS_SaveOverwrite;
+                    } else if ((unsigned)result != 25) {
+                        nextState = kS_SaveFailed;
+                    } else {
+                        nextState = kS_SaveConfirmOverwrite;
+                    }
+                } else {
+                    nextState = kS_SaveConfirmOverwrite;
+                }
+            } else {
+                nextState = kS_SaveConfirmOverwrite;
+            }
+        } else {
             if (result <= 8) {
                 if (result == 8) {
                     nextState = kS_SaveLookForFile;
                 } else {
-                    if (result == 0) {
+                    if ((unsigned)result < 1) {
                         goto result_zero;
-                    }
-                    if (result == 1) {
+                    } else if ((unsigned)result == 1) {
                         nextState = kS_AutoloadDeviceMissing;
-                    } else if (result != 5) {
-                        if (result != 6) {
+                    } else if ((unsigned)result != 5) {
+                        if ((unsigned)result != 6) {
                             nextState = kS_LoadFailed;
                         } else {
                             nextState = kS_SaveLookForFile;
@@ -1885,32 +1909,6 @@ DataNode SaveLoadManager::OnMsg(const MCResultMsg &msg) {
             } else {
                 nextState = kS_LoadFailed;
             }
-        } else if (mState == kS_SaveLookForFile) {
-            if (result != 0) {
-                if (result == 1) {
-                    nextState = kS_SaveDeviceInvalid;
-                    goto set_state;
-                }
-                if (result != 5) {
-                    if (result == 6) {
-                        nextState = kS_SaveOverwrite;
-                        goto set_state;
-                    }
-                    if (result != 7) {
-                        if (result == 8) {
-                            nextState = kS_SaveOverwrite;
-                            goto set_state;
-                        }
-                        if (result != 25) {
-                            nextState = kS_SaveFailed;
-                            goto set_state;
-                        }
-                    }
-                }
-            }
-            nextState = kS_SaveConfirmOverwrite;
-        } else {
-            goto fail;
         }
     } else if (mState == kS_SaveDeleteSaves) {
         nextState = kS_SaveNoOverwrite;
@@ -1924,21 +1922,21 @@ DataNode SaveLoadManager::OnMsg(const MCResultMsg &msg) {
             }
             goto fail;
         }
-        if (result == 0) {
+        if ((unsigned)result < 1) {
         result_zero:
             unk64 = 0;
             nextState = kS_SaveLoadError2;
-        } else if (result == 1) {
+        } else if ((unsigned)result == 1) {
             nextState = kS_ManualLoadMissing;
-        } else if (result == 5) {
+        } else if ((unsigned)result == 5) {
             nextState = kS_ManualLoadCorrupt;
-        } else if (result == 8) {
+        } else if ((unsigned)result == 8) {
             nextState = kS_ManualLoadNoFile;
-        } else if (result == 10) {
+        } else if ((unsigned)result == 10) {
             nextState = kS_AutoloadObsolete;
-        } else if (result == 11) {
+        } else if ((unsigned)result == 11) {
             nextState = kS_AutoloadFuture;
-        } else if (result == 25) {
+        } else if ((unsigned)result == 25) {
             nextState = kS_ManualLoadNotOwner;
         } else {
             nextState = kS_LoadFailed;

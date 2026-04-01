@@ -71,9 +71,8 @@ END_LOADS
 
 void HamCamTransform::Setup(bool update) {
     ClearOldCrowds();
-    auto& _ref0 = mAreas;
-    for (ObjVector<TransformArea>::iterator it = _ref0.begin(); it != _ref0.end(); ++it) {
-        TransformArea &area = *it;
+    for (int i = 0; i != mAreas.size(); i++) {
+        TransformArea &area = mAreas[i];
         if (area.mArea) {
             for (ObjPtrList<HamCamShot>::iterator sit = area.mCamshots.begin();
                  sit != area.mCamshots.end();
@@ -89,14 +88,16 @@ void HamCamTransform::Setup(bool update) {
                         }
                     }
                     if (area.mFlow) {
-                        area.mFlow->Enter();
+                        area.mFlow->Activate();
                     }
                     bool hasCrowd = false;
                     for (ObjVector<TransformCrowd>::iterator cit = area.mCrowds.begin();
                          cit != area.mCrowds.end();
                          ++cit) {
                         CamShotCrowd crowd(shot);
+                        crowd.mCamShot = shot;
                         crowd.mCrowd = cit->mCrowd;
+                        crowd.mCrowdRotate = cit->mCrowdRotate;
                         shot->AddCrowd(crowd);
                         if (!hasCrowd && cit->mCrowd) {
                             hasCrowd = true;
@@ -107,16 +108,14 @@ void HamCamTransform::Setup(bool update) {
         }
     }
     if (update && TheLoadMgr.EditMode()) {
-        DataArray *script = DataReadString("cam_transform_update_script");
-        DataArrayPtr node(script);
-        DataArray *arr = node->Array(0);
-        DataNode result = arr->Execute(true);
+        DataNode node(DataReadString("milo cur_anim"), kDataArray);
+        node.Array(0)->Release();
+        DataNode result = node.Array(0)->Execute(true);
         if (result.Type() == kDataObject) {
-            RndAnimatable *anim = result.Obj<RndAnimatable>();
+            HamCamShot *anim = result.Obj<HamCamShot>();
             if (anim) {
                 anim->StartAnim();
-                auto _tmp0 = anim->EndFrame();
-                anim->SetFrame(_tmp0, 1.0f);
+                anim->SetFrame(anim->GetFrame(), 1.0f);
             }
         }
     }
