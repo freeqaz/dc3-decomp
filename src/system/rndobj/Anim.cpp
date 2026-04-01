@@ -268,7 +268,6 @@ Task *RndAnimatable::Animate(
 #pragma endregion
 #pragma region AnimTask
 
-// this matches, GetEaseFunction just needs to be inlined here
 AnimTask::AnimTask(
     RndAnimatable *anim,
     float start,

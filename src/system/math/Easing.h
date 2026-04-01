@@ -379,7 +379,7 @@ EaseFunc *gEaseFuncs[35] = {
     EaseQuarterHalfStairstep,
 };
 
-inline EaseFunc *GetEaseFunction(EaseType e) {
+__forceinline EaseFunc *GetEaseFunction(EaseType e) {
     MILO_ASSERT(e >= kEaseLinear && e <= kEaseQuarterHalfStairstep, 0x16B);
     return gEaseFuncs[e];
 }

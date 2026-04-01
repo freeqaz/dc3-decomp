@@ -41,22 +41,18 @@ void RndEnviron::Save(BinStream &bs) {
     SAVE_SUPERCLASS(RndDrawable);
     SAVE_SUPERCLASS(RndTransformable);
     bs << mLightsReal << mLightsApprox;
-    bs << mAmbientColor;
-    bs << mFogStart;
+    bs << (const Vector4 &)mAmbientColor << mFogStart << mFogEnd
+       << (const Vector4 &)mFogColor;
     bs << mFogEnable;
-    bs << mFogEnd;
-    bs << mFogColor;
-    bs << mAmbientFogOwner;
     bs << mAnimateFromPreset;
     bs << mFadeOut;
     bs << mFadeStart;
     bs << mFadeEnd;
     bs << mFadeMax;
-    bs << mFadeRef;
-    bs << mLRFade;
+    bs << mFadeRef << mLRFade;
+    bs << mAmbientFogOwner;
     bs << mUseColorAdjust;
     mColorXfm.Save(bs);
-    bs << mAOEnabled;
     bs << mAOStrength;
     bs << mIntensityRate;
     bs << mExposure;

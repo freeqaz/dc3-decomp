@@ -102,13 +102,11 @@ CharClip *CharClipGroup::GetClip(int flags) {
         return nullptr;
     }
 
-    if (mClips.size() <= mWhich) {
-        mWhich = mClips.size() - 1;
+    {
+        int sz = (int)mClips.size() - 1;
+        if (sz < mWhich) mWhich = sz;
     }
-
-    if (unk24 >= mClips.size()) {
-        unk24 = mClips.size() - 1;
-    }
+    unk24 = Min((int)mClips.size() - 1, unk24);
 
     int origWhich = mWhich;
     int origUnk24 = unk24;
@@ -124,9 +122,6 @@ CharClip *CharClipGroup::GetClip(int flags) {
             CharClip *clip = mClips[pos];
             if ((clip->Flags() & flags) == flags) {
                 mClips.swap(pos, mWhich);
-                int newUnk24 = origUnk24 + 1;
-                newUnk24 -= (newUnk24 >= mClips.size()) ? mClips.size() : 0;
-                unk24 = newUnk24;
                 return clip;
             }
             pos++;
@@ -143,7 +138,10 @@ CharClip *CharClipGroup::GetClip(int flags) {
             if ((clip->Flags() & flags) == flags) {
                 mClips.swap(pos, mWhich);
                 mClips.swap(pos, unk24);
-                goto updateBoundary;
+                int newUnk24 = unk24 + 1;
+                newUnk24 -= (newUnk24 >= mClips.size()) ? mClips.size() : 0;
+                unk24 = newUnk24;
+                return clip;
             }
             pos++;
             pos -= (pos >= mClips.size()) ? mClips.size() : 0;
@@ -154,7 +152,6 @@ CharClip *CharClipGroup::GetClip(int flags) {
     if ((clip->Flags() & flags) == flags) {
         mClips.swap(pos, mWhich);
         mClips.swap(pos, unk24);
-    updateBoundary:;
         int newUnk24 = unk24 + 1;
         newUnk24 -= (newUnk24 >= mClips.size()) ? mClips.size() : 0;
         unk24 = newUnk24;

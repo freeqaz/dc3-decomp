@@ -899,25 +899,28 @@ void ProfileMgr::TriggerSignoutEvent() {
 }
 
 HamProfile *ProfileMgr::GetActiveProfile(bool b) const {
+    HamProfile *pCritical = TheProfileMgr.CriticalProfile();
+    if (pCritical) {
+        return pCritical;
+    }
     ShellInput *pShellInput = TheHamUI.GetShellInput();
-    if (CriticalProfile()) {
-        MILO_ASSERT(pShellInput, 0x565);
-        SkeletonChooser *pSkeletonChooser = pShellInput->GetSkeletonChooser();
-        MILO_ASSERT(pSkeletonChooser, 0x568);
-        int index = pSkeletonChooser->GetActivePlayerIndex();
-        HamPlayerData *pActivePlayer = TheGameData->Player(index);
-        MILO_ASSERT(pActivePlayer, 0x56c);
-        HamProfile *pProfileFromPad =
-            TheProfileMgr.GetProfileFromPad(pActivePlayer->PadNum());
-        if (!pProfileFromPad || !pProfileFromPad->HasValidSaveData()) {
-            HamPlayerData *pOtherPlayer = TheGameData->Player(0 == index);
-            MILO_ASSERT(pOtherPlayer, 0x579);
-            HamProfile *pOtherPlayerFromPad =
-                TheProfileMgr.GetProfileFromPad(pOtherPlayer->PadNum());
-            if (!b || pOtherPlayerFromPad || !pOtherPlayerFromPad->HasValidSaveData()) {
-                return pOtherPlayerFromPad;
-            }
-        }
+    MILO_ASSERT(pShellInput, 0x565);
+    SkeletonChooser *pSkeletonChooser = pShellInput->GetSkeletonChooser();
+    MILO_ASSERT(pSkeletonChooser, 0x568);
+    int index = pSkeletonChooser->GetActivePlayerIndex();
+    HamPlayerData *pActivePlayer = TheGameData->Player(index);
+    MILO_ASSERT(pActivePlayer, 0x56c);
+    HamProfile *pProfileFromPad =
+        TheProfileMgr.GetProfileFromPad(pActivePlayer->PadNum());
+    if (pProfileFromPad && pProfileFromPad->HasValidSaveData()) {
+        return pProfileFromPad;
+    }
+    HamPlayerData *pOtherPlayer = TheGameData->Player(index == 0);
+    MILO_ASSERT(pOtherPlayer, 0x579);
+    HamProfile *pOtherPlayerFromPad =
+        TheProfileMgr.GetProfileFromPad(pOtherPlayer->PadNum());
+    if (b && pOtherPlayerFromPad && pOtherPlayerFromPad->HasValidSaveData()) {
+        return pOtherPlayerFromPad;
     }
     return nullptr;
 }
@@ -1014,22 +1017,15 @@ float ProfileMgr::GetPadExtraLag(int padNum, LagContext ctx) const {
     case 5:
     case 6:
     case 7:
-        if (ctx == kVCal) {
-            lag = 27.0f;
-        } else {
+        if (ctx != kVCal) {
             lag = 18.0f;
+        } else {
+            lag = 27.0f;
         }
         break;
-    case 8:
-    case 9:
-    case 0xb:
-        if (ctx == kVCal) {
-            lag = 43.0f;
-        } else if (ctx == kACal) {
-            lag = 19.0f;
-        } else {
-            lag = 36.0f;
-        }
+    case 0x10:
+    case 0x17:
+        lag = 10.0f;
         break;
     case 0xc:
     case 0x19:
@@ -1040,10 +1036,23 @@ float ProfileMgr::GetPadExtraLag(int padNum, LagContext ctx) const {
         break;
     case 0xd:
     case 0x1a:
-        if (ctx == kVCal) {
-            lag = 35.0f;
-        } else {
+        if (ctx != kVCal) {
             lag = 20.0f;
+        } else {
+            lag = 35.0f;
+        }
+        break;
+    case 8:
+    case 9:
+    case 0xb:
+        if (ctx != kVCal) {
+            if (ctx != kACal) {
+                lag = 36.0f;
+            } else {
+                lag = 19.0f;
+            }
+        } else {
+            lag = 43.0f;
         }
         break;
     case 0xe:
@@ -1053,17 +1062,15 @@ float ProfileMgr::GetPadExtraLag(int padNum, LagContext ctx) const {
     case 0x18:
     case 0x1b:
     case 0x1c:
-        if (ctx == kACal) {
-            lag = -1.0f;
-        } else if (ctx == kVCal) {
-            lag = 24.0f;
+        if (ctx != kVCal) {
+            if (ctx != kACal) {
+                lag = 16.0f;
+            } else {
+                lag = -1.0f;
+            }
         } else {
-            lag = 16.0f;
+            lag = 24.0f;
         }
-        break;
-    case 0x10:
-    case 0x17:
-        lag = 10.0f;
         break;
     default:
         lag = 14.0f;

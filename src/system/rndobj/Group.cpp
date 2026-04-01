@@ -226,15 +226,13 @@ void RndGroup::DrawShowing() {
         for (std::vector<RndDrawable *>::iterator it = mDraws.begin(); it != mDraws.end();
              ++it) {
             RndTransformable *trans = dynamic_cast<RndTransformable *>(*it);
+            Vector3 zero(0.0f, 0.0f, 0.0f);
+            Vector3 pos = trans ? trans->WorldXfm().v : zero;
+            Vector3 delta;
+            Subtract(camXfm.v, pos, delta);
             GroupDrawDist gdd;
             gdd.draw = *it;
-            if (trans) {
-                Vector3 delta;
-                Subtract(camXfm.v, trans->WorldXfm().v, delta);
-                gdd.dist = bool(LengthSquared(delta));
-            } else {
-                gdd.dist = 0.0f;
-            }
+            gdd.dist = LengthSquared(delta);
             sorted.push_back(gdd);
         }
         std::sort(sorted.begin(), sorted.end(), SortInWorld);
