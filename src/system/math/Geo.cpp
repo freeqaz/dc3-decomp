@@ -647,10 +647,10 @@ namespace stlpmtx_std {
 void Multiply(const Box &box, float f, Box &out) {
     Vector3 center;
     Interp(box.mMin, box.mMax, 0.5f, center);
-    float hsy = box.mMax.y - center.y;
     float hsx = box.mMax.x - center.x;
+    float hsy = box.mMax.y - center.y;
+    float hsz = -(center.z - box.mMax.z);
     out.mMin.y = center.y - hsy * f;
-    float hsz = box.mMax.z - center.z;
     out.mMin.z = center.z - hsz * f;
     out.mMin.x = center.x - hsx * f;
     out.mMax.z = hsz * f + center.z;

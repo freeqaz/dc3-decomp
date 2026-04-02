@@ -53,10 +53,10 @@ BinStream &operator>>(BinStream &bs, Key<T> &key) {
     return bs;
 }
 
-// NOTE: BinStreamRev overload accesses stream directly for correct codegen
+// NOTE: BinStreamRev overload is REQUIRED - do not remove
 template <class T>
 BinStreamRev &operator>>(BinStreamRev &bs, Key<T> &key) {
-    bs.stream >> key.value >> key.frame;
+    bs >> key.value >> key.frame;
     return bs;
 }
 
