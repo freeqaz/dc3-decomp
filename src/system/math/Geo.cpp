@@ -645,18 +645,18 @@ namespace stlpmtx_std {
 #endif // HX_NATIVE
 
 void Multiply(const Box &box, float f, Box &out) {
-    const auto& _ref0 = box;
+    const Box& _ref0 = box;
     Vector3 center;
     Interp(_ref0.mMin, _ref0.mMax, 0.5f, center);
     Vector3 *pMax = &out.mMax;
     float hsz = _ref0.mMax.z - center.z;
     float hsy = _ref0.mMax.y - center.y;
+    float hsx = _ref0.mMax.x - center.x;
     pMax->y = hsy;
     pMax->z = hsz;
-    float hsx = _ref0.mMax.x - center.x;
     pMax->x = hsx;
-    float hsyf = pMax->y * f;
-    float hsxf = pMax->x * f;
+    float hsxf = out.mMax.x * f;
+    float hsyf = out.mMax.y * f;
     pMax->y = hsyf;
     float hszf = hsz * f;
     pMax->x = hsxf;
@@ -664,9 +664,12 @@ void Multiply(const Box &box, float f, Box &out) {
     pMax->y = hsyf + center.y;
     pMax->x = hsxf + center.x;
     pMax->z = hszf + center.z;
-    out.mMin.y = (_ref0.mMin.y - center.y) * f + center.y;
-    out.mMin.x = (_ref0.mMin.x - center.x) * f + center.x;
-    out.mMin.z = (_ref0.mMin.z - center.z) * f + center.z;
+    float dmx = _ref0.mMin.x - center.x;
+    float dmy = _ref0.mMin.y - center.y;
+    float dmz = _ref0.mMin.z - center.z;
+    out.mMin.z = dmz * f + center.z;
+    out.mMin.x = dmx * f + center.x;
+    out.mMin.y = dmy * f + center.y;
 }
 
 void Multiply(const Plane &p, const Transform &t, Plane &out) {
@@ -1158,49 +1161,44 @@ bool Intersect(const Transform &tf, const Hmx::Polygon &poly, const BSPNode *nod
             back = true;
     }
 
+    const BSPNode *child;
     if (!back) {
         // Entirely in front (or empty polygon)
-        const BSPNode *left = node->left;
-        if (!left)
+        child = node->left;
+        if (!child)
             return false;
-        bool res = Intersect(tf, poly, left);
-        if (res)
-            return true;
-        return false;
-    }
-    if (!front) {
+    } else if (!front) {
         // Entirely behind
-        const BSPNode *right = node->right;
-        if (!right)
+        child = node->right;
+        if (!child)
             return true;
-        bool res = Intersect(tf, poly, right);
-        if (res)
+    } else {
+        // Polygon straddles the plane - clip and test both sides
+        if (!node->right)
             return true;
-        return false;
-    }
-    // Polygon straddles the plane - clip and test both sides
-    if (!node->right)
-        return true;
-    Hmx::Ray r;
-    Intersect(tf, node->plane, r);
-    Hmx::Polygon splitPoly;
-    if (node->left) {
-        Clip(poly, r, splitPoly);
-        bool res = Intersect(tf, splitPoly, node->left);
-        if (res) {
-            return true;
+        Hmx::Ray r;
+        Intersect(tf, node->plane, r);
+        Hmx::Polygon splitPoly;
+        if (node->left) {
+            Clip(poly, r, splitPoly);
+            bool res = Intersect(tf, splitPoly, node->left);
+            if (res) {
+                return true;
+            }
         }
+        r.dir.x = -r.dir.x;
+        r.dir.y = -r.dir.y;
+        Clip(poly, r, splitPoly);
+        bool res = Intersect(tf, splitPoly, node->right);
+        return res;
     }
-    r.dir.x = -r.dir.x;
-    r.dir.y = -r.dir.y;
-    Clip(poly, r, splitPoly);
-    bool res = Intersect(tf, splitPoly, node->right);
-    return res;
+    bool res = Intersect(tf, poly, child);
+    if (res)
+        return true;
+    return false;
 }
 
 void Clip(const Hmx::Polygon &poly, const Hmx::Ray &ray, Hmx::Polygon &out) {
-    // Clip a 2D polygon against a half-plane defined by the ray
-    // Points with positive dot product against the ray direction are kept
     if (poly.points.begin() == poly.points.end()) {
         out.points.clear();
         return;
@@ -1209,7 +1207,7 @@ void Clip(const Hmx::Polygon &poly, const Hmx::Ray &ray, Hmx::Polygon &out) {
     std::vector<Vector2> tempPoints;
     std::vector<Vector2> *newPoints;
 
-    if (&poly == &out) {
+    if (&out == &poly) {
         newPoints = &tempPoints;
     } else {
         newPoints = &out.points;
@@ -1219,41 +1217,38 @@ void Clip(const Hmx::Polygon &poly, const Hmx::Ray &ray, Hmx::Polygon &out) {
     newPoints->reserve((poly.points.end() - poly.points.begin()) * 2);
 
     const Vector2 *lastPoint = &poly.points.back();
-    float lastDot = ray.dir.x * (lastPoint->x - ray.base.x)
-                  + ray.dir.y * (lastPoint->y - ray.base.y);
+    const Vector2 *dirPtr = &ray.dir;
+    float yDiff = lastPoint->y - ray.base.y;
+    float lastDot = dirPtr->x * (lastPoint->x - ray.base.x)
+                  + dirPtr->y * yDiff;
 
-    if (poly.points.begin() != poly.points.end()) {
-        for (const Vector2 *i = poly.points.begin(); i != poly.points.end(); i++) {
-            float yDelta = i->y - ray.base.y;
-            float dot = ray.dir.x * (i->x - ray.base.x) + yDelta * ray.dir.y;
+    Vector2 v;
+    for (const Vector2 *i = poly.points.begin(); i != poly.points.end(); i++) {
+        float yDelta = i->y - ray.base.y;
+        float dot = dirPtr->x * (i->x - ray.base.x) + yDelta * dirPtr->y;
 
-            if (!(dot < 0.0f)) {
-                if (dot > 0.0f && lastDot < 0.0f) {
-                    // Entering: compute intersection and add it
-                    float t = lastDot / (lastDot - dot);
-                    Vector2 v;
-                    v.Set(lastPoint->x + t * (i->x - lastPoint->x),
-                          lastPoint->y + t * (i->y - lastPoint->y));
-                    newPoints->push_back(v);
-                }
-                newPoints->push_back(*i);
-            } else {
-                if (lastDot > 0.0f) {
-                    // Leaving: compute intersection and add it
-                    float t = lastDot / (lastDot - dot);
-                    Vector2 v;
-                    v.Set(lastPoint->x + t * (i->x - lastPoint->x),
-                          lastPoint->y + t * (i->y - lastPoint->y));
-                    newPoints->push_back(v);
-                }
+        if (!(dot < 0.0f)) {
+            if (dot > 0.0f && lastDot < 0.0f) {
+                float t = lastDot / (lastDot - dot);
+                v.Set(lastPoint->x + t * (i->x - lastPoint->x),
+                      lastPoint->y + t * (i->y - lastPoint->y));
+                newPoints->push_back(v);
             }
-
-            lastDot = dot;
-            lastPoint = i;
+            newPoints->push_back(*i);
+        } else {
+            if (lastDot > 0.0f) {
+                float t = lastDot / (lastDot - dot);
+                v.Set(lastPoint->x + t * (i->x - lastPoint->x),
+                      lastPoint->y + t * (i->y - lastPoint->y));
+                newPoints->push_back(v);
+            }
         }
+
+        lastDot = dot;
+        lastPoint = i;
     }
 
-    if (&poly == &out) {
+    if (&out == &poly) {
         out.points = tempPoints;
     }
 }
