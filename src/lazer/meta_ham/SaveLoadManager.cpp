@@ -1905,37 +1905,36 @@ DataNode SaveLoadManager::OnMsg(const MCResultMsg &msg) {
             }
         } else {
             // AutoloadStartLoad result handling
-            if (result <= 8) {
-                switch (result) {
-                case 8:
-                    nextState = kS_SaveLookForFile;
-                    break;
-                case 0:
-                result_zero:
-                    unk64 = 0;
-                    nextState = kS_SaveLoadError2;
-                    break;
-                case 1:
-                    nextState = kS_AutoloadDeviceMissing;
-                    break;
-                case 5:
-                    nextState = kS_AutoloadCorrupt;
-                    break;
-                case 6:
-                    nextState = kS_SaveLookForFile;
-                    break;
-                default:
-                    nextState = kS_LoadFailed;
-                    break;
-                }
-            } else if (result == 10) {
+            switch (result) {
+            case 6:
+            case 8:
+                nextState = kS_SaveLookForFile;
+                break;
+            case 5:
+                nextState = kS_AutoloadCorrupt;
+                break;
+            case 1:
+                nextState = kS_AutoloadDeviceMissing;
+                break;
+            case 0:
+            result_zero:
+                unk64 = 0;
+                nextState = kS_SaveLoadError2;
+                break;
+            case 10:
+            autoload_obsolete:
                 nextState = kS_AutoloadObsolete;
-            } else if (result == 11) {
+                break;
+            case 11:
+            autoload_future:
                 nextState = kS_AutoloadFuture;
-            } else if (result == 25) {
+                break;
+            case 25:
                 nextState = kS_AutoloadNotOwner;
-            } else {
+                break;
+            default:
                 nextState = kS_LoadFailed;
+                break;
             }
         }
     } else if (mState == kS_SaveDeleteSaves) {
@@ -1952,7 +1951,9 @@ DataNode SaveLoadManager::OnMsg(const MCResultMsg &msg) {
         }
         switch (result) {
         case 0:
-            goto result_zero;
+            unk64 = 0;
+            nextState = kS_SaveLoadError2;
+            break;
         case 1:
             nextState = kS_ManualLoadMissing;
             break;
@@ -1963,11 +1964,9 @@ DataNode SaveLoadManager::OnMsg(const MCResultMsg &msg) {
             nextState = kS_ManualLoadNoFile;
             break;
         case 10:
-            nextState = kS_AutoloadObsolete;
-            break;
+            goto autoload_obsolete;
         case 11:
-            nextState = kS_AutoloadFuture;
-            break;
+            goto autoload_future;
         case 25:
             nextState = kS_ManualLoadNotOwner;
             break;
