@@ -413,8 +413,9 @@ void HamStoreProvider::RefreshFilteredCartOffers() {
     std::map<Symbol, std::vector<StoreOffer *> *>::iterator it =
         unk38.find(store_filter_shopping_cart);
     if (it != unk38.end()) {
-        if (it->second) {
-            delete it->second;
+        std::vector<StoreOffer *> *vec = it->second;
+        if (vec) {
+            delete vec;
         }
         it->second = 0;
         unk38.erase(it);
@@ -435,7 +436,8 @@ void HamStoreProvider::RefreshFilteredCartOffers() {
             StoreOffer **end = mAllOffers->end();
             while (end != mAllOffers->begin()) {
                 --end;
-                if ((*end)->StoreOfferData()->Sym(0) == store_checkout) {
+                Symbol sym = (*end)->StoreOfferData()->Sym(0);
+                if (sym == store_checkout) {
                     mCartCheckout = *end;
                     break;
                 }

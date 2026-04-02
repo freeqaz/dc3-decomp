@@ -131,8 +131,10 @@ template <>
 BinStream &operator<<(BinStream &bs, const ObjPtrVec<RhythmDetector, ObjectDir> &c) {
     bs << (int)c.size();
     MILO_ASSERT(c.Owner(), 0x525);
-    for (int i = 0; i < (int)c.size(); i++) {
-        const Hmx::Object *obj = c[i];
+    ObjPtrVec<RhythmDetector, ObjectDir>::const_iterator it = c.begin();
+    ObjPtrVec<RhythmDetector, ObjectDir>::const_iterator end = c.end();
+    for (; it != end; ++it) {
+        const Hmx::Object *obj = *it;
         const char *name = obj ? obj->Name() : "";
         bs << name;
     }

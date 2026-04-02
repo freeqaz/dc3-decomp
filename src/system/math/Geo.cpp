@@ -387,8 +387,8 @@ bool Intersect(const Plane &plane, const Box &box) {
     }
 
     const Vector3 &normal = *(const Vector3 *)&plane.a;
-    if (0.0f < normal.y * pMin.y + normal.z * pMin.z + normal.x * pMin.x + plane.d
-        || normal.y * pMax.y + normal.z * pMax.z + normal.x * pMax.x + plane.d < 0.0f) {
+    if (0.0f < normal.x * pMin.x + normal.y * pMin.y + normal.z * pMin.z + plane.d
+        || normal.x * pMax.x + normal.y * pMax.y + normal.z * pMax.z + plane.d < 0.0f) {
         return false;
     }
     return true;
@@ -722,18 +722,16 @@ void Sphere::GrowToContain(const Sphere &s) {
 void Frustum::Set(float near, float far, float fovY, float ratio) {
     front.Set(0, 1, 0, -near);
     back.Set(0, -1, 0, far);
-    float halfY = fovY * 0.5f;
-    float sy = std::sin(halfY);
-    float cy = std::cos(halfY);
-    float sx = sy / ratio;
+    float sy = std::sin((fovY * 0.5f));
+    float cy = std::cos((fovY * 0.5f));
     top.Set(0, sy, -cy, 0);
     bottom.Set(0, sy, cy, 0);
-    float len = std::sqrt(sx * sx + cy * cy);
+    float len = std::sqrt(cy * cy + (sy / ratio) * (sy / ratio));
     if (len != 0.0f) {
         len = 1.0f / len;
     }
     float la = len * cy;
-    float lb = len * sx;
+    float lb = len * (sy / ratio);
     left.Set(la, lb, 0, 0);
     right.Set(-la, lb, 0, 0);
     if (fovY == 0.0f) {
@@ -803,15 +801,16 @@ bool Intersect(const Segment &seg, const Sphere &sphere) {
 }
 
 bool Intersect(const Vector3 &v, const BSPNode *n) {
-    if (!n)
-        return true;
     MILO_ASSERT(n, 0x4ca);
-    if (n->plane.Dot(v) > 0) {
-        if (!n->left)
-            return false;
-        return Intersect(v, n->left);
-    } else
-        return Intersect(v, n->right);
+    do {
+        while (n->plane.Dot(v) <= 0) {
+            n = n->right;
+            if (!n)
+                return true;
+        }
+        n = n->left;
+    } while (n);
+    return false;
 }
 
 bool Intersect(const Segment &seg, const BSPNode *n, float &t, Plane &p) {

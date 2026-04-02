@@ -161,12 +161,11 @@ void Archive::Enumerate(
 
         if (lastPath != curPath) {
             if (recurse) {
-                matches = strncmp(dir, curPath, dirLen) == 0
+                matches = !strncmp(curPath, dir, dirLen)
                     && (curPath[dirLen] == '\0' || curPath[dirLen] == '/'
                         || curPath[dirLen] == '\\');
             } else {
-                matches = strlen(curPath) == (unsigned int)dirLen
-                    && strncmp(dir, curPath, dirLen) == 0;
+                matches = strcmp(curPath, dir) == 0;
             }
             lastPath = curPath;
         }
@@ -185,7 +184,7 @@ void Archive::Enumerate(
             const char *dtaName = MakeString("%s.dta", base);
             cb(path, dtaName);
         } else {
-            cb(curName, curPath);
+            cb(curPath, curName);
         }
     }
 }

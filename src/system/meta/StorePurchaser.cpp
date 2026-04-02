@@ -31,6 +31,24 @@ XboxPurchaser::~XboxPurchaser() {
 
 void XboxPurchaser::Initiate() {
     MILO_ASSERT(!IsPurchasing(), 0x39a);
+    mState = purchasestate1;
+
+    unsigned long trackingID;
+    unsigned long ret;
+    if (PlatformMgr::sXShowCallback(trackingID)) {
+        ret = XShowNuiMarketplaceUI(
+            trackingID, mUserIndex, XSHOWMARKETPLACEUI_ENTRYPOINT_CONTENTITEM_BACKGROUND, mOfferID, -1
+        );
+    } else {
+        ret = XShowMarketplaceUI(
+            mUserIndex, XSHOWMARKETPLACEUI_ENTRYPOINT_CONTENTITEM_BACKGROUND, mOfferID, -1
+        );
+    }
+
+    if (ret != ERROR_SUCCESS) {
+        TheDebug.Notify(MakeString("Error starting checkout UI: %d", ret));
+        mState = purchasestate3;
+    }
 
     // Register for UI changed notifications to detect when purchase UI closes
     static Symbol ui_changed("ui_changed");

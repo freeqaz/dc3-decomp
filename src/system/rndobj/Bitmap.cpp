@@ -325,8 +325,12 @@ int RndBitmap::PixelOffset(int x, int y, bool &nibble) const {
         0x6d, 0x75, 0x7d, 0x47, 0x4f, 0x57, 0x5f, 0x67, 0x6f, 0x77, 0x7f
     };
 
-    if (mOrder & 4) {
+    auto& _ref3 = mHeight;
+    auto& _ref0 = mOrder;
+    if (_ref0 & 4) {
         if (mBpp == 8) {
+            int yHalf = y >> 1;
+            int xHalf = x >> 1;
             int doubleRowStride = (int)mRowBytes * 2;
             char *lookup = (((y >> 2) % 4) & 1) ? hbytes13 : hbytes02;
             unsigned char lookupOffset = lookup[(y % 4) * 0x10 + (x % 16)];
@@ -334,40 +338,40 @@ int RndBitmap::PixelOffset(int x, int y, bool &nibble) const {
                 lookupOffset = (lookupOffset + doubleRowStride) - 0x20;
             }
             return lookupOffset
-                + ((((y >> 1) & 0xFFFFFFFE) * doubleRowStride)
-                   + (((x >> 1) * 4) & 0xFFFFFFE0));
+                + (((yHalf & 0xFFFFFFFE) * doubleRowStride)
+                   + ((xHalf * 4) & 0xFFFFFFE0));
         }
         int yQuadMod = (y >> 2) % 4;
         int tiledOffsetX, tiledOffsetY, tiledStride;
         if ((mWidth > 0x80U)) {
-            if ((mHeight > 0x80U)) {
+            if ((_ref3 > 0x80U)) {
                 tiledOffsetX = (((int)(y - ((y / 128) << 7)) >> 1) & 0xFFFFFFF8)
                     + ((x >> 1) & 0xFFFFFFC0);
                 tiledOffsetY = (((int)(x - ((x / 128) << 7)) >> 2) & 0xFFFFFFF8)
                     + ((y >> 2) & 0xFFFFFFE0) + (yQuadMod * 2);
-                tiledStride = (((mHeight - (((int)mHeight / 128) << 7)) & 0xFFFFFFF0)
+                tiledStride = (((_ref3 - (((int)_ref3 / 128) << 7)) & 0xFFFFFFF0)
                                + (mWidth & 0xFFFFFF80))
                     * 2;
             } else {
                 tiledOffsetX = (y >> 1) & 0xFFFFFFF8;
                 tiledOffsetY = ((x >> 2) & 0xFFFFFFF8) + (yQuadMod * 2);
-                tiledStride = (int)mHeight * 2;
+                tiledStride = (int)_ref3 * 2;
             }
         } else {
             tiledOffsetX = (y >> 1) & 0xFFFFFFF8;
             tiledOffsetY = ((x >> 2) & 0xFFFFFFF8) + (yQuadMod * 2);
-            tiledStride = (int)mHeight * 2;
+            tiledStride = (int)_ref3 * 2;
         }
         char *lookup2 = (yQuadMod & 1) ? hbytes13 : hbytes02;
         unsigned char nibbleOffset = lookup2[((y % 4) << 5) + (x - ((x / 32) << 5))];
-        int offsetShifted = (int)nibbleOffset >> 1;
         nibble = nibbleOffset & 1;
+        int offsetShifted = (int)nibbleOffset >> 1;
         if (offsetShifted > 0x1F) {
             offsetShifted = (offsetShifted + tiledStride) - 0x20;
         }
         return offsetShifted + ((tiledStride * tiledOffsetY) + (tiledOffsetX * 4));
     }
-    if (mOrder & 0x40) {
+    if (_ref0 & 0x40) {
         unsigned char bpp = mBpp;
         int blockSize = 8;
         if (bpp != 4) {
@@ -392,8 +396,8 @@ int RndBitmap::PixelOffset(int x, int y, bool &nibble) const {
         return offsetMod + rowOffset;
     }
     nibble = x & 1;
-    int byteOffsetX = (int)(mBpp * x) >> 3;
     int byteOffsetY = mRowBytes * y;
+    int byteOffsetX = (int)(mBpp * x) >> 3;
     return byteOffsetX + byteOffsetY;
 }
 
