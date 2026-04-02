@@ -1723,13 +1723,14 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
         return y;
 
     const FilterVersion *fv = move->FilterVer();
+    SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
     int numNodes = fv->NumNodes();
 
     MILO_ASSERT(TheGestureMgr, 0x795);
     MILO_ASSERT(mSkeletonViz, 0x796);
     MILO_ASSERT(TheHamDirector, 0x797);
 
-    MoveMode mode = CurrentMoveMode();
+    MoveFrame *closest = ClosestMoveFrame();
     MoveMirrored mirroredEnum = move->Mirrored();
     bool mirrored = (mirroredEnum != kMirroredNo);
 
@@ -1762,9 +1763,8 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
         float xRight = sCharWidth + y;
         float range = gBeatLineData.maxValue - gBeatLineData.minValue;
         float denominator =
-            gBeatLineData.rangeScale + gBeatLineData.rangeOffset + beatScale4;
-        float xPos = range * (gBeatLineData.rangeOffset / denominator)
-            + gBeatLineData.minValue;
+            (beatScale4 + (gBeatLineData.rangeOffset + gBeatLineData.rangeScale));
+        float xPos = gBeatLineData.minValue + range * (gBeatLineData.rangeOffset / denominator);
         float threshPos = (0.99f - xPos) * thresh + xPos;
         Hmx::Color threshColor(0.3, 0.3, 0.3, 0.8);
         UtilDrawLine(
@@ -1785,24 +1785,21 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
         gBeatLineData.rangeScale + gBeatLineData.rangeOffset + beatScale4;
     float xMin = range * (gBeatLineData.rangeOffset / denominator)
         + gBeatLineData.minValue;
-    float xScale = 0.99f - xMin;
 
     // Draw detected bar
     float detectFrac;
     detectFrac = move->IsRest() ? 0.0f : DetectFrac(0, -1);
     const char *mirroredStr = mirrored ? "(mirror)" : gNullStr;
-    int measureBeat = TheTaskMgr.CurrentMeasure();
-    const char *barLabel = MakeString(
-        "%i %s %s", measureBeat,
+    y = DrawDetectedBar(xRight, MakeString(
+        "%i %s %s", TheTaskMgr.CurrentMeasure(),
         move->Name() + (move->Name()[0] == '/' ? 1 : 0), mirroredStr
-    );
-    y = DrawDetectedBar(xRight, barLabel, detectFrac, xMin, 0.99f, mirrored, false);
+    ), detectFrac, xMin, 0.99f, mirrored, false);
 
     // Draw smoothed overlay bar
     DrawOverlayBar(y, xMin, 0.99f, sLightGray, sCharWidth);
     DrawOverlayBar(
         y, xMin,
-        mCurMoveSmoothers[0].Level() * 0.0625f * xScale + xMin, sLightGray,
+        mCurMoveSmoothers[0].Level() * 0.0625f * (0.99f - xMin) + xMin, sLightGray,
         sCharWidth
     );
 
@@ -1841,9 +1838,9 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
 
     // Draw Ham1 node column headers
     if (fv->mType == kFilterVersionHam1) {
-        float columnX = sCharWidth + yBase;
         float startX = gBeatLineData.minValue;
         if (numNodes > 0) {
+            float columnX = sCharWidth + yBase;
             for (int n = 0; n < numNodes; n++) {
                 const char *nodeName = fv->mErrorNodes[n]->NodeName().Str();
                 Vector2 pos(startX, columnX);
@@ -1874,7 +1871,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     int measureStart = TheTaskMgr.CurrentMeasure() * 4;
     float beatOffset = totalBeatF - (float)measureStart;
     float halfWidth = TheRnd.Width() * sCharWidth * 0.5f;
-    MoveFrame *closest = ClosestMoveFrame();
+    MoveMode mode = CurrentMoveMode();
 
     const std::vector<MoveFrame> &moveFrames =
         static_cast<const HamMove *>(move)->GetMoveFrames();
@@ -1888,10 +1885,10 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
             / denominator) + gBeatLineData.minValue;
 
         Hmx::Color markerColor;
-        if (&frame == closest) {
-            markerColor.Set(0.8, 0.8, 0.0, 1.0);
-        } else {
+        if (!(&frame == closest)) {
             markerColor.Set(0.8, 0.8, 0.8, 1.0);
+        } else {
+            markerColor.Set(0.8, 0.8, 0.0, 1.0);
         }
 
         DrawBeatLine(yBase, height, frame.GetBeat(), markerColor);
@@ -1920,7 +1917,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
 
     // Draw detect frames in range
     std::pair<DetectFrame *, DetectFrame *> detectRange(nullptr, nullptr);
-    DetectRange(_ref0[0].mDetectFrames, detectRange, measureBeat, measureBeat);
+    DetectRange(_ref0[0].mDetectFrames, detectRange, TheTaskMgr.CurrentMeasure(), TheTaskMgr.CurrentMeasure());
 
     if (fv->mType == kFilterVersionHam1 && detectRange.first != detectRange.second) {
         float colWidth = sCharWidth;
@@ -2178,7 +2175,6 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
 
     // Draw debug skeleton in remaining area
     {
-        SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
         std::vector<SkeletonCallback *> callbacks;
         if (this) {
             callbacks.push_back(this);

@@ -294,7 +294,7 @@ void Intersect(const Hmx::Ray &ray1, const Hmx::Ray &ray2, Vector2 &vec) {
     // Compute 2D cross product determinant
     float dot = r1dy * r2dx - r1dx * r2dy;
 
-    if ((int)dot != 0.0f) {
+    if (dot != 0.0f) {
         // Solve for intersection parameter s
         float s = ((r2by - r1by) * r1dx + (r1bx - r2bx) * r1dy) / dot;
         // Compute intersection point
@@ -645,17 +645,28 @@ namespace stlpmtx_std {
 #endif // HX_NATIVE
 
 void Multiply(const Box &box, float f, Box &out) {
+    const auto& _ref0 = box;
     Vector3 center;
-    Interp(box.mMin, box.mMax, 0.5f, center);
-    float hsx = box.mMax.x - center.x;
-    float hsy = box.mMax.y - center.y;
-    float hsz = -(center.z - box.mMax.z);
-    out.mMin.y = center.y - hsy * f;
-    out.mMin.z = center.z - hsz * f;
-    out.mMin.x = center.x - hsx * f;
-    out.mMax.z = hsz * f + center.z;
-    out.mMax.x = hsx * f + center.x;
-    out.mMax.y = hsy * f + center.y;
+    Interp(_ref0.mMin, _ref0.mMax, 0.5f, center);
+    Vector3 *pMax = &out.mMax;
+    float hsz = _ref0.mMax.z - center.z;
+    float hsy = _ref0.mMax.y - center.y;
+    pMax->y = hsy;
+    pMax->z = hsz;
+    float hsx = _ref0.mMax.x - center.x;
+    pMax->x = hsx;
+    float hsyf = pMax->y * f;
+    float hsxf = pMax->x * f;
+    pMax->y = hsyf;
+    float hszf = hsz * f;
+    pMax->x = hsxf;
+    pMax->z = hszf;
+    pMax->y = hsyf + center.y;
+    pMax->x = hsxf + center.x;
+    pMax->z = hszf + center.z;
+    out.mMin.y = (_ref0.mMin.y - center.y) * f + center.y;
+    out.mMin.x = (_ref0.mMin.x - center.x) * f + center.x;
+    out.mMin.z = (_ref0.mMin.z - center.z) * f + center.z;
 }
 
 void Multiply(const Plane &p, const Transform &t, Plane &out) {

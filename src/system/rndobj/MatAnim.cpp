@@ -237,6 +237,16 @@ void RndMatAnim::LoadStages(BinStreamRev &d) {
     }
 }
 
+#ifndef HX_NATIVE
+template <>
+BinStreamRev &operator>><RndMatAnim::TexPtr>(BinStreamRev &bs, Key<RndMatAnim::TexPtr> &key) {
+    BinStream &s = bs.stream;
+    key.value.Load(s, true, nullptr);
+    s.ReadEndian(&key.frame, sizeof(float));
+    return bs;
+}
+#endif
+
 void RndMatAnim::LoadStage(BinStreamRev &d) {
     if (d.rev < 2) {
         MILO_NOTIFY("Can't convert old MatAnim stages");
@@ -248,7 +258,7 @@ void RndMatAnim::LoadStage(BinStreamRev &d) {
         d >> t >> s >> r;
     }
     if (d.rev > 1) {
-        d >> mTexKeys;
+        d >> (Keys<TexPtr, RndTex *> &)mTexKeys;
     }
 }
 
@@ -274,28 +284,3 @@ void Interp(
 ) {
     tex = texPtr;
 }
-
-#ifndef HX_NATIVE
-template <>
-BinStreamRev &operator>><RndMatAnim::TexPtr>(BinStreamRev &bs, Key<RndMatAnim::TexPtr> &key) {
-    key.value.Load(bs.stream, true, nullptr);
-    bs.stream.ReadEndian(&key.frame, sizeof(float));
-    return bs;
-}
-
-BinStreamRev &operator>>(
-    BinStreamRev &bs, std::vector<Key<RndMatAnim::TexPtr>, stlpmtx_std::StlNodeAlloc<Key<RndMatAnim::TexPtr>>>
-        &keys
-) {
-    unsigned int length;
-    bs >> length;
-    keys.resize(length);
-    Key<RndMatAnim::TexPtr> *data = keys.data();
-    Key<RndMatAnim::TexPtr> *end = data + keys.size();
-    while (data != end) {
-        bs >> *data;
-        data++;
-    }
-    return bs;
-}
-#endif
