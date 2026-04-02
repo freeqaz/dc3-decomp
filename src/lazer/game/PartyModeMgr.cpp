@@ -1099,10 +1099,10 @@ int PartyModeMgr::PickNextPlayer() {
         mCurrentTeamSelector = 2;
         if (mPlayerSequences) {
             DataArray *arr = mPlayerSequences->Array(mRoundsPlayed + 1);
-            int idx = 1;
-            if (mTeam2Players.size() < mTeam1Players.size())
-                idx = 0;
-            auto teamCount = arr->Int(idx);
+            int idx = 0;
+            if (mTeam1Players.size() <= mTeam2Players.size())
+                idx = 1;
+            int teamCount = arr->Int(idx);
             ret = mTeam1Players.size() + teamCount;
         }
     }

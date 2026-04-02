@@ -417,7 +417,7 @@ void CharacterTest::Sync() {
     if (!mDriver || (mClip1 && mClip1->Dir() != Clips())) {
         mClip1 = nullptr;
     }
-    if (mClip1 && (!mDriver || (mClip2 && mClip2->Dir() != Clips()))) {
+    if (!mClip1 || !mDriver || (mClip2 && mClip2->Dir() != Clips())) {
         mClip2 = nullptr;
     }
     if (!mDriver || (mFilterGroup && mFilterGroup->Dir() != Clips())) {

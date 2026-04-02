@@ -143,10 +143,7 @@ float MultiTempoTempoMap::TickToTime(float tick) const {
     if (tick == 0.0f)
         return 0.0f;
 
-    // need to load up-front to prevent a re-load of the value in the `else` block
-    float startTick = mStartLoopTick;
-
-    if (startTick < 0.0f || tick <= mEndLoopTick) {
+    if (mStartLoopTick < 0.0f || tick <= mEndLoopTick) {
         const TempoInfoPoint *pt = PointForTick(tick);
         if (pt == mTempoPoints.end())
             return 0.0f;
@@ -154,13 +151,13 @@ float MultiTempoTempoMap::TickToTime(float tick) const {
             return pt->mMs
                 + (pt->mTempo * (tick - pt->mTick) / 480.0f / 1000.0f);
     } else {
-        float loopTick = tick - mEndLoopTick;
-        float loopTickLength = mEndLoopTick - startTick;
-        float loopPercent = std::floor(loopTick / loopTickLength);
+        float loopTickLength = mEndLoopTick - mStartLoopTick;
         float loopTimeLength = mEndLoopTime - mStartLoopTime;
+        float loopTick = tick - mEndLoopTick;
+        float loopPercent = std::floor(loopTick / loopTickLength);
 
         float loopTime = loopTimeLength * loopPercent + mEndLoopTime;
-        loopTime += TickToTime(startTick - loopTickLength * loopPercent + loopTick)
+        loopTime += TickToTime(loopTick - loopTickLength * loopPercent + mStartLoopTick)
             - mStartLoopTime;
         return loopTime;
     }

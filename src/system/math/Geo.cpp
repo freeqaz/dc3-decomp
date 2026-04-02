@@ -387,8 +387,8 @@ bool Intersect(const Plane &plane, const Box &box) {
     }
 
     const Vector3 &normal = *(const Vector3 *)&plane.a;
-    if (0.0f < normal.x * pMin.x + normal.y * pMin.y + normal.z * pMin.z + plane.d
-        || normal.x * pMax.x + normal.y * pMax.y + normal.z * pMax.z + plane.d < 0.0f) {
+    if (0.0f < normal.y * pMin.y + normal.z * pMin.z + normal.x * pMin.x + plane.d
+        || normal.y * pMax.y + normal.z * pMax.z + normal.x * pMax.x + plane.d < 0.0f) {
         return false;
     }
     return true;
@@ -806,9 +806,11 @@ bool Intersect(const Vector3 &v, const BSPNode *n) {
     if (!n)
         return true;
     MILO_ASSERT(n, 0x4ca);
-    if (n->plane.Dot(v) >= 0)
+    if (n->plane.Dot(v) > 0) {
+        if (!n->left)
+            return false;
         return Intersect(v, n->left);
-    else
+    } else
         return Intersect(v, n->right);
 }
 

@@ -129,6 +129,7 @@ bool DxShader::Compile(
 
     defines[0].Value = "0";
     ID3DXBuffer *vShader = nullptr;
+    ID3DXBuffer *vError = nullptr;
     HRESULT vRes = D3DXCompileShaderExA(
         data,
         bytes,
@@ -138,13 +139,14 @@ bool DxShader::Compile(
         "vs_3_0",
         0,
         vShader,
-        nullptr,
+        vError,
         nullptr,
         nullptr
     );
 
     defines[0].Value = "1";
     ID3DXBuffer *pShader = nullptr;
+    ID3DXBuffer *pError = nullptr;
     HRESULT pRes = D3DXCompileShaderExA(
         data,
         bytes,
@@ -154,10 +156,38 @@ bool DxShader::Compile(
         "ps_3_0",
         0,
         pShader,
-        nullptr,
+        pError,
         nullptr,
         nullptr
     );
+
+    if (vRes < 0 || pRes < 0) {
+        if (vRes < 0) {
+            if (vError == nullptr) {
+                TheDebug.Notify(MakeString("VShader '%s' compile failure: %d", shaderName, vRes));
+            } else {
+                TheDebug.Notify((char *)vError->GetBufferPointer());
+            }
+        }
+        if (pRes < 0) {
+            if (pError == nullptr) {
+                TheDebug.Notify(MakeString("PShader '%s' compile failure: %d", shaderName, pRes));
+            } else {
+                TheDebug.Notify((char *)pError->GetBufferPointer());
+            }
+        }
+    }
+
+    if (vError != nullptr) {
+        vError->Release();
+        vError = nullptr;
+    }
+    if (pError != nullptr) {
+        pError->Release();
+        pError = nullptr;
+    }
+
+    TheDxShaderInclude.Close(data);
 
     return (vRes >= 0) && (pRes >= 0);
 }

@@ -774,7 +774,7 @@ void SaveLoadManager::Poll() {
             SetState(kS_SongCacheFailed);
             return;
         }
-        nextState = kS_SongCacheFailed;
+        nextState = kS_GlobalOptionsSearch;
         break;
     }
     case kS_SongCacheUnmount: {

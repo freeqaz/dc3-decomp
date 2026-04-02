@@ -152,9 +152,6 @@ void Archive::Enumerate(
         dirp++;
     } while (*(dirp - 1) != '\0');
     int dirLen = dirp - dir - 1;
-    while (dirLen > 0 && (dir[dirLen - 1] == '/' || dir[dirLen - 1] == '\\')) {
-        dirLen--;
-    }
 
     bool matches = false;
     const char *lastPath = nullptr;

@@ -1073,11 +1073,10 @@ INIT_REVS(0x34, 0)
 BEGIN_LOADS(CamShot)
     LOAD_REVS(bs)
     ASSERT_REVS(0x34, 0)
-    bool hidden = mShotOver;
+    bool hidden = mHidden;
     if (hidden) {
         UnHide();
     }
-    float somefloat = 0;
     float oldRevFloat = 0;
     if (d.rev > 0) {
         Hmx::Object::Load(bs);
@@ -1103,8 +1102,8 @@ BEGIN_LOADS(CamShot)
         d >> mFilter;
         d >> mClampHeight;
     } else {
+        mLooping = false;
         mLoopKeyframe = false;
-        mNearPlane = 0;
 
         float fov1, fov2;
         d >> fov1;
@@ -1230,17 +1229,18 @@ BEGIN_LOADS(CamShot)
         d >> crowdModifyStamp;
     if (d.rev > 5) {
         mGenHideVector.clear();
-        mShowList.clear();
+        mGenHideList.clear();
         mHideList.clear();
         if (d.rev <= 0x2F || (bs.Cached() && d.rev < 0x32)) {
-            d >> mHideList;
+            mHideList.Load(bs, false, nullptr, true);
         } else {
-            d >> mHideList;
-            LoadDrawables(bs, mGenHideVector, Dir());
+            mHideList.Load(bs, false, nullptr, true);
+            std::vector<RndDrawable *> tempDraws;
+            LoadDrawables(bs, tempDraws, Dir());
         }
     }
     if (d.rev > 0x1B) {
-        d >> mGenHideList;
+        mShowList.Load(bs, false, nullptr, true);
     }
 
     if (d.rev > 0xB) {

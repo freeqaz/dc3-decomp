@@ -359,7 +359,7 @@ int RndBitmap::PixelOffset(int x, int y, bool &nibble) const {
             tiledStride = (int)mHeight * 2;
         }
         char *lookup2 = (yQuadMod & 1) ? hbytes13 : hbytes02;
-        unsigned char nibbleOffset = lookup2[(y % 4) << 5 + (x - ((x / 32) << 5))];
+        unsigned char nibbleOffset = lookup2[((y % 4) << 5) + (x - ((x / 32) << 5))];
         int offsetShifted = (int)nibbleOffset >> 1;
         nibble = nibbleOffset & 1;
         if (offsetShifted > 0x1F) {

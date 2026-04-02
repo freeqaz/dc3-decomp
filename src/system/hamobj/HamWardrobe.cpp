@@ -167,6 +167,7 @@ Symbol GetDanceBattleBackupOutfit(Symbol s1, Symbol s2) {
                 buf[crewCharLen - 1] = str88[crewCharLen - 1];
                 buf[crewCharLen] = 0;
                 out = GetOutfitRemap(Symbol(buf), false);
+                break;
             }
             i++;
         }

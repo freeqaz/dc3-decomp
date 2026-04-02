@@ -262,13 +262,14 @@ CharClipDriver *CharClipDriver::PreEvaluate(float beat, float deltaBeat, float d
         if (flags & 0x80) {
             mDBeat = 0.0f;
             mPlayFlags = flags & ~0x80;
-        } else {
-            if (!useUserTime) {
-                if (useRealTime) {
-                    deltaBeat = mClip->DeltaSecondsToDeltaBeat(deltaSeconds, oldBeat);
-                }
-                mDBeat = mTimeScale * deltaBeat;
+        } else if (!useUserTime) {
+            float db;
+            if (useRealTime) {
+                db = mClip->DeltaSecondsToDeltaBeat(deltaSeconds, oldBeat);
+            } else {
+                db = deltaBeat;
             }
+            mDBeat = mTimeScale * db;
         }
         mBeat = mDBeat + mBeat;
         float align = AlignToBeat(beat);
@@ -277,13 +278,12 @@ CharClipDriver *CharClipDriver::PreEvaluate(float beat, float deltaBeat, float d
         PlayEvents(oldBeat);
         RndAnimatable *syncAnim = mClip->SyncAnim();
         if (syncAnim) {
-            float frame = mClip->BeatToFrame(mBeat);
-            syncAnim->SetFrame(frame, 1.0f);
+            syncAnim->SetFrame(mClip->BeatToFrame(mBeat), 1.0f);
         }
         if (mBlendFrac < 1.0f) {
             if (!(mBlendWidth <= 0.0f)) {
                 float inc;
-                if (!(!useUserTime)) {
+                if (useUserTime) {
                     inc = deltaBeat;
                 } else {
                     inc = mDBeat;

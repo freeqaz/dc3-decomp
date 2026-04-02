@@ -28,6 +28,7 @@
 #include "rndobj/Mesh.h"
 #include "rndobj/Trans.h"
 #include "rndobj/Utl.h"
+#include "hamobj/RhythmDetector.h"
 #include "utl/BinStream.h"
 #include "utl/Loader.h"
 #include "utl/MemMgr.h"
@@ -125,6 +126,18 @@ BEGIN_PROPSYNCS(Character)
     SYNC_PROP(CharacterTesting, *mTest)
     SYNC_SUPERCLASS(RndDir)
 END_PROPSYNCS
+
+template <>
+BinStream &operator<<(BinStream &bs, const ObjPtrVec<RhythmDetector, ObjectDir> &c) {
+    bs << (int)c.size();
+    MILO_ASSERT(c.Owner(), 0x525);
+    for (int i = 0; i < (int)c.size(); i++) {
+        const Hmx::Object *obj = c[i];
+        const char *name = obj ? obj->Name() : "";
+        bs << name;
+    }
+    return bs;
+}
 
 BinStream &operator<<(BinStream &bs, const Character::Lod &lod) {
     bs << lod.mScreenSize;
