@@ -351,14 +351,14 @@ bool Intersect(const Vector3 &origin, const Vector3 &dir, const Box &box, float 
         float invDir = 1.0f / dir[i];
         float t1 = (box.mMin[i] - origin[i]) * invDir;
         float t2 = (box.mMax[i] - origin[i]) * invDir;
-        if (t2 < t1) {
+        if (t1 > t2) {
             float tmp = t1;
             t1 = t2;
             t2 = tmp;
         }
         tmin = t1 - tmin >= 0.0f ? t1 : tmin;
         tmax = t2 - tmax < 0.0f ? t2 : tmax;
-        if (tmax < tmin) {
+        if (tmin > tmax) {
             return false;
         }
     }
