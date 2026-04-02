@@ -732,7 +732,28 @@ void Frustum::Set(float near, float far, float fovY, float ratio) {
 }
 
 bool operator>(const Sphere &s, const Frustum &f) {
-    return s < f.front || s < f.back || s < f.left || s < f.right || s < f.top || s < f.bottom;
+    float neg_r = -s.radius;
+    bool r;
+    r = f.front.Dot(s.center) < neg_r;
+    if (r == 0) {
+        r = f.back.Dot(s.center) < neg_r;
+        if (r == 0) {
+            r = f.left.Dot(s.center) < neg_r;
+            if (r == 0) {
+                r = f.right.Dot(s.center) < neg_r;
+                if (r == 0) {
+                    r = f.top.Dot(s.center) < neg_r;
+                    if (r == 0) {
+                        r = f.bottom.Dot(s.center) < neg_r;
+                        if (r == 0) {
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return true;
 }
 
 bool Intersect(const Segment &seg, const Sphere &sphere) {
@@ -1114,88 +1135,114 @@ bool MakeBSPTree(BSPNode *&, std::list<BSPFace> &, int) { return false; }
 #endif
 
 bool Intersect(const Transform &tf, const Hmx::Polygon &poly, const BSPNode *node) {
-    if (!node)
-        return true;
-
-    // Classify all polygon points against the BSP split plane
     bool front = false;
     bool back = false;
     for (const Vector2 *i = poly.points.begin(); i != poly.points.end(); i++) {
         Vector3 v(i->x, i->y, 0.0f);
         Multiply(v, tf, v);
         float dot = node->plane.Dot(v);
-        if (dot >= 0.0f)
+        if (0.0f < dot)
             front = true;
         if (dot < 0.0f)
             back = true;
     }
 
-    if (front && !back) {
-        // Entirely in front
-        return Intersect(tf, poly, node->left);
+    if (!back) {
+        // Entirely in front (or empty polygon)
+        const BSPNode *left = node->left;
+        if (!left)
+            return false;
+        bool res = Intersect(tf, poly, left);
+        if (res)
+            return true;
+        return false;
     }
-    if (!front && back) {
+    if (!front) {
         // Entirely behind
-        return Intersect(tf, poly, node->right);
+        const BSPNode *right = node->right;
+        if (!right)
+            return true;
+        bool res = Intersect(tf, poly, right);
+        if (res)
+            return true;
+        return false;
     }
-
     // Polygon straddles the plane - clip and test both sides
+    if (!node->right)
+        return true;
     Hmx::Ray r;
     Intersect(tf, node->plane, r);
-
     Hmx::Polygon splitPoly;
+    if (node->left) {
+        Clip(poly, r, splitPoly);
+        bool res = Intersect(tf, splitPoly, node->left);
+        if (res) {
+            return true;
+        }
+    }
+    r.dir.x = -r.dir.x;
+    r.dir.y = -r.dir.y;
     Clip(poly, r, splitPoly);
-    if (!splitPoly.points.empty() && !Intersect(tf, splitPoly, node->left))
-        return false;
-
-    // Clip against the other side (negate the ray direction)
-    Hmx::Ray negRay;
-    negRay.base = r.base;
-    negRay.dir.Set(-r.dir.x, -r.dir.y);
-    Hmx::Polygon splitPoly2;
-    Clip(poly, negRay, splitPoly2);
-    if (!splitPoly2.points.empty() && !Intersect(tf, splitPoly2, node->right))
-        return false;
-
-    return true;
+    bool res = Intersect(tf, splitPoly, node->right);
+    return res;
 }
 
 void Clip(const Hmx::Polygon &poly, const Hmx::Ray &ray, Hmx::Polygon &out) {
     // Clip a 2D polygon against a half-plane defined by the ray
-    // The ray defines a line: points on the left side (positive dot) are kept
-    // Ray normal direction: (-dir.y, dir.x)
+    // Points with positive dot product against the ray direction are kept
+    if (poly.points.begin() == poly.points.end()) {
+        out.points.clear();
+        return;
+    }
+
     std::vector<Vector2> tempPoints;
-    std::vector<Vector2> *newPoints = &out.points;
+    std::vector<Vector2> *newPoints;
 
-    float lastDot = ray.dir.x * (poly.points.back().y - ray.base.y)
-                  - ray.dir.y * (poly.points.back().x - ray.base.x);
+    if (&poly == &out) {
+        newPoints = &tempPoints;
+    } else {
+        newPoints = &out.points;
+        out.points.clear();
+    }
+
+    newPoints->reserve((poly.points.end() - poly.points.begin()) * 2);
+
     const Vector2 *lastPoint = &poly.points.back();
+    float lastDot = ray.dir.x * (lastPoint->x - ray.base.x)
+                  + ray.dir.y * (lastPoint->y - ray.base.y);
 
-    for (const Vector2 *i = poly.points.begin(); i != poly.points.end(); i++) {
-        float dot = ray.dir.x * (i->y - ray.base.y) - ray.dir.y * (i->x - ray.base.x);
+    if (poly.points.begin() != poly.points.end()) {
+        for (const Vector2 *i = poly.points.begin(); i != poly.points.end(); i++) {
+            float yDelta = i->y - ray.base.y;
+            float dot = ray.dir.x * (i->x - ray.base.x) + yDelta * ray.dir.y;
 
-        if (dot >= 0.0f) {
-            if (lastDot < 0.0f) {
-                // Entering: compute intersection and add it
-                float t = lastDot / (lastDot - dot);
-                Vector2 v;
-                v.Set(lastPoint->x + t * (i->x - lastPoint->x),
-                      lastPoint->y + t * (i->y - lastPoint->y));
-                newPoints->push_back(v);
+            if (!(dot < 0.0f)) {
+                if (dot > 0.0f && lastDot < 0.0f) {
+                    // Entering: compute intersection and add it
+                    float t = lastDot / (lastDot - dot);
+                    Vector2 v;
+                    v.Set(lastPoint->x + t * (i->x - lastPoint->x),
+                          lastPoint->y + t * (i->y - lastPoint->y));
+                    newPoints->push_back(v);
+                }
+                newPoints->push_back(*i);
+            } else {
+                if (lastDot > 0.0f) {
+                    // Leaving: compute intersection and add it
+                    float t = lastDot / (lastDot - dot);
+                    Vector2 v;
+                    v.Set(lastPoint->x + t * (i->x - lastPoint->x),
+                          lastPoint->y + t * (i->y - lastPoint->y));
+                    newPoints->push_back(v);
+                }
             }
-            newPoints->push_back(*i);
-        } else {
-            if (lastDot >= 0.0f) {
-                // Leaving: compute intersection and add it
-                float t = lastDot / (lastDot - dot);
-                Vector2 v;
-                v.Set(lastPoint->x + t * (i->x - lastPoint->x),
-                      lastPoint->y + t * (i->y - lastPoint->y));
-                newPoints->push_back(v);
-            }
+
+            lastDot = dot;
+            lastPoint = i;
         }
+    }
 
-        lastDot = dot;
-        lastPoint = i;
+    if (&poly == &out) {
+        out.points = tempPoints;
     }
 }
