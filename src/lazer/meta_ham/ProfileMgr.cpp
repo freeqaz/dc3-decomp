@@ -545,7 +545,7 @@ void ProfileMgr::SaveGlobalOptions(FixedSizeSaveableStream &fs) {
     mGlobalOptionsDirty = false;
 }
 
-int ProfileMgr::GlobalOptionsSaveSize() { return 0x38; }
+int ProfileMgr::GetGlobalOptionsSize() { return 0x39; }
 
 void ProfileMgr::EnableFitnessForActiveProfiles() {
     for (int i = 0; i < 2; i++) {

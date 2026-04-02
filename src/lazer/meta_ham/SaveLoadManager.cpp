@@ -985,7 +985,7 @@ void SaveLoadManager::Poll() {
         }
         CacheResult result = mCache->GetLastResult();
         if (result == 0) {
-            unsigned long saveSize = TheProfileMgr.GlobalOptionsSaveSize();
+            unsigned long saveSize = TheProfileMgr.GetGlobalOptionsSize();
             FixedSizeSaveableStream fs(mData, saveSize, true);
             TheProfileMgr.LoadGlobalOptions(fs);
             TheProfileMgr.SetGlobalOptionsSaveState((ProfileSaveState)1);
@@ -1483,7 +1483,7 @@ void SaveLoadManager::SetState(State newState) {
             RELEASE(mCacheID);
         }
         static Symbol global_options_cache_name("global_options_cache_name");
-        int saveSize = TheProfileMgr.GlobalOptionsSaveSize();
+        int saveSize = TheProfileMgr.GetGlobalOptionsSize();
         const char *cacheName = Localize(global_options_cache_name, nullptr, TheLocale);
         if (!TheCacheMgr->ShowUserSelectUIAsync(
                 nullptr, saveSize, kStrGlobalCacheName, cacheName, &mCacheID
@@ -1541,7 +1541,7 @@ void SaveLoadManager::SetState(State newState) {
         // Dialog state
         break;
     case kS_GlobalRead: {
-        int saveSize = TheProfileMgr.GlobalOptionsSaveSize();
+        int saveSize = TheProfileMgr.GetGlobalOptionsSize();
         mData =
             _MemAllocTemp(saveSize, "SaveLoadManager.cpp", 0x69B, "SaveLoadManager", 0);
         if (!mCache->ReadAsync(kStrGlobalCacheName, mData, saveSize, nullptr)) {
@@ -1557,7 +1557,7 @@ void SaveLoadManager::SetState(State newState) {
         break;
     case kS_GlobalWrite: {
         UpdateStatus((SaveLoadMgrStatus)1);
-        int saveSize = TheProfileMgr.GlobalOptionsSaveSize();
+        int saveSize = TheProfileMgr.GetGlobalOptionsSize();
         mData =
             _MemAllocTemp(saveSize, "SaveLoadManager.cpp", 0x6AD, "SaveLoadManager", 0);
         FixedSizeSaveableStream fs(mData, saveSize, true);
@@ -1623,7 +1623,7 @@ void SaveLoadManager::SetState(State newState) {
             RELEASE(mCacheID);
         }
         static Symbol global_options_cache_name("global_options_cache_name");
-        int saveSize = TheProfileMgr.GlobalOptionsSaveSize();
+        int saveSize = TheProfileMgr.GetGlobalOptionsSize();
         const char *cacheName = Localize(global_options_cache_name, nullptr, TheLocale);
         if (!TheCacheMgr->ShowUserSelectUIAsync(
                 nullptr, saveSize, kStrGlobalCacheName, cacheName, &mCacheID
@@ -1639,7 +1639,7 @@ void SaveLoadManager::SetState(State newState) {
         // Read options
         break;
     case kS_GlobalOptionsAllocRead: {
-        int saveSize = TheProfileMgr.GlobalOptionsSaveSize();
+        int saveSize = TheProfileMgr.GetGlobalOptionsSize();
         mData =
             _MemAllocTemp(saveSize, "SaveLoadManager.cpp", 0x69B, "SaveLoadManager", 0);
         if (!mCache->ReadAsync(kStrGlobalCacheName, mData, saveSize, nullptr)) {
@@ -1652,7 +1652,7 @@ void SaveLoadManager::SetState(State newState) {
     }
     case kS_GlobalOptionsWrite: {
         UpdateStatus((SaveLoadMgrStatus)1);
-        int saveSize = TheProfileMgr.GlobalOptionsSaveSize();
+        int saveSize = TheProfileMgr.GetGlobalOptionsSize();
         mData =
             _MemAllocTemp(saveSize, "SaveLoadManager.cpp", 0x6AD, "SaveLoadManager", 0);
         FixedSizeSaveableStream fs(mData, saveSize, true);
@@ -1682,10 +1682,7 @@ void SaveLoadManager::SetState(State newState) {
         SetState(kS_GlobalOptionsDone);
         break;
     case kS_GlobalOptionsDone:
-        mDeviceIDState = 1;
-        mLastChosenDeviceID = 0;
-        TheProfileMgr.SetGlobalOptionsSaveState((ProfileSaveState)2);
-        SetState(kS_GlobalNewSignIns);
+        SetState(kS_SaveCheckProfile);
         break;
     case kS_SaveLoadError: {
         HamProfile *pProfile = mActiveProfile;
