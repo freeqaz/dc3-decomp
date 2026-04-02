@@ -802,17 +802,15 @@ bool Intersect(const Segment &seg, const Sphere &sphere) {
 
 bool Intersect(const Vector3 &v, const BSPNode *n) {
     MILO_ASSERT(n, 0x4ca);
-    do {
-        if (n->plane.Dot(v) > 0) {
-            n = n->left;
-            if (!n)
-                return false;
-        } else {
-            n = n->right;
-            if (!n)
-                return true;
-        }
-    } while (true);
+    if (n->plane.Dot(v) > 0) {
+        if (!n->left)
+            return false;
+        return Intersect(v, n->left);
+    } else {
+        if (!n->right)
+            return true;
+        return Intersect(v, n->right);
+    }
 }
 
 bool Intersect(const Segment &seg, const BSPNode *n, float &t, Plane &p) {
