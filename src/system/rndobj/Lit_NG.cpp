@@ -61,10 +61,10 @@ bool NgLight::SphereConeTest(const Vector3 &sphereCenter, float sphereRadius) {
     const Transform &xfm1 = WorldXfm();
     const Transform &xfm2 = WorldXfm();
     Vector3 sc = sphereCenter;
-    float fProjZ = xfm2.m.y.z * (sc.z - xfm1.v.z);
-    float fProjX = xfm2.m.y.x * (sc.x - xfm1.v.x);
-    float fProjY = xfm2.m.y.y * (sc.y - xfm1.v.y);
-    float proj = fProjX + fProjZ + fProjY;
+
+    float proj = xfm2.m.y.x * (sc.x - xfm1.v.x)
+        + xfm2.m.y.z * (sc.z - xfm1.v.z)
+        + xfm2.m.y.y * (sc.y - xfm1.v.y);
 
     if (proj < -sphereRadius) {
         return false;
@@ -75,38 +75,47 @@ bool NgLight::SphereConeTest(const Vector3 &sphereCenter, float sphereRadius) {
         return false;
     }
 
+    Vector3 axis = xfm2.m.y;
+
     Vector3 perp;
-    Vector3 xfm2my = xfm2.m.y;
-    perp.x = sc.x - xfm2my.x * proj - xfm1.v.x;
-    perp.y = sc.y - xfm2my.y * proj - xfm1.v.y;
-    perp.z = sc.z - xfm2my.z * proj - xfm1.v.z;
+    perp.x = (sc.x - xfm1.v.x) - axis.x * proj;
+    perp.y = (sc.y - xfm1.v.y) - axis.y * proj;
+    perp.z = (sc.z - xfm1.v.z) - axis.z * proj;
 
     Normalize(perp, perp);
+
+    Vector3 origin = xfm1.v;
     float topR = mTopRadius;
     float botR = mBotRadius;
 
-    float topX = xfm1.v.x + perp.x * topR;
-    float topY = xfm1.v.y + perp.y * topR;
-    float topZ = xfm1.v.z + perp.z * topR;
+    Vector3 perpTop = perp;
+    perpTop *= topR;
 
-    float toSphX = sc.x - topX;
-    float toSphY = sc.y - topY;
-    float toSphZ = sc.z - topZ;
+    Vector3 perpBot = perp;
+    perpBot *= botR;
 
-    float edgeX = (xfm1.v.x + (float)((double)xfm2my.x * range) + perp.x * botR) - topX;
-    float edgeY = (xfm1.v.y + (float)((double)xfm2my.y * range) + perp.y * botR) - topY;
-    float edgeZ = (xfm1.v.z + (float)((double)xfm2my.z * range) + perp.z * botR) - topZ;
+    Vector3 topPoint = origin;
+    topPoint += perpTop;
 
-    float t = (1.0f / (edgeX * edgeX + edgeZ * edgeZ + edgeY * edgeY))
-        * (toSphX * edgeX + toSphZ * edgeZ + toSphY * edgeY);
+    Vector3 toSphere = sphereCenter;
+    toSphere -= topPoint;
 
-    float perpDistX = toSphX - t * edgeX;
-    float perpDistY = toSphY - t * edgeY;
-    float perpDistZ = toSphZ - t * edgeZ;
+    Vector3 botPoint = origin;
+    botPoint.x += (float)((double)axis.x * range);
+    botPoint.y += (float)((double)axis.y * range);
+    botPoint.z += (float)((double)axis.z * range);
+    botPoint += perpBot;
+    botPoint -= topPoint;
 
-    if (0.0f <= perp.x * perpDistX + perp.z * perpDistZ + perp.y * perpDistY) {
-        return std::sqrt(perpDistX * perpDistX + perpDistZ * perpDistZ + perpDistY * perpDistY)
-            < sphereRadius;
+    float t = (1.0f / Dot(botPoint, botPoint)) * Dot(toSphere, botPoint);
+
+    Vector3 closest = toSphere;
+    closest.x -= t * botPoint.x;
+    closest.y -= t * botPoint.y;
+    closest.z -= t * botPoint.z;
+
+    if (Dot(perp, closest) >= 0.0f) {
+        return Length(closest) < sphereRadius;
     }
     return true;
 }

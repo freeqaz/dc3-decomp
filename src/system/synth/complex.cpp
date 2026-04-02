@@ -65,6 +65,7 @@ complex operator*(complex cplx1, complex cplx2) {
 // Returns: coeff[0] + coeff[1]*z + ... + coeff[degree]*z^degree
 complex eval(complex * const coeff, int degree, complex z) {
     complex result;
+    complex accum;
     result.x = 0.0;
     result.y = 0.0;
     if (degree >= 0) {
@@ -75,8 +76,13 @@ complex eval(complex * const coeff, int degree, complex z) {
             complex cf = *c;
             count--;
             c--;
-            result.y = z.x * old.y + z.y * old.x + cf.y;
-            result.x = (z.x * old.x - z.y * old.y) + cf.x;
+            complex temp;
+            temp.y = old.x * z.y + old.y * z.x;
+            temp.x = z.x * old.x - z.y * old.y;
+            accum = temp;
+            accum.x += cf.x;
+            accum.y += cf.y;
+            result = accum;
         } while (count != 0);
     }
     return result;

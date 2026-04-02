@@ -150,14 +150,15 @@ void Archive::Enumerate(
     const char *dirp = dir;
     do {
         dirp++;
-    } while (*(dirp - 1) != '\0');
+    } while ('\0' != *(dirp - 1));
     int dirLen = dirp - dir - 1;
 
     bool matches = false;
     const char *lastPath = nullptr;
 
+    auto& _ref0 = mHashTable;
     FOREACH (it, mFileEntries) {
-        const char *curPath = mHashTable[it->HashedPath()];
+        const char *curPath = _ref0[it->HashedPath()];
 
         if (lastPath != curPath) {
             if (recurse) {
@@ -172,7 +173,7 @@ void Archive::Enumerate(
 
         if (!matches) continue;
 
-        const char *curName = mHashTable[it->HashedName()];
+        const char *curName = _ref0[it->HashedName()];
         if (pattern) {
             const char *buf = MakeString("%s/%s", curPath, curName);
             if (!FileMatch(buf, pattern)) continue;

@@ -223,7 +223,7 @@ float ArcDetector::GetPathError() const {
 
 float ArcDetector::GetSwipeAmount() const {
     float threshold = mSwipeThreshold * 0.3f;
-    float adjustedThreshold = (float)((double)((float)mHoverTimer / (float)sDefaultHoverTimer) * (mSwipeThreshold - threshold) + threshold);
+    float adjustedThreshold = (float)mHoverTimer / (float)sDefaultHoverTimer * (mSwipeThreshold - threshold) + threshold;
     float pathLen = GetPathLength();
     float powered = (float)pow((double)pathLen, (double)(_swipeRetentionFactor + 1.0f));
     float pathErr = GetPathError();
@@ -238,20 +238,17 @@ float ArcDetector::GetSwipeAmount() const {
         } while (it != mJointPath.end());
         if (count > 2) goto done_clamp;
     }
-    if (0.5f - swipeAmt < 0.0f) {
-        swipeAmt = 0.5f;
-    }
+    swipeAmt = 0.5f - swipeAmt >= 0.0f ? swipeAmt : 0.5f;
 done_clamp:
     if (mJointPath.begin() != mJointPath.end()) {
-        const Vector3 &front = *mJointPath.begin();
-        const Vector3 &second = *++mJointPath.begin();
+        Vector3 front = mJointPath.front();
+        Vector3 second = mJointPath.back();
         Vector3 dir(front.x - second.x, front.y - second.y, front.z - second.z);
         Normalize(dir, dir);
         Vector3 boneDir(unk40.z, 0.0f, unk40.x);
         Normalize(boneDir, boneDir);
-        if (fabsf(boneDir.x * dir.x + boneDir.z * dir.z + boneDir.y * dir.y) < 0.2f &&
-            0.9f - swipeAmt < 0.0f) {
-            swipeAmt = 0.9f;
+        if (fabsf(boneDir.x * dir.x + boneDir.z * dir.z + boneDir.y * dir.y) < 0.2f) {
+            swipeAmt = 0.9f - swipeAmt >= 0.0f ? swipeAmt : 0.9f;
         }
     }
     return swipeAmt;

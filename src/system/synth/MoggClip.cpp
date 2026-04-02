@@ -419,7 +419,7 @@ void MoggClip::SetPan(int i1, float f2) {
 
 void MoggClip::SetupPanInfo(float f1, float f2, bool stereo) {
     if (stereo) {
-        SetPan(0, f1 - f2 / 2.0f);
+        SetPan(0, -f2 / 2.0 + f1);
         SetPan(1, f2 / 2.0f + f1);
     } else {
         SetPan(0, f1);

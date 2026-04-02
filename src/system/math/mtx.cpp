@@ -200,37 +200,24 @@ void Invert(const Hmx::Matrix4 &m, Hmx::Matrix4 &out) {
     float zx_ww = a20 * a33;
 
     // Cofactors for columns 1,2,3 stored directly to output rows y,z,w
-    // Expression trees match target's Ghidra decompilation nesting
     out.y.Set(
-        // dVar28: -(a22*a33*a10 - (zx_ww*a12 + a23*a32*a10 + -(zx_wz*a13 - (a22*a30*a13 - a23*a30*a12)))) * invDet
         -(a22 * a33 * a10 - (zx_ww * a12 + a23 * a32 * a10 + -(zx_wz * a13 - (a22 * a30 * a13 - a23 * a30 * a12)))) * invDet,
-        // dVar29: (a22*a33*a00 + -(zx_ww*a02 - -(a23*a32*a00 - (zx_wz*a03 + (a23*a30*a02 - a22*a30*a03))))) * invDet
          (a22 * a33 * a00 + -(zx_ww * a02 - -(a23 * a32 * a00 - (zx_wz * a03 + (a23 * a30 * a02 - a22 * a30 * a03))))) * invDet,
-        // dVar30: -(a00*a33*a12 - (a00*a32*a13 + a33*a10*a02 + -(a10*a32*a03 - (a03*a12*a30 - a02*a13*a30)))) * invDet
         -(a00 * a33 * a12 - (a00 * a32 * a13 + a33 * a10 * a02 + -(a10 * a32 * a03 - (a03 * a12 * a30 - a02 * a13 * a30)))) * invDet,
-        // dVar32: (a23*a00*a12 + -(a23*a10*a02 - -(a13*a22*a00 - (a03*a22*a10 + (a13*a20*a02 - a03*a12*a20))))) * invDet
          (a23 * a00 * a12 + -(a23 * a10 * a02 - -(a13 * a22 * a00 - (a03 * a22 * a10 + (a13 * a20 * a02 - a03 * a12 * a20))))) * invDet
     );
 
     out.z.Set(
-        // dVar33: (a10*a33*a21 + -(a11*a33*a20 - -(a10*a23*a31 - (a13*wy_zx + (a11*a23*a30 - a13*wx_zy))))) * invDet
          (a10 * a33 * a21 + -(a11 * a33 * a20 - -(a10 * a23 * a31 - (a13 * wy_zx + (a11 * a23 * a30 - a13 * wx_zy))))) * invDet,
-        // dVar31: -(a00*a33*a21 - (a01*a33*a20 + a00*a23*a31 + -(a03*wy_zx - (a03*wx_zy - a01*a23*a30)))) * invDet
         -(a00 * a33 * a21 - (a01 * a33 * a20 + a00 * a23 * a31 + -(a03 * wy_zx - (a03 * wx_zy - a01 * a23 * a30)))) * invDet,
-        // dVar34: (a33*a00*a11 + -(a33*a10*a01 - -(a13*a31*a00 - (a03*a31*a10 + (a13*a30*a01 - a03*a30*a11))))) * invDet
          (a33 * a00 * a11 + -(a33 * a10 * a01 - -(a13 * a31 * a00 - (a03 * a31 * a10 + (a13 * a30 * a01 - a03 * a30 * a11))))) * invDet,
-        // dVar37: -(a23*a00*a11 - (a23*a10*a01 + a13*a00*a21 + -(a03*a10*a21 - (a03*a11*a20 - a13*a20*a01)))) * invDet
         -(a23 * a00 * a11 - (a23 * a10 * a01 + a13 * a00 * a21 + -(a03 * a10 * a21 - (a03 * a11 * a20 - a13 * a20 * a01)))) * invDet
     );
 
     out.w.Set(
-        // out.w.x: -(a32*a21*a10 - (a32*a20*a11 + a31*a22*a10 + -(wy_zx*a12 - (wx_zy*a12 - a30*a22*a11)))) * invDet
         -(a32 * a21 * a10 - (a32 * a20 * a11 + a31 * a22 * a10 + -(wy_zx * a12 - (wx_zy * a12 - a30 * a22 * a11)))) * invDet,
-        // out.w.y: (a32*a21*a00 + -(a32*a20*a01 - -(a31*a22*a00 - (wy_zx*a02 + (a30*a22*a01 - wx_zy*a02))))) * invDet
          (a32 * a21 * a00 + -(a32 * a20 * a01 - -(a31 * a22 * a00 - (wy_zx * a02 + (a30 * a22 * a01 - wx_zy * a02))))) * invDet,
-        // out.w.z: -(a32*a00*a11 - (a31*a00*a12 + a32*a10*a01 + -(a31*a10*a02 - (a30*a11*a02 - a30*a01*a12)))) * invDet
         -(a32 * a00 * a11 - (a31 * a00 * a12 + a32 * a10 * a01 + -(a31 * a10 * a02 - (a30 * a11 * a02 - a30 * a01 * a12)))) * invDet,
-        // out.w.w: (a22*a00*a11 + -(a22*a10*a01 - -(a00*a21*a12 - (a10*a21*a02 + (a01*a12*a20 - a02*a11*a20))))) * invDet
          (a22 * a00 * a11 + -(a22 * a10 * a01 - -(a00 * a21 * a12 - (a10 * a21 * a02 + (a01 * a12 * a20 - a02 * a11 * a20))))) * invDet
     );
 
@@ -242,13 +229,13 @@ void Invert(const Hmx::Matrix4 &m, Hmx::Matrix4 &out) {
 #pragma inline_depth(0)
 
     // c30: minor removing row 3, col 0 -> rows 0,1,2 cols 1,2,3 (sign: -)
-    // Pre-computed seed from direct-access section: a21 * a12 * a03
     float acc = a21 * a12 * a03;
     acc = -(row2[1] * row1[3] * row0[2] - acc);
     acc = -(row2[2] * row1[1] * row0[3] - acc);
     acc = row2[3] * row1[1] * row0[2] + acc;
     acc = row2[2] * row1[3] * row0[1] + acc;
-    float c30 = (float)(-((double)(row2[3] * row1[2] * row0[1] - acc) * (double)invDet));
+    acc = -(row2[3] * row1[2] * row0[1] - acc);
+    float c30 = acc * invDet;
 
     // c20: minor removing row 2, col 0 -> rows 0,1,3 cols 1,2,3 (sign: +)
     acc = row3[1] * row1[3] * row0[2];
@@ -256,7 +243,8 @@ void Invert(const Hmx::Matrix4 &m, Hmx::Matrix4 &out) {
     acc = row3[2] * row1[1] * row0[3] + acc;
     acc = -(row3[2] * row1[3] * row0[1] - acc);
     acc = -(row3[3] * row1[1] * row0[2] - acc);
-    float c20 = (float)((double)(row3[3] * row1[2] * row0[1] + acc) * (double)invDet);
+    acc = row3[3] * row1[2] * row0[1] + acc;
+    float c20 = acc * invDet;
 
     // c10: minor removing row 1, col 0 -> rows 0,2,3 cols 1,2,3 (sign: -)
     acc = row3[1] * row2[2] * row0[3];
@@ -264,7 +252,8 @@ void Invert(const Hmx::Matrix4 &m, Hmx::Matrix4 &out) {
     acc = -(row3[2] * row2[1] * row0[3] - acc);
     acc = row3[2] * row2[3] * row0[1] + acc;
     acc = row3[3] * row2[1] * row0[2] + acc;
-    float c10 = (float)(-((double)(row3[3] * row2[2] * row0[1] - acc) * (double)invDet));
+    acc = -(row3[3] * row2[2] * row0[1] - acc);
+    float c10 = acc * invDet;
 
     // c00: minor removing row 0, col 0 -> rows 1,2,3 cols 1,2,3 (sign: +)
     acc = row3[1] * row2[3] * row1[2];
@@ -272,7 +261,8 @@ void Invert(const Hmx::Matrix4 &m, Hmx::Matrix4 &out) {
     acc = row3[2] * row2[1] * row1[3] + acc;
     acc = -(row3[2] * row2[3] * row1[1] - acc);
     acc = -(row3[3] * row2[1] * row1[2] - acc);
-    float c00 = (float)((double)(row3[3] * row2[2] * row1[1] + acc) * (double)invDet);
+    acc = row3[3] * row2[2] * row1[1] + acc;
+    float c00 = acc * invDet;
 #pragma inline_depth()
 
     out.x.Set(c00, c10, c20, c30);

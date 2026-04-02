@@ -116,6 +116,11 @@ void SaveLoadManager::EnableAutosave(HamProfile *p) {
     }
 }
 
+template <class _T>
+__declspec(noinline) auto _outline_GetPadNum(_T* _obj) -> decltype(_obj->GetPadNum()) {
+    return _obj->GetPadNum();
+}
+
 void SaveLoadManager::ManualSave(HamProfile *pProfile) {
     State cur = mState;
     if (cur != 0) {
@@ -126,12 +131,12 @@ void SaveLoadManager::ManualSave(HamProfile *pProfile) {
     } else {
         MILO_ASSERT(pProfile, 0x364);
         mActiveProfile = pProfile;
-        mPadNum = pProfile->GetPadNum();
+        auto _tmp0 = _outline_GetPadNum(pProfile);
+        mPadNum = _tmp0;
         TheMemcardMgr.AddSink(this);
         SetState((State)0x56);
     }
 }
-
 void SaveLoadManager::Start() {
     mPadNum = -1;
     TheMemcardMgr.AddSink(this);
@@ -642,11 +647,11 @@ void SaveLoadManager::Poll() {
     switch (mState) {
     case kS_Start: {
         unsigned int mode = mMode;
-        if (mode == kAutoLoad) {
+        if (mode < kAutoSave) {
             nextState = kS_AutoloadInit;
         } else if (mode == kAutoSave) {
             nextState = kS_SaveDone;
-        } else if (!(!(!(!(mode < kManualDelete))))) {
+        } else if (mode < kManualDelete) {
             nextState = kS_SaveLoadError;
         } else {
             MILO_NOTIFY("SaveLoadManager startup bad mode: %d", mMode);
@@ -662,10 +667,10 @@ void SaveLoadManager::Poll() {
             int deviceState = unk64;
             if (deviceState == 7) {
                 nextState = kS_AutoloadStartLoad;
-            } else if (deviceState == 8) {
-                nextState = kS_AutoloadDeviceFound;
             } else if (deviceState == 9) {
                 nextState = kS_AutoloadMultipleSavesFound;
+            } else if (deviceState == 8) {
+                nextState = kS_AutoloadDeviceFound;
             } else {
                 nextState = kS_SaveLoadError;
             }
@@ -754,11 +759,11 @@ void SaveLoadManager::Poll() {
             nextState = kS_SongCacheWrite;
         } else {
             if (result == 6) {
-                nextState = kS_SongCacheDone;
+                nextState = kS_SongCacheCreateCorrupt;
             } else if (result == 8) {
                 nextState = kS_SongCacheCreate;
             } else {
-                nextState = kS_SongCacheFailed;
+                nextState = kS_GlobalOptionsSearch;
             }
         }
         break;
@@ -832,7 +837,7 @@ void SaveLoadManager::Poll() {
         }
         CacheResult result = TheCacheMgr->GetLastResult();
         if (result != 0) {
-            nextState = kS_SongCacheFailed;
+            nextState = kS_GlobalOptionsSearch;
         } else {
             nextState = kS_GlobalOptionsSearchResult;
         }
@@ -850,7 +855,7 @@ void SaveLoadManager::Poll() {
         if (unk68 == 0) {
             nextState = kS_GlobalOptionsSearchResult;
         } else {
-            nextState = kS_SongCacheFailed;
+            nextState = kS_GlobalOptionsSearch;
         }
         break;
     }
@@ -976,12 +981,12 @@ void SaveLoadManager::Poll() {
         }
         CacheResult result = TheCacheMgr->GetLastResult();
         if (result != 0) {
-            nextState = kS_SongCacheFailed;
+            TheProfileMgr.SetGlobalOptionsSaveState((ProfileSaveState)2);
         } else {
             ProfileSaveState pss = (ProfileSaveState)1;
             TheProfileMgr.SetGlobalOptionsSaveState(pss);
-            nextState = kS_GlobalNewSignIns;
         }
+        nextState = kS_GlobalNewSignIns;
         break;
     }
     case kS_GlobalDone: {

@@ -2,6 +2,27 @@
 #include "os/Debug.h"
 #include "xdk/xaudio2/xaudio2.h"
 #include <math.h>
+#include <string.h>
+
+#ifdef HX_NATIVE
+inline double __fsel(double a, double b, double c) { return a >= 0.0 ? b : c; }
+#else
+#include "xdk/LIBCMT/ppcintrinsics.h"
+#endif
+
+// Filter design types for crossover computation
+enum FilterType { kFilterButterworth = 1 };
+enum FilterBand { kFilterLowpass = 0, kFilterHighpass = 1, kFilterBandpass = 2 };
+
+struct FILTER {
+    char _pad[0x800];
+    float coeffs[0x200];    // 0x800
+    float gain;             // 0x1000
+    char _pad2[8];          // 0x1004
+    int numCoeffs;          // 0x100C
+};
+
+extern "C" void createFilter(FilterType, FilterBand, unsigned int, float, float, FILTER *, int);
 
 EQEffect::EQEffect(IXAudioBatchAllocator *) {
     mBand0Enabled = false;
@@ -346,18 +367,14 @@ void EQEffect::SetParameter(int param, float value) {
     bool updateBand3 = false;
     bool updateBand4 = false;
     bool updateCrossover = false;
-    double zero = 0.0;
-    double one = 1.0;
-    double half = 0.5;
-    double val = (double)value;
+    float zero = 0.0f;
+    float one = 1.0f;
+    float half = 0.5f;
 
     switch (param) {
     case 0: {
-        // mBand1Freq (0x00): shelf frequency, 0..24000 Hz
-        double clamped = val;
-        if ((float)(24000.0 - val) < 0.0f) clamped = 24000.0;
-        double result = zero;
-        if (-clamped < 0.0) result = clamped;
+        float clamped = (float)__fsel((float)(24000.0f - value), value, 24000.0f);
+        float result = (float)__fsel(-clamped, zero, clamped);
         if (result == (double)mBand1Freq) break;
         mBand1Freq = (float)result;
         updateCrossover = true;
@@ -365,22 +382,16 @@ void EQEffect::SetParameter(int param, float value) {
         break;
     }
     case 1: {
-        // mBand1Gain (0x04): shelf gain, ±42 dB
-        double clamped = val;
-        if ((float)(42.0 - val) < 0.0f) clamped = 42.0;
-        double result = -42.0;
-        if ((float)(-42.0 - clamped) < 0.0f) result = clamped;
+        float clamped = (float)__fsel((float)(42.0f - value), value, 42.0f);
+        float result = (float)__fsel((float)(-42.0f - clamped), -42.0f, clamped);
         if (result == (double)mBand1Gain) break;
         mBand1Gain = (float)result;
         updateBand0 = true;
         break;
     }
     case 2: {
-        // mBand1Q (0x08): Q/bandwidth, 0..24000
-        double clamped = val;
-        if ((float)(24000.0 - val) < 0.0f) clamped = 24000.0;
-        double result = zero;
-        if (-clamped < 0.0) result = clamped;
+        float clamped = (float)__fsel((float)(24000.0f - value), value, 24000.0f);
+        float result = (float)__fsel(-clamped, zero, clamped);
         if (result == (double)mBand1Q) break;
         mBand1Q = (float)result;
         updateCrossover = true;
@@ -388,33 +399,24 @@ void EQEffect::SetParameter(int param, float value) {
         break;
     }
     case 3: {
-        // mBand2Freq (0x0C): bell frequency, 0..24000 Hz
-        double clamped = val;
-        if ((float)(24000.0 - val) < 0.0f) clamped = 24000.0;
-        double result = zero;
-        if (-clamped < 0.0) result = clamped;
+        float clamped = (float)__fsel((float)(24000.0f - value), value, 24000.0f);
+        float result = (float)__fsel(-clamped, zero, clamped);
         if (result == (double)mBand2Freq) break;
         mBand2Freq = (float)result;
         updateBand1 = true;
         break;
     }
     case 4: {
-        // mBand2Gain (0x10): bell gain, ±42 dB
-        double clamped = val;
-        if ((float)(42.0 - val) < 0.0f) clamped = 42.0;
-        double result = -42.0;
-        if ((float)(-42.0 - clamped) < 0.0f) result = clamped;
+        float clamped = (float)__fsel((float)(42.0f - value), value, 42.0f);
+        float result = (float)__fsel((float)(-42.0f - clamped), -42.0f, clamped);
         if (result == (double)mBand2Gain) break;
         mBand2Gain = (float)result;
         updateBand1 = true;
         break;
     }
     case 5: {
-        // mBand2Q (0x14): high shelf frequency, 0..24000 Hz
-        double clamped = val;
-        if ((float)(24000.0 - val) < 0.0f) clamped = 24000.0;
-        double result = zero;
-        if (-clamped < 0.0) result = clamped;
+        float clamped = (float)__fsel((float)(24000.0f - value), value, 24000.0f);
+        float result = (float)__fsel(-clamped, zero, clamped);
         if (result == (double)mBand2Q) break;
         mBand2Q = (float)result;
         updateCrossover = true;
@@ -422,80 +424,61 @@ void EQEffect::SetParameter(int param, float value) {
         break;
     }
     case 6: {
-        // mBand3Freq (0x18): high shelf gain, ±42 dB (name vs semantics mismatch in source)
-        double clamped = val;
-        if ((float)(42.0 - val) < 0.0f) clamped = 42.0;
-        double result = -42.0;
-        if ((float)(-42.0 - clamped) < 0.0f) result = clamped;
+        float clamped = (float)__fsel((float)(42.0f - value), value, 42.0f);
+        float result = (float)__fsel((float)(-42.0f - clamped), -42.0f, clamped);
         if (result == (double)mBand3Freq) break;
         mBand3Freq = (float)result;
         updateBand2 = true;
         break;
     }
     case 7: {
-        // mBand3Gain (0x1C): bandpass frequency, 20..20000 Hz (name vs semantics mismatch)
-        double clamped = val;
-        if ((float)(20000.0 - val) < 0.0f) clamped = 20000.0;
-        double result = 20.0;
-        if ((float)(20.0 - clamped) < 0.0f) result = clamped;
+        float clamped = (float)__fsel((float)(20000.0f - value), value, 20000.0f);
+        float result = (float)__fsel((float)(20.0f - clamped), clamped, 20.0f);
         if (result == (double)mBand3Gain) break;
         mBand3Gain = (float)result;
         updateBand3 = true;
         break;
     }
     case 8: {
-        // mBand3Q (0x20): bandpass Q, ±25 dB
-        double clamped = val;
-        if ((float)(25.0 - val) < 0.0f) clamped = 25.0;
-        double result = -25.0;
-        if ((float)(-25.0 - clamped) < 0.0f) result = clamped;
+        float clamped = (float)__fsel((float)(25.0f - value), value, 25.0f);
+        float result = (float)__fsel((float)(-25.0f - clamped), -25.0f, clamped);
         if (result == (double)mBand3Q) break;
         mBand3Q = (float)result;
         updateBand3 = true;
         break;
     }
     case 9: {
-        // mBand4Freq (0x24): bandpass frequency, 20..20000 Hz
-        double clamped = val;
-        if ((float)(20000.0 - val) < 0.0f) clamped = 20000.0;
-        double result = 20.0;
-        if ((float)(20.0 - clamped) < 0.0f) result = clamped;
+        float clamped = (float)__fsel((float)(20000.0f - value), value, 20000.0f);
+        float result = (float)__fsel((float)(20.0f - clamped), clamped, 20.0f);
         if (result == (double)mBand4Freq) break;
         mBand4Freq = (float)result;
         updateBand4 = true;
         break;
     }
     case 10: {
-        // mBand4Gain (0x28): bandpass gain, ±25 dB
-        double clamped = val;
-        if ((float)(25.0 - val) < 0.0f) clamped = 25.0;
-        double result = -25.0;
-        if ((float)(-25.0 - clamped) < 0.0f) result = clamped;
+        float clamped = (float)__fsel((float)(25.0f - value), value, 25.0f);
+        float result = (float)__fsel((float)(-25.0f - clamped), -25.0f, clamped);
         if (result == (double)mBand4Gain) break;
         mBand4Gain = (float)result;
         updateBand4 = true;
         break;
     }
     case 11:
-        // mBand4Q (0x2C): crossover enable (float bool: > 0.5)
-        mBand4Q = (float)(0.5 < val);
+        mBand4Q = (float)(0.5 < (double)value);
         break;
     case 12: {
-        // mBand5Freq (0x30): crossover frequency, 25..5000 Hz
-        double clamped = val;
-        if ((float)(5000.0 - val) < 0.0f) clamped = 5000.0;
-        double result = 25.0;
-        if ((float)(25.0 - clamped) < 0.0f) result = clamped;
+        float clamped = (float)__fsel((float)(5000.0f - value), value, 5000.0f);
+        float result = (float)__fsel((float)(25.0f - clamped), clamped, 25.0f);
         mBand5Freq = (float)result;
-        double smoothCoeff = one;
-        if (result != 0.0) {
-            smoothCoeff = (double)(float)pow(kSmoothBase, (double)(1.0f / (float)(result * 48.0)));
+        float smoothCoeff = one;
+        if (result != 0.0f) {
+            smoothCoeff = (float)pow(kSmoothBase, (double)(1.0f / (float)(result * 48.0f)));
         }
-        mSmoothCoeff = (float)smoothCoeff;
+        mSmoothCoeff = smoothCoeff;
         break;
     }
     default:
-        MILO_ASSERT(false, 0);
+        MILO_FAIL("bad parameter %i\n", param);
         break;
     }
 
@@ -504,18 +487,18 @@ void EQEffect::SetParameter(int param, float value) {
         double tanFreq = tan((double)(mBand1Freq * 6.544985e-05f));
         mBand0B0 = (float)tanFreq;
         double gainTarget = pow(10.0, (double)(mBand1Gain * 0.05f));
-        double gainF = (double)(float)gainTarget;
+        float gainFf = (float)gainTarget;
         mBand0B1 = (float)gainTarget;
-        float shelfTarget = (float)((gainF - one) * half);
+        float shelfTarget = (gainFf - one) * half;
         mBand0A1 = shelfTarget;
-        if (mBand0A2 != zero || (double)shelfTarget != zero) {
+        if (mBand0A2 != zero || shelfTarget != zero) {
             mBand0Enabled = true;
         } else {
             mBand0Enabled = false;
         }
         float coeff;
-        if ((double)mBand1Gain <= zero) {
-            coeff = (float)((gainF * (double)mBand0B0 - one) / (gainF * (double)mBand0B0 + one));
+        if (mBand1Gain <= zero) {
+            coeff = (float)((double)gainFf * (double)mBand0B0 - one) / (float)((double)gainFf * (double)mBand0B0 + one);
         } else {
             coeff = (float)((double)mBand0B0 - one) / (float)((double)mBand0B0 + one);
         }
@@ -525,59 +508,60 @@ void EQEffect::SetParameter(int param, float value) {
         double tanFreq = tan((double)(mBand2Freq * 6.544985e-05f));
         mBand1B1 = (float)tanFreq;
         double gainTarget = pow(10.0, (double)(mBand2Gain * 0.05f));
-        double gainF = (double)(float)gainTarget;
+        float gainFf = (float)gainTarget;
         mBand1B2 = (float)gainTarget;
-        mBand1A2 = (float)((gainF - one) * half);
+        mBand1A2 = (gainFf - one) * half;
         double cosQ = cos((double)(mBand1Q * 0.0001308997f));
         mBand1Z2 = -(float)cosQ;
-        if ((double)mBand1Z1 != zero || (double)mBand1A2 != zero) {
+        if (mBand1Z1 != zero || mBand1A2 != zero) {
             mBand1Enabled = true;
         } else {
             mBand1Enabled = false;
         }
         float coeff1;
-        if ((double)mBand2Gain <= zero) {
-            coeff1 = (float)((tanFreq - gainF) / (tanFreq + gainF));
+        if (mBand2Gain <= zero) {
+            coeff1 = (float)((tanFreq - (double)gainFf) / (tanFreq + (double)gainFf));
         } else {
             coeff1 = (float)(tanFreq - one) / (float)(tanFreq + one);
         }
         mBand1B0 = coeff1;
-        mBand1Z2 = (float)(one - coeff1) * (-(float)cosQ);
+        mBand1Z2 = (one - coeff1) * (-(float)cosQ);
     } else if (updateBand2) {
-        // High shelf filter (band 2) — reads mBand3Freq (0x18) for gain
+        // High shelf filter (band 2)
         double tanFreq = tan((double)(mBand2Q * 6.544985e-05f));
         mBand2B0 = (float)tanFreq;
-        double gainTarget = pow(10.0, (double)(mBand3Freq * 0.05f));  // 0x18 = band3 gain semantically
-        double gainF = (double)(float)gainTarget;
+        double gainTarget = pow(10.0, (double)(mBand3Freq * 0.05f));
+        float gainFf = (float)gainTarget;
         mBand2B1 = (float)gainTarget;
-        float shelfTarget = (float)((gainF - one) * half);
+        float shelfTarget = (gainFf - one) * half;
         mBand2A1 = shelfTarget;
-        if ((double)mBand2A2 != zero || (double)shelfTarget != zero) {
+        if (mBand2A2 != zero || shelfTarget != zero) {
             mBand2Enabled = true;
         } else {
             mBand2Enabled = false;
         }
         float coeff;
-        if ((double)mBand3Freq <= zero) {  // 0x18 holds band3 gain
-            coeff = (float)(((double)mBand2B0 - gainF) / ((double)mBand2B0 + gainF));
+        if (mBand3Freq <= zero) {
+            coeff = (float)((double)mBand2B0 - (double)gainFf) / (float)((double)mBand2B0 + (double)gainFf);
         } else {
             coeff = (float)((double)mBand2B0 - one) / (float)((double)mBand2B0 + one);
         }
         mBand2Z1 = coeff;
     } else if (updateBand3) {
-        // Bandpass filter 1 (band 3) — reads mBand3Gain (0x1C) for freq, mBand3Q for gain
-        mBand3Enabled = (mBand3Gain < 19999.0f);  // 0x1C holds band3 freq
-        double wc = (double)(mBand3Gain * 4.1666666e-05f);
+        // Bandpass filter 1 (band 3)
+        mBand3Enabled = (mBand3Gain < 19999.0f);
+        float wcF = mBand3Gain * 4.1666666e-05f;
         double invGain = pow(10.0, (double)(mBand3Q * -0.05f));
-        double invGainF = (double)(float)invGain;
-        double wcPi = (double)(float)(wc * 3.1415927410125732);
-        double sinWc = sin(wcPi);
-        double alpha = (double)(float)((double)(float)(sinWc * invGainF) * half);
-        double k = (double)((float)((double)(float)(one - alpha) * half) / (float)(alpha + one));
-        double cosWc = cos(wcPi);
-        mBand3A2 = (float)(k * 2.0);
-        mBand3A1 = (float)((double)(float)((double)(float)cosWc * (float)(k + half)) * -2.0);
-        float fk4 = (float)((k + half) - (double)(float)((double)(float)cosWc * (float)(k + half)));
+        float invGainF = (float)invGain;
+        float wcPi = (float)((double)wcF * 3.1415927410125732);
+        double sinWc = sin((double)wcPi);
+        float alpha = (float)((float)sinWc * invGainF) * half;
+        float k = (one - alpha) * half / (alpha + one);
+        double cosWc = cos((double)wcPi);
+        mBand3A2 = (float)((double)k * 2.0);
+        float cosKhalf = (float)cosWc * (k + half);
+        mBand3A1 = (float)((double)cosKhalf * -2.0);
+        float fk4 = (k + half) - cosKhalf;
         float fk2 = fk4 * 2.0f;
         mBand3B0 = fk2;
         mBand3B1 = fk4 * 4.0f;
@@ -585,18 +569,18 @@ void EQEffect::SetParameter(int param, float value) {
     } else if (updateBand4) {
         // Bandpass filter 2 (band 4)
         mBand4Enabled = (mBand4Freq > 21.0f);
-        double wc = (double)(mBand4Freq * 4.1666666e-05f);
+        float wcF = mBand4Freq * 4.1666666e-05f;
         double invGain = pow(10.0, (double)(mBand4Gain * -0.05f));
-        double invGainF = (double)(float)invGain;
-        double wcPi = (double)(float)(wc * 3.1415927410125732);
-        double sinWc = sin(wcPi);
-        double alpha = (double)(float)((double)(float)(sinWc * invGainF) * half);
-        double k = (double)((float)((double)(float)(one - alpha) * half) / (float)(alpha + one));
-        double cosWc = cos(wcPi);
-        mBand4A2 = (float)(k * 2.0);
-        double cosK = (double)((float)cosWc * (float)(k + half));
-        mBand4A1 = (float)(cosK * -2.0);
-        float fk4 = (float)((double)(float)(cosK + k) + half) * 0.25f;
+        float invGainF = (float)invGain;
+        float wcPi = (float)((double)wcF * 3.1415927410125732);
+        double sinWc = sin((double)wcPi);
+        float alpha = (float)((float)sinWc * invGainF) * half;
+        float k = (one - alpha) * half / (alpha + one);
+        double cosWc = cos((double)wcPi);
+        mBand4A2 = (float)((double)k * 2.0);
+        float cosKhalf = (float)cosWc * (k + half);
+        mBand4A1 = (float)((double)cosKhalf * -2.0);
+        float fk4 = (float)((double)(cosKhalf + k) + (double)half) * 0.25f;
         float fk2 = fk4 * 2.0f;
         mBand4B0 = fk2;
         mBand4B1 = fk4 * -4.0f;
@@ -604,6 +588,32 @@ void EQEffect::SetParameter(int param, float value) {
     }
 
     if (updateCrossover && mBand4Q != 0.0f) {
+        float freqScale = 2.0833333e-05f;
+        FILTER filter;
+
+        // Lowpass crossover filter (band 0)
+        float f1 = mBand2Q * freqScale;
+        createFilter(kFilterButterworth, kFilterLowpass, 0, f1, f1, &filter, 2);
+        mXoverGain[0] = filter.gain;
+        if (filter.numCoeffs > 0) {
+            memcpy(&mXoverCoeffs[0], &filter.coeffs[0], filter.numCoeffs * 4);
+        }
+
+        // Bandpass crossover filter (band 2)
+        createFilter(kFilterButterworth, kFilterBandpass, 0, mBand2Q * freqScale, mBand1Freq * freqScale, &filter, 2);
+        mXoverGain[1] = filter.gain;
+        if (filter.numCoeffs > 0) {
+            memcpy(&mXoverCoeffs[1], &filter.coeffs[0], filter.numCoeffs * 4);
+        }
+
+        // Highpass crossover filter (band 1)
+        float f3 = mBand1Freq * freqScale;
+        createFilter(kFilterButterworth, kFilterHighpass, 0, f3, f3, &filter, 2);
+        mXoverGain[2] = filter.gain;
+        if (filter.numCoeffs > 0) {
+            memcpy(&mXoverCoeffs[2], &filter.coeffs[0], filter.numCoeffs * 4);
+        }
+
         Reset();
     }
 }

@@ -140,17 +140,18 @@ Symbol GetOutfitBackupDancer(Symbol outfit) {
 
 Symbol GetDanceBattleBackupOutfit(Symbol s1, Symbol s2) {
     DataArray *charArr = DataGetMacro("CREWS")->FindArray(s2, "characters");
+    auto _tmp0 = s1.Str();
     Symbol out(gNullStr);
-    String str88(s1.Str());
+    String str88(_tmp0);
     String str90(str88);
     str90 = str90.substr(0, str90.length() - 2);
-    int i = 1;
+    unsigned int i = 1;
     if (charArr->Size() > 1) {
         Symbol s;
         while (i < charArr->Size()) {
             s = charArr->Sym(i);
-            if (str90 != s.Str()) {
-                const char *cStr = s.Str();
+            const char *cStr = s.Str();
+            if (str90 != cStr) {
                 const char *p = cStr;
                 while (*p) p++;
                 unsigned int crewCharLen = (unsigned int)(p - cStr);
