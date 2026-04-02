@@ -50,14 +50,19 @@ bool AccomplishmentOneShot::AreOneShotConditionsMet(
                     TheHamProvider->Property(stars_earned, false);
                 MILO_ASSERT(pStarsNode, 0x112);
                 i5 = pStarsNode->Int();
-            } else if (sbc == flawless_a || sbc == flawless_b) {
-                i5 = progress.GetFlawlessMoveCount();
-            } else if (sbc == nices_a || sbc == nices_b) {
-                i5 = progress.GetNiceMoveCount();
+                if (i5 >= i3) return true;
+            } else if (sbc == flawless_a) {
+                if (progress.GetFlawlessMoveCount() >= i3) return true;
+            } else if (sbc == flawless_b) {
+                if (progress.GetFlawlessMoveCount() >= i3) return true;
+            } else if (sbc == nices_a) {
+                if (progress.GetNiceMoveCount() >= i3) return true;
+            } else if (sbc == nices_b) {
+                if (progress.GetNiceMoveCount() >= i3) return true;
             } else if (sbc == days) {
-                i5 = progress.NumDays();
+                if (progress.NumDays() >= i3) return true;
             } else if (sbc == weekends) {
-                i5 = progress.NumWeekends();
+                if (progress.NumWeekends() >= i3) return true;
             } else if (sbc == hardest_stars) {
                 static Symbol omg("omg");
                 if (s == omg) {
@@ -66,14 +71,12 @@ bool AccomplishmentOneShot::AreOneShotConditionsMet(
                         TheHamProvider->Property(stars_earned, false);
                     MILO_ASSERT(pStarsNode, 0x14C);
                     i5 = pStarsNode->Int();
+                    if (i5 >= i3) return true;
                 } else
                     continue;
             } else {
                 MILO_NOTIFY("Condition is not currently supported: %s ", sbc);
                 return false;
-            }
-            if (i5 >= i3) {
-                return true;
             }
         }
     }

@@ -495,7 +495,7 @@ void RndPostProc::LoadRev(BinStreamRev &d) {
     if (d.rev > 0x12) {
         d >> mHallOfTimeRate;
         d >> mHallOfTimeColor >> mHallOfTimeMix;
-        if (d.rev >= 0x14 && d.rev <= 0x1F) {
+        if (d.rev > 0x13 && d.rev < 0x20) {
             bool hotType;
             d >> hotType;
             mHallOfTimeType = hotType ? 1 : 0;

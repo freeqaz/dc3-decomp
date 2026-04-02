@@ -185,7 +185,9 @@ DataNode SetBSPParams(DataArray *da) {
 
 void GeoInit() {
     DataArray *cfg = SystemConfig("math");
-    SetBSPParams(cfg->FindArray("bsp_pos_tol")->Float(1), cfg->FindArray("bsp_dir_tol")->Float(1), cfg->FindArray("bsp_max_depth")->Int(1), cfg->FindArray("bsp_max_candidates")->Int(1), cfg->FindArray("bsp_check_scale")->Float(1));
+    auto _tmp4 = cfg->FindArray("bsp_check_scale")->Float(1);
+    auto _tmp2 = cfg->FindArray("bsp_max_depth")->Int(1);
+    SetBSPParams(cfg->FindArray("bsp_pos_tol")->Float(1), cfg->FindArray("bsp_dir_tol")->Float(1), _tmp2, cfg->FindArray("bsp_max_candidates")->Int(1), _tmp4);
     DataRegisterFunc("set_bsp_params", SetBSPParams);
 }
 
@@ -292,7 +294,7 @@ void Intersect(const Hmx::Ray &ray1, const Hmx::Ray &ray2, Vector2 &vec) {
     // Compute 2D cross product determinant
     float dot = r1dy * r2dx - r1dx * r2dy;
 
-    if (dot != 0.0f) {
+    if ((int)dot != 0.0f) {
         // Solve for intersection parameter s
         float s = ((r2by - r1by) * r1dx + (r1bx - r2bx) * r1dy) / dot;
         // Compute intersection point
@@ -529,7 +531,7 @@ bool Intersect(const Segment &seg, const Triangle &tri, bool b, float &out) {
     float vec3AX = seg.start.x - tri.origin.x;
     float vec3AY = seg.start.y - tri.origin.y;
 
-    float tempDot = -((vec3AZ * triFrameZ.z + vec3AX * triFrameZ.x) + vec3AY * triFrameZ.y);
+    float tempDot = -((triFrameZ.z * vec3AZ + triFrameZ.x * vec3AX) + triFrameZ.y * vec3AY);
     float t = tempDot / segDirDot;
     out = t;
 
@@ -544,27 +546,27 @@ bool Intersect(const Segment &seg, const Triangle &tri, bool b, float &out) {
     const Vector3 &triFrameX = tri.frame.x;
     const Vector3 &triFrameY = tri.frame.y;
 
-    float dotXX = triFrameX.z * triFrameX.z;
-    float dotYY = triFrameY.z * triFrameY.z;
+    float dotXX = triFrameX.y * triFrameX.y;
+    float dotYY = triFrameY.y * triFrameY.y;
 
-    float dotXY = triFrameY.z * triFrameX.z;
+    float dotXY = triFrameY.y * triFrameX.y;
 
     hitPoint.x = seg.start.x + hitPoint.x;
     hitPoint.y = hitPoint.y + seg.start.y;
 
-    dotXX += triFrameX.y * triFrameX.y;
-    dotYY += triFrameY.y * triFrameY.y;
+    dotXX += triFrameX.x * triFrameX.x;
+    dotYY += triFrameY.x * triFrameY.x;
     hitPoint.z = seg.start.z + hitPoint.z;
-    dotXY += triFrameY.y * triFrameX.y;
+    dotXY += triFrameY.x * triFrameX.x;
 
     hitPoint.x = hitPoint.x - tri.origin.x;
     hitPoint.y = hitPoint.y - tri.origin.y;
 
-    dotXX += triFrameX.x * triFrameX.x;
-    dotYY += triFrameY.x * triFrameY.x;
+    dotXX += triFrameX.z * triFrameX.z;
+    dotYY += triFrameY.z * triFrameY.z;
     hitPoint.z = hitPoint.z - tri.origin.z;
 
-    dotXY += triFrameY.x * triFrameX.x;
+    dotXY += triFrameY.z * triFrameX.z;
     float dotX3B = Dot(triFrameX, hitPoint);
     float dotY3B = Dot(triFrameY, hitPoint);
 
@@ -761,11 +763,8 @@ bool Intersect(const Segment &seg, const Sphere &sphere) {
     float dir_x = seg.end.x - seg.start.x;
     float center_z = sphere.center.z;
     float dir_y = seg.end.y - seg.start.y;
-    float diff_z = center_z - seg.start.z;
     float center_x = sphere.center.x;
-    float diff_x = center_x - seg.start.x;
     float center_y = sphere.center.y;
-    float diff_y = center_y - seg.start.y;
     Vector3 closest;
     closest.x = dir_x;
     closest.y = dir_y;
@@ -773,7 +772,7 @@ bool Intersect(const Segment &seg, const Sphere &sphere) {
     float a = dir_z * dir_z + dir_x * dir_x + dir_y * dir_y;
     if (a == 0.0f)
         return false;
-    float t = (diff_z * dir_z + diff_x * dir_x + diff_y * dir_y) / a;
+    float t = ((center_z - seg.start.z) * dir_z + (center_x - seg.start.x) * dir_x + (center_y - seg.start.y) * dir_y) / a;
     float zero = 0.0f;
     float neg_t = -t;
     t = (neg_t >= 0.0f) ? zero : t;
