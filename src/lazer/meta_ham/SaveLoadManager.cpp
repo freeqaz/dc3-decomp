@@ -117,8 +117,8 @@ void SaveLoadManager::EnableAutosave(HamProfile *p) {
 }
 
 void SaveLoadManager::ManualSave(HamProfile *pProfile) {
-    State cur = mState;
-    if (cur != 0) {
+    if (mState != 0) {
+        State cur = mState;
         MILO_NOTIFY(
             "Attempted to perform a manual save, but saveloadmgr is not idle (state = %d).",
             cur
@@ -610,7 +610,7 @@ void SaveLoadManager::Poll() {
         return;
     }
 
-    if ((int)kS_Idle == mState) {
+    if (kS_Idle == mState) {
         if (mNeedsSave && IsSafePlaceToSave()) {
             mMode = kAutoSave;
             Start();

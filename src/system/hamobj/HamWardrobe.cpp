@@ -151,21 +151,21 @@ Symbol GetDanceBattleBackupOutfit(Symbol s1, Symbol s2) {
         while (i < charArr->Size()) {
             s = charArr->Sym(i);
             const char *cStr = s.Str();
-            if (str90 == cStr) {
-                i++;
-                continue;
-            }
+            if (!(str90 != cStr)) { i++; continue; }
             const char *p = cStr;
-            while (*p) p++;
-            unsigned int crewCharLen = (unsigned int)(p - cStr);
+            char _c;
+            do { _c = *p++; } while (_c);
+            unsigned int crewCharLen = (unsigned int)(p - 1 - cStr);
             MILO_ASSERT(crewCharLen < 30, 0x13c);
             char buf[30];
             {
                 const char *p2 = cStr;
+                char _c2;
                 do {
-                    buf[p2 - cStr] = *p2;
+                    _c2 = *p2;
+                    buf[p2 - cStr] = _c2;
                     p2++;
-                } while (*p2);
+                } while (_c2);
             }
             buf[crewCharLen] = 0;
             buf[crewCharLen - 1] = str88[crewCharLen - 1];

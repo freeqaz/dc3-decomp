@@ -76,13 +76,12 @@ bool NgLight::SphereConeTest(const Vector3 &sphereCenter, float sphereRadius) {
     }
 
     Vector3 axis = xfm2.m.y;
-    Vector3 diff = sc;
     Vector3 origin = xfm1.v;
 
     Vector3 perp;
-    perp.x = (diff.x - origin.x) - axis.x * proj;
-    perp.y = (diff.y - origin.y) - axis.y * proj;
-    perp.z = (diff.z - origin.z) - axis.z * proj;
+    perp.x = (sc.x - origin.x) - axis.x * proj;
+    perp.y = (sc.y - origin.y) - axis.y * proj;
+    perp.z = (sc.z - origin.z) - axis.z * proj;
 
     Normalize(perp, perp);
 

@@ -500,7 +500,7 @@ void EQEffect::SetParameter(int param, float value) {
         if (mBand1Gain <= zero) {
             coeff = (float)((double)gainFf * (double)mBand0B0 - one) / (float)((double)gainFf * (double)mBand0B0 + one);
         } else {
-            coeff = (float)((double)mBand0B0 - one) / (float)((double)mBand0B0 + one);
+            coeff = (mBand0B0 - one) / (mBand0B0 + one);
         }
         mBand0Z1 = coeff;
     } else if (updateBand1) {
@@ -520,9 +520,9 @@ void EQEffect::SetParameter(int param, float value) {
         }
         float coeff1;
         if (mBand2Gain <= zero) {
-            coeff1 = (float)((tanFreq - (double)gainFf) / (tanFreq + (double)gainFf));
+            coeff1 = ((float)tanFreq - gainFf) / ((float)tanFreq + gainFf);
         } else {
-            coeff1 = (float)(tanFreq - one) / (float)(tanFreq + one);
+            coeff1 = ((float)tanFreq - one) / ((float)tanFreq + one);
         }
         mBand1B0 = coeff1;
         mBand1Z2 = (one - coeff1) * (-(float)cosQ);
@@ -542,9 +542,9 @@ void EQEffect::SetParameter(int param, float value) {
         }
         float coeff;
         if (mBand3Freq <= zero) {
-            coeff = (float)((double)mBand2B0 - (double)gainFf) / (float)((double)mBand2B0 + (double)gainFf);
+            coeff = (mBand2B0 - gainFf) / (mBand2B0 + gainFf);
         } else {
-            coeff = (float)((double)mBand2B0 - one) / (float)((double)mBand2B0 + one);
+            coeff = (mBand2B0 - one) / (mBand2B0 + one);
         }
         mBand2Z1 = coeff;
     } else if (updateBand3) {
@@ -553,14 +553,14 @@ void EQEffect::SetParameter(int param, float value) {
         float wcF = mBand3Gain * 4.1666666e-05f;
         double invGain = pow(10.0, (double)(mBand3Q * -0.05f));
         float invGainF = (float)invGain;
-        float wcPi = (float)((double)wcF * 3.1415927410125732);
+        float wcPi = wcF * 3.1415927f;
         double sinWc = sin((double)wcPi);
         float alpha = (float)((float)sinWc * invGainF) * half;
         float k = (one - alpha) * half / (alpha + one);
         double cosWc = cos((double)wcPi);
-        mBand3A2 = (float)((double)k * 2.0);
+        mBand3A2 = k * 2.0f;
         float cosKhalf = (float)cosWc * (k + half);
-        mBand3A1 = (float)((double)cosKhalf * -2.0);
+        mBand3A1 = cosKhalf * -2.0f;
         float fk4 = (k + half) - cosKhalf;
         float fk2 = fk4 * 2.0f;
         mBand3B0 = fk2;
@@ -572,14 +572,14 @@ void EQEffect::SetParameter(int param, float value) {
         float wcF = mBand4Freq * 4.1666666e-05f;
         double invGain = pow(10.0, (double)(mBand4Gain * -0.05f));
         float invGainF = (float)invGain;
-        float wcPi = (float)((double)wcF * 3.1415927410125732);
+        float wcPi = wcF * 3.1415927f;
         double sinWc = sin((double)wcPi);
         float alpha = (float)((float)sinWc * invGainF) * half;
         float k = (one - alpha) * half / (alpha + one);
         double cosWc = cos((double)wcPi);
-        mBand4A2 = (float)((double)k * 2.0);
+        mBand4A2 = k * 2.0f;
         float cosKhalf = (float)cosWc * (k + half);
-        mBand4A1 = (float)((double)cosKhalf * -2.0);
+        mBand4A1 = cosKhalf * -2.0f;
         float fk4 = (float)((double)(cosKhalf + k) + (double)half) * 0.25f;
         float fk2 = fk4 * 2.0f;
         mBand4B0 = fk2;
