@@ -42,8 +42,6 @@ SaveLoadManager::~SaveLoadManager() {
     RELEASE(mAction);
 }
 
-bool SaveLoadManager::GetDialogFocusOption() { return mState == 0x5c; }
-
 BEGIN_HANDLERS(SaveLoadManager)
     HANDLE_ACTION(autosave, AutoSave())
     HANDLE_ACTION(autoload, AutoLoad())
@@ -58,7 +56,15 @@ BEGIN_HANDLERS(SaveLoadManager)
     HANDLE_EXPR(get_dialog_msg, GetDialogMsg())
     HANDLE_EXPR(get_dialog_opt1, GetDialogOpt1())
     HANDLE_EXPR(get_dialog_opt2, GetDialogOpt2())
-    HANDLE_EXPR(get_dialog_focus_option, GetDialogFocusOption())
+    {
+        _NEW_STATIC_SYMBOL(get_dialog_focus_option)
+        if (sym == _s) {
+            int focus = 0;
+            if (mState == kS_ManualLoadConfirm)
+                focus = 1;
+            return DataNode(focus);
+        }
+    }
     HANDLE_EXPR(is_initial_load_done, IsInitialLoadDone())
     HANDLE_EXPR(is_idle, IsIdle())
     HANDLE_ACTION(activate, Activate())
@@ -625,7 +631,8 @@ void SaveLoadManager::Poll() {
             return;
         }
 
-        if (TheUIEventMgr->HasActiveDialogEvent()) {
+        bool hasActiveDialog = TheUIEventMgr->HasActiveDialogEvent();
+        if (hasActiveDialog) {
             return;
         }
 
@@ -645,11 +652,11 @@ void SaveLoadManager::Poll() {
             nextState = kS_AutoloadInit;
         } else if (mode == kAutoSave) {
             nextState = kS_SaveDone;
-        } else if (mode < kManualDelete) {
-            nextState = kS_SaveLoadError;
-        } else {
+        } else if (mode >= kManualDelete) {
             MILO_NOTIFY("SaveLoadManager startup bad mode: %d", mMode);
             nextState = kS_Done;
+        } else {
+            nextState = kS_SaveLoadError;
         }
         break;
     }
@@ -659,14 +666,19 @@ void SaveLoadManager::Poll() {
         }
         {
             int deviceState = unk64;
-            if (deviceState == 7) {
+                        switch (deviceState) {
+                case 7:
                 nextState = kS_AutoloadStartLoad;
-            } else if (deviceState == 9) {
-                nextState = kS_AutoloadMultipleSavesFound;
-            } else if (deviceState == 8) {
+                break;
+                case 8:
                 nextState = kS_AutoloadDeviceFound;
-            } else {
+                break;
+                case 9:
+                nextState = kS_AutoloadMultipleSavesFound;
+                break;
+                default:
                 nextState = kS_SaveLoadError;
+                break;
             }
         }
         break;
@@ -675,15 +687,17 @@ void SaveLoadManager::Poll() {
             return;
         }
         unk68 = TheCacheMgr->GetLastResult();
-        if (unk68 == 0) {
-            Symbol sym(mCacheName.c_str());
-            TheCacheMgr->AddCacheID(mCacheID, sym);
-            nextState = kS_SongCacheRead;
-        } else if (unk68 == 6) {
-            nextState = kS_SongCacheSearchResult;
+        if (unk68 != 0) {
+            if (unk68 != 6) {
+                MILO_NOTIFY("SaveLoadManager - CacheMgr search returned error %d", unk68);
+                nextState = kS_GlobalOptionsSearch;
+            } else {
+                nextState = kS_SongCacheSearchResult;
+            }
         } else {
-            MILO_NOTIFY("SaveLoadManager - CacheMgr search returned error %d", unk68);
-            nextState = kS_GlobalOptionsSearch;
+            const char *cacheName = mCacheName.c_str();
+            TheCacheMgr->AddCacheID(mCacheID, cacheName);
+            nextState = kS_SongCacheRead;
         }
         break;
     }
@@ -692,18 +706,20 @@ void SaveLoadManager::Poll() {
             return;
         }
         CacheResult result = TheCacheMgr->GetLastResult();
-        if (result == 0) {
+        if (result != 0) {
+            if (result != 4) {
+                MILO_FAIL("SaveLoadManager - CacheMgr choose returned error %d", result);
+                nextState = kS_SongCacheFailed;
+            } else {
+                nextState = kS_SongCacheCreateNotFound_Msg;
+                mDeviceIDState = 1;
+            }
+        } else {
             mDeviceIDState = 2;
             mLastChosenDeviceID = mCacheID->GetDeviceID();
             Symbol sym(mCacheName.c_str());
             TheCacheMgr->AddCacheID(mCacheID, sym);
             nextState = kS_SongCacheUnmount;
-        } else if (result == 4) {
-            nextState = kS_SongCacheCreateNotFound_Msg;
-            mDeviceIDState = 1;
-        } else {
-            MILO_FAIL("SaveLoadManager - CacheMgr choose returned error %d", result);
-            nextState = kS_SongCacheFailed;
         }
         break;
     }
@@ -830,10 +846,10 @@ void SaveLoadManager::Poll() {
             return;
         }
         CacheResult result = TheCacheMgr->GetLastResult();
-        if (result != 0) {
-            nextState = kS_GlobalOptionsSearch;
-        } else {
+        if (result == 0) {
             nextState = kS_GlobalOptionsSearchResult;
+        } else {
+            nextState = kS_GlobalOptionsSearch;
         }
         break;
     }
@@ -865,10 +881,10 @@ void SaveLoadManager::Poll() {
         } else if (unk68 == 6) {
             if (mDeviceIDState == 0) {
                 nextState = kS_GlobalMount;
-            } else if (mDeviceIDState == 2) {
-                nextState = kS_GlobalMountStart;
-            } else {
+            } else if (mDeviceIDState != 2) {
                 nextState = kS_GlobalCreateNotFound_Msg;
+            } else {
+                nextState = kS_GlobalMountStart;
             }
         } else {
             MILO_FAIL("SaveLoadManager - CacheMgr search returned error %d", unk68);
@@ -909,17 +925,22 @@ void SaveLoadManager::Poll() {
             return;
         }
         CacheResult result = TheCacheMgr->GetLastResult();
-        if (result == 0) {
+                switch (result) {
+            case 0:
             nextState = kS_GlobalWrite;
-        } else if (result == 7) {
+            break;
+            case 7:
             nextState = kS_GlobalCreateCorrupt;
-        } else if (result == 8) {
+            break;
+            case 8:
             nextState = kS_GlobalOptionsLookup;
-        } else {
+            break;
+            default:
             int errCode = (int)result;
             State errState = mState;
             MILO_NOTIFY("SaveLoadManager - unknown error %d during state %d.", errCode, errState);
             nextState = kS_GlobalCacheLookup;
+            break;
         }
         break;
     }
@@ -936,20 +957,25 @@ void SaveLoadManager::Poll() {
             return;
         }
         CacheResult result = TheCacheMgr->GetLastResult();
-        if (result == 0) {
+                switch (result) {
+            case 0:
             nextState = kS_GlobalDoneWrite;
-        } else if (result == 7) {
+            break;
+            case 7:
             UpdateStatus((SaveLoadMgrStatus)2);
             nextState = kS_GlobalCreateCorrupt;
-        } else if (result == 8) {
+            break;
+            case 8:
             UpdateStatus((SaveLoadMgrStatus)2);
             nextState = kS_GlobalOptionsLookup;
-        } else {
+            break;
+            default:
             UpdateStatus((SaveLoadMgrStatus)2);
             int errCode = (int)result;
             State errState = mState;
             MILO_NOTIFY("SaveLoadManager - unknown error %d during state %d.", errCode, errState);
             nextState = kS_GlobalCacheLookup;
+            break;
         }
         break;
     }
@@ -977,8 +1003,7 @@ void SaveLoadManager::Poll() {
         if (result != 0) {
             TheProfileMgr.SetGlobalOptionsSaveState((ProfileSaveState)2);
         } else {
-            ProfileSaveState pss = (ProfileSaveState)1;
-            TheProfileMgr.SetGlobalOptionsSaveState(pss);
+            TheProfileMgr.SetGlobalOptionsSaveState((ProfileSaveState)1);
         }
         nextState = kS_GlobalNewSignIns;
         break;
@@ -1005,18 +1030,20 @@ void SaveLoadManager::Poll() {
             return;
         }
         CacheResult result = TheCacheMgr->GetLastResult();
-        if (result == 0) {
+        if (result != 0) {
+            if (result != 4) {
+                MILO_NOTIFY("SaveLoadManager - CacheMgr choose returned error %d", result);
+                nextState = kS_GlobalOptionsFailed;
+            } else {
+                nextState = kS_GlobalOptionsMissing_Msg;
+                mDeviceIDState = 1;
+            }
+        } else {
             mDeviceIDState = 2;
             mLastChosenDeviceID = mCacheID->GetDeviceID();
             Symbol sym(kStrGlobalCacheName);
             TheCacheMgr->AddCacheID(mCacheID, sym);
             nextState = kS_GlobalOptionsAllocRead;
-        } else if (result == 4) {
-            nextState = kS_GlobalOptionsMissing_Msg;
-            mDeviceIDState = 1;
-        } else {
-            MILO_NOTIFY("SaveLoadManager - CacheMgr choose returned error %d", result);
-            nextState = kS_GlobalOptionsFailed;
         }
         break;
     }
@@ -1032,15 +1059,17 @@ void SaveLoadManager::Poll() {
             return;
         }
         CacheResult result = TheCacheMgr->GetLastResult();
-        if (result == 0) {
-            nextState = kS_GlobalOptionsWrite;
-        } else if (result == 8) {
-            UpdateStatus((SaveLoadMgrStatus)2);
-            nextState = kS_GlobalOptionsMissing_Msg;
+        if (result != 0) {
+            if (result != 8) {
+                UpdateStatus((SaveLoadMgrStatus)2);
+                MILO_FAIL("SaveLoadManager - CacheMgr choose returned error %d", result);
+                nextState = kS_GlobalOptionsFailed;
+            } else {
+                UpdateStatus((SaveLoadMgrStatus)2);
+                nextState = kS_GlobalOptionsMissing_Msg;
+            }
         } else {
-            UpdateStatus((SaveLoadMgrStatus)2);
-            MILO_FAIL("SaveLoadManager - CacheMgr choose returned error %d", result);
-            nextState = kS_GlobalOptionsFailed;
+            nextState = kS_GlobalOptionsWrite;
         }
         break;
     }
@@ -1053,10 +1082,10 @@ void SaveLoadManager::Poll() {
             CacheResult result = TheCacheMgr->GetLastResult();
             unk68 = result;
         }
-        if (unk68 == 0) {
-            TheProfileMgr.SetGlobalOptionsSaveState((ProfileSaveState)1);
-        } else {
+        if (unk68 != 0) {
             TheProfileMgr.SetGlobalOptionsSaveState((ProfileSaveState)2);
+        } else {
+            TheProfileMgr.SetGlobalOptionsSaveState((ProfileSaveState)1);
         }
         nextState = kS_GlobalOptionsDone;
         break;
@@ -1068,20 +1097,26 @@ void SaveLoadManager::Poll() {
         }
         UpdateStatus((SaveLoadMgrStatus)2);
         {
-            int deviceState = unk64;
-            if (deviceState == 0) {
-                nextState = kS_SaveLoadCheckForFile;
-            } else if (deviceState == 1) {
-                nextState = kS_SaveDeleteSaves;
-            } else if (deviceState == 6) {
+            unsigned int deviceState = unk64;
+            switch (deviceState) {
+            case 0:
+                nextState = kS_SaveLoadError2;
+                break;
+            case 1:
+                nextState = kS_SaveDeviceInvalid;
+                break;
+            case 6:
                 nextState = kS_SaveNotEnoughSpace;
                 mDeviceIDState = 0;
                 mLastChosenDeviceID = 0;
-            } else if (deviceState == 7) {
+                break;
+            case 7:
                 MILO_ASSERT(mState != kS_SaveOverwrite, 0x2ED);
                 nextState = kS_SaveConfirmOverwrite;
-            } else {
+                break;
+            default:
                 nextState = kS_SaveFailed;
+                break;
             }
         }
         break;
@@ -1101,7 +1136,7 @@ void SaveLoadManager::Poll() {
             return;
         }
         if (mCache) {
-            if (!TheCacheMgr->IsDone()) {
+            if (!mCache->IsDone()) {
                 return;
             }
             TheCacheMgr->UnmountAsync(&mCache, nullptr);
@@ -1124,7 +1159,7 @@ void SaveLoadManager::Poll() {
 
 void SaveLoadManager::SetState(State newState) {
     auto& state = mState;
-    if (state == newState)
+    if ((int)(int)state == newState)
         return;
 
     static Symbol saveload_dialog_event("saveload_dialog_event");
@@ -1134,32 +1169,25 @@ void SaveLoadManager::SetState(State newState) {
     // Cleanup resources based on current state before transition
     // WARNING: Control flow structure is critical for codegen - do not refactor
     if (state <= kS_GlobalOptionsWrite) {
-        if (kS_GlobalOptionsWrite == state) {
-            // 0x3E: free mData unless going to Finish
+        if ((kS_GlobalOptionsWrite == state)
+            || ((state == kS_SongCacheWrite) || (state == kS_SongCacheDone))
+            || ((state > kS_GlobalDoneRead) && (state < kS_GlobalUnmount))) {
+            // 0x3E, 0x1F, 0x21, or 0x32-0x33: free mData unless going to Finish
             if ((newState != kS_Finish) && mData) {
                 MemFree(mData, "SaveLoadManager.cpp", 0x424);
                 mData = nullptr;
             }
-        } else if (!(state == kS_Idle)) {
-            if (state == kS_AutoloadStartLoad) {
-                // 0xB: release mAction unless going to Abort
-                if (newState != kS_Abort) {
-                    RELEASE(mAction);
-                }
-            } else if (((state == kS_SongCacheWrite) || (state == kS_SongCacheDone))
-                       || ((state > kS_GlobalDoneRead) && (state < kS_GlobalUnmount))) {
-                // 0x1F, 0x21, or 0x32-0x33: free mData unless going to Finish
-                if ((newState != kS_Finish) && mData) {
-                    MemFree(mData, "SaveLoadManager.cpp", 0x424);
-                    mData = nullptr;
-                }
-            }
-        } else {
+        } else if (state == kS_Idle) {
             // 0: set wasIdle flag
             wasIdle = true;
+        } else if (kS_AutoloadStartLoad == state) {
+            // 0xB: release mAction unless going to Abort
+            if (newState != kS_Abort) {
+                RELEASE(mAction);
+            }
         }
-    } else if (state > kS_SaveDeviceInvalid) {  // > 0x45
-        if ((state < kS_SaveConfirmOverwrite) || (state == kS_ManualLoadStartLoad)) {
+    } else if (state >= kS_SaveOverwrite) {  // >= 0x46
+        if ((state <= kS_SaveNoOverwrite) || (state == kS_ManualLoadStartLoad)) {
             // (mState < 0x48) || (mState == 0x60): release mAction unless going to Abort
             if (newState != kS_Abort) {
                 RELEASE(mAction);
@@ -1183,9 +1211,6 @@ void SaveLoadManager::SetState(State newState) {
     }
 
     // Handle state based on new state value
-    if (state > kS_Done)
-        return;
-
     switch (state) {
     case kS_Idle:
         UpdateStatus((SaveLoadMgrStatus)5);
@@ -1194,10 +1219,10 @@ void SaveLoadManager::SetState(State newState) {
         mDeviceIDState = 0;
         break;
     case kS_AutoloadInit:
-        if (!mInitialLoadPending) {
-            SetState(kS_AutoloadSelectProfile);
-        } else {
+        if (mInitialLoadPending) {
             SetState(kS_SongCacheInit);
+        } else {
+            SetState(kS_AutoloadSelectProfile);
         }
         break;
     case kS_AutoloadSelectProfile:
@@ -1584,9 +1609,9 @@ void SaveLoadManager::SetState(State newState) {
     }
     case kS_GlobalOptionsSearchResult2:
         if (mDeviceIDState == 0 || mDeviceIDState == 2) {
-            SetState(kS_GlobalOptionsMissing_Msg);
-        } else {
             SetState(kS_GlobalOptionsCreate2);
+        } else {
+            SetState(kS_GlobalOptionsMissing_Msg);
         }
         break;
     case kS_GlobalOptionsMissing_Msg:
@@ -1859,45 +1884,49 @@ DataNode SaveLoadManager::OnMsg(const MCResultMsg &msg) {
             if (mState != kS_SaveLookForFile) {
                 goto fail;
             }
-            if ((unsigned)result < 1) {
+            // SaveLookForFile result handling
+            switch ((unsigned)result) {
+            case 0:
+            case 5:
+            case 7:
+            case 25:
                 nextState = kS_SaveConfirmOverwrite;
-            } else if ((unsigned)result == 1) {
+                break;
+            case 1:
                 nextState = kS_SaveDeviceInvalid;
-            } else if ((unsigned)result != 5) {
-                if ((unsigned)result == 6) {
-                    nextState = kS_SaveOverwrite;
-                } else if ((unsigned)result != 7) {
-                    if ((unsigned)result == 8) {
-                        nextState = kS_SaveOverwrite;
-                    } else if ((unsigned)result != 25) {
-                        nextState = kS_SaveFailed;
-                    } else {
-                        nextState = kS_SaveConfirmOverwrite;
-                    }
-                } else {
-                    nextState = kS_SaveConfirmOverwrite;
-                }
-            } else {
-                nextState = kS_SaveConfirmOverwrite;
+                break;
+            case 6:
+            case 8:
+                nextState = kS_SaveOverwrite;
+                break;
+            default:
+                nextState = kS_SaveFailed;
+                break;
             }
         } else {
+            // AutoloadStartLoad result handling
             if (result <= 8) {
-                if (result == 8) {
+                switch (result) {
+                case 8:
                     nextState = kS_SaveLookForFile;
-                } else {
-                    if ((unsigned)result < 1) {
-                        goto result_zero;
-                    } else if ((unsigned)result == 1) {
-                        nextState = kS_AutoloadDeviceMissing;
-                    } else if ((unsigned)result != 5) {
-                        if ((unsigned)result != 6) {
-                            nextState = kS_LoadFailed;
-                        } else {
-                            nextState = kS_SaveLookForFile;
-                        }
-                    } else {
-                        nextState = kS_AutoloadCorrupt;
-                    }
+                    break;
+                case 0:
+                result_zero:
+                    unk64 = 0;
+                    nextState = kS_SaveLoadError2;
+                    break;
+                case 1:
+                    nextState = kS_AutoloadDeviceMissing;
+                    break;
+                case 5:
+                    nextState = kS_AutoloadCorrupt;
+                    break;
+                case 6:
+                    nextState = kS_SaveLookForFile;
+                    break;
+                default:
+                    nextState = kS_LoadFailed;
+                    break;
                 }
             } else if (result == 10) {
                 nextState = kS_AutoloadObsolete;
@@ -1921,24 +1950,30 @@ DataNode SaveLoadManager::OnMsg(const MCResultMsg &msg) {
             }
             goto fail;
         }
-        if ((unsigned)result < 1) {
-        result_zero:
-            unk64 = 0;
-            nextState = kS_SaveLoadError2;
-        } else if ((unsigned)result == 1) {
+        switch (result) {
+        case 0:
+            goto result_zero;
+        case 1:
             nextState = kS_ManualLoadMissing;
-        } else if ((unsigned)result == 5) {
+            break;
+        case 5:
             nextState = kS_ManualLoadCorrupt;
-        } else if ((unsigned)result == 8) {
+            break;
+        case 8:
             nextState = kS_ManualLoadNoFile;
-        } else if ((unsigned)result == 10) {
+            break;
+        case 10:
             nextState = kS_AutoloadObsolete;
-        } else if ((unsigned)result == 11) {
+            break;
+        case 11:
             nextState = kS_AutoloadFuture;
-        } else if ((unsigned)result == 25) {
+            break;
+        case 25:
             nextState = kS_ManualLoadNotOwner;
-        } else {
+            break;
+        default:
             nextState = kS_LoadFailed;
+            break;
         }
     }
 set_state:
@@ -2015,19 +2050,11 @@ DataNode SaveLoadManager::OnMsg(const SigninChangedMsg &msg) {
     case kS_ManualLoadNotOwner: {
         HamProfile *critProfile = TheProfileMgr.CriticalProfile();
 
-        bool activeSignedOut = false;
-        if (mActiveProfile != NULL) {
-            if (ThePlatformMgr.HasPadNumsSigninChanged(mActiveProfile->GetPadNum())) {
-                activeSignedOut = true;
-            }
-        }
+        bool activeSignedOut = mActiveProfile != NULL
+            && ThePlatformMgr.HasPadNumsSigninChanged(mActiveProfile->GetPadNum());
 
-        bool otherSignedOut = false;
-        if (critProfile != NULL) {
-            if (ThePlatformMgr.HasPadNumsSigninChanged(critProfile->GetPadNum())) {
-                otherSignedOut = true;
-            }
-        }
+        bool otherSignedOut = critProfile != NULL
+            && ThePlatformMgr.HasPadNumsSigninChanged(critProfile->GetPadNum());
 
         if (activeSignedOut) {
             if (TheUIEventMgr->HasActiveDialogEvent()
@@ -2060,78 +2087,120 @@ void SaveLoadManager::HandleEventResponse(HamProfile *profile, int response) {
 
     if (savedState != mState) {
         MILO_NOTIFY(
-            MakeString(
-                "HandleEventResponse: expected state %d but am now in state %d\n",
-                savedState, mState
-            )
+            "States changed between UIComponentSelectMsg (%d) and UIComponentSelectDoneMsg (%d).",
+            savedState, mState
         );
         return;
     }
 
     if (response < 1 || response > 3) {
-        MILO_ASSERT(
-            false,
-            MakeString("HandleEventResponse: unexpected response %d\n", response)
-        );
-    }
-
-    if (profile == nullptr) {
-        mPadNum = -1;
+        MILO_FAIL("Bad choice index %i", response);
     } else {
-        mPadNum = profile->GetPadNum();
-    }
+        if (profile != nullptr) {
+            mPadNum = profile->GetPadNum();
+        } else {
+            mPadNum = -1;
+        }
 
-    switch (mState) {
-    case kS_AutoloadNoSaveFound_Msg:
-        if (response == 1)
+        bool r1 = response == 1;
+        State next;
+        switch (mState) {
+        case kS_AutoloadNoSaveFound_Msg:
+            if (response == 1) {
+                if (mDeviceIDState == 2)
+                    SetState(kS_AutoloadSelectDevice);
+                else
+                    SetState(kS_AutoloadSetDevice);
+                return;
+            }
+            SetState(kS_SaveLoadError);
+            return;
+        case kS_AutoloadMultipleSavesFound:
+            next = (State)(kS_SaveLoadError + (-(int)r1 & (kS_AutoloadSelectDevice2 - kS_SaveLoadError)));
             break;
-        goto set_state;
-    case kS_AutoloadMultipleSavesFound:
-    case kS_AutoloadDeviceMissing:
-    case kS_AutoloadCorrupt:
-    case kS_AutoloadNotOwner:
-    case kS_AutoloadObsolete:
-    case kS_AutoloadFuture:
-    case kS_SongCacheCreateNotFound_Msg:
-    case kS_SongCacheCreateMissing_Msg:
-    case kS_SongCacheCreateCorrupt:
-    case kS_GlobalCreateNotFound_Msg:
-    case kS_GlobalCreateMissing_Msg:
-    case kS_GlobalCreateCorrupt:
-    case kS_GlobalOptionsMissing_Msg:
-        break;
-    case kS_SaveLoadError:
-        if (mMode != kAutoLoad && mMode != kAutoSave && mMode > kDisableAutoSave) {
+        case kS_AutoloadDeviceMissing:
+            next = (State)(kS_SaveLoadError + (-(int)r1 & (kS_AutoloadSelectDevice3 - kS_SaveLoadError)));
+            break;
+        case kS_AutoloadCorrupt:
+        case kS_AutoloadNotOwner:
+        case kS_AutoloadObsolete:
+        case kS_AutoloadFuture:
+        case kS_SaveConfirmOverwrite:
+            next = (State)(kS_SaveLoadError + (-(int)r1 & (kS_SaveOverwrite - kS_SaveLoadError)));
+            break;
+        case kS_SongCacheCreateNotFound_Msg:
+        case kS_SongCacheCreateMissing_Msg:
+            next = (State)(kS_GlobalOptionsInit + (-(int)r1 & (kS_SongCacheMount - kS_GlobalOptionsInit)));
+            break;
+        case kS_SongCacheCreateCorrupt:
+            next = (State)(kS_GlobalOptionsInit + (-(int)r1 & (kS_SongCacheGetSize - kS_GlobalOptionsInit)));
+            break;
+        case kS_GlobalCreateNotFound_Msg:
+        case kS_GlobalCreateMissing_Msg:
+            next = (State)(kS_GlobalFailed + (-(int)r1 & (kS_GlobalMount - kS_GlobalFailed)));
+            break;
+        case kS_GlobalCreateCorrupt:
+            next = (State)(kS_GlobalFailed + (-(int)r1 & (kS_GlobalRead - kS_GlobalFailed)));
+            break;
+        case kS_GlobalOptionsMissing_Msg:
+            next = (State)(kS_GlobalOptionsFailed + (-(int)r1 & (kS_GlobalOptionsCreate2 - kS_GlobalOptionsFailed)));
+            break;
+        case kS_SaveLoadError:
+            if ((unsigned int)mMode >= 1) {
+                if ((unsigned int)mMode != 1) {
+                    if ((unsigned int)mMode >= 3)
+                        return;
+                    SetState(kS_ManualSaveInit);
+                    return;
+                }
+                SetState(kS_SaveCheckProfile);
+                return;
+            }
+            SetState(kS_AutoloadSelectProfile);
+            return;
+        case kS_SaveNotEnoughSpace:
+        case kS_SaveFailed:
+        case kS_SaveDisabledByCheat:
+        case kS_LoadFailed:
+        case kS_ManualLoadMissing:
+        case kS_ManualLoadNoFile:
+        case kS_ManualLoadCorrupt:
+        case kS_ManualLoadNotOwner:
+            next = kS_SaveLoadError;
+            break;
+        case kS_SaveDeviceInvalid:
+            next = (State)(kS_SaveLoadError + (-(int)r1 & (kS_SaveChooseDeviceInvalid - kS_SaveLoadError)));
+            break;
+        case kS_SaveNotEnoughSpacePS3:
+            if (response == 1)
+                next = kS_SaveDeleteSaves;
+            else if (response == 2)
+                next = kS_SaveNoOverwrite;
+            else
+                next = kS_SaveLoadError;
+            break;
+        case kS_ManualSaveNoDevice:
+            next = (State)(kS_SaveLoadError + (-(int)r1 & (kS_ManualSaveChooseDevice - kS_SaveLoadError)));
+            break;
+        case kS_ManualLoadConfirmUnsaved:
+        case kS_ManualLoadConfirm:
+            if (response == 1) {
+                SetState(kS_ManualLoadChooseDevice);
+                return;
+            }
+            next = kS_SaveLoadCheckForFile;
+            break;
+        case kS_ManualLoadNoDevice:
+            next = (State)(kS_SaveLoadError + (-(int)r1 & (kS_ManualLoadChooseDevice - kS_SaveLoadError)));
+            break;
+        default:
+            MILO_FAIL(
+                "Unhandled UIComponentSelectDoneMsg from choice index %i in state %d and mode %d",
+                response, (int)mState, (int)mMode
+            );
             return;
         }
-        break;
-    case kS_SaveConfirmOverwrite:
-    case kS_SaveNotEnoughSpace:
-    case kS_SaveNotEnoughSpacePS3:
-    case kS_SaveDeviceInvalid:
-    case kS_SaveFailed:
-    case kS_SaveDisabledByCheat:
-    case kS_LoadFailed:
-    case kS_ManualSaveNoDevice:
-    case kS_ManualLoadConfirmUnsaved:
-    case kS_ManualLoadConfirm:
-    case kS_ManualLoadNoDevice:
-    case kS_ManualLoadMissing:
-    case kS_ManualLoadNoFile:
-    case kS_ManualLoadCorrupt:
-    case kS_ManualLoadNotOwner:
-        break;
-    default:
-        MILO_ASSERT(
-            false,
-            MakeString(
-                "HandleEventResponse: unexpected state %d mode %d response %d\n",
-                (int)mState, (int)mMode, response
-            )
-        );
-        break;
-    }
 
-set_state:
-    SetState((State)response);
+        SetState(next);
+    }
 }
