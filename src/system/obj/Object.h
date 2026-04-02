@@ -277,6 +277,8 @@ BinStream &operator>>(BinStream &bs, ObjOwnerPtr<T1> &ptr);
 #pragma region ObjPtrVec
 
 enum EraseMode {
+    kEraseShift = 0,
+    kEraseSwapLast = 1,
 };
 
 enum ObjListMode {

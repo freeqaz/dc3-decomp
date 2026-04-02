@@ -69,6 +69,15 @@ skip_ring_ops:
 }
 
 template <class T1, class T2>
+void ObjRefConcrete<T1, T2>::CopyRef(const ObjRefConcrete &o) {
+    if (&o == this) return;
+    if (mObject) this->ObjRef::Release(nullptr);
+    mObject = o.mObject;
+    if (!mObject) return;
+    this->ObjRef::AddRef(const_cast<ObjRef *>(static_cast<const ObjRef *>(&o)));
+}
+
+template <class T1, class T2>
 Hmx::Object *ObjRefConcrete<T1, T2>::SetObj(Hmx::Object *root_obj) {
     T1 *obj = root_obj ? dynamic_cast<T1 *>(root_obj) : nullptr;
     SetObjConcrete(obj);
@@ -738,7 +747,7 @@ Hmx::Object *ObjPtrVec<T1, T2>::Node::RefOwner() const {
 template <class T1, class T2>
 typename ObjPtrVec<T1, T2>::iterator
 ObjPtrVec<T1, T2>::erase(typename ObjPtrVec<T1, T2>::iterator it) {
-    return mNodes.erase(it.it);
+    return iterator(mNodes.erase(it.it));
 }
 
 template <class T1, class T2>
@@ -899,7 +908,7 @@ Hmx::Object *ObjPtrVec<T1, T2>::Node::RefOwner() const {
 template <class T1, class T2>
 typename ObjPtrVec<T1, T2>::iterator
 ObjPtrVec<T1, T2>::erase(ObjPtrVec<T1, T2>::iterator it) {
-    return mNodes.erase(it.it);
+    return iterator(mNodes.erase(it.it));
 }
 
 template <class T1, class T2>

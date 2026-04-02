@@ -146,12 +146,12 @@ XboxMultipleItemsPurchaser::XboxMultipleItemsPurchaser(
 }
 
 DataNode XboxMultipleItemsPurchaser::OnMsg(UIChangedMsg const &msg) {
-    if (msg.mData->Int(1) == 1) {
-        if (msg.mData->Node(2).Int(msg.mData) == 0) {
+    if (mState == purchasestate1) {
+        if (!msg.Showing()) {
             // UI closed successfully - unregister from notifications
-            mState = kSuccess;
             static Symbol ui_changed("ui_changed");
             ThePlatformMgr.RemoveSink(this, ui_changed);
+            mState = kSuccess;
         }
     }
     return DataNode();
