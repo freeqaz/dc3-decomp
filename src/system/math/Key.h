@@ -56,7 +56,7 @@ BinStream &operator>>(BinStream &bs, Key<T> &key) {
 // NOTE: BinStreamRev overload is REQUIRED - do not remove
 template <class T>
 BinStreamRev &operator>>(BinStreamRev &bs, Key<T> &key) {
-    bs >> key.value >> key.frame;
+    bs.stream >> key.value >> key.frame;
     return bs;
 }
 

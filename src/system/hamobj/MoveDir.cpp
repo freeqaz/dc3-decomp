@@ -1876,9 +1876,10 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     float halfWidth = TheRnd.Width() * sCharWidth * 0.5f;
     MoveFrame *closest = ClosestMoveFrame();
 
-    std::vector<MoveFrame> &moveFrames = move->GetMoveFrames();
+    const std::vector<MoveFrame> &moveFrames =
+        static_cast<const HamMove *>(move)->GetMoveFrames();
     for (unsigned int fi = 0; fi < moveFrames.size(); fi++) {
-        MoveFrame &frame = moveFrames[fi];
+        const MoveFrame &frame = moveFrames[fi];
         const Ham2FrameWeight &weight = frame.FrameWeight(mirroredEnum);
         if (weight.mWeight == 0.0f)
             continue;

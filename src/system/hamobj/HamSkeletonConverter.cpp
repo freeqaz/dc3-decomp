@@ -336,8 +336,8 @@ void HamSkeletonConverter::SetLeg(
     const BaseSkeleton *skel,
     int side
 ) {
-    auto& _sub0 = mJointPositions[hip];
     Vector3 dir;
+    auto& _sub0 = mJointPositions[hip];
     auto& kneePos = mJointPositions[knee];
     Subtract(kneePos, _sub0, dir);
     Vector3 dir2;
@@ -358,17 +358,14 @@ void HamSkeletonConverter::SetLeg(
         Plane plane;
         plane.Set(_sub0, kneePos, mJointPositions[ankle]);
 
-        PaddedJointPos *hipZAxisInit = &mLeftHipZAxisInit + side;
-
         int usePelvis = (angle < 0.2) ? 1 : 0;
         if (abs(usePelvis) != 0) {
             plane.a = mPelvisTransform.m.z.x;
             plane.b = mPelvisTransform.m.z.y;
             plane.c = mPelvisTransform.m.z.z;
-            plane.d = -(plane.a * (_sub0.x - kneePos.x)
-                + plane.b * (_sub0.y - kneePos.y)
-                + plane.c * (_sub0.z - kneePos.z));
+            plane.d = -((plane.c * (_sub0.z - kneePos.z) + (plane.b * (_sub0.y - kneePos.y) + plane.a * (_sub0.x - kneePos.x))));
         }
+        PaddedJointPos *hipZAxisInit = &mLeftHipZAxisInit + side;
         hipZAxisInit->x = plane.a * -1.0f;
         hipZAxisInit->y = plane.b * -1.0f;
         hipZAxisInit->z = plane.c * -1.0f;
@@ -386,14 +383,10 @@ void HamSkeletonConverter::SetLeg(
         Cross(dir, *hipZAxis, cross1);
         Normalize(cross1, cross1);
 
-        Vector3 cross2;
-        Cross(cross1, dir, cross2);
-        Normalize(cross2, cross2);
-
         Hmx::Matrix3 mat;
         mat.x = dir;
-        mat.y = cross2;
-        mat.z = cross1;
+        mat.y = cross1;
+        mat.z = *hipZAxis;
 
         Transform xfm;
         memcpy(&xfm.m, &mat, sizeof(Hmx::Matrix3));
