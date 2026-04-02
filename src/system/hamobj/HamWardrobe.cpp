@@ -409,14 +409,14 @@ void HamWardrobe::PlayCrowdAnimation(Symbol animName, int flags, bool override) 
                 if (stance == gNullStr) {
                     TheDebug << MakeString("    stance = NULL!\n");
                 }
-                char buf[49];
+                char buf[128];
                 _snprintf(buf, 0x78, "%s_%s", stance.Str(), animName.Str());
                 c->Driver()->SetBlendWidth(3.0f);
                 CharClipDriver *cd = c->Driver()->PlayGroup(
                     buf, flags | 0x30, -1.0f, 1e30f, 0.0f
                 );
                 if (cd != NULL) {
-                    if ((int)cd->mNext) {
+                    if (cd->mNext) {
                         cd->mRampIn = RandomFloat(0.0f, maxRandomBeat);
                     }
                 } else {
@@ -431,7 +431,7 @@ void HamWardrobe::PlayCrowdAnimation(Symbol animName, int flags, bool override) 
                         buf, flags | 0x30, -1.0f, 1e30f, 0.0
                     );
                     if (cd != NULL) {
-                        if ((int)cd->mNext) {
+                        if (cd->mNext) {
                             cd->mRampIn = RandomFloat(0.0f, maxRandomBeat);
                         }
                     } else {
@@ -569,7 +569,7 @@ DataNode HamWardrobe::OnAddCrowd(DataArray *a) {
                     break;
                 }
             }
-            if ((unsigned int)mit.mNode > 0) {
+            if (mit.mNode != nullptr) {
             } else {
                 mCrowdMembers.push_back(c);
             }
