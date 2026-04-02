@@ -151,26 +151,27 @@ Symbol GetDanceBattleBackupOutfit(Symbol s1, Symbol s2) {
         while (i < charArr->Size()) {
             s = charArr->Sym(i);
             const char *cStr = s.Str();
-            if (str90 != cStr) {
-                const char *p = cStr;
-                while (*p) p++;
-                unsigned int crewCharLen = (unsigned int)(p - cStr);
-                MILO_ASSERT(crewCharLen < 30, 0x13c);
-                char buf[30];
-                {
-                    const char *p2 = cStr;
-                    do {
-                        buf[p2 - cStr] = *p2;
-                        p2++;
-                    } while (*p2);
-                }
-                buf[crewCharLen - 2] = str88[crewCharLen - 2];
-                buf[crewCharLen - 1] = str88[crewCharLen - 1];
-                buf[crewCharLen] = 0;
-                out = GetOutfitRemap(Symbol(buf), false);
-                break;
+            if (str90 == cStr) {
+                i++;
+                continue;
             }
-            i++;
+            const char *p = cStr;
+            while (*p) p++;
+            unsigned int crewCharLen = (unsigned int)(p - cStr);
+            MILO_ASSERT(crewCharLen < 30, 0x13c);
+            char buf[30];
+            {
+                const char *p2 = cStr;
+                do {
+                    buf[p2 - cStr] = *p2;
+                    p2++;
+                } while (*p2);
+            }
+            buf[crewCharLen] = 0;
+            buf[crewCharLen - 1] = str88[crewCharLen - 1];
+            buf[crewCharLen - 2] = str88[crewCharLen - 2];
+            out = GetOutfitRemap(Symbol(buf), false);
+            break;
         }
     }
     return out;

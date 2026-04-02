@@ -199,27 +199,24 @@ void Invert(const Hmx::Matrix4 &m, Hmx::Matrix4 &out) {
     float zx_wz = a20 * a32;
     float zx_ww = a20 * a33;
 
-    // Cofactors for columns 1,2,3 stored directly to output rows y,z,w
-    out.y.Set(
-        -(a22 * a33 * a10 - (zx_ww * a12 + a23 * a32 * a10 + -(zx_wz * a13 - (a22 * a30 * a13 - a23 * a30 * a12)))) * invDet,
-         (a22 * a33 * a00 + -(zx_ww * a02 - -(a23 * a32 * a00 - (zx_wz * a03 + (a23 * a30 * a02 - a22 * a30 * a03))))) * invDet,
-        -(a00 * a33 * a12 - (a00 * a32 * a13 + a33 * a10 * a02 + -(a10 * a32 * a03 - (a03 * a12 * a30 - a02 * a13 * a30)))) * invDet,
-         (a23 * a00 * a12 + -(a23 * a10 * a02 - -(a13 * a22 * a00 - (a03 * a22 * a10 + (a13 * a20 * a02 - a03 * a12 * a20))))) * invDet
-    );
+    // Cofactors for columns 1,2,3 -> compute into output, will be overwritten by operator[] section
+    // out.y (row 1 of inverse)
+    float yx = -(a22 * a33 * a10 - (zx_ww * a12 + a23 * a32 * a10 + -(zx_wz * a13 - (a22 * a30 * a13 - a23 * a30 * a12)))) * invDet;
+    float yy =  (a22 * a33 * a00 + -(zx_ww * a02 - -(a23 * a32 * a00 - (zx_wz * a03 + (a23 * a30 * a02 - a22 * a30 * a03))))) * invDet;
+    float yz = -(a00 * a33 * a12 - (a00 * a32 * a13 + a33 * a10 * a02 + -(a10 * a32 * a03 - (a03 * a12 * a30 - a02 * a13 * a30)))) * invDet;
+    float yw =  (a23 * a00 * a12 + -(a23 * a10 * a02 - -(a13 * a22 * a00 - (a03 * a22 * a10 + (a13 * a20 * a02 - a03 * a12 * a20))))) * invDet;
 
-    out.z.Set(
-         (a10 * a33 * a21 + -(a11 * a33 * a20 - -(a10 * a23 * a31 - (a13 * wy_zx + (a11 * a23 * a30 - a13 * wx_zy))))) * invDet,
-        -(a00 * a33 * a21 - (a01 * a33 * a20 + a00 * a23 * a31 + -(a03 * wy_zx - (a03 * wx_zy - a01 * a23 * a30)))) * invDet,
-         (a33 * a00 * a11 + -(a33 * a10 * a01 - -(a13 * a31 * a00 - (a03 * a31 * a10 + (a13 * a30 * a01 - a03 * a30 * a11))))) * invDet,
-        -(a23 * a00 * a11 - (a23 * a10 * a01 + a13 * a00 * a21 + -(a03 * a10 * a21 - (a03 * a11 * a20 - a13 * a20 * a01)))) * invDet
-    );
+    // out.z (row 2 of inverse)
+    float zx =  (a10 * a33 * a21 + -(a11 * a33 * a20 - -(a10 * a23 * a31 - (a13 * wy_zx + (a11 * a23 * a30 - a13 * wx_zy))))) * invDet;
+    float zy = -(a00 * a33 * a21 - (a01 * a33 * a20 + a00 * a23 * a31 + -(a03 * wy_zx - (a03 * wx_zy - a01 * a23 * a30)))) * invDet;
+    float zz =  (a33 * a00 * a11 + -(a33 * a10 * a01 - -(a13 * a31 * a00 - (a03 * a31 * a10 + (a13 * a30 * a01 - a03 * a30 * a11))))) * invDet;
+    float zw = -(a23 * a00 * a11 - (a23 * a10 * a01 + a13 * a00 * a21 + -(a03 * a10 * a21 - (a03 * a11 * a20 - a13 * a20 * a01)))) * invDet;
 
-    out.w.Set(
-        -(a32 * a21 * a10 - (a32 * a20 * a11 + a31 * a22 * a10 + -(wy_zx * a12 - (wx_zy * a12 - a30 * a22 * a11)))) * invDet,
-         (a32 * a21 * a00 + -(a32 * a20 * a01 - -(a31 * a22 * a00 - (wy_zx * a02 + (a30 * a22 * a01 - wx_zy * a02))))) * invDet,
-        -(a32 * a00 * a11 - (a31 * a00 * a12 + a32 * a10 * a01 + -(a31 * a10 * a02 - (a30 * a11 * a02 - a30 * a01 * a12)))) * invDet,
-         (a22 * a00 * a11 + -(a22 * a10 * a01 - -(a00 * a21 * a12 - (a10 * a21 * a02 + (a01 * a12 * a20 - a02 * a11 * a20))))) * invDet
-    );
+    // out.w (row 3 of inverse)
+    float wx = -(a32 * a21 * a10 - (a32 * a20 * a11 + a31 * a22 * a10 + -(wy_zx * a12 - (wx_zy * a12 - a30 * a22 * a11)))) * invDet;
+    float wy =  (a32 * a21 * a00 + -(a32 * a20 * a01 - -(a31 * a22 * a00 - (wy_zx * a02 + (a30 * a22 * a01 - wx_zy * a02))))) * invDet;
+    float wz = -(a32 * a00 * a11 - (a31 * a00 * a12 + a32 * a10 * a01 + -(a31 * a10 * a02 - (a30 * a11 * a02 - a30 * a01 * a12)))) * invDet;
+    float ww =  (a22 * a00 * a11 + -(a22 * a10 * a01 - -(a00 * a21 * a12 - (a10 * a21 * a02 + (a01 * a12 * a20 - a02 * a11 * a20))))) * invDet;
 
     // Cofactors for column 0 via operator[] (cols 1,2,3) -> out.x (transposed)
     const Vector4 &row0 = m.x;
@@ -266,6 +263,9 @@ void Invert(const Hmx::Matrix4 &m, Hmx::Matrix4 &out) {
 #pragma inline_depth()
 
     out.x.Set(c00, c10, c20, c30);
+    out.y.Set(yx, yy, yz, yw);
+    out.z.Set(zx, zy, zz, zw);
+    out.w.Set(wx, wy, wz, ww);
 }
 
 // Transpose(Matrix4) moved to Mtx.h as inline

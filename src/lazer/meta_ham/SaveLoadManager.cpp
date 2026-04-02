@@ -116,11 +116,6 @@ void SaveLoadManager::EnableAutosave(HamProfile *p) {
     }
 }
 
-template <class _T>
-__declspec(noinline) auto _outline_GetPadNum(_T* _obj) -> decltype(_obj->GetPadNum()) {
-    return _obj->GetPadNum();
-}
-
 void SaveLoadManager::ManualSave(HamProfile *pProfile) {
     State cur = mState;
     if (cur != 0) {
@@ -131,8 +126,7 @@ void SaveLoadManager::ManualSave(HamProfile *pProfile) {
     } else {
         MILO_ASSERT(pProfile, 0x364);
         mActiveProfile = pProfile;
-        auto _tmp0 = _outline_GetPadNum(pProfile);
-        mPadNum = _tmp0;
+        mPadNum = pProfile->GetPadNum();
         TheMemcardMgr.AddSink(this);
         SetState((State)0x56);
     }
@@ -616,7 +610,7 @@ void SaveLoadManager::Poll() {
         return;
     }
 
-    if (kS_Idle == mState) {
+    if ((int)kS_Idle == mState) {
         if (mNeedsSave && IsSafePlaceToSave()) {
             mMode = kAutoSave;
             Start();
@@ -689,7 +683,7 @@ void SaveLoadManager::Poll() {
             nextState = kS_SongCacheSearchResult;
         } else {
             MILO_NOTIFY("SaveLoadManager - CacheMgr search returned error %d", unk68);
-            nextState = kS_SongCacheFailed;
+            nextState = kS_GlobalOptionsSearch;
         }
         break;
     }

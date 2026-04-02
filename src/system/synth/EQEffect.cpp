@@ -464,7 +464,7 @@ void EQEffect::SetParameter(int param, float value) {
         break;
     }
     case 11:
-        mBand4Q = (float)(0.5 < (double)value);
+        mBand4Q = (float)(value > half);
         break;
     case 12: {
         float clamped = (float)__fsel((float)(5000.0f - value), value, 5000.0f);

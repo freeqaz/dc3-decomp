@@ -76,15 +76,16 @@ bool NgLight::SphereConeTest(const Vector3 &sphereCenter, float sphereRadius) {
     }
 
     Vector3 axis = xfm2.m.y;
+    Vector3 diff = sc;
+    Vector3 origin = xfm1.v;
 
     Vector3 perp;
-    perp.x = (sc.x - xfm1.v.x) - axis.x * proj;
-    perp.y = (sc.y - xfm1.v.y) - axis.y * proj;
-    perp.z = (sc.z - xfm1.v.z) - axis.z * proj;
+    perp.x = (diff.x - origin.x) - axis.x * proj;
+    perp.y = (diff.y - origin.y) - axis.y * proj;
+    perp.z = (diff.z - origin.z) - axis.z * proj;
 
     Normalize(perp, perp);
 
-    Vector3 origin = xfm1.v;
     float topR = mTopRadius;
     float botR = mBotRadius;
 
@@ -105,14 +106,16 @@ bool NgLight::SphereConeTest(const Vector3 &sphereCenter, float sphereRadius) {
     botPoint.y += (float)((double)axis.y * range);
     botPoint.z += (float)((double)axis.z * range);
     botPoint += perpBot;
-    botPoint -= topPoint;
 
-    float t = (1.0f / Dot(botPoint, botPoint)) * Dot(toSphere, botPoint);
+    Vector3 edgeDir = botPoint;
+    edgeDir -= topPoint;
+
+    float t = (1.0f / Dot(edgeDir, edgeDir)) * Dot(toSphere, edgeDir);
 
     Vector3 closest = toSphere;
-    closest.x -= t * botPoint.x;
-    closest.y -= t * botPoint.y;
-    closest.z -= t * botPoint.z;
+    closest.x -= t * edgeDir.x;
+    closest.y -= t * edgeDir.y;
+    closest.z -= t * edgeDir.z;
 
     if (Dot(perp, closest) >= 0.0f) {
         return Length(closest) < sphereRadius;
