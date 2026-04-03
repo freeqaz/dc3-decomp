@@ -35,15 +35,15 @@ void MultiTempoTempoMap::SetLoopPoints(int start, int end) {
     mEndLoopTime = TickToTime(mEndLoopTick);
 }
 
-int MultiTempoTempoMap::GetLoopTick(int tick, int &asdf) const {
-    asdf = 0;
-
+int MultiTempoTempoMap::GetLoopTick(int tick, int &loopOffset) const {
     if (mStartLoopTick < 0.0f) {
         return tick;
     }
 
-    int endTick = static_cast<int>(mEndLoopTick);
+    loopOffset = 0;
+
     int startTick = static_cast<int>(mStartLoopTick);
+    int endTick = static_cast<int>(mEndLoopTick);
 
     if (tick >= mEndLoopTick) {
         if (mStartLoopTick == mEndLoopTick) {
@@ -53,15 +53,15 @@ int MultiTempoTempoMap::GetLoopTick(int tick, int &asdf) const {
         int loopLength = endTick - startTick;
         int loopTick = tick - startTick;
         int newTick = (loopTick % loopLength) + startTick;
-        asdf = tick - newTick;
+        loopOffset = tick - newTick;
         return newTick;
     }
     return tick;
 }
 
 int MultiTempoTempoMap::GetLoopTick(int tick) const {
-    int ok;
-    return GetLoopTick(tick, ok);
+    int unused;
+    return GetLoopTick(tick, unused);
 }
 
 float MultiTempoTempoMap::GetTimeInLoop(float time) {

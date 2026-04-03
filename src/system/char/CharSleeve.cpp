@@ -106,7 +106,7 @@ void CharSleeve::Poll() {
         ClampEq(d4, -mRange, mRange);
         ScaleAddEq(vcc, sleeveparent->WorldXfm().m.x, (d4 - dotted2));
         float len = Length(vcc);
-        float interped = (absed - len) * powed + len;
+        float interped = (absed - len) * (1.0f - powed) + len;
         ClampEq(interped, absed - mNegLength, absed + mPosLength);
         NormalizeScale(vcc, interped, vcc);
         Add(sleeveparent->WorldXfm().v, vcc, vb4);

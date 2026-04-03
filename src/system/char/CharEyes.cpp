@@ -1300,7 +1300,7 @@ void CharEyes::Poll() {
                     if (!anyEyeClamped)
                         goto storeState;
                 }
-                if (mAvDelta <= 0.0f)
+                if (mAvDelta >= 0.0f)
                     goto storeState;
             }
         }

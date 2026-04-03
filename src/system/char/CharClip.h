@@ -207,13 +207,13 @@ public:
     const CharGraphNode *FindFirstNode(CharClip *clip, float beat) const;
     const CharGraphNode *FindLastNode(CharClip *clip, float beat) const;
     const CharGraphNode *FindNode(CharClip *clip, float f1, int iii, float f2) const;
-    void EvaluateChannel(void *v1, const void *v2, int iii, float f);
+    void EvaluateChannel(void *dest, const void *channel, int frame, float blend);
     void ScaleAddSample(CharBones &bones, float f1, int i1, float f2, int i2, float f3);
     float FrameToBeat(float frame) const;
     float BeatToFrame(float beat) const;
     float DeltaSecondsToDeltaBeat(float f1, float beat);
     int BeatToSample(float f, float *fp) const;
-    void EvaluateChannel(void *v1, const void *v2, float f3);
+    void EvaluateChannel(void *dest, const void *channel, float blend);
     void RotateBy(CharBones &, float);
     void RotateTo(CharBones &, float, float);
     void ScaleAdd(CharBones &, float, float, float);

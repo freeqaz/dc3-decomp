@@ -142,7 +142,7 @@ void Archive::Enumerate(
         sprintf(dtbPath, "%s/gen/%s.dtb", FileGetPath(pattern), FileGetBase(pattern));
         pattern = dtbPath;
         if (!recurse) {
-            sprintf(folderPath, "%s/gen/", dir);
+            sprintf(folderPath, "%s/gen", dir);
             dir = folderPath;
         }
     }

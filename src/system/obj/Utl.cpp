@@ -138,20 +138,26 @@ const char *NextName(const char *old_name, ObjectDir *dir) {
         return old_name;
     const char *base = FileGetBase(old_name);
     const char *ext = FileGetExt(old_name);
+    int len = (int)strlen(base);
     char *ptr;
-    for (ptr = (char *)base + strlen(base); (ptr > base && ptr[-1] >= '0' && ptr[-1] <= '9'); ptr--)
+    for (ptr = (char *)base + len; (ptr > base && ptr[-1] >= '0' && ptr[-1] <= '9'); ptr--)
         ;
+    int numDigits = len - (int)(ptr - base);
     int atoied = 0;
+    if (numDigits <= 1)
+        numDigits = 1;
     if (*ptr != '\0')
         atoied = atoi(ptr);
     char buf[128];
     do {
+        char fmt[] = "%00d";
         atoied++;
-        sprintf(ptr, "%02d", atoied);
+        fmt[2] = '0' + numDigits;
+        sprintf(ptr, fmt, atoied);
         if (*ext != '\0') {
-            sprintf(buf, "%s.%s", ptr, ext);
+            sprintf(buf, "%s.%s", base, ext);
         } else {
-            strcpy(buf, ptr);
+            strcpy(buf, base);
         }
     } while (dir->FindObject(buf, false, true));
 

@@ -266,12 +266,12 @@ bool ScriptTask::Replace(ObjRef *ref, Hmx::Object *obj) {
         thisObj.SetObjConcrete(obj);
         if (thisObj) return true;
     } else {
-        if (ref->Parent() == &mObjects) {
-            if (obj) {
-                mObjects.remove(obj);
-                return true;
-            }
+        if (ref->Parent() != &mObjects) {
             return Hmx::Object::Replace(ref, obj);
+        }
+        if (obj) {
+            static_cast<ObjRefConcrete<Hmx::Object, ObjectDir>*>(ref)->SetObjConcrete(obj);
+            return true;
         }
     }
     delete this;

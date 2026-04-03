@@ -817,19 +817,20 @@ const CharGraphNode *CharClip::FindLastNode(CharClip *clip, float beat) const {
     return nullptr;
 }
 
-void CharClip::EvaluateChannel(void *v1, const void *v2, int iii, float f) {
-    if (!v2) {
-        MILO_FAIL("%s passed in NULL for evaluate channel", PathName(this));
+void CharClip::EvaluateChannel(void *dest, const void *channel, int frame, float blend) {
+    if (!channel) {
+        MILO_FAIL("%s passed in NULL for evaluate channel", (char *)PathName(this));
     }
-    int offset = (intptr_t)v2 - 1;
-    if (offset < mFull.TotalSize()) {
-        mFull.EvaluateChannel(v1, offset, iii, f);
+    auto _tmp2 = mFull.TotalSize();
+    int offset = (intptr_t)channel - 1;
+    if (offset < _tmp2) {
+        mFull.EvaluateChannel(dest, offset, frame, blend);
     } else {
         int oneOffset = offset - mFull.TotalSize();
         if (oneOffset < mOne.TotalSize()) {
-            mOne.EvaluateChannel(v1, oneOffset, 0, 0);
+            mOne.EvaluateChannel(dest, oneOffset, 0, 0);
         } else {
-            MILO_FAIL("%s could not find offset %d %d", PathName(this), offset, oneOffset);
+            MILO_FAIL("%s could not find offset %d %d", offset, oneOffset, PathName(this));
         }
     }
 }
