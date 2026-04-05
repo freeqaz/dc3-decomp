@@ -218,8 +218,8 @@ void UIList::CalcBoundingBox(Box &box) {
     UIList *subList = mListDir->SubList(mListState.SelectedDisplay(), mWidgets);
     if (subList != NULL) {
         int subSelectedDisplay = subList->mListState.SelectedDisplay();
-        float spacing = subList->GetUIListDir()->ElementSpacing();
-        offset = spacing * (float)subSelectedDisplay;
+        offset = subList->GetUIListDir()->ElementSpacing();
+        offset *= (float)subSelectedDisplay;
     } else {
         offset = 0.0f;
     }

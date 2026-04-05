@@ -142,7 +142,7 @@ const char *NextName(const char *old_name, ObjectDir *dir) {
     char *ptr;
     for (ptr = (char *)base + len; (ptr > base && ptr[-1] >= '0' && ptr[-1] <= '9'); ptr--)
         ;
-    int numDigits = len - (int)(ptr - base);
+    int numDigits = (int)(base + len - ptr);
     int atoied = 0;
     if (numDigits <= 1)
         numDigits = 1;

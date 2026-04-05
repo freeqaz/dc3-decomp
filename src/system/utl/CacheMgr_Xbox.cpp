@@ -376,12 +376,13 @@ void CacheMgrXbox::PollDelete() {
 }
 
 void CacheMgrXbox::PollSearch() {
+    DWORD res;
+    DWORD numFound;
     if (mOverlapped.InternalLow != 0x3E5) {
-        DWORD numFound = 0;
-        DWORD res = XGetOverlappedResult(&mOverlapped, &numFound, false);
+        numFound = 0;
+        res = XGetOverlappedResult(&mOverlapped, &numFound, false);
         if (res != 0 && res != 0x65B) {
-            MILO_WARN("CacheMgrXbox::PollSearch() encountered unknown error %u.\n", res);
-            EndSearch(kCache_ErrorCacheNotFound);
+            MILO_FAIL("CacheMgrXbox::PollSearch() encountered unknown error %u.\n", res);
         } else if (numFound != 0) {
             MILO_ASSERT(numFound == 1, 0x1FB);
             mContentData.szFileName[0] &= 0x7F;
@@ -397,21 +398,25 @@ void CacheMgrXbox::PollSearch() {
                 memcpy(cacheXbox->ContentData(), &mContentData, sizeof(XCONTENT_DATA));
                 cacheXbox->SetName(mStrCacheName);
                 EndSearch(kCache_NoError);
+                return;
             } else {
                 memset(&mContentData, 0, sizeof(XCONTENT_DATA));
                 mContentData.DeviceID = 0;
                 memset(&mOverlapped, 0, sizeof(XOVERLAPPED));
                 DWORD enumRes =
                     XEnumerate(mFile, &mContentData, 0x134, nullptr, &mOverlapped);
-                if (enumRes != 0x3E5) {
-                    MILO_NOTIFY(
-                        "CacheMgrXbox::PollSearch(): Unhandled error %u returned from XEnumerate().\n",
-                        enumRes
-                    );
-                    EndSearch(kCache_ErrorUnknown);
+                if (enumRes == 0x3E5) {
+                    return;
                 }
+                MILO_NOTIFY(
+                    "CacheMgrXbox::PollSearch(): Unhandled error %u returned from XEnumerate().\n",
+                    enumRes
+                );
+                EndSearch(kCache_ErrorUnknown);
+                return;
             }
         }
+        EndSearch(kCache_ErrorCacheNotFound);
     }
 }
 

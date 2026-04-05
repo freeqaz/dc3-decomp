@@ -459,17 +459,20 @@ bool SpeechMgr::IsSpeechSupportable(NUI_SPEECH_LANGUAGE &nuiLanguage) const {
 }
 
 void SpeechMgr::PrintSemanticTree(NUI_SPEECH_SEMANTICRESULT *sr, int i2) {
-    do {
-        MILO_ASSERT(sr, 0x306);
-        for (int i = 0; i < i2; i++) {
-            mOverlay->Print("  ");
-        }
-        mOverlay->Print(MakeString("tag: %s\n", WstrToANSI(sr->pcwszValue)));
-        if (sr->pFirstChild) {
-            PrintSemanticTree(sr->pFirstChild, i2 + 1);
-        }
-        sr = sr->pNextSibling;
-    } while (sr);
+loop:
+    MILO_ASSERT(sr, 0x306);
+    for (int i = 0; i < i2; i++) {
+        mOverlay->Print("  ");
+    }
+    mOverlay->Print(MakeString("tag: %s\n", WstrToANSI(sr->pcwszValue)));
+    if (sr->pFirstChild) {
+        PrintSemanticTree(sr->pFirstChild, i2 + 1);
+    }
+    NUI_SPEECH_SEMANTICRESULT *next = sr->pNextSibling;
+    if (next) {
+        sr = next;
+        goto loop;
+    }
 }
 
 void SpeechMgr::CommitGrammar(Symbol name) {

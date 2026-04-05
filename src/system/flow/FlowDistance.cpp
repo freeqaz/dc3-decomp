@@ -126,21 +126,21 @@ void FlowDistance::Execute(QueueState qs) {
         }
     }
     if (mOutOfRange) {
-        if ((double)dist <= (double)mDistance) {
+        if ((double)dist > (double)mDistance) {
             mOutOfRange = false;
             if (mRunInRange) {
-                shouldActivate = true;
-            } else {
                 shouldStop = true;
+            } else {
+                shouldActivate = true;
             }
         }
     } else {
-        if ((double)dist > (double)mDistance) {
+        if ((double)dist <= (double)mDistance) {
             mOutOfRange = true;
             if (mRunInRange) {
-                shouldStop = true;
-            } else {
                 shouldActivate = true;
+            } else {
+                shouldStop = true;
             }
         }
     }

@@ -821,16 +821,15 @@ void CharClip::EvaluateChannel(void *dest, const void *channel, int frame, float
     if (!channel) {
         MILO_FAIL("%s passed in NULL for evaluate channel", (char *)PathName(this));
     }
-    auto _tmp2 = mFull.TotalSize();
     int offset = (intptr_t)channel - 1;
-    if (offset < _tmp2) {
+    if (offset < mFull.TotalSize()) {
         mFull.EvaluateChannel(dest, offset, frame, blend);
     } else {
         int oneOffset = offset - mFull.TotalSize();
         if (oneOffset < mOne.TotalSize()) {
             mOne.EvaluateChannel(dest, oneOffset, 0, 0);
         } else {
-            MILO_FAIL("%s could not find offset %d %d", offset, oneOffset, PathName(this));
+            MILO_FAIL("%s could not find offset %d %d", (char *)offset, oneOffset, PathName(this));
         }
     }
 }

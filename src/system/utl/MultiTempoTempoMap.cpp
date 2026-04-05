@@ -50,8 +50,8 @@ int MultiTempoTempoMap::GetLoopTick(int tick, int &loopOffset) const {
             return tick;
         }
 
-        int loopLength = endTick - startTick;
         int loopTick = tick - startTick;
+        int loopLength = endTick - startTick;
         int newTick = (loopTick % loopLength) + startTick;
         loopOffset = tick - newTick;
         return newTick;

@@ -27,7 +27,10 @@ void GetLightPosition(Spotlight *s, Vector3 &v) {
     v = s->WorldXfm().v;
     Vector3 offset;
     Multiply(s->mBeam.mBeam->LocalXfm().v, s->WorldXfm().m, offset);
-    v += offset;
+    float vx = v.x, vy = v.y, vz = v.z;
+    v.x = vx + offset.x;
+    v.y = vy + offset.y;
+    v.z = vz + offset.z;
 }
 
 NgSpotlightDrawer::NgSpotlightDrawer()

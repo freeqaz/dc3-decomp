@@ -259,7 +259,7 @@ void RndAmbientOcclusion::BuildTrees(Quality quality) {
         int packDepth = kQualityLUT[quality + 2];
         BuildSphereStratified(kQualityLUT[quality], mSampleDirs);
 
-        Box box(Vector3(FLT_MAX, FLT_MAX, FLT_MAX), Vector3(-FLT_MAX, -FLT_MAX, -FLT_MAX));
+        Box box(Vector3(-FLT_MAX, -FLT_MAX, -FLT_MAX), Vector3(FLT_MAX, FLT_MAX, FLT_MAX));
 
         {
             auto it = mObjectsCast.begin();
@@ -270,7 +270,7 @@ void RndAmbientOcclusion::BuildTrees(Quality quality) {
 
                     for (unsigned int i = 0; i < mesh->Faces().size(); i++) {
                         RndMesh::Face &face = mesh->Faces(i);
-                        Vector3 v0, v1, v2;
+                        Vector3 v1, v0, v2;
                         Multiply(mesh->Verts()[face.v1].pos, xfm, v0);
                         Multiply(mesh->Verts()[face.v2].pos, xfm, v1);
                         Multiply(mesh->Verts()[face.v3].pos, xfm, v2);
@@ -289,9 +289,8 @@ void RndAmbientOcclusion::BuildTrees(Quality quality) {
                             mTriList.push_back(tri);
 
                             if (mIntersectBackFaces) {
-                                Triangle triBack;
-                                triBack.Set(v0, v2, v1);
-                                mTriList.push_back(triBack);
+                                tri.Set(v0, v2, v1);
+                                mTriList.push_back(tri);
                             }
                         }
                     }
