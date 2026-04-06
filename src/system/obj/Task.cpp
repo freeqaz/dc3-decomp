@@ -264,15 +264,20 @@ bool ScriptTask::Replace(ObjRef *ref, Hmx::Object *obj) {
     auto& thisObj = mThis;
     if (ref == &thisObj) {
         thisObj.SetObjConcrete(obj);
-        if (thisObj) return true;
-    } else {
-        if (ref->Parent() != &mObjects) {
-            return Hmx::Object::Replace(ref, obj);
-        }
-        if (obj) {
-            static_cast<ObjRefConcrete<Hmx::Object, ObjectDir>*>(ref)->SetObjConcrete(obj);
+        if (!thisObj) {
+            delete this;
             return true;
         }
+        return true;
+    }
+    ObjRef *listRef = (ref->Parent() == &mObjects) ? ref : 0;
+    if (listRef) {
+        if (obj) {
+            static_cast<ObjRefConcrete<Hmx::Object, ObjectDir>*>(listRef)->SetObjConcrete(obj);
+            return true;
+        }
+    } else {
+        return Hmx::Object::Replace(ref, obj);
     }
     delete this;
     return true;

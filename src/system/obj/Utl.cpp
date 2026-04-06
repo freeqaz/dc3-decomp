@@ -150,7 +150,7 @@ const char *NextName(const char *old_name, ObjectDir *dir) {
         atoied = atoi(ptr);
     char buf[128];
     do {
-        char fmt[] = "%00d";
+        char fmt[] = "%02d";
         atoied++;
         fmt[2] = '0' + numDigits;
         sprintf(ptr, fmt, atoied);
