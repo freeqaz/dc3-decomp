@@ -297,8 +297,9 @@ void ScriptTask::Poll(float f1) {
 
 bool ThreadTask::Replace(ObjRef *ref, Hmx::Object *obj) {
     if (mExecuting) {
-        if ((ref->Parent() == &mObjects) & (ref != 0)) {
-            mObjects.erase(*(ObjPtrList<Hmx::Object>::iterator *)&ref);
+        ObjRef *listRef = (ref->Parent() == &mObjects) ? ref : 0;
+        if (listRef) {
+            ((ObjPtrList<ObjectDir> *)&mObjects)->erase(*(ObjPtrList<ObjectDir>::iterator *)&listRef);
             return true;
         }
     }

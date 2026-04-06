@@ -3,8 +3,8 @@
 
 extern "C" {
     extern complex* lbl_8316EB70;
-    extern complex* lbl_8316EBA8;
-    extern complex* lbl_83172BB0;
+    extern char lbl_8316EBA8[0x4008];
+    extern char lbl_83172BB0[0x4008];
     extern const double __real_0000000000000000;
     extern const double __real_3f50624dd2f1a9fc;
     extern const double __real_3fe0000000000000;
@@ -15,40 +15,33 @@ extern "C" {
     extern const double __real_bff0000000000000;
 
     void expand(complex*, int, complex*, ...);
-    complex cexp(complex);
     complex expj(complex*, double);
     double exp(double);
 }
 
+complex cexp(complex);
+
+#pragma optimize("gt", on)
+
 void compute_z_mzt(void) {
-    complex sp50;
-    char* src_base;
-    char* dst_base;
+    char* src_base = (char*)lbl_8316EBA8;
+    char* dst_base = (char*)lbl_83172BB0;
     int src_count1;
     int src_count2;
-    complex* src_ptr;
-    complex* dst_ptr;
-    int loop_count;
+    int loop_count = 0;
+    int byte_offset;
 
-        dst_base = (char*)lbl_83172BB0;
-
-    src_count1 = *(int*)(src_base = (char*)lbl_8316EBA8 + 0x4000);
+    src_count1 = *(int*)(src_base + 0x4000);
     src_count2 = *(int*)(src_base + 0x4004);
     *(int*)(dst_base + 0x4000) = src_count1;
     *(int*)(dst_base + 0x4004) = src_count2;
 
     if (src_count1 > 0) {
-        loop_count = 0;
-        src_ptr = (complex*)src_base;
-        dst_ptr = (complex*)dst_base;
+        byte_offset = 0;
         do {
-            sp50 = cexp(*src_ptr);
+            *(complex*)(dst_base + byte_offset) = cexp(*(complex*)(src_base + byte_offset));
             loop_count++;
-            src_ptr++;
-            dst_ptr->x = sp50.x;
-            dst_ptr->y = sp50.y;
-            dst_ptr++;
-
+            byte_offset += 0x10;
             src_count1 = *(int*)(dst_base + 0x4000);
         } while (loop_count < src_count1);
     }
@@ -57,16 +50,11 @@ void compute_z_mzt(void) {
     loop_count = 0;
 
     if (src_count2 > 0) {
-        src_ptr = (complex*)(src_base + 0x2000);
-        dst_ptr = (complex*)(dst_base + 0x2000);
+        byte_offset = 0x2000;
         do {
-            sp50 = cexp(*src_ptr);
+            *(complex*)(dst_base + byte_offset) = cexp(*(complex*)(src_base + byte_offset));
             loop_count++;
-            src_ptr++;
-            dst_ptr->x = sp50.x;
-            dst_ptr->y = sp50.y;
-            dst_ptr++;
-
+            byte_offset += 0x10;
             src_count2 = *(int*)(dst_base + 0x4004);
         } while (loop_count < src_count2);
     }
@@ -101,7 +89,7 @@ void compute_bpres(double arg_sp10, double arg_sp18, double arg_sp20, double arg
         arg_sp60 = arg_sp50;
         arg_sp68 = -temp_f0;
 
-        expand(lbl_83172BB0, 2, arg_spA0);
+        expand((complex*)lbl_83172BB0, 2, arg_spA0);
 
         complex* zero_ptr = &arg_sp90[0];
         expj(zero_ptr, temp_f30);
