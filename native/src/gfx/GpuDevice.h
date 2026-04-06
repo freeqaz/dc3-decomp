@@ -51,7 +51,8 @@ public:
     void Shutdown();
 
     // Accessors
-    bool IsReady() const { return mDevice != nullptr; }
+    bool IsReady() const { return mDevice != nullptr && !mDeviceLost; }
+    bool IsDeviceLost() const { return mDeviceLost; }
     bool IsNullBackend() const { return mNullBackend; }
     wgpu::Device& Device() { return mDevice; }
     wgpu::Queue& Queue() { return mQueue; }
@@ -112,6 +113,7 @@ private:
     int mHeight = 0;
     bool mHeadless = false;
     bool mHasBCCompression = false;
+    bool mDeviceLost = false;
 
     // Surface texture (stored for CopyTextureToTexture in web frame resolve)
     wgpu::Texture mSurfaceTex;

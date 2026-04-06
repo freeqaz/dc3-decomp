@@ -263,7 +263,7 @@ BinStream &operator<<(BinStream &bs, const ObjPtrVec<T, ObjectDir> &vec) { \
 BINSTREAM_OP_OBJPTRVEC(CharClip)
 BINSTREAM_OP_OBJPTRVEC(Flow)
 BINSTREAM_OP_OBJPTRVEC(Hmx::Object)
-BINSTREAM_OP_OBJPTRVEC(RhythmDetector)
+// RhythmDetector: explicit specialization in Character.cpp (custom body)
 BINSTREAM_OP_OBJPTRVEC(RndDrawable)
 BINSTREAM_OP_OBJPTRVEC(RndEnviron)
 BINSTREAM_OP_OBJPTRVEC(RndLight)

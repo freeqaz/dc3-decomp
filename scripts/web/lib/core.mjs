@@ -79,7 +79,7 @@ export async function launchBrowser(port) {
             '--no-sandbox',
             '--enable-unsafe-webgpu',
             '--use-angle=vulkan',
-            '--enable-features=Vulkan,VulkanFromANGLE',
+            '--enable-features=Vulkan,VulkanFromANGLE,WebAssemblyJSPromiseIntegration',
             '--ozone-platform=x11',
             '--disable-extensions',
             '--disable-background-networking',

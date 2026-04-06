@@ -841,8 +841,13 @@ void WgpuRnd::BeginDrawing() {
             FrameCapture::Get().SetCaptureFrame(sCaptureFrame);
     }
 
-    // Skip if GPU not initialized (Phase 1A headless mode)
-    if (!mGpu.Device()) {
+    // Skip if GPU not initialized or device lost
+    if (mGpu.IsDeviceLost()) {
+        static int sLostLogCount = 0;
+        if (sLostLogCount++ < 3)
+            fprintf(stderr, "WgpuRnd::BeginDrawing: device lost, skipping frame %d\n", mFrameID);
+    }
+    if (!mGpu.IsReady()) {
         mDrawing = true;
         mWorldEnded = false;
         mDrawCount++;
@@ -1044,7 +1049,7 @@ void WgpuRnd::EnsureSceneUniformsCurrent() {
 
 void WgpuRnd::EndDrawing() {
     FrameCapture::Get().EndFrame();
-    if (!mGpu.Device()) {
+    if (!mGpu.IsReady()) {
         mDrawing = false;
         return;
     }

@@ -59,9 +59,10 @@ bool GpuDevice::Init(const GpuDeviceDesc& desc) {
 
             deviceDesc.SetDeviceLostCallback(
                 wgpu::CallbackMode::AllowSpontaneous,
-                [](const wgpu::Device&, wgpu::DeviceLostReason reason, wgpu::StringView msg) {
+                [this](const wgpu::Device&, wgpu::DeviceLostReason reason, wgpu::StringView msg) {
                     fprintf(stderr, "GpuDevice: device lost (reason=%d): %.*s\n",
                             (int)reason, (int)msg.length, msg.data);
+                    mDeviceLost = true;
                 });
             deviceDesc.SetUncapturedErrorCallback(
                 [](const wgpu::Device&, wgpu::ErrorType type, wgpu::StringView msg) {
