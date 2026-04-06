@@ -67,13 +67,15 @@ BEGIN_LOADS(CharSleeve)
 END_LOADS
 
 void CharSleeve::Poll() {
-    if (mSleeve && mSleeve->TransParent()) {
+    auto _tmp1 = mSleeve->TransParent();
+    if (mSleeve && _tmp1) {
         float deltasecs = TheTaskMgr.DeltaSeconds();
         float dvar12 = deltasecs * 60.0f;
         float gravity_z = (mGravity * (deltasecs * (dvar12 * -3.858268f)));
-        float powed = 1.0f - powf(1.0f - mStiffness, dvar12 * dvar12);
+        auto _tmp0 = powf(1.0f - mStiffness, dvar12 * dvar12);
         RndTransformable *sleeveparent = mSleeve->TransParent();
-        float absed = std::fabs(mSleeve->LocalXfm().v.z);
+        float absed = fabsf(mSleeve->LocalXfm().v.z);
+        float powed = 1.0f - _tmp0;
         bool b2 = false;
         Character *me = Character::Current();
         if (me && me->Teleported()) {
