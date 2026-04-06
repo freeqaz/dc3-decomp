@@ -498,27 +498,28 @@ int MemHeap::Free(int *ptr) {
         return 0;
     }
 
-    unsigned int header = *(unsigned int *)(ptr - 1);
     unsigned int *headerAddr = (unsigned int *)(ptr - 1);
+    unsigned int header = *headerAddr;
     int blockSizeBytes = (header >> 6) & 0x3FFFFFC;
-    unsigned int padBytes = (header >> 2) & 0x3C;
-    int *blockStart = (int *)((char *)headerAddr - padBytes);
 
     FreeBlock *prev = nullptr;
     FreeBlock *next;
-    for (next = mFreeBlockChain; next != nullptr && (int *)next < blockStart; next = next->mNextBlock) {
+    for (next = mFreeBlockChain; next != nullptr && (int *)next < (int *)headerAddr; next = next->mNextBlock) {
         prev = next;
     }
 
-    gTimeStamp++;
+    unsigned int padBytes = (header >> 2) & 0x3C;
+    int *blockStart = (int *)((char *)headerAddr - padBytes);
+
+    int ts = gTimeStamp++;
     FreeBlock *newFree = (FreeBlock *)blockStart;
-    InsertFreeBlock(newFree, header >> 8, prev, next, gTimeStamp);
+    InsertFreeBlock(newFree, *headerAddr >> 8, prev, next, ts);
 
     if (1 <= mDebugLevel) {
         int *end = (int *)newFree + newFree->mSizeWords;
         if ((int *)newFree + 3 < end) {
             int *cur = (int *)newFree + 2;
-            for (int count = ((end - ((int *)newFree + 3)) - 1) >> 2; count >= 0; count--) {
+            for (unsigned int count = (((unsigned int)end - (unsigned int)((int *)newFree + 3)) - 1) / 4 + 1; count != 0; count--) {
                 cur++;
                 *cur = 0xDEADDEAD;
             }
