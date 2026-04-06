@@ -8,6 +8,7 @@ namespace {
         jpeg_destination_mgr pub;  // Standard manager (0x0-0x13)
         JOCTET *bufferStart;       // Original buffer pointer (0x14)
         size_t bufferSize;         // Total buffer size (0x18)
+        int bytesWritten;          // Result: bytes written (0x1c)
     };
 
     void JpegInitDestination(jpeg_compress_struct *s) {
@@ -23,7 +24,7 @@ namespace {
     void JpegTermDestination(jpeg_compress_struct *s) {
         ExtendedDestMgr *dest = (ExtendedDestMgr *)s->dest;
         MILO_ASSERT(dest, 0x9c);
-        *(int *)((char *)dest + 0x1c) = dest->bufferSize - dest->pub.free_in_buffer;
+        dest->bytesWritten = dest->bufferSize - dest->pub.free_in_buffer;
     }
 };
 
@@ -32,41 +33,36 @@ bool LoadBitmapIntoJpeg(char *data, int width, int height, int depth, void *dest
     ExtendedDestMgr destMgr;
     jpeg_compress_struct cinfo;
     jpeg_error_mgr errorMgr;
-    int bytesPerRow;
 
     cinfo.err = jpeg_std_error(&errorMgr);
     jpeg_CreateCompress(&cinfo, JPEG_LIB_VERSION, sizeof(jpeg_compress_struct));
 
-    // Zero-initialize in 8-byte chunks (codegen-sensitive order)
-    *(long long*)&destMgr = 0;
-    *(long long*)(((char*)&destMgr) + 8) = 0;
-    // Note: bufferStart and bufferSize are set up at specific offsets
-    // JpegInitDestination will copy these to pub.next_output_byte and pub.free_in_buffer
-    *(long long*)(((char*)&destMgr) + 16) = 0;
+    // Zero the entire destMgr struct
+    memset(&destMgr, 0, sizeof(destMgr));
     destMgr.bufferStart = (JOCTET *)destBuffer;
-    destMgr.bufferSize = 2;
-    *(long long*)(((char*)&destMgr) + 24) = 0;
+    destMgr.bufferSize = outSize;
+
+    cinfo.image_height = height;
+    cinfo.image_width = width;
+    cinfo.input_components = depth;
+    cinfo.in_color_space = JCS_RGB;
 
     destMgr.pub.init_destination = JpegInitDestination;
     destMgr.pub.empty_output_buffer = JpegEmptyOutputBuffer;
     destMgr.pub.term_destination = JpegTermDestination;
-
     cinfo.dest = &destMgr.pub;
 
     jpeg_set_defaults(&cinfo);
     jpeg_start_compress(&cinfo, TRUE);
 
-        if (height > 0) {
-        do {
-            rowPtr = (JSAMPROW)data;
-            jpeg_write_scanlines(&cinfo, (JSAMPARRAY)&rowPtr, 1);
-            height--;
-            data += bytesPerRow = depth * width;
-        } while (height != 0);
+    int bytesPerRow = cinfo.input_components * width;
+    while (cinfo.next_scanline < cinfo.image_height) {
+        rowPtr = (JSAMPROW)(data + cinfo.next_scanline * bytesPerRow);
+        jpeg_write_scanlines(&cinfo, (JSAMPARRAY)&rowPtr, 1);
     }
 
     jpeg_finish_compress(&cinfo);
-    outSize = (int)destMgr.pub.next_output_byte - (int)destBuffer;
+    outSize = destMgr.bytesWritten;
 
     return true;
 }

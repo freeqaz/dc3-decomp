@@ -747,7 +747,18 @@ Hmx::Object *ObjPtrVec<T1, T2>::Node::RefOwner() const {
 template <class T1, class T2>
 typename ObjPtrVec<T1, T2>::iterator
 ObjPtrVec<T1, T2>::erase(typename ObjPtrVec<T1, T2>::iterator it) {
-    return iterator(mNodes.erase(it.it));
+    int idx = it.it ? (it.it - mNodes.begin()) : 0;
+    if (mEraseMode == kEraseSwapLast) {
+        unsigned int last = mNodes.size() - 1;
+        if ((unsigned int)idx != last) {
+            T1 *lastObj = mNodes.back().Obj();
+            mNodes.pop_back();
+            Set(begin() + idx, lastObj);
+            return it;
+        }
+    }
+    mNodes.erase(mNodes.begin() + idx);
+    return it;
 }
 
 template <class T1, class T2>

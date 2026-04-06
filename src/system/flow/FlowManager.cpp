@@ -3,8 +3,16 @@
 #include "obj/ObjPtrVec_impl.h"
 #include "obj/Data.h"
 #include "os/Timer.h"
+#include "rndobj/Env.h"
 #include "rndobj/Overlay.h"
+#include "rndobj/Trans.h"
 #include "utl/MakeString.h"
+
+template Hmx::Object *ObjPtrVec<RndTransformable, ObjectDir>::Node::RefOwner() const;
+template ObjPtrVec<FlowNode, ObjectDir>::iterator
+ObjPtrVec<FlowNode, ObjectDir>::erase(ObjPtrVec<FlowNode, ObjectDir>::iterator);
+template void ObjPtrVec<RndEnviron, ObjectDir>::Set(
+    ObjPtrVec<RndEnviron, ObjectDir>::iterator, RndEnviron *);
 
 FlowManager *TheFlowMgr;
 
