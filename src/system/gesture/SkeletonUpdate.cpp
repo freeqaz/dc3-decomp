@@ -82,7 +82,7 @@ void SkeletonUpdateHandle::PostUpdate() {
 
 const SkeletonHistory *SkeletonUpdateHandle::History() const {
 #ifdef HX_NATIVE
-    if (!mInst) return nullptr;
+    if (!mInst) return SkeletonUpdate::sNativeHistoryFallback;
 #endif
     return mInst;
 }
@@ -95,6 +95,9 @@ extern "C" float lbl_82F0BE80;
 SkeletonUpdate *SkeletonUpdate::sInstance;
 HANDLE SkeletonUpdate::sNewSkeletonEvent;
 HANDLE SkeletonUpdate::sSkeletonUpdatedEvent;
+#ifdef HX_NATIVE
+const SkeletonHistory *SkeletonUpdate::sNativeHistoryFallback = nullptr;
+#endif
 
 DWORD SkeletonUpdateThread(LPVOID) {
     HANDLE new_skeleton_event = SkeletonUpdate::NewSkeletonEvent();

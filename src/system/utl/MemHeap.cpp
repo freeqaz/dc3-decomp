@@ -9,6 +9,7 @@
 #include "utl/TextStream.h"
 #include "utl/AllocInfo.h"
 #include "utl/MemTrack.h"
+#include <cstdio>
 
 namespace {
     int gTimeStamp;
@@ -329,7 +330,7 @@ int *MemHeap::TryAlloc(int sizeWords, int align, int &allocSize) {
     int blockSize = info.mSizeWords;
     int padWords = info.mPadWords;
 
-    if (padWords >= 9) {
+    if (padWords > 8) {
         FreeBlock *newBlock = (FreeBlock *)((int *)info.mBlock + padWords);
         int remaining = blockSize - padWords;
         newBlock->mSizeWords = remaining;
@@ -345,7 +346,7 @@ int *MemHeap::TryAlloc(int sizeWords, int align, int &allocSize) {
     int totalUsed = padWords + sizeWords;
     int remainder = blockSize - totalUsed;
 
-    if (!(remainder < 9)) {
+    if (remainder > 8) {
         InsertFreeBlock(
             (FreeBlock *)((int *)info.mBlock + totalUsed), remainder,
             prevBlock, info.mBlock->mNextBlock, info.mBlock->mTimeStamp
@@ -368,7 +369,7 @@ int *MemHeap::TryAlloc(int sizeWords, int align, int &allocSize) {
         *ptr = 0;
     }
 
-    if (mDebugLevel > 0) {
+    if (1 <= mDebugLevel) {
         unsigned int hdr = *header;
         unsigned int dataWords = (hdr >> 8) - ((hdr >> 4) & 0xF);
         int *end = (int *)header + dataWords;
@@ -392,15 +393,18 @@ int *MemHeap::Alloc(int sizeWords, int align, int &allocSize) {
         FreeBlockStats(lFrags, rFrags, freeBytes, minFreeBytes, maxFreeBlock);
         bool isMain = MainThread();
         if (!isMain) {
-            extern int gInsideMemFunc;
+            extern bool gInsideMemFunc;
             extern CriticalSection *gMemLock;
-            gInsideMemFunc = 0;
+            gInsideMemFunc = false;
             gMemLock->Abandon();
         }
         extern MemTracker *gMemTracker;
         if (gMemTracker != nullptr && !gMemTracker->GetHeapOnly()) {
-            TextFileStream tfs("alloc_fail.txt", false);
-            MemTracker::SpitAllocInfo(&tfs);
+            FILE *f = fopen("alloc_fail.txt", "w");
+            if (f) {
+                MemTracker::SpitAllocInfo((struct _iobuf *)f);
+                fclose(f);
+            }
         }
         int wantBytes = sizeWords * 4;
         char buf[2048];
@@ -431,7 +435,7 @@ bool FreeBlock::AttemptMerge(FreeBlock *next, int debugLevel) {
         mTimeStamp = ts;
         mSizeWords += nextSize;
         mNextBlock = nextNext;
-        if (debugLevel > 0) {
+        if (1 <= debugLevel) {
             int *ptr = (int *)next;
             int *end = ptr + 3;
             if (ptr < end) {
@@ -462,18 +466,18 @@ int *MemHeap::Truncate(int *ptr, int newSizeWords, int &allocSize) {
     if (truncWords > 8) {
         FreeBlock *prev = nullptr;
         FreeBlock *next;
-        for (next = mFreeBlockChain; next != nullptr && (int *)next < ptr - 1; next = next->mNextBlock) {
+        for (next = mFreeBlockChain; next != nullptr && (int *)next < (int *)headerPtr; next = next->mNextBlock) {
             prev = next;
         }
         int ts = gTimeStamp;
         FreeBlock *newFree = (FreeBlock *)((int *)ptr + newSizeWords);
         gTimeStamp++;
         InsertFreeBlock(newFree, truncWords, prev, next, ts);
-        if (mDebugLevel > 0) {
+        if (1 <= mDebugLevel) {
             int *end = (int *)newFree + newFree->mSizeWords;
             if ((int *)newFree + 3 < end) {
-                for (int count = ((end - ((int *)newFree + 3)) - 1) >> 2; count >= 0; count--) {
-                    int *cur = (int *)newFree + 2;
+                int *cur = (int *)newFree + 2;
+                for (unsigned int count = (((unsigned int)end - (unsigned int)((int *)newFree + 3)) - 1) / 4 + 1; count != 0; count--) {
                     cur++;
                     *cur = 0xDEADDEAD;
                 }
@@ -510,7 +514,7 @@ int MemHeap::Free(int *ptr) {
     FreeBlock *newFree = (FreeBlock *)blockStart;
     InsertFreeBlock(newFree, header >> 8, prev, next, gTimeStamp);
 
-    if (mDebugLevel > 0) {
+    if (1 <= mDebugLevel) {
         int *end = (int *)newFree + newFree->mSizeWords;
         if ((int *)newFree + 3 < end) {
             int *cur = (int *)newFree + 2;

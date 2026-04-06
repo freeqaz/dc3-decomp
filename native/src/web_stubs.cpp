@@ -182,65 +182,38 @@ void NuiTransformSkeletonToDepthImage(
 
 // ============================================================================
 // Shared HX_NATIVE stubs (both desktop native and web/emscripten)
+// PPC intrinsics — portable implementations for x86/wasm
 // ============================================================================
 #ifdef HX_NATIVE
 
-#include "utl/JobMgr.h"
+#include "xdk/LIBCMT/ppcintrinsics.h"
 #include "xdk/LIBCMT/vectorintrinsics.h"
-#include <cstring>
 
-_XMMATRIX::_XMMATRIX() { std::memset(this, 0, sizeof(*this)); }
+extern "C" {
 
-SingleItemEnumJob::SingleItemEnumJob(Hmx::Object *obj, int idx, u64 id)
-    : Job(), mObject(obj), mUnkc(idx), mItemID(id), mStatus(0), mSuccess(false),
-      unk20(0), unk24(0), mOverlapped() {
-    std::memset(&mOverlapped, 0, sizeof(mOverlapped));
-}
-SingleItemEnumJob::~SingleItemEnumJob() {}
-void SingleItemEnumJob::Start() { mStatus = 2; }
-bool SingleItemEnumJob::IsFinished() { return true; }
-void SingleItemEnumJob::Cancel(Hmx::Object *) {}
-void SingleItemEnumJob::OnCompletion(Hmx::Object *) {}
-
-MultipleItemsEnumJob::MultipleItemsEnumJob(
-    Hmx::Object *obj, int userIndex, std::vector<u64> &itemIDs
-) : Job(), mObject(obj), mUserIndex(userIndex), mItemIDs(itemIDs), mPurchased(), mStatus(0),
-    mSuccess(false), mEnumBuffer(nullptr), mEnumHandle(0), mOverlapped(), mOfferSymbol(),
-    mPurchaserID(0) {
-    std::memset(&mOverlapped, 0, sizeof(mOverlapped));
+double __fsel(double fComparand, double fValGE, double fValLT) {
+    return fComparand >= 0.0 ? fValGE : fValLT;
 }
 
-MultipleItemsEnumJob::~MultipleItemsEnumJob() {}
-
-void MultipleItemsEnumJob::Start() { mStatus = 2; }
-
-bool MultipleItemsEnumJob::IsFinished() { return true; }
-
-void MultipleItemsEnumJob::Cancel(Hmx::Object *) {}
-
-void MultipleItemsEnumJob::OnCompletion(Hmx::Object *) {}
-
-PostPurchaseEnumJob::PostPurchaseEnumJob(
-    Hmx::Object *obj, int userIndex, u64 itemID, Symbol offerSym, unsigned int purchaserID
-) : SingleItemEnumJob(obj, userIndex, itemID), mOfferSymbol(offerSym),
-    mPurchaserID(purchaserID) {}
-PostPurchaseEnumJob::~PostPurchaseEnumJob() {}
-void PostPurchaseEnumJob::OnCompletion(Hmx::Object *obj) {
-    SingleItemEnumJob::OnCompletion(obj);
+XMVECTOR __vspltw(XMVECTOR vSrcA, unsigned int uImmed) {
+    XMVECTOR out = {};
+    float value = vSrcA.v[uImmed & 3];
+    out.x = value;
+    out.y = value;
+    out.z = value;
+    out.w = value;
+    return out;
 }
 
-MultipleItemsPostPurchaseEnumJob::MultipleItemsPostPurchaseEnumJob(
-    Hmx::Object *obj, int userIndex, std::vector<u64> &itemIDs, Symbol offerSym,
-    unsigned int purchaserID
-) : MultipleItemsEnumJob(obj, userIndex, itemIDs) {
-    mOfferSymbol = offerSym;
-    mPurchaserID = purchaserID;
-}
-MultipleItemsPostPurchaseEnumJob::~MultipleItemsPostPurchaseEnumJob() {}
-void MultipleItemsPostPurchaseEnumJob::OnCompletion(Hmx::Object *obj) {
-    MultipleItemsEnumJob::OnCompletion(obj);
+XMVECTOR __vmaddfp(XMVECTOR mul1, XMVECTOR mul2, XMVECTOR addend) {
+    XMVECTOR out = {};
+    out.x = mul1.x * mul2.x + addend.x;
+    out.y = mul1.y * mul2.y + addend.y;
+    out.z = mul1.z * mul2.z + addend.z;
+    out.w = mul1.w * mul2.w + addend.w;
+    return out;
 }
 
-unsigned long long SingleItemEnumCompleteMsg::OfferID() const { return 0ULL; }
+} // extern "C"
 
 #endif // HX_NATIVE

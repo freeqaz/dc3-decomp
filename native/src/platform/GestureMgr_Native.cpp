@@ -3,13 +3,31 @@
 #include "Skeleton_Native.h"
 #include "gesture/CameraInput.h"
 #include "gesture/GestureMgr.h"
+#include "gesture/SkeletonHistory.h"
+#include "gesture/SkeletonUpdate.h"
+#include "obj/Task.h"
 #ifdef ENABLE_NCNN
 #include "pose/InternalPoseProvider.h"
 #endif
 #include <cstdio>
 #include <cstring>
 
-// Minimal CameraInput for native — reports connected, no real frame data.
+// Lightweight SkeletonHistory for native -- follows the MocapSkeletonIterator
+// pattern. Inherits SkeletonHistoryArchive (ring buffer storage) and
+// SkeletonHistory (PrevSkeleton lookup). Populated each frame in
+// GestureMgr_NativePoll() to mirror Xbox's SkeletonUpdate::UpdateCallbacks().
+class NativeSkeletonHistory : public SkeletonHistoryArchive, public SkeletonHistory {
+public:
+    bool PrevSkeleton(
+        const Skeleton &s, int targetMs, ArchiveSkeleton &out, int &elapsedMs
+    ) const override {
+        return PrevFromArchive(*this, s, targetMs, out, elapsedMs);
+    }
+};
+
+static NativeSkeletonHistory *sNativeHistory = nullptr;
+
+// Minimal CameraInput for native -- reports connected, no real frame data.
 // Only used to satisfy SkeletonUpdateData::mCameraInput pointer.
 class NativeCameraInput : public CameraInput {
 public:
@@ -24,9 +42,16 @@ static InternalPoseProvider *sInternalPose = nullptr;
 // Native implementation of GestureMgr::Init — replaces the early return stub.
 // Called from game startup to initialize skeleton tracking via webcam + YOLO pose.
 void GestureMgr_NativeInit() {
-    // Always create the camera input stub — needed for PostUpdate pipeline.
+    // Always create the camera input stub -- needed for PostUpdate pipeline.
     if (!sNativeCameraInput)
         sNativeCameraInput = new NativeCameraInput();
+
+    // Create skeleton history so displacement-based scoring works on native.
+    // This replaces SkeletonUpdate's history (which requires Xbox NUI hardware).
+    if (!sNativeHistory) {
+        sNativeHistory = new NativeSkeletonHistory();
+        SkeletonUpdate::SetNativeHistoryFallback(sNativeHistory);
+    }
 
     // In headless mode (tests, CLI tools), skip the pose server entirely.
     // The dummy skeleton in GestureMgr_NativePoll provides a neutral standing
@@ -100,6 +125,9 @@ void GestureMgr_NativeTerminate() {
         delete TheSkeletonProvider;
         TheSkeletonProvider = nullptr;
     }
+    SkeletonUpdate::SetNativeHistoryFallback(nullptr);
+    delete sNativeHistory;
+    sNativeHistory = nullptr;
     delete sNativeCameraInput;
     sNativeCameraInput = nullptr;
 }
@@ -155,6 +183,20 @@ void GestureMgr_NativePoll(GestureMgr *mgr) {
         mgr->SetActiveSkeletonTrackingID(1);
     }
 
+    // Populate skeleton history (mirrors SkeletonUpdate::UpdateCallbacks
+    // lines 348-355). This must happen before building SkeletonUpdateData
+    // so that displacement-based scoring has frame history to work with.
+    if (sNativeHistory) {
+        for (int i = 0; i < NUM_SKELETONS; i++) {
+            Skeleton &skel = mgr->GetSkeleton(i);
+            if (skel.IsTracked()) {
+                sNativeHistory->AddToHistory(i, skel);
+            } else {
+                sNativeHistory->ClearHistory(i);
+            }
+        }
+    }
+
     // Run the quality filter + identity tracking pipeline.
     // On Xbox this is done by SkeletonUpdate's thread; on native we
     // do it synchronously here.
@@ -167,7 +209,7 @@ void GestureMgr_NativePoll(GestureMgr *mgr) {
     data.mSkeletonsLeft = skelPtrs;
     data.mSkeletonsRight = skelPtrs;
     data.mFrame = nullptr;
-    data.mHistory = nullptr;
+    data.mHistory = sNativeHistory;
     data.mCameraInput = sNativeCameraInput;
 
     mgr->PostUpdate(&data);

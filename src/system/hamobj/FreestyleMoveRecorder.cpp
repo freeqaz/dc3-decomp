@@ -18,43 +18,14 @@
 #include "utl/FileStream.h"
 #include "utl/Symbol.h"
 #include "utl/OSCMessenger.h"
-#ifndef HX_NATIVE
+#ifdef HX_NATIVE
+inline double __fsel(double a, double b, double c) { return a >= 0.0 ? b : c; }
+#else
 #include "xdk/LIBCMT/ppcintrinsics.h"
 #endif
 #include <cfloat>
 
-#ifdef HX_NATIVE
-// Kinect gesture recording — entirely PPC-specific (__fsel intrinsics, STLport).
-// Stub constructor/destructor + referenced methods for native linking.
-FreestyleMoveRecorder *FreestyleMoveRecorder::sInstance = nullptr;
-FreestyleMoveRecorder::FreestyleMoveRecorder()
-    : mPlaybackSpeed(0), mClipFrames(0), mClipFrameCount(0), mRecordingFrames(0),
-      mLastFrameIndex(-1), mMaxFrames(60), mRecordPos(-1), mPlaybackPos(-1),
-      mDefaultTimeout(15), mPlaybackIndex(-1), mRecording(0), mPlaybackActive(0),
-      mSkeletonIndex(-1), mCurrentTakeIndex(0) {
-    mPlayerPalette = nullptr;
-}
-FreestyleMoveRecorder::~FreestyleMoveRecorder() {}
-void FreestyleMoveRecorder::AssignStaticInstance() { sInstance = this; }
-void FreestyleMoveRecorder::Poll() {}
-void FreestyleMoveRecorder::Free() {}
-void FreestyleMoveRecorder::StartRecording() {}
-void FreestyleMoveRecorder::StartRecordingDancerTake() {}
-void FreestyleMoveRecorder::StopRecording() {}
-void FreestyleMoveRecorder::ClearRecording() {}
-void FreestyleMoveRecorder::StartPlayback(bool) {}
-void FreestyleMoveRecorder::StopPlayback() {}
-void FreestyleMoveRecorder::ClearDancerTake() {}
-BaseSkeleton *FreestyleMoveRecorder::GetLiveSkeleton() { return nullptr; }
-float FreestyleMoveRecorder::CompareSkeletonPositions(const BaseSkeleton *, const BaseSkeleton *, float) const { return 0.0f; }
-void FreestyleMoveRecorder::DrawDebug() {}
-void FreestyleMoveRecorder::PlaybackComplete() {}
-void FreestyleMoveRecorder::ClearFrameScores() {}
-void FreestyleMoveRecorder::ReadFreestyleMoveClip(String, int &, FreestyleMoveFrame *) {}
-float FreestyleMoveRecorder::GetScore(const BaseSkeleton *, int, float, bool) { return 0.0f; }
-float FreestyleMoveRecorder::GetScore(int, int, float, bool) { return 0.0f; }
-#else // PPC
-
+#ifndef HX_NATIVE
 namespace {
     struct DebugGraph {
         DebugGraph(const Hmx::Color &c) {
@@ -70,22 +41,32 @@ namespace {
 
     std::vector<DebugGraph> gDebugGraphs;
 }
+#endif // !HX_NATIVE
 
 static const float kE = 2.71828182845905f;
 
 DancerSkeleton sLastComparedDancerSkel;
 static int sLastBeatMod;
+#ifndef HX_NATIVE
 static SkeletonViz *sVizRecorded = nullptr;
 static SkeletonViz *sVizLive = nullptr;
 static float sDebugRectX = 0.1f;
 static float sDebugRectY = 0.3f;
 static float sDebugRectW = 0.3f;
+#endif // !HX_NATIVE
+
+FreestyleMoveRecorder *FreestyleMoveRecorder::sInstance = nullptr;
 
 FreestyleMoveRecorder::FreestyleMoveRecorder()
     : mPlaybackSpeed(0), mClipFrames(0), mClipFrameCount(0), mRecordingFrames(0), mLastFrameIndex(-1), mMaxFrames(60), mRecordPos(-1), mPlaybackPos(-1),
       mDefaultTimeout(15), mPlaybackIndex(-1), mRecording(0), mPlaybackActive(0), mSkeletonIndex(-1), mCurrentTakeIndex(0) {
+#ifdef HX_NATIVE
+    // No depth-buffer palette on native (only used by Poll's depth rendering)
+    mPlayerPalette = nullptr;
+#else
     mPlayerPalette = Hmx::Object::New<RndTex>();
     mPlayerPalette->SetBitmap(320, 240, 16, RndTex::kRegularLinear, false, nullptr);
+#endif
 
     JointAngle angle;
     angle.mJoint = kJointHandRight;
@@ -132,11 +113,14 @@ FreestyleMoveRecorder::FreestyleMoveRecorder()
     pos.unk4 = 3;
     mPositions.push_back(pos);
     mFrameBuffer = new FreestyleMoveFrame[mMaxFrames];
+#ifndef HX_NATIVE
+    // Debug recording functions -- use devkit:\ paths, Xbox-only
     DataRegisterFunc("bam_record_attempt", OnRecordAttempt);
     DataRegisterFunc("bam_write_created", OnWriteCreated);
     DataRegisterFunc("bam_read_created", OnReadCreated);
     DataRegisterFunc("bam_read_attempt", OnReadAttempt);
     DataRegisterFunc("bam_clear", OnClearAttempt);
+#endif
 }
 
 FreestyleMoveRecorder::~FreestyleMoveRecorder() {
@@ -163,6 +147,10 @@ void FreestyleMoveRecorder::UpdateFakeSkeleton() {
     sLastBeatMod = beatMod;
 }
 
+// Poll() accesses LiveCameraInput depth buffers -- Xbox-only.
+#ifdef HX_NATIVE
+void FreestyleMoveRecorder::Poll() {}
+#else
 void FreestyleMoveRecorder::Poll() {
     int recordFrame;
     if (mRecordPos >= 0.0f) {
@@ -324,7 +312,12 @@ void FreestyleMoveRecorder::Poll() {
     }
     UpdateFakeSkeleton();
 }
+#endif // Poll
 
+// DrawDebug uses SkeletonViz with CameraInput -- Xbox-only.
+#ifdef HX_NATIVE
+void FreestyleMoveRecorder::DrawDebug() {}
+#else
 void FreestyleMoveRecorder::DrawDebug() {
     if (DataVariable("bam_debug").Int()) {
         if (sVizRecorded == nullptr) {
@@ -366,7 +359,14 @@ void FreestyleMoveRecorder::DrawDebug() {
         }
     }
 }
+#endif // DrawDebug
 
+// Recording functions -- touch depth frame allocation (Xbox-only).
+#ifdef HX_NATIVE
+void FreestyleMoveRecorder::StartRecording() {}
+void FreestyleMoveRecorder::StartRecordingDancerTake() {}
+void FreestyleMoveRecorder::StopRecording() {}
+#else
 void FreestyleMoveRecorder::StartRecording() {
     mPlaybackIndex = 0xffffffff;
     mRecording = false;
@@ -377,13 +377,6 @@ void FreestyleMoveRecorder::StartRecording() {
     }
 }
 
-void FreestyleMoveRecorder::ClearRecording() {
-    if (mLastFrameIndex != mCurrentTakeIndex) {
-        mTakes[mCurrentTakeIndex].Clear();
-    }
-    mFrameIndex = 0;
-}
-
 void FreestyleMoveRecorder::StartRecordingDancerTake() {
     StartRecording();
     mRecording = true;
@@ -391,6 +384,14 @@ void FreestyleMoveRecorder::StartRecordingDancerTake() {
 
 void FreestyleMoveRecorder::StopRecording() {
     mPlaybackIndex = mTakes[mCurrentTakeIndex].mNumFrames + 2;
+}
+#endif // Recording
+
+void FreestyleMoveRecorder::ClearRecording() {
+    if (mLastFrameIndex != mCurrentTakeIndex) {
+        mTakes[mCurrentTakeIndex].Clear();
+    }
+    mFrameIndex = 0;
 }
 
 void FreestyleMoveRecorder::StartPlayback(bool param_1) {
@@ -449,6 +450,25 @@ void FreestyleMoveRecorder::UpdateRecordingAttempt(
     }
 }
 
+void FreestyleMoveRecorder::PlaybackComplete() {
+#ifndef HX_NATIVE
+    if (mClipName != gNullStr) {
+        WriteRecordedMoveAttempt();
+    }
+#endif
+}
+
+void FreestyleMoveRecorder::ClearFrameScores() {
+    for (int i = 0; i < 2; i++) {
+        unke4[i].Clear();
+    }
+}
+
+// Devkit file I/O and debug recording -- uses devkit:\ paths (Xbox-only).
+// ReadFreestyleMoveClip is declared in the header but never called on native.
+#ifdef HX_NATIVE
+void FreestyleMoveRecorder::ReadFreestyleMoveClip(String, int &, FreestyleMoveFrame *) {}
+#else
 void FreestyleMoveRecorder::RecordMoveAttempt(String str) {
     mClipName = str;
     delete[] mRecordingFrames;
@@ -468,18 +488,6 @@ void FreestyleMoveRecorder::ClearFreestyleMoveClip() {
     delete[] mClipFrames;
     mClipFrames = nullptr;
     mClipFrameCount = 0;
-}
-
-void FreestyleMoveRecorder::PlaybackComplete() {
-    if (mClipName != gNullStr) {
-        WriteRecordedMoveAttempt();
-    }
-}
-
-void FreestyleMoveRecorder::ClearFrameScores() {
-    for (int i = 0; i < 2; i++) {
-        unke4[i].Clear();
-    }
 }
 
 void FreestyleMoveRecorder::WriteFreestyleMoveClip(
@@ -575,6 +583,7 @@ DataNode FreestyleMoveRecorder::OnClearAttempt(DataArray *a) {
     sInstance->ClearFreestyleMoveClip();
     return 0;
 }
+#endif // devkit I/O
 
 void FreestyleMoveRecorder::CompareDisplacementVectors(
     const Vector3 &v1, int count1, const Vector3 &v2, int count2, float &outSimilarity, float &outMaxDisp
@@ -703,12 +712,19 @@ float FreestyleMoveRecorder::CompareSkeletonJointDisplacement(
             {
                 SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
                 const SkeletonHistory *history = handle.History();
+#ifdef HX_NATIVE
+                // History may be null before GestureMgr init or after terminate
+                if (history) {
+#endif
                 Vector3 liveDisp;
                 int liveCount = 0;
                 bool hasDisp = liveSkel->Displacement(history, kCoordCamera, joint, beatDiff, liveDisp, liveCount);
                 if (hasDisp) {
                     CompareDisplacementVectors(dispOffset, beatDiff, liveDisp, liveCount, similarity, maxDisp);
                 }
+#ifdef HX_NATIVE
+                }
+#endif
             }
             i++;
             totalScore += similarity * maxDisp;
@@ -906,4 +922,3 @@ float FreestyleMoveRecorder::GetScore(int i1, int i2, float f, bool b) {
 
     return GetScore(skeletonToScore, i2, f, b);
 }
-#endif // !HX_NATIVE

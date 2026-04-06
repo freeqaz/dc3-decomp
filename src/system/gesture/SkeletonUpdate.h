@@ -78,6 +78,16 @@ private:
     static HANDLE sNewSkeletonEvent;
     static HANDLE sSkeletonUpdatedEvent;
 
+#ifdef HX_NATIVE
+    // Native-only fallback: provides SkeletonHistory when sInstance is null
+    // (SkeletonUpdate is not instantiated on native because it requires Xbox
+    // threading and NUI hardware). Set by GestureMgr_NativeInit().
+    static const SkeletonHistory *sNativeHistoryFallback;
+public:
+    static void SetNativeHistoryFallback(const SkeletonHistory *h) { sNativeHistoryFallback = h; }
+private:
+#endif
+
     bool mHasNewFrame; // 0x78
     ObjOwnerPtr<CameraInput> mCameraInput; // 0x7c
     bool mIsCameraConnected; // 0x90
