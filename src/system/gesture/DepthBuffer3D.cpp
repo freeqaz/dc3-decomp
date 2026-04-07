@@ -127,19 +127,20 @@ void DepthBuffer3D::UpdateAttachment(
 }
 
 void DepthBuffer3D::AddAttachment(const DepthBuffer3DAttachment &attachment) {
-    bool found = false;
     MILO_ASSERT(attachment.obj, 0x390);
-    FOREACH (it, mAttachments) {
+    std::vector<DepthBuffer3DAttachment>::iterator it;
+    for (it = mAttachments.begin(); it != mAttachments.end(); ++it) {
         if (it->obj == attachment.obj) {
-            found = true;
             break;
         }
     }
-    if (!found) {
+    if (it == mAttachments.end()) {
         mAttachments.resize(mAttachments.size() + 1);
-        mAttachments.back() = attachment;
-        mAttachments.back().obj->SetTransParent(this, false);
-        mAttachments.back().obj->SetTransConstraint(mConstraint, nullptr, false);
+        DepthBuffer3DAttachment &back = mAttachments[mAttachments.size() - 1];
+        back = attachment;
+        back.unk20 = (int)back.obj->TransParent();
+        back.obj->SetTransParent(mParent, false);
+        back.obj->SetTransConstraint(mConstraint, nullptr, false);
     }
 }
 

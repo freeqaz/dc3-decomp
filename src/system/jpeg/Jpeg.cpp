@@ -45,12 +45,12 @@ bool LoadBitmapIntoJpeg(char *data, int width, int height, int depth, void *dest
     cinfo.image_height = height;
     cinfo.image_width = width;
     cinfo.input_components = depth;
-    cinfo.in_color_space = JCS_RGB;
 
     destMgr.pub.init_destination = JpegInitDestination;
     destMgr.pub.empty_output_buffer = JpegEmptyOutputBuffer;
     destMgr.pub.term_destination = JpegTermDestination;
     cinfo.dest = &destMgr.pub;
+    cinfo.in_color_space = JCS_RGB;
 
     jpeg_set_defaults(&cinfo);
     jpeg_start_compress(&cinfo, TRUE);

@@ -54,16 +54,17 @@ int ctr_reinit(int cipher, unsigned char *r4, symmetric_CTR *ctr) {
 int ctr_encrypt_fast(
     const unsigned char *src, unsigned char *dst, unsigned long len, symmetric_CTR *ctr
 ) {
-    int x0, x1, x2, x3;
     int *srcUI = (int *)src;
-    int *dstUI = (int *)dst;
+    int x0, x1, x2, x3;
     for (; len != 0; len -= 0x10) {
+        int *dstUI = (int *)dst;
         int i;
         for (i = 0; i < ctr->blocklen; i++) {
             if (++ctr->ctr[i] != '\0')
                 break;
         }
-        cipher_descriptor[ctr->cipher].ecb_encrypt(ctr->ctr, ctr->pad, &ctr->key);
+        if (ctr)
+            cipher_descriptor[ctr->cipher].ecb_encrypt(ctr->ctr, ctr->pad, &ctr->key);
 
         x0 = *srcUI++;
         x1 = *srcUI++;

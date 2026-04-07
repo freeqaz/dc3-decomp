@@ -162,8 +162,9 @@ void Ham1EuclideanNode::CalcError(
     frame_input.mSkeleton.NormPos(mCoordSys, mJoint, dancerVec);
     Vector3 baseVec;
     frame_input.mBaseSkeleton.NormPos(mCoordSys, mJoint, baseVec);
-    Vector3 diff;
-    Subtract(dancerVec, baseVec, diff);
+    float diffX = dancerVec.x - baseVec.x;
+    float diffY = dancerVec.y - baseVec.y;
+    float diffZ = dancerVec.z - baseVec.z;
     Vector3 vToProcess;
     for (int i = 0; i < 3; i++) {
         float set = Max(mComponentWeightRanges[i][0], node_input.mNodeComponentWeight[i]);
@@ -173,8 +174,10 @@ void Ham1EuclideanNode::CalcError(
     op.mPerfectDist = node_input.mNodeWeight->mPerfectDist;
     op.mType = kErrorScaleDistSq;
     op.mRate = node_input.mNodeWeight->mRate;
-    vToProcess *= diff;
-    vout.x = ScaleDistToError(op, Length(vToProcess));
+    float px = vToProcess.x * diffX;
+    float py = vToProcess.y * diffY;
+    float pz = vToProcess.z * diffZ;
+    vout.x = ScaleDistToError(op, std::sqrt(px * px + py * py + pz * pz));
 }
 
 #pragma endregion

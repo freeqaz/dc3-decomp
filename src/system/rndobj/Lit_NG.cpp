@@ -79,8 +79,8 @@ bool NgLight::SphereConeTest(const Vector3 &sphereCenter, float sphereRadius) {
     Vector3 origin = xfm1.v;
 
     Vector3 perp;
-    perp.x = (sc.x - origin.x) - axis.x * proj;
     perp.y = (sc.y - origin.y) - axis.y * proj;
+    perp.x = (sc.x - origin.x) - axis.x * proj;
     perp.z = (sc.z - origin.z) - axis.z * proj;
 
     Normalize(perp, perp);
@@ -116,10 +116,11 @@ bool NgLight::SphereConeTest(const Vector3 &sphereCenter, float sphereRadius) {
     closest.y -= t * edgeDir.y;
     closest.z -= t * edgeDir.z;
 
+    bool _result = true;
     if (Dot(perp, closest) >= 0.0f) {
-        return Length(closest) < sphereRadius;
+        _result = Length(closest) < sphereRadius;
     }
-    return true;
+    return _result;
 }
 
 namespace Hmx {
