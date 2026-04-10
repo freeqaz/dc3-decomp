@@ -127,8 +127,8 @@ bool SingleUserCrewSelectPanel::IsCrewAvailable(Symbol crew, int i) {
 }
 
 void SingleUserCrewSelectPanel::RefreshUI() {
-    static Message refresh_ui("refresh_ui");
-    TheUI->Handle(refresh_ui, false);
+    static Message cRefreshUIMsg("refresh_ui");
+    TheUI->Handle(cRefreshUIMsg, false);
 }
 
 void SingleUserCrewSelectPanel::SetRandomCharacter(int idx) {

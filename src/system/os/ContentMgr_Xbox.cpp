@@ -443,12 +443,11 @@ void XboxContentMgr::PollRefresh() {
                     for (unsigned int j = 0; j < numItems; j++) {
                         XCONTENT_CROSS_TITLE_DATA *xdata =
                             (XCONTENT_CROSS_TITLE_DATA *)((char *)&mXDatas[i] + j * 0x138);
-                        char *filename = xdata->szFileName;
-
                         // Check if this content is in the ignored list
                         String *found = std::find(
-                            gIgnoredContent.begin(), gIgnoredContent.end(), filename
+                            gIgnoredContent.begin(), gIgnoredContent.end(), xdata->szFileName
                         );
+                        char *filename = xdata->szFileName;
                         if (found != gIgnoredContent.end())
                             continue;
 
@@ -493,7 +492,7 @@ void XboxContentMgr::PollRefresh() {
                         mState = kDiscoveryMounting;
                     }
                 } else {
-                    unsigned short err = XGetOverlappedExtendedError(mOverlappeds[i]);
+                    DWORD err = XGetOverlappedExtendedError(mOverlappeds[i]);
                     if ((err & 0xFFFF) != 0x12) {
                         MILO_NOTIFY("XEnumerateCrossTitle (%d) error: %d", i, err);
                     }

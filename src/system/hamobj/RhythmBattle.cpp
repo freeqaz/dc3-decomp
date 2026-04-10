@@ -387,9 +387,9 @@ void RhythmBattle::OnReset() {
 }
 
 void RhythmBattle::PlayMindControlVO(Symbol s) {
-    static Message mind_control_vo("mind_control_vo", 0);
-    mind_control_vo[0] = s;
-    TheHamProvider->Handle(mind_control_vo, false);
+    static Message msg("mind_control_vo", 0);
+    msg[0] = s;
+    TheHamProvider->Handle(msg, false);
     mMindControlTimer = 0;
 }
 

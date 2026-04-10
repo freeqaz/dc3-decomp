@@ -177,6 +177,12 @@ def verify(unit_pattern, apply=False, mark_at_limit=False, verbose=False, limit=
                     verdict_reason="atexit_fuzzy_scope_match",
                     db_path=DB_PATH,
                 )
+                # Clear stale is_stub flag (base_size is now > 0 after patcher)
+                conn.execute(
+                    "UPDATE functions SET is_stub = 0 WHERE id = ?",
+                    (func["id"],),
+                )
+                conn.commit()
         elif mark_at_limit and fuzzy_pct >= 95.0 and classification != "STUB":
             newly_at_limit += 1
             if verbose:

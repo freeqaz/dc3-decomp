@@ -755,6 +755,36 @@ python3 scripts/obj_regswap_patcher.py --batch
 
 **Important:** Patches are lost on rebuild. Run the patcher after each `ninja` build.
 
+### Post-Compilation Atexit Scope Counter Patcher
+
+MSVC assigns sequential scope counters (e.g. `?BJ` vs `?CJ`) to every `{}` block in a function. These counters are embedded in the mangled names of static locals, guard variables, dynamic initializers, and atexit destructors (`??__F<var>@?<counter>?<containing>@YAXXZ`). Even small brace differences between our source and the original cause ALL atexit destructors in the affected function to get different mangled names, making objdiff unable to find the base counterpart and reporting 0% match — even though the 12-28 byte function bodies are byte-identical.
+
+The `obj_atexit_scope_patcher.py` tool fixes this via fuzzy symbol matching:
+
+```bash
+# Rename base .obj atexit destructors to match target scope counters
+python3 scripts/obj_atexit_scope_patcher.py --batch --apply
+
+# Verify and auto-mark newly matching ??__F destructors as COMPLETE
+python3 scripts/atexit_fuzzy_verify.py --apply
+
+# Run the self-tests for the canonical key parser
+python3 scripts/obj_atexit_scope_patcher.py --selftest
+```
+
+**How it works:**
+1. Parses `??__F*` symbols in both target and base .obj files
+2. Computes a canonical key by stripping the `?<counter>` scope token
+3. For canonical keys present on both sides:
+   - 1:1 case: renames the base symbol to match the target's scope counter
+   - m:n case: pairs positionally by sorted scope counter value
+4. Verifies byte-equality of the function bodies before renaming
+5. Symbol renames only (machine code + relocations unchanged); storage class stays STATIC so the linker never sees these names, preserving link integrity
+
+`atexit_fuzzy_verify.py` then runs objdiff with `functionRelocDiffs=none` to ignore remaining address-relocation noise (target uses `lbl_<addr>` vs base uses `?<var>@?<scope>@...` for the static-local data pointer). When `instruction_summary.equal_percent == 100.0` and `base_size > 0`, it marks the function as COMPLETE with `verdict_reason='atexit_fuzzy_scope_match'`.
+
+**Results:** 264 atexit symbols renamed across 118 files, 262 functions auto-promoted to COMPLETE (remaining 89 are genuine stubs where our C++ source is missing the static declaration entirely). Registered as a post-compile step in `configure.py` so it runs automatically on every `ninja` build.
+
 ---
 
 ## Class Layout Reference

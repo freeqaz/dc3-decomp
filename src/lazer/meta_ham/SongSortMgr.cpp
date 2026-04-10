@@ -153,8 +153,8 @@ void SongSortMgr::OnSetlistChanged() {
     mSorts[mCurrentSortIdx]->BuildItemList();
     mSorts[mCurrentSortIdx]->UpdateHighlight();
     static Symbol refresh_setlist("refresh_setlist");
-    static Message refresh_setlist_msg(refresh_setlist);
-    TheUI->Handle(refresh_setlist_msg, false);
+    static Message msg(refresh_setlist);
+    TheUI->Handle(msg, false);
 }
 
 void SongSortMgr::OnSetlistModeChanged() {
@@ -162,12 +162,12 @@ void SongSortMgr::OnSetlistModeChanged() {
     mSorts[mCurrentSortIdx]->UpdateHighlight();
 
     static Symbol on_change_setlist_mode("on_change_setlist_mode");
-    static Message on_change_setlist_mode_msg(on_change_setlist_mode);
-    TheUI->Handle(on_change_setlist_mode_msg, false);
+    static Message msg(on_change_setlist_mode);
+    TheUI->Handle(msg, false);
 
     static Symbol update_held_buttons("update_held_buttons");
-    static Message update_held_buttons_msg(update_held_buttons);
-    TheUI->Handle(update_held_buttons_msg, false);
+    static Message held_button_msg(update_held_buttons);
+    TheUI->Handle(held_button_msg, false);
 }
 
 Symbol SongSortMgr::DetermineHeaderSymbolForSong(Symbol sym) {

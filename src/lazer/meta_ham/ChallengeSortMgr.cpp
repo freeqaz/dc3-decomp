@@ -193,8 +193,8 @@ Symbol ChallengeSortMgr::MoveOn() {
         static Symbol move_on_quickplay("move_on_quickplay");
         UIPanel *challengeFeedPanel =
             ObjectDir::Main()->Find<UIPanel>("challenge_feed_panel");
-        static Message move_on_quickplay_msg("move_on_quickplay");
-        challengeFeedPanel->HandleType(move_on_quickplay_msg);
+        static Message msg("move_on_quickplay");
+        challengeFeedPanel->HandleType(msg);
     }
     return gNullStr;
 }

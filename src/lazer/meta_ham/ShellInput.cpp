@@ -610,8 +610,8 @@ DataNode ShellInput::OnMsg(const LeftHandListEngagementMsg &msg) {
             return DataNode(kDataInt, 0);
         }
         static Symbol voice_commander_help("voice_commander_help");
-        static Message voice_commander_help_msg(voice_commander_help);
-        TheHamProvider->Handle(voice_commander_help_msg, false);
+        static Message voiceCommanderHelp(voice_commander_help);
+        TheHamProvider->Handle(voiceCommanderHelp, false);
     }
     return DataNode(kDataInt, 0);
 }

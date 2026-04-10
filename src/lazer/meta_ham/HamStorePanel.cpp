@@ -269,9 +269,9 @@ char const *HamStorePanel::GetIndexFile() const {
 void HamStorePanel::ExitStore(StoreError err) const {
     static Symbol store_load_failed("store_load_failed");
     if (TheUIEventMgr->CurrentEvent() != store_load_failed) {
-        static Message init("init", -1);
-        init[0] = err;
-        TheUIEventMgr->TriggerEvent(store_load_failed, init);
+        static Message msg("init", -1);
+        msg[0] = err;
+        TheUIEventMgr->TriggerEvent(store_load_failed, msg);
     }
 }
 

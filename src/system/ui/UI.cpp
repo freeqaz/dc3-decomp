@@ -1060,8 +1060,8 @@ void Automator::AdvanceScript(Symbol msg) {
             if (mCurMsgIndex >= mCurScript->Size()) {
                 mCurScript = 0;
                 if (mScreenScripts->Size() == mCurScreenIndex) {
-                    static Message auto_script_done("auto_script_done");
-                    mUIManager.Handle(auto_script_done, false);
+                    static Message msg("auto_script_done");
+                    mUIManager.Handle(msg, false);
                 }
             }
         }

@@ -725,7 +725,7 @@ void RecursePatternInternal(
             unsigned int numDirs = dirs.size();
             for (unsigned int i = 0; i < numDirs; i++) {
                 const char *combined = MakeString(
-                    "%s/%s%s", pttn.c_str(), dirs[i].c_str(), subPattern.c_str()
+                    "%s/%s%s", pttn, dirs[i], subPattern
                 );
                 RecursePatternInternal(combined, cb, recurse, recurse_dirs);
             }

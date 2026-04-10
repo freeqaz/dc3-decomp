@@ -454,10 +454,10 @@ void PanelDir::Enter() {
 
 void PanelDir::Exit() {
     RndDir::Exit();
-    static Message ui_exit("ui_exit");
+    static Message msg("ui_exit");
     static Symbol ui_exit_forward("ui_exit_forward");
     static Symbol ui_exit_back("ui_exit_back");
-    SendTransition(ui_exit, ui_exit_forward, ui_exit_back);
+    SendTransition(msg, ui_exit_forward, ui_exit_back);
 }
 
 UIComponent *PanelDir::GetFirstFocusableComponent() {

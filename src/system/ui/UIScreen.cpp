@@ -141,8 +141,8 @@ void UIScreen::LoadPanels() {
             it->mLoaded = false;
         }
     }
-    static Message load_panels("load_panels");
-    HandleType(load_panels);
+    static Message msg("load_panels");
+    HandleType(msg);
 }
 
 void UIScreen::UnloadPanels() {
@@ -208,8 +208,8 @@ bool UIScreen::IsLoaded() const {
 }
 
 void UIScreen::Poll() {
-    static Message poll_msg("poll_msg");
-    HandleType(poll_msg);
+    static Message msg("poll_msg");
+    HandleType(msg);
 
     FOREACH (it, mPanelList) {
         if (it->Active() && !it->mPanel->Paused()) {
