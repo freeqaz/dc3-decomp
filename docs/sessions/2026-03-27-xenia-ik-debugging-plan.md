@@ -323,6 +323,69 @@ To instrument a new function:
 4. Add a slot constant and read in the `ik_log_handler` lambda
 5. Bump `kIkTelemetrySize` to accommodate the new slot
 
+## Status (2026-04-06)
+
+**RESOLVED VIA CODE ANALYSIS**: Xenia IK telemetry capture was NOT achieved (gameplay
+pipeline cannot be bootstrapped under Xenia headless). However, the key question
+was answered through code analysis and the native port's own telemetry tests.
+
+### Answer: totalWeight >= 1.0 on Xbox (Scenario 1)
+
+**The ground clamp in `HamIKEffector::Poll` NEVER fires during normal gameplay on
+either platform.** This was confirmed by:
+
+1. **Code analysis of `ApplyConstraints`** (100% matched): The constraint weight
+   formula `f7 = (lensq * -0.002392 + 7.4689/max(lensq, 0.001) + 0.505) * mWeight`
+   produces very large values when constraint targets are close to bone positions
+   (which they always are during normal animation). With typical lensq near zero,
+   `f7 ~ 7469 * mWeight` per constraint. Even a single constraint with mWeight=1.0
+   produces totalWeight >> 1.0.
+
+2. **Native port telemetry test** (`test_gameplay_telemetry.cpp:963`): The
+   `FeetNotBelowFloorDuringGameplay` test comment explicitly states:
+   > "The IK foot clamp (HamIKEffector::Poll) has a clampFactor that is a no-op
+   > at floor level: (neutralQ.z - groundH - 5.0) is always negative for standard
+   > characters (ankle Z ~0.7), so the clamp never engages. **This matches Xbox
+   > behavior.**"
+
+3. **The constraint weight formula**: When a constraint target (e.g. an animation
+   clip bone position) is at the same position as the effector bone (lensq ~ 0),
+   the `kConstraintConsts[2]/f7` term (7.47/0.001) dominates, producing totalWeight
+   in the thousands. The `if (totalWeight < 1.0f)` branch at line 348 is dead code
+   during normal gameplay.
+
+### Implications for the "feet in ground" bug
+
+The feet-below-floor visual issue on the native port is **NOT** an IK logic bug.
+It's a rendering issue. The fix is a render-time Z offset in `BoneSetup.cpp` that
+raises ankle/toe/ball skin matrices. This is documented in the test:
+> "Telemetry reads raw WorldXfm (game-logic bones), NOT the render-adjusted values,
+> so toes appear at Z ~= -3.3. We use a relaxed threshold (-4.0) as a regression
+> guard."
+
+### Xenia headless gameplay pipeline blockers (for reference)
+
+If future work needs actual runtime IK capture from the original Xbox binary,
+these are the blockers that prevent the gameplay pipeline from initializing:
+
+- **`Game::LoadSong()` blocks**: Called from `Game::Game()` constructor, calls
+  `SongSequence::DoNext()` which triggers async song loading via ARK. The ARK
+  reads work (103 NtReadFile calls observed) but ChunkStream seeking stalls
+  after ~93MB of reads.
+- **Song catalog inaccessible via VFS**: `DataReadFile('d:\\songs\\songs.dta')`
+  returns null because songs.dta is inside the ARK, not on the direct VFS path.
+  The game's file system normally reads it through Archive + BlockMgr.
+- **`GamePanel::CreateGame` SIGSEGV**: Calling CreateGame from the NUI callback
+  thread crashes at fault address 0x100000038 (null pointer + offset).
+- **transState=2 stall after Force-enter**: Fixed (s_stuck_transition_count >= 240
+  fallback added in emulator.cc).
+
+### IK telemetry instrumentation status
+
+All bytepatch caves applied, slots allocated, reader registered. The instrumentation
+is correct but will never produce data unless the full gameplay pipeline runs
+(characters loaded, HamIKEffector objects created, Poll called).
+
 ## Alternative: Quick GDB Check
 
 For a fast one-off inspection before building the full hook:

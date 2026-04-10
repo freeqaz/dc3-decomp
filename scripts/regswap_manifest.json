@@ -1,5 +1,14 @@
 [
   {
+    "symbol": "?getKey@KeyChain@@YAXIPAE0@Z",
+    "demangled": "void __cdecl KeyChain::getKey(unsigned int, unsigned char *, unsigned char *)",
+    "unit": "default/keygen_xbox",
+    "db_pct": 98.8,
+    "actual_pct": 98.8,
+    "patch_count": 4,
+    "total_reg_changes": 6
+  },
+  {
     "symbol": "?asciiDigitToHex@@YAED@Z",
     "demangled": "unsigned char __cdecl asciiDigitToHex(char)",
     "unit": "default/keygen_xbox",
