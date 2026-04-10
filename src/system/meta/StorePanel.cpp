@@ -142,8 +142,8 @@ void StorePanel::Poll() {
                 TheNetCacheMgr->DeleteNetCacheLoader(loader);
                 mAlbumTex->SetBitmap(bmap, 0, false, RndTex::kRegular);
                 if (mPendingArtCallback->GetState() == UIPanel::kUp) {
-                    static Message artMsg("art_loaded");
-                    mPendingArtCallback->HandleType(artMsg.mData);
+                    static Message msg("art_loaded");
+                    mPendingArtCallback->HandleType(msg.mData);
                 }
                 mArtLoader = 0;
                 mPendingArtCallback = 0;
@@ -197,9 +197,9 @@ void StorePanel::Poll() {
                         if (mPurchaser->IsSuccess()) {
                             enumFinished = true;
                             mCheckoutItem->isPurchased = true;
-                            static Message enumMsg("enum_finished");
-                            HandleType(enumMsg.mData);
-                            TheUI->Handle(enumMsg.mData, false);
+                            static Message msg("enum_finished");
+                            HandleType(msg.mData);
+                            TheUI->Handle(msg.mData, false);
                         } else if (mPurchaser->IsSuccess()) {
                             // purchased
                         } else if (mCheckoutProfile != 0) {
@@ -219,9 +219,9 @@ void StorePanel::Poll() {
                 }
             }
 
-            static Message checkoutMsg("checkout_finished", DataNode(enumFinished), DataNode(purchaseMade));
-            HandleType(checkoutMsg.mData);
-            TheUI->Handle(checkoutMsg.mData, false);
+            static Message msg("checkout_finished", DataNode(enumFinished), DataNode(purchaseMade));
+            HandleType(msg.mData);
+            TheUI->Handle(msg.mData, false);
 
             delete mPurchaser;
             mPurchaser = 0;

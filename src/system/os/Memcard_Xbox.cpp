@@ -464,42 +464,44 @@ String MemcardXbox::GenerateDriveName(DWORD deviceId, int i) {
 MCResult MemcardXbox::FindValidUnit(ContainerId *pCid) {
     MILO_ASSERT(pCid, 0xBE);
     bool i5;
-    if ((DWORD)pCid->mDeviceId == 0) {
+    HANDLE h1c0;
+    DWORD enumRes;
+    int num;
+    DWORD dw1bc;
+    XDEVICE_DATA data;
+    XCONTENT_DATA buffer;
+    if (pCid->mDeviceId == 0) {
         i5 = true;
     } else {
-        XDEVICE_DATA data;
         data.DeviceID = pCid->mDeviceId;
         i5 = XContentGetDeviceData(pCid->mDeviceId, &data) == ERROR_SUCCESS;
     }
-    if (i5 == 0) {
+    if (!i5) {
         return kMCNoCard;
-    } else {
-        HANDLE h1c0;
-        DWORD enumRes = XContentCreateEnumerator(
-            pCid->mUserIndex, pCid->mDeviceId, 1, 0x1000, 1, nullptr, &h1c0
-        );
-        if (enumRes != 0) {
-            if (enumRes == 0x12) {
-                return kMCFileNotFound;
-            }
-            return kMCGeneralError;
-        }
-        int num = 0;
-        DWORD dw1bc = 0;
-        XCONTENT_DATA buffer;
-        while (XEnumerate(h1c0, &buffer, 0x134, &dw1bc, nullptr) == 0) {
-            if (strncmp(buffer.szFileName, TheMC.FileName(), 0x2A) == 0) {
-                num++;
-                pCid->mDeviceId = (XCONTENTDEVICEID)buffer.DeviceID;
-            }
-        }
-        CloseHandle(h1c0);
-        if (num == 0) {
+    }
+    enumRes = XContentCreateEnumerator(
+        pCid->mUserIndex, pCid->mDeviceId, 1, 0x1000, 1, nullptr, &h1c0
+    );
+    if (enumRes != 0) {
+        if (enumRes == 0x12) {
             return kMCFileNotFound;
-        } else if (num == 1) {
-            return kMCFileExists;
-        } else {
-            return kMCMultipleFilesFound;
+        }
+        return kMCGeneralError;
+    }
+    num = 0;
+    dw1bc = 0;
+    while (XEnumerate(h1c0, &buffer, 0x134, &dw1bc, nullptr) == 0) {
+        if (strncmp(buffer.szFileName, TheMC.FileName(), 0x2A) == 0) {
+            num++;
+            pCid->mDeviceId = (XCONTENTDEVICEID)buffer.DeviceID;
         }
     }
+    CloseHandle(h1c0);
+    if (num != 0) {
+        if (num == 1) {
+            return kMCFileExists;
+        }
+        return kMCMultipleFilesFound;
+    }
+    return kMCMultipleFilesFound;
 }

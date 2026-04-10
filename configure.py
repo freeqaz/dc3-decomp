@@ -337,6 +337,15 @@ config.custom_build_steps = {
             },
         },
         {
+            "outputs": str(stamp_dir / "atexit_scope_patched.stamp"),
+            "rule": "run_script",
+            "order_only": "all_source",
+            "variables": {
+                "cmd": "python3 scripts/obj_atexit_scope_patcher.py --batch --apply",
+                "desc": "PATCH ??__F atexit scope counters (fuzzy match)",
+            },
+        },
+        {
             "outputs": str(stamp_dir / "data_stubs.stamp"),
             "rule": "run_script",
             "variables": {
