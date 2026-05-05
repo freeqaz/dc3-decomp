@@ -961,16 +961,12 @@ TEST_F(GameplayTelemetryTest, NoBoneGarbageDuringGameplay) {
 }
 
 TEST_F(GameplayTelemetryTest, FeetNotBelowFloorDuringGameplay) {
-    // The IK foot clamp (HamIKEffector::Poll) has a clampFactor that is a
-    // no-op at floor level: (neutralQ.z - groundH - 5.0) is always negative
-    // for standard characters (ankle Z ~0.7), so the clamp never engages.
-    // This matches Xbox behavior. The visual fix is a render-time Z offset
-    // in BoneSetup.cpp that raises ankle/toe/ball skin matrices.
+    // Real Xbox hardware does NOT exhibit feet-in-floor (verified by user
+    // visual inspection of original game). Native port shows toes at Z ~ -3.3
+    // due to an unresolved divergence in the IK pipeline. This test tracks
+    // the bug — it should FAIL until we find and fix the divergence.
     //
-    // Telemetry reads raw WorldXfm (game-logic bones), NOT the render-adjusted
-    // values, so toes appear at Z ~= -3.3. We use a relaxed threshold (-4.0)
-    // as a regression guard — if things get worse than the known baseline,
-    // something new broke.
+    // Do NOT relax this threshold to make the test pass. The bug is real.
     auto playing = gameplaySamples();
     ASSERT_FALSE(playing.empty())
         << "Never observed real gameplay on game_screen. " << progressSummary();
@@ -984,10 +980,8 @@ TEST_F(GameplayTelemetryTest, FeetNotBelowFloorDuringGameplay) {
     float worstRAnkleZ = 999.0f;
 
     const float kFloorZ = 0.0f;
-    // Relaxed threshold: IK clamp is a no-op at floor level (known Xbox
-    // behavior). Toes sit at ~-3.3 in game logic; render hack compensates.
-    // Guard against things getting worse than the known baseline.
-    const float kMaxPenetration = -4.0f;
+    // Strict threshold: any toe more than 2 units below floor is a real bug.
+    const float kMaxPenetration = -2.0f;
 
     for (auto &s : playing) {
         if (!s.getBool("footDataValid")) continue;
@@ -1020,7 +1014,7 @@ TEST_F(GameplayTelemetryTest, FeetNotBelowFloorDuringGameplay) {
         << ") in " << lBelowCount << "/" << footSamples
         << " gameplay samples. Worst toe Z: " << worstLToeZ
         << " (ankle Z: " << worstLAnkleZ << "). "
-        << "Regression: toes are deeper than the known baseline (~-3.3). "
+        << "Toe is below floor — real Xbox does not exhibit this. "
         << progressSummary();
 
     EXPECT_EQ(rBelowCount, 0)
@@ -1028,7 +1022,7 @@ TEST_F(GameplayTelemetryTest, FeetNotBelowFloorDuringGameplay) {
         << ") in " << rBelowCount << "/" << footSamples
         << " gameplay samples. Worst toe Z: " << worstRToeZ
         << " (ankle Z: " << worstRAnkleZ << "). "
-        << "Regression: toes are deeper than the known baseline (~-3.3). "
+        << "Toe is below floor — real Xbox does not exhibit this. "
         << progressSummary();
 }
 
