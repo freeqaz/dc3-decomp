@@ -13,6 +13,13 @@ A decompilation of Dance Central 3 (build Sep 16 2012) for the Xbox 360.
 
 This repository does **not** contain any game assets or assembly whatsoever. An existing copy of the game is required.
 
+Sister project
+==============
+
+Personal-project counterpart to [RB3 decomp (Wii)](https://github.com/freeqaz/rb3) maintained by [@freeqaz](https://github.com/freeqaz) — same AI-assisted decomp methodology, shared Milo engine codebase. The decomp tooling stack (orchestrator MCP, Ghidra MCP, m2c integration, source permuter, slash commands, persistent agent memory) was developed here on the harder target — Xbox 360 MSVC PowerPC with no DWARF, ICF, and link-time pragmas — and ports across to RB3 (Wii Gekko/MWCC, full DWARF) with minor adaptation.
+
+Cross-platform engine + game code (i.e. what actually runs in the WebGPU native port) is **~93% fuzzy-matched** here, with the Xbox 360 XDK excluded since it gets replaced in a native build. RB3 is at ~79% on the same basis. See [docs/SYNC_WITH_DC3.md in RB3](https://github.com/freeqaz/rb3/blob/master/docs/SYNC_WITH_DC3.md) for the cross-project sync plan.
+
 Dependencies
 ============
 
