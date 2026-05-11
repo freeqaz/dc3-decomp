@@ -22,6 +22,10 @@ enum SaveLoadMode {
 enum SaveLoadMgrStatus {
 };
 
+enum DeviceIDState {
+    kDeviceID_Chosen = 2,
+};
+
 class SaveLoadManager : public Hmx::Object {
 public:
     enum State {
@@ -143,7 +147,6 @@ public:
     void DisableAutosave(HamProfile *);
     void HandleEventResponse(HamProfile *, int);
     void Activate();
-    void Poll();
     void PrintoutSaveSizeInfo();
     Symbol GetDialogOpt1();
     Symbol GetDialogOpt2();
@@ -151,13 +154,15 @@ public:
     void AutoLoad();
     void HandleEventResponseStart(int);
     bool IsIdle() const;
-    bool IsInitialLoadDone() const { return !mInitialLoadPending; }
+    int GetDialogFocusOption();
+    void Poll();
+    bool IsInitialLoadDone() const { return !unk2d; }
 
     DataNode GetDialogMsg();
 
     static void Init();
 
-    bool IsActivated() const { return mActivated; }
+    bool GetUnk2c() { return unk2c; }
 
 private:
     bool SongCacheNeedsWrite();
@@ -178,22 +183,22 @@ protected:
     bool IsSafePlaceToSave() const;
     bool IsSafePlaceToLoad() const;
 
-    bool mActivated;
-    bool mInitialLoadPending;
+    bool unk2c;
+    bool unk2d;
     SaveLoadMode mMode; // 0x30
     State mState; // 0x34
     State mStateAtSelectStart; // 0x38
-    int mPadNum; // 0x3c
-    HamProfile *mActiveProfile; // 0x40
-    String mCacheName;
-    int mCacheFileSize;
-    int mSigninMask;
+    int unk3c; // 0x3c
+    HamProfile *unk40; // 0x40
+    String unk44;
+    unsigned int unk4c;
+    bool unk50;
     CacheID *mCacheID; // 0x54
     Cache *mCache; // 0x58
     void *mData; // 0x5c
     bool mSongCacheWriteDisabled; // 0x60
     bool mWaiting; // 0x61
-    int unk64;
+    MCResult unk64;
     CacheResult unk68; // 0x68
     bool mNeedsSave; // 0x6c
     bool mNeedsLoad; // 0x6d

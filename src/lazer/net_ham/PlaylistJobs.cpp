@@ -19,16 +19,16 @@ void GetPlaylist(JsonConverter &converter, const JsonObject *jsonObj, CustomPlay
 void GetPlaylists(
     JsonConverter &converter, const JsonObject *jsonObj, std::vector<CustomPlaylist> *playlists
 ) {
-    unsigned int size = ((JsonArray *)jsonObj)->GetSize();
+    int size = ((JsonArray *)jsonObj)->GetSize();
     for (unsigned int i = 0; i < size; i++) {
-        JsonObject *value = converter.GetValue((JsonArray *)jsonObj, i);
-        CustomPlaylist cp;
-        playlists->push_back(cp);
-        CustomPlaylist &last = playlists->back();
-        JsonObject *idValue = converter.GetValue((JsonArray *)value, 0);
-        last.SetOnlineID(idValue->Int());
-        JsonObject *nameValue = converter.GetValue((JsonArray *)value, 1);
-        last.SetName(Symbol(nameValue->Str()));
+        JsonObject *value = converter.GetValue(((JsonArray *)jsonObj), i);
+        {
+            playlists->push_back(CustomPlaylist());
+        }
+        CustomPlaylist &p = playlists->back();
+        p.SetOnlineID(converter.GetValue(((JsonArray *)value), 0)->Int());
+        CustomPlaylist &p2 = playlists->back();
+        p2.SetName(converter.GetValue(((JsonArray *)value), 1)->Str());
     }
 }
 

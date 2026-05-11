@@ -258,8 +258,10 @@ bool SongStatusMgr::IsSongPlayed(int songID) const { return HasSongStatus(songID
 void SongStatusMgr::GetScoresToUpload(std::list<SongStatusData> &data) {
     FOREACH (it, mSongStatusMap) {
         SongStatus cur = it->second;
-        for (int i = 0; i < kNumDifficulties; i++) {
-            if (cur.mStatusData[i].mFiveStarNoFlashcards) {
+        for (int i = 0; i < 4; i++) {
+            if (cur.mStatusData[i].mNeedUpload) {
+                cur.mStatusData[i].mDifficulty = (Difficulty)i;
+                cur.mStatusData[i].mSongID = cur.mSongID;
                 data.push_back(cur.mStatusData[i]);
             }
         }
@@ -269,7 +271,8 @@ void SongStatusMgr::GetScoresToUpload(std::list<SongStatusData> &data) {
 void SongStatusMgr::GetFlauntsToUpload(std::list<FlauntStatusData> &data) {
     FOREACH (it, mSongStatusMap) {
         SongStatus cur = it->second;
-        if (cur.mPeakStarRating) {
+        if (cur.mFlauntData.mNeedUpload) {
+            cur.mFlauntData.mSongID = cur.mSongID;
             data.push_back(cur.mFlauntData);
         }
     }

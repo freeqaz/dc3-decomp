@@ -262,22 +262,21 @@ namespace {
     bool gListenForKinectGuide;
     FileCache *gPersistentCache;
     ModalCallbackFunc *gRealCallback;
-    unsigned int gIsUselessLoadSymbolInitBits;
-    Symbol gIsUselessLoadDanceBattleMode;
-    Symbol gIsUselessLoadPracticeMode;
-    Symbol gIsUselessLoadCampaignPracticeMode;
-    Symbol gIsUselessLoadInCampaignModeProp;
-    Symbol gIsUselessLoadInCampaignStingerProp;
-    Symbol gIsUselessLoadJustIntroMode;
-    Symbol gIsUselessLoadMindControlMode;
-    Symbol gIsUselessLoadBustAMoveMode;
-    Symbol gIsUselessLoadChallengeMode;
-    Symbol gIsUselessLoadStrikeAPoseMode;
-    Symbol gIsUselessLoadRhythmBattleMode;
-    Symbol gIsUselessLoadGameplayModeProp;
-    Symbol gIsUselessLoadCurrentCampaignEraProp;
-    Symbol gIsUselessLoadEraTanBattleMode;
 }
+
+static const int kAppArchivePermissions[11] = {
+    0x000100CF,
+    0x000100C6,
+    0x000100EE,
+    0x000100C4,
+    0x000100BD,
+    0x000100C5,
+    0x000100BA,
+    0x00010059,
+    0x00010097,
+    0x00010081,
+    0x0001001B,
+};
 
 Symbol RemoveDigitSuffix(const Symbol &);
 bool IsUselessLoad(const char *);
@@ -294,19 +293,6 @@ App::App(int argc, char **argv) {
     SystemPreInit(argc, argv, "config/ham_preinit_keep.dta");
 
     if (TheArchive) {
-        static const int kAppArchivePermissions[11] = {
-            0x000100CF,
-            0x000100C6,
-            0x000100EE,
-            0x000100C4,
-            0x000100BD,
-            0x000100C5,
-            0x000100BA,
-            0x00010059,
-            0x00010097,
-            0x00010081,
-            0x0001001B,
-        };
         TheArchive->SetArchivePermission(11, kAppArchivePermissions);
     }
 
@@ -655,8 +641,7 @@ App::App(int argc, char **argv) {
     if (TheSplasher)
         TheSplasher->Poll();
 
-    FormatString redBuildBanner("HMX Red Build!\n");
-    TheDebug << redBuildBanner.Str();
+    MILO_LOG("HMX Red Build!\n");
 
     FixedSizeSaveable::Init(0x5C, 0x1662);
     HamUserMgrInit(false);
@@ -732,26 +717,12 @@ App::App(int argc, char **argv) {
 
     MetagameRank::Init();
 
-    DataArray *persistentCacheConfig = SystemConfig("persistent_filecache");
-    if (persistentCacheConfig) {
-        FileCache *allocatedFileCache = (FileCache *)MemAlloc(
-            0x1C,
-            "e:\\lazer_build_gmc1\\system\\src\\os/FileCache.h",
-            0x21,
-            "FileCache",
-            0
-        );
-        if (allocatedFileCache) {
-            auto cacheSize = persistentCacheConfig->Node(1).Int(persistentCacheConfig);
-            allocatedFileCache = new (allocatedFileCache)
-                FileCache(cacheSize, kLoadFront, false, true);
-        }
-        gPersistentCache = allocatedFileCache;
+    DataArray *cacheCfg = SystemConfig("persistent_filecache");
+    if (cacheCfg) {
+        gPersistentCache = new FileCache(cacheCfg->Int(1), kLoadFront, false, true);
         gPersistentCache->StartSet(0);
-        for (int cachePathIdx = 2; cachePathIdx < persistentCacheConfig->Size(); ++cachePathIdx) {
-            FilePath emptyPath("");
-            FilePath cachePath(persistentCacheConfig->Node(cachePathIdx).Str(persistentCacheConfig));
-            gPersistentCache->Add(cachePath, 1, emptyPath);
+        for (int i = 2; i < cacheCfg->Size(); i++) {
+            gPersistentCache->Add(cacheCfg->Str(i), 1, "");
         }
         gPersistentCache->EndSet();
         gPersistentCache->PollUntilLoaded();
@@ -783,10 +754,9 @@ App::App(int argc, char **argv) {
     PartyModeMgr::Init();
     TheUI->GotoFirstScreen();
 
-    float startupEndMs = startupTimer.SplitMs();
+    float f15 = startupTimer.SplitMs();
     if (TheArchive && Archive::DebugArkOrder()) {
-        float startupRemainderMs = startupEndMs - splashStartMs;
-        TheDebug << MakeString("Startup Time: %f %f\n", splashStartMs, startupRemainderMs);
+        MILO_LOG("Startup Time: %f %f\n", splashStartMs, f15 - splashStartMs);
     }
 
     splash.EndSplasher();
@@ -879,6 +849,33 @@ void App::DrawRegular() {
 
 App::~App() { TheDebug.Exit(0, true); }
 
+void DebugModal(Debug::ModalType &ty, FixedString &str, bool b3) {
+    if (ty == Debug::kModalFail) {
+        gRealCallback(ty, str, b3);
+    } else {
+        if (ty != Debug::kModalWarn) {
+            static DataNode &n = DataVariable("notify_level");
+            switch (n.Int()) {
+            case 2: {
+                gRealCallback(ty, str, b3);
+                return;
+            }
+            case 1: {
+                Hmx::Object *cheatDisplay =
+                    ObjectDir::Main()->Find<Hmx::Object>("cheat_display", false);
+                if (cheatDisplay) {
+                    static Message show("show", 0);
+                    show[0] = str.c_str();
+                    cheatDisplay->Handle(show, false);
+                }
+                return;
+            }
+            }
+        }
+        MILO_LOG("%s\n", str.c_str());
+    }
+}
+
 bool XShowNuiCallback(u32 &p1) {
     bool ret;
 
@@ -938,256 +935,122 @@ static bool InLoaderModeSafe(Symbol modeSymbol) {
     return g_LoaderModeCallback ? g_LoaderModeCallback(modeSymbol) : false;
 }
 
-bool IsUselessLoad(const char *loadPath) {
-    bool shouldSkipLoad = false;
-
-    if (gMiloTool || loadPath == 0 || TheGameData == 0) {
-        return false;
-    }
-
-    HamPlayerData *player0 = TheGameData->Player(0);
-    HamPlayerData *player1 = TheGameData->Player(1);
-    if (player0 == 0 || player1 == 0) {
-        return false;
-    }
-
-    bool isLocalizedVoiceBankPath;
-    if (strstr(loadPath, "sfx/loc/") != loadPath
-        || (isLocalizedVoiceBankPath = true, strstr(loadPath, "/vo_bank_") == 0)) {
-        isLocalizedVoiceBankPath = false;
-    }
-
-    const char *baseName = FileGetBase(loadPath);
-    Symbol baseNameSymbol(baseName);
-
-    bool isCharacterCamshotPath;
-    if (strstr(loadPath, "world/shared/camshots/") != loadPath
-        || (isCharacterCamshotPath = true, GetCharacterEntry(baseNameSymbol, false) == 0)) {
-        isCharacterCamshotPath = false;
-    }
-
-    bool isCrewCamshotPath = strstr(loadPath, "world/shared/camshots/crew_") == loadPath;
-    if ((gIsUselessLoadSymbolInitBits & 0x1) == 0) {
-        gIsUselessLoadSymbolInitBits |= 0x1;
-        new (&gIsUselessLoadDanceBattleMode) Symbol("dance_battle");
-    }
-    if ((isLocalizedVoiceBankPath || isCharacterCamshotPath)
-        && strstr(loadPath, player0->Char().Str()) == 0
-        && strstr(loadPath, player1->Char().Str()) == 0) {
-        if (g_LoaderModeCallback(gIsUselessLoadDanceBattleMode)) {
-            Symbol player0Crew = GetCrewForCharacter(player0->Char(), true);
-            Symbol player1Crew = GetCrewForCharacter(player1->Char(), true);
-            bool matchesCrewCharacter;
-            const char *crewCharacterMatch
-                = strstr(baseNameSymbol.Str(), GetCrewCharacter(player0Crew, 0).Str());
-            if (crewCharacterMatch == 0) {
-                crewCharacterMatch = strstr(baseNameSymbol.Str(), GetCrewCharacter(player0Crew, 1).Str());
-                if (crewCharacterMatch != 0) {
-                    goto crew_character_matched;
+bool IsUselessLoad(const char *file) {
+    bool useless = false;
+    if (!gMiloTool && file && TheGameData) {
+        HamPlayerData *p0 = TheGameData->Player(0);
+        HamPlayerData *p1 = TheGameData->Player(1);
+        if (p0 && p1) {
+            bool b13 = strstr(file, "sfx/loc/") == file && strstr(file, "/vo_bank_");
+            Symbol fileBase = FileGetBase(file);
+            bool b11 = strstr(file, "world/shared/camshots/") == file
+                && GetCharacterEntry(fileBase, false);
+            bool isCrewStr = strstr(file, "world/shared/camshots/crew_") == file;
+            static Symbol dance_battle("dance_battle");
+            if ((b13 || b11) && !strstr(file, p0->Char().Str())
+                && !strstr(file, p1->Char().Str())) {
+                if (g_LoaderModeCallback(dance_battle)) {
+                    Symbol crew0 = GetCrewForCharacter(p0->Char());
+                    Symbol crew1 = GetCrewForCharacter(p1->Char());
+                    bool nostr = strstr(fileBase.Str(), GetCrewCharacter(crew0, 0).Str())
+                        || strstr(fileBase.Str(), GetCrewCharacter(crew0, 1).Str())
+                        || strstr(fileBase.Str(), GetCrewCharacter(crew1, 0).Str())
+                        || strstr(fileBase.Str(), GetCrewCharacter(crew1, 1).Str());
+                    if (!nostr) {
+                        useless = true;
+                    }
+                } else {
+                    useless = true;
                 }
-                crewCharacterMatch = strstr(baseNameSymbol.Str(), GetCrewCharacter(player1Crew, 0).Str());
-                if (crewCharacterMatch != 0) {
-                    goto crew_character_matched;
+            }
+            if (!g_LoaderModeCallback(dance_battle)
+                && (isCrewStr || EndsWith(file, "/vo_bank.milo"))) {
+                useless = true;
+            }
+            static Symbol practice("practice");
+            static Symbol campaign_practice("campaign_practice");
+            if (!g_LoaderModeCallback(practice)
+                && !g_LoaderModeCallback(campaign_practice)
+                && EndsWith(file, "/barks.milo")) {
+                useless = true;
+            }
+            static Symbol is_in_campaign_mode("is_in_campaign_mode");
+            static Symbol is_in_campaign_stinger("is_in_campaign_stinger");
+            bool b14 =
+                TheHamProvider && TheHamProvider->Property(is_in_campaign_mode)->Int();
+            bool b12 =
+                TheHamProvider && TheHamProvider->Property(is_in_campaign_stinger)->Int();
+            if (!b14 && !b12 && strstr(file, "/campaign/camp_scene_")) {
+                useless = true;
+            }
+            if (strstr(file, "/vo_bank_camp_")) {
+                useless = !b14;
+            }
+            static Symbol just_intro("just_intro");
+            static Symbol mind_control("mind_control");
+            bool b12_2 =
+                g_LoaderModeCallback(mind_control) || g_LoaderModeCallback(just_intro);
+            if (TheHamWardrobe && (b12_2 || g_LoaderModeCallback(dance_battle))) {
+                if (b13 || b11) {
+                    Symbol bc;
+                    Symbol b8;
+                    if (b12_2) {
+                        bc = TheHamWardrobe->GetBackupOutfitOverride(0);
+                        b8 = TheHamWardrobe->GetBackupOutfitOverride(1);
+                    } else if (g_LoaderModeCallback(dance_battle)) {
+                        bc = GetAlternateCharacter(p0->Char());
+                        b8 = GetAlternateCharacter(p1->Char());
+                    }
+                    if (!bc.Null() && !b8.Null()) {
+                        Symbol remove0 = RemoveDigitSuffix(bc);
+                        Symbol remove1 = RemoveDigitSuffix(b8);
+                        if (strstr(file, remove0.Str()) || strstr(file, remove1.Str())) {
+                            useless = false;
+                        }
+                    }
                 }
-                crewCharacterMatch = strstr(baseNameSymbol.Str(), GetCrewCharacter(player1Crew, 1).Str());
-                matchesCrewCharacter = false;
-                if (crewCharacterMatch != 0) {
-                    goto crew_character_matched;
+            }
+            useless = !EndsWith(file, "/vo_bank.milo") ? useless : false;
+            static Symbol bustamove("bustamove");
+            if (g_LoaderModeCallback(bustamove)) {
+                useless = !EndsWith(file, "/vo_bank_bustamove.milo") ? useless : false;
+            }
+            static Symbol challenge("challenge");
+            if (g_LoaderModeCallback(challenge)) {
+                useless = !EndsWith(file, "/vo_bank_challenge.milo") ? useless : false;
+            }
+            static Symbol strike_a_pose("strike_a_pose");
+            if (g_LoaderModeCallback(strike_a_pose)) {
+                useless = !EndsWith(file, "/vo_bank_strikeapose.milo") ? useless : false;
+            }
+            static Symbol rhythm_battle("rhythm_battle");
+            static Symbol gameplay_mode("gameplay_mode");
+            static Symbol current_campaign_era("current_campaign_era");
+            static Symbol era_tan_battle("era_tan_battle");
+            bool u15 = TheHamProvider->Property(gameplay_mode)->Sym() == rhythm_battle;
+            if (b14) {
+                if (TheHamProvider->Property(current_campaign_era)->Sym()
+                    == era_tan_battle) {
+                    u15 = true;
                 }
-            } else {
-crew_character_matched:
-                matchesCrewCharacter = true;
             }
-
-            if (!matchesCrewCharacter) {
-                shouldSkipLoad = true;
+            if (u15) {
+                useless = !EndsWith(file, "/vo_bank_rhythmbattle.milo") ? useless : false;
             }
-        } else {
-            shouldSkipLoad = true;
-        }
-    }
-
-    if (!g_LoaderModeCallback(gIsUselessLoadDanceBattleMode)
-        && (isCrewCamshotPath || EndsWith(loadPath, "/vo_bank.milo"))) {
-        shouldSkipLoad = true;
-    }
-
-    if ((gIsUselessLoadSymbolInitBits & 0x2) == 0) {
-        gIsUselessLoadSymbolInitBits |= 0x2;
-        new (&gIsUselessLoadPracticeMode) Symbol("practice");
-    }
-    if ((gIsUselessLoadSymbolInitBits & 0x4) == 0) {
-        gIsUselessLoadSymbolInitBits |= 0x4;
-        new (&gIsUselessLoadCampaignPracticeMode) Symbol("campaign_practice");
-    }
-    if (!g_LoaderModeCallback(gIsUselessLoadPracticeMode)
-        && !g_LoaderModeCallback(gIsUselessLoadCampaignPracticeMode)
-        && EndsWith(loadPath, "/barks.milo")) {
-        shouldSkipLoad = true;
-    }
-
-    if ((gIsUselessLoadSymbolInitBits & 0x8) == 0) {
-        gIsUselessLoadSymbolInitBits |= 0x8;
-        new (&gIsUselessLoadInCampaignModeProp) Symbol("is_in_campaign_mode");
-    }
-    if ((gIsUselessLoadSymbolInitBits & 0x10) == 0) {
-        gIsUselessLoadSymbolInitBits |= 0x10;
-        new (&gIsUselessLoadInCampaignStingerProp) Symbol("is_in_campaign_stinger");
-    }
-    bool inCampaignMode;
-    bool inCampaignStinger;
-    if (TheHamProvider == 0) {
-not_in_campaign_mode:
-        inCampaignMode = false;
-    } else {
-        int campaignModeValue = TheHamProvider->Property(gIsUselessLoadInCampaignModeProp, true)->Int();
-        inCampaignMode = true;
-        if (campaignModeValue == 0) {
-            goto not_in_campaign_mode;
-        }
-    }
-    if (TheHamProvider == 0) {
-not_in_campaign_stinger:
-        inCampaignStinger = false;
-    } else {
-        int campaignStingerValue = TheHamProvider->Property(gIsUselessLoadInCampaignStingerProp, true)->Int();
-        inCampaignStinger = true;
-        if (campaignStingerValue == 0) {
-            goto not_in_campaign_stinger;
-        }
-    }
-
-    if (!inCampaignMode) {
-        if (!inCampaignStinger) {
-            if (strstr(loadPath, "/campaign/camp_scene_") != 0) {
-                shouldSkipLoad = true;
+            if (u15 && EndsWith(file, "/vo_bank_rhythmbattle_finale.milo")) {
+                useless = !b14 ? useless : false;
+            }
+            useless = !strstr(fileBase.Str(), "vo_bank_tutorial_") ? useless : false;
+            if (g_LoaderModeCallback(practice)
+                || g_LoaderModeCallback(campaign_practice)) {
+                useless = !EndsWith(file, "/vo_bank_rehearse.milo") ? useless : false;
             }
         }
     }
-
-    if (strstr(loadPath, "/vo_bank_camp_") != 0) {
-        shouldSkipLoad = !inCampaignMode;
+    if (useless) {
+        MILO_LOG("'%s' is a useless load\n", file ? file : "NULL");
     }
-
-    if ((gIsUselessLoadSymbolInitBits & 0x20) == 0) {
-        gIsUselessLoadSymbolInitBits |= 0x20;
-        new (&gIsUselessLoadJustIntroMode) Symbol("just_intro");
-    }
-    if ((gIsUselessLoadSymbolInitBits & 0x40) == 0) {
-        gIsUselessLoadSymbolInitBits |= 0x40;
-        new (&gIsUselessLoadMindControlMode) Symbol("mind_control");
-    }
-    bool inMindControlOrIntro
-        = g_LoaderModeCallback(gIsUselessLoadMindControlMode)
-        || g_LoaderModeCallback(gIsUselessLoadJustIntroMode);
-    if (TheHamWardrobe && (inMindControlOrIntro || g_LoaderModeCallback(gIsUselessLoadDanceBattleMode))
-        && (isLocalizedVoiceBankPath || isCharacterCamshotPath)) {
-        Symbol override0;
-        Symbol override1;
-
-        if (inMindControlOrIntro) {
-            override0 = TheHamWardrobe->GetBackupOutfitOverride(0);
-            override1 = TheHamWardrobe->GetBackupOutfitOverride(1);
-        } else if (g_LoaderModeCallback(gIsUselessLoadDanceBattleMode)) {
-            override0 = GetAlternateCharacter(player0->Char());
-            override1 = GetAlternateCharacter(player1->Char());
-        }
-
-        if (!override0.Null() && !override1.Null()) {
-            Symbol trimmedOverride0 = RemoveDigitSuffix(override0);
-            Symbol trimmedOverride1 = RemoveDigitSuffix(override1);
-            if (strstr(loadPath, trimmedOverride0.Str()) != 0 || strstr(loadPath, trimmedOverride1.Str()) != 0) {
-                shouldSkipLoad = false;
-            }
-        }
-    }
-
-    if (EndsWith(loadPath, "/vo_bank.milo")) {
-        shouldSkipLoad = false;
-    }
-
-    if ((gIsUselessLoadSymbolInitBits & 0x80) == 0) {
-        gIsUselessLoadSymbolInitBits |= 0x80;
-        new (&gIsUselessLoadBustAMoveMode) Symbol("bustamove");
-    }
-    if (g_LoaderModeCallback(gIsUselessLoadBustAMoveMode)
-        && EndsWith(loadPath, "/vo_bank_bustamove.milo")) {
-        shouldSkipLoad = false;
-    }
-    if ((gIsUselessLoadSymbolInitBits & 0x100) == 0) {
-        gIsUselessLoadSymbolInitBits |= 0x100;
-        new (&gIsUselessLoadChallengeMode) Symbol("challenge");
-    }
-    if (g_LoaderModeCallback(gIsUselessLoadChallengeMode)
-        && EndsWith(loadPath, "/vo_bank_challenge.milo")) {
-        shouldSkipLoad = false;
-    }
-    if ((gIsUselessLoadSymbolInitBits & 0x200) == 0) {
-        gIsUselessLoadSymbolInitBits |= 0x200;
-        new (&gIsUselessLoadStrikeAPoseMode) Symbol("strike_a_pose");
-    }
-    if (g_LoaderModeCallback(gIsUselessLoadStrikeAPoseMode)
-        && EndsWith(loadPath, "/vo_bank_strikeapose.milo")) {
-        shouldSkipLoad = false;
-    }
-
-    if ((gIsUselessLoadSymbolInitBits & 0x400) == 0) {
-        gIsUselessLoadSymbolInitBits |= 0x400;
-        new (&gIsUselessLoadRhythmBattleMode) Symbol("rhythm_battle");
-    }
-    if ((gIsUselessLoadSymbolInitBits & 0x800) == 0) {
-        gIsUselessLoadSymbolInitBits |= 0x800;
-        new (&gIsUselessLoadGameplayModeProp) Symbol("gameplay_mode");
-    }
-    if ((gIsUselessLoadSymbolInitBits & 0x1000) == 0) {
-        gIsUselessLoadSymbolInitBits |= 0x1000;
-        new (&gIsUselessLoadCurrentCampaignEraProp) Symbol("current_campaign_era");
-    }
-    if ((gIsUselessLoadSymbolInitBits & 0x2000) == 0) {
-        gIsUselessLoadSymbolInitBits |= 0x2000;
-        new (&gIsUselessLoadEraTanBattleMode) Symbol("era_tan_battle");
-    }
-    bool isRhythmBattleContext = false;
-    if (TheHamProvider) {
-        isRhythmBattleContext
-            = TheHamProvider->Property(gIsUselessLoadGameplayModeProp, true)->Sym() == gIsUselessLoadRhythmBattleMode;
-        if (inCampaignMode
-            && TheHamProvider->Property(gIsUselessLoadCurrentCampaignEraProp, true)->Sym()
-                == gIsUselessLoadEraTanBattleMode) {
-            isRhythmBattleContext = true;
-        }
-    }
-
-    if (isRhythmBattleContext) {
-        if (EndsWith(loadPath, "/vo_bank_rhythmbattle.milo")) {
-            shouldSkipLoad = false;
-        }
-        if (inCampaignMode) {
-            if (EndsWith(loadPath, "/vo_bank_rhythmbattle_finale.milo")) {
-                shouldSkipLoad = false;
-            }
-        }
-    }
-
-    if (strstr(baseNameSymbol.Str(), "vo_bank_tutorial_") != 0) {
-        shouldSkipLoad = false;
-    }
-
-    if ((g_LoaderModeCallback(gIsUselessLoadPracticeMode)
-         || g_LoaderModeCallback(gIsUselessLoadCampaignPracticeMode))
-        && EndsWith(loadPath, "/vo_bank_rehearse.milo")) {
-        shouldSkipLoad = false;
-    }
-
-    if (shouldSkipLoad) {
-        const char *loggedPath = loadPath;
-        if (loggedPath == 0) {
-            loggedPath = "NULL";
-        }
-        TheDebug << MakeString("'%s' is a useless load\n", loggedPath);
-    }
-
-    return shouldSkipLoad;
+    return useless;
 }
 
 void App::Run() { RunWithoutDebugging(); }
@@ -1292,103 +1155,104 @@ void App::RunWithoutDebugging() {
     return;
 #endif
     while (true) {
-            Timer loop_timer;
-            loop_timer.Restart();
+        float glitchTime;
+        do {
+            Timer timer;
+            timer.Restart();
             SystemPoll(false);
-
-            TIMER_ACTION("misc_poll", {
+            {
+                START_AUTO_TIMER("misc_poll");
                 TheAchievements->Poll();
                 TheAccomplishmentMgr->Poll();
-                if (TheLeaderboards)
+                if (TheLeaderboards) {
                     TheLeaderboards->Poll();
-                if (TheChallenges)
+                }
+                if (TheChallenges) {
                     TheChallenges->Poll();
+                }
                 TheSaveLoadMgr->Poll();
-            })
-
-            TIMER_ACTION("synth_poll", TheSynth->Poll())
-
-            TIMER_ACTION("rock_central_poll", TheRockCentral.Poll())
-
-            TIMER_ACTION("gesture_poll", TheGestureMgr->Poll())
-
-            TheUI->Poll();
-
+            }
             {
-                DataNode &hud_panel = DataVariable("hud_panel");
-                if (hud_panel.CompatibleType(kDataObject)) {
-                    PanelDir *panel = dynamic_cast<PanelDir *>(hud_panel.GetObj(0));
-                    if (panel) {
-                        Message msg("update_all_flashcard_dance_pct");
-                        panel->Handle(msg, true);
-                    }
+                START_AUTO_TIMER("synth_poll");
+                TheSynth->Poll();
+            }
+            {
+                START_AUTO_TIMER("rock_central_poll");
+                TheRockCentral.Poll();
+            }
+            {
+                START_AUTO_TIMER("gesture_poll");
+                TheGestureMgr->Poll();
+            }
+            TheUI->Poll();
+            DataNode &hud_panel = DataVariable("hud_panel");
+            if (hud_panel.CompatibleType(kDataObject)) {
+                PanelDir *dir = hud_panel.Obj<PanelDir>();
+                if (dir) {
+                    dir->Handle(Message("update_all_flashcard_dance_pct"), true);
                 }
             }
-
             TheTaskMgr.Poll();
             TheFlowMgr->Poll();
-
-            TIMER_ACTION("skeleton_post_update", {
-                SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
-                handle.PostUpdate();
-            })
-
+            {
+                START_AUTO_TIMER("skeleton_post_update");
+                SkeletonUpdateHandle h = SkeletonUpdate::InstanceHandle();
+                h.PostUpdate();
+            }
             FileDiscSpinUp();
-
             if (TheHiResScreen.IsActive()) {
                 CaptureHiRes();
             } else {
                 DrawRegular();
             }
+            float timerMs = timer.SplitMs();
+            glitchTime = timerMs
+                - Min(Timer::SlowFrameTimer().SplitMs(), Timer::SlowFrameWaiver());
+        } while (glitchTime <= 83.333298f);
+        const char *glitchStr = nullptr;
+        const char *currentScreenName =
+            TheUI->CurrentScreen() ? TheUI->CurrentScreen()->Name() : "none";
+        const char *transitionScreenName =
+            TheUI->TransitionScreen() ? TheUI->TransitionScreen()->Name() : "none";
 
-            float loopMs = loop_timer.SplitMs();
-            float waiverMs = Timer::SlowFrameWaiver();
-            float slowMs = Timer::SlowFrameTimer().SplitMs();
-            if (waiverMs > slowMs) waiverMs = slowMs;
-            float frameMs = loopMs - waiverMs;
-
-            if (frameMs > 83.3333) {
-                const char *msg = 0;
-                const char *activeScreen = "none";
-                UIScreen *currentScreen = TheUI->CurrentScreen();
-                if (currentScreen) {
-                    activeScreen = currentScreen->Name();
-                }
-
-                const char *transName = "none";
-                UIScreen *transScreen = TheUI->TransitionScreen();
-                if (transScreen) {
-                    transName = transScreen->Name();
-                }
-                UIManager::TransitionState state = TheUI->GetTransitionState();
-                switch (state) {
-                case UIManager::kTransitionNone:
-                    msg = MakeString("GLITCH: %g ms, ACTIVE %s", frameMs, activeScreen);
-                    break;
-                case UIManager::kTransitionTo:
-                    msg = MakeString(
-                        "GLITCH: %g ms, %s TRANS TO %s", frameMs, activeScreen, transName
-                    );
-                    break;
-                case UIManager::kTransitionFrom:
-                    msg = MakeString(
-                        "GLITCH: %g ms, %s TRANS FROM %s", frameMs, activeScreen, transName
-                    );
-                    break;
-                case UIManager::kTransitionPop:
-                    msg = MakeString("GLITCH: %g ms, POPPING %s", frameMs, transName);
-                    break;
-                }
-
-                static DataNode &notify_level = DataVariable("notify_level");
-                if (notify_level.Int() != 0) {
-                    static Hmx::Object *cheat_display =
-                        ObjectDir::Main()->Find<Hmx::Object>("cheat_display", true);
-                    static Message show("show", DataNode(0));
-                    show[0] = DataNode(msg);
-                    cheat_display->Handle(show, false);
-                }
-            }
+        switch (TheUI->GetTransitionState()) {
+        case UIManager::kTransitionNone: {
+            glitchStr =
+                MakeString("GLITCH: %g ms, ACTIVE %s", glitchTime, currentScreenName);
+            break;
+        }
+        case UIManager::kTransitionTo: {
+            glitchStr = MakeString(
+                "GLITCH: %g ms, %s TRANS TO %s",
+                glitchTime,
+                currentScreenName,
+                transitionScreenName
+            );
+            break;
+        }
+        case UIManager::kTransitionFrom: {
+            glitchStr = MakeString(
+                "GLITCH: %g ms, %s TRANS FROM %s",
+                glitchTime,
+                currentScreenName,
+                transitionScreenName
+            );
+            break;
+        }
+        case UIManager::kTransitionPop: {
+            glitchStr =
+                MakeString("GLITCH: %g ms, POPPING %s", glitchTime, transitionScreenName);
+            break;
+        }
+        }
+        static DataNode &notify_level = DataVariable("notify_level");
+        if (notify_level.Int()) {
+            static Hmx::Object *cheatDisplay =
+                ObjectDir::Main()->Find<Hmx::Object>("cheat_display");
+            static Message show("show", 0);
+            show[0] = glitchStr;
+            cheatDisplay->Handle(show, false);
+        }
     }
 }
 

@@ -178,13 +178,14 @@ void SongSortMgr::SetQuasiRandomSong() {
     int numIndices = mQuasiRandomIndices.size();
     MILO_ASSERT(numIndices > 0, 0x175);
 
-    int offset = rand() % (numIndices / 2);
-    int selectedValue = mQuasiRandomIndices[offset];
-    mQuasiRandomIndices.erase(mQuasiRandomIndices.begin() + offset);
-    mQuasiRandomIndices.push_back(selectedValue);
-    int sortIdx = mCurrentSortIdx;
-    Symbol song = mSorts[sortIdx]->DataSymbol(selectedValue);
-    MetaPerformer::Current()->SetSong(song);
+    int randVal = rand() % (numIndices / 2);
+    int val = mQuasiRandomIndices[randVal];
+    mQuasiRandomIndices.erase(mQuasiRandomIndices.begin() + randVal);
+    mQuasiRandomIndices.push_back(val);
+
+    NavListSortNode *node = mSorts[mCurrentSortIdx]->GetListFromIdx(val);
+    MetaPerformer *performer = MetaPerformer::Current();
+    performer->SetSong(node->GetToken());
 }
 
 bool SongSortMgr::HeadersSelectable() {

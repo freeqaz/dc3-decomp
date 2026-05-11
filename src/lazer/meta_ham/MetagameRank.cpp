@@ -1052,29 +1052,26 @@ void MetagameRank::AwardPointsForTask(Symbol task) {
     }
 }
 
-int MetagameRank::SaveSize(int saveVersion) {
-    int version = saveVersion;
-    int fieldCount = 4;
-
-    if (version > 0x45) {
-        fieldCount = 5;
+int MetagameRank::SaveSize(int i1) {
+    int i2 = 4;
+    if (i1 > 0x45) {
+        i2 = 5;
     }
-    if (version > 0x4e) {
-        fieldCount += 1;
+    if (i1 > 0x4E) {
+        i2++;
     }
-    int size = fieldCount + 0x80;
-    if (size > 0x3d) {
-        if (size <= 0x5a) {
-            size = fieldCount + 0x84;
-            goto checkSize;
+    int ret = i2 + 0x80;
+    if (i1 > 0x3D) {
+        if (i1 > 0x5A) {
+            goto end;
         }
-        return size + 8;
+        ret += 4;
     }
-checkSize:
-    if (size > 0x5a) {
-        return size + 8;
+    if (i1 <= 0x5A) {
+        return ret;
     }
-    return size;
+end:
+    return ret + 8;
 }
 
 int MetagameRank::GetRankInTier() const {

@@ -437,8 +437,11 @@ int CampaignProgress::GetSongStarsEarned(Symbol era, Symbol song) const {
         if (pEraSongProgress) {
             stars = pEraSongProgress->GetStarsEarned();
         }
-        auto clampedStars = Max(stars, 0);
-        stars = clampedStars;
+        int clamp = stars;
+        if (clamp <= 0) {
+            clamp = 0;
+        }
+        stars = clamp;
     }
     return stars;
 }

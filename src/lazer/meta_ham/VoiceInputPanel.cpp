@@ -340,122 +340,93 @@ void VoiceInputPanel::CreatePlaylistEditorGrammar() const {
 }
 
 DataNode VoiceInputPanel::OnMsg(const SpeechRecoMessage &msg) {
-    if (mActiveVoiceContext == NULL) {
-        return DataNode(kDataUnhandled, true);
-    }
-    DataArray *msgData = msg.mData;
-    DataArray *tags = msgData->Node(2).Array(msgData);
-    float confidence = msgData->Node(3).Float(msgData);
-    Symbol ruleName = msgData->Sym(4);
-    Symbol tagSym = tags->Sym(0);
-    bool recognized = confidence >= mActiveVoiceContext->mConfThreshold;
-    if (recognized) {
-        MetaPerformer::SendSpeechDatapoint(tags, confidence, ruleName);
-    }
-    const char *ruleStr = ruleName.Str();
-    const char *statusStr;
-    if (recognized) {
-        statusStr = "recognized";
-    } else {
-        statusStr = "not recognized";
-    }
-    TheDebug << MakeString(
-        "----- Voice Msg - tag: %s; confidence: %f (%s); rule: %s\n",
-        tagSym.Str(),
-        confidence,
-        statusStr,
-        ruleStr
-    );
-    if (recognized) {
-        TheSpeechMgr->Overlay()->Print("recognized\n");
-    } else {
-        TheSpeechMgr->Overlay()->Print("not recognized\n");
-    }
-    LetterboxPanel *letterbox = TheHamUI.GetLetterboxPanel();
-    if (letterbox != NULL) {
-        if (letterbox->InBlacklightTransition()) {
-            goto done;
+    if (mActiveVoiceContext) {
+        float conf = msg.Confidence();
+        DataArray *tags = msg.Tags();
+        Symbol rule = msg.RuleName();
+        Symbol tag = tags->Sym(0);
+        bool within = conf >= mActiveVoiceContext->mConfThreshold;
+        if (within) {
+            MetaPerformer::SendSpeechDatapoint(tags, conf, rule);
         }
-        letterbox->VoiceInput(TheSpeechMgr->VoiceDirection(), recognized);
-    }
-    if (!recognized)
-        goto done;
-    TheGestureMgr->SetInVoiceMode(true);
-    if (letterbox != NULL) {
-        letterbox->SetBlacklightMode(true);
-    }
-    if (ruleName == "select_artist") {
-        int songID =
-            TheHamSongMgr.GetSongIDFromShortName(tagSym, true);
-        if (songID == 0)
-            goto done;
-        static Symbol byArtist("by_artist");
-        TheSongSortMgr->SetSort(byArtist);
-        {
-            Message refreshMsg("refresh_sorting", DataNode(tagSym));
-            HandleType(refreshMsg);
+        MILO_LOG(
+            "----- Voice Msg - tag: %s; confidence: %f (%s); rule: %s\n",
+            tag.Str(),
+            conf,
+            within ? "recognized" : "not recognized",
+            rule.Str()
+        );
+        TheSpeechMgr->Overlay()->Print(within ? "recognized\n" : "not recognized\n");
+        LetterboxPanel *letter = TheHamUI.GetLetterboxPanel();
+        if (letter) {
+            if (letter->InBlacklightTransition()) {
+                return 0;
+            } else {
+                letter->VoiceInput(TheSpeechMgr->VoiceDirection(), within);
+            }
         }
-    } else if (ruleName == "select_song") {
-        Symbol songTag = tags->Sym(0);
-        int songID =
-            TheHamSongMgr.GetSongIDFromShortName(songTag, false);
-        if (songID == 0)
-            goto done;
-        {
-            Message songMsg("on_say_song_name", DataNode(songTag));
-            HandleType(songMsg);
-        }
-    } else if (ruleName == "select_playlist_song") {
-        Symbol songTag = tags->Sym(0);
-        int songID =
-            TheHamSongMgr.GetSongIDFromShortName(songTag, false);
-        if (songID == 0)
-            goto done;
-        {
-            Message playlistMsg(
-                "select_playlist_song", DataNode(songTag)
-            );
-            HandleType(playlistMsg);
-        }
-    } else {
-        bool isGlobal = false;
-        bool handleGlobal = false;
-        if (strstr(tagSym.Str(), "hidden_global")) {
-            isGlobal = true;
-            static Symbol handleGlobalCommands("handle_global_commands");
-            UIScreen *screen = TheHamUI.CurrentScreen();
-            const DataNode *prop =
-                screen->Property(handleGlobalCommands, false);
-            if (prop == NULL) {
-                UIPanel *focus = screen->FocusPanel();
-                if (focus != NULL) {
-                    prop = focus->Property(handleGlobalCommands, false);
+        if (within) {
+            TheGestureMgr->SetInVoiceMode(true);
+            if (letter) {
+                letter->SetBlacklightMode(true);
+            }
+            if (rule == "select_artist") {
+                if (TheHamSongMgr.GetSongIDFromShortName(tag)) {
+                    static Symbol by_artist("by_artist");
+                    TheSongSortMgr->SetSort(by_artist);
+                    HandleType(Message("refresh_sorting", tag));
+                }
+            } else if (rule == "select_song") {
+                Symbol song = tags->Sym(0);
+                if (TheHamSongMgr.GetSongIDFromShortName(song, false)) {
+                    HandleType(Message("on_say_song_name", song));
+                }
+            } else if (rule == "select_playlist_song") {
+                Symbol song = tags->Sym(0);
+                if (TheHamSongMgr.GetSongIDFromShortName(song, false)) {
+                    HandleType(Message("select_playlist_song", song));
+                }
+            } else {
+                bool b9 = false;
+                bool b6 = false;
+                if (strstr(tag.Str(), "hidden_global")) {
+                    b9 = true;
+                    static Symbol handle_global_commands("handle_global_commands");
+                    const DataNode *prop =
+                        TheHamUI.CurrentScreen()->Property(handle_global_commands, false);
+                    if (!prop) {
+                        UIPanel *panel = TheHamUI.CurrentScreen()->FocusPanel();
+                        if (panel) {
+                            prop = TheHamUI.CurrentScreen()->FocusPanel()->Property(
+                                handle_global_commands, false
+                            );
+                        }
+                    }
+                    if (prop && prop->Type() == kDataInt) {
+                        b6 = prop->Int();
+                    }
+                }
+                if (b9) {
+                    if (!b6) {
+                        static Symbol on_global_voice_command("on_global_voice_command");
+                        static DataArrayPtr onGlobalVoiceCommandFunc(new DataArray(2));
+                        onGlobalVoiceCommandFunc->Node(0) = on_global_voice_command;
+                        onGlobalVoiceCommandFunc->Node(1) = tag;
+                        onGlobalVoiceCommandFunc->Execute();
+                    } else {
+                        HandleType(Message("on_global_voice_command", tag));
+                    }
+                } else {
+                    HandleType(Message("on_voice_command", tag));
                 }
             }
-            if (prop != NULL && prop->Type() == kDataInt) {
-                handleGlobal = prop->Int(NULL) != 0;
-            }
-        }
-        if (isGlobal) {
-            if (handleGlobal) {
-                Message globalMsg(
-                    "on_global_voice_command", DataNode(tagSym)
-                );
-                HandleType(globalMsg);
-            } else {
-                static Symbol onGlobalVoiceCommand("on_global_voice_command");
-                static DataArrayPtr onGlobalVoiceCommandFunc(new DataArray(2));
-                onGlobalVoiceCommandFunc->Node(0) = DataNode(onGlobalVoiceCommand);
-                onGlobalVoiceCommandFunc->Node(1) = DataNode(tagSym);
-                onGlobalVoiceCommandFunc->Execute();
-            }
         } else {
-            Message voiceMsg("on_voice_command", DataNode(tagSym));
-            HandleType(voiceMsg);
+            return DATA_UNHANDLED;
         }
+        return 0;
+    } else {
+        return DATA_UNHANDLED;
     }
-done:
-    return DataNode(0);
 }
 #endif
 

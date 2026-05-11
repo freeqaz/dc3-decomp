@@ -16,7 +16,8 @@ public:
 
     NEW_OBJ(ClipGraphGenerator);
 
-    const DataArray *mTypeData;
+protected:
+    const DataArray *mTypeData; // 0x2c
     ClipDistMap *mDmap; // 0x30
     CharClip *mClipA; // 0x34
     CharClip *mClipB; // 0x38

@@ -567,67 +567,65 @@ void HamStorePanel::RefreshSpecialOfferStatus() {
     }
 }
 DataNode HamStorePanel::OnMsg(const RCJobCompleteMsg &msg) {
-    RCJob *job = msg.Job();
-    int success = msg.Success();
-
-    if (job == mJobs[0]) {
-        if (success != 0) {
+    if (msg.Job() == mJobs[4]) {
+        if (msg.Success()) {
             ReadLockData();
             GetCart();
         } else {
-            TheDebug << "HamStorePanel::OnMsg Cart fail\n";
+            MILO_LOG("[HamStorePanel::OnMsg] Cart failed to lock, disabling.\n");
             DisableCart();
         }
-    } else if (job == mJobs[1]) {
-        if (success == 0) {
-            TheDebug << "HamStorePanel::OnMsg Cart unload\n";
+    } else if (msg.Job() == mJobs[5]) {
+        if (msg.Success()) {
+            MILO_LOG("[HamStorePanel::OnMsg] Cart unlocked successfully.\n");
         } else {
-            TheDebug << "HamStorePanel::OnMsg Cart fail\n";
+            MILO_LOG("[HamStorePanel::OnMsg] Cart failed to unlock.\n");
         }
-    } else if (job == mJobs[2]) {
-        if (success != 0) {
+    } else if (msg.Job() == mJobs[6]) {
+        if (!msg.Success()) {
+            MILO_LOG("[HamStorePanel::OnMsg] Cart failed to re-lock.\n");
+        }
+    } else if (msg.Job() == mJobs[3]) {
+        if (msg.Success()) {
             ReadCartData();
         } else {
-            TheDebug << "Failed to read cart data\n";
+            MILO_LOG("[HamStorePanel::OnMsg] Failed to get cart, disabling.\n");
             DisableCart();
         }
-    } else if (job == mJobs[3]) {
-        if (success == 0) {
-            TheDebug << "HamStorePanel::OnMsg Cart fail\n";
-            ExitError(kStoreErrorNoContent);
+    } else if (msg.Job() == mJobs[1]) {
+        if (!msg.Success()) {
+            MILO_LOG("[HamStorePanel::OnMsg] Cart failed to remove song.\n");
+            ExitError(kStoreErrorCacheRemoved);
         } else {
-            std::list<int>::iterator it = mPendingRemoves.begin();
-            if (it != mPendingRemoves.end()) {
+            mPendingRemoves.pop_front();
+            if (!mPendingRemoves.empty()) {
                 RemoveNextDLCFromCart();
-                mPendingRemoves.erase(it);
             } else {
-                mLockData = 0;
-                mRemovingFromCart = 0;
+                mJobs[1] = nullptr;
+                mRemovingFromCart = false;
             }
         }
-    } else if (job == mJobs[4]) {
-        if (success == 0) {
-            TheDebug << "HamStorePanel::OnMsg Cart fail\n";
-            ExitError(kStoreErrorNoContent);
+    } else if (msg.Job() == mJobs[0]) {
+        if (!msg.Success()) {
+            MILO_LOG("[HamStorePanel::OnMsg] Cart failed to add song.\n");
+            ExitError(kStoreErrorCacheRemoved);
         } else {
-            std::list<int>::iterator it = mPendingAdds.begin();
-            if (it != mPendingAdds.end()) {
+            mPendingAdds.pop_front();
+            if (!mPendingAdds.empty()) {
                 AddNextDLCToCart();
-                mPendingAdds.erase(it);
             } else {
-                mLockData = 0;
-                mAddingToCart = 0;
+                mJobs[0] = nullptr;
+                mAddingToCart = false;
             }
         }
-    } else if (job == mJobs[5]) {
-        if (success == 0) {
-            TheDebug << "HamStorePanel::OnMsg Cart fail\n";
-            ExitError(kStoreErrorNoContent);
+    } else if (msg.Job() == mJobs[2]) {
+        if (!msg.Success()) {
+            MILO_LOG("[HamStorePanel::OnMsg] Cart failed to clear.\n");
         } else {
-            TheDebug << "HamStorePanel::OnMsg Cart empty\n";
+            MILO_LOG("[HamStorePanel::OnMsg] Cart emptied successfully.\n");
         }
     }
-    return DataNode(1);
+    return 1;
 }
 SpecialOfferEnumJob::SpecialOfferEnumJob(
     HamStorePanel *panel, int sessionID, std::vector<unsigned long long> &offerIDs

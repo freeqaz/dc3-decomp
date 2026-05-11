@@ -209,31 +209,27 @@ int NavListSortMgr::GetListIndexFromHeaderIndex(int idx) {
     return mHeadersB[idx];
 }
 
-int NavListSortMgr::GetHeaderIndexFromChildListIndex(int idx) {
-    int i = 0;
-    auto& _ref0 = mHeadersB;
-    int size = (int)_ref0.size();
-    if (size <= 0) return -1;
-    int *base;
-    do {
-        int headerVal = _ref0[i];
-        if (headerVal == idx) return idx;
-        if (headerVal > idx) {
-            if (i == 0) return _ref0.front();
-            base = &_ref0[i];
-            goto found;
-        }
-        if (headerVal < idx) {
-            if (i == size - 1) {
-                base = &_ref0[size];
-                goto found;
+int NavListSortMgr::GetHeaderIndexFromChildListIndex(int i1) {
+    int ret = -1;
+    int numBs = mHeadersB.size();
+    for (int i = 0; i < numBs; i++) {
+        int cur = mHeadersB[i];
+        if (cur == i1) {
+            ret = i1;
+            break;
+        } else if (cur > i1) {
+            if (i == 0) {
+                ret = mHeadersB[0];
+            } else {
+                ret = mHeadersB[i - 1];
             }
+            break;
+        } else if (cur < i1 && i == numBs - 1) {
+            ret = mHeadersB[numBs - 1];
+            break;
         }
-        i++;
-    } while (i < size);
-    return -1;
-found:
-    return *(base - 1);
+    }
+    return ret;
 }
 
 void NavListSortMgr::OnExit() {

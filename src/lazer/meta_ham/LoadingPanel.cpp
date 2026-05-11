@@ -23,8 +23,8 @@
 #include "utl/TimeConversion.h"
 #include "utl/TempoMap.h"
 
-HamMaster *LoadingPanel::sLoadingMaster = nullptr;
-SongDB *LoadingPanel::sSongDB = nullptr;
+static HamMaster *sLoadingMaster; // DAT_8311A440
+static SongDB *sSongDB; // DAT_8311A444 i think, def a SongDB
 
 #ifdef HX_NATIVE
 static bool sSkipLoadingMusicReadyGate = false;
@@ -201,6 +201,12 @@ BEGIN_HANDLERS(LoadingPanel)
     HANDLE_EXPR(choose_loading_screen, ChooseLoadingScreen())
     HANDLE_SUPERCLASS(UIPanel)
 END_HANDLERS
+
+#ifdef HX_NATIVE
+SongDB *LoadingPanel::TestGetSongDB() { return sSongDB; }
+HamMaster *LoadingPanel::TestGetLoadingMaster() { return sLoadingMaster; }
+void LoadingPanel::TestSetLoadingMaster(HamMaster *m) { sLoadingMaster = m; }
+#endif
 
 void ResetLoadingMusic() {
     static Symbol reset_loading_music_mogg("reset_loading_music_mogg");

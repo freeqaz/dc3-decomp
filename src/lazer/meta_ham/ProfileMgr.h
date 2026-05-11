@@ -121,6 +121,7 @@ public:
     bool NoFlashcards() const { return mNoFlashcards; }
     bool GetAllUnlocked() { return mAllUnlocked; }
     HamProfile *CriticalProfile() const { return mCriticalProfile; }
+    void SetCriticalProfile(HamProfile *p) { mCriticalProfile = p; }
     bool DisableVoice() const { return mDisableVoice; }
     bool DisablePhotos() const { return mDisablePhotos; }
     bool DisableFreestyle() const { return mDisableFreestyle; }

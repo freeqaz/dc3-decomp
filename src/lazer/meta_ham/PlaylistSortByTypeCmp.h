@@ -6,8 +6,9 @@
 
 class PlaylistTypeCmp : public NavListItemSortCmp {
 public:
-    virtual ~PlaylistTypeCmp();
+    virtual ~PlaylistTypeCmp() {}
     virtual int Compare(NavListItemSortCmp const *, NavListNodeType) const;
+    virtual const PlaylistTypeCmp *GetPlaylistTypeCmp() const { return this; }
 
     PlaylistTypeCmp(int type, const char *name) : mType(type), mName(name) {}
 

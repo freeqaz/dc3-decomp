@@ -170,6 +170,16 @@ void GlitchPoker::Dump(TextStream &stream, int i1) {
 GlitchAverager::GlitchAverager()
     : mAvg(0.0), mMax(0.0), mCount(0), mGlitchAvg(0.0), mGlitchCount(0) {}
 
+void GlitchAverager::PushInstance(float f1, bool b) {
+    mAvg = (f1 - mAvg) / ++mCount + mAvg;
+    if (b) {
+        mGlitchAvg = (f1 - mGlitchAvg) / ++mGlitchCount + mGlitchAvg;
+    }
+    if (f1 > mMax) {
+        mMax = f1;
+    }
+}
+
 GlitchFinder::GlitchFinder()
     : mFrameCount(0), mGlitchCount(0), mStop(true), mLastTime(0.0), mPokerIndex(-1),
       mStartPoker(0), mCurPoker(0), mActive(true), mDumpLeavesOnly(false),

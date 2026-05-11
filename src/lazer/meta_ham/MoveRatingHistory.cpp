@@ -54,7 +54,7 @@ void MoveRatingHistory::Clear() {
 int MoveRatingHistory::GetRating(Symbol s1, int i2) {
     Key key;
     key.mMoveSymbol = s1;
-    if (HasRatingHistory(key)) {
+    if (mMoveRatingMap.find(key) != mMoveRatingMap.end()) {
         return mMoveRatingMap[key].mRatingArray[i2];
     } else {
         return -1;
@@ -67,10 +67,9 @@ void MoveRatingHistory::AddHistory(Symbol s1, int i2) {
     Key key;
     key.mMoveSymbol = s1;
     RatingHistory &history = mMoveRatingMap[key];
-    MoveRating old = history.mRatingArray[0];
-    history.mRatingArray[2] = old;
-    history.mRatingArray[3] = old;
-    history.mRatingArray[1] = old;
+    for (int i = 1; i < 4; i++) {
+        history.mRatingArray[i] = history.mRatingArray[i - 1];
+    }
     history.mRatingArray[0] = (MoveRating)i2;
     mHasModifiedHistory = true;
 }

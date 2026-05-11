@@ -71,6 +71,10 @@ BEGIN_COPYS(CharClipSet)
     END_COPYING_MEMBERS
 END_COPYS
 
+BEGIN_LOADS(CharClipSet)
+    ObjectDir::Load(bs);
+END_LOADS
+
 void CharClipSet::PreSave(BinStream &bs) {
     if (mPreviewChar)
         mPreviewChar->SetName("", nullptr);

@@ -14,7 +14,7 @@ public:
     AppMiniLeaderboardDisplay();
     // Hmx::Object
     virtual ~AppMiniLeaderboardDisplay();
-    // registers as MiniLeaderboardDisplay — transparent factory replacement
+    // not an oversight
     OBJ_CLASSNAME(MiniLeaderboardDisplay);
     OBJ_SET_TYPE(MiniLeaderboardDisplay);
     virtual DataNode Handle(DataArray *, bool);
@@ -45,9 +45,9 @@ protected:
     DataNode OnMsg(const ServerStatusChangedMsg &);
     DataNode OnMsg(const RCJobCompleteMsg &);
 
-    int mState; // 0x60
+    int unk60; // 0x60 - state?
     UIList *mLeaderboardList; // 0x64
     int mSongID; // 0x68
-    float mLoadTime; // 0x6c
+    float unk6c; // 0x6c
     std::vector<LeaderboardRow> mLBRows; // 0x70
 };

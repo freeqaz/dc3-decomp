@@ -23,11 +23,6 @@ CursorPanel::~CursorPanel() {}
 
 void CursorPanel::Poll() {
     PassiveMessagesPanel::Poll();
-#ifdef HX_NATIVE
-    // Cursor/Kinect tracking not available on native — skip gesture-driven cursor logic
-    return;
-#endif
-
     static Symbol ui_crown_player("ui_crown_player");
     const DataNode *pCrownPlayerNode = TheHamProvider->Property(ui_crown_player);
     MILO_ASSERT(pCrownPlayerNode, 0x1f);

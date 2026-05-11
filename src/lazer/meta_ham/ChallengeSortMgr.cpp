@@ -222,25 +222,27 @@ int ChallengeSortMgr::GetTargetChallengeScore(int i) { return 1000; }
 const char *ChallengeSortMgr::GetBestChallengeScoreGamertag(int songID) {
     int bestScore = -1;
     int bestIndex = -1;
-    for (int i = 0; i < (int)mChallengeRecords.size(); i++) {
+    for (int i = 0; i < mChallengeRecords.size(); i++) {
         int score = mChallengeRecords[i].GetChallengeRow().mScore;
         if (songID == mChallengeRecords[i].GetChallengeRow().mSongID && bestScore < score) {
             bestScore = score;
             bestIndex = i;
         }
     }
-    if (bestIndex != -1) {
-        int type = mChallengeRecords[bestIndex].GetChallengeRow().mType;
-        bool inRange = (type >= 0 && type <= 2);
-        if (!inRange) {
-            inRange = (type >= 3 && type <= 5);
-            if (!inRange) {
-                return mChallengeRecords[bestIndex].GetChallengerGamertag().Str();
-            }
-        }
-        return "HARMONIX";
+    if (bestIndex == -1) {
+        return gNullStr;
     }
-    return gNullStr;
+
+    int type = mChallengeRecords[bestIndex].GetChallengeRow().mType;
+    bool inRange = (type >= 0 && type <= 2);
+    if (!inRange) {
+        inRange = (type >= 3 && type <= 5);
+        if (!inRange) {
+            return mChallengeRecords[bestIndex].GetChallengerGamertag().Str();
+        }
+    }
+
+    return "HARMONIX";
 }
 
 int ChallengeSortMgr::GetChallengerXp(int i) {
@@ -278,10 +280,10 @@ void ChallengeSortMgr::OnEnter() {
     std::vector<ChallengeRow> playerChallenges;
     TheChallenges->GetOfficialChallenges(officialChallenges);
     TheChallenges->GetPlayerChallenges(playerChallenges);
-    for (int i = 0; i < (int)officialChallenges.size(); i++) {
+    for (int i = 0; i < officialChallenges.size(); i++) {
         mChallengeRecords.push_back(officialChallenges[i]);
     }
-    for (int i = 0; i < (int)playerChallenges.size(); i++) {
+    for (int i = 0; i < playerChallenges.size(); i++) {
         mChallengeRecords.push_back(playerChallenges[i]);
     }
     FOREACH (it, mSorts) {

@@ -347,24 +347,32 @@ DataNode Leaderboards::OnMsg(const RCJobCompleteMsg &msg) {
     return 1;
 }
 
-void Leaderboards::GetScores(int i) {
-    auto& _ref4 = mMode;
+void Leaderboards::GetScores(int songID) {
     if (!mLoading && !mLeaderboardJob) {
         mRows.clear();
         HamProfile *activeProfile = TheProfileMgr.GetActiveProfile(true);
         if (!ThePlatformMgr.IsSignedIntoLive(activeProfile->GetPadNum())) {
-            static Message leaderboards_failed("leaderboards_failed");
-            TheUI->Handle(leaderboards_failed, false);
+            static Message leaderboardsFailedMsg("leaderboards_failed");
+            TheUI->Handle(leaderboardsFailedMsg, false);
         } else {
-            mCurrentSongID = i;
+            int temp = mType;
+            mCurrentSongID = songID;
             mLoading = true;
-            if (mType == 1 || mType == 5) {
-                i = 1000; // idk
+            if (mType == 4 || mType == 5) {
+                temp = temp == 4 ? 0 : temp;
+                if (mType == 5) {
+                    temp = 1;
+                }
+                songID = 0x989a6e;
             }
-            auto it = mScoreCache.find(_ref4 + i); // idk about the param here
-            if (it->second.empty()) {
+
+            int padnum = activeProfile->GetPadNum();
+            int index =
+                (songID & ~0xFC000000) + (((((padnum << 2) + temp) << 2) + mMode) << 26);
+            auto it = mScoreCache.find(index);
+            if (it == mScoreCache.end()) {
                 mLeaderboardJob = new GetLeaderboardByPlayerJob(
-                    this, activeProfile, i, mType, _ref4, 10, 0
+                    this, activeProfile, songID, temp, mMode, 10, index
                 );
                 TheRockCentral.ManageJob(mLeaderboardJob);
             } else {
