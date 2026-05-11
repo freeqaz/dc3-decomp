@@ -482,6 +482,7 @@ def generate_build_ninja(
         name="download_tool",
         command=f"$python {download_tool} $tool $out --tag $tag",
         description="TOOL $out",
+        restat=True,
     )
 
     decompctx = config.tools_dir / "decompctx.py"
