@@ -119,6 +119,7 @@ private:
     void QueueCmdGetPlaylistsFromRC();
     void QueueCmdResolvePlaylists();
     void QueueCmdGetPlaylistFromRC(int);
+    void QueueCmdGetPlaylistsFromRC(int);
     void HandleCmdGetPlaylistFromRC();
     void QueueCmdAddPlaylistToRC(Playlist *);
     void HandleCmdAddPlaylistToRC();

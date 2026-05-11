@@ -2,6 +2,7 @@
 #include "FlowEventListener.h"
 #include "FlowTrigger.h"
 #include "flow/FlowManager.h"
+#include "flow/Flow.h"
 #include "flow/FlowNode.h"
 #include "flow/FlowQueueable.h"
 #include "obj/Data.h"
@@ -33,44 +34,6 @@ BEGIN_SAVES(FlowEventListener)
     bs << mStartOnActivate;
 END_SAVES
 
-INIT_REVS(3, 0)
-
-BEGIN_LOADS(FlowEventListener)
-    LOAD_REVS(bs)
-    ASSERT_REVS(3, 0)
-    LOAD_SUPERCLASS(FlowTrigger)
-    if (d.rev == 1) {
-        bool tmp;
-        d >> tmp;
-        if (tmp) {
-            mEventCount = 1;
-        }
-    } else {
-        if (d.rev > 1) {
-            bs >> mEventCount;
-        }
-        if (2 < d.rev) {
-            d >> mStartOnActivate;
-        }
-    }
-    // Apply default property values from event editor definitions
-    FOREACH (it, mTriggerEvents) {
-        DataArray *def = GetEventEditorDef(*it);
-        if (def && def->Size() > 2) {
-            for (int i = 2; i < def->Size(); i++) {
-                DataArray *node = def->Node(i).Array(def);
-                Symbol propSym = node->Sym(0);
-                if (!Property(propSym, false)) {
-                    Hmx::Object *dir = Dir();
-                    if (dir) {
-                        dir->SetProperty(propSym, def->Node(i).Array(def)->Node(1));
-                    }
-                }
-            }
-        }
-    }
-END_LOADS
-
 BEGIN_COPYS(FlowEventListener)
     COPY_SUPERCLASS(FlowTrigger)
     CREATE_COPY(FlowEventListener)
@@ -79,6 +42,39 @@ BEGIN_COPYS(FlowEventListener)
         COPY_MEMBER(mStartOnActivate)
     END_COPYING_MEMBERS
 END_COPYS
+
+INIT_REVS(3, 0)
+
+BEGIN_LOADS(FlowEventListener)
+    LOAD_REVS(bs)
+    ASSERT_REVS(3, 0)
+    LOAD_SUPERCLASS(FlowTrigger)
+    if (d.rev == 1) {
+        bool b;
+        d >> b;
+        if (b) {
+            mEventCount = 1;
+        }
+    } else {
+        if (d.rev > 1) {
+            d >> mEventCount;
+        }
+        if (d.rev > 2) {
+            d >> mStartOnActivate;
+        }
+    }
+    FOREACH (it, mTriggerEvents) {
+        DataArray *def = GetEventEditorDef(*it);
+        if (def) {
+            for (int i = 2; i < def->Size(); i++) {
+                DataArray *arr = def->Array(i);
+                if (!Property(arr->Sym(0), false)) {
+                    GetOwnerFlow()->SetProperty(arr->Sym(0), arr->Node(1));
+                }
+            }
+        }
+    }
+END_LOADS
 
 bool FlowEventListener::Activate() {
     FLOW_LOG("Activate\n");
@@ -144,13 +140,7 @@ bool FlowEventListener::ActivateTrigger() {
     FlowNode::Activate();
     if (!FlowNode::IsRunning() && mEventCount > 0 && mEventsFired >= mEventCount) {
         FLOW_LOG("releasing\n");
-        FLOW_LOG("Timed Release From Parent \n");
-        Timer timer;
-        timer.Reset();
-        timer.Start();
-        mFlowParent->ChildFinished(this);
-        timer.Stop();
-        TheFlowMgr->AddMs(timer.Ms());
+        FLOW_TIMED_RELEASE_FROM_PARENT;
     }
     return FlowNode::IsRunning();
 }

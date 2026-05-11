@@ -17,7 +17,7 @@ public:
         kFingerMiddle,
         kFingerRing,
         kFingerPinky,
-        kFingerNone
+        kNumFingers
     };
     struct FingerDesc {
         FingerDesc()
@@ -79,7 +79,7 @@ protected:
     bool mResetHandDest; // 0x74
     bool mResetCurHandTrans; // 0x75
     Transform mCurHandTrans; // 0x78
-    Transform mDestHandTrans; // 0xc8
+    Transform mDestHandTrans; // 0xb8
     float mFingerCurledLength; // 0xf8
     Vector3 mDestForwardVector; // 0xfc
     Vector3 mCurForwardVector; // 0x10c

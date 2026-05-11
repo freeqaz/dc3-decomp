@@ -769,6 +769,7 @@ void Game::LoadNewSong(Symbol s1, Symbol s2) {
     } else {
         RELEASE(mAltTempoMap);
     }
+
     LoadNewSongAudio(s1);
     Symbol s48(TheMaster->GetAudio()->Name());
     LoadNewSongMoves(s2, true);

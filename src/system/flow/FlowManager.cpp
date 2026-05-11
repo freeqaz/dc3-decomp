@@ -82,7 +82,7 @@ void FlowManager::Poll() {
     mFlowQueue.clear();
 
     ObjPtrVec<FlowNode> polls(mPollables);
-    for (ObjPtrVec<FlowNode>::iterator it = polls.begin(); it != polls.end(); ++it) {
+    FOREACH (it, polls) {
         (*it)->Execute(FlowNode::kWhenAble);
     }
 

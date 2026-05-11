@@ -21,6 +21,5 @@ public:
     CharClip *mClipA; // 0x34
     CharClip *mClipB; // 0x38
 
-protected:
     DataNode OnGenerateTransitions(DataArray *);
 };

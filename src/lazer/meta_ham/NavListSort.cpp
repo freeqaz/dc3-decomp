@@ -1,4 +1,5 @@
 #include "meta_ham/NavListSort.h"
+#include "math/Utl.h"
 #include "meta_ham/NavListNode.h"
 #include "math/Utl.h"
 #include "obj/Data.h"

@@ -6,6 +6,8 @@
 #include "utl/BinStream.h"
 #include "utl/MemMgr.h"
 
+/** "Group of Charpollable, polled in the order given,
+    use when the automatic CharPollable sorting is not correct or sufficient." */
 class CharPollGroup : public CharPollable, public CharWeightable {
 public:
     // Hmx::Object
@@ -30,8 +32,11 @@ public:
 
     void SortPolls();
 
+    /** "Ordered list of CharPollables, will be polled in this order." */
     ObjPtrList<CharPollable> mPolls; // 0x28
+    /** "Explicit thing I am changed by, to force sorting, if set, ignores polls" */
     ObjPtr<CharPollable> mChangedBy; // 0x3c
+    /** "Explicit thing I change, to force sorting, if set, ignores polls" */
     ObjPtr<CharPollable> mChanges; // 0x50
 
 protected:

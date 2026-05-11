@@ -14,12 +14,6 @@
 #include "obj/Object.h"
 #include "utl/Symbol.h"
 
-void RotateAboutZ(const Vector3 &v, float f, Vector3 &res) {
-    float c = Cosine(f);
-    float s = Sine(f);
-    res.Set(v.x * c - v.y * s, v.x * s + v.y * c, v.z);
-}
-
 CharServoBone::CharServoBone()
     : mPelvis(0), mFacingRotDelta(0), mFacingPosDelta(0), mFacingRot(0), mFacingPos(0),
       mMoveSelf(false), mDeltaChanged(false), mRegulate(this) {}

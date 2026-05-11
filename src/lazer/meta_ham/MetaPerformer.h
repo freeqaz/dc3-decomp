@@ -12,10 +12,13 @@
 #include "obj/Data.h"
 #include "obj/Object.h"
 #include "os/DateTime.h"
+#include "stl/_vector.h"
 
 #define MULTIPLAYER_SLOTS 2
 
 enum PlayerFlag {
+    // kPlayer1Only = 0,
+    // kPlayer2Only = 1,
 };
 
 enum EndGameResult {
@@ -40,7 +43,7 @@ public:
     virtual void Clear() { ResetSongs(); }
     virtual void ResetSongs();
     virtual void SelectSong(Symbol, int) = 0;
-    virtual void CompleteSong(int, int, int, float, bool);
+    virtual void CompleteSong(int stars, int, int, float, bool);
     virtual void AdvanceSong(int i) { mNumCompleted.push_back(i); }
     virtual bool HasInstarankData() { return mInstarank; }
     virtual Instarank *GetInstarank() { return mInstarank; }
@@ -50,18 +53,17 @@ public:
     bool IsLastSong() const;
     bool IsSetComplete() const;
     void Restart();
-    void TriggerSongCompletion(int, float);
-    void JumpGameplayTimerForward(int);
-    int GetMovesPassed(int);
-    bool IsDifficultyUnlocked(Symbol) const;
+    void TriggerSongCompletion(int totalScore, float stars);
+    void JumpGameplayTimerForward(int secs);
+    int GetMovesPassed(int player);
+    bool IsDifficultyUnlocked(Symbol diffSym) const;
     void CalculatePracticeResults();
-    Symbol GetCrewVenue(Symbol) const;
-    bool IsCrewAvailable(Symbol) const;
+    Symbol GetCrewVenue(Symbol crew) const;
+    bool IsCrewAvailable(Symbol crew) const;
     bool IsPlaylistEmpty() const;
     bool IsPlaylistPlayable() const;
     bool IsPlaylistCustom() const;
-    void SetPlaylist(Symbol);
-    void SetDefaultCrews(Symbol);
+    void SetPlaylist(Symbol playlistName);
     void StartPlaylist();
     void ContinuePlaylist();
     void ShufflePlaylist();
@@ -69,34 +71,34 @@ public:
     void UpdateSongFromPlaylist();
     void UpdateIsLastSong();
     int GetNumSongsInPlaylist() const;
-    void SetPlaylistIndex(int);
+    void SetPlaylistIndex(int idx);
     String GetPlaylistElapsedTimeString() const;
-    void PopulatePlaylistSongProvider(HamNavProvider *) const;
+    void PopulatePlaylistSongProvider(HamNavProvider *prov) const;
     String GetPlaylistNameAndDuration() const;
-    void GenerateRecommendedPracticeMoves(int);
-    void SendOmgDatapoint(int, int);
-    void SendDropInDatapoint(int);
-    void SendDropOutDatapoint(int);
+    void GenerateRecommendedPracticeMoves(int player);
+    void SendOmgDatapoint(int p1Score, int p2Score);
+    void SendDropInDatapoint(int playerIdx);
+    void SendDropOutDatapoint(int playerIdx);
     void HandleSkippedSong();
     void HandleSongRestart();
     bool IsGameplayTimerRunning() const;
-    void SetPlayedLongIntro(Symbol);
-    bool GetPlayedLongIntro(Symbol);
+    void SetPlayedLongIntro(Symbol intro);
+    bool GetPlayedLongIntro(Symbol intro);
     void SetDefaultCrews();
     bool HasRecommendedPracticeMoves() const;
-    void SetSong(Symbol);
-    bool CanUpdateScoreLeaderboards(bool);
-    void SetVenuePref(Symbol);
+    void SetSong(Symbol song);
+    bool CanUpdateScoreLeaderboards(bool unused);
+    void SetVenuePref(Symbol venue);
     void StartGameplayTimer();
     void CalcPrimarySongCharacter(
         const HamSongMetadata *data, Symbol &crew, Symbol &charSym, Symbol &outfit
     );
     void CalcSecondarySongCharacter(
-        const HamSongMetadata *, bool, Symbol, Symbol &, Symbol &, Symbol &
+        const HamSongMetadata *data, bool, Symbol, Symbol &, Symbol &, Symbol &
     );
     int GetPlaylistIndex() const;
     Symbol GetCompletedSong() const;
-    bool SongInSet(Symbol) const;
+    bool SongInSet(Symbol song) const;
     void StopGameplayTimer();
     void ClearCharacters();
     void CalcCharacters(
@@ -114,56 +116,64 @@ public:
     );
     bool SongEndsWithEndgameSequence() const;
     int DetermineDanceBattleWinner();
-    bool IsRecommendedPracticeMove(String) const;
-    bool IsRecommendedPracticeMoveGroup(const std::vector<class HamMove *> &) const;
-    void SetDefaultSongCharacter(int);
+    bool IsRecommendedPracticeMove(String move) const;
+    bool IsRecommendedPracticeMoveGroup(const std::vector<class HamMove *> &moves) const;
+    void SetDefaultSongCharacter(int playerIdx);
     void SetupCharacters();
-    void SetPlaylist(Playlist *);
+    void SetPlaylist(Playlist *playlist);
     void HandleGameplayEnded(const EndGameResult &);
     void CheckForFitnessAccomplishments();
-    int GetMovesPassedByType(int, Symbol);
+    int GetMovesPassedByType(int player, Symbol typeSym);
 
     bool HasPlaylist() const { return mPlaylist; }
     Playlist *GetPlaylist() { return mPlaylist; }
     int GetPlaylistElapsedTime() const { return mPlaylistElapsedTime; }
     int GetUnk38() const { return unk38; }
-
+    const std::vector<HamMoveScore> &GetMoveScore(int player) const {
+        return mMoveScores[player];
+    }
     Symbol LastPlayedMode() const { return mLastPlayedMode; }
     bool CompletedSongWithNoFlashcards() const { return mCompletedSongWithNoFlashcards; }
+
     const std::vector<HamMoveScore>& GetMoveScores() const { return mMoveScores[0]; }
     const std::vector<HamMoveScore>& GetMoveScores(int playerIdx) const { return mMoveScores[playerIdx]; }
 
     void SetSkipPracticeWelcome(bool b) { mSkipPracticeWelcome = b; }
 
     static void Init();
-    static void SendSpeechDatapoint(DataArray *, float, Symbol);
+    static void SendSpeechDatapoint(DataArray *a, float confidence, Symbol rule);
     static MetaPerformer *Current();
 
 private:
-    void SaveAndUploadScores(Symbol, int, int);
-    void SaveDanceBattleScores(Symbol);
+    void SaveAndUploadScores(Symbol song, int totalScore, int stars);
+    void SaveDanceBattleScores(Symbol song);
 
     static bool sCheatFinale;
     static class MetaPerformerHook *sScriptHook;
 
 protected:
-    virtual void OnMovePassed(int, HamMove *, int, float);
+    virtual void
+    OnMovePassed(int playerIndex, HamMove *move, int ratingIndex, float detectFrac);
 
     void OnGameInit();
     void OnFreestylePictureTaken();
-    void OnPracticeMovePassed(int, const char *, SkillsAward, bool);
-    void OnReviewMovePassed(int, HamMove *, int, float);
-    void OnRecallMovePassed(int, HamMove *);
+    void OnPracticeMovePassed(
+        int playerIndex, const char *moveName, SkillsAward award, bool slowMo
+    );
+    void
+    OnReviewMovePassed(int playerIndex, HamMove *move, int ratingIndex, float detectFrac);
+    void OnRecallMovePassed(int playerIndex, HamMove *move);
     void GetEraInvalid();
     bool IsCheatWinning() const;
     Symbol GetRandomVenue();
-    void PotentiallyUpdateLeaderboards(bool, Symbol, int, int, bool);
-    bool CheckRecommendedPracticeMove(String, int) const;
+    void
+    PotentiallyUpdateLeaderboards(bool, Symbol song, int totalScore, int stars, bool);
+    bool CheckRecommendedPracticeMove(String moveName, int player) const;
     void SetUpRecapResults();
     const std::vector<PracticeStep> &GetPracticeSteps() const;
     void GetCurrentRecapMove(int &, int &) const;
 
-    DataNode OnMsg(const RCJobCompleteMsg &);
+    DataNode OnMsg(const RCJobCompleteMsg &msg);
 
     int mEnrollmentIndex[2]; // 0x8
     std::vector<int> mNumCompleted; // 0x10
@@ -183,8 +193,11 @@ protected:
     bool mUnlockedExpertDifficulty; // 0x37
     int unk38; // 0x38
     int unk3c; // 0x3c
+
+    // indexed by number of players
     std::vector<HamMoveScore> mMoveScores[2]; // 0x40
     int mMovesAttempted[2]; // 0x58
+
     Symbol mLastPlayedMode; // 0x60
     std::vector<String> mRecommendedPracticeMoves; // 0x64
     SkillsAwardList *mSkillsAwards; // 0x70
@@ -217,7 +230,7 @@ public:
     virtual ~QuickplayPerformer() {}
     virtual DataNode Handle(DataArray *, bool);
     virtual bool IsWinning() const { return IsCheatWinning() != false; }
-    virtual void SelectSong(Symbol, int);
+    virtual void SelectSong(Symbol song, int);
     virtual void ChooseVenue();
 
     DataNode OnSetSong(DataArray *);

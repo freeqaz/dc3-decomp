@@ -1,5 +1,4 @@
 #pragma once
-
 #include "char/CharClip.h"
 #include "obj/Data.h"
 #include "obj/Dir.h"
@@ -11,12 +10,7 @@
 #include "utl/FilePath.h"
 #include "utl/MemMgr.h"
 
-struct ObjNameSort {
-    bool operator()(Hmx::Object *c1, Hmx::Object *c2) const {
-        return strcmp(c1->Name(), c2->Name()) < 0;
-    }
-};
-
+/** "A <a href='#CharClip'>CharClip</a> container." */
 class CharClipSet : public ObjectDir, public RndDrawable, public RndAnimatable {
 public:
     // Hmx::Object
@@ -40,6 +34,7 @@ public:
 
     // RndDrawable
     virtual void Draw();
+    virtual void DrawShowing();
     virtual void ListDrawChildren(std::list<class RndDrawable *> &);
 
     // ObjectDir
@@ -53,16 +48,23 @@ public:
     void SortGroups();
     void LoadCharacter();
 
-    FilePath mCharFilePath; // 0xec
-    ObjPtr<RndDir> mPreviewChar; // 0xf4
-    ObjPtr<CharClip> mPreviewClip; // 0x108
-    int mFilterFlags; // 0x11c
-    int mBpm; // 0x120
-    bool mPreviewWalk; // 0x124
-    ObjPtr<CharClip> mStillClip; // 0x128
-
 protected:
     CharClipSet();
     void RecenterAll();
     DataNode OnListClips(DataArray *);
+
+    /** "Preview base character to use-
+        for example, char/male/male_guitar.milo for male guitarist" */
+    FilePath mCharFilePath; // 0xec
+    ObjPtr<RndDir> mPreviewChar; // 0xf4
+    /** "Pick a clip to play" */
+    ObjPtr<CharClip> mPreviewClip; // 0x108
+    /** "Flags for filtering preview clip" */
+    int mFilterFlags; // 0x11c
+    /** "bpm for clip playing" */
+    int mBpm; // 0x120
+    /** "Allow preview character to move around and walk?" */
+    bool mPreviewWalk; // 0x124
+    /** "Set this to view drummer play anims" */
+    ObjPtr<CharClip> mStillClip; // 0x128
 };

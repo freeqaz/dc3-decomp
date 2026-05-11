@@ -31,9 +31,10 @@ bool AccomplishmentOneShot::AreOneShotConditionsMet(
     static Symbol hardest_stars("hardest_stars");
     const AccomplishmentProgress &progress = profile->GetAccomplishmentProgress();
     FOREACH (it, m_lConditions) {
-        Symbol sbc = it->mConditionType;
-        Difficulty d2 = it->mDifficulty;
-        int i3 = it->mCount;
+        const AccomplishmentCondition &cur = *it;
+        Symbol condition = cur.mCondition;
+        Difficulty d2 = cur.mDifficulty;
+        int val = cur.mValue;
         unsigned char b6;
         if (d2 == kDifficultyBeginner) {
             b6 = 1;
@@ -42,40 +43,44 @@ bool AccomplishmentOneShot::AreOneShotConditionsMet(
         } else {
             b6 = d2 <= d;
         }
-        if (b6) {
-            int i5;
-            if (sbc == stars) {
+        if (b6 != 0) {
+            if (condition == stars) {
                 static Symbol stars_earned("stars_earned");
                 const DataNode *pStarsNode =
                     TheHamProvider->Property(stars_earned, false);
                 MILO_ASSERT(pStarsNode, 0x112);
-                i5 = pStarsNode->Int();
-                if (i5 >= i3) return true;
-            } else if (sbc == flawless_a) {
-                if (progress.GetFlawlessMoveCount() >= i3) return true;
-            } else if (sbc == flawless_b) {
-                if (progress.GetFlawlessMoveCount() >= i3) return true;
-            } else if (sbc == nices_a) {
-                if (progress.GetNiceMoveCount() >= i3) return true;
-            } else if (sbc == nices_b) {
-                if (progress.GetNiceMoveCount() >= i3) return true;
-            } else if (sbc == days) {
-                if (progress.NumDays() >= i3) return true;
-            } else if (sbc == weekends) {
-                if (progress.NumWeekends() >= i3) return true;
-            } else if (sbc == hardest_stars) {
+                if (pStarsNode->Int() >= val)
+                    return true;
+            } else if (condition == flawless_a) {
+                if (progress.GetFlawlessMoveCount() >= val)
+                    return true;
+            } else if (condition == flawless_b) {
+                if (progress.GetFlawlessMoveCount() >= val)
+                    return true;
+            } else if (condition == nices_a) {
+                if (progress.GetNiceMoveCount() >= val)
+                    return true;
+            } else if (condition == nices_b) {
+                if (progress.GetNiceMoveCount() >= val)
+                    return true;
+            } else if (condition == days) {
+                if (progress.NumDays() >= val)
+                    return true;
+            } else if (condition == weekends) {
+                if (progress.NumWeekends() >= val)
+                    return true;
+            } else if (condition == hardest_stars) {
                 static Symbol omg("omg");
                 if (s == omg) {
                     static Symbol stars_earned("stars_earned");
                     const DataNode *pStarsNode =
                         TheHamProvider->Property(stars_earned, false);
                     MILO_ASSERT(pStarsNode, 0x14C);
-                    i5 = pStarsNode->Int();
-                    if (i5 >= i3) return true;
-                } else
-                    continue;
+                    if (pStarsNode->Int() >= val)
+                        return true;
+                }
             } else {
-                MILO_NOTIFY("Condition is not currently supported: %s ", sbc);
+                MILO_NOTIFY("Condition is not currently supported: %s ", condition);
                 return false;
             }
         }

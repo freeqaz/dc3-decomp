@@ -24,6 +24,11 @@ public:
 
     OBJ_MEM_OVERLOAD(0x19)
     NEW_OBJ(BustAMoveData)
+
+    const std::vector<BAMPhrase> &Phrases() const { return mPhrases; }
+    int PhraseSize() const { return mPhrases.size(); }
+    BAMPhrase *PhraseAt(int i) { return &mPhrases[i]; }
+
 protected:
     BustAMoveData();
 

@@ -1,6 +1,7 @@
 #include "meta_ham/HamStoreOffer.h"
-#include "meta/Sorting.h"
+#include "hamobj/Difficulty.h"
 #include "meta/SongMgr.h"
+#include "meta/Sorting.h"
 #include "meta/StoreOffer.h"
 #include "obj/Data.h"
 #include "os/DateTime.h"

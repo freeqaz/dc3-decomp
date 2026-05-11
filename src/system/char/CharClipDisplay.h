@@ -11,19 +11,23 @@ struct CharClipDisplay {
         mClipNameBuffer[0] = '\0';
     }
 
+    void SetText(char const *);
+    float GetX(float) const;
+    void GetXY(Vector2 &, float) const;
+    void SetStartEnd(float, float, bool);
+    void DrawBlend(float, float);
+    void DrawBeatString(const char *, float, const Hmx::Color &);
+    void DrawCursor();
+    void SetClip(CharClip *, bool);
+    void DrawBeatString(float, const Hmx::Color &);
+    void DrawTrack();
+
+    /** "Zoom value for the highlight display" */
+    static float sZoom;
+    static float GetSEm() { return sEm; }
     static float LineSpacing();
     static void Init(ObjectDir *);
     static Hmx::Object *FindSource(Hmx::Object *);
-    void SetText(char const *);
-    float GetX(float) const;
-    void SetStartEnd(float, float, bool);
-    void DrawBlend(float, float);
-    void DrawBeatString(char const *, float, Hmx::Color const &);
-    void DrawCursor();
-    void SetClip(CharClip *, bool);
-    void DrawBeatString(float, Hmx::Color const &);
-    void DrawTrack();
-    static float GetSEm() { return sEm; }
 
     CharClip *mClip;
     float mViewStartBeat;
@@ -36,8 +40,6 @@ struct CharClipDisplay {
     float mBlendWeight;
     char mClipNameBuffer[64];
     float mPadding;
-
-    static float sZoom;
 
 protected:
     static float sEm;

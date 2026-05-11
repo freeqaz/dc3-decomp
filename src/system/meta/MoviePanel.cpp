@@ -190,11 +190,9 @@ void MoviePanel::Poll() {
         if (mSubtitles && mSubtitleLabel) {
             int frame = mMovie.GetFrame();
             DataArray *arr = mSubtitles->Array(mCurrentSubtitleIndex);
-            if (mSubtitleCleared) {
-                if (arr->Int(0) <= frame) {
-                    mSubtitleLabel->SetSubtitle(arr);
-                    mSubtitleCleared = false;
-                }
+            if (mSubtitleCleared && arr->Int(0) <= frame) {
+                mSubtitleLabel->SetSubtitle(arr);
+                mSubtitleCleared = false;
             }
             if (arr->Int(1) < frame) {
                 if (mSubtitles->Size() > mCurrentSubtitleIndex + 1) {

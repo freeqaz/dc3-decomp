@@ -3,6 +3,7 @@
 #include "hamobj/Difficulty.h"
 #include "hamobj/HamNavList.h"
 #include "macros.h"
+#include "math/Utl.h"
 #include "meta_ham/Campaign.h"
 #include "meta_ham/HamPanel.h"
 #include "meta_ham/HamProfile.h"
@@ -21,6 +22,7 @@
 #include "rndobj/Tex.h"
 #include "ui/UILabel.h"
 #include "ui/UIPanel.h"
+#include "utl/MakeString.h"
 #include "utl/Std.h"
 #include "utl/Symbol.h"
 #include <cstdio>
@@ -69,12 +71,17 @@ void CampaignMasterQuestSongSelectPanel::Enter() {
         Symbol crew = TheCampaign->GetMQCrew();
         static DataNode &mq_difficulty = DataVariable("mq_difficulty");
         Difficulty mqDiff = (Difficulty)mq_difficulty.Int();
-        int y, x;
+        int x, y;
         TheHamSongMgr.GetCrewStarsForDifficulty(pProfile, crew, mqDiff, x, y);
         char buffer[64];
-        sprintf(buffer, x == y ? "QR_%s.tex" : "crewLogo_%s.tex", crew.Str());
-        RndMat *logo = LoadedDir()->Find<RndMat>("logo.mat");
-        RndTex *tex = LoadedDir()->Find<RndTex>(buffer);
+        if (x == y) {
+            sprintf(buffer, "QR_%s.tex", crew.Str());
+        } else {
+            sprintf(buffer, "crewLogo_%s.tex", crew.Str());
+        }
+
+        RndMat *logo = mDir->Find<RndMat>("logo.mat");
+        RndTex *tex = mDir->Find<RndTex>(buffer);
         logo->SetDiffuseTex(tex);
     }
 }
@@ -141,14 +148,10 @@ void CampaignMasterQuestSongSelectPanel::OnHighlightSong() {
     mImpl->mContextualInstructionsLabel->SetPrelocalizedString(String());
     static DataNode &mq_difficulty = DataVariable("mq_difficulty");
     Difficulty mqDiff = (Difficulty)mq_difficulty.Int();
+    SongStatusMgr *songstatusMgr =
+        TheProfileMgr.GetActiveProfile(true)->GetSongStatusMgr();
     bool bref;
-    int stars =
-        TheProfileMgr.GetActiveProfile(true)->GetSongStatusMgr()->GetStarsForDifficulty(
-            songID, mqDiff, bref
-        );
-    if (stars >= 5) {
-        stars = 5;
-    }
+    int stars = Min(5, songstatusMgr->GetStarsForDifficulty(songID, mqDiff, bref));
     mImpl->mContextualStarsLabel->SetPrelocalizedString(
         String(MakeString("%d / %d", stars, 5))
     );
@@ -204,14 +207,11 @@ void CampaignMasterQuestSongSelectPanel::OnHighlightHeader() {
         Symbol song = *it;
         HamProfile *activeProfile = TheProfileMgr.GetActiveProfile(true);
         SongStatusMgr *mgr = activeProfile->GetSongStatusMgr();
-        int stars = mgr->GetStarsForDifficulty(
-            TheHamSongMgr.GetSongIDFromShortName(song),
-            mqDiff,
-            b
-        );
-        if (stars >= 5) {
-            stars = 5;
-        }
+        int stars =
+            Min(5,
+                mgr->GetStarsForDifficulty(
+                    TheHamSongMgr.GetSongIDFromShortName(song), mqDiff, b
+                ));
         totalStars += stars;
         maxStars += 5;
     }

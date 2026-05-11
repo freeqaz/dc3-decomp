@@ -1,5 +1,6 @@
 #pragma once
 #include "game/GamePanel.h"
+#include "gesture/GestureMgr.h"
 #include "gesture/LiveCameraInput.h"
 #include "meta_ham/BlacklightPanel.h"
 #include "meta_ham/HelpBarPanel.h"

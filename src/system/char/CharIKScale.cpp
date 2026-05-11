@@ -115,9 +115,7 @@ void CharIKScale::PollDeps(
     std::list<Hmx::Object *> &changedBy, std::list<Hmx::Object *> &change
 ) {
     change.push_back(mDest);
-    for (ObjPtrList<RndTransformable>::iterator it = mSecondaryTargets.begin();
-         it != mSecondaryTargets.end();
-         ++it) {
+    FOREACH (it, mSecondaryTargets) {
         change.push_back(*it);
     }
     changedBy.push_back(mDest);

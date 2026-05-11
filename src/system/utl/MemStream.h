@@ -27,7 +27,7 @@ private:
     virtual void WriteImpl(const void *, int);
     virtual void SeekImpl(int, SeekType);
 
-    bool mFail; // 0xc
-    int mTell; // 0x10
-    std::vector<char> mBuffer; // 0x14
+    bool mFail; // 0x10
+    int mTell; // 0x14
+    std::vector<char> mBuffer; // 0x18
 };

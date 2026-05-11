@@ -87,6 +87,11 @@ void ContentLoadingPanel::Poll() {
     }
 }
 
+void ContentLoadingPanel::ContentMounted(char const *c1, char const *c2) {
+    mMountedCount++;
+    ShowIfPossible();
+}
+
 BEGIN_HANDLERS(ContentLoadingPanel)
     HANDLE_ACTION(allowed_to_show, AllowedToShow(_msg->Int(2)))
     HANDLE_SUPERCLASS(UIPanel)

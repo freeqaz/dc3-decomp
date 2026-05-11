@@ -21,7 +21,7 @@ public:
     std::vector<Symbol> &GetFlatList() { return mFlatList; }
 
 private:
-    MQSongSortMgr(SongPreview &);
+    MQSongSortMgr(SongPreview &sp);
     virtual ~MQSongSortMgr();
 
 protected:

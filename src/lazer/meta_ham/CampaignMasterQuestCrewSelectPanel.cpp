@@ -7,6 +7,7 @@
 #include "meta_ham/Campaign.h"
 #include "meta_ham/HamSongMgr.h"
 #include "obj/Data.h"
+#include "obj/Dir.h"
 #include "obj/Msg.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
@@ -131,14 +132,15 @@ Symbol CampaignMasterQuestCrewSelectPanel::GetSelectedCrew() {
 
 void CampaignMasterQuestCrewSelectPanel::UpdateCrewMesh(Symbol s) {
     String matName = MakeString("crew_portrait.mat");
-    RndMat *pMat = LoadedDir()->Find<RndMat>(matName.c_str(), false);
+    RndMat *pMat = mDir->Find<RndMat>(matName.c_str(), false);
     MILO_ASSERT(pMat, 0xea);
     String meshName = MakeString("crew_portrait.mesh");
-    RndMesh *pMesh = LoadedDir()->Find<RndMesh>(meshName.c_str(), false);
+    RndMesh *pMesh = mDir->Find<RndMesh>(meshName.c_str(), false);
     MILO_ASSERT(pMesh, 0xed);
+
     String texName;
     texName = MakeString("%s.tex", s.Str());
-    RndTex *tex = LoadedDir()->Find<RndTex>(texName.c_str(), false);
+    RndTex *tex = mDir->Find<RndTex>(texName.c_str(), false);
     if (tex) {
         pMat->SetDiffuseTex(tex);
         pMesh->SetMat(pMat);

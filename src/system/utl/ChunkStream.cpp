@@ -21,8 +21,7 @@ namespace {
         for (; gDecompressionThread != false;) {
             if (ChunkStream::PollDecompressionWorker()) {
                 gDataProcessedEvt.Set();
-            }
-            else {
+            } else {
                 gDataReadyEvt.Wait(-1);
             }
         }
@@ -399,7 +398,9 @@ BinStream &MarkChunk(BinStream &bs) {
     return bs;
 }
 
-void DecompressMemHelper(const void *compressedMem, int size, void *dst, int &dstLen, const char *c) {
+void DecompressMemHelper(
+    const void *compressedMem, int size, void *dst, int &dstLen, const char *c
+) {
     unsigned int rawSize = *(unsigned int *)compressedMem;
     DecompressMem((const char *)compressedMem + 4, size - 4, dst, dstLen, c);
 #ifdef HX_NATIVE

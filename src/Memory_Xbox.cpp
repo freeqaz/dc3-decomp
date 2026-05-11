@@ -11,7 +11,7 @@
 
 extern "C" {
     void *XMemAllocDefault(unsigned long size, unsigned long attrs);
-    void *XMemFreeDefault(void *ptr, unsigned long attrs);
+    void XMemFreeDefault(void *ptr, unsigned long attrs);
     int XMemSizeDefault(void *ptr, unsigned long attrs);
 }
 

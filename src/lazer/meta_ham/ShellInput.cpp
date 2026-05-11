@@ -1,4 +1,5 @@
 #include "ShellInput.h"
+#include "OverlayPanel.h"
 #include "flow/PropertyEventProvider.h"
 #include "game/GameMode.h"
 #include "game/GamePanel.h"
@@ -162,6 +163,54 @@ void ShellInput::Poll() {
         }
         lastHasSkeleton = hasSkel;
     }
+
+    if (TheGestureMgr->InControllerMode() && unk_0x68.SplitMs() >= unk_0x98) {
+        ExitControllerMode(true);
+    }
+    if (mHandsUpGestureFilter->HandsUp() && TheHamUI.EventDialogPanel()
+        && TheHamUI.EventDialogPanel()->GetState() != UIPanel::kUp
+        && !TheHamUI.InTransition()) {
+        static Symbol ui_nav_mode("ui_nav_mode");
+        static Symbol movie("movie");
+        const DataNode *pNavModeNode = TheHamProvider->Property(ui_nav_mode);
+        MILO_ASSERT(pNavModeNode, 0xd2);
+        Symbol navmodeSym = pNavModeNode->Sym();
+        if (TheGestureMgr->IDEnabled() && navmodeSym != movie) {
+            mHandsUpGestureFilter->Clear();
+            if (TheHamUI.GetOverlayPanel()) {
+                TheHamUI.GetOverlayPanel()->Dismiss();
+            }
+            OverlayPanel *pCorrectPanel =
+                ObjectDir::Main()->Find<OverlayPanel>("correct_identity_panel");
+            MILO_ASSERT(pCorrectPanel->CheckIsLoaded(), 0xdc);
+            MILO_ASSERT(pCorrectPanel->LoadedDir(), 0xdd);
+            TheHamUI.SetOverlayPanel(pCorrectPanel);
+        }
+    }
+
+    OverlayPanel *panel = TheHamUI.GetOverlayPanel();
+    if (panel) {
+        mHandsUpGestureFilter->Clear();
+        if (TheHamUI.GetTransitionState() != 0) {
+            panel->Dismiss();
+        }
+    }
+    bool raised = mHandsUpGestureFilter->RaisedMs() > 0.0f;
+    HamNavList::sForceDisengage = raised != false;
+    mCursorPanel->Poll();
+    mDepthBuffer->Poll();
+    mSkelIdentifier->Poll();
+    mSkelChooser->Poll();
+    mSkelExtTracker->Poll();
+
+    bool hasSkel = HasSkeleton();
+    if (hasSkel != sHasSkeleton) {
+        static Symbol has_skeleton("has_skeleton");
+        static Message updateSkeletonStatus("update_skeleton_status");
+        Handle(updateSkeletonStatus, false);
+        TheHamProvider->SetProperty(has_skeleton, hasSkel);
+    }
+    sHasSkeleton = hasSkel;
 
     if (TheUI->InTransition()) {
         SetCursorAlpha(0);
@@ -373,6 +422,7 @@ void ShellInput::SyncVoiceControl() { // almost done
         || TheUIEventMgr->HasActiveDialogEvent() || !TheSpeechMgr->SpeechSupported())) {
         TheSpeechMgr->SetRecognizing(true);
         mVoiceControlEnabled = true;
+
         static Symbol show_microphone_icon("show_microphone_icon");
         static Message show_microphone_msg(show_microphone_icon);
         TheHamProvider->Handle(show_microphone_msg, false);
@@ -384,7 +434,7 @@ void ShellInput::SyncVoiceControl() { // almost done
         static Symbol voice_commander_tip_temporary("voice_commander_tip_temporary");
         const DataNode *voiceProp =
             mInputPanel->Property(voice_commander_tip_temporary, false);
-        if (!TheProfileMgr.GetShowVoiceTip() || !voiceProp || voiceProp->Int() == 1) {
+        if (!TheProfileMgr.GetShowVoiceTip() || (voiceProp && voiceProp->Int() == 1)) {
             TheHamProvider->SetProperty(voice_commander_tip_temporary, true);
         } else {
             TheHamProvider->SetProperty(voice_commander_tip_temporary, false);
@@ -548,32 +598,30 @@ DataNode ShellInput::OnMsg(const ButtonDownMsg &msg) {
         || msg.GetButton() == kPad_RStickLeft || msg.GetButton() == kPad_RStickRight
         || msg.GetButton() == kPad_Xbox_LT || msg.GetButton() == kPad_Xbox_RT) {
         TheSynth->RunFlow("invalid_select.flow");
-    } else {
-        if (TheGestureMgr->InControllerMode()) {
-            if (msg.GetButton() == kPad_Start) {
-                ExitControllerMode(false);
-                return 0;
-            } else {
-                if (mInputPanel) {
-                    bool b2 = false;
-                    static Symbol is_gameplay_panel("is_gameplay_panel");
-                    const DataNode *prop =
-                        mInputPanel->Property(is_gameplay_panel, false);
-                    b2 = prop && prop->Int() == 1;
-                    if (!b2 && !TheGestureMgr->InControllerMode()) {
-                        EnterControllerMode(false);
-                        if (msg.GetButton() != kPad_Xbox_B) {
-                            if (!TheHamUI.GetHelpBarPanel()) {
-                                TheSynth->RunFlow("invalid_select.flow");
-                            }
-                            return 0;
-                        }
-                    }
+        return DATA_UNHANDLED;
+    } else if (TheGestureMgr->InControllerMode() && msg.GetButton() == kPad_Start) {
+        ExitControllerMode(false);
+        return 0;
+    } else if (mInputPanel) {
+        bool b2 = false;
+        static Symbol is_gameplay_panel("is_gameplay_panel");
+        const DataNode *prop = mInputPanel->Property(is_gameplay_panel, false);
+        if (prop && prop->Int() == 1) {
+            b2 = true;
+        }
+        if (!b2 && !TheGestureMgr->InControllerMode()) {
+            EnterControllerMode(false);
+            if (msg.GetButton() != kPad_Xbox_B) {
+                if (!TheHamUI.GetHelpBarPanel()->AllowController()) {
+                    TheSynth->RunFlow("invalid_select.flow");
                 }
+                return 0;
             }
         }
+        return DATA_UNHANDLED;
+    } else {
+        return DATA_UNHANDLED;
     }
-    return DATA_UNHANDLED;
 }
 
 DataNode ShellInput::OnMsg(const JoypadConnectionMsg &msg) {

@@ -1,10 +1,13 @@
 #pragma once
 #include "ChallengeSortMgr.h"
 #include "NavListNode.h"
+#include "hamobj/Difficulty.h"
+#include "obj/Data.h"
 
 class ChallengeHeaderNode : public NavListHeaderNode {
 public:
     ChallengeHeaderNode(NavListItemSortCmp *, Symbol, bool);
+    virtual ~ChallengeHeaderNode() {}
     virtual void Text(UIListLabel *, UILabel *) const;
     virtual DataNode Handle(DataArray *, bool);
     virtual Symbol OnSelect();
@@ -15,11 +18,7 @@ public:
     virtual bool IsActive() const;
     virtual const char *GetAlbumArtPath();
     virtual void SetCollapseStateIcon(bool) const;
-#ifdef HX_NATIVE
-    virtual void Renumber(std::vector<NavListSortNode *> &);
-#else
     virtual void Renumber(stlpmtx_std::vector<NavListSortNode *> &);
-#endif
 
     int GetChallengeExp();
     int GetPotentialChallengeExp(NavListSortNode *);
@@ -34,21 +33,23 @@ protected:
 
 class ChallengeSortNode : public NavListItemNode {
 public:
-    ChallengeSortNode(NavListItemSortCmp *, ChallengeRecord *); // impl in
-                                                                // ChallengeSortByScore
+    ChallengeSortNode(NavListItemSortCmp *cmp, ChallengeRecord *record)
+        : NavListItemNode(cmp), mChallengeRecord(record) {}
+    virtual DataNode Handle(DataArray *, bool);
     virtual Symbol GetToken() const;
-    virtual void Text(UIListLabel *, UILabel *) const;
-    virtual void Custom(UIListCustom *, Hmx::Object *) const;
     virtual Symbol OnSelect();
     virtual Symbol Select();
-    virtual const char *GetAlbumArtPath();
     virtual void OnContentMounted(const char *, const char *);
+    virtual void Text(UIListLabel *, UILabel *) const;
+    virtual void Custom(UIListCustom *, Hmx::Object *) const;
+    virtual char const *GetAlbumArtPath();
 
     int GetChallengeExp();
     const char *GetChallengerGamertag();
     int GetChallengeScore();
     int GetSongID();
     int GetChallengerXp();
+    int GetDifficulty();
     void SetMedalIcon(UILabel *) const;
     void SetNewIcon(UILabel *) const;
     void SetBuyIcon(UILabel *) const;

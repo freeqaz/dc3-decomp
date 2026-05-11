@@ -1,4 +1,6 @@
 #include "char/CharClipSet.h"
+#include "char/CharBoneDir.h"
+#include "char/CharClip.h"
 #include "char/CharClipGroup.h"
 #include "obj/ObjPtrVec_impl.h"
 #include "char/Character.h"
@@ -13,7 +15,9 @@
 #include "obj/Msg.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
+#include "rndobj/Draw.h"
 #include "utl/BinStream.h"
+#include "utl/FilePath.h"
 
 CharClipSet::CharClipSet()
     : mCharFilePath(), mPreviewChar(this), mPreviewClip(this), mStillClip(this) {
@@ -22,6 +26,14 @@ CharClipSet::CharClipSet()
 }
 
 CharClipSet::~CharClipSet() {}
+
+BEGIN_HANDLERS(CharClipSet)
+    HANDLE_ACTION(sort_groups, SortGroups())
+    HANDLE_ACTION(recenter_all, RecenterAll())
+    HANDLE_ACTION(load_character, LoadCharacter())
+    HANDLE(list_clips, OnListClips)
+    HANDLE_SUPERCLASS(ObjectDir)
+END_HANDLERS
 
 BEGIN_PROPSYNCS(CharClipSet)
     SYNC_PROP(char_file_path, mCharFilePath)
@@ -36,14 +48,14 @@ END_PROPSYNCS
 BEGIN_SAVES(CharClipSet)
     SAVE_REVS(24, 0)
     SAVE_SUPERCLASS(ObjectDir)
-    if (IsProxy())
-        return;
-    bs << mCharFilePath;
-    bs << mPreviewClip;
-    bs << mFilterFlags;
-    bs << mBpm;
-    bs << mPreviewWalk;
-    bs << mStillClip;
+    if (!IsProxy()) {
+        bs << mCharFilePath;
+        bs << mPreviewClip;
+        bs << mFilterFlags;
+        bs << mBpm;
+        bs << mPreviewWalk;
+        bs << mStillClip;
+    }
 END_SAVES
 
 BEGIN_COPYS(CharClipSet)
@@ -59,13 +71,9 @@ BEGIN_COPYS(CharClipSet)
     END_COPYING_MEMBERS
 END_COPYS
 
-BEGIN_LOADS(CharClipSet)
-    ObjectDir::Load(bs);
-END_LOADS
-
 void CharClipSet::PreSave(BinStream &bs) {
     if (mPreviewChar)
-        mPreviewChar->SetName("", 0);
+        mPreviewChar->SetName("", nullptr);
     if (bs.Cached()) {
         ResetPreviewState();
         ResetEditorState();
@@ -317,7 +325,7 @@ void CharClipSet::ResetPreviewState() {
 }
 
 void CharClipSet::SortGroups() {
-    for (ObjDirItr<CharClipGroup> it(this, false); it != 0; ++it) {
+    for (ObjDirItr<CharClipGroup> it(this, false); it != nullptr; ++it) {
         it->Sort();
     }
 }
@@ -326,10 +334,10 @@ void CharClipSet::LoadCharacter() {
     MILO_ASSERT(TheLoadMgr.EditMode(), 0x14b);
     if (Dir() == this) {
         delete mPreviewChar;
-        ObjectDir *dummy =
+        ObjectDir *loadedDir =
             dynamic_cast<RndDir *>(DirLoader::LoadObjects(mCharFilePath, 0, 0));
-        mPreviewChar = dynamic_cast<RndDir *>(dummy);
-        Character *theChar = dynamic_cast<Character *>(dummy);
+        mPreviewChar = dynamic_cast<RndDir *>(loadedDir);
+        Character *theChar = dynamic_cast<Character *>(loadedDir);
         if (mPreviewChar && !theChar) {
             for (ObjDirItr<Character> it(mPreviewChar, true); it != nullptr; ++it) {
                 mPreviewChar = it;
@@ -340,10 +348,11 @@ void CharClipSet::LoadCharacter() {
             mPreviewChar->Enter();
             mPreviewChar->SetName("preview_character", this);
         }
-    } else
+    } else {
         MILO_NOTIFY(
             "Preview character can only be loaded if the CharClipSet is the top-level directory."
         );
+    }
 }
 
 void CharClipSet::RecenterAll() { MILO_NOTIFY("You can only recenter clips from PC"); }
@@ -366,11 +375,3 @@ DataNode CharClipSet::OnListClips(DataArray *) {
     arr->Release();
     return ret;
 }
-
-BEGIN_HANDLERS(CharClipSet)
-    HANDLE_ACTION(sort_groups, SortGroups())
-    HANDLE_ACTION(recenter_all, RecenterAll())
-    HANDLE_ACTION(load_character, LoadCharacter())
-    HANDLE(list_clips, OnListClips)
-    HANDLE_SUPERCLASS(ObjectDir)
-END_HANDLERS

@@ -30,6 +30,7 @@ public:
     NEW_OBJ(CharIKMidi)
 
     void NewSpot(RndTransformable *, float);
+    float Frac() const { return mFrac; }
 
 protected:
     CharIKMidi();

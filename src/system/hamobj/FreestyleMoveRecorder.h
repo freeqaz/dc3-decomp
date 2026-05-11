@@ -7,6 +7,7 @@
 #include "rndobj/Tex.h"
 #include "utl/MemMgr.h"
 #include "utl/Str.h"
+#include "utl/Symbol.h"
 
 #define MAX_FREESTYLE_MOVES 4
 
@@ -38,7 +39,8 @@ public:
     void StopPlayback();
     void ClearDancerTake();
     BaseSkeleton *GetLiveSkeleton();
-    float CompareSkeletonPositions(const BaseSkeleton *, const BaseSkeleton *, float) const;
+    float
+    CompareSkeletonPositions(const BaseSkeleton *, const BaseSkeleton *, float) const;
     void AssignStaticInstance();
     void DrawDebug();
     void PlaybackComplete();

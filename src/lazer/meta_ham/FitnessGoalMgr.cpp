@@ -16,6 +16,7 @@
 #include "os/PlatformMgr.h"
 #include "ui/UI.h"
 #include "utl/DataPointMgr.h"
+#include "utl/Std.h"
 #include "utl/Symbol.h"
 
 FitnessGoalMgr::FitnessGoalMgr() {

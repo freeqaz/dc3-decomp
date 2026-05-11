@@ -1,5 +1,6 @@
 #include "meta_ham/VoiceControlPanel.h"
 #include "HamPanel.h"
+#include "HamSongMetadata.h"
 #include "MultiUserGesturePanel.h"
 #include "ProfileMgr.h"
 #include "flow/Flow.h"
@@ -20,6 +21,7 @@
 #include "meta_ham/MetaPerformer.h"
 #include "meta_ham/MultiUserGesturePanel.h"
 #include "meta_ham/OverlayPanel.h"
+#include "meta_ham/SongRecord.h"
 #include "meta_ham/SongSortMgr.h"
 #include "obj/Data.h"
 #include "obj/Dir.h"
@@ -32,11 +34,13 @@
 #include "os/System.h"
 #include "rndobj/Anim.h"
 #include "rndobj/Draw.h"
+#include "stl/_vector.h"
 #include "synth/MetaMusic.h"
 #include "ui/UI.h"
 #include "ui/UIColor.h"
 #include "ui/UIScreen.h"
 #include "utl/Locale.h"
+#include "utl/Std.h"
 #include "utl/Symbol.h"
 
 VoiceControlPanel::VoiceControlPanel()
@@ -400,10 +404,10 @@ DataNode VoiceControlPanel::OnMsg(const SpeechRecoMessage &msg) {
             } else if (rulename == "mode" && mActive && mSong != gNullStr) {
                 Symbol arrSym = tags->Sym(0);
                 float frame = 0;
-                if (arrSym == "practice") {
+                if (mGameMode == "practice") {
                     frame = 1;
                 }
-                if (arrSym == "dance_battle") {
+                if (mGameMode == "dance_battle") {
                     frame = 2;
                 }
                 DataDir()->Find<RndAnimatable>("selected_mode.anim")->SetFrame(frame, 1);

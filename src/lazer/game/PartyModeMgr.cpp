@@ -5,10 +5,12 @@
 #include "hamobj/Difficulty.h"
 #include "hamobj/HamGameData.h"
 #include "hamobj/HamPlayerData.h"
+#include "math/Utl.h"
 #include "meta_ham/HamProfile.h"
 #include "meta_ham/HamSongMetadata.h"
 #include "meta_ham/HamSongMgr.h"
 #include "meta_ham/MetaPerformer.h"
+#include "meta_ham/MetagameStats.h"
 #include "meta_ham/ProfileMgr.h"
 #include "meta_ham/SongRecord.h"
 #include "meta_ham/Utl.h"
@@ -26,10 +28,12 @@
 #include "os/Debug.h"
 #include "os/PlatformMgr.h"
 #include "os/System.h"
+#include "stl/_vector.h"
 #include "ui/UI.h"
 #include "utl/DataPointMgr.h"
 #include "utl/JobMgr.h"
 #include "utl/Locale.h"
+#include "utl/PseudoRandomPicker.h"
 #include "utl/Std.h"
 #include "utl/Symbol.h"
 #include <cstdio>
@@ -1192,7 +1196,9 @@ void PartyModeMgr::SetupInfinitePartyMode() {
     }
     ResetModes(true);
     ResetMicrogames();
-    RELEASE(mCurrEvent);
+    if (mCurrEvent) {
+        RELEASE(mCurrEvent);
+    }
     mCurrEvent = new SubMode();
     GetDateAndTime(mRoundStartTime);
 }

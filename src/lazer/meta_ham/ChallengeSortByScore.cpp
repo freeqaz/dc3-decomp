@@ -6,9 +6,6 @@
 #include "meta/Sorting.h"
 #include "os/Debug.h"
 
-ChallengeSortNode::ChallengeSortNode(NavListItemSortCmp *cmp, ChallengeRecord *record)
-    : NavListItemNode(cmp), mChallengeRecord(record) {}
-
 int ChallengeScoreCmp::Compare(
     const NavListItemSortCmp *other, NavListNodeType nodeType
 ) const {

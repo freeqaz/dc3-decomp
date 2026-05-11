@@ -4,26 +4,9 @@
 #include "obj/Object.h"
 #include "obj/PropSync.h"
 #include "obj/Task.h"
+#include "rndobj/Anim.h"
 #include "utl/BinStream.h"
 #include "utl/PoolAlloc.h"
-
-class FlowTimer;
-
-class EventTask : public Task {
-public:
-    EventTask(FlowTimer *, ObjPtrVec<FlowNode> *, TaskUnits, float);
-    virtual ~EventTask();
-    OBJ_CLASSNAME(EventTask)
-    virtual void Poll(float);
-
-    POOL_OVERLOAD(EventTask, 0x12)
-
-protected:
-    ObjPtr<FlowTimer> mOwner; // 0x2C
-    ObjPtrVec<FlowNode> *mChildNodes; // 0x40
-    ObjPtrVec<FlowNode>::iterator mCurNode; // 0x44
-    float mDuration; // 0x48
-};
 
 class FlowTimer : public FlowNode {
 public:
@@ -51,11 +34,27 @@ public:
     OBJ_MEM_OVERLOAD(0x17)
     NEW_OBJ(FlowTimer)
 
-    int mStopMode;
-    ObjPtr<Task> mTask;
+    int mStopMode; // 0x5c
+    ObjPtr<Task> mTask; // 0x60
     int mRate; // 0x74
     float mTotalTime; // 0x78
 
 protected:
     FlowTimer();
+};
+
+class EventTask : public Task {
+public:
+    EventTask(FlowTimer *, ObjPtrVec<FlowNode> *, TaskUnits, float);
+    virtual ~EventTask();
+    OBJ_CLASSNAME(EventTask)
+    virtual void Poll(float);
+
+    POOL_OVERLOAD(EventTask, 0x12)
+
+protected:
+    ObjPtr<FlowTimer> mOwner; // 0x2c
+    ObjPtrVec<FlowNode> *mChildNodes; // 0x40
+    ObjPtrVec<FlowNode>::iterator mCurNode; // 0x44
+    float mDuration; // 0x48
 };

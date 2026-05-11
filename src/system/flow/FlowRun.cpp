@@ -4,6 +4,7 @@
 #include "flow/FlowNode.h"
 #include "obj/Dir.h"
 #include "obj/Object.h"
+#include "os/Debug.h"
 
 FlowRun::FlowRun()
     : mTargetDir(this), mTarget(this), mTargetName(""), mStop(false),
@@ -53,7 +54,7 @@ BEGIN_LOADS(FlowRun)
     ASSERT_REVS(2, 0)
     LOAD_SUPERCLASS(FlowNode)
     if (d.rev < 2) {
-        Hmx::Object *obj = LoadObjectFromMainOrDir(bs, Dir());
+        Hmx::Object *obj = FlowNode::LoadObjectFromMainOrDir(bs, Dir());
         if (obj) {
             mTargetDir = dynamic_cast<ObjectDir *>(obj);
         }

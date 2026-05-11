@@ -54,9 +54,9 @@ public:
     void ClearPerfectStreak();
     bool HasNewAwards() const;
     void NotifyPlayerOfAccomplishment(Symbol, const char *);
-    void SetTotalSongsPlayed(int);
-    void SetTotalCampaignSongsPlayed(int);
-    void MovePassed(Symbol, int);
+    void SetTotalSongsPlayed(int songs);
+    void SetTotalCampaignSongsPlayed(int songs);
+    void MovePassed(Symbol gameplayMode, int ratingIndex);
     Symbol GetFirstNewAward() const;
     Symbol GetFirstNewAwardReason() const;
     void Poll();
@@ -66,7 +66,7 @@ public:
     int GetNumCompletedInGroup(Symbol) const;
     int GetCharacterUseCount(Symbol) const;
     int GetCount(Symbol) const;
-    bool AddAward(Symbol, Symbol);
+    bool AddAward(Symbol award, Symbol reason);
     bool AddAccomplishment(Symbol);
     void Clear();
     void IncrementCharacterUseCount(Symbol);
@@ -87,8 +87,8 @@ public:
     const std::list<std::pair<Symbol, Symbol> >& GetNewAwards() const { return mNewAwards; }
 
 private:
-    void GiveGamerpic(Accomplishment *);
-    void GiveAvatarAsset(Accomplishment *);
+    void GiveGamerpic(Accomplishment *pAcc);
+    void GiveAvatarAsset(Accomplishment *pAcc);
 
     std::map<Symbol, int> unk34;
     HamProfile *mParentProfile; // 0x4c

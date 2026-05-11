@@ -1,4 +1,6 @@
 #include "utl/Locale.h"
+
+#include "DataPointMgr.h"
 #include "obj/DataFile.h"
 #include "obj/DataFunc.h"
 #include "os/Debug.h"
@@ -27,12 +29,16 @@ DataNode DataToggleShowTokensCheat(DataArray *arr) {
 }
 
 static int LocaleChunkSortFunc(const void *a, const void *b) {
-    const LocaleChunkSort::OrderedLocaleChunk *chunkA = (const LocaleChunkSort::OrderedLocaleChunk *)a;
-    const LocaleChunkSort::OrderedLocaleChunk *chunkB = (const LocaleChunkSort::OrderedLocaleChunk *)b;
+    const LocaleChunkSort::OrderedLocaleChunk *chunkA =
+        (const LocaleChunkSort::OrderedLocaleChunk *)a;
+    const LocaleChunkSort::OrderedLocaleChunk *chunkB =
+        (const LocaleChunkSort::OrderedLocaleChunk *)b;
     Symbol symA = chunkA->node1.LiteralSym(0);
     Symbol symB = chunkB->node1.LiteralSym(0);
-    if (symA < symB) return -1;
-    if (symA > symB) return 1;
+    if (symA < symB)
+        return -1;
+    if (symA > symB)
+        return 1;
     return chunkA->node2.Int(0) - chunkB->node2.Int(0);
 }
 
@@ -155,7 +161,9 @@ void Locale::Init() {
     Symbol prevSym;        // Tracks previous symbol to deduplicate
 
     // Check for alternate devkit locale file
-    String devkitPath(FileMakePath("devkit:\\locale", MakeString("%s\\locale_keep.dta", SystemLanguage())));
+    String devkitPath(FileMakePath(
+        "devkit:\\locale", MakeString("%s\\locale_keep.dta", SystemLanguage())
+    ));
     FileQualifiedFilename(devkitPath, devkitPath.c_str());
 
     static Symbol locale("locale");

@@ -3,6 +3,7 @@
 #include "obj/Dir.h"
 #include "obj/Msg.h"
 #include "obj/Object.h"
+#include "os/Debug.h"
 #include <list>
 
 FlowQueueable::FlowQueueable()
@@ -44,12 +45,6 @@ BEGIN_LOADS(FlowQueueable)
     LOAD_SUPERCLASS(FlowNode)
     d >> (int &)mInterrupt;
 END_LOADS
-
-void FlowQueueable::ReleaseListener(Hmx::Object *obj) {
-    if (obj) {
-        obj->Handle(Message("on_flow_finished", this), true);
-    }
-}
 
 void FlowQueueable::Deactivate(bool b) {
 #ifdef HX_NATIVE
@@ -211,3 +206,9 @@ void FlowQueueable::RequestStopCancel() {
 }
 
 void FlowQueueable::RequestStop() { FlowNode::RequestStop(); }
+
+void FlowQueueable::ReleaseListener(Hmx::Object *obj) {
+    if (obj) {
+        obj->Handle(Message("on_flow_finished", this), true);
+    }
+}

@@ -62,6 +62,6 @@ struct CompareHeaders {
 
 struct CompareItems {
     bool operator()(NavListSortNode *left, NavListSortNode *right) const {
-        return left->GetItemCount() < right->GetItemCount(); // also probably not right
+        return left->Compare(right, kNodeItem) < 0;
     }
 };

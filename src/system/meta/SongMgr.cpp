@@ -326,7 +326,7 @@ int SongMgr::GetCachedSongInfoSize() const {
 }
 
 const char *SongMgr::CachedPath(Symbol shortname, const char *cc, int version) const {
-    int songID = GetSongIDFromShortName(shortname, true);
+    int songID = GetSongIDFromShortName(shortname);
     const SongMetadata *data = Data(songID);
     if (!(UsingCD()
           || (data && (data->IsOnDisc() || (version != 0 && data->Version() < version)))

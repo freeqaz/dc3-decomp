@@ -1,3 +1,4 @@
+#include "flow/Flow.h"
 #include "flow/FlowLabel.h"
 #include "flow/Flow.h"
 #include "flow/FlowNode.h"

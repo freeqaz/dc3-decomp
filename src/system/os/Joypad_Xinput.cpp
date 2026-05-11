@@ -5,6 +5,7 @@
 #include "os/Joypad.h"
 #include "os/UserMgr.h"
 #include "xdk/XAPILIB.h"
+#include "xdk/xapilibi/winerror.h"
 
 namespace {
     XINPUT_CAPABILITIES gCaps[kNumJoypads];
@@ -14,27 +15,23 @@ namespace {
 }
 
 void JoypadInitXboxPCDeadzone(DataArray *arr) {
-    const char *dz = "deadzone";
-    arr->FindData(dz, gXboxDeadzone, true);
-    gXboxDeadzone *= (1.0f / 256.0f);
+    arr->FindData("deadzone", gXboxDeadzone);
+    gXboxDeadzone /= 256.0f;
 }
 
 void TranslateStick(char *keys, short s, bool param_a, bool param_b) {
-    float var1 = (s + 0.5f) / 32768.0f;
+    float var1 = (s + 0.5f) * 0.000030518044f; // this should be / 32768
 
     if (param_b) {
-        if (var1 <= gXboxDeadzone) {
-            if (-gXboxDeadzone <= var1) {
-                var1 = 0.0;
-            }
-            var1 += gXboxDeadzone;
+        if (var1 > gXboxDeadzone) {
+            var1 = (var1 - gXboxDeadzone) / (1 - gXboxDeadzone);
+        } else if (var1 < -gXboxDeadzone) {
+            var1 = (var1 + gXboxDeadzone) / (1 - gXboxDeadzone);
         } else {
-            var1 -= gXboxDeadzone;
+            var1 = 0;
         }
-        var1 /= (1.0 - gXboxDeadzone);
     }
-
-    int c = (var1 * 127.0);
+    char c = (var1 * 127);
     *keys = c;
 
     if (param_a) {
@@ -55,11 +52,11 @@ void TranslateButtons(unsigned int *buttons, unsigned short s) {
 
 bool JoypadGetCachedXInputCaps(int pad, XINPUT_CAPABILITIES *caps, bool b3) {
     if (gCapsValid[pad] && !b3) {
-        memcpy(caps, &gCaps[pad], sizeof(XINPUT_CAPABILITIES));
+        *caps = gCaps[pad];
     } else {
         CritSecTracker tracker(&gCritSection);
-        if (XInputGetCapabilities(pad, 0, caps) == 0) {
-            memcpy(&gCaps[pad], caps, sizeof(XINPUT_CAPABILITIES));
+        if (XInputGetCapabilities(pad, 0, caps) == ERROR_SUCCESS) {
+            gCaps[pad] = *caps;
             gCapsValid[pad] = true;
         } else
             return false;
@@ -69,11 +66,7 @@ bool JoypadGetCachedXInputCaps(int pad, XINPUT_CAPABILITIES *caps, bool b3) {
 
 void JoypadResetXboxPC(int pad) {
     ResetAllUsersPads();
-#ifdef HX_NATIVE
     if (TheUserMgr && TheUserMgr->GetBool()) {
-#else
-    if (TheUserMgr && *(unsigned char *)((char *)TheUserMgr + 0x2c)) {
-#endif
         std::vector<LocalUser *> users;
         TheUserMgr->GetLocalUsers(users);
         for (int i = 0; i < pad; i++) {

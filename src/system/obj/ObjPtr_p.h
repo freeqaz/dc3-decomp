@@ -81,7 +81,7 @@ template <class T1, class T2>
 Hmx::Object *ObjRefConcrete<T1, T2>::SetObj(Hmx::Object *root_obj) {
     T1 *obj = root_obj ? dynamic_cast<T1 *>(root_obj) : nullptr;
     SetObjConcrete(obj);
-    return mObject ? mObject : nullptr;
+    return mObject;
 }
 
 template <class T1>
@@ -386,6 +386,20 @@ bool ObjPtrVec<T1, T2>::Load(BinStream &bs, bool print, ObjectDir *dir) {
 }
 
 template <class T1>
+BinStream &operator<<(BinStream &bs, const ObjPtrVec<T1, ObjectDir> &c) {
+    bs << c.size();
+    MILO_ASSERT(c.Owner(), 0x525);
+    for (auto it = c.begin(); it != c.end(); ++it) {
+        if (*it) {
+            bs << (*it)->Name();
+        } else {
+            bs << "";
+        }
+    }
+    return bs;
+}
+
+template <class T1>
 BinStream &operator>>(BinStream &bs, ObjPtrVec<T1, ObjectDir> &vec) {
     vec.Load(bs, true, nullptr);
     return bs;
@@ -540,11 +554,14 @@ ObjPtrList<T1, T2>::find(const Hmx::Object *target) const {
     return end();
 }
 
+// TODO: not 100%, work on this
+// addr: 0x825C6868
 template <class T1, class T2>
 bool ObjPtrList<T1, T2>::remove(T1 *target) {
-    for (iterator it = begin(); it != end(); ++it) {
-        if (*it == target) {
-            erase(it);
+    for (iterator it = begin(); it != end();) {
+        auto old = it++;
+        if (*old == target) {
+            erase(old);
             return true;
         }
     }
@@ -613,6 +630,20 @@ bool ObjPtrList<T1, T2>::Load(BinStream &bs, bool print, ObjectDir *dir, bool b4
         count--;
     }
     return ret;
+}
+
+template <class T1>
+BinStream &operator<<(BinStream &bs, const ObjPtrList<T1, ObjectDir> &c) {
+    bs << c.size();
+    MILO_ASSERT(c.Owner(), 0x4E1);
+    FOREACH (it, c) {
+        if (*it) {
+            bs << (*it)->Name();
+        } else {
+            bs << "";
+        }
+    }
+    return bs;
 }
 
 template <class T1>
@@ -740,11 +771,6 @@ Hmx::Object *ObjPtrList<T1, T2>::Node::RefOwner() const {
 // -- ObjPtrVec Xbox template implementations --
 
 template <class T1, class T2>
-Hmx::Object *ObjPtrVec<T1, T2>::Node::RefOwner() const {
-    return static_cast<ObjPtrVec<T1, T2>*>(mOwner)->Owner();
-}
-
-template <class T1, class T2>
 typename ObjPtrVec<T1, T2>::iterator
 ObjPtrVec<T1, T2>::erase(typename ObjPtrVec<T1, T2>::iterator it) {
     int idx = it.it ? (it.it - mNodes.begin()) : 0;
@@ -767,34 +793,6 @@ typename ObjPtrVec<T1, T2>::iterator ObjPtrVec<T1, T2>::FindRef(ObjRef *ref) {
         if (&(*it) == ref) return it;
     }
     return end();
-}
-
-// -- BinStream operator<< for ObjPtrList (Xbox) --
-
-template <class T1>
-BinStream &operator<<(BinStream &bs, const ObjPtrList<T1, ObjectDir> &c) {
-    bs << c.size();
-    MILO_ASSERT(c.Owner(), 0x4E1);
-    for (typename ObjPtrList<T1, ObjectDir>::iterator it = c.begin(); it != c.end(); ++it) {
-        Hmx::Object *obj = *it;
-        const char *objName = obj ? obj->Name() : "";
-        bs << objName;
-    }
-    return bs;
-}
-
-// -- BinStream operator<< for ObjPtrVec (Xbox) --
-
-template <class T1>
-BinStream &operator<<(BinStream &bs, const ObjPtrVec<T1, ObjectDir> &c) {
-    bs << (int)c.size();
-    MILO_ASSERT(c.Owner(), 0x525);
-    for (int i = 0; i < (int)c.size(); i++) {
-        const Hmx::Object *obj = c[i];
-        const char *objName = obj ? obj->Name() : "";
-        bs << objName;
-    }
-    return bs;
 }
 
 #endif // !HX_NATIVE

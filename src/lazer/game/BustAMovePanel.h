@@ -1,5 +1,6 @@
 #pragma once
 #include "gesture/BaseSkeleton.h"
+#include "gesture/Skeleton.h"
 #include "hamobj/BustAMoveData.h"
 #include "hamobj/DancerSkeleton.h"
 #include "hamobj/FreestyleMoveRecorder.h"

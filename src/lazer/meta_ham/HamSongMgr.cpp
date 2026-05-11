@@ -336,20 +336,20 @@ const char *HamSongMgr::MidiFile(Symbol shortname) const {
     return info ? FakeSongMgr::MidiFile(info) : gNullStr;
 }
 
-char const *HamSongMgr::GetAlbumArtPath(Symbol s) const {
-    if (SongMgr::HasSong(s, true)) {
-        return SongMgr::SongFilePath(s, "_keep.png", 0);
+char const *HamSongMgr::GetAlbumArtPath(Symbol shortname) const {
+    if (SongMgr::HasSong(shortname)) {
+        return SongMgr::SongFilePath(shortname, "_keep.png", 0);
     }
     return gNullStr;
 }
 
-void HamSongMgr::AddRecentSong(Symbol s) {
-    int id = GetSongIDFromShortName(s, true);
+void HamSongMgr::AddRecentSong(Symbol shortname) {
+    int id = GetSongIDFromShortName(shortname, true);
     mJukebox.Play(id);
 }
 
-Symbol HamSongMgr::GetArtistNameFromShortName(Symbol s) {
-    int id = GetSongIDFromShortName(s, true);
+Symbol HamSongMgr::GetArtistNameFromShortName(Symbol shortname) {
+    int id = GetSongIDFromShortName(shortname, true);
     const HamSongMetadata *meta = Data(id);
     char const *artist = meta->Artist(); // so what was the point of this
     return meta->Artist();
@@ -524,8 +524,8 @@ const std::vector<int> &HamSongMgr::RankedSongs(SongType s) const {
     return s == 1 ? mRankedDiscSongs : mRankedSongs;
 }
 
-bool HamSongMgr::IsDummySong(Symbol s) const {
-    return strcmp(SongPath(s, 0), "dummy") == 0;
+bool HamSongMgr::IsDummySong(Symbol shortname) const {
+    return strcmp(SongPath(shortname, 0), "dummy") == 0;
 }
 
 void HamSongMgr::AddSongs(DataArray *a) {
@@ -533,17 +533,18 @@ void HamSongMgr::AddSongs(DataArray *a) {
     ContentDone();
 }
 
-int HamSongMgr::RankTier(int i1) const {
-    for (int i = 0; i < mRankTiers.size(); i++) {
-        if (i1 <= mRankTiers[i].second) {
+int HamSongMgr::RankTier(int rank) const {
+    int i = 0;
+    for (; i < mRankTiers.size(); i++) {
+        if (rank <= mRankTiers[i].second) {
             return i;
         }
     }
-    return mRankTiers.size() - 1;
+    return i - 1;
 }
 
-int HamSongMgr::RankTier(Symbol s1) const {
-    int songID = GetSongIDFromShortName(s1);
+int HamSongMgr::RankTier(Symbol shortname) const {
+    int songID = GetSongIDFromShortName(shortname);
     return RankTier(Data(songID)->Rank());
 }
 
@@ -642,17 +643,21 @@ void HamSongMgr::GetCoreStarsForDifficulty(
     i1 = 0;
     i2 = 0;
     if (profile) {
-        const std::set<int> &songSet = GetAvailableSongSet();
+        const auto &songSet = GetAvailableSongSet();
         SongStatusMgr *mgr = profile->GetSongStatusMgr();
-        FOREACH (it, songSet) {
-            int songID = *it;
-            const HamSongMetadata *data = TheHamSongMgr.Data(songID);
-            bool b = false;
-            static Symbol ham3("ham3");
-            if (!data->IsFake() && data->GameOrigin() == ham3
-                && TheProfileMgr.IsContentUnlocked(data->ShortName())) {
-                i1 += Clamp(0, 5, mgr->GetStarsForDifficulty(songID, diff, b));
-                i2 += 5;
+        auto begin = songSet.begin();
+        auto it = begin;
+        if (begin != songSet.end()) {
+            for (it; it != (songSet).end(); (++it)) {
+                int songID = *it;
+                const HamSongMetadata *data = TheHamSongMgr.Data(songID);
+                bool b = false;
+                static Symbol ham3("ham3");
+                if (!data->IsFake() && data->GameOrigin() == ham3
+                    && TheProfileMgr.IsContentUnlocked(data->ShortName())) {
+                    i1 += Clamp(0, 5, mgr->GetStarsForDifficulty(songID, diff, b));
+                    i2 += 5;
+                }
             }
         }
     }
@@ -666,16 +671,20 @@ void HamSongMgr::GetCharacterStars(
     if (profile) {
         const std::set<int> &songSet = GetAvailableSongSet();
         SongStatusMgr *mgr = profile->GetSongStatusMgr();
-        FOREACH (it, songSet) {
-            int songID = *it;
-            const HamSongMetadata *data = TheHamSongMgr.Data(songID);
-            bool b = false;
-            static Symbol ham3("ham3");
-            if (!data->IsFake() && data->GameOrigin() == ham3
-                && data->Character() == character
-                && TheProfileMgr.IsContentUnlocked(data->ShortName())) {
-                i1 += Clamp(0, 5, mgr->GetStars(songID, b));
-                i2 += 5;
+        auto begin = songSet.begin();
+        auto it = begin;
+        if (begin != songSet.end()) {
+            for (it; it != (songSet).end(); (++it)) {
+                int songID = *it;
+                const HamSongMetadata *data = TheHamSongMgr.Data(songID);
+                bool b = false;
+                static Symbol ham3("ham3");
+                if (!data->IsFake() && data->GameOrigin() == ham3
+                    && data->Character() == character
+                    && TheProfileMgr.IsContentUnlocked(data->ShortName())) {
+                    i1 += Clamp(0, 5, mgr->GetStars(songID, b));
+                    i2 += 5;
+                }
             }
         }
     }
@@ -689,16 +698,21 @@ void HamSongMgr::GetCrewStars(
     if (profile) {
         const std::set<int> &songSet = GetAvailableSongSet();
         SongStatusMgr *mgr = profile->GetSongStatusMgr();
-        FOREACH (it, songSet) {
-            int songID = *it;
-            const HamSongMetadata *data = TheHamSongMgr.Data(songID);
-            bool b = false;
-            Symbol crewForChar = GetCrewForCharacter(GetOutfitCharacter(data->Outfit()));
-            static Symbol ham3("ham3");
-            if (!data->IsFake() && data->GameOrigin() == ham3 && crewForChar == crew
-                && TheProfileMgr.IsContentUnlocked(data->ShortName())) {
-                i1 += Clamp(0, 5, mgr->GetBestStars(songID, b, kDifficultyBeginner));
-                i2 += 5;
+        auto begin = songSet.begin();
+        auto it = begin;
+        if (begin != songSet.end()) {
+            for (it; it != (songSet).end(); (++it)) {
+                int songID = *it;
+                const HamSongMetadata *data = TheHamSongMgr.Data(songID);
+                bool b = false;
+                Symbol crewForChar =
+                    GetCrewForCharacter(GetOutfitCharacter(data->Outfit()));
+                static Symbol ham3("ham3");
+                if (!data->IsFake() && data->GameOrigin() == ham3 && crewForChar == crew
+                    && TheProfileMgr.IsContentUnlocked(data->ShortName())) {
+                    i1 += Clamp(0, 5, mgr->GetBestStars(songID, b, kDifficultyBeginner));
+                    i2 += 5;
+                }
             }
         }
     }
@@ -712,16 +726,21 @@ void HamSongMgr::GetCrewStarsForDifficulty(
     if (profile) {
         const std::set<int> &songSet = GetAvailableSongSet();
         SongStatusMgr *mgr = profile->GetSongStatusMgr();
-        FOREACH (it, songSet) {
-            int songID = *it;
-            const HamSongMetadata *data = TheHamSongMgr.Data(songID);
-            bool b = false;
-            Symbol crewForChar = GetCrewForCharacter(GetOutfitCharacter(data->Outfit()));
-            static Symbol ham3("ham3");
-            if (!data->IsFake() && data->GameOrigin() == ham3 && crewForChar == crew
-                && TheProfileMgr.IsContentUnlocked(data->ShortName())) {
-                i1 += Clamp(0, 5, mgr->GetStarsForDifficulty(songID, diff, b));
-                i2 += 5;
+        auto begin = songSet.begin();
+        auto it = begin;
+        if (begin != songSet.end()) {
+            for (it; it != (songSet).end(); (++it)) {
+                int songID = *it;
+                const HamSongMetadata *data = TheHamSongMgr.Data(songID);
+                bool b = false;
+                Symbol crewForChar =
+                    GetCrewForCharacter(GetOutfitCharacter(data->Outfit()));
+                static Symbol ham3("ham3");
+                if (!data->IsFake() && data->GameOrigin() == ham3 && crewForChar == crew
+                    && TheProfileMgr.IsContentUnlocked(data->ShortName())) {
+                    i1 += Clamp(0, 5, mgr->GetStarsForDifficulty(songID, diff, b));
+                    i2 += 5;
+                }
             }
         }
     }

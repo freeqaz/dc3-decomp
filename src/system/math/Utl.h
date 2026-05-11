@@ -133,7 +133,7 @@ template <>
 inline bool MinEq(float &x, const float &y) {
     float tmp = x;
     x = Min(x, y);
-    return tmp != x;
+    return x != tmp;
 }
 
 template <class T>
@@ -150,7 +150,7 @@ template <>
 inline bool MaxEq(float &x, const float &y) {
     float tmp = x;
     x = Max(x, y);
-    return tmp != x;
+    return x != tmp;
 }
 
 inline float Abs(float x) { return fabsf(x); }
@@ -188,8 +188,6 @@ inline float Interp(float a, float b, float t) { return t * (b - a) + a; }
 inline void Interp(float a, float b, float t, float &fres) { fres = t * (b - a) + a; }
 
 inline void Interp(bool a, bool b, float t, bool &bres) { bres = t < 1.0f ? a : b; }
-
-inline float InterpAng(float, float, float) {}
 
 inline float InverseLerp(float min, float max, float value) {
     // Prevent divide-by-zero from zero-sized range

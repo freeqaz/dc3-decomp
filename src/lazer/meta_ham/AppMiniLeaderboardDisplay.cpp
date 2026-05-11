@@ -1,5 +1,6 @@
 #include "meta_ham/AppMiniLeaderboardDisplay.h"
 #include "flow/Flow.h"
+#include "hamobj/Difficulty.h"
 #include "hamobj/HamList.h"
 #include "hamobj/MiniLeaderboardDisplay.h"
 #include "meta/SongMgr.h"
@@ -22,7 +23,9 @@
 #include "ui/UIListLabel.h"
 #include "ui/UIListSlot.h"
 #include "ui/UIListWidget.h"
+#include "utl/Std.h"
 #include "utl/Symbol.h"
+#include "xdk/xapilibi/xbase.h"
 
 AppMiniLeaderboardDisplay::AppMiniLeaderboardDisplay()
     : mState(0), mLeaderboardList(0), mSongID(0), mLoadTime(0) {}
@@ -170,7 +173,7 @@ void AppMiniLeaderboardDisplay::UpdateLeaderboardOnline(int i1) {
     }
 }
 
-bool AppMiniLeaderboardDisplay::UpdateLeaderboard(Symbol s) { // has one small discrepancy
+bool AppMiniLeaderboardDisplay::UpdateLeaderboard(Symbol s) {
     if (!TheProfileMgr.HasActiveProfile(true)) {
         if (mState != 4) {
             mState = 4;
@@ -182,28 +185,33 @@ bool AppMiniLeaderboardDisplay::UpdateLeaderboard(Symbol s) { // has one small d
         HamProfile *profile = TheProfileMgr.GetActiveProfile(true);
         MILO_ASSERT(profile, 0xb1);
         profile->UpdateOnlineID();
-        if (profile->IsSignedIn()) {
-            if (!ThePlatformMgr.IsConnected()) { // mismatch right here?
-                if (mState != 5) {
-                    mState = 5;
-                    Flow *f = mResourceDir->Find<Flow>("no_profile.flow", true);
-                    f->Activate();
-                    return true;
-                }
-            } else {
-                mSongID = TheSongMgr.GetSongIDFromShortName(s, false);
-                ClearData();
-                TheRockCentral.CancelOutstandingCalls(this);
-                if (mSongID == 0) {
-                    return true;
-                }
-                if (mState != 0) {
-                    mState = 0;
-                    Flow *f = mResourceDir->Find<Flow>("pending.flow", true);
-                    f->Activate();
-                }
-                mLoadTime = TheTaskMgr.UISeconds();
+        if (!profile->IsSignedIn()) {
+            if (mState != 4) {
+                mState = 4;
+                Flow *f = mResourceDir->Find<Flow>("no_profile.flow", true);
+                f->Activate();
+                return true;
             }
+        } else if (!ThePlatformMgr.IsConnected()) {
+            if (mState != 5) {
+                mState = 5;
+                Flow *f = mResourceDir->Find<Flow>("no_profile.flow", true);
+                f->Activate();
+                return true;
+            }
+        } else {
+            mSongID = TheSongMgr.GetSongIDFromShortName(s, false);
+            ClearData();
+            TheRockCentral.CancelOutstandingCalls(this);
+            if (mSongID == 0) {
+                return true;
+            }
+            if (mState != 0) {
+                mState = 0;
+                Flow *f = mResourceDir->Find<Flow>("pending.flow", true);
+                f->Activate();
+            }
+            mLoadTime = TheTaskMgr.UISeconds();
         }
     }
     return true;

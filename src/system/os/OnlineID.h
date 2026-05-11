@@ -22,6 +22,7 @@ public:
     void SetPlayerName(const char *);
     XUID GetXUID() const;
     const char *ToString() const;
+    bool GetIsValid() const { return mValid; }
 
     MEM_OVERLOAD(OnlineID, 0x1E)
 };

@@ -11,6 +11,7 @@
 #include "rndobj/Poll.h"
 
 const float sMaxThreshold = 80;
+bool CharLookAt::sDisableJitter = false;
 
 CharLookAt::CharLookAt()
     : mSource(this), mPivot(this), mTarget(this), mHalfTime(0), mMinYaw(-80), mMaxYaw(80),

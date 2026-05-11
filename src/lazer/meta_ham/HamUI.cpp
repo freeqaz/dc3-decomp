@@ -43,6 +43,7 @@
 #include "ui/UILabel.h"
 #include "ui/UIPanel.h"
 #include "ui/UIScreen.h"
+#include "utl/Std.h"
 #include "utl/Symbol.h"
 #include "xdk/xapilibi/xbox.h"
 
@@ -350,8 +351,8 @@ bool HamUI::IsTimelineResetAllowed() const {
 #endif
     if (!ThePassiveMessenger->HasMessages()
         && !ThePassiveMessenger->HasRecentlyDismissedMessage()
-        && TheSkeletonIdentifier->GetIDStatus() == 0 &&
-        (!mHelpBar || (!mHelpBar->IsWriteIconShowing() && !mHelpBar->IsAnimating()))) {
+        && TheSkeletonIdentifier->GetIDStatus() == 0
+        && (!mHelpBar || (!mHelpBar->IsWriteIconShowing() && !mHelpBar->IsAnimating()))) {
         return true;
     }
     return false;
@@ -599,9 +600,10 @@ Symbol HamUI::DisplayNextCameraOutput() {
         return "player";
     case LiveCameraInput::kBufferPlayerColor:
         return "player color";
-    case LiveCameraInput::kBufferOff:
-        return "off";
     default:
+        if (mBufferType < 0) {
+            return "off";
+        }
         return MakeString("snapshot %d", mBufferType - 4);
     }
 }
@@ -609,36 +611,35 @@ Symbol HamUI::DisplayNextCameraOutput() {
 void HamUI::UpdateUIOverlay() {
     if (mUIOverlay && mUIOverlay->Showing()) {
         int lines = 0;
+        std::list<PanelRef>::iterator panelIt;
         mUIOverlay->Clear();
         std::vector<UIScreen *> screens;
         if (PushDepth() > 0) {
             screens.push_back(BottomScreen());
         }
-        if (mCurrentScreen) {
-            screens.push_back(mCurrentScreen);
+        if (CurrentScreen()) {
+            screens.push_back(CurrentScreen());
         }
         FOREACH (it, screens) {
             *mUIOverlay << "screen " << (*it)->Name() << "\n";
             UIPanel *focusPanel = (*it)->FocusPanel();
-            for (auto panelIt = (*it)->PanelList().begin();
-                 panelIt != (*it)->PanelList().end();
-                 ++panelIt, ++lines) {
-                UIPanel *panel = panelIt->mPanel;
-                *mUIOverlay << "panel " << panel->IsLoaded()
-                            << (focusPanel == panel ? "* " : "  ") << panel->Name()
-                            << "\n";
+            for (panelIt = ((*it)->PanelList()).begin();
+                 ++lines, panelIt != ((*it)->PanelList()).end();
+                 (++panelIt)) {
+                *mUIOverlay << "panel " << panelIt->mPanel->IsLoaded()
+                            << (focusPanel == panelIt->mPanel ? "* " : "  ")
+                            << panelIt->mPanel->Name() << "\n";
             }
         }
-        if (mTransitionScreen) {
-            *mUIOverlay << "going to screen " << mTransitionScreen->Name() << "\n";
-            UIPanel *focusPanel = mTransitionScreen->FocusPanel();
-            for (auto panelIt = mTransitionScreen->PanelList().begin();
-                 panelIt != mTransitionScreen->PanelList().end();
-                 ++panelIt, ++lines) {
-                UIPanel *panel = panelIt->mPanel;
-                *mUIOverlay << "panel " << panel->IsLoaded()
-                            << (focusPanel == panel ? "* " : "  ") << panel->Name()
-                            << "\n";
+        if (TransitionScreen()) {
+            *mUIOverlay << "going to screen " << TransitionScreen()->Name() << "\n";
+            UIPanel *focusPanel = TransitionScreen()->FocusPanel();
+            for (panelIt = (TransitionScreen()->PanelList()).begin();
+                 ++lines, panelIt != (TransitionScreen()->PanelList()).end();
+                 (++panelIt)) {
+                *mUIOverlay << "panel " << panelIt->mPanel->IsLoaded()
+                            << (focusPanel == panelIt->mPanel ? "* " : "  ")
+                            << panelIt->mPanel->Name() << "\n";
             }
         }
         if (lines != 0) {

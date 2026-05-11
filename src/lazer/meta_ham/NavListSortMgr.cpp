@@ -72,13 +72,14 @@ void NavListSortMgr::OnEnter() {
 
 Symbol NavListSortMgr::GetHeaderSymbolFromChildSymbol(Symbol sym) {
     NavListSort *sort = mSorts[mCurrentSortIdx];
-    if (!sort->GetNode(sym)) {
+    NavListSortNode *sortNode = sort->GetNode(sym);
+    if (!sortNode) {
         return gNullStr;
     } else {
         NavListHeaderNode *node =
             dynamic_cast<NavListHeaderNode *>(sort->GetNode(sym)->Parent());
         if (!node) {
-            return sort->GetSortName(); // unsure
+            return sortNode->GetToken();
         } else {
             return node->GetToken();
         }

@@ -6,6 +6,9 @@
 
 class MainMenuProvider : public UIListProvider, public Hmx::Object {
 public:
+    // Hmx::Object
+
+
     // UIListProvider
     virtual void Text(int, int, UIListLabel *, UILabel *) const;
     virtual Symbol DataSymbol(int) const;

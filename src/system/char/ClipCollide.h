@@ -1,13 +1,14 @@
 #pragma once
-
 #include "char/CharClip.h"
 #include "char/Character.h"
 #include "char/Waypoint.h"
 #include "obj/Data.h"
 #include "obj/Object.h"
 #include "rndobj/Graph.h"
-#include "stl/_vector.h"
+#include <vector>
 #include "utl/MemMgr.h"
+
+/** "Analyzes character clips in a venue" */
 class ClipCollide : public Hmx::Object {
 public:
     struct Report { // From RB3 Decomp
@@ -31,18 +32,6 @@ public:
 
     OBJ_MEM_OVERLOAD(0x1D)
     NEW_OBJ(ClipCollide);
-
-    std::vector<Report> mReports; // 0x2c
-    RndGraph *mGraph; // 0x38
-    ObjPtr<Character> mChar; // 0x3c
-    String mCharPath; // 0x50
-    ObjPtr<Waypoint> mWaypoint; // 0x58
-    Symbol mPosition; // 0x6c
-    ObjPtr<CharClip> mClip; // 0x70
-    String mReportString; // 0x84
-    bool mWorldLines; // 0x8c
-    bool mMoveCamera; // 0x8d
-    Symbol mMode; // 0x90
 
 protected:
     virtual void SetTypeDef(DataArray *);
@@ -71,4 +60,25 @@ protected:
     DataNode OnListReport(DataArray *);
     DataNode OnListClips(DataArray *);
     DataNode OnListWaypoints(DataArray *);
+
+    std::vector<Report> mReports; // 0x2c
+    RndGraph *mGraph; // 0x38
+    /** "Pointer to the character to move around" */
+    ObjPtr<Character> mChar; // 0x3c
+    /** "Changes the character to one of the listed ones". The list is "", "" (lol) */
+    String mCharPath; // 0x50
+    /** "Waypoint to stand at" */
+    ObjPtr<Waypoint> mWaypoint; // 0x58
+    /** "Where in the waypoint to stand". Options are: front, back, left, right */
+    Symbol mPosition; // 0x6c
+    /** "Clip to test" */
+    ObjPtr<CharClip> mClip; // 0x70
+    /** "Pick a report entry to look at" */
+    String mReportString; // 0x84
+    /** "show red world lines" */
+    bool mWorldLines; // 0x8c
+    /** "move the camera when you pick a report" */
+    bool mMoveCamera; // 0x8d
+    /** "mode to run in". List is "" (again, lol) */
+    Symbol mMode; // 0x90
 };

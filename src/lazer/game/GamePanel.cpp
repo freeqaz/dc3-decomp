@@ -57,6 +57,7 @@
 #include "ui/UIPanel.h"
 #include "ui/UIScreen.h"
 #include "utl/MBT.h"
+#include "utl/MakeString.h"
 #include "utl/TimeConversion.h"
 #include "world/Dir.h"
 #ifdef HX_NATIVE
@@ -595,38 +596,6 @@ void GamePanel::ResetJitter() {
     mCurrentJitterValue = 0;
 }
 
-void GamePanel::UpdateNowBar() {
-    MILO_ASSERT(mGame, 0x23d);
-    float songSec = TheTaskMgr.Seconds(TaskMgr::kRealTime);
-    float songDurMs = TheSongDB->GetSongDurationMs();
-    float timeRemaining = songDurMs * 0.001f - songSec;
-    char sign = '-';
-    if (timeRemaining < 0.0f) {
-        timeRemaining = -timeRemaining;
-        sign = '+';
-    }
-    int totalTick = (int)TheTaskMgr.TotalTick();
-    float pct;
-    if (songDurMs > 0.0f) {
-        pct = 100.0f;
-        float computed = songSec * 100.0f / (songDurMs * 0.001f);
-        if (computed <= 100.0f)
-            pct = computed;
-    }
-    *mTimeOverlay << MakeString(
-        "MBT %d:%d:%03d [%s %c%s %4.1f%%] (%.2fsec %dtk)\n",
-        TheTaskMgr.CurrentMeasure() + 1,
-        TheTaskMgr.CurrentBeat() + 1,
-        TheTaskMgr.CurrentTick(),
-        FormatTimeMSH(songSec * 1000.0f),
-        sign,
-        FormatTimeMSH(timeRemaining * 1000.0f),
-        pct,
-        songSec,
-        totalTick
-    );
-}
-
 float GamePanel::DeJitter(float ms) {
     float sentinel = 1.0000000150474662e+30f;
     static DataNode &noJitter = DataVariable("no_jitter");
@@ -1092,6 +1061,40 @@ void GamePanel::ClearDrawGlitch() {
         TheRnd.BeginDrawing();
         TheRnd.EndDrawing();
     }
+}
+
+void GamePanel::UpdateNowBar() {
+    MILO_ASSERT(mGame, 0x23d);
+    float seconds = TheTaskMgr.Seconds(TaskMgr::kRealTime);
+    float songDuration = TheSongDB->GetSongDurationMs();
+    float durVal = songDuration * 0.001f - seconds;
+    char operation = '-';
+    if (durVal < 0.0f) {
+        durVal = -durVal;
+        operation = '+';
+    }
+    int totalTick = TheTaskMgr.TotalTick();
+    float val;
+    if (0.0f < songDuration) {
+        val = 100.0f;
+        float secondsval = seconds * 100.0f;
+        float eq = secondsval / songDuration * 0.001f;
+        if (eq <= 100.0f) {
+            val = eq;
+        }
+    }
+    *mTimeOverlay << MakeString(
+        "MBT %d:%d:%03d [%s %c%s %4.1f%%] (%.2fsec %dtk)\n",
+        TheTaskMgr.CurrentMeasure() + 1,
+        TheTaskMgr.CurrentBeat() + 1,
+        TheTaskMgr.CurrentTick(),
+        FormatTimeMSH(seconds * 1000.0f),
+        operation,
+        FormatTimeMSH(durVal * 1000.0f),
+        val,
+        seconds,
+        totalTick
+    );
 }
 
 #pragma endregion

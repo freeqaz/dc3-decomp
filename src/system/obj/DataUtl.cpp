@@ -113,8 +113,7 @@ void DataReplaceTags(DataArray *dest, DataArray *src) {
                             found->Node(j) = arr->Node(j);
                         }
                         found->SetFileLine(arr->File(), arr->Line());
-                        const DataNode &destNode = arr;
-                        node = destNode;
+                        node = found;
                     }
                 }
             }
@@ -147,7 +146,6 @@ void DataInit() {
     TheLoadMgr.RegisterFactory("dtx", DataFactory);
     REGISTER_OBJ_FACTORY(TextFile);
     gDataMacroWarning = OptionBool("no_macro_warn", true);
-    //   gDataMacroWarning = OptionBool("no_macro_warn",true);
     ObjectDir::PreInit(19997, 150000);
 }
 

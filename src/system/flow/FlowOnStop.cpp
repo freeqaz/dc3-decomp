@@ -102,13 +102,7 @@ void FlowOnStop::Execute(QueueState qs) {
         mArmed = false;
         FlowNode::Activate();
         if (mRunningNodes.empty()) {
-            FLOW_LOG("Timed Release From Parent \n");
-            Timer timer;
-            timer.Reset();
-            timer.Start();
-            mFlowParent->ChildFinished(this);
-            timer.Stop();
-            TheFlowMgr->AddMs(timer.Ms());
+            FLOW_TIMED_RELEASE_FROM_PARENT;
         }
     }
 }

@@ -2,6 +2,8 @@
 #include "flow/FlowNode.h"
 #include "flow/Flow.h"
 #include "obj/Data.h"
+#include "obj/Dir.h"
+#include "obj/DirLoader.h"
 #include "obj/Object.h"
 
 FlowIf::FlowIf() : mValue1(0), mValue2(0), mOperator(kEqual) {}
@@ -66,7 +68,9 @@ BEGIN_LOADS(FlowIf)
             if (!owner) {
                 owner = dynamic_cast<Flow *>(this);
             }
-            mValue1 = LoadObjectFromMainOrDir(bs, owner);
+            DirLoader *dl = owner->Loader();
+            ObjectDir *dir = dl ? dl->ProxyDir() : owner->Dir();
+            mValue1 = LoadObjectFromMainOrDir(d.stream, dir);
         } else {
             DataNode val;
             val.Load(bs);
@@ -79,7 +83,9 @@ BEGIN_LOADS(FlowIf)
             if (!owner) {
                 owner = dynamic_cast<Flow *>(this);
             }
-            mValue2 = LoadObjectFromMainOrDir(bs, owner);
+            DirLoader *dl = owner->Loader();
+            ObjectDir *dir = dl ? dl->ProxyDir() : owner->Dir();
+            mValue2 = LoadObjectFromMainOrDir(d.stream, dir);
         } else {
             DataNode val;
             val.Load(bs);

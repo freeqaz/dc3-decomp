@@ -28,9 +28,10 @@ public:
         RndDir *dir;
         int durationMs;
     };
-    virtual ~Splash();
 
     Splash();
+    virtual ~Splash();
+
     void SetWaitForSplash(bool);
     void Suspend();
     void Resume();
@@ -76,7 +77,8 @@ protected:
     bool Show();
     bool UpdateThreadLoop();
     void UpdateThread();
-    static unsigned long ThreadStart(void *);
+
+    static DWORD ThreadStart(void *);
 };
 
 extern Splash *TheSplasher;

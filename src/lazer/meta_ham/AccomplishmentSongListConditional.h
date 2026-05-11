@@ -23,6 +23,6 @@ protected:
 private:
     void Configure(DataArray *);
 
-    std::vector<Symbol> mSongs;
+    std::vector<Symbol> mSongs; // 0x70
     int mSongCount; // 0x7c
 };

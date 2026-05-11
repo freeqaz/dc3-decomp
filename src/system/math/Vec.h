@@ -67,7 +67,6 @@ public:
 
     Vector3() {}
     Vector3(float f1, float f2, float f3) : x(f1), y(f2), z(f3) {}
-
     // used during decompression of CharBones vectors
     Vector3(short *s) {
         x = s[0] * 0.000030518509f * 1300.0f;
@@ -282,6 +281,15 @@ inline void Normalize(const Vector3 &in, Vector3 &out) {
     Scale(in, inv, out);
 }
 
+inline void NormalizeScale(const Vector3 &in, float scalar, Vector3 &out) {
+    float inv = 0;
+    float len = Length(in);
+    if (len != 0) {
+        inv = 1.0f / len;
+    }
+    Scale(in, inv * scalar, out);
+}
+
 inline void Negate(const Vector3 &v, Vector3 &vres) { vres.Set(-v.x, -v.y, -v.z); }
 
 inline void Interp(const Vector2 &v1, const Vector2 &v2, float f, Vector2 &res) {
@@ -321,6 +329,12 @@ inline float Distance(const Vector3 &v1, const Vector3 &v2) {
     Vector3 diff;
     Subtract(v1, v2, diff);
     return Length(diff);
+}
+
+inline float DistanceSquared(const Vector3 &v1, const Vector3 &v2) {
+    Vector3 diff;
+    Subtract(v1, v2, diff);
+    return LengthSquared(diff);
 }
 
 inline void ScaleAdd(const Vector3 &v1, const Vector3 &v2, float f, Vector3 &vres) {

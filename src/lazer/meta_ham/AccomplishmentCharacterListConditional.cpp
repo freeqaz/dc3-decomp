@@ -104,7 +104,7 @@ bool AccomplishmentCharacterListConditional::AreOldOutfitListConditionsMet() {
 }
 
 bool AccomplishmentCharacterListConditional::AreCharacterListConditionsMet(
-    Symbol s1, HamPlayerData *hpd, HamProfile *profile
+    Symbol shortname, HamPlayerData *hpd, HamProfile *profile
 ) {
     static Symbol dance_use_count("dance_use_count");
     static Symbol char_birthday("char_birthday");
@@ -112,18 +112,18 @@ bool AccomplishmentCharacterListConditional::AreCharacterListConditionsMet(
     const AccomplishmentProgress &progress = profile->GetAccomplishmentProgress();
     FOREACH (it, m_lConditions) {
         AccomplishmentCondition &curCond = *it;
-        Symbol curSym = curCond.mConditionType;
-        int cur4 = curCond.mCount;
-        if (curSym == dance_use_count) {
+        Symbol condition = curCond.mCondition;
+        int value = curCond.mValue;
+        if (condition == dance_use_count) {
             for (int i = 0; i < mCharacters.size(); i++) {
-                if (progress.GetCharacterUseCount(mCharacters[i]) >= cur4) {
+                if (progress.GetCharacterUseCount(mCharacters[i]) >= value) {
                     return true;
                 }
             }
-        } else if (curSym == char_birthday) {
+        } else if (condition == char_birthday) {
             static Symbol indaclub("indaclub");
             static Symbol birthday("birthday");
-            if (s1 == indaclub) {
+            if (shortname == indaclub) {
                 DataArray *birthdayCfg = SystemConfig(birthday);
                 DateTime dt;
                 GetDateAndTime(dt);
@@ -139,16 +139,16 @@ bool AccomplishmentCharacterListConditional::AreCharacterListConditionsMet(
                     }
                 }
             }
-        } else if (curSym == crew_use_count) {
+        } else if (condition == crew_use_count) {
             int i5 = 0;
             for (int i = 0; i < mCrews.size(); i++) {
                 i5 += progress.GetCharacterUseCount(mCrews[i]);
             }
-            if (i5 >= cur4) {
+            if (i5 >= value) {
                 return true;
             }
         } else {
-            MILO_NOTIFY("Condition is not currently supported: %s ", curSym);
+            MILO_NOTIFY("Condition is not currently supported: %s ", condition);
             return false;
         }
     }

@@ -11,9 +11,13 @@
 #include "game/PartyModeMgr.h"
 #include "meta_ham/MetaPerformer.h"
 #include "macros.h"
+#include "math/Utl.h"
 #include "meta/SongPreview.h"
 #include "meta_ham/FitnessGoalMgr.h"
+#include "meta_ham/HamSongMgr.h"
+#include "meta_ham/MetaPerformer.h"
 #include "meta_ham/Playlist.h"
+#include "meta_ham/PlaylistSortByTypeCmp.h"
 #include "net_ham/PlaylistJobs.h"
 #include "net_ham/RCJobDingo.h"
 #include "net_ham/RockCentral.h"
@@ -23,8 +27,10 @@
 #include "os/ContentMgr.h"
 #include "os/Debug.h"
 #include "os/PlatformMgr.h"
+#include "stl/_algo.h"
 #include "ui/UI.h"
 #include "utl/DataPointMgr.h"
+#include "utl/MakeString.h"
 #include "utl/Std.h"
 #include "utl/Symbol.h"
 #include "stl/_map.h"
@@ -476,16 +482,16 @@ void PlaylistSortMgr::ResolvePlaylists() {
             }
             playlist->SetOnlineID(-1);
         }
-        if (TheSaveLoadMgr) {
+
+        if (TheSaveLoadMgr)
             TheSaveLoadMgr->AutoSave();
-        }
+
         BroadcastSyncMsg("playlists_synced");
         if (mCustomPlaylists.size() > 0) {
             SendPassiveMsg("playlist_syned_with_rc");
         }
         return;
     }
-    BroadcastSyncMsg("sync_failed");
 }
 
 void PlaylistSortMgr::HandleCmdDeletePlaylistFromRC() {

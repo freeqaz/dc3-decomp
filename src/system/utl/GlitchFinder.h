@@ -1,28 +1,19 @@
 #pragma once
 #include "os/Timer.h"
 
-DataNode GlitchFindScriptImpl(DataArray *, int);
-
 class GlitchAverager {
 public:
     GlitchAverager();
-    ~GlitchAverager();
+    ~GlitchAverager() {}
 
     void PushInstance(float, bool);
 
+    // yes, this is public according to RBVR
     float mAvg; // 0x0
     float mMax; // 0x4
     int mCount; // 0x8
     float mGlitchAvg; // 0xc
     int mGlitchCount; // 0x10
-};
-
-class AutoGlitchPoker {
-public:
-    ~AutoGlitchPoker();
-
-protected:
-    bool mActive;
 };
 
 class GlitchPoker {
@@ -46,8 +37,6 @@ private:
     void PrintResult(TextStream &);
     void PrintNestedStartTimes(TextStream &, float);
 
-    friend class GlitchFinder;
-
 protected:
     char mName[64]; // 0x0
     float mTime; // 0x40
@@ -60,6 +49,7 @@ protected:
 
 class GlitchFinder {
 public:
+    friend DataNode GlitchFindScriptImpl(DataArray *a, int i2);
     GlitchFinder();
     ~GlitchFinder();
 
@@ -78,7 +68,6 @@ private:
 
     friend DataNode GlitchFindScriptImpl(DataArray *, int);
 
-protected:
     int mFrameCount; // 0x0
     int mGlitchCount; // 0x4
     bool mStop; // 0x8
@@ -95,3 +84,15 @@ protected:
 };
 
 extern GlitchFinder TheGlitchFinder;
+
+class AutoGlitchPoker {
+public:
+    AutoGlitchPoker(const char *func, float f1, float f2, GlitchAverager *avg) {
+        unsigned int time = __mftb();
+        mActive = true;
+        TheGlitchFinder.PokeStart(func, time, f1, f2, avg);
+    }
+    ~AutoGlitchPoker();
+
+    bool mActive; // 0x0
+};

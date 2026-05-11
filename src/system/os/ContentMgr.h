@@ -129,8 +129,8 @@ public:
     void RefreshSynchronously();
     void OnReadFailure(bool, const char *);
     bool Contains(const char *, String &);
-    void RegisterCallback(Callback *, bool);
-    void UnregisterCallback(Callback *, bool);
+    void RegisterCallback(Callback *callback, bool midRefreshAllowed);
+    void UnregisterCallback(Callback *callback, bool midRefreshAllowed);
 
 private:
     DataNode OnAddContent(DataArray *);
@@ -181,4 +181,5 @@ const char *GetStr() const { return mData->Str(3); }
 END_MESSAGE
 
 DECLARE_MESSAGE(ContentInstalledMsg, "content_installed")
+ContentInstalledMsg() : Message(Type()) {}
 END_MESSAGE

@@ -1,5 +1,6 @@
 #include "char/ClipGraphGen.h"
 #include "char/CharClip.h"
+#include "char/ClipDistMap.h"
 #include "math/Utl.h"
 #include "obj/Data.h"
 #include "obj/Object.h"
@@ -7,6 +8,10 @@
 ClipGraphGenerator::ClipGraphGenerator() : mTypeData(0), mDmap(0), mClipA(0), mClipB(0) {}
 
 ClipGraphGenerator::~ClipGraphGenerator() {}
+
+BEGIN_HANDLERS(ClipGraphGenerator)
+    HANDLE(generate_transitions, OnGenerateTransitions)
+END_HANDLERS
 
 ClipDistMap *ClipGraphGenerator::GeneratePair(
     CharClip *c1, CharClip *c2, ClipDistMap::Node *n1, ClipDistMap::Node *n2
@@ -68,7 +73,3 @@ DataNode ClipGraphGenerator::OnGenerateTransitions(DataArray *da) {
     mDmap->FindNodes(max_error, max_dist, end_dist);
     return 0;
 }
-
-BEGIN_HANDLERS(ClipGraphGenerator)
-    HANDLE(generate_transitions, OnGenerateTransitions)
-END_HANDLERS

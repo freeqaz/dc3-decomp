@@ -37541,27 +37541,6 @@
       }
     },
     {
-      "name": "default/system/zlib/ZlibLicense",
-      "target_path": "build/373307D9/obj/system/zlib/ZlibLicense.obj",
-      "base_path": "build/373307D9/src/system/zlib/ZlibLicense.obj",
-      "scratch": {
-        "platform": "xbox360",
-        "compiler": "msvc_ppc_16.00.11886.00",
-        "c_flags": "/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /TP",
-        "ctx_path": "build/373307D9/src/system/zlib/ZlibLicense.ctx",
-        "build_ctx": true
-      },
-      "metadata": {
-        "complete": true,
-        "reverse_fn_order": false,
-        "source_path": "src/system/zlib/ZlibLicense.c",
-        "progress_categories": [
-          "engine"
-        ],
-        "auto_generated": false
-      }
-    },
-    {
       "name": "default/xdk/nuispeech/fetype",
       "target_path": "build/373307D9/obj/xdk/nuispeech/fetype.obj",
       "scratch": {
@@ -37590,6 +37569,14 @@
         "progress_categories": [
           "sdk"
         ],
+        "auto_generated": false
+      }
+    },
+    {
+      "name": "default/system/zlib/ZlibLicense",
+      "target_path": "build/373307D9/obj/system/zlib/ZlibLicense.obj",
+      "metadata": {
+        "progress_categories": [],
         "auto_generated": false
       }
     },

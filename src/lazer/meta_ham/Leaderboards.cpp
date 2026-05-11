@@ -265,7 +265,7 @@ void Leaderboards::AddPendingProfile(HamProfile *pProfile) {
 }
 
 void Leaderboards::StartUploadingNextProfile() {
-    for (auto it = mPendingProfiles.begin(); it != mPendingProfiles.end(); ++it) {
+    while (!mPendingProfiles.empty()) {
         mUploadProfile = mPendingProfiles.front();
         mPendingProfiles.pop_front();
         mUploadProfile->GetSongStatusMgr()->GetScoresToUpload(mScoresToUpload);
@@ -312,11 +312,9 @@ Symbol Leaderboards::ShowGamercard(int i, HamProfile *profile) {
                     return display_gamercard_privilege_error;
                 } else if (result == (ShowGamercardResult)-3) {
                     return display_gamercard_pad_error;
-                } else {
-                    if (0 > result) {
-                        static Symbol on_select_gamertag_error("on_select_gamertag_error");
-                        return on_select_gamertag_error;
-                    }
+                } else if (0 > result) {
+                    static Symbol on_select_gamertag_error("on_select_gamertag_error");
+                    return on_select_gamertag_error;
                 }
             }
             return gNullStr;

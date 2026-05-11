@@ -64,6 +64,7 @@
 #include "rndobj/Tex.h"
 #include "rndobj/Utl.h"
 #include "world/Dir.h"
+#include <cstring>
 
 CharDebug TheCharDebug;
 
@@ -219,8 +220,8 @@ void CharDebug::DisplayObject(Hmx::Object *obj) {
     } else {
         RndTex *tex = dynamic_cast<RndTex *>(obj);
         if (tex) {
-            static RndMesh *mesh;
-            static RndMat *mat;
+            static RndMesh *mesh = nullptr;
+            static RndMat *mat = nullptr;
             if (!mesh) {
                 mesh = Hmx::Object::New<RndMesh>();
                 mat = Hmx::Object::New<RndMat>();
@@ -228,20 +229,16 @@ void CharDebug::DisplayObject(Hmx::Object *obj) {
                 mesh->Verts().resize(4);
                 mesh->Faces().resize(2);
                 for (int i = 0; i < 4; i++) {
-                    float u, v;
-                    if ((i != 1) && (i != 2)) {
-                        u = 0.0f;
-                    } else {
-                        u = 1.0f;
-                    }
-                    if (i < 2) {
-                        v = 1.0f;
-                    } else {
-                        v = 0.0f;
-                    }
-                    mesh->Verts()[i].pos.Set((v + 1.0f) * 20.0f, 0.0f, -(u * 20.0f - 60.0f));
-                    mesh->Verts()[i].norm.Set(0.0f, -1.0f, 0.0f);
-                    mesh->Verts()[i].color = Hmx::Color(1.0f, 1.0f, 1.0f, 1.0f);
+                    float f4 = i == 1 || i == 2 ? 0.0f : 1.0f;
+                    float f5 = i < 2 ? 1.0f : 0.0f;
+                    float floats[2] = { f5, f4 };
+                    mesh->Verts()[i].pos.Set(
+                        (floats[0] + 1) * 20, 0, -(floats[1] * 20 - 60)
+                    );
+                    memcpy(mesh->Verts()[i].boneIndices, floats, sizeof(floats));
+                    mesh->Verts()[i].norm.Set(0, -1, 0);
+                    mesh->Verts()[i].boneWeights.Set(0, 0, 0, 0);
+                    mesh->Verts()[i].color.Set(1, 1, 1, 1);
                 }
                 mesh->Faces()[0].Set(0, 1, 2);
                 mesh->Faces()[1].Set(0, 2, 3);
@@ -251,7 +248,7 @@ void CharDebug::DisplayObject(Hmx::Object *obj) {
             if (mat)
                 mat->SetDiffuseTex(tex);
             CreateAndSetMetaMat(mat);
-            mesh->Highlight();
+            mesh->DrawShowing();
         }
     }
 }

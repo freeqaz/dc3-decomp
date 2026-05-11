@@ -358,22 +358,6 @@ bool FlowAnimate::Replace(ObjRef *ref, Hmx::Object *obj) {
     return Hmx::Object::Replace(ref, obj);
 }
 
-void FlowAnimate::ResetAnim() {
-    if (mAnim && !FlowNode::sPushDrivenProperties) {
-        mRate = mAnim->GetRate();
-        mStart = mAnim->StartFrame();
-        mEnd = mAnim->EndFrame();
-        mEase = kEaseLinear;
-        mWrap = false;
-        mPeriod = 0;
-        mScale = 1;
-        mEasePower = 2;
-        static Symbol range("range");
-        static Symbol loop("loop");
-        mType = mAnim->Loop() ? loop : range;
-    }
-}
-
 bool FlowAnimate::IsRunning() {
     if (!FlowNode::IsRunning()) {
         return mAnimTask != 0;
@@ -432,4 +416,20 @@ void FlowAnimate::Deactivate(bool b) {
     }
     TheFlowMgr->CancelCommand(this);
     FlowNode::Deactivate(b);
+}
+
+void FlowAnimate::ResetAnim() {
+    if (mAnim && !FlowNode::sPushDrivenProperties) {
+        mRate = mAnim->GetRate();
+        mStart = mAnim->StartFrame();
+        mEnd = mAnim->EndFrame();
+        mEase = kEaseLinear;
+        mWrap = false;
+        mPeriod = 0;
+        mScale = 1;
+        mEasePower = 2;
+        static Symbol range("range");
+        static Symbol loop("loop");
+        mType = mAnim->Loop() ? loop : range;
+    }
 }

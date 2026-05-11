@@ -71,8 +71,8 @@ public:
         float delay,
         Hmx::Object *listener = nullptr,
         EaseType easeType = kEaseLinear,
-        float = 0,
-        bool = false
+        float easePower = 0,
+        bool wrap = false
     );
     Task *Animate(
         float blend,
@@ -86,8 +86,8 @@ public:
         Symbol type,
         Hmx::Object *listener = nullptr,
         EaseType easeType = kEaseLinear,
-        float = 0,
-        bool = false
+        float easePower = 0,
+        bool wrap = false
     );
     Task *Animate(
         float start,
@@ -97,8 +97,8 @@ public:
         float blend = 0,
         Hmx::Object *listener = nullptr,
         EaseType easeType = kEaseLinear,
-        float = 0,
-        bool = false
+        float easePower = 0,
+        bool wrap = false
     );
 
     TaskUnits Units() const;
@@ -162,6 +162,8 @@ public:
     AnimTask *BlendTask() const { return mBlendTask; }
     RndAnimatable *Anim() const { return mAnim; }
     Hmx::Object *AnimTarget() const { return mAnimTarget; }
+    Hmx::Object *Listener() const { return mListener; }
+    void SetListener(Hmx::Object *l) { mListener = l; }
 
     POOL_OVERLOAD(AnimTask, 0x75);
 

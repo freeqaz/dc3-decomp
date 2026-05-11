@@ -9,6 +9,11 @@ CharPollGroup::CharPollGroup() : mPolls(this), mChangedBy(this), mChanges(this) 
 
 CharPollGroup::~CharPollGroup() {}
 
+BEGIN_HANDLERS(CharPollGroup)
+    HANDLE_ACTION(sort_polls, SortPolls())
+    HANDLE_SUPERCLASS(Hmx::Object)
+END_HANDLERS
+
 BEGIN_PROPSYNCS(CharPollGroup)
     SYNC_PROP(polls, mPolls)
     SYNC_PROP(changed_by, mChangedBy)
@@ -32,9 +37,7 @@ BEGIN_COPYS(CharPollGroup)
     CREATE_COPY(CharPollGroup)
     BEGIN_COPYING_MEMBERS
         if (ty == kCopyFromMax) {
-            for (ObjPtrList<CharPollable>::iterator it = c->mPolls.begin();
-                 it != c->mPolls.end();
-                 ++it) {
+            FOREACH (it, c->mPolls) {
                 if (!mPolls.find(*it)) {
                     mPolls.push_back(*it);
                 }
@@ -52,43 +55,39 @@ INIT_REVS(3, 0)
 BEGIN_LOADS(CharPollGroup)
     LOAD_REVS(bs);
     ASSERT_REVS(3, 0);
-    Hmx::Object::Load(bs);
-    if (d.rev > 2)
-        CharWeightable::Load(bs);
-    bs >> mPolls;
+    LOAD_SUPERCLASS(Hmx::Object)
+    if (d.rev > 2) {
+        LOAD_SUPERCLASS(CharWeightable)
+    }
+    d >> mPolls;
     if (d.rev > 1) {
-        bs >> mChangedBy;
-        bs >> mChanges;
+        d >> mChangedBy;
+        d >> mChanges;
     }
 END_LOADS
 
 void CharPollGroup::Poll() {
-    if (Weight() != 0.0f) {
-        for (ObjPtrList<CharPollable>::iterator it = mPolls.begin(); it != mPolls.end();
-             ++it) {
+    if (Weight()) {
+        FOREACH (it, mPolls) {
             (*it)->Poll();
         }
     }
 }
 
 void CharPollGroup::Enter() {
-    for (ObjPtrList<CharPollable>::iterator it = mPolls.begin(); it != mPolls.end();
-         ++it) {
+    FOREACH (it, mPolls) {
         (*it)->Enter();
     }
 }
 
 void CharPollGroup::Exit() {
-    for (ObjPtrList<CharPollable>::iterator it = mPolls.begin(); it != mPolls.end();
-         ++it) {
+    FOREACH (it, mPolls) {
         (*it)->Exit();
     }
 }
 
 void CharPollGroup::ListPollChildren(std::list<RndPollable *> &l) const {
-    ObjPtrList<CharPollable>::iterator it = mPolls.begin();
-    ObjPtrList<CharPollable>::iterator itEnd = mPolls.end();
-    for (; it != itEnd; ++it) {
+    FOREACH (it, mPolls) {
         l.push_back(*it);
     }
 }
@@ -100,8 +99,7 @@ void CharPollGroup::PollDeps(
         changedBy.push_back(mChangedBy);
         change.push_back(mChanges);
     } else {
-        for (ObjPtrList<CharPollable>::iterator it = mPolls.begin(); it != mPolls.end();
-             ++it) {
+        FOREACH (it, mPolls) {
             (*it)->PollDeps(changedBy, change);
         }
     }
@@ -111,8 +109,7 @@ void CharPollGroup::SortPolls() {
     CharPollableSorter sorter;
     std::vector<RndPollable *> polls;
     polls.reserve(mPolls.size());
-    for (ObjPtrList<CharPollable>::iterator it = mPolls.begin(); it != mPolls.end();
-         ++it) {
+    FOREACH (it, mPolls) {
         polls.push_back(*it);
     }
     sorter.Sort(polls);
@@ -230,8 +227,3 @@ void CharPollableSorter::Sort(std::vector<RndPollable *> &polls) {
         }
     }
 }
-
-BEGIN_HANDLERS(CharPollGroup)
-    HANDLE_ACTION(sort_polls, SortPolls())
-    HANDLE_SUPERCLASS(Hmx::Object)
-END_HANDLERS

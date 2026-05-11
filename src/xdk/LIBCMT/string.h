@@ -13,6 +13,8 @@ char *strncat(char *dest, const char *src, size_t count);
 char *strdup(const char *src);
 char *strndup(const char *src, size_t size);
 
+int strcpy_s(char *dest, size_t dest_size, const char *src);
+
 size_t strxfrm(char *dest, const char *src, size_t count);
 
 size_t strlen(const char *str);

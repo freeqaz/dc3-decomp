@@ -6,11 +6,6 @@
 #include "ui/UIListWidget.h"
 #include <cstdio>
 
-SongSortBySong::SongSortBySong() {
-    static Symbol by_song("by_song");
-    SetSortName(by_song);
-}
-
 SongSortBySong::~SongSortBySong() {}
 
 SongCmp::~SongCmp() {}
@@ -123,3 +118,4 @@ NavListItemNode *SongSortBySong::NewItemNode(void *p1) const {
 
     return new SongSortNode(cmp, record);
 }
+

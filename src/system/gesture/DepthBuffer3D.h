@@ -49,6 +49,9 @@ public:
     void SetGrooviness(RhythmDetector *, RhythmDetector *);
     void ForceDrawSkeletonIndex(int, bool);
 
+    ObjPtr<RndTex> GetUnk18C() const { return mPlayerPaletteTex; }
+    void SetUnk18C(RndTex *tex) { mPlayerPaletteTex = tex; }
+
 protected:
     DepthBuffer3D();
 

@@ -155,6 +155,7 @@ void CustomPlaylist::SaveFixed(FixedSizeSaveableStream &fs) const {
     if (unk24) {
         TheRockCentral.ManageJob(new PlaylistChangedJob(0, mName, GetNumSongs()));
     }
+    static_cast<bool>(unk24) = false;
 }
 
 void CustomPlaylist::LoadFixed(FixedSizeSaveableStream &fs, int) {

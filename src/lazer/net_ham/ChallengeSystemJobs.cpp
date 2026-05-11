@@ -191,7 +191,8 @@ void GetOfficialChallengesJob::GetRows(
             bref = false;
             if (rows.size() == calcedRows.size()) {
                 for (int i = 0; i < calcedRows.size(); i++) {
-                    if (rows[i] != calcedRows[i]) {
+                    const ChallengeRow &cur = calcedRows[i];
+                    if (rows[i] != cur) {
                         bref = true;
                         break;
                     }

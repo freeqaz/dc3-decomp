@@ -1,103 +1,91 @@
-#include "HolmesClient.h"
-#include "os/Debug.h"
+#include "os/HolmesClient.h"
 #include "os/NetStream.h"
 #include "os/NetworkSocket.h"
 #include "os/System.h"
-#include "os/Timer.h"
-#include "utl/MakeString.h"
-#include "utl/MemMgr.h"
+#include "utl/BinStream.h"
 #include "utl/Option.h"
 #include <cstdio>
-#include <vector>
 
-namespace HolmesClient {
-    BinStream *PlatformCreateServerStream(bool quiet, const char *share) {
-        std::vector<String> hosts;
-        String hostname(HolmesFileHostName());
+String HolmesClient::PlatformGetHostName() { return NetworkSocket::GetHostName(); }
 
-        if (*hostname.c_str() != '\0') {
-            hosts.push_back(hostname);
-        }
+NetAddress HolmesClient::PlatformResolveIP() {
+    String name = HolmesFileHostName();
+    NetAddress addr =
+        NetworkSocket::SetIPPortFromHostPort(name.c_str(), "harmonixmusic.com", 4544);
+    if (addr.mIP == 0 && !gHostLogging) {
+        MILO_FAIL("Couldn't resolve holmes_host: %s", name);
+    }
+    return addr;
+}
 
-        while (true) {
-            hostname = OptionStr("holmes_host", "");
-            if (*hostname.c_str() == '\0') break;
-            hosts.push_back(hostname);
-        }
-
-        while (true) {
-            hostname = OptionStr("xb_host", "");
-            if (*hostname.c_str() == '\0') break;
-            hosts.push_back(hostname);
-        }
-
-        if (!hosts.size()) {
-            if (quiet) {
-                return 0;
-            }
-            FormatString fmt(
-                "NO HOSTNAME PROVIDED, ADD -CC -holmes_share <share> or -holmes_host <host>"
+BinStream *HolmesClient::PlatformCreateServerStream(bool b1, const char *cc2) {
+    std::vector<String> names;
+    String curName = HolmesFileHostName();
+    if (!curName.empty()) {
+        names.push_back(curName);
+    }
+    while (true) {
+        curName = OptionStr("holmes_host", "");
+        if (curName.empty())
+            break;
+        names.push_back(curName);
+    }
+    while (true) {
+        curName = OptionStr("xb_host", "");
+        if (curName.empty())
+            break;
+        names.push_back(curName);
+    }
+    if (names.size() == 0) {
+        if (b1) {
+            return nullptr;
+        } else {
+            MILO_FAIL(
+                "NO HOSTNAME PROVIDED, ADD \"-holmes_host <hostname>\" to your args"
             );
-            TheDebug.Fail(fmt.Str(), 0);
         }
-
-        printf("HolmesClientInit(host={%s", hosts[0].c_str());
-        for (unsigned int i = 1; i < hosts.size(); i++) {
-            printf(", %s", hosts[i].c_str());
-        }
-        printf("})\n");
-
-        int attempt = -1;
-        NetStream *stream = 0;
-        do {
-            attempt++;
-            if ((unsigned int)attempt >= hosts.size()) {
-                if (!quiet) {
-                    attempt = 0;
-                    Timer::Sleep(1000);
-                } else {
-                    return 0;
-                }
-            }
-
-            HolmesSetFileShare(hosts[attempt].c_str(), share);
-            NetAddress addr = HolmesResolveIP();
-
-            if (addr.mIP == 0) {
-                if (!quiet) {
-                    printf("\n\nCOULD NOT RESOLVE HOST ADDRESS '%s'\n\n", HolmesFileHostName());
-                }
-                continue;
-            }
-
-            stream = new NetStream();
-            stream->Socket()->SetNoDelay(true);
-            stream->ClientConnect(addr);
-
-            if (stream->Fail()) {
-                delete stream;
-                stream = 0;
-                if (!quiet) {
-                    printf("\n\nCOULD NOT CONNECT TO HOLMES ADDRESS '%s'\n\n", HolmesFileHostName());
-                }
-            }
-        } while (stream == 0);
-
-        return stream;
     }
-
-    String PlatformGetHostName() {
-        return NetworkSocket::GetHostName();
+    printf("HolmesClientInit(host={%s", names[0].c_str());
+    for (int i = 1; i < names.size(); i++) {
+        printf(", %s", names[i].c_str());
     }
-
-    NetAddress PlatformResolveIP() {
-        String hostname(HolmesFileHostName());
-        NetAddress addr = NetworkSocket::SetIPPortFromHostPort(
-            hostname.c_str(), "harmonixmusic.com", 0x11C0 // Port 4544
-        );
-        if (addr.mIP == 0 && !gHostLogging) {
-            TheDebug.Fail(MakeString("Couldn't resolve holmes_host: %s", hostname), 0);
+    printf("})\n");
+    int i4 = -1;
+    NetStream *ret = nullptr;
+    while (true) {
+        i4++;
+        if (i4 >= names.size()) {
+            if (b1) {
+                return nullptr;
+            }
+            i4 = 0;
+            Timer::Sleep(1000);
         }
-        return addr;
+        HolmesSetFileShare(names[i4].c_str(), cc2);
+        NetAddress addr = HolmesResolveIP();
+        if (addr.mIP == 0) {
+            if (!b1) {
+                printf(
+                    "\n\nCOULD NOT RESOLVE HOST ADDRESS '%s'\n\n", HolmesFileHostName()
+                );
+            }
+        } else {
+            ret = new NetStream();
+            ret->Socket()->SetNoDelay(true);
+            ret->ClientConnect(addr);
+            if (ret->Fail()) {
+                delete ret;
+                ret = nullptr;
+                if (!b1) {
+                    printf(
+                        "\n\nCOULD NOT CONNECT TO HOLMES ADDRESS '%s'\n\n",
+                        HolmesFileHostName()
+                    );
+                }
+            }
+        }
+        if (ret) {
+            return ret;
+        }
     }
 }

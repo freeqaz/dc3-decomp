@@ -291,8 +291,7 @@ int AccomplishmentProgress::GetNumCompletedInCategory(Symbol s) const {
     std::set<Symbol> *set = TheAccomplishmentMgr->GetAccomplishmentSetForCategory(s);
     if (set) {
         FOREACH_PTR (it, set) {
-            Symbol key = *it;
-            if (mCompletedAchievements.find(key) != mCompletedAchievements.end()) {
+            if (IsAccomplished(*it)) {
                 num++;
             }
         }
@@ -328,8 +327,7 @@ bool AccomplishmentProgress::AddAward(Symbol award, Symbol reason) {
 }
 
 bool AccomplishmentProgress::AddAccomplishment(Symbol s) {
-    Symbol key = s;
-    if (mCompletedAchievements.find(key) == mCompletedAchievements.end()) {
+    if (!IsAccomplished(s)) {
         Accomplishment *pAcc = TheAccomplishmentMgr->GetAccomplishment(s);
         if (!pAcc) {
             MILO_LOG("No Accomplishment for %s", s.Str());
@@ -361,7 +359,7 @@ bool AccomplishmentProgress::AddAccomplishment(Symbol s) {
             MILO_ASSERT(pGroup, 0xCA);
             if (TheAccomplishmentMgr->IsGroupComplete(mParentProfile, group)
                 && pGroup->HasAward()) {
-                AddAward(pCategory->GetGroup(), group);
+                AddAward(pGroup->GetAward(), group);
             }
             if (pAcc->HasGamerpicReward()) {
                 GiveGamerpic(pAcc);
@@ -373,8 +371,10 @@ bool AccomplishmentProgress::AddAccomplishment(Symbol s) {
             mParentProfile->MakeDirty();
             return true;
         }
+    } else {
+        return false;
     }
-    return false;
 }
+
 
 #pragma endregion
