@@ -29,7 +29,7 @@ public:
     // Hmx::Object
     virtual ~StoreOffer();
     virtual DataNode Handle(DataArray *, bool);
-    virtual bool Cmp(StoreOffer const &, Symbol) const;
+    virtual bool Cmp(StoreOffer const &, Symbol) const = 0;
 
     Symbol OfferType() const {
         static Symbol type("type");

@@ -172,8 +172,7 @@ bool SongSequence::DoNext(bool b1, bool b2) {
         }
     }
     if (!b2 && mCurrentIndex >= 0) {
-        auto hollaBackEnabled = TheHamProvider->Property(holla_back_config)->Int();
-        if (hollaBackEnabled) {
+        if (TheHamProvider->Property(in_campaign_era_intro)->Int()) {
             static Symbol num_stars("num_stars");
             const DataNode *prop = TheGamePanel->Property(num_stars, false);
             int stars;
