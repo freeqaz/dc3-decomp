@@ -257,7 +257,7 @@ bool GameEndedDataPointJob::CompileMoveRatings(
                     if (!isPractice) {
                         const char *ratingStr = RatingState(moveScores[count].mRatingStateIndex).Str();
                         formatted = MakeString(
-                            "%s:%.2f%%20(%s)", moveName, moveScores[count].unk8, ratingStr
+                            "%s:%.2f%%20(%s)", moveName, moveScores[count].mDetectFrac, ratingStr
                         );
                     } else {
                         if (moveScores[count].mRatingStateIndex < 0) {
@@ -270,7 +270,7 @@ bool GameEndedDataPointJob::CompileMoveRatings(
                                     label = "fail";
                                 }
                             }
-                            int slowmo = moveScores[count].unkc != 0;
+                            int slowmo = moveScores[count].mSlowMo != 0;
                             formatted = MakeString(
                                 "%s:%s%%20(slowmo:%d)", moveName, label, slowmo
                             );
@@ -286,11 +286,11 @@ bool GameEndedDataPointJob::CompileMoveRatings(
                                     label = "bad";
                                 }
                             }
-                            int slowmo = moveScores[count].unkc != 0;
+                            int slowmo = moveScores[count].mSlowMo != 0;
                             formatted = MakeString(
                                 "%s:%.2f%%20(%s)%%20(slowmo:%d)",
                                 moveName,
-                                moveScores[count].unk8,
+                                moveScores[count].mDetectFrac,
                                 label,
                                 slowmo
                             );

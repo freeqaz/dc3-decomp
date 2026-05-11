@@ -17,13 +17,13 @@ UpdateFriendsListJob::UpdateFriendsListJob(Hmx::Object *callback, HamProfile *pr
     : RCJob("friends/updatefriends/", callback) {
     MILO_ASSERT(callback == NULL, 0x18);
     mProfile = profile;
-    mFriendsCount = profile->GetPadNum();
+    mPadNum = profile->GetPadNum();
     mFriendsListJobState = kFriendsListState_0;
 }
 
 void UpdateFriendsListJob::EnumerateFriends() {
     mFriendsListJobState = kEnumeratingFriends;
-    ThePlatformMgr.EnumerateFriends(mFriendsCount, mFriendsList, this);
+    ThePlatformMgr.EnumerateFriends(mPadNum, mFriendsList, this);
 }
 
 DataNode UpdateFriendsListJob::OnMsg(RCJobCompleteMsg const &msg) {
