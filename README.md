@@ -1,33 +1,86 @@
-Dance Central 3
-[![Build Status]][actions] [![Code Progress]][progress] [![Discord Badge]][discord]
-=============
+Dance Central 3 — AI-Assisted Fork
+==================================
 
-[Build Status]: https://github.com/rjkiv/dc3-decomp/actions/workflows/build.yml/badge.svg
-[actions]: https://github.com/rjkiv/dc3-decomp/actions/workflows/build.yml
-[Code Progress]: https://decomp.dev/rjkiv/dc3-decomp.svg?mode=shield&measure=code&label=Code
-[progress]: https://decomp.dev/rjkiv/dc3-decomp
+> ⚠️ **Unofficial fork.** This repository is **not** the canonical DC3 decomp. It is a personal experiment by [@freeqaz](https://github.com/freeqaz) exploring how far AI agents can push a clean-room Xbox 360 decompilation project. Code, commits, decisions, tooling, and most of the documentation in this fork are **AI-assisted** (primarily via Claude Code). Do not assume anything here represents the views, code quality bar, or roadmap of the upstream maintainers.
+>
+> The **official, human-curated** project lives at **[rjkiv/dc3-decomp](https://github.com/rjkiv/dc3-decomp)**. If you want to contribute to or follow the canonical effort, please go there instead.
+>
+> No game assets, no Xbox 360 assembly, and no copyrighted binaries are stored in this repo. An existing copy of the game is required to do anything useful with it.
+
+[![Discord Badge]][discord]
+
 [Discord Badge]: https://img.shields.io/discord/727908905392275526?color=%237289DA&logo=discord&logoColor=%23FFFFFF
 [discord]: https://discord.gg/milohax
 
-A decompilation of Dance Central 3 (build Sep 16 2012) for the Xbox 360.
+What this fork is for
+=====================
 
-This repository does **not** contain any game assets or assembly whatsoever. An existing copy of the game is required.
+A decompilation of Dance Central 3 (build Sep 16 2012) for the Xbox 360, used here as a testbed for:
+
+1. **AI-driven matching decomp** — Can a swarm of LLM agents, given enough structured tooling (Ghidra, objdiff, m2c, Unicorn, source permuter, RB3/RB2 ground truth, DWARF cross-reference), produce byte-matching MSVC-PPC C++ source at scale?
+2. **A native port of the Milo engine** — A WebGPU (Dawn / Emscripten) port living in `native/` runs the decompiled engine on x86_64 Linux and in the browser, with real audio, DTA script execution, and the full UI flow. The native port exists partly because it surfaces correctness bugs in the decomp that pure objdiff matching cannot see.
+
+Status snapshot (auto-generated, may be stale):
+
+- ~**52%** fuzzy match across the whole binary, ~**58%** function count match.
+- ~**93%** fuzzy match on cross-platform engine/game code (the subset that actually runs in the native port). Xbox 360 XDK code is excluded since the native port replaces it.
+- Native port boots, renders, plays audio, and reaches gameplay venues with characters and IK.
+
+For live numbers run `scripts/measure_progress.sh --functions --detailed HEAD`.
 
 Sister project
 ==============
 
-Personal-project counterpart to [RB3 decomp (Wii)](https://github.com/freeqaz/rb3) maintained by [@freeqaz](https://github.com/freeqaz) — same AI-assisted decomp methodology, shared Milo engine codebase. The decomp tooling stack (orchestrator MCP, Ghidra MCP, m2c integration, source permuter, slash commands, persistent agent memory) was developed here on the harder target — Xbox 360 MSVC PowerPC with no DWARF, ICF, and link-time pragmas — and ports across to RB3 (Wii Gekko/MWCC, full DWARF) with minor adaptation.
+Counterpart Wii decomp at **[freeqaz/rb3](https://github.com/freeqaz/rb3)** (Rock Band 3, Gekko/MWCC, full DWARF). Same AI-assisted methodology, shared Milo engine codebase. Most of the tooling described below was built here on the harder target — Xbox 360 MSVC PPC, no DWARF, ICF, and link-time pragmas — and ports to RB3 with minor adaptation. See [docs/SYNC_WITH_DC3.md in RB3](https://github.com/freeqaz/rb3/blob/master/docs/SYNC_WITH_DC3.md) for the cross-project sync plan.
 
-Cross-platform engine + game code (i.e. what actually runs in the WebGPU native port) is **~93% fuzzy-matched** here, with the Xbox 360 XDK excluded since it gets replaced in a native build. RB3 is at ~79% on the same basis. See [docs/SYNC_WITH_DC3.md in RB3](https://github.com/freeqaz/rb3/blob/master/docs/SYNC_WITH_DC3.md) for the cross-project sync plan.
+How the AI tooling works
+========================
+
+The fork is organized around a small number of services that give LLM agents structured, reproducible access to the binary, the build, and prior-art codebases. Agents do not "look at assembly and guess" — they call typed tools that report match percentages, behavioral verdicts, struct offsets, and cross-references.
+
+Decomp services
+---------------
+
+- **Orchestrator MCP** (`scripts/orchestrator/`) — central tool surface exposed to agents. Wraps objdiff, the build, the Ghidra service, Unicorn, m2c, and the RB3/RB2 cross-reference databases. Sample tools: `run_objdiff`, `run_diff_inspect`, `run_analyze_function`, `query_functions`, `lookup_rb3`, `lookup_struct_offset`, `get_rb2_class_info`, `lookup_merged_symbol`, `mark_patch_result`.
+- **Ghidra MCP service** (`tools/ghidra/`, pyghidra-based) — headless Ghidra over HTTP. Provides decompiled C, switch-table/cast analysis (`pcode_inspect.py`), semantic search across 42k+ functions (`code_search.py`), and DTM-vs-header struct diffs (`struct_check.py`).
+- **m2c** — machine-code-to-C decompiler for PPC, called by `run_analyze_function` to seed first-pass C from the original asm.
+- **Unicorn function runner** (`scripts/unicorn_runner/`) — differential execution: runs target and decomp side-by-side on Unicorn PPC32 BE with synthesized inputs, classifies divergences as `logic` / `build_env` / `regalloc`. This is how the agents tell "real bug" from "harmless codegen drift."
+- **Source permuter** (`scripts/permuter/`) — tries signed/unsigned, variable extraction, and other source variations to close the last few percent on stubborn functions.
+- **RB2 DWARF + RB3 reference** — RB2 Wii ships with full DWARF, and RB3 (Wii) is ~54% matched in MWCC. Both are queried as ground truth for class layouts, local variable names/types, and shared engine implementations.
+- **Compiler trace** (`msvc-src/`) — instrumented MSVC `c2.dll` for IL capture and codegen diffing on specific functions where output diverges in non-obvious ways.
+
+Agent harness
+-------------
+
+- **`.claude/skills/`** — ~25 slash-command skills wrap the tools above into agent-callable verbs: `/recon`, `/permute`, `/batch-check`, `/ghidra-decompile`, `/ghidra-struct`, `/unicorn-query`, `/rb2-class`, `/rb3-pair`, `/vtable`, `/resolve-vcall`, `/stack-layout`, `/compare-asm`, `/refactor-staff`, `/screenshot`, `/gpu-capture`, etc.
+- **Worktree pool** (`scripts/setup_worktree.sh`, `worktree_pool.py`) — concurrent agents work on isolated git worktrees that share the configured ninja build, tools, compilers, and target objects via symlinks. Avoids serializing on a single working tree.
+- **Persistent memory** (`.claude/projects/.../memory/`) — index of prior-session findings (vtable layouts, AT_LIMIT divergence classes, known bugs, workflow lessons) that future sessions read before starting work.
+- **Orchestrator batch loops** (`bin/orchestrate`) — strategies like `divergent` (fix Unicorn-flagged logic bugs first) or `batch --strategy` to drive sustained agent work without per-function prompting.
+
+Native port debug surface
+-------------------------
+
+- **HTTP debug server** (`scripts/dc3-agent-test.sh`) — sets `DC3_HTTP=1 DC3_FAST_BOOT=1 DC3_TEL=1` and exposes `localhost:9090/api/{health,dta/eval,screenshot,...}` so agents can poke a running engine without a window manager. See [`docs/tools/HTTP_DEBUG_SERVER.md`](docs/tools/HTTP_DEBUG_SERVER.md).
+- **ImGui debug overlay** — tilde toggles in-game; camera blend / FOV / clip planes / aspect ratio / view-space offset sliders.
+- **DTA overlay system** — native-only DTA files in `native/dta/` shadow the `.ark` archive transparently. No asset patching. See [`docs/native/dta/USAGE_GUIDE.md`](docs/native/dta/USAGE_GUIDE.md).
+- **GFXReconstruct + RenderDoc capture** (`/gpu-capture`, `/gpu-debug`, `/gpu-inspect`) — headless or windowed Vulkan capture and inspection. Used to compare native port rendering against Xenia traces.
+- **Xenia harness** (`/xenia-gameplay`) — runs the original Xbox 360 debug XEX under Xenia (Linux/Vulkan) for ground-truth captures.
+
+Where to read more
+------------------
+
+- [`docs/INDEX.md`](docs/INDEX.md) — full docs sitemap.
+- [`docs/tools/INDEX.md`](docs/tools/INDEX.md) — agent tool selection guide and workflow.
+- [`docs/decomp/TECHNICAL_NOTES.md`](docs/decomp/TECHNICAL_NOTES.md) — compiler quirks and matching patterns.
+- [`docs/plans/dc3-native/STATUS.md`](docs/plans/dc3-native/STATUS.md) — native port status.
 
 Dependencies
 ============
 
 Windows
---------
+-------
 
-On Windows, it's **highly recommended** to use native tooling. WSL or msys2 are **not** required.  
-When running under WSL, [objdiff](#diffing) is unable to get filesystem notifications for automatic rebuilds.
+On Windows, native tooling is **highly recommended**. WSL and msys2 are **not** required. Under WSL, [objdiff](#diffing) cannot get filesystem notifications for automatic rebuilds.
 
 - Install [Python](https://www.python.org/downloads/) and add it to `%PATH%`.
   - Also available from the [Windows Store](https://apps.microsoft.com/store/detail/python-311/9NRWMJP3717K).
@@ -35,7 +88,7 @@ When running under WSL, [objdiff](#diffing) is unable to get filesystem notifica
   - Quick install via pip: `pip install ninja`
 
 macOS
-------
+-----
 
 - Install [ninja](https://github.com/ninja-build/ninja/wiki/Pre-built-Ninja-packages):
 
@@ -49,26 +102,26 @@ macOS
   brew install --cask --no-quarantine gcenx/wine/wine-crossover
   ```
 
-After OS upgrades, if macOS complains about `Wine Crossover.app` being unverified, you can unquarantine it using:
+After OS upgrades, if macOS complains about `Wine Crossover.app` being unverified, unquarantine it with:
 
 ```sh
 sudo xattr -rd com.apple.quarantine '/Applications/Wine Crossover.app'
 ```
 
 Linux
-------
+-----
 
 - Install [ninja](https://github.com/ninja-build/ninja/wiki/Pre-built-Ninja-packages).
-- For non-`x86_64` platforms: Install wine from your package manager.
-- For `x86_64`, [wibo](https://github.com/decompals/wibo), a minimal 32-bit Windows binary wrapper, will be automatically downloaded and used.
+- For non-`x86_64` platforms: install wine from your package manager.
+- For `x86_64`: [wibo](https://github.com/decompals/wibo), a minimal 32-bit Windows binary wrapper, is downloaded automatically.
 
 Building
 ========
 
-- Clone the repository:
+- Clone the repository (this fork or upstream — same build steps):
 
   ```sh
-  git clone https://github.com/rjkiv/dc3-decomp.git
+  git clone https://github.com/freeqaz/dc3-decomp.git
   ```
 
 - Copy the xex to `orig/373307D9`.
@@ -88,20 +141,21 @@ Building
 Diffing
 =======
 
-Once the initial build succeeds, an `objdiff.json` should exist in the project root.
+Once the initial build succeeds, an `objdiff.json` exists in the project root.
 
 Download the latest release from [encounter/objdiff](https://github.com/encounter/objdiff). Under project settings, set `Project directory`. The configuration should be loaded automatically.
 
-Select an object from the left sidebar to begin diffing. Changes to the project will rebuild automatically: changes to source files, headers, `configure.py`, `splits.txt` or `symbols.txt`.
+Select an object from the left sidebar to begin diffing. Changes to source files, headers, `configure.py`, `splits.txt`, or `symbols.txt` trigger automatic rebuilds.
 
 ![](assets/objdiff.png)
 
 Native Port
 ===========
 
-A native x86_64 Linux port lives in `native/`. It renders the game using WebGPU (Dawn) instead of Xbox 360 DX9, with real audio playback, DTA script execution, and the full UI flow.
+A native x86_64 Linux port lives in `native/`. It renders the game via WebGPU (Dawn) instead of Xbox 360 DX9, with real audio playback, DTA script execution, and the full UI flow. An Emscripten/WASM build is also wired up (`scripts/build/web.sh`).
 
-### Building
+Building
+--------
 
 ```sh
 cmake -S native -B native/build -G Ninja
@@ -110,26 +164,32 @@ cmake --build native/build --target dc3-native -- -j$(nproc)
 
 Requires extracted game assets in `orig-assets/` (see [native port status](docs/plans/dc3-native/STATUS.md)).
 
-### Debug Overlay
+Web build:
 
-Press **`~`** (tilde/backtick) at any time to toggle the ImGui debug overlay. This works during gameplay without pausing and provides real-time sliders for:
+```sh
+scripts/build/web.sh
+python3 native/web/server.py --port 8421
+```
 
-- **Camera Blend** -- enable/disable smooth camera transitions, adjust blend frame counts
-- **FOV Scale** -- scale all camera field-of-view values (0.5x to 2.0x)
-- **Clip Planes** -- override near/far plane distances
-- **Aspect Ratio** -- force a specific aspect ratio
-- **Camera Offset** -- shift the camera forward/back, up/down, left/right in view space
+Debug Overlay
+-------------
 
-The debug overlay is also accessible from **Settings > Gameplay Settings > Debug Overlay** in the game menus.
+Press **`~`** (tilde) any time to toggle the ImGui debug overlay. Works during gameplay without pausing; provides real-time sliders for:
 
-### DTA Overlay System
+- **Camera Blend** — enable/disable smooth transitions, adjust blend frame counts
+- **FOV Scale** — scale all camera FOV values (0.5x to 2.0x)
+- **Clip Planes** — override near/far plane distances
+- **Aspect Ratio** — force a specific aspect ratio
+- **Camera Offset** — shift the camera forward/back, up/down, left/right in view space
 
-Native-only features (like the Camera Blend toggle in Gameplay Settings) are injected via file overlays in `native/dta/`. These files shadow the `.ark` archive transparently -- no asset patching required. See [DTA Overlay docs](docs/native/dta/USAGE_GUIDE.md).
+Also accessible from **Settings > Gameplay Settings > Debug Overlay** in-game.
 
 Questions?
 ==========
-Please see [the FAQ](docs/FAQ.md).
 
-Want to contribute?
-===================
-If you are interested in contributing, please see [the CONTRIBUTING walkthrough and guidelines](docs/CONTRIBUTING.md).
+See [the FAQ](docs/FAQ.md). For anything fork-specific (AI tooling, native port, RB3 sync), open an issue against this repo rather than upstream.
+
+Contributing
+============
+
+This fork is a personal sandbox and accepts PRs at the maintainer's discretion. For the canonical project — which is where you almost certainly want to contribute — see [the upstream CONTRIBUTING guide](https://github.com/rjkiv/dc3-decomp/blob/main/docs/CONTRIBUTING.md). The local [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) walkthrough is preserved for reference.
