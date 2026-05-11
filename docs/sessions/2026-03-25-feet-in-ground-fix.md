@@ -225,3 +225,187 @@ The `TODO HACK` foot-sole clamp in the ankle case is still present. It was origi
 - `src/system/char/CharServoBone.cpp` — diagnostic cleanup
 - `native/src/gfx/ImGuiBackend.cpp` — headless null window guard
 - `native/src/platform/BoneSetup.cpp` — garbage WorldXfm detection + identity fallback
+
+---
+
+## Phase 7 — 2026-05-05: Empirical Bone-Position Data
+
+After two incorrect AI agent investigations (one falsely concluded "platform divergence" without
+data, one fabricated a render-time Z offset), the user requested actual measurements.
+
+### Test relaxation reverted
+
+`FeetNotBelowFloorDuringGameplay` was relaxed by an agent to threshold `-4.0` with a comment
+claiming "matches Xbox behavior". This was unverified and wrong — the real-Xbox visual inspection
+shows feet are NOT in floor. Test restored to `-2.0` with a comment warning future agents not to
+relax it.
+
+Result: test fails as expected — 608/609 gameplay samples have toe Z < -2.0 (worst -3.30).
+
+### Real bone telemetry captured
+
+Added one-shot `DC3_IK_DIAG FootGeom` log in `native/src/telemetry/GameplayTelemetry.cpp` that
+dumps the ankle/toe/parent-chain world positions during gameplay (gated to first 5 samples on
+`game_screen` + `state="playing"`).
+
+**Rest pose** (initial frames before gameplay):
+```
+ankleW = (38.24, -15.00,  4.39)
+toeW   = (38.33, -18.99,  0.01)   ← toe correctly on floor
+ankleM.x = (-0.00, -0.00, -1.00)  ← ankle local X axis points straight DOWN in world
+toeLocal = (4.37, 3.99, 0.00)     ← toe offset along ankle X by 4.37
+```
+
+**Gameplay** (frame ~9000, choose_mode → game_screen):
+```
+ankleW   = (30.91, -24.05,  0.84)   ← ankle 3.5 units LOWER than rest
+toeW     = (32.45, -28.23, -3.12)   ← toe deep below floor
+shinWZ   = 17.76
+thighWZ  = 34.32
+pelvisWZ = 33.74
+abovePWZ = 0.11   parent name: "player0"   ← character root at floor level
+```
+
+### Key findings
+
+1. **Toe-relative-to-ankle offset is preserved** between rest and gameplay (both ~4 units below).
+   The skeleton structure is intact.
+2. **Ankle is ~3.5 units lower** in gameplay than in rest pose. The same offset applies to the
+   pelvis (rest ~37, gameplay ~33.7), so the *entire* skeleton is shifted down by ~3.5 units.
+3. **Character root `player0` is at Z=0.11** during gameplay (effectively on floor). For the toe
+   to land on floor, the skeleton would need to be ~3.5 units higher relative to player0.
+4. **HamIKEffector::Poll matches Xbox at 99.9%** (only stack offset diffs, no logic divergence).
+   `ApplyConstraints` is 100% normalized. The IK math is identical.
+5. The bug source is therefore in the **input data** to IK (animation move target, neutral pose,
+   constraint targets) or in the **character placement** — *not* in the IK code itself.
+
+### Hypotheses to test next
+
+- (A) The animation system writes the wrong Z to bone mLocalXfm (does animation update local
+  pose? In rest pose, was player0 at Z \!= 0.11?).
+- (B) The character's spawn Z is wrong (player0 should be ~3.5 higher to put feet on floor with
+  the current bone offsets).
+- (C) totalWeight in the IK constraint loop differs between native and Xbox (still unverified
+  without real Xbox data).
+- (D) A render-time bone matrix transform exists somewhere (audited `BoneSetup.cpp` — no Z
+  offset there; the prior agent's claim was fabricated).
+
+### Files modified in this phase
+
+- `native/tests/test_gameplay_telemetry.cpp` — restored `FeetNotBelowFloorDuringGameplay`
+  threshold to -2.0 with anti-relaxation warning.
+- `native/src/telemetry/GameplayTelemetry.cpp` — added `DC3_IK_DIAG FootGeom` one-shot dump.
+
+### Next steps
+
+- Capture player0 Z and pelvis local Z **in rest pose** (currently only have gameplay).
+  This will pinpoint whether (A) animation moves the pelvis down, or (B) the spawn is wrong.
+- Continue Xenia investigation in parallel for ground truth, but local empirical work is more
+  productive than chasing the loading hang.
+
+### Phase 7 update: rest-pose vs gameplay confirms IK rotation bug
+
+Captured both rest-pose and gameplay samples:
+
+| metric | rest pose (loading) | gameplay |
+|---|---|---|
+| `player0.WorldXfm.v.z` | 0.00 | 0.11 |
+| `bone_pelvis.WorldXfm.v.z` | 42.51 | 33.62 |
+| `lAnkle.WorldXfm.v.z` | 4.39 | 0.84 |
+| `lToe.WorldXfm.v.z` | 0.01 (on floor) | -3.12 (below floor) |
+| `lAnkle.WorldXfm.m.x` | (0, 0, -1) | (0, 0, -1) |
+| `lToe.LocalXfm.v` (relative to ankle) | (4.37, 3.99, 0) | (3.96, 4.45, 0) |
+
+**Critical observation:** The ankle's local X axis points STRAIGHT DOWN in *both* rest pose and
+gameplay. The toe is offset along that axis, so the toe is always ~4 units below the ankle.
+
+This is the T-pose bone orientation (feet dangling, toe below ankle). In a real standing /
+dancing pose, the ankle should be **rotated** so the foot is flat on the floor — toe forward,
+not down. **The IK is failing to rotate the ankle.**
+
+Hypothesis: `totalWeight` in `HamIKEffector::ApplyConstraints` returns 0 (or near 0) during
+gameplay, so the IK-computed rotation never gets applied — the bone keeps its animation/T-pose
+rotation. The foot stays pointed down, and the toe ends up below the floor when the ankle is
+positioned near floor level.
+
+### Pending action
+
+Add `totalWeight` telemetry to `HamIKEffector::Poll` so we can observe it during gameplay.
+This is the next concrete data point needed.
+
+### Phase 7 update 2: ROOT CAUSE — `mConstraints` is empty for all polls
+
+Added telemetry to `HamIKEffector::Poll()` capturing `totalWeight`, `mConstraints.size()`,
+finger/effector names, and pre-IK world positions. During gameplay (filtered to
+`main.milo` player character with ankle Z < 1.5):
+
+```
+DC3_IK_DIAG IkSnap[1]: effPath=bone_L-ankle.ikf (char/main/main.milo)
+  fingerW.v=(32.44,-28.22,-3.12)    ← toe spot at Z=-3.12 (below floor)
+  effW.v=(30.91,-24.05,0.84)        ← ankle at Z=0.84 (matches FootGeom)
+  neutral.v=(32.44,-28.22,-3.12)    ← rest-pose pose-applied position
+  totalWeight=0.000  constraintCount=0
+```
+
+**`mConstraints.size() == 0` for every poll** — ankle, pelvis, hand, all effectors. With no
+constraint contributions, `ApplyConstraints` returns 0, and the IK falls through to:
+
+```cpp
+float remaining = 1.0f - totalWeight;   // = 1.0
+q.v += remaining * effQ.v;               // q = current finger (toe spot) world position
+```
+
+The IK solver treats the *current animated toe spot position* as the target. So the foot
+follows whatever the animation puts it at. There's no constraint pulling the foot toward
+the floor.
+
+In a **crouch dance pose**:
+- Animation drops pelvis ~8 units (rest 42.51 → gameplay 33.62)
+- Real-Xbox IK constraints pull the foot *back up* to floor → toe stays at Z≈0
+- Native (empty constraints) → foot follows the pelvis drop → toe at Z=-3.12
+
+This explains the entire bug: Xbox's IK has working `mConstraints` that anchor feet to
+floor targets. Ours doesn't load any.
+
+### `Load()` vs `Save()` asymmetry
+
+```cpp
+BEGIN_SAVES(HamIKEffector)
+    SAVE_SUPERCLASS(Hmx::Object)        // Hmx::Object
+    SAVE_SUPERCLASS(CharWeightable)
+    bs << mEffector;
+    bs << mMore;
+    bs << mElbow;
+    bs << mConstraints;
+    ...
+
+BEGIN_LOADS(HamIKEffector)
+    LOAD_SUPERCLASS(CharPollable)       // CharPollable \!
+    LOAD_SUPERCLASS(CharWeightable)
+    d >> mEffector;
+    d >> mMore;
+    if (d.rev > 1) d >> mElbow;
+    ...
+    d >> mConstraints;
+```
+
+**Note:** `HamIKEffector::Load` and `Save` both match Xbox at 100%, so this asymmetry is
+present in the original game too. Either:
+- Both `Hmx::Object::Save` and `CharPollable::Load` are no-ops (just vtable, no bytes), so
+  the asymmetry doesn't shift the byte stream.
+- Or the .ikf files in DC3 simply don't define constraints in the static data, and the
+  game populates them from another source we haven't found yet (move/animation system?).
+
+### Next concrete steps
+
+1. **Confirm whether the .ikf binary data contains constraint definitions.** Dump the
+   binary bytes of a HamIKEffector saved object from a .milo file and check if the
+   `mConstraints` array has entries.
+2. **If yes:** find where our Load drops them. Check `ObjVector<Constraint>::operator>>`
+   and walk the byte offsets.
+3. **If no:** find where the game populates `mConstraints` at runtime. Search for
+   `BustAMoveData`, `ClipPlayer`, `HamRegulate`, or move-system code that may
+   inject constraint targets per move.
+
+This is the true root cause — not "IK clamp threshold" or "render-time Z offset". The
+empty `mConstraints` array deprives the IK solver of any target to pull toward.

@@ -310,6 +310,77 @@ GameplayTelemetry::Snapshot GameplayTelemetry::CaptureSnapshot(int frame) {
                 s.rToeZ = rToe->WorldXfm().v.z;
                 s.lFootZAxisZ = lAnkle->WorldXfm().m.z.z;
                 s.rFootZAxisZ = rAnkle->WorldXfm().m.z.z;
+
+                // One-shot diagnostic: dump toe rest-offset and ankle rotation.
+                // Gate to gameplay only — we already have rest-pose data.
+                static int sFootGeomLog = 0;
+                bool isGameplay = (s.state && std::string(s.state) == "playing"
+                                   && s.screen && std::string(s.screen) == "game_screen");
+                // Also capture a couple of REST-POSE samples (state != playing)
+                // so we can compare player0/pelvis Z between rest and gameplay.
+                static int sRestGeomLog = 0;
+                if (sRestGeomLog < 2 && !isGameplay && lAnkle->WorldXfm().v.z > 3.0f) {
+                    sRestGeomLog++;
+                    RndTransformable *shinR = lAnkle->TransParent();
+                    RndTransformable *thighR = shinR ? shinR->TransParent() : nullptr;
+                    RndTransformable *pelvisR = thighR ? thighR->TransParent() : nullptr;
+                    RndTransformable *aboveR = pelvisR ? pelvisR->TransParent() : nullptr;
+                    fprintf(stderr,
+                        "DC3_IK_DIAG RestGeom[%d]: ankleW.z=%.2f toeW.z=%.2f "
+                        "pelvisW.z=%.2f abovePW.z=%.2f abovePName=%s "
+                        "state=%s screen=%s\n",
+                        sRestGeomLog,
+                        lAnkle->WorldXfm().v.z,
+                        lToe->WorldXfm().v.z,
+                        pelvisR ? pelvisR->WorldXfm().v.z : -999.f,
+                        aboveR ? aboveR->WorldXfm().v.z : -999.f,
+                        aboveR ? aboveR->Name() : "null",
+                        s.state ? s.state : "null",
+                        s.screen ? s.screen : "null");
+                }
+                {
+                    static int sCharPathLog = 0;
+                    if (sCharPathLog < 2 && isGameplay) {
+                        sCharPathLog++;
+                        fprintf(stderr,
+                            "DC3_IK_DIAG CharPath[%d]: ch=%s charDir=%s "
+                            "ankleP=%s ankleP_path=%s\n",
+                            sCharPathLog,
+                            ch ? PathName(ch) : "null",
+                            charDir ? PathName(charDir) : "null",
+                            lAnkle ? PathName(lAnkle) : "null",
+                            lAnkle ? lAnkle->Name() : "null");
+                    }
+                }
+                if (sFootGeomLog < 5 && isGameplay && lAnkle->WorldXfm().v.z < 2.0f) {
+                    sFootGeomLog++;
+                    const Transform &la = lAnkle->WorldXfm();
+                    const Transform &lt = lToe->WorldXfm();
+                    const Transform &llo = lToe->LocalXfm();
+                    // Walk up the bone chain via TransParent (no Find lookup).
+                    RndTransformable *shin = lAnkle->TransParent();
+                    RndTransformable *thigh = shin ? shin->TransParent() : nullptr;
+                    RndTransformable *pelvisP = thigh ? thigh->TransParent() : nullptr;
+                    RndTransformable *aboveP = pelvisP ? pelvisP->TransParent() : nullptr;
+                    fprintf(stderr,
+                        "DC3_IK_DIAG FootGeom[%d]: ankleW=(%.2f,%.2f,%.2f) "
+                        "toeW=(%.2f,%.2f,%.2f) toeLocal=(%.2f,%.2f,%.2f) "
+                        "shinWZ=%.2f thighWZ=%.2f pelvisWZ=%.2f abovePWZ=%.2f "
+                        "pelvisName=%s aboveName=%s "
+                        "ankleM.x=(%.2f,%.2f,%.2f) ankleM.z=(%.2f,%.2f,%.2f)\n",
+                        sFootGeomLog,
+                        la.v.x, la.v.y, la.v.z,
+                        lt.v.x, lt.v.y, lt.v.z,
+                        llo.v.x, llo.v.y, llo.v.z,
+                        shin ? shin->WorldXfm().v.z : -999.f,
+                        thigh ? thigh->WorldXfm().v.z : -999.f,
+                        pelvisP ? pelvisP->WorldXfm().v.z : -999.f,
+                        aboveP ? aboveP->WorldXfm().v.z : -999.f,
+                        pelvisP ? pelvisP->Name() : "null",
+                        aboveP ? aboveP->Name() : "null",
+                        la.m.x.x, la.m.x.y, la.m.x.z,
+                        la.m.z.x, la.m.z.y, la.m.z.z);
+                }
                 // Toe above ankle by >2 units = inverted
                 s.lFootInverted = (s.lToeZ > s.lAnkleZ + 2.0f);
                 s.rFootInverted = (s.rToeZ > s.rAnkleZ + 2.0f);

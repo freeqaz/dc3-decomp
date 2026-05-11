@@ -337,6 +337,38 @@ void HamIKEffector::Poll() {
                 q.q.z = 0.0f;
                 q.q.w = 0.0f;
                 float totalWeight = ApplyConstraints(q, neutral, this);
+#ifdef HX_NATIVE
+                {
+                    // Capture only main.milo (the actual player character),
+                    // not backup.milo. Filter by ankle Z below 1.5 (gameplay pose).
+                    static int sTotalWeightLog = 0;
+                    const char *path = PathName(this);
+                    bool isMain = path && strstr(path, "main.milo") != nullptr
+                                  && strstr(path, "backup") == nullptr;
+                    if (sTotalWeightLog < 20
+                        && t == kEffectorTypeAnkle
+                        && isMain
+                        && mEffector->WorldXfm().v.z < 1.5f) {
+                        sTotalWeightLog++;
+                        const Transform &fingW = finger->WorldXfm();
+                        const Transform &effW = mEffector->WorldXfm();
+                        fprintf(stderr,
+                            "DC3_IK_DIAG IkSnap[%d]: effPath=%s "
+                            "fingerW.v=(%.2f,%.2f,%.2f) effW.v=(%.2f,%.2f,%.2f) "
+                            "neutral.v=(%.2f,%.2f,%.2f) "
+                            "fingerW.m.x=(%.2f,%.2f,%.2f) "
+                            "totalWeight=%.3f constraintCount=%d\n",
+                            sTotalWeightLog,
+                            PathName(this),
+                            fingW.v.x, fingW.v.y, fingW.v.z,
+                            effW.v.x, effW.v.y, effW.v.z,
+                            neutral.v.x, neutral.v.y, neutral.v.z,
+                            fingW.m.x.x, fingW.m.x.y, fingW.m.x.z,
+                            totalWeight,
+                            (int)mConstraints.size());
+                    }
+                }
+#endif
 
                 if (t == kEffectorTypeHand && mElbow != nullptr) {
                     DoFancyElbow(q, totalWeight);
