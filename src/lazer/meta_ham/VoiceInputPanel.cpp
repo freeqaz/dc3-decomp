@@ -310,27 +310,28 @@ void VoiceInputPanel::CreatePlaylistEditorGrammar() const {
             TheSpeechMgr->UnloadGrammar("playlist_editor_grammar");
         }
         TheSpeechMgr->CreateGrammar("playlist_editor_grammar");
-        void *state;
+        void *v;
         TheSpeechMgr->AddDynamicRule(
-            "playlist_editor_grammar", "select_playlist_song", &state
+            "playlist_editor_grammar", "select_playlist_song", &v
         );
-        if (TheSongSortMgr->mSongRecordMap.size() == 0) {
+
+        if (TheSongSortMgr->MapSize() == 0) {
             TheSongSortMgr->OnEnter();
         }
-        for (std::map<Symbol, SongRecord>::iterator it =
-                 TheSongSortMgr->mSongRecordMap.begin();
-             it != TheSongSortMgr->mSongRecordMap.end();
-             ++it) {
-            const std::vector<String> &prons =
-                it->second.Metadata()->Pronunciations();
-            for (unsigned int i = 0; i < prons.size(); i++) {
-                String pron(prons[i]);
+
+        const std::map<Symbol, SongRecord> &songSortMembers = TheSongSortMgr->GetUnk78();
+        FOREACH (it, songSortMembers) {
+            const SongRecord &record = it->second;
+            const std::vector<String> &pronunciations =
+                record.Metadata()->Pronunciations();
+            for (int i = 0; i < pronunciations.size(); i++) {
+                String pronunciation = pronunciations[i];
                 TheSpeechMgr->AddDynamicRuleWord(
                     "playlist_editor_grammar",
-                    pron.c_str(),
-                    it->second.ShortName().Str(),
-                    &state,
-                    NULL
+                    pronunciation.c_str(),
+                    record.ShortName().Str(),
+                    &v,
+                    nullptr
                 );
             }
         }

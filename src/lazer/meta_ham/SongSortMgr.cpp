@@ -56,16 +56,6 @@ SongSortMgr::SongSortMgr(SongPreview &sp) : NavListSortMgr(sp) {
 
 SongSortMgr::~SongSortMgr() {}
 
-SongSortByDiff::SongSortByDiff() {
-    static Symbol by_difficulty("by_difficulty");
-    SetSortName(by_difficulty);
-}
-
-SongSortByLocation::SongSortByLocation() {
-    static Symbol by_location("by_location");
-    SetSortName(by_location);
-}
-
 void SongSortMgr::Init(SongPreview &preview) {
     MILO_ASSERT(!TheSongSortMgr, 0x21);
     TheSongSortMgr = new SongSortMgr(preview);
@@ -300,34 +290,29 @@ void SongSortMgr::OnEnter() {
 }
 
 void SongSortMgr::SetupQuasiRandomSongs() {
-    int dataCount = mSorts[mCurrentSortIdx]->GetDataCount();
-    unsigned int *tempIndices = new unsigned int[dataCount];
-    mQuasiRandomIndices.erase(mQuasiRandomIndices.begin(), mQuasiRandomIndices.end());
-    int i = 0;
-    if (dataCount > 0) {
-        unsigned int *ptr = tempIndices - 1;
-        int count = dataCount;
-        do {
-            ptr++;
-            *ptr = i;
-            i++;
-        } while (--count);
-        unsigned int *endPtr = tempIndices + dataCount;
-        do {
-            int randIdx = rand() % dataCount;
-            int value = tempIndices[randIdx];
-            SongSortNode *ssn =
-                dynamic_cast<SongSortNode *>(mSorts[mCurrentSortIdx]->GetListFromIdx(value));
-            if (ssn != nullptr && !ssn->IsMedley() && !ssn->IsFake()
-                && TheProfileMgr.IsContentUnlocked(ssn->Record()->ShortName())) {
-                mQuasiRandomIndices.push_back(value);
-            }
-            endPtr--;
-            dataCount--;
-            tempIndices[randIdx] = *endPtr;
-        } while (0 < dataCount);
+    int datacount = mSorts[mCurrentSortIdx]->GetDataCount();
+    int *tempArr = new int[datacount];
+    mQuasiRandomIndices.clear();
+
+    for (int i = 0; i < datacount; i++) {
+        tempArr[i] = i;
     }
-    delete[] tempIndices;
+
+    for (int i = datacount; i > 0; i--) {
+        int random = rand() % i;
+        int val = tempArr[random];
+        SongSortNode *sortNode =
+            dynamic_cast<SongSortNode *>(mSorts[mCurrentSortIdx]->GetListFromIdx(val));
+        if (sortNode) {
+            if (!sortNode->IsMedley() && !sortNode->IsFake()
+                && TheProfileMgr.IsContentUnlocked(sortNode->Record()->ShortName())) {
+                mQuasiRandomIndices.push_back(val);
+            }
+        }
+        tempArr[random] = tempArr[i - 1];
+    }
+
+    delete tempArr;
     SetQuasiRandomSong();
 }
 

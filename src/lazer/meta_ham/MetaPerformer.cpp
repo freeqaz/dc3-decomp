@@ -1182,16 +1182,17 @@ void MetaPerformer::OnRecallMovePassed(int playerIndex, HamMove *move) {
 void MetaPerformer::UpdateSongFromPlaylist() {
     int infinite = TheGameMode->Infinite();
     bool infiniteParty = TheHamProvider->Property("is_in_infinite_party_mode")->Int();
+    Symbol song;
     if ((!infinite && !infiniteParty) || TheGameMode->InMode("campaign")) {
         MILO_ASSERT(mPlaylist, 0x6F5);
         int songID = mPlaylist->GetSong(mPlaylistIndex);
-        Symbol song = TheHamSongMgr.GetShortNameFromSongID(songID);
-        SelectSong(song, mPlaylistIndex);
+        song = TheHamSongMgr.GetShortNameFromSongID(songID);
+
     } else {
-        Symbol song = TheHamSongMgr.GetRandomSong();
-        TheHamSongMgr.GetSongIDFromShortName(song);
-        SelectSong(song, mPlaylistIndex);
+        song = TheHamSongMgr.GetRandomSong();
+        int songID = TheHamSongMgr.GetSongIDFromShortName(song);
     }
+    SelectSong(song, mPlaylistIndex);
 }
 
 void MetaPerformer::SaveDanceBattleScores(Symbol s1) {

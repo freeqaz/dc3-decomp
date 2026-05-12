@@ -196,21 +196,19 @@ Symbol ChallengeHeaderNode::GetSongShortName() {
     return mChildren.front()->GetToken();
 }
 
-int ChallengeHeaderNode::GetTotalEarnedExp(int playerScore) {
+int ChallengeHeaderNode::GetTotalEarnedExp(int score) {
     int xp = 0;
     FOREACH (it, mChildren) {
-        NavListSortNode *node = *it;
+        ChallengeSortNode *node = static_cast<ChallengeSortNode *>(*it);
         MILO_ASSERT(node, 0xf5);
-        if (playerScore
-            >= static_cast<ChallengeSortNode *>(node)
-                   ->GetChallengeRecord()
-                   ->GetChallengeRow()
-                   .mScore) {
-            xp += static_cast<ChallengeSortNode *>(node)->GetChallengeExp();
+        if (score >= node->GetChallengeRecord()->GetChallengeRow().mScore) {
+            xp += TheChallenges->CalculateChallengeXp(
+                node->GetChallengeScore(), node->GetDifficulty()
+            );
         }
     }
     if (xp == 0) {
-        xp = TheChallenges->GetConsolationXP();
+        xp = TheChallenges->ConsolationXP();
     }
     return xp;
 }
@@ -536,8 +534,7 @@ void ChallengeSortNode::OnContentMounted(const char *contentName, const char *c2
     MILO_ASSERT(contentName, 0x1c1);
     if (!TheContentMgr.RefreshInProgress()) {
         int songID = mChallengeRecord->GetChallengeRow().mSongID;
-        Symbol sContentName(contentName);
-        if (TheHamSongMgr.IsContentUsedForSong(sContentName, songID)) {
+        if (TheHamSongMgr.IsContentUsedForSong(Symbol(contentName), songID)) {
             static Symbol song_data_mounted("song_data_mounted");
             static Message msg(song_data_mounted, gNullStr);
             msg[0] = GetToken();

@@ -679,7 +679,7 @@ bool AccomplishmentManager::HasArtForFirstNewAward(HamProfile *i_pProfile) const
     if (sym != "") {
         Award *pAward = GetAward(sym);
         MILO_ASSERT(pAward, 0x77F);
-        ret = pAward->GetArtName() == gNullStr;
+        ret = pAward->GetArtName() != gNullStr;
     } else {
         MILO_ASSERT(false, 0x785);
     }

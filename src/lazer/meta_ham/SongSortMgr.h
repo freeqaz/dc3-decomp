@@ -19,6 +19,9 @@ public:
     virtual void OnEnter();
     virtual int GetListIndexFromHeaderIndex(int);
 
+    std::map<Symbol, SongRecord> &GetUnk78() { return mSongRecordMap; }
+    unsigned int MapSize() { return mSongRecordMap.size(); }
+
     void MarkElementsProvided(UIListProvider *);
     void MarkElementInPlaylist(Symbol, bool);
     void OnHighlightChanged();

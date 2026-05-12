@@ -90,9 +90,6 @@ void HamSongMgr::ContentDone() {
     mRankedSongs.clear();
     FOREACH (it, mAvailableSongs) {
         const HamSongMetadata *data = Data(*it);
-        if (!data) {
-            continue;
-        }
         if (data->IsRanked()) {
             mRankedSongs.push_back(*it);
         }

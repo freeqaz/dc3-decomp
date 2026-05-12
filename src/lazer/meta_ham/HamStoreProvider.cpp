@@ -411,53 +411,34 @@ BEGIN_HANDLERS(HamStoreProvider)
 END_HANDLERS
 
 void HamStoreProvider::RefreshFilteredCartOffers() {
-    // Remove existing "store_filter_shopping_cart" entry from map
     static Symbol store_filter_shopping_cart("store_filter_shopping_cart");
-    std::map<Symbol, std::vector<StoreOffer *> *>::iterator it =
-        unk38.find(store_filter_shopping_cart);
+    auto it = unk38.find(store_filter_shopping_cart);
     if (it != unk38.end()) {
-        std::vector<StoreOffer *> *vec = it->second;
-        if (vec) {
-            delete vec;
-        }
-        it->second = 0;
+        RELEASE(it->second);
         unk38.erase(it);
     }
 
-    // Count cart offers
-    unsigned int count = 0;
-    for (std::list<StoreOffer *>::iterator cit = mCartOffers.begin();
-         cit != mCartOffers.end();
-         ++cit) {
-        count++;
-    }
-
-    if (count != 0) {
-        // Find the store_checkout offer if mCartCheckout is not set
+    if (mCartOffers.size() != 0) {
         if (!mCartCheckout) {
             static Symbol store_checkout("store_checkout");
-            StoreOffer **end = mAllOffers->end();
-            while (end != mAllOffers->begin()) {
-                --end;
-                Symbol sym = (*end)->StoreOfferData()->Sym(0);
-                if (sym == store_checkout) {
-                    mCartCheckout = *end;
+            FOREACH_REVERSE_PTR(it, mAllOffers) {
+                Symbol data = (*it)->StoreOfferData()->Sym(0);
+                if (data == store_checkout) {
+                    mCartCheckout = *it;
                     break;
                 }
             }
         }
         MILO_ASSERT(mCartCheckout, 0x242);
-
-        // Build new vector with checkout offer + all cart offers
-        std::vector<StoreOffer *> *vec = new std::vector<StoreOffer *>();
-        vec->push_back(mCartCheckout);
-        for (std::list<StoreOffer *>::iterator cit = mCartOffers.begin();
-             cit != mCartOffers.end();
-             ++cit) {
-            vec->push_back(*cit);
+        std::vector<StoreOffer *> *offers = new std::vector<StoreOffer *>();
+        offers->push_back(mCartCheckout);
+        FOREACH (it, mCartOffers) {
+            offers->push_back(*it);
         }
         unk38.insert(
-            std::pair<Symbol, std::vector<StoreOffer *> *>(store_filter_shopping_cart, vec)
+            std::pair<Symbol, std::vector<StoreOffer *> *>(
+                store_filter_shopping_cart, offers
+            )
         );
     }
 }
