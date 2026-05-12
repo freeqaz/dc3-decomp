@@ -61,16 +61,17 @@ void SongHeaderNode::SetCollapseStateIcon(bool b) const {
     }
 }
 
-const char *SongHeaderNode::GetAlbumArtPath() {
+char const *SongHeaderNode::GetAlbumArtPath() {
     static Symbol by_album("by_album");
     static Symbol singles("singles");
 
-    NavListSort *sort = TheSongSortMgr->GetCurrentSort();
-    if (sort->GetSortName() == by_album && GetToken() != singles
-        && !mChildren.empty()) {
-        return mChildren.front()->GetAlbumArtPath();
+    if (TheSongSortMgr->GetCurrentSort()->GetSortName() == by_album
+        && GetToken() != singles) {
+        auto node = mChildren.begin();
+        if (node != mChildren.end())
+            return (*node)->GetAlbumArtPath();
     }
-    return nullptr;
+    return 0;
 }
 
 NavListSortNode *SongHeaderNode::GetFirstActive() {

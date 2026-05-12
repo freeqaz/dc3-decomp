@@ -24,18 +24,15 @@ int PlaylistSongProvider::NumData() const {
     return mPlaylist->GetNumSongs();
 }
 
-Symbol PlaylistSongProvider::DataSymbol(int idx) const {
+Symbol PlaylistSongProvider::DataSymbol(int i) const {
     MILO_ASSERT(mPlaylist, 0x6d);
-
-    if (idx >= 0 && idx < NumData()) {
-        if (mPlaylist != nullptr && mPlaylist->IsValidSong(idx)) {
-            int songID = mPlaylist->GetSong(idx);
-            auto songShortName = TheHamSongMgr.GetShortNameFromSongID(songID, true);
-            return songShortName;
-        }
+    if (i >= 0 && i < NumData() && mPlaylist && mPlaylist->IsValidSong(i)) {
+        int songID = mPlaylist->GetSong(i);
+        Symbol shortName = TheHamSongMgr.GetShortNameFromSongID(songID);
+        return shortName;
+    } else {
+        return gNullStr;
     }
-
-    return Symbol(nullptr);
 }
 
 void PlaylistSongProvider::Text(

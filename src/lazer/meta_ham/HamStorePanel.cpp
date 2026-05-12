@@ -529,33 +529,28 @@ BEGIN_HANDLERS(HamStorePanel)
     HANDLE_SUPERCLASS(StorePanel)
 END_HANDLERS
 
-StoreError HamStorePanel::UpdateOffers(std::list<EnumProduct> const &enumList, bool pending) {
-    HamSpecialOffer *cur = mSpecialOffers.begin();
-    HamSpecialOffer *end = mSpecialOffers.end();
-    if (cur != end) {
-        do {
-            if (!cur->mOwned) {
-                bool found = false;
-                for (std::list<EnumProduct>::const_iterator it = enumList.begin();
-                     it != enumList.end(); ++it) {
-                    if (it->mOfferID == cur->mOfferID) {
-                        found = true;
-                        cur->mOwned = (it->mPurchased != 0);
-                        break;
-                    }
-                }
-                if (found) {
-                    const char *status = "owned";
-                    if (!cur->mOwned) {
-                        status = "not owned";
-                    }
-                    TheDebug << MakeString("Store: special offer %s is %s\n", cur->mName.Str(), status);
+StoreError HamStorePanel::UpdateOffers(std::list<EnumProduct> const &list, bool b) {
+    FOREACH (it, mSpecialOffers) {
+        if (!it->mOwned) {
+            bool check = false;
+            FOREACH (listIt, list) {
+                if (listIt->mOfferID == it->mOfferID) {
+                    check = true;
+                    it->mOwned = (listIt->mPurchased != 0);
+                    break;
                 }
             }
-            cur++;
-        } while (cur != end);
+
+            if (check) {
+                MILO_LOG(
+                    "Store: special offer %s is %s\n",
+                    it->mName.Str(),
+                    (it->mOwned) ? "owned" : "not owned"
+                );
+            }
+        }
     }
-    return StorePanel::UpdateOffers(enumList, pending);
+    return StorePanel::UpdateOffers(list, b);
 }
 
 void HamStorePanel::RefreshSpecialOfferStatus() {

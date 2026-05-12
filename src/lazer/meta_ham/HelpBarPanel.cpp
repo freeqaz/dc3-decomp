@@ -322,19 +322,17 @@ bool HelpBarPanel::UpdateBackButton(UIPanel *panel) {
     if (panel) {
         prop = panel->Property(back_token, false);
     }
-    UILabel *leftHandLabel = DataDir()->Find<UILabel>("left_hand.lbl", false);
     RndGroup *backIcon = DataDir()->Find<RndGroup>("back_icon.grp", false);
+    UILabel *leftHandLabel = DataDir()->Find<UILabel>("left_hand.lbl", false);
     bool b11 = false;
     if (prop) {
         if (prop->Type() == kDataSymbol) {
             if (prop->Sym() != gNullStr) {
                 b11 = true;
-                HamNavProvider *prov = mLeftHandNavList->GetHelpbarProvider();
-                prov->SetLabel(1, 0, prop->Sym());
+                mLeftHandNavList->GetHelpbarProvider()->SetLabel(1, 0, prop->Sym());
             }
         } else if (prop->Type() == kDataArray) {
-            auto arraySize = prop->Array()->Size();
-            if (arraySize > 0) {
+            if (prop->Array()->Size() > 0) {
                 b11 = true;
                 mLeftHandNavList->GetHelpbarProvider()->SetLabels(1, prop->Array());
             }
@@ -345,22 +343,16 @@ bool HelpBarPanel::UpdateBackButton(UIPanel *panel) {
         mLeftHandNavList->GetHelpbarProvider()->SetLabel(1, prop->Sym());
         if (backIcon) {
             static Symbol show_back_controller_icon("show_back_controller_icon");
-            bool show;
             if (panel) {
                 prop = panel->Property(show_back_controller_icon, false);
-                if (prop) {
-                    if (prop->Int()) {
-                        show = true;
-                    } else {
-                        show = false;
-                    }
+                if (!prop || prop->Int() != 0) {
+                    backIcon->SetShowing(true);
                 } else {
-                    show = true;
+                    backIcon->SetShowing(false);
                 }
             } else {
-                show = true;
+                backIcon->SetShowing(true);
             }
-            backIcon->SetShowing(show);
         }
         if (leftHandLabel) {
             leftHandLabel->SetShowing(true);

@@ -17,6 +17,7 @@
 #include "meta_ham/FitnessGoalMgr.h"
 #include "meta_ham/HamProfile.h"
 #include "meta_ham/MetaPanel.h"
+#include "meta_ham/SaveLoadManager.h"
 #include "meta_ham/ShellInput.h"
 #include "meta_ham/SkeletonChooser.h"
 #include "meta_ham/UIEventMgr.h"
@@ -44,6 +45,8 @@
 #include "ui/UIPanel.h"
 
 ProfileMgr TheProfileMgr;
+
+static const SaveLoadManager::State sVersion = (SaveLoadManager::State)28;
 
 ProfileMgr::ProfileMgr()
     : mPlatformAudioLatency(5), mPlatformVideoLatency(22), unk34(22), unk38(50),
@@ -1083,14 +1086,13 @@ float ProfileMgr::GetPadExtraLag(int padNum, LagContext ctx) const {
 void ProfileMgr::LoadGlobalOptions(FixedSizeSaveableStream &fs) {
     int version;
     fs >> version;
-    if (version > 0x1c) {
+    if (version > sVersion) {
         MILO_NOTIFY(
-            "Found System Settings with version %d, while this build only recognizes up "
-            "to %d.  Unable to load System Settings.\n",
+            "Found System Settings with version %d, while this build only recognizes up to %d.  Unable to load System Settings.\n",
             version,
-            0x1c
+            sVersion
         );
-    } else if (version == 0x1c) {
+    } else if (version == sVersion) {
         fs >> mMono;
         fs >> mSyncOffset;
         fs >> mSongToTaskMgrMs;
@@ -1110,17 +1112,21 @@ void ProfileMgr::LoadGlobalOptions(FixedSizeSaveableStream &fs) {
         fs >> mSyncPresetIx;
         fs >> mOverscan;
         fs >> mTutorialsSeen;
+
         int weightUnits;
         fs >> weightUnits;
         mWeightUnits = weightUnits;
+
         fs >> mForceSpeechLanguageSupport;
+
         u64 locale;
         fs >> locale;
-        mSystemLocale = (int)locale;
+        mSystemLocale = locale;
+
         u64 language;
         fs >> language;
         unk45 = true;
-        mSystemLanguage = (int)language;
+        mSystemLanguage = language;
     }
     PushAllOptions();
 }

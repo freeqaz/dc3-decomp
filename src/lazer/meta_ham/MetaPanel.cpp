@@ -121,9 +121,8 @@ MetaPanel::MetaPanel() : mLoopHistoryCursor(0), mSongPreview(TheHamSongMgr), mXM
         mLoopHistory.push_back(-1);
     }
     ThePlatformMgr.AddSink(this, "xmp_state_changed");
-    SongDB *songDB = new SongDB();
-    sSongDB = songDB;
-    sHamMaster = new HamMaster(songDB->SongData(), nullptr);
+    sSongDB = new SongDB();
+    sHamMaster = new HamMaster(sSongDB->SongData(), nullptr);
 }
 
 MetaPanel::~MetaPanel() {
@@ -431,10 +430,10 @@ void MetaPanel::CycleVenuePreference() {
             MILO_ASSERT(pVenueEntryArray, 0x80);
             Symbol entrySym = pVenueEntryArray->Sym(0);
             if (entrySym == venuePref) {
-                if (i + 1 >= pVenueArray->Size()) {
+                if (i + 1 >= size) {
                     venuePref = random_venue;
                 } else {
-                    DataArray *pVenueEntryArray = pVenueArray->Array(i + 1);
+                    pVenueEntryArray = pVenueArray->Array(i + 1);
                     MILO_ASSERT(pVenueEntryArray, 0x8f);
                     venuePref = pVenueEntryArray->Sym(0);
                 }
