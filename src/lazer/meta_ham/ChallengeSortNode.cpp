@@ -45,16 +45,17 @@ int ChallengeHeaderNode::GetChallengeExp() {
     return xp;
 }
 
-int ChallengeHeaderNode::GetPotentialChallengeExp(NavListSortNode *startNode) {
+int ChallengeHeaderNode::GetPotentialChallengeExp(NavListSortNode *n) {
     auto it = mChildren.begin();
-    auto end = mChildren.end();
-    for (; it != end && *it != startNode; ++it) {
+    for (; it != mChildren.end() && *it != n; ++it) {
     }
     int xp = 0;
-    for (; it != end; ++it) {
-        NavListSortNode *node = *it;
+    for (; it != mChildren.end(); ++it) {
+        ChallengeSortNode *node = static_cast<ChallengeSortNode *>(*it);
         MILO_ASSERT(node, 0xe7);
-        xp += static_cast<ChallengeSortNode *>(node)->GetChallengeExp();
+        xp += TheChallenges->CalculateChallengeXp(
+            node->GetChallengeScore(), node->GetDifficulty()
+        );
     }
     return xp;
 }

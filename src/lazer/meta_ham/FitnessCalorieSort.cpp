@@ -98,33 +98,29 @@ void FitnessCalorieSort::BuildTree() {
     Init();
     std::vector<NavListItemNode *> nodes;
 
-    // Populate nodes from TheFitnessCalorieSortMgr calories
-    std::vector<int> &calories = TheFitnessCalorieSortMgr->GetCalorieValues();
-    for (int i = 0; (unsigned int)i < (int)calories.size(); i++) {
-        NavListItemNode *node = NewItemNode((void *)&calories[i]);
-        nodes.push_back(node);
+    std::vector<int> &values = TheFitnessCalorieSortMgr->GetCalorieValues();
+    for (int i = 0; i < values.size(); i++) {
+        nodes.push_back(NewItemNode(&values[i]));
     }
 
-    // Process shortcuts and insert headers
     int groupSize = TheFitnessCalorieSortMgr->GetGroupSize();
-    std::vector<NavListItemNode *>::iterator pBegin = nodes.begin();
-    std::vector<NavListItemNode *>::iterator pEnd = nodes.end();
-    while (pBegin != pEnd) {
-        std::vector<NavListItemNode *>::iterator pNext;
-        int remaining = pEnd - pBegin;
-        if (remaining <= groupSize) {
-            pNext = pEnd;
+    auto begin = nodes.begin();
+    auto end = nodes.end();
+    while (begin != end) {
+        std::vector<NavListItemNode *>::iterator it;
+        // if not enough nodes to make a set of size "groupsize", go to end
+        if (end - begin <= groupSize) {
+            it = end;
+            // else move forward of size "groupsize" nodes
         } else {
-            pNext = pBegin + groupSize;
+            it = begin + groupSize;
         }
-
-        NavListShortcutNode *shortcut = NewShortcutNode(*pBegin);
-        mShortcutNodes.push_back(shortcut);
-        shortcut->InsertHeaderRange(&*pBegin, &*pNext, this);
-        pBegin = pNext;
+        NavListShortcutNode *shortcutNode = NewShortcutNode(*begin);
+        mShortcutNodes.push_back(shortcutNode);
+        shortcutNode->InsertHeaderRange(begin, it, this);
+        begin = it;
     }
 
-    // Finalize shortcuts
     FOREACH (it, mShortcutNodes) {
         (*it)->FinishSort(this);
     }

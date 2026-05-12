@@ -35,6 +35,8 @@
 #include "utl/Std.h"
 #include "utl/Symbol.h"
 
+static const char *sIndexString = "s_store_index_%s_%s.dtz";
+
 HamStorePanel::HamStorePanel()
     : unka0(), mMetadata(), mOfferProvider(), mMotd(), mAllowCancel(false), mLockData(),
       unk154(false), mCartEnabled(true), mCartLocked(false), mCartDataLoaded(false),
@@ -260,10 +262,9 @@ void HamStorePanel::AddOfferToCart(StoreOffer *offer) {
 }
 
 char const *HamStorePanel::GetIndexFile() const {
-    const char *str = "store_index_%s_%s.dtz";
     Symbol platSym = PlatformSymbol(TheLoadMgr.GetPlatform());
     Symbol sysLang = SystemLanguage();
-    return MakeString(str, sysLang, platSym);
+    return MakeString(sIndexString, platSym, sysLang);
 }
 
 void HamStorePanel::ExitStore(StoreError err) const {

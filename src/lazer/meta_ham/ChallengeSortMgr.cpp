@@ -245,21 +245,23 @@ const char *ChallengeSortMgr::GetBestChallengeScoreGamertag(int songID) {
     return "HARMONIX";
 }
 
-int ChallengeSortMgr::GetChallengerXp(int i) {
-    if (IsIndexHeader(i)) {
-        int songID = GetSongID(i);
-        int highestScore = 0;
-        int result = 0;
-        for (int j = 0; j < (int)mChallengeRecords.size(); j++) {
-            int score = mChallengeRecords[j].GetChallengeRow().mScore;
-            if (songID == mChallengeRecords[j].GetChallengeRow().mSongID && highestScore < score) {
-                result = mChallengeRecords[j].GetChallengeRow().mChallengerXp;
-                highestScore = score;
+int ChallengeSortMgr::GetChallengerXp(int val) {
+    if (IsIndexHeader(val)) {
+        int songID = GetSongID(val);
+        int highScore = 0;
+        int xp = 0;
+        for (int i = 0; i < mChallengeRecords.size(); i++) {
+            int score = mChallengeRecords[i].GetChallengeRow().mScore;
+            if (songID == mChallengeRecords[i].GetChallengeRow().mSongID
+                && highScore < score) {
+                xp = mChallengeRecords[i].GetChallengeRow().mChallengerXp;
+                highScore = score;
             }
         }
-        return result;
+        return xp;
     } else {
-        ChallengeSortNode *node = static_cast<ChallengeSortNode *>(mSorts[mCurrentSortIdx]->GetList()[i]);
+        ChallengeSortNode *node =
+            static_cast<ChallengeSortNode *>(mSorts[mCurrentSortIdx]->GetList()[val]);
         return node->GetChallengerXp();
     }
 }

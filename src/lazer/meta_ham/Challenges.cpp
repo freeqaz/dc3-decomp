@@ -139,7 +139,9 @@ int Challenges::GetGlobalChallengeSongID() {
 
 int Challenges::GetDlcChallengeSongID() {
     for (int i = mOfficialChallenges.size() - 1; i >= 0; i--) {
-        if (mOfficialChallenges[i].IsDLCChallenge()) {
+        bool okay = mOfficialChallenges[i].mType >= ChallengeRow::kChallengeDlcGold
+            && mOfficialChallenges[i].mType <= ChallengeRow::kChallengeDlcBronze;
+        if (okay) {
             return mOfficialChallenges[i].mSongID;
         }
     }
@@ -148,7 +150,9 @@ int Challenges::GetDlcChallengeSongID() {
 
 String Challenges::GetGlobalChallengeSongName() {
     for (int i = 0; i < mOfficialChallenges.size(); i++) {
-        if (mOfficialChallenges[i].IsHMXChallenge()) {
+        bool okay = mOfficialChallenges[i].mType >= ChallengeRow::kChallengeHmxGold
+            && mOfficialChallenges[i].mType <= ChallengeRow::kChallengeHmxBronze;
+        if (okay) {
             return mOfficialChallenges[i].mSongTitle;
         }
     }
