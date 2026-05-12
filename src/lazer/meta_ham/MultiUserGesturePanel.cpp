@@ -409,34 +409,36 @@ void MultiUserGesturePanel::UpdateCharPic(
     MILO_ASSERT(i_pPic, 0x18e);
     MILO_ASSERT_RANGE(i_iPlayerIndex, 0, 2, 0x18f);
     MILO_ASSERT_RANGE(i_iSide, 0, 2, 0x190);
-
     static Symbol character_default("character_default");
-
     HamPlayerData *pPlayerData = TheGameData->Player(i_iPlayerIndex);
-
     if (charSym == character_default) {
-        MetaPerformer *perf = MetaPerformer::Current();
+        MetaPerformer *pPerformer = MetaPerformer::Current();
         Symbol primaryCrew;
         Symbol primaryChar;
         Symbol primaryOutfit;
         Symbol secondaryCrew;
         Symbol secondaryChar;
         Symbol secondaryOutfit;
-
-        int songID = TheHamSongMgr.GetSongIDFromShortName(TheGameData->GetSong(), true);
+        int songID = TheHamSongMgr.GetSongIDFromShortName(TheGameData->GetSong());
         const HamSongMetadata *pSongData = TheHamSongMgr.Data(songID);
         MILO_ASSERT(pSongData, 0x19d);
 
-        bool isDanceBattle = TheGameMode->InMode("dance_battle", true);
-        if (!isDanceBattle) {
-            isDanceBattle = TheGameMode->InMode("strike_a_pose", true);
-        }
-
+        bool check =
+            TheGameMode->InMode("dance_battle") || TheGameMode->InMode("strike_a_pose");
         HamPlayerData *pPrimary;
         HamPlayerData *pSecondary;
-        perf->CalcCharacters(
-            pSongData, isDanceBattle, (PlayerFlag)i_iPlayerIndex, pPrimary, primaryCrew,
-            primaryChar, primaryOutfit, pSecondary, secondaryCrew, secondaryChar, secondaryOutfit
+        pPerformer->CalcCharacters(
+            pSongData,
+            check,
+            (PlayerFlag)i_iPlayerIndex,
+            pPrimary,
+            primaryCrew,
+            primaryChar,
+            primaryOutfit,
+            pSecondary,
+            secondaryCrew,
+            secondaryChar,
+            secondaryOutfit
         );
 
         if (pPlayerData == pPrimary) {
@@ -461,25 +463,22 @@ void MultiUserGesturePanel::UpdateCharPic(
     MILO_ASSERT(pProvider, 0x1ba);
 
     String str;
-    bool locked = !TheProfileMgr.IsContentUnlocked(charSym)
+    bool contentLocked = !TheProfileMgr.IsContentUnlocked(charSym)
         || !TheProfileMgr.IsContentUnlocked(outfitSym);
-
-    if (locked) {
+    if (contentLocked) {
         static Symbol is_in_party_mode("is_in_party_mode");
-        int inPartyMode = TheHamProvider->Property(is_in_party_mode, true)->Int();
-        if (inPartyMode != 0) {
-            locked = locked & (strstr(outfitSym.Str(), "01") == 0);
+        if (TheHamProvider->Property(is_in_party_mode)->Int()) {
+            contentLocked = !strstr(outfitSym.Str(), "01") ? contentLocked : false;
         }
     }
 
-    if (locked && !TheGameMode->InMode("campaign", true)) {
+    if (contentLocked && !TheGameMode->InMode("campaign")) {
         str = MakeString("%s_locked_keep.png", outfitSym);
-    } else if (const_cast<CharacterProvider *>(pProvider)->IsCharacterAvailable(charSym)) {
-        str = MakeString("%s_keep.png", outfitSym);
+    } else if (!pProvider->IsCharacterAvailable(charSym)) {
+        str = MakeString("%s_locked_keep.png", outfitSym);
     } else {
-        str = MakeString("%s_locked_keep.png", outfitSym);
+        str = MakeString("%s_keep.png", outfitSym);
     }
-
     FilePath fp = FilePath("ui/image/char/", str.c_str());
     i_pPic->SetTex(fp);
     i_pPic->GetMesh()->SetShowing(true);
@@ -540,86 +539,30 @@ void MultiUserGesturePanel::UpdateNavLists(int player) {
         return; // No Kinect on native
 #endif
     MILO_ASSERT(skeletonChooser, 0xa0);
-
     HamPlayerData *pPlayerData = TheGameData->Player(player);
     int trackingID = pPlayerData->GetSkeletonTrackingID();
-    SkeletonSide playerSide = skeletonChooser->GetPlayerSide(player);
-
-#ifdef HX_NATIVE
-    // Native port: use proper member access instead of hardcoded byte offsets
-    HamNavList *navList1 = (&mLeftNavList1)[playerSide];
-
-    if (navList1) {
-        navList1->SetSkeletonTrackingID(trackingID);
-        if (((trackingID <= 0) && !TheGestureMgr->InControllerMode()) ||
-            TheHamUI.GetOverlayPanel() != nullptr) {
-            navList1->SetSkeletonTrackingID(0);
-            navList1->Disengage();
+    SkeletonSide side = skeletonChooser->GetPlayerSide(player);
+    int idx = side != kSkeletonRight;
+    if ((&mLeftNavList1)[idx]) {
+        (&mLeftNavList1)[idx]->SetSkeletonTrackingID(trackingID);
+        if ((trackingID <= 0 && !TheGestureMgr->InControllerMode())
+            || TheHamUI.GetOverlayPanel()) {
+            (&mLeftNavList1)[idx]->SetSkeletonTrackingID(0);
+            (&mLeftNavList1)[idx]->Disengage();
         }
     }
-
-    HamNavList *navList2 = (&mLeftNavList2)[playerSide];
-
-    if (navList2) {
-        navList2->SetShowing(true);
-
-        navList2->SetSkeletonTrackingID(trackingID);
-        if (((trackingID <= 0) && !TheGestureMgr->InControllerMode()) ||
-            TheHamUI.GetOverlayPanel() != nullptr) {
-            navList2->SetSkeletonTrackingID(0);
-            navList2->Disengage();
-            if (TheHamUI.GetOverlayPanel() != nullptr) {
-                navList2->SetShowing(false);
+    if ((&mLeftNavList2)[idx]) {
+        (&mLeftNavList2)[idx]->SetShowing(true);
+        (&mLeftNavList2)[idx]->SetSkeletonTrackingID(trackingID);
+        if ((trackingID <= 0 && !TheGestureMgr->InControllerMode())
+            || TheHamUI.GetOverlayPanel()) {
+            (&mLeftNavList2)[idx]->SetSkeletonTrackingID(0);
+            (&mLeftNavList2)[idx]->Disengage();
+            if (TheHamUI.GetOverlayPanel()) {
+                (&mLeftNavList2)[idx]->SetShowing(false);
             }
         }
     }
-#else
-    int sideIdx = playerSide - 1;
-
-    // Get nav lists for this player's side using array indexing
-    // Array is [mLeftNavList1, mRightNavList1, mLeftNavList2, mRightNavList2]
-    // For left side (sideIdx=-1): indices 20, 22 map to mLeftNavList1, mLeftNavList2
-    // For right side (sideIdx=0): indices 21, 23 map to mRightNavList1, mRightNavList2
-    int offset1 = (sideIdx + 0x15) * 4;
-    auto basePtr = reinterpret_cast<u8 *>(this);
-    HamNavList *navList1 = *reinterpret_cast<HamNavList **>(basePtr + offset1);
-
-    if (navList1) {
-        navList1->SetSkeletonTrackingID(trackingID);
-        auto hamUIBytes = reinterpret_cast<u8 *>(&TheHamUI);
-        if (((trackingID <= 0) && (*(char *)(reinterpret_cast<u8 *>(TheGestureMgr) + 0x426d) == '\0')) ||
-            (*reinterpret_cast<u32 *>(hamUIBytes + 0xf0) != 0)) {
-            navList1->SetSkeletonTrackingID(0);
-            navList1->Disengage();
-        }
-    }
-
-    auto thisBytes = reinterpret_cast<u8 *>(this);
-    int offset2 = (sideIdx + 0x17) * 4;
-    HamNavList *navList2 = *reinterpret_cast<HamNavList **>(thisBytes + offset2);
-
-    if (navList2) {
-        void **ptr = reinterpret_cast<void **>(reinterpret_cast<u8 *>(navList2) + 4);
-        void *obj = *ptr;
-        void *drawablePtr = *reinterpret_cast<void **>(reinterpret_cast<u8 *>(obj) + 0xc);
-        drawablePtr = reinterpret_cast<u8 *>(drawablePtr) + 4;
-        reinterpret_cast<RndDrawable *>(drawablePtr)->SetShowing(true);
-
-        navList2->SetSkeletonTrackingID(trackingID);
-        if (((trackingID <= 0) && (*(char *)(reinterpret_cast<u8 *>(TheGestureMgr) + 0x426d) == '\0')) ||
-            (*reinterpret_cast<u32 *>(reinterpret_cast<u8 *>(&TheHamUI) + 0xf0) != 0)) {
-            navList2->SetSkeletonTrackingID(0);
-            navList2->Disengage();
-            if (*reinterpret_cast<u32 *>(reinterpret_cast<u8 *>(&TheHamUI) + 0xf0) != 0) {
-                void **ptr2 = reinterpret_cast<void **>(reinterpret_cast<u8 *>(navList2) + 4);
-                void *obj2 = *ptr2;
-                void *drawablePtr2 = *reinterpret_cast<void **>(reinterpret_cast<u8 *>(obj2) + 0xc);
-                drawablePtr2 = reinterpret_cast<u8 *>(drawablePtr2) + 4;
-                reinterpret_cast<RndDrawable *>(drawablePtr2)->SetShowing(false);
-            }
-        }
-    }
-#endif
 }
 
 DataNode MultiUserGesturePanel::OnMsg(const ButtonDownMsg &msg) {
