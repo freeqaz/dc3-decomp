@@ -184,26 +184,24 @@ void SingleUserCrewSelectPanel::SetRandomCrew(int idx) {
     SetRandomCharacter(idx);
 }
 
-void SingleUserCrewSelectPanel::UpdateCrewMesh(RndMesh *i_pMesh, int i_iSide, Symbol crewSym) {
+void SingleUserCrewSelectPanel::UpdateCrewMesh(RndMesh *i_pMesh, int i_iSide, Symbol s) {
     MILO_ASSERT(i_pMesh, 0xba);
     MILO_ASSERT_RANGE(i_iSide, 0, 2, 0xbb);
-
     const CrewProvider *pProvider = GetCrewProvider(i_iSide);
     MILO_ASSERT(pProvider, 0xbe);
-
-    String texName;
-    if (TheProfileMgr.IsContentUnlocked(crewSym)
-        && pProvider->IsCrewAvailable(crewSym)) {
-        texName = MakeString("%s.tex", crewSym.Str());
+    String texFile;
+    if (!TheProfileMgr.IsContentUnlocked(s)) {
+        texFile = MakeString("%s_locked.tex", s.Str());
+    } else if (!pProvider->IsCrewAvailable(s)) {
+        texFile = MakeString("%s_locked.tex", s.Str());
     } else {
-        texName = MakeString("%s_locked.tex", crewSym.Str());
+        texFile = MakeString("%s.tex", s.Str());
     }
 
     RndMat *pMat = LoadedDir()->Find<RndMat>("crew_p1.mat", false);
     MILO_ASSERT(pMat, 0xd1);
-
-    RndTex *pTex = LoadedDir()->Find<RndTex>(texName.c_str(), false);
-    if (pTex != NULL) {
+    RndTex *pTex = LoadedDir()->Find<RndTex>(texFile.c_str(), false);
+    if (pTex) {
         pMat->SetDiffuseTex(pTex);
         i_pMesh->SetMat(pMat);
     }

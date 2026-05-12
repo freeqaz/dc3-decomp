@@ -50,11 +50,10 @@ namespace {
         std::vector<Symbol> unk14;
     };
 
-    // size 0xC
+    // size 0xc
     struct DeferredAward {
-        DeferredAward() : unk8(0) {}
-        String unk0;
-        const Unlockable *unk8;
+        String unk0; // 0x0 - user name?
+        const Unlockable *unk8; // 0x8
     };
     std::vector<Unlockable> gUnlockables;
     std::vector<std::vector<Unlockable *>> gTiers;
@@ -1101,41 +1100,31 @@ int MetagameRank::ComputeRankNumber(bool forceAward) {
     return mRankNumber;
 }
 
-void MetagameRank::AwardForRankUp(int numRanks) {
-    std::vector<const Unlockable *> available;
-
-    while (numRanks > 0) {
-        if (available.empty()) {
-            BuildUnlockablesList(unk79, available);
-            if (available.empty()) {
+void MetagameRank::AwardForRankUp(int i1) {
+    std::vector<const Unlockable *> unlocks;
+    auto it = unlocks.rbegin();
+    for (; i1 > 0; i1--) {
+        if (unlocks.empty()) {
+            BuildUnlockablesList(unk79, unlocks);
+            it = unlocks.rbegin();
+            if (unlocks.empty()) {
                 return;
             }
         }
-
-        const Unlockable *unlock = available.back();
-        available.pop_back();
-
+        const Unlockable *cur = *++it;
         DeferredAward award;
-        if (mProfile) {
-            HamUser *user = mProfile->GetHamUser();
-            if (user) {
-                award.unk0 = mProfile->GetHamUser()->UserName();
-            }
+        if (mProfile && mProfile->GetHamUser()) {
+            award.unk0 = mProfile->GetHamUser()->UserName();
         }
-
-        unk79[unlock->unk0] = 1;
-        award.unk8 = unlock;
-
-        char noUnlock[11];
-        memcpy(noUnlock, "no_unlock_", 11);
-        if (strncmp(unlock->unk4.Str(), noUnlock, strlen(noUnlock)) != 0) {
+        award.unk8 = cur;
+        unk79[cur->unk0] = true;
+        char buffer[16];
+        memcpy(buffer, "no_unlock_", 11);
+        if (strncmp(cur->unk4.Str(), buffer, strlen(buffer))) {
             gDeferredAwardQueue.push_back(award);
-
-            for (std::vector<Symbol>::const_iterator it = unlock->unk14.begin();
-                 it != unlock->unk14.end(); ++it) {
-                mProfile->UnlockContent(*it);
+            FOREACH (sit, cur->unk14) {
+                mProfile->UnlockContent(*sit);
             }
         }
-        numRanks--;
     }
 }
