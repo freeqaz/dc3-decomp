@@ -92,64 +92,66 @@ void SongSort::DeleteItemList() {
 };
 
 void SongSort::BuildItemList() {
-    Symbol sym(gNullStr);
-    if (mHighlightNode) {
-        if (mHighlightNode->GetType() == kNodeFunction) {
+    Symbol sym = gNullStr;
+    if (mHighlightNode && mHighlightNode->GetType() == kNodeFunction) {
         sym = mHighlightNode->GetToken();
     }
-    }
     DeleteItemList();
-
-    static Symbol perform("perform");
+    static Symbol song_select_mode("song_select_mode");
+    static Symbol song_select_story("song_select_story");
     static Symbol song_select_playlist("song_select_playlist");
     static Symbol random_song("random_song");
+    static Symbol perform("perform");
     static Symbol dance_battle("dance_battle");
-    bool inDanceBattle = TheGameMode->InMode(dance_battle, true);
-    static Symbol song_select_story("song_select_story");
-
-    static Symbol song_select_mode("song_select_mode");
     bool inPerform = TheGameMode->InMode(perform, true);
-    Symbol prop = TheGameMode->Property(song_select_mode, true)->Sym();
+    bool inDanceBattle = TheGameMode->InMode(dance_battle, true);
+    Symbol prop;
+    prop = TheGameMode->Property(song_select_mode, true)->Sym();
+    bool check = prop == song_select_playlist;
 
-    if (TheSongSortMgr->HeadersSelectable() && (inPerform || inDanceBattle) && song_select_playlist != prop) {
-        static Symbol finish_setlist("finish_setlist");
-        SongFunctionNode *node = new SongFunctionNode(nullptr, finish_setlist, "ui/image/song_select_setlist_keep");
-        node->SetShortcut(mShortcutNodes[0]);
-        mAllNodes.insert(mAllNodes.end(), node);
-
+    if (TheSongSortMgr->HeadersSelectable() && (inPerform || inDanceBattle) && !check) {
+        static Symbol random_song("random_song");
+        SongFunctionNode *node = new SongFunctionNode(
+            nullptr, random_song, "ui/image/song_select_setlist_keep.png"
+        );
+        node->SetShortcut(mShortcutNodes.front());
+        mAllNodes.push_back(node);
         if (inPerform) {
             static Symbol playlists("playlists");
-            SongFunctionNode *playlistNode = new SongFunctionNode(nullptr, playlists, "ui/image/song_select_setlist_keep");
-            playlistNode->SetShortcut(mShortcutNodes[0]);
-            mAllNodes.insert(mAllNodes.end(), playlistNode);
+            SongFunctionNode *functionNode = new SongFunctionNode(
+                nullptr, playlists, "ui/image/song_select_setlist_keep.png"
+            );
+            functionNode->SetShortcut(mShortcutNodes.front());
+            mAllNodes.push_back(functionNode);
         }
-    } else if (song_select_playlist == prop) {
+    } else if (check) {
         static Symbol finish_setlist("finish_setlist");
-        SongFunctionNode *node = new SongFunctionNode(nullptr, finish_setlist, "ui/image/song_select_setlist_keep");
-        node->SetShortcut(mShortcutNodes[0]);
-        auto allNodesEnd = mAllNodes.end();
-        mAllNodes.insert(allNodesEnd, node);
+        SongFunctionNode *node = new SongFunctionNode(
+            nullptr, finish_setlist, "ui/image/song_select_setlist_keep.png"
+        );
+        node->SetShortcut(mShortcutNodes.front());
+        mAllNodes.push_back(node);
     }
 
-    FOREACH(it, mAllNodes) {
+    FOREACH (it, mAllNodes) {
         (*it)->Renumber(mList);
     }
 
-    FOREACH(it, mShortcutNodes) {
+    FOREACH (it, mShortcutNodes) {
         (*it)->Renumber(mList);
     }
 
-    if (song_select_playlist == prop) {
-        FOREACH(it, mAllNodes) {
+    if (check) {
+        FOREACH (it, mAllNodes) {
             (*it)->Renumber(mList);
         }
     }
 
-    FOREACH(it, mShortcutNodes) {
+    FOREACH (it, mShortcutNodes) {
         (*it)->FinishBuildList(this);
     }
 
-    if (sym != gNullStr) {
+    if (sym.Str() != gNullStr) {
         mHighlightNode = GetNode(sym);
     }
 
@@ -197,25 +199,23 @@ void SongSort::Text(int i1, int i2, UIListLabel *listlabel, UILabel *uilabel) co
 };
 
 Symbol SongSort::DetermineHeaderSymbolFromSong(Symbol sym) {
-    std::map<Symbol, SongRecord>::iterator it = TheSongSortMgr->mSongRecordMap.find(sym);
-    if (it != TheSongSortMgr->mSongRecordMap.end()) {
-        NavListItemNode *node = NewItemNode(&it->second);
-        for (auto shortcutIt = mShortcutNodes.begin(); shortcutIt != mShortcutNodes.end();
-             shortcutIt++) {
-            NavListShortcutNode *shortcut = *shortcutIt;
-            const std::list<NavListSortNode *> &children = shortcut->Children();
+    auto &map = TheSongSortMgr->mSongRecordMap;
+    auto find = map.find(sym);
+    if (find != map.end()) {
+        NavListItemNode *node = NewItemNode(&find->second);
+        FOREACH (it, mShortcutNodes) {
+            NavListShortcutNode *shortcutNode = *it;
+            auto &children = shortcutNode->Children();
             MILO_ASSERT(children.size() == 1, 0xea);
             NavListHeaderNode *header =
-                dynamic_cast<NavListHeaderNode *>(shortcut->FirstChild());
+                dynamic_cast<NavListHeaderNode *>(shortcutNode->FirstChild());
             MILO_ASSERT(header != NULL, 0xec);
-            if (node->Compare(header, kNodeHeader) == 0) {
+            if (header->Compare(node, kNodeHeader) == 0) {
                 delete node;
                 return header->GetToken();
             }
         }
         delete node;
-        Symbol nullSym(gNullStr);
-        return nullSym;
     }
-    return sym;
+    return gNullStr;
 };
