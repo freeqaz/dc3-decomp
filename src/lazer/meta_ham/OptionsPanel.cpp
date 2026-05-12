@@ -78,9 +78,8 @@ DataNode OptionsPanel::OnMsg(SingleItemEnumCompleteMsg const &msg) {
 
 DataNode OptionsPanel::OnMsg(RCJobCompleteMsg const &msg) {
     if (msg.Job() == mRedeemTokenJob) {
-        char *responseString = (char *)mRedeemTokenJob->GetResponseString();
-        MILO_LOG("Token: server response: %s\n", responseString);
-        int response = 0;
+        MILO_LOG("Token: server response: %s\n", mRedeemTokenJob->GetResponseString());
+        int res;
         String offer;
         static Symbol token_redemption_ready("token_redemption_ready");
         static Symbol token_redemption_error("token_redemption_error");
@@ -90,86 +89,81 @@ DataNode OptionsPanel::OnMsg(RCJobCompleteMsg const &msg) {
         static Symbol token_redemption_too_early("token_redemption_too_early");
         static Symbol token_redemption_too_late("token_redemption_too_late");
         static Symbol leaderboard_no_net("leaderboard_no_net");
-        mRedeemTokenJob->GetRedeemTokenData(response, offer);
-        Symbol error = token_redemption_ready;
+        mRedeemTokenJob->GetRedeemTokenData(res, offer);
         bool success;
-        if (response <= 0xA0002) {
-            if (response == 0xA0002) {
-                success = true;
-            } else {
-                unsigned int code = response - 0xA0003;
-                if (code == 0) {
-                    error = token_redemption_not_found;
-                } else if (code == 2) {
-                    error = token_redemption_other_player;
-                } else if (code == 5) {
-                    error = token_redemption_too_late;
-                } else if (code == 6) {
-                    error = token_redemption_too_early;
-                } else {
-                    goto check_online;
-                }
-                success = false;
-            }
-        } else {
-            unsigned int code = response - 0xA0005;
-            if (code == 0) {
-                success = true;
-            } else if (code == 1) {
-                error = token_redemption_purchased;
-                success = true;
-            } else if (code == 2) {
-                success = true;
-            } else {
-                check_online:
-                if (!TheRockCentral.IsOnline()) {
-                    error = leaderboard_no_net;
-                } else {
-                    error = token_redemption_error;
-                }
-                success = false;
-            }
-        }
-        static TokenRedeemedMsg tokenMsg(true, String(""), token_redemption_ready);
-        tokenMsg.SetSuccess(success);
-        tokenMsg.SetOfferString(offer);
-        tokenMsg.SetError(error);
-        UIPanel *panel = ObjectDir::Main()->Find<UIPanel>("store_redeem_token_panel", true);
-        panel->HandleType(tokenMsg);
-        mRedeemTokenJob = nullptr;
-        return 1;
-    } else if (msg.Job() == mGetWebLinkCodeJob) {
-        String code;
-        String text;
-        bool gotData = mGetWebLinkCodeJob->GetWebLinkCodeData(code);
-        static LinkingCodeRetrievedMsg linkMsg(true, String(""));
-        bool success;
-        if (gotData) {
-            bool hasCode = (code != "N/A");
+        Symbol error;
+        switch (res) {
+        case 0xA0002:
+            error = token_redemption_ready;
             success = true;
-            if (!hasCode) {
-                success = false;
-            }
-        } else {
+            break;
+        case 0xA0005:
+            error = token_redemption_ready;
+            success = true;
+            break;
+        case 0xA0006:
+            error = token_redemption_purchased;
+            success = true;
+            break;
+        case 0xA0007:
+            error = token_redemption_ready;
+            success = true;
+            break;
+        case 0x800A0003:
+            error = token_redemption_not_found;
             success = false;
+            break;
+        case 0x800A0005:
+            error = token_redemption_other_player;
+            success = false;
+            break;
+        case 0x800A0008:
+            error = token_redemption_too_late;
+            success = false;
+            break;
+        case 0x800A0009:
+            error = token_redemption_too_early;
+            success = false;
+            break;
+        default:
+            bool online = TheRockCentral.IsOnline();
+            success = false;
+            if (!online) {
+                error = leaderboard_no_net;
+            } else {
+                error = token_redemption_error;
+            }
+            break;
         }
+        static TokenRedeemedMsg msg(true, String(""), token_redemption_ready);
+        msg.SetSuccess(success);
+        msg.SetOfferString(offer);
+        msg.SetError(error);
+        UIPanel *panel = ObjectDir::Main()->Find<UIPanel>("store_redeem_token_panel");
+        panel->HandleType(msg);
+        mRedeemTokenJob = nullptr;
+    } else if (msg.Job() == mGetWebLinkCodeJob) {
+        String wlcData;
+        String offer;
+        bool webData = mGetWebLinkCodeJob->GetWebLinkCodeData(wlcData);
+        static LinkingCodeRetrievedMsg msg(true, String(""));
+        bool success = webData && wlcData != "N/A";
         static Symbol linking_code_desc("linking_code_desc");
         static Symbol linking_code_failure("linking_code_failure");
         if (success) {
-            text = Localize(linking_code_desc, 0, TheLocale);
-            text += "\n\n";
-            text += code;
+            offer = Localize(linking_code_desc, false, TheLocale);
+            offer += "\n\n";
+            offer += wlcData;
         } else {
-            text = Localize(linking_code_failure, 0, TheLocale);
+            offer = Localize(linking_code_failure, false, TheLocale);
         }
-        linkMsg.SetSuccess(success);
-        linkMsg.SetLinkingCode(text);
-        UIPanel *panel = ObjectDir::Main()->Find<UIPanel>("options_panel", true);
+        msg.SetSuccess(success);
+        msg.SetOfferString(offer);
+        UIPanel *panel = ObjectDir::Main()->Find<UIPanel>("options_panel");
         if (panel->GetState() == UIPanel::kUp) {
-            panel->HandleType(linkMsg);
+            panel->HandleType(msg);
         }
         mGetWebLinkCodeJob = nullptr;
-        return 1;
     }
     return 1;
 }
