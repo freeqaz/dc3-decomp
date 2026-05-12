@@ -90,8 +90,11 @@ void ChallengeHeaderNode::Text(UIListLabel *uiListLabel, UILabel *uiLabel) const
     } else if (uiListLabel->Matches("challenge_count")) {
         SetItemCountString(uiLabel);
     } else if (uiListLabel->Matches("header_collapse")) {
-        bool isHighlighted = TheChallengeSortMgr->GetHighlightItem() == this;
-        SetCollapseStateIcon(isHighlighted);
+        if (TheChallengeSortMgr->GetHighlightItem() == this) {
+            SetCollapseStateIcon(true);
+        } else {
+            SetCollapseStateIcon(false);
+        }
     } else {
         uiLabel->SetTextToken(gNullStr);
     }

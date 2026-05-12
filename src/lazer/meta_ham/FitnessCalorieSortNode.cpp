@@ -112,28 +112,24 @@ void FitnessCalorieHeaderNode::Text(UIListLabel *uiListLabel, UILabel *uiLabel) 
     AppLabel *app_label = dynamic_cast<AppLabel *>(uiLabel);
     MILO_ASSERT(app_label, 0x94);
     if (uiListLabel->Matches("sort_header")) {
-        FitnessCalorieSortNode *firstChild = static_cast<FitnessCalorieSortNode *>(mChildren.front());
-        FitnessCalorieSortNode *lastChild = static_cast<FitnessCalorieSortNode *>(mChildren.back());
+        FitnessCalorieSortNode *frontNode = ((FitnessCalorieSortNode *)mChildren.front());
+        FitnessCalorieSortNode *backNode = ((FitnessCalorieSortNode *)mChildren.back());
         String s = MakeString(
             "%i - %i %s",
-            firstChild->GetCalories(),
-            lastChild->GetCalories(),
-            Localize("fitness_goal_calories_generic", 0, TheLocale)
+            frontNode->GetCalories(),
+            backNode->GetCalories(),
+            Localize("fitness_goal_calories_generic", false, TheLocale)
         );
         uiLabel->SetPrelocalizedString(s);
-        return;
-    }
-    if (uiListLabel->Matches("header_collapse")) {
-        bool is_highlighted;
+    } else if (uiListLabel->Matches("header_collapse")) {
         if (TheFitnessCalorieSortMgr->GetHighlightItem() == this) {
-            is_highlighted = true;
+            SetCollapseStateIcon(true);
         } else {
-            is_highlighted = false;
+            SetCollapseStateIcon(false);
         }
-        SetCollapseStateIcon(is_highlighted);
-        return;
+    } else {
+        uiLabel->SetTextToken(gNullStr);
     }
-    uiLabel->SetTextToken(gNullStr);
 }
 
 void FitnessCalorieHeaderNode::Renumber(std::vector<NavListSortNode *> &vec) {

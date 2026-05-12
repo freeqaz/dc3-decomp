@@ -261,7 +261,6 @@ void SongStatusMgr::GetScoresToUpload(std::list<SongStatusData> &data) {
         for (int i = 0; i < 4; i++) {
             if (cur.mStatusData[i].mNeedUpload) {
                 cur.mStatusData[i].mDifficulty = (Difficulty)i;
-                cur.mStatusData[i].mSongID = cur.mSongID;
                 data.push_back(cur.mStatusData[i]);
             }
         }

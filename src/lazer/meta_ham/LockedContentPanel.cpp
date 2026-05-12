@@ -193,16 +193,12 @@ void LockedContentPanel::SetUpNoFlashcards(Symbol song, Difficulty diff) {
     int songID = TheHamSongMgr.GetSongIDFromShortName(song);
     mLabels[0]->SetShowing(true);
     mLabels[8]->SetShowing(true);
-    pContentName->SetSongName(song, -1, false);
+    ((AppLabel *)mLabels[0])->SetSongName(song, -1, false);
     ((HamStarsDisplay *)mLabels[8])->SetSongWithDifficulty(songID, diff, true);
-    HamLabel **pPtr = &mLabels[8];
-    int loopCount = 7;
-    do {
-        pPtr[-7]->SetShowing(false);
-        pPtr++;
-        (*pPtr)->SetShowing(false);
-        loopCount -= 1;
-    } while (loopCount != 0);
+    for (int i = 1; i <= 7; i++) {
+        mLabels[i]->SetShowing(false);
+        mLabels[i + 8]->SetShowing(false);
+    }
 }
 
 void LockedContentPanel::SetUpDifficultyLocked(Symbol s1, Symbol s2) {

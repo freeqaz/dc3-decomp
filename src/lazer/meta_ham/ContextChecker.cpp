@@ -142,17 +142,19 @@ namespace {
     }
 
     bool CheckContextNumPlayers(const DataArray *arr) {
-        int count = 0;
+        int numPlaying = 0;
         HamPlayerData *player1 = TheGameData->Player(0);
         MILO_ASSERT(player1, 0xCB);
         HamPlayerData *player2 = TheGameData->Player(1);
         MILO_ASSERT(player2, 0xCD);
-        count += (int)player1->IsPlaying();
+        if (player1->IsPlaying()) {
+            numPlaying++;
+        }
         if (player2->IsPlaying()) {
-            count++;
+            numPlaying++;
         }
         MILO_ASSERT(arr->Size() >= 2, 0xD8);
-        return count == arr->Int(1);
+        return numPlaying == arr->Int(1);
     }
 
     bool CheckContextEra(const DataArray *arr) {
