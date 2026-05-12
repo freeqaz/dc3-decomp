@@ -802,41 +802,37 @@ void MetaPerformer::CalculatePracticeResults() {
     mNumReviewMovesPassed = 0;
     mNumReviewMovesTotal = 0;
     mPracticeReviewScore = 0;
-    WorldDir *world = TheHamDirector->GetWorld();
-    MoveDir *moves = world->Find<MoveDir>("moves", true);
-    MILO_ASSERT(moves, 0x4A4);
+    MoveDir *moves = TheHamDirector->GetWorld()->Find<MoveDir>("moves");
+    MILO_ASSERT(moves, 0x4a4);
     PracticeSection *section = nullptr;
-    {
-        ObjDirItr<PracticeSection> it(moves, true);
-        for (; it != nullptr; ++it) {
-            int diff = it->GetDifficulty();
-            int navPlayer =
-                TheHamProvider->Property("ui_nav_player", true)->Int();
-            HamPlayerData *pPlayer = TheGameData->Player(navPlayer);
-            if (diff == pPlayer->GetDifficulty())
-                break;
+    for (ObjDirItr<PracticeSection> it(moves, true); it != nullptr; ++it) {
+        int difficulty = it->GetDifficulty();
+        HamPlayerData *pPlayer =
+            TheGameData->Player(TheHamProvider->Property("ui_nav_player")->Int());
+        if (difficulty == pPlayer->GetDifficulty()) {
+            section = it;
+            break;
         }
-        section = it;
     }
-    MILO_ASSERT(section, 0x4B0);
+    MILO_ASSERT(section, 0x4b0);
     static Symbol learn("learn");
-    const std::vector<PracticeStep> &steps = section->Steps();
-    for (std::vector<PracticeStep>::const_iterator it = steps.begin(); it != steps.end();
-         ++it) {
+    auto &steps = section->Steps();
+    FOREACH (it, steps) {
         if (it->mType == learn) {
             mNumLearnMovesTotal++;
         }
     }
     mNumLearnMovesPassed = mSkillsAwards->AwardCount((SkillsAward)2);
-    mNumLearnMovesFastLaned = bool(mSkillsAwards->AwardCount((SkillsAward)3));
-    for (unsigned int i = 0; i < mReviewMoveMaskBySection.size(); i++) {
-        for (unsigned int j = 0; j < mReviewMoveMaskBySection[i].size(); j++) {
+    mNumLearnMovesFastLaned = mSkillsAwards->AwardCount((SkillsAward)3);
+    for (int i = 0; i < mReviewMoveMaskBySection.size(); i++) {
+        for (int j = 0; j < mReviewMoveMaskBySection[i].size(); j++) {
             if (mReviewMoveMaskBySection[i][j]) {
                 mNumReviewMovesPassed++;
             }
             mNumReviewMovesTotal++;
         }
     }
+
     if (mNumLearnMovesTotal > 0) {
         mPracticeLearnScore =
             (mNumLearnMovesFastLaned + mNumLearnMovesPassed) * 100 / mNumLearnMovesTotal;
@@ -1264,7 +1260,7 @@ void MetaPerformer::SaveDanceBattleScores(Symbol s1) {
 // 4. Otherwise -> use tracking age (newer player gets priority)
 void MetaPerformer::CalcCharacters(
     const HamSongMetadata *data,
-    bool b2,
+    bool b,
     PlayerFlag flags,
     HamPlayerData *&primaryPlayer,
     Symbol &primaryCrew,
@@ -1279,21 +1275,16 @@ void MetaPerformer::CalcCharacters(
     HamPlayerData *pPlayer2Data = TheGameData->Player(1);
     Symbol player1Char = pPlayer1Data->MiniGameCharacter();
     Symbol player2Char = pPlayer2Data->MiniGameCharacter();
-
-    // Clear character preferences based on PlayerFlag
-    if (0 == flags || flags == 2) {
+    if (flags == 0 || flags == 2) {
         player1Char = gNullStr;
     }
-    if (1 == flags || flags == 2) {
+    if (flags == 1 || flags == 2) {
         player2Char = gNullStr;
     }
-
-    bool hasPlayer1Char = player1Char != gNullStr;
-    bool hasPlayer2Char = player2Char != gNullStr;
+    bool hasP1Char = player1Char != gNullStr;
+    bool hasP2Char = player2Char != gNullStr;
     bool conflict = CharConflict(player1Char, player2Char);
-
-    // Fast path: Both players have valid, non-conflicting characters
-    if (hasPlayer1Char && hasPlayer2Char && !conflict) {
+    if (hasP1Char && hasP2Char && !conflict) {
         primaryPlayer = pPlayer1Data;
         secondaryPlayer = pPlayer2Data;
         primaryCrew = GetCrewForCharacter(player1Char);
@@ -1303,68 +1294,64 @@ void MetaPerformer::CalcCharacters(
         secondaryChar = player2Char;
         secondaryOutfit = GetUnlockedOutfit(pPlayer2Data->GetPreferredOutfit());
     } else {
-        // Need to resolve character conflict or missing preferences
         int skeleton1 = pPlayer1Data->GetSkeletonTrackingID();
         int skeleton2 = pPlayer2Data->GetSkeletonTrackingID();
 
         Symbol primaryPlayerChar;
         Symbol secondaryPlayerChar;
 
-        bool skel1Active = skeleton1 > 0;
-        bool skel2Active = skeleton2 > 0;
+        bool skel1Check = skeleton1 > 0;
+        bool skel2Check = skeleton2 > 0;
 
-        // Determine player priority based on skeleton tracking state
-        if (skel1Active && !skel2Active) {
+        if (skel1Check && !skel2Check) {
             primaryPlayer = pPlayer1Data;
-            secondaryPlayer = pPlayer2Data;
             primaryPlayerChar = player1Char;
+            secondaryPlayer = pPlayer2Data;
             secondaryPlayerChar = player2Char;
-        } else if (skel2Active && !skel1Active) {
+        } else if (skel2Check && !skel1Check) {
             primaryPlayer = pPlayer2Data;
-            secondaryPlayer = pPlayer1Data;
             primaryPlayerChar = player2Char;
+            secondaryPlayer = pPlayer1Data;
             secondaryPlayerChar = player1Char;
-        } else if (hasPlayer1Char && !hasPlayer2Char) {
+        } else if (hasP1Char && !hasP2Char) {
             primaryPlayer = pPlayer1Data;
-            secondaryPlayer = pPlayer2Data;
             primaryPlayerChar = player1Char;
+            secondaryPlayer = pPlayer2Data;
             secondaryPlayerChar = player2Char;
-        } else if (hasPlayer2Char && !hasPlayer1Char) {
+        } else if (hasP2Char && !hasP1Char) {
             primaryPlayer = pPlayer2Data;
-            secondaryPlayer = pPlayer1Data;
             primaryPlayerChar = player2Char;
+            secondaryPlayer = pPlayer1Data;
             secondaryPlayerChar = player1Char;
-        } else if (pPlayer1Data->TrackingAgeSeconds() >= pPlayer2Data->TrackingAgeSeconds()) {
+        } else if (pPlayer1Data->TrackingAgeSeconds()
+                   >= pPlayer2Data->TrackingAgeSeconds()) {
             primaryPlayer = pPlayer1Data;
-            secondaryPlayer = pPlayer2Data;
             primaryPlayerChar = player1Char;
+            secondaryPlayer = pPlayer2Data;
             secondaryPlayerChar = player2Char;
         } else {
             primaryPlayer = pPlayer2Data;
-            secondaryPlayer = pPlayer1Data;
             primaryPlayerChar = player2Char;
+            secondaryPlayer = pPlayer1Data;
             secondaryPlayerChar = player1Char;
         }
 
-        // Get song's default primary character from metadata
         CalcPrimarySongCharacter(data, primaryCrew, primaryChar, primaryOutfit);
 
-        // Try to use player preferences for secondary character
         if (secondaryPlayerChar != gNullStr || primaryPlayerChar != gNullStr) {
             if (secondaryPlayerChar == gNullStr) {
-                // Secondary player has no preference, try using primary's preference
                 if (!CharConflict(primaryPlayerChar, primaryChar)) {
                     secondaryChar = primaryPlayerChar;
-                    secondaryOutfit = GetUnlockedOutfit(secondaryPlayer->GetPreferredOutfit());
+                    secondaryOutfit =
+                        GetUnlockedOutfit(secondaryPlayer->GetPreferredOutfit());
                     secondaryCrew = GetCrewForCharacter(primaryPlayerChar);
                     return;
                 }
             } else {
-                // Secondary player has preference, check if we can swap
                 Symbol tempCrew = GetCrewForCharacter(primaryPlayerChar);
-                Symbol tempOutfit = GetUnlockedOutfit(primaryPlayer->GetPreferredOutfit());
+                Symbol tempOutfit =
+                    GetUnlockedOutfit(primaryPlayer->GetPreferredOutfit());
                 if (!CharConflict(primaryChar, primaryPlayerChar)) {
-                    // Can swap: give primary player their preference, put song character on secondary
                     secondaryChar = primaryChar;
                     secondaryOutfit = primaryOutfit;
                     secondaryCrew = primaryCrew;
@@ -1373,15 +1360,14 @@ void MetaPerformer::CalcCharacters(
                     primaryOutfit = tempOutfit;
                     return;
                 }
-                // Cannot swap: override primary with player preference
                 primaryCrew = tempCrew;
                 primaryChar = primaryPlayerChar;
                 primaryOutfit = tempOutfit;
             }
         }
-
-        // Fall back to song's default secondary character
-        CalcSecondarySongCharacter(data, b2, primaryOutfit, secondaryCrew, secondaryChar, secondaryOutfit);
+        CalcSecondarySongCharacter(
+            data, b, primaryOutfit, secondaryCrew, secondaryChar, secondaryOutfit
+        );
     }
 }
 
@@ -1418,7 +1404,7 @@ void MetaPerformer::HandleGameplayEnded(const EndGameResult &egr) {
     TheRockCentral.ManageJob(new GameEndedDataPointJob(this, egr));
 }
 
-void MetaPerformer::SaveAndUploadScores(Symbol s, int i1, int i2) {
+void MetaPerformer::SaveAndUploadScores(Symbol song, int totalScore, int stars) {
     static Symbol score("score");
     int count = 0;
     for (int i = 0; i < 2; i++) {
@@ -1432,18 +1418,18 @@ void MetaPerformer::SaveAndUploadScores(Symbol s, int i1, int i2) {
             count++;
         }
     }
-
     if (0 < count) {
-        if (count <= 1) i1 = 0;
-
+        if (count <= 1) {
+            totalScore = 0;
+        }
         static Symbol p1("p1");
         static Symbol p2("p2");
         static Symbol alert_highscore_solo("alert_highscore_solo");
         static Symbol alert_highscore_coop("alert_highscore_coop");
 
-        HamProfile *criticalProfile = TheProfileMgr.CriticalProfile();
-        Difficulty highestDiff = EasiestDifficulty();
-        int songID = mSongMgr.GetSongIDFromShortName(s, true);
+        HamProfile *pCriticalProfile = TheProfileMgr.CriticalProfile();
+        Difficulty easiestDiff = EasiestDifficulty();
+        int songID = mSongMgr.GetSongIDFromShortName(song);
 
         for (int i = 0; i < 2; i++) {
             HamPlayerData *pPlayerData = TheGameData->Player(i);
@@ -1451,77 +1437,99 @@ void MetaPerformer::SaveAndUploadScores(Symbol s, int i1, int i2) {
             Hmx::Object *pPlayerProvider = pPlayerData->Provider();
             MILO_ASSERT(pPlayerProvider, 0x1af);
 
-            Symbol playerName = (i == 0) ? p1 : p2;
-            Difficulty difficulty = (Difficulty)pPlayerData->GetDifficulty();
-
-            bool isHarder = IsHarderDifficulty(difficulty, highestDiff);
-            if (isHarder) {
-                highestDiff = difficulty;
+            Symbol name = (i == 0) ? p1 : p2;
+            Difficulty diff = pPlayerData->GetDifficulty();
+            if (IsHarderDifficulty(diff, easiestDiff)) {
+                easiestDiff = diff;
             }
-
-            int padNum = pPlayerData->PadNum();
-            HamProfile *pProfile = TheProfileMgr.GetProfileFromPad(padNum);
-            if (pProfile && !TheAccomplishmentMgr->IsSigninChanged(padNum)) {
-                if (criticalProfile == pProfile) {
-                    criticalProfile = NULL;
+            int padnum = pPlayerData->PadNum();
+            HamProfile *pProfile = TheProfileMgr.GetProfileFromPad(padnum);
+            if (pProfile && !TheAccomplishmentMgr->IsSigninChanged(padnum)) {
+                if (pProfile == pCriticalProfile) {
+                    pCriticalProfile = nullptr;
                 }
 
                 SongStatusMgr *songStatusMgr = pProfile->GetSongStatusMgr();
                 MILO_ASSERT(songStatusMgr, 0x1c1);
 
-                static Symbol scoreSymbol("score");
-                const DataNode *pScoreNode = pPlayerProvider->Property(scoreSymbol);
+                static Symbol score("score");
+                const DataNode *pScoreNode = pPlayerProvider->Property(score);
                 int playerScore = pScoreNode->Int();
-
-                if (playerScore != 0 || i1 != 0) {
-                    int oldCoopScore = songStatusMgr->GetCoopScore(songID);
-                    bool baseScoreLocked = false;
-                    int baseScore = songStatusMgr->GetScore(songID, baseScoreLocked);
+                if (playerScore != 0 || totalScore != 0) {
+                    int coopScore = songStatusMgr->GetCoopScore(songID);
+                    bool noFlashcards;
+                    int baseScore = songStatusMgr->GetScore(songID, noFlashcards);
 
                     if (playerScore > baseScore) {
                         ThePassiveMessenger->TriggerGenericMsg(
-                            alert_highscore_solo, playerName, kPassiveMessageGeneral, Symbol(gNullStr), -1
+                            alert_highscore_solo,
+                            name,
+                            kPassiveMessageGeneral,
+                            gNullStr,
+                            -1
                         );
                     }
 
-                    if (i1 > oldCoopScore) {
+                    if (totalScore > coopScore) {
                         ThePassiveMessenger->TriggerGenericMsg(
-                            alert_highscore_coop, playerName, kPassiveMessageGeneral, Symbol(gNullStr), -1
+                            alert_highscore_coop,
+                            name,
+                            kPassiveMessageGeneral,
+                            gNullStr,
+                            -1
                         );
                     }
 
-                    static Symbol expertSymbol("expert");
-                    bool wasExpertUnlocked = pProfile->IsDifficultyUnlockedForProfile(s, expertSymbol);
+                    static Symbol expert("expert");
+                    bool isExpertUnlocked =
+                        pProfile->IsDifficultyUnlockedForProfile(song, expert);
 
-                    static Symbol moveAwesomeSymbol("move_awesome");
-                    int awesomeCount = GetMovesPassedByType(i, moveAwesomeSymbol);
+                    static Symbol move_awesome("move_awesome");
+                    int awesomeCount = GetMovesPassedByType(i, move_awesome);
 
-                    static Symbol movePerfectSymbol("move_perfect");
-                    int perfectCount = GetMovesPassedByType(i, movePerfectSymbol);
-
-                    int totalMovesPassed = GetMovesPassed(i);
+                    static Symbol move_perfect("move_perfect");
+                    int perfectCount = GetMovesPassedByType(i, move_perfect);
 
                     pProfile->UpdateScore(
-                        songID, pPlayerData, difficulty, playerScore, i1, i2, awesomeCount, perfectCount,
-                        totalMovesPassed, 0, false, mCompletedSongWithNoFlashcards
+                        songID,
+                        pPlayerData,
+                        diff,
+                        playerScore,
+                        totalScore,
+                        stars,
+                        awesomeCount,
+                        perfectCount,
+                        GetMovesPassed(i),
+                        0,
+                        false,
+                        mCompletedSongWithNoFlashcards
                     );
 
-                    if (!wasExpertUnlocked && pProfile->IsDifficultyUnlockedForProfile(s, expertSymbol)) {
+                    if (!isExpertUnlocked
+                        && pProfile->IsDifficultyUnlockedForProfile(song, expert)) {
                         static Symbol alert_unlockedhard("alert_unlockedhard");
                         ThePassiveMessenger->TriggerGenericMsg(
-                            alert_unlockedhard, playerName, kPassiveMessageUnlock, Symbol(gNullStr), -1
+                            alert_unlockedhard, name, kPassiveMessageUnlock, gNullStr, -1
                         );
                     }
                 }
             }
         }
-
-        if (TheGameMode->InMode("campaign", true)) {
-            if (criticalProfile) {
-                criticalProfile->UpdateScore(
-                    songID, NULL, highestDiff, 0, i1, i2, 0, 0, 0, 0, false, mCompletedSongWithNoFlashcards
-                );
-            }
+        if (TheGameMode->InMode("campaign") && pCriticalProfile) {
+            pCriticalProfile->UpdateScore(
+                songID,
+                nullptr,
+                easiestDiff,
+                0,
+                totalScore,
+                stars,
+                0,
+                0,
+                0,
+                0,
+                false,
+                mCompletedSongWithNoFlashcards
+            );
         }
     }
 }
