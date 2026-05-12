@@ -679,59 +679,45 @@ void SkeletonChooser::SetPlayerSkeletonWarningData(int p1ID, int p2ID) {
 }
 
 void SkeletonChooser::SwapPlayerDataForPractice() {
-    int val0;
-    int val1;
-    Symbol sym0;
-    Symbol sym1;
+    bool player1PropVal =
+        TheGameData->Player(0)->Provider()->Property("using_fitness")->Int();
+    bool player2PropVal =
+        TheGameData->Player(1)->Provider()->Property("using_fitness")->Int();
+    TheGameData->Player(0)->SetUsingFitness(player2PropVal);
+    TheGameData->Player(1)->SetUsingFitness(player1PropVal);
 
-    // Swap using_fitness
-    val0 = TheGameData->Player(0)->Provider()->Property("using_fitness")->Int();
-    val1 = TheGameData->Player(1)->Provider()->Property("using_fitness")->Int();
-    TheGameData->Player(0)->SetUsingFitness(val1 != 0);
-    TheGameData->Player(1)->SetUsingFitness(val0 != 0);
+    Symbol player1Crew = TheGameData->Player(0)->Provider()->Property("crew")->Sym();
+    TheGameData->Player(0)->SetCrew(
+        TheGameData->Player(1)->Provider()->Property("crew")->Sym()
+    );
+    TheGameData->Player(1)->SetCrew(player1Crew);
 
-    // Swap crew (from property)
-    sym0 = TheGameData->Player(0)->Provider()->Property("crew")->Sym();
-    sym1 = TheGameData->Player(1)->Provider()->Property("crew")->Sym();
-    TheGameData->Player(0)->SetCrew(sym1);
-    TheGameData->Player(1)->SetCrew(sym0);
+    player1Crew = TheGameData->Player(0)->Crew();
+    TheGameData->Player(0)->SetCrew(TheGameData->Player(1)->Crew());
+    TheGameData->Player(1)->SetCrew(player1Crew);
 
-    // Swap crew (from member)
-    sym0 = TheGameData->Player(0)->Crew();
-    sym1 = TheGameData->Player(1)->Crew();
-    TheGameData->Player(0)->SetCrew(sym1);
-    TheGameData->Player(1)->SetCrew(sym0);
+    Symbol player1Char = TheGameData->Player(0)->Char();
+    TheGameData->Player(0)->SetCharacter(TheGameData->Player(1)->Char());
+    TheGameData->Player(1)->SetCharacter(player1Char);
 
-    // Swap character
-    sym0 = TheGameData->Player(0)->Char();
-    sym1 = TheGameData->Player(1)->Char();
-    TheGameData->Player(0)->SetCharacter(sym1);
-    TheGameData->Player(1)->SetCharacter(sym0);
+    Symbol player1Symbol = TheGameData->Player(0)->MiniGameCharacter();
+    Symbol player2Symbol = TheGameData->Player(1)->MiniGameCharacter();
+    TheGameData->Player(0)->SetMiniGameCharacter(player2Symbol);
+    TheGameData->Player(1)->SetMiniGameCharacter(player1Symbol);
 
-    // Swap mini game character
-    sym0 = TheGameData->Player(0)->MiniGameCharacter();
-    sym1 = TheGameData->Player(1)->MiniGameCharacter();
-    TheGameData->Player(0)->SetMiniGameCharacter(sym1);
-    TheGameData->Player(1)->SetMiniGameCharacter(sym0);
+    Symbol player1Outfit = TheGameData->Player(0)->Outfit();
+    TheGameData->Player(0)->SetOutfit(TheGameData->Player(1)->Outfit());
+    TheGameData->Player(1)->SetOutfit(player1Outfit);
 
-    // Swap outfit
-    sym0 = TheGameData->Player(0)->Outfit();
-    sym1 = TheGameData->Player(1)->Outfit();
-    TheGameData->Player(0)->SetOutfit(sym1);
-    TheGameData->Player(1)->SetOutfit(sym0);
+    Symbol player1PreferredOutfit = TheGameData->Player(0)->GetPreferredOutfit();
+    TheGameData->Player(0)->SetPreferredOutfit(
+        TheGameData->Player(1)->GetPreferredOutfit()
+    );
+    TheGameData->Player(1)->SetPreferredOutfit(player1PreferredOutfit);
 
-    // Swap preferred outfit
-    auto player0PreferredOutfit = TheGameData->Player(0)->GetPreferredOutfit();
-    sym0 = player0PreferredOutfit;
-    sym1 = TheGameData->Player(1)->GetPreferredOutfit();
-    TheGameData->Player(0)->SetPreferredOutfit(sym1);
-    TheGameData->Player(1)->SetPreferredOutfit(sym0);
-
-    // Swap pad numbers
-    val0 = TheGameData->Player(0)->PadNum();
-    val1 = TheGameData->Player(1)->PadNum();
-    TheGameData->SetAssociatedPadNum(0, val1);
-    TheGameData->SetAssociatedPadNum(1, val0);
+    int player1PadNum = TheGameData->Player(0)->PadNum();
+    TheGameData->SetAssociatedPadNum(0, TheGameData->Player(1)->PadNum());
+    TheGameData->SetAssociatedPadNum(1, player1PadNum);
 }
 
 void SkeletonChooser::UpdatePlayerSkeletonNavData() {
@@ -942,51 +928,46 @@ int SkeletonChooser::RoundRobinForHandRaised(int player) {
 }
 
 void SkeletonChooser::SetPlayerSkeletonNavData(int p1ID, int p2ID) {
+    bool inMode;
     static Symbol player_present("player_present");
     static Symbol ui_nav_player("ui_nav_player");
 
-    // Get current skeleton tracking IDs for both players
-    int cur0 = TheGameData->Player(0)->GetSkeletonTrackingID();
-    int cur1 = TheGameData->Player(1)->GetSkeletonTrackingID();
-
-    // If a player's current skeleton doesn't match either new ID, unassign
-    if (cur0 != p1ID && cur0 != p2ID) {
+    int p1TrackingID = TheGameData->Player(0)->GetSkeletonTrackingID();
+    int p2TrackingID = TheGameData->Player(1)->GetSkeletonTrackingID();
+    if (p1TrackingID != p1ID && p1TrackingID != p2ID) {
         TheGameData->AssignSkeleton(0, -1);
-        cur0 = -1;
+        p1TrackingID = -1;
     }
-    if (cur1 != p1ID && cur1 != p2ID) {
+    if (p2TrackingID != p1ID && p2TrackingID != p2ID) {
         TheGameData->AssignSkeleton(1, -1);
-        cur1 = -1;
+        p2TrackingID = -1;
     }
 
-    // Determine if sided assignment matters
     static Symbol sided_colors_locked("sided_colors_locked");
     static Symbol bustamove("bustamove");
-    bool sidesOk = true;
-
-    if (TheHamProvider->Property(sided_colors_locked, true)->Int() != 0) {
-        bool inBustamove = TheGameMode->InMode(bustamove, true);
-        sidesOk = !inBustamove;
+    bool sideEqual = true;
+    const DataNode *sidedColorsProp = TheHamProvider->Property(sided_colors_locked);
+    if (sidedColorsProp->Int() != 0 && !TheGameMode->InMode(bustamove)) {
+        inMode = true;
     } else {
-        sidesOk = false;
+        inMode = false;
     }
 
-    if (sidesOk) {
-        Skeleton *pSkel1 = TheGestureMgr->GetSkeletonByTrackingID(p1ID);
-        Skeleton *pSkel2 = TheGestureMgr->GetSkeletonByTrackingID(p2ID);
-        SkeletonSide side0 = GetPlayerSide(0);
+    if (inMode) {
+        Skeleton *p1Skel = TheGestureMgr->GetSkeletonByTrackingID(p1ID);
+        Skeleton *p2Skel = TheGestureMgr->GetSkeletonByTrackingID(p2ID);
 
-        // Determine side for skeleton 1
-        int side1 = 2; // 2 = unknown/no skeleton
-        if (pSkel1 != NULL) {
-            if (side0 == kSkeletonRight) {
-                if (pSkel1->GetUnkab0().x < -0.15f) {
+        SkeletonSide p1side = GetPlayerSide(0);
+        int side1 = 2;
+        if (p1Skel) {
+            if (p1side == kSkeletonRight) {
+                if (p1Skel->GetUnkab0().x < 0.15f) {
                     side1 = 0;
                 } else {
                     side1 = 1;
                 }
             } else {
-                if (pSkel1->GetUnkab0().x > 0.15f) {
+                if (p1Skel->GetUnkab0().x > -0.15f) {
                     side1 = 1;
                 } else {
                     side1 = 0;
@@ -994,100 +975,90 @@ void SkeletonChooser::SetPlayerSkeletonNavData(int p1ID, int p2ID) {
             }
         }
 
-        // Determine side for skeleton 2
-        SkeletonSide side0b = GetPlayerSide(1);
+        SkeletonSide p2side = GetPlayerSide(1);
         int side2 = 2;
-        if (pSkel2 != NULL) {
-            if (side0b == kSkeletonRight) {
-                if (pSkel2->GetUnkab0().x < -0.15f) {
+        if (p2Skel) {
+            if (p2side == kSkeletonRight) {
+                if (p2Skel->GetUnkab0().x < -0.15f) {
                     side2 = 0;
                 } else {
                     side2 = 1;
                 }
             } else {
-                if (pSkel2->GetUnkab0().x > 0.15f) {
+                if (0.15f < p2Skel->GetUnkab0().x) {
                     side2 = 1;
                 } else {
                     side2 = 0;
                 }
             }
         }
-
-        sidesOk = (side2 != side1);
+        sideEqual = (side1 != side2);
     }
 
-    // Assign p1ID to a player
-    if (p1ID > 0 && p1ID != cur0 && p1ID != cur1) {
-        if (p2ID <= 0 || p2ID != cur0) {
-            if (sidesOk) {
+    if (p1ID > 0 && p1ID != p1TrackingID && p1ID != p2TrackingID) {
+        if (p2ID <= 0 || p2ID != p1TrackingID) {
+            if (sideEqual) {
                 TheGameData->AssignSkeleton(0, p1ID);
-                cur0 = p1ID;
+                p1TrackingID = p1ID;
             } else {
                 TheGameData->AssignSkeleton(0, -1);
-                cur0 = -1;
+                p1TrackingID = -1;
             }
         } else {
-            if (sidesOk) {
+            if (sideEqual) {
                 TheGameData->AssignSkeleton(1, p1ID);
-                cur1 = p1ID;
+                p2TrackingID = p1ID;
             } else {
                 TheGameData->AssignSkeleton(1, -1);
-                cur1 = -1;
+                p2TrackingID = -1;
             }
         }
     }
 
-    // Assign p2ID to a player
-    if (p2ID > 0 && p2ID != cur0 && p2ID != cur1) {
-        if (p1ID <= 0 || p1ID != cur1) {
-            if (sidesOk) {
+    if (p2ID > 0 && p2ID != p1TrackingID && p2ID != p2TrackingID) {
+        if (p1ID <= 0 || p1ID != p2TrackingID) {
+            if (sideEqual) {
                 TheGameData->AssignSkeleton(1, p2ID);
-                cur1 = p2ID;
+                p2TrackingID = p2ID;
             } else {
                 TheGameData->AssignSkeleton(1, -1);
-                cur1 = -1;
+                p2TrackingID = -1;
             }
         } else {
-            if (sidesOk) {
+            if (sideEqual) {
                 TheGameData->AssignSkeleton(0, p2ID);
-                cur0 = p2ID;
+                p1TrackingID = p2ID;
             } else {
                 TheGameData->AssignSkeleton(0, -1);
-                cur0 = -1;
+                p1TrackingID = -1;
             }
         }
     }
 
-    // Determine player presence
-    // Player is present if their skeleton tracking ID > 0 OR player is autoplaying
-    bool present0 = cur0 > 0;
-    bool present1 = cur1 > 0;
+    // probably should be written with an INT_MAX somewhere, like p1TrackingID == INT_MAX
+    bool presentP1 = (-p1TrackingID & ~p1TrackingID) < 0;
+    bool presentP2 = (-p2TrackingID & ~p2TrackingID) < 0;
 
     if (TheGameData->Player(0)->IsAutoplaying()) {
-        present0 = true;
+        presentP1 = true;
     }
     if (TheGameData->Player(1)->IsAutoplaying()) {
-        present1 = true;
+        presentP2 = true;
     }
-
-    SetPlayerPresent(0, present0);
-    SetPlayerPresent(1, present1);
-
-    // If not tracking all skeletons, set the active navigation player
-    int activeIdx = mActivePlayerIndex;
+    SetPlayerPresent(0, presentP1);
+    SetPlayerPresent(1, presentP2);
+    int val = mActivePlayerIndex;
     if (!TheGestureMgr->IsTrackingAllSkeletons()) {
-        TheHamProvider->SetProperty(ui_nav_player, DataNode(activeIdx));
+        TheHamProvider->SetProperty(ui_nav_player, val);
     }
 
-    // Timeout: if no skeletons visible and not in freestyle and not in controller mode,
-    // after 5 seconds, reset active player to 0 and ensure right side
-    static float sNoSkeletonTimer = 0.0f;
+    static float sFloat = 0.0f;
     if (p1ID > 0 || p2ID > 0 || IsFreestyleMode() || TheGestureMgr->InControllerMode()) {
-        sNoSkeletonTimer = 0.0f;
+        sFloat = 0.0f;
     } else {
-        sNoSkeletonTimer += TheTaskMgr.DeltaUISeconds();
-        if (sNoSkeletonTimer > 5.0f) {
-            TheHamProvider->SetProperty(ui_nav_player, DataNode(0));
+        sFloat += TheTaskMgr.DeltaUISeconds();
+        if (sFloat > 5.0f) {
+            TheHamProvider->SetProperty(ui_nav_player, 0);
             mActivePlayerIndex = 0;
             HamPlayerData *pPlayer = TheGameData->Player(0);
             TheGestureMgr->SetActiveSkeletonTrackingID(pPlayer->GetSkeletonTrackingID());
@@ -1097,9 +1068,8 @@ void SkeletonChooser::SetPlayerSkeletonNavData(int p1ID, int p2ID) {
         }
     }
 
-    // Always keep the active skeleton tracking ID in sync
-    HamPlayerData *pActivePlayer = TheGameData->Player(mActivePlayerIndex);
-    TheGestureMgr->SetActiveSkeletonTrackingID(pActivePlayer->GetSkeletonTrackingID());
+    HamPlayerData *pPlayer = TheGameData->Player(mActivePlayerIndex);
+    TheGestureMgr->SetActiveSkeletonTrackingID(pPlayer->GetSkeletonTrackingID());
 }
 
 void SkeletonChooser::ChoosePlayerSides() {
@@ -1110,106 +1080,80 @@ void SkeletonChooser::ChoosePlayerSides() {
     static Symbol game("game");
     static Symbol sided_colors_locked("sided_colors_locked");
 
-    bool locked;
-    if (TheHamProvider->Property(sided_colors_locked, true)->Int() == 0) {
-        locked = false;
-    } else {
-        Symbol navSym = TheHamProvider->Property(ui_nav_mode, true)->Sym();
-        locked = true;
-        if (navSym == game)
-            locked = false;
-    }
+    bool locked = TheHamProvider->Property(sided_colors_locked, true)->Int() != 0
+        && TheHamProvider->Property(ui_nav_mode, true)->Sym() != game;
 
-    SkeletonSide side0;
-    bool bSwap;
-
-    if (id0 < 1) {
-        // Player 0 has no skeleton
-        if ((id1 > 0) == false) {
-            return;
-        }
-        if (!locked) {
-            return;
-        }
-        if (id0 < 1) {
-            id0 = id1;
-        }
-        goto single_player;
-    }
-
-    if (id1 < 1) {
-        // Player 0 has skeleton, player 1 does not
-        if ((id1 > 0) == true) {
-            return;
-        }
-        if (!locked) {
-            return;
-        }
-        goto single_player;
-    }
-
-    {
-        // Both players have skeletons
+    if (id0 > 0 && id1 > 0) {
         Skeleton *pPlayer1Skeleton = TheGestureMgr->GetSkeletonByTrackingID(id0);
         Skeleton *pPlayer2Skeleton = TheGestureMgr->GetSkeletonByTrackingID(id1);
         MILO_ASSERT(pPlayer1Skeleton, 0x1cf);
         MILO_ASSERT(pPlayer2Skeleton, 0x1d0);
 
-        side0 = GetPlayerSide(0);
-        SkeletonSide newSide0;
+        SkeletonSide side0 = GetPlayerSide(0);
+        int newSide0;
         if (side0 == kSkeletonRight) {
-            newSide0 = (pPlayer1Skeleton->GetUnkab0().x < -0.15f) ? kSkeletonLeft : kSkeletonRight;
+            newSide0 = (pPlayer1Skeleton->GetUnkab0().x < -0.15f) ? 0 : 1;
         } else {
-            newSide0 = (pPlayer1Skeleton->GetUnkab0().x > 0.15f) ? kSkeletonRight : kSkeletonLeft;
+            newSide0 = (pPlayer1Skeleton->GetUnkab0().x > 0.15f) ? 1 : 0;
         }
 
         SkeletonSide side1 = GetPlayerSide(1);
-        float pos1x = pPlayer2Skeleton->GetUnkab0().x;
-        SkeletonSide newSide1;
+        int newSide1;
         if (side1 == kSkeletonRight) {
-            newSide1 = (pos1x < -0.15f) ? kSkeletonLeft : kSkeletonRight;
+            newSide1 = (pPlayer2Skeleton->GetUnkab0().x < -0.15f) ? 0 : 1;
         } else {
-            newSide1 = (pos1x > 0.15f) ? kSkeletonRight : kSkeletonLeft;
+            newSide1 = (pPlayer2Skeleton->GetUnkab0().x > 0.15f) ? 1 : 0;
         }
 
         if (locked) {
             if (newSide0 != side0) {
                 TheGameData->AssignSkeleton(0, -1);
             }
-            if (newSide1 == side1) {
-                return;
+            if (newSide1 != side1) {
+                TheGameData->AssignSkeleton(1, -1);
             }
-            TheGameData->AssignSkeleton(1, -1);
-            return;
+        } else {
+            int swapTest = pPlayer1Skeleton->GetUnkab0().x >= pPlayer2Skeleton->GetUnkab0().x;
+            if (side0 == kSkeletonRight) {
+                if (!swapTest) {
+                    SwapPlayerSides();
+                }
+            } else if (side0 == kSkeletonLeft) {
+                if (swapTest) {
+                    SwapPlayerSides();
+                }
+            }
         }
-
-        bSwap = pPlayer1Skeleton->GetUnkab0().x < pos1x;
-        if (side0 == kSkeletonRight && bSwap)
-            goto do_swap;
-
-        goto check_swap;
+    } else {
+        bool inverse = (id0 > 0);
+        bool isPos = (id1 > 0);
+        if (inverse != isPos) {
+            if (locked) {
+                int activeID = (id0 > 0) ? id0 : id1;
+                Skeleton *pPlayerSkeleton = TheGestureMgr->GetSkeletonByTrackingID(activeID);
+                MILO_ASSERT(pPlayerSkeleton, 0x1fb);
+                bool present0 = GetPlayerPresent(0);
+                int otherIdx;
+                if (present0) {
+                    otherIdx = 0;
+                } else {
+                    otherIdx = 1;
+                }
+                SkeletonSide side = GetPlayerSide(otherIdx);
+                bool xGtThresh = pPlayerSkeleton->GetUnkab0().x > 0.15f;
+                bool xLtNegThresh = pPlayerSkeleton->GetUnkab0().x < -0.15f;
+                if (side == kSkeletonRight) {
+                    if (xLtNegThresh) {
+                        SwapPlayerSides();
+                    }
+                } else if (side == kSkeletonLeft) {
+                    if (!xGtThresh) {
+                        SwapPlayerSides();
+                    }
+                }
+            }
+        }
     }
-
-single_player:
-    {
-        Skeleton *pPlayerSkeleton = TheGestureMgr->GetSkeletonByTrackingID(id0);
-        MILO_ASSERT(pPlayerSkeleton, 0x1fb);
-        bool present0 = GetPlayerPresent(0);
-        side0 = GetPlayerSide((int)!present0);
-        bSwap = pPlayerSkeleton->GetUnkab0().x <= 0.15f;
-        if (side0 == kSkeletonRight && pPlayerSkeleton->GetUnkab0().x < -0.15f)
-            goto do_swap;
-    }
-
-check_swap:
-    if (side0 != kSkeletonLeft) {
-        return;
-    }
-    if (bSwap) {
-        return;
-    }
-do_swap:
-    SwapPlayerSides();
 }
 
 static float sFloat0 = 0.03f;
