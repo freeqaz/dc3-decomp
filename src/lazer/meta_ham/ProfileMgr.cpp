@@ -1131,27 +1131,21 @@ void ProfileMgr::LoadGlobalOptions(FixedSizeSaveableStream &) {}
 #endif
 
 DataNode ProfileMgr::OnMsg(const SigninChangedMsg &msg) {
-    unsigned int mask = msg->Int(2);
-    int changedMask = msg->Int(3);
-
+    unsigned int mask = msg.GetMask();
+    unsigned int changedMask = msg.GetChangedMask();
+    int pad = 0;
     static Symbol kick_out_on_sign_out("kick_out_on_sign_out");
 
-    bool kickOutOnSignOut = false;
+    bool kick = false;
 
-    Hmx::Object *currentScreen = TheUI->CurrentScreen();
-    if (currentScreen != nullptr
-        && currentScreen->Property(kick_out_on_sign_out, false) != nullptr) {
-        kickOutOnSignOut =
-            TheUI->CurrentScreen()->Property(kick_out_on_sign_out, true)->Int() != 0;
+    if (TheUI->CurrentScreen()
+        && TheUI->CurrentScreen()->Property(kick_out_on_sign_out, false)) {
+        kick = TheUI->CurrentScreen()->Property(kick_out_on_sign_out)->Int();
     }
 
-    UIPanel *focusPanel = TheUI->FocusPanel();
-    if (focusPanel != nullptr) {
-        UIPanel *fp = TheUI->FocusPanel();
-        if (fp->Property(kick_out_on_sign_out, false) != nullptr) {
-            kickOutOnSignOut =
-                TheUI->FocusPanel()->Property(kick_out_on_sign_out, true)->Int() != 0;
-        }
+    if (TheUI->FocusPanel()
+        && TheUI->FocusPanel()->Property(kick_out_on_sign_out, false)) {
+        kick = TheUI->FocusPanel()->Property(kick_out_on_sign_out)->Int();
     }
 
     if (unkb0) {
@@ -1159,41 +1153,33 @@ DataNode ProfileMgr::OnMsg(const SigninChangedMsg &msg) {
         unkb8.Stop();
     }
 
-    if (changedMask != 0) {
-        unsigned int padIdx = 0;
-        unsigned int remaining = changedMask;
-        do {
-            if ((remaining & 1) != 0) {
-                Profile *pProfile = GetProfileFromPad(padIdx);
-                MILO_ASSERT(pProfile, 0x5fb);
-                pProfile->SetSaveState(kMetaProfileDelete);
-
-                if ((1 << (padIdx & 0x3f) & mask) == 0) {
-                    bool isCritical = pProfile == mCriticalProfile;
-                    if (kickOutOnSignOut) {
-                        for (int i = 0; i < 2; i++) {
-                            HamPlayerData *pPlayer = TheGameData->Player(i);
-                            if (pPlayer->PadNum() == padIdx) {
-                                isCritical = true;
-                            }
-                        }
-                    }
-                    if (isCritical) {
-                        if (mask == 0) {
-                            unkb0 = true;
-                            unkb8.Restart();
-                        } else {
-                            TriggerSignoutEvent();
+    for (; changedMask != 0; changedMask >>= 1, pad++) {
+        if ((changedMask & 1) != 0) {
+            HamProfile *pProfile = GetProfileFromPad(pad);
+            MILO_ASSERT(pProfile, 0x5fb);
+            pProfile->SetSaveState(kMetaProfileDelete);
+            if (!(mask & (1 << pad))) {
+                bool isCritProfile = pProfile == mCriticalProfile;
+                if (kick) {
+                    for (int j = 0; j < 2; j++) {
+                        if (TheGameData->Player(j)->PadNum() == pad) {
+                            isCritProfile = true;
                         }
                     }
                 }
+                if (isCritProfile) {
+                    if (mask == 0) {
+                        unkb0 = true;
+                        unkb8.Restart();
+                    } else {
+                        TriggerSignoutEvent();
+                    }
+                }
             }
-            remaining = (remaining & 0xFFFFFFFF) >> 1;
-            padIdx = padIdx + 1;
-        } while (remaining != 0);
+        }
     }
 
     TheGameData->UpdateAssociatedPads();
     UpdateUsingFitnessState();
-    return DataNode(kDataInt, 0);
+    return 1;
 }

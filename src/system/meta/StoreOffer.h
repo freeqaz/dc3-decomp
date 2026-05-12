@@ -69,7 +69,9 @@ protected:
 class SortCmp {
 public:
     SortCmp(Symbol sortBy) : mSortBy(sortBy) {}
-    bool operator()(const StoreOffer *, const StoreOffer *) const;
+    bool operator()(const StoreOffer *offer1, const StoreOffer *offer2) const {
+        return offer1->Cmp(*offer2, mSortBy);
+    }
 
     Symbol mSortBy;
 };

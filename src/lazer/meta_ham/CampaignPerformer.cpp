@@ -927,8 +927,9 @@ void CampaignPerformer::UpdateEraSong(Difficulty d, Symbol era, Symbol song, int
 }
 
 void CampaignPerformer::AwardCrazeAccomplishments() {
-    for (int i = 0; (unsigned int)i < TheCampaign->NumEras() - 1; i++) {
-        CampaignEra *pEra = TheCampaign->GetEra(i);
+    auto &eras = TheCampaign->Eras();
+    for (int i = 0; i < eras.size() - 1; i++) {
+        CampaignEra *pEra = eras[i];
         Symbol acc = pEra->CompletionAccomplishment();
         if (acc != gNullStr) {
             int starsEarned =

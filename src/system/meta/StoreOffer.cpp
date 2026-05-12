@@ -18,10 +18,6 @@
 #include <cstring>
 #include <stdlib.h>
 
-bool SortCmp::operator()(const StoreOffer *a, const StoreOffer *b) const {
-    return a->Cmp(*b, mSortBy);
-}
-
 StorePurchaseable::StorePurchaseable()
     : isAvailable(0), isPurchased(0), cost(0), songID(0) {}
 

@@ -238,9 +238,12 @@ bool HamStoreProvider::IsPartiallyPurchased(StoreOffer const *offer) const {
 void HamStoreProvider::ApplySort() {
     if (!mSorts.empty()) {
         MILO_ASSERT_RANGE(mSortIndex, 0, mSorts.size(), 0xf1);
-        if (mSorts[mSortIndex].Str() != gNullStr) {
-            SortCmp cmp(mSorts[mSortIndex]);
-            std::sort(mFilteredOffers->begin(), mFilteredOffers->end(), cmp);
+        if (!mSorts[mSortIndex].Null()) {
+            std::sort(
+                mFilteredOffers->begin(),
+                mFilteredOffers->end(),
+                SortCmp(mSorts[mSortIndex])
+            );
         }
     }
 }

@@ -202,9 +202,9 @@ DataNode HandleDeferredAward(DataArray *) {
 
 void MetagameRank::Init() {
     static DataNode &xp_force_award_small = DataVariable("xp_force_award_small");
-    static DataNode &xp_force_award_one_time = DataVariable("xp_force_award_one_time");
     static DataNode &xp_force_award_medium = DataVariable("xp_force_award_medium");
     static DataNode &xp_force_award_large = DataVariable("xp_force_award_large");
+    static DataNode &xp_force_award_one_time = DataVariable("xp_force_award_one_time");
     static DataNode &xp_force_award_all = DataVariable("xp_force_award_all");
     static DataNode &xp_force_one_rank_up = DataVariable("xp_force_one_rank_up");
     xp_force_award_small = 0;
@@ -215,22 +215,20 @@ void MetagameRank::Init() {
     xp_force_one_rank_up = 0;
     DataRegisterFunc("xp_have_deferred_award", HaveDeferredAward);
     DataRegisterFunc("xp_deferred_award", HandleDeferredAward);
-    int unlockablesSize = 0;
+    int u11 = 0;
     DataArray *rankCfg = SystemConfig("rank");
     DataArray *unlockArr = rankCfg->FindArray("unlockables");
     if (unlockArr) {
-        auto unlockablesArrSize = unlockArr->Size();
-        unlockablesSize = unlockablesArrSize - 1;
-        gUnlockables.resize(unlockablesSize);
-        for (int i = 0; i < unlockablesSize; i++) {
+        u11 = unlockArr->Size() - 1;
+        gUnlockables.resize(u11);
+        for (int i = 0; i < u11; i++) {
             DataArray *curUnlockArray = unlockArr->Array(i + 1);
             Unlockable &cur = gUnlockables[i];
             cur.unk0 = i;
             cur.unk4 = curUnlockArray->Sym(0);
             cur.unk8 = curUnlockArray->FindSym("name");
             cur.unkc = curUnlockArray->FindSym("desc");
-            auto imageSym = curUnlockArray->FindSym("image");
-            cur.unk10 = imageSym;
+            cur.unk10 = curUnlockArray->FindSym("image");
             DataArray *unlocksToPopulate = curUnlockArray->FindArray("unlock");
             cur.unk14.resize(unlocksToPopulate->Size() - 1);
             for (int j = 1; j < unlocksToPopulate->Size(); j++) {
@@ -241,33 +239,32 @@ void MetagameRank::Init() {
     }
     DataArray *tierArr = rankCfg->FindArray("tiers");
     if (tierArr) {
-        auto tierArrSize = tierArr->Size();
-        int tiersSize = tierArrSize - 1;
-        gTiers.resize(tiersSize);
-        for (int i = 0; i < tiersSize; i++) {
+        int newSize = tierArr->Size() - 1;
+        gTiers.resize(newSize);
+        for (int i = 0; i < newSize; i++) {
             DataArray *innerTierArr = tierArr->Array(i + 1);
             int innerSize = innerTierArr->Size();
             gTiers[i].reserve(innerSize);
             for (int j = 0; j < innerSize; j++) {
-                bool found = false;
-                Symbol unlockSym = innerTierArr->Sym(j);
-                int k;
-                for (k = 0; k < unlockablesSize; k++) {
-                    if (unlockSym == gUnlockables[k].unk4) {
-                        gTiers[i].push_back(&gUnlockables[k]);
-                        found = true;
+                bool b3 = false;
+                Symbol s128 = innerTierArr->Sym(j);
+                for (int k = 0; k < u11; k++) {
+                    Unlockable &cur = gUnlockables[k];
+                    if (cur.unk4 == s128) {
+                        gTiers[i].push_back(&cur);
+                        b3 = true;
                         break;
                     }
                 }
-                if (!found) {
-                    TheDebug.Fail(MakeString("Unlock named %s not found in unlock list", unlockSym), 0);
+                if (!b3) {
+                    MILO_FAIL("Unlock named %s not found in unlock list", s128.Str());
                 }
             }
         }
     }
     DataArray *taskArr = rankCfg->FindArray("tasks");
-    gOneTimeTasks = taskArr->FindArray("one_time");
     gRepeatableTasks = taskArr->FindArray("repeatable");
+    gOneTimeTasks = taskArr->FindArray("one_time");
 }
 
 void MetagameRank::Clear() {
