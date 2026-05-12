@@ -1332,8 +1332,8 @@ void MetaPerformer::CalcCharacters(
                 }
             } else {
                 Symbol tempCrew = GetCrewForCharacter(primaryPlayerChar);
-                Symbol tempOutfit =
-                    GetUnlockedOutfit(primaryPlayer->GetPreferredOutfit());
+                Symbol primaryOutfitPref = primaryPlayer->GetPreferredOutfit();
+                Symbol tempOutfit = GetUnlockedOutfit(primaryOutfitPref);
                 if (!CharConflict(primaryChar, primaryPlayerChar)) {
                     secondaryChar = primaryChar;
                     secondaryOutfit = primaryOutfit;
