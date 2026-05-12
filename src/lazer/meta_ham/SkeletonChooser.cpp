@@ -798,35 +798,29 @@ int SkeletonChooser::GetNumValidSkeletonChoices() {
     return numValidSkeletonChoices;
 }
 
-int SkeletonChooser::RoundRobinForStandingStill(int player) {
-    int iVar3 = -1;
-    float dVar5 = 0.0f;
-    float fVar4 = 0.08f;
-
+int SkeletonChooser::RoundRobinForStandingStill(int i) {
+    int id = -1;
     if (mNextSkelIdxToTrack < 0 || unk80 <= 0.0f) {
-        int iVar1 = NextSkeletonIndexToTrack(mNextSkelIdxToTrack);
-        mNextSkelIdxToTrack = iVar1;
-        unk80 = fVar4;
+        mNextSkelIdxToTrack = NextSkeletonIndexToTrack(mNextSkelIdxToTrack);
+        unk80 = 0.08f;
         mSkeletonStandingStillFilters[0]->Clear();
     }
 
     if (mNextSkelIdxToTrack >= 0) {
-        iVar3 = TheGestureMgr->GetSkeleton(mNextSkelIdxToTrack).mTrackingID;
-        float fVar6 = TheTaskMgr.DeltaUISeconds();
-        mSkeletonStandingStillFilters[0]->Update(iVar3, (int)(fVar6 * 1000.0f));
-
+        Skeleton &skel = TheGestureMgr->GetSkeleton(mNextSkelIdxToTrack);
+        id = skel.TrackingID();
+        mSkeletonStandingStillFilters[0]->Update(skel.TrackingID(), TheTaskMgr.DeltaUISeconds() * 1000.0f);
         if (mSkeletonStandingStillFilters[0]->StandingStill()) {
             mNextSkelIdxToTrack = -1;
         } else {
-            if (mSkeletonStandingStillFilters[0]->RaisedMs() <= dVar5) {
-                fVar6 = TheTaskMgr.DeltaUISeconds();
-                unk80 = unk80 - fVar6;
+            if (StandingStillRaisedEnough()) {
+                unk80 = 0.08f;
             } else {
-                unk80 = fVar4;
+                unk80 -= TheTaskMgr.DeltaUISeconds();
             }
         }
     }
-    return iVar3;
+    return id;
 }
 
 void SkeletonChooser::CheckToSwitchActivePlayer() {
@@ -858,73 +852,72 @@ switchImmediate:
     SwitchActiveToPlayerIndexImmediate(otherPlayer);
 }
 
-int SkeletonChooser::RoundRobinForHandRaised(int player) {
-    float dVar9 = 0.0f;
-    int trackingID = -1;
-    float dVar8 = 2.0f;
-    int numValid = GetNumValidSkeletonChoices();
-
-    if (numValid > unk90) {
+int SkeletonChooser::RoundRobinForHandRaised(int i) {
+    int id = -1;
+    int numValidSkeletonChoices = GetNumValidSkeletonChoices();
+    if (numValidSkeletonChoices > unk90) {
         unk84 = 2.0f;
         unk88 = 0.0f;
         unk8c = 0;
     }
-    unk90 = numValid;
-    float fVar4 = 0.08f;
-
+    unk90 = numValidSkeletonChoices;
     if (mNextSkelIdxToTrack < 0 || unk80 <= 0.0f) {
         mNextSkelIdxToTrack = NextSkeletonIndexToTrack(mNextSkelIdxToTrack);
-        unk80 = fVar4;
+        unk80 = 0.08f;
         mSkeletonHandRaisedFilters[0]->Clear();
     }
 
     if (mNextSkelIdxToTrack >= 0) {
-        trackingID = TheGestureMgr->GetSkeleton(mNextSkelIdxToTrack).mTrackingID;
-        float delta = TheTaskMgr.DeltaUISeconds();
-        mSkeletonHandRaisedFilters[0]->Update(trackingID, (int)(delta * 1000.0f));
-
-        if (mSkeletonHandRaisedFilters[0]->mHandRaised) {
-            static Symbol join_complete("join_in_progress_complete");
-            static Symbol none1("none");
+        Skeleton &skel = TheGestureMgr->GetSkeleton(mNextSkelIdxToTrack);
+        id = skel.TrackingID();
+        mSkeletonHandRaisedFilters[0]->Update(skel.TrackingID(), TheTaskMgr.DeltaUISeconds() * 1000.0f);
+        if (mSkeletonHandRaisedFilters[0]->HandRaised()) {
+            static Symbol join_in_progress_complete("join_in_progress_complete");
+            static Symbol none("none");
             ThePassiveMessenger->TriggerGenericMsg(
-                join_complete, none1, kPassiveMessageGeneral, gNullStr, -1
+                join_in_progress_complete, none, kPassiveMessageGeneral, gNullStr, -1
             );
             mNextSkelIdxToTrack = -1;
         } else {
-            if (mSkeletonHandRaisedFilters[0]->mRaisedMs <= dVar9) {
+            if (HandRaisedRaisedEnough()) {
+                unk80 = 0.08f;
+            } else {
                 unk80 -= TheTaskMgr.DeltaUISeconds();
-                if (trackingID >= 0 && unk8c < 2) {
+                if (0 <= id && unk8c < 2) {
                     unk84 -= TheTaskMgr.DeltaUISeconds();
-                    float newUnk88 = unk88 - TheTaskMgr.DeltaUISeconds();
-                    unk88 = newUnk88;
-                    if (unk84 <= 0.0f && newUnk88 <= 0.0f
-                        && mSkeletonHandRaisedFilters[0]->mStandingStillFilter.StandingStill()) {
-                        unk80 = fVar4;
+                    unk88 -= TheTaskMgr.DeltaUISeconds();
+                    if (unk84 <= 0.0f && unk88 <= 0.0f
+                        && mSkeletonHandRaisedFilters[0]->StandingStillFilter().StandingStill()) {
+                        unk80 = 0.08f;
                         unk8c++;
                         unk88 = 13.0f;
-                        static Symbol stupid_trick("doing_stupid_kinect_trick");
+                        static Symbol doing_stupid_kinect_trick(
+                            "doing_stupid_kinect_trick"
+                        );
                         if (!IsAutoplaying()) {
                             const DataNode *prop =
-                                TheHamProvider->Property(stupid_trick, true);
+                                TheHamProvider->Property(doing_stupid_kinect_trick, true);
                             if (prop->Int() == 0) {
-                                static Symbol join_progress("join_in_progress");
-                                static Symbol none2("none");
+                                static Symbol join_in_progress("join_in_progress");
+                                static Symbol none("none");
                                 ThePassiveMessenger->TriggerGenericMsg(
-                                    join_progress, none2, kPassiveMessageGeneral, gNullStr, -1
+                                    join_in_progress,
+                                    none,
+                                    kPassiveMessageGeneral,
+                                    gNullStr,
+                                    -1
                                 );
                             }
                         }
                     }
                 }
-            } else {
-                unk80 = fVar4;
             }
         }
     } else {
-        unk84 = dVar8;
-        unk88 = dVar9;
+        unk84 = 2.0f;
+        unk88 = 0.0f;
     }
-    return trackingID;
+    return id;
 }
 
 void SkeletonChooser::SetPlayerSkeletonNavData(int p1ID, int p2ID) {

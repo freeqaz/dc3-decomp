@@ -68,6 +68,9 @@ private:
     void SetPlayerSkeletonWarningData(int, int);
     void ChoosePlayerSides();
 
+    bool StandingStillRaisedEnough() { return mSkeletonStandingStillFilters[0]->RaisedMs() > 0.0f; }
+    bool HandRaisedRaisedEnough() { return mSkeletonHandRaisedFilters[0]->RaisedMs() > 0.0f; }
+
 protected:
     DirectionGestureFilterSingleUser *mRightDirFilter;
     DirectionGestureFilterSingleUser *mLeftDirFilter;
