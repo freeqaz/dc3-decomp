@@ -16,11 +16,11 @@ class LoadingPanelTest : public EngineTestFixture {};
 
 TEST_F(LoadingPanelTest, MissingLoadingMusicDoesNotBlockNativeReadyState) {
     TestLoadingPanel panel;
-    ASSERT_NE(LoadingPanel::sSongDB, nullptr);
+    ASSERT_NE(LoadingPanel::TestGetSongDB(), nullptr);
 
-    LoadingPanel::sLoadingMaster =
-        new HamMaster(LoadingPanel::sSongDB->SongData(), nullptr);
-    ASSERT_NE(LoadingPanel::sLoadingMaster, nullptr);
+    LoadingPanel::TestSetLoadingMaster(
+        new HamMaster(LoadingPanel::TestGetSongDB()->SongData(), nullptr));
+    ASSERT_NE(LoadingPanel::TestGetLoadingMaster(), nullptr);
 
     DataNode oldLoadingMusic = DataVariable("loading_music_mogg");
     DataVariable("loading_music_mogg") = "definitely_missing_loading_music.mogg";

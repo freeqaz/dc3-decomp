@@ -57,21 +57,22 @@ INIT_REVS(2, 0)
 BEGIN_LOADS(RndTexBlendController)
     LOAD_REVS(bs)
     ASSERT_REVS(2, 0)
-    Hmx::Object::Load(bs);
-    bs >> mMesh;
-    bs >> mObject1;
-    bs >> mObject2;
-    bs >> mReferenceDistance;
-    bs >> mMinDistance;
-    bs >> mMaxDistance;
+    LOAD_SUPERCLASS(Hmx::Object)
+    d >> mMesh;
+    d >> mObject1;
+    d >> mObject2;
+    d >> mReferenceDistance;
+    d >> mMinDistance;
+    d >> mMaxDistance;
     if (d.rev > 1) {
-        bs >> mTex;
+        d >> mTex;
     }
 END_LOADS
 
 bool RndTexBlendController::IsValid() const {
-    if (!mMesh)
+    if (!mMesh) {
         return false;
+    }
     if (!mTex) {
         float refDist = mReferenceDistance;
         bool distValid;

@@ -26,18 +26,21 @@ bool AccomplishmentCountConditional::IsFulfilled(HamProfile *profile) const {
     static Symbol character_no_outfit("character_no_outfit");
     int numStars = 0;
     FOREACH (it, m_lConditions) {
-        Symbol condition = it->mConditionType;
+        Symbol condition = it->mCondition;
         if (condition == character) {
             MILO_NOTIFY("Character-based achievements aren't supported in turbo (yet)");
         } else if (condition == stars) {
-            numStars = it->mCount;
+            numStars = it->mValue;
         } else if (condition != character_no_outfit) {
             MILO_NOTIFY("Condition is not currently supported: %s ", condition);
             return false;
         }
     }
     AccomplishmentProgress &progress = profile->AccessAccomplishmentProgress();
-    MetaPerformer *pPerformer = MetaPerformer::Current();
-    progress.IncrementCount(GetName(), pPerformer->GetUnk38());
-    return progress.GetCount(GetName()) >= numStars; // idk what this line is doin
+    progress.IncrementCount(GetName(), MetaPerformer::Current()->GetUnk38());
+    if (numStars <= progress.GetCount(GetName())) {
+        return true;
+    } else {
+        return false;
+    }
 }

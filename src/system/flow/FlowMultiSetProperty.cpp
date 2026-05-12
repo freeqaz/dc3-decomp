@@ -3,6 +3,8 @@
 #include "obj/ObjPtrVec_impl.h"
 #include "flow/FlowNode.h"
 #include "obj/Data.h"
+#include "obj/Dir.h"
+#include "obj/DirLoader.h"
 #include "obj/Object.h"
 #include "char/CharClipSet.h"
 
@@ -10,6 +12,10 @@ FlowMultiSetProperty::FlowMultiSetProperty()
     : mTargets(this, (EraseMode)1, kObjListNoNull) {}
 
 FlowMultiSetProperty::~FlowMultiSetProperty() {}
+
+BEGIN_HANDLERS(FlowMultiSetProperty)
+    HANDLE_SUPERCLASS(FlowNode)
+END_HANDLERS
 
 BEGIN_PROPSYNCS(FlowMultiSetProperty)
     SYNC_PROP_MODIFY(targets, mTargets, (mTargets.sort(ObjNameSort()), mTargets.unique()))
@@ -62,7 +68,3 @@ bool FlowMultiSetProperty::Activate() {
     }
     return false;
 }
-
-BEGIN_HANDLERS(FlowMultiSetProperty)
-    HANDLE_SUPERCLASS(FlowNode)
-END_HANDLERS

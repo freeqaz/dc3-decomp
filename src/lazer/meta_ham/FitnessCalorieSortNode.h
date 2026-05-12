@@ -20,6 +20,7 @@ protected:
 
 class FitnessCalorieHeaderNode : public NavListHeaderNode {
 public:
+    virtual ~FitnessCalorieHeaderNode() {}
     virtual Symbol OnSelect();
     virtual Symbol OnSelectDone();
     virtual void OnHighlight();

@@ -25,9 +25,9 @@ public:
         }
     };
 
-    CharPollableSorter() {}
-
     void Sort(std::vector<RndPollable *> &);
+
+protected:
     bool ChangedBy(Dep *, Dep *);
 
     static int sSearchID;

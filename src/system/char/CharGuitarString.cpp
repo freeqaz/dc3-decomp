@@ -1,5 +1,6 @@
 #include "char/CharGuitarString.h"
 #include "math/Mtx.h"
+#include "math/Utl.h"
 #include "math/Vec.h"
 #include "obj/Object.h"
 

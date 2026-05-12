@@ -30,6 +30,7 @@
 #include "utl/Locale.h"
 #include "utl/Std.h"
 #include "utl/Symbol.h"
+#include <cmath>
 
 static int sIndex;
 
@@ -238,11 +239,10 @@ void PracticeChoosePanel::InitData(RndDir *dir) {
     MILO_ASSERT(moves, 0x47);
     PracticeSection *section = nullptr;
     for (ObjDirItr<PracticeSection> it(moves, true); it != nullptr; ++it) {
-        Difficulty diff = it->GetDifficulty();
-        section = it;
-        if (diff
+        if (it->GetDifficulty()
             == TheGameData->Player(TheHamProvider->Property("ui_nav_player")->Int())
                    ->GetDifficulty()) {
+            section = it;
             break;
         }
     }
@@ -399,7 +399,7 @@ std::vector<HamMove *> PracticeChoosePanel::GetMovesInStep(PracticeStep step) {
             );
         }
         for (int i = 0; i < diff; i++) {
-            Symbol name = TheHamDirector->MoveNameFromBeat(i * 4, 0);
+            Symbol name = TheHamDirector->MoveNameFromBeat((start + (i * 4)) + 1, 0);
             out.push_back(moves->Find<HamMove>(name.Str()));
         }
     }

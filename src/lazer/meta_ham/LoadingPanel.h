@@ -24,9 +24,6 @@ public:
 
     LoadingPanel();
 
-    static HamMaster *sLoadingMaster; // DAT_8311A440
-    static SongDB *sSongDB; // DAT_8311A444 i think, def a SongDB
-
     DataArraySongInfo *mSongInfo;
     TempoMap *mTempoMap;
     BeatMap *mBeatMap;
@@ -43,6 +40,13 @@ protected:
     char const *GetLoadingScreen(Symbol);
     Symbol ChooseLoadingScreen();
     void PlayLoadingMusic();
+
+#ifdef HX_NATIVE
+public:
+    static SongDB *TestGetSongDB();
+    static HamMaster *TestGetLoadingMaster();
+    static void TestSetLoadingMaster(HamMaster *m);
+#endif
 };
 
 void ResetLoadingMusic();

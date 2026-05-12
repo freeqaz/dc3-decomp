@@ -43,9 +43,14 @@ DataNode EventDialogPanel::OnMsg(UIComponentSelectDoneMsg const &msg) {
     UIComponent *component = msg.GetComponent();
     if (!component) {
         return DATA_UNHANDLED;
-    }
-    if (component != DataDir()->Find<UIComponent>(component->Name(), false)) {
-        return 1;
+    } else {
+        UIComponent *componentCheck =
+            DataDir()->Find<UIComponent>(component->Name(), false);
+        if (component == componentCheck) {
+            return DATA_UNHANDLED;
+        } else {
+            return 1;
+        }
     }
 }
 

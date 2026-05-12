@@ -20,7 +20,7 @@ public:
     struct MotdData {
     public:
         MotdData();
-        MotdData(MotdData const &);
+        MotdData(const MotdData &);
 
         Symbol mType;
         String mText;
@@ -49,11 +49,11 @@ public:
     NEW_OBJ(MainMenuPanel)
 
     MainMenuPanel();
-    MainMenuProvider GetMainMenuProvider() const;
+    MainMenuProvider *GetMainMenuProvider();
 
 protected:
     HamLabel *mMsgLabel; // 0x40
-    MainMenuProvider unk44;
+    MainMenuProvider unk44; // 0x44
     bool mIsEntering; // 0x80
     bool mNetCacheActive; // 0x81
     std::list<NetCacheLoader *> mNetCacheLoaders; // 0x84

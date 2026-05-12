@@ -5,6 +5,8 @@
 
 class HamProfile;
 
+#define kMaxTasksOneTime 0x40
+
 struct DeferredPoints {
     int mPoints;
     Symbol mSource;

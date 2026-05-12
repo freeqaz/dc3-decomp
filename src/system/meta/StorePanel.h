@@ -53,7 +53,7 @@ public:
     virtual bool IsSongInLibrary(int const &) const { return false; }
     virtual void ExitStore(StoreError) const;
     virtual Profile *StoreProfile() const;
-    virtual StoreOffer *MakeNewOffer(DataArray *arr) { return new StoreOffer(arr, 0); }
+    virtual StoreOffer *MakeNewOffer(DataArray *) = 0;
     virtual StoreOffer *FindOffer(Symbol) const;
     virtual bool EnumerateSubsetOfOfferIDs() const { return false; }
     virtual void GetOfferIDsToEnumerate(std::vector<u64> &, bool) const {}

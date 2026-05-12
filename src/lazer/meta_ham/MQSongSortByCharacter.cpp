@@ -3,10 +3,13 @@
 #include "hamobj/HamGameData.h"
 #include "HamSongMgr.h"
 #include "MQSongSortNode.h"
+#include "meta_ham/NavListNode.h"
+#include "utl/Symbol.h"
 
 MQSongSortByCharacter::~MQSongSortByCharacter() {}
 
 int MQSongCharCmp::Compare(const NavListItemSortCmp *cmp, NavListNodeType type) const {
+    const MQSongCharCmp *mqCmp;
     switch (type) {
     case kNodeShortcut:
         return 0;
@@ -22,8 +25,9 @@ int MQSongCharCmp::Compare(const NavListItemSortCmp *cmp, NavListNodeType type) 
     }
     default:
         MILO_FAIL("invalid type of node comparison.\n");
+        return 0;
+        break;
     }
-    return 0;
 }
 
 NavListHeaderNode *MQSongSortByCharacter::NewHeaderNode(NavListItemNode *node) const {

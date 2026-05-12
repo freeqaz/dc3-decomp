@@ -49,7 +49,14 @@ public:
         kWrite = 1,
     };
 
-    ChunkStream(const char *, FileType, int, bool, Platform, bool);
+    ChunkStream(
+        const char *file,
+        FileType type,
+        int chunkSize,
+        bool compress,
+        Platform plat,
+        bool cached
+    );
     virtual ~ChunkStream();
     virtual void Flush() {}
     virtual int Tell();
@@ -124,5 +131,6 @@ private:
 BinStream &MarkChunk(BinStream &);
 BinStream &ReadChunks(BinStream &, void *, int, int);
 void SetActiveChunkObject(Hmx::Object *obj);
+BinStream &ReadChunks(BinStream &, void *, int, int);
 BinStream &WriteChunks(BinStream &, const void *, int, int);
 void DecompressMemHelper(const void *, int, void *, int &, const char *);

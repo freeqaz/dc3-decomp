@@ -30,6 +30,8 @@ public:
 
 protected:
     void ReadCounts(BinStream &, int);
+    void SetPreview(int);
+    void SetSamplePointers(int idx) { mStart = mRawData + mTotalSize * idx; }
 
     /** "how many keyframes" */
     int mNumSamples; // 0x54

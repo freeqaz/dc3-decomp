@@ -900,8 +900,8 @@ jump:
             UIPanel *challengeFeedPanel =
                 ObjectDir::Main()->Find<UIPanel>("challenge_feed_panel");
             if (challengeFeedPanel->GetState() == 1) {
-                static Message challenges_expired("challenges_expired");
-                TheUI->Handle(challenges_expired, true);
+                static Message msg("challenges_expired");
+                TheUI->Handle(msg, true);
             } else {
                 DownloadOfficialChallenges();
                 DownloadPlayerChallenges();
@@ -910,34 +910,26 @@ jump:
     }
 }
 
-extern unsigned int lbl_82F1AB98; // 60 (seconds per minute)
-extern unsigned int lbl_82F1AB9C; // 3600 (seconds per hour)
-extern unsigned int lbl_82F1ABA0; // 86400 (seconds per day)
-
 bool Challenges::GetExpireTime(int &days, int &hours, int &minutes, int &seconds) {
+    static unsigned int sInt0 = 60;
+    static unsigned int sInt1 = 3600;
+    static unsigned int sInt2 = 86400;
+
     if (mExpireCountdown == -1.0) {
         return false;
     }
-    unsigned int totalSeconds = (unsigned int)mExpireCountdown;
-    unsigned int secsPerHour = lbl_82F1AB9C;
-    unsigned int secsPerMin = lbl_82F1AB98;
-    unsigned int secsPerDay = lbl_82F1ABA0;
 
-    unsigned int d = totalSeconds / secsPerDay;
-    unsigned int temp = d * secsPerDay;
-    days = d;
-    unsigned int rem1 = totalSeconds - temp;
+    unsigned int totalSeconds = mExpireCountdown;
 
-    unsigned int h = rem1 / secsPerHour;
-    unsigned int temp2 = h * secsPerHour;
-    hours = h;
-    unsigned int rem2 = rem1 - temp2;
+    days = totalSeconds / sInt2;
+    unsigned int remaining = totalSeconds - (days * sInt2);
 
-    unsigned int m = rem2 / secsPerMin;
-    unsigned int temp3 = m * secsPerMin;
-    minutes = m;
-    seconds = rem2 - temp3;
+    hours = remaining / sInt1;
+    remaining = remaining - (hours * sInt1);
 
+    minutes = remaining / sInt0;
+
+    seconds = remaining - (minutes * sInt0);
     return true;
 }
 

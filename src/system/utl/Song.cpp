@@ -1,6 +1,7 @@
 #include "utl/Song.h"
 #include "beatmatch/HxAudio.h"
 #include "beatmatch/HxMaster.h"
+#include "math/Utl.h"
 #include "midi/MidiParser.h"
 #include "midi/MidiParserMgr.h"
 #include "obj/Data.h"

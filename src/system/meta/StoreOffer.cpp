@@ -73,8 +73,6 @@ StoreOffer::StoreOffer(DataArray *a, SongMgr *mgr) : mStoreOfferData(a), mSongMg
 
 StoreOffer::~StoreOffer() { mStoreOfferData->Release(); }
 
-bool StoreOffer::Cmp(StoreOffer const &, Symbol) const { return false; }
-
 bool StoreOffer::HasData(Symbol s) const {
     return mStoreOfferData->FindArray(s, false) != nullptr;
 }

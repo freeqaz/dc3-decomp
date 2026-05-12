@@ -1,7 +1,10 @@
 #include "char/CharIKFoot.h"
 #include "CharIKHand.h"
 #include "char/Character.h"
+#include "math/Mtx.h"
+#include "math/Vec.h"
 #include "obj/Object.h"
+#include "obj/Task.h"
 #include "rndobj/Trans.h"
 
 CharIKFoot::CharIKFoot() : mFootBone(this), mFootFsmState(0), mData(this), mDataIndex(0) {
@@ -45,19 +48,19 @@ BEGIN_LOADS(CharIKFoot)
     LOAD_SUPERCLASS(CharIKHand)
     if (d.rev < 6) {
         Symbol s;
-        bs >> s;
+        d >> s;
     }
     if (d.rev < 5) {
         int i;
         if (d.rev > 1)
-            bs >> i;
+            d >> i;
         if (d.rev > 2)
-            bs >> i;
+            d >> i;
         if (d.rev > 3)
-            bs >> i;
+            d >> i;
     } else {
-        bs >> mData;
-        bs >> mDataIndex;
+        d >> mData;
+        d >> mDataIndex;
     }
 END_LOADS
 

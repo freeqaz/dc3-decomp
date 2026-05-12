@@ -82,9 +82,7 @@ const ChunkHeader *IListChunk::Next() {
         int newlen = mSubHeader.GetNewLength();
         ChunkID theID = mSubHeader.ID();
         if (theID != kMidiTrackChunkID) {
-            // probably a branchless comparison
-            unsigned int tmp = newlen >> 0x1FU;
-            newlen += ((newlen & 1) ^ tmp) - tmp;
+            newlen += newlen % 2;
         }
 
         mSubChunkMarker += newlen;

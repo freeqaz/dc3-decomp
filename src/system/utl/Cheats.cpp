@@ -4,6 +4,7 @@
 #include "obj/Msg.h"
 #include "os/Debug.h"
 #include "os/Keyboard.h"
+#include "os/User.h"
 #include "os/UserMgr.h"
 #include "os/JoypadMsgs.h"
 #include "os/Joypad.h"

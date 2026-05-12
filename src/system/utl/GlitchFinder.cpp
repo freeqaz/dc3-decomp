@@ -1,5 +1,4 @@
-#include "GlitchFinder.h"
-
+#include "utl/GlitchFinder.h"
 #include "obj/DataFunc.h"
 #include "os/Debug.h"
 #include "utl/MakeString.h"
@@ -127,6 +126,8 @@ void GlitchPoker::Dump(TextStream &stream, int i1) {
                 stream << "\n";
                 smTotalLeafTime = (mTimeEnd - mTime) + smTotalLeafTime;
             }
+            smNestedStartTimes.pop_back();
+            PrintNestedStartTimes(stream, mTimeEnd);
         }
         return;
     }
@@ -170,16 +171,13 @@ GlitchAverager::GlitchAverager()
     : mAvg(0.0), mMax(0.0), mCount(0), mGlitchAvg(0.0), mGlitchCount(0) {}
 
 void GlitchAverager::PushInstance(float f1, bool b) {
-    mCount += 1;
-    mAvg = (f1 - mAvg) / mCount + mAvg;
+    mAvg = (f1 - mAvg) / ++mCount + mAvg;
     if (b) {
-        mGlitchCount += 1;
-        mGlitchAvg = (f1 - mGlitchAvg) / mGlitchCount + mGlitchAvg;
+        mGlitchAvg = (f1 - mGlitchAvg) / ++mGlitchCount + mGlitchAvg;
     }
-    if (f1 <= mMax)
-        return;
-
-    mMax = f1;
+    if (f1 > mMax) {
+        mMax = f1;
+    }
 }
 
 GlitchFinder::GlitchFinder()
@@ -201,7 +199,7 @@ void GlitchFinder::Init() {
 
 DataNode GlitchFinder::OnGlitchFindPoke(DataArray *da) {
     unsigned int mftb = __mftb();
-    TheGlitchFinder.Poke(da->Node(1).Str(da), mftb);
+    TheGlitchFinder.Poke(da->Str(1), mftb);
     return 0;
 }
 
@@ -216,7 +214,7 @@ DataNode GlitchFinder::OnGlitchFindLeaves(DataArray *da) {
 }
 
 void GlitchFinder::Poke(const char *c, unsigned int ui) {
-    PokeStart(c, 0, -1.0, 0.0, 0);
+    PokeStart(c, 0, -1, 0, 0);
     PokeEnd(ui);
 }
 

@@ -19,6 +19,7 @@
 #include "utl/NetLoader.h"
 #include "utl/Str.h"
 #include "utl/Symbol.h"
+#include "xdk/win_types.h"
 #include <list>
 
 struct HamSpecialOffer {
@@ -81,6 +82,8 @@ public:
     void RemoveOfferFromCart(StoreOffer *);
     void AddOfferToCart(StoreOffer *);
 
+    int GetUnk184() const { return unk184; }
+
 protected:
     virtual StoreError UpdateOffers(std::list<EnumProduct> const &, bool);
     virtual void StoreUserProfileSwappedToUser(LocalUser *);
@@ -113,6 +116,15 @@ protected:
     int mLockData;
     std::vector<CartRow> mCartRows;
     RCJob *mJobs[7];
+    /*
+        mJobs[0] - AddDLCToCartJob
+        mJobs[1] - RemoveDLCFromCartJob
+        mJobs[2] - EmptyCartJob
+        mJobs[3] - GetCartJob
+        mJobs[4] - LockCartJob
+        mJobs[5] - UnlockCartJob
+        mJobs[6] - LockCartJob (for Relocking?)
+    */
     bool unk154;
     bool mCartEnabled;
     bool mCartLocked;
@@ -126,3 +138,4 @@ protected:
     int unk184;
     XboxPurchaser *mXboxPurchaser; // 0x188
 };
+

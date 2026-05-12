@@ -10,6 +10,7 @@
 #include "obj/Object.h"
 #include "utl/JobMgr.h"
 #include "utl/Symbol.h"
+#include "xdk/win_types.h"
 
 class OptionsPanel : public HamPanel {
 public:

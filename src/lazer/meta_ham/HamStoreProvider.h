@@ -7,6 +7,7 @@
 #include "stl/_map.h"
 #include "stl/_vector.h"
 #include "ui/UIListProvider.h"
+#include "utl/NetCacheMgr.h"
 #include "utl/Str.h"
 #include "utl/Symbol.h"
 #include <list>
@@ -51,6 +52,7 @@ public:
     void Refresh();
     bool AllowSortToggle() { return mSorts.size() > 1; }
     bool IsOfferInCart(StoreOffer *);
+    bool IsDebug();
 
     PackSongListProvider GetPackProvider() { return mPackProvider; }
     HamStoreFilterProvider *GetFilterProvider() { return mFilterProvider; }

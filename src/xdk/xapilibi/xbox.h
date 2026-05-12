@@ -27,7 +27,10 @@ DWORD XShowPartyUI(DWORD dwUserIndex);
 DWORD XShowNuiFriendsUI(DWORD dwTrackingID, DWORD dwUserIndex);
 DWORD XShowNuiPartyUI(DWORD dwTrackingID, DWORD dwUserIndex);
 DWORD XShowNuiGuideUI(DWORD dwTrackingID);
+DWORD XShowNuiSigninUI(DWORD dwTrackingID, DWORD dwFlags);
 HRESULT XNuiDelayUI(ULONG ulMilliSeconds);
+DWORD XShowNuiGamerCardUI(DWORD dwTrackingID, DWORD dwUserIndex, XUID XuidPlayer);
+DWORD XShowNuiControllerRequiredUI(DWORD dwTrackingID, DWORD dwUserIndex);
 DWORD XUserCheckPrivilege(
     DWORD dwUserIndex, XPRIVILEGE_TYPE PrivilegeType, BOOL *pfResult
 );
@@ -115,8 +118,11 @@ VOID XAudioGetSpeakerConfig();
 VOID XGetVideoMode(XVIDEO_MODE *pVideoMode);
 VOID *XMemSet(VOID *dest, INT c, SIZE_T count);
 VOID *XMemAlloc(SIZE_T dwSize, DWORD dwAllocAttributes);
+VOID *XMemAllocDefault(SIZE_T dwSize, DWORD dwAllocAttributes);
 VOID XMemFree(LPVOID lpHandle, DWORD dwFreeAttributes);
+VOID XMemFreeDefault(LPVOID lpHandle, DWORD dwFreeAttributes);
 INT XMemSize(LPVOID lpHandle, DWORD dwSizeAttributes);
+INT XMemSizeDefault(LPVOID lpHandle, DWORD dwSizeAttributes);
 DWORD XPhysicalSize(LPVOID lpAddress);
 DWORD XUserAwardGamerPicture(
     DWORD dwUserIndex, DWORD dwPictureId, DWORD dwReserved, XOVERLAPPED *pXOverlapped
@@ -161,6 +167,7 @@ DWORD XShowDeviceSelectorUI(
     XOVERLAPPED *pOverlapped
 );
 DWORD XGetGameRegion();
+DWORD XShowSigninUI(DWORD cPanes, DWORD dwFlags);
 #ifdef HX_NATIVE
 [[noreturn]] DWORD XShowNuiDirtyDiscErrorUI(DWORD dwTrackingID, DWORD dwUserIndex);
 [[noreturn]] DWORD XShowDirtyDiscErrorUI(DWORD dwUserIndex);
@@ -184,8 +191,17 @@ DWORD XMarketplaceCreateOfferEnumeratorByOffering(
     DWORD *pcbBuffer,
     HANDLE *phEnum
 );
-HANDLE XNotifyCreateListener(DWORD dwNotificationArea);
-BOOL XNotifyGetNext(HANDLE hNotification, DWORD dwMsgFilter, DWORD *pdwId, ULONG_PTR *pParam);
+HANDLE XNotifyCreateListener(QWORD qwAreas);
+void XNotifyPositionUI(DWORD dwPosition);
+BOOL XNotifyGetNext(HANDLE hNotification, DWORD dwMsgFilter, DWORD *pdwId, ULONG *pParam);
+DWORD XUserSetPropertyEx(
+    DWORD dwUserIndex,
+    DWORD dwPropertyId,
+    DWORD cbValue,
+    const void *pvValue,
+    XOVERLAPPED *pOverlapped
+);
+DWORD XShowGamerCardUI(DWORD dwUserIndex, XUID XuidPlayer);
 
 #ifdef __cplusplus
 }

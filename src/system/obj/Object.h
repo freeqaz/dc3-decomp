@@ -2,6 +2,7 @@
 #include "obj/Data.h" /* IWYU pragma: keep */
 #include "obj/DataUtl.h"
 #include "obj/MessageTimer.h" /* IWYU pragma: keep */
+#include "os/Debug.h"
 #include "utl/BinStream.h" /* IWYU pragma: keep */
 #include "utl/MemMgr.h" /* IWYU pragma: keep */
 #include "utl/Symbol.h" /* IWYU pragma: keep */
@@ -44,13 +45,13 @@ public:
 void ObjRefRelinkRing(ObjRef *ref);
 
 // ObjRef size: 0xc
+/** A circular doubly linked list to track an Object's refs. */
 class ObjRef {
     friend class Hmx::Object;
     friend void ::MergeObjectsRecurse(ObjectDir *, ObjectDir *, MergeFilter &, bool);
     friend void ::ObjRefRelinkRing(ObjRef *);
 
 protected:
-    // seems to be a linked list of an Object's refs
     ObjRef *next; // 0x4
     ObjRef *prev; // 0x8
 #ifdef HX_NATIVE
@@ -160,6 +161,9 @@ public:
     iterator end() const { return iterator((ObjRef *)this); }
     bool empty() const { return next == this; }
 
+    /** Make `this` its own standalone single list node. */
+    void DetachSelf() { next = prev = this; }
+    /** Alias for DetachSelf */
     void Clear() { next = prev = this; }
 
     // Splice this ref from its current ring and insert at end of targetRing.
@@ -175,15 +179,30 @@ public:
         return p;
     }
 
+    void AddSelf() {
+        prev->next = this;
+        next->prev = this;
+    }
+
+    /** Reposition `this` so it's just before `ref`. */
+    ObjRef *MoveBefore(ObjRef *ref) {
+        ObjRef *oldPrev = prev;
+        Release(nullptr);
+        AddRef(ref);
+        return oldPrev;
+    }
+
+    // per ObjectDir::HasDirPtrs, this is the way to iterate across refs
+    // for (ObjRef *it = mRefs.next; it != &mRefs; it = it->next) {
+
 #ifdef HX_NATIVE
     void ReplaceList(Hmx::Object *obj);
 #else
     void ReplaceList(Hmx::Object *obj) {
-        while (next != this) {
+        while (!empty()) {
+            ObjRef *oldNext = next;
             next->Replace(obj);
-            if (this == next) {
-                MILO_FAIL("ReplaceList stuck in infinite loop");
-            }
+            MILO_ASSERT_FMT(oldNext != next, "ReplaceList stuck in infinite loop");
         }
     }
 #endif
@@ -295,9 +314,11 @@ private:
     struct Node : public ObjRefConcrete<T1, T2> {
         Node(ObjRefOwner *owner) : ObjRefConcrete<T1>(nullptr), mOwner(owner) {}
         Node(const Node &n);
-        void operator=(const Node &o) { CopyRef(o); mOwner = o.mOwner; }
         virtual ~Node() {}
-        virtual Hmx::Object *RefOwner() const;
+        virtual Hmx::Object *RefOwner() const {
+            ObjPtrVec<T1, T2> *vec = static_cast<ObjPtrVec<T1, T2> *>(mOwner);
+            return vec->Owner();
+        }
         virtual void Replace(Hmx::Object *obj) {
             ObjPtrVec<T1, T2> *vec = static_cast<ObjPtrVec<T1, T2> *>(mOwner);
             vec->ReplaceNode(this, obj);
@@ -316,6 +337,11 @@ private:
 #endif
 
         T1 *Obj() const { return mObject; }
+        Node &operator=(const Node &n) {
+            CopyRef(n);
+            mOwner = n.mOwner;
+            return *this;
+        }
 
         /** The ObjPtrVec this Node belongs to. */
         ObjRefOwner *mOwner; // 0x10
@@ -365,6 +391,11 @@ public:
             return *this;
         }
 
+        iterator operator--() {
+            --it;
+            return *this;
+        }
+
         bool operator!=(const iterator &other) const { return it != other.it; }
         bool operator==(const iterator &other) const { return it == other.it; }
     };
@@ -394,6 +425,11 @@ public:
 
         const_iterator operator++() {
             ++it;
+            return *this;
+        }
+
+        const_iterator operator--() {
+            --it;
             return *this;
         }
 
@@ -1066,7 +1102,7 @@ private:
     Hmx::Object *mOwner; // 0x8
     ObjPtrList<Hmx::Object> mObjects; // 0xc
 
-    void ReplaceObject(DataNode &, Hmx::Object *, Hmx::Object *);
+    void ReplaceObject(DataNode &n, Hmx::Object *from, Hmx::Object *to);
     void ReleaseObjects();
     void AddRefObjects();
     void ClearAll();
@@ -1076,19 +1112,19 @@ public:
         : mOwner(o), mMap(nullptr), mObjects(this, kObjListOwnerControl) {}
     virtual ~TypeProps() { ClearAll(); }
     virtual Hmx::Object *RefOwner() const { return mOwner; }
-    virtual bool Replace(ObjRef *, Hmx::Object *);
+    virtual bool Replace(ObjRef *from, Hmx::Object *to);
 
-    DataNode *KeyValue(Symbol, bool) const;
+    DataNode *KeyValue(Symbol key, bool fail = true) const;
     int Size() const;
-    void ClearKeyValue(Symbol);
-    void SetKeyValue(Symbol, const DataNode &, bool);
-    DataArray *GetArray(Symbol);
-    void SetArrayValue(Symbol, int, const DataNode &);
-    void RemoveArrayValue(Symbol, int);
-    void InsertArrayValue(Symbol, int, const DataNode &);
-    void Load(BinStreamRev &);
+    void ClearKeyValue(Symbol key);
+    void SetKeyValue(Symbol key, const DataNode &value, bool);
+    DataArray *GetArray(Symbol prop);
+    void SetArrayValue(Symbol prop, int i, const DataNode &value);
+    void RemoveArrayValue(Symbol prop, int i);
+    void InsertArrayValue(Symbol prop, int i, const DataNode &value);
+    void Load(BinStreamRev &d);
     TypeProps &operator=(const TypeProps &);
-    void Save(BinStream &);
+    void Save(BinStream &d);
     DataArray *Map() const { return mMap; }
     bool HasProps() const { return mMap && mMap->Size() != 0; }
 
@@ -1146,6 +1182,7 @@ namespace Hmx {
 
     protected:
         /** A collection of object instances which reference this Object. */
+        /** "ref owners" */
         ObjRef mRefs; // 0x4
         /** An array of properties this Object can have. */
         TypeProps *mTypeProps; // 0x10
@@ -1158,11 +1195,15 @@ namespace Hmx {
          */
         DataArray *mTypeDef; // 0x14
         /** A note about this Object, useful for debugging. */
+        /** "Just a note describing the object, stripped out of shipping assets,
+            so don't make code rely on this" */
         String mNote; // 0x18
         /** This Object's name. */
+        /** "name of the object" */
         const char *mName; // 0x20
         /** The ObjectDir in which this Object resides. */
         ObjectDir *mDir; // 0x24
+        /** "Sinks for messages sent to me" */
         MsgSinks *mSinks; // 0x28
     protected:
         /** An Object in the process of being deleted. */
@@ -1283,13 +1324,13 @@ namespace Hmx {
         /** Get this Object's path name. */
         virtual const char *FindPathName();
 
+        /** "script type of the object" */
         Symbol Type() const {
             if (mTypeDef)
                 return mTypeDef->Sym(0);
             else
                 return Symbol();
         }
-        // ObjRef *Refs() const { return (ObjRef *)&mRefs; }
         const ObjRef &Refs() const { return mRefs; }
         void SetNote(const char *note);
         DataArray *TypeDef() const { return mTypeDef; }
@@ -1322,7 +1363,7 @@ namespace Hmx {
 #ifdef HX_NATIVE
             if (!ref) return;
 #endif
-            ref->Release(0);
+            ref->Release(nullptr);
         }
         MsgSinks *Sinks() const { return mSinks; }
 
@@ -1449,6 +1490,12 @@ struct ObjMatchPr {
     ObjMatchPr(Hmx::Object *o) : obj(o) {}
     bool operator()(const Hmx::Object *value) const { return obj == value; }
     Hmx::Object *obj;
+};
+
+struct ObjNameSort {
+    bool operator()(Hmx::Object *c1, Hmx::Object *c2) const {
+        return strcmp(c1->Name(), c2->Name()) < 0;
+    }
 };
 
 #pragma endregion

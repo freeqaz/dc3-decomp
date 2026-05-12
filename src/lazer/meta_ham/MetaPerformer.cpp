@@ -307,10 +307,10 @@ void MetaPerformer::OnMovePassed(
             mMoveScores[playerIndex].reserve(keys.size());
         }
         HamMoveScore score;
-        score.unk8 = f4;
+        score.mDetectFrac = f4;
         score.mMove = move;
         score.mRatingStateIndex = ratingIndex;
-        score.unkc = false;
+        score.mSlowMo = false;
         mMoveScores[playerIndex].push_back(score);
         if (profile) {
             profile->GetMoveRatingHistory()->AddHistory(move->DisplayName(), ratingIndex);
@@ -747,8 +747,8 @@ void MetaPerformer::OnPracticeMovePassed(
     }
     score.mMove = theMove;
     score.mRatingStateIndex = i4;
-    score.unk8 = 0;
-    score.unkc = b4;
+    score.mDetectFrac = 0;
+    score.mSlowMo = b4;
     mMoveScores[playerIndex].push_back(score);
     mMovesAttempted[playerIndex]++;
 }
@@ -1141,9 +1141,9 @@ void MetaPerformer::OnReviewMovePassed(
     }
     HamMoveScore score;
     score.mRatingStateIndex = ratingIndex;
-    score.unk8 = f4;
+    score.mDetectFrac = f4;
     score.mMove = move;
-    score.unkc = false;
+    score.mSlowMo = false;
     mMoveScores[playerIndex].push_back(score);
     static Symbol move_awesome("move_awesome");
     int awesomeIdx = RatingStateToIndex(move_awesome);

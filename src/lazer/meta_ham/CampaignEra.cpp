@@ -186,15 +186,17 @@ bool CampaignEra::HasCrazeMove(Symbol song, Symbol crazeMove) const {
 
 Symbol CampaignEra::GetMoveVariantName(Symbol song, Symbol hamMoveName) const {
     CampaignEraSongEntry *songEntry = GetSongEntry(song);
-    if (songEntry == nullptr) {
-        MILO_FAIL(
-            "Failed to GetSongEntry for song '%s' in current era '%s'",
-            song.Str(),
-            mEra.Str()
-        );
+    MILO_ASSERT_FMT(
+        songEntry,
+        "Failed to GetSongEntry for song '%s' in current era '%s'",
+        song.Str(),
+        mEra.Str()
+    );
+    if (songEntry) {
+        return songEntry->GetVariantFromHamMoveName(hamMoveName);
+    } else {
         return gNullStr;
     }
-    return songEntry->GetVariantFromHamMoveName(hamMoveName);
 }
 
 Symbol CampaignEra::GetHamMoveNameFromVariant(Symbol song, Symbol variant) const {

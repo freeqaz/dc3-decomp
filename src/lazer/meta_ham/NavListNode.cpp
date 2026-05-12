@@ -238,11 +238,6 @@ BEGIN_HANDLERS(NavListFunctionNode)
     HANDLE_SUPERCLASS(NavListSortNode)
 END_HANDLERS
 
-NavListFunctionNode::NavListFunctionNode(
-    NavListItemSortCmp *cmp, Symbol token, const char *albumArtPath
-)
-    : NavListSortNode(cmp), mAlbumArtPath(albumArtPath), mFunctionToken(token) {}
-
 Symbol NavListFunctionNode::Select() { return 0; }
 
 void NavListFunctionNode::Renumber(std::vector<NavListSortNode *> &nodes) {
@@ -317,4 +312,5 @@ void NavListHeaderNode::Insert(NavListItemNode *node, NavListSort *sort) {
     mChildren.insert(lower, node);
     UpdateItemCount(node);
 }
+
 #pragma endregion

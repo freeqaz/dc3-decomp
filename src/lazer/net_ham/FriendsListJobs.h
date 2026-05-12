@@ -29,7 +29,7 @@ public:
 
 protected:
     HamProfile *mProfile; // 0xb0
-    int mFriendsCount; // 0xb4
+    int mPadNum; // 0xb4
     int mEnumerationToken; // 0xb8
     std::vector<Friend *> mFriendsList; // 0xbc
     FriendsListJobState mFriendsListJobState; // 0xc8

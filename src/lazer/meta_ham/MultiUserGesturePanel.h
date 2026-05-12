@@ -1,4 +1,5 @@
 #pragma once
+#include "hamobj/HamNavList.h"
 #include "meta_ham/CharacterProvider.h"
 #include "meta_ham/CrewProvider.h"
 #include "meta_ham/DifficultyProvider.h"

@@ -2,11 +2,21 @@
 #include "CharClipSet.h"
 #include "obj/ObjPtrVec_impl.h"
 #include "char/CharClip.h"
+#include "char/CharServoBone.h"
 #include "char/CharUtl.h"
+#include "char/Waypoint.h"
+#include "math/Vec.h"
 #include "obj/Data.h"
 #include "obj/Object.h"
+#include "rndobj/Draw.h"
+#include "rndobj/Mat.h"
 #include "rndobj/Mesh.h"
+#include "rndobj/Trans.h"
 #include "utl/Symbol.h"
+
+void clipcollideunusedlmao(Transform &xfm) {
+    xfm.LookAt(Vector3(0, 0, 0), Vector3(1, 1, 1));
+}
 
 ClipCollide::ClipCollide()
     : mReports(), mGraph(0), mChar(this), mCharPath(""), mWaypoint(this),
@@ -16,6 +26,20 @@ ClipCollide::ClipCollide()
 }
 
 ClipCollide::~ClipCollide() { mGraph->Free(this, false); }
+
+BEGIN_HANDLERS(ClipCollide)
+    HANDLE(list_clips, OnListClips)
+    HANDLE(list_waypoints, OnListWaypoints)
+    HANDLE(list_report, OnListReport)
+    HANDLE_ACTION(demonstrate, Demonstrate())
+    HANDLE_ACTION(collide, Collide())
+    HANDLE_ACTION(test_clips, TestClips())
+    HANDLE_ACTION(test_waypoints, TestWaypoints())
+    HANDLE_ACTION(test_chars, TestChars())
+    HANDLE_ACTION(clear_report, ClearReport())
+    HANDLE(venue_name, OnVenueName)
+    HANDLE_SUPERCLASS(Hmx::Object)
+END_HANDLERS
 
 BEGIN_PROPSYNCS(ClipCollide)
     SYNC_PROP_MODIFY(character, mChar, SyncChar())
@@ -46,11 +70,11 @@ BEGIN_LOADS(ClipCollide)
     LOAD_REVS(bs)
     ASSERT_REVS(1, 0)
     LOAD_SUPERCLASS(Hmx::Object)
-    bs >> mChar;
-    bs >> mCharPath;
-    bs >> mWaypoint;
-    bs >> mPosition;
-    mClip = 0;
+    d >> mChar;
+    d >> mCharPath;
+    d >> mWaypoint;
+    d >> mPosition;
+    mClip = nullptr;
 END_LOADS
 
 BEGIN_COPYS(ClipCollide)
@@ -183,12 +207,12 @@ void ClipCollide::TestChars() {
 }
 
 void ClipCollide::TestWaypoints() {
-    if (!mChar)
-        return;
-    for (ObjDirItr<Waypoint> it(Dir(), true); it != 0; ++it) {
-        if (ValidWaypoint(it)) {
-            mWaypoint = it;
-            TestClips();
+    if (mChar) {
+        for (ObjDirItr<Waypoint> it(Dir(), true); it != nullptr; ++it) {
+            if (ValidWaypoint(it)) {
+                mWaypoint = it;
+                TestClips();
+            }
         }
     }
 }
@@ -349,7 +373,7 @@ DataNode ClipCollide::OnListReport(DataArray *da) {
             report.name
         );
     }
-    DataNode ret(arr, kDataArray);
+    DataNode ret = arr;
     arr->Release();
     return ret;
 }
@@ -358,7 +382,7 @@ DataNode ClipCollide::OnListClips(DataArray *da) {
     std::list<CharClip *> cliplist;
     ObjectDir *clipDir = Clips();
     if (clipDir) {
-        for (ObjDirItr<CharClip> it(clipDir, true); it != 0; ++it) {
+        for (ObjDirItr<CharClip> it(clipDir, true); it != nullptr; ++it) {
             if (ValidClip(it))
                 cliplist.push_back(it);
         }
@@ -371,14 +395,14 @@ DataNode ClipCollide::OnListClips(DataArray *da) {
          it++) {
         arr->Node(idx++) = *it;
     }
-    DataNode ret(arr, kDataArray);
+    DataNode ret = arr;
     arr->Release();
     return ret;
 }
 
 DataNode ClipCollide::OnListWaypoints(DataArray *da) {
     std::list<Waypoint *> waylist;
-    for (ObjDirItr<Waypoint> it(Dir(), true); it != 0; ++it) {
+    for (ObjDirItr<Waypoint> it(Dir(), true); it != nullptr; ++it) {
         if (ValidWaypoint(it))
             waylist.push_back(it);
     }
@@ -390,21 +414,7 @@ DataNode ClipCollide::OnListWaypoints(DataArray *da) {
          it++) {
         arr->Node(idx++) = *it;
     }
-    DataNode ret(arr, kDataArray);
+    DataNode ret = arr;
     arr->Release();
     return ret;
 }
-
-BEGIN_HANDLERS(ClipCollide)
-    HANDLE(list_clips, OnListClips)
-    HANDLE(list_waypoints, OnListWaypoints)
-    HANDLE(list_report, OnListReport)
-    HANDLE_ACTION(demonstrate, Demonstrate())
-    HANDLE_ACTION(collide, Collide())
-    HANDLE_ACTION(test_clips, TestClips())
-    HANDLE_ACTION(test_waypoints, TestWaypoints())
-    HANDLE_ACTION(test_chars, TestChars())
-    HANDLE_ACTION(clear_report, ClearReport())
-    HANDLE(venue_name, OnVenueName)
-    HANDLE_SUPERCLASS(Hmx::Object)
-END_HANDLERS

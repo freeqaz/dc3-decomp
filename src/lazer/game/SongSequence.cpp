@@ -162,7 +162,7 @@ bool SongSequence::DoNext(bool b1, bool b2) {
         return true;
     bool isLoaded = TheGame->IsLoaded();
     if (!b1 && !isLoaded) {
-        return mEntries.size() <= mCurrentIndex;
+        return (int)mEntries.size() <= mCurrentIndex;
     }
     if (!b1) {
         float old = mPrevSongPosition;
@@ -172,8 +172,7 @@ bool SongSequence::DoNext(bool b1, bool b2) {
         }
     }
     if (!b2 && mCurrentIndex >= 0) {
-        auto hollaBackEnabled = TheHamProvider->Property(holla_back_config)->Int();
-        if (hollaBackEnabled) {
+        if (TheHamProvider->Property(in_campaign_era_intro)->Int()) {
             static Symbol num_stars("num_stars");
             const DataNode *prop = TheGamePanel->Property(num_stars, false);
             int stars;
@@ -200,11 +199,7 @@ bool SongSequence::DoNext(bool b1, bool b2) {
         CampaignPerformer *cp = static_cast<CampaignPerformer *>(MetaPerformer::Current());
         cp->SetCampaignMindControlComplete(true);
     }
-    mCurrentIndex++;
-    if (mCurrentIndex >= mEntries.size()) {
-        goto end_sequence;
-    }
-    if (!b2) {
+    if (++mCurrentIndex < (int)mEntries.size() && !b2) {
         Entry &nextEntry = mEntries[mCurrentIndex];
         bool loadCrew = false;
         if (*nextEntry.mCrew1Symbol.Str() != '\0') {
@@ -262,25 +257,27 @@ bool SongSequence::DoNext(bool b1, bool b2) {
             TheHamProvider->SetProperty(hide_venue, true);
         }
         return false;
-    }
-end_sequence:
-    MILO_LOG("SongSequence::DoNext: terminating (skipped=%s)\n", b2 ? "T" : "F");
-    Symbol mode = TheGameMode->Property(gameplay_mode)->Sym();
-    if (mode == holla_back) {
-        RndGroup *grp = TheHamDirector->GetVenueWorld()->Find<RndGroup>("bid.grp", true);
-        if (grp) {
-            grp->SetShowing(false);
+    } else {
+        MILO_LOG("SongSequence::DoNext: terminating. forced=%s\n", b2 ? "T" : "F");
+        static Symbol holla_back("holla_back");
+        Symbol mode = TheGameMode->Property(gameplay_mode)->Sym();
+        if (mode == holla_back) {
+            RndGroup *grp = TheHamDirector->GetVenueWorld()->Find<RndGroup>("bid.grp");
+            if (grp) {
+                grp->SetShowing(false);
+            }
+            RndPropAnim *anim = TheHamDirector->GetVenueWorld()->Find<RndPropAnim>(
+                "set_performance.anim", true
+            );
+            if (anim) {
+                anim->Animate(0, false, 0);
+            }
         }
-        RndPropAnim *anim =
-            TheHamDirector->GetVenueWorld()->Find<RndPropAnim>("set_performance.anim", true);
-        if (anim) {
-            anim->Animate(0, false, 0, nullptr, kEaseLinear, 0, false);
-        }
+        TheGameMode->SetGameplayMode(perform, true);
+        Clear();
+        mCurrentIndex = -1;
+        return true;
     }
-    TheGameMode->SetGameplayMode(perform, true);
-    Clear();
-    mCurrentIndex = -1;
-    return true;
 }
 
 void SongSequence::OnSongLoaded() {

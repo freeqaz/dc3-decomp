@@ -1,17 +1,21 @@
 #include "meta_ham/CursorPanel.h"
 #include "flow/PropertyEventProvider.h"
+#include "gesture/BaseSkeleton.h"
+#include "gesture/GestureMgr.h"
+#include "hamobj/HamGameData.h"
+#include "hamobj/HamPlayerData.h"
+#include "math/Mtx.h"
+#include "math/Rot.h"
 #include "meta_ham/PassiveMessagesPanel.h"
+#include "net_ham/RockCentral.h"
 #include "obj/Data.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
-#include "utl/Symbol.h"
-#include "hamobj/HamGameData.h"
-#include "gesture/GestureMgr.h"
-#include "gesture/Skeleton.h"
-#include "net_ham/RockCentral.h"
-#include "math/Rot.h"
 #include "rndobj/Mat.h"
+#include "rndobj/Tex.h"
 #include "ui/PanelDir.h"
+#include "utl/Symbol.h"
+static int sInt = -1;
 
 CursorPanel::CursorPanel() {}
 
@@ -19,90 +23,64 @@ CursorPanel::~CursorPanel() {}
 
 void CursorPanel::Poll() {
     PassiveMessagesPanel::Poll();
-#ifdef HX_NATIVE
-    // Cursor/Kinect tracking not available on native — skip gesture-driven cursor logic
-    return;
-#endif
-
     static Symbol ui_crown_player("ui_crown_player");
-    const DataNode *pCrownPlayerNode = TheHamProvider->Property(ui_crown_player, true);
+    const DataNode *pCrownPlayerNode = TheHamProvider->Property(ui_crown_player);
     MILO_ASSERT(pCrownPlayerNode, 0x1f);
-
-    int crownPlayerIdx = pCrownPlayerNode->Int();
-
-    for (int playerIdx = 0; playerIdx < 2; playerIdx++) {
-        SkeletonSide side = TheGameData->Player(playerIdx)->Side();
-
+    int crownPlayer = pCrownPlayerNode->Int();
+    for (int i = 0; i < 2; i++) {
+        SkeletonSide side = TheGameData->Player(i)->Side();
         static Symbol player_present("player_present");
-        bool playerPresent = TheGameData->Player(playerIdx)->Provider()->Property(player_present, true)->Int();
-
-        RndTex *crownTex = mDir->Find<RndTex>("depth_buffer_left_crown.tex", true);
-        const char *matName = (side == 0) ? "depth_buffer_left_crown.mat" : "depth_buffer_right_crown.mat";
-        RndMat *crownMat = mDir->Find<RndMat>(matName, true);
-
-        RndTex *miscArt = TheRockCentral.GetMiscArt();
-        if (miscArt == 0) {
-            miscArt = crownTex;
-        }
-
-        crownMat->SetDiffuseTex(miscArt);
-
-        Transform localXfm = crownMat->TexXfm();
-
-        int skeletonId = TheGestureMgr->GetPlayerSkeletonID(playerIdx);
-
-        bool hasCrown = true;
-        Skeleton *skeleton = 0;
-        if (!playerPresent || side != crownPlayerIdx || skeletonId < 0) {
-            hasCrown = false;
+        bool present =
+            TheGameData->Player(i)->Provider()->Property(player_present)->Int();
+        RndTex *pBufferLeftTex = LoadedDir()->Find<RndTex>("depth_buffer_left_crown.tex");
+        RndMat *pMat = nullptr;
+        if (side == kSkeletonLeft) {
+            pMat = LoadedDir()->Find<RndMat>("depth_buffer_left_crown.mat");
         } else {
-            skeleton = TheGestureMgr->GetSkeletonByTrackingID(skeletonId);
-            if (skeleton == 0) {
-                hasCrown = false;
-            }
+            pMat = LoadedDir()->Find<RndMat>("depth_buffer_right_crown.mat");
         }
-
-        static int lastCrownPlayer = -1;
-        if (hasCrown && lastCrownPlayer == -1) {
-            lastCrownPlayer = playerIdx;
+        RndTex *tex = TheRockCentral.GetMiscArt();
+        if (!tex) {
+            tex = pBufferLeftTex;
         }
+        pMat->SetDiffuseTex(tex);
 
-        if (playerIdx == lastCrownPlayer) {
-            if (!hasCrown) goto crown_loss;
-        } else if (hasCrown) {
-        crown_loss:
-            TheDebug << MakeString("player %d lost his crown\n", lastCrownPlayer);
-            lastCrownPlayer = -1;
-            DataNode node(-1);
-            TheHamProvider->SetProperty(ui_crown_player, node);
-            hasCrown = false;
+        Transform trans = pMat->TexXfm();
+        int skeletonID = TheGestureMgr->GetPlayerSkeletonID(i);
+        Skeleton *skeleton;
+        bool check = present && side == crownPlayer && skeletonID >= 0
+            && (skeleton = TheGestureMgr->GetSkeletonByTrackingID(skeletonID), skeleton);
+        static int sCrownPlayerIndex = -1;
+        if (check && sCrownPlayerIndex == -1) {
+            sCrownPlayerIndex = i;
         }
-
-        if (hasCrown) {
-            Vector2 joint2Pos, joint3Pos;
-            skeleton->ScreenPos((SkeletonJoint)3, joint3Pos);
-            skeleton->ScreenPos((SkeletonJoint)2, joint2Pos);
-
-            localXfm.v.x = joint3Pos.x;
-            localXfm.v.y = -joint3Pos.y;
-
-            float dx = joint3Pos.x - joint2Pos.x;
-            float dy = joint3Pos.y - joint2Pos.y;
-
-            float angle = atan2f(dy, dx) + 1.5707963705062866f;
-
-            Vector3 rotAxis(0.0f, 0.0f, angle);
-            MakeRotMatrix(rotAxis, localXfm.m, true);
-
-            localXfm.m.z *= 4.0f;
-            localXfm.m.y *= 4.0f;
-            localXfm.m.x *= 4.0f;
+        if ((i == sCrownPlayerIndex && !check) || check) {
+            MILO_LOG("player %d lost his crown\n", sCrownPlayerIndex);
+            sCrownPlayerIndex = -1;
+            TheHamProvider->SetProperty(ui_crown_player, -1);
+            check = false;
+        }
+        if (check) {
+            Vector2 v120;
+            skeleton->ScreenPos(kJointHead, v120);
+            Vector2 v128;
+            skeleton->ScreenPos(kJointShoulderCenter, v128);
+            trans.v.x = v120.x;
+            trans.v.y = -v120.y;
+            v128.x = v120.x - v128.x;
+            v128.y = v120.y - v128.y;
+            float tanned = atan2(v128.y, v128.x);
+            Vector3 v110(0, 0, tanned + (PI / 2));
+            MakeRotMatrix(v110, trans.m, true);
+            trans.m.x *= 4;
+            trans.m.y *= 4;
+            trans.m.z *= 4;
+            pMat->SetTexXfm(trans);
         } else {
-            localXfm.v.x = 2.0f;
-            localXfm.v.y = 2.0f;
+            trans.v.x = 2;
+            trans.v.y = 2;
+            pMat->SetTexXfm(trans);
         }
-
-        crownMat->SetTexXfm(localXfm);
     }
 }
 

@@ -172,16 +172,17 @@ void BlockMgr::GetAssociatedBlocks(
 }
 
 void BlockMgr::AddTask(const AsyncTask &task) {
-    int arkNum = task.GetArkfileNum();
-    int blockNum = task.GetBlockNum();
     std::list<BlockRequest>::iterator it;
+    int blockNum = task.GetBlockNum();
+    int arkNum = task.GetArkfileNum();
     for (it = mRequests.begin(); it != mRequests.end(); ++it) {
         bool match = (arkNum == it->mArkfileNum && blockNum == it->mBlockNum);
         if (match) {
             it->mTasks.push_back(task);
             break;
         }
-        bool exceeds = (it->mArkfileNum > arkNum || (it->mArkfileNum == arkNum && it->mBlockNum > blockNum));
+        int itArk = it->mArkfileNum;
+        bool exceeds = (itArk > arkNum || (itArk == arkNum && it->mBlockNum > blockNum));
         if (exceeds) {
             mRequests.insert(it, BlockRequest(task));
             break;

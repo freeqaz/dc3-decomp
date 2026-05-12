@@ -2,6 +2,9 @@
 
 #include <map>
 #include "DataFlex.h"
+#include "math/Utl.h"
+#include "obj/DataUtl.h"
+#include "utl/BinStream.h"
 #include "utl/Compress.h"
 #include "utl/Std.h"
 #include "math/FileChecksum.h"
@@ -722,6 +725,9 @@ void DataLoader::LoadFile() {
         }
     }
 }
+
+#pragma endregion
+#pragma region DataLoaderThreadObj
 
 DataLoaderThreadObj::DataLoaderThreadObj(
     DataLoader *dl, File *file, char *buffer, int bufSize, bool dtb, const char *filename

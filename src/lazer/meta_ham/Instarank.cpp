@@ -19,10 +19,11 @@ const char *Instarank::Str() const {
         unk_0x108, LocaleGenderMasculine, LocaleSingular, false, gNullStr, TheLocale
     );
     const char *score = LocalizeSeparatedInt(unk_0x10C, TheLocale);
+    const char *ret;
     if (mToken == 'd') {
-        return MakeString(Localize(ir_unranked, nullptr, TheLocale), mStr, score);
+        ret = MakeString(Localize(ir_unranked, nullptr, TheLocale), mStr, score);
     } else if (mToken == 'c') {
-        return MakeString(
+        ret = MakeString(
             Localize(ir_number_one, nullptr, TheLocale),
             LocalizeOrdinal(
                 1, LocaleGenderMasculine, LocaleSingular, false, gNullStr, TheLocale
@@ -30,19 +31,20 @@ const char *Instarank::Str() const {
             among_group
         );
     } else if (mToken == 'b') {
-        return MakeString(
+        ret = MakeString(
             Localize(ir_not_best, nullptr, TheLocale), ord, among_group, mStr, score
         );
     } else if (mToken == 'a') {
-        return MakeString(
+        ret = MakeString(
             Localize(ir_at_rank, nullptr, TheLocale), ord, among_group, mStr, score
         );
-    } else if (!(mToken == 'e')) {
-        MILO_NOTIFY("unrecognized instarank token: %c\n", mToken);
-        return "";
-    } else {
-        return MakeString(
+    } else if (mToken == 'e') {
+        ret = MakeString(
             Localize(ir_still_rank, nullptr, TheLocale), ord, among_group, mStr, score
         );
+    } else {
+        ret = "";
+        MILO_NOTIFY("unrecognized instarank token: %c\n", mToken);
     }
+    return ret;
 }

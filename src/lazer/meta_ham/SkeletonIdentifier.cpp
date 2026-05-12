@@ -401,4 +401,78 @@ DataNode SkeletonIdentifier::OnMsg(const SigninChangedMsg &msg) {
     return DataNode(0);
 }
 
-DataNode SkeletonIdentifier::OnMsg(const SkeletonIdentifiedMsg &) { return DataNode(0); }
+DataNode SkeletonIdentifier::OnMsg(const SkeletonIdentifiedMsg &msg) {
+    if (mIdentityStatus != kIdentityStatus_None) {
+        TheGestureMgr->RemoveSink(this, "skeleton_identified");
+        int enrollmentIdx = msg.GetVal2();
+        int skeletonIndex = msg.GetIndex();
+        MILO_ASSERT(skeletonIndex >= 0 && skeletonIndex < NUM_SKELETONS, 0x9e);
+        if (mIdentityStatus == 1) {
+            bool b3 = false;
+            if (enrollmentIdx != -2) {
+                if (enrollmentIdx == -1) {
+                    Skeleton &skel = TheGestureMgr->GetSkeleton(skeletonIndex);
+                    if (!skel.ProfileMatched() || !skel.EnrollIdentity(-1)) {
+                        b3 = true;
+                        mIdentityStatus = kIdentityStatus_None;
+                    } else {
+                        mIdentityStatus = kIdentityStatus_Enrolling;
+                        SetEnrolling();
+                    }
+                } else {
+                    TheGameData->SetAssociatedPadNum(
+                        mIdentifyingPlayerIndex, mEnrolledPlayers[enrollmentIdx].mPadNum
+                    );
+                    mIdentityStatus = kIdentityStatus_None;
+                }
+                if (!b3) {
+                    mIdentificationTimeout = -1;
+                    static Message identificationCompleteMsg(
+                        "identification_complete", 0, 0
+                    );
+                    identificationCompleteMsg[0] = enrollmentIdx;
+                    identificationCompleteMsg[1] = skeletonIndex;
+                    Export(identificationCompleteMsg, true);
+                }
+            } else {
+                b3 = true;
+            }
+            if (b3) {
+                mIdentityStatus = kIdentityStatus_None;
+                static Message identificationFailedMsg("identification_failed", 0);
+                identificationFailedMsg[0] = enrollmentIdx;
+                Export(identificationFailedMsg, true);
+                Skeleton &skel = TheGestureMgr->GetSkeleton(skeletonIndex);
+                mIdentificationTimeout = skel.TrackingID();
+                int skelPlayer = TheGameData->GetPlayerFromSkeleton(skel);
+                static Symbol p1("p1");
+                static Symbol p2("p2");
+                static Symbol identification_failed("identification_failed");
+                static Symbol identification("identification");
+                ThePassiveMessenger->TriggerStringMsg(
+                    Localize(identification_failed, nullptr, TheLocale),
+                    skelPlayer == 0 ? p1 : p2,
+                    kPassiveMessageGeneral,
+                    identification,
+                    -1
+                );
+            }
+        } else if (mIdentityStatus == kIdentityStatus_Enrolling
+                   || mIdentityStatus == kIdentityStatus_Correcting) {
+            mWaitingPlayerIndex = enrollmentIdx;
+            UpdateEnrolledPlayers();
+            TheGameData->SetAssociatedPadNum(
+                mIdentifyingPlayerIndex, mEnrolledPlayers[enrollmentIdx].mPadNum
+            );
+            Skeleton *skel = TheGestureMgr->GetSkeletonByEnrollmentIndex(enrollmentIdx);
+            if (!TheSkeletonIdentifier->IsAssociatedWithProfile(enrollmentIdx) && skel
+                && skel->ProfileMatched()
+                && TheProfileMgr.GetSignedInProfiles().size() < 4) {
+                mIdentityStatus = kIdentityStatus_WaitingForSignIn;
+            } else {
+                mIdentityStatus = kIdentityStatus_None;
+            }
+        }
+    }
+    return DataNode(kDataInt, 0);
+}

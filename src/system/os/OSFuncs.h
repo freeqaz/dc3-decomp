@@ -2,13 +2,11 @@
 #include "xdk/XAPILIB.h"
 #include "os/ThreadCall.h"
 
-bool MainThread();
+inline DWORD CurrentThreadId() { return GetCurrentThreadId(); }
 
 // Returns true if on main thread, or if gMainThreadID == -1 (thread checks disabled)
 inline bool MainThread() {
-    return gMainThreadID == -1 || gMainThreadID == GetCurrentThreadId();
+    return gMainThreadID == -1 || gMainThreadID == CurrentThreadId();
 }
-
-inline DWORD CurrentThreadId() { return GetCurrentThreadId(); }
 
 bool ValidateThreadId(unsigned long);

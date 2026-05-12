@@ -1,10 +1,14 @@
 #include "meta_ham/MultiUserGesturePanel.h"
 #include "HamPanel.h"
+#include "HamSongMetadata.h"
+#include "HamSongMgr.h"
 #include "MultiUserGesturePanel.h"
 #include "flow/PropertyEventProvider.h"
 #include "game/GameMode.h"
 #include "gesture/BaseSkeleton.h"
+#include "gesture/GestureMgr.h"
 #include "hamobj/HamGameData.h"
+#include "hamobj/HamNavList.h"
 #include "hamobj/HamPlayerData.h"
 #include "meta_ham/CharacterProvider.h"
 #include "meta_ham/CrewProvider.h"
@@ -29,6 +33,7 @@
 #include "rndobj/Mesh.h"
 #include "rndobj/Tex.h"
 #include "ui/UI.h"
+#include "ui/UIComponent.h"
 #include "ui/UIPicture.h"
 #include "utl/FilePath.h"
 #include "utl/MakeString.h"
@@ -266,8 +271,8 @@ void MultiUserGesturePanel::SetCrew(Symbol crew, int idx) {
 }
 
 void MultiUserGesturePanel::RefreshUI() {
-    static Message refresh_ui("refresh_ui");
-    TheUI->Handle(refresh_ui, false);
+    static Message cRefreshUIMsg("refresh_ui");
+    TheUI->Handle(cRefreshUIMsg, false);
 }
 
 int MultiUserGesturePanel::GetPlayerIndex(int idx) const {
@@ -288,7 +293,10 @@ int MultiUserGesturePanel::GetPlayerIndex(int idx) const {
             idx = playerSide == 0;
         }
     }
-    return idx;
+    if (idx == 0) {
+        return playerSide != kSkeletonRight;
+    } else
+        return playerSide == kSkeletonRight;
 }
 
 void MultiUserGesturePanel::SetCharacter(Symbol s, int idx) {
@@ -366,7 +374,9 @@ void MultiUserGesturePanel::UpdateCrewPic(
     String str;
     if (!TheProfileMgr.IsContentUnlocked(s)) {
         str = MakeString("%s_char_locked_keep.png", s.Str());
-    } else if (pProvider->IsCrewAvailable(s)) {
+    } else if (!pProvider->IsCrewAvailable(s)) {
+        str = MakeString("%s_char_locked_keep.png", s.Str());
+    } else {
         str = MakeString("%s_char_keep.png", s.Str());
     }
     FilePath fp = FilePath("ui/image/crew/", str.c_str());

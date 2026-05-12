@@ -37,22 +37,6 @@ BEGIN_PROPSYNCS(CharClipGroup)
     SYNC_SUPERCLASS(Hmx::Object)
 END_PROPSYNCS
 
-INIT_REVS(2, 0)
-
-BEGIN_LOADS(CharClipGroup)
-    LOAD_REVS(bs)
-    ASSERT_REVS(2, 0)
-    LOAD_SUPERCLASS(Hmx::Object)
-    mClips.Load(d.stream, true, nullptr);
-    d >> mWhich;
-    mWhich = Max(mWhich, 0);
-    if (d.rev > 1) {
-        d >> mFlags;
-    } else {
-        mFlags = 0;
-    }
-END_LOADS
-
 BEGIN_SAVES(CharClipGroup)
     SAVE_REVS(2, 0)
     SAVE_SUPERCLASS(Hmx::Object)
@@ -78,6 +62,22 @@ BEGIN_COPYS(CharClipGroup)
         COPY_MEMBER(mFlags)
     END_COPYING_MEMBERS
 END_COPYS
+
+INIT_REVS(2, 0)
+
+BEGIN_LOADS(CharClipGroup)
+    LOAD_REVS(bs)
+    ASSERT_REVS(2, 0)
+    LOAD_SUPERCLASS(Hmx::Object)
+    mClips.Load(d.stream, true, nullptr);
+    d >> mWhich;
+    mWhich = Max(mWhich, 0);
+    if (d.rev > 1) {
+        d >> mFlags;
+    } else {
+        mFlags = 0;
+    }
+END_LOADS
 
 void CharClipGroup::AddClip(CharClip *clip) {
     if (!HasClip(clip)) {
@@ -169,18 +169,18 @@ struct Alphabetically {
 
 void CharClipGroup::Sort() { mClips.sort(Alphabetically()); }
 
-void CharClipGroup::DeleteRemaining(int x) {
+void CharClipGroup::DeleteRemaining(int i1) {
     CharClip *clips[256];
     MILO_ASSERT(mClips.size() < 256, 0x88);
-    for (int i = 0; i < (int)mClips.size(); i++) {
-        clips[i] = (CharClip *)mClips[i];
+    for (int i = 0; i < mClips.size(); i++) {
+        clips[i] = mClips[i];
     }
-    CharClip::LockAndDelete(clips, mClips.size(), x);
+    CharClip::LockAndDelete(clips, mClips.size(), i1);
 }
 
-CharClip *CharClipGroup::FindClip(const char *name) const {
+CharClip *CharClipGroup::FindClip(const char *clipName) const {
     for (int i = 0; i < mClips.size(); i++) {
-        if (streq(name, ((CharClip *)mClips[i])->Name())) {
+        if (streq(clipName, mClips[i]->Name())) {
             return (CharClip *)mClips[i];
         }
     }
@@ -189,8 +189,8 @@ CharClip *CharClipGroup::FindClip(const char *name) const {
 
 void CharClipGroup::SetClipFlags(int flags) {
     for (int i = 0; i < mClips.size(); i++) {
-        CharClip *clip = mClips[i];
-        clip->SetFlags(flags | clip->Flags());
+        CharClip *cur = mClips[i];
+        cur->SetFlags(cur->Flags() | flags);
     }
 }
 

@@ -1,87 +1,81 @@
-#include "HolmesKeyboard.h"
-#include "os/PlatformMgr.h"
-#include "os/Keyboard.h"
+#include "os/HolmesKeyboard.h"
+#include "obj/Data.h"
 #include "os/Joypad.h"
 #include "os/JoypadMsgs.h"
+#include "os/Keyboard.h"
+#include "os/PlatformMgr.h"
+#include "utl/BinStream.h"
+#include "utl/MemStream.h"
 
-HolmesInput::HolmesInput(CWnd *cwnd) {
-    mJoypadBuffer = new MemStream(true);
-    mKeyboardBuffer = new MemStream(true);
-    mOwner = cwnd;
-}
+HolmesInput::HolmesInput(CWnd *cwnd)
+    : mJoypadStream(new MemStream(true)), mKeyboardStream(new MemStream(true)),
+      mCWnd(cwnd) {}
 
 HolmesInput::~HolmesInput() {
-    delete mKeyboardBuffer;
-    mKeyboardBuffer = 0;
-    delete mJoypadBuffer;
-    mJoypadBuffer = 0;
-}
-
-void HolmesInput::LoadKeyboard(BinStream &bs) {
-    int asdf;
-    mKeyboardBuffer->Seek(0, BinStream::kSeekEnd);
-    bs >> asdf;
-    if (0 < asdf) {
-        mKeyboardBuffer->WriteStream(bs, asdf);
-    }
-}
-
-void HolmesInput::LoadJoypad(BinStream &bs) {
-    int asdf;
-    mKeyboardBuffer->Seek(0, BinStream::kSeekEnd);
-    bs >> asdf;
-    if (0 < asdf) {
-        mJoypadBuffer->WriteStream(bs, asdf);
-    }
-}
-
-void HolmesInput::SendKeyboardMessages() {
-    mKeyboardBuffer->Seek(0, BinStream::kSeekBegin);
-    bool bbb;
-    while (!mKeyboardBuffer->Eof()) {
-        bbb = ThePlatformMgr.ScreenSaver();
-        ThePlatformMgr.SetScreenSaver(false);
-        ThePlatformMgr.SetScreenSaver(bbb);
-        int i;
-        bool b1, b2, b3;
-        *mKeyboardBuffer >> i;
-        *mKeyboardBuffer >> b1;
-        *mKeyboardBuffer >> b2;
-        *mKeyboardBuffer >> b3;
-        KeyboardSendMsg(i, b1, b2, b3);
-    }
-    mKeyboardBuffer->Compact();
+    RELEASE(mKeyboardStream);
+    RELEASE(mJoypadStream);
 }
 
 unsigned int HolmesInput::SendJoypadMessages() {
-    static DataNode &fake_controllers = DataVariable("fake_controllers");
-    int mask = 0;
-    mJoypadBuffer->Seek(0, BinStream::kSeekBegin);
-    while (!mJoypadBuffer->Eof()) {
-        fake_controllers = 1;
-        bool bbb = ThePlatformMgr.ScreenSaver();
+    static DataNode &n = DataVariable("fake_controllers");
+    unsigned int ret = 0;
+    mJoypadStream->Seek(0, BinStream::kSeekBegin);
+    while (mJoypadStream->Eof() == NotEof) {
+        n = 1;
+        bool curScreenSaver = ThePlatformMgr.ScreenSaver();
         ThePlatformMgr.SetScreenSaver(false);
-        ThePlatformMgr.SetScreenSaver(bbb);
+        ThePlatformMgr.SetScreenSaver(curScreenSaver);
         int up;
-        JoypadButton btn;
+        JoypadButton button;
         JoypadAction action;
-        *mJoypadBuffer >> up;
-        *mJoypadBuffer >> (int &)btn;
-        *mJoypadBuffer >> (int &)action;
-        JoypadData *jdata = JoypadGetPadData(0);
-        if (!up) {
-            mask |= 1 << btn;
-            ButtonDownMsg bdMsg(jdata->mUser, btn, action, 0);
-            JoypadPushThroughMsg(bdMsg);
+        *mJoypadStream >> up;
+        *mJoypadStream >> (int &)button;
+        *mJoypadStream >> (int &)action;
+        JoypadData *jData = JoypadGetPadData(0);
+        if (up == 0) {
+            ret |= 1 << button;
+            ButtonDownMsg msg(jData->mUser, button, action, 0);
+            JoypadPushThroughMsg(msg);
         } else {
-            ButtonUpMsg buMsg(jdata->mUser, btn, action, 0);
-            JoypadPushThroughMsg(buMsg);
+            ButtonUpMsg msg(jData->mUser, button, action, 0);
+            JoypadPushThroughMsg(msg);
         }
     }
-    mJoypadBuffer->Compact();
-    return mask;
+    mJoypadStream->Compact();
+    return ret;
 }
 
-BEGIN_HANDLERS(HolmesInput)
-    HANDLE_SUPERCLASS(Hmx::Object)
-END_HANDLERS
+void HolmesInput::SendKeyboardMessages() {
+    mKeyboardStream->Seek(0, BinStream::kSeekBegin);
+    while (mKeyboardStream->Eof() == NotEof) {
+        bool curScreenSaver = ThePlatformMgr.ScreenSaver();
+        ThePlatformMgr.SetScreenSaver(false);
+        ThePlatformMgr.SetScreenSaver(curScreenSaver);
+        int key;
+        bool shift, ctrl, alt;
+        *mKeyboardStream >> key;
+        *mKeyboardStream >> shift;
+        *mKeyboardStream >> ctrl;
+        *mKeyboardStream >> alt;
+        KeyboardSendMsg(key, shift, ctrl, alt);
+    }
+    mKeyboardStream->Compact();
+}
+
+void HolmesInput::LoadJoypad(BinStream &bs) {
+    mKeyboardStream->Seek(0, BinStream::kSeekEnd);
+    int i20;
+    bs >> i20;
+    if (i20 > 0) {
+        mJoypadStream->WriteStream(bs, i20);
+    }
+}
+
+void HolmesInput::LoadKeyboard(BinStream &bs) {
+    mKeyboardStream->Seek(0, BinStream::kSeekEnd);
+    int i20;
+    bs >> i20;
+    if (i20 > 0) {
+        mKeyboardStream->WriteStream(bs, i20);
+    }
+}

@@ -1,4 +1,5 @@
 #include "meta_ham/UIEventMgr.h"
+#include "macros.h"
 #include "meta_ham/EventDialogPanel.h"
 #include "meta_ham/HamUI.h"
 #include "obj/Data.h"
@@ -142,7 +143,7 @@ void UIEventMgr::TriggerEvent(Symbol eventName, DataArray *eventData) {
     // Check if current screen allows this event
     if (!TheUI->InTransition()) {
         UIScreen *curScreen = TheUI->CurrentScreen();
-        if (curScreen) {
+        if (TheUI->CurrentScreen()) {
             static Message msg("allow_event", 0);
             msg[0] = eventName;
             DataNode handled = curScreen->HandleType(msg);

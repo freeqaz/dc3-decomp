@@ -90,7 +90,7 @@ MsgSinks gSinks(nullptr);
 Hmx::Object::Object()
     : mTypeProps(nullptr), mTypeDef(nullptr), mName(gNullStr), mDir(nullptr),
       mSinks(nullptr) {
-    mRefs.Clear();
+    mRefs.DetachSelf();
 }
 
 Hmx::Object::~Object() {
@@ -400,7 +400,7 @@ void Hmx::Object::NullifyAllRefs() {
 void Hmx::Object::ReplaceRefsFrom(Hmx::Object *from, Hmx::Object *to) {
     MILO_ASSERT(from, 0xA6);
     ObjRef other;
-    other.Clear();
+    other.DetachSelf();
     FOREACH (it, mRefs) {
 #ifdef HX_NATIVE
         // Virtual base offsets can make RefOwner() != from even for the same
@@ -521,7 +521,6 @@ const DataNode *Hmx::Object::Property(DataArray *prop, bool fail) const {
         return &n;
     Symbol propKey = prop->Sym(0);
     const DataNode *propValue = nullptr;
-
     if (mTypeProps) {
         // retrieve property val from typeprops array
         propValue = mTypeProps->KeyValue(propKey, false);
@@ -540,6 +539,7 @@ const DataNode *Hmx::Object::Property(DataArray *prop, bool fail) const {
             return &ret->Node(prop->Int(1));
         }
     }
+
     if (fail) {
         MILO_FAIL_DTA("%s: property %s not found", PathName(this), PrintPropertyPath(prop));
     }
@@ -640,8 +640,9 @@ void Hmx::Object::SetProperty(DataArray *prop, const DataNode &val) {
         handler = mSinks->GetPropSyncHandler(prop);
         if (!handler.Null()) {
             prop_n = Property(prop, false);
-            if (prop_n)
+            if (prop_n) {
                 n = *prop_n;
+            }
         }
     }
     if (!SyncProperty((DataNode &)val, prop, 0, kPropSet)) {

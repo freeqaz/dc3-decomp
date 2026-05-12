@@ -41,8 +41,8 @@ public:
     virtual Symbol GetShortNameFromSongID(int songID, bool fail = true) const;
     virtual int GetSongIDFromShortName(Symbol shortname, bool fail = true) const;
 
-    const char *GetAlbumArtPath(Symbol) const;
-    bool IsDummySong(Symbol) const;
+    const char *GetAlbumArtPath(Symbol shortname) const;
+    bool IsDummySong(Symbol shortname) const;
     void AddSongs(DataArray *);
     void AddRecentSong(Symbol);
     Symbol GetArtistNameFromShortName(Symbol);
@@ -59,16 +59,17 @@ public:
     void GetCoreStarsForDifficulty(HamProfile const *, Difficulty, int &, int &) const;
     void GetCharacterStars(HamProfile const *, Symbol, int &, int &) const;
     void GetCrewStars(HamProfile const *, Symbol, int &, int &) const;
-    void
-    GetCrewStarsForDifficulty(HamProfile const *, Symbol, Difficulty, int &, int &) const;
+    void GetCrewStarsForDifficulty(
+        HamProfile const *profile, Symbol crew, Difficulty diff, int &, int &
+    ) const;
     int GetTotalNumLibrarySongs() const;
     void UploadSongLibraryToServer();
-    void GetRankedSongs(std::vector<int> &) const;
-    void GetRandomSelectableRankedSongs(std::vector<int> &) const;
+    void GetRankedSongs(std::vector<int> &songs) const;
     Symbol GetRandomSong();
     void InitializePlaylists();
-    void GetValidSongs(class MetaPerformer const &, std::vector<Symbol> &) const;
-    const char *MidiFile(Symbol) const;
+    void
+    GetValidSongs(class MetaPerformer const &performer, std::vector<Symbol> &songs) const;
+    const char *MidiFile(Symbol shortname) const;
     bool ToggleRandomSongDebug();
     int GetNumPlaylists() const { return mPlaylists.size(); }
     const std::vector<int> &RankedSongs(SongType) const;

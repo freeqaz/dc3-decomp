@@ -1,91 +1,79 @@
 #include "meta_ham/PlaylistSort.h"
+#include "meta_ham/PlaylistSortByTypeCmp.h"
 #include "meta_ham/PlaylistSortNode.h"
 #include "os/Debug.h"
 #include "utl/MakeString.h"
 #include "utl/Symbol.h"
 
-class PlaylistTypeCmp : public NavListItemSortCmp {
-public:
-    virtual ~PlaylistTypeCmp() {}
-    virtual int Compare(const NavListItemSortCmp *, NavListNodeType) const;
-    virtual const PlaylistTypeCmp *GetPlaylistTypeCmp() const { return this; }
-
-    int mType; // 0x4
-    const char *mName; // 0x8
-};
-
-int PlaylistTypeCmp::Compare(
-    const NavListItemSortCmp *other, NavListNodeType nodeType
-) const {
-    if (nodeType == kNodeShortcut) {
-    } else if (nodeType != kNodeHeader) {
-        if (nodeType != kNodeItem) {
-        } else {
-            other->GetPlaylistTypeCmp();
-            return -1;
-        }
-    } else {
-        const PlaylistTypeCmp *otherCmp = other->GetPlaylistTypeCmp();
-        return mType - otherCmp->mType;
+int PlaylistTypeCmp::Compare(NavListItemSortCmp const *cmp, NavListNodeType type) const {
+    switch (type) {
+    case kNodeShortcut:
+        return 0;
+        break;
+    case kNodeHeader:
+        return mType - cmp->GetPlaylistTypeCmp()->mType;
+        break;
+    case kNodeItem:
+        cmp->GetPlaylistTypeCmp();
+        return -1;
+        break;
+    default:
+        MILO_FAIL("invalid type of node comparison.\n");
+        break;
     }
-    MILO_FAIL("invalid type of node comparison.");
     return 0;
 }
 
-NavListShortcutNode *PlaylistSortByType::NewShortcutNode(NavListItemNode *item) const {
-    Playlist *playlist = static_cast<PlaylistSortNode *>(item)->GetPlaylist();
+NavListShortcutNode *PlaylistSortByType::NewShortcutNode(NavListItemNode *node) const {
+    Playlist *p = ((PlaylistSortNode *)node)->GetPlaylist();
     int type;
-    Symbol sym;
-    if (playlist->IsCustom()) {
+    Symbol name;
+    if (p->IsCustom()) {
         type = 1;
         static Symbol playlist_custom("playlist_custom");
-        sym = playlist_custom;
-    } else if (playlist->GetIsBattlePlaylist()) {
+        name = playlist_custom;
+    } else if (p->GetIsBattlePlaylist()) {
         type = 4;
         static Symbol playlist_fitness("playlist_fitness");
-        sym = playlist_fitness;
-    } else if (playlist->GetIsFriendPlaylist()) {
+        name = playlist_fitness;
+    } else if (p->GetIsFriendPlaylist()) {
         type = 2;
         static Symbol playlist_era("playlist_era");
-        sym = playlist_era;
+        name = playlist_era;
     } else {
         type = 3;
         static Symbol playlist_crew("playlist_crew");
-        sym = playlist_crew;
+        name = playlist_crew;
     }
 
-    PlaylistTypeCmp *cmp = new PlaylistTypeCmp();
-    cmp->mType = type;
-    cmp->mName = "";
-    return new NavListShortcutNode(cmp, sym, true);
+    PlaylistTypeCmp *cmp = new PlaylistTypeCmp(type, "");
+    return new NavListShortcutNode(cmp, name, true);
 }
 
-NavListHeaderNode *PlaylistSortByType::NewHeaderNode(NavListItemNode *item) const {
-    Playlist *playlist = static_cast<PlaylistSortNode *>(item)->GetPlaylist();
+NavListHeaderNode *PlaylistSortByType::NewHeaderNode(NavListItemNode *node) const {
+    Playlist *p = ((PlaylistSortNode *)node)->GetPlaylist();
     int type;
-    Symbol sym;
-    if (playlist->IsCustom()) {
+    Symbol name;
+    if (p->IsCustom()) {
         type = 1;
         static Symbol playlist_custom("playlist_custom");
-        sym = playlist_custom;
-    } else if (playlist->GetIsBattlePlaylist()) {
+        name = playlist_custom;
+    } else if (p->GetIsBattlePlaylist()) {
         type = 4;
         static Symbol playlist_fitness("playlist_fitness");
-        sym = playlist_fitness;
-    } else if (playlist->GetIsFriendPlaylist()) {
+        name = playlist_fitness;
+    } else if (p->GetIsFriendPlaylist()) {
         type = 2;
         static Symbol playlist_era("playlist_era");
-        sym = playlist_era;
+        name = playlist_era;
     } else {
         type = 3;
         static Symbol playlist_crew("playlist_crew");
-        sym = playlist_crew;
+        name = playlist_crew;
     }
 
-    PlaylistTypeCmp *cmp = new PlaylistTypeCmp();
-    cmp->mType = type;
-    cmp->mName = "";
-    return new PlaylistHeaderNode(cmp, sym, true);
+    PlaylistTypeCmp *cmp = new PlaylistTypeCmp(type, "");
+    return new PlaylistHeaderNode(cmp, name, true);
 }
 
 NavListHeaderNode *
@@ -111,8 +99,6 @@ NavListItemNode *PlaylistSortByType::NewItemNode(void *data) const {
     }
     const char *name = playlist->GetName().Str();
 
-    PlaylistTypeCmp *cmp = new PlaylistTypeCmp();
-    cmp->mType = type;
-    cmp->mName = name;
+    PlaylistTypeCmp *cmp = new PlaylistTypeCmp(type, name);
     return new PlaylistSortNode(cmp, playlist);
 }

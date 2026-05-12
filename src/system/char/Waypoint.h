@@ -27,8 +27,8 @@ public:
     void SetAngRadius(float r) { mAngRadius = r; }
     void SetStrictAngDelta(float d) { mStrictAngDelta = d; }
     void SetYRadius(float r) { mYRadius = r; }
-    float MYRadius() { return mYRadius; }
-    float Radius() { return mRadius; }
+    float Radius() const { return mRadius; }
+    float YRadius() const { return mYRadius; }
 
     float ShapeDelta(float);
     void ShapeDelta(Vector3 const &, Vector3 &);

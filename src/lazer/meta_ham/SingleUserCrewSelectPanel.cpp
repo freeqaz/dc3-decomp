@@ -17,8 +17,11 @@
 #include "obj/Msg.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
+#include "rndobj/Mat.h"
 #include "rndobj/Mesh.h"
+#include "rndobj/Tex.h"
 #include "ui/UI.h"
+#include "utl/MakeString.h"
 #include "utl/Symbol.h"
 
 SingleUserCrewSelectPanel::SingleUserCrewSelectPanel() {
@@ -69,6 +72,7 @@ void SingleUserCrewSelectPanel::UpdateProviderPlayerIndices() {
     int i;
     for (i = 0; i < 2; i++) {
         int playerIndex = GetPlayerIndex(i);
+        mCrewProviders[i].SetPlayer(playerIndex);
         mCharProviders[i].SetPlayer(playerIndex);
         mOutfitProviders[i].SetPlayer(playerIndex);
     }
@@ -206,7 +210,7 @@ void SingleUserCrewSelectPanel::UpdateCrewMesh(RndMesh *i_pMesh, int i_iSide, Sy
 }
 
 int SingleUserCrewSelectPanel::GetPlayerIndex(int i) const {
-    SkeletonChooser *pSkeletonChooser = TheHamUI.GetShellInput()->mSkelChooser;
+    SkeletonChooser *pSkeletonChooser = TheHamUI.GetShellInput()->GetSkeletonChooser();
     MILO_ASSERT(pSkeletonChooser, 0x52);
     SkeletonSide skelSide = pSkeletonChooser->GetPlayerSide(0);
     // In party mode, player index maps directly: i=0 -> player 0, i=1 -> player 1

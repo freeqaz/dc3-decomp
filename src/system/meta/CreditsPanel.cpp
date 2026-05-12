@@ -56,7 +56,7 @@ RndMat *CreditsPanel::Mat(int i, int j, UIListMesh *mesh) const {
         imgSym = array->Sym(0);
     }
     if (imgSym == image) {
-        return mDir->Find<RndMat>(array->Str(1), true);
+        return mDir->Find<RndMat>(array->Str(1));
     } else {
         return nullptr;
     }

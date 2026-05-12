@@ -1,18 +1,12 @@
 #include "char/CharTransDraw.h"
+#include "char/Character.h"
 #include "obj/Object.h"
 #include "rndobj/Draw.h"
 #include "utl/Std.h"
 
 CharTransDraw::CharTransDraw() : mChars(this), mForceDraw(false) {}
 
-CharTransDraw::~CharTransDraw() {
-    for (ObjPtrList<Character>::iterator it = mChars.begin(); it != NULL; ++it) {
-        if (it != NULL) {
-            Character *c = *it;
-            c->SetDrawMode((Character::DrawMode)3);
-        }
-    }
-}
+CharTransDraw::~CharTransDraw() { SetDrawModes(Character::kCharDrawAll); }
 
 void CharTransDraw::SetDrawModes(Character::DrawMode mode) {
     FOREACH (it, mChars) {
@@ -53,8 +47,9 @@ void CharTransDraw::Load(BinStream &bs) {
     LOAD_SUPERCLASS(Hmx::Object)
     LOAD_SUPERCLASS(RndDrawable)
     d >> mChars;
-    if (d.altRev > 0)
+    if (d.altRev > 0) {
         d >> mForceDraw;
+    }
     SetDrawModes(Character::kCharDrawOpaque);
 END_LOADS
 

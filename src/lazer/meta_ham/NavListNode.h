@@ -2,6 +2,7 @@
 #include "obj/Data.h"
 #include "obj/Object.h"
 #include "os/DateTime.h"
+#include "os/Debug.h"
 #include "ui/UILabel.h"
 #include "ui/UIListLabel.h"
 #include "utl/Symbol.h"
@@ -131,7 +132,7 @@ public:
     int StartIndex() const { return mStartIx; }
     void SetStartIndex(int idx) { mStartIx = idx; }
     NavListShortcutNode *GetShortcut() const { return mShortcut; }
-    const std::list<NavListSortNode *> &Children() const { return mChildren; }
+    std::list<NavListSortNode *> &Children() { return mChildren; }
     NavListSortNode *FirstChild() const { return mChildren.front(); }
     bool HasChildren() const { return !mChildren.empty(); }
     int GetStartIx() { return mStartIx; }
@@ -161,8 +162,9 @@ public:
     void FinishBuildList(NavListSort *);
     void FinishSort(NavListSort *);
     void Renumber(std::vector<NavListSortNode *> &);
-    const std::list<NavListSortNode *> &Children() const { return mChildren; }
+    std::list<NavListSortNode *> &Children() { return mChildren; }
     NavListSortNode *FirstChild() const { return mChildren.front(); }
+    void InsertNode(NavListSortNode *node) { mChildren.push_back(node); }
 
 protected:
     Symbol mToken; // 0x34
@@ -211,7 +213,8 @@ protected:
 
 class NavListFunctionNode : public NavListSortNode {
 public:
-    NavListFunctionNode(NavListItemSortCmp *, Symbol, const char *);
+    NavListFunctionNode(NavListItemSortCmp *cmp, Symbol s, const char *c)
+        : NavListSortNode(cmp), mAlbumArtPath(c), mFunctionToken(s) {}
     virtual ~NavListFunctionNode() {}
     virtual DataNode Handle(DataArray *, bool);
     virtual NavListNodeType GetType() const { return kNodeFunction; }

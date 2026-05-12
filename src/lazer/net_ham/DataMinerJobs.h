@@ -1,4 +1,5 @@
 #pragma once
+#include "meta_ham/HamProfile.h"
 #include "meta_ham/MetaPerformer.h"
 #include "net_ham/RCJobDingo.h"
 #include "obj/Object.h"

@@ -1,9 +1,12 @@
 #include "rndobj/Font.h"
 #include "os/Debug.h"
 #include "os/System.h"
+#include "rndobj/Bitmap.h"
 #include "rndobj/FontBase.h"
 #include "obj/Object.h"
 #include "obj/PropSync.h"
+#include "rndobj/Mat.h"
+#include "rndobj/Tex.h"
 #include "utl/BinStream.h"
 #include "math/Rot.h"
 #include "math/Utl.h"
@@ -211,9 +214,7 @@ BEGIN_SAVES(RndFont)
     }
     bs << mMaterialOffsets;
     bs << mCharInfoMap.size();
-    for (std::map<unsigned short, CharInfo>::iterator it = mCharInfoMap.begin();
-         it != mCharInfoMap.end();
-         ++it) {
+    FOREACH (it, mCharInfoMap) {
         bs << it->first;
         const CharInfo &info = it->second;
         bs << info.mPage;
@@ -332,6 +333,7 @@ BEGIN_LOADS(RndFont)
             mMats.Load(d.stream, true, NULL);
         }
         if (d.rev < 4) {
+            float w, h;
             if (d.rev < 2) {
                 int w, h;
                 d.stream >> w >> h;
@@ -344,8 +346,8 @@ BEGIN_LOADS(RndFont)
             if (validTex) {
                 RndBitmap bmap;
                 validTex->LockBitmap(bmap, 3);
-                mCellSize.x = std::floor((float)bmap.Width() / mCellSize.x + 0.5f);
-                mCellSize.y = std::floor((float)bmap.Height() / mCellSize.y + 0.5f);
+                mCellSize.x = std::floor((float)bmap.Width() / w + 0.5f);
+                mCellSize.y = std::floor((float)bmap.Height() / h + 0.5f);
                 validTex->UnlockBitmap();
             }
         } else {
@@ -791,5 +793,3 @@ bool RndFont::CharWidthAdvanceCoords(
     }
     return false;
 }
-
-

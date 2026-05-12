@@ -425,6 +425,7 @@ void MetaPanel::CycleVenuePreference() {
         MILO_ASSERT(pVenueEntryArray, 0x76);
         venuePref = pVenueEntryArray->Sym(0);
     } else {
+        short size = pVenueArray->Size();
         for (int i = 1; i < pVenueArray->Size(); i++) {
             DataArray *pVenueEntryArray = pVenueArray->Array(i);
             MILO_ASSERT(pVenueEntryArray, 0x80);

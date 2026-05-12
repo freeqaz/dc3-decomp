@@ -6,6 +6,7 @@
 #include "rndobj/Poll.h"
 #include "rndobj/Trans.h"
 #include "math/Vec.h"
+#include "math/Mtx.h"
 #include "math/Color.h"
 #include "math/Geo.h"
 #include "rndobj/TransAnim.h"
@@ -32,6 +33,7 @@ void RndScaleObject(Hmx::Object *, float, float);
 bool AnimContains(const RndAnimatable *anim1, const RndAnimatable *anim2);
 float ConvertFov(float, float);
 void PreMultiplyAlpha(Hmx::Color &);
+void RandomPointOnMesh(RndMesh *, Vector3 &, Vector3 &);
 
 bool AnimContains(const RndAnimatable *, const RndAnimatable *);
 bool SortDraws(RndDrawable *, RndDrawable *);
@@ -98,3 +100,8 @@ bool GroupedUnder(RndGroup *, Hmx::Object *);
 void EndianSwapBitmap(RndBitmap &bmap);
 
 void Clip(BuildPoly &, const Plane &, bool);
+
+typedef void (*SplashFunc)(void);
+void SetRndSplasherCallback(
+    SplashFunc pollFunc, SplashFunc suspendFunc, SplashFunc resumeFunc
+);

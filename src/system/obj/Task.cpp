@@ -3,7 +3,6 @@
 #include "obj/Data.h"
 #include "obj/DataFunc.h"
 #include "obj/DataUtl.h"
-
 #include "obj/Object.h"
 #include "os/Debug.h"
 #include "os/Timer.h"
@@ -36,62 +35,11 @@ bool Task::IsLive(Task *t) { return LiveTasks().count(t) > 0; }
 
 TaskMgr TheTaskMgr;
 
-void TaskMgr::Terminate() { SetName(nullptr, nullptr); }
-void TaskMgr::SetUISeconds(float f, bool b) { mTimelines[kTaskUISeconds].SetTime(f, b); }
-float TaskMgr::UISeconds() const { return mTimelines[kTaskUISeconds].GetTime(); }
-float TaskMgr::DeltaUISeconds() const { return mTimelines[kTaskUISeconds].DeltaTime(); }
-float TaskMgr::DeltaTime(TaskUnits u) const { return mTimelines[u].DeltaTime(); }
+#pragma region MessageTask
 
-void TaskMgr::SetDeltaTime(TaskUnits u, float delta) {
-    mTimelines[u].SetDeltaTime(delta);
-}
-
-void TaskMgr::SetTimeAndDelta(TaskUnits u, float time, float delta) {
-    mTimelines[u].SetTimeAndDelta(time, delta);
-}
-
-void TaskMgr::SetSecondsAndBeat(float f1, float f2, bool b) {
-    mAutoSecondsBeats = false;
-    mTimelines[kTaskSeconds].SetTime(f1, b);
-    mTimelines[kTaskBeats].SetTime(f2, b);
-}
-
-void TaskMgr::SetSeconds(float f, bool b) {
-    mAutoSecondsBeats = false;
-    mTimelines[kTaskSeconds].SetTime(f, b);
-    mTimelines[kTaskBeats].SetTime(
-        TheBeatMap->Beat(TheTempoMap->TimeToTick(f * 1000.0f)), b
-    );
-}
-
-float TaskMgr::Time(TaskUnits u) const { return mTimelines[u].GetTime(); }
-void TaskMgr::SetAVOffset(float offset) { mAVOffset = offset; }
-
-float TaskMgr::Seconds(TimeReference ref) const {
-    float time = mTimelines[kTaskSeconds].GetTime();
-    if (ref == 0) {
-        time -= mAVOffset;
-    }
-    return time;
-}
-
-float TaskMgr::DeltaSeconds() const { return mTimelines[kTaskSeconds].DeltaTime(); }
-float TaskMgr::Beat() const { return mTimelines[kTaskBeats].GetTime(); }
-float TaskMgr::DeltaBeat() const { return mTimelines[kTaskBeats].DeltaTime(); }
-float TaskMgr::TutorialSeconds() const {
-    return mTimelines[kTaskTutorialSeconds].GetTime();
-}
-
-const char *TaskMgr::GetMBT() {
-    return MakeString(
-        "%d:%d:%03d", mSongPos.GetMeasure(), mSongPos.GetBeat(), mSongPos.GetTick()
-    );
-}
-
-void ScriptTask::Var::Swap() {
-    DataNode tmp = value;
-    value = *var;
-    *var = tmp;
+MessageTask::MessageTask(Hmx::Object *o, DataArray *msg) : mObj(this, o), mMsg(msg) {
+    MILO_ASSERT(msg, 0x1D);
+    msg->AddRef();
 }
 
 MessageTask::~MessageTask() {
@@ -101,19 +49,19 @@ MessageTask::~MessageTask() {
     }
 }
 
-bool MessageTask::Replace(ObjRef *ref, Hmx::Object *o) {
-    if (ref == &mObj) {
-        if (!o) {
+bool MessageTask::Replace(ObjRef *from, Hmx::Object *to) {
+    if (from == &mObj) {
+        if (!to) {
             delete this;
         } else {
-            mObj.SetObjConcrete(o);
+            mObj = to;
         }
         return true;
     } else
-        return Hmx::Object::Replace(ref, o);
+        return Hmx::Object::Replace(from, to);
 }
 
-void MessageTask::Poll(float f1) {
+void MessageTask::Poll(float) {
     if (mObj && mMsg) {
         DataNode handled = mObj->Handle(mMsg, false);
         if (handled.Type() != kDataUnhandled) {
@@ -122,11 +70,126 @@ void MessageTask::Poll(float f1) {
     }
 }
 
+#pragma endregion
+#pragma region ScriptTask
+
+ScriptTask::ScriptTask(DataArray *script, bool once, DataArray *updateVarsObjs)
+    : mObjects(this, kObjListOwnerControl), mThis(this, DataThis()), mScript(script),
+      mOnce(once) {
+    script->AddRef();
+    static DataNode &taskvar = DataVariable("task");
+    DataNode old = taskvar;
+    taskvar = this;
+    mVars.push_back(Var(&taskvar));
+    if (!updateVarsObjs)
+        updateVarsObjs = script;
+    UpdateVarsObjects(updateVarsObjs);
+    taskvar = old;
+}
+
+ScriptTask::~ScriptTask() { mScript->Release(); }
+
+bool ScriptTask::Replace(ObjRef *from, Hmx::Object *to) {
+    if (from == &mThis) {
+        mThis = to;
+        if (mThis) {
+            return true;
+        }
+    } else {
+        if (from->Parent() != &mObjects) {
+            // mObjects = to;
+            return true;
+        } else
+            return Hmx::Object::Replace(from, to);
+    }
+    delete this;
+    return true;
+}
+
+void ScriptTask::Poll(float f1) {
+    MILO_ASSERT(mScript, 0xCF);
+    SwapVars();
+    static DataArrayPtr args(new DataArray(1));
+    args->Node(0) = f1;
+    DataNode handled = mScript->ExecuteScript(1, mThis, args, 0);
+    SwapVars();
+    if (mOnce || !handled.Int()) {
+        delete this;
+    }
+}
+
 void ScriptTask::SwapVars() {
-    for (std::list<Var>::iterator it = mVars.begin(); it != mVars.end(); ++it) {
+    FOREACH (it, mVars) {
         it->Swap();
     }
 }
+
+void ScriptTask::Var::Swap() {
+    DataNode tmp = value;
+    value = *var;
+    *var = tmp;
+}
+
+void ScriptTask::UpdateVarsObjects(DataArray *d) {
+    MILO_ASSERT(d, 0x9E);
+    int size = d->Size();
+    for (int i = 0; i < size; i++) {
+        DataType curType = d->Type(i);
+        Hmx::Object *obj = nullptr;
+        if (curType == kDataObject) {
+            obj = d->UncheckedObj(i);
+        } else if (curType == kDataSymbol || curType == kDataString) {
+            const char *name = d->LiteralStr(i);
+            ObjectDir *search = mThis ? mThis->DataDir() : ObjectDir::Main();
+            obj = search->FindObject(name, true, true);
+        } else if (curType == kDataVar) {
+            DataNode *var = d->UncheckedVar(i);
+            FOREACH (it, mVars) {
+                if (it->var == var) {
+                    var = nullptr;
+                    break;
+                }
+            }
+            if (var) {
+                mVars.push_back(Var(var));
+            }
+        } else if (curType == kDataArray || curType == kDataCommand) {
+            UpdateVarsObjects(d->UncheckedArray(i));
+        }
+
+        if (obj && obj != mThis && mObjects.find(obj) == mObjects.end()) {
+            mObjects.push_back(obj);
+        }
+    }
+}
+
+#pragma endregion
+#pragma region ThreadTask
+
+ThreadTask::ThreadTask(DataArray *script, DataArray *updateVarsObjs)
+    : ScriptTask(script, false, updateVarsObjs), mWait(false), mCurrent(1), mTime(0),
+      mExecuting(false), mTimeout(-1) {}
+
+bool ThreadTask::Replace(ObjRef *from, Hmx::Object *to) {
+    if (mExecuting) {
+        if (&mObjects == from->Parent() && from) {
+            mObjects.remove(to);
+            return true;
+        }
+    }
+    return ScriptTask::Replace(from, to);
+}
+
+BEGIN_HANDLERS(ThreadTask)
+    HANDLE(wait, OnWait)
+    HANDLE(wait_timeout, OnWaitTimeout)
+    HANDLE(sleep, OnSleep)
+    HANDLE(loop, OnLoop)
+    HANDLE(exit, OnExit)
+    HANDLE(current, OnCurrent)
+    HANDLE(set_current, OnSetCurrent)
+    HANDLE_SUPERCLASS(Hmx::Object)
+END_HANDLERS
 
 void ThreadTask::Poll(float f1) {
     if (mExecuting)
@@ -204,6 +267,12 @@ DataNode ThreadTask::OnExit(DataArray *arr) {
     return 0;
 }
 
+#pragma endregion
+#pragma region TaskTimeline
+
+TaskTimeline::TaskTimeline() : mTime(0), mLastTime(0), mPollingTask(nullptr) {}
+TaskTimeline::~TaskTimeline() {}
+
 void TaskTimeline::ClearTasks() {
     auto _tmp0 = mTasks.end();
     for (std::list<TaskInfo>::iterator it = mTasks.begin(); it != _tmp0; ++it) {
@@ -226,115 +295,6 @@ void TaskTimeline::ResetTaskTime(float time) {
     mLastTime += delta;
 }
 
-void TaskMgr::ClearTasks() {
-    for (int i = 0; i < kTaskNumUnits; i++) {
-        mTimelines[i].ClearTasks();
-    }
-}
-
-void TaskMgr::ClearTimelineTasks(TaskUnits u) { mTimelines[u].ClearTasks(); }
-
-void TaskMgr::ResetTaskTime(float f1, float f2) {
-    mTimelines[kTaskSeconds].ResetTaskTime(f1);
-    mTimelines[kTaskBeats].ResetTaskTime(f2);
-}
-
-void TaskMgr::ResetBeatTaskTime(float time) {
-    mTimelines[kTaskBeats].ResetTaskTime(time);
-}
-
-DataNode TaskMgr::OnTimeTilNext(DataArray *arr) {
-    float f2 = arr->Float(2);
-    float f3 = arr->Float(3);
-    float beat = Beat();
-    float floored = floor(beat / f2);
-    float f1 = f3 * (1.0f - (beat / f2 - floored));
-    if (f2 - f1 <= f3) {
-        return 0.0f;
-    } else
-        return f1;
-}
-
-MessageTask::MessageTask(Hmx::Object *o, DataArray *msg) : mObj(this, o), mMsg(msg) {
-    MILO_ASSERT(msg, 0x1D);
-    msg->AddRef();
-}
-
-bool ScriptTask::Replace(ObjRef *ref, Hmx::Object *obj) {
-    auto& thisObj = mThis;
-    if (ref == &thisObj) {
-        thisObj.SetObjConcrete(obj);
-        if (!thisObj) {
-            delete this;
-            return true;
-        }
-        return true;
-    }
-    ObjRef *listRef = (ref->Parent() == &mObjects) ? ref : 0;
-    if (listRef) {
-        if (obj) {
-            static_cast<ObjRefConcrete<Hmx::Object, ObjectDir>*>(listRef)->SetObjConcrete(obj);
-            return true;
-        }
-    } else {
-        return Hmx::Object::Replace(ref, obj);
-    }
-    delete this;
-    return true;
-}
-
-void ScriptTask::Poll(float f1) {
-    MILO_ASSERT(mScript, 0xCF);
-    SwapVars();
-    static DataArrayPtr args(new DataArray(1));
-    args->Node(0) = f1;
-    DataNode handled = mScript->ExecuteScript(1, mThis, args, 0);
-    SwapVars();
-    if (mOnce || !handled.Int()) {
-        delete this;
-    }
-}
-
-bool ThreadTask::Replace(ObjRef *ref, Hmx::Object *obj) {
-    if (mExecuting) {
-        ObjRef *listRef = (ref->Parent() == &mObjects) ? ref : 0;
-        if (listRef) {
-            ((ObjPtrList<ObjectDir> *)&mObjects)->erase(*(ObjPtrList<ObjectDir>::iterator *)&listRef);
-            return true;
-        }
-    }
-    return ScriptTask::Replace(ref, obj);
-}
-
-BEGIN_HANDLERS(ThreadTask)
-    HANDLE(wait, OnWait)
-    HANDLE(wait_timeout, OnWaitTimeout)
-    HANDLE(sleep, OnSleep)
-    HANDLE(loop, OnLoop)
-    HANDLE(exit, OnExit)
-    HANDLE(current, OnCurrent)
-    HANDLE(set_current, OnSetCurrent)
-    HANDLE_SUPERCLASS(Hmx::Object)
-END_HANDLERS
-
-BEGIN_HANDLERS(TaskMgr)
-    HANDLE_ACTION(clear_tasks, ClearTasks())
-    HANDLE_EXPR(seconds, Seconds(kRealTime))
-    HANDLE_EXPR(ms, Seconds(kRealTime) * 1000.0f)
-    HANDLE_EXPR(delta_seconds, mTimelines[kTaskSeconds].DeltaTime())
-    HANDLE_EXPR(beat, mTimelines[kTaskBeats].GetTime())
-    HANDLE_EXPR(delta_beat, mTimelines[kTaskBeats].DeltaTime())
-    HANDLE_EXPR(ui_seconds, mTimelines[kTaskUISeconds].GetTime())
-    HANDLE_EXPR(ui_delta_seconds, mTimelines[kTaskUISeconds].DeltaTime())
-    HANDLE_EXPR(tutorial_seconds, mTimelines[kTaskTutorialSeconds].GetTime())
-    HANDLE_EXPR(delta_tutorial_seconds, mTimelines[kTaskTutorialSeconds].DeltaTime())
-    HANDLE_EXPR(mbt, GetMBT())
-    HANDLE_EXPR(total_tick, mSongPos.GetTotalTick())
-    HANDLE(time_til_next, OnTimeTilNext)
-    HANDLE_ACTION(set_seconds, SetSeconds(_msg->Float(2), _msg->Int(3)))
-    HANDLE_ACTION(set_auto_seconds_beats, mAutoSecondsBeats = _msg->Int(2))
-END_HANDLERS
-
 void TaskTimeline::AddTask(const TaskInfo &info) {
     if (info.mStartTime > mTime || info.mTask) {
         if (mPollingTask) {
@@ -351,59 +311,6 @@ void TaskTimeline::AddTask(const TaskInfo &info) {
         }
     }
 }
-
-ScriptTask::ScriptTask(DataArray *script, bool once, DataArray *updateVarsObjs)
-    : mObjects(this, kObjListOwnerControl), mThis(this, DataThis()), mScript(script),
-      mOnce(once) {
-    script->AddRef();
-    static DataNode &taskvar = DataVariable("task");
-    DataNode old = taskvar;
-    taskvar = this;
-    mVars.push_back(Var(&taskvar));
-    if (!updateVarsObjs)
-        updateVarsObjs = script;
-    UpdateVarsObjects(updateVarsObjs);
-    taskvar = old;
-}
-
-void ScriptTask::UpdateVarsObjects(DataArray *d) {
-    MILO_ASSERT(d, 0x9E);
-    int size = d->Size();
-    for (int i = 0; i < size; i++) {
-        DataType curType = d->Type(i);
-        Hmx::Object *obj = nullptr;
-        if (curType == kDataObject) {
-            obj = d->UncheckedObj(i);
-        } else if (curType == kDataSymbol || curType == kDataString) {
-            const char *name = d->LiteralStr(i);
-            ObjectDir *search = mThis ? mThis->DataDir() : ObjectDir::Main();
-            obj = search->FindObject(name, true, true);
-        } else if (curType == kDataVar) {
-            DataNode *var = d->UncheckedVar(i);
-            for (std::list<Var>::iterator it = mVars.begin(); it != mVars.end(); ++it) {
-                if (it->var == var) {
-                    var = nullptr;
-                    break;
-                }
-            }
-            if (var) {
-                mVars.push_back(Var(var));
-            }
-        } else if (curType == kDataArray || curType == kDataCommand) {
-            UpdateVarsObjects(d->UncheckedArray(i));
-        }
-
-        if (obj && obj != mThis && mObjects.find(obj) == mObjects.end()) {
-            mObjects.push_back(obj);
-        }
-    }
-}
-
-ScriptTask::~ScriptTask() { mScript->Release(); }
-
-ThreadTask::ThreadTask(DataArray *script, DataArray *updateVarsObjs)
-    : ScriptTask(script, false, updateVarsObjs), mWait(false), mCurrent(1), mTime(0),
-      mExecuting(false), mTimeout(-1) {}
 
 void TaskTimeline::Poll() {
     for (std::list<TaskInfo>::iterator it = mTasks.begin(); it != mTasks.end();) {
@@ -433,6 +340,157 @@ void TaskTimeline::Poll() {
 }
 
 void TaskTimeline::AddTask(Task *task, float f) { AddTask(TaskInfo(task, mTime + f)); }
+
+#pragma endregion
+#pragma region TaskMgr
+
+TaskMgr::TaskMgr() { mTimelines = new TaskTimeline[4]; }
+
+TaskMgr::~TaskMgr() {
+    delete[] mTimelines;
+    mTimelines = nullptr;
+}
+
+BEGIN_HANDLERS(TaskMgr)
+    HANDLE_ACTION(clear_tasks, ClearTasks())
+    HANDLE_EXPR(seconds, Seconds(kRealTime))
+    HANDLE_EXPR(ms, Seconds(kRealTime) * 1000.0f)
+    HANDLE_EXPR(delta_seconds, mTimelines[kTaskSeconds].DeltaTime())
+    HANDLE_EXPR(beat, mTimelines[kTaskBeats].GetTime())
+    HANDLE_EXPR(delta_beat, mTimelines[kTaskBeats].DeltaTime())
+    HANDLE_EXPR(ui_seconds, mTimelines[kTaskUISeconds].GetTime())
+    HANDLE_EXPR(ui_delta_seconds, mTimelines[kTaskUISeconds].DeltaTime())
+    HANDLE_EXPR(tutorial_seconds, mTimelines[kTaskTutorialSeconds].GetTime())
+    HANDLE_EXPR(delta_tutorial_seconds, mTimelines[kTaskTutorialSeconds].DeltaTime())
+    HANDLE_EXPR(mbt, GetMBT())
+    HANDLE_EXPR(total_tick, mSongPos.GetTotalTick())
+    HANDLE(time_til_next, OnTimeTilNext)
+    HANDLE_ACTION(set_seconds, SetSeconds(_msg->Float(2), _msg->Int(3)))
+    HANDLE_ACTION(set_auto_seconds_beats, mAutoSecondsBeats = _msg->Int(2))
+END_HANDLERS
+
+void TaskMgr::Terminate() { SetName(nullptr, nullptr); }
+void TaskMgr::SetUISeconds(float f, bool b) { mTimelines[kTaskUISeconds].SetTime(f, b); }
+float TaskMgr::UISeconds() const { return mTimelines[kTaskUISeconds].GetTime(); }
+float TaskMgr::DeltaUISeconds() const { return mTimelines[kTaskUISeconds].DeltaTime(); }
+float TaskMgr::DeltaTime(TaskUnits u) const { return mTimelines[u].DeltaTime(); }
+
+void TaskMgr::SetDeltaTime(TaskUnits u, float delta) {
+    mTimelines[u].SetDeltaTime(delta);
+}
+
+void TaskMgr::SetTimeAndDelta(TaskUnits u, float time, float delta) {
+    mTimelines[u].SetTimeAndDelta(time, delta);
+}
+
+void TaskMgr::SetSecondsAndBeat(float f1, float f2, bool b) {
+    mAutoSecondsBeats = false;
+    mTimelines[kTaskSeconds].SetTime(f1, b);
+    mTimelines[kTaskBeats].SetTime(f2, b);
+}
+
+void TaskMgr::SetSeconds(float f, bool b) {
+    mAutoSecondsBeats = false;
+    mTimelines[kTaskSeconds].SetTime(f, b);
+    mTimelines[kTaskBeats].SetTime(
+        TheBeatMap->Beat(TheTempoMap->TimeToTick(f * 1000.0f)), b
+    );
+}
+
+float TaskMgr::Time(TaskUnits u) const { return mTimelines[u].GetTime(); }
+void TaskMgr::SetAVOffset(float offset) { mAVOffset = offset; }
+
+float TaskMgr::Seconds(TimeReference ref) const {
+    float time = mTimelines[kTaskSeconds].GetTime();
+    if (ref == 0) {
+        time -= mAVOffset;
+    }
+    return time;
+}
+
+float TaskMgr::DeltaSeconds() const { return mTimelines[kTaskSeconds].DeltaTime(); }
+float TaskMgr::Beat() const { return mTimelines[kTaskBeats].GetTime(); }
+float TaskMgr::DeltaBeat() const { return mTimelines[kTaskBeats].DeltaTime(); }
+float TaskMgr::TutorialSeconds() const {
+    return mTimelines[kTaskTutorialSeconds].GetTime();
+}
+
+float TaskMgr::DeltaTutorialSeconds() const {
+    return mTimelines[kTaskTutorialSeconds].DeltaTime();
+}
+
+const char *TaskMgr::GetMBT() {
+    return MakeString(
+        "%d:%d:%03d", mSongPos.GetMeasure(), mSongPos.GetBeat(), mSongPos.GetTick()
+    );
+}
+
+void TaskMgr::Poll() {
+    START_AUTO_TIMER("anim");
+#ifdef HX_NATIVE
+    // Headless mode: advance time by a fixed 1/30s delta per frame instead
+    // of reading the wall clock. DTA scripts use {taskmgr seconds} for
+    // timeouts and expect real-time pacing. Without this, headless mode runs
+    // at thousands of fps and DTA timeouts (e.g. autosave_warning 4s) never
+    // trigger within the frame budget.
+    static bool sHeadless = !!getenv("MILO_HEADLESS");
+    static float sFakeSeconds = 0.0f;
+    if (sHeadless && mAutoSecondsBeats) {
+        sFakeSeconds += 1.0f / 30.0f;
+        mTimelines[kTaskSeconds].SetTime(sFakeSeconds, false);
+        mTimelines[kTaskBeats].SetTime(sFakeSeconds * 2.0f, false);
+    } else {
+#endif
+    mTime.Split();
+    if (mAutoSecondsBeats) {
+        float secs = mTime.Ms() / 1000.0f;
+        mTimelines[kTaskSeconds].SetTime(secs, false);
+        mTimelines[kTaskBeats].SetTime(secs * 2.0f, false);
+    }
+#ifdef HX_NATIVE
+    }
+#endif
+    for (int i = 0; i < kTaskNumUnits; i++) {
+        mTimelines[i].Poll();
+    }
+    for (int i = 0; i < unk84.size(); i++) {
+        delete unk84[i].Ptr();
+    }
+    unk84.clear();
+}
+
+void TaskMgr::ClearTasks() {
+    for (int i = 0; i < kTaskNumUnits; i++) {
+        mTimelines[i].ClearTasks();
+    }
+}
+
+void TaskMgr::ClearTimelineTasks(TaskUnits u) { mTimelines[u].ClearTasks(); }
+
+void TaskMgr::ResetTaskTime(float f1, float f2) {
+    ResetSecondTaskTime(f1);
+    ResetBeatTaskTime(f2);
+}
+
+void TaskMgr::ResetSecondTaskTime(float time) {
+    mTimelines[kTaskSeconds].ResetTaskTime(time);
+}
+
+void TaskMgr::ResetBeatTaskTime(float time) {
+    mTimelines[kTaskBeats].ResetTaskTime(time);
+}
+
+DataNode TaskMgr::OnTimeTilNext(DataArray *arr) {
+    float f2 = arr->Float(2);
+    float f3 = arr->Float(3);
+    float beat = Beat();
+    float floored = floor(beat / f2);
+    float f1 = f3 * (1.0f - (beat / f2 - floored));
+    if (f2 - f1 <= f3) {
+        return 0.0f;
+    } else
+        return f1;
+}
 
 void TaskMgr::Start(Task *t, TaskUnits u, float f) {
 #ifdef HX_NATIVE
@@ -495,9 +553,6 @@ DataNode OnThreadTask(DataArray *arr) {
     return task;
 }
 
-TaskTimeline::TaskTimeline() : mTime(0), mLastTime(0), mPollingTask(nullptr) {}
-TaskTimeline::~TaskTimeline() {}
-
 void TaskMgr::Init() {
     mTime.Restart();
     mAutoSecondsBeats = true;
@@ -526,47 +581,4 @@ void TaskMgr::QueueTaskDelete(Task *task) {
     }
 }
 
-float TaskMgr::DeltaTutorialSeconds() const {
-    return mTimelines[kTaskTutorialSeconds].DeltaTime();
-}
-
-void TaskMgr::Poll() {
-    START_AUTO_TIMER("anim");
-#ifdef HX_NATIVE
-    // Headless mode: advance time by a fixed 1/30s delta per frame instead
-    // of reading the wall clock. DTA scripts use {taskmgr seconds} for
-    // timeouts and expect real-time pacing. Without this, headless mode runs
-    // at thousands of fps and DTA timeouts (e.g. autosave_warning 4s) never
-    // trigger within the frame budget.
-    static bool sHeadless = !!getenv("MILO_HEADLESS");
-    static float sFakeSeconds = 0.0f;
-    if (sHeadless && mAutoSecondsBeats) {
-        sFakeSeconds += 1.0f / 30.0f;
-        mTimelines[kTaskSeconds].SetTime(sFakeSeconds, false);
-        mTimelines[kTaskBeats].SetTime(sFakeSeconds * 2.0f, false);
-    } else {
-#endif
-    mTime.Split();
-    if (mAutoSecondsBeats) {
-        float secs = mTime.Ms() / 1000.0f;
-        mTimelines[kTaskSeconds].SetTime(secs, false);
-        mTimelines[kTaskBeats].SetTime(secs * 2.0f, false);
-    }
-#ifdef HX_NATIVE
-    }
-#endif
-    for (int i = 0; i < kTaskNumUnits; i++) {
-        mTimelines[i].Poll();
-    }
-    for (int i = 0; i < unk84.size(); i++) {
-        delete unk84[i].Ptr();
-    }
-    unk84.clear();
-}
-
-TaskMgr::TaskMgr() { mTimelines = new TaskTimeline[4]; }
-
-TaskMgr::~TaskMgr() {
-    delete[] mTimelines;
-    mTimelines = nullptr;
-}
+#pragma endregion

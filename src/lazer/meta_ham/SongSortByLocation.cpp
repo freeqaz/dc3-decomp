@@ -5,6 +5,7 @@
 #include "SongRecord.h"
 #include "SongSortNode.h"
 #include "meta/Sorting.h"
+#include "meta_ham/NavListNode.h"
 
 int ConvertGameOriginSymbolToEnum(Symbol sym) {
     static Symbol ham1("ham1");

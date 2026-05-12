@@ -29,6 +29,7 @@
 #include "os/System.h"
 #include "utl/Symbol.h"
 #include <algorithm>
+#include <climits>
 #include <cstdio>
 #include <cstring>
 #include <map>
@@ -103,6 +104,7 @@ bool MetagameRank::HasNewRank() const {
     }
 }
 
+
 void MetagameRank::SaveFixed(FixedSizeSaveableStream &fs) const {
     fs << mScore;
     bool b1 = mFirstTimePlayed;
@@ -120,6 +122,7 @@ void MetagameRank::SaveFixed(FixedSizeSaveableStream &fs) const {
     fs.Write(mOneTimeTaskFlags, 0x40);
     fs.Write(unk79, 0x40);
     static Symbol combined_xp_disp("combined_xp_disp");
+    Symbol s = combined_xp_disp; // lmao
     int sum;
     if (mDeferredPoints.size() != 0) {
         sum = 0;
@@ -129,7 +132,7 @@ void MetagameRank::SaveFixed(FixedSizeSaveableStream &fs) const {
     } else {
         sum = 0;
     }
-    SaveSymbolID(fs, combined_xp_disp);
+    SaveSymbolID(fs, s);
     fs << sum;
     const_cast<MetagameRank *>(this)->mXpAwarded = false;
 }
@@ -182,6 +185,7 @@ void MetagameRank::Preinit() {
 }
 
 DataNode HaveDeferredAward(DataArray *) { return !gDeferredAwardQueue.empty(); }
+
 DataNode HandleDeferredAward(DataArray *) {
     if (gDeferredAwardQueue.empty()) {
         return 0;
@@ -206,7 +210,7 @@ void MetagameRank::Init() {
     xp_force_award_small = 0;
     xp_force_award_medium = 0;
     xp_force_award_large = 0;
-    xp_force_award_one_time = 0;
+    xp_force_award_large = 0;
     xp_force_award_all = 0;
     xp_force_one_rank_up = 0;
     DataRegisterFunc("xp_have_deferred_award", HaveDeferredAward);
@@ -221,7 +225,7 @@ void MetagameRank::Init() {
         for (int i = 0; i < unlockablesSize; i++) {
             DataArray *curUnlockArray = unlockArr->Array(i + 1);
             Unlockable &cur = gUnlockables[i];
-            cur.unk0 = i + 1;
+            cur.unk0 = i;
             cur.unk4 = curUnlockArray->Sym(0);
             cur.unk8 = curUnlockArray->FindSym("name");
             cur.unkc = curUnlockArray->FindSym("desc");
@@ -290,30 +294,23 @@ Symbol MetagameRank::GetRankTitle() const {
 // If found, optionally return the DataArray* and/or the task index.
 // Returns true if found, false otherwise.
 bool MetagameRank::GetOneTimeTask(Symbol s, DataArray **aptr, int *iptr) {
-    // Early return if no output parameters requested
-    if (!aptr && !iptr) {
-        return false;
-    }
-
-    // Search through one-time tasks array
-    short size = gOneTimeTasks->Size();
-    int i = 1; // Start at 1 to skip the array name
-    while (i < size) {
-        DataNode &n = gOneTimeTasks->Node(i);
-        if (n.Type() == kDataArray && n.Array()->Sym(0) == s) {
-            // Found matching task
-            if (aptr) {
-                *aptr = n.Array();
+    if (aptr || iptr) {
+        int aSize = gOneTimeTasks->Size();
+        for (int i = 1; i < aSize; i++) {
+            DataNode &n = gOneTimeTasks->Node(i);
+            if (n.Type() == kDataArray) {
+                if (n.Array()->Sym(0) == s) {
+                    if (aptr) {
+                        *aptr = n.Array();
+                    }
+                    if (iptr) {
+                        *iptr = i - 1;
+                    }
+                    return true;
+                }
             }
-            if (iptr) {
-                *iptr = i - 1; // Return 0-based index
-            }
-            return true;
         }
-        i++;
     }
-
-    // Not found - set output parameters to default values
     if (aptr) {
         *aptr = nullptr;
     }
@@ -350,6 +347,7 @@ DataNode MetagameRank::GetNextDeferredPoints(DataArray *a) {
 }
 
 extern PropertyEventProvider *TheHamProvider;
+
 
 bool compare_deferred_points(DeferredPoints a, DeferredPoints b) {
     static Symbol play_first_time_disp("play_first_time_disp");
@@ -514,12 +512,14 @@ bool compare_deferred_points(DeferredPoints a, DeferredPoints b) {
     return aIdx < bIdx;
 }
 
+// whoever solves this will gain us 0x2194 bytes for lazer:
+// https://decomp.me/scratch/m3yNS
 void MetagameRank::UpdateScore(
     int songID,
     const HamPlayerData *playerData,
     const SongStatusMgr *statusMgr,
-    int stars,
-    int unk
+    int i4,
+    int stars
 ) {
     // Check if in party mode - early return (NOT static - constructed each call)
     auto isPartyMode = TheHamProvider->Property(Symbol("is_in_party_mode"), true)->Int(0);
@@ -766,11 +766,11 @@ void MetagameRank::UpdateScore(
         }
 
         // Star-based awards
-        if (unk > 5) {
+        if (stars > 5) {
             AwardPointsForTask(completed_song_with_5_stars);
             AwardPointsForTask(golden_performance);
         }
-        switch (unk) {
+        switch (stars) {
         case 1: AwardPointsForTask(completed_song_with_1_star); break;
         case 2: AwardPointsForTask(completed_song_with_2_stars); break;
         case 3: AwardPointsForTask(completed_song_with_3_stars); break;
@@ -1032,49 +1032,46 @@ void MetagameRank::AwardPointsForTask(Symbol task) {
         int task_index = -1;
         bool oneTimeTask = GetOneTimeTask(task, &taskArray, &task_index);
         if (!oneTimeTask) {
-            MILO_FAIL("Task %s not found in metagame_rank.dta", task_index);
+            MILO_FAIL("Task %s not found in metagame_rank.dta", task.Str());
         }
 
         MILO_ASSERT(task_index, 0x19b); // change later
         if (!oneTimeTask) {
             return;
         }
-        if (mOneTimeTaskFlags[0] != 0) {
+        if (mOneTimeTaskFlags[task_index] != 0) {
             return;
         }
-        mOneTimeTaskFlags[0] = 1;
+        mOneTimeTaskFlags[task_index] = 1;
     }
 
-    int scoreNum = taskArray->FindArray(score)->Int(1);
-    Symbol disp = taskArray->FindArray(display)->Sym(1);
+    int scoreNum = taskArray->FindInt(score);
+    Symbol disp = taskArray->FindSym(display);
     if (0 <= scoreNum) {
         AwardPoints(scoreNum, disp);
     }
 }
 
-int MetagameRank::SaveSize(int saveVersion) {
-    int version = saveVersion;
-    int fieldCount = 4;
-
-    if (version > 0x45) {
-        fieldCount = 5;
+int MetagameRank::SaveSize(int i1) {
+    int i2 = 4;
+    if (i1 > 0x45) {
+        i2 = 5;
     }
-    if (version > 0x4e) {
-        fieldCount += 1;
+    if (i1 > 0x4E) {
+        i2++;
     }
-    int size = fieldCount + 0x80;
-    if (size > 0x3d) {
-        if (size <= 0x5a) {
-            size = fieldCount + 0x84;
-            goto checkSize;
+    int ret = i2 + 0x80;
+    if (i1 > 0x3D) {
+        if (i1 > 0x5A) {
+            goto end;
         }
-        return size + 8;
+        ret += 4;
     }
-checkSize:
-    if (size > 0x5a) {
-        return size + 8;
+    if (i1 <= 0x5A) {
+        return ret;
     }
-    return size;
+end:
+    return ret + 8;
 }
 
 int MetagameRank::GetRankInTier() const {

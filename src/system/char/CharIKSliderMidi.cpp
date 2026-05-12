@@ -62,10 +62,11 @@ BEGIN_LOADS(CharIKSliderMidi)
     LOAD_REVS(bs)
     ASSERT_REVS(2, 0)
     LOAD_SUPERCLASS(Hmx::Object)
-    if (1 < d.rev)
-        CharWeightable::Load(bs);
-    bs >> mTarget >> mFirstSpot >> mSecondSpot;
-    bs >> mTolerance;
+    if (d.rev > 1) {
+        LOAD_SUPERCLASS(CharWeightable)
+    }
+    d >> mTarget >> mFirstSpot >> mSecondSpot;
+    d >> mTolerance;
 END_LOADS
 
 void CharIKSliderMidi::PollDeps(

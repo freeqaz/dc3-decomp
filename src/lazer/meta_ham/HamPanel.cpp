@@ -37,8 +37,8 @@ bool HamPanel::Exiting() const {
 #else
     if (UIPanel::Exiting()) {
         return true;
-    } else if (ShouldUseLocalNavlist() && mNavList) {
-        return mNavList->IsAnimating();
+    } else if (ShouldUseLocalNavlist() && mNavList && mNavList->IsAnimating()) {
+        return true;
     }
     return false;
 #endif

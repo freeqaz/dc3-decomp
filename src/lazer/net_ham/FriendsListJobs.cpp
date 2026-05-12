@@ -17,13 +17,13 @@ UpdateFriendsListJob::UpdateFriendsListJob(Hmx::Object *callback, HamProfile *pr
     : RCJob("friends/updatefriends/", callback) {
     MILO_ASSERT(callback == NULL, 0x18);
     mProfile = profile;
-    mFriendsCount = profile->GetPadNum();
+    mPadNum = profile->GetPadNum();
     mFriendsListJobState = kFriendsListState_0;
 }
 
 void UpdateFriendsListJob::EnumerateFriends() {
     mFriendsListJobState = kEnumeratingFriends;
-    ThePlatformMgr.EnumerateFriends(mFriendsCount, mFriendsList, this);
+    ThePlatformMgr.EnumerateFriends(mPadNum, mFriendsList, this);
 }
 
 DataNode UpdateFriendsListJob::OnMsg(RCJobCompleteMsg const &msg) {
@@ -37,18 +37,18 @@ DataNode UpdateFriendsListJob::OnMsg(RCJobCompleteMsg const &msg) {
 
 void UpdateFriendsListJob::GetFriendsListToken() {
     mEnumerationToken = 0;
-    for (unsigned int i = 0; i < (unsigned int)mFriendsList.size(); i++) {
-        const char *name = mFriendsList[i]->mName.c_str();
-        int nameLen = strlen(name);
-        for (int j = 0; j < nameLen; j += 4) {
-            int chunk[4];
-            chunk[0] = 0;
-            int copyLen = nameLen - j;
-            if (copyLen >= 4) {
-                copyLen = 4;
+    for (int i = 0; i < mFriendsList.size(); i++) {
+        const char *name = mFriendsList[i]->GetName();
+        for (int j = 0; j < strlen(name); j += 4) {
+            int buffer = 0;
+            int num;
+            if (strlen(name) - j >= 4) {
+                num = 4;
+            } else {
+                num = strlen(name) - j;
             }
-            memcpy(chunk, name + j, copyLen);
-            mEnumerationToken ^= chunk[0];
+            memcpy(&buffer, name + j, num);
+            mEnumerationToken ^= buffer;
         }
     }
 }
@@ -60,39 +60,33 @@ DataNode UpdateFriendsListJob::OnMsg(PlatformMgrOpCompleteMsg const &msg) {
     if (mProfile) {
         uploadToken = mProfile->GetUploadFriendsToken();
     }
+
     if (msg.Success() && mProfile && mProfile->HasValidSaveData()
         && mEnumerationToken != uploadToken) {
         mFriendsListJobState = kUpdatingFriends;
         DataPoint dataP;
-        String friendGuids;
+        String friendInfo;
         String friendName;
-        int numFriends = (int)mFriendsList.size();
+        int friendSize = mFriendsList.size();
         static Symbol friends("friends");
-        int loopLimit = numFriends - 1;
-        int loopIdx = 0;
-        int byteOff = 0;
-        char keyBuf[8];
-        char guidBuf[0x18];
-        if (0 < loopLimit) {
-            do {
-                friendName = mFriendsList[loopIdx]->mName.c_str();
-                XUID xuid = mFriendsList[loopIdx]->mXUID;
-                friendGuids += MakeString("%llu,", xuid);
-                Hx_snprintf(keyBuf, 8, "name%03d", loopIdx);
-                dataP.AddPair(keyBuf, DataNode(friendName));
-                Hx_snprintf(keyBuf, 8, "guid%03d", loopIdx);
-                Hx_snprintf(guidBuf, 0x18, "%lld", xuid);
-                dataP.AddPair(keyBuf, DataNode(guidBuf));
-                loopIdx++;
-                byteOff += 4;
-            } while (loopIdx < loopLimit);
+        char namebuf[8];
+        char buf[24];
+        for (int i = 0; i < friendSize - 1; i++) {
+            friendName = mFriendsList[i]->GetName();
+            XUID xuid = mFriendsList[i]->mXUID;
+            friendInfo += MakeString("%llu,", xuid);
+            Hx_snprintf(namebuf, 8, "name%03d", i);
+            dataP.AddPair(namebuf, friendName);
+            Hx_snprintf(namebuf, 8, "guid%03d", i);
+            Hx_snprintf(buf, 24, "%lld", xuid);
+            dataP.AddPair(namebuf, buf);
         }
-        if (numFriends != 0) {
-            friendName = mFriendsList[numFriends - 1]->mName.c_str();
-            XUID xuid = mFriendsList[numFriends - 1]->mXUID;
-            friendGuids += MakeString("%llu", xuid);
+        if (mFriendsList.size() > 0) {
+            friendName = mFriendsList[friendSize - 1]->GetName();
+            XUID xuid = mFriendsList[friendSize - 1]->mXUID;
+            friendInfo += MakeString("%llu", xuid);
         }
-        dataP.AddPair(friends, DataNode(friendGuids));
+        dataP.AddPair(friends, friendInfo);
         SetDataPoint(dataP);
         mCallback = this;
         TheRockCentral.ManageJob(this);

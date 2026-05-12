@@ -1,5 +1,6 @@
 #include "char/CharacterTest.h"
 #include "Character.h"
+#include "char/CharClip.h"
 #include "char/CharClipDriver.h"
 #include "char/CharForeTwist.h"
 #include "char/CharUpperTwist.h"
@@ -107,11 +108,11 @@ BEGIN_LOADS(CharacterTest)
         );
     }
     if (d.rev != 0xD)
-        mDriver.Load(bs, false, mMe);
+        mDriver.Load(d.stream, false, mMe);
 
     if (Clips()) {
-        mClip1.Load(bs, true, Clips());
-        mClip2.Load(bs, true, Clips());
+        mClip1.Load(d.stream, true, Clips());
+        mClip2.Load(d.stream, true, Clips());
     } else {
         Symbol s;
         d >> s;
@@ -120,7 +121,7 @@ BEGIN_LOADS(CharacterTest)
         mClip2 = nullptr;
     }
     d >> mTeleportTo;
-    mWalkPath.Load(bs, false, nullptr, true);
+    mWalkPath.Load(d.stream, false, nullptr, true);
     d >> mShowDistMap;
     d >> mTransition;
     d >> mCycleTransition;
@@ -166,8 +167,7 @@ void CharacterTest::TeleportTo(Waypoint *wp) {
 void CharacterTest::Walk() {
     if (!mWalkPath.empty()) {
         std::vector<Waypoint *> vec;
-        for (ObjPtrList<Waypoint>::iterator it = mWalkPath.begin(); it != mWalkPath.end();
-             ++it) {
+        FOREACH (it, mWalkPath) {
             vec.push_back(*it);
         }
     }
@@ -230,7 +230,7 @@ void CharacterTest::AddDefaults() {
         if (!mMe->Find<CharServoBone>("bone.servo", false)) {
             mMe->New<CharServoBone>("bone.servo");
         }
-        mMe->Driver()->SetBones(mMe->Find<CharBonesObject>("bone.servo", true));
+        mMe->Driver()->SetBones(mMe->Find<CharBonesObject>("bone.servo"));
     }
     if (!mMe->Find<CharForeTwist>("foreTwist_L.ik", false)) {
         RndTransformable *lhand = CharUtlFindBoneTrans("bone_L-hand", mMe);
@@ -464,3 +464,4 @@ void CharacterTest::Sync() {
     }
     mTransitionIdx = 0;
 }
+

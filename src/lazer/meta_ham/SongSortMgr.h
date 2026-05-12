@@ -28,6 +28,7 @@ public:
     void RebuildSongRecordMap();
     void SetupQuasiRandomSongs();
     void SetSetlistMode(bool);
+    bool GetSetlistMode();
     Symbol DetermineHeaderSymbolForSong(Symbol);
     int FirstArtistSongIndex(Symbol);
 

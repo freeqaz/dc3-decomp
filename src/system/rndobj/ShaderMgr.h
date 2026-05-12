@@ -171,13 +171,13 @@ protected:
     bool unk30;
     bool unk31;
     int unk34;
-    bool unk38;
+    bool unk38; // mMotionBlurChecked?
     bool unk39;
-    bool unk3a;
+    bool unk3a; // mGradientMapChecked?
     bool unk3b;
     bool unk3c;
     bool unk3d;
-    bool unk3e;
+    bool unk3e; // mVignetteChecked?
     bool unk3f;
     bool mAllowPerPixel; // 0x40
     bool unk41;

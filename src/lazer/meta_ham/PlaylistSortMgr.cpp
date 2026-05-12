@@ -11,9 +11,13 @@
 #include "game/PartyModeMgr.h"
 #include "meta_ham/MetaPerformer.h"
 #include "macros.h"
+#include "math/Utl.h"
 #include "meta/SongPreview.h"
 #include "meta_ham/FitnessGoalMgr.h"
+#include "meta_ham/HamSongMgr.h"
+#include "meta_ham/MetaPerformer.h"
 #include "meta_ham/Playlist.h"
+#include "meta_ham/PlaylistSortByTypeCmp.h"
 #include "net_ham/PlaylistJobs.h"
 #include "net_ham/RCJobDingo.h"
 #include "net_ham/RockCentral.h"
@@ -23,8 +27,10 @@
 #include "os/ContentMgr.h"
 #include "os/Debug.h"
 #include "os/PlatformMgr.h"
+#include "stl/_algo.h"
 #include "ui/UI.h"
 #include "utl/DataPointMgr.h"
+#include "utl/MakeString.h"
 #include "utl/Std.h"
 #include "utl/Symbol.h"
 #include "stl/_map.h"
@@ -456,36 +462,35 @@ void PlaylistSortMgr::ProcessNextCommand() {
 
 void PlaylistSortMgr::ResolvePlaylists() {
     HamProfile *activeProfile = TheProfileMgr.GetActiveProfile(true);
-    if (activeProfile) {
-        const char *profileName = activeProfile->GetName();
-        bool flag = mProfileName != profileName;
-        if (!flag) {
-            int count = (int)mCustomPlaylists.size();
-            for (int i = 0; i < count; i++) {
-                Playlist *playlist = &activeProfile->GetPlaylist(i);
-                CustomPlaylist *cusPlaylist = dynamic_cast<CustomPlaylist *>(playlist);
-                cusPlaylist->Copy(&mCustomPlaylists[i]);
-                cusPlaylist->SetParentProfile(activeProfile);
-            }
+    if (!activeProfile || mProfileName != activeProfile->GetName()) {
+        BroadcastSyncMsg("sync_failed");
+    } else {
+        int something = Max(5 - (int)mCustomPlaylists.size(), 0);
+        int size = (int)mCustomPlaylists.size();
+        for (int i = 0; i < size; i++) {
+            CustomPlaylist &cusPlaylist =
+                dynamic_cast<CustomPlaylist &>(activeProfile->GetPlaylist(i));
+            cusPlaylist.Copy(&mCustomPlaylists[i]);
+            cusPlaylist.SetParentProfile(activeProfile);
         }
-        for (int i = 0; i < 5; i++) {
+        for (int i = 5 - something; i < 5; i++) {
             Playlist *playlist = &activeProfile->GetPlaylist(i);
             int numSongs = playlist->GetNumSongs();
-            while (numSongs-- != 0) {
+            while (numSongs != 0) {
+                numSongs--;
                 playlist->RemoveSong();
             }
             playlist->SetOnlineID(-1);
         }
-        if (TheSaveLoadMgr) {
+
+        if (TheSaveLoadMgr)
             TheSaveLoadMgr->AutoSave();
-        }
+
         BroadcastSyncMsg("playlists_synced");
         if (mCustomPlaylists.size() > 0) {
             SendPassiveMsg("playlist_syned_with_rc");
         }
-        return;
     }
-    BroadcastSyncMsg("sync_failed");
 }
 
 void PlaylistSortMgr::HandleCmdDeletePlaylistFromRC() {

@@ -55,6 +55,12 @@ enum ChallengeBadgeType {
 
 class ChallengeBadgeInfo {
 public:
+    ChallengeBadgeInfo() {
+        for (int i = 0; i < kNumBadgeTypes; i++) {
+            mMedalCounts[i] = 0;
+        }
+    }
+
     int mMedalCounts[kNumBadgeTypes]; // 0x0
 };
 

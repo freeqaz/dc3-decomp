@@ -66,6 +66,7 @@ public:
     const char *Localize(Symbol, bool) const;
 
     static void SetLocaleVerboseNotify(bool set) { Locale::sVerboseNotify = set; }
+    static bool GetLocaleVerboseNotify() { return sVerboseNotify; }
 
     static bool sVerboseNotify;
 

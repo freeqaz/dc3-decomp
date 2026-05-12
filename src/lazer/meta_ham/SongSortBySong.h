@@ -1,6 +1,7 @@
 #pragma once
 #include "NavListNode.h"
 #include "SongSort.h"
+#include "utl/Symbol.h"
 
 class SongCmp : public NavListItemSortCmp {
 public:
@@ -17,7 +18,10 @@ public:
 
 class SongSortBySong : public SongSort {
 public:
-    SongSortBySong();
+    SongSortBySong() {
+        static Symbol by_song("by_song");
+        SetSortName(by_song);
+    }
     virtual ~SongSortBySong();
 
     virtual NavListItemNode *NewItemNode(void *) const;

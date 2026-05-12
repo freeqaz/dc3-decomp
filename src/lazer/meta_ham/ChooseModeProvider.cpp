@@ -122,60 +122,49 @@ void ChooseModeProvider::UpdateList(bool b) {
 
 RndMat *ChooseModeProvider::Mat(int, int i_iData, UIListMesh *mesh) const {
     MILO_ASSERT_RANGE(i_iData, 0, NumData(), 0x5d);
-    static Symbol practice("practice");
     static Symbol perform("perform");
-    static Symbol holla_back("holla_back");
-    static Symbol dance_battle("dance_battle");
-    static Symbol namethatdance("namethatdance");
     static Symbol perform_legacy("perform_legacy");
-    static Symbol start_the_party("start_the_party");
-    static Symbol rhythm_battle("rhythm_battle");
-    static Symbol bustamove("bustamove");
+    static Symbol practice("practice");
+    static Symbol dance_battle("dance_battle");
     static Symbol custom_party("custom_party");
     static Symbol crew_showdown("crew_showdown");
+    static Symbol start_the_party("start_the_party");
     static Symbol rtnbldrproto("rtnbldrproto");
+    static Symbol namethatdance("namethatdance");
     static Symbol concentration("concentration");
-
+    static Symbol rhythm_battle("rhythm_battle");
+    static Symbol holla_back("holla_back");
+    static Symbol holla_back_70s_craze("holla_back_70s_craze");
+    static Symbol bustamove("bustamove");
     Symbol dataSym = DataSymbol(i_iData);
-    RndMat *result = nullptr;
-
     if (mesh->Matches("icon_1p")) {
-        result = nullptr;
-    } else {
-        bool isOnePlusIcon = mesh->Matches("icon_1p_plus");
-        if (isOnePlusIcon) {
-            if (dataSym == custom_party) {
-                result = nullptr;
-            } else {
-                result = mesh->DefaultMat();
-            }
-        } else if (mesh->Matches("icon_2p")) {
-            if (dataSym == namethatdance || dataSym == dance_battle || dataSym == concentration || rhythm_battle == dataSym) {
-                result = nullptr;
-            } else {
-                result = mesh->DefaultMat();
-            }
-        } else if (mesh->Matches("icon_1por2p")) {
-            if (dataSym == perform || dataSym == perform_legacy || dataSym == rtnbldrproto || dataSym == holla_back) {
-                result = nullptr;
-            } else {
-                result = mesh->DefaultMat();
-            }
-        } else if (mesh->Matches("icon_2p_plus")) {
-            result = nullptr;
+        if (dataSym != practice) {
+            return nullptr;
+        }
+    } else if (mesh->Matches("icon_1p_plus")) {
+        if (dataSym == custom_party) {
+            return mesh->DefaultMat();
+        } else if (dataSym != start_the_party) {
+            return nullptr;
+        }
+    } else if (mesh->Matches("icon_2p")) {
+        if (dataSym == namethatdance || dataSym == dance_battle
+            || dataSym == concentration || dataSym == rhythm_battle) {
+            return mesh->DefaultMat();
+        } else if (dataSym != bustamove) {
+            return nullptr;
+        }
+    } else if (mesh->Matches("icon_1por2p")) {
+        if (dataSym == perform || dataSym == perform_legacy || dataSym == rtnbldrproto
+            || dataSym == holla_back) {
+            return mesh->DefaultMat();
+        } else if (dataSym != holla_back_70s_craze) {
+            return nullptr;
+        }
+    } else if (mesh->Matches("icon_2p_plus")) {
+        if (dataSym != crew_showdown) {
+            return nullptr;
         }
     }
-#ifdef HX_NATIVE
-    if (DebugChooseMode()) {
-        printf(
-            "DC3 CHOOSE ChooseModeProvider::Mat data=%d sym=%s slot=%s result=%s default=%s\n",
-            i_iData,
-            dataSym.Str(),
-            mesh ? mesh->MatchName() : "<null>",
-            result ? PathName(result) : "<null>",
-            mesh && mesh->DefaultMat() ? PathName(mesh->DefaultMat()) : "<null>"
-        );
-    }
-#endif
-    return result;
+    return mesh->DefaultMat();
 }

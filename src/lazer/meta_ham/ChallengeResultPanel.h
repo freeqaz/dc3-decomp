@@ -1,4 +1,5 @@
 #pragma once
+#include "gesture/BaseSkeleton.h"
 #include "meta_ham/HamPanel.h"
 #include "flow/PropertyEventProvider.h"
 #include "hamobj/HamNavList.h"

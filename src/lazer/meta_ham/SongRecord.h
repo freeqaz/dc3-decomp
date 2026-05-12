@@ -8,8 +8,8 @@ public:
     virtual ~SongRecord() {}
 
     const Symbol &ShortName() const { return mShortName; }
-    int RankTier() const;
     const HamSongMetadata *Metadata() const { return mMetadata; }
+    int GetTier() const;
 
 protected:
     Symbol mShortName;

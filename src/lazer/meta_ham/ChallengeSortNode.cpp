@@ -6,22 +6,28 @@
 #include "Challenges.h"
 #include "HamStarsDisplay.h"
 #include "ProfileMgr.h"
+#include "hamobj/Difficulty.h"
 #include "hamobj/HamGameData.h"
 #include "HamProfile.h"
 #include "HamSongMgr.h"
 #include "meta/SongPreview.h"
+#include "meta_ham/ChallengeRecord.h"
 #include "meta_ham/Challenges.h"
 #include "meta_ham/MQSongSortNode.h"
 #include "meta_ham/MetaPerformer.h"
 #include "meta_ham/NavListNode.h"
+#include "meta_ham/ProfileMgr.h"
+#include "obj/Dir.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
+#include "os/PlatformMgr.h"
 #include "stl/_vector.h"
 #include "ui/UI.h"
 #include "net_ham/RockCentral.h"
 #include "ui/UILabel.h"
 #include "ui/UIListCustom.h"
 #include "ui/UIListLabel.h"
+#include "ui/UIScreen.h"
 #include "utl/Std.h"
 #include "utl/Symbol.h"
 
@@ -49,25 +55,6 @@ int ChallengeHeaderNode::GetPotentialChallengeExp(NavListSortNode *startNode) {
         NavListSortNode *node = *it;
         MILO_ASSERT(node, 0xe7);
         xp += static_cast<ChallengeSortNode *>(node)->GetChallengeExp();
-    }
-    return xp;
-}
-
-int ChallengeHeaderNode::GetTotalEarnedExp(int playerScore) {
-    int xp = 0;
-    FOREACH (it, mChildren) {
-        NavListSortNode *node = *it;
-        MILO_ASSERT(node, 0xf5);
-        if (playerScore
-            >= static_cast<ChallengeSortNode *>(node)
-                   ->GetChallengeRecord()
-                   ->GetChallengeRow()
-                   .mScore) {
-            xp += static_cast<ChallengeSortNode *>(node)->GetChallengeExp();
-        }
-    }
-    if (xp == 0) {
-        xp = TheChallenges->GetConsolationXP();
     }
     return xp;
 }
@@ -100,13 +87,13 @@ void ChallengeHeaderNode::Text(UIListLabel *uiListLabel, UILabel *uiLabel) const
     MILO_ASSERT(app_label, 0x91);
     if (uiListLabel->Matches("sort_header")) {
         app_label->SetFromGeneralSelectNode(this);
-    } else if (!uiListLabel->Matches("challenge_count")) {
-        if (uiListLabel->Matches("header_collapse")) {
-            bool isHighlighted = TheChallengeSortMgr->GetHighlightItem() == this;
-            SetCollapseStateIcon(isHighlighted);
-        } else {
-            uiLabel->SetTextToken(gNullStr);
-        }
+    } else if (uiListLabel->Matches("challenge_count")) {
+        SetItemCountString(uiLabel);
+    } else if (uiListLabel->Matches("header_collapse")) {
+        bool isHighlighted = TheChallengeSortMgr->GetHighlightItem() == this;
+        SetCollapseStateIcon(isHighlighted);
+    } else {
+        uiLabel->SetTextToken(gNullStr);
     }
 }
 
@@ -130,6 +117,19 @@ Symbol ChallengeHeaderNode::OnSelect() {
         TheChallengeSortMgr->SetHeaderCollapsed(GetToken());
     }
     return gNullStr;
+}
+
+char const *ChallengeHeaderNode::GetAlbumArtPath() {
+    static Symbol by_album("by_album");
+    static Symbol singles("singles");
+
+    if (TheChallengeSortMgr->GetCurrentSort()->GetSortName() == by_album
+        && GetToken() != singles) {
+        auto node = mChildren.begin();
+        if (node != mChildren.end())
+            return (*node)->GetAlbumArtPath();
+    }
+    return 0;
 }
 
 void ChallengeHeaderNode::SetCollapseStateIcon(bool b) const {
@@ -169,8 +169,7 @@ Symbol ChallengeHeaderNode::OnSelectDone() {
 }
 
 int ChallengeHeaderNode::GetSongID() {
-    auto _tmp1 = mChildren.size();
-    if (_tmp1 == 0) {
+    if (mChildren.size() == 0) {
         return 0;
     }
     ChallengeSortNode *node = static_cast<ChallengeSortNode *>(mChildren.front());
@@ -179,33 +178,39 @@ int ChallengeHeaderNode::GetSongID() {
 }
 
 String ChallengeHeaderNode::GetSongShortTitle() {
-    auto _tmp1 = mChildren.size();
-    const char *title = gNullStr;
-    if (_tmp1 != 0) {
-        ChallengeSortNode *node = static_cast<ChallengeSortNode *>(mChildren.front());
-        MILO_ASSERT(node, 0x149);
-        title = node->GetChallengeRecord()->GetSongTitle().Str();
+    if (mChildren.size() == 0) {
+        return gNullStr;
     }
-    return String(title);
+
+    ChallengeSortNode *node = static_cast<ChallengeSortNode *>(mChildren.front());
+    MILO_ASSERT(node, 0x149);
+    return node->GetChallengeRecord()->GetSongTitle().Str();
 }
 
 Symbol ChallengeHeaderNode::GetSongShortName() {
-    if (!mChildren.size()) {
+    if (mChildren.size() == 0) {
         return gNullStr;
     }
     return mChildren.front()->GetToken();
 }
 
-const char *ChallengeHeaderNode::GetAlbumArtPath() {
-    static Symbol by_album("by_album");
-    static Symbol singles("singles");
-
-    NavListSort *sort = TheChallengeSortMgr->GetCurrentSort();
-    if (sort->GetSortName() == by_album && GetToken() != singles
-        && !mChildren.empty()) {
-        return mChildren.front()->GetAlbumArtPath();
+int ChallengeHeaderNode::GetTotalEarnedExp(int playerScore) {
+    int xp = 0;
+    FOREACH (it, mChildren) {
+        NavListSortNode *node = *it;
+        MILO_ASSERT(node, 0xf5);
+        if (playerScore
+            >= static_cast<ChallengeSortNode *>(node)
+                   ->GetChallengeRecord()
+                   ->GetChallengeRow()
+                   .mScore) {
+            xp += static_cast<ChallengeSortNode *>(node)->GetChallengeExp();
+        }
     }
-    return nullptr;
+    if (xp == 0) {
+        xp = TheChallenges->GetConsolationXP();
+    }
+    return xp;
 }
 
 BEGIN_HANDLERS(ChallengeHeaderNode)
@@ -235,12 +240,14 @@ int ChallengeSortNode::GetChallengerXp() {
     return mChallengeRecord->GetChallengeRow().mChallengerXp;
 }
 
+int ChallengeSortNode::GetDifficulty() {
+    return mChallengeRecord->GetChallengeRow().mDiff;
+}
+
 const char *ChallengeSortNode::GetChallengerGamertag() {
     int type = mChallengeRecord->GetChallengeRow().mType;
-    // Check if type is in range [0,2] (medal challenges)
     bool isHarmonix = (type >= 0 && type <= 2);
     if (!isHarmonix) {
-        // Check if type is in range [3,5] (song challenges)
         isHarmonix = (type >= 3 && type <= 5);
         if (!isHarmonix) {
             return mChallengeRecord->GetChallengerGamertag().Str();
@@ -330,93 +337,123 @@ void ChallengeSortNode::Text(UIListLabel *listlabel, UILabel *label) const {
         int ownerChallengeScore = TheChallengeSortMgr->GetOwnerChallengeScore(
             mChallengeRecord->GetChallengeRow().mSongID
         );
-        if (ownerChallengeScore >= mChallengeRecord->GetChallengeRow().mScore) {
+        if (ownerChallengeScore <= mChallengeRecord->GetChallengeRow().mScore) {
             if (mChallengeRecord->GetChallengerGamertag() != mChallengeRecord->GetMissionInfo()) {
-                int ownerChallengeTimestamp = TheChallengeSortMgr->GetOwnerChallengeTimeStamp(
-                    mChallengeRecord->GetChallengeRow().mSongID
-                );
-                if (ownerChallengeTimestamp
-                    <= (int)mChallengeRecord->GetChallengeRow().mTimeStamp) {
-                    app_label->SetChallengerName(mChallengeRecord->GetChallengerGamertag().Str());
-                }
-            } else {
                 app_label->SetChallengerName(mChallengeRecord->GetChallengerGamertag().Str());
+            } else {
+                label->SetTextToken(gNullStr);
+            }
+        } else {
+            int ownerChallengeTimestamp = TheChallengeSortMgr->GetOwnerChallengeTimeStamp(
+                mChallengeRecord->GetChallengeRow().mSongID
+            );
+            if (ownerChallengeTimestamp
+                <= (int)mChallengeRecord->GetChallengeRow().mTimeStamp) {
+                app_label->SetChallengerName(mChallengeRecord->GetChallengerGamertag().Str());
+            } else {
+                label->SetTextToken(gNullStr);
             }
         }
     } else if (listlabel->Matches("low_gamertag")) {
         int ownerChallengeScore = TheChallengeSortMgr->GetOwnerChallengeScore(
             mChallengeRecord->GetChallengeRow().mSongID
         );
-        if (ownerChallengeScore > mChallengeRecord->GetChallengeRow().mScore
-            && TheChallengeSortMgr->GetOwnerChallengeTimeStamp(
-                   mChallengeRecord->GetChallengeRow().mSongID
-               ) > (int)mChallengeRecord->GetChallengeRow().mTimeStamp) {
-            app_label->SetChallengerName(mChallengeRecord->GetChallengerGamertag().Str());
+        if (ownerChallengeScore > mChallengeRecord->GetChallengeRow().mScore) {
+            int ownerChallengeTimestamp = TheChallengeSortMgr->GetOwnerChallengeTimeStamp(
+                mChallengeRecord->GetChallengeRow().mSongID
+            );
+            if (ownerChallengeTimestamp
+                > (int)mChallengeRecord->GetChallengeRow().mTimeStamp) {
+                app_label->SetChallengerName(mChallengeRecord->GetChallengerGamertag().Str());
+            } else {
+                label->SetTextToken(gNullStr);
+            }
+        } else {
+            label->SetTextToken(gNullStr);
         }
     } else if (listlabel->Matches("right_gamertag")) {
         if (mChallengeRecord->GetChallengerGamertag() == mChallengeRecord->GetMissionInfo()
             && GetPlayerSide() == 1) {
             app_label->SetChallengerName(mChallengeRecord->GetChallengerGamertag().Str());
+        } else {
+            label->SetTextToken(gNullStr);
         }
     } else if (listlabel->Matches("left_gamertag")) {
         if (mChallengeRecord->GetChallengerGamertag() == mChallengeRecord->GetMissionInfo()
-            && !GetPlayerSide()) {
+            && GetPlayerSide() == 0) {
             app_label->SetChallengerName(mChallengeRecord->GetChallengerGamertag().Str());
+        } else {
+            label->SetTextToken(gNullStr);
         }
     } else if (listlabel->Matches("score")) {
         int ownerChallengeScore = TheChallengeSortMgr->GetOwnerChallengeScore(
             mChallengeRecord->GetChallengeRow().mSongID
         );
-        if (ownerChallengeScore > mChallengeRecord->GetChallengeRow().mScore) {
-            if (mChallengeRecord->GetChallengerGamertag() == mChallengeRecord->GetMissionInfo()) {
-                int ownerChallengeTimestamp = TheChallengeSortMgr->GetOwnerChallengeTimeStamp(
-                    mChallengeRecord->GetChallengeRow().mSongID
-                );
-                if (ownerChallengeTimestamp
-                    <= (int)mChallengeRecord->GetChallengeRow().mTimeStamp) {
-                    app_label->SetChallengeScoreLabel(
-                        mChallengeRecord->GetChallengeRow().mScore
-                    );
-                }
-            } else {
+        if (ownerChallengeScore <= mChallengeRecord->GetChallengeRow().mScore) {
+            if (mChallengeRecord->GetChallengerGamertag() != mChallengeRecord->GetMissionInfo()) {
                 app_label->SetChallengeScoreLabel(
                     mChallengeRecord->GetChallengeRow().mScore
                 );
+            } else {
+                label->SetTextToken(gNullStr);
+            }
+        } else {
+            int ownerChallengeTimestamp = TheChallengeSortMgr->GetOwnerChallengeTimeStamp(
+                mChallengeRecord->GetChallengeRow().mSongID
+            );
+            if (ownerChallengeTimestamp
+                <= (int)mChallengeRecord->GetChallengeRow().mTimeStamp) {
+                app_label->SetChallengeScoreLabel(
+                    mChallengeRecord->GetChallengeRow().mScore
+                );
+            } else {
+                label->SetTextToken(gNullStr);
             }
         }
     } else if (listlabel->Matches("low_score")) {
         int ownerChallengeScore = TheChallengeSortMgr->GetOwnerChallengeScore(
             mChallengeRecord->GetChallengeRow().mSongID
         );
-        if (ownerChallengeScore > mChallengeRecord->GetChallengeRow().mScore
-            && TheChallengeSortMgr->GetOwnerChallengeTimeStamp(
-                   mChallengeRecord->GetChallengeRow().mSongID
-               ) > (int)mChallengeRecord->GetChallengeRow().mTimeStamp) {
-            app_label->SetChallengeScoreLabel(mChallengeRecord->GetChallengeRow().mScore);
+        if (ownerChallengeScore > mChallengeRecord->GetChallengeRow().mScore) {
+            int ownerChallengeTimestamp = TheChallengeSortMgr->GetOwnerChallengeTimeStamp(
+                mChallengeRecord->GetChallengeRow().mSongID
+            );
+            if (ownerChallengeTimestamp
+                > (int)mChallengeRecord->GetChallengeRow().mTimeStamp) {
+                app_label->SetChallengeScoreLabel(
+                    mChallengeRecord->GetChallengeRow().mScore
+                );
+            } else {
+                label->SetTextToken(gNullStr);
+            }
+        } else {
+            label->SetTextToken(gNullStr);
         }
     } else if (listlabel->Matches("right_score")) {
         if (mChallengeRecord->GetChallengerGamertag() == mChallengeRecord->GetMissionInfo()
             && GetPlayerSide() == 1) {
             app_label->SetChallengeScoreLabel(mChallengeRecord->GetChallengeRow().mScore);
+        } else {
+            label->SetTextToken(gNullStr);
         }
     } else if (listlabel->Matches("left_score")) {
         if (mChallengeRecord->GetChallengerGamertag() == mChallengeRecord->GetMissionInfo()
-            && !GetPlayerSide()) {
+            && GetPlayerSide() == 0) {
             app_label->SetChallengeScoreLabel(mChallengeRecord->GetChallengeRow().mScore);
+        } else {
+            label->SetTextToken(gNullStr);
         }
     } else if (listlabel->Matches("medal")) {
         SetMedalIcon(label);
-        return;
     } else if (listlabel->Matches("new")) {
         SetNewIcon(label);
-        return;
     } else if (listlabel->Matches("buy")) {
         SetBuyIcon(label);
-        return;
     } else if (listlabel->Matches("header_collapse")) {
+        label->SetTextToken(gNullStr);
+    } else {
+        label->SetTextToken(gNullStr);
     }
-    Symbol blank(gNullStr);
-    label->SetTextToken(blank);
 }
 
 Symbol ChallengeSortNode::Select() {
@@ -426,10 +463,10 @@ Symbol ChallengeSortNode::Select() {
     static Symbol server_not_available_screen("server_not_available_screen");
     Symbol screen = show_offers_need_to_sign_in_screen;
     HamProfile *activeProfile = TheProfileMgr.GetActiveProfile(true);
-    if (activeProfile != 0) {
+    if (activeProfile) {
         activeProfile->UpdateOnlineID();
-        if (activeProfile->IsSignedIn() && ThePlatformMgr.IsSignedIntoLive(activeProfile->GetPadNum()) != 0) {
-            if (TheRockCentral.IsOnline() != 0) {
+        if (activeProfile->IsSignedIn() && ThePlatformMgr.IsSignedIntoLive(activeProfile->GetPadNum())) {
+            if (TheRockCentral.IsOnline()) {
                 screen = store_loading_screen;
             } else {
                 screen = server_not_available_screen;
@@ -437,11 +474,11 @@ Symbol ChallengeSortNode::Select() {
         }
     }
     static Symbol should_back_to_challenges("should_back_to_challenges");
-    int unk50 = mChallengeRecord->GetSongContentLockState();
-    if (unk50 != 1) {
-        if (unk50 > 1) {
-            if (unk50 > 3) {
-                if (unk50 == 4) {
+    int lockState = mChallengeRecord->GetSongContentLockState();
+    if (lockState != 1) {
+        if (lockState > 1) {
+            if (lockState > 3) {
+                if (lockState == 4) {
                     if (screen == store_loading_screen) {
                         static Symbol advertised_songid("advertised_songid");
                         UIScreen *storeScreen = ObjectDir::Main()->Find<UIScreen>("store_loading_screen", true);
@@ -465,10 +502,10 @@ Symbol ChallengeSortNode::Select() {
     }
     Symbol token = GetToken();
     HamProfile *profile = TheProfileMgr.GetActiveProfile(true);
-    if (profile != 0 && profile->IsContentNew(token) != 0) {
+    if (profile && profile->IsContentNew(token)) {
         profile->MarkContentNotNew(token);
     }
-    if (UseQuickplayPerformer() != 0) {
+    if (UseQuickplayPerformer()) {
         MetaPerformer *performer = MetaPerformer::Current();
         performer->SetSong(GetToken());
     }
@@ -496,8 +533,9 @@ const char *ChallengeSortNode::GetAlbumArtPath() {
 void ChallengeSortNode::OnContentMounted(const char *contentName, const char *c2) {
     MILO_ASSERT(contentName, 0x1c1);
     if (!TheContentMgr.RefreshInProgress()) {
+        int songID = mChallengeRecord->GetChallengeRow().mSongID;
         Symbol sContentName(contentName);
-        if (TheHamSongMgr.IsContentUsedForSong(sContentName, mChallengeRecord->GetChallengeRow().mSongID)) {
+        if (TheHamSongMgr.IsContentUsedForSong(sContentName, songID)) {
             static Symbol song_data_mounted("song_data_mounted");
             static Message msg(song_data_mounted, gNullStr);
             msg[0] = GetToken();
@@ -522,6 +560,10 @@ void ChallengeSortNode::Custom(UIListCustom *list, Hmx::Object *obj) const {
         }
     }
 }
+
+BEGIN_HANDLERS(ChallengeSortNode)
+    HANDLE_SUPERCLASS(NavListItemNode)
+END_HANDLERS
 
 #pragma endregion
 

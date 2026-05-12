@@ -60,6 +60,7 @@ public:
           mObjPtr(other.mObjPtr) {}
     ~FlowPtr() {}
 
+    // see: merged_82401EF0
     void operator=(T *obj) {
         Hmx::Object *hmxObj;
         const char *nameStr;
@@ -94,6 +95,8 @@ public:
 
     operator T *() { return Get(); }
 
+    T *Ptr() const { return mObjPtr; }
+
     T *operator->() {
         T *o = Get();
         MILO_ASSERT(o, 0xB2);
@@ -103,6 +106,14 @@ public:
     T *LoadFromMainOrDir(BinStream &bs) {
         mObjPtr = dynamic_cast<T *>(LoadObject(bs));
         return mObjPtr;
+    }
+
+    void Save(BinStream &bs) const {
+        if (mObjPtr && mState == -2) {
+            bs << mObjPtr;
+        } else {
+            bs << mObjName;
+        }
     }
 
 private:
