@@ -88,8 +88,8 @@
 #include "utl/TimeConversion.h"
 #include <cstring>
 
-SongDB *MetaPanel::sSongDB = nullptr;
-HamMaster *MetaPanel::sHamMaster = nullptr;
+static SongDB *sSongDB; // DAT_821189a0
+static HamMaster *sHamMaster; // DAT_8311899c
 #ifdef HX_NATIVE
 bool MetaPanel::sMotdCheat;
 bool MetaPanel::sUnlockAll;

@@ -22,6 +22,7 @@ public:
 
     void SetSongChallenge(Difficulty);
     void SetSong(int);
+    void SetSongLastPlayed(int);
     void SetSongCampaign(int);
     void SetSongWithDifficulty(int, Difficulty, bool);
 

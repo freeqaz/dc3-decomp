@@ -126,8 +126,8 @@ void UIEventMgr::DismissEvent(Symbol dismissReason) {
     MILO_ASSERT(mEventQueue.front()->mActive, 0x2E);
     Symbol curEvent = CurrentEvent();
     EventType eventType = mEventQueue.front()->mType;
-    RELEASE(mEventQueue.front());
-    mEventQueue.clear();
+    delete mEventQueue.front();
+    mEventQueue.erase(mEventQueue.begin());
     if (eventType == kDialogEvent) {
         static EventDialogDismissMsg dismiss_msg(gNullStr, gNullStr);
         dismiss_msg[0] = curEvent;

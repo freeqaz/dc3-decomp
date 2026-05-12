@@ -169,8 +169,8 @@ protected:
     bool mForceSpeechLanguageSupport; // 0x78
     bool mDisableFreestyle; // 0x79
     Symbol mVenuePreference; // 0x7c
-    int mSystemLocale; // 0x80
-    int mSystemLanguage; // 0x84
+    DWORD mSystemLocale; // 0x80
+    DWORD mSystemLanguage; // 0x84
     DataArray *mSliderConfig; // 0x88
     DataArray *mVoiceChatSliderConfig; // 0x8c
     std::vector<HamProfile *> mProfiles;

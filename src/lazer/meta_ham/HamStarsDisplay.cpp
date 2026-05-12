@@ -13,18 +13,16 @@
 #include "utl/Symbol.h"
 
 BEGIN_HANDLERS(HamStarsDisplay)
-    HANDLE_ACTION(set_song, SetSongImpl(_msg->Int(2), kNumDifficulties, kStarDisplay_0))
+    HANDLE_ACTION(set_song, SetSong(_msg->Int(2)))
     HANDLE_ACTION(
         set_song_with_diff,
-        SetSongImpl(_msg->Int(2), (Difficulty)_msg->Int(3), kStarDisplay_1)
+        SetSongWithDifficulty(_msg->Int(2), (Difficulty)_msg->Int(3), false)
     )
     HANDLE_ACTION(
         set_song_with_diff_always,
-        SetSongImpl(_msg->Int(2), (Difficulty)_msg->Int(3), kStarDisplay_2)
+        SetSongWithDifficulty(_msg->Int(2), (Difficulty)_msg->Int(3), true)
     )
-    HANDLE_ACTION(
-        set_song_last_played, SetSongImpl(_msg->Int(2), kNumDifficulties, kStarDisplay_3)
-    )
+    HANDLE_ACTION(set_song_last_played, SetSongLastPlayed(_msg->Int(2)))
     HANDLE_SUPERCLASS(StarsDisplay)
 END_HANDLERS
 
@@ -38,6 +36,10 @@ void HamStarsDisplay::SetSongChallenge(Difficulty diff) {
 }
 
 void HamStarsDisplay::SetSong(int i) { SetSongImpl(i, kNumDifficulties, kStarDisplay_0); }
+
+void HamStarsDisplay::SetSongLastPlayed(int i) {
+    SetSongImpl(i, kNumDifficulties, kStarDisplay_3);
+}
 
 void HamStarsDisplay::SetSongCampaign(int i) {
     SetSongImpl(i, kNumDifficulties, kStarDisplay_4);
