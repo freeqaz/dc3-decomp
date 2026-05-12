@@ -154,8 +154,8 @@ void VoiceInputPanel::OnConfidenceChange(float conf) {
     }
 }
 
-void VoiceInputPanel::CreateSongSelectGrammar(Symbol s1) const {
-    if (!TheSpeechMgr || !TheSpeechMgr->Enabled()) {
+void VoiceInputPanel::CreateSongSelectGrammar(Symbol language) const {
+    if (!TheSpeechMgr->Enabled()) {
         MILO_NOTIFY(
             "----- VoiceInputPanel::CreateSongSelectGrammar() - speechMgr not enabled\n"
         );
@@ -203,16 +203,15 @@ void VoiceInputPanel::CreateSongSelectGrammar(Symbol s1) const {
             const std::vector<PronunciationsLoc> &locs = data->PronunciationsLocalized();
             const std::vector<String> *pronsPtr = &data->Pronunciations();
             FOREACH (loc, locs) {
-                if (loc->mLanguage == s1) {
+                if (loc->mLanguage == language) {
                     pronsPtr = &loc->mPronunciations;
                     break;
                 }
             }
-            const std::vector<String> &prons = *pronsPtr;
-            for (int i = 0; i < prons.size(); i++) {
+            for (int i = 0; i < pronsPtr->size(); i++) {
                 TheSpeechMgr->AddDynamicRuleWord(
                     "song_select_grammar",
-                    prons[i].c_str(),
+                    (*pronsPtr)[i].c_str(),
                     data->ShortName().Str(),
                     &v94,
                     nullptr

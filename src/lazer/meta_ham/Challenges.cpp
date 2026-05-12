@@ -592,20 +592,18 @@ void Challenges::Init() {
 void Challenges::SetupInGameData() {
     NavListSortNode *node = TheChallengeSortMgr->GetHighlightItem();
     MILO_ASSERT(node, 0x2e5);
-
-    ChallengeRecord *record;
-    ChallengeSortNode *sortNode = dynamic_cast<ChallengeSortNode *>(node);
-    if (sortNode) {
-        auto challengeRecord = sortNode->GetChallengeRecord();
-        record = challengeRecord;
-    }
+    ChallengeSortNode *challenge = static_cast<ChallengeSortNode *>(node);
+    MILO_ASSERT(challenge, 0x2e7);
+    ChallengeRecord *record = challenge->GetChallengeRecord();
     MILO_ASSERT(record, 0x2e9);
 
-    int cost = record->GetChallengeRow().mDiff;
     int songID = record->GetChallengeRow().mSongID;
+    int score = record->GetChallengeRow().mScore;
+    Symbol record48 = record->GetChallengerGamertag();
 
     HamProfile *primaryProfile = TheProfileMgr.GetActiveProfile(true);
     MILO_ASSERT(primaryProfile, 0x2f0);
+    TheProfileMgr.SetCriticalProfile(primaryProfile);
     static Symbol has_valid_challenge_data("has_valid_challenge_data");
     static Symbol primary_challenge_player("primary_challenge_player");
     for (int i = 0; i < 2; i++) {
@@ -613,20 +611,31 @@ void Challenges::SetupInGameData() {
         MILO_ASSERT(playerData, 0x2fb);
         PropertyEventProvider *provider = playerData->Provider();
         MILO_ASSERT(provider, 0x2fd);
-        provider->SetProperty(has_valid_challenge_data, DataNode(false));
+        provider->SetProperty(has_valid_challenge_data, 0);
         mPlayerChallenges[i].clear();
-        auto padNum = playerData->PadNum();
         HamProfile *profileFromPad =
-            TheProfileMgr.GetProfileFromPad(padNum);
+            TheProfileMgr.GetProfileFromPad(playerData->PadNum());
         if (profileFromPad) {
             if (profileFromPad == primaryProfile) {
                 SetupInGameChallenges(
-                    songID, cost, nullptr, primaryProfile, true, mPlayerChallenges[i], provider
+                    songID,
+                    score,
+                    record48.Str(),
+                    primaryProfile,
+                    true,
+                    mPlayerChallenges[i],
+                    provider
                 );
-                TheHamProvider->SetProperty(primary_challenge_player, DataNode(0));
+                TheHamProvider->SetProperty(primary_challenge_player, i);
             } else {
                 SetupInGameChallenges(
-                    songID, cost, nullptr, profileFromPad, false, mPlayerChallenges[i], provider
+                    songID,
+                    score,
+                    record48.Str(),
+                    profileFromPad,
+                    false,
+                    mPlayerChallenges[i],
+                    provider
                 );
             }
         }
@@ -937,53 +946,48 @@ bool Challenges::HasNewChallenges() {
     if (!mProfileChallenges.empty()) {
         HamProfile *profile = TheProfileMgr.GetActiveProfile(true);
         if (profile) {
-            String name(profile->GetName());
-            std::map<String, std::vector<ChallengeRow> >::iterator it =
-                mProfileChallenges.find(name);
+            String name = profile->GetName();
+            auto it = mProfileChallenges.find(name);
             if (it != mProfileChallenges.end()) {
+                std::map<int, int> scores;
                 std::vector<ChallengeRow> &rows = it->second;
-                std::map<int, int> bestScores;
 
-                for (unsigned int i = 0; i < rows.size(); i++) {
+                for (int i = 0; i < rows.size(); i++) {
                     if (rows[i].mGamertag == rows[i].mNotes) {
                         int songID = rows[i].mSongID;
-                        bestScores[songID] = (int)rows[i].mTimeStamp;
+                        scores[songID] = rows[i].mTimeStamp;
                     }
                 }
 
-                for (unsigned int i = 0; i < rows.size(); i++) {
-                    Symbol shortName =
+                for (int i = 0; i < rows.size(); i++) {
+                    Symbol shortname =
                         TheHamSongMgr.GetShortNameFromSongID(rows[i].mSongID, false);
-                    if (shortName.Null()
-                        || TheProfileMgr.IsContentUnlocked(shortName)) {
+                    if (shortname.Null() || TheProfileMgr.IsContentUnlocked(shortname)) {
                         int songID = rows[i].mSongID;
-                        std::map<int, int>::iterator found =
-                            bestScores.find(songID);
-                        if (found == bestScores.end()) {
-                            goto found_new;
-                        }
-                        if (found->second < (int)rows[i].mTimeStamp) {
-                            goto found_new;
+                        auto find = scores.find(songID);
+
+                        if (find != scores.end()) {
+                            if (find->second < (int)rows[i].mTimeStamp) {
+                                return true;
+                            }
+                        } else {
+                            return true;
                         }
                     }
                 }
 
-                for (unsigned int i = 0; i < mOfficialChallenges.size(); i++) {
+                for (int i = 0; i < mOfficialChallenges.size(); i++) {
                     int songID = mOfficialChallenges[i].mSongID;
-                    std::map<int, int>::iterator found =
-                        bestScores.find(songID);
-                    if (found == bestScores.end()) {
-                        goto found_new;
-                    }
-                    if (found->second < (int)mOfficialChallenges[i].mTimeStamp) {
-                        goto found_new;
-                    }
+                    auto find = scores.find(songID);
+
+                    if (find != scores.end()) {
+                        if (find->second < (int)mOfficialChallenges[i].mTimeStamp) {
+                            return true;
+                        }
+                    } else
+                        return true;
                 }
             }
-            return false;
-
-        found_new:
-            return true;
         }
         return false;
     }
