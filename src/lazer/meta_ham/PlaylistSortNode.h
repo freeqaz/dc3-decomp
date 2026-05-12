@@ -29,22 +29,24 @@ protected:
 class PlaylistHeaderNode : public NavListHeaderNode {
 public:
     // Hmx::Object
+    virtual ~PlaylistHeaderNode() {}
     virtual DataNode Handle(DataArray *, bool);
 
     // NavListSortNode
-    virtual Symbol Select();
     virtual Symbol OnSelect();
+    virtual Symbol Select();
     virtual Symbol OnSelectDone();
     virtual void OnHighlight();
-    virtual NavListSortNode *GetFirstActive();
+    NavListSortNode *GetFirstActive();
     virtual void Text(UIListLabel *, UILabel *) const;
     virtual bool IsActive() const;
-    virtual void UpdateItemCount(NavListItemNode *);
     char const *GetAlbumArtPath();
     virtual void Renumber(std::vector<NavListSortNode *> &);
+    virtual void UpdateItemCount(NavListItemNode *);
+    virtual void SetItemCountString(UILabel *) const;
 
     PlaylistHeaderNode(NavListItemSortCmp *, Symbol, bool);
 
 protected:
-    int mChallengeCount;
+    int mChallengeCount; // 0x58
 };

@@ -576,17 +576,23 @@ BEGIN_HANDLERS(MainMenuPanel)
     HANDLE_SUPERCLASS(HamPanel)
 END_HANDLERS
 
-void MainMenuPanel::LoadArt(String path) {
-    if (path == gNullStr)
+void MainMenuPanel::LoadArt(String s) {
+    if (s == gNullStr) {
         return;
-    FOREACH (it, mNetCacheLoaders) {
-        if (path == (*it)->GetRemotePath()) {
+    }
+
+    auto it = mNetCacheLoaders.begin();
+    for (; it != mNetCacheLoaders.end(); ++it) {
+        if (s == (*it)->GetRemotePath()) {
             return;
         }
     }
-    NetCacheLoader *loader = TheNetCacheMgr->AddNetCacheLoader(path.c_str(), (NetLoaderPos)0);
-    if (loader) {
-        mNetCacheLoaders.push_back(loader);
+    if (it == mNetCacheLoaders.end()) {
+        NetCacheLoader *pLoader =
+            TheNetCacheMgr->AddNetCacheLoader(s.c_str(), (NetLoaderPos)0);
+        if (pLoader) {
+            mNetCacheLoaders.push_back(pLoader);
+        }
     }
 }
 

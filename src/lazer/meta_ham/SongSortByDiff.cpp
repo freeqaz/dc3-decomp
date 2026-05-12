@@ -51,8 +51,6 @@ int DifficultyCmp::Compare(const NavListItemSortCmp *cmp, NavListNodeType type) 
 
 DifficultyCmp::~DifficultyCmp() {}
 
-SongSortByDiff::~SongSortByDiff() {}
-
 NavListItemNode *SongSortByDiff::NewItemNode(void *v) const {
     SongRecord *record = static_cast<SongRecord *>(v);
     int tier = record->GetTier();

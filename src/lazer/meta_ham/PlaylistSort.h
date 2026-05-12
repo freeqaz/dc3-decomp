@@ -1,6 +1,7 @@
 #pragma once
 #include "NavListSort.h"
 #include "meta_ham/NavListNode.h"
+#include "utl/Symbol.h"
 
 class PlaylistSort : public NavListSort {
 public:
@@ -27,5 +28,8 @@ public:
     virtual NavListHeaderNode *NewHeaderNode(NavListItemNode *) const;
     virtual NavListHeaderNode *NewHeaderNode(NavListItemNode *, NavListItemNode *) const;
 
-    PlaylistSortByType();
+    PlaylistSortByType() {
+        static Symbol by_type("by_type");
+        mSortName = by_type;
+    }
 };

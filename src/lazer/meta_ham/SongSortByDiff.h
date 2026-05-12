@@ -23,8 +23,11 @@ public:
 
 class SongSortByDiff : public SongSort {
 public:
-    SongSortByDiff();
-    virtual ~SongSortByDiff();
+    SongSortByDiff() {
+        static Symbol by_difficulty("by_difficulty");
+        SetSortName(by_difficulty);
+    }
+    virtual ~SongSortByDiff() {};
 
     virtual NavListItemNode *NewItemNode(void *) const;
     virtual NavListHeaderNode *NewHeaderNode(NavListItemNode *) const;

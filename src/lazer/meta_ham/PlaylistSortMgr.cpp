@@ -57,11 +57,6 @@ PlaylistSortMgr::PlaylistSortMgr(SongPreview &sp) : NavListSortMgr(sp) {
 
 PlaylistSort::~PlaylistSort() {}
 
-PlaylistSortByType::PlaylistSortByType() {
-    static Symbol by_type("by_type");
-    mSortName = by_type;
-}
-
 PlaylistSortMgr::~PlaylistSortMgr() {}
 
 void PlaylistSortMgr::Init(SongPreview &sp) {

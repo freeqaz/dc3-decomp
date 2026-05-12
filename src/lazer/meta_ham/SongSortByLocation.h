@@ -18,7 +18,10 @@ public:
 
 class SongSortByLocation : public SongSort {
 public:
-    SongSortByLocation();
+    SongSortByLocation() {
+        static Symbol by_location("by_location");
+        SetSortName(by_location);
+    }
     virtual ~SongSortByLocation() {}
 
     virtual NavListItemNode *NewItemNode(void *) const;
