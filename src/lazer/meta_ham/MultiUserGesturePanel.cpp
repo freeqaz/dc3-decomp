@@ -284,14 +284,8 @@ int MultiUserGesturePanel::GetPlayerIndex(int idx) const {
     MILO_ASSERT(pSkeletonChooser, 0x68);
     SkeletonSide playerSide = pSkeletonChooser->GetPlayerSide(0);
     const DataNode *prop = TheHamProvider->Property("is_in_party_mode", true);
-    int check = prop->Int();
-    if (check == 0) {
-        check = playerSide - 1;
-        if ((unsigned int)idx == 0) {
-            idx = check - ((playerSide - 2) + (playerSide - 1 == 0));
-        } else {
-            idx = playerSide == 0;
-        }
+    if (prop->Int() != 0) {
+        return idx;
     }
     if (idx == 0) {
         return playerSide != kSkeletonRight;

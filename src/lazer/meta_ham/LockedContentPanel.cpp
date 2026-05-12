@@ -68,17 +68,12 @@ void LockedContentPanel::SetVoiceOver(Sound *s, bool b) {
 
 void LockedContentPanel::FinishLoad() {
     UIPanel::FinishLoad();
-    HamLabel **ptr = &mLabels[7];
-    int count = 8;
-    int i = 1;
-    do {
-        ptr[-7] = (HamLabel *)mDir->Find<AppLabel>(MakeString("song_name0%d.lbl", i), true);
-        HamStarsDisplay *stars = mDir->Find<HamStarsDisplay>(MakeString("stars0%d.std", i), true);
-        *++ptr = (HamLabel *)stars;
-        count -= 1;
-        i += 1;
+    for (int i = 0; i < 8; i++) {
+        mLabels[i] = (HamLabel *)mDir->Find<AppLabel>(MakeString("song_name0%d.lbl", i + 1));
+        HamStarsDisplay *stars = mDir->Find<HamStarsDisplay>(MakeString("stars0%d.std", i + 1));
+        mLabels[i + 8] = (HamLabel *)stars;
         stars->SetShowUnplayedSong(true);
-    } while (count != 0);
+    }
 }
 
 void LockedContentPanel::TriggerTeaserText() {
@@ -117,8 +112,8 @@ void LockedContentPanel::SetUpCampaignMasterQuestHeader(Symbol song) {
     Symbol s = TheAccomplishmentMgr->GetAssetSource(song);
     Accomplishment *pAccomplishment = TheAccomplishmentMgr->GetAccomplishment(s);
     AppLabel *pContentName = DataDir()->Find<AppLabel>("content_name.lbl");
-    HamLabel *pInstructions = DataDir()->Find<HamLabel>("instructions.lbl");
     HamLabel *pTeaser = DataDir()->Find<HamLabel>("teaser.lbl");
+    HamLabel *pInstructions = DataDir()->Find<HamLabel>("instructions.lbl");
     HamLabel *pProgress = DataDir()->Find<HamLabel>("progress.lbl");
     HamLabel *pPracticeScore = DataDir()->Find<HamLabel>("practice_score.lbl");
     pContentName->SetTextToken(gNullStr);
@@ -131,16 +126,15 @@ void LockedContentPanel::SetUpCampaignMasterQuestHeader(Symbol song) {
     if (!pAccomplishment) {
         MILO_NOTIFY("Could not find accomplishment for %s", song);
     } else {
-        auto accomplishmentType = pAccomplishment->GetType();
-        auto type = pAccomplishment->GetType();
-        if (type == kAccomplishmentTypeLessonSongListConditional
-            || accomplishmentType == kAccomplishmentTypeTourConditional) {
+        if (pAccomplishment->GetType() == kAccomplishmentTypeLessonSongListConditional
+            || pAccomplishment->GetType() == kAccomplishmentTypeTourConditional) {
             AccomplishmentCountConditional *pAccomplishmentCountConditional =
                 dynamic_cast<AccomplishmentCountConditional *>(pAccomplishment);
             Flow *pFlow = DataDir()->Find<Flow>("one_shot.flow");
             pFlow->Activate();
-            auto awardInstructionToken = MakeString("%s%s%s", "award_", song, "_instruction");
-            pTeaser->SetTextToken(awardInstructionToken);
+            pInstructions->SetTextToken(
+                MakeString("%s%s%s", "award_", song, "_instruction")
+            );
         } else {
             MILO_ASSERT(false, 0xbe);
         }
@@ -211,8 +205,8 @@ void LockedContentPanel::SetUpNoFlashcards(Symbol song, Difficulty diff) {
     } while (loopCount != 0);
 }
 
-void LockedContentPanel::SetUpDifficultyLocked(Symbol song, Symbol difficultySymbol) {
-    Difficulty diff = SymToDifficulty(difficultySymbol);
+void LockedContentPanel::SetUpDifficultyLocked(Symbol s1, Symbol s2) {
+    Difficulty diff = SymToDifficulty(s2);
     MILO_ASSERT(diff > kDifficultyEasy, 0x111);
     AppLabel *pContentName = DataDir()->Find<AppLabel>("content_name.lbl");
     HamLabel *pTeaser = DataDir()->Find<HamLabel>("teaser.lbl");
@@ -231,44 +225,34 @@ void LockedContentPanel::SetUpDifficultyLocked(Symbol song, Symbol difficultySym
     static Symbol award_hard_playlist_instruction("award_hard_playlist_instruction");
     static Symbol award_mediummedley_instruction("award_mediummedley_instruction");
     static Symbol award_hardmedley_instruction("award_hardmedley_instruction");
-    Symbol diffInstruction;
     if (TheGameMode->InMode("playlist_perform", true)) {
         if (diff == kDifficultyMedium) {
-            diffInstruction = award_medium_playlist_instruction;
+            pInstructions->SetTokenFmt(award_medium_playlist_instruction, 3);
         } else {
-            diffInstruction = award_hard_playlist_instruction;
+            pInstructions->SetTokenFmt(award_hard_playlist_instruction, 3);
         }
-        pInstructions->SetTokenFmt(diffInstruction, 3);
-        HamLabel **pPtr = &mLabels[7];
-        int loopCount = 8;
-        do {
-            pPtr[-7]->SetShowing(false);
-            pPtr++;
-            (*pPtr)->SetShowing(false);
-            loopCount -= 1;
-        } while (loopCount != 0);
+
+        for (int i = 0; i <= 7; i++) {
+            mLabels[i]->SetShowing(false);
+            mLabels[i + 8]->SetShowing(false);
+        }
     } else {
         if (diff == kDifficultyMedium) {
-            diffInstruction = award_medium_instruction;
+            pInstructions->SetTokenFmt(award_medium_instruction, 3);
         } else {
-            diffInstruction = award_expert_instruction;
+            pInstructions->SetTokenFmt(award_expert_instruction, 3);
         }
-        pInstructions->SetTokenFmt(diffInstruction, 3);
-        Flow *pFlowPractice = DataDir()->Find<Flow>("song_list_perform_practice.flow");
-        pFlowPractice->Activate();
-        int songID = TheHamSongMgr.GetSongIDFromShortName(song, true);
+        Flow *pPracticeFlow = DataDir()->Find<Flow>("song_list_perform_practice.flow");
+        pPracticeFlow->Activate();
+        int songID = TheHamSongMgr.GetSongIDFromShortName(s1);
         mLabels[0]->SetShowing(true);
         mLabels[8]->SetShowing(true);
-        ((AppLabel *)mLabels[0])->SetSongName(song, -1, false);
+        ((AppLabel *)mLabels[0])->SetSongName(s1, -1, false);
         ((HamStarsDisplay *)mLabels[8])->SetSongWithDifficulty(songID, (Difficulty)(diff - 1), true);
-        HamLabel **pPtr = &mLabels[8];
-        int loopCount = 7;
-        do {
-            pPtr[-7]->SetShowing(false);
-            pPtr++;
-            (*pPtr)->SetShowing(false);
-            loopCount -= 1;
-        } while (loopCount != 0);
+        for (int i = 1; i <= 7; i++) {
+            mLabels[i]->SetShowing(false);
+            mLabels[i + 8]->SetShowing(false);
+        }
     }
 }
 

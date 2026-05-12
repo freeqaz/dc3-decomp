@@ -182,7 +182,7 @@ Symbol SongSortNode::Select() {
 }
 
 Symbol SongSortNode::OnSelect() {
-    if (UseQuickplayPerformer() && TheSongSortMgr) {
+    if (UseQuickplayPerformer() && !TheSongSortMgr->GetSetlistMode()) {
         MetaPerformer::Current()->ResetSongs();
     }
     Symbol sel = Select();
@@ -190,8 +190,11 @@ Symbol SongSortNode::OnSelect() {
         auto obj = ObjectDir::Main()->Find<UIScreen>(sel.Str(), true);
         TheUI->PushScreen(obj);
         return gNullStr;
-    } else {
+    } else if (!TheSongSortMgr->GetSetlistMode()) {
         return TheSongSortMgr->MoveOn();
+    } else {
+        TheSongSortMgr->OnSetlistChanged();
+        return gNullStr;
     }
 }
 
