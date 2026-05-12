@@ -19,6 +19,7 @@
 #include "os/Debug.h"
 #include "ui/UIListCustom.h"
 #include "ui/UIListLabel.h"
+#include "ui/UIPanel.h"
 #include "utl/Symbol.h"
 #include <cstdio>
 
@@ -296,7 +297,10 @@ void SongSortNode::Text(UIListLabel *ull, UILabel *ul) const {
         AppLabel *app_label = dynamic_cast<AppLabel *>(ul);
         MILO_ASSERT(app_label, 513);
         static Symbol by_artist("by_artist");
-        app_label->SetBlacklightSongName(shortname, -1, false);
+        if (TheSongSortMgr->GetCurrentSortName() != by_artist) {
+            app_label->SetBlacklightSongName(shortname, -1, false);
+        } else
+            app_label->SetBlacklightSongName(shortname, -1, false);
     } else if (ull->Matches("lock")) {
         bool locked = !TheProfileMgr.IsContentUnlocked(shortname);
         AppLabel *app_label = dynamic_cast<AppLabel *>(ul);
@@ -333,34 +337,40 @@ void SongSortNode::Text(UIListLabel *ull, UILabel *ul) const {
             ul->SetTextToken(gNullStr);
         }
     } else if (ull->Matches("header_text")) {
-        if (!(!IsHeader())) {
-            ul->SetTextToken(HeaderText());
-        } else {
+        if (!IsHeader()) {
             ul->SetTextToken(gNullStr);
+        } else {
+            ul->SetTextToken(HeaderText());
         }
     } else if (ull->Matches("asmadefamous")) {
         static Symbol by_artist("by_artist");
-        // TheSongSortMgr->
-        if (!IsCoverSong(shortname)) {
+
+        if (TheSongSortMgr->GetCurrentSortName() != by_artist
+            || !IsCoverSong(shortname)) {
             ul->SetTextToken(gNullStr);
         } else {
-            auto defaultText = ull->GetDefaultText();
-            ul->SetTextToken(defaultText);
+            ul->SetTextToken(ull->GetDefaultText());
         }
     } else if (ull->Matches("artist")) {
-        auto shortName = unk_0x48->ShortName();
-        if (!TheAccomplishmentMgr->IsUnlockableAsset(shortName)) {
+        Symbol sName = unk_0x48->ShortName();
+        if (TheAccomplishmentMgr->IsUnlockableAsset(sName)) {
             ul->SetTextToken(gNullStr);
+            return;
         }
         AppLabel *app_label = dynamic_cast<AppLabel *>(ul);
         MILO_ASSERT(app_label, 646);
         static Symbol by_artist("by_artist");
-        app_label->SetArtistName(shortname, true);
+        if (TheSongSortMgr->GetCurrentSortName() != by_artist) {
+            app_label->SetArtistName(shortname, true);
+            return;
+        }
+        app_label->SetBlacklightSongName(shortname, -1, false);
+
     } else if (ull->Matches("in_playlist")) {
-        if (!unk_0x4C) {
-            ul->SetTextToken(gNullStr);
-        } else {
+        if (unk_0x4C) {
             ul->SetIcon('i');
+        } else {
+            ul->SetTextToken(gNullStr);
         }
     } else if (ull->Matches("header_collapse")) {
         ul->SetTextToken(gNullStr);
@@ -419,24 +429,20 @@ Symbol SongFunctionNode::OnSelect() {
     static Symbol play_setlist("play_setlist");
     static Symbol random_song("random_song");
     static Symbol career("career");
-    Symbol mode = GetToken();
-    if (mode == playlists) {
+    if (GetToken() == playlists) {
         static Symbol move_on_quickplay_playlist("move_on_quickplay_playlist");
-        auto pPanel = ObjectDir::Main()->Find<UIPanel>("song_select_panel", true);
+        UIPanel *pPanel = ObjectDir::Main()->Find<UIPanel>("song_select_panel");
         MILO_ASSERT(pPanel, 0x12d);
         static Message msg(move_on_quickplay_playlist);
-        HandleType(msg);
-    } else {
-        if (mode != random_song) {
-            return gNullStr;
-        }
-        auto song = TheHamSongMgr.GetRandomSong();
+        pPanel->HandleType(msg);
+    } else if (GetToken() == random_song) {
+        Symbol song = TheHamSongMgr.GetRandomSong();
         static Symbol special_select_song("special_select_song");
-        auto pPanel = ObjectDir::Main()->Find<UIPanel>("song_select_panel", true);
+        UIPanel *pPanel = ObjectDir::Main()->Find<UIPanel>("song_select_panel");
         MILO_ASSERT(pPanel, 0x139);
         static Message msg(special_select_song, gNullStr);
-        msg->Node(2).Sym() = song;
-        HandleType(msg);
+        msg[0] = song;
+        pPanel->HandleType(msg);
     }
     return gNullStr;
 }
