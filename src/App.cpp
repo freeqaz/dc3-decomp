@@ -258,10 +258,10 @@ public:
 #include <cctype>
 #include <new>
 
+ModalCallbackFunc *gRealCallback;
 namespace {
     bool gListenForKinectGuide;
     FileCache *gPersistentCache;
-    ModalCallbackFunc *gRealCallback;
 }
 
 static const int kAppArchivePermissions[11] = {

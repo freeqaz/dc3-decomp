@@ -100,7 +100,7 @@ public:
                     else
 #endif
                     mObject->Release(this);
-                    if (mObject && !mObject->HasDirPtrs()) {
+                    if (!mObject->HasDirPtrs()) {
 #ifdef HX_NATIVE
                             // Virtual inheritance makes Hmx::Object* point to
                             // a subobject offset within the malloc'd block.
