@@ -64,28 +64,26 @@ bool MQSongSortMgr::IsCharacter(Symbol sym) const {
 
 void MQSongSortMgr::UpdateList() {
     MILO_ASSERT(TheCampaign, 0x6e);
-    auto& _ref0 = mFlatList;
-    if (_ref0.begin() != _ref0.end()) {
-        _ref0.clear();
-    }
+    mFlatList.clear();
     Symbol mqCrew = TheCampaign->GetMQCrew();
     mCharacterSongs.clear();
     const std::vector<int> &rankedSongs = TheHamSongMgr.RankedSongs((SongType)1);
-    FOREACH (it, rankedSongs) {
+    FOREACH_CONST (it, rankedSongs) {
         const HamSongMetadata *metadata = TheHamSongMgr.Data(*it);
-        Symbol character = GetOutfitCharacter(metadata->Outfit(), true);
-        Symbol crew = GetCrewForCharacter(character, true);
-        Symbol charCopy = character;
-        Symbol mqHeader = MakeString<char>("mqheader_%s", charCopy);
-        if (metadata->IsFake() == false && crew == mqCrew
+        Symbol character = GetOutfitCharacter(metadata->Outfit());
+        Symbol crew = GetCrewForCharacter(character);
+        Symbol temp = character;
+        Symbol mqHeader = MakeString("mqheader_%s", temp);
+        if (!metadata->IsFake() && crew == mqCrew
             && TheProfileMgr.IsContentUnlocked(metadata->ShortName())) {
             mCharacterSongs[mqHeader].push_back(TheHamSongMgr.GetShortNameFromSongID(*it));
         }
     }
     FOREACH (it, mCharacterSongs) {
-        _ref0.push_back(it->first);
-        FOREACH (it2, it->second) {
-            _ref0.push_back(*it2);
+        auto &vec = it->second;
+        mFlatList.push_back(it->first);
+        FOREACH (it2, vec) {
+            mFlatList.push_back(*it2);
         }
     }
 }

@@ -104,8 +104,7 @@ void ChallengeHeaderNode::OnHighlight() {
 }
 
 bool ChallengeHeaderNode::IsActive() const {
-    bool ret = TheChallengeSortMgr->HeadersSelectable();
-    return ret;
+    return TheChallengeSortMgr->HeadersSelectable() != false;
 }
 
 Symbol ChallengeHeaderNode::Select() { return gNullStr; }

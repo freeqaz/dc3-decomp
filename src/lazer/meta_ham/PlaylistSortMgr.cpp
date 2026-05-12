@@ -404,26 +404,27 @@ void PlaylistSortMgr::QueueCmdEditPlaylist(Playlist *pl) {
 
 void PlaylistSortMgr::UpdateList() {
     mPlaylists.clear();
-    HamProfile *profile = TheProfileMgr.GetActiveProfile(true);
-    if (profile) {
+    HamProfile *pActiveProfile = TheProfileMgr.GetActiveProfile(true);
+    if (pActiveProfile) {
         for (int i = 0; i < 5; i++) {
-            Playlist *playlist = &profile->GetPlaylist(i);
-            if (playlist->GetNumSongs() == 0) {
+            Playlist *p = &pActiveProfile->GetPlaylist(i);
+            if (p->GetNumSongs() == 0) {
                 static Symbol playlist_create("playlist_create");
-                playlist->SetName(playlist_create);
-                ThePlaylistSortMgr->mPlaylists.push_back(playlist);
+                p->SetName(playlist_create);
+                ThePlaylistSortMgr->AddPlaylist(p);
                 break;
             }
         }
+
         for (int i = 0; i < 5; i++) {
-            Playlist *playlist = &profile->GetPlaylist(i);
-            if (playlist->GetNumSongs() != 0) {
-                ThePlaylistSortMgr->mPlaylists.push_back(playlist);
+            Playlist *p = &pActiveProfile->GetPlaylist(i);
+            if (p->GetNumSongs() != 0) {
+                ThePlaylistSortMgr->AddPlaylist(p);
             }
         }
     }
     for (int i = 0; i < TheHamSongMgr.GetNumPlaylists(); i++) {
-        ThePlaylistSortMgr->mPlaylists.push_back(TheHamSongMgr.GetPlaylist(i));
+        ThePlaylistSortMgr->AddPlaylist(TheHamSongMgr.GetPlaylist(i));
     }
     std::sort(mPlaylists.begin(), mPlaylists.end(), CompareType);
 }

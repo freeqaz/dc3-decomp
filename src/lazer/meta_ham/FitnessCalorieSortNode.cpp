@@ -40,7 +40,7 @@ FitnessCalorieHeaderNode::FitnessCalorieHeaderNode(
     : NavListHeaderNode(cmp, s, b), unk58() {}
 
 bool FitnessCalorieHeaderNode::IsActive() const {
-    return TheFitnessCalorieSortMgr->HeadersSelectable();
+    return TheFitnessCalorieSortMgr->HeadersSelectable() != false;
 }
 
 NavListSortNode *FitnessCalorieHeaderNode::GetFirstActive() {

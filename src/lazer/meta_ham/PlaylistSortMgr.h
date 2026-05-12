@@ -83,6 +83,8 @@ public:
 
     int ConvertListIndexToPlaylistIndex(int);
     Playlist *GetPlaylist(int);
+    const std::vector<Playlist *> &GetPlaylists() const { return mPlaylists; }
+    void AddPlaylist(Playlist *p) { mPlaylists.push_back(p); }
     void OnDeletePlaylistFromRC(Playlist *);
     void UpdateList();
 

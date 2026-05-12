@@ -64,6 +64,14 @@ public:
     void SetUpCustomSection();
     int NumSelected() const;
     void ToggleSort();
+    bool FindStep(int num) {
+        FOREACH (it, mSelectedStepNums) {
+            if (*it == num) {
+                return true;
+            }
+        }
+        return false;
+    }
 
 private:
     bool WantToAutoSelectRecommended() const;

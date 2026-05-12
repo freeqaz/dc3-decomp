@@ -1123,7 +1123,7 @@ void MetaPerformer::PopulatePlaylistSongProvider(HamNavProvider *prov) const {
 }
 
 void MetaPerformer::OnReviewMovePassed(
-    int playerIndex, HamMove *move, int ratingIndex, float f4
+    int playerIndex, HamMove *move, int ratingIndex, float detectFrac
 ) {
     MILO_ASSERT_RANGE(playerIndex, 0, 2, 0x455);
     HamPlayerData *pPlayerData = TheGameData->Player(playerIndex);
@@ -1132,37 +1132,20 @@ void MetaPerformer::OnReviewMovePassed(
         MoveDir *moves = TheHamDirector->GetWorld()->Find<MoveDir>("moves");
         std::vector<HamMoveKey> keys;
         TheHamDirector->MoveKeys(pPlayerData->GetDifficulty(), moves, keys);
-        auto _tmp1 = keys.size();
-        mMoveScores[playerIndex].reserve(_tmp1);
+        mMoveScores[playerIndex].reserve(keys.size());
     }
     HamMoveScore score;
-    score.mRatingStateIndex = ratingIndex;
-    score.mDetectFrac = f4;
+    score.mDetectFrac = detectFrac;
     score.mMove = move;
+    score.mRatingStateIndex = ratingIndex;
     score.mSlowMo = false;
     mMoveScores[playerIndex].push_back(score);
     static Symbol move_awesome("move_awesome");
-    int awesomeIdx = RatingStateToIndex(move_awesome);
+    bool awesome = RatingStateToIndex(move_awesome) >= ratingIndex;
     int i90, i80;
     GetCurrentRecapMove(i90, i80);
-    auto& _ref1 = mReviewMoveMaskBySection;
-    if (i90 >= 0) {
-        if (i80 >= 0) {
-#ifdef HX_NATIVE
-        if (!(ratingIndex <= awesomeIdx)) {
-            _ref1[i90][i80] = true;
-        } else {
-            _ref1[i90][i80] = false;
-        }
-#else
-        auto &set = _ref1[i90][i80];
-        if (!(ratingIndex <= awesomeIdx)) {
-            set = true;
-        } else {
-            set = false;
-        }
-#endif
-    }
+    if (i90 >= 0 && i80 >= 0) {
+        mReviewMoveMaskBySection[i90][i80] = awesome;
     }
 }
 

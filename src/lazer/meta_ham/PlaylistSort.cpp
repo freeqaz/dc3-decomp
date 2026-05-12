@@ -69,7 +69,8 @@ void PlaylistSort::BuildTree() {
     DeleteTree();
     Init();
     std::vector<NavListItemNode *> nodes;
-    FOREACH (it, ThePlaylistSortMgr->mPlaylists) {
+    auto &playlists = ThePlaylistSortMgr->GetPlaylists();
+    FOREACH (it, playlists) {
         nodes.push_back(NewItemNode(*it));
     }
     auto begin = nodes.begin();

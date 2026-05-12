@@ -853,8 +853,9 @@ void CampaignPerformer::UnlockAllMoves(Symbol era, Symbol song, int stars) {
 }
 
 Symbol CampaignPerformer::GetLastEra() const {
-    for (unsigned int i = 0; i < (unsigned int)TheCampaign->NumEras(); i++) {
-        CampaignEra *pEra = TheCampaign->GetEra(i);
+    auto &eras = TheCampaign->Eras();
+    for (int i = 0; i < eras.size() - 1; i++) {
+        CampaignEra *pEra = eras[i];
         MILO_ASSERT(pEra, 0x3B);
         if (pEra->HasTanBattle()) {
             return pEra->GetName();
