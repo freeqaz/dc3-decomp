@@ -384,14 +384,15 @@ void Challenges::UpdateChallengeTimeStamp() {
         if (profile) {
             FOREACH (it, mProfileChallenges) {
                 if (it->first == profile->GetName()) {
-                    auto& firstChallenge = it->second[0];
+                    int profileChallengeTimestamp = profile->GetChallengeTimeStamp();
+                    int challengeTimeStamp = it->second[0].mTimeStamp;
                     MILO_LOG(
                         ">>>> Update challenge time stamp from %i to %i\n",
-                        profile->GetChallengeTimeStamp(),
-                        firstChallenge.mTimeStamp
+                        profileChallengeTimestamp,
+                        challengeTimeStamp
                     );
-                    profile->MakeDirty();
-                    profile->SetChallengeTimeStamp(firstChallenge.mTimeStamp);
+                    profile->SetChallengeTimeStamp(it->second[0].mTimeStamp);
+                    profile->SetDirty(true);
                     return;
                 }
             }

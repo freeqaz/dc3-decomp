@@ -144,8 +144,7 @@ void SongHeaderNode::UpdateItemCount(NavListItemNode *itemnode) {
 
 void SongHeaderNode::Renumber(std::vector<NavListSortNode *> &vec) {
     SetStartIndex(vec.size());
-    if (TheSongSortMgr->HeadersSelectable()) { // this is adding in a bunch of other insts
-                                               // for some reason
+    if (TheSongSortMgr->GetHeadersSelectable()) {
         vec.push_back(this);
         TheSongSortMgr->AddHeaderIndex(StartIndex());
     }

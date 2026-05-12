@@ -72,7 +72,7 @@ public:
     int GetControllerModeEnterCount() const { return mControllerModeEnterCount; }
     void SetControllerModeEnterCount(int i) { mControllerModeEnterCount = i; }
     bool GetMotdXPFlag() const { return mMotdXPFlag; }
-    int GetMotdFreq() const { return mMotdFreq; }
+    int GetMotdFreq() const;
     RndTex *GetMiscArt() const { return mMiscArt; }
 
 private:

@@ -224,13 +224,15 @@ void PlaylistSortMgr::HandleCmdGetPlaylistFromRC() {
 
 void PlaylistSortMgr::HandleCmdGetPlaylistsFromRC() {
     MILO_LOG("===== HandleCmdGetPlaylistsFromRC\n");
-    GetPlaylistsJob *job = (GetPlaylistsJob *)mCurrentJob;
+    GetPlaylistsJob *pJob = ((GetPlaylistsJob *)mCurrentJob);
     mCustomPlaylists.clear();
-    job->GetPlaylists(&mCustomPlaylists);
+    pJob->GetPlaylists(&mCustomPlaylists);
     mCurrentJob = nullptr;
     MILO_LOG(">>>>>>>>>> there are %i of playlists on RC.\n", mCustomPlaylists.size());
-    for (unsigned int i = 0; i < mCustomPlaylists.size(); i++) {
-        QueueCmdGetPlaylistFromRC(mCustomPlaylists[i].GetOnlineID());
+    if (mCustomPlaylists.size() != 0) {
+        for (int i = 0; i < mCustomPlaylists.size(); i++) {
+            QueueCmdGetPlaylistFromRC(mCustomPlaylists[i].GetOnlineID());
+        }
     }
     QueueCmdResolvePlaylists();
     RELEASE(mCommandQueue.front());

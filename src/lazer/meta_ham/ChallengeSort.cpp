@@ -83,60 +83,65 @@ void ChallengeSort::SetHighlightItem(const NavListSortNode *node) {
 }
 
 void ChallengeSort::BuildTree() {
-    DeleteTree();
+    NavListSort::DeleteTree();
     Init();
-    std::vector<NavListItemNode *> sortedItems;
-    unsigned int i = 0;
-    std::vector<ChallengeRecord> &records = TheChallengeSortMgr->mChallengeRecords;
-    if (records.size() != 0) {
-        do {
-            if (records[i].GetSongContentLockState() != 1) {
-                NavListItemNode *item = NewItemNode(&records[i]);
-                auto pos =
-                    std::lower_bound(sortedItems.begin(), sortedItems.end(), item, CompareHeaders());
-                sortedItems.insert(pos, 1, item);
-            }
-            i++;
-        } while (i < records.size());
+    std::vector<NavListItemNode *> nodes;
+
+    std::vector<ChallengeRecord> &records = TheChallengeSortMgr->GetUnk78();
+    for (int i = 0; i < records.size(); i++) {
+        ChallengeRecord *record = &records[i];
+        if (record->GetSongContentLockState() != 1) {
+            NavListItemNode *node = NewItemNode(record);
+            auto bound =
+                std::lower_bound(nodes.begin(), nodes.end(), node, CompareHeaders());
+            nodes.insert(bound, 1, node);
+        }
     }
 
     static Symbol global_challenge("global_challenge");
     static Symbol dlc_challenge("dlc_challenge");
+    String globalChallengeSongName = TheChallenges->GetGlobalChallengeSongName();
+    String dlcChallengeSongName = TheChallenges->GetDlcChallengeSongName();
 
-    String globalSongName = TheChallenges->GetGlobalChallengeSongName();
-    String dlcSongName = TheChallenges->GetDlcChallengeSongName();
+    NavListShortcutNode *globalShortcutNode = new NavListShortcutNode(
+        new ChallengeScoreCmp(0, 0, globalChallengeSongName.c_str()),
+        global_challenge,
+        true
+    );
 
-    NavListShortcutNode *globalShortcut =
-        new NavListShortcutNode(new ChallengeScoreCmp(0, 0, globalSongName.c_str()), global_challenge, true);
-    NavListShortcutNode *dlcShortcut =
-        new NavListShortcutNode(new ChallengeScoreCmp(1, 0, dlcSongName.c_str()), dlc_challenge, true);
+    NavListShortcutNode *dlcShortcutNode = new NavListShortcutNode(
+        new ChallengeScoreCmp(1, 0, dlcChallengeSongName.c_str()), dlc_challenge, true
+    );
 
-    ChallengeHeaderNode *globalHeader =
-        new ChallengeHeaderNode(new ChallengeScoreCmp(0, 0, globalSongName.c_str()), global_challenge, true);
-    ChallengeHeaderNode *dlcHeader =
-        new ChallengeHeaderNode(new ChallengeScoreCmp(1, 0, dlcSongName.c_str()), dlc_challenge, true);
+    ChallengeHeaderNode *globalHeaderNode = new ChallengeHeaderNode(
+        new ChallengeScoreCmp(0, 0, globalChallengeSongName.c_str()),
+        global_challenge,
+        true
+    );
 
-    globalShortcut->mChildren.insert(globalShortcut->mChildren.end(), (NavListSortNode *)globalHeader);
-    dlcShortcut->mChildren.insert(dlcShortcut->mChildren.end(), (NavListSortNode *)dlcHeader);
+    ChallengeHeaderNode *dlcHeaderNode = new ChallengeHeaderNode(
+        new ChallengeScoreCmp(1, 0, dlcChallengeSongName.c_str()), dlc_challenge, true
+    );
 
-    mShortcutNodes.push_back(globalShortcut);
-    mShortcutNodes.push_back(dlcShortcut);
+    globalShortcutNode->InsertNode(globalHeaderNode);
+    dlcShortcutNode->InsertNode(dlcHeaderNode);
+    mShortcutNodes.push_back(globalShortcutNode);
+    mShortcutNodes.push_back(dlcShortcutNode);
 
-    for (auto it = sortedItems.begin(); it != sortedItems.end(); ++it) {
-        NavListShortcutNode *shortcut = NewShortcutNode(*it);
-        Symbol token = shortcut->GetToken();
-        auto found =
-            std::find_if(mShortcutNodes.begin(), mShortcutNodes.end(), NodeFind(token));
-        if (found == mShortcutNodes.end()) {
-            mShortcutNodes.push_back(shortcut);
+    FOREACH (it, nodes) {
+        NavListShortcutNode *shortcutNode = NewShortcutNode(*it);
+        auto findIf =
+            std::find_if(mShortcutNodes.begin(), mShortcutNodes.end(), NodeFind(shortcutNode->GetToken()));
+        if (findIf == mShortcutNodes.end()) {
+            mShortcutNodes.push_back(shortcutNode);
         } else {
-            delete shortcut;
-            shortcut = *found;
+            delete shortcutNode;
+            shortcutNode = *findIf;
         }
-        shortcut->Insert(*it, this);
+        shortcutNode->Insert(*it, this);
     }
 
-    for (auto it = mShortcutNodes.begin(); it != mShortcutNodes.end(); ++it) {
+    FOREACH (it, mShortcutNodes) {
         (*it)->FinishSort(this);
     }
 }
