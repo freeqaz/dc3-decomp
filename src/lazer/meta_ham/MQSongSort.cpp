@@ -13,33 +13,34 @@
 MQSongSort::MQSongSort() {}
 
 void MQSongSort::BuildTree() {
-    DeleteTree();
+    NavListSort::DeleteTree();
     Init();
+    std::vector<NavListItemNode *> nodes;
 
-    std::vector<NavListItemNode *> sortedNodes;
-
-    std::map<Symbol, std::vector<Symbol> > &charSongs = TheMQSongSortMgr->CharacterSongs();
-    for (auto it = charSongs.begin(); it != charSongs.end(); ++it) {
-        for (auto songIt = it->second.begin(); songIt != it->second.end(); ++songIt) {
-            NavListItemNode *node = NewItemNode(&*songIt);
-            static_cast<MQSongSortNode *>(node)->SetCharacter(it->first);
-            sortedNodes.push_back(node);
+    auto &map = TheMQSongSortMgr->CharacterSongs();
+    FOREACH (it, map) {
+        FOREACH (it2, it->second) {
+            MQSongSortNode *node = static_cast<MQSongSortNode *>(NewItemNode(it2));
+            node->SetCharacter(it->first);
+            nodes.push_back(node);
         }
     }
 
-    NavListItemNode **end = sortedNodes.end();
-    NavListItemNode **shortcutStart = sortedNodes.begin();
-    while (shortcutStart != end) {
-        NavListItemNode **rangeEnd = shortcutStart;
-        while (rangeEnd != end
-               && static_cast<MQSongSortNode *>(*rangeEnd)->GetCharacter()
-                      == static_cast<MQSongSortNode *>(*shortcutStart)->GetCharacter()) {
-            rangeEnd++;
+    auto begin = nodes.begin();
+    auto end = nodes.end();
+    while (begin != end) {
+        std::vector<NavListItemNode *>::iterator it = begin;
+        while (it != end) {
+            if (static_cast<MQSongSortNode *>(*it)->GetCharacter()
+                != static_cast<MQSongSortNode *>(*begin)->GetCharacter()) {
+                break;
+            }
+            it++;
         }
-        NavListShortcutNode *shortcut = NewShortcutNode(*shortcutStart);
-        mShortcutNodes.push_back(shortcut);
-        shortcut->InsertHeaderRange(shortcutStart, rangeEnd, this);
-        shortcutStart = rangeEnd;
+        NavListShortcutNode *shortcutNode = NewShortcutNode(*begin);
+        mShortcutNodes.push_back(shortcutNode);
+        shortcutNode->InsertHeaderRange(begin, it, this);
+        begin = it;
     }
 
     FOREACH (it, mShortcutNodes) {

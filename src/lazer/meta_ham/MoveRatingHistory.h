@@ -23,7 +23,7 @@ public:
     void Clear();
     void AddHistory(Symbol, int);
     int GetRating(Symbol, int);
-    bool HasRatingHistory(const Key &key) const { return mMoveRatingMap.find(key) != mMoveRatingMap.end(); }
+    bool HasRatingHistory(const Key &key) const { return mMoveRatingMap.count(key) > 0; }
 
     static int SaveSize(int);
 

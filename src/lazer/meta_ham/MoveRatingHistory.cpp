@@ -54,7 +54,7 @@ void MoveRatingHistory::Clear() {
 int MoveRatingHistory::GetRating(Symbol s1, int i2) {
     Key key;
     key.mMoveSymbol = s1;
-    if (mMoveRatingMap.find(key) != mMoveRatingMap.end()) {
+    if (HasRatingHistory(key)) {
         return mMoveRatingMap[key].mRatingArray[i2];
     } else {
         return -1;

@@ -210,6 +210,13 @@ void PlaylistHeaderNode::Text(UIListLabel *uiListLabel, UILabel *uiLabel) const 
     }
 }
 
+void PlaylistHeaderNode::SetItemCountString(UILabel *label) const {
+    char buffer[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+    sprintf(buffer, "(%d)", mChallengeCount);
+    Symbol sym = buffer;
+    label->SetPrelocalizedString(String(sym));
+}
+
 #pragma endregion PlaylistHeaderNode
 
 void MQSongHeaderNode::SetItemCountString(UILabel *lbl) const {

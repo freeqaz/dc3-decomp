@@ -7,54 +7,56 @@
 #include "os/Debug.h"
 
 int ChallengeScoreCmp::Compare(
-    const NavListItemSortCmp *other, NavListNodeType nodeType
+    const NavListItemSortCmp *cmp, NavListNodeType type
 ) const {
-    switch (nodeType) {
+    const ChallengeScoreCmp *mCmp;
+    switch (type) {
     case kNodeShortcut:
         break;
-    case kNodeHeader: {
-        const ChallengeScoreCmp *otherCmp = other->GetChallengeScoreCmp();
-        if (mType == otherCmp->mType) {
-            return AlphaKeyStrCmp(
-                mSongTitle, otherCmp->mSongTitle, false
-            );
+    case kNodeHeader:
+        mCmp = cmp->GetChallengeScoreCmp();
+        if (mType == mCmp->mType) {
+            return AlphaKeyStrCmp(mSongTitle, mCmp->mSongTitle, false);
         }
-        if (otherCmp->mType <= mType) {
-            return 1;
+        if (mType < mCmp->mType) {
+            return -1;
         }
-        return -1;
-    }
-    case kNodeItem: {
-        const ChallengeScoreCmp *otherCmp = other->GetChallengeScoreCmp();
-        if (mScore != otherCmp->mScore) {
-            if (mScore <= otherCmp->mScore) {
+        return 1;
+        break;
+    case kNodeItem:
+        mCmp = cmp->GetChallengeScoreCmp();
+        if (mScore != mCmp->mScore) {
+            if (mScore <= mCmp->mScore) {
                 return 1;
             }
             return -1;
         }
         break;
-    }
     default:
         MILO_FAIL("invalid type of node comparison.\n");
+        return 0;
         break;
     }
+
     return 0;
 }
 
-NavListItemNode *ChallengeSortByScore::NewItemNode(void *data) const {
-    ChallengeRecord *record = (ChallengeRecord *)data;
-    int songID = record->GetChallengeRow().mSongID;
+NavListItemNode *ChallengeSortByScore::NewItemNode(void *p1) const {
+    ChallengeRecord *record = static_cast<ChallengeRecord *>(p1);
     int score = record->GetChallengeRow().mScore;
-    Symbol songTitle = record->GetSongTitle();
+    Symbol sym = record->GetSongTitle();
+    int songID = record->GetChallengeRow().mSongID;
 
     int type = 2;
     if (songID == TheChallenges->GetGlobalChallengeSongID()) {
         type = 0;
-    } else if (songID == TheChallenges->GetDlcChallengeSongID()) {
-        type = 1;
+    } else {
+        songID = record->GetChallengeRow().mSongID;
+        if (songID == TheChallenges->GetDlcChallengeSongID()) {
+            type = 1;
+        }
     }
-
-    ChallengeScoreCmp *cmp = new ChallengeScoreCmp(type, score, songTitle.Str());
+    ChallengeScoreCmp *cmp = new ChallengeScoreCmp(type, score, sym.Str());
     return new ChallengeSortNode(cmp, record);
 }
 

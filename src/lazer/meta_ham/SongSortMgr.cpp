@@ -256,19 +256,16 @@ Symbol SongSortMgr::MoveOn() {
         songSelectPanel->HandleType(msg);
         return gNullStr;
     } else if (song_select_story != mode && song_select_practice != mode) {
-        if (mode != song_select_jukebox) {
-        MILO_FAIL("Unknown song_select_mode\n");
-        return gNullStr;
-    } else {
-        Symbol ready_screen("ready_screen");
-        const DataNode *prop = TheGameMode->Property(ready_screen);
-        return prop->Sym();
+        if (mode == song_select_jukebox) {
+            return TheGameMode->Property("ready_screen")->Sym();
+        } else {
+            MILO_FAIL("Unknown song_select_mode\n");
+            return gNullStr;
+        }
     }
-    } else {
-        Symbol ready_screen("ready_screen");
-        const DataNode *prop = TheGameMode->Property(ready_screen);
-        return prop->Sym();
-    }
+    // idk why its like this but it matches (i tried so many other ways to write this but
+    // this works)
+    return TheGameMode->Property("ready_screen")->Sym();
 }
 
 void SongSortMgr::OnEnter() {
