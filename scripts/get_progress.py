@@ -24,13 +24,20 @@ def get_progress() -> str:
 
     stats = get_stats(DB_PATH)
     total = stats["total_functions"]
-    complete = stats["complete"]
-    at_limit = stats["at_limit"]
 
     excluded = conn.execute(
         "SELECT COUNT(*) FROM functions WHERE unit LIKE '%xdk%'"
     ).fetchone()[0]
     non_excluded = total - excluded
+
+    # Count only non-xdk verdicts to avoid inflating Done when xdk functions
+    # accidentally get classified
+    complete = conn.execute(
+        "SELECT COUNT(*) FROM functions WHERE verdict = 'COMPLETE' AND unit NOT LIKE '%xdk%'"
+    ).fetchone()[0]
+    at_limit = conn.execute(
+        "SELECT COUNT(*) FROM functions WHERE verdict = 'AT_LIMIT' AND unit NOT LIKE '%xdk%'"
+    ).fetchone()[0]
     remaining = non_excluded - complete - at_limit
 
     complete_pct = (complete / non_excluded * 100) if non_excluded else 0
