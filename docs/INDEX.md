@@ -28,6 +28,7 @@ Tool-specific deep docs live in subdirectories:
 | [decomp/PRAGMA_INDEX.md](decomp/PRAGMA_INDEX.md) | Xbox 360 compiler pragma documentation |
 | [decomp/XBOX360_FLOATING_POINT_CODEGEN.md](decomp/XBOX360_FLOATING_POINT_CODEGEN.md) | Floating-point code generation details |
 | [decomp/SUBAGENT_STRATEGY.md](decomp/SUBAGENT_STRATEGY.md) | Parallel agent strategy for batch decomp |
+| [decomp/UPSTREAM_PORT_WORKFLOW.md](decomp/UPSTREAM_PORT_WORKFLOW.md) | Workflow for porting from a related decomp tree (RB3, upstream) when their function is at 100% and ours isn't |
 
 ## Reference
 

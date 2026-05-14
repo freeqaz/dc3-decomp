@@ -49,6 +49,11 @@ These patterns can often be fixed with source changes. Sorted by ROI (impact x s
 | Goto-Based Loop (Deferred Assignment) | +2-3% | MEDIUM | [fixable-control-flow.md](fixable-control-flow.md#goto-based-loop-for-deferred-assignment) |
 | Variable Declaration Order | +1-88% | 30% | [fixable-declarations.md](fixable-declarations.md#variable-declaration-order) |
 | Bodyless Copy Constructor | +100% (0→100) | 100% | [fixable-copy-ctor.md](fixable-copy-ctor.md) |
+| Inline Constructor Location | +5-10% | 100% | [fixable-inline-boundary.md](fixable-inline-boundary.md#inline-constructor-in-header-vs-out-of-line-in-cpp) |
+| Sort Comparator Inline Location | +30-50% | 100% | [fixable-inline-boundary.md](fixable-inline-boundary.md#sort-comparator-inline-location-stdsort--std__median) |
+| Inline Boundary Cascade (ICF) | varies | requires diagnose | [fixable-inline-boundary.md](fixable-inline-boundary.md#inline-boundary-cascade-icf-merge-of-out-of-line-accessor) |
+| Manual Helper Inlining | +2-12% | HIGH | [fixable-control-flow.md](fixable-control-flow.md#manual-helper-inlining-reverse-inline-a-trivial-helper) |
+| Static Variable Type in MakeString Args | +1-2% | HIGH | [fixable-casting.md](fixable-casting.md#sub-pattern-static-variable-type-in-makestring-args) |
 
 ### Additional Fixable Patterns
 
@@ -130,6 +135,7 @@ These patterns make matches **worse**. Avoid them.
 |---------|--------|------|
 | Member Aliasing | -6% | [harmful-avoid.md](harmful-avoid.md#member-aliasing) |
 | Child Pointer in Loop | -6.5% | [harmful-avoid.md](harmful-avoid.md#child-pointer-in-loop) |
+| Iterator Address-Of (`&*iter`) | -3-5% | [harmful-avoid.md](harmful-avoid.md#iterator-address-of-iter) |
 | End Iterator Explicit | -0.5% | [harmful-avoid.md](harmful-avoid.md#end-iterator-explicit) |
 | Constructor Zero-Init That Doesn’t Exist in Target | -2% to -6% | [harmful-avoid.md](harmful-avoid.md#constructor-zero-init-that-doesnt-exist-in-target) |
 
@@ -286,6 +292,7 @@ From 143 successful fine-tuning attempts (90%+ start, 100% end):
 - [fixable-fsel-fma.md](fixable-fsel-fma.md) — fsel intrinsic, Clamp templates, #pragma fp_contract
 - [fixable-operators.md](fixable-operators.md) — FMA order, operator overload, inline assignment
 - [fixable-bool-mask.md](fixable-bool-mask.md) — Bool mask (`clrlwi`) fixes
+- [fixable-inline-boundary.md](fixable-inline-boundary.md) — Inline ctor location, sort comparator inlining, ICF cascade fix
 - [unfixable-compiler.md](unfixable-compiler.md) — Hard patterns: register swap, ASSERT_REVS, fmadds, fsel pressure, guard naming
 - [TECHNICAL_NOTES.md: Offset Diagnosis](../TECHNICAL_NOTES.md#offset-mismatch-diagnosis-off--n) — How to diagnose `[off:-N]` mismatches (class vs stack)
 - [TECHNICAL_NOTES.md: MSVC Encoding](../TECHNICAL_NOTES.md#msvc-mangled-number-encoding) — Decode MakeString template sizes

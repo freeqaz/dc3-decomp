@@ -82,6 +82,66 @@ for (auto it = mChildren.begin(); it != mChildren.end(); ++it) {
 
 ---
 
+## Iterator Address-Of (`&*iter`)
+
+**Effect:** -3-5% on the function passing the address
+
+Taking the address of a dereferenced iterator (`&*it`) instead of passing
+the iterator directly to a function generates different codegen — even
+when the iterator's underlying type is `T*` and the function signature
+accepts `T*`.
+
+### What NOT to Do
+
+```cpp
+// BAD — extra deref-then-addr-of round trip
+std::vector<MyType> values;
+auto it = values.begin();
+auto next = it + 1;
+InsertHeaderRange(&*it, &*next);
+```
+
+### What To Do Instead
+
+Pass the iterators directly:
+
+```cpp
+// GOOD — direct iterator pass
+std::vector<MyType> values;
+auto it = values.begin();
+auto next = it + 1;
+InsertHeaderRange(it, next);
+```
+
+### Why It Hurts
+
+`&*it` decays to a `T*` via `operator*` then `operator&`. With STLPort's
+vector iterator (which is itself a `T*` typedef), this looks like a
+no-op — but the compiler emits the deref/addr round-trip in IR before
+any optimization, and the resulting reg-allocation choices diverge from
+target's direct-pass version.
+
+### Detection
+
+Look for `&*` in source (especially in calls to range-taking helpers
+like `Insert`, `Range`, `MakeString` of vectors). Compare against
+upstream's call shape — if upstream passes the iterator directly and
+your code uses `&*`, fix it.
+
+### Real Examples
+
+| Function | Before | After | Notes |
+|----------|--------|-------|-------|
+| `FitnessCalorieSort::BuildTree` | 99.5% | 100% | Replaced `InsertHeaderRange(&*pBegin, &*pNext)` with `InsertHeaderRange(begin, it)` |
+
+### Related
+
+- [Child Pointer in Loop](#child-pointer-in-loop) — Similar family: extra
+  pointer/iterator local that hurts register allocation.
+- [Iterator Dereference Caching](fixable-declarations.md#iterator-dereference-caching) — Sometimes the *opposite* helps; verify per call site.
+
+---
+
 ## End Iterator Explicit
 
 **Effect:** -0.5%

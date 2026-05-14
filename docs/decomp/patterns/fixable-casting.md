@@ -398,6 +398,56 @@ MILO_LOG("... '%s' ... '%s' ... '%s' ret = %d\n",
 |----------|--------|-------|-------|-------|
 | Game::IsSongDefaultPlayerPlaying | 78.1% | 98.6% | +20.5% | 3 Symbol args → `const char*` via `.Str()` |
 
+### Sub-pattern: Static Variable Type in MakeString Args
+
+When a function passes a `static const T sVar = ...` to `MakeString`,
+the variable's address gets a type annotation in the mangled symbol —
+and `MakeString<int>` differs from `MakeString<EnumType>` even when
+the values are identical. To pick the right type, decode target's
+mangled `MakeString` template arg list and match it.
+
+```cpp
+// Before — passes static int, mangles as MakeString<..., int>
+static const int sVersion = 0x1c;
+mStream.MakeString("version=%d", sVersion);  // doesn't match target
+
+// After — passes static enum, mangles as MakeString<..., SaveLoadManager::State>
+static const SaveLoadManager::State sVersion = (SaveLoadManager::State)0x1c;
+mStream.MakeString("version=%d", sVersion);  // matches target
+```
+
+The literal value the compiler stores is identical (`0x1c`); the only
+difference is the template instantiation MakeString picks based on
+`sVersion`'s declared type.
+
+| Function | Before | After | Notes |
+|----------|--------|-------|-------|
+| `ProfileMgr::LoadGlobalOptions` | 98.5% | 100% | `sVersion` typed as `SaveLoadManager::State` instead of `int` so the `MakeString<int, SaveLoadManager::State>` template matches |
+
+### Sub-pattern: Anonymous-Namespace Mangling on `MakeString` Globals
+
+If a global helper used inside `MakeString`'s call chain (e.g. a
+`ModalCallbackFunc *gRealCallback` shared across cases) sits inside
+an anonymous namespace, its symbol mangles as
+`?gRealCallback@?A0x...@@`, with a hash that depends on the TU's
+contents. The same global at file scope mangles cleanly. If target
+binary uses the file-scope form and we use the anonymous-namespace
+form, every relocation referencing it differs.
+
+```cpp
+// Before — anonymous namespace, mangling-hashed
+namespace {
+    ModalCallbackFunc *gRealCallback;
+}
+
+// After — true file-scope global, clean mangling
+ModalCallbackFunc *gRealCallback;
+```
+
+| Function | Before | After | Notes |
+|----------|--------|-------|-------|
+| `DebugModal` (call sites referencing `gRealCallback`) | n/a | aligned | Moved `gRealCallback` from anonymous namespace to file scope; idx 0-37 now match target byte-for-byte |
+
 ---
 
 ## Float-to-Int-to-Float Reconversion

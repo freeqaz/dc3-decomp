@@ -629,6 +629,86 @@ if (shouldCheck) {
 
 ---
 
+## Manual Helper Inlining (Reverse-Inline a Trivial Helper)
+
+**Impact:** +2-12% (typically 2-5b on a small function)
+**Success Rate:** HIGH when the helper has 1-3 lines of body
+**Time:** 2 minutes
+
+When a trivial inline helper (e.g. `IsHMXChallenge()`, `IsDLCChallenge()`)
+returns a simple expression and is called from a function that won't reach
+100%, **manually inline the helper's body at the call site**. MSVC generates
+different code for the inlined-via-helper path vs the manually-spelled
+expression, even though both should be equivalent.
+
+### Symptom
+
+Function is at 96-99% with a small residual mismatch around a `bl` to a
+helper, or around the comparison code that the helper would compile to.
+Diff shows a `cmpw / beq / li 1 / li 0` sequence where target uses a
+different bool-materialization pattern (or vice versa).
+
+### Why It Works
+
+For one-liner helpers like:
+
+```cpp
+bool IsHMXChallenge() const {
+    return mType >= kChallengeHmxGold && mType <= kChallengeHmxBronze;
+}
+```
+
+Even when MSVC inlines the helper, it preserves the helper's expression
+shape (often via an intermediate `bool` materialization at the call
+boundary). Manually inlining the body lets the compiler fuse the
+expression with the surrounding context — picking different bit-mask
+or compare instructions, eliminating one `clrlwi`, etc.
+
+### Fix
+
+```cpp
+// Before — calls inline helper
+String GetGlobalChallengeSongName() {
+    if (IsHMXChallenge()) {
+        // ...
+    }
+}
+
+// After — body inlined manually as bool local
+String GetGlobalChallengeSongName() {
+    bool okay = mType >= kChallengeHmxGold && mType <= kChallengeHmxBronze;
+    if (okay) {
+        // ...
+    }
+}
+```
+
+### Real Examples
+
+| Function | Before | After | Delta | Notes |
+|----------|--------|-------|-------|-------|
+| `Challenges::GetGlobalChallengeSongName` | 98.2% | 100% | +1.8% | Inlined `IsHMXChallenge()` as `bool okay = ...` |
+| `Challenges::GetDlcChallengeSongID` | 97.7% | 100% | +2.3% | Inlined `IsDLCChallenge()` as `bool okay = ...` |
+| `ChallengeHeaderNode::GetPotentialChallengeExp` | 98.1% | 100% | +1.9% | Inlined `node->GetChallengeExp()` body (calls `TheChallenges->CalculateChallengeXp(...)` directly) |
+
+### When to Use
+
+- Function is in the 96-99% range with no other obvious patterns.
+- Calls a one-line inline helper.
+- Diagnose shows the residual is at or near the helper call site.
+
+### When It Hurts
+
+If the helper is called from many places, inlining it manually in one
+place doesn't change anything — MSVC was already inlining everywhere.
+Verify the residual diff is actually at the helper-call boundary first.
+
+### See Also
+
+- [Local Bool Extraction for Complex Conditions](#local-bool-extraction-for-complex-conditions) — Opposite direction (extracting *to* a local bool); same underlying mechanism.
+
+---
+
 ## Branchless Bool Return to If/Else
 
 **Impact:** +4-5%
