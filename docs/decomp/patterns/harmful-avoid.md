@@ -134,6 +134,17 @@ your code uses `&*`, fix it.
 |----------|--------|-------|-------|
 | `FitnessCalorieSort::BuildTree` | 99.5% | 100% | Replaced `InsertHeaderRange(&*pBegin, &*pNext)` with `InsertHeaderRange(begin, it)` |
 
+### Permuter Coverage
+
+This pattern is automated by the `iter_address_of` permuter pattern:
+
+```bash
+python -m scripts.permuter --patterns iter_address_of \
+    --symbol "<mangled>" --source <path> --function "<Class::Method>"
+```
+
+Generates variants in both directions (drop `&*`, wrap with `&*`) and a "drop all" combined variant when 2+ sites are present.
+
 ### Related
 
 - [Child Pointer in Loop](#child-pointer-in-loop) — Similar family: extra

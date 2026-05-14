@@ -152,6 +152,34 @@ Swap between `.empty()` and `.size() == 0` (or `!= 0`) which can differ in codeg
 
 Split comma expressions into separate statements, or merge sequential statements into comma expressions.
 
+### iter_address_of
+
+Drop `&*<expr>` to `<expr>` at call sites, or wrap iterator-named bare arguments with `&*`. Discovered during the 2026-05-12 upstream-merge gap-recovery (FitnessCalorieSort::BuildTree 99.5% → 100%).
+
+```cpp
+// Before
+InsertHeaderRange(&*pBegin, &*pNext);
+
+// After
+InsertHeaderRange(begin, it);
+```
+
+See [docs/decomp/patterns/harmful-avoid.md](../decomp/patterns/harmful-avoid.md#iterator-address-of-iter).
+
+### helper_inline
+
+Reverse-inline a trivial header helper at the call site. When `obj->IsHelper()` calls a one-line `bool IsHelper() { return mFoo >= X; }` defined inline in a header, the pattern splices the helper's body in with `mFoo` rewritten to `obj->mFoo`. Targets the 96-99% range. Wins from the 2026-05-12 wave: `Challenges::GetGlobalChallengeSongName` 98.2% → 100%, `GetDlcChallengeSongID` 97.7% → 100%, `ChallengeHeaderNode::GetPotentialChallengeExp` 98.1% → 100%.
+
+```cpp
+// Before
+if (obj->IsHMXChallenge()) { ... }
+
+// After
+if ((obj->mType >= kChallengeHmxGold && obj->mType <= kChallengeHmxBronze)) { ... }
+```
+
+See [docs/decomp/patterns/fixable-control-flow.md](../decomp/patterns/fixable-control-flow.md#manual-helper-inlining-reverse-inline-a-trivial-helper).
+
 ## How It Works
 
 1. **Diagnose**: Run objdiff on baseline, parse instruction diff into `Diagnosis` (register swaps, opcode mismatches, offset shifts)

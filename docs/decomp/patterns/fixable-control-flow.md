@@ -703,6 +703,21 @@ If the helper is called from many places, inlining it manually in one
 place doesn't change anything — MSVC was already inlining everywhere.
 Verify the residual diff is actually at the helper-call boundary first.
 
+### Permuter Coverage
+
+This pattern is automated by the `helper_inline` permuter pattern:
+
+```bash
+python -m scripts.permuter --patterns helper_inline \
+    --symbol "<mangled>" --source <path> --function "<Class::Method>"
+```
+
+The pattern walks every zero-arg method/free-function call in the
+target function, looks up the callee's body in any included header,
+and — if the body is a single `return <expr>;` — splices the
+expression at the call site (with `mFoo` rewritten to `obj->mFoo`
+for member calls).
+
 ### See Also
 
 - [Local Bool Extraction for Complex Conditions](#local-bool-extraction-for-complex-conditions) — Opposite direction (extracting *to* a local bool); same underlying mechanism.

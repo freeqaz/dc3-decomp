@@ -84,6 +84,8 @@ from . import redundant_guard_elimination  # noqa: F401  # Remove exhaustive els
 from . import accessor_outline  # noqa: F401  # Outline inlined accessors via noinline wrappers
 from . import handler_inline  # noqa: F401  # Named/temp Message vars and handler wrapper inlining
 from . import variable_inline  # noqa: F401  # Inline single-assignment locals at use sites (inverse of variable_extraction)
+from . import iter_address_of  # noqa: F401  # &*<expr> <-> <expr> for iterator/pointer call args
+from . import helper_inline  # noqa: F401  # Reverse-inline a trivial header helper at its call site
 
 from .base import get_all_patterns, get_pattern, list_patterns
 
