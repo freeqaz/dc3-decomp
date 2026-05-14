@@ -363,8 +363,7 @@ void StorePanel::HandleNetCacheLoaderFailure(int failType) {
     case kNCMFT_NoSpace:
         return;
     case kNCMFT_StorageDeviceMissing:
-        err = kStoreErrorNoMetadata;
-        break;
+        goto no_metadata;
     default:
         MILO_NOTIFY("Unknown failure %d in a net cache loader!", failType);
         err = kStoreErrorCacheRemoved;
@@ -372,6 +371,7 @@ void StorePanel::HandleNetCacheLoaderFailure(int failType) {
     }
 
     if (!ThePlatformMgr.IsEthernetCableConnected()) {
+no_metadata:
         err = kStoreErrorNoMetadata;
     }
 

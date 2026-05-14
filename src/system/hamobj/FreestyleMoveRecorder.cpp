@@ -651,7 +651,7 @@ float FreestyleMoveRecorder::CompareSkeletonPositions(
                 int count = 0;
                 float totalDist = 0.0f;
                 float zero = 0.0f;
-                if ((int)mPositions.size() != 0) {
+                if (mPositions.size() > 0) {
                     int idx = 0;
                     do {
                         Vector3 pos1, pos2;

@@ -404,29 +404,24 @@ static CharClip *MyFindClip(const DataNode &n, ObjectDir *dir) {
     if (node.Type() == kDataObject) {
         obj = node.UncheckedObj();
     } else {
-        MILO_ASSERT(node.Type() == kDataSymbol || node.Type() == kDataString, 0x12A);
+        MILO_ASSERT(node.Type() == kDataSymbol || node.Type() == kDataString, 0x12C);
         obj = dir->FindObject(node.LiteralStr(), false, true);
     }
     if (!obj)
         return nullptr;
-    else {
-        CharClip *clip = dynamic_cast<CharClip *>(obj);
-        if (clip)
-            return clip;
-        else {
-            CharClipGroup *group = dynamic_cast<CharClipGroup *>(obj);
-            if (!group) {
-                MILO_NOTIFY_ONCE(
-                    "%s: MyFindClip %s bad object type, not CharClip or CharClipGroup",
-                    PathName(dir),
-                    PathName(obj)
-                );
-                clip = nullptr;
-            } else
-                clip = group->GetClip(0);
-        }
+    CharClip *clip = dynamic_cast<CharClip *>(obj);
+    if (clip)
         return clip;
+    CharClipGroup *group = dynamic_cast<CharClipGroup *>(obj);
+    if (!group) {
+        MILO_NOTIFY_ONCE(
+            "%s: MyFindClip %s bad object type, not CharClip or CharClipGroup",
+            PathName(dir),
+            PathName(obj)
+        );
+        return nullptr;
     }
+    return group->GetClip(0);
 }
 
 CharClip *CharDriver::FindClip(const DataNode &node, bool warn) {

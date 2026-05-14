@@ -343,6 +343,12 @@ Same mathematical result, different register order. The compiler's expression ev
 - c2.dll expression evaluator patch to reverse operand canonicalization for commutative FP ops
 - Sometimes swapping the source-level operand order helps (see [fixable-operators.md](fixable-operators.md#commutative-operand-order))
 
+### Source-Level Operand Reordering Is Almost Always A No-Op (Wave 1 / F1)
+
+For >99% of single-instruction `COMMUTATIVE_OP_ORDER` mismatches (`fmadds`, `fmuls`, `fadds`, `xor`, `add`, `mullw`, etc.), rewriting source-level expression order — e.g. `(a + b)` → `(b + a)`, or swapping operand order in an `__fsel`/`Min`/`Max` call — does **not** change the emitted assembly. The MSVC backend picks operand registers based on liveness and the register allocator's color→register mapping at the point of the op, not on the syntactic order in the AST.
+
+Wave 1 of the AT_LIMIT audit confirmed this across dozens of attempts: agents kept rewriting `(b + a)` vs `(a + b)`, `(x * y) - z` vs `z - (x * y)` (only legal for true commutative ops), etc., and the resulting `.obj` was byte-identical to the previous build in every case. Skip this rewrite — it is a wasted cycle. The actionable lever for a `COMMUTATIVE_OP_ORDER` mismatch is **upstream**: reorder the variables that feed the op so the register allocator assigns the operands to the registers the target chose. See [Register Allocation](#register-allocation) — the swap is a regalloc artifact, not an expression-evaluator artifact.
+
 ---
 
 ## 64-bit Extraction
@@ -418,6 +424,45 @@ Stack spill decisions are made by the register allocator based on register press
 | Function | Match | Gap | Notes |
 |----------|-------|-----|-------|
 | PhysicsManager::HarvestCollidables | 97.4% | ~2.6% | Target spills `owner` to stack 0x54 twice |
+| ObjPtrVec\<T\>::sort instantiations | ~99% | <1% | Target spills `size()` to stack 0x54, never reloads it; single `stw r5, 0x54, r31` delete around index ~21 (Wave 1 / F5) |
+
+### Sub-Pattern: ObjPtrVec<T>::sort `stw r5, 0x54, r31`
+
+Several `ObjPtrVec<T>::sort` template instantiations show a single-instruction delete at roughly index 21 where the target emits `stw r5, 0x54, r31` (spilling the result of `size()` into stack slot `0x54`) and then never reads that slot again. The function is otherwise 99%+. This is the same regalloc/spill-heuristic pattern as the parent section — the target compiler defensively spills the size around the recursive `__introsort_loop` call boundary, our compiler proves the value dead-on-return. No source-level workaround; not worth chasing. See [Real Examples](#real-example-1) above for the table entry.
+
+---
+
+## OFFSET_SWAP Auto-Classifier False Positives (Wave 1 / F3)
+
+**Status:** Not a real pattern — auto-classifier noise. Don't chase these without first verifying they're a real struct-member swap.
+
+The `primary_pattern='OFFSET_SWAP'` classification fires on three categories of mismatch that look syntactically like an offset swap but are NOT what the "real" OFFSET_SWAP fix (field reorder / variable extraction; see [fixable-declarations.md](fixable-declarations.md#offset-swap)) addresses:
+
+### False Positive 1 — Stack-Local (r1-Based) Offset Swap
+
+Paired `stw r?, offN, r1` / `stw r?, offM, r1` where the swapped offsets live on the stack frame. This is **scheduling/spill ordering**, not field layout. Source-level field reorder cannot move stack slots — the regalloc and frame-builder pick those.
+
+### False Positive 2 — Inlined memcpy/memset Word-Store Ordering
+
+The MSVC backend inlines small `memcpy` / `memset` / aggregate-init / POD-copy as a sequence of `lwz`/`stw` pairs at increasing word offsets. When the target's scheduler interleaves the loads and stores differently from ours, the diff produces a string of swapped offsets — but the offsets are byte positions inside a flat memory copy, not struct fields.
+
+### False Positive 3 — Adjacent-Field Write-Order Picked Independently By The Scheduler
+
+When two adjacent struct fields are written in the same statement (or by a constructor's member-init list), the compiler is free to schedule the two stores in either order regardless of source order. The instruction scheduler reorders these based on register pressure at the moment of emit, not on the AST. Rewriting the constructor's init order, splitting the writes across statements, or adding a `volatile` barrier does not reliably move the schedule.
+
+### Detection — Distinguishing Real From False
+
+A **real** OFFSET_SWAP from struct-member layout has paired `lwz`/`stw`/`stfs`/etc. instructions where:
+
+- The **base register is the `this` pointer** (typically `r3` for `this` on entry, `r4` for `that` in `operator=`, or a callee-saved like `r30`/`r31`) — NOT `r1` and NOT a scratch register holding a temporary.
+- The two offsets correspond to **actual struct field offsets** that you can find in the class definition.
+- Swapping the source-level field declaration order in the class definition is a meaningful (if usually unfixable) lever.
+
+If the base register is `r1`, or if the offsets are inside a memcpy/memset region, or if the offsets don't correspond to declared fields, the auto-classifier mis-fired. Skip the function or re-classify before spending agent cycles on it.
+
+### Why It Matters
+
+Wave 1 of the AT_LIMIT audit had multiple agents try field-reorder and variable-extraction fixes on functions classified as OFFSET_SWAP, with no movement, because the underlying pattern was one of the three false positives above. The classifier should be tightened to check the base register before tagging.
 
 ---
 

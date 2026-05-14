@@ -721,7 +721,7 @@ void RndPostProc::Interp(const RndPostProc *from, const RndPostProc *to, float p
     ::Interp(from->mKaleidoscopeSize, to->mKaleidoscopeSize, pct, mKaleidoscopeSize);
     ::Interp(from->mKaleidoscopeAngle, to->mKaleidoscopeAngle, pct, mKaleidoscopeAngle);
     ::Interp(from->mKaleidoscopeRadius, to->mKaleidoscopeRadius, pct, mKaleidoscopeRadius);
-    mKaleidoscopeFlipUVs = pct >= 1.0f ? to->mKaleidoscopeFlipUVs : from->mKaleidoscopeFlipUVs;
+    mKaleidoscopeFlipUVs = pct < 1.0f ? from->mKaleidoscopeFlipUVs : to->mKaleidoscopeFlipUVs;
 
     // Emulate FPS
     ::Interp(from->mEmulateFPS, to->mEmulateFPS, pct, mEmulateFPS);
@@ -780,7 +780,7 @@ void RndPostProc::Interp(const RndPostProc *from, const RndPostProc *to, float p
     ::Interp(from->mFlickerModBounds, to->mFlickerModBounds, pct, mFlickerModBounds);
 
     // Hall of time — copy from 'from' if it has a non-zero rate, otherwise zero
-    if (from->mHallOfTimeRate != 0.0f) {
+    if (from->HallOfTime()) {
         mHallOfTimeType = from->mHallOfTimeType;
         mHallOfTimeRate = from->mHallOfTimeRate;
         mHallOfTimeColor = from->mHallOfTimeColor;
