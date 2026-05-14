@@ -61,9 +61,8 @@ bool FlowMultiSetProperty::Activate() {
     }
     FlowNode::PushDrivenProperties();
     FOREACH (it, mTargets) {
-        Hmx::Object *obj = it->Obj();
-        if (obj) {
-            obj->SetProperty(mProperty.Array(), mPropertyValue);
+        if (*it) {
+            (*it)->SetProperty(mProperty.Array(), mPropertyValue);
         }
     }
     return false;

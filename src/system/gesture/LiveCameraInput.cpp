@@ -174,11 +174,11 @@ void LiveCameraInput::TextureStore::StoreColorBufferClip(
         RELEASE(mTex);
     }
     {
-        unsigned int w = (1U - (int)(clipWidth * -640.0f)) & 0xfffe;
-        unsigned int h = (1U - (int)(clipHeight * -480.0f)) & 0xfffe;
-        if (w > 0x280U)
+        int w = (1 - (int)(clipWidth * -640.0f)) & 0xfffe;
+        int h = (1 - (int)(clipHeight * -480.0f)) & 0xfffe;
+        if (w > 0x280)
             w = 0x280;
-        if (h > 0x1e0U)
+        if (h > 0x1e0)
             h = 0x1e0;
         mTex = Hmx::Object::New<RndTex>();
         mTex->SetBitmap(w, h, 16, RndTex::kScratch, false, nullptr);
@@ -199,11 +199,11 @@ void LiveCameraInput::TextureStore::StoreDepthBufferClip(
         RELEASE(mTex);
     }
     {
-        unsigned int w = (1U - (int)(clipWidth * -640.0f)) & 0xfffe;
-        unsigned int h = (1U - (int)(clipHeight * -480.0f)) & 0xfffe;
-        if (w > 0x280U)
+        int w = (1 - (int)(clipWidth * -640.0f)) & 0xfffe;
+        int h = (1 - (int)(clipHeight * -480.0f)) & 0xfffe;
+        if (w > 0x280)
             w = 0x280;
-        if (h > 0x1e0U)
+        if (h > 0x1e0)
             h = 0x1e0;
         mTex = Hmx::Object::New<RndTex>();
         mTex->SetBitmap(w, h, 16, RndTex::kScratch, false, nullptr);

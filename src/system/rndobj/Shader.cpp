@@ -322,18 +322,20 @@ void CheckDistortionOpts(RndMat *mat, ShaderOptions &opts) {
 }
 
 void CheckDistortion(RndMat *mat) {
-    if (RndSpline::sGlobalDefaultSpline
+    RndSpline *spline = RndSpline::sGlobalDefaultSpline;
+    if (spline
         && !mat->mNeverFitToSpline
-        && !RndSpline::sGlobalDefaultSpline->mManual
-        && RndSpline::sGlobalDefaultSpline->mCtrlPoints.size() >= 2) {
-        RndSpline::sGlobalDefaultSpline->PrepareShader();
+        && !spline->mManual
+        && spline->mCtrlPoints.size() >= 2) {
+        spline->PrepareShader();
     }
-    if (RndShockwave::sSelected) {
-        bool ampBad = Abs(RndShockwave::sSelected->mAmplitude) < 0.0001f;
+    RndShockwave *shock = RndShockwave::sSelected;
+    if (shock) {
+        bool ampBad = Abs(shock->mAmplitude) < 0.0001f;
         if (!ampBad && mat->mAllowDistortionEffects) {
             bool multBad = Abs(mat->mShockwaveMult) < 0.0001f;
             if (!multBad) {
-                RndShockwave::sSelected->PrepareShader(mat->mShockwaveMult);
+                shock->PrepareShader(mat->mShockwaveMult);
             }
         }
     }

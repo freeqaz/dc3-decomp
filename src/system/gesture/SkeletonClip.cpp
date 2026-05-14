@@ -464,8 +464,7 @@ void SkeletonClip::Poll() {
         SkeletonDir *dir = dynamic_cast<SkeletonDir *>(Dir());
         if (mAutoplay && TheLoadMgr.EditMode() && dir && dir->TestClip() == this) {
             mPlaybackFrame++;
-            float end = EndFrame() * 2;
-            if (mPlaybackFrame >= end) {
+            if ((float)mPlaybackFrame >= EndFrame() * 2) {
                 mPlaybackFrame = 0;
             }
             SetFrame(mPlaybackFrame / 2, 1.0f);

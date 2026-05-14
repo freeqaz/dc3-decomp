@@ -315,10 +315,12 @@ bool SkeletonChooser::IsSinglePlayerMode() const {
     static Symbol pause("pause");
     static Symbol practice_shell("practice_shell");
     static Symbol store("store");
-    if (TheGameMode->Property(gameplay_mode)->Sym() == practice
-        && (navModeSym == game || navModeSym == results || navModeSym == loading
-            || navModeSym == pause || navModeSym == practice_shell
-            || store == navModeSym)) {
+    if (TheGameMode->Property(gameplay_mode)->Sym() == practice) {
+        if (navModeSym == game || navModeSym == results || navModeSym == loading
+            || navModeSym == pause || navModeSym == practice_shell) {
+            ret = true;
+        }
+    } else if (navModeSym == store) {
         ret = true;
     }
     return ret;

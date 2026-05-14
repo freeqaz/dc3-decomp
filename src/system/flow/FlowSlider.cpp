@@ -79,7 +79,7 @@ BEGIN_LOADS(FlowSlider)
     bs >> mValue;
     bs >> (int &)mEaseType;
     bs >> mEasePower;
-    d >> mEventsRegistered;
+    GenerateAutoNames(this, true);
     mChildNodes.sort(SliderChildSort);
     UpdateEase();
 END_LOADS

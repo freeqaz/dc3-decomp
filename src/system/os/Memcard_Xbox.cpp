@@ -470,7 +470,7 @@ MCResult MemcardXbox::FindValidUnit(ContainerId *pCid) {
     DWORD dw1bc;
     XDEVICE_DATA data;
     XCONTENT_DATA buffer;
-    if (pCid->mDeviceId == 0) {
+    if ((unsigned int)pCid->mDeviceId == 0) {
         i5 = true;
     } else {
         data.DeviceID = pCid->mDeviceId;
@@ -497,11 +497,11 @@ MCResult MemcardXbox::FindValidUnit(ContainerId *pCid) {
         }
     }
     CloseHandle(h1c0);
-    if (num != 0) {
-        if (num == 1) {
-            return kMCFileExists;
-        }
-        return kMCMultipleFilesFound;
+    if (num == 0) {
+        return kMCFileNotFound;
+    }
+    if (num == 1) {
+        return kMCFileExists;
     }
     return kMCMultipleFilesFound;
 }

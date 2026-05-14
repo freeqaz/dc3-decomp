@@ -464,7 +464,7 @@ bool RndAmbientOcclusion::IsSerializable(const RndMesh *mesh) const {
         return false;
     }
     ObjectDir *meshDir = mesh->Dir();
-        if ((meshDir == Dir()))
+    if ((int)meshDir == (int)Dir())
         return true;
     return (meshDir->IsSubDir() && meshDir->InlineSubDirType() == kInlineAlways);
 }

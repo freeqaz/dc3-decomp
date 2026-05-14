@@ -24,7 +24,7 @@ public:
         /** "Forcably stop what we're doing and restart" */
         kImmediate = 3,
         /** "Ask our children to stop, then run again when they finish" */
-        kWhenAble = 4
+        kWhenAble = 5
     };
     enum StopMode {
         /** "Stop immediately." */

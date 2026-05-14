@@ -416,7 +416,7 @@ void HamWardrobe::PlayCrowdAnimation(Symbol animName, int flags, bool override) 
                     buf, flags | 0x30, -1.0f, 1e30f, 0.0f
                 );
                 if (cd != NULL) {
-                    if (cd->mNext) {
+                    if ((int)cd->mNext != 0) {
                         cd->mRampIn = RandomFloat(0.0f, maxRandomBeat);
                     }
                 } else {
@@ -431,7 +431,7 @@ void HamWardrobe::PlayCrowdAnimation(Symbol animName, int flags, bool override) 
                         buf, flags | 0x30, -1.0f, 1e30f, 0.0
                     );
                     if (cd != NULL) {
-                        if (cd->mNext) {
+                        if ((int)cd->mNext != 0) {
                             cd->mRampIn = RandomFloat(0.0f, maxRandomBeat);
                         }
                     } else {

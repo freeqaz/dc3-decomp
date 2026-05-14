@@ -31,8 +31,9 @@ void HamCamTransform::ClearOldCrowds() {
             for (ObjPtrList<HamCamShot>::iterator sit = area.mCamshots.begin();
                  sit != area.mCamshots.end();
                  ++sit) {
-                if (*sit) {
-                    (*sit)->ClearCrowds();
+                HamCamShot *shot = *sit;
+                if (shot) {
+                    shot->ClearCrowds();
                 }
             }
         }

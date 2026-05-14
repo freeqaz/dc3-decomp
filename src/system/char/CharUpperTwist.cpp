@@ -25,18 +25,18 @@ END_PROPSYNCS
 BEGIN_SAVES(CharUpperTwist)
     SAVE_REVS(1, 0)
     SAVE_SUPERCLASS(Hmx::Object)
+    bs << mTwist2;
     bs << mUpperArm;
     bs << mTwist1;
-    bs << mTwist2;
 END_SAVES
 
 BEGIN_COPYS(CharUpperTwist)
     COPY_SUPERCLASS(Hmx::Object)
     CREATE_COPY(CharUpperTwist)
     BEGIN_COPYING_MEMBERS
+        COPY_MEMBER(mTwist2)
         COPY_MEMBER(mUpperArm)
         COPY_MEMBER(mTwist1)
-        COPY_MEMBER(mTwist2)
     END_COPYING_MEMBERS
 END_COPYS
 

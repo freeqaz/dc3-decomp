@@ -578,7 +578,7 @@ void Rnd::TestPoint(const Vector3 &pos, RndFlare *flare) {
             flare->SetOcclusionResult(1.0f);
 #else
             PointTest pt = { 0, 0, 0, 0 };
-            std::list<PointTest>::iterator it = mPointTests.insert(mPointTests.begin(), pt);
+            std::list<PointTest>::iterator it = mPointTests.insert(mPointTests.end(), pt);
             it->mFlare = flare;
             it->x = (int)((float)mWidth * screen.x);
             it->y = (int)((float)mHeight * screen.y);

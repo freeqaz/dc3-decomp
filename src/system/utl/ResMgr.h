@@ -7,7 +7,7 @@
 template <class T>
 class RefRes {
 public:
-    int mRefs; // 0x0
+    unsigned long mRefs; // 0x0
     T *mRes; // 0x4
     RefRes() : mRefs(0), mRes(0) {}
 
@@ -15,7 +15,7 @@ public:
     void AddRef() { mRefs++; }
     void Release() { mRefs--; }
     void SetData(T *data) { mRes = data; }
-    int NumRefs() const { return mRefs; }
+    unsigned long NumRefs() const { return mRefs; }
 };
 
 template <class T>

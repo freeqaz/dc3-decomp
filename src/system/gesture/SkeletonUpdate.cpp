@@ -108,11 +108,11 @@ DWORD SkeletonUpdateThread(LPVOID) {
     while (!sBool878) {
         {
             SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
-            if (handle.mInst->mIsUpdateThreadActive) {
-                handle.mInst->Update();
-                SetEvent(skeleton_updated_event);
-            }
+            if (!handle.mInst->mIsUpdateThreadActive) goto wait;
+            handle.mInst->Update();
+            SetEvent(skeleton_updated_event);
         }
+    wait:
         WaitForSingleObject(new_skeleton_event, -1);
     }
     return 0;
