@@ -515,7 +515,7 @@ void Splash::UpdateThread() {
     MILO_ASSERT(SetImmutableState(kTerminated), 0x257);
 }
 
-unsigned long Splash::ThreadStart(void *v) {
+DWORD Splash::ThreadStart(void *v) {
     static_cast<Splash *>(v)->UpdateThread();
     return 0;
 }

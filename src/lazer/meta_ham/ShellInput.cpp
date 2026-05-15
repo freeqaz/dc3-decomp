@@ -167,7 +167,8 @@ void ShellInput::Poll() {
     if (TheGestureMgr->InControllerMode() && unk_0x68.SplitMs() >= unk_0x98) {
         ExitControllerMode(true);
     }
-    if (mHandsUpGestureFilter->HandsUp() && TheHamUI.EventDialogPanel()
+    if (mHandsUpGestureFilter && mHandsUpGestureFilter->GetHandsUp()
+        && TheHamUI.EventDialogPanel()
         && TheHamUI.EventDialogPanel()->GetState() != UIPanel::kUp
         && !TheHamUI.InTransition()) {
         static Symbol ui_nav_mode("ui_nav_mode");
@@ -195,14 +196,21 @@ void ShellInput::Poll() {
             panel->Dismiss();
         }
     }
-    bool raised = mHandsUpGestureFilter->RaisedMs() > 0.0f;
+    bool raised = mHandsUpGestureFilter && mHandsUpGestureFilter->GetRaisedMs() > 0;
     HamNavList::sForceDisengage = raised != false;
-    mCursorPanel->Poll();
-    mDepthBuffer->Poll();
-    mSkelIdentifier->Poll();
-    mSkelChooser->Poll();
-    mSkelExtTracker->Poll();
+    // Headless native builds don't initialize Kinect: cursor/depth/skeleton
+    // subsystems' Poll() bodies call into DataNode lookups that crash without
+    // Kinect state. Skip them entirely under HX_NATIVE so we can run automated
+    // gameplay tests. (If/when Kinect is available, gate this on a runtime flag.)
+#ifndef HX_NATIVE
+    if (mCursorPanel) mCursorPanel->Poll();
+    if (mDepthBuffer) mDepthBuffer->Poll();
+    if (mSkelIdentifier) mSkelIdentifier->Poll();
+    if (mSkelChooser) mSkelChooser->Poll();
+    if (mSkelExtTracker) mSkelExtTracker->Poll();
+#endif
 
+    static bool sHasSkeleton = false;
     bool hasSkel = HasSkeleton();
     if (hasSkel != sHasSkeleton) {
         static Symbol has_skeleton("has_skeleton");
@@ -273,7 +281,8 @@ void ShellInput::Poll() {
     if (TheGestureMgr->InControllerMode() && unk_0x68.SplitMs() >= unk_0x98) {
         ExitControllerMode(true);
     }
-    if (mHandsUpGestureFilter->GetHandsUp() && TheHamUI.EventDialogPanel()
+    if (mHandsUpGestureFilter && mHandsUpGestureFilter->GetHandsUp()
+        && TheHamUI.EventDialogPanel()
         && TheHamUI.EventDialogPanel()->GetState() != UIPanel::kUp
         && !TheHamUI.InTransition()) {
         static Symbol ui_nav_mode("ui_nav_mode");

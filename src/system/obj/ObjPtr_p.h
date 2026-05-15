@@ -908,11 +908,10 @@ T1 *ObjPtrList<T1, T2>::back() const {
 }
 
 // -- ObjPtrVec generic template implementations --
-
-template <class T1, class T2>
-Hmx::Object *ObjPtrVec<T1, T2>::Node::RefOwner() const {
-    return static_cast<ObjPtrVec<T1, T2>*>(mOwner)->Owner();
-}
+// NOTE: Node::RefOwner is inline-defined in Object.h (line 318) for both
+// Xbox and native; the BinStream operator<<'s for ObjPtrList/ObjPtrVec are
+// defined unconditionally earlier in this file. Do NOT redefine them here
+// or native builds will fail with redefinition errors.
 
 template <class T1, class T2>
 typename ObjPtrVec<T1, T2>::iterator
@@ -930,32 +929,5 @@ typename ObjPtrVec<T1, T2>::iterator ObjPtrVec<T1, T2>::FindRef(ObjRef *ref) {
 
 // ObjPtrVec::merge, ::unique, ::remove bodies are in ObjPtrVec_impl.h
 #include "obj/ObjPtrVec_impl.h"
-
-// -- BinStream operator<< for ObjPtrList --
-
-template <class T1>
-BinStream &operator<<(BinStream &bs, const ObjPtrList<T1, ObjectDir> &list) {
-    bs << list.size();
-    for (typename ObjPtrList<T1, ObjectDir>::iterator it = list.begin(); it != list.end(); ++it) {
-        Hmx::Object *obj = *it;
-        const char *name = obj ? obj->Name() : "";
-        bs << name;
-    }
-    return bs;
-}
-
-// -- BinStream operator<< for ObjPtrVec --
-
-template <class T1>
-BinStream &operator<<(BinStream &bs, const ObjPtrVec<T1, ObjectDir> &c) {
-    bs << (int)c.size();
-    MILO_ASSERT(c.Owner(), 0x525);
-    for (int i = 0; i < (int)c.size(); i++) {
-        const Hmx::Object *obj = c[i];
-        const char *name = obj ? obj->Name() : "";
-        bs << name;
-    }
-    return bs;
-}
 
 #endif

@@ -136,6 +136,15 @@ bool AudioDevice::Init(int sampleRate) {
     if (mInitialized)
         return true;
 
+    // Opt-out: skip audio init entirely for headless test runs.
+    // PipeWire/SPA plugins on some hosts crash on the audio thread during
+    // device init; headless tests don't need audio output anyway.
+    // DC3_NO_AUDIO=1 explicitly opts out; MILO_HEADLESS=1 implies it.
+    if (getenv("DC3_NO_AUDIO") || getenv("MILO_HEADLESS")) {
+        printf("AudioDevice: skipped (DC3_NO_AUDIO or MILO_HEADLESS set)\n");
+        return true;
+    }
+
     mDevice = new ma_device;
 
     ma_device_config config = ma_device_config_init(ma_device_type_playback);

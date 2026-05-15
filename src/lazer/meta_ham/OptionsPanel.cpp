@@ -92,7 +92,7 @@ DataNode OptionsPanel::OnMsg(RCJobCompleteMsg const &msg) {
         mRedeemTokenJob->GetRedeemTokenData(res, offer);
         bool success;
         Symbol error;
-        switch (res) {
+        switch ((unsigned int)res) {
         case 0xA0002:
             error = token_redemption_ready;
             success = true;
@@ -109,19 +109,19 @@ DataNode OptionsPanel::OnMsg(RCJobCompleteMsg const &msg) {
             error = token_redemption_ready;
             success = true;
             break;
-        case 0x800A0003:
+        case 0x800A0003U:
             error = token_redemption_not_found;
             success = false;
             break;
-        case 0x800A0005:
+        case 0x800A0005U:
             error = token_redemption_other_player;
             success = false;
             break;
-        case 0x800A0008:
+        case 0x800A0008U:
             error = token_redemption_too_late;
             success = false;
             break;
-        case 0x800A0009:
+        case 0x800A0009U:
             error = token_redemption_too_early;
             success = false;
             break;

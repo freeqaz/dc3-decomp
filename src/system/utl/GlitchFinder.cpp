@@ -3,6 +3,8 @@
 #include "os/Debug.h"
 #include "utl/MakeString.h"
 
+DataNode GlitchFindScriptImpl(DataArray *arr, int iii);
+
 GlitchFinder TheGlitchFinder;
 std::vector<float> GlitchPoker::smNestedStartTimes;
 #ifdef HX_NATIVE

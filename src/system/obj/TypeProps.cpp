@@ -208,7 +208,7 @@ DataArray *TypeProps::GetArray(Symbol prop) {
     if (!n) {
 #ifdef HX_NATIVE
         if (!typeDef) {
-            MILO_WARN("TypeProps::GetArray: %s has no TypeDef for key %s", PathName(mOwner), key);
+            MILO_WARN("TypeProps::GetArray: %s has no TypeDef for key %s", PathName(mOwner), prop);
             return nullptr;
         }
 #endif

@@ -16,6 +16,8 @@ HolmesInput::~HolmesInput() {
     RELEASE(mJoypadStream);
 }
 
+DataNode HolmesInput::Handle(DataArray *, bool) { return DataNode(0); }
+
 unsigned int HolmesInput::SendJoypadMessages() {
     static DataNode &n = DataVariable("fake_controllers");
     unsigned int ret = 0;

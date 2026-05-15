@@ -301,6 +301,12 @@ void CharClipSet::Draw() {
     }
 }
 
+void CharClipSet::DrawShowing() {
+    if (mPreviewChar) {
+        mPreviewChar->DrawShowing();
+    }
+}
+
 void CharClipSet::ListDrawChildren(std::list<RndDrawable *> &draws) {
     if (mPreviewChar) {
         RndDir *ptr = mPreviewChar;

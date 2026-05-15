@@ -1409,13 +1409,4 @@ DataNode CharEyes::OnAddInterest(DataArray *arr) {
 // sees NormalizeScale doesn't touch r4/r6, so EnforceMinimumTargetDistance
 // skips callee-saved GPR saves (r29-r31) that the target uses. Result:
 // structurally incompatible prologue (91.3% -> 57.8%). AT_LIMIT.
-#ifdef HX_NATIVE
-void NormalizeScale(const Vector3 &in, float scale, Vector3 &out) {
-    float inv = 0;
-    float len = Length(in);
-    if (len != 0) {
-        inv = 1.0f / len;
-    }
-    Scale(in, inv * scale, out);
-}
-#endif
+// Native build: NormalizeScale is provided inline in src/system/math/Vec.h.

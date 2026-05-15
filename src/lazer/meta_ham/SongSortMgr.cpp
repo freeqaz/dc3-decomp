@@ -313,6 +313,12 @@ void SongSortMgr::SetupQuasiRandomSongs() {
     SetQuasiRandomSong();
 }
 
+bool SongSortMgr::GetSetlistMode() {
+    // Setlist mode flag isn't currently tracked on the manager; report false so
+    // single-song selection paths work.
+    return false;
+}
+
 void SongSortMgr::SetSetlistMode(bool b) {
     static Symbol song_select_story("song_select_story");
     MILO_ASSERT(TheGameMode->Property("song_select_mode")->Sym() != song_select_story, 0xa7);

@@ -349,3 +349,13 @@ BINSTREAM_OP_OBJDIRPTR(UIListDir)
 // HDCache::Flush — defined outside HDCache.cpp to match original TU split
 #include "os/HDCache.h"
 void HDCache::Flush() {}
+
+// Ogg/Vorbis allocator stubs. VorbisMem.cpp is empty in this tree, and the
+// Xbox link_glue.cpp isn't compiled for native, so we provide them here.
+#include <cstdlib>
+extern "C" {
+void *OggMalloc(int n) { return malloc((size_t)n); }
+void *OggCalloc(int n, int sz) { return calloc((size_t)n, (size_t)sz); }
+void *OggRealloc(void *p, int n) { return realloc(p, (size_t)n); }
+void OggFree(void *p) { free(p); }
+}
