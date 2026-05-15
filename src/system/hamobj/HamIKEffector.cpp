@@ -345,6 +345,26 @@ void HamIKEffector::Poll() {
                     const char *path = PathName(this);
                     bool isMain = path && strstr(path, "main.milo") != nullptr
                                   && strstr(path, "backup") == nullptr;
+                    if (sTotalWeightLog < 3
+                        && t == kEffectorTypeAnkle
+                        && isMain
+                        && mEffector->WorldXfm().v.z < 1.5f) {
+                        // One-shot: dump TypeProps state to see if constraints
+                        // live there even when mConstraints is empty.
+                        fprintf(stderr,
+                            "DC3_IK_DIAG TypePropsDump: type=%s typeProps=%p "
+                            "constraintCount=%d\n",
+                            Type().Str() ? Type().Str() : "null",
+                            (void*)mTypeProps,
+                            (int)mConstraints.size());
+                        if (mTypeProps) {
+                            DataNode *n = mTypeProps->KeyValue(
+                                Symbol("constraints"), false);
+                            fprintf(stderr,
+                                "DC3_IK_DIAG TypePropsConstraints: node=%p type=%d\n",
+                                (void*)n, n ? (int)n->Type() : -1);
+                        }
+                    }
                     if (sTotalWeightLog < 20
                         && t == kEffectorTypeAnkle
                         && isMain

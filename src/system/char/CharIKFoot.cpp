@@ -74,6 +74,21 @@ void CharIKFoot::PollDeps(std::list<Hmx::Object *> &l1, std::list<Hmx::Object *>
 }
 
 void CharIKFoot::Poll() {
+#ifdef HX_NATIVE
+    {
+        static int sCharIKFootPollLog = 0;
+        if (sCharIKFootPollLog < 5) {
+            sCharIKFootPollLog++;
+            fprintf(stderr,
+                "DC3_IK_DIAG CharIKFootPoll[%d]: path=%s mFinger=%p mHand=%p "
+                "mData=%p mFootBone=%p\n",
+                sCharIKFootPollLog,
+                PathName(this),
+                (void*)mFinger.Ptr(), (void*)mHand.Ptr(),
+                (void*)mData.Ptr(), (void*)mFootBone.Ptr());
+        }
+    }
+#endif
     if (mFinger && mHand && mData) {
         mTargets.clear();
         mTargets.push_back(IKTarget(mFootBone, 0));
