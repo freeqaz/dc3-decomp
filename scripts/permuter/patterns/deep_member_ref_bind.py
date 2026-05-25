@@ -74,6 +74,12 @@ class DeepMemberRefBindPattern(Pattern):
         return score if score > 0 else 0.3
 
     def generate(self, ctx: FunctionContext) -> Iterator[Variant]:
+        # Pattern emits `auto&` which mwcc (C++98) rejects as implicit-int.
+        # Multi-level chain type inference requires walking through multiple
+        # class headers — too brittle to implement here. Skip for mwcc.
+        if ctx.compiler_dialect != "msvc":
+            return
+
         source = ctx.file_source
         body = ctx.body_node
         counter = 0

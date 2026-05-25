@@ -25,6 +25,7 @@ Detection signals:
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from typing import Iterator
 
 from tree_sitter import Node
@@ -32,6 +33,7 @@ from tree_sitter import Node
 from .base import Pattern
 from ..ast_queries import get_indent, get_line_start
 from ..editor import SourceEditor
+from ..extractor import _cached_parse
 from ..types import Diagnosis, FunctionContext, Variant
 
 # Member access patterns: this->member or just member (implicit this)
@@ -41,11 +43,136 @@ _FIELD_ACCESS_TYPES = {"field_expression", "pointer_expression"}
 _CALLEE_SAVED_RE = re.compile(r"r(1[3-9]|2\d|3[01])")
 
 
+# Cache: (header_path, class_name) -> {member_name: type_text}
+_MEMBER_TYPE_CACHE: dict[tuple[str, str], dict[str, bytes]] = {}
+
+
+def _extract_class_name(func_node: Node, source: bytes) -> str | None:
+    """Extract the class name from a function definition like `Foo::Bar()`."""
+    decl = func_node.child_by_field_name("declarator")
+    while decl is not None:
+        # function_declarator wraps the qualified id
+        if decl.type == "function_declarator":
+            inner = decl.child_by_field_name("declarator")
+            if inner is None:
+                return None
+            text = source[inner.start_byte:inner.end_byte].decode("utf-8", errors="replace")
+            if "::" in text:
+                # Strip dtor tilde / operator suffixes — keep only ClassName
+                qname = text.rsplit("::", 1)[0]
+                # Handle nested classes: take innermost qualifier (rightmost ::)
+                return qname.rsplit("::", 1)[-1]
+            return None
+        decl = decl.child_by_field_name("declarator")
+    return None
+
+
+def _find_header_for_class(source_file: Path, class_name: str) -> Path | None:
+    """Find header file declaring `class ClassName`. Same-folder lookup only."""
+    folder = source_file.parent
+    # Common case: ClassName.h next to ClassName.cpp
+    candidate = folder / f"{class_name}.h"
+    if candidate.exists():
+        return candidate
+    # File-stem match: source.cpp -> source.h
+    stem_header = folder / f"{source_file.stem}.h"
+    if stem_header.exists():
+        return stem_header
+    # Scan same folder for any .h containing `class ClassName`
+    needle = f"class {class_name}".encode()
+    for h in folder.glob("*.h"):
+        try:
+            if needle in h.read_bytes():
+                return h
+        except OSError:
+            continue
+    return None
+
+
+def _lookup_member_types(header_path: Path, class_name: str) -> dict[str, bytes]:
+    """Parse header, return {member_name: type_text} for class_name.
+
+    Returns empty dict if class not found or parsing fails. The type_text is the
+    raw declaration's `type` field, ready to use as `<type> _ref0 = mFoo;`.
+    """
+    key = (str(header_path), class_name)
+    if key in _MEMBER_TYPE_CACHE:
+        return _MEMBER_TYPE_CACHE[key]
+
+    out: dict[str, bytes] = {}
+    try:
+        source = header_path.read_bytes()
+    except OSError:
+        _MEMBER_TYPE_CACHE[key] = out
+        return out
+
+    tree = _cached_parse(source)
+    needle = class_name.encode()
+
+    def walk(node: Node) -> None:
+        if node.type in ("class_specifier", "struct_specifier"):
+            name_node = node.child_by_field_name("name")
+            if name_node is not None and source[name_node.start_byte:name_node.end_byte] == needle:
+                body = node.child_by_field_name("body")
+                if body is not None:
+                    _collect_fields(body, source, out)
+                return
+        for ch in node.children:
+            walk(ch)
+
+    walk(tree.root_node)
+    _MEMBER_TYPE_CACHE[key] = out
+    return out
+
+
+def _collect_fields(body: Node, source: bytes, out: dict[str, bytes]) -> None:
+    """Walk a class body collecting field declarations.
+
+    Skips method declarations (function_declarator) — we only care about data
+    members. Continues iterating after a skip so later fields still get picked
+    up.
+    """
+    for child in body.children:
+        if child.type != "field_declaration":
+            continue
+        type_node = child.child_by_field_name("type")
+        if type_node is None:
+            continue
+        # If this field_declaration is actually a method, skip it.
+        if any(c.type == "function_declarator" for c in child.children):
+            continue
+        type_text = source[type_node.start_byte:type_node.end_byte]
+        # A field_declaration can declare multiple names: collect each declarator
+        for c in child.children:
+            if c.type == "field_identifier":
+                # type member;
+                name = source[c.start_byte:c.end_byte].decode("utf-8", errors="replace")
+                out.setdefault(name, type_text)
+            elif c.type in ("pointer_declarator", "reference_declarator", "array_declarator"):
+                # type *member; / type &member; / type member[N];
+                # Walk to inner identifier; prepend the modifier char to type.
+                modifier = b""
+                inner = c
+                while inner.type in ("pointer_declarator", "reference_declarator", "array_declarator"):
+                    if inner.type == "pointer_declarator":
+                        modifier = b" *" + modifier
+                    elif inner.type == "reference_declarator":
+                        modifier = b" &" + modifier
+                    sub = inner.child_by_field_name("declarator")
+                    if sub is None:
+                        break
+                    inner = sub
+                if inner.type == "field_identifier":
+                    name = source[inner.start_byte:inner.end_byte].decode("utf-8", errors="replace")
+                    out.setdefault(name, type_text + modifier)
+
+
 class MemberRefBindPattern(Pattern):
     name = "member_ref_bind"
-    # opt_in: 212/218 variants failed compile (97%, 0 wins from 13 runs).
-    # Generated `auto&` references mismatch ObjPtr/smart-pointer types.
-    opt_in = True
+    # Re-enabled (was opt_in due to 212/218 variants failing on mwcc).
+    # Now branches on `ctx.compiler_dialect`: mwcc emits a concrete type read
+    # from the class's header (`TypeName &_ref0 = mFoo;`); msvc keeps `auto&`.
+    # Headers in the same folder as the .cpp are inspected via tree-sitter.
 
     def relevant(self, diagnosis: Diagnosis) -> bool:
         # Callee-saved GPR swaps — this pattern can fix register allocation
@@ -192,13 +319,29 @@ def _get_containing_stmt(node: Node, body: Node) -> Node | None:
 
 
 def _bind_member_accesses(ctx: FunctionContext, counter: int) -> Iterator[Variant]:
-    """Generate variants that bind member accesses to local references."""
+    """Generate variants that bind member accesses to local references.
+
+    For mwcc (C++98) we look up the member's real type from the class header
+    and emit `TypeName &_ref0 = mFoo;` (mwcc rejects `auto`).
+    For msvc (C++11+) we use `auto&` / `auto*` — terser and always type-correct.
+    """
     source = ctx.file_source
     body = ctx.body_node
 
     # Collect parameter names to exclude them from member detection
     param_names = {p[0] for p in _extract_params(ctx.func_node, source)}
     member_uses = _find_member_uses(body, source, param_names)
+
+    use_auto = ctx.compiler_dialect == "msvc"
+
+    # For mwcc, look up the enclosing class and its member types.
+    member_types: dict[str, bytes] = {}
+    if not use_auto:
+        class_name = _extract_class_name(ctx.func_node, source)
+        if class_name is not None:
+            header = _find_header_for_class(ctx.file_path, class_name)
+            if header is not None:
+                member_types = _lookup_member_types(header, class_name)
 
     for member_text, nodes in member_uses.items():
         if counter >= 5:  # Limit variants
@@ -223,13 +366,43 @@ def _bind_member_accesses(ctx: FunctionContext, counter: int) -> Iterator[Varian
             if field is None:
                 continue
             field_name = source[field.start_byte:field.end_byte]
-            if is_pointer:
-                decl_line = indent + b"auto* " + var_name + b" = " + field_name + b";\n"
+            bare_member = field_name.decode("utf-8", errors="replace")
+            if use_auto:
+                # msvc / C++11 — terse auto.
+                if is_pointer:
+                    decl_line = (indent + b"auto* " + var_name + b" = " +
+                                 field_name + b";\n")
+                else:
+                    decl_line = (indent + b"auto& " + var_name + b" = " +
+                                 field_name + b";\n")
             else:
-                decl_line = indent + b"auto& " + var_name + b" = " + field_name + b";\n"
+                # mwcc — emit concrete type. If we couldn't find it, skip;
+                # generating `auto&` would just produce a build failure.
+                type_bytes = member_types.get(bare_member)
+                if type_bytes is None:
+                    continue
+                if is_pointer:
+                    stripped = type_bytes.rstrip()
+                    if stripped.endswith(b"*") or stripped.endswith(b"&"):
+                        decl_line = (indent + stripped + b" " + var_name + b" = " +
+                                     field_name + b";\n")
+                    else:
+                        decl_line = (indent + stripped + b" *" + var_name + b" = &" +
+                                     field_name + b";\n")
+                else:
+                    decl_line = (indent + type_bytes + b" &" + var_name + b" = " +
+                                 field_name + b";\n")
         elif first_use.type == "identifier":
-            # Plain mFoo identifier — bind to auto& reference
-            decl_line = indent + b"auto& " + var_name + b" = " + member_bytes + b";\n"
+            # Plain mFoo identifier — bind to typed reference.
+            if use_auto:
+                decl_line = (indent + b"auto& " + var_name + b" = " +
+                             member_bytes + b";\n")
+            else:
+                type_bytes = member_types.get(member_text)
+                if type_bytes is None:
+                    continue
+                decl_line = (indent + type_bytes + b" &" + var_name + b" = " +
+                             member_bytes + b";\n")
         else:
             continue
 
@@ -281,6 +454,10 @@ def _bind_parameters(ctx: FunctionContext, counter: int) -> Iterator[Variant]:
         if not is_ref:
             continue
 
+        # Skip if parameter type is empty (defensive)
+        if not param_type.strip():
+            continue
+
         name_bytes = param_name.encode("utf-8")
         uses = _find_identifier_uses(body, name_bytes)
         if len(uses) < 2:
@@ -296,8 +473,17 @@ def _bind_parameters(ctx: FunctionContext, counter: int) -> Iterator[Variant]:
         indent = get_indent(source, containing_stmt)
         line_start = get_line_start(source, containing_stmt)
 
-        # const auto& _ref0 = param;
-        decl_line = indent + b"const auto& " + var_name + b" = " + name_bytes + b";\n"
+        # For mwcc: use the parameter's actual type (no `auto`). For msvc:
+        # `const auto&` works for any reference parameter.
+        if ctx.compiler_dialect == "msvc":
+            decl_line = (indent + b"const auto& " + var_name + b" = " +
+                         name_bytes + b";\n")
+        else:
+            # If source already wrote `const T`, our copy preserves that;
+            # otherwise we DON'T add const because the param may be written through.
+            type_bytes = param_type.encode("utf-8")
+            decl_line = (indent + type_bytes + b" &" + var_name + b" = " +
+                         name_bytes + b";\n")
 
         ed = SourceEditor(source)
         ed.insert_at(line_start, decl_line)

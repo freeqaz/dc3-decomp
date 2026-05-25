@@ -89,6 +89,14 @@ def parse_args() -> argparse.Namespace:
         help="Fail if BSF tracing/guidance fails (no fallback to unguided)",
     )
     parser.add_argument(
+        "--compiler",
+        choices=("mwcc", "msvc"),
+        default=None,
+        help="Compiler dialect target (mwcc=C++98 CodeWarrior, msvc=modern). "
+             "Patterns emitting C++11+ syntax check this. "
+             "Overrides permuter.json (default: mwcc).",
+    )
+    parser.add_argument(
         "--list-patterns",
         action="store_true",
         help="List available patterns and exit",
@@ -203,9 +211,15 @@ def main():
     # Extract function
     print(f"Extracting {args.function} from {args.source}...", file=sys.stderr)
     ctx = extract_function(args.source, args.function)
+
+    # Resolve compiler dialect: --compiler flag > permuter.json > "mwcc"
+    from .project_config import get_compiler
+    ctx.compiler_dialect = args.compiler or get_compiler()
+
     print(
         f"Found function with {len(ctx.statements)} statements "
-        f"({ctx.func_byte_range[1] - ctx.func_byte_range[0]} bytes)",
+        f"({ctx.func_byte_range[1] - ctx.func_byte_range[0]} bytes) "
+        f"[dialect={ctx.compiler_dialect}]",
         file=sys.stderr,
     )
 
@@ -368,8 +382,36 @@ def _print_dry_run(variants, json_output: bool):
 
 def _print_json(baseline: float, results: list[ScoreResult], diagnosis=None):
     from .types import Diagnosis
+
+    # Compute headline summary fields BEFORE the results array so downstream
+    # consumers don't have to filter. `results` is sorted by match_percent
+    # desc, so results[0] can be a regression when no variant improved —
+    # that is, results[0].match_percent < baseline. Always check
+    # `best_improvement` (None if nothing beat baseline) instead.
+    improvements = [
+        r for r in results
+        if r.build_success and r.match_percent > baseline + 1e-6
+    ]
+    build_failures = sum(1 for r in results if not r.build_success)
+
+    if improvements:
+        best = max(improvements, key=lambda r: r.match_percent)
+        best_summary = {
+            "name": best.variant.name,
+            "pattern": best.variant.pattern_name,
+            "description": best.variant.description,
+            "match_percent": best.match_percent,
+            "delta": best.match_percent - baseline,
+        }
+    else:
+        best_summary = None
+
     data = {
         "baseline": baseline,
+        "best_improvement": best_summary,
+        "improvements_count": len(improvements),
+        "variants_total": len(results),
+        "build_failures": build_failures,
         "results": [
             {
                 "name": r.variant.name,

@@ -196,6 +196,10 @@ class FunctionContext:
     # When True, line/node_in_mismatch_region() always return True
     # (used when all mismatch regions have low confidence)
     blind_generation_mode: bool = False
+    # Compiler dialect (mwcc | msvc). Patterns that emit C++11+ syntax (`auto`,
+    # `decltype`, etc.) must check this — mwcc is C++98 and rejects them.
+    # Populated by __main__ / batch entry points from CLI flag / permuter.json.
+    compiler_dialect: str = "mwcc"
 
     def source_text(self, node: Node) -> str:
         """Extract source text for a tree-sitter node."""

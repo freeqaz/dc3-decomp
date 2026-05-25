@@ -46,9 +46,10 @@ _CALLEE_SAVED_RE = re.compile(r"r(1[3-9]|2\d|3[01])")
 
 class ValueAddressCachingPattern(Pattern):
     name = "value_address_caching"
-    # opt_in: 79/84 variants failed compile (94%, 0 wins from 6 runs).
-    # Type inference on `auto val = member` often picks the wrong width.
-    opt_in = True
+    # Re-enabled (was opt_in due to 79/84 variants failing on mwcc).
+    # ref-to-value and value-to-ref strategies now reuse the source's existing
+    # `Type` instead of emitting `auto`. The inline-to-cached strategy still
+    # requires `auto` so it's msvc-only.
     safety_tier = "normal"
     structural_domain = "register_allocation"
     follow_ups = ("declaration_reorder", "prologue_pressure")
@@ -136,12 +137,20 @@ def _ref_to_value(ctx: FunctionContext, counter: int) -> Iterator[Variant]:
 
             # Replace the entire declaration statement
             # Original: "Type& ref = expr;" or "auto& ref = expr;"
-            # New: "auto val = expr;"
+            # New: "<type> val = expr;" — for mwcc we MUST use the concrete
+            # type; for msvc `auto` is fine. If the original was `auto&` and
+            # we're on mwcc, we can't fix it — skip.
             var_str = var_name.decode("utf-8", errors="replace")
             init_str = init_expr.decode("utf-8", errors="replace")
             new_name = f"_val{counter}"
             indent = get_indent(source, stmt)
-            new_decl = indent + f"auto {new_name} = {init_str};\n".encode("utf-8")
+            if ctx.compiler_dialect == "msvc":
+                type_decl = "auto"
+            else:
+                if is_auto:
+                    continue  # Original used `auto&` — no concrete type to reuse.
+                type_decl = type_text.decode("utf-8", errors="replace").rstrip()
+            new_decl = indent + f"{type_decl} {new_name} = {init_str};\n".encode("utf-8")
 
             # Delete old line and insert new
             del_start, del_end = _line_range(source, decl_start, decl_end)
@@ -200,12 +209,20 @@ def _value_to_ref(ctx: FunctionContext, counter: int) -> Iterator[Variant]:
             if not uses:
                 continue
 
-            # Build replacement: add & to declaration
+            # Build replacement: add & to declaration. For mwcc, reuse the
+            # original `Type` (must be a real type, not `auto`).
             var_str = var_name.decode("utf-8", errors="replace")
             init_str = init_expr.decode("utf-8", errors="replace")
             new_name = f"_ref{counter}"
             indent = get_indent(source, stmt)
-            new_decl = indent + f"auto& {new_name} = {init_str};\n".encode("utf-8")
+            if ctx.compiler_dialect == "msvc":
+                ref_decl = "auto&"
+            else:
+                type_str = type_text.decode("utf-8", errors="replace").rstrip()
+                if type_str == "auto":
+                    continue
+                ref_decl = f"{type_str} &"
+            new_decl = indent + f"{ref_decl} {new_name} = {init_str};\n".encode("utf-8")
 
             ed = SourceEditor(source)
 
@@ -284,6 +301,11 @@ def _inline_to_cached(ctx: FunctionContext, counter: int) -> Iterator[Variant]:
         indent = get_indent(source, containing_stmt)
         line_start = get_line_start(source, containing_stmt)
 
+        # mwcc can't deduce the return type via `auto` — skip this strategy
+        # entirely. Caching call results without knowing the return type is
+        # too risky (we'd need libclang or a parsed header to find it).
+        if ctx.compiler_dialect != "msvc":
+            continue
         decl_line = indent + b"auto " + var_bytes + b" = " + call_bytes + b";\n"
 
         ed = SourceEditor(source)

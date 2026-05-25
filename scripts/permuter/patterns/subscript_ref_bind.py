@@ -71,6 +71,12 @@ class SubscriptRefBindPattern(Pattern):
         return base
 
     def generate(self, ctx: FunctionContext) -> Iterator[Variant]:
+        # Pattern emits `auto&` for subscript element types. mwcc (C++98)
+        # rejects `auto`. Inferring the element type from a vector/array
+        # subscript at AST level isn't reliable enough to substitute here.
+        if ctx.compiler_dialect != "msvc":
+            return
+
         source = ctx.file_source
         body = ctx.body_node
         stmts = ctx.statements
