@@ -89,6 +89,7 @@ from . import helper_inline  # noqa: F401  # Reverse-inline a trivial header hel
 from . import goto_skip_to_ifelse  # noqa: F401  # Eliminate forward-skip gotos with negated if
 from . import goto_to_return  # noqa: F401  # Substitute goto with return statement at target label
 from . import goto_to_continue  # noqa: F401  # Replace `goto L` with `continue` for end-of-loop labels
+from . import loop_rotation_to_while  # noqa: F401  # Convert `goto check; do{...}while()` to `while(true){...; if break; ...}`
 
 from .base import get_all_patterns, get_pattern, list_patterns
 
