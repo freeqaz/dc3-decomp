@@ -85,13 +85,23 @@ class DiffOp:
 
 @dataclass
 class Cluster:
-    """A contiguous group of insert/delete instructions."""
+    """A contiguous group of insert/delete instructions.
+
+    ``target_opcodes`` lists the opcodes of TARGET-ONLY ``delete`` instructions
+    in source order (code present in the target but not in our output).
+    ``base_opcodes`` lists the opcodes of OUR-only ``insert`` instructions
+    (code we emit that the target does not). Patterns can use these to detect
+    structural signatures (e.g. inlined ``(end - begin) / sizeof(T)`` for
+    ``deque::size()``: target-only ``subf + srawi + addze``).
+    """
 
     start_idx: int
     end_idx: int
     size: int
     inserts: int
     deletes: int
+    target_opcodes: tuple[str, ...] = ()
+    base_opcodes: tuple[str, ...] = ()
 
 
 @dataclass
@@ -293,9 +303,19 @@ def variant_file_updates(primary_path: Path, variant: Variant) -> dict[Path, byt
     If the variant carries scope-isolation metadata (func_byte_range +
     original_source), validates that only bytes within the target function
     were modified.  Raises ValueError on out-of-scope modifications.
+
+    Exception: patterns whose `structural_domain` is "cross_unit" (e.g.
+    accessor_outline) legitimately insert wrapper functions outside the
+    target's byte range. For those we skip the pre-function check.
     """
+    # Patterns that may legitimately write outside the target function's range.
+    # Keep this list small — defaults remain strict.
+    _CROSS_UNIT_PATTERNS = {"accessor_outline", "helper_inline"}
+    skip_scope_check = variant.pattern_name in _CROSS_UNIT_PATTERNS
+
     # Scope isolation check: verify only target function bytes changed
-    if variant.func_byte_range and variant.original_source:
+    if (variant.func_byte_range and variant.original_source
+            and not skip_scope_check):
         func_start, func_end = variant.func_byte_range
         orig = variant.original_source
         mod = variant.source
@@ -332,6 +352,15 @@ def variant_file_updates(primary_path: Path, variant: Variant) -> dict[Path, byt
             raise ValueError(
                 f"Variant '{variant.name}' ({variant.pattern_name}) modified "
                 f"content after target function (length mismatch)"
+            )
+    elif skip_scope_check:
+        # Cross-unit patterns: skip the strict scope check but still detect
+        # accidental no-op variants (source unchanged from original).
+        if (variant.original_source is not None
+                and variant.source == variant.original_source):
+            raise ValueError(
+                f"Variant '{variant.name}' ({variant.pattern_name}) produced "
+                f"no change to source"
             )
 
     updates = {primary_path.resolve(): variant.source}
