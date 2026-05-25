@@ -92,6 +92,7 @@ from . import goto_to_continue  # noqa: F401  # Replace `goto L` with `continue`
 from . import loop_rotation_to_while  # noqa: F401  # Convert `goto check; do{...}while()` to `while(true){...; if break; ...}`
 from . import nested_goto_skip_to_ifelse  # noqa: F401  # Merge nested-if conditions to skip past a goto-to-outer-scope label
 from . import bare_label_loop_to_while  # noqa: F401  # Sibling-label variant of loop_rotation_to_while (no `do` keyword)
+from . import common_tail_goto_to_duplicate  # noqa: F401  # Duplicate else-clause tail to eliminate a forward goto-into-else
 
 from .base import get_all_patterns, get_pattern, list_patterns
 
