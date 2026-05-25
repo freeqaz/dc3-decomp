@@ -339,8 +339,37 @@ class DecompMCPServer:
                             },
                             "unicorn_class": {
                                 "type": "string",
-                                "description": "Filter by divergence class (only when unicorn_verdict='DIVERGENT'): 'logic' (real bug), 'build_env' (unfixable artifact), 'regalloc' (register quirk)",
-                                "enum": ["logic", "build_env", "regalloc"],
+                                "description": (
+                                    "Filter by divergence class (only when unicorn_verdict='DIVERGENT'). "
+                                    "Real bugs: 'logic', 'call_count', 'call_arg', 'return_value', "
+                                    "'object_memory', 'error', 'wild_jump_match', 'cap_exhausted', "
+                                    "'cap_exhausted_decomp'. "
+                                    "Unfixable artifacts: 'build_env', 'regalloc', 'merged_call', "
+                                    "'merged_arg', 'stack_layout', 'fpr_precision', 'orig_error', "
+                                    "'cap_exhausted_orig'."
+                                ),
+                                "enum": [
+                                    "logic", "build_env", "regalloc",
+                                    "call_count", "call_arg", "return_value",
+                                    "object_memory", "error", "orig_error",
+                                    "merged_call", "merged_arg",
+                                    "stack_layout", "fpr_precision",
+                                    "wild_jump_match",
+                                    "cap_exhausted", "cap_exhausted_decomp",
+                                    "cap_exhausted_orig",
+                                ],
+                            },
+                            "unicorn_confidence": {
+                                "type": "string",
+                                "description": (
+                                    "Filter by unicorn confidence label: 'high' (all probe runs agreed), "
+                                    "'stable_divergent' (all runs divergent), 'input_sensitive' (mixed), "
+                                    "'fixture_sensitive' (legacy dual-fixture label)."
+                                ),
+                                "enum": [
+                                    "high", "stable_divergent",
+                                    "input_sensitive", "fixture_sensitive",
+                                ],
                             },
                             "is_stub": {
                                 "type": "boolean",
@@ -666,6 +695,7 @@ class DecompMCPServer:
         skip_boilerplate = args.get("skip_boilerplate", True)
         unicorn_verdict = args.get("unicorn_verdict")
         unicorn_class = args.get("unicorn_class")
+        unicorn_confidence = args.get("unicorn_confidence")
         is_stub = args.get("is_stub")
 
         # Map status filter to database query params
@@ -698,6 +728,7 @@ class DecompMCPServer:
             skip_boilerplate=skip_boilerplate,
             unicorn_verdict=unicorn_verdict,
             unicorn_class=unicorn_class,
+            unicorn_confidence=unicorn_confidence,
             is_stub=is_stub,
         )
 

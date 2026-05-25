@@ -14,7 +14,7 @@ from typing import Any
 DEFAULT_DB_PATH = "decomp.db"
 
 # Schema version for migrations
-SCHEMA_VERSION = 14
+SCHEMA_VERSION = 15
 
 # Default maximum attempts before deprioritizing a function
 # Functions with >= this many attempts are excluded from normal queries
@@ -464,6 +464,26 @@ def _run_migrations(conn: sqlite3.Connection, from_version: int, to_version: int
             CREATE INDEX IF NOT EXISTS idx_patch_queue_status ON patch_queue(status);
         """)
 
+    if from_version < 15 <= to_version:
+        # Migration v14 -> v15: Add unicorn verdict provenance columns.
+        # These let us re-classify by query when the signal model changes
+        # instead of re-running the full 25k-function batch.
+        #   unicorn_signal_version           — bumped per signal-model change
+        #   unicorn_probe_schedule_hash      — hash of (fill, obj_mem, args, mock)
+        #   unicorn_unmapped_pages_fingerprint — Phase 3 fingerprint (write-only here)
+        print("  Migration v15: Adding unicorn verdict provenance columns...")
+        new_columns = [
+            ("unicorn_signal_version", "INTEGER"),
+            ("unicorn_probe_schedule_hash", "TEXT"),
+            ("unicorn_unmapped_pages_fingerprint", "TEXT"),
+        ]
+        for col_name, col_def in new_columns:
+            try:
+                conn.execute(f"ALTER TABLE functions ADD COLUMN {col_name} {col_def}")
+            except sqlite3.OperationalError as e:
+                if "duplicate column" not in str(e).lower():
+                    raise
+
     # Update schema version
     conn.execute("UPDATE schema_version SET version = ?", (to_version,))
     conn.commit()
@@ -773,6 +793,7 @@ def query_functions(
     skip_boilerplate: bool = False,
     unicorn_verdict: str | None = None,
     unicorn_class: str | None = None,
+    unicorn_confidence: str | None = None,
     is_stub: bool | None = None,
 ) -> list[dict[str, Any]]:
     """
@@ -784,7 +805,9 @@ def query_functions(
         exclude_patterns: Glob patterns for units to exclude (default: XDK)
         max_attempts: Skip functions with >= this many attempts (None to disable)
         unicorn_verdict: Filter by unicorn verdict (DIVERGENT, EQUIVALENT, SKIPPED, ERROR)
-        unicorn_class: Filter by divergence class (logic, build_env, regalloc)
+        unicorn_class: Filter by divergence class (logic, build_env, regalloc, ...)
+        unicorn_confidence: Filter by confidence (high, stable_divergent,
+                            input_sensitive, fixture_sensitive)
 
     Returns list of function dicts.
     """
@@ -839,6 +862,9 @@ def query_functions(
         query += f" AND unicorn_verdict = '{unicorn_verdict}'"
         if unicorn_class:
             query += f" AND unicorn_class = '{unicorn_class}'"
+
+    if unicorn_confidence:
+        query += f" AND unicorn_confidence = '{unicorn_confidence}'"
 
     # Exclude functions that have been tried too many times
     if max_attempts is not None:

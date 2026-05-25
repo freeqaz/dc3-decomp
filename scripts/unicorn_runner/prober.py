@@ -16,6 +16,7 @@ from .comparator import compare, classify_divergence
 from .engine import CL_R3, CL_R4, CL_R5, CL_R6
 from .memory_map import OBJECT_BASE, REGION_SIZE, VTABLE_BASE
 from .run import _run_comparison_core, EXIT_EQUIVALENT, EXIT_DIVERGENT, EXIT_ERROR, EXIT_SKIPPED
+from .signal_version import SIGNAL_VERSION, compute_schedule_hash
 from .typed_fixture import extract_class_from_symbol, generate_typed_object, generate_sentinel_object
 
 
@@ -33,6 +34,7 @@ class ProbeResult:
     per_run: list = field(default_factory=list)  # per-run details
     sensitivity_dimensions: list = field(default_factory=list)  # which inputs cause flips
     early_exit: bool = False         # stopped early due to stability
+    signal_version: int = SIGNAL_VERSION
 
     @property
     def confidence(self):
@@ -44,6 +46,25 @@ class ProbeResult:
         if self.stable_divergent:
             return "stable_divergent"
         return "input_sensitive"
+
+    @property
+    def schedule_hash(self):
+        """Deterministic hash of the inputs that produced this verdict.
+
+        Captures which fill patterns, fixtures, and args were tried. Used
+        for re-classification by query (`WHERE schedule_hash != current`)
+        when the probe schedule changes.
+        """
+        return compute_schedule_hash(
+            {
+                "fill_pattern": d.fill_pattern,
+                "fixture_type": d.fixture_type,
+                "arg_r4": d.arg_r4,
+                "arg_r5": d.arg_r5,
+                "arg_r6": d.arg_r6,
+            }
+            for d in self.per_run
+        )
 
 
 @dataclass
@@ -78,7 +99,7 @@ def _load_struct_db():
 def probe_function(symbol, decomp_coff, orig_coff, runs=8,
                    coload=True, coload_depth=None, timeout=5_000_000,
                    seed=None, typed=False, unit_class=None,
-                   typed_mem_zero=None, typed_mem_cd=None, early_exit=True):
+                   typed_mem_zero=None, typed_mem_cd=None, early_exit=False):
     """Run a function N times with varied fill patterns and aggregate results.
 
     Args:
@@ -94,7 +115,14 @@ def probe_function(symbol, decomp_coff, orig_coff, runs=8,
         unit_class: override class name (from unit path) for typed fixtures
         typed_mem_zero: pre-generated typed memory (zero fill) to reuse
         typed_mem_cd: pre-generated typed memory (CD fill) to reuse
-        early_exit: stop early if first 2 runs show stable behavior
+        early_exit: legacy knob — keep available for one-off speedup but
+            default is now False. The early-exit fired after only runs 0
+            and 1, which differ ONLY in fill byte (None vs 0xCD) with all
+            args = 0. Most "stable_equiv" verdicts under early_exit thus
+            rested on near-identical inputs and missed the args-varying
+            and typed-memory runs further down the schedule. Removing it
+            is correct-by-default; callers that want speed over coverage
+            can re-enable explicitly.
 
     Returns:
         ProbeResult or None if symbol not found/empty

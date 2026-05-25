@@ -32,6 +32,19 @@ from scripts.unicorn_runner.run import (
 from scripts.unicorn_runner.coff import COFFParser
 from scripts.unicorn_runner.comparator import classify_divergence
 from scripts.unicorn_runner.memory_map import FILL_BYTE
+from scripts.unicorn_runner.signal_version import SIGNAL_VERSION, compute_schedule_hash
+
+
+# The schedule batch_to_db runs: two fills (zero, 0xCD), zero args, no
+# typed memory, no hostile mocks. Hashing it once is fine — every result
+# this script writes shares the same hash.
+_BATCH_TO_DB_SCHEDULE = [
+    {"fill_pattern": None, "fixture_type": "fill",
+     "arg_r4": 0, "arg_r5": 0, "arg_r6": 0},
+    {"fill_pattern": FILL_BYTE, "fixture_type": "fill",
+     "arg_r4": 0, "arg_r5": 0, "arg_r6": 0},
+]
+_BATCH_TO_DB_HASH = compute_schedule_hash(_BATCH_TO_DB_SCHEDULE)
 
 
 def process_unit(name, decomp_path, orig_path, timeout=5_000_000):
@@ -73,8 +86,15 @@ def process_unit(name, decomp_path, orig_path, timeout=5_000_000):
 
         reason = None
 
+        unmapped_fp = None
+
         if exit_code == EXIT_EQUIVALENT:
             verdict = "EQUIVALENT"
+            if bundle is not None:
+                # Both sides shared the same fingerprint; persist it so
+                # downstream queries can find "EQUIV functions that
+                # touched null page" for audit.
+                unmapped_fp = bundle.result.details.get("unmapped_fingerprint")
         elif exit_code == EXIT_DIVERGENT:
             verdict = "DIVERGENT"
             if bundle is not None:
@@ -82,6 +102,11 @@ def process_unit(name, decomp_path, orig_path, timeout=5_000_000):
                     bundle.result, bundle.decomp_result, bundle.orig_result,
                     bundle.decomp_relocs, bundle.orig_relocs)
                 reason = bundle.result.details.get("reason")
+                # If divergence WAS unmapped_access_mismatch, record the
+                # decomp-side fingerprint (the side we'd compare against
+                # a future ground truth).
+                if reason == "unmapped_access_mismatch":
+                    unmapped_fp = bundle.result.details.get("decomp_fingerprint")
         elif exit_code == EXIT_SKIPPED:
             verdict = "SKIPPED"
         else:
@@ -106,6 +131,7 @@ def process_unit(name, decomp_path, orig_path, timeout=5_000_000):
             "class": div_class,
             "confidence": confidence,
             "reason": reason,
+            "unmapped_fingerprint": unmapped_fp,
         })
 
     return results
@@ -125,7 +151,8 @@ def write_results_to_db(conn, results, now_str):
     """Write a batch of results to the database.
 
     Matches symbols in results to rows in the functions table and updates
-    unicorn_verdict, unicorn_class, unicorn_confidence, unicorn_tested_at.
+    unicorn_verdict, unicorn_class, unicorn_confidence, unicorn_tested_at,
+    unicorn_signal_version, unicorn_probe_schedule_hash.
     """
     updated = 0
     missing = 0
@@ -139,11 +166,16 @@ def write_results_to_db(conn, results, now_str):
                 unicorn_confidence = ?,
                 unicorn_reason = ?,
                 unicorn_tested_at = ?,
+                unicorn_signal_version = ?,
+                unicorn_probe_schedule_hash = ?,
+                unicorn_unmapped_pages_fingerprint = ?,
                 updated_at = CURRENT_TIMESTAMP
             WHERE symbol = ?
             """,
             (r["verdict"], r["class"], r["confidence"], r.get("reason"),
-             now_str, r["symbol"]),
+             now_str, SIGNAL_VERSION, _BATCH_TO_DB_HASH,
+             r.get("unmapped_fingerprint"),
+             r["symbol"]),
         )
         if cursor.rowcount > 0:
             updated += 1
