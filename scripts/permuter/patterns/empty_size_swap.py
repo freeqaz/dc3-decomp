@@ -39,12 +39,28 @@ class EmptySizeSwapPattern(Pattern):
     def _detect_direction(self, diagnosis: Diagnosis) -> str | None:
         """Detect which direction to swap based on opcode mismatches.
 
-        Returns "to_size" if target uses division/multiply (size()), "to_empty" if
-        target uses pointer comparison (empty()), or None if no signal.
+        Returns "to_size" if target uses size()-style codegen, "to_empty" if
+        target uses empty()-style codegen, or None if no signal.
 
-        Only fires on divw/divwu/mulli opcodes — the actual codegen signature of
-        size() on STL containers. The previous subf secondary heuristic was removed
-        because subf appears in unrelated contexts (loop conditions, binary search).
+        Two detection paths:
+
+        1. ``diff_ops`` with ``divw``/``divwu``/``mulli`` — the classic signature
+           for ``size() != 0`` on STL containers whose ``size()`` divides by a
+           non-power-of-2 ``sizeof(T)``.
+
+        2. Clustered target-only or base-only signature for power-of-2
+           ``sizeof(T)`` containers like ``deque<T*>``/``vector<T*>``, where
+           ``(_M_finish - _M_start) / sizeof(T)`` inlines as a multi-instruction
+           arithmetic-shift idiom. The signature requires BOTH ``subf`` and
+           ``srawi`` in the same insert/delete cluster (plus often ``addze`` or
+           ``mulhw``). Checking same-cluster co-occurrence avoids firing on
+           unrelated div-by-constant idioms elsewhere in the function.
+
+        The previous ``subf`` secondary heuristic on ``diff_ops`` was removed
+        because ``subf`` appears in unrelated contexts (loop conditions, binary
+        search). The new path looks at insert/delete clusters instead, where
+        target-only ``subf`` arithmetic is a much stronger inlined-arithmetic
+        signal.
         """
         _SIZE_OPS = {"divw", "divwu", "mulli"}
 
@@ -54,12 +70,48 @@ class EmptySizeSwapPattern(Pattern):
         base_has_size = any(
             d.base_opcode in _SIZE_OPS for d in diagnosis.diff_ops
         )
+
+        # Secondary path: clustered pointer-diff arithmetic (deque::size on
+        # power-of-2-sized element types). Require BOTH subf and srawi in the
+        # same cluster — either alone is too common to be a reliable signal.
+        if not target_has_size:
+            target_has_size = self._has_pointer_diff_cluster(
+                diagnosis, side="target"
+            )
+        if not base_has_size:
+            base_has_size = self._has_pointer_diff_cluster(
+                diagnosis, side="base"
+            )
+
         if target_has_size and not base_has_size:
-            return "to_size"  # target uses division/multiply, swap empty→size
+            return "to_size"  # target uses size(), swap empty→size
         if base_has_size and not target_has_size:
-            return "to_empty"  # we use division/multiply, target uses pointer cmp
+            return "to_empty"  # we use size(), target uses empty()
 
         return None
+
+    @staticmethod
+    def _has_pointer_diff_cluster(diagnosis: Diagnosis, side: str) -> bool:
+        """Detect the inlined ``(end-begin)/sizeof(T)`` size() signature.
+
+        Looks for at least one insert/delete cluster whose ``side``-only
+        opcodes contain BOTH ``subf`` and a divide-by-power-of-2 op
+        (``srawi``), or both ``mulhw`` and ``srawi`` (non-power-of-2 div).
+
+        ``side`` is "target" (target-only deletes) or "base" (our-side inserts).
+        """
+        for c in diagnosis.clusters:
+            ops = c.target_opcodes if side == "target" else c.base_opcodes
+            if not ops:
+                continue
+            ops_set = set(ops)
+            # Power-of-2 sizeof(T): (end - begin) >> log2(sizeof) then addze
+            if "subf" in ops_set and "srawi" in ops_set:
+                return True
+            # Non-power-of-2 sizeof(T): multiply-high by reciprocal + srawi
+            if "mulhw" in ops_set and "srawi" in ops_set:
+                return True
+        return False
 
     def generate(self, ctx: FunctionContext) -> Iterator[Variant]:
         direction = None

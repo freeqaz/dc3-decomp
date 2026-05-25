@@ -156,6 +156,49 @@ def diag_with_divw_base() -> Diagnosis:
     return d
 
 
+def diag_with_ptr_diff_target_cluster() -> Diagnosis:
+    """Target has inlined (end-begin)/sizeof(T) — power-of-2 ptr-size variant.
+
+    Mirrors the VocalTrack::UpdateScrolling case: target uses size() on a
+    deque<T*>, generating subf+srawi+addze; our code uses empty() (pointer
+    compare). The arithmetic shows up as target-only deletes in a cluster.
+    """
+    d = _empty_diag()
+    d.clusters = [
+        Cluster(
+            start_idx=760,
+            end_idx=765,
+            size=4,
+            inserts=0,
+            deletes=4,
+            target_opcodes=("lwz", "subf", "srawi", "addze"),
+            base_opcodes=(),
+        ),
+    ]
+    return d
+
+
+def diag_with_ptr_diff_base_cluster() -> Diagnosis:
+    """We use size() but target uses empty() — swap size() -> empty().
+
+    Our compiler inlined the pointer-diff arithmetic (base-only inserts) but
+    target chose the empty()/pointer-compare codegen.
+    """
+    d = _empty_diag()
+    d.clusters = [
+        Cluster(
+            start_idx=760,
+            end_idx=765,
+            size=4,
+            inserts=4,
+            deletes=0,
+            target_opcodes=(),
+            base_opcodes=("lwz", "subf", "srawi", "addze"),
+        ),
+    ]
+    return d
+
+
 def diag_with_arith_ops() -> Diagnosis:
     d = _empty_diag()
     d.diff_ops = [DiffOp(index=8, target_opcode="fadds", base_opcode="fadds")]
@@ -570,6 +613,33 @@ void test_func() {
 void test_func() {
     List mList;
     if (!mList.empty()) {
+        return;
+    }
+}
+""",
+    ),
+
+    # Cluster-detected variant: no divw in diff_ops, signal comes from a
+    # target-only subf+srawi+addze cluster (inlined deque size() arithmetic).
+    # This is the VocalTrack::UpdateScrolling case.
+    PatternFixture(
+        id="emptysize_ptr_diff_cluster_to_size",
+        pattern_name="empty_size_swap",
+        description="!empty() -> size() != 0 (cluster-detected deque ptr-diff)",
+        func_name="test_func",
+        diagnosis=diag_with_ptr_diff_target_cluster(),
+        seeded_source="""\
+void test_func() {
+    Deque mDeque;
+    if (!mDeque.empty()) {
+        return;
+    }
+}
+""",
+        expected_source="""\
+void test_func() {
+    Deque mDeque;
+    if (mDeque.size() != 0) {
         return;
     }
 }
@@ -2966,6 +3036,65 @@ class TestPatternRelevance(unittest.TestCase):
     def test_empty_size_irrelevant_empty(self):
         p = get_pattern("empty_size_swap")
         self.assertFalse(p.relevant(_empty_diag()))
+
+    def test_empty_size_relevant_ptr_diff_target_cluster(self):
+        """Target-only subf+srawi+addze cluster -> swap empty()->size()."""
+        p = get_pattern("empty_size_swap")
+        self.assertTrue(p.relevant(diag_with_ptr_diff_target_cluster()))
+
+    def test_empty_size_relevant_ptr_diff_base_cluster(self):
+        """Base-only subf+srawi+addze cluster -> swap size()->empty()."""
+        p = get_pattern("empty_size_swap")
+        self.assertTrue(p.relevant(diag_with_ptr_diff_base_cluster()))
+
+    def test_empty_size_irrelevant_subf_only(self):
+        """Lone subf in a cluster is NOT enough — too common (loop conds)."""
+        p = get_pattern("empty_size_swap")
+        d = _empty_diag()
+        d.clusters = [Cluster(
+            start_idx=10, end_idx=12, size=2, inserts=0, deletes=2,
+            target_opcodes=("lwz", "subf"),
+            base_opcodes=(),
+        )]
+        self.assertFalse(p.relevant(d))
+
+    def test_empty_size_irrelevant_srawi_only(self):
+        """Lone srawi (e.g. arithmetic shift unrelated to ptr-diff) — skip."""
+        p = get_pattern("empty_size_swap")
+        d = _empty_diag()
+        d.clusters = [Cluster(
+            start_idx=10, end_idx=12, size=2, inserts=0, deletes=2,
+            target_opcodes=("lwz", "srawi"),
+            base_opcodes=(),
+        )]
+        self.assertFalse(p.relevant(d))
+
+    def test_empty_size_ptr_diff_requires_same_cluster(self):
+        """subf in one cluster + srawi in another is NOT a match.
+
+        Cross-cluster co-occurrence is too weak a signal — both opcodes are
+        common, the signature comes from their proximity.
+        """
+        p = get_pattern("empty_size_swap")
+        d = _empty_diag()
+        d.clusters = [
+            Cluster(start_idx=10, end_idx=11, size=1, inserts=0, deletes=1,
+                    target_opcodes=("subf",), base_opcodes=()),
+            Cluster(start_idx=50, end_idx=51, size=1, inserts=0, deletes=1,
+                    target_opcodes=("srawi",), base_opcodes=()),
+        ]
+        self.assertFalse(p.relevant(d))
+
+    def test_empty_size_relevant_ptr_diff_mulhw_variant(self):
+        """Non-power-of-2 sizeof(T): mulhw+srawi cluster fires to_size."""
+        p = get_pattern("empty_size_swap")
+        d = _empty_diag()
+        d.clusters = [Cluster(
+            start_idx=10, end_idx=14, size=4, inserts=0, deletes=4,
+            target_opcodes=("subf", "mulhw", "srawi", "addze"),
+            base_opcodes=(),
+        )]
+        self.assertTrue(p.relevant(d))
 
     def test_commutative_relevant_arith(self):
         p = get_pattern("commutative_swap")

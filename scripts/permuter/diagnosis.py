@@ -133,12 +133,29 @@ def diagnose_baseline(objdiff_json: dict) -> Diagnosis:
         indices = [ins["index"] for _, ins in cluster_group]
         ins_count = sum(1 for _, ins in cluster_group if ins["match_type"] == "insert")
         del_count = len(cluster_group) - ins_count
+        # Capture per-side opcodes so patterns can detect structural
+        # signatures in target-only or base-only code (e.g. inlined
+        # deque::size() pointer-diff: target has subf+srawi+addze).
+        tgt_ops: list[str] = []
+        base_ops: list[str] = []
+        for _, ins in cluster_group:
+            mt = ins.get("match_type")
+            if mt == "delete":
+                op = ins.get("target", {}).get("opcode", "")
+                if op:
+                    tgt_ops.append(op)
+            elif mt == "insert":
+                op = ins.get("base", {}).get("opcode", "")
+                if op:
+                    base_ops.append(op)
         clusters.append(Cluster(
             start_idx=min(indices),
             end_idx=max(indices),
             size=len(cluster_group),
             inserts=ins_count,
             deletes=del_count,
+            target_opcodes=tuple(tgt_ops),
+            base_opcodes=tuple(base_ops),
         ))
 
     # Replace categorization: symbol-reloc noise vs real structural
