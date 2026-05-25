@@ -167,7 +167,12 @@ class TestMemberAccessDetection(unittest.TestCase):
     """Test detection and outlining of repeated direct member accesses."""
 
     def test_repeated_member_access(self):
-        """Repeated ptr->mMember should produce a volatile indirection variant."""
+        """Repeated ptr->mMember should produce a volatile indirection variant.
+
+        Strategy 2 (`_get_mFoo` getters) is msvc-only — on mwcc the field
+        type resolution is too noisy (macros, nested types) and the resulting
+        thunk rarely helps the match. So we exercise the msvc path here.
+        """
         pattern = get_pattern("accessor_outline")
         ctx = make_context(
             """\
@@ -181,6 +186,7 @@ void test_func() {
             "test_func",
             _diag_with_bl_mismatch(),
         )
+        ctx.compiler_dialect = "msvc"
 
         variants = list(pattern.generate(ctx))
         member_variants = [
@@ -323,8 +329,14 @@ class TestPatternMetadata(unittest.TestCase):
         self.assertEqual(pattern.name, "accessor_outline")
 
     def test_safety_tier(self):
+        # Re-enabled (was "experimental" while wrappers used auto/decltype
+        # which mwcc rejects). Now resolves concrete types from headers.
         pattern = get_pattern("accessor_outline")
-        self.assertEqual(pattern.safety_tier, "experimental")
+        self.assertEqual(pattern.safety_tier, "normal")
+
+    def test_not_opt_in(self):
+        pattern = get_pattern("accessor_outline")
+        self.assertFalse(pattern.opt_in)
 
     def test_follow_ups(self):
         pattern = get_pattern("accessor_outline")
