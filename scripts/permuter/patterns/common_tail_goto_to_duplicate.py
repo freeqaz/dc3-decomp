@@ -63,6 +63,11 @@ from ..types import Diagnosis, FunctionContext, Variant
 
 class CommonTailGotoToDuplicate(Pattern):
     name = "common_tail_goto_to_duplicate"
+    # OPT-IN: duplicating the shared tail body produces extra basic blocks the
+    # original goto-fold avoided. Empirically regresses 100% functions —
+    # RGTrainerPanel::HandleChordLegend 100->89, OvershellPanel::ResolveSlotStates
+    # 100->67. Useful for research, NOT for cleanup at 100% baseline.
+    opt_in = True
     safety_tier = "conservative"
     structural_domain = "control_flow"
 

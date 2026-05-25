@@ -54,6 +54,11 @@ _NEGATABLE_OPS = {"<": ">=", ">": "<=", "<=": ">", ">=": "<", "==": "!=", "!=": 
 
 class BareLabelLoopToWhile(Pattern):
     name = "bare_label_loop_to_while"
+    # OPT-IN: the structured `while (true) { pre; if (!cond) break; body; }`
+    # form compiles to DIFFERENT codegen than MWCC's literal rotated form.
+    # Empirically regresses every candidate tested (FlagString 100->88, three
+    # UIListState fns 99->76, etc.). Useful for research, NOT for cleanup.
+    opt_in = True
     safety_tier = "conservative"
     structural_domain = "control_flow"
 
